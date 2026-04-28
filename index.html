@@ -151,6 +151,16 @@
     </div>
   </div>
 
+  <div id="wizardPawModal" class="modal-backdrop hidden" aria-hidden="true">
+    <div class="modal-box wizard-paw-box">
+      <h2 class="screen-title wizard-paw-title">WIZARD'S PAW</h2>
+      <p class="wizard-paw-copy">Choose 2 stats to triple. Time is stopped until you lock them in.</p>
+      <div id="wizardPawStats" class="wizard-paw-stats"></div>
+      <div id="wizardPawChoices" class="wizard-paw-choices"></div>
+      <button id="wizardPawConfirm" class="nav-btn" disabled>CONFIRM 2 PICKS</button>
+    </div>
+  </div>
+
   <!-- Death screen -->
   <div id="dead" class="overlay hidden">
     <h2>YOU DIED</h2>
@@ -308,6 +318,17 @@
     </div><!-- /.char-cards -->
 
     <div class="charselect-bottom">
+      <div class="difficulty-row">
+        <label>DIFFICULTY</label>
+        <div id="difficultySelect" class="difficulty-select" role="group" aria-label="Difficulty">
+          <button class="difficulty-btn sel" data-difficulty="easy" type="button">Easy</button>
+          <button class="difficulty-btn" data-difficulty="medium" type="button">Medium</button>
+          <button class="difficulty-btn" data-difficulty="hard" type="button">Hard</button>
+          <button class="difficulty-btn" data-difficulty="impossible" type="button">Impossible</button>
+          <button class="difficulty-btn" data-difficulty="god" type="button">God</button>
+        </div>
+        <small id="difficultyHint" class="difficulty-hint">Easy uses the current balance.</small>
+      </div>
       <div class="seedrow">
         <label>SEED</label>
         <input id="seed" placeholder="random">

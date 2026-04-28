@@ -17,6 +17,79 @@
   };
 
   const BOSS_TYPES = new Set(['god', 'queen_cult', 'bulk_golem', 'artificer_knave']);
+  const DIFFICULTY_ORDER = ['easy', 'medium', 'hard', 'impossible', 'god'];
+  const DIFFICULTY_DEFS = {
+    easy: {
+      key: 'easy',
+      name: 'Easy',
+      description: 'Easy uses the current balance.',
+      unlockLoops: 0,
+      waveBonus: 0,
+      eliteFloor: 8,
+      eliteChance: 0.12,
+      miniBossChanceMultiplier: 1,
+      roomWeightBonus: 0,
+      statMultiplier: 1,
+      bossStatMultiplier: 1,
+      speedMultiplier: 1,
+    },
+    medium: {
+      key: 'medium',
+      name: 'Medium',
+      description: 'Slightly denser rooms with tougher enemy rolls.',
+      unlockLoops: 0,
+      waveBonus: 1,
+      eliteFloor: 8,
+      eliteChance: 0.16,
+      miniBossChanceMultiplier: 1.18,
+      roomWeightBonus: 0.05,
+      statMultiplier: 1.1,
+      bossStatMultiplier: 1.12,
+      speedMultiplier: 1.03,
+    },
+    hard: {
+      key: 'hard',
+      name: 'Hard',
+      description: 'More enemies, more pressure, stronger scaling.',
+      unlockLoops: 0,
+      waveBonus: 2,
+      eliteFloor: 7,
+      eliteChance: 0.2,
+      miniBossChanceMultiplier: 1.35,
+      roomWeightBonus: 0.1,
+      statMultiplier: 1.22,
+      bossStatMultiplier: 1.26,
+      speedMultiplier: 1.06,
+    },
+    impossible: {
+      key: 'impossible',
+      name: 'Impossible',
+      description: 'Unlocks after 5 loops. Heavy elite and miniboss pressure.',
+      unlockLoops: 5,
+      waveBonus: 3,
+      eliteFloor: 6,
+      eliteChance: 0.26,
+      miniBossChanceMultiplier: 1.6,
+      roomWeightBonus: 0.16,
+      statMultiplier: 1.36,
+      bossStatMultiplier: 1.42,
+      speedMultiplier: 1.1,
+    },
+    god: {
+      key: 'god',
+      name: 'God',
+      description: 'Unlocks after 10 loops. Brutal challenge mode.',
+      unlockLoops: 10,
+      waveBonus: 4,
+      eliteFloor: 5,
+      eliteChance: 0.32,
+      miniBossChanceMultiplier: 1.9,
+      roomWeightBonus: 0.22,
+      statMultiplier: 1.52,
+      bossStatMultiplier: 1.62,
+      speedMultiplier: 1.14,
+    },
+  };
 
   const CHARACTER_DEFS = {
     thorn_knight: {
@@ -56,6 +129,7 @@
     power_disks: { key: 'power_disks', slot: 'laser', name: 'Power Disks', desc: 'Burst of spinning disks.' },
     blade_justice: { key: 'blade_justice', slot: 'laser', name: 'Blade Justice', desc: 'Divine short-range blade strike.' },
     lightning_columns: { key: 'lightning_columns', slot: 'laser', name: 'Lightning Columns', desc: 'Summon two lightning turrets.' },
+    god_sweep: { key: 'god_sweep', slot: 'laser', name: 'God Sweep', desc: 'Spin a massive divine beam around yourself.' },
 
     crimson_smash: { key: 'crimson_smash', slot: 'smash', name: 'Crimson Smash', desc: 'Heavy area smash.' },
     chaos_burst: { key: 'chaos_burst', slot: 'smash', name: 'Chaos Burst', desc: 'Multiple chaos detonations.' },
@@ -70,6 +144,7 @@
   const SHOP_MOVE_POOL = [
     'slash', 'fire_balls', 'smite',
     'blood_beam', 'power_disks', 'blade_justice', 'lightning_columns',
+    'god_sweep',
     'crimson_smash', 'chaos_burst', 'healing_zone', 'fire_circle', 'floor_lava',
     'dash', 'warp',
   ];
@@ -110,7 +185,7 @@
       key: 'insurance',
       name: 'Insurance',
       shortName: 'Insure',
-      description: 'At half HP, trigger a charged safety state.',
+      description: 'If a hit pushes you below half health, this is consumed and must recharge with kills.',
       rarity: 'white',
       color: '#f4f6fb',
       category: 'white',
@@ -136,15 +211,85 @@
       category: 'white',
       tags: ['speed'],
     },
+    keen_eye: {
+      key: 'keen_eye',
+      name: 'Keen Eye',
+      shortName: 'Crit +5%',
+      description: 'Crit chance +5%.',
+      rarity: 'white',
+      color: '#f7fbff',
+      category: 'white',
+      tags: ['crit'],
+    },
+    chrono_spring: {
+      key: 'chrono_spring',
+      name: 'Chrono Spring',
+      shortName: 'AS +0.2',
+      description: 'Attack speed +0.2.',
+      rarity: 'white',
+      color: '#e6f6ff',
+      category: 'white',
+      tags: ['speed'],
+    },
+    scholar_seal: {
+      key: 'scholar_seal',
+      name: 'Scholar Seal',
+      shortName: 'XP +15%',
+      description: 'Gain 15% more XP on enemy kill.',
+      rarity: 'white',
+      color: '#d0ecff',
+      category: 'white',
+      tags: ['xp'],
+    },
+    bandaid: {
+      key: 'bandaid',
+      name: 'Bandaid',
+      shortName: 'DEF +0.5%',
+      description: 'Defense +0.5%.',
+      rarity: 'white',
+      color: '#fff5f7',
+      category: 'white',
+      tags: ['defense'],
+    },
+    push_man: {
+      key: 'push_man',
+      name: 'Push Man',
+      shortName: 'KB +18%',
+      description: 'Knockback +18%.',
+      rarity: 'white',
+      color: '#fff2cf',
+      category: 'white',
+      tags: ['knockback'],
+    },
+    titan_heart: {
+      key: 'titan_heart',
+      name: 'Titan Heart',
+      shortName: 'Max HP +8%',
+      description: 'Max HP +8%.',
+      rarity: 'white',
+      color: '#ffd9de',
+      category: 'white',
+      tags: ['hp'],
+    },
     charged_adapter: {
       key: 'charged_adapter',
       name: 'Charged Adapter',
       shortName: 'Adapter',
-      description: 'Charge requirements reduced by 1 and unlocks ladder warp.',
+      description: 'Charge requirement -1. In non-boss fights, spend half your gold to teleport to the ladder room.',
       rarity: 'purple',
       color: '#b66cff',
       category: 'purple',
       tags: ['charge', 'mobility'],
+    },
+    explosive_jelly: {
+      key: 'explosive_jelly',
+      name: 'Explosive Jelly',
+      shortName: 'AOE x2',
+      description: 'All player AOE ranges are doubled.',
+      rarity: 'purple',
+      color: '#ffb27d',
+      category: 'purple',
+      tags: ['aoe', 'purple'],
     },
     turtle_shell: {
       key: 'turtle_shell',
@@ -170,7 +315,7 @@
       key: 'oracles_lens',
       name: "Oracle's Lens",
       shortName: 'Oracle',
-      description: 'Doubles crit chance and amplifies crit effectiveness.',
+      description: 'Critical hit chance is doubled on pickup, and crits scale harder with your crit chance.',
       rarity: 'god',
       color: '#8ee6ff',
       category: 'god',
@@ -180,7 +325,7 @@
       key: 'wizards_paw',
       name: "Wizard's Paw",
       shortName: 'Paw',
-      description: 'Randomly chooses 2 stats and triples them.',
+      description: 'Randomly chooses 2 stats to triple.',
       rarity: 'god',
       color: '#ffcf80',
       category: 'god',
@@ -190,11 +335,31 @@
       key: 'jesters_dice',
       name: "Jester's Dice",
       shortName: 'Dice',
-      description: 'Skip 3 floors and gain 10 random item stacks.',
+      description: 'Skip 3 floors and gain 10 random items.',
       rarity: 'god',
       color: '#ff8bd8',
       category: 'god',
       tags: ['god', 'chaos'],
+    },
+    shield_of_aegis: {
+      key: 'shield_of_aegis',
+      name: 'Shield of Aegis',
+      shortName: 'DEF +50%',
+      description: 'Defense +50%.',
+      rarity: 'god',
+      color: '#ffe7a8',
+      category: 'god',
+      tags: ['god', 'defense'],
+    },
+    pendant_of_kronos: {
+      key: 'pendant_of_kronos',
+      name: 'Pendant of Kronos',
+      shortName: 'Crit +1%/God',
+      description: 'Raises crit chance by 1% for each god item you have.',
+      rarity: 'god',
+      color: '#d8c6ff',
+      category: 'god',
+      tags: ['god', 'crit'],
     },
   };
   const ITEM_KEYS = Object.keys(ITEM_DEFS);
@@ -205,12 +370,40 @@
     ['insurance', 18],
     ['crit_charm', 24],
     ['attack_servo', 22],
+    ['keen_eye', 20],
+    ['chrono_spring', 20],
+    ['scholar_seal', 18],
+    ['bandaid', 22],
+    ['push_man', 18],
+    ['titan_heart', 18],
     ['charged_adapter', 18],
+    ['explosive_jelly', 12],
     ['turtle_shell', 24],
     ['iron_lung', 10],
     ['oracles_lens', 8],
     ['wizards_paw', 6],
     ['jesters_dice', 4],
+    ['shield_of_aegis', 4],
+    ['pendant_of_kronos', 5],
+  ];
+  const ITEM_DROP_TABLE = buildWeightTable(ITEM_DROP_WEIGHTS);
+  const ELITE_ITEM_DROP_TABLE = buildWeightTable(
+    ITEM_DROP_WEIGHTS.map(([key, weight]) => [key, weight + (key !== 'neo_knife' ? 4 : 0)])
+  );
+  const ELITE_INVENTORY_POOL = [
+    'neo_knife',
+    'orb_of_blood',
+    'insurance',
+    'crit_charm',
+    'attack_servo',
+    'charged_adapter',
+    'explosive_jelly',
+    'turtle_shell',
+    'iron_lung',
+    'oracles_lens',
+    'bandaid',
+    'shield_of_aegis',
+    'pendant_of_kronos',
   ];
   const itemRegistry = createItemRegistry();
 
@@ -262,6 +455,10 @@
     shopCoins: document.getElementById('shopCoins'),
     invPanel: document.getElementById('invPanel'),
     invClose: document.getElementById('invClose'),
+    wizardPawModal: document.getElementById('wizardPawModal'),
+    wizardPawStats: document.getElementById('wizardPawStats'),
+    wizardPawChoices: document.getElementById('wizardPawChoices'),
+    wizardPawConfirm: document.getElementById('wizardPawConfirm'),
     invItemsList: document.getElementById('invItemsList'),
     invStats: document.getElementById('invStats'),
     invMovesList: document.getElementById('invMovesList'),
@@ -283,6 +480,7 @@
     floorDisplay: document.getElementById('floorDisplay'),
     seed: document.getElementById('seed'),
     go: document.getElementById('go'),
+    difficultyHint: document.getElementById('difficultyHint'),
     continueRow: document.getElementById('continueRow'),
     continueBtn: document.getElementById('continueBtn'),
     newRunBtn: document.getElementById('newRunBtn'),
@@ -292,6 +490,7 @@
     deleteRunBtn: document.getElementById('deleteRunBtn'),
     runSummary: document.getElementById('runSummary'),
     charButtons: [...document.querySelectorAll('#choose .char-card')],
+    difficultyButtons: [...document.querySelectorAll('#difficultySelect .difficulty-btn')],
     itemSlots: {
       neo_knife: document.getElementById('rr-neo-knife'),
       orb_of_blood: document.getElementById('rr-orb-blood'),
@@ -339,8 +538,11 @@
   let shakeT = 0;
   let gameState = 'menu';
   let floor = 1;
+  let baseSeedStr = '';
   let seedStr = '';
+  let runLoopIndex = 0;
   let rng = null;
+  let rngStreams = {};
   let godTimer = 0;
   let fade = 0;
   let fading = 0;
@@ -353,8 +555,12 @@
   let laserActive = false;
   let laserTime = 0;
   let laserTick = 0;
+  let laserMode = 'beam';
+  let laserAngle = 0;
+  let laserSweepSpeed = 0;
   let dashKeyLatch = false;
   let chosenCharacter = 'thorn_knight';
+  let selectedDifficulty = 'easy';
   let destructibles = [];
   let hazards = [];
   let shopOffers = [];
@@ -373,6 +579,7 @@
   let activeInventorySlot = '';
   let shopPanelDirty = false;
   let inventoryPanelDirty = false;
+  let wizardPawSelection = null;
 
   const saveStore = createSaveStore();
   window._neoSaveStore = saveStore;
@@ -430,6 +637,10 @@
       keys[key] = true;
       const b = window.NeoSettings?.getBindings();
       const inventoryKey = b ? b.inventory : 'i';
+      if (isWizardPawOpen()) {
+        if (event.key === 'Escape') event.preventDefault();
+        return;
+      }
       if (event.key === 'Escape') {
         if (gameState === 'play') { pauseGame(); return; }
         if (gameState === 'pause') { resumeGame(); return; }
@@ -462,6 +673,11 @@
         chosenCharacter = characterKey;
         updateCharacterSelectionUI();
       },
+      onDifficultySelect(difficultyKey, button) {
+        if (button.classList.contains('locked')) return;
+        selectedDifficulty = normalizeDifficulty(difficultyKey);
+        updateCharacterSelectionUI();
+      },
       onOpenCharacterSelect() { setGameState('charselect'); },
       onCloseCharacterSelect() { setGameState('menu'); },
       onStartNew() { void startGame(false); },
@@ -478,6 +694,8 @@
       clearTimeout(savePendingTimer);
       void saveRunNow().then(() => { setGameState('menu'); });
     });
+    ui.wizardPawChoices?.addEventListener('click', handleWizardPawChoiceClick);
+    ui.wizardPawConfirm?.addEventListener('click', confirmWizardPawSelection);
 
     window.addEventListener('beforeunload', () => {
       if (gameState === 'play') {
@@ -633,22 +851,46 @@
     if (next) setShopPanelOpen(false);
   }
 
+  function isWizardPawOpen() {
+    return !!wizardPawSelection && isPanelOpen(ui.wizardPawModal);
+  }
+
+  function setWizardPawModalOpen(open) {
+    if (!ui.wizardPawModal) return;
+    ui.wizardPawModal.classList.toggle('hidden', !open);
+    ui.wizardPawModal.setAttribute('aria-hidden', open ? 'false' : 'true');
+  }
+
   function isOverlayBlockingInput() {
-    return isPanelOpen(ui.shopPanel) || isPanelOpen(ui.invPanel);
+    return isPanelOpen(ui.shopPanel) || isPanelOpen(ui.invPanel) || isWizardPawOpen();
+  }
+
+  function isGodSweepUnlocked() {
+    return Number(metaProgress.godsKilled || 0) > 0 && Number(metaProgress.loopsCompleted || 0) >= 5;
   }
 
   function getShopMoveOffers() {
     if (!currentRoom || currentRoom.type !== 'shop') return [];
     if (!Array.isArray(currentRoom.shopMoveOffers) || currentRoom.shopMoveOffers.length === 0) {
       const seen = new Set(Object.keys(player?.ownedMoves || {}));
-      const pool = SHOP_MOVE_POOL.filter(key => !seen.has(key));
-      shuffle(pool);
-      currentRoom.shopMoveOffers = pool.slice(0, 4).map((moveKey, index) => ({
+      const pool = SHOP_MOVE_POOL.filter(key => key !== 'god_sweep' && !seen.has(key));
+      shuffle(pool, 'loot');
+      const offers = pool.slice(0, 4).map((moveKey, index) => ({
         type: 'move',
         key: moveKey,
         bought: false,
         cost: 34 + floor * 6 + index * 4,
       }));
+      if (isGodSweepUnlocked() && !seen.has('god_sweep') && nextRandom('loot') < 0.12) {
+        const insertIndex = Math.min(offers.length, irand(0, Math.min(offers.length, 3), 'loot'));
+        offers.splice(insertIndex, 0, {
+          type: 'move',
+          key: 'god_sweep',
+          bought: false,
+          cost: 140 + floor * 12,
+        });
+      }
+      currentRoom.shopMoveOffers = offers.slice(0, 4);
     }
     return currentRoom.shopMoveOffers;
   }
@@ -871,6 +1113,7 @@
       unlockedItems: ['neo_knife'],
       unlockedCharacters: ['thorn_knight', 'metao'],
       godsKilled: 0,
+      loopsCompleted: 0,
     };
   }
 
@@ -882,12 +1125,21 @@
       insurance: 0,
       crit_charm: 0,
       attack_servo: 0,
+      keen_eye: 0,
+      chrono_spring: 0,
+      scholar_seal: 0,
+      bandaid: 0,
+      push_man: 0,
+      titan_heart: 0,
       charged_adapter: 0,
+      explosive_jelly: 0,
       turtle_shell: 0,
       iron_lung: 0,
       oracles_lens: 0,
       wizards_paw: 0,
       jesters_dice: 0,
+      shield_of_aegis: 0,
+      pendant_of_kronos: 0,
     };
     const character = CHARACTER_DEFS[chosenCharacter] || CHARACTER_DEFS.thorn_knight;
     items[character.startItem] = 1;
@@ -970,6 +1222,7 @@
         };
       }
       activeRun = savedRun && typeof savedRun === 'object' ? savedRun : null;
+      if (activeRun) activeRun.difficulty = normalizeDifficulty(activeRun.difficulty);
       uiController.setSaveState(saveStore.kind);
     } catch (error) {
       console.error('Failed to load save data', error);
@@ -998,20 +1251,89 @@
     return chars.length ? chars : fallback;
   }
 
+  function normalizeDifficulty(input) {
+    return DIFFICULTY_DEFS[input] ? input : 'easy';
+  }
+
+  function createRandomSeed() {
+    return `${Math.floor(Math.random() * 1e9)}`;
+  }
+
+  function syncSeedState() {
+    seedStr = runLoopIndex > 0 ? `${baseSeedStr}:loop:${runLoopIndex}` : baseSeedStr;
+  }
+
+  function getFloorSeed() {
+    return `${baseSeedStr}|difficulty:${selectedDifficulty}|loop:${runLoopIndex}|floor:${floor}`;
+  }
+
+  function createRngStream(seed, consumed = 0) {
+    const random = makeRNG(seed);
+    let count = Math.max(0, Number(consumed) || 0);
+    for (let index = 0; index < count; index += 1) random();
+    return {
+      next() {
+        count += 1;
+        return random();
+      },
+      getState() {
+        return count;
+      },
+    };
+  }
+
+  function resetRngStreams(savedState = null) {
+    const snapshot = savedState && typeof savedState === 'object' ? savedState : {};
+    const floorSeed = getFloorSeed();
+    rngStreams = {
+      world: createRngStream(`${floorSeed}|world`, snapshot.world),
+      loot: createRngStream(`${floorSeed}|loot`, snapshot.loot),
+      encounter: createRngStream(`${floorSeed}|encounter`, snapshot.encounter),
+      fx: createRngStream(`${floorSeed}|fx`, snapshot.fx),
+    };
+    rng = () => nextRandom('encounter');
+  }
+
+  function nextRandom(stream = 'encounter') {
+    const selected = rngStreams[stream] || rngStreams.encounter || rngStreams.world;
+    return selected ? selected.next() : Math.random();
+  }
+
+  function getRngState() {
+    return {
+      world: rngStreams.world?.getState?.() || 0,
+      loot: rngStreams.loot?.getState?.() || 0,
+      encounter: rngStreams.encounter?.getState?.() || 0,
+      fx: rngStreams.fx?.getState?.() || 0,
+    };
+  }
+
+  function getDifficultyDef(key = selectedDifficulty) {
+    return DIFFICULTY_DEFS[normalizeDifficulty(key)];
+  }
+
+  function getUnlockedDifficultySet() {
+    const loopsCompleted = Number(metaProgress.loopsCompleted || 0);
+    return new Set(DIFFICULTY_ORDER.filter(key => loopsCompleted >= DIFFICULTY_DEFS[key].unlockLoops));
+  }
+
   function refreshMenuState() {
     uiController.setMenuMeta(metaProgress.coins, metaProgress.bestFloor, saveStore.kind);
     updateCharacterSelectionUI();
     const summary = activeRun && activeRun.player && activeRun.floor
-      ? `Floor ${activeRun.floor} | ${activeRun.player.coins || 0} run coins`
+      ? `Floor ${activeRun.floor} | ${getDifficultyDef(activeRun.difficulty).name} | ${activeRun.player.coins || 0} run coins`
       : '';
     uiController.setRunSummary(summary);
   }
 
   function updateCharacterSelectionUI() {
     const unlocked = new Set(metaProgress.unlockedCharacters || ['thorn_knight', 'metao']);
+    const unlockedDifficulties = getUnlockedDifficultySet();
     if (metaProgress.godsKilled > 0) unlocked.add('granialla');
     if (!unlocked.has(chosenCharacter)) chosenCharacter = [...unlocked][0] || 'thorn_knight';
+    if (!unlockedDifficulties.has(selectedDifficulty)) selectedDifficulty = 'easy';
     uiController.updateCharacterSelection(unlocked, chosenCharacter);
+    uiController.updateDifficultySelection(unlockedDifficulties, selectedDifficulty, metaProgress.loopsCompleted || 0);
   }
 
   function setGameState(nextState) {
@@ -1029,7 +1351,10 @@
     if (resume && activeRun) {
       restoreRun(activeRun);
     } else {
-      seedStr = ui.seed.value.trim() || Math.floor(Math.random() * 1e9).toString();
+      baseSeedStr = ui.seed.value.trim() || createRandomSeed();
+      selectedDifficulty = normalizeDifficulty(selectedDifficulty);
+      runLoopIndex = 0;
+      syncSeedState();
       floor = 1;
       gameElapsedTime = 0;
       player = createDefaultPlayer();
@@ -1060,6 +1385,9 @@
     laserActive = false;
     laserTime = 0;
     laserTick = 0;
+    laserMode = 'beam';
+    laserAngle = 0;
+    laserSweepSpeed = 0;
     dashKeyLatch = false;
     godTimer = 0;
     camera = { x: 0, y: 0 };
@@ -1074,6 +1402,8 @@
     invKeyLatch = false;
     activeShopTab = 'items';
     draggingMoveKey = '';
+    wizardPawSelection = null;
+    setWizardPawModalOpen(false);
     setShopPanelOpen(false);
     setInventoryPanelOpen(false);
     mouse.down = false;
@@ -1081,10 +1411,13 @@
   }
 
   function restoreRun(snapshot) {
-    seedStr = snapshot.seedStr;
+    baseSeedStr = snapshot.baseSeedStr || snapshot.seedStr || createRandomSeed();
+    runLoopIndex = Number(snapshot.runLoopIndex || 0);
+    syncSeedState();
     floor = snapshot.floor;
+    selectedDifficulty = normalizeDifficulty(snapshot.difficulty);
     metaProgress.bestFloor = Math.max(metaProgress.bestFloor, floor);
-    rng = makeRNG(`${seedStr}:${floor}`);
+    resetRngStreams(snapshot.rngState);
     rooms = Array.isArray(snapshot.rooms) ? snapshot.rooms : [];
     currentRoom = rooms.find(room => room.gx === snapshot.currentRoom?.gx && room.gy === snapshot.currentRoom?.gy) || rooms[0] || null;
     player = migratePlayerData(snapshot.player);
@@ -1123,6 +1456,9 @@
     laserActive = !!snapshot.laserActive;
     laserTime = snapshot.laserTime || 0;
     laserTick = snapshot.laserTick || 0;
+    laserMode = snapshot.laserMode || 'beam';
+    laserAngle = Number(snapshot.laserAngle || 0);
+    laserSweepSpeed = Number(snapshot.laserSweepSpeed || 0);
     godTimer = snapshot.godTimer || 0;
     gameElapsedTime = snapshot.gameElapsedTime || 0;
     camera = snapshot.camera || { x: 0, y: 0 };
@@ -1138,6 +1474,8 @@
     invKeyLatch = false;
     activeShopTab = 'items';
     draggingMoveKey = '';
+    wizardPawSelection = null;
+    setWizardPawModalOpen(false);
     setShopPanelOpen(false);
     setInventoryPanelOpen(false);
     updateItemUI();
@@ -1147,7 +1485,8 @@
   }
 
   function generateFloor() {
-    rng = makeRNG(`${seedStr}:${floor}`);
+    syncSeedState();
+    resetRngStreams();
     rooms = [];
 
     const grid = Array.from({ length: 9 }, () => Array(9).fill(null));
@@ -1156,10 +1495,10 @@
     grid[start.y][start.x] = true;
     positions.push(start);
 
-    const target = 8 + Math.floor(rng() * 3) + Math.min(2, floor >> 2);
+    const target = 8 + Math.floor(nextRandom('world') * 3) + Math.min(2, floor >> 2);
     while (positions.length < target) {
-      const seed = positions[irand(0, positions.length - 1)];
-      const dirs = shuffle([[1, 0], [-1, 0], [0, 1], [0, -1]]);
+      const seed = positions[irand(0, positions.length - 1, 'world')];
+      const dirs = shuffle([[1, 0], [-1, 0], [0, 1], [0, -1]], 'world');
       let added = false;
       for (const [dx, dy] of dirs) {
         const nx = seed.x + dx;
@@ -1216,13 +1555,13 @@
     }
 
     const pool = rooms.filter(room => room !== startRoom && room !== farRoom);
-    shuffle(pool);
-    const treasureCount = Math.min(3, 1 + Math.floor(rng() * 3));
+    shuffle(pool, 'world');
+    const treasureCount = Math.min(3, 1 + Math.floor(nextRandom('world') * 3));
     for (let index = 0; index < treasureCount; index += 1) {
       if (pool[index]) pool[index].type = 'treasure';
     }
     const shopCandidate = pool.find(room => room.type === 'combat');
-    if (shopCandidate && rng() < 0.7) shopCandidate.type = 'shop';
+    if (shopCandidate && nextRandom('world') < 0.7) shopCandidate.type = 'shop';
     rooms.forEach(decorateRoomData);
 
     player.x = START_X;
@@ -1243,44 +1582,44 @@
 
     decorateRoomStructures(room);
 
-    const potCount = room.type === 'shop' ? 1 : irand(1, 3);
+    const potCount = room.type === 'shop' ? 1 : irand(1, 3, 'world');
     for (let index = 0; index < potCount; index += 1) {
       room.destructibles.push({
         kind: 'pot',
-        x: 150 + rand(ROOM_W - 300, 0),
-        y: 120 + rand(ROOM_H - 240, 0),
+        x: 150 + rand(ROOM_W - 300, 0, 'world'),
+        y: 120 + rand(ROOM_H - 240, 0, 'world'),
         r: 12,
         hp: 1,
         broken: false,
       });
     }
 
-    if (rng() < 0.45 && room.type !== 'shop') {
+    if (nextRandom('world') < 0.45 && room.type !== 'shop') {
       room.destructibles.push({
         kind: 'barrel',
-        x: 180 + rand(ROOM_W - 360, 0),
-        y: 140 + rand(ROOM_H - 280, 0),
+        x: 180 + rand(ROOM_W - 360, 0, 'world'),
+        y: 140 + rand(ROOM_H - 280, 0, 'world'),
         r: 14,
         hp: 1,
         broken: false,
       });
     }
 
-    if (rng() < 0.4 && room.type !== 'god') {
+    if (nextRandom('world') < 0.4 && room.type !== 'god') {
       const primaryLava = createMoatLavaHazard();
       room.hazards.push(primaryLava);
-      if (rng() < 0.35) {
+      if (nextRandom('world') < 0.35) {
         room.hazards.push(createCompanionMoatLava(primaryLava));
       }
     }
 
-    if (rng() < 0.3 && room.type !== 'shop' && room.type !== 'god') {
-      const wallX = rng() < 0.5 ? 76 : ROOM_W - 76;
+    if (nextRandom('world') < 0.3 && room.type !== 'shop' && room.type !== 'god') {
+      const wallX = nextRandom('world') < 0.5 ? 76 : ROOM_W - 76;
       const hiddenX = wallX < ROOM_W / 2 ? 48 : ROOM_W - 48;
       room.destructibles.push({
         kind: 'wall',
         x: wallX,
-        y: ROOM_H / 2 + rand(120, -120),
+        y: ROOM_H / 2 + rand(120, -120, 'world'),
         r: 26,
         hp: 2,
         broken: false,
@@ -1288,7 +1627,7 @@
       room.destructibles.push({
         kind: 'pot',
         x: hiddenX,
-        y: ROOM_H / 2 + rand(140, -140),
+        y: ROOM_H / 2 + rand(140, -140, 'world'),
         r: 12,
         hp: 1,
         broken: false,
@@ -1298,16 +1637,16 @@
 
     if (room.type === 'shop') {
       room.shopOffers = [
-        { type: 'potion', cost: 18 + floor * 2, x: ROOM_W / 2 - 90, y: ROOM_H / 2, bought: false },
-        { type: 'item', key: rollItemDrop(), cost: 32 + floor * 4, x: ROOM_W / 2 + 90, y: ROOM_H / 2, bought: false },
+        { type: 'potion', cost: 18 + floor * 2, x: ROOM_W / 2, y: ROOM_H / 2 + 88, bought: false },
       ];
+      ensureShopHasMinimumItemOffers(room, 3);
       room.shopMoveOffers = [];
       room.cleared = true;
     }
   }
 
   function decorateRoomStructures(room) {
-    const theme = rng();
+    const theme = nextRandom('world');
     if (theme < 0.34) {
       room.structures.push(
         { kind: 'pillar', x: ROOM_W / 2 - 120, y: ROOM_H / 2 - 90, w: 34, h: 34 },
@@ -1358,24 +1697,24 @@
     const ranges = [];
     if (lowMax > min) ranges.push([min, lowMax]);
     if (max > highMin) ranges.push([highMin, max]);
-    if (!ranges.length) return rand(max, min);
+    if (!ranges.length) return rand(max, min, 'world');
 
-    const [rangeMin, rangeMax] = ranges[irand(0, ranges.length - 1)];
-    return rand(rangeMax, rangeMin);
+    const [rangeMin, rangeMax] = ranges[irand(0, ranges.length - 1, 'world')];
+    return rand(rangeMax, rangeMin, 'world');
   }
 
   function createMoatLavaHazard() {
-    const r = 44 + rand(24, 0);
-    const side = irand(0, 3);
-    const wallOffset = WALL + r + 18 + rand(16, 0);
+    const r = 44 + rand(24, 0, 'world');
+    const side = irand(0, 3, 'world');
+    const wallOffset = WALL + r + 18 + rand(16, 0, 'world');
     const hazard = {
       kind: 'lava',
       x: ROOM_W / 2,
       y: ROOM_H / 2,
       r,
-      phase: rand(Math.PI * 2, 0),
-      pulse: rand(1.8, 1.15),
-      wobble: rand(0.75, 0.45),
+      phase: rand(Math.PI * 2, 0, 'world'),
+      pulse: rand(1.8, 1.15, 'world'),
+      wobble: rand(0.75, 0.45, 'world'),
       side,
     };
 
@@ -1401,19 +1740,19 @@
       kind: 'lava',
       x: primary.x,
       y: primary.y,
-      r: primary.r * rand(0.86, 0.68),
-      phase: primary.phase + rand(1.9, 0.6),
-      pulse: primary.pulse + rand(0.35, -0.2),
-      wobble: primary.wobble + rand(0.2, -0.15),
+      r: primary.r * rand(0.86, 0.68, 'world'),
+      phase: primary.phase + rand(1.9, 0.6, 'world'),
+      pulse: primary.pulse + rand(0.35, -0.2, 'world'),
+      wobble: primary.wobble + rand(0.2, -0.15, 'world'),
       side: primary.side,
     };
 
-    const along = (primary.r + companion.r) * rand(1.2, 0.75);
+    const along = (primary.r + companion.r) * rand(1.2, 0.75, 'world');
     if (primary.side <= 1) {
-      companion.x = clamp(primary.x + (rng() < 0.5 ? -along : along), companion.r + 42, ROOM_W - companion.r - 42);
+      companion.x = clamp(primary.x + (nextRandom('world') < 0.5 ? -along : along), companion.r + 42, ROOM_W - companion.r - 42);
       companion.y = primary.side === 0 ? WALL + companion.r + 18 : ROOM_H - WALL - companion.r - 18;
     } else {
-      companion.y = clamp(primary.y + (rng() < 0.5 ? -along : along), companion.r + 42, ROOM_H - companion.r - 42);
+      companion.y = clamp(primary.y + (nextRandom('world') < 0.5 ? -along : along), companion.r + 42, ROOM_H - companion.r - 42);
       companion.x = primary.side === 2 ? WALL + companion.r + 18 : ROOM_W - WALL - companion.r - 18;
     }
 
@@ -1501,17 +1840,24 @@
     laserActive = false;
     laserTime = 0;
     laserTick = 0;
+    laserMode = 'beam';
+    laserAngle = 0;
+    laserSweepSpeed = 0;
     player.roomDamageTaken = 0;
     const safeSpawn = findSafeSpawnPoint();
     player.x = safeSpawn.x;
     player.y = safeSpawn.y;
 
     if (room.type === 'combat' && !room.cleared && enemies.length === 0) {
-      spawnWave(3 + floor + irand(0, 1));
+      spawnWave(getWaveCount(3), 'combat');
+    }
+    if (room.type === 'shop') {
+      ensureShopHasMinimumItemOffers(room, 3);
+      shopOffers = room.shopOffers || [];
     }
 
     if (room.type === 'treasure' && !room.cleared && chests.length === 0) {
-      const chestCount = 1 + Math.floor(rng() * 2);
+      const chestCount = 1 + Math.floor(nextRandom('loot') * 2);
       for (let index = 0; index < chestCount; index += 1) {
         chests.push({ x: 260 + index * 180, y: ROOM_H / 2, open: false });
       }
@@ -1519,15 +1865,15 @@
 
     if (room.type === 'ladder') {
       if (!room.cleared && enemies.length === 0) {
-        spawnWave(4 + floor + irand(0, 1));
+        spawnWave(getWaveCount(4), 'ladder');
       }
       if (room.cleared && !pickups.some(pickup => pickup.type === 'ladder')) {
         let ladderX = ROOM_W / 2;
         let ladderY = ROOM_H / 2;
         let attempts = 0;
         while (isBlocked(ladderX, ladderY, 16) && attempts < 20) {
-          const angle = Math.random() * Math.PI * 2;
-          const radius = 60 + Math.random() * 120;
+          const angle = nextRandom('world') * Math.PI * 2;
+          const radius = 60 + nextRandom('world') * 120;
           ladderX = clamp(ROOM_W / 2 + Math.cos(angle) * radius, 60, ROOM_W - 60);
           ladderY = clamp(ROOM_H / 2 + Math.sin(angle) * radius, 60, ROOM_H - 60);
           attempts++;
@@ -1545,8 +1891,8 @@
         let ladderY = ROOM_H / 2;
         let attempts = 0;
         while (isBlocked(ladderX, ladderY, 16) && attempts < 20) {
-          const angle = Math.random() * Math.PI * 2;
-          const radius = 60 + Math.random() * 120;
+          const angle = nextRandom('world') * Math.PI * 2;
+          const radius = 60 + nextRandom('world') * 120;
           ladderX = clamp(ROOM_W / 2 + Math.cos(angle) * radius, 60, ROOM_W - 60);
           ladderY = clamp(ROOM_H / 2 + Math.sin(angle) * radius, 60, ROOM_H - 60);
           attempts++;
@@ -1579,6 +1925,40 @@
     scheduleRunSave();
   }
 
+  function ensureShopHasMinimumItemOffers(room, minItemOffers = 3) {
+    if (!room || room.type !== 'shop') return;
+    room.shopOffers = Array.isArray(room.shopOffers) ? room.shopOffers : [];
+    const itemOffers = room.shopOffers.filter(offer => offer?.type === 'item');
+    if (itemOffers.length >= minItemOffers) return;
+
+    const occupiedKeys = new Set(itemOffers.map(offer => offer.key));
+    const itemSlotsX = [ROOM_W / 2 - 180, ROOM_W / 2, ROOM_W / 2 + 180, ROOM_W / 2 - 90, ROOM_W / 2 + 90];
+    let created = 0;
+
+    while (itemOffers.length + created < minItemOffers) {
+      let key = '';
+      for (let attempts = 0; attempts < 12; attempts += 1) {
+        const candidate = rollItemDrop({ stream: 'loot' });
+        if (!occupiedKeys.has(candidate)) {
+          key = candidate;
+          break;
+        }
+      }
+      if (!key) key = rollItemDrop({ stream: 'loot' });
+      occupiedKeys.add(key);
+      const itemIndex = itemOffers.length + created;
+      room.shopOffers.push({
+        type: 'item',
+        key,
+        cost: 32 + floor * 4 + itemIndex * 6,
+        x: itemSlotsX[itemIndex] ?? ROOM_W / 2,
+        y: ROOM_H / 2 - 16,
+        bought: false,
+      });
+      created += 1;
+    }
+  }
+
   function findSafeEnemySpawnPoint(preferredX, preferredY, radius = 18) {
     if (!isBlocked(preferredX, preferredY, radius)) {
       return { x: preferredX, y: preferredY };
@@ -1599,24 +1979,70 @@
     return null;
   }
 
-  function spawnWave(count) {
+  function getMiniBossSpawnChance(roomType = 'combat') {
+    if (floor < 5) return 0;
+    const difficulty = getDifficultyDef();
+    const baseChance = clamp(0.08 + (floor - 5) * 0.02, 0.08, 0.34);
+    const scaledChance = baseChance * difficulty.miniBossChanceMultiplier;
+    if (roomType === 'ladder') return Math.min(0.95, scaledChance * 3);
+    return Math.min(0.8, scaledChance);
+  }
+
+  function getWaveCount(baseOffset) {
+    const difficulty = getDifficultyDef();
+    return baseOffset + floor + difficulty.waveBonus + irand(0, 1, 'encounter');
+  }
+
+  function rollEnemyType() {
+    const bonus = getDifficultyDef().roomWeightBonus;
+    const roll = nextRandom('encounter');
+    if (roll > 0.84 - bonus * 0.9) return 'golem';
+    if (roll > 0.68 - bonus * 0.82) return 'sniper';
+    if (roll > 0.5 - bonus * 0.68) return 'knave';
+    if (roll > 0.32 - bonus * 0.54) return 'cult_mage';
+    if (roll > 0.16 - bonus * 0.4) return 'charger';
+    if (roll > 0.08 - bonus * 0.24) return 'laser';
+    return 'hunter';
+  }
+
+  function spawnMiniBoss(roomType = 'combat') {
+    const chance = getMiniBossSpawnChance(roomType);
+    if (chance <= 0 || nextRandom('encounter') > chance) return;
+
+    const pool = roomType === 'ladder'
+      ? ['golem', 'knave', 'cult_mage', 'sniper']
+      : ['knave', 'cult_mage', 'sniper', 'golem'];
+    const type = pool[irand(0, pool.length - 1, 'encounter')];
+    const angle = nextRandom('encounter') * Math.PI * 2;
+    const radius = 120 + nextRandom('encounter') * 180;
+    const x = clamp(ROOM_W / 2 + Math.cos(angle) * radius, 80, ROOM_W - 80);
+    const y = clamp(ROOM_H / 2 + Math.sin(angle) * radius, 80, ROOM_H - 80);
+    const safeSpawn = findSafeEnemySpawnPoint(x, y, 18);
+    if (!safeSpawn) return;
+
+    const miniBoss = spawnEnemy(type, safeSpawn.x, safeSpawn.y, canSpawnEliteEnemies());
+    miniBoss.hp = Math.round(miniBoss.hp * 1.9);
+    miniBoss.max = miniBoss.hp;
+    miniBoss.dmg = Math.round(miniBoss.dmg * 1.45);
+    miniBoss.speed *= 0.94;
+    miniBoss.r = Math.round(miniBoss.r * 1.08);
+    miniBoss.miniBoss = true;
+    particles.push({ x: miniBoss.x, y: miniBoss.y - 26, life: 0.7, text: 'MINI BOSS', c: '#ffb347' });
+  }
+
+  function spawnWave(count, roomType = 'combat') {
     for (let index = 0; index < count; index += 1) {
-      const angle = rng() * Math.PI * 2;
-      const radius = 120 + rng() * 180;
+      const angle = nextRandom('encounter') * Math.PI * 2;
+      const radius = 120 + nextRandom('encounter') * 180;
       const x = clamp(ROOM_W / 2 + Math.cos(angle) * radius, 80, ROOM_W - 80);
       const y = clamp(ROOM_H / 2 + Math.sin(angle) * radius, 80, ROOM_H - 80);
       const safeSpawn = findSafeEnemySpawnPoint(x, y, 15);
       if (!safeSpawn) continue;
-      const roll = rng();
-      let type = 'hunter';
-      if (roll > 0.84) type = 'golem';
-      else if (roll > 0.68) type = 'sniper';
-      else if (roll > 0.5) type = 'knave';
-      else if (roll > 0.32) type = 'cult_mage';
-      else if (roll > 0.16) type = 'charger';
-      else if (roll > 0.08) type = 'laser';
-      spawnEnemy(type, safeSpawn.x, safeSpawn.y, rng() < 0.12);
+      const type = rollEnemyType();
+      const eliteRoll = canSpawnEliteEnemies() && nextRandom('encounter') < getDifficultyDef().eliteChance;
+      spawnEnemy(type, safeSpawn.x, safeSpawn.y, eliteRoll);
     }
+    spawnMiniBoss(roomType);
   }
 
   function spawnFloorBoss() {
@@ -1630,23 +2056,61 @@
     return 1 + gameMinutes * floor * 0.15;
   }
 
+  function canSpawnEliteEnemies() {
+    return floor >= getDifficultyDef().eliteFloor && floor <= 10;
+  }
+
+  function rollEliteInventory() {
+    const inventory = {};
+    const pool = ELITE_INVENTORY_POOL.slice();
+    shuffle(pool, 'encounter');
+    const slots = irand(1, 3, 'encounter');
+    for (let index = 0; index < slots; index += 1) {
+      const key = pool[index];
+      if (!key) continue;
+      inventory[key] = 1 + (nextRandom('encounter') < 0.28 ? 1 : 0);
+    }
+    return inventory;
+  }
+
+  function applyEliteInventory(enemy) {
+    const inventory = rollEliteInventory();
+    enemy.eliteInventory = inventory;
+
+    const stacks = key => Number(inventory[key] || 0);
+    const hpMult = 1 + stacks('insurance') * 0.16 + stacks('turtle_shell') * 0.1 + stacks('iron_lung') * 0.24;
+    const dmgMult = 1 + stacks('neo_knife') * 0.08 + stacks('orb_of_blood') * 0.14 + stacks('crit_charm') * 0.12 + stacks('oracles_lens') * 0.2;
+    const speedMult = 1 + stacks('attack_servo') * 0.08 + stacks('turtle_shell') * 0.04;
+    const attackCdMult = Math.max(0.52, 1 - stacks('charged_adapter') * 0.1);
+
+    enemy.hp = Math.round(enemy.hp * hpMult);
+    enemy.max = enemy.hp;
+    enemy.dmg = Math.round(enemy.dmg * dmgMult);
+    enemy.speed *= speedMult;
+    enemy.attackCd *= attackCdMult;
+    enemy.r = Math.round(enemy.r * (1 + stacks('iron_lung') * 0.04));
+  }
+
   function scaleEnemyStats(baseStats, type) {
     const result = { ...baseStats };
+    const difficulty = getDifficultyDef();
     const gameMinutes = gameElapsedTime / 60;
     const loopNumber = Math.max(1, Math.floor((floor - 1) / 10) + 1);
     const floorInLoop = ((floor - 1) % 10) + 1;
     const floorMultiplier = 1 + (floorInLoop - 1) * 0.14;
     const loopMultiplier = 1 + (loopNumber - 1) * 0.32;
     const timerMultiplier = 1 + gameMinutes * 0.12;
-    const combinedScaleFactor = floorMultiplier * loopMultiplier * timerMultiplier;
+    const difficultyMultiplier = isBossType(type) ? difficulty.bossStatMultiplier : difficulty.statMultiplier;
+    const combinedScaleFactor = floorMultiplier * loopMultiplier * timerMultiplier * difficultyMultiplier;
     result.hp = Math.round(result.hp * combinedScaleFactor);
     result.max = result.hp;
     result.dmg = Math.round(result.dmg * combinedScaleFactor);
-    result.speed *= combinedScaleFactor;
+    result.speed *= combinedScaleFactor * difficulty.speedMultiplier;
     return result;
   }
 
   function spawnEnemy(type, x, y, elite = false) {
+    const eliteAllowed = !!elite && canSpawnEliteEnemies();
     const base = {
       type,
       x,
@@ -1658,10 +2122,10 @@
       max: 52,
       speed: 96,
       dmg: 12,
-      elite,
+      elite: eliteAllowed,
       stun: 0,
       inv: 0,
-      attackCd: rand(0.2, 0.9),
+      attackCd: rand(0.2, 0.9, 'encounter'),
       bleed: 0,
       bleedT: 0,
       bleedTick: 0,
@@ -1689,6 +2153,9 @@
       base.speed = 108;
       base.dmg = 18;
       base.attackCd = 1.4;
+      base.beamRange = 620;
+      base.sweepDir = 1;
+      base.sweepSpeed = 0;
     } else if (type === 'cult_mage') {
       base.r = 17;
       base.hp = 84;
@@ -1755,7 +2222,7 @@
       const scale = 1 + (floor - 1) * 0.14;
       base.hp = Math.round(base.hp * scale);
       base.max = base.hp;
-      if (elite) {
+      if (eliteAllowed) {
         base.hp = Math.round(base.hp * 1.35);
         base.max = base.hp;
         base.speed *= 1.08;
@@ -1768,6 +2235,20 @@
     base.max = scaled.max;
     base.dmg = scaled.dmg;
     base.speed = scaled.speed;
+
+    if (isBossType(type)) {
+      base.hp = Math.round(base.hp * 2);
+      base.max = base.hp;
+    }
+
+    if (type === 'god') {
+      base.hp = Math.round(base.hp * 5);
+      base.max = base.hp;
+      base.dmg = Math.round(base.dmg * 5);
+      base.speed *= 1.12;
+    }
+
+    if (base.elite) applyEliteInventory(base);
 
     enemies.push(base);
     return base;
@@ -1852,11 +2333,24 @@
     const hemesScarf = getItemCount('hemes_scarf');
     const critCharm = getItemCount('crit_charm');
     const attackServo = getItemCount('attack_servo');
+    const keenEye = getItemCount('keen_eye');
+    const chronoSpring = getItemCount('chrono_spring');
+    const scholarSeal = getItemCount('scholar_seal');
+    const bandaid = getItemCount('bandaid');
+    const pushMan = getItemCount('push_man');
+    const explosiveJelly = getItemCount('explosive_jelly');
     const turtleShell = getItemCount('turtle_shell');
+    const shieldOfAegis = getItemCount('shield_of_aegis');
+    const pendantOfKronos = getItemCount('pendant_of_kronos');
     const oracleLens = getItemCount('oracles_lens') > 0;
-    let critChance = critCharm * 0.05;
+    const godItemStacks = ITEM_KEYS.reduce((total, key) => {
+      if (ITEM_DEFS[key]?.rarity !== 'god') return total;
+      return total + getItemCount(key);
+    }, 0);
+    let critChance = (critCharm + keenEye) * 0.05 + pendantOfKronos * godItemStacks * 0.01;
     if (oracleLens) critChance *= 2;
     critChance = clamp(critChance, 0, 0.95);
+    const damageReduction = clamp(bandaid * 0.005 + shieldOfAegis * 0.5, 0, 0.85);
     return {
       bleedChance: neoKnife * 0.05,
       bleedDamageMultiplier: orbOfBlood > 0 ? 1 + orbOfBlood : 1,
@@ -1864,8 +2358,12 @@
       passiveBleedStacks: hemesScarf,
       critChance,
       critMultiplier: 1.6 + (oracleLens ? critChance * 2.2 : critChance * 0.6),
-      attackSpeedBonus: attackServo * 0.2,
+      attackSpeedBonus: (attackServo + chronoSpring) * 0.2,
       moveSpeedMultiplier: 1 + turtleShell * 0.05,
+      xpGainMultiplier: 1 + scholarSeal * 0.15,
+      knockbackMultiplier: 1 + pushMan * 0.18,
+      aoeRadiusMultiplier: 1 + explosiveJelly,
+      damageReduction,
       hasIronLung: getItemCount('iron_lung') > 0,
     };
   }
@@ -1875,10 +2373,96 @@
     return Math.max(0.2, (player?.attackSpeed || 1) + stats.attackSpeedBonus);
   }
 
+  function getWizardPawStatCards() {
+    const stats = getItemStats();
+    return [
+      { label: 'HP', value: `${Math.round(player.hp)} / ${Math.round(player.maxHp)}` },
+      { label: 'Attack Power', value: `${Math.round(player.attackPower)}` },
+      { label: 'Attack Speed', value: getAttackSpeedValue().toFixed(2) },
+      { label: 'Crit Chance', value: `${Math.round(stats.critChance * 100)}%` },
+      { label: 'Move Speed', value: `${Math.round(stats.moveSpeedMultiplier * 100)}%` },
+    ];
+  }
+
+  function openWizardPawSelection() {
+    wizardPawSelection = {
+      picks: [],
+      options: [
+        { key: 'maxHp', name: 'Max HP', description: `Current ${Math.round(player.maxHp)}. Triple max HP and scale current HP with it.` },
+        { key: 'attackPower', name: 'Attack Power', description: `Current ${Math.round(player.attackPower)}. Triple raw attack power.` },
+        { key: 'attackSpeed', name: 'Attack Speed', description: `Current ${getAttackSpeedValue().toFixed(2)}. Triple base attack speed.` },
+      ],
+    };
+    setWizardPawModalOpen(true);
+    renderWizardPawPanel();
+  }
+
+  function renderWizardPawPanel() {
+    if (!wizardPawSelection || !ui.wizardPawStats || !ui.wizardPawChoices) return;
+    ui.wizardPawStats.innerHTML = getWizardPawStatCards()
+      .map(stat => `<div class="wizard-paw-stat"><span class="wizard-paw-stat__label">${stat.label}</span><div class="wizard-paw-stat__value">${stat.value}</div></div>`)
+      .join('');
+    ui.wizardPawChoices.innerHTML = wizardPawSelection.options
+      .map(option => {
+        const selected = wizardPawSelection.picks.includes(option.key);
+        return `<button class="wizard-paw-choice${selected ? ' is-selected' : ''}" type="button" data-stat="${option.key}">
+          <span class="wizard-paw-choice__eyebrow">${selected ? 'Selected' : 'Choose'}</span>
+          <h4>${option.name}</h4>
+          <p>${option.description}</p>
+        </button>`;
+      })
+      .join('');
+    if (ui.wizardPawConfirm) {
+      ui.wizardPawConfirm.disabled = wizardPawSelection.picks.length !== 2;
+      ui.wizardPawConfirm.textContent = wizardPawSelection.picks.length === 2
+        ? 'CONFIRM PICKS'
+        : `CONFIRM ${wizardPawSelection.picks.length}/2`;
+    }
+  }
+
+  function handleWizardPawChoiceClick(event) {
+    const target = event.target instanceof Element ? event.target.closest('[data-stat]') : null;
+    const statKey = target?.dataset?.stat || '';
+    if (!wizardPawSelection || !statKey) return;
+    const picks = wizardPawSelection.picks;
+    const index = picks.indexOf(statKey);
+    if (index >= 0) picks.splice(index, 1);
+    else if (picks.length < 2) picks.push(statKey);
+    renderWizardPawPanel();
+  }
+
+  function applyWizardPawStat(stat) {
+    if (stat === 'maxHp') {
+      player.maxHp = Math.max(120, Math.round(player.maxHp * 3));
+      player.hp = Math.min(player.maxHp, Math.round(player.hp * 3));
+      return;
+    }
+    if (stat === 'attackPower') {
+      player.attackPower = Math.max(3, Math.round(player.attackPower * 3));
+      return;
+    }
+    if (stat === 'attackSpeed') {
+      player.attackSpeed = Math.max(0.2, player.attackSpeed * 3);
+    }
+  }
+
+  function confirmWizardPawSelection() {
+    if (!wizardPawSelection || wizardPawSelection.picks.length !== 2) return;
+    wizardPawSelection.picks.forEach(applyWizardPawStat);
+    particles.push({ x: player.x, y: player.y - 46, life: 1, text: "WIZARD'S PAW!", c: '#ffd27d' });
+    wizardPawSelection = null;
+    setWizardPawModalOpen(false);
+    markInventoryPanelDirty();
+    renderInventoryPanel();
+    updateHud();
+    scheduleRunSave();
+  }
+
   function consumeCharge(chargeType) {
     if (chargeType === 'insurance') {
       player.insuranceReady = false;
       player.insuranceChargeKills = 0;
+      player.insuranceActive = false;
       return;
     }
     if (chargeType === 'escape') {
@@ -1908,6 +2492,11 @@
         particles.push({ x: player.x, y: player.y - 36, life: 0.7, text: 'WARP READY', c: '#b88cff' });
       }
     }
+  }
+
+  function refreshFloorChargeStates() {
+    if (!player) return;
+    player.insuranceActive = false;
   }
 
   function scaleDamageAgainstEnemy(enemy, damage) {
@@ -1990,7 +2579,17 @@
       castLightningColumns();
       return;
     }
+    if (move === 'god_sweep') {
+      laserActive = true;
+      laserMode = 'god_sweep';
+      laserTime = 1.45 / attackSpeed;
+      laserTick = 0;
+      laserAngle = Math.atan2(mouse.worldY - player.y, mouse.worldX - player.x);
+      laserSweepSpeed = (nextRandom('encounter') < 0.5 ? -1 : 1) * 4.6;
+      return;
+    }
     laserActive = true;
+    laserMode = 'beam';
     laserTime = (godTimer > 0 ? 0.72 : ATTACKS.laser.duration) / attackSpeed;
     laserTick = 0;
   }
@@ -1999,14 +2598,18 @@
     if (!laserActive) return;
     laserTime -= dt;
     laserTick -= dt;
-    const angle = Math.atan2(mouse.worldY - player.y, mouse.worldX - player.x);
+    const angle = laserMode === 'god_sweep'
+      ? laserAngle
+      : Math.atan2(mouse.worldY - player.y, mouse.worldX - player.x);
     if (laserTick <= 0) {
-      laserTick = ATTACKS.laser.tick;
-      const end = getBeamEnd(player.x, player.y, angle, ATTACKS.laser.range);
+      if (laserMode === 'god_sweep') laserAngle += laserSweepSpeed * 0.05;
+      laserTick = laserMode === 'god_sweep' ? 0.05 : ATTACKS.laser.tick;
+      const range = laserMode === 'god_sweep' ? 560 : ATTACKS.laser.range;
+      const end = getBeamEnd(player.x, player.y, angle, range);
       for (let index = enemies.length - 1; index >= 0; index -= 1) {
         const enemy = enemies[index];
         if (!beamHitsCircle(player.x, player.y, end.x, end.y, enemy.x, enemy.y, enemy.r + 6)) continue;
-        hitEnemy(enemy, godTimer > 0 ? 16 : ATTACKS.laser.damage, angle, 60, '#f0f');
+        hitEnemy(enemy, laserMode === 'god_sweep' ? 24 : godTimer > 0 ? 16 : ATTACKS.laser.damage, angle, laserMode === 'god_sweep' ? 120 : 60, '#f0f');
       }
       destructibles.forEach(prop => {
         if (!prop.broken && !prop.hidden && beamHitsCircle(player.x, player.y, end.x, end.y, prop.x, prop.y, prop.r + 4)) {
@@ -2016,7 +2619,10 @@
     }
     if (laserTime <= 0) {
       laserActive = false;
-      cooldowns.laser = godTimer > 0 ? 2.8 : ATTACKS.laser.baseCooldown;
+      laserMode = 'beam';
+      cooldowns.laser = getEquippedMove('laser') === 'god_sweep'
+        ? 7.2 / getAttackSpeedValue()
+        : godTimer > 0 ? 2.8 : ATTACKS.laser.baseCooldown;
     }
   }
 
@@ -2042,13 +2648,14 @@
       castFloorLava();
       return;
     }
+    const smashRadius = ATTACKS.smash.radius * (itemStats.aoeRadiusMultiplier || 1);
     shake = 16;
     shakeT = 0.24;
-    particles.push({ x: player.x, y: player.y, life: 0.4, ring: ATTACKS.smash.radius - 30, c: '#ff00aa' });
+    particles.push({ x: player.x, y: player.y, life: 0.4, ring: smashRadius - 30, c: '#ff00aa' });
     for (let index = enemies.length - 1; index >= 0; index -= 1) {
       const enemy = enemies[index];
       const distance = dist(player.x, player.y, enemy.x, enemy.y);
-      if (distance > ATTACKS.smash.radius + enemy.r) continue;
+      if (distance > smashRadius + enemy.r) continue;
       const angle = Math.atan2(enemy.y - player.y, enemy.x - player.x);
       let damage = godTimer > 0 ? 82 : ATTACKS.smash.damage;
       if (itemStats.bleedDamageMultiplier > 1 && enemy.bleed > 0) {
@@ -2059,7 +2666,7 @@
       enemy.stun = 0.5;
     }
     destructibles.forEach(prop => {
-      if (!prop.broken && !prop.hidden && dist(player.x, player.y, prop.x, prop.y) <= ATTACKS.smash.radius + prop.r) {
+      if (!prop.broken && !prop.hidden && dist(player.x, player.y, prop.x, prop.y) <= smashRadius + prop.r) {
       damageDestructible(prop, 2);
       }
     });
@@ -2098,20 +2705,22 @@
   }
 
   function spawnFireballs() {
+    const aoeRadiusMultiplier = getItemStats().aoeRadiusMultiplier || 1;
     const base = Math.atan2(mouse.worldY - player.y, mouse.worldX - player.x);
     for (let index = -1; index <= 1; index += 1) {
       const angle = base + index * 0.18;
-      projectiles.push({ x: player.x, y: player.y, vx: Math.cos(angle) * 320, vy: Math.sin(angle) * 320, r: 8, life: 1.6, enemy: false, kind: 'fireball', damage: 22, splash: 48 });
+      projectiles.push({ x: player.x, y: player.y, vx: Math.cos(angle) * 320, vy: Math.sin(angle) * 320, r: 8, life: 1.6, enemy: false, kind: 'fireball', damage: 22, splash: 48 * aoeRadiusMultiplier });
     }
   }
 
   function castChaosBurst() {
+    const aoeRadiusMultiplier = getItemStats().aoeRadiusMultiplier || 1;
     for (let index = 0; index < 6; index += 1) {
       const angle = rng() * Math.PI * 2;
       const px = player.x + Math.cos(angle) * rand(160, 40);
       const py = player.y + Math.sin(angle) * rand(160, 40);
-      particles.push({ x: px, y: py, life: 0.45, ring: 18, c: '#c971ff' });
-      blastRadius(px, py, 52, 24, '#c971ff');
+      particles.push({ x: px, y: py, life: 0.45, ring: 18 * aoeRadiusMultiplier, c: '#c971ff' });
+      blastRadius(px, py, 52 * aoeRadiusMultiplier, 24, '#c971ff');
     }
   }
 
@@ -2217,12 +2826,14 @@
   }
 
   function castHealingZone() {
-    hazards.push({ kind: 'healing_zone', x: player.x, y: player.y, r: 62, ttl: 6, healTick: 0.24, healAccum: 0, plusTick: 0.08 });
+    const aoeRadiusMultiplier = getItemStats().aoeRadiusMultiplier || 1;
+    hazards.push({ kind: 'healing_zone', x: player.x, y: player.y, r: 62 * aoeRadiusMultiplier, ttl: 6, healTick: 0.24, healAccum: 0, plusTick: 0.08 });
     particles.push({ x: player.x, y: player.y, life: 0.7, ring: 30, c: '#35ff6f' });
   }
 
   function castFireCircle() {
-    hazards.push({ kind: 'fire_circle', x: player.x, y: player.y, r: 96, ttl: 5.2, dps: 18, followPlayer: true });
+    const aoeRadiusMultiplier = getItemStats().aoeRadiusMultiplier || 1;
+    hazards.push({ kind: 'fire_circle', x: player.x, y: player.y, r: 96 * aoeRadiusMultiplier, ttl: 5.2, dps: 18, followPlayer: true });
     particles.push({ x: player.x, y: player.y, life: 0.55, ring: 34, c: '#ff7b32' });
   }
 
@@ -2233,6 +2844,7 @@
   }
 
   function castLightningColumns() {
+    const aoeRadiusMultiplier = getItemStats().aoeRadiusMultiplier || 1;
     const angle = Math.atan2(mouse.worldY - player.y, mouse.worldX - player.x);
     const offsets = [-42, 42];
     offsets.forEach(offset => {
@@ -2242,7 +2854,7 @@
         kind: 'lightning_column',
         x: mouse.worldX + ox,
         y: mouse.worldY + oy,
-        r: 54,
+        r: 54 * aoeRadiusMultiplier,
         ttl: 4.5,
         tick: 0,
         interval: 0.45,
@@ -2285,13 +2897,14 @@
   function hitEnemy(enemy, damage, angle, knockback, color) {
     const stats = getItemStats();
     let dealt = scaleDamageAgainstEnemy(enemy, damage);
-    const isCrit = stats.critChance > 0 && rng() < stats.critChance;
+    const isCrit = stats.critChance > 0 && nextRandom('encounter') < stats.critChance;
+    const appliedKnockback = knockback * (stats.knockbackMultiplier || 1);
     if (isCrit) dealt = Math.round(dealt * stats.critMultiplier);
     enemy.hp -= dealt;
-    enemy.vx += Math.cos(angle) * knockback;
-    enemy.vy += Math.sin(angle) * knockback;
+    enemy.vx += Math.cos(angle) * appliedKnockback;
+    enemy.vy += Math.sin(angle) * appliedKnockback;
     enemy.stun = Math.max(enemy.stun, 0.08);
-    particles.push({ x: enemy.x, y: enemy.y, life: 0.24, vx: rand(-30, 30), vy: rand(-30, 30), c: color });
+    particles.push({ x: enemy.x, y: enemy.y, life: 0.24, vx: rand(-30, 30, 'fx'), vy: rand(-30, 30, 'fx'), c: color });
     spawnDamagePopup(enemy.x, enemy.y - 14, dealt, {
       crit: isCrit,
       color: isCrit ? '#ff9f1c' : '#ff6b6b',
@@ -2314,9 +2927,9 @@
       particles.push({
         x: enemy.x,
         y: enemy.y,
-        life: 0.45 + Math.random() * 0.3,
-        vx: rand(-130, 130),
-        vy: rand(-130, 130),
+        life: 0.45 + nextRandom('fx') * 0.3,
+        vx: rand(-130, 130, 'fx'),
+        vy: rand(-130, 130, 'fx'),
         c: enemy.elite ? '#ffaa00' : enemy.type === 'god' ? '#fff' : '#0ff',
       });
     }
@@ -2326,9 +2939,9 @@
     incrementChargeProgress('insurance', 9);
     incrementChargeProgress('escape', 10);
 
-    if (enemy.elite && rng() < 0.18) {
-      pickups.push({ x: enemy.x, y: enemy.y, type: 'item', key: rollItemDrop({ elite: true }) });
-    } else if (rng() < 0.1) {
+    if (enemy.elite && nextRandom('loot') < 0.18) {
+      pickups.push({ x: enemy.x, y: enemy.y, type: 'item', key: rollItemDrop({ elite: true, stream: 'loot' }) });
+    } else if (nextRandom('loot') < 0.1) {
       pickups.push({ x: enemy.x, y: enemy.y, type: 'potion' });
     }
 
@@ -2374,8 +2987,8 @@
     const chunks = Math.max(1, Math.ceil(amount / 4));
     for (let index = 0; index < chunks; index += 1) {
       pickups.push({
-        x: x + rand(-18, 18),
-        y: y + rand(-18, 18),
+        x: x + rand(-18, 18, 'loot'),
+        y: y + rand(-18, 18, 'loot'),
         type: 'coin',
         value: Math.ceil(amount / chunks),
       });
@@ -2383,19 +2996,14 @@
   }
 
   function rollItemDrop(options = {}) {
-    const bonus = options.elite ? 8 : 0;
-    const totalWeight = ITEM_DROP_WEIGHTS.reduce((sum, [, weight]) => sum + weight, 0) + bonus;
-    let roll = rand(totalWeight, 0);
-    for (const [key, weight] of ITEM_DROP_WEIGHTS) {
-      const extra = options.elite && key !== 'neo_knife' ? bonus / 2 : 0;
-      roll -= weight + extra;
-      if (roll <= 0) return key;
-    }
-    return 'neo_knife';
+    const table = options.elite ? ELITE_ITEM_DROP_TABLE : ITEM_DROP_TABLE;
+    return rollFromWeightTable(table, options.stream || 'loot');
   }
 
   function grantXp(amount) {
-    player.xp += amount;
+    const stats = getItemStats();
+    const gained = Math.max(1, Math.round(amount * (stats.xpGainMultiplier || 1)));
+    player.xp += gained;
     while (player.xp >= player.xpToNext) {
       player.xp -= player.xpToNext;
       levelUp();
@@ -2421,30 +3029,25 @@
     particles.push({ x: player.x, y: player.y - 28, life: 0.9, text: `${item.shortName} +1`, c: item.color || '#fff' });
 
     if (itemKey === 'wizards_paw') {
-      const choices = ['maxHp', 'attackPower', 'attackSpeed'];
-      shuffle(choices);
-      const selected = choices.slice(0, 2);
-      selected.forEach(stat => {
-        if (stat === 'maxHp') {
-          player.maxHp = Math.max(120, Math.round(player.maxHp * 3));
-          player.hp = Math.min(player.maxHp, Math.round(player.hp * 3));
-        }
-        if (stat === 'attackPower') {
-          player.attackPower = Math.max(3, Math.round(player.attackPower * 3));
-        }
-        if (stat === 'attackSpeed') {
-          player.attackSpeed = Math.max(0.2, player.attackSpeed * 3);
-        }
-      });
-      particles.push({ x: player.x, y: player.y - 46, life: 1, text: "WIZARD'S PAW!", c: '#ffd27d' });
+      openWizardPawSelection();
+    }
+
+    if (itemKey === 'titan_heart') {
+      player.maxHp = Math.max(120, Math.round(player.maxHp * 1.08));
+      player.hp = Math.min(player.maxHp, Math.round(player.hp * 1.08));
+      particles.push({ x: player.x, y: player.y - 42, life: 0.8, text: 'MAX HP UP', c: '#ff9fa8' });
     }
 
     if (itemKey === 'jesters_dice') {
       floorSkipPending += 3;
       for (let index = 0; index < 10; index += 1) {
         const rewardPool = ITEM_KEYS.filter(key => key !== 'jesters_dice');
-        const key = rewardPool[irand(0, rewardPool.length - 1)];
+        const key = rewardPool[irand(0, rewardPool.length - 1, 'loot')];
         player.items[key] = getItemCount(key) + 1;
+        if (key === 'titan_heart') {
+          player.maxHp = Math.max(120, Math.round(player.maxHp * 1.08));
+          player.hp = Math.min(player.maxHp, Math.round(player.hp * 1.08));
+        }
       }
       particles.push({ x: player.x, y: player.y - 46, life: 1, text: '+10 ITEMS', c: '#ff8bd8' });
     }
@@ -2479,7 +3082,7 @@
   function loop(timestamp) {
     const dt = Math.min(0.033, (timestamp - lastTime) / 1000 || 0.016);
     lastTime = timestamp;
-    if (gameState === 'play') update(dt);
+    if (gameState === 'play' && !isWizardPawOpen()) update(dt);
     uiController.tick();
     draw();
     requestAnimationFrame(loop);
@@ -2568,7 +3171,7 @@
           kind: 'lava',
           x: player.x,
           y: player.y,
-          r: 24,
+          r: 24 * (itemStats.aoeRadiusMultiplier || 1),
           ttl: 1.8,
           pulse: 2.5,
           wobble: 0.35,
@@ -2982,6 +3585,25 @@
     }
   }
 
+  function spawnGodSwordRing(enemy, count = 10, damage = 26) {
+    for (let index = 0; index < count; index += 1) {
+      const angle = (Math.PI * 2 * index) / count + nextRandom('encounter') * 0.18;
+      const sx = enemy.x + Math.cos(angle) * 52;
+      const sy = enemy.y + Math.sin(angle) * 52;
+      projectiles.push({
+        x: sx,
+        y: sy,
+        vx: Math.cos(angle) * 280,
+        vy: Math.sin(angle) * 280,
+        r: 8,
+        life: 1.5,
+        enemy: true,
+        kind: 'god_sword',
+        damage,
+      });
+    }
+  }
+
   function updateArtificerBoss(enemy, dt) {
     const hpPct = enemy.hp / enemy.max;
     if (hpPct < 0.34) enemy.phase = 3;
@@ -3143,9 +3765,18 @@
           enemy.beamTime = 0.78;
           enemy.beamTick = 0;
         }
+        if (enemy.state === 'godSweep') {
+          enemy.beamTime = 1.9;
+          enemy.beamTick = 0;
+          enemy.sweepSpeed = 3.9 * (enemy.sweepDir || 1);
+        }
         if (enemy.state === 'godCharge') {
           enemy.dashTime = 0.48;
           enemy.dashHit = false;
+        }
+        if (enemy.state === 'godSwordRing') {
+          spawnGodSwordRing(enemy, 12, Math.round(enemy.dmg * 0.82));
+          enemy.attackCd = 1.2;
         }
       }
       return;
@@ -3157,14 +3788,15 @@
       enemy.vx *= 0.86;
       enemy.vy *= 0.86;
       if (enemy.beamTick <= 0) {
-        enemy.beamTick = 0.08;
-        enemy.beamAngle += Math.sin(Date.now() / 160) * 0.02;
-        const beamEnd = getBeamEnd(enemy.x, enemy.y, enemy.beamAngle, 480);
+        enemy.beamTick = enemy.state === 'godSweep' ? 0.045 : 0.08;
+        if (enemy.state === 'godSweep') enemy.beamAngle += enemy.sweepSpeed * 0.045;
+        else enemy.beamAngle += Math.sin(Date.now() / 160) * 0.02;
+        const beamEnd = getBeamEnd(enemy.x, enemy.y, enemy.beamAngle, enemy.beamRange || 620);
         if (beamHitsCircle(enemy.x, enemy.y, beamEnd.x, beamEnd.y, player.x, player.y, player.r + 6)) {
-          damagePlayer(16, enemy.beamAngle, 150);
+          damagePlayer(enemy.state === 'godSweep' ? enemy.dmg + 18 : enemy.dmg + 6, enemy.beamAngle, enemy.state === 'godSweep' ? 210 : 150);
         }
       }
-      if (enemy.beamTime <= 0) enemy.attackCd = 1;
+      if (enemy.beamTime <= 0) enemy.attackCd = enemy.state === 'godSweep' ? 1.45 : 1;
       return;
     }
 
@@ -3174,7 +3806,7 @@
       enemy.vy = Math.sin(enemy.dashAngle) * 500;
       if (!enemy.dashHit && dist(enemy.x, enemy.y, player.x, player.y) < enemy.r + player.r + 10) {
         enemy.dashHit = true;
-        damagePlayer(20, enemy.dashAngle, 260);
+        damagePlayer(enemy.dmg + 12, enemy.dashAngle, 300);
       }
       if (enemy.dashTime <= 0) enemy.attackCd = 1.1;
       return;
@@ -3192,22 +3824,31 @@
 
     if (distance < enemy.r + player.r + 12 && enemy.attackCd <= 0) {
       const angle = Math.atan2(dy, dx);
-      damagePlayer(18, angle, 220);
-      enemy.attackCd = 0.95;
+      damagePlayer(enemy.dmg + 10, angle, 260);
+      enemy.attackCd = 0.8;
       return;
     }
 
     if (enemy.attackCd <= 0) {
-      if (distance > 250 || rng() > 0.45) {
-        enemy.state = 'godLaser';
-        enemy.windup = 0.95;
+      const roll = nextRandom('encounter');
+      if (distance > 300 && roll > 0.68) {
+        enemy.state = 'godSweep';
+        enemy.windup = 1.15;
         enemy.beamAngle = Math.atan2(dy, dx);
+        enemy.sweepDir = nextRandom('encounter') < 0.5 ? -1 : 1;
+      } else if (roll > 0.42) {
+        enemy.state = 'godLaser';
+        enemy.windup = 0.82;
+        enemy.beamAngle = Math.atan2(dy, dx);
+      } else if (roll > 0.18) {
+        enemy.state = 'godSwordRing';
+        enemy.windup = 0.6;
       } else {
         enemy.state = 'godCharge';
-        enemy.windup = 0.55;
+        enemy.windup = 0.44;
         enemy.dashAngle = Math.atan2(dy, dx);
       }
-      enemy.attackCd = 3.1;
+      enemy.attackCd = 2.15;
     }
   }
 
@@ -3230,27 +3871,28 @@
   function damagePlayer(amount, angle, knockback) {
     if (player.inv > 0) return;
     const itemStats = getItemStats();
-    let finalAmount = amount;
+    const hpBeforeHit = player.hp;
+    const halfHpThreshold = player.maxHp * 0.5;
+    let finalAmount = amount * (1 - (itemStats.damageReduction || 0));
     if (itemStats.hasIronLung) {
       const roomCap = player.maxHp * 0.2;
       const remaining = roomCap - (player.roomDamageTaken || 0);
       if (remaining <= 0) return;
       finalAmount = Math.min(finalAmount, remaining);
     }
+    finalAmount = Math.max(0, finalAmount);
     if (finalAmount <= 0) return;
 
     player.hp -= finalAmount;
-    player.roomDamageTaken = (player.roomDamageTaken || 0) + finalAmount;
 
-    if (getItemCount('insurance') > 0 && player.insuranceReady && !player.insuranceActive && player.hp <= player.maxHp * 0.5) {
-      player.insuranceActive = true;
+    if (getItemCount('insurance') > 0 && player.insuranceReady && hpBeforeHit > halfHpThreshold && player.hp <= halfHpThreshold) {
+      player.hp = Math.max(player.hp, halfHpThreshold);
       consumeCharge('insurance');
-      particles.push({ x: player.x, y: player.y - 30, life: 0.8, text: 'INSURANCE ON', c: '#e6eeff' });
+      particles.push({ x: player.x, y: player.y - 30, life: 0.8, text: 'INSURANCE USED', c: '#e6eeff' });
     }
 
-    if (player.insuranceActive && player.hp < 1) {
-      player.hp = 1;
-    }
+    finalAmount = Math.max(0, hpBeforeHit - player.hp);
+    player.roomDamageTaken = (player.roomDamageTaken || 0) + finalAmount;
 
     player.inv = 0.75;
     player.vx += Math.cos(angle) * knockback;
@@ -3426,7 +4068,7 @@
     prop.broken = true;
     if (prop.kind === 'pot') {
       if (rng() < 0.7) dropCoins(prop.x, prop.y, 6 + floor);
-      else pickups.push({ x: prop.x, y: prop.y, type: 'item', key: rollItemDrop() });
+      else pickups.push({ x: prop.x, y: prop.y, type: 'item', key: rollItemDrop({ stream: 'loot' }) });
     }
     if (prop.kind === 'barrel') {
       blastRadius(prop.x, prop.y, 72, 28, '#ff5a3d');
@@ -3480,7 +4122,7 @@
       chest.open = true;
       dropCoins(chest.x, chest.y, 12 + floor * 2);
       if (rng() < 0.9) {
-        pickups.push({ x: chest.x, y: chest.y - 20, type: 'item', key: rollItemDrop() });
+        pickups.push({ x: chest.x, y: chest.y - 20, type: 'item', key: rollItemDrop({ stream: 'loot' }) });
       } else {
         pickups.push({ x: chest.x, y: chest.y - 20, type: 'potion' });
       }
@@ -3500,6 +4142,16 @@
           const pull = 180 + (1 - d / magnetRadius) * 260;
           pickup.x += ((player.x - pickup.x) / d) * 0.016 * pull;
           pickup.y += ((player.y - pickup.y) / d) * 0.016 * pull;
+        }
+      } else if (pickup.type === 'potion') {
+        if (player.hp < player.maxHp) {
+          const magnetRadius = 110;
+          const d = dist(pickup.x, pickup.y, player.x, player.y);
+          if (d < magnetRadius && d > 0.001) {
+            const pull = 180 + (1 - d / magnetRadius) * 260;
+            pickup.x += ((player.x - pickup.x) / d) * 0.016 * pull;
+            pickup.y += ((player.y - pickup.y) / d) * 0.016 * pull;
+          }
         }
       } else if (pickup.type === 'item') {
         const magnetRadius = 145;
@@ -3526,7 +4178,7 @@
         if (floorSkipPending > 0) {
           floor = Math.min(MAX_FLOOR, floor + floorSkipPending);
           floorSkipPending = 0;
-          player.insuranceActive = false;
+          refreshFloorChargeStates();
           metaProgress.bestFloor = Math.max(metaProgress.bestFloor, floor);
           persistMetaSoon();
           showFloorTransition = true;
@@ -3539,7 +4191,7 @@
 
       if (pickup.type === 'ladder') {
         floor = Math.min(MAX_FLOOR, floor + 1);
-        player.insuranceActive = false;
+        refreshFloorChargeStates();
         metaProgress.bestFloor = Math.max(metaProgress.bestFloor, floor);
         persistMetaSoon();
         showFloorTransition = true;
@@ -3637,8 +4289,10 @@
   function returnToFloorOne() {
     floor = 1;
     gameElapsedTime = 0;
-    player.insuranceActive = false;
-    seedStr = `${seedStr}:loop:${Date.now()}`;
+    refreshFloorChargeStates();
+    runLoopIndex += 1;
+    syncSeedState();
+    metaProgress.loopsCompleted = Number(metaProgress.loopsCompleted || 0) + 1;
     metaProgress.bestFloor = Math.max(metaProgress.bestFloor, MAX_FLOOR);
     persistMetaSoon();
     player.x = START_X;
@@ -3802,7 +4456,11 @@
 
   function serializeRun() {
     return {
+      baseSeedStr,
       seedStr,
+      runLoopIndex,
+      rngState: getRngState(),
+      difficulty: selectedDifficulty,
       floor,
       rooms,
       currentRoom: { gx: currentRoom.gx, gy: currentRoom.gy },
@@ -3820,6 +4478,9 @@
       laserActive,
       laserTime,
       laserTick,
+      laserMode,
+      laserAngle,
+      laserSweepSpeed,
       godTimer,
       gameElapsedTime,
       camera,
@@ -4282,11 +4943,11 @@
         ctx.restore();
       }
       if (enemy.beamTime > 0) {
-        const end = getBeamEnd(enemy.x, enemy.y, enemy.beamAngle, enemy.type === 'god' ? 480 : 430);
+        const end = getBeamEnd(enemy.x, enemy.y, enemy.beamAngle, enemy.type === 'god' ? (enemy.beamRange || 620) : 430);
         ctx.strokeStyle = enemy.type === 'god' ? '#ffffff' : '#aa66ff';
-        ctx.lineWidth = enemy.type === 'god' ? 10 : 7;
+        ctx.lineWidth = enemy.type === 'god' && enemy.state === 'godSweep' ? 18 : enemy.type === 'god' ? 10 : 7;
         ctx.shadowColor = ctx.strokeStyle;
-        ctx.shadowBlur = 14;
+        ctx.shadowBlur = enemy.type === 'god' && enemy.state === 'godSweep' ? 24 : 14;
         ctx.beginPath();
         ctx.moveTo(enemy.x, enemy.y);
         ctx.lineTo(end.x, end.y);
@@ -4406,12 +5067,14 @@
 
   function drawPlayerLaser() {
     if (!laserActive || !player) return;
-    const angle = Math.atan2(mouse.worldY - player.y, mouse.worldX - player.x);
-    const end = getBeamEnd(player.x, player.y, angle, ATTACKS.laser.range);
+    const angle = laserMode === 'god_sweep'
+      ? laserAngle
+      : Math.atan2(mouse.worldY - player.y, mouse.worldX - player.x);
+    const end = getBeamEnd(player.x, player.y, angle, laserMode === 'god_sweep' ? 560 : ATTACKS.laser.range);
     ctx.strokeStyle = '#ff00aa';
-    ctx.lineWidth = 8;
+    ctx.lineWidth = laserMode === 'god_sweep' ? 16 : 8;
     ctx.shadowColor = '#f0f';
-    ctx.shadowBlur = 18;
+    ctx.shadowBlur = laserMode === 'god_sweep' ? 26 : 18;
     ctx.globalAlpha = 0.92;
     ctx.beginPath();
     ctx.moveTo(player.x, player.y);
@@ -4764,6 +5427,11 @@
             handlers.onCharacterSelect(button.dataset.char || '', button);
           });
         });
+        view.difficultyButtons.forEach(button => {
+          button.addEventListener('click', () => {
+            handlers.onDifficultySelect(button.dataset.difficulty || '', button);
+          });
+        });
         view.go.addEventListener('click', handlers.onStartNew);
         view.seed.addEventListener('keydown', event => {
           if (event.key === 'Enter') handlers.onStartNew();
@@ -4806,6 +5474,23 @@
           button.disabled = !unlocked.has(itemKey);
           if (hint) hint.textContent = unlocked.has(itemKey) ? baseHint : 'locked in bank';
         });
+      },
+      updateDifficultySelection(unlocked, selected, loopsCompleted) {
+        const selectedDef = getDifficultyDef(selected);
+        view.difficultyButtons.forEach(button => {
+          const key = normalizeDifficulty(button.dataset.difficulty || '');
+          const def = getDifficultyDef(key);
+          const isUnlocked = unlocked.has(key);
+          button.classList.toggle('sel', selected === key);
+          button.classList.toggle('locked', !isUnlocked);
+          button.disabled = !isUnlocked;
+          button.title = isUnlocked ? def.description : `Unlock at ${def.unlockLoops} loops`;
+        });
+        if (view.difficultyHint) {
+          view.difficultyHint.textContent = selectedDef.unlockLoops > 0 && !unlocked.has(selected)
+            ? `Unlocks at ${selectedDef.unlockLoops} loops. Current loops: ${loopsCompleted}`
+            : `${selectedDef.description} Loops: ${loopsCompleted}.`;
+        }
       },
       setItemStatus(items) {
         ITEM_KEYS.forEach(key => {
@@ -4947,6 +5632,28 @@
     return mulberry32(xmur3(seed)());
   }
 
+  function buildWeightTable(entries) {
+    let total = 0;
+    const cumulative = entries.map(([key, weight]) => {
+      total += Math.max(0, Number(weight) || 0);
+      return [key, total];
+    });
+    return { total, cumulative };
+  }
+
+  function rollFromWeightTable(table, stream = 'loot') {
+    if (!table || table.total <= 0 || !table.cumulative.length) return 'neo_knife';
+    const roll = nextRandom(stream) * table.total;
+    let lo = 0;
+    let hi = table.cumulative.length - 1;
+    while (lo < hi) {
+      const mid = Math.floor((lo + hi) / 2);
+      if (roll < table.cumulative[mid][1]) hi = mid;
+      else lo = mid + 1;
+    }
+    return table.cumulative[lo]?.[0] || 'neo_knife';
+  }
+
   function mulberry32(a) {
     return function nextRandom() {
       a |= 0;
@@ -4970,18 +5677,18 @@
     };
   }
 
-  function rand(max = 1, min = 0) {
-    return min + (max - min) * (rng ? rng() : Math.random());
+  function rand(max = 1, min = 0, stream = 'encounter') {
+    return min + (max - min) * nextRandom(stream);
   }
 
-  function irand(min, max) {
-    return Math.floor(rand(max + 1, min));
+  function irand(min, max, stream = 'encounter') {
+    return Math.floor(rand(max + 1, min, stream));
   }
 
-  function shuffle(array) {
+  function shuffle(array, stream = 'encounter') {
     const copy = [...array];
     for (let index = copy.length - 1; index > 0; index -= 1) {
-      const swapIndex = Math.floor((rng ? rng() : Math.random()) * (index + 1));
+      const swapIndex = Math.floor(nextRandom(stream) * (index + 1));
       [copy[index], copy[swapIndex]] = [copy[swapIndex], copy[index]];
     }
     return copy;
