@@ -125,7 +125,7 @@
     fire_balls: { key: 'fire_balls', slot: 'melee', name: 'Fire Balls', desc: 'Shoot a spread of fireballs.' },
     smite: { key: 'smite', slot: 'melee', name: 'Smite', desc: 'Physical swing plus chaining lightning.' },
 
-    blood_beam: { key: 'blood_beam', slot: 'laser', name: 'Blood Beam', desc: 'Sustained piercing beam.' },
+    blood_beam: { key: 'blood_beam', slot: 'laser', name: 'Blood Beam', desc: 'Sustained piercing beam that causes bleed.' },
     power_disks: { key: 'power_disks', slot: 'laser', name: 'Power Disks', desc: 'Burst of spinning disks.' },
     blade_justice: { key: 'blade_justice', slot: 'laser', name: 'Blade Justice', desc: 'Divine short-range blade strike.' },
     lightning_columns: { key: 'lightning_columns', slot: 'laser', name: 'Lightning Columns', desc: 'Summon two lightning turrets.' },
@@ -2598,6 +2598,7 @@
     if (!laserActive) return;
     laserTime -= dt;
     laserTick -= dt;
+    const move = getEquippedMove('laser');
     const angle = laserMode === 'god_sweep'
       ? laserAngle
       : Math.atan2(mouse.worldY - player.y, mouse.worldX - player.x);
@@ -2610,6 +2611,7 @@
         const enemy = enemies[index];
         if (!beamHitsCircle(player.x, player.y, end.x, end.y, enemy.x, enemy.y, enemy.r + 6)) continue;
         hitEnemy(enemy, laserMode === 'god_sweep' ? 24 : godTimer > 0 ? 16 : ATTACKS.laser.damage, angle, laserMode === 'god_sweep' ? 120 : 60, '#f0f');
+        if (move === 'blood_beam') applyBleed(enemy, 1, 3.2);
       }
       destructibles.forEach(prop => {
         if (!prop.broken && !prop.hidden && beamHitsCircle(player.x, player.y, end.x, end.y, prop.x, prop.y, prop.r + 4)) {
@@ -2917,6 +2919,58 @@
     if (enemy.bleedImmune) return;
     enemy.bleed = Math.min(6, enemy.bleed + stacks);
     enemy.bleedT = Math.max(enemy.bleedT, duration);
+  }
+
+  function normalizeAngle(angle) {
+    let result = angle;
+    while (result <= -Math.PI) result += Math.PI * 2;
+    while (result > Math.PI) result -= Math.PI * 2;
+    return result;
+  }
+
+  function turnAngleToward(current, target, maxStep) {
+    const delta = normalizeAngle(target - current);
+    if (Math.abs(delta) <= maxStep) return target;
+    return current + Math.sign(delta) * maxStep;
+  }
+
+  function aimEnemyBeam(enemy, dt, turnRate) {
+    if (!player || turnRate <= 0) return;
+    const targetAngle = Math.atan2(player.y - enemy.y, player.x - enemy.x);
+    enemy.beamAngle = turnAngleToward(enemy.beamAngle, targetAngle, turnRate * dt);
+  }
+
+  function tickEnemyBeam(enemy, dt, config = {}) {
+    const {
+      tick = 0.1,
+      range = 430,
+      knockback = 130,
+      damage = enemy.dmg,
+      speedDamp = 0.84,
+      turnRate = 0,
+      onTick = null,
+      onHit = null,
+      onEnd = null,
+    } = config;
+    enemy.beamTime -= dt;
+    enemy.beamTick -= dt;
+    enemy.vx *= speedDamp;
+    enemy.vy *= speedDamp;
+    if (turnRate > 0) aimEnemyBeam(enemy, dt, turnRate);
+    if (typeof onTick === 'function') onTick(enemy, dt);
+    if (enemy.beamTick <= 0) {
+      enemy.beamTick = tick;
+      const beamEnd = getBeamEnd(enemy.x, enemy.y, enemy.beamAngle, range);
+      if (beamHitsCircle(enemy.x, enemy.y, beamEnd.x, beamEnd.y, player.x, player.y, player.r + 5)) {
+        damagePlayer(damage, enemy.beamAngle, knockback);
+        if (typeof onHit === 'function') onHit(enemy);
+      }
+    }
+    if (enemy.beamTime <= 0) {
+      if (typeof onEnd === 'function') onEnd(enemy);
+      return true;
+    }
+    return false;
   }
 
   function onEnemyDie(enemy) {
@@ -3332,6 +3386,7 @@
       enemy.windup -= dt;
       enemy.vx *= 0.88;
       enemy.vy *= 0.88;
+      aimEnemyBeam(enemy, dt, 2.9);
       particles.push({ x: enemy.x, y: enemy.y, life: 0.2, c: '#b455ff' });
       if (enemy.windup <= 0) {
         enemy.beamTime = 0.58;
@@ -3341,17 +3396,14 @@
     }
 
     if (enemy.beamTime > 0) {
-      enemy.beamTime -= dt;
-      enemy.beamTick -= dt;
-      enemy.vx *= 0.84;
-      enemy.vy *= 0.84;
-      if (enemy.beamTick <= 0) {
-        enemy.beamTick = 0.1;
-        const beamEnd = getBeamEnd(enemy.x, enemy.y, enemy.beamAngle, 460);
-        if (beamHitsCircle(enemy.x, enemy.y, beamEnd.x, beamEnd.y, player.x, player.y, player.r + 5)) {
-          damagePlayer(enemy.dmg, enemy.beamAngle, 145);
-        }
-      }
+      tickEnemyBeam(enemy, dt, {
+        tick: 0.1,
+        range: 460,
+        knockback: 145,
+        damage: enemy.dmg,
+        speedDamp: 0.84,
+        turnRate: 1.8,
+      });
       return;
     }
 
@@ -3441,6 +3493,7 @@
       enemy.windup -= dt;
       enemy.vx *= 0.88;
       enemy.vy *= 0.88;
+      aimEnemyBeam(enemy, dt, 2.6);
       if (enemy.windup <= 0) {
         const angle = enemy.beamAngle;
         projectiles.push({
@@ -3675,6 +3728,7 @@
       enemy.windup -= dt;
       enemy.vx *= 0.86;
       enemy.vy *= 0.86;
+      aimEnemyBeam(enemy, dt, 3.3);
       particles.push({ x: enemy.x, y: enemy.y, life: 0.16, c: '#aa66ff' });
       if (enemy.windup <= 0) {
         enemy.beamTime = 0.46;
@@ -3684,17 +3738,14 @@
     }
 
     if (enemy.beamTime > 0) {
-      enemy.beamTime -= dt;
-      enemy.beamTick -= dt;
-      enemy.vx *= 0.84;
-      enemy.vy *= 0.84;
-      if (enemy.beamTick <= 0) {
-        enemy.beamTick = 0.11;
-        const beamEnd = getBeamEnd(enemy.x, enemy.y, enemy.beamAngle, 430);
-        if (beamHitsCircle(enemy.x, enemy.y, beamEnd.x, beamEnd.y, player.x, player.y, player.r + 4)) {
-          damagePlayer(enemy.dmg, enemy.beamAngle, 130);
-        }
-      }
+      tickEnemyBeam(enemy, dt, {
+        tick: 0.11,
+        range: 430,
+        knockback: 130,
+        damage: enemy.dmg,
+        speedDamp: 0.84,
+        turnRate: 2.3,
+      });
       return;
     }
 
@@ -3759,6 +3810,7 @@
       enemy.windup -= dt;
       enemy.vx *= 0.74;
       enemy.vy *= 0.74;
+      if (enemy.state === 'godLaser') aimEnemyBeam(enemy, dt, 3.1);
       particles.push({ x: enemy.x, y: enemy.y, life: 0.18, c: '#ffffff' });
       if (enemy.windup <= 0) {
         if (enemy.state === 'godLaser') {
@@ -3783,20 +3835,23 @@
     }
 
     if (enemy.beamTime > 0) {
-      enemy.beamTime -= dt;
-      enemy.beamTick -= dt;
-      enemy.vx *= 0.86;
-      enemy.vy *= 0.86;
-      if (enemy.beamTick <= 0) {
-        enemy.beamTick = enemy.state === 'godSweep' ? 0.045 : 0.08;
-        if (enemy.state === 'godSweep') enemy.beamAngle += enemy.sweepSpeed * 0.045;
-        else enemy.beamAngle += Math.sin(Date.now() / 160) * 0.02;
-        const beamEnd = getBeamEnd(enemy.x, enemy.y, enemy.beamAngle, enemy.beamRange || 620);
-        if (beamHitsCircle(enemy.x, enemy.y, beamEnd.x, beamEnd.y, player.x, player.y, player.r + 6)) {
-          damagePlayer(enemy.state === 'godSweep' ? enemy.dmg + 18 : enemy.dmg + 6, enemy.beamAngle, enemy.state === 'godSweep' ? 210 : 150);
-        }
-      }
-      if (enemy.beamTime <= 0) enemy.attackCd = enemy.state === 'godSweep' ? 1.45 : 1;
+      const isSweep = enemy.state === 'godSweep';
+      tickEnemyBeam(enemy, dt, {
+        tick: isSweep ? 0.045 : 0.08,
+        range: enemy.beamRange || 620,
+        knockback: isSweep ? 210 : 150,
+        damage: isSweep ? enemy.dmg + 18 : enemy.dmg + 6,
+        speedDamp: 0.86,
+        turnRate: isSweep ? 0 : 2.2,
+        onTick: isSweep
+          ? activeEnemy => {
+            activeEnemy.beamAngle += activeEnemy.sweepSpeed * 0.045;
+          }
+          : null,
+        onEnd: activeEnemy => {
+          activeEnemy.attackCd = isSweep ? 1.45 : 1;
+        },
+      });
       return;
     }
 
