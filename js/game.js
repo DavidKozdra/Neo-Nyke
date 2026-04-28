@@ -118,6 +118,16 @@
       category: 'purple',
       tags: ['charge', 'mobility'],
     },
+    turtle_shell: {
+      key: 'turtle_shell',
+      name: 'Turtle Shell',
+      shortName: 'Shell +5%',
+      description: 'Move speed +5%.',
+      rarity: 'white',
+      color: '#d2ffd8',
+      category: 'white',
+      tags: ['speed', 'move'],
+    },
     iron_lung: {
       key: 'iron_lung',
       name: 'Iron Lung',
@@ -168,6 +178,7 @@
     ['crit_charm', 24],
     ['attack_servo', 22],
     ['charged_adapter', 18],
+    ['turtle_shell', 24],
     ['iron_lung', 10],
     ['oracles_lens', 8],
     ['wizards_paw', 6],
@@ -414,6 +425,7 @@
       crit_charm: 0,
       attack_servo: 0,
       charged_adapter: 0,
+      turtle_shell: 0,
       iron_lung: 0,
       oracles_lens: 0,
       wizards_paw: 0,
@@ -1307,6 +1319,7 @@
     const hemesScarf = getItemCount('hemes_scarf');
     const critCharm = getItemCount('crit_charm');
     const attackServo = getItemCount('attack_servo');
+    const turtleShell = getItemCount('turtle_shell');
     const oracleLens = getItemCount('oracles_lens') > 0;
     let critChance = critCharm * 0.05;
     if (oracleLens) critChance *= 2;
@@ -1319,6 +1332,7 @@
       critChance,
       critMultiplier: 1.6 + (oracleLens ? critChance * 2.2 : critChance * 0.6),
       attackSpeedBonus: attackServo * 0.2,
+      moveSpeedMultiplier: 1 + turtleShell * 0.05,
       hasIronLung: getItemCount('iron_lung') > 0,
     };
   }
@@ -1539,16 +1553,77 @@
   }
 
   function castSmiteChain() {
-    const origin = findNearestEnemy(player.x, player.y, 260);
-    if (!origin) return;
-    let current = origin;
-    const hit = new Set();
-    for (let jumps = 0; jumps < 4 && current; jumps += 1) {
-      hit.add(current);
-      hitEnemy(current, 18 + jumps * 4, Math.atan2(current.y - player.y, current.x - player.x), 90, '#fff');
-      particles.push({ x: current.x, y: current.y, life: 0.22, c: '#fff' });
-      current = findNearestEnemy(current.x, current.y, 140, hit);
+    const angle = Math.atan2(mouse.worldY - player.y, mouse.worldX - player.x);
+    player.swing = ATTACKS.melee.active;
+    player.swingA = angle;
+
+    // Physical swing: hits enemies and destructibles in an arc.
+    const physicalDamage = 20;
+    for (let index = enemies.length - 1; index >= 0; index -= 1) {
+      const enemy = enemies[index];
+      const distance = dist(player.x, player.y, enemy.x, enemy.y);
+      if (distance > ATTACKS.melee.range + enemy.r + 4) continue;
+      const targetAngle = Math.atan2(enemy.y - player.y, enemy.x - player.x);
+      const difference = Math.abs(Math.atan2(Math.sin(targetAngle - angle), Math.cos(targetAngle - angle)));
+      if (difference > ATTACKS.melee.arc + 0.15) continue;
+      hitEnemy(enemy, physicalDamage, angle, ATTACKS.melee.push, '#fff6a3');
     }
+    destructibles.forEach(prop => {
+      if (prop.broken || prop.hidden) return;
+      const distance = dist(player.x, player.y, prop.x, prop.y);
+      if (distance > ATTACKS.melee.range + prop.r + 4) return;
+      const targetAngle = Math.atan2(prop.y - player.y, prop.x - player.x);
+      const difference = Math.abs(Math.atan2(Math.sin(targetAngle - angle), Math.cos(targetAngle - angle)));
+      if (difference > ATTACKS.melee.arc + 0.15) return;
+      damageDestructible(prop, 2);
+    });
+
+    const origin = findNearestSmiteTarget(player.x, player.y, 280);
+    if (!origin) return;
+
+    let current = origin;
+    let fromX = player.x;
+    let fromY = player.y;
+    const hit = new Set();
+    for (let jumps = 0; jumps < 5 && current; jumps += 1) {
+      hit.add(current.ref);
+      const strikeDamage = 18 + jumps * 4;
+      if (current.type === 'enemy') {
+        hitEnemy(current.ref, strikeDamage, Math.atan2(current.y - fromY, current.x - fromX), 90, '#dfe8ff');
+      } else {
+        damageDestructible(current.ref, Math.max(2, Math.round(strikeDamage / 10)));
+      }
+      particles.push({ x: current.x, y: current.y, life: 0.32, ring: 18 + jumps * 3, c: '#cfdcff' });
+      particles.push({ life: 0.2, c: '#eaf2ff', line: { x1: fromX, y1: fromY, x2: current.x, y2: current.y, w: 2 + jumps * 0.4 } });
+      fromX = current.x;
+      fromY = current.y;
+      current = findNearestSmiteTarget(fromX, fromY, 170, hit);
+    }
+  }
+
+  function findNearestSmiteTarget(x, y, radius, exclude = new Set()) {
+    let best = null;
+    let bestDist = radius;
+
+    enemies.forEach(enemy => {
+      if (exclude.has(enemy)) return;
+      const d = dist(x, y, enemy.x, enemy.y);
+      if (d < bestDist) {
+        best = { type: 'enemy', ref: enemy, x: enemy.x, y: enemy.y, r: enemy.r };
+        bestDist = d;
+      }
+    });
+
+    destructibles.forEach(prop => {
+      if (prop.broken || prop.hidden || exclude.has(prop)) return;
+      const d = dist(x, y, prop.x, prop.y);
+      if (d < bestDist) {
+        best = { type: 'prop', ref: prop, x: prop.x, y: prop.y, r: prop.r };
+        bestDist = d;
+      }
+    });
+
+    return best;
   }
 
   function castHealingZone() {
@@ -1566,9 +1641,11 @@
     enemy.vy += Math.sin(angle) * knockback;
     enemy.stun = Math.max(enemy.stun, 0.08);
     particles.push({ x: enemy.x, y: enemy.y, life: 0.24, vx: rand(-30, 30), vy: rand(-30, 30), c: color });
-    if (isCrit) {
-      particles.push({ x: enemy.x, y: enemy.y - 14, life: 0.45, text: 'CRIT!', c: '#ffe066' });
-    }
+    spawnDamagePopup(enemy.x, enemy.y - 14, dealt, {
+      crit: isCrit,
+      color: isCrit ? '#ff9f1c' : '#ff6b6b',
+      size: isCrit ? 20 : 16,
+    });
     if (enemy.hp <= 0) onEnemyDie(enemy);
   }
 
@@ -1781,7 +1858,7 @@
       moveY = 0;
     }
 
-    const targetSpeed = 228 * (godTimer > 0 ? 1.25 : 1);
+    const targetSpeed = 228 * (godTimer > 0 ? 1.25 : 1) * itemStats.moveSpeedMultiplier;
     player.vx += (moveX * targetSpeed - player.vx) * 14 * dt;
     player.vy += (moveY * targetSpeed - player.vy) * 14 * dt;
 
@@ -1900,7 +1977,7 @@
       enemy.bleedTick = 0.5;
       const damage = scaleDamageAgainstEnemy(enemy, 3 * enemy.bleed);
       enemy.hp -= damage;
-      particles.push({ x: enemy.x, y: enemy.y - 10, life: 0.4, text: `-${damage}`, c: '#f44' });
+      spawnDamagePopup(enemy.x, enemy.y - 10, damage, { color: '#ff5f5f', size: 15 });
       if (enemy.hp <= 0) {
         onEnemyDie(enemy);
         return enemy.bleed;
@@ -2476,7 +2553,9 @@
     player.vy += Math.sin(angle) * knockback;
     shake = 8;
     shakeT = 0.15;
-    particles.push({ x: player.x, y: player.y, life: 0.3, c: '#f00' });
+    if (finalAmount >= 1) {
+      spawnDamagePopup(player.x, player.y - 18, finalAmount, { color: '#ff6b6b', size: 16 });
+    }
     if (player.hp <= 0) die();
   }
 
@@ -2575,6 +2654,14 @@
 
   function damageDestructible(prop, damage) {
     if (prop.broken) return;
+    const dealt = Math.max(0, Math.round(damage || 0));
+    if (dealt > 0) {
+      spawnDamagePopup(prop.x, prop.y - prop.r - 8, dealt, {
+        color: prop.kind === 'barrel' ? '#ff9f1c' : '#ffd27d',
+        size: 14,
+        outline: '#2a1800',
+      });
+    }
     prop.hp -= damage;
     if (prop.hp > 0) return;
     prop.broken = true;
@@ -2590,6 +2677,25 @@
         if (other.hidden) other.hidden = false;
       });
     }
+  }
+
+  function spawnDamagePopup(x, y, amount, opts = {}) {
+    const value = Math.max(0, Math.round(amount || 0));
+    if (value <= 0) return;
+    const crit = !!opts.crit;
+    const color = opts.color || (crit ? '#ff9f1c' : '#ff6b6b');
+    const size = opts.size || (crit ? 20 : 16);
+    particles.push({
+      x,
+      y,
+      life: crit ? 0.62 : 0.46,
+      text: `-${value}`,
+      c: color,
+      outline: opts.outline || '#120a00',
+      size,
+      vx: rand(-14, 14),
+      vy: -36 - (crit ? 10 : 0),
+    });
   }
 
   function updateChests() {
@@ -3426,15 +3532,33 @@
 
   function drawParticles() {
     particles.forEach(particle => {
+      if (particle.line) {
+        ctx.save();
+        ctx.globalAlpha = Math.min(1, particle.life * 1.8);
+        ctx.strokeStyle = particle.c || '#dfe8ff';
+        ctx.lineWidth = particle.line.w || 2;
+        ctx.shadowColor = particle.c || '#dfe8ff';
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.moveTo(particle.line.x1, particle.line.y1);
+        ctx.lineTo(particle.line.x2, particle.line.y2);
+        ctx.stroke();
+        ctx.restore();
+        return;
+      }
       ctx.save();
       ctx.globalAlpha = Math.min(1, particle.life * 1.5);
       ctx.translate(particle.x, particle.y);
       if (particle.text) {
         ctx.fillStyle = particle.c || '#fff';
-        ctx.font = 'bold 14px system-ui';
+        ctx.font = `bold ${particle.size || 14}px system-ui`;
         ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
         ctx.shadowColor = particle.c;
         ctx.shadowBlur = 8;
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = particle.outline || 'rgba(0,0,0,0.7)';
+        ctx.strokeText(particle.text, 0, -particle.life * 20);
         ctx.fillText(particle.text, 0, -particle.life * 20);
       } else if (particle.ring) {
         ctx.strokeStyle = particle.c;
