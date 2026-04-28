@@ -5420,6 +5420,43 @@
     ctx.restore();
   }
 
+  function drawSpriteToCanvas(canvasEl, spriteKey, size = canvasEl?.width || 96, options = {}) {
+    if (!(canvasEl instanceof HTMLCanvasElement)) return;
+    const frame = SPRITE_ATLAS.frames[spriteKey] || SPRITE_ATLAS.frames.hunter;
+    if (!frame) return;
+    const renderSize = Number.isFinite(size) ? size : (canvasEl.width || 96);
+    const c = canvasEl.getContext('2d');
+    if (!c) return;
+    const {
+      tint = null,
+      alpha = 1,
+    } = options;
+    c.clearRect(0, 0, canvasEl.width, canvasEl.height);
+    c.imageSmoothingEnabled = false;
+    const dx = Math.round((canvasEl.width - renderSize) / 2);
+    const dy = Math.round((canvasEl.height - renderSize) / 2);
+    c.save();
+    c.globalAlpha = alpha;
+    c.drawImage(
+      SPRITE_ATLAS.canvas,
+      frame.x,
+      frame.y,
+      frame.w,
+      frame.h,
+      dx,
+      dy,
+      renderSize,
+      renderSize,
+    );
+    if (tint) {
+      c.globalCompositeOperation = 'source-atop';
+      c.fillStyle = tint;
+      c.globalAlpha = 0.2;
+      c.fillRect(dx, dy, renderSize, renderSize);
+    }
+    c.restore();
+  }
+
   function drawEnemyTelegraphs() {
     enemies.forEach(enemy => {
       if (enemy.windup > 0) {
@@ -6003,12 +6040,18 @@
         view.charButtons.forEach(button => {
           const itemKey = button.dataset.char;
           const hint = button.querySelector('small');
+          const spriteCanvas = button.querySelector('[data-char-sprite]');
           const baseHint = hint?.dataset.base || hint?.textContent || '';
           if (hint && !hint.dataset.base) hint.dataset.base = baseHint;
           button.classList.toggle('locked', !unlocked.has(itemKey));
           button.classList.toggle('sel', selected === itemKey);
           button.disabled = !unlocked.has(itemKey);
           if (hint) hint.textContent = unlocked.has(itemKey) ? baseHint : 'locked in bank';
+          if (spriteCanvas) {
+            drawSpriteToCanvas(spriteCanvas, itemKey, 76, {
+              alpha: unlocked.has(itemKey) ? 1 : 0.42,
+            });
+          }
         });
 
         // ── Carousel position ────────────────────────────────
@@ -6042,9 +6085,11 @@
             `<span class="hero-detail-skill-pip">${s}</span>`
           ).join('');
           detail.innerHTML =
+            `<div class="hero-detail-portrait"><canvas id="heroDetailSprite" width="128" height="128" aria-hidden="true"></canvas></div>` +
             `<p class="hero-detail-lore">${disp.lore}</p>` +
             `<div class="hero-detail-stats"><div class="hero-detail-section-label">Stats</div>${statsHtml}</div>` +
             `<div class="hero-detail-skills"><div class="hero-detail-section-label">Kit</div>${skillsHtml}</div>`;
+          drawSpriteToCanvas(document.getElementById('heroDetailSprite'), selected, 104);
         }
       },
       updateDifficultySelection(unlocked, selected, loopsCompleted) {
