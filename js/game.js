@@ -33,6 +33,9 @@
       statMultiplier: 1,
       bossStatMultiplier: 1,
       speedMultiplier: 1,
+      enemyReactionMultiplier: 1,
+      rangedCadenceMultiplier: 1,
+      supportPowerMultiplier: 1,
     },
     medium: {
       key: 'medium',
@@ -47,6 +50,9 @@
       statMultiplier: 1.1,
       bossStatMultiplier: 1.12,
       speedMultiplier: 1.03,
+      enemyReactionMultiplier: 1.06,
+      rangedCadenceMultiplier: 0.95,
+      supportPowerMultiplier: 1.08,
     },
     hard: {
       key: 'hard',
@@ -61,6 +67,9 @@
       statMultiplier: 1.22,
       bossStatMultiplier: 1.26,
       speedMultiplier: 1.06,
+      enemyReactionMultiplier: 1.12,
+      rangedCadenceMultiplier: 0.9,
+      supportPowerMultiplier: 1.14,
     },
     impossible: {
       key: 'impossible',
@@ -75,6 +84,9 @@
       statMultiplier: 1.36,
       bossStatMultiplier: 1.42,
       speedMultiplier: 1.1,
+      enemyReactionMultiplier: 1.2,
+      rangedCadenceMultiplier: 0.82,
+      supportPowerMultiplier: 1.22,
     },
     god: {
       key: 'god',
@@ -89,6 +101,9 @@
       statMultiplier: 1.52,
       bossStatMultiplier: 1.62,
       speedMultiplier: 1.14,
+      enemyReactionMultiplier: 1.28,
+      rangedCadenceMultiplier: 0.74,
+      supportPowerMultiplier: 1.3,
     },
   };
   const CHALLENGE_DEFS = {
@@ -346,6 +361,16 @@
       category: 'purple',
       tags: ['aoe', 'purple'],
     },
+    dragon_orb: {
+      key: 'dragon_orb',
+      name: 'Dragon Orb',
+      shortName: 'Beam Chain',
+      description: 'Beam attacks deal more damage and chain to a nearby enemy after locking on.',
+      rarity: 'purple',
+      color: '#b77dff',
+      category: 'purple',
+      tags: ['beam', 'spell', 'purple'],
+    },
     turtle_shell: {
       key: 'turtle_shell',
       name: 'Turtle Shell',
@@ -433,6 +458,7 @@
     ['titan_heart', 18],
     ['charged_adapter', 18],
     ['explosive_jelly', 12],
+    ['dragon_orb', 14],
     ['turtle_shell', 24],
     ['iron_lung', 10],
     ['oracles_lens', 8],
@@ -453,6 +479,7 @@
     'attack_servo',
     'charged_adapter',
     'explosive_jelly',
+    'dragon_orb',
     'turtle_shell',
     'iron_lung',
     'oracles_lens',
@@ -1619,6 +1646,15 @@
     return DIFFICULTY_DEFS[normalizeDifficulty(key)];
   }
 
+  function getEnemyDifficultyTuning() {
+    const difficulty = getDifficultyDef();
+    return {
+      reaction: difficulty.enemyReactionMultiplier || 1,
+      rangedCadence: difficulty.rangedCadenceMultiplier || 1,
+      supportPower: difficulty.supportPowerMultiplier || 1,
+    };
+  }
+
   function getUnlockedDifficultySet() {
     const loopsCompleted = Number(metaProgress.loopsCompleted || 0);
     return new Set(DIFFICULTY_ORDER.filter(key => loopsCompleted >= DIFFICULTY_DEFS[key].unlockLoops));
@@ -2310,6 +2346,7 @@
   function rollEnemyType() {
     const bonus = getDifficultyDef().roomWeightBonus;
     const roll = nextRandom('encounter');
+    if (floor >= 7 && roll > 0.9 - bonus * 0.92) return 'machine_gunner';
     if (roll > 0.84 - bonus * 0.9) return 'golem';
     if (roll > 0.68 - bonus * 0.82) return 'sniper';
     if (roll > 0.5 - bonus * 0.68) return 'knave';
@@ -2317,6 +2354,59 @@
     if (roll > 0.16 - bonus * 0.4) return 'charger';
     if (roll > 0.08 - bonus * 0.24) return 'laser';
     return 'hunter';
+  }
+
+  function getFloorBossType() {
+    return floor <= 3 ? 'queen_cult' : floor <= 6 ? 'bulk_golem' : 'artificer_knave';
+  }
+
+  function buildWavePlan(count, roomType = 'combat') {
+    if (floor < 4) {
+      return Array.from({ length: count }, () => rollEnemyType());
+    }
+
+    const squads = [
+      ['hunter', 'hunter', 'charger'],
+      ['hunter', 'laser', 'shield_unit'],
+      ['golem', 'healer', 'hunter'],
+      ['knave', 'charger', 'healer'],
+      ['sniper', 'shield_unit', 'hunter'],
+      ['cult_mage', 'summoner', 'hunter'],
+    ];
+    if (floor >= 7) {
+      squads.push(
+        ['machine_gunner', 'shield_unit', 'hunter'],
+        ['machine_gunner', 'healer', 'charger'],
+        ['sniper', 'machine_gunner', 'hunter'],
+      );
+    }
+    const plan = [];
+    let safety = 0;
+    while (plan.length < count && safety < 12) {
+      safety += 1;
+      const squad = squads[irand(0, squads.length - 1, 'encounter')];
+      squad.forEach(type => {
+        if (plan.length < count) plan.push(type);
+      });
+    }
+
+    if (roomType === 'ladder' && !plan.includes('shield_unit') && count >= 3) {
+      plan[Math.max(1, count - 2)] = 'shield_unit';
+    }
+
+    if (count >= 5 && !plan.includes('healer')) {
+      plan[count - 2] = 'healer';
+    }
+
+    if (count >= 6 && !plan.includes('summoner') && nextRandom('encounter') < 0.55) {
+      plan[count - 3] = 'summoner';
+    }
+
+    if (count >= 6 && roomType === 'combat' && floor >= 4 && nextRandom('encounter') < 0.22) {
+      plan[count - 1] = 'boss_spawner';
+    }
+
+    return plan.slice(0, count);
   }
 
   function spawnMiniBoss(roomType = 'combat') {
@@ -2345,14 +2435,15 @@
   }
 
   function spawnWave(count, roomType = 'combat') {
-    for (let index = 0; index < count; index += 1) {
+    const plan = buildWavePlan(count, roomType);
+    for (let index = 0; index < plan.length; index += 1) {
       const angle = nextRandom('encounter') * Math.PI * 2;
       const radius = 120 + nextRandom('encounter') * 180;
       const x = clamp(ROOM_W / 2 + Math.cos(angle) * radius, 80, ROOM_W - 80);
       const y = clamp(ROOM_H / 2 + Math.sin(angle) * radius, 80, ROOM_H - 80);
       const safeSpawn = findSafeEnemySpawnPoint(x, y, 15);
       if (!safeSpawn) continue;
-      const type = rollEnemyType();
+      const type = plan[index] || rollEnemyType();
       const eliteRoll = canSpawnEliteEnemies() && nextRandom('encounter') < getDifficultyDef().eliteChance;
       spawnEnemy(type, safeSpawn.x, safeSpawn.y, eliteRoll);
     }
@@ -2360,7 +2451,7 @@
   }
 
   function spawnFloorBoss() {
-    const bossType = floor <= 3 ? 'queen_cult' : floor <= 6 ? 'bulk_golem' : 'artificer_knave';
+    const bossType = getFloorBossType();
     const safeSpawn = findSafeEnemySpawnPoint(ROOM_W / 2, ROOM_H / 2 - 40, 15);
     if (safeSpawn) spawnEnemy(bossType, safeSpawn.x, safeSpawn.y, false);
   }
@@ -2452,6 +2543,10 @@
       dashHit: false,
       swingTime: 0,
       summonCd: 0,
+      supportCd: 0,
+      barrier: 0,
+      bossSpawnTimer: 0,
+      bossSpawnWarnAt: 0,
       aoeTime: 0,
       phase: 1,
       splitReady: false,
@@ -2470,6 +2565,13 @@
       base.beamRange = 620;
       base.sweepDir = 1;
       base.sweepSpeed = 0;
+      base.phase = 1;
+      base.rebirthUsed = false;
+      base.phase3Triggered = false;
+      base.phase4Triggered = false;
+      base.phase5Triggered = false;
+      base.novaCd = 2.4;
+      base.judgementCd = 4.2;
     } else if (type === 'cult_mage') {
       base.r = 17;
       base.hp = 84;
@@ -2491,6 +2593,16 @@
       base.speed = 104;
       base.dmg = 12;
       base.attackCd = 1.55;
+    } else if (type === 'machine_gunner') {
+      base.r = 17;
+      base.hp = 96;
+      base.max = 96;
+      base.speed = 112;
+      base.dmg = 8;
+      base.attackCd = 1.15;
+      base.burstShots = 0;
+      base.burstDelay = 0;
+      base.burstAngle = 0;
     } else if (type === 'golem') {
       base.r = 20;
       base.hp = 132;
@@ -2506,6 +2618,41 @@
       base.speed = 138;
       base.dmg = 8;
       base.attackCd = 0.85;
+    } else if (type === 'summoner') {
+      base.r = 18;
+      base.hp = 120;
+      base.max = 120;
+      base.speed = 66;
+      base.dmg = 12;
+      base.attackCd = 1.5;
+      base.summonCd = 4.4;
+    } else if (type === 'shield_unit') {
+      base.r = 22;
+      base.hp = 210;
+      base.max = 210;
+      base.speed = 52;
+      base.dmg = 10;
+      base.attackCd = 1.4;
+      base.bleedImmune = true;
+      base.supportCd = 2.8;
+    } else if (type === 'healer') {
+      base.r = 19;
+      base.hp = floor >= 4 ? 260 : 150;
+      base.max = base.hp;
+      base.speed = 64;
+      base.dmg = 10;
+      base.attackCd = 1.2;
+      base.supportCd = floor >= 4 ? 2.2 : 3;
+    } else if (type === 'boss_spawner') {
+      base.r = 24;
+      base.hp = 300;
+      base.max = 300;
+      base.speed = 42;
+      base.dmg = 8;
+      base.attackCd = 1.8;
+      base.bleedImmune = true;
+      base.bossSpawnTimer = 30;
+      base.bossSpawnWarnAt = 30;
     } else if (type === 'queen_cult') {
       base.r = 38;
       base.hp = 760;
@@ -2549,6 +2696,18 @@
     base.max = scaled.max;
     base.dmg = scaled.dmg;
     base.speed = scaled.speed;
+
+    const difficultyTuning = getEnemyDifficultyTuning();
+    if (!isBossType(type) && floor >= 4) {
+      const barrierChance = type === 'shield_unit'
+        ? 1
+        : (type === 'healer' || type === 'summoner' || type === 'laser' || type === 'sniper' || type === 'machine_gunner')
+          ? 0.12 * difficultyTuning.supportPower
+          : 0.05 * Math.max(1, difficultyTuning.supportPower - 0.02);
+      if (nextRandom('encounter') < barrierChance) {
+        base.barrier = Math.round(base.max * (type === 'shield_unit' ? 0.24 : 0.12 * difficultyTuning.supportPower));
+      }
+    }
 
     if (isBossType(type)) {
       base.hp = Math.round(base.hp * 2);
@@ -2653,6 +2812,7 @@
     const bandaid = getItemCount('bandaid');
     const pushMan = getItemCount('push_man');
     const explosiveJelly = getItemCount('explosive_jelly');
+    const dragonOrb = getItemCount('dragon_orb');
     const turtleShell = getItemCount('turtle_shell');
     const shieldOfAegis = getItemCount('shield_of_aegis');
     const pendantOfKronos = getItemCount('pendant_of_kronos');
@@ -2677,6 +2837,9 @@
       xpGainMultiplier: 1 + scholarSeal * 0.15,
       knockbackMultiplier: 1 + pushMan * 0.18,
       aoeRadiusMultiplier: 1 + explosiveJelly,
+      beamDamageMultiplier: 1 + dragonOrb * 0.35,
+      beamChainTargets: dragonOrb > 0 ? Math.min(2, dragonOrb) : 0,
+      beamChainDamageMultiplier: dragonOrb > 0 ? 0.6 + (dragonOrb - 1) * 0.15 : 0,
       damageReduction,
       hasIronLung: getItemCount('iron_lung') > 0,
     };
@@ -2914,6 +3077,7 @@
     laserTime -= dt;
     laserTick -= dt;
     const move = getEquippedMove('laser');
+    const itemStats = getItemStats();
     const angle = laserMode === 'god_sweep'
       ? laserAngle
       : Math.atan2(mouse.worldY - player.y, mouse.worldX - player.x);
@@ -2925,7 +3089,9 @@
       for (let index = enemies.length - 1; index >= 0; index -= 1) {
         const enemy = enemies[index];
         if (!beamHitsCircle(player.x, player.y, end.x, end.y, enemy.x, enemy.y, enemy.r + 6)) continue;
-        hitEnemy(enemy, laserMode === 'god_sweep' ? 24 : godTimer > 0 ? 16 : ATTACKS.laser.damage, angle, laserMode === 'god_sweep' ? 120 : 60, '#f0f');
+        const beamDamage = (laserMode === 'god_sweep' ? 24 : godTimer > 0 ? 16 : ATTACKS.laser.damage) * (itemStats.beamDamageMultiplier || 1);
+        hitEnemy(enemy, beamDamage, angle, laserMode === 'god_sweep' ? 120 : 60, '#f0f');
+        chainBeamHit(enemy, beamDamage, angle, '#d890ff');
         if (move === 'blood_beam') applyBleed(enemy, 1, 3.2);
       }
       destructibles.forEach(prop => {
@@ -3217,6 +3383,18 @@
     const isCrit = stats.critChance > 0 && nextRandom('encounter') < stats.critChance;
     const appliedKnockback = knockback * (stats.knockbackMultiplier || 1);
     if (isCrit) dealt = Math.round(dealt * stats.critMultiplier);
+    if ((enemy.barrier || 0) > 0) {
+      const absorbed = Math.min(enemy.barrier, dealt);
+      enemy.barrier -= absorbed;
+      dealt -= absorbed;
+      particles.push({ x: enemy.x, y: enemy.y - 20, life: 0.4, text: `BLOCK ${absorbed}`, c: '#7ed6ff' });
+      if (dealt <= 0) {
+        enemy.vx += Math.cos(angle) * appliedKnockback * 0.35;
+        enemy.vy += Math.sin(angle) * appliedKnockback * 0.35;
+        enemy.stun = Math.max(enemy.stun, 0.04);
+        return;
+      }
+    }
     enemy.hp -= dealt;
     enemy.vx += Math.cos(angle) * appliedKnockback;
     enemy.vy += Math.sin(angle) * appliedKnockback;
@@ -3228,6 +3406,23 @@
       size: isCrit ? 20 : 16,
     });
     if (enemy.hp <= 0) onEnemyDie(enemy);
+  }
+
+  function chainBeamHit(primaryEnemy, baseDamage, angle, color) {
+    const stats = getItemStats();
+    const chains = stats.beamChainTargets || 0;
+    if (chains <= 0) return;
+    const visited = new Set([primaryEnemy]);
+    let source = primaryEnemy;
+    for (let index = 0; index < chains; index += 1) {
+      const nextEnemy = findNearestEnemy(source.x, source.y, 145, visited);
+      if (!nextEnemy) break;
+      visited.add(nextEnemy);
+      const chainDamage = Math.max(1, Math.round(baseDamage * (stats.beamChainDamageMultiplier || 0.6)));
+      hitEnemy(nextEnemy, chainDamage, Math.atan2(nextEnemy.y - source.y, nextEnemy.x - source.x), 55, color);
+      particles.push({ x: (source.x + nextEnemy.x) / 2, y: (source.y + nextEnemy.y) / 2, life: 0.22, c: '#d890ff' });
+      source = nextEnemy;
+    }
   }
 
   function applyBleed(enemy, stacks, duration) {
@@ -3289,6 +3484,16 @@
   }
 
   function onEnemyDie(enemy) {
+    if (enemy.type === 'god' && !enemy.rebirthUsed) {
+      enemy.rebirthUsed = true;
+      enemy.hp = Math.max(1, Math.round(enemy.max * 0.9));
+      enemy.dmg = Math.round(enemy.dmg * 3);
+      enemy.speed *= 1.18;
+      triggerGodPhase(enemy, 2, 'DIVINE REBIRTH');
+      spawnHealPopup(enemy.x, enemy.y - 54, enemy.hp, { color: '#79f7bf' });
+      return;
+    }
+
     const index = enemies.indexOf(enemy);
     if (index >= 0) enemies.splice(index, 1);
 
@@ -3595,11 +3800,17 @@
       else if (enemy.type === 'cult_mage') updateCultMageEnemy(enemy, dt);
       else if (enemy.type === 'knave') updateKnaveEnemy(enemy, dt);
       else if (enemy.type === 'sniper') updateSniperEnemy(enemy, dt);
+      else if (enemy.type === 'machine_gunner') updateMachineGunnerEnemy(enemy, dt);
       else if (enemy.type === 'golem') updateGolemEnemy(enemy, dt);
+      else if (enemy.type === 'summoner') updateSummonerEnemy(enemy, dt);
+      else if (enemy.type === 'shield_unit') updateShieldUnitEnemy(enemy, dt);
+      else if (enemy.type === 'healer') updateHealerEnemy(enemy, dt);
+      else if (enemy.type === 'boss_spawner') updateBossSpawnerEnemy(enemy, dt);
       else if (enemy.type === 'laser') updateLaserEnemy(enemy, dt);
       else if (enemy.type === 'charger') updateChargerEnemy(enemy, dt);
       else updateHunterEnemy(enemy, dt);
 
+      if (!enemies.includes(enemy)) continue;
       moveCircle(enemy, dt);
     }
 
@@ -3688,6 +3899,7 @@
   }
 
   function updateCultMageEnemy(enemy, dt) {
+    const tuning = getEnemyDifficultyTuning();
     const dx = player.x - enemy.x;
     const dy = player.y - enemy.y;
     const distance = Math.hypot(dx, dy) || 1;
@@ -3708,7 +3920,7 @@
       enemy.windup -= dt;
       enemy.vx *= 0.88;
       enemy.vy *= 0.88;
-      aimEnemyBeam(enemy, dt, 2.9);
+      aimEnemyBeam(enemy, dt, 2.9 * tuning.reaction);
       particles.push({ x: enemy.x, y: enemy.y, life: 0.2, c: '#b455ff' });
       if (enemy.windup <= 0) {
         enemy.beamTime = 0.58;
@@ -3730,9 +3942,9 @@
     }
 
     if (enemy.attackCd <= 0 && distance < 430) {
-      enemy.windup = 0.86;
+      enemy.windup = 0.86 / tuning.reaction;
       enemy.beamAngle = Math.atan2(dy, dx);
-      enemy.attackCd = 2.9;
+      enemy.attackCd = 2.9 * tuning.rangedCadence;
     }
   }
 
@@ -3801,6 +4013,7 @@
   }
 
   function updateSniperEnemy(enemy, dt) {
+    const tuning = getEnemyDifficultyTuning();
     const dx = player.x - enemy.x;
     const dy = player.y - enemy.y;
     const distance = Math.hypot(dx, dy) || 1;
@@ -3815,14 +4028,15 @@
       enemy.windup -= dt;
       enemy.vx *= 0.88;
       enemy.vy *= 0.88;
-      aimEnemyBeam(enemy, dt, 2.6);
+      aimEnemyBeam(enemy, dt, 2.6 * tuning.reaction);
       if (enemy.windup <= 0) {
         const angle = enemy.beamAngle;
+        const projectileSpeed = 360 * Math.min(1.4, tuning.reaction);
         projectiles.push({
           x: enemy.x,
           y: enemy.y,
-          vx: Math.cos(angle) * 360,
-          vy: Math.sin(angle) * 360,
+          vx: Math.cos(angle) * projectileSpeed,
+          vy: Math.sin(angle) * projectileSpeed,
           r: 5,
           life: 1.6,
           enemy: true,
@@ -3850,11 +4064,90 @@
     if (enemy.attackCd <= 0) {
       if (distance <= 74) {
         enemy.swingTime = 0.16;
-        enemy.attackCd = 0.95;
+        enemy.attackCd = 0.95 * tuning.rangedCadence;
       } else if (distance < 520) {
-        enemy.windup = 0.6;
+        enemy.windup = 0.6 / tuning.reaction;
         enemy.beamAngle = Math.atan2(dy, dx);
-        enemy.attackCd = 2.2;
+        enemy.attackCd = 2.2 * tuning.rangedCadence;
+      }
+    }
+  }
+
+  function updateMachineGunnerEnemy(enemy, dt) {
+    const tuning = getEnemyDifficultyTuning();
+    const dx = player.x - enemy.x;
+    const dy = player.y - enemy.y;
+    const distance = Math.hypot(dx, dy) || 1;
+
+    if (enemy.stun > 0) {
+      enemy.vx *= 0.9;
+      enemy.vy *= 0.9;
+      return;
+    }
+
+    if (enemy.windup > 0) {
+      enemy.windup -= dt;
+      enemy.vx *= 0.86;
+      enemy.vy *= 0.86;
+      aimEnemyBeam(enemy, dt, 3.2 * tuning.reaction);
+      particles.push({ x: enemy.x, y: enemy.y, life: 0.12, c: '#ffb55c' });
+      if (enemy.windup <= 0) {
+        enemy.burstShots = tuning.supportPower >= 1.22 ? 6 : 5;
+        enemy.burstDelay = 0;
+        enemy.burstAngle = enemy.beamAngle;
+      }
+      return;
+    }
+
+    if ((enemy.burstShots || 0) > 0) {
+      enemy.burstDelay -= dt;
+      enemy.vx *= 0.8;
+      enemy.vy *= 0.8;
+      if (enemy.burstDelay <= 0) {
+        enemy.burstDelay = 0.085 * Math.max(0.72, tuning.rangedCadence);
+        enemy.burstShots -= 1;
+        const baseAngle = Math.atan2(player.y - enemy.y, player.x - enemy.x);
+        enemy.burstAngle = turnAngleToward(enemy.burstAngle || baseAngle, baseAngle, 0.22 * tuning.reaction);
+        const spread = ((nextRandom('encounter') - 0.5) * 0.18) / Math.max(0.92, tuning.reaction);
+        const fireAngle = enemy.burstAngle + spread;
+        const projectileSpeed = 300 * Math.min(1.45, tuning.reaction + 0.06);
+        projectiles.push({
+          x: enemy.x,
+          y: enemy.y,
+          vx: Math.cos(fireAngle) * projectileSpeed,
+          vy: Math.sin(fireAngle) * projectileSpeed,
+          r: 4,
+          life: 1.45,
+          enemy: true,
+          kind: 'machine_round',
+          damage: enemy.dmg + 2,
+        });
+        particles.push({ x: enemy.x + Math.cos(fireAngle) * 10, y: enemy.y + Math.sin(fireAngle) * 10, life: 0.12, c: '#ffcf7a' });
+      }
+      return;
+    }
+
+    const desired = 250;
+    const direction = distance < desired - 24 ? -1 : distance > desired + 18 ? 1 : 0;
+    steerEnemy(enemy, dx / distance * direction, dy / distance * direction, enemy.speed, 3.9, dt);
+
+    if (enemy.attackCd <= 0) {
+      if (distance < 90) {
+        enemy.swingTime = 0.16;
+        enemy.attackCd = 0.88 * tuning.rangedCadence;
+      } else if (distance < 460) {
+        enemy.windup = 0.38 / tuning.reaction;
+        enemy.beamAngle = Math.atan2(dy, dx);
+        enemy.attackCd = 2.45 * tuning.rangedCadence;
+      }
+    }
+
+    if (enemy.swingTime > 0) {
+      enemy.swingTime -= dt;
+      enemy.vx *= 0.78;
+      enemy.vy *= 0.78;
+      if (enemy.swingTime <= 0 && distance < enemy.r + player.r + 18) {
+        damagePlayer(enemy.dmg + 3, Math.atan2(dy, dx), 180);
       }
     }
   }
@@ -3900,15 +4193,195 @@
     }
   }
 
+  function updateSummonerEnemy(enemy, dt) {
+    const tuning = getEnemyDifficultyTuning();
+    const dx = player.x - enemy.x;
+    const dy = player.y - enemy.y;
+    const distance = Math.hypot(dx, dy) || 1;
+
+    if (enemy.stun > 0) {
+      enemy.vx *= 0.88;
+      enemy.vy *= 0.88;
+      return;
+    }
+
+    const desired = 260;
+    const direction = distance < desired - 30 ? -1 : distance > desired + 20 ? 1 : 0;
+    steerEnemy(enemy, dx / distance * direction, dy / distance * direction, enemy.speed, 3.1, dt);
+
+    enemy.summonCd = Math.max(0, enemy.summonCd - dt);
+    if (enemy.summonCd <= 0) {
+      enemy.summonCd = (floor >= 4 ? 4.2 : 5) * Math.max(0.72, tuning.rangedCadence);
+      const summonCount = floor >= 4 && tuning.supportPower >= 1.22 ? 3 : 2;
+      for (let index = 0; index < summonCount; index += 1) {
+        const angle = nextRandom('encounter') * Math.PI * 2;
+        const px = enemy.x + Math.cos(angle) * (40 + index * 18);
+        const py = enemy.y + Math.sin(angle) * (40 + index * 18);
+        const safeSpawn = findSafeEnemySpawnPoint(clamp(px, 90, ROOM_W - 90), clamp(py, 90, ROOM_H - 90), 15);
+        if (safeSpawn) spawnEnemy('cult_follower', safeSpawn.x, safeSpawn.y, false);
+      }
+      particles.push({ x: enemy.x, y: enemy.y - 18, life: 0.7, text: 'SUMMON', c: '#d59bff' });
+    }
+
+    if (enemy.attackCd <= 0 && distance < 360) {
+      enemy.windup = 0.6 / tuning.reaction;
+      enemy.beamAngle = Math.atan2(dy, dx);
+      enemy.attackCd = 2.6 * tuning.rangedCadence;
+    }
+
+    if (enemy.windup > 0 || enemy.beamTime > 0) {
+      updateCultMageEnemy(enemy, dt);
+    }
+  }
+
+  function updateShieldUnitEnemy(enemy, dt) {
+    const tuning = getEnemyDifficultyTuning();
+    const dx = player.x - enemy.x;
+    const dy = player.y - enemy.y;
+    const distance = Math.hypot(dx, dy) || 1;
+
+    if (enemy.stun > 0) {
+      enemy.vx *= 0.9;
+      enemy.vy *= 0.9;
+      return;
+    }
+
+    const desired = 180;
+    const direction = distance < desired - 18 ? -1 : distance > desired + 24 ? 1 : 0;
+    steerEnemy(enemy, dx / distance * direction, dy / distance * direction, enemy.speed, 2.6, dt);
+
+    enemy.supportCd = Math.max(0, enemy.supportCd - dt);
+    if (enemy.supportCd <= 0) {
+      enemy.supportCd = 2.9 * Math.max(0.76, tuning.rangedCadence);
+      enemies.forEach(other => {
+        if (other === enemy) return;
+        if (dist(enemy.x, enemy.y, other.x, other.y) > 170) return;
+        other.barrier = Math.max(other.barrier || 0, Math.round(other.max * 0.22 * tuning.supportPower));
+      });
+      enemy.barrier = Math.max(enemy.barrier || 0, Math.round(enemy.max * 0.14 * tuning.supportPower));
+      particles.push({ x: enemy.x, y: enemy.y, life: 0.55, ring: 82, c: '#7ed6ff' });
+      particles.push({ x: enemy.x, y: enemy.y - 18, life: 0.65, text: 'SHIELD', c: '#7ed6ff' });
+    }
+
+    if (enemy.attackCd <= 0 && distance < enemy.r + player.r + 22) {
+      damagePlayer(enemy.dmg, Math.atan2(dy, dx), 170);
+      enemy.attackCd = 1.05 * tuning.rangedCadence;
+    }
+  }
+
+  function updateHealerEnemy(enemy, dt) {
+    const tuning = getEnemyDifficultyTuning();
+    const nearestWounded = enemies.reduce((best, candidate) => {
+      if (candidate === enemy || candidate.hp >= candidate.max) return best;
+      const d = dist(enemy.x, enemy.y, candidate.x, candidate.y);
+      if (!best || d < best.distance) return { enemy: candidate, distance: d };
+      return best;
+    }, null);
+    const target = nearestWounded?.enemy || player;
+    const dx = target.x - enemy.x;
+    const dy = target.y - enemy.y;
+    const distance = Math.hypot(dx, dy) || 1;
+
+    if (enemy.stun > 0) {
+      enemy.vx *= 0.9;
+      enemy.vy *= 0.9;
+      return;
+    }
+
+    const desired = nearestWounded ? 120 : 260;
+    const direction = distance < desired - 18 ? -1 : distance > desired + 24 ? 1 : 0;
+    steerEnemy(enemy, dx / distance * direction, dy / distance * direction, enemy.speed, 2.8, dt);
+
+    enemy.supportCd = Math.max(0, enemy.supportCd - dt);
+    if (enemy.supportCd <= 0) {
+      enemy.supportCd = (floor >= 4 ? 2.1 : 2.8) * Math.max(0.74, tuning.rangedCadence);
+      let healedAny = false;
+      enemies.forEach(other => {
+        if (other === enemy) return;
+        if (dist(enemy.x, enemy.y, other.x, other.y) > 170) return;
+        const heal = Math.max(8, Math.round(other.max * (floor >= 4 ? 0.08 : 0.05) * tuning.supportPower));
+        const nextHp = Math.min(other.max, other.hp + heal);
+        if (nextHp !== other.hp) {
+          other.hp = nextHp;
+          healedAny = true;
+          particles.push({ x: other.x, y: other.y - 16, life: 0.6, text: `+${heal}`, c: '#79f7bf' });
+        }
+      });
+      if (healedAny) {
+        particles.push({ x: enemy.x, y: enemy.y, life: 0.55, ring: 76, c: '#79f7bf' });
+        particles.push({ x: enemy.x, y: enemy.y - 18, life: 0.65, text: 'HEAL', c: '#79f7bf' });
+      }
+    }
+
+    if (enemy.attackCd <= 0 && !nearestWounded && distance < 350) {
+      enemy.windup = 0.54 / tuning.reaction;
+      enemy.beamAngle = Math.atan2(player.y - enemy.y, player.x - enemy.x);
+      enemy.attackCd = 2.8 * tuning.rangedCadence;
+    }
+
+    if (enemy.windup > 0 || enemy.beamTime > 0) {
+      updateLaserEnemy(enemy, dt);
+    }
+  }
+
+  function updateBossSpawnerEnemy(enemy, dt) {
+    const tuning = getEnemyDifficultyTuning();
+    const dx = player.x - enemy.x;
+    const dy = player.y - enemy.y;
+    const distance = Math.hypot(dx, dy) || 1;
+
+    if (enemy.stun > 0) {
+      enemy.vx *= 0.92;
+      enemy.vy *= 0.92;
+    } else {
+      const desired = 300;
+      const direction = distance < desired - 26 ? -1 : distance > desired + 18 ? 1 : 0;
+      steerEnemy(enemy, dx / distance * direction, dy / distance * direction, enemy.speed, 2.4, dt);
+    }
+
+    enemy.bossSpawnTimer = Math.max(0, enemy.bossSpawnTimer - dt);
+    const wholeSeconds = Math.ceil(enemy.bossSpawnTimer);
+    if (wholeSeconds > 0 && wholeSeconds <= 10 && wholeSeconds !== enemy.bossSpawnWarnAt) {
+      enemy.bossSpawnWarnAt = wholeSeconds;
+      particles.push({ x: enemy.x, y: enemy.y - 20, life: 0.85, text: `BOSS ${wholeSeconds}`, c: '#ff8e6c' });
+    }
+
+    if (enemy.bossSpawnTimer <= 0) {
+      const bossType = getFloorBossType();
+      const safeSpawn = findSafeEnemySpawnPoint(enemy.x, enemy.y, 18);
+      enemies.splice(enemies.indexOf(enemy), 1);
+      particles.push({ x: enemy.x, y: enemy.y, life: 0.8, ring: 120, c: '#ff9b5e' });
+      if (safeSpawn) {
+        const spawnedBoss = spawnEnemy(bossType, safeSpawn.x, safeSpawn.y, false);
+        spawnedBoss.hp = Math.round(spawnedBoss.hp * 0.72);
+        spawnedBoss.max = spawnedBoss.hp;
+        particles.push({ x: spawnedBoss.x, y: spawnedBoss.y - 24, life: 1, text: 'BOSS SPAWNED', c: '#ffb07b' });
+      }
+      return;
+    }
+
+    if (enemy.attackCd <= 0 && distance < 420) {
+      enemy.windup = 0.68 / tuning.reaction;
+      enemy.beamAngle = Math.atan2(dy, dx);
+      enemy.attackCd = 3.1 * tuning.rangedCadence;
+    }
+
+    if (enemy.windup > 0 || enemy.beamTime > 0) {
+      updateLaserEnemy(enemy, dt);
+    }
+  }
+
   function updateCultQueenBoss(enemy, dt) {
+    const tuning = getEnemyDifficultyTuning();
     const dx = player.x - enemy.x;
     const dy = player.y - enemy.y;
     const distance = Math.hypot(dx, dy) || 1;
 
     enemy.summonCd = Math.max(0, enemy.summonCd - dt);
     if (enemy.summonCd <= 0) {
-      enemy.summonCd = 4.6;
-      for (let index = 0; index < 3; index += 1) {
+      enemy.summonCd = 4.6 * Math.max(0.74, tuning.rangedCadence);
+      const summonCount = tuning.supportPower >= 1.22 ? 4 : 3;
+      for (let index = 0; index < summonCount; index += 1) {
         const angle = (Math.PI * 2 * index) / 3 + rng() * 0.8;
         const px = enemy.x + Math.cos(angle) * 54;
         const py = enemy.y + Math.sin(angle) * 54;
@@ -3920,7 +4393,7 @@
     updateCultMageEnemy(enemy, dt);
     if (enemy.attackCd <= 0 && distance < enemy.r + player.r + 18) {
       damagePlayer(enemy.dmg + 4, Math.atan2(dy, dx), 250);
-      enemy.attackCd = 0.95;
+      enemy.attackCd = 0.95 * tuning.rangedCadence;
     }
   }
 
@@ -3979,7 +4452,42 @@
     }
   }
 
+  function triggerGodPhase(enemy, phase, title, color = '#fff4b8') {
+    enemy.phase = phase;
+    enemy.windup = 0;
+    enemy.beamTime = 0;
+    enemy.beamTick = 0;
+    enemy.dashTime = 0;
+    enemy.swingTime = 0;
+    enemy.attackCd = Math.min(enemy.attackCd || 99, 0.7);
+    enemy.inv = Math.max(enemy.inv || 0, 0.35);
+    enemy.state = `godPhase${phase}`;
+    shake = Math.max(shake, 18 + phase * 2);
+    shakeT = Math.max(shakeT, 0.34);
+    particles.push({ x: enemy.x, y: enemy.y, life: 1, ring: 150 + phase * 14, c: color });
+    particles.push({ x: enemy.x, y: enemy.y - 34, life: 1.2, text: `PHASE ${phase}`, c: color });
+    particles.push({ x: enemy.x, y: enemy.y - 14, life: 1, text: title, c: '#ffffff' });
+  }
+
+  function spawnGodCouncil(enemy) {
+    const bossTypes = ['queen_cult', 'bulk_golem', 'artificer_knave'];
+    const spawnAngles = [-Math.PI * 0.5, Math.PI * 0.16, Math.PI * 0.84];
+    bossTypes.forEach((type, index) => {
+      const angle = spawnAngles[index] || ((Math.PI * 2 * index) / bossTypes.length);
+      const px = clamp(enemy.x + Math.cos(angle) * 220, 110, ROOM_W - 110);
+      const py = clamp(enemy.y + Math.sin(angle) * 220, 110, ROOM_H - 110);
+      const safeSpawn = findSafeEnemySpawnPoint(px, py, 18) || findSafeEnemySpawnPoint(ROOM_W / 2, ROOM_H / 2, 18);
+      if (!safeSpawn) return;
+      const boss = spawnEnemy(type, safeSpawn.x, safeSpawn.y, false);
+      boss.hp = Math.round(boss.hp * 0.85);
+      boss.max = boss.hp;
+      boss.attackCd = Math.min(boss.attackCd, 0.8);
+      particles.push({ x: boss.x, y: boss.y - 24, life: 1.05, text: getBossLabel(type), c: '#ffcf8a' });
+    });
+  }
+
   function updateArtificerBoss(enemy, dt) {
+    const tuning = getEnemyDifficultyTuning();
     const hpPct = enemy.hp / enemy.max;
     if (hpPct < 0.34) enemy.phase = 3;
     else if (hpPct < 0.67) enemy.phase = 2;
@@ -3999,7 +4507,7 @@
       enemy.speed = 120;
       if (enemy.attackCd <= 0) {
         spawnPhaseSwords(8, 14);
-        enemy.attackCd = 2.35;
+        enemy.attackCd = 2.35 * tuning.rangedCadence;
       }
       steerEnemy(enemy, dx / distance, dy / distance, enemy.speed, 4.4, dt);
       if (distance < enemy.r + player.r + 14 && enemy.swingTime <= 0) {
@@ -4017,9 +4525,9 @@
     enemy.speed = 62;
     steerEnemy(enemy, dx / distance, dy / distance, enemy.speed, 3.2, dt);
     if (enemy.attackCd <= 0) {
-      enemy.windup = 0.72;
+      enemy.windup = 0.72 / tuning.reaction;
       enemy.state = 'phase3_swing';
-      enemy.attackCd = 6;
+      enemy.attackCd = 6 * tuning.rangedCadence;
     }
     if (enemy.windup > 0) {
       enemy.windup -= dt;
@@ -4036,6 +4544,7 @@
   }
 
   function updateLaserEnemy(enemy, dt) {
+    const tuning = getEnemyDifficultyTuning();
     const dx = player.x - enemy.x;
     const dy = player.y - enemy.y;
     const distance = Math.hypot(dx, dy) || 1;
@@ -4050,7 +4559,7 @@
       enemy.windup -= dt;
       enemy.vx *= 0.86;
       enemy.vy *= 0.86;
-      aimEnemyBeam(enemy, dt, 3.3);
+      aimEnemyBeam(enemy, dt, 3.3 * tuning.reaction);
       particles.push({ x: enemy.x, y: enemy.y, life: 0.16, c: '#aa66ff' });
       if (enemy.windup <= 0) {
         enemy.beamTime = 0.46;
@@ -4061,12 +4570,12 @@
 
     if (enemy.beamTime > 0) {
       tickEnemyBeam(enemy, dt, {
-        tick: 0.11,
+        tick: 0.11 * Math.max(0.74, tuning.rangedCadence),
         range: 430,
         knockback: 130,
         damage: enemy.dmg,
         speedDamp: 0.84,
-        turnRate: 2.3,
+        turnRate: 2.3 * tuning.reaction,
       });
       return;
     }
@@ -4075,9 +4584,9 @@
     const direction = distance < desired - 25 ? -1 : distance > desired + 25 ? 1 : 0;
     steerEnemy(enemy, dx / distance * direction, dy / distance * direction, enemy.speed, 3.2, dt);
     if (enemy.attackCd <= 0 && distance < 390) {
-      enemy.windup = 0.78;
+      enemy.windup = 0.78 / tuning.reaction;
       enemy.beamAngle = Math.atan2(dy, dx);
-      enemy.attackCd = 2.8;
+      enemy.attackCd = 2.8 * tuning.rangedCadence;
     }
   }
 
@@ -4124,33 +4633,89 @@
   }
 
   function updateGod(enemy, dt) {
+    const tuning = getEnemyDifficultyTuning();
     const dx = player.x - enemy.x;
     const dy = player.y - enemy.y;
     const distance = Math.hypot(dx, dy) || 1;
+    const hpPct = enemy.hp / enemy.max;
+
+    if (enemy.rebirthUsed && !enemy.phase3Triggered && hpPct <= 0.2) {
+      enemy.phase3Triggered = true;
+      enemy.dmg = Math.round(enemy.dmg * 1.2);
+      enemy.speed *= 1.08;
+      enemy.novaCd = 1.9;
+      triggerGodPhase(enemy, 3, 'COUNCIL OF BOSSES', '#ffd27d');
+      spawnGodCouncil(enemy);
+    } else if (enemy.rebirthUsed && enemy.phase3Triggered && !enemy.phase4Triggered && hpPct <= 0.12) {
+      enemy.phase4Triggered = true;
+      enemy.dmg = Math.round(enemy.dmg * 1.16);
+      enemy.speed *= 1.06;
+      enemy.novaCd = 1.25;
+      enemy.judgementCd = 2.7;
+      triggerGodPhase(enemy, 4, 'HOLY ONSLAUGHT', '#ff9f6e');
+      spawnGodSwordRing(enemy, 24, Math.round(enemy.dmg * 1.05));
+    } else if (enemy.rebirthUsed && enemy.phase4Triggered && !enemy.phase5Triggered && hpPct <= 0.06) {
+      enemy.phase5Triggered = true;
+      enemy.dmg = Math.round(enemy.dmg * 1.22);
+      enemy.speed *= 1.08;
+      enemy.novaCd = 0.78;
+      enemy.judgementCd = 1.45;
+      triggerGodPhase(enemy, 5, 'LAST JUDGEMENT', '#ff5a5a');
+      spawnGodSwordRing(enemy, 32, Math.round(enemy.dmg * 1.15));
+    }
+
+    const phaseLevel = enemy.phase || 1;
+    const phaseTwo = phaseLevel >= 2;
+    const phaseFour = phaseLevel >= 4;
+    const phaseFive = phaseLevel >= 5;
+    const cadenceMult = phaseFive ? 0.42 : phaseFour ? 0.52 : phaseLevel >= 3 ? 0.6 : phaseTwo ? 0.68 : 1;
+    const reactionMult = phaseFive ? 1.45 : phaseFour ? 1.34 : phaseLevel >= 3 ? 1.28 : phaseTwo ? 1.22 : 1;
+    const desired = phaseFive ? 138 : phaseFour ? 146 : phaseTwo ? 156 : 190;
+
+    if (phaseFour) {
+      enemy.novaCd = Math.max(0, (enemy.novaCd || 0) - dt);
+      if (enemy.novaCd <= 0) {
+        const swordCount = phaseFive ? 20 : 14;
+        const swordDamage = Math.round(enemy.dmg * (phaseFive ? 1.08 : 0.92));
+        spawnGodSwordRing(enemy, swordCount, swordDamage);
+        enemy.novaCd = phaseFive ? 0.78 : 1.25;
+      }
+    }
+
+    if (phaseFive) {
+      enemy.judgementCd = Math.max(0, (enemy.judgementCd || 0) - dt);
+      if (enemy.judgementCd <= 0) {
+        spawnPhaseSwords(16, Math.round(enemy.dmg * 0.82));
+        particles.push({ x: player.x, y: player.y, life: 0.42, ring: 118, c: '#ff7a7a' });
+        enemy.judgementCd = 1.45;
+      }
+    }
 
     if (enemy.windup > 0) {
       enemy.windup -= dt;
       enemy.vx *= 0.74;
       enemy.vy *= 0.74;
-      if (enemy.state === 'godLaser') aimEnemyBeam(enemy, dt, 3.1);
+      if (enemy.state === 'godLaser') aimEnemyBeam(enemy, dt, 3.1 * tuning.reaction * reactionMult);
       particles.push({ x: enemy.x, y: enemy.y, life: 0.18, c: '#ffffff' });
       if (enemy.windup <= 0) {
         if (enemy.state === 'godLaser') {
-          enemy.beamTime = 0.78;
+          enemy.beamTime = phaseTwo ? 0.98 : 0.78;
           enemy.beamTick = 0;
         }
         if (enemy.state === 'godSweep') {
-          enemy.beamTime = 1.9;
+          enemy.beamTime = phaseFour ? 2.7 : phaseTwo ? 2.35 : 1.9;
           enemy.beamTick = 0;
-          enemy.sweepSpeed = 3.9 * (enemy.sweepDir || 1);
+          enemy.sweepSpeed = 3.9 * reactionMult * (enemy.sweepDir || 1);
         }
         if (enemy.state === 'godCharge') {
-          enemy.dashTime = 0.48;
+          enemy.dashTime = phaseFour ? 0.76 : phaseTwo ? 0.62 : 0.48;
           enemy.dashHit = false;
         }
         if (enemy.state === 'godSwordRing') {
-          spawnGodSwordRing(enemy, 12, Math.round(enemy.dmg * 0.82));
-          enemy.attackCd = 1.2;
+          const swordCount = phaseFive ? 30 : phaseFour ? 24 : phaseTwo ? 18 : 12;
+          const swordDamage = Math.round(enemy.dmg * (phaseFour ? 1.02 : phaseTwo ? 0.95 : 0.82));
+          spawnGodSwordRing(enemy, swordCount, swordDamage);
+          enemy.attackCd = 1.2 * tuning.rangedCadence * cadenceMult;
         }
       }
       return;
@@ -4159,19 +4724,19 @@
     if (enemy.beamTime > 0) {
       const isSweep = enemy.state === 'godSweep';
       tickEnemyBeam(enemy, dt, {
-        tick: isSweep ? 0.045 : 0.08,
+        tick: (isSweep ? 0.045 : 0.08) * Math.max(0.64, tuning.rangedCadence * cadenceMult),
         range: enemy.beamRange || 620,
-        knockback: isSweep ? 210 : 150,
-        damage: isSweep ? enemy.dmg + 18 : enemy.dmg + 6,
+        knockback: isSweep ? (phaseFour ? 260 : 210) : (phaseFour ? 180 : 150),
+        damage: isSweep ? enemy.dmg + (phaseFive ? 38 : phaseTwo ? 28 : 18) : enemy.dmg + (phaseFour ? 18 : phaseTwo ? 12 : 6),
         speedDamp: 0.86,
-        turnRate: isSweep ? 0 : 2.2,
+        turnRate: isSweep ? 0 : 2.2 * tuning.reaction * reactionMult,
         onTick: isSweep
           ? activeEnemy => {
             activeEnemy.beamAngle += activeEnemy.sweepSpeed * 0.045;
           }
           : null,
         onEnd: activeEnemy => {
-          activeEnemy.attackCd = isSweep ? 1.45 : 1;
+          activeEnemy.attackCd = (isSweep ? 1.45 : 1) * tuning.rangedCadence * cadenceMult;
         },
       });
       return;
@@ -4179,13 +4744,14 @@
 
     if (enemy.dashTime > 0) {
       enemy.dashTime -= dt;
-      enemy.vx = Math.cos(enemy.dashAngle) * 500;
-      enemy.vy = Math.sin(enemy.dashAngle) * 500;
+      const dashSpeed = phaseFive ? 710 : phaseFour ? 660 : phaseTwo ? 620 : 500;
+      enemy.vx = Math.cos(enemy.dashAngle) * dashSpeed;
+      enemy.vy = Math.sin(enemy.dashAngle) * dashSpeed;
       if (!enemy.dashHit && dist(enemy.x, enemy.y, player.x, player.y) < enemy.r + player.r + 10) {
         enemy.dashHit = true;
-        damagePlayer(enemy.dmg + 12, enemy.dashAngle, 300);
+        damagePlayer(enemy.dmg + (phaseFive ? 34 : phaseTwo ? 24 : 12), enemy.dashAngle, phaseFour ? 410 : phaseTwo ? 360 : 300);
       }
-      if (enemy.dashTime <= 0) enemy.attackCd = 1.1;
+      if (enemy.dashTime <= 0) enemy.attackCd = 1.1 * tuning.rangedCadence * cadenceMult;
       return;
     }
 
@@ -4195,37 +4761,36 @@
       return;
     }
 
-    const desired = 190;
     const direction = distance < desired - 10 ? -1 : distance > desired + 20 ? 1 : 0.5;
-    steerEnemy(enemy, dx / distance * direction, dy / distance * direction, enemy.speed, 4.6, dt);
+    steerEnemy(enemy, dx / distance * direction, dy / distance * direction, enemy.speed, phaseFour ? 6.2 : phaseTwo ? 5.5 : 4.6, dt);
 
     if (distance < enemy.r + player.r + 12 && enemy.attackCd <= 0) {
       const angle = Math.atan2(dy, dx);
-      damagePlayer(enemy.dmg + 10, angle, 260);
-      enemy.attackCd = 0.8;
+      damagePlayer(enemy.dmg + (phaseFive ? 26 : phaseTwo ? 18 : 10), angle, phaseFour ? 370 : phaseTwo ? 320 : 260);
+      enemy.attackCd = 0.8 * tuning.rangedCadence * cadenceMult;
       return;
     }
 
     if (enemy.attackCd <= 0) {
       const roll = nextRandom('encounter');
-      if (distance > 300 && roll > 0.68) {
+      if ((phaseTwo && distance > 250 && roll > (phaseFour ? 0.46 : 0.52)) || (!phaseTwo && distance > 300 && roll > 0.68)) {
         enemy.state = 'godSweep';
-        enemy.windup = 1.15;
+        enemy.windup = 1.15 / (tuning.reaction * reactionMult);
         enemy.beamAngle = Math.atan2(dy, dx);
         enemy.sweepDir = nextRandom('encounter') < 0.5 ? -1 : 1;
-      } else if (roll > 0.42) {
+      } else if (roll > (phaseFive ? 0.16 : phaseTwo ? 0.26 : 0.42)) {
         enemy.state = 'godLaser';
-        enemy.windup = 0.82;
+        enemy.windup = 0.82 / (tuning.reaction * reactionMult);
         enemy.beamAngle = Math.atan2(dy, dx);
-      } else if (roll > 0.18) {
+      } else if (roll > (phaseFour ? 0.04 : phaseTwo ? 0.08 : 0.18)) {
         enemy.state = 'godSwordRing';
-        enemy.windup = 0.6;
+        enemy.windup = 0.6 / (tuning.reaction * reactionMult);
       } else {
         enemy.state = 'godCharge';
-        enemy.windup = 0.44;
+        enemy.windup = 0.44 / (tuning.reaction * reactionMult);
         enemy.dashAngle = Math.atan2(dy, dx);
       }
-      enemy.attackCd = 2.15;
+      enemy.attackCd = 2.15 * tuning.rangedCadence * cadenceMult;
     }
   }
 
@@ -5364,6 +5929,11 @@
   }
 
   function getEnemySpriteKey(enemy) {
+    if (enemy.type === 'machine_gunner') return 'sniper';
+    if (enemy.type === 'summoner') return 'cult_mage';
+    if (enemy.type === 'shield_unit') return 'golem';
+    if (enemy.type === 'healer') return 'cult_follower';
+    if (enemy.type === 'boss_spawner') return 'laser';
     return SPRITE_DEFS[enemy.type] ? enemy.type : 'hunter';
   }
 
@@ -5530,6 +6100,19 @@
       ctx.fillRect(-18, -enemy.r - 14, 36, 5);
       ctx.fillStyle = isBossType(enemy.type) ? '#f2e8d7' : '#b24f68';
       ctx.fillRect(-18, -enemy.r - 14, 36 * hpPct, 5);
+      if ((enemy.barrier || 0) > 0) {
+        const barrierPct = clamp(enemy.barrier / Math.max(1, enemy.max * 0.22), 0, 1);
+        ctx.fillStyle = 'rgba(80, 215, 255, 0.24)';
+        ctx.fillRect(-18, -enemy.r - 20, 36, 4);
+        ctx.fillStyle = '#7ed6ff';
+        ctx.fillRect(-18, -enemy.r - 20, 36 * barrierPct, 4);
+      }
+      if (enemy.type === 'boss_spawner') {
+        ctx.fillStyle = '#ffb07b';
+        ctx.font = 'bold 10px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(`${Math.max(0, Math.ceil(enemy.bossSpawnTimer))}`, 0, -enemy.r - 26);
+      }
       ctx.restore();
     });
   }
