@@ -21,6 +21,7 @@
     <div>LV <b id="lv">1</b></div>
     <div>XP <b id="xp">0/20</b></div>
     <div>FL <b id="fl">1</b>/10</div>
+    <div>TIME <b id="gameTime">0:00</b></div>
     <div>COINS <b id="coins">0</b></div>
     <div>CHR <b id="charName">THORN KNIGHT</b></div>
     <div id="objective">Find the ladder.</div>
@@ -28,12 +29,6 @@
       <div class="relic" id="rr-neo-knife" data-t="knight" title="Neo-Knife"><span id="countNeoKnife">0</span></div>
       <div class="relic" id="rr-orb-blood" data-t="wizard" title="Orb of Blood"><span id="countOrbBlood">0</span></div>
       <div class="relic" id="rr-hemes-scarf" data-t="god" title="Heme's Scarf"><span id="countHemesScarf">0</span></div>
-    </div>
-    <div class="cds">
-      <div>SLASH <b id="cdM">0.0</b></div>
-      <div>LASER <b id="cdL">0.0</b></div>
-      <div>SMASH <b id="cdS">0.0</b></div>
-      <div>SHIFT <b id="cdD">0.0</b></div>
     </div>
   </div>
 
@@ -73,6 +68,49 @@
         <span class="skill-name">Smash</span>
       </div>
       <b class="skill-time" id="timeSmash">READY</b>
+    </div>
+  </div>
+
+  <div id="shopPanel" class="game-panel hidden" aria-hidden="true">
+    <div class="game-panel-head">
+      <h3>SHOP</h3>
+      <div class="shop-coins">COINS <b id="shopCoins">0</b></div>
+      <button id="shopClose" class="panel-close">X</button>
+    </div>
+    <div class="shop-tabs">
+      <button class="shop-tab active" data-tab="items">Items</button>
+      <button class="shop-tab" data-tab="moves">Moves</button>
+      <button class="shop-tab" data-tab="heals">Heal Ups</button>
+    </div>
+    <div id="shopItems" class="shop-list"></div>
+    <div id="shopMoves" class="shop-list hidden"></div>
+    <div id="shopHeals" class="shop-list hidden"></div>
+  </div>
+
+  <div id="invPanel" class="game-panel hidden" aria-hidden="true">
+    <div class="game-panel-head">
+      <h3>INVENTORY</h3>
+      <button id="invClose" class="panel-close">X</button>
+    </div>
+    <div id="invStats" class="inv-stats"></div>
+    <div class="inv-layout">
+      <div>
+        <h4>Items</h4>
+        <div id="invItemsList" class="inv-items"></div>
+      </div>
+      <div>
+        <h4>Owned Moves (drag to slot)</h4>
+        <div id="invMovesList" class="inv-moves"></div>
+      </div>
+      <div>
+        <h4>Equipped</h4>
+        <div class="inv-slots">
+          <div class="inv-slot" data-slot="melee">Melee</div>
+          <div class="inv-slot" data-slot="laser">Laser</div>
+          <div class="inv-slot" data-slot="smash">Smash</div>
+          <div class="inv-slot" data-slot="dash">Dash</div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -272,6 +310,7 @@
           <tr><td class="bind-label">Move Left</td> <td><button class="bind-btn" data-action="left">A</button></td></tr>
           <tr><td class="bind-label">Move Right</td><td><button class="bind-btn" data-action="right">D</button></td></tr>
           <tr><td class="bind-label">Dash</td>      <td><button class="bind-btn" data-action="dash">SHIFT</button></td></tr>
+          <tr><td class="bind-label">Inventory</td> <td><button class="bind-btn" data-action="inventory">I</button></td></tr>
           <tr><td class="bind-label">Slash</td>     <td><button class="bind-btn" data-action="slash">LMB</button></td></tr>
           <tr><td class="bind-label">Laser beam</td><td><button class="bind-btn" data-action="laser">RMB</button></td></tr>
           <tr><td class="bind-label">Smash</td>     <td><button class="bind-btn" data-action="smash">R</button></td></tr>
@@ -342,7 +381,7 @@
 (function Settings() {
   const STORE_KEY = 'neonyke:settings';
 
-  const DEFAULT_BINDINGS = { up:'w', down:'s', left:'a', right:'d', dash:'shift', smash:'r', slash:'lmb', laser:'rmb' };
+  const DEFAULT_BINDINGS = { up:'w', down:'s', left:'a', right:'d', dash:'shift', inventory:'i', smash:'r', slash:'lmb', laser:'rmb' };
   const DEFAULT_VOLUME   = { master:80, sfx:80, music:60 };
   const DEFAULT_ACCESS   = { reduceFlash:false, highContrast:false, screenShake:true };
 

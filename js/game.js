@@ -46,6 +46,34 @@
     },
   };
 
+  const MOVE_SLOTS = ['melee', 'laser', 'smash', 'dash'];
+  const MOVE_DEFS = {
+    slash: { key: 'slash', slot: 'melee', name: 'Slash', desc: 'Close-range arc attack.' },
+    fire_balls: { key: 'fire_balls', slot: 'melee', name: 'Fire Balls', desc: 'Shoot a spread of fireballs.' },
+    smite: { key: 'smite', slot: 'melee', name: 'Smite', desc: 'Physical swing plus chaining lightning.' },
+
+    blood_beam: { key: 'blood_beam', slot: 'laser', name: 'Blood Beam', desc: 'Sustained piercing beam.' },
+    power_disks: { key: 'power_disks', slot: 'laser', name: 'Power Disks', desc: 'Burst of spinning disks.' },
+    blade_justice: { key: 'blade_justice', slot: 'laser', name: 'Blade Justice', desc: 'Divine short-range blade strike.' },
+    lightning_columns: { key: 'lightning_columns', slot: 'laser', name: 'Lightning Columns', desc: 'Summon two lightning turrets.' },
+
+    crimson_smash: { key: 'crimson_smash', slot: 'smash', name: 'Crimson Smash', desc: 'Heavy area smash.' },
+    chaos_burst: { key: 'chaos_burst', slot: 'smash', name: 'Chaos Burst', desc: 'Multiple chaos detonations.' },
+    healing_zone: { key: 'healing_zone', slot: 'smash', name: 'Healing Zone', desc: 'Healing and damage zone.' },
+    fire_circle: { key: 'fire_circle', slot: 'smash', name: 'Fire Circle', desc: 'Burning aura around you.' },
+    floor_lava: { key: 'floor_lava', slot: 'smash', name: 'Floor Is Lava', desc: 'Lava immunity and lava trail.' },
+
+    dash: { key: 'dash', slot: 'dash', name: 'Dash', desc: 'Fast invulnerable burst movement.' },
+    warp: { key: 'warp', slot: 'dash', name: 'Warp', desc: 'Teleport to a safe room position.' },
+  };
+
+  const SHOP_MOVE_POOL = [
+    'slash', 'fire_balls', 'smite',
+    'blood_beam', 'power_disks', 'blade_justice', 'lightning_columns',
+    'crimson_smash', 'chaos_burst', 'healing_zone', 'fire_circle', 'floor_lava',
+    'dash', 'warp',
+  ];
+
   const ITEM_DEFS = {
     neo_knife: {
       key: 'neo_knife',
@@ -193,6 +221,7 @@
     lv: document.getElementById('lv'),
     xp: document.getElementById('xp'),
     fl: document.getElementById('fl'),
+    gameTime: document.getElementById('gameTime'),
     coins: document.getElementById('coins'),
     charName: document.getElementById('charName'),
     objective: document.getElementById('objective'),
@@ -224,6 +253,24 @@
     pauseSettings: document.getElementById('pauseSettings'),
     pauseMain: document.getElementById('pauseMain'),
     actionBar: document.getElementById('actionBar'),
+    shopPanel: document.getElementById('shopPanel'),
+    shopClose: document.getElementById('shopClose'),
+    shopTabs: [...document.querySelectorAll('#shopPanel .shop-tab')],
+    shopItems: document.getElementById('shopItems'),
+    shopMoves: document.getElementById('shopMoves'),
+    shopHeals: document.getElementById('shopHeals'),
+    shopCoins: document.getElementById('shopCoins'),
+    invPanel: document.getElementById('invPanel'),
+    invClose: document.getElementById('invClose'),
+    invItemsList: document.getElementById('invItemsList'),
+    invStats: document.getElementById('invStats'),
+    invMovesList: document.getElementById('invMovesList'),
+    invSlots: {
+      melee: document.querySelector('#invPanel [data-slot="melee"]'),
+      laser: document.querySelector('#invPanel [data-slot="laser"]'),
+      smash: document.querySelector('#invPanel [data-slot="smash"]'),
+      dash: document.querySelector('#invPanel [data-slot="dash"]'),
+    },
     seed: document.getElementById('seed'),
     go: document.getElementById('go'),
     continueRow: document.getElementById('continueRow'),
@@ -309,6 +356,10 @@
   let lavaAnimTime = 0;
   let floorSkipPending = 0;
   let teleportKeyLatch = false;
+  let shopKeyLatch = false;
+  let invKeyLatch = false;
+  let activeShopTab = 'items';
+  let draggingMoveKey = '';
 
   const saveStore = createSaveStore();
   window._neoSaveStore = saveStore;
@@ -338,6 +389,7 @@
       updateHud();
     });
     bindInput();
+    bindPanelInput();
     drawActionIcons();
     await loadPersistedState();
     updateCharacterSelectionUI();
@@ -364,15 +416,32 @@
       const key = event.key.toLowerCase();
       keys[key] = true;
       const b = window.NeoSettings?.getBindings();
+      const inventoryKey = b ? b.inventory : 'i';
       if (event.key === 'Escape') {
         if (gameState === 'play') { pauseGame(); return; }
         if (gameState === 'pause') { resumeGame(); return; }
+      }
+      if (key === 'e' && gameState === 'play') {
+        const inShopRoom = currentRoom?.type === 'shop';
+        if (inShopRoom && !shopKeyLatch) {
+          toggleShopPanel();
+          shopKeyLatch = true;
+        }
+      }
+      if (key === inventoryKey && gameState === 'play' && !invKeyLatch) {
+        toggleInventoryPanel();
+        invKeyLatch = true;
       }
       if (b && key === b.smash && gameState === 'play') trySmash();
       else if (!b && key === 'r' && gameState === 'play') trySmash();
     });
     window.addEventListener('keyup', event => {
-      keys[event.key.toLowerCase()] = false;
+      const key = event.key.toLowerCase();
+      keys[key] = false;
+      const b = window.NeoSettings?.getBindings();
+      const inventoryKey = b ? b.inventory : 'i';
+      if (key === 'e') shopKeyLatch = false;
+      if (key === inventoryKey) invKeyLatch = false;
     });
     uiController.bindMenuActions({
       onCharacterSelect(characterKey, button) {
@@ -403,6 +472,240 @@
         saveRunNow();
       }
     });
+  }
+
+  function bindPanelInput() {
+    ui.shopClose?.addEventListener('click', () => setShopPanelOpen(false));
+    ui.invClose?.addEventListener('click', () => setInventoryPanelOpen(false));
+    ui.shopTabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        const nextTab = tab.dataset.tab || 'items';
+        activeShopTab = nextTab;
+        renderShopPanel();
+      });
+    });
+    ui.shopItems?.addEventListener('click', handleShopBuyClick);
+    ui.shopMoves?.addEventListener('click', handleShopBuyClick);
+    ui.shopHeals?.addEventListener('click', handleShopBuyClick);
+    ui.invMovesList?.addEventListener('dragstart', event => {
+      const target = event.target instanceof Element ? event.target : null;
+      const moveKey = target?.dataset?.move;
+      if (!moveKey) return;
+      draggingMoveKey = moveKey;
+      event.dataTransfer?.setData('text/plain', moveKey);
+    });
+    ui.invMovesList?.addEventListener('dragend', () => {
+      draggingMoveKey = '';
+      clearDragOverSlots();
+    });
+    Object.entries(ui.invSlots).forEach(([slot, node]) => {
+      if (!node) return;
+      node.addEventListener('dragover', event => {
+        event.preventDefault();
+        const moveKey = draggingMoveKey || event.dataTransfer?.getData('text/plain') || '';
+        if (!MOVE_DEFS[moveKey] || MOVE_DEFS[moveKey].slot !== slot) return;
+        node.classList.add('drag-over');
+      });
+      node.addEventListener('dragleave', () => {
+        node.classList.remove('drag-over');
+      });
+      node.addEventListener('drop', event => {
+        event.preventDefault();
+        node.classList.remove('drag-over');
+        const moveKey = draggingMoveKey || event.dataTransfer?.getData('text/plain') || '';
+        equipMove(slot, moveKey);
+      });
+    });
+  }
+
+  function clearDragOverSlots() {
+    Object.values(ui.invSlots).forEach(node => node?.classList.remove('drag-over'));
+  }
+
+  function isPanelOpen(panel) {
+    return !!panel && !panel.classList.contains('hidden');
+  }
+
+  function setShopPanelOpen(open) {
+    if (!ui.shopPanel) return;
+    ui.shopPanel.classList.toggle('hidden', !open);
+    ui.shopPanel.setAttribute('aria-hidden', open ? 'false' : 'true');
+    if (open) renderShopPanel();
+  }
+
+  function setInventoryPanelOpen(open) {
+    if (!ui.invPanel) return;
+    ui.invPanel.classList.toggle('hidden', !open);
+    ui.invPanel.setAttribute('aria-hidden', open ? 'false' : 'true');
+    if (open) renderInventoryPanel();
+  }
+
+  function toggleShopPanel() {
+    if (currentRoom?.type !== 'shop') return;
+    const next = !isPanelOpen(ui.shopPanel);
+    setShopPanelOpen(next);
+    if (next) setInventoryPanelOpen(false);
+  }
+
+  function toggleInventoryPanel() {
+    const next = !isPanelOpen(ui.invPanel);
+    setInventoryPanelOpen(next);
+    if (next) setShopPanelOpen(false);
+  }
+
+  function isOverlayBlockingInput() {
+    return isPanelOpen(ui.shopPanel) || isPanelOpen(ui.invPanel);
+  }
+
+  function getShopMoveOffers() {
+    if (!currentRoom || currentRoom.type !== 'shop') return [];
+    if (!Array.isArray(currentRoom.shopMoveOffers) || currentRoom.shopMoveOffers.length === 0) {
+      const seen = new Set(Object.keys(player?.ownedMoves || {}));
+      const pool = SHOP_MOVE_POOL.filter(key => !seen.has(key));
+      shuffle(pool);
+      currentRoom.shopMoveOffers = pool.slice(0, 4).map((moveKey, index) => ({
+        type: 'move',
+        key: moveKey,
+        bought: false,
+        cost: 34 + floor * 6 + index * 4,
+      }));
+    }
+    return currentRoom.shopMoveOffers;
+  }
+
+  function renderShopPanel() {
+    if (!ui.shopPanel || !player) return;
+    ui.shopCoins.textContent = String(player.coins);
+    ui.shopTabs.forEach(tab => {
+      const isActive = tab.dataset.tab === activeShopTab;
+      tab.classList.toggle('active', isActive);
+    });
+    ui.shopItems.classList.toggle('hidden', activeShopTab !== 'items');
+    ui.shopMoves.classList.toggle('hidden', activeShopTab !== 'moves');
+    ui.shopHeals.classList.toggle('hidden', activeShopTab !== 'heals');
+
+    const itemCards = shopOffers
+      .filter(offer => !offer.bought && offer.type === 'item')
+      .map((offer, index) => {
+        const item = itemRegistry.get(offer.key);
+        return `<div class="shop-card"><h4>${item?.name || 'Item'}</h4><p>${item?.description || ''}</p><button class="shop-buy" data-kind="item" data-index="${index}">Buy ${offer.cost}</button></div>`;
+      })
+      .join('');
+    ui.shopItems.innerHTML = itemCards || '<div class="shop-card"><p>All item offers purchased.</p></div>';
+
+    const moveOffers = getShopMoveOffers();
+    const moveCards = moveOffers
+      .map((offer, index) => {
+        const def = MOVE_DEFS[offer.key];
+        const owned = !!player.ownedMoves?.[offer.key];
+        const disabledText = offer.bought || owned ? 'Owned' : `Buy ${offer.cost}`;
+        return `<div class="shop-card"><h4>${def?.name || offer.key}</h4><p>${def?.desc || ''}</p><button class="shop-buy" data-kind="move" data-index="${index}" ${offer.bought || owned ? 'disabled' : ''}>${disabledText}</button></div>`;
+      })
+      .join('');
+    ui.shopMoves.innerHTML = moveCards || '<div class="shop-card"><p>No moves available right now.</p></div>';
+
+    const heals = [
+      { id: 'small', name: 'Minor Heal', heal: 45, cost: 16 + floor * 2 },
+      { id: 'major', name: 'Major Heal', heal: 100, cost: 34 + floor * 4 },
+    ];
+    const healCards = heals
+      .map(heal => `<div class="shop-card"><h4>${heal.name}</h4><p>Restore ${heal.heal} HP.</p><button class="shop-buy" data-kind="heal" data-heal="${heal.heal}" data-cost="${heal.cost}">Buy ${heal.cost}</button></div>`)
+      .join('');
+    ui.shopHeals.innerHTML = healCards;
+  }
+
+  function renderInventoryPanel() {
+    if (!ui.invPanel || !player) return;
+    const stats = getItemStats();
+    ui.invStats.innerHTML = [
+      `<div class="inv-card"><h4>HP</h4><p>${Math.round(player.hp)} / ${Math.round(player.maxHp)}</p></div>`,
+      `<div class="inv-card"><h4>Attack Power</h4><p>${player.attackPower}</p></div>`,
+      `<div class="inv-card"><h4>Attack Speed</h4><p>${getAttackSpeedValue().toFixed(2)}</p></div>`,
+      `<div class="inv-card"><h4>Crit Chance</h4><p>${Math.round(stats.critChance * 100)}%</p></div>`,
+    ].join('');
+
+    ui.invItemsList.innerHTML = ITEM_KEYS
+      .filter(key => Number(player.items?.[key] || 0) > 0)
+      .map(key => {
+        const item = itemRegistry.get(key);
+        return `<div class="inv-card"><h4>${item?.name || key} x${player.items[key]}</h4><p>${item?.description || ''}</p></div>`;
+      })
+      .join('') || '<div class="inv-card"><p>No items collected.</p></div>';
+
+    const ownedMoves = Object.keys(player.ownedMoves || {})
+      .filter(key => player.ownedMoves[key] && MOVE_DEFS[key])
+      .sort((a, b) => MOVE_DEFS[a].slot.localeCompare(MOVE_DEFS[b].slot));
+    ui.invMovesList.innerHTML = ownedMoves
+      .map(key => {
+        const def = MOVE_DEFS[key];
+        return `<div class="inv-move-chip" draggable="true" data-move="${key}"><b>${def.name}</b><br>${def.slot.toUpperCase()} - ${def.desc}</div>`;
+      })
+      .join('') || '<div class="inv-card"><p>No moves owned.</p></div>';
+
+    MOVE_SLOTS.forEach(slot => {
+      const node = ui.invSlots[slot];
+      if (!node) return;
+      const moveKey = player.equippedMoves?.[slot];
+      const def = MOVE_DEFS[moveKey];
+      node.innerHTML = `<b>${slot.toUpperCase()}</b><p>${def?.name || 'None equipped'}</p>`;
+    });
+  }
+
+  function equipMove(slot, moveKey) {
+    if (!player || !MOVE_DEFS[moveKey]) return;
+    if (MOVE_DEFS[moveKey].slot !== slot) return;
+    if (!player.ownedMoves?.[moveKey]) return;
+    player.equippedMoves[slot] = moveKey;
+    renderInventoryPanel();
+    updateHud();
+    scheduleRunSave();
+  }
+
+  function spendCoins(cost) {
+    if (player.coins < cost) return false;
+    player.coins -= cost;
+    metaProgress.coins = Math.max(0, metaProgress.coins - cost);
+    persistMetaSoon();
+    return true;
+  }
+
+  function handleShopBuyClick(event) {
+    const target = event.target instanceof Element ? event.target : null;
+    const button = target?.closest('.shop-buy');
+    if (!button || !player) return;
+    const kind = button.dataset.kind;
+    if (kind === 'item') {
+      const offerIndex = Number(button.dataset.index || -1);
+      const itemOffers = shopOffers.filter(offer => !offer.bought && offer.type === 'item');
+      const offer = itemOffers[offerIndex];
+      if (!offer || offer.bought) return;
+      if (!spendCoins(offer.cost)) return;
+      offer.bought = true;
+      collectItem(offer.key);
+    } else if (kind === 'move') {
+      const offerIndex = Number(button.dataset.index || -1);
+      const moveOffers = getShopMoveOffers();
+      const offer = moveOffers[offerIndex];
+      if (!offer || offer.bought || player.ownedMoves?.[offer.key]) return;
+      if (!spendCoins(offer.cost)) return;
+      offer.bought = true;
+      player.ownedMoves[offer.key] = true;
+      particles.push({ x: player.x, y: player.y - 20, life: 0.6, text: `NEW MOVE: ${MOVE_DEFS[offer.key]?.name || offer.key}`, c: '#9fd7ff' });
+    } else if (kind === 'heal') {
+      const heal = Number(button.dataset.heal || 0);
+      const cost = Number(button.dataset.cost || 0);
+      if (!heal || !cost) return;
+      if (!spendCoins(cost)) return;
+      const before = player.hp;
+      player.hp = Math.min(player.maxHp, player.hp + heal);
+      const gained = player.hp - before;
+      if (gained > 0) spawnHealPopup(player.x + rand(-10, 10), player.y - 20, gained);
+    }
+    renderShopPanel();
+    renderInventoryPanel();
+    scheduleRunSave();
+    syncCurrentRoomState();
+    updateHud();
   }
 
   function pauseGame() {
@@ -440,6 +743,13 @@
     };
     const character = CHARACTER_DEFS[chosenCharacter] || CHARACTER_DEFS.thorn_knight;
     items[character.startItem] = 1;
+    const equippedMoves = character.key === 'metao'
+      ? { melee: 'fire_balls', laser: 'power_disks', smash: 'chaos_burst', dash: 'dash' }
+      : character.key === 'granialla'
+        ? { melee: 'smite', laser: 'blade_justice', smash: 'healing_zone', dash: 'dash' }
+        : { melee: 'slash', laser: 'blood_beam', smash: 'crimson_smash', dash: 'dash' };
+    const ownedMoves = {};
+    Object.values(equippedMoves).forEach(key => { ownedMoves[key] = true; });
     return {
       character: character.key,
       x: START_X,
@@ -468,6 +778,10 @@
       escapeChargeKills: 0,
       escapeReady: true,
       items,
+      equippedMoves,
+      ownedMoves,
+      lavaWalkTime: 0,
+      lavaTrailTick: 0,
     };
   }
 
@@ -555,6 +869,10 @@
   function setGameState(nextState) {
     gameState = nextState;
     uiController.setState(nextState);
+    if (nextState !== 'play') {
+      setShopPanelOpen(false);
+      setInventoryPanelOpen(false);
+    }
   }
 
   async function startGame(resume) {
@@ -604,6 +922,12 @@
     nextDoor = null;
     floorSkipPending = 0;
     teleportKeyLatch = false;
+    shopKeyLatch = false;
+    invKeyLatch = false;
+    activeShopTab = 'items';
+    draggingMoveKey = '';
+    setShopPanelOpen(false);
+    setInventoryPanelOpen(false);
     mouse.down = false;
     mouse.right = false;
   }
@@ -662,6 +986,12 @@
     floorSkipPending = 0;
     teleportKeyLatch = false;
     dashKeyLatch = false;
+    shopKeyLatch = false;
+    invKeyLatch = false;
+    activeShopTab = 'items';
+    draggingMoveKey = '';
+    setShopPanelOpen(false);
+    setInventoryPanelOpen(false);
     updateItemUI();
     updateObjective();
     updateHud();
@@ -758,6 +1088,7 @@
     room.destructibles = [];
     room.hazards = [];
     room.shopOffers = [];
+    room.shopMoveOffers = [];
     room.structures = [];
     room.decorations = [];
     if (room.type === 'start') return;
@@ -822,6 +1153,7 @@
         { type: 'potion', cost: 18 + floor * 2, x: ROOM_W / 2 - 90, y: ROOM_H / 2, bought: false },
         { type: 'item', key: rollItemDrop(), cost: 32 + floor * 4, x: ROOM_W / 2 + 90, y: ROOM_H / 2, bought: false },
       ];
+      room.shopMoveOffers = [];
       room.cleared = true;
     }
   }
@@ -1003,6 +1335,8 @@
 
   function enterRoom(room) {
     syncCurrentRoomState();
+    setShopPanelOpen(false);
+    setInventoryPanelOpen(false);
     currentRoom = room;
     room.explored = true;
     room.visited = true;
@@ -1148,6 +1482,22 @@
     return 1 + gameMinutes * floor * 0.15;
   }
 
+  function scaleEnemyStats(baseStats, type) {
+    const result = { ...baseStats };
+    const gameMinutes = gameElapsedTime / 60;
+    const loopNumber = Math.max(1, Math.floor((floor - 1) / 10) + 1);
+    const floorInLoop = ((floor - 1) % 10) + 1;
+    const floorMultiplier = 1 + (floorInLoop - 1) * 0.14;
+    const loopMultiplier = 1 + (loopNumber - 1) * 0.32;
+    const timerMultiplier = 1 + gameMinutes * 0.12;
+    const combinedScaleFactor = floorMultiplier * loopMultiplier * timerMultiplier;
+    result.hp = Math.round(result.hp * combinedScaleFactor);
+    result.max = result.hp;
+    result.dmg = Math.round(result.dmg * combinedScaleFactor);
+    result.speed *= combinedScaleFactor;
+    return result;
+  }
+
   function spawnEnemy(type, x, y, elite = false) {
     const base = {
       type,
@@ -1265,11 +1615,11 @@
       }
     }
 
-    const difficultyMult = getEnemyDifficultyMultiplier();
-    base.hp = Math.round(base.hp * difficultyMult);
-    base.max = base.hp;
-    base.dmg = Math.round(base.dmg * difficultyMult);
-    base.speed *= difficultyMult;
+    const scaled = scaleEnemyStats(base, type);
+    base.hp = scaled.hp;
+    base.max = scaled.max;
+    base.dmg = scaled.dmg;
+    base.speed = scaled.speed;
 
     enemies.push(base);
     return base;
@@ -1309,6 +1659,25 @@
     playerData.dashTime = Number(playerData.dashTime || 0);
     playerData.dashX = Number(playerData.dashX || 0);
     playerData.dashY = Number(playerData.dashY || 0);
+    playerData.lavaWalkTime = Number(playerData.lavaWalkTime || 0);
+    playerData.lavaTrailTick = Number(playerData.lavaTrailTick || 0);
+    if (!playerData.equippedMoves || typeof playerData.equippedMoves !== 'object') {
+      playerData.equippedMoves = playerData.character === 'metao'
+        ? { melee: 'fire_balls', laser: 'power_disks', smash: 'chaos_burst', dash: 'dash' }
+        : playerData.character === 'granialla'
+          ? { melee: 'smite', laser: 'blade_justice', smash: 'healing_zone', dash: 'dash' }
+          : { melee: 'slash', laser: 'blood_beam', smash: 'crimson_smash', dash: 'dash' };
+    }
+    if (!playerData.ownedMoves || typeof playerData.ownedMoves !== 'object') {
+      playerData.ownedMoves = {};
+    }
+    MOVE_SLOTS.forEach(slot => {
+      const moveKey = playerData.equippedMoves[slot];
+      if (!MOVE_DEFS[moveKey] || MOVE_DEFS[moveKey].slot !== slot) {
+        playerData.equippedMoves[slot] = slot === 'dash' ? 'dash' : slot === 'melee' ? 'slash' : slot === 'laser' ? 'blood_beam' : 'crimson_smash';
+      }
+      playerData.ownedMoves[playerData.equippedMoves[slot]] = true;
+    });
     playerData.insuranceActive = !!playerData.insuranceActive;
     playerData.insuranceChargeKills = Number(playerData.insuranceChargeKills || 0);
     playerData.insuranceReady = playerData.insuranceReady !== false;
@@ -1403,17 +1772,23 @@
     return Math.round(powered);
   }
 
+  function getEquippedMove(slot) {
+    const moveKey = player?.equippedMoves?.[slot];
+    if (MOVE_DEFS[moveKey]?.slot === slot) return moveKey;
+    return slot === 'dash' ? 'dash' : slot === 'melee' ? 'slash' : slot === 'laser' ? 'blood_beam' : 'crimson_smash';
+  }
+
   function tryMelee() {
     if (cooldowns.melee > 0) return;
     const itemStats = getItemStats();
     const attackSpeed = getAttackSpeedValue();
-    const character = getCharacterDef();
     cooldowns.melee = (godTimer > 0 ? 0.2 : ATTACKS.melee.baseCooldown) / attackSpeed;
-    if (character.key === 'metao') {
+    const move = getEquippedMove('melee');
+    if (move === 'fire_balls') {
       spawnFireballs();
       return;
     }
-    if (character.key === 'granialla') {
+    if (move === 'smite') {
       castSmiteChain();
       return;
     }
@@ -1451,15 +1826,20 @@
   function tryLaser() {
     if (cooldowns.laser > 0 || laserActive) return;
     const attackSpeed = getAttackSpeedValue();
-    const character = getCharacterDef();
-    if (character.key === 'metao') {
+    const move = getEquippedMove('laser');
+    if (move === 'power_disks') {
       cooldowns.laser = ATTACKS.laser.baseCooldown / attackSpeed;
       spawnPlayerDiskBurst();
       return;
     }
-    if (character.key === 'granialla') {
+    if (move === 'blade_justice') {
       cooldowns.laser = 3.8 / attackSpeed;
       castBladeOfJustice();
+      return;
+    }
+    if (move === 'lightning_columns') {
+      cooldowns.laser = 4.8 / attackSpeed;
+      castLightningColumns();
       return;
     }
     laserActive = true;
@@ -1496,14 +1876,22 @@
     if (cooldowns.smash > 0) return;
     const itemStats = getItemStats();
     const attackSpeed = getAttackSpeedValue();
-    const character = getCharacterDef();
     cooldowns.smash = (godTimer > 0 ? 2 : ATTACKS.smash.baseCooldown) / attackSpeed;
-    if (character.key === 'metao') {
+    const move = getEquippedMove('smash');
+    if (move === 'chaos_burst') {
       castChaosBurst();
       return;
     }
-    if (character.key === 'granialla') {
+    if (move === 'healing_zone') {
       castHealingZone();
+      return;
+    }
+    if (move === 'fire_circle') {
+      castFireCircle();
+      return;
+    }
+    if (move === 'floor_lava') {
+      castFloorLava();
       return;
     }
     shake = 16;
@@ -1531,6 +1919,12 @@
 
   function tryDash(moveX, moveY) {
     if (cooldowns.dash > 0 || player.dashTime > 0) return;
+    const move = getEquippedMove('dash');
+    if (move === 'warp') {
+      castWarp();
+      cooldowns.dash = 2.8 / getAttackSpeedValue();
+      return;
+    }
     const attackSpeed = getAttackSpeedValue();
     const angle = Math.hypot(moveX, moveY) > 0.15
       ? Math.atan2(moveY, moveX)
@@ -1677,6 +2071,67 @@
   function castHealingZone() {
     hazards.push({ kind: 'healing_zone', x: player.x, y: player.y, r: 62, ttl: 6, healTick: 0.24, healAccum: 0, plusTick: 0.08 });
     particles.push({ x: player.x, y: player.y, life: 0.7, ring: 30, c: '#35ff6f' });
+  }
+
+  function castFireCircle() {
+    hazards.push({ kind: 'fire_circle', x: player.x, y: player.y, r: 96, ttl: 5.2, dps: 18, followPlayer: true });
+    particles.push({ x: player.x, y: player.y, life: 0.55, ring: 34, c: '#ff7b32' });
+  }
+
+  function castFloorLava() {
+    player.lavaWalkTime = 5.8;
+    player.lavaTrailTick = 0;
+    particles.push({ x: player.x, y: player.y - 12, life: 0.7, text: 'LAVA WALK', c: '#ff9f40' });
+  }
+
+  function castLightningColumns() {
+    const angle = Math.atan2(mouse.worldY - player.y, mouse.worldX - player.x);
+    const offsets = [-42, 42];
+    offsets.forEach(offset => {
+      const ox = Math.cos(angle + Math.PI / 2) * offset;
+      const oy = Math.sin(angle + Math.PI / 2) * offset;
+      hazards.push({
+        kind: 'lightning_column',
+        x: mouse.worldX + ox,
+        y: mouse.worldY + oy,
+        r: 54,
+        ttl: 4.5,
+        tick: 0,
+        interval: 0.45,
+        damage: 18,
+      });
+      particles.push({ x: mouse.worldX + ox, y: mouse.worldY + oy, life: 0.45, ring: 24, c: '#8dd4ff' });
+    });
+  }
+
+  function castWarp() {
+    const tx = clamp(mouse.worldX, WALL + player.r + 2, ROOM_W - WALL - player.r - 2);
+    const ty = clamp(mouse.worldY, WALL + player.r + 2, ROOM_H - WALL - player.r - 2);
+    if (!isBlocked(tx, ty, player.r)) {
+      particles.push({ x: player.x, y: player.y, life: 0.35, ring: 18, c: '#b99cff' });
+      player.x = tx;
+      player.y = ty;
+      player.vx = 0;
+      player.vy = 0;
+      player.inv = Math.max(player.inv, 0.2);
+      particles.push({ x: player.x, y: player.y, life: 0.35, ring: 18, c: '#b99cff' });
+      return;
+    }
+    for (let tries = 0; tries < 18; tries += 1) {
+      const angle = rng() * Math.PI * 2;
+      const radius = rand(170, 24);
+      const px = clamp(player.x + Math.cos(angle) * radius, WALL + player.r + 2, ROOM_W - WALL - player.r - 2);
+      const py = clamp(player.y + Math.sin(angle) * radius, WALL + player.r + 2, ROOM_H - WALL - player.r - 2);
+      if (isBlocked(px, py, player.r)) continue;
+      particles.push({ x: player.x, y: player.y, life: 0.35, ring: 18, c: '#b99cff' });
+      player.x = px;
+      player.y = py;
+      player.vx = 0;
+      player.vy = 0;
+      player.inv = Math.max(player.inv, 0.2);
+      particles.push({ x: player.x, y: player.y, life: 0.35, ring: 18, c: '#b99cff' });
+      break;
+    }
   }
 
   function hitEnemy(enemy, damage, angle, knockback, color) {
@@ -1899,6 +2354,14 @@
     const _up    = _b ? _b.up    : 'w';
     let moveX = (keys[_right] || keys.arrowright ? 1 : 0) - (keys[_left] || keys.arrowleft ? 1 : 0);
     let moveY = (keys[_down]  || keys.arrowdown  ? 1 : 0) - (keys[_up]   || keys.arrowup   ? 1 : 0);
+    if (currentRoom?.type !== 'shop' && isPanelOpen(ui.shopPanel)) setShopPanelOpen(false);
+    const overlayOpen = isOverlayBlockingInput();
+    if (overlayOpen) {
+      moveX = 0;
+      moveY = 0;
+      mouse.down = false;
+      mouse.right = false;
+    }
     const moveLength = Math.hypot(moveX, moveY) || 1;
     moveX /= moveLength;
     moveY /= moveLength;
@@ -1909,7 +2372,7 @@
 
     const dashKey = _b ? _b.dash : 'shift';
     const dashHeld = !!keys[dashKey];
-    if (dashHeld && !dashKeyLatch) {
+    if (!overlayOpen && dashHeld && !dashKeyLatch) {
       tryDash(moveX, moveY);
       dashKeyLatch = true;
     } else if (!dashHeld) {
@@ -1939,13 +2402,32 @@
     mouse.worldX = mouse.x + camera.x;
     mouse.worldY = mouse.y + camera.y;
 
-    if (mouse.down) tryMelee();
-    if (mouse.right) tryLaser();
+    if (!overlayOpen && mouse.down) tryMelee();
+    if (!overlayOpen && mouse.right) tryLaser();
     if (keys.f && !teleportKeyLatch) {
       tryChargedLadderWarp();
       teleportKeyLatch = true;
     }
     if (!keys.f) teleportKeyLatch = false;
+
+    if (player.lavaWalkTime > 0) {
+      player.lavaWalkTime = Math.max(0, player.lavaWalkTime - dt);
+      player.lavaTrailTick -= dt;
+      if (player.lavaTrailTick <= 0) {
+        hazards.push({
+          kind: 'lava',
+          x: player.x,
+          y: player.y,
+          r: 24,
+          ttl: 1.8,
+          pulse: 2.5,
+          wobble: 0.35,
+          phase: rng() * Math.PI * 2,
+        });
+        player.lavaTrailTick = 0.22;
+      }
+    }
+
     updatePlayerLaser(dt);
 
     const targetCX = player.x - 480;
@@ -2010,6 +2492,9 @@
     if (godTimer > 0 && Math.random() < 0.4) {
       particles.push({ x: player.x + rand(-6, 6), y: player.y + rand(-6, 6), life: 0.32, c: `hsl(${(Date.now() / 8) % 360},100%,65%)` });
     }
+
+    if (isPanelOpen(ui.shopPanel)) renderShopPanel();
+    if (isPanelOpen(ui.invPanel)) renderInventoryPanel();
   }
 
   function tryChargedLadderWarp() {
@@ -2688,7 +3173,12 @@
 
   function updateWorldProps(dt) {
     hazards.forEach(hazard => {
-      if (hazard.kind === 'lava' && dist(player.x, player.y, hazard.x, hazard.y) < hazard.r + player.r - 10) {
+      if (hazard.ttl !== undefined) hazard.ttl -= dt;
+      if (hazard.followPlayer) {
+        hazard.x = player.x;
+        hazard.y = player.y;
+      }
+      if (hazard.kind === 'lava' && dist(player.x, player.y, hazard.x, hazard.y) < hazard.r + player.r - 10 && player.lavaWalkTime <= 0) {
         damagePlayer(6 * dt, 0, 0);
       }
       if (hazard.kind === 'healing_zone') {
@@ -2732,22 +3222,41 @@
             if (enemy.hp <= 0) onEnemyDie(enemy);
           }
         });
+      } else if (hazard.kind === 'fire_circle') {
+        enemies.forEach(enemy => {
+          if (dist(enemy.x, enemy.y, hazard.x, hazard.y) > hazard.r + enemy.r) return;
+          enemy.hp -= (hazard.dps || 16) * dt;
+          enemy.stun = Math.max(enemy.stun, 0.05);
+          if (Math.random() < 0.06) particles.push({ x: enemy.x + rand(-6, 6), y: enemy.y + rand(-6, 6), life: 0.3, c: '#ff8c3b' });
+          if (enemy.hp <= 0) onEnemyDie(enemy);
+        });
+      } else if (hazard.kind === 'lightning_column') {
+        hazard.tick -= dt;
+        if (hazard.tick <= 0) {
+          hazard.tick = hazard.interval || 0.45;
+          enemies.forEach(enemy => {
+            if (dist(enemy.x, enemy.y, hazard.x, hazard.y) > hazard.r + enemy.r) return;
+            const angle = Math.atan2(enemy.y - hazard.y, enemy.x - hazard.x);
+            hitEnemy(enemy, hazard.damage || 16, angle, 90, '#8dd4ff');
+          });
+          particles.push({
+            life: 0.25,
+            bolt: {
+              x1: hazard.x,
+              y1: hazard.y - hazard.r,
+              x2: hazard.x,
+              y2: hazard.y + hazard.r,
+              c: '#9fd3ff',
+              w: 4.4,
+              jag: 10,
+              seg: 6,
+              phase: rng() * Math.PI * 2,
+            },
+          });
+        }
       }
     });
     hazards = hazards.filter(hazard => hazard.ttl === undefined || hazard.ttl > 0);
-
-    shopOffers.forEach(offer => {
-      if (offer.bought || dist(player.x, player.y, offer.x, offer.y) > 30) return;
-      if (player.coins < offer.cost) return;
-      player.coins -= offer.cost;
-      metaProgress.coins = Math.max(0, metaProgress.coins - offer.cost);
-      offer.bought = true;
-      if (offer.type === 'potion') {
-        player.hp = Math.min(player.maxHp, player.hp + 55);
-      } else if (offer.type === 'item') {
-        collectItem(offer.key);
-      }
-    });
     syncCurrentRoomState();
   }
 
@@ -3027,6 +3536,10 @@
   function updateHud() {
     if (!player) return;
     const character = getCharacterDef();
+    const meleeMove = MOVE_DEFS[getEquippedMove('melee')];
+    const laserMove = MOVE_DEFS[getEquippedMove('laser')];
+    const smashMove = MOVE_DEFS[getEquippedMove('smash')];
+    const dashMove = MOVE_DEFS[getEquippedMove('dash')];
     const attackSpeed = getAttackSpeedValue();
     const meleeMax = (godTimer > 0 ? 0.2 : ATTACKS.melee.baseCooldown) / attackSpeed;
     const laserMax = laserActive
@@ -3034,6 +3547,9 @@
       : (godTimer > 0 ? 2.8 : ATTACKS.laser.baseCooldown) / attackSpeed;
     const smashMax = (godTimer > 0 ? 2 : ATTACKS.smash.baseCooldown) / attackSpeed;
     const dashMax = 1.8 / attackSpeed;
+    const minutes = Math.floor(gameElapsedTime / 60);
+    const seconds = Math.floor(gameElapsedTime % 60);
+    const timeStr = `${minutes}:${seconds.toString().padStart(2, '0')}`;
     uiController.setHudValues({
       floor,
       level: player.level,
@@ -3046,6 +3562,7 @@
       laserCd: cooldowns.laser,
       smashCd: cooldowns.smash,
       dashCd: cooldowns.dash,
+      gameTime: timeStr,
       skills: {
         melee: { current: cooldowns.melee, max: meleeMax, active: false },
         laser: { current: laserActive ? laserTime : cooldowns.laser, max: laserMax, active: laserActive },
@@ -3053,10 +3570,10 @@
         dash: { current: cooldowns.dash, max: dashMax, active: player.dashTime > 0 },
       },
     });
-    ui.skillNames.dash.textContent = character.skills.dash;
-    ui.skillNames.melee.textContent = character.skills.melee;
-    ui.skillNames.laser.textContent = character.skills.laser;
-    ui.skillNames.smash.textContent = character.skills.smash;
+    ui.skillNames.dash.textContent = dashMove?.name || character.skills.dash;
+    ui.skillNames.melee.textContent = meleeMove?.name || character.skills.melee;
+    ui.skillNames.laser.textContent = laserMove?.name || character.skills.laser;
+    ui.skillNames.smash.textContent = smashMove?.name || character.skills.smash;
     updateItemUI();
   }
 
@@ -3373,6 +3890,37 @@
         ctx.moveTo(0, -8);
         ctx.lineTo(0, 8);
         ctx.stroke();
+      } else if (hazard.kind === 'fire_circle') {
+        const t = Date.now() * 0.005;
+        const pulse = 1 + Math.sin(t * 2.6) * 0.07;
+        ctx.strokeStyle = '#ff7b32';
+        ctx.shadowColor = '#ff7b32';
+        ctx.shadowBlur = 18;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(0, 0, hazard.r * pulse, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = 'rgba(255,102,40,0.15)';
+        ctx.beginPath();
+        ctx.arc(0, 0, hazard.r * 0.76, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (hazard.kind === 'lightning_column') {
+        const t = Date.now() * 0.006 + hazard.x * 0.01;
+        ctx.fillStyle = 'rgba(112,180,255,0.12)';
+        ctx.beginPath();
+        ctx.arc(0, 0, hazard.r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#8dd4ff';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(0, 0, hazard.r * (0.8 + Math.sin(t) * 0.04), 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.strokeStyle = 'rgba(170,220,255,0.9)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(0, -hazard.r);
+        ctx.lineTo(0, hazard.r);
+        ctx.stroke();
       }
       ctx.restore();
     });
@@ -3407,7 +3955,7 @@
       ctx.lineWidth = 2;
       ctx.fillRect(-26, -26, 52, 52);
       ctx.strokeRect(-26, -26, 52, 52);
-      ctx.fillStyle = offer.type === 'item' ? '#a857ff' : '#35ff6f';
+      ctx.fillStyle = offer.type === 'item' ? '#a857ff' : offer.type === 'potion' ? '#35ff6f' : '#8fd2ff';
       ctx.beginPath();
       ctx.arc(0, -6, 10, 0, Math.PI * 2);
       ctx.fill();
@@ -3848,7 +4396,7 @@
     const height = 10;
     const gap = 18;
     const startX = (canvas.width - width) / 2;
-    const startY = 16;
+    const startY = 76;
 
     bosses.forEach((boss, index) => {
       const y = startY + index * gap;
@@ -4075,13 +4623,14 @@
         view.fl.textContent = payload.floor;
         view.lv.textContent = payload.level;
         view.xp.textContent = payload.xpText;
+        if (view.gameTime) view.gameTime.textContent = payload.gameTime;
         view.coins.textContent = payload.coins;
         view.charName.textContent = payload.character;
         view.hpFill.style.width = `${Math.max(0, payload.hp / payload.maxHp) * 100}%`;
         view.hpTxt.textContent = Math.ceil(payload.hp);
-        view.cdM.textContent = payload.meleeCd.toFixed(1);
-        view.cdL.textContent = payload.laserCd.toFixed(1);
-        view.cdS.textContent = payload.smashCd.toFixed(1);
+        if (view.cdM) view.cdM.textContent = payload.meleeCd.toFixed(1);
+        if (view.cdL) view.cdL.textContent = payload.laserCd.toFixed(1);
+        if (view.cdS) view.cdS.textContent = payload.smashCd.toFixed(1);
         if (view.cdD) view.cdD.textContent = payload.dashCd.toFixed(1);
         if (payload.skills) {
           const melee = payload.skills.melee;

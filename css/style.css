@@ -135,6 +135,155 @@ canvas {
 .cds b {
   min-width: 32px;
   display: inline-block;
+.hidden { display:none !important; }
+
+.game-panel {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(920px, 94vw);
+  max-height: 84vh;
+  overflow: auto;
+  z-index: 22;
+  background: linear-gradient(180deg, rgba(20,26,33,.97), rgba(12,16,21,.98));
+  border: 1px solid #4a5b6f;
+  border-radius: 14px;
+  box-shadow: 0 18px 48px rgba(0,0,0,.48);
+  padding: 14px;
+  color: #e7f4ff;
+}
+
+.game-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.game-panel-head h3 {
+  margin: 0;
+  letter-spacing: 1px;
+  color: #e7f4ff;
+}
+
+.game-panel h4 {
+  color: #cfe5fb;
+  margin-bottom: 8px;
+}
+
+.panel-close {
+  margin-left: auto;
+  border: 1px solid #58708a;
+  background: #1d2a36;
+  color: #e7f4ff;
+  border-radius: 8px;
+  width: 34px;
+  height: 30px;
+  cursor: pointer;
+}
+
+.shop-coins {
+  font-size: 13px;
+  color: #c5d5e4;
+}
+
+.shop-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.shop-tab {
+  border: 1px solid #4e6278;
+  background: #1b2632;
+  color: #cfe5fb;
+  border-radius: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+.shop-tab.active {
+  background: #2e455e;
+  border-color: #77a5d6;
+}
+
+.shop-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.shop-card, .inv-card, .inv-slot {
+  border: 1px solid #42566d;
+  border-radius: 10px;
+  background: rgba(20, 30, 41, .9);
+  padding: 10px;
+}
+
+.shop-card h4, .inv-card h4 {
+  margin: 0 0 4px;
+  font-size: 14px;
+}
+
+.shop-card p, .inv-card p {
+  margin: 0;
+  font-size: 12px;
+  color: #afc3d7;
+}
+
+.shop-buy {
+  margin-top: 8px;
+  border: 1px solid #6288ad;
+  border-radius: 8px;
+  background: #224161;
+  color: #e4f2ff;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+
+.inv-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+  margin-bottom: 10px;
+  font-size: 12px;
+}
+
+.inv-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+}
+
+.inv-items, .inv-moves, .inv-slots {
+  display: grid;
+  gap: 8px;
+}
+
+.inv-move-chip {
+  border: 1px solid #54708a;
+  border-radius: 8px;
+  padding: 8px;
+  background: #1d2f40;
+  font-size: 12px;
+  cursor: grab;
+}
+
+.inv-slot {
+  min-height: 64px;
+}
+
+.inv-slot.drag-over {
+  border-color: #8fd2ff;
+  box-shadow: 0 0 0 2px rgba(143, 210, 255, .2) inset;
+}
+
+@media (max-width: 860px) {
+  .inv-layout {
+    grid-template-columns: 1fr;
+  }
+}
   text-align: right;
   color: #0ff;
 }
