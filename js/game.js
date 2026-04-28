@@ -78,12 +78,100 @@
       category: 'god',
       tags: ['bleed', 'heal', 'breaker'],
     },
+    insurance: {
+      key: 'insurance',
+      name: 'Insurance',
+      shortName: 'Insure',
+      description: 'At half HP, trigger a charged safety state.',
+      rarity: 'white',
+      color: '#f4f6fb',
+      category: 'white',
+      tags: ['charge', 'defense'],
+    },
+    crit_charm: {
+      key: 'crit_charm',
+      name: 'Crit Charm',
+      shortName: 'Crit +5%',
+      description: 'Critical hit chance +5%.',
+      rarity: 'white',
+      color: '#ffffff',
+      category: 'white',
+      tags: ['crit'],
+    },
+    attack_servo: {
+      key: 'attack_servo',
+      name: 'Attack Servo',
+      shortName: 'AS +0.2',
+      description: 'Attack speed +0.2.',
+      rarity: 'white',
+      color: '#eef5ff',
+      category: 'white',
+      tags: ['speed'],
+    },
+    charged_adapter: {
+      key: 'charged_adapter',
+      name: 'Charged Adapter',
+      shortName: 'Adapter',
+      description: 'Charge requirements reduced by 1 and unlocks ladder warp.',
+      rarity: 'purple',
+      color: '#b66cff',
+      category: 'purple',
+      tags: ['charge', 'mobility'],
+    },
+    iron_lung: {
+      key: 'iron_lung',
+      name: 'Iron Lung',
+      shortName: 'Iron',
+      description: 'Cannot lose more than 20% max HP in one room.',
+      rarity: 'god',
+      color: '#c6d4e8',
+      category: 'god',
+      tags: ['defense', 'god'],
+    },
+    oracles_lens: {
+      key: 'oracles_lens',
+      name: "Oracle's Lens",
+      shortName: 'Oracle',
+      description: 'Doubles crit chance and amplifies crit effectiveness.',
+      rarity: 'god',
+      color: '#8ee6ff',
+      category: 'god',
+      tags: ['crit', 'god'],
+    },
+    wizards_paw: {
+      key: 'wizards_paw',
+      name: "Wizard's Paw",
+      shortName: 'Paw',
+      description: 'Randomly chooses 2 stats and triples them.',
+      rarity: 'god',
+      color: '#ffcf80',
+      category: 'god',
+      tags: ['god', 'stat'],
+    },
+    jesters_dice: {
+      key: 'jesters_dice',
+      name: "Jester's Dice",
+      shortName: 'Dice',
+      description: 'Skip 3 floors and gain 10 random item stacks.',
+      rarity: 'god',
+      color: '#ff8bd8',
+      category: 'god',
+      tags: ['god', 'chaos'],
+    },
   };
   const ITEM_KEYS = Object.keys(ITEM_DEFS);
   const ITEM_DROP_WEIGHTS = [
     ['neo_knife', 60],
     ['orb_of_blood', 28],
     ['hemes_scarf', 12],
+    ['insurance', 18],
+    ['crit_charm', 24],
+    ['attack_servo', 22],
+    ['charged_adapter', 18],
+    ['iron_lung', 10],
+    ['oracles_lens', 8],
+    ['wizards_paw', 6],
+    ['jesters_dice', 4],
   ];
   const itemRegistry = createItemRegistry();
 
@@ -185,6 +273,7 @@
   let nextDoor = null;
   let floorTransitionTime = 0;
   let showFloorTransition = false;
+  let gameElapsedTime = 0;
   let lastTime = 0;
   let loopStarted = false;
   let laserActive = false;
@@ -200,6 +289,8 @@
   let metaProgress = createDefaultMeta();
   let savePendingTimer = 0;
   let lavaAnimTime = 0;
+  let floorSkipPending = 0;
+  let teleportKeyLatch = false;
 
   const saveStore = createSaveStore();
   window._neoSaveStore = saveStore;
@@ -315,7 +406,19 @@
   }
 
   function createDefaultPlayer() {
-    const items = { neo_knife: 0, orb_of_blood: 0, hemes_scarf: 0 };
+    const items = {
+      neo_knife: 0,
+      orb_of_blood: 0,
+      hemes_scarf: 0,
+      insurance: 0,
+      crit_charm: 0,
+      attack_servo: 0,
+      charged_adapter: 0,
+      iron_lung: 0,
+      oracles_lens: 0,
+      wizards_paw: 0,
+      jesters_dice: 0,
+    };
     const character = CHARACTER_DEFS[chosenCharacter] || CHARACTER_DEFS.thorn_knight;
     items[character.startItem] = 1;
     return {
@@ -336,6 +439,12 @@
       xpToNext: 20,
       attackPower: 0,
       attackSpeed: 1,
+      roomDamageTaken: 0,
+      insuranceActive: false,
+      insuranceChargeKills: 0,
+      insuranceReady: true,
+      escapeChargeKills: 0,
+      escapeReady: true,
       items,
     };
   }
@@ -434,6 +543,7 @@
     } else {
       seedStr = ui.seed.value.trim() || Math.floor(Math.random() * 1e9).toString();
       floor = 1;
+      gameElapsedTime = 0;
       player = createDefaultPlayer();
       resetScene();
       generateFloor();
@@ -469,6 +579,8 @@
     fade = 0;
     fading = 0;
     nextDoor = null;
+    floorSkipPending = 0;
+    teleportKeyLatch = false;
     mouse.down = false;
     mouse.right = false;
   }
@@ -516,12 +628,15 @@
     laserTime = snapshot.laserTime || 0;
     laserTick = snapshot.laserTick || 0;
     godTimer = snapshot.godTimer || 0;
+    gameElapsedTime = snapshot.gameElapsedTime || 0;
     camera = snapshot.camera || { x: 0, y: 0 };
     shake = 0;
     shakeT = 0;
     fade = 0;
     fading = 0;
     nextDoor = null;
+    floorSkipPending = 0;
+    teleportKeyLatch = false;
     updateItemUI();
     updateObjective();
     updateHud();
@@ -879,6 +994,7 @@
     laserActive = false;
     laserTime = 0;
     laserTick = 0;
+    player.roomDamageTaken = 0;
     const safeSpawn = findSafeSpawnPoint();
     player.x = safeSpawn.x;
     player.y = safeSpawn.y;
@@ -1002,6 +1118,11 @@
     if (safeSpawn) spawnEnemy(bossType, safeSpawn.x, safeSpawn.y, false);
   }
 
+  function getEnemyDifficultyMultiplier() {
+    const gameMinutes = gameElapsedTime / 60;
+    return 1 + gameMinutes * floor * 0.15;
+  }
+
   function spawnEnemy(type, x, y, elite = false) {
     const base = {
       type,
@@ -1030,6 +1151,7 @@
       dashHit: false,
       swingTime: 0,
       summonCd: 0,
+      aoeTime: 0,
       phase: 1,
       splitReady: false,
       spawnedFromBulk: false,
@@ -1097,6 +1219,7 @@
       base.attackCd = 1.6;
       base.bleedImmune = true;
       base.splitReady = true;
+      base.aoeTime = 3;
     } else if (type === 'artificer_knave') {
       base.r = 30;
       base.hp = 940;
@@ -1116,6 +1239,12 @@
         base.r = 17;
       }
     }
+
+    const difficultyMult = getEnemyDifficultyMultiplier();
+    base.hp = Math.round(base.hp * difficultyMult);
+    base.max = base.hp;
+    base.dmg = Math.round(base.dmg * difficultyMult);
+    base.speed *= difficultyMult;
 
     enemies.push(base);
     return base;
@@ -1151,6 +1280,12 @@
     playerData.xpToNext = Number(playerData.xpToNext || 20);
     playerData.attackPower = Number(playerData.attackPower || 0);
     playerData.attackSpeed = Number(playerData.attackSpeed || 1);
+    playerData.roomDamageTaken = Number(playerData.roomDamageTaken || 0);
+    playerData.insuranceActive = !!playerData.insuranceActive;
+    playerData.insuranceChargeKills = Number(playerData.insuranceChargeKills || 0);
+    playerData.insuranceReady = playerData.insuranceReady !== false;
+    playerData.escapeChargeKills = Number(playerData.escapeChargeKills || 0);
+    playerData.escapeReady = playerData.escapeReady !== false;
     return playerData;
   }
 
@@ -1162,16 +1297,70 @@
     return Number(player?.items?.[key] || 0);
   }
 
+  function getChargeRequirement(baseRequirement) {
+    return Math.max(1, baseRequirement - getItemCount('charged_adapter'));
+  }
+
   function getItemStats() {
     const neoKnife = getItemCount('neo_knife');
     const orbOfBlood = getItemCount('orb_of_blood');
     const hemesScarf = getItemCount('hemes_scarf');
+    const critCharm = getItemCount('crit_charm');
+    const attackServo = getItemCount('attack_servo');
+    const oracleLens = getItemCount('oracles_lens') > 0;
+    let critChance = critCharm * 0.05;
+    if (oracleLens) critChance *= 2;
+    critChance = clamp(critChance, 0, 0.95);
     return {
       bleedChance: neoKnife * 0.05,
       bleedDamageMultiplier: orbOfBlood > 0 ? 1 + orbOfBlood : 1,
       bleedHealScale: hemesScarf,
       passiveBleedStacks: hemesScarf,
+      critChance,
+      critMultiplier: 1.6 + (oracleLens ? critChance * 2.2 : critChance * 0.6),
+      attackSpeedBonus: attackServo * 0.2,
+      hasIronLung: getItemCount('iron_lung') > 0,
     };
+  }
+
+  function getAttackSpeedValue() {
+    const stats = getItemStats();
+    return Math.max(0.2, (player?.attackSpeed || 1) + stats.attackSpeedBonus);
+  }
+
+  function consumeCharge(chargeType) {
+    if (chargeType === 'insurance') {
+      player.insuranceReady = false;
+      player.insuranceChargeKills = 0;
+      return;
+    }
+    if (chargeType === 'escape') {
+      player.escapeReady = false;
+      player.escapeChargeKills = 0;
+    }
+  }
+
+  function incrementChargeProgress(chargeType, baseRequirement) {
+    if (chargeType === 'insurance') {
+      if (getItemCount('insurance') <= 0 || player.insuranceReady) return;
+      player.insuranceChargeKills += 1;
+      if (player.insuranceChargeKills >= getChargeRequirement(baseRequirement)) {
+        player.insuranceReady = true;
+        player.insuranceChargeKills = 0;
+        player.insuranceActive = false;
+        particles.push({ x: player.x, y: player.y - 20, life: 0.7, text: 'INSURANCE READY', c: '#e8ecff' });
+      }
+      return;
+    }
+    if (chargeType === 'escape') {
+      if (getItemCount('charged_adapter') <= 0 || player.escapeReady) return;
+      player.escapeChargeKills += 1;
+      if (player.escapeChargeKills >= getChargeRequirement(baseRequirement)) {
+        player.escapeReady = true;
+        player.escapeChargeKills = 0;
+        particles.push({ x: player.x, y: player.y - 36, life: 0.7, text: 'WARP READY', c: '#b88cff' });
+      }
+    }
   }
 
   function scaleDamageAgainstEnemy(enemy, damage) {
@@ -1187,7 +1376,7 @@
   function tryMelee() {
     if (cooldowns.melee > 0) return;
     const itemStats = getItemStats();
-    const attackSpeed = player?.attackSpeed || 1;
+    const attackSpeed = getAttackSpeedValue();
     const character = getCharacterDef();
     cooldowns.melee = (godTimer > 0 ? 0.2 : ATTACKS.melee.baseCooldown) / attackSpeed;
     if (character.key === 'metao') {
@@ -1231,7 +1420,7 @@
 
   function tryLaser() {
     if (cooldowns.laser > 0 || laserActive) return;
-    const attackSpeed = player?.attackSpeed || 1;
+    const attackSpeed = getAttackSpeedValue();
     const character = getCharacterDef();
     if (character.key === 'metao') {
       cooldowns.laser = ATTACKS.laser.baseCooldown / attackSpeed;
@@ -1276,7 +1465,7 @@
   function trySmash() {
     if (cooldowns.smash > 0) return;
     const itemStats = getItemStats();
-    const attackSpeed = player?.attackSpeed || 1;
+    const attackSpeed = getAttackSpeedValue();
     const character = getCharacterDef();
     cooldowns.smash = (godTimer > 0 ? 2 : ATTACKS.smash.baseCooldown) / attackSpeed;
     if (character.key === 'metao') {
@@ -1368,11 +1557,18 @@
   }
 
   function hitEnemy(enemy, damage, angle, knockback, color) {
-    enemy.hp -= scaleDamageAgainstEnemy(enemy, damage);
+    const stats = getItemStats();
+    let dealt = scaleDamageAgainstEnemy(enemy, damage);
+    const isCrit = stats.critChance > 0 && rng() < stats.critChance;
+    if (isCrit) dealt = Math.round(dealt * stats.critMultiplier);
+    enemy.hp -= dealt;
     enemy.vx += Math.cos(angle) * knockback;
     enemy.vy += Math.sin(angle) * knockback;
     enemy.stun = Math.max(enemy.stun, 0.08);
     particles.push({ x: enemy.x, y: enemy.y, life: 0.24, vx: rand(-30, 30), vy: rand(-30, 30), c: color });
+    if (isCrit) {
+      particles.push({ x: enemy.x, y: enemy.y - 14, life: 0.45, text: 'CRIT!', c: '#ffe066' });
+    }
     if (enemy.hp <= 0) onEnemyDie(enemy);
   }
 
@@ -1399,6 +1595,8 @@
 
     dropCoins(enemy.x, enemy.y, isBossType(enemy.type) ? 40 : enemy.elite ? 10 : 5);
     grantXp(isBossType(enemy.type) ? 40 : enemy.elite ? 12 : 6);
+    incrementChargeProgress('insurance', 9);
+    incrementChargeProgress('escape', 10);
 
     if (enemy.elite && rng() < 0.18) {
       pickups.push({ x: enemy.x, y: enemy.y, type: 'item', key: rollItemDrop({ elite: true }) });
@@ -1492,6 +1690,35 @@
     player.items[itemKey] = getItemCount(itemKey) + 1;
     particles.push({ x: player.x, y: player.y - 28, life: 0.9, text: `${item.shortName} +1`, c: item.color || '#fff' });
 
+    if (itemKey === 'wizards_paw') {
+      const choices = ['maxHp', 'attackPower', 'attackSpeed'];
+      shuffle(choices);
+      const selected = choices.slice(0, 2);
+      selected.forEach(stat => {
+        if (stat === 'maxHp') {
+          player.maxHp = Math.max(120, Math.round(player.maxHp * 3));
+          player.hp = Math.min(player.maxHp, Math.round(player.hp * 3));
+        }
+        if (stat === 'attackPower') {
+          player.attackPower = Math.max(3, Math.round(player.attackPower * 3));
+        }
+        if (stat === 'attackSpeed') {
+          player.attackSpeed = Math.max(0.2, player.attackSpeed * 3);
+        }
+      });
+      particles.push({ x: player.x, y: player.y - 46, life: 1, text: "WIZARD'S PAW!", c: '#ffd27d' });
+    }
+
+    if (itemKey === 'jesters_dice') {
+      floorSkipPending += 3;
+      for (let index = 0; index < 10; index += 1) {
+        const rewardPool = ITEM_KEYS.filter(key => key !== 'jesters_dice');
+        const key = rewardPool[irand(0, rewardPool.length - 1)];
+        player.items[key] = getItemCount(key) + 1;
+      }
+      particles.push({ x: player.x, y: player.y - 46, life: 1, text: '+10 ITEMS', c: '#ff8bd8' });
+    }
+
     if (!metaProgress.unlockedItems.includes(itemKey)) {
       metaProgress.unlockedItems.push(itemKey);
       persistMetaSoon();
@@ -1530,6 +1757,7 @@
 
   function update(dt) {
     const itemStats = getItemStats();
+    gameElapsedTime += dt;
     lavaAnimTime += dt;
     floorTransitionTime += dt;
     if (floorTransitionTime > 2.5) showFloorTransition = false;
@@ -1567,6 +1795,11 @@
 
     if (mouse.down) tryMelee();
     if (mouse.right) tryLaser();
+    if (keys.f && !teleportKeyLatch) {
+      tryChargedLadderWarp();
+      teleportKeyLatch = true;
+    }
+    if (!keys.f) teleportKeyLatch = false;
     updatePlayerLaser(dt);
 
     const targetCX = player.x - 480;
@@ -1631,6 +1864,26 @@
     if (godTimer > 0 && Math.random() < 0.4) {
       particles.push({ x: player.x + rand(-6, 6), y: player.y + rand(-6, 6), life: 0.32, c: `hsl(${(Date.now() / 8) % 360},100%,65%)` });
     }
+  }
+
+  function tryChargedLadderWarp() {
+    if (getItemCount('charged_adapter') <= 0 || !player.escapeReady) return;
+    if (!currentRoom || currentRoom.type === 'boss' || currentRoom.type === 'god') return;
+    if (enemies.length === 0) return;
+
+    const ladderRoom = rooms.find(room => room.type === 'ladder') || rooms.find(room => room.type === 'boss');
+    if (!ladderRoom || ladderRoom === currentRoom) return;
+
+    const goldSpent = Math.floor(player.coins / 2);
+    if (goldSpent > 0) {
+      player.coins -= goldSpent;
+      metaProgress.coins = Math.max(0, metaProgress.coins - goldSpent);
+    }
+
+    consumeCharge('escape');
+    enterRoom(ladderRoom);
+    particles.push({ x: player.x, y: player.y - 20, life: 0.8, text: 'CHARGED WARP', c: '#b66cff' });
+    scheduleRunSave();
   }
 
   function updateBleed(enemy, dt) {
@@ -1913,6 +2166,16 @@
   }
 
   function updateBulkGolemBoss(enemy, dt) {
+    enemy.aoeTime = Math.max(0, enemy.aoeTime - dt);
+    if (enemy.aoeTime <= 0) {
+      enemy.aoeTime = 3;
+      const aoeRadius = 240;
+      const aoeDamage = Math.round(enemy.dmg * 1.2);
+      particles.push({ x: enemy.x, y: enemy.y, life: 0.5, ring: aoeRadius - 60, c: '#ff8844' });
+      blastRadius(enemy.x, enemy.y, aoeRadius, aoeDamage, '#ff8844');
+      shake = 12;
+      shakeT = 0.2;
+    }
     updateGolemEnemy(enemy, dt);
     enemy.speed = 78;
     if (enemy.attackCd < 1.4) enemy.attackCd = 1.4;
@@ -2185,7 +2448,29 @@
 
   function damagePlayer(amount, angle, knockback) {
     if (player.inv > 0) return;
-    player.hp -= amount;
+    const itemStats = getItemStats();
+    let finalAmount = amount;
+    if (itemStats.hasIronLung) {
+      const roomCap = player.maxHp * 0.2;
+      const remaining = roomCap - (player.roomDamageTaken || 0);
+      if (remaining <= 0) return;
+      finalAmount = Math.min(finalAmount, remaining);
+    }
+    if (finalAmount <= 0) return;
+
+    player.hp -= finalAmount;
+    player.roomDamageTaken = (player.roomDamageTaken || 0) + finalAmount;
+
+    if (getItemCount('insurance') > 0 && player.insuranceReady && !player.insuranceActive && player.hp <= player.maxHp * 0.5) {
+      player.insuranceActive = true;
+      consumeCharge('insurance');
+      particles.push({ x: player.x, y: player.y - 30, life: 0.8, text: 'INSURANCE ON', c: '#e6eeff' });
+    }
+
+    if (player.insuranceActive && player.hp < 1) {
+      player.hp = 1;
+    }
+
     player.inv = 0.75;
     player.vx += Math.cos(angle) * knockback;
     player.vy += Math.sin(angle) * knockback;
@@ -2335,6 +2620,14 @@
           pickup.x += ((player.x - pickup.x) / d) * 0.016 * pull;
           pickup.y += ((player.y - pickup.y) / d) * 0.016 * pull;
         }
+      } else if (pickup.type === 'item') {
+        const magnetRadius = 145;
+        const d = dist(pickup.x, pickup.y, player.x, player.y);
+        if (d < magnetRadius && d > 0.001) {
+          const pull = 150 + (1 - d / magnetRadius) * 220;
+          pickup.x += ((player.x - pickup.x) / d) * 0.016 * pull;
+          pickup.y += ((player.y - pickup.y) / d) * 0.016 * pull;
+        }
       }
       if (dist(pickup.x, pickup.y, player.x, player.y) >= 26) continue;
 
@@ -2349,10 +2642,23 @@
 
       if (pickup.type === 'item') {
         collectItem(pickup.key);
+        if (floorSkipPending > 0) {
+          floor = Math.min(MAX_FLOOR, floor + floorSkipPending);
+          floorSkipPending = 0;
+          player.insuranceActive = false;
+          metaProgress.bestFloor = Math.max(metaProgress.bestFloor, floor);
+          persistMetaSoon();
+          showFloorTransition = true;
+          floorTransitionTime = 0;
+          generateFloor();
+          scheduleRunSave();
+          return;
+        }
       }
 
       if (pickup.type === 'ladder') {
         floor = Math.min(MAX_FLOOR, floor + 1);
+        player.insuranceActive = false;
         metaProgress.bestFloor = Math.max(metaProgress.bestFloor, floor);
         persistMetaSoon();
         showFloorTransition = true;
@@ -2399,7 +2705,8 @@
   }
 
   function updateTransitions(dt) {
-    if (!fading && enemies.length === 0) {
+    const canLeaveFight = enemies.length > 0 && currentRoom && currentRoom.type !== 'boss' && currentRoom.type !== 'god' && currentRoom.type !== 'ladder';
+    if (!fading && (enemies.length === 0 || canLeaveFight)) {
       const door =
         player.y < WALL + 24 && currentRoom.doors.n && Math.abs(player.x - ROOM_W / 2) < DOOR / 2 ? 'n' :
         player.y > ROOM_H - WALL - 24 && currentRoom.doors.s && Math.abs(player.x - ROOM_W / 2) < DOOR / 2 ? 's' :
@@ -2448,6 +2755,8 @@
 
   function returnToFloorOne() {
     floor = 1;
+    gameElapsedTime = 0;
+    player.insuranceActive = false;
     seedStr = `${seedStr}:loop:${Date.now()}`;
     metaProgress.bestFloor = Math.max(metaProgress.bestFloor, MAX_FLOOR);
     persistMetaSoon();
@@ -2497,7 +2806,7 @@
   function updateHud() {
     if (!player) return;
     const character = getCharacterDef();
-    const attackSpeed = player.attackSpeed || 1;
+    const attackSpeed = getAttackSpeedValue();
     const meleeMax = (godTimer > 0 ? 0.2 : ATTACKS.melee.baseCooldown) / attackSpeed;
     const laserMax = laserActive
       ? (godTimer > 0 ? 0.72 : ATTACKS.laser.duration) / attackSpeed
@@ -2601,6 +2910,7 @@
       laserTime,
       laserTick,
       godTimer,
+      gameElapsedTime,
       camera,
     };
   }
