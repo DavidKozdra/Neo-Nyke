@@ -91,6 +91,23 @@
       speedMultiplier: 1.14,
     },
   };
+  const CHALLENGE_DEFS = {
+    no_hit: {
+      key: 'no_hit',
+      name: 'Never Get Hit',
+      cost: 140,
+      unlockLoops: 5,
+      description: 'Any real damage kills the run immediately.',
+    },
+    no_items: {
+      key: 'no_items',
+      name: 'No Items',
+      cost: 90,
+      unlockLoops: 5,
+      description: 'Start with no relic. Item pickups and relic buys are disabled.',
+    },
+  };
+  const CHALLENGE_ORDER = Object.keys(CHALLENGE_DEFS);
 
   const CHARACTER_DEFS = {
     thorn_knight: {
@@ -117,6 +134,39 @@
       damageMultiplier: 1,
       skills: { melee: 'Smite', laser: 'Blade Justice', smash: 'Healing Zone', dash: 'Dash' },
       unlock: 'godslain',
+    },
+  };
+
+  const HERO_DISPLAY = {
+    thorn_knight: {
+      lore: 'A bleed-forged warrior who turns wounds into weapons. The longer the fight, the deadlier he becomes.',
+      stats: [
+        { label: 'HP',    pct: 66, color: '#c06060' },
+        { label: 'DMG',   pct: 66, color: '#c08040' },
+        { label: 'SPD',   pct: 66, color: '#8080c0' },
+        { label: 'RANGE', pct: 40, color: '#60a080' },
+      ],
+      skills: ['⚔ Slash', '🩸 Blood Beam', '💥 Crimson Smash'],
+    },
+    metao: {
+      lore: 'Wizard king of chaos and fire. Low raw damage but disks and blasts reward aggressive play.',
+      stats: [
+        { label: 'HP',    pct: 66, color: '#c06060' },
+        { label: 'DMG',   pct: 33, color: '#c08040' },
+        { label: 'SPD',   pct: 66, color: '#8080c0' },
+        { label: 'RANGE', pct: 90, color: '#60a080' },
+      ],
+      skills: ['🔥 Fire Balls', '💿 Power Disks', '🌀 Chaos Burst'],
+    },
+    granialla: {
+      lore: 'Ascended beyond death. Divine judgment and self-restoration — earned only by slaying GOD.',
+      stats: [
+        { label: 'HP',    pct: 66, color: '#c06060' },
+        { label: 'DMG',   pct: 66, color: '#c08040' },
+        { label: 'SPD',   pct: 66, color: '#8080c0' },
+        { label: 'RANGE', pct: 66, color: '#60a080' },
+      ],
+      skills: ['⚡ Smite', '⚖ Blade Justice', '✨ Healing Zone'],
     },
   };
 
@@ -436,6 +486,7 @@
     fillSmash: document.getElementById('fillSmash'),
     fillDash: document.getElementById('fillDash'),
     bankCoins: document.getElementById('bankCoins'),
+    loopCount: document.getElementById('loopCount'),
     bestFloor: document.getElementById('bestFloor'),
     saveState: document.getElementById('saveState'),
     start: document.getElementById('start'),
@@ -475,6 +526,9 @@
     },
     playerStats: document.getElementById('playerStats'),
     coinDisplay: document.getElementById('coinDisplay'),
+    coinIcon: document.getElementById('coinIcon'),
+    metaCoinIcon: document.getElementById('metaCoinIcon'),
+    metaLoopIcon: document.getElementById('metaLoopIcon'),
     centerDisplay: document.getElementById('centerDisplay'),
     playerHpFill: document.getElementById('playerHpFill'),
     playerHpTxt: document.getElementById('playerHpTxt'),
@@ -486,6 +540,9 @@
     seed: document.getElementById('seed'),
     go: document.getElementById('go'),
     difficultyHint: document.getElementById('difficultyHint'),
+    challengePanel: document.getElementById('challengePanel'),
+    challengeToggle: document.getElementById('challengeToggle'),
+    challengeHint: document.getElementById('challengeHint'),
     continueRow: document.getElementById('continueRow'),
     continueBtn: document.getElementById('continueBtn'),
     newRunBtn: document.getElementById('newRunBtn'),
@@ -496,6 +553,7 @@
     runSummary: document.getElementById('runSummary'),
     charButtons: [...document.querySelectorAll('#choose .char-card')],
     difficultyButtons: [...document.querySelectorAll('#difficultySelect .difficulty-btn')],
+    challengeButtons: [...document.querySelectorAll('#challengeSelect .challenge-btn')],
     itemSlots: {
       neo_knife: document.getElementById('rr-neo-knife'),
       orb_of_blood: document.getElementById('rr-orb-blood'),
@@ -566,6 +624,7 @@
   let dashKeyLatch = false;
   let chosenCharacter = 'thorn_knight';
   let selectedDifficulty = 'easy';
+  let selectedChallenges = [];
   let destructibles = [];
   let hazards = [];
   let shopOffers = [];
@@ -622,6 +681,187 @@
     draw();
   }
 
+  function ensureItemNotifyStack() {
+    let stack = document.getElementById('itemNotifyStack');
+    if (stack) return stack;
+    stack = document.createElement('div');
+    stack.id = 'itemNotifyStack';
+    (document.getElementById('wrap') || document.body).appendChild(stack);
+    return stack;
+  }
+
+  function drawItemToastIcon(canvas, item) {
+    const ctx2d = canvas.getContext('2d');
+    if (!ctx2d) return;
+    const color = item?.color || '#ffffff';
+    const symbolByRarity = {
+      god: '✦',
+      purple: '◆',
+      wizard: '✹',
+      knight: '⚔',
+      white: '●',
+    };
+    const symbol = symbolByRarity[item?.rarity] || '●';
+    ctx2d.clearRect(0, 0, canvas.width, canvas.height);
+    ctx2d.fillStyle = color;
+    ctx2d.shadowColor = color;
+    ctx2d.shadowBlur = item?.rarity === 'god' ? 8 : 5;
+    ctx2d.beginPath();
+    ctx2d.arc(15, 15, 12, 0, Math.PI * 2);
+    ctx2d.fill();
+    if (item?.accent) {
+      ctx2d.shadowBlur = 0;
+      ctx2d.strokeStyle = item.accent;
+      ctx2d.lineWidth = 2;
+      ctx2d.beginPath();
+      ctx2d.arc(15, 15, 14, 0, Math.PI * 2);
+      ctx2d.stroke();
+    }
+    ctx2d.shadowBlur = 0;
+    ctx2d.fillStyle = '#071018';
+    ctx2d.font = 'bold 12px system-ui';
+    ctx2d.textAlign = 'center';
+    ctx2d.textBaseline = 'middle';
+    ctx2d.fillText(symbol, 15, 15.5);
+  }
+
+  function pushItemNotification(itemKey, amount = 1, note = '') {
+    const item = itemRegistry.get(itemKey) || ITEM_DEFS[itemKey];
+    if (!item || amount <= 0) return;
+
+    const stack = ensureItemNotifyStack();
+    const toast = document.createElement('div');
+    toast.className = 'item-toast';
+    toast.style.borderColor = item.color || '#9ec6ff';
+
+    const icon = document.createElement('canvas');
+    icon.className = 'item-toast-icon';
+    icon.width = 30;
+    icon.height = 30;
+    drawItemToastIcon(icon, item);
+
+    const body = document.createElement('div');
+    body.className = 'item-toast-body';
+
+    const title = document.createElement('div');
+    title.className = 'item-toast-title';
+
+    const name = document.createElement('span');
+    name.textContent = item.name;
+    name.style.color = item.color || '#d8e9ff';
+
+    const plus = document.createElement('span');
+    plus.className = 'item-toast-amount';
+    plus.textContent = `+${amount}`;
+
+    const desc = document.createElement('div');
+    desc.className = 'item-toast-desc';
+    desc.textContent = note ? `${item.description} ${note}` : item.description;
+
+    title.append(name, plus);
+    body.append(title, desc);
+    toast.append(icon, body);
+    stack.prepend(toast);
+
+    while (stack.children.length > 4) {
+      stack.removeChild(stack.lastElementChild);
+    }
+
+    setTimeout(() => {
+      toast.classList.add('is-leaving');
+      setTimeout(() => toast.remove(), 220);
+    }, 2600);
+  }
+
+  function drawMoveToastIcon(canvas, moveDef) {
+    const ctx2d = canvas.getContext('2d');
+    if (!ctx2d) return;
+    const slotColor = {
+      melee: '#ff9a6b',
+      laser: '#78d7ff',
+      smash: '#c08cff',
+      dash: '#79f7bf',
+    };
+    const slotGlyph = {
+      melee: '⚔',
+      laser: '✦',
+      smash: '⬣',
+      dash: '➤',
+    };
+    const color = slotColor[moveDef?.slot] || '#9ec6ff';
+    const glyph = slotGlyph[moveDef?.slot] || '✦';
+
+    ctx2d.clearRect(0, 0, canvas.width, canvas.height);
+    ctx2d.fillStyle = color;
+    ctx2d.shadowColor = color;
+    ctx2d.shadowBlur = 7;
+    ctx2d.beginPath();
+    ctx2d.arc(15, 15, 12, 0, Math.PI * 2);
+    ctx2d.fill();
+    ctx2d.shadowBlur = 0;
+    ctx2d.fillStyle = '#071018';
+    ctx2d.font = 'bold 12px system-ui';
+    ctx2d.textAlign = 'center';
+    ctx2d.textBaseline = 'middle';
+    ctx2d.fillText(glyph, 15, 15.5);
+  }
+
+  function pushMoveNotification(moveKey, amount = 1) {
+    const moveDef = MOVE_DEFS[moveKey];
+    if (!moveDef || amount <= 0) return;
+
+    const slotColor = {
+      melee: '#ff9a6b',
+      laser: '#78d7ff',
+      smash: '#c08cff',
+      dash: '#79f7bf',
+    };
+    const color = slotColor[moveDef.slot] || '#9ec6ff';
+
+    const stack = ensureItemNotifyStack();
+    const toast = document.createElement('div');
+    toast.className = 'item-toast';
+    toast.style.borderColor = color;
+
+    const icon = document.createElement('canvas');
+    icon.className = 'item-toast-icon';
+    icon.width = 30;
+    icon.height = 30;
+    drawMoveToastIcon(icon, moveDef);
+
+    const body = document.createElement('div');
+    body.className = 'item-toast-body';
+
+    const title = document.createElement('div');
+    title.className = 'item-toast-title';
+
+    const name = document.createElement('span');
+    name.textContent = `Move: ${moveDef.name}`;
+    name.style.color = color;
+
+    const plus = document.createElement('span');
+    plus.className = 'item-toast-amount';
+    plus.textContent = `+${amount}`;
+
+    const desc = document.createElement('div');
+    desc.className = 'item-toast-desc';
+    desc.textContent = moveDef.desc || 'New move unlocked.';
+
+    title.append(name, plus);
+    body.append(title, desc);
+    toast.append(icon, body);
+    stack.prepend(toast);
+
+    while (stack.children.length > 4) {
+      stack.removeChild(stack.lastElementChild);
+    }
+
+    setTimeout(() => {
+      toast.classList.add('is-leaving');
+      setTimeout(() => toast.remove(), 220);
+    }, 2600);
+  }
+
   function bindInput() {
     canvas.addEventListener('contextmenu', event => event.preventDefault());
     canvas.addEventListener('mousemove', event => {
@@ -673,6 +913,7 @@
       if (key === inventoryKey) invKeyLatch = false;
     });
     uiController.bindMenuActions({
+      _getChosenCharacter() { return chosenCharacter; },
       onCharacterSelect(characterKey, button) {
         if (button.classList.contains('locked')) return;
         chosenCharacter = characterKey;
@@ -682,6 +923,30 @@
         if (button.classList.contains('locked')) return;
         selectedDifficulty = normalizeDifficulty(difficultyKey);
         updateCharacterSelectionUI();
+      },
+      onChallengeSelect(challengeKey, button) {
+        const def = CHALLENGE_DEFS[challengeKey];
+        if (!def || button.classList.contains('locked')) return;
+        const owned = getOwnedChallengeSet();
+        if (!owned.has(challengeKey)) {
+          if ((metaProgress.coins || 0) < def.cost) {
+            particles.push({ x: ROOM_W / 2, y: ROOM_H / 2 - 30, life: 0.9, text: 'Not enough bank coins', c: '#ff6f7f' });
+            return;
+          }
+          metaProgress.coins -= def.cost;
+          metaProgress.unlockedChallenges = normalizeChallengeSelection([...(metaProgress.unlockedChallenges || []), challengeKey]);
+          persistMetaSoon();
+        } else if (selectedChallenges.includes(challengeKey)) {
+          selectedChallenges = selectedChallenges.filter(key => key !== challengeKey);
+        } else {
+          selectedChallenges = normalizeChallengeSelection([...selectedChallenges, challengeKey]);
+        }
+        metaProgress.selectedChallenges = normalizeChallengeSelection(selectedChallenges);
+        persistMetaSoon();
+        updateCharacterSelectionUI();
+      },
+      onToggleChallenges() {
+        uiController.setChallengePanelOpen(ui.challengePanel?.classList.contains('hidden'));
       },
       onOpenCharacterSelect() { setGameState('charselect'); },
       onCloseCharacterSelect() { setGameState('menu'); },
@@ -903,6 +1168,7 @@
   function renderShopPanel() {
     if (!ui.shopPanel || !player) return;
     ui.shopCoins.textContent = String(player.coins);
+    const noItemsChallenge = isChallengeActive('no_items');
     ui.shopTabs.forEach(tab => {
       const isActive = tab.dataset.tab === activeShopTab;
       tab.classList.toggle('active', isActive);
@@ -915,17 +1181,19 @@
       .filter(offer => !offer.bought && offer.type === 'item')
       .map((offer, index) => {
         const item = itemRegistry.get(offer.key);
-        return `<div class="shop-card">
+        const canAfford = player.coins >= offer.cost;
+        const blocked = noItemsChallenge || !canAfford;
+        return `<div class="shop-card${blocked ? ' shop-card--unaffordable' : ''}">
           <span class="shop-card__eyebrow">Relic</span>
           <div class="shop-card__title-row">
             <h4>${item?.name || 'Item'}</h4>
             <span class="shop-card__price">${offer.cost}</span>
           </div>
           <div class="shop-card__copy">
-            <p>${item?.description || 'No details available.'}</p>
+            <p>${noItemsChallenge ? 'No Items challenge is active. Relic buys are disabled for this run.' : item?.description || 'No details available.'}</p>
           </div>
           <div class="shop-card__footer">
-            <button class="shop-buy" data-kind="item" data-index="${index}">Buy Relic</button>
+            <button class="shop-buy${!canAfford ? ' shop-buy--unaffordable' : ''}" data-kind="item" data-index="${index}" ${blocked ? 'disabled' : ''}>${noItemsChallenge ? 'Relics Locked' : !canAfford ? 'Too Expensive' : 'Buy Relic'}</button>
           </div>
         </div>`;
       })
@@ -937,8 +1205,9 @@
       .map((offer, index) => {
         const def = MOVE_DEFS[offer.key];
         const owned = !!player.ownedMoves?.[offer.key];
-        const disabledText = offer.bought || owned ? 'Owned' : `Buy ${offer.cost}`;
-        return `<div class="shop-card">
+        const canAfford = player.coins >= offer.cost;
+        const disabled = offer.bought || owned || !canAfford;
+        return `<div class="shop-card${!canAfford && !owned && !offer.bought ? ' shop-card--unaffordable' : ''}">
           <span class="shop-card__eyebrow">${def?.slot || 'move'}</span>
           <div class="shop-card__title-row">
             <h4>${def?.name || offer.key}</h4>
@@ -948,7 +1217,7 @@
             <p>${def?.desc || 'No move description available.'}</p>
           </div>
           <div class="shop-card__footer">
-            <button class="shop-buy" data-kind="move" data-index="${index}" ${offer.bought || owned ? 'disabled' : ''}>${offer.bought || owned ? 'Owned' : 'Buy Move'}</button>
+            <button class="shop-buy${!canAfford && !owned && !offer.bought ? ' shop-buy--unaffordable' : ''}" data-kind="move" data-index="${index}" ${disabled ? 'disabled' : ''}>${offer.bought || owned ? 'Owned' : !canAfford ? 'Too Expensive' : 'Buy Move'}</button>
           </div>
         </div>`;
       })
@@ -960,7 +1229,9 @@
       { id: 'major', name: 'Major Heal', heal: 100, cost: 34 + floor * 4 },
     ];
     const healCards = heals
-      .map(heal => `<div class="shop-card">
+      .map(heal => {
+        const canAfford = player.coins >= heal.cost;
+        return `<div class="shop-card${!canAfford ? ' shop-card--unaffordable' : ''}">
         <span class="shop-card__eyebrow">Recovery</span>
         <div class="shop-card__title-row">
           <h4>${heal.name}</h4>
@@ -970,9 +1241,10 @@
           <p>Restore ${heal.heal} HP and stabilize before the next encounter.</p>
         </div>
         <div class="shop-card__footer">
-          <button class="shop-buy" data-kind="heal" data-heal="${heal.heal}" data-cost="${heal.cost}">Buy Heal</button>
+          <button class="shop-buy${!canAfford ? ' shop-buy--unaffordable' : ''}" data-kind="heal" data-heal="${heal.heal}" data-cost="${heal.cost}" ${!canAfford ? 'disabled' : ''}>${!canAfford ? 'Too Expensive' : 'Buy Heal'}</button>
         </div>
-      </div>`)
+      </div>`;
+      })
       .join('');
     ui.shopHeals.innerHTML = healCards;
     shopPanelDirty = false;
@@ -1067,6 +1339,10 @@
     if (!button || !player) return;
     const kind = button.dataset.kind;
     if (kind === 'item') {
+      if (isChallengeActive('no_items')) {
+        particles.push({ x: player.x, y: player.y - 24, life: 0.8, text: 'No Items challenge', c: '#ff8894' });
+        return;
+      }
       const offerIndex = Number(button.dataset.index || -1);
       const itemOffers = shopOffers.filter(offer => !offer.bought && offer.type === 'item');
       const offer = itemOffers[offerIndex];
@@ -1083,7 +1359,7 @@
       offer.bought = true;
       player.ownedMoves[offer.key] = true;
       markInventoryPanelDirty();
-      particles.push({ x: player.x, y: player.y - 20, life: 0.6, text: `NEW MOVE: ${MOVE_DEFS[offer.key]?.name || offer.key}`, c: '#9fd7ff' });
+      pushMoveNotification(offer.key, 1);
     } else if (kind === 'heal') {
       const heal = Number(button.dataset.heal || 0);
       const cost = Number(button.dataset.cost || 0);
@@ -1117,6 +1393,8 @@
       bestFloor: 1,
       unlockedItems: ['neo_knife'],
       unlockedCharacters: ['thorn_knight', 'metao'],
+      unlockedChallenges: [],
+      selectedChallenges: [],
       godsKilled: 0,
       loopsCompleted: 0,
     };
@@ -1147,7 +1425,7 @@
       pendant_of_kronos: 0,
     };
     const character = CHARACTER_DEFS[chosenCharacter] || CHARACTER_DEFS.thorn_knight;
-    items[character.startItem] = 1;
+    if (!isChallengeActive('no_items')) items[character.startItem] = 1;
     const equippedMoves = character.key === 'metao'
       ? { melee: 'fire_balls', laser: 'power_disks', smash: 'chaos_burst', dash: 'dash' }
       : character.key === 'granialla'
@@ -1224,10 +1502,16 @@
           ...savedMeta,
           unlockedItems: normalizeUnlockedItems(savedMeta.unlockedItems || savedMeta.unlockedRelics),
           unlockedCharacters: normalizeUnlockedCharacters(savedMeta.unlockedCharacters),
+          unlockedChallenges: normalizeChallengeSelection(savedMeta.unlockedChallenges),
+          selectedChallenges: normalizeChallengeSelection(savedMeta.selectedChallenges),
         };
       }
       activeRun = savedRun && typeof savedRun === 'object' ? savedRun : null;
-      if (activeRun) activeRun.difficulty = normalizeDifficulty(activeRun.difficulty);
+      if (activeRun) {
+        activeRun.difficulty = normalizeDifficulty(activeRun.difficulty);
+        activeRun.challenges = normalizeChallengeSelection(activeRun.challenges);
+      }
+      selectedChallenges = normalizeChallengeSelection(metaProgress.selectedChallenges);
       uiController.setSaveState(saveStore.kind);
     } catch (error) {
       console.error('Failed to load save data', error);
@@ -1258,6 +1542,24 @@
 
   function normalizeDifficulty(input) {
     return DIFFICULTY_DEFS[input] ? input : 'easy';
+  }
+
+  function normalizeChallengeSelection(input) {
+    if (!Array.isArray(input)) return [];
+    return [...new Set(input.filter(key => CHALLENGE_DEFS[key]))];
+  }
+
+  function getOwnedChallengeSet() {
+    return new Set(normalizeChallengeSelection(metaProgress.unlockedChallenges || []));
+  }
+
+  function getUnlockedChallengeSet() {
+    const loopsCompleted = Number(metaProgress.loopsCompleted || 0);
+    return new Set(CHALLENGE_ORDER.filter(key => loopsCompleted >= CHALLENGE_DEFS[key].unlockLoops));
+  }
+
+  function isChallengeActive(key) {
+    return selectedChallenges.includes(key);
   }
 
   function createRandomSeed() {
@@ -1323,10 +1625,10 @@
   }
 
   function refreshMenuState() {
-    uiController.setMenuMeta(metaProgress.coins, metaProgress.bestFloor, saveStore.kind);
+    uiController.setMenuMeta(metaProgress.coins, metaProgress.bestFloor, metaProgress.loopsCompleted || 0, saveStore.kind);
     updateCharacterSelectionUI();
     const summary = activeRun && activeRun.player && activeRun.floor
-      ? `Floor ${activeRun.floor} | ${getDifficultyDef(activeRun.difficulty).name} | ${activeRun.player.coins || 0} run coins`
+      ? `Floor ${activeRun.floor} | ${getDifficultyDef(activeRun.difficulty).name}${activeRun.challenges?.length ? ` | ${activeRun.challenges.length} challenge${activeRun.challenges.length === 1 ? '' : 's'}` : ''} | ${activeRun.player.coins || 0} run coins`
       : '';
     uiController.setRunSummary(summary);
   }
@@ -1334,11 +1636,16 @@
   function updateCharacterSelectionUI() {
     const unlocked = new Set(metaProgress.unlockedCharacters || ['thorn_knight', 'metao']);
     const unlockedDifficulties = getUnlockedDifficultySet();
+    const unlockedChallenges = getUnlockedChallengeSet();
+    const ownedChallenges = getOwnedChallengeSet();
     if (metaProgress.godsKilled > 0) unlocked.add('granialla');
     if (!unlocked.has(chosenCharacter)) chosenCharacter = [...unlocked][0] || 'thorn_knight';
     if (!unlockedDifficulties.has(selectedDifficulty)) selectedDifficulty = 'easy';
+    selectedChallenges = normalizeChallengeSelection(selectedChallenges).filter(key => unlockedChallenges.has(key) && ownedChallenges.has(key));
+    metaProgress.selectedChallenges = normalizeChallengeSelection(selectedChallenges);
     uiController.updateCharacterSelection(unlocked, chosenCharacter);
     uiController.updateDifficultySelection(unlockedDifficulties, selectedDifficulty, metaProgress.loopsCompleted || 0);
+    uiController.updateChallengeSelection(unlockedChallenges, ownedChallenges, selectedChallenges, metaProgress.loopsCompleted || 0, metaProgress.coins || 0);
   }
 
   function setGameState(nextState) {
@@ -1358,6 +1665,7 @@
     } else {
       baseSeedStr = ui.seed.value.trim() || createRandomSeed();
       selectedDifficulty = normalizeDifficulty(selectedDifficulty);
+      selectedChallenges = normalizeChallengeSelection(metaProgress.selectedChallenges);
       runLoopIndex = 0;
       syncSeedState();
       floor = 1;
@@ -1421,6 +1729,7 @@
     syncSeedState();
     floor = snapshot.floor;
     selectedDifficulty = normalizeDifficulty(snapshot.difficulty);
+    selectedChallenges = normalizeChallengeSelection(snapshot.challenges);
     metaProgress.bestFloor = Math.max(metaProgress.bestFloor, floor);
     resetRngStreams(snapshot.rngState);
     rooms = Array.isArray(snapshot.rooms) ? snapshot.rooms : [];
@@ -3082,11 +3391,15 @@
   }
 
   function collectItem(itemKey) {
+    if (isChallengeActive('no_items')) {
+      particles.push({ x: player.x, y: player.y - 28, life: 0.85, text: 'NO ITEMS', c: '#ff8a98' });
+      return;
+    }
     const item = itemRegistry.get(itemKey);
     if (!item) return;
     player.items[itemKey] = getItemCount(itemKey) + 1;
     markInventoryPanelDirty();
-    particles.push({ x: player.x, y: player.y - 28, life: 0.9, text: `${item.shortName} +1`, c: item.color || '#fff' });
+    pushItemNotification(itemKey, 1);
 
     if (itemKey === 'wizards_paw') {
       openWizardPawSelection();
@@ -3095,21 +3408,24 @@
     if (itemKey === 'titan_heart') {
       player.maxHp = Math.max(120, Math.round(player.maxHp * 1.08));
       player.hp = Math.min(player.maxHp, Math.round(player.hp * 1.08));
-      particles.push({ x: player.x, y: player.y - 42, life: 0.8, text: 'MAX HP UP', c: '#ff9fa8' });
     }
 
     if (itemKey === 'jesters_dice') {
       floorSkipPending += 3;
+      const bonusItemCounts = {};
       for (let index = 0; index < 10; index += 1) {
         const rewardPool = ITEM_KEYS.filter(key => key !== 'jesters_dice');
         const key = rewardPool[irand(0, rewardPool.length - 1, 'loot')];
         player.items[key] = getItemCount(key) + 1;
+        bonusItemCounts[key] = (bonusItemCounts[key] || 0) + 1;
         if (key === 'titan_heart') {
           player.maxHp = Math.max(120, Math.round(player.maxHp * 1.08));
           player.hp = Math.min(player.maxHp, Math.round(player.hp * 1.08));
         }
       }
-      particles.push({ x: player.x, y: player.y - 46, life: 1, text: '+10 ITEMS', c: '#ff8bd8' });
+      Object.entries(bonusItemCounts).forEach(([key, amount]) => {
+        pushItemNotification(key, Number(amount), '(Jester bonus)');
+      });
     }
 
     if (!metaProgress.unlockedItems.includes(itemKey)) {
@@ -3931,6 +4247,15 @@
 
   function damagePlayer(amount, angle, knockback) {
     if (player.inv > 0) return;
+    if (isChallengeActive('no_hit') && amount > 0) {
+      player.hp = 0;
+      player.inv = 0;
+      shake = 10;
+      shakeT = 0.18;
+      particles.push({ x: player.x, y: player.y - 24, life: 0.95, text: 'HIT RUN FAILED', c: '#ff7a88' });
+      die();
+      return;
+    }
     const itemStats = getItemStats();
     const hpBeforeHit = player.hp;
     const halfHpThreshold = player.maxHp * 0.5;
@@ -4445,6 +4770,7 @@
     if (ui.playerHpFill) {
       const hpPercent = Math.max(0, Math.min(100, (player.hp / player.maxHp) * 100));
       ui.playerHpFill.style.width = hpPercent + '%';
+      ui.playerHpFill.style.background = hpPercent > 70 ? '#4cbb5a' : hpPercent > 50 ? '#d4b840' : '#c04040';
       ui.playerHpTxt.textContent = Math.ceil(player.hp) + '/' + player.maxHp;
     }
     if (ui.playerXpFill) {
@@ -4522,6 +4848,7 @@
       runLoopIndex,
       rngState: getRngState(),
       difficulty: selectedDifficulty,
+      challenges: normalizeChallengeSelection(selectedChallenges),
       floor,
       rooms,
       currentRoom: { gx: currentRoom.gx, gy: currentRoom.gy },
@@ -4863,18 +5190,22 @@
 
     shopOffers.forEach(offer => {
       if (offer.bought) return;
+      const blockedByChallenge = offer.type === 'item' && isChallengeActive('no_items');
+      const canAfford = !!player && player.coins >= offer.cost;
       ctx.save();
       ctx.translate(offer.x, offer.y);
-      ctx.fillStyle = 'rgba(0,30,44,0.95)';
-      ctx.strokeStyle = '#ffd966';
+      ctx.fillStyle = blockedByChallenge || !canAfford ? 'rgba(36,18,24,0.95)' : 'rgba(0,30,44,0.95)';
+      ctx.strokeStyle = blockedByChallenge || !canAfford ? '#ff8b98' : '#ffd966';
       ctx.lineWidth = 2;
       ctx.fillRect(-26, -26, 52, 52);
       ctx.strokeRect(-26, -26, 52, 52);
-      ctx.fillStyle = offer.type === 'item' ? '#a857ff' : offer.type === 'potion' ? '#35ff6f' : '#8fd2ff';
+      ctx.fillStyle = blockedByChallenge
+        ? '#ff8b98'
+        : offer.type === 'item' ? '#a857ff' : offer.type === 'potion' ? '#35ff6f' : '#8fd2ff';
       ctx.beginPath();
       ctx.arc(0, -6, 10, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = '#fff';
+      ctx.fillStyle = blockedByChallenge || !canAfford ? '#ffccd2' : '#fff';
       ctx.font = 'bold 11px system-ui';
       ctx.textAlign = 'center';
       ctx.fillText(String(offer.cost), 0, 18);
@@ -5447,6 +5778,29 @@
   }
 
   function drawActionIcons() {
+    drawPixelIcon(ui.coinIcon, '#ffd15a', [
+      [2, 1], [3, 1], [4, 1],
+      [1, 2], [2, 2], [3, 2], [4, 2], [5, 2],
+      [1, 3], [2, 3], [3, 3], [4, 3], [5, 3],
+      [1, 4], [2, 4], [3, 4], [4, 4], [5, 4],
+      [2, 5], [3, 5], [4, 5],
+    ]);
+    drawPixelIcon(ui.metaCoinIcon, '#ffd15a', [
+      [2, 1], [3, 1], [4, 1],
+      [1, 2], [2, 2], [3, 2], [4, 2], [5, 2],
+      [1, 3], [2, 3], [3, 3], [4, 3], [5, 3],
+      [1, 4], [2, 4], [3, 4], [4, 4], [5, 4],
+      [2, 5], [3, 5], [4, 5],
+    ]);
+    drawPixelIcon(ui.metaLoopIcon, '#83f3ff', [
+      [2, 1], [3, 1], [4, 1],
+      [1, 2], [5, 2],
+      [1, 3], [5, 3],
+      [1, 4], [5, 4],
+      [2, 5], [3, 5], [4, 5],
+      [2, 2], [4, 2], [2, 4], [4, 4],
+      [3, 3],
+    ]);
     drawPixelIcon(ui.icons.dash, '#fff06a', [
       [1, 5], [2, 4], [3, 3], [4, 2], [5, 1], [5, 2], [6, 2], [7, 2],
       [4, 4], [5, 4], [6, 4], [7, 4], [4, 6], [5, 6], [6, 6], [7, 6],
@@ -5481,6 +5835,7 @@
     let restartBound = false;
     let activeState = 'menu';
     let hudUpdateHook = null;
+    let challengePanelOpen = false;
 
     function makeContainer(element) {
       return {
@@ -5519,6 +5874,16 @@
       view.playerStats?.classList.toggle('hidden', !inPlay);
       view.coinDisplay?.classList.toggle('hidden', !inPlay);
       view.centerDisplay?.classList.toggle('hidden', !inPlay);
+      if (show !== 'charselect') setChallengePanelOpen(false);
+    }
+
+    function setChallengePanelOpen(open) {
+      challengePanelOpen = !!open;
+      view.challengePanel?.classList.toggle('hidden', !challengePanelOpen);
+      if (view.challengeToggle) {
+        view.challengeToggle.textContent = challengePanelOpen ? 'HIDE CHALLENGE SHOP' : 'OPEN CHALLENGE SHOP';
+        view.challengeToggle.setAttribute('aria-expanded', challengePanelOpen ? 'true' : 'false');
+      }
     }
 
     if (manager && typeof manager.registerScreen === 'function') {
@@ -5559,11 +5924,45 @@
             handlers.onCharacterSelect(button.dataset.char || '', button);
           });
         });
+
+        // Carousel prev/next arrows
+        const carouselPrev = document.getElementById('carouselPrev');
+        const carouselNext = document.getElementById('carouselNext');
+        const charOrder = ['thorn_knight', 'metao', 'granialla'];
+        function carouselStep(delta) {
+          const currentIndex = charOrder.indexOf(handlers._getChosenCharacter ? handlers._getChosenCharacter() : 'thorn_knight');
+          const nextIndex = Math.max(0, Math.min(charOrder.length - 1, currentIndex + delta));
+          const nextKey = charOrder[nextIndex];
+          const btn = view.charButtons.find(b => b.dataset.char === nextKey);
+          if (btn && !btn.classList.contains('locked')) {
+            handlers.onCharacterSelect(nextKey, btn);
+          }
+        }
+        carouselPrev?.addEventListener('click', () => carouselStep(-1));
+        carouselNext?.addEventListener('click', () => carouselStep(1));
+
+        // Touch swipe on carousel viewport
+        const viewport = document.querySelector('.char-carousel-viewport');
+        if (viewport) {
+          let touchStartX = 0;
+          viewport.addEventListener('touchstart', e => { touchStartX = e.touches[0].clientX; }, { passive: true });
+          viewport.addEventListener('touchend', e => {
+            const dx = e.changedTouches[0].clientX - touchStartX;
+            if (Math.abs(dx) > 40) carouselStep(dx < 0 ? 1 : -1);
+          }, { passive: true });
+        }
+
         view.difficultyButtons.forEach(button => {
           button.addEventListener('click', () => {
             handlers.onDifficultySelect(button.dataset.difficulty || '', button);
           });
         });
+        view.challengeButtons.forEach(button => {
+          button.addEventListener('click', () => {
+            handlers.onChallengeSelect(button.dataset.challenge || '', button);
+          });
+        });
+        view.challengeToggle?.addEventListener('click', handlers.onToggleChallenges);
         view.go.addEventListener('click', handlers.onStartNew);
         view.seed.addEventListener('keydown', event => {
           if (event.key === 'Enter') handlers.onStartNew();
@@ -5582,20 +5981,25 @@
         restartBound = true;
       },
       setSaveState(text) { view.saveState.textContent = text; },
-      setMenuMeta(coins, bestFloor, saveState) {
+      setChallengePanelOpen,
+      setMenuMeta(coins, bestFloor, loopsCompleted, saveState) {
         view.bankCoins.textContent = coins;
         view.bestFloor.textContent = bestFloor;
+        if (view.loopCount) view.loopCount.textContent = loopsCompleted;
         view.saveState.textContent = saveState;
       },
       setRunSummary(summary) {
         const hasRun = !!summary;
         // Main menu: show/hide Continue button
         view.continueBtn?.classList.toggle('hidden', !hasRun);
-        // Char-select screen: show/hide delete-run row
-        view.deleteRunRow?.classList.toggle('hidden', !hasRun);
         view.runSummary.textContent = summary || '';
       },
       updateCharacterSelection(unlocked, selected) {
+        const CHAR_ORDER = ['thorn_knight', 'metao', 'granialla'];
+        const CARD_W_ACTIVE = 270;
+        const CARD_W_SIDE   = 200;
+        const CARD_GAP      = 18;
+
         view.charButtons.forEach(button => {
           const itemKey = button.dataset.char;
           const hint = button.querySelector('small');
@@ -5606,6 +6010,42 @@
           button.disabled = !unlocked.has(itemKey);
           if (hint) hint.textContent = unlocked.has(itemKey) ? baseHint : 'locked in bank';
         });
+
+        // ── Carousel position ────────────────────────────────
+        const track = document.getElementById('choose');
+        const viewport = track?.parentElement;
+        const activeIdx = CHAR_ORDER.indexOf(selected);
+        if (track && viewport && activeIdx >= 0) {
+          const viewW = viewport.offsetWidth || 440;
+          const leftEdge = activeIdx * (CARD_W_SIDE + CARD_GAP);
+          const tx = viewW / 2 - leftEdge - CARD_W_ACTIVE / 2;
+          track.style.transform = `translateX(${tx}px)`;
+        }
+
+        // ── Arrow disabled state ─────────────────────────────
+        const carouselPrev = document.getElementById('carouselPrev');
+        const carouselNext = document.getElementById('carouselNext');
+        const unlockedOrder = CHAR_ORDER.filter(k => unlocked.has(k));
+        const currentPos = unlockedOrder.indexOf(selected);
+        if (carouselPrev) carouselPrev.disabled = currentPos <= 0;
+        if (carouselNext) carouselNext.disabled = currentPos >= unlockedOrder.length - 1;
+
+        // ── Hero detail panel ────────────────────────────────
+        const detail = document.getElementById('heroDetail');
+        const disp = HERO_DISPLAY[selected];
+        if (detail && disp) {
+          const statsHtml = disp.stats.map(s =>
+            `<div class="char-stat-row"><span class="stat-label">${s.label}</span>` +
+            `<div class="stat-bar"><div class="stat-fill" style="width:${s.pct}%;background:${s.color}"></div></div></div>`
+          ).join('');
+          const skillsHtml = disp.skills.map(s =>
+            `<span class="hero-detail-skill-pip">${s}</span>`
+          ).join('');
+          detail.innerHTML =
+            `<p class="hero-detail-lore">${disp.lore}</p>` +
+            `<div class="hero-detail-stats"><div class="hero-detail-section-label">Stats</div>${statsHtml}</div>` +
+            `<div class="hero-detail-skills"><div class="hero-detail-section-label">Kit</div>${skillsHtml}</div>`;
+        }
       },
       updateDifficultySelection(unlocked, selected, loopsCompleted) {
         const selectedDef = getDifficultyDef(selected);
@@ -5623,6 +6063,38 @@
             ? `Unlocks at ${selectedDef.unlockLoops} loops. Current loops: ${loopsCompleted}`
             : `${selectedDef.description} Loops: ${loopsCompleted}.`;
         }
+      },
+      updateChallengeSelection(unlocked, owned, selected, loopsCompleted, bankCoins) {
+        view.challengeButtons.forEach(button => {
+          const key = button.dataset.challenge || '';
+          const def = CHALLENGE_DEFS[key];
+          if (!def) return;
+          const isUnlocked = unlocked.has(key);
+          const isOwned = owned.has(key);
+          const isSelected = selected.includes(key);
+          button.classList.toggle('locked', !isUnlocked);
+          button.classList.toggle('purchased', isOwned);
+          button.classList.toggle('sel', isSelected);
+          button.disabled = !isUnlocked;
+          button.title = !isUnlocked
+            ? `Unlock at ${def.unlockLoops} loops`
+            : isOwned
+              ? def.description
+              : `${def.description} Cost: ${def.cost} bank coins`;
+          button.textContent = !isUnlocked
+            ? `${def.name} Locked`
+            : isOwned
+              ? `${def.name}${isSelected ? ' On' : ' Off'}`
+              : `${def.name} Buy ${def.cost}`;
+        });
+        if (view.challengeHint) {
+          const hasChallenges = loopsCompleted >= 5;
+          const activeCount = selected.length;
+          view.challengeHint.textContent = !hasChallenges
+            ? `Unlocks at 5 loops. Current loops: ${loopsCompleted}.`
+            : `Bank: ${bankCoins} coins. Buy once, then toggle per run. Active challenges: ${activeCount}.`;
+        }
+        if (!unlocked.size) setChallengePanelOpen(false);
       },
       setItemStatus(items) {
         ITEM_KEYS.forEach(key => {
