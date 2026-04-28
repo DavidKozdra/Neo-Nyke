@@ -22,6 +22,7 @@
       name: 'Thorn Knight',
       rarity: 'knight',
       startItem: 'neo_knife',
+      damageMultiplier: 1,
       skills: { melee: 'Slash', laser: 'Blood Beam', smash: 'Crimson Smash' },
     },
     metao: {
@@ -29,13 +30,15 @@
       name: 'Metao',
       rarity: 'wizard',
       startItem: 'orb_of_blood',
-      skills: { melee: 'Power Disks', laser: 'Fire Balls', smash: 'Chaos Burst' },
+      damageMultiplier: 0.5,
+      skills: { melee: 'Fire Balls', laser: 'Power Disks', smash: 'Chaos Burst' },
     },
     granialla: {
       key: 'granialla',
       name: 'Granialla',
       rarity: 'god',
       startItem: 'neo_knife',
+      damageMultiplier: 1,
       skills: { melee: 'Smite', laser: 'Blade Justice', smash: 'Healing Zone' },
       unlock: 'godslain',
     },
@@ -123,7 +126,7 @@
     deleteRunRow: document.getElementById('deleteRunRow'),
     deleteRunBtn: document.getElementById('deleteRunBtn'),
     runSummary: document.getElementById('runSummary'),
-    charButtons: [...document.querySelectorAll('#choose button')],
+    charButtons: [...document.querySelectorAll('#choose .char-card')],
     itemSlots: {
       neo_knife: document.getElementById('rr-neo-knife'),
       orb_of_blood: document.getElementById('rr-orb-blood'),
@@ -183,11 +186,15 @@
   let destructibles = [];
   let hazards = [];
   let shopOffers = [];
+  let structures = [];
+  let decorations = [];
   let activeRun = null;
   let metaProgress = createDefaultMeta();
   let savePendingTimer = 0;
+  let lavaAnimTime = 0;
 
   const saveStore = createSaveStore();
+  window._neoSaveStore = saveStore;
 
   const walls = (() => {
     const hw = (ROOM_W - DOOR) / 2;
@@ -239,7 +246,9 @@
     window.addEventListener('keydown', event => {
       const key = event.key.toLowerCase();
       keys[key] = true;
-      if (key === 'r' && gameState === 'play') trySmash();
+      const b = window.NeoSettings?.getBindings();
+      if (b && key === b.smash && gameState === 'play') trySmash();
+      else if (!b && key === 'r' && gameState === 'play') trySmash();
     });
     window.addEventListener('keyup', event => {
       keys[event.key.toLowerCase()] = false;
@@ -250,6 +259,8 @@
         chosenCharacter = characterKey;
         updateCharacterSelectionUI();
       },
+      onOpenCharacterSelect() { setGameState('charselect'); },
+      onCloseCharacterSelect() { setGameState('menu'); },
       onStartNew() { void startGame(false); },
       onContinue() { void startGame(true); },
       onDeleteRun() { void deleteSavedRun(); },
@@ -416,6 +427,8 @@
     destructibles = [];
     hazards = [];
     shopOffers = [];
+    structures = [];
+    decorations = [];
     cooldowns = { melee: 0, laser: 0, smash: 0 };
     laserActive = false;
     laserTime = 0;
@@ -447,6 +460,28 @@
     destructibles = snapshot.destructibles || currentRoom?.destructibles || [];
     hazards = snapshot.hazards || currentRoom?.hazards || [];
     shopOffers = snapshot.shopOffers || currentRoom?.shopOffers || [];
+    structures = snapshot.structures || currentRoom?.structures || [];
+    decorations = snapshot.decorations || currentRoom?.decorations || [];
+    if (currentRoom) {
+      currentRoom.enemies = Array.isArray(currentRoom.enemies) ? currentRoom.enemies : enemies;
+      currentRoom.projectiles = Array.isArray(currentRoom.projectiles) ? currentRoom.projectiles : projectiles;
+      currentRoom.chests = Array.isArray(currentRoom.chests) ? currentRoom.chests : chests;
+      currentRoom.pickups = Array.isArray(currentRoom.pickups) ? currentRoom.pickups : pickups;
+      currentRoom.destructibles = Array.isArray(currentRoom.destructibles) ? currentRoom.destructibles : destructibles;
+      currentRoom.hazards = Array.isArray(currentRoom.hazards) ? currentRoom.hazards : hazards;
+      currentRoom.shopOffers = Array.isArray(currentRoom.shopOffers) ? currentRoom.shopOffers : shopOffers;
+      currentRoom.structures = Array.isArray(currentRoom.structures) ? currentRoom.structures : structures;
+      currentRoom.decorations = Array.isArray(currentRoom.decorations) ? currentRoom.decorations : decorations;
+      enemies = currentRoom.enemies;
+      projectiles = currentRoom.projectiles;
+      chests = currentRoom.chests;
+      pickups = currentRoom.pickups;
+      destructibles = currentRoom.destructibles;
+      hazards = currentRoom.hazards;
+      shopOffers = currentRoom.shopOffers;
+      structures = currentRoom.structures;
+      decorations = currentRoom.decorations;
+    }
     cooldowns = snapshot.cooldowns || { melee: 0, laser: 0, smash: 0 };
     laserActive = !!snapshot.laserActive;
     laserTime = snapshot.laserTime || 0;
@@ -474,7 +509,7 @@
     grid[start.y][start.x] = true;
     positions.push(start);
 
-    const target = 12 + Math.floor(rng() * 4) + Math.min(4, floor >> 1);
+    const target = 8 + Math.floor(rng() * 3) + Math.min(2, floor >> 2);
     while (positions.length < target) {
       const seed = positions[irand(0, positions.length - 1)];
       const dirs = shuffle([[1, 0], [-1, 0], [0, 1], [0, -1]]);
@@ -537,10 +572,9 @@
     if (shopCandidate && rng() < 0.7) shopCandidate.type = 'shop';
     rooms.forEach(decorateRoomData);
 
-    currentRoom = startRoom;
     player.x = START_X;
     player.y = START_Y;
-    enterRoom(currentRoom);
+    enterRoom(startRoom);
     updateObjective();
     updateHud();
   }
@@ -549,7 +583,11 @@
     room.destructibles = [];
     room.hazards = [];
     room.shopOffers = [];
+    room.structures = [];
+    room.decorations = [];
     if (room.type === 'start') return;
+
+    decorateRoomStructures(room);
 
     const potCount = room.type === 'shop' ? 1 : irand(1, 3);
     for (let index = 0; index < potCount; index += 1) {
@@ -575,12 +613,11 @@
     }
 
     if (rng() < 0.4 && room.type !== 'god') {
-      room.hazards.push({
-        kind: 'lava',
-        x: 260 + rand(ROOM_W - 520, 0),
-        y: 180 + rand(ROOM_H - 360, 0),
-        r: 46 + rand(26, 0),
-      });
+      const primaryLava = createMoatLavaHazard();
+      room.hazards.push(primaryLava);
+      if (rng() < 0.35) {
+        room.hazards.push(createCompanionMoatLava(primaryLava));
+      }
     }
 
     if (rng() < 0.3 && room.type !== 'shop' && room.type !== 'god') {
@@ -614,6 +651,120 @@
     }
   }
 
+  function decorateRoomStructures(room) {
+    const theme = rng();
+    if (theme < 0.34) {
+      room.structures.push(
+        { kind: 'pillar', x: ROOM_W / 2 - 120, y: ROOM_H / 2 - 90, w: 34, h: 34 },
+        { kind: 'pillar', x: ROOM_W / 2 + 120, y: ROOM_H / 2 - 90, w: 34, h: 34 },
+        { kind: 'pillar', x: ROOM_W / 2 - 120, y: ROOM_H / 2 + 90, w: 34, h: 34 },
+        { kind: 'pillar', x: ROOM_W / 2 + 120, y: ROOM_H / 2 + 90, w: 34, h: 34 },
+      );
+      room.decorations.push(
+        { kind: 'rubble', x: ROOM_W / 2, y: ROOM_H / 2 - 130, r: 22 },
+        { kind: 'rubble', x: ROOM_W / 2, y: ROOM_H / 2 + 130, r: 22 },
+      );
+      return;
+    }
+
+    if (theme < 0.68) {
+      room.structures.push(
+        { kind: 'wall', x: ROOM_W / 2 - 140, y: ROOM_H / 2 - 24, w: 92, h: 48 },
+        { kind: 'wall', x: ROOM_W / 2 + 140, y: ROOM_H / 2 - 24, w: 92, h: 48 },
+      );
+      room.decorations.push(
+        { kind: 'banner', x: ROOM_W / 2 - 140, y: ROOM_H / 2 - 70, r: 14 },
+        { kind: 'banner', x: ROOM_W / 2 + 140, y: ROOM_H / 2 - 70, r: 14 },
+        { kind: 'crack', x: ROOM_W / 2, y: ROOM_H / 2 + 80, r: 30 },
+      );
+      return;
+    }
+
+    room.structures.push(
+      { kind: 'wall', x: ROOM_W / 2 - 36, y: ROOM_H / 2 - 150, w: 72, h: 88 },
+      { kind: 'wall', x: ROOM_W / 2 - 36, y: ROOM_H / 2 + 62, w: 72, h: 88 },
+    );
+    room.decorations.push(
+      { kind: 'brazier', x: ROOM_W / 2 - 90, y: ROOM_H / 2, r: 18 },
+      { kind: 'brazier', x: ROOM_W / 2 + 90, y: ROOM_H / 2, r: 18 },
+      { kind: 'crack', x: ROOM_W / 2, y: ROOM_H / 2, r: 24 },
+    );
+  }
+
+  function randomMoatLanePosition(axis, radius) {
+    const margin = 54 + radius;
+    const center = axis === 'x' ? ROOM_W / 2 : ROOM_H / 2;
+    const max = axis === 'x' ? ROOM_W - margin : ROOM_H - margin;
+    const min = margin;
+    const doorHalf = DOOR / 2 + radius + 26;
+    const lowMax = center - doorHalf;
+    const highMin = center + doorHalf;
+
+    const ranges = [];
+    if (lowMax > min) ranges.push([min, lowMax]);
+    if (max > highMin) ranges.push([highMin, max]);
+    if (!ranges.length) return rand(max, min);
+
+    const [rangeMin, rangeMax] = ranges[irand(0, ranges.length - 1)];
+    return rand(rangeMax, rangeMin);
+  }
+
+  function createMoatLavaHazard() {
+    const r = 44 + rand(24, 0);
+    const side = irand(0, 3);
+    const wallOffset = WALL + r + 18 + rand(16, 0);
+    const hazard = {
+      kind: 'lava',
+      x: ROOM_W / 2,
+      y: ROOM_H / 2,
+      r,
+      phase: rand(Math.PI * 2, 0),
+      pulse: rand(1.8, 1.15),
+      wobble: rand(0.75, 0.45),
+      side,
+    };
+
+    if (side === 0) {
+      hazard.x = randomMoatLanePosition('x', r);
+      hazard.y = wallOffset;
+    } else if (side === 1) {
+      hazard.x = randomMoatLanePosition('x', r);
+      hazard.y = ROOM_H - wallOffset;
+    } else if (side === 2) {
+      hazard.x = wallOffset;
+      hazard.y = randomMoatLanePosition('y', r);
+    } else {
+      hazard.x = ROOM_W - wallOffset;
+      hazard.y = randomMoatLanePosition('y', r);
+    }
+
+    return hazard;
+  }
+
+  function createCompanionMoatLava(primary) {
+    const companion = {
+      kind: 'lava',
+      x: primary.x,
+      y: primary.y,
+      r: primary.r * rand(0.86, 0.68),
+      phase: primary.phase + rand(1.9, 0.6),
+      pulse: primary.pulse + rand(0.35, -0.2),
+      wobble: primary.wobble + rand(0.2, -0.15),
+      side: primary.side,
+    };
+
+    const along = (primary.r + companion.r) * rand(1.2, 0.75);
+    if (primary.side <= 1) {
+      companion.x = clamp(primary.x + (rng() < 0.5 ? -along : along), companion.r + 42, ROOM_W - companion.r - 42);
+      companion.y = primary.side === 0 ? WALL + companion.r + 18 : ROOM_H - WALL - companion.r - 18;
+    } else {
+      companion.y = clamp(primary.y + (rng() < 0.5 ? -along : along), companion.r + 42, ROOM_H - companion.r - 42);
+      companion.x = primary.side === 2 ? WALL + companion.r + 18 : ROOM_W - WALL - companion.r - 18;
+    }
+
+    return companion;
+  }
+
   function findFarthestRoom(startRoom, roomMap) {
     const queue = [startRoom];
     const distances = new Map([[startRoom, 0]]);
@@ -640,27 +791,43 @@
     return farthest;
   }
 
+  function syncCurrentRoomState() {
+    if (!currentRoom) return;
+    currentRoom.enemies = enemies;
+    currentRoom.projectiles = projectiles;
+    currentRoom.chests = chests;
+    currentRoom.pickups = pickups;
+    currentRoom.destructibles = destructibles;
+    currentRoom.hazards = hazards;
+    currentRoom.shopOffers = shopOffers;
+    currentRoom.structures = structures;
+    currentRoom.decorations = decorations;
+  }
+
   function enterRoom(room) {
+    syncCurrentRoomState();
     currentRoom = room;
     room.explored = true;
     room.visited = true;
-    enemies = [];
-    projectiles = [];
-    chests = [];
-    pickups = [];
+    enemies = room.enemies || [];
+    projectiles = room.projectiles || [];
+    chests = room.chests || [];
+    pickups = room.pickups || [];
     particles = [];
     destructibles = room.destructibles || [];
     hazards = room.hazards || [];
     shopOffers = room.shopOffers || [];
+    structures = room.structures || [];
+    decorations = room.decorations || [];
     laserActive = false;
     laserTime = 0;
     laserTick = 0;
 
-    if (room.type === 'combat' && !room.cleared) {
+    if (room.type === 'combat' && !room.cleared && enemies.length === 0) {
       spawnWave(3 + floor + irand(0, 1));
     }
 
-    if (room.type === 'treasure' && !room.cleared) {
+    if (room.type === 'treasure' && !room.cleared && chests.length === 0) {
       const chestCount = 1 + Math.floor(rng() * 2);
       for (let index = 0; index < chestCount; index += 1) {
         chests.push({ x: 260 + index * 180, y: ROOM_H / 2, open: false });
@@ -668,24 +835,33 @@
     }
 
     if (room.type === 'ladder') {
-      if (!room.cleared) {
+      if (!room.cleared && enemies.length === 0) {
         spawnWave(4 + floor + irand(0, 1));
-      } else {
+      } else if (room.cleared && !pickups.some(pickup => pickup.type === 'ladder')) {
         pickups.push({ x: ROOM_W / 2, y: ROOM_H / 2, type: 'ladder' });
       }
     }
 
     if (room.type === 'god') {
       if (room.cleared) {
-        pickups.push({ x: ROOM_W / 2, y: ROOM_H / 2, type: 'crown' });
+        if (!pickups.some(pickup => pickup.type === 'crown')) {
+          pickups.push({ x: ROOM_W / 2, y: ROOM_H / 2, type: 'crown' });
+        }
       } else if (room.bossStarted) {
-        spawnGodBoss();
+        if (!enemies.some(enemy => enemy.type === 'god')) {
+          spawnGodBoss();
+        }
       } else {
-        pickups.push({ x: ROOM_W / 2 - 120, y: ROOM_H / 2, type: 'fightGod' });
-        pickups.push({ x: ROOM_W / 2 + 120, y: ROOM_H / 2, type: 'returnGate' });
+        if (!pickups.some(pickup => pickup.type === 'fightGod')) {
+          pickups.push({ x: ROOM_W / 2 - 120, y: ROOM_H / 2, type: 'fightGod' });
+        }
+        if (!pickups.some(pickup => pickup.type === 'returnGate')) {
+          pickups.push({ x: ROOM_W / 2 + 120, y: ROOM_H / 2, type: 'returnGate' });
+        }
       }
     }
 
+    syncCurrentRoomState();
     updateObjective();
     scheduleRunSave();
   }
@@ -804,11 +980,12 @@
 
   function scaleDamageAgainstEnemy(enemy, damage) {
     const stats = getItemStats();
-    const powered = damage + (player?.attackPower || 0);
+    const characterMultiplier = getCharacterDef().damageMultiplier || 1;
+    const powered = (damage + (player?.attackPower || 0)) * characterMultiplier;
     if (enemy.bleed > 0 && stats.bleedDamageMultiplier > 1) {
       return Math.round(powered * stats.bleedDamageMultiplier);
     }
-    return powered;
+    return Math.round(powered);
   }
 
   function tryMelee() {
@@ -818,7 +995,7 @@
     const character = getCharacterDef();
     cooldowns.melee = (godTimer > 0 ? 0.2 : ATTACKS.melee.baseCooldown) / attackSpeed;
     if (character.key === 'metao') {
-      spawnPlayerDiskBurst();
+      spawnFireballs();
       return;
     }
     if (character.key === 'granialla') {
@@ -862,7 +1039,7 @@
     const character = getCharacterDef();
     if (character.key === 'metao') {
       cooldowns.laser = ATTACKS.laser.baseCooldown / attackSpeed;
-      spawnFireballs();
+      spawnPlayerDiskBurst();
       return;
     }
     if (character.key === 'granialla') {
@@ -1139,13 +1316,19 @@
 
   function update(dt) {
     const itemStats = getItemStats();
+    lavaAnimTime += dt;
     cooldowns.melee = Math.max(0, cooldowns.melee - dt);
     cooldowns.laser = Math.max(0, cooldowns.laser - dt);
     cooldowns.smash = Math.max(0, cooldowns.smash - dt);
     if (godTimer > 0) godTimer = Math.max(0, godTimer - dt);
 
-    let moveX = (keys.d || keys.arrowright ? 1 : 0) - (keys.a || keys.arrowleft ? 1 : 0);
-    let moveY = (keys.s || keys.arrowdown ? 1 : 0) - (keys.w || keys.arrowup ? 1 : 0);
+    const _b = window.NeoSettings?.getBindings();
+    const _right = _b ? _b.right : 'd';
+    const _left  = _b ? _b.left  : 'a';
+    const _down  = _b ? _b.down  : 's';
+    const _up    = _b ? _b.up    : 'w';
+    let moveX = (keys[_right] || keys.arrowright ? 1 : 0) - (keys[_left] || keys.arrowleft ? 1 : 0);
+    let moveY = (keys[_down]  || keys.arrowdown  ? 1 : 0) - (keys[_up]   || keys.arrowup   ? 1 : 0);
     const moveLength = Math.hypot(moveX, moveY) || 1;
     moveX /= moveLength;
     moveY /= moveLength;
@@ -1536,7 +1719,6 @@
       }
     });
     hazards = hazards.filter(hazard => hazard.ttl === undefined || hazard.ttl > 0);
-    if (currentRoom) currentRoom.hazards = hazards;
 
     shopOffers.forEach(offer => {
       if (offer.bought || dist(player.x, player.y, offer.x, offer.y) > 30) return;
@@ -1550,10 +1732,7 @@
         collectItem(offer.key);
       }
     });
-    if (currentRoom) {
-      currentRoom.destructibles = destructibles;
-      currentRoom.shopOffers = shopOffers;
-    }
+    syncCurrentRoomState();
   }
 
   function damageDestructible(prop, damage) {
@@ -1623,6 +1802,7 @@
         currentRoom.bossStarted = true;
         pickups = [];
         spawnGodBoss();
+        syncCurrentRoomState();
         updateObjective();
         scheduleRunSave();
         return;
@@ -1839,6 +2019,8 @@
       destructibles,
       hazards,
       shopOffers,
+      structures,
+      decorations,
       cooldowns,
       laserActive,
       laserTime,
@@ -1857,11 +2039,13 @@
   function draw() {
     ctx.save();
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    const offsetX = (Math.random() - 0.5) * shake * 2;
-    const offsetY = (Math.random() - 0.5) * shake * 2;
+    const _shakeOn = window.NeoSettings?.getAccess()?.screenShake !== false;
+    const offsetX = _shakeOn ? (Math.random() - 0.5) * shake * 2 : 0;
+    const offsetY = _shakeOn ? (Math.random() - 0.5) * shake * 2 : 0;
     ctx.translate(-camera.x + offsetX, -camera.y + offsetY);
 
     drawFloor();
+    drawRoomDecor();
     drawWorldProps();
     drawChests();
     drawPickups();
@@ -1954,16 +2138,89 @@
     });
   }
 
+  function drawRoomDecor() {
+    decorations.forEach(decor => {
+      ctx.save();
+      ctx.translate(decor.x, decor.y);
+      if (decor.kind === 'rubble') {
+        ctx.fillStyle = 'rgba(90,120,136,0.32)';
+        ctx.beginPath();
+        ctx.arc(0, 0, decor.r, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (decor.kind === 'banner') {
+        ctx.fillStyle = 'rgba(255,210,90,0.22)';
+        ctx.fillRect(-10, -22, 20, 44);
+      } else if (decor.kind === 'crack') {
+        ctx.strokeStyle = 'rgba(120,180,200,0.22)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(-decor.r, -6);
+        ctx.lineTo(-8, 0);
+        ctx.lineTo(0, -8);
+        ctx.lineTo(10, 4);
+        ctx.lineTo(decor.r, -2);
+        ctx.stroke();
+      } else if (decor.kind === 'brazier') {
+        ctx.fillStyle = 'rgba(255,120,60,0.7)';
+        ctx.shadowColor = '#ff7b39';
+        ctx.shadowBlur = 14;
+        ctx.beginPath();
+        ctx.arc(0, 0, decor.r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    });
+
+    structures.forEach(structure => {
+      ctx.save();
+      ctx.translate(structure.x, structure.y);
+      if (structure.kind === 'pillar') {
+        ctx.fillStyle = '#193849';
+        ctx.strokeStyle = '#5ad8ff';
+        ctx.lineWidth = 2;
+        ctx.fillRect(-structure.w / 2, -structure.h / 2, structure.w, structure.h);
+        ctx.strokeRect(-structure.w / 2, -structure.h / 2, structure.w, structure.h);
+      } else {
+        ctx.fillStyle = '#102f3e';
+        ctx.strokeStyle = 'rgba(88,217,255,0.7)';
+        ctx.lineWidth = 2;
+        ctx.fillRect(-structure.w / 2, -structure.h / 2, structure.w, structure.h);
+        ctx.strokeRect(-structure.w / 2, -structure.h / 2, structure.w, structure.h);
+      }
+      ctx.restore();
+    });
+  }
+
   function drawWorldProps() {
     hazards.forEach(hazard => {
       ctx.save();
       ctx.translate(hazard.x, hazard.y);
       if (hazard.kind === 'lava') {
-        ctx.fillStyle = 'rgba(255,90,40,0.7)';
+        const t = lavaAnimTime * (hazard.pulse || 1.5) + (hazard.phase || 0);
+        const wobble = hazard.wobble || 0.6;
+        const pulse = 1 + Math.sin(t * 2.4) * 0.07;
+        const outerRadius = hazard.r * pulse;
+
         ctx.shadowColor = '#ff5a3d';
-        ctx.shadowBlur = 16;
+        ctx.shadowBlur = 12 + Math.sin(t * 3.1) * 6;
+        ctx.fillStyle = 'rgba(255,95,42,0.55)';
         ctx.beginPath();
-        ctx.arc(0, 0, hazard.r, 0, Math.PI * 2);
+        for (let index = 0; index <= 26; index += 1) {
+          const angle = (index / 26) * Math.PI * 2;
+          const wave = Math.sin(t * 3.2 + angle * 4) * 0.06 * wobble
+            + Math.cos(t * 1.9 + angle * 7) * 0.04 * wobble;
+          const rr = outerRadius * (1 + wave);
+          const px = Math.cos(angle) * rr;
+          const py = Math.sin(angle) * rr;
+          if (index === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.fillStyle = `rgba(255,170,70,${0.45 + Math.sin(t * 4.5) * 0.12})`;
+        ctx.beginPath();
+        ctx.arc(Math.sin(t * 2.1) * 3, Math.cos(t * 2.6) * 3, hazard.r * 0.55, 0, Math.PI * 2);
         ctx.fill();
       } else if (hazard.kind === 'healing_zone') {
         ctx.strokeStyle = '#35ff6f';
@@ -2304,18 +2561,21 @@
     rooms.forEach(room => {
       const x = originX + room.gx * (size + gap);
       const y = originY + room.gy * (size + gap);
-      if (!room.explored) {
+      if (room.type === 'ladder' && !room.explored) {
+        ctx.globalAlpha = 0.55;
+        ctx.fillStyle = '#fff04a';
+      } else if (!room.explored) {
         ctx.globalAlpha = 0.25;
         ctx.fillStyle = '#001018';
+      } else if (room.type === 'ladder') {
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = room === currentRoom ? '#ffff00' : '#fff04a';
       } else if (room === currentRoom) {
         ctx.globalAlpha = 1;
         ctx.fillStyle = '#00ffff';
       } else if (room.type === 'god') {
         ctx.globalAlpha = 0.95;
         ctx.fillStyle = '#ffffff';
-      } else if (room.type === 'ladder') {
-        ctx.globalAlpha = 0.95;
-        ctx.fillStyle = '#7dff9e';
       } else if (room.type === 'treasure') {
         ctx.globalAlpha = 0.95;
         ctx.fillStyle = '#ffaa00';
@@ -2327,6 +2587,14 @@
         ctx.fillStyle = '#0a3344';
       }
       ctx.fillRect(x, y, size, size);
+      if (room.type === 'ladder') {
+        ctx.globalAlpha = room.explored ? 1 : 0.7;
+        ctx.fillStyle = '#fff700';
+        ctx.font = 'bold 9px system-ui';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('★', x + size / 2, y + size / 2);
+      }
       if (room.visited) {
         ctx.strokeStyle = 'rgba(0,255,255,0.5)';
         ctx.lineWidth = 1;
@@ -2439,6 +2707,7 @@
       });
       manager.registerScreen('actionBar', { create: () => makeContainer(view.actionBar), validStates: ['play'] });
       manager.registerScreen('start', { create: () => makeContainer(view.start), validStates: ['menu'] });
+      manager.registerScreen('charSelect', { create: () => makeContainer(view.charSelect), validStates: ['charselect'] });
       manager.registerScreen('dead', { create: () => makeContainer(view.dead), validStates: ['dead'] });
       manager.registerScreen('win', { create: () => makeContainer(view.win), validStates: ['win'] });
     }
@@ -2448,6 +2717,16 @@
         activeState = state || 'menu';
         if (manager && typeof manager.onGameStateChange === 'function') manager.onGameStateChange(state);
         else fallbackState(state);
+        if (state === 'menu') {
+          view.start.classList.remove('hidden');
+          view.charSelect?.classList.add('hidden');
+        } else if (state === 'charselect') {
+          view.start.classList.add('hidden');
+          view.charSelect?.classList.remove('hidden');
+        } else {
+          view.start.classList.add('hidden');
+          view.charSelect?.classList.add('hidden');
+        }
       },
       setHudUpdateHook(hook) {
         hudUpdateHook = typeof hook === 'function' ? hook : null;
@@ -2473,17 +2752,8 @@
         view.continueBtn?.addEventListener('click', handlers.onContinue);
         view.deleteRunBtn?.addEventListener('click', handlers.onDeleteRun);
         // New main-menu nav
-        view.newRunBtn?.addEventListener('click', () => {
-          view.start.classList.add('hidden');
-          view.charSelect?.classList.remove('hidden');
-        });
-        view.charBackBtn?.addEventListener('click', () => {
-          view.charSelect?.classList.add('hidden');
-          view.start.classList.remove('hidden');
-        });
-        view.settingsBtn?.addEventListener('click', () => {
-          // placeholder — extend later
-        });
+        view.newRunBtn?.addEventListener('click', handlers.onOpenCharacterSelect);
+        view.charBackBtn?.addEventListener('click', handlers.onCloseCharacterSelect);
         menuBound = true;
       },
       bindRestartActions(onRestart) {
@@ -2712,6 +2982,7 @@
 
   function isBlocked(x, y, r) {
     if (walls.some(wall => circleRect(x, y, r, wall.x, wall.y, wall.w, wall.h))) return true;
+    if (structures.some(structure => circleRect(x, y, r, structure.x - structure.w / 2, structure.y - structure.h / 2, structure.w, structure.h))) return true;
     return destructibles.some(prop => !prop.broken && !prop.hidden && circleRect(x, y, r, prop.x - prop.r, prop.y - prop.r, prop.r * 2, prop.r * 2));
   }
 

@@ -97,33 +97,128 @@
       <button id="settingsBtn" class="nav-btn nav-btn--minor">SETTINGS</button>
     </div>
     <span id="runSummary" class="run-summary-line"></span>
-    <div class="hint">
-      <span class="kbd">WASD</span> move &bull;
-      <span class="kbd">LMB</span> sword &bull;
-      <span class="kbd">RMB</span> laser &bull;
-      <span class="kbd">R</span> smash
-    </div>
   </div><!-- /.menu-content -->
 </div>
 
 <!-- Character select screen -->
 <div id="charSelect" class="overlay hidden">
   <canvas id="charBg"></canvas>
-  <div class="menu-content">
+  <div class="menu-content charselect-layout">
     <button id="charBackBtn" class="back-btn">&#8592; BACK</button>
     <h2 class="screen-title">CHOOSE YOUR WARRIOR</h2>
-    <div class="choose" id="choose">
-      <button data-char="thorn_knight" class="sel" data-rarity="knight">THORN KNIGHT<small>Bleed knight. Current kit.</small></button>
-      <button data-char="metao" data-rarity="wizard">METAO<small>Wizard king. Fire, disks, chaos blasts.</small></button>
-      <button data-char="granialla" data-rarity="god">GRANIALLA<small>Locked until GOD is killed.</small></button>
-    </div>
-    <div class="seedrow">
-      <label>SEED</label>
-      <input id="seed" placeholder="random">
-      <button id="go">ENTER DUNGEON</button>
-    </div>
-    <div id="deleteRunRow" class="continue-row hidden">
-      <button id="deleteRunBtn" class="alt danger">DELETE ACTIVE RUN</button>
+
+    <div class="char-cards" id="choose">
+
+      <!-- Thorn Knight -->
+      <button class="char-card sel" data-char="thorn_knight" data-rarity="knight">
+        <div class="char-card-header">
+          <span class="char-card-name">THORN KNIGHT</span>
+          <span class="char-card-tag knight-tag">KNIGHT</span>
+        </div>
+        <p class="char-card-lore">A bleed-forged warrior who turns wounds into weapons. The longer the fight, the deadlier he becomes.</p>
+        <div class="char-stats">
+          <div class="char-stat-row">
+            <span class="stat-label">HP</span>
+            <div class="stat-bar"><div class="stat-fill" style="width:66%;background:#c06060"></div></div>
+          </div>
+          <div class="char-stat-row">
+            <span class="stat-label">DMG</span>
+            <div class="stat-bar"><div class="stat-fill" style="width:66%;background:#c08040"></div></div>
+          </div>
+          <div class="char-stat-row">
+            <span class="stat-label">SPD</span>
+            <div class="stat-bar"><div class="stat-fill" style="width:66%;background:#8080c0"></div></div>
+          </div>
+          <div class="char-stat-row">
+            <span class="stat-label">RANGE</span>
+            <div class="stat-bar"><div class="stat-fill" style="width:40%;background:#60a080"></div></div>
+          </div>
+        </div>
+        <div class="char-skills">
+          <span class="skill-pip">⚔ Slash</span>
+          <span class="skill-pip">🩸 Blood Beam</span>
+          <span class="skill-pip">💥 Crimson Smash</span>
+        </div>
+        <small class="char-card-hint">Starter · bleed stacks, close range</small>
+      </button>
+
+      <!-- Metao -->
+      <button class="char-card" data-char="metao" data-rarity="wizard">
+        <div class="char-card-header">
+          <span class="char-card-name">METAO</span>
+          <span class="char-card-tag wizard-tag">WIZARD</span>
+        </div>
+        <p class="char-card-lore">Wizard king of chaos and fire. Low raw damage but disks and blasts reward aggressive play.</p>
+        <div class="char-stats">
+          <div class="char-stat-row">
+            <span class="stat-label">HP</span>
+            <div class="stat-bar"><div class="stat-fill" style="width:66%;background:#c06060"></div></div>
+          </div>
+          <div class="char-stat-row">
+            <span class="stat-label">DMG</span>
+            <div class="stat-bar"><div class="stat-fill" style="width:33%;background:#c08040"></div></div>
+          </div>
+          <div class="char-stat-row">
+            <span class="stat-label">SPD</span>
+            <div class="stat-bar"><div class="stat-fill" style="width:66%;background:#8080c0"></div></div>
+          </div>
+          <div class="char-stat-row">
+            <span class="stat-label">RANGE</span>
+            <div class="stat-bar"><div class="stat-fill" style="width:90%;background:#60a080"></div></div>
+          </div>
+        </div>
+        <div class="char-skills">
+          <span class="skill-pip">🔥 Fire Balls</span>
+          <span class="skill-pip">💿 Power Disks</span>
+          <span class="skill-pip">🌀 Chaos Burst</span>
+        </div>
+        <small class="char-card-hint">0.5× damage · compensate with range</small>
+      </button>
+
+      <!-- Granialla -->
+      <button class="char-card" data-char="granialla" data-rarity="god">
+        <div class="char-card-header">
+          <span class="char-card-name">GRANIALLA</span>
+          <span class="char-card-tag god-tag">GOD</span>
+        </div>
+        <p class="char-card-lore">Ascended beyond death. Divine judgment and self-restoration — earned only by slaying GOD.</p>
+        <div class="char-stats">
+          <div class="char-stat-row">
+            <span class="stat-label">HP</span>
+            <div class="stat-bar"><div class="stat-fill" style="width:66%;background:#c06060"></div></div>
+          </div>
+          <div class="char-stat-row">
+            <span class="stat-label">DMG</span>
+            <div class="stat-bar"><div class="stat-fill" style="width:66%;background:#c08040"></div></div>
+          </div>
+          <div class="char-stat-row">
+            <span class="stat-label">SPD</span>
+            <div class="stat-bar"><div class="stat-fill" style="width:66%;background:#8080c0"></div></div>
+          </div>
+          <div class="char-stat-row">
+            <span class="stat-label">RANGE</span>
+            <div class="stat-bar"><div class="stat-fill" style="width:66%;background:#60a080"></div></div>
+          </div>
+        </div>
+        <div class="char-skills">
+          <span class="skill-pip">⚡ Smite</span>
+          <span class="skill-pip">⚖ Blade Justice</span>
+          <span class="skill-pip">✨ Healing Zone</span>
+        </div>
+        <small class="char-card-hint">Unlock by killing GOD</small>
+      </button>
+
+    </div><!-- /.char-cards -->
+
+    <div class="charselect-bottom">
+      <div class="seedrow">
+        <label>SEED</label>
+        <input id="seed" placeholder="random">
+        <button id="go">ENTER DUNGEON</button>
+      </div>
+      <div id="deleteRunRow" class="continue-row hidden">
+        <button id="deleteRunBtn" class="alt danger">DELETE ACTIVE RUN</button>
+      </div>
     </div>
     <!-- legacy hidden row kept for JS compatibility -->
     <div id="continueRow" class="hidden"></div>
@@ -131,7 +226,318 @@
 </div>
 
 <script src="Koz_Engine_Lib/Core/koz-engine.global.js"></script>
+<!-- Settings modal -->
+<div id="settingsModal" class="modal-backdrop hidden">
+  <div class="modal-box">
+    <button class="modal-close" id="settingsClose">&#10005;</button>
+    <h2 class="screen-title" style="margin-bottom:18px">SETTINGS</h2>
+
+    <!-- Tab bar -->
+    <div class="stab-bar" role="tablist">
+      <button class="stab active" data-tab="controls" role="tab">Controls</button>
+      <button class="stab" data-tab="volume"   role="tab">Volume</button>
+      <button class="stab" data-tab="access"   role="tab">Accessibility</button>
+      <button class="stab" data-tab="data"     role="tab">Data</button>
+    </div>
+
+    <!-- Controls tab -->
+    <div class="stab-panel" id="stab-controls">
+      <p class="stab-hint">Click an action then press any key to remap.</p>
+      <table class="bind-table">
+        <tbody>
+          <tr><td class="bind-label">Move Up</td>   <td><button class="bind-btn" data-action="up">W</button></td></tr>
+          <tr><td class="bind-label">Move Down</td> <td><button class="bind-btn" data-action="down">S</button></td></tr>
+          <tr><td class="bind-label">Move Left</td> <td><button class="bind-btn" data-action="left">A</button></td></tr>
+          <tr><td class="bind-label">Move Right</td><td><button class="bind-btn" data-action="right">D</button></td></tr>
+          <tr><td class="bind-label">Slash</td>     <td><button class="bind-btn" data-action="slash">LMB</button></td></tr>
+          <tr><td class="bind-label">Laser beam</td><td><button class="bind-btn" data-action="laser">RMB</button></td></tr>
+          <tr><td class="bind-label">Smash</td>     <td><button class="bind-btn" data-action="smash">R</button></td></tr>
+        </tbody>
+      </table>
+      <button class="settings-reset" id="resetBindings">Reset to defaults</button>
+    </div>
+
+    <!-- Volume tab -->
+    <div class="stab-panel hidden" id="stab-volume">
+      <div class="vol-row">
+        <label class="vol-label" for="volMaster">Master</label>
+        <input class="vol-slider" id="volMaster" type="range" min="0" max="100" value="80">
+        <span class="vol-val" id="volMasterVal">80</span>
+      </div>
+      <div class="vol-row">
+        <label class="vol-label" for="volSfx">SFX</label>
+        <input class="vol-slider" id="volSfx" type="range" min="0" max="100" value="80">
+        <span class="vol-val" id="volSfxVal">80</span>
+      </div>
+      <div class="vol-row">
+        <label class="vol-label" for="volMusic">Music</label>
+        <input class="vol-slider" id="volMusic" type="range" min="0" max="100" value="60">
+        <span class="vol-val" id="volMusicVal">60</span>
+      </div>
+    </div>
+
+    <!-- Data tab -->
+    <div class="stab-panel hidden" id="stab-data">
+      <div class="data-row">
+        <span class="data-label">Export save</span>
+        <span class="data-desc">Download your progress as a JSON file.</span>
+        <button class="settings-reset" id="dataExport">Export</button>
+      </div>
+      <div class="data-row">
+        <span class="data-label">Import save</span>
+        <span class="data-desc">Restore progress from a JSON file.</span>
+        <button class="settings-reset" id="dataImport">Import</button>
+        <input type="file" id="dataImportFile" accept=".json" style="display:none">
+      </div>
+      <div class="data-row data-row--danger">
+        <span class="data-label">Delete all data</span>
+        <span class="data-desc">Wipes run and meta progress. Cannot be undone.</span>
+        <button class="settings-reset settings-reset--danger" id="dataDelete">Delete</button>
+      </div>
+    </div>
+
+    <!-- Accessibility tab -->
+    <div class="stab-panel hidden" id="stab-access">
+      <div class="access-row">
+        <span class="access-label">Reduce flashing</span>
+        <label class="toggle"><input type="checkbox" id="accReduceFlash"><span class="toggle-track"><span class="toggle-thumb"></span></span></label>
+      </div>
+      <div class="access-row">
+        <span class="access-label">High contrast HUD</span>
+        <label class="toggle"><input type="checkbox" id="accHighContrast"><span class="toggle-track"><span class="toggle-thumb"></span></span></label>
+      </div>
+      <div class="access-row">
+        <span class="access-label">Screen shake</span>
+        <label class="toggle"><input type="checkbox" id="accScreenShake" checked><span class="toggle-track"><span class="toggle-thumb"></span></span></label>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script src="js/game.js"></script>
+<script>
+(function Settings() {
+  const STORE_KEY = 'neonyke:settings';
+
+  const DEFAULT_BINDINGS = { up:'w', down:'s', left:'a', right:'d', smash:'r', slash:'lmb', laser:'rmb' };
+  const DEFAULT_VOLUME   = { master:80, sfx:80, music:60 };
+  const DEFAULT_ACCESS   = { reduceFlash:false, highContrast:false, screenShake:true };
+
+  let bindings = { ...DEFAULT_BINDINGS };
+  let volume   = { ...DEFAULT_VOLUME };
+  let access   = { ...DEFAULT_ACCESS };
+
+  function load() {
+    try {
+      const s = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
+      if (!s) return;
+      if (s.bindings) bindings = { ...DEFAULT_BINDINGS, ...s.bindings };
+      if (s.volume)   volume   = { ...DEFAULT_VOLUME,   ...s.volume };
+      if (s.access)   access   = { ...DEFAULT_ACCESS,   ...s.access };
+    } catch {}
+  }
+
+  function save() {
+    localStorage.setItem(STORE_KEY, JSON.stringify({ bindings, volume, access }));
+  }
+
+  function applyAccess() {
+    document.documentElement.classList.toggle('acc-reduce-flash',  access.reduceFlash);
+    document.documentElement.classList.toggle('acc-high-contrast', access.highContrast);
+  }
+
+  load();
+  applyAccess();
+
+  window.NeoSettings = { getBindings: () => bindings, getAccess: () => access, getVolume: () => volume };
+
+  // ── Modal open / close ─────────────────────────────────────────────────
+  const modal = document.getElementById('settingsModal');
+  const SettingsUIManagerCtor = window.KozEngine?.UI?.uiManager?.UIManager || window.UIManager || null;
+  const settingsUi = SettingsUIManagerCtor ? new SettingsUIManagerCtor({ autoRuntimeInit: false }) : null;
+  let settingsOpen = false;
+
+  if (settingsUi && typeof settingsUi.registerScreen === 'function') {
+    const modalScreen = {
+      show() {
+        modal.classList.remove('hidden');
+        modal.style.pointerEvents = 'auto';
+        settingsOpen = true;
+      },
+      hide() {
+        modal.classList.add('hidden');
+        modal.style.pointerEvents = '';
+        settingsOpen = false;
+        save();
+      },
+    };
+    settingsUi.registerScreen('settingsModal', {
+      create: () => modalScreen,
+      validStates: [],
+    });
+    modalScreen.hide();
+  }
+
+  function openSettings() {
+    stopListening();
+    if (settingsUi && typeof settingsUi.showScreen === 'function') {
+      settingsUi.showScreen('settingsModal');
+    }
+    else {
+      settingsOpen = true;
+      modal.classList.remove('hidden');
+      modal.style.pointerEvents = 'auto';
+    }
+  }
+
+  function closeSettings() {
+    stopListening();
+    if (settingsUi && typeof settingsUi.hideScreen === 'function') {
+      settingsUi.hideScreen('settingsModal');
+    }
+    else {
+      settingsOpen = false;
+      modal.classList.add('hidden');
+      modal.style.pointerEvents = '';
+      save();
+    }
+  }
+
+  document.getElementById('settingsBtn').addEventListener('click', openSettings);
+  document.getElementById('settingsClose').addEventListener('click', closeSettings);
+  modal.addEventListener('click', e => { if (e.target === modal) closeSettings(); });
+  window.addEventListener('keydown', e => { if (e.key === 'Escape' && settingsOpen) closeSettings(); });
+
+  // ── Tabs ───────────────────────────────────────────────────────────────
+  modal.querySelectorAll('.stab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      modal.querySelectorAll('.stab').forEach(b => b.classList.remove('active'));
+      modal.querySelectorAll('.stab-panel').forEach(p => p.classList.add('hidden'));
+      btn.classList.add('active');
+      document.getElementById('stab-' + btn.dataset.tab).classList.remove('hidden');
+    });
+  });
+
+  // ── Key binding ────────────────────────────────────────────────────────
+  let listeningBtn = null;
+
+  function label(action) {
+    const v = bindings[action];
+    return v === 'lmb' ? 'LMB' : v === 'rmb' ? 'RMB' : v.toUpperCase();
+  }
+
+  function refreshBindButtons() {
+    modal.querySelectorAll('.bind-btn').forEach(b => { b.textContent = label(b.dataset.action); });
+  }
+
+  function stopListening() {
+    if (!listeningBtn) return;
+    listeningBtn.classList.remove('listening');
+    listeningBtn = null;
+    refreshBindButtons();
+  }
+
+  refreshBindButtons();
+
+  modal.querySelectorAll('.bind-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (listeningBtn === btn) { stopListening(); return; }
+      stopListening();
+      listeningBtn = btn;
+      btn.classList.add('listening');
+      btn.textContent = '…';
+    });
+  });
+
+  window.addEventListener('keydown', e => {
+    if (!listeningBtn) return;
+    if (e.key === 'Escape') { stopListening(); return; }
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    bindings[listeningBtn.dataset.action] = e.key.toLowerCase();
+    stopListening();
+    save();
+  }, true);
+
+  document.getElementById('stab-controls').addEventListener('mousedown', e => {
+    if (!listeningBtn) return;
+    const action = listeningBtn.dataset.action;
+    if (action !== 'slash' && action !== 'laser') return;
+    e.preventDefault();
+    bindings[action] = e.button === 2 ? 'rmb' : 'lmb';
+    stopListening();
+    save();
+  }, true);
+
+  document.getElementById('resetBindings').addEventListener('click', () => {
+    bindings = { ...DEFAULT_BINDINGS };
+    stopListening();
+    save();
+  });
+
+  // ── Volume ─────────────────────────────────────────────────────────────
+  [['volMaster','volMasterVal','master'],['volSfx','volSfxVal','sfx'],['volMusic','volMusicVal','music']].forEach(([id, valId, key]) => {
+    const el = document.getElementById(id), val = document.getElementById(valId);
+    el.value = volume[key];
+    val.textContent = volume[key];
+    el.addEventListener('input', () => { volume[key] = Number(el.value); val.textContent = el.value; save(); });
+  });
+
+  // ── Accessibility ──────────────────────────────────────────────────────
+  [['accReduceFlash','reduceFlash'],['accHighContrast','highContrast'],['accScreenShake','screenShake']].forEach(([id, key]) => {
+    const el = document.getElementById(id);
+    el.checked = access[key];
+    el.addEventListener('change', () => { access[key] = el.checked; save(); applyAccess(); });
+  });
+
+  // ── Data ───────────────────────────────────────────────────────────────
+  document.getElementById('dataExport').addEventListener('click', async () => {
+    const store = window._neoSaveStore;
+    const [meta, run] = await Promise.all([
+      store ? store.get('meta') : Promise.resolve(null),
+      store ? store.get('run')  : Promise.resolve(null),
+    ]);
+    const blob = new Blob([JSON.stringify({ meta, run }, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `neonyke-save-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+
+  document.getElementById('dataImport').addEventListener('click', () => {
+    document.getElementById('dataImportFile').click();
+  });
+
+  document.getElementById('dataImportFile').addEventListener('change', async e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+      const store = window._neoSaveStore;
+      if (!store) { alert('Save system not ready. Start a game first.'); return; }
+      if (data.meta) await store.put('meta', data.meta);
+      if (data.run)  await store.put('run',  data.run);
+      alert('Save imported. Reload the page to apply.');
+    } catch {
+      alert('Invalid save file.');
+    }
+    e.target.value = '';
+  });
+
+  document.getElementById('dataDelete').addEventListener('click', async () => {
+    if (!confirm('Delete ALL save data? This cannot be undone.')) return;
+    const store = window._neoSaveStore;
+    if (store) {
+      await Promise.all([store.delete('meta'), store.delete('run')]);
+    }
+    localStorage.removeItem('neonyke:meta');
+    localStorage.removeItem('neonyke:run');
+    alert('Save data deleted. Reload the page.');
+  });
+})();
+</script>
 <script>
 (function menuBackground() {
   const bg  = document.getElementById('menuBg');
