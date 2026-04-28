@@ -25,7 +25,7 @@
       rarity: 'knight',
       startItem: 'neo_knife',
       damageMultiplier: 1,
-      skills: { melee: 'Slash', laser: 'Blood Beam', smash: 'Crimson Smash' },
+      skills: { melee: 'Slash', laser: 'Blood Beam', smash: 'Crimson Smash', dash: 'Dash' },
     },
     metao: {
       key: 'metao',
@@ -33,7 +33,7 @@
       rarity: 'wizard',
       startItem: 'orb_of_blood',
       damageMultiplier: 0.5,
-      skills: { melee: 'Fire Balls', laser: 'Power Disks', smash: 'Chaos Burst' },
+      skills: { melee: 'Fire Balls', laser: 'Power Disks', smash: 'Chaos Burst', dash: 'Dash' },
     },
     granialla: {
       key: 'granialla',
@@ -41,7 +41,7 @@
       rarity: 'god',
       startItem: 'neo_knife',
       damageMultiplier: 1,
-      skills: { melee: 'Smite', laser: 'Blade Justice', smash: 'Healing Zone' },
+      skills: { melee: 'Smite', laser: 'Blade Justice', smash: 'Healing Zone', dash: 'Dash' },
       unlock: 'godslain',
     },
   };
@@ -199,12 +199,15 @@
     cdM: document.getElementById('cdM'),
     cdL: document.getElementById('cdL'),
     cdS: document.getElementById('cdS'),
+    cdD: document.getElementById('cdD'),
     timeMelee: document.getElementById('timeMelee'),
     timeLaser: document.getElementById('timeLaser'),
     timeSmash: document.getElementById('timeSmash'),
+    timeDash: document.getElementById('timeDash'),
     fillMelee: document.getElementById('fillMelee'),
     fillLaser: document.getElementById('fillLaser'),
     fillSmash: document.getElementById('fillSmash'),
+    fillDash: document.getElementById('fillDash'),
     bankCoins: document.getElementById('bankCoins'),
     bestFloor: document.getElementById('bestFloor'),
     saveState: document.getElementById('saveState'),
@@ -243,16 +246,19 @@
       hemes_scarf: document.getElementById('countHemesScarf'),
     },
     actionCards: {
+      dash: document.querySelector('[data-skill="dash"]'),
       melee: document.querySelector('[data-skill="melee"]'),
       laser: document.querySelector('[data-skill="laser"]'),
       smash: document.querySelector('[data-skill="smash"]'),
     },
     skillNames: {
+      dash: document.querySelector('[data-skill="dash"] .skill-name'),
       melee: document.querySelector('[data-skill="melee"] .skill-name'),
       laser: document.querySelector('[data-skill="laser"] .skill-name'),
       smash: document.querySelector('[data-skill="smash"] .skill-name'),
     },
     icons: {
+      dash: document.getElementById('iconDash'),
       melee: document.getElementById('iconMelee'),
       laser: document.getElementById('iconLaser'),
       smash: document.getElementById('iconSmash'),
@@ -270,7 +276,7 @@
   let currentRoom = null;
   let keys = {};
   let mouse = { x: 0, y: 0, worldX: 0, worldY: 0, down: false, right: false };
-  let cooldowns = { melee: 0, laser: 0, smash: 0 };
+  let cooldowns = { melee: 0, laser: 0, smash: 0, dash: 0 };
   let camera = { x: 0, y: 0 };
   let shake = 0;
   let shakeT = 0;
@@ -290,6 +296,7 @@
   let laserActive = false;
   let laserTime = 0;
   let laserTick = 0;
+  let dashKeyLatch = false;
   let chosenCharacter = 'thorn_knight';
   let destructibles = [];
   let hazards = [];
@@ -445,6 +452,9 @@
       swing: 0,
       swingA: 0,
       inv: 0,
+      dashTime: 0,
+      dashX: 0,
+      dashY: 0,
       coins: 0,
       level: 1,
       xp: 0,
@@ -580,10 +590,11 @@
     shopOffers = [];
     structures = [];
     decorations = [];
-    cooldowns = { melee: 0, laser: 0, smash: 0 };
+    cooldowns = { melee: 0, laser: 0, smash: 0, dash: 0 };
     laserActive = false;
     laserTime = 0;
     laserTick = 0;
+    dashKeyLatch = false;
     godTimer = 0;
     camera = { x: 0, y: 0 };
     shake = 0;
@@ -635,7 +646,8 @@
       structures = currentRoom.structures;
       decorations = currentRoom.decorations;
     }
-    cooldowns = snapshot.cooldowns || { melee: 0, laser: 0, smash: 0 };
+    cooldowns = snapshot.cooldowns || { melee: 0, laser: 0, smash: 0, dash: 0 };
+    cooldowns.dash = Number(cooldowns.dash || 0);
     laserActive = !!snapshot.laserActive;
     laserTime = snapshot.laserTime || 0;
     laserTick = snapshot.laserTick || 0;
@@ -649,6 +661,7 @@
     nextDoor = null;
     floorSkipPending = 0;
     teleportKeyLatch = false;
+    dashKeyLatch = false;
     updateItemUI();
     updateObjective();
     updateHud();
@@ -1293,6 +1306,9 @@
     playerData.attackPower = Number(playerData.attackPower || 0);
     playerData.attackSpeed = Number(playerData.attackSpeed || 1);
     playerData.roomDamageTaken = Number(playerData.roomDamageTaken || 0);
+    playerData.dashTime = Number(playerData.dashTime || 0);
+    playerData.dashX = Number(playerData.dashX || 0);
+    playerData.dashY = Number(playerData.dashY || 0);
     playerData.insuranceActive = !!playerData.insuranceActive;
     playerData.insuranceChargeKills = Number(playerData.insuranceChargeKills || 0);
     playerData.insuranceReady = playerData.insuranceReady !== false;
@@ -1508,9 +1524,28 @@
     }
     destructibles.forEach(prop => {
       if (!prop.broken && !prop.hidden && dist(player.x, player.y, prop.x, prop.y) <= ATTACKS.smash.radius + prop.r) {
-        damageDestructible(prop, 2);
+      damageDestructible(prop, 2);
       }
     });
+  }
+
+  function tryDash(moveX, moveY) {
+    if (cooldowns.dash > 0 || player.dashTime > 0) return;
+    const attackSpeed = getAttackSpeedValue();
+    const angle = Math.hypot(moveX, moveY) > 0.15
+      ? Math.atan2(moveY, moveX)
+      : Math.atan2(mouse.worldY - player.y, mouse.worldX - player.x);
+    const dashSpeed = (520 + player.attackSpeed * 28) * (godTimer > 0 ? 1.1 : 1);
+    player.dashTime = 0.16;
+    player.dashX = Math.cos(angle) * dashSpeed;
+    player.dashY = Math.sin(angle) * dashSpeed;
+    player.vx = player.dashX;
+    player.vy = player.dashY;
+    player.inv = Math.max(player.inv, 0.18);
+    cooldowns.dash = 1.8 / attackSpeed;
+    shake = Math.max(shake, 3);
+    shakeT = Math.max(shakeT, 0.08);
+    particles.push({ x: player.x, y: player.y, life: 0.28, ring: 18, c: '#fff06a' });
   }
 
   function spawnPlayerDiskBurst() {
@@ -1594,7 +1629,20 @@
         damageDestructible(current.ref, Math.max(2, Math.round(strikeDamage / 10)));
       }
       particles.push({ x: current.x, y: current.y, life: 0.32, ring: 18 + jumps * 3, c: '#cfdcff' });
-      particles.push({ life: 0.2, c: '#eaf2ff', line: { x1: fromX, y1: fromY, x2: current.x, y2: current.y, w: 2 + jumps * 0.4 } });
+      particles.push({
+        life: 0.24,
+        c: '#eaf2ff',
+        line: {
+          x1: fromX,
+          y1: fromY,
+          x2: current.x,
+          y2: current.y,
+          w: 4.5 + jumps * 0.7,
+          jag: 14 + jumps * 1.4,
+          seg: 7,
+          phase: rng() * Math.PI * 2,
+        },
+      });
       fromX = current.x;
       fromY = current.y;
       current = findNearestSmiteTarget(fromX, fromY, 170, hit);
@@ -1627,7 +1675,7 @@
   }
 
   function castHealingZone() {
-    hazards.push({ kind: 'healing_zone', x: player.x, y: player.y, r: 62, ttl: 6 });
+    hazards.push({ kind: 'healing_zone', x: player.x, y: player.y, r: 62, ttl: 6, healTick: 0.24, healAccum: 0, plusTick: 0.08 });
     particles.push({ x: player.x, y: player.y, life: 0.7, ring: 30, c: '#35ff6f' });
   }
 
@@ -1841,6 +1889,7 @@
     cooldowns.melee = Math.max(0, cooldowns.melee - dt);
     cooldowns.laser = Math.max(0, cooldowns.laser - dt);
     cooldowns.smash = Math.max(0, cooldowns.smash - dt);
+    cooldowns.dash = Math.max(0, cooldowns.dash - dt);
     if (godTimer > 0) godTimer = Math.max(0, godTimer - dt);
 
     const _b = window.NeoSettings?.getBindings();
@@ -1858,9 +1907,29 @@
       moveY = 0;
     }
 
-    const targetSpeed = 228 * (godTimer > 0 ? 1.25 : 1) * itemStats.moveSpeedMultiplier;
-    player.vx += (moveX * targetSpeed - player.vx) * 14 * dt;
-    player.vy += (moveY * targetSpeed - player.vy) * 14 * dt;
+    const dashKey = _b ? _b.dash : 'shift';
+    const dashHeld = !!keys[dashKey];
+    if (dashHeld && !dashKeyLatch) {
+      tryDash(moveX, moveY);
+      dashKeyLatch = true;
+    } else if (!dashHeld) {
+      dashKeyLatch = false;
+    }
+
+    if (player.dashTime > 0) {
+      player.dashTime = Math.max(0, player.dashTime - dt);
+      player.vx = player.dashX;
+      player.vy = player.dashY;
+      player.inv = Math.max(player.inv, 0.12);
+      if (player.dashTime <= 0) {
+        player.dashX = 0;
+        player.dashY = 0;
+      }
+    } else {
+      const targetSpeed = 228 * (godTimer > 0 ? 1.25 : 1) * itemStats.moveSpeedMultiplier;
+      player.vx += (moveX * targetSpeed - player.vx) * 14 * dt;
+      player.vy += (moveY * targetSpeed - player.vy) * 14 * dt;
+    }
 
     moveCircle(player, dt);
 
@@ -2624,8 +2693,38 @@
       }
       if (hazard.kind === 'healing_zone') {
         hazard.ttl -= dt;
+        hazard.plusTick = (hazard.plusTick ?? 0.08) - dt;
+        if (hazard.plusTick <= 0) {
+          const angle = rng() * Math.PI * 2;
+          const radius = rand(hazard.r * 0.82, 8);
+          const px = hazard.x + Math.cos(angle) * radius;
+          const py = hazard.y + Math.sin(angle) * radius;
+          particles.push({
+            x: px,
+            y: py,
+            life: 0.45,
+            text: '+',
+            c: '#47ff7d',
+            size: 14,
+            outline: 'rgba(5,35,10,0.7)',
+            vx: rand(-10, 10),
+            vy: rand(-42, -24),
+          });
+          hazard.plusTick = rand(0.16, 0.07);
+        }
         if (dist(player.x, player.y, hazard.x, hazard.y) < hazard.r) {
+          const before = player.hp;
           player.hp = Math.min(player.maxHp, player.hp + 8 * dt);
+          const healed = player.hp - before;
+          if (healed > 0) {
+            hazard.healAccum = (hazard.healAccum || 0) + healed;
+            hazard.healTick = (hazard.healTick ?? 0.24) - dt;
+            if (hazard.healTick <= 0) {
+              spawnHealPopup(player.x + rand(-10, 10), player.y - 22, hazard.healAccum);
+              hazard.healAccum = 0;
+              hazard.healTick = 0.24;
+            }
+          }
         }
         enemies.forEach(enemy => {
           if (dist(enemy.x, enemy.y, hazard.x, hazard.y) < hazard.r + enemy.r) {
@@ -2695,6 +2794,22 @@
       size,
       vx: rand(-14, 14),
       vy: -36 - (crit ? 10 : 0),
+    });
+  }
+
+  function spawnHealPopup(x, y, amount, opts = {}) {
+    const value = Math.max(0, Math.round((amount || 0) * (opts.scale || 8)));
+    if (value <= 0) return;
+    particles.push({
+      x,
+      y,
+      life: 0.5,
+      text: `+${value}`,
+      c: opts.color || '#47ff7d',
+      outline: opts.outline || 'rgba(5,35,10,0.8)',
+      size: opts.size || 15,
+      vx: rand(-8, 8),
+      vy: -44,
     });
   }
 
@@ -2918,6 +3033,7 @@
       ? (godTimer > 0 ? 0.72 : ATTACKS.laser.duration) / attackSpeed
       : (godTimer > 0 ? 2.8 : ATTACKS.laser.baseCooldown) / attackSpeed;
     const smashMax = (godTimer > 0 ? 2 : ATTACKS.smash.baseCooldown) / attackSpeed;
+    const dashMax = 1.8 / attackSpeed;
     uiController.setHudValues({
       floor,
       level: player.level,
@@ -2929,12 +3045,15 @@
       meleeCd: cooldowns.melee,
       laserCd: cooldowns.laser,
       smashCd: cooldowns.smash,
+      dashCd: cooldowns.dash,
       skills: {
         melee: { current: cooldowns.melee, max: meleeMax, active: false },
         laser: { current: laserActive ? laserTime : cooldowns.laser, max: laserMax, active: laserActive },
         smash: { current: cooldowns.smash, max: smashMax, active: false },
+        dash: { current: cooldowns.dash, max: dashMax, active: player.dashTime > 0 },
       },
     });
+    ui.skillNames.dash.textContent = character.skills.dash;
     ui.skillNames.melee.textContent = character.skills.melee;
     ui.skillNames.laser.textContent = character.skills.laser;
     ui.skillNames.smash.textContent = character.skills.smash;
@@ -3216,12 +3335,43 @@
         ctx.arc(Math.sin(t * 2.1) * 3, Math.cos(t * 2.6) * 3, hazard.r * 0.55, 0, Math.PI * 2);
         ctx.fill();
       } else if (hazard.kind === 'healing_zone') {
+        const t = Date.now() * 0.004 + (hazard.ttl || 0);
+        const pulse = 1 + Math.sin(t * 2.2) * 0.08;
+        const inner = hazard.r * 0.62 * pulse;
+        ctx.fillStyle = `rgba(80,255,140,${0.12 + Math.sin(t * 1.8) * 0.04})`;
+        ctx.beginPath();
+        ctx.arc(0, 0, inner, 0, Math.PI * 2);
+        ctx.fill();
+
         ctx.strokeStyle = '#35ff6f';
         ctx.shadowColor = '#35ff6f';
         ctx.shadowBlur = 18;
         ctx.lineWidth = 4;
         ctx.beginPath();
-        ctx.arc(0, 0, hazard.r, 0, Math.PI * 2);
+        ctx.arc(0, 0, hazard.r * pulse, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.globalAlpha = 0.8;
+        ctx.lineWidth = 2;
+        for (let i = 0; i < 6; i += 1) {
+          const a = t + i * (Math.PI * 2 / 6);
+          const px = Math.cos(a) * (hazard.r * 0.7);
+          const py = Math.sin(a) * (hazard.r * 0.7);
+          ctx.beginPath();
+          ctx.moveTo(px - 4, py);
+          ctx.lineTo(px + 4, py);
+          ctx.moveTo(px, py - 4);
+          ctx.lineTo(px, py + 4);
+          ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(-8, 0);
+        ctx.lineTo(8, 0);
+        ctx.moveTo(0, -8);
+        ctx.lineTo(0, 8);
         ctx.stroke();
       }
       ctx.restore();
@@ -3533,15 +3683,48 @@
   function drawParticles() {
     particles.forEach(particle => {
       if (particle.line) {
+        const line = particle.line;
+        const dx = line.x2 - line.x1;
+        const dy = line.y2 - line.y1;
+        const len = Math.hypot(dx, dy) || 1;
+        const nx = -dy / len;
+        const ny = dx / len;
+        const segs = Math.max(4, line.seg || 6);
+        const jitter = (line.jag || 12) * (0.65 + particle.life * 0.55);
+
         ctx.save();
-        ctx.globalAlpha = Math.min(1, particle.life * 1.8);
+        ctx.globalAlpha = Math.min(1, particle.life * 2.1);
         ctx.strokeStyle = particle.c || '#dfe8ff';
-        ctx.lineWidth = particle.line.w || 2;
+        ctx.lineWidth = (line.w || 4.5) + 3;
         ctx.shadowColor = particle.c || '#dfe8ff';
-        ctx.shadowBlur = 10;
+        ctx.shadowBlur = 18;
         ctx.beginPath();
-        ctx.moveTo(particle.line.x1, particle.line.y1);
-        ctx.lineTo(particle.line.x2, particle.line.y2);
+        ctx.moveTo(line.x1, line.y1);
+        for (let index = 1; index < segs; index += 1) {
+          const t = index / segs;
+          const wave = Math.sin((t * 18) + (line.phase || 0) + particle.life * 22 + index * 0.9);
+          const off = wave * jitter * (index % 2 === 0 ? 1 : -1);
+          const px = line.x1 + dx * t + nx * off;
+          const py = line.y1 + dy * t + ny * off;
+          ctx.lineTo(px, py);
+        }
+        ctx.lineTo(line.x2, line.y2);
+        ctx.stroke();
+
+        ctx.lineWidth = Math.max(2, (line.w || 4.5) * 0.5);
+        ctx.shadowBlur = 8;
+        ctx.strokeStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.moveTo(line.x1, line.y1);
+        for (let index = 1; index < segs; index += 1) {
+          const t = index / segs;
+          const wave = Math.sin((t * 18) + (line.phase || 0) + particle.life * 22 + index * 0.9);
+          const off = wave * jitter * 0.35 * (index % 2 === 0 ? 1 : -1);
+          const px = line.x1 + dx * t + nx * off;
+          const py = line.y1 + dy * t + ny * off;
+          ctx.lineTo(px, py);
+        }
+        ctx.lineTo(line.x2, line.y2);
         ctx.stroke();
         ctx.restore();
         return;
@@ -3728,6 +3911,10 @@
   }
 
   function drawActionIcons() {
+    drawPixelIcon(ui.icons.dash, '#fff06a', [
+      [1, 5], [2, 4], [3, 3], [4, 2], [5, 1], [5, 2], [6, 2], [7, 2],
+      [4, 4], [5, 4], [6, 4], [7, 4], [4, 6], [5, 6], [6, 6], [7, 6],
+    ]);
     drawPixelIcon(ui.icons.melee, '#00ffff', [
       [2, 6], [3, 5], [4, 4], [5, 3], [6, 2], [5, 4], [6, 3], [7, 2], [6, 5], [7, 4],
     ]);
@@ -3767,8 +3954,14 @@
     }
 
     function setSkillCard(name, current, max, active = false) {
-      const fill = name === 'melee' ? view.fillMelee : name === 'laser' ? view.fillLaser : view.fillSmash;
-      const time = name === 'melee' ? view.timeMelee : name === 'laser' ? view.timeLaser : view.timeSmash;
+      const fill = name === 'melee' ? view.fillMelee
+        : name === 'laser' ? view.fillLaser
+          : name === 'smash' ? view.fillSmash
+            : view.fillDash;
+      const time = name === 'melee' ? view.timeMelee
+        : name === 'laser' ? view.timeLaser
+          : name === 'smash' ? view.timeSmash
+            : view.timeDash;
       const card = view.actionCards[name];
       const ready = current <= 0.02 && !active;
       const ratio = max <= 0 ? 0 : clamp(current / max, 0, 1);
@@ -3889,13 +4082,16 @@
         view.cdM.textContent = payload.meleeCd.toFixed(1);
         view.cdL.textContent = payload.laserCd.toFixed(1);
         view.cdS.textContent = payload.smashCd.toFixed(1);
+        if (view.cdD) view.cdD.textContent = payload.dashCd.toFixed(1);
         if (payload.skills) {
           const melee = payload.skills.melee;
           const laser = payload.skills.laser;
           const smash = payload.skills.smash;
+          const dash = payload.skills.dash;
           if (melee) setSkillCard('melee', melee.current, melee.max, !!melee.active);
           if (laser) setSkillCard('laser', laser.current, laser.max, !!laser.active);
           if (smash) setSkillCard('smash', smash.current, smash.max, !!smash.active);
+          if (dash) setSkillCard('dash', dash.current, dash.max, !!dash.active);
         }
       },
       setDeadInfo(text) { view.deadInfo.textContent = text; },

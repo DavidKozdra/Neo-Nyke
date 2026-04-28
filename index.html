@@ -33,10 +33,20 @@
       <div>SLASH <b id="cdM">0.0</b></div>
       <div>LASER <b id="cdL">0.0</b></div>
       <div>SMASH <b id="cdS">0.0</b></div>
+      <div>SHIFT <b id="cdD">0.0</b></div>
     </div>
   </div>
 
   <div id="actionBar" aria-hidden="true">
+    <div class="skill-card" data-skill="dash">
+      <canvas id="iconDash" class="skill-icon" width="36" height="36"></canvas>
+      <div class="skill-fill" id="fillDash"></div>
+      <div class="skill-meta">
+        <span class="skill-key">SHIFT</span>
+        <span class="skill-name">Dash</span>
+      </div>
+      <b class="skill-time" id="timeDash">READY</b>
+    </div>
     <div class="skill-card" data-skill="melee">
       <canvas id="iconMelee" class="skill-icon" width="36" height="36"></canvas>
       <div class="skill-fill" id="fillMelee"></div>
@@ -261,6 +271,7 @@
           <tr><td class="bind-label">Move Down</td> <td><button class="bind-btn" data-action="down">S</button></td></tr>
           <tr><td class="bind-label">Move Left</td> <td><button class="bind-btn" data-action="left">A</button></td></tr>
           <tr><td class="bind-label">Move Right</td><td><button class="bind-btn" data-action="right">D</button></td></tr>
+          <tr><td class="bind-label">Dash</td>      <td><button class="bind-btn" data-action="dash">SHIFT</button></td></tr>
           <tr><td class="bind-label">Slash</td>     <td><button class="bind-btn" data-action="slash">LMB</button></td></tr>
           <tr><td class="bind-label">Laser beam</td><td><button class="bind-btn" data-action="laser">RMB</button></td></tr>
           <tr><td class="bind-label">Smash</td>     <td><button class="bind-btn" data-action="smash">R</button></td></tr>
@@ -331,7 +342,7 @@
 (function Settings() {
   const STORE_KEY = 'neonyke:settings';
 
-  const DEFAULT_BINDINGS = { up:'w', down:'s', left:'a', right:'d', smash:'r', slash:'lmb', laser:'rmb' };
+  const DEFAULT_BINDINGS = { up:'w', down:'s', left:'a', right:'d', dash:'shift', smash:'r', slash:'lmb', laser:'rmb' };
   const DEFAULT_VOLUME   = { master:80, sfx:80, music:60 };
   const DEFAULT_ACCESS   = { reduceFlash:false, highContrast:false, screenShake:true };
 

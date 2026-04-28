@@ -16,19 +16,19 @@ body {
 
 #wrap {
   position: relative;
-  width: 960px;
-  height: 640px;
-  margin: 28px auto;
+  width: 100dvw;
+  height: 100dvh;
+  margin: 0;
   box-shadow: 0 0 0 1px rgba(180,140,60,.25), 0 0 60px rgba(100,60,0,.35), inset 0 0 60px #000;
-  border-radius: 12px;
+  border-radius: 0;
   overflow: hidden;
   background: #000;
 }
 
 canvas {
   display: block;
-  width: 960px;
-  height: 640px;
+  width: 100dvw;
+  height: 100dvh;
   background: #02030a;
 }
 
@@ -1027,7 +1027,7 @@ button.alt.danger {
   }
 
   .skill-card {
-    width: 31%;
+    width: 24%;
     min-width: 0;
     padding: 8px;
   }
