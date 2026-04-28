@@ -271,10 +271,16 @@
       smash: document.querySelector('#invPanel [data-slot="smash"]'),
       dash: document.querySelector('#invPanel [data-slot="dash"]'),
     },
+    playerStats: document.getElementById('playerStats'),
+    coinDisplay: document.getElementById('coinDisplay'),
+    centerDisplay: document.getElementById('centerDisplay'),
     playerHpFill: document.getElementById('playerHpFill'),
     playerHpTxt: document.getElementById('playerHpTxt'),
     playerXpFill: document.getElementById('playerXpFill'),
     playerXpTxt: document.getElementById('playerXpTxt'),
+    coinCount: document.getElementById('coinCount'),
+    timerDisplay: document.getElementById('timerDisplay'),
+    floorDisplay: document.getElementById('floorDisplay'),
     seed: document.getElementById('seed'),
     go: document.getElementById('go'),
     continueRow: document.getElementById('continueRow'),
@@ -364,6 +370,8 @@
   let invKeyLatch = false;
   let activeShopTab = 'items';
   let draggingMoveKey = '';
+  let shopPanelDirty = false;
+  let inventoryPanelDirty = false;
 
   const saveStore = createSaveStore();
   window._neoSaveStore = saveStore;
@@ -485,6 +493,7 @@
       tab.addEventListener('click', () => {
         const nextTab = tab.dataset.tab || 'items';
         activeShopTab = nextTab;
+        markShopPanelDirty();
         renderShopPanel();
       });
     });
@@ -530,18 +539,37 @@
     return !!panel && !panel.classList.contains('hidden');
   }
 
+  function markShopPanelDirty() {
+    shopPanelDirty = true;
+  }
+
+  function markInventoryPanelDirty() {
+    inventoryPanelDirty = true;
+  }
+
   function setShopPanelOpen(open) {
     if (!ui.shopPanel) return;
     ui.shopPanel.classList.toggle('hidden', !open);
     ui.shopPanel.setAttribute('aria-hidden', open ? 'false' : 'true');
-    if (open) renderShopPanel();
+    if (open) {
+      markShopPanelDirty();
+      renderShopPanel();
+    }
   }
 
   function setInventoryPanelOpen(open) {
-    if (!ui.invPanel) return;
+    if (!ui.invPanel) {
+      console.warn('Inventory panel element not found');
+      return;
+    }
+    console.log('setInventoryPanelOpen called with:', open);
     ui.invPanel.classList.toggle('hidden', !open);
     ui.invPanel.setAttribute('aria-hidden', open ? 'false' : 'true');
-    if (open) renderInventoryPanel();
+    if (open) {
+      console.log('Rendering inventory panel');
+      markInventoryPanelDirty();
+      renderInventoryPanel();
+    }
   }
 
   function toggleShopPanel() {
@@ -616,6 +644,7 @@
       .map(heal => `<div class="shop-card"><h4>${heal.name}</h4><p>Restore ${heal.heal} HP.</p><button class="shop-buy" data-kind="heal" data-heal="${heal.heal}" data-cost="${heal.cost}">Buy ${heal.cost}</button></div>`)
       .join('');
     ui.shopHeals.innerHTML = healCards;
+    shopPanelDirty = false;
   }
 
   function renderInventoryPanel() {
@@ -653,6 +682,7 @@
       const def = MOVE_DEFS[moveKey];
       node.innerHTML = `<b>${slot.toUpperCase()}</b><p>${def?.name || 'None equipped'}</p>`;
     });
+    inventoryPanelDirty = false;
   }
 
   function equipMove(slot, moveKey) {
@@ -660,13 +690,17 @@
     if (MOVE_DEFS[moveKey].slot !== slot) return;
     if (!player.ownedMoves?.[moveKey]) return;
     player.equippedMoves[slot] = moveKey;
+    markInventoryPanelDirty();
     renderInventoryPanel();
     updateHud();
     scheduleRunSave();
   }
 
   function spendCoins(cost) {
-    if (player.coins < cost) return false;
+    if (player.coins < cost) {
+      particles.push({ x: player.x, y: player.y - 24, life: 0.7, text: 'Not enough coins!', c: '#ff4455' });
+      return false;
+    }
     player.coins -= cost;
     metaProgress.coins = Math.max(0, metaProgress.coins - cost);
     persistMetaSoon();
@@ -694,6 +728,7 @@
       if (!spendCoins(offer.cost)) return;
       offer.bought = true;
       player.ownedMoves[offer.key] = true;
+      markInventoryPanelDirty();
       particles.push({ x: player.x, y: player.y - 20, life: 0.6, text: `NEW MOVE: ${MOVE_DEFS[offer.key]?.name || offer.key}`, c: '#9fd7ff' });
     } else if (kind === 'heal') {
       const heal = Number(button.dataset.heal || 0);
@@ -705,6 +740,8 @@
       const gained = player.hp - before;
       if (gained > 0) spawnHealPopup(player.x + rand(-10, 10), player.y - 20, gained);
     }
+    markShopPanelDirty();
+    markInventoryPanelDirty();
     renderShopPanel();
     renderInventoryPanel();
     scheduleRunSave();
@@ -2265,6 +2302,7 @@
     player.hp = Math.min(player.maxHp, player.hp + 15);
     player.attackPower += 3;
     player.attackSpeed += 0.01;
+    markInventoryPanelDirty();
     particles.push({ x: player.x, y: player.y - 20, life: 0.9, text: `LV ${player.level}`, c: '#7dff9e' });
   }
 
@@ -2272,6 +2310,7 @@
     const item = itemRegistry.get(itemKey);
     if (!item) return;
     player.items[itemKey] = getItemCount(itemKey) + 1;
+    markInventoryPanelDirty();
     particles.push({ x: player.x, y: player.y - 28, life: 0.9, text: `${item.shortName} +1`, c: item.color || '#fff' });
 
     if (itemKey === 'wizards_paw') {
@@ -2497,8 +2536,8 @@
       particles.push({ x: player.x + rand(-6, 6), y: player.y + rand(-6, 6), life: 0.32, c: `hsl(${(Date.now() / 8) % 360},100%,65%)` });
     }
 
-    if (isPanelOpen(ui.shopPanel)) renderShopPanel();
-    if (isPanelOpen(ui.invPanel)) renderInventoryPanel();
+    if (isPanelOpen(ui.shopPanel) && shopPanelDirty) renderShopPanel();
+    if (isPanelOpen(ui.invPanel) && inventoryPanelDirty) renderInventoryPanel();
   }
 
   function tryChargedLadderWarp() {
@@ -3591,6 +3630,11 @@
       ui.playerXpTxt.textContent = player.xp + '/' + player.xpToNext;
     }
     
+    // Update center display
+    if (ui.coinCount) ui.coinCount.textContent = player.coins;
+    if (ui.timerDisplay) ui.timerDisplay.textContent = timeStr;
+    if (ui.floorDisplay) ui.floorDisplay.textContent = floor;
+    
     updateItemUI();
   }
 
@@ -3699,6 +3743,7 @@
     drawPlayer();
     drawPlayerLaser();
     drawParticles();
+    drawShopPrompt();
 
     ctx.restore();
     drawMinimap();
@@ -3711,6 +3756,29 @@
     if (godTimer > 0) drawGodModeBar();
     drawBossHealthBars();
     drawFloorTransition();
+  }
+
+  function drawShopPrompt() {
+    if (currentRoom?.type !== 'shop' || isPanelOpen(ui.shopPanel)) return;
+    const cx = ROOM_W / 2;
+    const cy = ROOM_H - 60;
+    ctx.save();
+    ctx.font = 'bold 15px system-ui';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const text = 'Press [E] to open shop';
+    const pad = 18;
+    const tw = ctx.measureText(text).width;
+    ctx.fillStyle = 'rgba(0,20,30,0.82)';
+    ctx.beginPath();
+    ctx.roundRect(cx - tw / 2 - pad, cy - 14, tw + pad * 2, 28, 8);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(0,255,255,0.45)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.fillStyle = '#00ffff';
+    ctx.fillText(text, cx, cy);
+    ctx.restore();
   }
 
   function drawFloor() {
@@ -4545,6 +4613,9 @@
       const inPlay = show === 'play' || show === 'pause';
       view.hud.classList.toggle('hidden', !inPlay);
       view.actionBar.classList.toggle('hidden', !inPlay);
+      view.playerStats?.classList.toggle('hidden', !inPlay);
+      view.coinDisplay?.classList.toggle('hidden', !inPlay);
+      view.centerDisplay?.classList.toggle('hidden', !inPlay);
     }
 
     if (manager && typeof manager.registerScreen === 'function') {

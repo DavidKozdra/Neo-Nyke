@@ -52,6 +52,77 @@ canvas {
   pointer-events: none;
 }
 
+/* Coin Display Top Left */
+.coin-display {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: linear-gradient(180deg, rgba(0,20,30,.9), rgba(0,10,20,.95));
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,200,0,.4);
+  border-radius: 8px;
+  box-shadow: 0 0 16px rgba(255,200,0,.15);
+  font-size: 16px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  z-index: 20;
+  color: #ffd700;
+  pointer-events: none;
+}
+
+.coin-icon {
+  font-size: 20px;
+}
+
+/* Center Timer and Floor Display */
+.center-display {
+  position: fixed;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 15;
+  pointer-events: none;
+}
+
+.timer-floor {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 24px;
+  background: linear-gradient(180deg, rgba(20,26,33,.88), rgba(12,16,21,.92));
+  backdrop-filter: blur(10px);
+  border: 2px solid rgba(0,255,255,.3);
+  border-radius: 12px;
+  box-shadow: 0 0 30px rgba(0,200,255,.2), inset 0 0 20px rgba(0,255,255,.08);
+  font-size: 20px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .12em;
+  color: #00ffff;
+}
+
+.timer-floor #timerDisplay {
+  font-size: 24px;
+  font-weight: 800;
+  color: #00ffff;
+  min-width: 60px;
+  text-align: center;
+}
+
+.timer-floor .separator {
+  color: #0ff6;
+  opacity: 0.6;
+}
+
+.timer-floor #floorDisplay {
+  color: #ffd700;
+}
+
 #objective {
   max-width: 220px;
   color: #9ff;
@@ -137,6 +208,15 @@ canvas {
   box-shadow: inset 0 0 8px #0ff3, 0 0 12px #0ff2;
 }
 
+#playerHpFill {
+  display: block;
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(90deg, #ff0055, #00ffcc);
+  box-shadow: 0 0 12px #0ff;
+  transition: width .18s;
+}
+
 .player-xp-bar {
   width: 180px;
   height: 14px;
@@ -208,6 +288,7 @@ canvas {
 .cds b {
   min-width: 32px;
   display: inline-block;
+}
 .hidden { display:none !important; }
 
 .game-panel {
@@ -357,9 +438,6 @@ canvas {
     grid-template-columns: 1fr;
   }
 }
-  text-align: right;
-  color: #0ff;
-}
 
 #actionBar {
   position: absolute;
@@ -369,6 +447,7 @@ canvas {
   display: flex;
   gap: 14px;
   pointer-events: none;
+  z-index: 18;
 }
 
 .skill-card {
