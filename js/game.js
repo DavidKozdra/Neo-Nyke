@@ -16,6 +16,8 @@
     smash: { baseCooldown: 5.4, radius: 148, damage: 46, bonus: 26 },
   };
 
+  const BOSS_TYPES = new Set(['god', 'queen_cult', 'bulk_golem', 'artificer_knave']);
+
   const CHARACTER_DEFS = {
     thorn_knight: {
       key: 'thorn_knight',
@@ -115,6 +117,10 @@
     winInfo: document.getElementById('winInfo'),
     deadRestart: document.querySelector('#dead .restart'),
     winRestart: document.querySelector('#win .restart'),
+    pause: document.getElementById('pause'),
+    pauseResume: document.getElementById('pauseResume'),
+    pauseSettings: document.getElementById('pauseSettings'),
+    pauseMain: document.getElementById('pauseMain'),
     actionBar: document.getElementById('actionBar'),
     seed: document.getElementById('seed'),
     go: document.getElementById('go'),
@@ -177,6 +183,8 @@
   let fade = 0;
   let fading = 0;
   let nextDoor = null;
+  let floorTransitionTime = 0;
+  let showFloorTransition = false;
   let lastTime = 0;
   let loopStarted = false;
   let laserActive = false;
@@ -247,6 +255,10 @@
       const key = event.key.toLowerCase();
       keys[key] = true;
       const b = window.NeoSettings?.getBindings();
+      if (event.key === 'Escape') {
+        if (gameState === 'play') { pauseGame(); return; }
+        if (gameState === 'pause') { resumeGame(); return; }
+      }
       if (b && key === b.smash && gameState === 'play') trySmash();
       else if (!b && key === 'r' && gameState === 'play') trySmash();
     });
@@ -267,12 +279,29 @@
     });
     uiController.bindRestartActions(() => location.reload());
 
+    ui.pauseResume.addEventListener('click', resumeGame);
+    ui.pauseSettings.addEventListener('click', () => {
+      document.getElementById('settingsBtn').click();
+    });
+    ui.pauseMain.addEventListener('click', () => {
+      clearTimeout(savePendingTimer);
+      void saveRunNow().then(() => { setGameState('menu'); });
+    });
+
     window.addEventListener('beforeunload', () => {
       if (gameState === 'play') {
         clearTimeout(savePendingTimer);
         saveRunNow();
       }
     });
+  }
+
+  function pauseGame() {
+    setGameState('pause');
+  }
+
+  function resumeGame() {
+    setGameState('play');
   }
 
   function createDefaultMeta() {
@@ -560,7 +589,13 @@
     startRoom.visited = true;
 
     const farRoom = findFarthestRoom(startRoom, roomMap);
-    farRoom.type = floor === MAX_FLOOR ? 'god' : 'ladder';
+    if (floor === MAX_FLOOR) {
+      farRoom.type = 'god';
+    } else if (floor % 3 === 0) {
+      farRoom.type = 'boss';
+    } else {
+      farRoom.type = 'ladder';
+    }
 
     const pool = rooms.filter(room => room !== startRoom && room !== farRoom);
     shuffle(pool);
@@ -804,6 +839,28 @@
     currentRoom.decorations = decorations;
   }
 
+  function findSafeSpawnPoint() {
+    const searchRadius = 120;
+    const testRadius = 18;
+    const angleStep = Math.PI / 8;
+    
+    if (!isBlocked(START_X, START_Y, testRadius)) {
+      return { x: START_X, y: START_Y };
+    }
+    
+    for (let angle = 0; angle < Math.PI * 2; angle += angleStep) {
+      for (let r = searchRadius * 0.25; r <= searchRadius; r += 20) {
+        const x = START_X + Math.cos(angle) * r;
+        const y = START_Y + Math.sin(angle) * r;
+        if (!isBlocked(x, y, testRadius)) {
+          return { x: clamp(x, WALL + testRadius, ROOM_W - WALL - testRadius), y: clamp(y, WALL + testRadius, ROOM_H - WALL - testRadius) };
+        }
+      }
+    }
+    
+    return { x: START_X, y: START_Y };
+  }
+
   function enterRoom(room) {
     syncCurrentRoomState();
     currentRoom = room;
@@ -822,6 +879,9 @@
     laserActive = false;
     laserTime = 0;
     laserTick = 0;
+    const safeSpawn = findSafeSpawnPoint();
+    player.x = safeSpawn.x;
+    player.y = safeSpawn.y;
 
     if (room.type === 'combat' && !room.cleared && enemies.length === 0) {
       spawnWave(3 + floor + irand(0, 1));
@@ -837,8 +897,38 @@
     if (room.type === 'ladder') {
       if (!room.cleared && enemies.length === 0) {
         spawnWave(4 + floor + irand(0, 1));
-      } else if (room.cleared && !pickups.some(pickup => pickup.type === 'ladder')) {
-        pickups.push({ x: ROOM_W / 2, y: ROOM_H / 2, type: 'ladder' });
+      }
+      if (room.cleared && !pickups.some(pickup => pickup.type === 'ladder')) {
+        let ladderX = ROOM_W / 2;
+        let ladderY = ROOM_H / 2;
+        let attempts = 0;
+        while (isBlocked(ladderX, ladderY, 16) && attempts < 20) {
+          const angle = Math.random() * Math.PI * 2;
+          const radius = 60 + Math.random() * 120;
+          ladderX = clamp(ROOM_W / 2 + Math.cos(angle) * radius, 60, ROOM_W - 60);
+          ladderY = clamp(ROOM_H / 2 + Math.sin(angle) * radius, 60, ROOM_H - 60);
+          attempts++;
+        }
+        pickups.push({ x: ladderX, y: ladderY, type: 'ladder' });
+      }
+    }
+
+    if (room.type === 'boss') {
+      if (!room.cleared && enemies.length === 0) {
+        spawnFloorBoss();
+      }
+      if (room.cleared && !pickups.some(pickup => pickup.type === 'ladder')) {
+        let ladderX = ROOM_W / 2;
+        let ladderY = ROOM_H / 2;
+        let attempts = 0;
+        while (isBlocked(ladderX, ladderY, 16) && attempts < 20) {
+          const angle = Math.random() * Math.PI * 2;
+          const radius = 60 + Math.random() * 120;
+          ladderX = clamp(ROOM_W / 2 + Math.cos(angle) * radius, 60, ROOM_W - 60);
+          ladderY = clamp(ROOM_H / 2 + Math.sin(angle) * radius, 60, ROOM_H - 60);
+          attempts++;
+        }
+        pickups.push({ x: ladderX, y: ladderY, type: 'ladder' });
       }
     }
 
@@ -866,16 +956,50 @@
     scheduleRunSave();
   }
 
+  function findSafeEnemySpawnPoint(preferredX, preferredY, radius = 18) {
+    if (!isBlocked(preferredX, preferredY, radius)) {
+      return { x: preferredX, y: preferredY };
+    }
+    
+    const searchAngles = 16;
+    const maxAttempts = 40;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const angle = (attempt / searchAngles) * Math.PI * 2;
+      const searchRadius = 30 + (attempt % 4) * 40;
+      const x = clamp(preferredX + Math.cos(angle) * searchRadius, WALL + radius, ROOM_W - WALL - radius);
+      const y = clamp(preferredY + Math.sin(angle) * searchRadius, WALL + radius, ROOM_H - WALL - radius);
+      if (!isBlocked(x, y, radius)) {
+        return { x, y };
+      }
+    }
+    
+    return null;
+  }
+
   function spawnWave(count) {
     for (let index = 0; index < count; index += 1) {
       const angle = rng() * Math.PI * 2;
       const radius = 120 + rng() * 180;
       const x = clamp(ROOM_W / 2 + Math.cos(angle) * radius, 80, ROOM_W - 80);
       const y = clamp(ROOM_H / 2 + Math.sin(angle) * radius, 80, ROOM_H - 80);
+      const safeSpawn = findSafeEnemySpawnPoint(x, y, 15);
+      if (!safeSpawn) continue;
       const roll = rng();
-      const type = roll > 0.66 ? 'charger' : roll > 0.33 ? 'laser' : 'hunter';
-      spawnEnemy(type, x, y, rng() < 0.12);
+      let type = 'hunter';
+      if (roll > 0.84) type = 'golem';
+      else if (roll > 0.68) type = 'sniper';
+      else if (roll > 0.5) type = 'knave';
+      else if (roll > 0.32) type = 'cult_mage';
+      else if (roll > 0.16) type = 'charger';
+      else if (roll > 0.08) type = 'laser';
+      spawnEnemy(type, safeSpawn.x, safeSpawn.y, rng() < 0.12);
     }
+  }
+
+  function spawnFloorBoss() {
+    const bossType = floor <= 3 ? 'queen_cult' : floor <= 6 ? 'bulk_golem' : 'artificer_knave';
+    const safeSpawn = findSafeEnemySpawnPoint(ROOM_W / 2, ROOM_H / 2 - 40, 15);
+    if (safeSpawn) spawnEnemy(bossType, safeSpawn.x, safeSpawn.y, false);
   }
 
   function spawnEnemy(type, x, y, elite = false) {
@@ -904,6 +1028,12 @@
       dashTime: 0,
       dashAngle: 0,
       dashHit: false,
+      swingTime: 0,
+      summonCd: 0,
+      phase: 1,
+      splitReady: false,
+      spawnedFromBulk: false,
+      bleedImmune: false,
       state: 'idle',
     };
 
@@ -914,6 +1044,67 @@
       base.speed = 108;
       base.dmg = 18;
       base.attackCd = 1.4;
+    } else if (type === 'cult_mage') {
+      base.r = 17;
+      base.hp = 84;
+      base.max = 84;
+      base.speed = 58;
+      base.dmg = 18;
+      base.attackCd = 1.8;
+    } else if (type === 'knave') {
+      base.r = 16;
+      base.hp = 68;
+      base.max = 68;
+      base.speed = 118;
+      base.dmg = 14;
+      base.attackCd = 1.3;
+    } else if (type === 'sniper') {
+      base.r = 15;
+      base.hp = 58;
+      base.max = 58;
+      base.speed = 104;
+      base.dmg = 12;
+      base.attackCd = 1.55;
+    } else if (type === 'golem') {
+      base.r = 20;
+      base.hp = 132;
+      base.max = 132;
+      base.speed = 70;
+      base.dmg = 18;
+      base.attackCd = 1.9;
+      base.bleedImmune = true;
+    } else if (type === 'cult_follower') {
+      base.r = 12;
+      base.hp = 34;
+      base.max = 34;
+      base.speed = 138;
+      base.dmg = 8;
+      base.attackCd = 0.85;
+    } else if (type === 'queen_cult') {
+      base.r = 38;
+      base.hp = 760;
+      base.max = 760;
+      base.speed = 96;
+      base.dmg = 20;
+      base.attackCd = 1.2;
+      base.summonCd = 2.4;
+    } else if (type === 'bulk_golem') {
+      base.r = 58;
+      base.hp = 1280;
+      base.max = 1280;
+      base.speed = 74;
+      base.dmg = 26;
+      base.attackCd = 1.6;
+      base.bleedImmune = true;
+      base.splitReady = true;
+    } else if (type === 'artificer_knave') {
+      base.r = 30;
+      base.hp = 940;
+      base.max = 940;
+      base.speed = 124;
+      base.dmg = 20;
+      base.attackCd = 1.2;
+      base.phase = 1;
     } else {
       const scale = 1 + (floor - 1) * 0.14;
       base.hp = Math.round(base.hp * scale);
@@ -932,7 +1123,12 @@
 
   function spawnGodBoss() {
     if (enemies.some(enemy => enemy.type === 'god')) return;
-    spawnEnemy('god', ROOM_W / 2, ROOM_H / 2 - 40, false);
+    const safeSpawn = findSafeEnemySpawnPoint(ROOM_W / 2, ROOM_H / 2 - 40, 15);
+    if (safeSpawn) spawnEnemy('god', safeSpawn.x, safeSpawn.y, false);
+  }
+
+  function isBossType(type) {
+    return BOSS_TYPES.has(type);
   }
 
   function migratePlayerData(source) {
@@ -1181,6 +1377,7 @@
   }
 
   function applyBleed(enemy, stacks, duration) {
+    if (enemy.bleedImmune) return;
     enemy.bleed = Math.min(6, enemy.bleed + stacks);
     enemy.bleedT = Math.max(enemy.bleedT, duration);
   }
@@ -1200,8 +1397,8 @@
       });
     }
 
-    dropCoins(enemy.x, enemy.y, enemy.type === 'god' ? 40 : enemy.elite ? 10 : 5);
-    grantXp(enemy.type === 'god' ? 40 : enemy.elite ? 12 : 6);
+    dropCoins(enemy.x, enemy.y, isBossType(enemy.type) ? 40 : enemy.elite ? 10 : 5);
+    grantXp(isBossType(enemy.type) ? 40 : enemy.elite ? 12 : 6);
 
     if (enemy.elite && rng() < 0.18) {
       pickups.push({ x: enemy.x, y: enemy.y, type: 'item', key: rollItemDrop({ elite: true }) });
@@ -1220,9 +1417,26 @@
       return;
     }
 
+    if (enemy.type === 'bulk_golem' && enemy.splitReady) {
+      const leftSpawn = findSafeEnemySpawnPoint(enemy.x - 70, enemy.y, 15);
+      const rightSpawn = findSafeEnemySpawnPoint(enemy.x + 70, enemy.y, 15);
+      if (leftSpawn) {
+        const left = spawnEnemy('golem', leftSpawn.x, leftSpawn.y, false);
+        left.spawnedFromBulk = true;
+        left.hp = Math.round(left.max * 0.9);
+        left.max = left.hp;
+      }
+      if (rightSpawn) {
+        const right = spawnEnemy('golem', rightSpawn.x, rightSpawn.y, false);
+        right.spawnedFromBulk = true;
+        right.hp = Math.round(right.max * 0.9);
+        right.max = right.hp;
+      }
+    }
+
     if (enemies.length === 0 && !currentRoom.cleared) {
       currentRoom.cleared = true;
-      if (currentRoom.type === 'ladder') {
+      if (currentRoom.type === 'ladder' || currentRoom.type === 'boss') {
         pickups.push({ x: ROOM_W / 2, y: ROOM_H / 2, type: 'ladder' });
       }
       updateObjective();
@@ -1317,6 +1531,8 @@
   function update(dt) {
     const itemStats = getItemStats();
     lavaAnimTime += dt;
+    floorTransitionTime += dt;
+    if (floorTransitionTime > 2.5) showFloorTransition = false;
     cooldowns.melee = Math.max(0, cooldowns.melee - dt);
     cooldowns.laser = Math.max(0, cooldowns.laser - dt);
     cooldowns.smash = Math.max(0, cooldowns.smash - dt);
@@ -1371,10 +1587,10 @@
       enemy.stun = Math.max(0, enemy.stun - dt);
       enemy.inv = Math.max(0, enemy.inv - dt);
 
-      if (itemStats.passiveBleedStacks > 0 && enemy.type !== 'god') {
+      if (!enemy.bleedImmune && itemStats.passiveBleedStacks > 0 && enemy.type !== 'god') {
         enemy.bleed = Math.max(enemy.bleed, itemStats.passiveBleedStacks);
         enemy.bleedT = Math.max(enemy.bleedT, 0.25);
-      } else if (itemStats.passiveBleedStacks > 0 && enemy.type === 'god') {
+      } else if (!enemy.bleedImmune && itemStats.passiveBleedStacks > 0 && enemy.type === 'god') {
         enemy.bleed = Math.max(enemy.bleed, Math.max(1, itemStats.passiveBleedStacks - 1));
         enemy.bleedT = Math.max(enemy.bleedT, 0.25);
       }
@@ -1383,6 +1599,13 @@
       if (!enemies.includes(enemy)) continue;
 
       if (enemy.type === 'god') updateGod(enemy, dt);
+      else if (enemy.type === 'queen_cult') updateCultQueenBoss(enemy, dt);
+      else if (enemy.type === 'bulk_golem') updateBulkGolemBoss(enemy, dt);
+      else if (enemy.type === 'artificer_knave') updateArtificerBoss(enemy, dt);
+      else if (enemy.type === 'cult_mage') updateCultMageEnemy(enemy, dt);
+      else if (enemy.type === 'knave') updateKnaveEnemy(enemy, dt);
+      else if (enemy.type === 'sniper') updateSniperEnemy(enemy, dt);
+      else if (enemy.type === 'golem') updateGolemEnemy(enemy, dt);
       else if (enemy.type === 'laser') updateLaserEnemy(enemy, dt);
       else if (enemy.type === 'charger') updateChargerEnemy(enemy, dt);
       else updateHunterEnemy(enemy, dt);
@@ -1412,6 +1635,12 @@
 
   function updateBleed(enemy, dt) {
     if (enemy.bleed <= 0) return 0;
+    if (enemy.bleedImmune) {
+      enemy.bleed = 0;
+      enemy.bleedT = 0;
+      enemy.bleedTick = 0;
+      return 0;
+    }
     enemy.bleedT -= dt;
     enemy.bleedTick -= dt;
     if (enemy.bleedTick <= 0) {
@@ -1442,6 +1671,326 @@
       const angle = Math.atan2(dy, dx);
       damagePlayer(enemy.dmg, angle, 160);
       enemy.attackCd = 1.05;
+    }
+  }
+
+  function updateCultMageEnemy(enemy, dt) {
+    const dx = player.x - enemy.x;
+    const dy = player.y - enemy.y;
+    const distance = Math.hypot(dx, dy) || 1;
+
+    if (enemy.stun > 0) {
+      enemy.vx *= 0.88;
+      enemy.vy *= 0.88;
+      return;
+    }
+
+    const hpPct = enemy.hp / enemy.max;
+    const desired = hpPct < 0.35 ? 360 : 270;
+    const retreat = hpPct < 0.35 && distance < desired ? -1 : 1;
+    const direction = distance < desired - 24 ? -retreat : distance > desired + 24 ? retreat : 0;
+    steerEnemy(enemy, dx / distance * direction, dy / distance * direction, enemy.speed, 2.5, dt);
+
+    if (enemy.windup > 0) {
+      enemy.windup -= dt;
+      enemy.vx *= 0.88;
+      enemy.vy *= 0.88;
+      particles.push({ x: enemy.x, y: enemy.y, life: 0.2, c: '#b455ff' });
+      if (enemy.windup <= 0) {
+        enemy.beamTime = 0.58;
+        enemy.beamTick = 0;
+      }
+      return;
+    }
+
+    if (enemy.beamTime > 0) {
+      enemy.beamTime -= dt;
+      enemy.beamTick -= dt;
+      enemy.vx *= 0.84;
+      enemy.vy *= 0.84;
+      if (enemy.beamTick <= 0) {
+        enemy.beamTick = 0.1;
+        const beamEnd = getBeamEnd(enemy.x, enemy.y, enemy.beamAngle, 460);
+        if (beamHitsCircle(enemy.x, enemy.y, beamEnd.x, beamEnd.y, player.x, player.y, player.r + 5)) {
+          damagePlayer(enemy.dmg, enemy.beamAngle, 145);
+        }
+      }
+      return;
+    }
+
+    if (enemy.attackCd <= 0 && distance < 430) {
+      enemy.windup = 0.86;
+      enemy.beamAngle = Math.atan2(dy, dx);
+      enemy.attackCd = 2.9;
+    }
+  }
+
+  function updateKnaveEnemy(enemy, dt) {
+    const dx = player.x - enemy.x;
+    const dy = player.y - enemy.y;
+    const distance = Math.hypot(dx, dy) || 1;
+
+    if (enemy.stun > 0) {
+      enemy.vx *= 0.86;
+      enemy.vy *= 0.86;
+      return;
+    }
+
+    if (enemy.windup > 0) {
+      enemy.windup -= dt;
+      enemy.vx *= 0.76;
+      enemy.vy *= 0.76;
+      if (enemy.windup <= 0) {
+        if (enemy.state === 'charge') {
+          enemy.dashTime = 0.3;
+          enemy.dashHit = false;
+        } else {
+          enemy.swingTime = 0.2;
+        }
+      }
+      return;
+    }
+
+    if (enemy.dashTime > 0) {
+      enemy.dashTime -= dt;
+      enemy.vx = Math.cos(enemy.dashAngle) * 450;
+      enemy.vy = Math.sin(enemy.dashAngle) * 450;
+      if (!enemy.dashHit && dist(enemy.x, enemy.y, player.x, player.y) < enemy.r + player.r + 7) {
+        enemy.dashHit = true;
+        damagePlayer(enemy.dmg + 6, enemy.dashAngle, 260);
+      }
+      return;
+    }
+
+    if (enemy.swingTime > 0) {
+      enemy.swingTime -= dt;
+      enemy.vx *= 0.7;
+      enemy.vy *= 0.7;
+      if (enemy.swingTime <= 0 && dist(enemy.x, enemy.y, player.x, player.y) < enemy.r + player.r + 24) {
+        const angle = Math.atan2(dy, dx);
+        damagePlayer(enemy.dmg + 3, angle, 210);
+      }
+      return;
+    }
+
+    steerEnemy(enemy, dx / distance, dy / distance, enemy.speed, 4.8, dt);
+
+    if (enemy.attackCd <= 0) {
+      if (distance > 150) {
+        enemy.state = 'charge';
+        enemy.windup = 0.46;
+        enemy.dashAngle = Math.atan2(dy, dx);
+        enemy.attackCd = 1.9;
+      } else {
+        enemy.state = 'stab';
+        enemy.windup = 0.2;
+        enemy.attackCd = 0.9;
+      }
+    }
+  }
+
+  function updateSniperEnemy(enemy, dt) {
+    const dx = player.x - enemy.x;
+    const dy = player.y - enemy.y;
+    const distance = Math.hypot(dx, dy) || 1;
+
+    if (enemy.stun > 0) {
+      enemy.vx *= 0.9;
+      enemy.vy *= 0.9;
+      return;
+    }
+
+    if (enemy.windup > 0) {
+      enemy.windup -= dt;
+      enemy.vx *= 0.88;
+      enemy.vy *= 0.88;
+      if (enemy.windup <= 0) {
+        const angle = enemy.beamAngle;
+        projectiles.push({
+          x: enemy.x,
+          y: enemy.y,
+          vx: Math.cos(angle) * 360,
+          vy: Math.sin(angle) * 360,
+          r: 5,
+          life: 1.6,
+          enemy: true,
+          kind: 'sniper_round',
+          damage: enemy.dmg + 5,
+        });
+      }
+      return;
+    }
+
+    if (enemy.swingTime > 0) {
+      enemy.swingTime -= dt;
+      enemy.vx *= 0.75;
+      enemy.vy *= 0.75;
+      if (enemy.swingTime <= 0 && distance < enemy.r + player.r + 20) {
+        damagePlayer(enemy.dmg + 2, Math.atan2(dy, dx), 170);
+      }
+      return;
+    }
+
+    const desired = 290;
+    const direction = distance < desired - 20 ? -1 : distance > desired + 20 ? 1 : 0;
+    steerEnemy(enemy, dx / distance * direction, dy / distance * direction, enemy.speed, 3.6, dt);
+
+    if (enemy.attackCd <= 0) {
+      if (distance <= 74) {
+        enemy.swingTime = 0.16;
+        enemy.attackCd = 0.95;
+      } else if (distance < 520) {
+        enemy.windup = 0.6;
+        enemy.beamAngle = Math.atan2(dy, dx);
+        enemy.attackCd = 2.2;
+      }
+    }
+  }
+
+  function updateGolemEnemy(enemy, dt) {
+    const dx = player.x - enemy.x;
+    const dy = player.y - enemy.y;
+    const distance = Math.hypot(dx, dy) || 1;
+
+    if (enemy.stun > 0) {
+      enemy.vx *= 0.9;
+      enemy.vy *= 0.9;
+      return;
+    }
+
+    if (enemy.windup > 0) {
+      enemy.windup -= dt;
+      enemy.vx *= 0.7;
+      enemy.vy *= 0.7;
+      if (enemy.windup <= 0) {
+        enemy.dashTime = 0.34;
+        enemy.dashHit = false;
+      }
+      return;
+    }
+
+    if (enemy.dashTime > 0) {
+      enemy.dashTime -= dt;
+      enemy.vx = Math.cos(enemy.dashAngle) * 390;
+      enemy.vy = Math.sin(enemy.dashAngle) * 390;
+      if (!enemy.dashHit && dist(enemy.x, enemy.y, player.x, player.y) < enemy.r + player.r + 10) {
+        enemy.dashHit = true;
+        damagePlayer(enemy.dmg + 6, enemy.dashAngle, 280);
+      }
+      return;
+    }
+
+    steerEnemy(enemy, dx / distance, dy / distance, enemy.speed, 3.1, dt);
+    if (enemy.attackCd <= 0 && distance < 460) {
+      enemy.windup = 0.62;
+      enemy.dashAngle = Math.atan2(dy, dx);
+      enemy.attackCd = 2.6;
+    }
+  }
+
+  function updateCultQueenBoss(enemy, dt) {
+    const dx = player.x - enemy.x;
+    const dy = player.y - enemy.y;
+    const distance = Math.hypot(dx, dy) || 1;
+
+    enemy.summonCd = Math.max(0, enemy.summonCd - dt);
+    if (enemy.summonCd <= 0) {
+      enemy.summonCd = 4.6;
+      for (let index = 0; index < 3; index += 1) {
+        const angle = (Math.PI * 2 * index) / 3 + rng() * 0.8;
+        const px = enemy.x + Math.cos(angle) * 54;
+        const py = enemy.y + Math.sin(angle) * 54;
+        const safeSpawn = findSafeEnemySpawnPoint(clamp(px, 90, ROOM_W - 90), clamp(py, 90, ROOM_H - 90), 15);
+        if (safeSpawn) spawnEnemy('cult_follower', safeSpawn.x, safeSpawn.y, false);
+      }
+    }
+
+    updateCultMageEnemy(enemy, dt);
+    if (enemy.attackCd <= 0 && distance < enemy.r + player.r + 18) {
+      damagePlayer(enemy.dmg + 4, Math.atan2(dy, dx), 250);
+      enemy.attackCd = 0.95;
+    }
+  }
+
+  function updateBulkGolemBoss(enemy, dt) {
+    updateGolemEnemy(enemy, dt);
+    enemy.speed = 78;
+    if (enemy.attackCd < 1.4) enemy.attackCd = 1.4;
+  }
+
+  function spawnPhaseSwords(count, damage) {
+    for (let index = 0; index < count; index += 1) {
+      const angle = (Math.PI * 2 * index) / count + rng() * 0.25;
+      const sx = player.x + Math.cos(angle) * 110;
+      const sy = player.y + Math.sin(angle) * 110;
+      const travel = Math.atan2(player.y - sy, player.x - sx);
+      projectiles.push({
+        x: sx,
+        y: sy,
+        vx: Math.cos(travel) * 260,
+        vy: Math.sin(travel) * 260,
+        r: 7,
+        life: 1.25,
+        enemy: true,
+        kind: 'sword',
+        damage,
+      });
+    }
+  }
+
+  function updateArtificerBoss(enemy, dt) {
+    const hpPct = enemy.hp / enemy.max;
+    if (hpPct < 0.34) enemy.phase = 3;
+    else if (hpPct < 0.67) enemy.phase = 2;
+    else enemy.phase = 1;
+
+    const dx = player.x - enemy.x;
+    const dy = player.y - enemy.y;
+    const distance = Math.hypot(dx, dy) || 1;
+
+    if (enemy.phase === 1) {
+      enemy.speed = 132;
+      updateKnaveEnemy(enemy, dt);
+      return;
+    }
+
+    if (enemy.phase === 2) {
+      enemy.speed = 120;
+      if (enemy.attackCd <= 0) {
+        spawnPhaseSwords(8, 14);
+        enemy.attackCd = 2.35;
+      }
+      steerEnemy(enemy, dx / distance, dy / distance, enemy.speed, 4.4, dt);
+      if (distance < enemy.r + player.r + 14 && enemy.swingTime <= 0) {
+        enemy.swingTime = 0.2;
+      }
+      if (enemy.swingTime > 0) {
+        enemy.swingTime -= dt;
+        if (enemy.swingTime <= 0 && distance < enemy.r + player.r + 24) {
+          damagePlayer(enemy.dmg + 3, Math.atan2(dy, dx), 210);
+        }
+      }
+      return;
+    }
+
+    enemy.speed = 62;
+    steerEnemy(enemy, dx / distance, dy / distance, enemy.speed, 3.2, dt);
+    if (enemy.attackCd <= 0) {
+      enemy.windup = 0.72;
+      enemy.state = 'phase3_swing';
+      enemy.attackCd = 6;
+    }
+    if (enemy.windup > 0) {
+      enemy.windup -= dt;
+      enemy.vx *= 0.74;
+      enemy.vy *= 0.74;
+      if (enemy.windup <= 0) {
+        const angle = Math.atan2(dy, dx);
+        if (distance < enemy.r + player.r + 54) {
+          damagePlayer(enemy.dmg + 16, angle, 340);
+        }
+        particles.push({ x: enemy.x, y: enemy.y, life: 0.6, ring: 86, c: '#ffd27d' });
+      }
     }
   }
 
@@ -1696,6 +2245,10 @@
           projectiles.splice(index, 1);
           continue;
         }
+      } else if (dist(projectile.x, projectile.y, player.x, player.y) <= projectile.r + player.r) {
+        damagePlayer(projectile.damage || 10, Math.atan2(projectile.vy, projectile.vx), 120);
+        projectiles.splice(index, 1);
+        continue;
       }
     }
   }
@@ -1774,6 +2327,15 @@
   function updatePickups() {
     for (let index = pickups.length - 1; index >= 0; index -= 1) {
       const pickup = pickups[index];
+      if (pickup.type === 'coin') {
+        const magnetRadius = 110;
+        const d = dist(pickup.x, pickup.y, player.x, player.y);
+        if (d < magnetRadius && d > 0.001) {
+          const pull = 180 + (1 - d / magnetRadius) * 260;
+          pickup.x += ((player.x - pickup.x) / d) * 0.016 * pull;
+          pickup.y += ((player.y - pickup.y) / d) * 0.016 * pull;
+        }
+      }
       if (dist(pickup.x, pickup.y, player.x, player.y) >= 26) continue;
 
       if (pickup.type === 'coin') {
@@ -1793,6 +2355,8 @@
         floor = Math.min(MAX_FLOOR, floor + 1);
         metaProgress.bestFloor = Math.max(metaProgress.bestFloor, floor);
         persistMetaSoon();
+        showFloorTransition = true;
+        floorTransitionTime = 0;
         generateFloor();
         scheduleRunSave();
         return;
@@ -1869,10 +2433,17 @@
     const nextRoom = rooms.find(room => room.gx === currentRoom.gx + dx && room.gy === currentRoom.gy + dy);
     if (!nextRoom) return;
     enterRoom(nextRoom);
-    if (direction === 'n') { player.y = ROOM_H - WALL - 30; player.x = ROOM_W / 2; }
-    if (direction === 's') { player.y = WALL + 30; player.x = ROOM_W / 2; }
-    if (direction === 'e') { player.x = WALL + 30; player.y = ROOM_H / 2; }
-    if (direction === 'w') { player.x = ROOM_W - WALL - 30; player.y = ROOM_H / 2; }
+    const r = 18;
+    let doorX = ROOM_W / 2;
+    let doorY = ROOM_H / 2;
+    if (direction === 'n') { doorY = ROOM_H - WALL - 30; doorX = ROOM_W / 2; }
+    if (direction === 's') { doorY = WALL + 30; doorX = ROOM_W / 2; }
+    if (direction === 'e') { doorX = WALL + 30; doorY = ROOM_H / 2; }
+    if (direction === 'w') { doorX = ROOM_W - WALL - 30; doorY = ROOM_H / 2; }
+    if (!isBlocked(doorX, doorY, r)) {
+      player.x = doorX;
+      player.y = doorY;
+    }
   }
 
   function returnToFloorOne() {
@@ -1898,6 +2469,10 @@
     if (floor < MAX_FLOOR) {
       if (currentRoom.type === 'shop') {
         uiController.setObjective('Shop or move on.');
+        return;
+      }
+      if (currentRoom.type === 'boss' && !currentRoom.cleared) {
+        uiController.setObjective('Defeat the floor boss.');
         return;
       }
       objective = currentRoom.type === 'ladder' && !currentRoom.cleared ? 'Clear the ladder room.' : 'Find the ladder.';
@@ -2065,6 +2640,8 @@
     }
 
     if (godTimer > 0) drawGodModeBar();
+    drawBossHealthBars();
+    drawFloorTransition();
   }
 
   function drawFloor() {
@@ -2389,7 +2966,7 @@
       if (enemy.windup > 0) {
         ctx.save();
         ctx.translate(enemy.x, enemy.y);
-        ctx.strokeStyle = enemy.type === 'charger' ? '#ff8844' : '#aa66ff';
+        ctx.strokeStyle = (enemy.type === 'charger' || enemy.type === 'golem' || enemy.type === 'bulk_golem') ? '#ff8844' : '#aa66ff';
         ctx.lineWidth = 2;
         ctx.globalAlpha = 0.8;
         ctx.beginPath();
@@ -2429,18 +3006,32 @@
 
       const color = enemy.type === 'god'
         ? '#ffffff'
-        : enemy.type === 'charger'
-          ? '#ff8844'
-          : enemy.type === 'laser'
-            ? '#aa66ff'
-            : '#00ddff';
+        : enemy.type === 'queen_cult'
+          ? '#ffe0ff'
+          : enemy.type === 'bulk_golem'
+            ? '#ffb16a'
+            : enemy.type === 'artificer_knave'
+              ? '#ffd27d'
+              : enemy.type === 'golem'
+                ? '#cc7d42'
+                : enemy.type === 'cult_mage'
+                  ? '#b455ff'
+                  : enemy.type === 'sniper'
+                    ? '#8cd4ff'
+                    : enemy.type === 'knave'
+                      ? '#ff5f79'
+                      : enemy.type === 'charger'
+                        ? '#ff8844'
+                        : enemy.type === 'laser'
+                          ? '#aa66ff'
+                          : '#00ddff';
 
       ctx.fillStyle = color;
       ctx.shadowColor = color;
       ctx.shadowBlur = enemy.elite || enemy.type === 'god' ? 18 : 10;
       ctx.globalAlpha = enemy.stun > 0 ? 0.65 : 1;
 
-      if (enemy.type === 'hunter' || enemy.type === 'god') {
+      if (enemy.type === 'hunter' || enemy.type === 'god' || enemy.type === 'queen_cult' || enemy.type === 'artificer_knave' || enemy.type === 'knave' || enemy.type === 'cult_follower') {
         ctx.beginPath();
         ctx.moveTo(enemy.r, 0);
         ctx.lineTo(-enemy.r * 0.7, enemy.r * 0.8);
@@ -2448,12 +3039,13 @@
         ctx.lineTo(-enemy.r * 0.7, -enemy.r * 0.8);
         ctx.closePath();
         ctx.fill();
-      } else if (enemy.type === 'laser') {
+      } else if (enemy.type === 'laser' || enemy.type === 'cult_mage' || enemy.type === 'sniper') {
         ctx.fillRect(-enemy.r, -enemy.r, enemy.r * 2, enemy.r * 2);
       } else {
         ctx.beginPath();
-        for (let index = 0; index < 6; index += 1) {
-          const angle = index * Math.PI / 3;
+        const points = enemy.type === 'golem' || enemy.type === 'bulk_golem' ? 8 : 6;
+        for (let index = 0; index < points; index += 1) {
+          const angle = index * Math.PI * 2 / points;
           ctx.lineTo(Math.cos(angle) * enemy.r, Math.sin(angle) * enemy.r);
         }
         ctx.closePath();
@@ -2464,7 +3056,7 @@
       const hpPct = clamp(enemy.hp / enemy.max, 0, 1);
       ctx.fillStyle = '#000a';
       ctx.fillRect(-18, -enemy.r - 14, 36, 5);
-      ctx.fillStyle = enemy.type === 'god' ? '#fff' : '#f0f';
+      ctx.fillStyle = isBossType(enemy.type) ? '#fff' : '#f0f';
       ctx.fillRect(-18, -enemy.r - 14, 36 * hpPct, 5);
       ctx.restore();
     });
@@ -2576,6 +3168,9 @@
       } else if (room.type === 'god') {
         ctx.globalAlpha = 0.95;
         ctx.fillStyle = '#ffffff';
+      } else if (room.type === 'boss') {
+        ctx.globalAlpha = 0.95;
+        ctx.fillStyle = '#ff7a7a';
       } else if (room.type === 'treasure') {
         ctx.globalAlpha = 0.95;
         ctx.fillStyle = '#ffaa00';
@@ -2618,6 +3213,84 @@
     ctx.font = '10px system-ui';
     ctx.textAlign = 'center';
     ctx.fillText('GOD MODE', 480, 10);
+  }
+
+  function getBossLabel(type) {
+    if (type === 'queen_cult') return 'QUEEN OF THE CULT';
+    if (type === 'bulk_golem') return 'BULK GOLEM';
+    if (type === 'artificer_knave') return 'ARTIFICER CHARGED KNAVE';
+    if (type === 'god') return 'GOD';
+    return type.toUpperCase();
+  }
+
+  function drawBossHealthBars() {
+    const bosses = enemies.filter(enemy => isBossType(enemy.type));
+    if (!bosses.length) return;
+
+    const width = 420;
+    const height = 10;
+    const gap = 18;
+    const startX = (canvas.width - width) / 2;
+    const startY = 16;
+
+    bosses.forEach((boss, index) => {
+      const y = startY + index * gap;
+      const hpPct = clamp(boss.hp / boss.max, 0, 1);
+
+      ctx.fillStyle = 'rgba(0,0,0,0.65)';
+      ctx.fillRect(startX - 2, y - 2, width + 4, height + 4);
+      ctx.fillStyle = '#220f28';
+      ctx.fillRect(startX, y, width, height);
+
+      ctx.fillStyle = boss.type === 'bulk_golem' ? '#ff8e4a' : boss.type === 'artificer_knave' ? '#ffd27d' : '#e4b9ff';
+      if (boss.type === 'god') ctx.fillStyle = '#ffffff';
+      ctx.fillRect(startX, y, width * hpPct, height);
+
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 11px system-ui';
+      ctx.textAlign = 'center';
+      ctx.fillText(getBossLabel(boss.type), canvas.width / 2, y - 4);
+    });
+  }
+
+  function drawFloorTransition() {
+    if (!showFloorTransition || floorTransitionTime > 2.5) return;
+
+    const progress = floorTransitionTime / 2.5;
+    const scaleProgress = Math.min(progress * 1.5, 1);
+    const fadeInProgress = Math.min(progress * 2, 1);
+    const fadeOutProgress = Math.max((progress - 0.7) / 0.3, 0);
+
+    const baseScale = 0.3 + scaleProgress * 0.7;
+    const alpha = fadeInProgress * (1 - fadeOutProgress);
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+
+    const centerX = canvas.width / 2;
+    const centerY = canvas.height / 2;
+    const offsetY = (1 - scaleProgress) * 80;
+
+    ctx.translate(centerX, centerY - offsetY);
+    ctx.scale(baseScale, baseScale);
+    ctx.translate(-centerX, -centerY);
+
+    ctx.fillStyle = '#00ffff';
+    ctx.shadowColor = '#00ffff';
+    ctx.shadowBlur = 40 * alpha;
+    ctx.font = 'bold 72px system-ui';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    ctx.fillText(`FLOOR ${floor}`, centerX, centerY);
+
+    ctx.font = 'bold 24px system-ui';
+    ctx.fillStyle = '#7dff9e';
+    ctx.shadowColor = '#7dff9e';
+    ctx.shadowBlur = 20 * alpha;
+    ctx.fillText('▼ ▼ ▼', centerX, centerY + 50);
+
+    ctx.restore();
   }
 
   function drawActionIcons() {
@@ -2672,28 +3345,12 @@
 
     function fallbackState(state) {
       const show = state || 'menu';
-      if (show === 'menu') {
-        view.start.classList.remove('hidden');
-        view.charSelect?.classList.add('hidden');
-        view.dead.classList.add('hidden');
-        view.win.classList.add('hidden');
-      } else if (show === 'dead') {
-        view.start.classList.add('hidden');
-        view.charSelect?.classList.add('hidden');
-        view.dead.classList.remove('hidden');
-        view.win.classList.add('hidden');
-      } else if (show === 'win') {
-        view.start.classList.add('hidden');
-        view.charSelect?.classList.add('hidden');
-        view.dead.classList.add('hidden');
-        view.win.classList.remove('hidden');
-      } else {
-        view.start.classList.add('hidden');
-        view.charSelect?.classList.add('hidden');
-        view.dead.classList.add('hidden');
-        view.win.classList.add('hidden');
-      }
-      const inPlay = show === 'play';
+      view.start.classList.toggle('hidden',     show !== 'menu');
+      view.charSelect?.classList.toggle('hidden', show !== 'charselect');
+      view.dead.classList.toggle('hidden',      show !== 'dead');
+      view.win.classList.toggle('hidden',       show !== 'win');
+      view.pause?.classList.toggle('hidden',    show !== 'pause');
+      const inPlay = show === 'play' || show === 'pause';
       view.hud.classList.toggle('hidden', !inPlay);
       view.actionBar.classList.toggle('hidden', !inPlay);
     }
@@ -2710,23 +3367,14 @@
       manager.registerScreen('charSelect', { create: () => makeContainer(view.charSelect), validStates: ['charselect'] });
       manager.registerScreen('dead', { create: () => makeContainer(view.dead), validStates: ['dead'] });
       manager.registerScreen('win', { create: () => makeContainer(view.win), validStates: ['win'] });
+      manager.registerScreen('pause', { create: () => makeContainer(view.pause), validStates: ['pause'] });
     }
 
     return {
       setState(state) {
         activeState = state || 'menu';
         if (manager && typeof manager.onGameStateChange === 'function') manager.onGameStateChange(state);
-        else fallbackState(state);
-        if (state === 'menu') {
-          view.start.classList.remove('hidden');
-          view.charSelect?.classList.add('hidden');
-        } else if (state === 'charselect') {
-          view.start.classList.add('hidden');
-          view.charSelect?.classList.remove('hidden');
-        } else {
-          view.start.classList.add('hidden');
-          view.charSelect?.classList.add('hidden');
-        }
+        fallbackState(state);
       },
       setHudUpdateHook(hook) {
         hudUpdateHook = typeof hook === 'function' ? hook : null;
