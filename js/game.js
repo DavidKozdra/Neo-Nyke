@@ -1,6 +1,7 @@
 (() => {
   const canvas = document.getElementById('c');
   const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
 
   const ROOM_W = 900;
   const ROOM_H = 700;
@@ -118,6 +119,10 @@
       unlock: 'godslain',
     },
   };
+
+  const SPRITE_SOURCE_SIZE = 10;
+  const SPRITE_DEFS = window.NeoNykeSpriteDefs || {};
+  const SPRITE_ATLAS = buildSpriteAtlas();
 
   const MOVE_SLOTS = ['melee', 'laser', 'smash', 'dash'];
   const MOVE_DEFS = {
@@ -2517,10 +2522,11 @@
 
   function tryMelee() {
     if (cooldowns.melee > 0) return;
+    const move = getEquippedMove('melee');
     const itemStats = getItemStats();
     const attackSpeed = getAttackSpeedValue();
-    cooldowns.melee = (godTimer > 0 ? 0.2 : ATTACKS.melee.baseCooldown) / attackSpeed;
-    const move = getEquippedMove('melee');
+    const slashCooldownMultiplier = move === 'slash' ? 3 : 1;
+    cooldowns.melee = ((godTimer > 0 ? 0.2 : ATTACKS.melee.baseCooldown) * slashCooldownMultiplier) / attackSpeed;
     if (move === 'fire_balls') {
       spawnFireballs();
       return;
@@ -4984,6 +4990,105 @@
     ctx.shadowBlur = 0;
   }
 
+  function buildSpriteAtlas() {
+    const keys = Object.keys(SPRITE_DEFS);
+    const canvasEl = document.createElement('canvas');
+    canvasEl.width = SPRITE_SOURCE_SIZE * keys.length;
+    canvasEl.height = SPRITE_SOURCE_SIZE;
+    const atlasCtx = canvasEl.getContext('2d');
+    atlasCtx.imageSmoothingEnabled = false;
+    const frames = {};
+    keys.forEach((key, index) => {
+      const def = SPRITE_DEFS[key];
+      const ox = index * SPRITE_SOURCE_SIZE;
+      frames[key] = { x: ox, y: 0, w: SPRITE_SOURCE_SIZE, h: SPRITE_SOURCE_SIZE };
+      for (let y = 0; y < def.pixels.length; y += 1) {
+        const row = def.pixels[y];
+        for (let x = 0; x < row.length; x += 1) {
+          const pixel = row[x];
+          if (pixel === '.') continue;
+          for (let oy = -1; oy <= 1; oy += 1) {
+            for (let oxi = -1; oxi <= 1; oxi += 1) {
+              if (oxi === 0 && oy === 0) continue;
+              const nx = x + oxi;
+              const ny = y + oy;
+              if (nx < 0 || ny < 0 || nx >= row.length || ny >= def.pixels.length) continue;
+              if (def.pixels[ny][nx] !== '.') continue;
+              atlasCtx.fillStyle = 'rgba(15, 10, 14, 0.92)';
+              atlasCtx.fillRect(ox + nx, ny, 1, 1);
+            }
+          }
+        }
+      }
+      def.pixels.forEach((row, y) => {
+        for (let x = 0; x < row.length; x += 1) {
+          const pixel = row[x];
+          if (pixel === '.') continue;
+          atlasCtx.fillStyle = def.palette[pixel] || '#ff00ff';
+          atlasCtx.fillRect(ox + x, y, 1, 1);
+        }
+      });
+    });
+    return { canvas: canvasEl, frames };
+  }
+
+  function getEnemySpriteKey(enemy) {
+    return SPRITE_DEFS[enemy.type] ? enemy.type : 'hunter';
+  }
+
+  function getPlayerSpriteKey() {
+    const key = getCharacterDef().key;
+    return SPRITE_DEFS[key] ? key : 'thorn_knight';
+  }
+
+  function getFacingDirection(actor, fallbackAngle = 0) {
+    if (Math.abs(actor.vx) > 6) return actor.vx < 0 ? -1 : 1;
+    return Math.cos(fallbackAngle) < 0 ? -1 : 1;
+  }
+
+  function drawSpriteFrame(spriteKey, x, y, size, options = {}) {
+    const frame = SPRITE_ATLAS.frames[spriteKey] || SPRITE_ATLAS.frames.hunter;
+    if (!frame) return;
+    const {
+      alpha = 1,
+      flipX = false,
+      shadowColor = null,
+      shadowBlur = 0,
+      tint = null,
+    } = options;
+    ctx.save();
+    ctx.translate(x, y);
+    if (flipX) ctx.scale(-1, 1);
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = 'rgba(0,0,0,0.24)';
+    ctx.beginPath();
+    ctx.ellipse(0, size * 0.3, size * 0.28, size * 0.11, 0, 0, Math.PI * 2);
+    ctx.fill();
+    if (shadowColor && shadowBlur > 0) {
+      ctx.shadowColor = shadowColor;
+      ctx.shadowBlur = shadowBlur;
+    }
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(
+      SPRITE_ATLAS.canvas,
+      frame.x,
+      frame.y,
+      frame.w,
+      frame.h,
+      -size / 2,
+      -size / 2,
+      size,
+      size,
+    );
+    if (tint) {
+      ctx.globalCompositeOperation = 'source-atop';
+      ctx.fillStyle = tint;
+      ctx.globalAlpha = 0.22;
+      ctx.fillRect(-size / 2, -size / 2, size, size);
+    }
+    ctx.restore();
+  }
+
   function drawEnemyTelegraphs() {
     enemies.forEach(enemy => {
       if (enemy.windup > 0) {
@@ -5014,9 +5119,9 @@
 
   function drawEnemies() {
     enemies.forEach(enemy => {
-      ctx.save();
-      ctx.translate(enemy.x, enemy.y);
       if (enemy.bleed > 0) {
+        ctx.save();
+        ctx.translate(enemy.x, enemy.y);
         ctx.strokeStyle = 'rgba(255,0,80,0.7)';
         ctx.lineWidth = 2;
         ctx.shadowColor = '#f00';
@@ -5024,62 +5129,38 @@
         ctx.beginPath();
         ctx.arc(0, 0, enemy.r + 6 + Math.sin(Date.now() / 200) * 2, 0, Math.PI * 2);
         ctx.stroke();
-        ctx.shadowBlur = 0;
+        ctx.restore();
       }
-
-      const color = enemy.type === 'god'
-        ? '#ffffff'
-        : enemy.type === 'queen_cult'
-          ? '#ffe0ff'
-          : enemy.type === 'bulk_golem'
-            ? '#ffb16a'
-            : enemy.type === 'artificer_knave'
-              ? '#ffd27d'
-              : enemy.type === 'golem'
-                ? '#cc7d42'
-                : enemy.type === 'cult_mage'
-                  ? '#b455ff'
-                  : enemy.type === 'sniper'
-                    ? '#8cd4ff'
-                    : enemy.type === 'knave'
-                      ? '#ff5f79'
-                      : enemy.type === 'charger'
-                        ? '#ff8844'
-                        : enemy.type === 'laser'
-                          ? '#aa66ff'
-                          : '#00ddff';
-
-      ctx.fillStyle = color;
-      ctx.shadowColor = color;
-      ctx.shadowBlur = enemy.elite || enemy.type === 'god' ? 18 : 10;
-      ctx.globalAlpha = enemy.stun > 0 ? 0.65 : 1;
-
-      if (enemy.type === 'hunter' || enemy.type === 'god' || enemy.type === 'queen_cult' || enemy.type === 'artificer_knave' || enemy.type === 'knave' || enemy.type === 'cult_follower') {
+      const spriteKey = getEnemySpriteKey(enemy);
+      const facing = getFacingDirection(enemy, enemy.beamAngle || enemy.dashAngle || 0);
+      const drawSize = Math.max(30, enemy.r * 2.4);
+      drawSpriteFrame(spriteKey, enemy.x, enemy.y, drawSize, {
+        alpha: enemy.stun > 0 ? 0.68 : 1,
+        flipX: facing < 0,
+        shadowColor: enemy.elite || enemy.type === 'god' ? 'rgba(255,244,180,0.45)' : 'rgba(0,0,0,0.18)',
+        shadowBlur: enemy.type === 'god' ? 14 : enemy.elite ? 10 : 4,
+        tint: enemy.elite ? 'rgba(255,210,96,0.7)' : null,
+      });
+      if (enemy.elite) {
+        ctx.save();
+        ctx.translate(enemy.x, enemy.y - enemy.r - 10);
+        ctx.fillStyle = '#f6cf6a';
         ctx.beginPath();
-        ctx.moveTo(enemy.r, 0);
-        ctx.lineTo(-enemy.r * 0.7, enemy.r * 0.8);
-        ctx.lineTo(-enemy.r * 0.55, 0);
-        ctx.lineTo(-enemy.r * 0.7, -enemy.r * 0.8);
+        ctx.moveTo(-7, 4);
+        ctx.lineTo(-4, -5);
+        ctx.lineTo(0, 0);
+        ctx.lineTo(4, -6);
+        ctx.lineTo(7, 4);
         ctx.closePath();
         ctx.fill();
-      } else if (enemy.type === 'laser' || enemy.type === 'cult_mage' || enemy.type === 'sniper') {
-        ctx.fillRect(-enemy.r, -enemy.r, enemy.r * 2, enemy.r * 2);
-      } else {
-        ctx.beginPath();
-        const points = enemy.type === 'golem' || enemy.type === 'bulk_golem' ? 8 : 6;
-        for (let index = 0; index < points; index += 1) {
-          const angle = index * Math.PI * 2 / points;
-          ctx.lineTo(Math.cos(angle) * enemy.r, Math.sin(angle) * enemy.r);
-        }
-        ctx.closePath();
-        ctx.fill();
+        ctx.restore();
       }
-
-      ctx.shadowBlur = 0;
+      ctx.save();
+      ctx.translate(enemy.x, enemy.y);
       const hpPct = clamp(enemy.hp / enemy.max, 0, 1);
       ctx.fillStyle = '#000a';
       ctx.fillRect(-18, -enemy.r - 14, 36, 5);
-      ctx.fillStyle = isBossType(enemy.type) ? '#fff' : '#f0f';
+      ctx.fillStyle = isBossType(enemy.type) ? '#f2e8d7' : '#b24f68';
       ctx.fillRect(-18, -enemy.r - 14, 36 * hpPct, 5);
       ctx.restore();
     });
@@ -5087,30 +5168,26 @@
 
   function drawPlayer() {
     if (!player) return;
+    const aimAngle = Math.atan2(mouse.worldY - player.y, mouse.worldX - player.x);
+    const facing = getFacingDirection(player, aimAngle);
+    const shadowColor = godTimer > 0 ? 'rgba(255,248,210,0.65)' : 'rgba(0,0,0,0.25)';
+    drawSpriteFrame(getPlayerSpriteKey(), player.x, player.y, Math.max(34, player.r * 2.5), {
+      alpha: player.inv > 0 ? 0.68 : 1,
+      flipX: facing < 0,
+      shadowColor,
+      shadowBlur: godTimer > 0 ? 18 : 6,
+      tint: godTimer > 0 ? 'rgba(255,245,220,0.6)' : null,
+    });
     ctx.save();
     ctx.translate(player.x, player.y);
-    if (godTimer > 0) {
-      ctx.shadowColor = `hsl(${(Date.now() / 5) % 360},100%,60%)`;
-      ctx.shadowBlur = 24;
-    } else {
-      ctx.shadowColor = '#00ffff';
-      ctx.shadowBlur = 16;
-    }
-    ctx.fillStyle = '#0ff';
-    ctx.globalAlpha = player.inv > 0 ? 0.68 : 1;
-    ctx.beginPath();
-    ctx.arc(0, 0, player.r, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.shadowBlur = 0;
-    const angle = Math.atan2(mouse.worldY - player.y, mouse.worldX - player.x);
-    ctx.strokeStyle = '#fff';
+    ctx.strokeStyle = '#f5f1e8';
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.lineTo(Math.cos(angle) * 18, Math.sin(angle) * 18);
+    ctx.moveTo(Math.cos(aimAngle) * 6, Math.sin(aimAngle) * 6);
+    ctx.lineTo(Math.cos(aimAngle) * 20, Math.sin(aimAngle) * 20);
     ctx.stroke();
     if (player.swing > 0) {
-      ctx.strokeStyle = godTimer > 0 ? '#fff' : '#0ff';
+      ctx.strokeStyle = godTimer > 0 ? '#f6e8c8' : '#d86d87';
       ctx.lineWidth = 4;
       ctx.globalAlpha = 0.9;
       ctx.beginPath();
