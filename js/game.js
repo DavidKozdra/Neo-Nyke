@@ -271,6 +271,10 @@
       smash: document.querySelector('#invPanel [data-slot="smash"]'),
       dash: document.querySelector('#invPanel [data-slot="dash"]'),
     },
+    playerHpFill: document.getElementById('playerHpFill'),
+    playerHpTxt: document.getElementById('playerHpTxt'),
+    playerXpFill: document.getElementById('playerXpFill'),
+    playerXpTxt: document.getElementById('playerXpTxt'),
     seed: document.getElementById('seed'),
     go: document.getElementById('go'),
     continueRow: document.getElementById('continueRow'),
@@ -3574,6 +3578,19 @@
     ui.skillNames.melee.textContent = meleeMove?.name || character.skills.melee;
     ui.skillNames.laser.textContent = laserMove?.name || character.skills.laser;
     ui.skillNames.smash.textContent = smashMove?.name || character.skills.smash;
+    
+    // Update player stats in bottom right
+    if (ui.playerHpFill) {
+      const hpPercent = Math.max(0, Math.min(100, (player.hp / player.maxHp) * 100));
+      ui.playerHpFill.style.width = hpPercent + '%';
+      ui.playerHpTxt.textContent = Math.ceil(player.hp) + '/' + player.maxHp;
+    }
+    if (ui.playerXpFill) {
+      const xpPercent = Math.max(0, Math.min(100, (player.xp / player.xpToNext) * 100));
+      ui.playerXpFill.style.width = xpPercent + '%';
+      ui.playerXpTxt.textContent = player.xp + '/' + player.xpToNext;
+    }
+    
     updateItemUI();
   }
 
