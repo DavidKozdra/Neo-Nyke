@@ -18,8 +18,11 @@
       <div class="bar"><i id="hpFill"></i></div>
       <span id="hpTxt">120</span>
     </div>
+    <div>LV <b id="lv">1</b></div>
+    <div>XP <b id="xp">0/20</b></div>
     <div>FL <b id="fl">1</b>/10</div>
     <div>COINS <b id="coins">0</b></div>
+    <div>CHR <b id="charName">THORN KNIGHT</b></div>
     <div id="objective">Find the ladder.</div>
     <div class="relics">
       <div class="relic" id="rr-neo-knife" data-t="knight" title="Neo-Knife"><span id="countNeoKnife">0</span></div>
@@ -63,40 +66,6 @@
     </div>
   </div>
 
-  <!-- Start screen -->
-  <div id="start" class="overlay">
-    <h1>NEO NYKE // DUNGEON GOD</h1>
-    <p class="sub">Traverse 10 floors, find each ladder, then decide whether to challenge GOD or loop back to floor 1 with your gear.</p>
-    <div class="meta-row">
-      <span>BANK <b id="bankCoins">0</b></span>
-      <span>BEST FLOOR <b id="bestFloor">1</b></span>
-      <span>SAVE <b id="saveState">BOOTING</b></span>
-    </div>
-    <div>Choose starting item:</div>
-    <div class="choose" id="choose">
-      <button data-item="neo_knife" class="sel" data-rarity="knight">NEO-KNIFE<small>Bleed chance +5%</small></button>
-      <button data-item="orb_of_blood" data-rarity="wizard">ORB OF BLOOD<small>Bleeding enemies take double damage</small></button>
-      <button data-item="hemes_scarf" data-rarity="god">HEME'S SCARF<small>All enemies bleed and bleed heals</small></button>
-    </div>
-    <div class="seedrow">
-      <label>SEED</label>
-      <input id="seed" placeholder="random">
-      <button id="go">ENTER DUNGEON</button>
-    </div>
-    <div id="continueRow" class="continue-row hidden">
-      <button id="continueBtn" class="alt">CONTINUE RUN</button>
-      <button id="deleteRunBtn" class="alt danger">DELETE RUN</button>
-      <span id="runSummary"></span>
-    </div>
-    <div class="hint">
-      <span class="kbd">WASD</span> move &bull;
-      <span class="kbd">LMB</span> sword &bull;
-      <span class="kbd">RMB</span> laser &bull;
-      <span class="kbd">R</span> smash<br>
-      Find the ladder on floors 1-9 &bull; choose fate on floor 10
-    </div>
-  </div>
-
   <!-- Death screen -->
   <div id="dead" class="overlay hidden">
     <h2>YOU DIED</h2>
@@ -112,7 +81,249 @@
   </div>
 </div>
 
+<!-- Main menu — outside #wrap so it fills 100dvw × 100dvh -->
+<div id="start" class="overlay">
+  <canvas id="menuBg"></canvas>
+  <div class="menu-content">
+    <h1 id="menuTitle">NEO NYKE<span class="title-sub">// DUNGEON GOD</span></h1>
+    <div class="meta-row">
+      <span>BANK <b id="bankCoins">0</b></span>
+      <span>BEST FLOOR <b id="bestFloor">1</b></span>
+      <span>SAVE <b id="saveState">BOOTING</b></span>
+    </div>
+    <div class="main-nav">
+      <button id="continueBtn" class="nav-btn hidden">CONTINUE</button>
+      <button id="newRunBtn"   class="nav-btn">NEW RUN</button>
+      <button id="settingsBtn" class="nav-btn nav-btn--minor">SETTINGS</button>
+    </div>
+    <span id="runSummary" class="run-summary-line"></span>
+    <div class="hint">
+      <span class="kbd">WASD</span> move &bull;
+      <span class="kbd">LMB</span> sword &bull;
+      <span class="kbd">RMB</span> laser &bull;
+      <span class="kbd">R</span> smash
+    </div>
+  </div><!-- /.menu-content -->
+</div>
+
+<!-- Character select screen -->
+<div id="charSelect" class="overlay hidden">
+  <canvas id="charBg"></canvas>
+  <div class="menu-content">
+    <button id="charBackBtn" class="back-btn">&#8592; BACK</button>
+    <h2 class="screen-title">CHOOSE YOUR WARRIOR</h2>
+    <div class="choose" id="choose">
+      <button data-char="thorn_knight" class="sel" data-rarity="knight">THORN KNIGHT<small>Bleed knight. Current kit.</small></button>
+      <button data-char="metao" data-rarity="wizard">METAO<small>Wizard king. Fire, disks, chaos blasts.</small></button>
+      <button data-char="granialla" data-rarity="god">GRANIALLA<small>Locked until GOD is killed.</small></button>
+    </div>
+    <div class="seedrow">
+      <label>SEED</label>
+      <input id="seed" placeholder="random">
+      <button id="go">ENTER DUNGEON</button>
+    </div>
+    <div id="deleteRunRow" class="continue-row hidden">
+      <button id="deleteRunBtn" class="alt danger">DELETE ACTIVE RUN</button>
+    </div>
+    <!-- legacy hidden row kept for JS compatibility -->
+    <div id="continueRow" class="hidden"></div>
+  </div>
+</div>
+
 <script src="Koz_Engine_Lib/Core/koz-engine.global.js"></script>
 <script src="js/game.js"></script>
+<script>
+(function menuBackground() {
+  const bg  = document.getElementById('menuBg');
+  const bg2 = document.getElementById('charBg');
+  if (!bg) return;
+  const ctx  = bg.getContext('2d');
+  const ctx2 = bg2 ? bg2.getContext('2d') : null;
+
+  function resize() {
+    bg.width  = window.innerWidth;
+    bg.height = window.innerHeight;
+    if (bg2) { bg2.width = window.innerWidth; bg2.height = window.innerHeight; }
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  // Gold/amber palette — Greek epic feel
+  const GOLD   = [220, 170,  30];
+  const MARBLE = [200, 190, 160];
+  const FIRE   = [210,  80,  20];
+
+  function rgba([r,g,b], a) { return `rgba(${r},${g},${b},${a})`; }
+
+  // --- Lasers ---
+  const LASER_COUNT = 14;
+  const lasers = Array.from({length: LASER_COUNT}, (_, i) => spawnLaser(i / LASER_COUNT));
+
+  function spawnLaser(phaseFrac) {
+    const W = bg.width, H = bg.height;
+    const angle = Math.random() * Math.PI * 2;
+    const cx = W / 2 + (Math.random() - .5) * W * .9;
+    const cy = H / 2 + (Math.random() - .5) * H * .9;
+    const palette = [GOLD, MARBLE, FIRE][Math.floor(Math.random() * 3)];
+    return {
+      cx, cy, angle,
+      speed:  .0004 + Math.random() * .0006,
+      length: 120 + Math.random() * 260,
+      width:  1 + Math.random() * 2.5,
+      color:  palette,
+      phase:  (phaseFrac || 0) * Math.PI * 2,
+      life:   0,
+      maxLife: 180 + Math.random() * 240,
+    };
+  }
+
+  // --- Discs ---
+  const DISC_COUNT = 10;
+  const discs = Array.from({length: DISC_COUNT}, () => spawnDisc());
+
+  function spawnDisc() {
+    const W = bg.width, H = bg.height;
+    const side = Math.floor(Math.random() * 4);
+    let x, y, vx, vy;
+    const speed = .6 + Math.random() * 1.4;
+    const ang   = -Math.PI * .15 + Math.random() * Math.PI * .3;
+    if (side === 0)      { x = Math.random() * W; y = -40;     vx = Math.sin(ang) * speed; vy =  Math.cos(ang) * speed; }
+    else if (side === 1) { x = W + 40; y = Math.random() * H; vx = -Math.cos(ang) * speed; vy = Math.sin(ang) * speed; }
+    else if (side === 2) { x = Math.random() * W; y = H + 40;  vx = Math.sin(ang) * speed; vy = -Math.cos(ang) * speed; }
+    else                 { x = -40; y = Math.random() * H;     vx =  Math.cos(ang) * speed; vy = Math.sin(ang) * speed; }
+    const r = 10 + Math.random() * 22;
+    const palette = [GOLD, MARBLE, FIRE][Math.floor(Math.random() * 3)];
+    return { x, y, vx, vy, r, rot: 0, rotSpeed: (.5 + Math.random()) * (Math.random() < .5 ? 1 : -1) * .05, color: palette, trail: [] };
+  }
+
+  function isOffScreen(d) {
+    const W = bg.width, H = bg.height, pad = 80;
+    return d.x < -pad || d.x > W + pad || d.y < -pad || d.y > H + pad;
+  }
+
+  // Decorative Greek key border segments (static)
+  function drawBorder(ctx, W, H) {
+    ctx.save();
+    ctx.strokeStyle = rgba(GOLD, .12);
+    ctx.lineWidth = 1;
+    const m = 18;
+    ctx.strokeRect(m, m, W - m * 2, H - m * 2);
+    ctx.strokeStyle = rgba(GOLD, .06);
+    ctx.strokeRect(m + 6, m + 6, W - (m + 6) * 2, H - (m + 6) * 2);
+    ctx.restore();
+  }
+
+  function renderScene(c, W, H) {
+    c.clearRect(0, 0, W, H);
+    const grad = c.createRadialGradient(W/2, H * .42, 0, W/2, H/2, Math.max(W, H) * .72);
+    grad.addColorStop(0,   rgba([28,18,6], .0));
+    grad.addColorStop(.55, rgba([12,8,2],  .55));
+    grad.addColorStop(1,   rgba([4,2,8],   .92));
+    c.fillStyle = grad;
+    c.fillRect(0, 0, W, H);
+    drawBorder(c, W, H);
+
+    for (let i = 0; i < lasers.length; i++) {
+      const l = lasers[i];
+      const fade = Math.min(l.life / 30, 1) * Math.min((l.maxLife - l.life) / 30, 1);
+      const dx = Math.cos(l.angle) * l.length;
+      const dy = Math.sin(l.angle) * l.length;
+      c.save();
+      c.globalAlpha = fade * .55;
+      const lg = c.createLinearGradient(l.cx - dx * .5, l.cy - dy * .5, l.cx + dx * .5, l.cy + dy * .5);
+      lg.addColorStop(0,  rgba(l.color, 0));
+      lg.addColorStop(.5, rgba(l.color, .9));
+      lg.addColorStop(1,  rgba(l.color, 0));
+      c.strokeStyle = lg;
+      c.lineWidth   = l.width;
+      c.shadowColor = rgba(l.color, .4);
+      c.shadowBlur  = 14;
+      c.beginPath();
+      c.moveTo(l.cx - dx * .5, l.cy - dy * .5);
+      c.lineTo(l.cx + dx * .5, l.cy + dy * .5);
+      c.stroke();
+      c.restore();
+    }
+
+    for (let i = 0; i < discs.length; i++) {
+      const d = discs[i];
+      c.save();
+      for (let t = 0; t < d.trail.length - 1; t++) {
+        c.globalAlpha = (t / d.trail.length) * .25;
+        c.strokeStyle = rgba(d.color, .6);
+        c.lineWidth   = d.r * .35 * (t / d.trail.length);
+        c.beginPath();
+        c.moveTo(d.trail[t].x, d.trail[t].y);
+        c.lineTo(d.trail[t+1].x, d.trail[t+1].y);
+        c.stroke();
+      }
+      c.restore();
+      c.save();
+      c.translate(d.x, d.y);
+      c.rotate(d.rot);
+      c.globalAlpha = .72;
+      const dg = c.createRadialGradient(0, 0, 0, 0, 0, d.r);
+      dg.addColorStop(0,   rgba([255,240,200], .9));
+      dg.addColorStop(.5,  rgba(d.color,       .75));
+      dg.addColorStop(1,   rgba(d.color,       .1));
+      c.fillStyle   = dg;
+      c.shadowColor = rgba(d.color, .55);
+      c.shadowBlur  = 18;
+      c.beginPath();
+      c.ellipse(0, 0, d.r, d.r * .36, 0, 0, Math.PI * 2);
+      c.fill();
+      c.strokeStyle = rgba([255,240,180], .55);
+      c.lineWidth   = 1.2;
+      c.beginPath();
+      c.ellipse(0, 0, d.r * .55, d.r * .2, 0, 0, Math.PI * 2);
+      c.stroke();
+      c.restore();
+    }
+  }
+
+  let raf;
+  function draw() {
+    const startEl = document.getElementById('start');
+    const charEl  = document.getElementById('charSelect');
+    const startVis = startEl && !startEl.classList.contains('hidden');
+    const charVis  = charEl  && !charEl.classList.contains('hidden');
+    if (!startVis && !charVis) { cancelAnimationFrame(raf); return; }
+
+    const W = bg.width, H = bg.height;
+
+    // Advance simulation once per frame
+    for (let i = 0; i < lasers.length; i++) {
+      const l = lasers[i];
+      l.life++;
+      l.angle += l.speed;
+      if (l.life >= l.maxLife) lasers[i] = spawnLaser();
+    }
+    for (let i = 0; i < discs.length; i++) {
+      const d = discs[i];
+      d.x += d.vx; d.y += d.vy; d.rot += d.rotSpeed;
+      d.trail.push({ x: d.x, y: d.y });
+      if (d.trail.length > 18) d.trail.shift();
+      if (isOffScreen(d)) discs[i] = spawnDisc();
+    }
+
+    if (startVis) renderScene(ctx, W, H);
+    if (charVis && ctx2) renderScene(ctx2, W, H);
+
+    raf = requestAnimationFrame(draw);
+  }
+
+  // Restart animation when either overlay becomes visible
+  const startEl = document.getElementById('start');
+  const charEl  = document.getElementById('charSelect');
+  function onVisChange() {
+    const startVis = startEl && !startEl.classList.contains('hidden');
+    const charVis  = charEl  && !charEl.classList.contains('hidden');
+    if (startVis || charVis) { cancelAnimationFrame(raf); raf = requestAnimationFrame(draw); }
+  }
+  if (startEl) new MutationObserver(onVisChange).observe(startEl, { attributes: true, attributeFilter: ['class'] });
+  if (charEl)  new MutationObserver(onVisChange).observe(charEl,  { attributes: true, attributeFilter: ['class'] });
+  raf = requestAnimationFrame(draw);
+})();
+</script>
 </body>
 </html>

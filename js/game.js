@@ -16,6 +16,31 @@
     smash: { baseCooldown: 5.4, radius: 148, damage: 46, bonus: 26 },
   };
 
+  const CHARACTER_DEFS = {
+    thorn_knight: {
+      key: 'thorn_knight',
+      name: 'Thorn Knight',
+      rarity: 'knight',
+      startItem: 'neo_knife',
+      skills: { melee: 'Slash', laser: 'Blood Beam', smash: 'Crimson Smash' },
+    },
+    metao: {
+      key: 'metao',
+      name: 'Metao',
+      rarity: 'wizard',
+      startItem: 'orb_of_blood',
+      skills: { melee: 'Power Disks', laser: 'Fire Balls', smash: 'Chaos Burst' },
+    },
+    granialla: {
+      key: 'granialla',
+      name: 'Granialla',
+      rarity: 'god',
+      startItem: 'neo_knife',
+      skills: { melee: 'Smite', laser: 'Blade Justice', smash: 'Healing Zone' },
+      unlock: 'godslain',
+    },
+  };
+
   const ITEM_DEFS = {
     neo_knife: {
       key: 'neo_knife',
@@ -61,8 +86,11 @@
     hud: document.getElementById('hud'),
     hpFill: document.getElementById('hpFill'),
     hpTxt: document.getElementById('hpTxt'),
+    lv: document.getElementById('lv'),
+    xp: document.getElementById('xp'),
     fl: document.getElementById('fl'),
     coins: document.getElementById('coins'),
+    charName: document.getElementById('charName'),
     objective: document.getElementById('objective'),
     cdM: document.getElementById('cdM'),
     cdL: document.getElementById('cdL'),
@@ -77,6 +105,7 @@
     bestFloor: document.getElementById('bestFloor'),
     saveState: document.getElementById('saveState'),
     start: document.getElementById('start'),
+    charSelect: document.getElementById('charSelect'),
     dead: document.getElementById('dead'),
     deadInfo: document.getElementById('deadInfo'),
     win: document.getElementById('win'),
@@ -88,9 +117,13 @@
     go: document.getElementById('go'),
     continueRow: document.getElementById('continueRow'),
     continueBtn: document.getElementById('continueBtn'),
+    newRunBtn: document.getElementById('newRunBtn'),
+    settingsBtn: document.getElementById('settingsBtn'),
+    charBackBtn: document.getElementById('charBackBtn'),
+    deleteRunRow: document.getElementById('deleteRunRow'),
     deleteRunBtn: document.getElementById('deleteRunBtn'),
     runSummary: document.getElementById('runSummary'),
-    itemButtons: [...document.querySelectorAll('#choose button')],
+    charButtons: [...document.querySelectorAll('#choose button')],
     itemSlots: {
       neo_knife: document.getElementById('rr-neo-knife'),
       orb_of_blood: document.getElementById('rr-orb-blood'),
@@ -105,6 +138,11 @@
       melee: document.querySelector('[data-skill="melee"]'),
       laser: document.querySelector('[data-skill="laser"]'),
       smash: document.querySelector('[data-skill="smash"]'),
+    },
+    skillNames: {
+      melee: document.querySelector('[data-skill="melee"] .skill-name'),
+      laser: document.querySelector('[data-skill="laser"] .skill-name'),
+      smash: document.querySelector('[data-skill="smash"] .skill-name'),
     },
     icons: {
       melee: document.getElementById('iconMelee'),
@@ -141,7 +179,10 @@
   let laserActive = false;
   let laserTime = 0;
   let laserTick = 0;
-  let chosenItem = 'neo_knife';
+  let chosenCharacter = 'thorn_knight';
+  let destructibles = [];
+  let hazards = [];
+  let shopOffers = [];
   let activeRun = null;
   let metaProgress = createDefaultMeta();
   let savePendingTimer = 0;
@@ -167,10 +208,15 @@
 
   async function boot() {
     uiController.setState(gameState);
+    uiController.setHudUpdateHook(() => {
+      if (gameState !== 'play' || !player) return;
+      updateObjective();
+      updateHud();
+    });
     bindInput();
     drawActionIcons();
     await loadPersistedState();
-    updateItemSelectionUI();
+    updateCharacterSelectionUI();
     refreshMenuState();
     draw();
   }
@@ -190,11 +236,19 @@
       if (event.button === 0) mouse.down = false;
       if (event.button === 2) mouse.right = false;
     });
+    window.addEventListener('keydown', event => {
+      const key = event.key.toLowerCase();
+      keys[key] = true;
+      if (key === 'r' && gameState === 'play') trySmash();
+    });
+    window.addEventListener('keyup', event => {
+      keys[event.key.toLowerCase()] = false;
+    });
     uiController.bindMenuActions({
-      onItemSelect(itemKey, button) {
+      onCharacterSelect(characterKey, button) {
         if (button.classList.contains('locked')) return;
-        chosenItem = itemKey;
-        updateItemSelectionUI();
+        chosenCharacter = characterKey;
+        updateCharacterSelectionUI();
       },
       onStartNew() { void startGame(false); },
       onContinue() { void startGame(true); },
@@ -215,13 +269,17 @@
       coins: 0,
       bestFloor: 1,
       unlockedItems: ['neo_knife'],
+      unlockedCharacters: ['thorn_knight', 'metao'],
+      godsKilled: 0,
     };
   }
 
   function createDefaultPlayer() {
     const items = { neo_knife: 0, orb_of_blood: 0, hemes_scarf: 0 };
-    items[chosenItem] = 1;
+    const character = CHARACTER_DEFS[chosenCharacter] || CHARACTER_DEFS.thorn_knight;
+    items[character.startItem] = 1;
     return {
+      character: character.key,
       x: START_X,
       y: START_Y,
       r: 14,
@@ -233,6 +291,11 @@
       swingA: 0,
       inv: 0,
       coins: 0,
+      level: 1,
+      xp: 0,
+      xpToNext: 20,
+      attackPower: 0,
+      attackSpeed: 1,
       items,
     };
   }
@@ -270,6 +333,7 @@
           ...createDefaultMeta(),
           ...savedMeta,
           unlockedItems: normalizeUnlockedItems(savedMeta.unlockedItems || savedMeta.unlockedRelics),
+          unlockedCharacters: normalizeUnlockedCharacters(savedMeta.unlockedCharacters),
         };
       }
       activeRun = savedRun && typeof savedRun === 'object' ? savedRun : null;
@@ -294,20 +358,27 @@
     return items.length ? items : fallback;
   }
 
+  function normalizeUnlockedCharacters(input) {
+    const fallback = ['thorn_knight', 'metao'];
+    if (!Array.isArray(input)) return fallback;
+    const chars = Object.keys(CHARACTER_DEFS).filter(name => input.includes(name));
+    return chars.length ? chars : fallback;
+  }
+
   function refreshMenuState() {
     uiController.setMenuMeta(metaProgress.coins, metaProgress.bestFloor, saveStore.kind);
-    updateItemSelectionUI();
+    updateCharacterSelectionUI();
     const summary = activeRun && activeRun.player && activeRun.floor
       ? `Floor ${activeRun.floor} | ${activeRun.player.coins || 0} run coins`
       : '';
     uiController.setRunSummary(summary);
   }
 
-  function updateItemSelectionUI() {
-    const unlocked = new Set(metaProgress.unlockedItems || ['neo_knife']);
-    if (!unlocked.has(chosenItem)) chosenItem = metaProgress.unlockedItems[0] || 'neo_knife';
-
-    uiController.updateItemSelection(unlocked, chosenItem);
+  function updateCharacterSelectionUI() {
+    const unlocked = new Set(metaProgress.unlockedCharacters || ['thorn_knight', 'metao']);
+    if (metaProgress.godsKilled > 0) unlocked.add('granialla');
+    if (!unlocked.has(chosenCharacter)) chosenCharacter = [...unlocked][0] || 'thorn_knight';
+    uiController.updateCharacterSelection(unlocked, chosenCharacter);
   }
 
   function setGameState(nextState) {
@@ -342,6 +413,9 @@
     projectiles = [];
     chests = [];
     pickups = [];
+    destructibles = [];
+    hazards = [];
+    shopOffers = [];
     cooldowns = { melee: 0, laser: 0, smash: 0 };
     laserActive = false;
     laserTime = 0;
@@ -370,6 +444,9 @@
     projectiles = snapshot.projectiles || [];
     chests = snapshot.chests || [];
     pickups = snapshot.pickups || [];
+    destructibles = snapshot.destructibles || currentRoom?.destructibles || [];
+    hazards = snapshot.hazards || currentRoom?.hazards || [];
+    shopOffers = snapshot.shopOffers || currentRoom?.shopOffers || [];
     cooldowns = snapshot.cooldowns || { melee: 0, laser: 0, smash: 0 };
     laserActive = !!snapshot.laserActive;
     laserTime = snapshot.laserTime || 0;
@@ -456,6 +533,9 @@
     for (let index = 0; index < treasureCount; index += 1) {
       if (pool[index]) pool[index].type = 'treasure';
     }
+    const shopCandidate = pool.find(room => room.type === 'combat');
+    if (shopCandidate && rng() < 0.7) shopCandidate.type = 'shop';
+    rooms.forEach(decorateRoomData);
 
     currentRoom = startRoom;
     player.x = START_X;
@@ -463,6 +543,75 @@
     enterRoom(currentRoom);
     updateObjective();
     updateHud();
+  }
+
+  function decorateRoomData(room) {
+    room.destructibles = [];
+    room.hazards = [];
+    room.shopOffers = [];
+    if (room.type === 'start') return;
+
+    const potCount = room.type === 'shop' ? 1 : irand(1, 3);
+    for (let index = 0; index < potCount; index += 1) {
+      room.destructibles.push({
+        kind: 'pot',
+        x: 150 + rand(ROOM_W - 300, 0),
+        y: 120 + rand(ROOM_H - 240, 0),
+        r: 12,
+        hp: 1,
+        broken: false,
+      });
+    }
+
+    if (rng() < 0.45 && room.type !== 'shop') {
+      room.destructibles.push({
+        kind: 'barrel',
+        x: 180 + rand(ROOM_W - 360, 0),
+        y: 140 + rand(ROOM_H - 280, 0),
+        r: 14,
+        hp: 1,
+        broken: false,
+      });
+    }
+
+    if (rng() < 0.4 && room.type !== 'god') {
+      room.hazards.push({
+        kind: 'lava',
+        x: 260 + rand(ROOM_W - 520, 0),
+        y: 180 + rand(ROOM_H - 360, 0),
+        r: 46 + rand(26, 0),
+      });
+    }
+
+    if (rng() < 0.3 && room.type !== 'shop' && room.type !== 'god') {
+      const wallX = rng() < 0.5 ? 76 : ROOM_W - 76;
+      const hiddenX = wallX < ROOM_W / 2 ? 48 : ROOM_W - 48;
+      room.destructibles.push({
+        kind: 'wall',
+        x: wallX,
+        y: ROOM_H / 2 + rand(120, -120),
+        r: 26,
+        hp: 2,
+        broken: false,
+      });
+      room.destructibles.push({
+        kind: 'pot',
+        x: hiddenX,
+        y: ROOM_H / 2 + rand(140, -140),
+        r: 12,
+        hp: 1,
+        broken: false,
+        hidden: true,
+      });
+    }
+
+    if (room.type === 'shop') {
+      room.shopOffers = [
+        { type: 'potion', cost: 18 + floor * 2, x: ROOM_W / 2 - 90, y: ROOM_H / 2, bought: false },
+        { type: 'item', key: rollItemDrop(), cost: 32 + floor * 4, x: ROOM_W / 2 + 90, y: ROOM_H / 2, bought: false },
+      ];
+      room.cleared = true;
+    }
   }
 
   function findFarthestRoom(startRoom, roomMap) {
@@ -500,6 +649,9 @@
     chests = [];
     pickups = [];
     particles = [];
+    destructibles = room.destructibles || [];
+    hazards = room.hazards || [];
+    shopOffers = room.shopOffers || [];
     laserActive = false;
     laserTime = 0;
     laserTick = 0;
@@ -609,6 +761,7 @@
 
   function migratePlayerData(source) {
     const playerData = source || createDefaultPlayer();
+    playerData.character = playerData.character || 'thorn_knight';
     if (!playerData.items) {
       const legacy = playerData.relics || {};
       playerData.items = {
@@ -621,7 +774,16 @@
     ITEM_KEYS.forEach(key => {
       playerData.items[key] = Number(playerData.items[key] || 0);
     });
+    playerData.level = Number(playerData.level || 1);
+    playerData.xp = Number(playerData.xp || 0);
+    playerData.xpToNext = Number(playerData.xpToNext || 20);
+    playerData.attackPower = Number(playerData.attackPower || 0);
+    playerData.attackSpeed = Number(playerData.attackSpeed || 1);
     return playerData;
+  }
+
+  function getCharacterDef() {
+    return CHARACTER_DEFS[player?.character || chosenCharacter] || CHARACTER_DEFS.thorn_knight;
   }
 
   function getItemCount(key) {
@@ -642,16 +804,27 @@
 
   function scaleDamageAgainstEnemy(enemy, damage) {
     const stats = getItemStats();
+    const powered = damage + (player?.attackPower || 0);
     if (enemy.bleed > 0 && stats.bleedDamageMultiplier > 1) {
-      return Math.round(damage * stats.bleedDamageMultiplier);
+      return Math.round(powered * stats.bleedDamageMultiplier);
     }
-    return damage;
+    return powered;
   }
 
   function tryMelee() {
     if (cooldowns.melee > 0) return;
     const itemStats = getItemStats();
-    cooldowns.melee = godTimer > 0 ? 0.2 : ATTACKS.melee.baseCooldown;
+    const attackSpeed = player?.attackSpeed || 1;
+    const character = getCharacterDef();
+    cooldowns.melee = (godTimer > 0 ? 0.2 : ATTACKS.melee.baseCooldown) / attackSpeed;
+    if (character.key === 'metao') {
+      spawnPlayerDiskBurst();
+      return;
+    }
+    if (character.key === 'granialla') {
+      castSmiteChain();
+      return;
+    }
     const angle = Math.atan2(mouse.worldY - player.y, mouse.worldX - player.x);
     player.swing = ATTACKS.melee.active;
     player.swingA = angle;
@@ -676,12 +849,29 @@
       hitEnemy(enemy, damage, angle, ATTACKS.melee.push, '#0ff');
       if (itemStats.bleedChance > 0 && rng() < itemStats.bleedChance) applyBleed(enemy, 1, 5);
     }
+    destructibles.forEach(prop => {
+      if (!prop.broken && !prop.hidden && dist(player.x, player.y, prop.x, prop.y) <= ATTACKS.melee.range) {
+        damageDestructible(prop, 1);
+      }
+    });
   }
 
   function tryLaser() {
     if (cooldowns.laser > 0 || laserActive) return;
+    const attackSpeed = player?.attackSpeed || 1;
+    const character = getCharacterDef();
+    if (character.key === 'metao') {
+      cooldowns.laser = ATTACKS.laser.baseCooldown / attackSpeed;
+      spawnFireballs();
+      return;
+    }
+    if (character.key === 'granialla') {
+      cooldowns.laser = 3.8 / attackSpeed;
+      castBladeOfJustice();
+      return;
+    }
     laserActive = true;
-    laserTime = godTimer > 0 ? 0.72 : ATTACKS.laser.duration;
+    laserTime = (godTimer > 0 ? 0.72 : ATTACKS.laser.duration) / attackSpeed;
     laserTick = 0;
   }
 
@@ -698,6 +888,11 @@
         if (!beamHitsCircle(player.x, player.y, end.x, end.y, enemy.x, enemy.y, enemy.r + 6)) continue;
         hitEnemy(enemy, godTimer > 0 ? 16 : ATTACKS.laser.damage, angle, 60, '#f0f');
       }
+      destructibles.forEach(prop => {
+        if (!prop.broken && !prop.hidden && beamHitsCircle(player.x, player.y, end.x, end.y, prop.x, prop.y, prop.r + 4)) {
+          damageDestructible(prop, 1);
+        }
+      });
     }
     if (laserTime <= 0) {
       laserActive = false;
@@ -708,7 +903,17 @@
   function trySmash() {
     if (cooldowns.smash > 0) return;
     const itemStats = getItemStats();
-    cooldowns.smash = godTimer > 0 ? 2 : ATTACKS.smash.baseCooldown;
+    const attackSpeed = player?.attackSpeed || 1;
+    const character = getCharacterDef();
+    cooldowns.smash = (godTimer > 0 ? 2 : ATTACKS.smash.baseCooldown) / attackSpeed;
+    if (character.key === 'metao') {
+      castChaosBurst();
+      return;
+    }
+    if (character.key === 'granialla') {
+      castHealingZone();
+      return;
+    }
     shake = 16;
     shakeT = 0.24;
     particles.push({ x: player.x, y: player.y, life: 0.4, ring: ATTACKS.smash.radius - 30, c: '#ff00aa' });
@@ -725,6 +930,68 @@
       hitEnemy(enemy, damage, angle, 320, '#ff66cc');
       enemy.stun = 0.5;
     }
+    destructibles.forEach(prop => {
+      if (!prop.broken && !prop.hidden && dist(player.x, player.y, prop.x, prop.y) <= ATTACKS.smash.radius + prop.r) {
+        damageDestructible(prop, 2);
+      }
+    });
+  }
+
+  function spawnPlayerDiskBurst() {
+    for (let index = 0; index < 8; index += 1) {
+      const angle = index * (Math.PI * 2 / 8);
+      projectiles.push({ x: player.x, y: player.y, vx: Math.cos(angle) * 280, vy: Math.sin(angle) * 280, r: 7, life: 1.2, enemy: false, kind: 'disk', damage: 20 });
+    }
+  }
+
+  function spawnFireballs() {
+    const base = Math.atan2(mouse.worldY - player.y, mouse.worldX - player.x);
+    for (let index = -1; index <= 1; index += 1) {
+      const angle = base + index * 0.18;
+      projectiles.push({ x: player.x, y: player.y, vx: Math.cos(angle) * 320, vy: Math.sin(angle) * 320, r: 8, life: 1.6, enemy: false, kind: 'fireball', damage: 22, splash: 48 });
+    }
+  }
+
+  function castChaosBurst() {
+    for (let index = 0; index < 6; index += 1) {
+      const angle = rng() * Math.PI * 2;
+      const px = player.x + Math.cos(angle) * rand(160, 40);
+      const py = player.y + Math.sin(angle) * rand(160, 40);
+      particles.push({ x: px, y: py, life: 0.45, ring: 18, c: '#c971ff' });
+      blastRadius(px, py, 52, 24, '#c971ff');
+    }
+  }
+
+  function castBladeOfJustice() {
+    const angle = Math.atan2(mouse.worldY - player.y, mouse.worldX - player.x);
+    for (let index = enemies.length - 1; index >= 0; index -= 1) {
+      const enemy = enemies[index];
+      const distance = dist(player.x, player.y, enemy.x, enemy.y);
+      if (distance > 110 + enemy.r) continue;
+      const targetAngle = Math.atan2(enemy.y - player.y, enemy.x - player.x);
+      const difference = Math.abs(Math.atan2(Math.sin(targetAngle - angle), Math.cos(targetAngle - angle)));
+      if (difference > 1.3) continue;
+      hitEnemy(enemy, 34, angle, 280, '#fff6a3');
+    }
+    particles.push({ x: player.x, y: player.y, life: 0.5, ring: 36, c: '#fff6a3' });
+  }
+
+  function castSmiteChain() {
+    const origin = findNearestEnemy(player.x, player.y, 260);
+    if (!origin) return;
+    let current = origin;
+    const hit = new Set();
+    for (let jumps = 0; jumps < 4 && current; jumps += 1) {
+      hit.add(current);
+      hitEnemy(current, 18 + jumps * 4, Math.atan2(current.y - player.y, current.x - player.x), 90, '#fff');
+      particles.push({ x: current.x, y: current.y, life: 0.22, c: '#fff' });
+      current = findNearestEnemy(current.x, current.y, 140, hit);
+    }
+  }
+
+  function castHealingZone() {
+    hazards.push({ kind: 'healing_zone', x: player.x, y: player.y, r: 62, ttl: 6 });
+    particles.push({ x: player.x, y: player.y, life: 0.7, ring: 30, c: '#35ff6f' });
   }
 
   function hitEnemy(enemy, damage, angle, knockback, color) {
@@ -757,6 +1024,7 @@
     }
 
     dropCoins(enemy.x, enemy.y, enemy.type === 'god' ? 40 : enemy.elite ? 10 : 5);
+    grantXp(enemy.type === 'god' ? 40 : enemy.elite ? 12 : 6);
 
     if (enemy.elite && rng() < 0.18) {
       pickups.push({ x: enemy.x, y: enemy.y, type: 'item', key: rollItemDrop({ elite: true }) });
@@ -765,9 +1033,12 @@
     }
 
     if (enemy.type === 'god') {
+      metaProgress.godsKilled = Number(metaProgress.godsKilled || 0) + 1;
+      if (!metaProgress.unlockedCharacters.includes('granialla')) metaProgress.unlockedCharacters.push('granialla');
       currentRoom.cleared = true;
       pickups.push({ x: ROOM_W / 2, y: ROOM_H / 2, type: 'crown' });
       updateObjective();
+      refreshMenuState();
       scheduleRunSave();
       return;
     }
@@ -804,6 +1075,24 @@
       if (roll <= 0) return key;
     }
     return 'neo_knife';
+  }
+
+  function grantXp(amount) {
+    player.xp += amount;
+    while (player.xp >= player.xpToNext) {
+      player.xp -= player.xpToNext;
+      levelUp();
+    }
+  }
+
+  function levelUp() {
+    player.level += 1;
+    player.xpToNext = Math.round(player.xpToNext * 1.22);
+    player.maxHp += 15;
+    player.hp = Math.min(player.maxHp, player.hp + 15);
+    player.attackPower += 3;
+    player.attackSpeed += 0.01;
+    particles.push({ x: player.x, y: player.y - 20, life: 0.9, text: `LV ${player.level}`, c: '#7dff9e' });
   }
 
   function collectItem(itemKey) {
@@ -843,6 +1132,7 @@
     const dt = Math.min(0.033, (timestamp - lastTime) / 1000 || 0.016);
     lastTime = timestamp;
     if (gameState === 'play') update(dt);
+    uiController.tick();
     draw();
     requestAnimationFrame(loop);
   }
@@ -853,8 +1143,6 @@
     cooldowns.laser = Math.max(0, cooldowns.laser - dt);
     cooldowns.smash = Math.max(0, cooldowns.smash - dt);
     if (godTimer > 0) godTimer = Math.max(0, godTimer - dt);
-
-    updateHud();
 
     let moveX = (keys.d || keys.arrowright ? 1 : 0) - (keys.a || keys.arrowleft ? 1 : 0);
     let moveY = (keys.s || keys.arrowdown ? 1 : 0) - (keys.w || keys.arrowup ? 1 : 0);
@@ -928,6 +1216,7 @@
     }
 
     updateProjectiles(dt);
+    updateWorldProps(dt);
     updateChests();
     updatePickups();
     updateParticles(dt);
@@ -1174,15 +1463,115 @@
     if (player.hp <= 0) die();
   }
 
+  function blastRadius(x, y, radius, damage, color) {
+    for (let index = enemies.length - 1; index >= 0; index -= 1) {
+      const enemy = enemies[index];
+      if (dist(x, y, enemy.x, enemy.y) > radius + enemy.r) continue;
+      hitEnemy(enemy, damage, Math.atan2(enemy.y - y, enemy.x - x), 180, color);
+    }
+    destructibles.forEach(prop => {
+      if (!prop.broken && !prop.hidden && dist(x, y, prop.x, prop.y) <= radius + prop.r) damageDestructible(prop, damage);
+    });
+  }
+
+  function findNearestEnemy(x, y, radius, exclude = new Set()) {
+    let best = null;
+    let bestDist = radius;
+    enemies.forEach(enemy => {
+      if (exclude.has(enemy)) return;
+      const d = dist(x, y, enemy.x, enemy.y);
+      if (d < bestDist) {
+        best = enemy;
+        bestDist = d;
+      }
+    });
+    return best;
+  }
+
   function updateProjectiles(dt) {
     for (let index = projectiles.length - 1; index >= 0; index -= 1) {
       const projectile = projectiles[index];
       projectile.life -= dt;
       projectile.x += projectile.vx * dt;
       projectile.y += projectile.vy * dt;
+      const hitProp = destructibles.find(prop => !prop.broken && !prop.hidden && dist(projectile.x, projectile.y, prop.x, prop.y) <= projectile.r + prop.r);
+      if (!projectile.enemy && hitProp) {
+        damageDestructible(hitProp, projectile.damage || 1);
+        if (projectile.kind === 'fireball') blastRadius(projectile.x, projectile.y, projectile.splash || 44, 16, '#ff8844');
+        projectiles.splice(index, 1);
+        continue;
+      }
       if (projectile.life <= 0 || isBlocked(projectile.x, projectile.y, projectile.r)) {
         projectiles.splice(index, 1);
+        continue;
       }
+      if (!projectile.enemy) {
+        const target = enemies.find(enemy => dist(projectile.x, projectile.y, enemy.x, enemy.y) <= projectile.r + enemy.r);
+        if (target) {
+          hitEnemy(target, projectile.damage || 16, Math.atan2(projectile.vy, projectile.vx), 90, projectile.kind === 'fireball' ? '#ff8844' : '#a857ff');
+          if (projectile.kind === 'fireball') blastRadius(projectile.x, projectile.y, projectile.splash || 44, 14, '#ff8844');
+          projectiles.splice(index, 1);
+          continue;
+        }
+      }
+    }
+  }
+
+  function updateWorldProps(dt) {
+    hazards.forEach(hazard => {
+      if (hazard.kind === 'lava' && dist(player.x, player.y, hazard.x, hazard.y) < hazard.r + player.r - 10) {
+        damagePlayer(6 * dt, 0, 0);
+      }
+      if (hazard.kind === 'healing_zone') {
+        hazard.ttl -= dt;
+        if (dist(player.x, player.y, hazard.x, hazard.y) < hazard.r) {
+          player.hp = Math.min(player.maxHp, player.hp + 8 * dt);
+        }
+        enemies.forEach(enemy => {
+          if (dist(enemy.x, enemy.y, hazard.x, hazard.y) < hazard.r + enemy.r) {
+            enemy.hp -= 10 * dt;
+            if (enemy.hp <= 0) onEnemyDie(enemy);
+          }
+        });
+      }
+    });
+    hazards = hazards.filter(hazard => hazard.ttl === undefined || hazard.ttl > 0);
+    if (currentRoom) currentRoom.hazards = hazards;
+
+    shopOffers.forEach(offer => {
+      if (offer.bought || dist(player.x, player.y, offer.x, offer.y) > 30) return;
+      if (player.coins < offer.cost) return;
+      player.coins -= offer.cost;
+      metaProgress.coins = Math.max(0, metaProgress.coins - offer.cost);
+      offer.bought = true;
+      if (offer.type === 'potion') {
+        player.hp = Math.min(player.maxHp, player.hp + 55);
+      } else if (offer.type === 'item') {
+        collectItem(offer.key);
+      }
+    });
+    if (currentRoom) {
+      currentRoom.destructibles = destructibles;
+      currentRoom.shopOffers = shopOffers;
+    }
+  }
+
+  function damageDestructible(prop, damage) {
+    if (prop.broken) return;
+    prop.hp -= damage;
+    if (prop.hp > 0) return;
+    prop.broken = true;
+    if (prop.kind === 'pot') {
+      if (rng() < 0.7) dropCoins(prop.x, prop.y, 6 + floor);
+      else pickups.push({ x: prop.x, y: prop.y, type: 'item', key: rollItemDrop() });
+    }
+    if (prop.kind === 'barrel') {
+      blastRadius(prop.x, prop.y, 72, 28, '#ff5a3d');
+    }
+    if (prop.kind === 'wall') {
+      destructibles.forEach(other => {
+        if (other.hidden) other.hidden = false;
+      });
     }
   }
 
@@ -1327,6 +1716,10 @@
     if (!currentRoom) return;
     let objective = 'Find the ladder.';
     if (floor < MAX_FLOOR) {
+      if (currentRoom.type === 'shop') {
+        uiController.setObjective('Shop or move on.');
+        return;
+      }
       objective = currentRoom.type === 'ladder' && !currentRoom.cleared ? 'Clear the ladder room.' : 'Find the ladder.';
       uiController.setObjective(objective);
       return;
@@ -1348,14 +1741,19 @@
 
   function updateHud() {
     if (!player) return;
-    const meleeMax = godTimer > 0 ? 0.2 : ATTACKS.melee.baseCooldown;
+    const character = getCharacterDef();
+    const attackSpeed = player.attackSpeed || 1;
+    const meleeMax = (godTimer > 0 ? 0.2 : ATTACKS.melee.baseCooldown) / attackSpeed;
     const laserMax = laserActive
-      ? (godTimer > 0 ? 0.72 : ATTACKS.laser.duration)
-      : (godTimer > 0 ? 2.8 : ATTACKS.laser.baseCooldown);
-    const smashMax = godTimer > 0 ? 2 : ATTACKS.smash.baseCooldown;
+      ? (godTimer > 0 ? 0.72 : ATTACKS.laser.duration) / attackSpeed
+      : (godTimer > 0 ? 2.8 : ATTACKS.laser.baseCooldown) / attackSpeed;
+    const smashMax = (godTimer > 0 ? 2 : ATTACKS.smash.baseCooldown) / attackSpeed;
     uiController.setHudValues({
       floor,
+      level: player.level,
+      xpText: `${player.xp}/${player.xpToNext}`,
       coins: player.coins,
+      character: character.name.toUpperCase(),
       hp: player.hp,
       maxHp: player.maxHp,
       meleeCd: cooldowns.melee,
@@ -1367,6 +1765,9 @@
         smash: { current: cooldowns.smash, max: smashMax, active: false },
       },
     });
+    ui.skillNames.melee.textContent = character.skills.melee;
+    ui.skillNames.laser.textContent = character.skills.laser;
+    ui.skillNames.smash.textContent = character.skills.smash;
     updateItemUI();
   }
 
@@ -1435,6 +1836,9 @@
       projectiles,
       chests,
       pickups,
+      destructibles,
+      hazards,
+      shopOffers,
       cooldowns,
       laserActive,
       laserTime,
@@ -1458,6 +1862,7 @@
     ctx.translate(-camera.x + offsetX, -camera.y + offsetY);
 
     drawFloor();
+    drawWorldProps();
     drawChests();
     drawPickups();
     drawProjectiles();
@@ -1545,6 +1950,71 @@
       ctx.fillRect(-18, -12, 36, 24);
       ctx.fillStyle = '#000';
       ctx.fillRect(-6, -4, 12, 6);
+      ctx.restore();
+    });
+  }
+
+  function drawWorldProps() {
+    hazards.forEach(hazard => {
+      ctx.save();
+      ctx.translate(hazard.x, hazard.y);
+      if (hazard.kind === 'lava') {
+        ctx.fillStyle = 'rgba(255,90,40,0.7)';
+        ctx.shadowColor = '#ff5a3d';
+        ctx.shadowBlur = 16;
+        ctx.beginPath();
+        ctx.arc(0, 0, hazard.r, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (hazard.kind === 'healing_zone') {
+        ctx.strokeStyle = '#35ff6f';
+        ctx.shadowColor = '#35ff6f';
+        ctx.shadowBlur = 18;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(0, 0, hazard.r, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.restore();
+    });
+
+    destructibles.forEach(prop => {
+      if (prop.broken || prop.hidden) return;
+      ctx.save();
+      ctx.translate(prop.x, prop.y);
+      if (prop.kind === 'pot') {
+        ctx.fillStyle = '#b77d4a';
+        ctx.fillRect(-10, -12, 20, 24);
+      } else if (prop.kind === 'barrel') {
+        ctx.fillStyle = '#8c5324';
+        ctx.fillRect(-12, -14, 24, 28);
+        ctx.strokeStyle = '#ff5a3d';
+        ctx.strokeRect(-12, -14, 24, 28);
+      } else if (prop.kind === 'wall') {
+        ctx.fillStyle = '#113648';
+        ctx.fillRect(-24, -24, 48, 48);
+        ctx.strokeStyle = '#58d9ff';
+        ctx.strokeRect(-24, -24, 48, 48);
+      }
+      ctx.restore();
+    });
+
+    shopOffers.forEach(offer => {
+      if (offer.bought) return;
+      ctx.save();
+      ctx.translate(offer.x, offer.y);
+      ctx.fillStyle = 'rgba(0,30,44,0.95)';
+      ctx.strokeStyle = '#ffd966';
+      ctx.lineWidth = 2;
+      ctx.fillRect(-26, -26, 52, 52);
+      ctx.strokeRect(-26, -26, 52, 52);
+      ctx.fillStyle = offer.type === 'item' ? '#a857ff' : '#35ff6f';
+      ctx.beginPath();
+      ctx.arc(0, -6, 10, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 11px system-ui';
+      ctx.textAlign = 'center';
+      ctx.fillText(String(offer.cost), 0, 18);
       ctx.restore();
     });
   }
@@ -1911,6 +2381,8 @@
     const manager = typeof window.UIManager === 'function' ? new window.UIManager({ autoRuntimeInit: false }) : null;
     let menuBound = false;
     let restartBound = false;
+    let activeState = 'menu';
+    let hudUpdateHook = null;
 
     function makeContainer(element) {
       return {
@@ -1934,18 +2406,22 @@
       const show = state || 'menu';
       if (show === 'menu') {
         view.start.classList.remove('hidden');
+        view.charSelect?.classList.add('hidden');
         view.dead.classList.add('hidden');
         view.win.classList.add('hidden');
       } else if (show === 'dead') {
         view.start.classList.add('hidden');
+        view.charSelect?.classList.add('hidden');
         view.dead.classList.remove('hidden');
         view.win.classList.add('hidden');
       } else if (show === 'win') {
         view.start.classList.add('hidden');
+        view.charSelect?.classList.add('hidden');
         view.dead.classList.add('hidden');
         view.win.classList.remove('hidden');
       } else {
         view.start.classList.add('hidden');
+        view.charSelect?.classList.add('hidden');
         view.dead.classList.add('hidden');
         view.win.classList.add('hidden');
       }
@@ -1955,7 +2431,12 @@
     }
 
     if (manager && typeof manager.registerScreen === 'function') {
-      manager.registerScreen('hud', { create: () => makeContainer(view.hud), validStates: ['play'] });
+      manager.registerScreen('hud', {
+        create: () => makeContainer(view.hud),
+        show: () => { if (hudUpdateHook) hudUpdateHook(); },
+        update: () => { if (hudUpdateHook) hudUpdateHook(); },
+        validStates: ['play'],
+      });
       manager.registerScreen('actionBar', { create: () => makeContainer(view.actionBar), validStates: ['play'] });
       manager.registerScreen('start', { create: () => makeContainer(view.start), validStates: ['menu'] });
       manager.registerScreen('dead', { create: () => makeContainer(view.dead), validStates: ['dead'] });
@@ -1964,20 +2445,45 @@
 
     return {
       setState(state) {
+        activeState = state || 'menu';
         if (manager && typeof manager.onGameStateChange === 'function') manager.onGameStateChange(state);
         else fallbackState(state);
       },
+      setHudUpdateHook(hook) {
+        hudUpdateHook = typeof hook === 'function' ? hook : null;
+      },
+      tick() {
+        if (manager && typeof manager.updateAll === 'function') {
+          manager.updateAll();
+          return;
+        }
+        if (activeState === 'play' && hudUpdateHook) hudUpdateHook();
+      },
       bindMenuActions(handlers) {
         if (menuBound) return;
-        view.itemButtons.forEach(button => {
-          button.addEventListener('click', () => handlers.onItemSelect(button.dataset.item, button));
+        view.charButtons.forEach(button => {
+          button.addEventListener('click', () => {
+            handlers.onCharacterSelect(button.dataset.char || '', button);
+          });
         });
         view.go.addEventListener('click', handlers.onStartNew);
         view.seed.addEventListener('keydown', event => {
           if (event.key === 'Enter') handlers.onStartNew();
         });
-        view.continueBtn.addEventListener('click', handlers.onContinue);
-        view.deleteRunBtn.addEventListener('click', handlers.onDeleteRun);
+        view.continueBtn?.addEventListener('click', handlers.onContinue);
+        view.deleteRunBtn?.addEventListener('click', handlers.onDeleteRun);
+        // New main-menu nav
+        view.newRunBtn?.addEventListener('click', () => {
+          view.start.classList.add('hidden');
+          view.charSelect?.classList.remove('hidden');
+        });
+        view.charBackBtn?.addEventListener('click', () => {
+          view.charSelect?.classList.add('hidden');
+          view.start.classList.remove('hidden');
+        });
+        view.settingsBtn?.addEventListener('click', () => {
+          // placeholder — extend later
+        });
         menuBound = true;
       },
       bindRestartActions(onRestart) {
@@ -1994,12 +2500,15 @@
       },
       setRunSummary(summary) {
         const hasRun = !!summary;
-        view.continueRow.classList.toggle('hidden', !hasRun);
+        // Main menu: show/hide Continue button
+        view.continueBtn?.classList.toggle('hidden', !hasRun);
+        // Char-select screen: show/hide delete-run row
+        view.deleteRunRow?.classList.toggle('hidden', !hasRun);
         view.runSummary.textContent = summary || '';
       },
-      updateItemSelection(unlocked, selected) {
-        view.itemButtons.forEach(button => {
-          const itemKey = button.dataset.item;
+      updateCharacterSelection(unlocked, selected) {
+        view.charButtons.forEach(button => {
+          const itemKey = button.dataset.char;
           const hint = button.querySelector('small');
           const baseHint = hint?.dataset.base || hint?.textContent || '';
           if (hint && !hint.dataset.base) hint.dataset.base = baseHint;
@@ -2019,7 +2528,10 @@
       setObjective(text) { view.objective.textContent = text; },
       setHudValues(payload) {
         view.fl.textContent = payload.floor;
+        view.lv.textContent = payload.level;
+        view.xp.textContent = payload.xpText;
         view.coins.textContent = payload.coins;
+        view.charName.textContent = payload.character;
         view.hpFill.style.width = `${Math.max(0, payload.hp / payload.maxHp) * 100}%`;
         view.hpTxt.textContent = Math.ceil(payload.hp);
         view.cdM.textContent = payload.meleeCd.toFixed(1);
@@ -2199,7 +2711,8 @@
   }
 
   function isBlocked(x, y, r) {
-    return walls.some(wall => circleRect(x, y, r, wall.x, wall.y, wall.w, wall.h));
+    if (walls.some(wall => circleRect(x, y, r, wall.x, wall.y, wall.w, wall.h))) return true;
+    return destructibles.some(prop => !prop.broken && !prop.hidden && circleRect(x, y, r, prop.x - prop.r, prop.y - prop.r, prop.r * 2, prop.r * 2));
   }
 
   function beamHitsCircle(x1, y1, x2, y2, cx, cy, radius) {
