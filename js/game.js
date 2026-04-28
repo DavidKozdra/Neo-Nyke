@@ -370,6 +370,7 @@
   let invKeyLatch = false;
   let activeShopTab = 'items';
   let draggingMoveKey = '';
+  let activeInventorySlot = '';
   let shopPanelDirty = false;
   let inventoryPanelDirty = false;
 
@@ -500,19 +501,61 @@
     ui.shopItems?.addEventListener('click', handleShopBuyClick);
     ui.shopMoves?.addEventListener('click', handleShopBuyClick);
     ui.shopHeals?.addEventListener('click', handleShopBuyClick);
+    ui.invMovesList?.addEventListener('click', handleInventoryMoveSelect);
     ui.invMovesList?.addEventListener('dragstart', event => {
       const target = event.target instanceof Element ? event.target : null;
-      const moveKey = target?.dataset?.move;
+      const moveKey = target?.closest('[data-move]')?.dataset?.move;
       if (!moveKey) return;
       draggingMoveKey = moveKey;
       event.dataTransfer?.setData('text/plain', moveKey);
     });
+    ui.invMovesList?.addEventListener('dragover', event => {
+      const target = event.target instanceof Element ? event.target.closest('[data-move]') : null;
+      const moveKey = draggingMoveKey || event.dataTransfer?.getData('text/plain') || '';
+      const targetMoveKey = target?.dataset?.move || '';
+      if (!MOVE_DEFS[moveKey] || !MOVE_DEFS[targetMoveKey]) return;
+      if (MOVE_DEFS[moveKey].slot !== MOVE_DEFS[targetMoveKey].slot) return;
+      event.preventDefault();
+      target?.classList.add('drag-over');
+    });
+    ui.invMovesList?.addEventListener('dragleave', event => {
+      const target = event.target instanceof Element ? event.target.closest('[data-move]') : null;
+      target?.classList.remove('drag-over');
+    });
+    ui.invMovesList?.addEventListener('drop', event => {
+      const target = event.target instanceof Element ? event.target.closest('[data-move]') : null;
+      const moveKey = draggingMoveKey || event.dataTransfer?.getData('text/plain') || '';
+      const targetMoveKey = target?.dataset?.move || '';
+      target?.classList.remove('drag-over');
+      if (!MOVE_DEFS[moveKey] || !MOVE_DEFS[targetMoveKey]) return;
+      if (MOVE_DEFS[moveKey].slot !== MOVE_DEFS[targetMoveKey].slot) return;
+      event.preventDefault();
+      equipMove(MOVE_DEFS[targetMoveKey].slot, targetMoveKey);
+    });
     ui.invMovesList?.addEventListener('dragend', () => {
       draggingMoveKey = '';
-      clearDragOverSlots();
+      clearInventoryDragState();
     });
     Object.entries(ui.invSlots).forEach(([slot, node]) => {
       if (!node) return;
+      node.addEventListener('click', () => {
+        activeInventorySlot = activeInventorySlot === slot ? '' : slot;
+        markInventoryPanelDirty();
+        renderInventoryPanel();
+      });
+      node.addEventListener('dragstart', event => {
+        const moveKey = node.dataset.move || '';
+        if (!moveKey) {
+          event.preventDefault();
+          return;
+        }
+        draggingMoveKey = moveKey;
+        event.dataTransfer?.setData('text/plain', moveKey);
+      });
+      node.addEventListener('dragend', () => {
+        draggingMoveKey = '';
+        clearInventoryDragState();
+      });
       node.addEventListener('dragover', event => {
         event.preventDefault();
         const moveKey = draggingMoveKey || event.dataTransfer?.getData('text/plain') || '';
@@ -531,8 +574,17 @@
     });
   }
 
-  function clearDragOverSlots() {
+  function clearInventoryDragState() {
     Object.values(ui.invSlots).forEach(node => node?.classList.remove('drag-over'));
+    ui.invMovesList?.querySelectorAll('.drag-over').forEach(node => node.classList.remove('drag-over'));
+  }
+
+  function handleInventoryMoveSelect(event) {
+    const target = event.target instanceof Element ? event.target.closest('[data-move]') : null;
+    const moveKey = target?.dataset?.move || '';
+    if (!moveKey || !MOVE_DEFS[moveKey]) return;
+    activeInventorySlot = MOVE_DEFS[moveKey].slot;
+    equipMove(MOVE_DEFS[moveKey].slot, moveKey);
   }
 
   function isPanelOpen(panel) {
@@ -558,15 +610,11 @@
   }
 
   function setInventoryPanelOpen(open) {
-    if (!ui.invPanel) {
-      console.warn('Inventory panel element not found');
-      return;
-    }
-    console.log('setInventoryPanelOpen called with:', open);
+    if (!ui.invPanel) return;
     ui.invPanel.classList.toggle('hidden', !open);
     ui.invPanel.setAttribute('aria-hidden', open ? 'false' : 'true');
+    if (!open) activeInventorySlot = '';
     if (open) {
-      console.log('Rendering inventory panel');
       markInventoryPanelDirty();
       renderInventoryPanel();
     }
@@ -620,10 +668,22 @@
       .filter(offer => !offer.bought && offer.type === 'item')
       .map((offer, index) => {
         const item = itemRegistry.get(offer.key);
-        return `<div class="shop-card"><h4>${item?.name || 'Item'}</h4><p>${item?.description || ''}</p><button class="shop-buy" data-kind="item" data-index="${index}">Buy ${offer.cost}</button></div>`;
+        return `<div class="shop-card">
+          <span class="shop-card__eyebrow">Relic</span>
+          <div class="shop-card__title-row">
+            <h4>${item?.name || 'Item'}</h4>
+            <span class="shop-card__price">${offer.cost}</span>
+          </div>
+          <div class="shop-card__copy">
+            <p>${item?.description || 'No details available.'}</p>
+          </div>
+          <div class="shop-card__footer">
+            <button class="shop-buy" data-kind="item" data-index="${index}">Buy Relic</button>
+          </div>
+        </div>`;
       })
       .join('');
-    ui.shopItems.innerHTML = itemCards || '<div class="shop-card"><p>All item offers purchased.</p></div>';
+    ui.shopItems.innerHTML = itemCards || '<div class="shop-card shop-empty"><p>Every relic here is already yours. Clear the floor or check the move shelf.</p></div>';
 
     const moveOffers = getShopMoveOffers();
     const moveCards = moveOffers
@@ -631,17 +691,41 @@
         const def = MOVE_DEFS[offer.key];
         const owned = !!player.ownedMoves?.[offer.key];
         const disabledText = offer.bought || owned ? 'Owned' : `Buy ${offer.cost}`;
-        return `<div class="shop-card"><h4>${def?.name || offer.key}</h4><p>${def?.desc || ''}</p><button class="shop-buy" data-kind="move" data-index="${index}" ${offer.bought || owned ? 'disabled' : ''}>${disabledText}</button></div>`;
+        return `<div class="shop-card">
+          <span class="shop-card__eyebrow">${def?.slot || 'move'}</span>
+          <div class="shop-card__title-row">
+            <h4>${def?.name || offer.key}</h4>
+            <span class="shop-card__price">${offer.cost}</span>
+          </div>
+          <div class="shop-card__copy">
+            <p>${def?.desc || 'No move description available.'}</p>
+          </div>
+          <div class="shop-card__footer">
+            <button class="shop-buy" data-kind="move" data-index="${index}" ${offer.bought || owned ? 'disabled' : ''}>${offer.bought || owned ? 'Owned' : 'Buy Move'}</button>
+          </div>
+        </div>`;
       })
       .join('');
-    ui.shopMoves.innerHTML = moveCards || '<div class="shop-card"><p>No moves available right now.</p></div>';
+    ui.shopMoves.innerHTML = moveCards || '<div class="shop-card shop-empty"><p>No new techniques are on the rack right now.</p></div>';
 
     const heals = [
       { id: 'small', name: 'Minor Heal', heal: 45, cost: 16 + floor * 2 },
       { id: 'major', name: 'Major Heal', heal: 100, cost: 34 + floor * 4 },
     ];
     const healCards = heals
-      .map(heal => `<div class="shop-card"><h4>${heal.name}</h4><p>Restore ${heal.heal} HP.</p><button class="shop-buy" data-kind="heal" data-heal="${heal.heal}" data-cost="${heal.cost}">Buy ${heal.cost}</button></div>`)
+      .map(heal => `<div class="shop-card">
+        <span class="shop-card__eyebrow">Recovery</span>
+        <div class="shop-card__title-row">
+          <h4>${heal.name}</h4>
+          <span class="shop-card__price">${heal.cost}</span>
+        </div>
+        <div class="shop-card__copy">
+          <p>Restore ${heal.heal} HP and stabilize before the next encounter.</p>
+        </div>
+        <div class="shop-card__footer">
+          <button class="shop-buy" data-kind="heal" data-heal="${heal.heal}" data-cost="${heal.cost}">Buy Heal</button>
+        </div>
+      </div>`)
       .join('');
     ui.shopHeals.innerHTML = healCards;
     shopPanelDirty = false;
@@ -651,36 +735,59 @@
     if (!ui.invPanel || !player) return;
     const stats = getItemStats();
     ui.invStats.innerHTML = [
-      `<div class="inv-card"><h4>HP</h4><p>${Math.round(player.hp)} / ${Math.round(player.maxHp)}</p></div>`,
-      `<div class="inv-card"><h4>Attack Power</h4><p>${player.attackPower}</p></div>`,
-      `<div class="inv-card"><h4>Attack Speed</h4><p>${getAttackSpeedValue().toFixed(2)}</p></div>`,
-      `<div class="inv-card"><h4>Crit Chance</h4><p>${Math.round(stats.critChance * 100)}%</p></div>`,
+      `<div class="inv-card inv-stat-card"><span class="inv-card__eyebrow">Vital</span><h4>HP</h4><p>${Math.round(player.hp)} / ${Math.round(player.maxHp)}</p></div>`,
+      `<div class="inv-card inv-stat-card"><span class="inv-card__eyebrow">Damage</span><h4>Attack Power</h4><p>${player.attackPower}</p></div>`,
+      `<div class="inv-card inv-stat-card"><span class="inv-card__eyebrow">Tempo</span><h4>Attack Speed</h4><p>${getAttackSpeedValue().toFixed(2)}</p></div>`,
+      `<div class="inv-card inv-stat-card"><span class="inv-card__eyebrow">Edge</span><h4>Crit Chance</h4><p>${Math.round(stats.critChance * 100)}%</p></div>`,
     ].join('');
 
     ui.invItemsList.innerHTML = ITEM_KEYS
       .filter(key => Number(player.items?.[key] || 0) > 0)
       .map(key => {
         const item = itemRegistry.get(key);
-        return `<div class="inv-card"><h4>${item?.name || key} x${player.items[key]}</h4><p>${item?.description || ''}</p></div>`;
+        return `<div class="inv-card">
+          <span class="inv-card__eyebrow">Relic</span>
+          <div class="inv-card__title-row">
+            <h4>${item?.name || key}</h4>
+            <span class="inv-card__count">x${player.items[key]}</span>
+          </div>
+          <p>${item?.description || 'No item description available.'}</p>
+        </div>`;
       })
-      .join('') || '<div class="inv-card"><p>No items collected.</p></div>';
+      .join('') || '<div class="inv-card"><span class="inv-card__eyebrow">Empty</span><h4>No relics yet</h4><p>Your pockets are clear. Loot rooms or buy from the shop to start a build.</p></div>';
 
+    const equippedMoveKeys = new Set(Object.values(player.equippedMoves || {}).filter(Boolean));
     const ownedMoves = Object.keys(player.ownedMoves || {})
       .filter(key => player.ownedMoves[key] && MOVE_DEFS[key])
+      .filter(key => !equippedMoveKeys.has(key))
       .sort((a, b) => MOVE_DEFS[a].slot.localeCompare(MOVE_DEFS[b].slot));
     ui.invMovesList.innerHTML = ownedMoves
       .map(key => {
         const def = MOVE_DEFS[key];
-        return `<div class="inv-move-chip" draggable="true" data-move="${key}"><b>${def.name}</b><br>${def.slot.toUpperCase()} - ${def.desc}</div>`;
+        const isMatch = activeInventorySlot && activeInventorySlot === def.slot;
+        return `<div class="inv-move-chip${isMatch ? ' is-match' : ''}" draggable="true" data-move="${key}" data-slot-type="${def.slot}">
+          <div class="inv-move-chip__meta">
+            <b>${def.name}</b>
+            <span class="inv-move-chip__slot">${def.slot}</span>
+          </div>
+          <p>${def.desc}</p>
+          <span class="inv-move-chip__hint">${isMatch ? 'Selected slot match. Click or drag to equip.' : 'Click or drag to equip.'}</span>
+        </div>`;
       })
-      .join('') || '<div class="inv-card"><p>No moves owned.</p></div>';
+      .join('') || '<div class="inv-card"><span class="inv-card__eyebrow">Empty</span><h4>No spare moves</h4><p>Every move you own is currently equipped. Buy a new technique to open up swap options.</p></div>';
 
     MOVE_SLOTS.forEach(slot => {
       const node = ui.invSlots[slot];
       if (!node) return;
       const moveKey = player.equippedMoves?.[slot];
       const def = MOVE_DEFS[moveKey];
-      node.innerHTML = `<b>${slot.toUpperCase()}</b><p>${def?.name || 'None equipped'}</p>`;
+      const isSelected = activeInventorySlot === slot;
+      node.dataset.move = moveKey || '';
+      node.dataset.slotType = slot;
+      node.draggable = !!moveKey;
+      node.classList.toggle('is-equipped', !!moveKey);
+      node.classList.toggle('is-selected', isSelected);
+      node.innerHTML = `<div class="inv-slot__top"><span class="inv-slot__kicker">${slot}</span><span class="inv-slot__status">${isSelected ? 'Selected' : 'Equipped'}</span></div><div class="inv-slot__move">${def?.name || 'No move equipped'}</div><p class="inv-slot__hint">${isSelected ? 'Matching spare moves are highlighted. Click one or drag it here to swap.' : def?.desc || 'Click this slot to focus matching spare moves, or drag a matching move here to assign it.'}</p>`;
     });
     inventoryPanelDirty = false;
   }
@@ -2846,7 +2953,7 @@
       const aoeRadius = 240;
       const aoeDamage = Math.round(enemy.dmg * 1.2);
       particles.push({ x: enemy.x, y: enemy.y, life: 0.5, ring: aoeRadius - 60, c: '#ff8844' });
-      blastRadius(enemy.x, enemy.y, aoeRadius, aoeDamage, '#ff8844');
+      blastRadius(enemy.x, enemy.y, aoeRadius, aoeDamage, '#ff8844', enemy);
       shake = 12;
       shakeT = 0.2;
     }
@@ -3156,9 +3263,10 @@
     if (player.hp <= 0) die();
   }
 
-  function blastRadius(x, y, radius, damage, color) {
+  function blastRadius(x, y, radius, damage, color, sourceEnemy = null) {
     for (let index = enemies.length - 1; index >= 0; index -= 1) {
       const enemy = enemies[index];
+      if (sourceEnemy && enemy === sourceEnemy) continue;
       if (dist(x, y, enemy.x, enemy.y) > radius + enemy.r) continue;
       hitEnemy(enemy, damage, Math.atan2(enemy.y - y, enemy.x - x), 180, color);
     }

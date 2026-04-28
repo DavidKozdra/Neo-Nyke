@@ -100,11 +100,15 @@
     </div>
   </div>
 
-  <div id="shopPanel" class="game-panel hidden" aria-hidden="true">
+  <div id="shopPanel" class="game-panel game-panel--shop hidden" aria-hidden="true">
     <div class="game-panel-head">
-      <h3>SHOP</h3>
-      <div class="shop-coins">COINS <b id="shopCoins">0</b></div>
-      <button id="shopClose" class="panel-close">X</button>
+      <div class="panel-title-wrap">
+        <span class="panel-kicker">Bazaar</span>
+        <h3>SHOP</h3>
+        <p class="panel-subtitle">Weapons, relics, and quick repairs for the next room.</p>
+      </div>
+      <div class="shop-coins">Coins <b id="shopCoins">0</b></div>
+      <button id="shopClose" class="panel-close" aria-label="Close shop">X</button>
     </div>
     <div class="shop-tabs">
       <button class="shop-tab active" data-tab="items">Items</button>
@@ -116,23 +120,27 @@
     <div id="shopHeals" class="shop-list hidden"></div>
   </div>
 
-  <div id="invPanel" class="game-panel hidden" aria-hidden="true">
+  <div id="invPanel" class="game-panel game-panel--inventory hidden" aria-hidden="true">
     <div class="game-panel-head">
-      <h3>INVENTORY</h3>
-      <button id="invClose" class="panel-close">X</button>
+      <div class="panel-title-wrap">
+        <span class="panel-kicker">Loadout</span>
+        <h3>INVENTORY</h3>
+        <p class="panel-subtitle">Drag owned moves into matching slots to swap your kit.</p>
+      </div>
+      <button id="invClose" class="panel-close" aria-label="Close inventory">X</button>
     </div>
     <div id="invStats" class="inv-stats"></div>
     <div class="inv-layout">
-      <div>
-        <h4>Items</h4>
+      <div class="inv-column">
+        <h4 class="panel-section-title">Items</h4>
         <div id="invItemsList" class="inv-items"></div>
       </div>
-      <div>
-        <h4>Owned Moves (drag to slot)</h4>
+      <div class="inv-column">
+        <h4 class="panel-section-title">Owned Moves</h4>
         <div id="invMovesList" class="inv-moves"></div>
       </div>
-      <div>
-        <h4>Equipped</h4>
+      <div class="inv-column">
+        <h4 class="panel-section-title">Equipped</h4>
         <div class="inv-slots">
           <div class="inv-slot" data-slot="melee">Melee</div>
           <div class="inv-slot" data-slot="laser">Laser</div>
