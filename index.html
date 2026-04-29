@@ -737,7 +737,7 @@
   // ── Fight state ───────────────────────────────────────────────────────────
   const CLASH_INTERVAL = 90;
   let clashPhase = 'approaching', clashFrame = 0;
-  const F_SCALE = 6, F_KEYS = ['thorn_knight', 'god'];
+  const F_SCALE = 8, F_KEYS = ['thorn_knight', 'god'];
   let brazierT = 0;
 
   function renderScene(c, W, H, dt) {
@@ -746,8 +746,8 @@
 
     // Room geometry — matches in-game room proportions
     const wall = 28;
-    const rw = Math.min(W, 960), rh = Math.min(H, 640);
-    const rox = (W - rw) / 2, roy = (H - rh) / 2;
+    const rw = W, rh = H;
+    const rox = 0, roy = 0;
 
     // ── Dark base ─────────────────────────────────────────────────────────
     c.fillStyle = '#030610';
@@ -874,14 +874,15 @@
     }
 
     // ── Fight logic ───────────────────────────────────────────────────────
-    const fightY = cy + rh * 0.05;
-    const APPROACH = 80, FAR = 200;
+    // fightY sits in the lower third so fighters clear the title block
+    const fightY = roy + rh * 0.68;
+    const APPROACH = 90, FAR = Math.min(W * 0.22, 280);
 
     if (clashPhase === 'approaching') {
       clashFrame = Math.min(clashFrame + 1, CLASH_INTERVAL);
       if (clashFrame >= CLASH_INTERVAL) {
         clashPhase = 'clashing'; clashFrame = 0;
-        spawnClash(cx, fightY - 8);
+        spawnClash(cx, fightY - 14);
       }
     } else if (clashPhase === 'clashing') {
       if (++clashFrame > 18) { clashPhase = 'recoiling'; clashFrame = 0; }
@@ -901,26 +902,26 @@
     // floor shadow under each fighter
     [lx, rx2].forEach(fx => {
       c.save();
-      c.globalAlpha = 0.3;
-      const sg = c.createRadialGradient(fx, fightY + 22, 0, fx, fightY + 22, 34);
-      sg.addColorStop(0, 'rgba(0,0,0,.7)'); sg.addColorStop(1, 'rgba(0,0,0,0)');
+      c.globalAlpha = 0.35;
+      const sg = c.createRadialGradient(fx, fightY + 30, 0, fx, fightY + 30, 50);
+      sg.addColorStop(0, 'rgba(0,0,0,.8)'); sg.addColorStop(1, 'rgba(0,0,0,0)');
       c.fillStyle = sg;
-      c.beginPath(); c.ellipse(fx, fightY + 22, 34, 12, 0, 0, Math.PI * 2); c.fill();
+      c.beginPath(); c.ellipse(fx, fightY + 30, 50, 16, 0, 0, Math.PI * 2); c.fill();
       c.restore();
     });
 
     drawPixelSprite(c, F_KEYS[0], lx,  fightY, F_SCALE, false);
     drawPixelSprite(c, F_KEYS[1], rx2, fightY, F_SCALE, true);
 
-    const swing = clashPhase === 'clashing' ? Math.sin((clashFrame / 18) * Math.PI) * 0.24 : 0;
-    drawSword(c, lx  + 16, fightY - 10, -Math.PI * 0.28 - swing, 46, '#a0e8ff', 0.92);
-    drawSword(c, rx2 - 16, fightY - 10,  Math.PI * 1.28 + swing, 46, '#ffd060', 0.92);
+    const swing = clashPhase === 'clashing' ? Math.sin((clashFrame / 18) * Math.PI) * 0.28 : 0;
+    drawSword(c, lx  + 20, fightY - 14, -Math.PI * 0.28 - swing, 62, '#a0e8ff', 0.92);
+    drawSword(c, rx2 - 20, fightY - 14,  Math.PI * 1.28 + swing, 62, '#ffd060', 0.92);
 
     // clash flash
     if (clashPhase === 'clashing' && clashFrame < 8) {
       const fa = (1 - clashFrame / 8) * 0.48;
       c.save();
-      const fg2 = c.createRadialGradient(cx, fightY - 8, 0, cx, fightY - 8, 100);
+      const fg2 = c.createRadialGradient(cx, fightY - 12, 0, cx, fightY - 12, 140);
       fg2.addColorStop(0,   `rgba(255,240,160,${fa})`);
       fg2.addColorStop(0.5, `rgba(0,255,255,${fa * 0.45})`);
       fg2.addColorStop(1,   'rgba(0,0,0,0)');
@@ -929,11 +930,18 @@
       c.restore();
     }
 
-    // vignette to darken corners and outside-room strip
-    const vg = c.createRadialGradient(W/2, H/2, Math.min(rw,rh)*0.3, W/2, H/2, Math.max(W,H)*0.72);
-    vg.addColorStop(0, 'rgba(0,0,0,0)');
-    vg.addColorStop(1, 'rgba(0,0,0,0.92)');
+    // vignette: spotlight centered on fight zone, darken top+corners heavily
+    const spotY = fightY;
+    const vg = c.createRadialGradient(W/2, spotY, Math.min(W,H)*0.18, W/2, spotY, Math.max(W,H)*0.85);
+    vg.addColorStop(0,   'rgba(0,0,0,0)');
+    vg.addColorStop(0.5, 'rgba(0,0,0,0.25)');
+    vg.addColorStop(1,   'rgba(0,0,0,0.88)');
     c.fillStyle = vg; c.fillRect(0, 0, W, H);
+    // extra top shadow so title area has darker backdrop for readability
+    const tg = c.createLinearGradient(0, 0, 0, H * 0.45);
+    tg.addColorStop(0,   'rgba(0,0,0,0.72)');
+    tg.addColorStop(1,   'rgba(0,0,0,0)');
+    c.fillStyle = tg; c.fillRect(0, 0, W, H * 0.45);
   }
 
   let raf, lastTs = 0;

@@ -1748,6 +1748,18 @@
     return scaleShopPrice(16 + floorValue * 2, difficultyKey);
   }
 
+  function getLaserCastDuration(moveKey = getEquippedMove('laser'), attackSpeed = getAttackSpeedValue()) {
+    if (moveKey === 'god_sweep') return 1.45 / attackSpeed;
+    return (godTimer > 0 ? 0.72 : ATTACKS.laser.duration) / attackSpeed;
+  }
+
+  function getLaserCooldownDuration(moveKey = getEquippedMove('laser'), attackSpeed = getAttackSpeedValue()) {
+    if (moveKey === 'blade_justice') return 3.8 / attackSpeed;
+    if (moveKey === 'lightning_columns') return 4.8 / attackSpeed;
+    if (moveKey === 'god_sweep') return 7.2 / attackSpeed;
+    return (godTimer > 0 ? 2.8 : ATTACKS.laser.baseCooldown) / attackSpeed;
+  }
+
   function refreshRoomShopCosts(room, difficultyKey = selectedDifficulty, floorValue = floor) {
     if (!room || room.type !== 'shop') return;
     room.shopOffers = Array.isArray(room.shopOffers) ? room.shopOffers : [];
@@ -3453,24 +3465,24 @@
     const attackSpeed = getAttackSpeedValue();
     const move = getEquippedMove('laser');
     if (move === 'power_disks') {
-      cooldowns.laser = ATTACKS.laser.baseCooldown / attackSpeed;
+      cooldowns.laser = getLaserCooldownDuration(move, attackSpeed);
       spawnPlayerDiskBurst();
       return;
     }
     if (move === 'blade_justice') {
-      cooldowns.laser = 3.8 / attackSpeed;
+      cooldowns.laser = getLaserCooldownDuration(move, attackSpeed);
       castBladeOfJustice();
       return;
     }
     if (move === 'lightning_columns') {
-      cooldowns.laser = 4.8 / attackSpeed;
+      cooldowns.laser = getLaserCooldownDuration(move, attackSpeed);
       castLightningColumns();
       return;
     }
     if (move === 'god_sweep') {
       laserActive = true;
       laserMode = 'god_sweep';
-      laserTime = 1.45 / attackSpeed;
+      laserTime = getLaserCastDuration(move, attackSpeed);
       laserTick = 0;
       laserAngle = Math.atan2(mouse.worldY - player.y, mouse.worldX - player.x);
       laserSweepSpeed = (nextRandom('encounter') < 0.5 ? -1 : 1) * 4.6;
@@ -3478,7 +3490,7 @@
     }
     laserActive = true;
     laserMode = 'beam';
-    laserTime = (godTimer > 0 ? 0.72 : ATTACKS.laser.duration) / attackSpeed;
+    laserTime = getLaserCastDuration(move, attackSpeed);
     laserTick = 0;
   }
 
@@ -3513,9 +3525,7 @@
     if (laserTime <= 0) {
       laserActive = false;
       laserMode = 'beam';
-      cooldowns.laser = getEquippedMove('laser') === 'god_sweep'
-        ? 7.2 / getAttackSpeedValue()
-        : godTimer > 0 ? 2.8 : ATTACKS.laser.baseCooldown;
+      cooldowns.laser = getLaserCooldownDuration(getEquippedMove('laser'), getAttackSpeedValue());
     }
   }
 
@@ -5960,9 +5970,10 @@
     const dashMove = MOVE_DEFS[getEquippedMove('dash')];
     const attackSpeed = getAttackSpeedValue();
     const meleeMax = (godTimer > 0 ? 0.2 : ATTACKS.melee.baseCooldown) / attackSpeed;
+    const laserMoveKey = laserMove?.key || getEquippedMove('laser');
     const laserMax = laserActive
-      ? (godTimer > 0 ? 0.72 : ATTACKS.laser.duration) / attackSpeed
-      : (godTimer > 0 ? 2.8 : ATTACKS.laser.baseCooldown) / attackSpeed;
+      ? getLaserCastDuration(laserMoveKey, attackSpeed)
+      : getLaserCooldownDuration(laserMoveKey, attackSpeed);
     const smashMax = (godTimer > 0 ? 2 : ATTACKS.smash.baseCooldown) / attackSpeed;
     const dashMax = 1.8 / attackSpeed;
     const minutes = Math.floor(gameElapsedTime / 60);
@@ -7398,10 +7409,10 @@
         if (worldSpeechRuntime?.update) worldSpeechRuntime.update(dt);
         if (manager && typeof manager.updateAll === 'function') {
           manager.updateAll();
-          return;
+        } else {
+          renderDialogue();
+          renderEntityDialogue();
         }
-        renderDialogue();
-        renderEntityDialogue();
         if (activeState === 'play' && hudUpdateHook) hudUpdateHook();
       },
       bindMenuActions(handlers) {

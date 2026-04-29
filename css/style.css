@@ -1268,7 +1268,7 @@ canvas {
     0 0 0 1px rgba(255,255,255,.03) inset,
     0 0 36px var(--menu-glow);
   backdrop-filter: blur(12px);
-  margin-top: 240px;
+  margin-top: clamp(160px, 28vh, 280px);
 }
 
 .hidden {
@@ -1295,7 +1295,7 @@ canvas {
   flex-direction: column;
   align-items: center;
   justify-content: flex-start;
-  padding-top: 9vh;
+  padding-top: clamp(28px, 5vh, 60px);
   pointer-events: none;
   /* Sits above canvas (z:0) but below menu-content (z:2) */
 }
@@ -2073,6 +2073,9 @@ button.alt.danger {
   width: 100dvw;
   height: 100dvh;
   background: #030610;
+  justify-content: flex-start;
+  align-items: center;
+  padding-top: 0;
 }
 
 /* Main nav buttons */
