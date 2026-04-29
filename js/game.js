@@ -20,6 +20,9 @@
   const BOSS_TYPES = new Set(['god', 'queen_cult', 'bulk_golem', 'artificer_knave']);
   const CHALLENGE_ROOM_TYPES = new Set(['challenge']);
   const CHALLENGE_TRIAL_TYPES = ['mirror', 'stillness', 'bomb', 'survival', 'runes', 'storm'];
+  const KozSeededRngApi = window.KozEngine?.World?.seededRng || {};
+  const KozSaveApi = window.KozEngine?.SaveLoad?.saveApi || {};
+  const KozStorageDrivers = window.KozEngine?.SaveLoad?.storageDrivers || {};
   const DIFFICULTY_ORDER = ['easy', 'medium', 'hard', 'impossible', 'god'];
   const DIFFICULTY_DEFS = {
     easy: {
@@ -612,6 +615,11 @@
       smash: document.getElementById('iconSmash'),
     },
   };
+  const GameStateManagerCtor = window.KozEngine?.Core?.gameStateManager?.GameStateManager || null;
+  const gameStateManager = GameStateManagerCtor ? new GameStateManagerCtor() : null;
+  if (gameStateManager) {
+    ['menu', 'charselect', 'play', 'pause', 'dead', 'win'].forEach(state => gameStateManager.addState(state));
+  }
   const uiController = createUIController(ui);
 
   let player = null;
@@ -695,7 +703,8 @@
   boot();
 
   async function boot() {
-    uiController.setState(gameState);
+    if (gameStateManager) gameStateManager.setState(gameState);
+    else uiController.setState(gameState);
     uiController.setHudUpdateHook(() => {
       if (gameState !== 'play' || !player) return;
       updateObjective();
@@ -1605,7 +1614,15 @@
   }
 
   function createRngStream(seed, consumed = 0) {
-    const random = makeRNG(seed);
+    const hashSeed = typeof KozSeededRngApi.fnv1a === 'function'
+      ? KozSeededRngApi.fnv1a(String(seed || ''))
+      : xmur3(String(seed || ''))();
+    const stream = KozSeededRngApi.SeededStream
+      ? new KozSeededRngApi.SeededStream(hashSeed)
+      : null;
+    const random = stream
+      ? () => stream.random()
+      : makeRNG(String(seed || ''));
     let count = Math.max(0, Number(consumed) || 0);
     for (let index = 0; index < count; index += 1) random();
     return {
@@ -1688,8 +1705,11 @@
   }
 
   function setGameState(nextState) {
-    gameState = nextState;
-    uiController.setState(nextState);
+    if (gameStateManager) gameStateManager.setState(nextState);
+    else {
+      gameState = nextState;
+      uiController.setState(nextState);
+    }
     if (nextState !== 'play') {
       setShopPanelOpen(false);
       setInventoryPanelOpen(false);
@@ -6995,17 +7015,22 @@
 
     function fallbackState(state) {
       const show = state || 'menu';
+      function setVisible(element, visible, displayValue = '') {
+        if (!element) return;
+        element.classList.toggle('hidden', !visible);
+        element.style.display = visible ? displayValue : 'none';
+      }
       view.start.classList.toggle('hidden',     show !== 'menu');
       view.charSelect?.classList.toggle('hidden', show !== 'charselect');
       view.dead.classList.toggle('hidden',      show !== 'dead');
       view.win.classList.toggle('hidden',       show !== 'win');
       view.pause?.classList.toggle('hidden',    show !== 'pause');
       const inPlay = show === 'play' || show === 'pause';
-      view.hud.classList.toggle('hidden', !inPlay);
-      view.actionBar.classList.toggle('hidden', !inPlay);
-      view.playerStats?.classList.toggle('hidden', !inPlay);
-      view.coinDisplay?.classList.toggle('hidden', !inPlay);
-      view.centerDisplay?.classList.toggle('hidden', !inPlay);
+      setVisible(view.hud, inPlay, 'flex');
+      setVisible(view.actionBar, inPlay, '');
+      setVisible(view.playerStats, inPlay, '');
+      setVisible(view.coinDisplay, inPlay, 'flex');
+      setVisible(view.centerDisplay, inPlay, '');
       if (show !== 'charselect') setChallengePanelOpen(false);
     }
 
@@ -7031,11 +7056,26 @@
       manager.registerScreen('dead', { create: () => makeContainer(view.dead), validStates: ['dead'] });
       manager.registerScreen('win', { create: () => makeContainer(view.win), validStates: ['win'] });
       manager.registerScreen('pause', { create: () => makeContainer(view.pause), validStates: ['pause'] });
+      if (gameStateManager && typeof manager.bindToStateManager === 'function') {
+        manager.bindToStateManager(gameStateManager, { initialSync: true });
+      }
+    }
+
+    if (gameStateManager && typeof gameStateManager.onChange === 'function') {
+      gameStateManager.onChange((_from, to) => {
+        activeState = to || 'menu';
+        gameState = activeState;
+        fallbackState(activeState);
+      });
     }
 
     return {
       setState(state) {
         activeState = state || 'menu';
+        if (gameStateManager && typeof gameStateManager.getState === 'function' && gameStateManager.getState() !== state) {
+          gameStateManager.setState(state);
+          return;
+        }
         if (manager && typeof manager.onGameStateChange === 'function') manager.onGameStateChange(state);
         fallbackState(state);
       },
@@ -7277,6 +7317,20 @@
     const localPrefix = 'neonyke:';
     const idb = typeof indexedDB !== 'undefined' ? indexedDB : null;
     let dbPromise = null;
+    const SaveApiCtor = KozSaveApi.SaveAPI || null;
+    const createLocalStorageDriver = KozStorageDrivers.createLocalStorageDriver || null;
+
+    function createFallbackApi(key) {
+      if (!SaveApiCtor || !createLocalStorageDriver) return null;
+      try {
+        return new SaveApiCtor({
+          driver: createLocalStorageDriver(localStorage),
+          key: localPrefix + key,
+        });
+      } catch (error) {
+        return null;
+      }
+    }
 
     function openDb() {
       if (!idb) return Promise.reject(new Error('IndexedDB unavailable'));
@@ -7329,13 +7383,25 @@
 
     const fallback = {
       async get(key) {
+        const api = createFallbackApi(key);
+        if (api) return api.load();
         const raw = localStorage.getItem(localPrefix + key);
         return raw ? JSON.parse(raw) : null;
       },
       async put(key, value) {
+        const api = createFallbackApi(key);
+        if (api) {
+          api.save(value);
+          return;
+        }
         localStorage.setItem(localPrefix + key, JSON.stringify(value));
       },
       async delete(key) {
+        const api = createFallbackApi(key);
+        if (api) {
+          api.delete();
+          return;
+        }
         localStorage.removeItem(localPrefix + key);
       },
     };

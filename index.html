@@ -12,7 +12,7 @@
   <canvas id="c" width="960" height="640"></canvas>
 
   <!-- HUD -->
-  <div id="hud" style="display: none;">
+  <div id="hud" class="hidden">
     <div style="display:flex;align-items:center;gap:8px">
       <span>HP</span>
       <div class="bar"><i id="hpFill"></i></div>
@@ -33,13 +33,13 @@
   </div>
 
   <!-- Coin Display Top Left -->
-  <div id="coinDisplay" class="coin-display">
+  <div id="coinDisplay" class="coin-display hidden">
     <canvas id="coinIcon" class="coin-icon" width="32" height="32"></canvas>
     <span id="coinCount">0</span>
   </div>
 
   <!-- Center Timer and Floor Display -->
-  <div id="centerDisplay" class="center-display">
+  <div id="centerDisplay" class="center-display hidden">
     <div class="timer-floor">
       <span id="timerDisplay">0:00</span>
       <span class="separator">•</span>
@@ -48,7 +48,7 @@
   </div>
 
   <!-- Player Stats Bottom Right -->
-  <div id="playerStats">
+  <div id="playerStats" class="hidden">
     <div class="player-stat-row">
       <span>HP</span>
       <div class="bar player-hp-bar"><i id="playerHpFill"></i></div>
@@ -61,7 +61,7 @@
     </div>
   </div>
 
-  <div id="actionBar" aria-hidden="true">
+  <div id="actionBar" class="hidden" aria-hidden="true">
     <div class="skill-card" data-skill="dash">
       <canvas id="iconDash" class="skill-icon" width="36" height="36"></canvas>
       <div class="skill-fill" id="fillDash"></div>
