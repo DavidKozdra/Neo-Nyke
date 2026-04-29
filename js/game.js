@@ -16,6 +16,13 @@
     laser: { baseCooldown: 4.2, duration: 0.58, tick: 0.08, range: 430, damage: 10 },
     smash: { baseCooldown: 5.4, radius: 148, damage: 46, bonus: 26 },
   };
+  const STATUS_KEYS = ['bleed', 'fire', 'poison', 'dark_drain'];
+  const STATUS_STYLES = {
+    bleed: { color: '#ff4f6d', textColor: '#ff5f5f' },
+    fire: { color: '#ff9a3c', textColor: '#ff9a3c' },
+    poison: { color: '#85df63', textColor: '#85df63' },
+    dark_drain: { color: '#b48cff', textColor: '#b48cff' },
+  };
 
   const BOSS_TYPES = new Set(['god', 'queen_cult', 'bulk_golem', 'artificer_knave']);
   const CHALLENGE_ROOM_TYPES = new Set(['challenge']);
@@ -37,6 +44,7 @@
     bulk_golem: 'Stone remembers every blow.',
     artificer_knave: 'Run. I only need one clean hit.',
   };
+  const RUN_HISTORY_LIMIT = 200;
   const DIFFICULTY_ORDER = ['easy', 'medium', 'hard', 'impossible', 'god'];
   const DIFFICULTY_DEFS = {
     easy: {
@@ -605,6 +613,17 @@
     continueRow: document.getElementById('continueRow'),
     continueBtn: document.getElementById('continueBtn'),
     newRunBtn: document.getElementById('newRunBtn'),
+    runHistoryBtn: document.getElementById('runHistoryBtn'),
+    runHistoryPanel: document.getElementById('runHistoryPanel'),
+    runHistoryList: document.getElementById('runHistoryList'),
+    runHistoryEmpty: document.getElementById('runHistoryEmpty'),
+    runHistoryClose: document.getElementById('runHistoryClose'),
+    runHistoryPrev: document.getElementById('runHistoryPrev'),
+    runHistoryNext: document.getElementById('runHistoryNext'),
+    runHistoryPageLabel: document.getElementById('runHistoryPageLabel'),
+    runHistoryHero: document.getElementById('runHistoryHero'),
+    runHistoryTabPanel: document.getElementById('runHistoryTabPanel'),
+    runHistoryTabs: [...document.querySelectorAll('#runHistoryPanel .rh-tab')],
     settingsBtn: document.getElementById('settingsBtn'),
     charBackBtn: document.getElementById('charBackBtn'),
     deleteRunRow: document.getElementById('deleteRunRow'),
@@ -696,6 +715,8 @@
   let decorations = [];
   let activeRun = null;
   let metaProgress = createDefaultMeta();
+  let runHistory = [];
+  let lastDamageSource = '';
   let savePendingTimer = 0;
   let lavaAnimTime = 0;
   let floorSkipPending = 0;
@@ -711,6 +732,51 @@
 
   const saveStore = createSaveStore();
   window._neoSaveStore = saveStore;
+
+  function createStatusMap() {
+    return {
+      bleed: { stacks: 0, duration: 0, tick: 0 },
+      fire: { stacks: 0, duration: 0, tick: 0 },
+      poison: { stacks: 0, duration: 0, tick: 0 },
+      dark_drain: { stacks: 0, duration: 0, tick: 0 },
+    };
+  }
+
+  function ensureStatuses(entity) {
+    if (!entity || typeof entity !== 'object') return createStatusMap();
+    if (!entity.statuses || typeof entity.statuses !== 'object') entity.statuses = createStatusMap();
+    STATUS_KEYS.forEach(key => {
+      const state = entity.statuses[key];
+      if (!state || typeof state !== 'object') entity.statuses[key] = { stacks: 0, duration: 0, tick: 0 };
+      entity.statuses[key].stacks = Number(entity.statuses[key].stacks || 0);
+      entity.statuses[key].duration = Number(entity.statuses[key].duration || 0);
+      entity.statuses[key].tick = Number(entity.statuses[key].tick || 0);
+    });
+    return entity.statuses;
+  }
+
+  function getStatusState(entity, key) {
+    return ensureStatuses(entity)[key];
+  }
+
+  function getStatusStacks(entity, key) {
+    return Number(getStatusState(entity, key).stacks || 0);
+  }
+
+  function clearStatus(entity, key) {
+    const state = getStatusState(entity, key);
+    state.stacks = 0;
+    state.duration = 0;
+    state.tick = 0;
+  }
+
+  function applyStatus(entity, key, stacks, duration) {
+    if (!entity || !STATUS_KEYS.includes(key)) return;
+    if (entity[`${key}Immune`]) return;
+    const state = getStatusState(entity, key);
+    state.stacks = Math.min(6, Math.max(state.stacks, 0) + Math.max(0, Number(stacks || 0)));
+    state.duration = Math.max(state.duration, Number(duration || 0));
+  }
 
   const walls = (() => {
     const hw = (ROOM_W - DOOR) / 2;
@@ -1027,6 +1093,9 @@
       },
       onToggleChallenges() {
         uiController.setChallengePanelOpen(ui.challengePanel?.classList.contains('hidden'));
+      },
+      onToggleRunHistory() {
+        uiController.setRunHistoryOpen(ui.runHistoryPanel?.classList.contains('hidden'));
       },
       onOpenCharacterSelect() { setGameState('charselect'); },
       onCloseCharacterSelect() { setGameState('menu'); },
@@ -1541,6 +1610,7 @@
       dashY: 0,
       coins: 0,
       level: 1,
+      kills: 0,
       xp: 0,
       xpToNext: 20,
       attackPower: 0,
@@ -1551,6 +1621,7 @@
       insuranceReady: true,
       escapeChargeKills: 0,
       escapeReady: true,
+      statuses: createStatusMap(),
       items,
       equippedMoves,
       ownedMoves,
@@ -1583,9 +1654,10 @@
   async function loadPersistedState() {
     uiController.setSaveState('LOADING');
     try {
-      const [savedMeta, savedRun] = await Promise.all([
+      const [savedMeta, savedRun, savedRunHistory] = await Promise.all([
         saveStore.get('meta'),
         saveStore.get('run'),
+        saveStore.get('runHistory'),
       ]);
       if (savedMeta && typeof savedMeta === 'object') {
         metaProgress = {
@@ -1598,6 +1670,7 @@
           selectedChallenges: normalizeChallengeSelection(savedMeta.selectedChallenges),
         };
       }
+      runHistory = normalizeRunHistory(savedRunHistory || savedMeta?.runHistory);
       activeRun = savedRun && typeof savedRun === 'object' ? savedRun : null;
       if (activeRun) {
         activeRun.difficulty = normalizeDifficulty(activeRun.difficulty);
@@ -1639,6 +1712,46 @@
   function normalizeChallengeSelection(input) {
     if (!Array.isArray(input)) return [];
     return [...new Set(input.filter(key => CHALLENGE_DEFS[key]))];
+  }
+
+  function normalizeRunHistory(input) {
+    if (!Array.isArray(input)) return [];
+    return input
+      .filter(entry => entry && typeof entry === 'object')
+      .slice(0, RUN_HISTORY_LIMIT)
+      .map(entry => ({
+        id: String(entry.id || `${entry.endedAt || 'run'}:${entry.seed || ''}:${entry.floor || 0}`),
+        endedAt: String(entry.endedAt || ''),
+        result: entry.result === 'win' ? 'win' : 'dead',
+        character: String(entry.character || 'thorn_knight'),
+        characterName: String(entry.characterName || CHARACTER_DEFS[entry.character]?.name || 'Unknown'),
+        difficulty: normalizeDifficulty(entry.difficulty),
+        difficultyName: String(entry.difficultyName || getDifficultyDef(entry.difficulty).name),
+        floor: Math.max(1, Number(entry.floor || 1)),
+        loop: Math.max(0, Number(entry.loop || 0)),
+        coins: Math.max(0, Number(entry.coins || 0)),
+        level: Math.max(1, Number(entry.level || 1)),
+        kills: Math.max(0, Number(entry.kills || 0)),
+        maxHp: Math.max(1, Number(entry.maxHp || 120)),
+        attackPower: Math.max(0, Number(entry.attackPower || 0)),
+        attackSpeed: Math.max(0, Number(entry.attackSpeed || 1)),
+        elapsedSeconds: Math.max(0, Number(entry.elapsedSeconds || 0)),
+        seed: String(entry.seed || ''),
+        roomType: String(entry.roomType || ''),
+        killedBy: String(entry.killedBy || ''),
+        totalItemStacks: Math.max(0, Number(entry.totalItemStacks || 0)),
+        challenges: Array.isArray(entry.challenges) ? entry.challenges.map(String) : [],
+        items: Array.isArray(entry.items) ? entry.items.map(item => ({
+          key: String(item.key || ''),
+          name: String(item.name || item.key || 'Unknown'),
+          count: Math.max(0, Number(item.count || 0)),
+        })) : [],
+        equippedMoves: Array.isArray(entry.equippedMoves) ? entry.equippedMoves.map(move => ({
+          slot: String(move.slot || ''),
+          key: String(move.key || ''),
+          name: String(move.name || move.key || 'Unknown'),
+        })) : [],
+      }));
   }
 
   function getOwnedChallengeSet() {
@@ -1753,11 +1866,20 @@
     return (godTimer > 0 ? 0.72 : ATTACKS.laser.duration) / attackSpeed;
   }
 
+  function getMeleeCooldownDuration(moveKey = getEquippedMove('melee'), attackSpeed = getAttackSpeedValue()) {
+    return (godTimer > 0 ? 0.2 : ATTACKS.melee.baseCooldown) / attackSpeed;
+  }
+
   function getLaserCooldownDuration(moveKey = getEquippedMove('laser'), attackSpeed = getAttackSpeedValue()) {
     if (moveKey === 'blade_justice') return 3.8 / attackSpeed;
     if (moveKey === 'lightning_columns') return 4.8 / attackSpeed;
     if (moveKey === 'god_sweep') return 7.2 / attackSpeed;
     return (godTimer > 0 ? 2.8 : ATTACKS.laser.baseCooldown) / attackSpeed;
+  }
+
+  function getDashCooldownDuration(moveKey = getEquippedMove('dash'), attackSpeed = getAttackSpeedValue()) {
+    if (moveKey === 'warp') return 2.8 / attackSpeed;
+    return 1.8 / attackSpeed;
   }
 
   function refreshRoomShopCosts(room, difficultyKey = selectedDifficulty, floorValue = floor) {
@@ -1798,6 +1920,201 @@
     return new Set(DIFFICULTY_ORDER.filter(key => loopCrystals >= DIFFICULTY_DEFS[key].unlockLoops));
   }
 
+  function titleCase(value) {
+    return String(value || '')
+      .split(/[_\s]+/)
+      .filter(Boolean)
+      .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ');
+  }
+
+  function escapeHtml(value) {
+    return String(value || '')
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#39;');
+  }
+
+  function formatElapsedTime(totalSeconds) {
+    const seconds = Math.max(0, Math.round(Number(totalSeconds || 0)));
+    const minutes = Math.floor(seconds / 60);
+    const remain = seconds % 60;
+    return `${minutes}:${String(remain).padStart(2, '0')}`;
+  }
+
+  function formatRunEndedAt(isoString) {
+    const value = new Date(isoString);
+    if (Number.isNaN(value.getTime())) return 'Unknown date';
+    return value.toLocaleString([], {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+  }
+
+  function getBossDisplayName(type) {
+    if (type === 'queen_cult') return 'Queen of the Cult';
+    if (type === 'bulk_golem') return 'Bulk Golem';
+    if (type === 'artificer_knave') return 'Artificer Charged Knave';
+    if (type === 'god') return 'GOD';
+    return titleCase(type);
+  }
+
+  function getEnemyLabel(type) {
+    if (BOSS_TYPES.has(type)) return getBossDisplayName(type);
+    if (type === 'mirror_knight') return 'Mirror Champion';
+    return titleCase(type);
+  }
+
+  function getRoomLabel(type) {
+    if (!type) return 'Unknown';
+    if (type === 'god') return 'God Chamber';
+    return titleCase(type);
+  }
+
+  function getDamageSourceLabel(source) {
+    const value = String(source || '').trim();
+    if (!value) return 'Unknown';
+    if (value === 'no_hit') return 'Never Get Hit';
+    if (value === 'lava') return 'Lava';
+    if (value === 'challenge_bomb') return 'Trial Bomb';
+    if (value === 'storm') return 'Storm Trial';
+    if (value === 'enemy_projectile') return 'Enemy Projectile';
+    if (value === 'enemy_beam') return 'Enemy Beam';
+    if (value === 'god_beam') return 'GOD Beam';
+    if (value === 'mirror_beam') return 'Mirror Beam';
+    if (BOSS_TYPES.has(value) || value === 'mirror_knight') return getEnemyLabel(value);
+    if (SPRITE_DEFS[value] || ['cult_mage', 'knave', 'sniper', 'machine_gunner', 'golem', 'summoner', 'shield_unit', 'healer', 'boss_spawner', 'laser', 'charger', 'hunter'].includes(value)) {
+      return getEnemyLabel(value);
+    }
+    return titleCase(value);
+  }
+
+  function captureRunItemSnapshot(playerState = player) {
+    return ITEM_KEYS
+      .map(key => ({
+        key,
+        count: Math.max(0, Number(playerState?.items?.[key] || 0)),
+      }))
+      .filter(item => item.count > 0)
+      .map(item => ({
+        ...item,
+        name: itemRegistry.get(item.key)?.name || titleCase(item.key),
+      }));
+  }
+
+  function captureRunMoveSnapshot(playerState = player) {
+    return MOVE_SLOTS.map(slot => {
+      const key = playerState?.equippedMoves?.[slot] || '';
+      return {
+        slot,
+        key,
+        name: MOVE_DEFS[key]?.name || titleCase(key),
+      };
+    }).filter(move => move.key);
+  }
+
+  function buildRunHistoryEntry(result, extra = {}) {
+    const character = getCharacterDef();
+    const difficulty = normalizeDifficulty(selectedDifficulty);
+    const historyItems = captureRunItemSnapshot(player);
+    const totalItemStacks = historyItems.reduce((sum, item) => sum + item.count, 0);
+    return {
+      id: `${Date.now()}:${baseSeedStr}:${runLoopIndex}:${floor}:${result}`,
+      endedAt: new Date().toISOString(),
+      result,
+      character: character.key,
+      characterName: character.name,
+      difficulty,
+      difficultyName: getDifficultyDef(difficulty).name,
+      floor,
+      loop: runLoopIndex,
+      coins: Math.max(0, Number(player?.coins || 0)),
+      level: Math.max(1, Number(player?.level || 1)),
+      kills: Math.max(0, Number(player?.kills || 0)),
+      maxHp: Math.max(1, Number(player?.maxHp || 120)),
+      attackPower: Math.max(0, Number(player?.attackPower || 0)),
+      attackSpeed: Math.max(0, Number(player?.attackSpeed || 1)),
+      elapsedSeconds: Math.max(0, Number(gameElapsedTime || 0)),
+      seed: baseSeedStr,
+      roomType: currentRoom?.type || '',
+      killedBy: getDamageSourceLabel(extra.killedBy || ''),
+      challenges: normalizeChallengeSelection(selectedChallenges).map(key => CHALLENGE_DEFS[key]?.name || titleCase(key)),
+      items: historyItems,
+      equippedMoves: captureRunMoveSnapshot(player),
+      totalItemStacks,
+    };
+  }
+
+  function pushRunHistoryEntry(entry) {
+    runHistory = [entry, ...normalizeRunHistory(runHistory)]
+      .slice(0, RUN_HISTORY_LIMIT);
+  }
+
+  function renderRunHistoryListEntry(entry, selected = false) {
+    const cause = entry.result === 'win' ? 'Cleared' : (entry.killedBy || 'Unknown');
+    return `<button class="rh-row${selected ? ' active' : ''}" data-run-id="${escapeHtml(entry.id)}" data-result="${entry.result}" type="button">
+      <canvas class="rh-row-portrait" data-run-character="${escapeHtml(entry.character)}" width="40" height="40" aria-hidden="true"></canvas>
+      <span class="rh-row-body">
+        <span class="rh-row-top">
+          <span class="rh-row-name">${escapeHtml(entry.characterName)}</span>
+          <span class="rh-row-badge">${entry.result === 'win' ? 'WIN' : 'DEAD'}</span>
+        </span>
+        <span class="rh-row-sub">Fl.${entry.floor} · ${escapeHtml(cause)} · ${escapeHtml(formatRunEndedAt(entry.endedAt))}</span>
+      </span>
+    </button>`;
+  }
+
+  function renderRunHistoryHero(entry) {
+    const win = entry.result === 'win';
+    const detail = win ? 'Run cleared' : `Killed by ${escapeHtml(entry.killedBy || 'Unknown')}`;
+    return `<div class="rh-hero" data-result="${entry.result}">
+      <canvas class="rh-hero-portrait" data-run-character="${escapeHtml(entry.character)}" width="64" height="64" aria-hidden="true"></canvas>
+      <div class="rh-hero-info">
+        <span class="rh-outcome">${win ? 'VICTORY' : 'DEFEAT'}</span>
+        <strong class="rh-hero-name">${escapeHtml(entry.characterName)}</strong>
+        <span class="rh-hero-meta">${escapeHtml(entry.difficultyName)} · Floor ${entry.floor} · Loop ${entry.loop}</span>
+        <span class="rh-hero-meta">${detail}</span>
+        <span class="rh-hero-date">${escapeHtml(formatRunEndedAt(entry.endedAt))}</span>
+      </div>
+    </div>`;
+  }
+
+  function renderRunHistoryTabContent(entry, tab = 'stats') {
+    if (tab === 'items') {
+      if (!entry.items.length) return '<p class="rh-empty-inner">No relics collected.</p>';
+      return `<div class="rh-items-grid">${entry.items.map(i => `<div class="rh-item-tile"><span class="rh-item-icon">${escapeHtml(i.name.charAt(0))}</span><span class="rh-item-name">${escapeHtml(i.name)}</span><span class="rh-item-count">x${i.count}</span></div>`).join('')}</div>`;
+    }
+    if (tab === 'moves') {
+      if (!entry.equippedMoves.length) return '<p class="rh-empty-inner">No move data recorded.</p>';
+      return `<div class="rh-moves-grid">${entry.equippedMoves.map(m => `<div class="rh-move-slot" data-slot="${escapeHtml(m.slot)}"><span class="rh-move-label">${escapeHtml(m.slot.toUpperCase())}</span><span class="rh-move-name">${escapeHtml(m.name)}</span></div>`).join('')}</div>`;
+    }
+    return `<div class="rh-stats-grid">
+      <div class="rh-stat"><span class="rh-stat-label">Floor</span><b class="rh-stat-val">${entry.floor}</b></div>
+      <div class="rh-stat"><span class="rh-stat-label">Loop</span><b class="rh-stat-val">${entry.loop}</b></div>
+      <div class="rh-stat"><span class="rh-stat-label">Time</span><b class="rh-stat-val">${escapeHtml(formatElapsedTime(entry.elapsedSeconds))}</b></div>
+      <div class="rh-stat"><span class="rh-stat-label">Kills</span><b class="rh-stat-val">${entry.kills}</b></div>
+      <div class="rh-stat"><span class="rh-stat-label">Coins</span><b class="rh-stat-val">${entry.coins}</b></div>
+      <div class="rh-stat"><span class="rh-stat-label">Level</span><b class="rh-stat-val">${entry.level}</b></div>
+      <div class="rh-stat"><span class="rh-stat-label">Max HP</span><b class="rh-stat-val">${entry.maxHp}</b></div>
+      <div class="rh-stat"><span class="rh-stat-label">Atk Power</span><b class="rh-stat-val">${entry.attackPower}</b></div>
+      <div class="rh-stat"><span class="rh-stat-label">Atk Speed</span><b class="rh-stat-val">${entry.attackSpeed.toFixed(2)}x</b></div>
+      <div class="rh-stat"><span class="rh-stat-label">Item Stacks</span><b class="rh-stat-val">${entry.totalItemStacks || 0}</b></div>
+    </div>`;
+  }
+
+  function hydrateRunHistorySprites(root = ui.runHistoryList) {
+    if (!(root instanceof Element)) return;
+    root.querySelectorAll('[data-run-character]').forEach(element => {
+      if (!(element instanceof HTMLCanvasElement)) return;
+      drawSpriteToCanvas(element, element.dataset.runCharacter || 'thorn_knight', 56);
+    });
+  }
+
   function refreshMenuState() {
     uiController.setMenuMeta(metaProgress.coins, metaProgress.bestFloor, metaProgress.loopCrystals || 0, saveStore.kind);
     updateCharacterSelectionUI();
@@ -1805,6 +2122,7 @@
       ? `Floor ${activeRun.floor} | ${getDifficultyDef(activeRun.difficulty).name}${activeRun.challenges?.length ? ` | ${activeRun.challenges.length} challenge${activeRun.challenges.length === 1 ? '' : 's'}` : ''} | ${activeRun.player.coins || 0} run coins`
       : '';
     uiController.setRunSummary(summary);
+    uiController.setRunHistory(runHistory || []);
   }
 
   function updateCharacterSelectionUI() {
@@ -1848,6 +2166,7 @@
       floor = 1;
       gameElapsedTime = 0;
       player = createDefaultPlayer();
+      lastDamageSource = '';
       resetScene();
       generateFloor();
       persistMetaSoon();
@@ -1898,10 +2217,12 @@
     setInventoryPanelOpen(false);
     mouse.down = false;
     mouse.right = false;
+    lastDamageSource = '';
   }
 
   function restoreRun(snapshot) {
     baseSeedStr = snapshot.baseSeedStr || snapshot.seedStr || createRandomSeed();
+    lastDamageSource = '';
     runLoopIndex = Number(snapshot.runLoopIndex || 0);
     syncSeedState();
     floor = snapshot.floor;
@@ -1912,7 +2233,7 @@
     rooms = Array.isArray(snapshot.rooms) ? snapshot.rooms : [];
     currentRoom = rooms.find(room => room.gx === snapshot.currentRoom?.gx && room.gy === snapshot.currentRoom?.gy) || rooms[0] || null;
     player = migratePlayerData(snapshot.player);
-    enemies = snapshot.enemies || [];
+    enemies = Array.isArray(snapshot.enemies) ? snapshot.enemies.map(migrateEnemyState) : [];
     particles = [];
     projectiles = snapshot.projectiles || [];
     chests = snapshot.chests || [];
@@ -1923,7 +2244,7 @@
     structures = snapshot.structures || currentRoom?.structures || [];
     decorations = snapshot.decorations || currentRoom?.decorations || [];
     if (currentRoom) {
-      currentRoom.enemies = Array.isArray(currentRoom.enemies) ? currentRoom.enemies : enemies;
+      currentRoom.enemies = Array.isArray(currentRoom.enemies) ? currentRoom.enemies.map(migrateEnemyState) : enemies;
       currentRoom.projectiles = Array.isArray(currentRoom.projectiles) ? currentRoom.projectiles : projectiles;
       currentRoom.chests = Array.isArray(currentRoom.chests) ? currentRoom.chests : chests;
       currentRoom.pickups = Array.isArray(currentRoom.pickups) ? currentRoom.pickups : pickups;
@@ -2716,9 +3037,7 @@
       stun: 0,
       inv: 0,
       attackCd: rand(0.2, 0.9, 'encounter'),
-      bleed: 0,
-      bleedT: 0,
-      bleedTick: 0,
+      statuses: createStatusMap(),
       windup: 0,
       beamTime: 0,
       beamTick: 0,
@@ -2737,6 +3056,9 @@
       splitReady: false,
       spawnedFromBulk: false,
       bleedImmune: false,
+      fireImmune: false,
+      poisonImmune: false,
+      dark_drainImmune: false,
       state: 'idle',
     };
 
@@ -2994,9 +3316,7 @@
       stun: 0,
       inv: 0,
       attackCd: stats.attackCd,
-      bleed: 0,
-      bleedT: 0,
-      bleedTick: 0,
+      statuses: createStatusMap(),
       windup: 0,
       beamTime: 0,
       beamTick: 0,
@@ -3015,6 +3335,9 @@
       splitReady: false,
       spawnedFromBulk: false,
       bleedImmune: false,
+      fireImmune: false,
+      poisonImmune: false,
+      dark_drainImmune: false,
       state: 'idle',
       spriteKey: stats.spriteKey,
       mirrorLaserCd: Math.max(1.4, 4.2 / stats.attackSpeed),
@@ -3099,6 +3422,7 @@
       room.challengeData.maxTimer = 30;
       room.challengeData.anchorX = player.x;
       room.challengeData.anchorY = player.y;
+      room.challengeData.graceTimer = 2;
       room.challengeData.warnTick = 0;
       sayAtPosition(ROOM_W / 2, ROOM_H / 2, 'Stand still or lose everything.', { speaker: 'TRIAL', tone: 'warning' });
     } else if (type === 'bomb') {
@@ -3185,6 +3509,7 @@
     playerData.dashY = Number(playerData.dashY || 0);
     playerData.lavaWalkTime = Number(playerData.lavaWalkTime || 0);
     playerData.lavaTrailTick = Number(playerData.lavaTrailTick || 0);
+    ensureStatuses(playerData);
     if (!playerData.equippedMoves || typeof playerData.equippedMoves !== 'object') {
       playerData.equippedMoves = playerData.character === 'metao'
         ? { melee: 'fire_balls', laser: 'power_disks', smash: 'chaos_burst', dash: 'dash' }
@@ -3402,7 +3727,7 @@
     const stats = getItemStats();
     const characterMultiplier = getCharacterDef().damageMultiplier || 1;
     const powered = (damage + (player?.attackPower || 0)) * characterMultiplier;
-    if (enemy.bleed > 0 && stats.bleedDamageMultiplier > 1) {
+    if (getStatusStacks(enemy, 'bleed') > 0 && stats.bleedDamageMultiplier > 1) {
       return Math.round(powered * stats.bleedDamageMultiplier);
     }
     return Math.round(powered);
@@ -3419,8 +3744,7 @@
     const move = getEquippedMove('melee');
     const itemStats = getItemStats();
     const attackSpeed = getAttackSpeedValue();
-    const slashCooldownMultiplier = move === 'slash' ? 3 : 1;
-    cooldowns.melee = ((godTimer > 0 ? 0.2 : ATTACKS.melee.baseCooldown) * slashCooldownMultiplier) / attackSpeed;
+    cooldowns.melee = getMeleeCooldownDuration(move, attackSpeed);
     if (move === 'fire_balls') {
       spawnFireballs();
       return;
@@ -3451,6 +3775,8 @@
       const difference = Math.abs(Math.atan2(Math.sin(targetAngle - angle), Math.cos(targetAngle - angle)));
       if (difference > ATTACKS.melee.arc) continue;
       hitEnemy(enemy, damage, angle, ATTACKS.melee.push, '#0ff');
+      const slashBleedChance = move === 'slash' ? 0.10 : 0;
+      if (slashBleedChance > 0 && rng() < slashBleedChance) applyBleed(enemy, 1, 5);
       if (itemStats.bleedChance > 0 && rng() < itemStats.bleedChance) applyBleed(enemy, 1, 5);
     }
     destructibles.forEach(prop => {
@@ -3514,7 +3840,8 @@
         const beamDamage = (laserMode === 'god_sweep' ? 24 : godTimer > 0 ? 16 : ATTACKS.laser.damage) * (itemStats.beamDamageMultiplier || 1);
         hitEnemy(enemy, beamDamage, angle, laserMode === 'god_sweep' ? 120 : 60, '#f0f');
         chainBeamHit(enemy, beamDamage, angle, '#d890ff');
-        if (move === 'blood_beam') applyBleed(enemy, 1, 3.2);
+        if (move === 'blood_beam' && rng() < 0.05) applyBleed(enemy, 1, 3.2);
+        if (move === 'blood_beam' && rng() < 0.08) applyDarkDrain(enemy, 1, 3.4);
       }
       destructibles.forEach(prop => {
         if (!prop.broken && !prop.hidden && beamHitsCircle(player.x, player.y, end.x, end.y, prop.x, prop.y, prop.r + 4)) {
@@ -3561,7 +3888,7 @@
       if (distance > smashRadius + enemy.r) continue;
       const angle = Math.atan2(enemy.y - player.y, enemy.x - player.x);
       let damage = godTimer > 0 ? 82 : ATTACKS.smash.damage;
-      if (itemStats.bleedDamageMultiplier > 1 && enemy.bleed > 0) {
+      if (itemStats.bleedDamageMultiplier > 1 && getStatusStacks(enemy, 'bleed') > 0) {
         damage += ATTACKS.smash.bonus;
         particles.push({ x: enemy.x, y: enemy.y - 16, life: 0.6, text: 'POP', c: '#a0f' });
       }
@@ -3580,7 +3907,7 @@
     const move = getEquippedMove('dash');
     if (move === 'warp') {
       castWarp();
-      cooldowns.dash = 2.8 / getAttackSpeedValue();
+      cooldowns.dash = getDashCooldownDuration(move);
       return;
     }
     const attackSpeed = getAttackSpeedValue();
@@ -3594,7 +3921,7 @@
     player.vx = player.dashX;
     player.vy = player.dashY;
     player.inv = Math.max(player.inv, 0.18);
-    cooldowns.dash = 1.8 / attackSpeed;
+    cooldowns.dash = getDashCooldownDuration(move, attackSpeed);
     shake = Math.max(shake, 3);
     shakeT = Math.max(shakeT, 0.08);
     particles.push({ x: player.x, y: player.y, life: 0.28, ring: 18, c: '#fff06a' });
@@ -3612,7 +3939,7 @@
     const base = Math.atan2(mouse.worldY - player.y, mouse.worldX - player.x);
     for (let index = -1; index <= 1; index += 1) {
       const angle = base + index * 0.18;
-      projectiles.push({ x: player.x, y: player.y, vx: Math.cos(angle) * 320, vy: Math.sin(angle) * 320, r: 8, life: 1.6, enemy: false, kind: 'fireball', damage: 22, splash: 48 * aoeRadiusMultiplier });
+      projectiles.push({ x: player.x, y: player.y, vx: Math.cos(angle) * 320, vy: Math.sin(angle) * 320, r: 8, life: 1.6, enemy: false, kind: 'fireball', damage: 22, splash: 48 * aoeRadiusMultiplier, fireStacks: 2, fireDuration: 3.4 });
     }
   }
 
@@ -3624,6 +3951,7 @@
       const py = player.y + Math.sin(angle) * rand(160, 40);
       particles.push({ x: px, y: py, life: 0.45, ring: 18 * aoeRadiusMultiplier, c: '#c971ff' });
       blastRadius(px, py, 52 * aoeRadiusMultiplier, 24, '#c971ff');
+      applyStatusInRadius(px, py, 52 * aoeRadiusMultiplier, 'poison', 1, 4.8);
     }
   }
 
@@ -3846,9 +4174,108 @@
   }
 
   function applyBleed(enemy, stacks, duration) {
-    if (enemy.bleedImmune) return;
-    enemy.bleed = Math.min(6, enemy.bleed + stacks);
-    enemy.bleedT = Math.max(enemy.bleedT, duration);
+    applyStatus(enemy, 'bleed', stacks, duration);
+  }
+
+  function applyFire(entity, stacks, duration) {
+    applyStatus(entity, 'fire', stacks, duration);
+  }
+
+  function applyPoison(entity, stacks, duration) {
+    applyStatus(entity, 'poison', stacks, duration);
+  }
+
+  function applyDarkDrain(entity, stacks, duration) {
+    applyStatus(entity, 'dark_drain', stacks, duration);
+  }
+
+  function applyStatusInRadius(x, y, radius, statusKey, stacks, duration, sourceEnemy = null) {
+    enemies.forEach(enemy => {
+      if (sourceEnemy && enemy === sourceEnemy) return;
+      if (dist(x, y, enemy.x, enemy.y) > radius + enemy.r) return;
+      applyStatus(enemy, statusKey, stacks, duration);
+    });
+  }
+
+  function migrateEnemyState(enemy) {
+    if (!enemy || typeof enemy !== 'object') return enemy;
+    ensureStatuses(enemy);
+    enemy.bleedImmune = !!enemy.bleedImmune;
+    enemy.fireImmune = !!enemy.fireImmune;
+    enemy.poisonImmune = !!enemy.poisonImmune;
+    enemy.dark_drainImmune = !!enemy.dark_drainImmune;
+    if (Number(enemy.bleed || 0) > 0 || Number(enemy.bleedT || 0) > 0) {
+      applyBleed(enemy, Number(enemy.bleed || 0), Number(enemy.bleedT || 0));
+      getStatusState(enemy, 'bleed').tick = Number(enemy.bleedTick || 0);
+    }
+    delete enemy.bleed;
+    delete enemy.bleedT;
+    delete enemy.bleedTick;
+    return enemy;
+  }
+
+  function tickEnemyStatus(enemy, key, dt, config) {
+    const state = getStatusState(enemy, key);
+    if (state.stacks <= 0) return false;
+    if (enemy[`${key}Immune`]) {
+      clearStatus(enemy, key);
+      return false;
+    }
+    state.duration -= dt;
+    state.tick -= dt;
+    if (state.tick <= 0) {
+      state.tick = config.interval;
+      const damage = Math.max(1, Math.round(config.damage(state.stacks)));
+      enemy.hp -= damage;
+      spawnDamagePopup(enemy.x, enemy.y - 10, damage, { color: config.color, size: 15 });
+      if (config.particleColor) {
+        particles.push({ x: enemy.x + rand(-8, 8), y: enemy.y + rand(-8, 8), life: 0.25, c: config.particleColor });
+      }
+      if (config.healScale > 0 && player && player.hp < player.maxHp) {
+        const heal = damage * config.healScale;
+        player.hp = Math.min(player.maxHp, player.hp + heal);
+        if (heal > 0.2) spawnHealPopup(player.x + rand(-8, 8), player.y - 22, heal, { color: config.color });
+      }
+      if (enemy.hp <= 0) {
+        onEnemyDie(enemy);
+        return true;
+      }
+    }
+    if (state.duration <= 0) clearStatus(enemy, key);
+    return false;
+  }
+
+  function updateEnemyStatuses(enemy, dt) {
+    const bleedStacks = getStatusStacks(enemy, 'bleed');
+    if (tickEnemyStatus(enemy, 'bleed', dt, {
+      interval: 0.5,
+      damage: stacks => scaleDamageAgainstEnemy(enemy, 3 * stacks),
+      color: STATUS_STYLES.bleed.textColor,
+      particleColor: STATUS_STYLES.bleed.color,
+    })) return bleedStacks;
+    if (!enemies.includes(enemy)) return bleedStacks;
+    if (tickEnemyStatus(enemy, 'fire', dt, {
+      interval: 0.45,
+      damage: stacks => scaleDamageAgainstEnemy(enemy, 1.5 + stacks * 1.8),
+      color: STATUS_STYLES.fire.textColor,
+      particleColor: STATUS_STYLES.fire.color,
+    })) return bleedStacks;
+    if (!enemies.includes(enemy)) return bleedStacks;
+    if (tickEnemyStatus(enemy, 'poison', dt, {
+      interval: 0.7,
+      damage: stacks => Math.max(1, enemy.max * (0.008 * stacks)),
+      color: STATUS_STYLES.poison.textColor,
+      particleColor: STATUS_STYLES.poison.color,
+    })) return bleedStacks;
+    if (!enemies.includes(enemy)) return bleedStacks;
+    tickEnemyStatus(enemy, 'dark_drain', dt, {
+      interval: 0.6,
+      damage: stacks => scaleDamageAgainstEnemy(enemy, 1 + stacks * 2),
+      color: STATUS_STYLES.dark_drain.textColor,
+      particleColor: STATUS_STYLES.dark_drain.color,
+      healScale: 0.35,
+    });
+    return bleedStacks;
   }
 
   function normalizeAngle(angle) {
@@ -3892,7 +4319,7 @@
       enemy.beamTick = tick;
       const beamEnd = getBeamEnd(enemy.x, enemy.y, enemy.beamAngle, range);
       if (beamHitsCircle(enemy.x, enemy.y, beamEnd.x, beamEnd.y, player.x, player.y, player.r + 5)) {
-        damagePlayer(damage, enemy.beamAngle, knockback);
+        damagePlayer(damage, enemy.beamAngle, knockback, enemy.type === 'god' ? 'god_beam' : enemy.type === 'mirror_knight' ? 'mirror_beam' : 'enemy_beam');
         if (typeof onHit === 'function') onHit(enemy);
       }
     }
@@ -3917,6 +4344,7 @@
 
     const index = enemies.indexOf(enemy);
     if (index >= 0) enemies.splice(index, 1);
+    if (player) player.kills = Math.max(0, Number(player.kills || 0)) + 1;
 
     for (let burst = 0; burst < 12; burst += 1) {
       particles.push({
@@ -4214,14 +4642,12 @@
       enemy.inv = Math.max(0, enemy.inv - dt);
 
       if (!enemy.bleedImmune && itemStats.passiveBleedStacks > 0 && enemy.type !== 'god') {
-        enemy.bleed = Math.max(enemy.bleed, itemStats.passiveBleedStacks);
-        enemy.bleedT = Math.max(enemy.bleedT, 0.25);
+        applyBleed(enemy, Math.max(0, itemStats.passiveBleedStacks - getStatusStacks(enemy, 'bleed')), 0.25);
       } else if (!enemy.bleedImmune && itemStats.passiveBleedStacks > 0 && enemy.type === 'god') {
-        enemy.bleed = Math.max(enemy.bleed, Math.max(1, itemStats.passiveBleedStacks - 1));
-        enemy.bleedT = Math.max(enemy.bleedT, 0.25);
+        applyBleed(enemy, Math.max(0, Math.max(1, itemStats.passiveBleedStacks - 1) - getStatusStacks(enemy, 'bleed')), 0.25);
       }
 
-      totalBleed += updateBleed(enemy, dt);
+      totalBleed += updateEnemyStatuses(enemy, dt);
       if (!enemies.includes(enemy)) continue;
 
       if (enemy.type === 'god') updateGod(enemy, dt);
@@ -4256,6 +4682,7 @@
 
     updateProjectiles(dt);
     updateWorldProps(dt);
+    updatePlayerStatuses(dt);
     updateChests();
     updatePickups();
     updateParticles(dt);
@@ -4289,30 +4716,6 @@
     scheduleRunSave();
   }
 
-  function updateBleed(enemy, dt) {
-    if (enemy.bleed <= 0) return 0;
-    if (enemy.bleedImmune) {
-      enemy.bleed = 0;
-      enemy.bleedT = 0;
-      enemy.bleedTick = 0;
-      return 0;
-    }
-    enemy.bleedT -= dt;
-    enemy.bleedTick -= dt;
-    if (enemy.bleedTick <= 0) {
-      enemy.bleedTick = 0.5;
-      const damage = scaleDamageAgainstEnemy(enemy, 3 * enemy.bleed);
-      enemy.hp -= damage;
-      spawnDamagePopup(enemy.x, enemy.y - 10, damage, { color: '#ff5f5f', size: 15 });
-      if (enemy.hp <= 0) {
-        onEnemyDie(enemy);
-        return enemy.bleed;
-      }
-    }
-    if (enemy.bleedT <= 0) enemy.bleed = 0;
-    return enemy.bleed;
-  }
-
   function updateHunterEnemy(enemy, dt) {
     const dx = player.x - enemy.x;
     const dy = player.y - enemy.y;
@@ -4325,7 +4728,7 @@
     steerEnemy(enemy, dx / distance, dy / distance, enemy.speed, 4.4, dt);
     if (distance < enemy.r + player.r + 10 && enemy.attackCd <= 0) {
       const angle = Math.atan2(dy, dx);
-      damagePlayer(enemy.dmg, angle, 160);
+      damagePlayer(enemy.dmg, angle, 160, enemy.type);
       enemy.attackCd = 1.05;
     }
   }
@@ -4412,7 +4815,7 @@
       enemy.vy = Math.sin(enemy.dashAngle) * 450;
       if (!enemy.dashHit && dist(enemy.x, enemy.y, player.x, player.y) < enemy.r + player.r + 7) {
         enemy.dashHit = true;
-        damagePlayer(enemy.dmg + 6, enemy.dashAngle, 260);
+        damagePlayer(enemy.dmg + 6, enemy.dashAngle, 260, enemy.type);
       }
       return;
     }
@@ -4423,7 +4826,7 @@
       enemy.vy *= 0.7;
       if (enemy.swingTime <= 0 && dist(enemy.x, enemy.y, player.x, player.y) < enemy.r + player.r + 24) {
         const angle = Math.atan2(dy, dx);
-        damagePlayer(enemy.dmg + 3, angle, 210);
+        damagePlayer(enemy.dmg + 3, angle, 210, enemy.type);
       }
       return;
     }
@@ -4484,7 +4887,7 @@
       enemy.vx *= 0.75;
       enemy.vy *= 0.75;
       if (enemy.swingTime <= 0 && distance < enemy.r + player.r + 20) {
-        damagePlayer(enemy.dmg + 2, Math.atan2(dy, dx), 170);
+        damagePlayer(enemy.dmg + 2, Math.atan2(dy, dx), 170, enemy.type);
       }
       return;
     }
@@ -4579,7 +4982,7 @@
       enemy.vx *= 0.78;
       enemy.vy *= 0.78;
       if (enemy.swingTime <= 0 && distance < enemy.r + player.r + 18) {
-        damagePlayer(enemy.dmg + 3, Math.atan2(dy, dx), 180);
+        damagePlayer(enemy.dmg + 3, Math.atan2(dy, dx), 180, enemy.type);
       }
     }
   }
@@ -4612,7 +5015,7 @@
       enemy.vy = Math.sin(enemy.dashAngle) * 390;
       if (!enemy.dashHit && dist(enemy.x, enemy.y, player.x, player.y) < enemy.r + player.r + 10) {
         enemy.dashHit = true;
-        damagePlayer(enemy.dmg + 6, enemy.dashAngle, 280);
+        damagePlayer(enemy.dmg + 6, enemy.dashAngle, 280, enemy.type);
       }
       return;
     }
@@ -4696,7 +5099,7 @@
     }
 
     if (enemy.attackCd <= 0 && distance < enemy.r + player.r + 22) {
-      damagePlayer(enemy.dmg, Math.atan2(dy, dx), 170);
+      damagePlayer(enemy.dmg, Math.atan2(dy, dx), 170, enemy.type);
       enemy.attackCd = 1.05 * tuning.rangedCadence;
     }
   }
@@ -4828,7 +5231,7 @@
 
     updateCultMageEnemy(enemy, dt);
     if (enemy.attackCd <= 0 && distance < enemy.r + player.r + 18) {
-      damagePlayer(enemy.dmg + 4, Math.atan2(dy, dx), 250);
+      damagePlayer(enemy.dmg + 4, Math.atan2(dy, dx), 250, enemy.type);
       enemy.attackCd = 0.95 * tuning.rangedCadence;
     }
   }
@@ -4961,7 +5364,7 @@
       if (enemy.swingTime > 0) {
         enemy.swingTime -= dt;
         if (enemy.swingTime <= 0 && distance < enemy.r + player.r + 24) {
-          damagePlayer(enemy.dmg + 3, Math.atan2(dy, dx), 210);
+          damagePlayer(enemy.dmg + 3, Math.atan2(dy, dx), 210, enemy.type);
         }
       }
       return;
@@ -4981,7 +5384,7 @@
       if (enemy.windup <= 0) {
         const angle = Math.atan2(dy, dx);
         if (distance < enemy.r + player.r + 54) {
-          damagePlayer(enemy.dmg + 16, angle, 340);
+          damagePlayer(enemy.dmg + 16, angle, 340, 'storm');
         }
         particles.push({ x: enemy.x, y: enemy.y, life: 0.6, ring: 86, c: '#ffd27d' });
       }
@@ -5064,7 +5467,7 @@
       enemy.vy = Math.sin(enemy.dashAngle) * 430;
       if (!enemy.dashHit && dist(enemy.x, enemy.y, player.x, player.y) < enemy.r + player.r + 6) {
         enemy.dashHit = true;
-        damagePlayer(enemy.dmg + 4, enemy.dashAngle, 240);
+        damagePlayer(enemy.dmg + 4, enemy.dashAngle, 240, enemy.type);
       }
       return;
     }
@@ -5103,7 +5506,7 @@
         } else if (enemy.state === 'mirrorSmash') {
           particles.push({ x: enemy.x, y: enemy.y, life: 0.42, ring: 118, c: '#ff6dc7' });
           if (dist(enemy.x, enemy.y, player.x, player.y) <= ATTACKS.smash.radius + player.r) {
-            damagePlayer(enemy.smashDamage || enemy.dmg + 18, angleToPlayer, 300);
+            damagePlayer(enemy.smashDamage || enemy.dmg + 18, angleToPlayer, 300, enemy.type);
           }
           enemy.mirrorSmashCd = 5.4 / Math.max(0.5, enemy.attackSpeed || 1);
           enemy.attackCd = 0.75;
@@ -5134,7 +5537,7 @@
       enemy.vy = Math.sin(enemy.dashAngle) * 560;
       if (!enemy.dashHit && dist(enemy.x, enemy.y, player.x, player.y) < enemy.r + player.r + 6) {
         enemy.dashHit = true;
-        damagePlayer(enemy.dmg + 8, enemy.dashAngle, 240);
+        damagePlayer(enemy.dmg + 8, enemy.dashAngle, 240, enemy.type);
       }
       if (enemy.dashTime <= 0) {
         enemy.attackCd = 0.45;
@@ -5153,7 +5556,7 @@
     steerEnemy(enemy, dx / distance * preferred, dy / distance * preferred, enemy.speed, 5.2, dt);
 
     if (distance < ATTACKS.melee.range + player.r + 6 && enemy.attackCd <= 0) {
-      damagePlayer(enemy.dmg, angleToPlayer, ATTACKS.melee.push);
+      damagePlayer(enemy.dmg, angleToPlayer, ATTACKS.melee.push, enemy.type);
       enemy.attackCd = Math.max(0.26, 0.42 / Math.max(0.5, enemy.attackSpeed || 1));
       enemy.swingTime = ATTACKS.melee.active;
       return;
@@ -5184,11 +5587,13 @@
     if (type === 'stillness') {
       const anchorX = Number(currentRoom.challengeData?.anchorX || player.x);
       const anchorY = Number(currentRoom.challengeData?.anchorY || player.y);
+      const graceTimer = Math.max(0, Number(currentRoom.challengeData?.graceTimer || 0));
+      currentRoom.challengeData.graceTimer = Math.max(0, graceTimer - dt);
       const stable = dist(player.x, player.y, anchorX, anchorY) <= 18 && Math.hypot(player.vx, player.vy) <= 22;
       if (stable) {
         currentRoom.challengeTimer = Math.max(0, (currentRoom.challengeTimer || 0) - dt);
         if (currentRoom.challengeTimer <= 0) completeChallengeTrial('STILLNESS HELD');
-      } else {
+      } else if (graceTimer <= 0) {
         particles.push({ x: player.x, y: player.y - 20, life: 0.7, text: 'TRIAL FAILED', c: '#ff8b98' });
         failChallengeTrial('STILLNESS BROKEN');
       }
@@ -5357,7 +5762,7 @@
       enemy.vy = Math.sin(enemy.dashAngle) * dashSpeed;
       if (!enemy.dashHit && dist(enemy.x, enemy.y, player.x, player.y) < enemy.r + player.r + 10) {
         enemy.dashHit = true;
-        damagePlayer(enemy.dmg + (phaseFive ? 34 : phaseTwo ? 24 : 12), enemy.dashAngle, phaseFour ? 410 : phaseTwo ? 360 : 300);
+        damagePlayer(enemy.dmg + (phaseFive ? 34 : phaseTwo ? 24 : 12), enemy.dashAngle, phaseFour ? 410 : phaseTwo ? 360 : 300, enemy.type);
       }
       if (enemy.dashTime <= 0) enemy.attackCd = 1.1 * tuning.rangedCadence * cadenceMult;
       return;
@@ -5374,7 +5779,7 @@
 
     if (distance < enemy.r + player.r + 12 && enemy.attackCd <= 0) {
       const angle = Math.atan2(dy, dx);
-      damagePlayer(enemy.dmg + (phaseFive ? 26 : phaseTwo ? 18 : 10), angle, phaseFour ? 370 : phaseTwo ? 320 : 260);
+      damagePlayer(enemy.dmg + (phaseFive ? 26 : phaseTwo ? 18 : 10), angle, phaseFour ? 370 : phaseTwo ? 320 : 260, enemy.type);
       enemy.attackCd = 0.8 * tuning.rangedCadence * cadenceMult;
       return;
     }
@@ -5418,9 +5823,13 @@
     entity.y = clamp(entity.y, WALL + entity.r, ROOM_H - WALL - entity.r);
   }
 
-  function damagePlayer(amount, angle, knockback) {
-    if (player.inv > 0) return;
+  function damagePlayer(amount, angle, knockback, source = '', options = {}) {
+    const ignoreInv = !!options.ignoreInv;
+    const applyHitstop = !options.noInvFrames;
+    const showPopup = options.showPopup !== false;
+    if (!ignoreInv && player.inv > 0) return;
     if (isChallengeActive('no_hit') && amount > 0) {
+      lastDamageSource = getDamageSourceLabel(source || 'no_hit');
       player.hp = 0;
       player.inv = 0;
       shake = 10;
@@ -5441,6 +5850,7 @@
     }
     finalAmount = Math.max(0, finalAmount);
     if (finalAmount <= 0) return;
+    lastDamageSource = getDamageSourceLabel(source);
 
     player.hp -= finalAmount;
 
@@ -5453,15 +5863,57 @@
     finalAmount = Math.max(0, hpBeforeHit - player.hp);
     player.roomDamageTaken = (player.roomDamageTaken || 0) + finalAmount;
 
-    player.inv = 0.75;
-    player.vx += Math.cos(angle) * knockback;
-    player.vy += Math.sin(angle) * knockback;
-    shake = 8;
-    shakeT = 0.15;
-    if (finalAmount >= 1) {
+    if (applyHitstop) {
+      player.inv = 0.75;
+      player.vx += Math.cos(angle) * knockback;
+      player.vy += Math.sin(angle) * knockback;
+      shake = 8;
+      shakeT = 0.15;
+    }
+    if (showPopup && finalAmount >= 1) {
       spawnDamagePopup(player.x, player.y - 18, finalAmount, { color: '#ff6b6b', size: 16 });
     }
     if (player.hp <= 0) die();
+  }
+
+  function tickPlayerStatus(key, dt, config) {
+    const state = getStatusState(player, key);
+    if (state.stacks <= 0) return;
+    state.duration -= dt;
+    state.tick -= dt;
+    if (state.tick <= 0) {
+      state.tick = config.interval;
+      const damage = Math.max(0.25, config.damage(state.stacks));
+      damagePlayer(damage, 0, 0, key, { ignoreInv: true, noInvFrames: true });
+      if (Math.random() < 0.3) {
+        particles.push({ x: player.x + rand(-8, 8), y: player.y + rand(-8, 8), life: 0.25, c: config.color });
+      }
+    }
+    if (state.duration <= 0) clearStatus(player, key);
+  }
+
+  function updatePlayerStatuses(dt) {
+    if (!player) return;
+    tickPlayerStatus('bleed', dt, {
+      interval: 0.5,
+      damage: stacks => 1.2 + stacks * 1.3,
+      color: STATUS_STYLES.bleed.color,
+    });
+    tickPlayerStatus('fire', dt, {
+      interval: 0.45,
+      damage: stacks => 1 + stacks * 1.6,
+      color: STATUS_STYLES.fire.color,
+    });
+    tickPlayerStatus('poison', dt, {
+      interval: 0.7,
+      damage: stacks => player.maxHp * (0.004 + stacks * 0.0025),
+      color: STATUS_STYLES.poison.color,
+    });
+    tickPlayerStatus('dark_drain', dt, {
+      interval: 0.6,
+      damage: stacks => 1 + stacks * 1.7,
+      color: STATUS_STYLES.dark_drain.color,
+    });
   }
 
   function blastRadius(x, y, radius, damage, color, sourceEnemy = null) {
@@ -5511,12 +5963,16 @@
         const target = enemies.find(enemy => dist(projectile.x, projectile.y, enemy.x, enemy.y) <= projectile.r + enemy.r);
         if (target) {
           hitEnemy(target, projectile.damage || 16, Math.atan2(projectile.vy, projectile.vx), 90, projectile.kind === 'fireball' ? '#ff8844' : '#a857ff');
-          if (projectile.kind === 'fireball') blastRadius(projectile.x, projectile.y, projectile.splash || 44, 14, '#ff8844');
+          if (projectile.kind === 'fireball') {
+            applyFire(target, projectile.fireStacks || 2, projectile.fireDuration || 3);
+            blastRadius(projectile.x, projectile.y, projectile.splash || 44, 14, '#ff8844');
+            applyStatusInRadius(projectile.x, projectile.y, projectile.splash || 44, 'fire', 1, projectile.fireDuration || 3, null);
+          }
           projectiles.splice(index, 1);
           continue;
         }
       } else if (dist(projectile.x, projectile.y, player.x, player.y) <= projectile.r + player.r) {
-        damagePlayer(projectile.damage || 10, Math.atan2(projectile.vy, projectile.vx), 120);
+        damagePlayer(projectile.damage || 10, Math.atan2(projectile.vy, projectile.vx), 120, 'enemy_projectile');
         projectiles.splice(index, 1);
         continue;
       }
@@ -5530,11 +5986,19 @@
         hazard.x = player.x;
         hazard.y = player.y;
       }
+      hazard.statusTick = Number(hazard.statusTick ?? 0) - dt;
       if (hazard.kind === 'lava' && dist(player.x, player.y, hazard.x, hazard.y) < hazard.r + player.r - 10 && player.lavaWalkTime <= 0) {
-        damagePlayer(6 * dt, 0, 0);
+        damagePlayer(6 * dt, 0, 0, 'lava');
+        if (hazard.statusTick <= 0) applyFire(player, 1, 2.6);
+      }
+      if (hazard.kind === 'lava') {
+        enemies.forEach(enemy => {
+          if (dist(enemy.x, enemy.y, hazard.x, hazard.y) > hazard.r + enemy.r - 6) return;
+          if (hazard.statusTick <= 0) applyFire(enemy, 1, 2.8);
+        });
+        if (hazard.statusTick <= 0) hazard.statusTick = 0.45;
       }
       if (hazard.kind === 'healing_zone') {
-        hazard.ttl -= dt;
         hazard.plusTick = (hazard.plusTick ?? 0.08) - dt;
         if (hazard.plusTick <= 0) {
           const angle = rng() * Math.PI * 2;
@@ -5578,10 +6042,12 @@
         enemies.forEach(enemy => {
           if (dist(enemy.x, enemy.y, hazard.x, hazard.y) > hazard.r + enemy.r) return;
           enemy.hp -= (hazard.dps || 16) * dt;
+          if (hazard.statusTick <= 0) applyFire(enemy, 1, 2.8);
           enemy.stun = Math.max(enemy.stun, 0.05);
           if (Math.random() < 0.06) particles.push({ x: enemy.x + rand(-6, 6), y: enemy.y + rand(-6, 6), life: 0.3, c: '#ff8c3b' });
           if (enemy.hp <= 0) onEnemyDie(enemy);
         });
+        if (hazard.statusTick <= 0) hazard.statusTick = 0.45;
       } else if (hazard.kind === 'lightning_column') {
         hazard.tick -= dt;
         if (hazard.tick <= 0) {
@@ -5969,13 +6435,13 @@
     const smashMove = MOVE_DEFS[getEquippedMove('smash')];
     const dashMove = MOVE_DEFS[getEquippedMove('dash')];
     const attackSpeed = getAttackSpeedValue();
-    const meleeMax = (godTimer > 0 ? 0.2 : ATTACKS.melee.baseCooldown) / attackSpeed;
     const laserMoveKey = laserMove?.key || getEquippedMove('laser');
     const laserMax = laserActive
       ? getLaserCastDuration(laserMoveKey, attackSpeed)
       : getLaserCooldownDuration(laserMoveKey, attackSpeed);
     const smashMax = (godTimer > 0 ? 2 : ATTACKS.smash.baseCooldown) / attackSpeed;
-    const dashMax = 1.8 / attackSpeed;
+    const meleeMax = getMeleeCooldownDuration(meleeMove?.key || getEquippedMove('melee'), attackSpeed);
+    const dashMax = getDashCooldownDuration(dashMove?.key || getEquippedMove('dash'), attackSpeed);
     const minutes = Math.floor(gameElapsedTime / 60);
     const seconds = Math.floor(gameElapsedTime % 60);
     const timeStr = `${minutes}:${seconds.toString().padStart(2, '0')}`;
@@ -6041,24 +6507,34 @@
     updateItemUI();
   }
 
+  function finalizeRun(result, extra = {}) {
+    const entry = buildRunHistoryEntry(result, extra);
+    pushRunHistoryEntry(entry);
+    return entry;
+  }
+
   function die() {
+    const entry = finalizeRun('dead', { killedBy: lastDamageSource });
     setGameState('dead');
-    uiController.setDeadInfo(`Floor ${floor} | ${player.coins} run coins | ${Object.values(player.items).reduce((sum, count) => sum + count, 0)} item stacks`);
+    uiController.setDeadInfo(`Floor ${entry.floor} | Killed by ${entry.killedBy} | ${entry.coins} run coins | ${entry.totalItemStacks} item stacks`);
     clearRunSave();
   }
 
   function win() {
+    const entry = finalizeRun('win');
     setGameState('win');
-    uiController.setWinInfo(`Floor ${floor} cleared with ${player.coins} run coins banked and ${metaProgress.coins} total coins saved.`);
+    uiController.setWinInfo(`Floor ${entry.floor} cleared with ${entry.coins} run coins banked and ${metaProgress.coins} total coins saved.`);
     clearRunSave();
   }
 
   async function clearRunSave() {
     activeRun = null;
+    lastDamageSource = '';
     try {
       await Promise.all([
         saveStore.delete('run'),
         saveStore.put('meta', metaProgress),
+        saveStore.put('runHistory', runHistory),
       ]);
       refreshMenuState();
     } catch (error) {
@@ -6088,6 +6564,7 @@
       await Promise.all([
         saveStore.put('run', activeRun),
         saveStore.put('meta', metaProgress),
+        saveStore.put('runHistory', runHistory),
       ]);
     } catch (error) {
       console.error('Failed to save run', error);
@@ -6799,18 +7276,20 @@
 
   function drawEnemies() {
     enemies.forEach(enemy => {
-      if (enemy.bleed > 0) {
+      const activeStatuses = STATUS_KEYS.filter(key => getStatusStacks(enemy, key) > 0);
+      activeStatuses.forEach((key, index) => {
+        const style = STATUS_STYLES[key];
         ctx.save();
         ctx.translate(enemy.x, enemy.y);
-        ctx.strokeStyle = 'rgba(255,0,80,0.7)';
+        ctx.strokeStyle = style.color;
         ctx.lineWidth = 2;
-        ctx.shadowColor = '#f00';
+        ctx.shadowColor = style.color;
         ctx.shadowBlur = 10;
         ctx.beginPath();
-        ctx.arc(0, 0, enemy.r + 6 + Math.sin(Date.now() / 200) * 2, 0, Math.PI * 2);
+        ctx.arc(0, 0, enemy.r + 6 + index * 4 + Math.sin(Date.now() / (180 + index * 40)) * 2, 0, Math.PI * 2);
         ctx.stroke();
         ctx.restore();
-      }
+      });
       const spriteKey = getEnemySpriteKey(enemy);
       const facing = getFacingDirection(enemy, enemy.beamAngle || enemy.dashAngle || 0);
       const drawSize = Math.max(30, enemy.r * 2.4);
@@ -6864,6 +7343,19 @@
     const aimAngle = Math.atan2(mouse.worldY - player.y, mouse.worldX - player.x);
     const facing = getFacingDirection(player, aimAngle);
     const shadowColor = godTimer > 0 ? 'rgba(255,248,210,0.65)' : 'rgba(0,0,0,0.25)';
+    STATUS_KEYS.filter(key => getStatusStacks(player, key) > 0).forEach((key, index) => {
+      const style = STATUS_STYLES[key];
+      ctx.save();
+      ctx.translate(player.x, player.y);
+      ctx.strokeStyle = style.color;
+      ctx.lineWidth = 2;
+      ctx.shadowColor = style.color;
+      ctx.shadowBlur = 10;
+      ctx.beginPath();
+      ctx.arc(0, 0, player.r + 6 + index * 4 + Math.sin(Date.now() / (160 + index * 40)) * 2, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    });
     drawSpriteFrame(getPlayerSpriteKey(), player.x, player.y, Math.max(34, player.r * 2.5), {
       alpha: player.inv > 0 ? 0.68 : 1,
       flipX: facing < 0,
@@ -7226,6 +7718,12 @@
     let activeState = 'menu';
     let hudUpdateHook = null;
     let challengePanelOpen = false;
+    let runHistoryOpen = false;
+    let runHistoryPage = 0;
+    let runHistoryEntries = [];
+    let selectedRunHistoryId = '';
+    let activeRunHistoryTab = 'stats';
+    const runHistoryPageSize = 8;
 
     function makeContainer(element, visibleDisplay = '') {
       return {
@@ -7333,6 +7831,7 @@
         view.challengeStatus.setAttribute('aria-hidden', 'true');
       }
       if (show !== 'charselect') setChallengePanelOpen(false);
+      if (show !== 'menu') setRunHistoryOpen(false);
     }
 
     function setChallengePanelOpen(open) {
@@ -7342,6 +7841,61 @@
         view.challengeToggle.textContent = challengePanelOpen ? 'HIDE CHALLENGE SHOP' : 'OPEN CHALLENGE SHOP';
         view.challengeToggle.setAttribute('aria-expanded', challengePanelOpen ? 'true' : 'false');
       }
+    }
+
+    function setRunHistoryOpen(open) {
+      runHistoryOpen = !!open;
+      view.runHistoryPanel?.classList.toggle('hidden', !runHistoryOpen);
+      view.runHistoryPanel?.setAttribute('aria-hidden', runHistoryOpen ? 'false' : 'true');
+      if (view.runHistoryBtn) {
+        view.runHistoryBtn.textContent = runHistoryOpen ? 'HIDE HISTORY' : 'RUN HISTORY';
+        view.runHistoryBtn.setAttribute('aria-expanded', runHistoryOpen ? 'true' : 'false');
+      }
+    }
+
+    function renderRunHistoryDetail() {
+      const selected = runHistoryEntries.find(entry => entry.id === selectedRunHistoryId) || runHistoryEntries[0] || null;
+      view.runHistoryTabs.forEach(tab => {
+        const active = (tab.dataset.tab || 'stats') === activeRunHistoryTab;
+        tab.classList.toggle('active', active);
+      });
+      if (!selected) {
+        if (view.runHistoryHero) view.runHistoryHero.innerHTML = '';
+        if (view.runHistoryTabPanel) view.runHistoryTabPanel.innerHTML = '';
+        return;
+      }
+      if (view.runHistoryHero) {
+        view.runHistoryHero.innerHTML = renderRunHistoryHero(selected);
+        hydrateRunHistorySprites(view.runHistoryHero);
+      }
+      if (view.runHistoryTabPanel) {
+        view.runHistoryTabPanel.innerHTML = renderRunHistoryTabContent(selected, activeRunHistoryTab);
+      }
+    }
+
+    function renderRunHistoryPage() {
+      const totalPages = Math.max(1, Math.ceil(runHistoryEntries.length / runHistoryPageSize));
+      runHistoryPage = clamp(runHistoryPage, 0, totalPages - 1);
+      const start = runHistoryPage * runHistoryPageSize;
+      const visibleEntries = runHistoryEntries.slice(start, start + runHistoryPageSize);
+      if (!visibleEntries.some(entry => entry.id === selectedRunHistoryId)) {
+        selectedRunHistoryId = visibleEntries[0]?.id || '';
+      }
+      if (view.runHistoryEmpty) view.runHistoryEmpty.classList.toggle('hidden', runHistoryEntries.length > 0);
+      if (view.runHistoryList) {
+        view.runHistoryList.innerHTML = visibleEntries.map(entry => renderRunHistoryListEntry(entry, entry.id === selectedRunHistoryId)).join('');
+        view.runHistoryList.classList.toggle('hidden', runHistoryEntries.length === 0);
+        view.runHistoryList.scrollTop = 0;
+        hydrateRunHistorySprites(view.runHistoryList);
+      }
+      renderRunHistoryDetail();
+      if (view.runHistoryPageLabel) {
+        view.runHistoryPageLabel.textContent = runHistoryEntries.length
+          ? `Page ${runHistoryPage + 1} / ${totalPages}`
+          : 'Page 0 / 0';
+      }
+      if (view.runHistoryPrev) view.runHistoryPrev.disabled = runHistoryPage <= 0;
+      if (view.runHistoryNext) view.runHistoryNext.disabled = runHistoryPage >= totalPages - 1 || runHistoryEntries.length === 0;
     }
 
     if (manager && typeof manager.registerScreen === 'function') {
@@ -7461,6 +8015,28 @@
           });
         });
         view.challengeToggle?.addEventListener('click', handlers.onToggleChallenges);
+        view.runHistoryBtn?.addEventListener('click', handlers.onToggleRunHistory);
+        view.runHistoryClose?.addEventListener('click', () => setRunHistoryOpen(false));
+        view.runHistoryPrev?.addEventListener('click', () => {
+          runHistoryPage = Math.max(0, runHistoryPage - 1);
+          renderRunHistoryPage();
+        });
+        view.runHistoryNext?.addEventListener('click', () => {
+          runHistoryPage += 1;
+          renderRunHistoryPage();
+        });
+        view.runHistoryList?.addEventListener('click', event => {
+          const target = event.target instanceof Element ? event.target.closest('[data-run-id]') : null;
+          if (!target) return;
+          selectedRunHistoryId = target.dataset.runId || '';
+          renderRunHistoryPage();
+        });
+        view.runHistoryTabs.forEach(tab => {
+          tab.addEventListener('click', () => {
+            activeRunHistoryTab = tab.dataset.tab || 'stats';
+            renderRunHistoryDetail();
+          });
+        });
         view.go.addEventListener('click', handlers.onStartNew);
         view.seed.addEventListener('keydown', event => {
           if (event.key === 'Enter') handlers.onStartNew();
@@ -7499,6 +8075,7 @@
       },
       setSaveState(text) { view.saveState.textContent = text; },
       setChallengePanelOpen,
+      setRunHistoryOpen,
       setMenuMeta(coins, bestFloor, loopCrystals, saveState) {
         view.bankCoins.textContent = coins;
         view.bestFloor.textContent = bestFloor;
@@ -7510,6 +8087,13 @@
         // Main menu: show/hide Continue button
         view.continueBtn?.classList.toggle('hidden', !hasRun);
         view.runSummary.textContent = summary || '';
+      },
+      setRunHistory(entries) {
+        runHistoryEntries = normalizeRunHistory(entries);
+        runHistoryPage = 0;
+        selectedRunHistoryId = runHistoryEntries[0]?.id || '';
+        activeRunHistoryTab = 'stats';
+        renderRunHistoryPage();
       },
       updateCharacterSelection(unlocked, selected) {
         const CHAR_ORDER = ['thorn_knight', 'metao', 'granialla'];

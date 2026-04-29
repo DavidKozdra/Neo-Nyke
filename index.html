@@ -218,10 +218,37 @@
     <div class="main-nav">
       <button id="continueBtn" class="nav-btn hidden">CONTINUE</button>
       <button id="newRunBtn"   class="nav-btn">NEW RUN</button>
+      <button id="runHistoryBtn" class="nav-btn nav-btn--minor">RUN HISTORY</button>
       <button id="settingsBtn" class="nav-btn nav-btn--minor">SETTINGS</button>
     </div>
     <span id="runSummary" class="run-summary-line"></span>
   </div><!-- /.menu-content -->
+  <section id="runHistoryPanel" class="rh-panel hidden" aria-hidden="true">
+    <div class="rh-head">
+      <span class="rh-title">RUN HISTORY</span>
+      <button id="runHistoryClose" class="panel-close" aria-label="Close run history">X</button>
+    </div>
+    <div id="runHistoryEmpty" class="rh-empty hidden">No completed runs yet.</div>
+    <div class="rh-body">
+      <div class="rh-rail">
+        <div id="runHistoryList" class="rh-list"></div>
+        <div class="rh-pagination">
+          <button id="runHistoryPrev" class="rh-pgbtn" type="button">&#8592;</button>
+          <span id="runHistoryPageLabel" class="rh-pglabel">1 / 1</span>
+          <button id="runHistoryNext" class="rh-pgbtn" type="button">&#8594;</button>
+        </div>
+      </div>
+      <div class="rh-detail">
+        <div id="runHistoryHero"></div>
+        <div class="rh-tabs" role="tablist">
+          <button class="rh-tab active" data-tab="stats" type="button">Stats</button>
+          <button class="rh-tab" data-tab="items" type="button">Items</button>
+          <button class="rh-tab" data-tab="moves" type="button">Moves</button>
+        </div>
+        <div id="runHistoryTabPanel" class="rh-tabpanel"></div>
+      </div>
+    </div>
+  </section>
 </div>
 
 <!-- Character select screen -->
