@@ -928,10 +928,6 @@ canvas {
   gap: 10px;
 }
 
-#invWeaponsList {
-  margin-top: 12px;
-}
-
 .inv-slots {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
@@ -995,6 +991,14 @@ canvas {
     radial-gradient(circle at top right, rgba(255, 184, 94, 0.16), transparent 30%),
     rgba(31, 39, 56, .96);
   box-shadow: 0 0 0 2px rgba(255, 191, 109, .12) inset, 0 0 24px rgba(255, 162, 78, .1);
+}
+
+.inv-move-chip.is-equipped-weapon {
+  border-color: rgba(112, 236, 186, .52);
+  background:
+    radial-gradient(circle at top right, rgba(91, 228, 176, 0.18), transparent 30%),
+    rgba(24, 44, 41, .96);
+  box-shadow: 0 0 0 2px rgba(112, 236, 186, .12) inset, 0 0 24px rgba(91, 228, 176, .12);
 }
 
 .inv-move-chip__meta {

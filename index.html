@@ -80,7 +80,7 @@
       <div class="skill-fill" id="fillDash"></div>
       <div class="skill-meta">
         <span class="skill-key">SHIFT</span>
-        <span class="skill-name">Dash</span>
+        <span class="skill-name">Move</span>
       </div>
       <b class="skill-time" id="timeDash">READY</b>
     </div>
@@ -147,6 +147,7 @@
     <div class="inv-tabs shop-tabs" role="tablist">
       <button class="inv-tab shop-tab active" data-inv-tab="stats" role="tab">Stats</button>
       <button class="inv-tab shop-tab" data-inv-tab="items" role="tab">Items</button>
+      <button class="inv-tab shop-tab" data-inv-tab="weapons" role="tab">Weapons</button>
       <button class="inv-tab shop-tab" data-inv-tab="moves" role="tab">Moves</button>
       <button class="inv-tab shop-tab" data-inv-tab="equipped" role="tab">Equipped</button>
     </div>
@@ -155,6 +156,8 @@
     </div>
     <div class="inv-tab-panel hidden" id="invTabItems">
       <div id="invItemsList" class="inv-items"></div>
+    </div>
+    <div class="inv-tab-panel hidden" id="invTabWeapons">
       <div id="invWeaponsList" class="inv-moves"></div>
     </div>
     <div class="inv-tab-panel hidden" id="invTabMoves">
@@ -166,7 +169,7 @@
         <div class="inv-slot" data-slot="melee">Melee</div>
         <div class="inv-slot" data-slot="laser">Laser</div>
         <div class="inv-slot" data-slot="smash">Smash</div>
-        <div class="inv-slot" data-slot="dash">Dash</div>
+        <div class="inv-slot" data-slot="dash">Mobility</div>
       </div>
     </div>
   </div>
@@ -397,7 +400,7 @@
           <tr><td class="bind-label">Move Down</td> <td><button class="bind-btn" data-action="down">S</button></td></tr>
           <tr><td class="bind-label">Move Left</td> <td><button class="bind-btn" data-action="left">A</button></td></tr>
           <tr><td class="bind-label">Move Right</td><td><button class="bind-btn" data-action="right">D</button></td></tr>
-          <tr><td class="bind-label">Dash</td>      <td><button class="bind-btn" data-action="dash">SHIFT</button></td></tr>
+          <tr><td class="bind-label">Mobility Skill</td>      <td><button class="bind-btn" data-action="dash">SHIFT</button></td></tr>
           <tr><td class="bind-label">Inventory</td> <td><button class="bind-btn" data-action="inventory">I</button></td></tr>
           <tr><td class="bind-label">Slash</td>     <td><button class="bind-btn" data-action="slash">LMB</button></td></tr>
           <tr><td class="bind-label">Laser beam</td><td><button class="bind-btn" data-action="laser">RMB</button></td></tr>

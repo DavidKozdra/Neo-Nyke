@@ -189,7 +189,7 @@
       rarity: 'wizard',
       startItem: 'orb_of_blood',
       damageMultiplier: 0.5,
-      skills: { melee: 'Fire Balls', laser: 'Power Disks', smash: 'Chaos Burst', dash: 'Dash' },
+      skills: { melee: 'Fire Balls', laser: 'Power Disks', smash: 'Chaos Burst', dash: 'Warp' },
     },
     granialla: {
       key: 'granialla',
@@ -197,7 +197,7 @@
       rarity: 'god',
       startItem: 'neo_knife',
       damageMultiplier: 1,
-      skills: { melee: 'Smite', laser: 'Blade Justice', smash: 'Healing Zone', dash: 'Dash' },
+      skills: { melee: 'Smite', laser: 'Blade Justice', smash: 'Healing Zone', dash: 'Zip Lightning' },
       unlock: 'godslain',
     },
   };
@@ -258,8 +258,33 @@
     fire_circle: { key: 'fire_circle', slot: 'smash', name: 'Fire Circle', desc: 'Burning aura around you.' },
     floor_lava: { key: 'floor_lava', slot: 'smash', name: 'Floor Is Lava', desc: 'Lava immunity and lava trail.' },
 
-    dash: { key: 'dash', slot: 'dash', name: 'Dash', desc: 'Fast invulnerable burst movement.', maxStacks: 1, stackOverrides: { thorn_knight: 2 } },
-    warp: { key: 'warp', slot: 'dash', name: 'Warp', desc: 'Teleport to a safe room position.' },
+    dash: {
+      key: 'dash',
+      slot: 'dash',
+      name: 'Dash',
+      desc: 'Fast invulnerable burst movement.',
+      maxStacks: 1,
+      stackOverrides: { thorn_knight: 2 },
+    },
+    nimrod_stomp: {
+      key: 'nimrod_stomp',
+      slot: 'dash',
+      name: 'Nimrod Stomp',
+      desc: 'Leap across the room and slam on landing for heavy AOE damage.',
+    },
+    warp: { key: 'warp', slot: 'dash', name: 'Warp', desc: 'Phase out and reappear where you click.' },
+    zip_lightning: {
+      key: 'zip_lightning',
+      slot: 'dash',
+      name: 'Zip Lightning',
+      desc: 'Zip between targets, chaining lightning hits as you move.',
+    },
+    cowards_way: {
+      key: 'cowards_way',
+      slot: 'dash',
+      name: "Coward's Way",
+      desc: 'Become invulnerable for 3 seconds, but it ends if you attack.',
+    },
   };
 
   const SHOP_MOVE_POOL = [
@@ -267,7 +292,7 @@
     'blood_beam', 'turtle_wave', 'power_disks', 'blade_justice', 'lightning_columns',
     'god_sweep',
     'crimson_smash', 'chaos_burst', 'healing_zone', 'fire_circle', 'floor_lava',
-    'dash', 'warp',
+    'dash', 'nimrod_stomp', 'warp', 'zip_lightning', 'cowards_way',
   ];
 
   const WEAPON_DEFS = {
@@ -358,6 +383,35 @@
   };
   const WEAPON_KEYS = Object.keys(WEAPON_DEFS);
   const WHITE_WEAPON_POOL = ['extending_staff', 'hunters_bow', 'thorns_bleed_blade'];
+
+  // Rival adventurers: dungeon-roaming NPCs based on unchosen characters.
+  const RIVAL_DEFS = {
+    thorn_knight: {
+      name: 'Rival Thorn',
+      color: '#ff6e8b',
+      hp: 180, dmg: 22, speed: 118, r: 16, attackCd: 0.8,
+      enterLine: 'Your loot is mine.',
+      deathLine: 'Run next time...',
+      attackStyle: 'melee',
+    },
+    metao: {
+      name: 'Rival Metao',
+      color: '#ff9940',
+      hp: 130, dmg: 16, speed: 82, r: 15, attackCd: 1.3,
+      enterLine: 'I\'ve been watching you.',
+      deathLine: 'Impossible...',
+      attackStyle: 'ranged',
+    },
+    granialla: {
+      name: 'Rival Granialla',
+      color: '#a8aaff',
+      hp: 240, dmg: 20, speed: 94, r: 17, attackCd: 1.0,
+      enterLine: 'You dare compete with a god?',
+      deathLine: 'This cannot be...',
+      attackStyle: 'melee_heal',
+    },
+  };
+  const RIVAL_MOVE_INTERVAL_BASE = 8.5;
   const PURPLE_WEAPON_POOL = ['lazer_glasses', 'metao_fire_staff', 'magenta_degale', 'magenta_p90'];
   const RED_WEAPON_POOL = ['granillia_lightning_spear', 'excalibur', 'golden_fleece', 'void_piercer', 'aegis_shield_weapon'];
 
@@ -841,6 +895,7 @@
   let activeInvTab = 'stats';
   let draggingMoveKey = '';
   let weaponBurstQueue = [];
+  let rivals = [];
   let activeInventorySlot = '';
   let shopPanelDirty = false;
   let inventoryPanelDirty = false;
@@ -1428,8 +1483,8 @@
     if (!Array.isArray(currentRoom.shopMoveOffers) || currentRoom.shopMoveOffers.length === 0) {
       const seen = new Set(Object.keys(player?.ownedMoves || {}));
       const pool = SHOP_MOVE_POOL.filter(key => key !== 'god_sweep' && !seen.has(key));
-      shuffle(pool, 'loot');
-      const offers = pool.slice(0, 4).map((moveKey, index) => ({
+      const shuffledPool = shuffle(pool, 'loot');
+      const offers = shuffledPool.slice(0, 4).map((moveKey, index) => ({
         type: 'move',
         key: moveKey,
         bought: false,
@@ -1459,8 +1514,8 @@
       if (floor >= 4) pool.push(...PURPLE_WEAPON_POOL);
       if (floor >= 7) pool.push(...RED_WEAPON_POOL);
       const filtered = pool.filter(key => !owned.has(key));
-      shuffle(filtered, 'loot');
-      const offers = filtered.slice(0, 3).map((weaponKey, index) => ({
+      const shuffledFiltered = shuffle(filtered, 'loot');
+      const offers = shuffledFiltered.slice(0, 3).map((weaponKey, index) => ({
         type: 'weapon',
         key: weaponKey,
         bought: false,
@@ -1592,7 +1647,7 @@
     ui.invTabs.forEach(tab => {
       tab.classList.toggle('active', tab.dataset.invTab === activeInvTab);
     });
-    const tabPanels = { stats: 'invTabStats', items: 'invTabItems', moves: 'invTabMoves', equipped: 'invTabEquipped' };
+    const tabPanels = { stats: 'invTabStats', items: 'invTabItems', weapons: 'invTabWeapons', moves: 'invTabMoves', equipped: 'invTabEquipped' };
     Object.entries(tabPanels).forEach(([key, id]) => {
       const el = document.getElementById(id);
       if (el) el.classList.toggle('hidden', key !== activeInvTab);
@@ -1635,16 +1690,16 @@
         .map(key => {
           const def = WEAPON_DEFS[key];
           const equipped = player.equippedWeapon === key;
-          return `<button class="inv-move-chip${equipped ? ' is-match' : ''}" data-weapon="${key}" type="button">
+          return `<button class="inv-move-chip${equipped ? ' is-equipped-weapon' : ''}" data-weapon="${key}" type="button" aria-pressed="${equipped ? 'true' : 'false'}">
             <div class="inv-move-chip__meta">
               <b>${def?.name || key}</b>
               <span class="inv-move-chip__slot">${def?.rarity || 'weapon'}</span>
             </div>
             <p>${def?.description || 'No weapon description available.'}</p>
-            <span class="inv-move-chip__hint">${equipped ? 'Equipped' : 'Click to equip'}</span>
+            <span class="inv-move-chip__hint">${equipped ? 'Equipped On Left Click' : 'Click To Equip On Left Click'}</span>
           </button>`;
         })
-        .join('') || '<div class="inv-card"><span class="inv-card__eyebrow">Empty</span><h4>No weapons owned</h4><p>Buy weapons in the shop to override left click.</p></div>';
+        .join('') || '<div class="inv-card"><span class="inv-card__eyebrow">Empty</span><h4>No weapons owned</h4><p>Buy weapons in the shop to unlock left-click weapon loadouts.</p></div>';
     }
 
     const equippedMoveKeys = new Set(Object.values(player.equippedMoves || {}).filter(Boolean));
@@ -1683,7 +1738,7 @@
     if (ui.invWeaponSlot) {
       const weapon = WEAPON_DEFS[player.equippedWeapon];
       ui.invWeaponSlot.dataset.rarity = weapon?.rarity || '';
-      ui.invWeaponSlot.innerHTML = `<div class="inv-slot__top"><span class="inv-slot__kicker">weapon</span><span class="inv-slot__status">${weapon ? 'Equipped' : 'Empty'}</span></div><div class="inv-slot__move">${weapon?.name || 'No weapon equipped'}</div><p class="inv-slot__hint">${weapon?.description || 'Equip a weapon to make left click use weapon abilities instead of melee moves.'}</p>`;
+      ui.invWeaponSlot.innerHTML = `<div class="inv-slot__top"><span class="inv-slot__kicker">weapon</span><span class="inv-slot__status">${weapon ? 'Equipped Now' : 'No Weapon'}</span></div><div class="inv-slot__move">${weapon?.name || 'Default Melee Active'}</div><p class="inv-slot__hint">${weapon ? `${weapon.description} Click this slot to unequip and return left click to melee.` : 'Open the Weapons tab and click any owned weapon to equip it to left click.'}</p>`;
     }
     inventoryPanelDirty = false;
   }
@@ -1844,9 +1899,9 @@
     const character = CHARACTER_DEFS[chosenCharacter] || CHARACTER_DEFS.thorn_knight;
     if (!isChallengeActive('no_items')) items[character.startItem] = 1;
     const equippedMoves = character.key === 'metao'
-      ? { melee: 'fire_balls', laser: 'power_disks', smash: 'chaos_burst', dash: 'dash' }
+      ? { melee: 'fire_balls', laser: 'power_disks', smash: 'chaos_burst', dash: 'warp' }
       : character.key === 'granialla'
-        ? { melee: 'smite', laser: 'blade_justice', smash: 'healing_zone', dash: 'dash' }
+        ? { melee: 'smite', laser: 'blade_justice', smash: 'healing_zone', dash: 'zip_lightning' }
         : { melee: 'slash', laser: 'blood_beam', smash: 'crimson_smash', dash: 'dash' };
     const defaultWeapon = getDefaultWeaponForCharacter(character.key);
     const ownedMoves = {};
@@ -1866,6 +1921,7 @@
       dashTime: 0,
       dashX: 0,
       dashY: 0,
+      cowardsWayTime: 0,
       coins: 0,
       level: 1,
       kills: 0,
@@ -2154,7 +2210,10 @@
 
   function getDashCooldownDuration(moveKey = getEquippedMove('dash'), attackSpeed = getAttackSpeedValue()) {
     if (moveKey === 'warp') return 2.8 / attackSpeed;
-    return 1.8 / attackSpeed;
+    if (moveKey === 'nimrod_stomp') return 4.2 / attackSpeed;
+    if (moveKey === 'zip_lightning') return 5.4 / attackSpeed;
+    if (moveKey === 'cowards_way') return 6 / attackSpeed;
+    return 3.2 / attackSpeed;
   }
 
   function getSmashCooldownDuration(attackSpeed = getAttackSpeedValue()) {
@@ -2607,6 +2666,7 @@
     activeShopTab = 'items';
     draggingMoveKey = '';
     weaponBurstQueue = [];
+    rivals = [];
     wizardPawSelection = null;
     setWizardPawModalOpen(false);
     setShopPanelOpen(false);
@@ -2614,6 +2674,17 @@
     mouse.down = false;
     mouse.right = false;
     lastDamageSource = '';
+  }
+
+  function sanitizePickupList(source) {
+    if (!Array.isArray(source)) return [];
+    return source.filter(pickup => (
+      pickup
+      && typeof pickup === 'object'
+      && typeof pickup.type === 'string'
+      && Number.isFinite(Number(pickup.x))
+      && Number.isFinite(Number(pickup.y))
+    ));
   }
 
   function restoreRun(snapshot) {
@@ -2633,7 +2704,7 @@
     particles = [];
     projectiles = snapshot.projectiles || [];
     chests = snapshot.chests || [];
-    pickups = snapshot.pickups || [];
+    pickups = sanitizePickupList(snapshot.pickups);
     destructibles = snapshot.destructibles || currentRoom?.destructibles || [];
     hazards = snapshot.hazards || currentRoom?.hazards || [];
     shopOffers = snapshot.shopOffers || currentRoom?.shopOffers || [];
@@ -2643,7 +2714,7 @@
       currentRoom.enemies = Array.isArray(currentRoom.enemies) ? currentRoom.enemies.map(migrateEnemyState) : enemies;
       currentRoom.projectiles = Array.isArray(currentRoom.projectiles) ? currentRoom.projectiles : projectiles;
       currentRoom.chests = Array.isArray(currentRoom.chests) ? currentRoom.chests : chests;
-      currentRoom.pickups = Array.isArray(currentRoom.pickups) ? currentRoom.pickups : pickups;
+      currentRoom.pickups = sanitizePickupList(currentRoom.pickups);
       currentRoom.destructibles = Array.isArray(currentRoom.destructibles) ? currentRoom.destructibles : destructibles;
       currentRoom.hazards = Array.isArray(currentRoom.hazards) ? currentRoom.hazards : hazards;
       currentRoom.shopOffers = Array.isArray(currentRoom.shopOffers) ? currentRoom.shopOffers : shopOffers;
@@ -2684,6 +2755,7 @@
     activeShopTab = 'items';
     draggingMoveKey = '';
     weaponBurstQueue = [];
+    rivals = [];
     wizardPawSelection = null;
     setWizardPawModalOpen(false);
     setShopPanelOpen(false);
@@ -2770,6 +2842,7 @@
 
     player.x = START_X;
     player.y = START_Y;
+    spawnRivals();
     enterRoom(startRoom);
     updateObjective();
     updateHud();
@@ -2815,7 +2888,10 @@
       return;
     }
 
-    decorateRoomStructures(room);
+    // Boss and god rooms need an open arena — structures block projectiles and beams
+    if (room.type !== 'god' && room.type !== 'boss') {
+      decorateRoomStructures(room);
+    }
 
     const potCount = room.type === 'shop' ? 1 : room.type === 'challenge' ? 0 : irand(1, 3, 'world');
     for (let index = 0; index < potCount; index += 1) {
@@ -3188,7 +3264,8 @@
     enemies = room.enemies || [];
     projectiles = room.projectiles || [];
     chests = room.chests || [];
-    pickups = room.pickups || [];
+    pickups = sanitizePickupList(room.pickups);
+    room.pickups = pickups;
     particles = [];
     destructibles = room.destructibles || [];
     hazards = room.hazards || [];
@@ -3272,6 +3349,9 @@
       }
     }
 
+    // Inject rivals that are already present in this room
+    injectRivalsToCurrentRoom();
+
     if (room.type === 'god') {
       if (room.cleared) {
         if (!pickups.some(pickup => pickup.type === 'crown')) {
@@ -3329,6 +3409,327 @@
       created += 1;
     }
   }
+
+  // ── Rival Adventurer System ──────────────────────────────────────────────
+
+  function spawnRivals() {
+    rivals = [];
+    if (!rooms || rooms.length === 0) return;
+    const unchosen = Object.keys(CHARACTER_DEFS).filter(k => k !== chosenCharacter && RIVAL_DEFS[k]);
+    const count = floor >= 3 ? Math.min(2, unchosen.length) : 1;
+    const nonStartRooms = rooms.filter(r => r.type !== 'start' && r.type !== 'boss' && r.type !== 'god');
+    if (nonStartRooms.length === 0) return;
+    const shuffled = [...unchosen].sort(() => nextRandom('world') - 0.5);
+    for (let i = 0; i < count && i < shuffled.length; i++) {
+      const charKey = shuffled[i];
+      const def = RIVAL_DEFS[charKey];
+      const spawnRoom = nonStartRooms[i % nonStartRooms.length];
+      const floorScale = 1 + (floor - 1) * 0.12;
+      rivals.push({
+        characterKey: charKey,
+        name: def.name,
+        color: def.color,
+        attackStyle: def.attackStyle,
+        enterLine: def.enterLine,
+        deathLine: def.deathLine,
+        roomGx: spawnRoom.gx,
+        roomGy: spawnRoom.gy,
+        moveTimer: 6 + nextRandom('world') * 5,
+        moveInterval: RIVAL_MOVE_INTERVAL_BASE + nextRandom('world') * 4,
+        hp: Math.round(def.hp * floorScale),
+        max: Math.round(def.hp * floorScale),
+        dmg: Math.round(def.dmg * floorScale),
+        speed: def.speed,
+        r: def.r,
+        attackCd: def.attackCd,
+        loot: [],
+        homeGx: spawnRoom.gx,
+        homeGy: spawnRoom.gy,
+        objectiveGx: spawnRoom.gx,
+        objectiveGy: spawnRoom.gy,
+        objectiveKind: 'patrol',
+        route: [],
+        aggroTimer: 0,
+        lastKnownPlayerGx: spawnRoom.gx,
+        lastKnownPlayerGy: spawnRoom.gy,
+        hpSnapshot: Math.round(def.hp * floorScale),
+        dead: false,
+      });
+    }
+  }
+
+  function getRoomByCoords(gx, gy) {
+    return rooms.find(room => room.gx === gx && room.gy === gy) || null;
+  }
+
+  function hasStealableLoot(room) {
+    if (!room || !Array.isArray(room.pickups) || room.pickups.length === 0) return false;
+    return room.pickups.some(pickup => pickup.type === 'item' || pickup.type === 'coin' || pickup.type === 'potion');
+  }
+
+  function buildRivalRoute(fromRoom, toRoom) {
+    if (!fromRoom || !toRoom || fromRoom === toRoom) return [];
+    const visited = new Set([fromRoom]);
+    const queue = [{ room: fromRoom, path: [] }];
+    const DIRS = ['n', 's', 'e', 'w'];
+    while (queue.length > 0) {
+      const { room, path } = queue.shift();
+      for (const dir of DIRS) {
+        const next = getConnectedRoom(room, dir);
+        if (!next || visited.has(next)) continue;
+        visited.add(next);
+        const nextPath = [...path, dir];
+        if (next === toRoom) return nextPath;
+        queue.push({ room: next, path: nextPath });
+      }
+    }
+    return [];
+  }
+
+  function chooseRivalObjectiveRoom(rival, fromRoom) {
+    if (!fromRoom) return null;
+    const pool = rooms.filter(room => room !== fromRoom && room.type !== 'start' && room.type !== 'god' && room.type !== 'boss');
+    if (pool.length === 0) return fromRoom;
+
+    const weighted = [];
+    pool.forEach(room => {
+      let weight = 1;
+      if (hasStealableLoot(room)) weight += 3.4;
+      if (room.type === 'treasure') weight += 2.1;
+      if (room.type === 'shop') weight += 1.7;
+      if (room.type === 'challenge') weight += 1.1;
+      if (room.type === 'combat' && !room.cleared) weight += 0.8;
+      const distance = Math.abs(room.gx - fromRoom.gx) + Math.abs(room.gy - fromRoom.gy);
+      weight += Math.min(2, distance * 0.35);
+      if (rival.homeGx === room.gx && rival.homeGy === room.gy) weight += 0.2;
+      weighted.push({ room, weight: Math.max(0.1, weight) });
+    });
+
+    const totalWeight = weighted.reduce((sum, entry) => sum + entry.weight, 0);
+    if (totalWeight <= 0) return pool[Math.floor(nextRandom('encounter') * pool.length)] || fromRoom;
+    let roll = nextRandom('encounter') * totalWeight;
+    for (let i = 0; i < weighted.length; i += 1) {
+      roll -= weighted[i].weight;
+      if (roll <= 0) return weighted[i].room;
+    }
+    return weighted[weighted.length - 1].room || fromRoom;
+  }
+
+  function chooseFallbackNeighbor(fromRoom) {
+    const dirs = ['n', 's', 'e', 'w'];
+    for (const dir of dirs.sort(() => nextRandom('encounter') - 0.5)) {
+      const next = getConnectedRoom(fromRoom, dir);
+      if (next) return { next, dir };
+    }
+    return null;
+  }
+
+  function stealFromRoom(rival, room) {
+    if (!room || !Array.isArray(room.pickups) || room.pickups.length === 0) return;
+    const stealable = room.pickups.filter(p => p.type === 'item' || p.type === 'coin' || p.type === 'potion');
+    if (stealable.length === 0) return;
+    const idx = Math.floor(nextRandom('encounter') * stealable.length);
+    const stolen = stealable[idx];
+    const roomIdx = room.pickups.indexOf(stolen);
+    if (roomIdx < 0) return;
+    room.pickups.splice(roomIdx, 1);
+    rival.loot.push({ type: stolen.type, key: stolen.key, value: stolen.value });
+    if (room === currentRoom) {
+      const liveIdx = pickups.indexOf(stolen);
+      if (liveIdx >= 0) pickups.splice(liveIdx, 1);
+      particles.push({ x: stolen.x || ROOM_W / 2, y: (stolen.y || ROOM_H / 2) - 16, life: 1.6, text: `${rival.name} STOLE THIS!`, c: rival.color });
+    }
+  }
+
+  function injectRivalToCurrentRoom(rival) {
+    if (!currentRoom) return;
+    if (enemies.some(e => e.type === 'rival' && e.rivalData === rival)) return;
+    const sp = findSafeEnemySpawnPoint(ROOM_W / 2, ROOM_H / 2, rival.r) || { x: ROOM_W / 2, y: ROOM_H / 2 };
+    const entry = {
+      type: 'rival',
+      rivalData: rival,
+      rivalKey: rival.characterKey,
+      x: sp.x, y: sp.y,
+      vx: 0, vy: 0,
+      r: rival.r,
+      hp: rival.hp,
+      max: rival.max,
+      dmg: rival.dmg,
+      speed: rival.speed,
+      attackCd: 0.5 + nextRandom('encounter') * 0.6,
+      stun: 0, inv: 0,
+      elite: false,
+      bleedImmune: false, fireImmune: false, poisonImmune: false, dark_drainImmune: false,
+      statuses: createStatusMap(),
+      barrier: 0,
+      beamTime: 0, beamTick: 0, beamAngle: 0,
+      dashTime: 0, dashAngle: 0, dashHit: false,
+      swingTime: 0, windup: 0,
+      summonCd: 0, supportCd: 0,
+      bossSpawnTimer: 0, bossSpawnWarnAt: 0,
+      aoeTime: 0, phase: 1,
+      splitReady: false, spawnedFromBulk: false,
+      state: 'idle',
+    };
+    enemies.push(entry);
+    particles.push({ x: entry.x, y: entry.y - 26, life: 1.8, text: `${rival.name.toUpperCase()} ENTERS!`, c: rival.color });
+    sayAtPosition(entry.x, entry.y, rival.enterLine, { speaker: rival.name, tone: 'boss', holdTime: 1.8, offsetY: rival.r + 36 });
+  }
+
+  function injectRivalsToCurrentRoom() {
+    if (!currentRoom) return;
+    rivals.forEach(rival => {
+      if (!rival.dead && rival.roomGx === currentRoom.gx && rival.roomGy === currentRoom.gy) {
+        injectRivalToCurrentRoom(rival);
+      }
+    });
+  }
+
+  function updateRivals(dt) {
+    if (!currentRoom) return;
+    for (let i = rivals.length - 1; i >= 0; i--) {
+      const rival = rivals[i];
+      if (rival.dead) { rivals.splice(i, 1); continue; }
+      // Sync hp from live enemy if they're in the current room
+      const liveEnemy = enemies.find(e => e.type === 'rival' && e.rivalData === rival);
+      if (liveEnemy) {
+        rival.hp = liveEnemy.hp;
+        if (liveEnemy.hp < rival.hpSnapshot) {
+          rival.aggroTimer = Math.max(rival.aggroTimer, 12);
+          rival.lastKnownPlayerGx = currentRoom.gx;
+          rival.lastKnownPlayerGy = currentRoom.gy;
+        }
+        rival.hpSnapshot = liveEnemy.hp;
+      }
+      rival.aggroTimer = Math.max(0, rival.aggroTimer - dt);
+      rival.moveTimer -= dt;
+      if (rival.moveTimer <= 0) {
+        rival.moveTimer = rival.moveInterval;
+        const fromRoom = getRoomByCoords(rival.roomGx, rival.roomGy);
+        if (!fromRoom) continue;
+        const wasInCurrentRoom = fromRoom === currentRoom;
+        let goalRoom = null;
+
+        if (rival.aggroTimer > 0) {
+          rival.objectiveKind = 'hunt';
+          goalRoom = getRoomByCoords(rival.lastKnownPlayerGx, rival.lastKnownPlayerGy) || currentRoom;
+        } else {
+          const objectiveRoom = getRoomByCoords(rival.objectiveGx, rival.objectiveGy);
+          if (!objectiveRoom || objectiveRoom === fromRoom || rival.route.length === 0) {
+            goalRoom = chooseRivalObjectiveRoom(rival, fromRoom);
+            rival.objectiveKind = hasStealableLoot(goalRoom) ? 'loot' : 'patrol';
+            rival.objectiveGx = goalRoom.gx;
+            rival.objectiveGy = goalRoom.gy;
+            rival.route = buildRivalRoute(fromRoom, goalRoom);
+          }
+        }
+
+        let nextRoom = null;
+        if (goalRoom && goalRoom !== fromRoom && rival.route.length === 0) {
+          rival.route = buildRivalRoute(fromRoom, goalRoom);
+        }
+        const stepDir = rival.route.shift();
+        if (stepDir) {
+          nextRoom = getConnectedRoom(fromRoom, stepDir);
+        }
+        if (!nextRoom) {
+          const fallback = chooseFallbackNeighbor(fromRoom);
+          nextRoom = fallback?.next || null;
+          rival.route = [];
+        }
+        if (!nextRoom) continue;
+
+        stealFromRoom(rival, nextRoom);
+        rival.roomGx = nextRoom.gx;
+        rival.roomGy = nextRoom.gy;
+
+        if (nextRoom === currentRoom) {
+          rival.aggroTimer = Math.max(rival.aggroTimer, 8);
+          rival.lastKnownPlayerGx = currentRoom.gx;
+          rival.lastKnownPlayerGy = currentRoom.gy;
+          injectRivalToCurrentRoom(rival);
+        }
+
+        if (nextRoom.gx === rival.objectiveGx && nextRoom.gy === rival.objectiveGy) {
+          rival.route = [];
+        }
+
+        if (wasInCurrentRoom && nextRoom !== currentRoom && liveEnemy) {
+          const idx = enemies.indexOf(liveEnemy);
+          if (idx >= 0) enemies.splice(idx, 1);
+          const fleeText = rival.objectiveKind === 'hunt' ? `${rival.name} REPOSITIONED` : `${rival.name} MOVED`;
+          particles.push({ x: liveEnemy.x, y: liveEnemy.y - 16, life: 1.4, text: fleeText, c: rival.color });
+          rival.hp = liveEnemy.hp; // preserve hp
+        }
+      }
+    }
+  }
+
+  function updateRivalEnemy(enemy, dt) {
+    const rival = enemy.rivalData;
+    if (!rival) return;
+    const dx = player.x - enemy.x;
+    const dy = player.y - enemy.y;
+    const distance = Math.hypot(dx, dy) || 1;
+    if (enemy.stun > 0) { enemy.vx *= 0.88; enemy.vy *= 0.88; return; }
+
+    const attackStyle = rival.attackStyle;
+    const preferDist = attackStyle === 'ranged' ? 220 : 0;
+
+    // Movement
+    if (attackStyle === 'ranged') {
+      // Keep preferred distance
+      if (distance < preferDist - 30) {
+        steerEnemy(enemy, -(dx / distance), -(dy / distance), enemy.speed, 4.2, dt);
+      } else if (distance > preferDist + 60) {
+        steerEnemy(enemy, dx / distance, dy / distance, enemy.speed, 4.2, dt);
+      } else {
+        // Strafe sideways
+        const perp = Math.atan2(dy, dx) + Math.PI / 2;
+        steerEnemy(enemy, Math.cos(perp) * 0.8, Math.sin(perp) * 0.8, enemy.speed * 0.6, 3.0, dt);
+      }
+    } else {
+      steerEnemy(enemy, dx / distance, dy / distance, enemy.speed, 4.4, dt);
+    }
+
+    if (enemy.attackCd > 0) return;
+
+    if (attackStyle === 'melee' || attackStyle === 'melee_heal') {
+      if (distance < enemy.r + player.r + 12) {
+        const angle = Math.atan2(dy, dx);
+        damagePlayer(enemy.dmg, angle, 280, rival.name);
+        enemy.attackCd = rival.attackCd * 0.9 + nextRandom('encounter') * 0.4;
+        enemy.swingTime = 0.22;
+        // Heal on hit for granialla-style
+        if (attackStyle === 'melee_heal' && nextRandom('encounter') < 0.25) {
+          const heal = Math.round(enemy.max * 0.06);
+          enemy.hp = Math.min(enemy.max, enemy.hp + heal);
+          rival.hp = enemy.hp;
+          particles.push({ x: enemy.x, y: enemy.y - 18, life: 0.7, text: `+${heal}`, c: '#a8aaff' });
+        }
+      }
+    } else if (attackStyle === 'ranged') {
+      if (distance < 320) {
+        const angle = Math.atan2(dy, dx);
+        const spread = 0.22;
+        [-1, 0, 1].forEach(offset => {
+          const a = angle + offset * spread;
+          projectiles.push({
+            x: enemy.x, y: enemy.y,
+            vx: Math.cos(a) * 310, vy: Math.sin(a) * 310,
+            r: 5, life: 1.1, damage: enemy.dmg,
+            kind: 'rival_shot', color: rival.color,
+            knockback: 160, pierceCount: 0, hitOptions: null,
+            enemy: true,
+            fromRival: true,
+          });
+        });
+        enemy.attackCd = rival.attackCd + nextRandom('encounter') * 0.5;
+      }
+    }
+  }
+
+  // ── End Rival System ────────────────────────────────────────────────────────
 
   function findSafeEnemySpawnPoint(preferredX, preferredY, radius = 18) {
     if (!isBlocked(preferredX, preferredY, radius)) {
@@ -4012,7 +4413,7 @@
 
   function spawnChallengeStarter(room) {
     if (!room || room.type !== 'challenge') return;
-    const existing = pickups.find(pickup => pickup.type === 'challengeStarter');
+    const existing = pickups.find(pickup => pickup?.type === 'challengeStarter');
     if (existing) return;
     pickups.push({
       x: ROOM_W / 2,
@@ -4073,7 +4474,7 @@
     room.challengeTick = 0;
     room.challengeData = {};
     room.challengeFailed = false;
-    pickups = pickups.filter(pickup => pickup.type !== 'challengeStarter');
+    pickups = pickups.filter(pickup => pickup?.type !== 'challengeStarter');
     const type = room.challengeType || 'mirror';
     if (type === 'mirror') {
       spawnMirrorChampion();
@@ -4109,7 +4510,7 @@
   function spawnChallengeReward(text = 'TRIAL CLEARED') {
     if (!currentRoom || currentRoom.type !== 'challenge' || currentRoom.challengeRewardSpawned) return;
     currentRoom.challengeRewardSpawned = true;
-    pickups = pickups.filter(pickup => !['challengeBomb', 'challengeRune', 'challengeStarter'].includes(pickup.type));
+    pickups = pickups.filter(pickup => !['challengeBomb', 'challengeRune', 'challengeStarter'].includes(pickup?.type));
     pickups.push({ x: ROOM_W / 2, y: ROOM_H / 2 - 16, type: 'item', key: rollItemDrop({ elite: true, stream: 'loot' }) });
     pickups.push({ x: ROOM_W / 2, y: ROOM_H / 2 + 36, type: 'potion' });
     particles.push({ x: ROOM_W / 2, y: ROOM_H / 2 - 52, life: 1.05, text, c: '#d7f6ff' });
@@ -4135,7 +4536,7 @@
     currentRoom.challengeTimer = 0;
     currentRoom.challengeTick = 0;
     currentRoom.challengeData = {};
-    pickups = pickups.filter(pickup => !['challengeBomb', 'challengeRune', 'challengeStarter'].includes(pickup.type));
+    pickups = pickups.filter(pickup => !['challengeBomb', 'challengeRune', 'challengeStarter'].includes(pickup?.type));
     particles.push({ x: ROOM_W / 2, y: ROOM_H / 2 - 52, life: 1.05, text, c: '#ff8b98' });
     updateObjective();
     scheduleRunSave();
@@ -4169,14 +4570,15 @@
     playerData.dashTime = Number(playerData.dashTime || 0);
     playerData.dashX = Number(playerData.dashX || 0);
     playerData.dashY = Number(playerData.dashY || 0);
+    playerData.cowardsWayTime = Number(playerData.cowardsWayTime || 0);
     playerData.lavaWalkTime = Number(playerData.lavaWalkTime || 0);
     playerData.lavaTrailTick = Number(playerData.lavaTrailTick || 0);
     ensureStatuses(playerData);
     if (!playerData.equippedMoves || typeof playerData.equippedMoves !== 'object') {
       playerData.equippedMoves = playerData.character === 'metao'
-        ? { melee: 'fire_balls', laser: 'power_disks', smash: 'chaos_burst', dash: 'dash' }
+        ? { melee: 'fire_balls', laser: 'power_disks', smash: 'chaos_burst', dash: 'warp' }
         : playerData.character === 'granialla'
-          ? { melee: 'smite', laser: 'blade_justice', smash: 'healing_zone', dash: 'dash' }
+          ? { melee: 'smite', laser: 'blade_justice', smash: 'healing_zone', dash: 'zip_lightning' }
           : { melee: 'slash', laser: 'blood_beam', smash: 'crimson_smash', dash: 'dash' };
     }
     if (!playerData.ownedMoves || typeof playerData.ownedMoves !== 'object') {
@@ -4207,7 +4609,17 @@
     MOVE_SLOTS.forEach(slot => {
       const moveKey = playerData.equippedMoves[slot];
       if (!MOVE_DEFS[moveKey] || MOVE_DEFS[moveKey].slot !== slot) {
-        playerData.equippedMoves[slot] = slot === 'dash' ? 'dash' : slot === 'melee' ? 'slash' : slot === 'laser' ? 'blood_beam' : 'crimson_smash';
+        playerData.equippedMoves[slot] = slot === 'dash'
+          ? playerData.character === 'metao'
+            ? 'warp'
+            : playerData.character === 'granialla'
+              ? 'zip_lightning'
+              : 'dash'
+          : slot === 'melee'
+            ? 'slash'
+            : slot === 'laser'
+              ? 'blood_beam'
+              : 'crimson_smash';
       }
       playerData.ownedMoves[playerData.equippedMoves[slot]] = true;
     });
@@ -4576,6 +4988,7 @@
   }
 
   function tryMelee() {
+    cancelCowardsWayOnAttack();
     if (getEquippedWeapon()) {
       tryWeaponAttack();
       return;
@@ -4679,6 +5092,7 @@
   }
 
   function tryLaser() {
+    cancelCowardsWayOnAttack();
     if (laserActive) return;
     const attackSpeed = getAttackSpeedValue();
     const move = getEquippedMove('laser');
@@ -4768,6 +5182,7 @@
   }
 
   function trySmash() {
+    cancelCowardsWayOnAttack();
     const itemStats = getItemStats();
     const attackSpeed = getAttackSpeedValue();
     if (!spendSkillCharge('smash', getSmashCooldownDuration(attackSpeed))) return;
@@ -4818,12 +5233,27 @@
     const move = getEquippedMove('dash');
     const attackSpeed = getAttackSpeedValue();
     const rechargeTime = getDashCooldownDuration(move, attackSpeed);
+    if (!spendSkillCharge('dash', rechargeTime)) return;
     if (move === 'warp') {
-      if (!spendSkillCharge('dash', rechargeTime)) return;
       castWarp();
       return;
     }
-    if (!spendSkillCharge('dash', rechargeTime)) return;
+    if (move === 'zip_lightning') {
+      castZipLightning(moveX, moveY);
+      return;
+    }
+    if (move === 'cowards_way') {
+      castCowardsWay();
+      return;
+    }
+    if (move === 'nimrod_stomp') {
+      castNimrodStomp(moveX, moveY);
+      return;
+    }
+    castDashBurst(moveX, moveY);
+  }
+
+  function castDashBurst(moveX, moveY) {
     const angle = Math.hypot(moveX, moveY) > 0.15
       ? Math.atan2(moveY, moveX)
       : Math.atan2(mouse.worldY - player.y, mouse.worldX - player.x);
@@ -4837,6 +5267,137 @@
     shake = Math.max(shake, 3);
     shakeT = Math.max(shakeT, 0.08);
     particles.push({ x: player.x, y: player.y, life: 0.28, ring: 18, c: '#fff06a' });
+  }
+
+  function cancelCowardsWayOnAttack() {
+    if (player.cowardsWayTime <= 0) return;
+    player.cowardsWayTime = 0;
+    particles.push({ x: player.x, y: player.y - 20, life: 0.42, text: "COWARD'S WAY BROKEN", c: '#ffd27a' });
+  }
+
+  function findSafePointNearTarget(tx, ty, radius = player.r, maxRadius = 220, step = 22) {
+    const clampedX = clamp(tx, WALL + radius + 2, ROOM_W - WALL - radius - 2);
+    const clampedY = clamp(ty, WALL + radius + 2, ROOM_H - WALL - radius - 2);
+    if (!isBlocked(clampedX, clampedY, radius)) return { x: clampedX, y: clampedY };
+    for (let distStep = step; distStep <= maxRadius; distStep += step) {
+      const checks = Math.max(8, Math.floor((Math.PI * 2 * distStep) / step));
+      for (let index = 0; index < checks; index += 1) {
+        const angle = (index / checks) * Math.PI * 2;
+        const px = clamp(clampedX + Math.cos(angle) * distStep, WALL + radius + 2, ROOM_W - WALL - radius - 2);
+        const py = clamp(clampedY + Math.sin(angle) * distStep, WALL + radius + 2, ROOM_H - WALL - radius - 2);
+        if (!isBlocked(px, py, radius)) return { x: px, y: py };
+      }
+    }
+    return null;
+  }
+
+  function teleportPlayerTo(targetX, targetY, color = '#b99cff') {
+    particles.push({ x: player.x, y: player.y, life: 0.35, ring: 18, c: color });
+    player.x = targetX;
+    player.y = targetY;
+    player.vx = 0;
+    player.vy = 0;
+    particles.push({ x: player.x, y: player.y, life: 0.35, ring: 18, c: color });
+  }
+
+  function castNimrodStomp(moveX, moveY) {
+    const itemStats = getItemStats();
+    const angle = Math.hypot(moveX, moveY) > 0.15
+      ? Math.atan2(moveY, moveX)
+      : Math.atan2(mouse.worldY - player.y, mouse.worldX - player.x);
+    const horizontal = Math.abs(Math.cos(angle)) >= Math.abs(Math.sin(angle));
+    const edgePad = WALL + player.r + 4;
+    const targetX = horizontal
+      ? (Math.cos(angle) >= 0 ? ROOM_W - edgePad : edgePad)
+      : player.x;
+    const targetY = horizontal
+      ? clamp(mouse.worldY, edgePad, ROOM_H - edgePad)
+      : (Math.sin(angle) >= 0 ? ROOM_H - edgePad : edgePad);
+    const landingPoint = findSafePointNearTarget(targetX, targetY, player.r, 260, 24)
+      || findSafePointNearTarget(player.x + Math.cos(angle) * 240, player.y + Math.sin(angle) * 240, player.r, 140, 20);
+    if (!landingPoint) return;
+    teleportPlayerTo(landingPoint.x, landingPoint.y, '#fff06a');
+    const aoeRadius = 108 * (itemStats.aoeRadiusMultiplier || 1);
+    const stompDamage = godTimer > 0 ? 64 : 46;
+    blastRadius(player.x, player.y, aoeRadius, stompDamage, '#ffe67a');
+    shake = Math.max(shake, 14);
+    shakeT = Math.max(shakeT, 0.22);
+    player.inv = Math.max(player.inv, 0.32);
+    particles.push({ x: player.x, y: player.y, life: 0.44, ring: aoeRadius, c: '#ffe67a' });
+  }
+
+  function castCowardsWay() {
+    player.cowardsWayTime = 3;
+    player.inv = Math.max(player.inv, 0.25);
+    particles.push({ x: player.x, y: player.y - 18, life: 0.72, text: "COWARD'S WAY", c: '#8dffcf' });
+  }
+
+  function castZipLightning(moveX, moveY) {
+    const itemStats = getItemStats();
+    const visited = new Set();
+    const hops = 3;
+    const baseDamage = godTimer > 0 ? 34 : 26;
+    let sourceX = player.x;
+    let sourceY = player.y;
+    let performedHop = false;
+    for (let hop = 0; hop < hops; hop += 1) {
+      const searchX = hop === 0 ? mouse.worldX : sourceX;
+      const searchY = hop === 0 ? mouse.worldY : sourceY;
+      const target = findNearestEnemy(searchX, searchY, hop === 0 ? 280 : 260, visited)
+        || findNearestEnemy(sourceX, sourceY, 260, visited);
+      if (!target) break;
+      visited.add(target);
+      const toward = Math.atan2(target.y - sourceY, target.x - sourceX);
+      const landDist = target.r + player.r + 8;
+      const landing = findSafePointNearTarget(
+        target.x - Math.cos(toward) * landDist,
+        target.y - Math.sin(toward) * landDist,
+        player.r,
+        90,
+        14
+      );
+      if (landing) teleportPlayerTo(landing.x, landing.y, '#95deff');
+      sourceX = player.x;
+      sourceY = player.y;
+      performedHop = true;
+
+      const hitAngle = Math.atan2(target.y - player.y, target.x - player.x);
+      hitEnemy(target, baseDamage, hitAngle, 185, '#95deff');
+
+      const chained = new Set([target]);
+      let chainSource = target;
+      for (let chainIndex = 0; chainIndex < 2; chainIndex += 1) {
+        const chainedEnemy = findNearestEnemy(chainSource.x, chainSource.y, 156, chained);
+        if (!chainedEnemy) break;
+        chained.add(chainedEnemy);
+        const chainDamage = Math.max(1, Math.round(baseDamage * (0.72 - chainIndex * 0.1)));
+        hitEnemy(
+          chainedEnemy,
+          chainDamage,
+          Math.atan2(chainedEnemy.y - chainSource.y, chainedEnemy.x - chainSource.x),
+          120,
+          '#9adfff',
+          { rawDamage: true }
+        );
+        particles.push({ x: (chainSource.x + chainedEnemy.x) * 0.5, y: (chainSource.y + chainedEnemy.y) * 0.5, life: 0.2, c: '#9adfff' });
+        chainSource = chainedEnemy;
+      }
+      particles.push({ x: player.x, y: player.y, life: 0.22, ring: 16 + hop * 4, c: '#84cfff' });
+    }
+
+    if (!performedHop) {
+      const angle = Math.hypot(moveX, moveY) > 0.15
+        ? Math.atan2(moveY, moveX)
+        : Math.atan2(mouse.worldY - player.y, mouse.worldX - player.x);
+      const fallback = findSafePointNearTarget(player.x + Math.cos(angle) * 190, player.y + Math.sin(angle) * 190, player.r, 120, 16);
+      if (fallback) teleportPlayerTo(fallback.x, fallback.y, '#95deff');
+    }
+
+    shake = Math.max(shake, 8);
+    shakeT = Math.max(shakeT, 0.14);
+    player.inv = Math.max(player.inv, 0.26);
+    const zipShock = 72 * (itemStats.aoeRadiusMultiplier || 1);
+    particles.push({ x: player.x, y: player.y, life: 0.24, ring: zipShock, c: '#8ad9ff' });
   }
 
   function applyResponsiveVelocity(current, desired, dt) {
@@ -5021,31 +5582,10 @@
   function castWarp() {
     const tx = clamp(mouse.worldX, WALL + player.r + 2, ROOM_W - WALL - player.r - 2);
     const ty = clamp(mouse.worldY, WALL + player.r + 2, ROOM_H - WALL - player.r - 2);
-    if (!isBlocked(tx, ty, player.r)) {
-      particles.push({ x: player.x, y: player.y, life: 0.35, ring: 18, c: '#b99cff' });
-      player.x = tx;
-      player.y = ty;
-      player.vx = 0;
-      player.vy = 0;
-      player.inv = Math.max(player.inv, 0.2);
-      particles.push({ x: player.x, y: player.y, life: 0.35, ring: 18, c: '#b99cff' });
-      return;
-    }
-    for (let tries = 0; tries < 18; tries += 1) {
-      const angle = rng() * Math.PI * 2;
-      const radius = rand(170, 24);
-      const px = clamp(player.x + Math.cos(angle) * radius, WALL + player.r + 2, ROOM_W - WALL - player.r - 2);
-      const py = clamp(player.y + Math.sin(angle) * radius, WALL + player.r + 2, ROOM_H - WALL - player.r - 2);
-      if (isBlocked(px, py, player.r)) continue;
-      particles.push({ x: player.x, y: player.y, life: 0.35, ring: 18, c: '#b99cff' });
-      player.x = px;
-      player.y = py;
-      player.vx = 0;
-      player.vy = 0;
-      player.inv = Math.max(player.inv, 0.2);
-      particles.push({ x: player.x, y: player.y, life: 0.35, ring: 18, c: '#b99cff' });
-      break;
-    }
+    const safePoint = findSafePointNearTarget(tx, ty, player.r, 210, 18);
+    if (!safePoint) return;
+    teleportPlayerTo(safePoint.x, safePoint.y, '#b99cff');
+    player.inv = Math.max(player.inv, 0.24);
   }
 
   function hitEnemy(enemy, damage, angle, knockback, color, options = {}) {
@@ -5350,7 +5890,30 @@
       completeChallengeTrial('MIRROR BROKEN');
     }
 
-    if (enemies.length === 0 && !currentRoom.cleared) {
+    if (enemy.type === 'rival') {
+      const rival = enemy.rivalData;
+      if (rival) {
+        rival.dead = true;
+        rival.loot.forEach(item => {
+          if (item.type === 'item' && item.key) {
+            pickups.push({ x: enemy.x + rand(-22, 22, 'loot'), y: enemy.y + rand(-14, 14, 'loot'), type: 'item', key: item.key });
+          } else if (item.type === 'potion') {
+            pickups.push({ x: enemy.x + rand(-22, 22, 'loot'), y: enemy.y + rand(-14, 14, 'loot'), type: 'potion' });
+          }
+        });
+        const bonus = 18 + floor * 4 + rival.loot.length * 8;
+        dropCoins(enemy.x, enemy.y, bonus);
+        particles.push({ x: enemy.x, y: enemy.y - 26, life: 2.0, text: `${rival.name.toUpperCase()} DEFEATED!`, c: rival.color });
+        sayAtPosition(enemy.x, enemy.y, rival.deathLine, { speaker: rival.name, tone: 'boss', holdTime: 1.8, offsetY: enemy.r + 36 });
+        grantXp(20 + floor * 3);
+      }
+      const rivalIdx = enemies.indexOf(enemy);
+      if (rivalIdx >= 0) enemies.splice(rivalIdx, 1);
+      if (player) player.kills = Math.max(0, Number(player.kills || 0)) + 1;
+    }
+    if (enemy.type === 'rival') return;
+
+    if (enemies.filter(e => e.type !== 'rival').length === 0 && !currentRoom.cleared) {
       if (currentRoom.type === 'challenge') {
         updateObjective();
         return;
@@ -5535,12 +6098,21 @@
 
     moveCircle(player, dt);
 
+    if (player.cowardsWayTime > 0) {
+      player.cowardsWayTime = Math.max(0, player.cowardsWayTime - dt);
+      player.inv = Math.max(player.inv, 0.2);
+      if (nextRandom('fx') < 0.4) {
+        particles.push({ x: player.x + rand(16, -16, 'fx'), y: player.y + rand(16, -16, 'fx'), life: 0.18, c: '#92ffcf' });
+      }
+    }
+
     player.inv = Math.max(0, player.inv - dt);
     if (player.swing > 0) player.swing = Math.max(0, player.swing - dt);
 
     mouse.worldX = mouse.x + camera.x;
     mouse.worldY = mouse.y + camera.y;
     updateWeaponSystems(dt);
+    updateRivals(dt);
 
     if (!overlayOpen && mouse.down) tryMelee();
     if (!overlayOpen && mouse.right) tryLaser();
@@ -5605,6 +6177,7 @@
       else if (enemy.type === 'bulk_golem') updateBulkGolemBoss(enemy, dt);
       else if (enemy.type === 'artificer_knave') updateArtificerBoss(enemy, dt);
       else if (enemy.type === 'mirror_knight') updateMirrorChampion(enemy, dt);
+      else if (enemy.type === 'rival') updateRivalEnemy(enemy, dt);
       else if (enemy.type === 'cult_mage') updateCultMageEnemy(enemy, dt);
       else if (enemy.type === 'knave') updateKnaveEnemy(enemy, dt);
       else if (enemy.type === 'sniper') updateSniperEnemy(enemy, dt);
@@ -6845,7 +7418,10 @@
     if (itemStats.hasIronLung) {
       const roomCap = player.maxHp * 0.2;
       const remaining = roomCap - (player.roomDamageTaken || 0);
-      if (remaining <= 0) return;
+      if (remaining <= 0) {
+        if (player.hp <= 0) die();
+        return;
+      }
       finalAmount = Math.min(finalAmount, remaining);
     }
     finalAmount = Math.max(0, finalAmount);
@@ -7181,6 +7757,10 @@
   function updatePickups() {
     for (let index = pickups.length - 1; index >= 0; index -= 1) {
       const pickup = pickups[index];
+      if (!pickup || typeof pickup !== 'object' || typeof pickup.type !== 'string') {
+        pickups.splice(index, 1);
+        continue;
+      }
       if (pickup.type === 'coin') {
         const magnetRadius = 110;
         const d = dist(pickup.x, pickup.y, player.x, player.y);
@@ -7359,15 +7939,16 @@
   }
 
   function updateTransitions(dt) {
+    const challengeActive = !!currentRoom && CHALLENGE_ROOM_TYPES.has(currentRoom.type) && !!currentRoom.challengeStarted && !currentRoom.cleared;
     const canLeaveFight = enemies.length > 0
       && currentRoom
       && currentRoom.type !== 'boss'
       && currentRoom.type !== 'god'
       && currentRoom.type !== 'ladder'
-      && !CHALLENGE_ROOM_TYPES.has(currentRoom.type);
+      && !challengeActive;
     const roomLocked = !!currentRoom
       && !currentRoom.cleared
-      && (currentRoom.type === 'boss' || currentRoom.type === 'god' || currentRoom.type === 'ladder' || CHALLENGE_ROOM_TYPES.has(currentRoom.type));
+      && (currentRoom.type === 'boss' || currentRoom.type === 'god' || currentRoom.type === 'ladder' || challengeActive);
     if (!fading && !roomLocked && (enemies.length === 0 || canLeaveFight)) {
       const door =
         player.y < WALL + 24 && hasRoomExit(currentRoom, 'n') && Math.abs(player.x - ROOM_W / 2) < DOOR / 2 ? 'n' :
@@ -7533,7 +8114,7 @@
         melee: { current: meleeSkill.current, max: meleeSkill.max, active: false, charges: meleeSkill.charges, maxCharges: meleeSkill.maxCharges },
         laser: { current: laserSkill.current, max: laserSkill.max, active: laserActive, charges: laserSkill.charges, maxCharges: laserSkill.maxCharges },
         smash: { current: smashSkill.current, max: smashSkill.max, active: false, charges: smashSkill.charges, maxCharges: smashSkill.maxCharges },
-        dash: { current: dashSkill.current, max: dashSkill.max, active: player.dashTime > 0, charges: dashSkill.charges, maxCharges: dashSkill.maxCharges },
+        dash: { current: dashSkill.current, max: dashSkill.max, active: player.dashTime > 0 || player.cowardsWayTime > 0, charges: dashSkill.charges, maxCharges: dashSkill.maxCharges },
       },
     });
     ui.skillNames.dash.textContent = dashMove?.name || character.skills.dash;
@@ -8035,6 +8616,7 @@
 
   function drawPickups() {
     pickups.forEach(pickup => {
+      if (!pickup || typeof pickup !== 'object' || typeof pickup.type !== 'string') return;
       ctx.save();
       ctx.translate(pickup.x, pickup.y);
       const t = Date.now() / 260;
@@ -8273,6 +8855,7 @@
   }
 
   function getEnemySpriteKey(enemy) {
+    if (enemy.type === 'rival') return enemy.rivalKey;
     if (enemy.type === 'mirror_knight') return enemy.spriteKey || getPlayerSpriteKey();
     if (enemy.type === 'machine_gunner') return 'sniper';
     if (enemy.type === 'summoner') return 'cult_mage';
@@ -8440,12 +9023,23 @@
         ctx.fill();
         ctx.restore();
       }
+      // Rival name label
+      if (enemy.type === 'rival' && enemy.rivalData) {
+        ctx.save();
+        ctx.font = 'bold 10px system-ui';
+        ctx.fillStyle = enemy.rivalData.color;
+        ctx.textAlign = 'center';
+        ctx.shadowColor = '#000';
+        ctx.shadowBlur = 4;
+        ctx.fillText(enemy.rivalData.name, enemy.x, enemy.y - enemy.r - 20);
+        ctx.restore();
+      }
       ctx.save();
       ctx.translate(enemy.x, enemy.y);
       const hpPct = clamp(enemy.hp / enemy.max, 0, 1);
       ctx.fillStyle = '#000a';
       ctx.fillRect(-18, -enemy.r - 14, 36, 5);
-      ctx.fillStyle = isBossType(enemy.type) ? '#f2e8d7' : '#b24f68';
+      ctx.fillStyle = enemy.type === 'rival' ? (enemy.rivalData?.color || '#b24f68') : isBossType(enemy.type) ? '#f2e8d7' : '#b24f68';
       ctx.fillRect(-18, -enemy.r - 14, 36 * hpPct, 5);
       if ((enemy.barrier || 0) > 0) {
         const barrierPct = clamp(enemy.barrier / Math.max(1, enemy.max * 0.22), 0, 1);
@@ -8648,6 +9242,9 @@
       } else if (room.type === 'treasure') {
         ctx.globalAlpha = 0.95;
         ctx.fillStyle = '#ffaa00';
+      } else if (room.type === 'shop') {
+        ctx.globalAlpha = 0.95;
+        ctx.fillStyle = '#7ec8ff';
       } else if (room.type === 'start') {
         ctx.globalAlpha = 0.95;
         ctx.fillStyle = '#00ff88';
@@ -8670,6 +9267,13 @@
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText('T', x + size / 2, y + size / 2);
+      } else if (room.type === 'shop') {
+        ctx.globalAlpha = room.explored ? 1 : 0.72;
+        ctx.fillStyle = '#071116';
+        ctx.font = 'bold 9px system-ui';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('$', x + size / 2, y + size / 2);
       }
       if (room.visited) {
         ctx.strokeStyle = 'rgba(0,255,255,0.5)';
@@ -8776,6 +9380,55 @@
   }
 
   function drawActionIcons() {
+    const mobilityMove = getEquippedMove('dash');
+    const mobilityIcon = mobilityMove === 'dash'
+      ? {
+        color: '#fff06a',
+        pixels: [
+          [1, 4], [2, 4], [3, 4], [4, 4], [5, 4], [6, 4],
+          [4, 2], [5, 2], [6, 2], [6, 1], [7, 2], [6, 3],
+        ],
+      }
+      : mobilityMove === 'warp'
+      ? {
+        color: '#c8a6ff',
+        pixels: [
+          [3, 1], [4, 1], [2, 2], [5, 2], [1, 3], [3, 3], [4, 3], [6, 3],
+          [1, 4], [6, 4], [2, 5], [5, 5], [3, 6], [4, 6],
+        ],
+      }
+      : mobilityMove === 'nimrod_stomp'
+        ? {
+          color: '#ffe67a',
+          pixels: [
+            [3, 1], [4, 1], [3, 2], [4, 2], [2, 3], [5, 3], [2, 4], [3, 4], [4, 4], [5, 4],
+            [1, 5], [2, 5], [5, 5], [6, 5], [2, 6], [5, 6],
+          ],
+        }
+      : mobilityMove === 'zip_lightning'
+        ? {
+          color: '#8dd6ff',
+          pixels: [
+            [1, 2], [2, 2], [3, 2], [2, 3], [3, 4], [4, 4], [5, 4], [4, 5], [5, 6], [6, 6],
+            [6, 2], [7, 2], [6, 3],
+          ],
+        }
+        : mobilityMove === 'cowards_way'
+          ? {
+            color: '#8fffca',
+            pixels: [
+              [3, 1], [4, 1], [2, 2], [5, 2], [1, 3], [6, 3], [1, 4], [6, 4],
+              [2, 5], [5, 5], [3, 6], [4, 6], [3, 3], [4, 3], [3, 4], [4, 4],
+            ],
+          }
+          : {
+            color: '#8fffca',
+            pixels: [
+              [3, 1], [4, 1], [2, 2], [5, 2], [1, 3], [6, 3], [1, 4], [6, 4],
+              [2, 5], [5, 5], [3, 6], [4, 6], [3, 3], [4, 3], [3, 4], [4, 4],
+            ],
+          };
+
     drawPixelIcon(ui.coinIcon, '#ffd15a', [
       [2, 1], [3, 1], [4, 1],
       [1, 2], [2, 2], [3, 2], [4, 2], [5, 2],
@@ -8799,10 +9452,7 @@
       [2, 2], [4, 2], [2, 4], [4, 4],
       [3, 3],
     ]);
-    drawPixelIcon(ui.icons.dash, '#fff06a', [
-      [1, 5], [2, 4], [3, 3], [4, 2], [5, 1], [5, 2], [6, 2], [7, 2],
-      [4, 4], [5, 4], [6, 4], [7, 4], [4, 6], [5, 6], [6, 6], [7, 6],
-    ]);
+    drawPixelIcon(ui.icons.dash, mobilityIcon.color, mobilityIcon.pixels);
     drawPixelIcon(ui.icons.melee, '#00ffff', [
       [2, 6], [3, 5], [4, 4], [5, 3], [6, 2], [5, 4], [6, 3], [7, 2], [6, 5], [7, 4],
     ]);
