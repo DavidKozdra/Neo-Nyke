@@ -1848,6 +1848,7 @@
       : character.key === 'granialla'
         ? { melee: 'smite', laser: 'blade_justice', smash: 'healing_zone', dash: 'dash' }
         : { melee: 'slash', laser: 'blood_beam', smash: 'crimson_smash', dash: 'dash' };
+    const defaultWeapon = getDefaultWeaponForCharacter(character.key);
     const ownedMoves = {};
     Object.values(equippedMoves).forEach(key => { ownedMoves[key] = true; });
     return {
@@ -1880,8 +1881,8 @@
       escapeReady: true,
       statuses: createStatusMap(),
       items,
-      ownedWeapons: {},
-      equippedWeapon: '',
+      ownedWeapons: defaultWeapon ? { [defaultWeapon]: true } : {},
+      equippedWeapon: defaultWeapon,
       weaponCooldown: 0,
       blockActive: false,
       blockTimer: 0,
@@ -4188,6 +4189,15 @@
       playerData.ownedWeapons[key] = !!playerData.ownedWeapons[key];
     });
     if (!WEAPON_DEFS[playerData.equippedWeapon]) playerData.equippedWeapon = '';
+    const hasOwnedWeapons = WEAPON_KEYS.some(key => !!playerData.ownedWeapons[key]);
+    if (!hasOwnedWeapons && !playerData.equippedWeapon) {
+      const defaultWeapon = getDefaultWeaponForCharacter(playerData.character);
+      if (defaultWeapon) {
+        playerData.ownedWeapons[defaultWeapon] = true;
+        playerData.equippedWeapon = defaultWeapon;
+      }
+    }
+    if (playerData.equippedWeapon) playerData.ownedWeapons[playerData.equippedWeapon] = true;
     playerData.weaponCooldown = Number(playerData.weaponCooldown || 0);
     playerData.blockActive = !!playerData.blockActive;
     playerData.blockTimer = Number(playerData.blockTimer || 0);
@@ -4211,6 +4221,12 @@
 
   function getCharacterDef() {
     return CHARACTER_DEFS[player?.character || chosenCharacter] || CHARACTER_DEFS.thorn_knight;
+  }
+
+  function getDefaultWeaponForCharacter(characterKey) {
+    if (characterKey === 'metao') return 'metao_fire_staff';
+    if (characterKey === 'granialla') return 'granillia_lightning_spear';
+    return 'thorns_bleed_blade';
   }
 
   function getItemCount(key) {
@@ -4423,10 +4439,10 @@
     if (weaponKey === 'hunters_bow') return 0.4;
     if (weaponKey === 'thorns_bleed_blade') return 0.35;
     if (weaponKey === 'lazer_glasses') return 3.6;
-    if (weaponKey === 'metao_fire_staff') return 1.2;
+    if (weaponKey === 'metao_fire_staff') return ATTACKS.melee.baseCooldown;
     if (weaponKey === 'magenta_degale') return 1.5;
     if (weaponKey === 'magenta_p90') return 1.8;
-    if (weaponKey === 'granillia_lightning_spear') return 0.9;
+    if (weaponKey === 'granillia_lightning_spear') return ATTACKS.melee.baseCooldown;
     if (weaponKey === 'excalibur') return 2;
     if (weaponKey === 'golden_fleece') return 0.5;
     if (weaponKey === 'void_piercer') return 0.8;
@@ -4477,6 +4493,7 @@
     if (!weaponKey) return false;
     if (player.weaponCooldown > 0) return false;
     const angle = Math.atan2(mouse.worldY - player.y, mouse.worldX - player.x);
+    const attackSpeed = getAttackSpeedValue();
     if (weaponKey === 'extending_staff') {
       fireWeaponSweep(38, 130, 1.45, 500, '#eaf4ff');
       player.weaponCooldown = 0.5;
@@ -4499,20 +4516,9 @@
       return true;
     }
     if (weaponKey === 'metao_fire_staff') {
-      for (let index = -2; index <= 2; index += 1) {
-        spawnWeaponProjectile({
-          angle: angle + index * 0.12,
-          speed: 440,
-          damage: 18,
-          knockback: 150,
-          r: 6,
-          life: 1.25,
-          kind: 'metao_fire_staff',
-          color: '#ff9f4a',
-          hitOptions: { fireChance: 1, fireStacks: 1, fireDuration: 3 },
-        });
-      }
-      player.weaponCooldown = 1.2;
+      // Preserve Metao's original left-click behavior through weapon routing.
+      spawnFireballs();
+      player.weaponCooldown = ATTACKS.melee.baseCooldown / attackSpeed;
       return true;
     }
     if (weaponKey === 'magenta_degale') {
@@ -4534,8 +4540,9 @@
       return true;
     }
     if (weaponKey === 'granillia_lightning_spear') {
-      spawnWeaponProjectile({ angle, speed: 720, damage: 55, knockback: 300, r: 7, life: 1.1, kind: 'lightning_spear', color: '#9bd9ff', pierceCount: 2, hitOptions: { chainLightningRadius: 140, chainMultiplier: 0.65 } });
-      player.weaponCooldown = 0.9;
+      // Preserve Granillia's original smite-chain melee behavior through weapon routing.
+      castSmiteChain();
+      player.weaponCooldown = ATTACKS.melee.baseCooldown / attackSpeed;
       return true;
     }
     if (weaponKey === 'excalibur') {
