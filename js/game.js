@@ -246,6 +246,7 @@
     smite: { key: 'smite', slot: 'melee', name: 'Smite', desc: 'Physical swing plus chaining lightning.' },
 
     blood_beam: { key: 'blood_beam', slot: 'laser', name: 'Blood Beam', desc: 'Sustained piercing beam that causes bleed.' },
+    turtle_wave: { key: 'turtle_wave', slot: 'laser', name: 'Turtle Wave', desc: 'Giant beam. Costs 2 HP to cast.' },
     power_disks: { key: 'power_disks', slot: 'laser', name: 'Power Disks', desc: 'Burst of spinning disks.' },
     blade_justice: { key: 'blade_justice', slot: 'laser', name: 'Blade Justice', desc: 'Divine short-range blade strike.' },
     lightning_columns: { key: 'lightning_columns', slot: 'laser', name: 'Lightning Columns', desc: 'Summon two lightning turrets.' },
@@ -257,17 +258,108 @@
     fire_circle: { key: 'fire_circle', slot: 'smash', name: 'Fire Circle', desc: 'Burning aura around you.' },
     floor_lava: { key: 'floor_lava', slot: 'smash', name: 'Floor Is Lava', desc: 'Lava immunity and lava trail.' },
 
-    dash: { key: 'dash', slot: 'dash', name: 'Dash', desc: 'Fast invulnerable burst movement.' },
+    dash: { key: 'dash', slot: 'dash', name: 'Dash', desc: 'Fast invulnerable burst movement.', maxStacks: 1, stackOverrides: { thorn_knight: 2 } },
     warp: { key: 'warp', slot: 'dash', name: 'Warp', desc: 'Teleport to a safe room position.' },
   };
 
   const SHOP_MOVE_POOL = [
     'slash', 'fire_balls', 'smite',
-    'blood_beam', 'power_disks', 'blade_justice', 'lightning_columns',
+    'blood_beam', 'turtle_wave', 'power_disks', 'blade_justice', 'lightning_columns',
     'god_sweep',
     'crimson_smash', 'chaos_burst', 'healing_zone', 'fire_circle', 'floor_lava',
     'dash', 'warp',
   ];
+
+  const WEAPON_DEFS = {
+    extending_staff: {
+      key: 'extending_staff',
+      name: 'Extending Staff',
+      rarity: 'white',
+      description: 'Long sweeping strike with massive knockback.',
+      color: '#f2f6ff',
+    },
+    hunters_bow: {
+      key: 'hunters_bow',
+      name: "Hunter's Bow",
+      rarity: 'white',
+      description: 'Fast, accurate ranged shot with +10% crit chance.',
+      color: '#e8f7ff',
+    },
+    thorns_bleed_blade: {
+      key: 'thorns_bleed_blade',
+      name: "Thorn's Bleed Blade",
+      rarity: 'white',
+      description: 'Close slash with heavy bleed application.',
+      color: '#ffe9ef',
+    },
+    lazer_glasses: {
+      key: 'lazer_glasses',
+      name: 'Lazer Glasses',
+      rarity: 'purple',
+      description: 'Twin beams track your mouse and can ignite enemies.',
+      color: '#cd9bff',
+    },
+    metao_fire_staff: {
+      key: 'metao_fire_staff',
+      name: "Metao's Fire Staff",
+      rarity: 'purple',
+      description: 'Fan cast of burning fire bolts.',
+      color: '#ffb874',
+    },
+    magenta_degale: {
+      key: 'magenta_degale',
+      name: "Magenta's Degale",
+      rarity: 'purple',
+      description: 'Super heavy shot with massive knockback and recoil.',
+      color: '#ff8ccc',
+    },
+    magenta_p90: {
+      key: 'magenta_p90',
+      name: "Magenta's P90",
+      rarity: 'purple',
+      description: 'Rapid burst fire with controlled recoil.',
+      color: '#ff9dd7',
+    },
+    granillia_lightning_spear: {
+      key: 'granillia_lightning_spear',
+      name: "Granillia's Spear of Lightning",
+      rarity: 'red',
+      description: 'Piercing lightning spear that chains on impact.',
+      color: '#9bd9ff',
+    },
+    excalibur: {
+      key: 'excalibur',
+      name: 'Excalibur',
+      rarity: 'red',
+      description: 'A divine 1000-damage strike.',
+      color: '#ffd980',
+    },
+    golden_fleece: {
+      key: 'golden_fleece',
+      name: 'Golden Fleece',
+      rarity: 'red',
+      description: 'Heals 20% max HP every 2 seconds while equipped.',
+      color: '#ffe59c',
+    },
+    void_piercer: {
+      key: 'void_piercer',
+      name: 'Void Piercer',
+      rarity: 'red',
+      description: 'Pierces barriers with high damage and 20% crit.',
+      color: '#ffd2c0',
+    },
+    aegis_shield_weapon: {
+      key: 'aegis_shield_weapon',
+      name: 'Aegis Shield',
+      rarity: 'red',
+      description: 'Blocks all incoming damage for 2 seconds.',
+      color: '#c8f6ff',
+    },
+  };
+  const WEAPON_KEYS = Object.keys(WEAPON_DEFS);
+  const WHITE_WEAPON_POOL = ['extending_staff', 'hunters_bow', 'thorns_bleed_blade'];
+  const PURPLE_WEAPON_POOL = ['lazer_glasses', 'metao_fire_staff', 'magenta_degale', 'magenta_p90'];
+  const RED_WEAPON_POOL = ['granillia_lightning_spear', 'excalibur', 'golden_fleece', 'void_piercer', 'aegis_shield_weapon'];
 
   const ITEM_DEFS = {
     neo_knife: {
@@ -474,8 +566,8 @@
     shield_of_aegis: {
       key: 'shield_of_aegis',
       name: 'Shield of Aegis',
-      shortName: 'DEF +50%',
-      description: 'Defense +50%.',
+      shortName: 'DEF +20%',
+      description: 'Defense +20%.',
       rarity: 'god',
       color: '#ffe7a8',
       category: 'god',
@@ -583,16 +675,20 @@
     shopClose: document.getElementById('shopClose'),
     shopTabs: [...document.querySelectorAll('#shopPanel .shop-tab')],
     shopItems: document.getElementById('shopItems'),
+    shopWeapons: document.getElementById('shopWeapons'),
     shopMoves: document.getElementById('shopMoves'),
     shopHeals: document.getElementById('shopHeals'),
     shopCoins: document.getElementById('shopCoins'),
     invPanel: document.getElementById('invPanel'),
     invClose: document.getElementById('invClose'),
+    invTabs: [...document.querySelectorAll('#invPanel .inv-tab')],
     wizardPawModal: document.getElementById('wizardPawModal'),
     wizardPawStats: document.getElementById('wizardPawStats'),
     wizardPawChoices: document.getElementById('wizardPawChoices'),
     wizardPawConfirm: document.getElementById('wizardPawConfirm'),
     invItemsList: document.getElementById('invItemsList'),
+    invWeaponsList: document.getElementById('invWeaponsList'),
+    invWeaponSlot: document.getElementById('invWeaponSlot'),
     invStats: document.getElementById('invStats'),
     invMovesList: document.getElementById('invMovesList'),
     invSlots: {
@@ -696,7 +792,7 @@
   let currentRoom = null;
   let keys = {};
   let mouse = { x: 0, y: 0, worldX: 0, worldY: 0, down: false, right: false };
-  let cooldowns = { melee: 0, laser: 0, smash: 0, dash: 0 };
+  let cooldowns = {};
   let camera = { x: 0, y: 0 };
   let shake = 0;
   let shakeT = 0;
@@ -742,7 +838,9 @@
   let shopKeyLatch = false;
   let invKeyLatch = false;
   let activeShopTab = 'items';
+  let activeInvTab = 'stats';
   let draggingMoveKey = '';
+  let weaponBurstQueue = [];
   let activeInventorySlot = '';
   let shopPanelDirty = false;
   let inventoryPanelDirty = false;
@@ -1161,10 +1259,18 @@
         renderShopPanel();
       });
     });
+    ui.invTabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        activeInvTab = tab.dataset.invTab || 'stats';
+        renderInventoryPanel();
+      });
+    });
     ui.shopItems?.addEventListener('click', handleShopBuyClick);
+    ui.shopWeapons?.addEventListener('click', handleShopBuyClick);
     ui.shopMoves?.addEventListener('click', handleShopBuyClick);
     ui.shopHeals?.addEventListener('click', handleShopBuyClick);
     ui.invMovesList?.addEventListener('click', handleInventoryMoveSelect);
+    ui.invWeaponsList?.addEventListener('click', handleInventoryWeaponSelect);
     ui.invMovesList?.addEventListener('dragstart', event => {
       const target = event.target instanceof Element ? event.target : null;
       const moveKey = target?.closest('[data-move]')?.dataset?.move;
@@ -1234,6 +1340,9 @@
         const moveKey = draggingMoveKey || event.dataTransfer?.getData('text/plain') || '';
         equipMove(slot, moveKey);
       });
+    });
+    ui.invWeaponSlot?.addEventListener('click', () => {
+      if (player?.equippedWeapon) equipWeapon('');
     });
   }
 
@@ -1341,6 +1450,28 @@
     return currentRoom.shopMoveOffers;
   }
 
+  function getShopWeaponOffers() {
+    if (!currentRoom || currentRoom.type !== 'shop') return [];
+    if (!Array.isArray(currentRoom.shopWeaponOffers) || currentRoom.shopWeaponOffers.length === 0) {
+      const owned = new Set(Object.keys(player?.ownedWeapons || {}).filter(key => player?.ownedWeapons?.[key]));
+      const pool = [];
+      if (floor >= 1) pool.push(...WHITE_WEAPON_POOL);
+      if (floor >= 4) pool.push(...PURPLE_WEAPON_POOL);
+      if (floor >= 7) pool.push(...RED_WEAPON_POOL);
+      const filtered = pool.filter(key => !owned.has(key));
+      shuffle(filtered, 'loot');
+      const offers = filtered.slice(0, 3).map((weaponKey, index) => ({
+        type: 'weapon',
+        key: weaponKey,
+        bought: false,
+        cost: getShopWeaponCost(WEAPON_DEFS[weaponKey]?.rarity || 'white', index),
+      }));
+      currentRoom.shopWeaponOffers = offers;
+    }
+    refreshRoomShopCosts(currentRoom);
+    return currentRoom.shopWeaponOffers;
+  }
+
   function renderShopPanel() {
     if (!ui.shopPanel || !player) return;
     refreshRoomShopCosts(currentRoom);
@@ -1352,6 +1483,7 @@
       tab.classList.toggle('active', isActive);
     });
     ui.shopItems.classList.toggle('hidden', activeShopTab !== 'items');
+    ui.shopWeapons?.classList.toggle('hidden', activeShopTab !== 'weapons');
     ui.shopMoves.classList.toggle('hidden', activeShopTab !== 'moves');
     ui.shopHeals.classList.toggle('hidden', activeShopTab !== 'heals');
 
@@ -1377,6 +1509,32 @@
       })
       .join('');
     ui.shopItems.innerHTML = itemCards || '<div class="shop-card shop-empty"><p>Every relic here is already yours. Clear the floor or check the move shelf.</p></div>';
+
+    const weaponOffers = getShopWeaponOffers();
+    const weaponCards = weaponOffers
+      .map((offer, index) => {
+        const weapon = WEAPON_DEFS[offer.key];
+        const owned = !!player.ownedWeapons?.[offer.key];
+        const canAfford = player.coins >= offer.cost;
+        const disabled = offer.bought || owned || !canAfford;
+        return `<div class="shop-card${!canAfford && !owned && !offer.bought ? ' shop-card--unaffordable' : ''}">
+          <span class="shop-card__eyebrow">${weapon?.rarity || 'weapon'}</span>
+          <div class="shop-card__title-row">
+            <h4>${weapon?.name || offer.key}</h4>
+            <span class="shop-card__price">${offer.cost}</span>
+          </div>
+          <div class="shop-card__copy">
+            <p>${weapon?.description || 'No weapon description available.'}</p>
+          </div>
+          <div class="shop-card__footer">
+            <button class="shop-buy${!canAfford && !owned && !offer.bought ? ' shop-buy--unaffordable' : ''}" data-kind="weapon" data-index="${index}" ${disabled ? 'disabled' : ''}>${offer.bought || owned ? 'Owned' : !canAfford ? 'Too Expensive' : 'Buy Weapon'}</button>
+          </div>
+        </div>`;
+      })
+      .join('');
+    if (ui.shopWeapons) {
+      ui.shopWeapons.innerHTML = weaponCards || '<div class="shop-card shop-empty"><p>No weapons in stock right now.</p></div>';
+    }
 
     const moveOffers = getShopMoveOffers();
     const moveCards = moveOffers
@@ -1430,6 +1588,16 @@
 
   function renderInventoryPanel() {
     if (!ui.invPanel || !player) return;
+
+    ui.invTabs.forEach(tab => {
+      tab.classList.toggle('active', tab.dataset.invTab === activeInvTab);
+    });
+    const tabPanels = { stats: 'invTabStats', items: 'invTabItems', moves: 'invTabMoves', equipped: 'invTabEquipped' };
+    Object.entries(tabPanels).forEach(([key, id]) => {
+      const el = document.getElementById(id);
+      if (el) el.classList.toggle('hidden', key !== activeInvTab);
+    });
+
     const stats = getItemStats();
     ui.invStats.innerHTML = [
       `<div class="inv-card inv-stat-card"><span class="inv-card__eyebrow">Vital</span><h4>HP</h4><p>${Math.round(player.hp)} / ${Math.round(player.maxHp)}</p></div>`,
@@ -1452,6 +1620,32 @@
         </div>`;
       })
       .join('') || '<div class="inv-card"><span class="inv-card__eyebrow">Empty</span><h4>No relics yet</h4><p>Your pockets are clear. Loot rooms or buy from the shop to start a build.</p></div>';
+
+    const ownedWeapons = WEAPON_KEYS
+      .filter(key => player.ownedWeapons?.[key])
+      .sort((a, b) => {
+        const order = { white: 1, purple: 2, red: 3 };
+        const rarityA = order[WEAPON_DEFS[a]?.rarity] || 99;
+        const rarityB = order[WEAPON_DEFS[b]?.rarity] || 99;
+        if (rarityA !== rarityB) return rarityA - rarityB;
+        return (WEAPON_DEFS[a]?.name || a).localeCompare(WEAPON_DEFS[b]?.name || b);
+      });
+    if (ui.invWeaponsList) {
+      ui.invWeaponsList.innerHTML = ownedWeapons
+        .map(key => {
+          const def = WEAPON_DEFS[key];
+          const equipped = player.equippedWeapon === key;
+          return `<button class="inv-move-chip${equipped ? ' is-match' : ''}" data-weapon="${key}" type="button">
+            <div class="inv-move-chip__meta">
+              <b>${def?.name || key}</b>
+              <span class="inv-move-chip__slot">${def?.rarity || 'weapon'}</span>
+            </div>
+            <p>${def?.description || 'No weapon description available.'}</p>
+            <span class="inv-move-chip__hint">${equipped ? 'Equipped' : 'Click to equip'}</span>
+          </button>`;
+        })
+        .join('') || '<div class="inv-card"><span class="inv-card__eyebrow">Empty</span><h4>No weapons owned</h4><p>Buy weapons in the shop to override left click.</p></div>';
+    }
 
     const equippedMoveKeys = new Set(Object.values(player.equippedMoves || {}).filter(Boolean));
     const ownedMoves = Object.keys(player.ownedMoves || {})
@@ -1486,6 +1680,11 @@
       node.classList.toggle('is-selected', isSelected);
       node.innerHTML = `<div class="inv-slot__top"><span class="inv-slot__kicker">${slot}</span><span class="inv-slot__status">${isSelected ? 'Selected' : 'Equipped'}</span></div><div class="inv-slot__move">${def?.name || 'No move equipped'}</div><p class="inv-slot__hint">${isSelected ? 'Matching spare moves are highlighted. Click one or drag it here to swap.' : def?.desc || 'Click this slot to focus matching spare moves, or drag a matching move here to assign it.'}</p>`;
     });
+    if (ui.invWeaponSlot) {
+      const weapon = WEAPON_DEFS[player.equippedWeapon];
+      ui.invWeaponSlot.dataset.rarity = weapon?.rarity || '';
+      ui.invWeaponSlot.innerHTML = `<div class="inv-slot__top"><span class="inv-slot__kicker">weapon</span><span class="inv-slot__status">${weapon ? 'Equipped' : 'Empty'}</span></div><div class="inv-slot__move">${weapon?.name || 'No weapon equipped'}</div><p class="inv-slot__hint">${weapon?.description || 'Equip a weapon to make left click use weapon abilities instead of melee moves.'}</p>`;
+    }
     inventoryPanelDirty = false;
   }
 
@@ -1494,10 +1693,39 @@
     if (MOVE_DEFS[moveKey].slot !== slot) return;
     if (!player.ownedMoves?.[moveKey]) return;
     player.equippedMoves[slot] = moveKey;
+    cooldowns[slot] = createCooldownEntry(slot, player, cooldowns[slot]);
     markInventoryPanelDirty();
     renderInventoryPanel();
     updateHud();
     scheduleRunSave();
+  }
+
+  function equipWeapon(weaponKey) {
+    if (!player) return;
+    if (!weaponKey) {
+      player.equippedWeapon = '';
+      player.weaponCooldown = 0;
+      player.weaponBeamTime = 0;
+      player.weaponBeamTick = 0;
+    } else {
+      if (!WEAPON_DEFS[weaponKey]) return;
+      if (!player.ownedWeapons?.[weaponKey]) return;
+      player.equippedWeapon = weaponKey;
+      player.weaponCooldown = 0;
+      player.weaponBeamTime = 0;
+      player.weaponBeamTick = 0;
+    }
+    markInventoryPanelDirty();
+    renderInventoryPanel();
+    updateHud();
+    scheduleRunSave();
+  }
+
+  function handleInventoryWeaponSelect(event) {
+    const target = event.target instanceof Element ? event.target.closest('[data-weapon]') : null;
+    const weaponKey = target?.dataset?.weapon || '';
+    if (!weaponKey || !WEAPON_DEFS[weaponKey]) return;
+    equipWeapon(weaponKey);
   }
 
   function spendCoins(cost) {
@@ -1538,6 +1766,17 @@
       player.ownedMoves[offer.key] = true;
       markInventoryPanelDirty();
       pushMoveNotification(offer.key, 1);
+    } else if (kind === 'weapon') {
+      const offerIndex = Number(button.dataset.index || -1);
+      const weaponOffers = getShopWeaponOffers();
+      const offer = weaponOffers[offerIndex];
+      if (!offer || offer.bought || player.ownedWeapons?.[offer.key]) return;
+      if (!spendCoins(offer.cost)) return;
+      offer.bought = true;
+      player.ownedWeapons[offer.key] = true;
+      if (!player.equippedWeapon) equipWeapon(offer.key);
+      particles.push({ x: player.x, y: player.y - 24, life: 0.8, text: `${WEAPON_DEFS[offer.key]?.name || 'Weapon'} acquired`, c: WEAPON_DEFS[offer.key]?.color || '#d9e8ff' });
+      markInventoryPanelDirty();
     } else if (kind === 'heal') {
       const heal = Number(button.dataset.heal || 0);
       const cost = Number(button.dataset.cost || 0);
@@ -1641,6 +1880,14 @@
       escapeReady: true,
       statuses: createStatusMap(),
       items,
+      ownedWeapons: {},
+      equippedWeapon: '',
+      weaponCooldown: 0,
+      blockActive: false,
+      blockTimer: 0,
+      fleeceTick: 0,
+      weaponBeamTime: 0,
+      weaponBeamTick: 0,
       equippedMoves,
       ownedMoves,
       lavaWalkTime: 0,
@@ -1870,6 +2117,12 @@
     return scaleShopPrice(34 + floorValue * 6 + moveIndex * 4, difficultyKey);
   }
 
+  function getShopWeaponCost(rarity = 'white', weaponIndex = 0, floorValue = floor, difficultyKey = selectedDifficulty) {
+    if (rarity === 'red') return scaleShopPrice(180 + floorValue * 14 + weaponIndex * 10, difficultyKey);
+    if (rarity === 'purple') return scaleShopPrice(88 + floorValue * 9 + weaponIndex * 8, difficultyKey);
+    return scaleShopPrice(52 + floorValue * 5 + weaponIndex * 6, difficultyKey);
+  }
+
   function getShopGodSweepCost(floorValue = floor, difficultyKey = selectedDifficulty) {
     return scaleShopPrice(140 + floorValue * 12, difficultyKey);
   }
@@ -1881,14 +2134,17 @@
 
   function getLaserCastDuration(moveKey = getEquippedMove('laser'), attackSpeed = getAttackSpeedValue()) {
     if (moveKey === 'god_sweep') return 1.45 / attackSpeed;
+    if (moveKey === 'turtle_wave') return 1.35 / attackSpeed;
     return (godTimer > 0 ? 0.72 : ATTACKS.laser.duration) / attackSpeed;
   }
 
   function getMeleeCooldownDuration(moveKey = getEquippedMove('melee'), attackSpeed = getAttackSpeedValue()) {
+    if (moveKey === 'slash') return 0.4 / attackSpeed;
     return (godTimer > 0 ? 0.2 : ATTACKS.melee.baseCooldown) / attackSpeed;
   }
 
   function getLaserCooldownDuration(moveKey = getEquippedMove('laser'), attackSpeed = getAttackSpeedValue()) {
+    if (moveKey === 'turtle_wave') return 3 / attackSpeed;
     if (moveKey === 'blade_justice') return 3.8 / attackSpeed;
     if (moveKey === 'lightning_columns') return 4.8 / attackSpeed;
     if (moveKey === 'god_sweep') return 7.2 / attackSpeed;
@@ -1898,6 +2154,119 @@
   function getDashCooldownDuration(moveKey = getEquippedMove('dash'), attackSpeed = getAttackSpeedValue()) {
     if (moveKey === 'warp') return 2.8 / attackSpeed;
     return 1.8 / attackSpeed;
+  }
+
+  function getSmashCooldownDuration(attackSpeed = getAttackSpeedValue()) {
+    return (godTimer > 0 ? 2 : ATTACKS.smash.baseCooldown) / attackSpeed;
+  }
+
+  function getMoveMaxStacks(moveKey, characterKey = player?.character || chosenCharacter) {
+    const moveDef = MOVE_DEFS[moveKey] || {};
+    const baseStacks = Math.max(1, Number(moveDef.maxStacks || 1));
+    const overrideStacks = moveDef.stackOverrides?.[characterKey];
+    return Math.max(1, Number(overrideStacks || baseStacks));
+  }
+
+  function getSlotCooldownDuration(slot, moveKey, attackSpeed = getAttackSpeedValue()) {
+    if (slot === 'melee') return getMeleeCooldownDuration(moveKey, attackSpeed);
+    if (slot === 'laser') return getLaserCooldownDuration(moveKey, attackSpeed);
+    if (slot === 'smash') return getSmashCooldownDuration(attackSpeed);
+    return getDashCooldownDuration(moveKey, attackSpeed);
+  }
+
+  function createCooldownEntry(slot, playerState = player, source = null) {
+    const moveKey = playerState?.equippedMoves?.[slot] || (slot === 'dash' ? 'dash' : slot === 'melee' ? 'slash' : slot === 'laser' ? 'blood_beam' : 'crimson_smash');
+    const maxCharges = getMoveMaxStacks(moveKey, playerState?.character || chosenCharacter);
+    const sourceIsObject = !!source && typeof source === 'object' && !Array.isArray(source);
+    const sourceTimers = sourceIsObject && Array.isArray(source.timers)
+      ? source.timers.map(value => Number(value)).filter(value => value > 0)
+      : [];
+    const sourceHolding = sourceIsObject ? Math.max(0, Math.floor(Number(source.holding || 0))) : 0;
+    const wasFull = !sourceIsObject || (
+      Number(source.charges ?? source.maxCharges ?? 1) >= Number(source.maxCharges ?? 1)
+      && sourceTimers.length === 0
+      && sourceHolding === 0
+      && Number(source.recharge || 0) <= 0
+    );
+
+    let charges = maxCharges;
+    let timers = [];
+    let holding = 0;
+
+    if (typeof source === 'number') {
+      const legacyRecharge = Math.max(0, Number(source || 0));
+      if (legacyRecharge > 0) {
+        charges = Math.max(0, maxCharges - 1);
+        timers = [legacyRecharge];
+      }
+    } else if (sourceIsObject) {
+      charges = Math.max(0, Math.min(maxCharges, Math.floor(Number(source.charges ?? maxCharges))));
+      holding = Math.min(sourceHolding, Math.max(0, maxCharges - charges));
+      timers = sourceTimers.slice(0, Math.max(0, maxCharges - charges - holding));
+      if (timers.length === 0 && Number(source.recharge || 0) > 0 && charges < maxCharges) {
+        timers.push(Number(source.recharge));
+      }
+      if (wasFull) {
+        charges = maxCharges;
+        timers = [];
+        holding = 0;
+      }
+    }
+
+    return { charges, maxCharges, timers, holding };
+  }
+
+  function createCooldownState(playerState = player, source = null) {
+    const state = {};
+    MOVE_SLOTS.forEach(slot => {
+      state[slot] = createCooldownEntry(slot, playerState, source?.[slot]);
+    });
+    return state;
+  }
+
+  function spendSkillCharge(slot, rechargeTime, options = {}) {
+    const state = cooldowns[slot] || createCooldownEntry(slot);
+    if (state.charges <= 0) return false;
+    state.charges -= 1;
+    if (options.deferTimer) state.holding += 1;
+    else state.timers.push(rechargeTime);
+    cooldowns[slot] = state;
+    return true;
+  }
+
+  function queueHeldSkillRecharge(slot, rechargeTime) {
+    const state = cooldowns[slot] || createCooldownEntry(slot);
+    if (state.holding > 0) state.holding -= 1;
+    state.timers.push(rechargeTime);
+    cooldowns[slot] = state;
+  }
+
+  function tickCooldowns(dt) {
+    MOVE_SLOTS.forEach(slot => {
+      const state = cooldowns[slot] || createCooldownEntry(slot);
+      if (!state.timers.length) return;
+      const nextTimers = [];
+      let restoredCharges = 0;
+      state.timers.forEach(timer => {
+        const nextTimer = timer - dt;
+        if (nextTimer <= 0) restoredCharges += 1;
+        else nextTimers.push(nextTimer);
+      });
+      state.timers = nextTimers;
+      state.charges = Math.min(state.maxCharges, state.charges + restoredCharges);
+      cooldowns[slot] = state;
+    });
+  }
+
+  function getSkillCooldownInfo(slot, attackSpeed = getAttackSpeedValue()) {
+    const moveKey = getEquippedMove(slot);
+    const state = cooldowns[slot] || createCooldownEntry(slot);
+    return {
+      charges: state.charges,
+      maxCharges: state.maxCharges,
+      current: state.timers.length ? Math.min(...state.timers) : 0,
+      max: getSlotCooldownDuration(slot, moveKey, attackSpeed),
+    };
   }
 
   function refreshRoomShopCosts(room, difficultyKey = selectedDifficulty, floorValue = floor) {
@@ -1920,6 +2289,13 @@
         offer.cost = offer.key === 'god_sweep'
           ? getShopGodSweepCost(floorValue, difficultyKey)
           : getShopMoveCost(index, floorValue, difficultyKey);
+      });
+    }
+    if (Array.isArray(room.shopWeaponOffers)) {
+      room.shopWeaponOffers.forEach((offer, index) => {
+        if (!offer) return;
+        const rarity = WEAPON_DEFS[offer.key]?.rarity || 'white';
+        offer.cost = getShopWeaponCost(rarity, index, floorValue, difficultyKey);
       });
     }
   }
@@ -2208,7 +2584,7 @@
     shopOffers = [];
     structures = [];
     decorations = [];
-    cooldowns = { melee: 0, laser: 0, smash: 0, dash: 0 };
+    cooldowns = createCooldownState(player);
     laserActive = false;
     laserTime = 0;
     laserTick = 0;
@@ -2229,6 +2605,7 @@
     invKeyLatch = false;
     activeShopTab = 'items';
     draggingMoveKey = '';
+    weaponBurstQueue = [];
     wizardPawSelection = null;
     setWizardPawModalOpen(false);
     setShopPanelOpen(false);
@@ -2269,6 +2646,7 @@
       currentRoom.destructibles = Array.isArray(currentRoom.destructibles) ? currentRoom.destructibles : destructibles;
       currentRoom.hazards = Array.isArray(currentRoom.hazards) ? currentRoom.hazards : hazards;
       currentRoom.shopOffers = Array.isArray(currentRoom.shopOffers) ? currentRoom.shopOffers : shopOffers;
+      currentRoom.shopWeaponOffers = Array.isArray(currentRoom.shopWeaponOffers) ? currentRoom.shopWeaponOffers : [];
       currentRoom.structures = Array.isArray(currentRoom.structures) ? currentRoom.structures : structures;
       currentRoom.decorations = Array.isArray(currentRoom.decorations) ? currentRoom.decorations : decorations;
       refreshRoomShopCosts(currentRoom, selectedDifficulty, floor);
@@ -2282,8 +2660,7 @@
       structures = currentRoom.structures;
       decorations = currentRoom.decorations;
     }
-    cooldowns = snapshot.cooldowns || { melee: 0, laser: 0, smash: 0, dash: 0 };
-    cooldowns.dash = Number(cooldowns.dash || 0);
+    cooldowns = createCooldownState(player, snapshot.cooldowns || {});
     laserActive = !!snapshot.laserActive;
     laserTime = snapshot.laserTime || 0;
     laserTick = snapshot.laserTick || 0;
@@ -2305,6 +2682,7 @@
     invKeyLatch = false;
     activeShopTab = 'items';
     draggingMoveKey = '';
+    weaponBurstQueue = [];
     wizardPawSelection = null;
     setWizardPawModalOpen(false);
     setShopPanelOpen(false);
@@ -2405,6 +2783,7 @@
     room.hazards = [];
     room.shopOffers = [];
     room.shopMoveOffers = [];
+    room.shopWeaponOffers = [];
     room.structures = [];
     room.decorations = [];
     if (room.type === 'start') return;
@@ -2502,6 +2881,7 @@
       ];
       ensureShopHasMinimumItemOffers(room, 3);
       room.shopMoveOffers = [];
+      room.shopWeaponOffers = [];
       room.cleared = true;
     } else if (room.type === 'challenge') {
       room.cleared = false;
@@ -2770,6 +3150,7 @@
     currentRoom.destructibles = destructibles;
     currentRoom.hazards = hazards;
     currentRoom.shopOffers = shopOffers;
+    currentRoom.shopWeaponOffers = Array.isArray(currentRoom.shopWeaponOffers) ? currentRoom.shopWeaponOffers : [];
     currentRoom.structures = structures;
     currentRoom.decorations = decorations;
   }
@@ -2829,6 +3210,7 @@
     }
     if (room.type === 'shop') {
       ensureShopHasMinimumItemOffers(room, 3);
+      room.shopWeaponOffers = Array.isArray(room.shopWeaponOffers) ? room.shopWeaponOffers : [];
       refreshRoomShopCosts(room);
       shopOffers = room.shopOffers || [];
     }
@@ -3712,6 +4094,8 @@
       sayAtPosition(ROOM_W / 2, ROOM_H / 2, 'Live through it.', { speaker: 'TRIAL', tone: 'warning' });
     } else if (type === 'runes') {
       spawnChallengeRunes(room);
+      room.challengeTimer = 30;
+      room.challengeData.maxTimer = 30;
       sayAtPosition(ROOM_W / 2, ROOM_H / 2, 'Claim every rune.', { speaker: 'TRIAL', tone: 'warning' });
     } else if (type === 'storm') {
       room.challengeTimer = 18;
@@ -3797,6 +4181,19 @@
     if (!playerData.ownedMoves || typeof playerData.ownedMoves !== 'object') {
       playerData.ownedMoves = {};
     }
+    if (!playerData.ownedWeapons || typeof playerData.ownedWeapons !== 'object') {
+      playerData.ownedWeapons = {};
+    }
+    WEAPON_KEYS.forEach(key => {
+      playerData.ownedWeapons[key] = !!playerData.ownedWeapons[key];
+    });
+    if (!WEAPON_DEFS[playerData.equippedWeapon]) playerData.equippedWeapon = '';
+    playerData.weaponCooldown = Number(playerData.weaponCooldown || 0);
+    playerData.blockActive = !!playerData.blockActive;
+    playerData.blockTimer = Number(playerData.blockTimer || 0);
+    playerData.fleeceTick = Number(playerData.fleeceTick || 0);
+    playerData.weaponBeamTime = Number(playerData.weaponBeamTime || 0);
+    playerData.weaponBeamTick = Number(playerData.weaponBeamTick || 0);
     MOVE_SLOTS.forEach(slot => {
       const moveKey = playerData.equippedMoves[slot];
       if (!MOVE_DEFS[moveKey] || MOVE_DEFS[moveKey].slot !== slot) {
@@ -3848,7 +4245,7 @@
     let critChance = (critCharm + keenEye) * 0.05 + pendantOfKronos * godItemStacks * 0.01;
     if (oracleLens) critChance *= 2;
     critChance = clamp(critChance, 0, 0.95);
-    const damageReduction = clamp(bandaid * 0.005 + shieldOfAegis * 0.5, 0, 0.85);
+    const damageReduction = clamp(bandaid * 0.005 + shieldOfAegis * 0.2, 0, 0.85);
     return {
       bleedChance: neoKnife * 0.05,
       bleedDamageMultiplier: orbOfBlood > 0 ? 1 + orbOfBlood : 1,
@@ -4016,12 +4413,166 @@
     return slot === 'dash' ? 'dash' : slot === 'melee' ? 'slash' : slot === 'laser' ? 'blood_beam' : 'crimson_smash';
   }
 
+  function getEquippedWeapon() {
+    const key = player?.equippedWeapon || '';
+    return WEAPON_DEFS[key] ? key : '';
+  }
+
+  function getWeaponBaseCooldown(weaponKey) {
+    if (weaponKey === 'extending_staff') return 0.5;
+    if (weaponKey === 'hunters_bow') return 0.4;
+    if (weaponKey === 'thorns_bleed_blade') return 0.35;
+    if (weaponKey === 'lazer_glasses') return 3.6;
+    if (weaponKey === 'metao_fire_staff') return 1.2;
+    if (weaponKey === 'magenta_degale') return 1.5;
+    if (weaponKey === 'magenta_p90') return 1.8;
+    if (weaponKey === 'granillia_lightning_spear') return 0.9;
+    if (weaponKey === 'excalibur') return 2;
+    if (weaponKey === 'golden_fleece') return 0.5;
+    if (weaponKey === 'void_piercer') return 0.8;
+    if (weaponKey === 'aegis_shield_weapon') return 8;
+    return 0.5;
+  }
+
+  function spawnWeaponProjectile(config = {}) {
+    const angle = Number(config.angle || 0);
+    const speed = Number(config.speed || 520);
+    projectiles.push({
+      x: config.x ?? player.x,
+      y: config.y ?? player.y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      r: Number(config.r || 5),
+      life: Number(config.life || 1.2),
+      damage: Number(config.damage || 18),
+      kind: config.kind || 'weapon_shot',
+      color: config.color || '#ffd7aa',
+      knockback: Number(config.knockback || 140),
+      pierceCount: Number(config.pierceCount || 0),
+      hitOptions: config.hitOptions || null,
+    });
+  }
+
+  function fireWeaponSweep(damage, range, arc, push, color, options = {}) {
+    const angle = Math.atan2(mouse.worldY - player.y, mouse.worldX - player.x);
+    player.swing = ATTACKS.melee.active;
+    player.swingA = angle;
+    for (let index = enemies.length - 1; index >= 0; index -= 1) {
+      const enemy = enemies[index];
+      if (!enemy) continue;
+      const distance = dist(player.x, player.y, enemy.x, enemy.y);
+      if (distance > range + enemy.r) continue;
+      const targetAngle = Math.atan2(enemy.y - player.y, enemy.x - player.x);
+      const difference = Math.abs(Math.atan2(Math.sin(targetAngle - angle), Math.cos(targetAngle - angle)));
+      if (difference > arc) continue;
+      hitEnemy(enemy, damage, angle, push, color, options);
+      if (options.bleedChance > 0 && nextRandom('encounter') < options.bleedChance) {
+        applyBleed(enemy, Number(options.bleedStacks || 1), Number(options.bleedDuration || 4));
+      }
+    }
+  }
+
+  function tryWeaponAttack() {
+    const weaponKey = getEquippedWeapon();
+    if (!weaponKey) return false;
+    if (player.weaponCooldown > 0) return false;
+    const angle = Math.atan2(mouse.worldY - player.y, mouse.worldX - player.x);
+    if (weaponKey === 'extending_staff') {
+      fireWeaponSweep(38, 130, 1.45, 500, '#eaf4ff');
+      player.weaponCooldown = 0.5;
+      return true;
+    }
+    if (weaponKey === 'hunters_bow') {
+      spawnWeaponProjectile({ angle, speed: 820, damage: 28, knockback: 180, r: 4, life: 0.9, kind: 'hunters_bow', color: '#f0fbff', pierceCount: 1, hitOptions: { critBonus: 0.1 } });
+      player.weaponCooldown = 0.4;
+      return true;
+    }
+    if (weaponKey === 'thorns_bleed_blade') {
+      fireWeaponSweep(26, 76, 1.12, 240, '#ff6e8b', { bleedChance: 0.3, bleedStacks: 2, bleedDuration: 5 });
+      player.weaponCooldown = 0.35;
+      return true;
+    }
+    if (weaponKey === 'lazer_glasses') {
+      player.weaponBeamTime = 0.65;
+      player.weaponBeamTick = 0;
+      player.weaponCooldown = 3.6;
+      return true;
+    }
+    if (weaponKey === 'metao_fire_staff') {
+      for (let index = -2; index <= 2; index += 1) {
+        spawnWeaponProjectile({
+          angle: angle + index * 0.12,
+          speed: 440,
+          damage: 18,
+          knockback: 150,
+          r: 6,
+          life: 1.25,
+          kind: 'metao_fire_staff',
+          color: '#ff9f4a',
+          hitOptions: { fireChance: 1, fireStacks: 1, fireDuration: 3 },
+        });
+      }
+      player.weaponCooldown = 1.2;
+      return true;
+    }
+    if (weaponKey === 'magenta_degale') {
+      spawnWeaponProjectile({ angle, speed: 920, damage: 80, knockback: 480, r: 7, life: 0.9, kind: 'magenta_degale', color: '#ff8bd2' });
+      player.vx -= Math.cos(angle) * 280;
+      player.vy -= Math.sin(angle) * 280;
+      player.weaponCooldown = 1.5;
+      return true;
+    }
+    if (weaponKey === 'magenta_p90') {
+      for (let shot = 0; shot < 5; shot += 1) {
+        weaponBurstQueue.push({
+          delay: shot * 0.04,
+          angle: angle + rand(0.05, -0.05, 'encounter'),
+          weaponKey,
+        });
+      }
+      player.weaponCooldown = 1.8;
+      return true;
+    }
+    if (weaponKey === 'granillia_lightning_spear') {
+      spawnWeaponProjectile({ angle, speed: 720, damage: 55, knockback: 300, r: 7, life: 1.1, kind: 'lightning_spear', color: '#9bd9ff', pierceCount: 2, hitOptions: { chainLightningRadius: 140, chainMultiplier: 0.65 } });
+      player.weaponCooldown = 0.9;
+      return true;
+    }
+    if (weaponKey === 'excalibur') {
+      fireWeaponSweep(1000, 100, Math.PI, 800, '#ffe291', { rawDamage: true });
+      particles.push({ x: player.x, y: player.y, life: 0.6, ring: 56, c: '#ffd26a' });
+      player.weaponCooldown = 2;
+      return true;
+    }
+    if (weaponKey === 'golden_fleece') {
+      fireWeaponSweep(22, ATTACKS.melee.range, ATTACKS.melee.arc, ATTACKS.melee.push, '#ffe8a0');
+      player.weaponCooldown = 0.5;
+      return true;
+    }
+    if (weaponKey === 'void_piercer') {
+      spawnWeaponProjectile({ angle, speed: 760, damage: 65, knockback: 280, r: 6, life: 1.2, kind: 'void_piercer', color: '#ffd2c0', pierceCount: 4, hitOptions: { ignoreBarrier: true, critBonus: 0.2 } });
+      player.weaponCooldown = 0.8;
+      return true;
+    }
+    if (weaponKey === 'aegis_shield_weapon') {
+      player.blockActive = true;
+      player.blockTimer = 2;
+      player.weaponCooldown = 8;
+      particles.push({ x: player.x, y: player.y, life: 0.5, ring: 26, c: '#9ae9ff' });
+      return true;
+    }
+    return false;
+  }
+
   function tryMelee() {
-    if (cooldowns.melee > 0) return;
+    if (getEquippedWeapon()) {
+      tryWeaponAttack();
+      return;
+    }
     const move = getEquippedMove('melee');
     const itemStats = getItemStats();
     const attackSpeed = getAttackSpeedValue();
-    cooldowns.melee = getMeleeCooldownDuration(move, attackSpeed);
+    if (!spendSkillCharge('melee', getMeleeCooldownDuration(move, attackSpeed))) return;
     if (move === 'fire_balls') {
       spawnFireballs();
       return;
@@ -4033,15 +4584,6 @@
     const angle = Math.atan2(mouse.worldY - player.y, mouse.worldX - player.x);
     player.swing = ATTACKS.melee.active;
     player.swingA = angle;
-
-    const stepX = Math.cos(angle) * 22;
-    const stepY = Math.sin(angle) * 22;
-    const nextX = player.x + stepX;
-    const nextY = player.y + stepY;
-    if (!isBlocked(nextX, nextY, player.r)) {
-      player.x = nextX;
-      player.y = nextY;
-    }
 
     const damage = godTimer > 0 ? 56 : ATTACKS.melee.damage;
     for (let index = enemies.length - 1; index >= 0; index -= 1) {
@@ -4064,26 +4606,104 @@
     });
   }
 
+  function fireLazerGlassesTick() {
+    const baseAngle = Math.atan2(mouse.worldY - player.y, mouse.worldX - player.x);
+    [-0.2, 0.2].forEach(offset => {
+      const angle = baseAngle + offset;
+      const beamEnd = getBeamEnd(player.x, player.y, angle, 430);
+      const target = enemies.find(enemy => enemy && beamHitsCircle(player.x, player.y, beamEnd.x, beamEnd.y, enemy.x, enemy.y, enemy.r + 4));
+      if (target) {
+        hitEnemy(target, 9, angle, 80, '#cda8ff', { fireChance: 0.05, fireStacks: 1, fireDuration: 3 });
+      }
+      particles.push({ x: player.x + Math.cos(angle) * 24, y: player.y + Math.sin(angle) * 24, life: 0.16, c: '#cda8ff' });
+    });
+  }
+
+  function updateWeaponSystems(dt) {
+    player.weaponCooldown = Math.max(0, Number(player.weaponCooldown || 0) - dt);
+    if (player.blockTimer > 0) {
+      player.blockTimer = Math.max(0, player.blockTimer - dt);
+      player.blockActive = player.blockTimer > 0;
+      if (player.blockActive && nextRandom('fx') < 0.25) {
+        particles.push({ x: player.x + rand(18, -18, 'fx'), y: player.y + rand(18, -18, 'fx'), life: 0.2, c: '#9cefff' });
+      }
+    } else {
+      player.blockActive = false;
+    }
+
+    const equippedWeapon = getEquippedWeapon();
+    if (equippedWeapon === 'golden_fleece') {
+      player.fleeceTick += dt;
+      if (player.fleeceTick >= 2) {
+        player.fleeceTick = 0;
+        const heal = player.maxHp * 0.2;
+        const before = player.hp;
+        player.hp = Math.min(player.maxHp, player.hp + heal);
+        if (player.hp > before) spawnHealPopup(player.x + rand(-10, 10), player.y - 20, player.hp - before, { color: '#ffe59c' });
+      }
+    } else {
+      player.fleeceTick = 0;
+    }
+
+    if (equippedWeapon === 'lazer_glasses' && player.weaponBeamTime > 0) {
+      player.weaponBeamTime = Math.max(0, player.weaponBeamTime - dt);
+      player.weaponBeamTick = Number(player.weaponBeamTick || 0) - dt;
+      if (player.weaponBeamTick <= 0) {
+        player.weaponBeamTick = 0.08;
+        fireLazerGlassesTick();
+      }
+    }
+
+    for (let index = weaponBurstQueue.length - 1; index >= 0; index -= 1) {
+      const queued = weaponBurstQueue[index];
+      queued.delay -= dt;
+      if (queued.delay > 0) continue;
+      if (queued.weaponKey === 'magenta_p90') {
+        spawnWeaponProjectile({ angle: queued.angle, speed: 900, damage: 22, knockback: 200, r: 4, life: 0.8, kind: 'magenta_p90', color: '#ff9dd7' });
+        player.vx -= Math.cos(queued.angle) * 55;
+        player.vy -= Math.sin(queued.angle) * 55;
+      }
+      weaponBurstQueue.splice(index, 1);
+    }
+  }
+
   function tryLaser() {
-    if (cooldowns.laser > 0 || laserActive) return;
+    if (laserActive) return;
     const attackSpeed = getAttackSpeedValue();
     const move = getEquippedMove('laser');
+    const rechargeTime = getLaserCooldownDuration(move, attackSpeed);
+    if (move === 'turtle_wave') {
+      if (player.hp <= 2) {
+        particles.push({ x: player.x, y: player.y - 20, life: 0.52, text: 'NEED 2 HP', c: '#ff8b98' });
+        return;
+      }
+      if (!spendSkillCharge('laser', rechargeTime, { deferTimer: true })) return;
+      player.hp = Math.max(1, player.hp - 2);
+      player.roomDamageTaken = (player.roomDamageTaken || 0) + 2;
+      spawnDamagePopup(player.x, player.y - 18, 2, { color: '#ff8b98', size: 14 });
+      laserActive = true;
+      laserMode = 'turtle_wave';
+      laserTime = getLaserCastDuration(move, attackSpeed);
+      laserTick = 0;
+      return;
+    }
     if (move === 'power_disks') {
-      cooldowns.laser = getLaserCooldownDuration(move, attackSpeed);
+      if (!spendSkillCharge('laser', rechargeTime)) return;
       spawnPlayerDiskBurst();
       return;
     }
     if (move === 'blade_justice') {
-      cooldowns.laser = getLaserCooldownDuration(move, attackSpeed);
+      if (!spendSkillCharge('laser', rechargeTime)) return;
       castBladeOfJustice();
       return;
     }
     if (move === 'lightning_columns') {
-      cooldowns.laser = getLaserCooldownDuration(move, attackSpeed);
+      if (!spendSkillCharge('laser', rechargeTime)) return;
       castLightningColumns();
       return;
     }
     if (move === 'god_sweep') {
+      if (!spendSkillCharge('laser', rechargeTime, { deferTimer: true })) return;
       laserActive = true;
       laserMode = 'god_sweep';
       laserTime = getLaserCastDuration(move, attackSpeed);
@@ -4092,6 +4712,7 @@
       laserSweepSpeed = (nextRandom('encounter') < 0.5 ? -1 : 1) * 4.6;
       return;
     }
+    if (!spendSkillCharge('laser', rechargeTime, { deferTimer: true })) return;
     laserActive = true;
     laserMode = 'beam';
     laserTime = getLaserCastDuration(move, attackSpeed);
@@ -4109,15 +4730,15 @@
       : Math.atan2(mouse.worldY - player.y, mouse.worldX - player.x);
     if (laserTick <= 0) {
       if (laserMode === 'god_sweep') laserAngle += laserSweepSpeed * 0.05;
-      laserTick = laserMode === 'god_sweep' ? 0.05 : ATTACKS.laser.tick;
-      const range = laserMode === 'god_sweep' ? 560 : ATTACKS.laser.range;
+      laserTick = laserMode === 'god_sweep' ? 0.05 : laserMode === 'turtle_wave' ? 0.08 : ATTACKS.laser.tick;
+      const range = laserMode === 'god_sweep' ? 560 : laserMode === 'turtle_wave' ? 620 : ATTACKS.laser.range;
       const end = getBeamEnd(player.x, player.y, angle, range);
       for (let index = enemies.length - 1; index >= 0; index -= 1) {
         const enemy = enemies[index];
         if (!enemy) continue;
-        if (!beamHitsCircle(player.x, player.y, end.x, end.y, enemy.x, enemy.y, enemy.r + 6)) continue;
-        const beamDamage = (laserMode === 'god_sweep' ? 24 : godTimer > 0 ? 16 : ATTACKS.laser.damage) * (itemStats.beamDamageMultiplier || 1);
-        hitEnemy(enemy, beamDamage, angle, laserMode === 'god_sweep' ? 120 : 60, '#f0f');
+        if (!beamHitsCircle(player.x, player.y, end.x, end.y, enemy.x, enemy.y, enemy.r + (laserMode === 'turtle_wave' ? 14 : 6))) continue;
+        const beamDamage = (laserMode === 'god_sweep' ? 24 : laserMode === 'turtle_wave' ? 34 : godTimer > 0 ? 16 : ATTACKS.laser.damage) * (itemStats.beamDamageMultiplier || 1);
+        hitEnemy(enemy, beamDamage, angle, laserMode === 'god_sweep' ? 120 : laserMode === 'turtle_wave' ? 155 : 60, '#f0f');
         chainBeamHit(enemy, beamDamage, angle, '#d890ff');
         if (move === 'blood_beam' && rng() < 0.05) applyBleed(enemy, 1, 3.2);
         if (move === 'blood_beam' && rng() < 0.08) applyDarkDrain(enemy, 1, 3.4);
@@ -4131,15 +4752,14 @@
     if (laserTime <= 0) {
       laserActive = false;
       laserMode = 'beam';
-      cooldowns.laser = getLaserCooldownDuration(getEquippedMove('laser'), getAttackSpeedValue());
+      queueHeldSkillRecharge('laser', getLaserCooldownDuration(getEquippedMove('laser'), getAttackSpeedValue()));
     }
   }
 
   function trySmash() {
-    if (cooldowns.smash > 0) return;
     const itemStats = getItemStats();
     const attackSpeed = getAttackSpeedValue();
-    cooldowns.smash = (godTimer > 0 ? 2 : ATTACKS.smash.baseCooldown) / attackSpeed;
+    if (!spendSkillCharge('smash', getSmashCooldownDuration(attackSpeed))) return;
     const move = getEquippedMove('smash');
     if (move === 'chaos_burst') {
       castChaosBurst();
@@ -4183,14 +4803,16 @@
   }
 
   function tryDash(moveX, moveY) {
-    if (cooldowns.dash > 0 || player.dashTime > 0) return;
+    if (player.dashTime > 0) return;
     const move = getEquippedMove('dash');
+    const attackSpeed = getAttackSpeedValue();
+    const rechargeTime = getDashCooldownDuration(move, attackSpeed);
     if (move === 'warp') {
+      if (!spendSkillCharge('dash', rechargeTime)) return;
       castWarp();
-      cooldowns.dash = getDashCooldownDuration(move);
       return;
     }
-    const attackSpeed = getAttackSpeedValue();
+    if (!spendSkillCharge('dash', rechargeTime)) return;
     const angle = Math.hypot(moveX, moveY) > 0.15
       ? Math.atan2(moveY, moveX)
       : Math.atan2(mouse.worldY - player.y, mouse.worldX - player.x);
@@ -4201,10 +4823,17 @@
     player.vx = player.dashX;
     player.vy = player.dashY;
     player.inv = Math.max(player.inv, 0.18);
-    cooldowns.dash = getDashCooldownDuration(move, attackSpeed);
     shake = Math.max(shake, 3);
     shakeT = Math.max(shakeT, 0.08);
     particles.push({ x: player.x, y: player.y, life: 0.28, ring: 18, c: '#fff06a' });
+  }
+
+  function applyResponsiveVelocity(current, desired, dt) {
+    const isStopping = Math.abs(desired) < 0.001;
+    const isTurning = !isStopping && current !== 0 && Math.sign(current) !== Math.sign(desired);
+    const response = isStopping ? 20 : isTurning ? 24 : 14;
+    const next = current + (desired - current) * Math.min(1, response * dt);
+    return Math.abs(next) < 4 ? 0 : next;
   }
 
   function spawnPlayerDiskBurst() {
@@ -4408,13 +5037,14 @@
     }
   }
 
-  function hitEnemy(enemy, damage, angle, knockback, color) {
+  function hitEnemy(enemy, damage, angle, knockback, color, options = {}) {
     const stats = getItemStats();
-    let dealt = scaleDamageAgainstEnemy(enemy, damage);
-    const isCrit = stats.critChance > 0 && nextRandom('encounter') < stats.critChance;
+    const critChance = clamp((stats.critChance || 0) + Number(options.critBonus || 0), 0, 0.98);
+    let dealt = options.rawDamage ? Math.max(1, Math.round(damage)) : scaleDamageAgainstEnemy(enemy, damage);
+    const isCrit = critChance > 0 && nextRandom('encounter') < critChance;
     const appliedKnockback = knockback * (stats.knockbackMultiplier || 1);
     if (isCrit) dealt = Math.round(dealt * stats.critMultiplier);
-    if ((enemy.barrier || 0) > 0) {
+    if (!options.ignoreBarrier && (enemy.barrier || 0) > 0) {
       const absorbed = Math.min(enemy.barrier, dealt);
       enemy.barrier -= absorbed;
       dealt -= absorbed;
@@ -4436,6 +5066,22 @@
       color: isCrit ? '#ff9f1c' : '#ff6b6b',
       size: isCrit ? 20 : 16,
     });
+    if (options.fireChance > 0 && nextRandom('encounter') < options.fireChance) {
+      applyFire(enemy, Number(options.fireStacks || 1), Number(options.fireDuration || 2.8));
+    }
+    if (options.chainLightningRadius > 0) {
+      const chained = findNearestEnemy(enemy.x, enemy.y, options.chainLightningRadius, new Set([enemy]));
+      if (chained) {
+        hitEnemy(
+          chained,
+          Math.max(1, Math.round(dealt * Number(options.chainMultiplier || 0.6))),
+          Math.atan2(chained.y - enemy.y, chained.x - enemy.x),
+          Math.max(60, knockback * 0.5),
+          '#9ad9ff',
+          { rawDamage: true }
+        );
+      }
+    }
     if (enemy.hp <= 0) onEnemyDie(enemy);
   }
 
@@ -4826,10 +5472,7 @@
     lavaAnimTime += dt;
     floorTransitionTime += dt;
     if (floorTransitionTime > 2.5) showFloorTransition = false;
-    cooldowns.melee = Math.max(0, cooldowns.melee - dt);
-    cooldowns.laser = Math.max(0, cooldowns.laser - dt);
-    cooldowns.smash = Math.max(0, cooldowns.smash - dt);
-    cooldowns.dash = Math.max(0, cooldowns.dash - dt);
+    tickCooldowns(dt);
     if (godTimer > 0) godTimer = Math.max(0, godTimer - dt);
 
     const _b = window.NeoSettings?.getBindings();
@@ -4875,8 +5518,8 @@
       }
     } else {
       const targetSpeed = 228 * (godTimer > 0 ? 1.25 : 1) * itemStats.moveSpeedMultiplier;
-      player.vx += (moveX * targetSpeed - player.vx) * 14 * dt;
-      player.vy += (moveY * targetSpeed - player.vy) * 14 * dt;
+      player.vx = applyResponsiveVelocity(player.vx, moveX * targetSpeed, dt);
+      player.vy = applyResponsiveVelocity(player.vy, moveY * targetSpeed, dt);
     }
 
     moveCircle(player, dt);
@@ -4886,6 +5529,7 @@
 
     mouse.worldX = mouse.x + camera.x;
     mouse.worldY = mouse.y + camera.y;
+    updateWeaponSystems(dt);
 
     if (!overlayOpen && mouse.down) tryMelee();
     if (!overlayOpen && mouse.right) tryLaser();
@@ -4916,10 +5560,11 @@
     updatePlayerLaser(dt);
     updateChallengeRoomState(dt);
 
-    const targetCX = player.x - 480;
-    const targetCY = player.y - 320;
-    camera.x += (targetCX - camera.x) * 6 * dt;
-    camera.y += (targetCY - camera.y) * 6 * dt;
+    const cameraLead = 0.08;
+    const targetCX = player.x - 480 + player.vx * cameraLead;
+    const targetCY = player.y - 320 + player.vy * cameraLead;
+    camera.x += (targetCX - camera.x) * 8 * dt;
+    camera.y += (targetCY - camera.y) * 8 * dt;
     if (shakeT > 0) {
       shakeT -= dt;
       shake *= 0.88;
@@ -5946,6 +6591,14 @@
       return;
     }
 
+    if (type === 'runes') {
+      currentRoom.challengeTimer = Math.max(0, (currentRoom.challengeTimer || 0) - dt);
+      if (currentRoom.challengeTimer <= 0) {
+        failChallengeTrial('RUNES FADING');
+      }
+      return;
+    }
+
     if (type === 'storm') {
       currentRoom.challengeTimer = Math.max(0, (currentRoom.challengeTimer || 0) - dt);
       currentRoom.challengeTick = Math.max(0, (currentRoom.challengeTick || 0) - dt);
@@ -6160,6 +6813,10 @@
     const applyHitstop = !options.noInvFrames;
     const showPopup = options.showPopup !== false;
     if (!ignoreInv && player.inv > 0) return;
+    if (player.blockActive && amount > 0 && !options.ignoreBlock) {
+      particles.push({ x: player.x, y: player.y - 20, life: 0.3, text: 'BLOCK', c: '#9cefff' });
+      return;
+    }
     if (isChallengeActive('no_hit') && amount > 0) {
       lastDamageSource = getDamageSourceLabel(source || 'no_hit');
       player.hp = 0;
@@ -6296,13 +6953,27 @@
       if (!projectile.enemy) {
         const target = enemies.find(enemy => enemy && dist(projectile.x, projectile.y, enemy.x, enemy.y) <= projectile.r + enemy.r);
         if (target) {
-          hitEnemy(target, projectile.damage || 16, Math.atan2(projectile.vy, projectile.vx), 90, projectile.kind === 'fireball' ? '#ff8844' : '#a857ff');
+          const hitAngle = Math.atan2(projectile.vy, projectile.vx);
+          hitEnemy(
+            target,
+            projectile.damage || 16,
+            hitAngle,
+            projectile.knockback || 90,
+            projectile.color || (projectile.kind === 'fireball' ? '#ff8844' : '#a857ff'),
+            projectile.hitOptions || {}
+          );
           if (projectile.kind === 'fireball') {
             applyFire(target, projectile.fireStacks || 2, projectile.fireDuration || 3);
             blastRadius(projectile.x, projectile.y, projectile.splash || 44, 14, '#ff8844');
             applyStatusInRadius(projectile.x, projectile.y, projectile.splash || 44, 'fire', 1, projectile.fireDuration || 3, null);
           }
-          projectiles.splice(index, 1);
+          if (projectile.pierceCount > 0) {
+            projectile.pierceCount -= 1;
+            projectile.x += projectile.vx * 0.03;
+            projectile.y += projectile.vy * 0.03;
+          } else {
+            projectiles.splice(index, 1);
+          }
           continue;
         }
       } else if (dist(projectile.x, projectile.y, player.x, player.y) <= projectile.r + player.r) {
@@ -6810,17 +7481,27 @@
     if (!player) return;
     const character = getCharacterDef();
     const meleeMove = MOVE_DEFS[getEquippedMove('melee')];
+    const weaponKey = getEquippedWeapon();
+    const weaponDef = WEAPON_DEFS[weaponKey];
     const laserMove = MOVE_DEFS[getEquippedMove('laser')];
     const smashMove = MOVE_DEFS[getEquippedMove('smash')];
     const dashMove = MOVE_DEFS[getEquippedMove('dash')];
     const attackSpeed = getAttackSpeedValue();
     const laserMoveKey = laserMove?.key || getEquippedMove('laser');
-    const laserMax = laserActive
-      ? getLaserCastDuration(laserMoveKey, attackSpeed)
-      : getLaserCooldownDuration(laserMoveKey, attackSpeed);
-    const smashMax = (godTimer > 0 ? 2 : ATTACKS.smash.baseCooldown) / attackSpeed;
-    const meleeMax = getMeleeCooldownDuration(meleeMove?.key || getEquippedMove('melee'), attackSpeed);
-    const dashMax = getDashCooldownDuration(dashMove?.key || getEquippedMove('dash'), attackSpeed);
+    const meleeSkill = getSkillCooldownInfo('melee', attackSpeed);
+    const laserSkill = getSkillCooldownInfo('laser', attackSpeed);
+    const smashSkill = getSkillCooldownInfo('smash', attackSpeed);
+    const dashSkill = getSkillCooldownInfo('dash', attackSpeed);
+    if (laserActive) {
+      laserSkill.current = laserTime;
+      laserSkill.max = getLaserCastDuration(laserMoveKey, attackSpeed);
+    }
+    if (weaponDef) {
+      meleeSkill.current = Number(player.weaponCooldown || 0);
+      meleeSkill.max = getWeaponBaseCooldown(weaponKey);
+      meleeSkill.charges = meleeSkill.current > 0 ? 0 : 1;
+      meleeSkill.maxCharges = 1;
+    }
     const minutes = Math.floor(gameElapsedTime / 60);
     const seconds = Math.floor(gameElapsedTime % 60);
     const timeStr = `${minutes}:${seconds.toString().padStart(2, '0')}`;
@@ -6832,20 +7513,20 @@
       character: character.name.toUpperCase(),
       hp: player.hp,
       maxHp: player.maxHp,
-      meleeCd: cooldowns.melee,
-      laserCd: cooldowns.laser,
-      smashCd: cooldowns.smash,
-      dashCd: cooldowns.dash,
+      meleeCd: meleeSkill.current,
+      laserCd: laserSkill.current,
+      smashCd: smashSkill.current,
+      dashCd: dashSkill.current,
       gameTime: timeStr,
       skills: {
-        melee: { current: cooldowns.melee, max: meleeMax, active: false },
-        laser: { current: laserActive ? laserTime : cooldowns.laser, max: laserMax, active: laserActive },
-        smash: { current: cooldowns.smash, max: smashMax, active: false },
-        dash: { current: cooldowns.dash, max: dashMax, active: player.dashTime > 0 },
+        melee: { current: meleeSkill.current, max: meleeSkill.max, active: false, charges: meleeSkill.charges, maxCharges: meleeSkill.maxCharges },
+        laser: { current: laserSkill.current, max: laserSkill.max, active: laserActive, charges: laserSkill.charges, maxCharges: laserSkill.maxCharges },
+        smash: { current: smashSkill.current, max: smashSkill.max, active: false, charges: smashSkill.charges, maxCharges: smashSkill.maxCharges },
+        dash: { current: dashSkill.current, max: dashSkill.max, active: player.dashTime > 0, charges: dashSkill.charges, maxCharges: dashSkill.maxCharges },
       },
     });
     ui.skillNames.dash.textContent = dashMove?.name || character.skills.dash;
-    ui.skillNames.melee.textContent = meleeMove?.name || character.skills.melee;
+    ui.skillNames.melee.textContent = weaponDef?.name || meleeMove?.name || character.skills.melee;
     ui.skillNames.laser.textContent = laserMove?.name || character.skills.laser;
     ui.skillNames.smash.textContent = smashMove?.name || character.skills.smash;
     
@@ -6867,18 +7548,23 @@
     if (ui.timerDisplay) ui.timerDisplay.textContent = timeStr;
     if (ui.floorDisplay) ui.floorDisplay.textContent = floor;
     if (ui.challengeStatus && ui.challengeStatusFill) {
-      const stillnessActive = currentRoom
+      const timedChallengeType = currentRoom
         && currentRoom.type === 'challenge'
         && currentRoom.challengeStarted
         && !currentRoom.cleared
-        && (currentRoom.challengeType || 'mirror') === 'stillness';
-      ui.challengeStatus.classList.toggle('hidden', !stillnessActive);
-      ui.challengeStatus.setAttribute('aria-hidden', stillnessActive ? 'false' : 'true');
-      if (stillnessActive) {
+        ? (currentRoom.challengeType || 'mirror')
+        : null;
+      const timedChallengeActive = timedChallengeType === 'stillness' || timedChallengeType === 'runes';
+      ui.challengeStatus.classList.toggle('hidden', !timedChallengeActive);
+      ui.challengeStatus.setAttribute('aria-hidden', timedChallengeActive ? 'false' : 'true');
+      if (timedChallengeActive) {
         const maxTimer = Math.max(0.01, Number(currentRoom.challengeData?.maxTimer || 30));
         const timer = Math.max(0, Number(currentRoom.challengeTimer || 0));
         const ratio = Math.max(0, Math.min(1, timer / maxTimer));
-        if (ui.challengeStatusLabel) ui.challengeStatusLabel.textContent = `STILLNESS ${Math.ceil(timer)}S`;
+        if (ui.challengeStatusLabel) {
+          const label = timedChallengeType === 'runes' ? 'RUNES' : 'STILLNESS';
+          ui.challengeStatusLabel.textContent = `${label} ${Math.ceil(timer)}S`;
+        }
         ui.challengeStatusFill.style.width = `${ratio * 100}%`;
       }
     }
@@ -7295,16 +7981,18 @@
         ctx.strokeStyle = '#58d9ff';
         ctx.strokeRect(-24, -24, 48, 48);
       } else if (prop.kind === 'secret_wall') {
-        ctx.fillStyle = '#16384a';
-        ctx.fillRect(-22, -22, 44, 44);
-        ctx.strokeStyle = '#8dd4ff';
-        ctx.strokeRect(-22, -22, 44, 44);
+        ctx.fillStyle = '#113648';
+        ctx.fillRect(-24, -24, 48, 48);
+        ctx.strokeStyle = '#4f7f92';
+        ctx.strokeRect(-24, -24, 48, 48);
+        ctx.globalAlpha = 0.22;
+        ctx.strokeStyle = '#0a1f28';
         ctx.beginPath();
-        ctx.moveTo(-12, -12);
-        ctx.lineTo(12, 12);
-        ctx.moveTo(12, -12);
-        ctx.lineTo(-12, 12);
+        ctx.moveTo(-14, -8);
+        ctx.lineTo(12, -4);
+        ctx.lineTo(6, 10);
         ctx.stroke();
+        ctx.globalAlpha = 1;
       }
       ctx.restore();
     });
@@ -7520,8 +8208,9 @@
 
   function drawProjectiles() {
     projectiles.forEach(projectile => {
-      ctx.fillStyle = '#ff66aa';
-      ctx.shadowColor = '#ff66aa';
+      const color = projectile.color || '#ff66aa';
+      ctx.fillStyle = color;
+      ctx.shadowColor = color;
       ctx.shadowBlur = 10;
       ctx.beginPath();
       ctx.arc(projectile.x, projectile.y, projectile.r, 0, Math.PI * 2);
@@ -7813,11 +8502,12 @@
     const angle = laserMode === 'god_sweep'
       ? laserAngle
       : Math.atan2(mouse.worldY - player.y, mouse.worldX - player.x);
-    const end = getBeamEnd(player.x, player.y, angle, laserMode === 'god_sweep' ? 560 : ATTACKS.laser.range);
-    ctx.strokeStyle = '#ff00aa';
-    ctx.lineWidth = laserMode === 'god_sweep' ? 16 : 8;
-    ctx.shadowColor = '#f0f';
-    ctx.shadowBlur = laserMode === 'god_sweep' ? 26 : 18;
+    const turtleWaveActive = laserMode === 'turtle_wave';
+    const end = getBeamEnd(player.x, player.y, angle, laserMode === 'god_sweep' ? 560 : turtleWaveActive ? 620 : ATTACKS.laser.range);
+    ctx.strokeStyle = turtleWaveActive ? '#74f5ff' : '#ff00aa';
+    ctx.lineWidth = laserMode === 'god_sweep' ? 16 : turtleWaveActive ? 18 : 8;
+    ctx.shadowColor = turtleWaveActive ? '#9bf7ff' : '#f0f';
+    ctx.shadowBlur = laserMode === 'god_sweep' ? 26 : turtleWaveActive ? 30 : 18;
     ctx.globalAlpha = 0.92;
     ctx.beginPath();
     ctx.moveTo(player.x, player.y);
@@ -8171,7 +8861,7 @@
       };
     }
 
-    function setSkillCard(name, current, max, active = false) {
+    function setSkillCard(name, current, max, active = false, charges = 0, maxCharges = 1) {
       const fill = name === 'melee' ? view.fillMelee
         : name === 'laser' ? view.fillLaser
           : name === 'smash' ? view.fillSmash
@@ -8181,10 +8871,19 @@
           : name === 'smash' ? view.timeSmash
             : view.timeDash;
       const card = view.actionCards[name];
-      const ready = current <= 0.02 && !active;
-      const ratio = max <= 0 ? 0 : clamp(current / max, 0, 1);
+      const ready = charges > 0 && !active;
+      const partialCharge = charges < maxCharges && max > 0 ? clamp(1 - (current / max), 0, 1) : 0;
+      const ratio = maxCharges <= 0 ? 0 : clamp((charges + partialCharge) / maxCharges, 0, 1);
       if (fill) fill.style.height = `${ratio * 100}%`;
-      if (time) time.textContent = ready ? 'READY' : active ? 'CAST' : current.toFixed(1);
+      if (time) {
+        time.textContent = active
+          ? 'CAST'
+          : maxCharges > 1 && charges > 0
+            ? `${charges}/${maxCharges}`
+            : ready
+              ? 'READY'
+              : current.toFixed(1);
+      }
       if (card) card.classList.toggle('ready', ready);
     }
 
@@ -8662,10 +9361,10 @@
           const laser = payload.skills.laser;
           const smash = payload.skills.smash;
           const dash = payload.skills.dash;
-          if (melee) setSkillCard('melee', melee.current, melee.max, !!melee.active);
-          if (laser) setSkillCard('laser', laser.current, laser.max, !!laser.active);
-          if (smash) setSkillCard('smash', smash.current, smash.max, !!smash.active);
-          if (dash) setSkillCard('dash', dash.current, dash.max, !!dash.active);
+          if (melee) setSkillCard('melee', melee.current, melee.max, !!melee.active, melee.charges, melee.maxCharges);
+          if (laser) setSkillCard('laser', laser.current, laser.max, !!laser.active, laser.charges, laser.maxCharges);
+          if (smash) setSkillCard('smash', smash.current, smash.max, !!smash.active, smash.charges, smash.maxCharges);
+          if (dash) setSkillCard('dash', dash.current, dash.max, !!dash.active, dash.charges, dash.maxCharges);
         }
       },
       setDeadInfo(text) { view.deadInfo.textContent = text; },

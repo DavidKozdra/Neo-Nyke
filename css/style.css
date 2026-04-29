@@ -918,18 +918,23 @@ canvas {
   color: #f8fbff;
 }
 
-.inv-layout {
-  display: grid;
-  grid-template-columns: 1.1fr 1fr 1fr;
-  gap: 14px;
+.inv-tab-panel {
+  display: block;
 }
 
-.inv-column {
-  min-width: 0;
+.inv-items, .inv-moves {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 10px;
 }
 
-.inv-items, .inv-moves, .inv-slots {
+#invWeaponsList {
+  margin-top: 12px;
+}
+
+.inv-slots {
   display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
   gap: 10px;
 }
 
@@ -1106,6 +1111,20 @@ canvas {
   border-color: #8fd2ff;
   box-shadow: 0 0 0 2px rgba(143, 210, 255, .2) inset, 0 0 30px rgba(91, 188, 255, .12);
   transform: translateY(-1px);
+}
+
+#invWeaponSlot[data-rarity="white"] {
+  border-color: rgba(228, 240, 255, .44);
+}
+
+#invWeaponSlot[data-rarity="purple"] {
+  border-color: rgba(198, 120, 255, .5);
+  box-shadow: 0 0 0 1px rgba(198, 120, 255, .16) inset;
+}
+
+#invWeaponSlot[data-rarity="red"] {
+  border-color: rgba(255, 94, 94, .6);
+  box-shadow: 0 0 0 1px rgba(255, 94, 94, .2) inset;
 }
 
 @media (max-width: 860px) {
