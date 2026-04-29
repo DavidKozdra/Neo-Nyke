@@ -16,6 +16,24 @@
     laser: { baseCooldown: 4.2, duration: 0.58, tick: 0.08, range: 430, damage: 10 },
     smash: { baseCooldown: 5.4, radius: 148, damage: 46, bonus: 26 },
   };
+  const ENEMY_SCALING = {
+    floor: 0.14,
+    loop: 0.32,
+    minute: 0.12,
+  };
+  const DIRECTIONS = ['n', 's', 'e', 'w'];
+  const DIRECTION_VECTORS = {
+    n: { dx: 0, dy: -1 },
+    s: { dx: 0, dy: 1 },
+    e: { dx: 1, dy: 0 },
+    w: { dx: -1, dy: 0 },
+  };
+  const OPPOSITE_DIRECTION = {
+    n: 's',
+    s: 'n',
+    e: 'w',
+    w: 'e',
+  };
   const STATUS_KEYS = ['bleed', 'fire', 'poison', 'dark_drain'];
   const STATUS_STYLES = {
     bleed: { color: '#ff4f6d', textColor: '#ff5f5f' },
@@ -2327,19 +2345,7 @@
 
     const roomMap = new Map();
     positions.forEach(position => {
-      const room = {
-        gx: position.x,
-        gy: position.y,
-        type: 'combat',
-        doors: { n: false, s: false, e: false, w: false },
-        explored: false,
-        visited: false,
-        cleared: false,
-        bossStarted: false,
-        challengeStarted: false,
-        challengeRewardSpawned: false,
-        challengeFailed: false,
-      };
+      const room = createRoomRecord(position);
       rooms.push(room);
       roomMap.set(`${position.x},${position.y}`, room);
     });
@@ -2380,6 +2386,7 @@
     if (shopCandidate && nextRandom('world') < 0.7) shopCandidate.type = 'shop';
     const challengeCandidate = pool.find(room => room.type === 'combat');
     if (challengeCandidate && floor >= 2 && floor < MAX_FLOOR && nextRandom('world') < 0.42) challengeCandidate.type = 'challenge';
+    assignSecretRoom(roomMap);
     rooms.forEach(decorateRoomData);
 
     player.x = START_X;
@@ -2390,6 +2397,10 @@
   }
 
   function decorateRoomData(room) {
+    room.enemies = [];
+    room.projectiles = [];
+    room.chests = [];
+    room.pickups = [];
     room.destructibles = [];
     room.hazards = [];
     room.shopOffers = [];
@@ -2397,6 +2408,32 @@
     room.structures = [];
     room.decorations = [];
     if (room.type === 'start') return;
+
+    if (room.type === 'secret') {
+      room.cleared = true;
+      room.decorations.push(
+        { kind: 'banner', x: ROOM_W / 2 - 110, y: ROOM_H / 2 - 92, r: 14 },
+        { kind: 'banner', x: ROOM_W / 2 + 110, y: ROOM_H / 2 - 92, r: 14 },
+        { kind: 'crack', x: ROOM_W / 2, y: ROOM_H / 2 + 118, r: 32 },
+      );
+      if (room.secretKind === 'warp') {
+        const deltaPool = floor <= 2 ? [1, 2] : floor >= MAX_FLOOR - 1 ? [-2, -1] : [-2, -1, 1, 2];
+        const delta = deltaPool[irand(0, deltaPool.length - 1, 'world')];
+        room.pickups.push({
+          x: ROOM_W / 2,
+          y: ROOM_H / 2,
+          type: 'secretWarp',
+          delta,
+          targetFloor: clamp(floor + delta, 1, MAX_FLOOR),
+        });
+      } else {
+        const offerPool = shuffle(['relic', 'vitality', 'wealth'], 'world');
+        room.pickups.push(createSecretVendorOffer(offerPool[0], ROOM_W / 2 - 110, ROOM_H / 2 + 26));
+        room.pickups.push(createSecretVendorOffer(offerPool[1], ROOM_W / 2, ROOM_H / 2 - 18));
+        room.pickups.push(createSecretVendorOffer(offerPool[2], ROOM_W / 2 + 110, ROOM_H / 2 + 26));
+      }
+      return;
+    }
 
     decorateRoomStructures(room);
 
@@ -2452,6 +2489,12 @@
         hidden: true,
       });
     }
+
+    Object.entries(room.secretPassages || {}).forEach(([dir, passage]) => {
+      const targetRoom = findRoomAt(passage.targetGx, passage.targetGy);
+      const wall = createSecretWall(dir, targetRoom);
+      if (wall) room.destructibles.push(wall);
+    });
 
     if (room.type === 'shop') {
       room.shopOffers = [
@@ -2586,6 +2629,112 @@
     return companion;
   }
 
+  function createRoomRecord(position, overrides = {}) {
+    return {
+      gx: position.x,
+      gy: position.y,
+      type: 'combat',
+      doors: { n: false, s: false, e: false, w: false },
+      secretPassages: {},
+      secret: false,
+      explored: false,
+      visited: false,
+      cleared: false,
+      bossStarted: false,
+      challengeStarted: false,
+      challengeRewardSpawned: false,
+      challengeFailed: false,
+      ...overrides,
+    };
+  }
+
+  function findRoomAt(gx, gy) {
+    return rooms.find(room => room.gx === gx && room.gy === gy) || null;
+  }
+
+  function getConnectedRoom(room, direction) {
+    if (!room || !direction) return null;
+    const secretPassage = room.secretPassages?.[direction];
+    if (secretPassage?.open) {
+      return findRoomAt(secretPassage.targetGx, secretPassage.targetGy);
+    }
+    if (!room.doors?.[direction]) return null;
+    const vector = DIRECTION_VECTORS[direction];
+    return vector ? findRoomAt(room.gx + vector.dx, room.gy + vector.dy) : null;
+  }
+
+  function hasRoomExit(room, direction) {
+    return !!getConnectedRoom(room, direction);
+  }
+
+  function setSecretPassageOpen(room, direction, open = true) {
+    const passage = room?.secretPassages?.[direction];
+    if (!passage) return;
+    passage.open = !!open;
+    const targetRoom = findRoomAt(passage.targetGx, passage.targetGy);
+    const reverse = OPPOSITE_DIRECTION[direction];
+    if (targetRoom?.secretPassages?.[reverse]) {
+      targetRoom.secretPassages[reverse].open = !!open;
+    }
+  }
+
+  function createSecretWall(direction, targetRoom) {
+    if (!targetRoom) return null;
+    const position = {
+      n: { x: ROOM_W / 2, y: 48 },
+      s: { x: ROOM_W / 2, y: ROOM_H - 48 },
+      e: { x: ROOM_W - 48, y: ROOM_H / 2 },
+      w: { x: 48, y: ROOM_H / 2 },
+    }[direction];
+    if (!position) return null;
+    return {
+      kind: 'secret_wall',
+      x: position.x,
+      y: position.y,
+      r: 22,
+      hp: 2,
+      broken: false,
+      secretDir: direction,
+      targetGx: targetRoom.gx,
+      targetGy: targetRoom.gy,
+    };
+  }
+
+  function createSecretVendorOffer(kind, x, y) {
+    if (kind === 'relic') {
+      return { x, y, type: 'secretVendor', offerKind: 'relic', cost: 1, label: 'Relic' };
+    }
+    if (kind === 'vitality') {
+      return { x, y, type: 'secretVendor', offerKind: 'vitality', cost: 1, label: 'Vital' };
+    }
+    return { x, y, type: 'secretVendor', offerKind: 'wealth', cost: 2, label: 'Wealth' };
+  }
+
+  function assignSecretRoom(roomMap) {
+    const anchors = shuffle(rooms.filter(room => !room.secret && ['combat', 'treasure', 'shop'].includes(room.type)), 'world');
+    for (const anchor of anchors) {
+      const dirs = shuffle([...DIRECTIONS], 'world');
+      for (const dir of dirs) {
+        const vector = DIRECTION_VECTORS[dir];
+        const nx = anchor.gx + vector.dx;
+        const ny = anchor.gy + vector.dy;
+        if (nx < 0 || nx > 8 || ny < 0 || ny > 8) continue;
+        if (roomMap.get(`${nx},${ny}`)) continue;
+        const secretRoom = createRoomRecord({ x: nx, y: ny }, {
+          type: 'secret',
+          secret: true,
+          cleared: true,
+          secretKind: nextRandom('world') < 0.5 ? 'warp' : 'vendor',
+        });
+        anchor.secretPassages[dir] = { targetGx: nx, targetGy: ny, open: false };
+        secretRoom.secretPassages[OPPOSITE_DIRECTION[dir]] = { targetGx: anchor.gx, targetGy: anchor.gy, open: false };
+        rooms.push(secretRoom);
+        roomMap.set(`${nx},${ny}`, secretRoom);
+        return;
+      }
+    }
+  }
+
   function findFarthestRoom(startRoom, roomMap) {
     const queue = [startRoom];
     const distances = new Map([[startRoom, 0]]);
@@ -2696,6 +2845,10 @@
       for (let index = 0; index < chestCount; index += 1) {
         chests.push({ x: 260 + index * 180, y: ROOM_H / 2, open: false });
       }
+    }
+
+    if (room.secret) {
+      particles.push({ x: ROOM_W / 2, y: ROOM_H / 2 - 24, life: 1.1, text: 'SECRET ROOM', c: '#8dd4ff' });
     }
 
     if (room.type === 'ladder') {
@@ -2812,6 +2965,133 @@
     }
     
     return null;
+  }
+
+  function compactEnemyList() {
+    if (!Array.isArray(enemies) || enemies.length === 0) return;
+    const before = enemies.length;
+    enemies = enemies.filter(enemy => enemy && typeof enemy === 'object');
+    if (enemies.length !== before) syncCurrentRoomState();
+  }
+
+  function getCoverObstacles() {
+    const obstacleRects = structures.map(structure => ({
+      x: structure.x - structure.w / 2,
+      y: structure.y - structure.h / 2,
+      w: structure.w,
+      h: structure.h,
+    }));
+    destructibles.forEach(prop => {
+      if (prop.broken || prop.hidden) return;
+      if (prop.kind !== 'wall' && prop.kind !== 'secret_wall') return;
+      obstacleRects.push({
+        x: prop.x - prop.r,
+        y: prop.y - prop.r,
+        w: prop.r * 2,
+        h: prop.r * 2,
+      });
+    });
+    return obstacleRects;
+  }
+
+  function lineIntersectsRect(x1, y1, x2, y2, rect, padding = 0) {
+    const minX = rect.x - padding;
+    const minY = rect.y - padding;
+    const maxX = rect.x + rect.w + padding;
+    const maxY = rect.y + rect.h + padding;
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    let t0 = 0;
+    let t1 = 1;
+    const checks = [
+      [-dx, x1 - minX],
+      [dx, maxX - x1],
+      [-dy, y1 - minY],
+      [dy, maxY - y1],
+    ];
+    for (const [p, q] of checks) {
+      if (p === 0) {
+        if (q < 0) return false;
+        continue;
+      }
+      const ratio = q / p;
+      if (p < 0) {
+        if (ratio > t1) return false;
+        if (ratio > t0) t0 = ratio;
+      } else {
+        if (ratio < t0) return false;
+        if (ratio < t1) t1 = ratio;
+      }
+    }
+    return true;
+  }
+
+  function hasLineOfSight(ax, ay, bx, by) {
+    return !getCoverObstacles().some(rect => lineIntersectsRect(ax, ay, bx, by, rect, 3));
+  }
+
+  function findEnemyCoverTarget(enemy, preferredRange = 250) {
+    if (!enemy || !player) return null;
+    const obstacles = getCoverObstacles();
+    if (!obstacles.length) return null;
+    let best = null;
+    obstacles.forEach(rect => {
+      const cx = rect.x + rect.w / 2;
+      const cy = rect.y + rect.h / 2;
+      const awayX = cx - player.x;
+      const awayY = cy - player.y;
+      const awayLength = Math.hypot(awayX, awayY) || 1;
+      const nx = awayX / awayLength;
+      const ny = awayY / awayLength;
+      const px = -ny;
+      const py = nx;
+      const baseOffset = Math.max(rect.w, rect.h) * 0.55 + enemy.r + 18;
+      const sideOffset = Math.min(Math.max(rect.w, rect.h) * 0.32, 22);
+      [
+        { side: 0, depth: baseOffset },
+        { side: sideOffset, depth: baseOffset + 8 },
+        { side: -sideOffset, depth: baseOffset + 8 },
+      ].forEach(sample => {
+        const targetX = clamp(cx + nx * sample.depth + px * sample.side, WALL + enemy.r, ROOM_W - WALL - enemy.r);
+        const targetY = clamp(cy + ny * sample.depth + py * sample.side, WALL + enemy.r, ROOM_H - WALL - enemy.r);
+        if (isBlocked(targetX, targetY, enemy.r)) return;
+        if (!lineIntersectsRect(player.x, player.y, targetX, targetY, rect, 6)) return;
+        const enemyDistance = dist(enemy.x, enemy.y, targetX, targetY);
+        const playerDistance = dist(player.x, player.y, targetX, targetY);
+        if (enemyDistance > 360) return;
+        const score = enemyDistance + Math.abs(playerDistance - preferredRange) * 0.55;
+        if (!best || score < best.score) {
+          best = { x: targetX, y: targetY, score };
+        }
+      });
+    });
+    return best;
+  }
+
+  function trySteerEnemyToCover(enemy, dt, preferredRange = 250, accel = 3.2) {
+    if (!enemy || !player) return false;
+    enemy.coverCheckCd = Math.max(0, Number(enemy.coverCheckCd || 0) - dt);
+    const hasSight = hasLineOfSight(enemy.x, enemy.y, player.x, player.y);
+    const coverTarget = enemy.coverTarget;
+    const needsNewTarget = !coverTarget
+      || enemy.coverCheckCd <= 0
+      || dist(enemy.x, enemy.y, coverTarget.x, coverTarget.y) < 18
+      || !hasSight;
+    if (needsNewTarget) {
+      enemy.coverCheckCd = 0.35;
+      enemy.coverTarget = hasSight ? findEnemyCoverTarget(enemy, preferredRange) : null;
+    }
+    if (!enemy.coverTarget) return false;
+    const dx = enemy.coverTarget.x - enemy.x;
+    const dy = enemy.coverTarget.y - enemy.y;
+    const distance = Math.hypot(dx, dy) || 1;
+    if (distance < 16) {
+      enemy.vx *= 0.8;
+      enemy.vy *= 0.8;
+      return true;
+    }
+    steerEnemy(enemy, dx / distance, dy / distance, enemy.speed, accel, dt);
+    return true;
   }
 
   function getMiniBossSpawnChance(roomType = 'combat') {
@@ -3008,9 +3288,9 @@
     const gameMinutes = gameElapsedTime / 60;
     const loopNumber = Math.max(1, Math.floor((floor - 1) / 10) + 1);
     const floorInLoop = ((floor - 1) % 10) + 1;
-    const floorMultiplier = 1 + (floorInLoop - 1) * 0.14;
-    const loopMultiplier = 1 + (loopNumber - 1) * 0.32;
-    const timerMultiplier = 1 + gameMinutes * 0.12;
+    const floorMultiplier = 1 + (floorInLoop - 1) * ENEMY_SCALING.floor;
+    const loopMultiplier = 1 + (loopNumber - 1) * ENEMY_SCALING.loop;
+    const timerMultiplier = 1 + gameMinutes * ENEMY_SCALING.minute;
     const difficultyMultiplier = isBossType(type) ? difficulty.bossStatMultiplier : difficulty.statMultiplier;
     const combinedScaleFactor = floorMultiplier * loopMultiplier * timerMultiplier * difficultyMultiplier;
     result.hp = Math.round(result.hp * combinedScaleFactor);
@@ -3187,9 +3467,6 @@
       base.attackCd = 1.2;
       base.phase = 1;
     } else {
-      const scale = 1 + (floor - 1) * 0.14;
-      base.hp = Math.round(base.hp * scale);
-      base.max = base.hp;
       if (eliteAllowed) {
         base.hp = Math.round(base.hp * 1.35);
         base.max = base.hp;
@@ -3769,6 +4046,7 @@
     const damage = godTimer > 0 ? 56 : ATTACKS.melee.damage;
     for (let index = enemies.length - 1; index >= 0; index -= 1) {
       const enemy = enemies[index];
+      if (!enemy) continue;
       const distance = dist(player.x, player.y, enemy.x, enemy.y);
       if (distance > ATTACKS.melee.range + enemy.r) continue;
       const targetAngle = Math.atan2(enemy.y - player.y, enemy.x - player.x);
@@ -3836,6 +4114,7 @@
       const end = getBeamEnd(player.x, player.y, angle, range);
       for (let index = enemies.length - 1; index >= 0; index -= 1) {
         const enemy = enemies[index];
+        if (!enemy) continue;
         if (!beamHitsCircle(player.x, player.y, end.x, end.y, enemy.x, enemy.y, enemy.r + 6)) continue;
         const beamDamage = (laserMode === 'god_sweep' ? 24 : godTimer > 0 ? 16 : ATTACKS.laser.damage) * (itemStats.beamDamageMultiplier || 1);
         hitEnemy(enemy, beamDamage, angle, laserMode === 'god_sweep' ? 120 : 60, '#f0f');
@@ -3884,6 +4163,7 @@
     particles.push({ x: player.x, y: player.y, life: 0.4, ring: smashRadius - 30, c: '#ff00aa' });
     for (let index = enemies.length - 1; index >= 0; index -= 1) {
       const enemy = enemies[index];
+      if (!enemy) continue;
       const distance = dist(player.x, player.y, enemy.x, enemy.y);
       if (distance > smashRadius + enemy.r) continue;
       const angle = Math.atan2(enemy.y - player.y, enemy.x - player.x);
@@ -3959,6 +4239,7 @@
     const angle = Math.atan2(mouse.worldY - player.y, mouse.worldX - player.x);
     for (let index = enemies.length - 1; index >= 0; index -= 1) {
       const enemy = enemies[index];
+      if (!enemy) continue;
       const distance = dist(player.x, player.y, enemy.x, enemy.y);
       if (distance > 110 + enemy.r) continue;
       const targetAngle = Math.atan2(enemy.y - player.y, enemy.x - player.x);
@@ -3978,6 +4259,7 @@
     const physicalDamage = 20;
     for (let index = enemies.length - 1; index >= 0; index -= 1) {
       const enemy = enemies[index];
+      if (!enemy) continue;
       const distance = dist(player.x, player.y, enemy.x, enemy.y);
       if (distance > ATTACKS.melee.range + enemy.r + 4) continue;
       const targetAngle = Math.atan2(enemy.y - player.y, enemy.x - player.x);
@@ -4036,6 +4318,7 @@
     let bestDist = radius;
 
     enemies.forEach(enemy => {
+      if (!enemy) return;
       if (exclude.has(enemy)) return;
       const d = dist(x, y, enemy.x, enemy.y);
       if (d < bestDist) {
@@ -4191,6 +4474,7 @@
 
   function applyStatusInRadius(x, y, radius, statusKey, stacks, duration, sourceEnemy = null) {
     enemies.forEach(enemy => {
+      if (!enemy) return;
       if (sourceEnemy && enemy === sourceEnemy) return;
       if (dist(x, y, enemy.x, enemy.y) > radius + enemy.r) return;
       applyStatus(enemy, statusKey, stacks, duration);
@@ -4291,10 +4575,17 @@
     return current + Math.sign(delta) * maxStep;
   }
 
+  function rollEnemyBeamBias(enemy, maxError = 0.14) {
+    if (!enemy) return 0;
+    const bias = (nextRandom('encounter') - 0.5) * 2 * maxError;
+    enemy.beamAimBias = bias;
+    return bias;
+  }
+
   function aimEnemyBeam(enemy, dt, turnRate) {
     if (!player || turnRate <= 0) return;
-    const targetAngle = Math.atan2(player.y - enemy.y, player.x - enemy.x);
-    enemy.beamAngle = turnAngleToward(enemy.beamAngle, targetAngle, turnRate * dt);
+    const targetAngle = Math.atan2(player.y - enemy.y, player.x - enemy.x) + Number(enemy.beamAimBias || 0);
+    enemy.beamAngle = turnAngleToward(enemy.beamAngle, targetAngle, turnRate * dt * 0.72);
   }
 
   function tickEnemyBeam(enemy, dt, config = {}) {
@@ -4313,7 +4604,7 @@
     enemy.beamTick -= dt;
     enemy.vx *= speedDamp;
     enemy.vy *= speedDamp;
-    if (turnRate > 0) aimEnemyBeam(enemy, dt, turnRate);
+    if (turnRate > 0) aimEnemyBeam(enemy, dt, turnRate * 0.55);
     if (typeof onTick === 'function') onTick(enemy, dt);
     if (enemy.beamTick <= 0) {
       enemy.beamTick = tick;
@@ -4324,6 +4615,7 @@
       }
     }
     if (enemy.beamTime <= 0) {
+      enemy.beamAimBias = 0;
       if (typeof onEnd === 'function') onEnd(enemy);
       return true;
     }
@@ -4529,6 +4821,7 @@
 
   function update(dt) {
     const itemStats = getItemStats();
+    compactEnemyList();
     gameElapsedTime += dt;
     lavaAnimTime += dt;
     floorTransitionTime += dt;
@@ -4637,6 +4930,7 @@
     let totalBleed = 0;
     for (let index = enemies.length - 1; index >= 0; index -= 1) {
       const enemy = enemies[index];
+      if (!enemy) continue;
       enemy.attackCd = Math.max(0, enemy.attackCd - dt);
       enemy.stun = Math.max(0, enemy.stun - dt);
       enemy.inv = Math.max(0, enemy.inv - dt);
@@ -4749,7 +5043,11 @@
     const desired = hpPct < 0.35 ? 360 : 270;
     const retreat = hpPct < 0.35 && distance < desired ? -1 : 1;
     const direction = distance < desired - 24 ? -retreat : distance > desired + 24 ? retreat : 0;
-    steerEnemy(enemy, dx / distance * direction, dy / distance * direction, enemy.speed, 2.5, dt);
+    if (enemy.attackCd > 0.45 && trySteerEnemyToCover(enemy, dt, desired, 2.6)) {
+      // Hold cover while the beam is unavailable instead of idling in open sight.
+    } else {
+      steerEnemy(enemy, dx / distance * direction, dy / distance * direction, enemy.speed, 2.5, dt);
+    }
 
     if (enemy.windup > 0) {
       enemy.windup -= dt;
@@ -4778,7 +5076,7 @@
 
     if (enemy.attackCd <= 0 && distance < 430) {
       enemy.windup = 0.86 / tuning.reaction;
-      enemy.beamAngle = Math.atan2(dy, dx);
+      enemy.beamAngle = Math.atan2(dy, dx) + rollEnemyBeamBias(enemy, 0.18);
       enemy.attackCd = 2.9 * tuning.rangedCadence;
     }
   }
@@ -4894,7 +5192,11 @@
 
     const desired = 290;
     const direction = distance < desired - 20 ? -1 : distance > desired + 20 ? 1 : 0;
-    steerEnemy(enemy, dx / distance * direction, dy / distance * direction, enemy.speed, 3.6, dt);
+    if (enemy.attackCd > 0.35 && trySteerEnemyToCover(enemy, dt, desired, 3.8)) {
+      // Snipers should relocate behind obstacles between shots.
+    } else {
+      steerEnemy(enemy, dx / distance * direction, dy / distance * direction, enemy.speed, 3.6, dt);
+    }
 
     if (enemy.attackCd <= 0) {
       if (distance <= 74) {
@@ -4964,7 +5266,11 @@
 
     const desired = 250;
     const direction = distance < desired - 24 ? -1 : distance > desired + 18 ? 1 : 0;
-    steerEnemy(enemy, dx / distance * direction, dy / distance * direction, enemy.speed, 3.9, dt);
+    if (enemy.attackCd > 0.3 && trySteerEnemyToCover(enemy, dt, desired, 4.1)) {
+      // Machine gunners should burst, then duck back toward hard cover.
+    } else {
+      steerEnemy(enemy, dx / distance * direction, dy / distance * direction, enemy.speed, 3.9, dt);
+    }
 
     if (enemy.attackCd <= 0) {
       if (distance < 90) {
@@ -5042,7 +5348,11 @@
 
     const desired = 260;
     const direction = distance < desired - 30 ? -1 : distance > desired + 20 ? 1 : 0;
-    steerEnemy(enemy, dx / distance * direction, dy / distance * direction, enemy.speed, 3.1, dt);
+    if (enemy.attackCd > 0.4 && trySteerEnemyToCover(enemy, dt, desired, 3.2)) {
+      // Summoners get time to reposition while their beam is cooling down.
+    } else {
+      steerEnemy(enemy, dx / distance * direction, dy / distance * direction, enemy.speed, 3.1, dt);
+    }
 
     enemy.summonCd = Math.max(0, enemy.summonCd - dt);
     if (enemy.summonCd <= 0) {
@@ -5060,7 +5370,7 @@
 
     if (enemy.attackCd <= 0 && distance < 360) {
       enemy.windup = 0.6 / tuning.reaction;
-      enemy.beamAngle = Math.atan2(dy, dx);
+      enemy.beamAngle = Math.atan2(dy, dx) + rollEnemyBeamBias(enemy, 0.17);
       enemy.attackCd = 2.6 * tuning.rangedCadence;
     }
 
@@ -5125,7 +5435,11 @@
 
     const desired = nearestWounded ? 120 : 260;
     const direction = distance < desired - 18 ? -1 : distance > desired + 24 ? 1 : 0;
-    steerEnemy(enemy, dx / distance * direction, dy / distance * direction, enemy.speed, 2.8, dt);
+    if (!nearestWounded && enemy.attackCd > 0.4 && trySteerEnemyToCover(enemy, dt, 250, 2.9)) {
+      // Healers without an active support target can play safer angles.
+    } else {
+      steerEnemy(enemy, dx / distance * direction, dy / distance * direction, enemy.speed, 2.8, dt);
+    }
 
     enemy.supportCd = Math.max(0, enemy.supportCd - dt);
     if (enemy.supportCd <= 0) {
@@ -5150,7 +5464,7 @@
 
     if (enemy.attackCd <= 0 && !nearestWounded && distance < 350) {
       enemy.windup = 0.54 / tuning.reaction;
-      enemy.beamAngle = Math.atan2(player.y - enemy.y, player.x - enemy.x);
+      enemy.beamAngle = Math.atan2(player.y - enemy.y, player.x - enemy.x) + rollEnemyBeamBias(enemy, 0.16);
       enemy.attackCd = 2.8 * tuning.rangedCadence;
     }
 
@@ -5171,7 +5485,11 @@
     } else {
       const desired = 300;
       const direction = distance < desired - 26 ? -1 : distance > desired + 18 ? 1 : 0;
-      steerEnemy(enemy, dx / distance * direction, dy / distance * direction, enemy.speed, 2.4, dt);
+      if (enemy.attackCd > 0.45 && trySteerEnemyToCover(enemy, dt, desired, 2.5)) {
+        // Spawners should avoid open lanes while waiting on their beam.
+      } else {
+        steerEnemy(enemy, dx / distance * direction, dy / distance * direction, enemy.speed, 2.4, dt);
+      }
     }
 
     enemy.bossSpawnTimer = Math.max(0, enemy.bossSpawnTimer - dt);
@@ -5197,7 +5515,7 @@
 
     if (enemy.attackCd <= 0 && distance < 420) {
       enemy.windup = 0.68 / tuning.reaction;
-      enemy.beamAngle = Math.atan2(dy, dx);
+      enemy.beamAngle = Math.atan2(dy, dx) + rollEnemyBeamBias(enemy, 0.16);
       enemy.attackCd = 3.1 * tuning.rangedCadence;
     }
 
@@ -5430,10 +5748,14 @@
 
     const desired = 230;
     const direction = distance < desired - 25 ? -1 : distance > desired + 25 ? 1 : 0;
-    steerEnemy(enemy, dx / distance * direction, dy / distance * direction, enemy.speed, 3.2, dt);
+    if (enemy.attackCd > 0.35 && trySteerEnemyToCover(enemy, dt, desired, 3.3)) {
+      // Laser units should search for cover when their firing lane is not active.
+    } else {
+      steerEnemy(enemy, dx / distance * direction, dy / distance * direction, enemy.speed, 3.2, dt);
+    }
     if (enemy.attackCd <= 0 && distance < 390) {
       enemy.windup = 0.78 / tuning.reaction;
-      enemy.beamAngle = Math.atan2(dy, dx);
+      enemy.beamAngle = Math.atan2(dy, dx) + rollEnemyBeamBias(enemy, 0.2);
       enemy.attackCd = 2.8 * tuning.rangedCadence;
     }
   }
@@ -5569,7 +5891,7 @@
       } else if (enemy.mirrorLaserCd <= 0 && distance > 120) {
         enemy.state = 'mirrorLaser';
         enemy.windup = 0.52;
-        enemy.beamAngle = angleToPlayer;
+        enemy.beamAngle = angleToPlayer + rollEnemyBeamBias(enemy, 0.14);
       } else if (enemy.mirrorDashCd <= 0 && distance > 180) {
         enemy.state = 'mirrorDash';
         enemy.windup = 0.18;
@@ -5585,12 +5907,22 @@
     const type = currentRoom.challengeType || 'mirror';
 
     if (type === 'stillness') {
-      const anchorX = Number(currentRoom.challengeData?.anchorX || player.x);
-      const anchorY = Number(currentRoom.challengeData?.anchorY || player.y);
       const graceTimer = Math.max(0, Number(currentRoom.challengeData?.graceTimer || 0));
       currentRoom.challengeData.graceTimer = Math.max(0, graceTimer - dt);
-      const stable = dist(player.x, player.y, anchorX, anchorY) <= 18 && Math.hypot(player.vx, player.vy) <= 22;
-      if (stable) {
+      const bindings = window.NeoSettings?.getBindings();
+      const rightKey = bindings ? bindings.right : 'd';
+      const leftKey = bindings ? bindings.left : 'a';
+      const downKey = bindings ? bindings.down : 's';
+      const upKey = bindings ? bindings.up : 'w';
+      const dashKey = bindings ? bindings.dash : 'shift';
+      const moved = !!(
+        keys[rightKey] || keys.arrowright
+        || keys[leftKey] || keys.arrowleft
+        || keys[downKey] || keys.arrowdown
+        || keys[upKey] || keys.arrowup
+        || keys[dashKey]
+      );
+      if (!moved) {
         currentRoom.challengeTimer = Math.max(0, (currentRoom.challengeTimer || 0) - dt);
         if (currentRoom.challengeTimer <= 0) completeChallengeTrial('STILLNESS HELD');
       } else if (graceTimer <= 0) {
@@ -5789,12 +6121,12 @@
       if ((phaseTwo && distance > 250 && roll > (phaseFour ? 0.46 : 0.52)) || (!phaseTwo && distance > 300 && roll > 0.68)) {
         enemy.state = 'godSweep';
         enemy.windup = 1.15 / (tuning.reaction * reactionMult);
-        enemy.beamAngle = Math.atan2(dy, dx);
+        enemy.beamAngle = Math.atan2(dy, dx) + rollEnemyBeamBias(enemy, 0.1);
         enemy.sweepDir = nextRandom('encounter') < 0.5 ? -1 : 1;
       } else if (roll > (phaseFive ? 0.16 : phaseTwo ? 0.26 : 0.42)) {
         enemy.state = 'godLaser';
         enemy.windup = 0.82 / (tuning.reaction * reactionMult);
-        enemy.beamAngle = Math.atan2(dy, dx);
+        enemy.beamAngle = Math.atan2(dy, dx) + rollEnemyBeamBias(enemy, 0.12);
       } else if (roll > (phaseFour ? 0.04 : phaseTwo ? 0.08 : 0.18)) {
         enemy.state = 'godSwordRing';
         enemy.windup = 0.6 / (tuning.reaction * reactionMult);
@@ -5919,6 +6251,7 @@
   function blastRadius(x, y, radius, damage, color, sourceEnemy = null) {
     for (let index = enemies.length - 1; index >= 0; index -= 1) {
       const enemy = enemies[index];
+      if (!enemy) continue;
       if (sourceEnemy && enemy === sourceEnemy) continue;
       if (dist(x, y, enemy.x, enemy.y) > radius + enemy.r) continue;
       hitEnemy(enemy, damage, Math.atan2(enemy.y - y, enemy.x - x), 180, color);
@@ -5932,6 +6265,7 @@
     let best = null;
     let bestDist = radius;
     enemies.forEach(enemy => {
+      if (!enemy) return;
       if (exclude.has(enemy)) return;
       const d = dist(x, y, enemy.x, enemy.y);
       if (d < bestDist) {
@@ -5960,7 +6294,7 @@
         continue;
       }
       if (!projectile.enemy) {
-        const target = enemies.find(enemy => dist(projectile.x, projectile.y, enemy.x, enemy.y) <= projectile.r + enemy.r);
+        const target = enemies.find(enemy => enemy && dist(projectile.x, projectile.y, enemy.x, enemy.y) <= projectile.r + enemy.r);
         if (target) {
           hitEnemy(target, projectile.damage || 16, Math.atan2(projectile.vy, projectile.vx), 90, projectile.kind === 'fireball' ? '#ff8844' : '#a857ff');
           if (projectile.kind === 'fireball') {
@@ -6103,6 +6437,11 @@
         if (other.hidden) other.hidden = false;
       });
     }
+    if (prop.kind === 'secret_wall') {
+      const dir = prop.secretDir;
+      if (dir) setSecretPassageOpen(currentRoom, dir, true);
+      particles.push({ x: prop.x, y: prop.y - 18, life: 0.9, text: 'SECRET', c: '#8dd4ff' });
+    }
   }
 
   function spawnDamagePopup(x, y, amount, opts = {}) {
@@ -6233,6 +6572,48 @@
         return;
       }
 
+      if (pickup.type === 'secretWarp') {
+        floor = clamp(Number(pickup.targetFloor || floor), 1, MAX_FLOOR);
+        refreshFloorChargeStates();
+        metaProgress.bestFloor = Math.max(metaProgress.bestFloor, floor);
+        persistMetaSoon();
+        showFloorTransition = true;
+        floorTransitionTime = 0;
+        generateFloor();
+        scheduleRunSave();
+        return;
+      }
+
+      if (pickup.type === 'secretVendor') {
+        const cost = Math.max(1, Number(pickup.cost || 1));
+        const crystals = Number(metaProgress.loopCrystals || 0);
+        if (pickup.bought) {
+          pickups.splice(index, 1);
+          continue;
+        }
+        if (crystals < cost) {
+          const now = Date.now();
+          if (!pickup.lastDeniedAt || now - pickup.lastDeniedAt > 450) {
+            particles.push({ x: pickup.x, y: pickup.y - 20, life: 0.85, text: `${cost} LC`, c: '#ffb1b1' });
+            pickup.lastDeniedAt = now;
+          }
+          continue;
+        }
+        metaProgress.loopCrystals = crystals - cost;
+        pickup.bought = true;
+        if (pickup.offerKind === 'relic') {
+          collectItem(rollItemDrop({ elite: true, stream: 'loot' }));
+        } else if (pickup.offerKind === 'vitality') {
+          player.maxHp += 20;
+          player.hp = Math.min(player.maxHp, player.hp + 60);
+          particles.push({ x: player.x, y: player.y - 20, life: 0.7, text: '+VIT', c: '#8dffbd' });
+        } else {
+          addCoins(90 + floor * 12);
+          particles.push({ x: player.x, y: player.y - 20, life: 0.7, text: 'RICH', c: '#ffd966' });
+        }
+        persistMetaSoon();
+      }
+
       if (pickup.type === 'fightGod') {
         currentRoom.bossStarted = true;
         pickups = [];
@@ -6307,10 +6688,10 @@
       && (currentRoom.type === 'boss' || currentRoom.type === 'god' || currentRoom.type === 'ladder' || CHALLENGE_ROOM_TYPES.has(currentRoom.type));
     if (!fading && !roomLocked && (enemies.length === 0 || canLeaveFight)) {
       const door =
-        player.y < WALL + 24 && currentRoom.doors.n && Math.abs(player.x - ROOM_W / 2) < DOOR / 2 ? 'n' :
-        player.y > ROOM_H - WALL - 24 && currentRoom.doors.s && Math.abs(player.x - ROOM_W / 2) < DOOR / 2 ? 's' :
-        player.x < WALL + 24 && currentRoom.doors.w && Math.abs(player.y - ROOM_H / 2) < DOOR / 2 ? 'w' :
-        player.x > ROOM_W - WALL - 24 && currentRoom.doors.e && Math.abs(player.y - ROOM_H / 2) < DOOR / 2 ? 'e' :
+        player.y < WALL + 24 && hasRoomExit(currentRoom, 'n') && Math.abs(player.x - ROOM_W / 2) < DOOR / 2 ? 'n' :
+        player.y > ROOM_H - WALL - 24 && hasRoomExit(currentRoom, 's') && Math.abs(player.x - ROOM_W / 2) < DOOR / 2 ? 's' :
+        player.x < WALL + 24 && hasRoomExit(currentRoom, 'w') && Math.abs(player.y - ROOM_H / 2) < DOOR / 2 ? 'w' :
+        player.x > ROOM_W - WALL - 24 && hasRoomExit(currentRoom, 'e') && Math.abs(player.y - ROOM_H / 2) < DOOR / 2 ? 'e' :
         null;
       if (door) startTransition(door);
     }
@@ -6334,9 +6715,7 @@
 
   function doTransition() {
     const direction = nextDoor;
-    const dx = { e: 1, w: -1, n: 0, s: 0 }[direction];
-    const dy = { e: 0, w: 0, n: -1, s: 1 }[direction];
-    const nextRoom = rooms.find(room => room.gx === currentRoom.gx + dx && room.gy === currentRoom.gy + dy);
+    const nextRoom = getConnectedRoom(currentRoom, direction);
     if (!nextRoom) return;
     enterRoom(nextRoom);
     const r = 18;
@@ -6696,10 +7075,10 @@
 
     ctx.globalCompositeOperation = 'destination-out';
     ctx.fillStyle = '#000';
-    if (currentRoom?.doors.n) ctx.fillRect((ROOM_W - DOOR) / 2, 0, DOOR, WALL + 2);
-    if (currentRoom?.doors.s) ctx.fillRect((ROOM_W - DOOR) / 2, ROOM_H - WALL - 2, DOOR, WALL + 2);
-    if (currentRoom?.doors.w) ctx.fillRect(0, (ROOM_H - DOOR) / 2, WALL + 2, DOOR);
-    if (currentRoom?.doors.e) ctx.fillRect(ROOM_W - WALL - 2, (ROOM_H - DOOR) / 2, WALL + 2, DOOR);
+    if (hasRoomExit(currentRoom, 'n')) ctx.fillRect((ROOM_W - DOOR) / 2, 0, DOOR, WALL + 2);
+    if (hasRoomExit(currentRoom, 's')) ctx.fillRect((ROOM_W - DOOR) / 2, ROOM_H - WALL - 2, DOOR, WALL + 2);
+    if (hasRoomExit(currentRoom, 'w')) ctx.fillRect(0, (ROOM_H - DOOR) / 2, WALL + 2, DOOR);
+    if (hasRoomExit(currentRoom, 'e')) ctx.fillRect(ROOM_W - WALL - 2, (ROOM_H - DOOR) / 2, WALL + 2, DOOR);
     ctx.globalCompositeOperation = 'source-over';
 
     ctx.strokeStyle = enemies.length > 0 ? 'rgba(255,102,170,0.4)' : 'rgba(0,255,255,0.4)';
@@ -6712,7 +7091,7 @@
       ['w', 0, (ROOM_H - DOOR) / 2, 0, DOOR],
       ['e', ROOM_W, (ROOM_H - DOOR) / 2, 0, DOOR],
     ].forEach(([dir, x, y, width, height]) => {
-      if (!currentRoom?.doors[dir]) return;
+      if (!hasRoomExit(currentRoom, dir)) return;
       ctx.beginPath();
       if (width) {
         ctx.moveTo(x, y);
@@ -6915,6 +7294,17 @@
         ctx.fillRect(-24, -24, 48, 48);
         ctx.strokeStyle = '#58d9ff';
         ctx.strokeRect(-24, -24, 48, 48);
+      } else if (prop.kind === 'secret_wall') {
+        ctx.fillStyle = '#16384a';
+        ctx.fillRect(-22, -22, 44, 44);
+        ctx.strokeStyle = '#8dd4ff';
+        ctx.strokeRect(-22, -22, 44, 44);
+        ctx.beginPath();
+        ctx.moveTo(-12, -12);
+        ctx.lineTo(12, 12);
+        ctx.moveTo(12, -12);
+        ctx.lineTo(-12, 12);
+        ctx.stroke();
       }
       ctx.restore();
     });
@@ -7021,6 +7411,42 @@
         ctx.font = 'bold 10px system-ui';
         ctx.textAlign = 'center';
         ctx.fillText('LOOP', 0, 3);
+      } else if (pickup.type === 'secretWarp') {
+        const color = pickup.delta >= 0 ? '#8dffcf' : '#8dd4ff';
+        ctx.strokeStyle = color;
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 20;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(0, 0, 18, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(-8, 0);
+        ctx.lineTo(8, 0);
+        ctx.moveTo(0, -8);
+        ctx.lineTo(8, 0);
+        ctx.lineTo(0, 8);
+        ctx.stroke();
+        ctx.fillStyle = color;
+        ctx.font = 'bold 10px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(`F${pickup.targetFloor}`, 0, 32);
+      } else if (pickup.type === 'secretVendor') {
+        const canAfford = Number(metaProgress.loopCrystals || 0) >= Number(pickup.cost || 0);
+        const color = canAfford ? '#aee7ff' : '#ffb1b1';
+        ctx.fillStyle = 'rgba(7,17,22,0.92)';
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 16;
+        ctx.fillRect(-22, -18, 44, 36);
+        ctx.strokeRect(-22, -18, 44, 36);
+        ctx.fillStyle = color;
+        ctx.font = 'bold 11px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(String(pickup.label || 'Offer'), 0, -2);
+        ctx.font = 'bold 10px system-ui';
+        ctx.fillText(`${pickup.cost} LC`, 0, 12);
       } else if (pickup.type === 'crown') {
         ctx.fillStyle = '#fff';
         ctx.shadowColor = '#fff';
@@ -7491,11 +7917,15 @@
     const originY = 2;
     ctx.save();
     rooms.forEach(room => {
+      if (room.secret && !room.explored && room !== currentRoom) return;
       const x = originX + room.gx * (size + gap);
       const y = originY + room.gy * (size + gap);
       if (room.type === 'ladder' && !room.explored) {
         ctx.globalAlpha = 0.55;
         ctx.fillStyle = '#fff04a';
+      } else if (room.secret && room.explored) {
+        ctx.globalAlpha = room === currentRoom ? 1 : 0.95;
+        ctx.fillStyle = room === currentRoom ? '#8dd4ff' : '#3f6b7a';
       } else if (!room.explored) {
         ctx.globalAlpha = 0.25;
         ctx.fillStyle = '#001018';
@@ -7545,6 +7975,7 @@
         ctx.lineWidth = 1;
         ctx.strokeRect(x + 0.5, y + 0.5, size - 1, size - 1);
       }
+      if (room.secret) return;
       ctx.fillStyle = 'rgba(0,255,255,0.75)';
       if (room.doors.n) ctx.fillRect(x + size / 2 - 1, y - 2, 2, 2);
       if (room.doors.s) ctx.fillRect(x + size / 2 - 1, y + size, 2, 2);
