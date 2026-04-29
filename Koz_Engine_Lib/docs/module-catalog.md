@@ -152,26 +152,33 @@ How to use:
 Current caveat:
 - This still contains Bargain Quest runtime knowledge and should eventually move out or be split further.
 
-### `Events/notificationCenter.js`
-
-When to use:
-- You need notification queueing, expiration, and max-count enforcement.
-
-How to use:
-- Construct `new NotificationCenter(options)`.
-- Call `enqueue()` and `dismiss()`.
-
 ### `Events/notificationManager.js`
 
 When to use:
-- You need the current DOM/p5 notification presenter.
+- You need to display game notifications with queueing, auto-expiration, and optional user actions.
 
 How to use:
-- Construct `new NotificationManager(options)`.
-- Call `log(message, type, duration, action)`.
+- Construct `new NotificationManager(options)` with optional `maxNotifications`, `colorPalette`, and timer functions.
+- Call `log(message, type, duration, action)` to display a notification.
+- Call `has(id)` to check if a notification is queued.
+- Call `list()` to get all active notifications.
+- Call `dismissAll()` to clear all notifications.
+
+Features:
+- Integrated queue management (previously separate NotificationCenter)
+- DOM/p5.js rendering with fade animations
+- Auto-expiration with customizable duration
+- Optional click actions with custom buttons
+- Automatic cleanup on overflow
+- Color customization per notification type
 
 Current caveat:
-- This is still presentation-layer code, not a pure engine service.
+- Requires p5.js `createDiv`, `select`, and `createButton` functions for rendering.
+- Falls back gracefully if p5.js is unavailable (queue only, no rendering).
+
+### `Events/notificationCenter.js` (DEPRECATED)
+
+Use `notificationManager.js` instead. This file is now a backward-compatibility shim that re-exports `NotificationManager`.
 
 ### `Events/tipTracker.js`
 

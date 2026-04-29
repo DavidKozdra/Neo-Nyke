@@ -44,7 +44,7 @@ If you want modules that are easiest to understand and safest to reuse first, st
 - `Time/countdownTimer.js`
 - `Time/dayNightCore.js`
 - `Events/eventEngine.js`
-- `Events/notificationCenter.js`
+- `Events/notificationManager.js`
 - `Events/tipTracker.js`
 - `UI/mobileInput.js`
 - `World/*` except game-specific host composition
