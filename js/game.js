@@ -507,6 +507,16 @@
       category: 'white',
       tags: ['xp'],
     },
+    scholar_cap: {
+      key: 'scholar_cap',
+      name: "Scholar's Cap",
+      shortName: 'Level Edge',
+      description: 'Deal more damage the closer you are to leveling up.',
+      rarity: 'purple',
+      color: '#b49cff',
+      category: 'purple',
+      tags: ['xp', 'damage', 'purple'],
+    },
     bandaid: {
       key: 'bandaid',
       name: 'Bandaid',
@@ -649,6 +659,7 @@
     ['keen_eye', 20],
     ['chrono_spring', 20],
     ['scholar_seal', 18],
+    ['scholar_cap', 12],
     ['bandaid', 22],
     ['push_man', 18],
     ['titan_heart', 18],
@@ -673,6 +684,7 @@
     'insurance',
     'crit_charm',
     'attack_servo',
+    'scholar_cap',
     'charged_adapter',
     'explosive_jelly',
     'dragon_orb',
@@ -1883,6 +1895,7 @@
       keen_eye: 0,
       chrono_spring: 0,
       scholar_seal: 0,
+      scholar_cap: 0,
       bandaid: 0,
       push_man: 0,
       titan_heart: 0,
@@ -3992,8 +4005,8 @@
 
     const miniBoss = spawnEnemy(type, safeSpawn.x, safeSpawn.y, canSpawnEliteEnemies());
     miniBoss.hp = Math.round(miniBoss.hp * 1.9);
-    miniBoss.max = miniBoss.hp;
-    miniBoss.dmg = Math.round(miniBoss.dmg * 1.45);
+    const equippedWeapon = getEquippedWeapon();
+    const extendingStaffEquipped = equippedWeapon === 'extending_staff';
     miniBoss.speed *= 0.94;
     miniBoss.r = Math.round(miniBoss.r * 1.08);
     miniBoss.miniBoss = true;
@@ -4002,13 +4015,49 @@
 
   function spawnWave(count, roomType = 'combat') {
     const plan = buildWavePlan(count, roomType);
+    if (extendingStaffEquipped) {
+      const previewRange = 130;
+      const previewArc = 1.45;
+      const previewX = Math.cos(aimAngle) * previewRange;
+      const previewY = Math.sin(aimAngle) * previewRange;
+
+      ctx.globalAlpha = 0.32;
+      ctx.strokeStyle = '#d8f1ff';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(aimAngle) * 18, Math.sin(aimAngle) * 18);
+      ctx.lineTo(previewX, previewY);
+      ctx.stroke();
+
+      ctx.globalAlpha = 0.18;
+      ctx.beginPath();
+      ctx.arc(0, 0, previewRange, aimAngle - previewArc, aimAngle + previewArc);
+      ctx.stroke();
+
+      ctx.globalAlpha = 0.55;
+      ctx.fillStyle = '#f3fbff';
+      ctx.beginPath();
+      ctx.arc(previewX, previewY, 4, 0, Math.PI * 2);
+      ctx.fill();
+    }
     for (let index = 0; index < plan.length; index += 1) {
-      const angle = nextRandom('encounter') * Math.PI * 2;
-      const radius = 120 + nextRandom('encounter') * 180;
-      const x = clamp(ROOM_W / 2 + Math.cos(angle) * radius, 80, ROOM_W - 80);
-      const y = clamp(ROOM_H / 2 + Math.sin(angle) * radius, 80, ROOM_H - 80);
-      const safeSpawn = findSafeEnemySpawnPoint(x, y, 15);
-      if (!safeSpawn) continue;
+      const swingRange = extendingStaffEquipped ? 130 : 55;
+      const swingArc = extendingStaffEquipped ? 1.45 : ATTACKS.melee.arc;
+      ctx.strokeStyle = extendingStaffEquipped ? '#eaf4ff' : godTimer > 0 ? '#f6e8c8' : '#d86d87';
+      ctx.lineWidth = extendingStaffEquipped ? 6 : 4;
+      ctx.globalAlpha = 0.9;
+      ctx.beginPath();
+      ctx.arc(0, 0, swingRange, player.swingA - swingArc, player.swingA + swingArc);
+      ctx.stroke();
+      if (extendingStaffEquipped) {
+        ctx.globalAlpha = 0.18;
+        ctx.fillStyle = '#eaf4ff';
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.arc(0, 0, swingRange, player.swingA - swingArc, player.swingA + swingArc);
+        ctx.closePath();
+        ctx.fill();
+      }
       const type = plan[index] || rollEnemyType();
       const eliteRoll = canSpawnEliteEnemies() && nextRandom('encounter') < getDifficultyDef().eliteChance;
       spawnEnemy(type, safeSpawn.x, safeSpawn.y, eliteRoll);
@@ -4558,6 +4607,10 @@
       };
     }
     delete playerData.relics;
+    if (playerData.items && typeof playerData.items === 'object' && Number(playerData.items.scholors_cap || 0) > 0) {
+      playerData.items.scholar_cap = Number(playerData.items.scholar_cap || 0) + Number(playerData.items.scholors_cap || 0);
+      delete playerData.items.scholors_cap;
+    }
     ITEM_KEYS.forEach(key => {
       playerData.items[key] = Number(playerData.items[key] || 0);
     });
@@ -4658,6 +4711,7 @@
     const keenEye = getItemCount('keen_eye');
     const chronoSpring = getItemCount('chrono_spring');
     const scholarSeal = getItemCount('scholar_seal');
+    const scholarCap = getItemCount('scholar_cap');
     const bandaid = getItemCount('bandaid');
     const pushMan = getItemCount('push_man');
     const explosiveJelly = getItemCount('explosive_jelly');
@@ -4674,6 +4728,7 @@
     if (oracleLens) critChance *= 2;
     critChance = clamp(critChance, 0, 0.95);
     const damageReduction = clamp(bandaid * 0.005 + shieldOfAegis * 0.2, 0, 0.85);
+    const xpProgress = clamp((player?.xpToNext || 0) > 0 ? (player?.xp || 0) / player.xpToNext : 0, 0, 1);
     return {
       bleedChance: neoKnife * 0.05,
       bleedDamageMultiplier: orbOfBlood > 0 ? 1 + orbOfBlood : 1,
@@ -4684,6 +4739,7 @@
       attackSpeedBonus: (attackServo + chronoSpring) * 0.2,
       moveSpeedMultiplier: 1 + turtleShell * 0.05,
       xpGainMultiplier: 1 + scholarSeal * 0.15,
+      levelEdgeDamageMultiplier: 1 + scholarCap * xpProgress * 0.45,
       knockbackMultiplier: 1 + pushMan * 0.18,
       aoeRadiusMultiplier: 1 + explosiveJelly,
       beamDamageMultiplier: 1 + dragonOrb * 0.35,
@@ -4828,7 +4884,9 @@
   function scaleDamageAgainstEnemy(enemy, damage) {
     const stats = getItemStats();
     const characterMultiplier = getCharacterDef().damageMultiplier || 1;
-    const powered = (damage + (player?.attackPower || 0)) * characterMultiplier;
+    const powered = (damage + (player?.attackPower || 0))
+      * characterMultiplier
+      * (stats.levelEdgeDamageMultiplier || 1);
     if (getStatusStacks(enemy, 'bleed') > 0 && stats.bleedDamageMultiplier > 1) {
       return Math.round(powered * stats.bleedDamageMultiplier);
     }
@@ -4909,6 +4967,7 @@
     if (player.weaponCooldown > 0) return false;
     const angle = Math.atan2(mouse.worldY - player.y, mouse.worldX - player.x);
     const attackSpeed = getAttackSpeedValue();
+    const itemStats = getItemStats();
     if (weaponKey === 'extending_staff') {
       fireWeaponSweep(38, 130, 1.45, 500, '#eaf4ff');
       player.weaponCooldown = 0.5;
