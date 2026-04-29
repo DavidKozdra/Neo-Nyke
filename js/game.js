@@ -4437,7 +4437,7 @@
   function getWeaponBaseCooldown(weaponKey) {
     if (weaponKey === 'extending_staff') return 0.5;
     if (weaponKey === 'hunters_bow') return 0.4;
-    if (weaponKey === 'thorns_bleed_blade') return 0.35;
+    if (weaponKey === 'thorns_bleed_blade') return ATTACKS.melee.baseCooldown;
     if (weaponKey === 'lazer_glasses') return 3.6;
     if (weaponKey === 'metao_fire_staff') return ATTACKS.melee.baseCooldown;
     if (weaponKey === 'magenta_degale') return 1.5;
@@ -4485,6 +4485,9 @@
       if (options.bleedChance > 0 && nextRandom('encounter') < options.bleedChance) {
         applyBleed(enemy, Number(options.bleedStacks || 1), Number(options.bleedDuration || 4));
       }
+      if (options.itemBleedChance > 0 && nextRandom('encounter') < options.itemBleedChance) {
+        applyBleed(enemy, 1, 5);
+      }
     }
   }
 
@@ -4505,8 +4508,9 @@
       return true;
     }
     if (weaponKey === 'thorns_bleed_blade') {
-      fireWeaponSweep(26, 76, 1.12, 240, '#ff6e8b', { bleedChance: 0.3, bleedStacks: 2, bleedDuration: 5 });
-      player.weaponCooldown = 0.35;
+      // Preserve Thorn's original slash feel: same damage/range/arc/push and bleed values.
+      fireWeaponSweep(ATTACKS.melee.damage, ATTACKS.melee.range, ATTACKS.melee.arc, ATTACKS.melee.push, '#ff6e8b', { bleedChance: 0.10, bleedStacks: 1, bleedDuration: 5, itemBleedChance: itemStats.bleedChance || 0 });
+      player.weaponCooldown = getMeleeCooldownDuration();
       return true;
     }
     if (weaponKey === 'lazer_glasses') {
