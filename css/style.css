@@ -210,6 +210,10 @@ canvas {
   transform: translateX(-50%);
   z-index: 15;
   pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
 }
 
 .timer-floor {
@@ -244,6 +248,153 @@ canvas {
 
 .timer-floor #floorDisplay {
   color: #ffd700;
+}
+
+.challenge-status {
+  min-width: 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 14px 12px;
+  background: linear-gradient(180deg, rgba(12, 18, 26, .94), rgba(8, 12, 18, .96));
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 210, 125, .42);
+  border-radius: 10px;
+  box-shadow: 0 0 22px rgba(255, 210, 125, .16), inset 0 0 16px rgba(255, 255, 255, .04);
+  color: #ffe7aa;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: .12em;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.challenge-progress {
+  width: 100%;
+  height: 10px;
+  background: rgba(26, 32, 40, .96);
+  border: 1px solid rgba(255, 210, 125, .36);
+  border-radius: 999px;
+  overflow: hidden;
+  box-shadow: inset 0 0 8px rgba(0, 0, 0, .35);
+}
+
+#challengeStatusFill {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, #ffe08a, #ff8f57);
+  box-shadow: 0 0 12px rgba(255, 180, 90, .32);
+  transition: width .08s linear;
+}
+
+.dialogue-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 24px;
+  background: linear-gradient(180deg, rgba(0, 0, 0, .08), rgba(0, 0, 0, .36));
+  z-index: 46;
+  pointer-events: auto;
+}
+
+.dialogue-box {
+  width: min(720px, calc(100vw - 32px));
+  min-height: 146px;
+  padding: 18px 22px 16px;
+  background: linear-gradient(180deg, rgba(10, 16, 24, .96), rgba(6, 10, 18, .98));
+  border: 1px solid rgba(255, 223, 150, .42);
+  border-radius: 14px;
+  box-shadow: 0 18px 44px rgba(0, 0, 0, .42), inset 0 0 18px rgba(255, 255, 255, .04);
+  color: #f4ead2;
+}
+
+.dialogue-speaker {
+  margin-bottom: 10px;
+  color: #ffd78a;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+}
+
+.dialogue-text {
+  min-height: 70px;
+  color: #f8f3ea;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.45;
+  letter-spacing: .02em;
+  text-wrap: balance;
+}
+
+.dialogue-hint {
+  margin-top: 8px;
+  color: rgba(255, 231, 185, .72);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  opacity: .8;
+}
+
+.entity-dialogue-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 38;
+  pointer-events: none;
+}
+
+.entity-dialogue-bubble {
+  position: absolute;
+  min-width: 120px;
+  max-width: 260px;
+  padding: 8px 10px 9px;
+  transform: translate(-50%, -100%);
+  border: 1px solid rgba(255, 231, 185, .34);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(9, 14, 22, .94), rgba(5, 8, 14, .98));
+  box-shadow: 0 12px 24px rgba(0, 0, 0, .32);
+  color: #f7f1e5;
+}
+
+.entity-dialogue-bubble::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -7px;
+  width: 12px;
+  height: 12px;
+  transform: translateX(-50%) rotate(45deg);
+  background: rgba(5, 8, 14, .98);
+  border-right: 1px solid rgba(255, 231, 185, .34);
+  border-bottom: 1px solid rgba(255, 231, 185, .34);
+}
+
+.entity-dialogue-bubble[data-tone="mirror"] {
+  border-color: rgba(155, 224, 255, .44);
+}
+
+.entity-dialogue-bubble[data-tone="warning"] {
+  border-color: rgba(255, 142, 110, .46);
+}
+
+.entity-dialogue-name {
+  margin-bottom: 5px;
+  color: #ffd78a;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+}
+
+.entity-dialogue-text {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.3;
+  text-align: center;
 }
 
 #objective {
@@ -1084,8 +1235,7 @@ canvas {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: radial-gradient(ellipse at center, rgba(8,5,20,.96) 0%, rgba(0,0,0,.97) 70%);
-  backdrop-filter: blur(4px);
+  background: #030610;
   text-align: center;
   padding: 20px;
 }
@@ -1103,7 +1253,7 @@ canvas {
 
 .menu-content {
   position: relative;
-  z-index: 1;
+  z-index: 2;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1118,48 +1268,96 @@ canvas {
     0 0 0 1px rgba(255,255,255,.03) inset,
     0 0 36px var(--menu-glow);
   backdrop-filter: blur(12px);
+  margin-top: 240px;
 }
 
 .hidden {
   display: none;
 }
 
-h1#menuTitle {
-  font-size: clamp(28px, 5vw, 52px);
-  margin: 0 0 6px;
-  letter-spacing: .18em;
-  color: #a0e8ff;
-  text-shadow:
-    0 0 8px rgba(60,200,255,.7),
-    0 2px 0 rgba(0,0,0,.8),
-    0 0 40px rgba(40,160,220,.4);
-  font-weight: 900;
-  text-transform: uppercase;
-  animation: titlePulse 3.5s ease-in-out infinite;
-  transform-origin: center center;
+/* sr-only: visually hidden but accessible */
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0,0,0,0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ── Cinematic title overlay ─────────────────────────────────────────── */
+.menu-cinema {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
+  justify-content: flex-start;
+  padding-top: 9vh;
+  pointer-events: none;
+  /* Sits above canvas (z:0) but below menu-content (z:2) */
 }
 
-.title-line {
-  display: block;
-  width: 100%;
-  height: 1px;
-  background: linear-gradient(90deg, rgba(80,200,255,.8), rgba(40,140,220,.8));
-  border-radius: 2px;
-  box-shadow: 0 0 12px rgba(60,180,255,.5);
+.menu-letters {
+  display: flex;
+  gap: 0;
+  margin-bottom: 12px;
 }
 
-.title-sub {
-  font-size: .6em;
-  letter-spacing: .5em;
+.menu-letter {
+  display: inline-block;
+  font-size: clamp(52px, 9vw, 110px);
+  font-weight: 900;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: #a0e8ff;
+  text-shadow:
+    0 0 12px rgba(60,200,255,.9),
+    0 0 40px rgba(40,160,220,.55),
+    0 3px 0 rgba(0,0,0,.9);
+  opacity: 0;
+  transform: translateY(-120px) scale(1.4) rotate(var(--tilt, 0deg));
+  will-change: transform, opacity;
+}
+.menu-letter.space { width: .45em; }
+
+.menu-letter.landed {
+  animation: letterLand 0.32s cubic-bezier(.16,1.4,.6,1) forwards, letterGlow 2.8s 0.4s ease-in-out infinite;
+}
+
+@keyframes letterLand {
+  to { opacity: 1; transform: translateY(0) scale(1) rotate(0deg); }
+}
+
+@keyframes letterGlow {
+  0%,100% { text-shadow: 0 0 12px rgba(60,200,255,.9), 0 0 40px rgba(40,160,220,.55), 0 3px 0 rgba(0,0,0,.9); }
+  50%      { text-shadow: 0 0 22px rgba(100,230,255,1), 0 0 70px rgba(60,190,240,.8),  0 3px 0 rgba(0,0,0,.9); }
+}
+
+.menu-subtitle-flash {
+  font-size: clamp(13px, 2.2vw, 26px);
+  font-weight: 700;
+  letter-spacing: .62em;
+  text-transform: uppercase;
   color: #60c8f0;
-  text-shadow: 0 0 12px rgba(40,160,220,.55);
-  font-weight: 400;
+  text-shadow: 0 0 18px rgba(40,160,220,.7);
+  opacity: 0;
+  transform: scaleX(1.18);
 }
 
+.menu-subtitle-flash.visible {
+  animation: subtitleFlash .55s cubic-bezier(.22,1,.36,1) forwards;
+}
+
+@keyframes subtitleFlash {
+  0%   { opacity: 0; transform: scaleX(1.18); filter: brightness(3); }
+  30%  { opacity: 1; transform: scaleX(1);    filter: brightness(1.6); }
+  100% { opacity: 1; transform: scaleX(1);    filter: brightness(1); }
+}
+
+/* keep old titlePulse keyframe in case referenced elsewhere */
 @keyframes titlePulse {
   0%   { transform: scaleX(1)    scaleY(1); }
   25%  { transform: scaleX(1.04) scaleY(.97); }
@@ -1860,16 +2058,21 @@ button.alt.danger {
 }
 
 /* Start + charSelect overlays fill the whole viewport */
+/* death/win/pause overlays need their own opaque bg since they have no canvas */
+#dead.overlay,
+#win.overlay,
+#pause.overlay {
+  background: radial-gradient(ellipse at center, rgba(8,5,20,.96) 0%, rgba(0,0,0,.97) 70%);
+  backdrop-filter: blur(4px);
+}
+
 #start.overlay,
 #charSelect.overlay {
   position: fixed;
   inset: 0;
   width: 100dvw;
   height: 100dvh;
-  background:
-    radial-gradient(circle at 50% 18%, rgba(85, 210, 255, .16), transparent 34%),
-    radial-gradient(circle at 12% 82%, rgba(34, 90, 160, .12), transparent 26%),
-    radial-gradient(ellipse at 50% 40%, rgba(10,18,32,.97) 0%, rgba(3,5,12,.99) 74%);
+  background: #030610;
 }
 
 /* Main nav buttons */

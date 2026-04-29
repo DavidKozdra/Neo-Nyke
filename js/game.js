@@ -23,6 +23,20 @@
   const KozSeededRngApi = window.KozEngine?.World?.seededRng || {};
   const KozSaveApi = window.KozEngine?.SaveLoad?.saveApi || {};
   const KozStorageDrivers = window.KozEngine?.SaveLoad?.storageDrivers || {};
+  const KozDialogueApi = window.KozEngine?.UI?.typewriterDialogue || {};
+  const KozWorldSpeechApi = window.KozEngine?.UI?.worldSpeechBubbles || {};
+  const GOD_PHASE_DIALOGUE = {
+    1: 'So you really want to do this ?',
+    2: 'All the trinkets in the world can not make a mortal a god prepare for all my wrath',
+    3: 'HOW ?',
+    4: 'IT ENDS !',
+    5: 'HAVE NO FEAR',
+  };
+  const BOSS_OPENING_DIALOGUE = {
+    queen_cult: 'Kneel and join the chorus.',
+    bulk_golem: 'Stone remembers every blow.',
+    artificer_knave: 'Run. I only need one clean hit.',
+  };
   const DIFFICULTY_ORDER = ['easy', 'medium', 'hard', 'impossible', 'god'];
   const DIFFICULTY_DEFS = {
     easy: {
@@ -41,6 +55,7 @@
       enemyReactionMultiplier: 1,
       rangedCadenceMultiplier: 1,
       supportPowerMultiplier: 1,
+      shopPriceMultiplier: 1,
     },
     medium: {
       key: 'medium',
@@ -58,6 +73,7 @@
       enemyReactionMultiplier: 1.06,
       rangedCadenceMultiplier: 0.95,
       supportPowerMultiplier: 1.08,
+      shopPriceMultiplier: 1.08,
     },
     hard: {
       key: 'hard',
@@ -75,6 +91,7 @@
       enemyReactionMultiplier: 1.12,
       rangedCadenceMultiplier: 0.9,
       supportPowerMultiplier: 1.14,
+      shopPriceMultiplier: 1.16,
     },
     impossible: {
       key: 'impossible',
@@ -92,6 +109,7 @@
       enemyReactionMultiplier: 1.2,
       rangedCadenceMultiplier: 0.82,
       supportPowerMultiplier: 1.22,
+      shopPriceMultiplier: 1.28,
     },
     god: {
       key: 'god',
@@ -109,6 +127,7 @@
       enemyReactionMultiplier: 1.28,
       rangedCadenceMultiplier: 0.74,
       supportPowerMultiplier: 1.3,
+      shopPriceMultiplier: 1.42,
     },
   };
   const CHALLENGE_DEFS = {
@@ -562,6 +581,14 @@
     metaCoinIcon: document.getElementById('metaCoinIcon'),
     metaLoopIcon: document.getElementById('metaLoopIcon'),
     centerDisplay: document.getElementById('centerDisplay'),
+    challengeStatus: document.getElementById('challengeStatus'),
+    challengeStatusLabel: document.getElementById('challengeStatusLabel'),
+    challengeStatusFill: document.getElementById('challengeStatusFill'),
+    dialogueOverlay: document.getElementById('dialogueOverlay'),
+    dialogueSpeaker: document.getElementById('dialogueSpeaker'),
+    dialogueText: document.getElementById('dialogueText'),
+    dialogueHint: document.getElementById('dialogueHint'),
+    entityDialogueLayer: document.getElementById('entityDialogueLayer'),
     playerHpFill: document.getElementById('playerHpFill'),
     playerHpTxt: document.getElementById('playerHpTxt'),
     playerXpFill: document.getElementById('playerXpFill'),
@@ -618,7 +645,7 @@
   const GameStateManagerCtor = window.KozEngine?.Core?.gameStateManager?.GameStateManager || null;
   const gameStateManager = GameStateManagerCtor ? new GameStateManagerCtor() : null;
   if (gameStateManager) {
-    ['menu', 'charselect', 'play', 'pause', 'dead', 'win'].forEach(state => gameStateManager.addState(state));
+    ['menu', 'charselect', 'play', 'dialogue', 'pause', 'dead', 'win'].forEach(state => gameStateManager.addState(state));
   }
   const uiController = createUIController(ui);
 
@@ -917,6 +944,14 @@
     });
     window.addEventListener('keydown', event => {
       const key = event.key.toLowerCase();
+      if (uiController?.isDialogueOpen?.()) {
+        keys[key] = false;
+        if (key === 'enter' || key === ' ' || key === 'escape') {
+          event.preventDefault();
+          uiController.advanceDialogue();
+        }
+        return;
+      }
       keys[key] = true;
       const b = window.NeoSettings?.getBindings();
       const inventoryKey = b ? b.inventory : 'i';
@@ -944,6 +979,10 @@
     });
     window.addEventListener('keyup', event => {
       const key = event.key.toLowerCase();
+      if (uiController?.isDialogueOpen?.()) {
+        keys[key] = false;
+        return;
+      }
       keys[key] = false;
       const b = window.NeoSettings?.getBindings();
       const inventoryKey = b ? b.inventory : 'i';
@@ -983,6 +1022,9 @@
         persistMetaSoon();
         updateCharacterSelectionUI();
       },
+      onAdvanceDialogue() {
+        uiController.advanceDialogue();
+      },
       onToggleChallenges() {
         uiController.setChallengePanelOpen(ui.challengePanel?.classList.contains('hidden'));
       },
@@ -1011,6 +1053,14 @@
         saveRunNow();
       }
     });
+  }
+
+  function clearGameplayInput() {
+    Object.keys(keys).forEach(key => {
+      keys[key] = false;
+    });
+    mouse.down = false;
+    mouse.right = false;
   }
 
   function bindPanelInput() {
@@ -1187,7 +1237,7 @@
         type: 'move',
         key: moveKey,
         bought: false,
-        cost: 34 + floor * 6 + index * 4,
+        cost: getShopMoveCost(index),
       }));
       if (isGodSweepUnlocked() && !seen.has('god_sweep') && nextRandom('loot') < 0.12) {
         const insertIndex = Math.min(offers.length, irand(0, Math.min(offers.length, 3), 'loot'));
@@ -1195,16 +1245,19 @@
           type: 'move',
           key: 'god_sweep',
           bought: false,
-          cost: 140 + floor * 12,
+          cost: getShopGodSweepCost(),
         });
       }
       currentRoom.shopMoveOffers = offers.slice(0, 4);
     }
+    refreshRoomShopCosts(currentRoom);
     return currentRoom.shopMoveOffers;
   }
 
   function renderShopPanel() {
     if (!ui.shopPanel || !player) return;
+    refreshRoomShopCosts(currentRoom);
+    shopOffers = currentRoom?.shopOffers || shopOffers;
     ui.shopCoins.textContent = String(player.coins);
     const noItemsChallenge = isChallengeActive('no_items');
     ui.shopTabs.forEach(tab => {
@@ -1263,8 +1316,8 @@
     ui.shopMoves.innerHTML = moveCards || '<div class="shop-card shop-empty"><p>No new techniques are on the rack right now.</p></div>';
 
     const heals = [
-      { id: 'small', name: 'Minor Heal', heal: 45, cost: 16 + floor * 2 },
-      { id: 'major', name: 'Major Heal', heal: 100, cost: 34 + floor * 4 },
+      { id: 'small', name: 'Minor Heal', heal: 45, cost: getShopHealCost('small') },
+      { id: 'major', name: 'Major Heal', heal: 100, cost: getShopHealCost('major') },
     ];
     const healCards = heals
       .map(heal => {
@@ -1666,6 +1719,59 @@
     return DIFFICULTY_DEFS[normalizeDifficulty(key)];
   }
 
+  function getShopPriceMultiplier(difficultyKey = selectedDifficulty) {
+    return Number(getDifficultyDef(difficultyKey)?.shopPriceMultiplier || 1);
+  }
+
+  function scaleShopPrice(baseCost, difficultyKey = selectedDifficulty) {
+    return Math.max(1, Math.round(baseCost * getShopPriceMultiplier(difficultyKey)));
+  }
+
+  function getShopPotionCost(floorValue = floor, difficultyKey = selectedDifficulty) {
+    return scaleShopPrice(18 + floorValue * 2, difficultyKey);
+  }
+
+  function getShopItemCost(itemIndex = 0, floorValue = floor, difficultyKey = selectedDifficulty) {
+    return scaleShopPrice(32 + floorValue * 4 + itemIndex * 6, difficultyKey);
+  }
+
+  function getShopMoveCost(moveIndex = 0, floorValue = floor, difficultyKey = selectedDifficulty) {
+    return scaleShopPrice(34 + floorValue * 6 + moveIndex * 4, difficultyKey);
+  }
+
+  function getShopGodSweepCost(floorValue = floor, difficultyKey = selectedDifficulty) {
+    return scaleShopPrice(140 + floorValue * 12, difficultyKey);
+  }
+
+  function getShopHealCost(kind, floorValue = floor, difficultyKey = selectedDifficulty) {
+    if (kind === 'major') return scaleShopPrice(34 + floorValue * 4, difficultyKey);
+    return scaleShopPrice(16 + floorValue * 2, difficultyKey);
+  }
+
+  function refreshRoomShopCosts(room, difficultyKey = selectedDifficulty, floorValue = floor) {
+    if (!room || room.type !== 'shop') return;
+    room.shopOffers = Array.isArray(room.shopOffers) ? room.shopOffers : [];
+    let itemIndex = 0;
+    room.shopOffers.forEach(offer => {
+      if (!offer) return;
+      if (offer.type === 'item') {
+        offer.cost = getShopItemCost(itemIndex, floorValue, difficultyKey);
+        itemIndex += 1;
+      } else if (offer.type === 'potion') {
+        offer.cost = getShopPotionCost(floorValue, difficultyKey);
+      }
+    });
+
+    if (Array.isArray(room.shopMoveOffers)) {
+      room.shopMoveOffers.forEach((offer, index) => {
+        if (!offer) return;
+        offer.cost = offer.key === 'god_sweep'
+          ? getShopGodSweepCost(floorValue, difficultyKey)
+          : getShopMoveCost(index, floorValue, difficultyKey);
+      });
+    }
+  }
+
   function getEnemyDifficultyTuning() {
     const difficulty = getDifficultyDef();
     return {
@@ -1814,6 +1920,7 @@
       currentRoom.shopOffers = Array.isArray(currentRoom.shopOffers) ? currentRoom.shopOffers : shopOffers;
       currentRoom.structures = Array.isArray(currentRoom.structures) ? currentRoom.structures : structures;
       currentRoom.decorations = Array.isArray(currentRoom.decorations) ? currentRoom.decorations : decorations;
+      refreshRoomShopCosts(currentRoom, selectedDifficulty, floor);
       enemies = currentRoom.enemies;
       projectiles = currentRoom.projectiles;
       chests = currentRoom.chests;
@@ -1898,6 +2005,7 @@
         bossStarted: false,
         challengeStarted: false,
         challengeRewardSpawned: false,
+        challengeFailed: false,
       };
       rooms.push(room);
       roomMap.set(`${position.x},${position.y}`, room);
@@ -2014,7 +2122,7 @@
 
     if (room.type === 'shop') {
       room.shopOffers = [
-        { type: 'potion', cost: 18 + floor * 2, x: ROOM_W / 2, y: ROOM_H / 2 + 88, bought: false },
+        { type: 'potion', cost: getShopPotionCost(), x: ROOM_W / 2, y: ROOM_H / 2 + 88, bought: false },
       ];
       ensureShopHasMinimumItemOffers(room, 3);
       room.shopMoveOffers = [];
@@ -2023,6 +2131,7 @@
       room.cleared = false;
       room.challengeStarted = false;
       room.challengeRewardSpawned = false;
+      room.challengeFailed = false;
       room.challengeType = rollChallengeTrialType();
       room.challengeTimer = 0;
       room.challengeTick = 0;
@@ -2238,6 +2347,7 @@
     }
     if (room.type === 'shop') {
       ensureShopHasMinimumItemOffers(room, 3);
+      refreshRoomShopCosts(room);
       shopOffers = room.shopOffers || [];
     }
     if (room.type === 'challenge') {
@@ -2342,7 +2452,7 @@
       room.shopOffers.push({
         type: 'item',
         key,
-        cost: 32 + floor * 4 + itemIndex * 6,
+        cost: getShopItemCost(itemIndex),
         x: itemSlotsX[itemIndex] ?? ROOM_W / 2,
         y: ROOM_H / 2 - 16,
         bought: false,
@@ -2512,7 +2622,11 @@
   function spawnFloorBoss() {
     const bossType = getFloorBossType();
     const safeSpawn = findSafeEnemySpawnPoint(ROOM_W / 2, ROOM_H / 2 - 40, 15);
-    if (safeSpawn) spawnEnemy(bossType, safeSpawn.x, safeSpawn.y, false);
+    if (!safeSpawn) return null;
+    const boss = spawnEnemy(bossType, safeSpawn.x, safeSpawn.y, false);
+    const line = BOSS_OPENING_DIALOGUE[bossType];
+    if (boss && line) sayOverEntity(boss, line);
+    return boss;
   }
 
   function getEnemyDifficultyMultiplier() {
@@ -2787,9 +2901,46 @@
   }
 
   function spawnGodBoss() {
-    if (enemies.some(enemy => enemy.type === 'god')) return;
+    const existing = enemies.find(enemy => enemy.type === 'god');
+    if (existing) return existing;
     const safeSpawn = findSafeEnemySpawnPoint(ROOM_W / 2, ROOM_H / 2 - 40, 15);
-    if (safeSpawn) spawnEnemy('god', safeSpawn.x, safeSpawn.y, false);
+    if (!safeSpawn) return null;
+    return spawnEnemy('god', safeSpawn.x, safeSpawn.y, false);
+  }
+
+  function playGodDialogue(phase) {
+    const line = GOD_PHASE_DIALOGUE[phase];
+    if (!line) return false;
+    setShopPanelOpen(false);
+    setInventoryPanelOpen(false);
+    clearGameplayInput();
+    return uiController.playDialogue([{ speaker: 'GOD', text: line }], { returnState: 'play' });
+  }
+
+  function sayOverEntity(entity, text, options = {}) {
+    if (!entity || !text) return null;
+    return uiController.sayAtWorldAnchor({
+      anchor: () => enemies.includes(entity) ? { x: entity.x, y: entity.y } : null,
+      speaker: options.speaker || getBossLabel(entity.type),
+      text,
+      offsetY: options.offsetY ?? (entity.r ? entity.r + 26 : 56),
+      tone: options.tone || 'boss',
+      typeSpeed: options.typeSpeed,
+      holdTime: options.holdTime,
+    });
+  }
+
+  function sayAtPosition(x, y, text, options = {}) {
+    if (!text) return null;
+    return uiController.sayAtWorldAnchor({
+      anchor: () => ({ x, y }),
+      speaker: options.speaker || '',
+      text,
+      offsetY: options.offsetY ?? 54,
+      tone: options.tone || 'warning',
+      typeSpeed: options.typeSpeed,
+      holdTime: options.holdTime,
+    });
   }
 
   function getMirrorChampionStats() {
@@ -2860,6 +3011,7 @@
     };
     enemies.push(mirror);
     particles.push({ x: mirror.x, y: mirror.y - 28, life: 1, text: 'MIRROR CHAMPION', c: '#d7f6ff' });
+    sayOverEntity(mirror, 'I know every move you make.', { speaker: 'MIRROR', tone: 'mirror', holdTime: 1.9 });
     return mirror;
   }
 
@@ -2925,26 +3077,33 @@
     room.challengeStarted = true;
     room.challengeTick = 0;
     room.challengeData = {};
+    room.challengeFailed = false;
     pickups = pickups.filter(pickup => pickup.type !== 'challengeStarter');
     const type = room.challengeType || 'mirror';
     if (type === 'mirror') {
       spawnMirrorChampion();
     } else if (type === 'stillness') {
       room.challengeTimer = 30;
+      room.challengeData.maxTimer = 30;
       room.challengeData.anchorX = player.x;
       room.challengeData.anchorY = player.y;
       room.challengeData.warnTick = 0;
+      sayAtPosition(ROOM_W / 2, ROOM_H / 2, 'Stand still or lose everything.', { speaker: 'TRIAL', tone: 'warning' });
     } else if (type === 'bomb') {
       spawnChallengeBombs(room);
+      sayAtPosition(ROOM_W / 2, ROOM_H / 2, 'Choose wrong and you get nothing.', { speaker: 'TRIAL', tone: 'warning' });
     } else if (type === 'survival') {
       room.challengeTimer = 20;
       room.challengeTick = 0.9;
       spawnTrialEnemyWave(2);
+      sayAtPosition(ROOM_W / 2, ROOM_H / 2, 'Live through it.', { speaker: 'TRIAL', tone: 'warning' });
     } else if (type === 'runes') {
       spawnChallengeRunes(room);
+      sayAtPosition(ROOM_W / 2, ROOM_H / 2, 'Claim every rune.', { speaker: 'TRIAL', tone: 'warning' });
     } else if (type === 'storm') {
       room.challengeTimer = 18;
       room.challengeTick = 0.35;
+      sayAtPosition(ROOM_W / 2, ROOM_H / 2, 'Do not stop moving.', { speaker: 'TRIAL', tone: 'warning' });
     }
     particles.push({ x: ROOM_W / 2, y: ROOM_H / 2 - 46, life: 0.95, text: getChallengeTrialLabel(type), c: '#d7f6ff' });
   }
@@ -2961,10 +3120,25 @@
   function completeChallengeTrial(text = 'TRIAL CLEARED') {
     if (!currentRoom || currentRoom.type !== 'challenge') return;
     currentRoom.cleared = true;
+    currentRoom.challengeFailed = false;
     currentRoom.challengeTimer = 0;
     currentRoom.challengeTick = 0;
     currentRoom.challengeData = {};
     spawnChallengeReward(text);
+    updateObjective();
+    scheduleRunSave();
+  }
+
+  function failChallengeTrial(text = 'TRIAL FAILED') {
+    if (!currentRoom || currentRoom.type !== 'challenge') return;
+    currentRoom.cleared = true;
+    currentRoom.challengeFailed = true;
+    currentRoom.challengeRewardSpawned = true;
+    currentRoom.challengeTimer = 0;
+    currentRoom.challengeTick = 0;
+    currentRoom.challengeData = {};
+    pickups = pickups.filter(pickup => !['challengeBomb', 'challengeRune', 'challengeStarter'].includes(pickup.type));
+    particles.push({ x: ROOM_W / 2, y: ROOM_H / 2 - 52, life: 1.05, text, c: '#ff8b98' });
     updateObjective();
     scheduleRunSave();
   }
@@ -3726,6 +3900,7 @@
       enemy.dmg = Math.round(enemy.dmg * 3);
       enemy.speed *= 1.18;
       triggerGodPhase(enemy, 2, 'DIVINE REBIRTH');
+      playGodDialogue(2);
       spawnHealPopup(enemy.x, enemy.y - 54, enemy.hp, { color: '#79f7bf' });
       return;
     }
@@ -3767,6 +3942,7 @@
     }
 
     if (enemy.type === 'bulk_golem' && enemy.splitReady) {
+      sayAtPosition(enemy.x, enemy.y, 'I AM NOT DONE.', { speaker: 'BULK GOLEM', tone: 'boss', holdTime: 1.8, offsetY: enemy.r + 36 });
       const leftSpawn = findSafeEnemySpawnPoint(enemy.x - 70, enemy.y, 15);
       const rightSpawn = findSafeEnemySpawnPoint(enemy.x + 70, enemy.y, 15);
       if (leftSpawn) {
@@ -3908,7 +4084,7 @@
     const dt = Math.min(0.033, (timestamp - lastTime) / 1000 || 0.016);
     lastTime = timestamp;
     if (gameState === 'play' && !isWizardPawOpen()) update(dt);
-    uiController.tick();
+    uiController.tick(dt);
     draw();
     requestAnimationFrame(loop);
   }
@@ -4626,6 +4802,10 @@
     enemy.summonCd = Math.max(0, enemy.summonCd - dt);
     if (enemy.summonCd <= 0) {
       enemy.summonCd = 4.6 * Math.max(0.74, tuning.rangedCadence);
+      if (!enemy.queenSummonLineShown) {
+        enemy.queenSummonLineShown = true;
+        sayOverEntity(enemy, 'Come forth, faithful.', { holdTime: 1.7 });
+      }
       const summonCount = tuning.supportPower >= 1.22 ? 4 : 3;
       for (let index = 0; index < summonCount; index += 1) {
         const angle = (Math.PI * 2 * index) / 3 + rng() * 0.8;
@@ -4647,6 +4827,10 @@
     enemy.aoeTime = Math.max(0, enemy.aoeTime - dt);
     if (enemy.aoeTime <= 0) {
       enemy.aoeTime = 3;
+      if (!enemy.bulkNovaLineShown) {
+        enemy.bulkNovaLineShown = true;
+        sayOverEntity(enemy, 'Break under the weight.', { holdTime: 1.7 });
+      }
       const aoeRadius = 240;
       const aoeDamage = Math.round(enemy.dmg * 1.2);
       particles.push({ x: enemy.x, y: enemy.y, life: 0.5, ring: aoeRadius - 60, c: '#ff8844' });
@@ -4735,9 +4919,14 @@
   function updateArtificerBoss(enemy, dt) {
     const tuning = getEnemyDifficultyTuning();
     const hpPct = enemy.hp / enemy.max;
+    const previousPhase = enemy.phase || 1;
     if (hpPct < 0.34) enemy.phase = 3;
     else if (hpPct < 0.67) enemy.phase = 2;
     else enemy.phase = 1;
+    if (enemy.phase >= 2 && previousPhase < 2 && !enemy.artificerPhaseLineShown) {
+      enemy.artificerPhaseLineShown = true;
+      sayOverEntity(enemy, 'Then bleed trying.', { holdTime: 1.7 });
+    }
 
     const dx = player.x - enemy.x;
     const dy = player.y - enemy.y;
@@ -4990,11 +5179,8 @@
         currentRoom.challengeTimer = Math.max(0, (currentRoom.challengeTimer || 0) - dt);
         if (currentRoom.challengeTimer <= 0) completeChallengeTrial('STILLNESS HELD');
       } else {
-        currentRoom.challengeData.warnTick = Math.max(0, (currentRoom.challengeData.warnTick || 0) - dt);
-        if ((currentRoom.challengeData.warnTick || 0) <= 0) {
-          currentRoom.challengeData.warnTick = 0.7;
-          particles.push({ x: player.x, y: player.y - 20, life: 0.55, text: 'HOLD STILL', c: '#ffd27d' });
-        }
+        particles.push({ x: player.x, y: player.y - 20, life: 0.7, text: 'TRIAL FAILED', c: '#ff8b98' });
+        failChallengeTrial('STILLNESS BROKEN');
       }
       return;
     }
@@ -5052,6 +5238,8 @@
       enemy.novaCd = 1.9;
       triggerGodPhase(enemy, 3, 'COUNCIL OF BOSSES', '#ffd27d');
       spawnGodCouncil(enemy);
+      playGodDialogue(3);
+      return;
     } else if (enemy.rebirthUsed && enemy.phase3Triggered && !enemy.phase4Triggered && hpPct <= 0.12) {
       enemy.phase4Triggered = true;
       enemy.dmg = Math.round(enemy.dmg * 1.16);
@@ -5060,6 +5248,8 @@
       enemy.judgementCd = 2.7;
       triggerGodPhase(enemy, 4, 'HOLY ONSLAUGHT', '#ff9f6e');
       spawnGodSwordRing(enemy, 24, Math.round(enemy.dmg * 1.05));
+      playGodDialogue(4);
+      return;
     } else if (enemy.rebirthUsed && enemy.phase4Triggered && !enemy.phase5Triggered && hpPct <= 0.06) {
       enemy.phase5Triggered = true;
       enemy.dmg = Math.round(enemy.dmg * 1.22);
@@ -5068,6 +5258,8 @@
       enemy.judgementCd = 1.45;
       triggerGodPhase(enemy, 5, 'LAST JUDGEMENT', '#ff5a5a');
       spawnGodSwordRing(enemy, 32, Math.round(enemy.dmg * 1.15));
+      playGodDialogue(5);
+      return;
     }
 
     const phaseLevel = enemy.phase || 1;
@@ -5569,6 +5761,7 @@
         currentRoom.bossStarted = true;
         pickups = [];
         spawnGodBoss();
+        playGodDialogue(1);
         syncCurrentRoomState();
         updateObjective();
         scheduleRunSave();
@@ -5714,7 +5907,9 @@
       }
       if (currentRoom.type === 'challenge') {
         const type = currentRoom.challengeType || 'mirror';
-        if (currentRoom.cleared) {
+        if (currentRoom.challengeFailed) {
+          uiController.setObjective('Trial failed. Move on.');
+        } else if (currentRoom.cleared) {
           uiController.setObjective('Trial cleared. Claim the reward or move on.');
         } else if (!currentRoom.challengeStarted) {
           if (type === 'mirror') uiController.setObjective('Touch the sword to face your mirror.');
@@ -5815,6 +6010,22 @@
     if (ui.coinCount) ui.coinCount.textContent = player.coins;
     if (ui.timerDisplay) ui.timerDisplay.textContent = timeStr;
     if (ui.floorDisplay) ui.floorDisplay.textContent = floor;
+    if (ui.challengeStatus && ui.challengeStatusFill) {
+      const stillnessActive = currentRoom
+        && currentRoom.type === 'challenge'
+        && currentRoom.challengeStarted
+        && !currentRoom.cleared
+        && (currentRoom.challengeType || 'mirror') === 'stillness';
+      ui.challengeStatus.classList.toggle('hidden', !stillnessActive);
+      ui.challengeStatus.setAttribute('aria-hidden', stillnessActive ? 'false' : 'true');
+      if (stillnessActive) {
+        const maxTimer = Math.max(0.01, Number(currentRoom.challengeData?.maxTimer || 30));
+        const timer = Math.max(0, Number(currentRoom.challengeTimer || 0));
+        const ratio = Math.max(0, Math.min(1, timer / maxTimer));
+        if (ui.challengeStatusLabel) ui.challengeStatusLabel.textContent = `STILLNESS ${Math.ceil(timer)}S`;
+        ui.challengeStatusFill.style.width = `${ratio * 100}%`;
+      }
+    }
     
     updateItemUI();
   }
@@ -6982,17 +7193,41 @@
   }
 
   function createUIController(view) {
-    const manager = typeof window.UIManager === 'function' ? new window.UIManager({ autoRuntimeInit: false }) : null;
+    const UIManagerCtor = window.KozEngine?.UI?.uiManager?.UIManager || window.UIManager || null;
+    const manager = typeof UIManagerCtor === 'function' ? new UIManagerCtor({ autoRuntimeInit: false }) : null;
+    const DialogueManagerCtor = KozDialogueApi.TypewriterDialogueManager || window.TypewriterDialogueManager || null;
+    const WorldSpeechBubbleCtor = KozWorldSpeechApi.WorldSpeechBubbleManager || window.WorldSpeechBubbleManager || null;
+    const dialogueRuntime = typeof DialogueManagerCtor === 'function'
+      ? new DialogueManagerCtor({
+        gameStateManager,
+        defaultSpeaker: 'GOD',
+        typeSpeed: 0.028,
+        autoAdvanceDelay: 1.35,
+        onOpen: clearGameplayInput,
+        onClose: clearGameplayInput,
+      })
+      : null;
+    const worldSpeechRuntime = typeof WorldSpeechBubbleCtor === 'function'
+      ? new WorldSpeechBubbleCtor({ typeSpeed: 0.024, holdTime: 1.55, maxBubbles: 8 })
+      : null;
     let menuBound = false;
     let restartBound = false;
     let activeState = 'menu';
     let hudUpdateHook = null;
     let challengePanelOpen = false;
 
-    function makeContainer(element) {
+    function makeContainer(element, visibleDisplay = '') {
       return {
-        show() { element?.classList.remove('hidden'); },
-        hide() { element?.classList.add('hidden'); },
+        show() {
+          if (!element) return;
+          element.classList.remove('hidden');
+          element.style.display = visibleDisplay;
+        },
+        hide() {
+          if (!element) return;
+          element.classList.add('hidden');
+          element.style.display = 'none';
+        },
       };
     }
 
@@ -7013,6 +7248,55 @@
       if (card) card.classList.toggle('ready', ready);
     }
 
+    function renderDialogue() {
+      if (!view.dialogueOverlay || !view.dialogueSpeaker || !view.dialogueText) return;
+      const snapshot = dialogueRuntime?.getSnapshot?.() || { active: false, speaker: 'GOD', visibleText: '', isFullyTyped: false };
+      view.dialogueOverlay.classList.toggle('hidden', !snapshot.active);
+      view.dialogueOverlay.style.display = snapshot.active ? 'flex' : 'none';
+      view.dialogueOverlay.setAttribute('aria-hidden', snapshot.active ? 'false' : 'true');
+      if (!snapshot.active) return;
+      view.dialogueSpeaker.textContent = snapshot.speaker || 'GOD';
+      view.dialogueText.textContent = snapshot.visibleText || '';
+      if (view.dialogueHint) {
+        view.dialogueHint.textContent = snapshot.isFullyTyped ? 'ENTER TO CONTINUE' : 'ENTER TO SKIP';
+      }
+    }
+
+    function renderEntityDialogue() {
+      const layer = view.entityDialogueLayer;
+      if (!layer) return;
+      const bubbles = worldSpeechRuntime?.getActive?.() || [];
+      layer.innerHTML = '';
+      layer.classList.toggle('hidden', bubbles.length === 0);
+      layer.style.display = bubbles.length ? 'block' : 'none';
+      layer.setAttribute('aria-hidden', bubbles.length ? 'false' : 'true');
+      if (!bubbles.length) return;
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = rect.width / canvas.width;
+      const scaleY = rect.height / canvas.height;
+      bubbles.forEach((bubble) => {
+        const screenX = (bubble.anchor.x - camera.x) * scaleX;
+        const screenY = (bubble.anchor.y - camera.y - (bubble.offsetY || 48)) * scaleY;
+        if (screenX < -140 || screenX > rect.width + 140 || screenY < -140 || screenY > rect.height + 80) return;
+        const el = document.createElement('div');
+        el.className = 'entity-dialogue-bubble';
+        el.dataset.tone = bubble.tone || 'boss';
+        el.style.left = `${screenX}px`;
+        el.style.top = `${screenY}px`;
+        if (bubble.speaker) {
+          const name = document.createElement('div');
+          name.className = 'entity-dialogue-name';
+          name.textContent = bubble.speaker;
+          el.appendChild(name);
+        }
+        const text = document.createElement('div');
+        text.className = 'entity-dialogue-text';
+        text.textContent = bubble.visibleText || '';
+        el.appendChild(text);
+        layer.appendChild(el);
+      });
+    }
+
     function fallbackState(state) {
       const show = state || 'menu';
       function setVisible(element, visible, displayValue = '') {
@@ -7025,12 +7309,18 @@
       view.dead.classList.toggle('hidden',      show !== 'dead');
       view.win.classList.toggle('hidden',       show !== 'win');
       view.pause?.classList.toggle('hidden',    show !== 'pause');
-      const inPlay = show === 'play' || show === 'pause';
-      setVisible(view.hud, inPlay, 'flex');
-      setVisible(view.actionBar, inPlay, '');
+      const inPlay = show === 'play' || show === 'pause' || show === 'dialogue';
+      setVisible(view.hud, false, 'none');
+      setVisible(view.actionBar, show === 'play' || show === 'pause', '');
       setVisible(view.playerStats, inPlay, '');
       setVisible(view.coinDisplay, inPlay, 'flex');
       setVisible(view.centerDisplay, inPlay, '');
+      setVisible(view.dialogueOverlay, show === 'dialogue', 'flex');
+      setVisible(view.entityDialogueLayer, inPlay, 'block');
+      if (!inPlay && view.challengeStatus) {
+        view.challengeStatus.classList.add('hidden');
+        view.challengeStatus.setAttribute('aria-hidden', 'true');
+      }
       if (show !== 'charselect') setChallengePanelOpen(false);
     }
 
@@ -7044,18 +7334,39 @@
     }
 
     if (manager && typeof manager.registerScreen === 'function') {
-      manager.registerScreen('hud', {
-        create: () => makeContainer(view.hud),
-        show: () => { if (hudUpdateHook) hudUpdateHook(); },
-        update: () => { if (hudUpdateHook) hudUpdateHook(); },
-        validStates: ['play'],
+      manager.registerScreen('coinDisplay', {
+        create: () => makeContainer(view.coinDisplay, 'flex'),
+        validStates: ['play', 'pause', 'dialogue'],
       });
-      manager.registerScreen('actionBar', { create: () => makeContainer(view.actionBar), validStates: ['play'] });
-      manager.registerScreen('start', { create: () => makeContainer(view.start), validStates: ['menu'] });
-      manager.registerScreen('charSelect', { create: () => makeContainer(view.charSelect), validStates: ['charselect'] });
-      manager.registerScreen('dead', { create: () => makeContainer(view.dead), validStates: ['dead'] });
-      manager.registerScreen('win', { create: () => makeContainer(view.win), validStates: ['win'] });
-      manager.registerScreen('pause', { create: () => makeContainer(view.pause), validStates: ['pause'] });
+      manager.registerScreen('centerDisplay', {
+        create: () => makeContainer(view.centerDisplay, ''),
+        validStates: ['play', 'pause', 'dialogue'],
+      });
+      manager.registerScreen('playerStats', {
+        create: () => makeContainer(view.playerStats, ''),
+        validStates: ['play', 'pause', 'dialogue'],
+      });
+      manager.registerScreen('actionBar', {
+        create: () => makeContainer(view.actionBar, ''),
+        validStates: ['play', 'pause'],
+      });
+      manager.registerScreen('dialogue', {
+        create: () => makeContainer(view.dialogueOverlay, 'flex'),
+        show: renderDialogue,
+        update: renderDialogue,
+        validStates: ['dialogue'],
+      });
+      manager.registerScreen('entityDialogue', {
+        create: () => makeContainer(view.entityDialogueLayer, 'block'),
+        show: renderEntityDialogue,
+        update: renderEntityDialogue,
+        validStates: ['play', 'pause', 'dialogue'],
+      });
+      manager.registerScreen('start', { create: () => makeContainer(view.start, ''), validStates: ['menu'] });
+      manager.registerScreen('charSelect', { create: () => makeContainer(view.charSelect, ''), validStates: ['charselect'] });
+      manager.registerScreen('dead', { create: () => makeContainer(view.dead, ''), validStates: ['dead'] });
+      manager.registerScreen('win', { create: () => makeContainer(view.win, ''), validStates: ['win'] });
+      manager.registerScreen('pause', { create: () => makeContainer(view.pause, ''), validStates: ['pause'] });
       if (gameStateManager && typeof manager.bindToStateManager === 'function') {
         manager.bindToStateManager(gameStateManager, { initialSync: true });
       }
@@ -7082,11 +7393,15 @@
       setHudUpdateHook(hook) {
         hudUpdateHook = typeof hook === 'function' ? hook : null;
       },
-      tick() {
+      tick(dt = 0) {
+        if (dialogueRuntime?.update) dialogueRuntime.update(dt);
+        if (worldSpeechRuntime?.update) worldSpeechRuntime.update(dt);
         if (manager && typeof manager.updateAll === 'function') {
           manager.updateAll();
           return;
         }
+        renderDialogue();
+        renderEntityDialogue();
         if (activeState === 'play' && hudUpdateHook) hudUpdateHook();
       },
       bindMenuActions(handlers) {
@@ -7141,6 +7456,7 @@
         });
         view.continueBtn?.addEventListener('click', handlers.onContinue);
         view.deleteRunBtn?.addEventListener('click', handlers.onDeleteRun);
+        view.dialogueOverlay?.addEventListener('click', handlers.onAdvanceDialogue);
         // New main-menu nav
         view.newRunBtn?.addEventListener('click', handlers.onOpenCharacterSelect);
         view.charBackBtn?.addEventListener('click', handlers.onCloseCharacterSelect);
@@ -7151,6 +7467,24 @@
         view.deadRestart?.addEventListener('click', onRestart);
         view.winRestart?.addEventListener('click', onRestart);
         restartBound = true;
+      },
+      playDialogue(lines, options) {
+        const started = dialogueRuntime?.start?.(lines, options);
+        renderDialogue();
+        return !!started;
+      },
+      advanceDialogue() {
+        const advanced = dialogueRuntime?.advance?.();
+        renderDialogue();
+        return !!advanced;
+      },
+      isDialogueOpen() {
+        return !!dialogueRuntime?.isOpen?.();
+      },
+      sayAtWorldAnchor(input) {
+        const id = worldSpeechRuntime?.say?.(input);
+        renderEntityDialogue();
+        return id || null;
       },
       setSaveState(text) { view.saveState.textContent = text; },
       setChallengePanelOpen,

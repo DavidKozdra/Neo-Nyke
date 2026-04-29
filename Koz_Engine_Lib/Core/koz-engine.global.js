@@ -276,6 +276,20 @@
       register: ["UI", "modalPrimitives"],
     },
     {
+      path: "Koz_Engine_Lib/UI/typewriterDialogue.js",
+      register: ["UI", "typewriterDialogue"],
+      globals: {
+        TypewriterDialogueManager: (api) => api.TypewriterDialogueManager,
+      },
+    },
+    {
+      path: "Koz_Engine_Lib/UI/worldSpeechBubbles.js",
+      register: ["UI", "worldSpeechBubbles"],
+      globals: {
+        WorldSpeechBubbleManager: (api) => api.WorldSpeechBubbleManager,
+      },
+    },
+    {
       path: "Koz_Engine_Lib/Events/notificationCenter.js",
       register: ["Events", "notificationCenter"],
     },
