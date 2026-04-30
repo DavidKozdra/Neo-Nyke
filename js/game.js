@@ -27,6 +27,8 @@
   const CORPSE_FADE_START = 4.5;
   const CORPSE_LIFETIME = 11;
   const CORPSE_FALL_TIME = 0.32;
+  const PROJECTILE_TRAIL_LENGTH = 6;
+  const AOE_SHOCKWAVE_LIFE = 0.36;
   const ENEMY_SCALING = {
     floor: 0.14,
     loop: 0.32,
@@ -5611,6 +5613,7 @@
       knockback: Number(config.knockback || 140),
       pierceCount: Number(config.pierceCount || 0),
       hitOptions: config.hitOptions || null,
+      trail: [],
     });
   }
 
@@ -5999,6 +6002,7 @@
     shake = 16;
     shakeT = 0.24;
     particles.push({ x: player.x, y: player.y, life: 0.4, ring: smashRadius - 30, c: '#ff00aa' });
+    spawnAoeShockwave(player.x, player.y, smashRadius, '#ff66cc', 'heavy');
     for (let index = enemies.length - 1; index >= 0; index -= 1) {
       const enemy = enemies[index];
       if (!enemy) continue;
@@ -8395,6 +8399,7 @@
   }
 
   function blastRadius(x, y, radius, damage, color, sourceEnemy = null) {
+    spawnAoeShockwave(x, y, radius, color, damage >= 28 ? 'heavy' : 'normal');
     for (let index = enemies.length - 1; index >= 0; index -= 1) {
       const enemy = enemies[index];
       if (!enemy) continue;
@@ -8405,6 +8410,78 @@
     destructibles.forEach(prop => {
       if (!prop.broken && !prop.hidden && dist(x, y, prop.x, prop.y) <= radius + prop.r) damageDestructible(prop, damage);
     });
+  }
+
+  function spawnAoeShockwave(x, y, radius, color = '#ff66cc', style = 'normal') {
+    particles.push({
+      x,
+      y,
+      life: AOE_SHOCKWAVE_LIFE,
+      maxLife: AOE_SHOCKWAVE_LIFE,
+      shockwave: true,
+      radius,
+      c: color,
+      style,
+    });
+    const sparks = style === 'heavy' ? 12 : 7;
+    for (let index = 0; index < sparks; index += 1) {
+      const angle = (index / sparks) * Math.PI * 2 + rand(0.22, -0.22, 'fx');
+      const speed = rand(170, 70, 'fx');
+      particles.push({
+        x: x + Math.cos(angle) * Math.min(radius * 0.3, 34),
+        y: y + Math.sin(angle) * Math.min(radius * 0.3, 34),
+        life: rand(0.34, 0.16, 'fx'),
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        c: color,
+        spark: true,
+        size: style === 'heavy' ? 3.4 : 2.4,
+      });
+    }
+  }
+
+  function recordProjectileTrail(projectile, x, y) {
+    if (!projectile) return;
+    if (!Array.isArray(projectile.trail)) projectile.trail = [];
+    projectile.trail.unshift({ x, y });
+    const cap = projectile.kind === 'fireball' ? PROJECTILE_TRAIL_LENGTH + 2 : PROJECTILE_TRAIL_LENGTH;
+    if (projectile.trail.length > cap) projectile.trail.length = cap;
+  }
+
+  function spawnProjectileImpact(projectile, x = projectile?.x, y = projectile?.y, options = {}) {
+    if (!projectile || !Number.isFinite(x) || !Number.isFinite(y)) return;
+    const color = projectile.color || (projectile.enemy ? '#ff6688' : '#ffd7aa');
+    const angle = Math.atan2(Number(projectile.vy || 0), Number(projectile.vx || 1));
+    const heavy = projectile.kind === 'fireball' || projectile.kind === 'magenta_degale' || projectile.kind === 'god_sword';
+    particles.push({
+      x,
+      y,
+      life: heavy ? 0.34 : 0.22,
+      maxLife: heavy ? 0.34 : 0.22,
+      impact: true,
+      c: color,
+      angle,
+      size: Math.max(projectile.r || 4, heavy ? 9 : 5),
+      enemy: !!projectile.enemy,
+      kind: projectile.kind || 'shot',
+      blocked: !!options.blocked,
+    });
+    const sparks = heavy ? 8 : 4;
+    for (let index = 0; index < sparks; index += 1) {
+      const spread = rand(1.2, -1.2, 'fx');
+      const sparkAngle = angle + Math.PI + spread;
+      const speed = rand(120, 35, 'fx');
+      particles.push({
+        x,
+        y,
+        life: rand(0.28, 0.1, 'fx'),
+        vx: Math.cos(sparkAngle) * speed,
+        vy: Math.sin(sparkAngle) * speed,
+        c: color,
+        spark: true,
+        size: heavy ? 3 : 2,
+      });
+    }
   }
 
   function findNearestEnemy(x, y, radius, exclude = new Set()) {
@@ -8427,16 +8504,21 @@
       const projectile = projectiles[index];
       if (!projectile) { projectiles.splice(index, 1); continue; }
       projectile.life -= dt;
+      const prevX = projectile.x;
+      const prevY = projectile.y;
       projectile.x += projectile.vx * dt;
       projectile.y += projectile.vy * dt;
+      recordProjectileTrail(projectile, prevX, prevY);
       const hitProp = destructibles.find(prop => !prop.broken && !prop.hidden && dist(projectile.x, projectile.y, prop.x, prop.y) <= projectile.r + prop.r);
       if (!projectile.enemy && hitProp) {
         damageDestructible(hitProp, projectile.damage || 1);
         if (projectile.kind === 'fireball') blastRadius(projectile.x, projectile.y, projectile.splash || 44, 16, '#ff8844');
+        spawnProjectileImpact(projectile, projectile.x, projectile.y, { blocked: true });
         projectiles.splice(index, 1);
         continue;
       }
       if (projectile.life <= 0 || isBlocked(projectile.x, projectile.y, projectile.r)) {
+        spawnProjectileImpact(projectile, projectile.x, projectile.y, { blocked: true });
         projectiles.splice(index, 1);
         continue;
       }
@@ -8457,6 +8539,7 @@
             blastRadius(projectile.x, projectile.y, projectile.splash || 44, 14, '#ff8844');
             applyStatusInRadius(projectile.x, projectile.y, projectile.splash || 44, 'fire', 1, projectile.fireDuration || 3, null);
           }
+          spawnProjectileImpact(projectile, projectile.x, projectile.y);
           if (projectile.pierceCount > 0) {
             projectile.pierceCount -= 1;
             projectile.x += projectile.vx * 0.03;
@@ -8468,6 +8551,7 @@
         }
       } else if (dist(projectile.x, projectile.y, player.x, player.y) <= projectile.r + player.r) {
         damagePlayer(projectile.damage || 10, Math.atan2(projectile.vy, projectile.vx), 120, 'enemy_projectile');
+        spawnProjectileImpact(projectile, projectile.x, projectile.y);
         projectiles.splice(index, 1);
         continue;
       }
@@ -9503,6 +9587,19 @@
         ctx.moveTo(0, -8);
         ctx.lineTo(0, 8);
         ctx.stroke();
+        ctx.globalAlpha = 0.55;
+        ctx.strokeStyle = 'rgba(210,255,225,0.75)';
+        ctx.lineWidth = 1.5;
+        for (let index = 0; index < 10; index += 1) {
+          const a = -t * 0.55 + index * (Math.PI * 2 / 10);
+          const r0 = hazard.r * 0.84;
+          const r1 = hazard.r * 0.93;
+          ctx.beginPath();
+          ctx.moveTo(Math.cos(a) * r0, Math.sin(a) * r0);
+          ctx.lineTo(Math.cos(a) * r1, Math.sin(a) * r1);
+          ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
       } else if (hazard.kind === 'fire_circle') {
         const t = Date.now() * 0.005;
         const pulse = 1 + Math.sin(t * 2.6) * 0.07;
@@ -9517,6 +9614,20 @@
         ctx.beginPath();
         ctx.arc(0, 0, hazard.r * 0.76, 0, Math.PI * 2);
         ctx.fill();
+        ctx.globalAlpha = 0.78;
+        ctx.strokeStyle = 'rgba(255,205,90,0.8)';
+        ctx.lineWidth = 2;
+        for (let index = 0; index < 14; index += 1) {
+          const a = t * 0.9 + index * (Math.PI * 2 / 14);
+          const wiggle = Math.sin(t * 2 + index) * 4;
+          const r0 = hazard.r * 0.46 + wiggle;
+          const r1 = hazard.r * 0.68 + wiggle;
+          ctx.beginPath();
+          ctx.moveTo(Math.cos(a) * r0, Math.sin(a) * r0);
+          ctx.lineTo(Math.cos(a + 0.14) * r1, Math.sin(a + 0.14) * r1);
+          ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
       } else if (hazard.kind === 'lightning_column') {
         const t = Date.now() * 0.006 + hazard.x * 0.01;
         ctx.fillStyle = 'rgba(112,180,255,0.12)';
@@ -9534,6 +9645,17 @@
         ctx.moveTo(0, -hazard.r);
         ctx.lineTo(0, hazard.r);
         ctx.stroke();
+        ctx.shadowColor = '#bde8ff';
+        ctx.shadowBlur = 16;
+        for (let index = 0; index < 5; index += 1) {
+          const a = t * 1.7 + index * (Math.PI * 2 / 5);
+          const branch = hazard.r * (0.28 + 0.12 * Math.sin(t + index));
+          ctx.beginPath();
+          ctx.moveTo(Math.cos(a) * branch * 0.3, Math.sin(a) * branch * 0.3);
+          ctx.lineTo(Math.cos(a + 0.22) * branch, Math.sin(a + 0.22) * branch);
+          ctx.lineTo(Math.cos(a - 0.1) * hazard.r * 0.72, Math.sin(a - 0.1) * hazard.r * 0.72);
+          ctx.stroke();
+        }
       }
       ctx.restore();
     });
@@ -9778,18 +9900,140 @@
     });
   }
 
+  function getProjectileVisual(projectile) {
+    const kind = projectile.kind || 'shot';
+    if (projectile.enemy) {
+      if (kind === 'sword' || kind === 'god_sword') return { color: '#f6f1ff', core: '#ffffff', trail: '#d8c7ff', shape: 'blade', length: 28 };
+      if (kind === 'sniper_round') return { color: '#ff5d72', core: '#ffe1e6', trail: '#ff314d', shape: 'dart', length: 34 };
+      if (kind === 'machine_round') return { color: '#ffb35a', core: '#fff1ba', trail: '#ff6738', shape: 'tracer', length: 22 };
+      return { color: projectile.color || '#ff6688', core: '#ffe4eb', trail: projectile.color || '#ff6688', shape: 'dart', length: 24 };
+    }
+    if (kind === 'fireball') return { color: '#ff7b32', core: '#fff1a6', trail: '#ff2f17', shape: 'fireball', length: 30 };
+    if (kind === 'disk') return { color: '#b66cff', core: '#f0d8ff', trail: '#7d4dff', shape: 'disk', length: 20 };
+    if (kind === 'magenta_p90') return { color: '#ff9dd7', core: '#fff0fb', trail: '#ff4aa8', shape: 'tracer', length: 26 };
+    if (kind === 'magenta_degale') return { color: '#ff8bd2', core: '#fff0fb', trail: '#ff3eb7', shape: 'slug', length: 34 };
+    if (kind === 'hunters_bow') return { color: '#dff8ff', core: '#ffffff', trail: '#7edcff', shape: 'arrow', length: 32 };
+    if (kind === 'void_piercer') return { color: '#ffd2c0', core: '#fff8ee', trail: '#ff826a', shape: 'dart', length: 30 };
+    return { color: projectile.color || '#ffd7aa', core: '#ffffff', trail: projectile.color || '#ffd7aa', shape: 'orb', length: 20 };
+  }
+
+  function drawProjectileTrail(projectile, visual, angle) {
+    const trail = Array.isArray(projectile.trail) ? projectile.trail : [];
+    if (!trail.length) return;
+    ctx.save();
+    ctx.lineCap = 'round';
+    for (let index = trail.length - 1; index >= 0; index -= 1) {
+      const point = trail[index];
+      const next = index === 0 ? projectile : trail[index - 1];
+      const alpha = (1 - index / trail.length) * 0.32;
+      ctx.globalAlpha = alpha;
+      ctx.strokeStyle = visual.trail;
+      ctx.shadowColor = visual.trail;
+      ctx.shadowBlur = 8;
+      ctx.lineWidth = Math.max(1.5, projectile.r * (0.42 - index * 0.035));
+      ctx.beginPath();
+      ctx.moveTo(point.x, point.y);
+      ctx.lineTo(next.x, next.y);
+      ctx.stroke();
+    }
+    if (visual.shape === 'fireball') {
+      const tail = trail[Math.min(trail.length - 1, 2)];
+      ctx.globalAlpha = 0.24;
+      ctx.fillStyle = '#3d1420';
+      ctx.beginPath();
+      ctx.ellipse(tail.x - Math.cos(angle) * 3, tail.y - Math.sin(angle) * 3, projectile.r * 1.3, projectile.r * 0.65, angle, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function drawProjectileShape(projectile, visual) {
+    const angle = Math.atan2(projectile.vy, projectile.vx);
+    const r = projectile.r || 5;
+    drawProjectileTrail(projectile, visual, angle);
+
+    ctx.save();
+    ctx.translate(projectile.x, projectile.y);
+    ctx.rotate(angle);
+    ctx.shadowColor = visual.color;
+    ctx.shadowBlur = projectile.enemy ? 12 : 14;
+    ctx.fillStyle = visual.color;
+    ctx.strokeStyle = visual.core;
+    ctx.lineWidth = 1.5;
+
+    if (visual.shape === 'fireball') {
+      const t = Date.now() * 0.012 + projectile.x * 0.02;
+      ctx.fillStyle = '#ff5a2c';
+      ctx.beginPath();
+      for (let index = 0; index < 14; index += 1) {
+        const a = (index / 14) * Math.PI * 2;
+        const wobble = 1 + Math.sin(t + index * 1.7) * 0.18;
+        const rr = r * (1.15 + (index % 2) * 0.18) * wobble;
+        const x = Math.cos(a) * rr;
+        const y = Math.sin(a) * rr;
+        if (index === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = visual.core;
+      ctx.beginPath();
+      ctx.arc(0, 0, r * 0.55, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (visual.shape === 'disk') {
+      const spin = Date.now() * 0.018;
+      ctx.rotate(spin);
+      ctx.globalAlpha = 0.45;
+      ctx.beginPath();
+      ctx.arc(0, 0, r * 1.45, 0.25, Math.PI * 1.35);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = visual.color;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, r * 1.25, r * 0.48, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = visual.core;
+      ctx.fillRect(-r * 0.75, -1, r * 1.5, 2);
+    } else if (visual.shape === 'blade' || visual.shape === 'arrow') {
+      ctx.beginPath();
+      ctx.moveTo(r * 1.8, 0);
+      ctx.lineTo(-r * 1.1, -r * 0.52);
+      ctx.lineTo(-r * 0.55, 0);
+      ctx.lineTo(-r * 1.1, r * 0.52);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    } else if (visual.shape === 'tracer' || visual.shape === 'dart' || visual.shape === 'slug') {
+      ctx.beginPath();
+      ctx.moveTo(r * 1.8, 0);
+      ctx.lineTo(-r * 1.25, -r * 0.58);
+      ctx.lineTo(-r * 0.72, 0);
+      ctx.lineTo(-r * 1.25, r * 0.58);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = visual.core;
+      ctx.beginPath();
+      ctx.ellipse(r * 0.42, 0, r * 0.48, r * 0.22, 0, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      ctx.beginPath();
+      ctx.arc(0, 0, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = visual.core;
+      ctx.beginPath();
+      ctx.arc(r * 0.1, -r * 0.18, r * 0.42, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
   function drawProjectiles() {
     projectiles.forEach(projectile => {
       if (!projectile) return;
-      const color = projectile.color || '#ff66aa';
-      ctx.fillStyle = color;
-      ctx.shadowColor = color;
-      ctx.shadowBlur = 10;
-      ctx.beginPath();
-      ctx.arc(projectile.x, projectile.y, projectile.r, 0, Math.PI * 2);
-      ctx.fill();
+      drawProjectileShape(projectile, getProjectileVisual(projectile));
     });
     ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1;
   }
 
   function drawDeadBodies() {
@@ -10385,6 +10629,67 @@
         ctx.strokeStyle = particle.outline || 'rgba(0,0,0,0.7)';
         ctx.strokeText(particle.text, 0, -particle.life * 20);
         ctx.fillText(particle.text, 0, -particle.life * 20);
+      } else if (particle.shockwave) {
+        const maxLife = Number(particle.maxLife || AOE_SHOCKWAVE_LIFE);
+        const progress = clamp(1 - particle.life / maxLife, 0, 1);
+        const radius = Number(particle.radius || 48);
+        const waveRadius = radius * (0.22 + progress * 0.92);
+        ctx.globalAlpha = (1 - progress) * 0.8;
+        ctx.strokeStyle = particle.c || '#ff66cc';
+        ctx.shadowColor = particle.c || '#ff66cc';
+        ctx.shadowBlur = 18;
+        ctx.lineWidth = particle.style === 'heavy' ? 5 : 3;
+        ctx.beginPath();
+        if (particle.style === 'heavy') {
+          for (let index = 0; index <= 28; index += 1) {
+            const angle = (index / 28) * Math.PI * 2;
+            const jag = 1 + Math.sin(index * 2.1 + progress * 12) * 0.055;
+            const x = Math.cos(angle) * waveRadius * jag;
+            const y = Math.sin(angle) * waveRadius * jag;
+            if (index === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+          }
+          ctx.closePath();
+        } else {
+          ctx.arc(0, 0, waveRadius, 0, Math.PI * 2);
+        }
+        ctx.stroke();
+        ctx.globalAlpha = (1 - progress) * 0.16;
+        ctx.fillStyle = particle.c || '#ff66cc';
+        ctx.beginPath();
+        ctx.arc(0, 0, radius * (0.3 + progress * 0.45), 0, Math.PI * 2);
+        ctx.fill();
+      } else if (particle.impact) {
+        const maxLife = Number(particle.maxLife || 0.24);
+        const progress = clamp(1 - particle.life / maxLife, 0, 1);
+        const size = Number(particle.size || 6) * (1 + progress * 1.4);
+        ctx.rotate(Number(particle.angle || 0));
+        ctx.globalAlpha = (1 - progress) * 0.85;
+        ctx.strokeStyle = particle.c || '#fff';
+        ctx.shadowColor = particle.c || '#fff';
+        ctx.shadowBlur = 10;
+        ctx.lineWidth = 2;
+        for (let index = 0; index < 4; index += 1) {
+          const a = (index - 1.5) * 0.5;
+          ctx.beginPath();
+          ctx.moveTo(-size * 0.25, Math.sin(a) * size * 0.3);
+          ctx.lineTo(size * (0.75 + index * 0.12), Math.sin(a) * size);
+          ctx.stroke();
+        }
+        ctx.fillStyle = particle.c || '#fff';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, size * 0.5, size * 0.25, 0, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (particle.spark) {
+        const size = Number(particle.size || 2.2);
+        const angle = Math.atan2(Number(particle.vy || 0), Number(particle.vx || 1));
+        ctx.rotate(angle);
+        ctx.fillStyle = particle.c || '#fff';
+        ctx.shadowColor = particle.c || '#fff';
+        ctx.shadowBlur = 7;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, size * 1.8, size * 0.45, 0, 0, Math.PI * 2);
+        ctx.fill();
       } else if (particle.ring) {
         ctx.strokeStyle = particle.c;
         ctx.lineWidth = 3;
