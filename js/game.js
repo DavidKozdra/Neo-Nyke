@@ -462,8 +462,8 @@
     crit_charm: {
       key: 'crit_charm',
       name: 'Crit Charm',
-      shortName: 'Crit +5%',
-      description: 'Critical hit chance +5%.',
+      shortName: 'Hit Crit',
+      description: 'Hits grant +4% crit chance per stack for 2.2s.',
       rarity: 'white',
       color: '#ffffff',
       category: 'white',
@@ -472,8 +472,8 @@
     attack_servo: {
       key: 'attack_servo',
       name: 'Attack Servo',
-      shortName: 'AS +0.2',
-      description: 'Attack speed +0.2.',
+      shortName: 'AS %',
+      description: 'Attack speed +12% per stack.',
       rarity: 'white',
       color: '#eef5ff',
       category: 'white',
@@ -482,22 +482,22 @@
     keen_eye: {
       key: 'keen_eye',
       name: 'Keen Eye',
-      shortName: 'Crit +5%',
-      description: 'Crit chance +5%.',
+      shortName: 'Kill Focus',
+      description: 'Charge on 10 kills. When full, the next kill grants +10% crit chance per stack for 7s.',
       rarity: 'white',
       color: '#f7fbff',
       category: 'white',
-      tags: ['crit'],
+      tags: ['crit', 'charge'],
     },
     chrono_spring: {
       key: 'chrono_spring',
       name: 'Chrono Spring',
-      shortName: 'AS +0.2',
-      description: 'Attack speed +0.2.',
+      shortName: 'Kill Haste',
+      description: 'Charge on 7 kills. When full, the next kill grants +16% attack speed per stack for 6s.',
       rarity: 'white',
       color: '#e6f6ff',
       category: 'white',
-      tags: ['speed'],
+      tags: ['speed', 'charge'],
     },
     scholar_seal: {
       key: 'scholar_seal',
@@ -2295,6 +2295,13 @@
       insuranceActive: false,
       insuranceChargeKills: 0,
       insuranceReady: true,
+      keenEyeChargeKills: 0,
+      keenEyeReady: false,
+      keenEyeBuffTime: 0,
+      chronoSpringChargeKills: 0,
+      chronoSpringReady: false,
+      chronoSpringBuffTime: 0,
+      critCharmBuffTime: 0,
       escapeChargeKills: 0,
       escapeReady: true,
       statuses: createStatusMap(),
@@ -5045,6 +5052,13 @@
     playerData.insuranceActive = !!playerData.insuranceActive;
     playerData.insuranceChargeKills = Number(playerData.insuranceChargeKills || 0);
     playerData.insuranceReady = playerData.insuranceReady !== false;
+    playerData.keenEyeChargeKills = Number(playerData.keenEyeChargeKills || 0);
+    playerData.keenEyeReady = !!playerData.keenEyeReady;
+    playerData.keenEyeBuffTime = Number(playerData.keenEyeBuffTime || 0);
+    playerData.chronoSpringChargeKills = Number(playerData.chronoSpringChargeKills || 0);
+    playerData.chronoSpringReady = !!playerData.chronoSpringReady;
+    playerData.chronoSpringBuffTime = Number(playerData.chronoSpringBuffTime || 0);
+    playerData.critCharmBuffTime = Number(playerData.critCharmBuffTime || 0);
     playerData.escapeChargeKills = Number(playerData.escapeChargeKills || 0);
     playerData.escapeReady = playerData.escapeReady !== false;
     return playerData;
@@ -5068,14 +5082,36 @@
     return Math.max(1, baseRequirement - getItemCount('charged_adapter'));
   }
 
+  function getKeenEyeCritBonus() {
+    return getItemCount('keen_eye') * 0.1;
+  }
+
+  function getChronoSpringAttackSpeedBonus() {
+    return getItemCount('chrono_spring') * 0.16;
+  }
+
+  function grantCritCharmBuff() {
+    if (!player || getItemCount('crit_charm') <= 0) return;
+    player.critCharmBuffTime = Math.max(Number(player.critCharmBuffTime || 0), 2.2);
+  }
+
+  function triggerKeenEyeBuff() {
+    if (!player || getItemCount('keen_eye') <= 0) return;
+    player.keenEyeBuffTime = Math.max(Number(player.keenEyeBuffTime || 0), 7);
+    particles.push({ x: player.x, y: player.y - 24, life: 0.7, text: 'KEEN EYE', c: '#f8fdff' });
+  }
+
+  function triggerChronoSpringBuff() {
+    if (!player || getItemCount('chrono_spring') <= 0) return;
+    player.chronoSpringBuffTime = Math.max(Number(player.chronoSpringBuffTime || 0), 6);
+    particles.push({ x: player.x, y: player.y - 38, life: 0.7, text: 'CHRONO', c: '#cfeeff' });
+  }
+
   function getItemStats() {
     const neoKnife = getItemCount('neo_knife');
     const orbOfBlood = getItemCount('orb_of_blood');
     const hemesScarf = getItemCount('hemes_scarf');
-    const critCharm = getItemCount('crit_charm');
     const attackServo = getItemCount('attack_servo');
-    const keenEye = getItemCount('keen_eye');
-    const chronoSpring = getItemCount('chrono_spring');
     const scholarSeal = getItemCount('scholar_seal');
     const scholarCap = getItemCount('scholar_cap');
     const bandaid = getItemCount('bandaid');
@@ -5086,11 +5122,14 @@
     const shieldOfAegis = getItemCount('shield_of_aegis');
     const pendantOfKronos = getItemCount('pendant_of_kronos');
     const oracleLens = getItemCount('oracles_lens') > 0;
+    const critCharmBonus = Number(player?.critCharmBuffTime || 0) > 0 ? getItemCount('crit_charm') * 0.04 : 0;
+    const keenEyeBonus = Number(player?.keenEyeBuffTime || 0) > 0 ? getKeenEyeCritBonus() : 0;
+    const chronoSpringBonus = Number(player?.chronoSpringBuffTime || 0) > 0 ? getChronoSpringAttackSpeedBonus() : 0;
     const godItemStacks = ITEM_KEYS.reduce((total, key) => {
       if (ITEM_DEFS[key]?.rarity !== 'god') return total;
       return total + getItemCount(key);
     }, 0);
-    let critChance = (critCharm + keenEye) * 0.05 + pendantOfKronos * godItemStacks * 0.01;
+    let critChance = critCharmBonus + keenEyeBonus + pendantOfKronos * godItemStacks * 0.01;
     if (oracleLens) critChance *= 2;
     critChance = clamp(critChance, 0, 0.95);
     const damageReduction = clamp(bandaid * 0.005 + shieldOfAegis * 0.2, 0, 0.85);
@@ -5102,7 +5141,7 @@
       passiveBleedStacks: hemesScarf,
       critChance,
       critMultiplier: 1.6 + (oracleLens ? critChance * 2.2 : critChance * 0.6),
-      attackSpeedBonus: (attackServo + chronoSpring) * 0.2,
+      attackSpeedMultiplier: 1 + attackServo * 0.12 + chronoSpringBonus,
       moveSpeedMultiplier: 1 + turtleShell * 0.05,
       xpGainMultiplier: 1 + scholarSeal * 0.15,
       levelEdgeDamageMultiplier: 1 + scholarCap * xpProgress * 0.45,
@@ -5118,7 +5157,7 @@
 
   function getAttackSpeedValue() {
     const stats = getItemStats();
-    return Math.max(0.2, (player?.attackSpeed || 1) + stats.attackSpeedBonus);
+    return Math.max(0.2, (player?.attackSpeed || 1) * (stats.attackSpeedMultiplier || 1));
   }
 
   function getWizardPawStatCards() {
@@ -5213,6 +5252,16 @@
       player.insuranceActive = false;
       return;
     }
+    if (chargeType === 'keen_eye') {
+      player.keenEyeReady = false;
+      player.keenEyeChargeKills = 0;
+      return;
+    }
+    if (chargeType === 'chrono_spring') {
+      player.chronoSpringReady = false;
+      player.chronoSpringChargeKills = 0;
+      return;
+    }
     if (chargeType === 'escape') {
       player.escapeReady = false;
       player.escapeChargeKills = 0;
@@ -5231,6 +5280,26 @@
       }
       return;
     }
+    if (chargeType === 'keen_eye') {
+      if (getItemCount('keen_eye') <= 0 || player.keenEyeReady) return;
+      player.keenEyeChargeKills += 1;
+      if (player.keenEyeChargeKills >= getChargeRequirement(baseRequirement)) {
+        player.keenEyeReady = true;
+        player.keenEyeChargeKills = 0;
+        particles.push({ x: player.x, y: player.y - 20, life: 0.7, text: 'KEEN READY', c: '#f2fbff' });
+      }
+      return;
+    }
+    if (chargeType === 'chrono_spring') {
+      if (getItemCount('chrono_spring') <= 0 || player.chronoSpringReady) return;
+      player.chronoSpringChargeKills += 1;
+      if (player.chronoSpringChargeKills >= getChargeRequirement(baseRequirement)) {
+        player.chronoSpringReady = true;
+        player.chronoSpringChargeKills = 0;
+        particles.push({ x: player.x, y: player.y - 36, life: 0.7, text: 'SPRING READY', c: '#d9f7ff' });
+      }
+      return;
+    }
     if (chargeType === 'escape') {
       if (getItemCount('charged_adapter') <= 0 || player.escapeReady) return;
       player.escapeChargeKills += 1;
@@ -5245,6 +5314,9 @@
   function refreshFloorChargeStates() {
     if (!player) return;
     player.insuranceActive = false;
+    player.critCharmBuffTime = 0;
+    player.keenEyeBuffTime = 0;
+    player.chronoSpringBuffTime = 0;
   }
 
   function scaleDamageAgainstEnemy(enemy, damage) {
@@ -6048,6 +6120,7 @@
     enemy.vx += Math.cos(angle) * appliedKnockback;
     enemy.vy += Math.sin(angle) * appliedKnockback;
     enemy.stun = Math.max(enemy.stun, 0.08);
+    grantCritCharmBuff();
     particles.push({ x: enemy.x, y: enemy.y, life: 0.24, vx: rand(-30, 30, 'fx'), vy: rand(-30, 30, 'fx'), c: color });
     spawnDamagePopup(enemy.x, enemy.y - 14, dealt, {
       crit: isCrit,
@@ -6271,6 +6344,14 @@
     const index = enemies.indexOf(enemy);
     if (index >= 0) enemies.splice(index, 1);
     if (player) player.kills = Math.max(0, Number(player.kills || 0)) + 1;
+    if (player?.keenEyeReady) {
+      triggerKeenEyeBuff();
+      consumeCharge('keen_eye');
+    }
+    if (player?.chronoSpringReady) {
+      triggerChronoSpringBuff();
+      consumeCharge('chrono_spring');
+    }
 
     for (let burst = 0; burst < 12; burst += 1) {
       particles.push({
@@ -6286,6 +6367,8 @@
     dropCoins(enemy.x, enemy.y, isBossType(enemy.type) ? 40 : enemy.elite ? 10 : 5);
     grantXp(isBossType(enemy.type) ? 40 : enemy.elite ? 12 : 6);
     incrementChargeProgress('insurance', 9);
+    incrementChargeProgress('keen_eye', 10);
+    incrementChargeProgress('chrono_spring', 7);
     incrementChargeProgress('escape', 10);
 
     if (enemy.elite && nextRandom('loot') < 0.18) {
@@ -7909,6 +7992,9 @@
 
   function updatePlayerStatuses(dt) {
     if (!player) return;
+    player.critCharmBuffTime = Math.max(0, Number(player.critCharmBuffTime || 0) - dt);
+    player.keenEyeBuffTime = Math.max(0, Number(player.keenEyeBuffTime || 0) - dt);
+    player.chronoSpringBuffTime = Math.max(0, Number(player.chronoSpringBuffTime || 0) - dt);
     tickPlayerStatus('bleed', dt, {
       interval: 0.5,
       damage: stacks => 1.2 + stacks * 1.3,
