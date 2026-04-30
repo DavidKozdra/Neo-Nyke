@@ -57,7 +57,7 @@
   };
   const ROOM_ART_THEMES = {
     dungeon: {
-      floorTiles: ['floor_stone_a', 'floor_stone_b', 'floor_stone_cracked', 'floor_stone_moss'],
+      floorTiles: ['floor_stone_a', 'floor_stone_b', 'floor_stone_cracked', 'floor_stone_moss', 'floor_bone', 'floor_ash'],
       wallTile: 'wall_stone',
       thresholdTile: 'threshold_stone',
       backdrop: '#151916',
@@ -102,7 +102,7 @@
       vignette: 'rgba(0, 0, 0, 0.34)',
     },
     anvil: {
-      floorTiles: ['floor_forge', 'floor_stone_a', 'floor_forge'],
+      floorTiles: ['floor_forge', 'floor_ash', 'floor_stone_a', 'floor_forge'],
       wallTile: 'wall_forge',
       thresholdTile: 'threshold_warm',
       backdrop: '#181512',
@@ -117,7 +117,7 @@
       vignette: 'rgba(0, 0, 0, 0.4)',
     },
     boss: {
-      floorTiles: ['floor_boss', 'floor_boss', 'floor_stone_cracked'],
+      floorTiles: ['floor_boss', 'floor_boss', 'floor_blood', 'floor_stone_cracked'],
       wallTile: 'wall_boss',
       thresholdTile: 'threshold_boss',
       backdrop: '#171012',
@@ -147,7 +147,7 @@
       vignette: 'rgba(0, 0, 0, 0.38)',
     },
     secret: {
-      floorTiles: ['floor_stone_moss', 'floor_stone_b', 'floor_stone_cracked'],
+      floorTiles: ['floor_overgrowth', 'floor_stone_moss', 'floor_stone_b', 'floor_stone_cracked'],
       wallTile: 'wall_stone',
       thresholdTile: 'threshold_stone',
       backdrop: '#111913',
@@ -9577,27 +9577,27 @@
     target.restore();
   }
 
-  function drawFloorTiles(theme) {
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(WALL, WALL, ROOM_W - WALL * 2, ROOM_H - WALL * 2);
-    ctx.clip();
+  function drawFloorTiles(theme, target = ctx) {
+    target.save();
+    target.beginPath();
+    target.rect(WALL, WALL, ROOM_W - WALL * 2, ROOM_H - WALL * 2);
+    target.clip();
     for (let y = WALL; y < ROOM_H - WALL; y += ENV_TILE_SIZE) {
       for (let x = WALL; x < ROOM_W - WALL; x += ENV_TILE_SIZE) {
         const tileX = Math.floor((x - WALL) / ENV_TILE_SIZE);
         const tileY = Math.floor((y - WALL) / ENV_TILE_SIZE);
         const tile = pickFloorTile(tileX, tileY, theme);
-        drawEnvironmentTile(tile, x, y, ENV_TILE_SIZE, ENV_TILE_SIZE, { tint: theme.floorTint });
+        drawEnvironmentTile(tile, x, y, ENV_TILE_SIZE, ENV_TILE_SIZE, { tint: theme.floorTint, ctx: target });
       }
     }
-    ctx.restore();
+    target.restore();
   }
 
-  function drawFloorDecals(theme) {
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(WALL + 8, WALL + 8, ROOM_W - WALL * 2 - 16, ROOM_H - WALL * 2 - 16);
-    ctx.clip();
+  function drawFloorDecals(theme, target = ctx) {
+    target.save();
+    target.beginPath();
+    target.rect(WALL + 8, WALL + 8, ROOM_W - WALL * 2 - 16, ROOM_H - WALL * 2 - 16);
+    target.clip();
     const cols = Math.ceil((ROOM_W - WALL * 2) / ENV_TILE_SIZE);
     const rows = Math.ceil((ROOM_H - WALL * 2) / ENV_TILE_SIZE);
     for (let ty = 0; ty < rows; ty += 1) {
@@ -9606,9 +9606,9 @@
         const y = WALL + ty * ENV_TILE_SIZE;
         const stainNoise = artNoise(tx, ty, 12);
         if (stainNoise > 0.84) {
-          ctx.fillStyle = theme.stain;
-          ctx.beginPath();
-          ctx.ellipse(
+          target.fillStyle = theme.stain;
+          target.beginPath();
+          target.ellipse(
             x + 14 + artNoise(tx, ty, 13) * 20,
             y + 16 + artNoise(tx, ty, 14) * 18,
             8 + artNoise(tx, ty, 15) * 14,
@@ -9617,26 +9617,26 @@
             0,
             Math.PI * 2,
           );
-          ctx.fill();
+          target.fill();
         }
 
         if (artNoise(tx, ty, 22) > 0.78) {
           const sx = x + 8 + artNoise(tx, ty, 23) * 26;
           const sy = y + 8 + artNoise(tx, ty, 24) * 24;
-          ctx.strokeStyle = theme.crack;
-          ctx.lineWidth = 1.4;
-          ctx.beginPath();
-          ctx.moveTo(sx, sy);
-          ctx.lineTo(sx + 8 + artNoise(tx, ty, 25) * 12, sy - 4 + artNoise(tx, ty, 26) * 8);
-          ctx.lineTo(sx + 15 + artNoise(tx, ty, 27) * 14, sy + 4 + artNoise(tx, ty, 28) * 12);
-          ctx.stroke();
+          target.strokeStyle = theme.crack;
+          target.lineWidth = 1.4;
+          target.beginPath();
+          target.moveTo(sx, sy);
+          target.lineTo(sx + 8 + artNoise(tx, ty, 25) * 12, sy - 4 + artNoise(tx, ty, 26) * 8);
+          target.lineTo(sx + 15 + artNoise(tx, ty, 27) * 14, sy + 4 + artNoise(tx, ty, 28) * 12);
+          target.stroke();
         }
       }
     }
-    ctx.restore();
+    target.restore();
   }
 
-  function drawDoorThreshold(dir, theme) {
+  function drawDoorThreshold(dir, theme, target = ctx) {
     const isNorth = dir === 'n';
     const isSouth = dir === 's';
     const isWest = dir === 'w';
@@ -9644,45 +9644,45 @@
     const y = isNorth ? 0 : isSouth ? ROOM_H - WALL - 10 : (ROOM_H - DOOR) / 2;
     const w = isWest || dir === 'e' ? WALL + 10 : DOOR;
     const h = isNorth || isSouth ? WALL + 10 : DOOR;
-    drawTiledRect(theme.thresholdTile, x, y, w, h, { tileSize: ENV_TILE_SIZE, tint: theme.floorTint });
+    drawTiledRect(theme.thresholdTile, x, y, w, h, { tileSize: ENV_TILE_SIZE, tint: theme.floorTint, ctx: target });
 
-    ctx.save();
-    ctx.strokeStyle = theme.doorAccent;
-    ctx.lineWidth = 2;
-    ctx.shadowColor = theme.doorAccent;
-    ctx.shadowBlur = 5;
-    ctx.beginPath();
+    target.save();
+    target.strokeStyle = theme.doorAccent;
+    target.lineWidth = 2;
+    target.shadowColor = theme.doorAccent;
+    target.shadowBlur = 5;
+    target.beginPath();
     if (isNorth || isSouth) {
       const edgeY = isNorth ? WALL + 3 : ROOM_H - WALL - 3;
-      ctx.moveTo((ROOM_W - DOOR) / 2 + 12, edgeY);
-      ctx.lineTo((ROOM_W + DOOR) / 2 - 12, edgeY);
+      target.moveTo((ROOM_W - DOOR) / 2 + 12, edgeY);
+      target.lineTo((ROOM_W + DOOR) / 2 - 12, edgeY);
     } else {
       const edgeX = isWest ? WALL + 3 : ROOM_W - WALL - 3;
-      ctx.moveTo(edgeX, (ROOM_H - DOOR) / 2 + 12);
-      ctx.lineTo(edgeX, (ROOM_H + DOOR) / 2 - 12);
+      target.moveTo(edgeX, (ROOM_H - DOOR) / 2 + 12);
+      target.lineTo(edgeX, (ROOM_H + DOOR) / 2 - 12);
     }
-    ctx.stroke();
-    ctx.restore();
+    target.stroke();
+    target.restore();
   }
 
-  function drawStoneWalls(theme) {
-    drawTiledRect(theme.wallTile, 0, 0, ROOM_W, WALL + 8, { tileSize: ENV_TILE_SIZE });
-    drawTiledRect(theme.wallTile, 0, ROOM_H - WALL - 8, ROOM_W, WALL + 8, { tileSize: ENV_TILE_SIZE });
-    drawTiledRect(theme.wallTile, 0, 0, WALL + 8, ROOM_H, { tileSize: ENV_TILE_SIZE });
-    drawTiledRect(theme.wallTile, ROOM_W - WALL - 8, 0, WALL + 8, ROOM_H, { tileSize: ENV_TILE_SIZE });
+  function drawStoneWalls(theme, target = ctx) {
+    drawTiledRect(theme.wallTile, 0, 0, ROOM_W, WALL + 8, { tileSize: ENV_TILE_SIZE, ctx: target });
+    drawTiledRect(theme.wallTile, 0, ROOM_H - WALL - 8, ROOM_W, WALL + 8, { tileSize: ENV_TILE_SIZE, ctx: target });
+    drawTiledRect(theme.wallTile, 0, 0, WALL + 8, ROOM_H, { tileSize: ENV_TILE_SIZE, ctx: target });
+    drawTiledRect(theme.wallTile, ROOM_W - WALL - 8, 0, WALL + 8, ROOM_H, { tileSize: ENV_TILE_SIZE, ctx: target });
 
     DIRECTIONS.forEach(dir => {
-      if (hasVisibleRoomExit(currentRoom, dir)) drawDoorThreshold(dir, theme);
+      if (hasVisibleRoomExit(currentRoom, dir)) drawDoorThreshold(dir, theme, target);
     });
 
-    ctx.save();
-    ctx.fillStyle = theme.wallShadow;
-    ctx.fillRect(WALL, WALL, ROOM_W - WALL * 2, 8);
-    ctx.fillRect(WALL, ROOM_H - WALL - 8, ROOM_W - WALL * 2, 8);
-    ctx.fillRect(WALL, WALL, 8, ROOM_H - WALL * 2);
-    ctx.fillRect(ROOM_W - WALL - 8, WALL, 8, ROOM_H - WALL * 2);
-    ctx.strokeStyle = enemies.length > 0 ? theme.combatAccent : theme.wallEdge;
-    ctx.lineWidth = enemies.length > 0 ? 3 : 2;
+    target.save();
+    target.fillStyle = theme.wallShadow;
+    target.fillRect(WALL, WALL, ROOM_W - WALL * 2, 8);
+    target.fillRect(WALL, ROOM_H - WALL - 8, ROOM_W - WALL * 2, 8);
+    target.fillRect(WALL, WALL, 8, ROOM_H - WALL * 2);
+    target.fillRect(ROOM_W - WALL - 8, WALL, 8, ROOM_H - WALL * 2);
+    target.strokeStyle = enemies.length > 0 ? theme.combatAccent : theme.wallEdge;
+    target.lineWidth = enemies.length > 0 ? 3 : 2;
     const inset = WALL + 3;
     const left = inset;
     const right = ROOM_W - inset;
@@ -9692,37 +9692,37 @@
     const doorMaxX = (ROOM_W + DOOR) / 2 - 10;
     const doorMinY = (ROOM_H - DOOR) / 2 + 10;
     const doorMaxY = (ROOM_H + DOOR) / 2 - 10;
-    ctx.beginPath();
+    target.beginPath();
     if (hasVisibleRoomExit(currentRoom, 'n')) {
-      ctx.moveTo(left, top); ctx.lineTo(doorMinX, top);
-      ctx.moveTo(doorMaxX, top); ctx.lineTo(right, top);
+      target.moveTo(left, top); target.lineTo(doorMinX, top);
+      target.moveTo(doorMaxX, top); target.lineTo(right, top);
     } else {
-      ctx.moveTo(left, top); ctx.lineTo(right, top);
+      target.moveTo(left, top); target.lineTo(right, top);
     }
     if (hasVisibleRoomExit(currentRoom, 's')) {
-      ctx.moveTo(left, bottom); ctx.lineTo(doorMinX, bottom);
-      ctx.moveTo(doorMaxX, bottom); ctx.lineTo(right, bottom);
+      target.moveTo(left, bottom); target.lineTo(doorMinX, bottom);
+      target.moveTo(doorMaxX, bottom); target.lineTo(right, bottom);
     } else {
-      ctx.moveTo(left, bottom); ctx.lineTo(right, bottom);
+      target.moveTo(left, bottom); target.lineTo(right, bottom);
     }
     if (hasVisibleRoomExit(currentRoom, 'w')) {
-      ctx.moveTo(left, top); ctx.lineTo(left, doorMinY);
-      ctx.moveTo(left, doorMaxY); ctx.lineTo(left, bottom);
+      target.moveTo(left, top); target.lineTo(left, doorMinY);
+      target.moveTo(left, doorMaxY); target.lineTo(left, bottom);
     } else {
-      ctx.moveTo(left, top); ctx.lineTo(left, bottom);
+      target.moveTo(left, top); target.lineTo(left, bottom);
     }
     if (hasVisibleRoomExit(currentRoom, 'e')) {
-      ctx.moveTo(right, top); ctx.lineTo(right, doorMinY);
-      ctx.moveTo(right, doorMaxY); ctx.lineTo(right, bottom);
+      target.moveTo(right, top); target.lineTo(right, doorMinY);
+      target.moveTo(right, doorMaxY); target.lineTo(right, bottom);
     } else {
-      ctx.moveTo(right, top); ctx.lineTo(right, bottom);
+      target.moveTo(right, top); target.lineTo(right, bottom);
     }
-    ctx.stroke();
-    ctx.restore();
+    target.stroke();
+    target.restore();
   }
 
-  function drawEnvironmentVignette(theme) {
-    const gradient = ctx.createRadialGradient(
+  function drawEnvironmentVignette(theme, target = ctx) {
+    const gradient = target.createRadialGradient(
       ROOM_W / 2,
       ROOM_H / 2,
       120,
@@ -9732,18 +9732,44 @@
     );
     gradient.addColorStop(0, 'rgba(0,0,0,0)');
     gradient.addColorStop(1, theme.vignette || 'rgba(0,0,0,0.4)');
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, ROOM_W, ROOM_H);
+    target.fillStyle = gradient;
+    target.fillRect(0, 0, ROOM_W, ROOM_H);
+  }
+
+  function getEnvironmentBackgroundCacheKey() {
+    const roomKey = currentRoom
+      ? `${currentRoom.gx},${currentRoom.gy},${currentRoom.type || 'room'},${currentRoom.secretKind || ''}`
+      : 'none';
+    const doorsKey = DIRECTIONS.map(dir => hasVisibleRoomExit(currentRoom, dir) ? '1' : '0').join('');
+    const combatKey = enemies.length > 0 ? 'combat' : 'calm';
+    return `${floor}|${roomKey}|${doorsKey}|${combatKey}`;
+  }
+
+  function buildEnvironmentBackground(theme) {
+    const canvasEl = document.createElement('canvas');
+    canvasEl.width = ROOM_W;
+    canvasEl.height = ROOM_H;
+    const bg = canvasEl.getContext('2d');
+    bg.imageSmoothingEnabled = false;
+    bg.fillStyle = theme.backdrop;
+    bg.fillRect(0, 0, ROOM_W, ROOM_H);
+    drawFloorTiles(theme, bg);
+    drawFloorDecals(theme, bg);
+    drawStoneWalls(theme, bg);
+    drawEnvironmentVignette(theme, bg);
+    return canvasEl;
   }
 
   function drawFloor() {
     const theme = getRoomArtTheme();
-    ctx.fillStyle = theme.backdrop;
-    ctx.fillRect(0, 0, ROOM_W, ROOM_H);
-    drawFloorTiles(theme);
-    drawFloorDecals(theme);
-    drawStoneWalls(theme);
-    drawEnvironmentVignette(theme);
+    const cacheKey = getEnvironmentBackgroundCacheKey();
+    if (!environmentBackgroundCache.canvas || environmentBackgroundCache.key !== cacheKey) {
+      environmentBackgroundCache = {
+        key: cacheKey,
+        canvas: buildEnvironmentBackground(theme),
+      };
+    }
+    ctx.drawImage(environmentBackgroundCache.canvas, 0, 0);
   }
 
   function drawChests() {
@@ -10478,6 +10504,30 @@
       g.fillRect(ox + 1, oy + size - 4, 5, 2);
       g.fillRect(ox + size - 5, oy + 2, 3, 1);
       g.fillRect(ox + 7, oy + 13, 4, 1);
+    }
+    if (def.overgrowth) {
+      g.fillStyle = def.overgrowth;
+      g.fillRect(ox + 2, oy + size - 6, 8, 1);
+      g.fillRect(ox + 9, oy + size - 7, 1, 3);
+      g.fillRect(ox + size - 4, oy + 4, 2, 5);
+    }
+    if (def.ash) {
+      g.fillStyle = def.ash;
+      g.fillRect(ox + 3, oy + 4, 1, 1);
+      g.fillRect(ox + 8, oy + 12, 2, 1);
+      g.fillRect(ox + 12, oy + 7, 1, 1);
+    }
+    if (def.bone) {
+      g.fillStyle = def.bone;
+      g.fillRect(ox + 4, oy + 10, 4, 1);
+      g.fillRect(ox + 12, oy + 4, 1, 3);
+      g.fillRect(ox + 11, oy + 5, 3, 1);
+    }
+    if (def.blood) {
+      g.fillStyle = def.blood;
+      g.fillRect(ox + 4, oy + 8, 5, 2);
+      g.fillRect(ox + 8, oy + 10, 3, 1);
+      g.fillRect(ox + 12, oy + 11, 1, 1);
     }
     if (def.ember) {
       g.fillStyle = def.ember;
