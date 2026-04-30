@@ -55,12 +55,12 @@
   function spawnClash(cx, cy) {
     for (let i = 0; i < 30; i++) {
       const a = Math.random() * Math.PI * 2, sp = 1.5 + Math.random() * 4.5;
-      const col = ['#ffffff','#ffd060','#00ffff','#ff66aa'][i % 4];
+      const col = ['#f0f5ff', '#b7c7de', '#90a5c2', '#7a8faa'][i % 4];
       sparks.push({ x: cx, y: cy, vx: Math.cos(a)*sp, vy: Math.sin(a)*sp,
         life: 1, maxLife: 0.4 + Math.random() * 0.5, color: col, r: 1.5 + Math.random() * 2 });
     }
     rings.push({ x: cx, y: cy, r: 0, maxR: 85 + Math.random() * 65, life: 1,
-      color: ['#00ffff','#ffd060','#ffffff'][Math.floor(Math.random() * 3)] });
+      color: ['#95abc8', '#b8cae0', '#e6effb'][Math.floor(Math.random() * 3)] });
   }
 
   const MOTE_COUNT = 40;
@@ -70,7 +70,7 @@
       vy: -(0.18 + Math.random() * 0.38), vx: (Math.random() - 0.5) * 0.15,
       life: 1, decay: 1 / (150 + Math.random() * 220),
       r: 0.7 + Math.random() * 1.3,
-      col: Math.random() < 0.55 ? '#00ffff' : '#ff66aa' };
+          col: Math.random() < 0.55 ? '#8fa6c5' : '#6f84a0' };
   }
 
   const CLASH_INTERVAL = 90;
@@ -86,7 +86,7 @@
     const rw = W, rh = H;
     const rox = 0, roy = 0;
 
-    c.fillStyle = '#030610';
+    c.fillStyle = '#0f0d0c';
     c.fillRect(0, 0, W, H);
 
     c.save();
@@ -94,7 +94,7 @@
     c.rect(rox, roy, rw, rh);
     c.clip();
 
-    c.strokeStyle = 'rgba(0,255,255,0.05)';
+    c.strokeStyle = 'rgba(130, 151, 177, 0.08)';
     c.lineWidth = 1;
     for (let x = rox; x <= rox + rw; x += 48) {
       c.beginPath(); c.moveTo(x, roy); c.lineTo(x, roy + rh); c.stroke();
@@ -103,9 +103,9 @@
       c.beginPath(); c.moveTo(rox, y); c.lineTo(rox + rw, y); c.stroke();
     }
 
-    c.shadowColor = '#00ffff';
+    c.shadowColor = '#6f84a2';
     c.shadowBlur = 18;
-    c.strokeStyle = '#00ffff';
+    c.strokeStyle = '#8fa8ca';
     c.lineWidth = wall;
     c.strokeRect(rox + wall/2, roy + wall/2, rw - wall, rh - wall);
     c.shadowBlur = 0;
@@ -120,10 +120,10 @@
       [rox + rw - wall - pw, roy + rh - wall - ph],
     ].forEach(([px, py]) => {
       c.save();
-      c.fillStyle = '#193849';
-      c.strokeStyle = '#5ad8ff';
+      c.fillStyle = '#2a221b';
+      c.strokeStyle = '#8fa8ca';
       c.lineWidth = 2;
-      c.shadowColor = '#5ad8ff';
+      c.shadowColor = '#8fa8ca';
       c.shadowBlur = 8;
       c.fillRect(px, py, pw, ph);
       c.strokeRect(px, py, pw, ph);
@@ -238,15 +238,15 @@
     drawPixelSprite(c, F_KEYS[1], rx2, fightY, F_SCALE, true);
 
     const swing = clashPhase === 'clashing' ? Math.sin((clashFrame / 18) * Math.PI) * 0.28 : 0;
-    drawSword(c, lx  + 20, fightY - 14, -Math.PI * 0.28 - swing, 62, '#a0e8ff', 0.92);
-    drawSword(c, rx2 - 20, fightY - 14,  Math.PI * 1.28 + swing, 62, '#ffd060', 0.92);
+    drawSword(c, lx  + 20, fightY - 14, -Math.PI * 0.28 - swing, 62, '#c0d1e7', 0.92);
+    drawSword(c, rx2 - 20, fightY - 14,  Math.PI * 1.28 + swing, 62, '#8da5c5', 0.92);
 
     if (clashPhase === 'clashing' && clashFrame < 8) {
       const fa = (1 - clashFrame / 8) * 0.48;
       c.save();
       const fg2 = c.createRadialGradient(cx, fightY - 12, 0, cx, fightY - 12, 140);
-      fg2.addColorStop(0,   `rgba(255,240,160,${fa})`);
-      fg2.addColorStop(0.5, `rgba(0,255,255,${fa * 0.45})`);
+      fg2.addColorStop(0,   `rgba(218,230,246,${fa})`);
+      fg2.addColorStop(0.5, `rgba(139,165,198,${fa * 0.45})`);
       fg2.addColorStop(1,   'rgba(0,0,0,0)');
       c.fillStyle = fg2;
       c.fillRect(rox, roy, rw, rh);

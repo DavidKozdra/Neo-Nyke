@@ -9636,7 +9636,7 @@
     target.restore();
   }
 
-  function drawDoorThreshold(dir, theme, target = ctx) {
+  function drawDoorThreshold(dir, theme, locked, target = ctx) {
     const isNorth = dir === 'n';
     const isSouth = dir === 's';
     const isWest = dir === 'w';
@@ -9644,13 +9644,18 @@
     const y = isNorth ? 0 : isSouth ? ROOM_H - WALL - 10 : (ROOM_H - DOOR) / 2;
     const w = isWest || dir === 'e' ? WALL + 10 : DOOR;
     const h = isNorth || isSouth ? WALL + 10 : DOOR;
-    drawTiledRect(theme.thresholdTile, x, y, w, h, { tileSize: ENV_TILE_SIZE, tint: theme.floorTint, ctx: target });
+    if (locked) {
+      drawTiledRect(theme.thresholdTile, x, y, w, h, { tileSize: ENV_TILE_SIZE, tint: theme.floorTint, ctx: target });
+    } else {
+      target.fillStyle = 'rgba(8,8,10,0.96)';
+      target.fillRect(x, y, w, h);
+    }
 
     target.save();
-    target.strokeStyle = theme.doorAccent;
-    target.lineWidth = 2;
-    target.shadowColor = theme.doorAccent;
-    target.shadowBlur = 5;
+    target.strokeStyle = locked ? 'rgba(160,40,40,0.85)' : theme.doorAccent;
+    target.lineWidth = locked ? 3 : 2;
+    target.shadowColor = locked ? 'rgba(200,30,30,0.9)' : theme.doorAccent;
+    target.shadowBlur = locked ? 12 : 5;
     target.beginPath();
     if (isNorth || isSouth) {
       const edgeY = isNorth ? WALL + 3 : ROOM_H - WALL - 3;
@@ -9662,6 +9667,101 @@
       target.lineTo(edgeX, (ROOM_H + DOOR) / 2 - 12);
     }
     target.stroke();
+
+    if (locked) {
+      // Draw iron bars across the door opening
+      const barColor = 'rgba(90,55,55,0.92)';
+      const barHighlight = 'rgba(140,100,100,0.7)';
+      const barShadow = 'rgba(30,10,10,0.85)';
+      target.shadowBlur = 0;
+      if (isNorth || isSouth) {
+        const cx = ROOM_W / 2;
+        const openY1 = isNorth ? 0 : ROOM_H - WALL - 10;
+        const openY2 = isNorth ? WALL + 10 : ROOM_H;
+        const barSpacing = DOOR / 4;
+        for (let i = -1; i <= 1; i++) {
+          const bx = cx + i * barSpacing;
+          target.lineWidth = 6;
+          target.strokeStyle = barShadow;
+          target.shadowBlur = 0;
+          target.beginPath();
+          target.moveTo(bx + 1, openY1);
+          target.lineTo(bx + 1, openY2);
+          target.stroke();
+          target.lineWidth = 5;
+          target.strokeStyle = barColor;
+          target.beginPath();
+          target.moveTo(bx, openY1);
+          target.lineTo(bx, openY2);
+          target.stroke();
+          target.lineWidth = 2;
+          target.strokeStyle = barHighlight;
+          target.beginPath();
+          target.moveTo(bx - 1, openY1);
+          target.lineTo(bx - 1, openY2);
+          target.stroke();
+        }
+        // Horizontal crossbar
+        const crossY = (openY1 + openY2) / 2;
+        const barLeft = cx - DOOR / 2 + 10;
+        const barRight = cx + DOOR / 2 - 10;
+        target.lineWidth = 6;
+        target.strokeStyle = barShadow;
+        target.beginPath();
+        target.moveTo(barLeft, crossY + 1);
+        target.lineTo(barRight, crossY + 1);
+        target.stroke();
+        target.lineWidth = 5;
+        target.strokeStyle = barColor;
+        target.beginPath();
+        target.moveTo(barLeft, crossY);
+        target.lineTo(barRight, crossY);
+        target.stroke();
+      } else {
+        const cy = ROOM_H / 2;
+        const openX1 = isWest ? 0 : ROOM_W - WALL - 10;
+        const openX2 = isWest ? WALL + 10 : ROOM_W;
+        const barSpacing = DOOR / 4;
+        for (let i = -1; i <= 1; i++) {
+          const by = cy + i * barSpacing;
+          target.lineWidth = 6;
+          target.strokeStyle = barShadow;
+          target.beginPath();
+          target.moveTo(openX1, by + 1);
+          target.lineTo(openX2, by + 1);
+          target.stroke();
+          target.lineWidth = 5;
+          target.strokeStyle = barColor;
+          target.beginPath();
+          target.moveTo(openX1, by);
+          target.lineTo(openX2, by);
+          target.stroke();
+          target.lineWidth = 2;
+          target.strokeStyle = barHighlight;
+          target.beginPath();
+          target.moveTo(openX1, by - 1);
+          target.lineTo(openX2, by - 1);
+          target.stroke();
+        }
+        // Vertical crossbar
+        const crossX = (openX1 + openX2) / 2;
+        const barTop = cy - DOOR / 2 + 10;
+        const barBot = cy + DOOR / 2 - 10;
+        target.lineWidth = 6;
+        target.strokeStyle = barShadow;
+        target.beginPath();
+        target.moveTo(crossX + 1, barTop);
+        target.lineTo(crossX + 1, barBot);
+        target.stroke();
+        target.lineWidth = 5;
+        target.strokeStyle = barColor;
+        target.beginPath();
+        target.moveTo(crossX, barTop);
+        target.lineTo(crossX, barBot);
+        target.stroke();
+      }
+    }
+
     target.restore();
   }
 
@@ -9671,8 +9771,11 @@
     drawTiledRect(theme.wallTile, 0, 0, WALL + 8, ROOM_H, { tileSize: ENV_TILE_SIZE, ctx: target });
     drawTiledRect(theme.wallTile, ROOM_W - WALL - 8, 0, WALL + 8, ROOM_H, { tileSize: ENV_TILE_SIZE, ctx: target });
 
+    const challengeActive = !!currentRoom && CHALLENGE_ROOM_TYPES.has(currentRoom.type) && !!currentRoom.challengeStarted && !currentRoom.cleared;
+    const roomLocked = !!currentRoom && !currentRoom.cleared
+      && (currentRoom.type === 'boss' || currentRoom.type === 'god' || currentRoom.type === 'ladder' || challengeActive);
     DIRECTIONS.forEach(dir => {
-      if (hasVisibleRoomExit(currentRoom, dir)) drawDoorThreshold(dir, theme, target);
+      if (hasVisibleRoomExit(currentRoom, dir)) drawDoorThreshold(dir, theme, roomLocked, target);
     });
 
     target.save();
@@ -9718,6 +9821,29 @@
       target.moveTo(right, top); target.lineTo(right, bottom);
     }
     target.stroke();
+
+    // Draw bright arch accent on each open door gap so exits are obvious
+    if (!roomLocked) {
+      target.strokeStyle = theme.doorAccent;
+      target.lineWidth = 3;
+      target.shadowColor = theme.doorAccent;
+      target.shadowBlur = 14;
+      target.beginPath();
+      if (hasVisibleRoomExit(currentRoom, 'n')) {
+        target.moveTo(doorMinX, top); target.lineTo(doorMaxX, top);
+      }
+      if (hasVisibleRoomExit(currentRoom, 's')) {
+        target.moveTo(doorMinX, bottom); target.lineTo(doorMaxX, bottom);
+      }
+      if (hasVisibleRoomExit(currentRoom, 'w')) {
+        target.moveTo(left, doorMinY); target.lineTo(left, doorMaxY);
+      }
+      if (hasVisibleRoomExit(currentRoom, 'e')) {
+        target.moveTo(right, doorMinY); target.lineTo(right, doorMaxY);
+      }
+      target.stroke();
+    }
+
     target.restore();
   }
 
@@ -11570,7 +11696,7 @@
     drawPixelIcon(ui.icons.melee, '#00ffff', [
       [2, 6], [3, 5], [4, 4], [5, 3], [6, 2], [5, 4], [6, 3], [7, 2], [6, 5], [7, 4],
     ]);
-    drawPixelIcon(ui.icons.laser, '#ff00aa', [
+    drawPixelIcon(ui.icons.laser, '#7a9fc4', [
       [1, 4], [2, 4], [3, 4], [4, 4], [5, 4], [6, 4], [7, 4], [5, 3], [6, 2], [7, 1],
     ]);
     drawPixelIcon(ui.icons.smash, '#ffaa00', [
