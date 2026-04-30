@@ -372,6 +372,37 @@
   const MOVE_SLOTS = ['melee', 'laser', 'smash', 'dash'];
   const SLOT_LABELS = { melee: 'Melee', laser: 'Laser', smash: 'Smash', dash: 'Mobility' };
   const SLOT_KEYS  = { melee: 'LMB', laser: 'RMB', smash: 'R', dash: 'SHIFT' };
+  function normalizeMouseBinding(value, fallback) {
+    const normalized = String(value || fallback).toLowerCase();
+    return normalized === 'rmb' || normalized === 'lmb' ? normalized : fallback;
+  }
+
+  function getMouseBindings() {
+    const bindings = window.NeoSettings?.getBindings?.();
+    return {
+      slash: normalizeMouseBinding(bindings?.slash, 'lmb'),
+      laser: normalizeMouseBinding(bindings?.laser, 'rmb'),
+    };
+  }
+
+  function isMouseActionHeld(action) {
+    const mouseBindings = getMouseBindings();
+    return mouseBindings[action] === 'rmb' ? !!mouse.right : !!mouse.down;
+  }
+
+  function formatMouseBindingLabel(value, fallback) {
+    return normalizeMouseBinding(value, fallback) === 'rmb' ? 'RMB' : 'LMB';
+  }
+
+  function getSlotKeyLabel(slot) {
+    const bindings = window.NeoSettings?.getBindings?.();
+    if (slot === 'melee') return formatMouseBindingLabel(bindings?.slash, 'lmb');
+    if (slot === 'laser') return formatMouseBindingLabel(bindings?.laser, 'rmb');
+    if (slot === 'smash') return String(bindings?.smash || SLOT_KEYS.smash || 'r').toUpperCase();
+    if (slot === 'dash') return String(bindings?.dash || SLOT_KEYS.dash || 'shift').toUpperCase();
+    return SLOT_KEYS[slot] || '';
+  }
+
   const MOVE_DEFS = {
     slash: { key: 'slash', slot: 'melee', name: 'Slash', desc: 'Close-range arc attack.' },
     fire_balls: { key: 'fire_balls', slot: 'melee', name: 'Fire Balls', desc: 'Shoot a spread of fireballs.' },
@@ -1067,17 +1098,17 @@
 
   // Upgradeable stat schemas for the anvil panel
   const WEAPON_UPGRADEABLE_STATS = {
-    damage:    { label: 'Damage',       step: 5,     min: 5,    max: 9999, xpPerStep: 30, format: v => Math.round(v) },
-    cooldown:  { label: 'Cooldown (s)', step: -0.05, min: 0.05, max: 9999, xpPerStep: 40, format: v => v.toFixed(2) + 's' },
-    range:     { label: 'Range',        step: 10,    min: 10,   max: 9999, xpPerStep: 25, format: v => Math.round(v) },
-    knockback: { label: 'Knockback',    step: 30,    min: 0,    max: 9999, xpPerStep: 20, format: v => Math.round(v) },
+    damage:    { label: 'Damage',       step: 5,     min: 5,    max: 9999, xpPerStep: 15, format: v => Math.round(v) },
+    cooldown:  { label: 'Cooldown (s)', step: -0.05, min: 0.05, max: 9999, xpPerStep: 20, format: v => v.toFixed(2) + 's' },
+    range:     { label: 'Range',        step: 10,    min: 10,   max: 9999, xpPerStep: 13, format: v => Math.round(v) },
+    knockback: { label: 'Knockback',    step: 30,    min: 0,    max: 9999, xpPerStep: 10, format: v => Math.round(v) },
   };
   const MOVE_UPGRADEABLE_STATS = {
-    damage:    { label: 'Damage',       step: 5,    min: 5,   max: 9999, xpPerStep: 30, format: v => Math.round(v) },
-    cooldown:  { label: 'Cooldown (s)', step: -0.05,min: 0.05,max: 9999, xpPerStep: 40, format: v => v.toFixed(2) + 's' },
-    duration:  { label: 'Duration (s)', step: 0.1,  min: 0.1, max: 30,   xpPerStep: 25, format: v => v.toFixed(1) + 's' },
-    range:     { label: 'Range / AOE',  step: 10,   min: 10,  max: 9999, xpPerStep: 25, format: v => Math.round(v) },
-    critChance:{ label: 'Crit Chance',  step: 0.05, min: 0,   max: 1.0,  xpPerStep: 50, format: v => Math.round(v * 100) + '%' },
+    damage:    { label: 'Damage',       step: 5,    min: 5,   max: 9999, xpPerStep: 15, format: v => Math.round(v) },
+    cooldown:  { label: 'Cooldown (s)', step: -0.05,min: 0.05,max: 9999, xpPerStep: 20, format: v => v.toFixed(2) + 's' },
+    duration:  { label: 'Duration (s)', step: 0.1,  min: 0.1, max: 30,   xpPerStep: 13, format: v => v.toFixed(1) + 's' },
+    range:     { label: 'Range / AOE',  step: 10,   min: 10,  max: 9999, xpPerStep: 13, format: v => Math.round(v) },
+    critChance:{ label: 'Crit Chance',  step: 0.05, min: 0,   max: 1.0,  xpPerStep: 25, format: v => Math.round(v * 100) + '%' },
   };
 
   // Base stat values per weapon (used to compute current upgraded value)
@@ -1414,6 +1445,30 @@
     const ctx2d = canvas.getContext('2d');
     if (!ctx2d) return;
     const color = item?.color || '#ffffff';
+    const iconDef = window.NeoNykeIconDefs?.items?.[item?.key];
+    ctx2d.clearRect(0, 0, canvas.width, canvas.height);
+    if (iconDef) {
+      const scale = canvas.width / 32;
+      ctx2d.fillStyle = 'rgba(0,0,0,0.45)';
+      ctx2d.beginPath();
+      ctx2d.roundRect(0, 0, canvas.width, canvas.height, 4 * scale);
+      ctx2d.fill();
+      ctx2d.shadowColor = iconDef.accent || color;
+      ctx2d.shadowBlur = item?.rarity === 'god' ? 8 * scale : 5 * scale;
+      ctx2d.fillStyle = color;
+      iconDef.pixels.forEach(([px, py]) => {
+        ctx2d.fillRect(px * 4 * scale, py * 4 * scale, 4 * scale, 4 * scale);
+      });
+      if (iconDef.accent) {
+        ctx2d.shadowBlur = 0;
+        ctx2d.fillStyle = iconDef.accent;
+        (iconDef.accentPixels || []).forEach(([px, py]) => {
+          ctx2d.fillRect(px * 4 * scale, py * 4 * scale, 4 * scale, 4 * scale);
+        });
+      }
+      ctx2d.shadowBlur = 0;
+      return;
+    }
     const symbolByRarity = {
       god: '✦',
       purple: '◆',
@@ -1422,7 +1477,6 @@
       white: '●',
     };
     const symbol = symbolByRarity[item?.rarity] || '●';
-    ctx2d.clearRect(0, 0, canvas.width, canvas.height);
     ctx2d.fillStyle = color;
     ctx2d.shadowColor = color;
     ctx2d.shadowBlur = item?.rarity === 'god' ? 8 : 5;
@@ -1502,16 +1556,31 @@
       smash: '#c08cff',
       dash: '#79f7bf',
     };
+    const color = slotColor[moveDef?.slot] || '#9ec6ff';
+    const iconDef = window.NeoNykeIconDefs?.moves?.[moveDef?.key];
+    ctx2d.clearRect(0, 0, canvas.width, canvas.height);
+    if (iconDef) {
+      const scale = canvas.width / 32;
+      ctx2d.fillStyle = 'rgba(0,0,0,0.45)';
+      ctx2d.beginPath();
+      ctx2d.roundRect(0, 0, canvas.width, canvas.height, 4 * scale);
+      ctx2d.fill();
+      ctx2d.shadowColor = iconDef.color;
+      ctx2d.shadowBlur = 7 * scale;
+      ctx2d.fillStyle = iconDef.color;
+      iconDef.pixels.forEach(([px, py]) => {
+        ctx2d.fillRect(px * 4 * scale, py * 4 * scale, 4 * scale, 4 * scale);
+      });
+      ctx2d.shadowBlur = 0;
+      return;
+    }
     const slotGlyph = {
       melee: '⚔',
       laser: '✦',
       smash: '⬣',
       dash: '➤',
     };
-    const color = slotColor[moveDef?.slot] || '#9ec6ff';
     const glyph = slotGlyph[moveDef?.slot] || '✦';
-
-    ctx2d.clearRect(0, 0, canvas.width, canvas.height);
     ctx2d.fillStyle = color;
     ctx2d.shadowColor = color;
     ctx2d.shadowBlur = 7;
@@ -1524,6 +1593,76 @@
     ctx2d.textAlign = 'center';
     ctx2d.textBaseline = 'middle';
     ctx2d.fillText(glyph, 15, 15.5);
+  }
+
+  function drawWeaponToastIcon(canvas, weaponDef) {
+    const ctx2d = canvas.getContext('2d');
+    if (!ctx2d) return;
+    const color = weaponDef?.color || '#ffffff';
+    const iconDef = window.NeoNykeIconDefs?.weapons?.[weaponDef?.key];
+    ctx2d.clearRect(0, 0, canvas.width, canvas.height);
+    if (iconDef) {
+      const scale = canvas.width / 32;
+      ctx2d.fillStyle = 'rgba(0,0,0,0.45)';
+      ctx2d.beginPath();
+      ctx2d.roundRect(0, 0, canvas.width, canvas.height, 4 * scale);
+      ctx2d.fill();
+      ctx2d.shadowColor = color;
+      ctx2d.shadowBlur = 7 * scale;
+      ctx2d.fillStyle = color;
+      iconDef.pixels.forEach(([px, py]) => {
+        ctx2d.fillRect(px * 4 * scale, py * 4 * scale, 4 * scale, 4 * scale);
+      });
+      ctx2d.shadowBlur = 0;
+      return;
+    }
+    ctx2d.fillStyle = color;
+    ctx2d.shadowColor = color;
+    ctx2d.shadowBlur = 6;
+    ctx2d.beginPath();
+    ctx2d.arc(15, 15, 12, 0, Math.PI * 2);
+    ctx2d.fill();
+    ctx2d.shadowBlur = 0;
+    ctx2d.fillStyle = '#071018';
+    ctx2d.font = 'bold 11px system-ui';
+    ctx2d.textAlign = 'center';
+    ctx2d.textBaseline = 'middle';
+    ctx2d.fillText('⚔', 15, 15.5);
+  }
+
+  function drawHealToastIcon(canvas, healId) {
+    const ctx2d = canvas.getContext('2d');
+    if (!ctx2d) return;
+    const iconDef = window.NeoNykeIconDefs?.heals?.[healId];
+    const color = iconDef?.color || '#50e880';
+    const scale = canvas.width / 32;
+    ctx2d.clearRect(0, 0, canvas.width, canvas.height);
+    ctx2d.fillStyle = 'rgba(0,0,0,0.45)';
+    ctx2d.beginPath();
+    ctx2d.roundRect(0, 0, canvas.width, canvas.height, 4 * scale);
+    ctx2d.fill();
+    if (iconDef) {
+      ctx2d.shadowColor = color;
+      ctx2d.shadowBlur = 7 * scale;
+      ctx2d.fillStyle = color;
+      iconDef.pixels.forEach(([px, py]) => {
+        ctx2d.fillRect(px * 4 * scale, py * 4 * scale, 4 * scale, 4 * scale);
+      });
+      ctx2d.shadowBlur = 0;
+      return;
+    }
+    ctx2d.fillStyle = color;
+    ctx2d.shadowColor = color;
+    ctx2d.shadowBlur = 6;
+    ctx2d.beginPath();
+    ctx2d.arc(15, 15, 12, 0, Math.PI * 2);
+    ctx2d.fill();
+    ctx2d.shadowBlur = 0;
+    ctx2d.fillStyle = '#071018';
+    ctx2d.font = 'bold 12px system-ui';
+    ctx2d.textAlign = 'center';
+    ctx2d.textBaseline = 'middle';
+    ctx2d.fillText('+', 15, 15.5);
   }
 
   function pushMoveNotification(moveKey, amount = 1) {
@@ -1576,6 +1715,44 @@
       stack.removeChild(stack.lastElementChild);
     }
 
+    setTimeout(() => {
+      toast.classList.add('is-leaving');
+      setTimeout(() => toast.remove(), 220);
+    }, 2600);
+  }
+
+  function pushWeaponNotification(weaponKey) {
+    const def = WEAPON_DEFS[weaponKey];
+    if (!def) return;
+    const rarityColor = { white: '#e8f0ff', purple: '#c08cff', red: '#ff7070' };
+    const color = def.color || rarityColor[def.rarity] || '#d9e8ff';
+    const stack = ensureItemNotifyStack();
+    const toast = document.createElement('div');
+    toast.className = 'item-toast';
+    toast.style.borderColor = color;
+    const icon = document.createElement('canvas');
+    icon.className = 'item-toast-icon';
+    icon.width = 30;
+    icon.height = 30;
+    drawWeaponToastIcon(icon, def);
+    const body = document.createElement('div');
+    body.className = 'item-toast-body';
+    const title = document.createElement('div');
+    title.className = 'item-toast-title';
+    const name = document.createElement('span');
+    name.textContent = `Weapon: ${def.name}`;
+    name.style.color = color;
+    const plus = document.createElement('span');
+    plus.className = 'item-toast-amount';
+    plus.textContent = '+1';
+    const desc = document.createElement('div');
+    desc.className = 'item-toast-desc';
+    desc.textContent = def.description || 'New weapon acquired.';
+    title.append(name, plus);
+    body.append(title, desc);
+    toast.append(icon, body);
+    stack.prepend(toast);
+    while (stack.children.length > 4) stack.removeChild(stack.lastElementChild);
     setTimeout(() => {
       toast.classList.add('is-leaving');
       setTimeout(() => toast.remove(), 220);
@@ -2239,6 +2416,7 @@
         return `<div class="shop-card${blocked ? ' shop-card--unaffordable' : ''}">
           <span class="shop-card__eyebrow">Relic</span>
           <div class="shop-card__title-row">
+            <canvas class="shop-card__icon" data-item-icon="${offer.key}" width="30" height="30"></canvas>
             <h4>${item?.name || 'Item'}</h4>
             <span class="shop-card__price">${offer.cost}</span>
           </div>
@@ -2252,6 +2430,9 @@
       })
       .join('');
     ui.shopItems.innerHTML = itemCards || '<div class="shop-card shop-empty"><p>Every relic here is already yours. Clear the floor or check the move shelf.</p></div>';
+    ui.shopItems.querySelectorAll('[data-item-icon]').forEach(canvas => {
+      drawItemToastIcon(canvas, itemRegistry.get(canvas.dataset.itemIcon) || ITEM_DEFS[canvas.dataset.itemIcon]);
+    });
 
     const weaponOffers = getShopWeaponOffers();
     const weaponCards = weaponOffers
@@ -2263,6 +2444,7 @@
         return `<div class="shop-card${!canAfford && !owned && !offer.bought ? ' shop-card--unaffordable' : ''}">
           <span class="shop-card__eyebrow">${weapon?.rarity || 'weapon'}</span>
           <div class="shop-card__title-row">
+            <canvas class="shop-card__icon" data-weapon-icon="${offer.key}" width="30" height="30"></canvas>
             <h4>${weapon?.name || offer.key}</h4>
             <span class="shop-card__price">${offer.cost}</span>
           </div>
@@ -2277,6 +2459,9 @@
       .join('');
     if (ui.shopWeapons) {
       ui.shopWeapons.innerHTML = weaponCards || '<div class="shop-card shop-empty"><p>No weapons in stock right now.</p></div>';
+      ui.shopWeapons.querySelectorAll('[data-weapon-icon]').forEach(canvas => {
+        drawWeaponToastIcon(canvas, WEAPON_DEFS[canvas.dataset.weaponIcon]);
+      });
     }
 
     const moveOffers = getShopMoveOffers();
@@ -2295,6 +2480,7 @@
         return `<div class="shop-card${!canAfford && !owned && !offer.bought ? ' shop-card--unaffordable' : ''}">
           <span class="shop-card__eyebrow">${slotLabel}</span>
           <div class="shop-card__title-row">
+            <canvas class="shop-card__icon" data-move-icon="${offer.key}" width="30" height="30"></canvas>
             <h4>${def?.name || offer.key}</h4>
             <span class="shop-card__price">${offer.cost}</span>
           </div>
@@ -2309,6 +2495,9 @@
       })
       .join('');
     ui.shopMoves.innerHTML = moveCards || '<div class="shop-card shop-empty"><p>No new techniques are on the rack right now.</p></div>';
+    ui.shopMoves.querySelectorAll('[data-move-icon]').forEach(canvas => {
+      drawMoveToastIcon(canvas, MOVE_DEFS[canvas.dataset.moveIcon]);
+    });
 
     const heals = [
       { id: 'small', name: 'Minor Heal', heal: 45, cost: getShopHealCost('small') },
@@ -2320,6 +2509,7 @@
         return `<div class="shop-card${!canAfford ? ' shop-card--unaffordable' : ''}">
         <span class="shop-card__eyebrow">Recovery</span>
         <div class="shop-card__title-row">
+          <canvas class="shop-card__icon" data-heal-icon="${heal.id}" width="30" height="30"></canvas>
           <h4>${heal.name}</h4>
           <span class="shop-card__price">${heal.cost}</span>
         </div>
@@ -2333,6 +2523,9 @@
       })
       .join('');
     ui.shopHeals.innerHTML = healCards;
+    ui.shopHeals.querySelectorAll('[data-heal-icon]').forEach(canvas => {
+      drawHealToastIcon(canvas, canvas.dataset.healIcon);
+    });
     shopPanelDirty = false;
   }
 
@@ -2363,6 +2556,7 @@
         return `<div class="inv-card">
           <span class="inv-card__eyebrow">Relic</span>
           <div class="inv-card__title-row">
+            <canvas class="inv-card__icon" data-item-icon="${key}" width="30" height="30"></canvas>
             <h4>${item?.name || key}</h4>
             <span class="inv-card__count">x${player.items[key]}</span>
           </div>
@@ -2370,6 +2564,10 @@
         </div>`;
       })
       .join('') || '<div class="inv-card"><span class="inv-card__eyebrow">Empty</span><h4>No relics yet</h4><p>Your pockets are clear. Loot rooms or buy from the shop to start a build.</p></div>';
+
+    ui.invItemsList.querySelectorAll('[data-item-icon]').forEach(canvas => {
+      drawItemToastIcon(canvas, itemRegistry.get(canvas.dataset.itemIcon) || ITEM_DEFS[canvas.dataset.itemIcon]);
+    });
 
     const ownedWeapons = WEAPON_KEYS
       .filter(key => player.ownedWeapons?.[key])
@@ -2386,6 +2584,7 @@
           const def = WEAPON_DEFS[key];
           const equipped = player.equippedWeapon === key;
           return `<button class="inv-move-chip${equipped ? ' is-equipped-weapon' : ''}" data-weapon="${key}" type="button" aria-pressed="${equipped ? 'true' : 'false'}">
+            <canvas class="inv-chip__icon" data-weapon-icon="${key}" width="30" height="30"></canvas>
             <div class="inv-move-chip__meta">
               <b>${def?.name || key}</b>
               <span class="inv-move-chip__slot">${def?.rarity || 'weapon'}</span>
@@ -2395,6 +2594,9 @@
           </button>`;
         })
         .join('') || '<div class="inv-card"><span class="inv-card__eyebrow">Empty</span><h4>No weapons owned</h4><p>Buy weapons in the shop to unlock left-click weapon loadouts.</p></div>';
+      ui.invWeaponsList.querySelectorAll('[data-weapon-icon]').forEach(canvas => {
+        drawWeaponToastIcon(canvas, WEAPON_DEFS[canvas.dataset.weaponIcon]);
+      });
     }
 
     const equippedMoveKeys = new Set(Object.values(player.equippedMoves || {}).filter(Boolean));
@@ -2409,6 +2611,7 @@
         const slotLabel = SLOT_LABELS[def.slot] || def.slot;
         const hintText = isEquipped ? 'Equipped' : (isMatch ? 'Click or drag to equip' : `Drag to ${slotLabel} slot`);
         return `<div class="inv-move-chip${isEquipped ? ' is-equipped-move' : ''}${isMatch ? ' is-match' : ''}" ${isEquipped ? '' : `draggable="true"`} data-move="${key}" data-slot-type="${def.slot}">
+          <canvas class="inv-chip__icon" data-move-icon="${key}" width="30" height="30"></canvas>
           <div class="inv-move-chip__meta">
             <b>${def.name}</b>
             <span class="inv-move-chip__slot">${slotLabel}</span>
@@ -2418,6 +2621,9 @@
         </div>`;
       })
       .join('') || '<div class="inv-card"><span class="inv-card__eyebrow">Empty</span><h4>No moves owned</h4><p>Buy moves from the shop to build your kit.</p></div>';
+    ui.invMovesList.querySelectorAll('[data-move-icon]').forEach(canvas => {
+      drawMoveToastIcon(canvas, MOVE_DEFS[canvas.dataset.moveIcon]);
+    });
 
     MOVE_SLOTS.forEach(slot => {
       const node = ui.invSlots[slot];
@@ -2431,7 +2637,7 @@
       node.classList.toggle('is-equipped', !!moveKey);
       node.classList.toggle('is-selected', isSelected);
       const slotLabel = SLOT_LABELS[slot] || slot;
-      const slotKey = SLOT_KEYS[slot] || '';
+      const slotKey = getSlotKeyLabel(slot);
       node.innerHTML = `<div class="inv-slot__top"><span class="inv-slot__kicker">${slotLabel}</span><div class="inv-slot__top-right">${slotKey ? `<span class="inv-slot__key">${slotKey}</span>` : ''}<span class="inv-slot__status">${isSelected ? 'Selected' : (def ? 'Equipped' : 'Empty')}</span></div></div><div class="inv-slot__move">${def?.name || 'No move equipped'}</div><p class="inv-slot__hint">${isSelected ? 'Matching spare moves are highlighted below. Click one or drag it here to swap.' : def?.desc || 'Click this slot to see moves that can go here.'}</p>`;
     });
     if (ui.invWeaponSlot) {
@@ -2530,6 +2736,7 @@
       player.ownedWeapons[offer.key] = true;
       if (!player.equippedWeapon) equipWeapon(offer.key);
       particles.push({ x: player.x, y: player.y - 24, life: 0.8, text: `${WEAPON_DEFS[offer.key]?.name || 'Weapon'} acquired`, c: WEAPON_DEFS[offer.key]?.color || '#d9e8ff' });
+      pushWeaponNotification(offer.key);
       markInventoryPanelDirty();
     } else if (kind === 'heal') {
       const heal = Number(button.dataset.heal || 0);
@@ -7105,8 +7312,10 @@
     updateWeaponSystems(dt);
     updateRivals(dt);
 
-    if (!overlayOpen && mouse.down) tryMelee();
-    if (!overlayOpen && mouse.right) tryLaser();
+    const meleeHeld = isMouseActionHeld('slash');
+    const laserHeld = isMouseActionHeld('laser');
+    if (!overlayOpen && meleeHeld) tryMelee();
+    if (!overlayOpen && laserHeld) tryLaser();
     if (keys.f && !teleportKeyLatch) {
       tryChargedLadderWarp();
       teleportKeyLatch = true;
@@ -10186,16 +10395,23 @@
     pickups.forEach(pickup => {
       if (!pickup || typeof pickup !== 'object' || typeof pickup.type !== 'string') return;
       ctx.save();
-      ctx.translate(pickup.x, pickup.y);
       const t = Date.now() / 260;
+      const bob = Math.sin(t * 0.9) * 3;
+      ctx.translate(pickup.x, pickup.y + bob);
       ctx.globalAlpha = 0.88 + Math.sin(t) * 0.12;
       if (pickup.type === 'coin') {
-        ctx.fillStyle = '#ffd966';
         ctx.shadowColor = '#ffd966';
-        ctx.shadowBlur = 10;
-        ctx.beginPath();
-        ctx.arc(0, 0, 7, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.shadowBlur = 12;
+        if (ui.coinIcon instanceof HTMLCanvasElement) {
+          const s = 18;
+          ctx.imageSmoothingEnabled = false;
+          ctx.drawImage(ui.coinIcon, -s / 2, -s / 2, s, s);
+        } else {
+          ctx.fillStyle = '#ffd966';
+          ctx.beginPath();
+          ctx.arc(0, 0, 7, 0, Math.PI * 2);
+          ctx.fill();
+        }
       } else if (pickup.type === 'potion') {
         ctx.fillStyle = '#0f8';
         ctx.shadowColor = '#0f8';
@@ -11432,9 +11648,9 @@
     const maxGy = visibleRooms.reduce((m, r) => Math.max(m, r.gy), 0);
     const mapHeight = (maxGy + 1) * size + maxGy * gap;
     const originX = canvas.width - mapWidth - 2;
-    const originY = -5;
+    const originY = -10;
     ctx.save();
-    ctx.globalAlpha = 0.5;
+    ctx.globalAlpha = 1;
     ctx.fillStyle = '#2a2e38';
     ctx.beginPath();
     ctx.roundRect(originX, originY, mapWidth, mapHeight, 6);
