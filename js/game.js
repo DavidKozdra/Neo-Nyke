@@ -29,6 +29,7 @@
   const CORPSE_FALL_TIME = 0.32;
   const PROJECTILE_TRAIL_LENGTH = 6;
   const AOE_SHOCKWAVE_LIFE = 0.36;
+  const ENV_TILE_SIZE = 48;
   const ENEMY_SCALING = {
     floor: 0.14,
     loop: 0.32,
@@ -53,6 +54,113 @@
     fire: { color: '#ff9a3c', textColor: '#ff9a3c' },
     poison: { color: '#85df63', textColor: '#85df63' },
     dark_drain: { color: '#b48cff', textColor: '#b48cff' },
+  };
+  const ROOM_ART_THEMES = {
+    dungeon: {
+      floorTiles: ['floor_stone_a', 'floor_stone_b', 'floor_stone_cracked', 'floor_stone_moss'],
+      wallTile: 'wall_stone',
+      thresholdTile: 'threshold_stone',
+      backdrop: '#151916',
+      floorTint: 'rgba(26, 22, 17, 0.16)',
+      wallEdge: 'rgba(95, 91, 73, 0.62)',
+      wallShadow: 'rgba(0, 0, 0, 0.38)',
+      doorAccent: 'rgba(194, 132, 61, 0.68)',
+      combatAccent: 'rgba(128, 37, 42, 0.34)',
+      crack: 'rgba(7, 10, 9, 0.55)',
+      stain: 'rgba(38, 26, 20, 0.22)',
+      banner: '#7a2630',
+      vignette: 'rgba(0, 0, 0, 0.42)',
+    },
+    treasure: {
+      floorTiles: ['floor_stone_a', 'floor_stone_b', 'floor_stone_moss', 'floor_god'],
+      wallTile: 'wall_stone',
+      thresholdTile: 'threshold_warm',
+      backdrop: '#181811',
+      floorTint: 'rgba(88, 70, 30, 0.11)',
+      wallEdge: 'rgba(130, 108, 62, 0.58)',
+      wallShadow: 'rgba(0, 0, 0, 0.34)',
+      doorAccent: 'rgba(220, 166, 72, 0.76)',
+      combatAccent: 'rgba(128, 55, 36, 0.26)',
+      crack: 'rgba(12, 11, 8, 0.52)',
+      stain: 'rgba(62, 48, 20, 0.2)',
+      banner: '#89622c',
+      vignette: 'rgba(0, 0, 0, 0.38)',
+    },
+    shop: {
+      floorTiles: ['floor_plank', 'floor_plank', 'floor_stone_a'],
+      wallTile: 'wall_shop',
+      thresholdTile: 'threshold_warm',
+      backdrop: '#1c140e',
+      floorTint: 'rgba(115, 72, 32, 0.1)',
+      wallEdge: 'rgba(160, 103, 52, 0.52)',
+      wallShadow: 'rgba(0, 0, 0, 0.32)',
+      doorAccent: 'rgba(255, 176, 78, 0.74)',
+      combatAccent: 'rgba(110, 70, 34, 0.2)',
+      crack: 'rgba(21, 12, 7, 0.48)',
+      stain: 'rgba(70, 42, 18, 0.2)',
+      banner: '#9a5830',
+      vignette: 'rgba(0, 0, 0, 0.34)',
+    },
+    anvil: {
+      floorTiles: ['floor_forge', 'floor_stone_a', 'floor_forge'],
+      wallTile: 'wall_forge',
+      thresholdTile: 'threshold_warm',
+      backdrop: '#181512',
+      floorTint: 'rgba(132, 66, 28, 0.13)',
+      wallEdge: 'rgba(148, 106, 65, 0.55)',
+      wallShadow: 'rgba(0, 0, 0, 0.36)',
+      doorAccent: 'rgba(224, 119, 48, 0.72)',
+      combatAccent: 'rgba(166, 67, 35, 0.26)',
+      crack: 'rgba(10, 8, 7, 0.56)',
+      stain: 'rgba(70, 34, 16, 0.22)',
+      banner: '#88401e',
+      vignette: 'rgba(0, 0, 0, 0.4)',
+    },
+    boss: {
+      floorTiles: ['floor_boss', 'floor_boss', 'floor_stone_cracked'],
+      wallTile: 'wall_boss',
+      thresholdTile: 'threshold_boss',
+      backdrop: '#171012',
+      floorTint: 'rgba(86, 28, 38, 0.12)',
+      wallEdge: 'rgba(128, 70, 72, 0.58)',
+      wallShadow: 'rgba(0, 0, 0, 0.44)',
+      doorAccent: 'rgba(190, 76, 62, 0.72)',
+      combatAccent: 'rgba(170, 40, 48, 0.38)',
+      crack: 'rgba(8, 5, 6, 0.6)',
+      stain: 'rgba(72, 16, 22, 0.24)',
+      banner: '#8a2030',
+      vignette: 'rgba(0, 0, 0, 0.5)',
+    },
+    god: {
+      floorTiles: ['floor_god', 'floor_god', 'floor_stone_a'],
+      wallTile: 'wall_god',
+      thresholdTile: 'threshold_warm',
+      backdrop: '#1d1a13',
+      floorTint: 'rgba(145, 115, 54, 0.14)',
+      wallEdge: 'rgba(190, 154, 82, 0.58)',
+      wallShadow: 'rgba(0, 0, 0, 0.36)',
+      doorAccent: 'rgba(238, 196, 102, 0.78)',
+      combatAccent: 'rgba(170, 117, 47, 0.3)',
+      crack: 'rgba(16, 13, 8, 0.48)',
+      stain: 'rgba(80, 62, 28, 0.18)',
+      banner: '#9c7a38',
+      vignette: 'rgba(0, 0, 0, 0.38)',
+    },
+    secret: {
+      floorTiles: ['floor_stone_moss', 'floor_stone_b', 'floor_stone_cracked'],
+      wallTile: 'wall_stone',
+      thresholdTile: 'threshold_stone',
+      backdrop: '#111913',
+      floorTint: 'rgba(37, 78, 42, 0.12)',
+      wallEdge: 'rgba(73, 110, 68, 0.5)',
+      wallShadow: 'rgba(0, 0, 0, 0.42)',
+      doorAccent: 'rgba(116, 143, 79, 0.66)',
+      combatAccent: 'rgba(74, 104, 68, 0.24)',
+      crack: 'rgba(6, 10, 7, 0.58)',
+      stain: 'rgba(20, 46, 22, 0.22)',
+      banner: '#536b31',
+      vignette: 'rgba(0, 0, 0, 0.46)',
+    },
   };
   const BLEED_BLOOD_COLORS = ['#6f0014', '#a5001e', '#e51e37', '#ff5264'];
   const PERF_BUDGET_60FPS = 1000 / 60;
@@ -256,6 +364,10 @@
   const SPRITE_SOURCE_SIZE = 10;
   const SPRITE_DEFS = window.NeoNykeSpriteDefs || {};
   const SPRITE_ATLAS = buildSpriteAtlas();
+  const ENV_TILE_ROOT = window.NeoNykeEnvironmentTileDefs || {};
+  const ENV_TILE_SOURCE_SIZE = ENV_TILE_ROOT.sourceSize || 16;
+  const ENV_TILE_DEFS = ENV_TILE_ROOT.tiles || {};
+  const ENV_TILE_ATLAS = buildEnvironmentTileAtlas();
 
   const MOVE_SLOTS = ['melee', 'laser', 'smash', 'dash'];
   const SLOT_LABELS = { melee: 'Melee', laser: 'Laser', smash: 'Smash', dash: 'Mobility' };
@@ -928,6 +1040,7 @@
   let shopOffers = [];
   let structures = [];
   let decorations = [];
+  let environmentBackgroundCache = { key: '', canvas: null };
   let activeRun = null;
   let metaProgress = createDefaultMeta();
   let runHistory = [];
@@ -9393,61 +9506,244 @@
     ctx.restore();
   }
 
-  function drawFloor() {
-    ctx.fillStyle = '#030610';
-    ctx.fillRect(0, 0, ROOM_W, ROOM_H);
-    ctx.strokeStyle = 'rgba(0,255,255,0.05)';
-    ctx.lineWidth = 1;
-    for (let x = 0; x <= ROOM_W; x += 48) {
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, ROOM_H);
-      ctx.stroke();
+  function getRoomArtTheme(room = currentRoom) {
+    if (!room) return ROOM_ART_THEMES.dungeon;
+    if (room.type === 'shop') return ROOM_ART_THEMES.shop;
+    if (room.type === 'anvil') return ROOM_ART_THEMES.anvil;
+    if (room.type === 'god') return ROOM_ART_THEMES.god;
+    if (room.type === 'boss' || BOSS_TYPES.has(room.type)) return ROOM_ART_THEMES.boss;
+    if (room.type === 'secret') return ROOM_ART_THEMES.secret;
+    if (room.type === 'treasure' || room.type === 'ladder') return ROOM_ART_THEMES.treasure;
+    if (room.type === 'challenge') return ROOM_ART_THEMES.boss;
+    return ROOM_ART_THEMES.dungeon;
+  }
+
+  function artNoise(tileX, tileY, salt = 0, room = currentRoom) {
+    const gx = Number(room?.gx || 0);
+    const gy = Number(room?.gy || 0);
+    const value = Math.sin(tileX * 127.1 + tileY * 311.7 + gx * 74.7 + gy * 19.3 + floor * 13.1 + salt * 101.9) * 43758.5453;
+    return value - Math.floor(value);
+  }
+
+  function pickFloorTile(tileX, tileY, theme) {
+    const tiles = theme.floorTiles && theme.floorTiles.length ? theme.floorTiles : ['floor_stone_a'];
+    const noise = artNoise(tileX, tileY, 1);
+    return tiles[Math.min(tiles.length - 1, Math.floor(noise * tiles.length))];
+  }
+
+  function drawEnvironmentTile(tileKey, x, y, w = ENV_TILE_SIZE, h = ENV_TILE_SIZE, options = {}) {
+    const target = options.ctx || ctx;
+    const frame = ENV_TILE_ATLAS.frames[tileKey];
+    if (!frame) {
+      target.fillStyle = options.fallback || '#30342f';
+      target.fillRect(x, y, w, h);
+      return;
     }
-    for (let y = 0; y <= ROOM_H; y += 48) {
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(ROOM_W, y);
-      ctx.stroke();
+    target.save();
+    target.globalAlpha = options.alpha ?? 1;
+    target.imageSmoothingEnabled = false;
+    target.drawImage(
+      ENV_TILE_ATLAS.canvas,
+      frame.x,
+      frame.y,
+      frame.w,
+      frame.h,
+      x,
+      y,
+      w,
+      h,
+    );
+    if (options.tint) {
+      target.globalCompositeOperation = 'source-atop';
+      target.fillStyle = options.tint;
+      target.fillRect(x, y, w, h);
     }
+    target.restore();
+  }
 
-    ctx.shadowColor = '#00ffff';
-    ctx.shadowBlur = 18;
-    ctx.strokeStyle = enemies.length > 0 ? '#ff66aa' : '#00ffff';
-    ctx.lineWidth = WALL;
-    ctx.strokeRect(WALL / 2, WALL / 2, ROOM_W - WALL, ROOM_H - WALL);
-    ctx.shadowBlur = 0;
-
-    ctx.globalCompositeOperation = 'destination-out';
-    ctx.fillStyle = '#000';
-    if (hasVisibleRoomExit(currentRoom, 'n')) ctx.fillRect((ROOM_W - DOOR) / 2, 0, DOOR, WALL + 2);
-    if (hasVisibleRoomExit(currentRoom, 's')) ctx.fillRect((ROOM_W - DOOR) / 2, ROOM_H - WALL - 2, DOOR, WALL + 2);
-    if (hasVisibleRoomExit(currentRoom, 'w')) ctx.fillRect(0, (ROOM_H - DOOR) / 2, WALL + 2, DOOR);
-    if (hasVisibleRoomExit(currentRoom, 'e')) ctx.fillRect(ROOM_W - WALL - 2, (ROOM_H - DOOR) / 2, WALL + 2, DOOR);
-    ctx.globalCompositeOperation = 'source-over';
-
-    ctx.strokeStyle = enemies.length > 0 ? 'rgba(255,102,170,0.4)' : 'rgba(0,255,255,0.4)';
-    ctx.lineWidth = 3;
-    ctx.shadowColor = enemies.length > 0 ? '#ff66aa' : '#0ff';
-    ctx.shadowBlur = 10;
-    [
-      ['n', (ROOM_W - DOOR) / 2, 0, DOOR, 0],
-      ['s', (ROOM_W - DOOR) / 2, ROOM_H, DOOR, 0],
-      ['w', 0, (ROOM_H - DOOR) / 2, 0, DOOR],
-      ['e', ROOM_W, (ROOM_H - DOOR) / 2, 0, DOOR],
-    ].forEach(([dir, x, y, width, height]) => {
-      if (!hasVisibleRoomExit(currentRoom, dir)) return;
-      ctx.beginPath();
-      if (width) {
-        ctx.moveTo(x, y);
-        ctx.lineTo(x + width, y);
-      } else {
-        ctx.moveTo(x, y);
-        ctx.lineTo(x, y + height);
+  function drawTiledRect(tileKey, x, y, w, h, options = {}) {
+    if (w <= 0 || h <= 0) return;
+    const target = options.ctx || ctx;
+    const tileSize = options.tileSize || ENV_TILE_SIZE;
+    target.save();
+    target.beginPath();
+    target.rect(x, y, w, h);
+    target.clip();
+    for (let ty = y; ty < y + h; ty += tileSize) {
+      for (let tx = x; tx < x + w; tx += tileSize) {
+        drawEnvironmentTile(tileKey, tx, ty, tileSize, tileSize, { ...options, ctx: target });
       }
-      ctx.stroke();
+    }
+    target.restore();
+  }
+
+  function drawFloorTiles(theme) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(WALL, WALL, ROOM_W - WALL * 2, ROOM_H - WALL * 2);
+    ctx.clip();
+    for (let y = WALL; y < ROOM_H - WALL; y += ENV_TILE_SIZE) {
+      for (let x = WALL; x < ROOM_W - WALL; x += ENV_TILE_SIZE) {
+        const tileX = Math.floor((x - WALL) / ENV_TILE_SIZE);
+        const tileY = Math.floor((y - WALL) / ENV_TILE_SIZE);
+        const tile = pickFloorTile(tileX, tileY, theme);
+        drawEnvironmentTile(tile, x, y, ENV_TILE_SIZE, ENV_TILE_SIZE, { tint: theme.floorTint });
+      }
+    }
+    ctx.restore();
+  }
+
+  function drawFloorDecals(theme) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(WALL + 8, WALL + 8, ROOM_W - WALL * 2 - 16, ROOM_H - WALL * 2 - 16);
+    ctx.clip();
+    const cols = Math.ceil((ROOM_W - WALL * 2) / ENV_TILE_SIZE);
+    const rows = Math.ceil((ROOM_H - WALL * 2) / ENV_TILE_SIZE);
+    for (let ty = 0; ty < rows; ty += 1) {
+      for (let tx = 0; tx < cols; tx += 1) {
+        const x = WALL + tx * ENV_TILE_SIZE;
+        const y = WALL + ty * ENV_TILE_SIZE;
+        const stainNoise = artNoise(tx, ty, 12);
+        if (stainNoise > 0.84) {
+          ctx.fillStyle = theme.stain;
+          ctx.beginPath();
+          ctx.ellipse(
+            x + 14 + artNoise(tx, ty, 13) * 20,
+            y + 16 + artNoise(tx, ty, 14) * 18,
+            8 + artNoise(tx, ty, 15) * 14,
+            4 + artNoise(tx, ty, 16) * 8,
+            artNoise(tx, ty, 17) * Math.PI,
+            0,
+            Math.PI * 2,
+          );
+          ctx.fill();
+        }
+
+        if (artNoise(tx, ty, 22) > 0.78) {
+          const sx = x + 8 + artNoise(tx, ty, 23) * 26;
+          const sy = y + 8 + artNoise(tx, ty, 24) * 24;
+          ctx.strokeStyle = theme.crack;
+          ctx.lineWidth = 1.4;
+          ctx.beginPath();
+          ctx.moveTo(sx, sy);
+          ctx.lineTo(sx + 8 + artNoise(tx, ty, 25) * 12, sy - 4 + artNoise(tx, ty, 26) * 8);
+          ctx.lineTo(sx + 15 + artNoise(tx, ty, 27) * 14, sy + 4 + artNoise(tx, ty, 28) * 12);
+          ctx.stroke();
+        }
+      }
+    }
+    ctx.restore();
+  }
+
+  function drawDoorThreshold(dir, theme) {
+    const isNorth = dir === 'n';
+    const isSouth = dir === 's';
+    const isWest = dir === 'w';
+    const x = isWest ? 0 : isNorth || isSouth ? (ROOM_W - DOOR) / 2 : ROOM_W - WALL - 10;
+    const y = isNorth ? 0 : isSouth ? ROOM_H - WALL - 10 : (ROOM_H - DOOR) / 2;
+    const w = isWest || dir === 'e' ? WALL + 10 : DOOR;
+    const h = isNorth || isSouth ? WALL + 10 : DOOR;
+    drawTiledRect(theme.thresholdTile, x, y, w, h, { tileSize: ENV_TILE_SIZE, tint: theme.floorTint });
+
+    ctx.save();
+    ctx.strokeStyle = theme.doorAccent;
+    ctx.lineWidth = 2;
+    ctx.shadowColor = theme.doorAccent;
+    ctx.shadowBlur = 5;
+    ctx.beginPath();
+    if (isNorth || isSouth) {
+      const edgeY = isNorth ? WALL + 3 : ROOM_H - WALL - 3;
+      ctx.moveTo((ROOM_W - DOOR) / 2 + 12, edgeY);
+      ctx.lineTo((ROOM_W + DOOR) / 2 - 12, edgeY);
+    } else {
+      const edgeX = isWest ? WALL + 3 : ROOM_W - WALL - 3;
+      ctx.moveTo(edgeX, (ROOM_H - DOOR) / 2 + 12);
+      ctx.lineTo(edgeX, (ROOM_H + DOOR) / 2 - 12);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawStoneWalls(theme) {
+    drawTiledRect(theme.wallTile, 0, 0, ROOM_W, WALL + 8, { tileSize: ENV_TILE_SIZE });
+    drawTiledRect(theme.wallTile, 0, ROOM_H - WALL - 8, ROOM_W, WALL + 8, { tileSize: ENV_TILE_SIZE });
+    drawTiledRect(theme.wallTile, 0, 0, WALL + 8, ROOM_H, { tileSize: ENV_TILE_SIZE });
+    drawTiledRect(theme.wallTile, ROOM_W - WALL - 8, 0, WALL + 8, ROOM_H, { tileSize: ENV_TILE_SIZE });
+
+    DIRECTIONS.forEach(dir => {
+      if (hasVisibleRoomExit(currentRoom, dir)) drawDoorThreshold(dir, theme);
     });
-    ctx.shadowBlur = 0;
+
+    ctx.save();
+    ctx.fillStyle = theme.wallShadow;
+    ctx.fillRect(WALL, WALL, ROOM_W - WALL * 2, 8);
+    ctx.fillRect(WALL, ROOM_H - WALL - 8, ROOM_W - WALL * 2, 8);
+    ctx.fillRect(WALL, WALL, 8, ROOM_H - WALL * 2);
+    ctx.fillRect(ROOM_W - WALL - 8, WALL, 8, ROOM_H - WALL * 2);
+    ctx.strokeStyle = enemies.length > 0 ? theme.combatAccent : theme.wallEdge;
+    ctx.lineWidth = enemies.length > 0 ? 3 : 2;
+    const inset = WALL + 3;
+    const left = inset;
+    const right = ROOM_W - inset;
+    const top = inset;
+    const bottom = ROOM_H - inset;
+    const doorMinX = (ROOM_W - DOOR) / 2 + 10;
+    const doorMaxX = (ROOM_W + DOOR) / 2 - 10;
+    const doorMinY = (ROOM_H - DOOR) / 2 + 10;
+    const doorMaxY = (ROOM_H + DOOR) / 2 - 10;
+    ctx.beginPath();
+    if (hasVisibleRoomExit(currentRoom, 'n')) {
+      ctx.moveTo(left, top); ctx.lineTo(doorMinX, top);
+      ctx.moveTo(doorMaxX, top); ctx.lineTo(right, top);
+    } else {
+      ctx.moveTo(left, top); ctx.lineTo(right, top);
+    }
+    if (hasVisibleRoomExit(currentRoom, 's')) {
+      ctx.moveTo(left, bottom); ctx.lineTo(doorMinX, bottom);
+      ctx.moveTo(doorMaxX, bottom); ctx.lineTo(right, bottom);
+    } else {
+      ctx.moveTo(left, bottom); ctx.lineTo(right, bottom);
+    }
+    if (hasVisibleRoomExit(currentRoom, 'w')) {
+      ctx.moveTo(left, top); ctx.lineTo(left, doorMinY);
+      ctx.moveTo(left, doorMaxY); ctx.lineTo(left, bottom);
+    } else {
+      ctx.moveTo(left, top); ctx.lineTo(left, bottom);
+    }
+    if (hasVisibleRoomExit(currentRoom, 'e')) {
+      ctx.moveTo(right, top); ctx.lineTo(right, doorMinY);
+      ctx.moveTo(right, doorMaxY); ctx.lineTo(right, bottom);
+    } else {
+      ctx.moveTo(right, top); ctx.lineTo(right, bottom);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawEnvironmentVignette(theme) {
+    const gradient = ctx.createRadialGradient(
+      ROOM_W / 2,
+      ROOM_H / 2,
+      120,
+      ROOM_W / 2,
+      ROOM_H / 2,
+      Math.max(ROOM_W, ROOM_H) * 0.74,
+    );
+    gradient.addColorStop(0, 'rgba(0,0,0,0)');
+    gradient.addColorStop(1, theme.vignette || 'rgba(0,0,0,0.4)');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, ROOM_W, ROOM_H);
+  }
+
+  function drawFloor() {
+    const theme = getRoomArtTheme();
+    ctx.fillStyle = theme.backdrop;
+    ctx.fillRect(0, 0, ROOM_W, ROOM_H);
+    drawFloorTiles(theme);
+    drawFloorDecals(theme);
+    drawStoneWalls(theme);
+    drawEnvironmentVignette(theme);
   }
 
   function drawChests() {
@@ -9465,20 +9761,44 @@
   }
 
   function drawRoomDecor() {
+    const theme = getRoomArtTheme();
     decorations.forEach(decor => {
       ctx.save();
       ctx.translate(decor.x, decor.y);
       if (decor.kind === 'rubble') {
-        ctx.fillStyle = 'rgba(90,120,136,0.32)';
+        ctx.fillStyle = 'rgba(42,44,38,0.55)';
         ctx.beginPath();
-        ctx.arc(0, 0, decor.r, 0, Math.PI * 2);
+        ctx.ellipse(0, 1, decor.r * 1.15, decor.r * 0.62, -0.2, 0, Math.PI * 2);
         ctx.fill();
+        ctx.fillStyle = 'rgba(92,91,76,0.38)';
+        for (let index = 0; index < 5; index += 1) {
+          const angle = index * 1.7 + decor.x * 0.01;
+          const rx = Math.cos(angle) * decor.r * 0.55;
+          const ry = Math.sin(angle) * decor.r * 0.28;
+          ctx.fillRect(rx - 3, ry - 2, 6, 4);
+        }
       } else if (decor.kind === 'banner') {
-        ctx.fillStyle = 'rgba(255,210,90,0.22)';
-        ctx.fillRect(-10, -22, 20, 44);
+        ctx.fillStyle = 'rgba(0,0,0,0.22)';
+        ctx.fillRect(-12, -18, 24, 42);
+        ctx.fillStyle = theme.banner;
+        ctx.beginPath();
+        ctx.moveTo(-11, -24);
+        ctx.lineTo(11, -24);
+        ctx.lineTo(9, 17);
+        ctx.lineTo(2, 11);
+        ctx.lineTo(-6, 20);
+        ctx.lineTo(-9, 17);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(229,185,98,0.32)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(-13, -25);
+        ctx.lineTo(13, -25);
+        ctx.stroke();
       } else if (decor.kind === 'crack') {
-        ctx.strokeStyle = 'rgba(120,180,200,0.22)';
-        ctx.lineWidth = 2;
+        ctx.strokeStyle = theme.crack;
+        ctx.lineWidth = 2.2;
         ctx.beginPath();
         ctx.moveTo(-decor.r, -6);
         ctx.lineTo(-8, 0);
@@ -9487,11 +9807,15 @@
         ctx.lineTo(decor.r, -2);
         ctx.stroke();
       } else if (decor.kind === 'brazier') {
-        ctx.fillStyle = 'rgba(255,120,60,0.7)';
-        ctx.shadowColor = '#ff7b39';
-        ctx.shadowBlur = 14;
+        ctx.fillStyle = 'rgba(26,20,14,0.9)';
         ctx.beginPath();
-        ctx.arc(0, 0, decor.r, 0, Math.PI * 2);
+        ctx.arc(0, 3, decor.r * 0.9, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(255,120,60,0.78)';
+        ctx.shadowColor = '#ff7b39';
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.arc(0, -2, decor.r * 0.55, 0, Math.PI * 2);
         ctx.fill();
       }
       ctx.restore();
@@ -9501,16 +9825,14 @@
       ctx.save();
       ctx.translate(structure.x, structure.y);
       if (structure.kind === 'pillar') {
-        ctx.fillStyle = '#193849';
-        ctx.strokeStyle = '#5ad8ff';
-        ctx.lineWidth = 2;
-        ctx.fillRect(-structure.w / 2, -structure.h / 2, structure.w, structure.h);
+        drawEnvironmentTile('pillar_stone', -structure.w / 2, -structure.h / 2, structure.w, structure.h);
+        ctx.strokeStyle = theme.wallEdge;
+        ctx.lineWidth = 1.5;
         ctx.strokeRect(-structure.w / 2, -structure.h / 2, structure.w, structure.h);
       } else {
-        ctx.fillStyle = '#102f3e';
-        ctx.strokeStyle = 'rgba(88,217,255,0.7)';
-        ctx.lineWidth = 2;
-        ctx.fillRect(-structure.w / 2, -structure.h / 2, structure.w, structure.h);
+        drawEnvironmentTile('wall_block', -structure.w / 2, -structure.h / 2, structure.w, structure.h);
+        ctx.strokeStyle = theme.wallEdge;
+        ctx.lineWidth = 1.5;
         ctx.strokeRect(-structure.w / 2, -structure.h / 2, structure.w, structure.h);
       }
       ctx.restore();
@@ -9518,6 +9840,7 @@
   }
 
   function drawWorldProps() {
+    const theme = getRoomArtTheme();
     hazards.forEach(hazard => {
       ctx.save();
       ctx.translate(hazard.x, hazard.y);
@@ -9665,22 +9988,18 @@
       ctx.save();
       ctx.translate(prop.x, prop.y);
       if (prop.kind === 'pot') {
-        ctx.fillStyle = '#b77d4a';
-        ctx.fillRect(-10, -12, 20, 24);
+        drawEnvironmentTile('pot_clay', -16, -18, 32, 32);
       } else if (prop.kind === 'barrel') {
-        ctx.fillStyle = '#8c5324';
-        ctx.fillRect(-12, -14, 24, 28);
-        ctx.strokeStyle = '#ff5a3d';
-        ctx.strokeRect(-12, -14, 24, 28);
+        drawEnvironmentTile('barrel_oak', -17, -18, 34, 34);
       } else if (prop.kind === 'wall') {
-        ctx.fillStyle = '#113648';
-        ctx.fillRect(-24, -24, 48, 48);
-        ctx.strokeStyle = '#58d9ff';
-        ctx.strokeRect(-24, -24, 48, 48);
+        drawEnvironmentTile('wall_block', -26, -26, 52, 52);
+        ctx.strokeStyle = theme.wallEdge;
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(-25, -25, 50, 50);
       } else if (prop.kind === 'secret_wall') {
-        ctx.fillStyle = '#113648';
-        ctx.fillRect(-24, -24, 48, 48);
-        ctx.strokeStyle = '#58d9ff';
+        drawEnvironmentTile('secret_wall_block', -25, -25, 50, 50);
+        ctx.strokeStyle = 'rgba(125,110,70,0.48)';
+        ctx.lineWidth = 1.5;
         ctx.strokeRect(-24, -24, 48, 48);
       }
       ctx.restore();
@@ -10095,6 +10414,212 @@
         : `rgba(48,12,18,${0.22 + fadeT * 0.34})`;
       ctx.fillRect(-size / 2, -size / 2, size, size);
       ctx.restore();
+    });
+  }
+
+  function buildEnvironmentTileAtlas() {
+    const entries = Object.entries(ENV_TILE_DEFS);
+    const canvasEl = document.createElement('canvas');
+    canvasEl.width = Math.max(1, ENV_TILE_SOURCE_SIZE * Math.max(1, entries.length));
+    canvasEl.height = ENV_TILE_SOURCE_SIZE;
+    const atlasCtx = canvasEl.getContext('2d');
+    atlasCtx.imageSmoothingEnabled = false;
+    const frames = {};
+    entries.forEach(([key, def], index) => {
+      const ox = index * ENV_TILE_SOURCE_SIZE;
+      frames[key] = { x: ox, y: 0, w: ENV_TILE_SOURCE_SIZE, h: ENV_TILE_SOURCE_SIZE };
+      drawEnvironmentTileAsset(atlasCtx, ox, 0, ENV_TILE_SOURCE_SIZE, def || {});
+    });
+    return { canvas: canvasEl, frames };
+  }
+
+  function drawEnvironmentTileAsset(g, ox, oy, size, def) {
+    g.save();
+    if (!def.transparent) {
+      g.fillStyle = def.base || '#343832';
+      g.fillRect(ox, oy, size, size);
+    }
+
+    if (def.kind === 'floor') {
+      drawFloorTileAsset(g, ox, oy, size, def);
+    } else if (def.kind === 'plank') {
+      drawPlankTileAsset(g, ox, oy, size, def);
+    } else if (def.kind === 'wall') {
+      drawWallTileAsset(g, ox, oy, size, def);
+    } else if (def.kind === 'threshold') {
+      drawThresholdTileAsset(g, ox, oy, size, def);
+    } else if (def.kind === 'pillar') {
+      drawPillarTileAsset(g, ox, oy, size, def);
+    } else if (def.kind === 'block') {
+      drawBlockTileAsset(g, ox, oy, size, def);
+    } else if (def.kind === 'pot') {
+      drawPotTileAsset(g, ox, oy, size, def);
+    } else if (def.kind === 'barrel') {
+      drawBarrelTileAsset(g, ox, oy, size, def);
+    }
+
+    drawTileCracks(g, ox, oy, def);
+    drawTileChips(g, ox, oy, def);
+    g.restore();
+  }
+
+  function drawFloorTileAsset(g, ox, oy, size, def) {
+    g.fillStyle = def.shade || '#252823';
+    g.fillRect(ox, oy + size - 3, size, 3);
+    g.fillRect(ox + size - 3, oy, 3, size);
+    g.fillStyle = def.edge || '#4c5047';
+    g.fillRect(ox + 1, oy + 1, size - 3, 1);
+    g.fillRect(ox + 1, oy + 1, 1, size - 3);
+    g.strokeStyle = def.mortar || '#1c1f1d';
+    g.lineWidth = 1;
+    g.strokeRect(ox + 0.5, oy + 0.5, size - 1, size - 1);
+    if (def.moss) {
+      g.fillStyle = def.moss;
+      g.fillRect(ox + 1, oy + size - 4, 5, 2);
+      g.fillRect(ox + size - 5, oy + 2, 3, 1);
+      g.fillRect(ox + 7, oy + 13, 4, 1);
+    }
+    if (def.ember) {
+      g.fillStyle = def.ember;
+      g.fillRect(ox + 4, oy + 11, 1, 1);
+      g.fillRect(ox + 12, oy + 5, 1, 1);
+    }
+  }
+
+  function drawPlankTileAsset(g, ox, oy, size, def) {
+    g.fillStyle = def.base || '#4b3320';
+    g.fillRect(ox, oy, size, size);
+    g.fillStyle = def.shade || '#2b1e13';
+    g.fillRect(ox, oy + 5, size, 1);
+    g.fillRect(ox, oy + 11, size, 1);
+    g.fillRect(ox + 7, oy, 1, 5);
+    g.fillRect(ox + 12, oy + 6, 1, 5);
+    g.fillRect(ox + 4, oy + 12, 1, 4);
+    g.fillStyle = def.edge || '#6c4a2c';
+    g.fillRect(ox + 1, oy + 1, size - 2, 1);
+    g.strokeStyle = def.mortar || '#1d140d';
+    g.strokeRect(ox + 0.5, oy + 0.5, size - 1, size - 1);
+  }
+
+  function drawWallTileAsset(g, ox, oy, size, def) {
+    g.fillStyle = def.base || '#303832';
+    g.fillRect(ox, oy, size, size);
+    g.fillStyle = def.shade || '#202722';
+    g.fillRect(ox, oy + 8, size, 8);
+    g.fillStyle = def.edge || '#586257';
+    g.fillRect(ox + 1, oy + 1, size - 2, 2);
+    g.fillRect(ox + 1, oy + 8, size - 2, 1);
+    g.strokeStyle = def.mortar || '#151917';
+    g.strokeRect(ox + 0.5, oy + 0.5, size - 1, size - 1);
+    g.beginPath();
+    g.moveTo(ox + 7.5, oy);
+    g.lineTo(ox + 7.5, oy + 8);
+    g.moveTo(ox + 11.5, oy + 8);
+    g.lineTo(ox + 11.5, oy + size);
+    g.stroke();
+    if (def.ember) {
+      g.fillStyle = def.ember;
+      g.fillRect(ox + 3, oy + 12, 1, 1);
+      g.fillRect(ox + 13, oy + 4, 1, 1);
+    }
+  }
+
+  function drawThresholdTileAsset(g, ox, oy, size, def) {
+    g.fillStyle = def.base || '#3d4038';
+    g.fillRect(ox, oy, size, size);
+    g.fillStyle = def.shade || '#292d29';
+    g.fillRect(ox, oy + size - 4, size, 4);
+    g.fillStyle = def.edge || '#655a45';
+    g.fillRect(ox + 1, oy + 2, size - 2, 2);
+    g.fillRect(ox + 2, oy + 7, size - 4, 1);
+    g.strokeStyle = def.mortar || '#1b1f1d';
+    g.strokeRect(ox + 0.5, oy + 0.5, size - 1, size - 1);
+  }
+
+  function drawPillarTileAsset(g, ox, oy, size, def) {
+    g.fillStyle = 'rgba(0,0,0,0.26)';
+    g.fillRect(ox + 3, oy + 12, 10, 2);
+    g.fillStyle = def.shade || '#252b27';
+    g.fillRect(ox + 2, oy + 2, 12, 12);
+    g.fillStyle = def.base || '#4a4d43';
+    g.fillRect(ox + 3, oy + 1, 10, 11);
+    g.fillStyle = def.edge || '#727060';
+    g.fillRect(ox + 4, oy + 2, 8, 2);
+    g.fillRect(ox + 4, oy + 10, 8, 2);
+    g.strokeStyle = def.mortar || '#191d1b';
+    g.strokeRect(ox + 2.5, oy + 1.5, 11, 12);
+  }
+
+  function drawBlockTileAsset(g, ox, oy, size, def) {
+    g.fillStyle = 'rgba(0,0,0,0.22)';
+    g.fillRect(ox + 2, oy + 12, 12, 2);
+    g.fillStyle = def.shade || '#222823';
+    g.fillRect(ox + 1, oy + 2, 14, 12);
+    g.fillStyle = def.base || '#394038';
+    g.fillRect(ox + 2, oy + 1, 12, 11);
+    g.fillStyle = def.edge || '#626858';
+    g.fillRect(ox + 2, oy + 2, 12, 1);
+    g.fillRect(ox + 2, oy + 7, 12, 1);
+    g.strokeStyle = def.mortar || '#171c1a';
+    g.strokeRect(ox + 1.5, oy + 1.5, 13, 12);
+    if (def.hiddenMark) {
+      g.fillStyle = def.hiddenMark;
+      g.fillRect(ox + 7, oy + 4, 2, 1);
+      g.fillRect(ox + 8, oy + 5, 1, 3);
+    }
+  }
+
+  function drawPotTileAsset(g, ox, oy, size, def) {
+    g.fillStyle = 'rgba(0,0,0,0.24)';
+    g.fillRect(ox + 4, oy + 13, 8, 2);
+    g.fillStyle = def.shade || '#57331f';
+    g.fillRect(ox + 5, oy + 5, 7, 8);
+    g.fillStyle = def.base || '#9b6744';
+    g.fillRect(ox + 6, oy + 4, 5, 9);
+    g.fillRect(ox + 5, oy + 6, 7, 5);
+    g.fillStyle = def.edge || '#d19a68';
+    g.fillRect(ox + 6, oy + 4, 5, 1);
+    g.fillRect(ox + 7, oy + 2, 3, 2);
+    g.fillStyle = def.mortar || '#25150d';
+    g.fillRect(ox + 5, oy + 11, 7, 1);
+  }
+
+  function drawBarrelTileAsset(g, ox, oy, size, def) {
+    g.fillStyle = 'rgba(0,0,0,0.24)';
+    g.fillRect(ox + 3, oy + 13, 10, 2);
+    g.fillStyle = def.shade || '#3d2414';
+    g.fillRect(ox + 4, oy + 3, 9, 11);
+    g.fillStyle = def.base || '#7a4c27';
+    g.fillRect(ox + 5, oy + 2, 7, 11);
+    g.fillStyle = def.edge || '#b17a42';
+    g.fillRect(ox + 5, oy + 3, 7, 1);
+    g.fillRect(ox + 5, oy + 11, 7, 1);
+    g.fillStyle = def.band || '#2b2d2c';
+    g.fillRect(ox + 4, oy + 5, 9, 1);
+    g.fillRect(ox + 4, oy + 10, 9, 1);
+  }
+
+  function drawTileCracks(g, ox, oy, def) {
+    if (!Array.isArray(def.cracks)) return;
+    g.strokeStyle = def.mortar || '#151917';
+    g.lineWidth = 1;
+    def.cracks.forEach(points => {
+      if (!Array.isArray(points) || points.length < 4) return;
+      g.beginPath();
+      g.moveTo(ox + points[0], oy + points[1]);
+      for (let index = 2; index < points.length - 1; index += 2) {
+        g.lineTo(ox + points[index], oy + points[index + 1]);
+      }
+      g.stroke();
+    });
+  }
+
+  function drawTileChips(g, ox, oy, def) {
+    if (!Array.isArray(def.chips)) return;
+    g.fillStyle = def.shade || '#252823';
+    def.chips.forEach(chip => {
+      if (!Array.isArray(chip) || chip.length < 4) return;
+      g.fillRect(ox + chip[0], oy + chip[1], chip[2], chip[3]);
     });
   }
 
