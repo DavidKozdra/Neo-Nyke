@@ -387,7 +387,14 @@
 
   function isMouseActionHeld(action) {
     const mouseBindings = getMouseBindings();
-    return mouseBindings[action] === 'rmb' ? !!mouse.right : !!mouse.down;
+    if (mouseBindings[action] === 'rmb') {
+      const held = !!mouse.right || !!mouse.rightQueued;
+      mouse.rightQueued = false;
+      return held;
+    }
+    const held = !!mouse.down || !!mouse.downQueued;
+    mouse.downQueued = false;
+    return held;
   }
 
   function formatMouseBindingLabel(value, fallback) {
@@ -754,7 +761,7 @@
       key: 'iron_lung',
       name: 'Iron Lung',
       shortName: 'Iron',
-      description: 'Cannot lose more than 20% max HP in one room.',
+      description: 'In non-boss fights, you cannot lose more than 20% max HP in one room.',
       rarity: 'god',
       color: '#c6d4e8',
       category: 'god',
@@ -810,6 +817,14 @@
       category: 'god',
       tags: ['god', 'crit'],
     },
+  };
+  const RARITY_NAME_COLORS = {
+    knight: '#f4f6fb',
+    white: '#f4f6fb',
+    wizard: '#b77dff',
+    purple: '#b77dff',
+    god: '#ff4256',
+    red: '#ff4256',
   };
   const ITEM_KEYS = Object.keys(ITEM_DEFS);
   const ITEM_DROP_WEIGHTS = [
@@ -1034,7 +1049,7 @@
   let rooms = [];
   let currentRoom = null;
   let keys = {};
-  let mouse = { x: 0, y: 0, worldX: 0, worldY: 0, down: false, right: false };
+  let mouse = { x: 0, y: 0, worldX: 0, worldY: 0, down: false, right: false, downQueued: false, rightQueued: false };
   let cooldowns = {};
   let camera = { x: 0, y: 0 };
   let shake = 0;
@@ -1441,6 +1456,10 @@
     return stack;
   }
 
+  function getRarityNameColor(rarity) {
+    return RARITY_NAME_COLORS[String(rarity || '').toLowerCase()] || '#d8e9ff';
+  }
+
   function drawItemToastIcon(canvas, item) {
     const ctx2d = canvas.getContext('2d');
     if (!ctx2d) return;
@@ -1522,7 +1541,7 @@
 
     const name = document.createElement('span');
     name.textContent = item.name;
-    name.style.color = item.color || '#d8e9ff';
+    name.style.color = getRarityNameColor(item.rarity || item.category);
 
     const plus = document.createElement('span');
     plus.className = 'item-toast-amount';
@@ -1741,7 +1760,7 @@
     title.className = 'item-toast-title';
     const name = document.createElement('span');
     name.textContent = `Weapon: ${def.name}`;
-    name.style.color = color;
+    name.style.color = getRarityNameColor(def.rarity);
     const plus = document.createElement('span');
     plus.className = 'item-toast-amount';
     plus.textContent = '+1';
@@ -1767,8 +1786,8 @@
       mouse.y = (event.clientY - rect.top) * (canvas.height / rect.height);
     });
     canvas.addEventListener('mousedown', event => {
-      if (event.button === 0) mouse.down = true;
-      if (event.button === 2) mouse.right = true;
+      if (event.button === 0) { mouse.down = true; mouse.downQueued = true; }
+      if (event.button === 2) { mouse.right = true; mouse.rightQueued = true; }
     });
     window.addEventListener('mouseup', event => {
       if (event.button === 0) mouse.down = false;
@@ -1906,6 +1925,8 @@
     });
     mouse.down = false;
     mouse.right = false;
+    mouse.downQueued = false;
+    mouse.rightQueued = false;
   }
 
   function bindPanelInput() {
@@ -2177,7 +2198,7 @@
       const isActive = anvilSelectedItem === `${itemType}:${key}`;
       return `<button class="anvil-item-btn${isActive ? ' is-active' : ''}" data-item="${key}" data-item-type="${itemType}">
         <span class="anvil-item-dot" style="background:${color}"></span>
-        ${name}
+        <span style="color:${getRarityNameColor(def?.rarity || def?.category)}">${name}</span>
       </button>`;
     }).join('');
   }
@@ -2227,7 +2248,7 @@
       </div>`;
     });
 
-    statEl.innerHTML = `<div class="anvil-stat-title">${def?.name || itemKey}</div>${rows.join('')}`;
+    statEl.innerHTML = `<div class="anvil-stat-title" style="color:${getRarityNameColor(def?.rarity || def?.category)}">${def?.name || itemKey}</div>${rows.join('')}`;
   }
 
   function renderAnvilFooter() {
@@ -2417,7 +2438,7 @@
           <span class="shop-card__eyebrow">Relic</span>
           <div class="shop-card__title-row">
             <canvas class="shop-card__icon" data-item-icon="${offer.key}" width="30" height="30"></canvas>
-            <h4>${item?.name || 'Item'}</h4>
+            <h4 style="color:${getRarityNameColor(item?.rarity || item?.category)}">${item?.name || 'Item'}</h4>
             <span class="shop-card__price">${offer.cost}</span>
           </div>
           <div class="shop-card__copy">
@@ -2445,7 +2466,7 @@
           <span class="shop-card__eyebrow">${weapon?.rarity || 'weapon'}</span>
           <div class="shop-card__title-row">
             <canvas class="shop-card__icon" data-weapon-icon="${offer.key}" width="30" height="30"></canvas>
-            <h4>${weapon?.name || offer.key}</h4>
+            <h4 style="color:${getRarityNameColor(weapon?.rarity)}">${weapon?.name || offer.key}</h4>
             <span class="shop-card__price">${offer.cost}</span>
           </div>
           <div class="shop-card__copy">
@@ -2557,7 +2578,7 @@
           <span class="inv-card__eyebrow">Relic</span>
           <div class="inv-card__title-row">
             <canvas class="inv-card__icon" data-item-icon="${key}" width="30" height="30"></canvas>
-            <h4>${item?.name || key}</h4>
+            <h4 style="color:${getRarityNameColor(item?.rarity || item?.category)}">${item?.name || key}</h4>
             <span class="inv-card__count">x${player.items[key]}</span>
           </div>
           <p>${item?.description || 'No item description available.'}</p>
@@ -2586,7 +2607,7 @@
           return `<button class="inv-move-chip${equipped ? ' is-equipped-weapon' : ''}" data-weapon="${key}" type="button" aria-pressed="${equipped ? 'true' : 'false'}">
             <canvas class="inv-chip__icon" data-weapon-icon="${key}" width="30" height="30"></canvas>
             <div class="inv-move-chip__meta">
-              <b>${def?.name || key}</b>
+              <b style="color:${getRarityNameColor(def?.rarity)}">${def?.name || key}</b>
               <span class="inv-move-chip__slot">${def?.rarity || 'weapon'}</span>
             </div>
             <p>${def?.description || 'No weapon description available.'}</p>
@@ -2643,7 +2664,7 @@
     if (ui.invWeaponSlot) {
       const weapon = WEAPON_DEFS[player.equippedWeapon];
       ui.invWeaponSlot.dataset.rarity = weapon?.rarity || '';
-      ui.invWeaponSlot.innerHTML = `<div class="inv-slot__top"><span class="inv-slot__kicker">weapon</span><span class="inv-slot__status">${weapon ? 'Equipped Now' : 'No Weapon'}</span></div><div class="inv-slot__move">${weapon?.name || 'Default Melee Active'}</div><p class="inv-slot__hint">${weapon ? `${weapon.description} Click this slot to unequip and return left click to melee.` : 'Open the Weapons tab and click any owned weapon to equip it to left click.'}</p>`;
+      ui.invWeaponSlot.innerHTML = `<div class="inv-slot__top"><span class="inv-slot__kicker">weapon</span><span class="inv-slot__status">${weapon ? 'Equipped Now' : 'No Weapon'}</span></div><div class="inv-slot__move" style="color:${getRarityNameColor(weapon?.rarity)}">${weapon?.name || 'Default Melee Active'}</div><p class="inv-slot__hint">${weapon ? `${weapon.description} Click this slot to unequip and return left click to melee.` : 'Open the Weapons tab and click any owned weapon to equip it to left click.'}</p>`;
     }
     inventoryPanelDirty = false;
   }
@@ -2982,6 +3003,7 @@
           key: String(item.key || ''),
           name: String(item.name || item.key || 'Unknown'),
           count: Math.max(0, Number(item.count || 0)),
+          rarity: String(item.rarity || ITEM_DEFS[item.key]?.rarity || ''),
         })) : [],
         equippedMoves: Array.isArray(entry.equippedMoves) ? entry.equippedMoves.map(move => ({
           slot: String(move.slot || ''),
@@ -3396,6 +3418,7 @@
       .map(item => ({
         ...item,
         name: itemRegistry.get(item.key)?.name || titleCase(item.key),
+        rarity: itemRegistry.get(item.key)?.rarity || ITEM_DEFS[item.key]?.rarity || '',
       }));
   }
 
@@ -3479,7 +3502,7 @@
   function renderRunHistoryTabContent(entry, tab = 'stats') {
     if (tab === 'items') {
       if (!entry.items.length) return '<p class="rh-empty-inner">No relics collected.</p>';
-      return `<div class="rh-items-grid">${entry.items.map(i => `<div class="rh-item-tile"><span class="rh-item-icon">${escapeHtml(i.name.charAt(0))}</span><span class="rh-item-name">${escapeHtml(i.name)}</span><span class="rh-item-count">x${i.count}</span></div>`).join('')}</div>`;
+      return `<div class="rh-items-grid">${entry.items.map(i => `<div class="rh-item-tile"><span class="rh-item-icon">${escapeHtml(i.name.charAt(0))}</span><span class="rh-item-name" style="color:${getRarityNameColor(i.rarity)}">${escapeHtml(i.name)}</span><span class="rh-item-count">x${i.count}</span></div>`).join('')}</div>`;
     }
     if (tab === 'moves') {
       if (!entry.equippedMoves.length) return '<p class="rh-empty-inner">No move data recorded.</p>';
@@ -4220,6 +4243,41 @@
     return { x: START_X, y: START_Y };
   }
 
+  function isLockedFightRoom(room) {
+    return !!room && (room.type === 'boss' || room.type === 'god' || room.type === 'ladder' || CHALLENGE_ROOM_TYPES.has(room.type));
+  }
+
+  function clearPlayerTransientDefense() {
+    if (!player) return;
+    player.inv = 0;
+    player.vx = 0;
+    player.vy = 0;
+    player.dashTime = 0;
+    player.dashX = 0;
+    player.dashY = 0;
+    player.cowardsWayTime = 0;
+    player.blockActive = false;
+    player.blockTimer = 0;
+  }
+
+  function tickPlayerTransientDefenseTimers(dt) {
+    if (!player) return;
+    const step = Math.max(0, Number(dt) || 0);
+    player.inv = Math.max(0, Number(player.inv || 0) - step);
+    player.dashTime = Math.max(0, Number(player.dashTime || 0) - step);
+    if (player.dashTime <= 0) {
+      player.dashX = 0;
+      player.dashY = 0;
+    }
+    player.cowardsWayTime = Math.max(0, Number(player.cowardsWayTime || 0) - step);
+    player.blockTimer = Math.max(0, Number(player.blockTimer || 0) - step);
+    player.blockActive = player.blockTimer > 0;
+  }
+
+  function isBossFightActive() {
+    return currentRoom?.type === 'boss' || currentRoom?.type === 'god' || enemies.some(enemy => isBossType(enemy?.type));
+  }
+
   function enterRoom(room) {
     syncCurrentRoomState();
     setShopPanelOpen(false);
@@ -4248,6 +4306,7 @@
     laserSweepSpeed = 0;
     turtleWaveHpTimer = 0;
     player.roomDamageTaken = 0;
+    if (isLockedFightRoom(room)) clearPlayerTransientDefense();
     const safeSpawn = findSafeSpawnPoint();
     player.x = safeSpawn.x;
     player.y = safeSpawn.y;
@@ -6156,6 +6215,11 @@
       if (target) {
         hitEnemy(target, 9, hitSegment?.angle ?? angle, 80, '#cda8ff', { fireChance: 0.05, fireStacks: 1, fireDuration: 3 });
       }
+      destructibles.forEach(prop => {
+        if (!prop.broken && !prop.hidden && beamPathHitsCircle(beamPath, prop.x, prop.y, prop.r + 4)) {
+          damageDestructible(prop, 1);
+        }
+      });
       particles.push({ x: player.x + Math.cos(angle) * 24, y: player.y + Math.sin(angle) * 24, life: 0.16, c: '#cda8ff' });
     });
   }
@@ -6282,7 +6346,7 @@
         return true;
       }
       player.hp = Math.max(1, player.hp - drain);
-      player.roomDamageTaken = (player.roomDamageTaken || 0) + drain;
+      if (!isBossFightActive()) player.roomDamageTaken = (player.roomDamageTaken || 0) + drain;
       spawnDamagePopup(player.x, player.y - 18, drain, { color: '#74f5ff', size: 14 });
       particles.push({ x: player.x, y: player.y - 30, life: 0.42, text: `-${drain} HP`, c: '#74f5ff' });
       if (player.hp <= 1) {
@@ -6604,6 +6668,14 @@
       if (difference > 1.3) continue;
       hitEnemy(enemy, 34, angle, 280, '#fff6a3');
     }
+    destructibles.forEach(prop => {
+      if (prop.broken || prop.hidden) return;
+      if (dist(player.x, player.y, prop.x, prop.y) > 110 + prop.r) return;
+      const targetAngle = Math.atan2(prop.y - player.y, prop.x - player.x);
+      const difference = Math.abs(Math.atan2(Math.sin(targetAngle - angle), Math.cos(targetAngle - angle)));
+      if (difference > 1.3) return;
+      damageDestructible(prop, 2);
+    });
     particles.push({ x: player.x, y: player.y, life: 0.5, ring: 36, c: '#fff6a3' });
   }
 
@@ -7266,6 +7338,9 @@
     lastTime = timestamp;
     const updatePerfStart = perfStart();
     if (gameState === 'play' && !isWizardPawOpen()) update(dt);
+    else if (player && (gameState === 'dialogue' || gameState === 'pause')) {
+      tickPlayerTransientDefenseTimers(dt);
+    }
     perfEnd('update', updatePerfStart);
     const uiPerfStart = perfStart();
     uiController.tick(dt);
@@ -7303,6 +7378,8 @@
       moveY = 0;
       mouse.down = false;
       mouse.right = false;
+      mouse.downQueued = false;
+      mouse.rightQueued = false;
     }
     const moveLength = Math.hypot(moveX, moveY) || 1;
     moveX /= moveLength;
@@ -8051,6 +8128,7 @@
   }
 
   function updateBulkGolemBoss(enemy, dt) {
+    enemy.speed = 78;
     enemy.aoeTime = Math.max(0, enemy.aoeTime - dt);
     if (enemy.aoeTime <= 0) {
       enemy.aoeTime = 3;
@@ -8066,8 +8144,6 @@
       shakeT = 0.2;
     }
     updateGolemEnemy(enemy, dt);
-    enemy.speed = 78;
-    if (enemy.attackCd < 1.4) enemy.attackCd = 1.4;
   }
 
   function spawnPhaseSwords(count, damage) {
@@ -8663,12 +8739,19 @@
     const ignoreInv = !!options.ignoreInv;
     const applyHitstop = !options.noInvFrames;
     const showPopup = options.showPopup !== false;
+    const numericAmount = Number(amount);
+    if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
+      if (!Number.isFinite(numericAmount)) console.warn('Ignored invalid player damage', { amount, source });
+      return;
+    }
+    if (!Number.isFinite(Number(player.maxHp)) || Number(player.maxHp) <= 0) player.maxHp = 120;
+    if (!Number.isFinite(Number(player.hp))) player.hp = player.maxHp;
     if (!ignoreInv && player.inv > 0) return;
-    if (player.blockActive && amount > 0 && !options.ignoreBlock) {
+    if (player.blockActive && !options.ignoreBlock) {
       particles.push({ x: player.x, y: player.y - 20, life: 0.3, text: 'BLOCK', c: '#9cefff' });
       return;
     }
-    if (isChallengeActive('no_hit') && amount > 0) {
+    if (isChallengeActive('no_hit')) {
       lastDamageSource = getDamageSourceLabel(source || 'no_hit');
       player.hp = 0;
       player.inv = 0;
@@ -8681,8 +8764,9 @@
     const itemStats = getItemStats();
     const hpBeforeHit = player.hp;
     const halfHpThreshold = player.maxHp * 0.5;
-    let finalAmount = amount * (1 - (itemStats.damageReduction || 0));
-    if (itemStats.hasIronLung) {
+    const ironLungApplies = itemStats.hasIronLung && !isBossFightActive();
+    let finalAmount = numericAmount * (1 - (itemStats.damageReduction || 0));
+    if (ironLungApplies) {
       const roomCap = player.maxHp * 0.2;
       const remaining = roomCap - (player.roomDamageTaken || 0);
       if (remaining <= 0) {
@@ -8704,7 +8788,7 @@
     }
 
     finalAmount = Math.max(0, hpBeforeHit - player.hp);
-    player.roomDamageTaken = (player.roomDamageTaken || 0) + finalAmount;
+    if (ironLungApplies) player.roomDamageTaken = (player.roomDamageTaken || 0) + finalAmount;
 
     if (applyHitstop) {
       player.inv = 0.75;
@@ -9327,6 +9411,13 @@
     }
   }
 
+  function isRoomLocked() {
+    const challengeActive = !!currentRoom && CHALLENGE_ROOM_TYPES.has(currentRoom.type) && !!currentRoom.challengeStarted && !currentRoom.cleared;
+    return !!currentRoom
+      && !currentRoom.cleared
+      && (currentRoom.type === 'boss' || currentRoom.type === 'god' || currentRoom.type === 'ladder' || challengeActive);
+  }
+
   function updateTransitions(dt) {
     const challengeActive = !!currentRoom && CHALLENGE_ROOM_TYPES.has(currentRoom.type) && !!currentRoom.challengeStarted && !currentRoom.cleared;
     const canLeaveFight = enemies.length > 0
@@ -9335,9 +9426,7 @@
       && currentRoom.type !== 'god'
       && currentRoom.type !== 'ladder'
       && !challengeActive;
-    const roomLocked = !!currentRoom
-      && !currentRoom.cleared
-      && (currentRoom.type === 'boss' || currentRoom.type === 'god' || currentRoom.type === 'ladder' || challengeActive);
+    const roomLocked = isRoomLocked();
     if (!fading && !roomLocked && (enemies.length === 0 || canLeaveFight)) {
       const door =
         player.y < WALL + 24 && hasRoomExit(currentRoom, 'n') && Math.abs(player.x - ROOM_W / 2) < DOOR / 2 ? 'n' :
@@ -9892,6 +9981,122 @@
     target.restore();
   }
 
+  function drawLockedDoor(dir, target = ctx) {
+    const isNorth = dir === 'n';
+    const isSouth = dir === 's';
+    const isWest = dir === 'w';
+
+    // Door panel bounds (the opening in the wall)
+    let dx, dy, dw, dh;
+    if (isNorth) {
+      dx = (ROOM_W - DOOR) / 2; dy = 0; dw = DOOR; dh = WALL + 10;
+    } else if (isSouth) {
+      dx = (ROOM_W - DOOR) / 2; dy = ROOM_H - WALL - 10; dw = DOOR; dh = WALL + 10;
+    } else if (isWest) {
+      dx = 0; dy = (ROOM_H - DOOR) / 2; dw = WALL + 10; dh = DOOR;
+    } else {
+      dx = ROOM_W - WALL - 10; dy = (ROOM_H - DOOR) / 2; dw = WALL + 10; dh = DOOR;
+    }
+
+    const cx = dx + dw / 2;
+    const cy = dy + dh / 2;
+
+    target.save();
+
+    // Wood door panel fill
+    const woodGrad = isNorth || isSouth
+      ? target.createLinearGradient(dx, cy, dx + dw, cy)
+      : target.createLinearGradient(cx, dy, cx, dy + dh);
+    woodGrad.addColorStop(0,    'rgba(90,52,22,0.97)');
+    woodGrad.addColorStop(0.35, 'rgba(110,64,28,0.97)');
+    woodGrad.addColorStop(0.65, 'rgba(96,56,22,0.97)');
+    woodGrad.addColorStop(1,    'rgba(75,42,16,0.97)');
+    target.fillStyle = woodGrad;
+    target.fillRect(dx, dy, dw, dh);
+
+    // Wood grain lines
+    target.strokeStyle = 'rgba(60,35,12,0.35)';
+    target.lineWidth = 1;
+    const grainCount = 5;
+    for (let i = 1; i < grainCount; i++) {
+      target.beginPath();
+      if (isNorth || isSouth) {
+        const gx = dx + (dw / grainCount) * i;
+        target.moveTo(gx, dy); target.lineTo(gx, dy + dh);
+      } else {
+        const gy = dy + (dh / grainCount) * i;
+        target.moveTo(dx, gy); target.lineTo(dx + dw, gy);
+      }
+      target.stroke();
+    }
+
+    // Door frame border
+    target.strokeStyle = 'rgba(55,32,10,0.95)';
+    target.lineWidth = 3;
+    target.strokeRect(dx + 1.5, dy + 1.5, dw - 3, dh - 3);
+
+    // Metal hinges (two, offset toward door edges)
+    const hingeColor = 'rgba(80,80,90,0.92)';
+    const hingeHighlight = 'rgba(140,140,160,0.75)';
+    const hingeW = 8, hingeH = 14;
+    const hingeOffsets = isNorth || isSouth ? [-DOOR * 0.28, DOOR * 0.28] : [-DOOR * 0.28, DOOR * 0.28];
+    for (const off of hingeOffsets) {
+      const hx = cx + (isNorth || isSouth ? off : -hingeW / 2) - (isNorth || isSouth ? hingeW / 2 : 0);
+      const hy = cy + (isNorth || isSouth ? -hingeH / 2 : off) - (isNorth || isSouth ? 0 : hingeH / 2);
+      const hw = isNorth || isSouth ? hingeW : hingeH;
+      const hh = isNorth || isSouth ? hingeH : hingeW;
+      target.fillStyle = hingeColor;
+      target.fillRect(hx, hy, hw, hh);
+      target.strokeStyle = hingeHighlight;
+      target.lineWidth = 1;
+      target.strokeRect(hx + 0.5, hy + 0.5, hw - 1, hh - 1);
+    }
+
+    // Padlock icon centered on the door
+    const lw = 18, lh = 22;
+    const lx = cx - lw / 2;
+    const ly = cy - lh / 2;
+    const shackleR = lw * 0.38;
+
+    // Lock body
+    target.shadowColor = 'rgba(200,30,30,0.9)';
+    target.shadowBlur = 10;
+    target.fillStyle = 'rgba(160,40,40,0.97)';
+    const bodyTop = ly + lh * 0.38;
+    const bodyH = lh * 0.62;
+    target.beginPath();
+    target.roundRect(lx, bodyTop, lw, bodyH, 3);
+    target.fill();
+    target.strokeStyle = 'rgba(220,80,80,0.8)';
+    target.lineWidth = 1.5;
+    target.stroke();
+
+    // Shackle (arch over body)
+    target.shadowBlur = 8;
+    target.strokeStyle = 'rgba(200,60,60,0.97)';
+    target.lineWidth = 3.5;
+    target.beginPath();
+    target.arc(cx, bodyTop, shackleR, Math.PI, 0);
+    target.stroke();
+
+    // Keyhole
+    target.shadowBlur = 0;
+    target.fillStyle = 'rgba(30,10,10,0.95)';
+    const khY = bodyTop + bodyH * 0.35;
+    target.beginPath();
+    target.arc(cx, khY, 3, 0, Math.PI * 2);
+    target.fill();
+    target.beginPath();
+    target.moveTo(cx - 2, khY + 1);
+    target.lineTo(cx + 2, khY + 1);
+    target.lineTo(cx + 1.5, khY + 6);
+    target.lineTo(cx - 1.5, khY + 6);
+    target.closePath();
+    target.fill();
+
+    target.restore();
+  }
+
   function drawDoorThreshold(dir, theme, locked, target = ctx) {
     const isNorth = dir === 'n';
     const isSouth = dir === 's';
@@ -9925,97 +10130,7 @@
     target.stroke();
 
     if (locked) {
-      // Draw iron bars across the door opening
-      const barColor = 'rgba(90,55,55,0.92)';
-      const barHighlight = 'rgba(140,100,100,0.7)';
-      const barShadow = 'rgba(30,10,10,0.85)';
-      target.shadowBlur = 0;
-      if (isNorth || isSouth) {
-        const cx = ROOM_W / 2;
-        const openY1 = isNorth ? 0 : ROOM_H - WALL - 10;
-        const openY2 = isNorth ? WALL + 10 : ROOM_H;
-        const barSpacing = DOOR / 4;
-        for (let i = -1; i <= 1; i++) {
-          const bx = cx + i * barSpacing;
-          target.lineWidth = 6;
-          target.strokeStyle = barShadow;
-          target.shadowBlur = 0;
-          target.beginPath();
-          target.moveTo(bx + 1, openY1);
-          target.lineTo(bx + 1, openY2);
-          target.stroke();
-          target.lineWidth = 5;
-          target.strokeStyle = barColor;
-          target.beginPath();
-          target.moveTo(bx, openY1);
-          target.lineTo(bx, openY2);
-          target.stroke();
-          target.lineWidth = 2;
-          target.strokeStyle = barHighlight;
-          target.beginPath();
-          target.moveTo(bx - 1, openY1);
-          target.lineTo(bx - 1, openY2);
-          target.stroke();
-        }
-        // Horizontal crossbar
-        const crossY = (openY1 + openY2) / 2;
-        const barLeft = cx - DOOR / 2 + 10;
-        const barRight = cx + DOOR / 2 - 10;
-        target.lineWidth = 6;
-        target.strokeStyle = barShadow;
-        target.beginPath();
-        target.moveTo(barLeft, crossY + 1);
-        target.lineTo(barRight, crossY + 1);
-        target.stroke();
-        target.lineWidth = 5;
-        target.strokeStyle = barColor;
-        target.beginPath();
-        target.moveTo(barLeft, crossY);
-        target.lineTo(barRight, crossY);
-        target.stroke();
-      } else {
-        const cy = ROOM_H / 2;
-        const openX1 = isWest ? 0 : ROOM_W - WALL - 10;
-        const openX2 = isWest ? WALL + 10 : ROOM_W;
-        const barSpacing = DOOR / 4;
-        for (let i = -1; i <= 1; i++) {
-          const by = cy + i * barSpacing;
-          target.lineWidth = 6;
-          target.strokeStyle = barShadow;
-          target.beginPath();
-          target.moveTo(openX1, by + 1);
-          target.lineTo(openX2, by + 1);
-          target.stroke();
-          target.lineWidth = 5;
-          target.strokeStyle = barColor;
-          target.beginPath();
-          target.moveTo(openX1, by);
-          target.lineTo(openX2, by);
-          target.stroke();
-          target.lineWidth = 2;
-          target.strokeStyle = barHighlight;
-          target.beginPath();
-          target.moveTo(openX1, by - 1);
-          target.lineTo(openX2, by - 1);
-          target.stroke();
-        }
-        // Vertical crossbar
-        const crossX = (openX1 + openX2) / 2;
-        const barTop = cy - DOOR / 2 + 10;
-        const barBot = cy + DOOR / 2 - 10;
-        target.lineWidth = 6;
-        target.strokeStyle = barShadow;
-        target.beginPath();
-        target.moveTo(crossX + 1, barTop);
-        target.lineTo(crossX + 1, barBot);
-        target.stroke();
-        target.lineWidth = 5;
-        target.strokeStyle = barColor;
-        target.beginPath();
-        target.moveTo(crossX, barTop);
-        target.lineTo(crossX, barBot);
-        target.stroke();
-      }
+      drawLockedDoor(dir, target);
     }
 
     target.restore();
@@ -10027,9 +10142,7 @@
     drawTiledRect(theme.wallTile, 0, 0, WALL + 8, ROOM_H, { tileSize: ENV_TILE_SIZE, ctx: target });
     drawTiledRect(theme.wallTile, ROOM_W - WALL - 8, 0, WALL + 8, ROOM_H, { tileSize: ENV_TILE_SIZE, ctx: target });
 
-    const challengeActive = !!currentRoom && CHALLENGE_ROOM_TYPES.has(currentRoom.type) && !!currentRoom.challengeStarted && !currentRoom.cleared;
-    const roomLocked = !!currentRoom && !currentRoom.cleared
-      && (currentRoom.type === 'boss' || currentRoom.type === 'god' || currentRoom.type === 'ladder' || challengeActive);
+    const roomLocked = isRoomLocked();
     DIRECTIONS.forEach(dir => {
       if (hasVisibleRoomExit(currentRoom, dir)) drawDoorThreshold(dir, theme, roomLocked, target);
     });
