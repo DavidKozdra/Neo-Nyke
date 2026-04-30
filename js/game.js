@@ -16,6 +16,14 @@
     laser: { baseCooldown: 4.2, duration: 0.58, tick: 0.08, range: 430, damage: 10 },
     smash: { baseCooldown: 5.4, radius: 148, damage: 46, bonus: 26 },
   };
+  const SLASH_KNOCKBACK = 340;
+  const PLAYER_BEAM_BOUNCES = 2;
+  const HEAVY_BEAM_BOUNCES = 1;
+  const ENEMY_BEAM_BOUNCES = 1;
+  const LAZER_GLASSES_BOUNCES = 1;
+  const BEAM_RICOCHET_NUDGE = 0.65;
+  const BEAM_RICOCHET_EPSILON = 0.0001;
+  const TURTLE_WAVE_HP_PER_SECOND = 2;
   const ENEMY_SCALING = {
     floor: 0.14,
     loop: 0.32,
@@ -41,6 +49,11 @@
     poison: { color: '#85df63', textColor: '#85df63' },
     dark_drain: { color: '#b48cff', textColor: '#b48cff' },
   };
+  const BLEED_BLOOD_COLORS = ['#6f0014', '#a5001e', '#e51e37', '#ff5264'];
+  const PERF_BUDGET_60FPS = 1000 / 60;
+  const PERF_AVG_WEIGHT = 0.12;
+  const PERF_OVERLAY_INTERVAL = 250;
+  const perfState = createPerfState();
 
   const BOSS_TYPES = new Set(['god', 'queen_cult', 'bulk_golem', 'artificer_knave']);
   const CHALLENGE_ROOM_TYPES = new Set(['challenge']);
@@ -248,7 +261,7 @@
     smite: { key: 'smite', slot: 'melee', name: 'Smite', desc: 'Physical swing plus chaining lightning.' },
 
     blood_beam: { key: 'blood_beam', slot: 'laser', name: 'Blood Beam', desc: 'Sustained piercing beam that causes bleed.' },
-    turtle_wave: { key: 'turtle_wave', slot: 'laser', name: 'Turtle Wave', desc: 'Giant beam. Costs 2 HP to cast.' },
+    turtle_wave: { key: 'turtle_wave', slot: 'laser', name: 'Turtle Wave', desc: 'Giant beam. Drains 2 HP each active second.' },
     power_disks: { key: 'power_disks', slot: 'laser', name: 'Power Disks', desc: 'Burst of spinning disks.' },
     blade_justice: { key: 'blade_justice', slot: 'laser', name: 'Blade Justice', desc: 'Divine short-range blade strike.' },
     lightning_columns: { key: 'lightning_columns', slot: 'laser', name: 'Lightning Columns', desc: 'Summon two lightning turrets.' },
@@ -899,6 +912,7 @@
   let laserMode = 'beam';
   let laserAngle = 0;
   let laserSweepSpeed = 0;
+  let turtleWaveHpTimer = 0;
   let dashKeyLatch = false;
   let chosenCharacter = 'thorn_knight';
   let selectedDifficulty = 'easy';
@@ -1049,15 +1063,214 @@
     ];
   })();
 
+  function createPerfState() {
+    let enabled = false;
+    try {
+      enabled = new URLSearchParams(window.location.search).has('perf');
+    } catch {
+      enabled = false;
+    }
+    return {
+      enabled,
+      overlay: null,
+      averages: Object.create(null),
+      sections: Object.create(null),
+      fps: 0,
+      rafMs: 0,
+      workMs: 0,
+      lastRafTimestamp: 0,
+      lastOverlayAt: 0,
+      totalFrames: 0,
+      slowFrames: 0,
+      worstFrameMs: 0,
+    };
+  }
+
+  function resetPerfStats() {
+    perfState.averages = Object.create(null);
+    perfState.sections = Object.create(null);
+    perfState.fps = 0;
+    perfState.rafMs = 0;
+    perfState.workMs = 0;
+    perfState.lastRafTimestamp = 0;
+    perfState.lastOverlayAt = 0;
+    perfState.totalFrames = 0;
+    perfState.slowFrames = 0;
+    perfState.worstFrameMs = 0;
+  }
+
+  function setPerfEnabled(enabled) {
+    const nextEnabled = !!enabled;
+    if (nextEnabled === perfState.enabled) return perfState.enabled;
+    perfState.enabled = nextEnabled;
+    if (nextEnabled) {
+      resetPerfStats();
+      ensurePerfOverlay();
+      updatePerfOverlay(true);
+    } else if (perfState.overlay) {
+      perfState.overlay.remove();
+      perfState.overlay = null;
+    }
+    return perfState.enabled;
+  }
+
+  function perfStart() {
+    return perfState.enabled ? performance.now() : 0;
+  }
+
+  function perfEnd(name, startTime) {
+    if (!perfState.enabled || !startTime) return;
+    const elapsed = performance.now() - startTime;
+    perfState.sections[name] = (perfState.sections[name] || 0) + elapsed;
+  }
+
+  function perfSample(name, value) {
+    const previous = perfState.averages[name];
+    perfState.averages[name] = previous === undefined
+      ? value
+      : previous + (value - previous) * PERF_AVG_WEIGHT;
+  }
+
+  function perfBeginFrame(timestamp) {
+    if (!perfState.enabled) return 0;
+    perfState.sections = Object.create(null);
+    if (perfState.lastRafTimestamp) {
+      const rafMs = Math.max(0, timestamp - perfState.lastRafTimestamp);
+      perfState.rafMs = rafMs;
+      if (rafMs > 0) {
+        const fps = 1000 / rafMs;
+        perfState.fps = perfState.fps ? perfState.fps + (fps - perfState.fps) * PERF_AVG_WEIGHT : fps;
+      }
+    }
+    perfState.lastRafTimestamp = timestamp;
+    return performance.now();
+  }
+
+  function perfEndFrame(frameStartTime) {
+    if (!perfState.enabled || !frameStartTime) return;
+    const workMs = performance.now() - frameStartTime;
+    perfState.workMs = workMs;
+    perfState.totalFrames += 1;
+    if (workMs > PERF_BUDGET_60FPS) perfState.slowFrames += 1;
+    perfState.worstFrameMs = Math.max(perfState.worstFrameMs, workMs);
+    perfSample('frame.work', workMs);
+    Object.entries(perfState.sections).forEach(([name, value]) => perfSample(name, value));
+    updatePerfOverlay(false);
+  }
+
+  function formatPerfMs(value) {
+    const n = Number(value || 0);
+    return `${n >= 10 ? n.toFixed(1) : n.toFixed(2)}ms`;
+  }
+
+  function formatPerfFps(value) {
+    const n = Number(value || 0);
+    return n > 0 ? n.toFixed(1) : '--';
+  }
+
+  function ensurePerfOverlay() {
+    if (perfState.overlay) return perfState.overlay;
+    const existing = document.getElementById('perfOverlay');
+    if (existing) {
+      perfState.overlay = existing;
+      return existing;
+    }
+    const overlay = document.createElement('pre');
+    overlay.id = 'perfOverlay';
+    overlay.className = 'perf-overlay';
+    overlay.setAttribute('aria-live', 'off');
+    overlay.title = 'Press F3 to hide. Use NeoPerf.snapshot() in the console for raw values.';
+    (document.getElementById('wrap') || document.body).appendChild(overlay);
+    perfState.overlay = overlay;
+    return overlay;
+  }
+
+  function getPerfCounts() {
+    return {
+      state: gameState,
+      floor,
+      enemies: enemies.length,
+      projectiles: projectiles.length,
+      particles: particles.length,
+      pickups: pickups.length,
+      hazards: hazards.length,
+      destructibles: destructibles.length,
+      rooms: rooms.length,
+    };
+  }
+
+  function getTopPerfSections(limit = 4) {
+    const ignored = new Set(['frame.work', 'update', 'draw', 'ui']);
+    return Object.entries(perfState.averages)
+      .filter(([name, value]) => !ignored.has(name) && Number(value) > 0.05)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, limit);
+  }
+
+  function updatePerfOverlay(force) {
+    if (!perfState.enabled) return;
+    const now = performance.now();
+    if (!force && now - perfState.lastOverlayAt < PERF_OVERLAY_INTERVAL) return;
+    perfState.lastOverlayAt = now;
+    const overlay = ensurePerfOverlay();
+    const avg = perfState.averages;
+    const counts = getPerfCounts();
+    const slowPct = perfState.totalFrames
+      ? (perfState.slowFrames / perfState.totalFrames) * 100
+      : 0;
+    const top = getTopPerfSections()
+      .map(([name, value]) => `${name} ${formatPerfMs(value)}`)
+      .join(' | ') || 'collecting...';
+
+    overlay.textContent = [
+      'NEO PERF  F3 toggles  console: NeoPerf.snapshot()',
+      `fps ${formatPerfFps(perfState.fps)} | raf ${formatPerfMs(perfState.rafMs)} | work avg ${formatPerfMs(avg['frame.work'])} last ${formatPerfMs(perfState.workMs)}`,
+      `slow>${formatPerfMs(PERF_BUDGET_60FPS)} ${slowPct.toFixed(1)}% | worst ${formatPerfMs(perfState.worstFrameMs)}`,
+      `totals  update ${formatPerfMs(avg.update)} | draw ${formatPerfMs(avg.draw)} | ui/dom ${formatPerfMs(avg.ui)}`,
+      `update  player ${formatPerfMs(avg['update.player'])} | enemies ${formatPerfMs(avg['update.enemies'])} | projectiles ${formatPerfMs(avg['update.projectiles'])} | world ${formatPerfMs(avg['update.world'])}`,
+      `update  pickups ${formatPerfMs(avg['update.pickups'])} | particles ${formatPerfMs(avg['update.particles'])} | transitions ${formatPerfMs(avg['update.transitions'])} | panels ${formatPerfMs(avg['update.panels'])}`,
+      `draw    room ${formatPerfMs(avg['draw.room'])} | items ${formatPerfMs(avg['draw.items'])} | entities ${formatPerfMs(avg['draw.entities'])} | particles ${formatPerfMs(avg['draw.particles'])}`,
+      `draw    minimap ${formatPerfMs(avg['draw.minimap'])} | overlays ${formatPerfMs(avg['draw.overlays'])} | prompts ${formatPerfMs(avg['draw.prompts'])}`,
+      `counts  state ${counts.state} | floor ${counts.floor} | enemies ${counts.enemies} | shots ${counts.projectiles} | fx ${counts.particles} | pickups ${counts.pickups} | hazards ${counts.hazards}`,
+      `top     ${top}`,
+    ].join('\n');
+  }
+
+  function installPerfDebugApi() {
+    window.NeoPerf = {
+      enable() { return setPerfEnabled(true); },
+      disable() { return setPerfEnabled(false); },
+      toggle() { return setPerfEnabled(!perfState.enabled); },
+      reset() { resetPerfStats(); updatePerfOverlay(true); },
+      snapshot() {
+        return {
+          enabled: perfState.enabled,
+          fps: perfState.fps,
+          rafMs: perfState.rafMs,
+          workMs: perfState.workMs,
+          slowFrames: perfState.slowFrames,
+          totalFrames: perfState.totalFrames,
+          worstFrameMs: perfState.worstFrameMs,
+          averages: { ...perfState.averages },
+          counts: getPerfCounts(),
+        };
+      },
+    };
+    if (perfState.enabled) ensurePerfOverlay();
+  }
+
   boot();
 
   async function boot() {
+    installPerfDebugApi();
     if (gameStateManager) gameStateManager.setState(gameState);
     else uiController.setState(gameState);
     uiController.setHudUpdateHook(() => {
       if (gameState !== 'play' || !player) return;
+      const hudPerfStart = perfStart();
       updateObjective();
       updateHud();
+      perfEnd('ui.hud', hudPerfStart);
     });
     bindInput();
     bindPanelInput();
@@ -1266,6 +1479,11 @@
     });
     window.addEventListener('keydown', event => {
       const key = event.key.toLowerCase();
+      if (event.key === 'F3' || (event.ctrlKey && event.shiftKey && key === 'p')) {
+        event.preventDefault();
+        setPerfEnabled(!perfState.enabled);
+        return;
+      }
       if (uiController?.isDialogueOpen?.()) {
         keys[key] = false;
         if (key === 'enter' || key === ' ' || key === 'escape') {
@@ -2569,7 +2787,7 @@
 
   function getLaserCastDuration(moveKey = getEquippedMove('laser'), attackSpeed = getAttackSpeedValue()) {
     if (moveKey === 'god_sweep') return 1.45 / attackSpeed;
-    if (moveKey === 'turtle_wave') return 1.35 / attackSpeed;
+    if (moveKey === 'turtle_wave') return Math.max(0.1, (MOVE_BASE_STATS.turtle_wave.duration + getAnvilMoveBonus('turtle_wave', 'duration')) / attackSpeed);
     return (godTimer > 0 ? 0.72 : ATTACKS.laser.duration) / attackSpeed;
   }
 
@@ -3044,6 +3262,7 @@
     laserMode = 'beam';
     laserAngle = 0;
     laserSweepSpeed = 0;
+    turtleWaveHpTimer = 0;
     dashKeyLatch = false;
     godTimer = 0;
     camera = { x: 0, y: 0 };
@@ -3132,6 +3351,7 @@
     laserMode = snapshot.laserMode || 'beam';
     laserAngle = Number(snapshot.laserAngle || 0);
     laserSweepSpeed = Number(snapshot.laserSweepSpeed || 0);
+    turtleWaveHpTimer = Number(snapshot.turtleWaveHpTimer || 0);
     godTimer = snapshot.godTimer || 0;
     gameElapsedTime = snapshot.gameElapsedTime || 0;
     camera = snapshot.camera || { x: 0, y: 0 };
@@ -3691,6 +3911,7 @@
     laserMode = 'beam';
     laserAngle = 0;
     laserSweepSpeed = 0;
+    turtleWaveHpTimer = 0;
     player.roomDamageTaken = 0;
     const safeSpawn = findSafeSpawnPoint();
     player.x = safeSpawn.x;
@@ -5514,6 +5735,7 @@
     const anvilRngBonus = getAnvilMoveBonus(move, 'range');
     const damage = (godTimer > 0 ? 56 : ATTACKS.melee.damage) + anvilDmgBonus;
     const meleeRange = ATTACKS.melee.range + anvilRngBonus;
+    const meleeKnockback = move === 'slash' ? SLASH_KNOCKBACK : ATTACKS.melee.push;
     for (let index = enemies.length - 1; index >= 0; index -= 1) {
       const enemy = enemies[index];
       if (!enemy) continue;
@@ -5522,15 +5744,20 @@
       const targetAngle = Math.atan2(enemy.y - player.y, enemy.x - player.x);
       const difference = Math.abs(Math.atan2(Math.sin(targetAngle - angle), Math.cos(targetAngle - angle)));
       if (difference > ATTACKS.melee.arc) continue;
-      hitEnemy(enemy, damage, angle, ATTACKS.melee.push, '#0ff');
+      hitEnemy(enemy, damage, angle, meleeKnockback, '#0ff');
       const slashBleedChance = move === 'slash' ? 0.10 : 0;
       if (slashBleedChance > 0 && rng() < slashBleedChance) applyBleed(enemy, 1, 5);
       if (itemStats.bleedChance > 0 && rng() < itemStats.bleedChance) applyBleed(enemy, 1, 5);
     }
     destructibles.forEach(prop => {
-      if (!prop.broken && !prop.hidden && dist(player.x, player.y, prop.x, prop.y) <= ATTACKS.melee.range) {
-        damageDestructible(prop, 1);
-      }
+      if (prop.broken || prop.hidden) return;
+      const propDistance = dist(player.x, player.y, prop.x, prop.y);
+      if (propDistance > meleeRange + prop.r + 8) return;
+      const targetAngle = Math.atan2(prop.y - player.y, prop.x - player.x);
+      const difference = Math.abs(Math.atan2(Math.sin(targetAngle - angle), Math.cos(targetAngle - angle)));
+      const touching = propDistance <= player.r + prop.r + 18;
+      if (!touching && difference > ATTACKS.melee.arc + 0.25) return;
+      damageDestructible(prop, 1);
     });
   }
 
@@ -5538,10 +5765,20 @@
     const baseAngle = Math.atan2(mouse.worldY - player.y, mouse.worldX - player.x);
     [-0.2, 0.2].forEach(offset => {
       const angle = baseAngle + offset;
-      const beamEnd = getBeamEnd(player.x, player.y, angle, 430);
-      const target = enemies.find(enemy => enemy && beamHitsCircle(player.x, player.y, beamEnd.x, beamEnd.y, enemy.x, enemy.y, enemy.r + 4));
+      const beamPath = buildRicochetBeamPath(player.x, player.y, angle, 430, LAZER_GLASSES_BOUNCES);
+      let target = null;
+      let hitSegment = null;
+      for (let index = 0; index < enemies.length; index += 1) {
+        const enemy = enemies[index];
+        if (!enemy) continue;
+        hitSegment = beamPathHitsCircle(beamPath, enemy.x, enemy.y, enemy.r + 4);
+        if (hitSegment) {
+          target = enemy;
+          break;
+        }
+      }
       if (target) {
-        hitEnemy(target, 9, angle, 80, '#cda8ff', { fireChance: 0.05, fireStacks: 1, fireDuration: 3 });
+        hitEnemy(target, 9, hitSegment?.angle ?? angle, 80, '#cda8ff', { fireChance: 0.05, fireStacks: 1, fireDuration: 3 });
       }
       particles.push({ x: player.x + Math.cos(angle) * 24, y: player.y + Math.sin(angle) * 24, life: 0.16, c: '#cda8ff' });
     });
@@ -5604,18 +5841,16 @@
     const move = getEquippedMove('laser');
     const rechargeTime = getLaserCooldownDuration(move, attackSpeed);
     if (move === 'turtle_wave') {
-      if (player.hp <= 2) {
-        particles.push({ x: player.x, y: player.y - 20, life: 0.52, text: 'NEED 2 HP', c: '#ff8b98' });
+      if (player.hp <= 1) {
+        particles.push({ x: player.x, y: player.y - 20, life: 0.52, text: 'NEED HP', c: '#ff8b98' });
         return;
       }
       if (!spendSkillCharge('laser', rechargeTime, { deferTimer: true })) return;
-      player.hp = Math.max(1, player.hp - 2);
-      player.roomDamageTaken = (player.roomDamageTaken || 0) + 2;
-      spawnDamagePopup(player.x, player.y - 18, 2, { color: '#ff8b98', size: 14 });
       laserActive = true;
       laserMode = 'turtle_wave';
       laserTime = getLaserCastDuration(move, attackSpeed);
       laserTick = 0;
+      turtleWaveHpTimer = 0;
       return;
     }
     if (move === 'power_disks') {
@@ -5639,6 +5874,7 @@
       laserMode = 'god_sweep';
       laserTime = getLaserCastDuration(move, attackSpeed);
       laserTick = 0;
+      turtleWaveHpTimer = 0;
       laserAngle = Math.atan2(mouse.worldY - player.y, mouse.worldX - player.x);
       laserSweepSpeed = (nextRandom('encounter') < 0.5 ? -1 : 1) * 4.6;
       return;
@@ -5648,12 +5884,47 @@
     laserMode = 'beam';
     laserTime = getLaserCastDuration(move, attackSpeed);
     laserTick = 0;
+    turtleWaveHpTimer = 0;
+  }
+
+  function endActiveLaser() {
+    if (!laserActive) return;
+    laserActive = false;
+    laserMode = 'beam';
+    turtleWaveHpTimer = 0;
+    queueHeldSkillRecharge('laser', getLaserCooldownDuration(getEquippedMove('laser'), getAttackSpeedValue()));
+  }
+
+  function tickTurtleWaveHpDrain(dt) {
+    if (laserMode !== 'turtle_wave') return false;
+    turtleWaveHpTimer += dt;
+    while (turtleWaveHpTimer >= 1) {
+      turtleWaveHpTimer -= 1;
+      const drain = Math.min(TURTLE_WAVE_HP_PER_SECOND, Math.max(0, player.hp - 1));
+      if (drain <= 0) {
+        particles.push({ x: player.x, y: player.y - 20, life: 0.55, text: 'WAVE ENDED', c: '#ff8b98' });
+        return true;
+      }
+      player.hp = Math.max(1, player.hp - drain);
+      player.roomDamageTaken = (player.roomDamageTaken || 0) + drain;
+      spawnDamagePopup(player.x, player.y - 18, drain, { color: '#74f5ff', size: 14 });
+      particles.push({ x: player.x, y: player.y - 30, life: 0.42, text: `-${drain} HP`, c: '#74f5ff' });
+      if (player.hp <= 1) {
+        particles.push({ x: player.x, y: player.y - 20, life: 0.55, text: 'WAVE ENDED', c: '#ff8b98' });
+        return true;
+      }
+    }
+    return false;
   }
 
   function updatePlayerLaser(dt) {
     if (!laserActive) return;
     laserTime -= dt;
     laserTick -= dt;
+    if (tickTurtleWaveHpDrain(dt)) {
+      endActiveLaser();
+      return;
+    }
     const move = getEquippedMove('laser');
     const itemStats = getItemStats();
     const angle = laserMode === 'god_sweep'
@@ -5662,30 +5933,29 @@
     if (laserTick <= 0) {
       if (laserMode === 'god_sweep') laserAngle += laserSweepSpeed * 0.05;
       laserTick = laserMode === 'god_sweep' ? 0.05 : laserMode === 'turtle_wave' ? 0.08 : ATTACKS.laser.tick;
-      const range = laserMode === 'god_sweep' ? 560 : laserMode === 'turtle_wave' ? 620 : ATTACKS.laser.range;
-      const end = getBeamEnd(player.x, player.y, angle, range);
+      const range = getPlayerBeamRange(laserMode);
+      const beamPath = buildRicochetBeamPath(player.x, player.y, angle, range, getPlayerBeamBounceCount(laserMode));
       for (let index = enemies.length - 1; index >= 0; index -= 1) {
         const enemy = enemies[index];
         if (!enemy) continue;
-        if (!beamHitsCircle(player.x, player.y, end.x, end.y, enemy.x, enemy.y, enemy.r + (laserMode === 'turtle_wave' ? 14 : 6))) continue;
+        const hitSegment = beamPathHitsCircle(beamPath, enemy.x, enemy.y, enemy.r + (laserMode === 'turtle_wave' ? 14 : 6));
+        if (!hitSegment) continue;
         const anvilBeamBonus = getAnvilMoveBonus(move, 'damage');
         const beamDamage = ((laserMode === 'god_sweep' ? 24 : laserMode === 'turtle_wave' ? 34 : godTimer > 0 ? 16 : ATTACKS.laser.damage) + anvilBeamBonus) * (itemStats.beamDamageMultiplier || 1);
         const anvilCritBonus = getAnvilMoveBonus(move, 'critChance');
-        hitEnemy(enemy, beamDamage, angle, laserMode === 'god_sweep' ? 120 : laserMode === 'turtle_wave' ? 155 : 60, '#f0f', anvilCritBonus > 0 ? { critBonus: anvilCritBonus } : {});
-        chainBeamHit(enemy, beamDamage, angle, '#d890ff');
+        hitEnemy(enemy, beamDamage, hitSegment.angle, laserMode === 'god_sweep' ? 120 : laserMode === 'turtle_wave' ? 155 : 60, '#f0f', anvilCritBonus > 0 ? { critBonus: anvilCritBonus } : {});
+        chainBeamHit(enemy, beamDamage, hitSegment.angle, '#d890ff');
         if (move === 'blood_beam' && rng() < 0.05) applyBleed(enemy, 1, 3.2);
         if (move === 'blood_beam' && rng() < 0.08) applyDarkDrain(enemy, 1, 3.4);
       }
       destructibles.forEach(prop => {
-        if (!prop.broken && !prop.hidden && beamHitsCircle(player.x, player.y, end.x, end.y, prop.x, prop.y, prop.r + 4)) {
+        if (!prop.broken && !prop.hidden && beamPathHitsCircle(beamPath, prop.x, prop.y, prop.r + 4)) {
           damageDestructible(prop, 1);
         }
       });
     }
     if (laserTime <= 0) {
-      laserActive = false;
-      laserMode = 'beam';
-      queueHeldSkillRecharge('laser', getLaserCooldownDuration(getEquippedMove('laser'), getAttackSpeedValue()));
+      endActiveLaser();
     }
   }
 
@@ -6164,7 +6434,14 @@
   }
 
   function applyBleed(enemy, stacks, duration) {
+    if (!enemy) return;
+    const beforeStacks = getStatusStacks(enemy, 'bleed');
     applyStatus(enemy, 'bleed', stacks, duration);
+    const afterStacks = getStatusStacks(enemy, 'bleed');
+    if (afterStacks > beforeStacks) {
+      enemy.bleedFlash = 0.34;
+      spawnBleedSpray(enemy, afterStacks - beforeStacks, 1.7);
+    }
   }
 
   function applyFire(entity, stacks, duration) {
@@ -6186,6 +6463,26 @@
       if (dist(x, y, enemy.x, enemy.y) > radius + enemy.r) return;
       applyStatus(enemy, statusKey, stacks, duration);
     });
+  }
+
+  function spawnBleedSpray(enemy, stacks = 1, intensity = 1) {
+    if (!enemy) return;
+    const count = clamp(Math.ceil(Number(stacks || 1) * Number(intensity || 1)) + 1, 2, 9);
+    const radius = Math.max(8, Number(enemy.r || 12));
+    for (let index = 0; index < count; index += 1) {
+      const angle = rand(Math.PI * 2, 0, 'fx');
+      const force = rand(125, 35, 'fx') * (0.75 + Math.min(6, stacks) * 0.07);
+      particles.push({
+        x: enemy.x + Math.cos(angle) * rand(radius * 0.55, 1, 'fx'),
+        y: enemy.y + Math.sin(angle) * rand(radius * 0.45, 1, 'fx'),
+        life: rand(0.52, 0.22, 'fx'),
+        vx: Math.cos(angle) * force + rand(24, -24, 'fx'),
+        vy: Math.sin(angle) * force - rand(52, 12, 'fx'),
+        c: BLEED_BLOOD_COLORS[irand(0, BLEED_BLOOD_COLORS.length - 1, 'fx')],
+        blood: true,
+        size: rand(4.2, 2.1, 'fx'),
+      });
+    }
   }
 
   function migrateEnemyState(enemy) {
@@ -6222,6 +6519,7 @@
       if (config.particleColor) {
         particles.push({ x: enemy.x + rand(-8, 8), y: enemy.y + rand(-8, 8), life: 0.25, c: config.particleColor });
       }
+      if (key === 'bleed') spawnBleedSpray(enemy, state.stacks, 0.7);
       if (config.healScale > 0 && player && player.hp < player.maxHp) {
         const heal = damage * config.healScale;
         player.hp = Math.min(player.maxHp, player.hp + heal);
@@ -6237,6 +6535,7 @@
   }
 
   function updateEnemyStatuses(enemy, dt) {
+    if (enemy.bleedFlash > 0) enemy.bleedFlash = Math.max(0, enemy.bleedFlash - dt);
     const bleedStacks = getStatusStacks(enemy, 'bleed');
     if (tickEnemyStatus(enemy, 'bleed', dt, {
       interval: 0.5,
@@ -6315,9 +6614,10 @@
     if (typeof onTick === 'function') onTick(enemy, dt);
     if (enemy.beamTick <= 0) {
       enemy.beamTick = tick;
-      const beamEnd = getBeamEnd(enemy.x, enemy.y, enemy.beamAngle, range);
-      if (beamHitsCircle(enemy.x, enemy.y, beamEnd.x, beamEnd.y, player.x, player.y, player.r + 5)) {
-        damagePlayer(damage, enemy.beamAngle, knockback, enemy.type === 'god' ? 'god_beam' : enemy.type === 'mirror_knight' ? 'mirror_beam' : 'enemy_beam');
+      const beamPath = buildRicochetBeamPath(enemy.x, enemy.y, enemy.beamAngle, range, getEnemyBeamBounceCount(enemy));
+      const hitSegment = beamPathHitsCircle(beamPath, player.x, player.y, player.r + 5);
+      if (hitSegment) {
+        damagePlayer(damage, hitSegment.angle, knockback, enemy.type === 'god' ? 'god_beam' : enemy.type === 'mirror_knight' ? 'mirror_beam' : 'enemy_beam');
         if (typeof onHit === 'function') onHit(enemy);
       }
     }
@@ -6551,15 +6851,24 @@
   }
 
   function loop(timestamp) {
+    const framePerfStart = perfBeginFrame(timestamp);
     const dt = Math.min(0.033, (timestamp - lastTime) / 1000 || 0.016);
     lastTime = timestamp;
+    const updatePerfStart = perfStart();
     if (gameState === 'play' && !isWizardPawOpen()) update(dt);
+    perfEnd('update', updatePerfStart);
+    const uiPerfStart = perfStart();
     uiController.tick(dt);
+    perfEnd('ui', uiPerfStart);
+    const drawPerfStart = perfStart();
     draw();
+    perfEnd('draw', drawPerfStart);
+    perfEndFrame(framePerfStart);
     requestAnimationFrame(loop);
   }
 
   function update(dt) {
+    let sectionPerfStart = perfStart();
     const itemStats = getItemStats();
     compactEnemyList();
     gameElapsedTime += dt;
@@ -6675,7 +6984,9 @@
     } else {
       shake = 0;
     }
+    perfEnd('update.player', sectionPerfStart);
 
+    sectionPerfStart = perfStart();
     let totalBleed = 0;
     for (let index = enemies.length - 1; index >= 0; index -= 1) {
       const enemy = enemies[index];
@@ -6723,21 +7034,40 @@
         particles.push({ x: player.x + rand(-10, 10), y: player.y - 18, life: 0.5, text: `+${Math.max(1, Math.ceil(heal * 10))}`, c: '#0f8' });
       }
     }
+    perfEnd('update.enemies', sectionPerfStart);
 
+    sectionPerfStart = perfStart();
     updateProjectiles(dt);
+    perfEnd('update.projectiles', sectionPerfStart);
+    sectionPerfStart = perfStart();
     updateWorldProps(dt);
+    perfEnd('update.world', sectionPerfStart);
+    sectionPerfStart = perfStart();
     updatePlayerStatuses(dt);
+    perfEnd('update.statuses', sectionPerfStart);
+    sectionPerfStart = perfStart();
     updateChests();
+    perfEnd('update.chests', sectionPerfStart);
+    sectionPerfStart = perfStart();
     updatePickups();
+    perfEnd('update.pickups', sectionPerfStart);
+    sectionPerfStart = perfStart();
     updateParticles(dt);
+    perfEnd('update.particles', sectionPerfStart);
+    sectionPerfStart = perfStart();
     updateTransitions(dt);
+    perfEnd('update.transitions', sectionPerfStart);
 
+    sectionPerfStart = perfStart();
     if (godTimer > 0 && Math.random() < 0.4) {
       particles.push({ x: player.x + rand(-6, 6), y: player.y + rand(-6, 6), life: 0.32, c: `hsl(${(Date.now() / 8) % 360},100%,65%)` });
     }
+    perfEnd('update.fx', sectionPerfStart);
 
+    sectionPerfStart = perfStart();
     if (isPanelOpen(ui.shopPanel) && shopPanelDirty) renderShopPanel();
     if (isPanelOpen(ui.invPanel) && inventoryPanelDirty) renderInventoryPanel();
+    perfEnd('update.panels', sectionPerfStart);
   }
 
   function tryChargedLadderWarp() {
@@ -8477,6 +8807,7 @@
     for (let index = particles.length - 1; index >= 0; index -= 1) {
       const particle = particles[index];
       particle.life -= dt;
+      if (particle.blood) particle.vy = Math.min(220, Number(particle.vy || 0) + 390 * dt);
       if (particle.vx) particle.x += particle.vx * dt;
       if (particle.vy) particle.y += particle.vy * dt;
       if (particle.ring) particle.ring += 200 * dt;
@@ -8807,6 +9138,7 @@
       laserMode,
       laserAngle,
       laserSweepSpeed,
+      turtleWaveHpTimer,
       godTimer,
       gameElapsedTime,
       camera,
@@ -8820,6 +9152,7 @@
   }
 
   function draw() {
+    let sectionPerfStart = perfStart();
     ctx.save();
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     const _shakeOn = window.NeoSettings?.getAccess()?.screenShake !== false;
@@ -8830,20 +9163,32 @@
     drawFloor();
     drawRoomDecor();
     drawWorldProps();
+    perfEnd('draw.room', sectionPerfStart);
+    sectionPerfStart = perfStart();
     drawChests();
     drawPickups();
+    perfEnd('draw.items', sectionPerfStart);
+    sectionPerfStart = perfStart();
     drawProjectiles();
     drawEnemyTelegraphs();
     drawEnemies();
     drawPlayer();
     drawPlayerLaser();
+    perfEnd('draw.entities', sectionPerfStart);
+    sectionPerfStart = perfStart();
     drawParticles();
+    perfEnd('draw.particles', sectionPerfStart);
+    sectionPerfStart = perfStart();
     drawShopPrompt();
     drawAnvilPrompt();
+    perfEnd('draw.prompts', sectionPerfStart);
 
     ctx.restore();
+    sectionPerfStart = perfStart();
     drawMinimap();
+    perfEnd('draw.minimap', sectionPerfStart);
 
+    sectionPerfStart = perfStart();
     if (fade > 0) {
       ctx.fillStyle = `rgba(0,0,0,${fade})`;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -8852,6 +9197,7 @@
     if (godTimer > 0) drawGodModeBar();
     drawBossHealthBars();
     drawFloorTransition();
+    perfEnd('draw.overlays', sectionPerfStart);
   }
 
   function drawShopPrompt() {
@@ -9540,23 +9886,78 @@
         ctx.restore();
       }
       if (enemy.beamTime > 0) {
-        const end = getBeamEnd(enemy.x, enemy.y, enemy.beamAngle, enemy.type === 'god' ? (enemy.beamRange || 620) : 430);
-        ctx.strokeStyle = enemy.type === 'god' ? '#ffffff' : '#aa66ff';
-        ctx.lineWidth = enemy.type === 'god' && enemy.state === 'godSweep' ? 18 : enemy.type === 'god' ? 10 : 7;
-        ctx.shadowColor = ctx.strokeStyle;
-        ctx.shadowBlur = enemy.type === 'god' && enemy.state === 'godSweep' ? 24 : 14;
-        ctx.beginPath();
-        ctx.moveTo(enemy.x, enemy.y);
-        ctx.lineTo(end.x, end.y);
-        ctx.stroke();
-        ctx.shadowBlur = 0;
+        const range = enemy.type === 'god' ? (enemy.beamRange || 620) : 430;
+        const beamPath = buildRicochetBeamPath(enemy.x, enemy.y, enemy.beamAngle, range, getEnemyBeamBounceCount(enemy));
+        strokeBeamPath(beamPath, {
+          color: enemy.type === 'god' ? '#ffffff' : '#aa66ff',
+          width: enemy.type === 'god' && enemy.state === 'godSweep' ? 18 : enemy.type === 'god' ? 10 : 7,
+          shadowBlur: enemy.type === 'god' && enemy.state === 'godSweep' ? 24 : 14,
+        });
       }
     });
+  }
+
+  function drawBleedOverlay(enemy, stacks) {
+    const stackCount = Math.max(0, Math.round(Number(stacks || 0)));
+    if (!stackCount) return;
+    const t = Date.now() / 170;
+    const flash = clamp(Number(enemy.bleedFlash || 0) * 3, 0, 1);
+    const drops = Math.min(8, stackCount + 2);
+
+    ctx.save();
+    ctx.translate(enemy.x, enemy.y);
+    ctx.globalAlpha = 0.72 + flash * 0.22;
+    ctx.shadowColor = '#b50022';
+    ctx.shadowBlur = 8 + stackCount * 1.4 + flash * 10;
+    for (let index = 0; index < drops; index += 1) {
+      const angle = (index / drops) * Math.PI * 2 + t * (index % 2 ? -0.35 : 0.28);
+      const radius = enemy.r * (0.42 + (index % 3) * 0.18);
+      const x = Math.cos(angle) * radius;
+      const y = Math.sin(angle * 1.2) * radius * 0.68 + enemy.r * 0.06;
+      const size = 2.2 + Math.min(5, stackCount) * 0.22 + (index % 2) * 0.8;
+      ctx.fillStyle = BLEED_BLOOD_COLORS[index % BLEED_BLOOD_COLORS.length];
+      ctx.beginPath();
+      ctx.ellipse(x, y, size * 0.7, size * 1.15, angle, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    if (flash > 0) {
+      ctx.globalAlpha = flash * 0.65;
+      ctx.strokeStyle = '#ff2b45';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(0, 0, enemy.r + 9 + flash * 5, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    ctx.save();
+    ctx.translate(enemy.x, enemy.y);
+    const label = `BLEED x${stackCount}`;
+    const y = enemy.type === 'rival' ? -enemy.r - 40 : -enemy.r - 32;
+    ctx.font = 'bold 10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const width = Math.max(50, ctx.measureText(label).width + 14);
+    const height = 15;
+    ctx.fillStyle = 'rgba(62, 0, 12, 0.86)';
+    ctx.strokeStyle = '#ff4f6d';
+    ctx.lineWidth = 1;
+    ctx.shadowColor = '#ff2445';
+    ctx.shadowBlur = 8 + flash * 8;
+    ctx.beginPath();
+    ctx.roundRect(-width / 2, y, width, height, 5);
+    ctx.fill();
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#ffe3e7';
+    ctx.fillText(label, 0, y + height / 2 + 0.5);
+    ctx.restore();
   }
 
   function drawEnemies() {
     enemies.forEach(enemy => {
       if (!enemy) return;
+      const bleedStacks = getStatusStacks(enemy, 'bleed');
       const activeStatuses = STATUS_KEYS.filter(key => getStatusStacks(enemy, key) > 0);
       activeStatuses.forEach((key, index) => {
         const style = STATUS_STYLES[key];
@@ -9581,6 +9982,7 @@
         shadowBlur: enemy.type === 'god' ? 14 : enemy.elite ? 10 : 4,
         tint: enemy.elite ? 'rgba(255,210,96,0.7)' : null,
       });
+      if (bleedStacks > 0) drawBleedOverlay(enemy, bleedStacks);
       if (enemy.elite) {
         ctx.save();
         ctx.translate(enemy.x, enemy.y - enemy.r - 10);
@@ -9745,73 +10147,42 @@
       ? laserAngle
       : Math.atan2(mouse.worldY - player.y, mouse.worldX - player.x);
     const turtleWaveActive = laserMode === 'turtle_wave';
-    const beamRange = laserMode === 'god_sweep' ? 560 : turtleWaveActive ? 620 : ATTACKS.laser.range;
-    const end = getBeamEnd(player.x, player.y, angle, beamRange);
+    const beamRange = getPlayerBeamRange(laserMode);
+    const beamPath = buildRicochetBeamPath(player.x, player.y, angle, beamRange, getPlayerBeamBounceCount(laserMode));
+    if (!beamPath.length) return;
     const beamColor = turtleWaveActive ? '#74f5ff' : laserMode === 'god_sweep' ? '#ffffff' : '#ff00aa';
     const beamGlow = turtleWaveActive ? '#9bf7ff' : laserMode === 'god_sweep' ? '#e8f0ff' : '#f0f';
     const maxW = laserMode === 'god_sweep' ? 16 : turtleWaveActive ? 18 : 8;
-    const dx = end.x - player.x;
-    const dy = end.y - player.y;
-    const beamLen = Math.hypot(dx, dy) || 1;
-    const nx = -dy / beamLen;
-    const ny = dx / beamLen;
-    const segs = 18;
 
-    // Draw tapered beam using trapezoid segments
-    ctx.save();
-    ctx.globalAlpha = 0.92;
-    ctx.shadowColor = beamGlow;
-    ctx.shadowBlur = laserMode === 'god_sweep' ? 26 : turtleWaveActive ? 30 : 18;
-    for (let i = 0; i < segs; i += 1) {
-      const t0 = i / segs;
-      const t1 = (i + 1) / segs;
-      const taper0 = 1 - t0 * t0;
-      const taper1 = 1 - t1 * t1;
-      const w0 = maxW * taper0 * 0.5;
-      const w1 = maxW * taper1 * 0.5;
-      const x0 = player.x + dx * t0;
-      const y0 = player.y + dy * t0;
-      const x1 = player.x + dx * t1;
-      const y1 = player.y + dy * t1;
-      ctx.beginPath();
-      ctx.moveTo(x0 + nx * w0, y0 + ny * w0);
-      ctx.lineTo(x1 + nx * w1, y1 + ny * w1);
-      ctx.lineTo(x1 - nx * w1, y1 - ny * w1);
-      ctx.lineTo(x0 - nx * w0, y0 - ny * w0);
-      ctx.closePath();
-      ctx.fillStyle = beamColor;
-      ctx.fill();
-    }
-    // White core center line (also tapered)
-    ctx.shadowBlur = 6;
-    ctx.strokeStyle = 'rgba(255,255,255,0.7)';
-    ctx.lineWidth = maxW * 0.22;
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(player.x, player.y);
-    ctx.lineTo(end.x, end.y);
-    ctx.stroke();
-    ctx.restore();
+    drawTaperedBeamPath(beamPath, {
+      color: beamColor,
+      glow: beamGlow,
+      maxWidth: maxW,
+      shadowBlur: laserMode === 'god_sweep' ? 26 : turtleWaveActive ? 30 : 18,
+    });
 
     // Beam particles: small dots that drift perpendicular and fade toward tip
     if (rng() < 0.55) {
-      const t = rng();
-      const taper = 1 - t * t;
-      const spread = maxW * taper * 0.7;
-      const px = player.x + dx * t + nx * (rng() - 0.5) * spread * 2;
-      const py = player.y + dy * t + ny * (rng() - 0.5) * spread * 2;
-      const perpSpeed = (rng() - 0.5) * 28;
-      const forwardSpeed = -rng() * 18;
-      particles.push({
-        x: px, y: py,
-        life: 0.18 + rng() * 0.12,
-        vx: nx * perpSpeed + (dx / beamLen) * forwardSpeed,
-        vy: ny * perpSpeed + (dy / beamLen) * forwardSpeed,
-        c: beamColor,
-      });
+      const sample = sampleBeamPath(beamPath, rng());
+      if (sample) {
+        const taper = 1 - sample.t * sample.t;
+        const spread = maxW * taper * 0.7;
+        const px = sample.x + sample.nx * (rng() - 0.5) * spread * 2;
+        const py = sample.y + sample.ny * (rng() - 0.5) * spread * 2;
+        const perpSpeed = (rng() - 0.5) * 28;
+        const forwardSpeed = -rng() * 18;
+        particles.push({
+          x: px, y: py,
+          life: 0.18 + rng() * 0.12,
+          vx: sample.nx * perpSpeed + sample.dx * forwardSpeed,
+          vy: sample.ny * perpSpeed + sample.dy * forwardSpeed,
+          c: beamColor,
+        });
+      }
     }
     // Tip burst particles at beam end
     if (rng() < 0.4) {
+      const end = getBeamPathEnd(beamPath);
       const tipPx = end.x + (rng() - 0.5) * 6;
       const tipPy = end.y + (rng() - 0.5) * 6;
       particles.push({
@@ -9895,6 +10266,20 @@
         ctx.beginPath();
         ctx.arc(0, 0, particle.ring, 0, Math.PI * 2);
         ctx.stroke();
+      } else if (particle.blood) {
+        const size = particle.size || 3;
+        const tilt = Math.atan2(Number(particle.vy || 0), Number(particle.vx || 1)) + Math.PI / 2;
+        ctx.fillStyle = particle.c || '#a5001e';
+        ctx.shadowColor = particle.c || '#a5001e';
+        ctx.shadowBlur = 5;
+        ctx.rotate(tilt);
+        ctx.beginPath();
+        ctx.ellipse(0, 0, size * 0.72, size * 1.18, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha *= 0.5;
+        ctx.beginPath();
+        ctx.arc(0, size * 0.9, size * 0.34, 0, Math.PI * 2);
+        ctx.fill();
       } else {
         ctx.fillStyle = particle.c || '#0ff';
         ctx.shadowColor = particle.c || '#0ff';
@@ -10978,6 +11363,289 @@
     const px = x1 + t * (x2 - x1);
     const py = y1 + t * (y2 - y1);
     return dist(px, py, cx, cy) <= radius;
+  }
+
+  function getPlayerBeamRange(mode = laserMode) {
+    if (mode === 'god_sweep') return 560;
+    if (mode === 'turtle_wave') return 620;
+    return ATTACKS.laser.range;
+  }
+
+  function getPlayerBeamBounceCount(mode = laserMode) {
+    return mode === 'beam' ? PLAYER_BEAM_BOUNCES : HEAVY_BEAM_BOUNCES;
+  }
+
+  function getEnemyBeamBounceCount(enemy) {
+    if (!enemy) return ENEMY_BEAM_BOUNCES;
+    return enemy.type === 'god' ? HEAVY_BEAM_BOUNCES : ENEMY_BEAM_BOUNCES;
+  }
+
+  function getBeamReflectRects() {
+    const rects = walls.slice();
+    structures.forEach(structure => {
+      if (!structure || !Number.isFinite(structure.x) || !Number.isFinite(structure.y)) return;
+      if (!Number.isFinite(structure.w) || !Number.isFinite(structure.h) || structure.w <= 0 || structure.h <= 0) return;
+      rects.push({
+        x: structure.x - structure.w / 2,
+        y: structure.y - structure.h / 2,
+        w: structure.w,
+        h: structure.h,
+      });
+    });
+    return rects;
+  }
+
+  function rayRectHit(originX, originY, dirX, dirY, rect, maxDistance) {
+    const minX = rect.x;
+    const maxX = rect.x + rect.w;
+    const minY = rect.y;
+    const maxY = rect.y + rect.h;
+    let nearTime = -Infinity;
+    let farTime = Infinity;
+    let nearNormalX = 0;
+    let nearNormalY = 0;
+    let farNormalX = 0;
+    let farNormalY = 0;
+
+    if (Math.abs(dirX) < BEAM_RICOCHET_EPSILON) {
+      if (originX < minX || originX > maxX) return null;
+    } else {
+      let t1 = (minX - originX) / dirX;
+      let t2 = (maxX - originX) / dirX;
+      let n1x = dirX > 0 ? -1 : 1;
+      let n2x = -n1x;
+      if (t1 > t2) {
+        [t1, t2] = [t2, t1];
+        [n1x, n2x] = [n2x, n1x];
+      }
+      if (t1 > nearTime) {
+        nearTime = t1;
+        nearNormalX = n1x;
+        nearNormalY = 0;
+      }
+      if (t2 < farTime) {
+        farTime = t2;
+        farNormalX = n2x;
+        farNormalY = 0;
+      }
+    }
+
+    if (Math.abs(dirY) < BEAM_RICOCHET_EPSILON) {
+      if (originY < minY || originY > maxY) return null;
+    } else {
+      let t1 = (minY - originY) / dirY;
+      let t2 = (maxY - originY) / dirY;
+      let n1y = dirY > 0 ? -1 : 1;
+      let n2y = -n1y;
+      if (t1 > t2) {
+        [t1, t2] = [t2, t1];
+        [n1y, n2y] = [n2y, n1y];
+      }
+      if (t1 > nearTime) {
+        nearTime = t1;
+        nearNormalX = 0;
+        nearNormalY = n1y;
+      }
+      if (t2 < farTime) {
+        farTime = t2;
+        farNormalX = 0;
+        farNormalY = n2y;
+      }
+    }
+
+    if (nearTime > farTime || farTime < BEAM_RICOCHET_EPSILON) return null;
+    let distance = nearTime;
+    let normalX = nearNormalX;
+    let normalY = nearNormalY;
+    if (distance < BEAM_RICOCHET_EPSILON) {
+      distance = farTime;
+      normalX = farNormalX;
+      normalY = farNormalY;
+    }
+    if (distance < BEAM_RICOCHET_EPSILON || distance > maxDistance) return null;
+    return {
+      distance,
+      x: originX + dirX * distance,
+      y: originY + dirY * distance,
+      normalX,
+      normalY,
+    };
+  }
+
+  function findBeamRicochetHit(originX, originY, dirX, dirY, maxDistance, rects) {
+    let closest = null;
+    rects.forEach(rect => {
+      const hit = rayRectHit(originX, originY, dirX, dirY, rect, maxDistance);
+      if (!hit) return;
+      if (!closest || hit.distance < closest.distance) closest = hit;
+    });
+    return closest;
+  }
+
+  function buildRicochetBeamPath(originX, originY, angle, range, maxBounces = 0) {
+    const path = [];
+    let remaining = Math.max(0, Number(range || 0));
+    let startX = originX;
+    let startY = originY;
+    let currentAngle = Number.isFinite(angle) ? angle : 0;
+    const bounceLimit = Math.max(0, Math.floor(Number(maxBounces || 0)));
+    const rects = getBeamReflectRects();
+
+    for (let bounce = 0; remaining > BEAM_RICOCHET_NUDGE; bounce += 1) {
+      const dirX = Math.cos(currentAngle);
+      const dirY = Math.sin(currentAngle);
+      const hit = findBeamRicochetHit(startX, startY, dirX, dirY, remaining, rects);
+      if (!hit) {
+        const endX = startX + dirX * remaining;
+        const endY = startY + dirY * remaining;
+        path.push({ x1: startX, y1: startY, x2: endX, y2: endY, angle: currentAngle, length: remaining, hitWall: false });
+        break;
+      }
+
+      const segmentLength = Math.max(0, hit.distance);
+      if (segmentLength > BEAM_RICOCHET_EPSILON) {
+        path.push({ x1: startX, y1: startY, x2: hit.x, y2: hit.y, angle: currentAngle, length: segmentLength, hitWall: true });
+      }
+      if (bounce >= bounceLimit) break;
+
+      remaining = Math.max(0, remaining - segmentLength - BEAM_RICOCHET_NUDGE);
+      const dot = dirX * hit.normalX + dirY * hit.normalY;
+      const reflectX = dirX - 2 * dot * hit.normalX;
+      const reflectY = dirY - 2 * dot * hit.normalY;
+      currentAngle = Math.atan2(reflectY, reflectX);
+      startX = hit.x + reflectX * BEAM_RICOCHET_NUDGE;
+      startY = hit.y + reflectY * BEAM_RICOCHET_NUDGE;
+    }
+
+    return path;
+  }
+
+  function beamPathHitsCircle(path, cx, cy, radius) {
+    for (let index = 0; index < path.length; index += 1) {
+      const segment = path[index];
+      if (beamHitsCircle(segment.x1, segment.y1, segment.x2, segment.y2, cx, cy, radius)) return segment;
+    }
+    return null;
+  }
+
+  function getBeamPathLength(path) {
+    return path.reduce((sum, segment) => sum + (segment.length || Math.hypot(segment.x2 - segment.x1, segment.y2 - segment.y1)), 0);
+  }
+
+  function getBeamPathEnd(path) {
+    const last = path[path.length - 1];
+    return last ? { x: last.x2, y: last.y2 } : { x: 0, y: 0 };
+  }
+
+  function sampleBeamPath(path, amount) {
+    const totalLength = getBeamPathLength(path);
+    if (!totalLength) return null;
+    let targetDistance = clamp(Number(amount || 0), 0, 1) * totalLength;
+    let traversed = 0;
+    for (let index = 0; index < path.length; index += 1) {
+      const segment = path[index];
+      const dx = segment.x2 - segment.x1;
+      const dy = segment.y2 - segment.y1;
+      const length = segment.length || Math.hypot(dx, dy);
+      if (!length) continue;
+      if (targetDistance <= length || index === path.length - 1) {
+        const localT = clamp(targetDistance / length, 0, 1);
+        const dirX = dx / length;
+        const dirY = dy / length;
+        return {
+          x: segment.x1 + dx * localT,
+          y: segment.y1 + dy * localT,
+          dx: dirX,
+          dy: dirY,
+          nx: -dirY,
+          ny: dirX,
+          t: clamp((traversed + length * localT) / totalLength, 0, 1),
+          angle: segment.angle,
+        };
+      }
+      targetDistance -= length;
+      traversed += length;
+    }
+    return null;
+  }
+
+  function drawTaperedBeamPath(path, options = {}) {
+    const totalLength = getBeamPathLength(path);
+    if (!totalLength) return;
+    const color = options.color || '#ff00aa';
+    const glow = options.glow || color;
+    const maxWidth = Number(options.maxWidth || 8);
+    let traversed = 0;
+
+    ctx.save();
+    ctx.globalAlpha = 0.92;
+    ctx.shadowColor = glow;
+    ctx.shadowBlur = Number(options.shadowBlur || 18);
+    path.forEach(segment => {
+      const dx = segment.x2 - segment.x1;
+      const dy = segment.y2 - segment.y1;
+      const length = segment.length || Math.hypot(dx, dy);
+      if (!length) return;
+      const dirX = dx / length;
+      const dirY = dy / length;
+      const normalX = -dirY;
+      const normalY = dirX;
+      const subSegments = Math.max(2, Math.ceil(length / 32));
+      for (let index = 0; index < subSegments; index += 1) {
+        const t0 = index / subSegments;
+        const t1 = (index + 1) / subSegments;
+        const globalT0 = (traversed + length * t0) / totalLength;
+        const globalT1 = (traversed + length * t1) / totalLength;
+        const taper0 = 1 - globalT0 * globalT0;
+        const taper1 = 1 - globalT1 * globalT1;
+        const w0 = maxWidth * taper0 * 0.5;
+        const w1 = maxWidth * taper1 * 0.5;
+        const x0 = segment.x1 + dx * t0;
+        const y0 = segment.y1 + dy * t0;
+        const x1 = segment.x1 + dx * t1;
+        const y1 = segment.y1 + dy * t1;
+        ctx.beginPath();
+        ctx.moveTo(x0 + normalX * w0, y0 + normalY * w0);
+        ctx.lineTo(x1 + normalX * w1, y1 + normalY * w1);
+        ctx.lineTo(x1 - normalX * w1, y1 - normalY * w1);
+        ctx.lineTo(x0 - normalX * w0, y0 - normalY * w0);
+        ctx.closePath();
+        ctx.fillStyle = color;
+        ctx.fill();
+      }
+      traversed += length;
+    });
+
+    ctx.shadowBlur = 6;
+    ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+    ctx.lineWidth = Math.max(1.5, maxWidth * 0.22);
+    ctx.lineCap = 'round';
+    path.forEach(segment => {
+      ctx.beginPath();
+      ctx.moveTo(segment.x1, segment.y1);
+      ctx.lineTo(segment.x2, segment.y2);
+      ctx.stroke();
+    });
+    ctx.restore();
+  }
+
+  function strokeBeamPath(path, options = {}) {
+    if (!path.length) return;
+    const color = options.color || '#aa66ff';
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = Number(options.width || 7);
+    ctx.shadowColor = color;
+    ctx.shadowBlur = Number(options.shadowBlur || 14);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    path.forEach(segment => {
+      ctx.beginPath();
+      ctx.moveTo(segment.x1, segment.y1);
+      ctx.lineTo(segment.x2, segment.y2);
+      ctx.stroke();
+    });
+    ctx.restore();
   }
 
   function getBeamEnd(x, y, angle, range) {

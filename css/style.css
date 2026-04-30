@@ -49,6 +49,27 @@ canvas {
   background: #02030a;
 }
 
+.perf-overlay {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: 1000;
+  width: min(430px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  overflow: auto;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(125, 255, 220, .38);
+  border-radius: 8px;
+  background: rgba(3, 8, 13, .88);
+  box-shadow: 0 10px 34px rgba(0, 0, 0, .42), 0 0 24px rgba(60, 255, 210, .08);
+  color: #dfffee;
+  font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing: .01em;
+  pointer-events: none;
+  white-space: pre-wrap;
+}
+
 /* HUD */
 #hud {
   position: absolute;
