@@ -240,6 +240,8 @@
   const SPRITE_ATLAS = buildSpriteAtlas();
 
   const MOVE_SLOTS = ['melee', 'laser', 'smash', 'dash'];
+  const SLOT_LABELS = { melee: 'Melee', laser: 'Laser', smash: 'Smash', dash: 'Mobility' };
+  const SLOT_KEYS  = { melee: 'LMB', laser: 'RMB', smash: 'R', dash: 'SHIFT' };
   const MOVE_DEFS = {
     slash: { key: 'slash', slot: 'melee', name: 'Slash', desc: 'Close-range arc attack.' },
     fire_balls: { key: 'fire_balls', slot: 'melee', name: 'Fire Balls', desc: 'Shoot a spread of fireballs.' },
@@ -804,6 +806,19 @@
     runHistoryHero: document.getElementById('runHistoryHero'),
     runHistoryTabPanel: document.getElementById('runHistoryTabPanel'),
     runHistoryTabs: [...document.querySelectorAll('#runHistoryPanel .rh-tab')],
+    anvilPanel: document.getElementById('anvilPanel'),
+    anvilClose: document.getElementById('anvilClose'),
+    anvilTabs: [...document.querySelectorAll('#anvilPanel .anvil-tab')],
+    anvilXp: document.getElementById('anvilXp'),
+    anvilWeaponsTab: document.getElementById('anvilWeaponsTab'),
+    anvilMovesTab: document.getElementById('anvilMovesTab'),
+    anvilWeaponList: document.getElementById('anvilWeaponList'),
+    anvilMoveList: document.getElementById('anvilMoveList'),
+    anvilWeaponStats: document.getElementById('anvilWeaponStats'),
+    anvilMoveStats: document.getElementById('anvilMoveStats'),
+    anvilCostSummary: document.getElementById('anvilCostSummary'),
+    anvilCancel: document.getElementById('anvilCancel'),
+    anvilConfirm: document.getElementById('anvilConfirm'),
     settingsBtn: document.getElementById('settingsBtn'),
     charBackBtn: document.getElementById('charBackBtn'),
     deleteRunRow: document.getElementById('deleteRunRow'),
@@ -903,8 +918,12 @@
   let teleportKeyLatch = false;
   let shopKeyLatch = false;
   let invKeyLatch = false;
+  let anvilKeyLatch = false;
   let activeShopTab = 'items';
   let activeInvTab = 'stats';
+  let activeAnvilTab = 'weapons';
+  let anvilSelectedItem = null;
+  let anvilStagedUpgrades = {};
   let draggingMoveKey = '';
   let weaponBurstQueue = [];
   let rivals = [];
@@ -912,6 +931,60 @@
   let shopPanelDirty = false;
   let inventoryPanelDirty = false;
   let wizardPawSelection = null;
+
+  // Upgradeable stat schemas for the anvil panel
+  const WEAPON_UPGRADEABLE_STATS = {
+    damage:    { label: 'Damage',       step: 5,     min: 5,    max: 9999, xpPerStep: 30, format: v => Math.round(v) },
+    cooldown:  { label: 'Cooldown (s)', step: -0.05, min: 0.05, max: 9999, xpPerStep: 40, format: v => v.toFixed(2) + 's' },
+    range:     { label: 'Range',        step: 10,    min: 10,   max: 9999, xpPerStep: 25, format: v => Math.round(v) },
+    knockback: { label: 'Knockback',    step: 30,    min: 0,    max: 9999, xpPerStep: 20, format: v => Math.round(v) },
+  };
+  const MOVE_UPGRADEABLE_STATS = {
+    damage:    { label: 'Damage',       step: 5,    min: 5,   max: 9999, xpPerStep: 30, format: v => Math.round(v) },
+    cooldown:  { label: 'Cooldown (s)', step: -0.05,min: 0.05,max: 9999, xpPerStep: 40, format: v => v.toFixed(2) + 's' },
+    duration:  { label: 'Duration (s)', step: 0.1,  min: 0.1, max: 30,   xpPerStep: 25, format: v => v.toFixed(1) + 's' },
+    range:     { label: 'Range / AOE',  step: 10,   min: 10,  max: 9999, xpPerStep: 25, format: v => Math.round(v) },
+    critChance:{ label: 'Crit Chance',  step: 0.05, min: 0,   max: 1.0,  xpPerStep: 50, format: v => Math.round(v * 100) + '%' },
+  };
+
+  // Base stat values per weapon (used to compute current upgraded value)
+  const WEAPON_BASE_STATS = {
+    extending_staff:          { damage: 38,   cooldown: 0.50, range: 130, knockback: 500 },
+    hunters_bow:              { damage: 28,   cooldown: 0.40,             knockback: 180 },
+    thorns_bleed_blade:       { damage: 32,   cooldown: 0.55, range: 90,  knockback: 120 },
+    lazer_glasses:            { damage: 18,   cooldown: 3.60,             knockback: 80  },
+    metao_fire_staff:         { damage: 22,   cooldown: 0.55, range: 200, knockback: 100 },
+    magenta_degale:           { damage: 80,   cooldown: 1.50,             knockback: 480 },
+    magenta_p90:              { damage: 18,   cooldown: 1.80,             knockback: 140 },
+    granillia_lightning_spear:{ damage: 45,   cooldown: 0.55,             knockback: 200 },
+    excalibur:                { damage: 1000, cooldown: 2.00, range: 120, knockback: 600 },
+    golden_fleece:            { damage: 20,   cooldown: 0.50, range: 80,  knockback: 80  },
+    void_piercer:             { damage: 55,   cooldown: 0.80,             knockback: 160 },
+    aegis_shield_weapon:      { cooldown: 8.00 },
+  };
+
+  // Base stat values per move
+  const MOVE_BASE_STATS = {
+    slash:            { damage: 32,  cooldown: 0.40, range: 90  },
+    fire_balls:       { damage: 20,  cooldown: 0.55, range: 180 },
+    smite:            { damage: 28,  cooldown: 0.55, range: 110 },
+    blood_beam:       { damage: 14,  cooldown: 3.00, duration: 1.2, critChance: 0 },
+    turtle_wave:      { damage: 55,  cooldown: 3.00, duration: 1.35 },
+    power_disks:      { damage: 22,  cooldown: 3.00, range: 240 },
+    blade_justice:    { damage: 60,  cooldown: 3.80, range: 80  },
+    lightning_columns:{ damage: 30,  cooldown: 4.80, range: 180 },
+    god_sweep:        { damage: 40,  cooldown: 7.20, range: 320 },
+    crimson_smash:    { damage: 55,  cooldown: 4.00, range: 120 },
+    chaos_burst:      { damage: 38,  cooldown: 4.00, range: 100 },
+    healing_zone:     { damage: 12,  cooldown: 5.00, duration: 3.0, range: 130 },
+    fire_circle:      { damage: 18,  cooldown: 4.50, duration: 3.5, range: 100 },
+    floor_lava:       { damage: 12,  cooldown: 5.00, duration: 4.0, range: 160 },
+    dash:             { cooldown: 1.20 },
+    nimrod_stomp:     { damage: 60,  cooldown: 2.50, range: 110 },
+    warp:             { cooldown: 2.80 },
+    zip_lightning:    { damage: 30,  cooldown: 2.00 },
+    cowards_way:      { cooldown: 6.00, duration: 3.0 },
+  };
 
   const saveStore = createSaveStore();
   window._neoSaveStore = saveStore;
@@ -1218,6 +1291,11 @@
           toggleShopPanel();
           shopKeyLatch = true;
         }
+        const inAnvilRoom = currentRoom?.type === 'anvil';
+        if (inAnvilRoom && !anvilKeyLatch) {
+          toggleAnvilPanel();
+          anvilKeyLatch = true;
+        }
       }
       if (key === inventoryKey && gameState === 'play' && !invKeyLatch) {
         toggleInventoryPanel();
@@ -1235,7 +1313,7 @@
       keys[key] = false;
       const b = window.NeoSettings?.getBindings();
       const inventoryKey = b ? b.inventory : 'i';
-      if (key === 'e') shopKeyLatch = false;
+      if (key === 'e') { shopKeyLatch = false; anvilKeyLatch = false; }
       if (key === inventoryKey) invKeyLatch = false;
     });
     uiController.bindMenuActions({
@@ -1318,6 +1396,20 @@
   function bindPanelInput() {
     ui.shopClose?.addEventListener('click', () => setShopPanelOpen(false));
     ui.invClose?.addEventListener('click', () => setInventoryPanelOpen(false));
+    ui.anvilClose?.addEventListener('click', () => setAnvilPanelOpen(false));
+    ui.anvilCancel?.addEventListener('click', () => { anvilStagedUpgrades = {}; setAnvilPanelOpen(false); });
+    ui.anvilConfirm?.addEventListener('click', confirmAnvilUpgrades);
+    ui.anvilTabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        activeAnvilTab = tab.dataset.anvilTab || 'weapons';
+        anvilSelectedItem = null;
+        renderAnvilPanel();
+      });
+    });
+    ui.anvilWeaponList?.addEventListener('click', handleAnvilItemSelect);
+    ui.anvilMoveList?.addEventListener('click', handleAnvilItemSelect);
+    ui.anvilWeaponStats?.addEventListener('click', handleAnvilStatClick);
+    ui.anvilMoveStats?.addEventListener('click', handleAnvilStatClick);
     ui.shopTabs.forEach(tab => {
       tab.addEventListener('click', () => {
         const nextTab = tab.dataset.tab || 'items';
@@ -1472,6 +1564,252 @@
     if (next) setShopPanelOpen(false);
   }
 
+  // ---- Anvil panel ----
+
+  function setAnvilPanelOpen(open) {
+    if (!ui.anvilPanel) return;
+    ui.anvilPanel.classList.toggle('hidden', !open);
+    ui.anvilPanel.setAttribute('aria-hidden', open ? 'false' : 'true');
+    if (open) {
+      anvilStagedUpgrades = {};
+      anvilSelectedItem = null;
+      renderAnvilPanel();
+    }
+  }
+
+  function toggleAnvilPanel() {
+    if (currentRoom?.type !== 'anvil') return;
+    const next = !isPanelOpen(ui.anvilPanel);
+    if (!next) anvilStagedUpgrades = {};
+    setAnvilPanelOpen(next);
+    if (next) { setShopPanelOpen(false); setInventoryPanelOpen(false); }
+  }
+
+  function getAnvilStatSchema(itemKey, itemType) {
+    const base = itemType === 'weapon' ? WEAPON_BASE_STATS[itemKey] : MOVE_BASE_STATS[itemKey];
+    if (!base) return [];
+    const schema = itemType === 'weapon' ? WEAPON_UPGRADEABLE_STATS : MOVE_UPGRADEABLE_STATS;
+    return Object.entries(schema)
+      .filter(([statKey]) => statKey in base)
+      .map(([statKey, def]) => ({ statKey, ...def, baseValue: base[statKey] }));
+  }
+
+  function getAnvilCurrentValue(itemKey, statKey, itemType) {
+    const base = itemType === 'weapon' ? WEAPON_BASE_STATS[itemKey] : MOVE_BASE_STATS[itemKey];
+    if (!base || !(statKey in base)) return 0;
+    const upgrades = player.anvilUpgrades?.[itemType]?.[itemKey]?.[statKey] ?? 0;
+    const schema = itemType === 'weapon' ? WEAPON_UPGRADEABLE_STATS : MOVE_UPGRADEABLE_STATS;
+    return base[statKey] + upgrades * schema[statKey].step;
+  }
+
+  function getAnvilStagedValue(itemKey, statKey, itemType) {
+    const cur = getAnvilCurrentValue(itemKey, statKey, itemType);
+    const staged = anvilStagedUpgrades[`${itemType}:${itemKey}:${statKey}`] ?? 0;
+    const schema = itemType === 'weapon' ? WEAPON_UPGRADEABLE_STATS : MOVE_UPGRADEABLE_STATS;
+    return cur + staged * schema[statKey].step;
+  }
+
+  function getAnvilTotalCost() {
+    let total = 0;
+    for (const [key, count] of Object.entries(anvilStagedUpgrades)) {
+      if (count === 0) continue;
+      const [itemType, , statKey] = key.split(':');
+      const schema = itemType === 'weapon' ? WEAPON_UPGRADEABLE_STATS : MOVE_UPGRADEABLE_STATS;
+      total += Math.abs(count) * (schema[statKey]?.xpPerStep ?? 0);
+    }
+    return total;
+  }
+
+  function renderAnvilPanel() {
+    if (!isPanelOpen(ui.anvilPanel) || !player) return;
+
+    // XP display (current XP, not total)
+    if (ui.anvilXp) ui.anvilXp.textContent = player.xp ?? 0;
+
+    // Tab visibility
+    const isWeapons = activeAnvilTab === 'weapons';
+    ui.anvilWeaponsTab?.classList.toggle('hidden', !isWeapons);
+    ui.anvilMovesTab?.classList.toggle('hidden', isWeapons);
+    ui.anvilTabs.forEach(t => t.classList.toggle('active', t.dataset.anvilTab === activeAnvilTab));
+
+    if (isWeapons) renderAnvilItemList('weapon');
+    else renderAnvilItemList('move');
+
+    renderAnvilStatPanel();
+    renderAnvilFooter();
+  }
+
+  function renderAnvilItemList(itemType) {
+    const listEl = itemType === 'weapon' ? ui.anvilWeaponList : ui.anvilMoveList;
+    if (!listEl) return;
+
+    let keys = [];
+    if (itemType === 'weapon') {
+      keys = Object.keys(player.ownedWeapons || {}).filter(k => WEAPON_BASE_STATS[k]);
+    } else {
+      keys = Object.keys(player.ownedMoves || {}).filter(k => MOVE_BASE_STATS[k]);
+    }
+
+    if (keys.length === 0) {
+      listEl.innerHTML = `<p style="color:#91a8be;font-size:13px;padding:8px">No ${itemType}s owned.</p>`;
+      return;
+    }
+
+    listEl.innerHTML = keys.map(key => {
+      const def = itemType === 'weapon' ? WEAPON_DEFS[key] : MOVE_DEFS[key];
+      const name = def?.name || key;
+      const color = def?.color || '#9ec6ff';
+      const isActive = anvilSelectedItem === `${itemType}:${key}`;
+      return `<button class="anvil-item-btn${isActive ? ' is-active' : ''}" data-item="${key}" data-item-type="${itemType}">
+        <span class="anvil-item-dot" style="background:${color}"></span>
+        ${name}
+      </button>`;
+    }).join('');
+  }
+
+  function renderAnvilStatPanel() {
+    if (!anvilSelectedItem) {
+      if (ui.anvilWeaponStats) ui.anvilWeaponStats.classList.add('hidden');
+      if (ui.anvilMoveStats) ui.anvilMoveStats.classList.add('hidden');
+      return;
+    }
+    const [itemType, itemKey] = anvilSelectedItem.split(':');
+    const statEl = itemType === 'weapon' ? ui.anvilWeaponStats : ui.anvilMoveStats;
+    const otherEl = itemType === 'weapon' ? ui.anvilMoveStats : ui.anvilWeaponStats;
+    if (!statEl) return;
+    statEl.classList.remove('hidden');
+    if (otherEl) otherEl.classList.add('hidden');
+
+    const def = itemType === 'weapon' ? WEAPON_DEFS[itemKey] : MOVE_DEFS[itemKey];
+    const stats = getAnvilStatSchema(itemKey, itemType);
+    const schema = itemType === 'weapon' ? WEAPON_UPGRADEABLE_STATS : MOVE_UPGRADEABLE_STATS;
+
+    const rows = stats.map(({ statKey, label, min, max, xpPerStep, format }) => {
+      const cur = getAnvilCurrentValue(itemKey, statKey, itemType);
+      const staged = getAnvilStagedValue(itemKey, statKey, itemType);
+      const step = schema[statKey].step;
+      const stagedCount = anvilStagedUpgrades[`${itemType}:${itemKey}:${statKey}`] ?? 0;
+
+      // next value after pressing +: staged + step
+      const nextVal = staged + step;
+      const canIncrease = step > 0 ? nextVal <= max : nextVal >= min;
+      const canDecrease = stagedCount > 0;
+
+      const stagedDisplay = staged !== cur
+        ? `<span class="anvil-stat-staged">&rarr; ${format(staged)}</span>`
+        : '';
+      const costDisplay = xpPerStep > 0 ? `<span class="anvil-stat-cost">${xpPerStep} XP/step</span>` : '';
+
+      return `<div class="anvil-stat-row">
+        <span class="anvil-stat-label">${label}</span>
+        <span class="anvil-stat-value">${format(cur)}</span>
+        ${stagedDisplay}
+        ${costDisplay}
+        <div class="anvil-stat-controls">
+          <button class="anvil-stat-btn" data-stat="${statKey}" data-item="${itemKey}" data-item-type="${itemType}" data-dir="-1" ${canDecrease ? '' : 'disabled'}>&#8722;</button>
+          <button class="anvil-stat-btn" data-stat="${statKey}" data-item="${itemKey}" data-item-type="${itemType}" data-dir="1" ${canIncrease ? '' : 'disabled'}>&#43;</button>
+        </div>
+      </div>`;
+    });
+
+    statEl.innerHTML = `<div class="anvil-stat-title">${def?.name || itemKey}</div>${rows.join('')}`;
+  }
+
+  function renderAnvilFooter() {
+    const cost = getAnvilTotalCost();
+    const xp = player?.xp ?? 0;
+    if (ui.anvilCostSummary) {
+      if (cost === 0) {
+        ui.anvilCostSummary.textContent = 'Select stats above and press + to stage upgrades.';
+      } else {
+        ui.anvilCostSummary.textContent = `Total: ${cost} XP  (you have ${xp} XP)`;
+        ui.anvilCostSummary.style.color = xp >= cost ? '#7eff9e' : '#ff7c88';
+      }
+    }
+    if (ui.anvilConfirm) {
+      ui.anvilConfirm.disabled = cost === 0 || xp < cost;
+    }
+  }
+
+  function handleAnvilItemSelect(event) {
+    const btn = event.target.closest('[data-item]');
+    if (!btn) return;
+    const itemKey = btn.dataset.item;
+    const itemType = btn.dataset.itemType;
+    anvilSelectedItem = `${itemType}:${itemKey}`;
+    renderAnvilPanel();
+  }
+
+  function handleAnvilStatClick(event) {
+    const btn = event.target.closest('[data-stat]');
+    if (!btn || btn.disabled) return;
+    const statKey = btn.dataset.stat;
+    const itemKey = btn.dataset.item;
+    const itemType = btn.dataset.itemType;
+    const dir = Number(btn.dataset.dir);
+    const stageKey = `${itemType}:${itemKey}:${statKey}`;
+    const schema = itemType === 'weapon' ? WEAPON_UPGRADEABLE_STATS : MOVE_UPGRADEABLE_STATS;
+    const statDef = schema[statKey];
+    if (!statDef) return;
+
+    const currentStaged = anvilStagedUpgrades[stageKey] ?? 0;
+
+    if (dir === 1) {
+      // Check cap
+      const newVal = getAnvilStagedValue(itemKey, statKey, itemType) + statDef.step;
+      const capped = statDef.step > 0 ? newVal > statDef.max : newVal < statDef.min;
+      if (capped) return;
+      // Check if we could afford one more step
+      const nextCost = getAnvilTotalCost() + statDef.xpPerStep;
+      if (nextCost > (player?.xp ?? 0)) return;
+      anvilStagedUpgrades[stageKey] = currentStaged + 1;
+    } else {
+      // Remove a staged step (can't undo already-committed upgrades)
+      if (currentStaged <= 0) return;
+      anvilStagedUpgrades[stageKey] = currentStaged - 1;
+    }
+    renderAnvilPanel();
+  }
+
+  function confirmAnvilUpgrades() {
+    const cost = getAnvilTotalCost();
+    if (!player || cost === 0 || player.xp < cost) return;
+
+    player.xp -= cost;
+
+    if (!player.anvilUpgrades) player.anvilUpgrades = { weapon: {}, move: {} };
+
+    for (const [key, count] of Object.entries(anvilStagedUpgrades)) {
+      if (count === 0) continue;
+      const [itemType, itemKey, statKey] = key.split(':');
+      if (!player.anvilUpgrades[itemType]) player.anvilUpgrades[itemType] = {};
+      if (!player.anvilUpgrades[itemType][itemKey]) player.anvilUpgrades[itemType][itemKey] = {};
+      player.anvilUpgrades[itemType][itemKey][statKey] =
+        (player.anvilUpgrades[itemType][itemKey][statKey] ?? 0) + count;
+    }
+
+    anvilStagedUpgrades = {};
+    markInventoryPanelDirty();
+    scheduleRunSave();
+    particles.push({ x: player.x, y: player.y - 26, life: 1.0, text: 'UPGRADED!', c: '#ffb840' });
+    renderAnvilPanel();
+    updateHud();
+  }
+
+  // Returns the anvil bonus for a given weapon stat (additive delta)
+  function getAnvilWeaponBonus(weaponKey, statKey) {
+    const upgrades = player?.anvilUpgrades?.weapon?.[weaponKey]?.[statKey] ?? 0;
+    if (upgrades === 0) return 0;
+    return upgrades * (WEAPON_UPGRADEABLE_STATS[statKey]?.step ?? 0);
+  }
+
+  // Returns the anvil bonus for a given move stat
+  function getAnvilMoveBonus(moveKey, statKey) {
+    const upgrades = player?.anvilUpgrades?.move?.[moveKey]?.[statKey] ?? 0;
+    if (upgrades === 0) return 0;
+    return upgrades * (MOVE_UPGRADEABLE_STATS[statKey]?.step ?? 0);
+  }
+
   function isWizardPawOpen() {
     return !!wizardPawSelection && isPanelOpen(ui.wizardPawModal);
   }
@@ -1483,7 +1821,7 @@
   }
 
   function isOverlayBlockingInput() {
-    return isPanelOpen(ui.shopPanel) || isPanelOpen(ui.invPanel) || isWizardPawOpen();
+    return isPanelOpen(ui.shopPanel) || isPanelOpen(ui.invPanel) || isPanelOpen(ui.anvilPanel) || isWizardPawOpen();
   }
 
   function isGodSweepUnlocked() {
@@ -1610,8 +1948,14 @@
         const owned = !!player.ownedMoves?.[offer.key];
         const canAfford = player.coins >= offer.cost;
         const disabled = offer.bought || owned || !canAfford;
+        const slotLabel = SLOT_LABELS[def?.slot] || def?.slot || 'move';
+        const currentMoveKey = player.equippedMoves?.[def?.slot];
+        const currentMoveName = currentMoveKey ? (MOVE_DEFS[currentMoveKey]?.name || currentMoveKey) : null;
+        const replacesLine = currentMoveName
+          ? `<p class="shop-card__replaces">Replaces: <b>${currentMoveName}</b></p>`
+          : `<p class="shop-card__replaces">Goes into: <b>${slotLabel} slot</b> (nothing equipped)</p>`;
         return `<div class="shop-card${!canAfford && !owned && !offer.bought ? ' shop-card--unaffordable' : ''}">
-          <span class="shop-card__eyebrow">${def?.slot || 'move'}</span>
+          <span class="shop-card__eyebrow">${slotLabel}</span>
           <div class="shop-card__title-row">
             <h4>${def?.name || offer.key}</h4>
             <span class="shop-card__price">${offer.cost}</span>
@@ -1619,6 +1963,7 @@
           <div class="shop-card__copy">
             <p>${def?.desc || 'No move description available.'}</p>
           </div>
+          ${replacesLine}
           <div class="shop-card__footer">
             <button class="shop-buy${!canAfford && !owned && !offer.bought ? ' shop-buy--unaffordable' : ''}" data-kind="move" data-index="${index}" ${disabled ? 'disabled' : ''}>${offer.bought || owned ? 'Owned' : !canAfford ? 'Too Expensive' : 'Buy Move'}</button>
           </div>
@@ -1659,7 +2004,7 @@
     ui.invTabs.forEach(tab => {
       tab.classList.toggle('active', tab.dataset.invTab === activeInvTab);
     });
-    const tabPanels = { stats: 'invTabStats', items: 'invTabItems', weapons: 'invTabWeapons', moves: 'invTabMoves', equipped: 'invTabEquipped' };
+    const tabPanels = { stats: 'invTabStats', items: 'invTabItems', weapons: 'invTabWeapons', equipped: 'invTabEquipped' };
     Object.entries(tabPanels).forEach(([key, id]) => {
       const el = document.getElementById(id);
       if (el) el.classList.toggle('hidden', key !== activeInvTab);
@@ -1715,24 +2060,26 @@
     }
 
     const equippedMoveKeys = new Set(Object.values(player.equippedMoves || {}).filter(Boolean));
-    const ownedMoves = Object.keys(player.ownedMoves || {})
+    const allOwnedMoves = Object.keys(player.ownedMoves || {})
       .filter(key => player.ownedMoves[key] && MOVE_DEFS[key])
-      .filter(key => !equippedMoveKeys.has(key))
       .sort((a, b) => MOVE_DEFS[a].slot.localeCompare(MOVE_DEFS[b].slot));
-    ui.invMovesList.innerHTML = ownedMoves
+    ui.invMovesList.innerHTML = allOwnedMoves
       .map(key => {
         const def = MOVE_DEFS[key];
-        const isMatch = activeInventorySlot && activeInventorySlot === def.slot;
-        return `<div class="inv-move-chip${isMatch ? ' is-match' : ''}" draggable="true" data-move="${key}" data-slot-type="${def.slot}">
+        const isEquipped = equippedMoveKeys.has(key);
+        const isMatch = !isEquipped && activeInventorySlot && activeInventorySlot === def.slot;
+        const slotLabel = SLOT_LABELS[def.slot] || def.slot;
+        const hintText = isEquipped ? 'Equipped' : (isMatch ? 'Click or drag to equip' : `Drag to ${slotLabel} slot`);
+        return `<div class="inv-move-chip${isEquipped ? ' is-equipped-move' : ''}${isMatch ? ' is-match' : ''}" ${isEquipped ? '' : `draggable="true"`} data-move="${key}" data-slot-type="${def.slot}">
           <div class="inv-move-chip__meta">
             <b>${def.name}</b>
-            <span class="inv-move-chip__slot">${def.slot}</span>
+            <span class="inv-move-chip__slot">${slotLabel}</span>
           </div>
           <p>${def.desc}</p>
-          <span class="inv-move-chip__hint">${isMatch ? 'Selected slot match. Click or drag to equip.' : 'Click or drag to equip.'}</span>
+          <span class="inv-move-chip__hint">${hintText}</span>
         </div>`;
       })
-      .join('') || '<div class="inv-card"><span class="inv-card__eyebrow">Empty</span><h4>No spare moves</h4><p>Every move you own is currently equipped. Buy a new technique to open up swap options.</p></div>';
+      .join('') || '<div class="inv-card"><span class="inv-card__eyebrow">Empty</span><h4>No moves owned</h4><p>Buy moves from the shop to build your kit.</p></div>';
 
     MOVE_SLOTS.forEach(slot => {
       const node = ui.invSlots[slot];
@@ -1745,7 +2092,9 @@
       node.draggable = !!moveKey;
       node.classList.toggle('is-equipped', !!moveKey);
       node.classList.toggle('is-selected', isSelected);
-      node.innerHTML = `<div class="inv-slot__top"><span class="inv-slot__kicker">${slot}</span><span class="inv-slot__status">${isSelected ? 'Selected' : 'Equipped'}</span></div><div class="inv-slot__move">${def?.name || 'No move equipped'}</div><p class="inv-slot__hint">${isSelected ? 'Matching spare moves are highlighted. Click one or drag it here to swap.' : def?.desc || 'Click this slot to focus matching spare moves, or drag a matching move here to assign it.'}</p>`;
+      const slotLabel = SLOT_LABELS[slot] || slot;
+      const slotKey = SLOT_KEYS[slot] || '';
+      node.innerHTML = `<div class="inv-slot__top"><span class="inv-slot__kicker">${slotLabel}</span><div class="inv-slot__top-right">${slotKey ? `<span class="inv-slot__key">${slotKey}</span>` : ''}<span class="inv-slot__status">${isSelected ? 'Selected' : (def ? 'Equipped' : 'Empty')}</span></div></div><div class="inv-slot__move">${def?.name || 'No move equipped'}</div><p class="inv-slot__hint">${isSelected ? 'Matching spare moves are highlighted below. Click one or drag it here to swap.' : def?.desc || 'Click this slot to see moves that can go here.'}</p>`;
     });
     if (ui.invWeaponSlot) {
       const weapon = WEAPON_DEFS[player.equippedWeapon];
@@ -1962,6 +2311,7 @@
       ownedMoves,
       lavaWalkTime: 0,
       lavaTrailTick: 0,
+      anvilUpgrades: { weapon: {}, move: {} },
     };
   }
 
@@ -2202,18 +2552,36 @@
     return scaleShopPrice(16 + floorValue * 2, difficultyKey);
   }
 
+  function getSecretXpOfferCost(floorValue = floor, difficultyKey = selectedDifficulty) {
+    return scaleShopPrice(30 + floorValue * 8, difficultyKey);
+  }
+
+  function getSecretXpOfferAmount(floorValue = floor) {
+    return Math.max(12, Math.round(14 + floorValue * 7));
+  }
+
   function getLaserCastDuration(moveKey = getEquippedMove('laser'), attackSpeed = getAttackSpeedValue()) {
     if (moveKey === 'god_sweep') return 1.45 / attackSpeed;
     if (moveKey === 'turtle_wave') return 1.35 / attackSpeed;
     return (godTimer > 0 ? 0.72 : ATTACKS.laser.duration) / attackSpeed;
   }
 
+  function getMoveCooldownBase(moveKey) {
+    const base = MOVE_BASE_STATS[moveKey]?.cooldown ?? null;
+    if (base === null) return null;
+    return Math.max(0.05, base + getAnvilMoveBonus(moveKey, 'cooldown'));
+  }
+
   function getMeleeCooldownDuration(moveKey = getEquippedMove('melee'), attackSpeed = getAttackSpeedValue()) {
+    const anvilBase = getMoveCooldownBase(moveKey);
+    if (anvilBase !== null) return anvilBase / attackSpeed;
     if (moveKey === 'slash') return 0.4 / attackSpeed;
     return (godTimer > 0 ? 0.2 : ATTACKS.melee.baseCooldown) / attackSpeed;
   }
 
   function getLaserCooldownDuration(moveKey = getEquippedMove('laser'), attackSpeed = getAttackSpeedValue()) {
+    const anvilBase = getMoveCooldownBase(moveKey);
+    if (anvilBase !== null) return anvilBase / attackSpeed;
     if (moveKey === 'turtle_wave') return 3 / attackSpeed;
     if (moveKey === 'blade_justice') return 3.8 / attackSpeed;
     if (moveKey === 'lightning_columns') return 4.8 / attackSpeed;
@@ -2222,6 +2590,8 @@
   }
 
   function getDashCooldownDuration(moveKey = getEquippedMove('dash'), attackSpeed = getAttackSpeedValue()) {
+    const anvilBase = getMoveCooldownBase(moveKey);
+    if (anvilBase !== null) return anvilBase / attackSpeed;
     if (moveKey === 'warp') return 2.8 / attackSpeed;
     if (moveKey === 'nimrod_stomp') return 4.2 / attackSpeed;
     if (moveKey === 'zip_lightning') return 5.4 / attackSpeed;
@@ -2230,6 +2600,9 @@
   }
 
   function getSmashCooldownDuration(attackSpeed = getAttackSpeedValue()) {
+    const smashKey = getEquippedMove('smash');
+    const anvilBase = getMoveCooldownBase(smashKey);
+    if (anvilBase !== null) return anvilBase / attackSpeed;
     return (godTimer > 0 ? 2 : ATTACKS.smash.baseCooldown) / attackSpeed;
   }
 
@@ -2850,6 +3223,8 @@
     if (shopCandidate && nextRandom('world') < 0.7) shopCandidate.type = 'shop';
     const challengeCandidate = pool.find(room => room.type === 'combat');
     if (challengeCandidate && floor >= 2 && floor < MAX_FLOOR && nextRandom('world') < 0.42) challengeCandidate.type = 'challenge';
+    const anvilCandidate = pool.find(room => room.type === 'combat');
+    if (anvilCandidate && nextRandom('world') < 0.55) anvilCandidate.type = 'anvil';
     assignSecretRoom(roomMap);
     rooms.forEach(decorateRoomData);
 
@@ -2893,7 +3268,8 @@
           targetFloor: clamp(floor + delta, 1, MAX_FLOOR),
         });
       } else {
-        const offerPool = shuffle(['relic', 'vitality', 'wealth'], 'world');
+        const regularOffers = shuffle(['relic', 'vitality', 'wealth'], 'world');
+        const offerPool = shuffle(['xp', regularOffers[0], regularOffers[1]], 'world');
         room.pickups.push(createSecretVendorOffer(offerPool[0], ROOM_W / 2 - 110, ROOM_H / 2 + 26));
         room.pickups.push(createSecretVendorOffer(offerPool[1], ROOM_W / 2, ROOM_H / 2 - 18));
         room.pickups.push(createSecretVendorOffer(offerPool[2], ROOM_W / 2 + 110, ROOM_H / 2 + 26));
@@ -2906,7 +3282,7 @@
       decorateRoomStructures(room);
     }
 
-    const potCount = room.type === 'shop' ? 1 : room.type === 'challenge' ? 0 : irand(1, 3, 'world');
+    const potCount = room.type === 'shop' ? 1 : (room.type === 'challenge' || room.type === 'anvil') ? 0 : irand(1, 3, 'world');
     for (let index = 0; index < potCount; index += 1) {
       room.destructibles.push({
         kind: 'pot',
@@ -2918,7 +3294,7 @@
       });
     }
 
-    if (nextRandom('world') < 0.45 && room.type !== 'shop' && room.type !== 'challenge') {
+    if (nextRandom('world') < 0.45 && room.type !== 'shop' && room.type !== 'challenge' && room.type !== 'anvil') {
       room.destructibles.push({
         kind: 'barrel',
         x: 180 + rand(ROOM_W - 360, 0, 'world'),
@@ -2929,7 +3305,7 @@
       });
     }
 
-    if (nextRandom('world') < 0.4 && room.type !== 'god' && room.type !== 'challenge') {
+    if (nextRandom('world') < 0.4 && room.type !== 'god' && room.type !== 'challenge' && room.type !== 'anvil') {
       const primaryLava = createMoatLavaHazard();
       room.hazards.push(primaryLava);
       if (nextRandom('world') < 0.35) {
@@ -2982,6 +3358,8 @@
       room.challengeTimer = 0;
       room.challengeTick = 0;
       room.challengeData = {};
+    } else if (room.type === 'anvil') {
+      room.cleared = true;
     }
   }
 
@@ -3137,6 +3515,10 @@
     return !!getConnectedRoom(room, direction);
   }
 
+  function hasVisibleRoomExit(room, direction) {
+    return !!room?.doors?.[direction];
+  }
+
   function setSecretPassageOpen(room, direction, open = true) {
     const passage = room?.secretPassages?.[direction];
     if (!passage) return;
@@ -3177,11 +3559,22 @@
     if (kind === 'vitality') {
       return { x, y, type: 'secretVendor', offerKind: 'vitality', cost: 1, label: 'Vital' };
     }
+    if (kind === 'xp') {
+      return {
+        x,
+        y,
+        type: 'secretVendor',
+        offerKind: 'xp',
+        cost: getSecretXpOfferCost(),
+        xpValue: getSecretXpOfferAmount(),
+        label: 'XP',
+      };
+    }
     return { x, y, type: 'secretVendor', offerKind: 'wealth', cost: 2, label: 'Wealth' };
   }
 
   function assignSecretRoom(roomMap) {
-    const anchors = shuffle(rooms.filter(room => !room.secret && ['combat', 'treasure', 'shop'].includes(room.type)), 'world');
+    const anchors = shuffle(rooms.filter(room => !room.secret && ['combat', 'treasure', 'shop', 'anvil'].includes(room.type)), 'world');
     for (const anchor of anchors) {
       const dirs = shuffle([...DIRECTIONS], 'world');
       for (const dir of dirs) {
@@ -3311,6 +3704,10 @@
       } else if (!room.cleared && room.challengeStarted && !enemies.some(enemy => enemy.type === 'mirror_knight')) {
         if ((room.challengeType || 'mirror') === 'mirror') spawnMirrorChampion();
       }
+    }
+
+    if (room.type === 'anvil') {
+      setAnvilPanelOpen(false);
     }
 
     if (room.type === 'treasure' && !room.cleared && chests.length === 0) {
@@ -3511,6 +3908,7 @@
       if (room.type === 'treasure') weight += 2.1;
       if (room.type === 'shop') weight += 1.7;
       if (room.type === 'challenge') weight += 1.1;
+      if (room.type === 'anvil') weight += 1.3;
       if (room.type === 'combat' && !room.cleared) weight += 0.8;
       const distance = Math.abs(room.gx - fromRoom.gx) + Math.abs(room.gy - fromRoom.gy);
       weight += Math.min(2, distance * 0.35);
@@ -4005,8 +4403,6 @@
 
     const miniBoss = spawnEnemy(type, safeSpawn.x, safeSpawn.y, canSpawnEliteEnemies());
     miniBoss.hp = Math.round(miniBoss.hp * 1.9);
-    const equippedWeapon = getEquippedWeapon();
-    const extendingStaffEquipped = equippedWeapon === 'extending_staff';
     miniBoss.speed *= 0.94;
     miniBoss.r = Math.round(miniBoss.r * 1.08);
     miniBoss.miniBoss = true;
@@ -4015,51 +4411,16 @@
 
   function spawnWave(count, roomType = 'combat') {
     const plan = buildWavePlan(count, roomType);
-    if (extendingStaffEquipped) {
-      const previewRange = 130;
-      const previewArc = 1.45;
-      const previewX = Math.cos(aimAngle) * previewRange;
-      const previewY = Math.sin(aimAngle) * previewRange;
-
-      ctx.globalAlpha = 0.32;
-      ctx.strokeStyle = '#d8f1ff';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(Math.cos(aimAngle) * 18, Math.sin(aimAngle) * 18);
-      ctx.lineTo(previewX, previewY);
-      ctx.stroke();
-
-      ctx.globalAlpha = 0.18;
-      ctx.beginPath();
-      ctx.arc(0, 0, previewRange, aimAngle - previewArc, aimAngle + previewArc);
-      ctx.stroke();
-
-      ctx.globalAlpha = 0.55;
-      ctx.fillStyle = '#f3fbff';
-      ctx.beginPath();
-      ctx.arc(previewX, previewY, 4, 0, Math.PI * 2);
-      ctx.fill();
-    }
     for (let index = 0; index < plan.length; index += 1) {
-      const swingRange = extendingStaffEquipped ? 130 : 55;
-      const swingArc = extendingStaffEquipped ? 1.45 : ATTACKS.melee.arc;
-      ctx.strokeStyle = extendingStaffEquipped ? '#eaf4ff' : godTimer > 0 ? '#f6e8c8' : '#d86d87';
-      ctx.lineWidth = extendingStaffEquipped ? 6 : 4;
-      ctx.globalAlpha = 0.9;
-      ctx.beginPath();
-      ctx.arc(0, 0, swingRange, player.swingA - swingArc, player.swingA + swingArc);
-      ctx.stroke();
-      if (extendingStaffEquipped) {
-        ctx.globalAlpha = 0.18;
-        ctx.fillStyle = '#eaf4ff';
-        ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.arc(0, 0, swingRange, player.swingA - swingArc, player.swingA + swingArc);
-        ctx.closePath();
-        ctx.fill();
-      }
       const type = plan[index] || rollEnemyType();
       const eliteRoll = canSpawnEliteEnemies() && nextRandom('encounter') < getDifficultyDef().eliteChance;
+      const angle = nextRandom('encounter') * Math.PI * 2;
+      const radius = 140 + nextRandom('encounter') * 170;
+      const preferredX = clamp(ROOM_W / 2 + Math.cos(angle) * radius, 90, ROOM_W - 90);
+      const preferredY = clamp(ROOM_H / 2 + Math.sin(angle) * radius, 90, ROOM_H - 90);
+      const safeSpawn = findSafeEnemySpawnPoint(preferredX, preferredY, 15)
+        || findSafeEnemySpawnPoint(ROOM_W / 2, ROOM_H / 2, 15);
+      if (!safeSpawn) continue;
       spawnEnemy(type, safeSpawn.x, safeSpawn.y, eliteRoll);
     }
     spawnMiniBoss(roomType);
@@ -4659,6 +5020,11 @@
     playerData.fleeceTick = Number(playerData.fleeceTick || 0);
     playerData.weaponBeamTime = Number(playerData.weaponBeamTime || 0);
     playerData.weaponBeamTick = Number(playerData.weaponBeamTick || 0);
+    if (!playerData.anvilUpgrades || typeof playerData.anvilUpgrades !== 'object') {
+      playerData.anvilUpgrades = { weapon: {}, move: {} };
+    }
+    if (!playerData.anvilUpgrades.weapon || typeof playerData.anvilUpgrades.weapon !== 'object') playerData.anvilUpgrades.weapon = {};
+    if (!playerData.anvilUpgrades.move   || typeof playerData.anvilUpgrades.move   !== 'object') playerData.anvilUpgrades.move   = {};
     MOVE_SLOTS.forEach(slot => {
       const moveKey = playerData.equippedMoves[slot];
       if (!MOVE_DEFS[moveKey] || MOVE_DEFS[moveKey].slot !== slot) {
@@ -4905,19 +5271,22 @@
   }
 
   function getWeaponBaseCooldown(weaponKey) {
-    if (weaponKey === 'extending_staff') return 0.5;
-    if (weaponKey === 'hunters_bow') return 0.4;
-    if (weaponKey === 'thorns_bleed_blade') return ATTACKS.melee.baseCooldown;
-    if (weaponKey === 'lazer_glasses') return 3.6;
-    if (weaponKey === 'metao_fire_staff') return ATTACKS.melee.baseCooldown;
-    if (weaponKey === 'magenta_degale') return 1.5;
-    if (weaponKey === 'magenta_p90') return 1.8;
-    if (weaponKey === 'granillia_lightning_spear') return ATTACKS.melee.baseCooldown;
-    if (weaponKey === 'excalibur') return 2;
-    if (weaponKey === 'golden_fleece') return 0.5;
-    if (weaponKey === 'void_piercer') return 0.8;
-    if (weaponKey === 'aegis_shield_weapon') return 8;
-    return 0.5;
+    let base;
+    if (weaponKey === 'extending_staff') base = 0.5;
+    else if (weaponKey === 'hunters_bow') base = 0.4;
+    else if (weaponKey === 'thorns_bleed_blade') base = ATTACKS.melee.baseCooldown;
+    else if (weaponKey === 'lazer_glasses') base = 3.6;
+    else if (weaponKey === 'metao_fire_staff') base = ATTACKS.melee.baseCooldown;
+    else if (weaponKey === 'magenta_degale') base = 1.5;
+    else if (weaponKey === 'magenta_p90') base = 1.8;
+    else if (weaponKey === 'granillia_lightning_spear') base = ATTACKS.melee.baseCooldown;
+    else if (weaponKey === 'excalibur') base = 2;
+    else if (weaponKey === 'golden_fleece') base = 0.5;
+    else if (weaponKey === 'void_piercer') base = 0.8;
+    else if (weaponKey === 'aegis_shield_weapon') base = 8;
+    else base = 0.5;
+    const bonus = getAnvilWeaponBonus(weaponKey, 'cooldown');
+    return Math.max(0.05, base + bonus);
   }
 
   function spawnWeaponProjectile(config = {}) {
@@ -4968,39 +5337,41 @@
     const angle = Math.atan2(mouse.worldY - player.y, mouse.worldX - player.x);
     const attackSpeed = getAttackSpeedValue();
     const itemStats = getItemStats();
+    const wDmg  = k => Math.max(1, (WEAPON_BASE_STATS[k]?.damage  ?? 0) + getAnvilWeaponBonus(k, 'damage'));
+    const wKnk  = k => Math.max(0, (WEAPON_BASE_STATS[k]?.knockback ?? 0) + getAnvilWeaponBonus(k, 'knockback'));
+    const wRng  = k => Math.max(10, (WEAPON_BASE_STATS[k]?.range   ?? 120) + getAnvilWeaponBonus(k, 'range'));
+    const wCd   = k => getWeaponBaseCooldown(k);
     if (weaponKey === 'extending_staff') {
-      fireWeaponSweep(38, 130, 1.45, 500, '#eaf4ff');
-      player.weaponCooldown = 0.5;
+      fireWeaponSweep(wDmg(weaponKey), wRng(weaponKey), 1.45, wKnk(weaponKey), '#eaf4ff');
+      player.weaponCooldown = wCd(weaponKey);
       return true;
     }
     if (weaponKey === 'hunters_bow') {
-      spawnWeaponProjectile({ angle, speed: 820, damage: 28, knockback: 180, r: 4, life: 0.9, kind: 'hunters_bow', color: '#f0fbff', pierceCount: 1, hitOptions: { critBonus: 0.1 } });
-      player.weaponCooldown = 0.4;
+      spawnWeaponProjectile({ angle, speed: 820, damage: wDmg(weaponKey), knockback: wKnk(weaponKey), r: 4, life: 0.9, kind: 'hunters_bow', color: '#f0fbff', pierceCount: 1, hitOptions: { critBonus: 0.1 } });
+      player.weaponCooldown = wCd(weaponKey);
       return true;
     }
     if (weaponKey === 'thorns_bleed_blade') {
-      // Preserve Thorn's original slash feel: same damage/range/arc/push and bleed values.
-      fireWeaponSweep(ATTACKS.melee.damage, ATTACKS.melee.range, ATTACKS.melee.arc, ATTACKS.melee.push, '#ff6e8b', { bleedChance: 0.10, bleedStacks: 1, bleedDuration: 5, itemBleedChance: itemStats.bleedChance || 0 });
-      player.weaponCooldown = getMeleeCooldownDuration();
+      fireWeaponSweep(wDmg(weaponKey), wRng(weaponKey), ATTACKS.melee.arc, wKnk(weaponKey), '#ff6e8b', { bleedChance: 0.10, bleedStacks: 1, bleedDuration: 5, itemBleedChance: itemStats.bleedChance || 0 });
+      player.weaponCooldown = wCd(weaponKey);
       return true;
     }
     if (weaponKey === 'lazer_glasses') {
       player.weaponBeamTime = 0.65;
       player.weaponBeamTick = 0;
-      player.weaponCooldown = 3.6;
+      player.weaponCooldown = wCd(weaponKey);
       return true;
     }
     if (weaponKey === 'metao_fire_staff') {
-      // Preserve Metao's original left-click behavior through weapon routing.
       spawnFireballs();
-      player.weaponCooldown = ATTACKS.melee.baseCooldown / attackSpeed;
+      player.weaponCooldown = wCd(weaponKey) / attackSpeed;
       return true;
     }
     if (weaponKey === 'magenta_degale') {
-      spawnWeaponProjectile({ angle, speed: 920, damage: 80, knockback: 480, r: 7, life: 0.9, kind: 'magenta_degale', color: '#ff8bd2' });
+      spawnWeaponProjectile({ angle, speed: 920, damage: wDmg(weaponKey), knockback: wKnk(weaponKey), r: 7, life: 0.9, kind: 'magenta_degale', color: '#ff8bd2' });
       player.vx -= Math.cos(angle) * 280;
       player.vy -= Math.sin(angle) * 280;
-      player.weaponCooldown = 1.5;
+      player.weaponCooldown = wCd(weaponKey);
       return true;
     }
     if (weaponKey === 'magenta_p90') {
@@ -5011,35 +5382,34 @@
           weaponKey,
         });
       }
-      player.weaponCooldown = 1.8;
+      player.weaponCooldown = wCd(weaponKey);
       return true;
     }
     if (weaponKey === 'granillia_lightning_spear') {
-      // Preserve Granillia's original smite-chain melee behavior through weapon routing.
       castSmiteChain();
-      player.weaponCooldown = ATTACKS.melee.baseCooldown / attackSpeed;
+      player.weaponCooldown = wCd(weaponKey) / attackSpeed;
       return true;
     }
     if (weaponKey === 'excalibur') {
-      fireWeaponSweep(1000, 100, Math.PI, 800, '#ffe291', { rawDamage: true });
+      fireWeaponSweep(wDmg(weaponKey), wRng(weaponKey), Math.PI, wKnk(weaponKey), '#ffe291', { rawDamage: true });
       particles.push({ x: player.x, y: player.y, life: 0.6, ring: 56, c: '#ffd26a' });
-      player.weaponCooldown = 2;
+      player.weaponCooldown = wCd(weaponKey);
       return true;
     }
     if (weaponKey === 'golden_fleece') {
-      fireWeaponSweep(22, ATTACKS.melee.range, ATTACKS.melee.arc, ATTACKS.melee.push, '#ffe8a0');
-      player.weaponCooldown = 0.5;
+      fireWeaponSweep(wDmg(weaponKey), wRng(weaponKey), ATTACKS.melee.arc, wKnk(weaponKey), '#ffe8a0');
+      player.weaponCooldown = wCd(weaponKey);
       return true;
     }
     if (weaponKey === 'void_piercer') {
-      spawnWeaponProjectile({ angle, speed: 760, damage: 65, knockback: 280, r: 6, life: 1.2, kind: 'void_piercer', color: '#ffd2c0', pierceCount: 4, hitOptions: { ignoreBarrier: true, critBonus: 0.2 } });
-      player.weaponCooldown = 0.8;
+      spawnWeaponProjectile({ angle, speed: 760, damage: wDmg(weaponKey), knockback: wKnk(weaponKey), r: 6, life: 1.2, kind: 'void_piercer', color: '#ffd2c0', pierceCount: 4, hitOptions: { ignoreBarrier: true, critBonus: 0.2 } });
+      player.weaponCooldown = wCd(weaponKey);
       return true;
     }
     if (weaponKey === 'aegis_shield_weapon') {
       player.blockActive = true;
       player.blockTimer = 2;
-      player.weaponCooldown = 8;
+      player.weaponCooldown = wCd(weaponKey);
       particles.push({ x: player.x, y: player.y, life: 0.5, ring: 26, c: '#9ae9ff' });
       return true;
     }
@@ -5068,12 +5438,15 @@
     player.swing = ATTACKS.melee.active;
     player.swingA = angle;
 
-    const damage = godTimer > 0 ? 56 : ATTACKS.melee.damage;
+    const anvilDmgBonus = getAnvilMoveBonus(move, 'damage');
+    const anvilRngBonus = getAnvilMoveBonus(move, 'range');
+    const damage = (godTimer > 0 ? 56 : ATTACKS.melee.damage) + anvilDmgBonus;
+    const meleeRange = ATTACKS.melee.range + anvilRngBonus;
     for (let index = enemies.length - 1; index >= 0; index -= 1) {
       const enemy = enemies[index];
       if (!enemy) continue;
       const distance = dist(player.x, player.y, enemy.x, enemy.y);
-      if (distance > ATTACKS.melee.range + enemy.r) continue;
+      if (distance > meleeRange + enemy.r) continue;
       const targetAngle = Math.atan2(enemy.y - player.y, enemy.x - player.x);
       const difference = Math.abs(Math.atan2(Math.sin(targetAngle - angle), Math.cos(targetAngle - angle)));
       if (difference > ATTACKS.melee.arc) continue;
@@ -5142,7 +5515,9 @@
       queued.delay -= dt;
       if (queued.delay > 0) continue;
       if (queued.weaponKey === 'magenta_p90') {
-        spawnWeaponProjectile({ angle: queued.angle, speed: 900, damage: 22, knockback: 200, r: 4, life: 0.8, kind: 'magenta_p90', color: '#ff9dd7' });
+        const p90Dmg = Math.max(1, (WEAPON_BASE_STATS.magenta_p90?.damage ?? 18) + getAnvilWeaponBonus('magenta_p90', 'damage'));
+        const p90Knk = Math.max(0, (WEAPON_BASE_STATS.magenta_p90?.knockback ?? 140) + getAnvilWeaponBonus('magenta_p90', 'knockback'));
+        spawnWeaponProjectile({ angle: queued.angle, speed: 900, damage: p90Dmg, knockback: p90Knk, r: 4, life: 0.8, kind: 'magenta_p90', color: '#ff9dd7' });
         player.vx -= Math.cos(queued.angle) * 55;
         player.vy -= Math.sin(queued.angle) * 55;
       }
@@ -5221,8 +5596,10 @@
         const enemy = enemies[index];
         if (!enemy) continue;
         if (!beamHitsCircle(player.x, player.y, end.x, end.y, enemy.x, enemy.y, enemy.r + (laserMode === 'turtle_wave' ? 14 : 6))) continue;
-        const beamDamage = (laserMode === 'god_sweep' ? 24 : laserMode === 'turtle_wave' ? 34 : godTimer > 0 ? 16 : ATTACKS.laser.damage) * (itemStats.beamDamageMultiplier || 1);
-        hitEnemy(enemy, beamDamage, angle, laserMode === 'god_sweep' ? 120 : laserMode === 'turtle_wave' ? 155 : 60, '#f0f');
+        const anvilBeamBonus = getAnvilMoveBonus(move, 'damage');
+        const beamDamage = ((laserMode === 'god_sweep' ? 24 : laserMode === 'turtle_wave' ? 34 : godTimer > 0 ? 16 : ATTACKS.laser.damage) + anvilBeamBonus) * (itemStats.beamDamageMultiplier || 1);
+        const anvilCritBonus = getAnvilMoveBonus(move, 'critChance');
+        hitEnemy(enemy, beamDamage, angle, laserMode === 'god_sweep' ? 120 : laserMode === 'turtle_wave' ? 155 : 60, '#f0f', anvilCritBonus > 0 ? { critBonus: anvilCritBonus } : {});
         chainBeamHit(enemy, beamDamage, angle, '#d890ff');
         if (move === 'blood_beam' && rng() < 0.05) applyBleed(enemy, 1, 3.2);
         if (move === 'blood_beam' && rng() < 0.08) applyDarkDrain(enemy, 1, 3.4);
@@ -5262,7 +5639,8 @@
       castFloorLava();
       return;
     }
-    const smashRadius = ATTACKS.smash.radius * (itemStats.aoeRadiusMultiplier || 1);
+    const anvilSmashRange = getAnvilMoveBonus(move, 'range');
+    const smashRadius = (ATTACKS.smash.radius + anvilSmashRange) * (itemStats.aoeRadiusMultiplier || 1);
     shake = 16;
     shakeT = 0.24;
     particles.push({ x: player.x, y: player.y, life: 0.4, ring: smashRadius - 30, c: '#ff00aa' });
@@ -5272,7 +5650,7 @@
       const distance = dist(player.x, player.y, enemy.x, enemy.y);
       if (distance > smashRadius + enemy.r) continue;
       const angle = Math.atan2(enemy.y - player.y, enemy.x - player.x);
-      let damage = godTimer > 0 ? 82 : ATTACKS.smash.damage;
+      let damage = (godTimer > 0 ? 82 : ATTACKS.smash.damage) + getAnvilMoveBonus(move, 'damage');
       if (itemStats.bleedDamageMultiplier > 1 && getStatusStacks(enemy, 'bleed') > 0) {
         damage += ATTACKS.smash.bonus;
         particles.push({ x: enemy.x, y: enemy.y - 16, life: 0.6, text: 'POP', c: '#a0f' });
@@ -6116,6 +6494,7 @@
     let moveX = (keys[_right] || keys.arrowright ? 1 : 0) - (keys[_left] || keys.arrowleft ? 1 : 0);
     let moveY = (keys[_down]  || keys.arrowdown  ? 1 : 0) - (keys[_up]   || keys.arrowup   ? 1 : 0);
     if (currentRoom?.type !== 'shop' && isPanelOpen(ui.shopPanel)) setShopPanelOpen(false);
+    if (currentRoom?.type !== 'anvil' && isPanelOpen(ui.anvilPanel)) setAnvilPanelOpen(false);
     const overlayOpen = isOverlayBlockingInput();
     if (overlayOpen) {
       moveX = 0;
@@ -6687,7 +7066,7 @@
     if (enemy.supportCd <= 0) {
       enemy.supportCd = 2.9 * Math.max(0.76, tuning.rangedCadence);
       enemies.forEach(other => {
-        if (other === enemy) return;
+        if (!other || other === enemy) return;
         if (dist(enemy.x, enemy.y, other.x, other.y) > 170) return;
         other.barrier = Math.max(other.barrier || 0, Math.round(other.max * 0.22 * tuning.supportPower));
       });
@@ -6734,7 +7113,7 @@
       enemy.supportCd = (floor >= 4 ? 2.1 : 2.8) * Math.max(0.74, tuning.rangedCadence);
       let healedAny = false;
       enemies.forEach(other => {
-        if (other === enemy) return;
+        if (!other || other === enemy) return;
         if (dist(enemy.x, enemy.y, other.x, other.y) > 170) return;
         const heal = Math.max(8, Math.round(other.max * (floor >= 4 ? 0.08 : 0.05) * tuning.supportPower));
         const nextHp = Math.min(other.max, other.hp + heal);
@@ -6790,7 +7169,8 @@
     if (enemy.bossSpawnTimer <= 0) {
       const bossType = getFloorBossType();
       const safeSpawn = findSafeEnemySpawnPoint(enemy.x, enemy.y, 18);
-      enemies.splice(enemies.indexOf(enemy), 1);
+      const bossSpawnerIdx = enemies.indexOf(enemy);
+      if (bossSpawnerIdx >= 0) enemies.splice(bossSpawnerIdx, 1);
       particles.push({ x: enemy.x, y: enemy.y, life: 0.8, ring: 120, c: '#ff9b5e' });
       if (safeSpawn) {
         const spawnedBoss = spawnEnemy(bossType, safeSpawn.x, safeSpawn.y, false);
@@ -7582,6 +7962,7 @@
   function updateProjectiles(dt) {
     for (let index = projectiles.length - 1; index >= 0; index -= 1) {
       const projectile = projectiles[index];
+      if (!projectile) { projectiles.splice(index, 1); continue; }
       projectile.life -= dt;
       projectile.x += projectile.vx * dt;
       projectile.y += projectile.vy * dt;
@@ -7644,6 +8025,7 @@
       }
       if (hazard.kind === 'lava') {
         enemies.forEach(enemy => {
+          if (!enemy) return;
           if (dist(enemy.x, enemy.y, hazard.x, hazard.y) > hazard.r + enemy.r - 6) return;
           if (hazard.statusTick <= 0) applyFire(enemy, 1, 2.8);
         });
@@ -7683,31 +8065,37 @@
             }
           }
         }
-        enemies.forEach(enemy => {
+        for (let ei = enemies.length - 1; ei >= 0; ei -= 1) {
+          const enemy = enemies[ei];
+          if (!enemy) continue;
           if (dist(enemy.x, enemy.y, hazard.x, hazard.y) < hazard.r + enemy.r) {
             enemy.hp -= 10 * dt;
             if (enemy.hp <= 0) onEnemyDie(enemy);
           }
-        });
+        }
       } else if (hazard.kind === 'fire_circle') {
-        enemies.forEach(enemy => {
-          if (dist(enemy.x, enemy.y, hazard.x, hazard.y) > hazard.r + enemy.r) return;
+        for (let ei = enemies.length - 1; ei >= 0; ei -= 1) {
+          const enemy = enemies[ei];
+          if (!enemy) continue;
+          if (dist(enemy.x, enemy.y, hazard.x, hazard.y) > hazard.r + enemy.r) continue;
           enemy.hp -= (hazard.dps || 16) * dt;
           if (hazard.statusTick <= 0) applyFire(enemy, 1, 2.8);
           enemy.stun = Math.max(enemy.stun, 0.05);
           if (Math.random() < 0.06) particles.push({ x: enemy.x + rand(-6, 6), y: enemy.y + rand(-6, 6), life: 0.3, c: '#ff8c3b' });
           if (enemy.hp <= 0) onEnemyDie(enemy);
-        });
+        }
         if (hazard.statusTick <= 0) hazard.statusTick = 0.45;
       } else if (hazard.kind === 'lightning_column') {
         hazard.tick -= dt;
         if (hazard.tick <= 0) {
           hazard.tick = hazard.interval || 0.45;
-          enemies.forEach(enemy => {
-            if (dist(enemy.x, enemy.y, hazard.x, hazard.y) > hazard.r + enemy.r) return;
+          for (let ei = enemies.length - 1; ei >= 0; ei -= 1) {
+            const enemy = enemies[ei];
+            if (!enemy) continue;
+            if (dist(enemy.x, enemy.y, hazard.x, hazard.y) > hazard.r + enemy.r) continue;
             const angle = Math.atan2(enemy.y - hazard.y, enemy.x - hazard.x);
             hitEnemy(enemy, hazard.damage || 16, angle, 90, '#8dd4ff');
-          });
+          }
           particles.push({
             life: 0.25,
             bolt: {
@@ -7907,20 +8295,28 @@
 
       if (pickup.type === 'secretVendor') {
         const cost = Math.max(1, Number(pickup.cost || 1));
+        const usesCoins = pickup.offerKind === 'xp';
         const crystals = Number(metaProgress.loopCrystals || 0);
+        const coins = Number(player.coins || 0);
+        const canAfford = usesCoins ? coins >= cost : crystals >= cost;
+        const costLabel = usesCoins ? `${cost} C` : `${cost} LC`;
         if (pickup.bought) {
           pickups.splice(index, 1);
           continue;
         }
-        if (crystals < cost) {
+        if (!canAfford) {
           const now = Date.now();
           if (!pickup.lastDeniedAt || now - pickup.lastDeniedAt > 450) {
-            particles.push({ x: pickup.x, y: pickup.y - 20, life: 0.85, text: `${cost} LC`, c: '#ffb1b1' });
+            particles.push({ x: pickup.x, y: pickup.y - 20, life: 0.85, text: costLabel, c: '#ffb1b1' });
             pickup.lastDeniedAt = now;
           }
           continue;
         }
-        metaProgress.loopCrystals = crystals - cost;
+        if (usesCoins) {
+          if (!spendCoins(cost)) continue;
+        } else {
+          metaProgress.loopCrystals = crystals - cost;
+        }
         pickup.bought = true;
         if (pickup.offerKind === 'relic') {
           collectItem(rollItemDrop({ elite: true, stream: 'loot' }));
@@ -7928,6 +8324,10 @@
           player.maxHp += 20;
           player.hp = Math.min(player.maxHp, player.hp + 60);
           particles.push({ x: player.x, y: player.y - 20, life: 0.7, text: '+VIT', c: '#8dffbd' });
+        } else if (pickup.offerKind === 'xp') {
+          const xpValue = Math.max(1, Number(pickup.xpValue || getSecretXpOfferAmount()));
+          grantXp(xpValue);
+          particles.push({ x: player.x, y: player.y - 20, life: 0.7, text: `+${xpValue} XP`, c: '#8dd4ff' });
         } else {
           addCoins(90 + floor * 12);
           particles.push({ x: player.x, y: player.y - 20, life: 0.7, text: 'RICH', c: '#ffd966' });
@@ -7964,7 +8364,8 @@
       }
 
       if (pickup.type === 'challengeRune') {
-        currentRoom.challengeData.runesLeft = Math.max(0, Number(currentRoom.challengeData?.runesLeft || 1) - 1);
+        if (!currentRoom.challengeData) currentRoom.challengeData = {};
+        currentRoom.challengeData.runesLeft = Math.max(0, Number(currentRoom.challengeData.runesLeft || 1) - 1);
         particles.push({ x: pickup.x, y: pickup.y - 18, life: 0.55, text: 'RUNE', c: '#8dd4ff' });
         if (currentRoom.challengeData.runesLeft <= 0) {
           completeChallengeTrial('RUNES CLAIMED');
@@ -8080,6 +8481,10 @@
     if (floor < MAX_FLOOR) {
       if (currentRoom.type === 'shop') {
         uiController.setObjective('Shop or move on.');
+        return;
+      }
+      if (currentRoom.type === 'anvil') {
+        uiController.setObjective('Forge upgrades or move on.');
         return;
       }
       if (currentRoom.type === 'challenge') {
@@ -8348,6 +8753,7 @@
     drawPlayerLaser();
     drawParticles();
     drawShopPrompt();
+    drawAnvilPrompt();
 
     ctx.restore();
     drawMinimap();
@@ -8385,6 +8791,29 @@
     ctx.restore();
   }
 
+  function drawAnvilPrompt() {
+    if (currentRoom?.type !== 'anvil' || isPanelOpen(ui.anvilPanel)) return;
+    const cx = ROOM_W / 2;
+    const cy = ROOM_H - 60;
+    ctx.save();
+    ctx.font = 'bold 15px system-ui';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const text = 'Press [E] to open anvil forge';
+    const pad = 18;
+    const tw = ctx.measureText(text).width;
+    ctx.fillStyle = 'rgba(20,10,0,0.85)';
+    ctx.beginPath();
+    ctx.roundRect(cx - tw / 2 - pad, cy - 14, tw + pad * 2, 28, 8);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,180,40,0.55)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.fillStyle = '#ffb840';
+    ctx.fillText(text, cx, cy);
+    ctx.restore();
+  }
+
   function drawFloor() {
     ctx.fillStyle = '#030610';
     ctx.fillRect(0, 0, ROOM_W, ROOM_H);
@@ -8412,10 +8841,10 @@
 
     ctx.globalCompositeOperation = 'destination-out';
     ctx.fillStyle = '#000';
-    if (hasRoomExit(currentRoom, 'n')) ctx.fillRect((ROOM_W - DOOR) / 2, 0, DOOR, WALL + 2);
-    if (hasRoomExit(currentRoom, 's')) ctx.fillRect((ROOM_W - DOOR) / 2, ROOM_H - WALL - 2, DOOR, WALL + 2);
-    if (hasRoomExit(currentRoom, 'w')) ctx.fillRect(0, (ROOM_H - DOOR) / 2, WALL + 2, DOOR);
-    if (hasRoomExit(currentRoom, 'e')) ctx.fillRect(ROOM_W - WALL - 2, (ROOM_H - DOOR) / 2, WALL + 2, DOOR);
+    if (hasVisibleRoomExit(currentRoom, 'n')) ctx.fillRect((ROOM_W - DOOR) / 2, 0, DOOR, WALL + 2);
+    if (hasVisibleRoomExit(currentRoom, 's')) ctx.fillRect((ROOM_W - DOOR) / 2, ROOM_H - WALL - 2, DOOR, WALL + 2);
+    if (hasVisibleRoomExit(currentRoom, 'w')) ctx.fillRect(0, (ROOM_H - DOOR) / 2, WALL + 2, DOOR);
+    if (hasVisibleRoomExit(currentRoom, 'e')) ctx.fillRect(ROOM_W - WALL - 2, (ROOM_H - DOOR) / 2, WALL + 2, DOOR);
     ctx.globalCompositeOperation = 'source-over';
 
     ctx.strokeStyle = enemies.length > 0 ? 'rgba(255,102,170,0.4)' : 'rgba(0,255,255,0.4)';
@@ -8428,7 +8857,7 @@
       ['w', 0, (ROOM_H - DOOR) / 2, 0, DOOR],
       ['e', ROOM_W, (ROOM_H - DOOR) / 2, 0, DOOR],
     ].forEach(([dir, x, y, width, height]) => {
-      if (!hasRoomExit(currentRoom, dir)) return;
+      if (!hasVisibleRoomExit(currentRoom, dir)) return;
       ctx.beginPath();
       if (width) {
         ctx.moveTo(x, y);
@@ -8634,16 +9063,8 @@
       } else if (prop.kind === 'secret_wall') {
         ctx.fillStyle = '#113648';
         ctx.fillRect(-24, -24, 48, 48);
-        ctx.strokeStyle = '#4f7f92';
+        ctx.strokeStyle = '#58d9ff';
         ctx.strokeRect(-24, -24, 48, 48);
-        ctx.globalAlpha = 0.22;
-        ctx.strokeStyle = '#0a1f28';
-        ctx.beginPath();
-        ctx.moveTo(-14, -8);
-        ctx.lineTo(12, -4);
-        ctx.lineTo(6, 10);
-        ctx.stroke();
-        ctx.globalAlpha = 1;
       }
       ctx.restore();
     });
@@ -8772,7 +9193,11 @@
         ctx.textAlign = 'center';
         ctx.fillText(`F${pickup.targetFloor}`, 0, 32);
       } else if (pickup.type === 'secretVendor') {
-        const canAfford = Number(metaProgress.loopCrystals || 0) >= Number(pickup.cost || 0);
+        const cost = Number(pickup.cost || 0);
+        const usesCoins = pickup.offerKind === 'xp';
+        const canAfford = usesCoins
+          ? Number(player?.coins || 0) >= cost
+          : Number(metaProgress.loopCrystals || 0) >= cost;
         const color = canAfford ? '#aee7ff' : '#ffb1b1';
         ctx.fillStyle = 'rgba(7,17,22,0.92)';
         ctx.strokeStyle = color;
@@ -8786,7 +9211,7 @@
         ctx.textAlign = 'center';
         ctx.fillText(String(pickup.label || 'Offer'), 0, -2);
         ctx.font = 'bold 10px system-ui';
-        ctx.fillText(`${pickup.cost} LC`, 0, 12);
+        ctx.fillText(`${cost} ${usesCoins ? 'C' : 'LC'}`, 0, 12);
       } else if (pickup.type === 'crown') {
         ctx.fillStyle = '#fff';
         ctx.shadowColor = '#fff';
@@ -8860,6 +9285,7 @@
 
   function drawProjectiles() {
     projectiles.forEach(projectile => {
+      if (!projectile) return;
       const color = projectile.color || '#ff66aa';
       ctx.fillStyle = color;
       ctx.shadowColor = color;
@@ -9044,6 +9470,7 @@
 
   function drawEnemies() {
     enemies.forEach(enemy => {
+      if (!enemy) return;
       const activeStatuses = STATUS_KEYS.filter(key => getStatusStacks(enemy, key) > 0);
       activeStatuses.forEach((key, index) => {
         const style = STATUS_STYLES[key];
@@ -9150,13 +9577,48 @@
     ctx.moveTo(Math.cos(aimAngle) * 6, Math.sin(aimAngle) * 6);
     ctx.lineTo(Math.cos(aimAngle) * 20, Math.sin(aimAngle) * 20);
     ctx.stroke();
+    const equippedWeapon = getEquippedWeapon();
+    const extendingStaffEquipped = equippedWeapon === 'extending_staff';
+    if (extendingStaffEquipped) {
+      const previewRange = 130;
+      const previewArc = 1.45;
+      const previewX = Math.cos(aimAngle) * previewRange;
+      const previewY = Math.sin(aimAngle) * previewRange;
+      ctx.globalAlpha = 0.32;
+      ctx.strokeStyle = '#d8f1ff';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(aimAngle) * 18, Math.sin(aimAngle) * 18);
+      ctx.lineTo(previewX, previewY);
+      ctx.stroke();
+      ctx.globalAlpha = 0.18;
+      ctx.beginPath();
+      ctx.arc(0, 0, previewRange, aimAngle - previewArc, aimAngle + previewArc);
+      ctx.stroke();
+      ctx.globalAlpha = 0.55;
+      ctx.fillStyle = '#f3fbff';
+      ctx.beginPath();
+      ctx.arc(previewX, previewY, 4, 0, Math.PI * 2);
+      ctx.fill();
+    }
     if (player.swing > 0) {
-      ctx.strokeStyle = godTimer > 0 ? '#f6e8c8' : '#d86d87';
-      ctx.lineWidth = 4;
+      const swingRange = extendingStaffEquipped ? 130 : 55;
+      const swingArc = extendingStaffEquipped ? 1.45 : ATTACKS.melee.arc;
+      ctx.strokeStyle = extendingStaffEquipped ? '#eaf4ff' : godTimer > 0 ? '#f6e8c8' : '#d86d87';
+      ctx.lineWidth = extendingStaffEquipped ? 6 : 4;
       ctx.globalAlpha = 0.9;
       ctx.beginPath();
-      ctx.arc(0, 0, 55, player.swingA - ATTACKS.melee.arc, player.swingA + ATTACKS.melee.arc);
+      ctx.arc(0, 0, swingRange, player.swingA - swingArc, player.swingA + swingArc);
       ctx.stroke();
+      if (extendingStaffEquipped) {
+        ctx.globalAlpha = 0.18;
+        ctx.fillStyle = '#eaf4ff';
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.arc(0, 0, swingRange, player.swingA - swingArc, player.swingA + swingArc);
+        ctx.closePath();
+        ctx.fill();
+      }
     }
     ctx.restore();
   }
@@ -9268,18 +9730,26 @@
     const gridSize = 9;
     const mapWidth = gridSize * size + (gridSize - 1) * gap;
     const originX = canvas.width - mapWidth - 2;
-    const originY = 2;
+    const originY = -5;
     ctx.save();
+    const pad = 0;
+    ctx.globalAlpha = 0.5;
+    ctx.fillStyle = '#2a2e38';
+    ctx.beginPath();
+    ctx.roundRect(originX - pad, originY - pad, mapWidth + pad * 2, mapWidth + pad * 2, 6);
+    ctx.fill();
+    ctx.globalAlpha = 0.45;
+    ctx.strokeStyle = '#5a6070';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.globalAlpha = 1;
     rooms.forEach(room => {
-      if (room.secret && !room.explored && room !== currentRoom) return;
+      if (room.secret) return;
       const x = originX + room.gx * (size + gap);
       const y = originY + room.gy * (size + gap);
       if (room.type === 'ladder' && !room.explored) {
         ctx.globalAlpha = 0.55;
         ctx.fillStyle = '#fff04a';
-      } else if (room.secret && room.explored) {
-        ctx.globalAlpha = room === currentRoom ? 1 : 0.95;
-        ctx.fillStyle = room === currentRoom ? '#8dd4ff' : '#3f6b7a';
       } else if (!room.explored) {
         ctx.globalAlpha = 0.25;
         ctx.fillStyle = '#001018';
@@ -9304,6 +9774,9 @@
       } else if (room.type === 'shop') {
         ctx.globalAlpha = 0.95;
         ctx.fillStyle = '#7ec8ff';
+      } else if (room.type === 'anvil') {
+        ctx.globalAlpha = 0.95;
+        ctx.fillStyle = '#ffb840';
       } else if (room.type === 'start') {
         ctx.globalAlpha = 0.95;
         ctx.fillStyle = '#00ff88';
@@ -9333,6 +9806,13 @@
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText('$', x + size / 2, y + size / 2);
+      } else if (room.type === 'anvil') {
+        ctx.globalAlpha = room.explored ? 1 : 0.72;
+        ctx.fillStyle = '#1a0800';
+        ctx.font = 'bold 9px system-ui';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('⚒', x + size / 2, y + size / 2);
       }
       if (room.visited) {
         ctx.strokeStyle = 'rgba(0,255,255,0.5)';

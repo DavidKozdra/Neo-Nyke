@@ -113,6 +113,37 @@
     </div>
   </div>
 
+  <div id="anvilPanel" class="game-panel game-panel--anvil hidden" aria-hidden="true">
+    <div class="game-panel-head">
+      <div class="panel-title-wrap">
+        <span class="panel-kicker">Forge</span>
+        <h3>ANVIL</h3>
+        <p class="panel-subtitle">Spend XP to upgrade your weapons and moves. Changes apply on confirm.</p>
+      </div>
+      <div class="anvil-xp-display">XP <b id="anvilXp">0</b></div>
+      <button id="anvilClose" class="panel-close" aria-label="Close anvil">X</button>
+    </div>
+    <div class="anvil-tabs shop-tabs">
+      <button class="anvil-tab shop-tab active" data-anvil-tab="weapons">Weapons</button>
+      <button class="anvil-tab shop-tab" data-anvil-tab="moves">Moves</button>
+    </div>
+    <div id="anvilWeaponsTab" class="anvil-tab-panel">
+      <div id="anvilWeaponList" class="anvil-item-list"></div>
+      <div id="anvilWeaponStats" class="anvil-stat-panel hidden"></div>
+    </div>
+    <div id="anvilMovesTab" class="anvil-tab-panel hidden">
+      <div id="anvilMoveList" class="anvil-item-list"></div>
+      <div id="anvilMoveStats" class="anvil-stat-panel hidden"></div>
+    </div>
+    <div class="anvil-footer">
+      <div class="anvil-cost-summary" id="anvilCostSummary"></div>
+      <div class="anvil-footer-actions">
+        <button id="anvilCancel" class="anvil-btn anvil-btn--cancel">CANCEL</button>
+        <button id="anvilConfirm" class="anvil-btn anvil-btn--confirm" disabled>CONFIRM UPGRADES</button>
+      </div>
+    </div>
+  </div>
+
   <div id="shopPanel" class="game-panel game-panel--shop hidden" aria-hidden="true">
     <div class="game-panel-head">
       <div class="panel-title-wrap">
@@ -148,8 +179,7 @@
       <button class="inv-tab shop-tab active" data-inv-tab="stats" role="tab">Stats</button>
       <button class="inv-tab shop-tab" data-inv-tab="items" role="tab">Items</button>
       <button class="inv-tab shop-tab" data-inv-tab="weapons" role="tab">Weapons</button>
-      <button class="inv-tab shop-tab" data-inv-tab="moves" role="tab">Moves</button>
-      <button class="inv-tab shop-tab" data-inv-tab="equipped" role="tab">Equipped</button>
+      <button class="inv-tab shop-tab" data-inv-tab="equipped" role="tab">Moves</button>
     </div>
     <div class="inv-tab-panel" id="invTabStats">
       <div id="invStats" class="inv-stats"></div>
@@ -160,9 +190,6 @@
     <div class="inv-tab-panel hidden" id="invTabWeapons">
       <div id="invWeaponsList" class="inv-moves"></div>
     </div>
-    <div class="inv-tab-panel hidden" id="invTabMoves">
-      <div id="invMovesList" class="inv-moves"></div>
-    </div>
     <div class="inv-tab-panel hidden" id="invTabEquipped">
       <div class="inv-slots">
         <div id="invWeaponSlot" class="inv-slot">Weapon</div>
@@ -170,6 +197,10 @@
         <div class="inv-slot" data-slot="laser">Laser</div>
         <div class="inv-slot" data-slot="smash">Smash</div>
         <div class="inv-slot" data-slot="dash">Mobility</div>
+      </div>
+      <div class="inv-moves-section">
+        <div class="inv-moves-section__label">Owned Moves</div>
+        <div id="invMovesList" class="inv-moves"></div>
       </div>
     </div>
   </div>

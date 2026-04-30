@@ -825,6 +825,19 @@ canvas {
   margin-top: auto;
 }
 
+.shop-card__replaces {
+  margin: 0;
+  font-size: 11px;
+  color: #f0b97d;
+  font-weight: 700;
+  letter-spacing: .04em;
+}
+
+.shop-card__replaces b {
+  color: #ffe0b0;
+  font-weight: 800;
+}
+
 .shop-card.shop-card--unaffordable {
   border-color: rgba(160, 88, 96, .42);
   background:
@@ -928,6 +941,22 @@ canvas {
   gap: 10px;
 }
 
+.inv-moves-section {
+  margin-top: 24px;
+  display: grid;
+  gap: 10px;
+}
+
+.inv-moves-section__label {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: #6a8aa8;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(129, 155, 184, .12);
+}
+
 .inv-slots {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
@@ -983,6 +1012,12 @@ canvas {
 .inv-move-chip.drag-over {
   border-color: rgba(143, 210, 255, .52);
   box-shadow: 0 0 0 2px rgba(143, 210, 255, .18) inset, 0 0 30px rgba(91, 188, 255, .12);
+}
+
+.inv-move-chip.is-equipped-move {
+  opacity: 0.38;
+  cursor: default;
+  pointer-events: none;
 }
 
 .inv-move-chip.is-match {
@@ -1069,6 +1104,27 @@ canvas {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+}
+
+.inv-slot__top-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.inv-slot__key {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 7px;
+  border-radius: 6px;
+  background: rgba(255,255,255,.07);
+  border: 1px solid rgba(255,255,255,.14);
+  color: #c8dff0;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  font-family: monospace;
 }
 
 .inv-slot__kicker {
@@ -3065,4 +3121,239 @@ button.alt.danger {
     flex-direction: column;
     gap: 10px;
   }
+}
+
+/* ============================================================
+   ANVIL PANEL
+   ============================================================ */
+
+.game-panel--anvil {
+  background:
+    radial-gradient(circle at top left, rgba(255, 160, 40, 0.12), transparent 28%),
+    radial-gradient(circle at bottom right, rgba(255, 90, 40, 0.10), transparent 26%),
+    linear-gradient(180deg, rgba(16,14,10,.99), rgba(8,6,4,.995));
+  border-color: rgba(255, 170, 60, 0.28);
+}
+
+.anvil-xp-display {
+  margin-left: auto;
+  align-self: center;
+  padding: 10px 14px;
+  background: rgba(255,200,60,.08);
+  border: 1px solid rgba(255,200,60,.22);
+  border-radius: 12px;
+  font-size: 14px;
+  color: #ffe08a;
+  white-space: nowrap;
+}
+
+.anvil-xp-display b {
+  font-size: 18px;
+  color: #ffe8a0;
+  margin-left: 4px;
+}
+
+.anvil-tabs {
+  border-bottom-color: rgba(255,160,40,.22);
+}
+
+.anvil-tab-panel {
+  display: flex;
+  gap: 18px;
+  padding: 4px 0 12px;
+  min-height: 280px;
+}
+
+.anvil-item-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 240px;
+  flex-shrink: 0;
+  overflow-y: auto;
+  max-height: 400px;
+  padding-right: 4px;
+}
+
+.anvil-item-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(255,255,255,.10);
+  border-radius: 12px;
+  color: #d8cdb4;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  transition: background .14s, border-color .14s;
+}
+
+.anvil-item-btn:hover {
+  background: rgba(255,160,40,.10);
+  border-color: rgba(255,160,40,.36);
+  color: #ffe8a0;
+}
+
+.anvil-item-btn.is-active {
+  background: rgba(255,160,40,.18);
+  border-color: rgba(255,160,40,.55);
+  color: #ffe8a0;
+}
+
+.anvil-item-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.anvil-stat-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+  max-height: 400px;
+}
+
+.anvil-stat-title {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: #f2b272;
+  margin-bottom: 4px;
+}
+
+.anvil-stat-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: rgba(255,255,255,.03);
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 10px;
+}
+
+.anvil-stat-label {
+  flex: 1;
+  font-size: 13px;
+  color: #c8d4e0;
+}
+
+.anvil-stat-value {
+  font-size: 13px;
+  font-weight: 700;
+  color: #f4f7fb;
+  min-width: 60px;
+  text-align: right;
+}
+
+.anvil-stat-staged {
+  font-size: 12px;
+  color: #7eff9e;
+  min-width: 50px;
+  text-align: right;
+}
+
+.anvil-stat-cost {
+  font-size: 11px;
+  color: #ffe08a;
+  min-width: 50px;
+  text-align: right;
+}
+
+.anvil-stat-controls {
+  display: flex;
+  gap: 4px;
+}
+
+.anvil-stat-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,.14);
+  background: rgba(255,255,255,.06);
+  color: #f4f7fb;
+  font-size: 16px;
+  font-weight: 800;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background .12s, border-color .12s;
+  line-height: 1;
+  padding: 0;
+}
+
+.anvil-stat-btn:hover {
+  background: rgba(255,160,40,.22);
+  border-color: rgba(255,160,40,.55);
+  color: #ffe8a0;
+}
+
+.anvil-stat-btn:disabled {
+  opacity: 0.32;
+  cursor: not-allowed;
+}
+
+.anvil-footer {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255,160,40,.16);
+  margin-top: 8px;
+}
+
+.anvil-cost-summary {
+  flex: 1;
+  font-size: 13px;
+  color: #ffe08a;
+}
+
+.anvil-footer-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.anvil-btn {
+  padding: 10px 20px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: .10em;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background .14s, border-color .14s, opacity .14s;
+}
+
+.anvil-btn--cancel {
+  background: rgba(255,255,255,.05);
+  border-color: rgba(255,255,255,.12);
+  color: #91a8be;
+}
+
+.anvil-btn--cancel:hover {
+  background: rgba(255,255,255,.10);
+  color: #d8e8f4;
+}
+
+.anvil-btn--confirm {
+  background: linear-gradient(180deg, rgba(255,160,40,.28), rgba(255,100,20,.18));
+  border-color: rgba(255,160,40,.48);
+  color: #ffe8a0;
+}
+
+.anvil-btn--confirm:not(:disabled):hover {
+  background: linear-gradient(180deg, rgba(255,160,40,.42), rgba(255,100,20,.28));
+  border-color: rgba(255,160,40,.72);
+}
+
+.anvil-btn--confirm:disabled {
+  opacity: 0.36;
+  cursor: not-allowed;
 }
