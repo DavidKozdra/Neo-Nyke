@@ -9826,14 +9826,16 @@
     const gap = 2;
     const gridSize = 9;
     const mapWidth = gridSize * size + (gridSize - 1) * gap;
+    const visibleRooms = rooms.filter(r => !r.secret);
+    const maxGy = visibleRooms.reduce((m, r) => Math.max(m, r.gy), 0);
+    const mapHeight = (maxGy + 1) * size + maxGy * gap;
     const originX = canvas.width - mapWidth - 2;
     const originY = -5;
     ctx.save();
-    const pad = 0;
     ctx.globalAlpha = 0.5;
     ctx.fillStyle = '#2a2e38';
     ctx.beginPath();
-    ctx.roundRect(originX - pad, originY - pad, mapWidth + pad * 2, mapWidth + pad * 2, 6);
+    ctx.roundRect(originX, originY, mapWidth, mapHeight, 6);
     ctx.fill();
     ctx.globalAlpha = 0.45;
     ctx.strokeStyle = '#5a6070';
