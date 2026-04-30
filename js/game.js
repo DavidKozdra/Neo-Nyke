@@ -24,6 +24,9 @@
   const BEAM_RICOCHET_NUDGE = 0.65;
   const BEAM_RICOCHET_EPSILON = 0.0001;
   const TURTLE_WAVE_HP_PER_SECOND = 2;
+  const CORPSE_FADE_START = 4.5;
+  const CORPSE_LIFETIME = 11;
+  const CORPSE_FALL_TIME = 0.32;
   const ENEMY_SCALING = {
     floor: 0.14,
     loop: 0.32,
@@ -878,6 +881,7 @@
 
   let player = null;
   let enemies = [];
+  let deadBodies = [];
   let particles = [];
   let projectiles = [];
   let chests = [];
@@ -1190,6 +1194,7 @@
       state: gameState,
       floor,
       enemies: enemies.length,
+      bodies: deadBodies.length,
       projectiles: projectiles.length,
       particles: particles.length,
       pickups: pickups.length,
@@ -1228,10 +1233,10 @@
       `slow>${formatPerfMs(PERF_BUDGET_60FPS)} ${slowPct.toFixed(1)}% | worst ${formatPerfMs(perfState.worstFrameMs)}`,
       `totals  update ${formatPerfMs(avg.update)} | draw ${formatPerfMs(avg.draw)} | ui/dom ${formatPerfMs(avg.ui)}`,
       `update  player ${formatPerfMs(avg['update.player'])} | enemies ${formatPerfMs(avg['update.enemies'])} | projectiles ${formatPerfMs(avg['update.projectiles'])} | world ${formatPerfMs(avg['update.world'])}`,
-      `update  pickups ${formatPerfMs(avg['update.pickups'])} | particles ${formatPerfMs(avg['update.particles'])} | transitions ${formatPerfMs(avg['update.transitions'])} | panels ${formatPerfMs(avg['update.panels'])}`,
+      `update  pickups ${formatPerfMs(avg['update.pickups'])} | corpses ${formatPerfMs(avg['update.corpses'])} | particles ${formatPerfMs(avg['update.particles'])} | transitions ${formatPerfMs(avg['update.transitions'])}`,
       `draw    room ${formatPerfMs(avg['draw.room'])} | items ${formatPerfMs(avg['draw.items'])} | entities ${formatPerfMs(avg['draw.entities'])} | particles ${formatPerfMs(avg['draw.particles'])}`,
       `draw    minimap ${formatPerfMs(avg['draw.minimap'])} | overlays ${formatPerfMs(avg['draw.overlays'])} | prompts ${formatPerfMs(avg['draw.prompts'])}`,
-      `counts  state ${counts.state} | floor ${counts.floor} | enemies ${counts.enemies} | shots ${counts.projectiles} | fx ${counts.particles} | pickups ${counts.pickups} | hazards ${counts.hazards}`,
+      `counts  state ${counts.state} | floor ${counts.floor} | enemies ${counts.enemies} | bodies ${counts.bodies} | shots ${counts.projectiles} | fx ${counts.particles} | pickups ${counts.pickups}`,
       `top     ${top}`,
     ].join('\n');
   }
@@ -3246,6 +3251,7 @@
 
   function resetScene() {
     enemies = [];
+    deadBodies = [];
     particles = [];
     projectiles = [];
     chests = [];
@@ -3313,6 +3319,7 @@
     currentRoom = rooms.find(room => room.gx === snapshot.currentRoom?.gx && room.gy === snapshot.currentRoom?.gy) || rooms[0] || null;
     player = migratePlayerData(snapshot.player);
     enemies = Array.isArray(snapshot.enemies) ? snapshot.enemies.map(migrateEnemyState) : [];
+    deadBodies = Array.isArray(snapshot.deadBodies) ? snapshot.deadBodies : [];
     particles = [];
     projectiles = snapshot.projectiles || [];
     chests = snapshot.chests || [];
@@ -3324,6 +3331,7 @@
     decorations = snapshot.decorations || currentRoom?.decorations || [];
     if (currentRoom) {
       currentRoom.enemies = Array.isArray(currentRoom.enemies) ? currentRoom.enemies.map(migrateEnemyState) : enemies;
+      currentRoom.deadBodies = Array.isArray(currentRoom.deadBodies) ? currentRoom.deadBodies : deadBodies;
       currentRoom.projectiles = Array.isArray(currentRoom.projectiles) ? currentRoom.projectiles : projectiles;
       currentRoom.chests = Array.isArray(currentRoom.chests) ? currentRoom.chests : chests;
       currentRoom.pickups = sanitizePickupList(currentRoom.pickups);
@@ -3335,6 +3343,7 @@
       currentRoom.decorations = Array.isArray(currentRoom.decorations) ? currentRoom.decorations : decorations;
       refreshRoomShopCosts(currentRoom, selectedDifficulty, floor);
       enemies = currentRoom.enemies;
+      deadBodies = currentRoom.deadBodies;
       projectiles = currentRoom.projectiles;
       chests = currentRoom.chests;
       pickups = currentRoom.pickups;
@@ -3465,6 +3474,7 @@
 
   function decorateRoomData(room) {
     room.enemies = [];
+    room.deadBodies = [];
     room.projectiles = [];
     room.chests = [];
     room.pickups = [];
@@ -3854,6 +3864,7 @@
   function syncCurrentRoomState() {
     if (!currentRoom) return;
     currentRoom.enemies = enemies;
+    currentRoom.deadBodies = deadBodies;
     currentRoom.projectiles = projectiles;
     currentRoom.chests = chests;
     currentRoom.pickups = pickups;
@@ -3895,6 +3906,8 @@
     room.explored = true;
     room.visited = true;
     enemies = room.enemies || [];
+    deadBodies = room.deadBodies || [];
+    room.deadBodies = deadBodies;
     projectiles = room.projectiles || [];
     chests = room.chests || [];
     pickups = sanitizePickupList(room.pickups);
@@ -6629,6 +6642,34 @@
     return false;
   }
 
+  function spawnEnemyCorpse(enemy) {
+    if (!enemy || enemy.type === 'boss_spawner') return;
+    const speed = Math.min(150, Math.hypot(Number(enemy.vx || 0), Number(enemy.vy || 0)));
+    const direction = speed > 8
+      ? Math.atan2(Number(enemy.vy || 0), Number(enemy.vx || 0))
+      : rand(Math.PI * 2, 0, 'fx');
+    const boss = isBossType(enemy.type);
+    deadBodies.push({
+      x: enemy.x,
+      y: enemy.y,
+      vx: Math.cos(direction) * (22 + speed * 0.16),
+      vy: Math.sin(direction) * (22 + speed * 0.16),
+      r: enemy.r,
+      spriteKey: getEnemySpriteKey(enemy),
+      type: enemy.type,
+      elite: !!enemy.elite,
+      age: 0,
+      fallTime: boss ? CORPSE_FALL_TIME * 1.35 : CORPSE_FALL_TIME,
+      fadeStart: boss ? CORPSE_FADE_START * 1.8 : CORPSE_FADE_START,
+      life: boss ? CORPSE_LIFETIME * 1.9 : CORPSE_LIFETIME,
+      angle: direction + Math.PI / 2,
+      fallAngle: rand(0.95, -0.95, 'fx') + (enemy.elite ? 0.25 : 0),
+      face: getFacingDirection(enemy, enemy.beamAngle || enemy.dashAngle || direction),
+      size: Math.max(30, enemy.r * 2.4),
+      bloodColor: enemy.type === 'god' ? '#f2ecff' : enemy.elite ? '#c04a14' : '#8d0018',
+    });
+  }
+
   function onEnemyDie(enemy) {
     if (enemy.type === 'god' && !enemy.rebirthUsed) {
       enemy.rebirthUsed = true;
@@ -6643,6 +6684,7 @@
 
     const index = enemies.indexOf(enemy);
     if (index >= 0) enemies.splice(index, 1);
+    spawnEnemyCorpse(enemy);
     if (player) player.kills = Math.max(0, Number(player.kills || 0)) + 1;
     if (player?.keenEyeReady) {
       triggerKeenEyeBuff();
@@ -6653,14 +6695,16 @@
       consumeCharge('chrono_spring');
     }
 
-    for (let burst = 0; burst < 12; burst += 1) {
+    const deathDust = enemy.elite ? 6 : isBossType(enemy.type) ? 9 : 4;
+    for (let burst = 0; burst < deathDust; burst += 1) {
+      const angle = rand(Math.PI * 2, 0, 'fx');
       particles.push({
-        x: enemy.x,
-        y: enemy.y,
-        life: 0.45 + nextRandom('fx') * 0.3,
-        vx: rand(-130, 130, 'fx'),
-        vy: rand(-130, 130, 'fx'),
-        c: enemy.elite ? '#ffaa00' : enemy.type === 'god' ? '#fff' : '#0ff',
+        x: enemy.x + Math.cos(angle) * rand(enemy.r, 2, 'fx'),
+        y: enemy.y + Math.sin(angle) * rand(enemy.r, 2, 'fx'),
+        life: rand(0.34, 0.16, 'fx'),
+        vx: Math.cos(angle) * rand(42, 12, 'fx'),
+        vy: Math.sin(angle) * rand(42, 12, 'fx'),
+        c: enemy.elite ? '#b97333' : enemy.type === 'god' ? '#f2ecff' : '#7b1a22',
       });
     }
 
@@ -7051,6 +7095,9 @@
     sectionPerfStart = perfStart();
     updatePickups();
     perfEnd('update.pickups', sectionPerfStart);
+    sectionPerfStart = perfStart();
+    updateDeadBodies(dt);
+    perfEnd('update.corpses', sectionPerfStart);
     sectionPerfStart = perfStart();
     updateParticles(dt);
     perfEnd('update.particles', sectionPerfStart);
@@ -8803,6 +8850,20 @@
     }
   }
 
+  function updateDeadBodies(dt) {
+    for (let index = deadBodies.length - 1; index >= 0; index -= 1) {
+      const body = deadBodies[index];
+      body.age = Number(body.age || 0) + dt;
+      if (body.age <= Number(body.fallTime || CORPSE_FALL_TIME)) {
+        body.x += Number(body.vx || 0) * dt;
+        body.y += Number(body.vy || 0) * dt;
+        body.vx *= Math.max(0, 1 - 6.2 * dt);
+        body.vy *= Math.max(0, 1 - 6.2 * dt);
+      }
+      if (body.age >= Number(body.life || CORPSE_LIFETIME)) deadBodies.splice(index, 1);
+    }
+  }
+
   function updateParticles(dt) {
     for (let index = particles.length - 1; index >= 0; index -= 1) {
       const particle = particles[index];
@@ -9123,6 +9184,7 @@
       currentRoom: { gx: currentRoom.gx, gy: currentRoom.gy },
       player,
       enemies,
+      deadBodies,
       projectiles,
       chests,
       pickups,
@@ -9163,6 +9225,7 @@
     drawFloor();
     drawRoomDecor();
     drawWorldProps();
+    drawDeadBodies();
     perfEnd('draw.room', sectionPerfStart);
     sectionPerfStart = perfStart();
     drawChests();
@@ -9727,6 +9790,68 @@
       ctx.fill();
     });
     ctx.shadowBlur = 0;
+  }
+
+  function drawDeadBodies() {
+    deadBodies.forEach(body => {
+      if (!body) return;
+      const life = Math.max(0.01, Number(body.life || CORPSE_LIFETIME));
+      const fadeStart = Math.min(life - 0.01, Number(body.fadeStart || CORPSE_FADE_START));
+      const age = Math.max(0, Number(body.age || 0));
+      const fallTime = Math.max(0.01, Number(body.fallTime || CORPSE_FALL_TIME));
+      const fallT = clamp(age / fallTime, 0, 1);
+      const fallEase = 1 - (1 - fallT) ** 3;
+      const fadeT = age <= fadeStart ? 0 : clamp((age - fadeStart) / (life - fadeStart), 0, 1);
+      const alpha = Math.max(0, 1 - fadeT);
+      if (alpha <= 0) return;
+
+      const size = Number(body.size || Math.max(30, Number(body.r || 12) * 2.4));
+      const frame = SPRITE_ATLAS.frames[body.spriteKey] || SPRITE_ATLAS.frames.hunter;
+      if (!frame) return;
+      const squash = 1 - 0.46 * fallEase;
+      const rotation = Number(body.angle || 0) + Number(body.fallAngle || 0) * fallEase;
+      const poolScale = clamp(age / 1.2, 0, 1) * alpha;
+
+      ctx.save();
+      ctx.translate(body.x, body.y);
+      ctx.globalAlpha = alpha;
+
+      ctx.fillStyle = body.type === 'god'
+        ? `rgba(224,220,255,${0.2 * poolScale})`
+        : `rgba(94,0,16,${0.32 * poolScale})`;
+      ctx.beginPath();
+      ctx.ellipse(0, size * 0.26, size * (0.35 + poolScale * 0.14), size * (0.08 + poolScale * 0.05), rotation * 0.25, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = `rgba(0,0,0,${0.28 * alpha})`;
+      ctx.beginPath();
+      ctx.ellipse(0, size * 0.32, size * 0.34, size * 0.09, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.rotate(rotation);
+      if (Number(body.face || 1) < 0) ctx.scale(-1, 1);
+      ctx.scale(1 + 0.05 * fallEase, squash);
+      ctx.imageSmoothingEnabled = false;
+      ctx.shadowColor = body.elite ? 'rgba(255,170,64,0.35)' : 'rgba(0,0,0,0.2)';
+      ctx.shadowBlur = body.elite ? 8 : 3;
+      ctx.drawImage(
+        SPRITE_ATLAS.canvas,
+        frame.x,
+        frame.y,
+        frame.w,
+        frame.h,
+        -size / 2,
+        -size / 2,
+        size,
+        size,
+      );
+      ctx.globalCompositeOperation = 'source-atop';
+      ctx.fillStyle = body.type === 'god'
+        ? `rgba(255,255,255,${0.15 + fadeT * 0.16})`
+        : `rgba(48,12,18,${0.22 + fadeT * 0.34})`;
+      ctx.fillRect(-size / 2, -size / 2, size, size);
+      ctx.restore();
+    });
   }
 
   function buildSpriteAtlas() {
