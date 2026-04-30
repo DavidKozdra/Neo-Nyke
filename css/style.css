@@ -1239,15 +1239,18 @@ canvas {
   transform: translateY(-1px);
 }
 
+#invWeaponSlot[data-rarity="knight"],
 #invWeaponSlot[data-rarity="white"] {
   border-color: rgba(228, 240, 255, .44);
 }
 
+#invWeaponSlot[data-rarity="wizard"],
 #invWeaponSlot[data-rarity="purple"] {
   border-color: rgba(198, 120, 255, .5);
   box-shadow: 0 0 0 1px rgba(198, 120, 255, .16) inset;
 }
 
+#invWeaponSlot[data-rarity="god"],
 #invWeaponSlot[data-rarity="red"] {
   border-color: rgba(255, 94, 94, .6);
   box-shadow: 0 0 0 1px rgba(255, 94, 94, .2) inset;

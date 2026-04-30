@@ -305,7 +305,6 @@
       key: 'thorn_knight',
       name: 'Thorn Knight',
       rarity: 'knight',
-      startItem: 'neo_knife',
       damageMultiplier: 1,
       skills: { melee: 'Slash', laser: 'Blood Beam', smash: 'Crimson Smash', dash: 'Dash' },
     },
@@ -313,7 +312,6 @@
       key: 'metao',
       name: 'Metao',
       rarity: 'wizard',
-      startItem: 'orb_of_blood',
       damageMultiplier: 0.5,
       skills: { melee: 'Fire Balls', laser: 'Power Disks', smash: 'Chaos Burst', dash: 'Warp' },
     },
@@ -321,7 +319,6 @@
       key: 'granialla',
       name: 'Granialla',
       rarity: 'god',
-      startItem: 'neo_knife',
       damageMultiplier: 1,
       skills: { melee: 'Smite', laser: 'Blade Justice', smash: 'Healing Zone', dash: 'Zip Lightning' },
       unlock: 'godslain',
@@ -469,84 +466,84 @@
     extending_staff: {
       key: 'extending_staff',
       name: 'Extending Staff',
-      rarity: 'white',
+      rarity: 'knight',
       description: 'Long sweeping strike with massive knockback.',
       color: '#f2f6ff',
     },
     hunters_bow: {
       key: 'hunters_bow',
       name: "Hunter's Bow",
-      rarity: 'white',
+      rarity: 'knight',
       description: 'Fast, accurate ranged shot with +10% crit chance.',
       color: '#e8f7ff',
     },
     thorns_bleed_blade: {
       key: 'thorns_bleed_blade',
       name: "Thorn's Bleed Blade",
-      rarity: 'white',
+      rarity: 'knight',
       description: 'Close slash with heavy bleed application.',
       color: '#ffe9ef',
     },
     lazer_glasses: {
       key: 'lazer_glasses',
       name: 'Lazer Glasses',
-      rarity: 'purple',
+      rarity: 'wizard',
       description: 'Twin beams track your mouse and can ignite enemies.',
       color: '#cd9bff',
     },
     metao_fire_staff: {
       key: 'metao_fire_staff',
       name: "Metao's Fire Staff",
-      rarity: 'purple',
+      rarity: 'wizard',
       description: 'Fan cast of burning fire bolts.',
       color: '#ffb874',
     },
     magenta_degale: {
       key: 'magenta_degale',
       name: "Magenta's Degale",
-      rarity: 'purple',
+      rarity: 'wizard',
       description: 'Super heavy shot with massive knockback and recoil.',
       color: '#ff8ccc',
     },
     magenta_p90: {
       key: 'magenta_p90',
       name: "Magenta's P90",
-      rarity: 'purple',
+      rarity: 'wizard',
       description: 'Rapid burst fire with controlled recoil.',
       color: '#ff9dd7',
     },
     granillia_lightning_spear: {
       key: 'granillia_lightning_spear',
       name: "Granillia's Spear of Lightning",
-      rarity: 'red',
+      rarity: 'god',
       description: 'Piercing lightning spear that chains on impact.',
       color: '#9bd9ff',
     },
     excalibur: {
       key: 'excalibur',
       name: 'Excalibur',
-      rarity: 'red',
+      rarity: 'god',
       description: 'A divine 1000-damage strike.',
       color: '#ffd980',
     },
     golden_fleece: {
       key: 'golden_fleece',
       name: 'Golden Fleece',
-      rarity: 'red',
+      rarity: 'god',
       description: 'Heals 20% max HP every 2 seconds while equipped.',
       color: '#ffe59c',
     },
     void_piercer: {
       key: 'void_piercer',
       name: 'Void Piercer',
-      rarity: 'red',
+      rarity: 'god',
       description: 'Pierces barriers with high damage and 20% crit.',
       color: '#ffd2c0',
     },
     aegis_shield_weapon: {
       key: 'aegis_shield_weapon',
       name: 'Aegis Shield',
-      rarity: 'red',
+      rarity: 'god',
       description: 'Blocks all incoming damage for 2 seconds.',
       color: '#c8f6ff',
     },
@@ -594,7 +591,7 @@
       rarity: 'knight',
       color: '#f4f6fb',
       category: 'knight',
-      tags: ['bleed', 'starter'],
+      tags: ['bleed'],
     },
     orb_of_blood: {
       key: 'orb_of_blood',
@@ -622,9 +619,9 @@
       name: 'Insurance',
       shortName: 'Insure',
       description: 'If a hit pushes you below half health, this is consumed and must recharge with kills.',
-      rarity: 'white',
+      rarity: 'knight',
       color: '#f4f6fb',
-      category: 'white',
+      category: 'knight',
       tags: ['charge', 'defense'],
     },
     crit_charm: {
@@ -632,9 +629,9 @@
       name: 'Crit Charm',
       shortName: 'Hit Crit',
       description: 'Hits grant +4% crit chance per stack for 2.2s.',
-      rarity: 'white',
+      rarity: 'knight',
       color: '#ffffff',
-      category: 'white',
+      category: 'knight',
       tags: ['crit'],
     },
     attack_servo: {
@@ -642,9 +639,9 @@
       name: 'Attack Servo',
       shortName: 'AS %',
       description: 'Attack speed +12% per stack.',
-      rarity: 'white',
+      rarity: 'knight',
       color: '#eef5ff',
-      category: 'white',
+      category: 'knight',
       tags: ['speed'],
     },
     keen_eye: {
@@ -652,9 +649,9 @@
       name: 'Keen Eye',
       shortName: 'Kill Focus',
       description: 'Charge on 10 kills. When full, the next kill grants +10% crit chance per stack for 7s.',
-      rarity: 'white',
+      rarity: 'knight',
       color: '#f7fbff',
-      category: 'white',
+      category: 'knight',
       tags: ['crit', 'charge'],
     },
     chrono_spring: {
@@ -662,9 +659,9 @@
       name: 'Chrono Spring',
       shortName: 'Kill Haste',
       description: 'Charge on 7 kills. When full, the next kill grants +16% attack speed per stack for 6s.',
-      rarity: 'white',
+      rarity: 'knight',
       color: '#e6f6ff',
-      category: 'white',
+      category: 'knight',
       tags: ['speed', 'charge'],
     },
     scholar_seal: {
@@ -672,9 +669,9 @@
       name: 'Scholar Seal',
       shortName: 'XP +15%',
       description: 'Gain 15% more XP on enemy kill.',
-      rarity: 'white',
+      rarity: 'knight',
       color: '#d0ecff',
-      category: 'white',
+      category: 'knight',
       tags: ['xp'],
     },
     scholar_cap: {
@@ -682,19 +679,19 @@
       name: "Scholar's Cap",
       shortName: 'Level Edge',
       description: 'Deal more damage the closer you are to leveling up.',
-      rarity: 'purple',
+      rarity: 'wizard',
       color: '#b49cff',
-      category: 'purple',
-      tags: ['xp', 'damage', 'purple'],
+      category: 'wizard',
+      tags: ['xp', 'damage', 'wizard'],
     },
     bandaid: {
       key: 'bandaid',
       name: 'Bandaid',
       shortName: 'DEF +0.5%',
       description: 'Defense +0.5%.',
-      rarity: 'white',
+      rarity: 'knight',
       color: '#fff5f7',
-      category: 'white',
+      category: 'knight',
       tags: ['defense'],
     },
     push_man: {
@@ -702,9 +699,9 @@
       name: 'Push Man',
       shortName: 'KB +18%',
       description: 'Knockback +18%.',
-      rarity: 'white',
+      rarity: 'knight',
       color: '#fff2cf',
-      category: 'white',
+      category: 'knight',
       tags: ['knockback'],
     },
     titan_heart: {
@@ -712,9 +709,9 @@
       name: 'Titan Heart',
       shortName: 'Max HP +8%',
       description: 'Max HP +8%.',
-      rarity: 'white',
+      rarity: 'knight',
       color: '#ffd9de',
-      category: 'white',
+      category: 'knight',
       tags: ['hp'],
     },
     charged_adapter: {
@@ -722,9 +719,9 @@
       name: 'Charged Adapter',
       shortName: 'Adapter',
       description: 'Charge requirement -1. In non-boss fights, spend half your gold to teleport to the ladder room.',
-      rarity: 'purple',
+      rarity: 'wizard',
       color: '#b66cff',
-      category: 'purple',
+      category: 'wizard',
       tags: ['charge', 'mobility'],
     },
     explosive_jelly: {
@@ -732,29 +729,29 @@
       name: 'Explosive Jelly',
       shortName: 'AOE x2',
       description: 'All player AOE ranges are doubled.',
-      rarity: 'purple',
+      rarity: 'wizard',
       color: '#ffb27d',
-      category: 'purple',
-      tags: ['aoe', 'purple'],
+      category: 'wizard',
+      tags: ['aoe', 'wizard'],
     },
     dragon_orb: {
       key: 'dragon_orb',
       name: 'Dragon Orb',
       shortName: 'Beam Chain',
       description: 'Beam attacks deal more damage and chain to a nearby enemy after locking on.',
-      rarity: 'purple',
+      rarity: 'wizard',
       color: '#b77dff',
-      category: 'purple',
-      tags: ['beam', 'spell', 'purple'],
+      category: 'wizard',
+      tags: ['beam', 'spell', 'wizard'],
     },
     turtle_shell: {
       key: 'turtle_shell',
       name: 'Turtle Shell',
       shortName: 'Shell +5%',
       description: 'Move speed +5%.',
-      rarity: 'white',
+      rarity: 'knight',
       color: '#d2ffd8',
-      category: 'white',
+      category: 'knight',
       tags: ['speed', 'move'],
     },
     iron_lung: {
@@ -1743,7 +1740,14 @@
   function pushWeaponNotification(weaponKey) {
     const def = WEAPON_DEFS[weaponKey];
     if (!def) return;
-    const rarityColor = { white: '#e8f0ff', purple: '#c08cff', red: '#ff7070' };
+    const rarityColor = {
+      knight: '#e8f0ff',
+      wizard: '#c08cff',
+      god: '#ff7070',
+      white: '#e8f0ff',
+      purple: '#c08cff',
+      red: '#ff7070',
+    };
     const color = def.color || rarityColor[def.rarity] || '#d9e8ff';
     const stack = ensureItemNotifyStack();
     const toast = document.createElement('div');
@@ -2405,7 +2409,7 @@
         type: 'weapon',
         key: weaponKey,
         bought: false,
-        cost: getShopWeaponCost(WEAPON_DEFS[weaponKey]?.rarity || 'white', index),
+        cost: getShopWeaponCost(WEAPON_DEFS[weaponKey]?.rarity || 'knight', index),
       }));
       currentRoom.shopWeaponOffers = offers;
     }
@@ -2593,7 +2597,7 @@
     const ownedWeapons = WEAPON_KEYS
       .filter(key => player.ownedWeapons?.[key])
       .sort((a, b) => {
-        const order = { white: 1, purple: 2, red: 3 };
+        const order = { knight: 1, white: 1, wizard: 2, purple: 2, god: 3, red: 3 };
         const rarityA = order[WEAPON_DEFS[a]?.rarity] || 99;
         const rarityB = order[WEAPON_DEFS[b]?.rarity] || 99;
         if (rarityA !== rarityB) return rarityA - rarityB;
@@ -2790,7 +2794,7 @@
     return {
       coins: 0,
       bestFloor: 1,
-      unlockedItems: ['neo_knife'],
+      unlockedItems: [],
       unlockedCharacters: ['thorn_knight', 'metao'],
       unlockedChallenges: [],
       selectedChallenges: [],
@@ -2816,6 +2820,7 @@
       titan_heart: 0,
       charged_adapter: 0,
       explosive_jelly: 0,
+      dragon_orb: 0,
       turtle_shell: 0,
       iron_lung: 0,
       oracles_lens: 0,
@@ -2825,7 +2830,6 @@
       pendant_of_kronos: 0,
     };
     const character = CHARACTER_DEFS[chosenCharacter] || CHARACTER_DEFS.thorn_knight;
-    if (!isChallengeActive('no_items')) items[character.startItem] = 1;
     const equippedMoves = character.key === 'metao'
       ? { melee: 'fire_balls', laser: 'power_disks', smash: 'chaos_burst', dash: 'warp' }
       : character.key === 'granialla'
@@ -2944,7 +2948,7 @@
   }
 
   function normalizeUnlockedItems(input) {
-    const fallback = ['neo_knife'];
+    const fallback = [];
     if (!Array.isArray(input)) return fallback;
     const migrated = input.map(value => {
       if (value === 'thorn') return 'neo_knife';
@@ -3111,9 +3115,9 @@
     return scaleShopPrice(34 + floorValue * 6 + moveIndex * 4, difficultyKey);
   }
 
-  function getShopWeaponCost(rarity = 'white', weaponIndex = 0, floorValue = floor, difficultyKey = selectedDifficulty) {
-    if (rarity === 'red') return scaleShopPrice(180 + floorValue * 14 + weaponIndex * 10, difficultyKey);
-    if (rarity === 'purple') return scaleShopPrice(88 + floorValue * 9 + weaponIndex * 8, difficultyKey);
+  function getShopWeaponCost(rarity = 'knight', weaponIndex = 0, floorValue = floor, difficultyKey = selectedDifficulty) {
+    if (rarity === 'god' || rarity === 'red') return scaleShopPrice(180 + floorValue * 14 + weaponIndex * 10, difficultyKey);
+    if (rarity === 'wizard' || rarity === 'purple') return scaleShopPrice(88 + floorValue * 9 + weaponIndex * 8, difficultyKey);
     return scaleShopPrice(52 + floorValue * 5 + weaponIndex * 6, difficultyKey);
   }
 
@@ -3314,7 +3318,7 @@
     if (Array.isArray(room.shopWeaponOffers)) {
       room.shopWeaponOffers.forEach((offer, index) => {
         if (!offer) return;
-        const rarity = WEAPON_DEFS[offer.key]?.rarity || 'white';
+        const rarity = WEAPON_DEFS[offer.key]?.rarity || 'knight';
         offer.cost = getShopWeaponCost(rarity, index, floorValue, difficultyKey);
       });
     }
