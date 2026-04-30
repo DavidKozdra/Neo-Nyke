@@ -5957,6 +5957,25 @@
         applyBleed(enemy, 1, 5);
       }
     }
+
+    destructibles.forEach(prop => {
+      if (prop.broken || prop.hidden) return;
+      const potAssist = prop.kind === 'pot';
+      const reachBonus = potAssist ? 24 : 10;
+      const arcBonus = potAssist ? 0.4 : 0.2;
+      const touchingBonus = potAssist ? 30 : 18;
+      const propDistance = dist(player.x, player.y, prop.x, prop.y);
+      if (propDistance > range + prop.r + reachBonus) return;
+      if (potAssist && propDistance <= range + prop.r + 26) {
+        damageDestructible(prop, 1);
+        return;
+      }
+      const targetAngle = Math.atan2(prop.y - player.y, prop.x - player.x);
+      const difference = Math.abs(Math.atan2(Math.sin(targetAngle - angle), Math.cos(targetAngle - angle)));
+      const touching = propDistance <= player.r + prop.r + touchingBonus;
+      if (!touching && difference > arc + arcBonus) return;
+      damageDestructible(prop, 1);
+    });
   }
 
   function tryWeaponAttack() {
@@ -6087,12 +6106,20 @@
     }
     destructibles.forEach(prop => {
       if (prop.broken || prop.hidden) return;
+      const slashPotAssist = move === 'slash' && prop.kind === 'pot';
+      const destructibleReachBonus = slashPotAssist ? 24 : 8;
+      const destructibleArcBonus = slashPotAssist ? 0.45 : 0.25;
+      const touchingBonus = slashPotAssist ? 32 : 18;
       const propDistance = dist(player.x, player.y, prop.x, prop.y);
-      if (propDistance > meleeRange + prop.r + 8) return;
+      if (propDistance > meleeRange + prop.r + destructibleReachBonus) return;
+      if (slashPotAssist && propDistance <= meleeRange + prop.r + 24) {
+        damageDestructible(prop, 1);
+        return;
+      }
       const targetAngle = Math.atan2(prop.y - player.y, prop.x - player.x);
       const difference = Math.abs(Math.atan2(Math.sin(targetAngle - angle), Math.cos(targetAngle - angle)));
-      const touching = propDistance <= player.r + prop.r + 18;
-      if (!touching && difference > ATTACKS.melee.arc + 0.25) return;
+      const touching = propDistance <= player.r + prop.r + touchingBonus;
+      if (!touching && difference > ATTACKS.melee.arc + destructibleArcBonus) return;
       damageDestructible(prop, 1);
     });
   }
@@ -10377,16 +10404,43 @@
       ctx.lineWidth = 2;
       ctx.fillRect(-26, -26, 52, 52);
       ctx.strokeRect(-26, -26, 52, 52);
-      ctx.fillStyle = blockedByChallenge
-        ? '#ff8b98'
-        : offer.type === 'item' ? '#a857ff' : offer.type === 'potion' ? '#35ff6f' : '#8fd2ff';
-      ctx.beginPath();
-      ctx.arc(0, -6, 10, 0, Math.PI * 2);
-      ctx.fill();
+
+      // Draw pixel icon for the offer
+      const iconDef = offer.type === 'item'
+        ? window.NeoNykeIconDefs?.items?.[offer.key]
+        : offer.type === 'move'
+          ? window.NeoNykeIconDefs?.moves?.[offer.key]
+          : offer.type === 'weapon'
+            ? window.NeoNykeIconDefs?.weapons?.[offer.key]
+            : null;
+      if (iconDef) {
+        const iconColor = blockedByChallenge ? '#ff8b98' : iconDef.color || '#ffffff';
+        const scale = 32 / 32; // 1px per logical pixel, icon grid is 8x8 drawn at 4px each = 32px total
+        const iconSize = 32;
+        ctx.save();
+        ctx.translate(-iconSize / 2, -iconSize / 2 - 4);
+        ctx.shadowColor = iconColor;
+        ctx.shadowBlur = blockedByChallenge ? 0 : 8;
+        ctx.fillStyle = iconColor;
+        iconDef.pixels.forEach(([px, py]) => {
+          ctx.fillRect(px * 4 * scale, py * 4 * scale, 4 * scale, 4 * scale);
+        });
+        ctx.restore();
+      } else {
+        // fallback circle
+        ctx.fillStyle = blockedByChallenge
+          ? '#ff8b98'
+          : offer.type === 'item' ? '#a857ff' : offer.type === 'potion' ? '#35ff6f' : '#8fd2ff';
+        ctx.beginPath();
+        ctx.arc(0, -6, 10, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.shadowBlur = 0;
       ctx.fillStyle = blockedByChallenge || !canAfford ? '#ffccd2' : '#fff';
       ctx.font = 'bold 11px system-ui';
       ctx.textAlign = 'center';
-      ctx.fillText(String(offer.cost), 0, 18);
+      ctx.fillText(String(offer.cost), 0, 22);
       ctx.restore();
     });
   }
