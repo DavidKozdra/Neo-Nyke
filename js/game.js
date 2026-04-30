@@ -9604,18 +9604,48 @@
     if (player.swing > 0) {
       const swingRange = extendingStaffEquipped ? 130 : 55;
       const swingArc = extendingStaffEquipped ? 1.45 : ATTACKS.melee.arc;
-      ctx.strokeStyle = extendingStaffEquipped ? '#eaf4ff' : godTimer > 0 ? '#f6e8c8' : '#d86d87';
-      ctx.lineWidth = extendingStaffEquipped ? 6 : 4;
-      ctx.globalAlpha = 0.9;
+      const swingTotal = ATTACKS.melee.active;
+      const swingProgress = 1 - (player.swing / swingTotal);
+      // Sweep right-to-left: arc starts at swingA+arc and sweeps to swingA-arc
+      const sweepStart = player.swingA + swingArc;
+      const sweepEnd = player.swingA - swingArc;
+      const currentTip = sweepStart + (sweepEnd - sweepStart) * swingProgress;
+      const trailLength = swingArc * 0.55;
+      const trailStart = currentTip + trailLength;
+      const fadeAlpha = 0.9 * (player.swing / swingTotal);
+      const slashColor = extendingStaffEquipped ? '#eaf4ff' : godTimer > 0 ? '#f6e8c8' : '#d86d87';
+      // Glow outer trail
+      ctx.globalAlpha = fadeAlpha * 0.35;
+      ctx.strokeStyle = slashColor;
+      ctx.lineWidth = extendingStaffEquipped ? 14 : 10;
+      ctx.shadowColor = slashColor;
+      ctx.shadowBlur = 16;
       ctx.beginPath();
-      ctx.arc(0, 0, swingRange, player.swingA - swingArc, player.swingA + swingArc);
+      ctx.arc(0, 0, swingRange, trailStart, currentTip, true);
       ctx.stroke();
+      // Main sharp edge
+      ctx.globalAlpha = fadeAlpha;
+      ctx.strokeStyle = slashColor;
+      ctx.lineWidth = extendingStaffEquipped ? 5 : 3;
+      ctx.shadowBlur = 8;
+      ctx.beginPath();
+      ctx.arc(0, 0, swingRange, trailStart, currentTip, true);
+      ctx.stroke();
+      // Bright tip streak
+      ctx.globalAlpha = fadeAlpha * 0.9;
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = extendingStaffEquipped ? 2 : 1.5;
+      ctx.shadowBlur = 4;
+      ctx.beginPath();
+      ctx.arc(0, 0, swingRange, currentTip + 0.12, currentTip, true);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
       if (extendingStaffEquipped) {
-        ctx.globalAlpha = 0.18;
+        ctx.globalAlpha = 0.12 * fadeAlpha;
         ctx.fillStyle = '#eaf4ff';
         ctx.beginPath();
         ctx.moveTo(0, 0);
-        ctx.arc(0, 0, swingRange, player.swingA - swingArc, player.swingA + swingArc);
+        ctx.arc(0, 0, swingRange, trailStart, currentTip, true);
         ctx.closePath();
         ctx.fill();
       }
@@ -9629,16 +9659,83 @@
       ? laserAngle
       : Math.atan2(mouse.worldY - player.y, mouse.worldX - player.x);
     const turtleWaveActive = laserMode === 'turtle_wave';
-    const end = getBeamEnd(player.x, player.y, angle, laserMode === 'god_sweep' ? 560 : turtleWaveActive ? 620 : ATTACKS.laser.range);
-    ctx.strokeStyle = turtleWaveActive ? '#74f5ff' : '#ff00aa';
-    ctx.lineWidth = laserMode === 'god_sweep' ? 16 : turtleWaveActive ? 18 : 8;
-    ctx.shadowColor = turtleWaveActive ? '#9bf7ff' : '#f0f';
-    ctx.shadowBlur = laserMode === 'god_sweep' ? 26 : turtleWaveActive ? 30 : 18;
+    const beamRange = laserMode === 'god_sweep' ? 560 : turtleWaveActive ? 620 : ATTACKS.laser.range;
+    const end = getBeamEnd(player.x, player.y, angle, beamRange);
+    const beamColor = turtleWaveActive ? '#74f5ff' : laserMode === 'god_sweep' ? '#ffffff' : '#ff00aa';
+    const beamGlow = turtleWaveActive ? '#9bf7ff' : laserMode === 'god_sweep' ? '#e8f0ff' : '#f0f';
+    const maxW = laserMode === 'god_sweep' ? 16 : turtleWaveActive ? 18 : 8;
+    const dx = end.x - player.x;
+    const dy = end.y - player.y;
+    const beamLen = Math.hypot(dx, dy) || 1;
+    const nx = -dy / beamLen;
+    const ny = dx / beamLen;
+    const segs = 18;
+
+    // Draw tapered beam using trapezoid segments
+    ctx.save();
     ctx.globalAlpha = 0.92;
+    ctx.shadowColor = beamGlow;
+    ctx.shadowBlur = laserMode === 'god_sweep' ? 26 : turtleWaveActive ? 30 : 18;
+    for (let i = 0; i < segs; i += 1) {
+      const t0 = i / segs;
+      const t1 = (i + 1) / segs;
+      const taper0 = 1 - t0 * t0;
+      const taper1 = 1 - t1 * t1;
+      const w0 = maxW * taper0 * 0.5;
+      const w1 = maxW * taper1 * 0.5;
+      const x0 = player.x + dx * t0;
+      const y0 = player.y + dy * t0;
+      const x1 = player.x + dx * t1;
+      const y1 = player.y + dy * t1;
+      ctx.beginPath();
+      ctx.moveTo(x0 + nx * w0, y0 + ny * w0);
+      ctx.lineTo(x1 + nx * w1, y1 + ny * w1);
+      ctx.lineTo(x1 - nx * w1, y1 - ny * w1);
+      ctx.lineTo(x0 - nx * w0, y0 - ny * w0);
+      ctx.closePath();
+      ctx.fillStyle = beamColor;
+      ctx.fill();
+    }
+    // White core center line (also tapered)
+    ctx.shadowBlur = 6;
+    ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+    ctx.lineWidth = maxW * 0.22;
+    ctx.lineCap = 'round';
     ctx.beginPath();
     ctx.moveTo(player.x, player.y);
     ctx.lineTo(end.x, end.y);
     ctx.stroke();
+    ctx.restore();
+
+    // Beam particles: small dots that drift perpendicular and fade toward tip
+    if (rng() < 0.55) {
+      const t = rng();
+      const taper = 1 - t * t;
+      const spread = maxW * taper * 0.7;
+      const px = player.x + dx * t + nx * (rng() - 0.5) * spread * 2;
+      const py = player.y + dy * t + ny * (rng() - 0.5) * spread * 2;
+      const perpSpeed = (rng() - 0.5) * 28;
+      const forwardSpeed = -rng() * 18;
+      particles.push({
+        x: px, y: py,
+        life: 0.18 + rng() * 0.12,
+        vx: nx * perpSpeed + (dx / beamLen) * forwardSpeed,
+        vy: ny * perpSpeed + (dy / beamLen) * forwardSpeed,
+        c: beamColor,
+      });
+    }
+    // Tip burst particles at beam end
+    if (rng() < 0.4) {
+      const tipPx = end.x + (rng() - 0.5) * 6;
+      const tipPy = end.y + (rng() - 0.5) * 6;
+      particles.push({
+        x: tipPx, y: tipPy,
+        life: 0.12 + rng() * 0.1,
+        vx: (rng() - 0.5) * 40,
+        vy: (rng() - 0.5) * 40,
+        c: beamColor,
+      });
+    }
     ctx.shadowBlur = 0;
     ctx.globalAlpha = 1;
   }
