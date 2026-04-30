@@ -516,6 +516,19 @@ canvas {
   transition: width .18s;
 }
 
+.player-level-badge {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--menu-accent-strong);
+  background: rgba(20, 26, 36, .85);
+  border: 1px solid var(--menu-border);
+  border-radius: 5px;
+  padding: 1px 5px;
+  white-space: nowrap;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
 .player-xp-bar {
   width: 180px;
   height: 14px;

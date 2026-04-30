@@ -4287,6 +4287,17 @@
     if (room.type === 'ladder') {
       if (!room.cleared && enemies.length === 0) {
         spawnWave(getWaveCount(4), 'ladder');
+        // Almost always add a random non-god boss to ladder rooms
+        if (nextRandom('encounter') < 0.88) {
+          const _ladderBossPool = ['queen_cult', 'bulk_golem', 'artificer_knave'];
+          const _ladderBossType = _ladderBossPool[Math.floor(nextRandom('encounter') * _ladderBossPool.length)];
+          const _ladderBossSpawn = findSafeEnemySpawnPoint(ROOM_W / 2, ROOM_H / 2 - 60, 20);
+          if (_ladderBossSpawn) {
+            const _ladderBoss = spawnEnemy(_ladderBossType, _ladderBossSpawn.x, _ladderBossSpawn.y, false);
+            const _ladderBossLine = BOSS_OPENING_DIALOGUE[_ladderBossType];
+            if (_ladderBoss && _ladderBossLine) sayOverEntity(_ladderBoss, _ladderBossLine);
+          }
+        }
       }
       if (room.cleared && !pickups.some(pickup => pickup.type === 'ladder')) {
         let ladderX = ROOM_W / 2;
@@ -4334,13 +4345,15 @@
         if (!enemies.some(enemy => enemy.type === 'god')) {
           spawnGodBoss();
         }
-      } else {
-        if (!pickups.some(pickup => pickup.type === 'fightGod')) {
-          pickups.push({ x: ROOM_W / 2 - 120, y: ROOM_H / 2, type: 'fightGod' });
+      } else if (!room.bossStarted) {
+        // Auto-start the god fight immediately — no upfront choice
+        currentRoom.bossStarted = true;
+        if (!enemies.some(enemy => enemy.type === 'god')) {
+          spawnGodBoss();
+          playGodDialogue(1);
         }
-        if (!pickups.some(pickup => pickup.type === 'returnGate')) {
-          pickups.push({ x: ROOM_W / 2 + 120, y: ROOM_H / 2, type: 'returnGate' });
-        }
+        syncCurrentRoomState();
+        updateObjective();
       }
     }
 
@@ -7076,7 +7089,9 @@
       metaProgress.godsKilled = Number(metaProgress.godsKilled || 0) + 1;
       if (!metaProgress.unlockedCharacters.includes('granialla')) metaProgress.unlockedCharacters.push('granialla');
       currentRoom.cleared = true;
-      pickups.push({ x: ROOM_W / 2, y: ROOM_H / 2, type: 'crown' });
+      // After defeating god: offer the choice — cash in (win) or loop
+      pickups.push({ x: ROOM_W / 2 - 120, y: ROOM_H / 2, type: 'crown' });
+      pickups.push({ x: ROOM_W / 2 + 120, y: ROOM_H / 2, type: 'returnGate' });
       updateObjective();
       refreshMenuState();
       scheduleRunSave();
@@ -8749,6 +8764,9 @@
 
   function blastRadius(x, y, radius, damage, color, sourceEnemy = null) {
     spawnAoeShockwave(x, y, radius, color, damage >= 28 ? 'heavy' : 'normal');
+    if (sourceEnemy && player && dist(x, y, player.x, player.y) <= radius + player.r) {
+      damagePlayer(damage, Math.atan2(player.y - y, player.x - x), 200, sourceEnemy.type || 'enemy_aoe');
+    }
     for (let index = enemies.length - 1; index >= 0; index -= 1) {
       const enemy = enemies[index];
       if (!enemy) continue;
@@ -9508,6 +9526,8 @@
       const xpPercent = Math.max(0, Math.min(100, (player.xp / player.xpToNext) * 100));
       ui.playerXpFill.style.width = xpPercent + '%';
       ui.playerXpTxt.textContent = player.xp + '/' + player.xpToNext;
+      const _lvEl = document.getElementById('playerLevelTxt');
+      if (_lvEl) _lvEl.textContent = 'Lv.' + (player.level || 1);
     }
     
     // Update center display
@@ -10412,7 +10432,9 @@
           ? window.NeoNykeIconDefs?.moves?.[offer.key]
           : offer.type === 'weapon'
             ? window.NeoNykeIconDefs?.weapons?.[offer.key]
-            : null;
+            : offer.type === 'potion'
+              ? window.NeoNykeIconDefs?.pickups?.potion
+              : null;
       if (iconDef) {
         const iconColor = blockedByChallenge ? '#ff8b98' : iconDef.color || '#ffffff';
         const scale = 32 / 32; // 1px per logical pixel, icon grid is 8x8 drawn at 4px each = 32px total
@@ -10467,32 +10489,46 @@
           ctx.fill();
         }
       } else if (pickup.type === 'potion') {
-        ctx.fillStyle = '#0f8';
-        ctx.shadowColor = '#0f8';
-        ctx.shadowBlur = 12;
-        ctx.beginPath();
-        ctx.arc(0, 0, 10, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#002';
-        ctx.font = 'bold 12px system-ui';
-        ctx.textAlign = 'center';
-        ctx.fillText('+', 0, 4);
+        const potionDef = window.NeoNykeIconDefs?.pickups?.potion;
+        ctx.shadowColor = '#35ff6f';
+        ctx.shadowBlur = 14;
+        if (potionDef) {
+          ctx.fillStyle = '#35ff6f';
+          ctx.imageSmoothingEnabled = false;
+          potionDef.pixels.forEach(([px, py]) => {
+            ctx.fillRect(px * 3 - 12, py * 3 - 12, 3, 3);
+          });
+        } else {
+          ctx.fillStyle = '#0f8';
+          ctx.beginPath();
+          ctx.arc(0, 0, 10, 0, Math.PI * 2);
+          ctx.fill();
+        }
       } else if (pickup.type === 'item') {
         const item = itemRegistry.get(pickup.key);
         const color = item?.color || '#fff';
-        ctx.fillStyle = color;
+        const iconDef = window.NeoNykeIconDefs?.items?.[pickup.key];
         ctx.shadowColor = color;
-        ctx.shadowBlur = item?.rarity === 'god' ? 18 : 14;
+        ctx.shadowBlur = item?.rarity === 'god' ? 20 : 14;
         if (item?.rarity === 'god' && item?.accent) {
           ctx.strokeStyle = item.accent;
           ctx.lineWidth = 2;
           ctx.beginPath();
-          ctx.arc(0, 0, 15, 0, Math.PI * 2);
+          ctx.arc(0, 0, 17, 0, Math.PI * 2);
           ctx.stroke();
         }
-        ctx.beginPath();
-        ctx.arc(0, 0, 12, 0, Math.PI * 2);
-        ctx.fill();
+        if (iconDef) {
+          ctx.fillStyle = color;
+          ctx.imageSmoothingEnabled = false;
+          iconDef.pixels.forEach(([px, py]) => {
+            ctx.fillRect(px * 3 - 12, py * 3 - 12, 3, 3);
+          });
+        } else {
+          ctx.fillStyle = color;
+          ctx.beginPath();
+          ctx.arc(0, 0, 12, 0, Math.PI * 2);
+          ctx.fill();
+        }
       } else if (pickup.type === 'ladder') {
         ctx.strokeStyle = '#7dff9e';
         ctx.shadowColor = '#7dff9e';
@@ -11337,24 +11373,37 @@
         ctx.fill();
         ctx.restore();
       }
-      // Rival name label
-      if (enemy.type === 'rival' && enemy.rivalData) {
-        ctx.save();
-        ctx.font = 'bold 10px system-ui';
-        ctx.fillStyle = enemy.rivalData.color;
-        ctx.textAlign = 'center';
-        ctx.shadowColor = '#000';
-        ctx.shadowBlur = 4;
-        ctx.fillText(enemy.rivalData.name, enemy.x, enemy.y - enemy.r - 20);
-        ctx.restore();
-      }
       ctx.save();
       ctx.translate(enemy.x, enemy.y);
       const hpPct = clamp(enemy.hp / enemy.max, 0, 1);
+
+      // Name tag + level
+      const _enemyLabel = (enemy.type === 'rival' && enemy.rivalData)
+        ? enemy.rivalData.name
+        : getEnemyLabel(enemy.type);
+      const _levelStr = `Lv.${floor}`;
+      ctx.font = '9px system-ui';
+      ctx.textAlign = 'center';
+      ctx.shadowColor = '#000';
+      ctx.shadowBlur = 4;
+      ctx.fillStyle = enemy.elite ? '#f6cf6a' : isBossType(enemy.type) ? '#f2e8d7'
+        : (enemy.type === 'rival' && enemy.rivalData) ? enemy.rivalData.color : '#b8cfe0';
+      ctx.fillText(`${_enemyLabel}  ${_levelStr}`, 0, -enemy.r - 19);
+
+      // HP bar
       ctx.fillStyle = '#000a';
-      ctx.fillRect(-18, -enemy.r - 14, 36, 5);
+      ctx.fillRect(-18, -enemy.r - 13, 36, 5);
       ctx.fillStyle = enemy.type === 'rival' ? (enemy.rivalData?.color || '#b24f68') : isBossType(enemy.type) ? '#f2e8d7' : '#b24f68';
-      ctx.fillRect(-18, -enemy.r - 14, 36 * hpPct, 5);
+      ctx.fillRect(-18, -enemy.r - 13, 36 * hpPct, 5);
+
+      // HP current / max text
+      ctx.font = '8px system-ui';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#dce7f2';
+      ctx.shadowColor = '#000';
+      ctx.shadowBlur = 3;
+      ctx.fillText(`${Math.ceil(enemy.hp)} / ${enemy.max}`, 0, -enemy.r - 5);
+
       if ((enemy.barrier || 0) > 0) {
         const barrierPct = clamp(enemy.barrier / Math.max(1, enemy.max * 0.22), 0, 1);
         ctx.fillStyle = 'rgba(80, 215, 255, 0.24)';
@@ -11366,7 +11415,7 @@
         ctx.fillStyle = '#ffb07b';
         ctx.font = 'bold 10px system-ui';
         ctx.textAlign = 'center';
-        ctx.fillText(`${Math.max(0, Math.ceil(enemy.bossSpawnTimer))}`, 0, -enemy.r - 26);
+        ctx.fillText(`${Math.max(0, Math.ceil(enemy.bossSpawnTimer))}`, 0, -enemy.r - 30);
       }
       ctx.restore();
     });
