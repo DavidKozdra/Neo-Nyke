@@ -427,6 +427,100 @@ canvas {
   opacity: .85;
 }
 
+.objective-tracker {
+  position: absolute;
+  top: 10px;
+  right: 154px;
+  z-index: 24;
+  width: 248px;
+  padding: 8px 10px;
+  border: 1px solid rgba(126, 200, 255, .28);
+  border-radius: 6px;
+  background: linear-gradient(180deg, rgba(16, 22, 32, .9), rgba(7, 11, 18, .82));
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .28), inset 0 0 18px rgba(80, 160, 220, .06);
+  color: #d8e9ff;
+  pointer-events: none;
+}
+
+.objective-tracker__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid rgba(126, 200, 255, .16);
+  color: #8fd2ff;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .14em;
+}
+
+.objective-tracker__head b {
+  max-width: 92px;
+  overflow: hidden;
+  color: #ffd27d;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.objective-list {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.objective-list li {
+  display: grid;
+  grid-template-columns: 10px 1fr;
+  gap: 6px;
+  align-items: start;
+  color: #c7d4e6;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.objective-list li::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  margin-top: 3px;
+  border: 1px solid rgba(141, 212, 255, .7);
+  background: rgba(141, 212, 255, .18);
+  box-shadow: 0 0 8px rgba(141, 212, 255, .12);
+}
+
+.objective-list li[data-state="done"] {
+  color: #9fdca9;
+  text-decoration: line-through;
+  opacity: .76;
+}
+
+.objective-list li[data-state="done"]::before {
+  background: #9fdca9;
+  border-color: #9fdca9;
+}
+
+.objective-list li[data-state="warn"] {
+  color: #ffd27d;
+}
+
+.objective-list li[data-state="warn"]::before {
+  background: rgba(255, 210, 125, .34);
+  border-color: #ffd27d;
+}
+
+@media (max-width: 720px) {
+  .objective-tracker {
+    top: 142px;
+    right: 8px;
+    width: min(230px, calc(100vw - 16px));
+  }
+}
+
 #charName,
 #lv,
 #xp {
@@ -2003,10 +2097,13 @@ p.sub {
   display: grid;
   grid-template-columns: 1fr;
   gap: 10px;
+  max-height: min(46dvh, 430px);
+  overflow: auto;
+  padding-right: 4px;
 }
 
 .challenge-btn {
-  min-height: 76px;
+  min-height: 104px;
   padding: 12px 14px;
   background: rgba(24, 30, 42, .92);
   border: 1px solid rgba(128, 146, 170, .34);
@@ -2020,6 +2117,46 @@ p.sub {
   text-align: left;
 }
 
+.challenge-btn__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.challenge-btn__top b {
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+.challenge-btn__top em {
+  flex: 0 0 auto;
+  max-width: 42%;
+  color: #ffd27d;
+  font-style: normal;
+  font-size: 10px;
+  line-height: 1.2;
+  text-align: right;
+}
+
+.challenge-btn__desc,
+.challenge-btn__reward {
+  display: block;
+  margin-top: 8px;
+  color: var(--menu-text-muted);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0;
+  line-height: 1.35;
+  text-transform: none;
+}
+
+.challenge-btn__reward {
+  color: #9fdca9;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+
 .challenge-btn:hover:not(:disabled) {
   transform: translateY(-1px);
   border-color: var(--menu-border-strong);
@@ -2030,6 +2167,12 @@ p.sub {
   background: linear-gradient(180deg, #c9dcf3, #8da7ca);
   border-color: rgba(186, 209, 236, .94);
   box-shadow: 0 0 18px rgba(139, 166, 200, .3);
+}
+
+.challenge-btn.sel .challenge-btn__desc,
+.challenge-btn.sel .challenge-btn__reward,
+.challenge-btn.sel .challenge-btn__top em {
+  color: #203145;
 }
 
 .challenge-btn.locked,
@@ -3423,4 +3566,121 @@ button.alt.danger {
 .anvil-btn--confirm:disabled {
   opacity: 0.36;
   cursor: not-allowed;
+}
+
+/* ── God-rarity item reveal overlay ─────────────────────────────────────── */
+.god-reveal {
+  position: absolute;
+  inset: 0;
+  z-index: 9000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.god-reveal.hidden {
+  display: none;
+}
+
+.god-reveal__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(4, 3, 12, 0.88);
+  animation: god-reveal-fade-in 0.18s ease forwards;
+}
+
+.god-reveal__stage {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  animation: god-reveal-rise 0.32s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.god-reveal__rarity-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--god-reveal-color, #ffcf80);
+  opacity: 0.72;
+}
+
+.god-reveal__icon-wrap {
+  position: relative;
+  width: 128px;
+  height: 128px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.god-reveal__ring {
+  position: absolute;
+  inset: -16px;
+  border-radius: 50%;
+  border: 2px solid var(--god-reveal-color, #ffcf80);
+  opacity: 0;
+  animation: god-reveal-ring 1.8s ease-out 0.2s infinite;
+  box-shadow: 0 0 24px var(--god-reveal-color, #ffcf80);
+}
+
+.god-reveal__canvas {
+  position: relative;
+  z-index: 1;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 0 18px var(--god-reveal-color, #ffcf80));
+  animation: god-reveal-pulse 1.4s ease-in-out 0.3s infinite alternate;
+}
+
+.god-reveal__name {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--god-reveal-color, #ffcf80);
+  text-shadow: 0 0 24px var(--god-reveal-color, #ffcf80);
+  text-align: center;
+}
+
+.god-reveal__desc {
+  font-size: 12px;
+  color: #b8c4d8;
+  letter-spacing: 0.06em;
+  text-align: center;
+  max-width: 280px;
+  opacity: 0.82;
+}
+
+@keyframes god-reveal-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes god-reveal-rise {
+  from { opacity: 0; transform: scale(0.72) translateY(24px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes god-reveal-ring {
+  0%   { opacity: 0.7; transform: scale(1); }
+  100% { opacity: 0;   transform: scale(1.55); }
+}
+
+@keyframes god-reveal-pulse {
+  from { filter: drop-shadow(0 0 12px var(--god-reveal-color, #ffcf80)); }
+  to   { filter: drop-shadow(0 0 28px var(--god-reveal-color, #ffcf80)); }
+}
+
+.god-reveal--leaving .god-reveal__backdrop,
+.god-reveal--leaving .god-reveal__stage {
+  animation: god-reveal-fade-out 0.28s ease forwards;
+}
+
+@keyframes god-reveal-fade-out {
+  from { opacity: 1; }
+  to   { opacity: 0; }
 }

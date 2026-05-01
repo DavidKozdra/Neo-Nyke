@@ -286,16 +286,58 @@
     no_hit: {
       key: 'no_hit',
       name: 'Never Get Hit',
-      cost: 140,
-      unlockLoops: 5,
+      cost: 4,
+      unlockLoops: 0,
+      reward: '+65% loop crystal payout',
       description: 'Any real damage kills the run immediately.',
     },
     no_items: {
       key: 'no_items',
       name: 'No Items',
-      cost: 90,
-      unlockLoops: 5,
+      cost: 3,
+      unlockLoops: 0,
+      reward: '+40% loop crystal payout',
       description: 'Start with no relic. Item pickups and relic buys are disabled.',
+    },
+    fragile_body: {
+      key: 'fragile_body',
+      name: 'Fragile Body',
+      cost: 2,
+      unlockLoops: 0,
+      reward: '+25% loop crystal payout',
+      description: 'Start each run with 70% max HP.',
+    },
+    swarm_rooms: {
+      key: 'swarm_rooms',
+      name: 'Swarm Rooms',
+      cost: 3,
+      unlockLoops: 0,
+      reward: '+35% loop crystal payout',
+      description: 'Combat rooms spawn extra enemies.',
+    },
+    elite_hunt: {
+      key: 'elite_hunt',
+      name: 'Elite Hunt',
+      cost: 4,
+      unlockLoops: 0,
+      reward: '+45% loop crystal payout',
+      description: 'Elite enemies appear much more often.',
+    },
+    cursed_shops: {
+      key: 'cursed_shops',
+      name: 'Cursed Shops',
+      cost: 2,
+      unlockLoops: 0,
+      reward: '+30% loop crystal payout',
+      description: 'Shop prices are 50% higher this run.',
+    },
+    glass_cannon: {
+      key: 'glass_cannon',
+      name: 'Glass Cannon',
+      cost: 3,
+      unlockLoops: 0,
+      reward: '+35% loop crystal payout',
+      description: 'Deal 25% more damage, but incoming damage is 35% higher.',
     },
   };
   const CHALLENGE_ORDER = Object.keys(CHALLENGE_DEFS);
@@ -612,6 +654,7 @@
       color: '#ff4256',
       accent: '#35ff6f',
       category: 'god',
+      reveal: true,
       tags: ['bleed', 'heal', 'breaker'],
     },
     insurance: {
@@ -772,6 +815,7 @@
       rarity: 'god',
       color: '#8ee6ff',
       category: 'god',
+      reveal: true,
       tags: ['crit', 'god'],
     },
     wizards_paw: {
@@ -782,6 +826,7 @@
       rarity: 'god',
       color: '#ffcf80',
       category: 'god',
+      reveal: true,
       tags: ['god', 'stat'],
     },
     jesters_dice: {
@@ -792,6 +837,7 @@
       rarity: 'god',
       color: '#ff8bd8',
       category: 'god',
+      reveal: true,
       tags: ['god', 'chaos'],
     },
     shield_of_aegis: {
@@ -878,6 +924,14 @@
     'shield_of_aegis',
     'pendant_of_kronos',
   ];
+  const WHITE_ITEM_POOL = ITEM_KEYS.filter(key => ITEM_DEFS[key]?.rarity === 'knight');
+  const ELITE_TYPE_DEFS = {
+    burning: { label: 'Burning', color: '#ff9a3c' },
+    bleeding: { label: 'Bleeding', color: '#ff4256' },
+    giant: { label: 'Giant', color: '#ffd27d' },
+    blessed: { label: 'Blessed', color: '#f2f6ff' },
+    lasered: { label: 'Lazered', color: '#78d7ff' },
+  };
   const itemRegistry = createItemRegistry();
 
   const ui = {
@@ -891,6 +945,9 @@
     coins: document.getElementById('coins'),
     charName: document.getElementById('charName'),
     objective: document.getElementById('objective'),
+    objectiveTracker: document.getElementById('objectiveTracker'),
+    objectiveRoomLabel: document.getElementById('objectiveRoomLabel'),
+    objectiveList: document.getElementById('objectiveList'),
     cdM: document.getElementById('cdM'),
     cdL: document.getElementById('cdL'),
     cdS: document.getElementById('cdS'),
@@ -1579,6 +1636,43 @@
     }, 2600);
   }
 
+  let godRevealTimer = null;
+
+  function showGodItemReveal(itemKey, onDone) {
+    const item = itemRegistry.get(itemKey) || ITEM_DEFS[itemKey];
+    if (!item) { if (onDone) onDone(); return; }
+
+    const el = document.getElementById('godItemReveal');
+    const canvas = document.getElementById('godRevealCanvas');
+    const nameEl = document.getElementById('godRevealName');
+    const descEl = document.getElementById('godRevealDesc');
+    if (!el || !canvas || !nameEl || !descEl) { if (onDone) onDone(); return; }
+
+    const color = item.color || '#ffcf80';
+    el.style.setProperty('--god-reveal-color', color);
+    nameEl.textContent = item.name || itemKey;
+    descEl.textContent = item.description || '';
+
+    canvas.width = 128;
+    canvas.height = 128;
+    drawItemToastIcon(canvas, item);
+
+    el.classList.remove('hidden', 'god-reveal--leaving');
+    el.setAttribute('aria-hidden', 'false');
+
+    if (godRevealTimer) clearTimeout(godRevealTimer);
+    godRevealTimer = setTimeout(() => {
+      el.classList.add('god-reveal--leaving');
+      godRevealTimer = setTimeout(() => {
+        el.classList.add('hidden');
+        el.classList.remove('god-reveal--leaving');
+        el.setAttribute('aria-hidden', 'true');
+        godRevealTimer = null;
+        if (onDone) onDone();
+      }, 300);
+    }, 1600);
+  }
+
   function drawMoveToastIcon(canvas, moveDef) {
     const ctx2d = canvas.getContext('2d');
     if (!ctx2d) return;
@@ -1889,12 +1983,13 @@
         if (!def || button.classList.contains('locked')) return;
         const owned = getOwnedChallengeSet();
         if (!owned.has(challengeKey)) {
-          if ((metaProgress.coins || 0) < def.cost) {
-            particles.push({ x: ROOM_W / 2, y: ROOM_H / 2 - 30, life: 0.9, text: 'Not enough bank coins', c: '#ff6f7f' });
+          if ((metaProgress.loopCrystals || 0) < def.cost) {
+            particles.push({ x: ROOM_W / 2, y: ROOM_H / 2 - 30, life: 0.9, text: 'Not enough loop crystals', c: '#ff6f7f' });
             return;
           }
-          metaProgress.coins -= def.cost;
+          metaProgress.loopCrystals = Number(metaProgress.loopCrystals || 0) - def.cost;
           metaProgress.unlockedChallenges = normalizeChallengeSelection([...(metaProgress.unlockedChallenges || []), challengeKey]);
+          selectedChallenges = normalizeChallengeSelection([...selectedChallenges, challengeKey]);
           persistMetaSoon();
         } else if (selectedChallenges.includes(challengeKey)) {
           selectedChallenges = selectedChallenges.filter(key => key !== challengeKey);
@@ -2911,6 +3006,14 @@
     };
   }
 
+  function applyRunChallengeStartModifiers() {
+    if (!player) return;
+    if (isChallengeActive('fragile_body')) {
+      player.maxHp = Math.max(1, Math.round(player.maxHp * 0.7));
+      player.hp = Math.min(player.hp, player.maxHp);
+    }
+  }
+
   function createItemRegistry() {
     const factory = window.KozEngine?.Items?.itemFactory;
     if (factory?.createLibrary && factory?.createRegistryFromLibrary) {
@@ -3022,6 +3125,7 @@
         seed: String(entry.seed || ''),
         roomType: String(entry.roomType || ''),
         killedBy: String(entry.killedBy || ''),
+        challengeBonusCrystals: Math.max(0, Number(entry.challengeBonusCrystals || 0)),
         totalItemStacks: Math.max(0, Number(entry.totalItemStacks || 0)),
         challenges: Array.isArray(entry.challenges) ? entry.challenges.map(String) : [],
         items: Array.isArray(entry.items) ? entry.items.map(item => ({
@@ -3043,12 +3147,24 @@
   }
 
   function getUnlockedChallengeSet() {
-    const loopCrystals = Number(metaProgress.loopCrystals || 0);
-    return new Set(CHALLENGE_ORDER.filter(key => loopCrystals >= CHALLENGE_DEFS[key].unlockLoops));
+    return new Set(CHALLENGE_ORDER);
   }
 
   function isChallengeActive(key) {
     return selectedChallenges.includes(key);
+  }
+
+  function getActiveChallengeCrystalBonusMultiplier() {
+    const bonusByKey = {
+      no_hit: 0.65,
+      no_items: 0.4,
+      fragile_body: 0.25,
+      swarm_rooms: 0.35,
+      elite_hunt: 0.45,
+      cursed_shops: 0.3,
+      glass_cannon: 0.35,
+    };
+    return normalizeChallengeSelection(selectedChallenges).reduce((total, key) => total + (bonusByKey[key] || 0), 0);
   }
 
   function createRandomSeed() {
@@ -3117,7 +3233,8 @@
   }
 
   function getShopPriceMultiplier(difficultyKey = selectedDifficulty) {
-    return Number(getDifficultyDef(difficultyKey)?.shopPriceMultiplier || 1);
+    const challengeMultiplier = isChallengeActive('cursed_shops') ? 1.5 : 1;
+    return Number(getDifficultyDef(difficultyKey)?.shopPriceMultiplier || 1) * challengeMultiplier;
   }
 
   function scaleShopPrice(baseCost, difficultyKey = selectedDifficulty) {
@@ -3415,6 +3532,15 @@
     return titleCase(type);
   }
 
+  function getEliteEnemyLabel(enemy) {
+    const baseLabel = getEnemyLabel(enemy?.type || '');
+    if (!enemy?.elite || !Array.isArray(enemy.eliteTypes) || enemy.eliteTypes.length === 0) return baseLabel;
+    const prefix = enemy.eliteTypes
+      .map(type => ELITE_TYPE_DEFS[type]?.label || titleCase(type))
+      .join('_');
+    return `${prefix}_${baseLabel}`;
+  }
+
   function getRoomLabel(type) {
     if (!type) return 'Unknown';
     if (type === 'god') return 'God Chamber';
@@ -3489,6 +3615,7 @@
       seed: baseSeedStr,
       roomType: currentRoom?.type || '',
       killedBy: getDamageSourceLabel(extra.killedBy || ''),
+      challengeBonusCrystals: Math.max(0, Number(extra.challengeBonusCrystals || 0)),
       challenges: normalizeChallengeSelection(selectedChallenges).map(key => CHALLENGE_DEFS[key]?.name || titleCase(key)),
       items: historyItems,
       equippedMoves: captureRunMoveSnapshot(player),
@@ -3613,6 +3740,7 @@
       floor = 1;
       gameElapsedTime = 0;
       player = createDefaultPlayer();
+      applyRunChallengeStartModifiers();
       lastDamageSource = '';
       resetScene();
       generateFloor();
@@ -4968,7 +5096,8 @@
 
   function getWaveCount(baseOffset) {
     const difficulty = getDifficultyDef();
-    return baseOffset + floor + difficulty.waveBonus + irand(0, 1, 'encounter');
+    const challengeBonus = isChallengeActive('swarm_rooms') ? 2 : 0;
+    return baseOffset + floor + difficulty.waveBonus + challengeBonus + irand(0, 1, 'encounter');
   }
 
   function rollEnemyType() {
@@ -5081,7 +5210,8 @@
     const plan = buildWavePlan(count, roomType);
     for (let index = 0; index < plan.length; index += 1) {
       const type = plan[index] || rollEnemyType();
-      const eliteRoll = canSpawnEliteEnemies() && nextRandom('encounter') < getDifficultyDef().eliteChance;
+      const eliteChance = getDifficultyDef().eliteChance + (isChallengeActive('elite_hunt') ? 0.18 : 0);
+      const eliteRoll = canSpawnEliteEnemies() && nextRandom('encounter') < Math.min(0.85, eliteChance);
       const angle = nextRandom('encounter') * Math.PI * 2;
       const radius = 140 + nextRandom('encounter') * 170;
       const preferredX = clamp(ROOM_W / 2 + Math.cos(angle) * radius, 90, ROOM_W - 90);
@@ -5126,8 +5256,25 @@
     return inventory;
   }
 
-  function applyEliteInventory(enemy) {
-    const inventory = rollEliteInventory();
+  function rollBlessedEliteInventory() {
+    const inventory = {};
+    const rolls = irand(10, 15, 'encounter');
+    for (let index = 0; index < rolls; index += 1) {
+      const key = WHITE_ITEM_POOL[irand(0, WHITE_ITEM_POOL.length - 1, 'encounter')];
+      if (key) inventory[key] = Number(inventory[key] || 0) + 1;
+    }
+    return inventory;
+  }
+
+  function rollEliteTypes() {
+    const pool = ['burning', 'bleeding', 'giant', 'blessed', 'lasered'];
+    const shuffled = shuffle(pool, 'encounter');
+    const count = nextRandom('encounter') < 0.18 ? 3 : nextRandom('encounter') < 0.58 ? 2 : 1;
+    return shuffled.slice(0, count);
+  }
+
+  function applyEliteInventory(enemy, inventoryOverride = null) {
+    const inventory = inventoryOverride || rollEliteInventory();
     enemy.eliteInventory = inventory;
 
     const stacks = key => Number(inventory[key] || 0);
@@ -5142,6 +5289,38 @@
     enemy.speed *= speedMult;
     enemy.attackCd *= attackCdMult;
     enemy.r = Math.round(enemy.r * (1 + stacks('iron_lung') * 0.04));
+  }
+
+  function applyEliteTypes(enemy) {
+    if (!enemy?.elite) return;
+    enemy.eliteTypes = Array.isArray(enemy.eliteTypes) && enemy.eliteTypes.length ? enemy.eliteTypes : rollEliteTypes();
+
+    if (enemy.eliteTypes.includes('blessed')) {
+      applyEliteInventory(enemy, rollBlessedEliteInventory());
+    } else {
+      applyEliteInventory(enemy);
+    }
+
+    if (enemy.eliteTypes.includes('giant')) {
+      enemy.max = Math.round(enemy.max * 5);
+      enemy.hp = enemy.max;
+      enemy.r = Math.round(enemy.r * 1.65);
+      enemy.speed *= 0.84;
+      enemy.dmg = Math.round(enemy.dmg * 1.18);
+    }
+
+    if (enemy.eliteTypes.includes('burning')) {
+      enemy.fireImmune = true;
+      enemy.burningTick = rand(0.9, 0.25, 'encounter');
+    }
+    if (enemy.eliteTypes.includes('bleeding')) {
+      enemy.bleedImmune = true;
+      enemy.bleedingTick = rand(1.1, 0.35, 'encounter');
+    }
+    if (enemy.eliteTypes.includes('lasered')) {
+      enemy.eliteLaserCd = rand(1.9, 0.8, 'encounter');
+      enemy.eliteLaserModeIndex = 0;
+    }
   }
 
   function scaleEnemyStats(baseStats, type) {
@@ -5368,7 +5547,7 @@
       base.speed *= 1.12;
     }
 
-    if (base.elite) applyEliteInventory(base);
+    if (base.elite) applyEliteTypes(base);
 
     enemies.push(base);
     return base;
@@ -5992,7 +6171,8 @@
     const characterMultiplier = getCharacterDef().damageMultiplier || 1;
     const powered = (damage + (player?.attackPower || 0))
       * characterMultiplier
-      * (stats.levelEdgeDamageMultiplier || 1);
+      * (stats.levelEdgeDamageMultiplier || 1)
+      * (isChallengeActive('glass_cannon') ? 1.25 : 1);
     if (getStatusStacks(enemy, 'bleed') > 0 && stats.bleedDamageMultiplier > 1) {
       return Math.round(powered * stats.bleedDamageMultiplier);
     }
@@ -7324,31 +7504,35 @@
     markInventoryPanelDirty();
     pushItemNotification(itemKey, 1);
 
-    if (itemKey === 'wizards_paw') {
-      openWizardPawSelection();
+    if (item.reveal) {
+      if (itemKey === 'jesters_dice') {
+        floorSkipPending += 3;
+        const bonusItemCounts = {};
+        for (let index = 0; index < 10; index += 1) {
+          const rewardPool = ITEM_KEYS.filter(key => key !== 'jesters_dice');
+          const key = rewardPool[irand(0, rewardPool.length - 1, 'loot')];
+          player.items[key] = getItemCount(key) + 1;
+          bonusItemCounts[key] = (bonusItemCounts[key] || 0) + 1;
+          if (key === 'titan_heart') {
+            player.maxHp = Math.max(120, Math.round(player.maxHp * 1.08));
+            player.hp = Math.min(player.maxHp, Math.round(player.hp * 1.08));
+          }
+        }
+        showGodItemReveal(itemKey, () => {
+          Object.entries(bonusItemCounts).forEach(([key, amount]) => {
+            pushItemNotification(key, Number(amount), '(Jester bonus)');
+          });
+        });
+      } else if (itemKey === 'wizards_paw') {
+        showGodItemReveal(itemKey, () => openWizardPawSelection());
+      } else {
+        showGodItemReveal(itemKey, null);
+      }
     }
 
     if (itemKey === 'titan_heart') {
       player.maxHp = Math.max(120, Math.round(player.maxHp * 1.08));
       player.hp = Math.min(player.maxHp, Math.round(player.hp * 1.08));
-    }
-
-    if (itemKey === 'jesters_dice') {
-      floorSkipPending += 3;
-      const bonusItemCounts = {};
-      for (let index = 0; index < 10; index += 1) {
-        const rewardPool = ITEM_KEYS.filter(key => key !== 'jesters_dice');
-        const key = rewardPool[irand(0, rewardPool.length - 1, 'loot')];
-        player.items[key] = getItemCount(key) + 1;
-        bonusItemCounts[key] = (bonusItemCounts[key] || 0) + 1;
-        if (key === 'titan_heart') {
-          player.maxHp = Math.max(120, Math.round(player.maxHp * 1.08));
-          player.hp = Math.min(player.maxHp, Math.round(player.hp * 1.08));
-        }
-      }
-      Object.entries(bonusItemCounts).forEach(([key, amount]) => {
-        pushItemNotification(key, Number(amount), '(Jester bonus)');
-      });
     }
 
     if (!metaProgress.unlockedItems.includes(itemKey)) {
@@ -7538,25 +7722,29 @@
 
       totalBleed += updateEnemyStatuses(enemy, dt);
       if (!enemies.includes(enemy)) continue;
+      const eliteTraitControlled = updateEliteEnemyTraits(enemy, dt);
+      if (!enemies.includes(enemy)) continue;
 
-      if (enemy.type === 'god') updateGod(enemy, dt);
-      else if (enemy.type === 'queen_cult') updateCultQueenBoss(enemy, dt);
-      else if (enemy.type === 'bulk_golem') updateBulkGolemBoss(enemy, dt);
-      else if (enemy.type === 'artificer_knave') updateArtificerBoss(enemy, dt);
-      else if (enemy.type === 'mirror_knight') updateMirrorChampion(enemy, dt);
-      else if (enemy.type === 'rival') updateRivalEnemy(enemy, dt);
-      else if (enemy.type === 'cult_mage') updateCultMageEnemy(enemy, dt);
-      else if (enemy.type === 'knave') updateKnaveEnemy(enemy, dt);
-      else if (enemy.type === 'sniper') updateSniperEnemy(enemy, dt);
-      else if (enemy.type === 'machine_gunner') updateMachineGunnerEnemy(enemy, dt);
-      else if (enemy.type === 'golem') updateGolemEnemy(enemy, dt);
-      else if (enemy.type === 'summoner') updateSummonerEnemy(enemy, dt);
-      else if (enemy.type === 'shield_unit') updateShieldUnitEnemy(enemy, dt);
-      else if (enemy.type === 'healer') updateHealerEnemy(enemy, dt);
-      else if (enemy.type === 'boss_spawner') updateBossSpawnerEnemy(enemy, dt);
-      else if (enemy.type === 'laser') updateLaserEnemy(enemy, dt);
-      else if (enemy.type === 'charger') updateChargerEnemy(enemy, dt);
-      else updateHunterEnemy(enemy, dt);
+      if (!eliteTraitControlled) {
+        if (enemy.type === 'god') updateGod(enemy, dt);
+        else if (enemy.type === 'queen_cult') updateCultQueenBoss(enemy, dt);
+        else if (enemy.type === 'bulk_golem') updateBulkGolemBoss(enemy, dt);
+        else if (enemy.type === 'artificer_knave') updateArtificerBoss(enemy, dt);
+        else if (enemy.type === 'mirror_knight') updateMirrorChampion(enemy, dt);
+        else if (enemy.type === 'rival') updateRivalEnemy(enemy, dt);
+        else if (enemy.type === 'cult_mage') updateCultMageEnemy(enemy, dt);
+        else if (enemy.type === 'knave') updateKnaveEnemy(enemy, dt);
+        else if (enemy.type === 'sniper') updateSniperEnemy(enemy, dt);
+        else if (enemy.type === 'machine_gunner') updateMachineGunnerEnemy(enemy, dt);
+        else if (enemy.type === 'golem') updateGolemEnemy(enemy, dt);
+        else if (enemy.type === 'summoner') updateSummonerEnemy(enemy, dt);
+        else if (enemy.type === 'shield_unit') updateShieldUnitEnemy(enemy, dt);
+        else if (enemy.type === 'healer') updateHealerEnemy(enemy, dt);
+        else if (enemy.type === 'boss_spawner') updateBossSpawnerEnemy(enemy, dt);
+        else if (enemy.type === 'laser') updateLaserEnemy(enemy, dt);
+        else if (enemy.type === 'charger') updateChargerEnemy(enemy, dt);
+        else updateHunterEnemy(enemy, dt);
+      }
 
       if (!enemies.includes(enemy)) continue;
       moveCircle(enemy, dt);
@@ -8446,6 +8634,106 @@
     }
   }
 
+  function updateEliteEnemyTraits(enemy, dt) {
+    if (!enemy?.elite || !Array.isArray(enemy.eliteTypes)) return false;
+    const distanceToPlayer = player ? dist(enemy.x, enemy.y, player.x, player.y) : Infinity;
+
+    if (enemy.eliteTypes.includes('burning')) {
+      enemy.burningTick = Math.max(0, Number(enemy.burningTick || 0) - dt);
+      if (enemy.burningTick <= 0) {
+        enemy.burningTick = 1.15;
+        particles.push({ x: enemy.x + rand(-10, 10, 'fx'), y: enemy.y + rand(-10, 10, 'fx'), life: 0.24, c: '#ff9a3c' });
+        if (distanceToPlayer < enemy.r + player.r + 34) applyFire(player, 1, 2.8);
+      }
+    }
+
+    if (enemy.eliteTypes.includes('bleeding')) {
+      enemy.bleedingTick = Math.max(0, Number(enemy.bleedingTick || 0) - dt);
+      if (enemy.bleedingTick <= 0) {
+        enemy.bleedingTick = 1.25;
+        particles.push({ x: enemy.x + rand(-8, 8, 'fx'), y: enemy.y + rand(-8, 8, 'fx'), life: 0.22, c: '#ff4256' });
+        if (distanceToPlayer < enemy.r + player.r + 28) applyStatus(player, 'bleed', 1, 2.2);
+      }
+    }
+
+    if (!enemy.eliteTypes.includes('lasered')) return false;
+    if (enemy.beamTime > 0 && enemy.state === 'elite_laser') {
+      tickEnemyBeam(enemy, dt, {
+        tick: enemy.eliteLaserMode === 'god_sweep' ? 0.055 : enemy.eliteLaserMode === 'turtle_wave' ? 0.08 : 0.1,
+        range: enemy.eliteLaserMode === 'turtle_wave' ? 620 : enemy.eliteLaserMode === 'god_sweep' ? 560 : 430,
+        knockback: enemy.eliteLaserMode === 'turtle_wave' ? 190 : enemy.eliteLaserMode === 'god_sweep' ? 145 : 125,
+        damage: enemy.dmg + (enemy.eliteLaserMode === 'turtle_wave' ? 14 : enemy.eliteLaserMode === 'god_sweep' ? 8 : 0),
+        speedDamp: 0.84,
+        turnRate: enemy.eliteLaserMode === 'god_sweep' ? 0 : 2.6,
+        onTick: activeEnemy => {
+          if (activeEnemy.eliteLaserMode === 'god_sweep') activeEnemy.beamAngle += Number(activeEnemy.eliteSweepSpeed || 3.8) * 0.055;
+        },
+        onEnd: activeEnemy => {
+          activeEnemy.state = 'idle';
+          activeEnemy.eliteLaserCd = 1.35;
+        },
+      });
+      return true;
+    }
+
+    enemy.eliteLaserCd = Math.max(0, Number(enemy.eliteLaserCd || 0) - dt);
+    if (enemy.eliteLaserCd > 0 || distanceToPlayer > 520) return false;
+
+    const modes = ['blood_beam', 'turtle_wave', 'power_disks', 'blade_justice', 'lightning_columns', 'god_sweep'];
+    const mode = modes[Number(enemy.eliteLaserModeIndex || 0) % modes.length];
+    enemy.eliteLaserModeIndex = Number(enemy.eliteLaserModeIndex || 0) + 1;
+    const angle = Math.atan2(player.y - enemy.y, player.x - enemy.x);
+
+    if (mode === 'power_disks') {
+      for (let index = 0; index < 5; index += 1) {
+        const spread = (index - 2) * 0.16;
+        projectiles.push({
+          x: enemy.x,
+          y: enemy.y,
+          vx: Math.cos(angle + spread) * 360,
+          vy: Math.sin(angle + spread) * 360,
+          r: 7,
+          life: 1.15,
+          enemy: true,
+          kind: 'power_disk',
+          damage: Math.round(enemy.dmg * 0.72),
+          color: '#d890ff',
+          knockback: 110,
+        });
+      }
+      enemy.eliteLaserCd = 1.4;
+      return false;
+    }
+
+    if (mode === 'blade_justice') {
+      if (distanceToPlayer < 150) damagePlayer(enemy.dmg + 10, angle, 240, 'elite_blade_justice');
+      particles.push({ x: enemy.x, y: enemy.y, life: 0.34, ring: 112, c: '#ffffff' });
+      enemy.eliteLaserCd = 1.2;
+      return false;
+    }
+
+    if (mode === 'lightning_columns') {
+      for (let index = 0; index < 2; index += 1) {
+        const px = clamp(player.x + rand(-70, 70, 'encounter'), WALL + 60, ROOM_W - WALL - 60);
+        const py = clamp(player.y + rand(-70, 70, 'encounter'), WALL + 60, ROOM_H - WALL - 60);
+        hazards.push({ kind: 'lightning_column', x: px, y: py, r: 46, ttl: 1.25, tick: 0, interval: 0.36, damage: Math.round(enemy.dmg * 0.78) });
+        particles.push({ x: px, y: py, life: 0.28, ring: 18, c: '#8dd4ff' });
+      }
+      enemy.eliteLaserCd = 1.6;
+      return false;
+    }
+
+    enemy.state = 'elite_laser';
+    enemy.eliteLaserMode = mode === 'god_sweep' ? 'god_sweep' : mode === 'turtle_wave' ? 'turtle_wave' : 'blood_beam';
+    enemy.beamAngle = angle;
+    enemy.beamTime = enemy.eliteLaserMode === 'god_sweep' ? 1.4 : enemy.eliteLaserMode === 'turtle_wave' ? 0.9 : 0.56;
+    enemy.beamTick = 0;
+    enemy.eliteSweepSpeed = (nextRandom('encounter') < 0.5 ? -1 : 1) * 4.1;
+    enemy.eliteLaserCd = 99;
+    particles.push({ x: enemy.x, y: enemy.y - enemy.r - 14, life: 0.45, text: MOVE_DEFS[mode]?.name || 'LASER', c: '#8dd4ff' });
+    return true;
+  }
+
   function updateChargerEnemy(enemy, dt) {
     const dx = player.x - enemy.x;
     const dy = player.y - enemy.y;
@@ -8884,7 +9172,7 @@
     const hpBeforeHit = player.hp;
     const halfHpThreshold = player.maxHp * 0.5;
     const ironLungApplies = itemStats.hasIronLung && !isBossFightActive();
-    let finalAmount = numericAmount * (1 - (itemStats.damageReduction || 0));
+    let finalAmount = numericAmount * (isChallengeActive('glass_cannon') ? 1.35 : 1) * (1 - (itemStats.damageReduction || 0));
     if (ironLungApplies) {
       const roomCap = player.maxHp * 0.2;
       const remaining = roomCap - (player.roomDamageTaken || 0);
@@ -9618,7 +9906,11 @@
     refreshFloorChargeStates();
     runLoopIndex += 1;
     syncSeedState();
-    metaProgress.loopCrystals = Number(metaProgress.loopCrystals || 0) + 1;
+    const crystalBonus = Math.max(0, Math.round(getActiveChallengeCrystalBonusMultiplier()));
+    metaProgress.loopCrystals = Number(metaProgress.loopCrystals || 0) + 1 + crystalBonus;
+    if (crystalBonus > 0) {
+      particles.push({ x: player.x, y: player.y - 42, life: 1.1, text: `+${crystalBonus} CHALLENGE LC`, c: '#8dd4ff' });
+    }
     metaProgress.bestFloor = Math.max(metaProgress.bestFloor, MAX_FLOOR);
     persistMetaSoon();
     player.x = START_X;
@@ -9633,62 +9925,121 @@
     persistMetaSoon();
   }
 
+  function getObjectiveEntries(lineObjective = '') {
+    if (!currentRoom) return [];
+    const entries = [];
+    if (floor < MAX_FLOOR) {
+      const ladderRoom = rooms.find(room => room.type === 'ladder');
+      entries.push({
+        text: ladderRoom?.explored ? 'Reach the ladder room' : 'Find the ladder',
+        state: currentRoom.type === 'ladder' ? 'done' : 'todo',
+      });
+      if (currentRoom.type === 'ladder') {
+        entries.push({
+          text: currentRoom.cleared ? 'Ladder room cleared' : 'Clear the ladder room',
+          state: currentRoom.cleared ? 'done' : 'warn',
+        });
+      }
+      if (currentRoom.type === 'boss') {
+        entries.push({
+          text: currentRoom.cleared ? 'Floor boss defeated' : 'Kill the floor boss',
+          state: currentRoom.cleared ? 'done' : 'warn',
+        });
+      }
+      if (currentRoom.type === 'challenge') {
+        entries.push({
+          text: lineObjective || 'Complete the trial',
+          state: currentRoom.challengeFailed ? 'warn' : currentRoom.cleared ? 'done' : 'warn',
+        });
+      }
+      if (currentRoom.type === 'treasure') {
+        const unopened = chests.filter(chest => !chest.open).length;
+        entries.push({
+          text: unopened > 0 ? `Open treasure chests: ${unopened}` : 'Treasure claimed',
+          state: unopened > 0 ? 'warn' : 'done',
+        });
+      }
+      if (currentRoom.type === 'shop') entries.push({ text: 'Buy upgrades or move on', state: 'warn' });
+      if (currentRoom.type === 'anvil') entries.push({ text: 'Forge upgrades or move on', state: 'warn' });
+      if (enemies.some(enemy => enemy.miniBoss)) entries.push({ text: 'Defeat the mini boss', state: 'warn' });
+      if (selectedChallenges.length > 0) entries.push({ text: `${selectedChallenges.length} challenge${selectedChallenges.length === 1 ? '' : 's'} active`, state: 'todo' });
+      return entries.slice(0, 5);
+    }
+
+    entries.push({
+      text: currentRoom.type === 'god' ? 'Enter GOD chamber' : 'Reach GOD',
+      state: currentRoom.type === 'god' ? 'done' : 'todo',
+    });
+    if (currentRoom.type === 'god') {
+      entries.push({
+        text: currentRoom.cleared ? 'GOD defeated' : currentRoom.bossStarted ? 'Survive GOD' : 'Start the GOD fight',
+        state: currentRoom.cleared ? 'done' : 'warn',
+      });
+      if (currentRoom.cleared) entries.push({ text: 'Take the crown or loop', state: 'warn' });
+    }
+    return entries.slice(0, 5);
+  }
+
   function updateObjective() {
     if (!currentRoom) return;
     let objective = 'Find the ladder.';
+    const setObjective = text => {
+      uiController.setObjective(text);
+      uiController.setObjectiveList(getRoomLabel(currentRoom.type), getObjectiveEntries(text));
+    };
     if (floor < MAX_FLOOR) {
       if (currentRoom.type === 'shop') {
-        uiController.setObjective('Shop or move on.');
+        setObjective('Shop or move on.');
         return;
       }
       if (currentRoom.type === 'anvil') {
-        uiController.setObjective('Forge upgrades or move on.');
+        setObjective('Forge upgrades or move on.');
         return;
       }
       if (currentRoom.type === 'challenge') {
         const type = currentRoom.challengeType || 'mirror';
         if (currentRoom.challengeFailed) {
-          uiController.setObjective('Trial failed. Move on.');
+          setObjective('Trial failed. Move on.');
         } else if (currentRoom.cleared) {
-          uiController.setObjective('Trial cleared. Claim the reward or move on.');
+          setObjective('Trial cleared. Claim the reward or move on.');
         } else if (!currentRoom.challengeStarted) {
-          if (type === 'mirror') uiController.setObjective('Touch the sword to face your mirror.');
-          else if (type === 'stillness') uiController.setObjective('Begin the stillness trial.');
-          else if (type === 'bomb') uiController.setObjective('Begin the bomb trial.');
-          else if (type === 'survival') uiController.setObjective('Begin the survival trial.');
-          else if (type === 'runes') uiController.setObjective('Begin the rune hunt.');
-          else if (type === 'storm') uiController.setObjective('Begin the storm trial.');
+          if (type === 'mirror') setObjective('Touch the sword to face your mirror.');
+          else if (type === 'stillness') setObjective('Begin the stillness trial.');
+          else if (type === 'bomb') setObjective('Begin the bomb trial.');
+          else if (type === 'survival') setObjective('Begin the survival trial.');
+          else if (type === 'runes') setObjective('Begin the rune hunt.');
+          else if (type === 'storm') setObjective('Begin the storm trial.');
         } else {
-          if (type === 'mirror') uiController.setObjective('Defeat your mirror champion.');
-          else if (type === 'stillness') uiController.setObjective(`Hold still for ${Math.ceil(currentRoom.challengeTimer || 0)}s.`);
-          else if (type === 'bomb') uiController.setObjective('Find the one bomb you can safely disarm.');
-          else if (type === 'survival') uiController.setObjective(`Survive for ${Math.ceil(currentRoom.challengeTimer || 0)}s.`);
-          else if (type === 'runes') uiController.setObjective(`Collect the remaining runes: ${Math.max(0, Number(currentRoom.challengeData?.runesLeft || 0))}.`);
-          else if (type === 'storm') uiController.setObjective(`Live through the storm for ${Math.ceil(currentRoom.challengeTimer || 0)}s.`);
+          if (type === 'mirror') setObjective('Defeat your mirror champion.');
+          else if (type === 'stillness') setObjective(`Hold still for ${Math.ceil(currentRoom.challengeTimer || 0)}s.`);
+          else if (type === 'bomb') setObjective('Find the one bomb you can safely disarm.');
+          else if (type === 'survival') setObjective(`Survive for ${Math.ceil(currentRoom.challengeTimer || 0)}s.`);
+          else if (type === 'runes') setObjective(`Collect the remaining runes: ${Math.max(0, Number(currentRoom.challengeData?.runesLeft || 0))}.`);
+          else if (type === 'storm') setObjective(`Live through the storm for ${Math.ceil(currentRoom.challengeTimer || 0)}s.`);
         }
         return;
       }
       if (currentRoom.type === 'boss' && !currentRoom.cleared) {
-        uiController.setObjective('Defeat the floor boss.');
+        setObjective('Defeat the floor boss.');
         return;
       }
       objective = currentRoom.type === 'ladder' && !currentRoom.cleared ? 'Clear the ladder room.' : 'Find the ladder.';
-      uiController.setObjective(objective);
+      setObjective(objective);
       return;
     }
     if (currentRoom.type !== 'god') {
-      uiController.setObjective('Reach GOD.');
+      setObjective('Reach GOD.');
       return;
     }
     if (currentRoom.cleared) {
-      uiController.setObjective('Take the crown.');
+      setObjective('Take the crown.');
       return;
     }
     if (currentRoom.bossStarted) {
-      uiController.setObjective('Survive GOD.');
+      setObjective('Survive GOD.');
       return;
     }
-    uiController.setObjective('Fight GOD or loop with your gear.');
+    setObjective('Fight GOD or loop with your gear.');
   }
 
   function updateHud() {
@@ -11739,7 +12090,7 @@
       // Name tag + level
       const _enemyLabel = (enemy.type === 'rival' && enemy.rivalData)
         ? enemy.rivalData.name
-        : getEnemyLabel(enemy.type);
+        : getEliteEnemyLabel(enemy);
       const _levelStr = `Lv.${floor}`;
       ctx.font = '9px system-ui';
       ctx.textAlign = 'center';
@@ -12533,6 +12884,7 @@
       setVisible(view.playerStats, inPlay, '');
       setVisible(view.coinDisplay, inPlay, 'flex');
       setVisible(view.centerDisplay, inPlay, '');
+      setVisible(view.objectiveTracker, inPlay, '');
       setVisible(view.dialogueOverlay, show === 'dialogue', 'flex');
       setVisible(view.entityDialogueLayer, inPlay, 'block');
       if (!inPlay && view.challengeStatus) {
@@ -12898,21 +13250,26 @@
             ? `Unlock at ${def.unlockLoops} loop crystals`
             : isOwned
               ? def.description
-              : `${def.description} Cost: ${def.cost} bank coins`;
-          button.textContent = !isUnlocked
-            ? `${def.name} Locked`
+              : `${def.description} Cost: ${def.cost} loop crystals`;
+          const status = !isUnlocked
+            ? `LOCKED UNTIL ${def.unlockLoops} LC`
             : isOwned
-              ? `${def.name}${isSelected ? ' On' : ' Off'}`
-              : `${def.name} Buy ${def.cost}`;
+              ? (isSelected ? 'ACTIVE THIS RUN' : 'OWNED')
+              : `BUY ${def.cost} LC`;
+          button.innerHTML = `
+            <span class="challenge-btn__top">
+              <b>${escapeHtml(def.name)}</b>
+              <em>${escapeHtml(status)}</em>
+            </span>
+            <span class="challenge-btn__desc">${escapeHtml(def.description)}</span>
+            <span class="challenge-btn__reward">${escapeHtml(def.reward || 'Challenge reward')}</span>
+          `;
         });
         if (view.challengeHint) {
-          const hasChallenges = loopCrystals >= 5;
           const activeCount = selected.length;
-          view.challengeHint.textContent = !hasChallenges
-            ? `Unlocks at 5 loop crystals. Current crystals: ${loopCrystals}.`
-            : `Bank: ${bankCoins} coins. Buy once, then toggle per run. Active challenges: ${activeCount}.`;
+          const bonusCrystals = Math.max(0, Math.round(getActiveChallengeCrystalBonusMultiplier()));
+          view.challengeHint.textContent = `Loop Crystals: ${loopCrystals}. Buy run types once, then toggle them. Active: ${activeCount}. Loop bonus: +${bonusCrystals} LC.`;
         }
-        if (!unlocked.size) setChallengePanelOpen(false);
       },
       setItemStatus(items) {
         ITEM_KEYS.forEach(key => {
@@ -12922,6 +13279,16 @@
         });
       },
       setObjective(text) { view.objective.textContent = text; },
+      setObjectiveList(roomLabel, entries = []) {
+        if (!view.objectiveTracker || !view.objectiveList) return;
+        const visible = gameState === 'play' && entries.length > 0;
+        view.objectiveTracker.classList.toggle('hidden', !visible);
+        view.objectiveTracker.setAttribute('aria-hidden', visible ? 'false' : 'true');
+        if (view.objectiveRoomLabel) view.objectiveRoomLabel.textContent = String(roomLabel || 'ROOM').toUpperCase();
+        view.objectiveList.innerHTML = entries.map(entry => (
+          `<li data-state="${escapeHtml(entry.state || 'todo')}">${escapeHtml(entry.text || '')}</li>`
+        )).join('');
+      },
       setHudValues(payload) {
         view.fl.textContent = payload.floor;
         view.lv.textContent = payload.level;

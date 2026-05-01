@@ -119,6 +119,14 @@
     </div>
   </div>
 
+  <div id="objectiveTracker" class="objective-tracker hidden" aria-hidden="true">
+    <div class="objective-tracker__head">
+      <span>OBJECTIVES</span>
+      <b id="objectiveRoomLabel">ROOM</b>
+    </div>
+    <ul id="objectiveList" class="objective-list"></ul>
+  </div>
+
   <!-- Coin Display Top Left -->
   <div id="coinDisplay" class="coin-display hidden">
     <canvas id="coinIcon" class="coin-icon" width="32" height="32"></canvas>
@@ -303,6 +311,20 @@
     </div>
   </div>
 
+  <!-- God-rarity item reveal overlay -->
+  <div id="godItemReveal" class="god-reveal hidden" aria-hidden="true">
+    <div class="god-reveal__backdrop"></div>
+    <div class="god-reveal__stage">
+      <div class="god-reveal__rarity-label">GOD RELIC</div>
+      <div class="god-reveal__icon-wrap">
+        <canvas id="godRevealCanvas" class="god-reveal__canvas" width="128" height="128"></canvas>
+        <div class="god-reveal__ring"></div>
+      </div>
+      <div class="god-reveal__name" id="godRevealName"></div>
+      <div class="god-reveal__desc" id="godRevealDesc"></div>
+    </div>
+  </div>
+
   <!-- Death screen -->
   <div id="dead" class="overlay hidden">
     <h2>YOU DIED</h2>
@@ -482,8 +504,13 @@
               <div id="challengeSelect" class="challenge-select" role="group" aria-label="Challenge Modifiers">
                 <button class="challenge-btn" data-challenge="no_hit" type="button">Never Get Hit</button>
                 <button class="challenge-btn" data-challenge="no_items" type="button">No Items</button>
+                <button class="challenge-btn" data-challenge="fragile_body" type="button">Fragile Body</button>
+                <button class="challenge-btn" data-challenge="swarm_rooms" type="button">Swarm Rooms</button>
+                <button class="challenge-btn" data-challenge="elite_hunt" type="button">Elite Hunt</button>
+                <button class="challenge-btn" data-challenge="cursed_shops" type="button">Cursed Shops</button>
+                <button class="challenge-btn" data-challenge="glass_cannon" type="button">Glass Cannon</button>
               </div>
-              <small id="challengeHint" class="difficulty-hint">Unlocks at 5 loop crystals. Buy a challenge once, then toggle it per run.</small>
+              <small id="challengeHint" class="difficulty-hint">Buy run types once with loop crystals, then toggle them before entering the dungeon.</small>
             </div>
           </div>
         </div>
