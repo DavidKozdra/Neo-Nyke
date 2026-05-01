@@ -523,7 +523,7 @@
       key: 'excalibur',
       name: 'Excalibur',
       rarity: 'god',
-      description: 'A divine 1000-damage strike.',
+      description: "A divine strike for 777% of your base damage.",
       color: '#ffd980',
     },
     golden_fleece: {
@@ -1141,7 +1141,7 @@
     magenta_degale:           { damage: 80,   cooldown: 1.50,             knockback: 480 },
     magenta_p90:              { damage: 18,   cooldown: 1.80,             knockback: 140 },
     granillia_lightning_spear:{ damage: 45,   cooldown: 0.55,             knockback: 200 },
-    excalibur:                { damage: 1000, cooldown: 2.00, range: 120, knockback: 600 },
+    excalibur:                { damage: 202,  cooldown: 2.00, range: 120, knockback: 600 },
     golden_fleece:            { damage: 20,   cooldown: 0.50, range: 80,  knockback: 80  },
     void_piercer:             { damage: 55,   cooldown: 0.80,             knockback: 160 },
     aegis_shield_weapon:      { cooldown: 8.00 },
@@ -1450,6 +1450,14 @@
     updateCharacterSelectionUI();
     refreshMenuState();
     draw();
+    hideBootLoading();
+  }
+
+  function hideBootLoading() {
+    const bootLoading = document.getElementById('bootLoading');
+    if (!bootLoading) return;
+    bootLoading.classList.add('boot-loading--done');
+    setTimeout(() => bootLoading.remove(), 320);
   }
 
   function ensureItemNotifyStack() {
@@ -5991,6 +5999,11 @@
     return Math.round(powered);
   }
 
+  function getPlayerBaseDamage() {
+    const characterMultiplier = getCharacterDef().damageMultiplier || 1;
+    return Math.max(1, (ATTACKS.melee.damage + (player?.attackPower || 0)) * characterMultiplier);
+  }
+
   function getEquippedMove(slot) {
     const moveKey = player?.equippedMoves?.[slot];
     if (MOVE_DEFS[moveKey]?.slot === slot) return moveKey;
@@ -6143,7 +6156,8 @@
       return true;
     }
     if (weaponKey === 'excalibur') {
-      fireWeaponSweep(wDmg(weaponKey), wRng(weaponKey), Math.PI, wKnk(weaponKey), '#ffe291', { rawDamage: true });
+      const excaliburDamage = Math.max(1, Math.round(getPlayerBaseDamage() * 7.77 + getAnvilWeaponBonus(weaponKey, 'damage')));
+      fireWeaponSweep(excaliburDamage, wRng(weaponKey), Math.PI, wKnk(weaponKey), '#ffe291', { rawDamage: true });
       particles.push({ x: player.x, y: player.y, life: 0.6, ring: 56, c: '#ffd26a' });
       player.weaponCooldown = wCd(weaponKey);
       return true;
