@@ -654,7 +654,6 @@
       color: '#ff4256',
       accent: '#35ff6f',
       category: 'god',
-      reveal: true,
       tags: ['bleed', 'heal', 'breaker'],
     },
     insurance: {
@@ -826,7 +825,6 @@
       rarity: 'god',
       color: '#ffcf80',
       category: 'god',
-      reveal: true,
       tags: ['god', 'stat'],
     },
     jesters_dice: {
@@ -837,7 +835,6 @@
       rarity: 'god',
       color: '#ff8bd8',
       category: 'god',
-      reveal: true,
       tags: ['god', 'chaos'],
     },
     shield_of_aegis: {
@@ -967,7 +964,15 @@
     start: document.getElementById('start'),
     charSelect: document.getElementById('charSelect'),
     dead: document.getElementById('dead'),
-    deadInfo: document.getElementById('deadInfo'),
+    deadKillerCanvas: document.getElementById('deadKillerCanvas'),
+    deadKillerName: document.getElementById('deadKillerName'),
+    deadFloor: document.getElementById('deadFloor'),
+    deadLevel: document.getElementById('deadLevel'),
+    deadKills: document.getElementById('deadKills'),
+    deadTime: document.getElementById('deadTime'),
+    deadCoins: document.getElementById('deadCoins'),
+    deadDifficulty: document.getElementById('deadDifficulty'),
+    deadItems: document.getElementById('deadItems'),
     win: document.getElementById('win'),
     winInfo: document.getElementById('winInfo'),
     deadRestart: document.querySelector('#dead .restart'),
@@ -1153,6 +1158,7 @@
   let metaProgress = createDefaultMeta();
   let runHistory = [];
   let lastDamageSource = '';
+  let lastDamageSourceKey = '';
   let savePendingTimer = 0;
   let lavaAnimTime = 0;
   let floorSkipPending = 0;
@@ -1636,41 +1642,46 @@
     }, 2600);
   }
 
-  let godRevealTimer = null;
+  const ITEM_CINEMATIC_FLAVOR = {
+    wizards_paw: 'Choose 2 stats to triple — choose wisely.',
+    jesters_dice: 'Skip 3 floors. Chaos blooms in your wake.',
+  };
 
-  function showGodItemReveal(itemKey, onDone) {
+  let cinematicTimer = null;
+
+  function showItemCinematic(itemKey, onDone) {
     const item = itemRegistry.get(itemKey) || ITEM_DEFS[itemKey];
     if (!item) { if (onDone) onDone(); return; }
 
-    const el = document.getElementById('godItemReveal');
-    const canvas = document.getElementById('godRevealCanvas');
-    const nameEl = document.getElementById('godRevealName');
-    const descEl = document.getElementById('godRevealDesc');
-    if (!el || !canvas || !nameEl || !descEl) { if (onDone) onDone(); return; }
+    const el = document.getElementById('itemCinematic');
+    const canvas = document.getElementById('itemCinematicCanvas');
+    const nameEl = document.getElementById('itemCinematicName');
+    const flavorEl = document.getElementById('itemCinematicFlavor');
+    if (!el || !canvas || !nameEl || !flavorEl) { if (onDone) onDone(); return; }
 
     const color = item.color || '#ffcf80';
-    el.style.setProperty('--god-reveal-color', color);
+    el.style.setProperty('--cinematic-color', color);
     nameEl.textContent = item.name || itemKey;
-    descEl.textContent = item.description || '';
+    flavorEl.textContent = ITEM_CINEMATIC_FLAVOR[itemKey] || item.description || '';
 
-    canvas.width = 128;
-    canvas.height = 128;
+    canvas.width = 64;
+    canvas.height = 64;
     drawItemToastIcon(canvas, item);
 
-    el.classList.remove('hidden', 'god-reveal--leaving');
+    el.classList.remove('hidden', 'is-leaving');
     el.setAttribute('aria-hidden', 'false');
 
-    if (godRevealTimer) clearTimeout(godRevealTimer);
-    godRevealTimer = setTimeout(() => {
-      el.classList.add('god-reveal--leaving');
-      godRevealTimer = setTimeout(() => {
+    if (cinematicTimer) clearTimeout(cinematicTimer);
+    cinematicTimer = setTimeout(() => {
+      el.classList.add('is-leaving');
+      cinematicTimer = setTimeout(() => {
         el.classList.add('hidden');
-        el.classList.remove('god-reveal--leaving');
+        el.classList.remove('is-leaving');
         el.setAttribute('aria-hidden', 'true');
-        godRevealTimer = null;
+        cinematicTimer = null;
         if (onDone) onDone();
-      }, 300);
-    }, 1600);
+      }, 260);
+    }, 1400);
   }
 
   function drawMoveToastIcon(canvas, moveDef) {
@@ -2014,6 +2025,16 @@
       onStartNew() { void startGame(false); },
       onContinue() { void startGame(true); },
       onDeleteRun() { void deleteSavedRun(); },
+      onRerunFromHistory(entryId) {
+        const entry = runHistory.find(e => e.id === entryId);
+        if (!entry) return;
+        chosenCharacter = entry.character || chosenCharacter;
+        selectedDifficulty = normalizeDifficulty(entry.difficulty);
+        metaProgress.selectedDifficulty = selectedDifficulty;
+        if (ui.seed) ui.seed.value = entry.seed || '';
+        uiController.setRunHistoryOpen(false);
+        void startGame(false);
+      },
     });
     uiController.bindRestartActions(() => location.reload());
 
@@ -3615,6 +3636,7 @@
       seed: baseSeedStr,
       roomType: currentRoom?.type || '',
       killedBy: getDamageSourceLabel(extra.killedBy || ''),
+      killerKey: String(extra.killerKey || ''),
       challengeBonusCrystals: Math.max(0, Number(extra.challengeBonusCrystals || 0)),
       challenges: normalizeChallengeSelection(selectedChallenges).map(key => CHALLENGE_DEFS[key]?.name || titleCase(key)),
       items: historyItems,
@@ -3630,6 +3652,10 @@
 
   function renderRunHistoryListEntry(entry, selected = false) {
     const cause = entry.result === 'win' ? 'Cleared' : (entry.killedBy || 'Unknown');
+    const killerLookup = entry.killerKey || entry.killedBy || '';
+    const killerCanvas = entry.result !== 'win' && killerLookup
+      ? `<canvas class="rh-row-killer" data-run-killer="${escapeHtml(killerLookup)}" width="28" height="28" aria-hidden="true" title="${escapeHtml(entry.killedBy || '')}"></canvas>`
+      : '';
     return `<button class="rh-row${selected ? ' active' : ''}" data-run-id="${escapeHtml(entry.id)}" data-result="${entry.result}" type="button">
       <canvas class="rh-row-portrait" data-run-character="${escapeHtml(entry.character)}" width="40" height="40" aria-hidden="true"></canvas>
       <span class="rh-row-body">
@@ -3639,20 +3665,33 @@
         </span>
         <span class="rh-row-sub">Fl.${entry.floor} · ${escapeHtml(cause)} · ${escapeHtml(formatRunEndedAt(entry.endedAt))}</span>
       </span>
+      ${killerCanvas}
     </button>`;
   }
 
   function renderRunHistoryHero(entry) {
     const win = entry.result === 'win';
-    const detail = win ? 'Run cleared' : `Killed by ${escapeHtml(entry.killedBy || 'Unknown')}`;
+    const killerLookup = entry.killerKey || entry.killedBy || '';
+    const killerSection = !win && killerLookup
+      ? `<div class="rh-hero-killer">
+           <canvas class="rh-hero-killer-portrait" data-run-killer="${escapeHtml(killerLookup)}" width="48" height="48" aria-hidden="true"></canvas>
+           <div class="rh-hero-killer-info">
+             <span class="rh-hero-killer-label">KILLED BY</span>
+             <span class="rh-hero-killer-name">${escapeHtml(entry.killedBy || 'Unknown')}</span>
+           </div>
+         </div>`
+      : '';
     return `<div class="rh-hero" data-result="${entry.result}">
       <canvas class="rh-hero-portrait" data-run-character="${escapeHtml(entry.character)}" width="64" height="64" aria-hidden="true"></canvas>
       <div class="rh-hero-info">
         <span class="rh-outcome">${win ? 'VICTORY' : 'DEFEAT'}</span>
         <strong class="rh-hero-name">${escapeHtml(entry.characterName)}</strong>
         <span class="rh-hero-meta">${escapeHtml(entry.difficultyName)} · Floor ${entry.floor} · Loop ${entry.loop}</span>
-        <span class="rh-hero-meta">${detail}</span>
         <span class="rh-hero-date">${escapeHtml(formatRunEndedAt(entry.endedAt))}</span>
+      </div>
+      <div class="rh-hero-right">
+        ${killerSection}
+        <button class="rh-rerun-btn" data-rerun-id="${escapeHtml(entry.id)}" type="button" title="Start a new run with the same seed, character, and difficulty">&#9654; RERUN</button>
       </div>
     </div>`;
   }
@@ -3660,13 +3699,23 @@
   function renderRunHistoryTabContent(entry, tab = 'stats') {
     if (tab === 'items') {
       if (!entry.items.length) return '<p class="rh-empty-inner">No relics collected.</p>';
-      return `<div class="rh-items-grid">${entry.items.map(i => `<div class="rh-item-tile"><span class="rh-item-icon">${escapeHtml(i.name.charAt(0))}</span><span class="rh-item-name" style="color:${getRarityNameColor(i.rarity)}">${escapeHtml(i.name)}</span><span class="rh-item-count">x${i.count}</span></div>`).join('')}</div>`;
+      return `<div class="rh-items-grid">${entry.items.map(i => `<div class="rh-item-tile"><canvas class="rh-item-icon" data-item-icon="${escapeHtml(i.key)}" width="32" height="32" aria-hidden="true"></canvas><span class="rh-item-name" style="color:${getRarityNameColor(i.rarity)}">${escapeHtml(i.name)}</span>${i.count > 1 ? `<span class="rh-item-count">×${i.count}</span>` : ''}</div>`).join('')}</div>`;
     }
     if (tab === 'moves') {
       if (!entry.equippedMoves.length) return '<p class="rh-empty-inner">No move data recorded.</p>';
-      return `<div class="rh-moves-grid">${entry.equippedMoves.map(m => `<div class="rh-move-slot" data-slot="${escapeHtml(m.slot)}"><span class="rh-move-label">${escapeHtml(m.slot.toUpperCase())}</span><span class="rh-move-name">${escapeHtml(m.name)}</span></div>`).join('')}</div>`;
+      return `<div class="rh-moves-grid">${entry.equippedMoves.map(m => `<div class="rh-move-slot" data-slot="${escapeHtml(m.slot)}"><canvas class="rh-move-icon" data-move-icon="${escapeHtml(m.key)}" width="36" height="36" aria-hidden="true"></canvas><div class="rh-move-text"><span class="rh-move-label">${escapeHtml(m.slot.toUpperCase())}</span><span class="rh-move-name">${escapeHtml(m.name)}</span></div></div>`).join('')}</div>`;
     }
-    return `<div class="rh-stats-grid">
+    const killerBannerKey = entry.killerKey || entry.killedBy || '';
+    const killerBanner = entry.result !== 'win' && entry.killedBy
+      ? `<div class="rh-killer-banner">
+           ${killerBannerKey ? `<canvas class="rh-killer-banner-portrait" data-run-killer="${escapeHtml(killerBannerKey)}" width="48" height="48" aria-hidden="true"></canvas>` : ''}
+           <div class="rh-killer-banner-text">
+             <span class="rh-killer-banner-label">KILLED BY</span>
+             <span class="rh-killer-banner-name">${escapeHtml(entry.killedBy)}</span>
+           </div>
+         </div>`
+      : '';
+    return `${killerBanner}<div class="rh-stats-grid">
       <div class="rh-stat"><span class="rh-stat-label">Floor</span><b class="rh-stat-val">${entry.floor}</b></div>
       <div class="rh-stat"><span class="rh-stat-label">Loop</span><b class="rh-stat-val">${entry.loop}</b></div>
       <div class="rh-stat"><span class="rh-stat-label">Time</span><b class="rh-stat-val">${escapeHtml(formatElapsedTime(entry.elapsedSeconds))}</b></div>
@@ -3677,14 +3726,70 @@
       <div class="rh-stat"><span class="rh-stat-label">Atk Power</span><b class="rh-stat-val">${entry.attackPower}</b></div>
       <div class="rh-stat"><span class="rh-stat-label">Atk Speed</span><b class="rh-stat-val">${entry.attackSpeed.toFixed(2)}x</b></div>
       <div class="rh-stat"><span class="rh-stat-label">Item Stacks</span><b class="rh-stat-val">${entry.totalItemStacks || 0}</b></div>
+      <div class="rh-stat rh-stat--seed"><span class="rh-stat-label">Seed</span><b class="rh-stat-val rh-stat-val--seed">${escapeHtml(entry.seed || '—')}</b></div>
     </div>`;
+  }
+
+  const killerSpriteMap = {
+    lava: 'golem',
+    storm: 'cult_mage',
+    challenge_bomb: 'knave',
+    enemy_projectile: 'sniper',
+    enemy_beam: 'laser',
+    god_beam: 'god',
+    mirror_beam: 'thorn_knight',
+    elite_blade_justice: 'knave',
+    no_hit: 'hunter',
+    // label string fallbacks for old history entries without killerKey
+    'Lava': 'golem',
+    'Storm Trial': 'cult_mage',
+    'Trial Bomb': 'knave',
+    'Enemy Projectile': 'sniper',
+    'Enemy Beam': 'laser',
+    'GOD Beam': 'god',
+    'Mirror Beam': 'thorn_knight',
+    'Never Get Hit': 'hunter',
+    'Queen of the Cult': 'queen_cult',
+    'Bulk Golem': 'bulk_golem',
+    'Artificer Charged Knave': 'artificer_knave',
+    'GOD': 'god',
+    'Mirror Champion': 'thorn_knight',
+    'Hunter': 'hunter',
+    'Charger': 'charger',
+    'Laser': 'laser',
+    'Sniper': 'sniper',
+    'Machine Gunner': 'sniper',
+    'Golem': 'golem',
+    'Knave': 'knave',
+    'Cult Mage': 'cult_mage',
+  };
+
+  function resolveKillerSprite(key) {
+    if (!key) return 'hunter';
+    if (SPRITE_DEFS[key]) return key;
+    if (killerSpriteMap[key]) return killerSpriteMap[key];
+    return 'hunter';
   }
 
   function hydrateRunHistorySprites(root = ui.runHistoryList) {
     if (!(root instanceof Element)) return;
-    root.querySelectorAll('[data-run-character]').forEach(element => {
-      if (!(element instanceof HTMLCanvasElement)) return;
-      drawSpriteToCanvas(element, element.dataset.runCharacter || 'thorn_knight', 56);
+    root.querySelectorAll('[data-run-character]').forEach(el => {
+      if (!(el instanceof HTMLCanvasElement)) return;
+      drawSpriteToCanvas(el, el.dataset.runCharacter || 'thorn_knight', 56);
+    });
+    root.querySelectorAll('[data-run-killer]').forEach(el => {
+      if (!(el instanceof HTMLCanvasElement)) return;
+      drawSpriteToCanvas(el, resolveKillerSprite(el.dataset.runKiller), el.width);
+    });
+    root.querySelectorAll('[data-item-icon]').forEach(el => {
+      if (!(el instanceof HTMLCanvasElement)) return;
+      const item = itemRegistry.get(el.dataset.itemIcon) || ITEM_DEFS[el.dataset.itemIcon];
+      if (item) drawItemToastIcon(el, item);
+    });
+    root.querySelectorAll('[data-move-icon]').forEach(el => {
+      if (!(el instanceof HTMLCanvasElement)) return;
+      const move = MOVE_DEFS[el.dataset.moveIcon];
+      if (move) drawMoveToastIcon(el, move);
     });
   }
 
@@ -3742,6 +3847,7 @@
       player = createDefaultPlayer();
       applyRunChallengeStartModifiers();
       lastDamageSource = '';
+      lastDamageSourceKey = '';
       resetScene();
       generateFloor();
       persistMetaSoon();
@@ -3797,6 +3903,7 @@
     mouse.down = false;
     mouse.right = false;
     lastDamageSource = '';
+    lastDamageSourceKey = '';
   }
 
   function sanitizePickupList(source) {
@@ -3813,6 +3920,7 @@
   function restoreRun(snapshot) {
     baseSeedStr = snapshot.baseSeedStr || snapshot.seedStr || createRandomSeed();
     lastDamageSource = '';
+    lastDamageSourceKey = '';
     runLoopIndex = Number(snapshot.runLoopIndex || 0);
     syncSeedState();
     floor = snapshot.floor;
@@ -7504,30 +7612,24 @@
     markInventoryPanelDirty();
     pushItemNotification(itemKey, 1);
 
-    if (item.reveal) {
-      if (itemKey === 'jesters_dice') {
-        floorSkipPending += 3;
-        const bonusItemCounts = {};
-        for (let index = 0; index < 10; index += 1) {
-          const rewardPool = ITEM_KEYS.filter(key => key !== 'jesters_dice');
-          const key = rewardPool[irand(0, rewardPool.length - 1, 'loot')];
-          player.items[key] = getItemCount(key) + 1;
-          bonusItemCounts[key] = (bonusItemCounts[key] || 0) + 1;
-          if (key === 'titan_heart') {
-            player.maxHp = Math.max(120, Math.round(player.maxHp * 1.08));
-            player.hp = Math.min(player.maxHp, Math.round(player.hp * 1.08));
-          }
+    if (itemKey === 'jesters_dice') {
+      floorSkipPending += 3;
+      const bonusItemCounts = {};
+      for (let index = 0; index < 10; index += 1) {
+        const rewardPool = ITEM_KEYS.filter(key => key !== 'jesters_dice');
+        const key = rewardPool[irand(0, rewardPool.length - 1, 'loot')];
+        player.items[key] = getItemCount(key) + 1;
+        bonusItemCounts[key] = (bonusItemCounts[key] || 0) + 1;
+        if (key === 'titan_heart') {
+          player.maxHp = Math.max(120, Math.round(player.maxHp * 1.08));
+          player.hp = Math.min(player.maxHp, Math.round(player.hp * 1.08));
         }
-        showGodItemReveal(itemKey, () => {
-          Object.entries(bonusItemCounts).forEach(([key, amount]) => {
-            pushItemNotification(key, Number(amount), '(Jester bonus)');
-          });
-        });
-      } else if (itemKey === 'wizards_paw') {
-        showGodItemReveal(itemKey, () => openWizardPawSelection());
-      } else {
-        showGodItemReveal(itemKey, null);
       }
+      Object.entries(bonusItemCounts).forEach(([key, amount]) => {
+        pushItemNotification(key, Number(amount), '(Jester bonus)');
+      });
+    } else if (itemKey === 'wizards_paw') {
+      openWizardPawSelection();
     }
 
     if (itemKey === 'titan_heart') {
@@ -9160,6 +9262,7 @@
     }
     if (isChallengeActive('no_hit')) {
       lastDamageSource = getDamageSourceLabel(source || 'no_hit');
+      lastDamageSourceKey = String(source || 'no_hit');
       player.hp = 0;
       player.inv = 0;
       shake = 10;
@@ -9185,6 +9288,7 @@
     finalAmount = Math.max(0, finalAmount);
     if (finalAmount <= 0) return;
     lastDamageSource = getDamageSourceLabel(source);
+    lastDamageSourceKey = String(source || '');
 
     player.hp -= finalAmount;
 
@@ -10146,9 +10250,9 @@
   }
 
   function die() {
-    const entry = finalizeRun('dead', { killedBy: lastDamageSource });
+    const entry = finalizeRun('dead', { killedBy: lastDamageSource, killerKey: lastDamageSourceKey });
     setGameState('dead');
-    uiController.setDeadInfo(`Floor ${entry.floor} | Killed by ${entry.killedBy} | ${entry.coins} run coins | ${entry.totalItemStacks} item stacks`);
+    uiController.setDeadScreen(entry);
     clearRunSave();
   }
 
@@ -10162,6 +10266,7 @@
   async function clearRunSave() {
     activeRun = null;
     lastDamageSource = '';
+    lastDamageSourceKey = '';
     try {
       await Promise.all([
         saveStore.delete('run'),
@@ -12931,6 +13036,7 @@
       }
       if (view.runHistoryTabPanel) {
         view.runHistoryTabPanel.innerHTML = renderRunHistoryTabContent(selected, activeRunHistoryTab);
+        hydrateRunHistorySprites(view.runHistoryTabPanel);
       }
     }
 
@@ -13091,6 +13197,11 @@
           if (!target) return;
           selectedRunHistoryId = target.dataset.runId || '';
           renderRunHistoryPage();
+        });
+        view.runHistoryHero?.addEventListener('click', event => {
+          const btn = event.target instanceof Element ? event.target.closest('[data-rerun-id]') : null;
+          if (!btn) return;
+          handlers.onRerunFromHistory(btn.dataset.rerunId);
         });
         view.runHistoryTabs.forEach(tab => {
           tab.addEventListener('click', () => {
@@ -13313,7 +13424,40 @@
           if (dash) setSkillCard('dash', dash.current, dash.max, !!dash.active, dash.charges, dash.maxCharges);
         }
       },
-      setDeadInfo(text) { view.deadInfo.textContent = text; },
+      setDeadScreen(entry) {
+        const fmt = (n) => String(n ?? '—');
+        const fmtTime = (s) => {
+          const m = Math.floor(s / 60);
+          const sec = Math.floor(s % 60);
+          return `${m}:${sec.toString().padStart(2, '0')}`;
+        };
+        const rarityClass = { knight: 'knight', white: 'knight', wizard: 'wizard', purple: 'wizard', god: 'god' };
+        if (view.deadKillerCanvas) {
+          drawSpriteToCanvas(view.deadKillerCanvas, resolveKillerSprite(entry.killerKey || ''), 120);
+        }
+        if (view.deadKillerName) view.deadKillerName.textContent = entry.killedBy || 'Unknown';
+        if (view.deadFloor) view.deadFloor.textContent = `${fmt(entry.floor)}/10`;
+        if (view.deadLevel) view.deadLevel.textContent = fmt(entry.level);
+        if (view.deadKills) view.deadKills.textContent = fmt(entry.kills);
+        if (view.deadTime) view.deadTime.textContent = fmtTime(entry.elapsedSeconds || 0);
+        if (view.deadCoins) view.deadCoins.textContent = fmt(entry.coins);
+        if (view.deadDifficulty) view.deadDifficulty.textContent = (entry.difficultyName || entry.difficulty || '—').toUpperCase();
+        if (view.deadItems) {
+          view.deadItems.innerHTML = '';
+          const items = Array.isArray(entry.items) ? entry.items : [];
+          if (items.length === 0) {
+            view.deadItems.innerHTML = '<span style="opacity:.3;font-size:11px">None</span>';
+          } else {
+            items.forEach(item => {
+              const pill = document.createElement('span');
+              const rc = rarityClass[item.rarity] || 'knight';
+              pill.className = `dead-item-pill dead-item-pill--${rc}`;
+              pill.textContent = item.count > 1 ? `${item.name} ×${item.count}` : item.name;
+              view.deadItems.appendChild(pill);
+            });
+          }
+        }
+      },
       setWinInfo(text) { view.winInfo.textContent = text; },
     };
   }

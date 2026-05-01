@@ -311,25 +311,48 @@
     </div>
   </div>
 
-  <!-- God-rarity item reveal overlay -->
-  <div id="godItemReveal" class="god-reveal hidden" aria-hidden="true">
-    <div class="god-reveal__backdrop"></div>
-    <div class="god-reveal__stage">
-      <div class="god-reveal__rarity-label">GOD RELIC</div>
-      <div class="god-reveal__icon-wrap">
-        <canvas id="godRevealCanvas" class="god-reveal__canvas" width="128" height="128"></canvas>
-        <div class="god-reveal__ring"></div>
-      </div>
-      <div class="god-reveal__name" id="godRevealName"></div>
-      <div class="god-reveal__desc" id="godRevealDesc"></div>
+  <!-- Item cinematic overlay -->
+  <div id="itemCinematic" class="item-cinematic hidden" aria-hidden="true">
+    <canvas id="itemCinematicCanvas" class="item-cinematic__icon" width="64" height="64"></canvas>
+    <div class="item-cinematic__text">
+      <div class="item-cinematic__name" id="itemCinematicName"></div>
+      <div class="item-cinematic__flavor" id="itemCinematicFlavor"></div>
     </div>
   </div>
 
   <!-- Death screen -->
   <div id="dead" class="overlay hidden">
-    <h2>YOU DIED</h2>
-    <p id="deadInfo" style="color:#aff;opacity:.8"></p>
-    <button class="restart">RETRY</button>
+    <div class="dead-layout">
+      <div class="dead-left">
+        <div class="dead-killer-portrait-wrap">
+          <canvas id="deadKillerCanvas" class="dead-killer-canvas" width="120" height="120"></canvas>
+          <div class="dead-killer-glow"></div>
+        </div>
+        <div class="dead-killer-wrap">
+          <span class="dead-killer-label">KILLED BY</span>
+          <span class="dead-killer-name" id="deadKillerName">Unknown</span>
+        </div>
+      </div>
+      <div class="dead-right">
+        <div class="dead-title-wrap">
+          <span class="dead-kicker">RUN OVER</span>
+          <h2 class="dead-title">YOU DIED</h2>
+        </div>
+        <div class="dead-stats-grid">
+          <div class="dead-stat"><span class="dead-stat-label">FLOOR</span><b class="dead-stat-val" id="deadFloor">—</b></div>
+          <div class="dead-stat"><span class="dead-stat-label">LEVEL</span><b class="dead-stat-val" id="deadLevel">—</b></div>
+          <div class="dead-stat"><span class="dead-stat-label">KILLS</span><b class="dead-stat-val" id="deadKills">—</b></div>
+          <div class="dead-stat"><span class="dead-stat-label">TIME</span><b class="dead-stat-val" id="deadTime">—</b></div>
+          <div class="dead-stat"><span class="dead-stat-label">COINS</span><b class="dead-stat-val" id="deadCoins">—</b></div>
+          <div class="dead-stat"><span class="dead-stat-label">DIFFICULTY</span><b class="dead-stat-val" id="deadDifficulty">—</b></div>
+        </div>
+        <div class="dead-items-wrap">
+          <span class="dead-items-label">RELICS HELD</span>
+          <div class="dead-items-list" id="deadItems"></div>
+        </div>
+        <button class="restart dead-retry">RETRY</button>
+      </div>
+    </div>
   </div>
 
   <!-- Win screen -->
