@@ -450,8 +450,20 @@
           <div class="char-carousel-viewport">
             <div class="char-carousel-track" id="choose">
 
+              <!-- Princess -->
+              <button class="char-card" data-char="princess" data-rarity="princess">
+                <div class="char-card-art-wrap">
+                  <canvas class="char-card-art" data-char-sprite="princess" width="96" height="96" aria-hidden="true"></canvas>
+                </div>
+                <div class="char-card-header">
+                  <span class="char-card-name">PRINCESS</span>
+                  <span class="char-card-tag princess-tag">PINK</span>
+                </div>
+                <small class="char-card-hint" data-base="Starter · high damage, pink theme">Starter · high damage, pink theme</small>
+              </button>
+
               <!-- Thorn Knight -->
-              <button class="char-card sel" data-char="thorn_knight" data-rarity="knight">
+              <button class="char-card" data-char="thorn_knight" data-rarity="knight">
                 <div class="char-card-art-wrap">
                   <canvas class="char-card-art" data-char-sprite="thorn_knight" width="96" height="96" aria-hidden="true"></canvas>
                 </div>
@@ -509,8 +521,77 @@
               <button class="difficulty-btn" data-difficulty="hard" type="button">Hard</button>
               <button class="difficulty-btn" data-difficulty="impossible" type="button">Impossible</button>
               <button class="difficulty-btn" data-difficulty="god" type="button">God</button>
+              <button class="difficulty-btn difficulty-btn--custom" data-difficulty="custom" type="button">Custom</button>
             </div>
             <small id="difficultyHint" class="difficulty-hint">Easy uses the current balance.</small>
+          </div>
+          <div id="customDiffPanel" class="custom-diff-panel hidden">
+            <div class="cdiff-header">
+              <span class="cdiff-title">CUSTOM SETTINGS</span>
+              <button id="customDiffReset" class="cdiff-reset" type="button">Reset</button>
+            </div>
+            <div class="cdiff-grid">
+              <div class="cdiff-row" data-param="statMultiplier">
+                <span class="cdiff-label">Enemy Stats</span>
+                <input type="range" class="cdiff-slider" min="0.5" max="3" step="0.01" value="1">
+                <input type="number" class="cdiff-num" min="0.5" max="3" step="0.01" value="1">
+              </div>
+              <div class="cdiff-row" data-param="bossStatMultiplier">
+                <span class="cdiff-label">Boss Stats</span>
+                <input type="range" class="cdiff-slider" min="0.5" max="3" step="0.01" value="1">
+                <input type="number" class="cdiff-num" min="0.5" max="3" step="0.01" value="1">
+              </div>
+              <div class="cdiff-row" data-param="speedMultiplier">
+                <span class="cdiff-label">Enemy Speed</span>
+                <input type="range" class="cdiff-slider" min="0.5" max="2" step="0.01" value="1">
+                <input type="number" class="cdiff-num" min="0.5" max="2" step="0.01" value="1">
+              </div>
+              <div class="cdiff-row" data-param="enemyReactionMultiplier">
+                <span class="cdiff-label">Reaction Time</span>
+                <input type="range" class="cdiff-slider" min="0.5" max="2.5" step="0.01" value="1">
+                <input type="number" class="cdiff-num" min="0.5" max="2.5" step="0.01" value="1">
+              </div>
+              <div class="cdiff-row" data-param="rangedCadenceMultiplier">
+                <span class="cdiff-label">Ranged Cadence</span>
+                <input type="range" class="cdiff-slider" min="0.3" max="1.5" step="0.01" value="1">
+                <input type="number" class="cdiff-num" min="0.3" max="1.5" step="0.01" value="1">
+              </div>
+              <div class="cdiff-row" data-param="eliteChance">
+                <span class="cdiff-label">Elite Chance</span>
+                <input type="range" class="cdiff-slider" min="0" max="0.6" step="0.01" value="0.12">
+                <input type="number" class="cdiff-num" min="0" max="0.6" step="0.01" value="0.12">
+              </div>
+              <div class="cdiff-row" data-param="eliteFloor">
+                <span class="cdiff-label">Elite Start Floor</span>
+                <input type="range" class="cdiff-slider" min="1" max="10" step="1" value="8">
+                <input type="number" class="cdiff-num" min="1" max="10" step="1" value="8">
+              </div>
+              <div class="cdiff-row" data-param="miniBossChanceMultiplier">
+                <span class="cdiff-label">Miniboss Chance</span>
+                <input type="range" class="cdiff-slider" min="0" max="3" step="0.01" value="1">
+                <input type="number" class="cdiff-num" min="0" max="3" step="0.01" value="1">
+              </div>
+              <div class="cdiff-row" data-param="waveBonus">
+                <span class="cdiff-label">Wave Bonus</span>
+                <input type="range" class="cdiff-slider" min="0" max="6" step="1" value="0">
+                <input type="number" class="cdiff-num" min="0" max="6" step="1" value="0">
+              </div>
+              <div class="cdiff-row" data-param="roomWeightBonus">
+                <span class="cdiff-label">Room Weight</span>
+                <input type="range" class="cdiff-slider" min="0" max="0.4" step="0.01" value="0">
+                <input type="number" class="cdiff-num" min="0" max="0.4" step="0.01" value="0">
+              </div>
+              <div class="cdiff-row" data-param="supportPowerMultiplier">
+                <span class="cdiff-label">Support Power</span>
+                <input type="range" class="cdiff-slider" min="0.5" max="2.5" step="0.01" value="1">
+                <input type="number" class="cdiff-num" min="0.5" max="2.5" step="0.01" value="1">
+              </div>
+              <div class="cdiff-row" data-param="shopPriceMultiplier">
+                <span class="cdiff-label">Shop Prices</span>
+                <input type="range" class="cdiff-slider" min="0.5" max="3" step="0.01" value="1">
+                <input type="number" class="cdiff-num" min="0.5" max="3" step="0.01" value="1">
+              </div>
+            </div>
           </div>
           <div class="seedrow seedrow--panel">
             <label>SEED</label>
@@ -558,6 +639,7 @@
     <div class="stab-bar" role="tablist">
       <button class="stab active" data-tab="controls" role="tab">Controls</button>
       <button class="stab" data-tab="volume"   role="tab">Volume</button>
+      <button class="stab" data-tab="theme"    role="tab">Theme</button>
       <button class="stab" data-tab="access"   role="tab">Accessibility</button>
       <button class="stab" data-tab="data"     role="tab">Data</button>
     </div>
@@ -598,6 +680,22 @@
         <input class="vol-slider" id="volMusic" type="range" min="0" max="100" value="60">
         <span class="vol-val" id="volMusicVal">60</span>
       </div>
+    </div>
+
+    <!-- Theme tab -->
+    <div class="stab-panel hidden" id="stab-theme">
+      <p class="stab-hint">Pick a preset or build your own. Changes apply instantly.</p>
+      <div class="theme-presets" id="themePresets"></div>
+      <div class="theme-divider"></div>
+      <div class="theme-custom-head">
+        <span class="theme-custom-label">CUSTOM THEME</span>
+        <div class="theme-name-row">
+          <input id="themeNameInput" class="theme-name-input" type="text" maxlength="32" placeholder="Theme name…">
+          <button id="themeSaveBtn" class="theme-action-btn">Save</button>
+          <button id="themeDeleteBtn" class="theme-action-btn theme-action-btn--danger">Delete</button>
+        </div>
+      </div>
+      <div class="theme-vars" id="themeVars"></div>
     </div>
 
     <!-- Data tab -->

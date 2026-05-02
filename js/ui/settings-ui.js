@@ -5,6 +5,198 @@
   const DEFAULT_VOLUME   = { master:80, sfx:80, music:60 };
   const DEFAULT_ACCESS   = { reduceFlash:false, highContrast:false, screenShake:true };
 
+  // ── Theme system ─────────────────────────────────────────────────────────────
+
+  const THEME_VARS = [
+    { key: '--menu-bg-deep',          label: 'Background Deep',    type: 'color' },
+    { key: '--menu-bg-soft',          label: 'Background Soft',    type: 'color' },
+    { key: '--menu-surface',          label: 'Surface',            type: 'color' },
+    { key: '--menu-surface-strong',   label: 'Surface Strong',     type: 'color' },
+    { key: '--menu-border',           label: 'Border',             type: 'color' },
+    { key: '--menu-border-strong',    label: 'Border Strong',      type: 'color' },
+    { key: '--menu-text',             label: 'Text',               type: 'color' },
+    { key: '--menu-text-muted',       label: 'Text Muted',         type: 'color' },
+    { key: '--menu-text-soft',        label: 'Text Soft',          type: 'color' },
+    { key: '--menu-accent',           label: 'Accent',             type: 'color' },
+    { key: '--menu-accent-strong',    label: 'Accent Strong',      type: 'color' },
+    { key: '--menu-glow',             label: 'Glow',               type: 'color' },
+    { key: '--menu-shadow',           label: 'Shadow',             type: 'color' },
+    { key: '--menu-danger',           label: 'Danger',             type: 'color' },
+  ];
+
+  const PRESET_THEMES = {
+    dark: {
+      name: 'Dark',
+      vars: {
+        '--menu-bg-deep':         'rgba(15,18,24,.95)',
+        '--menu-bg-soft':         'rgba(23,29,39,.93)',
+        '--menu-surface':         'rgba(30,37,49,.9)',
+        '--menu-surface-strong':  'rgba(35,43,57,.96)',
+        '--menu-border':          'rgba(128,146,170,.34)',
+        '--menu-border-strong':   'rgba(168,190,219,.62)',
+        '--menu-text':            '#e4ebf6',
+        '--menu-text-muted':      '#a8b6ca',
+        '--menu-text-soft':       '#7f8fa6',
+        '--menu-accent':          '#8ea8cb',
+        '--menu-accent-strong':   '#c5d7ef',
+        '--menu-glow':            'rgba(144,170,201,.24)',
+        '--menu-shadow':          'rgba(0,0,0,.42)',
+        '--menu-danger':          '#d88a8f',
+      },
+    },
+    light: {
+      name: 'Light',
+      vars: {
+        '--menu-bg-deep':         'rgba(235,238,245,.98)',
+        '--menu-bg-soft':         'rgba(245,247,252,.97)',
+        '--menu-surface':         'rgba(255,255,255,.92)',
+        '--menu-surface-strong':  'rgba(248,250,255,.98)',
+        '--menu-border':          'rgba(100,120,150,.22)',
+        '--menu-border-strong':   'rgba(80,110,160,.48)',
+        '--menu-text':            '#1a2133',
+        '--menu-text-muted':      '#4a5870',
+        '--menu-text-soft':       '#7080a0',
+        '--menu-accent':          '#3a6aaa',
+        '--menu-accent-strong':   '#1e4888',
+        '--menu-glow':            'rgba(60,120,200,.18)',
+        '--menu-shadow':          'rgba(0,0,0,.14)',
+        '--menu-danger':          '#c0404a',
+      },
+    },
+    princess: {
+      name: 'Pink Princess',
+      vars: {
+        '--menu-bg-deep':         'rgba(34,10,28,.97)',
+        '--menu-bg-soft':         'rgba(52,18,46,.95)',
+        '--menu-surface':         'rgba(72,26,62,.92)',
+        '--menu-surface-strong':  'rgba(92,34,76,.97)',
+        '--menu-border':          'rgba(245,126,189,.36)',
+        '--menu-border-strong':   'rgba(255,180,220,.66)',
+        '--menu-text':            '#fff0f8',
+        '--menu-text-muted':      '#ffc2e0',
+        '--menu-text-soft':       '#d98bb8',
+        '--menu-accent':          '#f47ebd',
+        '--menu-accent-strong':   '#ffd1ea',
+        '--menu-glow':            'rgba(245,126,189,.34)',
+        '--menu-shadow':          'rgba(28,4,22,.52)',
+        '--menu-danger':          '#ff6f9f',
+      },
+    },
+    nature: {
+      name: 'Nature',
+      vars: {
+        '--menu-bg-deep':         'rgba(8,16,10,.97)',
+        '--menu-bg-soft':         'rgba(12,24,14,.95)',
+        '--menu-surface':         'rgba(18,36,20,.92)',
+        '--menu-surface-strong':  'rgba(22,44,24,.97)',
+        '--menu-border':          'rgba(80,160,90,.3)',
+        '--menu-border-strong':   'rgba(110,200,120,.58)',
+        '--menu-text':            '#d8f0d0',
+        '--menu-text-muted':      '#9ac89a',
+        '--menu-text-soft':       '#608860',
+        '--menu-accent':          '#6abf6a',
+        '--menu-accent-strong':   '#a8e890',
+        '--menu-glow':            'rgba(80,180,80,.26)',
+        '--menu-shadow':          'rgba(0,0,0,.52)',
+        '--menu-danger':          '#d4824a',
+      },
+    },
+  };
+
+  let activeTheme = 'dark';
+  let customThemeVars = { ...PRESET_THEMES.dark.vars };
+  let savedThemes = {};
+
+  function resolveColor(cssVal) {
+    // Convert rgba(...) to #rrggbb hex for color inputs (alpha is dropped for simplicity)
+    const m = cssVal.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+    if (m) return '#' + [m[1],m[2],m[3]].map(n => parseInt(n).toString(16).padStart(2,'0')).join('');
+    if (cssVal.startsWith('#') && cssVal.length === 7) return cssVal;
+    if (cssVal.startsWith('#') && cssVal.length === 4) {
+      return '#' + cssVal.slice(1).split('').map(c => c+c).join('');
+    }
+    return '#888888';
+  }
+
+  function applyThemeVars(vars) {
+    const root = document.documentElement;
+    THEME_VARS.forEach(({ key }) => {
+      if (vars[key] !== undefined) root.style.setProperty(key, vars[key]);
+    });
+  }
+
+  function applyTheme(key) {
+    activeTheme = key;
+    if (PRESET_THEMES[key]) {
+      customThemeVars = { ...PRESET_THEMES[key].vars };
+      applyThemeVars(PRESET_THEMES[key].vars);
+    } else if (savedThemes[key]) {
+      customThemeVars = { ...savedThemes[key].vars };
+      applyThemeVars(savedThemes[key].vars);
+    }
+    refreshThemeUI();
+  }
+
+  function refreshThemeUI() {
+    // Preset cards
+    const presetsEl = document.getElementById('themePresets');
+    if (!presetsEl) return;
+    const allThemes = { ...PRESET_THEMES, ...savedThemes };
+    presetsEl.innerHTML = '';
+    Object.entries(allThemes).forEach(([key, def]) => {
+      const card = document.createElement('button');
+      card.type = 'button';
+      card.className = 'theme-card' + (activeTheme === key ? ' theme-card--active' : '');
+      card.dataset.themeKey = key;
+      const swatch = Object.values(def.vars).slice(6, 10).map(c =>
+        `<span class="theme-swatch" style="background:${c}"></span>`
+      ).join('');
+      card.innerHTML = `<span class="theme-card-name">${def.name}</span><span class="theme-card-swatches">${swatch}</span>`;
+      card.addEventListener('click', () => {
+        applyTheme(key);
+        save();
+      });
+      presetsEl.appendChild(card);
+    });
+
+    // Color pickers
+    const varsEl = document.getElementById('themeVars');
+    if (!varsEl) return;
+    varsEl.innerHTML = '';
+    THEME_VARS.forEach(({ key, label }) => {
+      const row = document.createElement('div');
+      row.className = 'theme-var-row';
+      const hexVal = resolveColor(customThemeVars[key] || '#888888');
+      row.innerHTML =
+        `<label class="theme-var-label">${label}</label>` +
+        `<input type="color" class="theme-var-picker" data-var="${key}" value="${hexVal}">` +
+        `<span class="theme-var-hex">${hexVal}</span>`;
+      row.querySelector('.theme-var-picker').addEventListener('input', e => {
+        const hex = e.target.value;
+        customThemeVars[key] = hex;
+        row.querySelector('.theme-var-hex').textContent = hex;
+        document.documentElement.style.setProperty(key, hex);
+        // If a preset was active, switch to custom mode
+        if (PRESET_THEMES[activeTheme]) activeTheme = '_custom';
+        refreshPresetCards();
+      });
+      varsEl.appendChild(row);
+    });
+
+    // Name input reflects active theme if it's a saved one
+    const nameInput = document.getElementById('themeNameInput');
+    if (nameInput && savedThemes[activeTheme]) nameInput.value = savedThemes[activeTheme].name;
+    else if (nameInput && PRESET_THEMES[activeTheme]) nameInput.value = '';
+  }
+
+  function refreshPresetCards() {
+    document.querySelectorAll('.theme-card').forEach(card => {
+      card.classList.toggle('theme-card--active', card.dataset.themeKey === activeTheme);
+    });
+  }
+
+  // ── State ─────────────────────────────────────────────────────────────────────
+
   let bindings = { ...DEFAULT_BINDINGS };
   let volume   = { ...DEFAULT_VOLUME };
   let access   = { ...DEFAULT_ACCESS };
@@ -13,14 +205,17 @@
     try {
       const s = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
       if (!s) return;
-      if (s.bindings) bindings = { ...DEFAULT_BINDINGS, ...s.bindings };
-      if (s.volume)   volume   = { ...DEFAULT_VOLUME,   ...s.volume };
-      if (s.access)   access   = { ...DEFAULT_ACCESS,   ...s.access };
+      if (s.bindings)     bindings     = { ...DEFAULT_BINDINGS, ...s.bindings };
+      if (s.volume)       volume       = { ...DEFAULT_VOLUME,   ...s.volume };
+      if (s.access)       access       = { ...DEFAULT_ACCESS,   ...s.access };
+      if (s.activeTheme)  activeTheme  = s.activeTheme;
+      if (s.savedThemes && typeof s.savedThemes === 'object') savedThemes = s.savedThemes;
+      if (s.customThemeVars && typeof s.customThemeVars === 'object') customThemeVars = { ...customThemeVars, ...s.customThemeVars };
     } catch {}
   }
 
   function save() {
-    localStorage.setItem(STORE_KEY, JSON.stringify({ bindings, volume, access }));
+    localStorage.setItem(STORE_KEY, JSON.stringify({ bindings, volume, access, activeTheme, savedThemes, customThemeVars }));
   }
 
   function applyAccess() {
@@ -30,6 +225,12 @@
 
   load();
   applyAccess();
+  // Apply saved theme on boot (before any UI is queried)
+  if (activeTheme && (PRESET_THEMES[activeTheme] || savedThemes[activeTheme])) {
+    applyThemeVars((PRESET_THEMES[activeTheme] || savedThemes[activeTheme]).vars);
+  } else if (activeTheme === '_custom') {
+    applyThemeVars(customThemeVars);
+  }
 
   window.NeoSettings = { getBindings: () => bindings, getAccess: () => access, getVolume: () => volume };
 
@@ -95,6 +296,7 @@
       modal.querySelectorAll('.stab-panel').forEach(p => p.classList.add('hidden'));
       btn.classList.add('active');
       document.getElementById('stab-' + btn.dataset.tab).classList.remove('hidden');
+      if (btn.dataset.tab === 'theme') refreshThemeUI();
     });
   });
 
@@ -165,6 +367,27 @@
     const el = document.getElementById(id);
     el.checked = access[key];
     el.addEventListener('change', () => { access[key] = el.checked; save(); applyAccess(); });
+  });
+
+  // ── Theme save / delete ───────────────────────────────────────────────────────
+  document.getElementById('themeSaveBtn').addEventListener('click', () => {
+    const nameInput = document.getElementById('themeNameInput');
+    const name = (nameInput.value || '').trim();
+    if (!name) { nameInput.focus(); return; }
+    const slug = name.toLowerCase().replace(/[^a-z0-9_-]/g, '_');
+    savedThemes[slug] = { name, vars: { ...customThemeVars } };
+    activeTheme = slug;
+    save();
+    refreshThemeUI();
+  });
+
+  document.getElementById('themeDeleteBtn').addEventListener('click', () => {
+    if (!savedThemes[activeTheme]) return;
+    delete savedThemes[activeTheme];
+    activeTheme = 'dark';
+    applyTheme('dark');
+    save();
+    refreshThemeUI();
   });
 
   document.getElementById('dataExport').addEventListener('click', async () => {

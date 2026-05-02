@@ -1,4 +1,19 @@
 window.NeoNykeSpriteDefs = {
+  princess: {
+    palette: { a: '#241026', b: '#d85fa8', c: '#ffd1ea', d: '#f7e870' },
+    pixels: [
+      '.ddddddd..',
+      'ddcbbbcdd.',
+      'dcbcccbcd.',
+      '.dcccccd..',
+      '.bcccccb..',
+      '.bccbccb..',
+      '.bcbcbcb..',
+      '..b..bb...',
+      '.bb..bb...',
+      '.c....c...',
+    ],
+  },
   thorn_knight: {
     palette: { a: '#171d24', b: '#495765', c: '#dfe7ef', d: '#8b3247' },
     pixels: [
@@ -30,18 +45,18 @@ window.NeoNykeSpriteDefs = {
     ],
   },
   granialla: {
-    palette: { a: '#2e2230', b: '#b18a45', c: '#f8eed3', d: '#b8d0dd' },
+    palette: { a: '#1e1018', b: '#6b3a22', c: '#c8824a', d: '#f5d84a' },
     pixels: [
-      '..d.cd....',
-      '..bbbb....',
-      '.bcaccb...',
-      '.bccccb...',
-      '.bbddbbd..',
-      '.bbbbbbd..',
-      '.bbccbb...',
+      '.ddddddd..',
+      'ddcbbbcdd.',
+      'dcbcccbcd.',
+      '.dcccccbd.',
+      '.baaaaab..',
+      '.baabbab..',
+      '.bacbcab..',
       '..b..bb...',
-      '.db..bd...',
-      'c......c..',
+      '.bb..bb...',
+      '.c....c...',
     ],
   },
   hunter: {

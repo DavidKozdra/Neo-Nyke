@@ -189,7 +189,7 @@
     artificer_knave: 'Run. I only need one clean hit.',
   };
   const RUN_HISTORY_LIMIT = 200;
-  const DIFFICULTY_ORDER = ['easy', 'medium', 'hard', 'impossible', 'god'];
+  const DIFFICULTY_ORDER = ['easy', 'medium', 'hard', 'impossible', 'god', 'custom'];
   const DIFFICULTY_DEFS = {
     easy: {
       key: 'easy',
@@ -281,6 +281,24 @@
       supportPowerMultiplier: 1.3,
       shopPriceMultiplier: 1.42,
     },
+    custom: {
+      key: 'custom',
+      name: 'Custom',
+      description: 'Tweak every multiplier yourself.',
+      unlockLoops: 0,
+      waveBonus: 0,
+      eliteFloor: 8,
+      eliteChance: 0.12,
+      miniBossChanceMultiplier: 1,
+      roomWeightBonus: 0,
+      statMultiplier: 1,
+      bossStatMultiplier: 1,
+      speedMultiplier: 1,
+      enemyReactionMultiplier: 1,
+      rangedCadenceMultiplier: 1,
+      supportPowerMultiplier: 1,
+      shopPriceMultiplier: 1,
+    },
   };
   const CHALLENGE_DEFS = {
     no_hit: {
@@ -343,6 +361,14 @@
   const CHALLENGE_ORDER = Object.keys(CHALLENGE_DEFS);
 
   const CHARACTER_DEFS = {
+    princess: {
+      key: 'princess',
+      name: 'Princess',
+      rarity: 'princess',
+      damageMultiplier: 1.2,
+      hpMultiplier: 1.15,
+      skills: { melee: 'Royal Strike', laser: 'Petal Beam', smash: 'Blossom Burst', dash: 'Graceful Step' },
+    },
     thorn_knight: {
       key: 'thorn_knight',
       name: 'Thorn Knight',
@@ -368,6 +394,16 @@
   };
 
   const HERO_DISPLAY = {
+    princess: {
+      lore: 'A radiant pink princess built for accessible runs. High damage, generous HP, and forgiving cooldowns make her ideal for new adventurers.',
+      stats: [
+        { label: 'HP',    pct: 90, color: '#f47ebd' },
+        { label: 'DMG',   pct: 80, color: '#ff9ccf' },
+        { label: 'SPD',   pct: 66, color: '#c991ff' },
+        { label: 'RANGE', pct: 60, color: '#ffd1ea' },
+      ],
+      skills: ['Royal Strike', 'Petal Beam', 'Blossom Burst'],
+    },
     thorn_knight: {
       lore: 'A bleed-forged warrior who turns wounds into weapons. The longer the fight, the deadlier he becomes.',
       stats: [
@@ -389,7 +425,7 @@
       skills: ['🔥 Fire Balls', '💿 Power Disks', '🌀 Chaos Burst'],
     },
     granialla: {
-      lore: 'Ascended beyond death. Divine judgment and self-restoration — earned only by slaying GOD.',
+      lore: 'A dark-skinned princess with a crown of golden hair. Divine judgment and self-restoration — earned only by slaying GOD.',
       stats: [
         { label: 'HP',    pct: 66, color: '#c06060' },
         { label: 'DMG',   pct: 66, color: '#c08040' },
@@ -453,8 +489,10 @@
     slash: { key: 'slash', slot: 'melee', name: 'Slash', desc: 'Close-range arc attack.' },
     fire_balls: { key: 'fire_balls', slot: 'melee', name: 'Fire Balls', desc: 'Shoot a spread of fireballs.' },
     smite: { key: 'smite', slot: 'melee', name: 'Smite', desc: 'Physical swing plus chaining lightning.' },
+    narwal_fight: { key: 'narwal_fight', slot: 'melee', name: 'Narwal Fight', desc: 'A wide pink spear-sweep with a piercing follow-up.', exclusiveCharacter: 'princess' },
 
     blood_beam: { key: 'blood_beam', slot: 'laser', name: 'Blood Beam', desc: 'Sustained piercing beam that causes bleed.' },
+    love_beam: { key: 'love_beam', slot: 'laser', name: 'Love Beam', desc: 'A radiant beam that damages enemies and heals you on hit.', exclusiveCharacter: 'princess' },
     turtle_wave: { key: 'turtle_wave', slot: 'laser', name: 'Turtle Wave', desc: 'Giant beam. Drains 2 HP each active second.' },
     power_disks: { key: 'power_disks', slot: 'laser', name: 'Power Disks', desc: 'Burst of spinning disks.' },
     blade_justice: { key: 'blade_justice', slot: 'laser', name: 'Blade Justice', desc: 'Divine short-range blade strike.' },
@@ -462,6 +500,7 @@
     god_sweep: { key: 'god_sweep', slot: 'laser', name: 'God Sweep', desc: 'Spin a massive divine beam around yourself.' },
 
     crimson_smash: { key: 'crimson_smash', slot: 'smash', name: 'Crimson Smash', desc: 'Heavy area smash.' },
+    kicky_kick: { key: 'kicky_kick', slot: 'smash', name: 'Kicky Kick', desc: 'A heavy kick that blasts enemies away.', exclusiveCharacter: 'princess' },
     chaos_burst: { key: 'chaos_burst', slot: 'smash', name: 'Chaos Burst', desc: 'Multiple chaos detonations.' },
     healing_zone: { key: 'healing_zone', slot: 'smash', name: 'Healing Zone', desc: 'Healing and damage zone.' },
     fire_circle: { key: 'fire_circle', slot: 'smash', name: 'Fire Circle', desc: 'Burning aura around you.' },
@@ -488,6 +527,13 @@
       name: 'Zip Lightning',
       desc: 'Zip between targets, chaining lightning hits as you move.',
     },
+    flying_unhitable: {
+      key: 'flying_unhitable',
+      slot: 'dash',
+      name: 'Flying Untouchable',
+      desc: 'Rise into the air and become untouchable for 15 seconds.',
+      exclusiveCharacter: 'princess',
+    },
     cowards_way: {
       key: 'cowards_way',
       slot: 'dash',
@@ -497,11 +543,11 @@
   };
 
   const SHOP_MOVE_POOL = [
-    'slash', 'fire_balls', 'smite',
-    'blood_beam', 'turtle_wave', 'power_disks', 'blade_justice', 'lightning_columns',
+    'slash', 'fire_balls', 'smite', 'narwal_fight',
+    'blood_beam', 'love_beam', 'turtle_wave', 'power_disks', 'blade_justice', 'lightning_columns',
     'god_sweep',
-    'crimson_smash', 'chaos_burst', 'healing_zone', 'fire_circle', 'floor_lava',
-    'dash', 'nimrod_stomp', 'warp', 'zip_lightning', 'cowards_way',
+    'crimson_smash', 'kicky_kick', 'chaos_burst', 'healing_zone', 'fire_circle', 'floor_lava',
+    'dash', 'nimrod_stomp', 'warp', 'zip_lightning', 'flying_unhitable', 'cowards_way',
   ];
 
   const WEAPON_DEFS = {
@@ -595,6 +641,14 @@
 
   // Rival adventurers: dungeon-roaming NPCs based on unchosen characters.
   const RIVAL_DEFS = {
+    princess: {
+      name: 'Rival Princess',
+      color: '#e87fff',
+      hp: 220, dmg: 26, speed: 102, r: 16, attackCd: 0.75,
+      enterLine: 'This dungeon belongs to me.',
+      deathLine: 'Unbelievable...',
+      attackStyle: 'melee',
+    },
     thorn_knight: {
       name: 'Rival Thorn',
       color: '#ff6e8b',
@@ -1143,11 +1197,26 @@
   let laserMode = 'beam';
   let laserAngle = 0;
   let laserSweepSpeed = 0;
+  let loveBeamCasting = false;
   let turtleWaveHpTimer = 0;
   let dashKeyLatch = false;
   let chosenCharacter = 'thorn_knight';
   let selectedDifficulty = 'easy';
   let selectedChallenges = [];
+  let customDifficultySettings = {
+    waveBonus: 0,
+    eliteFloor: 8,
+    eliteChance: 0.12,
+    miniBossChanceMultiplier: 1,
+    roomWeightBonus: 0,
+    statMultiplier: 1,
+    bossStatMultiplier: 1,
+    speedMultiplier: 1,
+    enemyReactionMultiplier: 1,
+    rangedCadenceMultiplier: 1,
+    supportPowerMultiplier: 1,
+    shopPriceMultiplier: 1,
+  };
   let destructibles = [];
   let hazards = [];
   let shopOffers = [];
@@ -1215,13 +1284,16 @@
     slash:            { damage: 32,  cooldown: 0.40, range: 90  },
     fire_balls:       { damage: 20,  cooldown: 0.55, range: 180 },
     smite:            { damage: 28,  cooldown: 0.55, range: 110 },
+    narwal_fight:     { damage: 36,  cooldown: 0.55, range: 126 },
     blood_beam:       { damage: 14,  cooldown: 3.00, duration: 1.2, critChance: 0 },
+    love_beam:        { damage: 16,  cooldown: 3.40, duration: 1.7, critChance: 0 },
     turtle_wave:      { damage: 55,  cooldown: 3.00, duration: 1.35 },
     power_disks:      { damage: 22,  cooldown: 3.00, range: 240 },
     blade_justice:    { damage: 60,  cooldown: 3.80, range: 80  },
     lightning_columns:{ damage: 30,  cooldown: 4.80, range: 180 },
     god_sweep:        { damage: 40,  cooldown: 7.20, range: 320 },
     crimson_smash:    { damage: 55,  cooldown: 4.00, range: 120 },
+    kicky_kick:       { damage: 44,  cooldown: 4.20, range: 138 },
     chaos_burst:      { damage: 38,  cooldown: 4.00, range: 100 },
     healing_zone:     { damage: 12,  cooldown: 5.00, duration: 3.0, range: 130 },
     fire_circle:      { damage: 18,  cooldown: 4.50, duration: 3.5, range: 100 },
@@ -1230,6 +1302,7 @@
     nimrod_stomp:     { damage: 60,  cooldown: 2.50, range: 110 },
     warp:             { cooldown: 2.80 },
     zip_lightning:    { damage: 30,  cooldown: 2.00 },
+    flying_unhitable: { cooldown: 18.00, duration: 15.0 },
     cowards_way:      { cooldown: 6.00, duration: 3.0 },
   };
 
@@ -1980,6 +2053,8 @@
       onCharacterSelect(characterKey, button) {
         if (button.classList.contains('locked')) return;
         chosenCharacter = characterKey;
+        metaProgress.selectedCharacter = chosenCharacter;
+        persistMetaSoon();
         updateCharacterSelectionUI();
       },
       onDifficultySelect(difficultyKey, button) {
@@ -2029,8 +2104,10 @@
         const entry = runHistory.find(e => e.id === entryId);
         if (!entry) return;
         chosenCharacter = entry.character || chosenCharacter;
+        metaProgress.selectedCharacter = chosenCharacter;
         selectedDifficulty = normalizeDifficulty(entry.difficulty);
         metaProgress.selectedDifficulty = selectedDifficulty;
+        persistMetaSoon();
         if (ui.seed) ui.seed.value = entry.seed || '';
         uiController.setRunHistoryOpen(false);
         void startGame(false);
@@ -2506,7 +2583,8 @@
     if (!currentRoom || currentRoom.type !== 'shop') return [];
     if (!Array.isArray(currentRoom.shopMoveOffers) || currentRoom.shopMoveOffers.length === 0) {
       const seen = new Set(Object.keys(player?.ownedMoves || {}));
-      const pool = SHOP_MOVE_POOL.filter(key => key !== 'god_sweep' && !seen.has(key));
+      const allowedCharacter = player?.character || chosenCharacter;
+      const pool = SHOP_MOVE_POOL.filter(key => key !== 'god_sweep' && !seen.has(key) && isMoveAllowedForCharacter(key, allowedCharacter));
       const shuffledPool = shuffle(pool, 'loot');
       const offers = shuffledPool.slice(0, 4).map((moveKey, index) => ({
         type: 'move',
@@ -2524,6 +2602,9 @@
         });
       }
       currentRoom.shopMoveOffers = offers.slice(0, 4);
+    } else {
+      const allowedCharacter = player?.character || chosenCharacter;
+      currentRoom.shopMoveOffers = currentRoom.shopMoveOffers.filter(offer => offer.type !== 'move' || isMoveAllowedForCharacter(offer.key, allowedCharacter));
     }
     refreshRoomShopCosts(currentRoom);
     return currentRoom.shopMoveOffers;
@@ -2760,7 +2841,7 @@
 
     const equippedMoveKeys = new Set(Object.values(player.equippedMoves || {}).filter(Boolean));
     const allOwnedMoves = Object.keys(player.ownedMoves || {})
-      .filter(key => player.ownedMoves[key] && MOVE_DEFS[key])
+      .filter(key => player.ownedMoves[key] && MOVE_DEFS[key] && isMoveAllowedForCharacter(key, player.character))
       .sort((a, b) => MOVE_DEFS[a].slot.localeCompare(MOVE_DEFS[b].slot));
     ui.invMovesList.innerHTML = allOwnedMoves
       .map(key => {
@@ -2810,6 +2891,7 @@
   function equipMove(slot, moveKey) {
     if (!player || !MOVE_DEFS[moveKey]) return;
     if (MOVE_DEFS[moveKey].slot !== slot) return;
+    if (!isMoveAllowedForCharacter(moveKey, player.character)) return;
     if (!player.ownedMoves?.[moveKey]) return;
     player.equippedMoves[slot] = moveKey;
     cooldowns[slot] = createCooldownEntry(slot, player, cooldowns[slot]);
@@ -2879,7 +2961,7 @@
       const offerIndex = Number(button.dataset.index || -1);
       const moveOffers = getShopMoveOffers();
       const offer = moveOffers[offerIndex];
-      if (!offer || offer.bought || player.ownedMoves?.[offer.key]) return;
+      if (!offer || offer.bought || player.ownedMoves?.[offer.key] || !isMoveAllowedForCharacter(offer.key, player.character)) return;
       if (!spendCoins(offer.cost)) return;
       offer.bought = true;
       player.ownedMoves[offer.key] = true;
@@ -2929,10 +3011,11 @@
       coins: 0,
       bestFloor: 1,
       unlockedItems: [],
-      unlockedCharacters: ['thorn_knight', 'metao'],
+      unlockedCharacters: ['princess', 'thorn_knight', 'metao'],
       unlockedChallenges: [],
       selectedDifficulty: 'easy',
       selectedChallenges: [],
+      selectedCharacter: 'thorn_knight',
       godsKilled: 0,
       loopCrystals: 0,
     };
@@ -2965,14 +3048,11 @@
       pendant_of_kronos: 0,
     };
     const character = CHARACTER_DEFS[chosenCharacter] || CHARACTER_DEFS.thorn_knight;
-    const equippedMoves = character.key === 'metao'
-      ? { melee: 'fire_balls', laser: 'power_disks', smash: 'chaos_burst', dash: 'warp' }
-      : character.key === 'granialla'
-        ? { melee: 'smite', laser: 'blade_justice', smash: 'healing_zone', dash: 'zip_lightning' }
-        : { melee: 'slash', laser: 'blood_beam', smash: 'crimson_smash', dash: 'dash' };
+    const equippedMoves = getDefaultMovesForCharacter(character.key);
     const defaultWeapon = getDefaultWeaponForCharacter(character.key);
     const ownedMoves = {};
     Object.values(equippedMoves).forEach(key => { ownedMoves[key] = true; });
+    const maxHp = Math.round(120 * (character.hpMultiplier || 1));
     return {
       character: character.key,
       x: START_X,
@@ -2980,8 +3060,8 @@
       r: 14,
       vx: 0,
       vy: 0,
-      hp: 120,
-      maxHp: 120,
+      hp: maxHp,
+      maxHp,
       swing: 0,
       swingA: 0,
       inv: 0,
@@ -3023,6 +3103,7 @@
       ownedMoves,
       lavaWalkTime: 0,
       lavaTrailTick: 0,
+      princessFlightTime: 0,
       anvilUpgrades: { weapon: {}, move: {} },
     };
   }
@@ -3074,6 +3155,7 @@
           unlockedChallenges: normalizeChallengeSelection(savedMeta.unlockedChallenges),
           selectedDifficulty: normalizeDifficulty(savedMeta.selectedDifficulty),
           selectedChallenges: normalizeChallengeSelection(savedMeta.selectedChallenges),
+          selectedCharacter: String(savedMeta.selectedCharacter || createDefaultMeta().selectedCharacter),
         };
       }
       runHistory = normalizeRunHistory(savedRunHistory || savedMeta?.runHistory);
@@ -3084,6 +3166,16 @@
       }
       selectedDifficulty = normalizeDifficulty(metaProgress.selectedDifficulty);
       selectedChallenges = normalizeChallengeSelection(metaProgress.selectedChallenges);
+      {
+        const unlocked = new Set(metaProgress.unlockedCharacters || ['princess', 'thorn_knight', 'metao']);
+        if (metaProgress.godsKilled > 0) unlocked.add('granialla');
+        const preferredCharacter = String(metaProgress.selectedCharacter || chosenCharacter);
+        chosenCharacter = unlocked.has(preferredCharacter) ? preferredCharacter : [...unlocked][0] || 'thorn_knight';
+        metaProgress.selectedCharacter = chosenCharacter;
+      }
+      if (savedMeta && typeof savedMeta.customDifficultySettings === 'object' && savedMeta.customDifficultySettings) {
+        customDifficultySettings = { ...customDifficultySettings, ...savedMeta.customDifficultySettings };
+      }
       uiController.setSaveState(saveStore.kind);
     } catch (error) {
       console.error('Failed to load save data', error);
@@ -3106,13 +3198,14 @@
   }
 
   function normalizeUnlockedCharacters(input) {
-    const fallback = ['thorn_knight', 'metao'];
+    const fallback = ['princess', 'thorn_knight', 'metao'];
     if (!Array.isArray(input)) return fallback;
     const chars = Object.keys(CHARACTER_DEFS).filter(name => input.includes(name));
-    return chars.length ? chars : fallback;
+    return [...new Set([...fallback, ...chars])];
   }
 
   function normalizeDifficulty(input) {
+    if (input === 'custom') return 'custom';
     return DIFFICULTY_DEFS[input] ? input : 'easy';
   }
 
@@ -3250,7 +3343,11 @@
   }
 
   function getDifficultyDef(key = selectedDifficulty) {
-    return DIFFICULTY_DEFS[normalizeDifficulty(key)];
+    const norm = normalizeDifficulty(key);
+    if (norm === 'custom') {
+      return { ...DIFFICULTY_DEFS.custom, ...customDifficultySettings, key: 'custom', name: 'Custom' };
+    }
+    return DIFFICULTY_DEFS[norm];
   }
 
   function getShopPriceMultiplier(difficultyKey = selectedDifficulty) {
@@ -3304,6 +3401,7 @@
 
   function getLaserCastDuration(moveKey = getEquippedMove('laser'), attackSpeed = getAttackSpeedValue()) {
     if (moveKey === 'god_sweep') return 1.45 / attackSpeed;
+    if (moveKey === 'love_beam') return Math.max(0.1, (MOVE_BASE_STATS.love_beam.duration + getAnvilMoveBonus('love_beam', 'duration')) / attackSpeed);
     if (moveKey === 'turtle_wave') return Math.max(0.1, (MOVE_BASE_STATS.turtle_wave.duration + getAnvilMoveBonus('turtle_wave', 'duration')) / attackSpeed);
     return (godTimer > 0 ? 0.72 : ATTACKS.laser.duration) / attackSpeed;
   }
@@ -3419,6 +3517,7 @@
     if (options.deferTimer) state.holding += 1;
     else state.timers.push(rechargeTime);
     cooldowns[slot] = state;
+    updateHud();
     return true;
   }
 
@@ -3427,6 +3526,7 @@
     if (state.holding > 0) state.holding -= 1;
     state.timers.push(rechargeTime);
     cooldowns[slot] = state;
+    updateHud();
   }
 
   function tickCooldowns(dt) {
@@ -3500,7 +3600,7 @@
 
   function getUnlockedDifficultySet() {
     const loopCrystals = Number(metaProgress.loopCrystals || 0);
-    return new Set(DIFFICULTY_ORDER.filter(key => loopCrystals >= DIFFICULTY_DEFS[key].unlockLoops));
+    return new Set(DIFFICULTY_ORDER.filter(key => key === 'custom' || loopCrystals >= DIFFICULTY_DEFS[key].unlockLoops));
   }
 
   function titleCase(value) {
@@ -3804,12 +3904,18 @@
   }
 
   function updateCharacterSelectionUI() {
-    const unlocked = new Set(metaProgress.unlockedCharacters || ['thorn_knight', 'metao']);
+    const unlocked = new Set(metaProgress.unlockedCharacters || ['princess', 'thorn_knight', 'metao']);
     const unlockedDifficulties = getUnlockedDifficultySet();
     const unlockedChallenges = getUnlockedChallengeSet();
     const ownedChallenges = getOwnedChallengeSet();
     if (metaProgress.godsKilled > 0) unlocked.add('granialla');
-    if (!unlocked.has(chosenCharacter)) chosenCharacter = [...unlocked][0] || 'thorn_knight';
+    const preferredCharacter = String(metaProgress.selectedCharacter || chosenCharacter);
+    if (unlocked.has(preferredCharacter)) {
+      chosenCharacter = preferredCharacter;
+    } else if (!unlocked.has(chosenCharacter)) {
+      chosenCharacter = [...unlocked][0] || 'thorn_knight';
+    }
+    metaProgress.selectedCharacter = chosenCharacter;
     if (!unlockedDifficulties.has(selectedDifficulty)) selectedDifficulty = 'easy';
     metaProgress.selectedDifficulty = selectedDifficulty;
     selectedChallenges = normalizeChallengeSelection(selectedChallenges).filter(key => unlockedChallenges.has(key) && ownedChallenges.has(key));
@@ -3817,6 +3923,7 @@
     uiController.updateCharacterSelection(unlocked, chosenCharacter);
     uiController.updateDifficultySelection(unlockedDifficulties, selectedDifficulty, metaProgress.loopCrystals || 0);
     uiController.updateChallengeSelection(unlockedChallenges, ownedChallenges, selectedChallenges, metaProgress.loopCrystals || 0, metaProgress.coins || 0);
+    syncCharacterUiTheme();
   }
 
   function setGameState(nextState) {
@@ -4524,6 +4631,8 @@
     player.dashX = 0;
     player.dashY = 0;
     player.cowardsWayTime = 0;
+    player.princessFlightTime = 0;
+    loveBeamCasting = false;
     player.blockActive = false;
     player.blockTimer = 0;
   }
@@ -4538,8 +4647,12 @@
       player.dashY = 0;
     }
     player.cowardsWayTime = Math.max(0, Number(player.cowardsWayTime || 0) - step);
+    player.princessFlightTime = Math.max(0, Number(player.princessFlightTime || 0) - step);
     player.blockTimer = Math.max(0, Number(player.blockTimer || 0) - step);
     player.blockActive = player.blockTimer > 0;
+    if (player.princessFlightTime <= 0 && loveBeamCasting) {
+      loveBeamCasting = false;
+    }
   }
 
   function isBossFightActive() {
@@ -5949,13 +6062,10 @@
     playerData.cowardsWayTime = Number(playerData.cowardsWayTime || 0);
     playerData.lavaWalkTime = Number(playerData.lavaWalkTime || 0);
     playerData.lavaTrailTick = Number(playerData.lavaTrailTick || 0);
+    playerData.princessFlightTime = Number(playerData.princessFlightTime || 0);
     ensureStatuses(playerData);
     if (!playerData.equippedMoves || typeof playerData.equippedMoves !== 'object') {
-      playerData.equippedMoves = playerData.character === 'metao'
-        ? { melee: 'fire_balls', laser: 'power_disks', smash: 'chaos_burst', dash: 'warp' }
-        : playerData.character === 'granialla'
-          ? { melee: 'smite', laser: 'blade_justice', smash: 'healing_zone', dash: 'zip_lightning' }
-          : { melee: 'slash', laser: 'blood_beam', smash: 'crimson_smash', dash: 'dash' };
+      playerData.equippedMoves = getDefaultMovesForCharacter(playerData.character);
     }
     if (!playerData.ownedMoves || typeof playerData.ownedMoves !== 'object') {
       playerData.ownedMoves = {};
@@ -5989,20 +6099,13 @@
     if (!playerData.anvilUpgrades.move   || typeof playerData.anvilUpgrades.move   !== 'object') playerData.anvilUpgrades.move   = {};
     MOVE_SLOTS.forEach(slot => {
       const moveKey = playerData.equippedMoves[slot];
-      if (!MOVE_DEFS[moveKey] || MOVE_DEFS[moveKey].slot !== slot) {
-        playerData.equippedMoves[slot] = slot === 'dash'
-          ? playerData.character === 'metao'
-            ? 'warp'
-            : playerData.character === 'granialla'
-              ? 'zip_lightning'
-              : 'dash'
-          : slot === 'melee'
-            ? 'slash'
-            : slot === 'laser'
-              ? 'blood_beam'
-              : 'crimson_smash';
+      if (!MOVE_DEFS[moveKey] || MOVE_DEFS[moveKey].slot !== slot || !isMoveAllowedForCharacter(moveKey, playerData.character)) {
+        playerData.equippedMoves[slot] = getDefaultMovesForCharacter(playerData.character)[slot];
       }
       playerData.ownedMoves[playerData.equippedMoves[slot]] = true;
+    });
+    Object.keys(playerData.ownedMoves).forEach(moveKey => {
+      if (!isMoveAllowedForCharacter(moveKey, playerData.character)) delete playerData.ownedMoves[moveKey];
     });
     playerData.insuranceActive = !!playerData.insuranceActive;
     playerData.insuranceChargeKills = Number(playerData.insuranceChargeKills || 0);
@@ -6023,10 +6126,38 @@
     return CHARACTER_DEFS[player?.character || chosenCharacter] || CHARACTER_DEFS.thorn_knight;
   }
 
+  function getUiCharacterKey() {
+    return player?.character || chosenCharacter;
+  }
+
+  function syncCharacterUiTheme() {
+    document.documentElement.classList.toggle('princess-ui', getUiCharacterKey() === 'princess');
+  }
+
   function getDefaultWeaponForCharacter(characterKey) {
+    if (characterKey === 'princess') return '';
     if (characterKey === 'metao') return 'metao_fire_staff';
     if (characterKey === 'granialla') return 'granillia_lightning_spear';
     return 'thorns_bleed_blade';
+  }
+
+  function getDefaultMovesForCharacter(characterKey) {
+    if (characterKey === 'princess') {
+      return { melee: 'narwal_fight', laser: 'love_beam', smash: 'kicky_kick', dash: 'flying_unhitable' };
+    }
+    if (characterKey === 'metao') {
+      return { melee: 'fire_balls', laser: 'power_disks', smash: 'chaos_burst', dash: 'warp' };
+    }
+    if (characterKey === 'granialla') {
+      return { melee: 'smite', laser: 'blade_justice', smash: 'healing_zone', dash: 'zip_lightning' };
+    }
+    return { melee: 'slash', laser: 'blood_beam', smash: 'crimson_smash', dash: 'dash' };
+  }
+
+  function isMoveAllowedForCharacter(moveKey, characterKey = player?.character || chosenCharacter) {
+    const def = MOVE_DEFS[moveKey];
+    if (!def) return false;
+    return !def.exclusiveCharacter || def.exclusiveCharacter === characterKey;
   }
 
   function getItemCount(key) {
@@ -6295,7 +6426,7 @@
   function getEquippedMove(slot) {
     const moveKey = player?.equippedMoves?.[slot];
     if (MOVE_DEFS[moveKey]?.slot === slot) return moveKey;
-    return slot === 'dash' ? 'dash' : slot === 'melee' ? 'slash' : slot === 'laser' ? 'blood_beam' : 'crimson_smash';
+    return getDefaultMovesForCharacter(player?.character || chosenCharacter)[slot] || (slot === 'dash' ? 'dash' : slot === 'melee' ? 'slash' : slot === 'laser' ? 'blood_beam' : 'crimson_smash');
   }
 
   function getEquippedWeapon() {
@@ -6484,6 +6615,10 @@
       spawnFireballs();
       return;
     }
+    if (move === 'narwal_fight') {
+      castNarwalFight();
+      return;
+    }
     if (move === 'smite') {
       castSmiteChain();
       return;
@@ -6637,6 +6772,16 @@
       castBladeOfJustice();
       return;
     }
+    if (move === 'love_beam') {
+      if (!spendSkillCharge('laser', rechargeTime, { deferTimer: true })) return;
+      laserActive = true;
+      laserMode = 'beam';
+      loveBeamCasting = true;
+      laserTime = getLaserCastDuration(move, attackSpeed);
+      laserTick = 0;
+      turtleWaveHpTimer = 0;
+      return;
+    }
     if (move === 'lightning_columns') {
       if (!spendSkillCharge('laser', rechargeTime)) return;
       castLightningColumns();
@@ -6665,6 +6810,7 @@
     if (!laserActive) return;
     laserActive = false;
     laserMode = 'beam';
+    loveBeamCasting = false;
     turtleWaveHpTimer = 0;
     queueHeldSkillRecharge('laser', getLaserCooldownDuration(getEquippedMove('laser'), getAttackSpeedValue()));
   }
@@ -6701,24 +6847,36 @@
     }
     const move = getEquippedMove('laser');
     const itemStats = getItemStats();
+    const loveBeamActive = loveBeamCasting && move === 'love_beam';
     const angle = laserMode === 'god_sweep'
       ? laserAngle
       : Math.atan2(mouse.worldY - player.y, mouse.worldX - player.x);
     if (laserTick <= 0) {
       if (laserMode === 'god_sweep') laserAngle += laserSweepSpeed * 0.05;
-      laserTick = laserMode === 'god_sweep' ? 0.05 : laserMode === 'turtle_wave' ? 0.08 : ATTACKS.laser.tick;
-      const range = getPlayerBeamRange(laserMode);
+      laserTick = laserMode === 'god_sweep' ? 0.05 : laserMode === 'turtle_wave' ? 0.08 : loveBeamActive ? 0.06 : ATTACKS.laser.tick;
+      const range = getPlayerBeamRange(laserMode, move);
       const beamPath = buildRicochetBeamPath(player.x, player.y, angle, range, getPlayerBeamBounceCount(laserMode));
+      let loveBeamHits = 0;
       for (let index = enemies.length - 1; index >= 0; index -= 1) {
         const enemy = enemies[index];
         if (!enemy) continue;
         const hitSegment = beamPathHitsCircle(beamPath, enemy.x, enemy.y, enemy.r + (laserMode === 'turtle_wave' ? 14 : 6));
         if (!hitSegment) continue;
         const anvilBeamBonus = getAnvilMoveBonus(move, 'damage');
-        const beamDamage = ((laserMode === 'god_sweep' ? 24 : laserMode === 'turtle_wave' ? 34 : godTimer > 0 ? 16 : ATTACKS.laser.damage) + anvilBeamBonus) * (itemStats.beamDamageMultiplier || 1);
+        const baseBeamDamage = laserMode === 'god_sweep'
+          ? 24
+          : laserMode === 'turtle_wave'
+            ? 34
+            : loveBeamActive
+              ? 18
+              : godTimer > 0
+                ? 16
+                : ATTACKS.laser.damage;
+        const beamDamage = (baseBeamDamage + anvilBeamBonus) * (itemStats.beamDamageMultiplier || 1);
         const anvilCritBonus = getAnvilMoveBonus(move, 'critChance');
-        hitEnemy(enemy, beamDamage, hitSegment.angle, laserMode === 'god_sweep' ? 120 : laserMode === 'turtle_wave' ? 155 : 60, '#f0f', anvilCritBonus > 0 ? { critBonus: anvilCritBonus } : {});
-        chainBeamHit(enemy, beamDamage, hitSegment.angle, '#d890ff');
+        hitEnemy(enemy, beamDamage, hitSegment.angle, laserMode === 'god_sweep' ? 120 : laserMode === 'turtle_wave' ? 155 : loveBeamActive ? 52 : 60, loveBeamActive ? '#ff9ed6' : '#f0f', anvilCritBonus > 0 ? { critBonus: anvilCritBonus } : {});
+        chainBeamHit(enemy, beamDamage, hitSegment.angle, loveBeamActive ? '#ffb8e0' : '#d890ff');
+        if (loveBeamActive) loveBeamHits += 1;
         if (move === 'blood_beam' && rng() < 0.05) applyBleed(enemy, 1, 3.2);
         if (move === 'blood_beam' && rng() < 0.08) applyDarkDrain(enemy, 1, 3.4);
       }
@@ -6727,6 +6885,12 @@
           damageDestructible(prop, 1);
         }
       });
+      if (loveBeamHits > 0) {
+        const heal = Math.min(8, loveBeamHits * 1.25);
+        player.hp = Math.min(player.maxHp, player.hp + heal);
+        spawnHealPopup(player.x + rand(-6, 6), player.y - 22, heal, { color: '#ff9ed6' });
+        particles.push({ x: player.x, y: player.y - 26, life: 0.22, text: 'LOVE', c: '#ff9ed6' });
+      }
     }
     if (laserTime <= 0) {
       endActiveLaser();
@@ -6739,6 +6903,10 @@
     const attackSpeed = getAttackSpeedValue();
     if (!spendSkillCharge('smash', getSmashCooldownDuration(attackSpeed))) return;
     const move = getEquippedMove('smash');
+    if (move === 'kicky_kick') {
+      castKickyKick();
+      return;
+    }
     if (move === 'chaos_burst') {
       castChaosBurst();
       return;
@@ -6788,6 +6956,10 @@
     const attackSpeed = getAttackSpeedValue();
     const rechargeTime = getDashCooldownDuration(move, attackSpeed);
     if (!spendSkillCharge('dash', rechargeTime)) return;
+    if (move === 'flying_unhitable') {
+      castFlyingUntouchable();
+      return;
+    }
     if (move === 'warp') {
       castWarp();
       return;
@@ -6952,6 +7124,51 @@
     player.inv = Math.max(player.inv, 0.26);
     const zipShock = 72 * (itemStats.aoeRadiusMultiplier || 1);
     particles.push({ x: player.x, y: player.y, life: 0.24, ring: zipShock, c: '#8ad9ff' });
+  }
+
+  function castNarwalFight() {
+    const angle = Math.atan2(mouse.worldY - player.y, mouse.worldX - player.x);
+    fireWeaponSweep(40, 136, 1.45, 280, '#ff8ed0');
+    spawnWeaponProjectile({
+      x: player.x + Math.cos(angle) * 22,
+      y: player.y + Math.sin(angle) * 22,
+      angle,
+      speed: 760,
+      damage: 26,
+      knockback: 200,
+      r: 6,
+      life: 0.92,
+      kind: 'narwal_fight',
+      color: '#ffd1ea',
+      pierceCount: 2,
+      hitOptions: { critBonus: 0.08 },
+    });
+    particles.push({ x: player.x, y: player.y, life: 0.32, ring: 22, c: '#ff8ed0' });
+  }
+
+  function castKickyKick() {
+    const itemStats = getItemStats();
+    const angle = Math.atan2(mouse.worldY - player.y, mouse.worldX - player.x);
+    const radius = 138 * (itemStats.aoeRadiusMultiplier || 1);
+    blastRadius(player.x, player.y, radius, 46, '#ff7fc2');
+    enemies.forEach(enemy => {
+      if (!enemy) return;
+      if (dist(player.x, player.y, enemy.x, enemy.y) > radius + enemy.r) return;
+      enemy.stun = Math.max(enemy.stun, 0.52);
+    });
+    player.vx -= Math.cos(angle) * 160;
+    player.vy -= Math.sin(angle) * 160;
+    shake = Math.max(shake, 10);
+    shakeT = Math.max(shakeT, 0.18);
+    particles.push({ x: player.x, y: player.y, life: 0.42, ring: radius * 0.85, c: '#ff7fc2' });
+  }
+
+  function castFlyingUntouchable() {
+    player.princessFlightTime = 15;
+    player.inv = Math.max(player.inv, 15);
+    player.vx = 0;
+    player.vy = 0;
+    particles.push({ x: player.x, y: player.y - 18, life: 0.8, text: 'FLY HIGH', c: '#ffd1ea' });
   }
 
   function applyResponsiveVelocity(current, desired, dt) {
@@ -7740,9 +7957,13 @@
         player.dashY = 0;
       }
     } else {
-      const targetSpeed = 228 * (godTimer > 0 ? 1.25 : 1) * itemStats.moveSpeedMultiplier;
+      const flightBoost = player.princessFlightTime > 0 ? 1.28 : 1;
+      const targetSpeed = 228 * flightBoost * (godTimer > 0 ? 1.25 : 1) * itemStats.moveSpeedMultiplier;
       player.vx = applyResponsiveVelocity(player.vx, moveX * targetSpeed, dt);
       player.vy = applyResponsiveVelocity(player.vy, moveY * targetSpeed, dt);
+      if (player.princessFlightTime > 0 && (moveX || moveY) && nextRandom('fx') < 0.35) {
+        particles.push({ x: player.x + rand(12, -12, 'fx'), y: player.y + rand(10, -10, 'fx'), life: 0.2, c: '#ffd1ea' });
+      }
     }
 
     moveCircle(player, dt);
@@ -10191,13 +10412,14 @@
         melee: { current: meleeSkill.current, max: meleeSkill.max, active: false, charges: meleeSkill.charges, maxCharges: meleeSkill.maxCharges },
         laser: { current: laserSkill.current, max: laserSkill.max, active: laserActive, charges: laserSkill.charges, maxCharges: laserSkill.maxCharges },
         smash: { current: smashSkill.current, max: smashSkill.max, active: false, charges: smashSkill.charges, maxCharges: smashSkill.maxCharges },
-        dash: { current: dashSkill.current, max: dashSkill.max, active: player.dashTime > 0 || player.cowardsWayTime > 0, charges: dashSkill.charges, maxCharges: dashSkill.maxCharges },
+        dash: { current: dashSkill.current, max: dashSkill.max, active: player.dashTime > 0 || player.cowardsWayTime > 0 || player.princessFlightTime > 0, charges: dashSkill.charges, maxCharges: dashSkill.maxCharges },
       },
     });
     ui.skillNames.dash.textContent = dashMove?.name || character.skills.dash;
     ui.skillNames.melee.textContent = weaponDef?.name || meleeMove?.name || character.skills.melee;
     ui.skillNames.laser.textContent = laserMove?.name || character.skills.laser;
     ui.skillNames.smash.textContent = smashMove?.name || character.skills.smash;
+    syncCharacterUiTheme();
     
     // Update player stats in bottom right
     if (ui.playerHpFill) {
@@ -10286,6 +10508,8 @@
   }
 
   function persistMetaSoon() {
+    metaProgress.customDifficultySettings = { ...customDifficultySettings };
+    metaProgress.selectedCharacter = chosenCharacter;
     refreshMenuState();
     void saveStore.put('meta', metaProgress).catch(error => {
       console.error('Failed to save meta', error);
@@ -11039,6 +11263,35 @@
         ctx.beginPath();
         ctx.arc(0, -2, decor.r * 0.55, 0, Math.PI * 2);
         ctx.fill();
+      } else if (decor.kind === 'tree') {
+        // Shadow
+        ctx.fillStyle = 'rgba(20,30,14,0.35)';
+        ctx.beginPath();
+        ctx.ellipse(0, decor.r * 0.7, decor.r * 0.9, decor.r * 0.35, 0, 0, Math.PI * 2);
+        ctx.fill();
+        // Trunk
+        ctx.fillStyle = '#5c3a1e';
+        ctx.fillRect(-4, -decor.r * 0.3, 8, decor.r * 0.85);
+        // Canopy layers
+        ctx.shadowColor = '#3a7d2c';
+        ctx.shadowBlur = 6;
+        ctx.fillStyle = '#3a7d2c';
+        ctx.beginPath();
+        ctx.arc(0, -decor.r * 0.5, decor.r * 0.78, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#52a83a';
+        ctx.beginPath();
+        ctx.arc(-decor.r * 0.22, -decor.r * 0.7, decor.r * 0.55, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(decor.r * 0.22, -decor.r * 0.78, decor.r * 0.5, 0, Math.PI * 2);
+        ctx.fill();
+        // Highlight
+        ctx.fillStyle = 'rgba(160,230,100,0.25)';
+        ctx.beginPath();
+        ctx.arc(-decor.r * 0.15, -decor.r * 0.85, decor.r * 0.28, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
       }
       ctx.restore();
     });
@@ -12351,18 +12604,19 @@
       ? laserAngle
       : Math.atan2(mouse.worldY - player.y, mouse.worldX - player.x);
     const turtleWaveActive = laserMode === 'turtle_wave';
-    const beamRange = getPlayerBeamRange(laserMode);
+    const loveBeamActive = loveBeamCasting;
+    const beamRange = getPlayerBeamRange(laserMode, getEquippedMove('laser'));
     const beamPath = buildRicochetBeamPath(player.x, player.y, angle, beamRange, getPlayerBeamBounceCount(laserMode));
     if (!beamPath.length) return;
-    const beamColor = turtleWaveActive ? '#74f5ff' : laserMode === 'god_sweep' ? '#ffffff' : '#ff00aa';
-    const beamGlow = turtleWaveActive ? '#9bf7ff' : laserMode === 'god_sweep' ? '#e8f0ff' : '#f0f';
-    const maxW = laserMode === 'god_sweep' ? 16 : turtleWaveActive ? 18 : 8;
+    const beamColor = turtleWaveActive ? '#74f5ff' : loveBeamActive ? '#ff9ed6' : laserMode === 'god_sweep' ? '#ffffff' : '#ff00aa';
+    const beamGlow = turtleWaveActive ? '#9bf7ff' : loveBeamActive ? '#ffd1ea' : laserMode === 'god_sweep' ? '#e8f0ff' : '#f0f';
+    const maxW = laserMode === 'god_sweep' ? 16 : turtleWaveActive ? 18 : loveBeamActive ? 10 : 8;
 
     drawTaperedBeamPath(beamPath, {
       color: beamColor,
       glow: beamGlow,
       maxWidth: maxW,
-      shadowBlur: laserMode === 'god_sweep' ? 26 : turtleWaveActive ? 30 : 18,
+      shadowBlur: laserMode === 'god_sweep' ? 26 : turtleWaveActive ? 30 : loveBeamActive ? 22 : 18,
     });
 
     // Beam particles: small dots that drift perpendicular and fade toward tip
@@ -13147,14 +13401,18 @@
         // Carousel prev/next arrows
         const carouselPrev = document.getElementById('carouselPrev');
         const carouselNext = document.getElementById('carouselNext');
-        const charOrder = ['thorn_knight', 'metao', 'granialla'];
+        const charOrder = ['princess', 'thorn_knight', 'metao', 'granialla'];
         function carouselStep(delta) {
-          const currentIndex = charOrder.indexOf(handlers._getChosenCharacter ? handlers._getChosenCharacter() : 'thorn_knight');
-          const nextIndex = Math.max(0, Math.min(charOrder.length - 1, currentIndex + delta));
-          const nextKey = charOrder[nextIndex];
-          const btn = view.charButtons.find(b => b.dataset.char === nextKey);
-          if (btn && !btn.classList.contains('locked')) {
-            handlers.onCharacterSelect(nextKey, btn);
+          const currentIndex = charOrder.indexOf(handlers._getChosenCharacter ? handlers._getChosenCharacter() : 'princess');
+          let nextIndex = currentIndex;
+          while (nextIndex + delta >= 0 && nextIndex + delta < charOrder.length) {
+            nextIndex += delta;
+            const nextKey = charOrder[nextIndex];
+            const btn = view.charButtons.find(b => b.dataset.char === nextKey);
+            if (btn && !btn.classList.contains('locked')) {
+              handlers.onCharacterSelect(nextKey, btn);
+              break;
+            }
           }
         }
         carouselPrev?.addEventListener('click', () => carouselStep(-1));
@@ -13176,6 +13434,48 @@
             handlers.onDifficultySelect(button.dataset.difficulty || '', button);
           });
         });
+
+        // Custom difficulty panel: wire sliders and number inputs
+        document.querySelectorAll('#customDiffPanel .cdiff-row').forEach(row => {
+          const param = row.dataset.param;
+          if (!param) return;
+          const slider = row.querySelector('.cdiff-slider');
+          const numInput = row.querySelector('.cdiff-num');
+          function applyValue(raw) {
+            const v = param === 'waveBonus' || param === 'eliteFloor' ? parseInt(raw, 10) : parseFloat(raw);
+            const clamped = Math.min(parseFloat(slider.max), Math.max(parseFloat(slider.min), isNaN(v) ? parseFloat(slider.value) : v));
+            const rounded = param === 'waveBonus' || param === 'eliteFloor' ? clamped : Math.round(clamped * 100) / 100;
+            slider.value = rounded;
+            numInput.value = rounded;
+            customDifficultySettings[param] = rounded;
+            persistMetaSoon();
+          }
+          const savedVal = customDifficultySettings[param];
+          if (savedVal !== undefined) { slider.value = savedVal; numInput.value = savedVal; }
+          slider.addEventListener('input', () => applyValue(slider.value));
+          numInput.addEventListener('change', () => applyValue(numInput.value));
+        });
+        const resetCustomBtn = document.getElementById('customDiffReset');
+        if (resetCustomBtn) {
+          resetCustomBtn.addEventListener('click', () => {
+            const defaults = {
+              waveBonus: 0, eliteFloor: 8, eliteChance: 0.12, miniBossChanceMultiplier: 1,
+              roomWeightBonus: 0, statMultiplier: 1, bossStatMultiplier: 1, speedMultiplier: 1,
+              enemyReactionMultiplier: 1, rangedCadenceMultiplier: 1, supportPowerMultiplier: 1, shopPriceMultiplier: 1,
+            };
+            customDifficultySettings = { ...defaults };
+            document.querySelectorAll('#customDiffPanel .cdiff-row').forEach(row => {
+              const p = row.dataset.param;
+              if (!p) return;
+              const s = row.querySelector('.cdiff-slider');
+              const n = row.querySelector('.cdiff-num');
+              if (s) s.value = defaults[p];
+              if (n) n.value = defaults[p];
+            });
+            persistMetaSoon();
+          });
+        }
+
         view.challengeButtons.forEach(button => {
           button.addEventListener('click', () => {
             handlers.onChallengeSelect(button.dataset.challenge || '', button);
@@ -13268,7 +13568,7 @@
         renderRunHistoryPage();
       },
       updateCharacterSelection(unlocked, selected) {
-        const CHAR_ORDER = ['thorn_knight', 'metao', 'granialla'];
+        const CHAR_ORDER = ['princess', 'thorn_knight', 'metao', 'granialla'];
         const CARD_W_ACTIVE = 270;
         const CARD_W_SIDE   = 200;
         const CARD_GAP      = 18;
@@ -13331,7 +13631,7 @@
       updateDifficultySelection(unlocked, selected, loopCrystals) {
         const selectedDef = getDifficultyDef(selected);
         view.difficultyButtons.forEach(button => {
-          const key = normalizeDifficulty(button.dataset.difficulty || '');
+          const key = button.dataset.difficulty === 'custom' ? 'custom' : normalizeDifficulty(button.dataset.difficulty || '');
           const def = getDifficultyDef(key);
           const isUnlocked = unlocked.has(key);
           button.classList.toggle('sel', selected === key);
@@ -13339,10 +13639,14 @@
           button.disabled = !isUnlocked;
           button.title = isUnlocked ? def.description : `Unlock at ${def.unlockLoops} loop crystals`;
         });
+        const customPanel = document.getElementById('customDiffPanel');
+        if (customPanel) customPanel.classList.toggle('hidden', selected !== 'custom');
         if (view.difficultyHint) {
-          view.difficultyHint.textContent = selectedDef.unlockLoops > 0 && !unlocked.has(selected)
-            ? `Unlocks at ${selectedDef.unlockLoops} loop crystals. Current crystals: ${loopCrystals}`
-            : `${selectedDef.description} Loop Crystals: ${loopCrystals}.`;
+          view.difficultyHint.textContent = selected === 'custom'
+            ? 'Custom: set your own multipliers below.'
+            : selectedDef.unlockLoops > 0 && !unlocked.has(selected)
+              ? `Unlocks at ${selectedDef.unlockLoops} loop crystals. Current crystals: ${loopCrystals}`
+              : `${selectedDef.description} Loop Crystals: ${loopCrystals}.`;
         }
       },
       updateChallengeSelection(unlocked, owned, selected, loopCrystals, bankCoins) {
@@ -13685,9 +13989,10 @@
     return dist(px, py, cx, cy) <= radius;
   }
 
-  function getPlayerBeamRange(mode = laserMode) {
+  function getPlayerBeamRange(mode = laserMode, moveKey = getEquippedMove('laser')) {
     if (mode === 'god_sweep') return 560;
     if (mode === 'turtle_wave') return 620;
+    if (moveKey === 'love_beam') return 500;
     return ATTACKS.laser.range;
   }
 
