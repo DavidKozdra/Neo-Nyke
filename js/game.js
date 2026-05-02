@@ -58,6 +58,7 @@
   const ROOM_ART_THEMES = {
     dungeon: {
       floorTiles: ['floor_stone_a', 'floor_stone_b', 'floor_stone_cracked', 'floor_stone_moss', 'floor_bone', 'floor_ash'],
+      gardenFloorTiles: ['floor_stone_moss', 'floor_overgrowth', 'floor_leafy'],
       wallTile: 'wall_stone',
       thresholdTile: 'threshold_stone',
       backdrop: '#151916',
@@ -73,6 +74,7 @@
     },
     treasure: {
       floorTiles: ['floor_stone_a', 'floor_stone_b', 'floor_stone_moss', 'floor_god'],
+      gardenFloorTiles: ['floor_stone_moss', 'floor_overgrowth', 'floor_leafy'],
       wallTile: 'wall_stone',
       thresholdTile: 'threshold_warm',
       backdrop: '#181811',
@@ -88,6 +90,7 @@
     },
     shop: {
       floorTiles: ['floor_plank', 'floor_plank', 'floor_stone_a'],
+      gardenFloorTiles: ['floor_stone_moss', 'floor_overgrowth', 'floor_leafy'],
       wallTile: 'wall_shop',
       thresholdTile: 'threshold_warm',
       backdrop: '#1c140e',
@@ -103,6 +106,7 @@
     },
     anvil: {
       floorTiles: ['floor_forge', 'floor_ash', 'floor_stone_a', 'floor_forge'],
+      gardenFloorTiles: ['floor_stone_moss', 'floor_overgrowth', 'floor_leafy'],
       wallTile: 'wall_forge',
       thresholdTile: 'threshold_warm',
       backdrop: '#181512',
@@ -118,6 +122,7 @@
     },
     boss: {
       floorTiles: ['floor_boss', 'floor_boss', 'floor_blood', 'floor_stone_cracked'],
+      gardenFloorTiles: ['floor_stone_moss', 'floor_overgrowth'],
       wallTile: 'wall_boss',
       thresholdTile: 'threshold_boss',
       backdrop: '#171012',
@@ -133,6 +138,7 @@
     },
     god: {
       floorTiles: ['floor_god', 'floor_god', 'floor_stone_a'],
+      gardenFloorTiles: ['floor_stone_moss', 'floor_overgrowth'],
       wallTile: 'wall_god',
       thresholdTile: 'threshold_warm',
       backdrop: '#1d1a13',
@@ -148,6 +154,7 @@
     },
     secret: {
       floorTiles: ['floor_overgrowth', 'floor_stone_moss', 'floor_stone_b', 'floor_stone_cracked'],
+      gardenFloorTiles: ['floor_overgrowth', 'floor_leafy', 'floor_stone_moss'],
       wallTile: 'wall_stone',
       thresholdTile: 'threshold_stone',
       backdrop: '#111913',
@@ -1293,7 +1300,7 @@
     lightning_columns:{ damage: 30,  cooldown: 4.80, range: 180 },
     god_sweep:        { damage: 40,  cooldown: 7.20, range: 320 },
     crimson_smash:    { damage: 55,  cooldown: 4.00, range: 120 },
-    kicky_kick:       { damage: 44,  cooldown: 4.20, range: 138 },
+    kicky_kick:       { damage: 92,  cooldown: 4.20, range: 138 },
     chaos_burst:      { damage: 38,  cooldown: 4.00, range: 100 },
     healing_zone:     { damage: 12,  cooldown: 5.00, duration: 3.0, range: 130 },
     fire_circle:      { damage: 18,  cooldown: 4.50, duration: 3.5, range: 100 },
@@ -4205,6 +4212,7 @@
     room.shopWeaponOffers = [];
     room.structures = [];
     room.decorations = [];
+    room.gardenFruitNodes = [];
     if (room.type === 'start') return;
 
     if (room.type === 'secret') {
@@ -4318,6 +4326,8 @@
     } else if (room.type === 'anvil') {
       room.cleared = true;
     }
+
+    decorateGardenRoomData(room);
   }
 
   function decorateRoomStructures(room) {
@@ -4358,6 +4368,114 @@
       { kind: 'brazier', x: ROOM_W / 2 + 90, y: ROOM_H / 2, r: 18 },
       { kind: 'crack', x: ROOM_W / 2, y: ROOM_H / 2, r: 24 },
     );
+  }
+
+  function decorateGardenRoomData(room) {
+    if (!room || room.type === 'boss' || room.type === 'god' || floor <= 5) return;
+    room.gardenDecorated = true;
+    const gardenRoomScore = room.type === 'secret'
+      ? 1
+      : room.type === 'treasure'
+        ? 0.9
+        : room.type === 'shop'
+          ? 0.75
+          : room.type === 'anvil'
+            ? 0.72
+            : room.type === 'ladder'
+              ? 0.66
+              : 0.58;
+    const treeCount = Math.max(1, Math.round((room.type === 'secret' ? 4 : room.type === 'treasure' ? 3 : 2) * gardenRoomScore));
+    for (let index = 0; index < treeCount; index += 1) {
+      const side = index % 2 === 0 ? 1 : -1;
+      const depth = 84 + nextRandom('world') * 72;
+      const x = clamp(ROOM_W / 2 + side * (120 + nextRandom('world') * 180), WALL + 50, ROOM_W - WALL - 50);
+      const y = clamp(ROOM_H / 2 + (nextRandom('world') < 0.5 ? -1 : 1) * depth, WALL + 62, ROOM_H - WALL - 62);
+      room.decorations.push({
+        kind: nextRandom('world') < 0.45 ? 'fruit_tree' : 'tree',
+        x,
+        y,
+        r: 22 + nextRandom('world') * 10,
+      });
+    }
+
+    const mossCount = Math.max(2, Math.round(5 * gardenRoomScore));
+    for (let index = 0; index < mossCount; index += 1) {
+      room.decorations.push({
+        kind: 'moss_patch',
+        x: 120 + nextRandom('world') * (ROOM_W - 240),
+        y: 110 + nextRandom('world') * (ROOM_H - 220),
+        r: 14 + nextRandom('world') * 22,
+      });
+    }
+
+    const fruitNodeCount = Math.max(1, Math.round((room.type === 'secret' ? 3 : room.type === 'treasure' ? 2 : 1) * gardenRoomScore));
+    for (let index = 0; index < fruitNodeCount; index += 1) {
+      const x = 150 + nextRandom('world') * (ROOM_W - 300);
+      const y = 150 + nextRandom('world') * (ROOM_H - 300);
+      const node = {
+        id: `${room.gx},${room.gy}:${index}`,
+        x,
+        y,
+        heal: 18 + Math.round(nextRandom('world') * 10),
+        respawnAt: gameElapsedTime + rand(6, 2, 'world') + index * 2,
+        fruitSpawned: false,
+      };
+      room.gardenFruitNodes.push(node);
+      room.decorations.push({
+        kind: 'fruit_tree',
+        x: clamp(x + rand(42, -42, 'world'), WALL + 46, ROOM_W - WALL - 46),
+        y: clamp(y + rand(36, -36, 'world'), WALL + 52, ROOM_H - WALL - 52),
+        r: 20 + nextRandom('world') * 8,
+      });
+    }
+  }
+
+  function ensureGardenRoomData(room) {
+    if (!room || room.type === 'boss' || room.type === 'god' || floor <= 5) return;
+    if (!room.gardenDecorated) decorateGardenRoomData(room);
+    room.pickups = Array.isArray(room.pickups) ? room.pickups : [];
+    room.decorations = Array.isArray(room.decorations) ? room.decorations : [];
+    room.gardenFruitNodes = Array.isArray(room.gardenFruitNodes) ? room.gardenFruitNodes : [];
+  }
+
+  function spawnGardenFruit(room, node) {
+    if (!room || !node) return;
+    room.pickups = Array.isArray(room.pickups) ? room.pickups : [];
+    if (room.pickups.some(pickup => (pickup?.type === 'apple' || pickup?.type === 'fruit') && pickup.gardenNodeId === node.id)) return;
+    room.pickups.push({
+      x: node.x,
+      y: node.y - 8,
+      type: 'apple',
+      heal: Number(node.heal || 20),
+      gardenNodeId: node.id,
+      roomGx: room.gx,
+      roomGy: room.gy,
+      respawnAt: Number(node.respawnAt || 0),
+      grownAt: gameElapsedTime,
+      ripe: true,
+    });
+    node.fruitSpawned = true;
+  }
+
+  function updateGardenGrowth() {
+    if (floor <= 5) return;
+    if (!Array.isArray(rooms) || rooms.length === 0) return;
+    rooms.forEach(room => {
+      if (!room || room.type === 'boss' || room.type === 'god') return;
+      ensureGardenRoomData(room);
+      room.gardenFruitNodes.forEach(node => {
+        if (!node) return;
+        const activeFruit = Array.isArray(room.pickups) && room.pickups.some(pickup => (pickup?.type === 'apple' || pickup?.type === 'fruit') && pickup.gardenNodeId === node.id);
+        if (activeFruit) {
+          node.fruitSpawned = true;
+          return;
+        }
+        node.fruitSpawned = false;
+        if (gameElapsedTime >= Number(node.respawnAt || 0)) {
+          spawnGardenFruit(room, node);
+        }
+      });
+    });
   }
 
   function randomMoatLanePosition(axis, radius) {
@@ -4679,13 +4797,14 @@
     shopOffers = room.shopOffers || [];
     structures = room.structures || [];
     decorations = room.decorations || [];
-    laserActive = false;
+    endActiveLaser();
     laserTime = 0;
     laserTick = 0;
-    laserMode = 'beam';
     laserAngle = 0;
     laserSweepSpeed = 0;
     turtleWaveHpTimer = 0;
+    mouse.right = false;
+    mouse.rightQueued = false;
     player.roomDamageTaken = 0;
     if (isLockedFightRoom(room)) clearPlayerTransientDefense();
     const safeSpawn = findSafeSpawnPoint();
@@ -4797,6 +4916,7 @@
       }
     }
 
+    updateGardenGrowth();
     syncCurrentRoomState();
     updateObjective();
     scheduleRunSave();
@@ -7150,14 +7270,19 @@
     const itemStats = getItemStats();
     const angle = Math.atan2(mouse.worldY - player.y, mouse.worldX - player.x);
     const radius = 138 * (itemStats.aoeRadiusMultiplier || 1);
-    blastRadius(player.x, player.y, radius, 46, '#ff7fc2');
+    const kickDamage = 92;
+    const kickKnockback = 720;
+    blastRadius(player.x, player.y, radius, kickDamage, '#ff7fc2');
     enemies.forEach(enemy => {
       if (!enemy) return;
       if (dist(player.x, player.y, enemy.x, enemy.y) > radius + enemy.r) return;
-      enemy.stun = Math.max(enemy.stun, 0.52);
+      const enemyAngle = Math.atan2(enemy.y - player.y, enemy.x - player.x);
+      enemy.vx += Math.cos(enemyAngle) * kickKnockback;
+      enemy.vy += Math.sin(enemyAngle) * kickKnockback;
+      enemy.stun = Math.max(enemy.stun, 0.7);
     });
-    player.vx -= Math.cos(angle) * 160;
-    player.vy -= Math.sin(angle) * 160;
+    player.vx -= Math.cos(angle) * 260;
+    player.vy -= Math.sin(angle) * 260;
     shake = Math.max(shake, 10);
     shakeT = Math.max(shakeT, 0.18);
     particles.push({ x: player.x, y: player.y, life: 0.42, ring: radius * 0.85, c: '#ff7fc2' });
@@ -7957,7 +8082,7 @@
         player.dashY = 0;
       }
     } else {
-      const flightBoost = player.princessFlightTime > 0 ? 1.28 : 1;
+      const flightBoost = player.princessFlightTime > 0 ? 2 : 1;
       const targetSpeed = 228 * flightBoost * (godTimer > 0 ? 1.25 : 1) * itemStats.moveSpeedMultiplier;
       player.vx = applyResponsiveVelocity(player.vx, moveX * targetSpeed, dt);
       player.vy = applyResponsiveVelocity(player.vy, moveY * targetSpeed, dt);
@@ -8097,6 +8222,9 @@
     sectionPerfStart = perfStart();
     updatePickups(dt);
     perfEnd('update.pickups', sectionPerfStart);
+    sectionPerfStart = perfStart();
+    updateGardenGrowth();
+    perfEnd('update.garden', sectionPerfStart);
     sectionPerfStart = perfStart();
     updateDeadBodies(dt);
     perfEnd('update.corpses', sectionPerfStart);
@@ -9956,6 +10084,14 @@
             pickup.y += ((player.y - pickup.y) / d) * 0.016 * pull;
           }
         }
+      } else if (pickup.type === 'apple' || pickup.type === 'fruit') {
+        const magnetRadius = 124;
+        const d = dist(pickup.x, pickup.y, player.x, player.y);
+        if (d < magnetRadius && d > 0.001) {
+          const pull = 190 + (1 - d / magnetRadius) * 240;
+          pickup.x += ((player.x - pickup.x) / d) * 0.016 * pull;
+          pickup.y += ((player.y - pickup.y) / d) * 0.016 * pull;
+        }
       } else if (pickup.type === 'item') {
         const magnetRadius = 145;
         const d = dist(pickup.x, pickup.y, player.x, player.y);
@@ -10002,6 +10138,23 @@
       if (pickup.type === 'potion') {
         player.hp = Math.min(player.maxHp, player.hp + 40);
         particles.push({ x: player.x, y: player.y - 20, life: 0.6, text: '+40', c: '#0f8' });
+      }
+
+      if (pickup.type === 'apple' || pickup.type === 'fruit') {
+        const heal = Math.max(10, Number(pickup.heal || 20));
+        const before = player.hp;
+        player.hp = Math.min(player.maxHp, player.hp + heal);
+        const actual = player.hp - before;
+        if (actual > 0) {
+          spawnHealPopup(player.x + rand(-8, 8), player.y - 22, actual, { color: '#79ff8f', size: 14 });
+          particles.push({ x: player.x, y: player.y - 18, life: 0.55, text: `+${Math.ceil(actual)}`, c: '#79ff8f' });
+        }
+        const fruitRoom = getRoomByCoords(Number(pickup.roomGx ?? currentRoom?.gx), Number(pickup.roomGy ?? currentRoom?.gy)) || currentRoom;
+        const node = fruitRoom?.gardenFruitNodes?.find(gardenNode => gardenNode && gardenNode.id === pickup.gardenNodeId);
+        if (node) {
+          node.respawnAt = gameElapsedTime + rand(22, 12, 'world');
+          node.fruitSpawned = false;
+        }
       }
 
       if (pickup.type === 'item') {
@@ -10731,8 +10884,30 @@
 
   function pickFloorTile(tileX, tileY, theme) {
     const tiles = theme.floorTiles && theme.floorTiles.length ? theme.floorTiles : ['floor_stone_a'];
+    const gardenTiles = theme.gardenFloorTiles && theme.gardenFloorTiles.length ? theme.gardenFloorTiles : tiles;
     const noise = artNoise(tileX, tileY, 1);
+    const gardenBias = getGardenTileBias(currentRoom, theme);
+    if (gardenTiles.length && noise < gardenBias) {
+      const gardenNoise = artNoise(tileX, tileY, 9);
+      return gardenTiles[Math.min(gardenTiles.length - 1, Math.floor(gardenNoise * gardenTiles.length))];
+    }
     return tiles[Math.min(tiles.length - 1, Math.floor(noise * tiles.length))];
+  }
+
+  function getGardenTileBias(room = currentRoom, theme = getRoomArtTheme(room)) {
+    if (floor <= 5) return 0;
+    let bias = 0.18;
+    if (!room) return bias;
+    if (room.type === 'secret') bias = 0.58;
+    else if (room.type === 'treasure') bias = 0.42;
+    else if (room.type === 'shop') bias = 0.34;
+    else if (room.type === 'anvil') bias = 0.3;
+    else if (room.type === 'combat') bias = 0.26;
+    else if (room.type === 'ladder') bias = 0.24;
+    else if (room.type === 'boss') bias = 0.16;
+    else if (room.type === 'god') bias = 0.12;
+    if (theme === ROOM_ART_THEMES.secret) bias += 0.04;
+    return clamp(bias + Math.min(0.08, Math.max(0, (10 - floor) * 0.006)), 0.08, 0.72);
   }
 
   function drawEnvironmentTile(tileKey, x, y, w = ENV_TILE_SIZE, h = ENV_TILE_SIZE, options = {}) {
@@ -10802,6 +10977,7 @@
     target.beginPath();
     target.rect(WALL + 8, WALL + 8, ROOM_W - WALL * 2 - 16, ROOM_H - WALL * 2 - 16);
     target.clip();
+    const gardenBias = getGardenTileBias();
     const cols = Math.ceil((ROOM_W - WALL * 2) / ENV_TILE_SIZE);
     const rows = Math.ceil((ROOM_H - WALL * 2) / ENV_TILE_SIZE);
     for (let ty = 0; ty < rows; ty += 1) {
@@ -10834,6 +11010,23 @@
           target.lineTo(sx + 8 + artNoise(tx, ty, 25) * 12, sy - 4 + artNoise(tx, ty, 26) * 8);
           target.lineTo(sx + 15 + artNoise(tx, ty, 27) * 14, sy + 4 + artNoise(tx, ty, 28) * 12);
           target.stroke();
+        }
+
+        if (gardenBias > 0.12 && artNoise(tx, ty, 31) < gardenBias * 0.4) {
+          target.fillStyle = 'rgba(92, 149, 74, 0.24)';
+          target.beginPath();
+          target.ellipse(
+            x + 8 + artNoise(tx, ty, 32) * 24,
+            y + 8 + artNoise(tx, ty, 33) * 24,
+            5 + artNoise(tx, ty, 34) * 5,
+            2 + artNoise(tx, ty, 35) * 3,
+            artNoise(tx, ty, 36) * Math.PI,
+            0,
+            Math.PI * 2,
+          );
+          target.fill();
+          target.fillStyle = 'rgba(156, 218, 122, 0.18)';
+          target.fillRect(x + 2 + artNoise(tx, ty, 37) * 10, y + 2 + artNoise(tx, ty, 38) * 10, 2, 2);
         }
       }
     }
@@ -11292,6 +11485,43 @@
         ctx.arc(-decor.r * 0.15, -decor.r * 0.85, decor.r * 0.28, 0, Math.PI * 2);
         ctx.fill();
         ctx.shadowBlur = 0;
+      } else if (decor.kind === 'fruit_tree') {
+        ctx.fillStyle = 'rgba(18,30,12,0.34)';
+        ctx.beginPath();
+        ctx.ellipse(0, decor.r * 0.74, decor.r, decor.r * 0.36, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#5f3d1f';
+        ctx.fillRect(-4, -decor.r * 0.28, 8, decor.r * 0.9);
+        ctx.fillStyle = '#3f7a2d';
+        ctx.beginPath();
+        ctx.arc(0, -decor.r * 0.46, decor.r * 0.84, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#58a73d';
+        ctx.beginPath();
+        ctx.arc(-decor.r * 0.28, -decor.r * 0.68, decor.r * 0.58, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(decor.r * 0.26, -decor.r * 0.74, decor.r * 0.52, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#ff7385';
+        ctx.shadowColor = '#ff7f8f';
+        ctx.shadowBlur = 8;
+        ctx.beginPath();
+        ctx.arc(-decor.r * 0.18, -decor.r * 0.62, 3, 0, Math.PI * 2);
+        ctx.arc(decor.r * 0.15, -decor.r * 0.5, 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      } else if (decor.kind === 'moss_patch') {
+        ctx.fillStyle = 'rgba(17,34,18,0.5)';
+        ctx.beginPath();
+        ctx.ellipse(0, 2, decor.r * 1.2, decor.r * 0.56, decor.x * 0.01, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(92,145,72,0.5)';
+        ctx.beginPath();
+        ctx.ellipse(-decor.r * 0.2, -1, decor.r * 0.74, decor.r * 0.34, 0.4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(149,208,109,0.22)';
+        ctx.fillRect(-decor.r * 0.4, -1, decor.r * 0.45, 2);
       }
       ctx.restore();
     });
@@ -11571,6 +11801,30 @@
           ctx.arc(0, 0, 10, 0, Math.PI * 2);
           ctx.fill();
         }
+      } else if (pickup.type === 'apple' || pickup.type === 'fruit') {
+        const appleDef = window.NeoNykeIconDefs?.pickups?.apple || window.NeoNykeIconDefs?.pickups?.fruit;
+        const fruitPulse = 1 + Math.sin(t * 2.3) * 0.08;
+        ctx.shadowColor = '#ff4b4b';
+        ctx.shadowBlur = 16;
+        ctx.save();
+        ctx.scale(fruitPulse, fruitPulse);
+        if (appleDef) {
+          ctx.fillStyle = '#ff4b4b';
+          ctx.imageSmoothingEnabled = false;
+          appleDef.pixels.forEach(([px, py]) => {
+            ctx.fillRect(px * 3 - 12, py * 3 - 12, 3, 3);
+          });
+        } else {
+          ctx.fillStyle = '#ff4b4b';
+          ctx.beginPath();
+          ctx.arc(0, 0, 9, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+        ctx.fillStyle = '#7a1d1d';
+        ctx.fillRect(-1, -12, 2, 5);
+        ctx.fillStyle = '#ffd8d8';
+        ctx.fillRect(2, -11, 2, 2);
       } else if (pickup.type === 'item') {
         const item = itemRegistry.get(pickup.key);
         const color = item?.color || '#fff';
@@ -12010,6 +12264,13 @@
       g.fillRect(ox + 9, oy + size - 7, 1, 3);
       g.fillRect(ox + size - 4, oy + 4, 2, 5);
     }
+    if (def.leaf) {
+      g.fillStyle = def.leaf;
+      g.fillRect(ox + 2, oy + 3, 1, 1);
+      g.fillRect(ox + 10, oy + 6, 1, 1);
+      g.fillRect(ox + 6, oy + 9, 1, 1);
+      g.fillRect(ox + 12, oy + 12, 1, 1);
+    }
     if (def.ash) {
       g.fillStyle = def.ash;
       g.fillRect(ox + 3, oy + 4, 1, 1);
@@ -12070,6 +12331,13 @@
       g.fillStyle = def.ember;
       g.fillRect(ox + 3, oy + 12, 1, 1);
       g.fillRect(ox + 13, oy + 4, 1, 1);
+    }
+    if (def.ivy) {
+      g.fillStyle = def.ivy;
+      g.fillRect(ox + 1, oy + 2, 2, 1);
+      g.fillRect(ox + 2, oy + 6, 1, 3);
+      g.fillRect(ox + 11, oy + 3, 2, 1);
+      g.fillRect(ox + 12, oy + 7, 1, 3);
     }
   }
 
