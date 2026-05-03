@@ -409,7 +409,6 @@
         { label: 'SPD',   pct: 66, color: '#c991ff' },
         { label: 'RANGE', pct: 60, color: '#ffd1ea' },
       ],
-      skills: ['Royal Strike', 'Petal Beam', 'Blossom Burst'],
     },
     thorn_knight: {
       lore: 'A bleed-forged warrior who turns wounds into weapons. The longer the fight, the deadlier he becomes.',
@@ -419,7 +418,6 @@
         { label: 'SPD',   pct: 66, color: '#8080c0' },
         { label: 'RANGE', pct: 40, color: '#60a080' },
       ],
-      skills: ['⚔ Slash', '🩸 Blood Beam', '💥 Crimson Smash'],
     },
     metao: {
       lore: 'Wizard king of chaos and fire. Low raw damage but disks and blasts reward aggressive play.',
@@ -429,7 +427,6 @@
         { label: 'SPD',   pct: 66, color: '#8080c0' },
         { label: 'RANGE', pct: 90, color: '#60a080' },
       ],
-      skills: ['🔥 Fire Balls', '💿 Power Disks', '🌀 Chaos Burst'],
     },
     granialla: {
       lore: 'A dark-skinned princess with a crown of golden hair. Divine judgment and self-restoration — earned only by slaying GOD.',
@@ -439,7 +436,6 @@
         { label: 'SPD',   pct: 66, color: '#8080c0' },
         { label: 'RANGE', pct: 66, color: '#60a080' },
       ],
-      skills: ['⚡ Smite', '⚖ Blade Justice', '✨ Healing Zone'],
     },
   };
 
@@ -13885,7 +13881,10 @@
             `<div class="char-stat-row"><span class="stat-label">${s.label}</span>` +
             `<div class="stat-bar"><div class="stat-fill" style="width:${s.pct}%;background:${s.color}"></div></div></div>`
           ).join('');
-          const skillsHtml = disp.skills.map(s =>
+          const defaultMoves = getDefaultMovesForCharacter(selected);
+          const kitNames = ['melee', 'laser', 'smash', 'dash']
+            .map(slot => MOVE_DEFS[defaultMoves[slot]]?.name || defaultMoves[slot]);
+          const skillsHtml = kitNames.map(s =>
             `<span class="hero-detail-skill-pip">${s}</span>`
           ).join('');
           detail.innerHTML =
