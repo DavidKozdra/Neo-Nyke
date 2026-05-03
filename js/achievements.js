@@ -1,0 +1,17 @@
+const ACHIEVEMENTS = [
+  { id: 'one_punch_man',  name: 'Won Punch Man',    desc: 'Deal 10,000 damage in one hit',         icon: '👊' },
+  { id: 'the_avatar',     name: 'I Am the Avatar',  desc: 'Apply 4+ status effects in one run',    icon: '🌊' },
+  { id: 'rival_rumble',   name: 'Rival Rumble',     desc: 'Kill 100 rivals',                       icon: '⚔️' },
+  { id: 'gotta_meet_god', name: 'Gotta Meet God',   desc: 'Beat the game in under 5 minutes',      icon: '⚡' },
+  { id: 'yeshua_is_king', name: 'Yeshua Is King',   desc: 'Heal 343 (7×7×7) HP total in one run',  icon: '✝️' },
+  { id: 'unkillable',     name: 'Unkillable',       desc: 'Beat the game without taking damage',   icon: '🛡️' },
+  { id: 'hoarder',        name: 'Hoarder',          desc: 'Hold 10 relics at once',                icon: '🎒' },
+  { id: 'glass_cannon',   name: 'Glass Cannon',     desc: 'Win a run at 1 HP',                     icon: '💀' },
+  { id: 'floor_muncher',  name: 'Floor Muncher',    desc: 'Reach floor 10',                        icon: '🪜' },
+  { id: 'overleveled',    name: 'Overleveled',      desc: 'Reach level 20 in a single run',        icon: '⭐' },
+  { id: 'shopping_spree', name: 'Shopping Spree',   desc: 'Buy 5 items from shops in one run',     icon: '🛍️' },
+  { id: 'loop_lord',      name: 'Loop Lord',        desc: 'Complete 3 loops in a single run',      icon: '♾️' },
+  { id: 'coin_goblin',    name: 'Coin Goblin',      desc: 'Accumulate 1,000 total coins',          icon: '💰' },
+  { id: 'god_slayer',     name: 'God Slayer',        desc: 'Slay 10 gods',                          icon: '⚰️' },
+  { id: 'extinction',     name: 'Extinction',       desc: 'Kill 1,000 enemies total',              icon: '☠️' },
+];

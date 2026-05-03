@@ -1098,6 +1098,9 @@
     pauseSettings: document.getElementById('pauseSettings'),
     pauseMain: document.getElementById('pauseMain'),
     actionBar: document.getElementById('actionBar'),
+    adapterStatus: document.getElementById('adapterStatus'),
+    adapterStatusIcon: document.getElementById('adapterStatusIcon'),
+    adapterStatusText: document.getElementById('adapterStatusText'),
     shopPanel: document.getElementById('shopPanel'),
     shopClose: document.getElementById('shopClose'),
     shopTabs: [...document.querySelectorAll('#shopPanel .shop-tab')],
@@ -1163,8 +1166,12 @@
     newRunBtn: document.getElementById('newRunBtn'),
     runHistoryBtn: document.getElementById('runHistoryBtn'),
     runHistoryPanel: document.getElementById('runHistoryPanel'),
+    runHistoryPanelTitle: document.getElementById('runHistoryPanelTitle'),
+    runHistoryViewTabs: [...document.querySelectorAll('#runHistoryPanel .rh-view-tab')],
+    achievementsList: document.getElementById('achievementsList'),
     runHistoryList: document.getElementById('runHistoryList'),
     runHistoryEmpty: document.getElementById('runHistoryEmpty'),
+    runHistoryBody: document.querySelector('#runHistoryPanel .rh-body'),
     runHistoryClose: document.getElementById('runHistoryClose'),
     runHistoryPrev: document.getElementById('runHistoryPrev'),
     runHistoryNext: document.getElementById('runHistoryNext'),
@@ -1478,6 +1485,7 @@
     const state = getStatusState(entity, key);
     state.stacks = Math.min(6, Math.max(state.stacks, 0) + Math.max(0, Number(stacks || 0)));
     state.duration = Math.max(state.duration, Number(duration || 0));
+    if (entity !== player) achievementEvents.emit('status:applied', { key });
   }
 
   const walls = (() => {
@@ -3131,6 +3139,7 @@
       if (!spendCoins(offer.cost)) return;
       offer.bought = true;
       collectItem(offer.key);
+      achievementEvents.emit('shop:bought');
     } else if (kind === 'move') {
       const offerIndex = Number(button.dataset.index || -1);
       const moveOffers = getShopMoveOffers();
@@ -4371,6 +4380,7 @@
       syncSeedState();
       floor = 1;
       gameElapsedTime = 0;
+      achievementManager.resetRunCounters();
       player = createDefaultPlayer();
       if (gameMode === 'sandbox') {
         player.coins = Number(sandboxSettings.startingCoins || 0);
@@ -4410,6 +4420,7 @@
     syncSeedState();
     floor = 1;
     gameElapsedTime = 0;
+    achievementManager.resetRunCounters();
     endlessWave = 0;
     endlessWaveActive = false;
     resetTutorialState(false);
@@ -4432,6 +4443,7 @@
     syncSeedState();
     floor = 5;
     gameElapsedTime = 0;
+    achievementManager.resetRunCounters();
     resetTutorialState(false);
     player = createDefaultPlayer();
     player.hp = player.maxHp * 999;
@@ -4461,6 +4473,7 @@
     syncSeedState();
     floor = 5;
     gameElapsedTime = 0;
+    achievementManager.resetRunCounters();
     bossRushStage = 0;
     bossRushActive = false;
     resetTutorialState(false);
@@ -6545,17 +6558,18 @@
   }
 
   function getMirrorChampionStats() {
-    const character = getCharacterDef();
     const attackSpeed = getAttackSpeedValue();
-    const meleeDamage = Math.round((ATTACKS.melee.damage + (player?.attackPower || 0)) * (character.damageMultiplier || 1));
+    const itemStats = getItemStats();
+    const meleeDamage = Math.round(getPlayerBaseDamage());
     const beamDamage = Math.round(ATTACKS.laser.damage + (player?.attackPower || 0) * 0.45);
     const smashDamage = Math.round(ATTACKS.smash.damage + (player?.attackPower || 0) * 0.9);
+    const moveSpeed = Math.round(228 * (itemStats.moveSpeedMultiplier || 1));
     return {
       hp: Math.max(90, Math.round(player.maxHp)),
       dmg: Math.max(18, meleeDamage),
       beamDamage: Math.max(10, beamDamage),
       smashDamage: Math.max(20, smashDamage),
-      speed: Math.max(108, Math.round(176 + attackSpeed * 34)),
+      speed: Math.max(108, moveSpeed),
       attackCd: Math.max(0.22, 0.56 / attackSpeed),
       attackSpeed,
       spriteKey: player.character,
@@ -7432,7 +7446,6 @@
           damageDestructible(prop, 1);
         }
       });
-      particles.push({ x: player.x + Math.cos(angle) * 24, y: player.y + Math.sin(angle) * 24, life: 0.16, c: '#cda8ff' });
     });
   }
 
@@ -7607,7 +7620,7 @@
         if (!hitSegment) continue;
         const anvilBeamBonus = getAnvilMoveBonus(move, 'damage');
         const baseBeamDamage = laserMode === 'god_sweep'
-          ? 24
+          ? 12
           : laserMode === 'turtle_wave'
             ? 34
             : loveBeamActive
@@ -8150,6 +8163,7 @@
       color: isCrit ? '#ff9f1c' : '#ff6b6b',
       size: isCrit ? 20 : 16,
     });
+    achievementEvents.emit('damage:dealt', { amount: dealt });
     if (options.fireChance > 0 && nextRandom('encounter') < options.fireChance) {
       applyFire(enemy, Number(options.fireStacks || 1), Number(options.fireDuration || 2.8));
     }
@@ -8427,6 +8441,7 @@
     const isTutorialDummy = !!enemy.tutorialDummy;
     spawnEnemyCorpse(enemy);
     if (player) player.kills = Math.max(0, Number(player.kills || 0)) + 1;
+    achievementEvents.emit('enemy:killed');
     if (player?.keenEyeReady) {
       triggerKeenEyeBuff();
       consumeCharge('keen_eye');
@@ -8469,6 +8484,7 @@
 
     if (enemy.type === 'god') {
       metaProgress.godsKilled = Number(metaProgress.godsKilled || 0) + 1;
+      achievementEvents.emit('god:killed');
       if (!metaProgress.unlockedCharacters.includes('granialla')) metaProgress.unlockedCharacters.push('granialla');
       if (gameMode === 'boss_rush') {
         currentRoom.cleared = true;
@@ -8518,6 +8534,7 @@
       const rival = enemy.rivalData;
       if (rival) {
         rival.dead = true;
+        achievementEvents.emit('rival:killed');
         rival.loot.forEach(item => {
           if (item.type === 'item' && item.key) {
             pickups.push({ x: enemy.x + rand(-22, 22, 'loot'), y: enemy.y + rand(-14, 14, 'loot'), type: 'item', key: item.key });
@@ -8544,7 +8561,7 @@
         return;
       }
       currentRoom.cleared = true;
-      if (currentRoom.type === 'ladder' || currentRoom.type === 'boss') {
+      if ((currentRoom.type === 'ladder' || currentRoom.type === 'boss') && gameMode !== 'endless' && gameMode !== 'boss_rush') {
         pickups.push({ x: ROOM_W / 2, y: ROOM_H / 2, type: 'ladder' });
       }
       if (gameMode === 'endless' && endlessWaveActive) {
@@ -8621,6 +8638,7 @@
 
   function levelUp() {
     player.level += 1;
+    achievementEvents.emit('player:leveled', { level: player.level });
     player.xpToNext = Math.round(player.xpToNext * 1.22);
     player.maxHp += 15;
     player.hp = Math.min(player.maxHp, player.hp + 15);
@@ -8641,6 +8659,8 @@
     if (isFirstRunTutorialActive()) tutorialState.gotRelic = true;
     markInventoryPanelDirty();
     pushItemNotification(itemKey, 1);
+    const totalItems = Object.values(player.items).reduce((s, v) => s + Number(v || 0), 0);
+    achievementEvents.emit('item:collected', { totalItems });
 
     if (itemKey === 'jesters_dice') {
       floorSkipPending += 3;
@@ -10358,6 +10378,7 @@
     lastDamageSourceKey = String(source || '');
 
     player.hp -= finalAmount;
+    achievementEvents.emit('damage:taken', { amount: finalAmount });
 
     if (getItemCount('insurance') > 0 && player.insuranceReady && hpBeforeHit > halfHpThreshold && player.hp <= halfHpThreshold) {
       player.hp = Math.max(player.hp, halfHpThreshold);
@@ -10754,6 +10775,7 @@
   function spawnHealPopup(x, y, amount, opts = {}) {
     const value = Math.max(0, Math.round((amount || 0) * (opts.scale || 8)));
     if (value <= 0) return;
+    achievementEvents.emit('heal:applied', { amount: Math.max(0, amount || 0) });
     particles.push({
       x,
       y,
@@ -11011,6 +11033,7 @@
 
       if (pickup.type === 'descend') {
         floor += 1;
+        achievementEvents.emit('floor:reached', { floor });
         refreshFloorChargeStates();
         metaProgress.bestFloor = Math.max(metaProgress.bestFloor, floor);
         persistMetaSoon();
@@ -11130,6 +11153,7 @@
     gameElapsedTime = 0;
     refreshFloorChargeStates();
     runLoopIndex += 1;
+    achievementEvents.emit('loop:completed', { loopIndex: runLoopIndex });
     syncSeedState();
     const crystalBonus = Math.max(0, Math.round(getActiveChallengeCrystalBonusMultiplier()));
     const titheBonus = hasLegacy('crystal_tithe') && HARD_DIFFICULTIES.has(selectedDifficulty) ? 1 : 0;
@@ -11156,6 +11180,7 @@
     player.coins += amount;
     metaProgress.coins += amount;
     persistMetaSoon();
+    achievementEvents.emit('meta:coins', { total: metaProgress.coins });
   }
 
   function getObjectiveEntries(lineObjective = '') {
@@ -11241,6 +11266,29 @@
       uiController.setObjective(text);
       uiController.setObjectiveList(getRoomLabel(currentRoom.type), getObjectiveEntries(text));
     };
+    if (gameMode === 'endless') {
+      const displayWave = endlessWave + (endlessWaveActive ? 1 : 0);
+      if (!endlessWaveActive) {
+        setObjective(endlessWave === 0 ? 'Survive the first wave.' : `Wave ${endlessWave} cleared. Survive the next wave.`);
+      } else {
+        setObjective(`Survive wave ${displayWave}.`);
+      }
+      return;
+    }
+    if (gameMode === 'boss_rush') {
+      if (bossRushActive) {
+        const bossName = getBossDisplayName(BOSS_RUSH_ORDER[bossRushStage] || BOSS_RUSH_ORDER[0]);
+        setObjective(`Defeat ${bossName}.`);
+      } else {
+        const nextBoss = BOSS_RUSH_ORDER[bossRushStage];
+        if (nextBoss) {
+          setObjective(`Next: ${getBossDisplayName(nextBoss)}. Get ready.`);
+        } else {
+          setObjective('Boss Rush complete!');
+        }
+      }
+      return;
+    }
     if (floor < MAX_FLOOR) {
       if (currentRoom.type === 'shop') {
         setObjective('Shop or move on.');
@@ -11390,6 +11438,37 @@
         ui.challengeStatusFill.style.width = `${ratio * 100}%`;
       }
     }
+
+    if (ui.adapterStatus) {
+      const hasAdapter = getItemCount('charged_adapter') > 0;
+      const showAdapter = hasAdapter && (gameState === 'play' || gameState === 'pause');
+      ui.adapterStatus.classList.toggle('hidden', !showAdapter);
+      ui.adapterStatus.setAttribute('aria-hidden', showAdapter ? 'false' : 'true');
+      ui.adapterStatus.classList.toggle('is-ready', false);
+      ui.adapterStatus.classList.toggle('is-blocked', false);
+      const adapterItem = itemRegistry.get('charged_adapter') || ITEM_DEFS.charged_adapter;
+      if (showAdapter && ui.adapterStatusIcon && adapterItem) drawItemToastIcon(ui.adapterStatusIcon, adapterItem);
+      if (showAdapter) {
+        const warpKey = formatControlLabel('f', 'f');
+        const needed = getChargeRequirement(10);
+        const progress = Math.max(0, Number(player?.escapeChargeKills || 0));
+        if (!player.escapeReady) {
+          if (ui.adapterStatusText) ui.adapterStatusText.textContent = `Adapter [${warpKey}]: charging ${progress}/${needed}`;
+          ui.adapterStatus.classList.add('is-blocked');
+        } else if (!currentRoom || currentRoom.type === 'boss' || currentRoom.type === 'god') {
+          if (ui.adapterStatusText) ui.adapterStatusText.textContent = `Adapter [${warpKey}]: no warp in boss room`;
+          ui.adapterStatus.classList.add('is-blocked');
+        } else if (enemies.length === 0) {
+          if (ui.adapterStatusText) ui.adapterStatusText.textContent = `Adapter [${warpKey}]: requires active combat`;
+          ui.adapterStatus.classList.add('is-blocked');
+        } else {
+          if (ui.adapterStatusText) ui.adapterStatusText.textContent = `Adapter [${warpKey}]: ready - warp to ladder (50% coin cost)`;
+          ui.adapterStatus.classList.add('is-ready');
+        }
+      } else if (ui.adapterStatusText) {
+        ui.adapterStatusText.textContent = '';
+      }
+    }
     
     updateItemUI();
   }
@@ -11428,6 +11507,7 @@
 
   function win() {
     const entry = finalizeRun('win');
+    achievementEvents.emit('run:won', { elapsedSeconds: gameElapsedTime, playerHp: Math.round(player?.hp || 0) });
     setGameState('win');
     uiController.setWinInfo(`Floor ${entry.floor} cleared with ${entry.coins} run coins banked and ${metaProgress.coins} total coins saved.`);
     clearRunSave();
@@ -13936,7 +14016,36 @@
   }
 
   function drawPlayerLaser() {
-    if (!laserActive || !player) return;
+    if (!player) return;
+
+    // Draw Laser Glasses weapon beams (two beams, ±0.2 spread)
+    if (!laserActive && getEquippedWeapon() === 'lazer_glasses' && player.weaponBeamTime > 0) {
+      const baseAngle = Math.atan2(mouse.worldY - player.y, mouse.worldX - player.x);
+      const alpha = Math.min(1, player.weaponBeamTime / 0.3);
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      [-0.2, 0.2].forEach(offset => {
+        const beamAngle = baseAngle + offset;
+        const beamPath = buildRicochetBeamPath(player.x, player.y, beamAngle, 430, LAZER_GLASSES_BOUNCES);
+        drawTaperedBeamPath(beamPath, {
+          color: '#cda8ff',
+          glow: '#e0c8ff',
+          maxWidth: 5,
+          shadowBlur: 16,
+        });
+        // Tip burst
+        if (rng() < 0.35) {
+          const end = getBeamPathEnd(beamPath);
+          particles.push({ x: end.x + (rng() - 0.5) * 5, y: end.y + (rng() - 0.5) * 5, life: 0.1 + rng() * 0.08, vx: (rng() - 0.5) * 35, vy: (rng() - 0.5) * 35, c: '#cda8ff' });
+        }
+      });
+      ctx.restore();
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha = 1;
+      return;
+    }
+
+    if (!laserActive) return;
     const angle = laserMode === 'god_sweep'
       ? laserAngle
       : Math.atan2(mouse.worldY - player.y, mouse.worldX - player.x);
@@ -14604,6 +14713,7 @@
       const inPlay = show === 'play' || show === 'pause' || show === 'dialogue' || show === 'dying';
       setVisible(view.hud, false, 'none');
       setVisible(view.actionBar, show === 'play' || show === 'pause' || show === 'dying', '');
+      setVisible(view.adapterStatus, show === 'play' || show === 'pause', '');
       setVisible(view.playerStats, inPlay, '');
       setVisible(view.coinDisplay, inPlay, 'flex');
       setVisible(view.centerDisplay, inPlay, '');
@@ -14641,6 +14751,8 @@
       }
     }
 
+    let runHistoryView = 'runs'; // 'runs' | 'achievements'
+
     function setRunHistoryOpen(open) {
       runHistoryOpen = !!open;
       view.runHistoryPanel?.classList.toggle('hidden', !runHistoryOpen);
@@ -14649,6 +14761,41 @@
         view.runHistoryBtn.textContent = runHistoryOpen ? 'HIDE HISTORY' : 'RUN HISTORY';
         view.runHistoryBtn.setAttribute('aria-expanded', runHistoryOpen ? 'true' : 'false');
       }
+      if (open) setRunHistoryView('runs');
+    }
+
+    function setRunHistoryView(view_) {
+      runHistoryView = view_;
+      const showAch = view_ === 'achievements';
+      view.runHistoryBody?.classList.toggle('hidden', showAch);
+      view.runHistoryEmpty?.classList.toggle('hidden', true);
+      view.achievementsList?.classList.toggle('hidden', !showAch);
+      if (view.runHistoryPanelTitle) view.runHistoryPanelTitle.textContent = showAch ? 'ACHIEVEMENTS' : 'RUN HISTORY';
+      view.runHistoryViewTabs?.forEach(t => t.classList.toggle('active', t.dataset.view === view_));
+      if (showAch) populateAchievementsPanel();
+      else { view.runHistoryEmpty?.classList.toggle('hidden', runHistory.length > 0); renderRunHistoryPage(); }
+    }
+
+    async function populateAchievementsPanel() {
+      if (!view.achievementsList) return;
+      view.achievementsList.innerHTML = '<div class="ach-loading">Loading…</div>';
+      const cards = await Promise.all(ACHIEVEMENTS.map(async a => {
+        const unlocked = await achievementManager.isUnlocked(a.id);
+        return `<div class="ach-card${unlocked ? '' : ' ach-card--locked'}">
+          <span class="ach-icon" style="${unlocked ? '' : 'opacity:0.3;filter:grayscale(1)'}">${a.icon}</span>
+          <div>
+            <div class="ach-name">${a.name}</div>
+            <div class="ach-desc">${a.desc}</div>
+            <div class="${unlocked ? 'ach-unlocked-badge' : 'ach-locked-badge'}">${unlocked ? '✓ Unlocked  +1 💎' : 'Locked'}</div>
+          </div>
+        </div>`;
+      }));
+      view.achievementsList.innerHTML = cards.join('');
+    }
+
+    function setAchievementsPanelOpen(open) {
+      setRunHistoryOpen(open);
+      if (open) setRunHistoryView('achievements');
     }
 
     function setAltModesPanelOpen(open) {
@@ -14725,6 +14872,10 @@
       });
       manager.registerScreen('actionBar', {
         create: () => makeContainer(view.actionBar, ''),
+        validStates: ['play', 'pause'],
+      });
+      manager.registerScreen('adapterStatus', {
+        create: () => makeContainer(view.adapterStatus, ''),
         validStates: ['play', 'pause'],
       });
       manager.registerScreen('dialogue', {
@@ -14987,6 +15138,9 @@
         view.legacyToggle?.addEventListener('click', handlers.onToggleLegacy);
         view.runHistoryBtn?.addEventListener('click', handlers.onToggleRunHistory);
         view.runHistoryClose?.addEventListener('click', () => setRunHistoryOpen(false));
+        view.runHistoryViewTabs?.forEach(tab => {
+          tab.addEventListener('click', () => setRunHistoryView(tab.dataset.view || 'runs'));
+        });
         view.runHistoryPrev?.addEventListener('click', () => {
           runHistoryPage = Math.max(0, runHistoryPage - 1);
           renderRunHistoryPage();
@@ -15096,6 +15250,7 @@
       setLegacyPanelOpen,
       setRunHistoryOpen,
       setSandboxPanelOpen,
+      setAchievementsPanelOpen,
       setMenuMeta(coins, bestFloor, loopCrystals, saveState) {
         view.bankCoins.textContent = coins;
         view.bestFloor.textContent = bestFloor;
@@ -15395,10 +15550,13 @@
       if (!idb) return Promise.reject(new Error('IndexedDB unavailable'));
       if (dbPromise) return dbPromise;
       dbPromise = new Promise((resolve, reject) => {
-        const request = idb.open('NeoNykeDB', 1);
+        const request = idb.open('NeoNykeDB', 2);
         request.onupgradeneeded = () => {
           if (!request.result.objectStoreNames.contains('saves')) {
             request.result.createObjectStore('saves');
+          }
+          if (!request.result.objectStoreNames.contains('achievements')) {
+            request.result.createObjectStore('achievements', { keyPath: 'id' });
           }
         };
         request.onsuccess = () => resolve(request.result);

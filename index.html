@@ -223,6 +223,11 @@
     </div>
   </div>
 
+  <div id="adapterStatus" class="adapter-status hidden" aria-hidden="true">
+    <canvas id="adapterStatusIcon" class="adapter-status__icon" width="24" height="24" aria-hidden="true"></canvas>
+    <span id="adapterStatusText" class="adapter-status__text"></span>
+  </div>
+
   <div id="anvilPanel" class="game-panel game-panel--anvil hidden" aria-hidden="true">
     <div class="game-panel-head">
       <div class="panel-title-wrap">
@@ -447,7 +452,13 @@
   </div><!-- /.menu-content -->
   <section id="runHistoryPanel" class="rh-panel hidden" aria-hidden="true">
     <div class="rh-head">
-      <span class="rh-title">RUN HISTORY</span>
+      <div class="rh-head-left">
+        <span class="rh-title" id="runHistoryPanelTitle">RUN HISTORY</span>
+        <div class="rh-view-tabs" role="tablist">
+          <button class="rh-view-tab active" data-view="runs" type="button">Runs</button>
+          <button class="rh-view-tab" data-view="achievements" type="button">Achievements</button>
+        </div>
+      </div>
       <button id="runHistoryClose" class="panel-close" aria-label="Close run history">X</button>
     </div>
     <div id="runHistoryEmpty" class="rh-empty hidden">No completed runs yet.</div>
@@ -478,6 +489,7 @@
         <div id="runHistoryTabPanel" class="rh-tabpanel"></div>
       </div>
     </div>
+    <div id="achievementsList" class="ach-grid hidden"></div>
   </section>
 
   <!-- Alt Modes panel (slides in over main menu) -->
@@ -860,6 +872,8 @@
   </div>
 </div>
 
+<script src="js/achievements.js"></script>
+<script src="js/achievementManager.js"></script>
 <script src="js/game.js"></script>
 <script src="js/ui/settings-ui.js"></script>
 <script src="js/ui/menu-background.js"></script>
