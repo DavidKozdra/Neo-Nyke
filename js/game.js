@@ -367,6 +367,60 @@
   };
   const CHALLENGE_ORDER = Object.keys(CHALLENGE_DEFS);
 
+  const LEGACY_UPGRADES = {
+    rival_bounty: {
+      key: 'rival_bounty',
+      name: 'Rival Bounty',
+      cost: 3,
+      description: 'Rival adventurers drop 50% more coins when defeated.',
+      effect: '+50% rival coin drops',
+    },
+    elite_tracker: {
+      key: 'elite_tracker',
+      name: 'Elite Tracker',
+      cost: 4,
+      description: 'Elite enemies are always visible on the minimap, even in unexplored rooms.',
+      effect: 'Elites shown on minimap',
+    },
+    god_memory: {
+      key: 'god_memory',
+      name: 'God Memory',
+      cost: 5,
+      description: 'After the first God kill, phase dialogue is skipped in all future runs.',
+      effect: 'Skip God phase dialogue',
+    },
+    bank_interest: {
+      key: 'bank_interest',
+      name: 'Bank Interest',
+      cost: 6,
+      description: 'Each time you loop, +50 coins are automatically added to your bank.',
+      effect: '+50 bank coins per loop',
+    },
+    crystal_tithe: {
+      key: 'crystal_tithe',
+      name: 'Crystal Tithe',
+      cost: 8,
+      description: 'Completing a loop on Hard or higher grants +1 bonus Loop Crystal.',
+      effect: '+1 LC per loop on Hard+',
+    },
+    challenge_mastery: {
+      key: 'challenge_mastery',
+      name: 'Challenge Mastery',
+      cost: 10,
+      description: 'Completing a loop with 3 or more active challenges grants +3 LC instead of the sum of their individual bonuses (if that sum is lower).',
+      effect: 'Triple-challenge loops give at least +3 LC',
+    },
+    endless_descent: {
+      key: 'endless_descent',
+      name: 'Endless Descent',
+      cost: 15,
+      description: 'After defeating God, a third pickup appears — Descend. Taking it continues the dungeon past Floor 10 with ever-scaling enemies.',
+      effect: 'Floors continue past Floor 10',
+    },
+  };
+  const LEGACY_ORDER = Object.keys(LEGACY_UPGRADES);
+  const HARD_DIFFICULTIES = new Set(['hard', 'impossible', 'god']);
+
   const CHARACTER_DEFS = {
     princess: {
       key: 'princess',
@@ -1127,6 +1181,10 @@
     charButtons: [...document.querySelectorAll('#choose .char-card')],
     difficultyButtons: [...document.querySelectorAll('#difficultySelect .difficulty-btn')],
     challengeButtons: [...document.querySelectorAll('#challengeSelect .challenge-btn')],
+    legacyPanel: document.getElementById('legacyPanel'),
+    legacyToggle: document.getElementById('legacyToggle'),
+    legacyHint: document.getElementById('legacyHint'),
+    legacyButtons: [...document.querySelectorAll('#legacySelect .legacy-btn')],
     itemSlots: {
       neo_knife: document.getElementById('rr-neo-knife'),
       orb_of_blood: document.getElementById('rr-orb-blood'),
@@ -1159,7 +1217,7 @@
   const GameStateManagerCtor = window.KozEngine?.Core?.gameStateManager?.GameStateManager || null;
   const gameStateManager = GameStateManagerCtor ? new GameStateManagerCtor() : null;
   if (gameStateManager) {
-    ['menu', 'charselect', 'play', 'dialogue', 'pause', 'dead', 'win'].forEach(state => gameStateManager.addState(state));
+    ['menu', 'charselect', 'play', 'dialogue', 'pause', 'dying', 'dead', 'win'].forEach(state => gameStateManager.addState(state));
   }
   const uiController = createUIController(ui);
 
@@ -1203,6 +1261,7 @@
   let loveBeamCasting = false;
   let turtleWaveHpTimer = 0;
   let dashKeyLatch = false;
+  let playerDeathAnim = null;
   let chosenCharacter = 'thorn_knight';
   let selectedDifficulty = 'easy';
   let selectedChallenges = [];
@@ -2095,6 +2154,21 @@
       onToggleChallenges() {
         uiController.setChallengePanelOpen(ui.challengePanel?.classList.contains('hidden'));
       },
+      onToggleLegacy() {
+        uiController.setLegacyPanelOpen(ui.legacyPanel?.classList.contains('hidden'));
+      },
+      onLegacySelect(legacyKey) {
+        const def = LEGACY_UPGRADES[legacyKey];
+        if (!def) return;
+        if (hasLegacy(legacyKey)) return;
+        if ((metaProgress.loopCrystals || 0) < def.cost) {
+          return;
+        }
+        metaProgress.loopCrystals = Number(metaProgress.loopCrystals || 0) - def.cost;
+        metaProgress.unlockedLegacy = normalizeLegacySelection([...(metaProgress.unlockedLegacy || []), legacyKey]);
+        persistMetaSoon();
+        updateCharacterSelectionUI();
+      },
       onToggleRunHistory() {
         uiController.setRunHistoryOpen(ui.runHistoryPanel?.classList.contains('hidden'));
       },
@@ -2399,9 +2473,9 @@
 
     let keys = [];
     if (itemType === 'weapon') {
-      keys = Object.keys(player.ownedWeapons || {}).filter(k => WEAPON_BASE_STATS[k]);
+      keys = Object.keys(player.ownedWeapons || {}).filter(k => WEAPON_BASE_STATS[k] && player.ownedWeapons[k]);
     } else {
-      keys = Object.keys(player.ownedMoves || {}).filter(k => MOVE_BASE_STATS[k]);
+      keys = Object.keys(player.ownedMoves || {}).filter(k => MOVE_BASE_STATS[k] && player.ownedMoves[k]);
     }
 
     if (keys.length === 0) {
@@ -3021,6 +3095,7 @@
       selectedCharacter: 'thorn_knight',
       godsKilled: 0,
       loopCrystals: 0,
+      unlockedLegacy: [],
     };
   }
 
@@ -3159,6 +3234,7 @@
           selectedDifficulty: normalizeDifficulty(savedMeta.selectedDifficulty),
           selectedChallenges: normalizeChallengeSelection(savedMeta.selectedChallenges),
           selectedCharacter: String(savedMeta.selectedCharacter || createDefaultMeta().selectedCharacter),
+          unlockedLegacy: normalizeLegacySelection(savedMeta.unlockedLegacy),
         };
       }
       runHistory = normalizeRunHistory(savedRunHistory || savedMeta?.runHistory);
@@ -3215,6 +3291,15 @@
   function normalizeChallengeSelection(input) {
     if (!Array.isArray(input)) return [];
     return [...new Set(input.filter(key => CHALLENGE_DEFS[key]))];
+  }
+
+  function normalizeLegacySelection(input) {
+    if (!Array.isArray(input)) return [];
+    return [...new Set(input.filter(key => LEGACY_UPGRADES[key]))];
+  }
+
+  function hasLegacy(key) {
+    return (metaProgress.unlockedLegacy || []).includes(key);
   }
 
   function normalizeRunHistory(input) {
@@ -3281,7 +3366,12 @@
       cursed_shops: 0.3,
       glass_cannon: 0.35,
     };
-    return normalizeChallengeSelection(selectedChallenges).reduce((total, key) => total + (bonusByKey[key] || 0), 0);
+    const active = normalizeChallengeSelection(selectedChallenges);
+    const sum = active.reduce((total, key) => total + (bonusByKey[key] || 0), 0);
+    if (hasLegacy('challenge_mastery') && active.length >= 3) {
+      return Math.max(sum, 3);
+    }
+    return sum;
   }
 
   function createRandomSeed() {
@@ -3402,11 +3492,11 @@
     return Math.max(12, Math.round(14 + floorValue * 7));
   }
 
-  function getLaserCastDuration(moveKey = getEquippedMove('laser'), attackSpeed = getAttackSpeedValue()) {
-    if (moveKey === 'god_sweep') return 1.45 / attackSpeed;
-    if (moveKey === 'love_beam') return Math.max(0.1, (MOVE_BASE_STATS.love_beam.duration + getAnvilMoveBonus('love_beam', 'duration')) / attackSpeed);
-    if (moveKey === 'turtle_wave') return Math.max(0.1, (MOVE_BASE_STATS.turtle_wave.duration + getAnvilMoveBonus('turtle_wave', 'duration')) / attackSpeed);
-    return (godTimer > 0 ? 0.72 : ATTACKS.laser.duration) / attackSpeed;
+  function getLaserCastDuration(moveKey = getEquippedMove('laser')) {
+    if (moveKey === 'god_sweep') return 1.45;
+    if (moveKey === 'love_beam') return Math.max(0.1, MOVE_BASE_STATS.love_beam.duration + getAnvilMoveBonus('love_beam', 'duration'));
+    if (moveKey === 'turtle_wave') return Math.max(0.1, MOVE_BASE_STATS.turtle_wave.duration + getAnvilMoveBonus('turtle_wave', 'duration'));
+    return godTimer > 0 ? 0.72 : ATTACKS.laser.duration;
   }
 
   function getMoveCooldownBase(moveKey) {
@@ -3923,9 +4013,11 @@
     metaProgress.selectedDifficulty = selectedDifficulty;
     selectedChallenges = normalizeChallengeSelection(selectedChallenges).filter(key => unlockedChallenges.has(key) && ownedChallenges.has(key));
     metaProgress.selectedChallenges = normalizeChallengeSelection(selectedChallenges);
+    const ownedLegacy = new Set(metaProgress.unlockedLegacy || []);
     uiController.updateCharacterSelection(unlocked, chosenCharacter);
     uiController.updateDifficultySelection(unlockedDifficulties, selectedDifficulty, metaProgress.loopCrystals || 0);
     uiController.updateChallengeSelection(unlockedChallenges, ownedChallenges, selectedChallenges, metaProgress.loopCrystals || 0, metaProgress.coins || 0);
+    uiController.updateLegacySelection(ownedLegacy, metaProgress.loopCrystals || 0);
     syncCharacterUiTheme();
   }
 
@@ -4166,6 +4258,8 @@
     const farRoom = findFarthestRoom(startRoom, roomMap);
     if (floor === MAX_FLOOR) {
       farRoom.type = 'god';
+    } else if (floor > MAX_FLOOR) {
+      farRoom.type = floor % 3 === 0 ? 'boss' : 'ladder';
     } else if (floor % 3 === 0) {
       farRoom.type = 'boss';
     } else {
@@ -5901,6 +5995,7 @@
   function playGodDialogue(phase) {
     const line = GOD_PHASE_DIALOGUE[phase];
     if (!line) return false;
+    if (hasLegacy('god_memory') && (metaProgress.godsKilled || 0) > 0) return false;
     setShopPanelOpen(false);
     setInventoryPanelOpen(false);
     clearGameplayInput();
@@ -6106,6 +6201,16 @@
     particles.push({ x: ROOM_W / 2, y: ROOM_H / 2 - 46, life: 0.95, text: getChallengeTrialLabel(type), c: '#d7f6ff' });
   }
 
+  function rollChallengeWeapon() {
+    const owned = new Set(Object.keys(player?.ownedWeapons || {}).filter(k => player?.ownedWeapons?.[k]));
+    const pool = [...WHITE_WEAPON_POOL];
+    if (floor >= 4) pool.push(...PURPLE_WEAPON_POOL);
+    if (floor >= 7) pool.push(...RED_WEAPON_POOL);
+    const available = pool.filter(k => !owned.has(k));
+    if (available.length === 0) return null;
+    return available[Math.floor(rng() * available.length)];
+  }
+
   function spawnChallengeReward(text = 'TRIAL CLEARED') {
     if (!currentRoom || currentRoom.type !== 'challenge' || currentRoom.challengeRewardSpawned) return;
     currentRoom.challengeRewardSpawned = true;
@@ -6114,6 +6219,12 @@
     pickups.push({ x: ROOM_W / 2, y: ROOM_H / 2 + 36, type: 'potion' });
     dropCoins(ROOM_W / 2, ROOM_H / 2 + 4, 75 + floor * 15);
     grantXp(28 + floor * 5);
+    const weaponKey = rollChallengeWeapon();
+    if (weaponKey && player) {
+      player.ownedWeapons[weaponKey] = true;
+      const wName = WEAPON_DEFS[weaponKey]?.name || weaponKey;
+      particles.push({ x: ROOM_W / 2, y: ROOM_H / 2 - 68, life: 1.4, text: `+ ${wName}`, c: '#ffd700' });
+    }
     particles.push({ x: ROOM_W / 2, y: ROOM_H / 2 - 52, life: 1.05, text, c: '#d7f6ff' });
   }
 
@@ -6348,7 +6459,7 @@
       xpGainMultiplier: 1 + scholarSeal * 0.15,
       levelEdgeDamageMultiplier: 1 + scholarCap * xpProgress * 0.45,
       knockbackMultiplier: 1 + pushMan * 0.18,
-      aoeRadiusMultiplier: 1 + explosiveJelly,
+      aoeRadiusMultiplier: (1 + explosiveJelly) * (player?.character === 'metao' ? 1.1 : 1),
       beamDamageMultiplier: 1 + dragonOrb * 0.35,
       beamChainTargets: dragonOrb > 0 ? Math.min(2, dragonOrb) : 0,
       beamChainDamageMultiplier: dragonOrb > 0 ? 0.6 + (dragonOrb - 1) * 0.15 : 0,
@@ -6873,7 +6984,7 @@
       if (!spendSkillCharge('laser', rechargeTime, { deferTimer: true })) return;
       laserActive = true;
       laserMode = 'turtle_wave';
-      laserTime = getLaserCastDuration(move, attackSpeed);
+      laserTime = getLaserCastDuration(move);
       laserTick = 0;
       turtleWaveHpTimer = 0;
       return;
@@ -6893,7 +7004,7 @@
       laserActive = true;
       laserMode = 'beam';
       loveBeamCasting = true;
-      laserTime = getLaserCastDuration(move, attackSpeed);
+      laserTime = getLaserCastDuration(move);
       laserTick = 0;
       turtleWaveHpTimer = 0;
       return;
@@ -6907,7 +7018,7 @@
       if (!spendSkillCharge('laser', rechargeTime, { deferTimer: true })) return;
       laserActive = true;
       laserMode = 'god_sweep';
-      laserTime = getLaserCastDuration(move, attackSpeed);
+      laserTime = getLaserCastDuration(move);
       laserTick = 0;
       turtleWaveHpTimer = 0;
       laserAngle = Math.atan2(mouse.worldY - player.y, mouse.worldX - player.x);
@@ -6917,7 +7028,7 @@
     if (!spendSkillCharge('laser', rechargeTime, { deferTimer: true })) return;
     laserActive = true;
     laserMode = 'beam';
-    laserTime = getLaserCastDuration(move, attackSpeed);
+    laserTime = getLaserCastDuration(move);
     laserTick = 0;
     turtleWaveHpTimer = 0;
   }
@@ -7303,7 +7414,8 @@
   function spawnPlayerDiskBurst() {
     for (let index = 0; index < 8; index += 1) {
       const angle = index * (Math.PI * 2 / 8);
-      projectiles.push({ x: player.x, y: player.y, vx: Math.cos(angle) * 280, vy: Math.sin(angle) * 280, r: 7, life: 1.2, enemy: false, kind: 'disk', damage: 20 });
+      const isMetao = player?.character === 'metao';
+      projectiles.push({ x: player.x, y: player.y, vx: Math.cos(angle) * 280, vy: Math.sin(angle) * 280, r: 7, life: 1.2, enemy: false, kind: 'disk', damage: 20, hitOptions: isMetao ? { fireChance: 0.4, fireStacks: 1, fireDuration: 3 } : {} });
     }
   }
 
@@ -7318,6 +7430,7 @@
 
   function castChaosBurst() {
     const aoeRadiusMultiplier = getItemStats().aoeRadiusMultiplier || 1;
+    const isMetao = player?.character === 'metao';
     for (let index = 0; index < 6; index += 1) {
       const angle = rng() * Math.PI * 2;
       const px = player.x + Math.cos(angle) * rand(160, 40);
@@ -7325,6 +7438,7 @@
       particles.push({ x: px, y: py, life: 0.45, ring: 18 * aoeRadiusMultiplier, c: '#c971ff' });
       blastRadius(px, py, 52 * aoeRadiusMultiplier, 24, '#c971ff');
       applyStatusInRadius(px, py, 52 * aoeRadiusMultiplier, 'poison', 1, 4.8);
+      if (isMetao) applyStatusInRadius(px, py, 52 * aoeRadiusMultiplier, 'fire', 1, 3.5);
     }
   }
 
@@ -7681,7 +7795,7 @@
     if (!enemies.includes(enemy)) return bleedStacks;
     tickEnemyStatus(enemy, 'dark_drain', dt, {
       interval: 0.6,
-      damage: stacks => scaleDamageAgainstEnemy(enemy, 1 + stacks * 2),
+      damage: stacks => scaleDamageAgainstEnemy(enemy, (1 + stacks * 2) * 0.1),
       color: STATUS_STYLES.dark_drain.textColor,
       particleColor: STATUS_STYLES.dark_drain.color,
       healScale: 0.35,
@@ -7833,9 +7947,15 @@
       metaProgress.godsKilled = Number(metaProgress.godsKilled || 0) + 1;
       if (!metaProgress.unlockedCharacters.includes('granialla')) metaProgress.unlockedCharacters.push('granialla');
       currentRoom.cleared = true;
-      // After defeating god: offer the choice — cash in (win) or loop
-      pickups.push({ x: ROOM_W / 2 - 120, y: ROOM_H / 2, type: 'crown' });
-      pickups.push({ x: ROOM_W / 2 + 120, y: ROOM_H / 2, type: 'returnGate' });
+      // After defeating god: offer the choice — cash in (win) or loop; Endless Descent adds a third option
+      if (hasLegacy('endless_descent')) {
+        pickups.push({ x: ROOM_W / 2 - 200, y: ROOM_H / 2, type: 'crown' });
+        pickups.push({ x: ROOM_W / 2, y: ROOM_H / 2, type: 'descend' });
+        pickups.push({ x: ROOM_W / 2 + 200, y: ROOM_H / 2, type: 'returnGate' });
+      } else {
+        pickups.push({ x: ROOM_W / 2 - 120, y: ROOM_H / 2, type: 'crown' });
+        pickups.push({ x: ROOM_W / 2 + 120, y: ROOM_H / 2, type: 'returnGate' });
+      }
       updateObjective();
       refreshMenuState();
       scheduleRunSave();
@@ -7875,7 +7995,8 @@
             pickups.push({ x: enemy.x + rand(-22, 22, 'loot'), y: enemy.y + rand(-14, 14, 'loot'), type: 'potion' });
           }
         });
-        const bonus = 18 + floor * 4 + rival.loot.length * 8;
+        const rivalBase = 18 + floor * 4 + rival.loot.length * 8;
+        const bonus = hasLegacy('rival_bounty') ? Math.round(rivalBase * 1.5) : rivalBase;
         dropCoins(enemy.x, enemy.y, bonus);
         particles.push({ x: enemy.x, y: enemy.y - 26, life: 2.0, text: `${rival.name.toUpperCase()} DEFEATED!`, c: rival.color });
         sayAtPosition(enemy.x, enemy.y, rival.deathLine, { speaker: rival.name, tone: 'boss', holdTime: 1.8, offsetY: enemy.r + 36 });
@@ -8010,6 +8131,9 @@
     if (gameState === 'play' && !isWizardPawOpen()) update(dt);
     else if (player && (gameState === 'dialogue' || gameState === 'pause')) {
       tickPlayerTransientDefenseTimers(dt);
+    } else if (gameState === 'dying' && playerDeathAnim) {
+      playerDeathAnim.timer += dt;
+      if (playerDeathAnim.timer >= playerDeathAnim.duration) finalizeDeath();
     }
     perfEnd('update', updatePerfStart);
     const uiPerfStart = perfStart();
@@ -9697,7 +9821,7 @@
     });
     tickPlayerStatus('dark_drain', dt, {
       interval: 0.6,
-      damage: stacks => 1 + stacks * 1.7,
+      damage: stacks => (1 + stacks * 1.7) * 0.1,
       color: STATUS_STYLES.dark_drain.color,
     });
   }
@@ -10272,6 +10396,20 @@
         }
       }
 
+      if (pickup.type === 'descend') {
+        floor += 1;
+        refreshFloorChargeStates();
+        metaProgress.bestFloor = Math.max(metaProgress.bestFloor, floor);
+        persistMetaSoon();
+        showFloorTransition = true;
+        floorTransitionTime = 0;
+        player.x = START_X;
+        player.y = START_Y;
+        generateFloor();
+        scheduleRunSave();
+        return;
+      }
+
       if (pickup.type === 'returnGate') {
         returnToFloorOne();
         return;
@@ -10381,9 +10519,17 @@
     runLoopIndex += 1;
     syncSeedState();
     const crystalBonus = Math.max(0, Math.round(getActiveChallengeCrystalBonusMultiplier()));
-    metaProgress.loopCrystals = Number(metaProgress.loopCrystals || 0) + 1 + crystalBonus;
+    const titheBonus = hasLegacy('crystal_tithe') && HARD_DIFFICULTIES.has(selectedDifficulty) ? 1 : 0;
+    metaProgress.loopCrystals = Number(metaProgress.loopCrystals || 0) + 1 + crystalBonus + titheBonus;
     if (crystalBonus > 0) {
       particles.push({ x: player.x, y: player.y - 42, life: 1.1, text: `+${crystalBonus} CHALLENGE LC`, c: '#8dd4ff' });
+    }
+    if (titheBonus > 0) {
+      particles.push({ x: player.x, y: player.y - 56, life: 1.1, text: `+1 TITHE LC`, c: '#c9a8f0' });
+    }
+    if (hasLegacy('bank_interest')) {
+      metaProgress.coins = Number(metaProgress.coins || 0) + 50;
+      particles.push({ x: player.x, y: player.y - 70, life: 1.1, text: `+50 INTEREST`, c: '#ffd27d' });
     }
     metaProgress.bestFloor = Math.max(metaProgress.bestFloor, MAX_FLOOR);
     persistMetaSoon();
@@ -10402,7 +10548,7 @@
   function getObjectiveEntries(lineObjective = '') {
     if (!currentRoom) return [];
     const entries = [];
-    if (floor < MAX_FLOOR) {
+    if (floor < MAX_FLOOR || floor > MAX_FLOOR) {
       const ladderRoom = rooms.find(room => room.type === 'ladder');
       entries.push({
         text: ladderRoom?.explored ? 'Reach the ladder room' : 'Find the ladder',
@@ -10449,7 +10595,7 @@
         text: currentRoom.cleared ? 'GOD defeated' : currentRoom.bossStarted ? 'Survive GOD' : 'Start the GOD fight',
         state: currentRoom.cleared ? 'done' : 'warn',
       });
-      if (currentRoom.cleared) entries.push({ text: 'Take the crown or loop', state: 'warn' });
+      if (currentRoom.cleared) entries.push({ text: hasLegacy('endless_descent') ? 'Crown, Descend, or Loop' : 'Take the crown or loop', state: 'warn' });
     }
     return entries.slice(0, 5);
   }
@@ -10533,7 +10679,7 @@
     const dashSkill = getSkillCooldownInfo('dash', attackSpeed);
     if (laserActive) {
       laserSkill.current = laserTime;
-      laserSkill.max = getLaserCastDuration(laserMoveKey, attackSpeed);
+      laserSkill.max = getLaserCastDuration(laserMoveKey);
     }
     if (weaponDef) {
       meleeSkill.current = Number(player.weaponCooldown || 0);
@@ -10621,10 +10767,28 @@
   }
 
   function die() {
+    if (gameState === 'dying' || gameState === 'dead') return;
     const entry = finalizeRun('dead', { killedBy: lastDamageSource, killerKey: lastDamageSourceKey });
+    const aimAngle = player ? Math.atan2(mouse.worldY - player.y, mouse.worldX - player.x) : 0;
+    playerDeathAnim = {
+      timer: 0,
+      duration: 2.2,
+      x: player?.x ?? 0,
+      y: player?.y ?? 0,
+      r: player?.r ?? 14,
+      spriteKey: getPlayerSpriteKey(),
+      facing: getFacingDirection(player, aimAngle),
+      entry,
+    };
+    setGameState('dying');
+    clearRunSave();
+  }
+
+  function finalizeDeath() {
+    const { entry } = playerDeathAnim;
+    playerDeathAnim = null;
     setGameState('dead');
     uiController.setDeadScreen(entry);
-    clearRunSave();
   }
 
   function win() {
@@ -10725,6 +10889,8 @@
   }
 
   function draw() {
+    const isDying = gameState === 'dying';
+    if (gameState !== 'play' && !isDying) return;
     let sectionPerfStart = perfStart();
     ctx.save();
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -10746,20 +10912,21 @@
     drawProjectiles();
     drawEnemyTelegraphs();
     drawEnemies();
-    drawPlayer();
-    drawPlayerLaser();
+    if (!isDying) drawPlayer();
+    if (!isDying) drawPlayerLaser();
+    if (isDying && playerDeathAnim) drawPlayerCorpseAnim(playerDeathAnim);
     perfEnd('draw.entities', sectionPerfStart);
     sectionPerfStart = perfStart();
     drawParticles();
     perfEnd('draw.particles', sectionPerfStart);
     sectionPerfStart = perfStart();
-    drawShopPrompt();
-    drawAnvilPrompt();
+    if (!isDying) drawShopPrompt();
+    if (!isDying) drawAnvilPrompt();
     perfEnd('draw.prompts', sectionPerfStart);
 
     ctx.restore();
     sectionPerfStart = perfStart();
-    drawMinimap();
+    if (!isDying) drawMinimap();
     perfEnd('draw.minimap', sectionPerfStart);
 
     sectionPerfStart = perfStart();
@@ -10768,9 +10935,10 @@
       ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
 
-    drawLowHealthEdgeGlow();
-    if (godTimer > 0) drawGodModeBar();
-    drawBossHealthBars();
+    if (!isDying) drawLowHealthEdgeGlow();
+    if (isDying && playerDeathAnim) drawDeathOverlay(playerDeathAnim);
+    if (!isDying && godTimer > 0) drawGodModeBar();
+    if (!isDying) drawBossHealthBars();
     drawFloorTransition();
     perfEnd('draw.overlays', sectionPerfStart);
   }
@@ -11883,6 +12051,18 @@
         ctx.font = 'bold 10px system-ui';
         ctx.textAlign = 'center';
         ctx.fillText('LOOP', 0, 3);
+      } else if (pickup.type === 'descend') {
+        ctx.strokeStyle = '#c9a8f0';
+        ctx.shadowColor = '#c9a8f0';
+        ctx.shadowBlur = 22;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(0, 0, 20, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = '#c9a8f0';
+        ctx.font = 'bold 9px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText('DESCEND', 0, 3);
       } else if (pickup.type === 'secretWarp') {
         const color = pickup.delta >= 0 ? '#8dffcf' : '#8dd4ff';
         ctx.strokeStyle = color;
@@ -12661,6 +12841,29 @@
     ctx.restore();
   }
 
+  function drawStatusBadge(enemy, label, bgColor, borderColor, textColor, yOffset) {
+    ctx.save();
+    ctx.translate(enemy.x, enemy.y);
+    ctx.font = 'bold 10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const width = Math.max(50, ctx.measureText(label).width + 14);
+    const height = 15;
+    ctx.fillStyle = bgColor;
+    ctx.strokeStyle = borderColor;
+    ctx.lineWidth = 1;
+    ctx.shadowColor = borderColor;
+    ctx.shadowBlur = 8;
+    ctx.beginPath();
+    ctx.roundRect(-width / 2, yOffset, width, height, 5);
+    ctx.fill();
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = textColor;
+    ctx.fillText(label, 0, yOffset + height / 2 + 0.5);
+    ctx.restore();
+  }
+
   function drawEnemies() {
     enemies.forEach(enemy => {
       if (!enemy) return;
@@ -12691,6 +12894,22 @@
         tint: enemy.elite ? 'rgba(255,210,96,0.7)' : null,
       });
       if (bleedStacks > 0) drawBleedOverlay(enemy, bleedStacks);
+      const badgeBaseY = enemy.type === 'rival' ? -enemy.r - 40 : -enemy.r - 32;
+      let badgeOffset = bleedStacks > 0 ? 18 : 0;
+      const fireStacks = getStatusStacks(enemy, 'fire');
+      if (fireStacks > 0) {
+        drawStatusBadge(enemy, `FIRE x${fireStacks}`, 'rgba(62,22,0,0.86)', STATUS_STYLES.fire.color, '#ffe5c0', badgeBaseY + badgeOffset);
+        badgeOffset += 18;
+      }
+      const poisonStacks = getStatusStacks(enemy, 'poison');
+      if (poisonStacks > 0) {
+        drawStatusBadge(enemy, `POISON x${poisonStacks}`, 'rgba(10,38,0,0.86)', STATUS_STYLES.poison.color, '#d8ffc0', badgeBaseY + badgeOffset);
+        badgeOffset += 18;
+      }
+      const darkStacks = getStatusStacks(enemy, 'dark_drain');
+      if (darkStacks > 0) {
+        drawStatusBadge(enemy, `DRAIN x${darkStacks}`, 'rgba(20,8,48,0.86)', STATUS_STYLES.dark_drain.color, '#e8d8ff', badgeBaseY + badgeOffset);
+      }
       if (enemy.elite) {
         ctx.save();
         ctx.translate(enemy.x, drawY - enemy.r - 10);
@@ -12751,6 +12970,87 @@
       }
       ctx.restore();
     });
+  }
+
+  function drawPlayerCorpseAnim(anim) {
+    const t = clamp(anim.timer / anim.duration, 0, 1);
+    const fallEase = 1 - (1 - Math.min(t * 1.6, 1)) ** 3;
+    const size = Math.max(34, anim.r * 2.5);
+    const frame = SPRITE_ATLAS.frames[anim.spriteKey] || SPRITE_ATLAS.frames.thorn_knight;
+    if (!frame) return;
+
+    const fallAngle = (anim.facing < 0 ? -1 : 1) * (Math.PI / 2) * fallEase;
+    const squash = 1 - 0.46 * fallEase;
+
+    ctx.save();
+    ctx.translate(anim.x, anim.y);
+
+    const poolAlpha = clamp((t - 0.3) / 0.4, 0, 1);
+    if (poolAlpha > 0) {
+      ctx.fillStyle = `rgba(94,0,16,${0.45 * poolAlpha})`;
+      ctx.beginPath();
+      ctx.ellipse(0, size * 0.28, size * (0.32 + poolAlpha * 0.12), size * (0.08 + poolAlpha * 0.04), fallAngle * 0.2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.rotate(fallAngle);
+    if (anim.facing < 0) ctx.scale(-1, 1);
+    ctx.scale(1 + 0.05 * fallEase, squash);
+    ctx.globalAlpha = 1;
+    ctx.imageSmoothingEnabled = false;
+    ctx.shadowColor = 'rgba(180,0,0,0.55)';
+    ctx.shadowBlur = 14 + fallEase * 10;
+    ctx.drawImage(
+      SPRITE_ATLAS.canvas,
+      frame.x, frame.y, frame.w, frame.h,
+      -size / 2, -size / 2, size, size,
+    );
+    ctx.globalCompositeOperation = 'source-atop';
+    ctx.fillStyle = `rgba(48,12,18,${0.15 + fallEase * 0.45})`;
+    ctx.fillRect(-size / 2, -size / 2, size, size);
+    ctx.restore();
+  }
+
+  function drawDeathOverlay(anim) {
+    const t = clamp(anim.timer / anim.duration, 0, 1);
+    const fadeIn = clamp(t * 2, 0, 1);
+    const vignetteAlpha = clamp(t * 0.85, 0, 0.82);
+    const w = canvas.width;
+    const h = canvas.height;
+
+    const grad = ctx.createRadialGradient(w / 2, h / 2, h * 0.1, w / 2, h / 2, h * 0.72);
+    grad.addColorStop(0, `rgba(0,0,0,0)`);
+    grad.addColorStop(1, `rgba(12,0,0,${vignetteAlpha})`);
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, w, h);
+
+    const edgeAlpha = clamp(t * 0.7, 0, 0.62);
+    const edgeSize = Math.min(w, h) * 0.28;
+    ctx.fillStyle = `rgba(140,0,0,${edgeAlpha})`;
+    ctx.fillRect(0, 0, w, edgeSize * 0.35);
+    ctx.fillRect(0, h - edgeSize * 0.35, w, edgeSize * 0.35);
+    ctx.fillRect(0, 0, edgeSize * 0.28, h);
+    ctx.fillRect(w - edgeSize * 0.28, 0, edgeSize * 0.28, h);
+
+    if (t > 0.55) {
+      const textAlpha = clamp((t - 0.55) / 0.35, 0, 1);
+      ctx.save();
+      ctx.globalAlpha = textAlpha;
+      ctx.font = `bold ${Math.round(h * 0.072)}px system-ui`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.shadowColor = '#ff0020';
+      ctx.shadowBlur = 32;
+      ctx.fillStyle = '#fff0f0';
+      ctx.fillText('YOU DIED', w / 2, h * 0.42);
+      ctx.font = `${Math.round(h * 0.028)}px system-ui`;
+      ctx.shadowBlur = 12;
+      ctx.fillStyle = `rgba(255,200,200,${textAlpha * 0.85})`;
+      ctx.fillText('Loading results...', w / 2, h * 0.42 + h * 0.072 * 0.9);
+      ctx.restore();
+    }
+
+    void fadeIn;
   }
 
   function drawPlayer() {
@@ -13179,6 +13479,18 @@
       if (room.doors.w) ctx.fillRect(x - 2, y + size / 2 - 1, 2, 2);
       if (room.doors.e) ctx.fillRect(x + size, y + size / 2 - 1, 2, 2);
     });
+    if (hasLegacy('elite_tracker')) {
+      enemies.forEach(enemy => {
+        if (!enemy.elite) return;
+        const eRoom = rooms.find(r => r.gx === enemy.homeGx && r.gy === enemy.homeGy);
+        if (!eRoom || eRoom.secret || eRoom === currentRoom) return;
+        const rx = originX + eRoom.gx * (size + gap);
+        const ry = originY + eRoom.gy * (size + gap);
+        ctx.globalAlpha = 0.9;
+        ctx.fillStyle = '#ff4444';
+        ctx.fillRect(rx + size - 4, ry, 4, 4);
+      });
+    }
     ctx.restore();
   }
 
@@ -13514,7 +13826,7 @@
         view.challengeStatus.classList.add('hidden');
         view.challengeStatus.setAttribute('aria-hidden', 'true');
       }
-      if (show !== 'charselect') setChallengePanelOpen(false);
+      if (show !== 'charselect') { setChallengePanelOpen(false); setLegacyPanelOpen(false); }
       if (show !== 'menu') setRunHistoryOpen(false);
     }
 
@@ -13524,6 +13836,16 @@
       if (view.challengeToggle) {
         view.challengeToggle.textContent = challengePanelOpen ? 'HIDE CHALLENGE SHOP' : 'OPEN CHALLENGE SHOP';
         view.challengeToggle.setAttribute('aria-expanded', challengePanelOpen ? 'true' : 'false');
+      }
+    }
+
+    let legacyPanelOpen = false;
+    function setLegacyPanelOpen(open) {
+      legacyPanelOpen = !!open;
+      view.legacyPanel?.classList.toggle('hidden', !legacyPanelOpen);
+      if (view.legacyToggle) {
+        view.legacyToggle.textContent = legacyPanelOpen ? 'HIDE LEGACY UPGRADES' : 'OPEN LEGACY UPGRADES';
+        view.legacyToggle.setAttribute('aria-expanded', legacyPanelOpen ? 'true' : 'false');
       }
     }
 
@@ -13746,6 +14068,12 @@
           });
         });
         view.challengeToggle?.addEventListener('click', handlers.onToggleChallenges);
+        view.legacyButtons.forEach(button => {
+          button.addEventListener('click', () => {
+            handlers.onLegacySelect(button.dataset.legacy || '');
+          });
+        });
+        view.legacyToggle?.addEventListener('click', handlers.onToggleLegacy);
         view.runHistoryBtn?.addEventListener('click', handlers.onToggleRunHistory);
         view.runHistoryClose?.addEventListener('click', () => setRunHistoryOpen(false));
         view.runHistoryPrev?.addEventListener('click', () => {
@@ -13811,6 +14139,7 @@
       },
       setSaveState(text) { view.saveState.textContent = text; },
       setChallengePanelOpen,
+      setLegacyPanelOpen,
       setRunHistoryOpen,
       setMenuMeta(coins, bestFloor, loopCrystals, saveState) {
         view.bankCoins.textContent = coins;
@@ -13951,6 +14280,30 @@
           const activeCount = selected.length;
           const bonusCrystals = Math.max(0, Math.round(getActiveChallengeCrystalBonusMultiplier()));
           view.challengeHint.textContent = `Loop Crystals: ${loopCrystals}. Buy run types once, then toggle them. Active: ${activeCount}. Loop bonus: +${bonusCrystals} LC.`;
+        }
+      },
+      updateLegacySelection(owned, loopCrystals) {
+        view.legacyButtons.forEach(button => {
+          const key = button.dataset.legacy || '';
+          const def = LEGACY_UPGRADES[key];
+          if (!def) return;
+          const isOwned = owned.has(key);
+          const canAfford = loopCrystals >= def.cost;
+          button.classList.toggle('owned', isOwned);
+          button.disabled = isOwned;
+          const status = isOwned ? 'UNLOCKED' : canAfford ? `BUY ${def.cost} LC` : `NEED ${def.cost} LC`;
+          button.innerHTML = `
+            <span class="legacy-btn__top">
+              <b>${escapeHtml(def.name)}</b>
+              <em>${escapeHtml(status)}</em>
+            </span>
+            <span class="legacy-btn__desc">${escapeHtml(def.description)}</span>
+            <span class="legacy-btn__effect">${escapeHtml(def.effect)}</span>
+          `;
+        });
+        if (view.legacyHint) {
+          const ownedCount = LEGACY_ORDER.filter(k => owned.has(k)).length;
+          view.legacyHint.textContent = `Loop Crystals: ${loopCrystals}. Unlocked: ${ownedCount} / ${LEGACY_ORDER.length}. Upgrades are permanent and apply to all future runs.`;
         }
       },
       setItemStatus(items) {

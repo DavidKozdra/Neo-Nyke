@@ -2470,6 +2470,83 @@ p.sub {
   display: block;
 }
 
+/* ── Legacy Upgrades panel ────────────────────────────────���── */
+.legacy-toggle {
+  background: linear-gradient(180deg, rgba(42, 28, 55, .98), rgba(22, 14, 32, .98));
+  border-color: rgba(176, 128, 220, .34);
+}
+.legacy-toggle:hover {
+  border-color: rgba(176, 128, 220, .7);
+  box-shadow: 0 0 18px rgba(176, 128, 220, .2);
+}
+
+.legacy-select {
+  grid-template-columns: 1fr;
+}
+
+.legacy-btn {
+  min-height: 90px;
+  padding: 12px 14px;
+  background: rgba(28, 18, 42, .92);
+  border: 1px solid rgba(150, 100, 200, .3);
+  border-radius: 10px;
+  color: var(--menu-text);
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color .15s, box-shadow .15s, transform .12s, opacity .15s, background .15s;
+}
+.legacy-btn__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+.legacy-btn__top b { font-size: 13px; line-height: 1.2; }
+.legacy-btn__top em {
+  flex: 0 0 auto;
+  max-width: 44%;
+  color: #c9a8f0;
+  font-style: normal;
+  font-size: 10px;
+  line-height: 1.2;
+  text-align: right;
+}
+.legacy-btn__desc {
+  display: block;
+  margin-top: 8px;
+  color: var(--menu-text-muted);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0;
+  line-height: 1.35;
+  text-transform: none;
+}
+.legacy-btn__effect {
+  display: block;
+  margin-top: 6px;
+  color: #b8f0c8;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+.legacy-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: rgba(176, 128, 220, .6);
+}
+.legacy-btn.owned {
+  border-color: rgba(150, 210, 160, .55);
+  background: rgba(20, 36, 24, .92);
+}
+.legacy-btn.owned .legacy-btn__top em { color: #9fdca9; }
+.legacy-btn:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+
 input#seed {
   padding: 10px 12px;
   background: rgba(0,0,0,.6);
