@@ -4556,6 +4556,38 @@ button.alt.danger {
 }
 
 /* ═══════════════════════════════════════════════════
+   BOSS RUSH HUD
+   ═══════════════════════════════════════════════════ */
+.boss-rush-hud {
+  position: fixed;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(0,0,0,0.72);
+  border: 1px solid rgba(255,100,100,0.35);
+  border-radius: 8px;
+  padding: 6px 18px;
+  z-index: 50;
+  pointer-events: none;
+}
+.boss-rush-hud.hidden { display: none; }
+.boss-rush-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: #ff8b8b;
+  opacity: 0.85;
+}
+.boss-rush-stage {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+/* ═══════════════════════════════════════════════════
    PRACTICE MODE PANEL
    ═══════════════════════════════════════════════════ */
 .practice-panel {

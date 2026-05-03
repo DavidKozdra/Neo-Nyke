@@ -1179,8 +1179,11 @@
     altModesClose: document.getElementById('altModesClose'),
     altModeEndlessBtn: document.getElementById('altModeEndlessBtn'),
     altModePracticeBtn: document.getElementById('altModePracticeBtn'),
+    altModeBossRushBtn: document.getElementById('altModeBossRushBtn'),
     endlessHud: document.getElementById('endlessHud'),
     endlessWaveNum: document.getElementById('endlessWaveNum'),
+    bossRushHud: document.getElementById('bossRushHud'),
+    bossRushStageNum: document.getElementById('bossRushStageNum'),
     practicePanel: document.getElementById('practicePanel'),
     practicePanelToggle: document.getElementById('practicePanelToggle'),
     practicePanelBody: document.getElementById('practicePanelBody'),
@@ -1280,6 +1283,8 @@
   let gameMode = 'normal';
   let endlessWave = 0;
   let endlessWaveActive = false;
+  let bossRushStage = 0;
+  let bossRushActive = false;
   let chosenCharacter = 'thorn_knight';
   let selectedDifficulty = 'easy';
   let selectedChallenges = [];
@@ -4056,6 +4061,7 @@
   async function startGame(resume) {
     if (gameMode === 'endless') { startEndless(); return; }
     if (gameMode === 'practice') { startPractice(); return; }
+    if (gameMode === 'boss_rush') { startBossRush(); return; }
     setGameState('play');
 
     if (resume && activeRun) {
@@ -4140,6 +4146,83 @@
     if (!loopStarted) { loopStarted = true; requestAnimationFrame(loop); }
   }
 
+  const BOSS_RUSH_ORDER = ['queen_cult', 'bulk_golem', 'artificer_knave', 'god'];
+
+  function startBossRush() {
+    setGameState('play');
+    baseSeedStr = createRandomSeed();
+    selectedDifficulty = normalizeDifficulty(selectedDifficulty);
+    selectedChallenges = [];
+    runLoopIndex = 0;
+    syncSeedState();
+    floor = 5;
+    gameElapsedTime = 0;
+    bossRushStage = 0;
+    bossRushActive = false;
+    player = createDefaultPlayer();
+    lastDamageSource = '';
+    lastDamageSourceKey = '';
+    resetScene();
+    resetRngStreams();
+    rooms = [];
+    const room = createRoomRecord({ x: 4, y: 4 }, { type: 'combat', doors: { n: false, s: false, e: false, w: false }, cleared: false });
+    decorateRoomData(room);
+    rooms.push(room);
+    currentRoom = room;
+    player.x = START_X;
+    player.y = START_Y;
+    // Grant 3 random starting items
+    for (let i = 0; i < 3; i++) {
+      const key = rollItemDrop({ elite: i === 2, stream: 'loot' });
+      if (key) collectItem(key);
+    }
+    addCoins(120);
+    if (ui.bossRushStageNum) ui.bossRushStageNum.textContent = 1;
+    // Spawn first boss immediately
+    spawnBossRushBoss();
+    if (!loopStarted) { loopStarted = true; requestAnimationFrame(loop); }
+  }
+
+  function spawnBossRushBoss() {
+    const bossType = BOSS_RUSH_ORDER[bossRushStage];
+    if (!bossType) return;
+    bossRushActive = true;
+    currentRoom.cleared = false;
+    const safeSpawn = findSafeEnemySpawnPoint(ROOM_W / 2, ROOM_H / 2 - 40, 15);
+    if (!safeSpawn) return;
+    const boss = spawnEnemy(bossType, safeSpawn.x, safeSpawn.y, false);
+    const line = BOSS_OPENING_DIALOGUE[bossType];
+    if (boss && line) sayOverEntity(boss, line);
+    if (bossType === 'god') playGodDialogue(1);
+    particles.push({ x: ROOM_W / 2, y: ROOM_H / 2 - 50, life: 1.4, text: `BOSS ${bossRushStage + 1}: ${getBossDisplayName(bossType).toUpperCase()}`, c: '#ff8b8b' });
+  }
+
+  function onBossRushBossDefeated() {
+    bossRushActive = false;
+    bossRushStage += 1;
+    if (ui.bossRushStageNum) ui.bossRushStageNum.textContent = Math.min(bossRushStage + 1, 4);
+    if (bossRushStage >= BOSS_RUSH_ORDER.length) {
+      win();
+      return;
+    }
+    const cx = ROOM_W / 2;
+    const cy = ROOM_H / 2;
+    dropCoins(cx, cy - 20, 80 + bossRushStage * 30);
+    pickups.push({ x: cx - 60, y: cy, type: 'item', key: rollItemDrop({ elite: true, stream: 'loot' }) });
+    pickups.push({ x: cx + 60, y: cy, type: 'potion' });
+    grantXp(40 + bossRushStage * 20);
+    const nextName = getBossDisplayName(BOSS_RUSH_ORDER[bossRushStage]).toUpperCase();
+    particles.push({ x: cx, y: cy - 40, life: 1.6, text: 'BOSS DEFEATED!', c: '#78d7ff' });
+    setTimeout(() => {
+      if (gameMode !== 'boss_rush' || gameState !== 'play') return;
+      particles.push({ x: ROOM_W / 2, y: ROOM_H / 2 - 50, life: 1.2, text: `NEXT: ${nextName}`, c: '#ffb347' });
+    }, 1500);
+    setTimeout(() => {
+      if (gameMode !== 'boss_rush' || gameState !== 'play') return;
+      spawnBossRushBoss();
+    }, 4000);
+  }
+
   function buildPracticeEnemyGrid() {
     if (!ui.practiceEnemyGrid) return;
     const BOSS_TYPES_SET = new Set(['queen_cult', 'bulk_golem', 'artificer_knave', 'god']);
@@ -4173,6 +4256,8 @@
     playerDeathAnim = null;
     endlessWave = 0;
     endlessWaveActive = false;
+    bossRushStage = 0;
+    bossRushActive = false;
     projectiles = [];
     chests = [];
     pickups = [];
@@ -8061,6 +8146,12 @@
     if (enemy.type === 'god') {
       metaProgress.godsKilled = Number(metaProgress.godsKilled || 0) + 1;
       if (!metaProgress.unlockedCharacters.includes('granialla')) metaProgress.unlockedCharacters.push('granialla');
+      if (gameMode === 'boss_rush') {
+        currentRoom.cleared = true;
+        bossRushActive = false;
+        onBossRushBossDefeated();
+        return;
+      }
       currentRoom.cleared = true;
       // After defeating god: offer the choice — cash in (win) or loop; Endless Descent adds a third option
       if (hasLegacy('endless_descent')) {
@@ -8135,6 +8226,10 @@
       if (gameMode === 'endless' && endlessWaveActive) {
         endlessWaveActive = false;
         onEndlessWaveCleared();
+      }
+      if (gameMode === 'boss_rush' && bossRushActive) {
+        bossRushActive = false;
+        onBossRushBossDefeated();
       }
       updateObjective();
       scheduleRunSave();
@@ -14090,6 +14185,7 @@
       if (show !== 'charselect') { setChallengePanelOpen(false); setLegacyPanelOpen(false); }
       if (show !== 'menu') { setRunHistoryOpen(false); setAltModesPanelOpen(false); }
       setVisible(view.endlessHud, inPlay && gameMode === 'endless', 'flex');
+      setVisible(view.bossRushHud, inPlay && gameMode === 'boss_rush', 'flex');
       setVisible(view.practicePanel, inPlay && gameMode === 'practice' && show !== 'dying', 'block');
     }
 
@@ -14389,6 +14485,10 @@
         view.altModePracticeBtn?.addEventListener('click', () => {
           setAltModesPanelOpen(false);
           handlers.onOpenAltModeCharSelect('practice');
+        });
+        view.altModeBossRushBtn?.addEventListener('click', () => {
+          setAltModesPanelOpen(false);
+          handlers.onOpenAltModeCharSelect('boss_rush');
         });
         // Practice panel toggle
         view.practicePanelToggle?.addEventListener('click', () => {
