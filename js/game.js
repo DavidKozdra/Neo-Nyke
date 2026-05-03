@@ -5926,6 +5926,7 @@
       poisonImmune: false,
       dark_drainImmune: false,
       state: 'idle',
+      spawnT: 0.72,
     };
 
     if (type === 'god') {
@@ -8423,6 +8424,7 @@
       enemy.attackCd = Math.max(0, enemy.attackCd - dt);
       enemy.stun = Math.max(0, enemy.stun - dt);
       enemy.inv = Math.max(0, enemy.inv - dt);
+      if (enemy.spawnT > 0) { enemy.spawnT = Math.max(0, enemy.spawnT - dt); continue; }
 
       if (!enemy.bleedImmune && itemStats.passiveBleedStacks > 0 && enemy.type !== 'god') {
         applyBleed(enemy, Math.max(0, itemStats.passiveBleedStacks - getStatusStacks(enemy, 'bleed')), 0.25);
@@ -13015,9 +13017,117 @@
     ctx.restore();
   }
 
+  function drawSpawnPortal(enemy) {
+    const SPAWN_DURATION = 0.72;
+    const t = clamp(1 - enemy.spawnT / SPAWN_DURATION, 0, 1);
+    const emerge = clamp((t - 0.35) / 0.65, 0, 1);
+    const portalEase = 1 - (1 - Math.min(t * 1.8, 1)) ** 3;
+    const now = Date.now();
+    const r = enemy.r;
+    const isBoss = BOSS_TYPES.has(enemy.type);
+    const isElite = !!enemy.elite;
+    const portalColor = isBoss ? '#ffd060' : isElite ? '#e8b030' : '#8855ff';
+    const innerColor = isBoss ? '#fff4c0' : isElite ? '#ffe080' : '#cc88ff';
+    const portalR = r * (1.8 + portalEase * 0.6);
+
+    ctx.save();
+    ctx.translate(enemy.x, enemy.y);
+
+    // Ground shadow pool
+    ctx.globalAlpha = 0.45 * portalEase;
+    ctx.fillStyle = isBoss ? 'rgba(120,80,0,0.6)' : 'rgba(40,0,80,0.6)';
+    ctx.beginPath();
+    ctx.ellipse(0, r * 0.3, portalR * 0.85, portalR * 0.28, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Outer spinning ring
+    ctx.globalAlpha = 0.9 * portalEase;
+    ctx.shadowColor = portalColor;
+    ctx.shadowBlur = 18 + portalEase * 14;
+    for (let ring = 0; ring < 2; ring += 1) {
+      const ringR = portalR * (0.78 + ring * 0.22);
+      const spin = now / (ring === 0 ? 320 : -480);
+      const segments = 8 + ring * 4;
+      ctx.strokeStyle = ring === 0 ? portalColor : innerColor;
+      ctx.lineWidth = 2.5 - ring * 0.8;
+      ctx.beginPath();
+      for (let seg = 0; seg < segments; seg += 1) {
+        const a0 = (seg / segments) * Math.PI * 2 + spin;
+        const a1 = ((seg + 0.6) / segments) * Math.PI * 2 + spin;
+        ctx.moveTo(Math.cos(a0) * ringR, Math.sin(a0) * ringR * 0.38);
+        ctx.lineTo(Math.cos(a1) * ringR, Math.sin(a1) * ringR * 0.38);
+      }
+      ctx.stroke();
+    }
+
+    // Portal interior glow
+    ctx.globalAlpha = 0.55 * portalEase;
+    ctx.shadowBlur = 0;
+    const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, portalR * 0.7);
+    grad.addColorStop(0, isBoss ? 'rgba(255,230,120,0.9)' : 'rgba(180,100,255,0.9)');
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, portalR * 0.7, portalR * 0.26, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Inward particle streaks
+    ctx.globalAlpha = 0.7 * portalEase;
+    ctx.strokeStyle = innerColor;
+    ctx.lineWidth = 1.2;
+    ctx.shadowColor = innerColor;
+    ctx.shadowBlur = 8;
+    const streakCount = isBoss ? 10 : 6;
+    for (let s = 0; s < streakCount; s += 1) {
+      const angle = (s / streakCount) * Math.PI * 2 + now / 600;
+      const outerR = portalR * (0.9 + Math.sin(now / 200 + s) * 0.1);
+      const innerR = portalR * 0.25;
+      ctx.globalAlpha = (0.3 + 0.4 * Math.abs(Math.sin(now / 300 + s * 1.3))) * portalEase;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(angle) * outerR, Math.sin(angle) * outerR * 0.38);
+      ctx.lineTo(Math.cos(angle) * innerR, Math.sin(angle) * innerR * 0.38);
+      ctx.stroke();
+    }
+
+    ctx.restore();
+
+    // Enemy emerges from center — draw sprite squashed vertically
+    if (emerge > 0) {
+      const spriteKey = getEnemySpriteKey(enemy);
+      const facing = getFacingDirection(enemy, 0);
+      const drawSize = Math.max(30, r * 2.4);
+      const squash = 0.28 + emerge * 0.72;
+      const alpha = clamp(emerge * 1.8, 0, 1);
+      const frame = SPRITE_ATLAS.frames[spriteKey] || SPRITE_ATLAS.frames.hunter;
+      if (frame) {
+        ctx.save();
+        ctx.translate(enemy.x, enemy.y);
+        if (facing < 0) ctx.scale(-1, 1);
+        ctx.scale(1, squash);
+        ctx.globalAlpha = alpha;
+        ctx.shadowColor = portalColor;
+        ctx.shadowBlur = 12 + (1 - emerge) * 18;
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(
+          SPRITE_ATLAS.canvas,
+          frame.x, frame.y, frame.w, frame.h,
+          -drawSize / 2, -drawSize / 2, drawSize, drawSize,
+        );
+        if (isElite) {
+          ctx.globalCompositeOperation = 'source-atop';
+          ctx.fillStyle = 'rgba(255,210,96,0.7)';
+          ctx.globalAlpha = 0.22;
+          ctx.fillRect(-drawSize / 2, -drawSize / 2, drawSize, drawSize);
+        }
+        ctx.restore();
+      }
+    }
+  }
+
   function drawEnemies() {
     enemies.forEach(enemy => {
       if (!enemy) return;
+      if (enemy.spawnT > 0) { drawSpawnPortal(enemy); return; }
       const drawY = enemy.y - Math.max(0, Number(enemy.jumpZ || 0));
       const bleedStacks = getStatusStacks(enemy, 'bleed');
       const activeStatuses = STATUS_KEYS.filter(key => getStatusStacks(enemy, key) > 0);
