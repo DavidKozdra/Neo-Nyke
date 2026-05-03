@@ -439,6 +439,13 @@
     <div id="runHistoryEmpty" class="rh-empty hidden">No completed runs yet.</div>
     <div class="rh-body">
       <div class="rh-rail">
+        <div class="rh-mode-tabs" role="tablist" aria-label="Run mode filter">
+          <button class="rh-mode-tab active" data-mode="all" type="button">All</button>
+          <button class="rh-mode-tab" data-mode="normal" type="button">Normal</button>
+          <button class="rh-mode-tab" data-mode="endless" type="button">Endless</button>
+          <button class="rh-mode-tab" data-mode="practice" type="button">Practice</button>
+          <button class="rh-mode-tab" data-mode="boss_rush" type="button">Boss Rush</button>
+        </div>
         <div id="runHistoryList" class="rh-list"></div>
         <div class="rh-pagination">
           <button id="runHistoryPrev" class="rh-pgbtn" type="button">&#8592;</button>

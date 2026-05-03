@@ -870,8 +870,8 @@
     charged_adapter: {
       key: 'charged_adapter',
       name: 'Charged Adapter',
-      shortName: 'Adapter',
-      description: 'Charge requirement -1. In non-boss fights, spend half your gold to teleport to the ladder room.',
+      shortName: 'Warp F',
+      description: 'Charge requirement -1. When charged, press F during non-boss combat to spend 50% coins and warp to the ladder room (next floor path).',
       rarity: 'wizard',
       color: '#b66cff',
       category: 'wizard',
@@ -1159,6 +1159,7 @@
     runHistoryPageLabel: document.getElementById('runHistoryPageLabel'),
     runHistoryHero: document.getElementById('runHistoryHero'),
     runHistoryTabPanel: document.getElementById('runHistoryTabPanel'),
+    runHistoryModeTabs: [...document.querySelectorAll('#runHistoryPanel .rh-mode-tab')],
     runHistoryTabs: [...document.querySelectorAll('#runHistoryPanel .rh-tab')],
     anvilPanel: document.getElementById('anvilPanel'),
     anvilClose: document.getElementById('anvilClose'),
@@ -1317,6 +1318,7 @@
   let lavaAnimTime = 0;
   let floorSkipPending = 0;
   let teleportKeyLatch = false;
+  let ladderUseKeyLatch = false;
   let shopKeyLatch = false;
   let invKeyLatch = false;
   let anvilKeyLatch = false;
@@ -2131,6 +2133,7 @@
       const b = window.NeoSettings?.getBindings();
       const inventoryKey = b ? b.inventory : 'i';
       if (key === 'e') { shopKeyLatch = false; anvilKeyLatch = false; }
+      if (key === ' ') ladderUseKeyLatch = false;
       if (key === inventoryKey) invKeyLatch = false;
     });
     uiController.bindMenuActions({
@@ -2204,6 +2207,7 @@
       onRerunFromHistory(entryId) {
         const entry = runHistory.find(e => e.id === entryId);
         if (!entry) return;
+        gameMode = normalizeGameMode(entry.mode);
         chosenCharacter = entry.character || chosenCharacter;
         metaProgress.selectedCharacter = chosenCharacter;
         selectedDifficulty = normalizeDifficulty(entry.difficulty);
@@ -2726,7 +2730,7 @@
         type: 'weapon',
         key: weaponKey,
         bought: false,
-        cost: getShopWeaponCost(WEAPON_DEFS[weaponKey]?.rarity || 'knight', index),
+        cost: getShopWeaponCost(WEAPON_DEFS[weaponKey]?.rarity || 'knight', index, floor, selectedDifficulty, weaponKey),
       }));
       currentRoom.shopWeaponOffers = offers;
     }
@@ -3318,6 +3322,19 @@
     return [...new Set(input.filter(key => CHALLENGE_DEFS[key]))];
   }
 
+  function normalizeGameMode(input) {
+    const mode = String(input || 'normal').toLowerCase();
+    if (mode === 'endless' || mode === 'practice' || mode === 'boss_rush') return mode;
+    return 'normal';
+  }
+
+  function getRunModeLabel(mode) {
+    if (mode === 'endless') return 'Endless';
+    if (mode === 'practice') return 'Practice';
+    if (mode === 'boss_rush') return 'Boss Rush';
+    return 'Normal';
+  }
+
   function normalizeLegacySelection(input) {
     if (!Array.isArray(input)) return [];
     return [...new Set(input.filter(key => LEGACY_UPGRADES[key]))];
@@ -3336,6 +3353,7 @@
         id: String(entry.id || `${entry.endedAt || 'run'}:${entry.seed || ''}:${entry.floor || 0}`),
         endedAt: String(entry.endedAt || ''),
         result: entry.result === 'win' ? 'win' : 'dead',
+        mode: normalizeGameMode(entry.mode),
         character: String(entry.character || 'thorn_knight'),
         characterName: String(entry.characterName || CHARACTER_DEFS[entry.character]?.name || 'Unknown'),
         difficulty: normalizeDifficulty(entry.difficulty),
@@ -3352,6 +3370,7 @@
         seed: String(entry.seed || ''),
         roomType: String(entry.roomType || ''),
         killedBy: String(entry.killedBy || ''),
+        killerKey: String(entry.killerKey || ''),
         challengeBonusCrystals: Math.max(0, Number(entry.challengeBonusCrystals || 0)),
         totalItemStacks: Math.max(0, Number(entry.totalItemStacks || 0)),
         challenges: Array.isArray(entry.challenges) ? entry.challenges.map(String) : [],
@@ -3494,8 +3513,12 @@
     return scaleShopPrice(34 + floorValue * 6 + moveIndex * 4, difficultyKey);
   }
 
-  function getShopWeaponCost(rarity = 'knight', weaponIndex = 0, floorValue = floor, difficultyKey = selectedDifficulty) {
-    if (rarity === 'god' || rarity === 'red') return scaleShopPrice(180 + floorValue * 14 + weaponIndex * 10, difficultyKey);
+  function getShopWeaponCost(rarity = 'knight', weaponIndex = 0, floorValue = floor, difficultyKey = selectedDifficulty, weaponKey = '') {
+    if (rarity === 'god' || rarity === 'red') {
+      let baseCost = (180 + floorValue * 14 + weaponIndex * 10) * 3;
+      if (String(weaponKey || '').toLowerCase() === 'excalibur') baseCost = Math.round(baseCost * 1.25);
+      return scaleShopPrice(baseCost, difficultyKey);
+    }
     if (rarity === 'wizard' || rarity === 'purple') return scaleShopPrice(88 + floorValue * 9 + weaponIndex * 8, difficultyKey);
     return scaleShopPrice(52 + floorValue * 5 + weaponIndex * 6, difficultyKey);
   }
@@ -3702,7 +3725,7 @@
       room.shopWeaponOffers.forEach((offer, index) => {
         if (!offer) return;
         const rarity = WEAPON_DEFS[offer.key]?.rarity || 'knight';
-        offer.cost = getShopWeaponCost(rarity, index, floorValue, difficultyKey);
+        offer.cost = getShopWeaponCost(rarity, index, floorValue, difficultyKey, offer.key);
       });
     }
   }
@@ -3838,6 +3861,7 @@
       id: `${Date.now()}:${baseSeedStr}:${runLoopIndex}:${floor}:${result}`,
       endedAt: new Date().toISOString(),
       result,
+      mode: normalizeGameMode(gameMode),
       character: character.key,
       characterName: character.name,
       difficulty,
@@ -3870,6 +3894,7 @@
 
   function renderRunHistoryListEntry(entry, selected = false) {
     const cause = entry.result === 'win' ? 'Cleared' : (entry.killedBy || 'Unknown');
+    const modeLabel = getRunModeLabel(entry.mode);
     const killerLookup = entry.killerKey || entry.killedBy || '';
     const killerCanvas = entry.result !== 'win' && killerLookup
       ? `<canvas class="rh-row-killer" data-run-killer="${escapeHtml(killerLookup)}" width="28" height="28" aria-hidden="true" title="${escapeHtml(entry.killedBy || '')}"></canvas>`
@@ -3881,7 +3906,7 @@
           <span class="rh-row-name">${escapeHtml(entry.characterName)}</span>
           <span class="rh-row-badge">${entry.result === 'win' ? 'WIN' : 'DEAD'}</span>
         </span>
-        <span class="rh-row-sub">Fl.${entry.floor} · ${escapeHtml(cause)} · ${escapeHtml(formatRunEndedAt(entry.endedAt))}</span>
+        <span class="rh-row-sub">${escapeHtml(modeLabel)} · Fl.${entry.floor} · ${escapeHtml(cause)} · ${escapeHtml(formatRunEndedAt(entry.endedAt))}</span>
       </span>
       ${killerCanvas}
     </button>`;
@@ -3904,7 +3929,7 @@
       <div class="rh-hero-info">
         <span class="rh-outcome">${win ? 'VICTORY' : 'DEFEAT'}</span>
         <strong class="rh-hero-name">${escapeHtml(entry.characterName)}</strong>
-        <span class="rh-hero-meta">${escapeHtml(entry.difficultyName)} · Floor ${entry.floor} · Loop ${entry.loop}</span>
+        <span class="rh-hero-meta">${escapeHtml(entry.difficultyName)} · ${escapeHtml(getRunModeLabel(entry.mode))} · Floor ${entry.floor} · Loop ${entry.loop}</span>
         <span class="rh-hero-date">${escapeHtml(formatRunEndedAt(entry.endedAt))}</span>
       </div>
       <div class="rh-hero-right">
@@ -6819,7 +6844,7 @@
       if (player.escapeChargeKills >= getChargeRequirement(baseRequirement)) {
         player.escapeReady = true;
         player.escapeChargeKills = 0;
-        particles.push({ x: player.x, y: player.y - 36, life: 0.7, text: 'WARP READY', c: '#b88cff' });
+        particles.push({ x: player.x, y: player.y - 36, life: 0.9, text: 'ADAPTER READY - PRESS F', c: '#b88cff' });
       }
     }
   }
@@ -8607,12 +8632,27 @@
   }
 
   function tryChargedLadderWarp() {
-    if (getItemCount('charged_adapter') <= 0 || !player.escapeReady) return;
-    if (!currentRoom || currentRoom.type === 'boss' || currentRoom.type === 'god') return;
-    if (enemies.length === 0) return;
+    if (getItemCount('charged_adapter') <= 0) return;
+    if (!player.escapeReady) {
+      const needed = getChargeRequirement(10);
+      const progress = Math.max(0, Number(player.escapeChargeKills || 0));
+      particles.push({ x: player.x, y: player.y - 20, life: 0.75, text: `ADAPTER CHARGING ${progress}/${needed}`, c: '#b88cff' });
+      return;
+    }
+    if (!currentRoom || currentRoom.type === 'boss' || currentRoom.type === 'god') {
+      particles.push({ x: player.x, y: player.y - 20, life: 0.75, text: 'NO WARP IN BOSS ROOM', c: '#ff9e9e' });
+      return;
+    }
+    if (enemies.length === 0) {
+      particles.push({ x: player.x, y: player.y - 20, life: 0.75, text: 'WARP REQUIRES COMBAT', c: '#ffcf8f' });
+      return;
+    }
 
     const ladderRoom = rooms.find(room => room.type === 'ladder') || rooms.find(room => room.type === 'boss');
-    if (!ladderRoom || ladderRoom === currentRoom) return;
+    if (!ladderRoom || ladderRoom === currentRoom) {
+      particles.push({ x: player.x, y: player.y - 20, life: 0.75, text: 'ALREADY AT LADDER', c: '#b7ffca' });
+      return;
+    }
 
     const goldSpent = Math.floor(player.coins / 2);
     if (goldSpent > 0) {
@@ -8622,7 +8662,7 @@
 
     consumeCharge('escape');
     enterRoom(ladderRoom);
-    particles.push({ x: player.x, y: player.y - 20, life: 0.8, text: 'CHARGED WARP', c: '#b66cff' });
+    particles.push({ x: player.x, y: player.y - 20, life: 0.9, text: 'WARPED TO LADDER (-50% COINS)', c: '#b66cff' });
     scheduleRunSave();
   }
 
@@ -10540,6 +10580,13 @@
       }
 
       if (pickup.type === 'ladder') {
+        const wantsToAscend = !!keys[' '];
+        if (!wantsToAscend) {
+          ladderUseKeyLatch = false;
+          continue;
+        }
+        if (ladderUseKeyLatch) continue;
+        ladderUseKeyLatch = true;
         floor = Math.min(MAX_FLOOR, floor + 1);
         refreshFloorChargeStates();
         metaProgress.bestFloor = Math.max(metaProgress.bestFloor, floor);
@@ -10802,7 +10849,7 @@
       });
       if (currentRoom.type === 'ladder') {
         entries.push({
-          text: currentRoom.cleared ? 'Ladder room cleared' : 'Clear the ladder room',
+          text: currentRoom.cleared ? 'Ladder room cleared - press Space at ladder to continue' : 'Clear the ladder room',
           state: currentRoom.cleared ? 'done' : 'warn',
         });
       }
@@ -10827,6 +10874,15 @@
       }
       if (currentRoom.type === 'shop') entries.push({ text: 'Buy upgrades or move on', state: 'warn' });
       if (currentRoom.type === 'anvil') entries.push({ text: 'Forge upgrades or move on', state: 'warn' });
+      if (getItemCount('charged_adapter') > 0) {
+        const needed = getChargeRequirement(10);
+        const progress = Math.max(0, Number(player?.escapeChargeKills || 0));
+        if (player?.escapeReady) {
+          entries.push({ text: 'Charged Adapter ready: press F to warp to ladder (cost 50% coins)', state: 'warn' });
+        } else {
+          entries.push({ text: `Charged Adapter charging: ${progress}/${needed} kills`, state: 'todo' });
+        }
+      }
       if (enemies.some(enemy => enemy.miniBoss)) entries.push({ text: 'Defeat the mini boss', state: 'warn' });
       if (selectedChallenges.length > 0) entries.push({ text: `${selectedChallenges.length} challenge${selectedChallenges.length === 1 ? '' : 's'} active`, state: 'todo' });
       return entries.slice(0, 5);
@@ -11169,6 +11225,7 @@
       sectionPerfStart = perfStart();
       if (!isDying) drawShopPrompt();
       if (!isDying) drawAnvilPrompt();
+      if (!isDying) drawLadderPrompt();
       perfEnd('draw.prompts', sectionPerfStart);
     }
 
@@ -11271,6 +11328,32 @@
     ctx.lineWidth = 1.5;
     ctx.stroke();
     ctx.fillStyle = '#ffb840';
+    ctx.fillText(text, cx, cy);
+    ctx.restore();
+  }
+
+  function drawLadderPrompt() {
+    if (gameState !== 'play' || !currentRoom?.cleared) return;
+    const ladder = pickups.find(pickup => pickup?.type === 'ladder');
+    if (!ladder) return;
+    if (dist(player.x, player.y, ladder.x, ladder.y) > 64) return;
+    const cx = ladder.x;
+    const cy = ladder.y - 36;
+    ctx.save();
+    ctx.font = 'bold 14px system-ui';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const text = 'Press [Space] to go to next floor';
+    const pad = 14;
+    const tw = ctx.measureText(text).width;
+    ctx.fillStyle = 'rgba(10,24,14,0.86)';
+    ctx.beginPath();
+    ctx.roundRect(cx - tw / 2 - pad, cy - 13, tw + pad * 2, 26, 8);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(125,255,158,0.55)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.fillStyle = '#8fffaf';
     ctx.fillText(text, cx, cy);
     ctx.restore();
   }
@@ -14063,9 +14146,23 @@
     let runHistoryOpen = false;
     let runHistoryPage = 0;
     let runHistoryEntries = [];
+    let runHistoryModeFilter = 'all';
     let selectedRunHistoryId = '';
     let activeRunHistoryTab = 'stats';
     const runHistoryPageSize = 8;
+
+    function getVisibleRunHistoryEntries() {
+      if (runHistoryModeFilter === 'all') return runHistoryEntries;
+      return runHistoryEntries.filter(entry => normalizeGameMode(entry.mode) === runHistoryModeFilter);
+    }
+
+    function renderRunHistoryModeTabs() {
+      view.runHistoryModeTabs.forEach(tab => {
+        const tabMode = tab.dataset.mode || 'all';
+        const active = tabMode === runHistoryModeFilter;
+        tab.classList.toggle('active', active);
+      });
+    }
 
     function makeContainer(element, visibleDisplay = '') {
       return {
@@ -14224,7 +14321,8 @@
     }
 
     function renderRunHistoryDetail() {
-      const selected = runHistoryEntries.find(entry => entry.id === selectedRunHistoryId) || runHistoryEntries[0] || null;
+      const visibleEntries = getVisibleRunHistoryEntries();
+      const selected = visibleEntries.find(entry => entry.id === selectedRunHistoryId) || visibleEntries[0] || null;
       view.runHistoryTabs.forEach(tab => {
         const active = (tab.dataset.tab || 'stats') === activeRunHistoryTab;
         tab.classList.toggle('active', active);
@@ -14245,28 +14343,30 @@
     }
 
     function renderRunHistoryPage() {
-      const totalPages = Math.max(1, Math.ceil(runHistoryEntries.length / runHistoryPageSize));
+      renderRunHistoryModeTabs();
+      const visibleEntries = getVisibleRunHistoryEntries();
+      const totalPages = Math.max(1, Math.ceil(visibleEntries.length / runHistoryPageSize));
       runHistoryPage = clamp(runHistoryPage, 0, totalPages - 1);
       const start = runHistoryPage * runHistoryPageSize;
-      const visibleEntries = runHistoryEntries.slice(start, start + runHistoryPageSize);
+      const visiblePageEntries = visibleEntries.slice(start, start + runHistoryPageSize);
       if (!visibleEntries.some(entry => entry.id === selectedRunHistoryId)) {
         selectedRunHistoryId = visibleEntries[0]?.id || '';
       }
-      if (view.runHistoryEmpty) view.runHistoryEmpty.classList.toggle('hidden', runHistoryEntries.length > 0);
+      if (view.runHistoryEmpty) view.runHistoryEmpty.classList.toggle('hidden', visibleEntries.length > 0);
       if (view.runHistoryList) {
-        view.runHistoryList.innerHTML = visibleEntries.map(entry => renderRunHistoryListEntry(entry, entry.id === selectedRunHistoryId)).join('');
-        view.runHistoryList.classList.toggle('hidden', runHistoryEntries.length === 0);
+        view.runHistoryList.innerHTML = visiblePageEntries.map(entry => renderRunHistoryListEntry(entry, entry.id === selectedRunHistoryId)).join('');
+        view.runHistoryList.classList.toggle('hidden', visibleEntries.length === 0);
         view.runHistoryList.scrollTop = 0;
         hydrateRunHistorySprites(view.runHistoryList);
       }
       renderRunHistoryDetail();
       if (view.runHistoryPageLabel) {
-        view.runHistoryPageLabel.textContent = runHistoryEntries.length
+        view.runHistoryPageLabel.textContent = visibleEntries.length
           ? `Page ${runHistoryPage + 1} / ${totalPages}`
           : 'Page 0 / 0';
       }
       if (view.runHistoryPrev) view.runHistoryPrev.disabled = runHistoryPage <= 0;
-      if (view.runHistoryNext) view.runHistoryNext.disabled = runHistoryPage >= totalPages - 1 || runHistoryEntries.length === 0;
+      if (view.runHistoryNext) view.runHistoryNext.disabled = runHistoryPage >= totalPages - 1 || visibleEntries.length === 0;
     }
 
     if (manager && typeof manager.registerScreen === 'function') {
@@ -14465,6 +14565,14 @@
             renderRunHistoryDetail();
           });
         });
+        view.runHistoryModeTabs.forEach(tab => {
+          tab.addEventListener('click', () => {
+            const mode = tab.dataset.mode || 'all';
+            runHistoryModeFilter = mode === 'all' ? 'all' : normalizeGameMode(mode);
+            runHistoryPage = 0;
+            renderRunHistoryPage();
+          });
+        });
         view.go.addEventListener('click', handlers.onStartNew);
         view.seed.addEventListener('keydown', event => {
           if (event.key === 'Enter') handlers.onStartNew();
@@ -14547,6 +14655,7 @@
       setRunHistory(entries) {
         runHistoryEntries = normalizeRunHistory(entries);
         runHistoryPage = 0;
+        runHistoryModeFilter = 'all';
         selectedRunHistoryId = runHistoryEntries[0]?.id || '';
         activeRunHistoryTab = 'stats';
         renderRunHistoryPage();

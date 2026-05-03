@@ -3298,6 +3298,32 @@ button.alt.danger {
   min-height: 0;
 }
 
+.rh-mode-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.rh-mode-tab {
+  padding: 5px 10px;
+  border: 1px solid rgba(128,146,170,.2);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--menu-text-soft);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.rh-mode-tab.active {
+  border-color: rgba(168,190,219,.42);
+  background: rgba(36,44,58,.95);
+  color: var(--menu-text);
+}
+
 /* Killed-by banner above stats */
 .rh-killer-banner {
   display: flex;
