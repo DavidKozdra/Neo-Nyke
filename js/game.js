@@ -4066,6 +4066,7 @@
     enemies = [];
     deadBodies = [];
     particles = [];
+    playerDeathAnim = null;
     projectiles = [];
     chests = [];
     pickups = [];
@@ -10890,43 +10891,45 @@
 
   function draw() {
     const isDying = gameState === 'dying';
-    if (gameState !== 'play' && !isDying) return;
+    const isPlayLike = gameState === 'play' || gameState === 'pause' || gameState === 'dialogue' || isDying;
     let sectionPerfStart = perfStart();
     ctx.save();
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    const _shakeOn = window.NeoSettings?.getAccess()?.screenShake !== false;
-    const offsetX = _shakeOn ? (Math.random() - 0.5) * shake * 2 : 0;
-    const offsetY = _shakeOn ? (Math.random() - 0.5) * shake * 2 : 0;
-    ctx.translate(-camera.x + offsetX, -camera.y + offsetY);
+    if (isPlayLike) {
+      const _shakeOn = window.NeoSettings?.getAccess()?.screenShake !== false;
+      const offsetX = _shakeOn ? (Math.random() - 0.5) * shake * 2 : 0;
+      const offsetY = _shakeOn ? (Math.random() - 0.5) * shake * 2 : 0;
+      ctx.translate(-camera.x + offsetX, -camera.y + offsetY);
 
-    drawFloor();
-    drawRoomDecor();
-    drawWorldProps();
-    drawDeadBodies();
-    perfEnd('draw.room', sectionPerfStart);
-    sectionPerfStart = perfStart();
-    drawChests();
-    drawPickups();
-    perfEnd('draw.items', sectionPerfStart);
-    sectionPerfStart = perfStart();
-    drawProjectiles();
-    drawEnemyTelegraphs();
-    drawEnemies();
-    if (!isDying) drawPlayer();
-    if (!isDying) drawPlayerLaser();
-    if (isDying && playerDeathAnim) drawPlayerCorpseAnim(playerDeathAnim);
-    perfEnd('draw.entities', sectionPerfStart);
-    sectionPerfStart = perfStart();
-    drawParticles();
-    perfEnd('draw.particles', sectionPerfStart);
-    sectionPerfStart = perfStart();
-    if (!isDying) drawShopPrompt();
-    if (!isDying) drawAnvilPrompt();
-    perfEnd('draw.prompts', sectionPerfStart);
+      drawFloor();
+      drawRoomDecor();
+      drawWorldProps();
+      drawDeadBodies();
+      perfEnd('draw.room', sectionPerfStart);
+      sectionPerfStart = perfStart();
+      drawChests();
+      drawPickups();
+      perfEnd('draw.items', sectionPerfStart);
+      sectionPerfStart = perfStart();
+      drawProjectiles();
+      drawEnemyTelegraphs();
+      drawEnemies();
+      if (!isDying) drawPlayer();
+      if (!isDying) drawPlayerLaser();
+      if (isDying && playerDeathAnim) drawPlayerCorpseAnim(playerDeathAnim);
+      perfEnd('draw.entities', sectionPerfStart);
+      sectionPerfStart = perfStart();
+      drawParticles();
+      perfEnd('draw.particles', sectionPerfStart);
+      sectionPerfStart = perfStart();
+      if (!isDying) drawShopPrompt();
+      if (!isDying) drawAnvilPrompt();
+      perfEnd('draw.prompts', sectionPerfStart);
+    }
 
     ctx.restore();
     sectionPerfStart = perfStart();
-    if (!isDying) drawMinimap();
+    if (isPlayLike && !isDying) drawMinimap();
     perfEnd('draw.minimap', sectionPerfStart);
 
     sectionPerfStart = perfStart();
@@ -13813,9 +13816,9 @@
       view.dead.classList.toggle('hidden',      show !== 'dead');
       view.win.classList.toggle('hidden',       show !== 'win');
       view.pause?.classList.toggle('hidden',    show !== 'pause');
-      const inPlay = show === 'play' || show === 'pause' || show === 'dialogue';
+      const inPlay = show === 'play' || show === 'pause' || show === 'dialogue' || show === 'dying';
       setVisible(view.hud, false, 'none');
-      setVisible(view.actionBar, show === 'play' || show === 'pause', '');
+      setVisible(view.actionBar, show === 'play' || show === 'pause' || show === 'dying', '');
       setVisible(view.playerStats, inPlay, '');
       setVisible(view.coinDisplay, inPlay, 'flex');
       setVisible(view.centerDisplay, inPlay, '');
