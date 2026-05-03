@@ -371,6 +371,33 @@
       <button id="pauseMain" class="nav-btn nav-btn--minor">MAIN MENU</button>
     </div>
   </div>
+
+  <!-- Endless mode wave UI -->
+  <div id="endlessHud" class="endless-hud hidden">
+    <span class="endless-wave-label">WAVE</span>
+    <span id="endlessWaveNum" class="endless-wave-num">1</span>
+  </div>
+
+  <!-- Practice mode spawn panel -->
+  <div id="practicePanel" class="practice-panel hidden" aria-hidden="true">
+    <div class="practice-head">
+      <span class="practice-title">PRACTICE</span>
+      <button id="practicePanelToggle" class="practice-toggle-btn" aria-label="Toggle practice panel">&#9776;</button>
+    </div>
+    <div id="practicePanelBody" class="practice-body">
+      <div class="practice-section">
+        <span class="practice-section-label">SPAWN ENEMY</span>
+        <div class="practice-spawn-grid" id="practiceEnemyGrid"></div>
+      </div>
+      <div class="practice-section">
+        <span class="practice-section-label">OPTIONS</span>
+        <label class="practice-opt"><input type="checkbox" id="practiceEliteToggle"> Spawn as Elite</label>
+        <button id="practiceClearBtn" class="practice-action-btn">CLEAR ENEMIES</button>
+        <button id="practiceHealBtn" class="practice-action-btn">FULL HEAL</button>
+        <button id="practiceGiveItemBtn" class="practice-action-btn">GIVE RANDOM ITEM</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- Main menu — outside #wrap so it fills 100dvw × 100dvh -->
@@ -392,6 +419,7 @@
     <div class="main-nav">
       <button id="continueBtn" class="nav-btn hidden">CONTINUE</button>
       <button id="newRunBtn"   class="nav-btn">NEW RUN</button>
+      <button id="altModesBtn"   class="nav-btn nav-btn--minor">ALT MODES</button>
       <button id="runHistoryBtn" class="nav-btn nav-btn--minor">RUN HISTORY</button>
       <button id="settingsBtn" class="nav-btn nav-btn--minor">SETTINGS</button>
     </div>
@@ -420,6 +448,32 @@
           <button class="rh-tab" data-tab="moves" type="button">Moves</button>
         </div>
         <div id="runHistoryTabPanel" class="rh-tabpanel"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Alt Modes panel (slides in over main menu) -->
+  <section id="altModesPanel" class="altmodes-panel hidden" aria-hidden="true">
+    <div class="altmodes-head">
+      <span class="altmodes-title">ALTERNATIVE MODES</span>
+      <button id="altModesClose" class="panel-close" aria-label="Close alt modes">X</button>
+    </div>
+    <div class="altmodes-body">
+      <div class="altmode-card" id="altModeEndlessCard">
+        <div class="altmode-card__icon">&#9830;</div>
+        <div class="altmode-card__text">
+          <h3 class="altmode-card__name">ENDLESS</h3>
+          <p class="altmode-card__desc">One room. Infinite waves. Survive as long as possible and collect item rewards between each wave.</p>
+        </div>
+        <button id="altModeEndlessBtn" class="nav-btn altmode-card__btn">PLAY</button>
+      </div>
+      <div class="altmode-card" id="altModePracticeCard">
+        <div class="altmode-card__icon">&#9878;</div>
+        <div class="altmode-card__text">
+          <h3 class="altmode-card__name">PRACTICE</h3>
+          <p class="altmode-card__desc">Spawn any enemy or challenge trial at will. Test builds and learn attack patterns without consequences.</p>
+        </div>
+        <button id="altModePracticeBtn" class="nav-btn altmode-card__btn">PLAY</button>
       </div>
     </div>
   </section>

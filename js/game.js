@@ -1174,6 +1174,21 @@
     anvilCancel: document.getElementById('anvilCancel'),
     anvilConfirm: document.getElementById('anvilConfirm'),
     settingsBtn: document.getElementById('settingsBtn'),
+    altModesBtn: document.getElementById('altModesBtn'),
+    altModesPanel: document.getElementById('altModesPanel'),
+    altModesClose: document.getElementById('altModesClose'),
+    altModeEndlessBtn: document.getElementById('altModeEndlessBtn'),
+    altModePracticeBtn: document.getElementById('altModePracticeBtn'),
+    endlessHud: document.getElementById('endlessHud'),
+    endlessWaveNum: document.getElementById('endlessWaveNum'),
+    practicePanel: document.getElementById('practicePanel'),
+    practicePanelToggle: document.getElementById('practicePanelToggle'),
+    practicePanelBody: document.getElementById('practicePanelBody'),
+    practiceEnemyGrid: document.getElementById('practiceEnemyGrid'),
+    practiceEliteToggle: document.getElementById('practiceEliteToggle'),
+    practiceClearBtn: document.getElementById('practiceClearBtn'),
+    practiceHealBtn: document.getElementById('practiceHealBtn'),
+    practiceGiveItemBtn: document.getElementById('practiceGiveItemBtn'),
     charBackBtn: document.getElementById('charBackBtn'),
     deleteRunRow: document.getElementById('deleteRunRow'),
     deleteRunBtn: document.getElementById('deleteRunBtn'),
@@ -1262,6 +1277,9 @@
   let turtleWaveHpTimer = 0;
   let dashKeyLatch = false;
   let playerDeathAnim = null;
+  let gameMode = 'normal';
+  let endlessWave = 0;
+  let endlessWaveActive = false;
   let chosenCharacter = 'thorn_knight';
   let selectedDifficulty = 'easy';
   let selectedChallenges = [];
@@ -2172,8 +2190,9 @@
       onToggleRunHistory() {
         uiController.setRunHistoryOpen(ui.runHistoryPanel?.classList.contains('hidden'));
       },
-      onOpenCharacterSelect() { setGameState('charselect'); },
+      onOpenCharacterSelect() { gameMode = 'normal'; setGameState('charselect'); },
       onCloseCharacterSelect() { setGameState('menu'); },
+      onOpenAltModeCharSelect(mode) { gameMode = mode; setGameState('charselect'); },
       onStartNew() { void startGame(false); },
       onContinue() { void startGame(true); },
       onDeleteRun() { void deleteSavedRun(); },
@@ -2190,7 +2209,7 @@
         void startGame(false);
       },
     });
-    uiController.bindRestartActions(() => location.reload());
+    uiController.bindRestartActions(() => { gameMode = 'normal'; location.reload(); });
 
     ui.pauseResume.addEventListener('click', resumeGame);
     ui.pauseSettings.addEventListener('click', () => {
@@ -2198,6 +2217,7 @@
     });
     ui.pauseMain.addEventListener('click', () => {
       clearTimeout(savePendingTimer);
+      gameMode = 'normal';
       void saveRunNow().then(() => { setGameState('menu'); });
     });
     ui.wizardPawChoices?.addEventListener('click', handleWizardPawChoiceClick);
@@ -4034,6 +4054,8 @@
   }
 
   async function startGame(resume) {
+    if (gameMode === 'endless') { startEndless(); return; }
+    if (gameMode === 'practice') { startPractice(); return; }
     setGameState('play');
 
     if (resume && activeRun) {
@@ -4062,11 +4084,95 @@
     }
   }
 
+  function startEndlessRoom() {
+    rooms = [];
+    const room = createRoomRecord({ x: 4, y: 4 }, { type: 'combat', doors: { n: false, s: false, e: false, w: false }, cleared: false });
+    decorateRoomData(room);
+    rooms.push(room);
+    currentRoom = room;
+    enterRoom(room);
+  }
+
+  function startEndless() {
+    setGameState('play');
+    baseSeedStr = ui.seed.value.trim() || createRandomSeed();
+    selectedDifficulty = normalizeDifficulty(selectedDifficulty);
+    selectedChallenges = [];
+    runLoopIndex = 0;
+    syncSeedState();
+    floor = 1;
+    gameElapsedTime = 0;
+    endlessWave = 0;
+    endlessWaveActive = false;
+    player = createDefaultPlayer();
+    lastDamageSource = '';
+    lastDamageSourceKey = '';
+    resetScene();
+    resetRngStreams();
+    startEndlessRoom();
+    if (ui.endlessWaveNum) ui.endlessWaveNum.textContent = endlessWave;
+    if (!loopStarted) { loopStarted = true; requestAnimationFrame(loop); }
+  }
+
+  function startPractice() {
+    setGameState('play');
+    baseSeedStr = createRandomSeed();
+    selectedDifficulty = 'easy';
+    selectedChallenges = [];
+    runLoopIndex = 0;
+    syncSeedState();
+    floor = 5;
+    gameElapsedTime = 0;
+    player = createDefaultPlayer();
+    player.hp = player.maxHp * 999;
+    player.maxHp = player.maxHp * 999;
+    lastDamageSource = '';
+    lastDamageSourceKey = '';
+    resetScene();
+    resetRngStreams();
+    rooms = [];
+    const room = createRoomRecord({ x: 4, y: 4 }, { type: 'combat', doors: { n: false, s: false, e: false, w: false }, cleared: true });
+    decorateRoomData(room);
+    rooms.push(room);
+    currentRoom = room;
+    player.x = START_X;
+    player.y = START_Y;
+    if (!loopStarted) { loopStarted = true; requestAnimationFrame(loop); }
+  }
+
+  function buildPracticeEnemyGrid() {
+    if (!ui.practiceEnemyGrid) return;
+    const BOSS_TYPES_SET = new Set(['queen_cult', 'bulk_golem', 'artificer_knave', 'god']);
+    const allTypes = [
+      'hunter', 'charger', 'laser', 'knave', 'sniper', 'machine_gunner',
+      'golem', 'cult_mage', 'cult_follower', 'summoner', 'shield_unit', 'healer', 'boss_spawner',
+      'queen_cult', 'bulk_golem', 'artificer_knave', 'god', 'mirror_knight',
+    ];
+    ui.practiceEnemyGrid.innerHTML = allTypes.map(type => {
+      const isBoss = BOSS_TYPES_SET.has(type);
+      const label = type.replace(/_/g, ' ');
+      return `<button class="practice-spawn-btn${isBoss ? ' is-boss' : ''}" data-enemy="${type}">${label}</button>`;
+    }).join('');
+    ui.practiceEnemyGrid.addEventListener('click', event => {
+      const btn = event.target instanceof Element ? event.target.closest('[data-enemy]') : null;
+      if (!btn || !player) return;
+      const type = btn.dataset.enemy;
+      const elite = ui.practiceEliteToggle?.checked ?? false;
+      const angle = Math.random() * Math.PI * 2;
+      const dist = 160 + Math.random() * 120;
+      const x = clamp(player.x + Math.cos(angle) * dist, 80, ROOM_W - 80);
+      const y = clamp(player.y + Math.sin(angle) * dist, 80, ROOM_H - 80);
+      spawnEnemy(type, x, y, elite);
+    });
+  }
+
   function resetScene() {
     enemies = [];
     deadBodies = [];
     particles = [];
     playerDeathAnim = null;
+    endlessWave = 0;
+    endlessWaveActive = false;
     projectiles = [];
     chests = [];
     pickups = [];
@@ -4903,7 +5009,14 @@
     player.y = safeSpawn.y;
 
     if (room.type === 'combat' && !room.cleared && enemies.length === 0) {
-      spawnWave(getWaveCount(3), 'combat');
+      if (gameMode === 'endless') {
+        endlessWaveActive = true;
+        const firstWaveSize = 4 + floor;
+        spawnWave(firstWaveSize, 'combat');
+        particles.push({ x: ROOM_W / 2, y: ROOM_H / 2 - 40, life: 1.2, text: 'WAVE 1', c: '#ff8b8b' });
+      } else {
+        spawnWave(getWaveCount(3), 'combat');
+      }
     }
     if (room.type === 'shop') {
       ensureShopHasMinimumItemOffers(room, 3);
@@ -8018,9 +8131,37 @@
       if (currentRoom.type === 'ladder' || currentRoom.type === 'boss') {
         pickups.push({ x: ROOM_W / 2, y: ROOM_H / 2, type: 'ladder' });
       }
+      if (gameMode === 'endless' && endlessWaveActive) {
+        endlessWaveActive = false;
+        onEndlessWaveCleared();
+      }
       updateObjective();
       scheduleRunSave();
     }
+  }
+
+  function onEndlessWaveCleared() {
+    endlessWave += 1;
+    if (ui.endlessWaveNum) ui.endlessWaveNum.textContent = endlessWave;
+    const cx = ROOM_W / 2;
+    const cy = ROOM_H / 2;
+    particles.push({ x: cx, y: cy - 40, life: 1.4, text: `WAVE ${endlessWave} CLEARED`, c: '#78d7ff' });
+    pickups.push({ x: cx - 60, y: cy, type: 'item', key: rollItemDrop({ elite: endlessWave % 3 === 0, stream: 'loot' }) });
+    pickups.push({ x: cx + 60, y: cy, type: 'potion' });
+    if (endlessWave % 5 === 0) {
+      pickups.push({ x: cx, y: cy + 50, type: 'item', key: rollItemDrop({ elite: true, stream: 'loot' }) });
+    }
+    dropCoins(cx, cy - 20, 30 + endlessWave * 8);
+    grantXp(20 + endlessWave * 4);
+    const delay = endlessWave <= 2 ? 4 : endlessWave <= 5 ? 3 : 2;
+    setTimeout(() => {
+      if (gameMode !== 'endless' || gameState !== 'play') return;
+      currentRoom.cleared = false;
+      endlessWaveActive = true;
+      const waveSize = Math.min(4 + endlessWave + Math.floor(endlessWave / 3), 18);
+      spawnWave(waveSize, 'combat');
+      particles.push({ x: ROOM_W / 2, y: ROOM_H / 2 - 40, life: 1.1, text: `WAVE ${endlessWave + 1}`, c: '#ff8b8b' });
+    }, delay * 1000);
   }
 
   function dropCoins(x, y, amount) {
@@ -9781,7 +9922,14 @@
     if (showPopup && finalAmount >= 1) {
       spawnDamagePopup(player.x, player.y - 18, finalAmount, { color: '#ff6b6b', size: 16 });
     }
-    if (player.hp <= 0) die();
+    if (player.hp <= 0) {
+      if (gameMode === 'practice') {
+        player.hp = player.maxHp;
+        particles.push({ x: player.x, y: player.y - 30, life: 0.9, text: 'PRACTICE — NO DEATH', c: '#a880ff' });
+      } else {
+        die();
+      }
+    }
   }
 
   function tickPlayerStatus(key, dt, config) {
@@ -13830,7 +13978,9 @@
         view.challengeStatus.setAttribute('aria-hidden', 'true');
       }
       if (show !== 'charselect') { setChallengePanelOpen(false); setLegacyPanelOpen(false); }
-      if (show !== 'menu') setRunHistoryOpen(false);
+      if (show !== 'menu') { setRunHistoryOpen(false); setAltModesPanelOpen(false); }
+      setVisible(view.endlessHud, inPlay && gameMode === 'endless', 'flex');
+      setVisible(view.practicePanel, inPlay && gameMode === 'practice' && show !== 'dying', 'block');
     }
 
     function setChallengePanelOpen(open) {
@@ -13860,6 +14010,11 @@
         view.runHistoryBtn.textContent = runHistoryOpen ? 'HIDE HISTORY' : 'RUN HISTORY';
         view.runHistoryBtn.setAttribute('aria-expanded', runHistoryOpen ? 'true' : 'false');
       }
+    }
+
+    function setAltModesPanelOpen(open) {
+      view.altModesPanel?.classList.toggle('hidden', !open);
+      view.altModesPanel?.setAttribute('aria-hidden', open ? 'false' : 'true');
     }
 
     function renderRunHistoryDetail() {
@@ -14114,6 +14269,29 @@
         // New main-menu nav
         view.newRunBtn?.addEventListener('click', handlers.onOpenCharacterSelect);
         view.charBackBtn?.addEventListener('click', handlers.onCloseCharacterSelect);
+        // Alt modes panel
+        view.altModesBtn?.addEventListener('click', () => setAltModesPanelOpen(true));
+        view.altModesClose?.addEventListener('click', () => setAltModesPanelOpen(false));
+        view.altModeEndlessBtn?.addEventListener('click', () => {
+          setAltModesPanelOpen(false);
+          handlers.onOpenAltModeCharSelect('endless');
+        });
+        view.altModePracticeBtn?.addEventListener('click', () => {
+          setAltModesPanelOpen(false);
+          handlers.onOpenAltModeCharSelect('practice');
+        });
+        // Practice panel toggle
+        view.practicePanelToggle?.addEventListener('click', () => {
+          view.practicePanelBody?.classList.toggle('hidden');
+        });
+        view.practiceClearBtn?.addEventListener('click', () => { enemies.length = 0; });
+        view.practiceHealBtn?.addEventListener('click', () => { if (player) player.hp = player.maxHp; });
+        view.practiceGiveItemBtn?.addEventListener('click', () => {
+          if (!player) return;
+          const key = rollItemDrop({ elite: true, stream: 'loot' });
+          if (key) collectItem(key);
+        });
+        if (view.practiceEnemyGrid) buildPracticeEnemyGrid();
         menuBound = true;
       },
       bindRestartActions(onRestart) {

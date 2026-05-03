@@ -4450,3 +4450,224 @@ button.alt.danger {
   from { opacity: 1; transform: scale(1); }
   to   { opacity: 0; transform: scale(1.1); }
 }
+
+/* ═══════════════════════════════════════════════════
+   ALT MODES PANEL
+   ═══════════════════════════════════════════════════ */
+.altmodes-panel {
+  position: absolute;
+  inset: 0;
+  background: rgba(7,6,14,0.97);
+  display: flex;
+  flex-direction: column;
+  z-index: 12;
+  backdrop-filter: blur(6px);
+}
+.altmodes-panel.hidden { display: none; }
+
+.altmodes-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 28px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.altmodes-title {
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: #c8e8ff;
+}
+
+.altmodes-body {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 28px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.altmode-card {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.09);
+  border-radius: 10px;
+  padding: 22px 24px;
+  transition: border-color 0.2s;
+}
+.altmode-card:hover { border-color: rgba(120,200,255,0.3); }
+
+.altmode-card__icon {
+  font-size: 2.2rem;
+  opacity: 0.7;
+  flex-shrink: 0;
+  width: 48px;
+  text-align: center;
+}
+.altmode-card__text { flex: 1; }
+.altmode-card__name {
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: #e8f4ff;
+  margin: 0 0 6px;
+}
+.altmode-card__desc {
+  font-size: 0.82rem;
+  color: #8ca8c0;
+  margin: 0;
+  line-height: 1.5;
+}
+.altmode-card__btn { flex-shrink: 0; min-width: 90px; }
+
+/* ═══════════════════════════════════════════════════
+   ENDLESS MODE HUD
+   ═══════════════════════════════════════════════════ */
+.endless-hud {
+  position: fixed;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(0,0,0,0.72);
+  border: 1px solid rgba(120,220,255,0.25);
+  border-radius: 8px;
+  padding: 6px 18px;
+  z-index: 50;
+  pointer-events: none;
+}
+.endless-hud.hidden { display: none; }
+.endless-wave-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: #78d7ff;
+  opacity: 0.8;
+}
+.endless-wave-num {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+/* ═══════════════════════════════════════════════════
+   PRACTICE MODE PANEL
+   ═══════════════════════════════════════════════════ */
+.practice-panel {
+  position: fixed;
+  top: 80px;
+  right: 14px;
+  width: 220px;
+  background: rgba(10,8,22,0.94);
+  border: 1px solid rgba(160,120,255,0.3);
+  border-radius: 10px;
+  z-index: 60;
+  font-size: 0.8rem;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+}
+.practice-panel.hidden { display: none; }
+
+.practice-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px 8px;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+}
+.practice-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: #c8b4ff;
+}
+.practice-toggle-btn {
+  background: none;
+  border: none;
+  color: #8870c0;
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 2px 4px;
+}
+.practice-toggle-btn:hover { color: #c8b4ff; }
+
+.practice-body { padding: 10px 12px 14px; }
+.practice-section { margin-bottom: 14px; }
+.practice-section:last-child { margin-bottom: 0; }
+.practice-section-label {
+  display: block;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: #6858a0;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+
+.practice-spawn-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.practice-spawn-btn {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 5px;
+  color: #c4d4e8;
+  cursor: pointer;
+  font-size: 0.68rem;
+  padding: 4px 7px;
+  text-transform: capitalize;
+  transition: background 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+.practice-spawn-btn:hover {
+  background: rgba(160,120,255,0.18);
+  border-color: rgba(160,120,255,0.4);
+  color: #e0d4ff;
+}
+.practice-spawn-btn.is-boss {
+  border-color: rgba(255,190,60,0.3);
+  color: #ffd080;
+}
+.practice-spawn-btn.is-boss:hover {
+  background: rgba(255,160,0,0.15);
+  border-color: rgba(255,190,60,0.6);
+}
+
+.practice-opt {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #9088b0;
+  margin-bottom: 8px;
+  cursor: pointer;
+}
+.practice-opt input { cursor: pointer; accent-color: #a880ff; }
+
+.practice-action-btn {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 5px;
+  color: #b4c8e0;
+  cursor: pointer;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 6px 10px;
+  text-align: center;
+  transition: background 0.15s;
+}
+.practice-action-btn:hover {
+  background: rgba(120,180,255,0.12);
+  border-color: rgba(120,180,255,0.3);
+  color: #d0eaff;
+}
