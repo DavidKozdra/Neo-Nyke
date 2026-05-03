@@ -986,6 +986,11 @@
     red: 4.75,
   };
   const ITEM_KEYS = Object.keys(ITEM_DEFS);
+  const SANDBOX_ENEMY_TYPES = [
+    'hunter', 'charger', 'laser', 'knave', 'sniper', 'machine_gunner',
+    'golem', 'cult_mage', 'cult_follower', 'summoner', 'shield_unit', 'healer', 'boss_spawner',
+    'queen_cult', 'bulk_golem', 'artificer_knave', 'god', 'mirror_knight',
+  ];
   const ITEM_DROP_WEIGHTS = [
     ['neo_knife', 60],
     ['orb_of_blood', 28],
@@ -1132,6 +1137,13 @@
     dialogueSpeaker: document.getElementById('dialogueSpeaker'),
     dialogueText: document.getElementById('dialogueText'),
     dialogueHint: document.getElementById('dialogueHint'),
+    tutorialOverlay: document.getElementById('tutorialOverlay'),
+    tutorialSpeaker: document.getElementById('tutorialSpeaker'),
+    tutorialText: document.getElementById('tutorialText'),
+    tutorialPrevBtn: document.getElementById('tutorialPrevBtn'),
+    tutorialNextBtn: document.getElementById('tutorialNextBtn'),
+    tutorialHint: document.getElementById('tutorialHint'),
+    tutorialSkipBtn: document.getElementById('tutorialSkipBtn'),
     entityDialogueLayer: document.getElementById('entityDialogueLayer'),
     playerHpFill: document.getElementById('playerHpFill'),
     playerHpTxt: document.getElementById('playerHpTxt'),
@@ -1181,6 +1193,20 @@
     altModeEndlessBtn: document.getElementById('altModeEndlessBtn'),
     altModePracticeBtn: document.getElementById('altModePracticeBtn'),
     altModeBossRushBtn: document.getElementById('altModeBossRushBtn'),
+    altModeSandboxBtn: document.getElementById('altModeSandboxBtn'),
+    altModeSandboxConfigBtn: document.getElementById('altModeSandboxConfigBtn'),
+    sandboxPanel: document.getElementById('sandboxPanel'),
+    sandboxPanelBackdrop: document.getElementById('sandboxPanelBackdrop'),
+    sandboxClose: document.getElementById('sandboxClose'),
+    sandboxReset: document.getElementById('sandboxReset'),
+    sandboxSaveClose: document.getElementById('sandboxSaveClose'),
+    sandboxEnemyList: document.getElementById('sandboxEnemyList'),
+    sandboxItemList: document.getElementById('sandboxItemList'),
+    sandboxEnemiesAll: document.getElementById('sandboxEnemiesAll'),
+    sandboxEnemiesNone: document.getElementById('sandboxEnemiesNone'),
+    sandboxItemsAll: document.getElementById('sandboxItemsAll'),
+    sandboxItemsNone: document.getElementById('sandboxItemsNone'),
+    sandboxGodMode: document.getElementById('sandboxGodMode'),
     endlessHud: document.getElementById('endlessHud'),
     endlessWaveNum: document.getElementById('endlessWaveNum'),
     bossRushHud: document.getElementById('bossRushHud'),
@@ -1309,6 +1335,16 @@
   let structures = [];
   let decorations = [];
   let environmentBackgroundCache = { key: '', canvas: null };
+  const SANDBOX_DEFAULT_SETTINGS = {
+    enemyStatMultiplier: 1,
+    enemySpeedMultiplier: 1,
+    enemyDamageMultiplier: 1,
+    playerDamageMultiplier: 1,
+    startingCoins: 0,
+    godMode: false,
+    allowedEnemies: SANDBOX_ENEMY_TYPES.slice(),
+    allowedItems: ITEM_KEYS.slice(),
+  };
   let activeRun = null;
   let metaProgress = createDefaultMeta();
   let runHistory = [];
@@ -1334,6 +1370,9 @@
   let shopPanelDirty = false;
   let inventoryPanelDirty = false;
   let wizardPawSelection = null;
+  let tutorialState = null;
+  let sandboxSettings = { ...SANDBOX_DEFAULT_SETTINGS };
+  const REPLAY_TUTORIAL_KEY = 'neonyke:replayTutorialNextRun';
 
   // Upgradeable stat schemas for the anvil panel
   const WEAPON_UPGRADEABLE_STATS = {
@@ -2104,6 +2143,11 @@
         if (gameState === 'play') { pauseGame(); return; }
         if (gameState === 'pause') { resumeGame(); return; }
       }
+      if (gameState === 'play' && key === 'k' && isFirstRunTutorialActive()) {
+        event.preventDefault();
+        skipFirstRunTutorial();
+        return;
+      }
       if (key === 'e' && gameState === 'play') {
         const inShopRoom = currentRoom?.type === 'shop';
         if (inShopRoom && !shopKeyLatch) {
@@ -2198,9 +2242,31 @@
       onToggleRunHistory() {
         uiController.setRunHistoryOpen(ui.runHistoryPanel?.classList.contains('hidden'));
       },
+      onOpenSandboxConfig() {
+        uiController.setSandboxPanelOpen(true);
+      },
+      onCloseSandboxConfig() {
+        uiController.setSandboxPanelOpen(false);
+      },
+      onSkipTutorial() {
+        skipFirstRunTutorial();
+      },
+      onTutorialPrev() {
+        navigateTutorialStep(-1);
+      },
+      onTutorialNext() {
+        navigateTutorialStep(1);
+      },
       onOpenCharacterSelect() { gameMode = 'normal'; setGameState('charselect'); },
       onCloseCharacterSelect() { setGameState('menu'); },
       onOpenAltModeCharSelect(mode) { gameMode = mode; setGameState('charselect'); },
+      onStartSandbox() {
+        gameMode = 'sandbox';
+        selectedDifficulty = 'easy';
+        metaProgress.selectedDifficulty = selectedDifficulty;
+        persistMetaSoon();
+        setGameState('charselect');
+      },
       onStartNew() { void startGame(false); },
       onContinue() { void startGame(true); },
       onDeleteRun() { void deleteSavedRun(); },
@@ -2412,12 +2478,14 @@
     if (currentRoom?.type !== 'shop') return;
     const next = !isPanelOpen(ui.shopPanel);
     setShopPanelOpen(next);
+    if (next && isFirstRunTutorialActive()) tutorialState.openedShop = true;
     if (next) setInventoryPanelOpen(false);
   }
 
   function toggleInventoryPanel() {
     const next = !isPanelOpen(ui.invPanel);
     setInventoryPanelOpen(next);
+    if (next && isFirstRunTutorialActive()) tutorialState.openedInventory = true;
     if (next) setShopPanelOpen(false);
   }
 
@@ -3125,7 +3193,205 @@
       godsKilled: 0,
       loopCrystals: 0,
       unlockedLegacy: [],
+      tutorialCompleted: false,
+      sandboxSettings: { ...SANDBOX_DEFAULT_SETTINGS },
     };
+  }
+
+  function normalizeSandboxSettings(input) {
+    const source = input && typeof input === 'object' ? input : {};
+    const allowedEnemies = Array.isArray(source.allowedEnemies)
+      ? SANDBOX_ENEMY_TYPES.filter(type => source.allowedEnemies.includes(type))
+      : SANDBOX_ENEMY_TYPES.slice();
+    const allowedItems = Array.isArray(source.allowedItems)
+      ? ITEM_KEYS.filter(key => source.allowedItems.includes(key))
+      : ITEM_KEYS.slice();
+    return {
+      enemyStatMultiplier: Math.max(0.2, Math.min(4, Number(source.enemyStatMultiplier ?? SANDBOX_DEFAULT_SETTINGS.enemyStatMultiplier) || 1)),
+      enemySpeedMultiplier: Math.max(0.2, Math.min(3, Number(source.enemySpeedMultiplier ?? SANDBOX_DEFAULT_SETTINGS.enemySpeedMultiplier) || 1)),
+      enemyDamageMultiplier: Math.max(0.1, Math.min(3, Number(source.enemyDamageMultiplier ?? SANDBOX_DEFAULT_SETTINGS.enemyDamageMultiplier) || 1)),
+      playerDamageMultiplier: Math.max(0.1, Math.min(6, Number(source.playerDamageMultiplier ?? SANDBOX_DEFAULT_SETTINGS.playerDamageMultiplier) || 1)),
+      startingCoins: Math.max(0, Math.min(999, Math.round(Number(source.startingCoins ?? SANDBOX_DEFAULT_SETTINGS.startingCoins) || 0))),
+      godMode: !!source.godMode,
+      allowedEnemies: allowedEnemies.length ? allowedEnemies : SANDBOX_ENEMY_TYPES.slice(0, 1),
+      allowedItems: allowedItems.length ? allowedItems : ITEM_KEYS.slice(),
+    };
+  }
+
+  function isSandboxRunActive() {
+    return gameMode === 'sandbox';
+  }
+
+  function getActiveSandboxSettings() {
+    return isSandboxRunActive() ? sandboxSettings : null;
+  }
+
+  function createDefaultTutorialState() {
+    return {
+      active: false,
+      step: 'move',
+      manualStepLockUntil: 0,
+      dummySpawned: false,
+      moved: false,
+      gotKill: false,
+      gotRelic: false,
+      openedInventory: false,
+      openedShop: false,
+      usedLadder: false,
+    };
+  }
+
+  function resetTutorialState(active = false) {
+    tutorialState = createDefaultTutorialState();
+    tutorialState.active = !!active;
+  }
+
+  function isFirstRunTutorialActive() {
+    return !!tutorialState?.active && gameMode === 'normal' && gameState === 'play';
+  }
+
+  function consumeReplayTutorialRequest() {
+    let requested = false;
+    try {
+      requested = localStorage.getItem(REPLAY_TUTORIAL_KEY) === '1';
+      if (requested) localStorage.removeItem(REPLAY_TUTORIAL_KEY);
+    } catch {}
+    return requested;
+  }
+
+  function formatControlLabel(value, fallback = '') {
+    const key = String(value || fallback || '').toLowerCase();
+    if (!key) return '';
+    if (key === ' ') return 'Space';
+    if (key === 'lmb') return 'LMB';
+    if (key === 'rmb') return 'RMB';
+    if (key === 'shift') return 'Shift';
+    if (key === 'arrowup') return 'ArrowUp';
+    if (key === 'arrowdown') return 'ArrowDown';
+    if (key === 'arrowleft') return 'ArrowLeft';
+    if (key === 'arrowright') return 'ArrowRight';
+    if (key === 'control') return 'Ctrl';
+    return key.length === 1 ? key.toUpperCase() : key.charAt(0).toUpperCase() + key.slice(1);
+  }
+
+  function getControlHint(action, fallback) {
+    const bindings = window.NeoSettings?.getBindings?.() || {};
+    return formatControlLabel(bindings[action], fallback);
+  }
+
+  function getMovementControlHint() {
+    const up = getControlHint('up', 'w');
+    const left = getControlHint('left', 'a');
+    const down = getControlHint('down', 's');
+    const right = getControlHint('right', 'd');
+    return `${up}/${left}/${down}/${right}`;
+  }
+
+  function ensureTutorialDummyEnemy() {
+    if (!isFirstRunTutorialActive() || tutorialState.gotKill) return;
+    if (tutorialState.step !== 'fight') return;
+    if (!currentRoom || ['boss', 'god', 'shop', 'anvil', 'challenge'].includes(currentRoom.type)) return;
+    if (tutorialState.dummySpawned || enemies.some(enemy => enemy?.tutorialDummy)) return;
+    // Force a fair tutorial duel by clearing the normal room wave for this step.
+    if (enemies.length > 0) {
+      enemies = enemies.filter(enemy => enemy?.type === 'rival');
+      syncCurrentRoomState();
+    }
+    const safeSpawn = findSafeEnemySpawnPoint(player.x + 110, player.y, 15)
+      || findSafeEnemySpawnPoint(player.x - 110, player.y, 15)
+      || findSafeEnemySpawnPoint(player.x, player.y - 90, 15)
+      || findSafeEnemySpawnPoint(ROOM_W / 2 + 130, ROOM_H / 2, 15)
+      || { x: clamp(player.x + 80, WALL + 22, ROOM_W - WALL - 22), y: clamp(player.y - 40, WALL + 22, ROOM_H - WALL - 22) };
+    const dummy = spawnEnemy('hunter', safeSpawn.x, safeSpawn.y, false);
+    dummy.tutorialDummy = true;
+    dummy.hp = 16;
+    dummy.max = 16;
+    dummy.speed = 42;
+    dummy.dmg = 1;
+    dummy.attackCd = 2.8;
+    dummy.spawnT = 0.18;
+    dummy.barrier = 0;
+    tutorialState.dummySpawned = true;
+    particles.push({ x: dummy.x, y: dummy.y - 24, life: 1.4, text: 'TRAINING DUMMY', c: '#8dd4ff' });
+    particles.push({ x: player.x, y: player.y - 30, life: 1.1, text: 'DUMMY SPAWNED', c: '#9ce9ff' });
+  }
+
+  function getTutorialStepOrder() {
+    return ['move', 'fight', 'relic', 'panel', 'ladder'];
+  }
+
+  function navigateTutorialStep(direction = 1) {
+    if (!isFirstRunTutorialActive()) return;
+    const order = getTutorialStepOrder();
+    const current = order.indexOf(tutorialState.step);
+    const nextIndex = clamp((current >= 0 ? current : 0) + direction, 0, order.length - 1);
+    tutorialState.step = order[nextIndex];
+    tutorialState.manualStepLockUntil = Number(gameElapsedTime || 0) + 0.65;
+    if (tutorialState.step === 'fight') ensureTutorialDummyEnemy();
+    updateObjective();
+  }
+
+  function getTutorialStepMessage() {
+    if (!isFirstRunTutorialActive()) return '';
+    const moveHint = getMovementControlHint();
+    const slashHint = getControlHint('slash', 'lmb');
+    const laserHint = getControlHint('laser', 'rmb');
+    const smashHint = getControlHint('smash', 'r');
+    const inventoryHint = getControlHint('inventory', 'i');
+    if (tutorialState.step === 'move') return `Tutorial: Move with ${moveHint}.`;
+    if (tutorialState.step === 'fight') return `Tutorial: Defeat the training dummy using ${slashHint}, ${laserHint}, or ${smashHint}.`;
+    if (tutorialState.step === 'relic') return 'Tutorial: Pick up your first relic drop.';
+    if (tutorialState.step === 'panel') return `Tutorial: Press ${inventoryHint} to open Inventory. In shop rooms, press E to open the shop.`;
+    if (currentRoom?.type === 'ladder' && currentRoom?.cleared) return 'Tutorial: Stand on the ladder and press Space to go to the next floor.';
+    if (currentRoom?.type === 'ladder') return 'Tutorial: Clear this ladder room, then use the ladder.';
+    return 'Tutorial: Find the ladder room and continue to the next floor.';
+  }
+
+  function getTutorialObjectiveEntries() {
+    if (!isFirstRunTutorialActive()) return [];
+    const moveHint = getMovementControlHint();
+    const slashHint = getControlHint('slash', 'lmb');
+    const laserHint = getControlHint('laser', 'rmb');
+    const inventoryHint = getControlHint('inventory', 'i');
+    return [
+      { text: `Move (${moveHint})`, state: tutorialState.moved ? 'done' : 'todo' },
+      { text: `Defeat training dummy (${slashHint}/${laserHint})`, state: tutorialState.gotKill ? 'done' : 'todo' },
+      { text: 'Pick up one relic', state: tutorialState.gotRelic ? 'done' : 'todo' },
+      { text: `Open Inventory (${inventoryHint}) or Shop (E in shop room)`, state: (tutorialState.openedInventory || tutorialState.openedShop) ? 'done' : 'todo' },
+      { text: 'Use ladder: stand on it and press Space', state: tutorialState.usedLadder ? 'done' : 'todo' },
+    ];
+  }
+
+  function skipFirstRunTutorial() {
+    if (!isFirstRunTutorialActive()) return;
+    tutorialState.active = false;
+    tutorialState.usedLadder = true;
+    metaProgress.tutorialCompleted = true;
+    persistMetaSoon();
+    particles.push({ x: player.x, y: player.y - 26, life: 0.9, text: 'TUTORIAL SKIPPED', c: '#9cdcff' });
+    uiController.setTutorialBanner('', false);
+    updateObjective();
+  }
+
+  function updateFirstRunTutorialProgress() {
+    if (!isFirstRunTutorialActive()) return;
+    ensureTutorialDummyEnemy();
+    if (Number(tutorialState.manualStepLockUntil || 0) > Number(gameElapsedTime || 0)) return;
+    if (!tutorialState.moved && Math.hypot(player?.vx || 0, player?.vy || 0) > 24) tutorialState.moved = true;
+    if (!tutorialState.gotKill && Number(player?.kills || 0) > 0) tutorialState.gotKill = true;
+    if (tutorialState.step === 'move' && tutorialState.moved) tutorialState.step = 'fight';
+    if (tutorialState.step === 'fight' && tutorialState.gotKill) tutorialState.step = 'relic';
+    if (tutorialState.step === 'relic' && tutorialState.gotRelic) tutorialState.step = 'panel';
+    if (tutorialState.step === 'panel' && (tutorialState.openedInventory || tutorialState.openedShop)) tutorialState.step = 'ladder';
+    if (!tutorialState.usedLadder && floor > 1) tutorialState.usedLadder = true;
+    if (tutorialState.usedLadder) {
+      tutorialState.active = false;
+      if (!metaProgress.tutorialCompleted) {
+        metaProgress.tutorialCompleted = true;
+        persistMetaSoon();
+      }
+      particles.push({ x: player.x, y: player.y - 26, life: 1, text: 'TUTORIAL COMPLETE', c: '#8dffcf' });
+    }
   }
 
   function createDefaultPlayer() {
@@ -3284,6 +3550,7 @@
       if (savedMeta && typeof savedMeta.customDifficultySettings === 'object' && savedMeta.customDifficultySettings) {
         customDifficultySettings = { ...customDifficultySettings, ...savedMeta.customDifficultySettings };
       }
+      sandboxSettings = normalizeSandboxSettings(savedMeta?.sandboxSettings);
       uiController.setSaveState(saveStore.kind);
     } catch (error) {
       console.error('Failed to load save data', error);
@@ -3324,7 +3591,7 @@
 
   function normalizeGameMode(input) {
     const mode = String(input || 'normal').toLowerCase();
-    if (mode === 'endless' || mode === 'practice' || mode === 'boss_rush') return mode;
+    if (mode === 'endless' || mode === 'practice' || mode === 'boss_rush' || mode === 'sandbox') return mode;
     return 'normal';
   }
 
@@ -3332,6 +3599,7 @@
     if (mode === 'endless') return 'Endless';
     if (mode === 'practice') return 'Practice';
     if (mode === 'boss_rush') return 'Boss Rush';
+    if (mode === 'sandbox') return 'Sandbox';
     return 'Normal';
   }
 
@@ -4060,6 +4328,7 @@
     }
     metaProgress.selectedCharacter = chosenCharacter;
     if (!unlockedDifficulties.has(selectedDifficulty)) selectedDifficulty = 'easy';
+    if (selectedDifficulty === 'custom') selectedDifficulty = 'easy';
     metaProgress.selectedDifficulty = selectedDifficulty;
     selectedChallenges = normalizeChallengeSelection(selectedChallenges).filter(key => unlockedChallenges.has(key) && ownedChallenges.has(key));
     metaProgress.selectedChallenges = normalizeChallengeSelection(selectedChallenges);
@@ -4087,10 +4356,13 @@
     if (gameMode === 'endless') { startEndless(); return; }
     if (gameMode === 'practice') { startPractice(); return; }
     if (gameMode === 'boss_rush') { startBossRush(); return; }
+    const forceTutorialReplay = !resume && consumeReplayTutorialRequest();
+    const shouldRunTutorial = gameMode === 'normal' && (!metaProgress.tutorialCompleted || forceTutorialReplay);
     setGameState('play');
 
     if (resume && activeRun) {
       restoreRun(activeRun);
+      resetTutorialState(shouldRunTutorial);
     } else {
       baseSeedStr = ui.seed.value.trim() || createRandomSeed();
       selectedDifficulty = normalizeDifficulty(selectedDifficulty);
@@ -4100,11 +4372,16 @@
       floor = 1;
       gameElapsedTime = 0;
       player = createDefaultPlayer();
+      if (gameMode === 'sandbox') {
+        player.coins = Number(sandboxSettings.startingCoins || 0);
+        selectedChallenges = [];
+      }
       applyRunChallengeStartModifiers();
       lastDamageSource = '';
       lastDamageSourceKey = '';
       resetScene();
       generateFloor();
+      resetTutorialState(shouldRunTutorial);
       persistMetaSoon();
       scheduleRunSave();
     }
@@ -4135,6 +4412,7 @@
     gameElapsedTime = 0;
     endlessWave = 0;
     endlessWaveActive = false;
+    resetTutorialState(false);
     player = createDefaultPlayer();
     lastDamageSource = '';
     lastDamageSourceKey = '';
@@ -4154,6 +4432,7 @@
     syncSeedState();
     floor = 5;
     gameElapsedTime = 0;
+    resetTutorialState(false);
     player = createDefaultPlayer();
     player.hp = player.maxHp * 999;
     player.maxHp = player.maxHp * 999;
@@ -4184,6 +4463,7 @@
     gameElapsedTime = 0;
     bossRushStage = 0;
     bossRushActive = false;
+    resetTutorialState(false);
     player = createDefaultPlayer();
     lastDamageSource = '';
     lastDamageSourceKey = '';
@@ -5980,6 +6260,7 @@
 
   function scaleEnemyStats(baseStats, type) {
     const result = { ...baseStats };
+    const sandbox = getActiveSandboxSettings();
     const difficulty = getDifficultyDef();
     const gameMinutes = gameElapsedTime / 60;
     const loopNumber = Math.max(1, Math.floor((floor - 1) / 10) + 1);
@@ -5993,10 +6274,20 @@
     result.max = result.hp;
     result.dmg = Math.round(result.dmg * combinedScaleFactor);
     result.speed *= combinedScaleFactor * difficulty.speedMultiplier;
+    if (sandbox) {
+      result.hp = Math.max(1, Math.round(result.hp * sandbox.enemyStatMultiplier));
+      result.max = result.hp;
+      result.dmg = Math.max(1, Math.round(result.dmg * sandbox.enemyStatMultiplier));
+      result.speed *= sandbox.enemySpeedMultiplier;
+    }
     return result;
   }
 
   function spawnEnemy(type, x, y, elite = false) {
+    const sandbox = getActiveSandboxSettings();
+    if (sandbox && !sandbox.allowedEnemies.includes(type)) {
+      type = sandbox.allowedEnemies[0] || 'hunter';
+    }
     const eliteAllowed = !!elite && canSpawnEliteEnemies();
     const base = {
       type,
@@ -7829,8 +8120,10 @@
 
   function hitEnemy(enemy, damage, angle, knockback, color, options = {}) {
     const stats = getItemStats();
+    const sandbox = getActiveSandboxSettings();
     const critChance = clamp((stats.critChance || 0) + Number(options.critBonus || 0), 0, 0.98);
     let dealt = options.rawDamage ? Math.max(1, Math.round(damage)) : scaleDamageAgainstEnemy(enemy, damage);
+    if (sandbox) dealt = Math.max(1, Math.round(dealt * sandbox.playerDamageMultiplier));
     const isCrit = critChance > 0 && nextRandom('encounter') < critChance;
     const appliedKnockback = knockback * (stats.knockbackMultiplier || 1);
     if (isCrit) dealt = Math.round(dealt * stats.critMultiplier);
@@ -8131,6 +8424,7 @@
 
     const index = enemies.indexOf(enemy);
     if (index >= 0) enemies.splice(index, 1);
+    const isTutorialDummy = !!enemy.tutorialDummy;
     spawnEnemyCorpse(enemy);
     if (player) player.kills = Math.max(0, Number(player.kills || 0)) + 1;
     if (player?.keenEyeReady) {
@@ -8155,16 +8449,21 @@
       });
     }
 
-    dropCoins(enemy.x, enemy.y, isBossType(enemy.type) ? 40 : enemy.elite ? 10 : 5);
-    grantXp(isBossType(enemy.type) ? 40 : enemy.elite ? 12 : 6);
-    incrementChargeProgress('insurance', 9);
-    incrementChargeProgress('keen_eye', 10);
-    incrementChargeProgress('chrono_spring', 7);
-    incrementChargeProgress('escape', 10);
+    if (isTutorialDummy) {
+      pickups.push({ x: enemy.x, y: enemy.y, type: 'item', key: rollItemDrop({ stream: 'loot' }) });
+      particles.push({ x: enemy.x, y: enemy.y - 18, life: 0.85, text: 'RELIC DROPPED', c: '#8dd4ff' });
+    } else {
+      dropCoins(enemy.x, enemy.y, isBossType(enemy.type) ? 40 : enemy.elite ? 10 : 5);
+      grantXp(isBossType(enemy.type) ? 40 : enemy.elite ? 12 : 6);
+      incrementChargeProgress('insurance', 9);
+      incrementChargeProgress('keen_eye', 10);
+      incrementChargeProgress('chrono_spring', 7);
+      incrementChargeProgress('escape', 10);
+    }
 
-    if (enemy.elite && nextRandom('loot') < 0.18) {
+    if (!isTutorialDummy && enemy.elite && nextRandom('loot') < 0.18) {
       pickups.push({ x: enemy.x, y: enemy.y, type: 'item', key: rollItemDrop({ elite: true, stream: 'loot' }) });
-    } else if (nextRandom('loot') < 0.1) {
+    } else if (!isTutorialDummy && nextRandom('loot') < 0.1) {
       pickups.push({ x: enemy.x, y: enemy.y, type: 'potion' });
     }
 
@@ -8298,6 +8597,14 @@
   }
 
   function rollItemDrop(options = {}) {
+    const sandbox = getActiveSandboxSettings();
+    if (sandbox) {
+      const baseTable = options.elite ? ELITE_ITEM_DROP_TABLE : ITEM_DROP_TABLE;
+      const filteredTable = baseTable.filter(([key]) => sandbox.allowedItems.includes(key));
+      if (filteredTable.length > 0) {
+        return rollFromWeightTable(filteredTable, options.stream || 'loot');
+      }
+    }
     const table = options.elite ? ELITE_ITEM_DROP_TABLE : ITEM_DROP_TABLE;
     return rollFromWeightTable(table, options.stream || 'loot');
   }
@@ -8331,6 +8638,7 @@
     const item = itemRegistry.get(itemKey);
     if (!item) return;
     player.items[itemKey] = getItemCount(itemKey) + 1;
+    if (isFirstRunTutorialActive()) tutorialState.gotRelic = true;
     markInventoryPanelDirty();
     pushItemNotification(itemKey, 1);
 
@@ -8475,6 +8783,7 @@
     }
 
     moveCircle(player, dt);
+    updateFirstRunTutorialProgress();
 
     if (player.cowardsWayTime > 0) {
       player.cowardsWayTime = Math.max(0, player.cowardsWayTime - dt);
@@ -8491,6 +8800,7 @@
     mouse.worldY = mouse.y + camera.y;
     updateWeaponSystems(dt);
     updateRivals(dt);
+    if (gameState !== 'play') return;
 
     const meleeHeld = isMouseActionHeld('slash');
     const laserHeld = isMouseActionHeld('laser');
@@ -8590,22 +8900,28 @@
       }
     }
     perfEnd('update.enemies', sectionPerfStart);
+    if (gameState !== 'play') return;
 
     sectionPerfStart = perfStart();
     updateProjectiles(dt);
     perfEnd('update.projectiles', sectionPerfStart);
+    if (gameState !== 'play') return;
     sectionPerfStart = perfStart();
     updateWorldProps(dt);
     perfEnd('update.world', sectionPerfStart);
+    if (gameState !== 'play') return;
     sectionPerfStart = perfStart();
     updatePlayerStatuses(dt);
     perfEnd('update.statuses', sectionPerfStart);
+    if (gameState !== 'play') return;
     sectionPerfStart = perfStart();
     updateChests();
     perfEnd('update.chests', sectionPerfStart);
+    if (gameState !== 'play') return;
     sectionPerfStart = perfStart();
     updatePickups(dt);
     perfEnd('update.pickups', sectionPerfStart);
+    if (gameState !== 'play') return;
     sectionPerfStart = perfStart();
     updateGardenGrowth();
     perfEnd('update.garden', sectionPerfStart);
@@ -9993,6 +10309,8 @@
   }
 
   function damagePlayer(amount, angle, knockback, source = '', options = {}) {
+    const sandbox = getActiveSandboxSettings();
+    if (sandbox?.godMode) return;
     const ignoreInv = !!options.ignoreInv;
     const applyHitstop = !options.noInvFrames;
     const showPopup = options.showPopup !== false;
@@ -10024,6 +10342,7 @@
     const halfHpThreshold = player.maxHp * 0.5;
     const ironLungApplies = itemStats.hasIronLung && !isBossFightActive();
     let finalAmount = numericAmount * (isChallengeActive('glass_cannon') ? 1.35 : 1) * (1 - (itemStats.damageReduction || 0));
+    if (sandbox) finalAmount *= sandbox.enemyDamageMultiplier;
     if (ironLungApplies) {
       const roomCap = player.maxHp * 0.2;
       const remaining = roomCap - (player.roomDamageTaken || 0);
@@ -10587,6 +10906,7 @@
         }
         if (ladderUseKeyLatch) continue;
         ladderUseKeyLatch = true;
+        if (isFirstRunTutorialActive()) tutorialState.usedLadder = true;
         floor = Math.min(MAX_FLOOR, floor + 1);
         refreshFloorChargeStates();
         metaProgress.bestFloor = Math.max(metaProgress.bestFloor, floor);
@@ -10839,6 +11159,7 @@
   }
 
   function getObjectiveEntries(lineObjective = '') {
+    if (isFirstRunTutorialActive()) return getTutorialObjectiveEntries();
     if (!currentRoom) return [];
     const entries = [];
     if (floor < MAX_FLOOR || floor > MAX_FLOOR) {
@@ -10903,7 +11224,18 @@
   }
 
   function updateObjective() {
-    if (!currentRoom) return;
+    if (!currentRoom) {
+      uiController.setTutorialBanner('', false);
+      return;
+    }
+    if (isFirstRunTutorialActive()) {
+      const tutorialText = getTutorialStepMessage();
+      uiController.setTutorialBanner(tutorialText, true);
+      uiController.setObjective(tutorialText);
+      uiController.setObjectiveList('Tutorial', getTutorialObjectiveEntries());
+      return;
+    }
+    uiController.setTutorialBanner('', false);
     let objective = 'Find the ladder.';
     const setObjective = text => {
       uiController.setObjective(text);
@@ -11070,6 +11402,7 @@
 
   function die() {
     if (gameState === 'dying' || gameState === 'dead') return;
+    if (player) player.hp = 0;
     const entry = finalizeRun('dead', { killedBy: lastDamageSource, killerKey: lastDamageSourceKey });
     const aimAngle = player ? Math.atan2(mouse.worldY - player.y, mouse.worldX - player.x) : 0;
     playerDeathAnim = {
@@ -11124,6 +11457,7 @@
 
   function persistMetaSoon() {
     metaProgress.customDifficultySettings = { ...customDifficultySettings };
+    metaProgress.sandboxSettings = normalizeSandboxSettings(sandboxSettings);
     metaProgress.selectedCharacter = chosenCharacter;
     refreshMenuState();
     void saveStore.put('meta', metaProgress).catch(error => {
@@ -14149,6 +14483,7 @@
     let runHistoryModeFilter = 'all';
     let selectedRunHistoryId = '';
     let activeRunHistoryTab = 'stats';
+    let tutorialBannerCache = { open: null, text: null, hint: null, prevDisabled: null, nextDisabled: null };
     const runHistoryPageSize = 8;
 
     function getVisibleRunHistoryEntries() {
@@ -14274,13 +14609,14 @@
       setVisible(view.centerDisplay, inPlay, '');
       setVisible(view.objectiveTracker, inPlay, '');
       setVisible(view.dialogueOverlay, show === 'dialogue', 'flex');
+      if (show !== 'play') setVisible(view.tutorialOverlay, false, 'flex');
       setVisible(view.entityDialogueLayer, inPlay, 'block');
       if (!inPlay && view.challengeStatus) {
         view.challengeStatus.classList.add('hidden');
         view.challengeStatus.setAttribute('aria-hidden', 'true');
       }
       if (show !== 'charselect') { setChallengePanelOpen(false); setLegacyPanelOpen(false); }
-      if (show !== 'menu') { setRunHistoryOpen(false); setAltModesPanelOpen(false); }
+      if (show !== 'menu') { setRunHistoryOpen(false); setAltModesPanelOpen(false); setSandboxPanelOpen(false); }
       setVisible(view.endlessHud, inPlay && gameMode === 'endless', 'flex');
       setVisible(view.bossRushHud, inPlay && gameMode === 'boss_rush', 'flex');
       setVisible(view.practicePanel, inPlay && gameMode === 'practice' && show !== 'dying', 'block');
@@ -14318,6 +14654,11 @@
     function setAltModesPanelOpen(open) {
       view.altModesPanel?.classList.toggle('hidden', !open);
       view.altModesPanel?.setAttribute('aria-hidden', open ? 'false' : 'true');
+    }
+
+    function setSandboxPanelOpen(open) {
+      view.sandboxPanel?.classList.toggle('hidden', !open);
+      view.sandboxPanel?.setAttribute('aria-hidden', open ? 'false' : 'true');
     }
 
     function renderRunHistoryDetail() {
@@ -14485,46 +14826,152 @@
           });
         });
 
-        // Custom difficulty panel: wire sliders and number inputs
-        document.querySelectorAll('#customDiffPanel .cdiff-row').forEach(row => {
-          const param = row.dataset.param;
-          if (!param) return;
-          const slider = row.querySelector('.cdiff-slider');
-          const numInput = row.querySelector('.cdiff-num');
-          function applyValue(raw) {
-            const v = param === 'waveBonus' || param === 'eliteFloor' ? parseInt(raw, 10) : parseFloat(raw);
-            const clamped = Math.min(parseFloat(slider.max), Math.max(parseFloat(slider.min), isNaN(v) ? parseFloat(slider.value) : v));
-            const rounded = param === 'waveBonus' || param === 'eliteFloor' ? clamped : Math.round(clamped * 100) / 100;
-            slider.value = rounded;
-            numInput.value = rounded;
-            customDifficultySettings[param] = rounded;
-            persistMetaSoon();
-          }
-          const savedVal = customDifficultySettings[param];
-          if (savedVal !== undefined) { slider.value = savedVal; numInput.value = savedVal; }
-          slider.addEventListener('input', () => applyValue(slider.value));
-          numInput.addEventListener('change', () => applyValue(numInput.value));
-        });
-        const resetCustomBtn = document.getElementById('customDiffReset');
-        if (resetCustomBtn) {
-          resetCustomBtn.addEventListener('click', () => {
-            const defaults = {
-              waveBonus: 0, eliteFloor: 8, eliteChance: 0.12, miniBossChanceMultiplier: 1,
-              roomWeightBonus: 0, statMultiplier: 1, bossStatMultiplier: 1, speedMultiplier: 1,
-              enemyReactionMultiplier: 1, rangedCadenceMultiplier: 1, supportPowerMultiplier: 1, shopPriceMultiplier: 1,
-            };
-            customDifficultySettings = { ...defaults };
-            document.querySelectorAll('#customDiffPanel .cdiff-row').forEach(row => {
-              const p = row.dataset.param;
-              if (!p) return;
-              const s = row.querySelector('.cdiff-slider');
-              const n = row.querySelector('.cdiff-num');
-              if (s) s.value = defaults[p];
-              if (n) n.value = defaults[p];
-            });
-            persistMetaSoon();
+        // Sandbox Lab panel: visual "game hacking" controls moved to Alt Modes.
+        function getSandboxEnemySpriteKey(type) {
+          if (type === 'boss_spawner') return 'cult_follower';
+          return type;
+        }
+
+        function hydrateSandboxTokenIcons() {
+          view.sandboxEnemyList?.querySelectorAll('[data-sbox-enemy-icon]').forEach(el => {
+            const key = String(el.dataset.sboxEnemyIcon || 'hunter');
+            drawSpriteToCanvas(el, getSandboxEnemySpriteKey(key), 22);
+          });
+          view.sandboxItemList?.querySelectorAll('[data-sbox-item-icon]').forEach(el => {
+            const itemKey = String(el.dataset.sboxItemIcon || '');
+            const item = itemRegistry.get(itemKey) || ITEM_DEFS[itemKey];
+            if (item) drawItemToastIcon(el, item);
           });
         }
+
+        function renderSandboxTokenLists() {
+          if (view.sandboxEnemyList) {
+            view.sandboxEnemyList.innerHTML = SANDBOX_ENEMY_TYPES.map(type => {
+              const active = sandboxSettings.allowedEnemies.includes(type);
+              const label = getEnemyLabel(type);
+              return `<button class="sandbox-token${active ? ' is-active' : ''}" data-sbox-enemy="${type}" type="button">`
+                + `<canvas class="sandbox-token__icon" data-sbox-enemy-icon="${escapeHtml(type)}" width="28" height="28" aria-hidden="true"></canvas>`
+                + `<span class="sandbox-token__label">${escapeHtml(label)}</span>`
+                + `</button>`;
+            }).join('');
+          }
+          if (view.sandboxItemList) {
+            view.sandboxItemList.innerHTML = ITEM_KEYS.map(key => {
+              const active = sandboxSettings.allowedItems.includes(key);
+              const item = itemRegistry.get(key) || ITEM_DEFS[key];
+              const label = item?.name || key.replace(/_/g, ' ');
+              const rarity = String(item?.rarity || 'knight');
+              return `<button class="sandbox-token sandbox-token--item sandbox-token--${escapeHtml(rarity)}${active ? ' is-active' : ''}" data-sbox-item="${key}" type="button">`
+                + `<canvas class="sandbox-token__icon sandbox-token__icon--item" data-sbox-item-icon="${escapeHtml(key)}" width="26" height="26" aria-hidden="true"></canvas>`
+                + `<span class="sandbox-token__label">${escapeHtml(label)}</span>`
+                + `</button>`;
+            }).join('');
+          }
+          hydrateSandboxTokenIcons();
+        }
+
+        function syncSandboxPanelFields() {
+          document.querySelectorAll('#sandboxGrid .sandbox-row').forEach(row => {
+            const param = row.dataset.sboxParam;
+            if (!param) return;
+            const slider = row.querySelector('.sandbox-slider');
+            const numInput = row.querySelector('.sandbox-num');
+            const value = sandboxSettings[param];
+            if (slider && value !== undefined) slider.value = value;
+            if (numInput && value !== undefined) numInput.value = value;
+          });
+          if (view.sandboxGodMode) view.sandboxGodMode.checked = !!sandboxSettings.godMode;
+          renderSandboxTokenLists();
+        }
+
+        document.querySelectorAll('#sandboxGrid .sandbox-row').forEach(row => {
+          const param = row.dataset.sboxParam;
+          if (!param) return;
+          const slider = row.querySelector('.sandbox-slider');
+          const numInput = row.querySelector('.sandbox-num');
+          const integerParam = param === 'startingCoins';
+          function applyValue(raw) {
+            const parsed = integerParam ? parseInt(raw, 10) : parseFloat(raw);
+            const min = Number(slider?.min ?? 0);
+            const max = Number(slider?.max ?? 1);
+            const fallback = Number(slider?.value ?? 0);
+            const clamped = Math.min(max, Math.max(min, Number.isFinite(parsed) ? parsed : fallback));
+            const rounded = integerParam ? Math.round(clamped) : Math.round(clamped * 100) / 100;
+            if (slider) slider.value = String(rounded);
+            if (numInput) numInput.value = String(rounded);
+            sandboxSettings[param] = rounded;
+            persistMetaSoon();
+          }
+          slider?.addEventListener('input', () => applyValue(slider.value));
+          numInput?.addEventListener('change', () => applyValue(numInput.value));
+        });
+
+        view.sandboxGodMode?.addEventListener('change', () => {
+          sandboxSettings.godMode = !!view.sandboxGodMode?.checked;
+          persistMetaSoon();
+        });
+
+        view.sandboxEnemyList?.addEventListener('click', event => {
+          const btn = event.target instanceof Element ? event.target.closest('[data-sbox-enemy]') : null;
+          if (!btn) return;
+          const type = String(btn.dataset.sboxEnemy || '');
+          if (!SANDBOX_ENEMY_TYPES.includes(type)) return;
+          if (sandboxSettings.allowedEnemies.includes(type)) {
+            sandboxSettings.allowedEnemies = sandboxSettings.allowedEnemies.filter(key => key !== type);
+          } else {
+            sandboxSettings.allowedEnemies = [...sandboxSettings.allowedEnemies, type];
+          }
+          sandboxSettings = normalizeSandboxSettings(sandboxSettings);
+          syncSandboxPanelFields();
+          persistMetaSoon();
+        });
+
+        view.sandboxItemList?.addEventListener('click', event => {
+          const btn = event.target instanceof Element ? event.target.closest('[data-sbox-item]') : null;
+          if (!btn) return;
+          const key = String(btn.dataset.sboxItem || '');
+          if (!ITEM_KEYS.includes(key)) return;
+          if (sandboxSettings.allowedItems.includes(key)) {
+            sandboxSettings.allowedItems = sandboxSettings.allowedItems.filter(itemKey => itemKey !== key);
+          } else {
+            sandboxSettings.allowedItems = [...sandboxSettings.allowedItems, key];
+          }
+          sandboxSettings = normalizeSandboxSettings(sandboxSettings);
+          syncSandboxPanelFields();
+          persistMetaSoon();
+        });
+
+        view.sandboxEnemiesAll?.addEventListener('click', () => {
+          sandboxSettings.allowedEnemies = SANDBOX_ENEMY_TYPES.slice();
+          syncSandboxPanelFields();
+          persistMetaSoon();
+        });
+        view.sandboxEnemiesNone?.addEventListener('click', () => {
+          sandboxSettings.allowedEnemies = [];
+          sandboxSettings = normalizeSandboxSettings(sandboxSettings);
+          syncSandboxPanelFields();
+          persistMetaSoon();
+        });
+        view.sandboxItemsAll?.addEventListener('click', () => {
+          sandboxSettings.allowedItems = ITEM_KEYS.slice();
+          syncSandboxPanelFields();
+          persistMetaSoon();
+        });
+        view.sandboxItemsNone?.addEventListener('click', () => {
+          sandboxSettings.allowedItems = [];
+          sandboxSettings = normalizeSandboxSettings(sandboxSettings);
+          syncSandboxPanelFields();
+          persistMetaSoon();
+        });
+        view.sandboxReset?.addEventListener('click', () => {
+          sandboxSettings = normalizeSandboxSettings(SANDBOX_DEFAULT_SETTINGS);
+          syncSandboxPanelFields();
+          persistMetaSoon();
+        });
+        view.sandboxSaveClose?.addEventListener('click', handlers.onCloseSandboxConfig);
+        view.sandboxClose?.addEventListener('click', handlers.onCloseSandboxConfig);
+        view.sandboxPanelBackdrop?.addEventListener('click', handlers.onCloseSandboxConfig);
+        syncSandboxPanelFields();
 
         view.challengeButtons.forEach(button => {
           button.addEventListener('click', () => {
@@ -14580,6 +15027,9 @@
         view.continueBtn?.addEventListener('click', handlers.onContinue);
         view.deleteRunBtn?.addEventListener('click', handlers.onDeleteRun);
         view.dialogueOverlay?.addEventListener('click', handlers.onAdvanceDialogue);
+        view.tutorialPrevBtn?.addEventListener('click', handlers.onTutorialPrev);
+        view.tutorialNextBtn?.addEventListener('click', handlers.onTutorialNext);
+        view.tutorialSkipBtn?.addEventListener('click', handlers.onSkipTutorial);
         // New main-menu nav
         view.newRunBtn?.addEventListener('click', handlers.onOpenCharacterSelect);
         view.charBackBtn?.addEventListener('click', handlers.onCloseCharacterSelect);
@@ -14597,6 +15047,11 @@
         view.altModeBossRushBtn?.addEventListener('click', () => {
           setAltModesPanelOpen(false);
           handlers.onOpenAltModeCharSelect('boss_rush');
+        });
+        view.altModeSandboxConfigBtn?.addEventListener('click', handlers.onOpenSandboxConfig);
+        view.altModeSandboxBtn?.addEventListener('click', () => {
+          setAltModesPanelOpen(false);
+          handlers.onStartSandbox();
         });
         // Practice panel toggle
         view.practicePanelToggle?.addEventListener('click', () => {
@@ -14640,6 +15095,7 @@
       setChallengePanelOpen,
       setLegacyPanelOpen,
       setRunHistoryOpen,
+      setSandboxPanelOpen,
       setMenuMeta(coins, bestFloor, loopCrystals, saveState) {
         view.bankCoins.textContent = coins;
         view.bestFloor.textContent = bestFloor;
@@ -14735,12 +15191,8 @@
           button.disabled = !isUnlocked;
           button.title = isUnlocked ? def.description : `Unlock at ${def.unlockLoops} loop crystals`;
         });
-        const customPanel = document.getElementById('customDiffPanel');
-        if (customPanel) customPanel.classList.toggle('hidden', selected !== 'custom');
         if (view.difficultyHint) {
-          view.difficultyHint.textContent = selected === 'custom'
-            ? 'Custom: set your own multipliers below.'
-            : selectedDef.unlockLoops > 0 && !unlocked.has(selected)
+          view.difficultyHint.textContent = selectedDef.unlockLoops > 0 && !unlocked.has(selected)
               ? `Unlocks at ${selectedDef.unlockLoops} loop crystals. Current crystals: ${loopCrystals}`
               : `${selectedDef.description} Loop Crystals: ${loopCrystals}.`;
         }
@@ -14814,6 +15266,40 @@
         });
       },
       setObjective(text) { view.objective.textContent = text; },
+      setTutorialBanner(text, visible) {
+        const open = !!visible && !!text && gameState === 'play';
+        if (view.tutorialOverlay && tutorialBannerCache.open !== open) {
+          view.tutorialOverlay.classList.toggle('hidden', !open);
+          view.tutorialOverlay.setAttribute('aria-hidden', open ? 'false' : 'true');
+          view.tutorialOverlay.style.display = open ? 'flex' : 'none';
+          tutorialBannerCache.open = open;
+        }
+        if (view.tutorialSpeaker && open && view.tutorialSpeaker.textContent !== 'TUTORIAL') {
+          view.tutorialSpeaker.textContent = 'TUTORIAL';
+        }
+        const nextText = open ? String(text || '') : '';
+        if (view.tutorialText && tutorialBannerCache.text !== nextText) {
+          view.tutorialText.textContent = nextText;
+          tutorialBannerCache.text = nextText;
+        }
+        const nextHint = open ? 'Use Previous/Next. Press K or click Skip Tutorial' : '';
+        if (view.tutorialHint && tutorialBannerCache.hint !== nextHint) {
+          view.tutorialHint.textContent = nextHint;
+          tutorialBannerCache.hint = nextHint;
+        }
+        const stepOrder = getTutorialStepOrder();
+        const stepIndex = stepOrder.indexOf(tutorialState?.step || 'move');
+        const prevDisabled = !open || stepIndex <= 0;
+        const nextDisabled = !open || stepIndex < 0 || stepIndex >= (stepOrder.length - 1);
+        if (view.tutorialPrevBtn && tutorialBannerCache.prevDisabled !== prevDisabled) {
+          view.tutorialPrevBtn.disabled = prevDisabled;
+          tutorialBannerCache.prevDisabled = prevDisabled;
+        }
+        if (view.tutorialNextBtn && tutorialBannerCache.nextDisabled !== nextDisabled) {
+          view.tutorialNextBtn.disabled = nextDisabled;
+          tutorialBannerCache.nextDisabled = nextDisabled;
+        }
+      },
       setObjectiveList(roomLabel, entries = []) {
         if (!view.objectiveTracker || !view.objectiveList) return;
         const visible = gameState === 'play' && entries.length > 0;

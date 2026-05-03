@@ -153,6 +153,20 @@
       <div id="dialogueHint" class="dialogue-hint">ENTER TO CONTINUE</div>
     </div>
   </div>
+  <div id="tutorialOverlay" class="tutorial-overlay hidden" aria-hidden="true">
+    <div class="tutorial-box">
+      <div id="tutorialSpeaker" class="tutorial-speaker">TUTORIAL</div>
+      <div id="tutorialText" class="tutorial-text"></div>
+      <div class="tutorial-actions">
+        <div class="tutorial-nav">
+          <button id="tutorialPrevBtn" class="tutorial-nav-btn" type="button">Previous</button>
+          <button id="tutorialNextBtn" class="tutorial-nav-btn" type="button">Next</button>
+        </div>
+        <span id="tutorialHint" class="tutorial-hint">Press K to skip tutorial</span>
+        <button id="tutorialSkipBtn" class="tutorial-skip-btn" type="button">Skip Tutorial</button>
+      </div>
+    </div>
+  </div>
   <div id="entityDialogueLayer" class="entity-dialogue-layer hidden" aria-hidden="true"></div>
 
   <!-- Player Stats Bottom Right -->
@@ -445,6 +459,7 @@
           <button class="rh-mode-tab" data-mode="endless" type="button">Endless</button>
           <button class="rh-mode-tab" data-mode="practice" type="button">Practice</button>
           <button class="rh-mode-tab" data-mode="boss_rush" type="button">Boss Rush</button>
+          <button class="rh-mode-tab" data-mode="sandbox" type="button">Sandbox</button>
         </div>
         <div id="runHistoryList" class="rh-list"></div>
         <div class="rh-pagination">
@@ -495,6 +510,86 @@
           <p class="altmode-card__desc">Face all four bosses back to back. Collect loot between each fight. Defeat God to win.</p>
         </div>
         <button id="altModeBossRushBtn" class="nav-btn altmode-card__btn">PLAY</button>
+      </div>
+      <div class="altmode-card" id="altModeSandboxCard">
+        <div class="altmode-card__icon">&#9881;</div>
+        <div class="altmode-card__text">
+          <h3 class="altmode-card__name">SANDBOX LAB</h3>
+          <p class="altmode-card__desc">A visual game-hacking mode. Tune enemies, items, multipliers, and run wild in a full dungeon run.</p>
+        </div>
+        <div class="altmode-card__actions">
+          <button id="altModeSandboxConfigBtn" class="nav-btn nav-btn--minor altmode-card__btn" type="button">CONFIGURE</button>
+          <button id="altModeSandboxBtn" class="nav-btn altmode-card__btn" type="button">PLAY</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="sandboxPanel" class="sandbox-panel hidden" aria-hidden="true">
+    <div class="sandbox-panel__backdrop" id="sandboxPanelBackdrop"></div>
+    <div class="sandbox-panel__dialog">
+      <div class="sandbox-panel__head">
+        <div>
+          <span class="sandbox-panel__kicker">ALT MODE CONFIG</span>
+          <h3 class="sandbox-panel__title">SANDBOX LAB</h3>
+        </div>
+        <button id="sandboxClose" class="panel-close" aria-label="Close sandbox config">X</button>
+      </div>
+      <p class="sandbox-panel__desc">Adjust global multipliers, choose allowed enemies and items, then launch from Alternate Modes.</p>
+      <div class="sandbox-grid" id="sandboxGrid">
+        <div class="sandbox-card">
+          <h4>Core Multipliers</h4>
+          <div class="sandbox-rows">
+            <div class="sandbox-row" data-sbox-param="enemyStatMultiplier">
+              <span>Enemy Stats</span>
+              <input type="range" class="sandbox-slider" min="0.2" max="4" step="0.05" value="1">
+              <input type="number" class="sandbox-num" min="0.2" max="4" step="0.05" value="1">
+            </div>
+            <div class="sandbox-row" data-sbox-param="enemySpeedMultiplier">
+              <span>Enemy Speed</span>
+              <input type="range" class="sandbox-slider" min="0.2" max="3" step="0.05" value="1">
+              <input type="number" class="sandbox-num" min="0.2" max="3" step="0.05" value="1">
+            </div>
+            <div class="sandbox-row" data-sbox-param="enemyDamageMultiplier">
+              <span>Enemy Damage</span>
+              <input type="range" class="sandbox-slider" min="0.1" max="3" step="0.05" value="1">
+              <input type="number" class="sandbox-num" min="0.1" max="3" step="0.05" value="1">
+            </div>
+            <div class="sandbox-row" data-sbox-param="playerDamageMultiplier">
+              <span>Player Damage</span>
+              <input type="range" class="sandbox-slider" min="0.1" max="6" step="0.05" value="1">
+              <input type="number" class="sandbox-num" min="0.1" max="6" step="0.05" value="1">
+            </div>
+            <div class="sandbox-row" data-sbox-param="startingCoins">
+              <span>Starting Coins</span>
+              <input type="range" class="sandbox-slider" min="0" max="999" step="1" value="0">
+              <input type="number" class="sandbox-num" min="0" max="999" step="1" value="0">
+            </div>
+          </div>
+        </div>
+        <div class="sandbox-card">
+          <h4>Enemy Types</h4>
+          <div class="sandbox-toolbar">
+            <button id="sandboxEnemiesAll" class="sandbox-mini-btn" type="button">All</button>
+            <button id="sandboxEnemiesNone" class="sandbox-mini-btn" type="button">None</button>
+          </div>
+          <div id="sandboxEnemyList" class="sandbox-token-grid"></div>
+        </div>
+        <div class="sandbox-card">
+          <h4>Items</h4>
+          <div class="sandbox-toolbar">
+            <button id="sandboxItemsAll" class="sandbox-mini-btn" type="button">All</button>
+            <button id="sandboxItemsNone" class="sandbox-mini-btn" type="button">None</button>
+          </div>
+          <div id="sandboxItemList" class="sandbox-token-grid sandbox-token-grid--items"></div>
+        </div>
+      </div>
+      <div class="sandbox-flags">
+        <label><input id="sandboxGodMode" type="checkbox"> God mode (ignore incoming damage)</label>
+      </div>
+      <div class="sandbox-panel__actions">
+        <button id="sandboxReset" class="sandbox-mini-btn" type="button">Reset Defaults</button>
+        <button id="sandboxSaveClose" class="nav-btn nav-btn--minor" type="button">Save & Close</button>
       </div>
     </div>
   </section>
@@ -596,77 +691,8 @@
               <button class="difficulty-btn" data-difficulty="hard" type="button">Hard</button>
               <button class="difficulty-btn" data-difficulty="impossible" type="button">Impossible</button>
               <button class="difficulty-btn" data-difficulty="god" type="button">God</button>
-              <button class="difficulty-btn difficulty-btn--custom" data-difficulty="custom" type="button">Custom</button>
             </div>
             <small id="difficultyHint" class="difficulty-hint">Easy uses the current balance.</small>
-          </div>
-          <div id="customDiffPanel" class="custom-diff-panel hidden">
-            <div class="cdiff-header">
-              <span class="cdiff-title">CUSTOM SETTINGS</span>
-              <button id="customDiffReset" class="cdiff-reset" type="button">Reset</button>
-            </div>
-            <div class="cdiff-grid">
-              <div class="cdiff-row" data-param="statMultiplier">
-                <span class="cdiff-label">Enemy Stats</span>
-                <input type="range" class="cdiff-slider" min="0.5" max="3" step="0.01" value="1">
-                <input type="number" class="cdiff-num" min="0.5" max="3" step="0.01" value="1">
-              </div>
-              <div class="cdiff-row" data-param="bossStatMultiplier">
-                <span class="cdiff-label">Boss Stats</span>
-                <input type="range" class="cdiff-slider" min="0.5" max="3" step="0.01" value="1">
-                <input type="number" class="cdiff-num" min="0.5" max="3" step="0.01" value="1">
-              </div>
-              <div class="cdiff-row" data-param="speedMultiplier">
-                <span class="cdiff-label">Enemy Speed</span>
-                <input type="range" class="cdiff-slider" min="0.5" max="2" step="0.01" value="1">
-                <input type="number" class="cdiff-num" min="0.5" max="2" step="0.01" value="1">
-              </div>
-              <div class="cdiff-row" data-param="enemyReactionMultiplier">
-                <span class="cdiff-label">Reaction Time</span>
-                <input type="range" class="cdiff-slider" min="0.5" max="2.5" step="0.01" value="1">
-                <input type="number" class="cdiff-num" min="0.5" max="2.5" step="0.01" value="1">
-              </div>
-              <div class="cdiff-row" data-param="rangedCadenceMultiplier">
-                <span class="cdiff-label">Ranged Cadence</span>
-                <input type="range" class="cdiff-slider" min="0.3" max="1.5" step="0.01" value="1">
-                <input type="number" class="cdiff-num" min="0.3" max="1.5" step="0.01" value="1">
-              </div>
-              <div class="cdiff-row" data-param="eliteChance">
-                <span class="cdiff-label">Elite Chance</span>
-                <input type="range" class="cdiff-slider" min="0" max="0.6" step="0.01" value="0.12">
-                <input type="number" class="cdiff-num" min="0" max="0.6" step="0.01" value="0.12">
-              </div>
-              <div class="cdiff-row" data-param="eliteFloor">
-                <span class="cdiff-label">Elite Start Floor</span>
-                <input type="range" class="cdiff-slider" min="1" max="10" step="1" value="8">
-                <input type="number" class="cdiff-num" min="1" max="10" step="1" value="8">
-              </div>
-              <div class="cdiff-row" data-param="miniBossChanceMultiplier">
-                <span class="cdiff-label">Miniboss Chance</span>
-                <input type="range" class="cdiff-slider" min="0" max="3" step="0.01" value="1">
-                <input type="number" class="cdiff-num" min="0" max="3" step="0.01" value="1">
-              </div>
-              <div class="cdiff-row" data-param="waveBonus">
-                <span class="cdiff-label">Wave Bonus</span>
-                <input type="range" class="cdiff-slider" min="0" max="6" step="1" value="0">
-                <input type="number" class="cdiff-num" min="0" max="6" step="1" value="0">
-              </div>
-              <div class="cdiff-row" data-param="roomWeightBonus">
-                <span class="cdiff-label">Room Weight</span>
-                <input type="range" class="cdiff-slider" min="0" max="0.4" step="0.01" value="0">
-                <input type="number" class="cdiff-num" min="0" max="0.4" step="0.01" value="0">
-              </div>
-              <div class="cdiff-row" data-param="supportPowerMultiplier">
-                <span class="cdiff-label">Support Power</span>
-                <input type="range" class="cdiff-slider" min="0.5" max="2.5" step="0.01" value="1">
-                <input type="number" class="cdiff-num" min="0.5" max="2.5" step="0.01" value="1">
-              </div>
-              <div class="cdiff-row" data-param="shopPriceMultiplier">
-                <span class="cdiff-label">Shop Prices</span>
-                <input type="range" class="cdiff-slider" min="0.5" max="3" step="0.01" value="1">
-                <input type="number" class="cdiff-num" min="0.5" max="3" step="0.01" value="1">
-              </div>
-            </div>
           </div>
           <div class="seedrow seedrow--panel">
             <label>SEED</label>
@@ -825,6 +851,10 @@
       <div class="access-row">
         <span class="access-label">Screen shake</span>
         <label class="toggle"><input type="checkbox" id="accScreenShake" checked><span class="toggle-track"><span class="toggle-thumb"></span></span></label>
+      </div>
+      <div class="access-row">
+        <span class="access-label">Replay tutorial on next run</span>
+        <label class="toggle"><input type="checkbox" id="accReplayTutorial"><span class="toggle-track"><span class="toggle-thumb"></span></span></label>
       </div>
     </div>
   </div>

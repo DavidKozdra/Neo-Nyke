@@ -1,5 +1,6 @@
 (function Settings() {
   const STORE_KEY = 'neonyke:settings';
+  const REPLAY_TUTORIAL_KEY = 'neonyke:replayTutorialNextRun';
 
   const DEFAULT_BINDINGS = { up:'w', down:'s', left:'a', right:'d', dash:'shift', inventory:'i', smash:'r', slash:'lmb', laser:'rmb' };
   const DEFAULT_VOLUME   = { master:80, sfx:80, music:60 };
@@ -368,6 +369,15 @@
     el.checked = access[key];
     el.addEventListener('change', () => { access[key] = el.checked; save(); applyAccess(); });
   });
+
+  const replayTutorialEl = document.getElementById('accReplayTutorial');
+  if (replayTutorialEl) {
+    replayTutorialEl.checked = localStorage.getItem(REPLAY_TUTORIAL_KEY) === '1';
+    replayTutorialEl.addEventListener('change', () => {
+      if (replayTutorialEl.checked) localStorage.setItem(REPLAY_TUTORIAL_KEY, '1');
+      else localStorage.removeItem(REPLAY_TUTORIAL_KEY);
+    });
+  }
 
   // ── Theme save / delete ───────────────────────────────────────────────────────
   document.getElementById('themeSaveBtn').addEventListener('click', () => {
