@@ -296,9 +296,9 @@ canvas {
 .meta-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 14px;
-  margin-bottom: 18px;
-  font-size: 12px;
+  gap: 10px;
+  margin-bottom: 10px;
+  font-size: 10px;
   color: #70b8d8;
 }
 
@@ -5371,31 +5371,32 @@ button.alt.danger {
     padding: 1px 3px;
   }
 
+  /* ── Action bar — center bottom, compact ─────────────────────── */
   #actionBar {
     bottom: 180px;
-    width: calc(55% - 8px);
-    left: 4px;
+    left: 50%;
     right: auto;
-    gap: 4px;
-    justify-content: flex-start;
+    transform: translateX(-50%);
+    width: auto;
+    gap: 5px;
+    justify-content: center;
   }
 
   .skill-card {
-    max-width: 72px;
-    min-height: 40px;
-    padding: 4px 5px 3px;
-    grid-template-columns: 20px 1fr;
-    column-gap: 4px;
+    width: 56px;
+    min-width: 0;
+    flex: none;
+    min-height: 44px;
+    padding: 4px 4px 3px;
+    grid-template-columns: 18px 1fr;
+    column-gap: 3px;
+    border-radius: 6px;
   }
 
-  .skill-icon {
-    width: 20px;
-    height: 20px;
-  }
-
-  .skill-name { font-size: 7px; }
-  .skill-bind  { font-size: 6px; }
-  .skill-time  { font-size: 6px; }
+  .skill-icon { width: 18px; height: 18px; }
+  .skill-name { font-size: 6px; }
+  .skill-bind { font-size: 5px; }
+  .skill-time { font-size: 6px; }
 
 }
 @media (max-width: 600px) {
@@ -5414,6 +5415,7 @@ button.alt.danger {
     border-radius: 12px;
     margin: 20px auto 0;
     box-sizing: border-box;
+    max-height: 20dvw;
   }
 
   /* ── 2b. Meta row (bank / crystals / floor) ─────────────────── */
@@ -5694,45 +5696,8 @@ button.alt.danger {
     gap: 5px;
   }
 
-  /* ── 12. Action bar (skill cards) ────────────────────────────── */
-
-  #actionBar {
-    bottom: 180px; /* sit above touch controls */
-    gap: 4px;
-    width: calc(55% - 8px); /* left half only — right half is button cluster */
-    left: 4px;
-    right: auto;
-    justify-content: flex-start;
-  }
-
-  .skill-card {
-    width: auto;
-    min-width: 0;
-    flex: 1 1 0;
-    max-width: 72px;
-    min-height: 40px;
-    padding: 4px 5px 3px;
-    grid-template-columns: 20px 1fr;
-    column-gap: 4px;
-    border-radius: 6px;
-  }
-
-  .skill-icon {
-    width: 20px;
-    height: 20px;
-  }
-
-  .skill-name {
-    font-size: 7px;
-  }
-
-  .skill-bind {
-    font-size: 6px;
-  }
-
-  .skill-time {
-    font-size: 6px;
-  }
+  /* action bar: center bottom above touch controls */
+  #actionBar { bottom: 180px; }
 
   /* ── 13. Player stats panel — compact top-left on mobile ────── */
 
@@ -5894,13 +5859,8 @@ button.alt.danger {
   }
 
   /* Action bar above touch controls in landscape */
-  #actionBar {
-    bottom: 90px;
-    width: calc(55% - 8px);
-    left: 4px;
-    right: auto;
-    justify-content: flex-start;
-  }
+  /* action bar: center bottom, less space needed in landscape */
+  #actionBar { bottom: 90px; }
 
   /* compact stats top-left below coin display */
   #playerStats {

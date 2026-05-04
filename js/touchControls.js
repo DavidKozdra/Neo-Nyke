@@ -135,6 +135,43 @@
     el.addEventListener('touchcancel', release, { passive: false });
   }
 
+  // ── Hamburger menu ─────────────────────────────────────────────────────────
+
+  const hamburger = mkEl('button', 'touch-hamburger');
+  hamburger.setAttribute('type', 'button');
+  hamburger.setAttribute('aria-label', 'Menu');
+  hamburger.innerHTML = '<span></span><span></span><span></span>';
+  overlay.appendChild(hamburger);
+
+  const hamMenu = mkEl('div', 'touch-ham-menu');
+
+  function mkHamBtn(label, fn) {
+    const b = mkEl('button', 'touch-ham-btn');
+    b.setAttribute('type', 'button');
+    b.textContent = label;
+    b.addEventListener('touchstart', e => { e.preventDefault(); closeHamMenu(); fn(); }, { passive: false });
+    return b;
+  }
+
+  hamMenu.appendChild(mkHamBtn('⏸ PAUSE',     () => { if (window._neoGame?.pauseGame)         window._neoGame.pauseGame();         }));
+  hamMenu.appendChild(mkHamBtn('🎒 INVENTORY', () => { if (window._neoGame?.toggleInventoryPanel) window._neoGame.toggleInventoryPanel(); }));
+  overlay.appendChild(hamMenu);
+
+  let hamOpen = false;
+  function closeHamMenu() { hamOpen = false; hamMenu.classList.remove('open'); }
+
+  hamburger.addEventListener('touchstart', e => {
+    e.preventDefault();
+    hamOpen = !hamOpen;
+    hamMenu.classList.toggle('open', hamOpen);
+    setNTActive();
+  }, { passive: false });
+
+  // close on tap outside
+  overlay.addEventListener('touchstart', e => {
+    if (hamOpen && !hamMenu.contains(e.target) && e.target !== hamburger) closeHamMenu();
+  }, { passive: true });
+
   // ── Visibility ─────────────────────────────────────────────────────────────
 
   function setNTActive() {
