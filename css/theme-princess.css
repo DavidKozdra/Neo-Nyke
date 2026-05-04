@@ -1,0 +1,98 @@
+/* NEO NYKE — Princess UI theme overrides
+   Applied when <html class="princess-ui"> is set. */
+
+html.princess-ui body {
+  background: #160711;
+  color: #ffe3f2;
+}
+
+html.princess-ui #wrap {
+  box-shadow: 0 0 0 1px rgba(255, 154, 207, .24), 0 0 60px rgba(164, 62, 118, .28), inset 0 0 60px #000;
+}
+
+html.princess-ui canvas {
+  background: #09030a;
+}
+
+html.princess-ui #hud {
+  background: linear-gradient(180deg, rgba(48, 10, 28, .96), rgba(20, 5, 14, .72));
+  border-bottom-color: rgba(255, 154, 207, .42);
+}
+
+html.princess-ui .coin-display,
+html.princess-ui .timer-floor,
+html.princess-ui .item-toast,
+html.princess-ui .skill-card,
+html.princess-ui .menu-content,
+html.princess-ui .char-card,
+html.princess-ui .theme-card {
+  border-color: rgba(255, 154, 207, .4);
+}
+
+html.princess-ui .coin-display,
+html.princess-ui .timer-floor {
+  background: linear-gradient(180deg, rgba(56, 16, 36, .96), rgba(25, 8, 18, .98));
+  border-top-color: rgba(255, 190, 225, .7);
+  color: #ffd6ea;
+}
+
+html.princess-ui .skill-card {
+  background: linear-gradient(180deg, rgba(54, 18, 40, .96), rgba(24, 8, 18, .98));
+  box-shadow: 0 6px 18px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.07);
+}
+
+html.princess-ui .skill-card.ready {
+  border-color: rgba(255, 183, 224, .8);
+  border-top-color: rgba(255, 210, 236, .95);
+  box-shadow: 0 6px 18px rgba(0,0,0,.45), 0 0 16px rgba(255, 154, 207, .26), inset 0 1px 0 rgba(255,255,255,.1);
+}
+
+html.princess-ui .skill-fill {
+  background: linear-gradient(180deg, rgba(255, 156, 207, 0), rgba(255, 156, 207, .6));
+}
+
+html.princess-ui .skill-key,
+html.princess-ui .skill-time,
+html.princess-ui .skill-name {
+  color: #ffe1f0;
+}
+
+html.princess-ui .skill-icon {
+  border-color: rgba(255, 220, 238, .22);
+  background: linear-gradient(180deg, rgba(32, 7, 17, .42), rgba(255,255,255,.03));
+}
+
+html.princess-ui .menu-content {
+  background: linear-gradient(180deg, rgba(52, 12, 34, .98), rgba(22, 6, 16, .99));
+  border-top-color: rgba(255, 190, 225, .7);
+  box-shadow: 0 8px 60px rgba(0,0,0,.7), inset 0 1px 0 rgba(255,255,255,.06), 0 0 32px rgba(255, 154, 207, .16);
+}
+
+html.princess-ui .menu-letter {
+  color: #ffd8ea;
+  text-shadow:
+    0 0 8px rgba(255, 154, 207, .44),
+    0 0 24px rgba(196, 102, 154, .34),
+    0 3px 0 rgba(0,0,0,.9);
+}
+
+html.princess-ui .menu-letter.landed {
+  animation: letterLand 0.32s cubic-bezier(.16,1.4,.6,1) forwards, princessLetterGlow 2.8s 0.4s ease-in-out infinite;
+}
+
+@keyframes princessLetterGlow {
+  0%,100% { text-shadow: 0 0 8px rgba(255, 154, 207, .44), 0 0 24px rgba(196, 102, 154, .34), 0 3px 0 rgba(0,0,0,.9); }
+  50%      { text-shadow: 0 0 14px rgba(255, 210, 236, .66), 0 0 42px rgba(214, 112, 167, .46), 0 3px 0 rgba(0,0,0,.9); }
+}
+
+html.princess-ui .char-card[data-rarity="princess"],
+html.princess-ui .char-card[data-rarity="princess"].sel {
+  box-shadow: 0 0 28px rgba(255, 154, 207, .36), 0 6px 20px rgba(0,0,0,.4);
+}
+
+html.princess-ui .char-card[data-rarity="princess"],
+html.princess-ui .theme-card--active,
+html.princess-ui .settings-reset,
+html.princess-ui .theme-action-btn {
+  border-color: rgba(255, 154, 207, .42);
+}
