@@ -461,6 +461,7 @@
         <div class="rh-view-tabs" role="tablist">
           <button class="rh-view-tab active" data-view="runs" type="button">Runs</button>
           <button class="rh-view-tab" data-view="achievements" type="button">Achievements</button>
+          <button class="rh-view-tab" data-view="profile" type="button">Profile</button>
         </div>
       </div>
       <button id="runHistoryClose" class="panel-close" aria-label="Close run history">X</button>
@@ -494,6 +495,12 @@
       </div>
     </div>
     <div id="achievementsList" class="ach-grid hidden"></div>
+    <div id="rhProfilePanel" class="rh-profile hidden">
+      <div class="rh-profile-row"><span class="rh-profile-label">Bank</span><b id="rhBankCoins">0</b></div>
+      <div class="rh-profile-row"><span class="rh-profile-label">Loop Crystals</span><b id="rhLoopCount">0</b></div>
+      <div class="rh-profile-row"><span class="rh-profile-label">Best Floor</span><b id="rhBestFloor">1</b></div>
+      <div class="rh-profile-row"><span class="rh-profile-label">Save</span><b id="rhSaveState">—</b></div>
+    </div>
   </section>
 
   <!-- Alt Modes panel (slides in over main menu) -->

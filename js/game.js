@@ -1169,6 +1169,11 @@
     runHistoryPanelTitle: document.getElementById('runHistoryPanelTitle'),
     runHistoryViewTabs: [...document.querySelectorAll('#runHistoryPanel .rh-view-tab')],
     achievementsList: document.getElementById('achievementsList'),
+    rhProfilePanel: document.getElementById('rhProfilePanel'),
+    rhBankCoins: document.getElementById('rhBankCoins'),
+    rhLoopCount: document.getElementById('rhLoopCount'),
+    rhBestFloor: document.getElementById('rhBestFloor'),
+    rhSaveState: document.getElementById('rhSaveState'),
     runHistoryList: document.getElementById('runHistoryList'),
     runHistoryEmpty: document.getElementById('runHistoryEmpty'),
     runHistoryBody: document.querySelector('#runHistoryPanel .rh-body'),
@@ -2292,7 +2297,10 @@
         void startGame(false);
       },
     });
-    uiController.bindRestartActions(() => { gameMode = 'normal'; location.reload(); });
+    uiController.bindRestartActions(() => {
+      if (ui.seed) ui.seed.value = baseSeedStr;
+      void startGame(false);
+    });
 
     ui.pauseResume.addEventListener('click', resumeGame);
     ui.pauseSettings.addEventListener('click', () => {
@@ -14803,12 +14811,21 @@
     function setRunHistoryView(view_) {
       runHistoryView = view_;
       const showAch = view_ === 'achievements';
-      view.runHistoryBody?.classList.toggle('hidden', showAch);
+      const showProfile = view_ === 'profile';
+      view.runHistoryBody?.classList.toggle('hidden', showAch || showProfile);
       view.runHistoryEmpty?.classList.toggle('hidden', true);
       view.achievementsList?.classList.toggle('hidden', !showAch);
-      if (view.runHistoryPanelTitle) view.runHistoryPanelTitle.textContent = showAch ? 'ACHIEVEMENTS' : 'RUN HISTORY';
+      view.rhProfilePanel?.classList.toggle('hidden', !showProfile);
+      const titles = { achievements: 'ACHIEVEMENTS', profile: 'PROFILE', runs: 'RUN HISTORY' };
+      if (view.runHistoryPanelTitle) view.runHistoryPanelTitle.textContent = titles[view_] ?? 'RUN HISTORY';
       view.runHistoryViewTabs?.forEach(t => t.classList.toggle('active', t.dataset.view === view_));
       if (showAch) populateAchievementsPanel();
+      else if (showProfile) {
+        if (view.rhBankCoins)  view.rhBankCoins.textContent  = metaProgress.coins ?? 0;
+        if (view.rhLoopCount)  view.rhLoopCount.textContent  = metaProgress.loopCrystals ?? 0;
+        if (view.rhBestFloor)  view.rhBestFloor.textContent  = metaProgress.bestFloor ?? 1;
+        if (view.rhSaveState)  view.rhSaveState.textContent  = view.saveState?.textContent ?? '—';
+      }
       else { view.runHistoryEmpty?.classList.toggle('hidden', runHistory.length > 0); renderRunHistoryPage(); }
     }
 

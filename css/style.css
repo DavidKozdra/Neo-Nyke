@@ -5091,6 +5091,41 @@ button.alt.danger {
 }
 
 /* Achievements panel grid */
+.rh-profile {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px 24px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.rh-profile-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-radius: 10px;
+  border: 1px solid rgba(128, 146, 170, .18);
+  background: rgba(24, 30, 44, .7);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.rh-profile-label {
+  color: #8ca0bb;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.rh-profile-row b {
+  color: #f4f7fb;
+  font-size: 16px;
+}
+
 .ach-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));

@@ -7,6 +7,9 @@
 /* ── Pixel / wide tablet landscape ───────────────────────────────────────── */
 @media (max-width: 920px) {
 
+  .meta-row { display: none; }
+  .adapter-status { display: none !important; }
+
   .charselect-layout {
     width: calc(100vw - 24px);
     padding: 0;
@@ -94,32 +97,24 @@
   /* ── 2. Main menu card ───────────────────────────────────────── */
 
   .menu-content {
-    position: relative;
+    position: fixed;
     top: auto;
-    left: auto;
-    transform: none;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
     width: calc(100vw - 24px);
     min-width: 0;
     max-width: 100%;
-    padding: 22px 16px 26px;
+    padding: 16px 16px 20px;
     border-radius: 12px;
-    margin: 20px auto 0;
     box-sizing: border-box;
-    max-height: 20dvw;
+    max-height: 55dvh;
+    overflow-y: auto;
   }
 
-  /* ── 2b. Meta row (bank / crystals / floor) ─────────────────── */
+  /* ── 2b. Meta row hidden on mobile — shown in Run History > Profile tab ── */
 
-  .meta-row {
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 8px;
-    margin-bottom: 12px;
-    font-size: 10px;
-  }
-
-  .meta-pill { padding: 5px 9px; font-size: 10px; gap: 5px; }
-  .meta-icon { width: 16px; height: 16px; }
+  .meta-row { display: none; }
 
   /* ── 3. Title letters ────────────────────────────────────────── */
 
@@ -128,12 +123,12 @@
 
   /* ── 4. Nav buttons ──────────────────────────────────────────── */
 
-  .main-nav { width: 100%; gap: 10px; margin: 18px 0 10px; }
+  .main-nav { width: 100%; gap: 7px; margin: 12px 0 6px; }
 
   .nav-btn {
     width: 100%;
     max-width: 100%;
-    padding: 14px 18px;
+    padding: 11px 16px;
     font-size: 14px;
   }
 
@@ -141,7 +136,7 @@
     width: 100%;
     max-width: 100%;
     font-size: 12px;
-    padding: 10px 16px;
+    padding: 8px 14px;
   }
 
   /* ── 5. Char select layout ───────────────────────────────────── */
