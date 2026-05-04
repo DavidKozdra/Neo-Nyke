@@ -8753,6 +8753,42 @@
     const _left  = _b ? _b.left  : 'a';
     const _down  = _b ? _b.down  : 's';
     const _up    = _b ? _b.up    : 'w';
+    const _nt = window.NeoTouch;
+    if (_nt?.active) {
+      // Inject touch move vector — auto-aim fires in last joystick direction
+      if (Math.abs(_nt.moveX) > 0.08 || Math.abs(_nt.moveY) > 0.08) {
+        keys[_right] = _nt.moveX > 0.08;
+        keys[_left]  = _nt.moveX < -0.08;
+        keys[_down]  = _nt.moveY > 0.08;
+        keys[_up]    = _nt.moveY < -0.08;
+      } else {
+        keys[_right] = false; keys[_left] = false;
+        keys[_down]  = false; keys[_up]   = false;
+      }
+      // Auto-aim toward nearest enemy, fallback to last joystick direction
+      const _aimTarget = (() => {
+        let best = null, bestDist = Infinity;
+        for (const en of enemies) {
+          if (!en || en.dead) continue;
+          const d = Math.hypot(en.x - player.x, en.y - player.y);
+          if (d < bestDist) { bestDist = d; best = en; }
+        }
+        return best;
+      })();
+      const _aimDX = _aimTarget ? (_aimTarget.x - player.x) : (_nt.lastAimX * 200);
+      const _aimDY = _aimTarget ? (_aimTarget.y - player.y) : (_nt.lastAimY * 200);
+      mouse.worldX = player.x + _aimDX;
+      mouse.worldY = player.y + _aimDY;
+      mouse.x = mouse.worldX - camera.x;
+      mouse.y = mouse.worldY - camera.y;
+      // Attack buttons — hold while button pressed, release otherwise
+      if (_nt.slash) { mouse.down = true; mouse.downQueued = true; } else { mouse.down = false; }
+      if (_nt.laser) { mouse.right = true; mouse.rightQueued = true; } else { mouse.right = false; }
+      if (_nt.smash) { trySmash(); _nt.smash = false; }
+      if (_nt.ascend) keys[' '] = true; else if (!keys[' ']) keys[' '] = false;
+      if (_nt.dash) keys[_b ? _b.dash : 'shift'] = true;
+      else keys[_b ? _b.dash : 'shift'] = false;
+    }
     let moveX = (keys[_right] || keys.arrowright ? 1 : 0) - (keys[_left] || keys.arrowleft ? 1 : 0);
     let moveY = (keys[_down]  || keys.arrowdown  ? 1 : 0) - (keys[_up]   || keys.arrowup   ? 1 : 0);
     if (currentRoom?.type !== 'shop' && isPanelOpen(ui.shopPanel)) setShopPanelOpen(false);
