@@ -58,7 +58,9 @@
         : function defaultClearTimer(id) { return globalThis.clearTimeout(id); };
       this._seq = 0;
       this._entries = [];
+      this._entryById = new Map();
       this._timers = new Map();
+      this._domNodes = new Map();
       this._colorPalette = opts.colorPalette || DEFAULT_COLORS;
 
       // UI rendering (p5.js integration)
@@ -101,11 +103,12 @@
       };
 
       this._entries.push(entry);
+      this._entryById.set(entry.id, entry);
 
       var dropped = null;
       if (this._entries.length > this.maxNotifications) {
         dropped = this._entries.shift();
-        this._dismiss(dropped.id, "overflow");
+        if (dropped && dropped.id) this._dismiss(dropped.id, "overflow");
       }
 
       const timerId = this._setTimer(() => {
@@ -129,9 +132,24 @@
         this._clearTimer(timerId);
         this._timers.delete(id);
       }
-      this._entries = this._entries.filter(function keepEntry(entry) {
-        return entry.id !== id;
-      });
+
+      if (!this._entryById.has(id)) return;
+      this._entryById.delete(id);
+
+      for (let index = 0; index < this._entries.length; index += 1) {
+        if (this._entries[index] && this._entries[index].id === id) {
+          this._entries.splice(index, 1);
+          break;
+        }
+      }
+
+      const domNode = this._domNodes.get(id);
+      if (domNode) {
+        try { domNode.remove(); } catch (_err) {}
+        this._domNodes.delete(id);
+      } else if (typeof select === "function") {
+        select(`#${id}`)?.remove();
+      }
     }
 
     /**
@@ -140,9 +158,7 @@
      * @returns {boolean} True if notification exists
      */
     has(id) {
-      return this._entries.some(function isMatch(entry) {
-        return entry.id === id;
-      });
+      return this._entryById.has(id);
     }
 
     /**
@@ -166,9 +182,7 @@
       const { entry } = this._enqueue(
         { message, type, duration, action },
         (entry) => {
-          if (typeof select === "function") {
-            select(`#${entry.id}`)?.remove();
-          }
+          this._dismiss(entry.id, "timeout");
         }
       );
 
@@ -195,6 +209,7 @@
         .style("pointer-events", action ? "auto" : "none")
         .style("opacity", "0")
         .style("transition", "opacity 0.3s ease");
+      this._domNodes.set(id, notification.elt || notification);
 
       if (action && typeof action.onClick === 'function') {
         const btn = createButton(action.label || "Action")
@@ -211,18 +226,11 @@
           .style("pointer-events", "auto");
         btn.mousePressed(() => {
           try { action.onClick(); } catch (e) { console.warn('Notification action failed:', e); }
-          select(`#${id}`)?.remove();
           this._dismiss(id);
         });
       }
 
       setTimeout(() => notification.style("opacity", "1"), 50);
-
-      // Clean up expired notifications from DOM
-      const liveIds = new Set(this._entries.map(e => e.id));
-      this.uiContainer.elt.querySelectorAll(".notification").forEach((node) => {
-        if (!liveIds.has(node.id)) node.remove();
-      });
 
       return id;
     }
@@ -231,11 +239,9 @@
      * Dismisses all active notifications.
      */
     dismissAll() {
-      this._entries.forEach((entry) => {
+      const entries = this._entries.slice();
+      entries.forEach((entry) => {
         this._dismiss(entry.id);
-        if (typeof select === "function") {
-          select(`#${entry.id}`)?.remove();
-        }
       });
     }
   }

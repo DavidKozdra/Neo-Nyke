@@ -1448,6 +1448,13 @@
   let lastDamageSource = '';
   let lastDamageSourceKey = '';
   let savePendingTimer = 0;
+  let metaSavePendingTimer = 0;
+  let metaSaveDirty = false;
+  let menuRefreshQueued = false;
+  let frameId = 0;
+  let itemStatsCacheFrame = -1;
+  let itemStatsCacheValue = null;
+  let godItemKeysCache = null;
   let lavaAnimTime = 0;
   let floorSkipPending = 0;
   const JESTER_PORTAL_ACTIVATE_DELAY = 0.44;
@@ -2443,6 +2450,14 @@
       if (gameState === 'play') {
         clearTimeout(savePendingTimer);
         saveRunNow();
+      }
+      if (metaSavePendingTimer) {
+        clearTimeout(metaSavePendingTimer);
+        metaSavePendingTimer = 0;
+      }
+      if (metaSaveDirty) {
+        metaSaveDirty = false;
+        saveStore.put('meta', metaProgress);
       }
     });
   }
@@ -6657,6 +6672,15 @@
 
   function compactEnemyList() {
     if (!Array.isArray(enemies) || enemies.length === 0) return;
+    let needsCompaction = false;
+    for (let index = 0; index < enemies.length; index += 1) {
+      const enemy = enemies[index];
+      if (!enemy || typeof enemy !== 'object') {
+        needsCompaction = true;
+        break;
+      }
+    }
+    if (!needsCompaction) return;
     const before = enemies.length;
     enemies = enemies.filter(enemy => enemy && typeof enemy === 'object');
     if (enemies.length !== before) syncCurrentRoomState();
@@ -7722,6 +7746,9 @@
   }
 
   function getItemStats() {
+    if (itemStatsCacheFrame === frameId && itemStatsCacheValue) return itemStatsCacheValue;
+    if (!godItemKeysCache) godItemKeysCache = ITEM_KEYS.filter(key => ITEM_DEFS[key]?.rarity === 'god');
+
     const neoKnife = getItemCount('neo_knife');
     const orbOfBlood = getItemCount('orb_of_blood');
     const hemesScarf = getItemCount('hemes_scarf');
@@ -7740,8 +7767,7 @@
     const critCharmBonus = Number(player?.critCharmBuffTime || 0) > 0 ? getItemCount('crit_charm') * 0.04 : 0;
     const keenEyeBonus = Number(player?.keenEyeBuffTime || 0) > 0 ? getKeenEyeCritBonus() : 0;
     const chronoSpringBonus = Number(player?.chronoSpringBuffTime || 0) > 0 ? getChronoSpringAttackSpeedBonus() : 0;
-    const godItemStacks = ITEM_KEYS.reduce((total, key) => {
-      if (ITEM_DEFS[key]?.rarity !== 'god') return total;
+    const godItemStacks = godItemKeysCache.reduce((total, key) => {
       return total + getItemCount(key);
     }, 0);
     let critChance = critCharmBonus + keenEyeBonus + pendantOfKronos * godItemStacks * 0.01;
@@ -7749,7 +7775,7 @@
     critChance = clamp(critChance, 0, 0.95);
     const damageReduction = clamp(bandaid * 0.005 + shieldOfAegis * 0.2, 0, 0.85);
     const xpProgress = clamp((player?.xpToNext || 0) > 0 ? (player?.xp || 0) / player.xpToNext : 0, 0, 1);
-    return {
+    itemStatsCacheValue = {
       bleedChance: neoKnife * 0.05,
       bleedDamageMultiplier: orbOfBlood > 0 ? 1 + orbOfBlood : 1,
       bleedHealScale: hemesScarf,
@@ -7769,6 +7795,8 @@
       damageReduction,
       hasIronLung: getItemCount('iron_lung') > 0,
     };
+    itemStatsCacheFrame = frameId;
+    return itemStatsCacheValue;
   }
 
   function getAttackSpeedValue() {
@@ -9493,6 +9521,7 @@
     const framePerfStart = perfBeginFrame(timestamp);
     const dt = Math.min(0.033, (timestamp - lastTime) / 1000 || 0.016);
     lastTime = timestamp;
+    frameId += 1;
     const updatePerfStart = perfStart();
     if (gameState === 'play' && !isWizardPawOpen()) update(dt);
     else if (player && (gameState === 'dialogue' || gameState === 'pause')) {
@@ -9528,6 +9557,26 @@
     const _left  = _b ? _b.left  : 'a';
     const _down  = _b ? _b.down  : 's';
     const _up    = _b ? _b.up    : 'w';
+    const _getNearestEnemyForAim = (() => {
+      let cached = false;
+      let nearest = null;
+      return () => {
+        if (cached) return nearest;
+        cached = true;
+        let bestDistSq = Infinity;
+        for (const en of enemies) {
+          if (!en || en.dead) continue;
+          const dx = en.x - player.x;
+          const dy = en.y - player.y;
+          const distSq = dx * dx + dy * dy;
+          if (distSq < bestDistSq) {
+            bestDistSq = distSq;
+            nearest = en;
+          }
+        }
+        return nearest;
+      };
+    })();
     if (p1DeadInCoop) { keys[_right] = false; keys[_left] = false; keys[_down] = false; keys[_up] = false; }
     const _nt = window.NeoTouch;
     if (_nt?.active) {
@@ -9542,15 +9591,7 @@
         keys[_down]  = false; keys[_up]   = false;
       }
       // Auto-aim toward nearest enemy, fallback to last joystick direction
-      const _aimTarget = (() => {
-        let best = null, bestDist = Infinity;
-        for (const en of enemies) {
-          if (!en || en.dead) continue;
-          const d = Math.hypot(en.x - player.x, en.y - player.y);
-          if (d < bestDist) { bestDist = d; best = en; }
-        }
-        return best;
-      })();
+      const _aimTarget = _getNearestEnemyForAim();
       const _aimDX = _aimTarget ? (_aimTarget.x - player.x) : (_nt.lastAimX * 200);
       const _aimDY = _aimTarget ? (_aimTarget.y - player.y) : (_nt.lastAimY * 200);
       mouse.worldX = player.x + _aimDX;
@@ -9577,16 +9618,7 @@
         keys[_right] = false; keys[_left] = false;
         keys[_down] = false; keys[_up] = false;
       }
-      const _gpAimTarget = (() => {
-        if (_gp0.hasAim) return null;
-        let best = null, bestDist = Infinity;
-        for (const en of enemies) {
-          if (!en || en.dead) continue;
-          const d = Math.hypot(en.x - player.x, en.y - player.y);
-          if (d < bestDist) { bestDist = d; best = en; }
-        }
-        return best;
-      })();
+      const _gpAimTarget = _gp0.hasAim ? null : _getNearestEnemyForAim();
       const _gpAimX = _gp0.hasAim ? _gp0.aimX * 200 : (_gpAimTarget ? _gpAimTarget.x - player.x : _gp0.lastAimX * 200);
       const _gpAimY = _gp0.hasAim ? _gp0.aimY * 200 : (_gpAimTarget ? _gpAimTarget.y - player.y : _gp0.lastAimY * 200);
       mouse.worldX = player.x + _gpAimX;
@@ -12708,14 +12740,34 @@
     savePendingTimer = setTimeout(() => { void saveRunNow(); }, 250);
   }
 
+  function queueMenuRefresh() {
+    if (menuRefreshQueued) return;
+    menuRefreshQueued = true;
+    requestAnimationFrame(() => {
+      menuRefreshQueued = false;
+      refreshMenuState();
+    });
+  }
+
+  function queueMetaSave() {
+    metaSaveDirty = true;
+    if (metaSavePendingTimer) return;
+    metaSavePendingTimer = setTimeout(() => {
+      metaSavePendingTimer = 0;
+      if (!metaSaveDirty) return;
+      metaSaveDirty = false;
+      void saveStore.put('meta', metaProgress).catch(error => {
+        console.error('Failed to save meta', error);
+      });
+    }, 250);
+  }
+
   function persistMetaSoon() {
     metaProgress.customDifficultySettings = { ...customDifficultySettings };
     metaProgress.sandboxSettings = normalizeSandboxSettings(sandboxSettings);
     metaProgress.selectedCharacter = chosenCharacter;
-    refreshMenuState();
-    void saveStore.put('meta', metaProgress).catch(error => {
-      console.error('Failed to save meta', error);
-    });
+    queueMenuRefresh();
+    queueMetaSave();
   }
 
   async function saveRunNow() {

@@ -14,6 +14,10 @@ const achievementManager = (() => {
   const DB_NAME = 'NeoNykeDB';
   const STORE = 'achievements';
   let db = null;
+  const cumulativeCounts = new Map();
+  const pendingCumulativeWrites = new Map();
+  let cumulativeFlushTimer = 0;
+  let cumulativeFlushPromise = Promise.resolve();
 
   // Per-run counters
   let statusesApplied = new Set();
@@ -54,7 +58,7 @@ const achievementManager = (() => {
     });
   }
 
-  async function getCumulativeCount(id) {
+  async function readCumulativeCountFromStore(id) {
     const d = await getDB();
     return new Promise((resolve, reject) => {
       const tx = d.transaction(STORE, 'readonly');
@@ -64,14 +68,59 @@ const achievementManager = (() => {
     });
   }
 
-  async function setCumulativeCount(id, value) {
-    const d = await getDB();
-    return new Promise((resolve, reject) => {
-      const tx = d.transaction(STORE, 'readwrite');
-      const req = tx.objectStore(STORE).put({ id: id + '_count', value });
-      req.onsuccess = () => resolve();
-      req.onerror = () => reject(req.error);
-    });
+  async function getCumulativeCount(id) {
+    if (cumulativeCounts.has(id)) return cumulativeCounts.get(id);
+    const count = await readCumulativeCountFromStore(id);
+    cumulativeCounts.set(id, count);
+    return count;
+  }
+
+  function scheduleCumulativeFlush(delay = 300) {
+    clearTimeout(cumulativeFlushTimer);
+    cumulativeFlushTimer = setTimeout(() => {
+      cumulativeFlushTimer = 0;
+      void flushPendingCumulativeWrites();
+    }, delay);
+  }
+
+  function flushPendingCumulativeWrites() {
+    if (pendingCumulativeWrites.size === 0) return cumulativeFlushPromise;
+
+    const snapshot = [...pendingCumulativeWrites.entries()];
+    pendingCumulativeWrites.clear();
+
+    cumulativeFlushPromise = cumulativeFlushPromise
+      .then(async () => {
+        const d = await getDB();
+        await new Promise((resolve, reject) => {
+          const tx = d.transaction(STORE, 'readwrite');
+          const store = tx.objectStore(STORE);
+          snapshot.forEach(([id, value]) => {
+            store.put({ id: id + '_count', value });
+          });
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => reject(tx.error || new Error('failed to flush cumulative counts'));
+          tx.onabort = () => reject(tx.error || new Error('aborted cumulative count flush'));
+        });
+      })
+      .catch(error => {
+        console.error('Failed to flush achievement counters', error);
+        snapshot.forEach(([id, value]) => {
+          pendingCumulativeWrites.set(id, value);
+        });
+        scheduleCumulativeFlush(500);
+      });
+
+    return cumulativeFlushPromise;
+  }
+
+  async function incrementCumulativeCount(id, delta = 1) {
+    const current = await getCumulativeCount(id);
+    const next = current + delta;
+    cumulativeCounts.set(id, next);
+    pendingCumulativeWrites.set(id, next);
+    scheduleCumulativeFlush();
+    return next;
   }
 
   async function unlock(id) {
@@ -109,9 +158,7 @@ const achievementManager = (() => {
   });
 
   achievementEvents.on('rival:killed', async () => {
-    let count = await getCumulativeCount('rival_kills');
-    count += 1;
-    await setCumulativeCount('rival_kills', count);
+    const count = await incrementCumulativeCount('rival_kills');
     if (count >= 100) await unlock('rival_rumble');
   });
 
@@ -156,18 +203,28 @@ const achievementManager = (() => {
   });
 
   achievementEvents.on('god:killed', async () => {
-    let count = await getCumulativeCount('gods_killed');
-    count += 1;
-    await setCumulativeCount('gods_killed', count);
+    const count = await incrementCumulativeCount('gods_killed');
     if (count >= 10) await unlock('god_slayer');
   });
 
   achievementEvents.on('enemy:killed', async () => {
-    let count = await getCumulativeCount('enemies_killed');
-    count += 1;
-    await setCumulativeCount('enemies_killed', count);
+    const count = await incrementCumulativeCount('enemies_killed');
     if (count >= 1000) await unlock('extinction');
   });
+
+  if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') {
+        void flushPendingCumulativeWrites();
+      }
+    });
+  }
+
+  if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+    window.addEventListener('beforeunload', () => {
+      void flushPendingCumulativeWrites();
+    });
+  }
 
   return { isUnlocked, unlock, resetRunCounters };
 })();
