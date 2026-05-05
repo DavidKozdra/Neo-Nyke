@@ -1423,6 +1423,8 @@
   let savePendingTimer = 0;
   let lavaAnimTime = 0;
   let floorSkipPending = 0;
+  const JESTER_PORTAL_ACTIVATE_DELAY = 0.44;
+  const JESTER_PORTAL_TRIGGER_RADIUS = 42;
   let teleportKeyLatch = false;
   let ladderUseKeyLatch = false;
   let shopKeyLatch = false;
@@ -11339,6 +11341,50 @@
     });
   }
 
+  function canSpawnJesterPortal() {
+    if (floorSkipPending <= 0) return false;
+    if (floor >= MAX_FLOOR) return false;
+    if (!currentRoom) return false;
+    if (pickups.some(pickup => pickup?.type === 'jesterPortal')) return false;
+    return true;
+  }
+
+  function spawnJesterPortalPickup() {
+    if (!canSpawnJesterPortal()) return false;
+    const skipFloors = Math.max(1, Math.floor(floorSkipPending));
+    const preferred = findSafePointNearTarget(player.x, player.y - 96, 24, 180, 20);
+    const fallback = findSafePointNearTarget(ROOM_W / 2, ROOM_H / 2, 24, 240, 20) || findSafeSpawnPoint();
+    const spawnPoint = preferred || fallback;
+    pickups.push({
+      x: spawnPoint.x,
+      y: spawnPoint.y,
+      type: 'jesterPortal',
+      skipFloors,
+      spawnT: 0,
+      activateAt: JESTER_PORTAL_ACTIVATE_DELAY,
+      active: false,
+    });
+    floorSkipPending = 0;
+    particles.push({ x: spawnPoint.x, y: spawnPoint.y, life: 0.5, ring: 28, c: '#ff8bd8' });
+    particles.push({ x: spawnPoint.x, y: spawnPoint.y - 20, life: 0.8, text: 'CHAOS GATE', c: '#ffc2f0' });
+    return true;
+  }
+
+  function useJesterPortal(pickup) {
+    const skipFloors = clamp(Number(pickup?.skipFloors || 0), 1, MAX_FLOOR - floor);
+    if (skipFloors <= 0) return false;
+    floor = Math.min(MAX_FLOOR, floor + skipFloors);
+    achievementEvents.emit('floor:reached', { floor });
+    refreshFloorChargeStates();
+    metaProgress.bestFloor = Math.max(metaProgress.bestFloor, floor);
+    persistMetaSoon();
+    showFloorTransition = true;
+    floorTransitionTime = 0;
+    generateFloor();
+    scheduleRunSave();
+    return true;
+  }
+
   function updatePickups(dt = 0.016) {
     for (let index = pickups.length - 1; index >= 0; index -= 1) {
       const pickup = pickups[index];
@@ -11380,6 +11426,13 @@
           pickup.x += ((player.x - pickup.x) / d) * 0.016 * pull;
           pickup.y += ((player.y - pickup.y) / d) * 0.016 * pull;
         }
+      } else if (pickup.type === 'jesterPortal') {
+        pickup.spawnT = Math.max(0, Number(pickup.spawnT || 0) + dt);
+        const activateAt = Math.max(0.01, Number(pickup.activateAt || JESTER_PORTAL_ACTIVATE_DELAY));
+        if (!pickup.active && pickup.spawnT >= activateAt) {
+          pickup.active = true;
+          particles.push({ x: pickup.x, y: pickup.y - 16, life: 0.6, text: 'READY', c: '#ffc2f0' });
+        }
       } else if (pickup.type === 'challengeRune') {
         const runeRadius = 16;
         const minX = WALL + runeRadius;
@@ -11409,7 +11462,8 @@
           pickup.y += ((player.y - pickup.y) / d) * 0.016 * pull;
         }
       }
-      if (dist(pickup.x, pickup.y, player.x, player.y) >= 26) continue;
+      const pickupTriggerRadius = pickup.type === 'jesterPortal' ? JESTER_PORTAL_TRIGGER_RADIUS : 26;
+      if (dist(pickup.x, pickup.y, player.x, player.y) >= pickupTriggerRadius) continue;
 
       if (pickup.type === 'coin') {
         addCoins(pickup.value || 1);
@@ -11440,6 +11494,11 @@
       if (pickup.type === 'item') {
         collectItem(pickup.key);
         if (floorSkipPending > 0) {
+          if (spawnJesterPortalPickup()) {
+            pickups.splice(index, 1);
+            scheduleRunSave();
+            continue;
+          }
           floor = Math.min(MAX_FLOOR, floor + floorSkipPending);
           floorSkipPending = 0;
           refreshFloorChargeStates();
@@ -11451,6 +11510,12 @@
           scheduleRunSave();
           return;
         }
+      }
+
+      if (pickup.type === 'jesterPortal') {
+        if (!pickup.active) continue;
+        if (useJesterPortal(pickup)) return;
+        continue;
       }
 
       if (pickup.type === 'ladder') {
@@ -12177,6 +12242,7 @@
       if (!isDying) drawShopPrompt();
       if (!isDying) drawAnvilPrompt();
       if (!isDying) drawLadderPrompt();
+      if (!isDying) drawJesterPortalPrompt();
       perfEnd('draw.prompts', sectionPerfStart);
     }
 
@@ -12305,6 +12371,33 @@
     ctx.lineWidth = 1.5;
     ctx.stroke();
     ctx.fillStyle = '#8fffaf';
+    ctx.fillText(text, cx, cy);
+    ctx.restore();
+  }
+
+  function drawJesterPortalPrompt() {
+    if (gameState !== 'play') return;
+    const portal = pickups.find(pickup => pickup?.type === 'jesterPortal' && pickup.active);
+    if (!portal) return;
+    if (dist(player.x, player.y, portal.x, portal.y) > 74) return;
+    const cx = portal.x;
+    const cy = portal.y - 38;
+    const floors = Math.max(1, Number(portal.skipFloors || 1));
+    ctx.save();
+    ctx.font = 'bold 14px system-ui';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const text = `Touch to skip ${floors} floors`;
+    const pad = 14;
+    const tw = ctx.measureText(text).width;
+    ctx.fillStyle = 'rgba(28,11,32,0.86)';
+    ctx.beginPath();
+    ctx.roundRect(cx - tw / 2 - pad, cy - 13, tw + pad * 2, 26, 8);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,155,228,0.62)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.fillStyle = '#ffc9ef';
     ctx.fillText(text, cx, cy);
     ctx.restore();
   }
@@ -13309,6 +13402,54 @@
         ctx.moveTo(-6, 0); ctx.lineTo(6, 0);
         ctx.moveTo(-6, 6); ctx.lineTo(6, 6);
         ctx.stroke();
+      } else if (pickup.type === 'jesterPortal') {
+        const spawnT = Math.max(0, Number(pickup.spawnT || 0));
+        const activateAt = Math.max(0.01, Number(pickup.activateAt || JESTER_PORTAL_ACTIVATE_DELAY));
+        const reveal = clamp(spawnT / activateAt, 0, 1);
+        const ease = 1 - (1 - reveal) ** 3;
+        const spin = Date.now() / 360;
+        const portalR = 16 + ease * 11;
+
+        ctx.globalAlpha = 0.34 + ease * 0.56;
+        ctx.fillStyle = 'rgba(48,8,66,0.65)';
+        ctx.beginPath();
+        ctx.ellipse(0, 8, portalR * 0.95, portalR * 0.34, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.globalAlpha = 0.9;
+        ctx.shadowColor = '#ff8bd8';
+        ctx.shadowBlur = 20;
+        for (let ring = 0; ring < 2; ring += 1) {
+          const ringR = portalR * (0.72 + ring * 0.3);
+          const segments = 9 + ring * 3;
+          ctx.strokeStyle = ring === 0 ? '#ff8bd8' : '#ffd1f5';
+          ctx.lineWidth = ring === 0 ? 2.4 : 1.5;
+          ctx.beginPath();
+          for (let seg = 0; seg < segments; seg += 1) {
+            const a0 = (seg / segments) * Math.PI * 2 + spin * (ring === 0 ? 1 : -0.7);
+            const a1 = ((seg + 0.56) / segments) * Math.PI * 2 + spin * (ring === 0 ? 1 : -0.7);
+            ctx.moveTo(Math.cos(a0) * ringR, Math.sin(a0) * ringR * 0.42);
+            ctx.lineTo(Math.cos(a1) * ringR, Math.sin(a1) * ringR * 0.42);
+          }
+          ctx.stroke();
+        }
+
+        ctx.shadowBlur = 0;
+        const core = ctx.createRadialGradient(0, 0, 0, 0, 0, portalR * 0.72);
+        core.addColorStop(0, 'rgba(255,188,236,0.92)');
+        core.addColorStop(1, 'rgba(255,95,194,0)');
+        ctx.fillStyle = core;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, portalR * 0.72, portalR * 0.27, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        if (pickup.active) {
+          ctx.globalAlpha = 0.9;
+          ctx.fillStyle = '#ffd6f7';
+          ctx.font = 'bold 10px system-ui';
+          ctx.textAlign = 'center';
+          ctx.fillText('JUMP', 0, 3);
+        }
       } else if (pickup.type === 'fightGod') {
         ctx.strokeStyle = '#fff';
         ctx.shadowColor = '#fff';
