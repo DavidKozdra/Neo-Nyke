@@ -195,6 +195,48 @@
     bulk_golem: 'Stone remembers every blow.',
     artificer_knave: 'Run. I only need one clean hit.',
   };
+  const DEFAULT_KILLER_DEATH_QUOTES = [
+    'Another hero falls.',
+    'Your story ends here.',
+    'You were not ready for this dungeon.',
+    'Remember this defeat.',
+    'Dust and silence, that is all that remains.',
+  ];
+  const KILLER_DEATH_QUOTES = {
+    god: ['Kneel, mortal.', 'Divinity does not miss twice.', 'You challenged a god and paid for it.'],
+    queen_cult: ['The chorus grows louder.', 'Your voice joins the cult now.', 'Sing your last note.'],
+    bulk_golem: ['Stone outlasts flesh.', 'I break what stands before me.', 'Crushed.'],
+    artificer_knave: ['Precision beats courage.', 'You moved exactly where I wanted.', 'Your logic failed.'],
+    rival_princess: ['You were always late.', 'You should have fought for me.', 'Too slow, too weak.'],
+    rival_thorn: ['You should have run.', 'Your loot is mine.', 'You fought hard, still lost.'],
+    rival_metao: ['I saw this ending already.', 'Prediction complete.', 'You never caught up.'],
+    rival_granialla: ['A god does not yield.', 'You were judged and found wanting.', 'Kneel.'],
+    mirror_knight: ['I know every move you make.', 'I was always one step ahead.', 'You cannot outfight yourself.'],
+    hunter: ['Easy prey.', 'You slowed down for one second.', 'The hunt is over.'],
+    charger: ['One hit was enough.', 'I only need momentum.', 'You should have dodged.'],
+    sniper: ['Clean shot.', 'Distance wins.', 'Never stop moving.'],
+    machine_gunner: ['Keep your head down next time.', 'I never run out of bullets.', 'Pinned and finished.'],
+    cult_mage: ['Arcane truth: you lose.', 'Magic always collects its debt.', 'Burn in silence.'],
+    laser: ['Stand still and perish.', 'The beam never lies.', 'Light cuts deeper than steel.'],
+    golem: ['Stone crushes all.', 'You cannot stagger a mountain.', 'Another crack in the floor.'],
+    knave: ['Sharp steel, dull judgment.', 'You fought. You lost.', 'Should have stayed home.'],
+    summoner: ['I am never alone.', 'My minions did the rest.', 'Outnumbered and outplayed.'],
+    shield_unit: ['Defense is victory.', 'You broke first, not me.', 'You hit the wall and fell.'],
+    healer: ['I endured. You did not.', 'Your damage was not enough.', 'I outlasted you.'],
+    boss_spawner: ['Spawn and repeat.', 'The dungeon keeps coming.', 'You were consumed by the swarm.'],
+    bleed: ['You bled out.', 'Every wound has a price.', 'Too many cuts.'],
+    fire: ['Burn away.', 'Ashes to ashes.', 'You fed the flames.'],
+    poison: ['It only takes time.', 'The venom was patient.', 'Poison does not hurry.'],
+    dark_drain: ['The dark drank deeply.', 'Your light was siphoned away.', 'Empty.'],
+    lava: ['The floor remembered your mistake.', 'Molten stone takes all.', 'Heat wins.'],
+    storm: ['Thunder decides.', 'The storm claims another.', 'Skyfire answered.'],
+    challenge_bomb: ['Trial failed.', 'Wrong step, wrong time.', 'The trial does not forgive.'],
+    enemy_projectile: ['Struck down from afar.', 'Projectiles do not hesitate.', 'Too late to dodge.'],
+    enemy_beam: ['The beam carved through you.', 'One line, one ending.', 'No cover saves everyone.'],
+    god_beam: ['Holy light judged you.', 'You stood in divine fire.', 'The god beam does not miss.'],
+    mirror_beam: ['Your reflection erased you.', 'Your own pattern destroyed you.', 'Mirror light, mirror death.'],
+    no_hit: ['The challenge marks your failure.', 'One mistake ended the run.', 'No-hit broken.'],
+  };
   const RUN_HISTORY_LIMIT = 200;
   const DIFFICULTY_ORDER = ['easy', 'medium', 'hard', 'impossible', 'god', 'custom'];
   const DIFFICULTY_DEFS = {
@@ -734,6 +776,8 @@
   const RIVAL_MOVE_INTERVAL_BASE = 8.5;
   const RIVAL_GROWTH_TICK_SECONDS = 18;
   const RIVAL_XP_PER_GROWTH_TICK = 10;
+  const MONSTER_ROAM_INTERVAL_SECONDS = 60;
+  const MONSTER_ROAM_MOVE_CHANCE = 0.28;
   const PURPLE_WEAPON_POOL = ['lazer_glasses', 'metao_fire_staff', 'magenta_degale', 'magenta_p90'];
   const RED_WEAPON_POOL = ['granillia_lightning_spear', 'excalibur', 'golden_fleece', 'void_piercer', 'aegis_shield_weapon'];
 
@@ -970,6 +1014,16 @@
       category: 'god',
       tags: ['god', 'crit'],
     },
+    robot_arm: {
+      key: 'robot_arm',
+      name: 'Robot Arm',
+      shortName: 'Auto x15 Spd',
+      description: 'Attack speed x15. Automatically attacks with left click.',
+      rarity: 'god',
+      color: '#c0e8ff',
+      category: 'god',
+      tags: ['god', 'speed'],
+    },
   };
   const RARITY_NAME_COLORS = {
     knight: '#f4f6fb',
@@ -1017,6 +1071,7 @@
     ['jesters_dice', 4],
     ['shield_of_aegis', 4],
     ['pendant_of_kronos', 5],
+    ['robot_arm', 3],
   ];
   const ITEM_DROP_TABLE = buildWeightTable(ITEM_DROP_WEIGHTS);
   const ELITE_ITEM_DROP_TABLE = buildWeightTable(
@@ -1139,6 +1194,7 @@
     challengeStatusLabel: document.getElementById('challengeStatusLabel'),
     challengeStatusFill: document.getElementById('challengeStatusFill'),
     dialogueOverlay: document.getElementById('dialogueOverlay'),
+    dialoguePortrait: document.getElementById('dialoguePortrait'),
     dialogueSpeaker: document.getElementById('dialogueSpeaker'),
     dialogueText: document.getElementById('dialogueText'),
     dialogueHint: document.getElementById('dialogueHint'),
@@ -1380,6 +1436,8 @@
   let draggingMoveKey = '';
   let weaponBurstQueue = [];
   let rivals = [];
+  let monsterRoamTimer = 0;
+  let knaveKnightCutscenePlayed = false;
   let activeInventorySlot = '';
   let shopPanelDirty = false;
   let inventoryPanelDirty = false;
@@ -4115,6 +4173,63 @@
     return titleCase(value);
   }
 
+  function normalizeDeathQuoteKey(source) {
+    const value = String(source || '').trim().toLowerCase();
+    if (!value) return 'unknown';
+    return value
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '');
+  }
+
+  function getKillerDeathQuote(sourceKey) {
+    const exact = normalizeDeathQuoteKey(sourceKey);
+    const pool = KILLER_DEATH_QUOTES[exact] || DEFAULT_KILLER_DEATH_QUOTES;
+    if (!Array.isArray(pool) || pool.length === 0) return '';
+    const index = Math.floor(nextRandom('fx') * pool.length);
+    return pool[index] || pool[0] || '';
+  }
+
+  function findKillerEnemyEntity(sourceKey, sourceLabel) {
+    const key = String(sourceKey || '').trim().toLowerCase();
+    const label = String(sourceLabel || '').trim().toLowerCase();
+    if (!Array.isArray(enemies) || enemies.length === 0) return null;
+
+    const byType = enemies.find(enemy => String(enemy?.type || '').toLowerCase() === key);
+    if (byType) return byType;
+
+    const byRivalName = enemies.find(enemy => enemy?.type === 'rival' && String(enemy?.rivalData?.name || '').trim().toLowerCase() === key);
+    if (byRivalName) return byRivalName;
+
+    const byLabel = enemies.find(enemy => String(getDamageSourceLabel(enemy?.type || '') || '').trim().toLowerCase() === label);
+    if (byLabel) return byLabel;
+    return null;
+  }
+
+  function speakKillerDeathQuote() {
+    const sourceKey = lastDamageSourceKey || '';
+    const sourceLabel = lastDamageSource || getDamageSourceLabel(sourceKey) || 'DUNGEON';
+    const quote = getKillerDeathQuote(sourceKey || sourceLabel);
+    if (!quote || !player) return;
+
+    const killer = findKillerEnemyEntity(sourceKey, sourceLabel);
+    if (killer) {
+      sayOverEntity(killer, quote, {
+        speaker: sourceLabel,
+        tone: 'boss',
+        holdTime: 2.1,
+        offsetY: (killer.r || 16) + 32,
+      });
+      return;
+    }
+
+    sayAtPosition(player.x, player.y, quote, {
+      speaker: sourceLabel,
+      tone: 'warning',
+      holdTime: 2.1,
+      offsetY: 56,
+    });
+  }
+
   function captureRunItemSnapshot(playerState = player) {
     return ITEM_KEYS
       .map(key => ({
@@ -4520,8 +4635,9 @@
     const safeSpawn = findSafeEnemySpawnPoint(ROOM_W / 2, ROOM_H / 2 - 40, 15);
     if (!safeSpawn) return;
     const boss = spawnEnemy(bossType, safeSpawn.x, safeSpawn.y, false);
+    const playedCutscene = tryPlayKnaveKnightCutscene(boss, bossType);
     const line = BOSS_OPENING_DIALOGUE[bossType];
-    if (boss && line) sayOverEntity(boss, line);
+    if (!playedCutscene && boss && line) sayOverEntity(boss, line);
     if (bossType === 'god') playGodDialogue(1);
     particles.push({ x: ROOM_W / 2, y: ROOM_H / 2 - 50, life: 1.4, text: `BOSS ${bossRushStage + 1}: ${getBossDisplayName(bossType).toUpperCase()}`, c: '#ff8b8b' });
   }
@@ -4619,6 +4735,8 @@
     draggingMoveKey = '';
     weaponBurstQueue = [];
     rivals = [];
+    monsterRoamTimer = 0;
+    knaveKnightCutscenePlayed = false;
     wizardPawSelection = null;
     setWizardPawModalOpen(false);
     setShopPanelOpen(false);
@@ -4713,6 +4831,8 @@
     activeShopTab = 'items';
     draggingMoveKey = '';
     weaponBurstQueue = [];
+    monsterRoamTimer = Number(snapshot.monsterRoamTimer || 0);
+    knaveKnightCutscenePlayed = !!snapshot.knaveKnightCutscenePlayed;
     restoreRivals(snapshot.rivals);
     wizardPawSelection = null;
     setWizardPawModalOpen(false);
@@ -5472,8 +5592,9 @@
           const _ladderBossSpawn = findSafeEnemySpawnPoint(ROOM_W / 2, ROOM_H / 2 - 60, 20);
           if (_ladderBossSpawn) {
             const _ladderBoss = spawnEnemy(_ladderBossType, _ladderBossSpawn.x, _ladderBossSpawn.y, false);
+            const _playedLadderCutscene = tryPlayKnaveKnightCutscene(_ladderBoss, _ladderBossType);
             const _ladderBossLine = BOSS_OPENING_DIALOGUE[_ladderBossType];
-            if (_ladderBoss && _ladderBossLine) sayOverEntity(_ladderBoss, _ladderBossLine);
+            if (!_playedLadderCutscene && _ladderBoss && _ladderBossLine) sayOverEntity(_ladderBoss, _ladderBossLine);
           }
         }
       }
@@ -5899,6 +6020,97 @@
       if (next) return { next, dir };
     }
     return null;
+  }
+
+  function isMonsterDoorRoamEligible(enemy) {
+    if (!enemy || typeof enemy !== 'object') return false;
+    if (enemy.type === 'rival' || enemy.type === 'mirror_knight') return false;
+    if (isBossType(enemy.type) || enemy.type === 'god') return false;
+    if (enemy.type === 'boss_spawner') return false;
+    if (enemy.spawnT > 0) return false;
+    return true;
+  }
+
+  function getDoorEntryPoint(direction, radius = 15) {
+    const r = Math.max(8, Number(radius || 15));
+    const laneX = ROOM_W / 2 + rand(34, -34, 'encounter');
+    const laneY = ROOM_H / 2 + rand(34, -34, 'encounter');
+    if (direction === 'n') {
+      return { x: laneX, y: WALL + r + 10 };
+    }
+    if (direction === 's') {
+      return { x: laneX, y: ROOM_H - WALL - r - 10 };
+    }
+    if (direction === 'e') {
+      return { x: ROOM_W - WALL - r - 10, y: laneY };
+    }
+    return { x: WALL + r + 10, y: laneY };
+  }
+
+  function updateMonsterDoorRoaming(dt) {
+    if (!currentRoom || !player || !Array.isArray(rooms) || rooms.length === 0) return;
+    if (player.character === 'princess') {
+      monsterRoamTimer = 0;
+      return;
+    }
+
+    monsterRoamTimer += dt;
+    if (monsterRoamTimer < MONSTER_ROAM_INTERVAL_SECONDS) return;
+    monsterRoamTimer -= MONSTER_ROAM_INTERVAL_SECONDS;
+
+    const moves = [];
+    for (const room of rooms) {
+      if (!room || room === currentRoom) continue;
+      if (!Array.isArray(room.enemies) || room.enemies.length === 0) continue;
+      const exits = DIRECTIONS
+        .map(dir => ({ dir, next: getConnectedRoom(room, dir) }))
+        .filter(entry => !!entry.next);
+      if (exits.length === 0) continue;
+
+      const remaining = [];
+      for (const enemy of room.enemies) {
+        if (!isMonsterDoorRoamEligible(enemy) || nextRandom('encounter') > MONSTER_ROAM_MOVE_CHANCE) {
+          remaining.push(enemy);
+          continue;
+        }
+        const chosenExit = exits[Math.floor(nextRandom('encounter') * exits.length)];
+        if (!chosenExit?.next) {
+          remaining.push(enemy);
+          continue;
+        }
+        moves.push({ enemy, from: room, to: chosenExit.next, dir: chosenExit.dir });
+      }
+
+      room.enemies = remaining;
+    }
+
+    if (moves.length === 0) return;
+
+    let enteredCurrentRoom = 0;
+    for (const move of moves) {
+      const targetRoom = move.to;
+      if (!Array.isArray(targetRoom.enemies)) targetRoom.enemies = [];
+      const entryDir = OPPOSITE_DIRECTION[move.dir] || 'n';
+      const point = getDoorEntryPoint(entryDir, move.enemy.r);
+      move.enemy.x = point.x;
+      move.enemy.y = point.y;
+      move.enemy.vx = 0;
+      move.enemy.vy = 0;
+      targetRoom.enemies.push(move.enemy);
+      if (targetRoom === currentRoom) enteredCurrentRoom += 1;
+    }
+
+    if (enteredCurrentRoom > 0) {
+      enemies = currentRoom.enemies;
+      particles.push({
+        x: ROOM_W / 2,
+        y: ROOM_H / 2 - 34,
+        life: 1.4,
+        text: enteredCurrentRoom > 1 ? `${enteredCurrentRoom} MONSTERS ROAMED IN` : 'A MONSTER ROAMED IN',
+        c: '#ffbf7a',
+      });
+    }
+    scheduleRunSave();
   }
 
   function stealFromRoom(rival, room) {
@@ -6435,8 +6647,9 @@
     const safeSpawn = findSafeEnemySpawnPoint(ROOM_W / 2, ROOM_H / 2 - 40, 15);
     if (!safeSpawn) return null;
     const boss = spawnEnemy(bossType, safeSpawn.x, safeSpawn.y, false);
+    const playedCutscene = tryPlayKnaveKnightCutscene(boss, bossType);
     const line = BOSS_OPENING_DIALOGUE[bossType];
-    if (boss && line) sayOverEntity(boss, line);
+    if (!playedCutscene && boss && line) sayOverEntity(boss, line);
     return boss;
   }
 
@@ -6787,6 +7000,26 @@
     setInventoryPanelOpen(false);
     clearGameplayInput();
     return uiController.playDialogue([{ speaker: 'GOD', text: line }], { returnState: 'play' });
+  }
+
+  function tryPlayKnaveKnightCutscene(enemy, enemyType) {
+    if (!enemy || enemyType !== 'artificer_knave' || !player) return false;
+    if (player.character !== 'thorn_knight') return false;
+    if (knaveKnightCutscenePlayed) return false;
+
+    knaveKnightCutscenePlayed = true;
+    clearGameplayInput();
+    setShopPanelOpen(false);
+    setInventoryPanelOpen(false);
+    enemy.attackCd = Math.max(Number(enemy.attackCd || 0), 1.4);
+    enemy.stun = Math.max(Number(enemy.stun || 0), 0.25);
+    scheduleRunSave();
+
+    return uiController.playDialogue([
+      { speaker: 'KNAVE', text: 'You think you can out fight me you couldnt out argue me! your logic is false' },
+      { speaker: 'KNIGHT', text: 'The kingdom of God has come for you ...' },
+      { speaker: 'KNAVE', text: 'Violence it is' },
+    ], { returnState: 'play' });
   }
 
   function sayOverEntity(entity, text, options = {}) {
@@ -7214,6 +7447,7 @@
     const orbOfBlood = getItemCount('orb_of_blood');
     const hemesScarf = getItemCount('hemes_scarf');
     const attackServo = getItemCount('attack_servo');
+    const robotArm = getItemCount('robot_arm');
     const scholarSeal = getItemCount('scholar_seal');
     const scholarCap = getItemCount('scholar_cap');
     const bandaid = getItemCount('bandaid');
@@ -7243,7 +7477,8 @@
       passiveBleedStacks: hemesScarf,
       critChance,
       critMultiplier: 1.6 + (oracleLens ? critChance * 2.2 : critChance * 0.6),
-      attackSpeedMultiplier: 1 + attackServo * 0.12 + chronoSpringBonus,
+      attackSpeedMultiplier: robotArm > 0 ? 15 * (1 + attackServo * 0.12 + chronoSpringBonus) : 1 + attackServo * 0.12 + chronoSpringBonus,
+      hasRobotArm: robotArm > 0,
       moveSpeedMultiplier: 1 + turtleShell * 0.05,
       xpGainMultiplier: 1 + scholarSeal * 0.15,
       levelEdgeDamageMultiplier: 1 + scholarCap * xpProgress * 0.45,
@@ -9116,8 +9351,10 @@
     mouse.worldY = mouse.y + camera.y;
     updateWeaponSystems(dt);
     updateRivals(dt);
+    updateMonsterDoorRoaming(dt);
     if (gameState !== 'play') return;
 
+    if (getItemStats().hasRobotArm) { mouse.down = true; mouse.downQueued = true; }
     const meleeHeld = isMouseActionHeld('slash');
     const laserHeld = isMouseActionHeld('laser');
     if (!overlayOpen && meleeHeld) tryMelee();
@@ -11779,6 +12016,7 @@
     if (gameState === 'dying' || gameState === 'dead') return;
     if (player) player.hp = 0;
     const entry = finalizeRun('dead', { killedBy: lastDamageSource, killerKey: lastDamageSourceKey });
+    speakKillerDeathQuote();
     const aimAngle = player ? Math.atan2(mouse.worldY - player.y, mouse.worldX - player.x) : 0;
     playerDeathAnim = {
       timer: 0,
@@ -11891,6 +12129,8 @@
       turtleWaveHpTimer,
       godTimer,
       gameElapsedTime,
+      monsterRoamTimer,
+      knaveKnightCutscenePlayed,
       camera,
     };
   }
@@ -14946,15 +15186,57 @@
       if (card) card.classList.toggle('ready', ready);
     }
 
+    function resolveDialoguePortraitKey(speaker = '') {
+      const raw = String(speaker || '').trim();
+      if (!raw) return getPlayerSpriteKey();
+      const normalized = raw
+        .toLowerCase()
+        .replace(/[^a-z0-9 ]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      if (!normalized) return getPlayerSpriteKey();
+
+      const directKey = normalized.replace(/ /g, '_');
+      if (SPRITE_DEFS[directKey]) return directKey;
+
+      const noRival = normalized.replace(/^rival\s+/, '');
+      const noRivalKey = noRival.replace(/ /g, '_');
+      if (SPRITE_DEFS[noRivalKey]) return noRivalKey;
+
+      if (normalized.includes('knight')) return 'thorn_knight';
+      if (normalized.includes('knave')) return 'artificer_knave';
+      if (normalized.includes('thorn')) return 'thorn_knight';
+      if (normalized.includes('princess')) return 'princess';
+      if (normalized.includes('metao')) return 'metao';
+      if (normalized.includes('granialla')) return 'granialla';
+      if (normalized.includes('queen') && normalized.includes('cult')) return 'queen_cult';
+      if (normalized.includes('bulk') && normalized.includes('golem')) return 'bulk_golem';
+      if (normalized.includes('artificer')) return 'artificer_knave';
+      if (normalized.includes('golem')) return 'golem';
+      if (normalized.includes('god')) return 'god';
+      if (normalized.includes('mirror')) return getPlayerSpriteKey();
+      return 'hunter';
+    }
+
     function renderDialogue() {
       if (!view.dialogueOverlay || !view.dialogueSpeaker || !view.dialogueText) return;
       const snapshot = dialogueRuntime?.getSnapshot?.() || { active: false, speaker: 'GOD', visibleText: '', isFullyTyped: false };
       view.dialogueOverlay.classList.toggle('hidden', !snapshot.active);
       view.dialogueOverlay.style.display = snapshot.active ? 'flex' : 'none';
       view.dialogueOverlay.setAttribute('aria-hidden', snapshot.active ? 'false' : 'true');
-      if (!snapshot.active) return;
+      if (!snapshot.active) {
+        if (view.dialoguePortrait instanceof HTMLCanvasElement) {
+          const portraitCtx = view.dialoguePortrait.getContext('2d');
+          portraitCtx?.clearRect(0, 0, view.dialoguePortrait.width, view.dialoguePortrait.height);
+        }
+        return;
+      }
       view.dialogueSpeaker.textContent = snapshot.speaker || 'GOD';
       view.dialogueText.textContent = snapshot.visibleText || '';
+      if (view.dialoguePortrait instanceof HTMLCanvasElement) {
+        const spriteKey = resolveDialoguePortraitKey(snapshot.speaker || '');
+        drawSpriteToCanvas(view.dialoguePortrait, spriteKey, view.dialoguePortrait.width);
+      }
       if (view.dialogueHint) {
         view.dialogueHint.textContent = snapshot.isFullyTyped ? 'ENTER TO CONTINUE' : 'ENTER TO SKIP';
       }

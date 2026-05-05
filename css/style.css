@@ -335,6 +335,35 @@ canvas {
   color: #f4ead2;
 }
 
+.dialogue-main {
+  display: flex;
+  align-items: stretch;
+  gap: 16px;
+}
+
+.dialogue-portrait-wrap {
+  width: 112px;
+  min-width: 112px;
+  height: 112px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 223, 150, .42);
+  background: radial-gradient(circle at 50% 35%, rgba(253, 227, 174, .26), rgba(8, 13, 21, .92));
+  box-shadow: inset 0 0 16px rgba(255, 255, 255, .05), 0 0 20px rgba(255, 220, 150, .14);
+  display: grid;
+  place-items: center;
+}
+
+.dialogue-portrait {
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+}
+
+.dialogue-content {
+  flex: 1;
+  min-width: 0;
+}
+
 .dialogue-speaker {
   margin-bottom: 10px;
   color: #ffd78a;
@@ -362,6 +391,23 @@ canvas {
   letter-spacing: .16em;
   text-transform: uppercase;
   opacity: .8;
+}
+
+@media (max-width: 640px) {
+  .dialogue-main {
+    gap: 12px;
+  }
+
+  .dialogue-portrait-wrap {
+    width: 84px;
+    min-width: 84px;
+    height: 84px;
+  }
+
+  .dialogue-text {
+    font-size: 20px;
+    min-height: 56px;
+  }
 }
 
 .tutorial-overlay {

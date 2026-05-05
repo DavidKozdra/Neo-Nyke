@@ -151,9 +151,16 @@
 
   <div id="dialogueOverlay" class="dialogue-overlay hidden" aria-hidden="true">
     <div class="dialogue-box">
-      <div id="dialogueSpeaker" class="dialogue-speaker">GOD</div>
-      <div id="dialogueText" class="dialogue-text"></div>
-      <div id="dialogueHint" class="dialogue-hint">ENTER TO CONTINUE</div>
+      <div class="dialogue-main">
+        <div class="dialogue-portrait-wrap" aria-hidden="true">
+          <canvas id="dialoguePortrait" class="dialogue-portrait" width="112" height="112"></canvas>
+        </div>
+        <div class="dialogue-content">
+          <div id="dialogueSpeaker" class="dialogue-speaker">GOD</div>
+          <div id="dialogueText" class="dialogue-text"></div>
+          <div id="dialogueHint" class="dialogue-hint">ENTER TO CONTINUE</div>
+        </div>
+      </div>
     </div>
   </div>
   <div id="tutorialOverlay" class="tutorial-overlay hidden" aria-hidden="true">
