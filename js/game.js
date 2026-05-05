@@ -1169,6 +1169,8 @@
     invPanel: document.getElementById('invPanel'),
     invClose: document.getElementById('invClose'),
     invTabs: [...document.querySelectorAll('#invPanel .inv-tab')],
+    invPlayerTabs: document.getElementById('invPlayerTabs'),
+    invPlayerTabBtns: [...document.querySelectorAll('#invPlayerTabs .inv-player-tab')],
     wizardPawModal: document.getElementById('wizardPawModal'),
     wizardPawStats: document.getElementById('wizardPawStats'),
     wizardPawChoices: document.getElementById('wizardPawChoices'),
@@ -1353,6 +1355,7 @@
   let chosenCharacter2 = 'thorn_knight';
   let chosenCharacter3 = 'thorn_knight';
   let chosenCharacter4 = 'thorn_knight';
+  let p1DeadInCoop = false;
   let p2DeadInCoop = false;
   let p3DeadInCoop = false;
   let p4DeadInCoop = false;
@@ -1456,6 +1459,7 @@
   let anvilKeyLatch = false;
   let activeShopTab = 'items';
   let activeInvTab = 'stats';
+  let activeInvPlayer = 1;
   let activeAnvilTab = 'weapons';
   let anvilSelectedItem = null;
   let anvilStagedUpgrades = {};
@@ -2484,6 +2488,12 @@
         renderInventoryPanel();
       });
     });
+    ui.invPlayerTabBtns.forEach(tab => {
+      tab.addEventListener('click', () => {
+        activeInvPlayer = Number(tab.dataset.invPlayer) || 1;
+        renderInventoryPanel();
+      });
+    });
     ui.shopItems?.addEventListener('click', handleShopBuyClick);
     ui.shopWeapons?.addEventListener('click', handleShopBuyClick);
     ui.shopMoves?.addEventListener('click', handleShopBuyClick);
@@ -2606,9 +2616,27 @@
     ui.invPanel.setAttribute('aria-hidden', open ? 'false' : 'true');
     if (!open) activeInventorySlot = '';
     if (open) {
+      const isCoop = gameMode === 'coop' && (player2 || player3 || player4);
+      if (ui.invPlayerTabs) ui.invPlayerTabs.classList.toggle('hidden', !isCoop);
+      if (isCoop) updateInvPlayerTabVisibility();
       markInventoryPanelDirty();
       renderInventoryPanel();
     }
+  }
+
+  function updateInvPlayerTabVisibility() {
+    const players = [player, player2, player3, player4];
+    const dead = [false, p2DeadInCoop, p3DeadInCoop, p4DeadInCoop];
+    ui.invPlayerTabBtns.forEach(tab => {
+      const n = Number(tab.dataset.invPlayer);
+      const exists = !!players[n - 1];
+      tab.classList.toggle('hidden', !exists);
+      tab.classList.toggle('active', n === activeInvPlayer);
+      tab.classList.toggle('inv-player-dead', dead[n - 1]);
+    });
+    // If selected player no longer exists, fall back to P1
+    const players2 = [player, player2, player3, player4];
+    if (!players2[activeInvPlayer - 1]) activeInvPlayer = 1;
   }
 
   function toggleShopPanel() {
@@ -3083,6 +3111,12 @@
   function renderInventoryPanel() {
     if (!ui.invPanel || !player) return;
 
+    // Resolve which player to display
+    const _invPlayers = [player, player2, player3, player4];
+    const _invP = _invPlayers[activeInvPlayer - 1] || player;
+
+    if (gameMode === 'coop' && (player2 || player3 || player4)) updateInvPlayerTabVisibility();
+
     ui.invTabs.forEach(tab => {
       tab.classList.toggle('active', tab.dataset.invTab === activeInvTab);
     });
@@ -3094,14 +3128,14 @@
 
     const stats = getItemStats();
     ui.invStats.innerHTML = [
-      `<div class="inv-card inv-stat-card"><span class="inv-card__eyebrow">Vital</span><h4>HP</h4><p>${Math.round(player.hp)} / ${Math.round(player.maxHp)}</p></div>`,
-      `<div class="inv-card inv-stat-card"><span class="inv-card__eyebrow">Damage</span><h4>Attack Power</h4><p>${player.attackPower}</p></div>`,
+      `<div class="inv-card inv-stat-card"><span class="inv-card__eyebrow">Vital</span><h4>HP</h4><p>${Math.round(_invP.hp)} / ${Math.round(_invP.maxHp)}</p></div>`,
+      `<div class="inv-card inv-stat-card"><span class="inv-card__eyebrow">Damage</span><h4>Attack Power</h4><p>${_invP.attackPower}</p></div>`,
       `<div class="inv-card inv-stat-card"><span class="inv-card__eyebrow">Tempo</span><h4>Attack Speed</h4><p>${getAttackSpeedValue().toFixed(2)}</p></div>`,
       `<div class="inv-card inv-stat-card"><span class="inv-card__eyebrow">Edge</span><h4>Crit Chance</h4><p>${Math.round(stats.critChance * 100)}%</p></div>`,
     ].join('');
 
     ui.invItemsList.innerHTML = ITEM_KEYS
-      .filter(key => Number(player.items?.[key] || 0) > 0)
+      .filter(key => Number(_invP.items?.[key] || 0) > 0)
       .map(key => {
         const item = itemRegistry.get(key);
         return `<div class="inv-card">
@@ -3109,7 +3143,7 @@
           <div class="inv-card__title-row">
             <canvas class="inv-card__icon" data-item-icon="${key}" width="30" height="30"></canvas>
             <h4 style="color:${getRarityNameColor(item?.rarity || item?.category)}">${item?.name || key}</h4>
-            <span class="inv-card__count">x${player.items[key]}</span>
+            <span class="inv-card__count">x${_invP.items[key]}</span>
           </div>
           <p>${item?.description || 'No item description available.'}</p>
         </div>`;
@@ -3121,7 +3155,7 @@
     });
 
     const ownedWeapons = WEAPON_KEYS
-      .filter(key => player.ownedWeapons?.[key])
+      .filter(key => _invP.ownedWeapons?.[key])
       .sort((a, b) => {
         const order = { knight: 1, white: 1, wizard: 2, purple: 2, god: 3, red: 3 };
         const rarityA = order[WEAPON_DEFS[a]?.rarity] || 99;
@@ -3133,7 +3167,7 @@
       ui.invWeaponsList.innerHTML = ownedWeapons
         .map(key => {
           const def = WEAPON_DEFS[key];
-          const equipped = player.equippedWeapon === key;
+          const equipped = _invP.equippedWeapon === key;
           return `<button class="inv-move-chip${equipped ? ' is-equipped-weapon' : ''}" data-weapon="${key}" type="button" aria-pressed="${equipped ? 'true' : 'false'}">
             <canvas class="inv-chip__icon" data-weapon-icon="${key}" width="30" height="30"></canvas>
             <div class="inv-move-chip__meta">
@@ -3150,9 +3184,9 @@
       });
     }
 
-    const equippedMoveKeys = new Set(Object.values(player.equippedMoves || {}).filter(Boolean));
-    const allOwnedMoves = Object.keys(player.ownedMoves || {})
-      .filter(key => player.ownedMoves[key] && MOVE_DEFS[key] && isMoveAllowedForCharacter(key, player.character))
+    const equippedMoveKeys = new Set(Object.values(_invP.equippedMoves || {}).filter(Boolean));
+    const allOwnedMoves = Object.keys(_invP.ownedMoves || {})
+      .filter(key => _invP.ownedMoves[key] && MOVE_DEFS[key] && isMoveAllowedForCharacter(key, _invP.character))
       .sort((a, b) => MOVE_DEFS[a].slot.localeCompare(MOVE_DEFS[b].slot));
     ui.invMovesList.innerHTML = allOwnedMoves
       .map(key => {
@@ -3179,7 +3213,7 @@
     MOVE_SLOTS.forEach(slot => {
       const node = ui.invSlots[slot];
       if (!node) return;
-      const moveKey = player.equippedMoves?.[slot];
+      const moveKey = _invP.equippedMoves?.[slot];
       const def = MOVE_DEFS[moveKey];
       const isSelected = activeInventorySlot === slot;
       node.dataset.move = moveKey || '';
@@ -3192,7 +3226,7 @@
       node.innerHTML = `<div class="inv-slot__top"><span class="inv-slot__kicker">${slotLabel}</span><div class="inv-slot__top-right">${slotKey ? `<span class="inv-slot__key">${slotKey}</span>` : ''}<span class="inv-slot__status">${isSelected ? 'Selected' : (def ? 'Equipped' : 'Empty')}</span></div></div><div class="inv-slot__move">${def?.name || 'No move equipped'}</div><p class="inv-slot__hint">${isSelected ? 'Matching spare moves are highlighted below. Click one or drag it here to swap.' : def?.desc || 'Click this slot to see moves that can go here.'}</p>`;
     });
     if (ui.invWeaponSlot) {
-      const weapon = WEAPON_DEFS[player.equippedWeapon];
+      const weapon = WEAPON_DEFS[_invP.equippedWeapon];
       ui.invWeaponSlot.dataset.rarity = weapon?.rarity || '';
       ui.invWeaponSlot.innerHTML = `<div class="inv-slot__top"><span class="inv-slot__kicker">weapon</span><span class="inv-slot__status">${weapon ? 'Equipped Now' : 'No Weapon'}</span></div><div class="inv-slot__move" style="color:${getRarityNameColor(weapon?.rarity)}">${weapon?.name || 'Default Melee Active'}</div><p class="inv-slot__hint">${weapon ? `${weapon.description} Click this slot to unequip and return left click to melee.` : 'Open the Weapons tab and click any owned weapon to equip it to left click.'}</p>`;
     }
@@ -4682,7 +4716,7 @@
       gameElapsedTime = 0;
       achievementManager.resetRunCounters();
       player = createDefaultPlayer();
-      if (gameMode !== 'coop' && gameMode !== 'pvp') { player2 = null; player3 = null; player4 = null; p2DeadInCoop = false; p3DeadInCoop = false; p4DeadInCoop = false; pvpState = null; const _p2r = document.getElementById('p2HpRow'); if (_p2r) _p2r.style.display = 'none'; }
+      if (gameMode !== 'coop' && gameMode !== 'pvp') { player2 = null; player3 = null; player4 = null; p1DeadInCoop = false; p2DeadInCoop = false; p3DeadInCoop = false; p4DeadInCoop = false; pvpState = null; const _p2r = document.getElementById('p2HpRow'); if (_p2r) _p2r.style.display = 'none'; }
       if (gameMode === 'sandbox') {
         player.coins = Number(sandboxSettings.startingCoins || 0);
         selectedChallenges = [];
@@ -4728,7 +4762,7 @@
     player2 = mpPlayerCount >= 2 ? spawnMpPlayer(chosenCharacter2, 36, 0) : null;
     player3 = mpPlayerCount >= 3 ? spawnMpPlayer(chosenCharacter3, 0, 36) : null;
     player4 = mpPlayerCount >= 4 ? spawnMpPlayer(chosenCharacter4, 36, 36) : null;
-    p2DeadInCoop = false; p3DeadInCoop = false; p4DeadInCoop = false;
+    p1DeadInCoop = false; p2DeadInCoop = false; p3DeadInCoop = false; p4DeadInCoop = false;
     lastDamageSource = '';
     lastDamageSourceKey = '';
     resetScene();
@@ -4756,11 +4790,10 @@
     player2.maxHp = 300; player2.hp = 300;
     if (mpPlayerCount >= 3) { player3 = spawnMpPlayer(chosenCharacter3 || chosenCharacter, -80, 60); player3.maxHp = 300; player3.hp = 300; }
     if (mpPlayerCount >= 4) { player4 = spawnMpPlayer(chosenCharacter4 || chosenCharacter, 0, 60); player4.maxHp = 300; player4.hp = 300; }
-    p3DeadInCoop = false; p4DeadInCoop = false;
+    p1DeadInCoop = false; p2DeadInCoop = false; p3DeadInCoop = false; p4DeadInCoop = false;
     player2.x = START_X + 80;
     player2.y = START_Y;
     player2.items = JSON.parse(JSON.stringify(player.items));
-    p2DeadInCoop = false;
     pvpState = { p1Kills: 0, p2Kills: 0, killsToWin: 3, respawnTimer: null };
     lastDamageSource = '';
     lastDamageSourceKey = '';
@@ -9495,6 +9528,7 @@
     const _left  = _b ? _b.left  : 'a';
     const _down  = _b ? _b.down  : 's';
     const _up    = _b ? _b.up    : 'w';
+    if (p1DeadInCoop) { keys[_right] = false; keys[_left] = false; keys[_down] = false; keys[_up] = false; }
     const _nt = window.NeoTouch;
     if (_nt?.active) {
       // Inject touch move vector — auto-aim fires in last joystick direction
@@ -9656,11 +9690,13 @@
         }
       }
     }
-    if (getItemStats().hasRobotArm) { mouse.down = true; mouse.downQueued = true; }
-    const meleeHeld = isMouseActionHeld('slash');
-    const laserHeld = isMouseActionHeld('laser');
-    if (!overlayOpen && meleeHeld) tryMelee();
-    if (!overlayOpen && laserHeld) tryLaser();
+    if (!p1DeadInCoop) {
+      if (getItemStats().hasRobotArm) { mouse.down = true; mouse.downQueued = true; }
+      const meleeHeld = isMouseActionHeld('slash');
+      const laserHeld = isMouseActionHeld('laser');
+      if (!overlayOpen && meleeHeld) tryMelee();
+      if (!overlayOpen && laserHeld) tryLaser();
+    }
     if (keys.f && !teleportKeyLatch) {
       tryChargedLadderWarp();
       teleportKeyLatch = true;
@@ -9685,7 +9721,7 @@
       }
     }
 
-    updatePlayerLaser(dt);
+    if (!p1DeadInCoop) updatePlayerLaser(dt);
     if (gameMode === 'coop' || gameMode === 'pvp') {
       if (player2 && !p2DeadInCoop) updatePlayer2(dt);
       if (player3 && !p3DeadInCoop) updatePlayerN(dt, player3, 3);
@@ -9707,7 +9743,7 @@
       cam.y += (ty - cam.y) * 8 * dt;
     }
 
-    trackCamera(camera, player, slotW, slotH);
+    if (!p1DeadInCoop) trackCamera(camera, player, slotW, slotH);
     if (isSplit && player2 && !p2DeadInCoop) trackCamera(camera2, player2, slotW, slotH);
     if (isSplit && player3 && !p3DeadInCoop) trackCamera(camera3, player3, slotW, slotH);
     if (isSplit && player4 && !p4DeadInCoop) trackCamera(camera4, player4, slotW, slotH);
@@ -11326,7 +11362,7 @@
       if (n === 3) p3DeadInCoop = true;
       if (n === 4) p4DeadInCoop = true;
       particles.push({ x: pn.x, y: pn.y - 30, life: 1.2, text: `P${n} DOWN`, c: '#a8d8ff' });
-      if (player.hp <= 0 && p2DeadInCoop && p3DeadInCoop && p4DeadInCoop) die();
+      if (p1DeadInCoop && p2DeadInCoop && p3DeadInCoop && p4DeadInCoop) die();
     }
   }
 
@@ -11351,7 +11387,7 @@
       } else {
         p2DeadInCoop = true;
         particles.push({ x: player2.x, y: player2.y - 30, life: 1.2, text: 'P2 DOWN', c: '#4ca8ff' });
-        if (player.hp <= 0) die();
+        if (p1DeadInCoop && p3DeadInCoop && p4DeadInCoop) die();
       }
     }
   }
@@ -11452,9 +11488,10 @@
             player.x = START_X - 80; player.y = START_Y - 40;
             player.inv = 1;
           }
-        } else if (gameMode === 'coop' && player2 && !p2DeadInCoop) {
+        } else if (gameMode === 'coop' && (player2 || player3 || player4) && (!p2DeadInCoop || !p3DeadInCoop || !p4DeadInCoop)) {
           particles.push({ x: player.x, y: player.y - 30, life: 1.2, text: 'P1 DOWN', c: '#ff6b6b' });
           player.hp = 0;
+          p1DeadInCoop = true;
         } else {
           die();
         }

@@ -84,11 +84,7 @@
     slot.p2MeleeHeld = slot.slash;
     slot.p2DashHeld  = slot.dash;
 
-    if (
-      Math.hypot(slot.moveX, slot.moveY) > DEAD_ZONE ||
-      slot.slash || slot.laser || slot.smash || slot.dash
-    ) slot.active = true;
-    else slot.active = true; // stay active once a gamepad is connected
+    slot.active = true; // stay active once a gamepad is connected and reporting
   }
 
   function pollGamepads() {
