@@ -4713,12 +4713,13 @@
     activeShopTab = 'items';
     draggingMoveKey = '';
     weaponBurstQueue = [];
-    rivals = [];
+    restoreRivals(snapshot.rivals);
     wizardPawSelection = null;
     setWizardPawModalOpen(false);
     setShopPanelOpen(false);
     setInventoryPanelOpen(false);
     updateItemUI();
+    injectRivalsToCurrentRoom();
     updateObjective();
     updateHud();
     persistMetaSoon();
@@ -5586,6 +5587,7 @@
       roomsVisited: 0,
       threat: 0,
       lastSeenTime: 0,
+      princessKnightIntroPlayed: false,
     };
   }
 
@@ -5600,7 +5602,33 @@
       roomsVisited: Number(memory.roomsVisited || fallback.roomsVisited),
       threat: Number(memory.threat || fallback.threat),
       lastSeenTime: Number(memory.lastSeenTime || fallback.lastSeenTime),
+      princessKnightIntroPlayed: !!memory.princessKnightIntroPlayed,
     };
+  }
+
+  function tryPlayPrincessKnightCutscene(rival, enemy) {
+    if (!rival || !enemy || !player) return false;
+    if (player.character !== 'thorn_knight') return false;
+    if (rival.characterKey !== 'princess') return false;
+    if (rival.memory?.princessKnightIntroPlayed) return false;
+
+    rival.memory.princessKnightIntroPlayed = true;
+    clearGameplayInput();
+    setShopPanelOpen(false);
+    setInventoryPanelOpen(false);
+    enemy.attackCd = Math.max(Number(enemy.attackCd || 0), 1.2);
+    enemy.stun = Math.max(Number(enemy.stun || 0), 0.2);
+
+    return uiController.playDialogue([
+      {
+        speaker: 'RIVAL PRINCESS',
+        text: "Oh, you're here. You were supposed to be fighting for me, but you took too long, so now we fight!",
+      },
+      {
+        speaker: 'THORN KNIGHT',
+        text: 'Then draw your blade.',
+      },
+    ], { returnState: 'play' });
   }
 
   function getRivalById(rivalId, rivalKey = '') {
@@ -5829,6 +5857,13 @@
 
   function chooseRivalObjectiveRoom(rival, fromRoom) {
     if (!fromRoom) return null;
+    const threat = Number(rival?.memory?.threat || 0);
+    if (currentRoom && currentRoom !== fromRoom && threat > 1.2) {
+      const huntChance = clamp(0.2 + threat * 0.07, 0.2, 0.72);
+      if (nextRandom('encounter') < huntChance) {
+        return currentRoom;
+      }
+    }
     const pool = rooms.filter(room => room !== fromRoom && room.type !== 'start' && room.type !== 'god' && room.type !== 'boss');
     if (pool.length === 0) return fromRoom;
 
@@ -5876,6 +5911,11 @@
     if (roomIdx < 0) return;
     room.pickups.splice(roomIdx, 1);
     rival.loot.push({ type: stolen.type, key: stolen.key, value: stolen.value });
+    if (rival.memory) {
+      rival.memory.stolenCount += 1;
+      rival.memory.threat += 0.12;
+    }
+    awardRivalXp(rival, stolen.type === 'item' ? 10 : 6, 'loot');
     if (room === currentRoom) {
       const liveIdx = pickups.indexOf(stolen);
       if (liveIdx >= 0) pickups.splice(liveIdx, 1);
@@ -5915,7 +5955,10 @@
     };
     enemies.push(entry);
     particles.push({ x: entry.x, y: entry.y - 26, life: 1.8, text: `${rival.name.toUpperCase()} ENTERS!`, c: rival.color });
-    sayAtPosition(entry.x, entry.y, rival.enterLine, { speaker: rival.name, tone: 'boss', holdTime: 1.8, offsetY: rival.r + 36 });
+    const playedCutscene = tryPlayPrincessKnightCutscene(rival, entry);
+    if (!playedCutscene) {
+      sayAtPosition(entry.x, entry.y, rival.enterLine, { speaker: rival.name, tone: 'boss', holdTime: 1.8, offsetY: rival.r + 36 });
+    }
   }
 
   function injectRivalsToCurrentRoom() {
@@ -5932,16 +5975,31 @@
     for (let i = rivals.length - 1; i >= 0; i--) {
       const rival = rivals[i];
       if (rival.dead) { rivals.splice(i, 1); continue; }
+
+      rival.growthTick = Number(rival.growthTick || 0) + dt;
+      while (rival.growthTick >= RIVAL_GROWTH_TICK_SECONDS) {
+        rival.growthTick -= RIVAL_GROWTH_TICK_SECONDS;
+        awardRivalXp(rival, RIVAL_XP_PER_GROWTH_TICK + floor * 0.5, 'time');
+      }
+
       // Sync hp from live enemy if they're in the current room
       const liveEnemy = enemies.find(e => e.type === 'rival' && e.rivalData === rival);
       if (liveEnemy) {
         rival.hp = liveEnemy.hp;
         if (liveEnemy.hp < rival.hpSnapshot) {
-          rival.aggroTimer = Math.max(rival.aggroTimer, 12);
+          if (rival.memory) {
+            rival.memory.playerHitsTaken += 1;
+            rival.memory.threat += 0.34;
+          }
+          rival.aggroTimer = Math.max(rival.aggroTimer, 12 + Math.min(8, Number(rival.memory?.threat || 0)));
           rival.lastKnownPlayerGx = currentRoom.gx;
           rival.lastKnownPlayerGy = currentRoom.gy;
+          awardRivalXp(rival, 9, 'combat');
         }
         rival.hpSnapshot = liveEnemy.hp;
+      }
+      if (rival.memory) {
+        rival.memory.threat = Math.max(0, rival.memory.threat - dt * 0.03);
       }
       rival.aggroTimer = Math.max(0, rival.aggroTimer - dt);
       rival.moveTimer -= dt;
@@ -5984,11 +6042,20 @@
         stealFromRoom(rival, nextRoom);
         rival.roomGx = nextRoom.gx;
         rival.roomGy = nextRoom.gy;
+        if (rival.memory) {
+          rival.memory.roomsVisited += 1;
+        }
 
         if (nextRoom === currentRoom) {
-          rival.aggroTimer = Math.max(rival.aggroTimer, 8);
+          if (rival.memory) {
+            rival.memory.playerSightings += 1;
+            rival.memory.lastSeenTime = Number(gameElapsedTime || 0);
+            rival.memory.threat += 0.6;
+          }
+          rival.aggroTimer = Math.max(rival.aggroTimer, 8 + Math.min(7, Number(rival.memory?.threat || 0)));
           rival.lastKnownPlayerGx = currentRoom.gx;
           rival.lastKnownPlayerGy = currentRoom.gy;
+          awardRivalXp(rival, 7, 'sighting');
           injectRivalToCurrentRoom(rival);
         }
 
@@ -6040,6 +6107,10 @@
       if (distance < enemy.r + player.r + 12) {
         const angle = Math.atan2(dy, dx);
         damagePlayer(enemy.dmg, angle, 280, rival.name);
+        if (rival.memory) {
+          rival.memory.playerHitsDealt += 1;
+          rival.memory.threat += 0.2;
+        }
         enemy.attackCd = rival.attackCd * 0.9 + nextRandom('encounter') * 0.4;
         enemy.swingTime = 0.22;
         // Heal on hit for granialla-style
@@ -8722,6 +8793,7 @@
       const rival = enemy.rivalData;
       if (rival) {
         rival.dead = true;
+        if (player) player.rivalReputation = Math.max(0, Number(player.rivalReputation || 0)) + 1;
         achievementEvents.emit('rival:killed');
         rival.loot.forEach(item => {
           if (item.type === 'item' && item.key) {
@@ -11808,6 +11880,7 @@
       shopOffers,
       structures,
       decorations,
+      rivals,
       cooldowns,
       laserActive,
       laserTime,
