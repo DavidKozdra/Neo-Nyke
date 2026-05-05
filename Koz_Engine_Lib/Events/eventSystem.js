@@ -111,7 +111,7 @@ class EventSystem {
    */
   startEventTimer(seconds) {
     this.clearEventTimer();
-    this._countdown.start(seconds, () => {
+    this._countdown.start(this._getScaledEventTimeLimit(seconds), () => {
       if (!this.currentEvent) return;
 
       // Grab event info before we clear it
@@ -120,20 +120,7 @@ class EventSystem {
       const choice = evt.choices[worst];
 
       // Resolve the consequence
-      let result;
-      try {
-        result = choice.resolve();
-      } catch (err) {
-        console.error('[EventSystem] timed event resolve failed:', err);
-        result = {
-          message: 'The event failed to resolve correctly. You continue your journey.',
-          type: 'error',
-        };
-      }
-
-      if (!result || typeof result !== 'object') {
-        result = { message: 'The event concludes.', type: 'info' };
-      }
+      let result = this._resolveEventChoice(choice, 'timed event');
 
       // Build a proper timeout message: event-specific flavor + actual consequence
       const timeoutFlavor = evt.timeoutMessage || `You hesitated too long!`;
@@ -160,6 +147,135 @@ class EventSystem {
    */
   getTimerRemaining() {
     return this._countdown.remainingSeconds();
+  }
+
+  _getDifficultyConfig() {
+    const config = typeof window !== 'undefined' && window.DIFFICULTY_CONFIG && typeof window.DIFFICULTY_CONFIG === 'object'
+      ? window.DIFFICULTY_CONFIG
+      : {};
+    return {
+      eventCheckIntervalMultiplier: Number(config.eventCheckIntervalMultiplier || 1),
+      eventChanceMultiplier: Number(config.eventChanceMultiplier || 1),
+      eventTimerMultiplier: Number(config.eventTimerMultiplier || 1),
+      eventPenaltyMultiplier: Number(config.eventPenaltyMultiplier || 1),
+    };
+  }
+
+  _getScaledCheckInterval() {
+    const config = this._getDifficultyConfig();
+    return Math.max(6, Math.round(this.checkInterval * config.eventCheckIntervalMultiplier));
+  }
+
+  _getScaledEventChance() {
+    const config = this._getDifficultyConfig();
+    return Math.max(0, Math.min(0.95, this.eventChance * config.eventChanceMultiplier));
+  }
+
+  _getScaledEventTimeLimit(seconds) {
+    const config = this._getDifficultyConfig();
+    return Math.max(5, Math.round(Number(seconds || 0) * config.eventTimerMultiplier));
+  }
+
+  _capturePenaltySnapshot() {
+    return {
+      gold: Math.max(0, Number(player?.gold || 0)),
+      hp: Math.max(0, Number(player?.hp || 0)),
+      boatCondition: player?.activeBoat ? Math.max(0, Number(player.activeBoat.condition || 0)) : null,
+    };
+  }
+
+  _applyDifficultyPenaltyScaling(snapshot, result) {
+    if (!snapshot || !result || typeof result !== 'object') return result;
+    const type = String(result.type || 'info');
+    if (type !== 'warning' && type !== 'error') return result;
+
+    const config = this._getDifficultyConfig();
+    const penaltyMultiplier = Number(config.eventPenaltyMultiplier || 1);
+    if (!Number.isFinite(penaltyMultiplier) || Math.abs(penaltyMultiplier - 1) < 0.001) return result;
+
+    const adjustmentNotes = [];
+    const currentGold = Math.max(0, Number(player?.gold || 0));
+    const goldLoss = Math.max(0, snapshot.gold - currentGold);
+    if (goldLoss > 0) {
+      const targetLoss = Math.max(0, Math.round(goldLoss * penaltyMultiplier));
+      const delta = targetLoss - goldLoss;
+      if (delta > 0) {
+        const extraGold = Math.min(Math.max(0, Number(player?.gold || 0)), delta);
+        if (extraGold > 0 && typeof player?.spendGold === 'function') {
+          player.spendGold(extraGold);
+          adjustmentNotes.push(`gold penalty +${extraGold}`);
+        }
+      } else if (delta < 0) {
+        const refund = Math.abs(delta);
+        if (refund > 0) {
+          if (typeof player?.earnGold === 'function') player.earnGold(refund);
+          else if (player) player.gold = currentGold + refund;
+          adjustmentNotes.push(`gold refund ${refund}`);
+        }
+      }
+    }
+
+    const currentHp = Math.max(0, Number(player?.hp || 0));
+    const hpLoss = Math.max(0, snapshot.hp - currentHp);
+    if (hpLoss > 0) {
+      const targetLoss = Math.max(0, Math.round(hpLoss * penaltyMultiplier));
+      const delta = targetLoss - hpLoss;
+      if (delta > 0) {
+        if (typeof player?.takeDamage === 'function') {
+          player.takeDamage(delta);
+          adjustmentNotes.push(`HP penalty +${delta}`);
+        }
+      } else if (delta < 0 && player) {
+        const heal = Math.abs(delta);
+        player.hp = Math.min(Number(player.maxHp || player.hp || 0), Number(player.hp || 0) + heal);
+        adjustmentNotes.push(`HP restored ${heal}`);
+      }
+    }
+
+    if (snapshot.boatCondition !== null && player?.activeBoat) {
+      const currentCondition = Math.max(0, Number(player.activeBoat.condition || 0));
+      const hullLoss = Math.max(0, snapshot.boatCondition - currentCondition);
+      if (hullLoss > 0) {
+        const targetLoss = Math.max(0, Math.round(hullLoss * penaltyMultiplier));
+        const delta = targetLoss - hullLoss;
+        if (delta > 0) {
+          if (typeof player.activeBoat.applyDamage === 'function') {
+            player.activeBoat.applyDamage(delta);
+            adjustmentNotes.push(`hull penalty +${delta}`);
+          }
+        } else if (delta < 0) {
+          const repair = Math.abs(delta);
+          player.activeBoat.condition = Math.min(100, currentCondition + repair);
+          adjustmentNotes.push(`hull restored ${repair}`);
+        }
+      }
+    }
+
+    if (adjustmentNotes.length > 0) {
+      const difficultyNote = penaltyMultiplier > 1 ? 'Difficulty increased the penalty.' : 'Difficulty softened the penalty.';
+      result.message = `${result.message}\n\n${difficultyNote} ${adjustmentNotes.join(', ')}.`;
+    }
+    return result;
+  }
+
+  _resolveEventChoice(choice, sourceLabel = 'choice') {
+    const snapshot = this._capturePenaltySnapshot();
+    let result;
+    try {
+      result = choice.resolve();
+    } catch (err) {
+      console.error(`[EventSystem] ${sourceLabel} resolve failed:`, err);
+      result = {
+        message: 'The event failed to resolve correctly. You continue your journey.',
+        type: 'error',
+      };
+    }
+
+    if (!result || typeof result !== 'object') {
+      result = { message: 'The event concludes.', type: 'info' };
+    }
+
+    return this._applyDifficultyPenaltyScaling(snapshot, result);
   }
 
   /**
@@ -195,9 +311,9 @@ class EventSystem {
     if (player.currentCity) return; // No events in cities
 
     this.tilesMoved++;
-    if (this.tilesMoved >= this.checkInterval) {
+    if (this.tilesMoved >= this._getScaledCheckInterval()) {
       this.tilesMoved = 0;
-      if (Math.random() < this.eventChance) {
+      if (Math.random() < this._getScaledEventChance()) {
         this.triggerRandomEvent();
       }
     }
@@ -261,20 +377,7 @@ class EventSystem {
     this.clearEventTimer();
 
     const choice = this.currentEvent.choices[choiceIndex];
-    let result;
-    try {
-      result = choice.resolve();
-    } catch (err) {
-      console.error('[EventSystem] choice resolve failed:', err);
-      result = {
-        message: 'The event failed to resolve correctly. You continue your journey.',
-        type: 'error',
-      };
-    }
-
-    if (!result || typeof result !== 'object') {
-      result = { message: 'The event concludes.', type: 'info' };
-    }
+    const result = this._resolveEventChoice(choice);
 
     if (typeof notificationManager !== 'undefined') {
       notificationManager.log(result.message, result.type || "info");

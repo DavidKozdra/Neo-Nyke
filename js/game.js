@@ -1263,6 +1263,16 @@
     altModeEndlessBtn: document.getElementById('altModeEndlessBtn'),
     altModePracticeBtn: document.getElementById('altModePracticeBtn'),
     altModeBossRushBtn: document.getElementById('altModeBossRushBtn'),
+    altModeCoopBtn: document.getElementById('altModeCoopBtn'),
+    altModePvpBtn: document.getElementById('altModePvpBtn'),
+    mpLobby: document.getElementById('mpLobby'),
+    mpLobbyBack: document.getElementById('mpLobbyBack'),
+    mpLobby1Btn: document.getElementById('mpLobby1Btn'),
+    mpLobby2Btn: document.getElementById('mpLobby2Btn'),
+    mpLobbyTitle: document.getElementById('mpLobbyTitle'),
+    charSelectPhaseTag: document.getElementById('charSelectPhaseTag'),
+    charSelectTitle: document.getElementById('charSelectTitle'),
+    charSelectSubtitle: document.getElementById('charSelectSubtitle'),
     altModeSandboxBtn: document.getElementById('altModeSandboxBtn'),
     altModeSandboxConfigBtn: document.getElementById('altModeSandboxConfigBtn'),
     sandboxPanel: document.getElementById('sandboxPanel'),
@@ -1337,6 +1347,17 @@
   const uiController = createUIController(ui);
 
   let player = null;
+  let player2 = null;
+  let player3 = null;
+  let player4 = null;
+  let chosenCharacter2 = 'thorn_knight';
+  let chosenCharacter3 = 'thorn_knight';
+  let chosenCharacter4 = 'thorn_knight';
+  let p2DeadInCoop = false;
+  let p3DeadInCoop = false;
+  let p4DeadInCoop = false;
+  let charSelectPhase = null; // null | 'p1' | 'p2' | 'p3' | 'p4'
+  let mpPlayerCount = 2;
   let enemies = [];
   let deadBodies = [];
   let particles = [];
@@ -1349,6 +1370,9 @@
   let mouse = { x: 0, y: 0, worldX: 0, worldY: 0, down: false, right: false, downQueued: false, rightQueued: false };
   let cooldowns = {};
   let camera = { x: 0, y: 0 };
+  let camera2 = { x: 0, y: 0 };
+  let camera3 = { x: 0, y: 0 };
+  let camera4 = { x: 0, y: 0 };
   let shake = 0;
   let shakeT = 0;
   let gameState = 'menu';
@@ -2256,12 +2280,18 @@
       if (key === inventoryKey) invKeyLatch = false;
     });
     uiController.bindMenuActions({
-      _getChosenCharacter() { return chosenCharacter; },
+      _getChosenCharacter() {
+        if (charSelectPhase === 'p2') return chosenCharacter2;
+        if (charSelectPhase === 'p3') return chosenCharacter3;
+        if (charSelectPhase === 'p4') return chosenCharacter4;
+        return chosenCharacter;
+      },
       onCharacterSelect(characterKey, button) {
         if (button.classList.contains('locked')) return;
-        chosenCharacter = characterKey;
-        metaProgress.selectedCharacter = chosenCharacter;
-        persistMetaSoon();
+        if (charSelectPhase === 'p2') { chosenCharacter2 = characterKey; }
+        else if (charSelectPhase === 'p3') { chosenCharacter3 = characterKey; }
+        else if (charSelectPhase === 'p4') { chosenCharacter4 = characterKey; }
+        else { chosenCharacter = characterKey; metaProgress.selectedCharacter = chosenCharacter; persistMetaSoon(); }
         updateCharacterSelectionUI();
       },
       onDifficultySelect(difficultyKey, button) {
@@ -2333,8 +2363,27 @@
         navigateTutorialStep(1);
       },
       onOpenCharacterSelect() { gameMode = 'normal'; setGameState('charselect'); },
-      onCloseCharacterSelect() { setGameState('menu'); },
-      onOpenAltModeCharSelect(mode) { gameMode = mode; setGameState('charselect'); },
+      onCloseCharacterSelect() {
+        const phases = ['p1','p2','p3','p4'].slice(0, mpPlayerCount);
+        const cur = phases.indexOf(charSelectPhase);
+        if (cur > 0) {
+          charSelectPhase = phases[cur - 1];
+          updateCharacterSelectionUI();
+          return;
+        }
+        charSelectPhase = null;
+        setGameState('menu');
+      },
+      onOpenAltModeCharSelect(mode) {
+        gameMode = mode;
+        if (mode === 'coop' || mode === 'pvp') {
+          openMpLobby(mode);
+        } else {
+          charSelectPhase = null;
+          setGameState('charselect');
+          updateCharacterSelectionUI();
+        }
+      },
       onStartSandbox() {
         gameMode = 'sandbox';
         selectedDifficulty = 'easy';
@@ -2342,7 +2391,17 @@
         persistMetaSoon();
         setGameState('charselect');
       },
-      onStartNew() { void startGame(false); },
+      onStartNew() {
+        const phases = ['p1','p2','p3','p4'].slice(0, mpPlayerCount);
+        const cur = phases.indexOf(charSelectPhase);
+        if (cur >= 0 && cur < phases.length - 1) {
+          charSelectPhase = phases[cur + 1];
+          updateCharacterSelectionUI();
+          return;
+        }
+        charSelectPhase = null;
+        void startGame(false);
+      },
       onContinue() { void startGame(true); },
       onDeleteRun() { void deleteSavedRun(); },
       onRerunFromHistory(entryId) {
@@ -2992,8 +3051,8 @@
     });
 
     const heals = [
-      { id: 'small', name: 'Minor Heal', heal: 45, cost: getShopHealCost('small') },
-      { id: 'major', name: 'Major Heal', heal: 100, cost: getShopHealCost('major') },
+      { id: 'small', name: 'Minor Heal', heal: scalePotionHealing(45, 24), cost: getShopHealCost('small') },
+      { id: 'major', name: 'Major Heal', heal: scalePotionHealing(100, 52), cost: getShopHealCost('major') },
     ];
     const healCards = heals
       .map(heal => {
@@ -3669,13 +3728,45 @@
     return [...new Set(input.filter(key => CHALLENGE_DEFS[key]))];
   }
 
+  function isSplitScreen() {
+    return (gameMode === 'coop' || gameMode === 'pvp') && !!player2 && mpPlayerCount >= 2;
+  }
+  function splitPlayerCount() {
+    let n = 0;
+    if (player && gameState === 'play') n++;
+    if (player2 && !p2DeadInCoop) n++;
+    if (player3 && !p3DeadInCoop) n++;
+    if (player4 && !p4DeadInCoop) n++;
+    return n;
+  }
+
+  function openMpLobby(mode) {
+    gameMode = mode;
+    const titleEl = document.getElementById('mpLobbyTitle');
+    const hintEl = document.getElementById('mpLobbyHint');
+    if (titleEl) titleEl.textContent = mode === 'pvp' ? 'PVP' : 'CO-OP';
+    if (hintEl) {
+      if (mode === 'pvp') hintEl.textContent = 'First to 3 kills wins. Melee your opponent to score.';
+      else hintEl.textContent = 'P1: WASD + Mouse / Gamepad 1  ·  P2: IJKL + U/; / Gamepad 2';
+    }
+    const lobby = document.getElementById('mpLobby');
+    if (lobby) lobby.classList.remove('hidden');
+  }
+
+  function closeMpLobby() {
+    const lobby = document.getElementById('mpLobby');
+    if (lobby) lobby.classList.add('hidden');
+  }
+
   function normalizeGameMode(input) {
     const mode = String(input || 'normal').toLowerCase();
-    if (mode === 'endless' || mode === 'practice' || mode === 'boss_rush' || mode === 'sandbox') return mode;
+    if (mode === 'endless' || mode === 'practice' || mode === 'boss_rush' || mode === 'sandbox' || mode === 'coop' || mode === 'pvp') return mode;
     return 'normal';
   }
 
   function getRunModeLabel(mode) {
+    if (mode === 'coop') return 'Co-op';
+    if (mode === 'pvp') return 'PVP';
     if (mode === 'endless') return 'Endless';
     if (mode === 'practice') return 'Practice';
     if (mode === 'boss_rush') return 'Boss Rush';
@@ -3833,6 +3924,59 @@
       return { ...DIFFICULTY_DEFS.custom, ...customDifficultySettings, key: 'custom', name: 'Custom' };
     }
     return DIFFICULTY_DEFS[norm];
+  }
+
+  function getDifficultyRuntimeConfig(key = selectedDifficulty) {
+    const difficulty = getDifficultyDef(key);
+    const statPressure = clamp((Number(difficulty?.statMultiplier || 1) - 1) / 0.52, 0, 1);
+    const roomPressure = clamp(Number(difficulty?.roomWeightBonus || 0) / 0.22, 0, 1);
+    const economyPressure = clamp((Number(difficulty?.shopPriceMultiplier || 1) - 1) / 0.42, 0, 1);
+    return {
+      key: String(difficulty?.key || normalizeDifficulty(key)),
+      eventCheckIntervalMultiplier: 1 - roomPressure * 0.18,
+      eventChanceMultiplier: 1 + roomPressure * 0.26,
+      eventTimerMultiplier: 1 - statPressure * 0.22,
+      eventPenaltyMultiplier: 1 + statPressure * 0.38,
+      challengeTimerMultiplier: 1 - roomPressure * 0.2,
+      potionHealMultiplier: 1 - statPressure * 0.16,
+      coinRewardMultiplier: 1 + economyPressure * 0.24,
+      xpRewardMultiplier: 1 + statPressure * 0.16,
+      bribeCostMultiplier: 1 + economyPressure * 0.22,
+      memoryMatchMaxFlips: Math.max(2, 6 - Math.round(statPressure * 2)),
+    };
+  }
+
+  function getRunDifficultyScalars() {
+    const config = getDifficultyRuntimeConfig();
+    return {
+      challengeTimerMultiplier: Number(config.challengeTimerMultiplier || 1),
+      potionHealMultiplier: Number(config.potionHealMultiplier || 1),
+      coinRewardMultiplier: Number(config.coinRewardMultiplier || 1),
+      xpRewardMultiplier: Number(config.xpRewardMultiplier || 1),
+    };
+  }
+
+  function scaleChallengeTimer(baseSeconds) {
+    const scaledSeconds = Math.round(Number(baseSeconds || 0) * getRunDifficultyScalars().challengeTimerMultiplier);
+    return Math.max(6, scaledSeconds);
+  }
+
+  function scalePotionHealing(baseAmount, minimumAmount = 1) {
+    const scaledAmount = Math.round(Number(baseAmount || 0) * getRunDifficultyScalars().potionHealMultiplier);
+    return Math.max(Number(minimumAmount || 0), scaledAmount);
+  }
+
+  function getPotionHealAmount() {
+    return scalePotionHealing(40, 24);
+  }
+
+  if (typeof window !== 'undefined') {
+    Object.defineProperty(window, 'DIFFICULTY_CONFIG', {
+      configurable: true,
+      get() {
+        return getDifficultyRuntimeConfig();
+      },
+    });
   }
 
   function getShopPriceMultiplier(difficultyKey = selectedDifficulty) {
@@ -4451,26 +4595,52 @@
     uiController.setRunHistory(runHistory || []);
   }
 
+  const PHASE_LABELS = { p1: 'PLAYER 1', p2: 'PLAYER 2', p3: 'PLAYER 3', p4: 'PLAYER 4' };
+  const PHASE_COLORS = { p1: 'p1', p2: 'p2', p3: 'p3', p4: 'p4' };
+  const PHASE_CHAR = { p1: () => chosenCharacter, p2: () => chosenCharacter2, p3: () => chosenCharacter3, p4: () => chosenCharacter4 };
+
   function updateCharacterSelectionUI() {
+    const phaseTag = document.getElementById('charSelectPhaseTag');
+    const titleEl = document.getElementById('charSelectTitle');
+    const subtitleEl = document.getElementById('charSelectSubtitle');
+    const goBtn = document.getElementById('go');
+    const phases = ['p1','p2','p3','p4'].slice(0, mpPlayerCount);
+    const phaseIdx = phases.indexOf(charSelectPhase);
+    const isLastPhase = phaseIdx === phases.length - 1;
+    if (charSelectPhase && PHASE_LABELS[charSelectPhase]) {
+      const label = PHASE_LABELS[charSelectPhase];
+      if (phaseTag) { phaseTag.textContent = label; phaseTag.className = `charselect-phase-tag ${PHASE_COLORS[charSelectPhase]}`; phaseTag.classList.remove('hidden'); }
+      if (titleEl) titleEl.textContent = `${label} — CHOOSE YOUR WARRIOR`;
+      if (subtitleEl) subtitleEl.textContent = isLastPhase ? 'Last player — then enter the dungeon.' : `${label} locked. Next player picks after.`;
+      if (goBtn) goBtn.textContent = isLastPhase ? 'ENTER DUNGEON' : `CONFIRM ${label} →`;
+    } else {
+      if (phaseTag) phaseTag.classList.add('hidden');
+      if (titleEl) titleEl.textContent = 'CHOOSE YOUR WARRIOR';
+      if (subtitleEl) subtitleEl.textContent = 'Pick a fighter, set the run, then enter the dungeon. Challenges live in their own shop panel.';
+      if (goBtn) goBtn.textContent = 'ENTER DUNGEON';
+    }
+    const activeChar = charSelectPhase && PHASE_CHAR[charSelectPhase] ? PHASE_CHAR[charSelectPhase]() : chosenCharacter;
     const unlocked = new Set(metaProgress.unlockedCharacters || ['princess', 'thorn_knight', 'metao']);
     const unlockedDifficulties = getUnlockedDifficultySet();
     const unlockedChallenges = getUnlockedChallengeSet();
     const ownedChallenges = getOwnedChallengeSet();
     if (metaProgress.godsKilled > 0) unlocked.add('granialla');
     const preferredCharacter = String(metaProgress.selectedCharacter || chosenCharacter);
-    if (unlocked.has(preferredCharacter)) {
-      chosenCharacter = preferredCharacter;
-    } else if (!unlocked.has(chosenCharacter)) {
-      chosenCharacter = [...unlocked][0] || 'thorn_knight';
+    if (!charSelectPhase || charSelectPhase === 'p1') {
+      if (unlocked.has(preferredCharacter)) {
+        chosenCharacter = preferredCharacter;
+      } else if (!unlocked.has(chosenCharacter)) {
+        chosenCharacter = [...unlocked][0] || 'thorn_knight';
+      }
+      metaProgress.selectedCharacter = chosenCharacter;
     }
-    metaProgress.selectedCharacter = chosenCharacter;
     if (!unlockedDifficulties.has(selectedDifficulty)) selectedDifficulty = 'easy';
     if (selectedDifficulty === 'custom') selectedDifficulty = 'easy';
     metaProgress.selectedDifficulty = selectedDifficulty;
     selectedChallenges = normalizeChallengeSelection(selectedChallenges).filter(key => unlockedChallenges.has(key) && ownedChallenges.has(key));
     metaProgress.selectedChallenges = normalizeChallengeSelection(selectedChallenges);
     const ownedLegacy = new Set(metaProgress.unlockedLegacy || []);
-    uiController.updateCharacterSelection(unlocked, chosenCharacter);
+    uiController.updateCharacterSelection(unlocked, activeChar);
     uiController.updateDifficultySelection(unlockedDifficulties, selectedDifficulty, metaProgress.loopCrystals || 0);
     uiController.updateChallengeSelection(unlockedChallenges, ownedChallenges, selectedChallenges, metaProgress.loopCrystals || 0, metaProgress.coins || 0);
     uiController.updateLegacySelection(ownedLegacy, metaProgress.loopCrystals || 0);
@@ -4493,6 +4663,8 @@
     if (gameMode === 'endless') { startEndless(); return; }
     if (gameMode === 'practice') { startPractice(); return; }
     if (gameMode === 'boss_rush') { startBossRush(); return; }
+    if (gameMode === 'coop') { startCoop(); return; }
+    if (gameMode === 'pvp') { startPvp(); return; }
     const forceTutorialReplay = !resume && consumeReplayTutorialRequest();
     const shouldRunTutorial = gameMode === 'normal' && (!metaProgress.tutorialCompleted || forceTutorialReplay);
     setGameState('play');
@@ -4510,6 +4682,7 @@
       gameElapsedTime = 0;
       achievementManager.resetRunCounters();
       player = createDefaultPlayer();
+      if (gameMode !== 'coop' && gameMode !== 'pvp') { player2 = null; player3 = null; player4 = null; p2DeadInCoop = false; p3DeadInCoop = false; p4DeadInCoop = false; pvpState = null; const _p2r = document.getElementById('p2HpRow'); if (_p2r) _p2r.style.display = 'none'; }
       if (gameMode === 'sandbox') {
         player.coins = Number(sandboxSettings.startingCoins || 0);
         selectedChallenges = [];
@@ -4528,6 +4701,74 @@
       loopStarted = true;
       requestAnimationFrame(loop);
     }
+  }
+
+  function spawnMpPlayer(charKey, offsetX, offsetY) {
+    const savedChosen = chosenCharacter;
+    chosenCharacter = charKey;
+    const p = createDefaultPlayer();
+    chosenCharacter = savedChosen;
+    p.x = START_X + offsetX;
+    p.y = START_Y + offsetY;
+    p.items = JSON.parse(JSON.stringify(player.items));
+    return p;
+  }
+
+  function startCoop() {
+    setGameState('play');
+    baseSeedStr = ui.seed.value.trim() || createRandomSeed();
+    selectedDifficulty = normalizeDifficulty(selectedDifficulty);
+    selectedChallenges = [];
+    runLoopIndex = 0;
+    syncSeedState();
+    floor = 1;
+    gameElapsedTime = 0;
+    achievementManager.resetRunCounters();
+    player = createDefaultPlayer();
+    player2 = mpPlayerCount >= 2 ? spawnMpPlayer(chosenCharacter2, 36, 0) : null;
+    player3 = mpPlayerCount >= 3 ? spawnMpPlayer(chosenCharacter3, 0, 36) : null;
+    player4 = mpPlayerCount >= 4 ? spawnMpPlayer(chosenCharacter4, 36, 36) : null;
+    p2DeadInCoop = false; p3DeadInCoop = false; p4DeadInCoop = false;
+    lastDamageSource = '';
+    lastDamageSourceKey = '';
+    resetScene();
+    generateFloor();
+    const p2Row = document.getElementById('p2HpRow');
+    if (p2Row) p2Row.style.display = player2 ? '' : 'none';
+    if (!loopStarted) { loopStarted = true; requestAnimationFrame(loop); }
+  }
+
+  let pvpState = null;
+
+  function startPvp() {
+    setGameState('play');
+    baseSeedStr = ui.seed.value.trim() || createRandomSeed();
+    selectedDifficulty = normalizeDifficulty(selectedDifficulty);
+    selectedChallenges = [];
+    runLoopIndex = 0;
+    syncSeedState();
+    floor = 1;
+    gameElapsedTime = 0;
+    achievementManager.resetRunCounters();
+    player = createDefaultPlayer();
+    player.maxHp = 300; player.hp = 300;
+    player2 = spawnMpPlayer(chosenCharacter2 || Object.keys(CHARACTER_DEFS).find(k => k !== chosenCharacter) || chosenCharacter, 80, 0);
+    player2.maxHp = 300; player2.hp = 300;
+    if (mpPlayerCount >= 3) { player3 = spawnMpPlayer(chosenCharacter3 || chosenCharacter, -80, 60); player3.maxHp = 300; player3.hp = 300; }
+    if (mpPlayerCount >= 4) { player4 = spawnMpPlayer(chosenCharacter4 || chosenCharacter, 0, 60); player4.maxHp = 300; player4.hp = 300; }
+    p3DeadInCoop = false; p4DeadInCoop = false;
+    player2.x = START_X + 80;
+    player2.y = START_Y;
+    player2.items = JSON.parse(JSON.stringify(player.items));
+    p2DeadInCoop = false;
+    pvpState = { p1Kills: 0, p2Kills: 0, killsToWin: 3, respawnTimer: null };
+    lastDamageSource = '';
+    lastDamageSourceKey = '';
+    resetScene();
+    generateFloor();
+    if (!loopStarted) { loopStarted = true; requestAnimationFrame(loop); }
+    const p2Row = document.getElementById('p2HpRow');
+    if (p2Row) p2Row.style.display = '';
   }
 
   function startEndlessRoom() {
@@ -4724,6 +4965,9 @@
     dashKeyLatch = false;
     godTimer = 0;
     camera = { x: 0, y: 0 };
+    camera2 = { x: 0, y: 0 };
+    camera3 = { x: 0, y: 0 };
+    camera4 = { x: 0, y: 0 };
     shake = 0;
     shakeT = 0;
     fade = 0;
@@ -7196,8 +7440,8 @@
     if (type === 'mirror') {
       spawnMirrorChampion();
     } else if (type === 'stillness') {
-      room.challengeTimer = 10;
-      room.challengeData.maxTimer = 10;
+      room.challengeTimer = scaleChallengeTimer(10);
+      room.challengeData.maxTimer = room.challengeTimer;
       room.challengeData.anchorX = player.x;
       room.challengeData.anchorY = player.y;
       room.challengeData.graceTimer = 2;
@@ -7207,17 +7451,17 @@
       spawnChallengeBombs(room);
       sayAtPosition(ROOM_W / 2, ROOM_H / 2, 'Choose wrong and you get nothing.', { speaker: 'TRIAL', tone: 'warning' });
     } else if (type === 'survival') {
-      room.challengeTimer = 20;
+      room.challengeTimer = scaleChallengeTimer(20);
       room.challengeTick = 0.9;
       spawnTrialEnemyWave(2);
       sayAtPosition(ROOM_W / 2, ROOM_H / 2, 'Live through it.', { speaker: 'TRIAL', tone: 'warning' });
     } else if (type === 'runes') {
       spawnChallengeRunes(room);
-      room.challengeTimer = 30;
-      room.challengeData.maxTimer = 30;
+      room.challengeTimer = scaleChallengeTimer(30);
+      room.challengeData.maxTimer = room.challengeTimer;
       sayAtPosition(ROOM_W / 2, ROOM_H / 2, 'Claim every rune.', { speaker: 'TRIAL', tone: 'warning' });
     } else if (type === 'storm') {
-      room.challengeTimer = 18;
+      room.challengeTimer = scaleChallengeTimer(18);
       room.challengeTick = 0.35;
       sayAtPosition(ROOM_W / 2, ROOM_H / 2, 'Do not stop moving.', { speaker: 'TRIAL', tone: 'warning' });
     }
@@ -9099,13 +9343,14 @@
   }
 
   function dropCoins(x, y, amount) {
-    const chunks = Math.max(1, Math.ceil(amount / 4));
+    const scaledAmount = Math.max(1, Math.round(Number(amount || 0) * getRunDifficultyScalars().coinRewardMultiplier));
+    const chunks = Math.max(1, Math.ceil(scaledAmount / 4));
     for (let index = 0; index < chunks; index += 1) {
       pickups.push({
         x: x + rand(-18, 18, 'loot'),
         y: y + rand(-18, 18, 'loot'),
         type: 'coin',
-        value: Math.ceil(amount / chunks),
+        value: Math.ceil(scaledAmount / chunks),
       });
     }
   }
@@ -9125,7 +9370,7 @@
 
   function grantXp(amount) {
     const stats = getItemStats();
-    const gained = Math.max(1, Math.round(amount * (stats.xpGainMultiplier || 1)));
+    const gained = Math.max(1, Math.round(amount * getRunDifficultyScalars().xpRewardMultiplier * (stats.xpGainMultiplier || 1)));
     player.xp += gained;
     while (player.xp >= player.xpToNext) {
       player.xp -= player.xpToNext;
@@ -9286,6 +9531,45 @@
       if (_nt.dash) keys[_b ? _b.dash : 'shift'] = true;
       else keys[_b ? _b.dash : 'shift'] = false;
     }
+    // Gamepad 0 → P1
+    const _gp0 = window.NeoGamepad?.[0];
+    if (_gp0?.active && !_nt?.active) {
+      if (Math.abs(_gp0.moveX) > 0.18 || Math.abs(_gp0.moveY) > 0.18) {
+        keys[_right] = _gp0.moveX > 0.18;
+        keys[_left]  = _gp0.moveX < -0.18;
+        keys[_down]  = _gp0.moveY > 0.18;
+        keys[_up]    = _gp0.moveY < -0.18;
+      } else {
+        keys[_right] = false; keys[_left] = false;
+        keys[_down] = false; keys[_up] = false;
+      }
+      const _gpAimTarget = (() => {
+        if (_gp0.hasAim) return null;
+        let best = null, bestDist = Infinity;
+        for (const en of enemies) {
+          if (!en || en.dead) continue;
+          const d = Math.hypot(en.x - player.x, en.y - player.y);
+          if (d < bestDist) { bestDist = d; best = en; }
+        }
+        return best;
+      })();
+      const _gpAimX = _gp0.hasAim ? _gp0.aimX * 200 : (_gpAimTarget ? _gpAimTarget.x - player.x : _gp0.lastAimX * 200);
+      const _gpAimY = _gp0.hasAim ? _gp0.aimY * 200 : (_gpAimTarget ? _gpAimTarget.y - player.y : _gp0.lastAimY * 200);
+      mouse.worldX = player.x + _gpAimX;
+      mouse.worldY = player.y + _gpAimY;
+      mouse.x = mouse.worldX - camera.x;
+      mouse.y = mouse.worldY - camera.y;
+      if (_gp0.slash) { mouse.down = true; mouse.downQueued = true; } else { mouse.down = false; }
+      if (_gp0.laser) { mouse.right = true; mouse.rightQueued = true; } else { mouse.right = false; }
+      if (_gp0.smash) { trySmash(); _gp0.smash = false; }
+      if (_gp0.dash) keys[_b ? _b.dash : 'shift'] = true;
+      else if (!keys[_b ? _b.dash : 'shift']) keys[_b ? _b.dash : 'shift'] = false;
+      if (_gp0.start) {
+        if (gameState === 'play') pauseGame();
+        else if (gameState === 'pause') resumeGame();
+        _gp0.start = false;
+      }
+    }
     let moveX = (keys[_right] || keys.arrowright ? 1 : 0) - (keys[_left] || keys.arrowleft ? 1 : 0);
     let moveY = (keys[_down]  || keys.arrowdown  ? 1 : 0) - (keys[_up]   || keys.arrowup   ? 1 : 0);
     if (currentRoom?.type !== 'shop' && isPanelOpen(ui.shopPanel)) setShopPanelOpen(false);
@@ -9349,13 +9633,29 @@
     player.inv = Math.max(0, player.inv - dt);
     if (player.swing > 0) player.swing = Math.max(0, player.swing - dt);
 
-    mouse.worldX = mouse.x + camera.x;
+    const _vpW = isSplitScreen() ? canvas.width / 2 : canvas.width;
+    const _clampedMouseX = isSplitScreen() ? Math.min(mouse.x, _vpW) : mouse.x;
+    mouse.worldX = _clampedMouseX + camera.x;
     mouse.worldY = mouse.y + camera.y;
     updateWeaponSystems(dt);
     updateRivals(dt);
     updateMonsterDoorRoaming(dt);
     if (gameState !== 'play') return;
 
+    // PVP: check if P1 melee arc hits P2
+    if (gameMode === 'pvp' && player2 && player.swing > 0) {
+      const _pvpDx = player2.x - player.x;
+      const _pvpDy = player2.y - player.y;
+      const _pvpDist = Math.hypot(_pvpDx, _pvpDy);
+      if (_pvpDist < ATTACKS.melee.range + player2.r + 4 && player2.inv <= 0) {
+        const _pvpAimAngle = Math.atan2(mouse.worldY - player.y, mouse.worldX - player.x);
+        const _pvpHitAngle = Math.atan2(_pvpDy, _pvpDx);
+        const _pvpDiff = Math.abs(((_pvpHitAngle - _pvpAimAngle) + Math.PI * 3) % (Math.PI * 2) - Math.PI);
+        if (_pvpDiff <= ATTACKS.melee.arc) {
+          damagePlayer2(Math.max(1, ATTACKS.melee.damage), _pvpHitAngle, ATTACKS.melee.push, 'pvp_p1');
+        }
+      }
+    }
     if (getItemStats().hasRobotArm) { mouse.down = true; mouse.downQueued = true; }
     const meleeHeld = isMouseActionHeld('slash');
     const laserHeld = isMouseActionHeld('laser');
@@ -9386,13 +9686,31 @@
     }
 
     updatePlayerLaser(dt);
+    if (gameMode === 'coop' || gameMode === 'pvp') {
+      if (player2 && !p2DeadInCoop) updatePlayer2(dt);
+      if (player3 && !p3DeadInCoop) updatePlayerN(dt, player3, 3);
+      if (player4 && !p4DeadInCoop) updatePlayerN(dt, player4, 4);
+    }
     updateChallengeRoomState(dt);
 
     const cameraLead = 0.08;
-    const targetCX = player.x - 480 + player.vx * cameraLead;
-    const targetCY = player.y - 320 + player.vy * cameraLead;
-    camera.x += (targetCX - camera.x) * 8 * dt;
-    camera.y += (targetCY - camera.y) * 8 * dt;
+    const isSplit = isSplitScreen();
+    const n = isSplit ? splitPlayerCount() : 1;
+    // Viewport dimensions per slot: 2 players = left/right halves, 3-4 = quad grid
+    const slotW = n >= 2 ? Math.floor(canvas.width / 2) : canvas.width;
+    const slotH = n >= 3 ? Math.floor(canvas.height / 2) : canvas.height;
+
+    function trackCamera(cam, p, vW, vH) {
+      const tx = p.x - vW / 2 + p.vx * cameraLead;
+      const ty = p.y - vH / 2 + p.vy * cameraLead;
+      cam.x += (tx - cam.x) * 8 * dt;
+      cam.y += (ty - cam.y) * 8 * dt;
+    }
+
+    trackCamera(camera, player, slotW, slotH);
+    if (isSplit && player2 && !p2DeadInCoop) trackCamera(camera2, player2, slotW, slotH);
+    if (isSplit && player3 && !p3DeadInCoop) trackCamera(camera3, player3, slotW, slotH);
+    if (isSplit && player4 && !p4DeadInCoop) trackCamera(camera4, player4, slotW, slotH);
     if (shakeT > 0) {
       shakeT -= dt;
       shake *= 0.88;
@@ -10743,7 +11061,7 @@
       enemy.windup -= dt;
       enemy.vx *= 0.74;
       enemy.vy *= 0.74;
-      if (enemy.state === 'godLaser') aimEnemyBeam(enemy, dt, 3.1 * tuning.reaction * reactionMult);
+      if (enemy.state === 'godLaser') aimEnemyBeam(enemy, dt, (0.9 + (tuning.reaction - 1) * 8.0) * reactionMult);
       particles.push({ x: enemy.x, y: enemy.y, life: 0.18, c: '#ffffff' });
       if (enemy.windup <= 0) {
         if (enemy.state === 'godLaser') {
@@ -10777,7 +11095,7 @@
         knockback: isSweep ? (phaseFour ? 260 : 210) : (phaseFour ? 180 : 150),
         damage: isSweep ? enemy.dmg + (phaseFive ? 38 : phaseTwo ? 28 : 18) : enemy.dmg + (phaseFour ? 18 : phaseTwo ? 12 : 6),
         speedDamp: 0.86,
-        turnRate: isSweep ? 0 : 2.2 * tuning.reaction * reactionMult,
+        turnRate: isSweep ? 0 : (0.6 + (tuning.reaction - 1) * 6.0) * reactionMult,
         onTick: isSweep
           ? activeEnemy => {
             activeEnemy.beamAngle += activeEnemy.sweepSpeed * 0.045;
@@ -10863,6 +11181,190 @@
     entity.y = clamp(entity.y, WALL + entity.r, ROOM_H - WALL - entity.r);
   }
 
+  function updatePlayer2(dt) {
+    if (!player2) return;
+    const _gp1 = window.NeoGamepad?.[1];
+    const _gp1Active = !!_gp1?.active;
+    let p2MoveX = (keys['l'] ? 1 : 0) - (keys['j'] ? 1 : 0);
+    let p2MoveY = (keys['k'] ? 1 : 0) - (keys['i'] ? 1 : 0);
+    if (_gp1Active) {
+      if (Math.abs(_gp1.moveX) > 0.18 || Math.abs(_gp1.moveY) > 0.18) {
+        p2MoveX = _gp1.moveX; p2MoveY = _gp1.moveY;
+      }
+    }
+    const p2Len = Math.hypot(p2MoveX, p2MoveY) || 1;
+    const p2NX = p2Len > 0.1 ? p2MoveX / p2Len : 0;
+    const p2NY = p2Len > 0.1 ? p2MoveY / p2Len : 0;
+    if (player2.dashTime > 0) {
+      player2.dashTime = Math.max(0, player2.dashTime - dt);
+      player2.vx = player2.dashX;
+      player2.vy = player2.dashY;
+      player2.inv = Math.max(player2.inv, 0.12);
+      if (player2.dashTime <= 0) { player2.dashX = 0; player2.dashY = 0; }
+    } else {
+      const targetSpeed = 228;
+      player2.vx = applyResponsiveVelocity(player2.vx, p2NX * targetSpeed, dt);
+      player2.vy = applyResponsiveVelocity(player2.vy, p2NY * targetSpeed, dt);
+    }
+    moveCircle(player2, dt);
+    player2.inv = Math.max(0, player2.inv - dt);
+    if (player2.swing > 0) player2.swing = Math.max(0, player2.swing - dt);
+    // P2 melee: U key
+    if ((keys['u'] || _gp1Active && _gp1.p2MeleeHeld) && !player2.meleeLatch && player2.swing <= 0) {
+      player2.meleeLatch = true;
+      const aimAngle = Math.atan2(player2.vy || 1, player2.vx || 1);
+      player2.swing = ATTACKS.melee.active;
+      player2.swingA = aimAngle;
+      for (const enemy of enemies) {
+        const dx = enemy.x - player2.x;
+        const dy = enemy.y - player2.y;
+        const dist2 = Math.hypot(dx, dy);
+        if (dist2 > ATTACKS.melee.range + enemy.r + 4) continue;
+        const a = Math.atan2(dy, dx);
+        const diff = Math.abs(((a - aimAngle) + Math.PI * 3) % (Math.PI * 2) - Math.PI);
+        if (diff > ATTACKS.melee.arc) continue;
+        const dmg = Math.max(1, ATTACKS.melee.damage);
+        hitEnemy(enemy, dmg, a, ATTACKS.melee.push, '#4ca8ff');
+      }
+    } else if (!keys['u'] && !(_gp1Active && _gp1.p2MeleeHeld)) {
+      player2.meleeLatch = false;
+    }
+    // P2 dash: semicolon key
+    if ((keys[';'] || _gp1Active && _gp1.p2DashHeld) && !player2.dashLatch && player2.dashTime <= 0) {
+      player2.dashLatch = true;
+      const angle = p2Len > 0.1 ? Math.atan2(p2NY, p2NX) : 0;
+      player2.dashTime = 0.16;
+      player2.dashX = Math.cos(angle) * 480;
+      player2.dashY = Math.sin(angle) * 480;
+      player2.vx = player2.dashX;
+      player2.vy = player2.dashY;
+      player2.inv = Math.max(player2.inv, 0.18);
+    } else if (!keys[';'] && !(_gp1Active && _gp1.p2DashHeld)) {
+      player2.dashLatch = false;
+    }
+    // PVP: P2 melee hits P1
+    if (gameMode === 'pvp' && player && player.inv <= 0 && player2.swing > 0) {
+      const pvpDx = player.x - player2.x;
+      const pvpDy = player.y - player2.y;
+      const pvpDist = Math.hypot(pvpDx, pvpDy);
+      if (pvpDist < ATTACKS.melee.range + player.r + 4) {
+        const pvpAngle = Math.atan2(player2.vy || 0, player2.vx || 1);
+        const pvpHitAngle = Math.atan2(pvpDy, pvpDx);
+        const pvpDiff = Math.abs(((pvpHitAngle - pvpAngle) + Math.PI * 3) % (Math.PI * 2) - Math.PI);
+        if (pvpDiff <= ATTACKS.melee.arc) {
+          const pvpDmg = Math.max(1, ATTACKS.melee.damage);
+          damagePlayer(pvpDmg, Math.atan2(pvpDy, pvpDx), ATTACKS.melee.push, 'pvp_p2', { ignoreInv: false });
+        }
+      }
+    }
+    // Enemy collision damage for P2
+    for (const enemy of enemies) {
+      if (enemy.dead) continue;
+      const dx = player2.x - enemy.x;
+      const dy = player2.y - enemy.y;
+      if (Math.hypot(dx, dy) < player2.r + enemy.r + 2 && player2.inv <= 0) {
+        damagePlayer2(enemy.dmg || 10, Math.atan2(dy, dx), 220, 'contact');
+      }
+    }
+  }
+
+  function updatePlayerN(dt, pn, n) {
+    if (!pn) return;
+    const _gpN = window.NeoGamepad?.[n - 1];
+    let mX = 0, mY = 0;
+    if (_gpN && Math.hypot(_gpN.moveX || 0, _gpN.moveY || 0) > 0.18) { mX = _gpN.moveX; mY = _gpN.moveY; }
+    const len = Math.hypot(mX, mY) || 1;
+    const nX = len > 0.1 ? mX / len : 0;
+    const nY = len > 0.1 ? mY / len : 0;
+    if (pn.dashTime > 0) {
+      pn.dashTime = Math.max(0, pn.dashTime - dt);
+      pn.vx = pn.dashX; pn.vy = pn.dashY;
+      pn.inv = Math.max(pn.inv, 0.12);
+      if (pn.dashTime <= 0) { pn.dashX = 0; pn.dashY = 0; }
+    } else {
+      pn.vx = applyResponsiveVelocity(pn.vx, nX * 228, dt);
+      pn.vy = applyResponsiveVelocity(pn.vy, nY * 228, dt);
+    }
+    moveCircle(pn, dt);
+    pn.inv = Math.max(0, pn.inv - dt);
+    if (pn.swing > 0) pn.swing = Math.max(0, pn.swing - dt);
+    if (_gpN && _gpN.p2MeleeHeld && !pn.meleeLatch && pn.swing <= 0) {
+      pn.meleeLatch = true;
+      const aimAngle = Math.atan2(pn.vy || 0, pn.vx || 1);
+      pn.swing = ATTACKS.melee.active; pn.swingA = aimAngle;
+      for (const enemy of enemies) {
+        if (enemy.dead) continue;
+        const dx = enemy.x - pn.x, dy = enemy.y - pn.y;
+        if (Math.hypot(dx, dy) > ATTACKS.melee.range + enemy.r + 4) continue;
+        const a = Math.atan2(dy, dx);
+        if (Math.abs(((a - aimAngle) + Math.PI * 3) % (Math.PI * 2) - Math.PI) <= ATTACKS.melee.arc)
+          hitEnemy(enemy, Math.max(1, ATTACKS.melee.damage), a, ATTACKS.melee.push, '#a8d8ff');
+      }
+    } else if (!(_gpN && _gpN.p2MeleeHeld)) { pn.meleeLatch = false; }
+    if (_gpN && _gpN.p2DashHeld && !pn.dashLatch && pn.dashTime <= 0) {
+      pn.dashLatch = true;
+      const angle = len > 0.1 ? Math.atan2(nY, nX) : 0;
+      pn.dashTime = 0.16; pn.dashX = Math.cos(angle) * 480; pn.dashY = Math.sin(angle) * 480;
+      pn.vx = pn.dashX; pn.vy = pn.dashY; pn.inv = Math.max(pn.inv, 0.18);
+    } else if (!(_gpN && _gpN.p2DashHeld)) { pn.dashLatch = false; }
+    for (const enemy of enemies) {
+      if (enemy.dead) continue;
+      if (Math.hypot(pn.x - enemy.x, pn.y - enemy.y) < pn.r + enemy.r + 2 && pn.inv <= 0)
+        damagePlayerN(pn, n, enemy.dmg || 10, Math.atan2(pn.y - enemy.y, pn.x - enemy.x), 220);
+    }
+  }
+
+  function damagePlayerN(pn, n, amount, angle, knockback) {
+    if (!pn || pn.inv > 0) return;
+    pn.hp -= amount;
+    pn.vx += Math.cos(angle) * knockback;
+    pn.vy += Math.sin(angle) * knockback;
+    pn.inv = 0.75;
+    spawnDamagePopup(pn.x, pn.y - 18, amount, { color: '#a8d8ff', size: 16 });
+    if (pn.hp <= 0) {
+      pn.hp = 0;
+      if (n === 3) p3DeadInCoop = true;
+      if (n === 4) p4DeadInCoop = true;
+      particles.push({ x: pn.x, y: pn.y - 30, life: 1.2, text: `P${n} DOWN`, c: '#a8d8ff' });
+      if (player.hp <= 0 && p2DeadInCoop && p3DeadInCoop && p4DeadInCoop) die();
+    }
+  }
+
+  function damagePlayer2(amount, angle, knockback, source = '') {
+    if (!player2 || p2DeadInCoop) return;
+    if (player2.inv > 0) return;
+    player2.hp -= amount;
+    player2.vx += Math.cos(angle) * knockback;
+    player2.vy += Math.sin(angle) * knockback;
+    player2.inv = 0.75;
+    spawnDamagePopup(player2.x, player2.y - 18, amount, { color: '#4ca8ff', size: 16 });
+    if (player2.hp <= 0) {
+      player2.hp = 0;
+      if (gameMode === 'pvp' && pvpState) {
+        pvpState.p1Kills = (pvpState.p1Kills || 0) + 1;
+        particles.push({ x: player2.x, y: player2.y - 30, life: 1.5, text: `P1 KILL ${pvpState.p1Kills}/${pvpState.killsToWin}`, c: '#ff6b6b' });
+        if (pvpState.p1Kills >= pvpState.killsToWin) {
+          pvpEndGame('P1');
+        } else {
+          setTimeout(() => { if (player2) { player2.hp = player2.maxHp; player2.x = START_X + 80; player2.y = START_Y + 40; player2.inv = 1; } }, 1500);
+        }
+      } else {
+        p2DeadInCoop = true;
+        particles.push({ x: player2.x, y: player2.y - 30, life: 1.2, text: 'P2 DOWN', c: '#4ca8ff' });
+        if (player.hp <= 0) die();
+      }
+    }
+  }
+
+  function pvpEndGame(winner) {
+    pvpState = null;
+    player2 = null;
+    const p2Row = document.getElementById('p2HpRow');
+    if (p2Row) p2Row.style.display = 'none';
+    particles.push({ x: ROOM_W / 2, y: ROOM_H / 2 - 40, life: 4, text: `${winner} WINS!`, c: winner === 'P1' ? '#ff6b6b' : '#4ca8ff' });
+    setTimeout(() => { die(); }, 3000);
+  }
+
   function damagePlayer(amount, angle, knockback, source = '', options = {}) {
     const sandbox = getActiveSandboxSettings();
     if (sandbox?.godMode) return;
@@ -10939,7 +11441,23 @@
         player.hp = player.maxHp;
         particles.push({ x: player.x, y: player.y - 30, life: 0.9, text: 'PRACTICE — NO DEATH', c: '#a880ff' });
       } else {
-        die();
+        if (gameMode === 'pvp' && pvpState && player2) {
+          pvpState.p2Kills = (pvpState.p2Kills || 0) + 1;
+          particles.push({ x: player.x, y: player.y - 30, life: 1.5, text: `P2 KILL ${pvpState.p2Kills}/${pvpState.killsToWin}`, c: '#4ca8ff' });
+          if (pvpState.p2Kills >= pvpState.killsToWin) {
+            player.hp = 0;
+            pvpEndGame('P2');
+          } else {
+            player.hp = player.maxHp;
+            player.x = START_X - 80; player.y = START_Y - 40;
+            player.inv = 1;
+          }
+        } else if (gameMode === 'coop' && player2 && !p2DeadInCoop) {
+          particles.push({ x: player.x, y: player.y - 30, life: 1.2, text: 'P1 DOWN', c: '#ff6b6b' });
+          player.hp = 0;
+        } else {
+          die();
+        }
       }
     }
   }
@@ -11470,8 +11988,9 @@
       }
 
       if (pickup.type === 'potion') {
-        player.hp = Math.min(player.maxHp, player.hp + 40);
-        particles.push({ x: player.x, y: player.y - 20, life: 0.6, text: '+40', c: '#0f8' });
+        const potionHeal = getPotionHealAmount();
+        player.hp = Math.min(player.maxHp, player.hp + potionHeal);
+        particles.push({ x: player.x, y: player.y - 20, life: 0.6, text: `+${potionHeal}`, c: '#0f8' });
       }
 
       if (pickup.type === 'apple' || pickup.type === 'fruit') {
@@ -12003,6 +12522,18 @@
       ui.playerHpFill.style.background = hpPercent > 70 ? '#4cbb5a' : hpPercent > 50 ? '#d4b840' : '#c04040';
       ui.playerHpTxt.textContent = Math.ceil(player.hp) + '/' + player.maxHp;
     }
+    const p2HpFill = document.getElementById('player2HpFill');
+    const p2HpTxt = document.getElementById('player2HpTxt');
+    if (p2HpFill && player2 && (gameMode === 'coop' || gameMode === 'pvp')) {
+      const p2Pct = p2DeadInCoop ? 0 : Math.max(0, Math.min(100, (player2.hp / player2.maxHp) * 100));
+      p2HpFill.style.width = p2Pct + '%';
+      if (gameMode === 'pvp' && pvpState) {
+        if (p2HpTxt) p2HpTxt.textContent = `${Math.ceil(player2.hp)} | K:${pvpState.p2Kills}/${pvpState.killsToWin}`;
+        if (ui.playerHpTxt) ui.playerHpTxt.textContent = `${Math.ceil(player.hp)} | K:${pvpState.p1Kills}/${pvpState.killsToWin}`;
+      } else {
+        if (p2HpTxt) p2HpTxt.textContent = p2DeadInCoop ? 'DOWN' : Math.ceil(player2.hp) + '/' + player2.maxHp;
+      }
+    }
     if (ui.playerXpFill) {
       const xpPercent = Math.max(0, Math.min(100, (player.xp / player.xpToNext) * 100));
       ui.playerXpFill.style.width = xpPercent + '%';
@@ -12079,6 +12610,12 @@
 
   function die() {
     if (gameState === 'dying' || gameState === 'dead') return;
+    if (gameMode === 'pvp' && pvpState) return;
+    if (gameMode === 'coop' && player2 && !p2DeadInCoop) {
+      if (player) player.hp = 0;
+      particles.push({ x: player?.x ?? 0, y: (player?.y ?? 0) - 30, life: 1.2, text: 'P1 DOWN', c: '#ff6b6b' });
+      return;
+    }
     if (player) player.hp = 0;
     const entry = finalizeRun('dead', { killedBy: lastDamageSource, killerKey: lastDamageSourceKey });
     speakKillerDeathQuote();
@@ -12206,47 +12743,81 @@
     refreshMenuState();
   }
 
+  function drawWorldViewport(cam, vpX, vpW, vpH, vpY, pLabel) {
+    const isDying = gameState === 'dying';
+    const _shakeOn = window.NeoSettings?.getAccess()?.screenShake !== false;
+    const sX = _shakeOn && pLabel === 'P1' ? (Math.random() - 0.5) * shake * 2 : 0;
+    const sY = _shakeOn && pLabel === 'P1' ? (Math.random() - 0.5) * shake * 2 : 0;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(vpX, vpY, vpW, vpH);
+    ctx.clip();
+    ctx.translate(vpX - cam.x + sX, vpY - cam.y + sY);
+    drawFloor();
+    drawRoomDecor();
+    drawWorldProps();
+    drawDeadBodies();
+    drawChests();
+    drawPickups();
+    drawProjectiles();
+    drawEnemyTelegraphs();
+    drawEnemies();
+    if (!isDying) drawPlayer();
+    if (!isDying && player2 && !p2DeadInCoop) drawPlayer2();
+    if (!isDying && player3 && !p3DeadInCoop) drawPlayerN(player3, chosenCharacter3, '#8aff8a', 'P3');
+    if (!isDying && player4 && !p4DeadInCoop) drawPlayerN(player4, chosenCharacter4, '#ffd080', 'P4');
+    if (!isDying) drawPlayerLaser();
+    if (isDying && playerDeathAnim) drawPlayerCorpseAnim(playerDeathAnim);
+    drawParticles();
+    if (!isDying) drawShopPrompt();
+    if (!isDying) drawAnvilPrompt();
+    if (!isDying) drawLadderPrompt();
+    if (!isDying) drawJesterPortalPrompt();
+    // P-label in corner of each viewport (split only)
+    if (isSplitScreen() && pLabel) {
+      const colors = { P1: '#ff8a8a', P2: '#4ca8ff', P3: '#8aff8a', P4: '#ffd080' };
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.font = 'bold 11px monospace';
+      ctx.textAlign = 'left';
+      ctx.fillStyle = colors[pLabel] || '#fff';
+      ctx.fillText(pLabel, vpX + 8, vpY + 18);
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
   function draw() {
     const isDying = gameState === 'dying';
     const isPlayLike = gameState === 'play' || gameState === 'pause' || gameState === 'dialogue' || isDying;
     let sectionPerfStart = perfStart();
-    ctx.save();
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     if (isPlayLike) {
-      const _shakeOn = window.NeoSettings?.getAccess()?.screenShake !== false;
-      const offsetX = _shakeOn ? (Math.random() - 0.5) * shake * 2 : 0;
-      const offsetY = _shakeOn ? (Math.random() - 0.5) * shake * 2 : 0;
-      ctx.translate(-camera.x + offsetX, -camera.y + offsetY);
-
-      drawFloor();
-      drawRoomDecor();
-      drawWorldProps();
-      drawDeadBodies();
+      const split = isSplitScreen();
+      if (split) {
+        const sc = splitPlayerCount();
+        const vpW = Math.floor(canvas.width / 2);
+        const vpH = sc >= 3 ? Math.floor(canvas.height / 2) : canvas.height;
+        // Top row
+        drawWorldViewport(camera,  0,   vpW, vpH, 0, 'P1');
+        drawWorldViewport(camera2, vpW, vpW, vpH, 0, 'P2');
+        // Bottom row (3-4 players)
+        if (sc >= 3 && player3 && !p3DeadInCoop)
+          drawWorldViewport(camera3, 0,   vpW, vpH, vpH, 'P3');
+        if (sc >= 4 && player4 && !p4DeadInCoop)
+          drawWorldViewport(camera4, vpW, vpW, vpH, vpH, 'P4');
+        // Dividers
+        ctx.save();
+        ctx.fillStyle = '#000';
+        ctx.fillRect(vpW - 1, 0, 2, canvas.height);
+        if (sc >= 3) ctx.fillRect(0, vpH - 1, canvas.width, 2);
+        ctx.restore();
+      } else {
+        drawWorldViewport(camera, 0, canvas.width, canvas.height, 0, null);
+      }
       perfEnd('draw.room', sectionPerfStart);
-      sectionPerfStart = perfStart();
-      drawChests();
-      drawPickups();
-      perfEnd('draw.items', sectionPerfStart);
-      sectionPerfStart = perfStart();
-      drawProjectiles();
-      drawEnemyTelegraphs();
-      drawEnemies();
-      if (!isDying) drawPlayer();
-      if (!isDying) drawPlayerLaser();
-      if (isDying && playerDeathAnim) drawPlayerCorpseAnim(playerDeathAnim);
-      perfEnd('draw.entities', sectionPerfStart);
-      sectionPerfStart = perfStart();
-      drawParticles();
-      perfEnd('draw.particles', sectionPerfStart);
-      sectionPerfStart = perfStart();
-      if (!isDying) drawShopPrompt();
-      if (!isDying) drawAnvilPrompt();
-      if (!isDying) drawLadderPrompt();
-      if (!isDying) drawJesterPortalPrompt();
-      perfEnd('draw.prompts', sectionPerfStart);
     }
 
-    ctx.restore();
     sectionPerfStart = perfStart();
     if (isPlayLike && !isDying) drawMinimap();
     perfEnd('draw.minimap', sectionPerfStart);
@@ -14693,6 +15264,66 @@
     ctx.restore();
   }
 
+  function drawPlayer2() {
+    if (!player2) return;
+    const aimAngle = Math.atan2(player2.vy || 0, player2.vx || 1);
+    const facing = getFacingDirection(player2, aimAngle);
+    const spriteKey = SPRITE_DEFS[chosenCharacter2] ? chosenCharacter2 : 'thorn_knight';
+    drawSpriteFrame(spriteKey, player2.x, player2.y, Math.max(34, player2.r * 2.5), {
+      alpha: player2.inv > 0 ? 0.55 : 1,
+      flipX: facing < 0,
+      shadowColor: 'rgba(76,168,255,0.5)',
+      shadowBlur: 10,
+      tint: 'rgba(76,168,255,0.25)',
+    });
+    // Aim indicator
+    ctx.save();
+    ctx.translate(player2.x, player2.y);
+    ctx.strokeStyle = '#4ca8ff';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(aimAngle) * 6, Math.sin(aimAngle) * 6);
+    ctx.lineTo(Math.cos(aimAngle) * 20, Math.sin(aimAngle) * 20);
+    ctx.stroke();
+    ctx.restore();
+    // P2 label
+    ctx.save();
+    ctx.fillStyle = '#4ca8ff';
+    ctx.font = 'bold 11px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('P2', player2.x, player2.y - player2.r - 6);
+    ctx.restore();
+  }
+
+  function drawPlayerN(pn, charKey, tintColor, label) {
+    if (!pn) return;
+    const aimAngle = Math.atan2(pn.vy || 0, pn.vx || 1);
+    const facing = getFacingDirection(pn, aimAngle);
+    const spriteKey = SPRITE_DEFS[charKey] ? charKey : 'thorn_knight';
+    drawSpriteFrame(spriteKey, pn.x, pn.y, Math.max(34, pn.r * 2.5), {
+      alpha: pn.inv > 0 ? 0.55 : 1,
+      flipX: facing < 0,
+      shadowColor: `rgba(${tintColor},0.4)`,
+      shadowBlur: 10,
+      tint: `${tintColor}40`,
+    });
+    ctx.save();
+    ctx.translate(pn.x, pn.y);
+    ctx.strokeStyle = tintColor;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(aimAngle) * 6, Math.sin(aimAngle) * 6);
+    ctx.lineTo(Math.cos(aimAngle) * 20, Math.sin(aimAngle) * 20);
+    ctx.stroke();
+    ctx.restore();
+    ctx.save();
+    ctx.fillStyle = tintColor;
+    ctx.font = 'bold 11px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(label, pn.x, pn.y - pn.r - 6);
+    ctx.restore();
+  }
+
   function drawPlayerLaser() {
     if (!player) return;
 
@@ -15930,6 +16561,56 @@
         view.altModeBossRushBtn?.addEventListener('click', () => {
           setAltModesPanelOpen(false);
           handlers.onOpenAltModeCharSelect('boss_rush');
+        });
+        view.altModeCoopBtn?.addEventListener('click', () => {
+          setAltModesPanelOpen(false);
+          handlers.onOpenAltModeCharSelect('coop');
+        });
+        view.altModePvpBtn?.addEventListener('click', () => {
+          setAltModesPanelOpen(false);
+          handlers.onOpenAltModeCharSelect('pvp');
+        });
+        view.mpLobbyBack?.addEventListener('click', () => {
+          closeMpLobby();
+          setAltModesPanelOpen(true);
+        });
+        view.mpLobby1Btn?.addEventListener('click', () => {
+          mpPlayerCount = 1;
+          closeMpLobby();
+          charSelectPhase = 'p1';
+          setGameState('charselect');
+          updateCharacterSelectionUI();
+        });
+        view.mpLobby2Btn?.addEventListener('click', () => {
+          mpPlayerCount = 2;
+          closeMpLobby();
+          charSelectPhase = 'p1';
+          setGameState('charselect');
+          updateCharacterSelectionUI();
+        });
+        document.getElementById('mpLobby3Btn')?.addEventListener('click', () => {
+          mpPlayerCount = 3;
+          closeMpLobby();
+          charSelectPhase = 'p1';
+          setGameState('charselect');
+          updateCharacterSelectionUI();
+        });
+        document.getElementById('mpLobby4Btn')?.addEventListener('click', () => {
+          mpPlayerCount = 4;
+          closeMpLobby();
+          charSelectPhase = 'p1';
+          setGameState('charselect');
+          updateCharacterSelectionUI();
+        });
+        // Alt modes tabs
+        document.querySelectorAll('.altmodes-tab').forEach(tab => {
+          tab.addEventListener('click', () => {
+            document.querySelectorAll('.altmodes-tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.altmodes-tab-panel').forEach(p => p.classList.add('hidden'));
+            tab.classList.add('active');
+            const panel = document.querySelector(`.altmodes-tab-panel[data-panel="${tab.dataset.tab}"]`);
+            if (panel) panel.classList.remove('hidden');
+          });
         });
         view.altModeSandboxConfigBtn?.addEventListener('click', handlers.onOpenSandboxConfig);
         view.altModeSandboxBtn?.addEventListener('click', () => {

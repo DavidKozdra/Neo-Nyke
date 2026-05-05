@@ -182,9 +182,14 @@
   <!-- Player Stats Bottom Right -->
   <div id="playerStats" class="hidden">
     <div class="player-stat-row">
-      <span>HP</span>
+      <span>P1</span>
       <div class="bar player-hp-bar"><i id="playerHpFill"></i></div>
       <span id="playerHpTxt">120</span>
+    </div>
+    <div class="player-stat-row" id="p2HpRow" style="display:none">
+      <span>P2</span>
+      <div class="bar player-hp-bar"><i id="player2HpFill" style="background:#4ca8ff"></i></div>
+      <span id="player2HpTxt">120</span>
     </div>
     <div class="player-stat-row">
       <span>XP</span>
@@ -516,40 +521,70 @@
       <span class="altmodes-title">ALTERNATIVE MODES</span>
       <button id="altModesClose" class="panel-close" aria-label="Close alt modes">X</button>
     </div>
+    <div class="altmodes-tabs" role="tablist">
+      <button class="altmodes-tab active" data-tab="challenges" type="button">CHALLENGES</button>
+      <button class="altmodes-tab" data-tab="multiplayer" type="button">MULTIPLAYER</button>
+      <button class="altmodes-tab" data-tab="testing" type="button">TESTING</button>
+    </div>
     <div class="altmodes-body">
-      <div class="altmode-card" id="altModeEndlessCard">
-        <div class="altmode-card__icon">&#9830;</div>
-        <div class="altmode-card__text">
-          <h3 class="altmode-card__name">ENDLESS</h3>
-          <p class="altmode-card__desc">One room. Infinite waves. Survive as long as possible and collect item rewards between each wave.</p>
+      <!-- CHALLENGES -->
+      <div class="altmodes-tab-panel" data-panel="challenges">
+        <div class="altmode-card" id="altModeEndlessCard">
+          <div class="altmode-card__icon">&#9830;</div>
+          <div class="altmode-card__text">
+            <h3 class="altmode-card__name">ENDLESS</h3>
+            <p class="altmode-card__desc">One room. Infinite waves. Survive as long as possible and collect item rewards between each wave.</p>
+          </div>
+          <button id="altModeEndlessBtn" class="nav-btn altmode-card__btn">PLAY</button>
         </div>
-        <button id="altModeEndlessBtn" class="nav-btn altmode-card__btn">PLAY</button>
+        <div class="altmode-card" id="altModeBossRushCard">
+          <div class="altmode-card__icon">&#9760;</div>
+          <div class="altmode-card__text">
+            <h3 class="altmode-card__name">BOSS RUSH</h3>
+            <p class="altmode-card__desc">Face all four bosses back to back. Collect loot between each fight. Defeat God to win.</p>
+          </div>
+          <button id="altModeBossRushBtn" class="nav-btn altmode-card__btn">PLAY</button>
+        </div>
       </div>
-      <div class="altmode-card" id="altModePracticeCard">
-        <div class="altmode-card__icon">&#9878;</div>
-        <div class="altmode-card__text">
-          <h3 class="altmode-card__name">PRACTICE</h3>
-          <p class="altmode-card__desc">Spawn any enemy or challenge trial at will. Test builds and learn attack patterns without consequences.</p>
+      <!-- MULTIPLAYER -->
+      <div class="altmodes-tab-panel hidden" data-panel="multiplayer">
+        <div class="altmode-card" id="altModeCoopCard">
+          <div class="altmode-card__icon">&#9829;</div>
+          <div class="altmode-card__text">
+            <h3 class="altmode-card__name">CO-OP</h3>
+            <p class="altmode-card__desc">Two players, one screen. P1: WASD + mouse / Gamepad 1. P2: IJKL + U/;  / Gamepad 2. Clear the dungeon together.</p>
+          </div>
+          <button id="altModeCoopBtn" class="nav-btn altmode-card__btn">PLAY</button>
         </div>
-        <button id="altModePracticeBtn" class="nav-btn altmode-card__btn">PLAY</button>
+        <div class="altmode-card" id="altModePvpCard">
+          <div class="altmode-card__icon">&#9876;</div>
+          <div class="altmode-card__text">
+            <h3 class="altmode-card__name">PVP</h3>
+            <p class="altmode-card__desc">Two players fight each other in an arena. First to land 3 kills wins. Same controls as Co-op.</p>
+          </div>
+          <button id="altModePvpBtn" class="nav-btn altmode-card__btn" style="background:rgba(200,50,50,0.18);border-color:rgba(255,80,80,0.4);">FIGHT</button>
+        </div>
       </div>
-      <div class="altmode-card" id="altModeBossRushCard">
-        <div class="altmode-card__icon">&#9760;</div>
-        <div class="altmode-card__text">
-          <h3 class="altmode-card__name">BOSS RUSH</h3>
-          <p class="altmode-card__desc">Face all four bosses back to back. Collect loot between each fight. Defeat God to win.</p>
+      <!-- TESTING -->
+      <div class="altmodes-tab-panel hidden" data-panel="testing">
+        <div class="altmode-card" id="altModePracticeCard">
+          <div class="altmode-card__icon">&#9878;</div>
+          <div class="altmode-card__text">
+            <h3 class="altmode-card__name">PRACTICE</h3>
+            <p class="altmode-card__desc">Spawn any enemy or challenge trial at will. Test builds and learn attack patterns without consequences.</p>
+          </div>
+          <button id="altModePracticeBtn" class="nav-btn altmode-card__btn">PLAY</button>
         </div>
-        <button id="altModeBossRushBtn" class="nav-btn altmode-card__btn">PLAY</button>
-      </div>
-      <div class="altmode-card" id="altModeSandboxCard">
-        <div class="altmode-card__icon">&#9881;</div>
-        <div class="altmode-card__text">
-          <h3 class="altmode-card__name">SANDBOX LAB</h3>
-          <p class="altmode-card__desc">A visual game-hacking mode. Tune enemies, items, multipliers, and run wild in a full dungeon run.</p>
-        </div>
-        <div class="altmode-card__actions">
-          <button id="altModeSandboxConfigBtn" class="nav-btn nav-btn--minor altmode-card__btn" type="button">CONFIGURE</button>
-          <button id="altModeSandboxBtn" class="nav-btn altmode-card__btn" type="button">PLAY</button>
+        <div class="altmode-card" id="altModeSandboxCard">
+          <div class="altmode-card__icon">&#9881;</div>
+          <div class="altmode-card__text">
+            <h3 class="altmode-card__name">SANDBOX LAB</h3>
+            <p class="altmode-card__desc">A visual game-hacking mode. Tune enemies, items, multipliers, and run wild in a full dungeon run.</p>
+          </div>
+          <div class="altmode-card__actions">
+            <button id="altModeSandboxConfigBtn" class="nav-btn nav-btn--minor altmode-card__btn" type="button">CONFIGURE</button>
+            <button id="altModeSandboxBtn" class="nav-btn altmode-card__btn" type="button">PLAY</button>
+          </div>
         </div>
       </div>
     </div>
@@ -626,14 +661,42 @@
 </div>
 
 <!-- Character select screen -->
+<div id="mpLobby" class="overlay hidden">
+  <div class="mploby-wrap">
+    <button id="mpLobbyBack" class="back-btn">&#8592; BACK</button>
+    <h2 class="screen-title" id="mpLobbyTitle">CO-OP</h2>
+    <p class="mploby-sub">How many players?</p>
+    <div class="mploby-btns">
+      <button class="mploby-count-btn" id="mpLobby1Btn">
+        <span class="mploby-count">1</span>
+        <span class="mploby-count-label">Solo</span>
+      </button>
+      <button class="mploby-count-btn" id="mpLobby2Btn">
+        <span class="mploby-count">2</span>
+        <span class="mploby-count-label">2 Players</span>
+      </button>
+      <button class="mploby-count-btn" id="mpLobby3Btn">
+        <span class="mploby-count">3</span>
+        <span class="mploby-count-label">3 Players</span>
+      </button>
+      <button class="mploby-count-btn" id="mpLobby4Btn">
+        <span class="mploby-count">4</span>
+        <span class="mploby-count-label">4 Players</span>
+      </button>
+    </div>
+    <p class="mploby-controls">P1: WASD+Mouse/Gamepad1 &nbsp;·&nbsp; P2: IJKL+U/;/Gamepad2 &nbsp;·&nbsp; P3/P4: Gamepad 3/4</p>
+    <p class="mploby-hint" id="mpLobbyHint">P1: WASD + Mouse / Gamepad 1 &nbsp;·&nbsp; P2: IJKL + U/; / Gamepad 2</p>
+  </div>
+</div>
 <div id="charSelect" class="overlay hidden">
   <canvas id="charBg"></canvas>
   <div class="menu-content charselect-layout">
     <div class="charselect-header">
       <button id="charBackBtn" class="back-btn">&#8592; BACK</button>
       <div class="charselect-titlewrap">
-        <h2 class="screen-title">CHOOSE YOUR WARRIOR</h2>
-        <p class="charselect-subtitle">Pick a fighter, set the run, then enter the dungeon. Challenges live in their own shop panel.</p>
+        <div id="charSelectPhaseTag" class="charselect-phase-tag hidden"></div>
+        <h2 class="screen-title" id="charSelectTitle">CHOOSE YOUR WARRIOR</h2>
+        <p class="charselect-subtitle" id="charSelectSubtitle">Pick a fighter, set the run, then enter the dungeon. Challenges live in their own shop panel.</p>
       </div>
     </div>
 
@@ -893,6 +956,7 @@
 <script src="js/achievements.js"></script>
 <script src="js/achievementManager.js"></script>
 <script src="js/touchControls.js"></script>
+<script src="js/gamepadControls.js"></script>
 <script src="js/game.js"></script>
 <script src="js/ui/settings-ui.js"></script>
 <script src="js/ui/menu-background.js"></script>

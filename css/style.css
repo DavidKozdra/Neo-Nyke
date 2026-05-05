@@ -4614,6 +4614,30 @@ button.alt.danger {
   color: #c8e8ff;
 }
 
+.altmodes-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 0 28px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  background: rgba(0,0,0,0.2);
+}
+.altmodes-tab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: #607a90;
+  font-family: inherit;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  padding: 12px 18px 10px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+  margin-bottom: -1px;
+}
+.altmodes-tab:hover { color: #c8e8ff; }
+.altmodes-tab.active { color: #c8e8ff; border-bottom-color: #4ca8ff; }
+
 .altmodes-body {
   display: flex;
   flex-direction: column;
@@ -4622,6 +4646,8 @@ button.alt.danger {
   overflow-y: auto;
   flex: 1;
 }
+.altmodes-tab-panel { display: flex; flex-direction: column; gap: 18px; }
+.altmodes-tab-panel.hidden { display: none; }
 
 .altmode-card {
   display: flex;
@@ -5275,3 +5301,62 @@ button.alt.danger {
   color: var(--menu-text);
 }
 
+
+/* ── MP Lobby ─────────────────────────────────────────────────── */
+.mploby-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+  height: 100%;
+  padding: 40px;
+  text-align: center;
+}
+.mploby-sub {
+  font-size: 1rem;
+  color: #8ca8c0;
+  letter-spacing: 0.08em;
+  margin: 0;
+}
+.mploby-btns {
+  display: flex;
+  gap: 28px;
+}
+.mploby-count-btn {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 14px;
+  color: #e8f4ff;
+  font-family: inherit;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 32px 48px;
+  transition: border-color 0.2s, background 0.2s;
+}
+.mploby-count-btn:hover { border-color: rgba(76,168,255,0.5); background: rgba(76,168,255,0.08); }
+.mploby-count { font-size: 3rem; font-weight: 900; line-height: 1; }
+.mploby-count-label { font-size: 0.75rem; letter-spacing: 0.12em; color: #8ca8c0; }
+.mploby-hint { font-size: 0.76rem; color: #4a6070; margin: 0; }
+
+/* ── Charselect phase tag ─────────────────────────────────────── */
+.charselect-phase-tag {
+  display: inline-block;
+  background: rgba(76,168,255,0.18);
+  border: 1px solid rgba(76,168,255,0.4);
+  color: #4ca8ff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  padding: 3px 12px;
+  border-radius: 20px;
+  margin-bottom: 6px;
+}
+.charselect-phase-tag.p1 { background: rgba(255,107,107,0.15); border-color: rgba(255,107,107,0.4); color: #ff8a8a; }
+.charselect-phase-tag.p2 { background: rgba(76,168,255,0.15); border-color: rgba(76,168,255,0.4); color: #4ca8ff; }
+.charselect-phase-tag.p3 { background: rgba(138,255,138,0.12); border-color: rgba(138,255,138,0.4); color: #8aff8a; }
+.charselect-phase-tag.p4 { background: rgba(255,208,128,0.12); border-color: rgba(255,208,128,0.4); color: #ffd080; }
+.mploby-controls { font-size: 0.72rem; color: #3a5060; margin: 0; }
