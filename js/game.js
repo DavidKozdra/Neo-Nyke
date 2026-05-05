@@ -732,6 +732,8 @@
     },
   };
   const RIVAL_MOVE_INTERVAL_BASE = 8.5;
+  const RIVAL_GROWTH_TICK_SECONDS = 18;
+  const RIVAL_XP_PER_GROWTH_TICK = 10;
   const PURPLE_WEAPON_POOL = ['lazer_glasses', 'metao_fire_staff', 'magenta_degale', 'magenta_p90'];
   const RED_WEAPON_POOL = ['granillia_lightning_spear', 'excalibur', 'golden_fleece', 'void_piercer', 'aegis_shield_weapon'];
 
@@ -3467,6 +3469,7 @@
       attackPower: 0,
       attackSpeed: 1,
       roomDamageTaken: 0,
+      rivalReputation: 0,
       insuranceActive: false,
       insuranceChargeKills: 0,
       insuranceReady: true,
@@ -5574,6 +5577,167 @@
 
   // ── Rival Adventurer System ──────────────────────────────────────────────
 
+  function createDefaultRivalMemory() {
+    return {
+      playerSightings: 0,
+      playerHitsTaken: 0,
+      playerHitsDealt: 0,
+      stolenCount: 0,
+      roomsVisited: 0,
+      threat: 0,
+      lastSeenTime: 0,
+    };
+  }
+
+  function normalizeRivalMemory(source) {
+    const fallback = createDefaultRivalMemory();
+    const memory = source && typeof source === 'object' ? source : {};
+    return {
+      playerSightings: Number(memory.playerSightings || fallback.playerSightings),
+      playerHitsTaken: Number(memory.playerHitsTaken || fallback.playerHitsTaken),
+      playerHitsDealt: Number(memory.playerHitsDealt || fallback.playerHitsDealt),
+      stolenCount: Number(memory.stolenCount || fallback.stolenCount),
+      roomsVisited: Number(memory.roomsVisited || fallback.roomsVisited),
+      threat: Number(memory.threat || fallback.threat),
+      lastSeenTime: Number(memory.lastSeenTime || fallback.lastSeenTime),
+    };
+  }
+
+  function getRivalById(rivalId, rivalKey = '') {
+    if (!rivalId && !rivalKey) return null;
+    return rivals.find(r => (r.rivalId && r.rivalId === rivalId) || (r.characterKey && r.characterKey === rivalKey)) || null;
+  }
+
+  function applyRivalLevelStats(rival, options = {}) {
+    if (!rival) return;
+    const syncLiveEnemy = options.syncLiveEnemy !== false;
+    const keepHpRatio = options.keepHpRatio !== false;
+    const oldMax = Math.max(1, Number(rival.max || rival.baseHp || 1));
+    const oldHp = clamp(Number(rival.hp || oldMax), 1, oldMax);
+    const level = Math.max(1, Number(rival.level || 1));
+    const hpScale = 1 + (level - 1) * 0.14;
+    const dmgScale = 1 + (level - 1) * 0.11;
+    const speedScale = 1 + Math.min(0.24, (level - 1) * 0.02);
+    const attackCdScale = 1 - Math.min(0.28, (level - 1) * 0.018);
+    const moveScale = 1 - Math.min(0.38, (level - 1) * 0.022);
+
+    rival.max = Math.max(20, Math.round(Number(rival.baseHp || rival.max || oldMax) * hpScale));
+    rival.dmg = Math.max(4, Math.round(Number(rival.baseDmg || rival.dmg || 4) * dmgScale));
+    rival.speed = Math.max(40, Number(rival.baseSpeed || rival.speed || 40) * speedScale);
+    rival.attackCd = Math.max(0.42, Number(rival.baseAttackCd || rival.attackCd || 1) * attackCdScale);
+    rival.moveInterval = Math.max(3.2, Number(rival.baseMoveInterval || RIVAL_MOVE_INTERVAL_BASE) * moveScale);
+    rival.hp = keepHpRatio
+      ? clamp(Math.round((oldHp / oldMax) * rival.max), 1, rival.max)
+      : clamp(oldHp, 1, rival.max);
+    rival.hpSnapshot = rival.hp;
+
+    if (!syncLiveEnemy) return;
+    const liveEnemy = enemies.find(e => e.type === 'rival' && ((e.rivalData && e.rivalData.rivalId === rival.rivalId) || e.rivalKey === rival.characterKey));
+    if (!liveEnemy) return;
+    const liveOldMax = Math.max(1, Number(liveEnemy.max || oldMax));
+    const liveOldHp = clamp(Number(liveEnemy.hp || liveOldMax), 1, liveOldMax);
+    liveEnemy.max = rival.max;
+    liveEnemy.dmg = rival.dmg;
+    liveEnemy.speed = rival.speed;
+    liveEnemy.hp = keepHpRatio
+      ? clamp(Math.round((liveOldHp / liveOldMax) * rival.max), 1, rival.max)
+      : clamp(liveOldHp, 1, rival.max);
+    rival.hp = liveEnemy.hp;
+    rival.hpSnapshot = liveEnemy.hp;
+  }
+
+  function migrateRivalState(source) {
+    if (!source || typeof source !== 'object') return null;
+    const def = RIVAL_DEFS[source.characterKey] || null;
+    const baseHp = Math.max(40, Number(source.baseHp || source.max || source.hp || def?.hp || 140));
+    const baseDmg = Math.max(5, Number(source.baseDmg || source.dmg || def?.dmg || 18));
+    const migrated = {
+      ...source,
+      rivalId: String(source.rivalId || `${source.characterKey || 'rival'}-${Math.floor(nextRandom('world') * 1000000)}`),
+      characterKey: String(source.characterKey || ''),
+      name: String(source.name || def?.name || 'Rival'),
+      color: String(source.color || def?.color || '#ff9d7a'),
+      attackStyle: String(source.attackStyle || def?.attackStyle || 'melee'),
+      enterLine: String(source.enterLine || def?.enterLine || 'I remember you.'),
+      deathLine: String(source.deathLine || def?.deathLine || 'Not this time...'),
+      roomGx: Number(source.roomGx || 0),
+      roomGy: Number(source.roomGy || 0),
+      moveTimer: Number(source.moveTimer || 0),
+      moveInterval: Number(source.moveInterval || source.baseMoveInterval || RIVAL_MOVE_INTERVAL_BASE),
+      baseMoveInterval: Number(source.baseMoveInterval || source.moveInterval || RIVAL_MOVE_INTERVAL_BASE),
+      baseHp,
+      baseDmg,
+      baseSpeed: Math.max(40, Number(source.baseSpeed || source.speed || def?.speed || 90)),
+      baseAttackCd: Math.max(0.42, Number(source.baseAttackCd || source.attackCd || def?.attackCd || 1)),
+      hp: Math.max(1, Number(source.hp || source.max || baseHp)),
+      max: Math.max(1, Number(source.max || source.hp || baseHp)),
+      dmg: Math.max(1, Number(source.dmg || baseDmg)),
+      speed: Math.max(40, Number(source.speed || def?.speed || 90)),
+      r: Math.max(10, Number(source.r || def?.r || 16)),
+      attackCd: Math.max(0.42, Number(source.attackCd || def?.attackCd || 1)),
+      level: Math.max(1, Number(source.level || 1)),
+      xp: Math.max(0, Number(source.xp || 0)),
+      xpToNext: Math.max(8, Number(source.xpToNext || (22 + floor * 4))),
+      growthTick: Math.max(0, Number(source.growthTick || 0)),
+      memory: normalizeRivalMemory(source.memory),
+      dead: !!source.dead,
+    };
+    applyRivalLevelStats(migrated, { syncLiveEnemy: false, keepHpRatio: false });
+    migrated.hp = clamp(Number(source.hp || migrated.hp), 1, migrated.max);
+    migrated.hpSnapshot = migrated.hp;
+    return migrated;
+  }
+
+  function awardRivalXp(rival, amount, reason = '') {
+    if (!rival || rival.dead) return;
+    let xpGain = Math.max(0, Number(amount) || 0);
+    if (xpGain <= 0) return;
+    const threatBonus = 1 + Math.min(0.6, Math.max(0, Number(rival.memory?.threat || 0)) * 0.08);
+    xpGain *= threatBonus;
+    rival.xp += xpGain;
+    let leveled = false;
+    while (rival.xp >= rival.xpToNext) {
+      rival.xp -= rival.xpToNext;
+      rival.level += 1;
+      rival.xpToNext = Math.round(rival.xpToNext * 1.18 + 3);
+      applyRivalLevelStats(rival, { keepHpRatio: true });
+      leveled = true;
+      const liveEnemy = enemies.find(e => e.type === 'rival' && e.rivalData === rival);
+      if (liveEnemy) {
+        particles.push({ x: liveEnemy.x, y: liveEnemy.y - 20, life: 1.0, text: `${rival.name.toUpperCase()} LV ${rival.level}`, c: rival.color });
+      }
+    }
+    if (leveled && reason !== 'silent') {
+      scheduleRunSave();
+    }
+  }
+
+  function restoreRivals(snapshotRivals) {
+    const loaded = Array.isArray(snapshotRivals) ? snapshotRivals.map(migrateRivalState).filter(Boolean) : [];
+    rivals = loaded;
+    const rivalById = new Map(rivals.map(rival => [rival.rivalId, rival]));
+    enemies.forEach(enemy => {
+      if (enemy?.type !== 'rival') return;
+      const rivalFromEnemy = enemy.rivalData && typeof enemy.rivalData === 'object' ? migrateRivalState(enemy.rivalData) : null;
+      const matching = (rivalFromEnemy && rivalById.get(rivalFromEnemy.rivalId))
+        || getRivalById(enemy.rivalData?.rivalId, enemy.rivalKey)
+        || rivalFromEnemy;
+      if (!matching) return;
+      if (!rivalById.has(matching.rivalId)) {
+        rivals.push(matching);
+        rivalById.set(matching.rivalId, matching);
+      }
+      matching.hp = clamp(Number(enemy.hp || matching.hp), 1, matching.max);
+      matching.hpSnapshot = matching.hp;
+      enemy.rivalData = matching;
+      enemy.rivalKey = matching.characterKey;
+      enemy.max = matching.max;
+      enemy.dmg = matching.dmg;
+      enemy.speed = matching.speed;
+      enemy.attackCd = Math.max(Number(enemy.attackCd || 0), matching.attackCd * 0.5);
+    });
+  }
+
   function spawnRivals() {
     rivals = [];
     if (!rooms || rooms.length === 0) return;
@@ -5587,7 +5751,11 @@
       const def = RIVAL_DEFS[charKey];
       const spawnRoom = nonStartRooms[i % nonStartRooms.length];
       const floorScale = 1 + (floor - 1) * 0.12;
+      const reputationBonus = Math.max(0, Math.floor(Number(player?.rivalReputation || 0) / 2));
+      const startingLevel = Math.max(1, 1 + reputationBonus);
+      const baseMoveInterval = RIVAL_MOVE_INTERVAL_BASE + nextRandom('world') * 4;
       rivals.push({
+        rivalId: `${charKey}-${floor}-${Math.floor(nextRandom('world') * 1000000)}`,
         characterKey: charKey,
         name: def.name,
         color: def.color,
@@ -5597,13 +5765,22 @@
         roomGx: spawnRoom.gx,
         roomGy: spawnRoom.gy,
         moveTimer: 6 + nextRandom('world') * 5,
-        moveInterval: RIVAL_MOVE_INTERVAL_BASE + nextRandom('world') * 4,
+        moveInterval: baseMoveInterval,
+        baseMoveInterval,
+        baseHp: Math.round(def.hp * floorScale),
+        baseDmg: Math.round(def.dmg * floorScale),
+        baseSpeed: def.speed,
+        baseAttackCd: def.attackCd,
         hp: Math.round(def.hp * floorScale),
         max: Math.round(def.hp * floorScale),
         dmg: Math.round(def.dmg * floorScale),
         speed: def.speed,
         r: def.r,
         attackCd: def.attackCd,
+        level: startingLevel,
+        xp: 0,
+        xpToNext: 22 + floor * 4,
+        growthTick: 0,
         loot: [],
         homeGx: spawnRoom.gx,
         homeGy: spawnRoom.gy,
@@ -5615,8 +5792,10 @@
         lastKnownPlayerGx: spawnRoom.gx,
         lastKnownPlayerGy: spawnRoom.gy,
         hpSnapshot: Math.round(def.hp * floorScale),
+        memory: createDefaultRivalMemory(),
         dead: false,
       });
+      applyRivalLevelStats(rivals[rivals.length - 1], { syncLiveEnemy: false, keepHpRatio: false });
     }
   }
 
@@ -6821,6 +7000,7 @@
     playerData.attackPower = Number(playerData.attackPower || 0);
     playerData.attackSpeed = Number(playerData.attackSpeed || 1);
     playerData.roomDamageTaken = Number(playerData.roomDamageTaken || 0);
+    playerData.rivalReputation = Number(playerData.rivalReputation || 0);
     playerData.dashTime = Number(playerData.dashTime || 0);
     playerData.dashX = Number(playerData.dashX || 0);
     playerData.dashY = Number(playerData.dashY || 0);
