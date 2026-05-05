@@ -35,6 +35,14 @@
     loop: 0.32,
     minute: 0.12,
   };
+  const BLEED_RESIST_SCALING = {
+    floorInLoop: 0.16,
+    loop: 0.65,
+    elite: 0.45,
+    miniBoss: 0.4,
+    boss: 1.1,
+    rival: 0.75,
+  };
   const DIRECTIONS = ['n', 's', 'e', 'w'];
   const DIRECTION_VECTORS = {
     n: { dx: 0, dy: -1 },
@@ -774,12 +782,35 @@
     },
   };
   const RIVAL_MOVE_INTERVAL_BASE = 8.5;
-  const RIVAL_GROWTH_TICK_SECONDS = 18;
-  const RIVAL_XP_PER_GROWTH_TICK = 10;
+  const RIVAL_SPAWN_CHANCE = 0.6; // 40% less likely overall
+  const RIVAL_GROWTH_TICK_SECONDS = 14;
+  const RIVAL_XP_PER_GROWTH_TICK = 12;
+  const RIVAL_WEAPON_SWAP_BASE = 3.6;
   const MONSTER_ROAM_INTERVAL_SECONDS = 60;
   const MONSTER_ROAM_MOVE_CHANCE = 0.28;
   const PURPLE_WEAPON_POOL = ['lazer_glasses', 'metao_fire_staff', 'magenta_degale', 'magenta_p90'];
   const RED_WEAPON_POOL = ['granillia_lightning_spear', 'excalibur', 'golden_fleece', 'void_piercer', 'aegis_shield_weapon'];
+
+  const RIVAL_WEAPON_LOADOUTS = {
+    princess: [
+      { key: 'thorns_bleed_blade', class: 'melee', range: 42, preferredRange: 120, damageMult: 1.08, cooldownMult: 0.92, knockback: 300 },
+      { key: 'magenta_degale', class: 'ranged', range: 360, preferredRange: 220, damageMult: 0.88, cooldownMult: 1.1, projectileCount: 2, spread: 0.14, projectileSpeed: 340 },
+    ],
+    thorn_knight: [
+      { key: 'extending_staff', class: 'melee', range: 56, preferredRange: 130, damageMult: 1.0, cooldownMult: 0.84, knockback: 320 },
+      { key: 'hunters_bow', class: 'ranged', range: 430, preferredRange: 270, damageMult: 0.86, cooldownMult: 1.05, projectileCount: 1, spread: 0.04, projectileSpeed: 420 },
+      { key: 'thorns_bleed_blade', class: 'dash', range: 240, preferredRange: 165, damageMult: 1.15, cooldownMult: 1.2, knockback: 360 },
+    ],
+    metao: [
+      { key: 'magenta_p90', class: 'burst', range: 390, preferredRange: 250, damageMult: 0.72, cooldownMult: 1.0, projectileCount: 4, spread: 0.16, projectileSpeed: 360 },
+      { key: 'lazer_glasses', class: 'ranged', range: 470, preferredRange: 300, damageMult: 0.92, cooldownMult: 1.14, projectileCount: 1, spread: 0.02, projectileSpeed: 460 },
+    ],
+    granialla: [
+      { key: 'granillia_lightning_spear', class: 'ranged', range: 420, preferredRange: 260, damageMult: 0.94, cooldownMult: 1.0, projectileCount: 2, spread: 0.08, projectileSpeed: 390 },
+      { key: 'excalibur', class: 'melee_heal', range: 50, preferredRange: 130, damageMult: 1.12, cooldownMult: 0.95, knockback: 320 },
+      { key: 'void_piercer', class: 'burst', range: 340, preferredRange: 220, damageMult: 0.95, cooldownMult: 1.12, projectileCount: 3, spread: 0.1, projectileSpeed: 380 },
+    ],
+  };
 
   const ITEM_DEFS = {
     neo_knife: {
@@ -6122,9 +6153,13 @@
       xp: Math.max(0, Number(source.xp || 0)),
       xpToNext: Math.max(8, Number(source.xpToNext || (22 + floor * 4))),
       growthTick: Math.max(0, Number(source.growthTick || 0)),
+      weapons: Array.isArray(source.weapons) ? source.weapons : [],
       memory: normalizeRivalMemory(source.memory),
       dead: !!source.dead,
     };
+    if (!migrated.weapons.length) {
+      migrated.weapons = (RIVAL_WEAPON_LOADOUTS[migrated.characterKey] || []).map(weapon => ({ ...weapon }));
+    }
     applyRivalLevelStats(migrated, { syncLiveEnemy: false, keepHpRatio: false });
     migrated.hp = clamp(Number(source.hp || migrated.hp), 1, migrated.max);
     migrated.hpSnapshot = migrated.hp;
@@ -6184,6 +6219,7 @@
   function spawnRivals() {
     rivals = [];
     if (!rooms || rooms.length === 0) return;
+    if (nextRandom('world') > RIVAL_SPAWN_CHANCE) return;
     const unchosen = Object.keys(CHARACTER_DEFS).filter(k => k !== chosenCharacter && RIVAL_DEFS[k]);
     const count = floor >= 3 ? Math.min(2, unchosen.length) : 1;
     const nonStartRooms = rooms.filter(r => r.type !== 'start' && r.type !== 'boss' && r.type !== 'god');
@@ -6224,6 +6260,7 @@
         xp: 0,
         xpToNext: 22 + floor * 4,
         growthTick: 0,
+        weapons: (RIVAL_WEAPON_LOADOUTS[charKey] || []).map(weapon => ({ ...weapon })),
         loot: [],
         homeGx: spawnRoom.gx,
         homeGy: spawnRoom.gy,
@@ -6583,16 +6620,57 @@
   function updateRivalEnemy(enemy, dt) {
     const rival = enemy.rivalData;
     if (!rival) return;
+    const weapons = Array.isArray(rival.weapons) && rival.weapons.length
+      ? rival.weapons
+      : (RIVAL_WEAPON_LOADOUTS[rival.characterKey] || []);
+    if (weapons.length === 0) return;
+
+    enemy.rivalWeaponIndex = Math.max(0, Math.min(weapons.length - 1, Number(enemy.rivalWeaponIndex || 0)));
+    enemy.rivalWeaponSwapCd = Math.max(0, Number(enemy.rivalWeaponSwapCd || 0) - dt);
+    enemy.rivalStrafeDir = enemy.rivalStrafeDir || (nextRandom('encounter') < 0.5 ? -1 : 1);
+    enemy.rivalStrafeFlipCd = Math.max(0, Number(enemy.rivalStrafeFlipCd || 0) - dt);
+    if (enemy.rivalStrafeFlipCd <= 0) {
+      enemy.rivalStrafeFlipCd = 1.1 + nextRandom('encounter') * 1.8;
+      if (nextRandom('encounter') < 0.35) enemy.rivalStrafeDir *= -1;
+    }
+    if (enemy.rivalWeaponSwapCd <= 0 && weapons.length > 1) {
+      enemy.rivalWeaponIndex = (enemy.rivalWeaponIndex + 1) % weapons.length;
+      enemy.rivalWeaponSwapCd = RIVAL_WEAPON_SWAP_BASE + nextRandom('encounter') * 1.6;
+    }
+    const weapon = weapons[enemy.rivalWeaponIndex] || weapons[0];
+
     const dx = player.x - enemy.x;
     const dy = player.y - enemy.y;
     const distance = Math.hypot(dx, dy) || 1;
+
+    if (enemy.dashTime > 0) {
+      enemy.dashTime -= dt;
+      enemy.vx = Math.cos(enemy.dashAngle) * 620;
+      enemy.vy = Math.sin(enemy.dashAngle) * 620;
+      if (!enemy.dashHit && distance < enemy.r + player.r + 8) {
+        enemy.dashHit = true;
+        const dashDamage = Math.round(enemy.dmg * Number(weapon.damageMult || 1));
+        damagePlayer(dashDamage, enemy.dashAngle, Number(weapon.knockback || 340), rival.name);
+      }
+      if (enemy.dashTime <= 0) {
+        enemy.attackCd = Math.max(0.32, rival.attackCd * Number(weapon.cooldownMult || 1));
+      }
+      return;
+    }
+
     if (enemy.stun > 0) { enemy.vx *= 0.88; enemy.vy *= 0.88; return; }
 
-    const attackStyle = rival.attackStyle;
-    const preferDist = attackStyle === 'ranged' ? 220 : 0;
+    const attackStyle = weapon.class || rival.attackStyle;
+    const preferDist = Number(weapon.preferredRange || (attackStyle === 'ranged' || attackStyle === 'burst' ? 220 : 120));
 
     // Movement
-    if (attackStyle === 'ranged') {
+    if (attackStyle === 'ranged' || attackStyle === 'burst') {
+      const shouldSeekCover = enemy.hp < enemy.max * 0.65
+        || enemy.attackCd > 0.25
+        || distance < preferDist * 0.82;
+      if (shouldSeekCover && trySteerEnemyToCover(enemy, dt, preferDist, 4.2)) {
+        // Hold cover and only peek out when an attack window opens.
+      } else 
       // Keep preferred distance
       if (distance < preferDist - 30) {
         steerEnemy(enemy, -(dx / distance), -(dy / distance), enemy.speed, 4.2, dt);
@@ -6600,9 +6678,12 @@
         steerEnemy(enemy, dx / distance, dy / distance, enemy.speed, 4.2, dt);
       } else {
         // Strafe sideways
-        const perp = Math.atan2(dy, dx) + Math.PI / 2;
+        const perp = Math.atan2(dy, dx) + Math.PI / 2 * enemy.rivalStrafeDir;
         steerEnemy(enemy, Math.cos(perp) * 0.8, Math.sin(perp) * 0.8, enemy.speed * 0.6, 3.0, dt);
       }
+    } else if (attackStyle === 'dash') {
+      const preferred = distance > preferDist ? 1 : distance < 110 ? -1 : 0.2;
+      steerEnemy(enemy, dx / distance * preferred, dy / distance * preferred, enemy.speed, 4.6, dt);
     } else {
       steerEnemy(enemy, dx / distance, dy / distance, enemy.speed, 4.4, dt);
     }
@@ -6610,14 +6691,15 @@
     if (enemy.attackCd > 0) return;
 
     if (attackStyle === 'melee' || attackStyle === 'melee_heal') {
-      if (distance < enemy.r + player.r + 12) {
+      if (distance < enemy.r + player.r + Number(weapon.range || 12)) {
         const angle = Math.atan2(dy, dx);
-        damagePlayer(enemy.dmg, angle, 280, rival.name);
+        const meleeDamage = Math.round(enemy.dmg * Number(weapon.damageMult || 1));
+        damagePlayer(meleeDamage, angle, Number(weapon.knockback || 280), rival.name);
         if (rival.memory) {
           rival.memory.playerHitsDealt += 1;
           rival.memory.threat += 0.2;
         }
-        enemy.attackCd = rival.attackCd * 0.9 + nextRandom('encounter') * 0.4;
+        enemy.attackCd = rival.attackCd * Number(weapon.cooldownMult || 1) + nextRandom('encounter') * 0.4;
         enemy.swingTime = 0.22;
         // Heal on hit for granialla-style
         if (attackStyle === 'melee_heal' && nextRandom('encounter') < 0.25) {
@@ -6627,23 +6709,38 @@
           particles.push({ x: enemy.x, y: enemy.y - 18, life: 0.7, text: `+${heal}`, c: '#a8aaff' });
         }
       }
-    } else if (attackStyle === 'ranged') {
-      if (distance < 320) {
+    } else if (attackStyle === 'dash') {
+      if (distance < Number(weapon.range || 230) && distance > 85) {
+        enemy.dashAngle = Math.atan2(dy, dx);
+        enemy.dashTime = 0.24;
+        enemy.dashHit = false;
+        enemy.attackCd = rival.attackCd * Number(weapon.cooldownMult || 1) + 0.35;
+      }
+    } else if (attackStyle === 'ranged' || attackStyle === 'burst') {
+      if (distance < Number(weapon.range || 320)) {
+        if (attackStyle === 'ranged' && !hasLineOfSight(enemy.x, enemy.y, player.x, player.y)) {
+          enemy.attackCd = 0.2;
+          return;
+        }
         const angle = Math.atan2(dy, dx);
-        const spread = 0.22;
-        [-1, 0, 1].forEach(offset => {
+        const shotCount = Math.max(1, Number(weapon.projectileCount || 1));
+        const spread = Number(weapon.spread || 0.2);
+        for (let shot = 0; shot < shotCount; shot += 1) {
+          const offset = shotCount === 1 ? 0 : (shot / (shotCount - 1)) * 2 - 1;
           const a = angle + offset * spread;
           projectiles.push({
             x: enemy.x, y: enemy.y,
-            vx: Math.cos(a) * 310, vy: Math.sin(a) * 310,
-            r: 5, life: 1.1, damage: enemy.dmg,
-            kind: 'rival_shot', color: rival.color,
+            vx: Math.cos(a) * Number(weapon.projectileSpeed || 310), vy: Math.sin(a) * Number(weapon.projectileSpeed || 310),
+            r: attackStyle === 'burst' ? 4 : 5,
+            life: attackStyle === 'burst' ? 1.0 : 1.1,
+            damage: Math.round(enemy.dmg * Number(weapon.damageMult || 1)),
+            kind: weapon.key || 'rival_shot', color: rival.color,
             knockback: 160, pierceCount: 0, hitOptions: null,
             enemy: true,
             fromRival: true,
           });
-        });
-        enemy.attackCd = rival.attackCd + nextRandom('encounter') * 0.5;
+        }
+        enemy.attackCd = rival.attackCd * Number(weapon.cooldownMult || 1) + nextRandom('encounter') * 0.5;
       }
     }
   }
@@ -7963,17 +8060,38 @@
     player.chronoSpringBuffTime = 0;
   }
 
-  function scaleDamageAgainstEnemy(enemy, damage) {
+  function scaleDamageAgainstEnemy(enemy, damage, options = {}) {
     const stats = getItemStats();
+    const applyBleedBonus = options.applyBleedBonus !== false;
     const characterMultiplier = getCharacterDef().damageMultiplier || 1;
     const powered = (damage + (player?.attackPower || 0))
       * characterMultiplier
       * (stats.levelEdgeDamageMultiplier || 1)
       * (isChallengeActive('glass_cannon') ? 1.25 : 1);
-    if (getStatusStacks(enemy, 'bleed') > 0 && stats.bleedDamageMultiplier > 1) {
+    if (applyBleedBonus && getStatusStacks(enemy, 'bleed') > 0 && stats.bleedDamageMultiplier > 1) {
       return Math.round(powered * stats.bleedDamageMultiplier);
     }
     return Math.round(powered);
+  }
+
+  function getEnemyBleedResistance(enemy) {
+    const loopNumber = Math.max(1, Math.floor((floor - 1) / 10) + 1);
+    const floorInLoop = ((floor - 1) % 10) + 1;
+    let resistance = 1;
+    resistance += Math.max(0, floorInLoop - 1) * BLEED_RESIST_SCALING.floorInLoop;
+    resistance += Math.max(0, loopNumber - 1) * BLEED_RESIST_SCALING.loop;
+    if (enemy?.elite) resistance += BLEED_RESIST_SCALING.elite;
+    if (enemy?.miniBoss) resistance += BLEED_RESIST_SCALING.miniBoss;
+    if (isBossType(enemy?.type) || enemy?.type === 'god') resistance += BLEED_RESIST_SCALING.boss;
+    if (enemy?.type === 'rival' || enemy?.type === 'mirror_knight') resistance += BLEED_RESIST_SCALING.rival;
+    return Math.max(1, resistance);
+  }
+
+  function scaleBleedDamageAgainstEnemy(enemy, stacks) {
+    const baseBleed = 1.8 + Math.max(1, Number(stacks || 1)) * 2.2;
+    const preResist = scaleDamageAgainstEnemy(enemy, baseBleed, { applyBleedBonus: false });
+    const reduced = preResist / getEnemyBleedResistance(enemy);
+    return Math.max(1, Math.round(reduced));
   }
 
   function getPlayerBaseDamage() {
@@ -8933,6 +9051,7 @@
   }
 
   function hitEnemy(enemy, damage, angle, knockback, color, options = {}) {
+    if ((enemy?.inv || 0) > 0) return;
     const stats = getItemStats();
     const sandbox = getActiveSandboxSettings();
     const critChance = clamp((stats.critChance || 0) + Number(options.critBonus || 0), 0, 0.98);
@@ -9107,7 +9226,7 @@
     const bleedStacks = getStatusStacks(enemy, 'bleed');
     if (tickEnemyStatus(enemy, 'bleed', dt, {
       interval: 0.5,
-      damage: stacks => scaleDamageAgainstEnemy(enemy, 3 * stacks),
+      damage: stacks => scaleBleedDamageAgainstEnemy(enemy, stacks),
       color: STATUS_STYLES.bleed.textColor,
       particleColor: STATUS_STYLES.bleed.color,
     })) return bleedStacks;
@@ -10602,7 +10721,31 @@
     enemy.dashTime = 0;
     enemy.swingTime = 0;
     enemy.attackCd = Math.min(enemy.attackCd || 99, 0.7);
-    enemy.inv = Math.max(enemy.inv || 0, 0.35);
+
+    const phaseInv = 1 + nextRandom('encounter') * 2; // 1-3s invulnerability on phase shift
+    enemy.inv = Math.max(enemy.inv || 0, phaseInv);
+
+    // On phase shift, reposition the god away from the player to reset spacing.
+    if (player) {
+      const dx = enemy.x - player.x;
+      const dy = enemy.y - player.y;
+      const len = Math.hypot(dx, dy) || 1;
+      const nx = dx / len;
+      const ny = dy / len;
+      const jumpDistance = rand(320, 200, 'encounter');
+      const targetX = clamp(enemy.x + nx * jumpDistance, WALL + enemy.r, ROOM_W - WALL - enemy.r);
+      const targetY = clamp(enemy.y + ny * jumpDistance, WALL + enemy.r, ROOM_H - WALL - enemy.r);
+      const landing = findSafeEnemySpawnPoint(targetX, targetY, Math.max(18, enemy.r || 18));
+      if (landing) {
+        particles.push({ x: enemy.x, y: enemy.y, life: 0.28, ring: 44, c: '#ffffff' });
+        enemy.x = landing.x;
+        enemy.y = landing.y;
+        enemy.vx = 0;
+        enemy.vy = 0;
+        particles.push({ x: enemy.x, y: enemy.y, life: 0.34, ring: 58, c: '#ffffff' });
+      }
+    }
+
     enemy.state = `godPhase${phase}`;
     shake = Math.max(shake, 18 + phase * 2);
     shakeT = Math.max(shakeT, 0.34);
