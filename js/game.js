@@ -4432,9 +4432,9 @@
     return null;
   }
 
-  function speakKillerDeathQuote() {
-    const sourceKey = lastDamageSourceKey || '';
-    const sourceLabel = lastDamageSource || getDamageSourceLabel(sourceKey) || 'DUNGEON';
+  function speakKillerDeathQuote(sourceKeyInput = '', sourceLabelInput = '') {
+    const sourceKey = sourceKeyInput || lastDamageSourceKey || '';
+    const sourceLabel = sourceLabelInput || lastDamageSource || getDamageSourceLabel(sourceKey) || 'DUNGEON';
     const quote = getKillerDeathQuote(sourceKey || sourceLabel);
     if (!quote || !player) return;
 
@@ -12872,7 +12872,6 @@
     }
     if (player) player.hp = 0;
     const entry = finalizeRun('dead', { killedBy: lastDamageSource, killerKey: lastDamageSourceKey });
-    speakKillerDeathQuote();
     const aimAngle = player ? Math.atan2(mouse.worldY - player.y, mouse.worldX - player.x) : 0;
     playerDeathAnim = {
       timer: 0,
@@ -12891,6 +12890,7 @@
   function finalizeDeath() {
     const { entry } = playerDeathAnim;
     playerDeathAnim = null;
+    speakKillerDeathQuote(entry?.killerKey || '', entry?.killedBy || '');
     setGameState('dead');
     uiController.setDeadScreen(entry);
   }
