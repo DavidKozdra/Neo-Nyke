@@ -121,8 +121,12 @@
   <div id="objectiveTracker" class="objective-tracker hidden" aria-hidden="true">
     <div class="objective-tracker__head">
       <span>OBJECTIVES</span>
-      <b id="objectiveRoomLabel">ROOM</b>
+      <div class="objective-tracker__meta">
+        <b id="objectiveRoomLabel">ROOM</b>
+        <button id="objectiveToggle" class="objective-tracker__toggle hidden" type="button" aria-expanded="false" aria-controls="objectiveList">Show</button>
+      </div>
     </div>
+    <div id="objectiveSummary" class="objective-tracker__summary hidden"></div>
     <ul id="objectiveList" class="objective-list"></ul>
   </div>
 
@@ -137,7 +141,8 @@
     <div class="timer-floor">
       <span id="timerDisplay">0:00</span>
       <span class="separator">•</span>
-      <span>FL <b id="floorDisplay">1</b>/10</span>
+      <span id="timerFloorSlot">FL <b id="floorDisplay">1</b>/10</span>
+      <span id="timerBossSlot" style="display:none">BOSS <b id="bossRushStageNum2">1</b>/4</span>
     </div>
     <div id="challengeStatus" class="challenge-status hidden" aria-hidden="true">
       <span id="challengeStatusLabel">STILLNESS</span>
@@ -414,11 +419,7 @@
     <span id="endlessWaveNum" class="endless-wave-num">1</span>
   </div>
 
-  <div id="bossRushHud" class="boss-rush-hud hidden">
-    <span class="boss-rush-label">BOSS RUSH</span>
-    <span id="bossRushStageNum" class="boss-rush-stage">1</span>
-    <span class="boss-rush-label">/ 4</span>
-  </div>
+  <div id="bossRushHud" class="hidden" style="display:none!important" aria-hidden="true"></div>
 
   <!-- Practice mode spawn panel -->
   <div id="practicePanel" class="practice-panel hidden" aria-hidden="true">

@@ -274,6 +274,10 @@ canvas {
   color: #ffd700;
 }
 
+.timer-floor #bossRushStageNum2 {
+  color: #ff8b8b;
+}
+
 .challenge-status {
   min-width: 240px;
   display: flex;
@@ -586,14 +590,12 @@ canvas {
 }
 
 .objective-tracker {
-  --minimap-width: 142px;
-  --minimap-height: 142px;
-  --minimap-right-gap: 2px;
   position: fixed;
-  top: calc(var(--minimap-height) + 12px);
-  right: var(--minimap-right-gap);
+  top: 154px;
+  right: 2px;
   z-index: 24;
   width: 142px;
+  max-height: calc(100dvh - 158px);
   padding: 6px 8px;
   border: 1px solid rgba(126, 200, 255, .18);
   border-radius: 4px;
@@ -601,6 +603,7 @@ canvas {
   box-shadow: 0 6px 16px rgba(0, 0, 0, .18), inset 0 0 10px rgba(80, 160, 220, .035);
   color: #d8e9ff;
   pointer-events: none;
+  overflow-y: auto;
 }
 
 .objective-tracker__head {
@@ -616,6 +619,12 @@ canvas {
   letter-spacing: .12em;
 }
 
+.objective-tracker__meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .objective-tracker__head b {
   max-width: 54px;
   overflow: hidden;
@@ -623,6 +632,29 @@ canvas {
   text-align: right;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.objective-tracker__toggle {
+  border: 1px solid rgba(143, 210, 255, .42);
+  border-radius: 3px;
+  background: rgba(10, 18, 30, .78);
+  color: #b9e5ff;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  padding: 1px 5px;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.objective-tracker__summary {
+  margin-bottom: 4px;
+  color: #c9ddf3;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, .65);
 }
 
 .objective-list {
@@ -677,9 +709,23 @@ canvas {
 
 @media (max-width: 720px) {
   .objective-tracker {
-    top: calc(var(--minimap-height) + 10px);
+    top: 118px;
     right: 2px;
     width: min(142px, calc(100vw - 16px));
+  }
+}
+
+@media (max-width: 920px) {
+  .objective-tracker.objective-tracker--compact {
+    pointer-events: auto;
+  }
+
+  .objective-tracker.objective-tracker--compact .objective-tracker__head {
+    margin-bottom: 2px;
+  }
+
+  .objective-tracker.objective-tracker--compact:not(.objective-tracker--expanded) {
+    padding-bottom: 5px;
   }
 }
 

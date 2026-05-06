@@ -311,8 +311,6 @@
   /* ── 14. Objective tracker ───────────────────────────────────── */
 
   .objective-tracker {
-    --minimap-height: 100px;
-    --minimap-width: 100px;
     right: 2px;
     width: min(118px, calc(100vw - 12px));
     font-size: 9px;

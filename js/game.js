@@ -1148,6 +1148,8 @@
     objective: document.getElementById('objective'),
     objectiveTracker: document.getElementById('objectiveTracker'),
     objectiveRoomLabel: document.getElementById('objectiveRoomLabel'),
+    objectiveToggle: document.getElementById('objectiveToggle'),
+    objectiveSummary: document.getElementById('objectiveSummary'),
     objectiveList: document.getElementById('objectiveList'),
     cdM: document.getElementById('cdM'),
     cdL: document.getElementById('cdL'),
@@ -1223,6 +1225,9 @@
     metaCoinIcon: document.getElementById('metaCoinIcon'),
     metaLoopIcon: document.getElementById('metaLoopIcon'),
     centerDisplay: document.getElementById('centerDisplay'),
+    timerFloorSlot: document.getElementById('timerFloorSlot'),
+    timerBossSlot: document.getElementById('timerBossSlot'),
+    bossRushStageNum2: document.getElementById('bossRushStageNum2'),
     challengeStatus: document.getElementById('challengeStatus'),
     challengeStatusLabel: document.getElementById('challengeStatusLabel'),
     challengeStatusFill: document.getElementById('challengeStatusFill'),
@@ -1475,6 +1480,11 @@
   };
   let activeRun = null;
   let metaProgress = createDefaultMeta();
+  window.addEventListener('achievement:unlocked', () => {
+    metaProgress.loopCrystals = Number(metaProgress.loopCrystals || 0) + 1;
+    persistMetaSoon();
+    refreshMenuState();
+  });
   let runHistory = [];
   let lastDamageSource = '';
   let lastDamageSourceKey = '';
@@ -1483,6 +1493,7 @@
   let metaSaveDirty = false;
   let menuRefreshQueued = false;
   let frameId = 0;
+  let minimapLayoutState = null;
   let itemStatsCacheFrame = -1;
   let itemStatsCacheValue = null;
   let godItemKeysCache = null;
@@ -3363,6 +3374,7 @@
       player.ownedMoves[offer.key] = true;
       markInventoryPanelDirty();
       pushMoveNotification(offer.key, 1);
+      achievementEvents.emit('shop:bought');
     } else if (kind === 'weapon') {
       const offerIndex = Number(button.dataset.index || -1);
       const weaponOffers = getShopWeaponOffers();
@@ -3375,6 +3387,7 @@
       particles.push({ x: player.x, y: player.y - 24, life: 0.8, text: `${WEAPON_DEFS[offer.key]?.name || 'Weapon'} acquired`, c: WEAPON_DEFS[offer.key]?.color || '#d9e8ff' });
       pushWeaponNotification(offer.key);
       markInventoryPanelDirty();
+      achievementEvents.emit('shop:bought');
     } else if (kind === 'heal') {
       const heal = Number(button.dataset.heal || 0);
       const cost = Number(button.dataset.cost || 0);
@@ -3384,6 +3397,8 @@
       player.hp = Math.min(player.maxHp, player.hp + heal);
       const gained = player.hp - before;
       if (gained > 0) spawnHealPopup(player.x + rand(-10, 10), player.y - 20, gained);
+      if (gained > 0) achievementEvents.emit('heal:applied', { amount: gained });
+      achievementEvents.emit('shop:bought');
     }
     markShopPanelDirty();
     markInventoryPanelDirty();
@@ -4737,6 +4752,9 @@
       gameState = nextState;
       uiController.setState(nextState);
     }
+    const isBossRush = gameMode === 'boss_rush';
+    if (ui.timerFloorSlot) ui.timerFloorSlot.style.display = isBossRush ? 'none' : '';
+    if (ui.timerBossSlot) ui.timerBossSlot.style.display = isBossRush ? '' : 'none';
     if (nextState !== 'play') {
       setShopPanelOpen(false);
       setInventoryPanelOpen(false);
@@ -4948,6 +4966,7 @@
     }
     addCoins(120);
     if (ui.bossRushStageNum) ui.bossRushStageNum.textContent = 1;
+    if (ui.bossRushStageNum2) ui.bossRushStageNum2.textContent = 1;
     // Spawn first boss immediately
     spawnBossRushBoss();
     if (!loopStarted) { loopStarted = true; requestAnimationFrame(loop); }
@@ -4972,6 +4991,7 @@
     bossRushActive = false;
     bossRushStage += 1;
     if (ui.bossRushStageNum) ui.bossRushStageNum.textContent = Math.min(bossRushStage + 1, 4);
+    if (ui.bossRushStageNum2) ui.bossRushStageNum2.textContent = Math.min(bossRushStage + 1, 4);
     if (bossRushStage >= BOSS_RUSH_ORDER.length) {
       win();
       return;
@@ -5967,6 +5987,10 @@
     injectRivalsToCurrentRoom();
 
     if (room.type === 'god') {
+      const ensureGodIntroDialogue = () => {
+        if (room.godIntroPlayed) return;
+        if (playGodDialogue(1)) room.godIntroPlayed = true;
+      };
       if (room.cleared) {
         if (!pickups.some(pickup => pickup.type === 'crown')) {
           pickups.push({ x: ROOM_W / 2, y: ROOM_H / 2, type: 'crown' });
@@ -5975,13 +5999,14 @@
         if (!enemies.some(enemy => enemy.type === 'god')) {
           spawnGodBoss();
         }
+        ensureGodIntroDialogue();
       } else if (!room.bossStarted) {
         // Auto-start the god fight immediately — no upfront choice
         currentRoom.bossStarted = true;
         if (!enemies.some(enemy => enemy.type === 'god')) {
           spawnGodBoss();
-          playGodDialogue(1);
         }
+        ensureGodIntroDialogue();
         syncCurrentRoomState();
         updateObjective();
       }
@@ -7407,7 +7432,6 @@
   function playGodDialogue(phase) {
     const line = GOD_PHASE_DIALOGUE[phase];
     if (!line) return false;
-    if (hasLegacy('god_memory') && (metaProgress.godsKilled || 0) > 0) return false;
     setShopPanelOpen(false);
     setInventoryPanelOpen(false);
     clearGameplayInput();
@@ -13114,7 +13138,13 @@
     }
 
     sectionPerfStart = perfStart();
-    if (isPlayLike && !isDying) drawMinimap();
+    if (isPlayLike && !isDying) {
+      const minimapLayout = drawMinimap();
+      uiController.setObjectiveLayout(minimapLayout?.viewportBounds || null);
+    } else {
+      minimapLayoutState = null;
+      uiController.setObjectiveLayout(null);
+    }
     perfEnd('draw.minimap', sectionPerfStart);
 
     sectionPerfStart = perfStart();
@@ -15867,15 +15897,29 @@
   }
 
   function drawMinimap() {
-    const size = 14;
-    const gap = 2;
+    const baseSize = 14;
+    const baseGap = 2;
     const gridSize = 9;
-    const mapWidth = gridSize * size + (gridSize - 1) * gap;
     const visibleRooms = rooms.filter(r => !r.secret);
     const maxGy = visibleRooms.reduce((m, r) => Math.max(m, r.gy), 0);
+    const baseMapWidth = gridSize * baseSize + (gridSize - 1) * baseGap;
+    const baseMapHeight = (maxGy + 1) * baseSize + maxGy * baseGap;
+    const canvasRect = canvas.getBoundingClientRect();
+    const scaleX = canvasRect.width > 0 ? canvasRect.width / canvas.width : 1;
+    const scaleY = canvasRect.height > 0 ? canvasRect.height / canvas.height : 1;
+    const compact = window.innerWidth <= 920;
+    const targetViewportWidth = compact ? Math.min(112, canvasRect.width * 0.25) : Math.min(146, canvasRect.width * 0.2);
+    const targetViewportHeight = compact ? Math.min(112, canvasRect.height * 0.25) : Math.min(146, canvasRect.height * 0.23);
+    const baseViewportWidth = baseMapWidth * scaleX;
+    const baseViewportHeight = baseMapHeight * scaleY;
+    const minimapScale = clamp(Math.min(1, targetViewportWidth / Math.max(1, baseViewportWidth), targetViewportHeight / Math.max(1, baseViewportHeight)), 0.62, 1);
+    const size = Math.max(8, Math.round(baseSize * minimapScale));
+    const gap = Math.max(1, Math.round(baseGap * minimapScale));
+    const mapWidth = gridSize * size + (gridSize - 1) * gap;
     const mapHeight = (maxGy + 1) * size + maxGy * gap;
     const originX = canvas.width - mapWidth - 2;
-    const originY = -10;
+    const originY = Math.round(-10 * minimapScale);
+    const markerFont = `${Math.max(7, Math.round(size * 0.62))}px system-ui`;
     ctx.save();
     ctx.globalAlpha = 1;
     ctx.fillStyle = '#2a2e38';
@@ -15932,28 +15976,28 @@
       if (room.type === 'ladder') {
         ctx.globalAlpha = room.explored ? 1 : 0.7;
         ctx.fillStyle = '#fff700';
-        ctx.font = 'bold 9px system-ui';
+        ctx.font = `bold ${markerFont}`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText('★', x + size / 2, y + size / 2);
       } else if (room.type === 'challenge') {
         ctx.globalAlpha = room.explored ? 1 : 0.72;
         ctx.fillStyle = '#071116';
-        ctx.font = 'bold 9px system-ui';
+        ctx.font = `bold ${markerFont}`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText('T', x + size / 2, y + size / 2);
       } else if (room.type === 'shop') {
         ctx.globalAlpha = room.explored ? 1 : 0.72;
         ctx.fillStyle = '#071116';
-        ctx.font = 'bold 9px system-ui';
+        ctx.font = `bold ${markerFont}`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText('$', x + size / 2, y + size / 2);
       } else if (room.type === 'anvil') {
         ctx.globalAlpha = room.explored ? 1 : 0.72;
         ctx.fillStyle = '#1a0800';
-        ctx.font = 'bold 9px system-ui';
+        ctx.font = `bold ${markerFont}`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText('⚒', x + size / 2, y + size / 2);
@@ -15983,6 +16027,22 @@
       });
     }
     ctx.restore();
+
+    const viewportBounds = {
+      left: canvasRect.left + originX * scaleX,
+      top: canvasRect.top + originY * scaleY,
+      right: canvasRect.left + (originX + mapWidth) * scaleX,
+      bottom: canvasRect.top + (originY + mapHeight) * scaleY,
+    };
+    minimapLayoutState = {
+      x: originX,
+      y: originY,
+      width: mapWidth,
+      height: mapHeight,
+      scale: minimapScale,
+      viewportBounds,
+    };
+    return minimapLayoutState;
   }
 
   function drawGodModeBar() {
@@ -16202,7 +16262,105 @@
     let selectedRunHistoryId = '';
     let activeRunHistoryTab = 'stats';
     let tutorialBannerCache = { open: null, text: null, hint: null, prevDisabled: null, nextDisabled: null };
+    let objectiveEntriesCache = [];
+    let objectiveTrackerVisible = false;
+    let objectiveCompactMode = false;
+    let objectiveExpanded = true;
     const runHistoryPageSize = 8;
+
+    function isCompactObjectiveViewport() {
+      return window.innerWidth <= 920;
+    }
+
+    function getObjectiveCompactSummary(entries = []) {
+      if (!entries.length) return 'No objectives';
+      const doneCount = entries.filter(entry => String(entry?.state || '') === 'done').length;
+      const primary = entries.find(entry => String(entry?.state || '') !== 'done') || entries[0];
+      const primaryText = String(primary?.text || '').trim();
+      return `${doneCount}/${entries.length} done${primaryText ? ` • ${primaryText}` : ''}`;
+    }
+
+    function syncObjectiveTrackerCompactState() {
+      if (!view.objectiveTracker) return;
+      const compact = isCompactObjectiveViewport();
+      if (compact !== objectiveCompactMode) {
+        objectiveCompactMode = compact;
+        objectiveExpanded = compact ? false : true;
+      }
+
+      if (!objectiveTrackerVisible) {
+        view.objectiveTracker.classList.remove('objective-tracker--compact', 'objective-tracker--expanded');
+        if (view.objectiveSummary) view.objectiveSummary.classList.add('hidden');
+        if (view.objectiveList) view.objectiveList.classList.remove('hidden');
+        if (view.objectiveToggle) {
+          view.objectiveToggle.classList.add('hidden');
+          view.objectiveToggle.setAttribute('aria-expanded', 'false');
+        }
+        return;
+      }
+
+      view.objectiveTracker.classList.toggle('objective-tracker--compact', objectiveCompactMode);
+      view.objectiveTracker.classList.toggle('objective-tracker--expanded', !objectiveCompactMode || objectiveExpanded);
+      if (view.objectiveToggle) {
+        const showToggle = objectiveCompactMode;
+        view.objectiveToggle.classList.toggle('hidden', !showToggle);
+        view.objectiveToggle.setAttribute('aria-expanded', objectiveExpanded ? 'true' : 'false');
+        view.objectiveToggle.textContent = objectiveExpanded ? 'Hide' : 'Show';
+      }
+      if (view.objectiveSummary) {
+        const showSummary = objectiveCompactMode && !objectiveExpanded;
+        view.objectiveSummary.classList.toggle('hidden', !showSummary);
+        view.objectiveSummary.textContent = showSummary ? getObjectiveCompactSummary(objectiveEntriesCache) : '';
+      }
+      if (view.objectiveList) {
+        view.objectiveList.classList.toggle('hidden', objectiveCompactMode && !objectiveExpanded);
+      }
+    }
+
+    function setObjectiveLayout(layout) {
+      if (!view.objectiveTracker) return;
+      if (!layout) {
+        view.objectiveTracker.style.removeProperty('top');
+        view.objectiveTracker.style.removeProperty('right');
+        view.objectiveTracker.style.removeProperty('width');
+        view.objectiveTracker.style.removeProperty('max-height');
+        view.objectiveTracker.style.removeProperty('overflow-y');
+        return;
+      }
+
+      const margin = 4;
+      const gap = window.innerWidth <= 920 ? 8 : 12;
+      const trackerWidth = Math.round(clamp(window.innerWidth <= 920 ? 124 : 142, 108, window.innerWidth - margin * 2));
+      let right = Math.round(clamp(window.innerWidth - layout.right, margin, window.innerWidth - trackerWidth - margin));
+      let top = Math.max(margin, Math.round(layout.bottom + gap));
+      let maxHeight = Math.floor(window.innerHeight - top - margin);
+
+      // If there is not enough room below the minimap, place objectives left of it.
+      if (maxHeight < 92) {
+        top = Math.max(margin, Math.round(layout.top));
+        right = Math.round(clamp(window.innerWidth - layout.left + gap, margin, window.innerWidth - trackerWidth - margin));
+        maxHeight = Math.floor(window.innerHeight - top - margin);
+      }
+
+      view.objectiveTracker.style.top = `${top}px`;
+      view.objectiveTracker.style.right = `${right}px`;
+      view.objectiveTracker.style.width = `${trackerWidth}px`;
+      view.objectiveTracker.style.maxHeight = `${Math.max(74, maxHeight)}px`;
+      view.objectiveTracker.style.overflowY = 'auto';
+      syncObjectiveTrackerCompactState();
+    }
+
+    if (view.objectiveToggle) {
+      view.objectiveToggle.addEventListener('click', () => {
+        if (!objectiveCompactMode || !objectiveTrackerVisible) return;
+        objectiveExpanded = !objectiveExpanded;
+        syncObjectiveTrackerCompactState();
+      });
+    }
+
+    window.addEventListener('resize', () => {
+      syncObjectiveTrackerCompactState();
+    });
 
     function getVisibleRunHistoryEntries() {
       if (runHistoryModeFilter === 'all') return runHistoryEntries;
@@ -16379,8 +16537,10 @@
       if (show !== 'charselect') { setChallengePanelOpen(false); setLegacyPanelOpen(false); }
       if (show !== 'menu') { setRunHistoryOpen(false); setAltModesPanelOpen(false); setSandboxPanelOpen(false); }
       setVisible(view.endlessHud, inPlay && gameMode === 'endless', 'flex');
-      setVisible(view.bossRushHud, inPlay && gameMode === 'boss_rush', 'flex');
       setVisible(view.practicePanel, inPlay && gameMode === 'practice' && show !== 'dying', 'block');
+      const isBossRush = gameMode === 'boss_rush';
+      if (view.timerFloorSlot) view.timerFloorSlot.style.display = isBossRush ? 'none' : '';
+      if (view.timerBossSlot) view.timerBossSlot.style.display = isBossRush ? '' : 'none';
     }
 
     function setChallengePanelOpen(open) {
@@ -17168,13 +17328,17 @@
       setObjectiveList(roomLabel, entries = []) {
         if (!view.objectiveTracker || !view.objectiveList) return;
         const visible = gameState === 'play' && entries.length > 0;
+        objectiveTrackerVisible = visible;
+        objectiveEntriesCache = Array.isArray(entries) ? entries.slice() : [];
         view.objectiveTracker.classList.toggle('hidden', !visible);
         view.objectiveTracker.setAttribute('aria-hidden', visible ? 'false' : 'true');
         if (view.objectiveRoomLabel) view.objectiveRoomLabel.textContent = String(roomLabel || 'ROOM').toUpperCase();
         view.objectiveList.innerHTML = entries.map(entry => (
           `<li data-state="${escapeHtml(entry.state || 'todo')}">${escapeHtml(entry.text || '')}</li>`
         )).join('');
+        syncObjectiveTrackerCompactState();
       },
+      setObjectiveLayout,
       setHudValues(payload) {
         view.fl.textContent = payload.floor;
         view.lv.textContent = payload.level;

@@ -229,41 +229,49 @@ const achievementManager = (() => {
   return { isUnlocked, unlock, resetRunCounters };
 })();
 
-// Grant a loop crystal when any achievement is unlocked
-window.addEventListener('achievement:unlocked', () => {
-  if (typeof metaProgress !== 'undefined' && typeof persistMetaSoon === 'function') {
-    metaProgress.loopCrystals = Number(metaProgress.loopCrystals || 0) + 1;
-    persistMetaSoon();
-  }
-});
-
 function pushAchievementToast(achievement) {
-  const container = document.getElementById('notification-container')
-    || (() => {
-      const el = document.createElement('div');
-      el.id = 'notification-container';
-      document.body.appendChild(el);
-      return el;
-    })();
+  let stack = document.getElementById('itemNotifyStack');
+  if (!stack) {
+    stack = document.createElement('div');
+    stack.id = 'itemNotifyStack';
+    document.body.appendChild(stack);
+  }
 
   const toast = document.createElement('div');
-  toast.className = 'achievement-toast';
-  toast.innerHTML = `
-    <div class="achievement-toast-label">ACHIEVEMENT UNLOCKED &nbsp;+1 💎</div>
-    <div class="achievement-toast-body">
-      <span class="achievement-toast-icon">${achievement.icon}</span>
-      <div class="achievement-toast-text">
-        <div class="achievement-toast-name">${achievement.name}</div>
-        <div class="achievement-toast-desc">${achievement.desc}</div>
-      </div>
-    </div>
-  `;
+  toast.className = 'item-toast';
+  toast.style.borderColor = '#ffd27d';
 
-  container.appendChild(toast);
-  requestAnimationFrame(() => toast.classList.add('achievement-toast--visible'));
+  const icon = document.createElement('div');
+  icon.className = 'item-toast-icon';
+  icon.textContent = String(achievement?.icon || '🏆');
+  icon.style.display = 'grid';
+  icon.style.placeItems = 'center';
+  icon.style.fontSize = '18px';
+  icon.style.lineHeight = '1';
+  icon.style.background = 'rgba(8, 14, 22, 0.88)';
+
+  const body = document.createElement('div');
+  body.className = 'item-toast-body';
+
+  const title = document.createElement('div');
+  title.className = 'item-toast-title';
+  title.textContent = 'ACHIEVEMENT UNLOCKED';
+
+  const plus = document.createElement('div');
+  plus.className = 'item-toast-amount';
+  plus.textContent = `+1 LC • ${String(achievement?.name || 'Achievement')}`;
+
+  const desc = document.createElement('div');
+  desc.className = 'item-toast-desc';
+  desc.textContent = String(achievement?.desc || 'Unlocked');
+
+  body.append(title, plus, desc);
+  toast.append(icon, body);
+  stack.prepend(toast);
+  while (stack.childElementCount > 4) stack.lastElementChild?.remove();
 
   setTimeout(() => {
-    toast.classList.remove('achievement-toast--visible');
-    toast.addEventListener('transitionend', () => toast.remove(), { once: true });
-  }, 6000);
+    toast.classList.add('is-leaving');
+    setTimeout(() => toast.remove(), 220);
+  }, 4400);
 }
