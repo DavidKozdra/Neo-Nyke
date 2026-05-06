@@ -3190,11 +3190,20 @@
     });
 
     const stats = getItemStats();
+    const hpPct = Math.round(_invP.hp) / Math.round(_invP.maxHp);
+    const hpColor = hpPct > 0.6 ? '#6dde88' : hpPct > 0.3 ? '#f5c842' : '#ff6b6b';
+    const critPct = Math.round(stats.critChance * 100);
+    const critColor = critPct >= 30 ? '#f5a623' : critPct >= 10 ? '#e8f4ff' : '#8ca8c0';
+    const atkSpeed = getAttackSpeedValue();
+    const atkSpeedColor = atkSpeed >= 2 ? '#6dde88' : atkSpeed >= 1.2 ? '#e8f4ff' : '#8ca8c0';
+    const dmgReduction = Math.round(stats.damageReduction * 100);
     ui.invStats.innerHTML = [
-      `<div class="inv-card inv-stat-card"><span class="inv-card__eyebrow">Vital</span><h4>HP</h4><p>${Math.round(_invP.hp)} / ${Math.round(_invP.maxHp)}</p></div>`,
-      `<div class="inv-card inv-stat-card"><span class="inv-card__eyebrow">Damage</span><h4>Attack Power</h4><p>${_invP.attackPower}</p></div>`,
-      `<div class="inv-card inv-stat-card"><span class="inv-card__eyebrow">Tempo</span><h4>Attack Speed</h4><p>${getAttackSpeedValue().toFixed(2)}</p></div>`,
-      `<div class="inv-card inv-stat-card"><span class="inv-card__eyebrow">Edge</span><h4>Crit Chance</h4><p>${Math.round(stats.critChance * 100)}%</p></div>`,
+      `<div class="inv-stat-row inv-stat-row--bar"><div class="inv-stat-row__icon">❤️</div><div class="inv-stat-row__body"><span class="inv-stat-row__label">HP</span><span class="inv-stat-row__value" style="color:${hpColor}">${Math.round(_invP.hp)} <span class="inv-stat-row__sub">/ ${Math.round(_invP.maxHp)}</span></span></div><div class="inv-stat-row__bar"><div class="inv-stat-row__bar-fill" style="width:${Math.round(hpPct*100)}%;background:${hpColor}"></div></div></div>`,
+      `<div class="inv-stat-row"><div class="inv-stat-row__icon">⚔️</div><div class="inv-stat-row__body"><span class="inv-stat-row__label">Attack Power</span><span class="inv-stat-row__value">${_invP.attackPower}</span></div></div>`,
+      `<div class="inv-stat-row"><div class="inv-stat-row__icon">⚡</div><div class="inv-stat-row__body"><span class="inv-stat-row__label">Attack Speed</span><span class="inv-stat-row__value" style="color:${atkSpeedColor}">${atkSpeed.toFixed(2)}x</span></div></div>`,
+      `<div class="inv-stat-row"><div class="inv-stat-row__icon">🎯</div><div class="inv-stat-row__body"><span class="inv-stat-row__label">Crit Chance</span><span class="inv-stat-row__value" style="color:${critColor}">${critPct}%</span></div></div>`,
+      dmgReduction > 0 ? `<div class="inv-stat-row"><div class="inv-stat-row__icon">🛡️</div><div class="inv-stat-row__body"><span class="inv-stat-row__label">Damage Reduction</span><span class="inv-stat-row__value" style="color:#6dde88">${dmgReduction}%</span></div></div>` : '',
+      stats.bleedChance > 0 ? `<div class="inv-stat-row"><div class="inv-stat-row__icon">🩸</div><div class="inv-stat-row__body"><span class="inv-stat-row__label">Bleed Chance</span><span class="inv-stat-row__value" style="color:#e05c5c">${Math.round(stats.bleedChance * 100)}%</span></div></div>` : '',
     ].join('');
 
     ui.invItemsList.innerHTML = ITEM_KEYS
@@ -3286,12 +3295,22 @@
       node.classList.toggle('is-selected', isSelected);
       const slotLabel = SLOT_LABELS[slot] || slot;
       const slotKey = getSlotKeyLabel(slot);
-      node.innerHTML = `<div class="inv-slot__top"><span class="inv-slot__kicker">${slotLabel}</span><div class="inv-slot__top-right">${slotKey ? `<span class="inv-slot__key">${slotKey}</span>` : ''}<span class="inv-slot__status">${isSelected ? 'Selected' : (def ? 'Equipped' : 'Empty')}</span></div></div><div class="inv-slot__move">${def?.name || 'No move equipped'}</div><p class="inv-slot__hint">${isSelected ? 'Matching spare moves are highlighted below. Click one or drag it here to swap.' : def?.desc || 'Click this slot to see moves that can go here.'}</p>`;
+      const iconHtml = moveKey ? `<canvas class="inv-slot__icon" data-move-icon="${moveKey}" width="36" height="36"></canvas>` : `<div class="inv-slot__icon inv-slot__icon--empty"></div>`;
+      node.innerHTML = `<div class="inv-slot__top"><span class="inv-slot__kicker">${slotLabel}</span><div class="inv-slot__top-right">${slotKey ? `<span class="inv-slot__key">${slotKey}</span>` : ''}<span class="inv-slot__status">${isSelected ? 'Selected' : (def ? 'Equipped' : 'Empty')}</span></div></div><div class="inv-slot__main">${iconHtml}<div class="inv-slot__move-wrap"><div class="inv-slot__move">${def?.name || 'No move equipped'}</div><p class="inv-slot__hint">${isSelected ? 'Matching spare moves highlighted below. Click or drag to swap.' : def?.desc || 'Click to see moves that can go here.'}</p></div></div>`;
+    });
+    ui.invSlots && Object.values(ui.invSlots).forEach(node => {
+      node.querySelectorAll('[data-move-icon]').forEach(canvas => {
+        drawMoveToastIcon(canvas, MOVE_DEFS[canvas.dataset.moveIcon]);
+      });
     });
     if (ui.invWeaponSlot) {
       const weapon = WEAPON_DEFS[_invP.equippedWeapon];
       ui.invWeaponSlot.dataset.rarity = weapon?.rarity || '';
-      ui.invWeaponSlot.innerHTML = `<div class="inv-slot__top"><span class="inv-slot__kicker">weapon</span><span class="inv-slot__status">${weapon ? 'Equipped Now' : 'No Weapon'}</span></div><div class="inv-slot__move" style="color:${getRarityNameColor(weapon?.rarity)}">${weapon?.name || 'Default Melee Active'}</div><p class="inv-slot__hint">${weapon ? `${weapon.description} Click this slot to unequip and return left click to melee.` : 'Open the Weapons tab and click any owned weapon to equip it to left click.'}</p>`;
+      const wIconHtml = weapon ? `<canvas class="inv-slot__icon" data-weapon-icon="${_invP.equippedWeapon}" width="36" height="36"></canvas>` : `<div class="inv-slot__icon inv-slot__icon--empty">⚔️</div>`;
+      ui.invWeaponSlot.innerHTML = `<div class="inv-slot__top"><span class="inv-slot__kicker">weapon</span><span class="inv-slot__status">${weapon ? 'Equipped Now' : 'No Weapon'}</span></div><div class="inv-slot__main">${wIconHtml}<div class="inv-slot__move-wrap"><div class="inv-slot__move" style="color:${getRarityNameColor(weapon?.rarity)}">${weapon?.name || 'Default Melee Active'}</div><p class="inv-slot__hint">${weapon ? `${weapon.description} Click to unequip.` : 'Open Weapons tab and click a weapon to equip it.'}</p></div></div>`;
+      ui.invWeaponSlot.querySelectorAll('[data-weapon-icon]').forEach(canvas => {
+        drawWeaponToastIcon(canvas, WEAPON_DEFS[canvas.dataset.weaponIcon]);
+      });
     }
     inventoryPanelDirty = false;
   }
