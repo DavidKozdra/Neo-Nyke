@@ -1506,6 +1506,7 @@
   let rivals = [];
   let monsterRoamTimer = 0;
   let knaveKnightCutscenePlayed = false;
+  let queenMetaoCutscenePlayed = false;
   let activeInventorySlot = '';
   let shopPanelDirty = false;
   let inventoryPanelDirty = false;
@@ -5062,6 +5063,7 @@
     rivals = [];
     monsterRoamTimer = 0;
     knaveKnightCutscenePlayed = false;
+    queenMetaoCutscenePlayed = false;
     wizardPawSelection = null;
     setWizardPawModalOpen(false);
     setShopPanelOpen(false);
@@ -5158,6 +5160,7 @@
     weaponBurstQueue = [];
     monsterRoamTimer = Number(snapshot.monsterRoamTimer || 0);
     knaveKnightCutscenePlayed = !!snapshot.knaveKnightCutscenePlayed;
+    queenMetaoCutscenePlayed = !!snapshot.queenMetaoCutscenePlayed;
     restoreRivals(snapshot.rivals);
     wizardPawSelection = null;
     setWizardPawModalOpen(false);
@@ -5917,7 +5920,7 @@
           const _ladderBossSpawn = findSafeEnemySpawnPoint(ROOM_W / 2, ROOM_H / 2 - 60, 20);
           if (_ladderBossSpawn) {
             const _ladderBoss = spawnEnemy(_ladderBossType, _ladderBossSpawn.x, _ladderBossSpawn.y, false);
-            const _playedLadderCutscene = tryPlayKnaveKnightCutscene(_ladderBoss, _ladderBossType);
+            const _playedLadderCutscene = tryPlayBossIntroCutscene(_ladderBoss, _ladderBossType);
             const _ladderBossLine = BOSS_OPENING_DIALOGUE[_ladderBossType];
             if (!_playedLadderCutscene && _ladderBoss && _ladderBossLine) sayOverEntity(_ladderBoss, _ladderBossLine);
           }
@@ -6220,7 +6223,13 @@
     rivals = [];
     if (!rooms || rooms.length === 0) return;
     if (nextRandom('world') > RIVAL_SPAWN_CHANCE) return;
-    const unchosen = Object.keys(CHARACTER_DEFS).filter(k => k !== chosenCharacter && RIVAL_DEFS[k]);
+    let unchosen = Object.keys(CHARACTER_DEFS).filter(k => k !== chosenCharacter && RIVAL_DEFS[k]);
+    if (chosenCharacter === 'thorn_knight' && unchosen.includes('princess') && unchosen.length > 1) {
+      // Thorn runs: rival princess is intentionally very rare.
+      if (nextRandom('world') > 0.05) {
+        unchosen = unchosen.filter(key => key !== 'princess');
+      }
+    }
     const count = floor >= 3 ? Math.min(2, unchosen.length) : 1;
     const nonStartRooms = rooms.filter(r => r.type !== 'start' && r.type !== 'boss' && r.type !== 'god');
     if (nonStartRooms.length === 0) return;
@@ -7047,7 +7056,7 @@
     const safeSpawn = findSafeEnemySpawnPoint(ROOM_W / 2, ROOM_H / 2 - 40, 15);
     if (!safeSpawn) return null;
     const boss = spawnEnemy(bossType, safeSpawn.x, safeSpawn.y, false);
-    const playedCutscene = tryPlayKnaveKnightCutscene(boss, bossType);
+    const playedCutscene = tryPlayBossIntroCutscene(boss, bossType);
     const line = BOSS_OPENING_DIALOGUE[bossType];
     if (!playedCutscene && boss && line) sayOverEntity(boss, line);
     return boss;
@@ -7420,6 +7429,31 @@
       { speaker: 'KNIGHT', text: 'The kingdom of God has come for you ...' },
       { speaker: 'KNAVE', text: 'Violence it is' },
     ], { returnState: 'play' });
+  }
+
+  function tryPlayQueenMetaoCutscene(enemy, enemyType) {
+    if (!enemy || enemyType !== 'queen_cult' || !player) return false;
+    if (player.character !== 'metao') return false;
+    if (queenMetaoCutscenePlayed) return false;
+
+    queenMetaoCutscenePlayed = true;
+    clearGameplayInput();
+    setShopPanelOpen(false);
+    setInventoryPanelOpen(false);
+    enemy.attackCd = Math.max(Number(enemy.attackCd || 0), 1.4);
+    enemy.stun = Math.max(Number(enemy.stun || 0), 0.25);
+    scheduleRunSave();
+
+    return uiController.playDialogue([
+      { speaker: 'QUEEN', text: 'once my champion planning to kill me again are you apostate' },
+      { speaker: 'MATEO', text: '...' },
+      { speaker: 'QUEEN', text: 'Your life will be mine !' },
+    ], { returnState: 'play' });
+  }
+
+  function tryPlayBossIntroCutscene(enemy, enemyType) {
+    return tryPlayKnaveKnightCutscene(enemy, enemyType)
+      || tryPlayQueenMetaoCutscene(enemy, enemyType);
   }
 
   function sayOverEntity(entity, text, options = {}) {
@@ -9641,6 +9675,14 @@
     const dt = Math.min(0.033, (timestamp - lastTime) / 1000 || 0.016);
     lastTime = timestamp;
     frameId += 1;
+
+    // Safety net: if dialogue runtime has closed but game state is still "dialogue",
+    // restore play state so controls and simulation cannot get stuck.
+    if (gameState === 'dialogue' && !uiController?.isDialogueOpen?.()) {
+      setGameState('play');
+      clearGameplayInput();
+    }
+
     const updatePerfStart = perfStart();
     if (gameState === 'play' && !isWizardPawOpen()) update(dt);
     else if (player && (gameState === 'dialogue' || gameState === 'pause')) {
@@ -12965,6 +13007,7 @@
       gameElapsedTime,
       monsterRoamTimer,
       knaveKnightCutscenePlayed,
+      queenMetaoCutscenePlayed,
       camera,
     };
   }
