@@ -21,6 +21,8 @@
   };
 
   const NT = window.NeoTouch;
+  const DEFAULT_TOUCH_BINDINGS = { touchA:'slash', touchB:'laser', touchY:'smash', touchX:'ascend', touchDash:'dash' };
+  const TOUCH_ACTION_LABELS = { slash: 'SLASH', laser: 'LASER', smash: 'SMASH', ascend: 'CLIMB', dash: 'DASH' };
 
   // ── DOM ────────────────────────────────────────────────────────────────────
 
@@ -113,22 +115,57 @@
 
   // ── Button logic ───────────────────────────────────────────────────────────
 
-  bindBtn(btnA,    'slash');
-  bindBtn(btnB,    'laser');
-  bindBtn(btnY,    'smash');
-  bindBtn(btnX,    'ascend');
-  bindBtn(btnDash, 'dash');
+  bindBtn(btnA,    'touchA',    'slash');
+  bindBtn(btnB,    'touchB',    'laser');
+  bindBtn(btnY,    'touchY',    'smash');
+  bindBtn(btnX,    'touchX',    'ascend');
+  bindBtn(btnDash, 'touchDash', 'dash');
 
-  function bindBtn(el, prop) {
+  function normalizeTouchAction(value, fallback) {
+    const action = String(value || fallback || '').toLowerCase();
+    return Object.prototype.hasOwnProperty.call(TOUCH_ACTION_LABELS, action)
+      ? action
+      : fallback;
+  }
+
+  function getTouchAction(bindingKey, fallback) {
+    const configured = window.NeoSettings?.getTouchBindings?.();
+    return normalizeTouchAction(configured?.[bindingKey], fallback);
+  }
+
+  function getActionSubLabel(action) {
+    return TOUCH_ACTION_LABELS[action] || TOUCH_ACTION_LABELS.slash;
+  }
+
+  function setButtonSubLabel(el, action) {
+    const sub = el.querySelector('.btn-sub');
+    if (!sub) return;
+    sub.textContent = getActionSubLabel(action);
+  }
+
+  function refreshButtonLabels() {
+    setButtonSubLabel(btnA, getTouchAction('touchA', DEFAULT_TOUCH_BINDINGS.touchA));
+    setButtonSubLabel(btnB, getTouchAction('touchB', DEFAULT_TOUCH_BINDINGS.touchB));
+    setButtonSubLabel(btnY, getTouchAction('touchY', DEFAULT_TOUCH_BINDINGS.touchY));
+    setButtonSubLabel(btnX, getTouchAction('touchX', DEFAULT_TOUCH_BINDINGS.touchX));
+  }
+
+  refreshButtonLabels();
+  window.addEventListener('neo:settings-changed', refreshButtonLabels);
+
+  function bindBtn(el, bindingKey, fallbackAction) {
     el.addEventListener('touchstart', e => {
       e.preventDefault();
-      NT[prop] = true;
+      const action = getTouchAction(bindingKey, fallbackAction);
+      el.dataset.touchAction = action;
+      NT[action] = true;
       el.classList.add('pressed');
       setNTActive();
     }, { passive: false });
     const release = e => {
       e.preventDefault();
-      NT[prop] = false;
+      const action = normalizeTouchAction(el.dataset.touchAction, fallbackAction);
+      NT[action] = false;
       el.classList.remove('pressed');
     };
     el.addEventListener('touchend',    release, { passive: false });

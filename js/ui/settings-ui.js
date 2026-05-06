@@ -3,6 +3,7 @@
   const REPLAY_TUTORIAL_KEY = 'neonyke:replayTutorialNextRun';
 
   const DEFAULT_BINDINGS = { up:'w', down:'s', left:'a', right:'d', dash:'shift', inventory:'i', smash:'r', slash:'lmb', laser:'rmb' };
+  const DEFAULT_TOUCH_BINDINGS = { touchA:'slash', touchB:'laser', touchY:'smash', touchX:'ascend', touchDash:'dash' };
   const DEFAULT_VOLUME   = { master:80, sfx:80, music:60 };
   const DEFAULT_ACCESS   = { reduceFlash:false, highContrast:false, screenShake:true };
 
@@ -199,6 +200,7 @@
   // ── State ─────────────────────────────────────────────────────────────────────
 
   let bindings = { ...DEFAULT_BINDINGS };
+  let touchBindings = { ...DEFAULT_TOUCH_BINDINGS };
   let volume   = { ...DEFAULT_VOLUME };
   let access   = { ...DEFAULT_ACCESS };
 
@@ -207,6 +209,7 @@
       const s = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
       if (!s) return;
       if (s.bindings)     bindings     = { ...DEFAULT_BINDINGS, ...s.bindings };
+      if (s.touchBindings) touchBindings = { ...DEFAULT_TOUCH_BINDINGS, ...s.touchBindings };
       if (s.volume)       volume       = { ...DEFAULT_VOLUME,   ...s.volume };
       if (s.access)       access       = { ...DEFAULT_ACCESS,   ...s.access };
       if (s.activeTheme)  activeTheme  = s.activeTheme;
@@ -216,7 +219,8 @@
   }
 
   function save() {
-    localStorage.setItem(STORE_KEY, JSON.stringify({ bindings, volume, access, activeTheme, savedThemes, customThemeVars }));
+    localStorage.setItem(STORE_KEY, JSON.stringify({ bindings, touchBindings, volume, access, activeTheme, savedThemes, customThemeVars }));
+    window.dispatchEvent(new CustomEvent('neo:settings-changed'));
   }
 
   function applyAccess() {
@@ -233,7 +237,12 @@
     applyThemeVars(customThemeVars);
   }
 
-  window.NeoSettings = { getBindings: () => bindings, getAccess: () => access, getVolume: () => volume };
+  window.NeoSettings = {
+    getBindings: () => bindings,
+    getTouchBindings: () => touchBindings,
+    getAccess: () => access,
+    getVolume: () => volume,
+  };
 
   const modal = document.getElementById('settingsModal');
   const SettingsUIManagerCtor = window.KozEngine?.UI?.uiManager?.UIManager || window.UIManager || null;
@@ -312,12 +321,37 @@
     modal.querySelectorAll('.bind-btn').forEach(b => { b.textContent = label(b.dataset.action); });
   }
 
+  function refreshTouchBindControls() {
+    modal.querySelectorAll('.mobile-bind-select').forEach(select => {
+      const key = select.dataset.touchbind;
+      if (!key) return;
+      select.value = touchBindings[key] || DEFAULT_TOUCH_BINDINGS[key] || 'slash';
+    });
+  }
+
   function stopListening() {
     if (!listeningBtn) return;
     listeningBtn.classList.remove('listening');
     listeningBtn = null;
     refreshBindButtons();
   }
+
+  refreshTouchBindControls();
+
+  modal.querySelectorAll('.mobile-bind-select').forEach(select => {
+    select.addEventListener('change', () => {
+      const key = select.dataset.touchbind;
+      if (!key) return;
+      touchBindings[key] = String(select.value || DEFAULT_TOUCH_BINDINGS[key] || 'slash');
+      save();
+    });
+  });
+
+  document.getElementById('resetTouchBindings')?.addEventListener('click', () => {
+    touchBindings = { ...DEFAULT_TOUCH_BINDINGS };
+    refreshTouchBindControls();
+    save();
+  });
 
   refreshBindButtons();
 

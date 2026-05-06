@@ -1257,6 +1257,7 @@
     difficultyHint: document.getElementById('difficultyHint'),
     challengePanel: document.getElementById('challengePanel'),
     challengeToggle: document.getElementById('challengeToggle'),
+    challengeClose: document.getElementById('challengeClose'),
     challengeHint: document.getElementById('challengeHint'),
     continueRow: document.getElementById('continueRow'),
     continueBtn: document.getElementById('continueBtn'),
@@ -1347,6 +1348,7 @@
     challengeButtons: [...document.querySelectorAll('#challengeSelect .challenge-btn')],
     legacyPanel: document.getElementById('legacyPanel'),
     legacyToggle: document.getElementById('legacyToggle'),
+    legacyClose: document.getElementById('legacyClose'),
     legacyHint: document.getElementById('legacyHint'),
     legacyButtons: [...document.querySelectorAll('#legacySelect .legacy-btn')],
     itemSlots: {
@@ -2386,10 +2388,14 @@
         uiController.advanceDialogue();
       },
       onToggleChallenges() {
-        uiController.setChallengePanelOpen(ui.challengePanel?.classList.contains('hidden'));
+        const opening = ui.challengePanel?.classList.contains('hidden');
+        if (opening) uiController.setLegacyPanelOpen(false);
+        uiController.setChallengePanelOpen(opening);
       },
       onToggleLegacy() {
-        uiController.setLegacyPanelOpen(ui.legacyPanel?.classList.contains('hidden'));
+        const opening = ui.legacyPanel?.classList.contains('hidden');
+        if (opening) uiController.setChallengePanelOpen(false);
+        uiController.setLegacyPanelOpen(opening);
       },
       onLegacySelect(legacyKey) {
         const def = LEGACY_UPGRADES[legacyKey];
@@ -3596,11 +3602,13 @@
     const laserHint = getControlHint('laser', 'rmb');
     const smashHint = getControlHint('smash', 'r');
     const inventoryHint = getControlHint('inventory', 'i');
+    const shopHint = formatControlLabel('e', 'e');
+    const ladderHint = formatControlLabel('space', 'space');
     if (tutorialState.step === 'move') return `Tutorial: Move with ${moveHint}.`;
     if (tutorialState.step === 'fight') return `Tutorial: Defeat the training dummy using ${slashHint}, ${laserHint}, or ${smashHint}.`;
     if (tutorialState.step === 'relic') return 'Tutorial: Pick up your first relic drop.';
-    if (tutorialState.step === 'panel') return `Tutorial: Press ${inventoryHint} to open Inventory. In shop rooms, press E to open the shop.`;
-    if (currentRoom?.type === 'ladder' && currentRoom?.cleared) return 'Tutorial: Stand on the ladder and press Space to go to the next floor.';
+    if (tutorialState.step === 'panel') return `Tutorial: Press ${inventoryHint} to open Inventory. In shop rooms, press ${shopHint} to open the shop.`;
+    if (currentRoom?.type === 'ladder' && currentRoom?.cleared) return `Tutorial: Stand on the ladder and press ${ladderHint} to go to the next floor.`;
     if (currentRoom?.type === 'ladder') return 'Tutorial: Clear this ladder room, then use the ladder.';
     return 'Tutorial: Find the ladder room and continue to the next floor.';
   }
@@ -3611,12 +3619,14 @@
     const slashHint = getControlHint('slash', 'lmb');
     const laserHint = getControlHint('laser', 'rmb');
     const inventoryHint = getControlHint('inventory', 'i');
+    const shopHint = formatControlLabel('e', 'e');
+    const ladderHint = formatControlLabel('space', 'space');
     return [
       { text: `Move (${moveHint})`, state: tutorialState.moved ? 'done' : 'todo' },
       { text: `Defeat training dummy (${slashHint}/${laserHint})`, state: tutorialState.gotKill ? 'done' : 'todo' },
       { text: 'Pick up one relic', state: tutorialState.gotRelic ? 'done' : 'todo' },
-      { text: `Open Inventory (${inventoryHint}) or Shop (E in shop room)`, state: (tutorialState.openedInventory || tutorialState.openedShop) ? 'done' : 'todo' },
-      { text: 'Use ladder: stand on it and press Space', state: tutorialState.usedLadder ? 'done' : 'todo' },
+      { text: `Open Inventory (${inventoryHint}) or Shop (${shopHint} in shop room)`, state: (tutorialState.openedInventory || tutorialState.openedShop) ? 'done' : 'todo' },
+      { text: `Use ladder: stand on it and press ${ladderHint}`, state: tutorialState.usedLadder ? 'done' : 'todo' },
     ];
   }
 
@@ -8129,7 +8139,8 @@
       if (player.escapeChargeKills >= getChargeRequirement(baseRequirement)) {
         player.escapeReady = true;
         player.escapeChargeKills = 0;
-        particles.push({ x: player.x, y: player.y - 36, life: 0.9, text: 'ADAPTER READY - PRESS F', c: '#b88cff' });
+        const warpHint = formatControlLabel('f', 'f');
+        particles.push({ x: player.x, y: player.y - 36, life: 0.9, text: `ADAPTER READY - PRESS ${warpHint}`, c: '#b88cff' });
       }
     }
   }
@@ -12630,8 +12641,9 @@
         state: currentRoom.type === 'ladder' ? 'done' : 'todo',
       });
       if (currentRoom.type === 'ladder') {
+        const ladderHint = formatControlLabel('space', 'space');
         entries.push({
-          text: currentRoom.cleared ? 'Ladder room cleared - press Space at ladder to continue' : 'Clear the ladder room',
+          text: currentRoom.cleared ? `Ladder room cleared - press ${ladderHint} at ladder to continue` : 'Clear the ladder room',
           state: currentRoom.cleared ? 'done' : 'warn',
         });
       }
@@ -12657,10 +12669,11 @@
       if (currentRoom.type === 'shop') entries.push({ text: 'Buy upgrades or move on', state: 'warn' });
       if (currentRoom.type === 'anvil') entries.push({ text: 'Forge upgrades or move on', state: 'warn' });
       if (getItemCount('charged_adapter') > 0) {
+        const warpHint = formatControlLabel('f', 'f');
         const needed = getChargeRequirement(10);
         const progress = Math.max(0, Number(player?.escapeChargeKills || 0));
         if (player?.escapeReady) {
-          entries.push({ text: 'Charged Adapter ready: press F to warp to ladder (cost 50% coins)', state: 'warn' });
+          entries.push({ text: `Charged Adapter ready: press ${warpHint} to warp to ladder (cost 50% coins)`, state: 'warn' });
         } else {
           entries.push({ text: `Charged Adapter charging: ${progress}/${needed} kills`, state: 'todo' });
         }
@@ -13236,7 +13249,8 @@
     ctx.font = 'bold 15px system-ui';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    const text = 'Press [E] to open shop';
+    const shopHint = formatControlLabel('e', 'e');
+    const text = `Press [${shopHint}] to open shop`;
     const pad = 18;
     const tw = ctx.measureText(text).width;
     ctx.fillStyle = 'rgba(0,20,30,0.82)';
@@ -13259,7 +13273,8 @@
     ctx.font = 'bold 15px system-ui';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    const text = 'Press [E] to open anvil forge';
+    const shopHint = formatControlLabel('e', 'e');
+    const text = `Press [${shopHint}] to open anvil forge`;
     const pad = 18;
     const tw = ctx.measureText(text).width;
     ctx.fillStyle = 'rgba(20,10,0,0.85)';
@@ -13285,7 +13300,8 @@
     ctx.font = 'bold 14px system-ui';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    const text = 'Press [Space] to go to next floor';
+    const ladderHint = formatControlLabel('space', 'space');
+    const text = `Press [${ladderHint}] to go to next floor`;
     const pad = 14;
     const tw = ctx.measureText(text).width;
     ctx.fillStyle = 'rgba(10,24,14,0.86)';
@@ -16575,20 +16591,16 @@
     function setChallengePanelOpen(open) {
       challengePanelOpen = !!open;
       view.challengePanel?.classList.toggle('hidden', !challengePanelOpen);
-      if (view.challengeToggle) {
-        view.challengeToggle.textContent = challengePanelOpen ? 'HIDE CHALLENGE SHOP' : 'OPEN CHALLENGE SHOP';
-        view.challengeToggle.setAttribute('aria-expanded', challengePanelOpen ? 'true' : 'false');
-      }
+      view.challengePanel?.setAttribute('aria-hidden', challengePanelOpen ? 'false' : 'true');
+      view.challengeToggle?.setAttribute('aria-expanded', challengePanelOpen ? 'true' : 'false');
     }
 
     let legacyPanelOpen = false;
     function setLegacyPanelOpen(open) {
       legacyPanelOpen = !!open;
       view.legacyPanel?.classList.toggle('hidden', !legacyPanelOpen);
-      if (view.legacyToggle) {
-        view.legacyToggle.textContent = legacyPanelOpen ? 'HIDE LEGACY UPGRADES' : 'OPEN LEGACY UPGRADES';
-        view.legacyToggle.setAttribute('aria-expanded', legacyPanelOpen ? 'true' : 'false');
-      }
+      view.legacyPanel?.setAttribute('aria-hidden', legacyPanelOpen ? 'false' : 'true');
+      view.legacyToggle?.setAttribute('aria-expanded', legacyPanelOpen ? 'true' : 'false');
     }
 
     let runHistoryView = 'runs'; // 'runs' | 'achievements'
@@ -16979,12 +16991,14 @@
           });
         });
         view.challengeToggle?.addEventListener('click', handlers.onToggleChallenges);
+        view.challengeClose?.addEventListener('click', () => setChallengePanelOpen(false));
         view.legacyButtons.forEach(button => {
           button.addEventListener('click', () => {
             handlers.onLegacySelect(button.dataset.legacy || '');
           });
         });
         view.legacyToggle?.addEventListener('click', handlers.onToggleLegacy);
+        view.legacyClose?.addEventListener('click', () => setLegacyPanelOpen(false));
         view.runHistoryBtn?.addEventListener('click', handlers.onToggleRunHistory);
         view.runHistoryClose?.addEventListener('click', () => setRunHistoryOpen(false));
         view.runHistoryViewTabs?.forEach(tab => {

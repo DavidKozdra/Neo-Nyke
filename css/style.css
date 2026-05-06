@@ -2043,24 +2043,21 @@ p.sub {
   gap: 14px;
 }
 
-.char-roster-head,
-.setup-panel__head {
+.char-roster-head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 12px;
 }
 
-.char-roster-kicker,
-.setup-kicker {
+.char-roster-kicker {
   font-size: 11px;
   letter-spacing: .16em;
   color: var(--menu-accent);
   text-transform: uppercase;
 }
 
-.char-roster-note,
-.setup-note {
+.char-roster-note {
   font-size: 11px;
   color: var(--menu-text-soft);
   letter-spacing: .05em;
@@ -2406,20 +2403,7 @@ p.sub {
   margin-top: auto;
 }
 
-.difficulty-row {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 10px;
-}
 
-.difficulty-row label {
-  font-size: 11px;
-  letter-spacing: .14em;
-  color: var(--menu-accent);
-  text-align: left;
-}
 
 .difficulty-select {
   display: flex;
@@ -2704,26 +2688,48 @@ p.sub {
   color: var(--menu-accent);
 }
 
-.setup-panel,
-.challenge-drawer {
-  padding: 18px;
-  border-radius: 18px;
-  background: var(--menu-surface);
+/* ── Floating panel (shared: challenge, legacy) ─────────────── */
+.floating-panel {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  width: min(600px, 94vw);
+  max-height: min(86vh, 720px);
   border: 1px solid var(--menu-border);
-  box-shadow: 0 18px 44px rgba(0,0,0,.26);
+  border-radius: 18px;
+  background: linear-gradient(180deg, var(--menu-bg-soft), var(--menu-bg-deep));
+  box-shadow: 0 24px 80px rgba(0,0,0,.65), inset 0 0 0 1px rgba(255,255,255,.03);
+  backdrop-filter: blur(12px);
+  color: var(--menu-text);
+  overflow: hidden;
+}
+.floating-panel.hidden { display: none; }
+
+.floating-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  flex-shrink: 0;
+}
+.floating-panel__title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: #c8e8ff;
+}
+.floating-panel__body {
+  padding: 20px;
+  overflow-y: auto;
+  flex: 1;
 }
 
-.setup-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-}
 
-.challenge-drawer {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
 
 .challenge-toggle {
   width: 100%;
@@ -2743,10 +2749,6 @@ p.sub {
   transform: translateY(-1px);
   border-color: var(--menu-border-strong);
   box-shadow: 0 0 18px rgba(139, 166, 200, .2);
-}
-
-.challenge-panel {
-  display: block;
 }
 
 /* ── Legacy Upgrades panel ────────────────────────────────���── */
@@ -4073,6 +4075,35 @@ button.alt.danger {
 }
 
 .settings-reset:hover { color: var(--menu-accent-strong); border-color: var(--menu-border-strong); }
+
+.mobile-bindings {
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(128, 146, 170, .18);
+}
+
+.mobile-bindings__hint {
+  margin-top: 2px;
+}
+
+.mobile-bind-select {
+  min-width: 120px;
+  padding: 5px 8px;
+  background: var(--menu-surface);
+  border: 1px solid var(--menu-border);
+  border-radius: 6px;
+  color: var(--menu-accent-strong);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .04em;
+}
+
+.mobile-bind-select:hover,
+.mobile-bind-select:focus {
+  border-color: var(--menu-border-strong);
+  color: #fff;
+  outline: none;
+}
 
 /* --- Theme tab --- */
 .theme-presets {

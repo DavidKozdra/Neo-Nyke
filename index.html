@@ -774,72 +774,67 @@
 
       </div>
       <aside class="charselect-sidebar">
-        <div class="setup-panel">
-          <div class="setup-panel__head">
-            <span class="setup-kicker">Run Setup</span>
-            <span class="setup-note">Configure this run</span>
-          </div>
-          <div class="difficulty-row">
-            <label>DIFFICULTY</label>
-            <div id="difficultySelect" class="difficulty-select" role="group" aria-label="Difficulty">
-              <button class="difficulty-btn sel" data-difficulty="easy" type="button">Easy</button>
-              <button class="difficulty-btn" data-difficulty="medium" type="button">Medium</button>
-              <button class="difficulty-btn" data-difficulty="hard" type="button">Hard</button>
-              <button class="difficulty-btn" data-difficulty="impossible" type="button">Impossible</button>
-              <button class="difficulty-btn" data-difficulty="god" type="button">God</button>
-            </div>
-            <small id="difficultyHint" class="difficulty-hint">Easy uses the current balance.</small>
-          </div>
-          <div class="seedrow seedrow--panel">
-            <label>SEED</label>
-            <input id="seed" placeholder="random">
-            <button id="go">ENTER DUNGEON</button>
-          </div>
+        <div id="difficultySelect" class="difficulty-select" role="group" aria-label="Difficulty">
+          <button class="difficulty-btn sel" data-difficulty="easy" type="button">Easy</button>
+          <button class="difficulty-btn" data-difficulty="medium" type="button">Medium</button>
+          <button class="difficulty-btn" data-difficulty="hard" type="button">Hard</button>
+          <button class="difficulty-btn" data-difficulty="impossible" type="button">Impossible</button>
+          <button class="difficulty-btn" data-difficulty="god" type="button">God</button>
         </div>
-
-        <div class="challenge-drawer">
-          <button id="challengeToggle" class="challenge-toggle" type="button">OPEN CHALLENGE SHOP</button>
-          <div id="challengePanel" class="challenge-panel hidden">
-            <div class="challenge-row">
-              <label>CHALLENGE SHOP</label>
-              <div id="challengeSelect" class="challenge-select" role="group" aria-label="Challenge Modifiers">
-                <button class="challenge-btn" data-challenge="no_hit" type="button">Never Get Hit</button>
-                <button class="challenge-btn" data-challenge="no_items" type="button">No Items</button>
-                <button class="challenge-btn" data-challenge="fragile_body" type="button">Fragile Body</button>
-                <button class="challenge-btn" data-challenge="swarm_rooms" type="button">Swarm Rooms</button>
-                <button class="challenge-btn" data-challenge="elite_hunt" type="button">Elite Hunt</button>
-                <button class="challenge-btn" data-challenge="cursed_shops" type="button">Cursed Shops</button>
-                <button class="challenge-btn" data-challenge="glass_cannon" type="button">Glass Cannon</button>
-              </div>
-              <small id="challengeHint" class="difficulty-hint">Buy run types once with loop crystals, then toggle them before entering the dungeon.</small>
-            </div>
-          </div>
+        <small id="difficultyHint" class="difficulty-hint"></small>
+        <div class="seedrow seedrow--panel">
+          <label>SEED</label>
+          <input id="seed" placeholder="random">
+          <button id="go">ENTER DUNGEON</button>
         </div>
-
-        <div class="challenge-drawer legacy-drawer">
-          <button id="legacyToggle" class="challenge-toggle legacy-toggle" type="button">OPEN LEGACY UPGRADES</button>
-          <div id="legacyPanel" class="challenge-panel hidden">
-            <div class="challenge-row">
-              <label>LEGACY UPGRADES — permanent account unlocks</label>
-              <div id="legacySelect" class="challenge-select legacy-select" role="group" aria-label="Legacy Upgrades">
-                <button class="legacy-btn" data-legacy="rival_bounty" type="button">Rival Bounty</button>
-                <button class="legacy-btn" data-legacy="elite_tracker" type="button">Elite Tracker</button>
-                <button class="legacy-btn" data-legacy="god_memory" type="button">God Memory</button>
-                <button class="legacy-btn" data-legacy="bank_interest" type="button">Bank Interest</button>
-                <button class="legacy-btn" data-legacy="crystal_tithe" type="button">Crystal Tithe</button>
-                <button class="legacy-btn" data-legacy="challenge_mastery" type="button">Challenge Mastery</button>
-                <button class="legacy-btn" data-legacy="endless_descent" type="button">Endless Descent</button>
-              </div>
-              <small id="legacyHint" class="difficulty-hint">Spend Loop Crystals on permanent upgrades that carry across all future runs.</small>
-            </div>
-          </div>
-        </div>
+        <button id="challengeToggle" class="challenge-toggle" type="button" aria-expanded="false">CHALLENGE SHOP</button>
+        <button id="legacyToggle" class="challenge-toggle legacy-toggle" type="button" aria-expanded="false">LEGACY UPGRADES</button>
       </aside>
     </div>
     <!-- legacy hidden row kept for JS compatibility -->
     <div id="continueRow" class="hidden"></div>
   </div>
 </div>
+
+<!-- Challenge Shop floating panel -->
+<section id="challengePanel" class="floating-panel hidden" aria-hidden="true">
+  <div class="floating-panel__head">
+    <span class="floating-panel__title">CHALLENGE SHOP</span>
+    <button id="challengeClose" class="panel-close" aria-label="Close challenge shop">X</button>
+  </div>
+  <div class="floating-panel__body">
+    <small id="challengeHint" class="difficulty-hint" style="margin-bottom:14px;display:block">Buy run types once with loop crystals, then toggle them before entering the dungeon.</small>
+    <div id="challengeSelect" class="challenge-select" role="group" aria-label="Challenge Modifiers">
+      <button class="challenge-btn" data-challenge="no_hit" type="button">Never Get Hit</button>
+      <button class="challenge-btn" data-challenge="no_items" type="button">No Items</button>
+      <button class="challenge-btn" data-challenge="fragile_body" type="button">Fragile Body</button>
+      <button class="challenge-btn" data-challenge="swarm_rooms" type="button">Swarm Rooms</button>
+      <button class="challenge-btn" data-challenge="elite_hunt" type="button">Elite Hunt</button>
+      <button class="challenge-btn" data-challenge="cursed_shops" type="button">Cursed Shops</button>
+      <button class="challenge-btn" data-challenge="glass_cannon" type="button">Glass Cannon</button>
+    </div>
+  </div>
+</section>
+
+<!-- Legacy Upgrades floating panel -->
+<section id="legacyPanel" class="floating-panel hidden" aria-hidden="true">
+  <div class="floating-panel__head">
+    <span class="floating-panel__title">LEGACY UPGRADES</span>
+    <button id="legacyClose" class="panel-close" aria-label="Close legacy upgrades">X</button>
+  </div>
+  <div class="floating-panel__body">
+    <small id="legacyHint" class="difficulty-hint" style="margin-bottom:14px;display:block">Spend Loop Crystals on permanent upgrades that carry across all future runs.</small>
+    <div id="legacySelect" class="challenge-select legacy-select" role="group" aria-label="Legacy Upgrades">
+      <button class="legacy-btn" data-legacy="rival_bounty" type="button">Rival Bounty</button>
+      <button class="legacy-btn" data-legacy="elite_tracker" type="button">Elite Tracker</button>
+      <button class="legacy-btn" data-legacy="god_memory" type="button">God Memory</button>
+      <button class="legacy-btn" data-legacy="bank_interest" type="button">Bank Interest</button>
+      <button class="legacy-btn" data-legacy="crystal_tithe" type="button">Crystal Tithe</button>
+      <button class="legacy-btn" data-legacy="challenge_mastery" type="button">Challenge Mastery</button>
+      <button class="legacy-btn" data-legacy="endless_descent" type="button">Endless Descent</button>
+    </div>
+  </div>
+</section>
 
 <script src="Koz_Engine_Lib/Core/koz-engine.global.js" defer></script>
 <script src="assets/sprites/combatants.js" defer></script>
@@ -877,6 +872,75 @@
         </tbody>
       </table>
       <button class="settings-reset" id="resetBindings">Reset to defaults</button>
+
+      <div class="mobile-bindings">
+        <p class="stab-hint mobile-bindings__hint">Mobile touch actions (same settings panel)</p>
+        <table class="bind-table">
+          <tbody>
+            <tr>
+              <td class="bind-label">Touch A Button</td>
+              <td>
+                <select class="mobile-bind-select" data-touchbind="touchA">
+                  <option value="slash">Slash</option>
+                  <option value="laser">Laser</option>
+                  <option value="smash">Smash</option>
+                  <option value="ascend">Climb</option>
+                  <option value="dash">Dash</option>
+                </select>
+              </td>
+            </tr>
+            <tr>
+              <td class="bind-label">Touch B Button</td>
+              <td>
+                <select class="mobile-bind-select" data-touchbind="touchB">
+                  <option value="slash">Slash</option>
+                  <option value="laser">Laser</option>
+                  <option value="smash">Smash</option>
+                  <option value="ascend">Climb</option>
+                  <option value="dash">Dash</option>
+                </select>
+              </td>
+            </tr>
+            <tr>
+              <td class="bind-label">Touch Y Button</td>
+              <td>
+                <select class="mobile-bind-select" data-touchbind="touchY">
+                  <option value="slash">Slash</option>
+                  <option value="laser">Laser</option>
+                  <option value="smash">Smash</option>
+                  <option value="ascend">Climb</option>
+                  <option value="dash">Dash</option>
+                </select>
+              </td>
+            </tr>
+            <tr>
+              <td class="bind-label">Touch X Button</td>
+              <td>
+                <select class="mobile-bind-select" data-touchbind="touchX">
+                  <option value="slash">Slash</option>
+                  <option value="laser">Laser</option>
+                  <option value="smash">Smash</option>
+                  <option value="ascend">Climb</option>
+                  <option value="dash">Dash</option>
+                </select>
+              </td>
+            </tr>
+            <tr>
+              <td class="bind-label">Touch Dash Button</td>
+              <td>
+                <select class="mobile-bind-select" data-touchbind="touchDash">
+                  <option value="slash">Slash</option>
+                  <option value="laser">Laser</option>
+                  <option value="smash">Smash</option>
+                  <option value="ascend">Climb</option>
+                  <option value="dash">Dash</option>
+                </select>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <button class="settings-reset" id="resetTouchBindings">Reset mobile defaults</button>
+      </div>
     </div>
 
     <!-- Volume tab -->
