@@ -1,4 +1,4 @@
-const CACHE = 'neonyke-v3';
+const CACHE = 'neonyke-v5';
 
 const PRECACHE = [
   '/',
@@ -39,6 +39,24 @@ self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
   // Don't intercept itch.io or external requests
   if (url.origin !== self.location.origin) return;
+
+  const isDocument = e.request.mode === 'navigate' || e.request.destination === 'document';
+  const isCoreAsset = e.request.destination === 'script' || e.request.destination === 'style';
+
+  if (isDocument || isCoreAsset) {
+    e.respondWith(
+      fetch(e.request)
+        .then(res => {
+          if (res && res.status === 200 && res.type !== 'opaque') {
+            const clone = res.clone();
+            caches.open(CACHE).then(c => c.put(e.request, clone));
+          }
+          return res;
+        })
+        .catch(() => caches.match(e.request))
+    );
+    return;
+  }
 
   e.respondWith(
     caches.match(e.request).then(cached => {

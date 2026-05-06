@@ -24,6 +24,7 @@
   const BEAM_RICOCHET_NUDGE = 0.65;
   const BEAM_RICOCHET_EPSILON = 0.0001;
   const TURTLE_WAVE_HP_PER_SECOND = 2;
+  const LOW_HEALTH_HIT_FLASH_MS = 700;
   const CORPSE_FADE_START = 4.5;
   const CORPSE_LIFETIME = 11;
   const CORPSE_FALL_TIME = 0.32;
@@ -1438,6 +1439,7 @@
   let laserSweepSpeed = 0;
   let loveBeamCasting = false;
   let turtleWaveHpTimer = 0;
+  let lowHealthHitFlashUntil = 0;
   let dashKeyLatch = false;
   let playerDeathAnim = null;
   let gameMode = 'normal';
@@ -5347,7 +5349,7 @@
         kind: 'barrel',
         x: 180 + rand(ROOM_W - 360, 0, 'world'),
         y: 140 + rand(ROOM_H - 280, 0, 'world'),
-        r: 14,
+        r: 20,
         hp: 1,
         broken: false,
       });
@@ -11708,6 +11710,7 @@
     }
 
     finalAmount = Math.max(0, hpBeforeHit - player.hp);
+    if (finalAmount > 0) lowHealthHitFlashUntil = Date.now() + LOW_HEALTH_HIT_FLASH_MS;
     if (ironLungApplies) player.roomDamageTaken = (player.roomDamageTaken || 0) + finalAmount;
 
     if (applyHitstop) {
@@ -12084,7 +12087,7 @@
       else pickups.push({ x: prop.x, y: prop.y, type: 'item', key: rollItemDrop({ stream: 'loot' }) });
     }
     if (prop.kind === 'barrel') {
-      blastRadius(prop.x, prop.y, 72, 28, '#ff5a3d');
+      blastRadius(prop.x, prop.y, 130, 55, '#ff5a3d');
     }
     if (prop.kind === 'wall') {
       destructibles.forEach(other => {
@@ -13163,13 +13166,20 @@
 
   function drawLowHealthEdgeGlow() {
     if (!player || gameState !== 'play' || !Number.isFinite(player.hp) || !Number.isFinite(player.maxHp) || player.maxHp <= 0) return;
+    const now = Date.now();
     const hpRatio = clamp(player.hp / player.maxHp, 0, 1);
-    if (hpRatio >= 0.2) return;
+    const hitFlashActive = lowHealthHitFlashUntil > now;
+    const isForcedHitFlash = hitFlashActive && hpRatio >= 0.2;
+    // On hit at healthy HP, trigger a softer version of the low-health edge effect.
+    const effectiveHpRatio = isForcedHitFlash ? 0.17 : hpRatio;
+    if (effectiveHpRatio >= 0.2) return;
 
-    const danger = (0.2 - hpRatio) / 0.2;
-    const pulse = 0.74 + Math.sin(Date.now() / 120) * 0.18;
-    const alpha = clamp((0.16 + danger * 0.34) * pulse, 0, 0.52);
-    const edge = Math.max(92, Math.min(canvas.width, canvas.height) * (0.18 + danger * 0.08));
+    const danger = (0.2 - effectiveHpRatio) / 0.2;
+    const pulse = 0.74 + Math.sin(now / 120) * 0.18;
+    const baseAlpha = clamp((0.16 + danger * 0.34) * pulse, 0, 0.52);
+    const alpha = isForcedHitFlash ? baseAlpha * 0.45 : baseAlpha;
+    const baseEdge = Math.max(92, Math.min(canvas.width, canvas.height) * (0.18 + danger * 0.08));
+    const edge = isForcedHitFlash ? baseEdge * 0.78 : baseEdge;
 
     ctx.save();
     ctx.globalCompositeOperation = 'source-over';
@@ -14130,7 +14140,7 @@
       if (prop.kind === 'pot') {
         drawEnvironmentTile('pot_clay', -16, -18, 32, 32);
       } else if (prop.kind === 'barrel') {
-        drawEnvironmentTile('barrel_oak', -17, -18, 34, 34);
+        drawEnvironmentTile('barrel_oak', -24, -26, 48, 48);
       } else if (prop.kind === 'wall') {
         drawEnvironmentTile('wall_block', -26, -26, 52, 52);
         ctx.strokeStyle = theme.wallEdge;
