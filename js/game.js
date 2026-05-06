@@ -1490,6 +1490,7 @@
   let floorSkipPending = 0;
   const JESTER_PORTAL_ACTIVATE_DELAY = 0.44;
   const JESTER_PORTAL_TRIGGER_RADIUS = 42;
+  const LADDER_TRIGGER_RADIUS = 64;
   let teleportKeyLatch = false;
   let ladderUseKeyLatch = false;
   let shopKeyLatch = false;
@@ -11010,7 +11011,7 @@
       for (let index = 0; index < 2; index += 1) {
         const px = clamp(player.x + rand(-70, 70, 'encounter'), WALL + 60, ROOM_W - WALL - 60);
         const py = clamp(player.y + rand(-70, 70, 'encounter'), WALL + 60, ROOM_H - WALL - 60);
-        hazards.push({ kind: 'lightning_column', x: px, y: py, r: 46, ttl: 1.25, tick: 0, interval: 0.36, damage: Math.round(enemy.dmg * 0.78) });
+        hazards.push({ kind: 'lightning_column', x: px, y: py, r: 46, ttl: 1.25, tick: 0, interval: 0.36, damage: Math.round(enemy.dmg * 0.78), enemy: true, source: enemy.type || 'lightning_column' });
         particles.push({ x: px, y: py, life: 0.28, ring: 18, c: '#8dd4ff' });
       }
       enemy.eliteLaserCd = 1.6;
@@ -11239,6 +11240,8 @@
             tick: 0,
             interval: 0.42,
             damage: 18 + floor,
+            enemy: true,
+            source: 'storm',
           });
           particles.push({ x: px, y: py, life: 0.35, ring: 18, c: '#8dd4ff' });
         }
@@ -12002,12 +12005,19 @@
         hazard.tick -= dt;
         if (hazard.tick <= 0) {
           hazard.tick = hazard.interval || 0.45;
-          for (let ei = enemies.length - 1; ei >= 0; ei -= 1) {
-            const enemy = enemies[ei];
-            if (!enemy) continue;
-            if (dist(enemy.x, enemy.y, hazard.x, hazard.y) > hazard.r + enemy.r) continue;
-            const angle = Math.atan2(enemy.y - hazard.y, enemy.x - hazard.x);
-            hitEnemy(enemy, hazard.damage || 16, angle, 90, '#8dd4ff');
+          if (hazard.enemy) {
+            if (dist(player.x, player.y, hazard.x, hazard.y) <= hazard.r + player.r) {
+              const angle = Math.atan2(player.y - hazard.y, player.x - hazard.x);
+              damagePlayer(hazard.damage || 16, angle, 90, hazard.source || 'lightning_column');
+            }
+          } else {
+            for (let ei = enemies.length - 1; ei >= 0; ei -= 1) {
+              const enemy = enemies[ei];
+              if (!enemy) continue;
+              if (dist(enemy.x, enemy.y, hazard.x, hazard.y) > hazard.r + enemy.r) continue;
+              const angle = Math.atan2(enemy.y - hazard.y, enemy.x - hazard.x);
+              hitEnemy(enemy, hazard.damage || 16, angle, 90, '#8dd4ff');
+            }
           }
           particles.push({
             life: 0.25,
@@ -12236,7 +12246,11 @@
           pickup.y += ((player.y - pickup.y) / d) * 0.016 * pull;
         }
       }
-      const pickupTriggerRadius = pickup.type === 'jesterPortal' ? JESTER_PORTAL_TRIGGER_RADIUS : 26;
+      const pickupTriggerRadius = pickup.type === 'jesterPortal'
+        ? JESTER_PORTAL_TRIGGER_RADIUS
+        : pickup.type === 'ladder'
+          ? LADDER_TRIGGER_RADIUS
+          : 26;
       if (dist(pickup.x, pickup.y, player.x, player.y) >= pickupTriggerRadius) continue;
 
       if (pickup.type === 'coin') {
@@ -12244,6 +12258,7 @@
       }
 
       if (pickup.type === 'potion') {
+        if (player.hp >= player.maxHp) continue;
         const potionHeal = getPotionHealAmount();
         player.hp = Math.min(player.maxHp, player.hp + potionHeal);
         particles.push({ x: player.x, y: player.y - 20, life: 0.6, text: `+${potionHeal}`, c: '#0f8' });
@@ -12873,6 +12888,7 @@
       return;
     }
     if (player) player.hp = 0;
+    updateHud();
     const entry = finalizeRun('dead', { killedBy: lastDamageSource, killerKey: lastDamageSourceKey });
     const aimAngle = player ? Math.atan2(mouse.worldY - player.y, mouse.worldX - player.x) : 0;
     playerDeathAnim = {
@@ -13201,7 +13217,7 @@
     if (gameState !== 'play' || !currentRoom?.cleared) return;
     const ladder = pickups.find(pickup => pickup?.type === 'ladder');
     if (!ladder) return;
-    if (dist(player.x, player.y, ladder.x, ladder.y) > 64) return;
+    if (dist(player.x, player.y, ladder.x, ladder.y) > LADDER_TRIGGER_RADIUS) return;
     const cx = ladder.x;
     const cy = ladder.y - 36;
     ctx.save();
@@ -16567,7 +16583,7 @@
           renderDialogue();
           renderEntityDialogue();
         }
-        if (activeState === 'play' && hudUpdateHook) hudUpdateHook();
+        if ((activeState === 'play' || activeState === 'dying') && hudUpdateHook) hudUpdateHook();
       },
       bindMenuActions(handlers) {
         if (menuBound) return;
