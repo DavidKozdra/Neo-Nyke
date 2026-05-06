@@ -545,11 +545,11 @@
 
   const SPRITE_SOURCE_SIZE = 10;
   const SPRITE_DEFS = window.NeoNykeSpriteDefs || {};
-  const SPRITE_ATLAS = buildSpriteAtlas();
+  let SPRITE_ATLAS = null;
   const ENV_TILE_ROOT = window.NeoNykeEnvironmentTileDefs || {};
   const ENV_TILE_SOURCE_SIZE = ENV_TILE_ROOT.sourceSize || 16;
   const ENV_TILE_DEFS = ENV_TILE_ROOT.tiles || {};
-  const ENV_TILE_ATLAS = buildEnvironmentTileAtlas();
+  let ENV_TILE_ATLAS = null;
 
   const MOVE_SLOTS = ['melee', 'laser', 'smash', 'dash'];
   const SLOT_LABELS = { melee: 'Melee', laser: 'Laser', smash: 'Smash', dash: 'Mobility' };
@@ -1848,6 +1848,8 @@
       updateHud();
       perfEnd('ui.hud', hudPerfStart);
     });
+    SPRITE_ATLAS = buildSpriteAtlas();
+    ENV_TILE_ATLAS = buildEnvironmentTileAtlas();
     bindInput();
     bindPanelInput();
     drawActionIcons();
@@ -14967,7 +14969,9 @@
   }
 
   function drawSpriteFrame(spriteKey, x, y, size, options = {}) {
-    const frame = SPRITE_ATLAS.frames[spriteKey] || SPRITE_ATLAS.frames.hunter;
+    const atlas = SPRITE_ATLAS;
+    if (!atlas?.frames || !atlas.canvas) return;
+    const frame = atlas.frames[spriteKey] || atlas.frames.hunter;
     if (!frame) return;
     const {
       alpha = 1,
@@ -14990,7 +14994,7 @@
     }
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(
-      SPRITE_ATLAS.canvas,
+      atlas.canvas,
       frame.x,
       frame.y,
       frame.w,
@@ -15011,7 +15015,9 @@
 
   function drawSpriteToCanvas(canvasEl, spriteKey, size = canvasEl?.width || 96, options = {}) {
     if (!(canvasEl instanceof HTMLCanvasElement)) return;
-    const frame = SPRITE_ATLAS.frames[spriteKey] || SPRITE_ATLAS.frames.hunter;
+    const atlas = SPRITE_ATLAS;
+    if (!atlas?.frames || !atlas.canvas) return;
+    const frame = atlas.frames[spriteKey] || atlas.frames.hunter;
     if (!frame) return;
     const renderSize = Number.isFinite(size) ? size : (canvasEl.width || 96);
     const c = canvasEl.getContext('2d');
@@ -15027,7 +15033,7 @@
     c.save();
     c.globalAlpha = alpha;
     c.drawImage(
-      SPRITE_ATLAS.canvas,
+      atlas.canvas,
       frame.x,
       frame.y,
       frame.w,
@@ -15232,7 +15238,8 @@
       const drawSize = Math.max(30, r * 2.4);
       const squash = 0.28 + emerge * 0.72;
       const alpha = clamp(emerge * 1.8, 0, 1);
-      const frame = SPRITE_ATLAS.frames[spriteKey] || SPRITE_ATLAS.frames.hunter;
+      const atlas = SPRITE_ATLAS;
+      const frame = atlas?.frames ? (atlas.frames[spriteKey] || atlas.frames.hunter) : null;
       if (frame) {
         ctx.save();
         ctx.translate(enemy.x, enemy.y);
@@ -15243,7 +15250,7 @@
         ctx.shadowBlur = 12 + (1 - emerge) * 18;
         ctx.imageSmoothingEnabled = false;
         ctx.drawImage(
-          SPRITE_ATLAS.canvas,
+          atlas.canvas,
           frame.x, frame.y, frame.w, frame.h,
           -drawSize / 2, -drawSize / 2, drawSize, drawSize,
         );
