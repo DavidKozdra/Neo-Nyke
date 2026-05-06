@@ -782,7 +782,7 @@
     },
   };
   const RIVAL_MOVE_INTERVAL_BASE = 8.5;
-  const RIVAL_SPAWN_CHANCE = 0.6; // 40% less likely overall
+  const RIVAL_SPAWN_CHANCE = 0.15; // ~15% spawn chance - very rare encounters
   const RIVAL_GROWTH_TICK_SECONDS = 14;
   const RIVAL_XP_PER_GROWTH_TICK = 12;
   const RIVAL_WEAPON_SWAP_BASE = 3.6;
@@ -9572,10 +9572,12 @@
   function rollItemDrop(options = {}) {
     const sandbox = getActiveSandboxSettings();
     if (sandbox) {
-      const baseTable = options.elite ? ELITE_ITEM_DROP_TABLE : ITEM_DROP_TABLE;
-      const filteredTable = baseTable.filter(([key]) => sandbox.allowedItems.includes(key));
-      if (filteredTable.length > 0) {
-        return rollFromWeightTable(filteredTable, options.stream || 'loot');
+      const baseEntries = options.elite
+        ? ITEM_DROP_WEIGHTS.map(([key, weight]) => [key, weight + (key !== 'neo_knife' ? 4 : 0)])
+        : ITEM_DROP_WEIGHTS;
+      const filteredEntries = baseEntries.filter(([key]) => sandbox.allowedItems.includes(key));
+      if (filteredEntries.length > 0) {
+        return rollFromWeightTable(buildWeightTable(filteredEntries), options.stream || 'loot');
       }
     }
     const table = options.elite ? ELITE_ITEM_DROP_TABLE : ITEM_DROP_TABLE;
