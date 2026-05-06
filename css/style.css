@@ -4760,13 +4760,22 @@ button.alt.danger {
    ALT MODES PANEL
    ═══════════════════════════════════════════════════ */
 .altmodes-panel {
-  position: absolute;
-  inset: 0;
-  background: rgba(7,6,14,0.97);
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 30;
   display: flex;
   flex-direction: column;
-  z-index: 12;
-  backdrop-filter: blur(6px);
+  width: min(720px, 94vw);
+  max-height: min(86vh, 820px);
+  border: 1px solid var(--menu-border);
+  border-radius: 18px;
+  background: linear-gradient(180deg, var(--menu-bg-soft), var(--menu-bg-deep));
+  box-shadow: 0 24px 80px rgba(0,0,0,.65), inset 0 0 0 1px rgba(255,255,255,.03);
+  backdrop-filter: blur(12px);
+  color: var(--menu-text);
+  overflow: hidden;
 }
 .altmodes-panel.hidden { display: none; }
 
@@ -4774,11 +4783,11 @@ button.alt.danger {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 20px 28px 12px;
+  padding: 18px 20px 12px;
   border-bottom: 1px solid rgba(255,255,255,0.08);
 }
 .altmodes-title {
-  font-size: 1rem;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.14em;
   color: #c8e8ff;
@@ -4787,9 +4796,10 @@ button.alt.danger {
 .altmodes-tabs {
   display: flex;
   gap: 2px;
-  padding: 0 28px;
+  padding: 0 20px;
   border-bottom: 1px solid rgba(255,255,255,0.08);
   background: rgba(0,0,0,0.2);
+  flex-shrink: 0;
 }
 .altmodes-tab {
   background: none;
@@ -4812,7 +4822,7 @@ button.alt.danger {
   display: flex;
   flex-direction: column;
   gap: 18px;
-  padding: 28px;
+  padding: 20px;
   overflow-y: auto;
   flex: 1;
 }
@@ -5393,9 +5403,17 @@ button.alt.danger {
   background: rgba(20,24,34,0.4);
 }
 .ach-icon {
-  font-size: 32px;
+  font-size: 2rem;
   line-height: 1;
   flex-shrink: 0;
+  width: 44px;
+  text-align: center;
+  color: #f0c040;
+}
+.ach-card--locked .ach-icon {
+  color: #8090a8;
+  opacity: 0.35;
+  filter: none;
 }
 .ach-name {
   font-size: 13px;

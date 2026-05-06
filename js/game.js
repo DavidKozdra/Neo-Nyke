@@ -16631,11 +16631,11 @@
       const cards = await Promise.all(ACHIEVEMENTS.map(async a => {
         const unlocked = await achievementManager.isUnlocked(a.id);
         return `<div class="ach-card${unlocked ? '' : ' ach-card--locked'}">
-          <span class="ach-icon" style="${unlocked ? '' : 'opacity:0.3;filter:grayscale(1)'}">${a.icon}</span>
+          <span class="ach-icon">${a.icon}</span>
           <div>
             <div class="ach-name">${a.name}</div>
             <div class="ach-desc">${a.desc}</div>
-            <div class="${unlocked ? 'ach-unlocked-badge' : 'ach-locked-badge'}">${unlocked ? '✓ Unlocked  +1 💎' : 'Locked'}</div>
+            <div class="${unlocked ? 'ach-unlocked-badge' : 'ach-locked-badge'}">${unlocked ? '✓ Unlocked  +1 ◆' : '— Locked'}</div>
           </div>
         </div>`;
       }));
