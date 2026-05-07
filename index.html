@@ -857,24 +857,29 @@
 
     <!-- Controls tab -->
     <div class="stab-panel" id="stab-controls">
-      <p class="stab-hint">Click an action then press any key to remap.</p>
-      <table class="bind-table">
-        <tbody>
-          <tr><td class="bind-label">Move Up</td>   <td><button class="bind-btn" data-action="up">W</button></td></tr>
-          <tr><td class="bind-label">Move Down</td> <td><button class="bind-btn" data-action="down">S</button></td></tr>
-          <tr><td class="bind-label">Move Left</td> <td><button class="bind-btn" data-action="left">A</button></td></tr>
-          <tr><td class="bind-label">Move Right</td><td><button class="bind-btn" data-action="right">D</button></td></tr>
-          <tr><td class="bind-label">Mobility Skill</td>      <td><button class="bind-btn" data-action="dash">SHIFT</button></td></tr>
-          <tr><td class="bind-label">Inventory</td> <td><button class="bind-btn" data-action="inventory">I</button></td></tr>
-          <tr><td class="bind-label">Slash</td>     <td><button class="bind-btn" data-action="slash">LMB</button></td></tr>
-          <tr><td class="bind-label">Laser beam</td><td><button class="bind-btn" data-action="laser">RMB</button></td></tr>
-          <tr><td class="bind-label">Smash</td>     <td><button class="bind-btn" data-action="smash">R</button></td></tr>
-        </tbody>
-      </table>
-      <button class="settings-reset" id="resetBindings">Reset to defaults</button>
 
-      <div class="mobile-bindings">
-        <p class="stab-hint mobile-bindings__hint">Mobile touch actions (same settings panel)</p>
+      <!-- Desktop keyboard bindings (hidden on touch-only devices) -->
+      <div class="controls-desktop-section">
+        <p class="stab-hint">Click an action then press any key to remap.</p>
+        <table class="bind-table">
+          <tbody>
+            <tr><td class="bind-label">Move Up</td>   <td><button class="bind-btn" data-action="up">W</button></td></tr>
+            <tr><td class="bind-label">Move Down</td> <td><button class="bind-btn" data-action="down">S</button></td></tr>
+            <tr><td class="bind-label">Move Left</td> <td><button class="bind-btn" data-action="left">A</button></td></tr>
+            <tr><td class="bind-label">Move Right</td><td><button class="bind-btn" data-action="right">D</button></td></tr>
+            <tr><td class="bind-label">Mobility Skill</td>      <td><button class="bind-btn" data-action="dash">SHIFT</button></td></tr>
+            <tr><td class="bind-label">Inventory</td> <td><button class="bind-btn" data-action="inventory">I</button></td></tr>
+            <tr><td class="bind-label">Slash</td>     <td><button class="bind-btn" data-action="slash">LMB</button></td></tr>
+            <tr><td class="bind-label">Laser beam</td><td><button class="bind-btn" data-action="laser">RMB</button></td></tr>
+            <tr><td class="bind-label">Smash</td>     <td><button class="bind-btn" data-action="smash">R</button></td></tr>
+          </tbody>
+        </table>
+        <button class="settings-reset" id="resetBindings">Reset to defaults</button>
+      </div>
+
+      <!-- Mobile touch bindings (hidden on desktop) -->
+      <div class="mobile-bindings controls-mobile-section">
+        <p class="stab-hint mobile-bindings__hint">Assign actions to each touch button.</p>
         <table class="bind-table">
           <tbody>
             <tr>
@@ -1001,19 +1006,45 @@
     <!-- Accessibility tab -->
     <div class="stab-panel hidden" id="stab-access">
       <div class="access-row">
-        <span class="access-label">Reduce flashing</span>
+        <div class="access-text">
+          <span class="access-label">Reduce flashing</span>
+          <span class="access-desc">Stops pulsing edge glow, hit flash, and CSS animations. Recommended for photosensitivity.</span>
+        </div>
         <label class="toggle"><input type="checkbox" id="accReduceFlash"><span class="toggle-track"><span class="toggle-thumb"></span></span></label>
       </div>
       <div class="access-row">
-        <span class="access-label">High contrast HUD</span>
+        <div class="access-text">
+          <span class="access-label">Reduce motion</span>
+          <span class="access-desc">Skips floor transition animations and portal pulse effects on the canvas.</span>
+        </div>
+        <label class="toggle"><input type="checkbox" id="accReduceMotion"><span class="toggle-track"><span class="toggle-thumb"></span></span></label>
+      </div>
+      <div class="access-row">
+        <div class="access-text">
+          <span class="access-label">Reduce particles</span>
+          <span class="access-desc">Limits visual particle effects (sparks, text pop-ups). Improves performance on weak devices.</span>
+        </div>
+        <label class="toggle"><input type="checkbox" id="accReduceParticles"><span class="toggle-track"><span class="toggle-thumb"></span></span></label>
+      </div>
+      <div class="access-row">
+        <div class="access-text">
+          <span class="access-label">High contrast HUD</span>
+          <span class="access-desc">Uses high-visibility colours for the health bar and HUD background.</span>
+        </div>
         <label class="toggle"><input type="checkbox" id="accHighContrast"><span class="toggle-track"><span class="toggle-thumb"></span></span></label>
       </div>
       <div class="access-row">
-        <span class="access-label">Screen shake</span>
+        <div class="access-text">
+          <span class="access-label">Screen shake</span>
+          <span class="access-desc">Camera shakes on hits and explosions. Disable if this causes discomfort.</span>
+        </div>
         <label class="toggle"><input type="checkbox" id="accScreenShake" checked><span class="toggle-track"><span class="toggle-thumb"></span></span></label>
       </div>
       <div class="access-row">
-        <span class="access-label">Replay tutorial on next run</span>
+        <div class="access-text">
+          <span class="access-label">Replay tutorial on next run</span>
+          <span class="access-desc">Shows the tutorial intro again at the start of your next run.</span>
+        </div>
         <label class="toggle"><input type="checkbox" id="accReplayTutorial"><span class="toggle-track"><span class="toggle-thumb"></span></span></label>
       </div>
     </div>

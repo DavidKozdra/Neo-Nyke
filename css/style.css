@@ -29,7 +29,27 @@ body {
   border-bottom-color: #fff;
 }
 .acc-high-contrast #hpFill { background: #0f0; }
-.acc-reduce-flash * { animation: none !important; transition: none !important; }
+.acc-high-contrast #hpBar  { outline: 2px solid #fff; }
+
+/* Stop all CSS animations and transitions when reduce-flash is on */
+.acc-reduce-flash *,
+.acc-reduce-flash *::before,
+.acc-reduce-flash *::after {
+  animation: none !important;
+  transition: none !important;
+}
+
+/* Also respect the prefers-reduced-motion media query */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* Controls tab – hide irrelevant platform section */
+.controls-desktop-section,
+.controls-mobile-section { display: block; }
 
 #wrap {
   position: relative;
@@ -1949,6 +1969,11 @@ canvas {
   animation: letterLand 0.32s cubic-bezier(.16,1.4,.6,1) forwards, letterGlow 2.8s 0.4s ease-in-out infinite;
 }
 
+.acc-reduce-flash .menu-letter.landed {
+  opacity: 1;
+  transform: translateY(0) scale(1) rotate(0deg);
+}
+
 @keyframes letterLand {
   to { opacity: 1; transform: translateY(0) scale(1) rotate(0deg); }
 }
@@ -1971,6 +1996,12 @@ canvas {
 
 .menu-subtitle-flash.visible {
   animation: subtitleFlash .55s cubic-bezier(.22,1,.36,1) forwards;
+}
+
+.acc-reduce-flash .menu-subtitle-flash.visible {
+  opacity: 1;
+  transform: scaleX(1);
+  filter: none;
 }
 
 @keyframes subtitleFlash {
@@ -4294,10 +4325,29 @@ button.alt.danger {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
   padding: 10px 4px;
 }
 
 .access-row + .access-row { border-top: 1px solid rgba(128, 146, 170, .12); }
+
+.access-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.access-label {
+  font-size: 13px;
+  color: var(--menu-text);
+}
+
+.access-desc {
+  font-size: 11px;
+  color: var(--menu-text-soft);
+  line-height: 1.4;
+}
 
 /* --- Data tab --- */
 .data-row {
@@ -4332,11 +4382,6 @@ button.alt.danger {
 .settings-reset--danger:hover {
   color: #ffd2d6;
   border-color: rgba(255,124,136,.82);
-}
-
-.access-label {
-  font-size: 13px;
-  color: var(--menu-text);
 }
 
 .toggle {

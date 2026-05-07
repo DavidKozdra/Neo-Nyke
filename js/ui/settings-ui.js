@@ -5,7 +5,7 @@
   const DEFAULT_BINDINGS = { up:'w', down:'s', left:'a', right:'d', dash:'shift', inventory:'i', smash:'r', slash:'lmb', laser:'rmb' };
   const DEFAULT_TOUCH_BINDINGS = { touchA:'slash', touchB:'laser', touchY:'smash', touchX:'ascend', touchDash:'dash' };
   const DEFAULT_VOLUME   = { master:80, sfx:80, music:60 };
-  const DEFAULT_ACCESS   = { reduceFlash:false, highContrast:false, screenShake:true };
+  const DEFAULT_ACCESS   = { reduceFlash:false, reduceMotion:false, reduceParticles:false, highContrast:false, screenShake:true };
 
   // ── Theme system ─────────────────────────────────────────────────────────────
 
@@ -224,12 +224,29 @@
   }
 
   function applyAccess() {
-    document.documentElement.classList.toggle('acc-reduce-flash',  access.reduceFlash);
-    document.documentElement.classList.toggle('acc-high-contrast', access.highContrast);
+    document.documentElement.classList.toggle('acc-reduce-flash',    access.reduceFlash);
+    document.documentElement.classList.toggle('acc-reduce-motion',   access.reduceMotion);
+    document.documentElement.classList.toggle('acc-high-contrast',   access.highContrast);
+  }
+
+  // ── Mobile detection ─────────────────────────────────────────────────────────
+  function isTouchDevice() {
+    return window.matchMedia('(hover: none) and (pointer: coarse)').matches ||
+           ('ontouchstart' in window) ||
+           (navigator.maxTouchPoints > 0);
+  }
+
+  function applyControlsSectionVisibility() {
+    const isTouch = isTouchDevice();
+    const desktopSec = document.querySelector('.controls-desktop-section');
+    const mobileSec  = document.querySelector('.controls-mobile-section');
+    if (desktopSec) desktopSec.style.display = isTouch ? 'none' : '';
+    if (mobileSec)  mobileSec.style.display  = isTouch ? '' : 'none';
   }
 
   load();
   applyAccess();
+  applyControlsSectionVisibility();
   // Apply saved theme on boot (before any UI is queried)
   if (activeTheme && (PRESET_THEMES[activeTheme] || savedThemes[activeTheme])) {
     applyThemeVars((PRESET_THEMES[activeTheme] || savedThemes[activeTheme]).vars);
@@ -307,6 +324,7 @@
       btn.classList.add('active');
       document.getElementById('stab-' + btn.dataset.tab).classList.remove('hidden');
       if (btn.dataset.tab === 'theme') refreshThemeUI();
+      if (btn.dataset.tab === 'controls') applyControlsSectionVisibility();
     });
   });
 
@@ -398,7 +416,7 @@
     el.addEventListener('input', () => { volume[key] = Number(el.value); val.textContent = el.value; save(); });
   });
 
-  [['accReduceFlash','reduceFlash'],['accHighContrast','highContrast'],['accScreenShake','screenShake']].forEach(([id, key]) => {
+  [['accReduceFlash','reduceFlash'],['accReduceMotion','reduceMotion'],['accReduceParticles','reduceParticles'],['accHighContrast','highContrast'],['accScreenShake','screenShake']].forEach(([id, key]) => {
     const el = document.getElementById(id);
     el.checked = access[key];
     el.addEventListener('change', () => { access[key] = el.checked; save(); applyAccess(); });

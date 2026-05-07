@@ -12523,6 +12523,16 @@
   }
 
   function updateParticles(dt) {
+    // With reduceParticles: cull non-text particles to keep count low
+    if (window.NeoSettings?.getAccess()?.reduceParticles) {
+      const MAX_REDUCED = 24;
+      if (particles.length > MAX_REDUCED) {
+        // Remove oldest non-text particles first
+        for (let index = 0; index < particles.length && particles.length > MAX_REDUCED; index++) {
+          if (!particles[index].text) { particles.splice(index, 1); index--; }
+        }
+      }
+    }
     for (let index = particles.length - 1; index >= 0; index -= 1) {
       const particle = particles[index];
       particle.life -= dt;
@@ -13198,16 +13208,18 @@
 
   function drawLowHealthEdgeGlow() {
     if (!player || gameState !== 'play' || !Number.isFinite(player.hp) || !Number.isFinite(player.maxHp) || player.maxHp <= 0) return;
+    const access = window.NeoSettings?.getAccess() || {};
     const now = Date.now();
     const hpRatio = clamp(player.hp / player.maxHp, 0, 1);
     const hitFlashActive = lowHealthHitFlashUntil > now;
-    const isForcedHitFlash = hitFlashActive && hpRatio >= 0.2;
-    // On hit at healthy HP, trigger a softer version of the low-health edge effect.
+    // With reduceFlash: skip the hit-flash-at-healthy-HP effect entirely; static glow only.
+    const isForcedHitFlash = !access.reduceFlash && hitFlashActive && hpRatio >= 0.2;
     const effectiveHpRatio = isForcedHitFlash ? 0.17 : hpRatio;
     if (effectiveHpRatio >= 0.2) return;
 
     const danger = (0.2 - effectiveHpRatio) / 0.2;
-    const pulse = 0.74 + Math.sin(now / 120) * 0.18;
+    // With reduceFlash: no sine pulse — use a stable alpha
+    const pulse = access.reduceFlash ? 0.82 : (0.74 + Math.sin(now / 120) * 0.18);
     const baseAlpha = clamp((0.16 + danger * 0.34) * pulse, 0, 0.52);
     const alpha = isForcedHitFlash ? baseAlpha * 0.45 : baseAlpha;
     const baseEdge = Math.max(92, Math.min(canvas.width, canvas.height) * (0.18 + danger * 0.08));
@@ -15175,7 +15187,7 @@
       ctx.ellipse(x, y, size * 0.7, size * 1.15, angle, 0, Math.PI * 2);
       ctx.fill();
     }
-    if (flash > 0) {
+    if (flash > 0 && !window.NeoSettings?.getAccess()?.reduceFlash) {
       ctx.globalAlpha = flash * 0.65;
       ctx.strokeStyle = '#ff2b45';
       ctx.lineWidth = 2;
@@ -15297,7 +15309,8 @@
       const angle = (s / streakCount) * Math.PI * 2 + now / 600;
       const outerR = portalR * (0.9 + Math.sin(now / 200 + s) * 0.1);
       const innerR = portalR * 0.25;
-      ctx.globalAlpha = (0.3 + 0.4 * Math.abs(Math.sin(now / 300 + s * 1.3))) * portalEase;
+      const _portalAccess = window.NeoSettings?.getAccess() || {};
+      ctx.globalAlpha = (_portalAccess.reduceMotion ? 0.55 : (0.3 + 0.4 * Math.abs(Math.sin(now / 300 + s * 1.3)))) * portalEase;
       ctx.beginPath();
       ctx.moveTo(Math.cos(angle) * outerR, Math.sin(angle) * outerR * 0.38);
       ctx.lineTo(Math.cos(angle) * innerR, Math.sin(angle) * innerR * 0.38);
@@ -15356,7 +15369,7 @@
         ctx.shadowColor = style.color;
         ctx.shadowBlur = 10;
         ctx.beginPath();
-        ctx.arc(0, 0, enemy.r + 6 + index * 4 + Math.sin(Date.now() / (180 + index * 40)) * 2, 0, Math.PI * 2);
+        ctx.arc(0, 0, enemy.r + 6 + index * 4 + (window.NeoSettings?.getAccess()?.reduceFlash ? 0 : Math.sin(Date.now() / (180 + index * 40)) * 2), 0, Math.PI * 2);
         ctx.stroke();
         ctx.restore();
       });
@@ -15535,6 +15548,7 @@
     const aimAngle = Math.atan2(mouse.worldY - player.y, mouse.worldX - player.x);
     const facing = getFacingDirection(player, aimAngle);
     const shadowColor = godTimer > 0 ? 'rgba(255,248,210,0.65)' : 'rgba(0,0,0,0.25)';
+    const _reduceFlash = window.NeoSettings?.getAccess()?.reduceFlash;
     STATUS_KEYS.filter(key => getStatusStacks(player, key) > 0).forEach((key, index) => {
       const style = STATUS_STYLES[key];
       ctx.save();
@@ -15544,12 +15558,12 @@
       ctx.shadowColor = style.color;
       ctx.shadowBlur = 10;
       ctx.beginPath();
-      ctx.arc(0, 0, player.r + 6 + index * 4 + Math.sin(Date.now() / (160 + index * 40)) * 2, 0, Math.PI * 2);
+      ctx.arc(0, 0, player.r + 6 + index * 4 + (_reduceFlash ? 0 : Math.sin(Date.now() / (160 + index * 40)) * 2), 0, Math.PI * 2);
       ctx.stroke();
       ctx.restore();
     });
     drawSpriteFrame(getPlayerSpriteKey(), player.x, player.y, Math.max(34, player.r * 2.5), {
-      alpha: player.inv > 0 ? 0.68 : 1,
+      alpha: (!_reduceFlash && player.inv > 0) ? 0.68 : 1,
       flipX: facing < 0,
       shadowColor,
       shadowBlur: godTimer > 0 ? 18 : 6,
@@ -16141,6 +16155,9 @@
 
   function drawFloorTransition() {
     if (!showFloorTransition || floorTransitionTime > 2.5) return;
+    const _access = window.NeoSettings?.getAccess() || {};
+    // With reduceMotion: skip the animated banner entirely
+    if (_access.reduceMotion) return;
 
     const progress = floorTransitionTime / 2.5;
     const scaleProgress = Math.min(progress * 1.5, 1);
