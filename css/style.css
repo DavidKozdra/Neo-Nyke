@@ -116,8 +116,9 @@ canvas {
   top: 16px;
   left: 16px;
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 5px;
   padding: 10px 14px;
   background: linear-gradient(180deg, var(--menu-surface-strong), var(--menu-bg-deep));
   backdrop-filter: blur(8px);
@@ -132,6 +133,18 @@ canvas {
   z-index: 20;
   color: #ffd700;
   pointer-events: none;
+}
+
+.currency-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 68px;
+}
+
+.currency-line--loop {
+  color: #83f3ff;
+  font-size: 14px;
 }
 
 .coin-icon {

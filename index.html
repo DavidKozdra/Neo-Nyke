@@ -132,8 +132,14 @@
 
   <!-- Coin Display Top Left -->
   <div id="coinDisplay" class="coin-display hidden">
-    <canvas id="coinIcon" class="coin-icon" width="32" height="32"></canvas>
-    <span id="coinCount">0</span>
+    <div class="currency-line">
+      <canvas id="coinIcon" class="coin-icon" width="32" height="32"></canvas>
+      <span id="coinCount">0</span>
+    </div>
+    <div class="currency-line currency-line--loop">
+      <canvas id="hudLoopIcon" class="coin-icon" width="32" height="32"></canvas>
+      <span id="hudLoopCount">0</span>
+    </div>
   </div>
 
   <!-- Center Timer and Floor Display -->

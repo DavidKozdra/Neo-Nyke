@@ -1241,6 +1241,7 @@
     playerStats: document.getElementById('playerStats'),
     coinDisplay: document.getElementById('coinDisplay'),
     coinIcon: document.getElementById('coinIcon'),
+    hudLoopIcon: document.getElementById('hudLoopIcon'),
     metaCoinIcon: document.getElementById('metaCoinIcon'),
     metaLoopIcon: document.getElementById('metaLoopIcon'),
     centerDisplay: document.getElementById('centerDisplay'),
@@ -1268,6 +1269,7 @@
     playerXpFill: document.getElementById('playerXpFill'),
     playerXpTxt: document.getElementById('playerXpTxt'),
     coinCount: document.getElementById('coinCount'),
+    hudLoopCount: document.getElementById('hudLoopCount'),
     timerDisplay: document.getElementById('timerDisplay'),
     floorDisplay: document.getElementById('floorDisplay'),
     difficultyDisplay: document.getElementById('difficultyDisplay'),
@@ -5226,6 +5228,8 @@
     teleportKeyLatch = false;
     shopKeyLatch = false;
     invKeyLatch = false;
+    anvilKeyLatch = false;
+    ladderUseKeyLatch = false;
     activeShopTab = 'items';
     draggingMoveKey = '';
     weaponBurstQueue = [];
@@ -5343,6 +5347,8 @@
     dashKeyLatch = false;
     shopKeyLatch = false;
     invKeyLatch = false;
+    anvilKeyLatch = false;
+    ladderUseKeyLatch = false;
     activeShopTab = 'items';
     draggingMoveKey = '';
     weaponBurstQueue = [];
@@ -5442,6 +5448,7 @@
     player.x = START_X;
     player.y = START_Y;
     spawnRivals();
+    gameEvents.emit('floor:enter', { floor });
     enterRoom(startRoom);
     updateObjective();
     updateHud();
@@ -5966,16 +5973,17 @@
     const searchRadius = 120;
     const testRadius = 18;
     const angleStep = Math.PI / 8;
-    
-    if (!isBlocked(START_X, START_Y, testRadius)) {
+    const clearOfEnemies = (x, y) => enemies.every(e => Math.hypot(e.x - x, e.y - y) > e.r + testRadius + 32);
+
+    if (!isBlocked(START_X, START_Y, testRadius) && clearOfEnemies(START_X, START_Y)) {
       return { x: START_X, y: START_Y };
     }
-    
+
     for (let angle = 0; angle < Math.PI * 2; angle += angleStep) {
       for (let r = searchRadius * 0.25; r <= searchRadius; r += 20) {
         const x = START_X + Math.cos(angle) * r;
         const y = START_Y + Math.sin(angle) * r;
-        if (!isBlocked(x, y, testRadius)) {
+        if (!isBlocked(x, y, testRadius) && clearOfEnemies(x, y)) {
           return { x: clamp(x, WALL + testRadius, ROOM_W - WALL - testRadius), y: clamp(y, WALL + testRadius, ROOM_H - WALL - testRadius) };
         }
       }
@@ -6022,6 +6030,24 @@
     }
   }
 
+  // --- Game event handlers ---
+  // room:enter  fires every time the player enters any room (including floor start)
+  // floor:enter fires when a new floor is generated, before room:enter
+  gameEvents.on('room:enter', ({ room }) => {
+    clearPlayerTransientDefense();
+    player.roomDamageTaken = 0;
+    endActiveLaser();
+    laserTime = 0;
+    laserTick = 0;
+    laserAngle = 0;
+    laserSweepSpeed = 0;
+    turtleWaveHpTimer = 0;
+  });
+
+  gameEvents.on('floor:enter', ({ floor: newFloor }) => {
+    // floor-level resets go here; room:enter will fire immediately after for the start room
+  });
+
   function isBossFightActive() {
     return currentRoom?.type === 'boss' || currentRoom?.type === 'god' || enemies.some(enemy => isBossType(enemy?.type));
   }
@@ -6046,16 +6072,9 @@
     shopOffers = room.shopOffers || [];
     structures = room.structures || [];
     decorations = room.decorations || [];
-    endActiveLaser();
-    laserTime = 0;
-    laserTick = 0;
-    laserAngle = 0;
-    laserSweepSpeed = 0;
-    turtleWaveHpTimer = 0;
     mouse.right = false;
     mouse.rightQueued = false;
-    player.roomDamageTaken = 0;
-    clearPlayerTransientDefense();
+    gameEvents.emit('room:enter', { room });
     const safeSpawn = findSafeSpawnPoint();
     player.x = safeSpawn.x;
     player.y = safeSpawn.y;
@@ -9357,7 +9376,7 @@
     enemy.vy += Math.sin(angle) * appliedKnockback;
     enemy.stun = Math.max(enemy.stun, 0.08);
     applyEnemyImpactStun(enemy, dealt, appliedKnockback);
-    grantCritCharmBuff();
+    if (!options.noCharmBuff) grantCritCharmBuff();
     particles.push({ x: enemy.x, y: enemy.y, life: 0.24, vx: rand(-30, 30, 'fx'), vy: rand(-30, 30, 'fx'), c: color });
     spawnDamagePopup(enemy.x, enemy.y - 14, dealt, {
       crit: isCrit,
@@ -9377,7 +9396,7 @@
           Math.atan2(chained.y - enemy.y, chained.x - enemy.x),
           Math.max(60, knockback * 0.5),
           '#9ad9ff',
-          { rawDamage: true }
+          { noCharmBuff: true }
         );
       }
     }
@@ -11906,7 +11925,7 @@
       } else {
         p2DeadInCoop = true;
         particles.push({ x: player2.x, y: player2.y - 30, life: 1.2, text: 'P2 DOWN', c: '#4ca8ff' });
-        if (p1DeadInCoop && p3DeadInCoop && p4DeadInCoop) die();
+        if (p1DeadInCoop && p2DeadInCoop && p3DeadInCoop && p4DeadInCoop) die();
       }
     }
   }
@@ -11965,7 +11984,10 @@
       finalAmount = Math.min(finalAmount, remaining);
     }
     finalAmount = Math.max(0, finalAmount);
-    if (finalAmount <= 0) return;
+    if (finalAmount <= 0) {
+      if (player.hp <= 0) die();
+      return;
+    }
     lastDamageSource = getDamageSourceLabel(source);
     lastDamageSourceKey = String(source || '');
 
@@ -13137,6 +13159,7 @@
     
     // Update center display
     if (ui.coinCount) ui.coinCount.textContent = player.coins;
+    if (ui.hudLoopCount) ui.hudLoopCount.textContent = Number(metaProgress.loopCrystals || 0);
     if (ui.timerDisplay) ui.timerDisplay.textContent = timeStr;
     if (ui.floorDisplay) ui.floorDisplay.textContent = floor;
     if (ui.difficultyDisplay) ui.difficultyDisplay.textContent = getDifficultyDef(selectedDifficulty).name.toUpperCase();
@@ -13254,8 +13277,9 @@
   function die() {
     if (gameState === 'dying' || gameState === 'dead') return;
     if (gameMode === 'pvp' && pvpState) return;
-    if (gameMode === 'coop' && player2 && !p2DeadInCoop) {
+    if (gameMode === 'coop' && ((!p2DeadInCoop && player2) || (!p3DeadInCoop && player3) || (!p4DeadInCoop && player4))) {
       if (player) player.hp = 0;
+      p1DeadInCoop = true;
       particles.push({ x: player?.x ?? 0, y: (player?.y ?? 0) - 30, life: 1.2, text: 'P1 DOWN', c: '#ff6b6b' });
       return;
     }
@@ -16565,6 +16589,15 @@
       [1, 3], [2, 3], [3, 3], [4, 3], [5, 3],
       [1, 4], [2, 4], [3, 4], [4, 4], [5, 4],
       [2, 5], [3, 5], [4, 5],
+    ]);
+    drawPixelIcon(ui.hudLoopIcon, '#83f3ff', [
+      [2, 1], [3, 1], [4, 1],
+      [1, 2], [5, 2],
+      [1, 3], [5, 3],
+      [1, 4], [5, 4],
+      [2, 5], [3, 5], [4, 5],
+      [2, 2], [4, 2], [2, 4], [4, 4],
+      [3, 3],
     ]);
     drawPixelIcon(ui.metaCoinIcon, '#ffd15a', [
       [2, 1], [3, 1], [4, 1],
