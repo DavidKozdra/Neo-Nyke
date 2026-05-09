@@ -452,6 +452,11 @@
       </div>
       <div class="practice-section">
         <span class="practice-section-label">OPTIONS</span>
+        <div class="practice-range-row">
+          <label for="practiceMaxHpSlider">Max HP</label>
+          <input id="practiceMaxHpSlider" class="practice-slider" type="range" min="1" max="10000" step="10" value="1000">
+          <input id="practiceMaxHpNum" class="practice-num" type="number" min="1" max="10000" step="10" value="1000" aria-label="Practice max health">
+        </div>
         <label class="practice-opt"><input type="checkbox" id="practiceEliteToggle"> Spawn as Elite</label>
         <button id="practiceClearBtn" class="practice-action-btn">CLEAR ENEMIES</button>
         <button id="practiceHealBtn" class="practice-action-btn">FULL HEAL</button>

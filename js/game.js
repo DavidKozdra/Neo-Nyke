@@ -1357,6 +1357,8 @@
     practicePanelToggle: document.getElementById('practicePanelToggle'),
     practicePanelBody: document.getElementById('practicePanelBody'),
     practiceEnemyGrid: document.getElementById('practiceEnemyGrid'),
+    practiceMaxHpSlider: document.getElementById('practiceMaxHpSlider'),
+    practiceMaxHpNum: document.getElementById('practiceMaxHpNum'),
     practiceEliteToggle: document.getElementById('practiceEliteToggle'),
     practiceClearBtn: document.getElementById('practiceClearBtn'),
     practiceHealBtn: document.getElementById('practiceHealBtn'),
@@ -3492,10 +3494,12 @@
   }
 
   function pauseGame() {
+    document.body.classList.add('game-paused');
     setGameState('pause');
   }
 
   function resumeGame() {
+    document.body.classList.remove('game-paused');
     setGameState('play');
   }
 
@@ -4882,6 +4886,7 @@
     const isBossRush = gameMode === 'boss_rush';
     if (ui.timerFloorSlot) ui.timerFloorSlot.style.display = isBossRush ? 'none' : '';
     if (ui.timerBossSlot) ui.timerBossSlot.style.display = isBossRush ? '' : 'none';
+    if (nextState !== 'pause') document.body.classList.remove('game-paused');
     if (nextState !== 'play') {
       setShopPanelOpen(false);
       setInventoryPanelOpen(false);
@@ -5060,8 +5065,8 @@
     resetMultiplayerState();
     invalidateRunStatCaches();
     player = createDefaultPlayer();
-    player.hp = player.maxHp * 999;
-    player.maxHp = player.maxHp * 999;
+    player.maxHp = 1000;
+    player.hp = player.maxHp;
     lastDamageSource = '';
     lastDamageSourceKey = '';
     resetScene();
@@ -5073,6 +5078,7 @@
     currentRoom = room;
     player.x = START_X;
     player.y = START_Y;
+    syncPracticeMaxHpControls();
     if (!loopStarted) { loopStarted = true; requestAnimationFrame(loop); }
   }
 
@@ -5160,6 +5166,27 @@
       if (gameMode !== 'boss_rush' || gameState !== 'play') return;
       spawnBossRushBoss();
     }, 4000);
+  }
+
+  function clampPracticeMaxHp(value) {
+    return clamp(Math.round(Number(value) || 1000), 1, 10000);
+  }
+
+  function syncPracticeMaxHpControls() {
+    if (!ui.practiceMaxHpSlider && !ui.practiceMaxHpNum) return;
+    const value = clampPracticeMaxHp(player?.maxHp || 1000);
+    if (ui.practiceMaxHpSlider) ui.practiceMaxHpSlider.value = String(value);
+    if (ui.practiceMaxHpNum) ui.practiceMaxHpNum.value = String(value);
+  }
+
+  function setPracticeMaxHp(value) {
+    if (!player) return;
+    const nextMaxHp = clampPracticeMaxHp(value);
+    const hpRatio = player.maxHp > 0 ? player.hp / player.maxHp : 1;
+    player.maxHp = nextMaxHp;
+    player.hp = clamp(Math.round(nextMaxHp * hpRatio), 1, nextMaxHp);
+    syncPracticeMaxHpControls();
+    updateHud();
   }
 
   function buildPracticeEnemyGrid() {
@@ -7548,8 +7575,8 @@
       base.r = 58;
       base.hp = 1280;
       base.max = 1280;
-      base.speed = 74;
-      base.dmg = 26;
+      base.speed = 88;
+      base.dmg = 31;
       base.attackCd = 1.6;
       base.bleedImmune = true;
       base.splitReady = true;
@@ -9964,7 +9991,7 @@
     uiController.tick(dt);
     perfEnd('ui', uiPerfStart);
     const drawPerfStart = perfStart();
-    draw();
+    if (gameState !== 'pause') draw();
     perfEnd('draw', drawPerfStart);
     perfEndFrame(framePerfStart);
     requestAnimationFrame(loop);
@@ -17487,8 +17514,18 @@
         view.practicePanelToggle?.addEventListener('click', () => {
           view.practicePanelBody?.classList.toggle('hidden');
         });
+        view.practiceMaxHpSlider?.addEventListener('input', () => {
+          setPracticeMaxHp(view.practiceMaxHpSlider.value);
+        });
+        view.practiceMaxHpNum?.addEventListener('change', () => {
+          setPracticeMaxHp(view.practiceMaxHpNum.value);
+        });
         view.practiceClearBtn?.addEventListener('click', () => { enemies.length = 0; });
-        view.practiceHealBtn?.addEventListener('click', () => { if (player) player.hp = player.maxHp; });
+        view.practiceHealBtn?.addEventListener('click', () => {
+          if (!player) return;
+          player.hp = player.maxHp;
+          updateHud();
+        });
         view.practiceGiveItemBtn?.addEventListener('click', () => {
           if (!player) return;
           const key = rollItemDrop({ elite: true, stream: 'loot' });

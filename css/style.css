@@ -31,6 +31,13 @@ body {
 .acc-high-contrast #hpFill { background: #0f0; }
 .acc-high-contrast #hpBar  { outline: 2px solid #fff; }
 
+/* Pause all CSS animations while the game is paused */
+.game-paused #wrap *,
+.game-paused #wrap *::before,
+.game-paused #wrap *::after {
+  animation-play-state: paused !important;
+}
+
 /* Stop all CSS animations and transitions when reduce-flash is on */
 .acc-reduce-flash *,
 .acc-reduce-flash *::before,
@@ -5429,6 +5436,34 @@ button.alt.danger {
   cursor: pointer;
 }
 .practice-opt input { cursor: pointer; accent-color: #a880ff; }
+
+.practice-range-row {
+  display: grid;
+  grid-template-columns: 56px minmax(110px, 1fr) 72px;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 10px;
+  color: #a8a0c8;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.practice-slider {
+  width: 100%;
+  accent-color: #a880ff;
+  cursor: pointer;
+}
+
+.practice-num {
+  width: 72px;
+  background: rgba(0,0,0,0.28);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 5px;
+  color: #d8e4f8;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 4px 6px;
+}
 
 .practice-action-btn {
   display: block;
