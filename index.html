@@ -143,6 +143,13 @@
       <span class="separator">•</span>
       <span id="timerFloorSlot">FL <b id="floorDisplay">1</b>/10</span>
       <span id="timerBossSlot" style="display:none">BOSS <b id="bossRushStageNum2">1</b>/4</span>
+      <span class="separator">•</span>
+      <span id="difficultyDisplay" class="difficulty-display">EASY</span>
+      <span id="itemRarityCounts" class="item-rarity-counts" aria-label="Relic counts by rarity">
+        <span class="rarity-count rarity-count--white" title="White relics">0</span>
+        <span class="rarity-count rarity-count--purple" title="Purple relics">0</span>
+        <span class="rarity-count rarity-count--red" title="Red relics">0</span>
+      </span>
     </div>
     <div id="challengeStatus" class="challenge-status hidden" aria-hidden="true">
       <span id="challengeStatusLabel">STILLNESS</span>
@@ -391,7 +398,12 @@
           <span class="dead-items-label">RELICS HELD</span>
           <div class="dead-items-list" id="deadItems"></div>
         </div>
-        <button class="restart dead-retry">RETRY</button>
+        <div class="dead-actions" aria-label="Death screen actions">
+          <button class="dead-action dead-action--primary" data-dead-action="retry-current" type="button">RETRY CURRENT SEED</button>
+          <button class="dead-action" data-dead-action="retry-new" type="button">RETRY NEW SEED</button>
+          <button class="dead-action dead-action--revive" data-dead-action="revive" type="button">REVIVE</button>
+          <button class="dead-action dead-action--menu" data-dead-action="menu" type="button">MAIN MENU</button>
+        </div>
       </div>
     </div>
   </div>

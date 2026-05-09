@@ -17,6 +17,11 @@
     smash: { baseCooldown: 5.4, radius: 148, damage: 46, bonus: 26 },
   };
   const SLASH_KNOCKBACK = 340;
+  const HEAVY_HIT_HEALTH_RATIO = 0.5;
+  const HEAVY_KNOCKBACK_THRESHOLD = 300;
+  const HEAVY_HIT_STUN = 0.62;
+  const HEAVY_KNOCKBACK_STUN = 0.46;
+  const HEAVY_IMPACT_BOSS_STUN_MULTIPLIER = 0.65;
   const PLAYER_BEAM_BOUNCES = 2;
   const HEAVY_BEAM_BOUNCES = 1;
   const ENEMY_BEAM_BOUNCES = 1;
@@ -985,6 +990,16 @@
       category: 'knight',
       tags: ['speed', 'move'],
     },
+    anchor_charm: {
+      key: 'anchor_charm',
+      name: 'Anchor Charm',
+      shortName: 'Stun Resist',
+      description: 'Stun resistance. Impact stuns last less and require harder hits or stronger knockback.',
+      rarity: 'knight',
+      color: '#d7e4f2',
+      category: 'knight',
+      tags: ['defense', 'stun'],
+    },
     iron_lung: {
       key: 'iron_lung',
       name: 'Iron Lung',
@@ -1097,6 +1112,7 @@
     ['explosive_jelly', 12],
     ['dragon_orb', 14],
     ['turtle_shell', 24],
+    ['anchor_charm', 18],
     ['iron_lung', 10],
     ['oracles_lens', 8],
     ['wizards_paw', 6],
@@ -1120,6 +1136,7 @@
     'explosive_jelly',
     'dragon_orb',
     'turtle_shell',
+    'anchor_charm',
     'iron_lung',
     'oracles_lens',
     'bandaid',
@@ -1180,6 +1197,7 @@
     deadCoins: document.getElementById('deadCoins'),
     deadDifficulty: document.getElementById('deadDifficulty'),
     deadItems: document.getElementById('deadItems'),
+    deadActions: [...document.querySelectorAll('#dead [data-dead-action]')],
     win: document.getElementById('win'),
     winInfo: document.getElementById('winInfo'),
     deadRestart: document.querySelector('#dead .restart'),
@@ -1252,6 +1270,8 @@
     coinCount: document.getElementById('coinCount'),
     timerDisplay: document.getElementById('timerDisplay'),
     floorDisplay: document.getElementById('floorDisplay'),
+    difficultyDisplay: document.getElementById('difficultyDisplay'),
+    itemRarityCounts: document.getElementById('itemRarityCounts'),
     seed: document.getElementById('seed'),
     go: document.getElementById('go'),
     difficultyHint: document.getElementById('difficultyHint'),
@@ -1387,6 +1407,14 @@
   }
   const uiController = createUIController(ui);
 
+  const gameEvents = (() => {
+    const listeners = {};
+    return {
+      on(event, fn) { (listeners[event] = listeners[event] || []).push(fn); },
+      emit(event, payload) { (listeners[event] || []).forEach(fn => fn(payload)); },
+    };
+  })();
+
   let player = null;
   let player2 = null;
   let player3 = null;
@@ -1444,6 +1472,8 @@
   let lowHealthHitFlashUntil = 0;
   let dashKeyLatch = false;
   let playerDeathAnim = null;
+  let runRevivesUsed = 0;
+  let lastDeathEntryId = '';
   let gameMode = 'normal';
   let endlessWave = 0;
   let endlessWaveActive = false;
@@ -2483,9 +2513,32 @@
         void startGame(false);
       },
     });
-    uiController.bindRestartActions(() => {
-      if (ui.seed) ui.seed.value = baseSeedStr;
-      void startGame(false);
+    uiController.bindRestartActions({
+      onWinRestart() {
+        if (ui.seed) ui.seed.value = baseSeedStr;
+        void startGame(false);
+      },
+      onDeadAction(action) {
+        if (action === 'menu') {
+          gameMode = 'normal';
+          resetMultiplayerState();
+          setGameState('menu');
+          refreshMenuState();
+          return;
+        }
+        if (action === 'revive') {
+          reviveFromDeath();
+          return;
+        }
+        if (action === 'retry-new') {
+          if (ui.seed) ui.seed.value = '';
+          baseSeedStr = createRandomSeed();
+          void startGame(false);
+          return;
+        }
+        if (ui.seed) ui.seed.value = baseSeedStr;
+        void startGame(false);
+      },
     });
 
     ui.pauseResume.addEventListener('click', resumeGame);
@@ -3681,6 +3734,7 @@
       explosive_jelly: 0,
       dragon_orb: 0,
       turtle_shell: 0,
+      anchor_charm: 0,
       iron_lung: 0,
       oracles_lens: 0,
       wizards_paw: 0,
@@ -3703,6 +3757,7 @@
       vy: 0,
       hp: maxHp,
       maxHp,
+      stun: 0,
       swing: 0,
       swingA: 0,
       inv: 0,
@@ -3804,6 +3859,7 @@
       runHistory = normalizeRunHistory(savedRunHistory || savedMeta?.runHistory);
       activeRun = savedRun && typeof savedRun === 'object' ? savedRun : null;
       if (activeRun) {
+        activeRun.mode = normalizeGameMode(activeRun.mode);
         activeRun.difficulty = normalizeDifficulty(activeRun.difficulty);
         activeRun.challenges = normalizeChallengeSelection(activeRun.challenges);
       }
@@ -3861,6 +3917,31 @@
   function isSplitScreen() {
     return (gameMode === 'coop' || gameMode === 'pvp') && !!player2 && mpPlayerCount >= 2;
   }
+
+  function isMultiplayerMode() {
+    return gameMode === 'coop' || gameMode === 'pvp';
+  }
+
+  function resetMultiplayerState() {
+    player2 = null;
+    player3 = null;
+    player4 = null;
+    p1DeadInCoop = false;
+    p2DeadInCoop = false;
+    p3DeadInCoop = false;
+    p4DeadInCoop = false;
+    pvpState = null;
+    const p2Row = document.getElementById('p2HpRow');
+    if (p2Row) p2Row.style.display = 'none';
+    closeMpLobby();
+  }
+
+  function invalidateRunStatCaches() {
+    itemStatsCacheFrame = -1;
+    itemStatsCacheValue = null;
+    godItemKeysCache = null;
+  }
+
   function splitPlayerCount() {
     let n = 0;
     if (player && gameState === 'play') n++;
@@ -4520,6 +4601,19 @@
       }));
   }
 
+  function getItemRarityCounts(playerState = player) {
+    const counts = { white: 0, purple: 0, red: 0 };
+    ITEM_KEYS.forEach(key => {
+      const count = Math.max(0, Number(playerState?.items?.[key] || 0));
+      if (count <= 0) return;
+      const rarity = String(itemRegistry.get(key)?.rarity || ITEM_DEFS[key]?.rarity || 'knight').toLowerCase();
+      if (rarity === 'god' || rarity === 'red') counts.red += count;
+      else if (rarity === 'wizard' || rarity === 'purple') counts.purple += count;
+      else counts.white += count;
+    });
+    return counts;
+  }
+
   function captureRunMoveSnapshot(playerState = player) {
     return MOVE_SLOTS.map(slot => {
       const key = playerState?.equippedMoves?.[slot] || '';
@@ -4810,12 +4904,15 @@
       selectedDifficulty = normalizeDifficulty(selectedDifficulty);
       selectedChallenges = normalizeChallengeSelection(metaProgress.selectedChallenges);
       runLoopIndex = 0;
+      runRevivesUsed = 0;
+      lastDeathEntryId = '';
       syncSeedState();
       floor = 1;
       gameElapsedTime = 0;
       achievementManager.resetRunCounters();
+      invalidateRunStatCaches();
       player = createDefaultPlayer();
-      if (gameMode !== 'coop' && gameMode !== 'pvp') { player2 = null; player3 = null; player4 = null; p1DeadInCoop = false; p2DeadInCoop = false; p3DeadInCoop = false; p4DeadInCoop = false; pvpState = null; const _p2r = document.getElementById('p2HpRow'); if (_p2r) _p2r.style.display = 'none'; }
+      if (!isMultiplayerMode()) resetMultiplayerState();
       if (gameMode === 'sandbox') {
         player.coins = Number(sandboxSettings.startingCoins || 0);
         selectedChallenges = [];
@@ -4853,10 +4950,13 @@
     selectedDifficulty = normalizeDifficulty(selectedDifficulty);
     selectedChallenges = [];
     runLoopIndex = 0;
+    runRevivesUsed = 0;
+    lastDeathEntryId = '';
     syncSeedState();
     floor = 1;
     gameElapsedTime = 0;
     achievementManager.resetRunCounters();
+    invalidateRunStatCaches();
     player = createDefaultPlayer();
     player2 = mpPlayerCount >= 2 ? spawnMpPlayer(chosenCharacter2, 36, 0) : null;
     player3 = mpPlayerCount >= 3 ? spawnMpPlayer(chosenCharacter3, 0, 36) : null;
@@ -4879,10 +4979,13 @@
     selectedDifficulty = normalizeDifficulty(selectedDifficulty);
     selectedChallenges = [];
     runLoopIndex = 0;
+    runRevivesUsed = 0;
+    lastDeathEntryId = '';
     syncSeedState();
     floor = 1;
     gameElapsedTime = 0;
     achievementManager.resetRunCounters();
+    invalidateRunStatCaches();
     player = createDefaultPlayer();
     player.maxHp = 300; player.hp = 300;
     player2 = spawnMpPlayer(chosenCharacter2 || Object.keys(CHARACTER_DEFS).find(k => k !== chosenCharacter) || chosenCharacter, 80, 0);
@@ -4918,6 +5021,8 @@
     selectedDifficulty = normalizeDifficulty(selectedDifficulty);
     selectedChallenges = [];
     runLoopIndex = 0;
+    runRevivesUsed = 0;
+    lastDeathEntryId = '';
     syncSeedState();
     floor = 1;
     gameElapsedTime = 0;
@@ -4925,6 +5030,8 @@
     endlessWave = 0;
     endlessWaveActive = false;
     resetTutorialState(false);
+    resetMultiplayerState();
+    invalidateRunStatCaches();
     player = createDefaultPlayer();
     lastDamageSource = '';
     lastDamageSourceKey = '';
@@ -4941,11 +5048,15 @@
     selectedDifficulty = 'easy';
     selectedChallenges = [];
     runLoopIndex = 0;
+    runRevivesUsed = 0;
+    lastDeathEntryId = '';
     syncSeedState();
     floor = 5;
     gameElapsedTime = 0;
     achievementManager.resetRunCounters();
     resetTutorialState(false);
+    resetMultiplayerState();
+    invalidateRunStatCaches();
     player = createDefaultPlayer();
     player.hp = player.maxHp * 999;
     player.maxHp = player.maxHp * 999;
@@ -4971,6 +5082,8 @@
     selectedDifficulty = normalizeDifficulty(selectedDifficulty);
     selectedChallenges = [];
     runLoopIndex = 0;
+    runRevivesUsed = 0;
+    lastDeathEntryId = '';
     syncSeedState();
     floor = 5;
     gameElapsedTime = 0;
@@ -4978,6 +5091,8 @@
     bossRushStage = 0;
     bossRushActive = false;
     resetTutorialState(false);
+    resetMultiplayerState();
+    invalidateRunStatCaches();
     player = createDefaultPlayer();
     lastDamageSource = '';
     lastDamageSourceKey = '';
@@ -5140,10 +5255,13 @@
   }
 
   function restoreRun(snapshot) {
+    gameMode = normalizeGameMode(snapshot.mode || gameMode);
     baseSeedStr = snapshot.baseSeedStr || snapshot.seedStr || createRandomSeed();
     lastDamageSource = '';
     lastDamageSourceKey = '';
     runLoopIndex = Number(snapshot.runLoopIndex || 0);
+    runRevivesUsed = Math.max(0, Number(snapshot.runRevivesUsed || 0));
+    lastDeathEntryId = '';
     syncSeedState();
     floor = snapshot.floor;
     selectedDifficulty = normalizeDifficulty(snapshot.difficulty);
@@ -5152,7 +5270,23 @@
     resetRngStreams(snapshot.rngState);
     rooms = Array.isArray(snapshot.rooms) ? snapshot.rooms : [];
     currentRoom = rooms.find(room => room.gx === snapshot.currentRoom?.gx && room.gy === snapshot.currentRoom?.gy) || rooms[0] || null;
+    invalidateRunStatCaches();
     player = migratePlayerData(snapshot.player);
+    if (isMultiplayerMode()) {
+      player2 = snapshot.player2 ? migratePlayerData(snapshot.player2) : null;
+      player3 = snapshot.player3 ? migratePlayerData(snapshot.player3) : null;
+      player4 = snapshot.player4 ? migratePlayerData(snapshot.player4) : null;
+      p1DeadInCoop = !!snapshot.p1DeadInCoop;
+      p2DeadInCoop = !!snapshot.p2DeadInCoop;
+      p3DeadInCoop = !!snapshot.p3DeadInCoop;
+      p4DeadInCoop = !!snapshot.p4DeadInCoop;
+      pvpState = snapshot.pvpState && typeof snapshot.pvpState === 'object' ? { ...snapshot.pvpState, respawnTimer: null } : null;
+      const p2Row = document.getElementById('p2HpRow');
+      if (p2Row) p2Row.style.display = player2 ? '' : 'none';
+      if (!player2) resetMultiplayerState();
+    } else {
+      resetMultiplayerState();
+    }
     enemies = Array.isArray(snapshot.enemies) ? snapshot.enemies.map(migrateEnemyState) : [];
     deadBodies = Array.isArray(snapshot.deadBodies) ? snapshot.deadBodies : [];
     particles = [];
@@ -5857,6 +5991,7 @@
   function clearPlayerTransientDefense() {
     if (!player) return;
     player.inv = 0;
+    player.stun = 0;
     player.vx = 0;
     player.vy = 0;
     player.dashTime = 0;
@@ -5920,7 +6055,7 @@
     mouse.right = false;
     mouse.rightQueued = false;
     player.roomDamageTaken = 0;
-    if (isLockedFightRoom(room)) clearPlayerTransientDefense();
+    clearPlayerTransientDefense();
     const safeSpawn = findSafeSpawnPoint();
     player.x = safeSpawn.x;
     player.y = safeSpawn.y;
@@ -7169,6 +7304,7 @@
     const dmgMult = 1 + stacks('neo_knife') * 0.08 + stacks('orb_of_blood') * 0.14 + stacks('crit_charm') * 0.12 + stacks('oracles_lens') * 0.2;
     const speedMult = 1 + stacks('attack_servo') * 0.08 + stacks('turtle_shell') * 0.04;
     const attackCdMult = Math.max(0.52, 1 - stacks('charged_adapter') * 0.1);
+    const stunResistStacks = stacks('anchor_charm');
 
     enemy.hp = Math.round(enemy.hp * hpMult);
     enemy.max = enemy.hp;
@@ -7176,6 +7312,7 @@
     enemy.speed *= speedMult;
     enemy.attackCd *= attackCdMult;
     enemy.r = Math.round(enemy.r * (1 + stacks('iron_lung') * 0.04));
+    enemy.stunResistance = Math.max(Number(enemy.stunResistance || 0), stunResistStacks);
   }
 
   function applyEliteTypes(enemy) {
@@ -7797,6 +7934,7 @@
     playerData.attackSpeed = Number(playerData.attackSpeed || 1);
     playerData.roomDamageTaken = Number(playerData.roomDamageTaken || 0);
     playerData.rivalReputation = Number(playerData.rivalReputation || 0);
+    playerData.stun = Math.max(0, Number(playerData.stun || 0));
     playerData.dashTime = Number(playerData.dashTime || 0);
     playerData.dashX = Number(playerData.dashX || 0);
     playerData.dashY = Number(playerData.dashY || 0);
@@ -7950,6 +8088,7 @@
     const explosiveJelly = getItemCount('explosive_jelly');
     const dragonOrb = getItemCount('dragon_orb');
     const turtleShell = getItemCount('turtle_shell');
+    const anchorCharm = getItemCount('anchor_charm');
     const shieldOfAegis = getItemCount('shield_of_aegis');
     const pendantOfKronos = getItemCount('pendant_of_kronos');
     const oracleLens = getItemCount('oracles_lens') > 0;
@@ -7982,6 +8121,7 @@
       beamChainTargets: dragonOrb > 0 ? Math.min(2, dragonOrb) : 0,
       beamChainDamageMultiplier: dragonOrb > 0 ? 0.6 + (dragonOrb - 1) * 0.15 : 0,
       damageReduction,
+      stunResistance: anchorCharm,
       hasIronLung: getItemCount('iron_lung') > 0,
     };
     itemStatsCacheFrame = frameId;
@@ -9143,6 +9283,52 @@
     player.inv = Math.max(player.inv, 0.24);
   }
 
+  function applyEnemyImpactStun(enemy, dealt, appliedKnockback) {
+    const maxHealth = Number(enemy?.max) || 0;
+    const stunResistance = Math.max(0, Number(enemy?.stunResistance || 0));
+    const thresholdMultiplier = 1 + stunResistance * 0.35;
+    const durationMultiplier = Math.max(0.28, 1 - stunResistance * 0.28);
+    const lostHalfHealth = maxHealth > 0 && dealt >= maxHealth * HEAVY_HIT_HEALTH_RATIO * thresholdMultiplier;
+    const knockbackThreshold = HEAVY_KNOCKBACK_THRESHOLD * thresholdMultiplier;
+    const heavyKnockback = appliedKnockback >= knockbackThreshold;
+    if (!lostHalfHealth && !heavyKnockback) return false;
+    let stunDuration = 0;
+    if (lostHalfHealth) stunDuration = Math.max(stunDuration, HEAVY_HIT_STUN);
+    if (heavyKnockback) {
+      const knockbackOverThreshold = (appliedKnockback - knockbackThreshold) / knockbackThreshold;
+      stunDuration = Math.max(stunDuration, HEAVY_KNOCKBACK_STUN + clamp(knockbackOverThreshold, 0, 1) * 0.18);
+    }
+    stunDuration *= durationMultiplier;
+    if (BOSS_TYPES.has(enemy.type)) stunDuration *= HEAVY_IMPACT_BOSS_STUN_MULTIPLIER;
+    enemy.stun = Math.max(enemy.stun || 0, stunDuration);
+    particles.push({ x: enemy.x, y: enemy.y - enemy.r - 18, life: 0.55, text: 'STUN', c: '#ffe66d' });
+    particles.push({ x: enemy.x, y: enemy.y, life: 0.36, ring: enemy.r + 18, c: '#ffe66d' });
+    return true;
+  }
+
+  function applyPlayerImpactStun(dealt, appliedKnockback) {
+    if (!player) return false;
+    const stats = getItemStats();
+    const stunResistance = Math.max(0, Number(stats.stunResistance || 0));
+    const thresholdMultiplier = 1 + stunResistance * 0.35;
+    const durationMultiplier = Math.max(0.28, 1 - stunResistance * 0.28);
+    const maxHealth = Number(player.maxHp) || 0;
+    const lostHalfHealth = maxHealth > 0 && dealt >= maxHealth * HEAVY_HIT_HEALTH_RATIO * thresholdMultiplier;
+    const knockbackThreshold = HEAVY_KNOCKBACK_THRESHOLD * thresholdMultiplier;
+    const heavyKnockback = appliedKnockback >= knockbackThreshold;
+    if (!lostHalfHealth && !heavyKnockback) return false;
+    let stunDuration = 0;
+    if (lostHalfHealth) stunDuration = Math.max(stunDuration, HEAVY_HIT_STUN);
+    if (heavyKnockback) {
+      const knockbackOverThreshold = (appliedKnockback - knockbackThreshold) / knockbackThreshold;
+      stunDuration = Math.max(stunDuration, HEAVY_KNOCKBACK_STUN + clamp(knockbackOverThreshold, 0, 1) * 0.18);
+    }
+    player.stun = Math.max(Number(player.stun || 0), stunDuration * durationMultiplier);
+    particles.push({ x: player.x, y: player.y - player.r - 18, life: 0.55, text: 'STUN', c: '#ffe66d' });
+    particles.push({ x: player.x, y: player.y, life: 0.36, ring: player.r + 18, c: '#ffe66d' });
+    return true;
+  }
+
   function hitEnemy(enemy, damage, angle, knockback, color, options = {}) {
     if ((enemy?.inv || 0) > 0) return;
     const stats = getItemStats();
@@ -9162,6 +9348,7 @@
         enemy.vx += Math.cos(angle) * appliedKnockback * 0.35;
         enemy.vy += Math.sin(angle) * appliedKnockback * 0.35;
         enemy.stun = Math.max(enemy.stun, 0.04);
+        applyEnemyImpactStun(enemy, 0, appliedKnockback * 0.35);
         return;
       }
     }
@@ -9169,6 +9356,7 @@
     enemy.vx += Math.cos(angle) * appliedKnockback;
     enemy.vy += Math.sin(angle) * appliedKnockback;
     enemy.stun = Math.max(enemy.stun, 0.08);
+    applyEnemyImpactStun(enemy, dealt, appliedKnockback);
     grantCritCharmBuff();
     particles.push({ x: enemy.x, y: enemy.y, life: 0.24, vx: rand(-30, 30, 'fx'), vy: rand(-30, 30, 'fx'), c: color });
     spawnDamagePopup(enemy.x, enemy.y - 14, dealt, {
@@ -9871,6 +10059,15 @@
       mouse.downQueued = false;
       mouse.rightQueued = false;
     }
+    const playerStunned = Number(player.stun || 0) > 0;
+    if (playerStunned) {
+      moveX = 0;
+      moveY = 0;
+      mouse.down = false;
+      mouse.right = false;
+      mouse.downQueued = false;
+      mouse.rightQueued = false;
+    }
     const moveLength = Math.hypot(moveX, moveY) || 1;
     moveX /= moveLength;
     moveY /= moveLength;
@@ -9881,14 +10078,21 @@
 
     const dashKey = _b ? _b.dash : 'shift';
     const dashHeld = !!keys[dashKey];
-    if (!overlayOpen && dashHeld && !dashKeyLatch) {
+    if (!overlayOpen && !playerStunned && dashHeld && !dashKeyLatch) {
       tryDash(moveX, moveY);
       dashKeyLatch = true;
     } else if (!dashHeld) {
       dashKeyLatch = false;
     }
 
-    if (player.dashTime > 0) {
+    if (playerStunned) {
+      player.dashTime = 0;
+      player.dashX = 0;
+      player.dashY = 0;
+      const friction = Math.pow(0.84, dt * 60);
+      player.vx *= friction;
+      player.vy *= friction;
+    } else if (player.dashTime > 0) {
       player.dashTime = Math.max(0, player.dashTime - dt);
       player.vx = player.dashX;
       player.vy = player.dashY;
@@ -9919,6 +10123,7 @@
     }
 
     player.inv = Math.max(0, player.inv - dt);
+    player.stun = Math.max(0, Number(player.stun || 0) - dt);
     if (player.swing > 0) player.swing = Math.max(0, player.swing - dt);
 
     const _vpW = isSplitScreen() ? canvas.width / 2 : canvas.width;
@@ -10666,6 +10871,12 @@
     const dy = player.y - enemy.y;
     const distance = Math.hypot(dx, dy) || 1;
 
+    enemy.queenMissileCd = Math.max(0, Number(enemy.queenMissileCd || 0) - dt);
+    if (enemy.queenMissileCd <= 0 && distance > 95 && distance < 580 && enemy.stun <= 0) {
+      spawnCultQueenMissile(enemy, tuning);
+      enemy.queenMissileCd = 3.4 * Math.max(0.78, tuning.rangedCadence);
+    }
+
     enemy.summonCd = Math.max(0, enemy.summonCd - dt);
     if (enemy.summonCd <= 0) {
       enemy.summonCd = 4.6 * Math.max(0.74, tuning.rangedCadence);
@@ -10688,6 +10899,34 @@
       damagePlayer(enemy.dmg + 4, Math.atan2(dy, dx), 250, enemy.type);
       enemy.attackCd = 0.95 * tuning.rangedCadence;
     }
+  }
+
+  function spawnCultQueenMissile(enemy, tuning = getEnemyDifficultyTuning()) {
+    if (!enemy || !player) return;
+    const count = tuning.supportPower >= 1.22 ? 2 : 1;
+    const baseAngle = Math.atan2(player.y - enemy.y, player.x - enemy.x);
+    for (let index = 0; index < count; index += 1) {
+      const spread = count === 1 ? 0 : (index === 0 ? -0.22 : 0.22);
+      const angle = baseAngle + spread + (nextRandom('encounter') - 0.5) * 0.24;
+      projectiles.push({
+        x: enemy.x + Math.cos(angle) * (enemy.r + 8),
+        y: enemy.y + Math.sin(angle) * (enemy.r + 8),
+        vx: Math.cos(angle) * 165,
+        vy: Math.sin(angle) * 165,
+        r: 8,
+        life: 2.45,
+        enemy: true,
+        kind: 'cult_missile',
+        damage: Math.round(enemy.dmg * 0.78),
+        knockback: 155,
+        color: '#b455ff',
+        homing: true,
+        homingTurnRate: 2.15 * Math.min(1.24, tuning.reaction),
+        homingSpeed: 235 * Math.min(1.18, tuning.reaction),
+        homingAccel: 3.2,
+      });
+    }
+    particles.push({ x: enemy.x, y: enemy.y - enemy.r - 12, life: 0.55, text: 'MISSILE', c: '#d59bff' });
   }
 
   function updateBulkGolemBoss(enemy, dt) {
@@ -11377,7 +11616,7 @@
       enemy.windup -= dt;
       enemy.vx *= 0.74;
       enemy.vy *= 0.74;
-      if (enemy.state === 'godLaser') aimEnemyBeam(enemy, dt, (0.9 + (tuning.reaction - 1) * 8.0) * reactionMult);
+      if (enemy.state === 'godLaser') aimEnemyBeam(enemy, dt, (0.68 + (tuning.reaction - 1) * 3.6) * reactionMult);
       particles.push({ x: enemy.x, y: enemy.y, life: 0.18, c: '#ffffff' });
       if (enemy.windup <= 0) {
         if (enemy.state === 'godLaser') {
@@ -11411,7 +11650,7 @@
         knockback: isSweep ? (phaseFour ? 260 : 210) : (phaseFour ? 180 : 150),
         damage: isSweep ? enemy.dmg + (phaseFive ? 38 : phaseTwo ? 28 : 18) : enemy.dmg + (phaseFour ? 18 : phaseTwo ? 12 : 6),
         speedDamp: 0.86,
-        turnRate: isSweep ? 0 : (0.6 + (tuning.reaction - 1) * 6.0) * reactionMult,
+        turnRate: isSweep ? 0 : (0.34 + (tuning.reaction - 1) * 2.8) * reactionMult,
         onTick: isSweep
           ? activeEnemy => {
             activeEnemy.beamAngle += activeEnemy.sweepSpeed * 0.045;
@@ -11463,7 +11702,7 @@
       } else if (roll > (phaseFive ? 0.16 : phaseTwo ? 0.26 : 0.42)) {
         enemy.state = 'godLaser';
         enemy.windup = 0.82 / (tuning.reaction * reactionMult);
-        enemy.beamAngle = Math.atan2(dy, dx) + rollEnemyBeamBias(enemy, 0.12);
+        enemy.beamAngle = Math.atan2(dy, dx) + rollEnemyBeamBias(enemy, phaseFour ? 0.24 : phaseTwo ? 0.2 : 0.17);
       } else if (roll > (phaseFour ? 0.04 : phaseTwo ? 0.08 : 0.18)) {
         enemy.state = 'godSwordRing';
         enemy.windup = 0.6 / (tuning.reaction * reactionMult);
@@ -11747,6 +11986,7 @@
       player.inv = 0.75;
       player.vx += Math.cos(angle) * knockback;
       player.vy += Math.sin(angle) * knockback;
+      applyPlayerImpactStun(finalAmount, knockback);
       shake = 8;
       shakeT = 0.15;
     }
@@ -11932,6 +12172,15 @@
       const projectile = projectiles[index];
       if (!projectile) { projectiles.splice(index, 1); continue; }
       projectile.life -= dt;
+      if (projectile.enemy && projectile.homing && player) {
+        const speed = Math.hypot(Number(projectile.vx || 0), Number(projectile.vy || 0)) || Number(projectile.homingSpeed || 180);
+        const targetAngle = Math.atan2(player.y - projectile.y, player.x - projectile.x);
+        const currentAngle = Math.atan2(Number(projectile.vy || 0), Number(projectile.vx || 1));
+        const nextAngle = turnAngleToward(currentAngle, targetAngle, Number(projectile.homingTurnRate || 2) * dt);
+        const nextSpeed = speed + (Number(projectile.homingSpeed || speed) - speed) * Number(projectile.homingAccel || 2.5) * dt;
+        projectile.vx = Math.cos(nextAngle) * nextSpeed;
+        projectile.vy = Math.sin(nextAngle) * nextSpeed;
+      }
       const prevX = projectile.x;
       const prevY = projectile.y;
       projectile.x += projectile.vx * dt;
@@ -11978,7 +12227,7 @@
           continue;
         }
       } else if (dist(projectile.x, projectile.y, player.x, player.y) <= projectile.r + player.r) {
-        damagePlayer(projectile.damage || 10, Math.atan2(projectile.vy, projectile.vx), 120, 'enemy_projectile');
+        damagePlayer(projectile.damage || 10, Math.atan2(projectile.vy, projectile.vx), projectile.knockback || 120, 'enemy_projectile');
         spawnProjectileImpact(projectile, projectile.x, projectile.y);
         projectiles.splice(index, 1);
         continue;
@@ -12844,6 +13093,8 @@
       smashCd: smashSkill.current,
       dashCd: dashSkill.current,
       gameTime: timeStr,
+      difficultyName: getDifficultyDef(selectedDifficulty).name,
+      itemRarityCounts: getItemRarityCounts(player),
       skills: {
         melee: { current: meleeSkill.current, max: meleeSkill.max, active: false, charges: meleeSkill.charges, maxCharges: meleeSkill.maxCharges },
         laser: { current: laserSkill.current, max: laserSkill.max, active: laserActive, charges: laserSkill.charges, maxCharges: laserSkill.maxCharges },
@@ -12888,6 +13139,16 @@
     if (ui.coinCount) ui.coinCount.textContent = player.coins;
     if (ui.timerDisplay) ui.timerDisplay.textContent = timeStr;
     if (ui.floorDisplay) ui.floorDisplay.textContent = floor;
+    if (ui.difficultyDisplay) ui.difficultyDisplay.textContent = getDifficultyDef(selectedDifficulty).name.toUpperCase();
+    if (ui.itemRarityCounts) {
+      const rarityCounts = getItemRarityCounts(player);
+      const white = ui.itemRarityCounts.querySelector('.rarity-count--white');
+      const purple = ui.itemRarityCounts.querySelector('.rarity-count--purple');
+      const red = ui.itemRarityCounts.querySelector('.rarity-count--red');
+      if (white) white.textContent = String(rarityCounts.white);
+      if (purple) purple.textContent = String(rarityCounts.purple);
+      if (red) red.textContent = String(rarityCounts.red);
+    }
     if (ui.challengeStatus && ui.challengeStatusFill) {
       const timedChallengeType = currentRoom
         && currentRoom.type === 'challenge'
@@ -12950,6 +13211,46 @@
     return entry;
   }
 
+  function getReviveCost() {
+    return runRevivesUsed > 0 ? 3 : 1;
+  }
+
+  function canReviveFromDeath() {
+    return gameState === 'dead' && player && currentRoom && Number(metaProgress.loopCrystals || 0) >= getReviveCost();
+  }
+
+  function reviveFromDeath() {
+    if (!canReviveFromDeath()) {
+      particles.push({ x: player?.x ?? START_X, y: (player?.y ?? START_Y) - 28, life: 0.8, text: 'NEED LOOP CRYSTALS', c: '#ff9e9e' });
+      uiController.setDeadScreen(playerDeathAnim?.entry || { floor, level: player?.level || 1, kills: player?.kills || 0, coins: player?.coins || 0, difficulty: selectedDifficulty });
+      return false;
+    }
+    const cost = getReviveCost();
+    metaProgress.loopCrystals = Math.max(0, Number(metaProgress.loopCrystals || 0) - cost);
+    runRevivesUsed += 1;
+    if (lastDeathEntryId) {
+      runHistory = runHistory.filter(entry => entry.id !== lastDeathEntryId);
+      lastDeathEntryId = '';
+    }
+    playerDeathAnim = null;
+    player.hp = Math.max(1, Math.round(player.maxHp * 0.45));
+    player.inv = Math.max(player.inv || 0, 1.5);
+    player.stun = 0;
+    player.vx = 0;
+    player.vy = 0;
+    player.dashTime = 0;
+    projectiles = [];
+    hazards = [];
+    lastDamageSource = '';
+    lastDamageSourceKey = '';
+    setGameState('play');
+    particles.push({ x: player.x, y: player.y - 28, life: 1, text: `REVIVED -${cost} LC`, c: '#8dd4ff' });
+    persistMetaSoon();
+    scheduleRunSave();
+    updateHud();
+    return true;
+  }
+
   function die() {
     if (gameState === 'dying' || gameState === 'dead') return;
     if (gameMode === 'pvp' && pvpState) return;
@@ -12961,6 +13262,7 @@
     if (player) player.hp = 0;
     updateHud();
     const entry = finalizeRun('dead', { killedBy: lastDamageSource, killerKey: lastDamageSourceKey });
+    lastDeathEntryId = entry.id;
     const aimAngle = player ? Math.atan2(mouse.worldY - player.y, mouse.worldX - player.x) : 0;
     playerDeathAnim = {
       timer: 0,
@@ -13063,9 +13365,11 @@
 
   function serializeRun() {
     return {
+      mode: normalizeGameMode(gameMode),
       baseSeedStr,
       seedStr,
       runLoopIndex,
+      runRevivesUsed,
       rngState: getRngState(),
       difficulty: selectedDifficulty,
       challenges: normalizeChallengeSelection(selectedChallenges),
@@ -13073,6 +13377,14 @@
       rooms,
       currentRoom: { gx: currentRoom.gx, gy: currentRoom.gy },
       player,
+      player2: isMultiplayerMode() ? player2 : null,
+      player3: isMultiplayerMode() ? player3 : null,
+      player4: isMultiplayerMode() ? player4 : null,
+      p1DeadInCoop,
+      p2DeadInCoop,
+      p3DeadInCoop,
+      p4DeadInCoop,
+      pvpState: gameMode === 'pvp' && pvpState ? { ...pvpState, respawnTimer: null } : null,
       enemies,
       deadBodies,
       projectiles,
@@ -13127,9 +13439,9 @@
     drawEnemyTelegraphs();
     drawEnemies();
     if (!isDying) drawPlayer();
-    if (!isDying && player2 && !p2DeadInCoop) drawPlayer2();
-    if (!isDying && player3 && !p3DeadInCoop) drawPlayerN(player3, chosenCharacter3, '#8aff8a', 'P3');
-    if (!isDying && player4 && !p4DeadInCoop) drawPlayerN(player4, chosenCharacter4, '#ffd080', 'P4');
+    if (!isDying && isMultiplayerMode() && player2 && !p2DeadInCoop) drawPlayer2();
+    if (!isDying && isMultiplayerMode() && player3 && !p3DeadInCoop) drawPlayerN(player3, chosenCharacter3, '#8aff8a', 'P3');
+    if (!isDying && isMultiplayerMode() && player4 && !p4DeadInCoop) drawPlayerN(player4, chosenCharacter4, '#ffd080', 'P4');
     if (!isDying) drawPlayerLaser();
     if (isDying && playerDeathAnim) drawPlayerCorpseAnim(playerDeathAnim);
     drawParticles();
@@ -14556,6 +14868,7 @@
       if (kind === 'sword' || kind === 'god_sword') return { color: '#f6f1ff', core: '#ffffff', trail: '#d8c7ff', shape: 'blade', length: 28 };
       if (kind === 'sniper_round') return { color: '#ff5d72', core: '#ffe1e6', trail: '#ff314d', shape: 'dart', length: 34 };
       if (kind === 'machine_round') return { color: '#ffb35a', core: '#fff1ba', trail: '#ff6738', shape: 'tracer', length: 22 };
+      if (kind === 'cult_missile') return { color: '#b455ff', core: '#f2ddff', trail: '#7d39ff', shape: 'orb', length: 30 };
       return { color: projectile.color || '#ff6688', core: '#ffe4eb', trail: projectile.color || '#ff6688', shape: 'dart', length: 24 };
     }
     if (kind === 'fireball') return { color: '#ff7b32', core: '#fff1a6', trail: '#ff2f17', shape: 'fireball', length: 30 };
@@ -15563,7 +15876,7 @@
       ctx.restore();
     });
     drawSpriteFrame(getPlayerSpriteKey(), player.x, player.y, Math.max(34, player.r * 2.5), {
-      alpha: (!_reduceFlash && player.inv > 0) ? 0.68 : 1,
+      alpha: (!_reduceFlash && (player.inv > 0 || Number(player.stun || 0) > 0)) ? 0.68 : 1,
       flipX: facing < 0,
       shadowColor,
       shadowBlur: godTimer > 0 ? 18 : 6,
@@ -17151,10 +17464,18 @@
         if (view.practiceEnemyGrid) buildPracticeEnemyGrid();
         menuBound = true;
       },
-      bindRestartActions(onRestart) {
+      bindRestartActions(actions) {
         if (restartBound) return;
-        view.deadRestart?.addEventListener('click', onRestart);
-        view.winRestart?.addEventListener('click', onRestart);
+        const defaultRestart = typeof actions === 'function' ? actions : actions?.onWinRestart;
+        view.deadRestart?.addEventListener('click', defaultRestart);
+        view.winRestart?.addEventListener('click', defaultRestart);
+        view.deadActions?.forEach(button => {
+          button.addEventListener('click', () => {
+            const action = button.dataset.deadAction || 'retry-current';
+            if (typeof actions === 'function') actions();
+            else actions?.onDeadAction?.(action);
+          });
+        });
         restartBound = true;
       },
       playDialogue(lines, options) {
@@ -17404,6 +17725,15 @@
         view.lv.textContent = payload.level;
         view.xp.textContent = payload.xpText;
         if (view.gameTime) view.gameTime.textContent = payload.gameTime;
+        if (view.difficultyDisplay) view.difficultyDisplay.textContent = String(payload.difficultyName || '').toUpperCase();
+        if (view.itemRarityCounts && payload.itemRarityCounts) {
+          const white = view.itemRarityCounts.querySelector('.rarity-count--white');
+          const purple = view.itemRarityCounts.querySelector('.rarity-count--purple');
+          const red = view.itemRarityCounts.querySelector('.rarity-count--red');
+          if (white) white.textContent = String(payload.itemRarityCounts.white || 0);
+          if (purple) purple.textContent = String(payload.itemRarityCounts.purple || 0);
+          if (red) red.textContent = String(payload.itemRarityCounts.red || 0);
+        }
         view.coins.textContent = payload.coins;
         view.charName.textContent = payload.character;
         view.hpFill.style.width = `${Math.max(0, payload.hp / payload.maxHp) * 100}%`;
@@ -17441,6 +17771,14 @@
         if (view.deadTime) view.deadTime.textContent = fmtTime(entry.elapsedSeconds || 0);
         if (view.deadCoins) view.deadCoins.textContent = fmt(entry.coins);
         if (view.deadDifficulty) view.deadDifficulty.textContent = (entry.difficultyName || entry.difficulty || '—').toUpperCase();
+        const reviveButton = view.deadActions?.find(button => button.dataset.deadAction === 'revive');
+        if (reviveButton) {
+          const cost = getReviveCost();
+          const crystals = Number(metaProgress.loopCrystals || 0);
+          reviveButton.textContent = `REVIVE ${cost} LC`;
+          reviveButton.disabled = crystals < cost;
+          reviveButton.title = crystals < cost ? `Need ${cost} Loop Crystal${cost === 1 ? '' : 's'}` : `Spend ${cost} Loop Crystal${cost === 1 ? '' : 's'} to revive`;
+        }
         if (view.deadItems) {
           view.deadItems.innerHTML = '';
           const items = Array.isArray(entry.items) ? entry.items : [];
