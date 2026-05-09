@@ -36,6 +36,31 @@
   const PROJECTILE_TRAIL_LENGTH = 6;
   const AOE_SHOCKWAVE_LIFE = 0.36;
   const ENV_TILE_SIZE = 48;
+  const LIGHTING_CONFIG = {
+    clearRoomTypes: new Set(['start', 'shop', 'anvil', 'secret']),
+    darkness: {
+      combat: 0.1,
+      challenge: 0.16,
+      boss: 0.1,
+      minVisible: 0.05,
+      lightRelief: 0.12,
+    },
+    ambient: {
+      inner: 210,
+      outerScale: 1.08,
+      strength: 0.5,
+      bossStrength: 0.5,
+      tint: 'rgba(126, 165, 226, 0.08)',
+    },
+    player: {
+      inner: 128,
+      outer: 660,
+      strength: 2.16,
+      tint: 'rgba(155, 212, 255, 0.12)',
+    },
+    maxLights: 34,
+    maxOuterRadius: 700,
+  };
   const ENEMY_SCALING = {
     floor: 0.14,
     loop: 0.32,
@@ -1206,6 +1231,7 @@
     pauseResume: document.getElementById('pauseResume'),
     pauseSettings: document.getElementById('pauseSettings'),
     pauseMain: document.getElementById('pauseMain'),
+    interactPrompt: document.getElementById('interactPrompt'),
     actionBar: document.getElementById('actionBar'),
     adapterStatus: document.getElementById('adapterStatus'),
     adapterStatusIcon: document.getElementById('adapterStatusIcon'),
@@ -1290,6 +1316,10 @@
     runHistoryViewTabs: [...document.querySelectorAll('#runHistoryPanel .rh-view-tab')],
     achievementsList: document.getElementById('achievementsList'),
     rhProfilePanel: document.getElementById('rhProfilePanel'),
+    rhInfoPanel: document.getElementById('rhInfoPanel'),
+    rhInfoContent: document.getElementById('rhInfoContent'),
+    rhInfoTabs: [...document.querySelectorAll('#rhInfoPanel .rh-info-tab')],
+    infoTutorialBtn: document.getElementById('infoTutorialBtn'),
     rhBankCoins: document.getElementById('rhBankCoins'),
     rhLoopCount: document.getElementById('rhLoopCount'),
     rhBestFloor: document.getElementById('rhBestFloor'),
@@ -4887,6 +4917,7 @@
     if (ui.timerFloorSlot) ui.timerFloorSlot.style.display = isBossRush ? 'none' : '';
     if (ui.timerBossSlot) ui.timerBossSlot.style.display = isBossRush ? '' : 'none';
     if (nextState !== 'pause') document.body.classList.remove('game-paused');
+    if (nextState !== 'play' && ui.interactPrompt) ui.interactPrompt.classList.add('hidden');
     if (nextState !== 'play') {
       setShopPanelOpen(false);
       setInventoryPanelOpen(false);
@@ -5560,6 +5591,14 @@
       }
     }
 
+    if ((room.type === 'combat' || room.type === 'boss') && nextRandom('world') < (room.type === 'boss' ? 0.45 : 0.32)) {
+      const trapCount = room.type === 'boss' ? 2 : (nextRandom('world') < 0.45 ? 2 : 1);
+      for (let index = 0; index < trapCount; index += 1) {
+        const trap = createExplosiveTrapHazard(room, index);
+        if (trap) room.hazards.push(trap);
+      }
+    }
+
     if (nextRandom('world') < 0.3 && room.type !== 'shop' && room.type !== 'god' && room.type !== 'challenge') {
       const wallX = nextRandom('world') < 0.5 ? 76 : ROOM_W - 76;
       const hiddenX = wallX < ROOM_W / 2 ? 48 : ROOM_W - 48;
@@ -5613,42 +5652,209 @@
   }
 
   function decorateRoomStructures(room) {
-    const theme = nextRandom('world');
-    if (theme < 0.34) {
-      room.structures.push(
-        { kind: 'pillar', x: ROOM_W / 2 - 120, y: ROOM_H / 2 - 90, w: 34, h: 34 },
-        { kind: 'pillar', x: ROOM_W / 2 + 120, y: ROOM_H / 2 - 90, w: 34, h: 34 },
-        { kind: 'pillar', x: ROOM_W / 2 - 120, y: ROOM_H / 2 + 90, w: 34, h: 34 },
-        { kind: 'pillar', x: ROOM_W / 2 + 120, y: ROOM_H / 2 + 90, w: 34, h: 34 },
-      );
+    const addWall = (x, y, w, h) => {
+      const reinforced = nextRandom('world') < 0.24;
+      room.destructibles.push({
+        kind: 'cover_wall',
+        x,
+        y,
+        w,
+        h,
+        r: Math.hypot(w, h) / 2,
+        hp: reinforced ? 12 : 4,
+        maxHp: reinforced ? 12 : 4,
+        reinforced,
+        broken: false,
+      });
+    };
+    const addPillar = (x, y, size = 34) => {
+      room.structures.push({ kind: 'pillar', x, y, w: size, h: size });
+    };
+    const setChambers = (...chambers) => {
+      room.layoutChambers = chambers.map(chamber => ({
+        x: chamber.x,
+        y: chamber.y,
+        w: chamber.w,
+        h: chamber.h,
+      }));
+    };
+    const addDoorFrames = () => {
+      const edgeInset = WALL + 52;
+      const pocketInset = DOOR / 2 + 48;
+      const addTorch = (x, y) => {
+        room.decorations.push({ kind: 'torch', x, y, r: 12 });
+      };
+      if (room.doors.n) {
+        addWall(ROOM_W / 2 - pocketInset, edgeInset, 28, 56);
+        addWall(ROOM_W / 2 + pocketInset, edgeInset, 28, 56);
+        room.decorations.push(
+          { kind: 'banner', x: ROOM_W / 2 - pocketInset, y: edgeInset - 42, r: 12 },
+          { kind: 'banner', x: ROOM_W / 2 + pocketInset, y: edgeInset - 42, r: 12 },
+        );
+        addTorch(ROOM_W / 2 - pocketInset - 26, edgeInset - 4);
+        addTorch(ROOM_W / 2 + pocketInset + 26, edgeInset - 4);
+      }
+      if (room.doors.s) {
+        addWall(ROOM_W / 2 - pocketInset, ROOM_H - edgeInset, 28, 56);
+        addWall(ROOM_W / 2 + pocketInset, ROOM_H - edgeInset, 28, 56);
+        room.decorations.push({ kind: 'crack', x: ROOM_W / 2, y: ROOM_H - edgeInset + 34, r: 22 });
+        addTorch(ROOM_W / 2 - pocketInset - 26, ROOM_H - edgeInset + 4);
+        addTorch(ROOM_W / 2 + pocketInset + 26, ROOM_H - edgeInset + 4);
+      }
+      if (room.doors.w) {
+        addWall(edgeInset, ROOM_H / 2 - pocketInset, 56, 28);
+        addWall(edgeInset, ROOM_H / 2 + pocketInset, 56, 28);
+        room.decorations.push({ kind: 'brazier', x: edgeInset + 28, y: ROOM_H / 2, r: 14 });
+        addTorch(edgeInset - 6, ROOM_H / 2 - pocketInset - 28);
+        addTorch(edgeInset - 6, ROOM_H / 2 + pocketInset + 28);
+      }
+      if (room.doors.e) {
+        addWall(ROOM_W - edgeInset, ROOM_H / 2 - pocketInset, 56, 28);
+        addWall(ROOM_W - edgeInset, ROOM_H / 2 + pocketInset, 56, 28);
+        room.decorations.push({ kind: 'brazier', x: ROOM_W - edgeInset - 28, y: ROOM_H / 2, r: 14 });
+        addTorch(ROOM_W - edgeInset + 6, ROOM_H / 2 - pocketInset - 28);
+        addTorch(ROOM_W - edgeInset + 6, ROOM_H / 2 + pocketInset + 28);
+      }
+    };
+    const pickCombatArchetype = () => {
+      const pool = ['pillar_ring', 'split_cross', 'side_lanes', 'gate_room', 'broken_halls'];
+      return pool[irand(0, pool.length - 1, 'world')];
+    };
+    const pickBossArchetype = () => {
+      const pool = ['boss_buttresses', 'boss_crossfire', 'boss_processional'];
+      return pool[irand(0, pool.length - 1, 'world')];
+    };
+
+    room.layoutArchetype = room.type === 'boss' ? pickBossArchetype() : pickCombatArchetype();
+    room.layoutChambers = [];
+    addDoorFrames();
+
+    if (room.layoutArchetype === 'pillar_ring') {
+      addPillar(ROOM_W / 2 - 150, ROOM_H / 2 - 104, 36);
+      addPillar(ROOM_W / 2 + 150, ROOM_H / 2 - 104, 36);
+      addPillar(ROOM_W / 2 - 150, ROOM_H / 2 + 104, 36);
+      addPillar(ROOM_W / 2 + 150, ROOM_H / 2 + 104, 36);
+      addPillar(ROOM_W / 2, ROOM_H / 2 - 138, 28);
+      addPillar(ROOM_W / 2, ROOM_H / 2 + 138, 28);
       room.decorations.push(
-        { kind: 'rubble', x: ROOM_W / 2, y: ROOM_H / 2 - 130, r: 22 },
-        { kind: 'rubble', x: ROOM_W / 2, y: ROOM_H / 2 + 130, r: 22 },
+        { kind: 'rubble', x: ROOM_W / 2 - 54, y: ROOM_H / 2, r: 24 },
+        { kind: 'rubble', x: ROOM_W / 2 + 54, y: ROOM_H / 2, r: 24 },
+      );
+      setChambers({ x: ROOM_W / 2, y: ROOM_H / 2, w: ROOM_W - 240, h: ROOM_H - 220 });
+      return;
+    }
+
+    if (room.layoutArchetype === 'split_cross') {
+      addWall(ROOM_W / 2, ROOM_H / 2 - 136, 74, 92);
+      addWall(ROOM_W / 2, ROOM_H / 2 + 136, 74, 92);
+      addWall(ROOM_W / 2 - 182, ROOM_H / 2, 94, 58);
+      addWall(ROOM_W / 2 + 182, ROOM_H / 2, 94, 58);
+      room.decorations.push(
+        { kind: 'brazier', x: ROOM_W / 2 - 102, y: ROOM_H / 2 - 84, r: 16 },
+        { kind: 'brazier', x: ROOM_W / 2 + 102, y: ROOM_H / 2 + 84, r: 16 },
+        { kind: 'crack', x: ROOM_W / 2, y: ROOM_H / 2, r: 28 },
+      );
+      setChambers(
+        { x: ROOM_W / 2, y: ROOM_H / 2 - 150, w: 240, h: 150 },
+        { x: ROOM_W / 2, y: ROOM_H / 2 + 150, w: 240, h: 150 },
+        { x: ROOM_W / 2 - 210, y: ROOM_H / 2, w: 180, h: 180 },
+        { x: ROOM_W / 2 + 210, y: ROOM_H / 2, w: 180, h: 180 },
       );
       return;
     }
 
-    if (theme < 0.68) {
-      room.structures.push(
-        { kind: 'wall', x: ROOM_W / 2 - 140, y: ROOM_H / 2 - 24, w: 92, h: 48 },
-        { kind: 'wall', x: ROOM_W / 2 + 140, y: ROOM_H / 2 - 24, w: 92, h: 48 },
-      );
+    if (room.layoutArchetype === 'side_lanes') {
+      addWall(ROOM_W / 2, ROOM_H / 2 - 124, 228, 46);
+      addWall(ROOM_W / 2, ROOM_H / 2 + 124, 228, 46);
+      addPillar(ROOM_W / 2 - 242, ROOM_H / 2, 30);
+      addPillar(ROOM_W / 2 + 242, ROOM_H / 2, 30);
       room.decorations.push(
-        { kind: 'banner', x: ROOM_W / 2 - 140, y: ROOM_H / 2 - 70, r: 14 },
-        { kind: 'banner', x: ROOM_W / 2 + 140, y: ROOM_H / 2 - 70, r: 14 },
-        { kind: 'crack', x: ROOM_W / 2, y: ROOM_H / 2 + 80, r: 30 },
+        { kind: 'banner', x: ROOM_W / 2 - 188, y: ROOM_H / 2 - 166, r: 14 },
+        { kind: 'banner', x: ROOM_W / 2 + 188, y: ROOM_H / 2 + 166, r: 14 },
+      );
+      setChambers(
+        { x: ROOM_W / 2 - 238, y: ROOM_H / 2, w: 170, h: ROOM_H - 220 },
+        { x: ROOM_W / 2 + 238, y: ROOM_H / 2, w: 170, h: ROOM_H - 220 },
+        { x: ROOM_W / 2, y: ROOM_H / 2, w: 220, h: 180 },
       );
       return;
     }
 
-    room.structures.push(
-      { kind: 'wall', x: ROOM_W / 2 - 36, y: ROOM_H / 2 - 150, w: 72, h: 88 },
-      { kind: 'wall', x: ROOM_W / 2 - 36, y: ROOM_H / 2 + 62, w: 72, h: 88 },
-    );
+    if (room.layoutArchetype === 'gate_room') {
+      addWall(ROOM_W / 2 - 172, ROOM_H / 2 - 38, 108, 52);
+      addWall(ROOM_W / 2 + 172, ROOM_H / 2 - 38, 108, 52);
+      addWall(ROOM_W / 2, ROOM_H / 2 + 148, 86, 82);
+      addPillar(ROOM_W / 2 - 62, ROOM_H / 2 + 34, 28);
+      addPillar(ROOM_W / 2 + 62, ROOM_H / 2 + 34, 28);
+      room.decorations.push(
+        { kind: 'brazier', x: ROOM_W / 2 - 130, y: ROOM_H / 2 + 112, r: 15 },
+        { kind: 'brazier', x: ROOM_W / 2 + 130, y: ROOM_H / 2 + 112, r: 15 },
+        { kind: 'crack', x: ROOM_W / 2, y: ROOM_H / 2 - 104, r: 32 },
+      );
+      setChambers(
+        { x: ROOM_W / 2, y: ROOM_H / 2 - 146, w: ROOM_W - 300, h: 150 },
+        { x: ROOM_W / 2 - 200, y: ROOM_H / 2 + 40, w: 180, h: 220 },
+        { x: ROOM_W / 2 + 200, y: ROOM_H / 2 + 40, w: 180, h: 220 },
+      );
+      return;
+    }
+
+    if (room.layoutArchetype === 'broken_halls') {
+      addWall(ROOM_W / 2 - 96, ROOM_H / 2 - 150, 84, 74);
+      addWall(ROOM_W / 2 + 118, ROOM_H / 2 - 36, 104, 54);
+      addWall(ROOM_W / 2 - 148, ROOM_H / 2 + 112, 122, 46);
+      addPillar(ROOM_W / 2 + 186, ROOM_H / 2 + 138, 32);
+      room.decorations.push(
+        { kind: 'rubble', x: ROOM_W / 2 - 20, y: ROOM_H / 2 + 10, r: 26 },
+        { kind: 'crack', x: ROOM_W / 2 + 132, y: ROOM_H / 2 - 132, r: 28 },
+        { kind: 'banner', x: ROOM_W / 2 - 170, y: ROOM_H / 2 - 180, r: 12 },
+      );
+      setChambers(
+        { x: ROOM_W / 2 - 150, y: ROOM_H / 2 - 118, w: 240, h: 170 },
+        { x: ROOM_W / 2 + 172, y: ROOM_H / 2 - 8, w: 200, h: 180 },
+        { x: ROOM_W / 2 - 36, y: ROOM_H / 2 + 170, w: 320, h: 130 },
+      );
+      return;
+    }
+
+    if (room.layoutArchetype === 'boss_buttresses') {
+      addWall(ROOM_W / 2 - 220, ROOM_H / 2, 64, 184);
+      addWall(ROOM_W / 2 + 220, ROOM_H / 2, 64, 184);
+      addPillar(ROOM_W / 2 - 84, ROOM_H / 2 - 126, 30);
+      addPillar(ROOM_W / 2 + 84, ROOM_H / 2 - 126, 30);
+      room.decorations.push(
+        { kind: 'brazier', x: ROOM_W / 2 - 220, y: ROOM_H / 2 - 136, r: 17 },
+        { kind: 'brazier', x: ROOM_W / 2 + 220, y: ROOM_H / 2 - 136, r: 17 },
+      );
+      setChambers({ x: ROOM_W / 2, y: ROOM_H / 2, w: ROOM_W - 220, h: ROOM_H - 170 });
+      return;
+    }
+
+    if (room.layoutArchetype === 'boss_crossfire') {
+      addWall(ROOM_W / 2, ROOM_H / 2 - 162, 68, 70);
+      addWall(ROOM_W / 2, ROOM_H / 2 + 162, 68, 70);
+      addPillar(ROOM_W / 2 - 188, ROOM_H / 2, 34);
+      addPillar(ROOM_W / 2 + 188, ROOM_H / 2, 34);
+      room.decorations.push(
+        { kind: 'crack', x: ROOM_W / 2 - 128, y: ROOM_H / 2, r: 26 },
+        { kind: 'crack', x: ROOM_W / 2 + 128, y: ROOM_H / 2, r: 26 },
+      );
+      setChambers({ x: ROOM_W / 2, y: ROOM_H / 2, w: ROOM_W - 240, h: ROOM_H - 210 });
+      return;
+    }
+
+    addWall(ROOM_W / 2 - 160, ROOM_H / 2 + 118, 116, 46);
+    addWall(ROOM_W / 2 + 160, ROOM_H / 2 + 118, 116, 46);
+    addPillar(ROOM_W / 2 - 74, ROOM_H / 2 - 64, 32);
+    addPillar(ROOM_W / 2 + 74, ROOM_H / 2 - 64, 32);
     room.decorations.push(
-      { kind: 'brazier', x: ROOM_W / 2 - 90, y: ROOM_H / 2, r: 18 },
-      { kind: 'brazier', x: ROOM_W / 2 + 90, y: ROOM_H / 2, r: 18 },
-      { kind: 'crack', x: ROOM_W / 2, y: ROOM_H / 2, r: 24 },
+      { kind: 'banner', x: ROOM_W / 2, y: ROOM_H / 2 - 186, r: 14 },
+      { kind: 'brazier', x: ROOM_W / 2 - 148, y: ROOM_H / 2 - 10, r: 16 },
+      { kind: 'brazier', x: ROOM_W / 2 + 148, y: ROOM_H / 2 - 10, r: 16 },
+    );
+    setChambers(
+      { x: ROOM_W / 2, y: ROOM_H / 2 - 96, w: ROOM_W - 260, h: 180 },
+      { x: ROOM_W / 2, y: ROOM_H / 2 + 176, w: ROOM_W - 220, h: 140 },
     );
   }
 
@@ -5834,11 +6040,55 @@
     return companion;
   }
 
+  function createExplosiveTrapHazard(room, index = 0) {
+    const structuresList = Array.isArray(room?.structures) ? room.structures : [];
+    const destructibleList = Array.isArray(room?.destructibles) ? room.destructibles : [];
+    const chambers = Array.isArray(room?.layoutChambers) && room.layoutChambers.length
+      ? room.layoutChambers
+      : [{ x: ROOM_W / 2, y: ROOM_H / 2, w: ROOM_W - 260, h: ROOM_H - 240 }];
+    const radius = 16;
+    const collides = (x, y) => {
+      if (x < WALL + radius + 12 || x > ROOM_W - WALL - radius - 12) return true;
+      if (y < WALL + radius + 12 || y > ROOM_H - WALL - radius - 12) return true;
+      if (Math.hypot(x - START_X, y - START_Y) < 78) return true;
+      if (structuresList.some(structure => circleRect(x, y, radius + 6, structure.x - structure.w / 2, structure.y - structure.h / 2, structure.w, structure.h))) return true;
+      if (destructibleList.some(prop => !prop.broken && !prop.hidden && destructibleIntersectsCircle(prop, x, y, radius + 4))) return true;
+      if (Array.isArray(room.hazards) && room.hazards.some(hazard => hazard?.kind === 'explosive_trap' && dist(x, y, hazard.x, hazard.y) < radius + (hazard.r || 16) + 58)) return true;
+      return false;
+    };
+
+    for (let attempt = 0; attempt < 18; attempt += 1) {
+      const chamber = chambers[(index + attempt) % chambers.length] || chambers[0];
+      const halfW = Math.max(40, chamber.w / 2 - 28);
+      const halfH = Math.max(40, chamber.h / 2 - 28);
+      const x = clamp(chamber.x + rand(halfW, -halfW, 'world'), WALL + radius + 12, ROOM_W - WALL - radius - 12);
+      const y = clamp(chamber.y + rand(halfH, -halfH, 'world'), WALL + radius + 12, ROOM_H - WALL - radius - 12);
+      if (collides(x, y)) continue;
+      return {
+        kind: 'explosive_trap',
+        x,
+        y,
+        r: radius,
+        triggerRadius: 34,
+        blastRadius: room.type === 'boss' ? 104 : 88,
+        damage: room.type === 'boss' ? 26 + floor * 1.5 : 18 + floor * 1.2,
+        fuse: 0,
+        fuseDuration: room.type === 'boss' ? 0.62 : 0.78,
+        triggered: false,
+        sparkTick: 0,
+      };
+    }
+
+    return null;
+  }
+
   function createRoomRecord(position, overrides = {}) {
     return {
       gx: position.x,
       gy: position.y,
       type: 'combat',
+      layoutArchetype: 'open',
+      layoutChambers: [],
       doors: { n: false, s: false, e: false, w: false },
       secretPassages: {},
       secret: false,
@@ -6778,7 +7028,9 @@
       const liveEnemy = enemies.find(e => e.type === 'rival' && e.rivalData === rival);
       if (liveEnemy) {
         rival.hp = liveEnemy.hp;
-        if (liveEnemy.hp < rival.hpSnapshot) {
+        const prevSnapshot = rival.hpSnapshot;
+        rival.hpSnapshot = liveEnemy.hp;
+        if (liveEnemy.hp < prevSnapshot) {
           if (rival.memory) {
             rival.memory.playerHitsTaken += 1;
             rival.memory.threat += 0.34;
@@ -6788,7 +7040,6 @@
           rival.lastKnownPlayerGy = currentRoom.gy;
           awardRivalXp(rival, 9, 'combat');
         }
-        rival.hpSnapshot = liveEnemy.hp;
       }
       if (rival.memory) {
         rival.memory.threat = Math.max(0, rival.memory.threat - dt * 0.03);
@@ -7041,13 +7292,8 @@
     }));
     destructibles.forEach(prop => {
       if (prop.broken || prop.hidden) return;
-      if (prop.kind !== 'wall' && prop.kind !== 'secret_wall') return;
-      obstacleRects.push({
-        x: prop.x - prop.r,
-        y: prop.y - prop.r,
-        w: prop.r * 2,
-        h: prop.r * 2,
-      });
+      if (prop.kind !== 'wall' && prop.kind !== 'secret_wall' && prop.kind !== 'cover_wall') return;
+      obstacleRects.push(getDestructibleRect(prop));
     });
     return obstacleRects;
   }
@@ -7726,9 +7972,24 @@
   function getMirrorChampionStats() {
     const attackSpeed = getAttackSpeedValue();
     const itemStats = getItemStats();
-    const meleeDamage = Math.round(getPlayerBaseDamage());
-    const beamDamage = Math.round(ATTACKS.laser.damage + (player?.attackPower || 0) * 0.45);
-    const smashDamage = Math.round(ATTACKS.smash.damage + (player?.attackPower || 0) * 0.9);
+    const equippedMoves = { ...(player?.equippedMoves || getDefaultMovesForCharacter(player?.character || chosenCharacter)) };
+    const meleeMove = equippedMoves.melee || 'slash';
+    const laserMove = equippedMoves.laser || 'blood_beam';
+    const smashMove = equippedMoves.smash || 'crimson_smash';
+    const dashMove = equippedMoves.dash || 'dash';
+    const mirrorCooldownMultiplier = 0.82;
+    const weaponKey = player?.equippedWeapon || '';
+    const weaponStats = weaponKey ? {
+      damage: Math.max(1, Math.round((WEAPON_BASE_STATS[weaponKey]?.damage ?? getPlayerBaseDamage()) + getAnvilWeaponBonus(weaponKey, 'damage'))),
+      range: Math.max(40, Math.round((WEAPON_BASE_STATS[weaponKey]?.range ?? ATTACKS.melee.range) + getAnvilWeaponBonus(weaponKey, 'range'))),
+      knockback: Math.max(0, Math.round((WEAPON_BASE_STATS[weaponKey]?.knockback ?? ATTACKS.melee.push) + getAnvilWeaponBonus(weaponKey, 'knockback'))),
+      cooldown: Math.max(0.12, getWeaponBaseCooldown(weaponKey) * mirrorCooldownMultiplier),
+    } : null;
+    const meleeDamage = weaponStats
+      ? weaponStats.damage
+      : Math.round((MOVE_BASE_STATS[meleeMove]?.damage ?? getPlayerBaseDamage()) + getAnvilMoveBonus(meleeMove, 'damage') + (player?.attackPower || 0) * 0.35);
+    const beamDamage = Math.round((MOVE_BASE_STATS[laserMove]?.damage ?? ATTACKS.laser.damage) + getAnvilMoveBonus(laserMove, 'damage') + (player?.attackPower || 0) * 0.45);
+    const smashDamage = Math.round((MOVE_BASE_STATS[smashMove]?.damage ?? ATTACKS.smash.damage) + getAnvilMoveBonus(smashMove, 'damage') + (player?.attackPower || 0) * 0.9);
     const moveSpeed = Math.round(228 * (itemStats.moveSpeedMultiplier || 1));
     return {
       hp: Math.max(90, Math.round(player.maxHp)),
@@ -7738,6 +7999,15 @@
       speed: Math.max(108, moveSpeed),
       attackCd: Math.max(0.22, 0.56 / attackSpeed),
       attackSpeed,
+      equippedMoves,
+      equippedWeapon: weaponKey,
+      weaponStats,
+      mirrorCooldowns: {
+        melee: weaponStats ? weaponStats.cooldown : Math.max(0.18, getMeleeCooldownDuration(meleeMove, attackSpeed) * mirrorCooldownMultiplier),
+        laser: Math.max(0.75, getLaserCooldownDuration(laserMove, attackSpeed) * mirrorCooldownMultiplier),
+        smash: Math.max(1.1, getSmashCooldownDuration(attackSpeed) * mirrorCooldownMultiplier),
+        dash: Math.max(0.55, getDashCooldownDuration(dashMove, attackSpeed) * mirrorCooldownMultiplier),
+      },
       spriteKey: player.character,
     };
   }
@@ -7787,9 +8057,13 @@
       dark_drainImmune: false,
       state: 'idle',
       spriteKey: stats.spriteKey,
-      mirrorLaserCd: Math.max(1.4, 4.2 / stats.attackSpeed),
-      mirrorSmashCd: Math.max(2.2, 5.4 / stats.attackSpeed),
-      mirrorDashCd: Math.max(0.9, 1.8 / stats.attackSpeed),
+      mirrorMoves: stats.equippedMoves,
+      mirrorWeapon: stats.equippedWeapon,
+      mirrorWeaponStats: stats.weaponStats,
+      mirrorCooldowns: stats.mirrorCooldowns,
+      mirrorLaserCd: Math.max(0.55, stats.mirrorCooldowns.laser * 0.45),
+      mirrorSmashCd: Math.max(0.8, stats.mirrorCooldowns.smash * 0.55),
+      mirrorDashCd: Math.max(0.45, stats.mirrorCooldowns.dash * 0.4),
     };
     enemies.push(mirror);
     particles.push({ x: mirror.x, y: mirror.y - 28, life: 1, text: 'MIRROR CHAMPION', c: '#d7f6ff' });
@@ -8640,7 +8914,7 @@
         hitEnemy(target, 9, hitSegment?.angle ?? angle, 80, '#cda8ff', { fireChance: 0.05, fireStacks: 1, fireDuration: 3 });
       }
       destructibles.forEach(prop => {
-        if (!prop.broken && !prop.hidden && beamPathHitsCircle(beamPath, prop.x, prop.y, prop.r + 4)) {
+        if (!prop.broken && !prop.hidden && beamPathHitsDestructible(beamPath, prop, 4)) {
           damageDestructible(prop, 1);
         }
       });
@@ -8835,7 +9109,7 @@
         if (move === 'blood_beam' && rng() < 0.08) applyDarkDrain(enemy, 1, 3.4);
       }
       destructibles.forEach(prop => {
-        if (!prop.broken && !prop.hidden && beamPathHitsCircle(beamPath, prop.x, prop.y, prop.r + 4)) {
+        if (!prop.broken && !prop.hidden && beamPathHitsDestructible(beamPath, prop, 4)) {
           damageDestructible(prop, 1);
         }
       });
@@ -11414,6 +11688,267 @@
     }
   }
 
+  function getMirrorMove(enemy, slot) {
+    const fallback = slot === 'melee' ? 'slash' : slot === 'laser' ? 'blood_beam' : slot === 'smash' ? 'crimson_smash' : 'dash';
+    const key = enemy?.mirrorMoves?.[slot] || fallback;
+    return MOVE_DEFS[key]?.slot === slot ? key : fallback;
+  }
+
+  function getMirrorSkillCooldown(enemy, slot) {
+    const cooldowns = enemy?.mirrorCooldowns || {};
+    if (Number.isFinite(cooldowns[slot])) return Math.max(0.12, cooldowns[slot]);
+    const attackSpeed = Math.max(0.5, enemy?.attackSpeed || 1);
+    if (slot === 'laser') return Math.max(0.75, 3.2 / attackSpeed);
+    if (slot === 'smash') return Math.max(1.1, 4.2 / attackSpeed);
+    if (slot === 'dash') return Math.max(0.55, 1.8 / attackSpeed);
+    return Math.max(0.18, 0.42 / attackSpeed);
+  }
+
+  function getMirrorMoveDamage(enemy, moveKey, fallback) {
+    const base = MOVE_BASE_STATS[moveKey]?.damage ?? fallback;
+    const powerBonus = Math.max(0, Number(enemy?.dmg || 0) - 18) * 0.35;
+    return Math.max(1, Math.round(base + powerBonus));
+  }
+
+  function getPredictedPlayerPoint(lead = 0.22) {
+    return {
+      x: clamp(player.x + Number(player.vx || 0) * lead, WALL + player.r, ROOM_W - WALL - player.r),
+      y: clamp(player.y + Number(player.vy || 0) * lead, WALL + player.r, ROOM_H - WALL - player.r),
+    };
+  }
+
+  function mirrorHitArc(enemy, angle, range, arc, damage, knockback, source = 'mirror_knight') {
+    const d = dist(enemy.x, enemy.y, player.x, player.y);
+    if (d > range + player.r) return false;
+    const targetAngle = Math.atan2(player.y - enemy.y, player.x - enemy.x);
+    const diff = Math.abs(Math.atan2(Math.sin(targetAngle - angle), Math.cos(targetAngle - angle)));
+    if (diff > arc) return false;
+    damagePlayer(damage, angle, knockback, source);
+    return true;
+  }
+
+  function mirrorBlastPlayer(enemy, radius, damage, knockback, color, source = 'mirror_knight') {
+    particles.push({ x: enemy.x, y: enemy.y, life: 0.42, ring: radius, c: color });
+    if (dist(enemy.x, enemy.y, player.x, player.y) > radius + player.r) return false;
+    const angle = Math.atan2(player.y - enemy.y, player.x - enemy.x);
+    damagePlayer(damage, angle, knockback, source);
+    return true;
+  }
+
+  function fireMirrorProjectiles(enemy, angle, count, spread, speed, damage, options = {}) {
+    for (let index = 0; index < count; index += 1) {
+      const offset = count === 1 ? 0 : (index - (count - 1) / 2) * spread;
+      const a = angle + offset;
+      projectiles.push({
+        x: enemy.x + Math.cos(a) * (enemy.r + 7),
+        y: enemy.y + Math.sin(a) * (enemy.r + 7),
+        vx: Math.cos(a) * speed,
+        vy: Math.sin(a) * speed,
+        r: options.r || 6,
+        life: options.life || 1.25,
+        enemy: true,
+        kind: options.kind || 'mirror_shot',
+        color: options.color || '#d7f6ff',
+        damage,
+        knockback: options.knockback || 120,
+        homing: !!options.homing,
+        homingSpeed: options.homingSpeed,
+        homingTurnRate: options.homingTurnRate,
+        homingAccel: options.homingAccel,
+      });
+    }
+  }
+
+  function startMirrorMelee(enemy, angleToPlayer) {
+    const weaponKey = enemy.mirrorWeapon || '';
+    if (weaponKey && WEAPON_DEFS[weaponKey]) {
+      const weaponStats = enemy.mirrorWeaponStats || {};
+      const damage = Math.max(1, Math.round(weaponStats.damage || enemy.dmg || ATTACKS.melee.damage));
+      const range = Math.max(40, Number(weaponStats.range || ATTACKS.melee.range));
+      const knockback = Math.max(0, Number(weaponStats.knockback || ATTACKS.melee.push));
+      enemy.swingTime = ATTACKS.melee.active;
+      enemy.attackCd = getMirrorSkillCooldown(enemy, 'melee');
+      if (weaponKey === 'hunters_bow' || weaponKey === 'magenta_degale' || weaponKey === 'void_piercer' || weaponKey === 'granillia_lightning_spear') {
+        fireMirrorProjectiles(enemy, angleToPlayer, 1, 0, weaponKey === 'magenta_degale' ? 880 : 760, damage, {
+          kind: weaponKey,
+          color: WEAPON_DEFS[weaponKey]?.color || '#d7f6ff',
+          r: weaponKey === 'magenta_degale' ? 7 : 6,
+          life: weaponKey === 'void_piercer' ? 1.2 : 0.9,
+          knockback,
+        });
+        return true;
+      }
+      if (weaponKey === 'metao_fire_staff') {
+        fireMirrorProjectiles(enemy, angleToPlayer, 3, 0.18, 345, damage, { kind: 'fireball', color: '#ffb874', r: 8, life: 1.4, knockback });
+        return true;
+      }
+      if (weaponKey === 'magenta_p90') {
+        fireMirrorProjectiles(enemy, angleToPlayer, 5, 0.08, 880, Math.max(6, damage), { kind: 'magenta_p90', color: '#ff9dd7', r: 4, life: 0.75, knockback });
+        return true;
+      }
+      if (weaponKey === 'lazer_glasses') {
+        enemy.state = 'mirrorLaser';
+        enemy.windup = 0.22;
+        enemy.beamAngle = angleToPlayer;
+        enemy.beamDamage = Math.max(enemy.beamDamage || 0, Math.round(damage * 0.55));
+        return true;
+      }
+      if (weaponKey === 'aegis_shield_weapon') {
+        enemy.barrier = Math.max(enemy.barrier || 0, Math.round(enemy.max * 0.12));
+        enemy.inv = Math.max(enemy.inv || 0, 0.32);
+        particles.push({ x: enemy.x, y: enemy.y, life: 0.44, ring: 34, c: '#9ae9ff' });
+        return true;
+      }
+      mirrorHitArc(enemy, angleToPlayer, range + 10, weaponKey === 'excalibur' ? Math.PI : ATTACKS.melee.arc + 0.18, damage, knockback, `mirror_${weaponKey}`);
+      return true;
+    }
+    const move = getMirrorMove(enemy, 'melee');
+    const damage = getMirrorMoveDamage(enemy, move, enemy.dmg || ATTACKS.melee.damage);
+    enemy.swingTime = ATTACKS.melee.active;
+    enemy.attackCd = getMirrorSkillCooldown(enemy, 'melee');
+    if (move === 'fire_balls') {
+      fireMirrorProjectiles(enemy, angleToPlayer, 3, 0.16, 340, Math.max(14, damage - 4), { kind: 'fireball', color: '#ff8844', r: 8, life: 1.45, knockback: 110 });
+      return true;
+    }
+    if (move === 'narwal_fight') {
+      mirrorHitArc(enemy, angleToPlayer, 138, 1.45, Math.max(22, damage + 4), 300);
+      fireMirrorProjectiles(enemy, angleToPlayer, 1, 0, 740, Math.max(16, damage - 8), { kind: 'narwal_fight', color: '#ffd1ea', r: 6, life: 0.9, knockback: 190 });
+      return true;
+    }
+    if (move === 'smite') {
+      const didHit = mirrorHitArc(enemy, angleToPlayer, ATTACKS.melee.range + 18, ATTACKS.melee.arc + 0.18, damage, ATTACKS.melee.push);
+      if (didHit) damagePlayer(Math.max(8, Math.round(damage * 0.45)), angleToPlayer, 70, 'mirror_smite');
+      particles.push({ x: player.x, y: player.y, life: 0.24, ring: 18, c: '#eaf2ff' });
+      return true;
+    }
+    mirrorHitArc(enemy, angleToPlayer, ATTACKS.melee.range + 10, ATTACKS.melee.arc + 0.12, damage, ATTACKS.melee.push);
+    return true;
+  }
+
+  function startMirrorLaser(enemy, angleToPlayer, distance) {
+    const move = getMirrorMove(enemy, 'laser');
+    const predicted = getPredictedPlayerPoint(0.32);
+    const aimedAngle = Math.atan2(predicted.y - enemy.y, predicted.x - enemy.x);
+    enemy.attackCd = 0.42;
+    enemy.mirrorLaserCd = getMirrorSkillCooldown(enemy, 'laser');
+    if (move === 'power_disks') {
+      for (let index = 0; index < 8; index += 1) {
+        const a = index * (Math.PI * 2 / 8);
+        fireMirrorProjectiles(enemy, a, 1, 0, 300, getMirrorMoveDamage(enemy, move, 20), { kind: 'disk', color: '#d7f6ff', r: 7, life: 1.1, knockback: 110 });
+      }
+      return true;
+    }
+    if (move === 'blade_justice') {
+      mirrorHitArc(enemy, aimedAngle, 124, 1.35, getMirrorMoveDamage(enemy, move, 34), 280, 'mirror_blade');
+      particles.push({ x: enemy.x, y: enemy.y, life: 0.44, ring: 36, c: '#fff6a3' });
+      return true;
+    }
+    if (move === 'lightning_columns') {
+      [-38, 38].forEach(offset => {
+        const ox = Math.cos(aimedAngle + Math.PI / 2) * offset;
+        const oy = Math.sin(aimedAngle + Math.PI / 2) * offset;
+        hazards.push({
+          kind: 'lightning_column',
+          enemy: true,
+          source: 'mirror_lightning',
+          x: predicted.x + ox,
+          y: predicted.y + oy,
+          r: 48,
+          ttl: 3.6,
+          tick: 0.18,
+          interval: 0.42,
+          damage: getMirrorMoveDamage(enemy, move, 18),
+        });
+        particles.push({ x: predicted.x + ox, y: predicted.y + oy, life: 0.45, ring: 24, c: '#8dd4ff' });
+      });
+      return true;
+    }
+    enemy.state = 'mirrorLaser';
+    enemy.windup = move === 'god_sweep' ? 0.36 : distance < 150 ? 0.34 : 0.46;
+    enemy.beamAngle = aimedAngle + rollEnemyBeamBias(enemy, move === 'god_sweep' ? 0.08 : 0.1);
+    return true;
+  }
+
+  function startMirrorSmash(enemy, angleToPlayer) {
+    const move = getMirrorMove(enemy, 'smash');
+    const damage = getMirrorMoveDamage(enemy, move, enemy.smashDamage || ATTACKS.smash.damage);
+    enemy.attackCd = 0.6;
+    enemy.mirrorSmashCd = getMirrorSkillCooldown(enemy, 'smash');
+    if (move === 'kicky_kick') {
+      mirrorBlastPlayer(enemy, 142, Math.max(damage, 84), 680, '#ff7fc2', 'mirror_kick');
+      enemy.vx -= Math.cos(angleToPlayer) * 210;
+      enemy.vy -= Math.sin(angleToPlayer) * 210;
+      return true;
+    }
+    if (move === 'chaos_burst') {
+      for (let index = 0; index < 4; index += 1) {
+        const a = angleToPlayer + (index - 1.5) * 0.38;
+        const px = player.x + Math.cos(a) * rand(46, -46, 'encounter');
+        const py = player.y + Math.sin(a) * rand(46, -46, 'encounter');
+        particles.push({ x: px, y: py, life: 0.38, ring: 36, c: '#c971ff' });
+        if (dist(player.x, player.y, px, py) <= 58 + player.r) damagePlayer(Math.max(16, Math.round(damage * 0.62)), Math.atan2(player.y - py, player.x - px), 120, 'mirror_chaos');
+      }
+      return true;
+    }
+    if (move === 'healing_zone') {
+      enemy.hp = Math.min(enemy.max, enemy.hp + enemy.max * 0.08);
+      mirrorBlastPlayer(enemy, 118, Math.max(10, damage), 120, '#35ff6f', 'mirror_zone');
+      return true;
+    }
+    if (move === 'fire_circle' || move === 'floor_lava') {
+      mirrorBlastPlayer(enemy, move === 'floor_lava' ? 156 : 108, Math.max(12, damage), 150, '#ff7b32', 'mirror_fire');
+      applyFire(player, move === 'floor_lava' ? 2 : 1, 3.2);
+      return true;
+    }
+    enemy.state = 'mirrorSmash';
+    enemy.windup = 0.38;
+    return true;
+  }
+
+  function startMirrorDash(enemy, angleToPlayer, distance) {
+    const move = getMirrorMove(enemy, 'dash');
+    const predicted = getPredictedPlayerPoint(0.28);
+    enemy.attackCd = 0.34;
+    enemy.mirrorDashCd = getMirrorSkillCooldown(enemy, 'dash');
+    if (move === 'warp') {
+      const backAngle = angleToPlayer + Math.PI;
+      const safePoint = findSafePointNearTarget(predicted.x + Math.cos(backAngle) * 72, predicted.y + Math.sin(backAngle) * 72, enemy.r, 130, 16);
+      if (safePoint) {
+        enemy.x = safePoint.x;
+        enemy.y = safePoint.y;
+        enemy.inv = Math.max(enemy.inv || 0, 0.22);
+        particles.push({ x: enemy.x, y: enemy.y, life: 0.3, ring: 22, c: '#b99cff' });
+      }
+      return true;
+    }
+    if (move === 'nimrod_stomp') {
+      const safePoint = findSafePointNearTarget(predicted.x, predicted.y, enemy.r, 90, 14);
+      if (safePoint) {
+        enemy.x = safePoint.x;
+        enemy.y = safePoint.y;
+      }
+      mirrorBlastPlayer(enemy, 112, getMirrorMoveDamage(enemy, move, 46), 310, '#ffe67a', 'mirror_stomp');
+      return true;
+    }
+    if (move === 'zip_lightning') {
+      enemy.dashAngle = angleToPlayer;
+      enemy.dashTime = 0.16;
+      enemy.dashHit = false;
+      enemy.mirrorDashMove = 'zip_lightning';
+      return true;
+    }
+    if (move === 'cowards_way' || move === 'flying_unhitable') {
+      enemy.inv = Math.max(enemy.inv || 0, move === 'flying_unhitable' ? 1.2 : 0.7);
+      enemy.speed = Math.max(enemy.speed || 0, 260);
+      particles.push({ x: enemy.x, y: enemy.y - 18, life: 0.55, text: move === 'flying_unhitable' ? 'FLY HIGH' : "COWARD'S WAY", c: '#8dffcf' });
+      return true;
+    }
+    enemy.state = 'mirrorDash';
+    enemy.windup = distance > 260 ? 0.08 : 0.14;
+    enemy.dashAngle = angleToPlayer;
+    return true;
+  }
+
   function updateMirrorChampion(enemy, dt) {
     const dx = player.x - enemy.x;
     const dy = player.y - enemy.y;
@@ -11432,17 +11967,20 @@
       particles.push({ x: enemy.x, y: enemy.y, life: 0.16, c: '#d7f6ff' });
       if (enemy.windup <= 0) {
         if (enemy.state === 'mirrorLaser') {
-          enemy.beamTime = 0.56;
+          const laserMove = getMirrorMove(enemy, 'laser');
+          enemy.beamTime = laserMove === 'god_sweep'
+            ? 1.05
+            : laserMove === 'turtle_wave'
+              ? 0.86
+              : laserMove === 'love_beam'
+                ? 0.92
+                : 0.64;
           enemy.beamTick = 0;
         } else if (enemy.state === 'mirrorDash') {
           enemy.dashTime = 0.18;
           enemy.dashHit = false;
         } else if (enemy.state === 'mirrorSmash') {
-          particles.push({ x: enemy.x, y: enemy.y, life: 0.42, ring: 118, c: '#ff6dc7' });
-          if (dist(enemy.x, enemy.y, player.x, player.y) <= ATTACKS.smash.radius + player.r) {
-            damagePlayer(enemy.smashDamage || enemy.dmg + 18, angleToPlayer, 300, enemy.type);
-          }
-          enemy.mirrorSmashCd = 5.4 / Math.max(0.5, enemy.attackSpeed || 1);
+          mirrorBlastPlayer(enemy, ATTACKS.smash.radius + 8, enemy.smashDamage || enemy.dmg + 18, 300, '#ff6dc7');
           enemy.attackCd = 0.75;
         }
       }
@@ -11450,16 +11988,24 @@
     }
 
     if (enemy.beamTime > 0) {
+      const laserMove = getMirrorMove(enemy, 'laser');
       tickEnemyBeam(enemy, dt, {
-        tick: 0.08,
-        range: ATTACKS.laser.range,
-        knockback: 95,
-        damage: enemy.beamDamage || enemy.dmg,
+        tick: laserMove === 'god_sweep' ? 0.06 : laserMove === 'love_beam' ? 0.07 : 0.08,
+        range: laserMove === 'god_sweep' ? 360 : laserMove === 'turtle_wave' ? 440 : ATTACKS.laser.range,
+        knockback: laserMove === 'turtle_wave' ? 145 : 95,
+        damage: laserMove === 'turtle_wave'
+          ? Math.max(enemy.beamDamage || enemy.dmg, 32)
+          : laserMove === 'god_sweep'
+            ? Math.max(10, Math.round((enemy.beamDamage || enemy.dmg) * 0.55))
+            : enemy.beamDamage || enemy.dmg,
         speedDamp: 0.84,
-        turnRate: 2.8,
+        turnRate: laserMove === 'god_sweep' ? 5.8 : 3.5,
+        onTick: activeEnemy => {
+          if (laserMove === 'god_sweep') activeEnemy.beamAngle += 4.4 * dt;
+        },
         onEnd: activeEnemy => {
           activeEnemy.attackCd = 0.62;
-          activeEnemy.mirrorLaserCd = 4.2 / Math.max(0.5, activeEnemy.attackSpeed || 1);
+          activeEnemy.mirrorLaserCd = getMirrorSkillCooldown(activeEnemy, 'laser');
         },
       });
       return;
@@ -11467,15 +12013,18 @@
 
     if (enemy.dashTime > 0) {
       enemy.dashTime -= dt;
-      enemy.vx = Math.cos(enemy.dashAngle) * 560;
-      enemy.vy = Math.sin(enemy.dashAngle) * 560;
+      const dashMove = enemy.mirrorDashMove || getMirrorMove(enemy, 'dash');
+      const dashSpeed = dashMove === 'zip_lightning' ? 700 : 600;
+      enemy.vx = Math.cos(enemy.dashAngle) * dashSpeed;
+      enemy.vy = Math.sin(enemy.dashAngle) * dashSpeed;
       if (!enemy.dashHit && dist(enemy.x, enemy.y, player.x, player.y) < enemy.r + player.r + 6) {
         enemy.dashHit = true;
-        damagePlayer(enemy.dmg + 8, enemy.dashAngle, 240, enemy.type);
+        damagePlayer(enemy.dmg + (dashMove === 'zip_lightning' ? 18 : 8), enemy.dashAngle, dashMove === 'zip_lightning' ? 300 : 240, enemy.type);
       }
       if (enemy.dashTime <= 0) {
         enemy.attackCd = 0.45;
-        enemy.mirrorDashCd = 1.8 / Math.max(0.5, enemy.attackSpeed || 1);
+        enemy.mirrorDashCd = getMirrorSkillCooldown(enemy, 'dash');
+        enemy.mirrorDashMove = '';
       }
       return;
     }
@@ -11486,28 +12035,44 @@
       return;
     }
 
-    const preferred = distance > 220 ? 1 : distance < 92 ? -1 : 0.3;
-    steerEnemy(enemy, dx / distance * preferred, dy / distance * preferred, enemy.speed, 5.2, dt);
+    const laserMove = getMirrorMove(enemy, 'laser');
+    const smashMove = getMirrorMove(enemy, 'smash');
+    const desiredRange = enemy.mirrorSmashCd <= 0
+      ? (smashMove === 'kicky_kick' ? 126 : 118)
+      : enemy.mirrorLaserCd <= 0 && !['blade_justice'].includes(laserMove)
+        ? 230
+        : 112;
+    const preferred = distance > desiredRange + 24 ? 1 : distance < desiredRange - 26 ? -1 : 0.2;
+    const strafe = distance < 300 ? 0.34 : 0;
+    steerEnemy(
+      enemy,
+      dx / distance * preferred + -dy / distance * strafe,
+      dy / distance * preferred + dx / distance * strafe,
+      enemy.speed,
+      6.2,
+      dt
+    );
+
+    const mirrorWeapon = enemy.mirrorWeapon || '';
+    const rangedMirrorWeapon = ['hunters_bow', 'metao_fire_staff', 'magenta_degale', 'magenta_p90', 'granillia_lightning_spear', 'void_piercer', 'lazer_glasses'].includes(mirrorWeapon);
+    const mirrorWeaponRange = Number(enemy.mirrorWeaponStats?.range || 0);
+    if (mirrorWeapon && enemy.attackCd <= 0 && (rangedMirrorWeapon ? distance < 520 : distance < mirrorWeaponRange + player.r + 14)) {
+      startMirrorMelee(enemy, angleToPlayer);
+      return;
+    }
 
     if (distance < ATTACKS.melee.range + player.r + 6 && enemy.attackCd <= 0) {
-      damagePlayer(enemy.dmg, angleToPlayer, ATTACKS.melee.push, enemy.type);
-      enemy.attackCd = Math.max(0.26, 0.42 / Math.max(0.5, enemy.attackSpeed || 1));
-      enemy.swingTime = ATTACKS.melee.active;
+      startMirrorMelee(enemy, angleToPlayer);
       return;
     }
 
     if (enemy.attackCd <= 0) {
-      if (enemy.mirrorSmashCd <= 0 && distance < 170) {
-        enemy.state = 'mirrorSmash';
-        enemy.windup = 0.48;
-      } else if (enemy.mirrorLaserCd <= 0 && distance > 120) {
-        enemy.state = 'mirrorLaser';
-        enemy.windup = 0.52;
-        enemy.beamAngle = angleToPlayer + rollEnemyBeamBias(enemy, 0.14);
-      } else if (enemy.mirrorDashCd <= 0 && distance > 180) {
-        enemy.state = 'mirrorDash';
-        enemy.windup = 0.18;
-        enemy.dashAngle = angleToPlayer;
+      if (enemy.mirrorSmashCd <= 0 && distance < 178) {
+        startMirrorSmash(enemy, angleToPlayer);
+      } else if (enemy.mirrorLaserCd <= 0 && (distance > 96 || laserMove === 'blade_justice')) {
+        startMirrorLaser(enemy, angleToPlayer, distance);
+      } else if (enemy.mirrorDashCd <= 0 && (distance > 170 || getMirrorMove(enemy, 'dash') === 'warp')) {
+        startMirrorDash(enemy, angleToPlayer, distance);
       } else {
         enemy.attackCd = 0.18;
       }
@@ -12235,7 +12800,7 @@
       projectile.x += projectile.vx * dt;
       projectile.y += projectile.vy * dt;
       recordProjectileTrail(projectile, prevX, prevY);
-      const hitProp = destructibles.find(prop => !prop.broken && !prop.hidden && dist(projectile.x, projectile.y, prop.x, prop.y) <= projectile.r + prop.r);
+      const hitProp = destructibles.find(prop => !prop.broken && !prop.hidden && destructibleIntersectsCircle(prop, projectile.x, projectile.y, projectile.r));
       if (!projectile.enemy && hitProp) {
         damageDestructible(hitProp, projectile.damage || 1);
         if (projectile.kind === 'fireball') blastRadius(projectile.x, projectile.y, projectile.splash || 44, 16, '#ff8844');
@@ -12295,6 +12860,42 @@
       if (hazard.kind === 'lava' && dist(player.x, player.y, hazard.x, hazard.y) < hazard.r + player.r - 10 && player.lavaWalkTime <= 0) {
         damagePlayer(6 * dt, 0, 0, 'lava');
         if (hazard.statusTick <= 0) applyFire(player, 1, 2.6);
+      }
+      if (hazard.kind === 'explosive_trap') {
+        if (!hazard.triggered) {
+          const playerNear = dist(player.x, player.y, hazard.x, hazard.y) <= hazard.triggerRadius + player.r;
+          const enemyNear = enemies.some(enemy => enemy && dist(enemy.x, enemy.y, hazard.x, hazard.y) <= hazard.triggerRadius + enemy.r);
+          if (playerNear || enemyNear) {
+            hazard.triggered = true;
+            hazard.fuse = hazard.fuseDuration || 0.75;
+            hazard.sparkTick = 0;
+            particles.push({ x: hazard.x, y: hazard.y - 20, life: 0.5, text: 'CLICK', c: '#ffcc66', size: 12 });
+          }
+        } else {
+          hazard.fuse -= dt;
+          hazard.sparkTick = Number(hazard.sparkTick || 0) - dt;
+          if (hazard.sparkTick <= 0) {
+            particles.push({
+              x: hazard.x + rand(7, -7),
+              y: hazard.y - 8 + rand(4, -4),
+              life: 0.22,
+              vx: rand(34, -34),
+              vy: rand(-44, -22),
+              c: '#ffb347',
+              spark: true,
+              size: 2.4,
+            });
+            hazard.sparkTick = 0.07;
+          }
+          if (hazard.fuse <= 0) {
+            if (dist(player.x, player.y, hazard.x, hazard.y) <= hazard.blastRadius + player.r) {
+              const angle = Math.atan2(player.y - hazard.y, player.x - hazard.x);
+              damagePlayer(hazard.damage || 18, angle, 220, 'explosive_trap');
+            }
+            blastRadius(hazard.x, hazard.y, hazard.blastRadius || 88, hazard.damage || 18, '#ff9a4d');
+            hazard.ttl = 0;
+          }
+        }
       }
       if (hazard.kind === 'lava') {
         enemies.forEach(enemy => {
@@ -12402,9 +13003,9 @@
     const dealt = Math.max(0, Math.round(damage || 0));
     if (dealt > 0) {
       spawnDamagePopup(prop.x, prop.y - prop.r - 8, dealt, {
-        color: prop.kind === 'barrel' ? '#ff9f1c' : '#ffd27d',
+        color: prop.kind === 'barrel' ? '#ff9f1c' : prop.reinforced ? '#b8c0ca' : '#ffd27d',
         size: 14,
-        outline: '#2a1800',
+        outline: prop.reinforced ? '#11151c' : '#2a1800',
       });
     }
     prop.hp -= damage;
@@ -12421,6 +13022,21 @@
       destructibles.forEach(other => {
         if (other.hidden) other.hidden = false;
       });
+    }
+    if (prop.kind === 'cover_wall') {
+      const splinters = prop.reinforced ? 18 : 12;
+      for (let index = 0; index < splinters; index += 1) {
+        particles.push({
+          x: prop.x + rand((prop.w || prop.r) * 0.42, -(prop.w || prop.r) * 0.42, 'fx'),
+          y: prop.y + rand((prop.h || prop.r) * 0.42, -(prop.h || prop.r) * 0.42, 'fx'),
+          life: rand(0.42, 0.18, 'fx'),
+          vx: rand(90, -90, 'fx'),
+          vy: rand(70, -95, 'fx'),
+          c: prop.reinforced ? '#aeb5bd' : '#b87838',
+          spark: true,
+          size: prop.reinforced ? 2.2 : 2.8,
+        });
+      }
     }
     if (prop.kind === 'secret_wall') {
       const dir = prop.secretDir;
@@ -13252,6 +13868,22 @@
       }
     }
     
+    if (ui.interactPrompt) {
+      const shopHint = getControlHint('e', 'e');
+      const isShop = currentRoom?.type === 'shop' && !isPanelOpen(ui.shopPanel);
+      const isAnvil = currentRoom?.type === 'anvil' && !isPanelOpen(ui.anvilPanel);
+      if (isShop) {
+        ui.interactPrompt.textContent = `[${shopHint}]  Open Shop`;
+        ui.interactPrompt.classList.remove('hidden', 'interact-prompt--forge');
+      } else if (isAnvil) {
+        ui.interactPrompt.textContent = `[${shopHint}]  Open Forge`;
+        ui.interactPrompt.classList.remove('hidden');
+        ui.interactPrompt.classList.add('interact-prompt--forge');
+      } else {
+        ui.interactPrompt.classList.add('hidden');
+      }
+    }
+
     updateItemUI();
   }
 
@@ -13489,6 +14121,7 @@
     drawProjectiles();
     drawEnemyTelegraphs();
     drawEnemies();
+    drawRoomCeilingMask();
     if (!isDying) drawPlayer();
     if (!isDying && isMultiplayerMode() && player2 && !p2DeadInCoop) drawPlayer2();
     if (!isDying && isMultiplayerMode() && player3 && !p3DeadInCoop) drawPlayerN(player3, chosenCharacter3, '#8aff8a', 'P3');
@@ -13496,8 +14129,6 @@
     if (!isDying) drawPlayerLaser();
     if (isDying && playerDeathAnim) drawPlayerCorpseAnim(playerDeathAnim);
     drawParticles();
-    if (!isDying) drawShopPrompt();
-    if (!isDying) drawAnvilPrompt();
     if (!isDying) drawLadderPrompt();
     if (!isDying) drawJesterPortalPrompt();
     // P-label in corner of each viewport (split only)
@@ -13511,6 +14142,142 @@
       ctx.fillText(pLabel, vpX + 8, vpY + 18);
       ctx.restore();
     }
+    ctx.restore();
+  }
+
+  function getActiveRoomChamber(room, entity = player) {
+    if (!room || !entity || !Array.isArray(room.layoutChambers) || room.layoutChambers.length === 0) return null;
+    const containing = room.layoutChambers.find(chamber => (
+      entity.x >= chamber.x - chamber.w / 2
+      && entity.x <= chamber.x + chamber.w / 2
+      && entity.y >= chamber.y - chamber.h / 2
+      && entity.y <= chamber.y + chamber.h / 2
+    ));
+    if (containing) return containing;
+
+    let nearest = room.layoutChambers[0];
+    let bestDistance = Infinity;
+    room.layoutChambers.forEach(chamber => {
+      const distance = Math.hypot(entity.x - chamber.x, entity.y - chamber.y);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        nearest = chamber;
+      }
+    });
+    return nearest;
+  }
+
+  function withRoundedClipRect(rect, radius, drawFn) {
+    if (!rect || typeof drawFn !== 'function') return;
+    ctx.save();
+    ctx.beginPath();
+    ctx.roundRect(rect.x, rect.y, rect.w, rect.h, radius);
+    ctx.clip();
+    drawFn();
+    ctx.restore();
+  }
+
+  function getRoomDarkness(room, lights) {
+    const baseDarkness = room?.type === 'boss'
+      ? LIGHTING_CONFIG.darkness.boss
+      : room?.type === 'challenge'
+        ? LIGHTING_CONFIG.darkness.challenge
+        : LIGHTING_CONFIG.darkness.combat;
+    const lightPressure = Math.min(1.2, lights.reduce((sum, light) => sum + light.strength, 0) / 14);
+    return Math.max(0, baseDarkness - lightPressure * LIGHTING_CONFIG.darkness.lightRelief);
+  }
+
+  function createRoomDarknessGradient(alpha) {
+    const darkness = ctx.createLinearGradient(0, 0, 0, ROOM_H);
+    darkness.addColorStop(0, `rgba(10,14,22,${Math.min(0.28, alpha + 0.035)})`);
+    darkness.addColorStop(0.5, `rgba(5,7,12,${alpha})`);
+    darkness.addColorStop(1, `rgba(8,11,18,${Math.min(0.32, alpha + 0.05)})`);
+    return darkness;
+  }
+
+  function carveSoftLight(x, y, innerRadius, outerRadius, strength = 1, clipRect = null) {
+    const drawLight = () => {
+      const gradient = ctx.createRadialGradient(x, y, innerRadius, x, y, outerRadius);
+      gradient.addColorStop(0, 'rgba(0,0,0,1)');
+      gradient.addColorStop(0.26, 'rgba(0,0,0,0.72)');
+      gradient.addColorStop(0.66, 'rgba(0,0,0,0.22)');
+      gradient.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.globalAlpha = clamp(strength, 0, 1.12);
+      ctx.fillStyle = gradient;
+      ctx.fillRect(x - outerRadius, y - outerRadius, outerRadius * 2, outerRadius * 2);
+    };
+
+    if (clipRect) {
+      withRoundedClipRect(clipRect, 32, drawLight);
+      return;
+    }
+    drawLight();
+  }
+
+  function carvePlayerBeamLights() {
+    if (laserActive) {
+      const angle = laserMode === 'god_sweep'
+        ? laserAngle
+        : Math.atan2(mouse.worldY - player.y, mouse.worldX - player.x);
+      const beamPath = buildRicochetBeamPath(player.x, player.y, angle, getPlayerBeamRange(laserMode, getEquippedMove('laser')), getPlayerBeamBounceCount(laserMode));
+      carveBeamLight(beamPath, laserMode === 'god_sweep' ? 42 : laserMode === 'turtle_wave' ? 34 : 22, laserMode === 'god_sweep' ? 0.9 : 0.7);
+      return;
+    }
+
+    if (getEquippedWeapon() !== 'lazer_glasses' || player.weaponBeamTime <= 0) return;
+    const baseAngle = Math.atan2(mouse.worldY - player.y, mouse.worldX - player.x);
+    [-0.2, 0.2].forEach(offset => {
+      const beamPath = buildRicochetBeamPath(player.x, player.y, baseAngle + offset, 430, LAZER_GLASSES_BOUNCES);
+      carveBeamLight(beamPath, 14, 0.46);
+    });
+  }
+
+  function carveEnemyBeamLights() {
+    enemies.forEach(enemy => {
+      if (!enemy || Number(enemy.beamTime || 0) <= 0 || !Number.isFinite(enemy.beamAngle)) return;
+      const beamPath = buildRicochetBeamPath(enemy.x, enemy.y, enemy.beamAngle, enemy.type === 'god' ? 620 : 460, getEnemyBeamBounceCount(enemy));
+      carveBeamLight(beamPath, enemy.type === 'god' ? 36 : 18, enemy.type === 'god' ? 0.72 : 0.42);
+    });
+  }
+
+  function lightTintWithAlpha(tint, alpha) {
+    const match = /^rgba\((\s*\d+\s*,\s*\d+\s*,\s*\d+\s*),\s*[\d.]+\)$/.exec(tint);
+    return match ? `rgba(${match[1]}, ${alpha})` : 'rgba(255,255,255,0)';
+  }
+
+  function drawLightBloom(lights) {
+    ctx.globalCompositeOperation = 'lighter';
+    lights.forEach(light => {
+      if (!light.tint) return;
+      const glow = ctx.createRadialGradient(light.x, light.y, Math.max(4, light.inner * 0.35), light.x, light.y, light.outer);
+      glow.addColorStop(0, light.tint);
+      glow.addColorStop(0.58, lightTintWithAlpha(light.tint, 0.02));
+      glow.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = glow;
+      ctx.globalAlpha = Math.min(0.46, light.strength * 0.46);
+      ctx.fillRect(light.x - light.outer, light.y - light.outer, light.outer * 2, light.outer * 2);
+    });
+  }
+
+  function drawRoomCeilingMask() {
+    const room = currentRoom;
+    if (!room || LIGHTING_CONFIG.clearRoomTypes.has(room.type)) return;
+    const lights = collectRoomLightSources(room);
+    const darknessAlpha = getRoomDarkness(room, lights);
+    if (darknessAlpha < LIGHTING_CONFIG.darkness.minVisible) return;
+
+    ctx.save();
+    ctx.fillStyle = createRoomDarknessGradient(darknessAlpha);
+    ctx.fillRect(0, 0, ROOM_W, ROOM_H);
+    ctx.globalCompositeOperation = 'destination-out';
+
+    lights.forEach(light => {
+      carveSoftLight(light.x, light.y, light.inner, light.outer, light.strength, null);
+    });
+
+    carvePlayerBeamLights();
+    carveEnemyBeamLights();
+    drawLightBloom(lights);
     ctx.restore();
   }
 
@@ -13613,54 +14380,6 @@
     ctx.fillRect(0, 0, edge * 0.18, canvas.height);
     ctx.fillRect(canvas.width - edge * 0.18, 0, edge * 0.18, canvas.height);
 
-    ctx.restore();
-  }
-
-  function drawShopPrompt() {
-    if (currentRoom?.type !== 'shop' || isPanelOpen(ui.shopPanel)) return;
-    const cx = ROOM_W / 2;
-    const cy = ROOM_H - 60;
-    ctx.save();
-    ctx.font = 'bold 15px system-ui';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    const shopHint = formatControlLabel('e', 'e');
-    const text = `Press [${shopHint}] to open shop`;
-    const pad = 18;
-    const tw = ctx.measureText(text).width;
-    ctx.fillStyle = 'rgba(0,20,30,0.82)';
-    ctx.beginPath();
-    ctx.roundRect(cx - tw / 2 - pad, cy - 14, tw + pad * 2, 28, 8);
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(0,255,255,0.45)';
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-    ctx.fillStyle = '#00ffff';
-    ctx.fillText(text, cx, cy);
-    ctx.restore();
-  }
-
-  function drawAnvilPrompt() {
-    if (currentRoom?.type !== 'anvil' || isPanelOpen(ui.anvilPanel)) return;
-    const cx = ROOM_W / 2;
-    const cy = ROOM_H - 60;
-    ctx.save();
-    ctx.font = 'bold 15px system-ui';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    const shopHint = formatControlLabel('e', 'e');
-    const text = `Press [${shopHint}] to open anvil forge`;
-    const pad = 18;
-    const tw = ctx.measureText(text).width;
-    ctx.fillStyle = 'rgba(20,10,0,0.85)';
-    ctx.beginPath();
-    ctx.roundRect(cx - tw / 2 - pad, cy - 14, tw + pad * 2, 28, 8);
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(255,180,40,0.55)';
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-    ctx.fillStyle = '#ffb840';
-    ctx.fillText(text, cx, cy);
     ctx.restore();
   }
 
@@ -14311,6 +15030,26 @@
         ctx.beginPath();
         ctx.arc(0, -2, decor.r * 0.55, 0, Math.PI * 2);
         ctx.fill();
+      } else if (decor.kind === 'torch') {
+        ctx.fillStyle = 'rgba(28, 20, 12, 0.95)';
+        ctx.fillRect(-2, -6, 4, 18);
+        ctx.fillStyle = '#5b6670';
+        ctx.fillRect(-6, -4, 12, 4);
+        ctx.shadowColor = '#ff9648';
+        ctx.shadowBlur = 14;
+        ctx.fillStyle = 'rgba(255, 126, 58, 0.92)';
+        ctx.beginPath();
+        ctx.moveTo(0, -18);
+        ctx.quadraticCurveTo(7, -8, 0, -2);
+        ctx.quadraticCurveTo(-7, -9, 0, -18);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(255, 226, 150, 0.82)';
+        ctx.beginPath();
+        ctx.moveTo(0, -15);
+        ctx.quadraticCurveTo(4, -9, 0, -5);
+        ctx.quadraticCurveTo(-4, -9, 0, -15);
+        ctx.fill();
+        ctx.shadowBlur = 0;
       } else if (decor.kind === 'tree') {
         // Shadow
         ctx.fillStyle = 'rgba(20,30,14,0.35)';
@@ -14399,6 +15138,208 @@
     });
   }
 
+  function drawCoverWall(prop) {
+    const w = Math.max(16, Number(prop.w || prop.r * 2 || 48));
+    const h = Math.max(16, Number(prop.h || prop.r * 2 || 48));
+    const left = -w / 2;
+    const top = -h / 2;
+    const hpRatio = clamp(Number(prop.hp || 0) / Math.max(1, Number(prop.maxHp || prop.hp || 1)), 0, 1);
+    const damageAlpha = (1 - hpRatio) * 0.45;
+
+    const wood = ctx.createLinearGradient(left, top, left + w, top + h);
+    wood.addColorStop(0, '#5b341d');
+    wood.addColorStop(0.5, '#8a5229');
+    wood.addColorStop(1, '#4b2a18');
+    ctx.fillStyle = wood;
+    ctx.fillRect(left, top, w, h);
+
+    const horizontal = w >= h;
+    const plankCount = Math.max(2, Math.floor((horizontal ? h : w) / 18));
+    ctx.strokeStyle = 'rgba(38,20,10,0.72)';
+    ctx.lineWidth = 2;
+    for (let index = 1; index < plankCount; index += 1) {
+      ctx.beginPath();
+      if (horizontal) {
+        const y = top + (h / plankCount) * index;
+        ctx.moveTo(left + 3, y);
+        ctx.lineTo(left + w - 3, y);
+      } else {
+        const x = left + (w / plankCount) * index;
+        ctx.moveTo(x, top + 3);
+        ctx.lineTo(x, top + h - 3);
+      }
+      ctx.stroke();
+    }
+
+    ctx.strokeStyle = 'rgba(245,188,104,0.18)';
+    ctx.lineWidth = 1;
+    for (let index = 0; index < 4; index += 1) {
+      const offset = (index + 0.35) / 4;
+      ctx.beginPath();
+      if (horizontal) {
+        const y = top + h * offset;
+        ctx.moveTo(left + 8, y);
+        ctx.lineTo(left + w - 8, y + Math.sin(index + prop.x * 0.01) * 3);
+      } else {
+        const x = left + w * offset;
+        ctx.moveTo(x, top + 8);
+        ctx.lineTo(x + Math.sin(index + prop.y * 0.01) * 3, top + h - 8);
+      }
+      ctx.stroke();
+    }
+
+    if (prop.reinforced) {
+      ctx.fillStyle = 'rgba(96, 105, 116, 0.92)';
+      ctx.strokeStyle = 'rgba(190, 198, 208, 0.42)';
+      ctx.lineWidth = 1;
+      if (horizontal) {
+        [-0.28, 0.28].forEach(offset => {
+          const y = offset * h;
+          ctx.fillRect(left, y - 5, w, 10);
+          ctx.strokeRect(left + 0.5, y - 4.5, w - 1, 9);
+        });
+      } else {
+        [-0.28, 0.28].forEach(offset => {
+          const x = offset * w;
+          ctx.fillRect(x - 5, top, 10, h);
+          ctx.strokeRect(x - 4.5, top + 0.5, 9, h - 1);
+        });
+      }
+    }
+
+    if (damageAlpha > 0) {
+      ctx.fillStyle = `rgba(20, 10, 4, ${damageAlpha})`;
+      ctx.fillRect(left, top, w, h);
+      ctx.strokeStyle = `rgba(255, 210, 140, ${0.22 + damageAlpha})`;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(left + w * 0.25, top + h * 0.25);
+      ctx.lineTo(left + w * 0.46, top + h * 0.52);
+      ctx.lineTo(left + w * 0.4, top + h * 0.78);
+      ctx.moveTo(left + w * 0.64, top + h * 0.18);
+      ctx.lineTo(left + w * 0.55, top + h * 0.48);
+      ctx.lineTo(left + w * 0.74, top + h * 0.72);
+      ctx.stroke();
+    }
+
+    ctx.strokeStyle = prop.reinforced ? 'rgba(198, 205, 214, 0.58)' : 'rgba(38, 20, 10, 0.92)';
+    ctx.lineWidth = prop.reinforced ? 2.5 : 2;
+    ctx.strokeRect(left + 1, top + 1, w - 2, h - 2);
+  }
+
+  function carveBeamLight(path, maxWidth, strength = 0.5) {
+    if (!Array.isArray(path) || path.length < 2) return;
+    ctx.save();
+    ctx.globalAlpha = clamp(strength, 0, 1);
+    ctx.strokeStyle = '#000';
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.shadowColor = '#000';
+    ctx.shadowBlur = Math.max(8, maxWidth * 1.8);
+    for (let index = 0; index < path.length - 1; index += 1) {
+      const start = path[index];
+      const end = path[index + 1];
+      ctx.lineWidth = maxWidth;
+      ctx.beginPath();
+      ctx.moveTo(start.x, start.y);
+      ctx.lineTo(end.x, end.y);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function pushLightSource(target, x, y, inner, outer, strength, tint = '') {
+    if (target.length >= LIGHTING_CONFIG.maxLights) return;
+    if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(outer) || outer <= 0) return;
+    if (x + outer < 0 || x - outer > ROOM_W || y + outer < 0 || y - outer > ROOM_H) return;
+
+    const cleanOuter = clamp(outer, 8, LIGHTING_CONFIG.maxOuterRadius);
+    const cleanInner = clamp(Number.isFinite(inner) ? inner : 0, 0, cleanOuter * 0.72);
+    const cleanStrength = clamp(Number.isFinite(strength) ? strength : 0.5, 0, 1.1);
+    target.push({ x, y, inner: cleanInner, outer: cleanOuter, strength: cleanStrength, tint });
+  }
+
+  function collectRoomLightSources(room) {
+    const lights = [];
+    const activeChamber = getActiveRoomChamber(room, player);
+    pushLightSource(
+      lights,
+      ROOM_W / 2,
+      ROOM_H / 2,
+      LIGHTING_CONFIG.ambient.inner,
+      Math.max(ROOM_W, ROOM_H) * LIGHTING_CONFIG.ambient.outerScale,
+      room?.type === 'boss' ? LIGHTING_CONFIG.ambient.bossStrength : LIGHTING_CONFIG.ambient.strength,
+      LIGHTING_CONFIG.ambient.tint
+    );
+    if (activeChamber && Array.isArray(room?.layoutChambers) && room.layoutChambers.length > 1) {
+      pushLightSource(lights, activeChamber.x, activeChamber.y, 36, Math.max(activeChamber.w, activeChamber.h) * 0.58, 0.22, 'rgba(120, 160, 255, 0.05)');
+    }
+
+    pushLightSource(
+      lights,
+      player.x,
+      player.y - 8,
+      LIGHTING_CONFIG.player.inner,
+      LIGHTING_CONFIG.player.outer,
+      LIGHTING_CONFIG.player.strength,
+      LIGHTING_CONFIG.player.tint
+    );
+
+    decorations.forEach(decor => {
+      if (!decor) return;
+      const flameT = Date.now() * 0.007 + decor.x * 0.017 + decor.y * 0.011;
+      const flicker = 1 + Math.sin(flameT) * 0.08 + Math.cos(flameT * 1.9) * 0.05;
+      if (decor.kind === 'brazier') {
+        pushLightSource(
+          lights,
+          decor.x,
+          decor.y - 8,
+          20,
+          decor.r * 8.8 * flicker,
+          1,
+          'rgba(255, 146, 74, 0.16)'
+        );
+      } else if (decor.kind === 'torch') {
+        pushLightSource(
+          lights,
+          decor.x,
+          decor.y - 12,
+          18,
+          152 * flicker,
+          0.98,
+          'rgba(255, 166, 86, 0.15)'
+        );
+      }
+    });
+
+    hazards.forEach(hazard => {
+      if (!hazard) return;
+      if (hazard.kind === 'lava') {
+        pushLightSource(lights, hazard.x, hazard.y, hazard.r * 0.25, hazard.r * 2.7, 0.95, 'rgba(255, 92, 44, 0.12)');
+      } else if (hazard.kind === 'fire_circle') {
+        pushLightSource(lights, hazard.x, hazard.y, hazard.r * 0.35, hazard.r * 1.75, 0.72, 'rgba(255, 120, 54, 0.08)');
+      } else if (hazard.kind === 'lightning_column') {
+        pushLightSource(lights, hazard.x, hazard.y, hazard.r * 0.22, hazard.r * 1.8, 0.82, 'rgba(124, 200, 255, 0.09)');
+      } else if (hazard.kind === 'explosive_trap' && hazard.triggered) {
+        pushLightSource(lights, hazard.x, hazard.y, 10, hazard.blastRadius * 0.72, 0.52, 'rgba(255, 122, 70, 0.06)');
+      }
+    });
+
+    projectiles.forEach(projectile => {
+      if (!projectile || !Number.isFinite(projectile.x) || !Number.isFinite(projectile.y)) return;
+      const kind = projectile.kind || '';
+      if (kind === 'fireball') {
+        pushLightSource(lights, projectile.x, projectile.y, projectile.r * 0.8, 90, 0.86, 'rgba(255, 118, 42, 0.1)');
+      } else if (kind === 'disk' || kind === 'cult_missile') {
+        pushLightSource(lights, projectile.x, projectile.y, projectile.r * 0.7, 70, 0.58, 'rgba(182, 108, 255, 0.08)');
+      } else if (kind === 'sniper_round' || kind === 'machine_round' || kind === 'magenta_degale') {
+        pushLightSource(lights, projectile.x, projectile.y, projectile.r * 0.45, 42, 0.34, 'rgba(255, 148, 92, 0.04)');
+      }
+    });
+
+    return lights;
+  }
+
   function drawWorldProps() {
     const theme = getRoomArtTheme();
     hazards.forEach(hazard => {
@@ -14431,6 +15372,41 @@
         ctx.beginPath();
         ctx.arc(Math.sin(t * 2.1) * 3, Math.cos(t * 2.6) * 3, hazard.r * 0.55, 0, Math.PI * 2);
         ctx.fill();
+      } else if (hazard.kind === 'explosive_trap') {
+        const t = Date.now() * 0.008 + hazard.x * 0.01;
+        const armed = !!hazard.triggered;
+        const pulse = armed ? 1 + Math.sin(t * 2.4) * 0.12 : 1 + Math.sin(t * 0.8) * 0.03;
+        ctx.fillStyle = 'rgba(18,19,22,0.95)';
+        ctx.beginPath();
+        ctx.arc(0, 0, hazard.r * 1.05, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = armed ? '#ff9250' : 'rgba(255,200,120,0.55)';
+        ctx.lineWidth = armed ? 3 : 2;
+        ctx.shadowColor = armed ? '#ff7438' : 'rgba(255,180,90,0.25)';
+        ctx.shadowBlur = armed ? 16 : 6;
+        ctx.beginPath();
+        ctx.arc(0, 0, hazard.r * pulse, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+
+        ctx.strokeStyle = armed ? 'rgba(255,80,70,0.95)' : 'rgba(255,214,120,0.82)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(-6, -6);
+        ctx.lineTo(6, 6);
+        ctx.moveTo(6, -6);
+        ctx.lineTo(-6, 6);
+        ctx.stroke();
+
+        ctx.globalAlpha = armed ? 0.24 : 0.12;
+        ctx.strokeStyle = armed ? '#ff7a54' : 'rgba(255,210,130,0.55)';
+        ctx.setLineDash([6, 5]);
+        ctx.beginPath();
+        ctx.arc(0, 0, hazard.triggerRadius || 34, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.globalAlpha = 1;
       } else if (hazard.kind === 'healing_zone') {
         const t = Date.now() * 0.004 + (hazard.ttl || 0);
         const pulse = 1 + Math.sin(t * 2.2) * 0.08;
@@ -14556,6 +15532,8 @@
         ctx.strokeStyle = theme.wallEdge;
         ctx.lineWidth = 1.5;
         ctx.strokeRect(-25, -25, 50, 50);
+      } else if (prop.kind === 'cover_wall') {
+        drawCoverWall(prop);
       } else if (prop.kind === 'secret_wall') {
         drawEnvironmentTile('secret_wall_block', -25, -25, 50, 50);
         ctx.strokeStyle = 'rgba(125,110,70,0.48)';
@@ -16993,29 +17971,33 @@
       view.legacyToggle?.setAttribute('aria-expanded', legacyPanelOpen ? 'true' : 'false');
     }
 
-    let runHistoryView = 'runs'; // 'runs' | 'achievements'
+    let runHistoryView = 'info';
+    let activeInfoTab = 'items';
 
     function setRunHistoryOpen(open) {
       runHistoryOpen = !!open;
       view.runHistoryPanel?.classList.toggle('hidden', !runHistoryOpen);
       view.runHistoryPanel?.setAttribute('aria-hidden', runHistoryOpen ? 'false' : 'true');
       if (view.runHistoryBtn) {
-        view.runHistoryBtn.textContent = runHistoryOpen ? 'HIDE HISTORY' : 'RUN HISTORY';
+        view.runHistoryBtn.textContent = runHistoryOpen ? 'HIDE INFO' : 'INFO';
         view.runHistoryBtn.setAttribute('aria-expanded', runHistoryOpen ? 'true' : 'false');
       }
-      if (open) setRunHistoryView('runs');
+      if (open) setRunHistoryView('info');
     }
 
     function setRunHistoryView(view_) {
       runHistoryView = view_;
-      const showAch = view_ === 'achievements';
+      const showAch     = view_ === 'achievements';
       const showProfile = view_ === 'profile';
-      view.runHistoryBody?.classList.toggle('hidden', showAch || showProfile);
+      const showInfo    = view_ === 'info';
+      const showRuns    = !showAch && !showProfile && !showInfo;
+      view.runHistoryBody?.classList.toggle('hidden', !showRuns);
       view.runHistoryEmpty?.classList.toggle('hidden', true);
       view.achievementsList?.classList.toggle('hidden', !showAch);
       view.rhProfilePanel?.classList.toggle('hidden', !showProfile);
-      const titles = { achievements: 'ACHIEVEMENTS', profile: 'PROFILE', runs: 'RUN HISTORY' };
-      if (view.runHistoryPanelTitle) view.runHistoryPanelTitle.textContent = titles[view_] ?? 'RUN HISTORY';
+      view.rhInfoPanel?.classList.toggle('hidden', !showInfo);
+      const titles = { achievements: 'ACHIEVEMENTS', profile: 'PROFILE', runs: 'RUN HISTORY', info: 'INFO' };
+      if (view.runHistoryPanelTitle) view.runHistoryPanelTitle.textContent = titles[view_] ?? 'INFO';
       view.runHistoryViewTabs?.forEach(t => t.classList.toggle('active', t.dataset.view === view_));
       if (showAch) populateAchievementsPanel();
       else if (showProfile) {
@@ -17024,7 +18006,138 @@
         if (view.rhBestFloor)  view.rhBestFloor.textContent  = metaProgress.bestFloor ?? 1;
         if (view.rhSaveState)  view.rhSaveState.textContent  = view.saveState?.textContent ?? '—';
       }
+      else if (showInfo) populateInfoPanel(activeInfoTab);
       else { view.runHistoryEmpty?.classList.toggle('hidden', runHistory.length > 0); renderRunHistoryPage(); }
+    }
+
+    const ENEMY_INFO = [
+      { key: 'hunter',          label: 'Hunter',          boss: false },
+      { key: 'charger',         label: 'Charger',         boss: false },
+      { key: 'laser',           label: 'Laser Unit',      boss: false },
+      { key: 'knave',           label: 'Knave',           boss: false },
+      { key: 'sniper',          label: 'Sniper',          boss: false },
+      { key: 'machine_gunner',  label: 'Machine Gunner',  boss: false },
+      { key: 'golem',           label: 'Golem',           boss: false },
+      { key: 'cult_mage',       label: 'Cult Mage',       boss: false },
+      { key: 'cult_follower',   label: 'Cult Follower',   boss: false },
+      { key: 'summoner',        label: 'Summoner',        boss: false },
+      { key: 'shield_unit',     label: 'Shield Unit',     boss: false },
+      { key: 'healer',          label: 'Healer',          boss: false },
+      { key: 'boss_spawner',    label: 'Boss Spawner',    boss: false },
+      { key: 'bulk_golem',      label: 'Bulk Golem',      boss: false },
+      { key: 'artificer_knave', label: 'Artificer Knave', boss: false },
+      { key: 'queen_cult',      label: 'Queen Cult',      boss: true  },
+      { key: 'mirror_knight',   label: 'Mirror Champion', boss: true  },
+      { key: 'god',             label: 'GOD',             boss: true  },
+    ];
+
+    function populateInfoPanel(tab) {
+      activeInfoTab = tab;
+      if (!view.rhInfoContent) return;
+      view.rhInfoTabs?.forEach(t => t.classList.toggle('active', t.dataset.infoTab === tab));
+
+      if (tab === 'items') {
+        const rarityOrder = ['knight', 'wizard', 'god'];
+        const sorted = Object.values(ITEM_DEFS).sort((a, b) => {
+          const ri = rarityOrder.indexOf(a.rarity ?? a.category) - rarityOrder.indexOf(b.rarity ?? b.category);
+          return ri !== 0 ? ri : (a.name || '').localeCompare(b.name || '');
+        });
+        view.rhInfoContent.innerHTML = `<div class="info-grid">${sorted.map(item => {
+          const rarity = item.rarity || item.category || 'knight';
+          return `<div class="info-card">
+            <div class="info-card__header">
+              <canvas class="info-card__icon" data-info-item="${item.key}" width="32" height="32"></canvas>
+              <span class="info-card__name">${item.name}</span>
+              <span class="info-card__tag info-card__tag--${rarity}">${rarity}</span>
+            </div>
+            <div class="info-card__desc">${item.description || ''}</div>
+          </div>`;
+        }).join('')}</div>`;
+        view.rhInfoContent.querySelectorAll('[data-info-item]').forEach(el => {
+          const item = ITEM_DEFS[el.dataset.infoItem];
+          if (item) drawItemToastIcon(el, item);
+        });
+
+      } else if (tab === 'weapons') {
+        const rarityOrder = ['knight', 'wizard', 'god'];
+        const sorted = Object.values(WEAPON_DEFS).sort((a, b) => {
+          const ri = rarityOrder.indexOf(a.rarity) - rarityOrder.indexOf(b.rarity);
+          return ri !== 0 ? ri : (a.name || '').localeCompare(b.name || '');
+        });
+        view.rhInfoContent.innerHTML = `<div class="info-grid">${sorted.map(w => {
+          return `<div class="info-card">
+            <div class="info-card__header">
+              <canvas class="info-card__icon" data-info-weapon="${w.key}" width="32" height="32"></canvas>
+              <span class="info-card__name">${w.name}</span>
+              <span class="info-card__tag info-card__tag--${w.rarity}">${w.rarity}</span>
+            </div>
+            <div class="info-card__desc">${w.description || ''}</div>
+          </div>`;
+        }).join('')}</div>`;
+        view.rhInfoContent.querySelectorAll('[data-info-weapon]').forEach(el => {
+          const w = WEAPON_DEFS[el.dataset.infoWeapon];
+          if (w) drawItemToastIcon(el, w);
+        });
+
+      } else if (tab === 'moves') {
+        const slotOrder = ['melee', 'laser', 'smash', 'dash'];
+        const sorted = Object.values(MOVE_DEFS).sort((a, b) => {
+          const si = slotOrder.indexOf(a.slot) - slotOrder.indexOf(b.slot);
+          return si !== 0 ? si : (a.name || '').localeCompare(b.name || '');
+        });
+        view.rhInfoContent.innerHTML = `<div class="info-grid">${sorted.map(m => {
+          const slotLabel = SLOT_LABELS[m.slot] || m.slot;
+          const exclusive = m.exclusiveCharacter
+            ? `<br><em style="color:rgba(200,200,255,0.5)">${titleCase(m.exclusiveCharacter.replace(/_/g, ' '))} only</em>`
+            : '';
+          return `<div class="info-card">
+            <div class="info-card__header">
+              <span class="info-card__name">${m.name}</span>
+              <span class="info-card__tag info-card__tag--${m.slot}">${slotLabel}</span>
+            </div>
+            <div class="info-card__desc">${m.desc || ''}${exclusive}</div>
+          </div>`;
+        }).join('')}</div>`;
+
+      } else if (tab === 'enemies') {
+        view.rhInfoContent.innerHTML = `<div class="info-enemy-grid">${ENEMY_INFO.map(e => {
+          const tagClass = e.boss ? 'info-enemy-card__tag--boss' : 'info-enemy-card__tag--normal';
+          return `<div class="info-enemy-card">
+            <canvas class="info-enemy-card__sprite" data-info-enemy="${e.key}" width="52" height="52"></canvas>
+            <div class="info-enemy-card__name">${e.label}</div>
+            <span class="info-enemy-card__tag ${tagClass}">${e.boss ? 'Boss' : 'Enemy'}</span>
+          </div>`;
+        }).join('')}</div>`;
+        view.rhInfoContent.querySelectorAll('[data-info-enemy]').forEach(el => {
+          drawSpriteToCanvas(el, el.dataset.infoEnemy, 48);
+        });
+
+      } else if (tab === 'characters') {
+        view.rhInfoContent.innerHTML = `<div class="info-char-grid">${Object.values(CHARACTER_DEFS).map(c => {
+          const display = HERO_DISPLAY[c.key] || {};
+          const statBars = (display.stats || []).map(s =>
+            `<div class="info-char-stat">
+              <span class="info-char-stat__label">${s.label}</span>
+              <div class="info-char-stat__bar"><div class="info-char-stat__fill" style="width:${s.pct}%;background:${s.color}"></div></div>
+            </div>`
+          ).join('');
+          const lockNote = c.unlock === 'godslain'
+            ? '<div style="font-size:11px;color:rgba(255,110,80,0.75);margin-top:6px">Unlock: Slay GOD</div>'
+            : '';
+          return `<div class="info-char-card">
+            <canvas class="info-char-card__sprite" data-info-char="${c.key}" width="64" height="64"></canvas>
+            <div class="info-char-card__body">
+              <div class="info-char-card__name">${c.name.toUpperCase()}</div>
+              <div class="info-char-card__lore">${display.lore || ''}</div>
+              <div class="info-char-card__stats">${statBars}</div>
+              ${lockNote}
+            </div>
+          </div>`;
+        }).join('')}</div>`;
+        view.rhInfoContent.querySelectorAll('[data-info-char]').forEach(el => {
+          drawSpriteToCanvas(el, el.dataset.infoChar, 60);
+        });
+      }
     }
 
     async function populateAchievementsPanel() {
@@ -17392,7 +18505,21 @@
         view.runHistoryBtn?.addEventListener('click', handlers.onToggleRunHistory);
         view.runHistoryClose?.addEventListener('click', () => setRunHistoryOpen(false));
         view.runHistoryViewTabs?.forEach(tab => {
-          tab.addEventListener('click', () => setRunHistoryView(tab.dataset.view || 'runs'));
+          tab.addEventListener('click', () => setRunHistoryView(tab.dataset.view || 'info'));
+        });
+        view.rhInfoTabs?.forEach(tab => {
+          tab.addEventListener('click', () => populateInfoPanel(tab.dataset.infoTab || 'items'));
+        });
+        view.infoTutorialBtn?.addEventListener('click', () => {
+          localStorage.setItem(REPLAY_TUTORIAL_KEY, '1');
+          view.infoTutorialBtn.textContent = '✓ Set for next run';
+          view.infoTutorialBtn.disabled = true;
+          setTimeout(() => {
+            if (view.infoTutorialBtn) {
+              view.infoTutorialBtn.textContent = '▶ Tutorial';
+              view.infoTutorialBtn.disabled = false;
+            }
+          }, 2200);
         });
         view.runHistoryPrev?.addEventListener('click', () => {
           runHistoryPage = Math.max(0, runHistoryPage - 1);
@@ -18079,10 +19206,26 @@
     return dx * dx + dy * dy < r * r;
   }
 
+  function getDestructibleRect(prop) {
+    const w = Number.isFinite(prop?.w) && prop.w > 0 ? prop.w : (prop?.r || 0) * 2;
+    const h = Number.isFinite(prop?.h) && prop.h > 0 ? prop.h : (prop?.r || 0) * 2;
+    return {
+      x: prop.x - w / 2,
+      y: prop.y - h / 2,
+      w,
+      h,
+    };
+  }
+
+  function destructibleIntersectsCircle(prop, x, y, r) {
+    const rect = getDestructibleRect(prop);
+    return circleRect(x, y, r, rect.x, rect.y, rect.w, rect.h);
+  }
+
   function isBlocked(x, y, r) {
     if (walls.some(wall => circleRect(x, y, r, wall.x, wall.y, wall.w, wall.h))) return true;
     if (structures.some(structure => circleRect(x, y, r, structure.x - structure.w / 2, structure.y - structure.h / 2, structure.w, structure.h))) return true;
-    return destructibles.some(prop => !prop.broken && !prop.hidden && circleRect(x, y, r, prop.x - prop.r, prop.y - prop.r, prop.r * 2, prop.r * 2));
+    return destructibles.some(prop => !prop.broken && !prop.hidden && destructibleIntersectsCircle(prop, x, y, r));
   }
 
   function beamHitsCircle(x1, y1, x2, y2, cx, cy, radius) {
@@ -18122,6 +19265,11 @@
         w: structure.w,
         h: structure.h,
       });
+    });
+    destructibles.forEach(prop => {
+      if (!prop || prop.broken || prop.hidden || prop.kind !== 'cover_wall') return;
+      const rect = getDestructibleRect(prop);
+      if (rect.w > 0 && rect.h > 0) rects.push(rect);
     });
     return rects;
   }
@@ -18255,6 +19403,15 @@
     for (let index = 0; index < path.length; index += 1) {
       const segment = path[index];
       if (beamHitsCircle(segment.x1, segment.y1, segment.x2, segment.y2, cx, cy, radius)) return segment;
+    }
+    return null;
+  }
+
+  function beamPathHitsDestructible(path, prop, padding = 0) {
+    const rect = getDestructibleRect(prop);
+    for (let index = 0; index < path.length; index += 1) {
+      const segment = path[index];
+      if (lineIntersectsRect(segment.x1, segment.y1, segment.x2, segment.y2, rect, padding)) return segment;
     }
     return null;
   }

@@ -213,6 +213,8 @@
     </div>
   </div>
 
+  <div id="interactPrompt" class="interact-prompt hidden" aria-live="polite"></div>
+
   <div id="actionBar" class="hidden" aria-hidden="true">
     <div class="skill-card" data-skill="dash">
       <canvas id="iconDash" class="skill-icon" width="36" height="36"></canvas>
@@ -481,7 +483,7 @@
       <button id="continueBtn" class="nav-btn hidden">CONTINUE</button>
       <button id="newRunBtn"   class="nav-btn">NEW RUN</button>
       <button id="altModesBtn"   class="nav-btn nav-btn--minor">ALT MODES</button>
-      <button id="runHistoryBtn" class="nav-btn nav-btn--minor">RUN HISTORY</button>
+      <button id="runHistoryBtn" class="nav-btn nav-btn--minor">INFO</button>
       <button id="settingsBtn" class="nav-btn nav-btn--minor">SETTINGS</button>
     </div>
         <div class="meta-row">
@@ -495,14 +497,15 @@
   <section id="runHistoryPanel" class="rh-panel hidden" aria-hidden="true">
     <div class="rh-head">
       <div class="rh-head-left">
-        <span class="rh-title" id="runHistoryPanelTitle">RUN HISTORY</span>
+        <span class="rh-title" id="runHistoryPanelTitle">INFO</span>
         <div class="rh-view-tabs" role="tablist">
-          <button class="rh-view-tab active" data-view="runs" type="button">Runs</button>
+          <button class="rh-view-tab" data-view="runs" type="button">Runs</button>
           <button class="rh-view-tab" data-view="achievements" type="button">Achievements</button>
           <button class="rh-view-tab" data-view="profile" type="button">Profile</button>
+          <button class="rh-view-tab active" data-view="info" type="button">Info</button>
         </div>
       </div>
-      <button id="runHistoryClose" class="panel-close" aria-label="Close run history">X</button>
+      <button id="runHistoryClose" class="panel-close" aria-label="Close">X</button>
     </div>
     <div id="runHistoryEmpty" class="rh-empty hidden">No completed runs yet.</div>
     <div class="rh-body">
@@ -538,6 +541,19 @@
       <div class="rh-profile-row"><span class="rh-profile-label">Loop Crystals</span><b id="rhLoopCount">0</b></div>
       <div class="rh-profile-row"><span class="rh-profile-label">Best Floor</span><b id="rhBestFloor">1</b></div>
       <div class="rh-profile-row"><span class="rh-profile-label">Save</span><b id="rhSaveState">—</b></div>
+    </div>
+    <div id="rhInfoPanel" class="rh-info hidden">
+      <div class="rh-info-head">
+        <div class="rh-info-tabs" role="tablist">
+          <button class="rh-info-tab active" data-info-tab="items" type="button">Items</button>
+          <button class="rh-info-tab" data-info-tab="weapons" type="button">Weapons</button>
+          <button class="rh-info-tab" data-info-tab="moves" type="button">Moves</button>
+          <button class="rh-info-tab" data-info-tab="enemies" type="button">Enemies</button>
+          <button class="rh-info-tab" data-info-tab="characters" type="button">Characters</button>
+        </div>
+        <button id="infoTutorialBtn" class="rh-info-tutorial-btn" type="button">&#9654; Tutorial</button>
+      </div>
+      <div id="rhInfoContent" class="rh-info-content"></div>
     </div>
   </section>
 
