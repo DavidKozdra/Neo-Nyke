@@ -488,20 +488,22 @@
     <h1 id="menuTitle" class="sr-only">NEO NYKE — DUNGEON GOD</h1>
 
     <div class="main-nav">
-      <button id="continueBtn" class="nav-btn hidden">CONTINUE</button>
-      <button id="newRunBtn"   class="nav-btn">NEW RUN</button>
-      <button id="altModesBtn"   class="nav-btn nav-btn--minor">ALT MODES</button>
-      <button id="runHistoryBtn" class="nav-btn nav-btn--minor">INFO</button>
-      <button id="settingsBtn" class="nav-btn nav-btn--minor">SETTINGS</button>
+      <button id="continueBtn" class="nav-btn hidden">CONTINUE<span class="nav-btn__icon">↺</span></button>
+      <button id="newRunBtn"   class="nav-btn">NEW RUN<span class="nav-btn__icon">▶</span></button>
+      <button id="altModesBtn"   class="nav-btn nav-btn--minor">ALT MODES<span class="nav-btn__icon">◈</span></button>
+      <button id="runHistoryBtn" class="nav-btn nav-btn--minor">INFO<span class="nav-btn__icon">◎</span></button>
+      <button id="settingsBtn" class="nav-btn nav-btn--minor">SETTINGS<span class="nav-btn__icon">⚙</span></button>
     </div>
-        <div class="meta-row">
+  </div><!-- /.menu-content -->
+  <div class="menu-footer">
+    <div class="meta-row">
       <span class="meta-pill"><canvas id="metaCoinIcon" class="meta-icon" width="32" height="32"></canvas> BANK <b id="bankCoins">0</b></span>
       <span class="meta-pill"><canvas id="metaLoopIcon" class="meta-icon" width="32" height="32"></canvas> LOOP CRYSTALS <b id="loopCount">0</b></span>
-      <span>BEST FLOOR <b id="bestFloor">1</b></span>
-      <span>SAVE <b id="saveState">BOOTING</b></span>
+      <span class="meta-pill"><span class="meta-pill__icon">↟</span> BEST FLOOR <b id="bestFloor">1</b></span>
+      <span class="meta-pill meta-pill--save"><span class="meta-pill__icon">◆</span> SAVE <b id="saveState">BOOTING</b></span>
     </div>
     <span id="runSummary" class="run-summary-line"></span>
-  </div><!-- /.menu-content -->
+  </div>
   <section id="runHistoryPanel" class="rh-panel hidden" aria-hidden="true">
     <div class="rh-head">
       <div class="rh-head-left">
@@ -895,11 +897,11 @@
 
     <!-- Tab bar -->
     <div class="stab-bar" role="tablist">
-      <button class="stab active" data-tab="controls" role="tab">Controls</button>
-      <button class="stab" data-tab="volume"   role="tab">Volume</button>
-      <button class="stab" data-tab="theme"    role="tab">Theme</button>
-      <button class="stab" data-tab="access"   role="tab">Accessibility</button>
-      <button class="stab" data-tab="data"     role="tab">Data</button>
+      <button class="stab active" data-tab="controls" role="tab"><span class="tab-icon">⌨</span>Controls</button>
+      <button class="stab" data-tab="volume"   role="tab"><span class="tab-icon">♪</span>Volume</button>
+      <button class="stab" data-tab="theme"    role="tab"><span class="tab-icon">◈</span>Theme</button>
+      <button class="stab" data-tab="access"   role="tab"><span class="tab-icon">◎</span>Accessibility</button>
+      <button class="stab" data-tab="data"     role="tab"><span class="tab-icon">◆</span>Data</button>
     </div>
 
     <!-- Controls tab -->

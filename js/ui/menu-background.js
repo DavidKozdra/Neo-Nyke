@@ -5,264 +5,305 @@
   const ctx  = bg.getContext('2d');
   const ctx2 = bg2 ? bg2.getContext('2d') : null;
 
+  let tileCache = null;
+
   function resize() {
     bg.width  = window.innerWidth;
     bg.height = window.innerHeight;
     if (bg2) { bg2.width = window.innerWidth; bg2.height = window.innerHeight; }
+    tileCache = null;
   }
   resize();
   window.addEventListener('resize', resize);
 
-  const SPRITES = window.NeoNykeSpriteDefs || {};
+  // ── Tile rendering (mirrors game.js asset pipeline) ─────────────────────
+  const TILE_SRC  = window.NeoNykeEnvironmentTileDefs || {};
+  const SRC_SIZE  = TILE_SRC.sourceSize || 16;
+  const TILE_DEFS = TILE_SRC.tiles || {};
+  const TILE_PX   = 48;
 
-  function drawPixelSprite(c, key, cx, cy, scale, flipX) {
-    const def = SPRITES[key];
-    if (!def) return;
-    const cols = def.pixels[0].length, rows = def.pixels.length;
-    const ox = cx - (cols * scale) / 2;
-    const oy = cy - (rows * scale) / 2;
-    def.pixels.forEach((row, ry) => {
-      for (let rx2 = 0; rx2 < row.length; rx2++) {
-        const ch = row[rx2];
-        if (ch === '.') continue;
-        const px = flipX ? (cols - 1 - rx2) : rx2;
-        c.fillStyle = def.palette[ch] || '#ff00ff';
-        c.fillRect(ox + px * scale, oy + ry * scale, scale, scale);
-      }
+  function drawFloorAsset(g, ox, oy, s, def) {
+    g.fillStyle = def.shade || '#252823';
+    g.fillRect(ox, oy + s - 3, s, 3);
+    g.fillRect(ox + s - 3, oy, 3, s);
+    g.fillStyle = def.edge || '#4c5047';
+    g.fillRect(ox + 1, oy + 1, s - 3, 1);
+    g.fillRect(ox + 1, oy + 1, 1, s - 3);
+    g.strokeStyle = def.mortar || '#1c1f1d';
+    g.lineWidth = 1;
+    g.strokeRect(ox + 0.5, oy + 0.5, s - 1, s - 1);
+  }
+
+  function drawWallAsset(g, ox, oy, s, def) {
+    g.fillStyle = def.shade || '#202722';
+    g.fillRect(ox, oy + 8, s, 8);
+    g.fillStyle = def.edge || '#586257';
+    g.fillRect(ox + 1, oy + 1, s - 2, 2);
+    g.fillRect(ox + 1, oy + 8, s - 2, 1);
+    g.strokeStyle = def.mortar || '#151917';
+    g.lineWidth = 1;
+    g.strokeRect(ox + 0.5, oy + 0.5, s - 1, s - 1);
+    g.beginPath();
+    g.moveTo(ox + 7.5, oy); g.lineTo(ox + 7.5, oy + 8);
+    g.moveTo(ox + 11.5, oy + 8); g.lineTo(ox + 11.5, oy + s);
+    g.stroke();
+  }
+
+  function drawCracks(g, ox, oy, def) {
+    if (!Array.isArray(def.cracks)) return;
+    g.strokeStyle = def.mortar || '#151917';
+    g.lineWidth = 1;
+    def.cracks.forEach(pts => {
+      if (!pts || pts.length < 4) return;
+      g.beginPath();
+      g.moveTo(ox + pts[0], oy + pts[1]);
+      for (let i = 2; i < pts.length - 1; i += 2) g.lineTo(ox + pts[i], oy + pts[i + 1]);
+      g.stroke();
     });
   }
 
-  function drawSword(c, x, y, angle, len, color, alpha) {
-    c.save();
-    c.globalAlpha = alpha;
-    c.translate(x, y);
-    c.rotate(angle);
-    c.strokeStyle = color;
-    c.lineWidth = 3;
-    c.shadowColor = color;
-    c.shadowBlur = 16;
-    c.beginPath(); c.moveTo(0, -len * 0.5); c.lineTo(0, len * 0.5); c.stroke();
-    c.lineWidth = 2;
-    c.beginPath(); c.moveTo(-10, len * 0.12); c.lineTo(10, len * 0.12); c.stroke();
-    c.fillStyle = color;
-    c.beginPath(); c.arc(0, len * 0.5, 3.5, 0, Math.PI * 2); c.fill();
-    c.restore();
+  function drawChips(g, ox, oy, def) {
+    if (!Array.isArray(def.chips)) return;
+    g.fillStyle = def.shade || '#252823';
+    def.chips.forEach(c => { if (c && c.length >= 4) g.fillRect(ox + c[0], oy + c[1], c[2], c[3]); });
   }
 
-  const sparks = [];
-  const rings  = [];
+  function drawTileOnto(g, key, ox, oy, s) {
+    const def = TILE_DEFS[key];
+    if (!def) { g.fillStyle = '#30342f'; g.fillRect(ox, oy, s, s); return; }
+    g.fillStyle = def.base || '#343832';
+    g.fillRect(ox, oy, s, s);
+    if (def.kind === 'floor' || def.kind === 'plank') drawFloorAsset(g, ox, oy, s, def);
+    else if (def.kind === 'wall') drawWallAsset(g, ox, oy, s, def);
+    drawCracks(g, ox, oy, def);
+    drawChips(g, ox, oy, def);
+  }
 
-  function spawnClash(cx, cy) {
-    for (let i = 0; i < 30; i++) {
-      const a = Math.random() * Math.PI * 2, sp = 1.5 + Math.random() * 4.5;
-      const col = ['#f0f5ff', '#b7c7de', '#90a5c2', '#7a8faa'][i % 4];
-      sparks.push({ x: cx, y: cy, vx: Math.cos(a)*sp, vy: Math.sin(a)*sp,
-        life: 1, maxLife: 0.4 + Math.random() * 0.5, color: col, r: 1.5 + Math.random() * 2 });
+  // ── Tile atlas (one canvas, one draw per tile key) ───────────────────────
+  let atlas = null;
+  let atlasIndex = {};
+
+  function buildAtlas() {
+    const keys = Object.keys(TILE_DEFS);
+    if (!keys.length) return;
+    const c = document.createElement('canvas');
+    c.width = SRC_SIZE * keys.length;
+    c.height = SRC_SIZE;
+    const g = c.getContext('2d');
+    g.imageSmoothingEnabled = false;
+    keys.forEach((key, i) => {
+      const ox = i * SRC_SIZE;
+      atlasIndex[key] = { x: ox, y: 0, w: SRC_SIZE, h: SRC_SIZE };
+      drawTileOnto(g, key, ox, 0, SRC_SIZE);
+    });
+    atlas = c;
+  }
+
+  function blitTile(g, key, dx, dy, size) {
+    if (!atlas) return;
+    const fr = atlasIndex[key];
+    if (!fr) return;
+    g.imageSmoothingEnabled = false;
+    g.drawImage(atlas, fr.x, fr.y, fr.w, fr.h, dx, dy, size, size);
+  }
+
+  // ── Dungeon layout ───────────────────────────────────────────────────────
+  // Grid of rooms, each with a floor and wall tile key.
+  const THEMES = [
+    { floor: 'floor_stone_a',    wall: 'wall_stone' },
+    { floor: 'floor_stone_b',    wall: 'wall_stone' },
+    { floor: 'floor_stone_cracked', wall: 'wall_stone' },
+    { floor: 'floor_boss',       wall: 'wall_boss'  },
+    { floor: 'floor_stone_moss', wall: 'wall_stone' },
+  ];
+
+  // Room grid: GRID_W × GRID_H rooms, each ROOM_COLS × ROOM_ROWS tiles
+  const ROOM_COLS = 14;
+  const ROOM_ROWS = 10;
+  const WALL_TILES = 2; // wall thickness in tiles
+  const ROOM_W_PX  = ROOM_COLS * TILE_PX;
+  const ROOM_H_PX  = ROOM_ROWS * TILE_PX;
+  const GRID_W = 4;
+  const GRID_H = 3;
+
+  function seededRand(x, y, salt) {
+    const v = Math.sin(x * 127.1 + y * 311.7 + salt * 101.9) * 43758.5453;
+    return v - Math.floor(v);
+  }
+
+  function buildTileCache() {
+    const W = GRID_W * ROOM_W_PX;
+    const H = GRID_H * ROOM_H_PX;
+    const c = document.createElement('canvas');
+    c.width = W; c.height = H;
+    const g = c.getContext('2d');
+    g.imageSmoothingEnabled = false;
+
+    for (let gy = 0; gy < GRID_H; gy++) {
+      for (let gx = 0; gx < GRID_W; gx++) {
+        const theme = THEMES[Math.floor(seededRand(gx, gy, 0) * THEMES.length)];
+        const rx = gx * ROOM_W_PX;
+        const ry = gy * ROOM_H_PX;
+
+        for (let ty = 0; ty < ROOM_ROWS; ty++) {
+          for (let tx = 0; tx < ROOM_COLS; tx++) {
+            const isWall = tx < WALL_TILES || ty < WALL_TILES ||
+                           tx >= ROOM_COLS - WALL_TILES || ty >= ROOM_ROWS - WALL_TILES;
+            const key = isWall ? theme.wall : theme.floor;
+            // Vary floor tiles slightly
+            const floorKeys = [theme.floor];
+            if (theme.floor === 'floor_stone_a') floorKeys.push('floor_stone_b', 'floor_stone_cracked');
+            const pick = isWall ? theme.wall
+              : floorKeys[Math.floor(seededRand(gx * ROOM_COLS + tx, gy * ROOM_ROWS + ty, 3) * floorKeys.length)];
+            blitTile(g, pick, rx + tx * TILE_PX, ry + ty * TILE_PX, TILE_PX);
+          }
+        }
+
+        // Corridor openings — cut door-width gaps in walls (N/S/E/W)
+        const doorW  = 3 * TILE_PX;
+        const doorOX = Math.floor((ROOM_COLS - 3) / 2) * TILE_PX;
+        const doorOY = Math.floor((ROOM_ROWS - 3) / 2) * TILE_PX;
+        const floorKey = theme.floor;
+        // North door
+        for (let dx = 0; dx < 3; dx++)
+          for (let dy = 0; dy < WALL_TILES; dy++)
+            blitTile(g, floorKey, rx + doorOX + dx * TILE_PX, ry + dy * TILE_PX, TILE_PX);
+        // South door
+        for (let dx = 0; dx < 3; dx++)
+          for (let dy = 0; dy < WALL_TILES; dy++)
+            blitTile(g, floorKey, rx + doorOX + dx * TILE_PX, ry + (ROOM_ROWS - WALL_TILES + dy) * TILE_PX, TILE_PX);
+        // West door
+        for (let dy = 0; dy < 3; dy++)
+          for (let dx = 0; dx < WALL_TILES; dx++)
+            blitTile(g, floorKey, rx + dx * TILE_PX, ry + doorOY + dy * TILE_PX, TILE_PX);
+        // East door
+        for (let dy = 0; dy < 3; dy++)
+          for (let dx = 0; dx < WALL_TILES; dx++)
+            blitTile(g, floorKey, rx + (ROOM_COLS - WALL_TILES + dx) * TILE_PX, ry + doorOY + dy * TILE_PX, TILE_PX);
+      }
     }
-    rings.push({ x: cx, y: cy, r: 0, maxR: 85 + Math.random() * 65, life: 1,
-      color: ['#95abc8', '#b8cae0', '#e6effb'][Math.floor(Math.random() * 3)] });
+
+    tileCache = c;
   }
 
-  const MOTE_COUNT = 40;
+  // ── Camera pan ───────────────────────────────────────────────────────────
+  // Slow continuous drift across the dungeon grid, looping seamlessly.
+  const TOTAL_W = GRID_W * ROOM_W_PX;
+  const TOTAL_H = GRID_H * ROOM_H_PX;
+  const PAN_SPEED_X = 0.18; // px/frame at 60fps
+  const PAN_SPEED_Y = 0.10;
+  let camX = 0, camY = 0;
+
+  // ── Atmosphere particles (motes) ─────────────────────────────────────────
+  const MOTE_COUNT = 50;
   const motes = [];
-  function newMote(W, H, ry2) {
-    return { x: Math.random() * W, y: ry2 + Math.random() * (H - ry2) * 0.9,
-      vy: -(0.18 + Math.random() * 0.38), vx: (Math.random() - 0.5) * 0.15,
-      life: 1, decay: 1 / (150 + Math.random() * 220),
-      r: 0.7 + Math.random() * 1.3,
-          col: Math.random() < 0.55 ? '#8fa6c5' : '#6f84a0' };
+  function newMote(W, H) {
+    return {
+      x: Math.random() * W, y: Math.random() * H,
+      vy: -(0.15 + Math.random() * 0.32), vx: (Math.random() - 0.5) * 0.12,
+      life: 1, decay: 1 / (180 + Math.random() * 240),
+      r: 0.6 + Math.random() * 1.4,
+      col: Math.random() < 0.55 ? '#8fa6c5' : '#6f84a0',
+    };
   }
 
-  const CLASH_INTERVAL = 90;
-  let clashPhase = 'approaching', clashFrame = 0;
-  const F_SCALE = 8, F_KEYS = ['thorn_knight', 'god'];
+  // ── Render ───────────────────────────────────────────────────────────────
   let brazierT = 0;
 
   function renderScene(c, W, H, dt) {
     c.clearRect(0, 0, W, H);
     brazierT += dt * 0.045;
 
-    const wall = 28;
-    const rw = W, rh = H;
-    const rox = 0, roy = 0;
+    // Build atlas + cache lazily (after sprites loaded)
+    if (!atlas && Object.keys(TILE_DEFS).length) buildAtlas();
+    if (!tileCache && atlas) buildTileCache();
 
-    c.fillStyle = '#0f0d0c';
-    c.fillRect(0, 0, W, H);
+    // ── Tiled dungeon background ──
+    if (tileCache) {
+      // Advance camera
+      camX = (camX + PAN_SPEED_X * dt) % TOTAL_W;
+      camY = (camY + PAN_SPEED_Y * dt) % TOTAL_H;
 
-    c.save();
-    c.beginPath();
-    c.rect(rox, roy, rw, rh);
-    c.clip();
+      const startX = Math.floor(camX);
+      const startY = Math.floor(camY);
 
-    c.strokeStyle = 'rgba(130, 151, 177, 0.08)';
-    c.lineWidth = 1;
-    for (let x = rox; x <= rox + rw; x += 48) {
-      c.beginPath(); c.moveTo(x, roy); c.lineTo(x, roy + rh); c.stroke();
+      // Tile the cache across the viewport with wrapping
+      for (let oy = -startY; oy < H; oy += TOTAL_H) {
+        for (let ox = -startX; ox < W; ox += TOTAL_W) {
+          c.imageSmoothingEnabled = false;
+          c.drawImage(tileCache, ox, oy);
+        }
+      }
+    } else {
+      c.fillStyle = '#0f0d0c';
+      c.fillRect(0, 0, W, H);
     }
-    for (let y = roy; y <= roy + rh; y += 48) {
-      c.beginPath(); c.moveTo(rox, y); c.lineTo(rox + rw, y); c.stroke();
+
+    // ── Braziers at each room corner ──
+    if (tileCache) {
+      const cornersPerRoom = [
+        [WALL_TILES * TILE_PX + 20,  WALL_TILES * TILE_PX + 14],
+        [ROOM_W_PX - WALL_TILES * TILE_PX - 20, WALL_TILES * TILE_PX + 14],
+      ];
+      let bi = 0;
+      for (let gy = 0; gy < GRID_H + 1; gy++) {
+        for (let gx = 0; gx < GRID_W + 1; gx++) {
+          for (const [lx, ly] of cornersPerRoom) {
+            const wx = (gx * ROOM_W_PX + lx - camX % TOTAL_W + TOTAL_W * 2) % TOTAL_W;
+            const wy = (gy * ROOM_H_PX + ly - camY % TOTAL_H + TOTAL_H * 2) % TOTAL_H;
+            if (wx < 0 || wx > W || wy < 0 || wy > H) { bi++; continue; }
+            const flick = 1 + Math.sin(brazierT * 3.1 + bi * 1.7) * 0.14;
+            c.save();
+            c.fillStyle = `rgba(255,120,60,${0.65 + Math.sin(brazierT * 4 + bi) * 0.08})`;
+            c.shadowColor = '#ff7b39';
+            c.shadowBlur = 16 + Math.sin(brazierT * 2.5 + bi) * 5;
+            c.beginPath(); c.arc(wx, wy, 8 * flick, 0, Math.PI * 2); c.fill();
+            c.shadowBlur = 0;
+            const fg = c.createRadialGradient(wx, wy, 0, wx, wy, 52);
+            fg.addColorStop(0, 'rgba(255,110,30,0.10)');
+            fg.addColorStop(1, 'rgba(0,0,0,0)');
+            c.fillStyle = fg;
+            c.beginPath(); c.ellipse(wx, wy + 6, 52, 22, 0, 0, Math.PI * 2); c.fill();
+            c.restore();
+            bi++;
+          }
+        }
+      }
     }
 
-    c.shadowColor = '#6f84a2';
-    c.shadowBlur = 18;
-    c.strokeStyle = '#8fa8ca';
-    c.lineWidth = wall;
-    c.strokeRect(rox + wall/2, roy + wall/2, rw - wall, rh - wall);
-    c.shadowBlur = 0;
+    // ── Atmospheric vignette ──
+    const vg = c.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.18, W / 2, H / 2, Math.max(W, H) * 0.85);
+    vg.addColorStop(0,   'rgba(0,0,0,0)');
+    vg.addColorStop(0.5, 'rgba(0,0,0,0.32)');
+    vg.addColorStop(1,   'rgba(0,0,0,0.92)');
+    c.fillStyle = vg; c.fillRect(0, 0, W, H);
 
-    c.restore();
+    // Top fade so title sits cleanly
+    const tg = c.createLinearGradient(0, 0, 0, H * 0.42);
+    tg.addColorStop(0, 'rgba(0,0,0,0.78)');
+    tg.addColorStop(1, 'rgba(0,0,0,0)');
+    c.fillStyle = tg; c.fillRect(0, 0, W, H * 0.42);
 
-    const pw = 28, ph = 42;
-    [
-      [rox + wall,          roy + wall],
-      [rox + rw - wall - pw, roy + wall],
-      [rox + wall,          roy + rh - wall - ph],
-      [rox + rw - wall - pw, roy + rh - wall - ph],
-    ].forEach(([px, py]) => {
-      c.save();
-      c.fillStyle = '#2a221b';
-      c.strokeStyle = '#8fa8ca';
-      c.lineWidth = 2;
-      c.shadowColor = '#8fa8ca';
-      c.shadowBlur = 8;
-      c.fillRect(px, py, pw, ph);
-      c.strokeRect(px, py, pw, ph);
-      c.restore();
-    });
+    // Bottom fade for meta bar
+    const bg_ = c.createLinearGradient(0, H * 0.72, 0, H);
+    bg_.addColorStop(0, 'rgba(0,0,0,0)');
+    bg_.addColorStop(1, 'rgba(0,0,0,0.82)');
+    c.fillStyle = bg_; c.fillRect(0, H * 0.72, W, H * 0.28);
 
-    const cx = rox + rw / 2, cy = roy + rh / 2;
-    const brazPos = [
-      [rox + wall + pw + 40, roy + wall + 18],
-      [rox + rw - wall - pw - 40, roy + wall + 18],
-      [rox + wall + pw + 40, roy + rh - wall - 18],
-      [rox + rw - wall - pw - 40, roy + rh - wall - 18],
-    ];
-    brazPos.forEach(([bx, by], i) => {
-      const flick = 1 + Math.sin(brazierT * 3.1 + i * 1.3) * 0.13;
-      c.save();
-      c.fillStyle = `rgba(255,120,60,${0.68 + Math.sin(brazierT * 4 + i) * 0.08})`;
-      c.shadowColor = '#ff7b39';
-      c.shadowBlur = 18 + Math.sin(brazierT * 2.5 + i) * 6;
-      c.beginPath();
-      c.arc(bx, by, 10 * flick, 0, Math.PI * 2);
-      c.fill();
-      c.shadowBlur = 0;
-      const fg = c.createRadialGradient(bx, by, 0, bx, by, 60);
-      fg.addColorStop(0, 'rgba(255,110,30,0.09)');
-      fg.addColorStop(1, 'rgba(0,0,0,0)');
-      c.fillStyle = fg;
-      c.beginPath();
-      c.ellipse(bx, by + 8, 60, 28, 0, 0, Math.PI * 2);
-      c.fill();
-      c.restore();
-    });
-
-    while (motes.length < MOTE_COUNT) motes.push(newMote(W, H, roy));
+    // ── Floating motes ──
+    while (motes.length < MOTE_COUNT) motes.push(newMote(W, H));
     for (let i = motes.length - 1; i >= 0; i--) {
       const m = motes[i];
       m.x += m.vx; m.y += m.vy;
       m.life -= m.decay;
-      if (m.life <= 0 || m.y < roy) { motes[i] = newMote(W, H, roy); continue; }
+      if (m.life <= 0 || m.y < 0) { motes[i] = newMote(W, H); motes[i].y = H; continue; }
       c.save();
-      c.globalAlpha = m.life * 0.4;
+      c.globalAlpha = m.life * 0.38;
       c.fillStyle = m.col;
-      c.shadowColor = m.col;
-      c.shadowBlur = 4;
+      c.shadowColor = m.col; c.shadowBlur = 4;
       c.beginPath(); c.arc(m.x, m.y, m.r, 0, Math.PI * 2); c.fill();
       c.restore();
     }
-
-    for (let i = rings.length - 1; i >= 0; i--) {
-      const rg = rings[i];
-      rg.r += (rg.maxR - rg.r) * 0.1;
-      rg.life -= 0.022;
-      if (rg.life <= 0) { rings.splice(i, 1); continue; }
-      c.save();
-      c.globalAlpha = rg.life * 0.78;
-      c.strokeStyle = rg.color;
-      c.lineWidth = 2.5;
-      c.shadowColor = rg.color;
-      c.shadowBlur = 22;
-      c.beginPath(); c.arc(rg.x, rg.y, rg.r, 0, Math.PI * 2); c.stroke();
-      c.restore();
-    }
-
-    for (let i = sparks.length - 1; i >= 0; i--) {
-      const s = sparks[i];
-      s.x += s.vx; s.y += s.vy; s.vy += 0.09;
-      s.life -= dt / s.maxLife;
-      if (s.life <= 0) { sparks.splice(i, 1); continue; }
-      c.save();
-      c.globalAlpha = s.life * 0.9;
-      c.fillStyle = s.color;
-      c.shadowColor = s.color; c.shadowBlur = 8;
-      c.beginPath(); c.arc(s.x, s.y, s.r * s.life, 0, Math.PI * 2); c.fill();
-      c.restore();
-    }
-
-    const fightY = roy + rh * 0.68;
-    const APPROACH = 90, FAR = Math.min(W * 0.22, 280);
-
-    if (clashPhase === 'approaching') {
-      clashFrame = Math.min(clashFrame + 1, CLASH_INTERVAL);
-      if (clashFrame >= CLASH_INTERVAL) {
-        clashPhase = 'clashing'; clashFrame = 0;
-        spawnClash(cx, fightY - 14);
-      }
-    } else if (clashPhase === 'clashing') {
-      if (++clashFrame > 18) { clashPhase = 'recoiling'; clashFrame = 0; }
-    } else {
-      clashFrame = Math.min(clashFrame + 1, 55);
-      if (clashFrame >= 55) { clashPhase = 'approaching'; clashFrame = 0; }
-    }
-
-    const sep = clashPhase === 'approaching'
-      ? FAR - (FAR - APPROACH) * (clashFrame / CLASH_INTERVAL)
-      : clashPhase === 'clashing'
-        ? APPROACH + Math.sin((clashFrame / 18) * Math.PI) * 16
-        : APPROACH + (FAR - APPROACH) * (clashFrame / 55);
-
-    const lx = cx - sep / 2, rx2 = cx + sep / 2;
-
-    [lx, rx2].forEach(fx => {
-      c.save();
-      c.globalAlpha = 0.35;
-      const sg = c.createRadialGradient(fx, fightY + 30, 0, fx, fightY + 30, 50);
-      sg.addColorStop(0, 'rgba(0,0,0,.8)'); sg.addColorStop(1, 'rgba(0,0,0,0)');
-      c.fillStyle = sg;
-      c.beginPath(); c.ellipse(fx, fightY + 30, 50, 16, 0, 0, Math.PI * 2); c.fill();
-      c.restore();
-    });
-
-    drawPixelSprite(c, F_KEYS[0], lx,  fightY, F_SCALE, false);
-    drawPixelSprite(c, F_KEYS[1], rx2, fightY, F_SCALE, true);
-
-    const swing = clashPhase === 'clashing' ? Math.sin((clashFrame / 18) * Math.PI) * 0.28 : 0;
-    drawSword(c, lx  + 20, fightY - 14, -Math.PI * 0.28 - swing, 62, '#c0d1e7', 0.92);
-    drawSword(c, rx2 - 20, fightY - 14,  Math.PI * 1.28 + swing, 62, '#8da5c5', 0.92);
-
-    if (clashPhase === 'clashing' && clashFrame < 8) {
-      const fa = (1 - clashFrame / 8) * 0.48;
-      c.save();
-      const fg2 = c.createRadialGradient(cx, fightY - 12, 0, cx, fightY - 12, 140);
-      fg2.addColorStop(0,   `rgba(218,230,246,${fa})`);
-      fg2.addColorStop(0.5, `rgba(139,165,198,${fa * 0.45})`);
-      fg2.addColorStop(1,   'rgba(0,0,0,0)');
-      c.fillStyle = fg2;
-      c.fillRect(rox, roy, rw, rh);
-      c.restore();
-    }
-
-    const spotY = fightY;
-    const vg = c.createRadialGradient(W/2, spotY, Math.min(W,H)*0.18, W/2, spotY, Math.max(W,H)*0.85);
-    vg.addColorStop(0,   'rgba(0,0,0,0)');
-    vg.addColorStop(0.5, 'rgba(0,0,0,0.25)');
-    vg.addColorStop(1,   'rgba(0,0,0,0.88)');
-    c.fillStyle = vg; c.fillRect(0, 0, W, H);
-    const tg = c.createLinearGradient(0, 0, 0, H * 0.45);
-    tg.addColorStop(0,   'rgba(0,0,0,0.72)');
-    tg.addColorStop(1,   'rgba(0,0,0,0)');
-    c.fillStyle = tg; c.fillRect(0, 0, W, H * 0.45);
   }
 
   let raf, lastTs = 0;
@@ -301,7 +342,6 @@
 
     const TITLE = 'NEO NYKE';
     const TILTS = ['-8deg','5deg','-4deg','6deg','0deg','-5deg','7deg','-3deg'];
-    let letterEls = [];
 
     TITLE.split('').forEach((ch, i) => {
       const span = document.createElement('span');
@@ -309,18 +349,10 @@
       span.className   = ch === ' ' ? 'menu-letter space' : 'menu-letter';
       span.style.setProperty('--tilt', TILTS[i] || '0deg');
       container.appendChild(span);
-      if (ch !== ' ') letterEls.push({ el: span, delay: 320 + i * 95 });
+      if (ch !== ' ') setTimeout(() => span.classList.add('landed'), 320 + i * 95);
     });
 
-    letterEls.forEach(({ el, delay }) => {
-      setTimeout(() => {
-        el.classList.add('landed');
-      }, delay);
-    });
-
-    const lastDelay = letterEls[letterEls.length - 1]?.delay || 800;
-    setTimeout(() => {
-      subtitleEl && subtitleEl.classList.add('visible');
-    }, lastDelay + 260);
+    const lastDelay = 320 + (TITLE.replace(/ /g, '').length - 1) * 95;
+    setTimeout(() => subtitleEl && subtitleEl.classList.add('visible'), lastDelay + 260);
   })();
 })();

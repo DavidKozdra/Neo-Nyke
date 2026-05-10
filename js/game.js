@@ -2552,6 +2552,8 @@
         metaProgress.selectedCharacter = chosenCharacter;
         selectedDifficulty = normalizeDifficulty(entry.difficulty);
         metaProgress.selectedDifficulty = selectedDifficulty;
+        selectedChallenges = normalizeRunHistoryChallengeKeys(entry);
+        metaProgress.selectedChallenges = normalizeChallengeSelection(selectedChallenges);
         persistMetaSoon();
         if (ui.seed) ui.seed.value = entry.seed || '';
         uiController.setRunHistoryOpen(false);
@@ -3088,18 +3090,19 @@
   function getShopMoveOffers() {
     if (!currentRoom || currentRoom.type !== 'shop') return [];
     if (!Array.isArray(currentRoom.shopMoveOffers) || currentRoom.shopMoveOffers.length === 0) {
+      const shopRandom = createRoomRandom(currentRoom, 'shop:move-offers');
       const seen = new Set(Object.keys(player?.ownedMoves || {}));
       const allowedCharacter = player?.character || chosenCharacter;
       const pool = SHOP_MOVE_POOL.filter(key => key !== 'god_sweep' && !seen.has(key) && isMoveAllowedForCharacter(key, allowedCharacter));
-      const shuffledPool = shuffle(pool, 'loot');
+      const shuffledPool = shuffleWithRandom(pool, shopRandom);
       const offers = shuffledPool.slice(0, 4).map((moveKey, index) => ({
         type: 'move',
         key: moveKey,
         bought: false,
         cost: getShopMoveCost(index),
       }));
-      if (isGodSweepUnlocked() && !seen.has('god_sweep') && nextRandom('loot') < 0.12) {
-        const insertIndex = Math.min(offers.length, irand(0, Math.min(offers.length, 3), 'loot'));
+      if (isGodSweepUnlocked() && !seen.has('god_sweep') && shopRandom() < 0.12) {
+        const insertIndex = Math.min(offers.length, Math.floor(shopRandom() * (Math.min(offers.length, 3) + 1)));
         offers.splice(insertIndex, 0, {
           type: 'move',
           key: 'god_sweep',
@@ -3119,13 +3122,14 @@
   function getShopWeaponOffers() {
     if (!currentRoom || currentRoom.type !== 'shop') return [];
     if (!Array.isArray(currentRoom.shopWeaponOffers) || currentRoom.shopWeaponOffers.length === 0) {
+      const shopRandom = createRoomRandom(currentRoom, 'shop:weapon-offers');
       const owned = new Set(Object.keys(player?.ownedWeapons || {}).filter(key => player?.ownedWeapons?.[key]));
       const pool = [];
       if (floor >= 1) pool.push(...WHITE_WEAPON_POOL);
       if (floor >= 4) pool.push(...PURPLE_WEAPON_POOL);
       if (floor >= 7) pool.push(...RED_WEAPON_POOL);
       const filtered = pool.filter(key => !owned.has(key));
-      const shuffledFiltered = shuffle(filtered, 'loot');
+      const shuffledFiltered = shuffleWithRandom(filtered, shopRandom);
       const offers = shuffledFiltered.slice(0, 3).map((weaponKey, index) => ({
         type: 'weapon',
         key: weaponKey,
@@ -4074,43 +4078,61 @@
     return input
       .filter(entry => entry && typeof entry === 'object')
       .slice(0, RUN_HISTORY_LIMIT)
-      .map(entry => ({
-        id: String(entry.id || `${entry.endedAt || 'run'}:${entry.seed || ''}:${entry.floor || 0}`),
-        endedAt: String(entry.endedAt || ''),
-        result: entry.result === 'win' ? 'win' : 'dead',
-        mode: normalizeGameMode(entry.mode),
-        character: String(entry.character || 'thorn_knight'),
-        characterName: String(entry.characterName || CHARACTER_DEFS[entry.character]?.name || 'Unknown'),
-        difficulty: normalizeDifficulty(entry.difficulty),
-        difficultyName: String(entry.difficultyName || getDifficultyDef(entry.difficulty).name),
-        floor: Math.max(1, Number(entry.floor || 1)),
-        loop: Math.max(0, Number(entry.loop || 0)),
-        coins: Math.max(0, Number(entry.coins || 0)),
-        level: Math.max(1, Number(entry.level || 1)),
-        kills: Math.max(0, Number(entry.kills || 0)),
-        maxHp: Math.max(1, Number(entry.maxHp || 120)),
-        attackPower: Math.max(0, Number(entry.attackPower || 0)),
-        attackSpeed: Math.max(0, Number(entry.attackSpeed || 1)),
-        elapsedSeconds: Math.max(0, Number(entry.elapsedSeconds || 0)),
-        seed: String(entry.seed || ''),
-        roomType: String(entry.roomType || ''),
-        killedBy: String(entry.killedBy || ''),
-        killerKey: String(entry.killerKey || ''),
-        challengeBonusCrystals: Math.max(0, Number(entry.challengeBonusCrystals || 0)),
-        totalItemStacks: Math.max(0, Number(entry.totalItemStacks || 0)),
-        challenges: Array.isArray(entry.challenges) ? entry.challenges.map(String) : [],
-        items: Array.isArray(entry.items) ? entry.items.map(item => ({
-          key: String(item.key || ''),
-          name: String(item.name || item.key || 'Unknown'),
-          count: Math.max(0, Number(item.count || 0)),
-          rarity: String(item.rarity || ITEM_DEFS[item.key]?.rarity || ''),
-        })) : [],
-        equippedMoves: Array.isArray(entry.equippedMoves) ? entry.equippedMoves.map(move => ({
-          slot: String(move.slot || ''),
-          key: String(move.key || ''),
-          name: String(move.name || move.key || 'Unknown'),
-        })) : [],
-      }));
+      .map(entry => {
+        const challengeKeys = normalizeRunHistoryChallengeKeys(entry);
+        return {
+          id: String(entry.id || `${entry.endedAt || 'run'}:${entry.seed || ''}:${entry.floor || 0}`),
+          endedAt: String(entry.endedAt || ''),
+          result: entry.result === 'win' ? 'win' : 'dead',
+          mode: normalizeGameMode(entry.mode),
+          character: String(entry.character || 'thorn_knight'),
+          characterName: String(entry.characterName || CHARACTER_DEFS[entry.character]?.name || 'Unknown'),
+          difficulty: normalizeDifficulty(entry.difficulty),
+          difficultyName: String(entry.difficultyName || getDifficultyDef(entry.difficulty).name),
+          floor: Math.max(1, Number(entry.floor || 1)),
+          loop: Math.max(0, Number(entry.loop || 0)),
+          coins: Math.max(0, Number(entry.coins || 0)),
+          level: Math.max(1, Number(entry.level || 1)),
+          kills: Math.max(0, Number(entry.kills || 0)),
+          maxHp: Math.max(1, Number(entry.maxHp || 120)),
+          attackPower: Math.max(0, Number(entry.attackPower || 0)),
+          attackSpeed: Math.max(0, Number(entry.attackSpeed || 1)),
+          elapsedSeconds: Math.max(0, Number(entry.elapsedSeconds || 0)),
+          seed: String(entry.seed || ''),
+          roomType: String(entry.roomType || ''),
+          killedBy: String(entry.killedBy || ''),
+          killerKey: String(entry.killerKey || ''),
+          challengeBonusCrystals: Math.max(0, Number(entry.challengeBonusCrystals || 0)),
+          totalItemStacks: Math.max(0, Number(entry.totalItemStacks || 0)),
+          challengeKeys,
+          challenges: challengeKeys.map(key => CHALLENGE_DEFS[key]?.name || titleCase(key)),
+          items: Array.isArray(entry.items) ? entry.items.map(item => ({
+            key: String(item.key || ''),
+            name: String(item.name || item.key || 'Unknown'),
+            count: Math.max(0, Number(item.count || 0)),
+            rarity: String(item.rarity || ITEM_DEFS[item.key]?.rarity || ''),
+          })) : [],
+          equippedMoves: Array.isArray(entry.equippedMoves) ? entry.equippedMoves.map(move => ({
+            slot: String(move.slot || ''),
+            key: String(move.key || ''),
+            name: String(move.name || move.key || 'Unknown'),
+          })) : [],
+        };
+      });
+  }
+
+  function normalizeRunHistoryChallengeKeys(entry) {
+    if (!entry || typeof entry !== 'object') return [];
+    if (Array.isArray(entry.challengeKeys)) return normalizeChallengeSelection(entry.challengeKeys);
+    const byLabel = new Map(Object.entries(CHALLENGE_DEFS).map(([key, def]) => [
+      String(def?.name || titleCase(key)).toLowerCase(),
+      key,
+    ]));
+    const legacy = Array.isArray(entry.challenges) ? entry.challenges : [];
+    return normalizeChallengeSelection(legacy.map(value => {
+      const text = String(value || '');
+      return CHALLENGE_DEFS[text] ? text : byLabel.get(text.toLowerCase()) || text;
+    }));
   }
 
   function deriveRunRecords(entries, fallback = {}) {
@@ -4221,6 +4243,31 @@
   function nextRandom(stream = 'encounter') {
     const selected = rngStreams[stream] || rngStreams.encounter || rngStreams.world;
     return selected ? selected.next() : Math.random();
+  }
+
+  function createScopedRandom(scope) {
+    const stream = createRngStream(`${getFloorSeed()}|${scope}`);
+    return () => stream.next();
+  }
+
+  function createRandomFromSeed(seed) {
+    const stream = createRngStream(seed);
+    return () => stream.next();
+  }
+
+  function createRoomRandom(room, scope) {
+    const gx = Number.isFinite(room?.gx) ? room.gx : 'x';
+    const gy = Number.isFinite(room?.gy) ? room.gy : 'y';
+    const type = room?.type || 'room';
+    return createScopedRandom(`room:${gx},${gy}|type:${type}|${scope}`);
+  }
+
+  function createEntityRandom(entity, scope) {
+    const roomPart = currentRoom
+      ? `room:${currentRoom.gx},${currentRoom.gy}|type:${currentRoom.type || 'room'}`
+      : 'room:none';
+    const entityPart = `${entity?.kind || entity?.type || 'entity'}:${Math.round(Number(entity?.x || 0))},${Math.round(Number(entity?.y || 0))}`;
+    return createScopedRandom(`${roomPart}|${entityPart}|${scope}`);
   }
 
   function getRngState() {
@@ -4756,6 +4803,7 @@
       killedBy: getDamageSourceLabel(extra.killedBy || ''),
       killerKey: String(extra.killerKey || ''),
       challengeBonusCrystals: Math.max(0, Number(extra.challengeBonusCrystals || 0)),
+      challengeKeys: normalizeChallengeSelection(selectedChallenges),
       challenges: normalizeChallengeSelection(selectedChallenges).map(key => CHALLENGE_DEFS[key]?.name || titleCase(key)),
       items: historyItems,
       equippedMoves: captureRunMoveSnapshot(player),
@@ -5212,8 +5260,9 @@
     player.x = START_X;
     player.y = START_Y;
     // Grant 3 random starting items
+    const bossRushStartRandom = createScopedRandom('boss-rush:starting-items');
     for (let i = 0; i < 3; i++) {
-      const key = rollItemDrop({ elite: i === 2, stream: 'loot' });
+      const key = rollItemDrop({ elite: i === 2, random: bossRushStartRandom });
       if (key) collectItem(key);
     }
     addCoins(120);
@@ -5231,11 +5280,61 @@
     currentRoom.cleared = false;
     const safeSpawn = findSafeEnemySpawnPoint(ROOM_W / 2, ROOM_H / 2 - 40, 15);
     if (!safeSpawn) return;
-    const boss = spawnEnemy(bossType, safeSpawn.x, safeSpawn.y, false);
-    const playedCutscene = tryPlayKnaveKnightCutscene(boss, bossType);
-    const line = BOSS_OPENING_DIALOGUE[bossType];
-    if (!playedCutscene && boss && line) sayOverEntity(boss, line);
-    if (bossType === 'god') playGodDialogue(1);
+    let boss;
+    if (bossType === 'artificer_knave') {
+      // Step 1: Spawn as a regular knave
+      boss = spawnEnemy('knave', safeSpawn.x, safeSpawn.y, false);
+      boss.isTransforming = true;
+      // Visual cue: show particles or text
+      particles.push({ x: boss.x, y: boss.y - 40, life: 1.2, text: '???', c: '#ffd27d' });
+      // After a short delay, transform into artificer_knave
+      setTimeout(() => {
+        if (!boss || !enemies.includes(boss)) return;
+        // --- Transformation Animation ---
+        // 1. Flash effect
+        for (let i = 0; i < 8; i++) {
+          setTimeout(() => {
+            particles.push({ x: boss.x, y: boss.y, life: 0.18, ring: 32 + i * 4, c: i % 2 === 0 ? '#ffd27d' : '#fffbe0' });
+          }, i * 40);
+        }
+        // 2. Scale up and down (squash/stretch)
+        boss.transformAnimT = 0.36; // duration in seconds
+        const animInterval = setInterval(() => {
+          if (!boss || boss.transformAnimT <= 0) { clearInterval(animInterval); return; }
+          boss.transformAnimT -= 0.04;
+        }, 40);
+        // 3. Transformation text
+        particles.push({ x: boss.x, y: boss.y - 40, life: 1.6, text: 'TRANSFORM!', c: '#ffd27d' });
+        // 4. Play sound if available
+        if (window.playSound) playSound('transform');
+        // 5. After a short moment, actually transform
+        setTimeout(() => {
+          if (!boss || !enemies.includes(boss)) return;
+          boss.type = 'artificer_knave';
+          boss.r = 30;
+          boss.hp = 1880;
+          boss.max = 1880;
+          boss.speed = 124;
+          boss.dmg = 20;
+          boss.attackCd = 1.2;
+          boss.phase = 1;
+          boss.isTransforming = false;
+          boss.transformAnimT = 0;
+          // --- Wait a moment before cutscene/dialogue so animation is clear ---
+          setTimeout(() => {
+            const playedCutscene = tryPlayKnaveKnightCutscene(boss, 'artificer_knave');
+            const line = BOSS_OPENING_DIALOGUE['artificer_knave'];
+            if (!playedCutscene && boss && line) sayOverEntity(boss, line);
+          }, 400); // Wait 0.4s after animation for clarity
+        }, 420); // transformation after animation
+      }, 1200); // 1.2 seconds delay
+    } else {
+      boss = spawnEnemy(bossType, safeSpawn.x, safeSpawn.y, false);
+      const playedCutscene = tryPlayKnaveKnightCutscene(boss, bossType);
+      const line = BOSS_OPENING_DIALOGUE[bossType];
+      if (!playedCutscene && boss && line) sayOverEntity(boss, line);
+      if (bossType === 'god') playGodDialogue(1);
+    }
     particles.push({ x: ROOM_W / 2, y: ROOM_H / 2 - 50, life: 1.4, text: `BOSS ${bossRushStage + 1}: ${getBossDisplayName(bossType).toUpperCase()}`, c: '#ff8b8b' });
   }
 
@@ -5250,8 +5349,9 @@
     }
     const cx = ROOM_W / 2;
     const cy = ROOM_H / 2;
+    const rewardRandom = createScopedRandom(`boss-rush:stage:${bossRushStage}:reward`);
     dropCoins(cx, cy - 20, 80 + bossRushStage * 30);
-    pickups.push({ x: cx - 60, y: cy, type: 'item', key: rollItemDrop({ elite: true, stream: 'loot' }) });
+    pickups.push({ x: cx - 60, y: cy, type: 'item', key: rollItemDrop({ elite: true, random: rewardRandom }) });
     pickups.push({ x: cx + 60, y: cy, type: 'potion' });
     grantXp(40 + bossRushStage * 20);
     const nextName = getBossDisplayName(BOSS_RUSH_ORDER[bossRushStage]).toUpperCase();
@@ -5305,8 +5405,8 @@
       if (!btn || !player) return;
       const type = btn.dataset.enemy;
       const elite = ui.practiceEliteToggle?.checked ?? false;
-      const angle = Math.random() * Math.PI * 2;
-      const dist = 160 + Math.random() * 120;
+      const angle = nextRandom('encounter') * Math.PI * 2;
+      const dist = 160 + nextRandom('encounter') * 120;
       const x = clamp(player.x + Math.cos(angle) * dist, 80, ROOM_W - 80);
       const y = clamp(player.y + Math.sin(angle) * dist, 80, ROOM_H - 80);
       spawnEnemy(type, x, y, elite);
@@ -5615,9 +5715,9 @@
       } else {
         const regularOffers = shuffle(['relic', 'vitality', 'wealth'], 'world');
         const offerPool = shuffle(['xp', regularOffers[0], regularOffers[1]], 'world');
-        room.pickups.push(createSecretVendorOffer(offerPool[0], ROOM_W / 2 - 110, ROOM_H / 2 + 26));
-        room.pickups.push(createSecretVendorOffer(offerPool[1], ROOM_W / 2, ROOM_H / 2 - 18));
-        room.pickups.push(createSecretVendorOffer(offerPool[2], ROOM_W / 2 + 110, ROOM_H / 2 + 26));
+        room.pickups.push(createSecretVendorOffer(offerPool[0], ROOM_W / 2 - 110, ROOM_H / 2 + 26, room, 0));
+        room.pickups.push(createSecretVendorOffer(offerPool[1], ROOM_W / 2, ROOM_H / 2 - 18, room, 1));
+        room.pickups.push(createSecretVendorOffer(offerPool[2], ROOM_W / 2 + 110, ROOM_H / 2 + 26, room, 2));
       }
       return;
     }
@@ -6229,9 +6329,10 @@
     };
   }
 
-  function createSecretVendorOffer(kind, x, y) {
+  function createSecretVendorOffer(kind, x, y, room = currentRoom, index = 0) {
     if (kind === 'relic') {
-      return { x, y, type: 'secretVendor', offerKind: 'relic', cost: 1, label: 'Relic' };
+      const vendorRandom = createRoomRandom(room, `secret-vendor:relic:${index}`);
+      return { x, y, type: 'secretVendor', offerKind: 'relic', cost: 1, label: 'Relic', rewardKey: rollItemDrop({ elite: true, random: vendorRandom }) };
     }
     if (kind === 'vitality') {
       return { x, y, type: 'secretVendor', offerKind: 'vitality', cost: 1, label: 'Vital' };
@@ -6455,9 +6556,17 @@
     }
 
     if (room.type === 'treasure' && !room.cleared && chests.length === 0) {
-      const chestCount = 1 + Math.floor(nextRandom('loot') * 2);
+      const treasureRandom = createRoomRandom(room, 'treasure:chests');
+      const chestCount = 1 + Math.floor(treasureRandom() * 2);
       for (let index = 0; index < chestCount; index += 1) {
-        chests.push({ x: 260 + index * 180, y: ROOM_H / 2, open: false });
+        const rewardsItem = treasureRandom() < 0.9;
+        chests.push({
+          x: 260 + index * 180,
+          y: ROOM_H / 2,
+          open: false,
+          rewardType: rewardsItem ? 'item' : 'potion',
+          rewardKey: rewardsItem ? rollItemDrop({ random: treasureRandom }) : '',
+        });
       }
     }
 
@@ -6469,9 +6578,16 @@
       if (!room.cleared && enemies.length === 0) {
         spawnWave(getWaveCount(4), 'ladder');
         // Almost always add a random non-god boss to ladder rooms
-        if (nextRandom('encounter') < 0.88) {
+        if (!room.ladderBossPlan) {
+          const ladderRandom = createRoomRandom(room, 'ladder:boss');
           const _ladderBossPool = ['queen_cult', 'bulk_golem', 'artificer_knave'];
-          const _ladderBossType = _ladderBossPool[Math.floor(nextRandom('encounter') * _ladderBossPool.length)];
+          room.ladderBossPlan = {
+            spawn: ladderRandom() < 0.88,
+            type: _ladderBossPool[Math.floor(ladderRandom() * _ladderBossPool.length)],
+          };
+        }
+        if (room.ladderBossPlan.spawn) {
+          const _ladderBossType = room.ladderBossPlan.type;
           const _ladderBossSpawn = findSafeEnemySpawnPoint(ROOM_W / 2, ROOM_H / 2 - 60, 20);
           if (_ladderBossSpawn) {
             const _ladderBoss = spawnEnemy(_ladderBossType, _ladderBossSpawn.x, _ladderBossSpawn.y, false);
@@ -6556,6 +6672,7 @@
     const itemOffers = room.shopOffers.filter(offer => offer?.type === 'item');
     if (itemOffers.length >= minItemOffers) return;
 
+    const shopRandom = createRoomRandom(room, 'shop:item-offers');
     const occupiedKeys = new Set(itemOffers.map(offer => offer.key));
     const itemSlotsX = [ROOM_W / 2 - 180, ROOM_W / 2, ROOM_W / 2 + 180, ROOM_W / 2 - 90, ROOM_W / 2 + 90];
     let created = 0;
@@ -6563,13 +6680,13 @@
     while (itemOffers.length + created < minItemOffers) {
       let key = '';
       for (let attempts = 0; attempts < 12; attempts += 1) {
-        const candidate = rollItemDrop({ stream: 'loot' });
+        const candidate = rollItemDrop({ random: shopRandom });
         if (!occupiedKeys.has(candidate)) {
           key = candidate;
           break;
         }
       }
-      if (!key) key = rollItemDrop({ stream: 'loot' });
+      if (!key) key = rollItemDrop({ random: shopRandom });
       occupiedKeys.add(key);
       const itemIndex = itemOffers.length + created;
       const rarity = itemRegistry.get(key)?.rarity || ITEM_DEFS[key]?.rarity || 'knight';
@@ -7559,7 +7676,9 @@
   }
 
   function getFloorBossType() {
-    return floor <= 3 ? 'queen_cult' : floor <= 6 ? 'bulk_golem' : 'artificer_knave';
+    const bossPool = ['queen_cult', 'bulk_golem', 'artificer_knave'];
+    const bossRandom = createScopedRandom('floor-boss:type');
+    return bossPool[Math.floor(bossRandom() * bossPool.length)] || bossPool[0];
   }
 
   function rollChallengeTrialType() {
@@ -7630,14 +7749,15 @@
 
   function spawnMiniBoss(roomType = 'combat') {
     const chance = getMiniBossSpawnChance(roomType);
-    if (chance <= 0 || nextRandom('encounter') > chance) return;
+    const miniBossRandom = createRoomRandom(currentRoom, `mini-boss:${roomType}`);
+    if (chance <= 0 || miniBossRandom() > chance) return;
 
     const pool = roomType === 'ladder'
       ? ['golem', 'knave', 'cult_mage', 'sniper']
       : ['knave', 'cult_mage', 'sniper', 'golem'];
-    const type = pool[irand(0, pool.length - 1, 'encounter')];
-    const angle = nextRandom('encounter') * Math.PI * 2;
-    const radius = 120 + nextRandom('encounter') * 180;
+    const type = pool[Math.floor(miniBossRandom() * pool.length)] || pool[0];
+    const angle = miniBossRandom() * Math.PI * 2;
+    const radius = 120 + miniBossRandom() * 180;
     const x = clamp(ROOM_W / 2 + Math.cos(angle) * radius, 80, ROOM_W - 80);
     const y = clamp(ROOM_H / 2 + Math.sin(angle) * radius, 80, ROOM_H - 80);
     const safeSpawn = findSafeEnemySpawnPoint(x, y, 18);
@@ -7842,6 +7962,11 @@
       state: 'idle',
       spawnT: 0.72,
     };
+    const roomPart = currentRoom
+      ? `room:${currentRoom.gx},${currentRoom.gy}|type:${currentRoom.type || 'room'}`
+      : 'room:none';
+    if (currentRoom) currentRoom.enemySpawnSerial = Math.max(0, Number(currentRoom.enemySpawnSerial || 0)) + 1;
+    base.lootSeed = `${getFloorSeed()}|${roomPart}|enemy:${type}:${Math.round(x)},${Math.round(y)}:${currentRoom?.enemySpawnSerial || 0}|loot`;
 
     if (type === 'god') {
       base.r = 34;
@@ -8310,14 +8435,16 @@
     if (floor >= 7) pool.push(...RED_WEAPON_POOL);
     const available = pool.filter(k => !owned.has(k));
     if (available.length === 0) return null;
-    return available[Math.floor(rng() * available.length)];
+    const challengeRandom = createRoomRandom(currentRoom, 'challenge:weapon-reward');
+    return available[Math.floor(challengeRandom() * available.length)];
   }
 
   function spawnChallengeReward(text = 'TRIAL CLEARED') {
     if (!currentRoom || currentRoom.type !== 'challenge' || currentRoom.challengeRewardSpawned) return;
     currentRoom.challengeRewardSpawned = true;
+    const rewardRandom = createRoomRandom(currentRoom, 'challenge:reward');
     pickups = pickups.filter(pickup => !['challengeBomb', 'challengeRune', 'challengeStarter'].includes(pickup?.type));
-    pickups.push({ x: ROOM_W / 2, y: ROOM_H / 2 - 16, type: 'item', key: rollItemDrop({ elite: true, stream: 'loot' }) });
+    pickups.push({ x: ROOM_W / 2, y: ROOM_H / 2 - 16, type: 'item', key: rollItemDrop({ elite: true, random: rewardRandom }) });
     pickups.push({ x: ROOM_W / 2, y: ROOM_H / 2 + 36, type: 'potion' });
     dropCoins(ROOM_W / 2, ROOM_H / 2 + 4, 75 + floor * 15);
     grantXp(28 + floor * 5);
@@ -10117,8 +10244,9 @@
       });
     }
 
+    const enemyLootRandom = createRandomFromSeed(enemy.lootSeed || `${getFloorSeed()}|enemy:fallback:${enemy.type}:${Math.round(enemy.x)},${Math.round(enemy.y)}|loot`);
     if (isTutorialDummy) {
-      pickups.push({ x: enemy.x, y: enemy.y, type: 'item', key: rollItemDrop({ stream: 'loot' }) });
+      pickups.push({ x: enemy.x, y: enemy.y, type: 'item', key: rollItemDrop({ random: enemyLootRandom }) });
       particles.push({ x: enemy.x, y: enemy.y - 18, life: 0.85, text: 'RELIC DROPPED', c: '#8dd4ff' });
     } else {
       dropCoins(enemy.x, enemy.y, isBossType(enemy.type) ? 40 : enemy.elite ? 10 : 5);
@@ -10129,9 +10257,9 @@
       incrementChargeProgress('escape', 10);
     }
 
-    if (!isTutorialDummy && enemy.elite && nextRandom('loot') < 0.18) {
-      pickups.push({ x: enemy.x, y: enemy.y, type: 'item', key: rollItemDrop({ elite: true, stream: 'loot' }) });
-    } else if (!isTutorialDummy && nextRandom('loot') < 0.1) {
+    if (!isTutorialDummy && enemy.elite && enemyLootRandom() < 0.18) {
+      pickups.push({ x: enemy.x, y: enemy.y, type: 'item', key: rollItemDrop({ elite: true, random: enemyLootRandom }) });
+    } else if (!isTutorialDummy && enemyLootRandom() < 0.1) {
       pickups.push({ x: enemy.x, y: enemy.y, type: 'potion' });
     }
 
@@ -10236,11 +10364,12 @@
     if (ui.endlessWaveNum) ui.endlessWaveNum.textContent = endlessWave;
     const cx = ROOM_W / 2;
     const cy = ROOM_H / 2;
+    const rewardRandom = createScopedRandom(`endless:wave:${endlessWave}:reward`);
     particles.push({ x: cx, y: cy - 40, life: 1.4, text: `WAVE ${endlessWave} CLEARED`, c: '#78d7ff' });
-    pickups.push({ x: cx - 60, y: cy, type: 'item', key: rollItemDrop({ elite: endlessWave % 3 === 0, stream: 'loot' }) });
+    pickups.push({ x: cx - 60, y: cy, type: 'item', key: rollItemDrop({ elite: endlessWave % 3 === 0, random: rewardRandom }) });
     pickups.push({ x: cx + 60, y: cy, type: 'potion' });
     if (endlessWave % 5 === 0) {
-      pickups.push({ x: cx, y: cy + 50, type: 'item', key: rollItemDrop({ elite: true, stream: 'loot' }) });
+      pickups.push({ x: cx, y: cy + 50, type: 'item', key: rollItemDrop({ elite: true, random: rewardRandom }) });
     }
     dropCoins(cx, cy - 20, 30 + endlessWave * 8);
     grantXp(20 + endlessWave * 4);
@@ -10276,11 +10405,11 @@
         : ITEM_DROP_WEIGHTS;
       const filteredEntries = baseEntries.filter(([key]) => sandbox.allowedItems.includes(key));
       if (filteredEntries.length > 0) {
-        return rollFromWeightTable(buildWeightTable(filteredEntries), options.stream || 'loot');
+        return rollFromWeightTable(buildWeightTable(filteredEntries), options.stream || 'loot', options.random);
       }
     }
     const table = options.elite ? ELITE_ITEM_DROP_TABLE : ITEM_DROP_TABLE;
-    return rollFromWeightTable(table, options.stream || 'loot');
+    return rollFromWeightTable(table, options.stream || 'loot', options.random);
   }
 
   function grantXp(amount) {
@@ -10721,7 +10850,7 @@
     if (itemStats.bleedHealScale > 0 && totalBleed > 0 && player.hp < player.maxHp) {
       const heal = player.maxHp * 0.006 * totalBleed * itemStats.bleedHealScale * dt;
       player.hp = Math.min(player.maxHp, player.hp + heal);
-      if (Math.random() < 0.14) {
+      if (nextRandom('fx') < 0.14) {
         particles.push({ x: player.x + rand(-10, 10), y: player.y - 18, life: 0.5, text: `+${Math.max(1, Math.ceil(heal * 10))}`, c: '#0f8' });
       }
     }
@@ -10762,7 +10891,7 @@
     perfEnd('update.transitions', sectionPerfStart);
 
     sectionPerfStart = perfStart();
-    if (godTimer > 0 && Math.random() < 0.4) {
+    if (godTimer > 0 && nextRandom('fx') < 0.4) {
       particles.push({ x: player.x + rand(-6, 6), y: player.y + rand(-6, 6), life: 0.32, c: `hsl(${(Date.now() / 8) % 360},100%,65%)` });
     }
     perfEnd('update.fx', sectionPerfStart);
@@ -12781,7 +12910,7 @@
       state.tick = config.interval;
       const damage = Math.max(0.25, config.damage(state.stacks));
       damagePlayer(damage, 0, 0, key, { ignoreInv: true, noInvFrames: true });
-      if (Math.random() < 0.3) {
+      if (nextRandom('fx') < 0.3) {
         particles.push({ x: player.x + rand(-8, 8), y: player.y + rand(-8, 8), life: 0.25, c: config.color });
       }
     }
@@ -13093,7 +13222,7 @@
           enemy.hp -= (hazard.dps || 16) * dt;
           if (hazard.statusTick <= 0) applyFire(enemy, 1, 2.8);
           enemy.stun = Math.max(enemy.stun, 0.05);
-          if (Math.random() < 0.06) particles.push({ x: enemy.x + rand(-6, 6), y: enemy.y + rand(-6, 6), life: 0.3, c: '#ff8c3b' });
+          if (nextRandom('fx') < 0.06) particles.push({ x: enemy.x + rand(-6, 6), y: enemy.y + rand(-6, 6), life: 0.3, c: '#ff8c3b' });
           if (enemy.hp <= 0) onEnemyDie(enemy);
         }
         if (hazard.statusTick <= 0) hazard.statusTick = 0.45;
@@ -13150,8 +13279,9 @@
     if (prop.hp > 0) return;
     prop.broken = true;
     if (prop.kind === 'pot') {
-      if (rng() < 0.7) dropCoins(prop.x, prop.y, 6 + floor);
-      else pickups.push({ x: prop.x, y: prop.y, type: 'item', key: rollItemDrop({ stream: 'loot' }) });
+      const potRandom = createEntityRandom(prop, 'pot:reward');
+      if (potRandom() < 0.7) dropCoins(prop.x, prop.y, 6 + floor);
+      else pickups.push({ x: prop.x, y: prop.y, type: 'item', key: rollItemDrop({ random: potRandom }) });
     }
     if (prop.kind === 'barrel') {
       blastRadius(prop.x, prop.y, 130, 55, '#ff5a3d');
@@ -13238,8 +13368,8 @@
       if (dist(chest.x, chest.y, player.x, player.y) >= 36) return;
       chest.open = true;
       dropCoins(chest.x, chest.y, 12 + floor * 2);
-      if (rng() < 0.9) {
-        pickups.push({ x: chest.x, y: chest.y - 20, type: 'item', key: rollItemDrop({ stream: 'loot' }) });
+      if ((chest.rewardType || 'item') === 'item') {
+        pickups.push({ x: chest.x, y: chest.y - 20, type: 'item', key: chest.rewardKey || rollItemDrop({ random: createEntityRandom(chest, 'chest:fallback') }) });
       } else {
         pickups.push({ x: chest.x, y: chest.y - 20, type: 'potion' });
       }
@@ -13490,7 +13620,7 @@
         }
         pickup.bought = true;
         if (pickup.offerKind === 'relic') {
-          collectItem(rollItemDrop({ elite: true, stream: 'loot' }));
+          collectItem(pickup.rewardKey || rollItemDrop({ elite: true, random: createEntityRandom(pickup, 'secret-vendor:fallback') }));
         } else if (pickup.offerKind === 'vitality') {
           player.maxHp += 20;
           player.hp = Math.min(player.maxHp, player.hp + 60);
@@ -14367,8 +14497,8 @@
     const isDying = gameState === 'dying';
     const slotDead = !!slot?.getDead?.();
     const _shakeOn = window.NeoSettings?.getAccess()?.screenShake !== false;
-    const sX = _shakeOn && pLabel === 'P1' ? (Math.random() - 0.5) * shake * 2 : 0;
-    const sY = _shakeOn && pLabel === 'P1' ? (Math.random() - 0.5) * shake * 2 : 0;
+    const sX = _shakeOn && pLabel === 'P1' ? (nextRandom('fx') - 0.5) * shake * 2 : 0;
+    const sY = _shakeOn && pLabel === 'P1' ? (nextRandom('fx') - 0.5) * shake * 2 : 0;
     ctx.save();
     ctx.beginPath();
     ctx.rect(vpX, vpY, vpW, vpH);
@@ -17004,13 +17134,26 @@
       const spriteKey = getEnemySpriteKey(enemy);
       const facing = getFacingDirection(enemy, enemy.beamAngle || enemy.dashAngle || 0);
       const drawSize = Math.max(30, enemy.r * 2.4);
-      drawSpriteFrame(spriteKey, enemy.x, drawY, drawSize, {
+      // Transformation animation: scale and flash
+      let scale = 1;
+      let flash = false;
+      if (enemy.transformAnimT && enemy.transformAnimT > 0) {
+        // Oscillate scale and flash
+        const t = enemy.transformAnimT;
+        scale = 1.1 + Math.sin(Date.now() / 60) * 0.13 * t * 2;
+        flash = Math.floor(Date.now() / 80) % 2 === 0;
+      }
+      ctx.save();
+      ctx.translate(enemy.x, drawY);
+      ctx.scale(scale, scale);
+      drawSpriteFrame(spriteKey, 0, 0, drawSize, {
         alpha: enemy.stun > 0 ? 0.68 : 1,
         flipX: facing < 0,
         shadowColor: enemy.elite || enemy.type === 'god' ? 'rgba(255,244,180,0.45)' : 'rgba(0,0,0,0.18)',
         shadowBlur: enemy.type === 'god' ? 14 : enemy.elite ? 10 : 4,
-        tint: enemy.elite ? 'rgba(255,210,96,0.7)' : null,
+        tint: flash ? 'rgba(255,255,180,0.55)' : (enemy.elite ? 'rgba(255,210,96,0.7)' : null),
       });
+      ctx.restore();
       if (bleedStacks > 0) drawBleedOverlay(enemy, bleedStacks);
       const badgeBaseY = enemy.type === 'rival' ? -enemy.r - 40 : -enemy.r - 32;
       let badgeOffset = bleedStacks > 0 ? 18 : 0;
@@ -18375,12 +18518,17 @@
             : '';
           return `<div class="info-card">
             <div class="info-card__header">
+              <canvas class="info-card__icon" data-info-move="${m.key}" width="32" height="32"></canvas>
               <span class="info-card__name">${m.name}</span>
               <span class="info-card__tag info-card__tag--${m.slot}">${slotLabel}</span>
             </div>
             <div class="info-card__desc">${m.desc || ''}${exclusive}</div>
           </div>`;
         }).join('')}</div>`;
+        view.rhInfoContent.querySelectorAll('[data-info-move]').forEach(el => {
+          const move = MOVE_DEFS[el.dataset.infoMove];
+          if (move) drawMoveToastIcon(el, move);
+        });
 
       } else if (tab === 'enemies') {
         const attackStyleLabel = { melee: 'Melee', dash: 'Dash', ranged: 'Ranged', burst: 'Burst', summon: 'Summoner', support: 'Support', mirror: 'Mirror', beam: 'Beam' };
@@ -19521,9 +19669,9 @@
     return { total, cumulative };
   }
 
-  function rollFromWeightTable(table, stream = 'loot') {
+  function rollFromWeightTable(table, stream = 'loot', random = null) {
     if (!table || table.total <= 0 || !table.cumulative.length) return 'neo_knife';
-    const roll = nextRandom(stream) * table.total;
+    const roll = (typeof random === 'function' ? random() : nextRandom(stream)) * table.total;
     let lo = 0;
     let hi = table.cumulative.length - 1;
     while (lo < hi) {
@@ -19569,6 +19717,16 @@
     const copy = [...array];
     for (let index = copy.length - 1; index > 0; index -= 1) {
       const swapIndex = Math.floor(nextRandom(stream) * (index + 1));
+      [copy[index], copy[swapIndex]] = [copy[swapIndex], copy[index]];
+    }
+    return copy;
+  }
+
+  function shuffleWithRandom(array, random) {
+    const copy = [...array];
+    const next = typeof random === 'function' ? random : () => nextRandom('encounter');
+    for (let index = copy.length - 1; index > 0; index -= 1) {
+      const swapIndex = Math.floor(next() * (index + 1));
       [copy[index], copy[swapIndex]] = [copy[swapIndex], copy[index]];
     }
     return copy;
