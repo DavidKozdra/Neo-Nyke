@@ -14369,6 +14369,7 @@
   }
 
   async function clearRunSave() {
+    if (window.__neoDataResetting) return;
     activeRun = null;
     lastDamageSource = '';
     lastDamageSourceKey = '';
@@ -14385,6 +14386,7 @@
   }
 
   function scheduleRunSave() {
+    if (window.__neoDataResetting) return;
     if (gameState !== 'play' || !player || !currentRoom) return;
     clearTimeout(savePendingTimer);
     savePendingTimer = setTimeout(() => { void saveRunNow(); }, 250);
@@ -14400,6 +14402,7 @@
   }
 
   function queueMetaSave() {
+    if (window.__neoDataResetting) return;
     metaSaveDirty = true;
     if (metaSavePendingTimer) return;
     metaSavePendingTimer = setTimeout(() => {
@@ -14413,6 +14416,7 @@
   }
 
   function persistMetaSoon() {
+    if (window.__neoDataResetting) return;
     metaProgress.customDifficultySettings = { ...customDifficultySettings };
     metaProgress.sandboxSettings = normalizeSandboxSettings(sandboxSettings);
     metaProgress.selectedCharacter = chosenCharacter;
@@ -14421,6 +14425,7 @@
   }
 
   async function saveRunNow() {
+    if (window.__neoDataResetting) return;
     if (gameState !== 'play' || !player || !currentRoom) return;
     activeRun = serializeRun();
     metaProgress.bestFloor = Math.max(metaProgress.bestFloor, floor);
@@ -18619,18 +18624,44 @@
     async function populateAchievementsPanel() {
       if (!view.achievementsList) return;
       view.achievementsList.innerHTML = '<div class="ach-loading">Loading…</div>';
+      const progressSnapshot = typeof achievementManager.getProgressSnapshot === 'function'
+        ? await achievementManager.getProgressSnapshot()
+        : {};
+      progressSnapshot.metaCoins = Math.max(
+        Math.max(0, Number(progressSnapshot.metaCoins) || 0),
+        Math.max(0, Number(metaProgress?.coins) || 0)
+      );
       const cards = await Promise.all(ACHIEVEMENTS.map(async a => {
         const unlocked = await achievementManager.isUnlocked(a.id);
+        const progressDef = ACHIEVEMENT_PROGRESS?.[a.id];
+        const progressMarkup = !unlocked && progressDef
+          ? renderAchievementProgress(progressDef, progressSnapshot)
+          : '';
         return `<div class="ach-card${unlocked ? '' : ' ach-card--locked'}">
           <span class="ach-icon">${a.icon}</span>
           <div>
             <div class="ach-name">${a.name}</div>
             <div class="ach-desc">${a.desc}</div>
+            ${progressMarkup}
             <div class="${unlocked ? 'ach-unlocked-badge' : 'ach-locked-badge'}">${unlocked ? '✓ Unlocked  +1 ◆' : '— Locked'}</div>
           </div>
         </div>`;
       }));
       view.achievementsList.innerHTML = cards.join('');
+    }
+
+    function renderAchievementProgress(progressDef, progressSnapshot) {
+      const target = Math.max(1, Number(progressDef.target) || 1);
+      const rawValue = Math.max(0, Number(progressSnapshot?.[progressDef.key]) || 0);
+      const value = Math.min(rawValue, target);
+      const percent = Math.max(0, Math.min(100, (value / target) * 100));
+      return `<div class="ach-progress" aria-label="${escapeHtml(progressDef.label)} ${value} of ${target}">
+        <div class="ach-progress__meta">
+          <span>${escapeHtml(progressDef.label)}</span>
+          <b>${value.toLocaleString()} / ${target.toLocaleString()}</b>
+        </div>
+        <div class="ach-progress__track"><i style="width:${percent.toFixed(2)}%"></i></div>
+      </div>`;
     }
 
     function setAchievementsPanelOpen(open) {

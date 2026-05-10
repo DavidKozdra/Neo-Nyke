@@ -5,7 +5,7 @@
   "scripts": {
     "icons": "node generate-icons.js",
     "build": "terser js/game.js -o dist/game.min.js -c -m && cp index.html dist/ && sed -i 's|js/game.js|game.min.js|g' dist/index.html",
-    "build:all": "mkdir -p dist && cp -r assets css Koz_Engine_Lib manifest.json sw.js js/achievements.js js/achievementManager.js js/touchControls.js js/gamepadControls.js js/ui dist/ && npm run build"
+    "build:all": "mkdir -p dist/js && cp -r assets css Koz_Engine_Lib manifest.json sw.js dist/ && cp js/achievements.js js/achievementManager.js js/dataAdapter.js js/touchControls.js js/gamepadControls.js dist/js/ && cp -r js/ui dist/js/ && npm run build"
   },
   "devDependencies": {
     "canvas": "^3.2.3",
