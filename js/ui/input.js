@@ -107,7 +107,7 @@
       name: 'Extending Staff',
       rarity: 'knight',
       description: 'Long sweeping strike with massive knockback.',
-      color: '#f2f6ff',
+      color: '#ff3333',
     },
     hunters_bow: {
       key: 'hunters_bow',
@@ -1036,7 +1036,7 @@
 
   // Base stat values per weapon (used to compute current upgraded value)
   const WEAPON_BASE_STATS = {
-    extending_staff:          { damage: 38,   cooldown: 0.50, range: 130, knockback: 500 },
+    extending_staff:          { damage: 38,   cooldown: 0.55, range: 130, knockback: 500 },
     hunters_bow:              { damage: 28,   cooldown: 0.40,             knockback: 180 },
     thorns_bleed_blade:       { damage: 32,   cooldown: 0.55, range: 90,  knockback: 120 },
     lazer_glasses:            { damage: 18,   cooldown: 3.60,             knockback: 80  },

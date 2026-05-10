@@ -599,7 +599,7 @@ window.NeoNykeIconDefs = {
 
   weapons: {
     extending_staff: {
-      color: '#f2f6ff',
+      color: '#ff3333',
       pixels: [
         [6,0],[7,0],
         [5,1],[6,1],

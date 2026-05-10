@@ -50,7 +50,7 @@
 
   function getWeaponBaseCooldown(weaponKey) {
     let base;
-    if (weaponKey === 'extending_staff') base = 0.5;
+    if (weaponKey === 'extending_staff') base = 0.55;
     else if (weaponKey === 'hunters_bow') base = 0.4;
     else if (weaponKey === 'thorns_bleed_blade') base = ATTACKS.melee.baseCooldown;
     else if (weaponKey === 'lazer_glasses') base = 3.6;
@@ -140,7 +140,7 @@
     const wRng  = k => Math.max(10, (WEAPON_BASE_STATS[k]?.range   ?? 120) + getAnvilWeaponBonus(k, 'range'));
     const wCd   = k => getWeaponBaseCooldown(k);
     if (weaponKey === 'extending_staff') {
-      fireWeaponSweep(wDmg(weaponKey), wRng(weaponKey), 1.45, wKnk(weaponKey), '#eaf4ff');
+      fireWeaponSweep(wDmg(weaponKey), wRng(weaponKey), 1.45, wKnk(weaponKey), '#ff3333');
       player.weaponCooldown = wCd(weaponKey);
       return true;
     }

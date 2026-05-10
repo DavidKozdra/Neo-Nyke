@@ -604,7 +604,7 @@
       const previewX = Math.cos(aimAngle) * previewRange;
       const previewY = Math.sin(aimAngle) * previewRange;
       ctx.globalAlpha = 0.32;
-      ctx.strokeStyle = '#d8f1ff';
+      ctx.strokeStyle = '#ff6666';
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.moveTo(Math.cos(aimAngle) * 18, Math.sin(aimAngle) * 18);
@@ -615,7 +615,7 @@
       ctx.arc(0, 0, previewRange, aimAngle - previewArc, aimAngle + previewArc);
       ctx.stroke();
       ctx.globalAlpha = 0.55;
-      ctx.fillStyle = '#f3fbff';
+      ctx.fillStyle = '#ff3333';
       ctx.beginPath();
       ctx.arc(previewX, previewY, 4, 0, Math.PI * 2);
       ctx.fill();
@@ -632,7 +632,7 @@
       const trailLength = swingArc * 0.55;
       const trailStart = currentTip + trailLength;
       const fadeAlpha = 0.9 * (player.swing / swingTotal);
-      const slashColor = extendingStaffEquipped ? '#eaf4ff' : godTimer > 0 ? '#f6e8c8' : '#d86d87';
+      const slashColor = extendingStaffEquipped ? '#ff3333' : godTimer > 0 ? '#f6e8c8' : '#d86d87';
       // Glow outer trail
       ctx.globalAlpha = fadeAlpha * 0.35;
       ctx.strokeStyle = slashColor;

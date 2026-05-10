@@ -694,7 +694,7 @@
       name: 'Extending Staff',
       rarity: 'knight',
       description: 'Long sweeping strike with massive knockback.',
-      color: '#f2f6ff',
+      color: '#ff3333',
     },
     hunters_bow: {
       key: 'hunters_bow',
@@ -1623,7 +1623,7 @@
 
   // Base stat values per weapon (used to compute current upgraded value)
   const WEAPON_BASE_STATS = {
-    extending_staff:          { damage: 38,   cooldown: 0.50, range: 130, knockback: 500 },
+    extending_staff:          { damage: 38,   cooldown: 0.55, range: 130, knockback: 500 },
     hunters_bow:              { damage: 28,   cooldown: 0.40,             knockback: 180 },
     thorns_bleed_blade:       { damage: 32,   cooldown: 0.55, range: 90,  knockback: 120 },
     lazer_glasses:            { damage: 18,   cooldown: 3.60,             knockback: 80  },
@@ -9094,7 +9094,7 @@
         enemy.bulkJumpWarned = false;
         enemy.jumpCd = 2.4;
         const impactRadius = 150;
-        particles.push({ x: enemy.x, y: enemy.y, life: 0.55, ring: impactRadius - 38, c: '#ff8844' });
+        particles.push({ x: enemy.x, y: enemy.y, life: 0.55, ring: impactRadius, c: '#ff8844' });
         shake = Math.max(shake, 10);
         shakeT = Math.max(shakeT, 0.18);
         if (dist(enemy.x, enemy.y, player.x, player.y) < impactRadius + player.r) {
@@ -9115,7 +9115,7 @@
       }
       const aoeRadius = 240;
       const aoeDamage = Math.round(enemy.dmg * 1.2);
-      particles.push({ x: enemy.x, y: enemy.y, life: 0.5, ring: aoeRadius - 60, c: '#ff8844' });
+      particles.push({ x: enemy.x, y: enemy.y, life: 0.5, ring: aoeRadius, c: '#ff8844' });
       blastRadius(enemy.x, enemy.y, aoeRadius, aoeDamage, '#ff8844', enemy);
       shake = 12;
       shakeT = 0.2;
@@ -10602,7 +10602,7 @@
 
   function getWeaponBaseCooldown(weaponKey) {
     let base;
-    if (weaponKey === 'extending_staff') base = 0.5;
+    if (weaponKey === 'extending_staff') base = 0.55;
     else if (weaponKey === 'hunters_bow') base = 0.4;
     else if (weaponKey === 'thorns_bleed_blade') base = ATTACKS.melee.baseCooldown;
     else if (weaponKey === 'lazer_glasses') base = 3.6;
@@ -10692,7 +10692,7 @@
     const wRng  = k => Math.max(10, (WEAPON_BASE_STATS[k]?.range   ?? 120) + getAnvilWeaponBonus(k, 'range'));
     const wCd   = k => getWeaponBaseCooldown(k);
     if (weaponKey === 'extending_staff') {
-      fireWeaponSweep(wDmg(weaponKey), wRng(weaponKey), 1.45, wKnk(weaponKey), '#eaf4ff');
+      fireWeaponSweep(wDmg(weaponKey), wRng(weaponKey), 1.45, wKnk(weaponKey), '#ff3333');
       player.weaponCooldown = wCd(weaponKey);
       return true;
     }
@@ -17362,7 +17362,7 @@
       const previewX = Math.cos(aimAngle) * previewRange;
       const previewY = Math.sin(aimAngle) * previewRange;
       ctx.globalAlpha = 0.32;
-      ctx.strokeStyle = '#d8f1ff';
+      ctx.strokeStyle = '#ff6666';
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.moveTo(Math.cos(aimAngle) * 18, Math.sin(aimAngle) * 18);
@@ -17373,7 +17373,7 @@
       ctx.arc(0, 0, previewRange, aimAngle - previewArc, aimAngle + previewArc);
       ctx.stroke();
       ctx.globalAlpha = 0.55;
-      ctx.fillStyle = '#f3fbff';
+      ctx.fillStyle = '#ff3333';
       ctx.beginPath();
       ctx.arc(previewX, previewY, 4, 0, Math.PI * 2);
       ctx.fill();
@@ -17390,7 +17390,7 @@
       const trailLength = swingArc * 0.55;
       const trailStart = currentTip + trailLength;
       const fadeAlpha = 0.9 * (player.swing / swingTotal);
-      const slashColor = extendingStaffEquipped ? '#eaf4ff' : godTimer > 0 ? '#f6e8c8' : '#d86d87';
+      const slashColor = extendingStaffEquipped ? '#ff3333' : godTimer > 0 ? '#f6e8c8' : '#d86d87';
       // Glow outer trail
       ctx.globalAlpha = fadeAlpha * 0.35;
       ctx.strokeStyle = slashColor;

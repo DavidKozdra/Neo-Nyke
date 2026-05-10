@@ -1659,7 +1659,7 @@
         enemy.bulkJumpWarned = false;
         enemy.jumpCd = 2.4;
         const impactRadius = 150;
-        particles.push({ x: enemy.x, y: enemy.y, life: 0.55, ring: impactRadius - 38, c: '#ff8844' });
+        particles.push({ x: enemy.x, y: enemy.y, life: 0.55, ring: impactRadius, c: '#ff8844' });
         shake = Math.max(shake, 10);
         shakeT = Math.max(shakeT, 0.18);
         if (dist(enemy.x, enemy.y, player.x, player.y) < impactRadius + player.r) {
@@ -1680,7 +1680,7 @@
       }
       const aoeRadius = 240;
       const aoeDamage = Math.round(enemy.dmg * 1.2);
-      particles.push({ x: enemy.x, y: enemy.y, life: 0.5, ring: aoeRadius - 60, c: '#ff8844' });
+      particles.push({ x: enemy.x, y: enemy.y, life: 0.5, ring: aoeRadius, c: '#ff8844' });
       blastRadius(enemy.x, enemy.y, aoeRadius, aoeDamage, '#ff8844', enemy);
       shake = 12;
       shakeT = 0.2;
