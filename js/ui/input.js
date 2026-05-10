@@ -1,0 +1,1082 @@
+  function normalizeMouseBinding(value, fallback) {
+    const normalized = String(value || fallback).toLowerCase();
+    return normalized === 'rmb' || normalized === 'lmb' ? normalized : fallback;
+  }
+
+  function getMouseBindings() {
+    const bindings = window.NeoSettings?.getBindings?.();
+    return {
+      slash: normalizeMouseBinding(bindings?.slash, 'lmb'),
+      laser: normalizeMouseBinding(bindings?.laser, 'rmb'),
+    };
+  }
+
+  function isMouseActionHeld(action) {
+    const mouseBindings = getMouseBindings();
+    if (mouseBindings[action] === 'rmb') {
+      const held = !!mouse.right || !!mouse.rightQueued;
+      mouse.rightQueued = false;
+      return held;
+    }
+    const held = !!mouse.down || !!mouse.downQueued;
+    mouse.downQueued = false;
+    return held;
+  }
+
+  function formatMouseBindingLabel(value, fallback) {
+    return normalizeMouseBinding(value, fallback) === 'rmb' ? 'RMB' : 'LMB';
+  }
+
+  function getSlotKeyLabel(slot) {
+    const bindings = window.NeoSettings?.getBindings?.();
+    if (slot === 'melee') return formatMouseBindingLabel(bindings?.slash, 'lmb');
+    if (slot === 'laser') return formatMouseBindingLabel(bindings?.laser, 'rmb');
+    if (slot === 'smash') return String(bindings?.smash || SLOT_KEYS.smash || 'r').toUpperCase();
+    if (slot === 'dash') return String(bindings?.dash || SLOT_KEYS.dash || 'shift').toUpperCase();
+    return SLOT_KEYS[slot] || '';
+  }
+
+  const MOVE_DEFS = {
+    slash: { key: 'slash', slot: 'melee', name: 'Slash', desc: 'Close-range arc attack.' },
+    fire_balls: { key: 'fire_balls', slot: 'melee', name: 'Fire Balls', desc: 'Shoot a spread of fireballs.' },
+    smite: { key: 'smite', slot: 'melee', name: 'Smite', desc: 'Physical swing plus chaining lightning.' },
+    narwal_fight: { key: 'narwal_fight', slot: 'melee', name: 'Narwal Fight', desc: 'A wide pink spear-sweep with a piercing follow-up.', exclusiveCharacter: 'princess' },
+
+    blood_beam: { key: 'blood_beam', slot: 'laser', name: 'Blood Beam', desc: 'Sustained piercing beam that causes bleed.' },
+    love_beam: { key: 'love_beam', slot: 'laser', name: 'Love Beam', desc: 'A radiant beam that damages enemies and heals you on hit.', exclusiveCharacter: 'princess' },
+    turtle_wave: { key: 'turtle_wave', slot: 'laser', name: 'Turtle Wave', desc: 'Giant beam. Drains 2 HP each active second.' },
+    power_disks: { key: 'power_disks', slot: 'laser', name: 'Power Disks', desc: 'Burst of spinning disks.' },
+    blade_justice: { key: 'blade_justice', slot: 'laser', name: 'Blade Justice', desc: 'Divine short-range blade strike.' },
+    lightning_columns: { key: 'lightning_columns', slot: 'laser', name: 'Lightning Columns', desc: 'Summon two lightning turrets.' },
+    god_sweep: { key: 'god_sweep', slot: 'laser', name: 'God Sweep', desc: 'Spin a massive divine beam around yourself.' },
+
+    crimson_smash: { key: 'crimson_smash', slot: 'smash', name: 'Crimson Smash', desc: 'Heavy area smash.' },
+    kicky_kick: { key: 'kicky_kick', slot: 'smash', name: 'Kicky Kick', desc: 'A heavy kick that blasts enemies away.', exclusiveCharacter: 'princess' },
+    chaos_burst: { key: 'chaos_burst', slot: 'smash', name: 'Chaos Burst', desc: 'Multiple chaos detonations.' },
+    healing_zone: { key: 'healing_zone', slot: 'smash', name: 'Healing Zone', desc: 'Healing and damage zone.' },
+    fire_circle: { key: 'fire_circle', slot: 'smash', name: 'Fire Circle', desc: 'Burning aura around you.' },
+    floor_lava: { key: 'floor_lava', slot: 'smash', name: 'Floor Is Lava', desc: 'Lava immunity and lava trail.' },
+
+    dash: {
+      key: 'dash',
+      slot: 'dash',
+      name: 'Dash',
+      desc: 'Fast invulnerable burst movement.',
+      maxStacks: 1,
+      stackOverrides: { thorn_knight: 2 },
+    },
+    nimrod_stomp: {
+      key: 'nimrod_stomp',
+      slot: 'dash',
+      name: 'Nimrod Stomp',
+      desc: 'Leap across the room and slam on landing for heavy AOE damage.',
+    },
+    warp: { key: 'warp', slot: 'dash', name: 'Warp', desc: 'Phase out and reappear where you click.' },
+    zip_lightning: {
+      key: 'zip_lightning',
+      slot: 'dash',
+      name: 'Zip Lightning',
+      desc: 'Zip between targets, chaining lightning hits as you move.',
+    },
+    flying_unhitable: {
+      key: 'flying_unhitable',
+      slot: 'dash',
+      name: 'Flying Untouchable',
+      desc: 'Rise into the air and become untouchable for 15 seconds.',
+      exclusiveCharacter: 'princess',
+    },
+    cowards_way: {
+      key: 'cowards_way',
+      slot: 'dash',
+      name: "Coward's Way",
+      desc: 'Become invulnerable for 3 seconds, but it ends if you attack.',
+    },
+  };
+
+  const SHOP_MOVE_POOL = [
+    'slash', 'fire_balls', 'smite', 'narwal_fight',
+    'blood_beam', 'love_beam', 'turtle_wave', 'power_disks', 'blade_justice', 'lightning_columns',
+    'god_sweep',
+    'crimson_smash', 'kicky_kick', 'chaos_burst', 'healing_zone', 'fire_circle', 'floor_lava',
+    'dash', 'nimrod_stomp', 'warp', 'zip_lightning', 'flying_unhitable', 'cowards_way',
+  ];
+
+  const WEAPON_DEFS = {
+    extending_staff: {
+      key: 'extending_staff',
+      name: 'Extending Staff',
+      rarity: 'knight',
+      description: 'Long sweeping strike with massive knockback.',
+      color: '#f2f6ff',
+    },
+    hunters_bow: {
+      key: 'hunters_bow',
+      name: "Hunter's Bow",
+      rarity: 'knight',
+      description: 'Fast, accurate ranged shot with +10% crit chance.',
+      color: '#e8f7ff',
+    },
+    thorns_bleed_blade: {
+      key: 'thorns_bleed_blade',
+      name: "Thorn's Bleed Blade",
+      rarity: 'knight',
+      description: 'Close slash with heavy bleed application.',
+      color: '#ffe9ef',
+    },
+    lazer_glasses: {
+      key: 'lazer_glasses',
+      name: 'Lazer Glasses',
+      rarity: 'wizard',
+      description: 'Twin beams track your mouse and can ignite enemies.',
+      color: '#cd9bff',
+    },
+    metao_fire_staff: {
+      key: 'metao_fire_staff',
+      name: "Metao's Fire Staff",
+      rarity: 'wizard',
+      description: 'Fan cast of burning fire bolts.',
+      color: '#ffb874',
+    },
+    magenta_degale: {
+      key: 'magenta_degale',
+      name: "Magenta's Degale",
+      rarity: 'wizard',
+      description: 'Super heavy shot with massive knockback and recoil.',
+      color: '#ff8ccc',
+    },
+    magenta_p90: {
+      key: 'magenta_p90',
+      name: "Magenta's P90",
+      rarity: 'wizard',
+      description: 'Rapid burst fire with controlled recoil.',
+      color: '#ff9dd7',
+    },
+    granillia_lightning_spear: {
+      key: 'granillia_lightning_spear',
+      name: "Granillia's Spear of Lightning",
+      rarity: 'god',
+      description: 'Piercing lightning spear that chains on impact.',
+      color: '#9bd9ff',
+    },
+    excalibur: {
+      key: 'excalibur',
+      name: 'Excalibur',
+      rarity: 'god',
+      description: "A divine strike for 777% of your base damage.",
+      color: '#ffd980',
+    },
+    golden_fleece: {
+      key: 'golden_fleece',
+      name: 'Golden Fleece',
+      rarity: 'god',
+      description: 'Heals 20% max HP every 2 seconds while equipped.',
+      color: '#ffe59c',
+    },
+    void_piercer: {
+      key: 'void_piercer',
+      name: 'Void Piercer',
+      rarity: 'god',
+      description: 'Pierces barriers with high damage and 20% crit.',
+      color: '#ffd2c0',
+    },
+    aegis_shield_weapon: {
+      key: 'aegis_shield_weapon',
+      name: 'Aegis Shield',
+      rarity: 'god',
+      description: 'Blocks all incoming damage for 2 seconds.',
+      color: '#c8f6ff',
+    },
+  };
+  const WEAPON_KEYS = Object.keys(WEAPON_DEFS);
+  const WHITE_WEAPON_POOL = ['extending_staff', 'hunters_bow', 'thorns_bleed_blade'];
+
+  // Rival adventurers: dungeon-roaming NPCs based on unchosen characters.
+  const RIVAL_DEFS = {
+    princess: {
+      name: 'Rival Princess',
+      color: '#e87fff',
+      hp: 220, dmg: 26, speed: 102, r: 16, attackCd: 0.75,
+      enterLine: 'This dungeon belongs to me.',
+      deathLine: 'Unbelievable...',
+      attackStyle: 'melee',
+    },
+    thorn_knight: {
+      name: 'Rival Thorn',
+      color: '#ff6e8b',
+      hp: 180, dmg: 22, speed: 118, r: 16, attackCd: 0.8,
+      enterLine: 'Your loot is mine.',
+      deathLine: 'Run next time...',
+      attackStyle: 'melee',
+    },
+    metao: {
+      name: 'Rival Metao',
+      color: '#ff9940',
+      hp: 130, dmg: 16, speed: 82, r: 15, attackCd: 1.3,
+      enterLine: 'I\'ve been watching you.',
+      deathLine: 'Impossible...',
+      attackStyle: 'ranged',
+    },
+    granialla: {
+      name: 'Rival Granialla',
+      color: '#a8aaff',
+      hp: 240, dmg: 20, speed: 94, r: 17, attackCd: 1.0,
+      enterLine: 'You dare compete with a god?',
+      deathLine: 'This cannot be...',
+      attackStyle: 'melee_heal',
+    },
+  };
+  const RIVAL_MOVE_INTERVAL_BASE = 8.5;
+  const RIVAL_SPAWN_CHANCE = 0.15; // ~15% spawn chance - very rare encounters
+  const RIVAL_GROWTH_TICK_SECONDS = 14;
+  const RIVAL_XP_PER_GROWTH_TICK = 12;
+  const RIVAL_WEAPON_SWAP_BASE = 3.6;
+  const MONSTER_ROAM_INTERVAL_SECONDS = 60;
+  const MONSTER_ROAM_MOVE_CHANCE = 0.28;
+  const PURPLE_WEAPON_POOL = ['lazer_glasses', 'metao_fire_staff', 'magenta_degale', 'magenta_p90'];
+  const RED_WEAPON_POOL = ['granillia_lightning_spear', 'excalibur', 'golden_fleece', 'void_piercer', 'aegis_shield_weapon'];
+
+  const RIVAL_WEAPON_LOADOUTS = {
+    princess: [
+      { key: 'thorns_bleed_blade', class: 'melee', range: 42, preferredRange: 120, damageMult: 1.08, cooldownMult: 0.92, knockback: 300 },
+      { key: 'magenta_degale', class: 'ranged', range: 360, preferredRange: 220, damageMult: 0.88, cooldownMult: 1.1, projectileCount: 2, spread: 0.14, projectileSpeed: 340 },
+    ],
+    thorn_knight: [
+      { key: 'extending_staff', class: 'melee', range: 56, preferredRange: 130, damageMult: 1.0, cooldownMult: 0.84, knockback: 320 },
+      { key: 'hunters_bow', class: 'ranged', range: 430, preferredRange: 270, damageMult: 0.86, cooldownMult: 1.05, projectileCount: 1, spread: 0.04, projectileSpeed: 420 },
+      { key: 'thorns_bleed_blade', class: 'dash', range: 240, preferredRange: 165, damageMult: 1.15, cooldownMult: 1.2, knockback: 360 },
+    ],
+    metao: [
+      { key: 'magenta_p90', class: 'burst', range: 390, preferredRange: 250, damageMult: 0.72, cooldownMult: 1.0, projectileCount: 4, spread: 0.16, projectileSpeed: 360 },
+      { key: 'lazer_glasses', class: 'ranged', range: 470, preferredRange: 300, damageMult: 0.92, cooldownMult: 1.14, projectileCount: 1, spread: 0.02, projectileSpeed: 460 },
+    ],
+    granialla: [
+      { key: 'granillia_lightning_spear', class: 'ranged', range: 420, preferredRange: 260, damageMult: 0.94, cooldownMult: 1.0, projectileCount: 2, spread: 0.08, projectileSpeed: 390 },
+      { key: 'excalibur', class: 'melee_heal', range: 50, preferredRange: 130, damageMult: 1.12, cooldownMult: 0.95, knockback: 320 },
+      { key: 'void_piercer', class: 'burst', range: 340, preferredRange: 220, damageMult: 0.95, cooldownMult: 1.12, projectileCount: 3, spread: 0.1, projectileSpeed: 380 },
+    ],
+  };
+
+  const ITEM_DEFS = {
+    neo_knife: {
+      key: 'neo_knife',
+      name: 'Neo-Knife',
+      shortName: 'Knife',
+      description: 'Bleed chance +5%.',
+      rarity: 'knight',
+      color: '#f4f6fb',
+      category: 'knight',
+      tags: ['bleed'],
+    },
+    orb_of_blood: {
+      key: 'orb_of_blood',
+      name: 'Orb of Blood',
+      shortName: 'Orb',
+      description: 'Bleeding enemies take double damage.',
+      rarity: 'wizard',
+      color: '#a857ff',
+      category: 'wizard',
+      tags: ['bleed', 'damage'],
+    },
+    hemes_scarf: {
+      key: 'hemes_scarf',
+      name: "Heme's Scarf",
+      shortName: 'Scarf',
+      description: 'All enemies bleed and each bleed stack heals you.',
+      rarity: 'god',
+      color: '#ff4256',
+      accent: '#35ff6f',
+      category: 'god',
+      tags: ['bleed', 'heal', 'breaker'],
+    },
+    insurance: {
+      key: 'insurance',
+      name: 'Insurance',
+      shortName: 'Insure',
+      description: 'If a hit pushes you below half health, this is consumed and must recharge with kills.',
+      rarity: 'knight',
+      color: '#f4f6fb',
+      category: 'knight',
+      tags: ['charge', 'defense'],
+    },
+    crit_charm: {
+      key: 'crit_charm',
+      name: 'Crit Charm',
+      shortName: 'Hit Crit',
+      description: 'Hits grant +4% crit chance per stack for 2.2s.',
+      rarity: 'knight',
+      color: '#ffffff',
+      category: 'knight',
+      tags: ['crit'],
+    },
+    attack_servo: {
+      key: 'attack_servo',
+      name: 'Attack Servo',
+      shortName: 'AS %',
+      description: 'Attack speed +12% per stack.',
+      rarity: 'knight',
+      color: '#eef5ff',
+      category: 'knight',
+      tags: ['speed'],
+    },
+    keen_eye: {
+      key: 'keen_eye',
+      name: 'Keen Eye',
+      shortName: 'Kill Focus',
+      description: 'Charge on 10 kills. When full, the next kill grants +10% crit chance per stack for 7s.',
+      rarity: 'knight',
+      color: '#f7fbff',
+      category: 'knight',
+      tags: ['crit', 'charge'],
+    },
+    chrono_spring: {
+      key: 'chrono_spring',
+      name: 'Chrono Spring',
+      shortName: 'Kill Haste',
+      description: 'Charge on 7 kills. When full, the next kill grants +16% attack speed per stack for 6s.',
+      rarity: 'knight',
+      color: '#e6f6ff',
+      category: 'knight',
+      tags: ['speed', 'charge'],
+    },
+    scholar_seal: {
+      key: 'scholar_seal',
+      name: 'Scholar Seal',
+      shortName: 'XP +15%',
+      description: 'Gain 15% more XP on enemy kill.',
+      rarity: 'knight',
+      color: '#d0ecff',
+      category: 'knight',
+      tags: ['xp'],
+    },
+    scholar_cap: {
+      key: 'scholar_cap',
+      name: "Scholar's Cap",
+      shortName: 'Level Edge',
+      description: 'Deal more damage the closer you are to leveling up.',
+      rarity: 'wizard',
+      color: '#b49cff',
+      category: 'wizard',
+      tags: ['xp', 'damage', 'wizard'],
+    },
+    bandaid: {
+      key: 'bandaid',
+      name: 'Bandaid',
+      shortName: 'DEF +0.5%',
+      description: 'Defense +0.5%.',
+      rarity: 'knight',
+      color: '#fff5f7',
+      category: 'knight',
+      tags: ['defense'],
+    },
+    push_man: {
+      key: 'push_man',
+      name: 'Push Man',
+      shortName: 'KB +18%',
+      description: 'Knockback +18%.',
+      rarity: 'knight',
+      color: '#fff2cf',
+      category: 'knight',
+      tags: ['knockback'],
+    },
+    titan_heart: {
+      key: 'titan_heart',
+      name: 'Titan Heart',
+      shortName: 'Max HP +8%',
+      description: 'Max HP +8%.',
+      rarity: 'knight',
+      color: '#ffd9de',
+      category: 'knight',
+      tags: ['hp'],
+    },
+    charged_adapter: {
+      key: 'charged_adapter',
+      name: 'Charged Adapter',
+      shortName: 'Warp F',
+      description: 'Charge requirement -1. When charged, press F during non-boss combat to spend 50% coins and warp to the ladder room (next floor path).',
+      rarity: 'wizard',
+      color: '#b66cff',
+      category: 'wizard',
+      tags: ['charge', 'mobility'],
+    },
+    explosive_jelly: {
+      key: 'explosive_jelly',
+      name: 'Explosive Jelly',
+      shortName: 'AOE x2',
+      description: 'All player AOE ranges are doubled.',
+      rarity: 'wizard',
+      color: '#ffb27d',
+      category: 'wizard',
+      tags: ['aoe', 'wizard'],
+    },
+    dragon_orb: {
+      key: 'dragon_orb',
+      name: 'Dragon Orb',
+      shortName: 'Beam Chain',
+      description: 'Beam attacks deal more damage and chain to a nearby enemy after locking on.',
+      rarity: 'wizard',
+      color: '#b77dff',
+      category: 'wizard',
+      tags: ['beam', 'spell', 'wizard'],
+    },
+    turtle_shell: {
+      key: 'turtle_shell',
+      name: 'Turtle Shell',
+      shortName: 'Shell +5%',
+      description: 'Move speed +5%.',
+      rarity: 'knight',
+      color: '#d2ffd8',
+      category: 'knight',
+      tags: ['speed', 'move'],
+    },
+    anchor_charm: {
+      key: 'anchor_charm',
+      name: 'Anchor Charm',
+      shortName: 'Stun Resist',
+      description: 'Stun resistance. Impact stuns last less and require harder hits or stronger knockback.',
+      rarity: 'knight',
+      color: '#d7e4f2',
+      category: 'knight',
+      tags: ['defense', 'stun'],
+    },
+    iron_lung: {
+      key: 'iron_lung',
+      name: 'Iron Lung',
+      shortName: 'Iron',
+      description: 'In non-boss fights, you cannot lose more than 20% max HP in one room.',
+      rarity: 'god',
+      color: '#c6d4e8',
+      category: 'god',
+      tags: ['defense', 'god'],
+    },
+    oracles_lens: {
+      key: 'oracles_lens',
+      name: "Oracle's Lens",
+      shortName: 'Oracle',
+      description: 'Critical hit chance is doubled on pickup, and crits scale harder with your crit chance.',
+      rarity: 'god',
+      color: '#8ee6ff',
+      category: 'god',
+      reveal: true,
+      tags: ['crit', 'god'],
+    },
+    wizards_paw: {
+      key: 'wizards_paw',
+      name: "Wizard's Paw",
+      shortName: 'Paw',
+      description: 'Randomly chooses 2 stats to triple.',
+      rarity: 'god',
+      color: '#ffcf80',
+      category: 'god',
+      tags: ['god', 'stat'],
+    },
+    jesters_dice: {
+      key: 'jesters_dice',
+      name: "Jester's Dice",
+      shortName: 'Dice',
+      description: 'Skip 3 floors and gain 10 random items.',
+      rarity: 'god',
+      color: '#ff8bd8',
+      category: 'god',
+      tags: ['god', 'chaos'],
+    },
+    shield_of_aegis: {
+      key: 'shield_of_aegis',
+      name: 'Shield of Aegis',
+      shortName: 'DEF +20%',
+      description: 'Defense +20%.',
+      rarity: 'god',
+      color: '#ffe7a8',
+      category: 'god',
+      tags: ['god', 'defense'],
+    },
+    pendant_of_kronos: {
+      key: 'pendant_of_kronos',
+      name: 'Pendant of Kronos',
+      shortName: 'Crit +1%/God',
+      description: 'Raises crit chance by 1% for each god item you have.',
+      rarity: 'god',
+      color: '#d8c6ff',
+      category: 'god',
+      tags: ['god', 'crit'],
+    },
+    robot_arm: {
+      key: 'robot_arm',
+      name: 'Robot Arm',
+      shortName: 'Auto x15 Spd',
+      description: 'Attack speed x15. Automatically attacks with left click.',
+      rarity: 'god',
+      color: '#c0e8ff',
+      category: 'god',
+      tags: ['god', 'speed'],
+    },
+  };
+  const RARITY_NAME_COLORS = {
+    knight: '#f4f6fb',
+    white: '#f4f6fb',
+    wizard: '#b77dff',
+    purple: '#b77dff',
+    god: '#ff4256',
+    red: '#ff4256',
+  };
+  const SHOP_RARITY_PRICE_MULTIPLIERS = {
+    knight: 1,
+    white: 1,
+    wizard: 2.15,
+    purple: 2.15,
+    god: 4.75,
+    red: 4.75,
+  };
+  const ITEM_KEYS = Object.keys(ITEM_DEFS);
+  const SANDBOX_ENEMY_TYPES = [
+    'hunter', 'charger', 'laser', 'knave', 'sniper', 'machine_gunner',
+    'golem', 'cult_mage', 'cult_follower', 'summoner', 'shield_unit', 'healer', 'boss_spawner',
+    'queen_cult', 'bulk_golem', 'artificer_knave', 'god', 'mirror_knight',
+  ];
+  const ITEM_DROP_WEIGHTS = [
+    ['neo_knife', 60],
+    ['orb_of_blood', 28],
+    ['hemes_scarf', 12],
+    ['insurance', 18],
+    ['crit_charm', 24],
+    ['attack_servo', 22],
+    ['keen_eye', 20],
+    ['chrono_spring', 20],
+    ['scholar_seal', 18],
+    ['scholar_cap', 12],
+    ['bandaid', 22],
+    ['push_man', 18],
+    ['titan_heart', 18],
+    ['charged_adapter', 18],
+    ['explosive_jelly', 12],
+    ['dragon_orb', 14],
+    ['turtle_shell', 24],
+    ['anchor_charm', 18],
+    ['iron_lung', 10],
+    ['oracles_lens', 8],
+    ['wizards_paw', 6],
+    ['jesters_dice', 4],
+    ['shield_of_aegis', 4],
+    ['pendant_of_kronos', 5],
+    ['robot_arm', 3],
+  ];
+  const ITEM_DROP_TABLE = buildWeightTable(ITEM_DROP_WEIGHTS);
+  const ELITE_ITEM_DROP_TABLE = buildWeightTable(
+    ITEM_DROP_WEIGHTS.map(([key, weight]) => [key, weight + (key !== 'neo_knife' ? 4 : 0)])
+  );
+  const ELITE_INVENTORY_POOL = [
+    'neo_knife',
+    'orb_of_blood',
+    'insurance',
+    'crit_charm',
+    'attack_servo',
+    'scholar_cap',
+    'charged_adapter',
+    'explosive_jelly',
+    'dragon_orb',
+    'turtle_shell',
+    'anchor_charm',
+    'iron_lung',
+    'oracles_lens',
+    'bandaid',
+    'shield_of_aegis',
+    'pendant_of_kronos',
+  ];
+  const WHITE_ITEM_POOL = ITEM_KEYS.filter(key => ITEM_DEFS[key]?.rarity === 'knight');
+  const ELITE_TYPE_DEFS = {
+    burning: { label: 'Burning', color: '#ff9a3c' },
+    bleeding: { label: 'Bleeding', color: '#ff4256' },
+    giant: { label: 'Giant', color: '#ffd27d' },
+    blessed: { label: 'Blessed', color: '#f2f6ff' },
+    lasered: { label: 'Lazered', color: '#78d7ff' },
+  };
+  const itemRegistry = createItemRegistry();
+
+  const ui = {
+    hud: document.getElementById('hud'),
+    hpFill: document.getElementById('hpFill'),
+    hpTxt: document.getElementById('hpTxt'),
+    lv: document.getElementById('lv'),
+    xp: document.getElementById('xp'),
+    fl: document.getElementById('fl'),
+    gameTime: document.getElementById('gameTime'),
+    coins: document.getElementById('coins'),
+    charName: document.getElementById('charName'),
+    objective: document.getElementById('objective'),
+    objectiveTracker: document.getElementById('objectiveTracker'),
+    objectiveRoomLabel: document.getElementById('objectiveRoomLabel'),
+    objectiveToggle: document.getElementById('objectiveToggle'),
+    objectiveSummary: document.getElementById('objectiveSummary'),
+    objectiveList: document.getElementById('objectiveList'),
+    cdM: document.getElementById('cdM'),
+    cdL: document.getElementById('cdL'),
+    cdS: document.getElementById('cdS'),
+    cdD: document.getElementById('cdD'),
+    timeMelee: document.getElementById('timeMelee'),
+    timeLaser: document.getElementById('timeLaser'),
+    timeSmash: document.getElementById('timeSmash'),
+    timeDash: document.getElementById('timeDash'),
+    fillMelee: document.getElementById('fillMelee'),
+    fillLaser: document.getElementById('fillLaser'),
+    fillSmash: document.getElementById('fillSmash'),
+    fillDash: document.getElementById('fillDash'),
+    bankCoins: document.getElementById('bankCoins'),
+    loopCount: document.getElementById('loopCount'),
+    bestFloor: document.getElementById('bestFloor'),
+    saveState: document.getElementById('saveState'),
+    start: document.getElementById('start'),
+    charSelect: document.getElementById('charSelect'),
+    dead: document.getElementById('dead'),
+    deadKillerCanvas: document.getElementById('deadKillerCanvas'),
+    deadKillerName: document.getElementById('deadKillerName'),
+    deadFloor: document.getElementById('deadFloor'),
+    deadLevel: document.getElementById('deadLevel'),
+    deadKills: document.getElementById('deadKills'),
+    deadTime: document.getElementById('deadTime'),
+    deadCoins: document.getElementById('deadCoins'),
+    deadDifficulty: document.getElementById('deadDifficulty'),
+    deadItems: document.getElementById('deadItems'),
+    deadItemsPrev: document.getElementById('deadItemsPrev'),
+    deadItemsNext: document.getElementById('deadItemsNext'),
+    deadItemsPage: document.getElementById('deadItemsPage'),
+    deadRecords: document.getElementById('deadRecords'),
+    deadActions: [...document.querySelectorAll('#dead [data-dead-action]')],
+    win: document.getElementById('win'),
+    winInfo: document.getElementById('winInfo'),
+    deadRestart: document.querySelector('#dead .restart'),
+    winRestart: document.querySelector('#win .restart'),
+    pause: document.getElementById('pause'),
+    pauseResume: document.getElementById('pauseResume'),
+    pauseSettings: document.getElementById('pauseSettings'),
+    pauseMain: document.getElementById('pauseMain'),
+    interactPrompt: document.getElementById('interactPrompt'),
+    actionBar: document.getElementById('actionBar'),
+    hudLower: document.getElementById('hudLower'),
+    adapterStatus: document.getElementById('adapterStatus'),
+    adapterStatusIcon: document.getElementById('adapterStatusIcon'),
+    adapterStatusText: document.getElementById('adapterStatusText'),
+    shopPanel: document.getElementById('shopPanel'),
+    shopClose: document.getElementById('shopClose'),
+    shopTabs: [...document.querySelectorAll('#shopPanel .shop-tab')],
+    shopItems: document.getElementById('shopItems'),
+    shopWeapons: document.getElementById('shopWeapons'),
+    shopMoves: document.getElementById('shopMoves'),
+    shopHeals: document.getElementById('shopHeals'),
+    shopCoins: document.getElementById('shopCoins'),
+    invPanel: document.getElementById('invPanel'),
+    invClose: document.getElementById('invClose'),
+    invTabs: [...document.querySelectorAll('#invPanel .inv-tab')],
+    invPlayerTabs: document.getElementById('invPlayerTabs'),
+    invPlayerTabBtns: [...document.querySelectorAll('#invPlayerTabs .inv-player-tab')],
+    wizardPawModal: document.getElementById('wizardPawModal'),
+    wizardPawStats: document.getElementById('wizardPawStats'),
+    wizardPawChoices: document.getElementById('wizardPawChoices'),
+    wizardPawConfirm: document.getElementById('wizardPawConfirm'),
+    invItemsList: document.getElementById('invItemsList'),
+    invWeaponsList: document.getElementById('invWeaponsList'),
+    invWeaponSlot: document.getElementById('invWeaponSlot'),
+    invStats: document.getElementById('invStats'),
+    invMovesList: document.getElementById('invMovesList'),
+    invSlots: {
+      melee: document.querySelector('#invPanel [data-slot="melee"]'),
+      laser: document.querySelector('#invPanel [data-slot="laser"]'),
+      smash: document.querySelector('#invPanel [data-slot="smash"]'),
+      dash: document.querySelector('#invPanel [data-slot="dash"]'),
+    },
+    playerStats: document.getElementById('playerStats'),
+    coinDisplay: document.getElementById('coinDisplay'),
+    coinIcon: document.getElementById('coinIcon'),
+    hudLoopIcon: document.getElementById('hudLoopIcon'),
+    metaCoinIcon: document.getElementById('metaCoinIcon'),
+    metaLoopIcon: document.getElementById('metaLoopIcon'),
+    centerDisplay: document.getElementById('centerDisplay'),
+    timerFloorSlot: document.getElementById('timerFloorSlot'),
+    timerBossSlot: document.getElementById('timerBossSlot'),
+    bossRushStageNum2: document.getElementById('bossRushStageNum2'),
+    challengeStatus: document.getElementById('challengeStatus'),
+    challengeStatusLabel: document.getElementById('challengeStatusLabel'),
+    challengeStatusFill: document.getElementById('challengeStatusFill'),
+    dialogueOverlay: document.getElementById('dialogueOverlay'),
+    dialoguePortrait: document.getElementById('dialoguePortrait'),
+    dialogueSpeaker: document.getElementById('dialogueSpeaker'),
+    dialogueText: document.getElementById('dialogueText'),
+    dialogueHint: document.getElementById('dialogueHint'),
+    tutorialOverlay: document.getElementById('tutorialOverlay'),
+    tutorialSpeaker: document.getElementById('tutorialSpeaker'),
+    tutorialText: document.getElementById('tutorialText'),
+    tutorialPrevBtn: document.getElementById('tutorialPrevBtn'),
+    tutorialNextBtn: document.getElementById('tutorialNextBtn'),
+    tutorialHint: document.getElementById('tutorialHint'),
+    tutorialSkipBtn: document.getElementById('tutorialSkipBtn'),
+    entityDialogueLayer: document.getElementById('entityDialogueLayer'),
+    playerHpFill: document.getElementById('playerHpFill'),
+    playerHpTxt: document.getElementById('playerHpTxt'),
+    playerXpFill: document.getElementById('playerXpFill'),
+    playerXpTxt: document.getElementById('playerXpTxt'),
+    coinCount: document.getElementById('coinCount'),
+    hudLoopCount: document.getElementById('hudLoopCount'),
+    timerDisplay: document.getElementById('timerDisplay'),
+    floorDisplay: document.getElementById('floorDisplay'),
+    difficultyDisplay: document.getElementById('difficultyDisplay'),
+    itemRarityCounts: document.getElementById('itemRarityCounts'),
+    seed: document.getElementById('seed'),
+    go: document.getElementById('go'),
+    difficultyHint: document.getElementById('difficultyHint'),
+    challengePanel: document.getElementById('challengePanel'),
+    challengeToggle: document.getElementById('challengeToggle'),
+    challengeClose: document.getElementById('challengeClose'),
+    challengeHint: document.getElementById('challengeHint'),
+    continueRow: document.getElementById('continueRow'),
+    continueBtn: document.getElementById('continueBtn'),
+    newRunBtn: document.getElementById('newRunBtn'),
+    runHistoryBtn: document.getElementById('runHistoryBtn'),
+    runHistoryPanel: document.getElementById('runHistoryPanel'),
+    runHistoryPanelTitle: document.getElementById('runHistoryPanelTitle'),
+    runHistoryViewTabs: [...document.querySelectorAll('#runHistoryPanel .rh-view-tab')],
+    achievementsList: document.getElementById('achievementsList'),
+    rhProfilePanel: document.getElementById('rhProfilePanel'),
+    rhInfoPanel: document.getElementById('rhInfoPanel'),
+    rhInfoContent: document.getElementById('rhInfoContent'),
+    rhInfoTabs: [...document.querySelectorAll('#rhInfoPanel .rh-info-tab')],
+    infoTutorialBtn: document.getElementById('infoTutorialBtn'),
+    rhBankCoins: document.getElementById('rhBankCoins'),
+    rhLoopCount: document.getElementById('rhLoopCount'),
+    rhBestFloor: document.getElementById('rhBestFloor'),
+    rhSaveState: document.getElementById('rhSaveState'),
+    runHistoryList: document.getElementById('runHistoryList'),
+    runHistoryEmpty: document.getElementById('runHistoryEmpty'),
+    runHistoryBody: document.querySelector('#runHistoryPanel .rh-body'),
+    runHistoryClose: document.getElementById('runHistoryClose'),
+    runHistoryPrev: document.getElementById('runHistoryPrev'),
+    runHistoryNext: document.getElementById('runHistoryNext'),
+    runHistoryPageLabel: document.getElementById('runHistoryPageLabel'),
+    runHistoryHero: document.getElementById('runHistoryHero'),
+    runHistoryTabPanel: document.getElementById('runHistoryTabPanel'),
+    runHistoryModeTabs: [...document.querySelectorAll('#runHistoryPanel .rh-mode-tab')],
+    runHistoryTabs: [...document.querySelectorAll('#runHistoryPanel .rh-tab')],
+    anvilPanel: document.getElementById('anvilPanel'),
+    anvilClose: document.getElementById('anvilClose'),
+    anvilTabs: [...document.querySelectorAll('#anvilPanel .anvil-tab')],
+    anvilXp: document.getElementById('anvilXp'),
+    anvilWeaponsTab: document.getElementById('anvilWeaponsTab'),
+    anvilMovesTab: document.getElementById('anvilMovesTab'),
+    anvilWeaponList: document.getElementById('anvilWeaponList'),
+    anvilMoveList: document.getElementById('anvilMoveList'),
+    anvilWeaponStats: document.getElementById('anvilWeaponStats'),
+    anvilMoveStats: document.getElementById('anvilMoveStats'),
+    anvilCostSummary: document.getElementById('anvilCostSummary'),
+    anvilCancel: document.getElementById('anvilCancel'),
+    anvilConfirm: document.getElementById('anvilConfirm'),
+    settingsBtn: document.getElementById('settingsBtn'),
+    altModesBtn: document.getElementById('altModesBtn'),
+    altModesPanel: document.getElementById('altModesPanel'),
+    altModesClose: document.getElementById('altModesClose'),
+    altModeEndlessBtn: document.getElementById('altModeEndlessBtn'),
+    altModePracticeBtn: document.getElementById('altModePracticeBtn'),
+    altModeBossRushBtn: document.getElementById('altModeBossRushBtn'),
+    altModeCoopBtn: document.getElementById('altModeCoopBtn'),
+    altModePvpBtn: document.getElementById('altModePvpBtn'),
+    mpLobby: document.getElementById('mpLobby'),
+    mpLobbyBack: document.getElementById('mpLobbyBack'),
+    mpLobby1Btn: document.getElementById('mpLobby1Btn'),
+    mpLobby2Btn: document.getElementById('mpLobby2Btn'),
+    mpLobbyTitle: document.getElementById('mpLobbyTitle'),
+    charSelectPhaseTag: document.getElementById('charSelectPhaseTag'),
+    charSelectTitle: document.getElementById('charSelectTitle'),
+    charSelectSubtitle: document.getElementById('charSelectSubtitle'),
+    altModeSandboxBtn: document.getElementById('altModeSandboxBtn'),
+    altModeSandboxConfigBtn: document.getElementById('altModeSandboxConfigBtn'),
+    sandboxPanel: document.getElementById('sandboxPanel'),
+    sandboxPanelBackdrop: document.getElementById('sandboxPanelBackdrop'),
+    sandboxClose: document.getElementById('sandboxClose'),
+    sandboxReset: document.getElementById('sandboxReset'),
+    sandboxSaveClose: document.getElementById('sandboxSaveClose'),
+    sandboxEnemyList: document.getElementById('sandboxEnemyList'),
+    sandboxItemList: document.getElementById('sandboxItemList'),
+    sandboxEnemiesAll: document.getElementById('sandboxEnemiesAll'),
+    sandboxEnemiesNone: document.getElementById('sandboxEnemiesNone'),
+    sandboxItemsAll: document.getElementById('sandboxItemsAll'),
+    sandboxItemsNone: document.getElementById('sandboxItemsNone'),
+    sandboxGodMode: document.getElementById('sandboxGodMode'),
+    endlessHud: document.getElementById('endlessHud'),
+    endlessWaveNum: document.getElementById('endlessWaveNum'),
+    bossRushHud: document.getElementById('bossRushHud'),
+    bossRushStageNum: document.getElementById('bossRushStageNum'),
+    practicePanel: document.getElementById('practicePanel'),
+    practicePanelToggle: document.getElementById('practicePanelToggle'),
+    practicePanelBody: document.getElementById('practicePanelBody'),
+    practiceEnemyGrid: document.getElementById('practiceEnemyGrid'),
+    practiceMaxHpSlider: document.getElementById('practiceMaxHpSlider'),
+    practiceMaxHpNum: document.getElementById('practiceMaxHpNum'),
+    practiceEliteToggle: document.getElementById('practiceEliteToggle'),
+    practiceClearBtn: document.getElementById('practiceClearBtn'),
+    practiceHealBtn: document.getElementById('practiceHealBtn'),
+    practiceGiveItemBtn: document.getElementById('practiceGiveItemBtn'),
+    charBackBtn: document.getElementById('charBackBtn'),
+    deleteRunRow: document.getElementById('deleteRunRow'),
+    deleteRunBtn: document.getElementById('deleteRunBtn'),
+    runSummary: document.getElementById('runSummary'),
+    charButtons: [...document.querySelectorAll('#choose .char-card')],
+    difficultyButtons: [...document.querySelectorAll('#difficultySelect .difficulty-btn')],
+    challengeButtons: [...document.querySelectorAll('#challengeSelect .challenge-btn')],
+    legacyPanel: document.getElementById('legacyPanel'),
+    legacyToggle: document.getElementById('legacyToggle'),
+    legacyClose: document.getElementById('legacyClose'),
+    legacyHint: document.getElementById('legacyHint'),
+    legacyButtons: [...document.querySelectorAll('#legacySelect .legacy-btn')],
+    itemSlots: {
+      neo_knife: document.getElementById('rr-neo-knife'),
+      orb_of_blood: document.getElementById('rr-orb-blood'),
+      hemes_scarf: document.getElementById('rr-hemes-scarf'),
+    },
+    itemCounts: {
+      neo_knife: document.getElementById('countNeoKnife'),
+      orb_of_blood: document.getElementById('countOrbBlood'),
+      hemes_scarf: document.getElementById('countHemesScarf'),
+    },
+    actionCards: {
+      dash: document.querySelector('[data-skill="dash"]'),
+      melee: document.querySelector('[data-skill="melee"]'),
+      laser: document.querySelector('[data-skill="laser"]'),
+      smash: document.querySelector('[data-skill="smash"]'),
+    },
+    skillNames: {
+      dash: document.querySelector('[data-skill="dash"] .skill-name'),
+      melee: document.querySelector('[data-skill="melee"] .skill-name'),
+      laser: document.querySelector('[data-skill="laser"] .skill-name'),
+      smash: document.querySelector('[data-skill="smash"] .skill-name'),
+    },
+    icons: {
+      dash: document.getElementById('iconDash'),
+      melee: document.getElementById('iconMelee'),
+      laser: document.getElementById('iconLaser'),
+      smash: document.getElementById('iconSmash'),
+    },
+  };
+  const GameStateManagerCtor = window.KozEngine?.Core?.gameStateManager?.GameStateManager || null;
+  const gameStateManager = GameStateManagerCtor ? new GameStateManagerCtor() : null;
+  if (gameStateManager) {
+    ['menu', 'charselect', 'play', 'dialogue', 'pause', 'dying', 'dead', 'win'].forEach(state => gameStateManager.addState(state));
+  }
+  const uiController = createUIController(ui);
+
+  const gameEvents = (() => {
+    const listeners = {};
+    return {
+      on(event, fn) { (listeners[event] = listeners[event] || []).push(fn); },
+      emit(event, payload) { (listeners[event] || []).forEach(fn => fn(payload)); },
+    };
+  })();
+
+  let player = null;
+  let player2 = null;
+  let player3 = null;
+  let player4 = null;
+  let chosenCharacter2 = 'thorn_knight';
+  let chosenCharacter3 = 'thorn_knight';
+  let chosenCharacter4 = 'thorn_knight';
+  let p1DeadInCoop = false;
+  let p2DeadInCoop = false;
+  let p3DeadInCoop = false;
+  let p4DeadInCoop = false;
+  let charSelectPhase = null; // null | 'p1' | 'p2' | 'p3' | 'p4'
+  let mpPlayerCount = 2;
+  let enemies = [];
+  let deadBodies = [];
+  let particles = [];
+  let projectiles = [];
+  let chests = [];
+  let pickups = [];
+  let rooms = [];
+  let currentRoom = null;
+  let keys = {};
+  let mouse = { x: 0, y: 0, worldX: 0, worldY: 0, down: false, right: false, downQueued: false, rightQueued: false };
+  let cooldowns = {};
+  let camera = { x: 0, y: 0 };
+  let camera2 = { x: 0, y: 0 };
+  let camera3 = { x: 0, y: 0 };
+  let camera4 = { x: 0, y: 0 };
+  const PLAYER_SLOT_CONFIG = [
+    { id: 1, label: 'P1', color: '#ff8a8a', getEntity: () => player, setEntity: value => { player = value; }, getCharacter: () => chosenCharacter, setCharacter: value => { chosenCharacter = value; }, getDead: () => p1DeadInCoop, setDead: value => { p1DeadInCoop = !!value; }, getCamera: () => camera, setCamera: value => { camera = value; } },
+    { id: 2, label: 'P2', color: '#4ca8ff', getEntity: () => player2, setEntity: value => { player2 = value; }, getCharacter: () => chosenCharacter2, setCharacter: value => { chosenCharacter2 = value; }, getDead: () => p2DeadInCoop, setDead: value => { p2DeadInCoop = !!value; }, getCamera: () => camera2, setCamera: value => { camera2 = value; } },
+    { id: 3, label: 'P3', color: '#8aff8a', getEntity: () => player3, setEntity: value => { player3 = value; }, getCharacter: () => chosenCharacter3, setCharacter: value => { chosenCharacter3 = value; }, getDead: () => p3DeadInCoop, setDead: value => { p3DeadInCoop = !!value; }, getCamera: () => camera3, setCamera: value => { camera3 = value; } },
+    { id: 4, label: 'P4', color: '#ffd080', getEntity: () => player4, setEntity: value => { player4 = value; }, getCharacter: () => chosenCharacter4, setCharacter: value => { chosenCharacter4 = value; }, getDead: () => p4DeadInCoop, setDead: value => { p4DeadInCoop = !!value; }, getCamera: () => camera4, setCamera: value => { camera4 = value; } },
+  ];
+  let shake = 0;
+  let shakeT = 0;
+  let gameState = 'menu';
+  let floor = 1;
+  let baseSeedStr = '';
+  let seedStr = '';
+  let runLoopIndex = 0;
+  let rng = null;
+  let rngStreams = {};
+  let godTimer = 0;
+  let fade = 0;
+  let fading = 0;
+  let nextDoor = null;
+  let floorTransitionTime = 0;
+  let showFloorTransition = false;
+  let gameElapsedTime = 0;
+  let lastTime = 0;
+  let loopStarted = false;
+  let laserActive = false;
+  let laserTime = 0;
+  let laserTick = 0;
+  let laserMode = 'beam';
+  let laserAngle = 0;
+  let laserSweepSpeed = 0;
+  let loveBeamCasting = false;
+  let turtleWaveHpTimer = 0;
+  let lowHealthHitFlashUntil = 0;
+  let dashKeyLatch = false;
+  let playerDeathAnim = null;
+  let runRevivesUsed = 0;
+  let lastDeathEntryId = '';
+  let gameMode = 'normal';
+  let endlessWave = 0;
+  let endlessWaveActive = false;
+  let bossRushStage = 0;
+  let bossRushActive = false;
+  let chosenCharacter = 'thorn_knight';
+  let selectedDifficulty = 'easy';
+  let selectedChallenges = [];
+  let customDifficultySettings = {
+    waveBonus: 0,
+    eliteFloor: 8,
+    eliteChance: 0.12,
+    miniBossChanceMultiplier: 1,
+    roomWeightBonus: 0,
+    statMultiplier: 1,
+    bossStatMultiplier: 1,
+    speedMultiplier: 1,
+    enemyReactionMultiplier: 1,
+    rangedCadenceMultiplier: 1,
+    supportPowerMultiplier: 1,
+    shopPriceMultiplier: 1,
+  };
+  let destructibles = [];
+  let hazards = [];
+  let shopOffers = [];
+  let structures = [];
+  let decorations = [];
+  let environmentBackgroundCache = { key: '', canvas: null };
+  const SANDBOX_DEFAULT_SETTINGS = {
+    enemyStatMultiplier: 1,
+    enemySpeedMultiplier: 1,
+    enemyDamageMultiplier: 1,
+    playerDamageMultiplier: 1,
+    startingCoins: 0,
+    godMode: false,
+    allowedEnemies: SANDBOX_ENEMY_TYPES.slice(),
+    allowedItems: ITEM_KEYS.slice(),
+  };
+  let activeRun = null;
+  let metaProgress = createDefaultMeta();
+  window.addEventListener('achievement:unlocked', () => {
+    metaProgress.loopCrystals = Number(metaProgress.loopCrystals || 0) + 1;
+    persistMetaSoon();
+    refreshMenuState();
+  });
+  let runHistory = [];
+  let lastDamageSource = '';
+  let lastDamageSourceKey = '';
+  let savePendingTimer = 0;
+  let metaSavePendingTimer = 0;
+  let metaSaveDirty = false;
+  let menuRefreshQueued = false;
+  let frameId = 0;
+  let minimapLayoutState = null;
+  let itemStatsCacheFrame = -1;
+  let itemStatsCacheValue = null;
+  let godItemKeysCache = null;
+  let lavaAnimTime = 0;
+  let floorSkipPending = 0;
+  const JESTER_PORTAL_ACTIVATE_DELAY = 0.44;
+  const JESTER_PORTAL_TRIGGER_RADIUS = 42;
+  const LADDER_TRIGGER_RADIUS = 64;
+  let teleportKeyLatch = false;
+  let ladderUseKeyLatch = false;
+  let shopKeyLatch = false;
+  let invKeyLatch = false;
+  let anvilKeyLatch = false;
+  let activeShopTab = 'items';
+  let activeInvTab = 'stats';
+  let activeInvPlayer = 1;
+  let activeAnvilTab = 'weapons';
+  let anvilSelectedItem = null;
+  let anvilStagedUpgrades = {};
+  let draggingMoveKey = '';
+  let weaponBurstQueue = [];
+  let rivals = [];
+  let monsterRoamTimer = 0;
+  let knaveKnightCutscenePlayed = false;
+  let queenMetaoCutscenePlayed = false;
+  let activeInventorySlot = '';
+  let shopPanelDirty = false;
+  let inventoryPanelDirty = false;
+  let wizardPawSelection = null;
+  let tutorialState = null;
+  let sandboxSettings = { ...SANDBOX_DEFAULT_SETTINGS };
+  const REPLAY_TUTORIAL_KEY = 'neonyke:replayTutorialNextRun';
+
+  // Upgradeable stat schemas for the anvil panel
+  const WEAPON_UPGRADEABLE_STATS = {
+    damage:    { label: 'Damage',       step: 5,     min: 5,    max: 9999, xpPerStep: 15, format: v => Math.round(v) },
+    cooldown:  { label: 'Cooldown (s)', step: -0.05, min: 0.05, max: 9999, xpPerStep: 20, format: v => v.toFixed(2) + 's' },
+    range:     { label: 'Range',        step: 10,    min: 10,   max: 9999, xpPerStep: 13, format: v => Math.round(v) },
+    knockback: { label: 'Knockback',    step: 30,    min: 0,    max: 9999, xpPerStep: 10, format: v => Math.round(v) },
+  };
+  const MOVE_UPGRADEABLE_STATS = {
+    damage:    { label: 'Damage',       step: 5,    min: 5,   max: 9999, xpPerStep: 15, format: v => Math.round(v) },
+    cooldown:  { label: 'Cooldown (s)', step: -0.05,min: 0.05,max: 9999, xpPerStep: 20, format: v => v.toFixed(2) + 's' },
+    duration:  { label: 'Duration (s)', step: 0.1,  min: 0.1, max: 30,   xpPerStep: 13, format: v => v.toFixed(1) + 's' },
+    range:     { label: 'Range / AOE',  step: 10,   min: 10,  max: 9999, xpPerStep: 13, format: v => Math.round(v) },
+    critChance:{ label: 'Crit Chance',  step: 0.05, min: 0,   max: 1.0,  xpPerStep: 25, format: v => Math.round(v * 100) + '%' },
+  };
+
+  // Base stat values per weapon (used to compute current upgraded value)
+  const WEAPON_BASE_STATS = {
+    extending_staff:          { damage: 38,   cooldown: 0.50, range: 130, knockback: 500 },
+    hunters_bow:              { damage: 28,   cooldown: 0.40,             knockback: 180 },
+    thorns_bleed_blade:       { damage: 32,   cooldown: 0.55, range: 90,  knockback: 120 },
+    lazer_glasses:            { damage: 18,   cooldown: 3.60,             knockback: 80  },
+    metao_fire_staff:         { damage: 22,   cooldown: 0.55, range: 200, knockback: 100 },
+    magenta_degale:           { damage: 80,   cooldown: 1.50,             knockback: 480 },
+    magenta_p90:              { damage: 18,   cooldown: 1.80,             knockback: 140 },
+    granillia_lightning_spear:{ damage: 45,   cooldown: 0.55,             knockback: 200 },
+    excalibur:                { damage: 202,  cooldown: 2.00, range: 120, knockback: 600 },
+    golden_fleece:            { damage: 20,   cooldown: 0.50, range: 80,  knockback: 80  },
+    void_piercer:             { damage: 55,   cooldown: 0.80,             knockback: 160 },
+    aegis_shield_weapon:      { cooldown: 8.00 },
+  };
+
+  // Base stat values per move
+  const MOVE_BASE_STATS = {
+    slash:            { damage: 32,  cooldown: 0.40, range: 90  },
+    fire_balls:       { damage: 20,  cooldown: 0.55, range: 180 },
+    smite:            { damage: 28,  cooldown: 0.55, range: 110 },
+    narwal_fight:     { damage: 36,  cooldown: 0.55, range: 126 },
+    blood_beam:       { damage: 14,  cooldown: 3.00, duration: 1.2, critChance: 0 },
+    love_beam:        { damage: 16,  cooldown: 3.40, duration: 1.7, critChance: 0 },
+    turtle_wave:      { damage: 55,  cooldown: 3.00, duration: 1.35 },
+    power_disks:      { damage: 22,  cooldown: 3.00, range: 240 },
+    blade_justice:    { damage: 60,  cooldown: 3.80, range: 80  },
+    lightning_columns:{ damage: 30,  cooldown: 4.80, range: 180 },
+    god_sweep:        { damage: 40,  cooldown: 7.20, range: 320 },
+    crimson_smash:    { damage: 55,  cooldown: 4.00, range: 120 },
+    kicky_kick:       { damage: 92,  cooldown: 4.20, range: 138 },
+    chaos_burst:      { damage: 38,  cooldown: 4.00, range: 100 },
+    healing_zone:     { damage: 12,  cooldown: 5.00, duration: 3.0, range: 130 },
+    fire_circle:      { damage: 18,  cooldown: 4.50, duration: 3.5, range: 100 },
+    floor_lava:       { damage: 12,  cooldown: 5.00, duration: 4.0, range: 160 },
+    dash:             { cooldown: 1.20 },
+    nimrod_stomp:     { damage: 60,  cooldown: 2.50, range: 110 },
+    warp:             { cooldown: 2.80 },
+    zip_lightning:    { damage: 30,  cooldown: 2.00 },
+    flying_unhitable: { cooldown: 18.00, duration: 15.0 },
+    cowards_way:      { cooldown: 6.00, duration: 3.0 },
+  };
+
+  const saveStore = createSaveStore();
+  window._neoSaveStore = saveStore;
+
