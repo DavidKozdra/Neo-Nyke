@@ -346,10 +346,16 @@
     }
 
     if (itemStats.bleedHealScale > 0 && totalBleed > 0 && player.hp < player.maxHp) {
-      const heal = player.maxHp * 0.006 * totalBleed * itemStats.bleedHealScale * dt;
-      player.hp = Math.min(player.maxHp, player.hp + heal);
-      if (nextRandom('fx') < 0.14) {
-        particles.push({ x: player.x + rand(-10, 10), y: player.y - 18, life: 0.5, text: `+${Math.max(1, Math.ceil(heal * 10))}`, c: '#0f8' });
+      if (player.hp < 50) player.scarfHealReady = true;
+      if (player.scarfHealReady) {
+        const heal = player.maxHp * 0.0006 * totalBleed * itemStats.bleedHealScale * dt;
+        player.hp = Math.min(player.maxHp, player.hp + heal);
+        if (player.hp >= 50 && player.scarfHealReady) {
+          consumeCharge('hemes_scarf');
+        }
+        if (nextRandom('fx') < 0.14) {
+          particles.push({ x: player.x + rand(-10, 10), y: player.y - 18, life: 0.5, text: `+${Math.max(1, Math.ceil(heal * 10))}`, c: '#0f8' });
+        }
       }
     }
     perfEnd('update.enemies', sectionPerfStart);

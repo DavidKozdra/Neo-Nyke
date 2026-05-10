@@ -1381,6 +1381,7 @@
       incrementChargeProgress('keen_eye', 10);
       incrementChargeProgress('chrono_spring', 7);
       incrementChargeProgress('escape', 10);
+      incrementChargeProgress('hemes_scarf', 6);
     }
 
     if (!isTutorialDummy && enemy.elite && enemyLootRandom() < 0.18) {

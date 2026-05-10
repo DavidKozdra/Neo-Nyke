@@ -1047,6 +1047,9 @@
           particles.push({ x: pickup.x, y: pickup.y - 20, life: 0.75, text: 'WRONG', c: '#ff7a7a' });
           failChallengeTrial('WRONG BOMB');
         }
+        pickups.splice(index, 1);
+        scheduleRunSave();
+        return;
       }
 
       if (pickup.type === 'challengeRune') {

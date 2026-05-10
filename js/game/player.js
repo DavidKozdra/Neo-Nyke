@@ -88,6 +88,8 @@
     playerData.critCharmBuffTime = Number(playerData.critCharmBuffTime || 0);
     playerData.escapeChargeKills = Number(playerData.escapeChargeKills || 0);
     playerData.escapeReady = playerData.escapeReady !== false;
+    playerData.scarfChargeKills = Number(playerData.scarfChargeKills || 0);
+    playerData.scarfHealReady = playerData.scarfHealReady !== false;
     return playerData;
   }
 
@@ -329,6 +331,10 @@
       player.escapeReady = false;
       player.escapeChargeKills = 0;
     }
+    if (chargeType === 'hemes_scarf') {
+      player.scarfHealReady = false;
+      player.scarfChargeKills = 0;
+    }
   }
 
   function incrementChargeProgress(chargeType, baseRequirement) {
@@ -371,6 +377,15 @@
         player.escapeChargeKills = 0;
         const warpHint = formatControlLabel('f', 'f');
         particles.push({ x: player.x, y: player.y - 36, life: 0.9, text: `ADAPTER READY - PRESS ${warpHint}`, c: '#b88cff' });
+      }
+    }
+    if (chargeType === 'hemes_scarf') {
+      if (getItemCount('hemes_scarf') <= 0 || player.scarfHealReady) return;
+      player.scarfChargeKills += 1;
+      if (player.scarfChargeKills >= getChargeRequirement(baseRequirement)) {
+        player.scarfHealReady = true;
+        player.scarfChargeKills = 0;
+        particles.push({ x: player.x, y: player.y - 20, life: 0.7, text: 'SCARF READY', c: '#0f8' });
       }
     }
   }
