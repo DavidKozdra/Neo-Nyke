@@ -537,7 +537,7 @@
 
   const HERO_DISPLAY = {
     princess: {
-      lore: 'A radiant pink princess built for accessible runs. High damage, generous HP, and forgiving cooldowns make her ideal for new adventurers.',
+      lore: 'A dark-skinned princess built for accessible runs. High damage, generous HP, and forgiving cooldowns make her ideal for new adventurers.',
       stats: [
         { label: 'HP',    pct: 90, color: '#f47ebd' },
         { label: 'DMG',   pct: 80, color: '#ff9ccf' },
@@ -564,7 +564,7 @@
       ],
     },
     granialla: {
-      lore: 'A dark-skinned princess with a crown of golden hair. Divine judgment and self-restoration — earned only by slaying GOD.',
+      lore: 'A priestess with a crown of golden hair. Divine judgment and self-restoration — earned only by slaying GOD.',
       stats: [
         { label: 'HP',    pct: 66, color: '#c06060' },
         { label: 'DMG',   pct: 66, color: '#c08040' },
@@ -1222,6 +1222,10 @@
     deadCoins: document.getElementById('deadCoins'),
     deadDifficulty: document.getElementById('deadDifficulty'),
     deadItems: document.getElementById('deadItems'),
+    deadItemsPrev: document.getElementById('deadItemsPrev'),
+    deadItemsNext: document.getElementById('deadItemsNext'),
+    deadItemsPage: document.getElementById('deadItemsPage'),
+    deadRecords: document.getElementById('deadRecords'),
     deadActions: [...document.querySelectorAll('#dead [data-dead-action]')],
     win: document.getElementById('win'),
     winInfo: document.getElementById('winInfo'),
@@ -1233,6 +1237,7 @@
     pauseMain: document.getElementById('pauseMain'),
     interactPrompt: document.getElementById('interactPrompt'),
     actionBar: document.getElementById('actionBar'),
+    hudLower: document.getElementById('hudLower'),
     adapterStatus: document.getElementById('adapterStatus'),
     adapterStatusIcon: document.getElementById('adapterStatusIcon'),
     adapterStatusText: document.getElementById('adapterStatusText'),
@@ -1477,6 +1482,12 @@
   let camera2 = { x: 0, y: 0 };
   let camera3 = { x: 0, y: 0 };
   let camera4 = { x: 0, y: 0 };
+  const PLAYER_SLOT_CONFIG = [
+    { id: 1, label: 'P1', color: '#ff8a8a', getEntity: () => player, setEntity: value => { player = value; }, getCharacter: () => chosenCharacter, setCharacter: value => { chosenCharacter = value; }, getDead: () => p1DeadInCoop, setDead: value => { p1DeadInCoop = !!value; }, getCamera: () => camera, setCamera: value => { camera = value; } },
+    { id: 2, label: 'P2', color: '#4ca8ff', getEntity: () => player2, setEntity: value => { player2 = value; }, getCharacter: () => chosenCharacter2, setCharacter: value => { chosenCharacter2 = value; }, getDead: () => p2DeadInCoop, setDead: value => { p2DeadInCoop = !!value; }, getCamera: () => camera2, setCamera: value => { camera2 = value; } },
+    { id: 3, label: 'P3', color: '#8aff8a', getEntity: () => player3, setEntity: value => { player3 = value; }, getCharacter: () => chosenCharacter3, setCharacter: value => { chosenCharacter3 = value; }, getDead: () => p3DeadInCoop, setDead: value => { p3DeadInCoop = !!value; }, getCamera: () => camera3, setCamera: value => { camera3 = value; } },
+    { id: 4, label: 'P4', color: '#ffd080', getEntity: () => player4, setEntity: value => { player4 = value; }, getCharacter: () => chosenCharacter4, setCharacter: value => { chosenCharacter4 = value; }, getDead: () => p4DeadInCoop, setDead: value => { p4DeadInCoop = !!value; }, getCamera: () => camera4, setCamera: value => { camera4 = value; } },
+  ];
   let shake = 0;
   let shakeT = 0;
   let gameState = 'menu';
@@ -3291,12 +3302,12 @@
     const atkSpeedColor = atkSpeed >= 2 ? '#6dde88' : atkSpeed >= 1.2 ? '#e8f4ff' : '#8ca8c0';
     const dmgReduction = Math.round(stats.damageReduction * 100);
     ui.invStats.innerHTML = [
-      `<div class="inv-stat-row inv-stat-row--bar"><div class="inv-stat-row__icon">❤️</div><div class="inv-stat-row__body"><span class="inv-stat-row__label">HP</span><span class="inv-stat-row__value" style="color:${hpColor}">${Math.round(_invP.hp)} <span class="inv-stat-row__sub">/ ${Math.round(_invP.maxHp)}</span></span></div><div class="inv-stat-row__bar"><div class="inv-stat-row__bar-fill" style="width:${Math.round(hpPct*100)}%;background:${hpColor}"></div></div></div>`,
-      `<div class="inv-stat-row"><div class="inv-stat-row__icon">⚔️</div><div class="inv-stat-row__body"><span class="inv-stat-row__label">Attack Power</span><span class="inv-stat-row__value">${_invP.attackPower}</span></div></div>`,
-      `<div class="inv-stat-row"><div class="inv-stat-row__icon">⚡</div><div class="inv-stat-row__body"><span class="inv-stat-row__label">Attack Speed</span><span class="inv-stat-row__value" style="color:${atkSpeedColor}">${atkSpeed.toFixed(2)}x</span></div></div>`,
-      `<div class="inv-stat-row"><div class="inv-stat-row__icon">🎯</div><div class="inv-stat-row__body"><span class="inv-stat-row__label">Crit Chance</span><span class="inv-stat-row__value" style="color:${critColor}">${critPct}%</span></div></div>`,
-      dmgReduction > 0 ? `<div class="inv-stat-row"><div class="inv-stat-row__icon">🛡️</div><div class="inv-stat-row__body"><span class="inv-stat-row__label">Damage Reduction</span><span class="inv-stat-row__value" style="color:#6dde88">${dmgReduction}%</span></div></div>` : '',
-      stats.bleedChance > 0 ? `<div class="inv-stat-row"><div class="inv-stat-row__icon">🩸</div><div class="inv-stat-row__body"><span class="inv-stat-row__label">Bleed Chance</span><span class="inv-stat-row__value" style="color:#e05c5c">${Math.round(stats.bleedChance * 100)}%</span></div></div>` : '',
+      `<div class="inv-stat-row inv-stat-row--bar"><div class="inv-stat-row__icon inv-stat-row__icon--hp">♥</div><div class="inv-stat-row__body"><span class="inv-stat-row__label">HP</span><span class="inv-stat-row__value" style="color:${hpColor}">${Math.round(_invP.hp)} <span class="inv-stat-row__sub">/ ${Math.round(_invP.maxHp)}</span></span></div><div class="inv-stat-row__bar"><div class="inv-stat-row__bar-fill" style="width:${Math.round(hpPct*100)}%;background:${hpColor}"></div></div></div>`,
+      `<div class="inv-stat-row"><div class="inv-stat-row__icon inv-stat-row__icon--atk">⚔</div><div class="inv-stat-row__body"><span class="inv-stat-row__label">Attack Power</span><span class="inv-stat-row__value">${_invP.attackPower}</span></div></div>`,
+      `<div class="inv-stat-row"><div class="inv-stat-row__icon inv-stat-row__icon--spd">⚡</div><div class="inv-stat-row__body"><span class="inv-stat-row__label">Attack Speed</span><span class="inv-stat-row__value" style="color:${atkSpeedColor}">${atkSpeed.toFixed(2)}x</span></div></div>`,
+      `<div class="inv-stat-row"><div class="inv-stat-row__icon inv-stat-row__icon--crit">◎</div><div class="inv-stat-row__body"><span class="inv-stat-row__label">Crit Chance</span><span class="inv-stat-row__value" style="color:${critColor}">${critPct}%</span></div></div>`,
+      dmgReduction > 0 ? `<div class="inv-stat-row"><div class="inv-stat-row__icon inv-stat-row__icon--def">⛨</div><div class="inv-stat-row__body"><span class="inv-stat-row__label">Damage Reduction</span><span class="inv-stat-row__value" style="color:#6dde88">${dmgReduction}%</span></div></div>` : '',
+      stats.bleedChance > 0 ? `<div class="inv-stat-row"><div class="inv-stat-row__icon inv-stat-row__icon--bleed">✦</div><div class="inv-stat-row__body"><span class="inv-stat-row__label">Bleed Chance</span><span class="inv-stat-row__value" style="color:#e05c5c">${Math.round(stats.bleedChance * 100)}%</span></div></div>` : '',
     ].join('');
 
     ui.invItemsList.innerHTML = ITEM_KEYS
@@ -3537,6 +3548,10 @@
     return {
       coins: 0,
       bestFloor: 1,
+      bestKills: 0,
+      bestLevel: 1,
+      bestTime: 0,
+      bestCoins: 0,
       unlockedItems: [],
       unlockedCharacters: ['princess', 'thorn_knight', 'metao'],
       unlockedChallenges: [],
@@ -3893,6 +3908,7 @@
         };
       }
       runHistory = normalizeRunHistory(savedRunHistory || savedMeta?.runHistory);
+      syncMetaRecordsFromRunHistory();
       activeRun = savedRun && typeof savedRun === 'object' ? savedRun : null;
       if (activeRun) {
         activeRun.mode = normalizeGameMode(activeRun.mode);
@@ -3958,14 +3974,41 @@
     return gameMode === 'coop' || gameMode === 'pvp';
   }
 
+  function getPlayerSlot(id) {
+    return PLAYER_SLOT_CONFIG[id - 1] || null;
+  }
+
+  function getPlayerSlots({ includeInactive = false, includeDead = true } = {}) {
+    return PLAYER_SLOT_CONFIG
+      .filter(slot => includeInactive || !!slot.getEntity())
+      .filter(slot => includeDead || !slot.getDead());
+  }
+
+  function getActivePlayerSlots() {
+    if (!isMultiplayerMode()) return player ? [PLAYER_SLOT_CONFIG[0]] : [];
+    return getPlayerSlots({ includeInactive: false, includeDead: true })
+      .filter(slot => slot.id <= Math.max(1, mpPlayerCount));
+  }
+
+  function getLivePlayerSlots() {
+    return getActivePlayerSlots().filter(slot => !slot.getDead());
+  }
+
+  function getSlotByEntity(entity) {
+    return getActivePlayerSlots().find(slot => slot.getEntity() === entity) || null;
+  }
+
+  function setSlotDead(slotOrId, dead) {
+    const slot = typeof slotOrId === 'number' ? getPlayerSlot(slotOrId) : slotOrId;
+    if (!slot) return;
+    slot.setDead(dead);
+  }
+
   function resetMultiplayerState() {
-    player2 = null;
-    player3 = null;
-    player4 = null;
-    p1DeadInCoop = false;
-    p2DeadInCoop = false;
-    p3DeadInCoop = false;
-    p4DeadInCoop = false;
+    PLAYER_SLOT_CONFIG.forEach(slot => {
+      if (slot.id > 1) slot.setEntity(null);
+      slot.setDead(false);
+    });
     pvpState = null;
     const p2Row = document.getElementById('p2HpRow');
     if (p2Row) p2Row.style.display = 'none';
@@ -3979,12 +4022,8 @@
   }
 
   function splitPlayerCount() {
-    let n = 0;
-    if (player && gameState === 'play') n++;
-    if (player2 && !p2DeadInCoop) n++;
-    if (player3 && !p3DeadInCoop) n++;
-    if (player4 && !p4DeadInCoop) n++;
-    return n;
+    if (gameState !== 'play') return 0;
+    return getActivePlayerSlots().length;
   }
 
   function openMpLobby(mode) {
@@ -4072,6 +4111,34 @@
           name: String(move.name || move.key || 'Unknown'),
         })) : [],
       }));
+  }
+
+  function deriveRunRecords(entries, fallback = {}) {
+    const records = {
+      floor: Math.max(1, Number(fallback.bestFloor || 1)),
+      kills: Math.max(0, Number(fallback.bestKills || 0)),
+      level: Math.max(1, Number(fallback.bestLevel || 1)),
+      time: Math.max(0, Number(fallback.bestTime || 0)),
+      coins: Math.max(0, Number(fallback.bestCoins || 0)),
+    };
+    normalizeRunHistory(entries).forEach(entry => {
+      records.floor = Math.max(records.floor, Number(entry.floor || 1));
+      records.kills = Math.max(records.kills, Number(entry.kills || 0));
+      records.level = Math.max(records.level, Number(entry.level || 1));
+      records.time = Math.max(records.time, Number(entry.elapsedSeconds || 0));
+      records.coins = Math.max(records.coins, Number(entry.coins || 0));
+    });
+    return records;
+  }
+
+  function syncMetaRecordsFromRunHistory() {
+    const records = deriveRunRecords(runHistory, metaProgress);
+    metaProgress.bestFloor = records.floor;
+    metaProgress.bestKills = records.kills;
+    metaProgress.bestLevel = records.level;
+    metaProgress.bestTime = records.time;
+    metaProgress.bestCoins = records.coins;
+    return records;
   }
 
   function getOwnedChallengeSet() {
@@ -6123,7 +6190,7 @@
   }
 
   function hasVisibleRoomExit(room, direction) {
-    return !!room?.doors?.[direction];
+    return !!room?.doors?.[direction] || !!room?.secretPassages?.[direction]?.open;
   }
 
   function setSecretPassageOpen(room, direction, open = true) {
@@ -6150,8 +6217,11 @@
       kind: 'secret_wall',
       x: position.x,
       y: position.y,
+      w: 52,
+      h: 52,
       r: 22,
       hp: 2,
+      maxHp: 2,
       broken: false,
       secretDir: direction,
       targetGx: targetRoom.gx,
@@ -7248,7 +7318,8 @@
   // ── End Rival System ────────────────────────────────────────────────────────
 
   function findSafeEnemySpawnPoint(preferredX, preferredY, radius = 18) {
-    if (!isBlocked(preferredX, preferredY, radius)) {
+    const isSpawnUsable = (x, y) => !isBlocked(x, y, radius) && hasNavigableSpawnSpace(x, y, radius, player);
+    if (isSpawnUsable(preferredX, preferredY)) {
       return { x: preferredX, y: preferredY };
     }
     
@@ -7259,7 +7330,7 @@
       const searchRadius = 30 + (attempt % 4) * 40;
       const x = clamp(preferredX + Math.cos(angle) * searchRadius, WALL + radius, ROOM_W - WALL - radius);
       const y = clamp(preferredY + Math.sin(angle) * searchRadius, WALL + radius, ROOM_H - WALL - radius);
-      if (!isBlocked(x, y, radius)) {
+      if (isSpawnUsable(x, y)) {
         return { x, y };
       }
     }
@@ -7396,6 +7467,67 @@
     }
     steerEnemy(enemy, dx / distance, dy / distance, enemy.speed, accel, dt);
     return true;
+  }
+
+  function hasNavigableSpawnSpace(x, y, radius, target = player) {
+    const probeStep = Math.max(18, radius + 10);
+    const directions = 8;
+    let openPaths = 0;
+    let hasProgressTowardTarget = !target;
+    const targetDistance = target ? dist(x, y, target.x, target.y) : 0;
+
+    for (let index = 0; index < directions; index += 1) {
+      const angle = (index / directions) * Math.PI * 2;
+      const px = x + Math.cos(angle) * probeStep;
+      const py = y + Math.sin(angle) * probeStep;
+      if (isBlocked(px, py, radius)) continue;
+      openPaths += 1;
+      if (target && dist(px, py, target.x, target.y) < targetDistance - 2) {
+        hasProgressTowardTarget = true;
+      }
+    }
+
+    return openPaths >= 2 && hasProgressTowardTarget;
+  }
+
+  function findBlockingBreakableDestructible(x, y, r) {
+    const breakableKinds = new Set(['cover_wall', 'wall', 'secret_wall']);
+    return destructibles.find(prop => {
+      if (!prop || prop.broken || prop.hidden) return false;
+      if (!breakableKinds.has(prop.kind)) return false;
+      return destructibleIntersectsCircle(prop, x, y, r);
+    }) || null;
+  }
+
+  function enemyTryBreakBlockingObstacle(enemy, dt) {
+    if (!enemy || enemy.stun > 0) return;
+    enemy.obstacleHitCd = Math.max(0, Number(enemy.obstacleHitCd || 0) - dt);
+    if (enemy.obstacleHitCd > 0) return;
+
+    const speed = Math.hypot(Number(enemy.vx || 0), Number(enemy.vy || 0));
+    let dirX = speed > 4 ? enemy.vx / speed : 0;
+    let dirY = speed > 4 ? enemy.vy / speed : 0;
+    if ((Math.abs(dirX) + Math.abs(dirY)) < 0.05 && player) {
+      const dx = player.x - enemy.x;
+      const dy = player.y - enemy.y;
+      const d = Math.hypot(dx, dy) || 1;
+      dirX = dx / d;
+      dirY = dy / d;
+    }
+
+    const probeDistance = Math.max(enemy.r + 10, 22);
+    const probeX = enemy.x + dirX * probeDistance;
+    const probeY = enemy.y + dirY * probeDistance;
+    let blocker = findBlockingBreakableDestructible(probeX, probeY, Math.max(10, enemy.r * 0.92));
+    if (!blocker) {
+      blocker = findBlockingBreakableDestructible(enemy.x, enemy.y, enemy.r + 3);
+    }
+    if (!blocker) return;
+
+    const baseDamage = Math.max(1, Math.round((enemy.dmg || 10) / 14));
+    const heavyBonus = enemy.type === 'golem' || enemy.type === 'bulk_golem' || enemy.type === 'charger' ? 1 : 0;
+    damageDestructible(blocker, baseDamage + heavyBonus);
+    enemy.obstacleHitCd = heavyBonus ? 0.22 : 0.38;
   }
 
   function getMiniBossSpawnChance(roomType = 'combat') {
@@ -10256,6 +10388,7 @@
     if (gameState === 'play' && !isWizardPawOpen()) update(dt);
     else if (player && (gameState === 'dialogue' || gameState === 'pause')) {
       tickPlayerTransientDefenseTimers(dt);
+      stepActiveTransitionFade(dt);
     } else if (gameState === 'dying' && playerDeathAnim) {
       playerDeathAnim.timer += dt;
       if (playerDeathAnim.timer >= playerDeathAnim.duration) finalizeDeath();
@@ -10502,9 +10635,10 @@
 
     if (!p1DeadInCoop) updatePlayerLaser(dt);
     if (gameMode === 'coop' || gameMode === 'pvp') {
-      if (player2 && !p2DeadInCoop) updatePlayer2(dt);
-      if (player3 && !p3DeadInCoop) updatePlayerN(dt, player3, 3);
-      if (player4 && !p4DeadInCoop) updatePlayerN(dt, player4, 4);
+      getLivePlayerSlots().forEach(slot => {
+        if (slot.id === 2) updatePlayer2(dt);
+        else if (slot.id > 2) updatePlayerN(dt, slot.getEntity(), slot.id);
+      });
     }
     updateChallengeRoomState(dt);
 
@@ -10523,9 +10657,12 @@
     }
 
     if (!p1DeadInCoop) trackCamera(camera, player, slotW, slotH);
-    if (isSplit && player2 && !p2DeadInCoop) trackCamera(camera2, player2, slotW, slotH);
-    if (isSplit && player3 && !p3DeadInCoop) trackCamera(camera3, player3, slotW, slotH);
-    if (isSplit && player4 && !p4DeadInCoop) trackCamera(camera4, player4, slotW, slotH);
+    if (isSplit) {
+      getLivePlayerSlots().forEach(slot => {
+        if (slot.id === 1) return;
+        trackCamera(slot.getCamera(), slot.getEntity(), slotW, slotH);
+      });
+    }
     if (shakeT > 0) {
       shakeT -= dt;
       shake *= 0.88;
@@ -10577,11 +10714,12 @@
       }
 
       if (!enemies.includes(enemy)) continue;
+      enemyTryBreakBlockingObstacle(enemy, dt);
       moveCircle(enemy, dt);
     }
 
     if (itemStats.bleedHealScale > 0 && totalBleed > 0 && player.hp < player.maxHp) {
-      const heal = player.maxHp * 0.012 * totalBleed * itemStats.bleedHealScale * dt;
+      const heal = player.maxHp * 0.006 * totalBleed * itemStats.bleedHealScale * dt;
       player.hp = Math.min(player.maxHp, player.hp + heal);
       if (Math.random() < 0.14) {
         particles.push({ x: player.x + rand(-10, 10), y: player.y - 18, life: 0.5, text: `+${Math.max(1, Math.ceil(heal * 10))}`, c: '#0f8' });
@@ -13022,6 +13160,19 @@
       destructibles.forEach(other => {
         if (other.hidden) other.hidden = false;
       });
+      for (let index = 0; index < 16; index += 1) {
+        particles.push({
+          x: prop.x + rand(22, -22, 'fx'),
+          y: prop.y + rand(22, -22, 'fx'),
+          life: rand(0.55, 0.22, 'fx'),
+          vx: rand(110, -110, 'fx'),
+          vy: rand(80, -110, 'fx'),
+          c: index % 3 === 0 ? '#a09080' : '#c8bfb0',
+          spark: true,
+          size: rand(3.2, 1.8, 'fx'),
+        });
+      }
+      particles.push({ x: prop.x, y: prop.y - 22, life: 0.75, text: 'CLEAR', c: '#d7f6ff' });
     }
     if (prop.kind === 'cover_wall') {
       const splinters = prop.reinforced ? 18 : 12;
@@ -13380,6 +13531,7 @@
         } else {
           blastRadius(pickup.x, pickup.y, 76, 28 + floor * 2, '#ff7a66');
           particles.push({ x: pickup.x, y: pickup.y - 20, life: 0.75, text: 'WRONG', c: '#ff7a7a' });
+          failChallengeTrial('WRONG BOMB');
         }
       }
 
@@ -13484,6 +13636,10 @@
       if (door) startTransition(door);
     }
 
+    stepActiveTransitionFade(dt);
+  }
+
+  function stepActiveTransitionFade(dt) {
     if (!fading) return;
     fade += (fading === 1 ? 1 : -1) * dt * 3;
     if (fade >= 1 && fading === 1) {
@@ -13499,6 +13655,26 @@
   function startTransition(direction) {
     fading = 1;
     nextDoor = direction;
+  }
+
+  function snapCameraToEntity(cam, entity, vpW, vpH) {
+    if (!cam || !entity) return;
+    cam.x = entity.x - vpW / 2;
+    cam.y = entity.y - vpH / 2;
+  }
+
+  function syncCamerasAfterTransition() {
+    const split = isSplitScreen();
+    const sc = split ? getActivePlayerSlots().length : 1;
+    const vpW = split ? Math.floor(canvas.width / 2) : canvas.width;
+    const vpH = sc >= 3 ? Math.floor(canvas.height / 2) : canvas.height;
+
+    snapCameraToEntity(camera, player, vpW, vpH);
+    if (!split) return;
+    getLivePlayerSlots().forEach(slot => {
+      if (slot.id === 1) return;
+      snapCameraToEntity(slot.getCamera(), slot.getEntity(), vpW, vpH);
+    });
   }
 
   function doTransition() {
@@ -13517,6 +13693,8 @@
       player.x = doorX;
       player.y = doorY;
     }
+    // Prevent one-frame camera lag that can look like room offset after fades/cutscenes.
+    syncCamerasAfterTransition();
   }
 
   function returnToFloorOne() {
@@ -13717,6 +13895,102 @@
     setObjective('Fight GOD or loop with your gear.');
   }
 
+  function getPlayerSlotScoreText(slot) {
+    if (gameMode !== 'pvp' || !pvpState) return '';
+    const kills = slot.id === 1 ? pvpState.p1Kills : slot.id === 2 ? pvpState.p2Kills : 0;
+    return `K:${kills || 0}/${pvpState.killsToWin}`;
+  }
+
+  function getHpFillColor(percent, fallbackColor) {
+    if (percent <= 0) return '#485060';
+    if (percent > 70) return '#4cbb5a';
+    if (percent > 50) return '#d4b840';
+    if (percent > 25) return '#d98134';
+    return fallbackColor || '#c04040';
+  }
+
+  function renderPlayerStatsPanel() {
+    if (!ui.playerStats) return;
+    const slots = getActivePlayerSlots();
+    const activeIds = new Set(slots.map(slot => String(slot.id)));
+    ui.playerStats.classList.toggle('player-stats--split', slots.length > 1);
+    ui.playerStats.querySelectorAll('[data-player-slot]').forEach(card => {
+      if (!activeIds.has(card.dataset.playerSlot || '')) card.remove();
+    });
+    slots.forEach(slot => {
+      const entity = slot.getEntity();
+      if (!entity) return;
+      const character = CHARACTER_DEFS[entity.character || slot.getCharacter()] || CHARACTER_DEFS.thorn_knight;
+      const dead = slot.getDead();
+      const hpPercent = dead ? 0 : Math.max(0, Math.min(100, (entity.hp / Math.max(1, entity.maxHp)) * 100));
+      const xpPercent = Math.max(0, Math.min(100, (Number(entity.xp || 0) / Math.max(1, Number(entity.xpToNext || 1))) * 100));
+      const scoreText = getPlayerSlotScoreText(slot);
+      const hpText = dead ? 'DOWN' : `${Math.ceil(entity.hp)}/${entity.maxHp}`;
+      const metaText = scoreText || `${entity.coins || 0} coins`;
+      const showPlayerLabel = slots.length > 1;
+      let card = ui.playerStats.querySelector(`[data-player-slot="${slot.id}"]`);
+      if (!card) {
+        card = document.createElement('section');
+        card.className = 'player-stat-card';
+        card.dataset.playerSlot = String(slot.id);
+        card.innerHTML = `
+          <div class="player-stat-head">
+            <span class="player-stat-label"><i class="player-stat-dot"></i><span data-player-field="label"></span></span>
+            <span class="player-stat-name" data-player-field="name"></span>
+          </div>
+          <div class="player-stat-row">
+            <span>HP</span>
+            <div class="bar player-hp-bar"><i class="player-stat-fill" data-player-field="hpFill"></i></div>
+            <span data-player-field="hpText"></span>
+          </div>
+          <div class="player-stat-row">
+            <span>XP</span>
+            <span class="player-level-badge" data-player-field="level"></span>
+            <div class="bar player-xp-bar"><i class="player-stat-fill player-stat-fill--xp" data-player-field="xpFill"></i></div>
+            <span data-player-field="xpText"></span>
+          </div>
+          <div class="player-stat-row">
+            <span>INF</span>
+            <span></span>
+            <span data-player-field="meta"></span>
+          </div>`;
+        ui.playerStats.appendChild(card);
+      }
+      card.style.setProperty('--player-color', slot.color);
+      card.classList.toggle('player-stat-card--dead', dead);
+      card.classList.toggle('player-stat-card--solo', !showPlayerLabel);
+      card.querySelector('[data-player-field="label"]').textContent = showPlayerLabel ? slot.label : '';
+      card.querySelector('[data-player-field="name"]').textContent = character.name || slot.getCharacter();
+      card.querySelector('[data-player-field="hpText"]').textContent = hpText;
+      card.querySelector('[data-player-field="level"]').textContent = `Lv.${entity.level || 1}`;
+      card.querySelector('[data-player-field="xpText"]').textContent = `${entity.xp || 0}/${entity.xpToNext || 0}`;
+      card.querySelector('[data-player-field="meta"]').textContent = metaText;
+      const hpFill = card.querySelector('[data-player-field="hpFill"]');
+      const xpFill = card.querySelector('[data-player-field="xpFill"]');
+      if (hpFill) {
+        hpFill.style.width = `${hpPercent.toFixed(1)}%`;
+        hpFill.style.background = getHpFillColor(hpPercent, slot.color);
+      }
+      if (xpFill) xpFill.style.width = `${xpPercent.toFixed(1)}%`;
+    });
+
+    if (ui.playerHpFill && player) {
+      const p1Percent = Math.max(0, Math.min(100, (player.hp / Math.max(1, player.maxHp)) * 100));
+      ui.playerHpFill.style.width = `${p1Percent}%`;
+      ui.playerHpFill.style.background = getHpFillColor(p1Percent, PLAYER_SLOT_CONFIG[0].color);
+      ui.playerHpTxt.textContent = gameMode === 'pvp' && pvpState
+        ? `${Math.ceil(player.hp)} | ${getPlayerSlotScoreText(PLAYER_SLOT_CONFIG[0])}`
+        : `${Math.ceil(player.hp)}/${player.maxHp}`;
+    }
+    if (ui.playerXpFill && player) {
+      const xpPercent = Math.max(0, Math.min(100, (player.xp / Math.max(1, player.xpToNext)) * 100));
+      ui.playerXpFill.style.width = `${xpPercent}%`;
+      ui.playerXpTxt.textContent = `${player.xp}/${player.xpToNext}`;
+      const levelEl = document.getElementById('playerLevelTxt');
+      if (levelEl) levelEl.textContent = `Lv.${player.level || 1}`;
+    }
+  }
+
   function updateHud() {
     if (!player) return;
     const character = getCharacterDef();
@@ -13772,33 +14046,7 @@
     ui.skillNames.laser.textContent = laserMove?.name || character.skills.laser;
     ui.skillNames.smash.textContent = smashMove?.name || character.skills.smash;
     syncCharacterUiTheme();
-    
-    // Update player stats in bottom right
-    if (ui.playerHpFill) {
-      const hpPercent = Math.max(0, Math.min(100, (player.hp / player.maxHp) * 100));
-      ui.playerHpFill.style.width = hpPercent + '%';
-      ui.playerHpFill.style.background = hpPercent > 70 ? '#4cbb5a' : hpPercent > 50 ? '#d4b840' : '#c04040';
-      ui.playerHpTxt.textContent = Math.ceil(player.hp) + '/' + player.maxHp;
-    }
-    const p2HpFill = document.getElementById('player2HpFill');
-    const p2HpTxt = document.getElementById('player2HpTxt');
-    if (p2HpFill && player2 && (gameMode === 'coop' || gameMode === 'pvp')) {
-      const p2Pct = p2DeadInCoop ? 0 : Math.max(0, Math.min(100, (player2.hp / player2.maxHp) * 100));
-      p2HpFill.style.width = p2Pct + '%';
-      if (gameMode === 'pvp' && pvpState) {
-        if (p2HpTxt) p2HpTxt.textContent = `${Math.ceil(player2.hp)} | K:${pvpState.p2Kills}/${pvpState.killsToWin}`;
-        if (ui.playerHpTxt) ui.playerHpTxt.textContent = `${Math.ceil(player.hp)} | K:${pvpState.p1Kills}/${pvpState.killsToWin}`;
-      } else {
-        if (p2HpTxt) p2HpTxt.textContent = p2DeadInCoop ? 'DOWN' : Math.ceil(player2.hp) + '/' + player2.maxHp;
-      }
-    }
-    if (ui.playerXpFill) {
-      const xpPercent = Math.max(0, Math.min(100, (player.xp / player.xpToNext) * 100));
-      ui.playerXpFill.style.width = xpPercent + '%';
-      ui.playerXpTxt.textContent = player.xp + '/' + player.xpToNext;
-      const _lvEl = document.getElementById('playerLevelTxt');
-      if (_lvEl) _lvEl.textContent = 'Lv.' + (player.level || 1);
-    }
+    renderPlayerStatsPanel();
     
     // Update center display
     if (ui.coinCount) ui.coinCount.textContent = player.coins;
@@ -13840,6 +14088,10 @@
     if (ui.adapterStatus) {
       const hasAdapter = getItemCount('charged_adapter') > 0;
       const showAdapter = hasAdapter && (gameState === 'play' || gameState === 'pause');
+      if (ui.hudLower) {
+        ui.hudLower.classList.toggle('hidden', !showAdapter);
+        ui.hudLower.setAttribute('aria-hidden', showAdapter ? 'false' : 'true');
+      }
       ui.adapterStatus.classList.toggle('hidden', !showAdapter);
       ui.adapterStatus.setAttribute('aria-hidden', showAdapter ? 'false' : 'true');
       ui.adapterStatus.classList.toggle('is-ready', false);
@@ -13888,8 +14140,17 @@
   }
 
   function finalizeRun(result, extra = {}) {
+    const previousRecords = deriveRunRecords(runHistory);
     const entry = buildRunHistoryEntry(result, extra);
     pushRunHistoryEntry(entry);
+    const nextRecords = syncMetaRecordsFromRunHistory();
+    const newRecords = {};
+    if (nextRecords.floor > previousRecords.floor && entry.floor >= nextRecords.floor) newRecords.floor = true;
+    if (nextRecords.kills > previousRecords.kills && entry.kills >= nextRecords.kills) newRecords.kills = true;
+    if (nextRecords.level > previousRecords.level && entry.level >= nextRecords.level) newRecords.level = true;
+    if (nextRecords.time > previousRecords.time && entry.elapsedSeconds >= nextRecords.time) newRecords.time = true;
+    if (nextRecords.coins > previousRecords.coins && entry.coins >= nextRecords.coins) newRecords.coins = true;
+    entry._newRecords = newRecords;
     return entry;
   }
 
@@ -14102,8 +14363,9 @@
     refreshMenuState();
   }
 
-  function drawWorldViewport(cam, vpX, vpW, vpH, vpY, pLabel) {
+  function drawWorldViewport(cam, vpX, vpW, vpH, vpY, pLabel, slot = null) {
     const isDying = gameState === 'dying';
+    const slotDead = !!slot?.getDead?.();
     const _shakeOn = window.NeoSettings?.getAccess()?.screenShake !== false;
     const sX = _shakeOn && pLabel === 'P1' ? (Math.random() - 0.5) * shake * 2 : 0;
     const sY = _shakeOn && pLabel === 'P1' ? (Math.random() - 0.5) * shake * 2 : 0;
@@ -14122,10 +14384,17 @@
     drawEnemyTelegraphs();
     drawEnemies();
     drawRoomCeilingMask();
-    if (!isDying) drawPlayer();
-    if (!isDying && isMultiplayerMode() && player2 && !p2DeadInCoop) drawPlayer2();
-    if (!isDying && isMultiplayerMode() && player3 && !p3DeadInCoop) drawPlayerN(player3, chosenCharacter3, '#8aff8a', 'P3');
-    if (!isDying && isMultiplayerMode() && player4 && !p4DeadInCoop) drawPlayerN(player4, chosenCharacter4, '#ffd080', 'P4');
+    if (!isDying) {
+      if (isMultiplayerMode()) {
+        getActivePlayerSlots().forEach(drawSlot => {
+          if (drawSlot.getDead()) return;
+          if (drawSlot.id === 1) drawPlayer();
+          else drawPlayerSlot(drawSlot);
+        });
+      } else {
+        drawPlayer();
+      }
+    }
     if (!isDying) drawPlayerLaser();
     if (isDying && playerDeathAnim) drawPlayerCorpseAnim(playerDeathAnim);
     drawParticles();
@@ -14133,13 +14402,25 @@
     if (!isDying) drawJesterPortalPrompt();
     // P-label in corner of each viewport (split only)
     if (isSplitScreen() && pLabel) {
-      const colors = { P1: '#ff8a8a', P2: '#4ca8ff', P3: '#8aff8a', P4: '#ffd080' };
+      const slot = getActivePlayerSlots().find(candidate => candidate.label === pLabel);
       ctx.save();
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.font = 'bold 11px monospace';
       ctx.textAlign = 'left';
-      ctx.fillStyle = colors[pLabel] || '#fff';
+      ctx.fillStyle = slot?.color || '#fff';
       ctx.fillText(pLabel, vpX + 8, vpY + 18);
+      ctx.restore();
+    }
+    if (slotDead && pLabel) {
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.fillStyle = 'rgba(0,0,0,.52)';
+      ctx.fillRect(vpX, vpY, vpW, vpH);
+      ctx.fillStyle = slot?.color || '#dfeeff';
+      ctx.font = 'bold 24px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(`${pLabel} DOWN`, vpX + vpW / 2, vpY + vpH / 2);
       ctx.restore();
     }
     ctx.restore();
@@ -14289,17 +14570,15 @@
     if (isPlayLike) {
       const split = isSplitScreen();
       if (split) {
-        const sc = splitPlayerCount();
+        const slots = getActivePlayerSlots();
+        const sc = slots.length;
         const vpW = Math.floor(canvas.width / 2);
         const vpH = sc >= 3 ? Math.floor(canvas.height / 2) : canvas.height;
-        // Top row
-        drawWorldViewport(camera,  0,   vpW, vpH, 0, 'P1');
-        drawWorldViewport(camera2, vpW, vpW, vpH, 0, 'P2');
-        // Bottom row (3-4 players)
-        if (sc >= 3 && player3 && !p3DeadInCoop)
-          drawWorldViewport(camera3, 0,   vpW, vpH, vpH, 'P3');
-        if (sc >= 4 && player4 && !p4DeadInCoop)
-          drawWorldViewport(camera4, vpW, vpW, vpH, vpH, 'P4');
+        slots.forEach((slot, index) => {
+          const col = index % 2;
+          const row = sc >= 3 ? Math.floor(index / 2) : 0;
+          drawWorldViewport(slot.getCamera(), col * vpW, vpW, vpH, row * vpH, slot.label, slot);
+        });
         // Dividers
         ctx.save();
         ctx.fillStyle = '#000';
@@ -15304,10 +15583,20 @@
           lights,
           decor.x,
           decor.y - 12,
-          18,
-          152 * flicker,
-          0.98,
-          'rgba(255, 166, 86, 0.15)'
+          34,
+          286 * flicker,
+          1.1,
+          'rgba(255, 176, 94, 0.24)'
+        );
+        // Add a softer wide spill so torches brighten nearby floor, not just the immediate hotspot.
+        pushLightSource(
+          lights,
+          decor.x,
+          decor.y - 10,
+          96,
+          448 * flicker,
+          0.52,
+          'rgba(255, 206, 142, 0.12)'
         );
       }
     });
@@ -15535,10 +15824,7 @@
       } else if (prop.kind === 'cover_wall') {
         drawCoverWall(prop);
       } else if (prop.kind === 'secret_wall') {
-        drawEnvironmentTile('secret_wall_block', -25, -25, 50, 50);
-        ctx.strokeStyle = 'rgba(125,110,70,0.48)';
-        ctx.lineWidth = 1.5;
-        ctx.strokeRect(-24, -24, 48, 48);
+        drawCoverWall(prop);
       }
       ctx.restore();
     });
@@ -16995,48 +17281,30 @@
     ctx.restore();
   }
 
-  function drawPlayer2() {
-    if (!player2) return;
-    const aimAngle = Math.atan2(player2.vy || 0, player2.vx || 1);
-    const facing = getFacingDirection(player2, aimAngle);
-    const spriteKey = SPRITE_DEFS[chosenCharacter2] ? chosenCharacter2 : 'thorn_knight';
-    drawSpriteFrame(spriteKey, player2.x, player2.y, Math.max(34, player2.r * 2.5), {
-      alpha: player2.inv > 0 ? 0.55 : 1,
-      flipX: facing < 0,
-      shadowColor: 'rgba(76,168,255,0.5)',
-      shadowBlur: 10,
-      tint: 'rgba(76,168,255,0.25)',
-    });
-    // Aim indicator
-    ctx.save();
-    ctx.translate(player2.x, player2.y);
-    ctx.strokeStyle = '#4ca8ff';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(Math.cos(aimAngle) * 6, Math.sin(aimAngle) * 6);
-    ctx.lineTo(Math.cos(aimAngle) * 20, Math.sin(aimAngle) * 20);
-    ctx.stroke();
-    ctx.restore();
-    // P2 label
-    ctx.save();
-    ctx.fillStyle = '#4ca8ff';
-    ctx.font = 'bold 11px monospace';
-    ctx.textAlign = 'center';
-    ctx.fillText('P2', player2.x, player2.y - player2.r - 6);
-    ctx.restore();
+  function hexToRgba(hex, alpha) {
+    const value = String(hex || '').replace('#', '');
+    if (!/^[0-9a-fA-F]{6}$/.test(value)) return `rgba(168,216,255,${alpha})`;
+    const r = parseInt(value.slice(0, 2), 16);
+    const g = parseInt(value.slice(2, 4), 16);
+    const b = parseInt(value.slice(4, 6), 16);
+    return `rgba(${r},${g},${b},${alpha})`;
   }
 
-  function drawPlayerN(pn, charKey, tintColor, label) {
+  function drawPlayerSlot(slot) {
+    const pn = slot?.getEntity?.();
     if (!pn) return;
+    const charKey = slot.getCharacter();
+    const tintColor = slot.color;
+    const label = slot.label;
     const aimAngle = Math.atan2(pn.vy || 0, pn.vx || 1);
     const facing = getFacingDirection(pn, aimAngle);
     const spriteKey = SPRITE_DEFS[charKey] ? charKey : 'thorn_knight';
     drawSpriteFrame(spriteKey, pn.x, pn.y, Math.max(34, pn.r * 2.5), {
       alpha: pn.inv > 0 ? 0.55 : 1,
       flipX: facing < 0,
-      shadowColor: `rgba(${tintColor},0.4)`,
+      shadowColor: hexToRgba(tintColor, 0.45),
       shadowBlur: 10,
-      tint: `${tintColor}40`,
+      tint: hexToRgba(tintColor, 0.25),
     });
     ctx.save();
     ctx.translate(pn.x, pn.y);
@@ -17053,6 +17321,20 @@
     ctx.textAlign = 'center';
     ctx.fillText(label, pn.x, pn.y - pn.r - 6);
     ctx.restore();
+  }
+
+  function drawPlayer2() {
+    drawPlayerSlot(PLAYER_SLOT_CONFIG[1]);
+  }
+
+  function drawPlayerN(pn, charKey, tintColor, label) {
+    const slot = getSlotByEntity(pn) || {
+      getEntity: () => pn,
+      getCharacter: () => charKey,
+      color: tintColor,
+      label,
+    };
+    drawPlayerSlot(slot);
   }
 
   function drawPlayerLaser() {
@@ -17935,6 +18217,7 @@
       const inPlay = show === 'play' || show === 'pause' || show === 'dialogue' || show === 'dying';
       setVisible(view.hud, false, 'none');
       setVisible(view.actionBar, show === 'play' || show === 'pause' || show === 'dying', '');
+      setVisible(view.hudLower, show === 'play' || show === 'pause', '');
       setVisible(view.adapterStatus, show === 'play' || show === 'pause', '');
       setVisible(view.playerStats, inPlay, '');
       setVisible(view.coinDisplay, inPlay, 'flex');
@@ -18011,24 +18294,24 @@
     }
 
     const ENEMY_INFO = [
-      { key: 'hunter',          label: 'Hunter',          boss: false },
-      { key: 'charger',         label: 'Charger',         boss: false },
-      { key: 'laser',           label: 'Laser Unit',      boss: false },
-      { key: 'knave',           label: 'Knave',           boss: false },
-      { key: 'sniper',          label: 'Sniper',          boss: false },
-      { key: 'machine_gunner',  label: 'Machine Gunner',  boss: false },
-      { key: 'golem',           label: 'Golem',           boss: false },
-      { key: 'cult_mage',       label: 'Cult Mage',       boss: false },
-      { key: 'cult_follower',   label: 'Cult Follower',   boss: false },
-      { key: 'summoner',        label: 'Summoner',        boss: false },
-      { key: 'shield_unit',     label: 'Shield Unit',     boss: false },
-      { key: 'healer',          label: 'Healer',          boss: false },
-      { key: 'boss_spawner',    label: 'Boss Spawner',    boss: false },
-      { key: 'bulk_golem',      label: 'Bulk Golem',      boss: false },
-      { key: 'artificer_knave', label: 'Artificer Knave', boss: false },
-      { key: 'queen_cult',      label: 'Queen Cult',      boss: true  },
-      { key: 'mirror_knight',   label: 'Mirror Champion', boss: true  },
-      { key: 'god',             label: 'GOD',             boss: true  },
+      { key: 'hunter',          label: 'Hunter',          boss: false, hp: 52,   dmg: 12, speed: 96,  attackStyle: 'melee',   immunities: [],                                    desc: 'Relentless tracker that closes in fast and slashes. Low HP but high pressure.' },
+      { key: 'charger',         label: 'Charger',         boss: false, hp: 68,   dmg: 14, speed: 118, attackStyle: 'dash',    immunities: [],                                    desc: 'Winds up then dashes straight at the player for heavy knockback damage.' },
+      { key: 'laser',           label: 'Laser Unit',      boss: false, hp: 52,   dmg: 12, speed: 96,  attackStyle: 'ranged',  immunities: [],                                    desc: 'Fires a precision beam from range. Keeps distance and punishes slow movement.' },
+      { key: 'knave',           label: 'Knave',           boss: false, hp: 68,   dmg: 14, speed: 118, attackStyle: 'melee',   immunities: [],                                    desc: 'Fast melee fighter with erratic movement. Hard to read at close range.' },
+      { key: 'sniper',          label: 'Sniper',          boss: false, hp: 58,   dmg: 12, speed: 104, attackStyle: 'ranged',  immunities: [],                                    desc: 'Long-range shooter that aims carefully before firing a high-damage shot.' },
+      { key: 'machine_gunner',  label: 'Machine Gunner',  boss: false, hp: 96,   dmg: 8,  speed: 112, attackStyle: 'burst',   immunities: [],                                    desc: 'Sprays bullets in rapid bursts. Low per-shot damage but overwhelming volume.' },
+      { key: 'golem',           label: 'Golem',           boss: false, hp: 132,  dmg: 18, speed: 70,  attackStyle: 'melee',   immunities: ['bleed'],                             desc: 'Slow stone tank immune to bleed. High HP and damage make it dangerous up close.' },
+      { key: 'cult_mage',       label: 'Cult Mage',       boss: false, hp: 84,   dmg: 18, speed: 58,  attackStyle: 'ranged',  immunities: [],                                    desc: 'Slow-moving caster that hurls powerful projectiles. Prioritise from a distance.' },
+      { key: 'cult_follower',   label: 'Cult Follower',   boss: false, hp: 34,   dmg: 8,  speed: 138, attackStyle: 'melee',   immunities: [],                                    desc: 'Frail but extremely fast swarmer. Dangerous in groups.' },
+      { key: 'summoner',        label: 'Summoner',        boss: false, hp: 120,  dmg: 12, speed: 66,  attackStyle: 'summon',  immunities: [],                                    desc: 'Hangs back and periodically summons reinforcements. Kill it first.' },
+      { key: 'shield_unit',     label: 'Shield Unit',     boss: false, hp: 210,  dmg: 10, speed: 52,  attackStyle: 'melee',   immunities: ['bleed'],                             desc: 'Heavy armoured tank with a barrier. Bleed immune. Can boost nearby allies.' },
+      { key: 'healer',          label: 'Healer',          boss: false, hp: 150,  dmg: 10, speed: 64,  attackStyle: 'support', immunities: [],                                    desc: 'Restores HP to nearby enemies on a cooldown. Eliminate it before it undoes your damage.' },
+      { key: 'boss_spawner',    label: 'Boss Spawner',    boss: false, hp: 300,  dmg: 8,  speed: 42,  attackStyle: 'summon',  immunities: ['bleed'],                             desc: 'Immobile spawner that releases enemies on a timer. Destroy it before the countdown ends.' },
+      { key: 'bulk_golem',      label: 'Bulk Golem',      boss: true,  hp: 1280, dmg: 31, speed: 88,  attackStyle: 'melee',   immunities: ['bleed'],                             desc: 'Boss. Massive golem that splits into smaller golems at low HP. Ground-slam AOE attack.' },
+      { key: 'artificer_knave', label: 'Artificer Knave', boss: true,  hp: 1880, dmg: 20, speed: 124, attackStyle: 'melee',   immunities: [],                                    desc: 'Boss. High-speed multi-phase fighter. Becomes more aggressive at each phase threshold.' },
+      { key: 'queen_cult',      label: 'Queen Cult',      boss: true,  hp: 760,  dmg: 20, speed: 96,  attackStyle: 'summon',  immunities: [],                                    desc: 'Boss. Cult leader that summons followers and mages while striking with projectiles.' },
+      { key: 'mirror_knight',   label: 'Mirror Champion', boss: true,  hp: 0,    dmg: 0,  speed: 0,   attackStyle: 'mirror',  immunities: [],                                    desc: 'Elite. Copies the player\'s equipped moves and items. The perfect counter to your build.' },
+      { key: 'god',             label: 'GOD',             boss: true,  hp: 920,  dmg: 18, speed: 108, attackStyle: 'beam',    immunities: ['bleed', 'fire', 'poison', 'dark'],   desc: 'Final boss. Multi-phase deity with beam sweeps, nova blasts, and judgement strikes. Immune to all status effects.' },
     ];
 
     function populateInfoPanel(tab) {
@@ -18100,17 +18383,62 @@
         }).join('')}</div>`;
 
       } else if (tab === 'enemies') {
-        view.rhInfoContent.innerHTML = `<div class="info-enemy-grid">${ENEMY_INFO.map(e => {
-          const tagClass = e.boss ? 'info-enemy-card__tag--boss' : 'info-enemy-card__tag--normal';
-          return `<div class="info-enemy-card">
-            <canvas class="info-enemy-card__sprite" data-info-enemy="${e.key}" width="52" height="52"></canvas>
-            <div class="info-enemy-card__name">${e.label}</div>
-            <span class="info-enemy-card__tag ${tagClass}">${e.boss ? 'Boss' : 'Enemy'}</span>
+        const attackStyleLabel = { melee: 'Melee', dash: 'Dash', ranged: 'Ranged', burst: 'Burst', summon: 'Summoner', support: 'Support', mirror: 'Mirror', beam: 'Beam' };
+        view.rhInfoContent.innerHTML = `
+          <div class="info-enemy-layout">
+            <div class="info-enemy-grid">${ENEMY_INFO.map(e => {
+              const tagClass = e.boss ? 'info-enemy-card__tag--boss' : 'info-enemy-card__tag--normal';
+              return `<div class="info-enemy-card" data-enemy-select="${e.key}" tabindex="0">
+                <canvas class="info-enemy-card__sprite" data-info-enemy="${e.key}" width="52" height="52"></canvas>
+                <div class="info-enemy-card__name">${e.label}</div>
+                <span class="info-enemy-card__tag ${tagClass}">${e.boss ? 'Boss' : 'Enemy'}</span>
+              </div>`;
+            }).join('')}</div>
+            <div class="info-enemy-detail hidden" id="infoEnemyDetail">
+              <canvas class="info-enemy-detail__sprite" id="infoEnemySprite" width="80" height="80"></canvas>
+              <div class="info-enemy-detail__name" id="infoEnemyName"></div>
+              <div class="info-enemy-detail__tag-row" id="infoEnemyTagRow"></div>
+              <div class="info-enemy-detail__stats" id="infoEnemyStats"></div>
+              <div class="info-enemy-detail__desc" id="infoEnemyDesc"></div>
+            </div>
           </div>`;
-        }).join('')}</div>`;
         view.rhInfoContent.querySelectorAll('[data-info-enemy]').forEach(el => {
           drawSpriteToCanvas(el, el.dataset.infoEnemy, 48);
         });
+        const showEnemyDetail = (key) => {
+          const e = ENEMY_INFO.find(x => x.key === key);
+          if (!e) return;
+          const detail = document.getElementById('infoEnemyDetail');
+          const sprite = document.getElementById('infoEnemySprite');
+          if (!detail || !sprite) return;
+          detail.classList.remove('hidden');
+          drawSpriteToCanvas(sprite, key, 76);
+          document.getElementById('infoEnemyName').textContent = e.label;
+          const isBoss = e.boss;
+          const tagCls = isBoss ? 'info-enemy-card__tag--boss' : 'info-enemy-card__tag--normal';
+          const styleLbl = attackStyleLabel[e.attackStyle] || e.attackStyle;
+          document.getElementById('infoEnemyTagRow').innerHTML =
+            `<span class="info-enemy-card__tag ${tagCls}">${isBoss ? 'Boss' : 'Enemy'}</span>` +
+            `<span class="info-enemy-detail__style-tag">${styleLbl}</span>`;
+          const immHtml = e.immunities.length
+            ? e.immunities.map(im => `<span class="info-enemy-detail__imm">${im}</span>`).join('')
+            : '<span class="info-enemy-detail__imm info-enemy-detail__imm--none">None</span>';
+          const hpRow    = e.hp    ? `<div class="ied-stat"><span class="ied-stat__label">HP</span><span class="ied-stat__value">${e.hp}</span></div>` : '';
+          const dmgRow   = e.dmg   ? `<div class="ied-stat"><span class="ied-stat__label">DMG</span><span class="ied-stat__value">${e.dmg}</span></div>` : '';
+          const spdRow   = e.speed ? `<div class="ied-stat"><span class="ied-stat__label">SPD</span><span class="ied-stat__value">${e.speed}</span></div>` : '';
+          document.getElementById('infoEnemyStats').innerHTML =
+            `<div class="ied-stats-row">${hpRow}${dmgRow}${spdRow}</div>` +
+            `<div class="ied-imm-row"><span class="ied-imm-label">Immune:</span>${immHtml}</div>`;
+          document.getElementById('infoEnemyDesc').textContent = e.desc || '';
+          view.rhInfoContent.querySelectorAll('[data-enemy-select]').forEach(card => {
+            card.classList.toggle('info-enemy-card--selected', card.dataset.enemySelect === key);
+          });
+        };
+        view.rhInfoContent.querySelectorAll('[data-enemy-select]').forEach(card => {
+          card.addEventListener('click', () => showEnemyDetail(card.dataset.enemySelect));
+          card.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' ') showEnemyDetail(card.dataset.enemySelect); });
+        });
+        showEnemyDetail(ENEMY_INFO[0].key);
 
       } else if (tab === 'characters') {
         view.rhInfoContent.innerHTML = `<div class="info-char-grid">${Object.values(CHARACTER_DEFS).map(c => {
@@ -18236,6 +18564,10 @@
       });
       manager.registerScreen('actionBar', {
         create: () => makeContainer(view.actionBar, ''),
+        validStates: ['play', 'pause'],
+      });
+      manager.registerScreen('hudLower', {
+        create: () => makeContainer(view.hudLower, ''),
         validStates: ['play', 'pause'],
       });
       manager.registerScreen('adapterStatus', {
@@ -18957,7 +19289,6 @@
           const sec = Math.floor(s % 60);
           return `${m}:${sec.toString().padStart(2, '0')}`;
         };
-        const rarityClass = { knight: 'knight', white: 'knight', wizard: 'wizard', purple: 'wizard', god: 'god' };
         if (view.deadKillerCanvas) {
           drawSpriteToCanvas(view.deadKillerCanvas, resolveKillerSprite(entry.killerKey || ''), 120);
         }
@@ -18976,20 +19307,73 @@
           reviveButton.disabled = crystals < cost;
           reviveButton.title = crystals < cost ? `Need ${cost} Loop Crystal${cost === 1 ? '' : 's'}` : `Spend ${cost} Loop Crystal${cost === 1 ? '' : 's'} to revive`;
         }
+
+        // ── Records row ────────────────────────────────────────────────────
+        if (view.deadRecords) {
+          const nr = entry._newRecords || {};
+          const records = deriveRunRecords(runHistory, metaProgress);
+          const bests = [
+            { label: 'FLOOR',  val: `${records.floor}/10`,         isNew: nr.floor },
+            { label: 'KILLS',  val: fmt(records.kills),            isNew: nr.kills },
+            { label: 'LEVEL',  val: fmt(records.level),            isNew: nr.level },
+            { label: 'TIME',   val: fmtTime(records.time),         isNew: nr.time  },
+            { label: 'COINS',  val: fmt(records.coins),            isNew: nr.coins },
+          ];
+          view.deadRecords.innerHTML = bests.map(b =>
+            `<div class="dead-record${b.isNew ? ' dead-record--new' : ''}">
+              <span class="dead-record-label">${b.label}</span>
+              <span class="dead-record-val">${b.val}</span>
+              ${b.isNew ? '<span class="dead-record-badge">NEW</span>' : ''}
+            </div>`
+          ).join('');
+        }
+
+        // ── Item icon cards with pagination ────────────────────────────────
         if (view.deadItems) {
-          view.deadItems.innerHTML = '';
           const items = Array.isArray(entry.items) ? entry.items : [];
-          if (items.length === 0) {
-            view.deadItems.innerHTML = '<span style="opacity:.3;font-size:11px">None</span>';
-          } else {
-            items.forEach(item => {
-              const pill = document.createElement('span');
-              const rc = rarityClass[item.rarity] || 'knight';
-              pill.className = `dead-item-pill dead-item-pill--${rc}`;
-              pill.textContent = item.count > 1 ? `${item.name} ×${item.count}` : item.name;
-              view.deadItems.appendChild(pill);
-            });
+          const PAGE_SIZE = 5;
+          let itemPage = 0;
+          const totalPages = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
+
+          const renderItemPage = () => {
+            view.deadItems.innerHTML = '';
+            if (items.length === 0) {
+              view.deadItems.innerHTML = '<span class="dead-items-empty">None</span>';
+            } else {
+              const slice = items.slice(itemPage * PAGE_SIZE, itemPage * PAGE_SIZE + PAGE_SIZE);
+              slice.forEach(item => {
+                const itemDef = ITEM_DEFS[item.key] || {};
+                const rc = { knight: 'knight', white: 'knight', wizard: 'wizard', purple: 'wizard', god: 'god' }[item.rarity] || 'knight';
+                const card = document.createElement('div');
+                card.className = `dead-item-card dead-item-card--${rc}`;
+                const cnv = document.createElement('canvas');
+                cnv.width = 32;
+                cnv.height = 32;
+                cnv.className = 'dead-item-icon';
+                drawItemToastIcon(cnv, { ...itemDef, key: item.key, rarity: item.rarity, color: itemDef.color, accent: itemDef.accent });
+                const label = document.createElement('span');
+                label.className = 'dead-item-name';
+                label.textContent = item.count > 1 ? `${item.name} ×${item.count}` : item.name;
+                card.appendChild(cnv);
+                card.appendChild(label);
+                view.deadItems.appendChild(card);
+              });
+            }
+            if (view.deadItemsPage) view.deadItemsPage.textContent = totalPages > 1 ? `${itemPage + 1}/${totalPages}` : '';
+            if (view.deadItemsPrev) view.deadItemsPrev.disabled = itemPage <= 0;
+            if (view.deadItemsNext) view.deadItemsNext.disabled = itemPage >= totalPages - 1;
+            if (view.deadItemsPrev) view.deadItemsPrev.classList.toggle('hidden', totalPages <= 1);
+            if (view.deadItemsNext) view.deadItemsNext.classList.toggle('hidden', totalPages <= 1);
+            if (view.deadItemsPage) view.deadItemsPage.classList.toggle('hidden', totalPages <= 1);
+          };
+
+          if (view.deadItemsPrev) {
+            view.deadItemsPrev.onclick = () => { itemPage = Math.max(0, itemPage - 1); renderItemPage(); };
           }
+          if (view.deadItemsNext) {
+            view.deadItemsNext.onclick = () => { itemPage = Math.min(totalPages - 1, itemPage + 1); renderItemPage(); };
+          }
+          renderItemPage();
         }
       },
       setWinInfo(text) { view.winInfo.textContent = text; },

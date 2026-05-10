@@ -193,24 +193,19 @@
   </div>
   <div id="entityDialogueLayer" class="entity-dialogue-layer hidden" aria-hidden="true"></div>
 
-  <!-- Player Stats Bottom Right -->
-  <div id="playerStats" class="hidden">
-    <div class="player-stat-row">
-      <span>P1</span>
-      <div class="bar player-hp-bar"><i id="playerHpFill"></i></div>
-      <span id="playerHpTxt">120</span>
-    </div>
-    <div class="player-stat-row" id="p2HpRow" style="display:none">
-      <span>P2</span>
-      <div class="bar player-hp-bar"><i id="player2HpFill" style="background:#4ca8ff"></i></div>
-      <span id="player2HpTxt">120</span>
-    </div>
-    <div class="player-stat-row">
-      <span>XP</span>
-      <span id="playerLevelTxt" class="player-level-badge">Lv.1</span>
-      <div class="bar player-xp-bar"><i id="playerXpFill"></i></div>
-      <span id="playerXpTxt">0/20</span>
-    </div>
+  <!-- Player Stats -->
+  <div id="playerStats" class="player-stats hidden" aria-label="Player status"></div>
+
+  <!-- Legacy stat nodes kept for compatibility with older scripts/tests. -->
+  <div id="legacyPlayerStats" class="hidden" aria-hidden="true">
+    <i id="playerHpFill"></i>
+    <span id="playerHpTxt">120</span>
+    <i id="player2HpFill"></i>
+    <span id="player2HpTxt">120</span>
+    <i id="playerXpFill"></i>
+    <span id="playerXpTxt">0/20</span>
+    <span id="playerLevelTxt">Lv.1</span>
+    <div id="p2HpRow" style="display:none"></div>
   </div>
 
   <div id="interactPrompt" class="interact-prompt hidden" aria-live="polite"></div>
@@ -254,9 +249,11 @@
     </div>
   </div>
 
-  <div id="adapterStatus" class="adapter-status hidden" aria-hidden="true">
-    <canvas id="adapterStatusIcon" class="adapter-status__icon" width="24" height="24" aria-hidden="true"></canvas>
-    <span id="adapterStatusText" class="adapter-status__text"></span>
+  <div id="hudLower" class="hud-lower hidden" aria-hidden="true">
+    <div id="adapterStatus" class="adapter-status hidden" aria-hidden="true">
+      <canvas id="adapterStatusIcon" class="adapter-status__icon" width="24" height="24" aria-hidden="true"></canvas>
+      <span id="adapterStatusText" class="adapter-status__text"></span>
+    </div>
   </div>
 
   <div id="anvilPanel" class="game-panel game-panel--anvil hidden" aria-hidden="true">
@@ -402,8 +399,19 @@
           <div class="dead-stat"><span class="dead-stat-label">COINS</span><b class="dead-stat-val" id="deadCoins">—</b></div>
           <div class="dead-stat"><span class="dead-stat-label">DIFFICULTY</span><b class="dead-stat-val" id="deadDifficulty">—</b></div>
         </div>
+        <div class="dead-records-wrap">
+          <span class="dead-records-title">PERSONAL BESTS</span>
+          <div class="dead-records-row" id="deadRecords"></div>
+        </div>
         <div class="dead-items-wrap">
-          <span class="dead-items-label">RELICS HELD</span>
+          <div class="dead-items-header">
+            <span class="dead-items-label">RELICS HELD</span>
+            <div class="dead-items-pager">
+              <button id="deadItemsPrev" class="dead-items-pgbtn hidden" type="button" aria-label="Previous">&#8592;</button>
+              <span id="deadItemsPage" class="dead-items-pgnum hidden"></span>
+              <button id="deadItemsNext" class="dead-items-pgbtn hidden" type="button" aria-label="Next">&#8594;</button>
+            </div>
+          </div>
           <div class="dead-items-list" id="deadItems"></div>
         </div>
         <div class="dead-actions" aria-label="Death screen actions">
