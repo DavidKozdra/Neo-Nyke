@@ -1,9 +1,11 @@
+// save-store.js — standalone IIFE. IndexedDB/localStorage save store factory.
+(() => {
   function createSaveStore() {
     const localPrefix = 'neonyke:';
     const idb = typeof indexedDB !== 'undefined' ? indexedDB : null;
     let dbPromise = null;
-    const SaveApiCtor = KozSaveApi.SaveAPI || null;
-    const createLocalStorageDriver = KozStorageDrivers.createLocalStorageDriver || null;
+    const SaveApiCtor = Neo.KozSaveApi.SaveAPI || null;
+    const createLocalStorageDriver = Neo.KozStorageDrivers.createLocalStorageDriver || null;
 
     function createFallbackApi(key) {
       if (!SaveApiCtor || !createLocalStorageDriver) return null;
@@ -126,3 +128,6 @@
     };
   }
 
+  // Expose on Neo
+  Neo.createSaveStore = createSaveStore;
+})();

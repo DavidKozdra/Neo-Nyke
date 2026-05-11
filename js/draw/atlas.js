@@ -1,15 +1,17 @@
+// atlas.js — standalone IIFE. Environment tile atlas builder.
+(() => {
   function buildEnvironmentTileAtlas() {
-    const entries = Object.entries(ENV_TILE_DEFS);
+    const entries = Object.entries(Neo.ENV_TILE_DEFS);
     const canvasEl = document.createElement('canvas');
-    canvasEl.width = Math.max(1, ENV_TILE_SOURCE_SIZE * Math.max(1, entries.length));
-    canvasEl.height = ENV_TILE_SOURCE_SIZE;
+    canvasEl.width = Math.max(1, Neo.ENV_TILE_SOURCE_SIZE * Math.max(1, entries.length));
+    canvasEl.height = Neo.ENV_TILE_SOURCE_SIZE;
     const atlasCtx = canvasEl.getContext('2d');
     atlasCtx.imageSmoothingEnabled = false;
     const frames = {};
     entries.forEach(([key, def], index) => {
-      const ox = index * ENV_TILE_SOURCE_SIZE;
-      frames[key] = { x: ox, y: 0, w: ENV_TILE_SOURCE_SIZE, h: ENV_TILE_SOURCE_SIZE };
-      drawEnvironmentTileAsset(atlasCtx, ox, 0, ENV_TILE_SOURCE_SIZE, def || {});
+      const ox = index * Neo.ENV_TILE_SOURCE_SIZE;
+      frames[key] = { x: ox, y: 0, w: Neo.ENV_TILE_SOURCE_SIZE, h: Neo.ENV_TILE_SOURCE_SIZE };
+      drawEnvironmentTileAsset(atlasCtx, ox, 0, Neo.ENV_TILE_SOURCE_SIZE, def || {});
     });
     return { canvas: canvasEl, frames };
   }
@@ -242,3 +244,17 @@
     });
   }
 
+  // Expose on Neo
+  Neo.buildEnvironmentTileAtlas = buildEnvironmentTileAtlas;
+  Neo.drawEnvironmentTileAsset = drawEnvironmentTileAsset;
+  Neo.drawFloorTileAsset = drawFloorTileAsset;
+  Neo.drawPlankTileAsset = drawPlankTileAsset;
+  Neo.drawWallTileAsset = drawWallTileAsset;
+  Neo.drawThresholdTileAsset = drawThresholdTileAsset;
+  Neo.drawPillarTileAsset = drawPillarTileAsset;
+  Neo.drawBlockTileAsset = drawBlockTileAsset;
+  Neo.drawPotTileAsset = drawPotTileAsset;
+  Neo.drawBarrelTileAsset = drawBarrelTileAsset;
+  Neo.drawTileCracks = drawTileCracks;
+  Neo.drawTileChips = drawTileChips;
+})();

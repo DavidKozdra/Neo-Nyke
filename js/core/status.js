@@ -1,3 +1,5 @@
+// status.js — standalone IIFE. Status-effect helpers and walls constant.
+(() => {
   function createStatusMap() {
     return {
       bleed: { stacks: 0, duration: 0, tick: 0 },
@@ -10,7 +12,7 @@
   function ensureStatuses(entity) {
     if (!entity || typeof entity !== 'object') return createStatusMap();
     if (!entity.statuses || typeof entity.statuses !== 'object') entity.statuses = createStatusMap();
-    STATUS_KEYS.forEach(key => {
+    Neo.STATUS_KEYS.forEach(key => {
       const state = entity.statuses[key];
       if (!state || typeof state !== 'object') entity.statuses[key] = { stacks: 0, duration: 0, tick: 0 };
       entity.statuses[key].stacks = Number(entity.statuses[key].stacks || 0);
@@ -36,26 +38,35 @@
   }
 
   function applyStatus(entity, key, stacks, duration) {
-    if (!entity || !STATUS_KEYS.includes(key)) return;
+    if (!entity || !Neo.STATUS_KEYS.includes(key)) return;
     if (entity[`${key}Immune`]) return;
     const state = getStatusState(entity, key);
     state.stacks = Math.min(6, Math.max(state.stacks, 0) + Math.max(0, Number(stacks || 0)));
     state.duration = Math.max(state.duration, Number(duration || 0));
-    if (entity !== player) achievementEvents.emit('status:applied', { key });
+    if (entity !== Neo.player) achievementEvents.emit('status:applied', { key });
   }
 
   const walls = (() => {
-    const hw = (ROOM_W - DOOR) / 2;
-    const hh = (ROOM_H - DOOR) / 2;
+    const hw = (Neo.ROOM_W - Neo.DOOR) / 2;
+    const hh = (Neo.ROOM_H - Neo.DOOR) / 2;
     return [
-      { x: 0, y: 0, w: hw, h: WALL },
-      { x: ROOM_W - hw, y: 0, w: hw, h: WALL },
-      { x: 0, y: ROOM_H - WALL, w: hw, h: WALL },
-      { x: ROOM_W - hw, y: ROOM_H - WALL, w: hw, h: WALL },
-      { x: 0, y: 0, w: WALL, h: hh },
-      { x: 0, y: ROOM_H - hh, w: WALL, h: hh },
-      { x: ROOM_W - WALL, y: 0, w: WALL, h: hh },
-      { x: ROOM_W - WALL, y: ROOM_H - hh, w: WALL, h: hh },
+      { x: 0, y: 0, w: hw, h: Neo.WALL },
+      { x: Neo.ROOM_W - hw, y: 0, w: hw, h: Neo.WALL },
+      { x: 0, y: Neo.ROOM_H - Neo.WALL, w: hw, h: Neo.WALL },
+      { x: Neo.ROOM_W - hw, y: Neo.ROOM_H - Neo.WALL, w: hw, h: Neo.WALL },
+      { x: 0, y: 0, w: Neo.WALL, h: hh },
+      { x: 0, y: Neo.ROOM_H - hh, w: Neo.WALL, h: hh },
+      { x: Neo.ROOM_W - Neo.WALL, y: 0, w: Neo.WALL, h: hh },
+      { x: Neo.ROOM_W - Neo.WALL, y: Neo.ROOM_H - hh, w: Neo.WALL, h: hh },
     ];
   })();
 
+  // Expose on Neo
+  Neo.walls = walls;
+  Neo.createStatusMap = createStatusMap;
+  Neo.ensureStatuses = ensureStatuses;
+  Neo.getStatusState = getStatusState;
+  Neo.getStatusStacks = getStatusStacks;
+  Neo.clearStatus = clearStatus;
+  Neo.applyStatus = applyStatus;
+})();

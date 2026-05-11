@@ -1,3 +1,5 @@
+// notifications.js — standalone IIFE. Item toast notifications.
+(() => {
   function ensureItemNotifyStack() {
     let stack = document.getElementById('itemNotifyStack');
     if (stack) return stack;
@@ -8,7 +10,7 @@
   }
 
   function getRarityNameColor(rarity) {
-    return RARITY_NAME_COLORS[String(rarity || '').toLowerCase()] || '#d8e9ff';
+    return Neo.RARITY_NAME_COLORS[String(rarity || '').toLowerCase()] || '#d8e9ff';
   }
 
   function drawItemToastIcon(canvas, item) {
@@ -70,7 +72,7 @@
   }
 
   function pushItemNotification(itemKey, amount = 1, note = '') {
-    const item = itemRegistry.get(itemKey) || ITEM_DEFS[itemKey];
+    const item = Neo.itemRegistry.get(itemKey) || Neo.ITEM_DEFS[itemKey];
     if (!item || amount <= 0) return;
 
     const stack = ensureItemNotifyStack();
@@ -125,7 +127,7 @@
   let cinematicTimer = null;
 
   function showItemCinematic(itemKey, onDone) {
-    const item = itemRegistry.get(itemKey) || ITEM_DEFS[itemKey];
+    const item = Neo.itemRegistry.get(itemKey) || Neo.ITEM_DEFS[itemKey];
     if (!item) { if (onDone) onDone(); return; }
 
     const el = document.getElementById('itemCinematic');
@@ -334,7 +336,7 @@
   }
 
   function pushWeaponNotification(weaponKey) {
-    const def = WEAPON_DEFS[weaponKey];
+    const def = Neo.WEAPON_DEFS[weaponKey];
     if (!def) return;
     const rarityColor = {
       knight: '#e8f0ff',
@@ -378,3 +380,15 @@
     }, 2600);
   }
 
+  // Expose on Neo
+  Neo.ensureItemNotifyStack = ensureItemNotifyStack;
+  Neo.getRarityNameColor = getRarityNameColor;
+  Neo.drawItemToastIcon = drawItemToastIcon;
+  Neo.pushItemNotification = pushItemNotification;
+  Neo.showItemCinematic = showItemCinematic;
+  Neo.drawMoveToastIcon = drawMoveToastIcon;
+  Neo.drawWeaponToastIcon = drawWeaponToastIcon;
+  Neo.drawHealToastIcon = drawHealToastIcon;
+  Neo.pushMoveNotification = pushMoveNotification;
+  Neo.pushWeaponNotification = pushWeaponNotification;
+})();

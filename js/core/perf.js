@@ -1,3 +1,5 @@
+// perf.js — standalone IIFE. Performance monitoring and boot() entry point.
+(() => {
   function createPerfState() {
     let enabled = false;
     try {
@@ -20,6 +22,9 @@
       worstFrameMs: 0,
     };
   }
+
+  const perfState = createPerfState();
+  Neo.perfState = perfState;
 
   function resetPerfStats() {
     perfState.averages = Object.create(null);
@@ -63,7 +68,7 @@
     const previous = perfState.averages[name];
     perfState.averages[name] = previous === undefined
       ? value
-      : previous + (value - previous) * PERF_AVG_WEIGHT;
+      : previous + (value - previous) * Neo.PERF_AVG_WEIGHT;
   }
 
   function perfBeginFrame(timestamp) {
@@ -86,7 +91,7 @@
     const workMs = performance.now() - frameStartTime;
     perfState.workMs = workMs;
     perfState.totalFrames += 1;
-    if (workMs > PERF_BUDGET_60FPS) perfState.slowFrames += 1;
+    if (workMs > Neo.PERF_BUDGET_60FPS) perfState.slowFrames += 1;
     perfState.worstFrameMs = Math.max(perfState.worstFrameMs, workMs);
     perfSample('frame.work', workMs);
     Object.entries(perfState.sections).forEach(([name, value]) => perfSample(name, value));
@@ -122,16 +127,16 @@
 
   function getPerfCounts() {
     return {
-      state: gameState,
-      floor,
-      enemies: enemies.length,
-      bodies: deadBodies.length,
-      projectiles: projectiles.length,
-      particles: particles.length,
-      pickups: pickups.length,
-      hazards: hazards.length,
-      destructibles: destructibles.length,
-      rooms: rooms.length,
+      state: Neo.gameState,
+      floor: Neo.floor,
+      enemies: Neo.enemies.length,
+      bodies: Neo.deadBodies.length,
+      projectiles: Neo.projectiles.length,
+      particles: Neo.particles.length,
+      pickups: Neo.pickups.length,
+      hazards: Neo.hazards.length,
+      destructibles: Neo.destructibles.length,
+      rooms: Neo.rooms.length,
     };
   }
 
@@ -146,7 +151,7 @@
   function updatePerfOverlay(force) {
     if (!perfState.enabled) return;
     const now = performance.now();
-    if (!force && now - perfState.lastOverlayAt < PERF_OVERLAY_INTERVAL) return;
+    if (!force && now - perfState.lastOverlayAt < Neo.PERF_OVERLAY_INTERVAL) return;
     perfState.lastOverlayAt = now;
     const overlay = ensurePerfOverlay();
     const avg = perfState.averages;
@@ -161,7 +166,7 @@
     overlay.textContent = [
       'NEO PERF  F3 toggles  console: NeoPerf.snapshot()',
       `fps ${formatPerfFps(perfState.fps)} | raf ${formatPerfMs(perfState.rafMs)} | work avg ${formatPerfMs(avg['frame.work'])} last ${formatPerfMs(perfState.workMs)}`,
-      `slow>${formatPerfMs(PERF_BUDGET_60FPS)} ${slowPct.toFixed(1)}% | worst ${formatPerfMs(perfState.worstFrameMs)}`,
+      `slow>${formatPerfMs(Neo.PERF_BUDGET_60FPS)} ${slowPct.toFixed(1)}% | worst ${formatPerfMs(perfState.worstFrameMs)}`,
       `totals  update ${formatPerfMs(avg.update)} | draw ${formatPerfMs(avg.draw)} | ui/dom ${formatPerfMs(avg.ui)}`,
       `update  player ${formatPerfMs(avg['update.player'])} | enemies ${formatPerfMs(avg['update.enemies'])} | projectiles ${formatPerfMs(avg['update.projectiles'])} | world ${formatPerfMs(avg['update.world'])}`,
       `update  pickups ${formatPerfMs(avg['update.pickups'])} | corpses ${formatPerfMs(avg['update.corpses'])} | particles ${formatPerfMs(avg['update.particles'])} | transitions ${formatPerfMs(avg['update.transitions'])}`,
@@ -198,25 +203,35 @@
   boot();
 
   async function boot() {
+    // Create uiController now that controller.js is loaded
+    Neo.uiController = Neo.createUIController(Neo.ui);
+    // Create saveStore now that save-store.js is loaded
+    Neo.saveStore = Neo.createSaveStore();
+    window._neoSaveStore = Neo.saveStore;
+    // Create itemRegistry now that createItemRegistry is defined in game-state.js
+    Neo.itemRegistry = Neo.createItemRegistry();
+
     installPerfDebugApi();
-    if (gameStateManager) gameStateManager.setState(gameState);
-    else uiController.setState(gameState);
-    uiController.setHudUpdateHook(() => {
-      if (gameState !== 'play' || !player) return;
+    if (Neo.gameStateManager) Neo.gameStateManager.setState(Neo.gameState);
+    else Neo.uiController.setState(Neo.gameState);
+    Neo.uiController.setHudUpdateHook(() => {
+      if (Neo.gameState !== 'play' || !Neo.player) return;
       const hudPerfStart = perfStart();
-      updateObjective();
-      updateHud();
+      Neo.updateObjective();
+      Neo.updateHud();
       perfEnd('ui.hud', hudPerfStart);
     });
-    SPRITE_ATLAS = buildSpriteAtlas();
-    ENV_TILE_ATLAS = buildEnvironmentTileAtlas();
-    bindInput();
-    bindPanelInput();
-    drawActionIcons();
-    await loadPersistedState();
-    updateCharacterSelectionUI();
-    refreshMenuState();
-    draw();
+    // Initialize metaProgress now that createDefaultMeta is defined
+    if (!Neo.metaProgress) Neo.metaProgress = Neo.createDefaultMeta();
+    Neo.SPRITE_ATLAS = Neo.buildSpriteAtlas();
+    Neo.ENV_TILE_ATLAS = Neo.buildEnvironmentTileAtlas();
+    Neo.bindInput();
+    Neo.bindPanelInput();
+    Neo.drawActionIcons();
+    await Neo.loadPersistedState();
+    Neo.updateCharacterSelectionUI();
+    Neo.refreshMenuState();
+    Neo.draw();
     hideBootLoading();
   }
 
@@ -226,4 +241,17 @@
     bootLoading.classList.add('boot-loading--done');
     setTimeout(() => bootLoading.remove(), 320);
   }
+
+  // Expose on Neo
+  Neo.createPerfState = createPerfState;
+  Neo.resetPerfStats = resetPerfStats;
+  Neo.setPerfEnabled = setPerfEnabled;
+  Neo.perfStart = perfStart;
+  Neo.perfEnd = perfEnd;
+  Neo.perfSample = perfSample;
+  Neo.perfBeginFrame = perfBeginFrame;
+  Neo.perfEndFrame = perfEndFrame;
+  Neo.installPerfDebugApi = installPerfDebugApi;
+  Neo.boot = boot;
+})();
 

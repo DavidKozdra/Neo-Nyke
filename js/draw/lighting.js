@@ -1,30 +1,32 @@
+// lighting.js — standalone IIFE. Light source collection and beam carving.
+(() => {
   function carveBeamLight(path, maxWidth, strength = 0.5) {
     if (!Array.isArray(path) || path.length < 2) return;
-    ctx.save();
-    ctx.globalAlpha = clamp(strength, 0, 1);
-    ctx.strokeStyle = '#000';
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.shadowColor = '#000';
-    ctx.shadowBlur = Math.max(8, maxWidth * 1.8);
+    Neo.ctx.save();
+    Neo.ctx.globalAlpha = clamp(strength, 0, 1);
+    Neo.ctx.strokeStyle = '#000';
+    Neo.ctx.lineCap = 'round';
+    Neo.ctx.lineJoin = 'round';
+    Neo.ctx.shadowColor = '#000';
+    Neo.ctx.shadowBlur = Math.max(8, maxWidth * 1.8);
     for (let index = 0; index < path.length - 1; index += 1) {
       const start = path[index];
       const end = path[index + 1];
-      ctx.lineWidth = maxWidth;
-      ctx.beginPath();
-      ctx.moveTo(start.x, start.y);
-      ctx.lineTo(end.x, end.y);
-      ctx.stroke();
+      Neo.ctx.lineWidth = maxWidth;
+      Neo.ctx.beginPath();
+      Neo.ctx.moveTo(start.x, start.y);
+      Neo.ctx.lineTo(end.x, end.y);
+      Neo.ctx.stroke();
     }
-    ctx.restore();
+    Neo.ctx.restore();
   }
 
   function pushLightSource(target, x, y, inner, outer, strength, tint = '') {
-    if (target.length >= LIGHTING_CONFIG.maxLights) return;
+    if (target.length >= Neo.LIGHTING_CONFIG.maxLights) return;
     if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(outer) || outer <= 0) return;
-    if (x + outer < 0 || x - outer > ROOM_W || y + outer < 0 || y - outer > ROOM_H) return;
+    if (x + outer < 0 || x - outer > Neo.ROOM_W || y + outer < 0 || y - outer > Neo.ROOM_H) return;
 
-    const cleanOuter = clamp(outer, 8, LIGHTING_CONFIG.maxOuterRadius);
+    const cleanOuter = clamp(outer, 8, Neo.LIGHTING_CONFIG.maxOuterRadius);
     const cleanInner = clamp(Number.isFinite(inner) ? inner : 0, 0, cleanOuter * 0.72);
     const cleanStrength = clamp(Number.isFinite(strength) ? strength : 0.5, 0, 1.1);
     target.push({ x, y, inner: cleanInner, outer: cleanOuter, strength: cleanStrength, tint });
@@ -32,15 +34,15 @@
 
   function collectRoomLightSources(room) {
     const lights = [];
-    const activeChamber = getActiveRoomChamber(room, player);
+    const activeChamber = getActiveRoomChamber(room, Neo.player);
     pushLightSource(
       lights,
-      ROOM_W / 2,
-      ROOM_H / 2,
-      LIGHTING_CONFIG.ambient.inner,
-      Math.max(ROOM_W, ROOM_H) * LIGHTING_CONFIG.ambient.outerScale,
-      room?.type === 'boss' ? LIGHTING_CONFIG.ambient.bossStrength : LIGHTING_CONFIG.ambient.strength,
-      LIGHTING_CONFIG.ambient.tint
+      Neo.ROOM_W / 2,
+      Neo.ROOM_H / 2,
+      Neo.LIGHTING_CONFIG.ambient.inner,
+      Math.max(Neo.ROOM_W, Neo.ROOM_H) * Neo.LIGHTING_CONFIG.ambient.outerScale,
+      room?.type === 'boss' ? Neo.LIGHTING_CONFIG.ambient.bossStrength : Neo.LIGHTING_CONFIG.ambient.strength,
+      Neo.LIGHTING_CONFIG.ambient.tint
     );
     if (activeChamber && Array.isArray(room?.layoutChambers) && room.layoutChambers.length > 1) {
       pushLightSource(lights, activeChamber.x, activeChamber.y, 36, Math.max(activeChamber.w, activeChamber.h) * 0.58, 0.22, 'rgba(120, 160, 255, 0.05)');
@@ -48,15 +50,15 @@
 
     pushLightSource(
       lights,
-      player.x,
-      player.y - 8,
-      LIGHTING_CONFIG.player.inner,
-      LIGHTING_CONFIG.player.outer,
-      LIGHTING_CONFIG.player.strength,
-      LIGHTING_CONFIG.player.tint
+      Neo.player.x,
+      Neo.player.y - 8,
+      Neo.LIGHTING_CONFIG.player.inner,
+      Neo.LIGHTING_CONFIG.player.outer,
+      Neo.LIGHTING_CONFIG.player.strength,
+      Neo.LIGHTING_CONFIG.player.tint
     );
 
-    decorations.forEach(decor => {
+    Neo.decorations.forEach(decor => {
       if (!decor) return;
       const flameT = Date.now() * 0.007 + decor.x * 0.017 + decor.y * 0.011;
       const flicker = 1 + Math.sin(flameT) * 0.08 + Math.cos(flameT * 1.9) * 0.05;
@@ -93,7 +95,7 @@
       }
     });
 
-    hazards.forEach(hazard => {
+    Neo.hazards.forEach(hazard => {
       if (!hazard) return;
       if (hazard.kind === 'lava') {
         pushLightSource(lights, hazard.x, hazard.y, hazard.r * 0.25, hazard.r * 2.7, 0.95, 'rgba(255, 92, 44, 0.12)');
@@ -106,7 +108,7 @@
       }
     });
 
-    projectiles.forEach(projectile => {
+    Neo.projectiles.forEach(projectile => {
       if (!projectile || !Number.isFinite(projectile.x) || !Number.isFinite(projectile.y)) return;
       const kind = projectile.kind || '';
       if (kind === 'fireball') {
@@ -121,3 +123,8 @@
     return lights;
   }
 
+  // Expose on Neo
+  Neo.carveBeamLight = carveBeamLight;
+  Neo.pushLightSource = pushLightSource;
+  Neo.collectRoomLightSources = collectRoomLightSources;
+})();

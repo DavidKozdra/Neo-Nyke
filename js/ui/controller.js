@@ -1,11 +1,13 @@
+// controller.js — standalone IIFE. UI controller factory.
+(() => {
   function createUIController(view) {
     const UIManagerCtor = window.KozEngine?.UI?.uiManager?.UIManager || window.UIManager || null;
     const manager = typeof UIManagerCtor === 'function' ? new UIManagerCtor({ autoRuntimeInit: false }) : null;
-    const DialogueManagerCtor = KozDialogueApi.TypewriterDialogueManager || window.TypewriterDialogueManager || null;
-    const WorldSpeechBubbleCtor = KozWorldSpeechApi.WorldSpeechBubbleManager || window.WorldSpeechBubbleManager || null;
+    const DialogueManagerCtor = Neo.KozDialogueApi.TypewriterDialogueManager || window.TypewriterDialogueManager || null;
+    const WorldSpeechBubbleCtor = Neo.KozWorldSpeechApi.WorldSpeechBubbleManager || window.WorldSpeechBubbleManager || null;
     const dialogueRuntime = typeof DialogueManagerCtor === 'function'
       ? new DialogueManagerCtor({
-        gameStateManager,
+        gameStateManager: Neo.gameStateManager,
         defaultSpeaker: 'GOD',
         typeSpeed: 0.028,
         autoAdvanceDelay: 1.35,
@@ -193,11 +195,11 @@
       if (!normalized) return getPlayerSpriteKey();
 
       const directKey = normalized.replace(/ /g, '_');
-      if (SPRITE_DEFS[directKey]) return directKey;
+      if (Neo.SPRITE_DEFS[directKey]) return directKey;
 
       const noRival = normalized.replace(/^rival\s+/, '');
       const noRivalKey = noRival.replace(/ /g, '_');
-      if (SPRITE_DEFS[noRivalKey]) return noRivalKey;
+      if (Neo.SPRITE_DEFS[noRivalKey]) return noRivalKey;
 
       if (normalized.includes('knight')) return 'thorn_knight';
       if (normalized.includes('knave')) return 'artificer_knave';
@@ -247,12 +249,12 @@
       layer.style.display = bubbles.length ? 'block' : 'none';
       layer.setAttribute('aria-hidden', bubbles.length ? 'false' : 'true');
       if (!bubbles.length) return;
-      const rect = canvas.getBoundingClientRect();
-      const scaleX = rect.width / canvas.width;
-      const scaleY = rect.height / canvas.height;
+      const rect = Neo.canvas.getBoundingClientRect();
+      const scaleX = rect.width / Neo.canvas.width;
+      const scaleY = rect.height / Neo.canvas.height;
       bubbles.forEach((bubble) => {
-        const screenX = (bubble.anchor.x - camera.x) * scaleX;
-        const screenY = (bubble.anchor.y - camera.y - (bubble.offsetY || 48)) * scaleY;
+        const screenX = (bubble.anchor.x - Neo.camera.x) * scaleX;
+        const screenY = (bubble.anchor.y - Neo.camera.y - (bubble.offsetY || 48)) * scaleY;
         if (screenX < -140 || screenX > rect.width + 140 || screenY < -140 || screenY > rect.height + 80) return;
         const el = document.createElement('div');
         el.className = 'entity-dialogue-bubble';
@@ -303,9 +305,9 @@
       }
       if (show !== 'charselect') { setChallengePanelOpen(false); setLegacyPanelOpen(false); }
       if (show !== 'menu') { setRunHistoryOpen(false); setAltModesPanelOpen(false); setSandboxPanelOpen(false); }
-      setVisible(view.endlessHud, inPlay && gameMode === 'endless', 'flex');
-      setVisible(view.practicePanel, inPlay && gameMode === 'practice' && show !== 'dying', 'block');
-      const isBossRush = gameMode === 'boss_rush';
+      setVisible(view.endlessHud, inPlay && Neo.gameMode === 'endless', 'flex');
+      setVisible(view.practicePanel, inPlay && Neo.gameMode === 'practice' && show !== 'dying', 'block');
+      const isBossRush = Neo.gameMode === 'boss_rush';
       if (view.timerFloorSlot) view.timerFloorSlot.style.display = isBossRush ? 'none' : '';
       if (view.timerBossSlot) view.timerBossSlot.style.display = isBossRush ? '' : 'none';
     }
@@ -355,13 +357,13 @@
       view.runHistoryViewTabs?.forEach(t => t.classList.toggle('active', t.dataset.view === view_));
       if (showAch) populateAchievementsPanel();
       else if (showProfile) {
-        if (view.rhBankCoins)  view.rhBankCoins.textContent  = metaProgress.coins ?? 0;
-        if (view.rhLoopCount)  view.rhLoopCount.textContent  = metaProgress.loopCrystals ?? 0;
-        if (view.rhBestFloor)  view.rhBestFloor.textContent  = metaProgress.bestFloor ?? 1;
+        if (view.rhBankCoins)  view.rhBankCoins.textContent  = Neo.metaProgress.coins ?? 0;
+        if (view.rhLoopCount)  view.rhLoopCount.textContent  = Neo.metaProgress.loopCrystals ?? 0;
+        if (view.rhBestFloor)  view.rhBestFloor.textContent  = Neo.metaProgress.bestFloor ?? 1;
         if (view.rhSaveState)  view.rhSaveState.textContent  = view.saveState?.textContent ?? '—';
       }
       else if (showInfo) populateInfoPanel(activeInfoTab);
-      else { view.runHistoryEmpty?.classList.toggle('hidden', runHistory.length > 0); renderRunHistoryPage(); }
+      else { view.runHistoryEmpty?.classList.toggle('hidden', Neo.runHistory.length > 0); renderRunHistoryPage(); }
     }
 
     const ENEMY_INFO = [
@@ -392,7 +394,7 @@
 
       if (tab === 'items') {
         const rarityOrder = ['knight', 'wizard', 'god'];
-        const sorted = Object.values(ITEM_DEFS).sort((a, b) => {
+        const sorted = Object.values(Neo.ITEM_DEFS).sort((a, b) => {
           const ri = rarityOrder.indexOf(a.rarity ?? a.category) - rarityOrder.indexOf(b.rarity ?? b.category);
           return ri !== 0 ? ri : (a.name || '').localeCompare(b.name || '');
         });
@@ -408,13 +410,13 @@
           </div>`;
         }).join('')}</div>`;
         view.rhInfoContent.querySelectorAll('[data-info-item]').forEach(el => {
-          const item = ITEM_DEFS[el.dataset.infoItem];
+          const item = Neo.ITEM_DEFS[el.dataset.infoItem];
           if (item) drawItemToastIcon(el, item);
         });
 
       } else if (tab === 'weapons') {
         const rarityOrder = ['knight', 'wizard', 'god'];
-        const sorted = Object.values(WEAPON_DEFS).sort((a, b) => {
+        const sorted = Object.values(Neo.WEAPON_DEFS).sort((a, b) => {
           const ri = rarityOrder.indexOf(a.rarity) - rarityOrder.indexOf(b.rarity);
           return ri !== 0 ? ri : (a.name || '').localeCompare(b.name || '');
         });
@@ -429,18 +431,18 @@
           </div>`;
         }).join('')}</div>`;
         view.rhInfoContent.querySelectorAll('[data-info-weapon]').forEach(el => {
-          const w = WEAPON_DEFS[el.dataset.infoWeapon];
+          const w = Neo.WEAPON_DEFS[el.dataset.infoWeapon];
           if (w) drawItemToastIcon(el, w);
         });
 
       } else if (tab === 'moves') {
         const slotOrder = ['melee', 'laser', 'smash', 'dash'];
-        const sorted = Object.values(MOVE_DEFS).sort((a, b) => {
+        const sorted = Object.values(Neo.MOVE_DEFS).sort((a, b) => {
           const si = slotOrder.indexOf(a.slot) - slotOrder.indexOf(b.slot);
           return si !== 0 ? si : (a.name || '').localeCompare(b.name || '');
         });
         view.rhInfoContent.innerHTML = `<div class="info-grid">${sorted.map(m => {
-          const slotLabel = SLOT_LABELS[m.slot] || m.slot;
+          const slotLabel = Neo.SLOT_LABELS[m.slot] || m.slot;
           const exclusive = m.exclusiveCharacter
             ? `<br><em style="color:rgba(200,200,255,0.5)">${titleCase(m.exclusiveCharacter.replace(/_/g, ' '))} only</em>`
             : '';
@@ -454,7 +456,7 @@
           </div>`;
         }).join('')}</div>`;
         view.rhInfoContent.querySelectorAll('[data-info-move]').forEach(el => {
-          const move = MOVE_DEFS[el.dataset.infoMove];
+          const move = Neo.MOVE_DEFS[el.dataset.infoMove];
           if (move) drawMoveToastIcon(el, move);
         });
 
@@ -518,7 +520,7 @@
 
       } else if (tab === 'characters') {
         view.rhInfoContent.innerHTML = `<div class="info-char-grid">${Object.values(CHARACTER_DEFS).map(c => {
-          const display = HERO_DISPLAY[c.key] || {};
+          const display = Neo.HERO_DISPLAY[c.key] || {};
           const statBars = (display.stats || []).map(s =>
             `<div class="info-char-stat">
               <span class="info-char-stat__label">${s.label}</span>
@@ -552,7 +554,7 @@
         : {};
       progressSnapshot.metaCoins = Math.max(
         Math.max(0, Number(progressSnapshot.metaCoins) || 0),
-        Math.max(0, Number(metaProgress?.coins) || 0)
+        Math.max(0, Number(Neo.metaProgress?.coins) || 0)
       );
       const cards = await Promise.all(ACHIEVEMENTS.map(async a => {
         const unlocked = await achievementManager.isUnlocked(a.id);
@@ -693,15 +695,15 @@
       manager.registerScreen('dead', { create: () => makeContainer(view.dead, ''), validStates: ['dead'] });
       manager.registerScreen('win', { create: () => makeContainer(view.win, ''), validStates: ['win'] });
       manager.registerScreen('pause', { create: () => makeContainer(view.pause, ''), validStates: ['pause'] });
-      if (gameStateManager && typeof manager.bindToStateManager === 'function') {
-        manager.bindToStateManager(gameStateManager, { initialSync: true });
+      if (Neo.gameStateManager && typeof manager.bindToStateManager === 'function') {
+        manager.bindToStateManager(Neo.gameStateManager, { initialSync: true });
       }
     }
 
-    if (gameStateManager && typeof gameStateManager.onChange === 'function') {
-      gameStateManager.onChange((_from, to) => {
+    if (Neo.gameStateManager && typeof Neo.gameStateManager.onChange === 'function') {
+      Neo.gameStateManager.onChange((_from, to) => {
         activeState = to || 'menu';
-        gameState = activeState;
+        Neo.gameState = activeState;
         fallbackState(activeState);
       });
     }
@@ -709,8 +711,8 @@
     return {
       setState(state) {
         activeState = state || 'menu';
-        if (gameStateManager && typeof gameStateManager.getState === 'function' && gameStateManager.getState() !== state) {
-          gameStateManager.setState(state);
+        if (Neo.gameStateManager && typeof Neo.gameStateManager.getState === 'function' && Neo.gameStateManager.getState() !== state) {
+          Neo.gameStateManager.setState(state);
           return;
         }
         if (manager && typeof manager.onGameStateChange === 'function') manager.onGameStateChange(state);
@@ -788,15 +790,15 @@
           });
           view.sandboxItemList?.querySelectorAll('[data-sbox-item-icon]').forEach(el => {
             const itemKey = String(el.dataset.sboxItemIcon || '');
-            const item = itemRegistry.get(itemKey) || ITEM_DEFS[itemKey];
+            const item = Neo.itemRegistry.get(itemKey) || Neo.ITEM_DEFS[itemKey];
             if (item) drawItemToastIcon(el, item);
           });
         }
 
         function renderSandboxTokenLists() {
           if (view.sandboxEnemyList) {
-            view.sandboxEnemyList.innerHTML = SANDBOX_ENEMY_TYPES.map(type => {
-              const active = sandboxSettings.allowedEnemies.includes(type);
+            view.sandboxEnemyList.innerHTML = Neo.SANDBOX_ENEMY_TYPES.map(type => {
+              const active = Neo.sandboxSettings.allowedEnemies.includes(type);
               const label = getEnemyLabel(type);
               return `<button class="sandbox-token${active ? ' is-active' : ''}" data-sbox-enemy="${type}" type="button">`
                 + `<canvas class="sandbox-token__icon" data-sbox-enemy-icon="${escapeHtml(type)}" width="28" height="28" aria-hidden="true"></canvas>`
@@ -805,9 +807,9 @@
             }).join('');
           }
           if (view.sandboxItemList) {
-            view.sandboxItemList.innerHTML = ITEM_KEYS.map(key => {
-              const active = sandboxSettings.allowedItems.includes(key);
-              const item = itemRegistry.get(key) || ITEM_DEFS[key];
+            view.sandboxItemList.innerHTML = Neo.ITEM_KEYS.map(key => {
+              const active = Neo.sandboxSettings.allowedItems.includes(key);
+              const item = Neo.itemRegistry.get(key) || Neo.ITEM_DEFS[key];
               const label = item?.name || key.replace(/_/g, ' ');
               const rarity = String(item?.rarity || 'knight');
               return `<button class="sandbox-token sandbox-token--item sandbox-token--${escapeHtml(rarity)}${active ? ' is-active' : ''}" data-sbox-item="${key}" type="button">`
@@ -825,11 +827,11 @@
             if (!param) return;
             const slider = row.querySelector('.sandbox-slider');
             const numInput = row.querySelector('.sandbox-num');
-            const value = sandboxSettings[param];
+            const value = Neo.sandboxSettings[param];
             if (slider && value !== undefined) slider.value = value;
             if (numInput && value !== undefined) numInput.value = value;
           });
-          if (view.sandboxGodMode) view.sandboxGodMode.checked = !!sandboxSettings.godMode;
+          if (view.sandboxGodMode) view.sandboxGodMode.checked = !!Neo.sandboxSettings.godMode;
           renderSandboxTokenLists();
         }
 
@@ -848,7 +850,7 @@
             const rounded = integerParam ? Math.round(clamped) : Math.round(clamped * 100) / 100;
             if (slider) slider.value = String(rounded);
             if (numInput) numInput.value = String(rounded);
-            sandboxSettings[param] = rounded;
+            Neo.sandboxSettings[param] = rounded;
             persistMetaSoon();
           }
           slider?.addEventListener('input', () => applyValue(slider.value));
@@ -856,7 +858,7 @@
         });
 
         view.sandboxGodMode?.addEventListener('change', () => {
-          sandboxSettings.godMode = !!view.sandboxGodMode?.checked;
+          Neo.sandboxSettings.godMode = !!view.sandboxGodMode?.checked;
           persistMetaSoon();
         });
 
@@ -864,13 +866,13 @@
           const btn = event.target instanceof Element ? event.target.closest('[data-sbox-enemy]') : null;
           if (!btn) return;
           const type = String(btn.dataset.sboxEnemy || '');
-          if (!SANDBOX_ENEMY_TYPES.includes(type)) return;
-          if (sandboxSettings.allowedEnemies.includes(type)) {
-            sandboxSettings.allowedEnemies = sandboxSettings.allowedEnemies.filter(key => key !== type);
+          if (!Neo.SANDBOX_ENEMY_TYPES.includes(type)) return;
+          if (Neo.sandboxSettings.allowedEnemies.includes(type)) {
+            Neo.sandboxSettings.allowedEnemies = Neo.sandboxSettings.allowedEnemies.filter(key => key !== type);
           } else {
-            sandboxSettings.allowedEnemies = [...sandboxSettings.allowedEnemies, type];
+            Neo.sandboxSettings.allowedEnemies = [...sandboxSettings.allowedEnemies, type];
           }
-          sandboxSettings = normalizeSandboxSettings(sandboxSettings);
+          Neo.sandboxSettings = normalizeSandboxSettings(Neo.sandboxSettings);
           syncSandboxPanelFields();
           persistMetaSoon();
         });
@@ -879,41 +881,41 @@
           const btn = event.target instanceof Element ? event.target.closest('[data-sbox-item]') : null;
           if (!btn) return;
           const key = String(btn.dataset.sboxItem || '');
-          if (!ITEM_KEYS.includes(key)) return;
-          if (sandboxSettings.allowedItems.includes(key)) {
-            sandboxSettings.allowedItems = sandboxSettings.allowedItems.filter(itemKey => itemKey !== key);
+          if (!Neo.ITEM_KEYS.includes(key)) return;
+          if (Neo.sandboxSettings.allowedItems.includes(key)) {
+            Neo.sandboxSettings.allowedItems = Neo.sandboxSettings.allowedItems.filter(itemKey => itemKey !== key);
           } else {
-            sandboxSettings.allowedItems = [...sandboxSettings.allowedItems, key];
+            Neo.sandboxSettings.allowedItems = [...sandboxSettings.allowedItems, key];
           }
-          sandboxSettings = normalizeSandboxSettings(sandboxSettings);
+          Neo.sandboxSettings = normalizeSandboxSettings(Neo.sandboxSettings);
           syncSandboxPanelFields();
           persistMetaSoon();
         });
 
         view.sandboxEnemiesAll?.addEventListener('click', () => {
-          sandboxSettings.allowedEnemies = SANDBOX_ENEMY_TYPES.slice();
+          Neo.sandboxSettings.allowedEnemies = Neo.SANDBOX_ENEMY_TYPES.slice();
           syncSandboxPanelFields();
           persistMetaSoon();
         });
         view.sandboxEnemiesNone?.addEventListener('click', () => {
-          sandboxSettings.allowedEnemies = [];
-          sandboxSettings = normalizeSandboxSettings(sandboxSettings);
+          Neo.sandboxSettings.allowedEnemies = [];
+          Neo.sandboxSettings = normalizeSandboxSettings(Neo.sandboxSettings);
           syncSandboxPanelFields();
           persistMetaSoon();
         });
         view.sandboxItemsAll?.addEventListener('click', () => {
-          sandboxSettings.allowedItems = ITEM_KEYS.slice();
+          Neo.sandboxSettings.allowedItems = Neo.ITEM_KEYS.slice();
           syncSandboxPanelFields();
           persistMetaSoon();
         });
         view.sandboxItemsNone?.addEventListener('click', () => {
-          sandboxSettings.allowedItems = [];
-          sandboxSettings = normalizeSandboxSettings(sandboxSettings);
+          Neo.sandboxSettings.allowedItems = [];
+          Neo.sandboxSettings = normalizeSandboxSettings(Neo.sandboxSettings);
           syncSandboxPanelFields();
           persistMetaSoon();
         });
         view.sandboxReset?.addEventListener('click', () => {
-          sandboxSettings = normalizeSandboxSettings(SANDBOX_DEFAULT_SETTINGS);
+          Neo.sandboxSettings = normalizeSandboxSettings(Neo.SANDBOX_DEFAULT_SETTINGS);
           syncSandboxPanelFields();
           persistMetaSoon();
         });
@@ -945,7 +947,7 @@
           tab.addEventListener('click', () => populateInfoPanel(tab.dataset.infoTab || 'items'));
         });
         view.infoTutorialBtn?.addEventListener('click', () => {
-          localStorage.setItem(REPLAY_TUTORIAL_KEY, '1');
+          localStorage.setItem(Neo.REPLAY_TUTORIAL_KEY, '1');
           view.infoTutorialBtn.textContent = '✓ Set for next run';
           view.infoTutorialBtn.disabled = true;
           setTimeout(() => {
@@ -1029,30 +1031,30 @@
           setAltModesPanelOpen(true);
         });
         view.mpLobby1Btn?.addEventListener('click', () => {
-          mpPlayerCount = 1;
+          Neo.mpPlayerCount = 1;
           closeMpLobby();
-          charSelectPhase = 'p1';
+          Neo.charSelectPhase = 'p1';
           setGameState('charselect');
           updateCharacterSelectionUI();
         });
         view.mpLobby2Btn?.addEventListener('click', () => {
-          mpPlayerCount = 2;
+          Neo.mpPlayerCount = 2;
           closeMpLobby();
-          charSelectPhase = 'p1';
+          Neo.charSelectPhase = 'p1';
           setGameState('charselect');
           updateCharacterSelectionUI();
         });
         document.getElementById('mpLobby3Btn')?.addEventListener('click', () => {
-          mpPlayerCount = 3;
+          Neo.mpPlayerCount = 3;
           closeMpLobby();
-          charSelectPhase = 'p1';
+          Neo.charSelectPhase = 'p1';
           setGameState('charselect');
           updateCharacterSelectionUI();
         });
         document.getElementById('mpLobby4Btn')?.addEventListener('click', () => {
-          mpPlayerCount = 4;
+          Neo.mpPlayerCount = 4;
           closeMpLobby();
-          charSelectPhase = 'p1';
+          Neo.charSelectPhase = 'p1';
           setGameState('charselect');
           updateCharacterSelectionUI();
         });
@@ -1081,14 +1083,14 @@
         view.practiceMaxHpNum?.addEventListener('change', () => {
           setPracticeMaxHp(view.practiceMaxHpNum.value);
         });
-        view.practiceClearBtn?.addEventListener('click', () => { enemies.length = 0; });
+        view.practiceClearBtn?.addEventListener('click', () => { Neo.enemies.length = 0; });
         view.practiceHealBtn?.addEventListener('click', () => {
-          if (!player) return;
-          player.hp = player.maxHp;
+          if (!Neo.player) return;
+          Neo.player.hp = Neo.player.maxHp;
           updateHud();
         });
         view.practiceGiveItemBtn?.addEventListener('click', () => {
-          if (!player) return;
+          if (!Neo.player) return;
           const key = rollItemDrop({ elite: true, stream: 'loot' });
           if (key) collectItem(key);
         });
@@ -1197,7 +1199,7 @@
 
         // ── Hero detail panel ────────────────────────────────
         const detail = document.getElementById('heroDetail');
-        const disp = HERO_DISPLAY[selected];
+        const disp = Neo.HERO_DISPLAY[selected];
         if (detail && disp) {
           const statsHtml = disp.stats.map(s =>
             `<div class="char-stat-row"><span class="stat-label">${s.label}</span>` +
@@ -1205,7 +1207,7 @@
           ).join('');
           const defaultMoves = getDefaultMovesForCharacter(selected);
           const kitNames = ['melee', 'laser', 'smash', 'dash']
-            .map(slot => MOVE_DEFS[defaultMoves[slot]]?.name || defaultMoves[slot]);
+            .map(slot => Neo.MOVE_DEFS[defaultMoves[slot]]?.name || defaultMoves[slot]);
           const skillsHtml = kitNames.map(s =>
             `<span class="hero-detail-skill-pip">${s}</span>`
           ).join('');
@@ -1237,7 +1239,7 @@
       updateChallengeSelection(unlocked, owned, selected, loopCrystals, bankCoins) {
         view.challengeButtons.forEach(button => {
           const key = button.dataset.challenge || '';
-          const def = CHALLENGE_DEFS[key];
+          const def = Neo.CHALLENGE_DEFS[key];
           if (!def) return;
           const isUnlocked = unlocked.has(key);
           const isOwned = owned.has(key);
@@ -1274,7 +1276,7 @@
       updateLegacySelection(owned, loopCrystals) {
         view.legacyButtons.forEach(button => {
           const key = button.dataset.legacy || '';
-          const def = LEGACY_UPGRADES[key];
+          const def = Neo.LEGACY_UPGRADES[key];
           if (!def) return;
           const isOwned = owned.has(key);
           const canAfford = loopCrystals >= def.cost;
@@ -1291,12 +1293,12 @@
           `;
         });
         if (view.legacyHint) {
-          const ownedCount = LEGACY_ORDER.filter(k => owned.has(k)).length;
+          const ownedCount = Neo.LEGACY_ORDER.filter(k => owned.has(k)).length;
           view.legacyHint.textContent = `Loop Crystals: ${loopCrystals}. Unlocked: ${ownedCount} / ${LEGACY_ORDER.length}. Upgrades are permanent and apply to all future runs.`;
         }
       },
       setItemStatus(items) {
-        ITEM_KEYS.forEach(key => {
+        Neo.ITEM_KEYS.forEach(key => {
           const count = Number(items[key] || 0);
           view.itemSlots[key]?.classList.toggle('on', count > 0);
           if (view.itemCounts[key]) view.itemCounts[key].textContent = String(count);
@@ -1304,7 +1306,7 @@
       },
       setObjective(text) { view.objective.textContent = text; },
       setTutorialBanner(text, visible) {
-        const open = !!visible && !!text && gameState === 'play';
+        const open = !!visible && !!text && Neo.gameState === 'play';
         if (view.tutorialOverlay && tutorialBannerCache.open !== open) {
           view.tutorialOverlay.classList.toggle('hidden', !open);
           view.tutorialOverlay.setAttribute('aria-hidden', open ? 'false' : 'true');
@@ -1325,7 +1327,7 @@
           tutorialBannerCache.hint = nextHint;
         }
         const stepOrder = getTutorialStepOrder();
-        const stepIndex = stepOrder.indexOf(tutorialState?.step || 'move');
+        const stepIndex = stepOrder.indexOf(Neo.tutorialState?.step || 'move');
         const prevDisabled = !open || stepIndex <= 0;
         const nextDisabled = !open || stepIndex < 0 || stepIndex >= (stepOrder.length - 1);
         if (view.tutorialPrevBtn && tutorialBannerCache.prevDisabled !== prevDisabled) {
@@ -1339,7 +1341,7 @@
       },
       setObjectiveList(roomLabel, entries = []) {
         if (!view.objectiveTracker || !view.objectiveList) return;
-        const visible = gameState === 'play' && entries.length > 0;
+        const visible = Neo.gameState === 'play' && entries.length > 0;
         objectiveTrackerVisible = visible;
         objectiveEntriesCache = Array.isArray(entries) ? entries.slice() : [];
         view.objectiveTracker.classList.toggle('hidden', !visible);
@@ -1404,7 +1406,7 @@
         const reviveButton = view.deadActions?.find(button => button.dataset.deadAction === 'revive');
         if (reviveButton) {
           const cost = getReviveCost();
-          const crystals = Number(metaProgress.loopCrystals || 0);
+          const crystals = Number(Neo.metaProgress.loopCrystals || 0);
           reviveButton.textContent = `REVIVE ${cost} LC`;
           reviveButton.disabled = crystals < cost;
           reviveButton.title = crystals < cost ? `Need ${cost} Loop Crystal${cost === 1 ? '' : 's'}` : `Spend ${cost} Loop Crystal${cost === 1 ? '' : 's'} to revive`;
@@ -1413,7 +1415,7 @@
         // ── Records row ────────────────────────────────────────────────────
         if (view.deadRecords) {
           const nr = entry._newRecords || {};
-          const records = deriveRunRecords(runHistory, metaProgress);
+          const records = deriveRunRecords(Neo.runHistory, Neo.metaProgress);
           const bests = [
             { label: 'FLOOR',  val: `${records.floor}/10`,         isNew: nr.floor },
             { label: 'KILLS',  val: fmt(records.kills),            isNew: nr.kills },
@@ -1444,7 +1446,7 @@
             } else {
               const slice = items.slice(itemPage * PAGE_SIZE, itemPage * PAGE_SIZE + PAGE_SIZE);
               slice.forEach(item => {
-                const itemDef = ITEM_DEFS[item.key] || {};
+                const itemDef = Neo.ITEM_DEFS[item.key] || {};
                 const rc = { knight: 'knight', white: 'knight', wizard: 'wizard', purple: 'wizard', god: 'god' }[item.rarity] || 'knight';
                 const card = document.createElement('div');
                 card.className = `dead-item-card dead-item-card--${rc}`;
@@ -1482,3 +1484,6 @@
     };
   }
 
+  // Expose on Neo
+  Neo.createUIController = createUIController;
+})();

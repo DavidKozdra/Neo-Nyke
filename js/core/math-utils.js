@@ -1,3 +1,7 @@
+// math-utils.js — standalone IIFE. Utility math/beam/RNG functions.
+// Reads mutable state from Neo; reads constants from Neo.
+// Exposes public functions on Neo at the bottom.
+(() => {
   function makeRNG(seed) {
     return mulberry32(xmur3(seed)());
   }
@@ -13,7 +17,7 @@
 
   function rollFromWeightTable(table, stream = 'loot', random = null) {
     if (!table || table.total <= 0 || !table.cumulative.length) return 'neo_knife';
-    const roll = (typeof random === 'function' ? random() : nextRandom(stream)) * table.total;
+    const roll = (typeof random === 'function' ? random() : Neo.nextRandom(stream)) * table.total;
     let lo = 0;
     let hi = table.cumulative.length - 1;
     while (lo < hi) {
@@ -48,7 +52,7 @@
   }
 
   function rand(max = 1, min = 0, stream = 'encounter') {
-    return min + (max - min) * nextRandom(stream);
+    return min + (max - min) * Neo.nextRandom(stream);
   }
 
   function irand(min, max, stream = 'encounter') {
@@ -58,7 +62,7 @@
   function shuffle(array, stream = 'encounter') {
     const copy = [...array];
     for (let index = copy.length - 1; index > 0; index -= 1) {
-      const swapIndex = Math.floor(nextRandom(stream) * (index + 1));
+      const swapIndex = Math.floor(Neo.nextRandom(stream) * (index + 1));
       [copy[index], copy[swapIndex]] = [copy[swapIndex], copy[index]];
     }
     return copy;
@@ -66,7 +70,7 @@
 
   function shuffleWithRandom(array, random) {
     const copy = [...array];
-    const next = typeof random === 'function' ? random : () => nextRandom('encounter');
+    const next = typeof random === 'function' ? random : () => Neo.nextRandom('encounter');
     for (let index = copy.length - 1; index > 0; index -= 1) {
       const swapIndex = Math.floor(next() * (index + 1));
       [copy[index], copy[swapIndex]] = [copy[swapIndex], copy[index]];
@@ -107,9 +111,9 @@
   }
 
   function isBlocked(x, y, r) {
-    if (walls.some(wall => circleRect(x, y, r, wall.x, wall.y, wall.w, wall.h))) return true;
-    if (structures.some(structure => circleRect(x, y, r, structure.x - structure.w / 2, structure.y - structure.h / 2, structure.w, structure.h))) return true;
-    return destructibles.some(prop => !prop.broken && !prop.hidden && destructibleIntersectsCircle(prop, x, y, r));
+    if (Neo.walls.some(wall => circleRect(x, y, r, wall.x, wall.y, wall.w, wall.h))) return true;
+    if (Neo.structures.some(structure => circleRect(x, y, r, structure.x - structure.w / 2, structure.y - structure.h / 2, structure.w, structure.h))) return true;
+    return Neo.destructibles.some(prop => !prop.broken && !prop.hidden && destructibleIntersectsCircle(prop, x, y, r));
   }
 
   function beamHitsCircle(x1, y1, x2, y2, cx, cy, radius) {
@@ -122,25 +126,25 @@
     return dist(px, py, cx, cy) <= radius;
   }
 
-  function getPlayerBeamRange(mode = laserMode, moveKey = getEquippedMove('laser')) {
+  function getPlayerBeamRange(mode = Neo.laserMode, moveKey = Neo.getEquippedMove('laser')) {
     if (mode === 'god_sweep') return 560;
     if (mode === 'turtle_wave') return 620;
     if (moveKey === 'love_beam') return 500;
-    return ATTACKS.laser.range;
+    return Neo.ATTACKS.laser.range;
   }
 
-  function getPlayerBeamBounceCount(mode = laserMode) {
-    return mode === 'beam' ? PLAYER_BEAM_BOUNCES : HEAVY_BEAM_BOUNCES;
+  function getPlayerBeamBounceCount(mode = Neo.laserMode) {
+    return mode === 'beam' ? Neo.PLAYER_BEAM_BOUNCES : Neo.HEAVY_BEAM_BOUNCES;
   }
 
   function getEnemyBeamBounceCount(enemy) {
-    if (!enemy) return ENEMY_BEAM_BOUNCES;
-    return enemy.type === 'god' ? HEAVY_BEAM_BOUNCES : ENEMY_BEAM_BOUNCES;
+    if (!enemy) return Neo.ENEMY_BEAM_BOUNCES;
+    return enemy.type === 'god' ? Neo.HEAVY_BEAM_BOUNCES : Neo.ENEMY_BEAM_BOUNCES;
   }
 
   function getBeamReflectRects() {
-    const rects = walls.slice();
-    structures.forEach(structure => {
+    const rects = Neo.walls.slice();
+    Neo.structures.forEach(structure => {
       if (!structure || !Number.isFinite(structure.x) || !Number.isFinite(structure.y)) return;
       if (!Number.isFinite(structure.w) || !Number.isFinite(structure.h) || structure.w <= 0 || structure.h <= 0) return;
       rects.push({
@@ -150,7 +154,7 @@
         h: structure.h,
       });
     });
-    destructibles.forEach(prop => {
+    Neo.destructibles.forEach(prop => {
       if (!prop || prop.broken || prop.hidden || prop.kind !== 'cover_wall') return;
       const rect = getDestructibleRect(prop);
       if (rect.w > 0 && rect.h > 0) rects.push(rect);
@@ -170,7 +174,7 @@
     let farNormalX = 0;
     let farNormalY = 0;
 
-    if (Math.abs(dirX) < BEAM_RICOCHET_EPSILON) {
+    if (Math.abs(dirX) < Neo.BEAM_RICOCHET_EPSILON) {
       if (originX < minX || originX > maxX) return null;
     } else {
       let t1 = (minX - originX) / dirX;
@@ -193,7 +197,7 @@
       }
     }
 
-    if (Math.abs(dirY) < BEAM_RICOCHET_EPSILON) {
+    if (Math.abs(dirY) < Neo.BEAM_RICOCHET_EPSILON) {
       if (originY < minY || originY > maxY) return null;
     } else {
       let t1 = (minY - originY) / dirY;
@@ -216,16 +220,16 @@
       }
     }
 
-    if (nearTime > farTime || farTime < BEAM_RICOCHET_EPSILON) return null;
+    if (nearTime > farTime || farTime < Neo.BEAM_RICOCHET_EPSILON) return null;
     let distance = nearTime;
     let normalX = nearNormalX;
     let normalY = nearNormalY;
-    if (distance < BEAM_RICOCHET_EPSILON) {
+    if (distance < Neo.BEAM_RICOCHET_EPSILON) {
       distance = farTime;
       normalX = farNormalX;
       normalY = farNormalY;
     }
-    if (distance < BEAM_RICOCHET_EPSILON || distance > maxDistance) return null;
+    if (distance < Neo.BEAM_RICOCHET_EPSILON || distance > maxDistance) return null;
     return {
       distance,
       x: originX + dirX * distance,
@@ -254,7 +258,7 @@
     const bounceLimit = Math.max(0, Math.floor(Number(maxBounces || 0)));
     const rects = getBeamReflectRects();
 
-    for (let bounce = 0; remaining > BEAM_RICOCHET_NUDGE; bounce += 1) {
+    for (let bounce = 0; remaining > Neo.BEAM_RICOCHET_NUDGE; bounce += 1) {
       const dirX = Math.cos(currentAngle);
       const dirY = Math.sin(currentAngle);
       const hit = findBeamRicochetHit(startX, startY, dirX, dirY, remaining, rects);
@@ -266,18 +270,18 @@
       }
 
       const segmentLength = Math.max(0, hit.distance);
-      if (segmentLength > BEAM_RICOCHET_EPSILON) {
+      if (segmentLength > Neo.BEAM_RICOCHET_EPSILON) {
         path.push({ x1: startX, y1: startY, x2: hit.x, y2: hit.y, angle: currentAngle, length: segmentLength, hitWall: true });
       }
       if (bounce >= bounceLimit) break;
 
-      remaining = Math.max(0, remaining - segmentLength - BEAM_RICOCHET_NUDGE);
+      remaining = Math.max(0, remaining - segmentLength - Neo.BEAM_RICOCHET_NUDGE);
       const dot = dirX * hit.normalX + dirY * hit.normalY;
       const reflectX = dirX - 2 * dot * hit.normalX;
       const reflectY = dirY - 2 * dot * hit.normalY;
       currentAngle = Math.atan2(reflectY, reflectX);
-      startX = hit.x + reflectX * BEAM_RICOCHET_NUDGE;
-      startY = hit.y + reflectY * BEAM_RICOCHET_NUDGE;
+      startX = hit.x + reflectX * Neo.BEAM_RICOCHET_NUDGE;
+      startY = hit.y + reflectY * Neo.BEAM_RICOCHET_NUDGE;
     }
 
     return path;
@@ -295,7 +299,7 @@
     const rect = getDestructibleRect(prop);
     for (let index = 0; index < path.length; index += 1) {
       const segment = path[index];
-      if (lineIntersectsRect(segment.x1, segment.y1, segment.x2, segment.y2, rect, padding)) return segment;
+      if (Neo.lineIntersectsRect(segment.x1, segment.y1, segment.x2, segment.y2, rect, padding)) return segment;
     }
     return null;
   }
@@ -348,6 +352,7 @@
     const glow = options.glow || color;
     const maxWidth = Number(options.maxWidth || 8);
     let traversed = 0;
+    const ctx = Neo.ctx;
 
     ctx.save();
     ctx.globalAlpha = 0.92;
@@ -404,6 +409,7 @@
   function strokeBeamPath(path, options = {}) {
     if (!path.length) return;
     const color = options.color || '#aa66ff';
+    const ctx = Neo.ctx;
     ctx.save();
     ctx.strokeStyle = color;
     ctx.lineWidth = Number(options.width || 7);
@@ -428,5 +434,42 @@
   }
 
   // Expose touch-accessible APIs for mobile hamburger menu
-  window._neoGame = { pauseGame, resumeGame, toggleInventoryPanel };
+  window._neoGame = {
+    pauseGame:              () => Neo.pauseGame(),
+    resumeGame:             () => Neo.resumeGame(),
+    toggleInventoryPanel:   () => Neo.toggleInventoryPanel(),
+  };
+
+  // Expose math/beam utilities on Neo
+  Neo.makeRNG = makeRNG;
+  Neo.buildWeightTable = buildWeightTable;
+  Neo.rollFromWeightTable = rollFromWeightTable;
+  Neo.mulberry32 = mulberry32;
+  Neo.xmur3 = xmur3;
+  Neo.rand = rand;
+  Neo.irand = irand;
+  Neo.shuffle = shuffle;
+  Neo.shuffleWithRandom = shuffleWithRandom;
+  Neo.clamp = clamp;
+  Neo.dist = dist;
+  Neo.circleRect = circleRect;
+  Neo.getDestructibleRect = getDestructibleRect;
+  Neo.destructibleIntersectsCircle = destructibleIntersectsCircle;
+  Neo.isBlocked = isBlocked;
+  Neo.beamHitsCircle = beamHitsCircle;
+  Neo.getPlayerBeamRange = getPlayerBeamRange;
+  Neo.getPlayerBeamBounceCount = getPlayerBeamBounceCount;
+  Neo.getEnemyBeamBounceCount = getEnemyBeamBounceCount;
+  Neo.getBeamReflectRects = getBeamReflectRects;
+  Neo.rayRectHit = rayRectHit;
+  Neo.findBeamRicochetHit = findBeamRicochetHit;
+  Neo.buildRicochetBeamPath = buildRicochetBeamPath;
+  Neo.beamPathHitsCircle = beamPathHitsCircle;
+  Neo.beamPathHitsDestructible = beamPathHitsDestructible;
+  Neo.getBeamPathLength = getBeamPathLength;
+  Neo.getBeamPathEnd = getBeamPathEnd;
+  Neo.sampleBeamPath = sampleBeamPath;
+  Neo.drawTaperedBeamPath = drawTaperedBeamPath;
+  Neo.strokeBeamPath = strokeBeamPath;
+  Neo.getBeamEnd = getBeamEnd;
 })();

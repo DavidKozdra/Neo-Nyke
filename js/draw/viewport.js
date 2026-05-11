@@ -1,14 +1,16 @@
+// viewport.js — standalone IIFE. Viewport rendering, lighting compositing.
+(() => {
   function drawWorldViewport(cam, vpX, vpW, vpH, vpY, pLabel, slot = null) {
-    const isDying = gameState === 'dying';
+    const isDying = Neo.gameState === 'dying';
     const slotDead = !!slot?.getDead?.();
     const _shakeOn = window.NeoSettings?.getAccess()?.screenShake !== false;
-    const sX = _shakeOn && pLabel === 'P1' ? (nextRandom('fx') - 0.5) * shake * 2 : 0;
-    const sY = _shakeOn && pLabel === 'P1' ? (nextRandom('fx') - 0.5) * shake * 2 : 0;
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(vpX, vpY, vpW, vpH);
-    ctx.clip();
-    ctx.translate(vpX - cam.x + sX, vpY - cam.y + sY);
+    const sX = _shakeOn && pLabel === 'P1' ? (Neo.nextRandom('fx') - 0.5) * Neo.shake * 2 : 0;
+    const sY = _shakeOn && pLabel === 'P1' ? (Neo.nextRandom('fx') - 0.5) * Neo.shake * 2 : 0;
+    Neo.ctx.save();
+    Neo.ctx.beginPath();
+    Neo.ctx.rect(vpX, vpY, vpW, vpH);
+    Neo.ctx.clip();
+    Neo.ctx.translate(vpX - cam.x + sX, vpY - cam.y + sY);
     drawFloor();
     drawRoomDecor();
     drawWorldProps();
@@ -31,37 +33,37 @@
       }
     }
     if (!isDying) drawPlayerLaser();
-    if (isDying && playerDeathAnim) drawPlayerCorpseAnim(playerDeathAnim);
+    if (isDying && Neo.playerDeathAnim) drawPlayerCorpseAnim(Neo.playerDeathAnim);
     drawParticles();
     if (!isDying) drawLadderPrompt();
     if (!isDying) drawJesterPortalPrompt();
     // P-label in corner of each viewport (split only)
     if (isSplitScreen() && pLabel) {
       const slot = getActivePlayerSlots().find(candidate => candidate.label === pLabel);
-      ctx.save();
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.font = 'bold 11px monospace';
-      ctx.textAlign = 'left';
-      ctx.fillStyle = slot?.color || '#fff';
-      ctx.fillText(pLabel, vpX + 8, vpY + 18);
-      ctx.restore();
+      Neo.ctx.save();
+      Neo.ctx.setTransform(1, 0, 0, 1, 0, 0);
+      Neo.ctx.font = 'bold 11px monospace';
+      Neo.ctx.textAlign = 'left';
+      Neo.ctx.fillStyle = slot?.color || '#fff';
+      Neo.ctx.fillText(pLabel, vpX + 8, vpY + 18);
+      Neo.ctx.restore();
     }
     if (slotDead && pLabel) {
-      ctx.save();
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.fillStyle = 'rgba(0,0,0,.52)';
-      ctx.fillRect(vpX, vpY, vpW, vpH);
-      ctx.fillStyle = slot?.color || '#dfeeff';
-      ctx.font = 'bold 24px monospace';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(`${pLabel} DOWN`, vpX + vpW / 2, vpY + vpH / 2);
-      ctx.restore();
+      Neo.ctx.save();
+      Neo.ctx.setTransform(1, 0, 0, 1, 0, 0);
+      Neo.ctx.fillStyle = 'rgba(0,0,0,.52)';
+      Neo.ctx.fillRect(vpX, vpY, vpW, vpH);
+      Neo.ctx.fillStyle = slot?.color || '#dfeeff';
+      Neo.ctx.font = 'bold 24px monospace';
+      Neo.ctx.textAlign = 'center';
+      Neo.ctx.textBaseline = 'middle';
+      Neo.ctx.fillText(`${pLabel} DOWN`, vpX + vpW / 2, vpY + vpH / 2);
+      Neo.ctx.restore();
     }
-    ctx.restore();
+    Neo.ctx.restore();
   }
 
-  function getActiveRoomChamber(room, entity = player) {
+  function getActiveRoomChamber(room, entity = Neo.player) {
     if (!room || !entity || !Array.isArray(room.layoutChambers) || room.layoutChambers.length === 0) return null;
     const containing = room.layoutChambers.find(chamber => (
       entity.x >= chamber.x - chamber.w / 2
@@ -85,26 +87,26 @@
 
   function withRoundedClipRect(rect, radius, drawFn) {
     if (!rect || typeof drawFn !== 'function') return;
-    ctx.save();
-    ctx.beginPath();
-    ctx.roundRect(rect.x, rect.y, rect.w, rect.h, radius);
-    ctx.clip();
+    Neo.ctx.save();
+    Neo.ctx.beginPath();
+    Neo.ctx.roundRect(rect.x, rect.y, rect.w, rect.h, radius);
+    Neo.ctx.clip();
     drawFn();
-    ctx.restore();
+    Neo.ctx.restore();
   }
 
   function getRoomDarkness(room, lights) {
     const baseDarkness = room?.type === 'boss'
-      ? LIGHTING_CONFIG.darkness.boss
+      ? Neo.LIGHTING_CONFIG.darkness.boss
       : room?.type === 'challenge'
-        ? LIGHTING_CONFIG.darkness.challenge
-        : LIGHTING_CONFIG.darkness.combat;
+        ? Neo.LIGHTING_CONFIG.darkness.challenge
+        : Neo.LIGHTING_CONFIG.darkness.combat;
     const lightPressure = Math.min(1.2, lights.reduce((sum, light) => sum + light.strength, 0) / 14);
-    return Math.max(0, baseDarkness - lightPressure * LIGHTING_CONFIG.darkness.lightRelief);
+    return Math.max(0, baseDarkness - lightPressure * Neo.LIGHTING_CONFIG.darkness.lightRelief);
   }
 
   function createRoomDarknessGradient(alpha) {
-    const darkness = ctx.createLinearGradient(0, 0, 0, ROOM_H);
+    const darkness = Neo.ctx.createLinearGradient(0, 0, 0, Neo.ROOM_H);
     darkness.addColorStop(0, `rgba(10,14,22,${Math.min(0.28, alpha + 0.035)})`);
     darkness.addColorStop(0.5, `rgba(5,7,12,${alpha})`);
     darkness.addColorStop(1, `rgba(8,11,18,${Math.min(0.32, alpha + 0.05)})`);
@@ -113,14 +115,14 @@
 
   function carveSoftLight(x, y, innerRadius, outerRadius, strength = 1, clipRect = null) {
     const drawLight = () => {
-      const gradient = ctx.createRadialGradient(x, y, innerRadius, x, y, outerRadius);
+      const gradient = Neo.ctx.createRadialGradient(x, y, innerRadius, x, y, outerRadius);
       gradient.addColorStop(0, 'rgba(0,0,0,1)');
       gradient.addColorStop(0.26, 'rgba(0,0,0,0.72)');
       gradient.addColorStop(0.66, 'rgba(0,0,0,0.22)');
       gradient.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.globalAlpha = clamp(strength, 0, 1.12);
-      ctx.fillStyle = gradient;
-      ctx.fillRect(x - outerRadius, y - outerRadius, outerRadius * 2, outerRadius * 2);
+      Neo.ctx.globalAlpha = clamp(strength, 0, 1.12);
+      Neo.ctx.fillStyle = gradient;
+      Neo.ctx.fillRect(x - outerRadius, y - outerRadius, outerRadius * 2, outerRadius * 2);
     };
 
     if (clipRect) {
@@ -131,25 +133,25 @@
   }
 
   function carvePlayerBeamLights() {
-    if (laserActive) {
-      const angle = laserMode === 'god_sweep'
-        ? laserAngle
-        : Math.atan2(mouse.worldY - player.y, mouse.worldX - player.x);
-      const beamPath = buildRicochetBeamPath(player.x, player.y, angle, getPlayerBeamRange(laserMode, getEquippedMove('laser')), getPlayerBeamBounceCount(laserMode));
-      carveBeamLight(beamPath, laserMode === 'god_sweep' ? 42 : laserMode === 'turtle_wave' ? 34 : 22, laserMode === 'god_sweep' ? 0.9 : 0.7);
+    if (Neo.laserActive) {
+      const angle = Neo.laserMode === 'god_sweep'
+        ? Neo.laserAngle
+        : Math.atan2(Neo.mouse.worldY - Neo.player.y, Neo.mouse.worldX - Neo.player.x);
+      const beamPath = buildRicochetBeamPath(Neo.player.x, Neo.player.y, angle, getPlayerBeamRange(Neo.laserMode, getEquippedMove('laser')), getPlayerBeamBounceCount(Neo.laserMode));
+      carveBeamLight(beamPath, Neo.laserMode === 'god_sweep' ? 42 : Neo.laserMode === 'turtle_wave' ? 34 : 22, Neo.laserMode === 'god_sweep' ? 0.9 : 0.7);
       return;
     }
 
-    if (getEquippedWeapon() !== 'lazer_glasses' || player.weaponBeamTime <= 0) return;
-    const baseAngle = Math.atan2(mouse.worldY - player.y, mouse.worldX - player.x);
+    if (getEquippedWeapon() !== 'lazer_glasses' || Neo.player.weaponBeamTime <= 0) return;
+    const baseAngle = Math.atan2(Neo.mouse.worldY - Neo.player.y, Neo.mouse.worldX - Neo.player.x);
     [-0.2, 0.2].forEach(offset => {
-      const beamPath = buildRicochetBeamPath(player.x, player.y, baseAngle + offset, 430, LAZER_GLASSES_BOUNCES);
+      const beamPath = buildRicochetBeamPath(Neo.player.x, Neo.player.y, baseAngle + offset, 430, Neo.LAZER_GLASSES_BOUNCES);
       carveBeamLight(beamPath, 14, 0.46);
     });
   }
 
   function carveEnemyBeamLights() {
-    enemies.forEach(enemy => {
+    Neo.enemies.forEach(enemy => {
       if (!enemy || Number(enemy.beamTime || 0) <= 0 || !Number.isFinite(enemy.beamAngle)) return;
       const beamPath = buildRicochetBeamPath(enemy.x, enemy.y, enemy.beamAngle, enemy.type === 'god' ? 620 : 460, getEnemyBeamBounceCount(enemy));
       carveBeamLight(beamPath, enemy.type === 'god' ? 36 : 18, enemy.type === 'god' ? 0.72 : 0.42);
@@ -162,30 +164,30 @@
   }
 
   function drawLightBloom(lights) {
-    ctx.globalCompositeOperation = 'lighter';
+    Neo.ctx.globalCompositeOperation = 'lighter';
     lights.forEach(light => {
       if (!light.tint) return;
-      const glow = ctx.createRadialGradient(light.x, light.y, Math.max(4, light.inner * 0.35), light.x, light.y, light.outer);
+      const glow = Neo.ctx.createRadialGradient(light.x, light.y, Math.max(4, light.inner * 0.35), light.x, light.y, light.outer);
       glow.addColorStop(0, light.tint);
       glow.addColorStop(0.58, lightTintWithAlpha(light.tint, 0.02));
       glow.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = glow;
-      ctx.globalAlpha = Math.min(0.46, light.strength * 0.46);
-      ctx.fillRect(light.x - light.outer, light.y - light.outer, light.outer * 2, light.outer * 2);
+      Neo.ctx.fillStyle = glow;
+      Neo.ctx.globalAlpha = Math.min(0.46, light.strength * 0.46);
+      Neo.ctx.fillRect(light.x - light.outer, light.y - light.outer, light.outer * 2, light.outer * 2);
     });
   }
 
   function drawRoomCeilingMask() {
-    const room = currentRoom;
-    if (!room || LIGHTING_CONFIG.clearRoomTypes.has(room.type)) return;
+    const room = Neo.currentRoom;
+    if (!room || Neo.LIGHTING_CONFIG.clearRoomTypes.has(room.type)) return;
     const lights = collectRoomLightSources(room);
     const darknessAlpha = getRoomDarkness(room, lights);
-    if (darknessAlpha < LIGHTING_CONFIG.darkness.minVisible) return;
+    if (darknessAlpha < Neo.LIGHTING_CONFIG.darkness.minVisible) return;
 
-    ctx.save();
-    ctx.fillStyle = createRoomDarknessGradient(darknessAlpha);
-    ctx.fillRect(0, 0, ROOM_W, ROOM_H);
-    ctx.globalCompositeOperation = 'destination-out';
+    Neo.ctx.save();
+    Neo.ctx.fillStyle = createRoomDarknessGradient(darknessAlpha);
+    Neo.ctx.fillRect(0, 0, Neo.ROOM_W, Neo.ROOM_H);
+    Neo.ctx.globalCompositeOperation = 'destination-out';
 
     lights.forEach(light => {
       carveSoftLight(light.x, light.y, light.inner, light.outer, light.strength, null);
@@ -194,6 +196,19 @@
     carvePlayerBeamLights();
     carveEnemyBeamLights();
     drawLightBloom(lights);
-    ctx.restore();
+    Neo.ctx.restore();
   }
 
+  // Expose on Neo
+  Neo.drawWorldViewport = drawWorldViewport;
+  Neo.getActiveRoomChamber = getActiveRoomChamber;
+  Neo.withRoundedClipRect = withRoundedClipRect;
+  Neo.getRoomDarkness = getRoomDarkness;
+  Neo.createRoomDarknessGradient = createRoomDarknessGradient;
+  Neo.carveSoftLight = carveSoftLight;
+  Neo.carvePlayerBeamLights = carvePlayerBeamLights;
+  Neo.carveEnemyBeamLights = carveEnemyBeamLights;
+  Neo.lightTintWithAlpha = lightTintWithAlpha;
+  Neo.drawLightBloom = drawLightBloom;
+  Neo.drawRoomCeilingMask = drawRoomCeilingMask;
+})();

@@ -1,3 +1,7 @@
+// input.js — standalone IIFE. Defines all shared constants (MOVE_DEFS, ITEM_DEFS, etc.),
+// the ui object, gameStateManager, uiController, gameEvents, and all input handlers.
+// Shared mutable state lives on Neo (set here to its initial values, then managed via Neo.X).
+(() => {
   function normalizeMouseBinding(value, fallback) {
     const normalized = String(value || fallback).toLowerCase();
     return normalized === 'rmb' || normalized === 'lmb' ? normalized : fallback;
@@ -14,12 +18,12 @@
   function isMouseActionHeld(action) {
     const mouseBindings = getMouseBindings();
     if (mouseBindings[action] === 'rmb') {
-      const held = !!mouse.right || !!mouse.rightQueued;
-      mouse.rightQueued = false;
+      const held = !!Neo.mouse.right || !!Neo.mouse.rightQueued;
+      Neo.mouse.rightQueued = false;
       return held;
     }
-    const held = !!mouse.down || !!mouse.downQueued;
-    mouse.downQueued = false;
+    const held = !!Neo.mouse.down || !!Neo.mouse.downQueued;
+    Neo.mouse.downQueued = false;
     return held;
   }
 
@@ -31,9 +35,9 @@
     const bindings = window.NeoSettings?.getBindings?.();
     if (slot === 'melee') return formatMouseBindingLabel(bindings?.slash, 'lmb');
     if (slot === 'laser') return formatMouseBindingLabel(bindings?.laser, 'rmb');
-    if (slot === 'smash') return String(bindings?.smash || SLOT_KEYS.smash || 'r').toUpperCase();
-    if (slot === 'dash') return String(bindings?.dash || SLOT_KEYS.dash || 'shift').toUpperCase();
-    return SLOT_KEYS[slot] || '';
+    if (slot === 'smash') return String(bindings?.smash || Neo.SLOT_KEYS.smash || 'r').toUpperCase();
+    if (slot === 'dash') return String(bindings?.dash || Neo.SLOT_KEYS.dash || 'shift').toUpperCase();
+    return Neo.SLOT_KEYS[slot] || '';
   }
 
   const MOVE_DEFS = {
@@ -559,8 +563,8 @@
     ['pendant_of_kronos', 5],
     ['robot_arm', 3],
   ];
-  const ITEM_DROP_TABLE = buildWeightTable(ITEM_DROP_WEIGHTS);
-  const ELITE_ITEM_DROP_TABLE = buildWeightTable(
+  const ITEM_DROP_TABLE = Neo.buildWeightTable(ITEM_DROP_WEIGHTS);
+  const ELITE_ITEM_DROP_TABLE = Neo.buildWeightTable(
     ITEM_DROP_WEIGHTS.map(([key, weight]) => [key, weight + (key !== 'neo_knife' ? 4 : 0)])
   );
   const ELITE_INVENTORY_POOL = [
@@ -589,7 +593,8 @@
     blessed: { label: 'Blessed', color: '#f2f6ff' },
     lasered: { label: 'Lazered', color: '#78d7ff' },
   };
-  const itemRegistry = createItemRegistry();
+  // itemRegistry is created in game-state.js after createItemRegistry is defined
+  // const itemRegistry = createItemRegistry();  -- moved to game-state.js
 
   const ui = {
     hud: document.getElementById('hud'),
@@ -857,7 +862,8 @@
   if (gameStateManager) {
     ['menu', 'charselect', 'play', 'dialogue', 'pause', 'dying', 'dead', 'win'].forEach(state => gameStateManager.addState(state));
   }
-  const uiController = createUIController(ui);
+  // uiController is created in perf.js boot() after controller.js loads
+  // Neo.uiController is set there.
 
   const gameEvents = (() => {
     const listeners = {};
@@ -867,99 +873,21 @@
     };
   })();
 
-  let player = null;
-  let player2 = null;
-  let player3 = null;
-  let player4 = null;
-  let chosenCharacter2 = 'thorn_knight';
-  let chosenCharacter3 = 'thorn_knight';
-  let chosenCharacter4 = 'thorn_knight';
-  let p1DeadInCoop = false;
-  let p2DeadInCoop = false;
-  let p3DeadInCoop = false;
-  let p4DeadInCoop = false;
-  let charSelectPhase = null; // null | 'p1' | 'p2' | 'p3' | 'p4'
-  let mpPlayerCount = 2;
-  let enemies = [];
-  let deadBodies = [];
-  let particles = [];
-  let projectiles = [];
-  let chests = [];
-  let pickups = [];
-  let rooms = [];
-  let currentRoom = null;
-  let keys = {};
-  let mouse = { x: 0, y: 0, worldX: 0, worldY: 0, down: false, right: false, downQueued: false, rightQueued: false };
-  let cooldowns = {};
-  let camera = { x: 0, y: 0 };
-  let camera2 = { x: 0, y: 0 };
-  let camera3 = { x: 0, y: 0 };
-  let camera4 = { x: 0, y: 0 };
+  // Expose infrastructure objects on Neo for other files
+  Neo.ui = ui;
+  Neo.gameStateManager = gameStateManager;
+  // Neo.uiController set in boot() in perf.js
+  Neo.gameEvents = gameEvents;
+
+  // PLAYER_SLOT_CONFIG uses closures over Neo for mutable player/camera state
   const PLAYER_SLOT_CONFIG = [
-    { id: 1, label: 'P1', color: '#ff8a8a', getEntity: () => player, setEntity: value => { player = value; }, getCharacter: () => chosenCharacter, setCharacter: value => { chosenCharacter = value; }, getDead: () => p1DeadInCoop, setDead: value => { p1DeadInCoop = !!value; }, getCamera: () => camera, setCamera: value => { camera = value; } },
-    { id: 2, label: 'P2', color: '#4ca8ff', getEntity: () => player2, setEntity: value => { player2 = value; }, getCharacter: () => chosenCharacter2, setCharacter: value => { chosenCharacter2 = value; }, getDead: () => p2DeadInCoop, setDead: value => { p2DeadInCoop = !!value; }, getCamera: () => camera2, setCamera: value => { camera2 = value; } },
-    { id: 3, label: 'P3', color: '#8aff8a', getEntity: () => player3, setEntity: value => { player3 = value; }, getCharacter: () => chosenCharacter3, setCharacter: value => { chosenCharacter3 = value; }, getDead: () => p3DeadInCoop, setDead: value => { p3DeadInCoop = !!value; }, getCamera: () => camera3, setCamera: value => { camera3 = value; } },
-    { id: 4, label: 'P4', color: '#ffd080', getEntity: () => player4, setEntity: value => { player4 = value; }, getCharacter: () => chosenCharacter4, setCharacter: value => { chosenCharacter4 = value; }, getDead: () => p4DeadInCoop, setDead: value => { p4DeadInCoop = !!value; }, getCamera: () => camera4, setCamera: value => { camera4 = value; } },
+    { id: 1, label: 'P1', color: '#ff8a8a', getEntity: () => Neo.player, setEntity: value => { Neo.player = value; }, getCharacter: () => Neo.chosenCharacter, setCharacter: value => { Neo.chosenCharacter = value; }, getDead: () => Neo.p1DeadInCoop, setDead: value => { Neo.p1DeadInCoop = !!value; }, getCamera: () => Neo.camera, setCamera: value => { Neo.camera = value; } },
+    { id: 2, label: 'P2', color: '#4ca8ff', getEntity: () => Neo.player2, setEntity: value => { Neo.player2 = value; }, getCharacter: () => Neo.chosenCharacter2, setCharacter: value => { Neo.chosenCharacter2 = value; }, getDead: () => Neo.p2DeadInCoop, setDead: value => { Neo.p2DeadInCoop = !!value; }, getCamera: () => Neo.camera2, setCamera: value => { Neo.camera2 = value; } },
+    { id: 3, label: 'P3', color: '#8aff8a', getEntity: () => Neo.player3, setEntity: value => { Neo.player3 = value; }, getCharacter: () => Neo.chosenCharacter3, setCharacter: value => { Neo.chosenCharacter3 = value; }, getDead: () => Neo.p3DeadInCoop, setDead: value => { Neo.p3DeadInCoop = !!value; }, getCamera: () => Neo.camera3, setCamera: value => { Neo.camera3 = value; } },
+    { id: 4, label: 'P4', color: '#ffd080', getEntity: () => Neo.player4, setEntity: value => { Neo.player4 = value; }, getCharacter: () => Neo.chosenCharacter4, setCharacter: value => { Neo.chosenCharacter4 = value; }, getDead: () => Neo.p4DeadInCoop, setDead: value => { Neo.p4DeadInCoop = !!value; }, getCamera: () => Neo.camera4, setCamera: value => { Neo.camera4 = value; } },
   ];
-  let shake = 0;
-  let shakeT = 0;
-  let gameState = 'menu';
-  let floor = 1;
-  let baseSeedStr = '';
-  let seedStr = '';
-  let runLoopIndex = 0;
-  let rng = null;
-  let rngStreams = {};
-  let godTimer = 0;
-  let fade = 0;
-  let fading = 0;
-  let nextDoor = null;
-  let floorTransitionTime = 0;
-  let showFloorTransition = false;
-  let gameElapsedTime = 0;
-  let lastTime = 0;
-  let loopStarted = false;
-  let laserActive = false;
-  let laserTime = 0;
-  let laserTick = 0;
-  let laserMode = 'beam';
-  let laserAngle = 0;
-  let laserSweepSpeed = 0;
-  let loveBeamCasting = false;
-  let turtleWaveHpTimer = 0;
-  let lowHealthHitFlashUntil = 0;
-  let dashKeyLatch = false;
-  let playerDeathAnim = null;
-  let runRevivesUsed = 0;
-  let lastDeathEntryId = '';
-  let gameMode = 'normal';
-  let endlessWave = 0;
-  let endlessWaveActive = false;
-  let bossRushStage = 0;
-  let bossRushActive = false;
-  let chosenCharacter = 'thorn_knight';
-  let selectedDifficulty = 'easy';
-  let selectedChallenges = [];
-  let customDifficultySettings = {
-    waveBonus: 0,
-    eliteFloor: 8,
-    eliteChance: 0.12,
-    miniBossChanceMultiplier: 1,
-    roomWeightBonus: 0,
-    statMultiplier: 1,
-    bossStatMultiplier: 1,
-    speedMultiplier: 1,
-    enemyReactionMultiplier: 1,
-    rangedCadenceMultiplier: 1,
-    supportPowerMultiplier: 1,
-    shopPriceMultiplier: 1,
-  };
-  let destructibles = [];
-  let hazards = [];
-  let shopOffers = [];
-  let structures = [];
-  let decorations = [];
-  let environmentBackgroundCache = { key: '', canvas: null };
+
+  // SANDBOX_DEFAULT_SETTINGS needs ITEM_KEYS and SANDBOX_ENEMY_TYPES (defined above)
   const SANDBOX_DEFAULT_SETTINGS = {
     enemyStatMultiplier: 1,
     enemySpeedMultiplier: 1,
@@ -970,53 +898,22 @@
     allowedEnemies: SANDBOX_ENEMY_TYPES.slice(),
     allowedItems: ITEM_KEYS.slice(),
   };
-  let activeRun = null;
-  let metaProgress = createDefaultMeta();
+  // sandboxSettings initial value (metaProgress/tutorialState set later in game-state.js)
+  Neo.sandboxSettings = { ...SANDBOX_DEFAULT_SETTINGS };
+  Neo.PLAYER_SLOT_CONFIG = PLAYER_SLOT_CONFIG;
+  Neo.SANDBOX_DEFAULT_SETTINGS = SANDBOX_DEFAULT_SETTINGS;
+  Neo.SANDBOX_ENEMY_TYPES = SANDBOX_ENEMY_TYPES;
+
+  // achievement listener — needs Neo.metaProgress (set later), but persists via closure
   window.addEventListener('achievement:unlocked', () => {
-    metaProgress.loopCrystals = Number(metaProgress.loopCrystals || 0) + 1;
-    persistMetaSoon();
-    refreshMenuState();
+    if (Neo.metaProgress) Neo.metaProgress.loopCrystals = Number(Neo.metaProgress.loopCrystals || 0) + 1;
+    Neo.persistMetaSoon();
+    Neo.refreshMenuState();
   });
-  let runHistory = [];
-  let lastDamageSource = '';
-  let lastDamageSourceKey = '';
-  let savePendingTimer = 0;
-  let metaSavePendingTimer = 0;
-  let metaSaveDirty = false;
-  let menuRefreshQueued = false;
-  let frameId = 0;
-  let minimapLayoutState = null;
-  let itemStatsCacheFrame = -1;
-  let itemStatsCacheValue = null;
-  let godItemKeysCache = null;
-  let lavaAnimTime = 0;
-  let floorSkipPending = 0;
+
   const JESTER_PORTAL_ACTIVATE_DELAY = 0.44;
   const JESTER_PORTAL_TRIGGER_RADIUS = 42;
   const LADDER_TRIGGER_RADIUS = 64;
-  let teleportKeyLatch = false;
-  let ladderUseKeyLatch = false;
-  let shopKeyLatch = false;
-  let invKeyLatch = false;
-  let anvilKeyLatch = false;
-  let activeShopTab = 'items';
-  let activeInvTab = 'stats';
-  let activeInvPlayer = 1;
-  let activeAnvilTab = 'weapons';
-  let anvilSelectedItem = null;
-  let anvilStagedUpgrades = {};
-  let draggingMoveKey = '';
-  let weaponBurstQueue = [];
-  let rivals = [];
-  let monsterRoamTimer = 0;
-  let knaveKnightCutscenePlayed = false;
-  let queenMetaoCutscenePlayed = false;
-  let activeInventorySlot = '';
-  let shopPanelDirty = false;
-  let inventoryPanelDirty = false;
-  let wizardPawSelection = null;
-  let tutorialState = null;
-  let sandboxSettings = { ...SANDBOX_DEFAULT_SETTINGS };
   const REPLAY_TUTORIAL_KEY = 'neonyke:replayTutorialNextRun';
 
   // Upgradeable stat schemas for the anvil panel
@@ -1077,6 +974,49 @@
     cowards_way:      { cooldown: 6.00, duration: 3.0 },
   };
 
-  const saveStore = createSaveStore();
-  window._neoSaveStore = saveStore;
+  // saveStore is created in save-store.js after createSaveStore is defined
+  // Neo.saveStore is set there.
 
+  // Expose constants on Neo (needed by other files)
+  Neo.RARITY_NAME_COLORS = RARITY_NAME_COLORS;
+  Neo.SHOP_RARITY_PRICE_MULTIPLIERS = SHOP_RARITY_PRICE_MULTIPLIERS;
+  Neo.MOVE_DEFS = MOVE_DEFS;
+  Neo.SHOP_MOVE_POOL = SHOP_MOVE_POOL;
+  Neo.WEAPON_DEFS = WEAPON_DEFS;
+  Neo.WEAPON_KEYS = WEAPON_KEYS;
+  Neo.WHITE_WEAPON_POOL = WHITE_WEAPON_POOL;
+  Neo.RIVAL_DEFS = RIVAL_DEFS;
+  Neo.RIVAL_MOVE_INTERVAL_BASE = RIVAL_MOVE_INTERVAL_BASE;
+  Neo.RIVAL_SPAWN_CHANCE = RIVAL_SPAWN_CHANCE;
+  Neo.RIVAL_GROWTH_TICK_SECONDS = RIVAL_GROWTH_TICK_SECONDS;
+  Neo.RIVAL_XP_PER_GROWTH_TICK = RIVAL_XP_PER_GROWTH_TICK;
+  Neo.RIVAL_WEAPON_SWAP_BASE = RIVAL_WEAPON_SWAP_BASE;
+  Neo.MONSTER_ROAM_INTERVAL_SECONDS = MONSTER_ROAM_INTERVAL_SECONDS;
+  Neo.MONSTER_ROAM_MOVE_CHANCE = MONSTER_ROAM_MOVE_CHANCE;
+  Neo.PURPLE_WEAPON_POOL = PURPLE_WEAPON_POOL;
+  Neo.RED_WEAPON_POOL = RED_WEAPON_POOL;
+  Neo.RIVAL_WEAPON_LOADOUTS = RIVAL_WEAPON_LOADOUTS;
+  Neo.ITEM_DEFS = ITEM_DEFS;
+  Neo.ITEM_KEYS = ITEM_KEYS;
+  Neo.ITEM_DROP_WEIGHTS = ITEM_DROP_WEIGHTS;
+  Neo.ITEM_DROP_TABLE = ITEM_DROP_TABLE;
+  Neo.ELITE_ITEM_DROP_TABLE = ELITE_ITEM_DROP_TABLE;
+  Neo.ELITE_INVENTORY_POOL = ELITE_INVENTORY_POOL;
+  Neo.WHITE_ITEM_POOL = WHITE_ITEM_POOL;
+  Neo.ELITE_TYPE_DEFS = ELITE_TYPE_DEFS;
+  // Neo.itemRegistry is set in game-state.js
+  Neo.JESTER_PORTAL_ACTIVATE_DELAY = JESTER_PORTAL_ACTIVATE_DELAY;
+  Neo.JESTER_PORTAL_TRIGGER_RADIUS = JESTER_PORTAL_TRIGGER_RADIUS;
+  Neo.LADDER_TRIGGER_RADIUS = LADDER_TRIGGER_RADIUS;
+  Neo.REPLAY_TUTORIAL_KEY = REPLAY_TUTORIAL_KEY;
+  Neo.WEAPON_UPGRADEABLE_STATS = WEAPON_UPGRADEABLE_STATS;
+  Neo.MOVE_UPGRADEABLE_STATS = MOVE_UPGRADEABLE_STATS;
+  Neo.WEAPON_BASE_STATS = WEAPON_BASE_STATS;
+  Neo.MOVE_BASE_STATS = MOVE_BASE_STATS;
+  // Neo.saveStore is set in save-store.js
+  Neo.normalizeMouseBinding = normalizeMouseBinding;
+  Neo.getMouseBindings = getMouseBindings;
+  Neo.isMouseActionHeld = isMouseActionHeld;
+  Neo.formatMouseBindingLabel = formatMouseBindingLabel;
+  Neo.getSlotKeyLabel = getSlotKeyLabel;
+})();
