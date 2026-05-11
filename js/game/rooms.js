@@ -941,7 +941,7 @@
         Neo.endlessWaveActive = true;
         const firstWaveSize = 4 + Neo.floor;
         spawnWave(firstWaveSize, 'combat');
-        Neo.particles.push({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 40, life: 1.2, text: 'WAVE 1', c: '#ff8b8b' });
+        Neo.spawnParticle({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 40, life: 1.2, text: 'WAVE 1', c: '#ff8b8b' });
       } else {
         spawnWave(getWaveCount(3), 'combat');
       }
@@ -980,7 +980,7 @@
     }
 
     if (room.secret) {
-      Neo.particles.push({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 24, life: 1.1, text: 'SECRET ROOM', c: '#8dd4ff' });
+      Neo.spawnParticle({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 24, life: 1.1, text: 'SECRET ROOM', c: '#8dd4ff' });
     }
 
     if (room.type === 'ladder') {
@@ -1271,7 +1271,7 @@
       leveled = true;
       const liveEnemy = Neo.enemies.find(e => e.type === 'rival' && e.rivalData === rival);
       if (liveEnemy) {
-        Neo.particles.push({ x: liveEnemy.x, y: liveEnemy.y - 20, life: 1.0, text: `${rival.name.toUpperCase()} LV ${rival.level}`, c: rival.color });
+        Neo.spawnParticle({ x: liveEnemy.x, y: liveEnemy.y - 20, life: 1.0, text: `${rival.name.toUpperCase()} LV ${rival.level}`, c: rival.color });
       }
     }
     if (leveled && reason !== 'silent') {
@@ -1528,7 +1528,7 @@
 
     if (enteredCurrentRoom > 0) {
       Neo.enemies = Neo.currentRoom.enemies;
-      Neo.particles.push({
+      Neo.spawnParticle({
         x: Neo.ROOM_W / 2,
         y: Neo.ROOM_H / 2 - 34,
         life: 1.4,
@@ -1557,7 +1557,7 @@
     if (room === Neo.currentRoom) {
       const liveIdx = Neo.pickups.indexOf(stolen);
       if (liveIdx >= 0) Neo.pickups.splice(liveIdx, 1);
-      Neo.particles.push({ x: stolen.x || Neo.ROOM_W / 2, y: (stolen.y || Neo.ROOM_H / 2) - 16, life: 1.6, text: `${rival.name} STOLE THIS!`, c: rival.color });
+      Neo.spawnParticle({ x: stolen.x || Neo.ROOM_W / 2, y: (stolen.y || Neo.ROOM_H / 2) - 16, life: 1.6, text: `${rival.name} STOLE THIS!`, c: rival.color });
     }
   }
 
@@ -1592,7 +1592,7 @@
       state: 'idle',
     };
     Neo.enemies.push(entry);
-    Neo.particles.push({ x: entry.x, y: entry.y - 26, life: 1.8, text: `${rival.name.toUpperCase()} ENTERS!`, c: rival.color });
+    Neo.spawnParticle({ x: entry.x, y: entry.y - 26, life: 1.8, text: `${rival.name.toUpperCase()} ENTERS!`, c: rival.color });
     const playedCutscene = tryPlayPrincessKnightCutscene(rival, entry);
     if (!playedCutscene) {
       sayAtPosition(entry.x, entry.y, rival.enterLine, { speaker: rival.name, tone: 'boss', holdTime: 1.8, offsetY: rival.r + 36 });
@@ -1706,7 +1706,7 @@
           const idx = Neo.enemies.indexOf(liveEnemy);
           if (idx >= 0) Neo.enemies.splice(idx, 1);
           const fleeText = rival.objectiveKind === 'hunt' ? `${rival.name} REPOSITIONED` : `${rival.name} MOVED`;
-          Neo.particles.push({ x: liveEnemy.x, y: liveEnemy.y - 16, life: 1.4, text: fleeText, c: rival.color });
+          Neo.spawnParticle({ x: liveEnemy.x, y: liveEnemy.y - 16, life: 1.4, text: fleeText, c: rival.color });
           rival.hp = liveEnemy.hp; // preserve hp
         }
       }
@@ -1802,7 +1802,7 @@
           const heal = Math.round(enemy.max * 0.06);
           enemy.hp = Math.min(enemy.max, enemy.hp + heal);
           rival.hp = enemy.hp;
-          Neo.particles.push({ x: enemy.x, y: enemy.y - 18, life: 0.7, text: `+${heal}`, c: '#a8aaff' });
+          Neo.spawnParticle({ x: enemy.x, y: enemy.y - 18, life: 0.7, text: `+${heal}`, c: '#a8aaff' });
         }
       }
     } else if (attackStyle === 'dash') {
@@ -1824,7 +1824,7 @@
         for (let shot = 0; shot < shotCount; shot += 1) {
           const offset = shotCount === 1 ? 0 : (shot / (shotCount - 1)) * 2 - 1;
           const a = angle + offset * spread;
-          Neo.projectiles.push({
+          Neo.spawnProjectile({
             x: enemy.x, y: enemy.y,
             vx: Math.cos(a) * Number(weapon.projectileSpeed || 310), vy: Math.sin(a) * Number(weapon.projectileSpeed || 310),
             r: attackStyle === 'burst' ? 4 : 5,

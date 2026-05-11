@@ -147,8 +147,8 @@
     dummy.spawnT = 0.18;
     dummy.barrier = 0;
     Neo.tutorialState.dummySpawned = true;
-    Neo.particles.push({ x: dummy.x, y: dummy.y - 24, life: 1.4, text: 'TRAINING DUMMY', c: '#8dd4ff' });
-    Neo.particles.push({ x: Neo.player.x, y: Neo.player.y - 30, life: 1.1, text: 'DUMMY SPAWNED', c: '#9ce9ff' });
+    Neo.spawnParticle({ x: dummy.x, y: dummy.y - 24, life: 1.4, text: 'TRAINING DUMMY', c: '#8dd4ff' });
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 30, life: 1.1, text: 'DUMMY SPAWNED', c: '#9ce9ff' });
   }
 
   function getTutorialStepOrder() {
@@ -207,7 +207,7 @@
     Neo.tutorialState.usedLadder = true;
     Neo.metaProgress.tutorialCompleted = true;
     persistMetaSoon();
-    Neo.particles.push({ x: Neo.player.x, y: Neo.player.y - 26, life: 0.9, text: 'TUTORIAL SKIPPED', c: '#9cdcff' });
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 26, life: 0.9, text: 'TUTORIAL SKIPPED', c: '#9cdcff' });
     Neo.uiController.setTutorialBanner('', false);
     updateObjective();
   }
@@ -229,7 +229,7 @@
         Neo.metaProgress.tutorialCompleted = true;
         persistMetaSoon();
       }
-      Neo.particles.push({ x: Neo.player.x, y: Neo.player.y - 26, life: 1, text: 'TUTORIAL COMPLETE', c: '#8dffcf' });
+      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 26, life: 1, text: 'TUTORIAL COMPLETE', c: '#8dffcf' });
     }
   }
 
@@ -1749,7 +1749,7 @@
       boss = spawnEnemy('knave', safeSpawn.x, safeSpawn.y, false);
       boss.isTransforming = true;
       // Visual cue: show particles or text
-      Neo.particles.push({ x: boss.x, y: boss.y - 40, life: 1.2, text: '???', c: '#ffd27d' });
+      Neo.spawnParticle({ x: boss.x, y: boss.y - 40, life: 1.2, text: '???', c: '#ffd27d' });
       // After a short delay, transform into artificer_knave
       setTimeout(() => {
         if (!boss || !Neo.enemies.includes(boss)) return;
@@ -1757,7 +1757,7 @@
         // 1. Flash effect
         for (let i = 0; i < 8; i++) {
           setTimeout(() => {
-            Neo.particles.push({ x: boss.x, y: boss.y, life: 0.18, ring: 32 + i * 4, c: i % 2 === 0 ? '#ffd27d' : '#fffbe0' });
+            Neo.spawnParticle({ x: boss.x, y: boss.y, life: 0.18, ring: 32 + i * 4, c: i % 2 === 0 ? '#ffd27d' : '#fffbe0' });
           }, i * 40);
         }
         // 2. Scale up and down (squash/stretch)
@@ -1767,7 +1767,7 @@
           boss.transformAnimT -= 0.04;
         }, 40);
         // 3. Transformation text
-        Neo.particles.push({ x: boss.x, y: boss.y - 40, life: 1.6, text: 'TRANSFORM!', c: '#ffd27d' });
+        Neo.spawnParticle({ x: boss.x, y: boss.y - 40, life: 1.6, text: 'TRANSFORM!', c: '#ffd27d' });
         // 4. Play sound if available
         if (window.playSound) playSound('transform');
         // 5. After a short moment, actually transform
@@ -1798,7 +1798,7 @@
       if (!playedCutscene && boss && line) sayOverEntity(boss, line);
       if (bossType === 'god') playGodDialogue(1);
     }
-    Neo.particles.push({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 50, life: 1.4, text: `BOSS ${bossRushStage + 1}: ${getBossDisplayName(bossType).toUpperCase()}`, c: '#ff8b8b' });
+    Neo.spawnParticle({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 50, life: 1.4, text: `BOSS ${bossRushStage + 1}: ${getBossDisplayName(bossType).toUpperCase()}`, c: '#ff8b8b' });
   }
 
   function onBossRushBossDefeated() {
@@ -1818,10 +1818,10 @@
     Neo.pickups.push({ x: cx + 60, y: cy, type: 'potion' });
     grantXp(40 + Neo.bossRushStage * 20);
     const nextName = getBossDisplayName(BOSS_RUSH_ORDER[Neo.bossRushStage]).toUpperCase();
-    Neo.particles.push({ x: cx, y: cy - 40, life: 1.6, text: 'BOSS DEFEATED!', c: '#78d7ff' });
+    Neo.spawnParticle({ x: cx, y: cy - 40, life: 1.6, text: 'BOSS DEFEATED!', c: '#78d7ff' });
     setTimeout(() => {
       if (Neo.gameMode !== 'boss_rush' || Neo.gameState !== 'play') return;
-      Neo.particles.push({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 50, life: 1.2, text: `NEXT: ${nextName}`, c: '#ffb347' });
+      Neo.spawnParticle({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 50, life: 1.2, text: `NEXT: ${nextName}`, c: '#ffb347' });
     }, 1500);
     setTimeout(() => {
       if (Neo.gameMode !== 'boss_rush' || Neo.gameState !== 'play') return;

@@ -189,7 +189,7 @@
       Neo.player.vx = applyResponsiveVelocity(Neo.player.vx, moveX * targetSpeed, dt);
       Neo.player.vy = applyResponsiveVelocity(Neo.player.vy, moveY * targetSpeed, dt);
       if (Neo.player.princessFlightTime > 0 && (moveX || moveY) && Neo.nextRandom('fx') < 0.35) {
-        Neo.particles.push({ x: Neo.player.x + rand(12, -12, 'fx'), y: Neo.player.y + rand(10, -10, 'fx'), life: 0.2, c: '#ffd1ea' });
+        Neo.spawnParticle({ x: Neo.player.x + rand(12, -12, 'fx'), y: Neo.player.y + rand(10, -10, 'fx'), life: 0.2, c: '#ffd1ea' });
       }
     }
 
@@ -200,7 +200,7 @@
       Neo.player.cowardsWayTime = Math.max(0, Neo.player.cowardsWayTime - dt);
       Neo.player.inv = Math.max(Neo.player.inv, 0.2);
       if (Neo.nextRandom('fx') < 0.4) {
-        Neo.particles.push({ x: Neo.player.x + rand(16, -16, 'fx'), y: Neo.player.y + rand(16, -16, 'fx'), life: 0.18, c: '#92ffcf' });
+        Neo.spawnParticle({ x: Neo.player.x + rand(16, -16, 'fx'), y: Neo.player.y + rand(16, -16, 'fx'), life: 0.18, c: '#92ffcf' });
       }
     }
 
@@ -356,7 +356,7 @@
           consumeCharge('hemes_scarf');
         }
         if (Neo.nextRandom('fx') < 0.14) {
-          Neo.particles.push({ x: Neo.player.x + rand(-10, 10), y: Neo.player.y - 18, life: 0.5, text: `+${Math.max(1, Math.ceil(heal * 10))}`, c: '#0f8' });
+          Neo.spawnParticle({ x: Neo.player.x + rand(-10, 10), y: Neo.player.y - 18, life: 0.5, text: `+${Math.max(1, Math.ceil(heal * 10))}`, c: '#0f8' });
         }
       }
     }
@@ -398,7 +398,7 @@
 
     sectionPerfStart = perfStart();
     if (Neo.godTimer > 0 && Neo.nextRandom('fx') < 0.4) {
-      Neo.particles.push({ x: Neo.player.x + rand(-6, 6), y: Neo.player.y + rand(-6, 6), life: 0.32, c: `hsl(${(Date.now() / 8) % 360},100%,65%)` });
+      Neo.spawnParticle({ x: Neo.player.x + rand(-6, 6), y: Neo.player.y + rand(-6, 6), life: 0.32, c: `hsl(${(Date.now() / 8) % 360},100%,65%)` });
     }
     perfEnd('update.fx', sectionPerfStart);
 
@@ -413,21 +413,21 @@
     if (!Neo.player.escapeReady) {
       const needed = getChargeRequirement(10);
       const progress = Math.max(0, Number(Neo.player.escapeChargeKills || 0));
-      Neo.particles.push({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.75, text: `ADAPTER CHARGING ${progress}/${needed}`, c: '#b88cff' });
+      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.75, text: `ADAPTER CHARGING ${progress}/${needed}`, c: '#b88cff' });
       return;
     }
     if (!Neo.currentRoom || Neo.currentRoom.type === 'boss' || Neo.currentRoom.type === 'god') {
-      Neo.particles.push({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.75, text: 'NO WARP IN BOSS ROOM', c: '#ff9e9e' });
+      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.75, text: 'NO WARP IN BOSS ROOM', c: '#ff9e9e' });
       return;
     }
     if (Neo.enemies.length === 0) {
-      Neo.particles.push({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.75, text: 'WARP REQUIRES COMBAT', c: '#ffcf8f' });
+      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.75, text: 'WARP REQUIRES COMBAT', c: '#ffcf8f' });
       return;
     }
 
     const ladderRoom = Neo.rooms.find(room => room.type === 'ladder') || Neo.rooms.find(room => room.type === 'boss');
     if (!ladderRoom || ladderRoom === Neo.currentRoom) {
-      Neo.particles.push({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.75, text: 'ALREADY AT LADDER', c: '#b7ffca' });
+      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.75, text: 'ALREADY AT LADDER', c: '#b7ffca' });
       return;
     }
 
@@ -439,7 +439,7 @@
 
     consumeCharge('escape');
     enterRoom(ladderRoom);
-    Neo.particles.push({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.9, text: 'WARPED TO LADDER (-50% COINS)', c: '#b66cff' });
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.9, text: 'WARPED TO LADDER (-50% COINS)', c: '#b66cff' });
     scheduleRunSave();
   }
 

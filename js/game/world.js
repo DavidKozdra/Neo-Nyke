@@ -144,7 +144,7 @@
       pn.hp = 0;
       if (n === 3) Neo.p3DeadInCoop = true;
       if (n === 4) Neo.p4DeadInCoop = true;
-      Neo.particles.push({ x: pn.x, y: pn.y - 30, life: 1.2, text: `P${n} DOWN`, c: '#a8d8ff' });
+      Neo.spawnParticle({ x: pn.x, y: pn.y - 30, life: 1.2, text: `P${n} DOWN`, c: '#a8d8ff' });
       if (Neo.p1DeadInCoop && Neo.p2DeadInCoop && Neo.p3DeadInCoop && Neo.p4DeadInCoop) die();
     }
   }
@@ -161,7 +161,7 @@
       Neo.player2.hp = 0;
       if (Neo.gameMode === 'pvp' && Neo.pvpState) {
         Neo.pvpState.p1Kills = (Neo.pvpState.p1Kills || 0) + 1;
-        Neo.particles.push({ x: Neo.player2.x, y: Neo.player2.y - 30, life: 1.5, text: `P1 KILL ${pvpState.p1Kills}/${pvpState.killsToWin}`, c: '#ff6b6b' });
+        Neo.spawnParticle({ x: Neo.player2.x, y: Neo.player2.y - 30, life: 1.5, text: `P1 KILL ${pvpState.p1Kills}/${pvpState.killsToWin}`, c: '#ff6b6b' });
         if (Neo.pvpState.p1Kills >= Neo.pvpState.killsToWin) {
           pvpEndGame('P1');
         } else {
@@ -169,7 +169,7 @@
         }
       } else {
         Neo.p2DeadInCoop = true;
-        Neo.particles.push({ x: Neo.player2.x, y: Neo.player2.y - 30, life: 1.2, text: 'P2 DOWN', c: '#4ca8ff' });
+        Neo.spawnParticle({ x: Neo.player2.x, y: Neo.player2.y - 30, life: 1.2, text: 'P2 DOWN', c: '#4ca8ff' });
         if (Neo.p1DeadInCoop && Neo.p2DeadInCoop && Neo.p3DeadInCoop && Neo.p4DeadInCoop) die();
       }
     }
@@ -180,7 +180,7 @@
     Neo.player2 = null;
     const p2Row = document.getElementById('p2HpRow');
     if (p2Row) p2Row.style.display = 'none';
-    Neo.particles.push({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 40, life: 4, text: `${winner} WINS!`, c: winner === 'P1' ? '#ff6b6b' : '#4ca8ff' });
+    Neo.spawnParticle({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 40, life: 4, text: `${winner} WINS!`, c: winner === 'P1' ? '#ff6b6b' : '#4ca8ff' });
     setTimeout(() => { die(); }, 3000);
   }
 
@@ -199,7 +199,7 @@
     if (!Number.isFinite(Number(Neo.player.hp))) Neo.player.hp = Neo.player.maxHp;
     if (!ignoreInv && Neo.player.inv > 0) return;
     if (Neo.player.blockActive && !options.ignoreBlock) {
-      Neo.particles.push({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.3, text: 'BLOCK', c: '#9cefff' });
+      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.3, text: 'BLOCK', c: '#9cefff' });
       return;
     }
     if (isChallengeActive('no_hit')) {
@@ -209,7 +209,7 @@
       Neo.player.inv = 0;
       Neo.shake = 10;
       Neo.shakeT = 0.18;
-      Neo.particles.push({ x: Neo.player.x, y: Neo.player.y - 24, life: 0.95, text: 'HIT RUN FAILED', c: '#ff7a88' });
+      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 24, life: 0.95, text: 'HIT RUN FAILED', c: '#ff7a88' });
       die();
       return;
     }
@@ -242,7 +242,7 @@
     if (getItemCount('insurance') > 0 && Neo.player.insuranceReady && hpBeforeHit > halfHpThreshold && Neo.player.hp <= halfHpThreshold) {
       Neo.player.hp = Math.max(Neo.player.hp, halfHpThreshold);
       consumeCharge('insurance');
-      Neo.particles.push({ x: Neo.player.x, y: Neo.player.y - 30, life: 0.8, text: 'INSURANCE USED', c: '#e6eeff' });
+      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 30, life: 0.8, text: 'INSURANCE USED', c: '#e6eeff' });
     }
 
     finalAmount = Math.max(0, hpBeforeHit - Neo.player.hp);
@@ -263,11 +263,11 @@
     if (Neo.player.hp <= 0) {
       if (Neo.gameMode === 'practice') {
         Neo.player.hp = Neo.player.maxHp;
-        Neo.particles.push({ x: Neo.player.x, y: Neo.player.y - 30, life: 0.9, text: 'PRACTICE — NO DEATH', c: '#a880ff' });
+        Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 30, life: 0.9, text: 'PRACTICE — NO DEATH', c: '#a880ff' });
       } else {
         if (Neo.gameMode === 'pvp' && Neo.pvpState && Neo.player2) {
           Neo.pvpState.p2Kills = (Neo.pvpState.p2Kills || 0) + 1;
-          Neo.particles.push({ x: Neo.player.x, y: Neo.player.y - 30, life: 1.5, text: `P2 KILL ${pvpState.p2Kills}/${pvpState.killsToWin}`, c: '#4ca8ff' });
+          Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 30, life: 1.5, text: `P2 KILL ${pvpState.p2Kills}/${pvpState.killsToWin}`, c: '#4ca8ff' });
           if (Neo.pvpState.p2Kills >= Neo.pvpState.killsToWin) {
             Neo.player.hp = 0;
             pvpEndGame('P2');
@@ -277,7 +277,7 @@
             Neo.player.inv = 1;
           }
         } else if (Neo.gameMode === 'coop' && (Neo.player2 || Neo.player3 || Neo.player4) && (!Neo.p2DeadInCoop || !Neo.p3DeadInCoop || !Neo.p4DeadInCoop)) {
-          Neo.particles.push({ x: Neo.player.x, y: Neo.player.y - 30, life: 1.2, text: 'P1 DOWN', c: '#ff6b6b' });
+          Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 30, life: 1.2, text: 'P1 DOWN', c: '#ff6b6b' });
           Neo.player.hp = 0;
           Neo.p1DeadInCoop = true;
         } else {
@@ -297,7 +297,7 @@
       const damage = Math.max(0.25, config.damage(state.stacks));
       damagePlayer(damage, 0, 0, key, { ignoreInv: true, noInvFrames: true });
       if (Neo.nextRandom('fx') < 0.3) {
-        Neo.particles.push({ x: Neo.player.x + rand(-8, 8), y: Neo.player.y + rand(-8, 8), life: 0.25, c: config.color });
+        Neo.spawnParticle({ x: Neo.player.x + rand(-8, 8), y: Neo.player.y + rand(-8, 8), life: 0.25, c: config.color });
       }
     }
     if (state.duration <= 0) clearStatus(Neo.player, key);
@@ -348,7 +348,7 @@
   }
 
   function spawnAoeShockwave(x, y, radius, color = '#ff66cc', style = 'normal') {
-    Neo.particles.push({
+    Neo.spawnParticle({
       x,
       y,
       life: Neo.AOE_SHOCKWAVE_LIFE,
@@ -362,7 +362,7 @@
     for (let index = 0; index < sparks; index += 1) {
       const angle = (index / sparks) * Math.PI * 2 + rand(0.22, -0.22, 'fx');
       const speed = rand(170, 70, 'fx');
-      Neo.particles.push({
+      Neo.spawnParticle({
         x: x + Math.cos(angle) * Math.min(radius * 0.3, 34),
         y: y + Math.sin(angle) * Math.min(radius * 0.3, 34),
         life: rand(0.34, 0.16, 'fx'),
@@ -388,7 +388,7 @@
     const color = projectile.color || (projectile.enemy ? '#ff6688' : '#ffd7aa');
     const angle = Math.atan2(Number(projectile.vy || 0), Number(projectile.vx || 1));
     const heavy = projectile.kind === 'fireball' || projectile.kind === 'magenta_degale' || projectile.kind === 'god_sword';
-    Neo.particles.push({
+    Neo.spawnParticle({
       x,
       y,
       life: heavy ? 0.34 : 0.22,
@@ -406,7 +406,7 @@
       const spread = rand(1.2, -1.2, 'fx');
       const sparkAngle = angle + Math.PI + spread;
       const speed = rand(120, 35, 'fx');
-      Neo.particles.push({
+      Neo.spawnParticle({
         x,
         y,
         life: rand(0.28, 0.1, 'fx'),
@@ -434,6 +434,61 @@
     return best;
   }
 
+  const _PROJECTILE_POOL_SIZE = 256;
+  const _projectilePool = [];
+  for (let _pji = 0; _pji < _PROJECTILE_POOL_SIZE; _pji += 1) {
+    _projectilePool.push({
+      x: 0, y: 0, vx: 0, vy: 0,
+      r: 0, life: 0, damage: 0,
+      kind: null, color: null, enemy: false,
+      knockback: 0, pierceCount: 0,
+      hitOptions: null, trail: null,
+      splash: 0, fireStacks: 0, fireDuration: 0,
+      homing: false, homingSpeed: 0, homingAccel: 0, homingTurnRate: 0,
+      fromRival: false,
+    });
+  }
+
+  function _acquireProjectile() {
+    return _projectilePool.length > 0 ? _projectilePool.pop() : {
+      x: 0, y: 0, vx: 0, vy: 0,
+      r: 0, life: 0, damage: 0,
+      kind: null, color: null, enemy: false,
+      knockback: 0, pierceCount: 0,
+      hitOptions: null, trail: null,
+      splash: 0, fireStacks: 0, fireDuration: 0,
+      homing: false, homingSpeed: 0, homingAccel: 0, homingTurnRate: 0,
+      fromRival: false,
+    };
+  }
+
+  function spawnProjectile(props) {
+    const p = _acquireProjectile();
+    p.x = props.x;
+    p.y = props.y;
+    p.vx = props.vx;
+    p.vy = props.vy;
+    p.r = props.r ?? 5;
+    p.life = props.life ?? 1.2;
+    p.damage = props.damage ?? 0;
+    p.kind = props.kind ?? null;
+    p.color = props.color ?? null;
+    p.enemy = props.enemy ?? false;
+    p.knockback = props.knockback ?? 0;
+    p.pierceCount = props.pierceCount ?? 0;
+    p.hitOptions = props.hitOptions ?? null;
+    p.trail = props.trail ?? [];
+    p.splash = props.splash ?? 0;
+    p.fireStacks = props.fireStacks ?? 0;
+    p.fireDuration = props.fireDuration ?? 0;
+    p.homing = props.homing ?? false;
+    p.homingSpeed = props.homingSpeed ?? 0;
+    p.homingAccel = props.homingAccel ?? 0;
+    p.homingTurnRate = props.homingTurnRate ?? 0;
+    p.fromRival = props.fromRival ?? false;
+    Neo.projectiles.push(p);
+  }
+
   function updateProjectiles(dt) {
     for (let index = Neo.projectiles.length - 1; index >= 0; index -= 1) {
       const projectile = Neo.projectiles[index];
@@ -458,12 +513,12 @@
         damageDestructible(hitProp, projectile.damage || 1);
         if (projectile.kind === 'fireball') blastRadius(projectile.x, projectile.y, projectile.splash || 44, 16, '#ff8844');
         spawnProjectileImpact(projectile, projectile.x, projectile.y, { blocked: true });
-        Neo.projectiles.splice(index, 1);
+        _projectilePool.push(Neo.projectiles.splice(index, 1)[0]);
         continue;
       }
       if (projectile.life <= 0 || isBlocked(projectile.x, projectile.y, projectile.r)) {
         spawnProjectileImpact(projectile, projectile.x, projectile.y, { blocked: true });
-        Neo.projectiles.splice(index, 1);
+        _projectilePool.push(Neo.projectiles.splice(index, 1)[0]);
         continue;
       }
       if (!projectile.enemy) {
@@ -489,14 +544,14 @@
             projectile.x += projectile.vx * 0.03;
             projectile.y += projectile.vy * 0.03;
           } else {
-            Neo.projectiles.splice(index, 1);
+            _projectilePool.push(Neo.projectiles.splice(index, 1)[0]);
           }
           continue;
         }
       } else if (dist(projectile.x, projectile.y, Neo.player.x, Neo.player.y) <= projectile.r + Neo.player.r) {
         damagePlayer(projectile.damage || 10, Math.atan2(projectile.vy, projectile.vx), projectile.knockback || 120, 'enemy_projectile');
         spawnProjectileImpact(projectile, projectile.x, projectile.y);
-        Neo.projectiles.splice(index, 1);
+        _projectilePool.push(Neo.projectiles.splice(index, 1)[0]);
         continue;
       }
     }
@@ -522,13 +577,13 @@
             hazard.triggered = true;
             hazard.fuse = hazard.fuseDuration || 0.75;
             hazard.sparkTick = 0;
-            Neo.particles.push({ x: hazard.x, y: hazard.y - 20, life: 0.5, text: 'CLICK', c: '#ffcc66', size: 12 });
+            Neo.spawnParticle({ x: hazard.x, y: hazard.y - 20, life: 0.5, text: 'CLICK', c: '#ffcc66', size: 12 });
           }
         } else {
           hazard.fuse -= dt;
           hazard.sparkTick = Number(hazard.sparkTick || 0) - dt;
           if (hazard.sparkTick <= 0) {
-            Neo.particles.push({
+            Neo.spawnParticle({
               x: hazard.x + rand(7, -7),
               y: hazard.y - 8 + rand(4, -4),
               life: 0.22,
@@ -565,7 +620,7 @@
           const radius = rand(hazard.r * 0.82, 8);
           const px = hazard.x + Math.cos(angle) * radius;
           const py = hazard.y + Math.sin(angle) * radius;
-          Neo.particles.push({
+          Neo.spawnParticle({
             x: px,
             y: py,
             life: 0.45,
@@ -608,7 +663,7 @@
           enemy.hp -= (hazard.dps || 16) * dt;
           if (hazard.statusTick <= 0) applyFire(enemy, 1, 2.8);
           enemy.stun = Math.max(enemy.stun, 0.05);
-          if (Neo.nextRandom('fx') < 0.06) Neo.particles.push({ x: enemy.x + rand(-6, 6), y: enemy.y + rand(-6, 6), life: 0.3, c: '#ff8c3b' });
+          if (Neo.nextRandom('fx') < 0.06) Neo.spawnParticle({ x: enemy.x + rand(-6, 6), y: enemy.y + rand(-6, 6), life: 0.3, c: '#ff8c3b' });
           if (enemy.hp <= 0) onEnemyDie(enemy);
         }
         if (hazard.statusTick <= 0) hazard.statusTick = 0.45;
@@ -630,7 +685,7 @@
               hitEnemy(enemy, hazard.damage || 16, angle, 90, '#8dd4ff');
             }
           }
-          Neo.particles.push({
+          Neo.spawnParticle({
             life: 0.25,
             bolt: {
               x1: hazard.x,
@@ -677,7 +732,7 @@
         if (other.hidden) other.hidden = false;
       });
       for (let index = 0; index < 16; index += 1) {
-        Neo.particles.push({
+        Neo.spawnParticle({
           x: prop.x + rand(22, -22, 'fx'),
           y: prop.y + rand(22, -22, 'fx'),
           life: rand(0.55, 0.22, 'fx'),
@@ -688,12 +743,12 @@
           size: rand(3.2, 1.8, 'fx'),
         });
       }
-      Neo.particles.push({ x: prop.x, y: prop.y - 22, life: 0.75, text: 'CLEAR', c: '#d7f6ff' });
+      Neo.spawnParticle({ x: prop.x, y: prop.y - 22, life: 0.75, text: 'CLEAR', c: '#d7f6ff' });
     }
     if (prop.kind === 'cover_wall') {
       const splinters = prop.reinforced ? 18 : 12;
       for (let index = 0; index < splinters; index += 1) {
-        Neo.particles.push({
+        Neo.spawnParticle({
           x: prop.x + rand((prop.w || prop.r) * 0.42, -(prop.w || prop.r) * 0.42, 'fx'),
           y: prop.y + rand((prop.h || prop.r) * 0.42, -(prop.h || prop.r) * 0.42, 'fx'),
           life: rand(0.42, 0.18, 'fx'),
@@ -708,7 +763,7 @@
     if (prop.kind === 'secret_wall') {
       const dir = prop.secretDir;
       if (dir) setSecretPassageOpen(Neo.currentRoom, dir, true);
-      Neo.particles.push({ x: prop.x, y: prop.y - 18, life: 0.9, text: 'SECRET', c: '#8dd4ff' });
+      Neo.spawnParticle({ x: prop.x, y: prop.y - 18, life: 0.9, text: 'SECRET', c: '#8dd4ff' });
     }
   }
 
@@ -718,7 +773,7 @@
     const crit = !!opts.crit;
     const color = opts.color || (crit ? '#ff9f1c' : '#ff6b6b');
     const size = opts.size || (crit ? 20 : 16);
-    Neo.particles.push({
+    Neo.spawnParticle({
       x,
       y,
       life: crit ? 0.62 : 0.46,
@@ -735,7 +790,7 @@
     const value = Math.max(0, Math.round((amount || 0) * (opts.scale || 8)));
     if (value <= 0) return;
     achievementEvents.emit('heal:applied', { amount: Math.max(0, amount || 0) });
-    Neo.particles.push({
+    Neo.spawnParticle({
       x,
       y,
       life: 0.5,
@@ -789,8 +844,8 @@
       active: false,
     });
     Neo.floorSkipPending = 0;
-    Neo.particles.push({ x: spawnPoint.x, y: spawnPoint.y, life: 0.5, ring: 28, c: '#ff8bd8' });
-    Neo.particles.push({ x: spawnPoint.x, y: spawnPoint.y - 20, life: 0.8, text: 'CHAOS GATE', c: '#ffc2f0' });
+    Neo.spawnParticle({ x: spawnPoint.x, y: spawnPoint.y, life: 0.5, ring: 28, c: '#ff8bd8' });
+    Neo.spawnParticle({ x: spawnPoint.x, y: spawnPoint.y - 20, life: 0.8, text: 'CHAOS GATE', c: '#ffc2f0' });
     return true;
   }
 
@@ -855,7 +910,7 @@
         const activateAt = Math.max(0.01, Number(pickup.activateAt || Neo.JESTER_PORTAL_ACTIVATE_DELAY));
         if (!pickup.active && pickup.spawnT >= activateAt) {
           pickup.active = true;
-          Neo.particles.push({ x: pickup.x, y: pickup.y - 16, life: 0.6, text: 'READY', c: '#ffc2f0' });
+          Neo.spawnParticle({ x: pickup.x, y: pickup.y - 16, life: 0.6, text: 'READY', c: '#ffc2f0' });
         }
       } else if (pickup.type === 'challengeRune') {
         const runeRadius = 16;
@@ -901,7 +956,7 @@
         if (Neo.player.hp >= Neo.player.maxHp) continue;
         const potionHeal = getPotionHealAmount();
         Neo.player.hp = Math.min(Neo.player.maxHp, Neo.player.hp + potionHeal);
-        Neo.particles.push({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.6, text: `+${potionHeal}`, c: '#0f8' });
+        Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.6, text: `+${potionHeal}`, c: '#0f8' });
       }
 
       if (pickup.type === 'apple' || pickup.type === 'fruit') {
@@ -911,7 +966,7 @@
         const actual = Neo.player.hp - before;
         if (actual > 0) {
           spawnHealPopup(Neo.player.x + rand(-8, 8), Neo.player.y - 22, actual, { color: '#79ff8f', size: 14 });
-          Neo.particles.push({ x: Neo.player.x, y: Neo.player.y - 18, life: 0.55, text: `+${Math.ceil(actual)}`, c: '#79ff8f' });
+          Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 18, life: 0.55, text: `+${Math.ceil(actual)}`, c: '#79ff8f' });
         }
         const fruitRoom = getRoomByCoords(Number(pickup.roomGx ?? Neo.currentRoom?.gx), Number(pickup.roomGy ?? Neo.currentRoom?.gy)) || Neo.currentRoom;
         const node = fruitRoom?.gardenFruitNodes?.find(gardenNode => gardenNode && gardenNode.id === pickup.gardenNodeId);
@@ -994,7 +1049,7 @@
         if (!canAfford) {
           const now = Date.now();
           if (!pickup.lastDeniedAt || now - pickup.lastDeniedAt > 450) {
-            Neo.particles.push({ x: pickup.x, y: pickup.y - 20, life: 0.85, text: costLabel, c: '#ffb1b1' });
+            Neo.spawnParticle({ x: pickup.x, y: pickup.y - 20, life: 0.85, text: costLabel, c: '#ffb1b1' });
             pickup.lastDeniedAt = now;
           }
           continue;
@@ -1010,14 +1065,14 @@
         } else if (pickup.offerKind === 'vitality') {
           Neo.player.maxHp += 20;
           Neo.player.hp = Math.min(Neo.player.maxHp, Neo.player.hp + 60);
-          Neo.particles.push({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.7, text: '+VIT', c: '#8dffbd' });
+          Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.7, text: '+VIT', c: '#8dffbd' });
         } else if (pickup.offerKind === 'xp') {
           const xpValue = Math.max(1, Number(pickup.xpValue || getSecretXpOfferAmount()));
           grantXp(xpValue);
-          Neo.particles.push({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.7, text: `+${xpValue} XP`, c: '#8dd4ff' });
+          Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.7, text: `+${xpValue} XP`, c: '#8dd4ff' });
         } else {
           addCoins(90 + Neo.floor * 12);
-          Neo.particles.push({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.7, text: 'RICH', c: '#ffd966' });
+          Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.7, text: 'RICH', c: '#ffd966' });
         }
         persistMetaSoon();
       }
@@ -1046,7 +1101,7 @@
           completeChallengeTrial('BOMB DISARMED');
         } else {
           blastRadius(pickup.x, pickup.y, 76, 28 + Neo.floor * 2, '#ff7a66');
-          Neo.particles.push({ x: pickup.x, y: pickup.y - 20, life: 0.75, text: 'WRONG', c: '#ff7a7a' });
+          Neo.spawnParticle({ x: pickup.x, y: pickup.y - 20, life: 0.75, text: 'WRONG', c: '#ff7a7a' });
           failChallengeTrial('WRONG BOMB');
         }
         Neo.pickups.splice(index, 1);
@@ -1057,7 +1112,7 @@
       if (pickup.type === 'challengeRune') {
         if (!Neo.currentRoom.challengeData) Neo.currentRoom.challengeData = {};
         Neo.currentRoom.challengeData.runesLeft = Math.max(0, Number(Neo.currentRoom.challengeData.runesLeft || 1) - 1);
-        Neo.particles.push({ x: pickup.x, y: pickup.y - 18, life: 0.55, text: 'RUNE', c: '#8dd4ff' });
+        Neo.spawnParticle({ x: pickup.x, y: pickup.y - 18, life: 0.55, text: 'RUNE', c: '#8dd4ff' });
         if (Neo.currentRoom.challengeData.runesLeft <= 0) {
           completeChallengeTrial('RUNES CLAIMED');
         }
@@ -1107,14 +1162,64 @@
     }
   }
 
+  const _PARTICLE_POOL_SIZE = 600;
+  const _particlePool = [];
+  for (let _pi = 0; _pi < _PARTICLE_POOL_SIZE; _pi += 1) {
+    _particlePool.push({
+      x: 0, y: 0, life: 0, c: null,
+      vx: 0, vy: 0,
+      text: null, size: null, outline: null,
+      line: null, shockwave: null, impact: null, spark: null,
+      blood: null, ring: null, style: null,
+      maxLife: null, radius: null, angle: null,
+    });
+  }
+
+  function _acquireParticle() {
+    return _particlePool.length > 0 ? _particlePool.pop() : {
+      x: 0, y: 0, life: 0, c: null,
+      vx: 0, vy: 0,
+      text: null, size: null, outline: null,
+      line: null, shockwave: null, impact: null, spark: null,
+      blood: null, ring: null, style: null,
+      maxLife: null, radius: null, angle: null,
+    };
+  }
+
+  function spawnParticle(props) {
+    const p = _acquireParticle();
+    p.x = props.x;
+    p.y = props.y;
+    p.life = props.life;
+    p.c = props.c ?? null;
+    p.vx = props.vx ?? 0;
+    p.vy = props.vy ?? 0;
+    p.text = props.text ?? null;
+    p.size = props.size ?? null;
+    p.outline = props.outline ?? null;
+    p.line = props.line ?? null;
+    p.shockwave = props.shockwave ?? null;
+    p.impact = props.impact ?? null;
+    p.spark = props.spark ?? null;
+    p.blood = props.blood ?? null;
+    p.ring = props.ring ?? null;
+    p.style = props.style ?? null;
+    p.maxLife = props.maxLife ?? null;
+    p.radius = props.radius ?? null;
+    p.angle = props.angle ?? null;
+    Neo.particles.push(p);
+  }
+
   function updateParticles(dt) {
     // With reduceParticles: cull non-text particles to keep count low
     if (window.NeoSettings?.getAccess()?.reduceParticles) {
       const MAX_REDUCED = 24;
       if (Neo.particles.length > MAX_REDUCED) {
-        // Remove oldest non-text particles first
         for (let index = 0; index < Neo.particles.length && Neo.particles.length > MAX_REDUCED; index++) {
-          if (!Neo.particles[index].text) { Neo.particles.splice(index, 1); index--; }
+          if (!Neo.particles[index].text) {
+            _particlePool.push(Neo.particles.splice(index, 1)[0]);
+            index--;
+          }
         }
       }
     }
@@ -1125,7 +1230,9 @@
       if (particle.vx) particle.x += particle.vx * dt;
       if (particle.vy) particle.y += particle.vy * dt;
       if (particle.ring) particle.ring += 200 * dt;
-      if (particle.life <= 0) Neo.particles.splice(index, 1);
+      if (particle.life <= 0) {
+        _particlePool.push(Neo.particles.splice(index, 1)[0]);
+      }
     }
   }
 
@@ -1227,14 +1334,14 @@
     const titheBonus = hasLegacy('crystal_tithe') && Neo.HARD_DIFFICULTIES.has(Neo.selectedDifficulty) ? 1 : 0;
     Neo.metaProgress.loopCrystals = Number(Neo.metaProgress.loopCrystals || 0) + 1 + crystalBonus + titheBonus;
     if (crystalBonus > 0) {
-      Neo.particles.push({ x: Neo.player.x, y: Neo.player.y - 42, life: 1.1, text: `+${crystalBonus} CHALLENGE LC`, c: '#8dd4ff' });
+      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 42, life: 1.1, text: `+${crystalBonus} CHALLENGE LC`, c: '#8dd4ff' });
     }
     if (titheBonus > 0) {
-      Neo.particles.push({ x: Neo.player.x, y: Neo.player.y - 56, life: 1.1, text: `+1 TITHE LC`, c: '#c9a8f0' });
+      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 56, life: 1.1, text: `+1 TITHE LC`, c: '#c9a8f0' });
     }
     if (hasLegacy('bank_interest')) {
       Neo.metaProgress.coins = Number(Neo.metaProgress.coins || 0) + 50;
-      Neo.particles.push({ x: Neo.player.x, y: Neo.player.y - 70, life: 1.1, text: `+50 INTEREST`, c: '#ffd27d' });
+      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 70, life: 1.1, text: `+50 INTEREST`, c: '#ffd27d' });
     }
     Neo.metaProgress.bestFloor = Math.max(Neo.metaProgress.bestFloor, Neo.MAX_FLOOR);
     persistMetaSoon();
@@ -1276,6 +1383,8 @@
   Neo.useJesterPortal = useJesterPortal;
   Neo.updatePickups = updatePickups;
   Neo.updateDeadBodies = updateDeadBodies;
+  Neo.spawnProjectile = spawnProjectile;
+  Neo.spawnParticle = spawnParticle;
   Neo.updateParticles = updateParticles;
   Neo.isRoomLocked = isRoomLocked;
   Neo.updateTransitions = updateTransitions;

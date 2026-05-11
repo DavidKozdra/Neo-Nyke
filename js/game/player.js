@@ -157,13 +157,13 @@
   function triggerKeenEyeBuff() {
     if (!Neo.player || getItemCount('keen_eye') <= 0) return;
     Neo.player.keenEyeBuffTime = Math.max(Number(Neo.player.keenEyeBuffTime || 0), 7);
-    Neo.particles.push({ x: Neo.player.x, y: Neo.player.y - 24, life: 0.7, text: 'KEEN EYE', c: '#f8fdff' });
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 24, life: 0.7, text: 'KEEN EYE', c: '#f8fdff' });
   }
 
   function triggerChronoSpringBuff() {
     if (!Neo.player || getItemCount('chrono_spring') <= 0) return;
     Neo.player.chronoSpringBuffTime = Math.max(Number(Neo.player.chronoSpringBuffTime || 0), 6);
-    Neo.particles.push({ x: Neo.player.x, y: Neo.player.y - 38, life: 0.7, text: 'CHRONO', c: '#cfeeff' });
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 38, life: 0.7, text: 'CHRONO', c: '#cfeeff' });
   }
 
   function getItemStats() {
@@ -303,7 +303,7 @@
   function confirmWizardPawSelection() {
     if (!Neo.wizardPawSelection || Neo.wizardPawSelection.picks.length !== 2) return;
     Neo.wizardPawSelection.picks.forEach(applyWizardPawStat);
-    Neo.particles.push({ x: Neo.player.x, y: Neo.player.y - 46, life: 1, text: "WIZARD'S PAW!", c: '#ffd27d' });
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 46, life: 1, text: "WIZARD'S PAW!", c: '#ffd27d' });
     Neo.wizardPawSelection = null;
     setWizardPawModalOpen(false);
     markInventoryPanelDirty();
@@ -348,7 +348,7 @@
         Neo.player.insuranceReady = true;
         Neo.player.insuranceChargeKills = 0;
         Neo.player.insuranceActive = false;
-        Neo.particles.push({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.7, text: 'INSURANCE READY', c: '#e8ecff' });
+        Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.7, text: 'INSURANCE READY', c: '#e8ecff' });
       }
     }
 
@@ -357,7 +357,7 @@
       if (Neo.player.keenEyeChargeKills >= getChargeRequirement(10)) {
         Neo.player.keenEyeReady = true;
         Neo.player.keenEyeChargeKills = 0;
-        Neo.particles.push({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.7, text: 'KEEN READY', c: '#f2fbff' });
+        Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.7, text: 'KEEN READY', c: '#f2fbff' });
       }
     }
 
@@ -366,7 +366,7 @@
       if (Neo.player.chronoSpringChargeKills >= getChargeRequirement(7)) {
         Neo.player.chronoSpringReady = true;
         Neo.player.chronoSpringChargeKills = 0;
-        Neo.particles.push({ x: Neo.player.x, y: Neo.player.y - 36, life: 0.7, text: 'SPRING READY', c: '#d9f7ff' });
+        Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 36, life: 0.7, text: 'SPRING READY', c: '#d9f7ff' });
       }
     }
 
@@ -376,7 +376,7 @@
         Neo.player.escapeReady = true;
         Neo.player.escapeChargeKills = 0;
         const warpHint = formatControlLabel('f', 'f');
-        Neo.particles.push({ x: Neo.player.x, y: Neo.player.y - 36, life: 0.9, text: `ADAPTER READY - PRESS ${warpHint}`, c: '#b88cff' });
+        Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 36, life: 0.9, text: `ADAPTER READY - PRESS ${warpHint}`, c: '#b88cff' });
       }
     }
 
@@ -385,7 +385,7 @@
       if (Neo.player.scarfChargeKills >= getChargeRequirement(6)) {
         Neo.player.scarfHealReady = true;
         Neo.player.scarfChargeKills = 0;
-        Neo.particles.push({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.7, text: 'SCARF READY', c: '#0f8' });
+        Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.7, text: 'SCARF READY', c: '#0f8' });
       }
     }
   });

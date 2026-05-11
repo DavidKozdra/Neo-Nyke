@@ -229,27 +229,22 @@
     Neo.ctx.restore();
   }
 
+  // Called inside a save() block with font/textAlign/textBaseline already set.
+  // Coordinates are in world space (not translated).
   function drawStatusBadge(enemy, label, bgColor, borderColor, textColor, yOffset) {
-    Neo.ctx.save();
-    Neo.ctx.translate(enemy.x, enemy.y);
-    Neo.ctx.font = 'bold 10px system-ui';
-    Neo.ctx.textAlign = 'center';
-    Neo.ctx.textBaseline = 'middle';
     const width = Math.max(50, Neo.ctx.measureText(label).width + 14);
     const height = 15;
     Neo.ctx.fillStyle = bgColor;
     Neo.ctx.strokeStyle = borderColor;
-    Neo.ctx.lineWidth = 1;
     Neo.ctx.shadowColor = borderColor;
     Neo.ctx.shadowBlur = 8;
     Neo.ctx.beginPath();
-    Neo.ctx.roundRect(-width / 2, yOffset, width, height, 5);
+    Neo.ctx.roundRect(enemy.x - width / 2, enemy.y + yOffset, width, height, 5);
     Neo.ctx.fill();
     Neo.ctx.stroke();
     Neo.ctx.shadowBlur = 0;
     Neo.ctx.fillStyle = textColor;
-    Neo.ctx.fillText(label, 0, yOffset + height / 2 + 0.5);
-    Neo.ctx.restore();
+    Neo.ctx.fillText(label, enemy.x, enemy.y + yOffset + height / 2 + 0.5);
   }
 
   function drawSpawnPortal(enemy) {
@@ -362,36 +357,38 @@
   }
 
   function drawEnemies() {
+    const _now = Date.now();
+    const _reduceFlash = window.NeoSettings?.getAccess()?.reduceFlash;
     Neo.enemies.forEach(enemy => {
       if (!enemy) return;
       if (enemy.spawnT > 0) { drawSpawnPortal(enemy); return; }
       const drawY = enemy.y - Math.max(0, Number(enemy.jumpZ || 0));
       const bleedStacks = getStatusStacks(enemy, 'bleed');
       const activeStatuses = Neo.STATUS_KEYS.filter(key => getStatusStacks(enemy, key) > 0);
-      activeStatuses.forEach((key, index) => {
-        const style = Neo.STATUS_STYLES[key];
+      if (activeStatuses.length > 0) {
         Neo.ctx.save();
         Neo.ctx.translate(enemy.x, drawY);
-        Neo.ctx.strokeStyle = style.color;
         Neo.ctx.lineWidth = 2;
-        Neo.ctx.shadowColor = style.color;
-        Neo.ctx.shadowBlur = 10;
-        Neo.ctx.beginPath();
-        Neo.ctx.arc(0, 0, enemy.r + 6 + index * 4 + (window.NeoSettings?.getAccess()?.reduceFlash ? 0 : Math.sin(Date.now() / (180 + index * 40)) * 2), 0, Math.PI * 2);
-        Neo.ctx.stroke();
+        activeStatuses.forEach((key, index) => {
+          const style = Neo.STATUS_STYLES[key];
+          Neo.ctx.strokeStyle = style.color;
+          Neo.ctx.shadowColor = style.color;
+          Neo.ctx.shadowBlur = 10;
+          Neo.ctx.beginPath();
+          Neo.ctx.arc(0, 0, enemy.r + 6 + index * 4 + (_reduceFlash ? 0 : Math.sin(_now / (180 + index * 40)) * 2), 0, Math.PI * 2);
+          Neo.ctx.stroke();
+        });
         Neo.ctx.restore();
-      });
+      }
       const spriteKey = getEnemySpriteKey(enemy);
       const facing = getFacingDirection(enemy, enemy.beamAngle || enemy.dashAngle || 0);
       const drawSize = Math.max(30, enemy.r * 2.4);
-      // Transformation animation: scale and flash
       let scale = 1;
       let flash = false;
       if (enemy.transformAnimT && enemy.transformAnimT > 0) {
-        // Oscillate scale and flash
         const t = enemy.transformAnimT;
-        scale = 1.1 + Math.sin(Date.now() / 60) * 0.13 * t * 2;
-        flash = Math.floor(Date.now() / 80) % 2 === 0;
+        scale = 1.1 + Math.sin(_now / 60) * 0.13 * t * 2;
+        flash = Math.floor(_now / 80) % 2 === 0;
       }
       Neo.ctx.save();
       Neo.ctx.translate(enemy.x, drawY);
@@ -408,18 +405,26 @@
       const badgeBaseY = enemy.type === 'rival' ? -enemy.r - 40 : -enemy.r - 32;
       let badgeOffset = bleedStacks > 0 ? 18 : 0;
       const fireStacks = getStatusStacks(enemy, 'fire');
-      if (fireStacks > 0) {
-        drawStatusBadge(enemy, `FIRE x${fireStacks}`, 'rgba(62,22,0,0.86)', Neo.STATUS_STYLES.fire.color, '#ffe5c0', badgeBaseY + badgeOffset);
-        badgeOffset += 18;
-      }
       const poisonStacks = getStatusStacks(enemy, 'poison');
-      if (poisonStacks > 0) {
-        drawStatusBadge(enemy, `POISON x${poisonStacks}`, 'rgba(10,38,0,0.86)', Neo.STATUS_STYLES.poison.color, '#d8ffc0', badgeBaseY + badgeOffset);
-        badgeOffset += 18;
-      }
       const darkStacks = getStatusStacks(enemy, 'dark_drain');
-      if (darkStacks > 0) {
-        drawStatusBadge(enemy, `DRAIN x${darkStacks}`, 'rgba(20,8,48,0.86)', Neo.STATUS_STYLES.dark_drain.color, '#e8d8ff', badgeBaseY + badgeOffset);
+      if (fireStacks > 0 || poisonStacks > 0 || darkStacks > 0) {
+        Neo.ctx.save();
+        Neo.ctx.font = 'bold 10px system-ui';
+        Neo.ctx.textAlign = 'center';
+        Neo.ctx.textBaseline = 'middle';
+        Neo.ctx.lineWidth = 1;
+        if (fireStacks > 0) {
+          drawStatusBadge(enemy, `FIRE x${fireStacks}`, 'rgba(62,22,0,0.86)', Neo.STATUS_STYLES.fire.color, '#ffe5c0', badgeBaseY + badgeOffset);
+          badgeOffset += 18;
+        }
+        if (poisonStacks > 0) {
+          drawStatusBadge(enemy, `POISON x${poisonStacks}`, 'rgba(10,38,0,0.86)', Neo.STATUS_STYLES.poison.color, '#d8ffc0', badgeBaseY + badgeOffset);
+          badgeOffset += 18;
+        }
+        if (darkStacks > 0) {
+          drawStatusBadge(enemy, `DRAIN x${darkStacks}`, 'rgba(20,8,48,0.86)', Neo.STATUS_STYLES.dark_drain.color, '#e8d8ff', badgeBaseY + badgeOffset);
+        }
+        Neo.ctx.restore();
       }
       if (enemy.elite) {
         Neo.ctx.save();
@@ -751,7 +756,7 @@
         // Tip burst
         if (Neo.rng() < 0.35) {
           const end = getBeamPathEnd(beamPath);
-          Neo.particles.push({ x: end.x + (Neo.rng() - 0.5) * 5, y: end.y + (Neo.rng() - 0.5) * 5, life: 0.1 + Neo.rng() * 0.08, vx: (Neo.rng() - 0.5) * 35, vy: (Neo.rng() - 0.5) * 35, c: '#cda8ff' });
+          Neo.spawnParticle({ x: end.x + (Neo.rng() - 0.5) * 5, y: end.y + (Neo.rng() - 0.5) * 5, life: 0.1 + Neo.rng() * 0.08, vx: (Neo.rng() - 0.5) * 35, vy: (Neo.rng() - 0.5) * 35, c: '#cda8ff' });
         }
       });
       Neo.ctx.restore();
@@ -790,7 +795,7 @@
         const py = sample.y + sample.ny * (Neo.rng() - 0.5) * spread * 2;
         const perpSpeed = (Neo.rng() - 0.5) * 28;
         const forwardSpeed = -Neo.rng() * 18;
-        Neo.particles.push({
+        Neo.spawnParticle({
           x: px, y: py,
           life: 0.18 + Neo.rng() * 0.12,
           vx: sample.nx * perpSpeed + sample.dx * forwardSpeed,
@@ -804,7 +809,7 @@
       const end = getBeamPathEnd(beamPath);
       const tipPx = end.x + (Neo.rng() - 0.5) * 6;
       const tipPy = end.y + (Neo.rng() - 0.5) * 6;
-      Neo.particles.push({
+      Neo.spawnParticle({
         x: tipPx, y: tipPy,
         life: 0.12 + Neo.rng() * 0.1,
         vx: (Neo.rng() - 0.5) * 40,

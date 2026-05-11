@@ -72,7 +72,7 @@
   function spawnWeaponProjectile(config = {}) {
     const angle = Number(config.angle || 0);
     const speed = Number(config.speed || 520);
-    Neo.projectiles.push({
+    Neo.spawnProjectile({
       x: config.x ?? Neo.player.x,
       y: config.y ?? Neo.player.y,
       vx: Math.cos(angle) * speed,
@@ -193,7 +193,7 @@
     if (weaponKey === 'excalibur') {
       const excaliburDamage = Math.max(1, Math.round(getPlayerBaseDamage() * 7.77 + getAnvilWeaponBonus(weaponKey, 'damage')));
       fireWeaponSweep(excaliburDamage, wRng(weaponKey), Math.PI, wKnk(weaponKey), '#ffe291', { rawDamage: true });
-      Neo.particles.push({ x: Neo.player.x, y: Neo.player.y, life: 0.6, ring: 56, c: '#ffd26a' });
+      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.6, ring: 56, c: '#ffd26a' });
       Neo.player.weaponCooldown = wCd(weaponKey);
       return true;
     }
@@ -211,7 +211,7 @@
       Neo.player.blockActive = true;
       Neo.player.blockTimer = 2;
       Neo.player.weaponCooldown = wCd(weaponKey);
-      Neo.particles.push({ x: Neo.player.x, y: Neo.player.y, life: 0.5, ring: 26, c: '#9ae9ff' });
+      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.5, ring: 26, c: '#9ae9ff' });
       return true;
     }
     return false;
@@ -314,7 +314,7 @@
       Neo.player.blockTimer = Math.max(0, Neo.player.blockTimer - dt);
       Neo.player.blockActive = Neo.player.blockTimer > 0;
       if (Neo.player.blockActive && Neo.nextRandom('fx') < 0.25) {
-        Neo.particles.push({ x: Neo.player.x + rand(18, -18, 'fx'), y: Neo.player.y + rand(18, -18, 'fx'), life: 0.2, c: '#9cefff' });
+        Neo.spawnParticle({ x: Neo.player.x + rand(18, -18, 'fx'), y: Neo.player.y + rand(18, -18, 'fx'), life: 0.2, c: '#9cefff' });
       }
     } else {
       Neo.player.blockActive = false;
@@ -366,7 +366,7 @@
     const rechargeTime = getLaserCooldownDuration(move, attackSpeed);
     if (move === 'turtle_wave') {
       if (Neo.player.hp <= 1) {
-        Neo.particles.push({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.52, text: 'NEED HP', c: '#ff8b98' });
+        Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.52, text: 'NEED HP', c: '#ff8b98' });
         return;
       }
       if (!spendSkillCharge('laser', rechargeTime, { deferTimer: true })) return;
@@ -437,15 +437,15 @@
       Neo.turtleWaveHpTimer -= 1;
       const drain = Math.min(Neo.TURTLE_WAVE_HP_PER_SECOND, Math.max(0, Neo.player.hp - 1));
       if (drain <= 0) {
-        Neo.particles.push({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.55, text: 'WAVE ENDED', c: '#ff8b98' });
+        Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.55, text: 'WAVE ENDED', c: '#ff8b98' });
         return true;
       }
       Neo.player.hp = Math.max(1, Neo.player.hp - drain);
       if (!isBossFightActive()) Neo.player.roomDamageTaken = (Neo.player.roomDamageTaken || 0) + drain;
       spawnDamagePopup(Neo.player.x, Neo.player.y - 18, drain, { color: '#74f5ff', size: 14 });
-      Neo.particles.push({ x: Neo.player.x, y: Neo.player.y - 30, life: 0.42, text: `-${drain} HP`, c: '#74f5ff' });
+      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 30, life: 0.42, text: `-${drain} HP`, c: '#74f5ff' });
       if (Neo.player.hp <= 1) {
-        Neo.particles.push({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.55, text: 'WAVE ENDED', c: '#ff8b98' });
+        Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.55, text: 'WAVE ENDED', c: '#ff8b98' });
         return true;
       }
     }
@@ -504,7 +504,7 @@
         const heal = Math.min(8, loveBeamHits * 1.25);
         Neo.player.hp = Math.min(Neo.player.maxHp, Neo.player.hp + heal);
         spawnHealPopup(Neo.player.x + rand(-6, 6), Neo.player.y - 22, heal, { color: '#ff9ed6' });
-        Neo.particles.push({ x: Neo.player.x, y: Neo.player.y - 26, life: 0.22, text: 'LOVE', c: '#ff9ed6' });
+        Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 26, life: 0.22, text: 'LOVE', c: '#ff9ed6' });
       }
     }
     if (Neo.laserTime <= 0) {
@@ -542,7 +542,7 @@
     const smashRadius = (Neo.ATTACKS.smash.radius + anvilSmashRange) * (itemStats.aoeRadiusMultiplier || 1);
     Neo.shake = 16;
     Neo.shakeT = 0.24;
-    Neo.particles.push({ x: Neo.player.x, y: Neo.player.y, life: 0.4, ring: smashRadius - 30, c: '#ff00aa' });
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.4, ring: smashRadius - 30, c: '#ff00aa' });
     spawnAoeShockwave(Neo.player.x, Neo.player.y, smashRadius, '#ff66cc', 'heavy');
     for (let index = Neo.enemies.length - 1; index >= 0; index -= 1) {
       const enemy = Neo.enemies[index];
@@ -553,7 +553,7 @@
       let damage = (Neo.godTimer > 0 ? 82 : Neo.ATTACKS.smash.damage) + getAnvilMoveBonus(move, 'damage');
       if (itemStats.bleedDamageMultiplier > 1 && getStatusStacks(enemy, 'bleed') > 0) {
         damage += Neo.ATTACKS.smash.bonus;
-        Neo.particles.push({ x: enemy.x, y: enemy.y - 16, life: 0.6, text: 'POP', c: '#a0f' });
+        Neo.spawnParticle({ x: enemy.x, y: enemy.y - 16, life: 0.6, text: 'POP', c: '#a0f' });
       }
       hitEnemy(enemy, damage, angle, 320, '#ff66cc');
       enemy.stun = 0.5;
@@ -607,13 +607,13 @@
     Neo.player.inv = Math.max(Neo.player.inv, 0.18);
     Neo.shake = Math.max(Neo.shake, 3);
     Neo.shakeT = Math.max(Neo.shakeT, 0.08);
-    Neo.particles.push({ x: Neo.player.x, y: Neo.player.y, life: 0.28, ring: 18, c: '#fff06a' });
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.28, ring: 18, c: '#fff06a' });
   }
 
   function cancelCowardsWayOnAttack() {
     if (Neo.player.cowardsWayTime <= 0) return;
     Neo.player.cowardsWayTime = 0;
-    Neo.particles.push({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.42, text: "COWARD'S WAY BROKEN", c: '#ffd27a' });
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.42, text: "COWARD'S WAY BROKEN", c: '#ffd27a' });
   }
 
   function findSafePointNearTarget(tx, ty, radius = Neo.player.r, maxRadius = 220, step = 22) {
@@ -633,12 +633,12 @@
   }
 
   function teleportPlayerTo(targetX, targetY, color = '#b99cff') {
-    Neo.particles.push({ x: Neo.player.x, y: Neo.player.y, life: 0.35, ring: 18, c: color });
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.35, ring: 18, c: color });
     Neo.player.x = targetX;
     Neo.player.y = targetY;
     Neo.player.vx = 0;
     Neo.player.vy = 0;
-    Neo.particles.push({ x: Neo.player.x, y: Neo.player.y, life: 0.35, ring: 18, c: color });
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.35, ring: 18, c: color });
   }
 
   function castNimrodStomp(moveX, moveY) {
@@ -664,13 +664,13 @@
     Neo.shake = Math.max(Neo.shake, 14);
     Neo.shakeT = Math.max(Neo.shakeT, 0.22);
     Neo.player.inv = Math.max(Neo.player.inv, 0.32);
-    Neo.particles.push({ x: Neo.player.x, y: Neo.player.y, life: 0.44, ring: aoeRadius, c: '#ffe67a' });
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.44, ring: aoeRadius, c: '#ffe67a' });
   }
 
   function castCowardsWay() {
     Neo.player.cowardsWayTime = 3;
     Neo.player.inv = Math.max(Neo.player.inv, 0.25);
-    Neo.particles.push({ x: Neo.player.x, y: Neo.player.y - 18, life: 0.72, text: "COWARD'S WAY", c: '#8dffcf' });
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 18, life: 0.72, text: "COWARD'S WAY", c: '#8dffcf' });
   }
 
   function castZipLightning(moveX, moveY) {
@@ -720,10 +720,10 @@
           '#9adfff',
           { rawDamage: true }
         );
-        Neo.particles.push({ x: (chainSource.x + chainedEnemy.x) * 0.5, y: (chainSource.y + chainedEnemy.y) * 0.5, life: 0.2, c: '#9adfff' });
+        Neo.spawnParticle({ x: (chainSource.x + chainedEnemy.x) * 0.5, y: (chainSource.y + chainedEnemy.y) * 0.5, life: 0.2, c: '#9adfff' });
         chainSource = chainedEnemy;
       }
-      Neo.particles.push({ x: Neo.player.x, y: Neo.player.y, life: 0.22, ring: 16 + hop * 4, c: '#84cfff' });
+      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.22, ring: 16 + hop * 4, c: '#84cfff' });
     }
 
     if (!performedHop) {
@@ -738,7 +738,7 @@
     Neo.shakeT = Math.max(Neo.shakeT, 0.14);
     Neo.player.inv = Math.max(Neo.player.inv, 0.26);
     const zipShock = 72 * (itemStats.aoeRadiusMultiplier || 1);
-    Neo.particles.push({ x: Neo.player.x, y: Neo.player.y, life: 0.24, ring: zipShock, c: '#8ad9ff' });
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.24, ring: zipShock, c: '#8ad9ff' });
   }
 
   function castNarwalFight() {
@@ -758,7 +758,7 @@
       pierceCount: 2,
       hitOptions: { critBonus: 0.08 },
     });
-    Neo.particles.push({ x: Neo.player.x, y: Neo.player.y, life: 0.32, ring: 22, c: '#ff8ed0' });
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.32, ring: 22, c: '#ff8ed0' });
   }
 
   function castKickyKick() {
@@ -780,7 +780,7 @@
     Neo.player.vy -= Math.sin(angle) * 260;
     Neo.shake = Math.max(Neo.shake, 10);
     Neo.shakeT = Math.max(Neo.shakeT, 0.18);
-    Neo.particles.push({ x: Neo.player.x, y: Neo.player.y, life: 0.42, ring: radius * 0.85, c: '#ff7fc2' });
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.42, ring: radius * 0.85, c: '#ff7fc2' });
   }
 
   function castFlyingUntouchable() {
@@ -788,7 +788,7 @@
     Neo.player.inv = Math.max(Neo.player.inv, 15);
     Neo.player.vx = 0;
     Neo.player.vy = 0;
-    Neo.particles.push({ x: Neo.player.x, y: Neo.player.y - 18, life: 0.8, text: 'FLY HIGH', c: '#ffd1ea' });
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 18, life: 0.8, text: 'FLY HIGH', c: '#ffd1ea' });
   }
 
   function applyResponsiveVelocity(current, desired, dt) {
@@ -803,7 +803,7 @@
     for (let index = 0; index < 8; index += 1) {
       const angle = index * (Math.PI * 2 / 8);
       const isMetao = Neo.player?.character === 'metao';
-      Neo.projectiles.push({ x: Neo.player.x, y: Neo.player.y, vx: Math.cos(angle) * 280, vy: Math.sin(angle) * 280, r: 7, life: 1.2, enemy: false, kind: 'disk', damage: 20, hitOptions: isMetao ? { fireChance: 0.4, fireStacks: 1, fireDuration: 3 } : {} });
+      Neo.spawnProjectile({ x: Neo.player.x, y: Neo.player.y, vx: Math.cos(angle) * 280, vy: Math.sin(angle) * 280, r: 7, life: 1.2, enemy: false, kind: 'disk', damage: 20, hitOptions: isMetao ? { fireChance: 0.4, fireStacks: 1, fireDuration: 3 } : {} });
     }
   }
 
@@ -812,7 +812,7 @@
     const base = Math.atan2(Neo.mouse.worldY - Neo.player.y, Neo.mouse.worldX - Neo.player.x);
     for (let index = -1; index <= 1; index += 1) {
       const angle = base + index * 0.18;
-      Neo.projectiles.push({ x: Neo.player.x, y: Neo.player.y, vx: Math.cos(angle) * 320, vy: Math.sin(angle) * 320, r: 8, life: 1.6, enemy: false, kind: 'fireball', damage: 22, splash: 48 * aoeRadiusMultiplier, fireStacks: 2, fireDuration: 3.4 });
+      Neo.spawnProjectile({ x: Neo.player.x, y: Neo.player.y, vx: Math.cos(angle) * 320, vy: Math.sin(angle) * 320, r: 8, life: 1.6, enemy: false, kind: 'fireball', damage: 22, splash: 48 * aoeRadiusMultiplier, fireStacks: 2, fireDuration: 3.4 });
     }
   }
 
@@ -823,7 +823,7 @@
       const angle = Neo.rng() * Math.PI * 2;
       const px = Neo.player.x + Math.cos(angle) * rand(160, 40);
       const py = Neo.player.y + Math.sin(angle) * rand(160, 40);
-      Neo.particles.push({ x: px, y: py, life: 0.45, ring: 18 * aoeRadiusMultiplier, c: '#c971ff' });
+      Neo.spawnParticle({ x: px, y: py, life: 0.45, ring: 18 * aoeRadiusMultiplier, c: '#c971ff' });
       blastRadius(px, py, 52 * aoeRadiusMultiplier, 24, '#c971ff');
       applyStatusInRadius(px, py, 52 * aoeRadiusMultiplier, 'poison', 1, 4.8);
       if (isMetao) applyStatusInRadius(px, py, 52 * aoeRadiusMultiplier, 'fire', 1, 3.5);
@@ -850,7 +850,7 @@
       if (difference > 1.3) return;
       damageDestructible(prop, 2);
     });
-    Neo.particles.push({ x: Neo.player.x, y: Neo.player.y, life: 0.5, ring: 36, c: '#fff6a3' });
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.5, ring: 36, c: '#fff6a3' });
   }
 
   function castSmiteChain() {
@@ -895,8 +895,8 @@
       } else {
         damageDestructible(current.ref, Math.max(2, Math.round(strikeDamage / 10)));
       }
-      Neo.particles.push({ x: current.x, y: current.y, life: 0.32, ring: 18 + jumps * 3, c: '#cfdcff' });
-      Neo.particles.push({
+      Neo.spawnParticle({ x: current.x, y: current.y, life: 0.32, ring: 18 + jumps * 3, c: '#cfdcff' });
+      Neo.spawnParticle({
         life: 0.24,
         c: '#eaf2ff',
         line: {
@@ -945,19 +945,19 @@
   function castHealingZone() {
     const aoeRadiusMultiplier = getItemStats().aoeRadiusMultiplier || 1;
     Neo.hazards.push({ kind: 'healing_zone', x: Neo.player.x, y: Neo.player.y, r: 62 * aoeRadiusMultiplier, ttl: 6, healTick: 0.24, healAccum: 0, plusTick: 0.08 });
-    Neo.particles.push({ x: Neo.player.x, y: Neo.player.y, life: 0.7, ring: 30, c: '#35ff6f' });
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.7, ring: 30, c: '#35ff6f' });
   }
 
   function castFireCircle() {
     const aoeRadiusMultiplier = getItemStats().aoeRadiusMultiplier || 1;
     Neo.hazards.push({ kind: 'fire_circle', x: Neo.player.x, y: Neo.player.y, r: 96 * aoeRadiusMultiplier, ttl: 5.2, dps: 18, followPlayer: true });
-    Neo.particles.push({ x: Neo.player.x, y: Neo.player.y, life: 0.55, ring: 34, c: '#ff7b32' });
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.55, ring: 34, c: '#ff7b32' });
   }
 
   function castFloorLava() {
     Neo.player.lavaWalkTime = 5.8;
     Neo.player.lavaTrailTick = 0;
-    Neo.particles.push({ x: Neo.player.x, y: Neo.player.y - 12, life: 0.7, text: 'LAVA WALK', c: '#ff9f40' });
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 12, life: 0.7, text: 'LAVA WALK', c: '#ff9f40' });
   }
 
   function castLightningColumns() {
@@ -977,7 +977,7 @@
         interval: 0.45,
         damage: 18,
       });
-      Neo.particles.push({ x: Neo.mouse.worldX + ox, y: Neo.mouse.worldY + oy, life: 0.45, ring: 24, c: '#8dd4ff' });
+      Neo.spawnParticle({ x: Neo.mouse.worldX + ox, y: Neo.mouse.worldY + oy, life: 0.45, ring: 24, c: '#8dd4ff' });
     });
   }
 
@@ -1008,8 +1008,8 @@
     stunDuration *= durationMultiplier;
     if (Neo.BOSS_TYPES.has(enemy.type)) stunDuration *= Neo.HEAVY_IMPACT_BOSS_STUN_MULTIPLIER;
     enemy.stun = Math.max(enemy.stun || 0, stunDuration);
-    Neo.particles.push({ x: enemy.x, y: enemy.y - enemy.r - 18, life: 0.55, text: 'STUN', c: '#ffe66d' });
-    Neo.particles.push({ x: enemy.x, y: enemy.y, life: 0.36, ring: enemy.r + 18, c: '#ffe66d' });
+    Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 18, life: 0.55, text: 'STUN', c: '#ffe66d' });
+    Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.36, ring: enemy.r + 18, c: '#ffe66d' });
     return true;
   }
 
@@ -1031,8 +1031,8 @@
       stunDuration = Math.max(stunDuration, Neo.HEAVY_KNOCKBACK_STUN + clamp(knockbackOverThreshold, 0, 1) * 0.18);
     }
     Neo.player.stun = Math.max(Number(Neo.player.stun || 0), stunDuration * durationMultiplier);
-    Neo.particles.push({ x: Neo.player.x, y: Neo.player.y - Neo.player.r - 18, life: 0.55, text: 'STUN', c: '#ffe66d' });
-    Neo.particles.push({ x: Neo.player.x, y: Neo.player.y, life: 0.36, ring: Neo.player.r + 18, c: '#ffe66d' });
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - Neo.player.r - 18, life: 0.55, text: 'STUN', c: '#ffe66d' });
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.36, ring: Neo.player.r + 18, c: '#ffe66d' });
     return true;
   }
 
@@ -1050,7 +1050,7 @@
       const absorbed = Math.min(enemy.barrier, dealt);
       enemy.barrier -= absorbed;
       dealt -= absorbed;
-      Neo.particles.push({ x: enemy.x, y: enemy.y - 20, life: 0.4, text: `BLOCK ${absorbed}`, c: '#7ed6ff' });
+      Neo.spawnParticle({ x: enemy.x, y: enemy.y - 20, life: 0.4, text: `BLOCK ${absorbed}`, c: '#7ed6ff' });
       if (dealt <= 0) {
         enemy.vx += Math.cos(angle) * appliedKnockback * 0.35;
         enemy.vy += Math.sin(angle) * appliedKnockback * 0.35;
@@ -1065,7 +1065,7 @@
     enemy.stun = Math.max(enemy.stun, 0.08);
     applyEnemyImpactStun(enemy, dealt, appliedKnockback);
     if (!options.noCharmBuff) grantCritCharmBuff();
-    Neo.particles.push({ x: enemy.x, y: enemy.y, life: 0.24, vx: rand(-30, 30, 'fx'), vy: rand(-30, 30, 'fx'), c: color });
+    Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.24, vx: rand(-30, 30, 'fx'), vy: rand(-30, 30, 'fx'), c: color });
     spawnDamagePopup(enemy.x, enemy.y - 14, dealt, {
       crit: isCrit,
       color: isCrit ? '#ff9f1c' : '#ff6b6b',
@@ -1103,7 +1103,7 @@
       visited.add(nextEnemy);
       const chainDamage = Math.max(1, Math.round(baseDamage * (stats.beamChainDamageMultiplier || 0.6)));
       hitEnemy(nextEnemy, chainDamage, Math.atan2(nextEnemy.y - source.y, nextEnemy.x - source.x), 55, color);
-      Neo.particles.push({ x: (source.x + nextEnemy.x) / 2, y: (source.y + nextEnemy.y) / 2, life: 0.22, c: '#d890ff' });
+      Neo.spawnParticle({ x: (source.x + nextEnemy.x) / 2, y: (source.y + nextEnemy.y) / 2, life: 0.22, c: '#d890ff' });
       source = nextEnemy;
     }
   }
@@ -1147,7 +1147,7 @@
     for (let index = 0; index < count; index += 1) {
       const angle = rand(Math.PI * 2, 0, 'fx');
       const force = rand(125, 35, 'fx') * (0.75 + Math.min(6, stacks) * 0.07);
-      Neo.particles.push({
+      Neo.spawnParticle({
         x: enemy.x + Math.cos(angle) * rand(radius * 0.55, 1, 'fx'),
         y: enemy.y + Math.sin(angle) * rand(radius * 0.45, 1, 'fx'),
         life: rand(0.52, 0.22, 'fx'),
@@ -1192,7 +1192,7 @@
       enemy.hp -= damage;
       spawnDamagePopup(enemy.x, enemy.y - 10, damage, { color: config.color, size: 15 });
       if (config.particleColor) {
-        Neo.particles.push({ x: enemy.x + rand(-8, 8), y: enemy.y + rand(-8, 8), life: 0.25, c: config.particleColor });
+        Neo.spawnParticle({ x: enemy.x + rand(-8, 8), y: enemy.y + rand(-8, 8), life: 0.25, c: config.particleColor });
       }
       if (key === 'bleed') spawnBleedSpray(enemy, state.stacks, 0.7);
       if (config.healScale > 0 && Neo.player && Neo.player.hp < Neo.player.maxHp) {
@@ -1362,7 +1362,7 @@
     const deathDust = enemy.elite ? 6 : isBossType(enemy.type) ? 9 : 4;
     for (let burst = 0; burst < deathDust; burst += 1) {
       const angle = rand(Math.PI * 2, 0, 'fx');
-      Neo.particles.push({
+      Neo.spawnParticle({
         x: enemy.x + Math.cos(angle) * rand(enemy.r, 2, 'fx'),
         y: enemy.y + Math.sin(angle) * rand(enemy.r, 2, 'fx'),
         life: rand(0.34, 0.16, 'fx'),
@@ -1375,7 +1375,7 @@
     const enemyLootRandom = createRandomFromSeed(enemy.lootSeed || `${getFloorSeed()}|enemy:fallback:${enemy.type}:${Math.round(enemy.x)},${Math.round(enemy.y)}|loot`);
     if (isTutorialDummy) {
       Neo.pickups.push({ x: enemy.x, y: enemy.y, type: 'item', key: rollItemDrop({ random: enemyLootRandom }) });
-      Neo.particles.push({ x: enemy.x, y: enemy.y - 18, life: 0.85, text: 'RELIC DROPPED', c: '#8dd4ff' });
+      Neo.spawnParticle({ x: enemy.x, y: enemy.y - 18, life: 0.85, text: 'RELIC DROPPED', c: '#8dd4ff' });
     } else {
       dropCoins(enemy.x, enemy.y, isBossType(enemy.type) ? 40 : enemy.elite ? 10 : 5);
       grantXp(isBossType(enemy.type) ? 40 : enemy.elite ? 12 : 6);
@@ -1452,7 +1452,7 @@
         const rivalBase = 18 + Neo.floor * 4 + rival.loot.length * 8;
         const bonus = hasLegacy('rival_bounty') ? Math.round(rivalBase * 1.5) : rivalBase;
         dropCoins(enemy.x, enemy.y, bonus);
-        Neo.particles.push({ x: enemy.x, y: enemy.y - 26, life: 2.0, text: `${rival.name.toUpperCase()} DEFEATED!`, c: rival.color });
+        Neo.spawnParticle({ x: enemy.x, y: enemy.y - 26, life: 2.0, text: `${rival.name.toUpperCase()} DEFEATED!`, c: rival.color });
         sayAtPosition(enemy.x, enemy.y, rival.deathLine, { speaker: rival.name, tone: 'boss', holdTime: 1.8, offsetY: enemy.r + 36 });
         grantXp(20 + Neo.floor * 3);
       }
@@ -1490,7 +1490,7 @@
     const cx = Neo.ROOM_W / 2;
     const cy = Neo.ROOM_H / 2;
     const rewardRandom = createScopedRandom(`endless:wave:${endlessWave}:reward`);
-    Neo.particles.push({ x: cx, y: cy - 40, life: 1.4, text: `WAVE ${endlessWave} CLEARED`, c: '#78d7ff' });
+    Neo.spawnParticle({ x: cx, y: cy - 40, life: 1.4, text: `WAVE ${endlessWave} CLEARED`, c: '#78d7ff' });
     Neo.pickups.push({ x: cx - 60, y: cy, type: 'item', key: rollItemDrop({ elite: Neo.endlessWave % 3 === 0, random: rewardRandom }) });
     Neo.pickups.push({ x: cx + 60, y: cy, type: 'potion' });
     if (Neo.endlessWave % 5 === 0) {
@@ -1505,7 +1505,7 @@
       Neo.endlessWaveActive = true;
       const waveSize = Math.min(4 + Neo.endlessWave + Math.floor(Neo.endlessWave / 3), 18);
       spawnWave(waveSize, 'combat');
-      Neo.particles.push({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 40, life: 1.1, text: `WAVE ${endlessWave + 1}`, c: '#ff8b8b' });
+      Neo.spawnParticle({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 40, life: 1.1, text: `WAVE ${endlessWave + 1}`, c: '#ff8b8b' });
     }, delay * 1000);
   }
 
@@ -1556,12 +1556,12 @@
     Neo.player.attackPower += 3;
     Neo.player.attackSpeed += 0.01;
     markInventoryPanelDirty();
-    Neo.particles.push({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.9, text: `LV ${Neo.player.level}`, c: '#7dff9e' });
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.9, text: `LV ${Neo.player.level}`, c: '#7dff9e' });
   }
 
   function collectItem(itemKey) {
     if (isChallengeActive('no_items')) {
-      Neo.particles.push({ x: Neo.player.x, y: Neo.player.y - 28, life: 0.85, text: 'NO ITEMS', c: '#ff8a98' });
+      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 28, life: 0.85, text: 'NO ITEMS', c: '#ff8a98' });
       return;
     }
     const item = Neo.itemRegistry.get(itemKey);
@@ -1609,7 +1609,7 @@
     if (Neo.ITEM_KEYS.every(key => getItemCount(key) > 0) && Neo.godTimer <= 0) {
       Neo.godTimer = 12;
       for (let index = 0; index < 40; index += 1) {
-        Neo.particles.push({
+        Neo.spawnParticle({
           x: Neo.player.x,
           y: Neo.player.y,
           life: 1.1,

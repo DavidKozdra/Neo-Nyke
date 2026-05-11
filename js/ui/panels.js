@@ -106,7 +106,7 @@
         const owned = getOwnedChallengeSet();
         if (!owned.has(challengeKey)) {
           if ((Neo.metaProgress.loopCrystals || 0) < def.cost) {
-            Neo.particles.push({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 30, life: 0.9, text: 'Not enough loop crystals', c: '#ff6f7f' });
+            Neo.spawnParticle({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 30, life: 0.9, text: 'Not enough loop crystals', c: '#ff6f7f' });
             return;
           }
           Neo.metaProgress.loopCrystals = Number(Neo.metaProgress.loopCrystals || 0) - def.cost;
@@ -280,7 +280,7 @@
   }
 
   function clearGameplayInput() {
-    Object.keys(keys).forEach(key => {
+    Object.keys(Neo.keys).forEach(key => {
       Neo.keys[key] = false;
     });
     Neo.mouse.down = false;
@@ -713,7 +713,7 @@
     Neo.anvilStagedUpgrades = {};
     markInventoryPanelDirty();
     scheduleRunSave();
-    Neo.particles.push({ x: Neo.player.x, y: Neo.player.y - 26, life: 1.0, text: 'UPGRADED!', c: '#ffb840' });
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 26, life: 1.0, text: 'UPGRADED!', c: '#ffb840' });
     renderAnvilPanel();
     updateHud();
   }
@@ -1129,7 +1129,7 @@
 
   function spendCoins(cost) {
     if (Neo.player.coins < cost) {
-      Neo.particles.push({ x: Neo.player.x, y: Neo.player.y - 24, life: 0.7, text: 'Not enough coins!', c: '#ff4455' });
+      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 24, life: 0.7, text: 'Not enough coins!', c: '#ff4455' });
       return false;
     }
     Neo.player.coins -= cost;
@@ -1145,7 +1145,7 @@
     const kind = button.dataset.kind;
     if (kind === 'item') {
       if (isChallengeActive('no_items')) {
-        Neo.particles.push({ x: Neo.player.x, y: Neo.player.y - 24, life: 0.8, text: 'No Items challenge', c: '#ff8894' });
+        Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 24, life: 0.8, text: 'No Items challenge', c: '#ff8894' });
         return;
       }
       const offerIndex = Number(button.dataset.index || -1);
@@ -1176,7 +1176,7 @@
       offer.bought = true;
       Neo.player.ownedWeapons[offer.key] = true;
       if (!Neo.player.equippedWeapon) equipWeapon(offer.key);
-      Neo.particles.push({ x: Neo.player.x, y: Neo.player.y - 24, life: 0.8, text: `${WEAPON_DEFS[offer.key]?.name || 'Weapon'} acquired`, c: Neo.WEAPON_DEFS[offer.key]?.color || '#d9e8ff' });
+      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 24, life: 0.8, text: `${WEAPON_DEFS[offer.key]?.name || 'Weapon'} acquired`, c: Neo.WEAPON_DEFS[offer.key]?.color || '#d9e8ff' });
       pushWeaponNotification(offer.key);
       markInventoryPanelDirty();
       achievementEvents.emit('shop:bought');

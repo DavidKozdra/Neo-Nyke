@@ -11,37 +11,47 @@
         const ny = dx / len;
         const segs = Math.max(4, line.seg || 6);
         const jitter = (line.jag || 12) * (0.65 + particle.life * 0.55);
+        const phase = (line.phase || 0) + particle.life * 22;
+
+        // Compute segment offsets once; reuse for both stroke passes.
+        const pts = new Float32Array(segs * 2);
+        for (let index = 1; index < segs; index += 1) {
+          const t = index / segs;
+          const wave = Math.sin((t * 18) + phase + index * 0.9);
+          const off = wave * jitter * (index % 2 === 0 ? 1 : -1);
+          pts[(index - 1) * 2]     = line.x1 + dx * t + nx * off;
+          pts[(index - 1) * 2 + 1] = line.y1 + dy * t + ny * off;
+        }
 
         Neo.ctx.save();
         Neo.ctx.globalAlpha = Math.min(1, particle.life * 2.1);
+        Neo.ctx.shadowColor = particle.c || '#dfe8ff';
+
+        // Outer glow pass
         Neo.ctx.strokeStyle = particle.c || '#dfe8ff';
         Neo.ctx.lineWidth = (line.w || 4.5) + 3;
-        Neo.ctx.shadowColor = particle.c || '#dfe8ff';
         Neo.ctx.shadowBlur = 18;
         Neo.ctx.beginPath();
         Neo.ctx.moveTo(line.x1, line.y1);
         for (let index = 1; index < segs; index += 1) {
-          const t = index / segs;
-          const wave = Math.sin((t * 18) + (line.phase || 0) + particle.life * 22 + index * 0.9);
-          const off = wave * jitter * (index % 2 === 0 ? 1 : -1);
-          const px = line.x1 + dx * t + nx * off;
-          const py = line.y1 + dy * t + ny * off;
-          Neo.ctx.lineTo(px, py);
+          Neo.ctx.lineTo(pts[(index - 1) * 2], pts[(index - 1) * 2 + 1]);
         }
         Neo.ctx.lineTo(line.x2, line.y2);
         Neo.ctx.stroke();
 
+        // Inner highlight pass — displace 35% as much as the outer pass.
+        // pts stores the fully-displaced coords; lerp back toward the straight baseline.
+        Neo.ctx.strokeStyle = '#ffffff';
         Neo.ctx.lineWidth = Math.max(2, (line.w || 4.5) * 0.5);
         Neo.ctx.shadowBlur = 8;
-        Neo.ctx.strokeStyle = '#ffffff';
         Neo.ctx.beginPath();
         Neo.ctx.moveTo(line.x1, line.y1);
         for (let index = 1; index < segs; index += 1) {
           const t = index / segs;
-          const wave = Math.sin((t * 18) + (line.phase || 0) + particle.life * 22 + index * 0.9);
-          const off = wave * jitter * 0.35 * (index % 2 === 0 ? 1 : -1);
-          const px = line.x1 + dx * t + nx * off;
-          const py = line.y1 + dy * t + ny * off;
+          const baseX = line.x1 + dx * t;
+          const baseY = line.y1 + dy * t;
+          const px = baseX + (pts[(index - 1) * 2]     - baseX) * 0.35;
+          const py = baseY + (pts[(index - 1) * 2 + 1] - baseY) * 0.35;
           Neo.ctx.lineTo(px, py);
         }
         Neo.ctx.lineTo(line.x2, line.y2);

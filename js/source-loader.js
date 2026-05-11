@@ -1,5 +1,5 @@
 (() => {
-  const SOURCE_VERSION = '2026-05-11-001';
+  const SOURCE_VERSION = '2026-05-11-003';
   const GAME_SOURCE_FILES = [
     'js/core/game-core.js',
     'js/core/math-utils.js',
@@ -41,7 +41,7 @@
   async function loadGameSources() {
     const parts = await Promise.all(GAME_SOURCE_FILES.map(async file => {
       const sourceUrl = `${file}?v=${SOURCE_VERSION}`;
-      const response = await fetch(sourceUrl, { cache: 'reload' });
+      const response = await fetch(sourceUrl, { cache: 'default' });
       if (!response.ok) throw new Error(`Failed to load ${file}: ${response.status}`);
       return `\n// ${file}\n${unwrapIife(await response.text(), file)}\n`;
     }));
