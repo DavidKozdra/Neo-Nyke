@@ -368,6 +368,12 @@ export function bindPanelInput() {
     Object.entries(Neo.ui.invSlots).forEach(([slot, node]) => {
       if (!node) return;
       node.addEventListener('click', () => {
+        if (!hasSpareMoveForSlot(Neo.player, slot)) {
+          Neo.activeInventorySlot = '';
+          markInventoryPanelDirty();
+          renderInventoryPanel();
+          return;
+        }
         Neo.activeInventorySlot = Neo.activeInventorySlot === slot ? '' : slot;
         markInventoryPanelDirty();
         renderInventoryPanel();
@@ -411,10 +417,27 @@ export function clearInventoryDragState() {
     Neo.ui.invMovesList?.querySelectorAll('.drag-over').forEach(node => node.classList.remove('drag-over'));
   }
 
+function hasSpareMoveForSlot(playerRef, slot) {
+    if (!playerRef || !slot) return false;
+    const equipped = new Set(Object.values(playerRef.equippedMoves || {}).filter(Boolean));
+    return Object.keys(playerRef.ownedMoves || {}).some(key => (
+      playerRef.ownedMoves[key]
+      && !equipped.has(key)
+      && Neo.MOVE_DEFS[key]?.slot === slot
+      && Neo.isMoveAllowedForCharacter(key, playerRef.character)
+    ));
+  }
+
 function handleInventoryMoveSelect(event) {
     const target = event.target instanceof Element ? event.target.closest('[data-move]') : null;
     const moveKey = target?.dataset?.move || '';
     if (!moveKey || !Neo.MOVE_DEFS[moveKey]) return;
+    if (Object.values(Neo.player?.equippedMoves || {}).includes(moveKey)) {
+      Neo.activeInventorySlot = '';
+      markInventoryPanelDirty();
+      renderInventoryPanel();
+      return;
+    }
     Neo.activeInventorySlot = Neo.MOVE_DEFS[moveKey].slot;
     equipMove(Neo.MOVE_DEFS[moveKey].slot, moveKey);
   }
@@ -1058,15 +1081,23 @@ export function renderInventoryPanel() {
       const moveKey = _invP.equippedMoves?.[slot];
       const def = Neo.MOVE_DEFS[moveKey];
       const isSelected = Neo.activeInventorySlot === slot;
+      const hasSpareMove = hasSpareMoveForSlot(_invP, slot);
       node.dataset.move = moveKey || '';
       node.dataset.slotType = slot;
       node.draggable = !!moveKey;
       node.classList.toggle('is-equipped', !!moveKey);
       node.classList.toggle('is-selected', isSelected);
+      node.classList.toggle('is-swap-ready', hasSpareMove);
       const slotLabel = Neo.SLOT_LABELS[slot] || slot;
       const slotKey = Neo.getSlotKeyLabel(slot);
       const iconHtml = moveKey ? `<canvas class="inv-slot__icon" data-move-icon="${moveKey}" width="36" height="36"></canvas>` : `<div class="inv-slot__icon inv-slot__icon--empty"></div>`;
-      node.innerHTML = `<div class="inv-slot__top"><span class="inv-slot__kicker">${slotLabel}</span><div class="inv-slot__top-right">${slotKey ? `<span class="inv-slot__key">${slotKey}</span>` : ''}<span class="inv-slot__status">${isSelected ? 'Selected' : (def ? 'Equipped' : 'Empty')}</span></div></div><div class="inv-slot__main">${iconHtml}<div class="inv-slot__move-wrap"><div class="inv-slot__move">${def?.name || 'No move equipped'}</div><p class="inv-slot__hint">${isSelected ? 'Matching spare moves highlighted below. Click or drag to swap.' : def?.desc || 'Click to see moves that can go here.'}</p></div></div>`;
+      const statusText = isSelected ? 'Swap Ready' : (def ? 'Equipped' : 'Empty');
+      const hintText = isSelected
+        ? 'Matching spare moves highlighted below.'
+        : hasSpareMove
+          ? (def?.desc || 'Click to show spare moves for this slot.')
+          : (def ? `${def.desc} No spare ${slotLabel.toLowerCase()} moves owned.` : `No spare ${slotLabel.toLowerCase()} moves owned.`);
+      node.innerHTML = `<div class="inv-slot__top"><span class="inv-slot__kicker">${slotLabel}</span><div class="inv-slot__top-right">${slotKey ? `<span class="inv-slot__key">${slotKey}</span>` : ''}<span class="inv-slot__status">${statusText}</span></div></div><div class="inv-slot__main">${iconHtml}<div class="inv-slot__move-wrap"><div class="inv-slot__move">${def?.name || 'No move equipped'}</div><p class="inv-slot__hint">${hintText}</p></div></div>`;
     });
     Neo.ui.invSlots && Object.values(Neo.ui.invSlots).forEach(node => {
       node.querySelectorAll('[data-move-icon]').forEach(canvas => {

@@ -62,6 +62,56 @@
     return Math.cos(fallbackAngle) < 0 ? -1 : 1;
   }
 
+  function drawWarpPreview() {
+    if (Neo.getEquippedMove?.('dash') !== 'warp' || !Neo.getWarpLandingPoint) return;
+    const landing = Neo.getWarpLandingPoint();
+    if (!landing) return;
+    const time = Date.now() * 0.006;
+    const pulse = Math.sin(time) * 2.5;
+
+    Neo.ctx.save();
+    Neo.ctx.lineCap = 'round';
+    Neo.ctx.shadowColor = '#c8a6ff';
+    Neo.ctx.shadowBlur = 14;
+    Neo.ctx.globalAlpha = 0.34;
+    Neo.ctx.strokeStyle = '#c8a6ff';
+    Neo.ctx.lineWidth = 2;
+    Neo.ctx.setLineDash([8, 7]);
+    Neo.ctx.lineDashOffset = -time * 7;
+    Neo.ctx.beginPath();
+    Neo.ctx.moveTo(Neo.player.x, Neo.player.y);
+    Neo.ctx.lineTo(landing.x, landing.y);
+    Neo.ctx.stroke();
+    Neo.ctx.setLineDash([]);
+
+    if (landing.adjustedFromCursor) {
+      Neo.ctx.globalAlpha = 0.2;
+      Neo.ctx.lineWidth = 1.5;
+      Neo.ctx.beginPath();
+      Neo.ctx.arc(landing.targetX, landing.targetY, 12, 0, Math.PI * 2);
+      Neo.ctx.stroke();
+    }
+
+    Neo.ctx.globalAlpha = 0.58;
+    Neo.ctx.lineWidth = 3;
+    Neo.ctx.beginPath();
+    Neo.ctx.arc(landing.x, landing.y, Neo.player.r + 11 + pulse, 0, Math.PI * 2);
+    Neo.ctx.stroke();
+
+    Neo.ctx.globalAlpha = 0.18;
+    Neo.ctx.fillStyle = '#c8a6ff';
+    Neo.ctx.beginPath();
+    Neo.ctx.arc(landing.x, landing.y, Neo.player.r + 18 + pulse, 0, Math.PI * 2);
+    Neo.ctx.fill();
+
+    Neo.ctx.globalAlpha = 0.74;
+    Neo.ctx.fillStyle = '#ffffff';
+    Neo.ctx.beginPath();
+    Neo.ctx.arc(landing.x, landing.y, 3.5, 0, Math.PI * 2);
+    Neo.ctx.fill();
+    Neo.ctx.restore();
+  }
+
   function drawSpriteFrame(spriteKey, x, y, size, options = {}) {
     const atlas = Neo.SPRITE_ATLAS;
     if (!atlas?.frames || !atlas.canvas) return;
@@ -587,6 +637,7 @@
       Neo.ctx.stroke();
       Neo.ctx.restore();
     });
+    drawWarpPreview();
     drawSpriteFrame(getPlayerSpriteKey(), Neo.player.x, Neo.player.y, Math.max(34, Neo.player.r * 2.5), {
       alpha: (!_reduceFlash && (Neo.player.inv > 0 || Number(Neo.player.stun || 0) > 0)) ? 0.68 : 1,
       flipX: facing < 0,
@@ -825,6 +876,7 @@
   Neo.getEnemySpriteKey = getEnemySpriteKey;
   Neo.getPlayerSpriteKey = getPlayerSpriteKey;
   Neo.getFacingDirection = getFacingDirection;
+  Neo.drawWarpPreview = drawWarpPreview;
   Neo.drawSpriteFrame = drawSpriteFrame;
   Neo.drawSpriteToCanvas = drawSpriteToCanvas;
   Neo.drawEnemyTelegraphs = drawEnemyTelegraphs;
@@ -840,4 +892,3 @@
   Neo.drawPlayer2 = drawPlayer2;
   Neo.drawPlayerN = drawPlayerN;
   Neo.drawPlayerLaser = drawPlayerLaser;
-

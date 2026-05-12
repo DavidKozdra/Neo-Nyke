@@ -917,17 +917,17 @@ export const REPLAY_TUTORIAL_KEY = 'neonyke:replayTutorialNextRun';
 
 // Upgradeable stat schemas for the anvil panel
 export const WEAPON_UPGRADEABLE_STATS = {
-    damage:    { label: 'Damage',       step: 5,     min: 5,    max: 9999, xpPerStep: 15, format: v => Math.round(v) },
-    cooldown:  { label: 'Cooldown (s)', step: -0.05, min: 0.05, max: 9999, xpPerStep: 20, format: v => v.toFixed(2) + 's' },
-    range:     { label: 'Range',        step: 10,    min: 10,   max: 9999, xpPerStep: 13, format: v => Math.round(v) },
-    knockback: { label: 'Knockback',    step: 30,    min: 0,    max: 9999, xpPerStep: 10, format: v => Math.round(v) },
+    damage:    { label: 'Damage',       step: 5,     min: 5,    max: 9999, xpPerStep: 8,  format: v => Math.round(v) },
+    cooldown:  { label: 'Cooldown (s)', step: -0.05, min: 0.05, max: 9999, xpPerStep: 10, format: v => v.toFixed(2) + 's' },
+    range:     { label: 'Range',        step: 10,    min: 10,   max: 9999, xpPerStep: 7,  format: v => Math.round(v) },
+    knockback: { label: 'Knockback',    step: 30,    min: 0,    max: 9999, xpPerStep: 5,  format: v => Math.round(v) },
   };
 export const MOVE_UPGRADEABLE_STATS = {
-    damage:    { label: 'Damage',       step: 5,    min: 5,   max: 9999, xpPerStep: 15, format: v => Math.round(v) },
-    cooldown:  { label: 'Cooldown (s)', step: -0.05,min: 0.05,max: 9999, xpPerStep: 20, format: v => v.toFixed(2) + 's' },
-    duration:  { label: 'Duration (s)', step: 0.1,  min: 0.1, max: 30,   xpPerStep: 13, format: v => v.toFixed(1) + 's' },
-    range:     { label: 'Range / AOE',  step: 10,   min: 10,  max: 9999, xpPerStep: 13, format: v => Math.round(v) },
-    critChance:{ label: 'Crit Chance',  step: 0.05, min: 0,   max: 1.0,  xpPerStep: 25, format: v => Math.round(v * 100) + '%' },
+    damage:    { label: 'Damage',       step: 5,    min: 5,   max: 9999, xpPerStep: 8,  format: v => Math.round(v) },
+    cooldown:  { label: 'Cooldown (s)', step: -0.05,min: 0.05,max: 9999, xpPerStep: 10, format: v => v.toFixed(2) + 's' },
+    duration:  { label: 'Duration (s)', step: 0.1,  min: 0.1, max: 30,   xpPerStep: 7,  format: v => v.toFixed(1) + 's' },
+    range:     { label: 'Range / AOE',  step: 10,   min: 10,  max: 9999, xpPerStep: 7,  format: v => Math.round(v) },
+    critChance:{ label: 'Crit Chance',  step: 0.05, min: 0,   max: 1.0,  xpPerStep: 12, format: v => Math.round(v * 100) + '%' },
   };
 
 // Base stat values per weapon (used to compute current upgraded value)
