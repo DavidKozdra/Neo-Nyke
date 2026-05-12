@@ -47,14 +47,28 @@ export function drawEnvironmentTileAsset(g, ox, oy, size, def) {
 
 export function drawFloorTileAsset(g, ox, oy, size, def) {
     g.fillStyle = def.shade || '#252823';
-    g.fillRect(ox, oy + size - 3, size, 3);
-    g.fillRect(ox + size - 3, oy, 3, size);
+    g.fillRect(ox, oy + size - 2, size, 2);
     g.fillStyle = def.edge || '#4c5047';
-    g.fillRect(ox + 1, oy + 1, size - 3, 1);
-    g.fillRect(ox + 1, oy + 1, 1, size - 3);
+    g.globalAlpha = 0.42;
+    g.fillRect(ox + 2, oy + 2, size - 4, 1);
+    g.fillRect(ox + 3, oy + 5, size - 7, 1);
+    g.fillRect(ox + 2, oy + 9, size - 5, 1);
+    g.fillRect(ox + 5, oy + 13, size - 8, 1);
+    g.globalAlpha = 1;
     g.strokeStyle = def.mortar || '#1c1f1d';
     g.lineWidth = 1;
-    g.strokeRect(ox + 0.5, oy + 0.5, size - 1, size - 1);
+    g.beginPath();
+    g.moveTo(ox + 1.5, oy + size - 2.5);
+    g.lineTo(ox + size - 2.5, oy + 1.5);
+    g.stroke();
+    g.globalAlpha = 0.32;
+    g.beginPath();
+    g.moveTo(ox + 1.5, oy + 7.5);
+    g.lineTo(ox + 7.5, oy + 1.5);
+    g.moveTo(ox + 8.5, oy + size - 1.5);
+    g.lineTo(ox + size - 1.5, oy + 8.5);
+    g.stroke();
+    g.globalAlpha = 1;
     if (def.moss) {
       g.fillStyle = def.moss;
       g.fillRect(ox + 1, oy + size - 4, 5, 2);

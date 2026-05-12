@@ -1,4 +1,4 @@
-const CACHE = 'neonyke-v11';
+const CACHE = 'neonyke-v12';
 
 const PRECACHE = [
   '/',

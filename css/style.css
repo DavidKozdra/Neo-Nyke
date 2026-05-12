@@ -23,6 +23,31 @@ body {
   --menu-danger: #e05555;
 }
 
+/* ── Scrollbars ─────────────────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(10, 12, 20, 0.60);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(91, 141, 217, 0.35);
+  border-radius: 3px;
+  transition: background 0.2s;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(168, 200, 255, 0.60);
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(91, 141, 217, 0.35) rgba(10, 12, 20, 0.60);
+}
+
 /* Accessibility overrides */
 .acc-high-contrast #hud {
   background: rgba(0,0,0,.95);
@@ -2753,7 +2778,6 @@ p.sub {
   padding-right: 4px;
 }
 .cdiff-grid::-webkit-scrollbar { width: 4px; }
-.cdiff-grid::-webkit-scrollbar-thumb { background: rgba(160, 110, 240, .3); border-radius: 2px; }
 
 .cdiff-row {
   display: grid;
@@ -4633,7 +4657,6 @@ button.alt.danger {
   padding-right: 4px;
 }
 .theme-vars::-webkit-scrollbar { width: 4px; }
-.theme-vars::-webkit-scrollbar-thumb { background: rgba(128,146,170,.3); border-radius: 2px; }
 
 .theme-var-row {
   display: grid;
