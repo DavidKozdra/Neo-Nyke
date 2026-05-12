@@ -189,7 +189,7 @@ canvas {
 /* Item pickup notification stack (top-left) */
 #itemNotifyStack {
   position: fixed;
-  top: 74px;
+  top: 94px;
   left: 16px;
   display: flex;
   flex-direction: column;
