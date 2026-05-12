@@ -1,5 +1,4 @@
 // draw/hud.js — standalone IIFE. HUD canvas drawing (particles, minimap, boss bars, transitions, action icons).
-(() => {
   function drawParticles() {
     Neo.particles.forEach(particle => {
       if (particle.line) {
@@ -75,7 +74,7 @@
         Neo.ctx.fillText(particle.text, 0, -particle.life * 20);
       } else if (particle.shockwave) {
         const maxLife = Number(particle.maxLife || Neo.AOE_SHOCKWAVE_LIFE);
-        const progress = clamp(1 - particle.life / maxLife, 0, 1);
+        const progress = Neo.clamp(1 - particle.life / maxLife, 0, 1);
         const radius = Number(particle.radius || 48);
         const waveRadius = radius * (0.22 + progress * 0.92);
         Neo.ctx.globalAlpha = (1 - progress) * 0.8;
@@ -105,7 +104,7 @@
         Neo.ctx.fill();
       } else if (particle.impact) {
         const maxLife = Number(particle.maxLife || 0.24);
-        const progress = clamp(1 - particle.life / maxLife, 0, 1);
+        const progress = Neo.clamp(1 - particle.life / maxLife, 0, 1);
         const size = Number(particle.size || 6) * (1 + progress * 1.4);
         Neo.ctx.rotate(Number(particle.angle || 0));
         Neo.ctx.globalAlpha = (1 - progress) * 0.85;
@@ -182,7 +181,7 @@
     const targetViewportHeight = compact ? Math.min(112, canvasRect.height * 0.25) : Math.min(146, canvasRect.height * 0.23);
     const baseViewportWidth = baseMapWidth * scaleX;
     const baseViewportHeight = baseMapHeight * scaleY;
-    const minimapScale = clamp(Math.min(1, targetViewportWidth / Math.max(1, baseViewportWidth), targetViewportHeight / Math.max(1, baseViewportHeight)), 0.62, 1);
+    const minimapScale = Neo.clamp(Math.min(1, targetViewportWidth / Math.max(1, baseViewportWidth), targetViewportHeight / Math.max(1, baseViewportHeight)), 0.62, 1);
     const size = Math.max(8, Math.round(baseSize * minimapScale));
     const gap = Math.max(1, Math.round(baseGap * minimapScale));
     const mapWidth = gridSize * size + (gridSize - 1) * gap;
@@ -284,7 +283,7 @@
       if (room.doors.w) Neo.ctx.fillRect(x - 2, y + size / 2 - 1, 2, 2);
       if (room.doors.e) Neo.ctx.fillRect(x + size, y + size / 2 - 1, 2, 2);
     });
-    if (hasLegacy('elite_tracker')) {
+    if (Neo.hasLegacy('elite_tracker')) {
       Neo.enemies.forEach(enemy => {
         if (!enemy.elite) return;
         const eRoom = Neo.rooms.find(r => r.gx === enemy.homeGx && r.gy === enemy.homeGy);
@@ -335,7 +334,7 @@
   }
 
   function drawBossHealthBars() {
-    const bosses = Neo.enemies.filter(enemy => isBossType(enemy.type));
+    const bosses = Neo.enemies.filter(enemy => Neo.isBossType(enemy.type));
     if (!bosses.length) return;
 
     const width = 420;
@@ -346,7 +345,7 @@
 
     bosses.forEach((boss, index) => {
       const y = startY + index * gap;
-      const hpPct = clamp(boss.hp / boss.max, 0, 1);
+      const hpPct = Neo.clamp(boss.hp / boss.max, 0, 1);
 
       Neo.ctx.fillStyle = 'rgba(0,0,0,0.65)';
       Neo.ctx.fillRect(startX - 2, y - 2, width + 4, height + 4);
@@ -408,7 +407,7 @@
   }
 
   function drawActionIcons() {
-    const mobilityMove = getEquippedMove('dash');
+    const mobilityMove = Neo.getEquippedMove('dash');
     const mobilityIcon = mobilityMove === 'dash'
       ? {
         color: '#fff06a',
@@ -457,14 +456,14 @@
             ],
           };
 
-    drawPixelIcon(ui.coinIcon, '#ffd15a', [
+    drawPixelIcon(Neo.ui.coinIcon, '#ffd15a', [
       [2, 1], [3, 1], [4, 1],
       [1, 2], [2, 2], [3, 2], [4, 2], [5, 2],
       [1, 3], [2, 3], [3, 3], [4, 3], [5, 3],
       [1, 4], [2, 4], [3, 4], [4, 4], [5, 4],
       [2, 5], [3, 5], [4, 5],
     ]);
-    drawPixelIcon(ui.hudLoopIcon, '#83f3ff', [
+    drawPixelIcon(Neo.ui.hudLoopIcon, '#83f3ff', [
       [2, 1], [3, 1], [4, 1],
       [1, 2], [5, 2],
       [1, 3], [5, 3],
@@ -473,14 +472,14 @@
       [2, 2], [4, 2], [2, 4], [4, 4],
       [3, 3],
     ]);
-    drawPixelIcon(ui.metaCoinIcon, '#ffd15a', [
+    drawPixelIcon(Neo.ui.metaCoinIcon, '#ffd15a', [
       [2, 1], [3, 1], [4, 1],
       [1, 2], [2, 2], [3, 2], [4, 2], [5, 2],
       [1, 3], [2, 3], [3, 3], [4, 3], [5, 3],
       [1, 4], [2, 4], [3, 4], [4, 4], [5, 4],
       [2, 5], [3, 5], [4, 5],
     ]);
-    drawPixelIcon(ui.metaLoopIcon, '#83f3ff', [
+    drawPixelIcon(Neo.ui.metaLoopIcon, '#83f3ff', [
       [2, 1], [3, 1], [4, 1],
       [1, 2], [5, 2],
       [1, 3], [5, 3],
@@ -489,14 +488,14 @@
       [2, 2], [4, 2], [2, 4], [4, 4],
       [3, 3],
     ]);
-    drawPixelIcon(ui.icons.dash, mobilityIcon.color, mobilityIcon.pixels);
-    drawPixelIcon(ui.icons.melee, '#00ffff', [
+    drawPixelIcon(Neo.ui.icons.dash, mobilityIcon.color, mobilityIcon.pixels);
+    drawPixelIcon(Neo.ui.icons.melee, '#00ffff', [
       [2, 6], [3, 5], [4, 4], [5, 3], [6, 2], [5, 4], [6, 3], [7, 2], [6, 5], [7, 4],
     ]);
-    drawPixelIcon(ui.icons.laser, '#7a9fc4', [
+    drawPixelIcon(Neo.ui.icons.laser, '#7a9fc4', [
       [1, 4], [2, 4], [3, 4], [4, 4], [5, 4], [6, 4], [7, 4], [5, 3], [6, 2], [7, 1],
     ]);
-    drawPixelIcon(ui.icons.smash, '#ffaa00', [
+    drawPixelIcon(Neo.ui.icons.smash, '#ffaa00', [
       [4, 1], [3, 2], [4, 2], [5, 2], [2, 3], [3, 3], [4, 3], [5, 3], [6, 3],
       [2, 4], [3, 4], [4, 4], [5, 4], [6, 4], [3, 5], [4, 5], [5, 5], [4, 6],
     ]);
@@ -523,4 +522,4 @@
   Neo.drawFloorTransition = drawFloorTransition;
   Neo.drawActionIcons = drawActionIcons;
   Neo.drawPixelIcon = drawPixelIcon;
-})();
+

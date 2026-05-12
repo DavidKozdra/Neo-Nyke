@@ -9,6 +9,7 @@ const achievementEvents = (() => {
     },
   };
 })();
+window.achievementEvents = achievementEvents;
 
 const achievementManager = (() => {
   const DB_NAME = 'NeoNykeDB';
@@ -318,6 +319,7 @@ const achievementManager = (() => {
 
   return { isUnlocked, unlock, resetRunCounters, getProgressSnapshot, clearAll, exportAll, importAll };
 })();
+window.achievementManager = achievementManager;
 
 function pushAchievementToast(achievement) {
   let stack = document.getElementById('itemNotifyStack');

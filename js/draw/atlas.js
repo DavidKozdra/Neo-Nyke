@@ -1,6 +1,5 @@
-// atlas.js — standalone IIFE. Environment tile atlas builder.
-(() => {
-  function buildEnvironmentTileAtlas() {
+// atlas.js — Environment tile atlas builder.
+export function buildEnvironmentTileAtlas() {
     const entries = Object.entries(Neo.ENV_TILE_DEFS);
     const canvasEl = document.createElement('canvas');
     canvasEl.width = Math.max(1, Neo.ENV_TILE_SOURCE_SIZE * Math.max(1, entries.length));
@@ -16,7 +15,7 @@
     return { canvas: canvasEl, frames };
   }
 
-  function drawEnvironmentTileAsset(g, ox, oy, size, def) {
+export function drawEnvironmentTileAsset(g, ox, oy, size, def) {
     g.save();
     if (!def.transparent) {
       g.fillStyle = def.base || '#343832';
@@ -46,7 +45,7 @@
     g.restore();
   }
 
-  function drawFloorTileAsset(g, ox, oy, size, def) {
+export function drawFloorTileAsset(g, ox, oy, size, def) {
     g.fillStyle = def.shade || '#252823';
     g.fillRect(ox, oy + size - 3, size, 3);
     g.fillRect(ox + size - 3, oy, 3, size);
@@ -100,7 +99,7 @@
     }
   }
 
-  function drawPlankTileAsset(g, ox, oy, size, def) {
+export function drawPlankTileAsset(g, ox, oy, size, def) {
     g.fillStyle = def.base || '#4b3320';
     g.fillRect(ox, oy, size, size);
     g.fillStyle = def.shade || '#2b1e13';
@@ -115,7 +114,7 @@
     g.strokeRect(ox + 0.5, oy + 0.5, size - 1, size - 1);
   }
 
-  function drawWallTileAsset(g, ox, oy, size, def) {
+export function drawWallTileAsset(g, ox, oy, size, def) {
     g.fillStyle = def.base || '#303832';
     g.fillRect(ox, oy, size, size);
     g.fillStyle = def.shade || '#202722';
@@ -145,7 +144,7 @@
     }
   }
 
-  function drawThresholdTileAsset(g, ox, oy, size, def) {
+export function drawThresholdTileAsset(g, ox, oy, size, def) {
     g.fillStyle = def.base || '#3d4038';
     g.fillRect(ox, oy, size, size);
     g.fillStyle = def.shade || '#292d29';
@@ -157,7 +156,7 @@
     g.strokeRect(ox + 0.5, oy + 0.5, size - 1, size - 1);
   }
 
-  function drawPillarTileAsset(g, ox, oy, size, def) {
+export function drawPillarTileAsset(g, ox, oy, size, def) {
     g.fillStyle = 'rgba(0,0,0,0.26)';
     g.fillRect(ox + 3, oy + 12, 10, 2);
     g.fillStyle = def.shade || '#252b27';
@@ -171,7 +170,7 @@
     g.strokeRect(ox + 2.5, oy + 1.5, 11, 12);
   }
 
-  function drawBlockTileAsset(g, ox, oy, size, def) {
+export function drawBlockTileAsset(g, ox, oy, size, def) {
     g.fillStyle = 'rgba(0,0,0,0.22)';
     g.fillRect(ox + 2, oy + 12, 12, 2);
     g.fillStyle = def.shade || '#222823';
@@ -190,7 +189,7 @@
     }
   }
 
-  function drawPotTileAsset(g, ox, oy, size, def) {
+export function drawPotTileAsset(g, ox, oy, size, def) {
     g.fillStyle = 'rgba(0,0,0,0.24)';
     g.fillRect(ox + 4, oy + 13, 8, 2);
     g.fillStyle = def.shade || '#57331f';
@@ -205,7 +204,7 @@
     g.fillRect(ox + 5, oy + 11, 7, 1);
   }
 
-  function drawBarrelTileAsset(g, ox, oy, size, def) {
+export function drawBarrelTileAsset(g, ox, oy, size, def) {
     g.fillStyle = 'rgba(0,0,0,0.24)';
     g.fillRect(ox + 3, oy + 13, 10, 2);
     g.fillStyle = def.shade || '#3d2414';
@@ -220,7 +219,7 @@
     g.fillRect(ox + 4, oy + 10, 9, 1);
   }
 
-  function drawTileCracks(g, ox, oy, def) {
+export function drawTileCracks(g, ox, oy, def) {
     if (!Array.isArray(def.cracks)) return;
     g.strokeStyle = def.mortar || '#151917';
     g.lineWidth = 1;
@@ -235,7 +234,7 @@
     });
   }
 
-  function drawTileChips(g, ox, oy, def) {
+export function drawTileChips(g, ox, oy, def) {
     if (!Array.isArray(def.chips)) return;
     g.fillStyle = def.shade || '#252823';
     def.chips.forEach(chip => {
@@ -257,4 +256,3 @@
   Neo.drawBarrelTileAsset = drawBarrelTileAsset;
   Neo.drawTileCracks = drawTileCracks;
   Neo.drawTileChips = drawTileChips;
-})();

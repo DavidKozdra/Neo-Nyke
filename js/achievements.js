@@ -30,3 +30,6 @@ const ACHIEVEMENT_PROGRESS = {
   god_slayer:     { key: 'gods_killed', target: 10, label: 'Gods slain' },
   extinction:     { key: 'enemies_killed', target: 1000, label: 'Enemies slain' },
 };
+
+window.ACHIEVEMENTS = ACHIEVEMENTS;
+window.ACHIEVEMENT_PROGRESS = ACHIEVEMENT_PROGRESS;

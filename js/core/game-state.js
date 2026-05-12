@@ -1,12 +1,11 @@
-// game-state.js — standalone IIFE. Game state management, meta progress, run logic.
-(() => {
+// game-state.js — Game state management, meta progress, run logic.
 
-  function pauseGame() {
+export function pauseGame() {
     document.body.classList.add('game-paused');
     setGameState('pause');
   }
 
-  function resumeGame() {
+export function resumeGame() {
     document.body.classList.remove('game-paused');
     setGameState('play');
   }
@@ -29,7 +28,7 @@
       loopCrystals: 0,
       unlockedLegacy: [],
       tutorialCompleted: false,
-      sandboxSettings: { ...SANDBOX_DEFAULT_SETTINGS },
+      sandboxSettings: { ...Neo.SANDBOX_DEFAULT_SETTINGS },
     };
   }
 
@@ -130,14 +129,14 @@
     // Force a fair tutorial duel by clearing the normal room wave for this step.
     if (Neo.enemies.length > 0) {
       Neo.enemies = Neo.enemies.filter(enemy => enemy?.type === 'rival');
-      syncCurrentRoomState();
+      Neo.syncCurrentRoomState();
     }
-    const safeSpawn = findSafeEnemySpawnPoint(Neo.player.x + 110, Neo.player.y, 15)
-      || findSafeEnemySpawnPoint(Neo.player.x - 110, Neo.player.y, 15)
-      || findSafeEnemySpawnPoint(Neo.player.x, Neo.player.y - 90, 15)
-      || findSafeEnemySpawnPoint(Neo.ROOM_W / 2 + 130, Neo.ROOM_H / 2, 15)
-      || { x: clamp(Neo.player.x + 80, Neo.WALL + 22, Neo.ROOM_W - Neo.WALL - 22), y: clamp(Neo.player.y - 40, Neo.WALL + 22, Neo.ROOM_H - Neo.WALL - 22) };
-    const dummy = spawnEnemy('hunter', safeSpawn.x, safeSpawn.y, false);
+    const safeSpawn = Neo.findSafeEnemySpawnPoint(Neo.player.x + 110, Neo.player.y, 15)
+      || Neo.findSafeEnemySpawnPoint(Neo.player.x - 110, Neo.player.y, 15)
+      || Neo.findSafeEnemySpawnPoint(Neo.player.x, Neo.player.y - 90, 15)
+      || Neo.findSafeEnemySpawnPoint(Neo.ROOM_W / 2 + 130, Neo.ROOM_H / 2, 15)
+      || { x: Neo.clamp(Neo.player.x + 80, Neo.WALL + 22, Neo.ROOM_W - Neo.WALL - 22), y: Neo.clamp(Neo.player.y - 40, Neo.WALL + 22, Neo.ROOM_H - Neo.WALL - 22) };
+    const dummy = Neo.spawnEnemy('hunter', safeSpawn.x, safeSpawn.y, false);
     dummy.tutorialDummy = true;
     dummy.hp = 16;
     dummy.max = 16;
@@ -159,11 +158,11 @@
     if (!isFirstRunTutorialActive()) return;
     const order = getTutorialStepOrder();
     const current = order.indexOf(Neo.tutorialState.step);
-    const nextIndex = clamp((current >= 0 ? current : 0) + direction, 0, order.length - 1);
+    const nextIndex = Neo.clamp((current >= 0 ? current : 0) + direction, 0, order.length - 1);
     Neo.tutorialState.step = order[nextIndex];
     Neo.tutorialState.manualStepLockUntil = Number(Neo.gameElapsedTime || 0) + 0.65;
     if (Neo.tutorialState.step === 'fight') ensureTutorialDummyEnemy();
-    updateObjective();
+    Neo.updateObjective();
   }
 
   function getTutorialStepMessage() {
@@ -206,10 +205,10 @@
     Neo.tutorialState.active = false;
     Neo.tutorialState.usedLadder = true;
     Neo.metaProgress.tutorialCompleted = true;
-    persistMetaSoon();
+    Neo.persistMetaSoon();
     Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 26, life: 0.9, text: 'TUTORIAL SKIPPED', c: '#9cdcff' });
     Neo.uiController.setTutorialBanner('', false);
-    updateObjective();
+    Neo.updateObjective();
   }
 
   function updateFirstRunTutorialProgress() {
@@ -227,7 +226,7 @@
       Neo.tutorialState.active = false;
       if (!Neo.metaProgress.tutorialCompleted) {
         Neo.metaProgress.tutorialCompleted = true;
-        persistMetaSoon();
+        Neo.persistMetaSoon();
       }
       Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 26, life: 1, text: 'TUTORIAL COMPLETE', c: '#8dffcf' });
     }
@@ -261,8 +260,8 @@
       pendant_of_kronos: 0,
     };
     const character = Neo.CHARACTER_DEFS[Neo.chosenCharacter] || Neo.CHARACTER_DEFS.thorn_knight;
-    const equippedMoves = getDefaultMovesForCharacter(character.key);
-    const defaultWeapon = getDefaultWeaponForCharacter(character.key);
+    const equippedMoves = Neo.getDefaultMovesForCharacter(character.key);
+    const defaultWeapon = Neo.getDefaultWeaponForCharacter(character.key);
     const ownedMoves = {};
     Object.values(equippedMoves).forEach(key => { ownedMoves[key] = true; });
     const maxHp = Math.round(120 * (character.hpMultiplier || 1));
@@ -304,7 +303,7 @@
       critCharmBuffTime: 0,
       escapeChargeKills: 0,
       escapeReady: true,
-      statuses: createStatusMap(),
+      statuses: Neo.createStatusMap(),
       items,
       ownedWeapons: defaultWeapon ? { [defaultWeapon]: true } : {},
       equippedWeapon: defaultWeapon,
@@ -546,7 +545,7 @@
         return {
           id: String(entry.id || `${entry.endedAt || 'run'}:${entry.seed || ''}:${entry.floor || 0}`),
           endedAt: String(entry.endedAt || ''),
-          result: entry.result === 'win' ? 'win' : 'dead',
+          result: String(entry.result || '').replace(/^Neo\./, '') === 'win' ? 'win' : 'dead',
           mode: normalizeGameMode(entry.mode),
           character: String(entry.character || 'thorn_knight'),
           characterName: String(entry.characterName || Neo.CHARACTER_DEFS[entry.character]?.name || 'Unknown'),
@@ -671,13 +670,13 @@
   function createRngStream(seed, consumed = 0) {
     const hashSeed = typeof Neo.KozSeededRngApi.fnv1a === 'function'
       ? Neo.KozSeededRngApi.fnv1a(String(seed || ''))
-      : xmur3(String(seed || ''))();
+      : Neo.xmur3(String(seed || ''))();
     const stream = Neo.KozSeededRngApi.SeededStream
       ? new Neo.KozSeededRngApi.SeededStream(hashSeed)
       : null;
     const random = stream
       ? () => stream.random()
-      : makeRNG(String(seed || ''));
+      : Neo.makeRNG(String(seed || ''));
     let count = Math.max(0, Number(consumed) || 0);
     for (let index = 0; index < count; index += 1) random();
     return {
@@ -752,9 +751,9 @@
 
   function getDifficultyRuntimeConfig(key = Neo.selectedDifficulty) {
     const difficulty = getDifficultyDef(key);
-    const statPressure = clamp((Number(difficulty?.statMultiplier || 1) - 1) / 0.52, 0, 1);
-    const roomPressure = clamp(Number(difficulty?.roomWeightBonus || 0) / 0.22, 0, 1);
-    const economyPressure = clamp((Number(difficulty?.shopPriceMultiplier || 1) - 1) / 0.42, 0, 1);
+    const statPressure = Neo.clamp((Number(difficulty?.statMultiplier || 1) - 1) / 0.52, 0, 1);
+    const roomPressure = Neo.clamp(Number(difficulty?.roomWeightBonus || 0) / 0.22, 0, 1);
+    const economyPressure = Neo.clamp((Number(difficulty?.shopPriceMultiplier || 1) - 1) / 0.42, 0, 1);
     return {
       key: String(difficulty?.key || normalizeDifficulty(key)),
       eventCheckIntervalMultiplier: 1 - roomPressure * 0.18,
@@ -856,27 +855,27 @@
     return Math.max(12, Math.round(14 + floorValue * 7));
   }
 
-  function getLaserCastDuration(moveKey = getEquippedMove('laser')) {
+  function getLaserCastDuration(moveKey = Neo.getEquippedMove('laser')) {
     if (moveKey === 'god_sweep') return 1.45;
-    if (moveKey === 'love_beam') return Math.max(0.1, Neo.MOVE_BASE_STATS.love_beam.duration + getAnvilMoveBonus('love_beam', 'duration'));
-    if (moveKey === 'turtle_wave') return Math.max(0.1, Neo.MOVE_BASE_STATS.turtle_wave.duration + getAnvilMoveBonus('turtle_wave', 'duration'));
+    if (moveKey === 'love_beam') return Math.max(0.1, Neo.MOVE_BASE_STATS.love_beam.duration + Neo.getAnvilMoveBonus('love_beam', 'duration'));
+    if (moveKey === 'turtle_wave') return Math.max(0.1, Neo.MOVE_BASE_STATS.turtle_wave.duration + Neo.getAnvilMoveBonus('turtle_wave', 'duration'));
     return Neo.godTimer > 0 ? 0.72 : Neo.ATTACKS.laser.duration;
   }
 
   function getMoveCooldownBase(moveKey) {
     const base = Neo.MOVE_BASE_STATS[moveKey]?.cooldown ?? null;
     if (base === null) return null;
-    return Math.max(0.05, base + getAnvilMoveBonus(moveKey, 'cooldown'));
+    return Math.max(0.05, base + Neo.getAnvilMoveBonus(moveKey, 'cooldown'));
   }
 
-  function getMeleeCooldownDuration(moveKey = getEquippedMove('melee'), attackSpeed = getAttackSpeedValue()) {
+  function getMeleeCooldownDuration(moveKey = Neo.getEquippedMove('melee'), attackSpeed = Neo.getAttackSpeedValue()) {
     const anvilBase = getMoveCooldownBase(moveKey);
     if (anvilBase !== null) return anvilBase / attackSpeed;
     if (moveKey === 'slash') return 0.4 / attackSpeed;
     return (Neo.godTimer > 0 ? 0.2 : Neo.ATTACKS.melee.baseCooldown) / attackSpeed;
   }
 
-  function getLaserCooldownDuration(moveKey = getEquippedMove('laser'), attackSpeed = getAttackSpeedValue()) {
+  function getLaserCooldownDuration(moveKey = Neo.getEquippedMove('laser'), attackSpeed = Neo.getAttackSpeedValue()) {
     const anvilBase = getMoveCooldownBase(moveKey);
     if (anvilBase !== null) return anvilBase / attackSpeed;
     if (moveKey === 'turtle_wave') return 3 / attackSpeed;
@@ -886,7 +885,7 @@
     return (Neo.godTimer > 0 ? 2.8 : Neo.ATTACKS.laser.baseCooldown) / attackSpeed;
   }
 
-  function getDashCooldownDuration(moveKey = getEquippedMove('dash'), attackSpeed = getAttackSpeedValue()) {
+  function getDashCooldownDuration(moveKey = Neo.getEquippedMove('dash'), attackSpeed = Neo.getAttackSpeedValue()) {
     const anvilBase = getMoveCooldownBase(moveKey);
     if (anvilBase !== null) return anvilBase / attackSpeed;
     if (moveKey === 'warp') return 2.8 / attackSpeed;
@@ -896,8 +895,8 @@
     return 3.2 / attackSpeed;
   }
 
-  function getSmashCooldownDuration(attackSpeed = getAttackSpeedValue()) {
-    const smashKey = getEquippedMove('smash');
+  function getSmashCooldownDuration(attackSpeed = Neo.getAttackSpeedValue()) {
+    const smashKey = Neo.getEquippedMove('smash');
     const anvilBase = getMoveCooldownBase(smashKey);
     if (anvilBase !== null) return anvilBase / attackSpeed;
     return (Neo.godTimer > 0 ? 2 : Neo.ATTACKS.smash.baseCooldown) / attackSpeed;
@@ -910,7 +909,7 @@
     return Math.max(1, Number(overrideStacks || baseStacks));
   }
 
-  function getSlotCooldownDuration(slot, moveKey, attackSpeed = getAttackSpeedValue()) {
+  function getSlotCooldownDuration(slot, moveKey, attackSpeed = Neo.getAttackSpeedValue()) {
     if (slot === 'melee') return getMeleeCooldownDuration(moveKey, attackSpeed);
     if (slot === 'laser') return getLaserCooldownDuration(moveKey, attackSpeed);
     if (slot === 'smash') return getSmashCooldownDuration(attackSpeed);
@@ -974,7 +973,7 @@
     if (options.deferTimer) state.holding += 1;
     else state.timers.push(rechargeTime);
     Neo.cooldowns[slot] = state;
-    updateHud();
+    Neo.updateHud();
     return true;
   }
 
@@ -983,7 +982,7 @@
     if (state.holding > 0) state.holding -= 1;
     state.timers.push(rechargeTime);
     Neo.cooldowns[slot] = state;
-    updateHud();
+    Neo.updateHud();
   }
 
   function tickCooldowns(dt) {
@@ -1003,8 +1002,8 @@
     });
   }
 
-  function getSkillCooldownInfo(slot, attackSpeed = getAttackSpeedValue()) {
-    const moveKey = getEquippedMove(slot);
+  function getSkillCooldownInfo(slot, attackSpeed = Neo.getAttackSpeedValue()) {
+    const moveKey = Neo.getEquippedMove(slot);
     const state = Neo.cooldowns[slot] || createCooldownEntry(slot);
     return {
       charges: state.charges,
@@ -1183,7 +1182,7 @@
 
     const killer = findKillerEnemyEntity(sourceKey, sourceLabel);
     if (killer) {
-      sayOverEntity(killer, quote, {
+      Neo.sayOverEntity(killer, quote, {
         speaker: sourceLabel,
         tone: 'boss',
         holdTime: 2.1,
@@ -1192,7 +1191,7 @@
       return;
     }
 
-    sayAtPosition(Neo.player.x, Neo.player.y, quote, {
+    Neo.sayAtPosition(Neo.player.x, Neo.player.y, quote, {
       speaker: sourceLabel,
       tone: 'warning',
       holdTime: 2.1,
@@ -1239,7 +1238,7 @@
   }
 
   function buildRunHistoryEntry(result, extra = {}) {
-    const character = getCharacterDef();
+    const character = Neo.getCharacterDef();
     const difficulty = normalizeDifficulty(Neo.selectedDifficulty);
     const historyItems = captureRunItemSnapshot(Neo.player);
     const totalItemStacks = historyItems.reduce((sum, item) => sum + item.count, 0);
@@ -1329,7 +1328,7 @@
   function renderRunHistoryTabContent(entry, tab = 'stats') {
     if (tab === 'items') {
       if (!entry.items.length) return '<p class="rh-empty-inner">No relics collected.</p>';
-      return `<div class="rh-items-grid">${entry.items.map(i => `<div class="rh-item-tile"><canvas class="rh-item-icon" data-item-icon="${escapeHtml(i.key)}" width="32" height="32" aria-hidden="true"></canvas><span class="rh-item-name" style="color:${getRarityNameColor(i.rarity)}">${escapeHtml(i.name)}</span>${i.count > 1 ? `<span class="rh-item-count">×${i.count}</span>` : ''}</div>`).join('')}</div>`;
+      return `<div class="rh-items-grid">${entry.items.map(i => `<div class="rh-item-tile"><canvas class="rh-item-icon" data-item-icon="${escapeHtml(i.key)}" width="32" height="32" aria-hidden="true"></canvas><span class="rh-item-name" style="color:${Neo.getRarityNameColor(i.rarity)}">${escapeHtml(i.name)}</span>${i.count > 1 ? `<span class="rh-item-count">×${i.count}</span>` : ''}</div>`).join('')}</div>`;
     }
     if (tab === 'moves') {
       if (!entry.equippedMoves.length) return '<p class="rh-empty-inner">No move data recorded.</p>';
@@ -1401,25 +1400,25 @@
     return 'hunter';
   }
 
-  function hydrateRunHistorySprites(root = ui.runHistoryList) {
+  function hydrateRunHistorySprites(root = Neo.ui.runHistoryList) {
     if (!(root instanceof Element)) return;
     root.querySelectorAll('[data-run-character]').forEach(el => {
       if (!(el instanceof HTMLCanvasElement)) return;
-      drawSpriteToCanvas(el, el.dataset.runCharacter || 'thorn_knight', 56);
+      Neo.drawSpriteToCanvas(el, el.dataset.runCharacter || 'thorn_knight', 56);
     });
     root.querySelectorAll('[data-run-killer]').forEach(el => {
       if (!(el instanceof HTMLCanvasElement)) return;
-      drawSpriteToCanvas(el, resolveKillerSprite(el.dataset.runKiller), el.width);
+      Neo.drawSpriteToCanvas(el, resolveKillerSprite(el.dataset.runKiller), el.width);
     });
     root.querySelectorAll('[data-item-icon]').forEach(el => {
       if (!(el instanceof HTMLCanvasElement)) return;
       const item = Neo.itemRegistry.get(el.dataset.itemIcon) || Neo.ITEM_DEFS[el.dataset.itemIcon];
-      if (item) drawItemToastIcon(el, item);
+      if (item) Neo.drawItemToastIcon(el, item);
     });
     root.querySelectorAll('[data-move-icon]').forEach(el => {
       if (!(el instanceof HTMLCanvasElement)) return;
       const move = Neo.MOVE_DEFS[el.dataset.moveIcon];
-      if (move) drawMoveToastIcon(el, move);
+      if (move) Neo.drawMoveToastIcon(el, move);
     });
   }
 
@@ -1447,7 +1446,7 @@
     const isLastPhase = phaseIdx === phases.length - 1;
     if (Neo.charSelectPhase && PHASE_LABELS[Neo.charSelectPhase]) {
       const label = PHASE_LABELS[Neo.charSelectPhase];
-      if (phaseTag) { phaseTag.textContent = label; phaseTag.className = `charselect-phase-tag ${PHASE_COLORS[charSelectPhase]}`; phaseTag.classList.remove('hidden'); }
+      if (phaseTag) { phaseTag.textContent = label; phaseTag.className = `charselect-phase-tag ${PHASE_COLORS[Neo.charSelectPhase]}`; phaseTag.classList.remove('hidden'); }
       if (titleEl) titleEl.textContent = `${label} — CHOOSE YOUR WARRIOR`;
       if (subtitleEl) subtitleEl.textContent = isLastPhase ? 'Last player — then enter the dungeon.' : `${label} locked. Next player picks after.`;
       if (goBtn) goBtn.textContent = isLastPhase ? 'ENTER DUNGEON' : `CONFIRM ${label} →`;
@@ -1482,7 +1481,7 @@
     Neo.uiController.updateDifficultySelection(unlockedDifficulties, Neo.selectedDifficulty, Neo.metaProgress.loopCrystals || 0);
     Neo.uiController.updateChallengeSelection(unlockedChallenges, ownedChallenges, Neo.selectedChallenges, Neo.metaProgress.loopCrystals || 0, Neo.metaProgress.coins || 0);
     Neo.uiController.updateLegacySelection(ownedLegacy, Neo.metaProgress.loopCrystals || 0);
-    syncCharacterUiTheme();
+    Neo.syncCharacterUiTheme();
   }
 
   function setGameState(nextState) {
@@ -1492,13 +1491,13 @@
       Neo.uiController.setState(nextState);
     }
     const isBossRush = Neo.gameMode === 'boss_rush';
-    if (ui.timerFloorSlot) ui.timerFloorSlot.style.display = isBossRush ? 'none' : '';
-    if (ui.timerBossSlot) ui.timerBossSlot.style.display = isBossRush ? '' : 'none';
+    if (Neo.ui.timerFloorSlot) Neo.ui.timerFloorSlot.style.display = isBossRush ? 'none' : '';
+    if (Neo.ui.timerBossSlot) Neo.ui.timerBossSlot.style.display = isBossRush ? '' : 'none';
     if (nextState !== 'pause') document.body.classList.remove('game-paused');
-    if (nextState !== 'play' && ui.interactPrompt) ui.interactPrompt.classList.add('hidden');
+    if (nextState !== 'play' && Neo.ui.interactPrompt) Neo.ui.interactPrompt.classList.add('hidden');
     if (nextState !== 'play') {
-      setShopPanelOpen(false);
-      setInventoryPanelOpen(false);
+      Neo.setShopPanelOpen(false);
+      Neo.setInventoryPanelOpen(false);
     }
   }
 
@@ -1516,7 +1515,7 @@
       restoreRun(Neo.activeRun);
       resetTutorialState(shouldRunTutorial);
     } else {
-      Neo.baseSeedStr = ui.seed.value.trim() || createRandomSeed();
+      Neo.baseSeedStr = Neo.ui.seed.value.trim() || createRandomSeed();
       Neo.selectedDifficulty = normalizeDifficulty(Neo.selectedDifficulty);
       Neo.selectedChallenges = normalizeChallengeSelection(Neo.metaProgress.selectedChallenges);
       Neo.runLoopIndex = 0;
@@ -1525,7 +1524,7 @@
       syncSeedState();
       Neo.floor = 1;
       Neo.gameElapsedTime = 0;
-      achievementManager.resetRunCounters();
+      window.achievementManager?.resetRunCounters();
       invalidateRunStatCaches();
       Neo.player = createDefaultPlayer();
       if (!isMultiplayerMode()) resetMultiplayerState();
@@ -1537,15 +1536,15 @@
       Neo.lastDamageSource = '';
       Neo.lastDamageSourceKey = '';
       resetScene();
-      generateFloor();
+      Neo.generateFloor();
       resetTutorialState(shouldRunTutorial);
-      persistMetaSoon();
-      scheduleRunSave();
+      Neo.persistMetaSoon();
+      Neo.scheduleRunSave();
     }
 
     if (!Neo.loopStarted) {
       Neo.loopStarted = true;
-      requestAnimationFrame(loop);
+      requestAnimationFrame(Neo.loop);
     }
   }
 
@@ -1562,7 +1561,7 @@
 
   function startCoop() {
     setGameState('play');
-    Neo.baseSeedStr = ui.seed.value.trim() || createRandomSeed();
+    Neo.baseSeedStr = Neo.ui.seed.value.trim() || createRandomSeed();
     Neo.selectedDifficulty = normalizeDifficulty(Neo.selectedDifficulty);
     Neo.selectedChallenges = [];
     Neo.runLoopIndex = 0;
@@ -1571,7 +1570,7 @@
     syncSeedState();
     Neo.floor = 1;
     Neo.gameElapsedTime = 0;
-    achievementManager.resetRunCounters();
+    window.achievementManager?.resetRunCounters();
     invalidateRunStatCaches();
     Neo.player = createDefaultPlayer();
     Neo.player2 = Neo.mpPlayerCount >= 2 ? spawnMpPlayer(Neo.chosenCharacter2, 36, 0) : null;
@@ -1581,17 +1580,17 @@
     Neo.lastDamageSource = '';
     Neo.lastDamageSourceKey = '';
     resetScene();
-    generateFloor();
+    Neo.generateFloor();
     const p2Row = document.getElementById('p2HpRow');
     if (p2Row) p2Row.style.display = Neo.player2 ? '' : 'none';
-    if (!Neo.loopStarted) { Neo.loopStarted = true; requestAnimationFrame(loop); }
+    if (!Neo.loopStarted) { Neo.loopStarted = true; requestAnimationFrame(Neo.loop); }
   }
 
   // Neo.pvpState is declared in neo.js; this file manages it via Neo.pvpState
 
   function startPvp() {
     setGameState('play');
-    Neo.baseSeedStr = ui.seed.value.trim() || createRandomSeed();
+    Neo.baseSeedStr = Neo.ui.seed.value.trim() || createRandomSeed();
     Neo.selectedDifficulty = normalizeDifficulty(Neo.selectedDifficulty);
     Neo.selectedChallenges = [];
     Neo.runLoopIndex = 0;
@@ -1600,7 +1599,7 @@
     syncSeedState();
     Neo.floor = 1;
     Neo.gameElapsedTime = 0;
-    achievementManager.resetRunCounters();
+    window.achievementManager?.resetRunCounters();
     invalidateRunStatCaches();
     Neo.player = createDefaultPlayer();
     Neo.player.maxHp = 300; Neo.player.hp = 300;
@@ -1616,24 +1615,24 @@
     Neo.lastDamageSource = '';
     Neo.lastDamageSourceKey = '';
     resetScene();
-    generateFloor();
-    if (!Neo.loopStarted) { Neo.loopStarted = true; requestAnimationFrame(loop); }
+    Neo.generateFloor();
+    if (!Neo.loopStarted) { Neo.loopStarted = true; requestAnimationFrame(Neo.loop); }
     const p2Row = document.getElementById('p2HpRow');
     if (p2Row) p2Row.style.display = '';
   }
 
   function startEndlessRoom() {
     Neo.rooms = [];
-    const room = createRoomRecord({ x: 4, y: 4 }, { type: 'combat', doors: { n: false, s: false, e: false, w: false }, cleared: false });
-    decorateRoomData(room);
+    const room = Neo.createRoomRecord({ x: 4, y: 4 }, { type: 'combat', doors: { n: false, s: false, e: false, w: false }, cleared: false });
+    Neo.decorateRoomData(room);
     Neo.rooms.push(room);
     Neo.currentRoom = room;
-    enterRoom(room);
+    Neo.enterRoom(room);
   }
 
   function startEndless() {
     setGameState('play');
-    Neo.baseSeedStr = ui.seed.value.trim() || createRandomSeed();
+    Neo.baseSeedStr = Neo.ui.seed.value.trim() || createRandomSeed();
     Neo.selectedDifficulty = normalizeDifficulty(Neo.selectedDifficulty);
     Neo.selectedChallenges = [];
     Neo.runLoopIndex = 0;
@@ -1642,7 +1641,7 @@
     syncSeedState();
     Neo.floor = 1;
     Neo.gameElapsedTime = 0;
-    achievementManager.resetRunCounters();
+    window.achievementManager?.resetRunCounters();
     Neo.endlessWave = 0;
     Neo.endlessWaveActive = false;
     resetTutorialState(false);
@@ -1654,8 +1653,8 @@
     resetScene();
     resetRngStreams();
     startEndlessRoom();
-    if (ui.endlessWaveNum) ui.endlessWaveNum.textContent = Neo.endlessWave;
-    if (!Neo.loopStarted) { Neo.loopStarted = true; requestAnimationFrame(loop); }
+    if (Neo.ui.endlessWaveNum) Neo.ui.endlessWaveNum.textContent = Neo.endlessWave;
+    if (!Neo.loopStarted) { Neo.loopStarted = true; requestAnimationFrame(Neo.loop); }
   }
 
   function startPractice() {
@@ -1669,7 +1668,7 @@
     syncSeedState();
     Neo.floor = 5;
     Neo.gameElapsedTime = 0;
-    achievementManager.resetRunCounters();
+    window.achievementManager?.resetRunCounters();
     resetTutorialState(false);
     resetMultiplayerState();
     invalidateRunStatCaches();
@@ -1681,17 +1680,18 @@
     resetScene();
     resetRngStreams();
     Neo.rooms = [];
-    const room = createRoomRecord({ x: 4, y: 4 }, { type: 'combat', doors: { n: false, s: false, e: false, w: false }, cleared: true });
-    decorateRoomData(room);
+    const room = Neo.createRoomRecord({ x: 4, y: 4 }, { type: 'combat', doors: { n: false, s: false, e: false, w: false }, cleared: true });
+    Neo.decorateRoomData(room);
     Neo.rooms.push(room);
     Neo.currentRoom = room;
     Neo.player.x = Neo.START_X;
     Neo.player.y = Neo.START_Y;
     syncPracticeMaxHpControls();
-    if (!Neo.loopStarted) { Neo.loopStarted = true; requestAnimationFrame(loop); }
+    if (!Neo.loopStarted) { Neo.loopStarted = true; requestAnimationFrame(Neo.loop); }
   }
 
   const BOSS_RUSH_ORDER = ['queen_cult', 'bulk_golem', 'artificer_knave', 'god'];
+  Neo.BOSS_RUSH_ORDER = BOSS_RUSH_ORDER;
 
   function startBossRush() {
     setGameState('play');
@@ -1704,7 +1704,7 @@
     syncSeedState();
     Neo.floor = 5;
     Neo.gameElapsedTime = 0;
-    achievementManager.resetRunCounters();
+    window.achievementManager?.resetRunCounters();
     Neo.bossRushStage = 0;
     Neo.bossRushActive = false;
     resetTutorialState(false);
@@ -1716,8 +1716,8 @@
     resetScene();
     resetRngStreams();
     Neo.rooms = [];
-    const room = createRoomRecord({ x: 4, y: 4 }, { type: 'combat', doors: { n: false, s: false, e: false, w: false }, cleared: false });
-    decorateRoomData(room);
+    const room = Neo.createRoomRecord({ x: 4, y: 4 }, { type: 'combat', doors: { n: false, s: false, e: false, w: false }, cleared: false });
+    Neo.decorateRoomData(room);
     Neo.rooms.push(room);
     Neo.currentRoom = room;
     Neo.player.x = Neo.START_X;
@@ -1725,15 +1725,15 @@
     // Grant 3 random starting items
     const bossRushStartRandom = createScopedRandom('boss-rush:starting-items');
     for (let i = 0; i < 3; i++) {
-      const key = rollItemDrop({ elite: i === 2, random: bossRushStartRandom });
-      if (key) collectItem(key);
+      const key = Neo.rollItemDrop({ elite: i === 2, random: bossRushStartRandom });
+      if (key) Neo.collectItem(key);
     }
-    addCoins(120);
-    if (ui.bossRushStageNum) ui.bossRushStageNum.textContent = 1;
-    if (ui.bossRushStageNum2) ui.bossRushStageNum2.textContent = 1;
+    Neo.addCoins(120);
+    if (Neo.ui.bossRushStageNum) Neo.ui.bossRushStageNum.textContent = 1;
+    if (Neo.ui.bossRushStageNum2) Neo.ui.bossRushStageNum2.textContent = 1;
     // Spawn first boss immediately
     spawnBossRushBoss();
-    if (!Neo.loopStarted) { Neo.loopStarted = true; requestAnimationFrame(loop); }
+    if (!Neo.loopStarted) { Neo.loopStarted = true; requestAnimationFrame(Neo.loop); }
   }
 
   function spawnBossRushBoss() {
@@ -1741,12 +1741,12 @@
     if (!bossType) return;
     Neo.bossRushActive = true;
     Neo.currentRoom.cleared = false;
-    const safeSpawn = findSafeEnemySpawnPoint(Neo.ROOM_W / 2, Neo.ROOM_H / 2 - 40, 15);
+    const safeSpawn = Neo.findSafeEnemySpawnPoint(Neo.ROOM_W / 2, Neo.ROOM_H / 2 - 40, 15);
     if (!safeSpawn) return;
     let boss;
     if (bossType === 'artificer_knave') {
       // Step 1: Spawn as a regular knave
-      boss = spawnEnemy('knave', safeSpawn.x, safeSpawn.y, false);
+      boss = Neo.spawnEnemy('knave', safeSpawn.x, safeSpawn.y, false);
       boss.isTransforming = true;
       // Visual cue: show particles or text
       Neo.spawnParticle({ x: boss.x, y: boss.y - 40, life: 1.2, text: '???', c: '#ffd27d' });
@@ -1769,7 +1769,7 @@
         // 3. Transformation text
         Neo.spawnParticle({ x: boss.x, y: boss.y - 40, life: 1.6, text: 'TRANSFORM!', c: '#ffd27d' });
         // 4. Play sound if available
-        if (window.playSound) playSound('transform');
+        if (window.playSound) window.playSound('transform');
         // 5. After a short moment, actually transform
         setTimeout(() => {
           if (!boss || !Neo.enemies.includes(boss)) return;
@@ -1785,38 +1785,38 @@
           boss.transformAnimT = 0;
           // --- Wait a moment before cutscene/dialogue so animation is clear ---
           setTimeout(() => {
-            const playedCutscene = tryPlayKnaveKnightCutscene(boss, 'artificer_knave');
+            const playedCutscene = Neo.tryPlayKnaveKnightCutscene(boss, 'artificer_knave');
             const line = Neo.BOSS_OPENING_DIALOGUE['artificer_knave'];
-            if (!playedCutscene && boss && line) sayOverEntity(boss, line);
+            if (!playedCutscene && boss && line) Neo.sayOverEntity(boss, line);
           }, 400); // Wait 0.4s after animation for clarity
         }, 420); // transformation after animation
       }, 1200); // 1.2 seconds delay
     } else {
-      boss = spawnEnemy(bossType, safeSpawn.x, safeSpawn.y, false);
-      const playedCutscene = tryPlayKnaveKnightCutscene(boss, bossType);
+      boss = Neo.spawnEnemy(bossType, safeSpawn.x, safeSpawn.y, false);
+      const playedCutscene = Neo.tryPlayKnaveKnightCutscene(boss, bossType);
       const line = Neo.BOSS_OPENING_DIALOGUE[bossType];
-      if (!playedCutscene && boss && line) sayOverEntity(boss, line);
-      if (bossType === 'god') playGodDialogue(1);
+      if (!playedCutscene && boss && line) Neo.sayOverEntity(boss, line);
+      if (bossType === 'god') Neo.playGodDialogue(1);
     }
-    Neo.spawnParticle({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 50, life: 1.4, text: `BOSS ${bossRushStage + 1}: ${getBossDisplayName(bossType).toUpperCase()}`, c: '#ff8b8b' });
+    Neo.spawnParticle({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 50, life: 1.4, text: `BOSS ${Neo.bossRushStage + 1}: ${getBossDisplayName(bossType).toUpperCase()}`, c: '#ff8b8b' });
   }
 
   function onBossRushBossDefeated() {
     Neo.bossRushActive = false;
     Neo.bossRushStage += 1;
-    if (ui.bossRushStageNum) ui.bossRushStageNum.textContent = Math.min(Neo.bossRushStage + 1, 4);
-    if (ui.bossRushStageNum2) ui.bossRushStageNum2.textContent = Math.min(Neo.bossRushStage + 1, 4);
+    if (Neo.ui.bossRushStageNum) Neo.ui.bossRushStageNum.textContent = Math.min(Neo.bossRushStage + 1, 4);
+    if (Neo.ui.bossRushStageNum2) Neo.ui.bossRushStageNum2.textContent = Math.min(Neo.bossRushStage + 1, 4);
     if (Neo.bossRushStage >= BOSS_RUSH_ORDER.length) {
-      win();
+      Neo.win();
       return;
     }
     const cx = Neo.ROOM_W / 2;
     const cy = Neo.ROOM_H / 2;
-    const rewardRandom = createScopedRandom(`boss-rush:stage:${bossRushStage}:reward`);
-    dropCoins(cx, cy - 20, 80 + Neo.bossRushStage * 30);
-    Neo.pickups.push({ x: cx - 60, y: cy, type: 'item', key: rollItemDrop({ elite: true, random: rewardRandom }) });
+    const rewardRandom = createScopedRandom(`boss-rush:stage:${Neo.bossRushStage}:reward`);
+    Neo.dropCoins(cx, cy - 20, 80 + Neo.bossRushStage * 30);
+    Neo.pickups.push({ x: cx - 60, y: cy, type: 'item', key: Neo.rollItemDrop({ elite: true, random: rewardRandom }) });
     Neo.pickups.push({ x: cx + 60, y: cy, type: 'potion' });
-    grantXp(40 + Neo.bossRushStage * 20);
+    Neo.grantXp(40 + Neo.bossRushStage * 20);
     const nextName = getBossDisplayName(BOSS_RUSH_ORDER[Neo.bossRushStage]).toUpperCase();
     Neo.spawnParticle({ x: cx, y: cy - 40, life: 1.6, text: 'BOSS DEFEATED!', c: '#78d7ff' });
     setTimeout(() => {
@@ -1830,14 +1830,14 @@
   }
 
   function clampPracticeMaxHp(value) {
-    return clamp(Math.round(Number(value) || 1000), 1, 10000);
+    return Neo.clamp(Math.round(Number(value) || 1000), 1, 10000);
   }
 
   function syncPracticeMaxHpControls() {
-    if (!ui.practiceMaxHpSlider && !ui.practiceMaxHpNum) return;
+    if (!Neo.ui.practiceMaxHpSlider && !Neo.ui.practiceMaxHpNum) return;
     const value = clampPracticeMaxHp(Neo.player?.maxHp || 1000);
-    if (ui.practiceMaxHpSlider) ui.practiceMaxHpSlider.value = String(value);
-    if (ui.practiceMaxHpNum) ui.practiceMaxHpNum.value = String(value);
+    if (Neo.ui.practiceMaxHpSlider) Neo.ui.practiceMaxHpSlider.value = String(value);
+    if (Neo.ui.practiceMaxHpNum) Neo.ui.practiceMaxHpNum.value = String(value);
   }
 
   function setPracticeMaxHp(value) {
@@ -1845,34 +1845,34 @@
     const nextMaxHp = clampPracticeMaxHp(value);
     const hpRatio = Neo.player.maxHp > 0 ? Neo.player.hp / Neo.player.maxHp : 1;
     Neo.player.maxHp = nextMaxHp;
-    Neo.player.hp = clamp(Math.round(nextMaxHp * hpRatio), 1, nextMaxHp);
+    Neo.player.hp = Neo.clamp(Math.round(nextMaxHp * hpRatio), 1, nextMaxHp);
     syncPracticeMaxHpControls();
-    updateHud();
+    Neo.updateHud();
   }
 
   function buildPracticeEnemyGrid() {
-    if (!ui.practiceEnemyGrid) return;
+    if (!Neo.ui.practiceEnemyGrid) return;
     const BOSS_TYPES_SET = new Set(['queen_cult', 'bulk_golem', 'artificer_knave', 'god']);
     const allTypes = [
       'hunter', 'charger', 'laser', 'knave', 'sniper', 'machine_gunner',
       'golem', 'cult_mage', 'cult_follower', 'summoner', 'shield_unit', 'healer', 'boss_spawner',
       'queen_cult', 'bulk_golem', 'artificer_knave', 'god', 'mirror_knight',
     ];
-    ui.practiceEnemyGrid.innerHTML = allTypes.map(type => {
+    Neo.ui.practiceEnemyGrid.innerHTML = allTypes.map(type => {
       const isBoss = BOSS_TYPES_SET.has(type);
       const label = type.replace(/_/g, ' ');
       return `<button class="practice-spawn-btn${isBoss ? ' is-boss' : ''}" data-enemy="${type}">${label}</button>`;
     }).join('');
-    ui.practiceEnemyGrid.addEventListener('click', event => {
+    Neo.ui.practiceEnemyGrid.addEventListener('click', event => {
       const btn = event.target instanceof Element ? event.target.closest('[data-enemy]') : null;
       if (!btn || !Neo.player) return;
       const type = btn.dataset.enemy;
-      const elite = ui.practiceEliteToggle?.checked ?? false;
+      const elite = Neo.ui.practiceEliteToggle?.checked ?? false;
       const angle = Neo.nextRandom('encounter') * Math.PI * 2;
       const dist = 160 + Neo.nextRandom('encounter') * 120;
-      const x = clamp(Neo.player.x + Math.cos(angle) * dist, 80, Neo.ROOM_W - 80);
-      const y = clamp(Neo.player.y + Math.sin(angle) * dist, 80, Neo.ROOM_H - 80);
-      spawnEnemy(type, x, y, elite);
+      const x = Neo.clamp(Neo.player.x + Math.cos(angle) * Neo.dist, 80, Neo.ROOM_W - 80);
+      const y = Neo.clamp(Neo.player.y + Math.sin(angle) * Neo.dist, 80, Neo.ROOM_H - 80);
+      Neo.spawnEnemy(type, x, y, elite);
     });
   }
 
@@ -1926,9 +1926,9 @@
     Neo.knaveKnightCutscenePlayed = false;
     Neo.queenMetaoCutscenePlayed = false;
     Neo.wizardPawSelection = null;
-    setWizardPawModalOpen(false);
-    setShopPanelOpen(false);
-    setInventoryPanelOpen(false);
+    Neo.setWizardPawModalOpen(false);
+    Neo.setShopPanelOpen(false);
+    Neo.setInventoryPanelOpen(false);
     Neo.mouse.down = false;
     Neo.mouse.right = false;
     Neo.lastDamageSource = '';
@@ -1963,11 +1963,11 @@
     Neo.rooms = Array.isArray(snapshot.rooms) ? snapshot.rooms : [];
     Neo.currentRoom = Neo.rooms.find(room => room.gx === snapshot.currentRoom?.gx && room.gy === snapshot.currentRoom?.gy) || Neo.rooms[0] || null;
     invalidateRunStatCaches();
-    Neo.player = migratePlayerData(snapshot.player);
+    Neo.player = Neo.migratePlayerData(snapshot.player);
     if (isMultiplayerMode()) {
-      Neo.player2 = snapshot.player2 ? migratePlayerData(snapshot.player2) : null;
-      Neo.player3 = snapshot.player3 ? migratePlayerData(snapshot.player3) : null;
-      Neo.player4 = snapshot.player4 ? migratePlayerData(snapshot.player4) : null;
+      Neo.player2 = snapshot.player2 ? Neo.migratePlayerData(snapshot.player2) : null;
+      Neo.player3 = snapshot.player3 ? Neo.migratePlayerData(snapshot.player3) : null;
+      Neo.player4 = snapshot.player4 ? Neo.migratePlayerData(snapshot.player4) : null;
       Neo.p1DeadInCoop = !!snapshot.p1DeadInCoop;
       Neo.p2DeadInCoop = !!snapshot.p2DeadInCoop;
       Neo.p3DeadInCoop = !!snapshot.p3DeadInCoop;
@@ -1979,7 +1979,7 @@
     } else {
       resetMultiplayerState();
     }
-    Neo.enemies = Array.isArray(snapshot.enemies) ? snapshot.enemies.map(migrateEnemyState) : [];
+    Neo.enemies = Array.isArray(snapshot.enemies) ? snapshot.enemies.map(Neo.migrateEnemyState) : [];
     Neo.deadBodies = Array.isArray(snapshot.deadBodies) ? snapshot.deadBodies : [];
     Neo.particles = [];
     Neo.projectiles = snapshot.projectiles || [];
@@ -1991,7 +1991,7 @@
     Neo.structures = snapshot.structures || Neo.currentRoom?.structures || [];
     Neo.decorations = snapshot.decorations || Neo.currentRoom?.decorations || [];
     if (Neo.currentRoom) {
-      Neo.currentRoom.enemies = Array.isArray(Neo.currentRoom.enemies) ? Neo.currentRoom.enemies.map(migrateEnemyState) : Neo.enemies;
+      Neo.currentRoom.enemies = Array.isArray(Neo.currentRoom.enemies) ? Neo.currentRoom.enemies.map(Neo.migrateEnemyState) : Neo.enemies;
       Neo.currentRoom.deadBodies = Array.isArray(Neo.currentRoom.deadBodies) ? Neo.currentRoom.deadBodies : Neo.deadBodies;
       Neo.currentRoom.projectiles = Array.isArray(Neo.currentRoom.projectiles) ? Neo.currentRoom.projectiles : Neo.projectiles;
       Neo.currentRoom.chests = Array.isArray(Neo.currentRoom.chests) ? Neo.currentRoom.chests : Neo.chests;
@@ -2043,16 +2043,16 @@
     Neo.monsterRoamTimer = Number(snapshot.monsterRoamTimer || 0);
     Neo.knaveKnightCutscenePlayed = !!snapshot.knaveKnightCutscenePlayed;
     Neo.queenMetaoCutscenePlayed = !!snapshot.queenMetaoCutscenePlayed;
-    restoreRivals(snapshot.rivals);
+    Neo.restoreRivals(snapshot.rivals);
     Neo.wizardPawSelection = null;
-    setWizardPawModalOpen(false);
-    setShopPanelOpen(false);
-    setInventoryPanelOpen(false);
-    updateItemUI();
-    injectRivalsToCurrentRoom();
-    updateObjective();
-    updateHud();
-    persistMetaSoon();
+    Neo.setWizardPawModalOpen(false);
+    Neo.setShopPanelOpen(false);
+    Neo.setInventoryPanelOpen(false);
+    Neo.updateItemUI();
+    Neo.injectRivalsToCurrentRoom();
+    Neo.updateObjective();
+    Neo.updateHud();
+    Neo.persistMetaSoon();
   }
 
   // Expose on Neo
@@ -2180,6 +2180,7 @@
   Neo.refreshMenuState = refreshMenuState;
   Neo.updateCharacterSelectionUI = updateCharacterSelectionUI;
   Neo.setGameState = setGameState;
+  Neo.startGame = startGame;
   Neo.spawnMpPlayer = spawnMpPlayer;
   Neo.startCoop = startCoop;
   Neo.startPvp = startPvp;
@@ -2196,4 +2197,3 @@
   Neo.resetScene = resetScene;
   Neo.sanitizePickupList = sanitizePickupList;
   Neo.restoreRun = restoreRun;
-})();

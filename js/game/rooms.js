@@ -1,9 +1,8 @@
 // rooms.js — standalone IIFE. Floor generation, rooms, rival system.
-(() => {
 
   function generateFloor() {
-    syncSeedState();
-    resetRngStreams();
+    Neo.syncSeedState();
+    Neo.resetRngStreams();
     Neo.rooms = [];
 
     const grid = Array.from({ length: 9 }, () => Array(9).fill(null));
@@ -14,8 +13,8 @@
 
     const target = 8 + Math.floor(Neo.nextRandom('world') * 3) + Math.min(2, Neo.floor >> 2);
     while (positions.length < target) {
-      const seed = positions[irand(0, positions.length - 1, 'world')];
-      const dirs = shuffle([[1, 0], [-1, 0], [0, 1], [0, -1]], 'world');
+      const seed = positions[Neo.irand(0, positions.length - 1, 'world')];
+      const dirs = Neo.shuffle([[1, 0], [-1, 0], [0, 1], [0, -1]], 'world');
       let added = false;
       for (const [dx, dy] of dirs) {
         const nx = seed.x + dx;
@@ -65,7 +64,7 @@
     }
 
     const pool = Neo.rooms.filter(room => room !== startRoom && room !== farRoom);
-    shuffle(pool, 'world');
+    Neo.shuffle(pool, 'world');
     const treasureCount = Math.min(3, 1 + Math.floor(Neo.nextRandom('world') * 3));
     for (let index = 0; index < treasureCount; index += 1) {
       if (pool[index]) pool[index].type = 'treasure';
@@ -84,8 +83,8 @@
     spawnRivals();
     Neo.gameEvents.emit('floor:enter', { floor: Neo.floor });
     enterRoom(startRoom);
-    updateObjective();
-    updateHud();
+    Neo.updateObjective();
+    Neo.updateHud();
   }
 
   function decorateRoomData(room) {
@@ -113,17 +112,17 @@
       );
       if (room.secretKind === 'warp') {
         const deltaPool = Neo.floor <= 2 ? [1, 2] : Neo.floor >= Neo.MAX_FLOOR - 1 ? [-2, -1] : [-2, -1, 1, 2];
-        const delta = deltaPool[irand(0, deltaPool.length - 1, 'world')];
+        const delta = deltaPool[Neo.irand(0, deltaPool.length - 1, 'world')];
         room.pickups.push({
           x: Neo.ROOM_W / 2,
           y: Neo.ROOM_H / 2,
           type: 'secretWarp',
           delta,
-          targetFloor: clamp(Neo.floor + delta, 1, Neo.MAX_FLOOR),
+          targetFloor: Neo.clamp(Neo.floor + delta, 1, Neo.MAX_FLOOR),
         });
       } else {
-        const regularOffers = shuffle(['relic', 'vitality', 'wealth'], 'world');
-        const offerPool = shuffle(['xp', regularOffers[0], regularOffers[1]], 'world');
+        const regularOffers = Neo.shuffle(['relic', 'vitality', 'wealth'], 'world');
+        const offerPool = Neo.shuffle(['xp', regularOffers[0], regularOffers[1]], 'world');
         room.pickups.push(createSecretVendorOffer(offerPool[0], Neo.ROOM_W / 2 - 110, Neo.ROOM_H / 2 + 26, room, 0));
         room.pickups.push(createSecretVendorOffer(offerPool[1], Neo.ROOM_W / 2, Neo.ROOM_H / 2 - 18, room, 1));
         room.pickups.push(createSecretVendorOffer(offerPool[2], Neo.ROOM_W / 2 + 110, Neo.ROOM_H / 2 + 26, room, 2));
@@ -136,12 +135,12 @@
       decorateRoomStructures(room);
     }
 
-    const potCount = room.type === 'shop' ? 1 : (room.type === 'challenge' || room.type === 'anvil') ? 0 : irand(1, 3, 'world');
+    const potCount = room.type === 'shop' ? 1 : (room.type === 'challenge' || room.type === 'anvil') ? 0 : Neo.irand(1, 3, 'world');
     for (let index = 0; index < potCount; index += 1) {
       room.destructibles.push({
         kind: 'pot',
-        x: 150 + rand(Neo.ROOM_W - 300, 0, 'world'),
-        y: 120 + rand(Neo.ROOM_H - 240, 0, 'world'),
+        x: 150 + Neo.rand(Neo.ROOM_W - 300, 0, 'world'),
+        y: 120 + Neo.rand(Neo.ROOM_H - 240, 0, 'world'),
         r: 12,
         hp: 1,
         broken: false,
@@ -151,8 +150,8 @@
     if (Neo.nextRandom('world') < 0.45 && room.type !== 'shop' && room.type !== 'challenge' && room.type !== 'anvil') {
       room.destructibles.push({
         kind: 'barrel',
-        x: 180 + rand(Neo.ROOM_W - 360, 0, 'world'),
-        y: 140 + rand(Neo.ROOM_H - 280, 0, 'world'),
+        x: 180 + Neo.rand(Neo.ROOM_W - 360, 0, 'world'),
+        y: 140 + Neo.rand(Neo.ROOM_H - 280, 0, 'world'),
         r: 20,
         hp: 1,
         broken: false,
@@ -181,7 +180,7 @@
       room.destructibles.push({
         kind: 'wall',
         x: wallX,
-        y: Neo.ROOM_H / 2 + rand(120, -120, 'world'),
+        y: Neo.ROOM_H / 2 + Neo.rand(120, -120, 'world'),
         r: 26,
         hp: 2,
         broken: false,
@@ -189,7 +188,7 @@
       room.destructibles.push({
         kind: 'pot',
         x: hiddenX,
-        y: Neo.ROOM_H / 2 + rand(140, -140, 'world'),
+        y: Neo.ROOM_H / 2 + Neo.rand(140, -140, 'world'),
         r: 12,
         hp: 1,
         broken: false,
@@ -205,7 +204,7 @@
 
     if (room.type === 'shop') {
       room.shopOffers = [
-        { type: 'potion', cost: getShopPotionCost(), x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 + 88, bought: false },
+        { type: 'potion', cost: Neo.getShopPotionCost(), x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 + 88, bought: false },
       ];
       ensureShopHasMinimumItemOffers(room, 3);
       room.shopMoveOffers = [];
@@ -216,7 +215,7 @@
       room.challengeStarted = false;
       room.challengeRewardSpawned = false;
       room.challengeFailed = false;
-      room.challengeType = rollChallengeTrialType();
+      room.challengeType = Neo.rollChallengeTrialType();
       room.challengeTimer = 0;
       room.challengeTick = 0;
       room.challengeData = {};
@@ -294,11 +293,11 @@
     };
     const pickCombatArchetype = () => {
       const pool = ['pillar_ring', 'split_cross', 'side_lanes', 'gate_room', 'broken_halls'];
-      return pool[irand(0, pool.length - 1, 'world')];
+      return pool[Neo.irand(0, pool.length - 1, 'world')];
     };
     const pickBossArchetype = () => {
       const pool = ['boss_buttresses', 'boss_crossfire', 'boss_processional'];
-      return pool[irand(0, pool.length - 1, 'world')];
+      return pool[Neo.irand(0, pool.length - 1, 'world')];
     };
 
     room.layoutArchetype = room.type === 'boss' ? pickBossArchetype() : pickCombatArchetype();
@@ -452,8 +451,8 @@
     for (let index = 0; index < treeCount; index += 1) {
       const side = index % 2 === 0 ? 1 : -1;
       const depth = 84 + Neo.nextRandom('world') * 72;
-      const x = clamp(Neo.ROOM_W / 2 + side * (120 + Neo.nextRandom('world') * 180), Neo.WALL + 50, Neo.ROOM_W - Neo.WALL - 50);
-      const y = clamp(Neo.ROOM_H / 2 + (Neo.nextRandom('world') < 0.5 ? -1 : 1) * depth, Neo.WALL + 62, Neo.ROOM_H - Neo.WALL - 62);
+      const x = Neo.clamp(Neo.ROOM_W / 2 + side * (120 + Neo.nextRandom('world') * 180), Neo.WALL + 50, Neo.ROOM_W - Neo.WALL - 50);
+      const y = Neo.clamp(Neo.ROOM_H / 2 + (Neo.nextRandom('world') < 0.5 ? -1 : 1) * depth, Neo.WALL + 62, Neo.ROOM_H - Neo.WALL - 62);
       room.decorations.push({
         kind: Neo.nextRandom('world') < 0.45 ? 'fruit_tree' : 'tree',
         x,
@@ -481,14 +480,14 @@
         x,
         y,
         heal: 18 + Math.round(Neo.nextRandom('world') * 10),
-        respawnAt: Neo.gameElapsedTime + rand(6, 2, 'world') + index * 2,
+        respawnAt: Neo.gameElapsedTime + Neo.rand(6, 2, 'world') + index * 2,
         fruitSpawned: false,
       };
       room.gardenFruitNodes.push(node);
       room.decorations.push({
         kind: 'fruit_tree',
-        x: clamp(x + rand(42, -42, 'world'), Neo.WALL + 46, Neo.ROOM_W - Neo.WALL - 46),
-        y: clamp(y + rand(36, -36, 'world'), Neo.WALL + 52, Neo.ROOM_H - Neo.WALL - 52),
+        x: Neo.clamp(x + Neo.rand(42, -42, 'world'), Neo.WALL + 46, Neo.ROOM_W - Neo.WALL - 46),
+        y: Neo.clamp(y + Neo.rand(36, -36, 'world'), Neo.WALL + 52, Neo.ROOM_H - Neo.WALL - 52),
         r: 20 + Neo.nextRandom('world') * 8,
       });
     }
@@ -554,24 +553,24 @@
     const ranges = [];
     if (lowMax > min) ranges.push([min, lowMax]);
     if (max > highMin) ranges.push([highMin, max]);
-    if (!ranges.length) return rand(max, min, 'world');
+    if (!ranges.length) return Neo.rand(max, min, 'world');
 
-    const [rangeMin, rangeMax] = ranges[irand(0, ranges.length - 1, 'world')];
-    return rand(rangeMax, rangeMin, 'world');
+    const [rangeMin, rangeMax] = ranges[Neo.irand(0, ranges.length - 1, 'world')];
+    return Neo.rand(rangeMax, rangeMin, 'world');
   }
 
   function createMoatLavaHazard() {
-    const r = 44 + rand(24, 0, 'world');
-    const side = irand(0, 3, 'world');
-    const wallOffset = Neo.WALL + r + 18 + rand(16, 0, 'world');
+    const r = 44 + Neo.rand(24, 0, 'world');
+    const side = Neo.irand(0, 3, 'world');
+    const wallOffset = Neo.WALL + r + 18 + Neo.rand(16, 0, 'world');
     const hazard = {
       kind: 'lava',
       x: Neo.ROOM_W / 2,
       y: Neo.ROOM_H / 2,
       r,
-      phase: rand(Math.PI * 2, 0, 'world'),
-      pulse: rand(1.8, 1.15, 'world'),
-      wobble: rand(0.75, 0.45, 'world'),
+      phase: Neo.rand(Math.PI * 2, 0, 'world'),
+      pulse: Neo.rand(1.8, 1.15, 'world'),
+      wobble: Neo.rand(0.75, 0.45, 'world'),
       side,
     };
 
@@ -597,19 +596,19 @@
       kind: 'lava',
       x: primary.x,
       y: primary.y,
-      r: primary.r * rand(0.86, 0.68, 'world'),
-      phase: primary.phase + rand(1.9, 0.6, 'world'),
-      pulse: primary.pulse + rand(0.35, -0.2, 'world'),
-      wobble: primary.wobble + rand(0.2, -0.15, 'world'),
+      r: primary.r * Neo.rand(0.86, 0.68, 'world'),
+      phase: primary.phase + Neo.rand(1.9, 0.6, 'world'),
+      pulse: primary.pulse + Neo.rand(0.35, -0.2, 'world'),
+      wobble: primary.wobble + Neo.rand(0.2, -0.15, 'world'),
       side: primary.side,
     };
 
-    const along = (primary.r + companion.r) * rand(1.2, 0.75, 'world');
+    const along = (primary.r + companion.r) * Neo.rand(1.2, 0.75, 'world');
     if (primary.side <= 1) {
-      companion.x = clamp(primary.x + (Neo.nextRandom('world') < 0.5 ? -along : along), companion.r + 42, Neo.ROOM_W - companion.r - 42);
+      companion.x = Neo.clamp(primary.x + (Neo.nextRandom('world') < 0.5 ? -along : along), companion.r + 42, Neo.ROOM_W - companion.r - 42);
       companion.y = primary.side === 0 ? Neo.WALL + companion.r + 18 : Neo.ROOM_H - Neo.WALL - companion.r - 18;
     } else {
-      companion.y = clamp(primary.y + (Neo.nextRandom('world') < 0.5 ? -along : along), companion.r + 42, Neo.ROOM_H - companion.r - 42);
+      companion.y = Neo.clamp(primary.y + (Neo.nextRandom('world') < 0.5 ? -along : along), companion.r + 42, Neo.ROOM_H - companion.r - 42);
       companion.x = primary.side === 2 ? Neo.WALL + companion.r + 18 : Neo.ROOM_W - Neo.WALL - companion.r - 18;
     }
 
@@ -627,9 +626,9 @@
       if (x < Neo.WALL + radius + 12 || x > Neo.ROOM_W - Neo.WALL - radius - 12) return true;
       if (y < Neo.WALL + radius + 12 || y > Neo.ROOM_H - Neo.WALL - radius - 12) return true;
       if (Math.hypot(x - Neo.START_X, y - Neo.START_Y) < 78) return true;
-      if (structuresList.some(structure => circleRect(x, y, radius + 6, structure.x - structure.w / 2, structure.y - structure.h / 2, structure.w, structure.h))) return true;
-      if (destructibleList.some(prop => !prop.broken && !prop.hidden && destructibleIntersectsCircle(prop, x, y, radius + 4))) return true;
-      if (Array.isArray(room.hazards) && room.hazards.some(hazard => hazard?.kind === 'explosive_trap' && dist(x, y, hazard.x, hazard.y) < radius + (hazard.r || 16) + 58)) return true;
+      if (structuresList.some(structure => Neo.circleRect(x, y, radius + 6, structure.x - structure.w / 2, structure.y - structure.h / 2, structure.w, structure.h))) return true;
+      if (destructibleList.some(prop => !prop.broken && !prop.hidden && Neo.destructibleIntersectsCircle(prop, x, y, radius + 4))) return true;
+      if (Array.isArray(room.hazards) && room.hazards.some(hazard => hazard?.kind === 'explosive_trap' && Neo.dist(x, y, hazard.x, hazard.y) < radius + (hazard.r || 16) + 58)) return true;
       return false;
     };
 
@@ -637,8 +636,8 @@
       const chamber = chambers[(index + attempt) % chambers.length] || chambers[0];
       const halfW = Math.max(40, chamber.w / 2 - 28);
       const halfH = Math.max(40, chamber.h / 2 - 28);
-      const x = clamp(chamber.x + rand(halfW, -halfW, 'world'), Neo.WALL + radius + 12, Neo.ROOM_W - Neo.WALL - radius - 12);
-      const y = clamp(chamber.y + rand(halfH, -halfH, 'world'), Neo.WALL + radius + 12, Neo.ROOM_H - Neo.WALL - radius - 12);
+      const x = Neo.clamp(chamber.x + Neo.rand(halfW, -halfW, 'world'), Neo.WALL + radius + 12, Neo.ROOM_W - Neo.WALL - radius - 12);
+      const y = Neo.clamp(chamber.y + Neo.rand(halfH, -halfH, 'world'), Neo.WALL + radius + 12, Neo.ROOM_H - Neo.WALL - radius - 12);
       if (collides(x, y)) continue;
       return {
         kind: 'explosive_trap',
@@ -740,8 +739,8 @@
 
   function createSecretVendorOffer(kind, x, y, room = Neo.currentRoom, index = 0) {
     if (kind === 'relic') {
-      const vendorRandom = createRoomRandom(room, `secret-vendor:relic:${index}`);
-      return { x, y, type: 'secretVendor', offerKind: 'relic', cost: 1, label: 'Relic', rewardKey: rollItemDrop({ elite: true, random: vendorRandom }) };
+      const vendorRandom = Neo.createRoomRandom(room, `secret-vendor:relic:${index}`);
+      return { x, y, type: 'secretVendor', offerKind: 'relic', cost: 1, label: 'Relic', rewardKey: Neo.rollItemDrop({ elite: true, random: vendorRandom }) };
     }
     if (kind === 'vitality') {
       return { x, y, type: 'secretVendor', offerKind: 'vitality', cost: 1, label: 'Vital' };
@@ -752,8 +751,8 @@
         y,
         type: 'secretVendor',
         offerKind: 'xp',
-        cost: getSecretXpOfferCost(),
-        xpValue: getSecretXpOfferAmount(),
+        cost: Neo.getSecretXpOfferCost(),
+        xpValue: Neo.getSecretXpOfferAmount(),
         label: 'XP',
       };
     }
@@ -761,9 +760,9 @@
   }
 
   function assignSecretRoom(roomMap) {
-    const anchors = shuffle(Neo.rooms.filter(room => !room.secret && ['combat', 'treasure', 'shop', 'anvil'].includes(room.type)), 'world');
+    const anchors = Neo.shuffle(Neo.rooms.filter(room => !room.secret && ['combat', 'treasure', 'shop', 'anvil'].includes(room.type)), 'world');
     for (const anchor of anchors) {
-      const dirs = shuffle([...DIRECTIONS], 'world');
+      const dirs = Neo.shuffle([...Neo.DIRECTIONS], 'world');
       for (const dir of dirs) {
         const vector = Neo.DIRECTION_VECTORS[dir];
         const nx = anchor.gx + vector.dx;
@@ -832,7 +831,7 @@
     const angleStep = Math.PI / 8;
     const clearOfEnemies = (x, y) => Neo.enemies.every(e => Math.hypot(e.x - x, e.y - y) > e.r + testRadius + 32);
 
-    if (!isBlocked(Neo.START_X, Neo.START_Y, testRadius) && clearOfEnemies(Neo.START_X, Neo.START_Y)) {
+    if (!Neo.isBlocked(Neo.START_X, Neo.START_Y, testRadius) && clearOfEnemies(Neo.START_X, Neo.START_Y)) {
       return { x: Neo.START_X, y: Neo.START_Y };
     }
 
@@ -840,8 +839,8 @@
       for (let r = searchRadius * 0.25; r <= searchRadius; r += 20) {
         const x = Neo.START_X + Math.cos(angle) * r;
         const y = Neo.START_Y + Math.sin(angle) * r;
-        if (!isBlocked(x, y, testRadius) && clearOfEnemies(x, y)) {
-          return { x: clamp(x, Neo.WALL + testRadius, Neo.ROOM_W - Neo.WALL - testRadius), y: clamp(y, Neo.WALL + testRadius, Neo.ROOM_H - Neo.WALL - testRadius) };
+        if (!Neo.isBlocked(x, y, testRadius) && clearOfEnemies(x, y)) {
+          return { x: Neo.clamp(x, Neo.WALL + testRadius, Neo.ROOM_W - Neo.WALL - testRadius), y: Neo.clamp(y, Neo.WALL + testRadius, Neo.ROOM_H - Neo.WALL - testRadius) };
         }
       }
     }
@@ -893,7 +892,7 @@
   Neo.gameEvents.on('room:enter', ({ room }) => {
     clearPlayerTransientDefense();
     Neo.player.roomDamageTaken = 0;
-    endActiveLaser();
+    Neo.endActiveLaser();
     Neo.laserTime = 0;
     Neo.laserTick = 0;
     Neo.laserAngle = 0;
@@ -906,13 +905,13 @@
   });
 
   function isBossFightActive() {
-    return Neo.currentRoom?.type === 'boss' || Neo.currentRoom?.type === 'god' || Neo.enemies.some(enemy => isBossType(enemy?.type));
+    return Neo.currentRoom?.type === 'boss' || Neo.currentRoom?.type === 'god' || Neo.enemies.some(enemy => Neo.isBossType(enemy?.type));
   }
 
   function enterRoom(room) {
     syncCurrentRoomState();
-    setShopPanelOpen(false);
-    setInventoryPanelOpen(false);
+    Neo.setShopPanelOpen(false);
+    Neo.setInventoryPanelOpen(false);
     Neo.currentRoom = room;
     room.explored = true;
     room.visited = true;
@@ -921,7 +920,7 @@
     room.deadBodies = Neo.deadBodies;
     Neo.projectiles = room.projectiles || [];
     Neo.chests = room.chests || [];
-    Neo.pickups = sanitizePickupList(room.pickups);
+    Neo.pickups = Neo.sanitizePickupList(room.pickups);
     room.pickups = Neo.pickups;
     Neo.particles = [];
     Neo.destructibles = room.destructibles || [];
@@ -940,32 +939,32 @@
       if (Neo.gameMode === 'endless') {
         Neo.endlessWaveActive = true;
         const firstWaveSize = 4 + Neo.floor;
-        spawnWave(firstWaveSize, 'combat');
+        Neo.spawnWave(firstWaveSize, 'combat');
         Neo.spawnParticle({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 40, life: 1.2, text: 'WAVE 1', c: '#ff8b8b' });
       } else {
-        spawnWave(getWaveCount(3), 'combat');
+        Neo.spawnWave(Neo.getWaveCount(3), 'combat');
       }
     }
     if (room.type === 'shop') {
       ensureShopHasMinimumItemOffers(room, 3);
       room.shopWeaponOffers = Array.isArray(room.shopWeaponOffers) ? room.shopWeaponOffers : [];
-      refreshRoomShopCosts(room);
+      Neo.refreshRoomShopCosts(room);
       Neo.shopOffers = room.shopOffers || [];
     }
     if (room.type === 'challenge') {
       if (!room.cleared && !room.challengeStarted) {
-        spawnChallengeStarter(room);
+        Neo.spawnChallengeStarter(room);
       } else if (!room.cleared && room.challengeStarted && !Neo.enemies.some(enemy => enemy.type === 'mirror_knight')) {
-        if ((room.challengeType || 'mirror') === 'mirror') spawnMirrorChampion();
+        if ((room.challengeType || 'mirror') === 'mirror') Neo.spawnMirrorChampion();
       }
     }
 
     if (room.type === 'anvil') {
-      setAnvilPanelOpen(false);
+      Neo.setAnvilPanelOpen(false);
     }
 
     if (room.type === 'treasure' && !room.cleared && Neo.chests.length === 0) {
-      const treasureRandom = createRoomRandom(room, 'treasure:chests');
+      const treasureRandom = Neo.createRoomRandom(room, 'treasure:chests');
       const chestCount = 1 + Math.floor(treasureRandom() * 2);
       for (let index = 0; index < chestCount; index += 1) {
         const rewardsItem = treasureRandom() < 0.9;
@@ -974,7 +973,7 @@
           y: Neo.ROOM_H / 2,
           open: false,
           rewardType: rewardsItem ? 'item' : 'potion',
-          rewardKey: rewardsItem ? rollItemDrop({ random: treasureRandom }) : '',
+          rewardKey: rewardsItem ? Neo.rollItemDrop({ random: treasureRandom }) : '',
         });
       }
     }
@@ -985,10 +984,10 @@
 
     if (room.type === 'ladder') {
       if (!room.cleared && Neo.enemies.length === 0) {
-        spawnWave(getWaveCount(4), 'ladder');
+        Neo.spawnWave(Neo.getWaveCount(4), 'ladder');
         // Almost always add a random non-god boss to ladder rooms
         if (!room.ladderBossPlan) {
-          const ladderRandom = createRoomRandom(room, 'ladder:boss');
+          const ladderRandom = Neo.createRoomRandom(room, 'ladder:boss');
           const _ladderBossPool = ['queen_cult', 'bulk_golem', 'artificer_knave'];
           room.ladderBossPlan = {
             spawn: ladderRandom() < 0.88,
@@ -997,12 +996,12 @@
         }
         if (room.ladderBossPlan.spawn) {
           const _ladderBossType = room.ladderBossPlan.type;
-          const _ladderBossSpawn = findSafeEnemySpawnPoint(Neo.ROOM_W / 2, Neo.ROOM_H / 2 - 60, 20);
+          const _ladderBossSpawn = Neo.findSafeEnemySpawnPoint(Neo.ROOM_W / 2, Neo.ROOM_H / 2 - 60, 20);
           if (_ladderBossSpawn) {
-            const _ladderBoss = spawnEnemy(_ladderBossType, _ladderBossSpawn.x, _ladderBossSpawn.y, false);
-            const _playedLadderCutscene = tryPlayBossIntroCutscene(_ladderBoss, _ladderBossType);
+            const _ladderBoss = Neo.spawnEnemy(_ladderBossType, _ladderBossSpawn.x, _ladderBossSpawn.y, false);
+            const _playedLadderCutscene = Neo.tryPlayBossIntroCutscene(_ladderBoss, _ladderBossType);
             const _ladderBossLine = Neo.BOSS_OPENING_DIALOGUE[_ladderBossType];
-            if (!_playedLadderCutscene && _ladderBoss && _ladderBossLine) sayOverEntity(_ladderBoss, _ladderBossLine);
+            if (!_playedLadderCutscene && _ladderBoss && _ladderBossLine) Neo.sayOverEntity(_ladderBoss, _ladderBossLine);
           }
         }
       }
@@ -1010,11 +1009,11 @@
         let ladderX = Neo.ROOM_W / 2;
         let ladderY = Neo.ROOM_H / 2;
         let attempts = 0;
-        while (isBlocked(ladderX, ladderY, 16) && attempts < 20) {
+        while (Neo.isBlocked(ladderX, ladderY, 16) && attempts < 20) {
           const angle = Neo.nextRandom('world') * Math.PI * 2;
           const radius = 60 + Neo.nextRandom('world') * 120;
-          ladderX = clamp(Neo.ROOM_W / 2 + Math.cos(angle) * radius, 60, Neo.ROOM_W - 60);
-          ladderY = clamp(Neo.ROOM_H / 2 + Math.sin(angle) * radius, 60, Neo.ROOM_H - 60);
+          ladderX = Neo.clamp(Neo.ROOM_W / 2 + Math.cos(angle) * radius, 60, Neo.ROOM_W - 60);
+          ladderY = Neo.clamp(Neo.ROOM_H / 2 + Math.sin(angle) * radius, 60, Neo.ROOM_H - 60);
           attempts++;
         }
         Neo.pickups.push({ x: ladderX, y: ladderY, type: 'ladder' });
@@ -1023,17 +1022,17 @@
 
     if (room.type === 'boss') {
       if (!room.cleared && Neo.enemies.length === 0) {
-        spawnFloorBoss();
+        Neo.spawnFloorBoss();
       }
       if (room.cleared && !Neo.pickups.some(pickup => pickup.type === 'ladder')) {
         let ladderX = Neo.ROOM_W / 2;
         let ladderY = Neo.ROOM_H / 2;
         let attempts = 0;
-        while (isBlocked(ladderX, ladderY, 16) && attempts < 20) {
+        while (Neo.isBlocked(ladderX, ladderY, 16) && attempts < 20) {
           const angle = Neo.nextRandom('world') * Math.PI * 2;
           const radius = 60 + Neo.nextRandom('world') * 120;
-          ladderX = clamp(Neo.ROOM_W / 2 + Math.cos(angle) * radius, 60, Neo.ROOM_W - 60);
-          ladderY = clamp(Neo.ROOM_H / 2 + Math.sin(angle) * radius, 60, Neo.ROOM_H - 60);
+          ladderX = Neo.clamp(Neo.ROOM_W / 2 + Math.cos(angle) * radius, 60, Neo.ROOM_W - 60);
+          ladderY = Neo.clamp(Neo.ROOM_H / 2 + Math.sin(angle) * radius, 60, Neo.ROOM_H - 60);
           attempts++;
         }
         Neo.pickups.push({ x: ladderX, y: ladderY, type: 'ladder' });
@@ -1046,7 +1045,7 @@
     if (room.type === 'god') {
       const ensureGodIntroDialogue = () => {
         if (room.godIntroPlayed) return;
-        if (playGodDialogue(1)) room.godIntroPlayed = true;
+        if (Neo.playGodDialogue(1)) room.godIntroPlayed = true;
       };
       if (room.cleared) {
         if (!Neo.pickups.some(pickup => pickup.type === 'crown')) {
@@ -1054,25 +1053,25 @@
         }
       } else if (room.bossStarted) {
         if (!Neo.enemies.some(enemy => enemy.type === 'god')) {
-          spawnGodBoss();
+          Neo.spawnGodBoss();
         }
         ensureGodIntroDialogue();
       } else if (!room.bossStarted) {
         // Auto-start the god fight immediately — no upfront choice
         Neo.currentRoom.bossStarted = true;
         if (!Neo.enemies.some(enemy => enemy.type === 'god')) {
-          spawnGodBoss();
+          Neo.spawnGodBoss();
         }
         ensureGodIntroDialogue();
         syncCurrentRoomState();
-        updateObjective();
+        Neo.updateObjective();
       }
     }
 
     updateGardenGrowth();
     syncCurrentRoomState();
-    updateObjective();
-    scheduleRunSave();
+    Neo.updateObjective();
+    Neo.scheduleRunSave();
   }
 
   function ensureShopHasMinimumItemOffers(room, minItemOffers = 3) {
@@ -1081,7 +1080,7 @@
     const itemOffers = room.shopOffers.filter(offer => offer?.type === 'item');
     if (itemOffers.length >= minItemOffers) return;
 
-    const shopRandom = createRoomRandom(room, 'shop:item-offers');
+    const shopRandom = Neo.createRoomRandom(room, 'shop:item-offers');
     const occupiedKeys = new Set(itemOffers.map(offer => offer.key));
     const itemSlotsX = [Neo.ROOM_W / 2 - 180, Neo.ROOM_W / 2, Neo.ROOM_W / 2 + 180, Neo.ROOM_W / 2 - 90, Neo.ROOM_W / 2 + 90];
     let created = 0;
@@ -1089,20 +1088,20 @@
     while (itemOffers.length + created < minItemOffers) {
       let key = '';
       for (let attempts = 0; attempts < 12; attempts += 1) {
-        const candidate = rollItemDrop({ random: shopRandom });
+        const candidate = Neo.rollItemDrop({ random: shopRandom });
         if (!occupiedKeys.has(candidate)) {
           key = candidate;
           break;
         }
       }
-      if (!key) key = rollItemDrop({ random: shopRandom });
+      if (!key) key = Neo.rollItemDrop({ random: shopRandom });
       occupiedKeys.add(key);
       const itemIndex = itemOffers.length + created;
       const rarity = Neo.itemRegistry.get(key)?.rarity || Neo.ITEM_DEFS[key]?.rarity || 'knight';
       room.shopOffers.push({
         type: 'item',
         key,
-        cost: getShopItemCost(itemIndex, Neo.floor, Neo.selectedDifficulty, rarity),
+        cost: Neo.getShopItemCost(itemIndex, Neo.floor, Neo.selectedDifficulty, rarity),
         x: itemSlotsX[itemIndex] ?? Neo.ROOM_W / 2,
         y: Neo.ROOM_H / 2 - 16,
         bought: false,
@@ -1148,9 +1147,9 @@
     if (rival.memory?.princessKnightIntroPlayed) return false;
 
     rival.memory.princessKnightIntroPlayed = true;
-    clearGameplayInput();
-    setShopPanelOpen(false);
-    setInventoryPanelOpen(false);
+    Neo.clearGameplayInput();
+    Neo.setShopPanelOpen(false);
+    Neo.setInventoryPanelOpen(false);
     enemy.attackCd = Math.max(Number(enemy.attackCd || 0), 1.2);
     enemy.stun = Math.max(Number(enemy.stun || 0), 0.2);
 
@@ -1176,7 +1175,7 @@
     const syncLiveEnemy = options.syncLiveEnemy !== false;
     const keepHpRatio = options.keepHpRatio !== false;
     const oldMax = Math.max(1, Number(rival.max || rival.baseHp || 1));
-    const oldHp = clamp(Number(rival.hp || oldMax), 1, oldMax);
+    const oldHp = Neo.clamp(Number(rival.hp || oldMax), 1, oldMax);
     const level = Math.max(1, Number(rival.level || 1));
     const hpScale = 1 + (level - 1) * 0.14;
     const dmgScale = 1 + (level - 1) * 0.11;
@@ -1190,21 +1189,21 @@
     rival.attackCd = Math.max(0.42, Number(rival.baseAttackCd || rival.attackCd || 1) * attackCdScale);
     rival.moveInterval = Math.max(3.2, Number(rival.baseMoveInterval || Neo.RIVAL_MOVE_INTERVAL_BASE) * moveScale);
     rival.hp = keepHpRatio
-      ? clamp(Math.round((oldHp / oldMax) * rival.max), 1, rival.max)
-      : clamp(oldHp, 1, rival.max);
+      ? Neo.clamp(Math.round((oldHp / oldMax) * rival.max), 1, rival.max)
+      : Neo.clamp(oldHp, 1, rival.max);
     rival.hpSnapshot = rival.hp;
 
     if (!syncLiveEnemy) return;
     const liveEnemy = Neo.enemies.find(e => e.type === 'rival' && ((e.rivalData && e.rivalData.rivalId === rival.rivalId) || e.rivalKey === rival.characterKey));
     if (!liveEnemy) return;
     const liveOldMax = Math.max(1, Number(liveEnemy.max || oldMax));
-    const liveOldHp = clamp(Number(liveEnemy.hp || liveOldMax), 1, liveOldMax);
+    const liveOldHp = Neo.clamp(Number(liveEnemy.hp || liveOldMax), 1, liveOldMax);
     liveEnemy.max = rival.max;
     liveEnemy.dmg = rival.dmg;
     liveEnemy.speed = rival.speed;
     liveEnemy.hp = keepHpRatio
-      ? clamp(Math.round((liveOldHp / liveOldMax) * rival.max), 1, rival.max)
-      : clamp(liveOldHp, 1, rival.max);
+      ? Neo.clamp(Math.round((liveOldHp / liveOldMax) * rival.max), 1, rival.max)
+      : Neo.clamp(liveOldHp, 1, rival.max);
     rival.hp = liveEnemy.hp;
     rival.hpSnapshot = liveEnemy.hp;
   }
@@ -1250,7 +1249,7 @@
       migrated.weapons = (Neo.RIVAL_WEAPON_LOADOUTS[migrated.characterKey] || []).map(weapon => ({ ...weapon }));
     }
     applyRivalLevelStats(migrated, { syncLiveEnemy: false, keepHpRatio: false });
-    migrated.hp = clamp(Number(source.hp || migrated.hp), 1, migrated.max);
+    migrated.hp = Neo.clamp(Number(source.hp || migrated.hp), 1, migrated.max);
     migrated.hpSnapshot = migrated.hp;
     return migrated;
   }
@@ -1275,7 +1274,7 @@
       }
     }
     if (leveled && reason !== 'silent') {
-      scheduleRunSave();
+      Neo.scheduleRunSave();
     }
   }
 
@@ -1294,7 +1293,7 @@
         Neo.rivals.push(matching);
         rivalById.set(matching.rivalId, matching);
       }
-      matching.hp = clamp(Number(enemy.hp || matching.hp), 1, matching.max);
+      matching.hp = Neo.clamp(Number(enemy.hp || matching.hp), 1, matching.max);
       matching.hpSnapshot = matching.hp;
       enemy.rivalData = matching;
       enemy.rivalKey = matching.characterKey;
@@ -1406,7 +1405,7 @@
     if (!fromRoom) return null;
     const threat = Number(rival?.memory?.threat || 0);
     if (Neo.currentRoom && Neo.currentRoom !== fromRoom && threat > 1.2) {
-      const huntChance = clamp(0.2 + threat * 0.07, 0.2, 0.72);
+      const huntChance = Neo.clamp(0.2 + threat * 0.07, 0.2, 0.72);
       if (Neo.nextRandom('encounter') < huntChance) {
         return Neo.currentRoom;
       }
@@ -1451,7 +1450,7 @@
   function isMonsterDoorRoamEligible(enemy) {
     if (!enemy || typeof enemy !== 'object') return false;
     if (enemy.type === 'rival' || enemy.type === 'mirror_knight') return false;
-    if (isBossType(enemy.type) || enemy.type === 'god') return false;
+    if (Neo.isBossType(enemy.type) || enemy.type === 'god') return false;
     if (enemy.type === 'boss_spawner') return false;
     if (enemy.spawnT > 0) return false;
     return true;
@@ -1459,8 +1458,8 @@
 
   function getDoorEntryPoint(direction, radius = 15) {
     const r = Math.max(8, Number(radius || 15));
-    const laneX = Neo.ROOM_W / 2 + rand(34, -34, 'encounter');
-    const laneY = Neo.ROOM_H / 2 + rand(34, -34, 'encounter');
+    const laneX = Neo.ROOM_W / 2 + Neo.rand(34, -34, 'encounter');
+    const laneY = Neo.ROOM_H / 2 + Neo.rand(34, -34, 'encounter');
     if (direction === 'n') {
       return { x: laneX, y: Neo.WALL + r + 10 };
     }
@@ -1536,7 +1535,7 @@
         c: '#ffbf7a',
       });
     }
-    scheduleRunSave();
+    Neo.scheduleRunSave();
   }
 
   function stealFromRoom(rival, room) {
@@ -1564,7 +1563,7 @@
   function injectRivalToCurrentRoom(rival) {
     if (!Neo.currentRoom) return;
     if (Neo.enemies.some(e => e.type === 'rival' && e.rivalData === rival)) return;
-    const sp = findSafeEnemySpawnPoint(Neo.ROOM_W / 2, Neo.ROOM_H / 2, rival.r) || { x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 };
+    const sp = Neo.findSafeEnemySpawnPoint(Neo.ROOM_W / 2, Neo.ROOM_H / 2, rival.r) || { x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 };
     const entry = {
       type: 'rival',
       rivalData: rival,
@@ -1580,7 +1579,7 @@
       stun: 0, inv: 0,
       elite: false,
       bleedImmune: false, fireImmune: false, poisonImmune: false, dark_drainImmune: false,
-      statuses: createStatusMap(),
+      statuses: Neo.createStatusMap(),
       barrier: 0,
       beamTime: 0, beamTick: 0, beamAngle: 0,
       dashTime: 0, dashAngle: 0, dashHit: false,
@@ -1595,7 +1594,7 @@
     Neo.spawnParticle({ x: entry.x, y: entry.y - 26, life: 1.8, text: `${rival.name.toUpperCase()} ENTERS!`, c: rival.color });
     const playedCutscene = tryPlayPrincessKnightCutscene(rival, entry);
     if (!playedCutscene) {
-      sayAtPosition(entry.x, entry.y, rival.enterLine, { speaker: rival.name, tone: 'boss', holdTime: 1.8, offsetY: rival.r + 36 });
+      Neo.sayAtPosition(entry.x, entry.y, rival.enterLine, { speaker: rival.name, tone: 'boss', holdTime: 1.8, offsetY: rival.r + 36 });
     }
   }
 
@@ -1746,7 +1745,7 @@
       if (!enemy.dashHit && distance < enemy.r + Neo.player.r + 8) {
         enemy.dashHit = true;
         const dashDamage = Math.round(enemy.dmg * Number(weapon.damageMult || 1));
-        damagePlayer(dashDamage, enemy.dashAngle, Number(weapon.knockback || 340), rival.name);
+        Neo.damagePlayer(dashDamage, enemy.dashAngle, Number(weapon.knockback || 340), rival.name);
       }
       if (enemy.dashTime <= 0) {
         enemy.attackCd = Math.max(0.32, rival.attackCd * Number(weapon.cooldownMult || 1));
@@ -1764,24 +1763,24 @@
       const shouldSeekCover = enemy.hp < enemy.max * 0.65
         || enemy.attackCd > 0.25
         || distance < preferDist * 0.82;
-      if (shouldSeekCover && trySteerEnemyToCover(enemy, dt, preferDist, 4.2)) {
+      if (shouldSeekCover && Neo.trySteerEnemyToCover(enemy, dt, preferDist, 4.2)) {
         // Hold cover and only peek out when an attack window opens.
       } else 
       // Keep preferred distance
       if (distance < preferDist - 30) {
-        steerEnemy(enemy, -(dx / distance), -(dy / distance), enemy.speed, 4.2, dt);
+        Neo.steerEnemy(enemy, -(dx / distance), -(dy / distance), enemy.speed, 4.2, dt);
       } else if (distance > preferDist + 60) {
-        steerEnemy(enemy, dx / distance, dy / distance, enemy.speed, 4.2, dt);
+        Neo.steerEnemy(enemy, dx / distance, dy / distance, enemy.speed, 4.2, dt);
       } else {
         // Strafe sideways
         const perp = Math.atan2(dy, dx) + Math.PI / 2 * enemy.rivalStrafeDir;
-        steerEnemy(enemy, Math.cos(perp) * 0.8, Math.sin(perp) * 0.8, enemy.speed * 0.6, 3.0, dt);
+        Neo.steerEnemy(enemy, Math.cos(perp) * 0.8, Math.sin(perp) * 0.8, enemy.speed * 0.6, 3.0, dt);
       }
     } else if (attackStyle === 'dash') {
       const preferred = distance > preferDist ? 1 : distance < 110 ? -1 : 0.2;
-      steerEnemy(enemy, dx / distance * preferred, dy / distance * preferred, enemy.speed, 4.6, dt);
+      Neo.steerEnemy(enemy, dx / distance * preferred, dy / distance * preferred, enemy.speed, 4.6, dt);
     } else {
-      steerEnemy(enemy, dx / distance, dy / distance, enemy.speed, 4.4, dt);
+      Neo.steerEnemy(enemy, dx / distance, dy / distance, enemy.speed, 4.4, dt);
     }
 
     if (enemy.attackCd > 0) return;
@@ -1790,7 +1789,7 @@
       if (distance < enemy.r + Neo.player.r + Number(weapon.range || 12)) {
         const angle = Math.atan2(dy, dx);
         const meleeDamage = Math.round(enemy.dmg * Number(weapon.damageMult || 1));
-        damagePlayer(meleeDamage, angle, Number(weapon.knockback || 280), rival.name);
+        Neo.damagePlayer(meleeDamage, angle, Number(weapon.knockback || 280), rival.name);
         if (rival.memory) {
           rival.memory.playerHitsDealt += 1;
           rival.memory.threat += 0.2;
@@ -1814,7 +1813,7 @@
       }
     } else if (attackStyle === 'ranged' || attackStyle === 'burst') {
       if (distance < Number(weapon.range || 320)) {
-        if (attackStyle === 'ranged' && !hasLineOfSight(enemy.x, enemy.y, Neo.player.x, Neo.player.y)) {
+        if (attackStyle === 'ranged' && !Neo.hasLineOfSight(enemy.x, enemy.y, Neo.player.x, Neo.player.y)) {
           enemy.attackCd = 0.2;
           return;
         }
@@ -1895,4 +1894,3 @@
   Neo.injectRivalsToCurrentRoom = injectRivalsToCurrentRoom;
   Neo.updateRivals = updateRivals;
   Neo.updateRivalEnemy = updateRivalEnemy;
-})();

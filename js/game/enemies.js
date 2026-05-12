@@ -1,8 +1,7 @@
 // enemies.js — standalone IIFE. Enemy spawning, AI, boss logic.
-(() => {
 
   function findSafeEnemySpawnPoint(preferredX, preferredY, radius = 18) {
-    const isSpawnUsable = (x, y) => !isBlocked(x, y, radius) && hasNavigableSpawnSpace(x, y, radius, Neo.player);
+    const isSpawnUsable = (x, y) => !Neo.isBlocked(x, y, radius) && hasNavigableSpawnSpace(x, y, radius, Neo.player);
     if (isSpawnUsable(preferredX, preferredY)) {
       return { x: preferredX, y: preferredY };
     }
@@ -12,8 +11,8 @@
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       const angle = (attempt / searchAngles) * Math.PI * 2;
       const searchRadius = 30 + (attempt % 4) * 40;
-      const x = clamp(preferredX + Math.cos(angle) * searchRadius, Neo.WALL + radius, Neo.ROOM_W - Neo.WALL - radius);
-      const y = clamp(preferredY + Math.sin(angle) * searchRadius, Neo.WALL + radius, Neo.ROOM_H - Neo.WALL - radius);
+      const x = Neo.clamp(preferredX + Math.cos(angle) * searchRadius, Neo.WALL + radius, Neo.ROOM_W - Neo.WALL - radius);
+      const y = Neo.clamp(preferredY + Math.sin(angle) * searchRadius, Neo.WALL + radius, Neo.ROOM_H - Neo.WALL - radius);
       if (isSpawnUsable(x, y)) {
         return { x, y };
       }
@@ -35,7 +34,7 @@
     if (!needsCompaction) return;
     const before = Neo.enemies.length;
     Neo.enemies = Neo.enemies.filter(enemy => enemy && typeof enemy === 'object');
-    if (Neo.enemies.length !== before) syncCurrentRoomState();
+    if (Neo.enemies.length !== before) Neo.syncCurrentRoomState();
   }
 
   function getCoverObstacles() {
@@ -48,7 +47,7 @@
     Neo.destructibles.forEach(prop => {
       if (prop.broken || prop.hidden) return;
       if (prop.kind !== 'wall' && prop.kind !== 'secret_wall' && prop.kind !== 'cover_wall') return;
-      obstacleRects.push(getDestructibleRect(prop));
+      obstacleRects.push(Neo.getDestructibleRect(prop));
     });
     return obstacleRects;
   }
@@ -111,12 +110,12 @@
         { side: sideOffset, depth: baseOffset + 8 },
         { side: -sideOffset, depth: baseOffset + 8 },
       ].forEach(sample => {
-        const targetX = clamp(cx + nx * sample.depth + px * sample.side, Neo.WALL + enemy.r, Neo.ROOM_W - Neo.WALL - enemy.r);
-        const targetY = clamp(cy + ny * sample.depth + py * sample.side, Neo.WALL + enemy.r, Neo.ROOM_H - Neo.WALL - enemy.r);
-        if (isBlocked(targetX, targetY, enemy.r)) return;
+        const targetX = Neo.clamp(cx + nx * sample.depth + px * sample.side, Neo.WALL + enemy.r, Neo.ROOM_W - Neo.WALL - enemy.r);
+        const targetY = Neo.clamp(cy + ny * sample.depth + py * sample.side, Neo.WALL + enemy.r, Neo.ROOM_H - Neo.WALL - enemy.r);
+        if (Neo.isBlocked(targetX, targetY, enemy.r)) return;
         if (!lineIntersectsRect(Neo.player.x, Neo.player.y, targetX, targetY, rect, 6)) return;
-        const enemyDistance = dist(enemy.x, enemy.y, targetX, targetY);
-        const playerDistance = dist(Neo.player.x, Neo.player.y, targetX, targetY);
+        const enemyDistance = Neo.dist(enemy.x, enemy.y, targetX, targetY);
+        const playerDistance = Neo.dist(Neo.player.x, Neo.player.y, targetX, targetY);
         if (enemyDistance > 360) return;
         const score = enemyDistance + Math.abs(playerDistance - preferredRange) * 0.55;
         if (!best || score < best.score) {
@@ -134,7 +133,7 @@
     const coverTarget = enemy.coverTarget;
     const needsNewTarget = !coverTarget
       || enemy.coverCheckCd <= 0
-      || dist(enemy.x, enemy.y, coverTarget.x, coverTarget.y) < 18
+      || Neo.dist(enemy.x, enemy.y, coverTarget.x, coverTarget.y) < 18
       || !hasSight;
     if (needsNewTarget) {
       enemy.coverCheckCd = 0.35;
@@ -158,15 +157,15 @@
     const directions = 8;
     let openPaths = 0;
     let hasProgressTowardTarget = !target;
-    const targetDistance = target ? dist(x, y, target.x, target.y) : 0;
+    const targetDistance = target ? Neo.dist(x, y, target.x, target.y) : 0;
 
     for (let index = 0; index < directions; index += 1) {
       const angle = (index / directions) * Math.PI * 2;
       const px = x + Math.cos(angle) * probeStep;
       const py = y + Math.sin(angle) * probeStep;
-      if (isBlocked(px, py, radius)) continue;
+      if (Neo.isBlocked(px, py, radius)) continue;
       openPaths += 1;
-      if (target && dist(px, py, target.x, target.y) < targetDistance - 2) {
+      if (target && Neo.dist(px, py, target.x, target.y) < targetDistance - 2) {
         hasProgressTowardTarget = true;
       }
     }
@@ -179,7 +178,7 @@
     return Neo.destructibles.find(prop => {
       if (!prop || prop.broken || prop.hidden) return false;
       if (!breakableKinds.has(prop.kind)) return false;
-      return destructibleIntersectsCircle(prop, x, y, r);
+      return Neo.destructibleIntersectsCircle(prop, x, y, r);
     }) || null;
   }
 
@@ -210,27 +209,27 @@
 
     const baseDamage = Math.max(1, Math.round((enemy.dmg || 10) / 14));
     const heavyBonus = enemy.type === 'golem' || enemy.type === 'bulk_golem' || enemy.type === 'charger' ? 1 : 0;
-    damageDestructible(blocker, baseDamage + heavyBonus);
+    Neo.damageDestructible(blocker, baseDamage + heavyBonus);
     enemy.obstacleHitCd = heavyBonus ? 0.22 : 0.38;
   }
 
   function getMiniBossSpawnChance(roomType = 'combat') {
     if (Neo.floor < 5) return 0;
-    const difficulty = getDifficultyDef();
-    const baseChance = clamp(0.08 + (Neo.floor - 5) * 0.02, 0.08, 0.34);
+    const difficulty = Neo.getDifficultyDef();
+    const baseChance = Neo.clamp(0.08 + (Neo.floor - 5) * 0.02, 0.08, 0.34);
     const scaledChance = baseChance * difficulty.miniBossChanceMultiplier;
     if (roomType === 'ladder') return Math.min(0.95, scaledChance * 3);
     return Math.min(0.8, scaledChance);
   }
 
   function getWaveCount(baseOffset) {
-    const difficulty = getDifficultyDef();
-    const challengeBonus = isChallengeActive('swarm_rooms') ? 2 : 0;
-    return baseOffset + Neo.floor + difficulty.waveBonus + challengeBonus + irand(0, 1, 'encounter');
+    const difficulty = Neo.getDifficultyDef();
+    const challengeBonus = Neo.isChallengeActive('swarm_rooms') ? 2 : 0;
+    return baseOffset + Neo.floor + difficulty.waveBonus + challengeBonus + Neo.irand(0, 1, 'encounter');
   }
 
   function rollEnemyType() {
-    const bonus = getDifficultyDef().roomWeightBonus;
+    const bonus = Neo.getDifficultyDef().roomWeightBonus;
     const roll = Neo.nextRandom('encounter');
     if (Neo.floor >= 7 && roll > 0.9 - bonus * 0.92) return 'machine_gunner';
     if (roll > 0.84 - bonus * 0.9) return 'golem';
@@ -244,15 +243,15 @@
 
   function getFloorBossType() {
     const bossPool = ['queen_cult', 'bulk_golem', 'artificer_knave'];
-    const bossRandom = createScopedRandom('floor-boss:type');
+    const bossRandom = Neo.createScopedRandom('floor-boss:type');
     return bossPool[Math.floor(bossRandom() * bossPool.length)] || bossPool[0];
   }
 
   function rollChallengeTrialType() {
     const pool = Neo.CHALLENGE_TRIAL_TYPES.slice();
-    if (Neo.floor <= 2) return pool[irand(0, 2, 'world')];
-    if (Neo.floor <= 4) return pool[irand(0, 4, 'world')];
-    return pool[irand(0, pool.length - 1, 'world')];
+    if (Neo.floor <= 2) return pool[Neo.irand(0, 2, 'world')];
+    if (Neo.floor <= 4) return pool[Neo.irand(0, 4, 'world')];
+    return pool[Neo.irand(0, pool.length - 1, 'world')];
   }
 
   function getChallengeTrialLabel(type) {
@@ -289,7 +288,7 @@
     let safety = 0;
     while (plan.length < count && safety < 12) {
       safety += 1;
-      const squad = squads[irand(0, squads.length - 1, 'encounter')];
+      const squad = squads[Neo.irand(0, squads.length - 1, 'encounter')];
       squad.forEach(type => {
         if (plan.length < count) plan.push(type);
       });
@@ -316,7 +315,7 @@
 
   function spawnMiniBoss(roomType = 'combat') {
     const chance = getMiniBossSpawnChance(roomType);
-    const miniBossRandom = createRoomRandom(Neo.currentRoom, `mini-boss:${roomType}`);
+    const miniBossRandom = Neo.createRoomRandom(Neo.currentRoom, `mini-boss:${roomType}`);
     if (chance <= 0 || miniBossRandom() > chance) return;
 
     const pool = roomType === 'ladder'
@@ -325,8 +324,8 @@
     const type = pool[Math.floor(miniBossRandom() * pool.length)] || pool[0];
     const angle = miniBossRandom() * Math.PI * 2;
     const radius = 120 + miniBossRandom() * 180;
-    const x = clamp(Neo.ROOM_W / 2 + Math.cos(angle) * radius, 80, Neo.ROOM_W - 80);
-    const y = clamp(Neo.ROOM_H / 2 + Math.sin(angle) * radius, 80, Neo.ROOM_H - 80);
+    const x = Neo.clamp(Neo.ROOM_W / 2 + Math.cos(angle) * radius, 80, Neo.ROOM_W - 80);
+    const y = Neo.clamp(Neo.ROOM_H / 2 + Math.sin(angle) * radius, 80, Neo.ROOM_H - 80);
     const safeSpawn = findSafeEnemySpawnPoint(x, y, 18);
     if (!safeSpawn) return;
 
@@ -342,12 +341,12 @@
     const plan = buildWavePlan(count, roomType);
     for (let index = 0; index < plan.length; index += 1) {
       const type = plan[index] || rollEnemyType();
-      const eliteChance = getDifficultyDef().eliteChance + (isChallengeActive('elite_hunt') ? 0.18 : 0);
+      const eliteChance = Neo.getDifficultyDef().eliteChance + (Neo.isChallengeActive('elite_hunt') ? 0.18 : 0);
       const eliteRoll = canSpawnEliteEnemies() && Neo.nextRandom('encounter') < Math.min(0.85, eliteChance);
       const angle = Neo.nextRandom('encounter') * Math.PI * 2;
       const radius = 140 + Neo.nextRandom('encounter') * 170;
-      const preferredX = clamp(Neo.ROOM_W / 2 + Math.cos(angle) * radius, 90, Neo.ROOM_W - 90);
-      const preferredY = clamp(Neo.ROOM_H / 2 + Math.sin(angle) * radius, 90, Neo.ROOM_H - 90);
+      const preferredX = Neo.clamp(Neo.ROOM_W / 2 + Math.cos(angle) * radius, 90, Neo.ROOM_W - 90);
+      const preferredY = Neo.clamp(Neo.ROOM_H / 2 + Math.sin(angle) * radius, 90, Neo.ROOM_H - 90);
       const safeSpawn = findSafeEnemySpawnPoint(preferredX, preferredY, 15)
         || findSafeEnemySpawnPoint(Neo.ROOM_W / 2, Neo.ROOM_H / 2, 15);
       if (!safeSpawn) continue;
@@ -373,14 +372,14 @@
   }
 
   function canSpawnEliteEnemies() {
-    return Neo.floor >= getDifficultyDef().eliteFloor && Neo.floor <= 10;
+    return Neo.floor >= Neo.getDifficultyDef().eliteFloor && Neo.floor <= 10;
   }
 
   function rollEliteInventory() {
     const inventory = {};
     const pool = Neo.ELITE_INVENTORY_POOL.slice();
-    shuffle(pool, 'encounter');
-    const slots = irand(1, 3, 'encounter');
+    Neo.shuffle(pool, 'encounter');
+    const slots = Neo.irand(1, 3, 'encounter');
     for (let index = 0; index < slots; index += 1) {
       const key = pool[index];
       if (!key) continue;
@@ -391,9 +390,9 @@
 
   function rollBlessedEliteInventory() {
     const inventory = {};
-    const rolls = irand(10, 15, 'encounter');
+    const rolls = Neo.irand(10, 15, 'encounter');
     for (let index = 0; index < rolls; index += 1) {
-      const key = Neo.WHITE_ITEM_POOL[irand(0, Neo.WHITE_ITEM_POOL.length - 1, 'encounter')];
+      const key = Neo.WHITE_ITEM_POOL[Neo.irand(0, Neo.WHITE_ITEM_POOL.length - 1, 'encounter')];
       if (key) inventory[key] = Number(inventory[key] || 0) + 1;
     }
     return inventory;
@@ -401,7 +400,7 @@
 
   function rollEliteTypes() {
     const pool = ['burning', 'bleeding', 'giant', 'blessed', 'lasered'];
-    const shuffled = shuffle(pool, 'encounter');
+    const shuffled = Neo.shuffle(pool, 'encounter');
     const count = Neo.nextRandom('encounter') < 0.18 ? 3 : Neo.nextRandom('encounter') < 0.58 ? 2 : 1;
     return shuffled.slice(0, count);
   }
@@ -446,22 +445,22 @@
 
     if (enemy.eliteTypes.includes('burning')) {
       enemy.fireImmune = true;
-      enemy.burningTick = rand(0.9, 0.25, 'encounter');
+      enemy.burningTick = Neo.rand(0.9, 0.25, 'encounter');
     }
     if (enemy.eliteTypes.includes('bleeding')) {
       enemy.bleedImmune = true;
-      enemy.bleedingTick = rand(1.1, 0.35, 'encounter');
+      enemy.bleedingTick = Neo.rand(1.1, 0.35, 'encounter');
     }
     if (enemy.eliteTypes.includes('lasered')) {
-      enemy.eliteLaserCd = rand(1.9, 0.8, 'encounter');
+      enemy.eliteLaserCd = Neo.rand(1.9, 0.8, 'encounter');
       enemy.eliteLaserModeIndex = 0;
     }
   }
 
   function scaleEnemyStats(baseStats, type) {
     const result = { ...baseStats };
-    const sandbox = getActiveSandboxSettings();
-    const difficulty = getDifficultyDef();
+    const sandbox = Neo.getActiveSandboxSettings();
+    const difficulty = Neo.getDifficultyDef();
     const gameMinutes = Neo.gameElapsedTime / 60;
     const loopNumber = Math.max(1, Math.floor((Neo.floor - 1) / 10) + 1);
     const floorInLoop = ((Neo.floor - 1) % 10) + 1;
@@ -484,7 +483,7 @@
   }
 
   function spawnEnemy(type, x, y, elite = false) {
-    const sandbox = getActiveSandboxSettings();
+    const sandbox = Neo.getActiveSandboxSettings();
     if (sandbox && !sandbox.allowedEnemies.includes(type)) {
       type = sandbox.allowedEnemies[0] || 'hunter';
     }
@@ -503,8 +502,8 @@
       elite: eliteAllowed,
       stun: 0,
       inv: 0,
-      attackCd: rand(0.2, 0.9, 'encounter'),
-      statuses: createStatusMap(),
+      attackCd: Neo.rand(0.2, 0.9, 'encounter'),
+      statuses: Neo.createStatusMap(),
       windup: 0,
       beamTime: 0,
       beamTick: 0,
@@ -533,7 +532,7 @@
       ? `room:${Neo.currentRoom.gx},${Neo.currentRoom.gy}|type:${Neo.currentRoom.type || 'room'}`
       : 'room:none';
     if (Neo.currentRoom) Neo.currentRoom.enemySpawnSerial = Math.max(0, Number(Neo.currentRoom.enemySpawnSerial || 0)) + 1;
-    base.lootSeed = `${getFloorSeed()}|${roomPart}|enemy:${type}:${Math.round(x)},${Math.round(y)}:${Neo.currentRoom?.enemySpawnSerial || 0}|loot`;
+    base.lootSeed = `${Neo.getFloorSeed()}|${roomPart}|enemy:${type}:${Math.round(x)},${Math.round(y)}:${Neo.currentRoom?.enemySpawnSerial || 0}|loot`;
 
     if (type === 'god') {
       base.r = 34;
@@ -675,7 +674,7 @@
     base.dmg = scaled.dmg;
     base.speed = scaled.speed;
 
-    const difficultyTuning = getEnemyDifficultyTuning();
+    const difficultyTuning = Neo.getEnemyDifficultyTuning();
     if (!isBossType(type) && Neo.floor >= 4) {
       const barrierChance = type === 'shield_unit'
         ? 1
@@ -716,9 +715,9 @@
   function playGodDialogue(phase) {
     const line = Neo.GOD_PHASE_DIALOGUE[phase];
     if (!line) return false;
-    setShopPanelOpen(false);
-    setInventoryPanelOpen(false);
-    clearGameplayInput();
+    Neo.setShopPanelOpen(false);
+    Neo.setInventoryPanelOpen(false);
+    Neo.clearGameplayInput();
     return Neo.uiController.playDialogue([{ speaker: 'GOD', text: line }], { returnState: 'play' });
   }
 
@@ -728,12 +727,12 @@
     if (Neo.knaveKnightCutscenePlayed) return false;
 
     Neo.knaveKnightCutscenePlayed = true;
-    clearGameplayInput();
-    setShopPanelOpen(false);
-    setInventoryPanelOpen(false);
+    Neo.clearGameplayInput();
+    Neo.setShopPanelOpen(false);
+    Neo.setInventoryPanelOpen(false);
     enemy.attackCd = Math.max(Number(enemy.attackCd || 0), 1.4);
     enemy.stun = Math.max(Number(enemy.stun || 0), 0.25);
-    scheduleRunSave();
+    Neo.scheduleRunSave();
 
     return Neo.uiController.playDialogue([
       { speaker: 'KNAVE', text: 'You think you can out fight me you couldnt out argue me! your logic is false' },
@@ -748,12 +747,12 @@
     if (Neo.queenMetaoCutscenePlayed) return false;
 
     Neo.queenMetaoCutscenePlayed = true;
-    clearGameplayInput();
-    setShopPanelOpen(false);
-    setInventoryPanelOpen(false);
+    Neo.clearGameplayInput();
+    Neo.setShopPanelOpen(false);
+    Neo.setInventoryPanelOpen(false);
     enemy.attackCd = Math.max(Number(enemy.attackCd || 0), 1.4);
     enemy.stun = Math.max(Number(enemy.stun || 0), 0.25);
-    scheduleRunSave();
+    Neo.scheduleRunSave();
 
     return Neo.uiController.playDialogue([
       { speaker: 'QUEEN', text: 'once my champion planning to kill me again are you apostate' },
@@ -771,7 +770,7 @@
     if (!entity || !text) return null;
     return Neo.uiController.sayAtWorldAnchor({
       anchor: () => Neo.enemies.includes(entity) ? { x: entity.x, y: entity.y } : null,
-      speaker: options.speaker || getBossLabel(entity.type),
+      speaker: options.speaker || Neo.getBossLabel(entity.type),
       text,
       offsetY: options.offsetY ?? (entity.r ? entity.r + 26 : 56),
       tone: options.tone || 'boss',
@@ -794,9 +793,9 @@
   }
 
   function getMirrorChampionStats() {
-    const attackSpeed = getAttackSpeedValue();
-    const itemStats = getItemStats();
-    const equippedMoves = { ...(Neo.player?.equippedMoves || getDefaultMovesForCharacter(Neo.player?.character || Neo.chosenCharacter)) };
+    const attackSpeed = Neo.getAttackSpeedValue();
+    const itemStats = Neo.getItemStats();
+    const equippedMoves = { ...(Neo.player?.equippedMoves || Neo.getDefaultMovesForCharacter(Neo.player?.character || Neo.chosenCharacter)) };
     const meleeMove = equippedMoves.melee || 'slash';
     const laserMove = equippedMoves.laser || 'blood_beam';
     const smashMove = equippedMoves.smash || 'crimson_smash';
@@ -804,16 +803,16 @@
     const mirrorCooldownMultiplier = 0.82;
     const weaponKey = Neo.player?.equippedWeapon || '';
     const weaponStats = weaponKey ? {
-      damage: Math.max(1, Math.round((Neo.WEAPON_BASE_STATS[weaponKey]?.damage ?? getPlayerBaseDamage()) + getAnvilWeaponBonus(weaponKey, 'damage'))),
-      range: Math.max(40, Math.round((Neo.WEAPON_BASE_STATS[weaponKey]?.range ?? Neo.ATTACKS.melee.range) + getAnvilWeaponBonus(weaponKey, 'range'))),
-      knockback: Math.max(0, Math.round((Neo.WEAPON_BASE_STATS[weaponKey]?.knockback ?? Neo.ATTACKS.melee.push) + getAnvilWeaponBonus(weaponKey, 'knockback'))),
-      cooldown: Math.max(0.12, getWeaponBaseCooldown(weaponKey) * mirrorCooldownMultiplier),
+      damage: Math.max(1, Math.round((Neo.WEAPON_BASE_STATS[weaponKey]?.damage ?? Neo.getPlayerBaseDamage()) + Neo.getAnvilWeaponBonus(weaponKey, 'damage'))),
+      range: Math.max(40, Math.round((Neo.WEAPON_BASE_STATS[weaponKey]?.range ?? Neo.ATTACKS.melee.range) + Neo.getAnvilWeaponBonus(weaponKey, 'range'))),
+      knockback: Math.max(0, Math.round((Neo.WEAPON_BASE_STATS[weaponKey]?.knockback ?? Neo.ATTACKS.melee.push) + Neo.getAnvilWeaponBonus(weaponKey, 'knockback'))),
+      cooldown: Math.max(0.12, Neo.getWeaponBaseCooldown(weaponKey) * mirrorCooldownMultiplier),
     } : null;
     const meleeDamage = weaponStats
       ? weaponStats.damage
-      : Math.round((Neo.MOVE_BASE_STATS[meleeMove]?.damage ?? getPlayerBaseDamage()) + getAnvilMoveBonus(meleeMove, 'damage') + (Neo.player?.attackPower || 0) * 0.35);
-    const beamDamage = Math.round((Neo.MOVE_BASE_STATS[laserMove]?.damage ?? Neo.ATTACKS.laser.damage) + getAnvilMoveBonus(laserMove, 'damage') + (Neo.player?.attackPower || 0) * 0.45);
-    const smashDamage = Math.round((Neo.MOVE_BASE_STATS[smashMove]?.damage ?? Neo.ATTACKS.smash.damage) + getAnvilMoveBonus(smashMove, 'damage') + (Neo.player?.attackPower || 0) * 0.9);
+      : Math.round((Neo.MOVE_BASE_STATS[meleeMove]?.damage ?? Neo.getPlayerBaseDamage()) + Neo.getAnvilMoveBonus(meleeMove, 'damage') + (Neo.player?.attackPower || 0) * 0.35);
+    const beamDamage = Math.round((Neo.MOVE_BASE_STATS[laserMove]?.damage ?? Neo.ATTACKS.laser.damage) + Neo.getAnvilMoveBonus(laserMove, 'damage') + (Neo.player?.attackPower || 0) * 0.45);
+    const smashDamage = Math.round((Neo.MOVE_BASE_STATS[smashMove]?.damage ?? Neo.ATTACKS.smash.damage) + Neo.getAnvilMoveBonus(smashMove, 'damage') + (Neo.player?.attackPower || 0) * 0.9);
     const moveSpeed = Math.round(228 * (itemStats.moveSpeedMultiplier || 1));
     return {
       hp: Math.max(90, Math.round(Neo.player.maxHp)),
@@ -827,10 +826,10 @@
       equippedWeapon: weaponKey,
       weaponStats,
       mirrorCooldowns: {
-        melee: weaponStats ? weaponStats.cooldown : Math.max(0.18, getMeleeCooldownDuration(meleeMove, attackSpeed) * mirrorCooldownMultiplier),
-        laser: Math.max(0.75, getLaserCooldownDuration(laserMove, attackSpeed) * mirrorCooldownMultiplier),
-        smash: Math.max(1.1, getSmashCooldownDuration(attackSpeed) * mirrorCooldownMultiplier),
-        dash: Math.max(0.55, getDashCooldownDuration(dashMove, attackSpeed) * mirrorCooldownMultiplier),
+        melee: weaponStats ? weaponStats.cooldown : Math.max(0.18, Neo.getMeleeCooldownDuration(meleeMove, attackSpeed) * mirrorCooldownMultiplier),
+        laser: Math.max(0.75, Neo.getLaserCooldownDuration(laserMove, attackSpeed) * mirrorCooldownMultiplier),
+        smash: Math.max(1.1, Neo.getSmashCooldownDuration(attackSpeed) * mirrorCooldownMultiplier),
+        dash: Math.max(0.55, Neo.getDashCooldownDuration(dashMove, attackSpeed) * mirrorCooldownMultiplier),
       },
       spriteKey: Neo.player.character,
     };
@@ -857,7 +856,7 @@
       stun: 0,
       inv: 0,
       attackCd: stats.attackCd,
-      statuses: createStatusMap(),
+      statuses: Neo.createStatusMap(),
       windup: 0,
       beamTime: 0,
       beamTick: 0,
@@ -913,7 +912,7 @@
       [-90, 0], [0, 0], [90, 0],
       [-90, 90], [0, 90], [90, 90],
     ];
-    const safeIndex = irand(0, slots.length - 1, 'loot');
+    const safeIndex = Neo.irand(0, slots.length - 1, 'loot');
     room.challengeData = { safeBombIndex: safeIndex };
     slots.forEach(([ox, oy], index) => {
       Neo.pickups.push({
@@ -930,8 +929,8 @@
     room.challengeData = { runesLeft: count };
     for (let index = 0; index < count; index += 1) {
       const angle = (Math.PI * 2 * index) / count + Neo.nextRandom('world') * 0.18;
-      const driftAngle = angle + Math.PI / 2 + rand(-0.55, 0.55, 'world');
-      const driftSpeed = rand(82, 56, 'world');
+      const driftAngle = angle + Math.PI / 2 + Neo.rand(-0.55, 0.55, 'world');
+      const driftSpeed = Neo.rand(82, 56, 'world');
       Neo.pickups.push({
         x: Neo.ROOM_W / 2 + Math.cos(angle) * 160,
         y: Neo.ROOM_H / 2 + Math.sin(angle) * 160,
@@ -951,7 +950,7 @@
       const radius = 170 + Neo.nextRandom('encounter') * 90;
       const safeSpawn = findSafeEnemySpawnPoint(Neo.ROOM_W / 2 + Math.cos(angle) * radius, Neo.ROOM_H / 2 + Math.sin(angle) * radius, 15);
       if (!safeSpawn) continue;
-      const type = pool[irand(0, pool.length - 1, 'encounter')];
+      const type = pool[Neo.irand(0, pool.length - 1, 'encounter')];
       spawnEnemy(type, safeSpawn.x, safeSpawn.y, false);
     }
   }
@@ -967,7 +966,7 @@
     if (type === 'mirror') {
       spawnMirrorChampion();
     } else if (type === 'stillness') {
-      room.challengeTimer = scaleChallengeTimer(10);
+      room.challengeTimer = Neo.scaleChallengeTimer(10);
       room.challengeData.maxTimer = room.challengeTimer;
       room.challengeData.anchorX = Neo.player.x;
       room.challengeData.anchorY = Neo.player.y;
@@ -978,17 +977,17 @@
       spawnChallengeBombs(room);
       sayAtPosition(Neo.ROOM_W / 2, Neo.ROOM_H / 2, 'Choose wrong and you get nothing.', { speaker: 'TRIAL', tone: 'warning' });
     } else if (type === 'survival') {
-      room.challengeTimer = scaleChallengeTimer(20);
+      room.challengeTimer = Neo.scaleChallengeTimer(20);
       room.challengeTick = 0.9;
       spawnTrialEnemyWave(2);
       sayAtPosition(Neo.ROOM_W / 2, Neo.ROOM_H / 2, 'Live through it.', { speaker: 'TRIAL', tone: 'warning' });
     } else if (type === 'runes') {
       spawnChallengeRunes(room);
-      room.challengeTimer = scaleChallengeTimer(30);
+      room.challengeTimer = Neo.scaleChallengeTimer(30);
       room.challengeData.maxTimer = room.challengeTimer;
       sayAtPosition(Neo.ROOM_W / 2, Neo.ROOM_H / 2, 'Claim every rune.', { speaker: 'TRIAL', tone: 'warning' });
     } else if (type === 'storm') {
-      room.challengeTimer = scaleChallengeTimer(18);
+      room.challengeTimer = Neo.scaleChallengeTimer(18);
       room.challengeTick = 0.35;
       sayAtPosition(Neo.ROOM_W / 2, Neo.ROOM_H / 2, 'Do not stop moving.', { speaker: 'TRIAL', tone: 'warning' });
     }
@@ -997,24 +996,24 @@
 
   function rollChallengeWeapon() {
     const owned = new Set(Object.keys(Neo.player?.ownedWeapons || {}).filter(k => Neo.player?.ownedWeapons?.[k]));
-    const pool = [...WHITE_WEAPON_POOL];
-    if (Neo.floor >= 4) pool.push(...PURPLE_WEAPON_POOL);
-    if (Neo.floor >= 7) pool.push(...RED_WEAPON_POOL);
+    const pool = [...Neo.WHITE_WEAPON_POOL];
+    if (Neo.floor >= 4) pool.push(...Neo.PURPLE_WEAPON_POOL);
+    if (Neo.floor >= 7) pool.push(...Neo.RED_WEAPON_POOL);
     const available = pool.filter(k => !owned.has(k));
     if (available.length === 0) return null;
-    const challengeRandom = createRoomRandom(Neo.currentRoom, 'challenge:weapon-reward');
+    const challengeRandom = Neo.createRoomRandom(Neo.currentRoom, 'challenge:weapon-reward');
     return available[Math.floor(challengeRandom() * available.length)];
   }
 
   function spawnChallengeReward(text = 'TRIAL CLEARED') {
     if (!Neo.currentRoom || Neo.currentRoom.type !== 'challenge' || Neo.currentRoom.challengeRewardSpawned) return;
     Neo.currentRoom.challengeRewardSpawned = true;
-    const rewardRandom = createRoomRandom(Neo.currentRoom, 'challenge:reward');
+    const rewardRandom = Neo.createRoomRandom(Neo.currentRoom, 'challenge:reward');
     Neo.pickups = Neo.pickups.filter(pickup => !['challengeBomb', 'challengeRune', 'challengeStarter'].includes(pickup?.type));
-    Neo.pickups.push({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 16, type: 'item', key: rollItemDrop({ elite: true, random: rewardRandom }) });
+    Neo.pickups.push({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 16, type: 'item', key: Neo.rollItemDrop({ elite: true, random: rewardRandom }) });
     Neo.pickups.push({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 + 36, type: 'potion' });
-    dropCoins(Neo.ROOM_W / 2, Neo.ROOM_H / 2 + 4, 75 + Neo.floor * 15);
-    grantXp(28 + Neo.floor * 5);
+    Neo.dropCoins(Neo.ROOM_W / 2, Neo.ROOM_H / 2 + 4, 75 + Neo.floor * 15);
+    Neo.grantXp(28 + Neo.floor * 5);
     const weaponKey = rollChallengeWeapon();
     if (weaponKey && Neo.player) {
       Neo.player.ownedWeapons[weaponKey] = true;
@@ -1032,8 +1031,8 @@
     Neo.currentRoom.challengeTick = 0;
     Neo.currentRoom.challengeData = {};
     spawnChallengeReward(text);
-    updateObjective();
-    scheduleRunSave();
+    Neo.updateObjective();
+    Neo.scheduleRunSave();
   }
 
   function failChallengeTrial(text = 'TRIAL FAILED') {
@@ -1046,8 +1045,8 @@
     Neo.currentRoom.challengeData = {};
     Neo.pickups = Neo.pickups.filter(pickup => !['challengeBomb', 'challengeRune', 'challengeStarter'].includes(pickup?.type));
     Neo.spawnParticle({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 52, life: 1.05, text, c: '#ff8b98' });
-    updateObjective();
-    scheduleRunSave();
+    Neo.updateObjective();
+    Neo.scheduleRunSave();
   }
 
   function isBossType(type) {
@@ -1067,13 +1066,13 @@
     steerEnemy(enemy, dx / distance, dy / distance, enemy.speed, 4.4, dt);
     if (distance < enemy.r + Neo.player.r + 10 && enemy.attackCd <= 0) {
       const angle = Math.atan2(dy, dx);
-      damagePlayer(enemy.dmg, angle, 160, enemy.type);
+      Neo.damagePlayer(enemy.dmg, angle, 160, enemy.type);
       enemy.attackCd = 1.05;
     }
   }
 
   function updateCultMageEnemy(enemy, dt) {
-    const tuning = getEnemyDifficultyTuning();
+    const tuning = Neo.getEnemyDifficultyTuning();
     const dx = Neo.player.x - enemy.x;
     const dy = Neo.player.y - enemy.y;
     const distance = Math.hypot(dx, dy) || 1;
@@ -1098,7 +1097,7 @@
       enemy.windup -= dt;
       enemy.vx *= 0.88;
       enemy.vy *= 0.88;
-      aimEnemyBeam(enemy, dt, 2.9 * tuning.reaction);
+      Neo.aimEnemyBeam(enemy, dt, 2.9 * tuning.reaction);
       Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.2, c: '#b455ff' });
       if (enemy.windup <= 0) {
         enemy.beamTime = 0.58;
@@ -1108,7 +1107,7 @@
     }
 
     if (enemy.beamTime > 0) {
-      tickEnemyBeam(enemy, dt, {
+      Neo.tickEnemyBeam(enemy, dt, {
         tick: 0.1,
         range: 460,
         knockback: 145,
@@ -1121,7 +1120,7 @@
 
     if (enemy.attackCd <= 0 && distance < 430) {
       enemy.windup = 0.86 / tuning.reaction;
-      enemy.beamAngle = Math.atan2(dy, dx) + rollEnemyBeamBias(enemy, 0.18);
+      enemy.beamAngle = Math.atan2(dy, dx) + Neo.rollEnemyBeamBias(enemy, 0.18);
       enemy.attackCd = 2.9 * tuning.rangedCadence;
     }
   }
@@ -1156,9 +1155,9 @@
       enemy.dashTime -= dt;
       enemy.vx = Math.cos(enemy.dashAngle) * 450;
       enemy.vy = Math.sin(enemy.dashAngle) * 450;
-      if (!enemy.dashHit && dist(enemy.x, enemy.y, Neo.player.x, Neo.player.y) < enemy.r + Neo.player.r + 7) {
+      if (!enemy.dashHit && Neo.dist(enemy.x, enemy.y, Neo.player.x, Neo.player.y) < enemy.r + Neo.player.r + 7) {
         enemy.dashHit = true;
-        damagePlayer(enemy.dmg + 6, enemy.dashAngle, 260, enemy.type);
+        Neo.damagePlayer(enemy.dmg + 6, enemy.dashAngle, 260, enemy.type);
       }
       return;
     }
@@ -1167,9 +1166,9 @@
       enemy.swingTime -= dt;
       enemy.vx *= 0.7;
       enemy.vy *= 0.7;
-      if (enemy.swingTime <= 0 && dist(enemy.x, enemy.y, Neo.player.x, Neo.player.y) < enemy.r + Neo.player.r + 24) {
+      if (enemy.swingTime <= 0 && Neo.dist(enemy.x, enemy.y, Neo.player.x, Neo.player.y) < enemy.r + Neo.player.r + 24) {
         const angle = Math.atan2(dy, dx);
-        damagePlayer(enemy.dmg + 3, angle, 210, enemy.type);
+        Neo.damagePlayer(enemy.dmg + 3, angle, 210, enemy.type);
       }
       return;
     }
@@ -1191,7 +1190,7 @@
   }
 
   function updateSniperEnemy(enemy, dt) {
-    const tuning = getEnemyDifficultyTuning();
+    const tuning = Neo.getEnemyDifficultyTuning();
     const dx = Neo.player.x - enemy.x;
     const dy = Neo.player.y - enemy.y;
     const distance = Math.hypot(dx, dy) || 1;
@@ -1206,7 +1205,7 @@
       enemy.windup -= dt;
       enemy.vx *= 0.88;
       enemy.vy *= 0.88;
-      aimEnemyBeam(enemy, dt, 2.6 * tuning.reaction);
+      Neo.aimEnemyBeam(enemy, dt, 2.6 * tuning.reaction);
       if (enemy.windup <= 0) {
         const angle = enemy.beamAngle;
         const projectileSpeed = 360 * Math.min(1.4, tuning.reaction);
@@ -1230,7 +1229,7 @@
       enemy.vx *= 0.75;
       enemy.vy *= 0.75;
       if (enemy.swingTime <= 0 && distance < enemy.r + Neo.player.r + 20) {
-        damagePlayer(enemy.dmg + 2, Math.atan2(dy, dx), 170, enemy.type);
+        Neo.damagePlayer(enemy.dmg + 2, Math.atan2(dy, dx), 170, enemy.type);
       }
       return;
     }
@@ -1256,7 +1255,7 @@
   }
 
   function updateMachineGunnerEnemy(enemy, dt) {
-    const tuning = getEnemyDifficultyTuning();
+    const tuning = Neo.getEnemyDifficultyTuning();
     const dx = Neo.player.x - enemy.x;
     const dy = Neo.player.y - enemy.y;
     const distance = Math.hypot(dx, dy) || 1;
@@ -1271,7 +1270,7 @@
       enemy.windup -= dt;
       enemy.vx *= 0.86;
       enemy.vy *= 0.86;
-      aimEnemyBeam(enemy, dt, 3.2 * tuning.reaction);
+      Neo.aimEnemyBeam(enemy, dt, 3.2 * tuning.reaction);
       Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.12, c: '#ffb55c' });
       if (enemy.windup <= 0) {
         enemy.burstShots = tuning.supportPower >= 1.22 ? 6 : 5;
@@ -1289,7 +1288,7 @@
         enemy.burstDelay = 0.085 * Math.max(0.72, tuning.rangedCadence);
         enemy.burstShots -= 1;
         const baseAngle = Math.atan2(Neo.player.y - enemy.y, Neo.player.x - enemy.x);
-        enemy.burstAngle = turnAngleToward(enemy.burstAngle || baseAngle, baseAngle, 0.22 * tuning.reaction);
+        enemy.burstAngle = Neo.turnAngleToward(enemy.burstAngle || baseAngle, baseAngle, 0.22 * tuning.reaction);
         const spread = ((Neo.nextRandom('encounter') - 0.5) * 0.18) / Math.max(0.92, tuning.reaction);
         const fireAngle = enemy.burstAngle + spread;
         const projectileSpeed = 300 * Math.min(1.45, tuning.reaction + 0.06);
@@ -1333,7 +1332,7 @@
       enemy.vx *= 0.78;
       enemy.vy *= 0.78;
       if (enemy.swingTime <= 0 && distance < enemy.r + Neo.player.r + 18) {
-        damagePlayer(enemy.dmg + 3, Math.atan2(dy, dx), 180, enemy.type);
+        Neo.damagePlayer(enemy.dmg + 3, Math.atan2(dy, dx), 180, enemy.type);
       }
     }
   }
@@ -1364,9 +1363,9 @@
       enemy.dashTime -= dt;
       enemy.vx = Math.cos(enemy.dashAngle) * 390;
       enemy.vy = Math.sin(enemy.dashAngle) * 390;
-      if (!enemy.dashHit && dist(enemy.x, enemy.y, Neo.player.x, Neo.player.y) < enemy.r + Neo.player.r + 10) {
+      if (!enemy.dashHit && Neo.dist(enemy.x, enemy.y, Neo.player.x, Neo.player.y) < enemy.r + Neo.player.r + 10) {
         enemy.dashHit = true;
-        damagePlayer(enemy.dmg + 6, enemy.dashAngle, 280, enemy.type);
+        Neo.damagePlayer(enemy.dmg + 6, enemy.dashAngle, 280, enemy.type);
       }
       return;
     }
@@ -1380,7 +1379,7 @@
   }
 
   function updateSummonerEnemy(enemy, dt) {
-    const tuning = getEnemyDifficultyTuning();
+    const tuning = Neo.getEnemyDifficultyTuning();
     const dx = Neo.player.x - enemy.x;
     const dy = Neo.player.y - enemy.y;
     const distance = Math.hypot(dx, dy) || 1;
@@ -1407,7 +1406,7 @@
         const angle = Neo.nextRandom('encounter') * Math.PI * 2;
         const px = enemy.x + Math.cos(angle) * (40 + index * 18);
         const py = enemy.y + Math.sin(angle) * (40 + index * 18);
-        const safeSpawn = findSafeEnemySpawnPoint(clamp(px, 90, Neo.ROOM_W - 90), clamp(py, 90, Neo.ROOM_H - 90), 15);
+        const safeSpawn = findSafeEnemySpawnPoint(Neo.clamp(px, 90, Neo.ROOM_W - 90), Neo.clamp(py, 90, Neo.ROOM_H - 90), 15);
         if (safeSpawn) spawnEnemy('cult_follower', safeSpawn.x, safeSpawn.y, false);
       }
       Neo.spawnParticle({ x: enemy.x, y: enemy.y - 18, life: 0.7, text: 'SUMMON', c: '#d59bff' });
@@ -1415,7 +1414,7 @@
 
     if (enemy.attackCd <= 0 && distance < 360) {
       enemy.windup = 0.6 / tuning.reaction;
-      enemy.beamAngle = Math.atan2(dy, dx) + rollEnemyBeamBias(enemy, 0.17);
+      enemy.beamAngle = Math.atan2(dy, dx) + Neo.rollEnemyBeamBias(enemy, 0.17);
       enemy.attackCd = 2.6 * tuning.rangedCadence;
     }
 
@@ -1425,7 +1424,7 @@
   }
 
   function updateShieldUnitEnemy(enemy, dt) {
-    const tuning = getEnemyDifficultyTuning();
+    const tuning = Neo.getEnemyDifficultyTuning();
     const dx = Neo.player.x - enemy.x;
     const dy = Neo.player.y - enemy.y;
     const distance = Math.hypot(dx, dy) || 1;
@@ -1445,7 +1444,7 @@
       enemy.supportCd = 2.9 * Math.max(0.76, tuning.rangedCadence);
       Neo.enemies.forEach(other => {
         if (!other || other === enemy) return;
-        if (dist(enemy.x, enemy.y, other.x, other.y) > 170) return;
+        if (Neo.dist(enemy.x, enemy.y, other.x, other.y) > 170) return;
         other.barrier = Math.max(other.barrier || 0, Math.round(other.max * 0.22 * tuning.supportPower));
       });
       enemy.barrier = Math.max(enemy.barrier || 0, Math.round(enemy.max * 0.14 * tuning.supportPower));
@@ -1454,16 +1453,16 @@
     }
 
     if (enemy.attackCd <= 0 && distance < enemy.r + Neo.player.r + 22) {
-      damagePlayer(enemy.dmg, Math.atan2(dy, dx), 170, enemy.type);
+      Neo.damagePlayer(enemy.dmg, Math.atan2(dy, dx), 170, enemy.type);
       enemy.attackCd = 1.05 * tuning.rangedCadence;
     }
   }
 
   function updateHealerEnemy(enemy, dt) {
-    const tuning = getEnemyDifficultyTuning();
+    const tuning = Neo.getEnemyDifficultyTuning();
     const nearestWounded = Neo.enemies.reduce((best, candidate) => {
       if (candidate === enemy || candidate.hp >= candidate.max) return best;
-      const d = dist(enemy.x, enemy.y, candidate.x, candidate.y);
+      const d = Neo.dist(enemy.x, enemy.y, candidate.x, candidate.y);
       if (!best || d < best.distance) return { enemy: candidate, distance: d };
       return best;
     }, null);
@@ -1492,7 +1491,7 @@
       let healedAny = false;
       Neo.enemies.forEach(other => {
         if (!other || other === enemy) return;
-        if (dist(enemy.x, enemy.y, other.x, other.y) > 170) return;
+        if (Neo.dist(enemy.x, enemy.y, other.x, other.y) > 170) return;
         const heal = Math.max(8, Math.round(other.max * (Neo.floor >= 4 ? 0.08 : 0.05) * tuning.supportPower));
         const nextHp = Math.min(other.max, other.hp + heal);
         if (nextHp !== other.hp) {
@@ -1509,7 +1508,7 @@
 
     if (enemy.attackCd <= 0 && !nearestWounded && distance < 350) {
       enemy.windup = 0.54 / tuning.reaction;
-      enemy.beamAngle = Math.atan2(Neo.player.y - enemy.y, Neo.player.x - enemy.x) + rollEnemyBeamBias(enemy, 0.16);
+      enemy.beamAngle = Math.atan2(Neo.player.y - enemy.y, Neo.player.x - enemy.x) + Neo.rollEnemyBeamBias(enemy, 0.16);
       enemy.attackCd = 2.8 * tuning.rangedCadence;
     }
 
@@ -1519,7 +1518,7 @@
   }
 
   function updateBossSpawnerEnemy(enemy, dt) {
-    const tuning = getEnemyDifficultyTuning();
+    const tuning = Neo.getEnemyDifficultyTuning();
     const dx = Neo.player.x - enemy.x;
     const dy = Neo.player.y - enemy.y;
     const distance = Math.hypot(dx, dy) || 1;
@@ -1561,7 +1560,7 @@
 
     if (enemy.attackCd <= 0 && distance < 420) {
       enemy.windup = 0.68 / tuning.reaction;
-      enemy.beamAngle = Math.atan2(dy, dx) + rollEnemyBeamBias(enemy, 0.16);
+      enemy.beamAngle = Math.atan2(dy, dx) + Neo.rollEnemyBeamBias(enemy, 0.16);
       enemy.attackCd = 3.1 * tuning.rangedCadence;
     }
 
@@ -1571,7 +1570,7 @@
   }
 
   function updateCultQueenBoss(enemy, dt) {
-    const tuning = getEnemyDifficultyTuning();
+    const tuning = Neo.getEnemyDifficultyTuning();
     const dx = Neo.player.x - enemy.x;
     const dy = Neo.player.y - enemy.y;
     const distance = Math.hypot(dx, dy) || 1;
@@ -1594,19 +1593,19 @@
         const angle = (Math.PI * 2 * index) / 3 + Neo.rng() * 0.8;
         const px = enemy.x + Math.cos(angle) * 54;
         const py = enemy.y + Math.sin(angle) * 54;
-        const safeSpawn = findSafeEnemySpawnPoint(clamp(px, 90, Neo.ROOM_W - 90), clamp(py, 90, Neo.ROOM_H - 90), 15);
+        const safeSpawn = findSafeEnemySpawnPoint(Neo.clamp(px, 90, Neo.ROOM_W - 90), Neo.clamp(py, 90, Neo.ROOM_H - 90), 15);
         if (safeSpawn) spawnEnemy('cult_follower', safeSpawn.x, safeSpawn.y, false);
       }
     }
 
     updateCultMageEnemy(enemy, dt);
     if (enemy.attackCd <= 0 && distance < enemy.r + Neo.player.r + 18) {
-      damagePlayer(enemy.dmg + 4, Math.atan2(dy, dx), 250, enemy.type);
+      Neo.damagePlayer(enemy.dmg + 4, Math.atan2(dy, dx), 250, enemy.type);
       enemy.attackCd = 0.95 * tuning.rangedCadence;
     }
   }
 
-  function spawnCultQueenMissile(enemy, tuning = getEnemyDifficultyTuning()) {
+  function spawnCultQueenMissile(enemy, tuning = Neo.getEnemyDifficultyTuning()) {
     if (!enemy || !Neo.player) return;
     const count = tuning.supportPower >= 1.22 ? 2 : 1;
     const baseAngle = Math.atan2(Neo.player.y - enemy.y, Neo.player.x - enemy.x);
@@ -1641,7 +1640,7 @@
     if (enemy.bulkJumpTime > 0) {
       enemy.bulkJumpTime = Math.max(0, enemy.bulkJumpTime - dt);
       const duration = Math.max(0.01, Number(enemy.bulkJumpDuration || 0.82));
-      const progress = clamp(1 - enemy.bulkJumpTime / duration, 0, 1);
+      const progress = Neo.clamp(1 - enemy.bulkJumpTime / duration, 0, 1);
       const eased = progress * progress * (3 - 2 * progress);
       enemy.x = Number(enemy.bulkJumpStartX || enemy.x) + (Number(enemy.bulkJumpTargetX || enemy.x) - Number(enemy.bulkJumpStartX || enemy.x)) * eased;
       enemy.y = Number(enemy.bulkJumpStartY || enemy.y) + (Number(enemy.bulkJumpTargetY || enemy.y) - Number(enemy.bulkJumpStartY || enemy.y)) * eased;
@@ -1664,8 +1663,8 @@
         Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.55, ring: impactRadius, c: '#ff8844' });
         Neo.shake = Math.max(Neo.shake, 10);
         Neo.shakeT = Math.max(Neo.shakeT, 0.18);
-        if (dist(enemy.x, enemy.y, Neo.player.x, Neo.player.y) < impactRadius + Neo.player.r) {
-          damagePlayer(Math.round(enemy.dmg * 0.85), Math.atan2(Neo.player.y - enemy.y, Neo.player.x - enemy.x), 330, enemy.type);
+        if (Neo.dist(enemy.x, enemy.y, Neo.player.x, Neo.player.y) < impactRadius + Neo.player.r) {
+          Neo.damagePlayer(Math.round(enemy.dmg * 0.85), Math.atan2(Neo.player.y - enemy.y, Neo.player.x - enemy.x), 330, enemy.type);
         }
       }
       return;
@@ -1683,7 +1682,7 @@
       const aoeRadius = 240;
       const aoeDamage = Math.round(enemy.dmg * 1.2);
       Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.5, ring: aoeRadius, c: '#ff8844' });
-      blastRadius(enemy.x, enemy.y, aoeRadius, aoeDamage, '#ff8844', enemy);
+      Neo.blastRadius(enemy.x, enemy.y, aoeRadius, aoeDamage, '#ff8844', enemy);
       Neo.shake = 12;
       Neo.shakeT = 0.2;
     }
@@ -1692,15 +1691,15 @@
     const distance = Math.hypot(dx, dy) || 1;
     const nextX = enemy.x + (dx / distance) * enemy.speed * 0.25;
     const nextY = enemy.y + (dy / distance) * enemy.speed * 0.25;
-    const pathBlocked = isBlocked(nextX, enemy.y, enemy.r) && isBlocked(enemy.x, nextY, enemy.r);
+    const pathBlocked = Neo.isBlocked(nextX, enemy.y, enemy.r) && Neo.isBlocked(enemy.x, nextY, enemy.r);
     if (enemy.jumpCd <= 0 && (pathBlocked || distance > 230)) {
       const angle = Math.atan2(dy, dx);
-      const targetDistance = clamp(distance - 84, 80, 260);
-      const preferredX = Neo.player.x - Math.cos(angle) * targetDistance + rand(-34, 34, 'encounter');
-      const preferredY = Neo.player.y - Math.sin(angle) * targetDistance + rand(-34, 34, 'encounter');
+      const targetDistance = Neo.clamp(distance - 84, 80, 260);
+      const preferredX = Neo.player.x - Math.cos(angle) * targetDistance + Neo.rand(-34, 34, 'encounter');
+      const preferredY = Neo.player.y - Math.sin(angle) * targetDistance + Neo.rand(-34, 34, 'encounter');
       const landing = findSafeEnemySpawnPoint(
-        clamp(preferredX, Neo.WALL + enemy.r, Neo.ROOM_W - Neo.WALL - enemy.r),
-        clamp(preferredY, Neo.WALL + enemy.r, Neo.ROOM_H - Neo.WALL - enemy.r),
+        Neo.clamp(preferredX, Neo.WALL + enemy.r, Neo.ROOM_W - Neo.WALL - enemy.r),
+        Neo.clamp(preferredY, Neo.WALL + enemy.r, Neo.ROOM_H - Neo.WALL - enemy.r),
         enemy.r,
       );
       if (landing) {
@@ -1779,9 +1778,9 @@
       const len = Math.hypot(dx, dy) || 1;
       const nx = dx / len;
       const ny = dy / len;
-      const jumpDistance = rand(320, 200, 'encounter');
-      const targetX = clamp(enemy.x + nx * jumpDistance, Neo.WALL + enemy.r, Neo.ROOM_W - Neo.WALL - enemy.r);
-      const targetY = clamp(enemy.y + ny * jumpDistance, Neo.WALL + enemy.r, Neo.ROOM_H - Neo.WALL - enemy.r);
+      const jumpDistance = Neo.rand(320, 200, 'encounter');
+      const targetX = Neo.clamp(enemy.x + nx * jumpDistance, Neo.WALL + enemy.r, Neo.ROOM_W - Neo.WALL - enemy.r);
+      const targetY = Neo.clamp(enemy.y + ny * jumpDistance, Neo.WALL + enemy.r, Neo.ROOM_H - Neo.WALL - enemy.r);
       const landing = findSafeEnemySpawnPoint(targetX, targetY, Math.max(18, enemy.r || 18));
       if (landing) {
         Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.28, ring: 44, c: '#ffffff' });
@@ -1806,20 +1805,20 @@
     const spawnAngles = [-Math.PI * 0.5, Math.PI * 0.16, Math.PI * 0.84];
     bossTypes.forEach((type, index) => {
       const angle = spawnAngles[index] || ((Math.PI * 2 * index) / bossTypes.length);
-      const px = clamp(enemy.x + Math.cos(angle) * 220, 110, Neo.ROOM_W - 110);
-      const py = clamp(enemy.y + Math.sin(angle) * 220, 110, Neo.ROOM_H - 110);
+      const px = Neo.clamp(enemy.x + Math.cos(angle) * 220, 110, Neo.ROOM_W - 110);
+      const py = Neo.clamp(enemy.y + Math.sin(angle) * 220, 110, Neo.ROOM_H - 110);
       const safeSpawn = findSafeEnemySpawnPoint(px, py, 18) || findSafeEnemySpawnPoint(Neo.ROOM_W / 2, Neo.ROOM_H / 2, 18);
       if (!safeSpawn) return;
       const boss = spawnEnemy(type, safeSpawn.x, safeSpawn.y, false);
       boss.hp = Math.round(boss.hp * 0.85);
       boss.max = boss.hp;
       boss.attackCd = Math.min(boss.attackCd, 0.8);
-      Neo.spawnParticle({ x: boss.x, y: boss.y - 24, life: 1.05, text: getBossLabel(type), c: '#ffcf8a' });
+      Neo.spawnParticle({ x: boss.x, y: boss.y - 24, life: 1.05, text: Neo.getBossLabel(type), c: '#ffcf8a' });
     });
   }
 
   function updateArtificerBoss(enemy, dt) {
-    const tuning = getEnemyDifficultyTuning();
+    const tuning = Neo.getEnemyDifficultyTuning();
     const hpPct = enemy.hp / enemy.max;
     const previousPhase = enemy.phase || 1;
     if (hpPct < 0.34) enemy.phase = 3;
@@ -1853,7 +1852,7 @@
       if (enemy.swingTime > 0) {
         enemy.swingTime -= dt;
         if (enemy.swingTime <= 0 && distance < enemy.r + Neo.player.r + 24) {
-          damagePlayer(enemy.dmg + 3, Math.atan2(dy, dx), 210, enemy.type);
+          Neo.damagePlayer(enemy.dmg + 3, Math.atan2(dy, dx), 210, enemy.type);
         }
       }
       return;
@@ -1873,7 +1872,7 @@
       if (enemy.windup <= 0) {
         const angle = Math.atan2(dy, dx);
         if (distance < enemy.r + Neo.player.r + 54) {
-          damagePlayer(enemy.dmg + 16, angle, 340, 'storm');
+          Neo.damagePlayer(enemy.dmg + 16, angle, 340, 'storm');
         }
         Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.6, ring: 86, c: '#ffd27d' });
       }
@@ -1881,7 +1880,7 @@
   }
 
   function updateLaserEnemy(enemy, dt) {
-    const tuning = getEnemyDifficultyTuning();
+    const tuning = Neo.getEnemyDifficultyTuning();
     const dx = Neo.player.x - enemy.x;
     const dy = Neo.player.y - enemy.y;
     const distance = Math.hypot(dx, dy) || 1;
@@ -1896,7 +1895,7 @@
       enemy.windup -= dt;
       enemy.vx *= 0.86;
       enemy.vy *= 0.86;
-      aimEnemyBeam(enemy, dt, 3.3 * tuning.reaction);
+      Neo.aimEnemyBeam(enemy, dt, 3.3 * tuning.reaction);
       Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.16, c: '#aa66ff' });
       if (enemy.windup <= 0) {
         enemy.beamTime = 0.46;
@@ -1906,7 +1905,7 @@
     }
 
     if (enemy.beamTime > 0) {
-      tickEnemyBeam(enemy, dt, {
+      Neo.tickEnemyBeam(enemy, dt, {
         tick: 0.11 * Math.max(0.74, tuning.rangedCadence),
         range: 430,
         knockback: 130,
@@ -1926,21 +1925,21 @@
     }
     if (enemy.attackCd <= 0 && distance < 390) {
       enemy.windup = 0.78 / tuning.reaction;
-      enemy.beamAngle = Math.atan2(dy, dx) + rollEnemyBeamBias(enemy, 0.2);
+      enemy.beamAngle = Math.atan2(dy, dx) + Neo.rollEnemyBeamBias(enemy, 0.2);
       enemy.attackCd = 2.8 * tuning.rangedCadence;
     }
   }
 
   function updateEliteEnemyTraits(enemy, dt) {
     if (!enemy?.elite || !Array.isArray(enemy.eliteTypes)) return false;
-    const distanceToPlayer = Neo.player ? dist(enemy.x, enemy.y, Neo.player.x, Neo.player.y) : Infinity;
+    const distanceToPlayer = Neo.player ? Neo.dist(enemy.x, enemy.y, Neo.player.x, Neo.player.y) : Infinity;
 
     if (enemy.eliteTypes.includes('burning')) {
       enemy.burningTick = Math.max(0, Number(enemy.burningTick || 0) - dt);
       if (enemy.burningTick <= 0) {
         enemy.burningTick = 1.15;
-        Neo.spawnParticle({ x: enemy.x + rand(-10, 10, 'fx'), y: enemy.y + rand(-10, 10, 'fx'), life: 0.24, c: '#ff9a3c' });
-        if (distanceToPlayer < enemy.r + Neo.player.r + 34) applyFire(Neo.player, 1, 2.8);
+        Neo.spawnParticle({ x: enemy.x + Neo.rand(-10, 10, 'fx'), y: enemy.y + Neo.rand(-10, 10, 'fx'), life: 0.24, c: '#ff9a3c' });
+        if (distanceToPlayer < enemy.r + Neo.player.r + 34) Neo.applyFire(Neo.player, 1, 2.8);
       }
     }
 
@@ -1948,14 +1947,14 @@
       enemy.bleedingTick = Math.max(0, Number(enemy.bleedingTick || 0) - dt);
       if (enemy.bleedingTick <= 0) {
         enemy.bleedingTick = 1.25;
-        Neo.spawnParticle({ x: enemy.x + rand(-8, 8, 'fx'), y: enemy.y + rand(-8, 8, 'fx'), life: 0.22, c: '#ff4256' });
-        if (distanceToPlayer < enemy.r + Neo.player.r + 28) applyStatus(Neo.player, 'bleed', 1, 2.2);
+        Neo.spawnParticle({ x: enemy.x + Neo.rand(-8, 8, 'fx'), y: enemy.y + Neo.rand(-8, 8, 'fx'), life: 0.22, c: '#ff4256' });
+        if (distanceToPlayer < enemy.r + Neo.player.r + 28) Neo.applyStatus(Neo.player, 'bleed', 1, 2.2);
       }
     }
 
     if (!enemy.eliteTypes.includes('lasered')) return false;
     if (enemy.beamTime > 0 && enemy.state === 'elite_laser') {
-      tickEnemyBeam(enemy, dt, {
+      Neo.tickEnemyBeam(enemy, dt, {
         tick: enemy.eliteLaserMode === 'god_sweep' ? 0.055 : enemy.eliteLaserMode === 'turtle_wave' ? 0.08 : 0.1,
         range: enemy.eliteLaserMode === 'turtle_wave' ? 620 : enemy.eliteLaserMode === 'god_sweep' ? 560 : 430,
         knockback: enemy.eliteLaserMode === 'turtle_wave' ? 190 : enemy.eliteLaserMode === 'god_sweep' ? 145 : 125,
@@ -2003,7 +2002,7 @@
     }
 
     if (mode === 'blade_justice') {
-      if (distanceToPlayer < 150) damagePlayer(enemy.dmg + 10, angle, 240, 'elite_blade_justice');
+      if (distanceToPlayer < 150) Neo.damagePlayer(enemy.dmg + 10, angle, 240, 'elite_blade_justice');
       Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.34, ring: 112, c: '#ffffff' });
       enemy.eliteLaserCd = 1.2;
       return false;
@@ -2011,8 +2010,8 @@
 
     if (mode === 'lightning_columns') {
       for (let index = 0; index < 2; index += 1) {
-        const px = clamp(Neo.player.x + rand(-70, 70, 'encounter'), Neo.WALL + 60, Neo.ROOM_W - Neo.WALL - 60);
-        const py = clamp(Neo.player.y + rand(-70, 70, 'encounter'), Neo.WALL + 60, Neo.ROOM_H - Neo.WALL - 60);
+        const px = Neo.clamp(Neo.player.x + Neo.rand(-70, 70, 'encounter'), Neo.WALL + 60, Neo.ROOM_W - Neo.WALL - 60);
+        const py = Neo.clamp(Neo.player.y + Neo.rand(-70, 70, 'encounter'), Neo.WALL + 60, Neo.ROOM_H - Neo.WALL - 60);
         Neo.hazards.push({ kind: 'lightning_column', x: px, y: py, r: 46, ttl: 1.25, tick: 0, interval: 0.36, damage: Math.round(enemy.dmg * 0.78), enemy: true, source: enemy.type || 'lightning_column' });
         Neo.spawnParticle({ x: px, y: py, life: 0.28, ring: 18, c: '#8dd4ff' });
       }
@@ -2058,9 +2057,9 @@
       enemy.dashTime -= dt;
       enemy.vx = Math.cos(enemy.dashAngle) * 430;
       enemy.vy = Math.sin(enemy.dashAngle) * 430;
-      if (!enemy.dashHit && dist(enemy.x, enemy.y, Neo.player.x, Neo.player.y) < enemy.r + Neo.player.r + 6) {
+      if (!enemy.dashHit && Neo.dist(enemy.x, enemy.y, Neo.player.x, Neo.player.y) < enemy.r + Neo.player.r + 6) {
         enemy.dashHit = true;
-        damagePlayer(enemy.dmg + 4, enemy.dashAngle, 240, enemy.type);
+        Neo.damagePlayer(enemy.dmg + 4, enemy.dashAngle, 240, enemy.type);
       }
       return;
     }
@@ -2097,26 +2096,26 @@
 
   function getPredictedPlayerPoint(lead = 0.22) {
     return {
-      x: clamp(Neo.player.x + Number(Neo.player.vx || 0) * lead, Neo.WALL + Neo.player.r, Neo.ROOM_W - Neo.WALL - Neo.player.r),
-      y: clamp(Neo.player.y + Number(Neo.player.vy || 0) * lead, Neo.WALL + Neo.player.r, Neo.ROOM_H - Neo.WALL - Neo.player.r),
+      x: Neo.clamp(Neo.player.x + Number(Neo.player.vx || 0) * lead, Neo.WALL + Neo.player.r, Neo.ROOM_W - Neo.WALL - Neo.player.r),
+      y: Neo.clamp(Neo.player.y + Number(Neo.player.vy || 0) * lead, Neo.WALL + Neo.player.r, Neo.ROOM_H - Neo.WALL - Neo.player.r),
     };
   }
 
   function mirrorHitArc(enemy, angle, range, arc, damage, knockback, source = 'mirror_knight') {
-    const d = dist(enemy.x, enemy.y, Neo.player.x, Neo.player.y);
+    const d = Neo.dist(enemy.x, enemy.y, Neo.player.x, Neo.player.y);
     if (d > range + Neo.player.r) return false;
     const targetAngle = Math.atan2(Neo.player.y - enemy.y, Neo.player.x - enemy.x);
     const diff = Math.abs(Math.atan2(Math.sin(targetAngle - angle), Math.cos(targetAngle - angle)));
     if (diff > arc) return false;
-    damagePlayer(damage, angle, knockback, source);
+    Neo.damagePlayer(damage, angle, knockback, source);
     return true;
   }
 
   function mirrorBlastPlayer(enemy, radius, damage, knockback, color, source = 'mirror_knight') {
     Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.42, ring: radius, c: color });
-    if (dist(enemy.x, enemy.y, Neo.player.x, Neo.player.y) > radius + Neo.player.r) return false;
+    if (Neo.dist(enemy.x, enemy.y, Neo.player.x, Neo.player.y) > radius + Neo.player.r) return false;
     const angle = Math.atan2(Neo.player.y - enemy.y, Neo.player.x - enemy.x);
-    damagePlayer(damage, angle, knockback, source);
+    Neo.damagePlayer(damage, angle, knockback, source);
     return true;
   }
 
@@ -2202,7 +2201,7 @@
     }
     if (move === 'smite') {
       const didHit = mirrorHitArc(enemy, angleToPlayer, Neo.ATTACKS.melee.range + 18, Neo.ATTACKS.melee.arc + 0.18, damage, Neo.ATTACKS.melee.push);
-      if (didHit) damagePlayer(Math.max(8, Math.round(damage * 0.45)), angleToPlayer, 70, 'mirror_smite');
+      if (didHit) Neo.damagePlayer(Math.max(8, Math.round(damage * 0.45)), angleToPlayer, 70, 'mirror_smite');
       Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.24, ring: 18, c: '#eaf2ff' });
       return true;
     }
@@ -2250,7 +2249,7 @@
     }
     enemy.state = 'mirrorLaser';
     enemy.windup = move === 'god_sweep' ? 0.36 : distance < 150 ? 0.34 : 0.46;
-    enemy.beamAngle = aimedAngle + rollEnemyBeamBias(enemy, move === 'god_sweep' ? 0.08 : 0.1);
+    enemy.beamAngle = aimedAngle + Neo.rollEnemyBeamBias(enemy, move === 'god_sweep' ? 0.08 : 0.1);
     return true;
   }
 
@@ -2268,10 +2267,10 @@
     if (move === 'chaos_burst') {
       for (let index = 0; index < 4; index += 1) {
         const a = angleToPlayer + (index - 1.5) * 0.38;
-        const px = Neo.player.x + Math.cos(a) * rand(46, -46, 'encounter');
-        const py = Neo.player.y + Math.sin(a) * rand(46, -46, 'encounter');
+        const px = Neo.player.x + Math.cos(a) * Neo.rand(46, -46, 'encounter');
+        const py = Neo.player.y + Math.sin(a) * Neo.rand(46, -46, 'encounter');
         Neo.spawnParticle({ x: px, y: py, life: 0.38, ring: 36, c: '#c971ff' });
-        if (dist(Neo.player.x, Neo.player.y, px, py) <= 58 + Neo.player.r) damagePlayer(Math.max(16, Math.round(damage * 0.62)), Math.atan2(Neo.player.y - py, Neo.player.x - px), 120, 'mirror_chaos');
+        if (Neo.dist(Neo.player.x, Neo.player.y, px, py) <= 58 + Neo.player.r) Neo.damagePlayer(Math.max(16, Math.round(damage * 0.62)), Math.atan2(Neo.player.y - py, Neo.player.x - px), 120, 'mirror_chaos');
       }
       return true;
     }
@@ -2282,7 +2281,7 @@
     }
     if (move === 'fire_circle' || move === 'floor_lava') {
       mirrorBlastPlayer(enemy, move === 'floor_lava' ? 156 : 108, Math.max(12, damage), 150, '#ff7b32', 'mirror_fire');
-      applyFire(Neo.player, move === 'floor_lava' ? 2 : 1, 3.2);
+      Neo.applyFire(Neo.player, move === 'floor_lava' ? 2 : 1, 3.2);
       return true;
     }
     enemy.state = 'mirrorSmash';
@@ -2297,7 +2296,7 @@
     enemy.mirrorDashCd = getMirrorSkillCooldown(enemy, 'dash');
     if (move === 'warp') {
       const backAngle = angleToPlayer + Math.PI;
-      const safePoint = findSafePointNearTarget(predicted.x + Math.cos(backAngle) * 72, predicted.y + Math.sin(backAngle) * 72, enemy.r, 130, 16);
+      const safePoint = Neo.findSafePointNearTarget(predicted.x + Math.cos(backAngle) * 72, predicted.y + Math.sin(backAngle) * 72, enemy.r, 130, 16);
       if (safePoint) {
         enemy.x = safePoint.x;
         enemy.y = safePoint.y;
@@ -2307,7 +2306,7 @@
       return true;
     }
     if (move === 'nimrod_stomp') {
-      const safePoint = findSafePointNearTarget(predicted.x, predicted.y, enemy.r, 90, 14);
+      const safePoint = Neo.findSafePointNearTarget(predicted.x, predicted.y, enemy.r, 90, 14);
       if (safePoint) {
         enemy.x = safePoint.x;
         enemy.y = safePoint.y;
@@ -2348,7 +2347,7 @@
       enemy.windup -= dt;
       enemy.vx *= 0.78;
       enemy.vy *= 0.78;
-      if (enemy.state === 'mirrorLaser') aimEnemyBeam(enemy, dt, 3.4);
+      if (enemy.state === 'mirrorLaser') Neo.aimEnemyBeam(enemy, dt, 3.4);
       Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.16, c: '#d7f6ff' });
       if (enemy.windup <= 0) {
         if (enemy.state === 'mirrorLaser') {
@@ -2374,7 +2373,7 @@
 
     if (enemy.beamTime > 0) {
       const laserMove = getMirrorMove(enemy, 'laser');
-      tickEnemyBeam(enemy, dt, {
+      Neo.tickEnemyBeam(enemy, dt, {
         tick: laserMove === 'god_sweep' ? 0.06 : laserMove === 'love_beam' ? 0.07 : 0.08,
         range: laserMove === 'god_sweep' ? 360 : laserMove === 'turtle_wave' ? 440 : Neo.ATTACKS.laser.range,
         knockback: laserMove === 'turtle_wave' ? 145 : 95,
@@ -2402,9 +2401,9 @@
       const dashSpeed = dashMove === 'zip_lightning' ? 700 : 600;
       enemy.vx = Math.cos(enemy.dashAngle) * dashSpeed;
       enemy.vy = Math.sin(enemy.dashAngle) * dashSpeed;
-      if (!enemy.dashHit && dist(enemy.x, enemy.y, Neo.player.x, Neo.player.y) < enemy.r + Neo.player.r + 6) {
+      if (!enemy.dashHit && Neo.dist(enemy.x, enemy.y, Neo.player.x, Neo.player.y) < enemy.r + Neo.player.r + 6) {
         enemy.dashHit = true;
-        damagePlayer(enemy.dmg + (dashMove === 'zip_lightning' ? 18 : 8), enemy.dashAngle, dashMove === 'zip_lightning' ? 300 : 240, enemy.type);
+        Neo.damagePlayer(enemy.dmg + (dashMove === 'zip_lightning' ? 18 : 8), enemy.dashAngle, dashMove === 'zip_lightning' ? 300 : 240, enemy.type);
       }
       if (enemy.dashTime <= 0) {
         enemy.attackCd = 0.45;
@@ -2544,7 +2543,7 @@
   }
 
   function updateGod(enemy, dt) {
-    const tuning = getEnemyDifficultyTuning();
+    const tuning = Neo.getEnemyDifficultyTuning();
     const dx = Neo.player.x - enemy.x;
     const dy = Neo.player.y - enemy.y;
     const distance = Math.hypot(dx, dy) || 1;
@@ -2612,7 +2611,7 @@
       enemy.windup -= dt;
       enemy.vx *= 0.74;
       enemy.vy *= 0.74;
-      if (enemy.state === 'godLaser') aimEnemyBeam(enemy, dt, (0.68 + (tuning.reaction - 1) * 3.6) * reactionMult);
+      if (enemy.state === 'godLaser') Neo.aimEnemyBeam(enemy, dt, (0.68 + (tuning.reaction - 1) * 3.6) * reactionMult);
       Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.18, c: '#ffffff' });
       if (enemy.windup <= 0) {
         if (enemy.state === 'godLaser') {
@@ -2640,7 +2639,7 @@
 
     if (enemy.beamTime > 0) {
       const isSweep = enemy.state === 'godSweep';
-      tickEnemyBeam(enemy, dt, {
+      Neo.tickEnemyBeam(enemy, dt, {
         tick: (isSweep ? 0.045 : 0.08) * Math.max(0.64, tuning.rangedCadence * cadenceMult),
         range: enemy.beamRange || 620,
         knockback: isSweep ? (phaseFour ? 260 : 210) : (phaseFour ? 180 : 150),
@@ -2664,9 +2663,9 @@
       const dashSpeed = phaseFive ? 710 : phaseFour ? 660 : phaseTwo ? 620 : 500;
       enemy.vx = Math.cos(enemy.dashAngle) * dashSpeed;
       enemy.vy = Math.sin(enemy.dashAngle) * dashSpeed;
-      if (!enemy.dashHit && dist(enemy.x, enemy.y, Neo.player.x, Neo.player.y) < enemy.r + Neo.player.r + 10) {
+      if (!enemy.dashHit && Neo.dist(enemy.x, enemy.y, Neo.player.x, Neo.player.y) < enemy.r + Neo.player.r + 10) {
         enemy.dashHit = true;
-        damagePlayer(enemy.dmg + (phaseFive ? 34 : phaseTwo ? 24 : 12), enemy.dashAngle, phaseFour ? 410 : phaseTwo ? 360 : 300, enemy.type);
+        Neo.damagePlayer(enemy.dmg + (phaseFive ? 34 : phaseTwo ? 24 : 12), enemy.dashAngle, phaseFour ? 410 : phaseTwo ? 360 : 300, enemy.type);
       }
       if (enemy.dashTime <= 0) enemy.attackCd = 1.1 * tuning.rangedCadence * cadenceMult;
       return;
@@ -2683,7 +2682,7 @@
 
     if (distance < enemy.r + Neo.player.r + 12 && enemy.attackCd <= 0) {
       const angle = Math.atan2(dy, dx);
-      damagePlayer(enemy.dmg + (phaseFive ? 26 : phaseTwo ? 18 : 10), angle, phaseFour ? 370 : phaseTwo ? 320 : 260, enemy.type);
+      Neo.damagePlayer(enemy.dmg + (phaseFive ? 26 : phaseTwo ? 18 : 10), angle, phaseFour ? 370 : phaseTwo ? 320 : 260, enemy.type);
       enemy.attackCd = 0.8 * tuning.rangedCadence * cadenceMult;
       return;
     }
@@ -2693,12 +2692,12 @@
       if ((phaseTwo && distance > 250 && roll > (phaseFour ? 0.46 : 0.52)) || (!phaseTwo && distance > 300 && roll > 0.68)) {
         enemy.state = 'godSweep';
         enemy.windup = 1.15 / (tuning.reaction * reactionMult);
-        enemy.beamAngle = Math.atan2(dy, dx) + rollEnemyBeamBias(enemy, 0.1);
+        enemy.beamAngle = Math.atan2(dy, dx) + Neo.rollEnemyBeamBias(enemy, 0.1);
         enemy.sweepDir = Neo.nextRandom('encounter') < 0.5 ? -1 : 1;
       } else if (roll > (phaseFive ? 0.16 : phaseTwo ? 0.26 : 0.42)) {
         enemy.state = 'godLaser';
         enemy.windup = 0.82 / (tuning.reaction * reactionMult);
-        enemy.beamAngle = Math.atan2(dy, dx) + rollEnemyBeamBias(enemy, phaseFour ? 0.24 : phaseTwo ? 0.2 : 0.17);
+        enemy.beamAngle = Math.atan2(dy, dx) + Neo.rollEnemyBeamBias(enemy, phaseFour ? 0.24 : phaseTwo ? 0.2 : 0.17);
       } else if (roll > (phaseFour ? 0.04 : phaseTwo ? 0.08 : 0.18)) {
         enemy.state = 'godSwordRing';
         enemy.windup = 0.6 / (tuning.reaction * reactionMult);
@@ -2718,18 +2717,18 @@
 
   function moveCircle(entity, dt) {
     if (entity.airborne) {
-      entity.x = clamp(entity.x, Neo.WALL + entity.r, Neo.ROOM_W - Neo.WALL - entity.r);
-      entity.y = clamp(entity.y, Neo.WALL + entity.r, Neo.ROOM_H - Neo.WALL - entity.r);
+      entity.x = Neo.clamp(entity.x, Neo.WALL + entity.r, Neo.ROOM_W - Neo.WALL - entity.r);
+      entity.y = Neo.clamp(entity.y, Neo.WALL + entity.r, Neo.ROOM_H - Neo.WALL - entity.r);
       return;
     }
     const nextX = entity.x + entity.vx * dt;
     const nextY = entity.y + entity.vy * dt;
-    if (!isBlocked(nextX, entity.y, entity.r)) entity.x = nextX;
+    if (!Neo.isBlocked(nextX, entity.y, entity.r)) entity.x = nextX;
     else entity.vx *= -0.4;
-    if (!isBlocked(entity.x, nextY, entity.r)) entity.y = nextY;
+    if (!Neo.isBlocked(entity.x, nextY, entity.r)) entity.y = nextY;
     else entity.vy *= -0.4;
-    entity.x = clamp(entity.x, Neo.WALL + entity.r, Neo.ROOM_W - Neo.WALL - entity.r);
-    entity.y = clamp(entity.y, Neo.WALL + entity.r, Neo.ROOM_H - Neo.WALL - entity.r);
+    entity.x = Neo.clamp(entity.x, Neo.WALL + entity.r, Neo.ROOM_W - Neo.WALL - entity.r);
+    entity.y = Neo.clamp(entity.y, Neo.WALL + entity.r, Neo.ROOM_H - Neo.WALL - entity.r);
   }
 
   // Expose on Neo
@@ -2781,10 +2780,20 @@
   Neo.completeChallengeTrial = completeChallengeTrial;
   Neo.failChallengeTrial = failChallengeTrial;
   Neo.isBossType = isBossType;
-  Neo.updateHunterEnemy = updateHunterEnemy;
-  Neo.updateCultMageEnemy = updateCultMageEnemy;
-  Neo.updateArtificerBoss = updateArtificerBoss;
-  Neo.updateLaserEnemy = updateLaserEnemy;
+	  Neo.updateHunterEnemy = updateHunterEnemy;
+	  Neo.updateCultMageEnemy = updateCultMageEnemy;
+	  Neo.updateCultQueenBoss = updateCultQueenBoss;
+	  Neo.updateBulkGolemBoss = updateBulkGolemBoss;
+	  Neo.updateArtificerBoss = updateArtificerBoss;
+	  Neo.updateKnaveEnemy = updateKnaveEnemy;
+	  Neo.updateSniperEnemy = updateSniperEnemy;
+	  Neo.updateMachineGunnerEnemy = updateMachineGunnerEnemy;
+	  Neo.updateGolemEnemy = updateGolemEnemy;
+	  Neo.updateSummonerEnemy = updateSummonerEnemy;
+	  Neo.updateShieldUnitEnemy = updateShieldUnitEnemy;
+	  Neo.updateHealerEnemy = updateHealerEnemy;
+	  Neo.updateBossSpawnerEnemy = updateBossSpawnerEnemy;
+	  Neo.updateLaserEnemy = updateLaserEnemy;
   Neo.updateEliteEnemyTraits = updateEliteEnemyTraits;
   Neo.updateChargerEnemy = updateChargerEnemy;
   Neo.getMirrorMove = getMirrorMove;
@@ -2799,8 +2808,8 @@
   Neo.startMirrorSmash = startMirrorSmash;
   Neo.startMirrorDash = startMirrorDash;
   Neo.updateMirrorChampion = updateMirrorChampion;
-  Neo.updateChallengeRoomState = updateChallengeRoomState;
-  Neo.updateGod = updateGod;
+	  Neo.updateChallengeRoomState = updateChallengeRoomState;
+	  Neo.triggerGodPhase = triggerGodPhase;
+	  Neo.updateGod = updateGod;
   Neo.steerEnemy = steerEnemy;
   Neo.moveCircle = moveCircle;
-})();

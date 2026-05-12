@@ -1,5 +1,4 @@
 // entities.js — standalone IIFE. Sprite atlas, player/enemy drawing.
-(() => {
   function buildSpriteAtlas() {
     const keys = Object.keys(Neo.SPRITE_DEFS);
     const canvasEl = document.createElement('canvas');
@@ -54,7 +53,7 @@
   }
 
   function getPlayerSpriteKey() {
-    const key = getCharacterDef().key;
+    const key = Neo.getCharacterDef().key;
     return Neo.SPRITE_DEFS[key] ? key : 'thorn_knight';
   }
 
@@ -162,8 +161,8 @@
       }
       if (enemy.beamTime > 0) {
         const range = enemy.type === 'god' ? (enemy.beamRange || 620) : 430;
-        const beamPath = buildRicochetBeamPath(enemy.x, enemy.y, enemy.beamAngle, range, getEnemyBeamBounceCount(enemy));
-        strokeBeamPath(beamPath, {
+        const beamPath = Neo.buildRicochetBeamPath(enemy.x, enemy.y, enemy.beamAngle, range, Neo.getEnemyBeamBounceCount(enemy));
+        Neo.strokeBeamPath(beamPath, {
           color: enemy.type === 'god' ? '#ffffff' : '#aa66ff',
           width: enemy.type === 'god' && enemy.state === 'godSweep' ? 18 : enemy.type === 'god' ? 10 : 7,
           shadowBlur: enemy.type === 'god' && enemy.state === 'godSweep' ? 24 : 14,
@@ -176,7 +175,7 @@
     const stackCount = Math.max(0, Math.round(Number(stacks || 0)));
     if (!stackCount) return;
     const t = Date.now() / 170;
-    const flash = clamp(Number(enemy.bleedFlash || 0) * 3, 0, 1);
+    const flash = Neo.clamp(Number(enemy.bleedFlash || 0) * 3, 0, 1);
     const drops = Math.min(8, stackCount + 2);
 
     Neo.ctx.save();
@@ -249,8 +248,8 @@
 
   function drawSpawnPortal(enemy) {
     const SPAWN_DURATION = 0.72;
-    const t = clamp(1 - enemy.spawnT / SPAWN_DURATION, 0, 1);
-    const emerge = clamp((t - 0.35) / 0.65, 0, 1);
+    const t = Neo.clamp(1 - enemy.spawnT / SPAWN_DURATION, 0, 1);
+    const emerge = Neo.clamp((t - 0.35) / 0.65, 0, 1);
     const portalEase = 1 - (1 - Math.min(t * 1.8, 1)) ** 3;
     const now = Date.now();
     const r = enemy.r;
@@ -328,7 +327,7 @@
       const facing = getFacingDirection(enemy, 0);
       const drawSize = Math.max(30, r * 2.4);
       const squash = 0.28 + emerge * 0.72;
-      const alpha = clamp(emerge * 1.8, 0, 1);
+      const alpha = Neo.clamp(emerge * 1.8, 0, 1);
       const atlas = Neo.SPRITE_ATLAS;
       const frame = atlas?.frames ? (atlas.frames[spriteKey] || atlas.frames.hunter) : null;
       if (frame) {
@@ -363,8 +362,8 @@
       if (!enemy) return;
       if (enemy.spawnT > 0) { drawSpawnPortal(enemy); return; }
       const drawY = enemy.y - Math.max(0, Number(enemy.jumpZ || 0));
-      const bleedStacks = getStatusStacks(enemy, 'bleed');
-      const activeStatuses = Neo.STATUS_KEYS.filter(key => getStatusStacks(enemy, key) > 0);
+      const bleedStacks = Neo.getStatusStacks(enemy, 'bleed');
+      const activeStatuses = Neo.STATUS_KEYS.filter(key => Neo.getStatusStacks(enemy, key) > 0);
       if (activeStatuses.length > 0) {
         Neo.ctx.save();
         Neo.ctx.translate(enemy.x, drawY);
@@ -404,9 +403,9 @@
       if (bleedStacks > 0) drawBleedOverlay(enemy, bleedStacks);
       const badgeBaseY = enemy.type === 'rival' ? -enemy.r - 40 : -enemy.r - 32;
       let badgeOffset = bleedStacks > 0 ? 18 : 0;
-      const fireStacks = getStatusStacks(enemy, 'fire');
-      const poisonStacks = getStatusStacks(enemy, 'poison');
-      const darkStacks = getStatusStacks(enemy, 'dark_drain');
+      const fireStacks = Neo.getStatusStacks(enemy, 'fire');
+      const poisonStacks = Neo.getStatusStacks(enemy, 'poison');
+      const darkStacks = Neo.getStatusStacks(enemy, 'dark_drain');
       if (fireStacks > 0 || poisonStacks > 0 || darkStacks > 0) {
         Neo.ctx.save();
         Neo.ctx.font = 'bold 10px system-ui';
@@ -442,25 +441,25 @@
       }
       Neo.ctx.save();
       Neo.ctx.translate(enemy.x, drawY);
-      const hpPct = clamp(enemy.hp / enemy.max, 0, 1);
+      const hpPct = Neo.clamp(enemy.hp / enemy.max, 0, 1);
 
       // Name tag + level
       const _enemyLabel = (enemy.type === 'rival' && enemy.rivalData)
         ? enemy.rivalData.name
-        : getEliteEnemyLabel(enemy);
+        : Neo.getEliteEnemyLabel(enemy);
       const _levelStr = `Lv.${Neo.floor}`;
       Neo.ctx.font = '9px system-ui';
       Neo.ctx.textAlign = 'center';
       Neo.ctx.shadowColor = '#000';
       Neo.ctx.shadowBlur = 4;
-      Neo.ctx.fillStyle = enemy.elite ? '#f6cf6a' : isBossType(enemy.type) ? '#f2e8d7'
+      Neo.ctx.fillStyle = enemy.elite ? '#f6cf6a' : Neo.isBossType(enemy.type) ? '#f2e8d7'
         : (enemy.type === 'rival' && enemy.rivalData) ? enemy.rivalData.color : '#b8cfe0';
       Neo.ctx.fillText(`${_enemyLabel}  ${_levelStr}`, 0, -enemy.r - 19);
 
       // HP bar
       Neo.ctx.fillStyle = '#000a';
       Neo.ctx.fillRect(-18, -enemy.r - 13, 36, 5);
-      Neo.ctx.fillStyle = enemy.type === 'rival' ? (enemy.rivalData?.color || '#b24f68') : isBossType(enemy.type) ? '#f2e8d7' : '#b24f68';
+      Neo.ctx.fillStyle = enemy.type === 'rival' ? (enemy.rivalData?.color || '#b24f68') : Neo.isBossType(enemy.type) ? '#f2e8d7' : '#b24f68';
       Neo.ctx.fillRect(-18, -enemy.r - 13, 36 * hpPct, 5);
 
       // HP current / max text
@@ -472,7 +471,7 @@
       Neo.ctx.fillText(`${Math.ceil(enemy.hp)} / ${enemy.max}`, 0, -enemy.r - 5);
 
       if ((enemy.barrier || 0) > 0) {
-        const barrierPct = clamp(enemy.barrier / Math.max(1, enemy.max * 0.22), 0, 1);
+        const barrierPct = Neo.clamp(enemy.barrier / Math.max(1, enemy.max * 0.22), 0, 1);
         Neo.ctx.fillStyle = 'rgba(80, 215, 255, 0.24)';
         Neo.ctx.fillRect(-18, -enemy.r - 20, 36, 4);
         Neo.ctx.fillStyle = '#7ed6ff';
@@ -489,7 +488,7 @@
   }
 
   function drawPlayerCorpseAnim(anim) {
-    const t = clamp(anim.timer / anim.duration, 0, 1);
+    const t = Neo.clamp(anim.timer / anim.duration, 0, 1);
     const fallEase = 1 - (1 - Math.min(t * 1.6, 1)) ** 3;
     const size = Math.max(34, anim.r * 2.5);
     const frame = Neo.SPRITE_ATLAS.frames[anim.spriteKey] || Neo.SPRITE_ATLAS.frames.thorn_knight;
@@ -501,7 +500,7 @@
     Neo.ctx.save();
     Neo.ctx.translate(anim.x, anim.y);
 
-    const poolAlpha = clamp((t - 0.3) / 0.4, 0, 1);
+    const poolAlpha = Neo.clamp((t - 0.3) / 0.4, 0, 1);
     if (poolAlpha > 0) {
       Neo.ctx.fillStyle = `rgba(94,0,16,${0.45 * poolAlpha})`;
       Neo.ctx.beginPath();
@@ -528,9 +527,9 @@
   }
 
   function drawDeathOverlay(anim) {
-    const t = clamp(anim.timer / anim.duration, 0, 1);
-    const fadeIn = clamp(t * 2, 0, 1);
-    const vignetteAlpha = clamp(t * 0.85, 0, 0.82);
+    const t = Neo.clamp(anim.timer / anim.duration, 0, 1);
+    const fadeIn = Neo.clamp(t * 2, 0, 1);
+    const vignetteAlpha = Neo.clamp(t * 0.85, 0, 0.82);
     const w = Neo.canvas.width;
     const h = Neo.canvas.height;
 
@@ -540,7 +539,7 @@
     Neo.ctx.fillStyle = grad;
     Neo.ctx.fillRect(0, 0, w, h);
 
-    const edgeAlpha = clamp(t * 0.7, 0, 0.62);
+    const edgeAlpha = Neo.clamp(t * 0.7, 0, 0.62);
     const edgeSize = Math.min(w, h) * 0.28;
     Neo.ctx.fillStyle = `rgba(140,0,0,${edgeAlpha})`;
     Neo.ctx.fillRect(0, 0, w, edgeSize * 0.35);
@@ -549,7 +548,7 @@
     Neo.ctx.fillRect(w - edgeSize * 0.28, 0, edgeSize * 0.28, h);
 
     if (t > 0.55) {
-      const textAlpha = clamp((t - 0.55) / 0.35, 0, 1);
+      const textAlpha = Neo.clamp((t - 0.55) / 0.35, 0, 1);
       Neo.ctx.save();
       Neo.ctx.globalAlpha = textAlpha;
       Neo.ctx.font = `bold ${Math.round(h * 0.072)}px system-ui`;
@@ -575,7 +574,7 @@
     const facing = getFacingDirection(Neo.player, aimAngle);
     const shadowColor = Neo.godTimer > 0 ? 'rgba(255,248,210,0.65)' : 'rgba(0,0,0,0.25)';
     const _reduceFlash = window.NeoSettings?.getAccess()?.reduceFlash;
-    Neo.STATUS_KEYS.filter(key => getStatusStacks(Neo.player, key) > 0).forEach((key, index) => {
+    Neo.STATUS_KEYS.filter(key => Neo.getStatusStacks(Neo.player, key) > 0).forEach((key, index) => {
       const style = Neo.STATUS_STYLES[key];
       Neo.ctx.save();
       Neo.ctx.translate(Neo.player.x, Neo.player.y);
@@ -603,7 +602,7 @@
     Neo.ctx.moveTo(Math.cos(aimAngle) * 6, Math.sin(aimAngle) * 6);
     Neo.ctx.lineTo(Math.cos(aimAngle) * 20, Math.sin(aimAngle) * 20);
     Neo.ctx.stroke();
-    const equippedWeapon = getEquippedWeapon();
+    const equippedWeapon = Neo.getEquippedWeapon();
     const extendingStaffEquipped = equippedWeapon === 'extending_staff';
     if (extendingStaffEquipped) {
       const previewRange = 130;
@@ -726,7 +725,7 @@
   }
 
   function drawPlayerN(pn, charKey, tintColor, label) {
-    const slot = getSlotByEntity(pn) || {
+    const slot = Neo.getSlotByEntity(pn) || {
       getEntity: () => pn,
       getCharacter: () => charKey,
       color: tintColor,
@@ -739,15 +738,15 @@
     if (!Neo.player) return;
 
     // Draw Laser Glasses weapon beams (two beams, ±0.2 spread)
-    if (!Neo.laserActive && getEquippedWeapon() === 'lazer_glasses' && Neo.player.weaponBeamTime > 0) {
+    if (!Neo.laserActive && Neo.getEquippedWeapon() === 'lazer_glasses' && Neo.player.weaponBeamTime > 0) {
       const baseAngle = Math.atan2(Neo.mouse.worldY - Neo.player.y, Neo.mouse.worldX - Neo.player.x);
       const alpha = Math.min(1, Neo.player.weaponBeamTime / 0.3);
       Neo.ctx.save();
       Neo.ctx.globalAlpha = alpha;
       [-0.2, 0.2].forEach(offset => {
         const beamAngle = baseAngle + offset;
-        const beamPath = buildRicochetBeamPath(Neo.player.x, Neo.player.y, beamAngle, 430, Neo.LAZER_GLASSES_BOUNCES);
-        drawTaperedBeamPath(beamPath, {
+        const beamPath = Neo.buildRicochetBeamPath(Neo.player.x, Neo.player.y, beamAngle, 430, Neo.LAZER_GLASSES_BOUNCES);
+        Neo.drawTaperedBeamPath(beamPath, {
           color: '#cda8ff',
           glow: '#e0c8ff',
           maxWidth: 5,
@@ -755,7 +754,7 @@
         });
         // Tip burst
         if (Neo.rng() < 0.35) {
-          const end = getBeamPathEnd(beamPath);
+          const end = Neo.getBeamPathEnd(beamPath);
           Neo.spawnParticle({ x: end.x + (Neo.rng() - 0.5) * 5, y: end.y + (Neo.rng() - 0.5) * 5, life: 0.1 + Neo.rng() * 0.08, vx: (Neo.rng() - 0.5) * 35, vy: (Neo.rng() - 0.5) * 35, c: '#cda8ff' });
         }
       });
@@ -771,14 +770,14 @@
       : Math.atan2(Neo.mouse.worldY - Neo.player.y, Neo.mouse.worldX - Neo.player.x);
     const turtleWaveActive = Neo.laserMode === 'turtle_wave';
     const loveBeamActive = Neo.loveBeamCasting;
-    const beamRange = getPlayerBeamRange(Neo.laserMode, getEquippedMove('laser'));
-    const beamPath = buildRicochetBeamPath(Neo.player.x, Neo.player.y, angle, beamRange, getPlayerBeamBounceCount(Neo.laserMode));
+    const beamRange = Neo.getPlayerBeamRange(Neo.laserMode, Neo.getEquippedMove('laser'));
+    const beamPath = Neo.buildRicochetBeamPath(Neo.player.x, Neo.player.y, angle, beamRange, Neo.getPlayerBeamBounceCount(Neo.laserMode));
     if (!beamPath.length) return;
     const beamColor = turtleWaveActive ? '#74f5ff' : loveBeamActive ? '#ff9ed6' : Neo.laserMode === 'god_sweep' ? '#ffffff' : '#ff00aa';
     const beamGlow = turtleWaveActive ? '#9bf7ff' : loveBeamActive ? '#ffd1ea' : Neo.laserMode === 'god_sweep' ? '#e8f0ff' : '#f0f';
     const maxW = Neo.laserMode === 'god_sweep' ? 16 : turtleWaveActive ? 18 : loveBeamActive ? 10 : 8;
 
-    drawTaperedBeamPath(beamPath, {
+    Neo.drawTaperedBeamPath(beamPath, {
       color: beamColor,
       glow: beamGlow,
       maxWidth: maxW,
@@ -787,7 +786,7 @@
 
     // Beam particles: small dots that drift perpendicular and fade toward tip
     if (Neo.rng() < 0.55) {
-      const sample = sampleBeamPath(beamPath, Neo.rng());
+      const sample = Neo.sampleBeamPath(beamPath, Neo.rng());
       if (sample) {
         const taper = 1 - sample.t * sample.t;
         const spread = maxW * taper * 0.7;
@@ -806,7 +805,7 @@
     }
     // Tip burst particles at beam end
     if (Neo.rng() < 0.4) {
-      const end = getBeamPathEnd(beamPath);
+      const end = Neo.getBeamPathEnd(beamPath);
       const tipPx = end.x + (Neo.rng() - 0.5) * 6;
       const tipPy = end.y + (Neo.rng() - 0.5) * 6;
       Neo.spawnParticle({
@@ -841,4 +840,4 @@
   Neo.drawPlayer2 = drawPlayer2;
   Neo.drawPlayerN = drawPlayerN;
   Neo.drawPlayerLaser = drawPlayerLaser;
-})();
+

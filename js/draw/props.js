@@ -1,7 +1,6 @@
 // props.js — standalone IIFE. Drawing world props, pickups, projectiles, corpses.
-(() => {
   function drawWorldProps() {
-    const theme = getRoomArtTheme();
+    const theme = Neo.getRoomArtTheme();
     Neo.hazards.forEach(hazard => {
       Neo.ctx.save();
       Neo.ctx.translate(hazard.x, hazard.y);
@@ -184,25 +183,25 @@
       Neo.ctx.save();
       Neo.ctx.translate(prop.x, prop.y);
       if (prop.kind === 'pot') {
-        drawEnvironmentTile('pot_clay', -16, -18, 32, 32);
+        Neo.drawEnvironmentTile('pot_clay', -16, -18, 32, 32);
       } else if (prop.kind === 'barrel') {
-        drawEnvironmentTile('barrel_oak', -24, -26, 48, 48);
+        Neo.drawEnvironmentTile('barrel_oak', -24, -26, 48, 48);
       } else if (prop.kind === 'wall') {
-        drawEnvironmentTile('wall_block', -26, -26, 52, 52);
+        Neo.drawEnvironmentTile('wall_block', -26, -26, 52, 52);
         Neo.ctx.strokeStyle = theme.wallEdge;
         Neo.ctx.lineWidth = 1.5;
         Neo.ctx.strokeRect(-25, -25, 50, 50);
       } else if (prop.kind === 'cover_wall') {
-        drawCoverWall(prop);
+        Neo.drawCoverWall(prop);
       } else if (prop.kind === 'secret_wall') {
-        drawCoverWall(prop);
+        Neo.drawCoverWall(prop);
       }
       Neo.ctx.restore();
     });
 
     Neo.shopOffers.forEach(offer => {
       if (offer.bought) return;
-      const blockedByChallenge = offer.type === 'item' && isChallengeActive('no_items');
+      const blockedByChallenge = offer.type === 'item' && Neo.isChallengeActive('no_items');
       const canAfford = !!Neo.player && Neo.player.coins >= offer.cost;
       Neo.ctx.save();
       Neo.ctx.translate(offer.x, offer.y);
@@ -265,10 +264,10 @@
       if (pickup.type === 'coin') {
         Neo.ctx.shadowColor = '#ffd966';
         Neo.ctx.shadowBlur = 12;
-        if (ui.coinIcon instanceof HTMLCanvasElement) {
+        if (Neo.ui.coinIcon instanceof HTMLCanvasElement) {
           const s = 18;
           Neo.ctx.imageSmoothingEnabled = false;
-          Neo.ctx.drawImage(ui.coinIcon, -s / 2, -s / 2, s, s);
+          Neo.ctx.drawImage(Neo.ui.coinIcon, -s / 2, -s / 2, s, s);
         } else {
           Neo.ctx.fillStyle = '#ffd966';
           Neo.ctx.beginPath();
@@ -356,7 +355,7 @@
       } else if (pickup.type === 'jesterPortal') {
         const spawnT = Math.max(0, Number(pickup.spawnT || 0));
         const activateAt = Math.max(0.01, Number(pickup.activateAt || Neo.JESTER_PORTAL_ACTIVATE_DELAY));
-        const reveal = clamp(spawnT / activateAt, 0, 1);
+        const reveal = Neo.clamp(spawnT / activateAt, 0, 1);
         const ease = 1 - (1 - reveal) ** 3;
         const spin = Date.now() / 360;
         const portalR = 16 + ease * 11;
@@ -523,7 +522,7 @@
         Neo.ctx.fillStyle = '#ffffff';
         Neo.ctx.font = 'bold 10px system-ui';
         Neo.ctx.textAlign = 'center';
-        Neo.ctx.fillText(getChallengeTrialLabel(trial), 0, 34);
+        Neo.ctx.fillText(Neo.getChallengeTrialLabel(trial), 0, 34);
       } else if (pickup.type === 'challengeBomb') {
         Neo.ctx.fillStyle = pickup.safe ? '#8dd4ff' : '#ff7a66';
         Neo.ctx.shadowColor = Neo.ctx.fillStyle;
@@ -692,9 +691,9 @@
       const fadeStart = Math.min(life - 0.01, Number(body.fadeStart || Neo.CORPSE_FADE_START));
       const age = Math.max(0, Number(body.age || 0));
       const fallTime = Math.max(0.01, Number(body.fallTime || Neo.CORPSE_FALL_TIME));
-      const fallT = clamp(age / fallTime, 0, 1);
+      const fallT = Neo.clamp(age / fallTime, 0, 1);
       const fallEase = 1 - (1 - fallT) ** 3;
-      const fadeT = age <= fadeStart ? 0 : clamp((age - fadeStart) / (life - fadeStart), 0, 1);
+      const fadeT = age <= fadeStart ? 0 : Neo.clamp((age - fadeStart) / (life - fadeStart), 0, 1);
       const alpha = Math.max(0, 1 - fadeT);
       if (alpha <= 0) return;
 
@@ -703,7 +702,7 @@
       if (!frame) return;
       const squash = 1 - 0.46 * fallEase;
       const rotation = Number(body.angle || 0) + Number(body.fallAngle || 0) * fallEase;
-      const poolScale = clamp(age / 1.2, 0, 1) * alpha;
+      const poolScale = Neo.clamp(age / 1.2, 0, 1) * alpha;
 
       Neo.ctx.save();
       Neo.ctx.translate(body.x, body.y);
@@ -755,4 +754,4 @@
   Neo.drawProjectileShape = drawProjectileShape;
   Neo.drawProjectiles = drawProjectiles;
   Neo.drawDeadBodies = drawDeadBodies;
-})();
+

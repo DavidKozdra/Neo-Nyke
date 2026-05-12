@@ -1,21 +1,20 @@
 // environment.js — standalone IIFE. Room environment drawing.
-(() => {
   function draw() {
     const isDying = Neo.gameState === 'dying';
     const isPlayLike = Neo.gameState === 'play' || Neo.gameState === 'pause' || Neo.gameState === 'dialogue' || isDying;
-    let sectionPerfStart = perfStart();
+    let sectionPerfStart = Neo.perfStart();
     Neo.ctx.clearRect(0, 0, Neo.canvas.width, Neo.canvas.height);
     if (isPlayLike) {
-      const split = isSplitScreen();
+      const split = Neo.isSplitScreen();
       if (split) {
-        const slots = getActivePlayerSlots();
+        const slots = Neo.getActivePlayerSlots();
         const sc = slots.length;
         const vpW = Math.floor(Neo.canvas.width / 2);
         const vpH = sc >= 3 ? Math.floor(Neo.canvas.height / 2) : Neo.canvas.height;
         slots.forEach((slot, index) => {
           const col = index % 2;
           const row = sc >= 3 ? Math.floor(index / 2) : 0;
-          drawWorldViewport(slot.getCamera(), col * vpW, vpW, vpH, row * vpH, slot.label, slot);
+          Neo.drawWorldViewport(slot.getCamera(), col * vpW, vpW, vpH, row * vpH, slot.label, slot);
         });
         // Dividers
         Neo.ctx.save();
@@ -24,40 +23,40 @@
         if (sc >= 3) Neo.ctx.fillRect(0, vpH - 1, Neo.canvas.width, 2);
         Neo.ctx.restore();
       } else {
-        drawWorldViewport(Neo.camera, 0, Neo.canvas.width, Neo.canvas.height, 0, null);
+        Neo.drawWorldViewport(Neo.camera, 0, Neo.canvas.width, Neo.canvas.height, 0, null);
       }
-      perfEnd('draw.room', sectionPerfStart);
+      Neo.perfEnd('draw.room', sectionPerfStart);
     }
 
-    sectionPerfStart = perfStart();
+    sectionPerfStart = Neo.perfStart();
     if (isPlayLike && !isDying) {
-      const minimapLayout = drawMinimap();
+      const minimapLayout = Neo.drawMinimap();
       Neo.uiController.setObjectiveLayout(minimapLayout?.viewportBounds || null);
     } else {
       Neo.minimapLayoutState = null;
       Neo.uiController.setObjectiveLayout(null);
     }
-    perfEnd('draw.minimap', sectionPerfStart);
+    Neo.perfEnd('draw.minimap', sectionPerfStart);
 
-    sectionPerfStart = perfStart();
+    sectionPerfStart = Neo.perfStart();
     if (Neo.fade > 0) {
       Neo.ctx.fillStyle = `rgba(0,0,0,${Neo.fade})`;
       Neo.ctx.fillRect(0, 0, Neo.canvas.width, Neo.canvas.height);
     }
 
     if (!isDying) drawLowHealthEdgeGlow();
-    if (isDying && Neo.playerDeathAnim) drawDeathOverlay(Neo.playerDeathAnim);
-    if (!isDying && Neo.godTimer > 0) drawGodModeBar();
-    if (!isDying) drawBossHealthBars();
-    drawFloorTransition();
-    perfEnd('draw.overlays', sectionPerfStart);
+    if (isDying && Neo.playerDeathAnim) Neo.drawDeathOverlay(Neo.playerDeathAnim);
+    if (!isDying && Neo.godTimer > 0) Neo.drawGodModeBar();
+    if (!isDying) Neo.drawBossHealthBars();
+    Neo.drawFloorTransition();
+    Neo.perfEnd('draw.overlays', sectionPerfStart);
   }
 
   function drawLowHealthEdgeGlow() {
     if (!Neo.player || Neo.gameState !== 'play' || !Number.isFinite(Neo.player.hp) || !Number.isFinite(Neo.player.maxHp) || Neo.player.maxHp <= 0) return;
     const access = window.NeoSettings?.getAccess() || {};
     const now = Date.now();
-    const hpRatio = clamp(Neo.player.hp / Neo.player.maxHp, 0, 1);
+    const hpRatio = Neo.clamp(Neo.player.hp / Neo.player.maxHp, 0, 1);
     const hitFlashActive = Neo.lowHealthHitFlashUntil > now;
     // With reduceFlash: skip the hit-flash-at-healthy-HP effect entirely; static glow only.
     const isForcedHitFlash = !access.reduceFlash && hitFlashActive && hpRatio >= 0.2;
@@ -67,7 +66,7 @@
     const danger = (0.2 - effectiveHpRatio) / 0.2;
     // With reduceFlash: no sine pulse — use a stable alpha
     const pulse = access.reduceFlash ? 0.82 : (0.74 + Math.sin(now / 120) * 0.18);
-    const baseAlpha = clamp((0.16 + danger * 0.34) * pulse, 0, 0.52);
+    const baseAlpha = Neo.clamp((0.16 + danger * 0.34) * pulse, 0, 0.52);
     const alpha = isForcedHitFlash ? baseAlpha * 0.45 : baseAlpha;
     const baseEdge = Math.max(92, Math.min(Neo.canvas.width, Neo.canvas.height) * (0.18 + danger * 0.08));
     const edge = isForcedHitFlash ? baseEdge * 0.78 : baseEdge;
@@ -104,14 +103,14 @@
     if (Neo.gameState !== 'play' || !Neo.currentRoom?.cleared) return;
     const ladder = Neo.pickups.find(pickup => pickup?.type === 'ladder');
     if (!ladder) return;
-    if (dist(Neo.player.x, Neo.player.y, ladder.x, ladder.y) > Neo.LADDER_TRIGGER_RADIUS) return;
+    if (Neo.dist(Neo.player.x, Neo.player.y, ladder.x, ladder.y) > Neo.LADDER_TRIGGER_RADIUS) return;
     const cx = ladder.x;
     const cy = ladder.y - 36;
     Neo.ctx.save();
     Neo.ctx.font = 'bold 14px system-ui';
     Neo.ctx.textAlign = 'center';
     Neo.ctx.textBaseline = 'middle';
-    const ladderHint = formatControlLabel('space', 'space');
+    const ladderHint = Neo.formatControlLabel('space', 'space');
     const text = `Press [${ladderHint}] to go to next floor`;
     const pad = 14;
     const tw = Neo.ctx.measureText(text).width;
@@ -131,7 +130,7 @@
     if (Neo.gameState !== 'play') return;
     const portal = Neo.pickups.find(pickup => pickup?.type === 'jesterPortal' && pickup.active);
     if (!portal) return;
-    if (dist(Neo.player.x, Neo.player.y, portal.x, portal.y) > 74) return;
+    if (Neo.dist(Neo.player.x, Neo.player.y, portal.x, portal.y) > 74) return;
     const cx = portal.x;
     const cy = portal.y - 38;
     const floors = Math.max(1, Number(portal.skipFloors || 1));
@@ -198,7 +197,7 @@
     else if (room.type === 'boss') bias = 0.16;
     else if (room.type === 'god') bias = 0.12;
     if (theme === Neo.ROOM_ART_THEMES.secret) bias += 0.04;
-    return clamp(bias + Math.min(0.08, Math.max(0, (10 - Neo.floor) * 0.006)), 0.08, 0.72);
+    return Neo.clamp(bias + Math.min(0.08, Math.max(0, (10 - Neo.floor) * 0.006)), 0.08, 0.72);
   }
 
   function drawEnvironmentTile(tileKey, x, y, w = Neo.ENV_TILE_SIZE, h = Neo.ENV_TILE_SIZE, options = {}) {
@@ -485,9 +484,9 @@
     drawTiledRect(theme.wallTile, 0, 0, Neo.WALL + 8, Neo.ROOM_H, { tileSize: Neo.ENV_TILE_SIZE, ctx: target });
     drawTiledRect(theme.wallTile, Neo.ROOM_W - Neo.WALL - 8, 0, Neo.WALL + 8, Neo.ROOM_H, { tileSize: Neo.ENV_TILE_SIZE, ctx: target });
 
-    const roomLocked = isRoomLocked();
+    const roomLocked = Neo.isRoomLocked();
     Neo.DIRECTIONS.forEach(dir => {
-      if (hasVisibleRoomExit(Neo.currentRoom, dir)) drawDoorThreshold(dir, theme, roomLocked, target);
+      if (Neo.hasVisibleRoomExit(Neo.currentRoom, dir)) drawDoorThreshold(dir, theme, roomLocked, target);
     });
 
     target.save();
@@ -508,25 +507,25 @@
     const doorMinY = (Neo.ROOM_H - Neo.DOOR) / 2 + 10;
     const doorMaxY = (Neo.ROOM_H + Neo.DOOR) / 2 - 10;
     target.beginPath();
-    if (hasVisibleRoomExit(Neo.currentRoom, 'n')) {
+    if (Neo.hasVisibleRoomExit(Neo.currentRoom, 'n')) {
       target.moveTo(left, top); target.lineTo(doorMinX, top);
       target.moveTo(doorMaxX, top); target.lineTo(right, top);
     } else {
       target.moveTo(left, top); target.lineTo(right, top);
     }
-    if (hasVisibleRoomExit(Neo.currentRoom, 's')) {
+    if (Neo.hasVisibleRoomExit(Neo.currentRoom, 's')) {
       target.moveTo(left, bottom); target.lineTo(doorMinX, bottom);
       target.moveTo(doorMaxX, bottom); target.lineTo(right, bottom);
     } else {
       target.moveTo(left, bottom); target.lineTo(right, bottom);
     }
-    if (hasVisibleRoomExit(Neo.currentRoom, 'w')) {
+    if (Neo.hasVisibleRoomExit(Neo.currentRoom, 'w')) {
       target.moveTo(left, top); target.lineTo(left, doorMinY);
       target.moveTo(left, doorMaxY); target.lineTo(left, bottom);
     } else {
       target.moveTo(left, top); target.lineTo(left, bottom);
     }
-    if (hasVisibleRoomExit(Neo.currentRoom, 'e')) {
+    if (Neo.hasVisibleRoomExit(Neo.currentRoom, 'e')) {
       target.moveTo(right, top); target.lineTo(right, doorMinY);
       target.moveTo(right, doorMaxY); target.lineTo(right, bottom);
     } else {
@@ -541,16 +540,16 @@
       target.shadowColor = theme.doorAccent;
       target.shadowBlur = 14;
       target.beginPath();
-      if (hasVisibleRoomExit(Neo.currentRoom, 'n')) {
+      if (Neo.hasVisibleRoomExit(Neo.currentRoom, 'n')) {
         target.moveTo(doorMinX, top); target.lineTo(doorMaxX, top);
       }
-      if (hasVisibleRoomExit(Neo.currentRoom, 's')) {
+      if (Neo.hasVisibleRoomExit(Neo.currentRoom, 's')) {
         target.moveTo(doorMinX, bottom); target.lineTo(doorMaxX, bottom);
       }
-      if (hasVisibleRoomExit(Neo.currentRoom, 'w')) {
+      if (Neo.hasVisibleRoomExit(Neo.currentRoom, 'w')) {
         target.moveTo(left, doorMinY); target.lineTo(left, doorMaxY);
       }
-      if (hasVisibleRoomExit(Neo.currentRoom, 'e')) {
+      if (Neo.hasVisibleRoomExit(Neo.currentRoom, 'e')) {
         target.moveTo(right, doorMinY); target.lineTo(right, doorMaxY);
       }
       target.stroke();
@@ -578,7 +577,7 @@
     const roomKey = Neo.currentRoom
       ? `${Neo.currentRoom.gx},${Neo.currentRoom.gy},${Neo.currentRoom.type || 'room'},${Neo.currentRoom.secretKind || ''}`
       : 'none';
-    const doorsKey = Neo.DIRECTIONS.map(dir => hasVisibleRoomExit(Neo.currentRoom, dir) ? '1' : '0').join('');
+    const doorsKey = Neo.DIRECTIONS.map(dir => Neo.hasVisibleRoomExit(Neo.currentRoom, dir) ? '1' : '0').join('');
     const combatKey = Neo.enemies.length > 0 ? 'combat' : 'calm';
     return `${Neo.floor}|${roomKey}|${doorsKey}|${combatKey}`;
   }
@@ -860,7 +859,7 @@
     const h = Math.max(16, Number(prop.h || prop.r * 2 || 48));
     const left = -w / 2;
     const top = -h / 2;
-    const hpRatio = clamp(Number(prop.hp || 0) / Math.max(1, Number(prop.maxHp || prop.hp || 1)), 0, 1);
+    const hpRatio = Neo.clamp(Number(prop.hp || 0) / Math.max(1, Number(prop.maxHp || prop.hp || 1)), 0, 1);
     const damageAlpha = (1 - hpRatio) * 0.45;
 
     const wood = Neo.ctx.createLinearGradient(left, top, left + w, top + h);
@@ -967,4 +966,4 @@
   Neo.drawChests = drawChests;
   Neo.drawRoomDecor = drawRoomDecor;
   Neo.drawCoverWall = drawCoverWall;
-})();
+

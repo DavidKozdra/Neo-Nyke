@@ -1,13 +1,12 @@
-// input.js — standalone IIFE. Defines all shared constants (MOVE_DEFS, ITEM_DEFS, etc.),
+// input.js — Defines all shared constants (MOVE_DEFS, ITEM_DEFS, etc.),
 // the ui object, gameStateManager, uiController, gameEvents, and all input handlers.
 // Shared mutable state lives on Neo (set here to its initial values, then managed via Neo.X).
-(() => {
-  function normalizeMouseBinding(value, fallback) {
+export function normalizeMouseBinding(value, fallback) {
     const normalized = String(value || fallback).toLowerCase();
     return normalized === 'rmb' || normalized === 'lmb' ? normalized : fallback;
   }
 
-  function getMouseBindings() {
+export function getMouseBindings() {
     const bindings = window.NeoSettings?.getBindings?.();
     return {
       slash: normalizeMouseBinding(bindings?.slash, 'lmb'),
@@ -15,7 +14,7 @@
     };
   }
 
-  function isMouseActionHeld(action) {
+export function isMouseActionHeld(action) {
     const mouseBindings = getMouseBindings();
     if (mouseBindings[action] === 'rmb') {
       const held = !!Neo.mouse.right || !!Neo.mouse.rightQueued;
@@ -27,11 +26,11 @@
     return held;
   }
 
-  function formatMouseBindingLabel(value, fallback) {
+export function formatMouseBindingLabel(value, fallback) {
     return normalizeMouseBinding(value, fallback) === 'rmb' ? 'RMB' : 'LMB';
   }
 
-  function getSlotKeyLabel(slot) {
+export function getSlotKeyLabel(slot) {
     const bindings = window.NeoSettings?.getBindings?.();
     if (slot === 'melee') return formatMouseBindingLabel(bindings?.slash, 'lmb');
     if (slot === 'laser') return formatMouseBindingLabel(bindings?.laser, 'rmb');
@@ -40,7 +39,7 @@
     return Neo.SLOT_KEYS[slot] || '';
   }
 
-  const MOVE_DEFS = {
+export const MOVE_DEFS = {
     slash: { key: 'slash', slot: 'melee', name: 'Slash', desc: 'Close-range arc attack.' },
     fire_balls: { key: 'fire_balls', slot: 'melee', name: 'Fire Balls', desc: 'Shoot a spread of fireballs.' },
     smite: { key: 'smite', slot: 'melee', name: 'Smite', desc: 'Physical swing plus chaining lightning.' },
@@ -97,7 +96,7 @@
     },
   };
 
-  const SHOP_MOVE_POOL = [
+export const SHOP_MOVE_POOL = [
     'slash', 'fire_balls', 'smite', 'narwal_fight',
     'blood_beam', 'love_beam', 'turtle_wave', 'power_disks', 'blade_justice', 'lightning_columns',
     'god_sweep',
@@ -105,7 +104,7 @@
     'dash', 'nimrod_stomp', 'warp', 'zip_lightning', 'flying_unhitable', 'cowards_way',
   ];
 
-  const WEAPON_DEFS = {
+export const WEAPON_DEFS = {
     extending_staff: {
       key: 'extending_staff',
       name: 'Extending Staff',
@@ -191,11 +190,11 @@
       color: '#c8f6ff',
     },
   };
-  const WEAPON_KEYS = Object.keys(WEAPON_DEFS);
-  const WHITE_WEAPON_POOL = ['extending_staff', 'hunters_bow', 'thorns_bleed_blade'];
+export const WEAPON_KEYS = Object.keys(WEAPON_DEFS);
+export const WHITE_WEAPON_POOL = ['extending_staff', 'hunters_bow', 'thorns_bleed_blade'];
 
-  // Rival adventurers: dungeon-roaming NPCs based on unchosen characters.
-  const RIVAL_DEFS = {
+// Rival adventurers: dungeon-roaming NPCs based on unchosen characters.
+export const RIVAL_DEFS = {
     princess: {
       name: 'Rival Princess',
       color: '#e87fff',
@@ -229,17 +228,17 @@
       attackStyle: 'melee_heal',
     },
   };
-  const RIVAL_MOVE_INTERVAL_BASE = 8.5;
-  const RIVAL_SPAWN_CHANCE = 0.15; // ~15% spawn chance - very rare encounters
-  const RIVAL_GROWTH_TICK_SECONDS = 14;
-  const RIVAL_XP_PER_GROWTH_TICK = 12;
-  const RIVAL_WEAPON_SWAP_BASE = 3.6;
-  const MONSTER_ROAM_INTERVAL_SECONDS = 60;
-  const MONSTER_ROAM_MOVE_CHANCE = 0.28;
-  const PURPLE_WEAPON_POOL = ['lazer_glasses', 'metao_fire_staff', 'magenta_degale', 'magenta_p90'];
-  const RED_WEAPON_POOL = ['granillia_lightning_spear', 'excalibur', 'golden_fleece', 'void_piercer', 'aegis_shield_weapon'];
+export const RIVAL_MOVE_INTERVAL_BASE = 8.5;
+export const RIVAL_SPAWN_CHANCE = 0.15; // ~15% spawn chance - very rare encounters
+export const RIVAL_GROWTH_TICK_SECONDS = 14;
+export const RIVAL_XP_PER_GROWTH_TICK = 12;
+export const RIVAL_WEAPON_SWAP_BASE = 3.6;
+export const MONSTER_ROAM_INTERVAL_SECONDS = 60;
+export const MONSTER_ROAM_MOVE_CHANCE = 0.28;
+export const PURPLE_WEAPON_POOL = ['lazer_glasses', 'metao_fire_staff', 'magenta_degale', 'magenta_p90'];
+export const RED_WEAPON_POOL = ['granillia_lightning_spear', 'excalibur', 'golden_fleece', 'void_piercer', 'aegis_shield_weapon'];
 
-  const RIVAL_WEAPON_LOADOUTS = {
+export const RIVAL_WEAPON_LOADOUTS = {
     princess: [
       { key: 'thorns_bleed_blade', class: 'melee', range: 42, preferredRange: 120, damageMult: 1.08, cooldownMult: 0.92, knockback: 300 },
       { key: 'magenta_degale', class: 'ranged', range: 360, preferredRange: 220, damageMult: 0.88, cooldownMult: 1.1, projectileCount: 2, spread: 0.14, projectileSpeed: 340 },
@@ -260,7 +259,7 @@
     ],
   };
 
-  const ITEM_DEFS = {
+export const ITEM_DEFS = {
     neo_knife: {
       key: 'neo_knife',
       name: 'Neo-Knife',
@@ -514,7 +513,7 @@
       tags: ['god', 'speed'],
     },
   };
-  const RARITY_NAME_COLORS = {
+export const RARITY_NAME_COLORS = {
     knight: '#f4f6fb',
     white: '#f4f6fb',
     wizard: '#b77dff',
@@ -522,7 +521,7 @@
     god: '#ff4256',
     red: '#ff4256',
   };
-  const SHOP_RARITY_PRICE_MULTIPLIERS = {
+export const SHOP_RARITY_PRICE_MULTIPLIERS = {
     knight: 1,
     white: 1,
     wizard: 2.15,
@@ -530,13 +529,13 @@
     god: 4.75,
     red: 4.75,
   };
-  const ITEM_KEYS = Object.keys(ITEM_DEFS);
-  const SANDBOX_ENEMY_TYPES = [
+export const ITEM_KEYS = Object.keys(ITEM_DEFS);
+export const SANDBOX_ENEMY_TYPES = [
     'hunter', 'charger', 'laser', 'knave', 'sniper', 'machine_gunner',
     'golem', 'cult_mage', 'cult_follower', 'summoner', 'shield_unit', 'healer', 'boss_spawner',
     'queen_cult', 'bulk_golem', 'artificer_knave', 'god', 'mirror_knight',
   ];
-  const ITEM_DROP_WEIGHTS = [
+export const ITEM_DROP_WEIGHTS = [
     ['neo_knife', 60],
     ['orb_of_blood', 28],
     ['hemes_scarf', 12],
@@ -563,11 +562,11 @@
     ['pendant_of_kronos', 5],
     ['robot_arm', 3],
   ];
-  const ITEM_DROP_TABLE = Neo.buildWeightTable(ITEM_DROP_WEIGHTS);
-  const ELITE_ITEM_DROP_TABLE = Neo.buildWeightTable(
+export const ITEM_DROP_TABLE = Neo.buildWeightTable(ITEM_DROP_WEIGHTS);
+export const ELITE_ITEM_DROP_TABLE = Neo.buildWeightTable(
     ITEM_DROP_WEIGHTS.map(([key, weight]) => [key, weight + (key !== 'neo_knife' ? 4 : 0)])
   );
-  const ELITE_INVENTORY_POOL = [
+export const ELITE_INVENTORY_POOL = [
     'neo_knife',
     'orb_of_blood',
     'insurance',
@@ -585,8 +584,8 @@
     'shield_of_aegis',
     'pendant_of_kronos',
   ];
-  const WHITE_ITEM_POOL = ITEM_KEYS.filter(key => ITEM_DEFS[key]?.rarity === 'knight');
-  const ELITE_TYPE_DEFS = {
+export const WHITE_ITEM_POOL = ITEM_KEYS.filter(key => ITEM_DEFS[key]?.rarity === 'knight');
+export const ELITE_TYPE_DEFS = {
     burning: { label: 'Burning', color: '#ff9a3c' },
     bleeding: { label: 'Bleeding', color: '#ff4256' },
     giant: { label: 'Giant', color: '#ffd27d' },
@@ -596,7 +595,7 @@
   // itemRegistry is created in game-state.js after createItemRegistry is defined
   // const itemRegistry = createItemRegistry();  -- moved to game-state.js
 
-  const ui = {
+export const ui = {
     hud: document.getElementById('hud'),
     hpFill: document.getElementById('hpFill'),
     hpTxt: document.getElementById('hpTxt'),
@@ -857,15 +856,15 @@
       smash: document.getElementById('iconSmash'),
     },
   };
-  const GameStateManagerCtor = window.KozEngine?.Core?.gameStateManager?.GameStateManager || null;
-  const gameStateManager = GameStateManagerCtor ? new GameStateManagerCtor() : null;
+const GameStateManagerCtor = window.KozEngine?.Core?.gameStateManager?.GameStateManager || null;
+export const gameStateManager = GameStateManagerCtor ? new GameStateManagerCtor() : null;
   if (gameStateManager) {
     ['menu', 'charselect', 'play', 'dialogue', 'pause', 'dying', 'dead', 'win'].forEach(state => gameStateManager.addState(state));
   }
   // uiController is created in perf.js boot() after controller.js loads
   // Neo.uiController is set there.
 
-  const gameEvents = (() => {
+export const gameEvents = (() => {
     const listeners = {};
     return {
       on(event, fn) { (listeners[event] = listeners[event] || []).push(fn); },
@@ -880,15 +879,15 @@
   Neo.gameEvents = gameEvents;
 
   // PLAYER_SLOT_CONFIG uses closures over Neo for mutable player/camera state
-  const PLAYER_SLOT_CONFIG = [
+export const PLAYER_SLOT_CONFIG = [
     { id: 1, label: 'P1', color: '#ff8a8a', getEntity: () => Neo.player, setEntity: value => { Neo.player = value; }, getCharacter: () => Neo.chosenCharacter, setCharacter: value => { Neo.chosenCharacter = value; }, getDead: () => Neo.p1DeadInCoop, setDead: value => { Neo.p1DeadInCoop = !!value; }, getCamera: () => Neo.camera, setCamera: value => { Neo.camera = value; } },
     { id: 2, label: 'P2', color: '#4ca8ff', getEntity: () => Neo.player2, setEntity: value => { Neo.player2 = value; }, getCharacter: () => Neo.chosenCharacter2, setCharacter: value => { Neo.chosenCharacter2 = value; }, getDead: () => Neo.p2DeadInCoop, setDead: value => { Neo.p2DeadInCoop = !!value; }, getCamera: () => Neo.camera2, setCamera: value => { Neo.camera2 = value; } },
     { id: 3, label: 'P3', color: '#8aff8a', getEntity: () => Neo.player3, setEntity: value => { Neo.player3 = value; }, getCharacter: () => Neo.chosenCharacter3, setCharacter: value => { Neo.chosenCharacter3 = value; }, getDead: () => Neo.p3DeadInCoop, setDead: value => { Neo.p3DeadInCoop = !!value; }, getCamera: () => Neo.camera3, setCamera: value => { Neo.camera3 = value; } },
     { id: 4, label: 'P4', color: '#ffd080', getEntity: () => Neo.player4, setEntity: value => { Neo.player4 = value; }, getCharacter: () => Neo.chosenCharacter4, setCharacter: value => { Neo.chosenCharacter4 = value; }, getDead: () => Neo.p4DeadInCoop, setDead: value => { Neo.p4DeadInCoop = !!value; }, getCamera: () => Neo.camera4, setCamera: value => { Neo.camera4 = value; } },
   ];
 
-  // SANDBOX_DEFAULT_SETTINGS needs ITEM_KEYS and SANDBOX_ENEMY_TYPES (defined above)
-  const SANDBOX_DEFAULT_SETTINGS = {
+// SANDBOX_DEFAULT_SETTINGS needs ITEM_KEYS and SANDBOX_ENEMY_TYPES (defined above)
+export const SANDBOX_DEFAULT_SETTINGS = {
     enemyStatMultiplier: 1,
     enemySpeedMultiplier: 1,
     enemyDamageMultiplier: 1,
@@ -911,19 +910,19 @@
     Neo.refreshMenuState();
   });
 
-  const JESTER_PORTAL_ACTIVATE_DELAY = 0.44;
-  const JESTER_PORTAL_TRIGGER_RADIUS = 42;
-  const LADDER_TRIGGER_RADIUS = 64;
-  const REPLAY_TUTORIAL_KEY = 'neonyke:replayTutorialNextRun';
+export const JESTER_PORTAL_ACTIVATE_DELAY = 0.44;
+export const JESTER_PORTAL_TRIGGER_RADIUS = 42;
+export const LADDER_TRIGGER_RADIUS = 64;
+export const REPLAY_TUTORIAL_KEY = 'neonyke:replayTutorialNextRun';
 
-  // Upgradeable stat schemas for the anvil panel
-  const WEAPON_UPGRADEABLE_STATS = {
+// Upgradeable stat schemas for the anvil panel
+export const WEAPON_UPGRADEABLE_STATS = {
     damage:    { label: 'Damage',       step: 5,     min: 5,    max: 9999, xpPerStep: 15, format: v => Math.round(v) },
     cooldown:  { label: 'Cooldown (s)', step: -0.05, min: 0.05, max: 9999, xpPerStep: 20, format: v => v.toFixed(2) + 's' },
     range:     { label: 'Range',        step: 10,    min: 10,   max: 9999, xpPerStep: 13, format: v => Math.round(v) },
     knockback: { label: 'Knockback',    step: 30,    min: 0,    max: 9999, xpPerStep: 10, format: v => Math.round(v) },
   };
-  const MOVE_UPGRADEABLE_STATS = {
+export const MOVE_UPGRADEABLE_STATS = {
     damage:    { label: 'Damage',       step: 5,    min: 5,   max: 9999, xpPerStep: 15, format: v => Math.round(v) },
     cooldown:  { label: 'Cooldown (s)', step: -0.05,min: 0.05,max: 9999, xpPerStep: 20, format: v => v.toFixed(2) + 's' },
     duration:  { label: 'Duration (s)', step: 0.1,  min: 0.1, max: 30,   xpPerStep: 13, format: v => v.toFixed(1) + 's' },
@@ -931,8 +930,8 @@
     critChance:{ label: 'Crit Chance',  step: 0.05, min: 0,   max: 1.0,  xpPerStep: 25, format: v => Math.round(v * 100) + '%' },
   };
 
-  // Base stat values per weapon (used to compute current upgraded value)
-  const WEAPON_BASE_STATS = {
+// Base stat values per weapon (used to compute current upgraded value)
+export const WEAPON_BASE_STATS = {
     extending_staff:          { damage: 38,   cooldown: 0.55, range: 130, knockback: 500 },
     hunters_bow:              { damage: 28,   cooldown: 0.40,             knockback: 180 },
     thorns_bleed_blade:       { damage: 32,   cooldown: 0.55, range: 90,  knockback: 120 },
@@ -947,8 +946,8 @@
     aegis_shield_weapon:      { cooldown: 8.00 },
   };
 
-  // Base stat values per move
-  const MOVE_BASE_STATS = {
+// Base stat values per move
+export const MOVE_BASE_STATS = {
     slash:            { damage: 32,  cooldown: 0.40, range: 90  },
     fire_balls:       { damage: 20,  cooldown: 0.55, range: 180 },
     smite:            { damage: 28,  cooldown: 0.55, range: 110 },
@@ -1019,4 +1018,3 @@
   Neo.isMouseActionHeld = isMouseActionHeld;
   Neo.formatMouseBindingLabel = formatMouseBindingLabel;
   Neo.getSlotKeyLabel = getSlotKeyLabel;
-})();

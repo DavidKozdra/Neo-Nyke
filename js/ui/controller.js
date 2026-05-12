@@ -1,6 +1,6 @@
-// controller.js — standalone IIFE. UI controller factory.
-(() => {
-  function createUIController(view) {
+// controller.js — UI controller factory.
+
+export function createUIController(view) {
     const UIManagerCtor = window.KozEngine?.UI?.uiManager?.UIManager || window.UIManager || null;
     const manager = typeof UIManagerCtor === 'function' ? new UIManagerCtor({ autoRuntimeInit: false }) : null;
     const DialogueManagerCtor = Neo.KozDialogueApi.TypewriterDialogueManager || window.TypewriterDialogueManager || null;
@@ -11,8 +11,8 @@
         defaultSpeaker: 'GOD',
         typeSpeed: 0.028,
         autoAdvanceDelay: 1.35,
-        onOpen: clearGameplayInput,
-        onClose: clearGameplayInput,
+        onOpen: () => Neo.clearGameplayInput(),
+        onClose: () => Neo.clearGameplayInput(),
       })
       : null;
     const worldSpeechRuntime = typeof WorldSpeechBubbleCtor === 'function'
@@ -98,15 +98,15 @@
 
       const margin = 4;
       const gap = window.innerWidth <= 920 ? 8 : 12;
-      const trackerWidth = Math.round(clamp(window.innerWidth <= 920 ? 124 : 142, 108, window.innerWidth - margin * 2));
-      let right = Math.round(clamp(window.innerWidth - layout.right, margin, window.innerWidth - trackerWidth - margin));
+      const trackerWidth = Math.round(Neo.clamp(window.innerWidth <= 920 ? 124 : 142, 108, window.innerWidth - margin * 2));
+      let right = Math.round(Neo.clamp(window.innerWidth - layout.right, margin, window.innerWidth - trackerWidth - margin));
       let top = Math.max(margin, Math.round(layout.bottom + gap));
       let maxHeight = Math.floor(window.innerHeight - top - margin);
 
       // If there is not enough room below the minimap, place objectives left of it.
       if (maxHeight < 92) {
         top = Math.max(margin, Math.round(layout.top));
-        right = Math.round(clamp(window.innerWidth - layout.left + gap, margin, window.innerWidth - trackerWidth - margin));
+        right = Math.round(Neo.clamp(window.innerWidth - layout.left + gap, margin, window.innerWidth - trackerWidth - margin));
         maxHeight = Math.floor(window.innerHeight - top - margin);
       }
 
@@ -132,7 +132,7 @@
 
     function getVisibleRunHistoryEntries() {
       if (runHistoryModeFilter === 'all') return runHistoryEntries;
-      return runHistoryEntries.filter(entry => normalizeGameMode(entry.mode) === runHistoryModeFilter);
+      return runHistoryEntries.filter(entry => Neo.normalizeGameMode(entry.mode) === runHistoryModeFilter);
     }
 
     function renderRunHistoryModeTabs() {
@@ -169,8 +169,8 @@
             : view.timeDash;
       const card = view.actionCards[name];
       const ready = charges > 0 && !active;
-      const partialCharge = charges < maxCharges && max > 0 ? clamp(1 - (current / max), 0, 1) : 0;
-      const ratio = maxCharges <= 0 ? 0 : clamp((charges + partialCharge) / maxCharges, 0, 1);
+      const partialCharge = charges < maxCharges && max > 0 ? Neo.clamp(1 - (current / max), 0, 1) : 0;
+      const ratio = maxCharges <= 0 ? 0 : Neo.clamp((charges + partialCharge) / maxCharges, 0, 1);
       if (fill) fill.style.height = `${ratio * 100}%`;
       if (time) {
         time.textContent = active
@@ -186,13 +186,13 @@
 
     function resolveDialoguePortraitKey(speaker = '') {
       const raw = String(speaker || '').trim();
-      if (!raw) return getPlayerSpriteKey();
+      if (!raw) return Neo.getPlayerSpriteKey();
       const normalized = raw
         .toLowerCase()
         .replace(/[^a-z0-9 ]+/g, ' ')
         .replace(/\s+/g, ' ')
         .trim();
-      if (!normalized) return getPlayerSpriteKey();
+      if (!normalized) return Neo.getPlayerSpriteKey();
 
       const directKey = normalized.replace(/ /g, '_');
       if (Neo.SPRITE_DEFS[directKey]) return directKey;
@@ -212,7 +212,7 @@
       if (normalized.includes('artificer')) return 'artificer_knave';
       if (normalized.includes('golem')) return 'golem';
       if (normalized.includes('god')) return 'god';
-      if (normalized.includes('mirror')) return getPlayerSpriteKey();
+      if (normalized.includes('mirror')) return Neo.getPlayerSpriteKey();
       return 'hunter';
     }
 
@@ -233,7 +233,7 @@
       view.dialogueText.textContent = snapshot.visibleText || '';
       if (view.dialoguePortrait instanceof HTMLCanvasElement) {
         const spriteKey = resolveDialoguePortraitKey(snapshot.speaker || '');
-        drawSpriteToCanvas(view.dialoguePortrait, spriteKey, view.dialoguePortrait.width);
+        Neo.drawSpriteToCanvas(view.dialoguePortrait, spriteKey, view.dialoguePortrait.width);
       }
       if (view.dialogueHint) {
         view.dialogueHint.textContent = snapshot.isFullyTyped ? 'ENTER TO CONTINUE' : 'ENTER TO SKIP';
@@ -411,7 +411,7 @@
         }).join('')}</div>`;
         view.rhInfoContent.querySelectorAll('[data-info-item]').forEach(el => {
           const item = Neo.ITEM_DEFS[el.dataset.infoItem];
-          if (item) drawItemToastIcon(el, item);
+          if (item) Neo.drawItemToastIcon(el, item);
         });
 
       } else if (tab === 'weapons') {
@@ -432,7 +432,7 @@
         }).join('')}</div>`;
         view.rhInfoContent.querySelectorAll('[data-info-weapon]').forEach(el => {
           const w = Neo.WEAPON_DEFS[el.dataset.infoWeapon];
-          if (w) drawItemToastIcon(el, w);
+          if (w) Neo.drawItemToastIcon(el, w);
         });
 
       } else if (tab === 'moves') {
@@ -444,7 +444,7 @@
         view.rhInfoContent.innerHTML = `<div class="info-grid">${sorted.map(m => {
           const slotLabel = Neo.SLOT_LABELS[m.slot] || m.slot;
           const exclusive = m.exclusiveCharacter
-            ? `<br><em style="color:rgba(200,200,255,0.5)">${titleCase(m.exclusiveCharacter.replace(/_/g, ' '))} only</em>`
+            ? `<br><em style="color:rgba(200,200,255,0.5)">${Neo.titleCase(m.exclusiveCharacter.replace(/_/g, ' '))} only</em>`
             : '';
           return `<div class="info-card">
             <div class="info-card__header">
@@ -457,7 +457,7 @@
         }).join('')}</div>`;
         view.rhInfoContent.querySelectorAll('[data-info-move]').forEach(el => {
           const move = Neo.MOVE_DEFS[el.dataset.infoMove];
-          if (move) drawMoveToastIcon(el, move);
+          if (move) Neo.drawMoveToastIcon(el, move);
         });
 
       } else if (tab === 'enemies') {
@@ -481,7 +481,7 @@
             </div>
           </div>`;
         view.rhInfoContent.querySelectorAll('[data-info-enemy]').forEach(el => {
-          drawSpriteToCanvas(el, el.dataset.infoEnemy, 48);
+          Neo.drawSpriteToCanvas(el, el.dataset.infoEnemy, 48);
         });
         const showEnemyDetail = (key) => {
           const e = ENEMY_INFO.find(x => x.key === key);
@@ -490,7 +490,7 @@
           const sprite = document.getElementById('infoEnemySprite');
           if (!detail || !sprite) return;
           detail.classList.remove('hidden');
-          drawSpriteToCanvas(sprite, key, 76);
+          Neo.drawSpriteToCanvas(sprite, key, 76);
           document.getElementById('infoEnemyName').textContent = e.label;
           const isBoss = e.boss;
           const tagCls = isBoss ? 'info-enemy-card__tag--boss' : 'info-enemy-card__tag--normal';
@@ -519,7 +519,7 @@
         showEnemyDetail(ENEMY_INFO[0].key);
 
       } else if (tab === 'characters') {
-        view.rhInfoContent.innerHTML = `<div class="info-char-grid">${Object.values(CHARACTER_DEFS).map(c => {
+        view.rhInfoContent.innerHTML = `<div class="info-char-grid">${Object.values(Neo.CHARACTER_DEFS).map(c => {
           const display = Neo.HERO_DISPLAY[c.key] || {};
           const statBars = (display.stats || []).map(s =>
             `<div class="info-char-stat">
@@ -541,7 +541,7 @@
           </div>`;
         }).join('')}</div>`;
         view.rhInfoContent.querySelectorAll('[data-info-char]').forEach(el => {
-          drawSpriteToCanvas(el, el.dataset.infoChar, 60);
+          Neo.drawSpriteToCanvas(el, el.dataset.infoChar, 60);
         });
       }
     }
@@ -549,16 +549,16 @@
     async function populateAchievementsPanel() {
       if (!view.achievementsList) return;
       view.achievementsList.innerHTML = '<div class="ach-loading">Loading…</div>';
-      const progressSnapshot = typeof achievementManager.getProgressSnapshot === 'function'
-        ? await achievementManager.getProgressSnapshot()
+      const progressSnapshot = typeof window.achievementManager?.getProgressSnapshot === 'function'
+        ? await window.achievementManager.getProgressSnapshot()
         : {};
       progressSnapshot.metaCoins = Math.max(
         Math.max(0, Number(progressSnapshot.metaCoins) || 0),
         Math.max(0, Number(Neo.metaProgress?.coins) || 0)
       );
-      const cards = await Promise.all(ACHIEVEMENTS.map(async a => {
-        const unlocked = await achievementManager.isUnlocked(a.id);
-        const progressDef = ACHIEVEMENT_PROGRESS?.[a.id];
+      const cards = await Promise.all((window.ACHIEVEMENTS || []).map(async a => {
+        const unlocked = await window.achievementManager?.isUnlocked(a.id);
+        const progressDef = window.ACHIEVEMENT_PROGRESS?.[a.id];
         const progressMarkup = !unlocked && progressDef
           ? renderAchievementProgress(progressDef, progressSnapshot)
           : '';
@@ -580,9 +580,9 @@
       const rawValue = Math.max(0, Number(progressSnapshot?.[progressDef.key]) || 0);
       const value = Math.min(rawValue, target);
       const percent = Math.max(0, Math.min(100, (value / target) * 100));
-      return `<div class="ach-progress" aria-label="${escapeHtml(progressDef.label)} ${value} of ${target}">
+      return `<div class="ach-progress" aria-label="${Neo.escapeHtml(progressDef.label)} ${value} of ${target}">
         <div class="ach-progress__meta">
-          <span>${escapeHtml(progressDef.label)}</span>
+          <span>${Neo.escapeHtml(progressDef.label)}</span>
           <b>${value.toLocaleString()} / ${target.toLocaleString()}</b>
         </div>
         <div class="ach-progress__track"><i style="width:${percent.toFixed(2)}%"></i></div>
@@ -617,12 +617,12 @@
         return;
       }
       if (view.runHistoryHero) {
-        view.runHistoryHero.innerHTML = renderRunHistoryHero(selected);
-        hydrateRunHistorySprites(view.runHistoryHero);
+        view.runHistoryHero.innerHTML = Neo.renderRunHistoryHero(selected);
+        Neo.hydrateRunHistorySprites(view.runHistoryHero);
       }
       if (view.runHistoryTabPanel) {
-        view.runHistoryTabPanel.innerHTML = renderRunHistoryTabContent(selected, activeRunHistoryTab);
-        hydrateRunHistorySprites(view.runHistoryTabPanel);
+        view.runHistoryTabPanel.innerHTML = Neo.renderRunHistoryTabContent(selected, activeRunHistoryTab);
+        Neo.hydrateRunHistorySprites(view.runHistoryTabPanel);
       }
     }
 
@@ -630,7 +630,7 @@
       renderRunHistoryModeTabs();
       const visibleEntries = getVisibleRunHistoryEntries();
       const totalPages = Math.max(1, Math.ceil(visibleEntries.length / runHistoryPageSize));
-      runHistoryPage = clamp(runHistoryPage, 0, totalPages - 1);
+      runHistoryPage = Neo.clamp(runHistoryPage, 0, totalPages - 1);
       const start = runHistoryPage * runHistoryPageSize;
       const visiblePageEntries = visibleEntries.slice(start, start + runHistoryPageSize);
       if (!visibleEntries.some(entry => entry.id === selectedRunHistoryId)) {
@@ -638,10 +638,10 @@
       }
       if (view.runHistoryEmpty) view.runHistoryEmpty.classList.toggle('hidden', visibleEntries.length > 0);
       if (view.runHistoryList) {
-        view.runHistoryList.innerHTML = visiblePageEntries.map(entry => renderRunHistoryListEntry(entry, entry.id === selectedRunHistoryId)).join('');
+        view.runHistoryList.innerHTML = visiblePageEntries.map(entry => Neo.renderRunHistoryListEntry(entry, entry.id === selectedRunHistoryId)).join('');
         view.runHistoryList.classList.toggle('hidden', visibleEntries.length === 0);
         view.runHistoryList.scrollTop = 0;
-        hydrateRunHistorySprites(view.runHistoryList);
+        Neo.hydrateRunHistorySprites(view.runHistoryList);
       }
       renderRunHistoryDetail();
       if (view.runHistoryPageLabel) {
@@ -786,12 +786,12 @@
         function hydrateSandboxTokenIcons() {
           view.sandboxEnemyList?.querySelectorAll('[data-sbox-enemy-icon]').forEach(el => {
             const key = String(el.dataset.sboxEnemyIcon || 'hunter');
-            drawSpriteToCanvas(el, getSandboxEnemySpriteKey(key), 22);
+            Neo.drawSpriteToCanvas(el, getSandboxEnemySpriteKey(key), 22);
           });
           view.sandboxItemList?.querySelectorAll('[data-sbox-item-icon]').forEach(el => {
             const itemKey = String(el.dataset.sboxItemIcon || '');
             const item = Neo.itemRegistry.get(itemKey) || Neo.ITEM_DEFS[itemKey];
-            if (item) drawItemToastIcon(el, item);
+            if (item) Neo.drawItemToastIcon(el, item);
           });
         }
 
@@ -799,10 +799,10 @@
           if (view.sandboxEnemyList) {
             view.sandboxEnemyList.innerHTML = Neo.SANDBOX_ENEMY_TYPES.map(type => {
               const active = Neo.sandboxSettings.allowedEnemies.includes(type);
-              const label = getEnemyLabel(type);
+              const label = Neo.getEnemyLabel(type);
               return `<button class="sandbox-token${active ? ' is-active' : ''}" data-sbox-enemy="${type}" type="button">`
-                + `<canvas class="sandbox-token__icon" data-sbox-enemy-icon="${escapeHtml(type)}" width="28" height="28" aria-hidden="true"></canvas>`
-                + `<span class="sandbox-token__label">${escapeHtml(label)}</span>`
+                + `<canvas class="sandbox-token__icon" data-sbox-enemy-icon="${Neo.escapeHtml(type)}" width="28" height="28" aria-hidden="true"></canvas>`
+                + `<span class="sandbox-token__label">${Neo.escapeHtml(label)}</span>`
                 + `</button>`;
             }).join('');
           }
@@ -812,9 +812,9 @@
               const item = Neo.itemRegistry.get(key) || Neo.ITEM_DEFS[key];
               const label = item?.name || key.replace(/_/g, ' ');
               const rarity = String(item?.rarity || 'knight');
-              return `<button class="sandbox-token sandbox-token--item sandbox-token--${escapeHtml(rarity)}${active ? ' is-active' : ''}" data-sbox-item="${key}" type="button">`
-                + `<canvas class="sandbox-token__icon sandbox-token__icon--item" data-sbox-item-icon="${escapeHtml(key)}" width="26" height="26" aria-hidden="true"></canvas>`
-                + `<span class="sandbox-token__label">${escapeHtml(label)}</span>`
+              return `<button class="sandbox-token sandbox-token--item sandbox-token--${Neo.escapeHtml(rarity)}${active ? ' is-active' : ''}" data-sbox-item="${key}" type="button">`
+                + `<canvas class="sandbox-token__icon sandbox-token__icon--item" data-sbox-item-icon="${Neo.escapeHtml(key)}" width="26" height="26" aria-hidden="true"></canvas>`
+                + `<span class="sandbox-token__label">${Neo.escapeHtml(label)}</span>`
                 + `</button>`;
             }).join('');
           }
@@ -851,7 +851,7 @@
             if (slider) slider.value = String(rounded);
             if (numInput) numInput.value = String(rounded);
             Neo.sandboxSettings[param] = rounded;
-            persistMetaSoon();
+            Neo.persistMetaSoon();
           }
           slider?.addEventListener('input', () => applyValue(slider.value));
           numInput?.addEventListener('change', () => applyValue(numInput.value));
@@ -859,7 +859,7 @@
 
         view.sandboxGodMode?.addEventListener('change', () => {
           Neo.sandboxSettings.godMode = !!view.sandboxGodMode?.checked;
-          persistMetaSoon();
+          Neo.persistMetaSoon();
         });
 
         view.sandboxEnemyList?.addEventListener('click', event => {
@@ -870,11 +870,11 @@
           if (Neo.sandboxSettings.allowedEnemies.includes(type)) {
             Neo.sandboxSettings.allowedEnemies = Neo.sandboxSettings.allowedEnemies.filter(key => key !== type);
           } else {
-            Neo.sandboxSettings.allowedEnemies = [...sandboxSettings.allowedEnemies, type];
+            Neo.sandboxSettings.allowedEnemies = [...Neo.sandboxSettings.allowedEnemies, type];
           }
-          Neo.sandboxSettings = normalizeSandboxSettings(Neo.sandboxSettings);
+          Neo.sandboxSettings = Neo.normalizeSandboxSettings(Neo.sandboxSettings);
           syncSandboxPanelFields();
-          persistMetaSoon();
+          Neo.persistMetaSoon();
         });
 
         view.sandboxItemList?.addEventListener('click', event => {
@@ -885,39 +885,39 @@
           if (Neo.sandboxSettings.allowedItems.includes(key)) {
             Neo.sandboxSettings.allowedItems = Neo.sandboxSettings.allowedItems.filter(itemKey => itemKey !== key);
           } else {
-            Neo.sandboxSettings.allowedItems = [...sandboxSettings.allowedItems, key];
+            Neo.sandboxSettings.allowedItems = [...Neo.sandboxSettings.allowedItems, key];
           }
-          Neo.sandboxSettings = normalizeSandboxSettings(Neo.sandboxSettings);
+          Neo.sandboxSettings = Neo.normalizeSandboxSettings(Neo.sandboxSettings);
           syncSandboxPanelFields();
-          persistMetaSoon();
+          Neo.persistMetaSoon();
         });
 
         view.sandboxEnemiesAll?.addEventListener('click', () => {
           Neo.sandboxSettings.allowedEnemies = Neo.SANDBOX_ENEMY_TYPES.slice();
           syncSandboxPanelFields();
-          persistMetaSoon();
+          Neo.persistMetaSoon();
         });
         view.sandboxEnemiesNone?.addEventListener('click', () => {
           Neo.sandboxSettings.allowedEnemies = [];
-          Neo.sandboxSettings = normalizeSandboxSettings(Neo.sandboxSettings);
+          Neo.sandboxSettings = Neo.normalizeSandboxSettings(Neo.sandboxSettings);
           syncSandboxPanelFields();
-          persistMetaSoon();
+          Neo.persistMetaSoon();
         });
         view.sandboxItemsAll?.addEventListener('click', () => {
           Neo.sandboxSettings.allowedItems = Neo.ITEM_KEYS.slice();
           syncSandboxPanelFields();
-          persistMetaSoon();
+          Neo.persistMetaSoon();
         });
         view.sandboxItemsNone?.addEventListener('click', () => {
           Neo.sandboxSettings.allowedItems = [];
-          Neo.sandboxSettings = normalizeSandboxSettings(Neo.sandboxSettings);
+          Neo.sandboxSettings = Neo.normalizeSandboxSettings(Neo.sandboxSettings);
           syncSandboxPanelFields();
-          persistMetaSoon();
+          Neo.persistMetaSoon();
         });
         view.sandboxReset?.addEventListener('click', () => {
-          Neo.sandboxSettings = normalizeSandboxSettings(Neo.SANDBOX_DEFAULT_SETTINGS);
+          Neo.sandboxSettings = Neo.normalizeSandboxSettings(Neo.SANDBOX_DEFAULT_SETTINGS);
           syncSandboxPanelFields();
-          persistMetaSoon();
+          Neo.persistMetaSoon();
         });
         view.sandboxSaveClose?.addEventListener('click', handlers.onCloseSandboxConfig);
         view.sandboxClose?.addEventListener('click', handlers.onCloseSandboxConfig);
@@ -985,7 +985,7 @@
         view.runHistoryModeTabs.forEach(tab => {
           tab.addEventListener('click', () => {
             const mode = tab.dataset.mode || 'all';
-            runHistoryModeFilter = mode === 'all' ? 'all' : normalizeGameMode(mode);
+            runHistoryModeFilter = mode === 'all' ? 'all' : Neo.normalizeGameMode(mode);
             runHistoryPage = 0;
             renderRunHistoryPage();
           });
@@ -1027,36 +1027,36 @@
           handlers.onOpenAltModeCharSelect('pvp');
         });
         view.mpLobbyBack?.addEventListener('click', () => {
-          closeMpLobby();
+          Neo.closeMpLobby();
           setAltModesPanelOpen(true);
         });
         view.mpLobby1Btn?.addEventListener('click', () => {
           Neo.mpPlayerCount = 1;
-          closeMpLobby();
+          Neo.closeMpLobby();
           Neo.charSelectPhase = 'p1';
-          setGameState('charselect');
-          updateCharacterSelectionUI();
+          Neo.setGameState('charselect');
+          Neo.updateCharacterSelectionUI();
         });
         view.mpLobby2Btn?.addEventListener('click', () => {
           Neo.mpPlayerCount = 2;
-          closeMpLobby();
+          Neo.closeMpLobby();
           Neo.charSelectPhase = 'p1';
-          setGameState('charselect');
-          updateCharacterSelectionUI();
+          Neo.setGameState('charselect');
+          Neo.updateCharacterSelectionUI();
         });
         document.getElementById('mpLobby3Btn')?.addEventListener('click', () => {
           Neo.mpPlayerCount = 3;
-          closeMpLobby();
+          Neo.closeMpLobby();
           Neo.charSelectPhase = 'p1';
-          setGameState('charselect');
-          updateCharacterSelectionUI();
+          Neo.setGameState('charselect');
+          Neo.updateCharacterSelectionUI();
         });
         document.getElementById('mpLobby4Btn')?.addEventListener('click', () => {
           Neo.mpPlayerCount = 4;
-          closeMpLobby();
+          Neo.closeMpLobby();
           Neo.charSelectPhase = 'p1';
-          setGameState('charselect');
-          updateCharacterSelectionUI();
+          Neo.setGameState('charselect');
+          Neo.updateCharacterSelectionUI();
         });
         // Alt modes tabs
         document.querySelectorAll('.altmodes-tab').forEach(tab => {
@@ -1078,23 +1078,23 @@
           view.practicePanelBody?.classList.toggle('hidden');
         });
         view.practiceMaxHpSlider?.addEventListener('input', () => {
-          setPracticeMaxHp(view.practiceMaxHpSlider.value);
+          Neo.setPracticeMaxHp(view.practiceMaxHpSlider.value);
         });
         view.practiceMaxHpNum?.addEventListener('change', () => {
-          setPracticeMaxHp(view.practiceMaxHpNum.value);
+          Neo.setPracticeMaxHp(view.practiceMaxHpNum.value);
         });
         view.practiceClearBtn?.addEventListener('click', () => { Neo.enemies.length = 0; });
         view.practiceHealBtn?.addEventListener('click', () => {
           if (!Neo.player) return;
           Neo.player.hp = Neo.player.maxHp;
-          updateHud();
+          Neo.updateHud();
         });
         view.practiceGiveItemBtn?.addEventListener('click', () => {
           if (!Neo.player) return;
-          const key = rollItemDrop({ elite: true, stream: 'loot' });
-          if (key) collectItem(key);
+          const key = Neo.rollItemDrop({ elite: true, stream: 'loot' });
+          if (key) Neo.collectItem(key);
         });
-        if (view.practiceEnemyGrid) buildPracticeEnemyGrid();
+        if (view.practiceEnemyGrid) Neo.buildPracticeEnemyGrid();
         menuBound = true;
       },
       bindRestartActions(actions) {
@@ -1148,7 +1148,7 @@
         view.runSummary.textContent = summary || '';
       },
       setRunHistory(entries) {
-        runHistoryEntries = normalizeRunHistory(entries);
+        runHistoryEntries = Neo.normalizeRunHistory(entries);
         runHistoryPage = 0;
         runHistoryModeFilter = 'all';
         selectedRunHistoryId = runHistoryEntries[0]?.id || '';
@@ -1172,7 +1172,7 @@
           button.disabled = !unlocked.has(itemKey);
           if (hint) hint.textContent = unlocked.has(itemKey) ? baseHint : 'locked in bank';
           if (spriteCanvas) {
-            drawSpriteToCanvas(spriteCanvas, itemKey, 76, {
+            Neo.drawSpriteToCanvas(spriteCanvas, itemKey, 76, {
               alpha: unlocked.has(itemKey) ? 1 : 0.42,
             });
           }
@@ -1205,7 +1205,7 @@
             `<div class="char-stat-row"><span class="stat-label">${s.label}</span>` +
             `<div class="stat-bar"><div class="stat-fill" style="width:${s.pct}%;background:${s.color}"></div></div></div>`
           ).join('');
-          const defaultMoves = getDefaultMovesForCharacter(selected);
+          const defaultMoves = Neo.getDefaultMovesForCharacter(selected);
           const kitNames = ['melee', 'laser', 'smash', 'dash']
             .map(slot => Neo.MOVE_DEFS[defaultMoves[slot]]?.name || defaultMoves[slot]);
           const skillsHtml = kitNames.map(s =>
@@ -1216,23 +1216,23 @@
             `<p class="hero-detail-lore">${disp.lore}</p>` +
             `<div class="hero-detail-stats"><div class="hero-detail-section-label">Stats</div>${statsHtml}</div>` +
             `<div class="hero-detail-skills"><div class="hero-detail-section-label">Kit</div>${skillsHtml}</div>`;
-          drawSpriteToCanvas(document.getElementById('heroDetailSprite'), selected, 104);
+          Neo.drawSpriteToCanvas(document.getElementById('heroDetailSprite'), selected, 104);
         }
       },
       updateDifficultySelection(unlocked, selected, loopCrystals) {
-        const selectedDef = getDifficultyDef(selected);
+        const selectedDef = Neo.getDifficultyDef(selected);
         view.difficultyButtons.forEach(button => {
-          const key = button.dataset.difficulty === 'custom' ? 'custom' : normalizeDifficulty(button.dataset.difficulty || '');
-          const def = getDifficultyDef(key);
+          const key = button.dataset.difficulty === 'custom' ? 'custom' : Neo.normalizeDifficulty(button.dataset.difficulty || '');
+          const def = Neo.getDifficultyDef(key);
           const isUnlocked = unlocked.has(key);
           button.classList.toggle('sel', selected === key);
           button.classList.toggle('locked', !isUnlocked);
           button.disabled = !isUnlocked;
-          button.title = isUnlocked ? def.description : `Unlock at ${def.unlockLoops} loop crystals`;
+          button.title = isUnlocked ? def.description : `Unlock at ${def.unlockLoops} Loop Crystals`;
         });
         if (view.difficultyHint) {
           view.difficultyHint.textContent = selectedDef.unlockLoops > 0 && !unlocked.has(selected)
-              ? `Unlocks at ${selectedDef.unlockLoops} loop crystals. Current crystals: ${loopCrystals}`
+              ? `Unlocks at ${selectedDef.unlockLoops} Loop Crystals. Current crystals: ${loopCrystals}`
               : `${selectedDef.description} Loop Crystals: ${loopCrystals}.`;
         }
       },
@@ -1249,10 +1249,10 @@
           button.classList.toggle('sel', isSelected);
           button.disabled = !isUnlocked;
           button.title = !isUnlocked
-            ? `Unlock at ${def.unlockLoops} loop crystals`
+            ? `Unlock at ${def.unlockLoops} Loop Crystals`
             : isOwned
               ? def.description
-              : `${def.description} Cost: ${def.cost} loop crystals`;
+              : `${def.description} Cost: ${def.cost} Loop Crystals`;
           const status = !isUnlocked
             ? `LOCKED UNTIL ${def.unlockLoops} LC`
             : isOwned
@@ -1260,16 +1260,16 @@
               : `BUY ${def.cost} LC`;
           button.innerHTML = `
             <span class="challenge-btn__top">
-              <b>${escapeHtml(def.name)}</b>
-              <em>${escapeHtml(status)}</em>
+              <b>${Neo.escapeHtml(def.name)}</b>
+              <em>${Neo.escapeHtml(status)}</em>
             </span>
-            <span class="challenge-btn__desc">${escapeHtml(def.description)}</span>
-            <span class="challenge-btn__reward">${escapeHtml(def.reward || 'Challenge reward')}</span>
+            <span class="challenge-btn__desc">${Neo.escapeHtml(def.description)}</span>
+            <span class="challenge-btn__reward">${Neo.escapeHtml(def.reward || 'Challenge reward')}</span>
           `;
         });
         if (view.challengeHint) {
           const activeCount = selected.length;
-          const bonusCrystals = Math.max(0, Math.round(getActiveChallengeCrystalBonusMultiplier()));
+          const bonusCrystals = Math.max(0, Math.round(Neo.getActiveChallengeCrystalBonusMultiplier()));
           view.challengeHint.textContent = `Loop Crystals: ${loopCrystals}. Buy run types once, then toggle them. Active: ${activeCount}. Loop bonus: +${bonusCrystals} LC.`;
         }
       },
@@ -1285,16 +1285,16 @@
           const status = isOwned ? 'UNLOCKED' : canAfford ? `BUY ${def.cost} LC` : `NEED ${def.cost} LC`;
           button.innerHTML = `
             <span class="legacy-btn__top">
-              <b>${escapeHtml(def.name)}</b>
-              <em>${escapeHtml(status)}</em>
+              <b>${Neo.escapeHtml(def.name)}</b>
+              <em>${Neo.escapeHtml(status)}</em>
             </span>
-            <span class="legacy-btn__desc">${escapeHtml(def.description)}</span>
-            <span class="legacy-btn__effect">${escapeHtml(def.effect)}</span>
+            <span class="legacy-btn__desc">${Neo.escapeHtml(def.description)}</span>
+            <span class="legacy-btn__effect">${Neo.escapeHtml(def.effect)}</span>
           `;
         });
         if (view.legacyHint) {
           const ownedCount = Neo.LEGACY_ORDER.filter(k => owned.has(k)).length;
-          view.legacyHint.textContent = `Loop Crystals: ${loopCrystals}. Unlocked: ${ownedCount} / ${LEGACY_ORDER.length}. Upgrades are permanent and apply to all future runs.`;
+          view.legacyHint.textContent = `Loop Crystals: ${loopCrystals}. Unlocked: ${ownedCount} / ${Neo.LEGACY_ORDER.length}. Upgrades are permanent and apply to all future runs.`;
         }
       },
       setItemStatus(items) {
@@ -1326,7 +1326,7 @@
           view.tutorialHint.textContent = nextHint;
           tutorialBannerCache.hint = nextHint;
         }
-        const stepOrder = getTutorialStepOrder();
+        const stepOrder = Neo.getTutorialStepOrder();
         const stepIndex = stepOrder.indexOf(Neo.tutorialState?.step || 'move');
         const prevDisabled = !open || stepIndex <= 0;
         const nextDisabled = !open || stepIndex < 0 || stepIndex >= (stepOrder.length - 1);
@@ -1348,7 +1348,7 @@
         view.objectiveTracker.setAttribute('aria-hidden', visible ? 'false' : 'true');
         if (view.objectiveRoomLabel) view.objectiveRoomLabel.textContent = String(roomLabel || 'ROOM').toUpperCase();
         view.objectiveList.innerHTML = entries.map(entry => (
-          `<li data-state="${escapeHtml(entry.state || 'todo')}">${escapeHtml(entry.text || '')}</li>`
+          `<li data-state="${Neo.escapeHtml(entry.state || 'todo')}">${Neo.escapeHtml(entry.text || '')}</li>`
         )).join('');
         syncObjectiveTrackerCompactState();
       },
@@ -1394,7 +1394,7 @@
           return `${m}:${sec.toString().padStart(2, '0')}`;
         };
         if (view.deadKillerCanvas) {
-          drawSpriteToCanvas(view.deadKillerCanvas, resolveKillerSprite(entry.killerKey || ''), 120);
+          Neo.drawSpriteToCanvas(view.deadKillerCanvas, Neo.resolveKillerSprite(entry.killerKey || ''), 120);
         }
         if (view.deadKillerName) view.deadKillerName.textContent = entry.killedBy || 'Unknown';
         if (view.deadFloor) view.deadFloor.textContent = `${fmt(entry.floor)}/10`;
@@ -1405,7 +1405,7 @@
         if (view.deadDifficulty) view.deadDifficulty.textContent = (entry.difficultyName || entry.difficulty || '—').toUpperCase();
         const reviveButton = view.deadActions?.find(button => button.dataset.deadAction === 'revive');
         if (reviveButton) {
-          const cost = getReviveCost();
+          const cost = Neo.getReviveCost();
           const crystals = Number(Neo.metaProgress.loopCrystals || 0);
           reviveButton.textContent = `REVIVE ${cost} LC`;
           reviveButton.disabled = crystals < cost;
@@ -1415,7 +1415,7 @@
         // ── Records row ────────────────────────────────────────────────────
         if (view.deadRecords) {
           const nr = entry._newRecords || {};
-          const records = deriveRunRecords(Neo.runHistory, Neo.metaProgress);
+          const records = Neo.deriveRunRecords(Neo.runHistory, Neo.metaProgress);
           const bests = [
             { label: 'FLOOR',  val: `${records.floor}/10`,         isNew: nr.floor },
             { label: 'KILLS',  val: fmt(records.kills),            isNew: nr.kills },
@@ -1454,7 +1454,7 @@
                 cnv.width = 32;
                 cnv.height = 32;
                 cnv.className = 'dead-item-icon';
-                drawItemToastIcon(cnv, { ...itemDef, key: item.key, rarity: item.rarity, color: itemDef.color, accent: itemDef.accent });
+                Neo.drawItemToastIcon(cnv, { ...itemDef, key: item.key, rarity: item.rarity, color: itemDef.color, accent: itemDef.accent });
                 const label = document.createElement('span');
                 label.className = 'dead-item-name';
                 label.textContent = item.count > 1 ? `${item.name} ×${item.count}` : item.name;
@@ -1484,6 +1484,4 @@
     };
   }
 
-  // Expose on Neo
-  Neo.createUIController = createUIController;
-})();
+Neo.createUIController = createUIController;

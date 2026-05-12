@@ -1,7 +1,6 @@
-// player.js — standalone IIFE. Player data migration, stats, abilities, charge.
-(() => {
-  function migratePlayerData(source) {
-    const playerData = source || createDefaultPlayer();
+// player.js — Player data migration, stats, abilities, charge.
+export function migratePlayerData(source) {
+    const playerData = source || Neo.createDefaultPlayer();
     playerData.character = playerData.character || 'thorn_knight';
     if (!playerData.items) {
       const legacy = playerData.relics || {};
@@ -34,7 +33,7 @@
     playerData.lavaWalkTime = Number(playerData.lavaWalkTime || 0);
     playerData.lavaTrailTick = Number(playerData.lavaTrailTick || 0);
     playerData.princessFlightTime = Number(playerData.princessFlightTime || 0);
-    ensureStatuses(playerData);
+    Neo.ensureStatuses(playerData);
     if (!playerData.equippedMoves || typeof playerData.equippedMoves !== 'object') {
       playerData.equippedMoves = getDefaultMovesForCharacter(playerData.character);
     }
@@ -95,26 +94,26 @@
     return playerData;
   }
 
-  function getCharacterDef() {
+export function getCharacterDef() {
     return Neo.CHARACTER_DEFS[Neo.player?.character || Neo.chosenCharacter] || Neo.CHARACTER_DEFS.thorn_knight;
   }
 
-  function getUiCharacterKey() {
+export function getUiCharacterKey() {
     return Neo.player?.character || Neo.chosenCharacter;
   }
 
-  function syncCharacterUiTheme() {
+export function syncCharacterUiTheme() {
     document.documentElement.classList.toggle('princess-ui', getUiCharacterKey() === 'princess');
   }
 
-  function getDefaultWeaponForCharacter(characterKey) {
+export function getDefaultWeaponForCharacter(characterKey) {
     if (characterKey === 'princess') return '';
     if (characterKey === 'metao') return 'metao_fire_staff';
     if (characterKey === 'granialla') return 'granillia_lightning_spear';
     return 'thorns_bleed_blade';
   }
 
-  function getDefaultMovesForCharacter(characterKey) {
+export function getDefaultMovesForCharacter(characterKey) {
     if (characterKey === 'princess') {
       return { melee: 'narwal_fight', laser: 'love_beam', smash: 'kicky_kick', dash: 'flying_unhitable' };
     }
@@ -127,46 +126,46 @@
     return { melee: 'slash', laser: 'blood_beam', smash: 'crimson_smash', dash: 'dash' };
   }
 
-  function isMoveAllowedForCharacter(moveKey, characterKey = Neo.player?.character || Neo.chosenCharacter) {
+export function isMoveAllowedForCharacter(moveKey, characterKey = Neo.player?.character || Neo.chosenCharacter) {
     const def = Neo.MOVE_DEFS[moveKey];
     if (!def) return false;
     return !def.exclusiveCharacter || def.exclusiveCharacter === characterKey;
   }
 
-  function getItemCount(key) {
+export function getItemCount(key) {
     return Number(Neo.player?.items?.[key] || 0);
   }
 
-  function getChargeRequirement(baseRequirement) {
+export function getChargeRequirement(baseRequirement) {
     return Math.max(1, baseRequirement - getItemCount('charged_adapter'));
   }
 
-  function getKeenEyeCritBonus() {
+export function getKeenEyeCritBonus() {
     return getItemCount('keen_eye') * 0.1;
   }
 
-  function getChronoSpringAttackSpeedBonus() {
+export function getChronoSpringAttackSpeedBonus() {
     return getItemCount('chrono_spring') * 0.16;
   }
 
-  function grantCritCharmBuff() {
+export function grantCritCharmBuff() {
     if (!Neo.player || getItemCount('crit_charm') <= 0) return;
     Neo.player.critCharmBuffTime = Math.max(Number(Neo.player.critCharmBuffTime || 0), 2.2);
   }
 
-  function triggerKeenEyeBuff() {
+export function triggerKeenEyeBuff() {
     if (!Neo.player || getItemCount('keen_eye') <= 0) return;
     Neo.player.keenEyeBuffTime = Math.max(Number(Neo.player.keenEyeBuffTime || 0), 7);
     Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 24, life: 0.7, text: 'KEEN EYE', c: '#f8fdff' });
   }
 
-  function triggerChronoSpringBuff() {
+export function triggerChronoSpringBuff() {
     if (!Neo.player || getItemCount('chrono_spring') <= 0) return;
     Neo.player.chronoSpringBuffTime = Math.max(Number(Neo.player.chronoSpringBuffTime || 0), 6);
     Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 38, life: 0.7, text: 'CHRONO', c: '#cfeeff' });
   }
 
-  function getItemStats() {
+export function getItemStats() {
     if (Neo.itemStatsCacheFrame === Neo.frameId && Neo.itemStatsCacheValue) return Neo.itemStatsCacheValue;
     if (!Neo.godItemKeysCache) Neo.godItemKeysCache = Neo.ITEM_KEYS.filter(key => Neo.ITEM_DEFS[key]?.rarity === 'god');
 
@@ -194,9 +193,9 @@
     }, 0);
     let critChance = critCharmBonus + keenEyeBonus + pendantOfKronos * godItemStacks * 0.01;
     if (oracleLens) critChance *= 2;
-    critChance = clamp(critChance, 0, 0.95);
-    const damageReduction = clamp(bandaid * 0.005 + shieldOfAegis * 0.2, 0, 0.85);
-    const xpProgress = clamp((Neo.player?.xpToNext || 0) > 0 ? (Neo.player?.xp || 0) / Neo.player.xpToNext : 0, 0, 1);
+    critChance = Neo.clamp(critChance, 0, 0.95);
+    const damageReduction = Neo.clamp(bandaid * 0.005 + shieldOfAegis * 0.2, 0, 0.85);
+    const xpProgress = Neo.clamp((Neo.player?.xpToNext || 0) > 0 ? (Neo.player?.xp || 0) / Neo.player.xpToNext : 0, 0, 1);
     Neo.itemStatsCacheValue = {
       bleedChance: neoKnife * 0.05,
       bleedDamageMultiplier: orbOfBlood > 0 ? 1 + orbOfBlood : 1,
@@ -222,12 +221,12 @@
     return Neo.itemStatsCacheValue;
   }
 
-  function getAttackSpeedValue() {
+export function getAttackSpeedValue() {
     const stats = getItemStats();
     return Math.max(0.2, (Neo.player?.attackSpeed || 1) * (stats.attackSpeedMultiplier || 1));
   }
 
-  function getWizardPawStatCards() {
+export function getWizardPawStatCards() {
     const stats = getItemStats();
     return [
       { label: 'HP', value: `${Math.round(Neo.player.hp)} / ${Math.round(Neo.player.maxHp)}` },
@@ -238,7 +237,7 @@
     ];
   }
 
-  function openWizardPawSelection() {
+export function openWizardPawSelection() {
     Neo.wizardPawSelection = {
       picks: [],
       options: [
@@ -247,16 +246,16 @@
         { key: 'attackSpeed', name: 'Attack Speed', description: `Current ${getAttackSpeedValue().toFixed(2)}. Triple base attack speed.` },
       ],
     };
-    setWizardPawModalOpen(true);
+    Neo.setWizardPawModalOpen(true);
     renderWizardPawPanel();
   }
 
-  function renderWizardPawPanel() {
-    if (!Neo.wizardPawSelection || !ui.wizardPawStats || !ui.wizardPawChoices) return;
-    ui.wizardPawStats.innerHTML = getWizardPawStatCards()
+export function renderWizardPawPanel() {
+    if (!Neo.wizardPawSelection || !Neo.ui.wizardPawStats || !Neo.ui.wizardPawChoices) return;
+    Neo.ui.wizardPawStats.innerHTML = getWizardPawStatCards()
       .map(stat => `<div class="wizard-paw-stat"><span class="wizard-paw-stat__label">${stat.label}</span><div class="wizard-paw-stat__value">${stat.value}</div></div>`)
       .join('');
-    ui.wizardPawChoices.innerHTML = Neo.wizardPawSelection.options
+    Neo.ui.wizardPawChoices.innerHTML = Neo.wizardPawSelection.options
       .map(option => {
         const selected = Neo.wizardPawSelection.picks.includes(option.key);
         return `<button class="wizard-paw-choice${selected ? ' is-selected' : ''}" type="button" data-stat="${option.key}">
@@ -266,15 +265,15 @@
         </button>`;
       })
       .join('');
-    if (ui.wizardPawConfirm) {
-      ui.wizardPawConfirm.disabled = Neo.wizardPawSelection.picks.length !== 2;
-      ui.wizardPawConfirm.textContent = Neo.wizardPawSelection.picks.length === 2
+    if (Neo.ui.wizardPawConfirm) {
+      Neo.ui.wizardPawConfirm.disabled = Neo.wizardPawSelection.picks.length !== 2;
+      Neo.ui.wizardPawConfirm.textContent = Neo.wizardPawSelection.picks.length === 2
         ? 'CONFIRM PICKS'
-        : `CONFIRM ${wizardPawSelection.picks.length}/2`;
+        : `CONFIRM ${Neo.wizardPawSelection.picks.length}/2`;
     }
   }
 
-  function handleWizardPawChoiceClick(event) {
+export function handleWizardPawChoiceClick(event) {
     const target = event.target instanceof Element ? event.target.closest('[data-stat]') : null;
     const statKey = target?.dataset?.stat || '';
     if (!Neo.wizardPawSelection || !statKey) return;
@@ -285,7 +284,7 @@
     renderWizardPawPanel();
   }
 
-  function applyWizardPawStat(stat) {
+export function applyWizardPawStat(stat) {
     if (stat === 'maxHp') {
       Neo.player.maxHp = Math.max(120, Math.round(Neo.player.maxHp * 3));
       Neo.player.hp = Math.min(Neo.player.maxHp, Math.round(Neo.player.hp * 3));
@@ -300,19 +299,19 @@
     }
   }
 
-  function confirmWizardPawSelection() {
+export function confirmWizardPawSelection() {
     if (!Neo.wizardPawSelection || Neo.wizardPawSelection.picks.length !== 2) return;
     Neo.wizardPawSelection.picks.forEach(applyWizardPawStat);
     Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 46, life: 1, text: "WIZARD'S PAW!", c: '#ffd27d' });
     Neo.wizardPawSelection = null;
-    setWizardPawModalOpen(false);
-    markInventoryPanelDirty();
-    renderInventoryPanel();
-    updateHud();
-    scheduleRunSave();
+    Neo.setWizardPawModalOpen(false);
+    Neo.markInventoryPanelDirty();
+    Neo.renderInventoryPanel();
+    Neo.updateHud();
+    Neo.scheduleRunSave();
   }
 
-  function consumeCharge(chargeType) {
+export function consumeCharge(chargeType) {
     if (chargeType === 'insurance') {
       Neo.player.insuranceReady = false;
       Neo.player.insuranceChargeKills = 0;
@@ -339,7 +338,7 @@
     }
   }
 
-  achievementEvents.on('charge:kill', () => {
+  window.achievementEvents?.on('charge:kill', () => {
     if (!Neo.player) return;
 
     if (getItemCount('insurance') > 0 && !Neo.player.insuranceReady) {
@@ -375,7 +374,7 @@
       if (Neo.player.escapeChargeKills >= getChargeRequirement(10)) {
         Neo.player.escapeReady = true;
         Neo.player.escapeChargeKills = 0;
-        const warpHint = formatControlLabel('f', 'f');
+        const warpHint = Neo.formatControlLabel('f', 'f');
         Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 36, life: 0.9, text: `ADAPTER READY - PRESS ${warpHint}`, c: '#b88cff' });
       }
     }
@@ -390,7 +389,7 @@
     }
   });
 
-  function refreshFloorChargeStates() {
+export function refreshFloorChargeStates() {
     if (!Neo.player) return;
     Neo.player.insuranceActive = false;
     Neo.player.critCharmBuffTime = 0;
@@ -423,4 +422,3 @@
   Neo.confirmWizardPawSelection = confirmWizardPawSelection;
   Neo.consumeCharge = consumeCharge;
   Neo.refreshFloorChargeStates = refreshFloorChargeStates;
-})();

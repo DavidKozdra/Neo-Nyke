@@ -1,9 +1,8 @@
-// lighting.js — standalone IIFE. Light source collection and beam carving.
-(() => {
-  function carveBeamLight(path, maxWidth, strength = 0.5) {
+// lighting.js — Light source collection and beam carving.
+export function carveBeamLight(path, maxWidth, strength = 0.5) {
     if (!Array.isArray(path) || path.length < 2) return;
     Neo.ctx.save();
-    Neo.ctx.globalAlpha = clamp(strength, 0, 1);
+    Neo.ctx.globalAlpha = Neo.clamp(strength, 0, 1);
     Neo.ctx.strokeStyle = '#000';
     Neo.ctx.lineCap = 'round';
     Neo.ctx.lineJoin = 'round';
@@ -21,20 +20,20 @@
     Neo.ctx.restore();
   }
 
-  function pushLightSource(target, x, y, inner, outer, strength, tint = '') {
+export function pushLightSource(target, x, y, inner, outer, strength, tint = '') {
     if (target.length >= Neo.LIGHTING_CONFIG.maxLights) return;
     if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(outer) || outer <= 0) return;
     if (x + outer < 0 || x - outer > Neo.ROOM_W || y + outer < 0 || y - outer > Neo.ROOM_H) return;
 
-    const cleanOuter = clamp(outer, 8, Neo.LIGHTING_CONFIG.maxOuterRadius);
-    const cleanInner = clamp(Number.isFinite(inner) ? inner : 0, 0, cleanOuter * 0.72);
-    const cleanStrength = clamp(Number.isFinite(strength) ? strength : 0.5, 0, 1.1);
+    const cleanOuter = Neo.clamp(outer, 8, Neo.LIGHTING_CONFIG.maxOuterRadius);
+    const cleanInner = Neo.clamp(Number.isFinite(inner) ? inner : 0, 0, cleanOuter * 0.72);
+    const cleanStrength = Neo.clamp(Number.isFinite(strength) ? strength : 0.5, 0, 1.1);
     target.push({ x, y, inner: cleanInner, outer: cleanOuter, strength: cleanStrength, tint });
   }
 
-  function collectRoomLightSources(room) {
+export function collectRoomLightSources(room) {
     const lights = [];
-    const activeChamber = getActiveRoomChamber(room, Neo.player);
+    const activeChamber = Neo.getActiveRoomChamber(room, Neo.player);
     pushLightSource(
       lights,
       Neo.ROOM_W / 2,
@@ -127,4 +126,3 @@
   Neo.carveBeamLight = carveBeamLight;
   Neo.pushLightSource = pushLightSource;
   Neo.collectRoomLightSources = collectRoomLightSources;
-})();
