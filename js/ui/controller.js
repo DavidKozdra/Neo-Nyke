@@ -1026,6 +1026,10 @@ export function createUIController(view) {
           setAltModesPanelOpen(false);
           handlers.onOpenAltModeCharSelect('pvp');
         });
+        view.altModeCompetitiveBtn?.addEventListener('click', () => {
+          setAltModesPanelOpen(false);
+          handlers.onOpenAltModeCharSelect('competitive');
+        });
         view.mpLobbyBack?.addEventListener('click', () => {
           Neo.closeMpLobby();
           setAltModesPanelOpen(true);

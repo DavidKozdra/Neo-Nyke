@@ -779,6 +779,7 @@ export const ui = {
     altModeBossRushBtn: document.getElementById('altModeBossRushBtn'),
     altModeCoopBtn: document.getElementById('altModeCoopBtn'),
     altModePvpBtn: document.getElementById('altModePvpBtn'),
+    altModeCompetitiveBtn: document.getElementById('altModeCompetitiveBtn'),
     mpLobby: document.getElementById('mpLobby'),
     mpLobbyBack: document.getElementById('mpLobbyBack'),
     mpLobby1Btn: document.getElementById('mpLobby1Btn'),

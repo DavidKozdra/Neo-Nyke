@@ -1,0 +1,3 @@
+basic express server with redis connection 
+generates a seed daily 
+sends seed on request to client 

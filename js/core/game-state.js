@@ -512,7 +512,7 @@ export function resumeGame() {
 
   function normalizeGameMode(input) {
     const mode = String(input || 'normal').toLowerCase();
-    if (mode === 'endless' || mode === 'practice' || mode === 'boss_rush' || mode === 'sandbox' || mode === 'coop' || mode === 'pvp') return mode;
+    if (mode === 'endless' || mode === 'practice' || mode === 'boss_rush' || mode === 'sandbox' || mode === 'coop' || mode === 'pvp' || mode === 'competitive') return mode;
     return 'normal';
   }
 
@@ -523,6 +523,7 @@ export function resumeGame() {
     if (mode === 'practice') return 'Practice';
     if (mode === 'boss_rush') return 'Boss Rush';
     if (mode === 'sandbox') return 'Sandbox';
+    if (mode === 'competitive') return 'Competitive';
     return 'Normal';
   }
 
@@ -1453,8 +1454,13 @@ export function resumeGame() {
     } else {
       if (phaseTag) phaseTag.classList.add('hidden');
       if (titleEl) titleEl.textContent = 'CHOOSE YOUR WARRIOR';
-      if (subtitleEl) subtitleEl.textContent = 'Pick a fighter, set the run, then enter the dungeon. Challenges live in their own shop panel.';
-      if (goBtn) goBtn.textContent = 'ENTER DUNGEON';
+      if (Neo.gameMode === 'competitive') {
+        if (subtitleEl) subtitleEl.textContent = 'Competitive Run — Hard difficulty, today\'s shared seed, no modifiers.';
+        if (goBtn) goBtn.textContent = 'COMPETE';
+      } else {
+        if (subtitleEl) subtitleEl.textContent = 'Pick a fighter, set the run, then enter the dungeon. Challenges live in their own shop panel.';
+        if (goBtn) goBtn.textContent = 'ENTER DUNGEON';
+      }
     }
     const activeChar = Neo.charSelectPhase && PHASE_CHAR[Neo.charSelectPhase] ? PHASE_CHAR[Neo.charSelectPhase]() : Neo.chosenCharacter;
     const unlocked = new Set(Neo.metaProgress.unlockedCharacters || ['princess', 'thorn_knight', 'metao']);
@@ -1507,6 +1513,7 @@ export function resumeGame() {
     if (Neo.gameMode === 'boss_rush') { startBossRush(); return; }
     if (Neo.gameMode === 'coop') { startCoop(); return; }
     if (Neo.gameMode === 'pvp') { startPvp(); return; }
+    if (Neo.gameMode === 'competitive') { void startCompetitive(); return; }
     const forceTutorialReplay = !resume && consumeReplayTutorialRequest();
     const shouldRunTutorial = Neo.gameMode === 'normal' && (!Neo.metaProgress.tutorialCompleted || forceTutorialReplay);
     setGameState('play');
@@ -1619,6 +1626,41 @@ export function resumeGame() {
     if (!Neo.loopStarted) { Neo.loopStarted = true; requestAnimationFrame(Neo.loop); }
     const p2Row = document.getElementById('p2HpRow');
     if (p2Row) p2Row.style.display = '';
+  }
+
+  const COMPETITIVE_SERVER_URL = 'http://localhost:3000';
+
+  async function startCompetitive() {
+    setGameState('play');
+    let serverSeed;
+    try {
+      const res = await fetch(`${COMPETITIVE_SERVER_URL}/newSeed`);
+      const data = await res.json();
+      serverSeed = String(data.seed);
+    } catch {
+      serverSeed = createRandomSeed();
+    }
+    Neo.baseSeedStr = serverSeed;
+    Neo.selectedDifficulty = 'hard';
+    Neo.selectedChallenges = [];
+    Neo.runLoopIndex = 0;
+    Neo.runRevivesUsed = 0;
+    Neo.lastDeathEntryId = '';
+    syncSeedState();
+    Neo.floor = 1;
+    Neo.gameElapsedTime = 0;
+    window.achievementManager?.resetRunCounters();
+    invalidateRunStatCaches();
+    Neo.player = createDefaultPlayer();
+    resetMultiplayerState();
+    Neo.lastDamageSource = '';
+    Neo.lastDamageSourceKey = '';
+    resetScene();
+    Neo.generateFloor();
+    resetTutorialState(false);
+    Neo.persistMetaSoon();
+    Neo.scheduleRunSave();
+    if (!Neo.loopStarted) { Neo.loopStarted = true; requestAnimationFrame(Neo.loop); }
   }
 
   function startEndlessRoom() {
@@ -2184,6 +2226,7 @@ export function resumeGame() {
   Neo.spawnMpPlayer = spawnMpPlayer;
   Neo.startCoop = startCoop;
   Neo.startPvp = startPvp;
+  Neo.startCompetitive = startCompetitive;
   Neo.startEndlessRoom = startEndlessRoom;
   Neo.startEndless = startEndless;
   Neo.startPractice = startPractice;
