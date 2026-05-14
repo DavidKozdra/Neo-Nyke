@@ -597,6 +597,72 @@ export function createUIController(view) {
     function setAltModesPanelOpen(open) {
       view.altModesPanel?.classList.toggle('hidden', !open);
       view.altModesPanel?.setAttribute('aria-hidden', open ? 'false' : 'true');
+      if (open) {
+        const activeTab = view.altModesPanel?.querySelector('.altmodes-tab.active');
+        if (activeTab?.dataset?.tab === 'competitive') initCompetitiveLeaderboard();
+      }
+    }
+
+    // --- Competitive leaderboard ---
+    let lbPage = 1;
+    let lbLoading = false;
+    let lbHasMore = true;
+    let lbDebounceTimer = null;
+
+    function initCompetitiveLeaderboard() {
+      lbPage = 1;
+      lbHasMore = true;
+      const listEl = document.getElementById('competitiveLbList');
+      const moreBtn = document.getElementById('competitiveLbMoreBtn');
+      if (listEl) listEl.textContent = 'Loading...';
+      if (moreBtn) moreBtn.style.display = 'none';
+      debouncedLoadLb(true);
+    }
+
+    function debouncedLoadLb(immediate) {
+      clearTimeout(lbDebounceTimer);
+      lbDebounceTimer = setTimeout(loadLbPage, immediate ? 0 : 300);
+    }
+
+    function loadLbPage() {
+      if (lbLoading || !lbHasMore) return;
+      lbLoading = true;
+      const statusEl = document.getElementById('competitiveLbStatus');
+      if (statusEl) statusEl.textContent = 'Loading...';
+      fetch(`${Neo.COMPETITIVE_SERVER_URL || 'http://localhost:3004'}/leadbyPage?page=${lbPage}`)
+        .then(r => r.json())
+        .then(data => {
+          const listEl = document.getElementById('competitiveLbList');
+          const moreBtn = document.getElementById('competitiveLbMoreBtn');
+          if (!listEl) return;
+          if (lbPage === 1) listEl.innerHTML = '';
+          if (!data.data || data.data.length === 0) {
+            if (lbPage === 1) listEl.textContent = 'No runs this week — be the first!';
+          } else {
+            const startRank = (lbPage - 1) * data.pageSize + 1;
+            data.data.forEach((entry, i) => {
+              const rank = startRank + i;
+              const row = document.createElement('div');
+              row.style.cssText = 'display:flex;gap:8px;align-items:baseline;border-bottom:1px solid rgba(255,255,255,0.06);padding:2px 0';
+              row.innerHTML = `<span style="width:24px;text-align:right;color:#ffe566;font-weight:bold">${rank}.</span><span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(entry.name)}</span><span style="color:#aaa">Fl.${entry.floor}</span>`;
+              listEl.appendChild(row);
+            });
+          }
+          lbHasMore = !!data.hasMore;
+          lbPage += 1;
+          if (moreBtn) moreBtn.style.display = lbHasMore ? '' : 'none';
+          if (statusEl) statusEl.textContent = data.totalEntries ? `${data.totalEntries} entries total` : '';
+        })
+        .catch(() => {
+          const listEl = document.getElementById('competitiveLbList');
+          if (listEl && lbPage === 1) listEl.textContent = 'Could not reach server.';
+          if (statusEl) statusEl.textContent = '';
+        })
+        .finally(() => { lbLoading = false; });
+    }
+
+    function escHtml(str) {
+      return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     }
 
     function setSandboxPanelOpen(open) {
@@ -1001,6 +1067,16 @@ export function createUIController(view) {
         view.tutorialNextBtn?.addEventListener('click', handlers.onTutorialNext);
         view.tutorialSkipBtn?.addEventListener('click', handlers.onSkipTutorial);
         // New main-menu nav
+        view.mainCompetitiveBtn?.addEventListener('click', () => {
+          document.querySelectorAll('.altmodes-tab').forEach(t => t.classList.remove('active'));
+          document.querySelectorAll('.altmodes-tab-panel').forEach(p => p.classList.add('hidden'));
+          const compTab = document.querySelector('.altmodes-tab[data-tab="competitive"]');
+          const compPanel = document.querySelector('.altmodes-tab-panel[data-panel="competitive"]');
+          if (compTab) compTab.classList.add('active');
+          if (compPanel) compPanel.classList.remove('hidden');
+          setAltModesPanelOpen(true);
+          initCompetitiveLeaderboard();
+        });
         view.newRunBtn?.addEventListener('click', handlers.onOpenCharacterSelect);
         view.charBackBtn?.addEventListener('click', handlers.onCloseCharacterSelect);
         // Alt modes panel
@@ -1030,6 +1106,7 @@ export function createUIController(view) {
           setAltModesPanelOpen(false);
           handlers.onOpenAltModeCharSelect('competitive');
         });
+        document.getElementById('competitiveLbMoreBtn')?.addEventListener('click', () => debouncedLoadLb(true));
         view.mpLobbyBack?.addEventListener('click', () => {
           Neo.closeMpLobby();
           setAltModesPanelOpen(true);
@@ -1070,6 +1147,7 @@ export function createUIController(view) {
             tab.classList.add('active');
             const panel = document.querySelector(`.altmodes-tab-panel[data-panel="${tab.dataset.tab}"]`);
             if (panel) panel.classList.remove('hidden');
+            if (tab.dataset.tab === 'competitive') initCompetitiveLeaderboard();
           });
         });
         view.altModeSandboxConfigBtn?.addEventListener('click', handlers.onOpenSandboxConfig);

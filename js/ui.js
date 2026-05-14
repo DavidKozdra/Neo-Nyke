@@ -727,6 +727,7 @@
     challengeHint: document.getElementById('challengeHint'),
     continueRow: document.getElementById('continueRow'),
     continueBtn: document.getElementById('continueBtn'),
+    mainCompetitiveBtn: document.getElementById('mainCompetitiveBtn'),
     newRunBtn: document.getElementById('newRunBtn'),
     runHistoryBtn: document.getElementById('runHistoryBtn'),
     runHistoryPanel: document.getElementById('runHistoryPanel'),

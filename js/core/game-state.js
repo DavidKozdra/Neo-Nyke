@@ -12,6 +12,7 @@ export function resumeGame() {
 
   function createDefaultMeta() {
     return {
+      username: '',
       coins: 0,
       bestFloor: 1,
       bestKills: 0,
@@ -395,6 +396,7 @@ export function resumeGame() {
       }
       Neo.sandboxSettings = normalizeSandboxSettings(savedMeta?.sandboxSettings);
       Neo.uiController.setSaveState(Neo.saveStore.kind);
+      window.dispatchEvent(new Event('neo:meta-loaded'));
     } catch (error) {
       console.error('Failed to load save data', error);
       Neo.uiController.setSaveState('SAVE ERROR');
@@ -1455,13 +1457,51 @@ export function resumeGame() {
       if (phaseTag) phaseTag.classList.add('hidden');
       if (titleEl) titleEl.textContent = 'CHOOSE YOUR WARRIOR';
       if (Neo.gameMode === 'competitive') {
-        if (subtitleEl) subtitleEl.textContent = 'Competitive Run — Hard difficulty, today\'s shared seed, no modifiers.';
+        if (subtitleEl) subtitleEl.textContent = 'Hard difficulty · this week\'s shared seed · no modifiers';
         if (goBtn) goBtn.textContent = 'COMPETE';
       } else {
         if (subtitleEl) subtitleEl.textContent = 'Pick a fighter, set the run, then enter the dungeon. Challenges live in their own shop panel.';
         if (goBtn) goBtn.textContent = 'ENTER DUNGEON';
       }
     }
+
+    const isCompetitive = Neo.gameMode === 'competitive';
+    const difficultySelect = document.getElementById('difficultySelect');
+    const difficultyHint = document.getElementById('difficultyHint');
+    const seedLabel = document.getElementById('seedLabel');
+    const seedInput = document.getElementById('seed');
+    const challengeToggleEl = document.getElementById('challengeToggle');
+    const legacyToggleEl = document.getElementById('legacyToggle');
+    if (difficultySelect) difficultySelect.style.pointerEvents = isCompetitive ? 'none' : '';
+    if (difficultySelect) difficultySelect.style.opacity = isCompetitive ? '0.35' : '';
+    if (difficultyHint) difficultyHint.textContent = isCompetitive ? 'Locked to Hard in Competitive.' : '';
+    if (seedLabel) seedLabel.style.display = isCompetitive ? 'none' : '';
+    if (seedInput) seedInput.style.display = isCompetitive ? 'none' : '';
+    if (challengeToggleEl) challengeToggleEl.style.display = isCompetitive ? 'none' : '';
+    if (legacyToggleEl) legacyToggleEl.style.display = isCompetitive ? 'none' : '';
+
+    if (isCompetitive) {
+      Neo.selectedDifficulty = 'hard';
+      if (Neo.ui.seed) Neo.ui.seed.value = '';
+      if (Neo._competitiveSeed) {
+        if (subtitleEl) subtitleEl.textContent = `Hard · Seed ${Neo._competitiveSeed} · no modifiers`;
+      } else if (!Neo._competitiveSeedFetching) {
+        Neo._competitiveSeedFetching = true;
+        fetch(`${COMPETITIVE_SERVER_URL}/seed`)
+          .then(r => r.json())
+          .then(data => {
+            Neo._competitiveSeed = String(data.seed);
+            Neo._competitiveSeedFetching = false;
+            const el = document.getElementById('charSelectSubtitle');
+            if (el) el.textContent = `Hard · Seed ${Neo._competitiveSeed} · no modifiers`;
+          })
+          .catch(() => { Neo._competitiveSeedFetching = false; });
+      }
+    } else {
+      Neo._competitiveSeed = null;
+      Neo._competitiveSeedFetching = false;
+    }
+
     const activeChar = Neo.charSelectPhase && PHASE_CHAR[Neo.charSelectPhase] ? PHASE_CHAR[Neo.charSelectPhase]() : Neo.chosenCharacter;
     const unlocked = new Set(Neo.metaProgress.unlockedCharacters || ['princess', 'thorn_knight', 'metao']);
     const unlockedDifficulties = getUnlockedDifficultySet();
@@ -1477,15 +1517,22 @@ export function resumeGame() {
       }
       Neo.metaProgress.selectedCharacter = Neo.chosenCharacter;
     }
-    if (!unlockedDifficulties.has(Neo.selectedDifficulty)) Neo.selectedDifficulty = 'easy';
-    if (Neo.selectedDifficulty === 'custom') Neo.selectedDifficulty = 'easy';
-    Neo.metaProgress.selectedDifficulty = Neo.selectedDifficulty;
-    Neo.selectedChallenges = normalizeChallengeSelection(Neo.selectedChallenges).filter(key => unlockedChallenges.has(key) && ownedChallenges.has(key));
-    Neo.metaProgress.selectedChallenges = normalizeChallengeSelection(Neo.selectedChallenges);
+    if (!isCompetitive) {
+      if (!unlockedDifficulties.has(Neo.selectedDifficulty)) Neo.selectedDifficulty = 'easy';
+      if (Neo.selectedDifficulty === 'custom') Neo.selectedDifficulty = 'easy';
+      Neo.metaProgress.selectedDifficulty = Neo.selectedDifficulty;
+      Neo.selectedChallenges = normalizeChallengeSelection(Neo.selectedChallenges).filter(key => unlockedChallenges.has(key) && ownedChallenges.has(key));
+      Neo.metaProgress.selectedChallenges = normalizeChallengeSelection(Neo.selectedChallenges);
+    }
     const ownedLegacy = new Set(Neo.metaProgress.unlockedLegacy || []);
-    Neo.uiController.updateCharacterSelection(unlocked, activeChar);
-    Neo.uiController.updateDifficultySelection(unlockedDifficulties, Neo.selectedDifficulty, Neo.metaProgress.loopCrystals || 0);
-    Neo.uiController.updateChallengeSelection(unlockedChallenges, ownedChallenges, Neo.selectedChallenges, Neo.metaProgress.loopCrystals || 0, Neo.metaProgress.coins || 0);
+    const competitiveUnlocked = isCompetitive ? new Set([...unlocked].filter(k => k !== 'princess')) : unlocked;
+    if (isCompetitive && competitiveUnlocked.size > 0 && !competitiveUnlocked.has(Neo.chosenCharacter)) {
+      Neo.chosenCharacter = [...competitiveUnlocked][0];
+      Neo.metaProgress.selectedCharacter = Neo.chosenCharacter;
+    }
+    Neo.uiController.updateCharacterSelection(isCompetitive ? competitiveUnlocked : unlocked, activeChar);
+    Neo.uiController.updateDifficultySelection(unlockedDifficulties, isCompetitive ? 'hard' : Neo.selectedDifficulty, Neo.metaProgress.loopCrystals || 0);
+    Neo.uiController.updateChallengeSelection(unlockedChallenges, ownedChallenges, isCompetitive ? [] : Neo.selectedChallenges, Neo.metaProgress.loopCrystals || 0, Neo.metaProgress.coins || 0);
     Neo.uiController.updateLegacySelection(ownedLegacy, Neo.metaProgress.loopCrystals || 0);
     Neo.syncCharacterUiTheme();
   }
@@ -1628,18 +1675,24 @@ export function resumeGame() {
     if (p2Row) p2Row.style.display = '';
   }
 
-  const COMPETITIVE_SERVER_URL = 'http://localhost:3000';
+  const COMPETITIVE_SERVER_URL = Neo.COMPETITIVE_SERVER_URL || 'http://localhost:3004';
 
   async function startCompetitive() {
-    setGameState('play');
-    let serverSeed;
-    try {
-      const res = await fetch(`${COMPETITIVE_SERVER_URL}/newSeed`);
-      const data = await res.json();
-      serverSeed = String(data.seed);
-    } catch {
-      serverSeed = createRandomSeed();
+    if (Neo.chosenCharacter === 'princess') {
+      Neo.chosenCharacter = 'thorn_knight';
     }
+    setGameState('play');
+    let serverSeed = Neo._competitiveSeed || null;
+    if (!serverSeed) {
+      try {
+        const res = await fetch(`${COMPETITIVE_SERVER_URL}/seed`);
+        const data = await res.json();
+        serverSeed = String(data.seed);
+      } catch {
+        serverSeed = createRandomSeed();
+      }
+    }
+    Neo._competitiveSeed = null;
     Neo.baseSeedStr = serverSeed;
     Neo.selectedDifficulty = 'hard';
     Neo.selectedChallenges = [];
@@ -2227,6 +2280,7 @@ export function resumeGame() {
   Neo.startCoop = startCoop;
   Neo.startPvp = startPvp;
   Neo.startCompetitive = startCompetitive;
+  Neo.COMPETITIVE_SERVER_URL = COMPETITIVE_SERVER_URL;
   Neo.startEndlessRoom = startEndlessRoom;
   Neo.startEndless = startEndless;
   Neo.startPractice = startPractice;

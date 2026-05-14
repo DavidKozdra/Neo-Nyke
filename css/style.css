@@ -4779,6 +4779,20 @@ button.alt.danger {
 
 .data-row + .data-row { border-top: 1px solid rgba(128, 146, 170, .12); }
 
+.settings-text-input {
+  background: rgba(0,0,0,0.3);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 6px;
+  color: #e8f0ff;
+  font-family: inherit;
+  font-size: 0.85rem;
+  padding: 5px 10px;
+  width: 160px;
+  outline: none;
+  margin-left: auto;
+}
+.settings-text-input:focus { border-color: rgba(120,200,255,0.5); }
+
 .data-label {
   font-size: 13px;
   color: var(--menu-text);
@@ -5358,6 +5372,28 @@ button.alt.danger {
   line-height: 1.5;
 }
 .altmode-card__btn { flex-shrink: 0; min-width: 90px; }
+
+.competitive-lb-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,210,0,0.18);
+  border-radius: 10px;
+  padding: 18px 20px;
+}
+.competitive-lb-list {
+  display: flex;
+  flex-direction: column;
+  min-height: 60px;
+  font-size: 0.82em;
+  line-height: 1.7;
+  color: #ccc;
+}
+.competitive-lb-status {
+  font-size: 0.75em;
+  color: #888;
+}
 
 .altmode-card__actions {
   display: flex;

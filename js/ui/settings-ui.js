@@ -452,6 +452,24 @@
     refreshThemeUI();
   });
 
+  const usernameInput = document.getElementById('usernameInput');
+  if (usernameInput) {
+    const syncUsername = () => {
+      if (window.Neo?.metaProgress !== undefined) {
+        usernameInput.value = window.Neo.metaProgress.username || '';
+      }
+    };
+    syncUsername();
+    window.addEventListener('neo:meta-loaded', syncUsername);
+    usernameInput.addEventListener('input', () => {
+      const val = usernameInput.value.trim().slice(0, 24);
+      if (window.Neo?.metaProgress) {
+        window.Neo.metaProgress.username = val;
+        window.Neo.persistMetaSoon?.();
+      }
+    });
+  }
+
   document.getElementById('dataExport').addEventListener('click', async () => {
     if (!window.NeoDataAdapter) { alert('Data system not ready.'); return; }
     const data = await window.NeoDataAdapter.exportAll();

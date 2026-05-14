@@ -321,6 +321,9 @@
     if (Neo.ui.timerDisplay) Neo.ui.timerDisplay.textContent = timeStr;
     if (Neo.ui.floorDisplay) Neo.ui.floorDisplay.textContent = Neo.floor;
     if (Neo.ui.difficultyDisplay) Neo.ui.difficultyDisplay.textContent = Neo.getDifficultyDef(Neo.selectedDifficulty).name.toUpperCase();
+    const isCompetitive = Neo.gameMode === 'competitive';
+    if (Neo.ui.competitiveSeedDisplay) Neo.ui.competitiveSeedDisplay.style.display = isCompetitive ? '' : 'none';
+    if (isCompetitive && Neo.ui.competitiveSeedValue) Neo.ui.competitiveSeedValue.textContent = Neo.baseSeedStr || '';
     if (Neo.ui.itemRarityCounts) {
       const rarityCounts = Neo.getItemRarityCounts(Neo.player);
       const white = Neo.ui.itemRarityCounts.querySelector('.rarity-count--white');
@@ -418,6 +421,20 @@
     if (nextRecords.time > previousRecords.time && entry.elapsedSeconds >= nextRecords.time) newRecords.time = true;
     if (nextRecords.coins > previousRecords.coins && entry.coins >= nextRecords.coins) newRecords.coins = true;
     entry._newRecords = newRecords;
+    if (Neo.gameMode === 'competitive') {
+      const username = Neo.metaProgress?.username?.trim() || 'Anonymous';
+      fetch(`${Neo.COMPETITIVE_SERVER_URL}/leaderboard`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: username,
+          floor: entry.floor,
+          seed: entry.seed || Neo.baseSeedStr,
+          character: entry.character || Neo.chosenCharacter,
+          time: entry.elapsedSeconds,
+        }),
+      }).catch(() => {});
+    }
     return entry;
   }
 

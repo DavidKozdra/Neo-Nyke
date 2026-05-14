@@ -1133,7 +1133,11 @@
       }
 
       if (pickup.type === 'returnGate') {
-        returnToFloorOne();
+        if (Neo.gameMode === 'competitive') {
+          Neo.win();
+        } else {
+          returnToFloorOne();
+        }
         return;
       }
 
