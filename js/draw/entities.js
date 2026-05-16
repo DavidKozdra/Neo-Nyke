@@ -1,15 +1,17 @@
 // entities.js — standalone IIFE. Sprite atlas, player/enemy drawing.
   function buildSpriteAtlas() {
     const keys = Object.keys(Neo.SPRITE_DEFS);
+    const GUTTER = 1;
+    const STRIDE = Neo.SPRITE_SOURCE_SIZE + GUTTER;
     const canvasEl = document.createElement('canvas');
-    canvasEl.width = Neo.SPRITE_SOURCE_SIZE * keys.length;
+    canvasEl.width = STRIDE * keys.length;
     canvasEl.height = Neo.SPRITE_SOURCE_SIZE;
     const atlasCtx = canvasEl.getContext('2d');
     atlasCtx.imageSmoothingEnabled = false;
     const frames = {};
     keys.forEach((key, index) => {
       const def = Neo.SPRITE_DEFS[key];
-      const ox = index * Neo.SPRITE_SOURCE_SIZE;
+      const ox = index * STRIDE;
       frames[key] = { x: ox, y: 0, w: Neo.SPRITE_SOURCE_SIZE, h: Neo.SPRITE_SOURCE_SIZE };
       for (let y = 0; y < def.pixels.length; y += 1) {
         const row = def.pixels[y];
