@@ -166,26 +166,33 @@
   }
 
   function drawMinimap() {
-    const baseSize = 14;
-    const baseGap = 2;
+    const hasGlasses = Neo.getItemStats?.()?.hasPrincesGlasses;
     const gridSize = 9;
     const visibleRooms = Neo.rooms.filter(r => !r.secret);
     const maxGy = visibleRooms.reduce((m, r) => Math.max(m, r.gy), 0);
-    const baseMapWidth = gridSize * baseSize + (gridSize - 1) * baseGap;
-    const baseMapHeight = (maxGy + 1) * baseSize + maxGy * baseGap;
     const canvasRect = Neo.canvas.getBoundingClientRect();
     const scaleX = canvasRect.width > 0 ? canvasRect.width / Neo.canvas.width : 1;
     const scaleY = canvasRect.height > 0 ? canvasRect.height / Neo.canvas.height : 1;
     const compact = window.innerWidth <= 920;
-    const hasGlasses = Neo.getItemStats?.()?.hasPrincesGlasses;
-    const glassesViewMult = hasGlasses ? 1.45 : 1;
-    const targetViewportWidth = compact ? Math.min(112 * glassesViewMult, canvasRect.width * 0.25 * glassesViewMult) : Math.min(146 * glassesViewMult, canvasRect.width * 0.2 * glassesViewMult);
-    const targetViewportHeight = compact ? Math.min(112 * glassesViewMult, canvasRect.height * 0.25 * glassesViewMult) : Math.min(146 * glassesViewMult, canvasRect.height * 0.23 * glassesViewMult);
-    const baseViewportWidth = baseMapWidth * scaleX;
-    const baseViewportHeight = baseMapHeight * scaleY;
-    const minimapScale = Neo.clamp(Math.min(1, targetViewportWidth / Math.max(1, baseViewportWidth), targetViewportHeight / Math.max(1, baseViewportHeight)), 0.62, 1);
-    const size = Math.max(8, Math.round(baseSize * minimapScale));
-    const gap = Math.max(1, Math.round(baseGap * minimapScale));
+
+    let size, gap, minimapScale;
+    if (hasGlasses) {
+      size = 28;
+      gap = 3;
+      minimapScale = 1;
+    } else {
+      const baseSize = 14;
+      const baseGap = 2;
+      const baseMapWidth = gridSize * baseSize + (gridSize - 1) * baseGap;
+      const baseMapHeight = (maxGy + 1) * baseSize + maxGy * baseGap;
+      const targetViewportWidth = compact ? Math.min(112, canvasRect.width * 0.25) : Math.min(146, canvasRect.width * 0.2);
+      const targetViewportHeight = compact ? Math.min(112, canvasRect.height * 0.25) : Math.min(146, canvasRect.height * 0.23);
+      const baseViewportWidth = baseMapWidth * scaleX;
+      const baseViewportHeight = baseMapHeight * scaleY;
+      minimapScale = Neo.clamp(Math.min(1, targetViewportWidth / Math.max(1, baseViewportWidth), targetViewportHeight / Math.max(1, baseViewportHeight)), 0.62, 1);
+      size = Math.max(8, Math.round(baseSize * minimapScale));
+      gap = Math.max(1, Math.round(baseGap * minimapScale));
+    }
     const mapWidth = gridSize * size + (gridSize - 1) * gap;
     const mapHeight = (maxGy + 1) * size + maxGy * gap;
     const originX = Neo.canvas.width - mapWidth - 2;
@@ -286,12 +293,12 @@
       if (room.doors.e) Neo.ctx.fillRect(x + size, y + size / 2 - 1, 2, 2);
     });
     if (Neo.hasLegacy('elite_tracker')) {
-      Neo.enemies.forEach(enemy => {
-        if (!enemy.elite) return;
-        const eRoom = Neo.rooms.find(r => r.gx === enemy.homeGx && r.gy === enemy.homeGy);
-        if (!eRoom || eRoom.secret || eRoom === Neo.currentRoom) return;
-        const rx = originX + eRoom.gx * (size + gap);
-        const ry = originY + eRoom.gy * (size + gap);
+      Neo.rooms.forEach(room => {
+        if (room.secret || room === Neo.currentRoom) return;
+        const hasElite = Array.isArray(room.enemies) && room.enemies.some(e => e?.elite);
+        if (!hasElite) return;
+        const rx = originX + room.gx * (size + gap);
+        const ry = originY + room.gy * (size + gap);
         Neo.ctx.globalAlpha = 0.9;
         Neo.ctx.fillStyle = '#ff4444';
         Neo.ctx.fillRect(rx + size - 4, ry, 4, 4);
@@ -342,28 +349,24 @@
         if (hasCoin) drawDot('#ffdd44');
       });
 
-      // Enemy red dots with legs in non-current rooms
-      Neo.enemies.forEach(enemy => {
-        const eRoom = Neo.rooms.find(r => r.gx === enemy.homeGx && r.gy === enemy.homeGy);
-        if (!eRoom || eRoom.secret || eRoom === Neo.currentRoom) return;
-        const rx = originX + eRoom.gx * (size + gap);
-        const ry = originY + eRoom.gy * (size + gap);
-        const ex = rx + size / 2;
-        const ey = ry + size / 2 - dotR;
-        Neo.ctx.globalAlpha = 0.85;
-        Neo.ctx.fillStyle = '#ff3333';
-        Neo.ctx.beginPath();
-        Neo.ctx.arc(ex, ey, dotR, 0, Math.PI * 2);
-        Neo.ctx.fill();
-        // Tiny legs
-        Neo.ctx.strokeStyle = '#ff3333';
-        Neo.ctx.lineWidth = 0.8;
-        Neo.ctx.beginPath();
-        Neo.ctx.moveTo(ex - dotR, ey + dotR * 0.5);
-        Neo.ctx.lineTo(ex - dotR * 1.8, ey + dotR * 1.6);
-        Neo.ctx.moveTo(ex + dotR, ey + dotR * 0.5);
-        Neo.ctx.lineTo(ex + dotR * 1.8, ey + dotR * 1.6);
-        Neo.ctx.stroke();
+      // Enemy dots per room — use room.enemies for non-current rooms
+      Neo.rooms.forEach(room => {
+        if (room.secret || room === Neo.currentRoom) return;
+        const roomEnemies = Array.isArray(room.enemies) ? room.enemies.filter(e => e && e.hp > 0) : [];
+        if (roomEnemies.length === 0) return;
+        const rx = originX + room.gx * (size + gap);
+        const ry = originY + room.gy * (size + gap);
+        const count = Math.min(roomEnemies.length, 5);
+        const spacing = (size - 2) / count;
+        for (let i = 0; i < count; i++) {
+          const ex = rx + 1 + spacing * i + spacing / 2;
+          const ey = ry + size / 2;
+          Neo.ctx.globalAlpha = 0.9;
+          Neo.ctx.fillStyle = roomEnemies[i]?.elite ? '#ff8800' : '#ff3333';
+          Neo.ctx.beginPath();
+          Neo.ctx.arc(ex, ey, dotR, 0, Math.PI * 2);
+          Neo.ctx.fill();
+        }
       });
     }
 

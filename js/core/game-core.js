@@ -545,6 +545,8 @@ export const CHARACTER_DEFS = {
     name: 'Metao',
     rarity: 'wizard',
     damageMultiplier: 0.5,
+    aoeRadiusMultiplier: 1.2,
+    aoeDamageMultiplier: 1.35,
     skills: { melee: 'Fire Balls', laser: 'Power Disks', smash: 'Chaos Burst', dash: 'Warp' },
   },
   granialla: {
@@ -587,10 +589,10 @@ export const HERO_DISPLAY = {
     ],
   },
   metao: {
-    lore: 'Wizard king of chaos and fire. Low raw damage but disks and blasts reward aggressive play.',
+    lore: 'Wizard king of chaos and fire. Slower spell cadence, but larger blasts reward timing and crowd control.',
     stats: [
       { label: 'HP',    pct: 66, color: '#c06060' },
-      { label: 'DMG',   pct: 33, color: '#c08040' },
+      { label: 'DMG',   pct: 48, color: '#c08040' },
       { label: 'SPD',   pct: 66, color: '#8080c0' },
       { label: 'RANGE', pct: 90, color: '#60a080' },
     ],

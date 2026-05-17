@@ -68,7 +68,7 @@
     else if (weaponKey === 'hunters_bow') base = 0.4;
     else if (weaponKey === 'thorns_bleed_blade') base = Neo.ATTACKS.melee.baseCooldown;
     else if (weaponKey === 'lazer_glasses') base = 3.6;
-    else if (weaponKey === 'metao_fire_staff') base = Neo.ATTACKS.melee.baseCooldown;
+    else if (weaponKey === 'metao_fire_staff') base = 0.75;
     else if (weaponKey === 'magenta_degale') base = 1.5;
     else if (weaponKey === 'magenta_p90') base = 1.8;
     else if (weaponKey === 'granillia_lightning_spear') base = Neo.ATTACKS.melee.baseCooldown;
@@ -950,23 +950,27 @@
   }
 
   function spawnFireballs() {
-    const aoeRadiusMultiplier = Neo.getItemStats().aoeRadiusMultiplier || 1;
+    const itemStats = Neo.getItemStats();
+    const aoeRadiusMultiplier = itemStats.aoeRadiusMultiplier || 1;
+    const aoeDamageMultiplier = itemStats.aoeDamageMultiplier || 1;
     const base = Math.atan2(Neo.mouse.worldY - Neo.player.y, Neo.mouse.worldX - Neo.player.x);
     for (let index = -1; index <= 1; index += 1) {
       const angle = base + index * 0.18;
-      Neo.spawnProjectile({ x: Neo.player.x, y: Neo.player.y, vx: Math.cos(angle) * 320, vy: Math.sin(angle) * 320, r: 8, life: 1.6, enemy: false, kind: 'fireball', damage: 22, splash: 48 * aoeRadiusMultiplier, fireStacks: 2, fireDuration: 3.4 });
+      Neo.spawnProjectile({ x: Neo.player.x, y: Neo.player.y, vx: Math.cos(angle) * 320, vy: Math.sin(angle) * 320, r: 8, life: 1.6, enemy: false, kind: 'fireball', damage: 22, splash: 48 * aoeRadiusMultiplier, splashDamage: Math.round(14 * aoeDamageMultiplier), blockedSplashDamage: Math.round(16 * aoeDamageMultiplier), fireStacks: 2, fireDuration: 3.4 });
     }
   }
 
   function castChaosBurst() {
-    const aoeRadiusMultiplier = Neo.getItemStats().aoeRadiusMultiplier || 1;
+    const itemStats = Neo.getItemStats();
+    const aoeRadiusMultiplier = itemStats.aoeRadiusMultiplier || 1;
+    const aoeDamageMultiplier = itemStats.aoeDamageMultiplier || 1;
     const isMetao = Neo.player?.character === 'metao';
     for (let index = 0; index < 6; index += 1) {
       const angle = Neo.rng() * Math.PI * 2;
       const px = Neo.player.x + Math.cos(angle) * Neo.rand(160, 40);
       const py = Neo.player.y + Math.sin(angle) * Neo.rand(160, 40);
       Neo.spawnParticle({ x: px, y: py, life: 0.45, ring: 18 * aoeRadiusMultiplier, c: '#c971ff' });
-      Neo.blastRadius(px, py, 52 * aoeRadiusMultiplier, 24, '#c971ff');
+      Neo.blastRadius(px, py, 52 * aoeRadiusMultiplier, Math.round(24 * aoeDamageMultiplier), '#c971ff');
       applyStatusInRadius(px, py, 52 * aoeRadiusMultiplier, 'poison', 1, 4.8);
       if (isMetao) applyStatusInRadius(px, py, 52 * aoeRadiusMultiplier, 'fire', 1, 3.5);
     }
@@ -1091,8 +1095,10 @@
   }
 
   function castFireCircle() {
-    const aoeRadiusMultiplier = Neo.getItemStats().aoeRadiusMultiplier || 1;
-    Neo.hazards.push({ kind: 'fire_circle', x: Neo.player.x, y: Neo.player.y, r: 96 * aoeRadiusMultiplier, ttl: 5.2, dps: 18, followPlayer: true });
+    const itemStats = Neo.getItemStats();
+    const aoeRadiusMultiplier = itemStats.aoeRadiusMultiplier || 1;
+    const aoeDamageMultiplier = itemStats.aoeDamageMultiplier || 1;
+    Neo.hazards.push({ kind: 'fire_circle', x: Neo.player.x, y: Neo.player.y, r: 96 * aoeRadiusMultiplier, ttl: 5.2, dps: 18 * aoeDamageMultiplier, followPlayer: true });
     Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.55, ring: 34, c: '#ff7b32' });
   }
 

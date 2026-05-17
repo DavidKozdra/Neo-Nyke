@@ -201,6 +201,7 @@ export function getItemStats() {
     critChance = Neo.clamp(critChance, 0.01, 0.95);
     const damageReduction = Neo.clamp(bandaid * 0.005 + shieldOfAegis * 0.2, 0, 0.85);
     const xpProgress = Neo.clamp((Neo.player?.xpToNext || 0) > 0 ? (Neo.player?.xp || 0) / Neo.player.xpToNext : 0, 0, 1);
+    const characterDef = Neo.getCharacterDef?.() || {};
     Neo.itemStatsCacheValue = {
       bleedChance: neoKnife * 0.05,
       bleedDamageMultiplier: orbOfBlood > 0 ? 1 + orbOfBlood : 1,
@@ -214,7 +215,8 @@ export function getItemStats() {
       xpGainMultiplier: 1 + scholarSeal * 0.15,
       levelEdgeDamageMultiplier: 1 + scholarCap * xpProgress * 0.45,
       knockbackMultiplier: 1 + pushMan * 0.18,
-      aoeRadiusMultiplier: (1 + explosiveJelly) * (Neo.player?.character === 'metao' ? 1.1 : 1),
+      aoeRadiusMultiplier: (1 + explosiveJelly) * Number(characterDef.aoeRadiusMultiplier || 1),
+      aoeDamageMultiplier: Number(characterDef.aoeDamageMultiplier || 1),
       beamDamageMultiplier: 1 + dragonOrb * 0.35,
       beamChainTargets: dragonOrb > 0 ? Math.min(2, dragonOrb) : 0,
       beamChainDamageMultiplier: dragonOrb > 0 ? 0.6 + (dragonOrb - 1) * 0.15 : 0,

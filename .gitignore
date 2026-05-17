@@ -3,3 +3,5 @@ Archive.zip
 .codex
 .agents
 js/game.bundle.js
+node_modules/
+./node_modules/

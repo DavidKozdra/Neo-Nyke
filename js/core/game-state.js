@@ -264,6 +264,7 @@ export function resumeGame() {
     };
     const character = Neo.CHARACTER_DEFS[Neo.chosenCharacter] || Neo.CHARACTER_DEFS.thorn_knight;
     if (character.key === 'mooggy') items.hemes_scarf = 1;
+    if (character.key === 'princess') items.princes_glasses = 1;
     const equippedMoves = Neo.getDefaultMovesForCharacter(character.key);
     const defaultWeapon = Neo.getDefaultWeaponForCharacter(character.key);
     const ownedMoves = {};
@@ -1488,13 +1489,17 @@ export function resumeGame() {
     if (isCompetitive) {
       Neo.selectedDifficulty = 'hard';
       if (Neo.ui.seed) Neo.ui.seed.value = '';
+      const competBtn = document.getElementById('altModeCompetitiveBtn');
       if (Neo._competitiveSeed) {
         if (subtitleEl) subtitleEl.textContent = `Hard · Seed ${Neo._competitiveSeed} · no modifiers`;
         const banner = document.getElementById('seedErrorBanner');
         if (banner) banner.classList.add('hidden');
+        if (competBtn) competBtn.disabled = false;
       } else if (!Neo._competitiveSeedFetching) {
         Neo._competitiveSeedFetching = true;
-        fetch(`${COMPETITIVE_SERVER_URL}/seed`)
+        fetch(`${COMPETITIVE_SERVER_URL}/health`, { signal: AbortSignal.timeout(4000) })
+          .then(r => { if (!r.ok) throw new Error('Server error'); return r.json(); })
+          .then(() => fetch(`${COMPETITIVE_SERVER_URL}/seed`))
           .then(r => r.json())
           .then(data => {
             Neo._competitiveSeed = String(data.seed);
@@ -1503,11 +1508,13 @@ export function resumeGame() {
             if (el) el.textContent = `Hard · Seed ${Neo._competitiveSeed} · no modifiers`;
             const banner = document.getElementById('seedErrorBanner');
             if (banner) banner.classList.add('hidden');
+            if (competBtn) competBtn.disabled = false;
           })
           .catch(() => {
             Neo._competitiveSeedFetching = false;
             const banner = document.getElementById('seedErrorBanner');
             if (banner) banner.classList.remove('hidden');
+            if (competBtn) competBtn.disabled = true;
           });
       }
     } else {
@@ -1515,6 +1522,8 @@ export function resumeGame() {
       Neo._competitiveSeedFetching = false;
       const banner = document.getElementById('seedErrorBanner');
       if (banner) banner.classList.add('hidden');
+      const competBtn = document.getElementById('altModeCompetitiveBtn');
+      if (competBtn) competBtn.disabled = false;
     }
 
     const activeChar = Neo.charSelectPhase && PHASE_CHAR[Neo.charSelectPhase] ? PHASE_CHAR[Neo.charSelectPhase]() : Neo.chosenCharacter;
@@ -1705,10 +1714,23 @@ export function resumeGame() {
     if (!serverSeed) {
       try {
         const res = await fetch(`${COMPETITIVE_SERVER_URL}/seed`);
+        if (!res.ok) throw new Error(`Server returned ${res.status}`);
         const data = await res.json();
+        if (!data.seed) throw new Error('No seed in response');
         serverSeed = String(data.seed);
       } catch {
-        serverSeed = createRandomSeed();
+        setGameState('start');
+        Neo._competitiveSeedFetching = false;
+        // Navigate back to the competitive tab and show the red banner
+        const altmodesPanel = document.getElementById('altModesPanel');
+        if (altmodesPanel) altmodesPanel.classList.remove('hidden');
+        document.querySelectorAll('.altmodes-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === 'competitive'));
+        document.querySelectorAll('.altmodes-tab-panel').forEach(p => p.classList.toggle('hidden', p.dataset.panel !== 'competitive'));
+        const banner = document.getElementById('seedErrorBanner');
+        if (banner) banner.classList.remove('hidden');
+        const competBtn = document.getElementById('altModeCompetitiveBtn');
+        if (competBtn) competBtn.disabled = true;
+        return;
       }
     }
     Neo._competitiveSeed = null;

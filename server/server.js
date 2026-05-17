@@ -105,6 +105,10 @@ app.get('/version', readLimiter, (req, res) => {
     res.json({ version });
 });
 
+app.get('/health', readLimiter, (req, res) => {
+    res.json({ ok: true });
+});
+
 app.get('/seed', readLimiter, (req, res) => {
     res.json({ seed });
 });

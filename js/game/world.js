@@ -445,7 +445,7 @@
       kind: null, color: null, enemy: false,
       knockback: 0, pierceCount: 0,
       hitOptions: null, trail: null,
-      splash: 0, fireStacks: 0, fireDuration: 0,
+      splash: 0, splashDamage: 0, blockedSplashDamage: 0, fireStacks: 0, fireDuration: 0,
       homing: false, homingSpeed: 0, homingAccel: 0, homingTurnRate: 0,
       fromRival: false,
     });
@@ -458,7 +458,7 @@
       kind: null, color: null, enemy: false,
       knockback: 0, pierceCount: 0,
       hitOptions: null, trail: null,
-      splash: 0, fireStacks: 0, fireDuration: 0,
+      splash: 0, splashDamage: 0, blockedSplashDamage: 0, fireStacks: 0, fireDuration: 0,
       homing: false, homingSpeed: 0, homingAccel: 0, homingTurnRate: 0,
       fromRival: false,
     };
@@ -481,6 +481,8 @@
     p.hitOptions = props.hitOptions ?? null;
     p.trail = props.trail ?? [];
     p.splash = props.splash ?? 0;
+    p.splashDamage = props.splashDamage ?? 0;
+    p.blockedSplashDamage = props.blockedSplashDamage ?? 0;
     p.fireStacks = props.fireStacks ?? 0;
     p.fireDuration = props.fireDuration ?? 0;
     p.homing = props.homing ?? false;
@@ -513,7 +515,7 @@
       const hitProp = Neo.destructibles.find(prop => !prop.broken && !prop.hidden && Neo.destructibleIntersectsCircle(prop, projectile.x, projectile.y, projectile.r));
       if (!projectile.enemy && hitProp) {
         damageDestructible(hitProp, projectile.damage || 1);
-        if (projectile.kind === 'fireball') blastRadius(projectile.x, projectile.y, projectile.splash || 44, 16, '#ff8844');
+        if (projectile.kind === 'fireball') blastRadius(projectile.x, projectile.y, projectile.splash || 44, projectile.blockedSplashDamage || 16, '#ff8844');
         spawnProjectileImpact(projectile, projectile.x, projectile.y, { blocked: true });
         _projectilePool.push(Neo.projectiles.splice(index, 1)[0]);
         continue;
@@ -537,7 +539,7 @@
           );
           if (projectile.kind === 'fireball') {
             Neo.applyFire(target, projectile.fireStacks || 2, projectile.fireDuration || 3);
-            blastRadius(projectile.x, projectile.y, projectile.splash || 44, 14, '#ff8844');
+            blastRadius(projectile.x, projectile.y, projectile.splash || 44, projectile.splashDamage || 14, '#ff8844');
             Neo.applyStatusInRadius(projectile.x, projectile.y, projectile.splash || 44, 'fire', 1, projectile.fireDuration || 3, null);
           }
           spawnProjectileImpact(projectile, projectile.x, projectile.y);

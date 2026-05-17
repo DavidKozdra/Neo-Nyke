@@ -635,7 +635,7 @@
           </div>
           <button id="altModeCompetitiveBtn" class="nav-btn altmode-card__btn" style="background:rgba(180,140,0,0.18);border-color:rgba(255,210,0,0.5);">COMPETE</button>
         </div>
-        <div id="seedErrorBanner" class="seed-error-banner hidden">&#9888; Could not reach the server — seed unavailable. A random seed will be used if you start now.</div>
+        <div id="seedErrorBanner" class="seed-error-banner hidden">&#9888; Cannot connect to the competitive server. Check your connection — you will not be able to start a competitive run until it is reachable.</div>
         <div id="competitiveLeaderboardCard" class="competitive-lb-card">
           <h3 class="altmode-card__name">THIS WEEK'S LEADERBOARD</h3>
           <div id="competitiveLbList" class="competitive-lb-list">Loading...</div>
@@ -1190,6 +1190,16 @@
           <span class="access-desc">Uses high-visibility colours for the health bar and HUD background.</span>
         </div>
         <label class="toggle"><input type="checkbox" id="accHighContrast"><span class="toggle-track"><span class="toggle-thumb"></span></span></label>
+      </div>
+      <div class="access-row">
+        <div class="access-text">
+          <span class="access-label">HUD scale</span>
+          <span class="access-desc">Resizes the in-game HUD. 100% is default; go larger for readability or smaller to reduce screen coverage.</span>
+        </div>
+        <div class="access-slider-wrap">
+          <input type="range" id="accHudScale" min="0.5" max="2.0" step="0.1" value="1" class="access-slider">
+          <span id="accHudScaleVal" class="access-slider-val">100%</span>
+        </div>
       </div>
       <div class="access-row">
         <div class="access-text">

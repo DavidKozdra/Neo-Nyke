@@ -5,7 +5,7 @@
   const DEFAULT_BINDINGS = { up:'w', down:'s', left:'a', right:'d', dash:'shift', inventory:'i', smash:'r', slash:'lmb', laser:'rmb' };
   const DEFAULT_TOUCH_BINDINGS = { touchA:'slash', touchB:'laser', touchY:'smash', touchX:'ascend', touchDash:'dash' };
   const DEFAULT_VOLUME   = { master:80, sfx:80, music:60 };
-  const DEFAULT_ACCESS   = { reduceFlash:false, reduceMotion:false, reduceParticles:false, highContrast:false, screenShake:true, shopCanAfford:'#4caf50', shopCantAfford:'#e05555' };
+  const DEFAULT_ACCESS   = { reduceFlash:false, reduceMotion:false, reduceParticles:false, highContrast:false, screenShake:true, shopCanAfford:'#4caf50', shopCantAfford:'#e05555', hudScale:1 };
   const DEFAULT_GAMEPLAY = { pauseInventory:true, bloodMultiplier:1, bloodOnHit:true };
   const BLOOD_MULTIPLIER_MIN = 1;
   const BLOOD_MULTIPLIER_MAX = 10;
@@ -14,6 +14,15 @@
     const n = Number(value);
     if (!Number.isFinite(n)) return DEFAULT_GAMEPLAY.bloodMultiplier;
     return Math.max(BLOOD_MULTIPLIER_MIN, Math.min(BLOOD_MULTIPLIER_MAX, Math.round(n)));
+  }
+
+  const HUD_SCALE_MIN = 0.5;
+  const HUD_SCALE_MAX = 2.0;
+  const HUD_SCALE_STEP = 0.1;
+  function normalizeHudScale(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return DEFAULT_ACCESS.hudScale;
+    return Math.max(HUD_SCALE_MIN, Math.min(HUD_SCALE_MAX, Math.round(n / HUD_SCALE_STEP) * HUD_SCALE_STEP));
   }
 
   // ── Theme system ─────────────────────────────────────────────────────────────
@@ -246,6 +255,7 @@
     const root = document.documentElement;
     root.style.setProperty('--shop-can-afford',  access.shopCanAfford  || DEFAULT_ACCESS.shopCanAfford);
     root.style.setProperty('--shop-cant-afford', access.shopCantAfford || DEFAULT_ACCESS.shopCantAfford);
+    root.style.setProperty('--hud-scale', String(normalizeHudScale(access.hudScale)));
   }
 
   // ── Mobile detection ─────────────────────────────────────────────────────────
@@ -483,6 +493,20 @@
     el.value = access[key] || DEFAULT_ACCESS[key];
     el.addEventListener('input', () => { access[key] = el.value; save(); applyAccess(); });
   });
+
+  const hudScaleSlider = document.getElementById('accHudScale');
+  const hudScaleVal    = document.getElementById('accHudScaleVal');
+  if (hudScaleSlider && hudScaleVal) {
+    const fmt = v => `${Math.round(normalizeHudScale(v) * 100)}%`;
+    hudScaleSlider.value = normalizeHudScale(access.hudScale);
+    hudScaleVal.textContent = fmt(access.hudScale);
+    hudScaleSlider.addEventListener('input', () => {
+      access.hudScale = normalizeHudScale(hudScaleSlider.value);
+      hudScaleVal.textContent = fmt(access.hudScale);
+      save();
+      applyAccess();
+    });
+  }
 
   const replayTutorialEl = document.getElementById('accReplayTutorial');
   if (replayTutorialEl) {
