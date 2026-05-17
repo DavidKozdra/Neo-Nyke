@@ -181,6 +181,7 @@ export async function boot() {
   Neo.bindInput();
   Neo.bindPanelInput();
   Neo.drawActionIcons();
+  Neo.drawDifficultyIcons();
   await Neo.loadPersistedState();
   Neo.updateCharacterSelectionUI();
   Neo.refreshMenuState();

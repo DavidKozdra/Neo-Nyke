@@ -103,6 +103,7 @@ export function bindInput() {
         Neo.metaProgress.selectedDifficulty = Neo.selectedDifficulty;
         Neo.persistMetaSoon();
         Neo.updateCharacterSelectionUI();
+        Neo.drawDifficultyIcons?.();
       },
       onChallengeSelect(challengeKey, button) {
         const def = Neo.CHALLENGE_DEFS[challengeKey];

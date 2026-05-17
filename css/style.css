@@ -370,6 +370,23 @@ canvas {
   font-size: 13px;
   min-width: 58px;
   text-align: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.difficulty-hud-icon {
+  width: 14px;
+  height: 14px;
+  image-rendering: pixelated;
+  flex-shrink: 0;
+}
+
+.difficulty-btn-icon {
+  width: 16px;
+  height: 16px;
+  image-rendering: pixelated;
+  flex-shrink: 0;
 }
 
 .item-rarity-counts {
@@ -2693,6 +2710,9 @@ p.sub {
   text-transform: uppercase;
   cursor: pointer;
   transition: border-color .15s, box-shadow .15s, transform .12s, color .15s, opacity .15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .difficulty-btn:hover:not(:disabled) {

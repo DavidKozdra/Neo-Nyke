@@ -1567,7 +1567,8 @@ export function createUIController(view) {
         view.lv.textContent = payload.level;
         view.xp.textContent = payload.xpText;
         if (view.gameTime) view.gameTime.textContent = payload.gameTime;
-        if (view.difficultyDisplay) view.difficultyDisplay.textContent = String(payload.difficultyName || '').toUpperCase();
+        if (view.difficultyLabel) view.difficultyLabel.textContent = String(payload.difficultyName || '').toUpperCase();
+        else if (view.difficultyDisplay) view.difficultyDisplay.textContent = String(payload.difficultyName || '').toUpperCase();
         if (view.itemRarityCounts && payload.itemRarityCounts) {
           const white = view.itemRarityCounts.querySelector('.rarity-count--white');
           const purple = view.itemRarityCounts.querySelector('.rarity-count--purple');

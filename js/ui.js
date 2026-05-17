@@ -688,6 +688,9 @@
     hudLoopIcon: document.getElementById('hudLoopIcon'),
     metaCoinIcon: document.getElementById('metaCoinIcon'),
     metaLoopIcon: document.getElementById('metaLoopIcon'),
+    difficultyHudIcon: document.getElementById('difficultyHudIcon'),
+    difficultyLabel: document.getElementById('difficultyLabel'),
+    difficultyBtnIcons: [...document.querySelectorAll('.difficulty-btn-icon')],
     centerDisplay: document.getElementById('centerDisplay'),
     timerFloorSlot: document.getElementById('timerFloorSlot'),
     timerBossSlot: document.getElementById('timerBossSlot'),
@@ -717,6 +720,7 @@
     timerDisplay: document.getElementById('timerDisplay'),
     floorDisplay: document.getElementById('floorDisplay'),
     difficultyDisplay: document.getElementById('difficultyDisplay'),
+    difficultyLabel: document.getElementById('difficultyLabel'),
     itemRarityCounts: document.getElementById('itemRarityCounts'),
     seed: document.getElementById('seed'),
     go: document.getElementById('go'),
@@ -1358,6 +1362,7 @@
     bindInput();
     bindPanelInput();
     drawActionIcons();
+    drawDifficultyIcons();
     await loadPersistedState();
     updateCharacterSelectionUI();
     refreshMenuState();
@@ -1851,6 +1856,7 @@
         metaProgress.selectedDifficulty = selectedDifficulty;
         persistMetaSoon();
         updateCharacterSelectionUI();
+        drawDifficultyIcons();
       },
       onChallengeSelect(challengeKey, button) {
         const def = CHALLENGE_DEFS[challengeKey];

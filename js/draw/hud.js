@@ -573,6 +573,74 @@
     ]);
   }
 
+  const DIFFICULTY_ICON_DEFS = {
+    easy: {
+      color: '#7dffb0',
+      pixels: [
+        [1,0],[2,0],[3,0],
+        [0,1],[4,1],
+        [0,2],[2,2],[4,2],
+        [0,3],[4,3],
+        [1,4],[2,4],[3,4],
+      ],
+    },
+    medium: {
+      color: '#ffe566',
+      pixels: [
+        [0,0],[4,0],
+        [0,1],[1,1],[3,1],[4,1],
+        [1,2],[2,2],[3,2],
+        [1,3],[2,3],[3,3],
+        [0,4],[1,4],[3,4],[4,4],
+      ],
+    },
+    hard: {
+      color: '#ff7a45',
+      pixels: [
+        [2,0],
+        [1,1],[3,1],
+        [0,2],[2,2],[4,2],
+        [0,3],[2,3],[4,3],
+        [1,4],[2,4],[3,4],
+      ],
+    },
+    impossible: {
+      color: '#b06fff',
+      pixels: [
+        [1,0],[2,0],[3,0],
+        [0,1],[2,1],[4,1],
+        [0,2],[1,2],[2,2],[3,2],[4,2],
+        [1,3],[2,3],[3,3],
+        [1,4],[3,4],
+      ],
+    },
+    god: {
+      color: '#ff5577',
+      pixels: [
+        [0,0],[2,0],[4,0],
+        [0,1],[1,1],[2,1],[3,1],[4,1],
+        [0,2],[1,2],[2,2],[3,2],[4,2],
+        [1,3],[2,3],[3,3],
+        [1,4],[2,4],[3,4],
+      ],
+    },
+  };
+
+  function drawDifficultyIcons() {
+    const hudIcon = Neo.ui?.difficultyHudIcon;
+    if (hudIcon) {
+      const key = Neo.selectedDifficulty || 'easy';
+      const def = DIFFICULTY_ICON_DEFS[key] || DIFFICULTY_ICON_DEFS.easy;
+      drawPixelIcon(hudIcon, def.color, def.pixels);
+    }
+    const btnIcons = Neo.ui?.difficultyBtnIcons || [];
+    btnIcons.forEach(canvas => {
+      const key = canvas.dataset.difficultyIcon;
+      const def = DIFFICULTY_ICON_DEFS[key];
+      if (def) drawPixelIcon(canvas, def.color, def.pixels);
+    });
+  }
+
   function drawPixelIcon(canvasEl, color, pixels) {
     const iconCtx = canvasEl.getContext('2d');
     iconCtx.clearRect(0, 0, canvasEl.width, canvasEl.height);
@@ -594,4 +662,5 @@
   Neo.drawFloorTransition = drawFloorTransition;
   Neo.drawActionIcons = drawActionIcons;
   Neo.drawPixelIcon = drawPixelIcon;
+  Neo.drawDifficultyIcons = drawDifficultyIcons;
 
