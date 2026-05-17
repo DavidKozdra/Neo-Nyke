@@ -124,14 +124,17 @@
           setObjective('Trial cleared. Claim the reward or move on.');
         } else if (!Neo.currentRoom.challengeStarted) {
           if (type === 'mirror') setObjective('Touch the sword to face your mirror.');
-          else if (type === 'stillness') setObjective('Begin the stillness trial.');
+          else if (type === 'stillness') setObjective('Begin the prize trial.');
           else if (type === 'bomb') setObjective('Begin the bomb trial.');
           else if (type === 'survival') setObjective('Begin the survival trial.');
           else if (type === 'runes') setObjective('Begin the rune hunt.');
           else if (type === 'storm') setObjective('Begin the storm trial.');
         } else {
           if (type === 'mirror') setObjective('Defeat your mirror champion.');
-          else if (type === 'stillness') setObjective(`Hold still for ${Math.ceil(Neo.currentRoom.challengeTimer || 0)}s.`);
+          else if (type === 'stillness') {
+            const phase = Neo.currentRoom.challengeData?.phase || 'choose';
+            setObjective(phase === 'fight' ? 'Defeat the trial enemies to claim your chosen item.' : 'Pick one item, then fight for it.');
+          }
           else if (type === 'bomb') setObjective('Find the one bomb you can safely disarm.');
           else if (type === 'survival') setObjective(`Survive for ${Math.ceil(Neo.currentRoom.challengeTimer || 0)}s.`);
           else if (type === 'runes') setObjective(`Collect the remaining runes: ${Math.max(0, Number(Neo.currentRoom.challengeData?.runesLeft || 0))}.`);
@@ -318,6 +321,12 @@
     // Update center display
     if (Neo.ui.coinCount) Neo.ui.coinCount.textContent = Neo.player.coins;
     if (Neo.ui.hudLoopCount) Neo.ui.hudLoopCount.textContent = Number(Neo.metaProgress.loopCrystals || 0);
+    const _potionCap = Neo.getPotionCarryCap();
+    if (Neo.ui.potionDisplay) Neo.ui.potionDisplay.classList.toggle('hidden', _potionCap <= 0);
+    if (_potionCap > 0) {
+      if (Neo.ui.potionCount) Neo.ui.potionCount.textContent = String(Number(Neo.player.storedPotions || 0));
+      if (Neo.ui.potionCap) Neo.ui.potionCap.textContent = `/${_potionCap}`;
+    }
     if (Neo.ui.timerDisplay) Neo.ui.timerDisplay.textContent = timeStr;
     if (Neo.ui.floorDisplay) Neo.ui.floorDisplay.textContent = Neo.floor;
     if (Neo.ui.difficultyLabel) Neo.ui.difficultyLabel.textContent = Neo.getDifficultyDef(Neo.selectedDifficulty).name.toUpperCase();
@@ -340,7 +349,7 @@
         && !Neo.currentRoom.cleared
         ? (Neo.currentRoom.challengeType || 'mirror')
         : null;
-      const timedChallengeActive = timedChallengeType === 'stillness' || timedChallengeType === 'runes';
+      const timedChallengeActive = timedChallengeType === 'runes';
       Neo.ui.challengeStatus.classList.toggle('hidden', !timedChallengeActive);
       Neo.ui.challengeStatus.setAttribute('aria-hidden', timedChallengeActive ? 'false' : 'true');
       if (timedChallengeActive) {
@@ -348,8 +357,7 @@
         const timer = Math.max(0, Number(Neo.currentRoom.challengeTimer || 0));
         const ratio = Math.max(0, Math.min(1, timer / maxTimer));
         if (Neo.ui.challengeStatusLabel) {
-          const label = timedChallengeType === 'runes' ? 'RUNES' : 'STILLNESS';
-          Neo.ui.challengeStatusLabel.textContent = `${label} ${Math.ceil(timer)}S`;
+          Neo.ui.challengeStatusLabel.textContent = `RUNES ${Math.ceil(timer)}S`;
         }
         Neo.ui.challengeStatusFill.style.width = `${ratio * 100}%`;
       }

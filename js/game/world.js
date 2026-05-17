@@ -248,6 +248,10 @@
     if (finalAmount > 0) Neo.lowHealthHitFlashUntil = Date.now() + Neo.LOW_HEALTH_HIT_FLASH_MS;
     if (ironLungApplies) Neo.player.roomDamageTaken = (Neo.player.roomDamageTaken || 0) + finalAmount;
 
+    if (finalAmount > 0 && itemStats.scarfBleedsOnHit > 0 && !options.noInvFrames) {
+      Neo.applyBleed(Neo.player, itemStats.scarfBleedsOnHit, 4);
+    }
+
     if (applyHitstop) {
       Neo.player.inv = 0.75;
       Neo.player.vx += Math.cos(angle) * knockback;
@@ -639,7 +643,7 @@
         }
         if (Neo.dist(Neo.player.x, Neo.player.y, hazard.x, hazard.y) < hazard.r) {
           const before = Neo.player.hp;
-          Neo.player.hp = Math.min(Neo.player.maxHp, Neo.player.hp + 8 * dt);
+          Neo.player.hp = Math.min(Neo.player.maxHp, Neo.player.hp + 7.36 * dt);
           const healed = Neo.player.hp - before;
           if (healed > 0) {
             hazard.healAccum = (hazard.healAccum || 0) + healed;
@@ -884,7 +888,9 @@
           pickup.y += ((Neo.player.y - pickup.y) / d) * 0.016 * pull;
         }
       } else if (pickup.type === 'potion') {
-        if (Neo.player.hp < Neo.player.maxHp) {
+        const _potionCap = Neo.getPotionCarryCap();
+        const _wantPotion = Neo.player.hp < Neo.player.maxHp || (_potionCap > 0 && Number(Neo.player.storedPotions || 0) < _potionCap);
+        if (_wantPotion) {
           const magnetRadius = 110;
           const d = Neo.dist(pickup.x, pickup.y, Neo.player.x, Neo.player.y);
           if (d < magnetRadius && d > 0.001) {
@@ -957,10 +963,21 @@
       }
 
       if (pickup.type === 'potion') {
-        if (Neo.player.hp >= Neo.player.maxHp) continue;
-        const potionHeal = Neo.getPotionHealAmount();
-        Neo.player.hp = Math.min(Neo.player.maxHp, Neo.player.hp + potionHeal);
-        Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.6, text: `+${potionHeal}`, c: '#0f8' });
+        const potionCap = Neo.getPotionCarryCap();
+        const stored = Number(Neo.player.storedPotions || 0);
+        if (potionCap > 0 && stored < potionCap) {
+          Neo.player.storedPotions = stored + 1;
+          Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.7, text: `POTION STORED (${Neo.player.storedPotions}/${potionCap})`, c: '#a0e8ff' });
+          Neo.updateHud();
+        } else if (Neo.player.hp < Neo.player.maxHp) {
+          const potionHeal = Neo.getPotionHealAmount();
+          const before = Neo.player.hp;
+          Neo.player.hp = Math.min(Neo.player.maxHp, Neo.player.hp + potionHeal);
+          const gained = Neo.player.hp - before;
+          if (gained > 0) spawnHealPopup(Neo.player.x + Neo.rand(-10, 10), Neo.player.y - 20, gained);
+        } else {
+          continue;
+        }
       }
 
       if (pickup.type === 'apple' || pickup.type === 'fruit') {
@@ -1097,6 +1114,15 @@
         Neo.syncCurrentRoomState();
         Neo.updateObjective();
         Neo.scheduleRunSave();
+        return;
+      }
+
+      if (pickup.type === 'challengeItemChoice') {
+        if (Neo.chooseStillnessChallengeReward?.(pickup)) {
+          Neo.syncCurrentRoomState();
+          Neo.updateObjective();
+          Neo.scheduleRunSave();
+        }
         return;
       }
 

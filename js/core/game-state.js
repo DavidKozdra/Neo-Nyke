@@ -261,10 +261,12 @@ export function resumeGame() {
       jesters_dice: 0,
       shield_of_aegis: 0,
       pendant_of_kronos: 0,
+      mateos_bag: 0,
     };
     const character = Neo.CHARACTER_DEFS[Neo.chosenCharacter] || Neo.CHARACTER_DEFS.thorn_knight;
     if (character.key === 'mooggy') items.hemes_scarf = 1;
     if (character.key === 'princess') items.princes_glasses = 1;
+    if (character.key === 'metao') items.mateos_bag = 1;
     const equippedMoves = Neo.getDefaultMovesForCharacter(character.key);
     const defaultWeapon = Neo.getDefaultWeaponForCharacter(character.key);
     const ownedMoves = {};
@@ -324,6 +326,7 @@ export function resumeGame() {
       lavaTrailTick: 0,
       princessFlightTime: 0,
       anvilUpgrades: { weapon: {}, move: {} },
+      storedPotions: 0,
     };
   }
 

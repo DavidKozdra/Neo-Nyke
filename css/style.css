@@ -181,6 +181,15 @@ canvas {
   font-size: 14px;
 }
 
+.currency-line--potion {
+  color: #a0e8ff;
+  font-size: 14px;
+  gap: 4px;
+}
+.potion-icon { font-size: 15px; line-height: 1; }
+.potion-cap  { opacity: 0.6; }
+.potion-hint { font-size: 10px; opacity: 0.5; margin-left: 2px; text-transform: uppercase; letter-spacing: .06em; }
+
 .coin-icon {
   width: 24px;
   height: 24px;

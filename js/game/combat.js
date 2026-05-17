@@ -524,6 +524,26 @@
     }
   }
 
+  function tryUsePotion() {
+    if (!Neo.player || Neo.gameState !== 'play') return;
+    const stored = Number(Neo.player.storedPotions || 0);
+    if (stored <= 0) {
+      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.55, text: 'NO POTION', c: '#ff7070' });
+      return;
+    }
+    if (Neo.player.hp >= Neo.player.maxHp) {
+      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.55, text: 'FULL HP', c: '#a0ffa0' });
+      return;
+    }
+    Neo.player.storedPotions = stored - 1;
+    const heal = Neo.getPotionHealAmount();
+    const before = Neo.player.hp;
+    Neo.player.hp = Math.min(Neo.player.maxHp, Neo.player.hp + heal);
+    const gained = Neo.player.hp - before;
+    if (gained > 0) Neo.spawnHealPopup(Neo.player.x + Neo.rand(-10, 10), Neo.player.y - 20, gained);
+    Neo.updateHud();
+  }
+
   function trySmash() {
     cancelCowardsWayOnAttack();
     const itemStats = Neo.getItemStats();
@@ -1813,6 +1833,7 @@
   Neo.endActiveLaser = endActiveLaser;
   Neo.tickTurtleWaveHpDrain = tickTurtleWaveHpDrain;
   Neo.updatePlayerLaser = updatePlayerLaser;
+  Neo.tryUsePotion = tryUsePotion;
   Neo.trySmash = trySmash;
   Neo.tryDash = tryDash;
   Neo.castDashBurst = castDashBurst;

@@ -141,6 +141,12 @@ export function getItemCount(key) {
     return Number(Neo.player?.items?.[key] || 0);
   }
 
+export function getPotionCarryCap() {
+    const stacks = getItemCount('mateos_bag');
+    if (stacks <= 0) return 0;
+    return 3 + (stacks - 1);
+  }
+
 export function getChargeRequirement(baseRequirement) {
     return Math.max(1, baseRequirement - getItemCount('charged_adapter'));
   }
@@ -207,6 +213,7 @@ export function getItemStats() {
       bleedDamageMultiplier: orbOfBlood > 0 ? 1 + orbOfBlood : 1,
       bleedHealScale: hemesScarf,
       passiveBleedStacks: hemesScarf,
+      scarfBleedsOnHit: hemesScarf,
       critChance,
       critMultiplier: 1.6 + (oracleLens ? critChance * 2.2 : critChance * 0.6),
       attackSpeedMultiplier: robotArm > 0 ? 15 * (1 + attackServo * 0.12 + chronoSpringBonus) : 1 + attackServo * 0.12 + chronoSpringBonus,
@@ -414,6 +421,7 @@ export function refreshFloorChargeStates() {
   Neo.getDefaultMovesForCharacter = getDefaultMovesForCharacter;
   Neo.isMoveAllowedForCharacter = isMoveAllowedForCharacter;
   Neo.getItemCount = getItemCount;
+  Neo.getPotionCarryCap = getPotionCarryCap;
   Neo.getChargeRequirement = getChargeRequirement;
   Neo.getKeenEyeCritBonus = getKeenEyeCritBonus;
   Neo.getChronoSpringAttackSpeedBonus = getChronoSpringAttackSpeedBonus;

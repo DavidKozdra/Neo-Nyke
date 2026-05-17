@@ -546,6 +546,16 @@ export const ITEM_DEFS = {
       category: 'wizard',
       tags: ['minimap', 'utility'],
     },
+    mateos_bag: {
+      key: 'mateos_bag',
+      name: "Mateo's Bag",
+      shortName: 'Bag',
+      description: 'Carry potions instead of consuming them immediately. First stack: +3 slots. Each additional stack: +1 slot. Press G to use a stored potion.',
+      rarity: 'wizard',
+      color: '#b49cff',
+      category: 'wizard',
+      tags: ['potion', 'utility', 'wizard'],
+    },
   };
 export const RARITY_NAME_COLORS = {
     knight: '#f4f6fb',
@@ -597,6 +607,7 @@ export const ITEM_DROP_WEIGHTS = [
     ['robot_arm', 3],
     ['princes_glasses', 14],
     ['veggys_pendant', 0],
+    ['mateos_bag', 10],
   ];
 export const ITEM_DROP_TABLE = Neo.buildWeightTable(ITEM_DROP_WEIGHTS);
 export const ELITE_ITEM_DROP_TABLE = Neo.buildWeightTable(

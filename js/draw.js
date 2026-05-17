@@ -5687,4 +5687,3 @@
 
   // Expose touch-accessible APIs for mobile hamburger menu
   window._neoGame = { pauseGame, resumeGame, toggleInventoryPanel };
-})();

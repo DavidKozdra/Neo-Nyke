@@ -40,40 +40,99 @@
         Neo.ctx.arc(Math.sin(t * 2.1) * 3, Math.cos(t * 2.6) * 3, hazard.r * 0.55, 0, Math.PI * 2);
         Neo.ctx.fill();
       } else if (hazard.kind === 'explosive_trap') {
-        const t = Date.now() * 0.008 + hazard.x * 0.01;
+        const now = Date.now();
+        const t = now * 0.008 + hazard.x * 0.01;
         const armed = !!hazard.triggered;
-        const pulse = armed ? 1 + Math.sin(t * 2.4) * 0.12 : 1 + Math.sin(t * 0.8) * 0.03;
-        Neo.ctx.fillStyle = 'rgba(18,19,22,0.95)';
+        const fuseRatio = armed ? Neo.clamp(1 - (hazard.fuse || 0) / (hazard.fuseDuration || 0.78), 0, 1) : 0;
+        const r = hazard.r || 14;
+        const blastR = hazard.blastRadius || 88;
+        const trigR = hazard.triggerRadius || 34;
+
+        // blast-radius danger zone (always visible, dim when unarmed)
+        Neo.ctx.globalAlpha = armed ? (0.13 + fuseRatio * 0.18) : 0.06;
+        Neo.ctx.fillStyle = '#ff4400';
         Neo.ctx.beginPath();
-        Neo.ctx.arc(0, 0, hazard.r * 1.05, 0, Math.PI * 2);
+        Neo.ctx.arc(0, 0, blastR, 0, Math.PI * 2);
+        Neo.ctx.fill();
+        Neo.ctx.globalAlpha = 1;
+
+        // blast-radius dashed outline
+        Neo.ctx.setLineDash([8, 6]);
+        Neo.ctx.strokeStyle = armed ? `rgba(255,80,40,${0.55 + fuseRatio * 0.35})` : 'rgba(255,140,60,0.28)';
+        Neo.ctx.lineWidth = armed ? 2 : 1.5;
+        Neo.ctx.shadowColor = armed ? '#ff4400' : 'transparent';
+        Neo.ctx.shadowBlur = armed ? 10 + fuseRatio * 14 : 0;
+        Neo.ctx.beginPath();
+        Neo.ctx.arc(0, 0, blastR, 0, Math.PI * 2);
+        Neo.ctx.stroke();
+        Neo.ctx.setLineDash([]);
+        Neo.ctx.shadowBlur = 0;
+
+        // trigger-radius ring (only when unarmed — shows detection zone)
+        if (!armed) {
+          Neo.ctx.setLineDash([4, 4]);
+          Neo.ctx.strokeStyle = 'rgba(255,200,80,0.38)';
+          Neo.ctx.lineWidth = 1;
+          Neo.ctx.beginPath();
+          Neo.ctx.arc(0, 0, trigR, 0, Math.PI * 2);
+          Neo.ctx.stroke();
+          Neo.ctx.setLineDash([]);
+        }
+
+        // mine body
+        const bodyPulse = armed ? 1 + Math.sin(t * (3 + fuseRatio * 5)) * (0.06 + fuseRatio * 0.1) : 1;
+        Neo.ctx.shadowColor = armed ? `rgba(255,${Math.round(100 - fuseRatio * 80)},40,0.9)` : 'rgba(255,160,60,0.4)';
+        Neo.ctx.shadowBlur = armed ? 14 + fuseRatio * 20 : 8;
+        Neo.ctx.fillStyle = armed ? `rgb(${Math.round(40 + fuseRatio * 30)},10,6)` : 'rgb(28,28,32)';
+        Neo.ctx.beginPath();
+        Neo.ctx.arc(0, 0, r * bodyPulse, 0, Math.PI * 2);
         Neo.ctx.fill();
 
-        Neo.ctx.strokeStyle = armed ? '#ff9250' : 'rgba(255,200,120,0.55)';
+        // outer ring
+        Neo.ctx.strokeStyle = armed
+          ? `rgb(255,${Math.round(100 - fuseRatio * 80)},40)`
+          : '#c8a040';
         Neo.ctx.lineWidth = armed ? 3 : 2;
-        Neo.ctx.shadowColor = armed ? '#ff7438' : 'rgba(255,180,90,0.25)';
-        Neo.ctx.shadowBlur = armed ? 16 : 6;
         Neo.ctx.beginPath();
-        Neo.ctx.arc(0, 0, hazard.r * pulse, 0, Math.PI * 2);
+        Neo.ctx.arc(0, 0, r * bodyPulse, 0, Math.PI * 2);
         Neo.ctx.stroke();
         Neo.ctx.shadowBlur = 0;
 
-        Neo.ctx.strokeStyle = armed ? 'rgba(255,80,70,0.95)' : 'rgba(255,214,120,0.82)';
-        Neo.ctx.lineWidth = 2;
-        Neo.ctx.beginPath();
-        Neo.ctx.moveTo(-6, -6);
-        Neo.ctx.lineTo(6, 6);
-        Neo.ctx.moveTo(6, -6);
-        Neo.ctx.lineTo(-6, 6);
-        Neo.ctx.stroke();
+        // warning stripes on body (hazard pattern)
+        Neo.ctx.save();
+        Neo.ctx.clip();
+        const stripeColor = armed
+          ? `rgba(255,${Math.round(80 - fuseRatio * 60)},30,${0.7 + fuseRatio * 0.3})`
+          : 'rgba(220,170,40,0.55)';
+        Neo.ctx.strokeStyle = stripeColor;
+        Neo.ctx.lineWidth = 3;
+        for (let si = -3; si <= 3; si += 1) {
+          Neo.ctx.beginPath();
+          Neo.ctx.moveTo(si * 7 - r, r);
+          Neo.ctx.lineTo(si * 7 + r, -r);
+          Neo.ctx.stroke();
+        }
+        Neo.ctx.restore();
 
-        Neo.ctx.globalAlpha = armed ? 0.24 : 0.12;
-        Neo.ctx.strokeStyle = armed ? '#ff7a54' : 'rgba(255,210,130,0.55)';
-        Neo.ctx.setLineDash([6, 5]);
+        // fuse countdown arc when armed
+        if (armed) {
+          Neo.ctx.strokeStyle = `rgba(255,${Math.round(220 - fuseRatio * 180)},60,0.95)`;
+          Neo.ctx.lineWidth = 3;
+          Neo.ctx.lineCap = 'round';
+          Neo.ctx.shadowColor = '#ffcc00';
+          Neo.ctx.shadowBlur = 8;
+          Neo.ctx.beginPath();
+          Neo.ctx.arc(0, 0, r + 6, -Math.PI / 2, -Math.PI / 2 + fuseRatio * Math.PI * 2);
+          Neo.ctx.stroke();
+          Neo.ctx.lineCap = 'butt';
+          Neo.ctx.shadowBlur = 0;
+        }
+
+        // pressure-plate nub on top
+        Neo.ctx.fillStyle = armed ? '#ff6030' : '#b89040';
         Neo.ctx.beginPath();
-        Neo.ctx.arc(0, 0, hazard.triggerRadius || 34, 0, Math.PI * 2);
-        Neo.ctx.stroke();
-        Neo.ctx.setLineDash([]);
-        Neo.ctx.globalAlpha = 1;
+        Neo.ctx.arc(0, -r * 0.55, r * 0.22, 0, Math.PI * 2);
+        Neo.ctx.fill();
       } else if (hazard.kind === 'healing_zone') {
         const t = Date.now() * 0.004 + (hazard.ttl || 0);
         const pulse = 1 + Math.sin(t * 2.2) * 0.08;
@@ -347,6 +406,34 @@
           Neo.ctx.arc(0, 0, 12, 0, Math.PI * 2);
           Neo.ctx.fill();
         }
+      } else if (pickup.type === 'challengeItemChoice') {
+        const item = Neo.itemRegistry.get(pickup.key);
+        const color = item?.color || '#d7f6ff';
+        const iconDef = window.NeoNykeIconDefs?.items?.[pickup.key];
+        Neo.ctx.strokeStyle = color;
+        Neo.ctx.shadowColor = color;
+        Neo.ctx.shadowBlur = 18;
+        Neo.ctx.lineWidth = 2;
+        Neo.ctx.beginPath();
+        Neo.ctx.arc(0, 0, 20, 0, Math.PI * 2);
+        Neo.ctx.stroke();
+        if (iconDef) {
+          Neo.ctx.fillStyle = color;
+          Neo.ctx.imageSmoothingEnabled = false;
+          iconDef.pixels.forEach(([px, py]) => {
+            Neo.ctx.fillRect(px * 3 - 12, py * 3 - 12, 3, 3);
+          });
+        } else {
+          Neo.ctx.fillStyle = color;
+          Neo.ctx.beginPath();
+          Neo.ctx.arc(0, 0, 11, 0, Math.PI * 2);
+          Neo.ctx.fill();
+        }
+        Neo.ctx.shadowBlur = 0;
+        Neo.ctx.fillStyle = '#ffffff';
+        Neo.ctx.font = 'bold 9px system-ui';
+        Neo.ctx.textAlign = 'center';
+        Neo.ctx.fillText('PICK', 0, 33);
       } else if (pickup.type === 'ladder') {
         Neo.ctx.strokeStyle = '#7dff9e';
         Neo.ctx.shadowColor = '#7dff9e';
@@ -532,11 +619,58 @@
         Neo.ctx.textAlign = 'center';
         Neo.ctx.fillText(Neo.getChallengeTrialLabel(trial), 0, 34);
       } else if (pickup.type === 'challengeBomb') {
-        Neo.ctx.fillStyle = pickup.safe ? '#8dd4ff' : '#ff7a66';
-        Neo.ctx.shadowColor = Neo.ctx.fillStyle;
-        Neo.ctx.shadowBlur = 16;
+        const bColor = pickup.safe ? '#8dd4ff' : '#ff7a66';
+        const bGlow  = pickup.safe ? '#5ab8ff' : '#ff4422';
+        const bPulse = 1 + Math.sin(t * 2.2) * 0.07;
+
+        // outer glow ring
+        Neo.ctx.strokeStyle = bColor;
+        Neo.ctx.shadowColor = bGlow;
+        Neo.ctx.shadowBlur = 18;
+        Neo.ctx.lineWidth = 2;
+        Neo.ctx.globalAlpha = 0.45 + Math.sin(t * 1.8) * 0.18;
         Neo.ctx.beginPath();
-        Neo.ctx.arc(0, 0, 12, 0, Math.PI * 2);
+        Neo.ctx.arc(0, 0, 18 * bPulse, 0, Math.PI * 2);
+        Neo.ctx.stroke();
+        Neo.ctx.globalAlpha = 1;
+
+        // bomb body
+        Neo.ctx.fillStyle = pickup.safe ? 'rgb(20,44,72)' : 'rgb(52,16,12)';
+        Neo.ctx.shadowBlur = 12;
+        Neo.ctx.beginPath();
+        Neo.ctx.arc(0, 2, 11, 0, Math.PI * 2);
+        Neo.ctx.fill();
+        Neo.ctx.strokeStyle = bColor;
+        Neo.ctx.lineWidth = 2;
+        Neo.ctx.beginPath();
+        Neo.ctx.arc(0, 2, 11, 0, Math.PI * 2);
+        Neo.ctx.stroke();
+        Neo.ctx.shadowBlur = 0;
+
+        // fuse
+        Neo.ctx.strokeStyle = '#c8a040';
+        Neo.ctx.lineWidth = 2;
+        Neo.ctx.lineCap = 'round';
+        Neo.ctx.beginPath();
+        Neo.ctx.moveTo(0, -9);
+        Neo.ctx.quadraticCurveTo(6, -16, 4, -20);
+        Neo.ctx.stroke();
+
+        // fuse spark
+        const sparkT = Date.now() * 0.012;
+        Neo.ctx.fillStyle = '#ffe060';
+        Neo.ctx.shadowColor = '#fff080';
+        Neo.ctx.shadowBlur = 8;
+        Neo.ctx.beginPath();
+        Neo.ctx.arc(4 + Math.sin(sparkT) * 1.5, -20 + Math.cos(sparkT * 1.3) * 1.5, 2.5, 0, Math.PI * 2);
+        Neo.ctx.fill();
+        Neo.ctx.shadowBlur = 0;
+        Neo.ctx.lineCap = 'butt';
+
+        // highlight on body
+        Neo.ctx.fillStyle = `rgba(255,255,255,0.12)`;
+        Neo.ctx.beginPath();
+        Neo.ctx.arc(-3, -1, 5, 0, Math.PI * 2);
         Neo.ctx.fill();
       } else if (pickup.type === 'challengeRune') {
         Neo.ctx.strokeStyle = '#8dd4ff';

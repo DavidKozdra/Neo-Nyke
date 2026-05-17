@@ -102,8 +102,15 @@ export function collectRoomLightSources(room) {
         pushLightSource(lights, hazard.x, hazard.y, hazard.r * 0.35, hazard.r * 1.75, 0.72, 'rgba(255, 120, 54, 0.08)');
       } else if (hazard.kind === 'lightning_column') {
         pushLightSource(lights, hazard.x, hazard.y, hazard.r * 0.22, hazard.r * 1.8, 0.82, 'rgba(124, 200, 255, 0.09)');
-      } else if (hazard.kind === 'explosive_trap' && hazard.triggered) {
-        pushLightSource(lights, hazard.x, hazard.y, 10, hazard.blastRadius * 0.72, 0.52, 'rgba(255, 122, 70, 0.06)');
+      } else if (hazard.kind === 'explosive_trap') {
+        if (hazard.triggered) {
+          const fuseRatio = Neo.clamp(1 - (hazard.fuse || 0) / (hazard.fuseDuration || 0.78), 0, 1);
+          const intensity = 0.12 + fuseRatio * 0.22;
+          const radius = hazard.blastRadius * (0.55 + fuseRatio * 0.35);
+          pushLightSource(lights, hazard.x, hazard.y, (hazard.r || 14) * 0.6, radius, intensity, 'rgba(255, 90, 30, 0.14)');
+        } else {
+          pushLightSource(lights, hazard.x, hazard.y, (hazard.r || 14) * 0.3, (hazard.r || 14) * 2.2, 0.18, 'rgba(255, 180, 60, 0.04)');
+        }
       }
     });
 

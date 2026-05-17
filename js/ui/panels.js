@@ -68,6 +68,7 @@ export function bindInput() {
       }
       if (b && key === b.smash && Neo.gameState === 'play') Neo.trySmash();
       else if (!b && key === 'r' && Neo.gameState === 'play') Neo.trySmash();
+      if (key === 'g' && Neo.gameState === 'play') Neo.tryUsePotion();
     });
     window.addEventListener('keyup', event => {
       const key = event.key.toLowerCase();

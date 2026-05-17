@@ -1010,6 +1010,61 @@
     }
   }
 
+  function spawnStillnessItemChoices(room) {
+    if (!room || room.type !== 'challenge') return;
+    let choices = Array.isArray(room.challengeData?.choices)
+      ? room.challengeData.choices.filter(Boolean).slice(0, 3)
+      : [];
+    if (choices.length < 3) {
+      const random = Neo.createRoomRandom(room, 'challenge:stillness-item-choices');
+      let guard = 0;
+      while (choices.length < 3 && guard < 24) {
+        guard += 1;
+        const key = Neo.rollItemDrop({ elite: true, random });
+        if (key && !choices.includes(key)) choices.push(key);
+      }
+      while (choices.length < 3) {
+        const key = Neo.ITEM_KEYS.find(itemKey => itemKey && !choices.includes(itemKey));
+        if (!key) break;
+        choices.push(key);
+      }
+    }
+    room.challengeData = {
+      ...(room.challengeData || {}),
+      phase: 'choose',
+      choices,
+    };
+    const y = Neo.ROOM_H / 2;
+    const offsets = [-76, 0, 76];
+    choices.forEach((key, index) => {
+      Neo.pickups.push({
+        x: Neo.ROOM_W / 2 + offsets[index],
+        y,
+        type: 'challengeItemChoice',
+        key,
+      });
+    });
+  }
+
+  function chooseStillnessChallengeReward(pickup) {
+    const room = Neo.currentRoom;
+    if (!room || room.type !== 'challenge' || (room.challengeType || 'mirror') !== 'stillness') return false;
+    if (!room.challengeStarted || room.challengeData?.phase !== 'choose') return false;
+    const key = pickup?.key;
+    if (!key) return false;
+    room.challengeData = {
+      ...(room.challengeData || {}),
+      phase: 'fight',
+      rewardKey: key,
+    };
+    Neo.pickups = Neo.pickups.filter(item => item?.type !== 'challengeItemChoice');
+    spawnTrialEnemyWave(3 + Math.min(3, Math.floor(Neo.floor / 3)));
+    const itemName = Neo.itemRegistry.get(key)?.name || Neo.titleCase?.(key) || key;
+    Neo.spawnParticle({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 48, life: 1.1, text: 'FIGHT FOR IT', c: '#d7f6ff' });
+    sayAtPosition(Neo.ROOM_W / 2, Neo.ROOM_H / 2, `Win and claim ${itemName}.`, { speaker: 'TRIAL', tone: 'warning' });
+    return true;
+  }
+
   function spawnTrialEnemyWave(count = 1) {
     const pool = Neo.floor >= 6
       ? ['hunter', 'laser', 'charger', 'knave']
@@ -1035,13 +1090,8 @@
     if (type === 'mirror') {
       spawnMirrorChampion();
     } else if (type === 'stillness') {
-      room.challengeTimer = Neo.scaleChallengeTimer(10);
-      room.challengeData.maxTimer = room.challengeTimer;
-      room.challengeData.anchorX = Neo.player.x;
-      room.challengeData.anchorY = Neo.player.y;
-      room.challengeData.graceTimer = 2;
-      room.challengeData.warnTick = 0;
-      sayAtPosition(Neo.ROOM_W / 2, Neo.ROOM_H / 2, 'Stand still or lose everything.', { speaker: 'TRIAL', tone: 'warning' });
+      spawnStillnessItemChoices(room);
+      sayAtPosition(Neo.ROOM_W / 2, Neo.ROOM_H / 2, 'Choose your prize. Then earn it.', { speaker: 'TRIAL', tone: 'warning' });
     } else if (type === 'bomb') {
       spawnChallengeBombs(room);
       sayAtPosition(Neo.ROOM_W / 2, Neo.ROOM_H / 2, 'Choose wrong and you get nothing.', { speaker: 'TRIAL', tone: 'warning' });
@@ -1078,8 +1128,10 @@
     if (!Neo.currentRoom || Neo.currentRoom.type !== 'challenge' || Neo.currentRoom.challengeRewardSpawned) return;
     Neo.currentRoom.challengeRewardSpawned = true;
     const rewardRandom = Neo.createRoomRandom(Neo.currentRoom, 'challenge:reward');
-    Neo.pickups = Neo.pickups.filter(pickup => !['challengeBomb', 'challengeRune', 'challengeStarter'].includes(pickup?.type));
-    Neo.pickups.push({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 16, type: 'item', key: Neo.rollItemDrop({ elite: true, random: rewardRandom }) });
+    const challengeData = Neo.currentRoom.challengeData || {};
+    const rewardKey = challengeData.rewardKey || Neo.rollItemDrop({ elite: true, random: rewardRandom });
+    Neo.pickups = Neo.pickups.filter(pickup => !['challengeBomb', 'challengeRune', 'challengeStarter', 'challengeItemChoice'].includes(pickup?.type));
+    Neo.pickups.push({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 16, type: 'item', key: rewardKey });
     Neo.pickups.push({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 + 36, type: 'potion' });
     Neo.dropCoins(Neo.ROOM_W / 2, Neo.ROOM_H / 2 + 4, 75 + Neo.floor * 15);
     Neo.grantXp(28 + Neo.floor * 5);
@@ -1098,8 +1150,8 @@
     Neo.currentRoom.challengeFailed = false;
     Neo.currentRoom.challengeTimer = 0;
     Neo.currentRoom.challengeTick = 0;
-    Neo.currentRoom.challengeData = {};
     spawnChallengeReward(text);
+    Neo.currentRoom.challengeData = {};
     Neo.updateObjective();
     Neo.scheduleRunSave();
   }
@@ -1112,7 +1164,7 @@
     Neo.currentRoom.challengeTimer = 0;
     Neo.currentRoom.challengeTick = 0;
     Neo.currentRoom.challengeData = {};
-    Neo.pickups = Neo.pickups.filter(pickup => !['challengeBomb', 'challengeRune', 'challengeStarter'].includes(pickup?.type));
+    Neo.pickups = Neo.pickups.filter(pickup => !['challengeBomb', 'challengeRune', 'challengeStarter', 'challengeItemChoice'].includes(pickup?.type));
     Neo.spawnParticle({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 52, life: 1.05, text, c: '#ff8b98' });
     Neo.updateObjective();
     Neo.scheduleRunSave();
@@ -1748,8 +1800,8 @@
         enemy.bulkNovaLineShown = true;
         sayOverEntity(enemy, 'Break under the weight.', { holdTime: 1.7 });
       }
-      const aoeRadius = 240;
-      const aoeDamage = Math.round(enemy.dmg * 1.2);
+      const aoeRadius = 216;
+      const aoeDamage = Math.round(enemy.dmg * 1.08);
       Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.5, ring: aoeRadius, c: '#ff8844' });
       Neo.blastRadius(enemy.x, enemy.y, aoeRadius, aoeDamage, '#ff8844', enemy);
       Neo.shake = 12;
@@ -2598,27 +2650,10 @@
     const type = Neo.currentRoom.challengeType || 'mirror';
 
     if (type === 'stillness') {
-      const graceTimer = Math.max(0, Number(Neo.currentRoom.challengeData?.graceTimer || 0));
-      Neo.currentRoom.challengeData.graceTimer = Math.max(0, graceTimer - dt);
-      const bindings = window.NeoSettings?.getBindings();
-      const rightKey = bindings ? bindings.right : 'd';
-      const leftKey = bindings ? bindings.left : 'a';
-      const downKey = bindings ? bindings.down : 's';
-      const upKey = bindings ? bindings.up : 'w';
-      const dashKey = bindings ? bindings.dash : 'shift';
-      const moved = !!(
-        Neo.keys[rightKey] || Neo.keys.arrowright
-        || Neo.keys[leftKey] || Neo.keys.arrowleft
-        || Neo.keys[downKey] || Neo.keys.arrowdown
-        || Neo.keys[upKey] || Neo.keys.arrowup
-        || Neo.keys[dashKey]
-      );
-      if (!moved) {
-        Neo.currentRoom.challengeTimer = Math.max(0, (Neo.currentRoom.challengeTimer || 0) - dt);
-        if (Neo.currentRoom.challengeTimer <= 0) completeChallengeTrial('STILLNESS HELD');
-      } else if (graceTimer <= 0) {
-        Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.7, text: 'TRIAL FAILED', c: '#ff8b98' });
-        failChallengeTrial('STILLNESS BROKEN');
+      const phase = Neo.currentRoom.challengeData?.phase || 'choose';
+      if (phase === 'fight') {
+        const livingEnemies = Neo.enemies.some(enemy => enemy && enemy.type !== 'rival');
+        if (!livingEnemies) completeChallengeTrial('PRIZE WON');
       }
       return;
     }
@@ -2904,6 +2939,8 @@
   Neo.spawnChallengeStarter = spawnChallengeStarter;
   Neo.spawnChallengeBombs = spawnChallengeBombs;
   Neo.spawnChallengeRunes = spawnChallengeRunes;
+  Neo.spawnStillnessItemChoices = spawnStillnessItemChoices;
+  Neo.chooseStillnessChallengeReward = chooseStillnessChallengeReward;
   Neo.spawnTrialEnemyWave = spawnTrialEnemyWave;
   Neo.beginChallengeTrial = beginChallengeTrial;
   Neo.rollChallengeWeapon = rollChallengeWeapon;
