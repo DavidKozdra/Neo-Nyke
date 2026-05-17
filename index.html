@@ -77,6 +77,14 @@
       0% { transform: translateX(-110%); }
       100% { transform: translateX(240%); }
     }
+    .version-badge {
+      position: fixed;
+      bottom: 8px;
+      right: 8px;
+      font-size: 10px;
+      color: #333;
+      opacity: .5;
+    }
   </style>
   <link rel="stylesheet" href="css/style.css">
   <link rel="stylesheet" href="css/theme-princess.css">
@@ -88,6 +96,7 @@
 <div id="bootLoading" class="boot-loading" role="status" aria-live="polite">
   <div class="boot-loading__box">
     <img class="boot-loading__mark" src="assets/icons/icon-128x128.png" width="64" height="64" alt="" aria-hidden="true">
+    <span class="version">prealpha 1.1.1.1.1.1.1.69420</span>
     <h1 class="boot-loading__title">NEO NYKE</h1>
     <div class="boot-loading__bar" aria-hidden="true"><i></i></div>
     <p class="boot-loading__hint">Loading dungeon</p>
@@ -505,6 +514,10 @@
       <span class="meta-pill meta-pill--save"><span class="meta-pill__icon">◆</span> SAVE <b id="saveState">BOOTING</b></span>
     </div>
     <span id="runSummary" class="run-summary-line"></span>
+
+    <span class="version-badge" class="run-summary-line">
+      version prealpha 1.1.1.1.1.1.1.69420
+      </span>
   </div>
   <section id="runHistoryPanel" class="rh-panel hidden" aria-hidden="true">
     <div class="rh-head">
@@ -562,6 +575,7 @@
           <button class="rh-info-tab" data-info-tab="moves" type="button">Moves</button>
           <button class="rh-info-tab" data-info-tab="enemies" type="button">Enemies</button>
           <button class="rh-info-tab" data-info-tab="characters" type="button">Characters</button>
+          <button class="rh-info-tab" data-info-tab="meta" type="button">Meta</button>
         </div>
         <button id="infoTutorialBtn" class="rh-info-tutorial-btn" type="button">&#9654; Tutorial</button>
       </div>
@@ -833,6 +847,18 @@
                 <small class="char-card-hint" data-base="Unlock by killing GOD">Unlock by killing GOD</small>
               </button>
 
+              <!-- Mooggy -->
+              <button class="char-card" data-char="mooggy" data-rarity="assassin">
+                <div class="char-card-art-wrap">
+                  <canvas class="char-card-art" data-char-sprite="mooggy" width="96" height="96" aria-hidden="true"></canvas>
+                </div>
+                <div class="char-card-header">
+                  <span class="char-card-name">MOOGGY</span>
+                  <span class="char-card-tag assassin-tag">ASSASSIN</span>
+                </div>
+                <small class="char-card-hint" data-base="Red scarf cat · rapid lazer eyes">Unlock by beating Mooggy 3 times</small>
+              </button>
+
             </div>
           </div>
           <button class="carousel-arrow carousel-arrow--next" id="carouselNext" aria-label="Next hero">&#8594;</button>
@@ -909,6 +935,19 @@
 <script src="assets/sprites/combatants.js" defer></script>
 <script src="assets/sprites/environment.js" defer></script>
 <script src="assets/sprites/icons.js" defer></script>
+<!-- Birthday modal -->
+<div id="birthdayModal" class="modal-backdrop hidden" aria-hidden="true">
+  <div class="modal-box birthday-box">
+    <button class="modal-close" id="birthdayClose">&#10005;</button>
+    <div class="birthday-stars" aria-hidden="true">★ ★ ★ ★ ★</div>
+    <h2 class="screen-title birthday-title">HAPPY BIRTHDAY!</h2>
+    <p class="birthday-sub">The monsters of the dungeon wish you well.</p>
+    <div class="birthday-monsters" id="birthdayMonsters"></div>
+    <p class="birthday-note">We can't actually verify this. But we believe you.</p>
+    <button class="nav-btn birthday-dismiss" id="birthdayDismiss">THANKS!</button>
+  </div>
+</div>
+
 <!-- Settings modal -->
 <div id="settingsModal" class="modal-backdrop hidden">
   <div class="modal-box">
@@ -1060,6 +1099,11 @@
         <input id="usernameInput" class="settings-text-input" type="text" maxlength="24" placeholder="Enter name..." autocomplete="off" spellcheck="false">
       </div>
       <div class="data-row">
+        <span class="data-label">Birthday</span>
+        <span class="data-desc">Get a surprise on your birthday. We have no way of knowing if this is real.</span>
+        <input id="birthdayInput" class="settings-text-input" type="date" autocomplete="off">
+      </div>
+      <div class="data-row">
         <span class="data-label">Export save</span>
         <span class="data-desc">Download all stored game data as a JSON file.</span>
         <button class="settings-reset" id="dataExport">Export</button>
@@ -1136,9 +1180,24 @@
 <script src="js/ui/menu-background.js" defer></script>
 <script>
   if ('serviceWorker' in navigator) {
+    const CACHE_REFRESH_INTERVAL_MS = 5 * 60 * 60 * 1000;
+    const CACHE_REFRESH_KEY = 'neonyke:lastAutoCacheRefresh';
+    const refreshAppCache = reg => {
+      if (!reg) return;
+      const now = Date.now();
+      const last = Number(localStorage.getItem(CACHE_REFRESH_KEY) || 0);
+      if (now - last < CACHE_REFRESH_INTERVAL_MS) return;
+      localStorage.setItem(CACHE_REFRESH_KEY, String(now));
+      reg.update().catch(() => {});
+      const worker = reg.active || reg.waiting || reg.installing;
+      worker?.postMessage?.({ type: 'NEONYKE_REFRESH_CACHE' });
+    };
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' })
-        .then(reg => { reg.update().catch(() => {}); })
+        .then(reg => {
+          refreshAppCache(reg);
+          window.setInterval(() => refreshAppCache(reg), CACHE_REFRESH_INTERVAL_MS);
+        })
         .catch(() => {});
     });
   }

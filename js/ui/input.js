@@ -227,6 +227,14 @@ export const RIVAL_DEFS = {
       deathLine: 'This cannot be...',
       attackStyle: 'melee_heal',
     },
+    mooggy: {
+      name: 'Rival Mooggy',
+      color: '#ff3348',
+      hp: 190, dmg: 24, speed: 132, r: 14, attackCd: 0.45,
+      enterLine: 'Mrow.',
+      deathLine: 'Hiss...',
+      attackStyle: 'ranged',
+    },
   };
 export const RIVAL_MOVE_INTERVAL_BASE = 8.5;
 export const RIVAL_SPAWN_CHANCE = 0.15; // ~15% spawn chance - very rare encounters
@@ -256,6 +264,10 @@ export const RIVAL_WEAPON_LOADOUTS = {
       { key: 'granillia_lightning_spear', class: 'ranged', range: 420, preferredRange: 260, damageMult: 0.94, cooldownMult: 1.0, projectileCount: 2, spread: 0.08, projectileSpeed: 390 },
       { key: 'excalibur', class: 'melee_heal', range: 50, preferredRange: 130, damageMult: 1.12, cooldownMult: 0.95, knockback: 320 },
       { key: 'void_piercer', class: 'burst', range: 340, preferredRange: 220, damageMult: 0.95, cooldownMult: 1.12, projectileCount: 3, spread: 0.1, projectileSpeed: 380 },
+    ],
+    mooggy: [
+      { key: 'lazer_glasses', class: 'ranged', range: 500, preferredRange: 230, damageMult: 0.98, cooldownMult: 0.28, projectileCount: 1, spread: 0.01, projectileSpeed: 520 },
+      { key: 'thorns_bleed_blade', class: 'dash', range: 245, preferredRange: 150, damageMult: 1.08, cooldownMult: 0.8, knockback: 320 },
     ],
   };
 
@@ -512,6 +524,28 @@ export const ITEM_DEFS = {
       category: 'god',
       tags: ['god', 'speed'],
     },
+    veggys_pendant: {
+      key: 'veggys_pendant',
+      name: "Veggy's Pendant",
+      shortName: 'Pendant',
+      description: 'Every 3 rooms entered, gain +10% max HP.',
+      rarity: 'wizard',
+      color: '#a0e87a',
+      accent: '#5fcc2a',
+      category: 'wizard',
+      tags: ['hp', 'scaling', 'wizard'],
+    },
+    princes_glasses: {
+      key: 'princes_glasses',
+      name: "Prince's Glasses",
+      shortName: 'Map Vision',
+      description: 'Pink, not that anything is wrong with that. Upgrades the minimap: larger zoom, skull markers for traps, enemy dots, green for healing, yellow for coins.',
+      rarity: 'wizard',
+      color: '#ff9de8',
+      accent: '#ff55cc',
+      category: 'wizard',
+      tags: ['minimap', 'utility'],
+    },
   };
 export const RARITY_NAME_COLORS = {
     knight: '#f4f6fb',
@@ -533,7 +567,7 @@ export const ITEM_KEYS = Object.keys(ITEM_DEFS);
 export const SANDBOX_ENEMY_TYPES = [
     'hunter', 'charger', 'laser', 'knave', 'sniper', 'machine_gunner',
     'golem', 'cult_mage', 'cult_follower', 'summoner', 'shield_unit', 'healer', 'boss_spawner',
-    'queen_cult', 'bulk_golem', 'artificer_knave', 'god', 'mirror_knight',
+    'queen_cult', 'bulk_golem', 'artificer_knave', 'god', 'mirror_knight', 'mooggy',
   ];
 export const ITEM_DROP_WEIGHTS = [
     ['neo_knife', 60],
@@ -561,6 +595,8 @@ export const ITEM_DROP_WEIGHTS = [
     ['shield_of_aegis', 4],
     ['pendant_of_kronos', 5],
     ['robot_arm', 3],
+    ['princes_glasses', 14],
+    ['veggys_pendant', 0],
   ];
 export const ITEM_DROP_TABLE = Neo.buildWeightTable(ITEM_DROP_WEIGHTS);
 export const ELITE_ITEM_DROP_TABLE = Neo.buildWeightTable(

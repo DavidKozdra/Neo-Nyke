@@ -177,8 +177,10 @@
     const scaleX = canvasRect.width > 0 ? canvasRect.width / Neo.canvas.width : 1;
     const scaleY = canvasRect.height > 0 ? canvasRect.height / Neo.canvas.height : 1;
     const compact = window.innerWidth <= 920;
-    const targetViewportWidth = compact ? Math.min(112, canvasRect.width * 0.25) : Math.min(146, canvasRect.width * 0.2);
-    const targetViewportHeight = compact ? Math.min(112, canvasRect.height * 0.25) : Math.min(146, canvasRect.height * 0.23);
+    const hasGlasses = Neo.getItemStats?.()?.hasPrincesGlasses;
+    const glassesViewMult = hasGlasses ? 1.45 : 1;
+    const targetViewportWidth = compact ? Math.min(112 * glassesViewMult, canvasRect.width * 0.25 * glassesViewMult) : Math.min(146 * glassesViewMult, canvasRect.width * 0.2 * glassesViewMult);
+    const targetViewportHeight = compact ? Math.min(112 * glassesViewMult, canvasRect.height * 0.25 * glassesViewMult) : Math.min(146 * glassesViewMult, canvasRect.height * 0.23 * glassesViewMult);
     const baseViewportWidth = baseMapWidth * scaleX;
     const baseViewportHeight = baseMapHeight * scaleY;
     const minimapScale = Neo.clamp(Math.min(1, targetViewportWidth / Math.max(1, baseViewportWidth), targetViewportHeight / Math.max(1, baseViewportHeight)), 0.62, 1);
@@ -295,6 +297,76 @@
         Neo.ctx.fillRect(rx + size - 4, ry, 4, 4);
       });
     }
+
+    if (hasGlasses) {
+      const dotR = Math.max(2, Math.round(size * 0.18));
+      const skullFont = `bold ${Math.max(6, Math.round(size * 0.55))}px system-ui`;
+
+      // Trap skull markers on explored rooms
+      Neo.rooms.forEach(room => {
+        if (room.secret || !room.explored) return;
+        const hasExplosiveTrap = Array.isArray(room.hazards) && room.hazards.some(h => h?.kind === 'explosive_trap');
+        if (!hasExplosiveTrap) return;
+        const rx = originX + room.gx * (size + gap);
+        const ry = originY + room.gy * (size + gap);
+        Neo.ctx.globalAlpha = 0.88;
+        Neo.ctx.fillStyle = '#ff2222';
+        Neo.ctx.font = skullFont;
+        Neo.ctx.textAlign = 'center';
+        Neo.ctx.textBaseline = 'middle';
+        Neo.ctx.fillText('💀', rx + size / 2, ry + size / 2);
+      });
+
+      // Pickup dots: green=potion, yellow=coin, red=item — on explored non-current rooms
+      Neo.rooms.forEach(room => {
+        if (room.secret || !room.explored || room === Neo.currentRoom) return;
+        const pickups = Array.isArray(room.pickups) ? room.pickups : [];
+        const hasPotion = pickups.some(p => p?.type === 'potion');
+        const hasCoin = pickups.some(p => p?.type === 'coin');
+        const hasItem = pickups.some(p => p?.type === 'item');
+        if (!hasPotion && !hasCoin && !hasItem) return;
+        const rx = originX + room.gx * (size + gap);
+        const ry = originY + room.gy * (size + gap);
+        let slotX = rx + 1;
+        const dotY = ry + size - dotR - 1;
+        const drawDot = (color) => {
+          Neo.ctx.globalAlpha = 0.92;
+          Neo.ctx.fillStyle = color;
+          Neo.ctx.beginPath();
+          Neo.ctx.arc(slotX + dotR, dotY, dotR, 0, Math.PI * 2);
+          Neo.ctx.fill();
+          slotX += dotR * 2 + 1;
+        };
+        if (hasItem) drawDot('#ff5555');
+        if (hasPotion) drawDot('#55ff88');
+        if (hasCoin) drawDot('#ffdd44');
+      });
+
+      // Enemy red dots with legs in non-current rooms
+      Neo.enemies.forEach(enemy => {
+        const eRoom = Neo.rooms.find(r => r.gx === enemy.homeGx && r.gy === enemy.homeGy);
+        if (!eRoom || eRoom.secret || eRoom === Neo.currentRoom) return;
+        const rx = originX + eRoom.gx * (size + gap);
+        const ry = originY + eRoom.gy * (size + gap);
+        const ex = rx + size / 2;
+        const ey = ry + size / 2 - dotR;
+        Neo.ctx.globalAlpha = 0.85;
+        Neo.ctx.fillStyle = '#ff3333';
+        Neo.ctx.beginPath();
+        Neo.ctx.arc(ex, ey, dotR, 0, Math.PI * 2);
+        Neo.ctx.fill();
+        // Tiny legs
+        Neo.ctx.strokeStyle = '#ff3333';
+        Neo.ctx.lineWidth = 0.8;
+        Neo.ctx.beginPath();
+        Neo.ctx.moveTo(ex - dotR, ey + dotR * 0.5);
+        Neo.ctx.lineTo(ex - dotR * 1.8, ey + dotR * 1.6);
+        Neo.ctx.moveTo(ex + dotR, ey + dotR * 0.5);
+        Neo.ctx.lineTo(ex + dotR * 1.8, ey + dotR * 1.6);
+        Neo.ctx.stroke();
+      });
+    }
+
     Neo.ctx.restore();
 
     const viewportBounds = {

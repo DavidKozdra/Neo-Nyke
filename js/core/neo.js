@@ -123,6 +123,9 @@ window.Neo = {
   nextDoor: null,
   rivals: [],
   monsterRoamTimer: 0,
+  mooggyAssassinSpawnedThisRun: false,
+  mooggyAssassinSpawnedThisFloor: false,
+  mooggyAudioContext: null,
 
   // --- meta ---
   activeRun: null,

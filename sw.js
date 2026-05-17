@@ -1,4 +1,4 @@
-const CACHE = 'neonyke-v12';
+const CACHE = 'neonyke-v13';
 
 const PRECACHE = [
   '/',
@@ -46,9 +46,24 @@ const PRECACHE = [
   '/js/ui/menu-background.js',
 ];
 
+async function precacheApp() {
+  const cache = await caches.open(CACHE);
+  await Promise.all(PRECACHE.map(async path => {
+    try {
+      const request = new Request(path, { cache: 'reload' });
+      const response = await fetch(request);
+      if (response && response.status === 200 && response.type !== 'opaque') {
+        await cache.put(path, response);
+      }
+    } catch {
+      // Keep the existing cached copy if a refresh request fails.
+    }
+  }));
+}
+
 self.addEventListener('install', e => {
   e.waitUntil(
-    caches.open(CACHE).then(c => c.addAll(PRECACHE)).then(() => self.skipWaiting())
+    precacheApp().then(() => self.skipWaiting())
   );
 });
 
@@ -95,4 +110,9 @@ self.addEventListener('fetch', e => {
       });
     })
   );
+});
+
+self.addEventListener('message', e => {
+  if (e.data?.type !== 'NEONYKE_REFRESH_CACHE') return;
+  e.waitUntil(precacheApp());
 });

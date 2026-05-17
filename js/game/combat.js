@@ -1407,6 +1407,7 @@
       onTick = null,
       onHit = null,
       onEnd = null,
+      damageSource = null,
     } = config;
     enemy.beamTime -= dt;
     enemy.beamTick -= dt;
@@ -1419,7 +1420,7 @@
       const beamPath = Neo.buildRicochetBeamPath(enemy.x, enemy.y, enemy.beamAngle, range, Neo.getEnemyBeamBounceCount(enemy));
       const hitSegment = Neo.beamPathHitsCircle(beamPath, Neo.player.x, Neo.player.y, Neo.player.r + 5);
       if (hitSegment) {
-        Neo.damagePlayer(damage, hitSegment.angle, knockback, enemy.type === 'god' ? 'god_beam' : enemy.type === 'mirror_knight' ? 'mirror_beam' : 'enemy_beam');
+        Neo.damagePlayer(damage, hitSegment.angle, knockback, damageSource || (enemy.type === 'god' ? 'god_beam' : enemy.type === 'mirror_knight' ? 'mirror_beam' : 'enemy_beam'));
         if (typeof onHit === 'function') onHit(enemy);
       }
     }
@@ -1515,6 +1516,21 @@
       Neo.pickups.push({ x: enemy.x, y: enemy.y, type: 'potion' });
     }
 
+    if (enemy.type === 'mooggy') {
+      const defeats = Math.max(0, Number(Neo.metaProgress.mooggyDefeats || 0)) + 1;
+      Neo.metaProgress.mooggyDefeats = defeats;
+      dropCoins(enemy.x, enemy.y, 35 + defeats * 5);
+      grantXp(24 + Neo.floor * 4);
+      if (defeats >= 3 && !Neo.metaProgress.unlockedCharacters.includes('mooggy')) {
+        Neo.metaProgress.unlockedCharacters.push('mooggy');
+        Neo.spawnParticle({ x: enemy.x, y: enemy.y - 34, life: 2.2, text: 'MOOGGY UNLOCKED!', c: '#ff3348' });
+      } else {
+        Neo.spawnParticle({ x: enemy.x, y: enemy.y - 28, life: 1.5, text: `MOOGGY ${defeats}/3`, c: '#ff3348' });
+      }
+      Neo.persistMetaSoon();
+      Neo.refreshMenuState();
+    }
+
     if (enemy.type === 'god') {
       Neo.metaProgress.godsKilled = Number(Neo.metaProgress.godsKilled || 0) + 1;
       window.achievementEvents?.emit('god:killed');
@@ -1576,6 +1592,9 @@
             Neo.pickups.push({ x: enemy.x + Neo.rand(-22, 22, 'loot'), y: enemy.y + Neo.rand(-14, 14, 'loot'), type: 'potion' });
           }
         });
+        if (Neo.nextRandom('loot') < 0.05) {
+          Neo.pickups.push({ x: enemy.x, y: enemy.y + 10, type: 'item', key: 'veggys_pendant' });
+        }
         const rivalBase = 18 + Neo.floor * 4 + rival.loot.length * 8;
         const bonus = Neo.hasLegacy('rival_bounty') ? Math.round(rivalBase * 1.5) : rivalBase;
         dropCoins(enemy.x, enemy.y, bonus);

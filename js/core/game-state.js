@@ -13,6 +13,7 @@ export function resumeGame() {
   function createDefaultMeta() {
     return {
       username: '',
+      birthday: '',
       coins: 0,
       bestFloor: 1,
       bestKills: 0,
@@ -26,6 +27,7 @@ export function resumeGame() {
       selectedChallenges: [],
       selectedCharacter: 'thorn_knight',
       godsKilled: 0,
+      mooggyDefeats: 0,
       loopCrystals: 0,
       unlockedLegacy: [],
       tutorialCompleted: false,
@@ -261,6 +263,7 @@ export function resumeGame() {
       pendant_of_kronos: 0,
     };
     const character = Neo.CHARACTER_DEFS[Neo.chosenCharacter] || Neo.CHARACTER_DEFS.thorn_knight;
+    if (character.key === 'mooggy') items.hemes_scarf = 1;
     const equippedMoves = Neo.getDefaultMovesForCharacter(character.key);
     const defaultWeapon = Neo.getDefaultWeaponForCharacter(character.key);
     const ownedMoves = {};
@@ -387,6 +390,7 @@ export function resumeGame() {
       {
         const unlocked = new Set(Neo.metaProgress.unlockedCharacters || ['princess', 'thorn_knight', 'metao']);
         if (Neo.metaProgress.godsKilled > 0) unlocked.add('granialla');
+        if (Number(Neo.metaProgress.mooggyDefeats || 0) >= 3) unlocked.add('mooggy');
         const preferredCharacter = String(Neo.metaProgress.selectedCharacter || Neo.chosenCharacter);
         Neo.chosenCharacter = unlocked.has(preferredCharacter) ? preferredCharacter : [...unlocked][0] || 'thorn_knight';
         Neo.metaProgress.selectedCharacter = Neo.chosenCharacter;
@@ -880,12 +884,13 @@ export function resumeGame() {
 
   function getLaserCooldownDuration(moveKey = Neo.getEquippedMove('laser'), attackSpeed = Neo.getAttackSpeedValue()) {
     const anvilBase = getMoveCooldownBase(moveKey);
-    if (anvilBase !== null) return anvilBase / attackSpeed;
-    if (moveKey === 'turtle_wave') return 3 / attackSpeed;
-    if (moveKey === 'blade_justice') return 3.8 / attackSpeed;
-    if (moveKey === 'lightning_columns') return 4.8 / attackSpeed;
-    if (moveKey === 'god_sweep') return 7.2 / attackSpeed;
-    return (Neo.godTimer > 0 ? 2.8 : Neo.ATTACKS.laser.baseCooldown) / attackSpeed;
+    const characterMult = Number(Neo.getCharacterDef?.().laserCooldownMultiplier || 1);
+    if (anvilBase !== null) return (anvilBase / attackSpeed) * characterMult;
+    if (moveKey === 'turtle_wave') return (3 / attackSpeed) * characterMult;
+    if (moveKey === 'blade_justice') return (3.8 / attackSpeed) * characterMult;
+    if (moveKey === 'lightning_columns') return (4.8 / attackSpeed) * characterMult;
+    if (moveKey === 'god_sweep') return (7.2 / attackSpeed) * characterMult;
+    return ((Neo.godTimer > 0 ? 2.8 : Neo.ATTACKS.laser.baseCooldown) / attackSpeed) * characterMult;
   }
 
   function getDashCooldownDuration(moveKey = Neo.getEquippedMove('dash'), attackSpeed = Neo.getAttackSpeedValue()) {
@@ -1139,7 +1144,7 @@ export function resumeGame() {
     if (value === 'god_beam') return 'GOD Beam';
     if (value === 'mirror_beam') return 'Mirror Beam';
     if (Neo.BOSS_TYPES.has(value) || value === 'mirror_knight') return getEnemyLabel(value);
-    if (Neo.SPRITE_DEFS[value] || ['cult_mage', 'knave', 'sniper', 'machine_gunner', 'golem', 'summoner', 'shield_unit', 'healer', 'boss_spawner', 'laser', 'charger', 'hunter'].includes(value)) {
+    if (Neo.SPRITE_DEFS[value] || ['cult_mage', 'knave', 'sniper', 'machine_gunner', 'golem', 'summoner', 'shield_unit', 'healer', 'boss_spawner', 'laser', 'charger', 'hunter', 'mooggy'].includes(value)) {
       return getEnemyLabel(value);
     }
     return titleCase(value);
@@ -1508,6 +1513,7 @@ export function resumeGame() {
     const unlockedChallenges = getUnlockedChallengeSet();
     const ownedChallenges = getOwnedChallengeSet();
     if (Neo.metaProgress.godsKilled > 0) unlocked.add('granialla');
+    if (Number(Neo.metaProgress.mooggyDefeats || 0) >= 3) unlocked.add('mooggy');
     const preferredCharacter = String(Neo.metaProgress.selectedCharacter || Neo.chosenCharacter);
     if (!Neo.charSelectPhase || Neo.charSelectPhase === 'p1') {
       if (unlocked.has(preferredCharacter)) {
@@ -1951,7 +1957,7 @@ export function resumeGame() {
     const allTypes = [
       'hunter', 'charger', 'laser', 'knave', 'sniper', 'machine_gunner',
       'golem', 'cult_mage', 'cult_follower', 'summoner', 'shield_unit', 'healer', 'boss_spawner',
-      'queen_cult', 'bulk_golem', 'artificer_knave', 'god', 'mirror_knight',
+      'queen_cult', 'bulk_golem', 'artificer_knave', 'god', 'mirror_knight', 'mooggy',
     ];
     Neo.ui.practiceEnemyGrid.innerHTML = allTypes.map(type => {
       const isBoss = BOSS_TYPES_SET.has(type);
@@ -2018,6 +2024,8 @@ export function resumeGame() {
     Neo.weaponBurstQueue = [];
     Neo.rivals = [];
     Neo.monsterRoamTimer = 0;
+    Neo.mooggyAssassinSpawnedThisRun = false;
+    Neo.mooggyAssassinSpawnedThisFloor = false;
     Neo.knaveKnightCutscenePlayed = false;
     Neo.queenMetaoCutscenePlayed = false;
     Neo.wizardPawSelection = null;

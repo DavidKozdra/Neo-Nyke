@@ -25,6 +25,7 @@ export function migratePlayerData(source) {
     playerData.attackSpeed = Number(playerData.attackSpeed || 1);
     playerData.roomDamageTaken = Number(playerData.roomDamageTaken || 0);
     playerData.rivalReputation = Number(playerData.rivalReputation || 0);
+    playerData.veggysRoomCounter = Number(playerData.veggysRoomCounter || 0);
     playerData.stun = Math.max(0, Number(playerData.stun || 0));
     playerData.dashTime = Number(playerData.dashTime || 0);
     playerData.dashX = Number(playerData.dashX || 0);
@@ -110,6 +111,7 @@ export function getDefaultWeaponForCharacter(characterKey) {
     if (characterKey === 'princess') return '';
     if (characterKey === 'metao') return 'metao_fire_staff';
     if (characterKey === 'granialla') return 'granillia_lightning_spear';
+    if (characterKey === 'mooggy') return 'lazer_glasses';
     return 'thorns_bleed_blade';
   }
 
@@ -122,6 +124,9 @@ export function getDefaultMovesForCharacter(characterKey) {
     }
     if (characterKey === 'granialla') {
       return { melee: 'smite', laser: 'blade_justice', smash: 'healing_zone', dash: 'zip_lightning' };
+    }
+    if (characterKey === 'mooggy') {
+      return { melee: 'slash', laser: 'blood_beam', smash: 'fire_circle', dash: 'dash' };
     }
     return { melee: 'slash', laser: 'blood_beam', smash: 'crimson_smash', dash: 'dash' };
   }
@@ -216,6 +221,7 @@ export function getItemStats() {
       damageReduction,
       stunResistance: anchorCharm,
       hasIronLung: getItemCount('iron_lung') > 0,
+      hasPrincesGlasses: getItemCount('princes_glasses') > 0,
     };
     Neo.itemStatsCacheFrame = Neo.frameId;
     return Neo.itemStatsCacheValue;

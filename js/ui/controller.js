@@ -36,6 +36,123 @@ export function createUIController(view) {
     let objectiveExpanded = true;
     const runHistoryPageSize = 8;
 
+    function getChallengeAccent(def) {
+      const accent = String(def?.accent || '#8dd4ff').trim();
+      return /^#[0-9a-f]{3,8}$/i.test(accent) ? accent : '#8dd4ff';
+    }
+
+    function getChallengeStatus(def, state) {
+      if (!state.isUnlocked) return `LOCKED UNTIL ${def.unlockLoops} LC`;
+      if (state.isOwned) return state.isSelected ? 'ACTIVE THIS RUN' : 'OWNED';
+      return `BUY ${def.cost} LC`;
+    }
+
+    function renderChallengeButtonContent(def, state) {
+      const status = getChallengeStatus(def, state);
+      const accent = getChallengeAccent(def);
+      return `
+        <span class="challenge-btn__icon" style="--challenge-accent:${accent}">${Neo.escapeHtml(def.icon || '!')}</span>
+        <span class="challenge-btn__content">
+          <span class="challenge-btn__top">
+            <b>${Neo.escapeHtml(def.name)}</b>
+            <em>${Neo.escapeHtml(status)}</em>
+          </span>
+          <span class="challenge-btn__meta">${Neo.escapeHtml(def.theme || 'Challenge')}</span>
+          <span class="challenge-btn__desc">${Neo.escapeHtml(def.description)}</span>
+          <span class="challenge-btn__reward">${Neo.escapeHtml(def.reward || 'Challenge reward')}</span>
+        </span>
+      `;
+    }
+
+    function getMetaChallengeContext() {
+      const loopCrystals = Math.max(0, Number(Neo.metaProgress?.loopCrystals || 0));
+      const unlocked = typeof Neo.getUnlockedChallengeSet === 'function'
+        ? Neo.getUnlockedChallengeSet()
+        : new Set((Neo.CHALLENGE_ORDER || []).filter(key => loopCrystals >= Number(Neo.CHALLENGE_DEFS[key]?.unlockLoops || 0)));
+      const owned = typeof Neo.getOwnedChallengeSet === 'function'
+        ? Neo.getOwnedChallengeSet()
+        : new Set(Neo.normalizeChallengeSelection?.(Neo.metaProgress?.unlockedChallenges || []) || []);
+      const selected = new Set(Neo.normalizeChallengeSelection?.(Neo.selectedChallenges || []) || []);
+      return { loopCrystals, unlocked, owned, selected };
+    }
+
+    function renderMetaChallengeCard(key, context) {
+      const def = Neo.CHALLENGE_DEFS[key];
+      if (!def) return '';
+      const isUnlocked = context.unlocked.has(key);
+      const isOwned = context.owned.has(key);
+      const isSelected = context.selected.has(key);
+      const status = getChallengeStatus(def, { isUnlocked, isOwned, isSelected });
+      const className = [
+        'meta-challenge-card',
+        !isUnlocked ? 'meta-challenge-card--locked' : '',
+        isOwned ? 'meta-challenge-card--owned' : '',
+        isSelected ? 'meta-challenge-card--active' : '',
+      ].filter(Boolean).join(' ');
+      return `<div class="${className}" style="--challenge-accent:${getChallengeAccent(def)}">
+        <span class="meta-challenge-card__icon">${Neo.escapeHtml(def.icon || '!')}</span>
+        <div class="meta-challenge-card__body">
+          <div class="meta-challenge-card__top">
+            <b>${Neo.escapeHtml(def.name)}</b>
+            <em>${Neo.escapeHtml(status)}</em>
+          </div>
+          <div class="meta-challenge-card__tags">
+            <span>${Neo.escapeHtml(def.theme || 'Challenge')}</span>
+            <span>${Neo.escapeHtml(def.reward || 'Challenge reward')}</span>
+          </div>
+          <p>${Neo.escapeHtml(def.description)}</p>
+        </div>
+      </div>`;
+    }
+
+    function renderMetaProgressionInfo() {
+      const context = getMetaChallengeContext();
+      const selectedCount = context.selected.size;
+      const ownedCount = context.owned.size;
+      const challengeBonus = Math.max(0, Math.round(Neo.getActiveChallengeCrystalBonusMultiplier?.() || 0));
+      const ownedLegacy = new Set(Neo.metaProgress?.unlockedLegacy || []);
+      const legacyOrder = Neo.LEGACY_ORDER || [];
+      const legacyCards = legacyOrder.map(key => {
+        const def = Neo.LEGACY_UPGRADES[key];
+        if (!def) return '';
+        const isOwned = ownedLegacy.has(key);
+        const status = isOwned ? 'UNLOCKED' : context.loopCrystals >= def.cost ? `BUY ${def.cost} LC` : `NEED ${def.cost} LC`;
+        return `<div class="meta-legacy-card${isOwned ? ' meta-legacy-card--owned' : ''}">
+          <span class="meta-legacy-card__sigil">LC</span>
+          <div>
+            <div class="meta-legacy-card__top">
+              <b>${Neo.escapeHtml(def.name)}</b>
+              <em>${Neo.escapeHtml(status)}</em>
+            </div>
+            <p>${Neo.escapeHtml(def.effect || def.description || '')}</p>
+          </div>
+        </div>`;
+      }).join('');
+      return `<div class="meta-info-layout">
+        <div class="meta-info-summary">
+          <div class="meta-info-summary__stat"><span>Loop Crystals</span><b>${context.loopCrystals}</b></div>
+          <div class="meta-info-summary__stat"><span>Challenges Owned</span><b>${ownedCount}/${(Neo.CHALLENGE_ORDER || []).length}</b></div>
+          <div class="meta-info-summary__stat"><span>Active Bonus</span><b>+${challengeBonus} LC</b></div>
+        </div>
+        <section class="meta-info-section">
+          <div class="meta-info-section__head">
+            <h3>Challenge Shop</h3>
+            <span>${selectedCount} active</span>
+          </div>
+          <div class="meta-challenge-grid">
+            ${(Neo.CHALLENGE_ORDER || []).map(key => renderMetaChallengeCard(key, context)).join('')}
+          </div>
+        </section>
+        <section class="meta-info-section">
+          <div class="meta-info-section__head">
+            <h3>Permanent Upgrades</h3>
+            <span>${ownedLegacy.size}/${legacyOrder.length} unlocked</span>
+          </div>
+          <div class="meta-legacy-grid">${legacyCards}</div>
+        </section>
+      </div>`;
+    }
+
     function isCompactObjectiveViewport() {
       return window.innerWidth <= 920;
     }
@@ -207,6 +324,7 @@ export function createUIController(view) {
       if (normalized.includes('princess')) return 'princess';
       if (normalized.includes('metao')) return 'metao';
       if (normalized.includes('granialla')) return 'granialla';
+      if (normalized.includes('mooggy')) return 'mooggy';
       if (normalized.includes('queen') && normalized.includes('cult')) return 'queen_cult';
       if (normalized.includes('bulk') && normalized.includes('golem')) return 'bulk_golem';
       if (normalized.includes('artificer')) return 'artificer_knave';
@@ -384,6 +502,7 @@ export function createUIController(view) {
       { key: 'artificer_knave', label: 'Artificer Knave', boss: true,  hp: 1880, dmg: 20, speed: 124, attackStyle: 'melee',   immunities: [],                                    desc: 'Boss. High-speed multi-phase fighter. Becomes more aggressive at each phase threshold.' },
       { key: 'queen_cult',      label: 'Queen Cult',      boss: true,  hp: 760,  dmg: 20, speed: 96,  attackStyle: 'summon',  immunities: [],                                    desc: 'Boss. Cult leader that summons followers and mages while striking with projectiles.' },
       { key: 'mirror_knight',   label: 'Mirror Champion', boss: true,  hp: 0,    dmg: 0,  speed: 0,   attackStyle: 'mirror',  immunities: [],                                    desc: 'Elite. Copies the player\'s equipped moves and items. The perfect counter to your build.' },
+      { key: 'mooggy',          label: 'Mooggy',          boss: false, hp: 0,    dmg: 0,  speed: 0,   attackStyle: 'assassin',immunities: ['bleed'],                             desc: 'White and black assassin cat with a red aura. Mirrors your stats and items, then fires rapid bleed-stacking eye lasers.' },
       { key: 'god',             label: 'GOD',             boss: true,  hp: 920,  dmg: 18, speed: 108, attackStyle: 'beam',    immunities: ['bleed', 'fire', 'poison', 'dark'],   desc: 'Final boss. Multi-phase deity with beam sweeps, nova blasts, and judgement strikes. Immune to all status effects.' },
     ];
 
@@ -461,7 +580,7 @@ export function createUIController(view) {
         });
 
       } else if (tab === 'enemies') {
-        const attackStyleLabel = { melee: 'Melee', dash: 'Dash', ranged: 'Ranged', burst: 'Burst', summon: 'Summoner', support: 'Support', mirror: 'Mirror', beam: 'Beam' };
+        const attackStyleLabel = { melee: 'Melee', dash: 'Dash', ranged: 'Ranged', burst: 'Burst', summon: 'Summoner', support: 'Support', mirror: 'Mirror', assassin: 'Assassin', beam: 'Beam' };
         view.rhInfoContent.innerHTML = `
           <div class="info-enemy-layout">
             <div class="info-enemy-grid">${ENEMY_INFO.map(e => {
@@ -543,6 +662,8 @@ export function createUIController(view) {
         view.rhInfoContent.querySelectorAll('[data-info-char]').forEach(el => {
           Neo.drawSpriteToCanvas(el, el.dataset.infoChar, 60);
         });
+      } else if (tab === 'meta') {
+        view.rhInfoContent.innerHTML = renderMetaProgressionInfo();
       }
     }
 
@@ -667,7 +788,11 @@ export function createUIController(view) {
 
     function setSandboxPanelOpen(open) {
       view.sandboxPanel?.classList.toggle('hidden', !open);
+      view.sandboxPanel?.classList.toggle('sandbox-panel--open', open);
       view.sandboxPanel?.setAttribute('aria-hidden', open ? 'false' : 'true');
+      view.altModesPanel?.classList.toggle('altmodes-panel--sandbox-open', open);
+      view.altModeSandboxConfigBtn?.classList.toggle('is-active', open);
+      document.getElementById('altModeSandboxCard')?.classList.toggle('altmode-card--configuring', open);
     }
 
     function renderRunHistoryDetail() {
@@ -809,7 +934,7 @@ export function createUIController(view) {
         // Carousel prev/next arrows
         const carouselPrev = document.getElementById('carouselPrev');
         const carouselNext = document.getElementById('carouselNext');
-        const charOrder = ['princess', 'thorn_knight', 'metao', 'granialla'];
+        const charOrder = ['princess', 'thorn_knight', 'metao', 'granialla', 'mooggy'];
         function carouselStep(delta) {
           const currentIndex = charOrder.indexOf(handlers._getChosenCharacter ? handlers._getChosenCharacter() : 'princess');
           let nextIndex = currentIndex;
@@ -1238,7 +1363,7 @@ export function createUIController(view) {
         renderRunHistoryPage();
       },
       updateCharacterSelection(unlocked, selected) {
-        const CHAR_ORDER = ['princess', 'thorn_knight', 'metao', 'granialla'];
+        const CHAR_ORDER = ['princess', 'thorn_knight', 'metao', 'granialla', 'mooggy'];
         const CARD_W_ACTIVE = 270;
         const CARD_W_SIDE   = 200;
         const CARD_GAP      = 18;
@@ -1252,7 +1377,14 @@ export function createUIController(view) {
           button.classList.toggle('locked', !unlocked.has(itemKey));
           button.classList.toggle('sel', selected === itemKey);
           button.disabled = !unlocked.has(itemKey);
-          if (hint) hint.textContent = unlocked.has(itemKey) ? baseHint : 'locked in bank';
+          if (hint) {
+            const mooggyProgress = Math.max(0, Math.min(3, Number(Neo.metaProgress?.mooggyDefeats || 0)));
+            hint.textContent = unlocked.has(itemKey)
+              ? baseHint
+              : itemKey === 'mooggy'
+                ? `beat Mooggy ${mooggyProgress}/3`
+                : 'locked in bank';
+          }
           if (spriteCanvas) {
             Neo.drawSpriteToCanvas(spriteCanvas, itemKey, 76, {
               alpha: unlocked.has(itemKey) ? 1 : 0.42,
@@ -1326,6 +1458,7 @@ export function createUIController(view) {
           const isUnlocked = unlocked.has(key);
           const isOwned = owned.has(key);
           const isSelected = selected.includes(key);
+          button.style.setProperty('--challenge-accent', getChallengeAccent(def));
           button.classList.toggle('locked', !isUnlocked);
           button.classList.toggle('purchased', isOwned);
           button.classList.toggle('sel', isSelected);
@@ -1335,25 +1468,14 @@ export function createUIController(view) {
             : isOwned
               ? def.description
               : `${def.description} Cost: ${def.cost} Loop Crystals`;
-          const status = !isUnlocked
-            ? `LOCKED UNTIL ${def.unlockLoops} LC`
-            : isOwned
-              ? (isSelected ? 'ACTIVE THIS RUN' : 'OWNED')
-              : `BUY ${def.cost} LC`;
-          button.innerHTML = `
-            <span class="challenge-btn__top">
-              <b>${Neo.escapeHtml(def.name)}</b>
-              <em>${Neo.escapeHtml(status)}</em>
-            </span>
-            <span class="challenge-btn__desc">${Neo.escapeHtml(def.description)}</span>
-            <span class="challenge-btn__reward">${Neo.escapeHtml(def.reward || 'Challenge reward')}</span>
-          `;
+          button.innerHTML = renderChallengeButtonContent(def, { isUnlocked, isOwned, isSelected });
         });
         if (view.challengeHint) {
           const activeCount = selected.length;
           const bonusCrystals = Math.max(0, Math.round(Neo.getActiveChallengeCrystalBonusMultiplier()));
           view.challengeHint.textContent = `Loop Crystals: ${loopCrystals}. Buy run types once, then toggle them. Active: ${activeCount}. Loop bonus: +${bonusCrystals} LC.`;
         }
+        if (activeInfoTab === 'meta' && view.rhInfoContent) view.rhInfoContent.innerHTML = renderMetaProgressionInfo();
       },
       updateLegacySelection(owned, loopCrystals) {
         view.legacyButtons.forEach(button => {
@@ -1378,6 +1500,7 @@ export function createUIController(view) {
           const ownedCount = Neo.LEGACY_ORDER.filter(k => owned.has(k)).length;
           view.legacyHint.textContent = `Loop Crystals: ${loopCrystals}. Unlocked: ${ownedCount} / ${Neo.LEGACY_ORDER.length}. Upgrades are permanent and apply to all future runs.`;
         }
+        if (activeInfoTab === 'meta' && view.rhInfoContent) view.rhInfoContent.innerHTML = renderMetaProgressionInfo();
       },
       setItemStatus(items) {
         Neo.ITEM_KEYS.forEach(key => {

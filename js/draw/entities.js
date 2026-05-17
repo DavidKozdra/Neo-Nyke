@@ -212,15 +212,35 @@
         Neo.ctx.restore();
       }
       if (enemy.beamTime > 0) {
-        const range = enemy.type === 'god' ? (enemy.beamRange || 620) : 430;
+        const range = enemy.type === 'god' ? (enemy.beamRange || 620) : enemy.type === 'mooggy' ? 520 : 430;
         const beamPath = Neo.buildRicochetBeamPath(enemy.x, enemy.y, enemy.beamAngle, range, Neo.getEnemyBeamBounceCount(enemy));
         Neo.strokeBeamPath(beamPath, {
-          color: enemy.type === 'god' ? '#ffffff' : '#aa66ff',
-          width: enemy.type === 'god' && enemy.state === 'godSweep' ? 18 : enemy.type === 'god' ? 10 : 7,
-          shadowBlur: enemy.type === 'god' && enemy.state === 'godSweep' ? 24 : 14,
+          color: enemy.type === 'god' ? '#ffffff' : enemy.type === 'mooggy' ? '#ff3348' : '#aa66ff',
+          width: enemy.type === 'god' && enemy.state === 'godSweep' ? 18 : enemy.type === 'god' ? 10 : enemy.type === 'mooggy' ? 5 : 7,
+          shadowBlur: enemy.type === 'god' && enemy.state === 'godSweep' ? 24 : enemy.type === 'mooggy' ? 20 : 14,
         });
       }
     });
+  }
+
+  function drawMooggyAura(enemy) {
+    const t = Date.now() / 180;
+    Neo.ctx.save();
+    Neo.ctx.translate(enemy.x, enemy.y);
+    Neo.ctx.globalAlpha = window.NeoSettings?.getAccess()?.reduceFlash ? 0.32 : 0.34 + Math.sin(t) * 0.08;
+    Neo.ctx.shadowColor = '#ff1d34';
+    Neo.ctx.shadowBlur = 18;
+    Neo.ctx.strokeStyle = '#ff3348';
+    Neo.ctx.lineWidth = 2;
+    Neo.ctx.beginPath();
+    Neo.ctx.arc(0, 0, enemy.r + 13 + Math.sin(t * 1.4) * 2, 0, Math.PI * 2);
+    Neo.ctx.stroke();
+    Neo.ctx.globalAlpha *= 0.36;
+    Neo.ctx.fillStyle = '#ff1d34';
+    Neo.ctx.beginPath();
+    Neo.ctx.arc(0, 0, enemy.r + 19, 0, Math.PI * 2);
+    Neo.ctx.fill();
+    Neo.ctx.restore();
   }
 
   function drawBleedOverlay(enemy, stacks) {
@@ -441,14 +461,15 @@
         scale = 1.1 + Math.sin(_now / 60) * 0.13 * t * 2;
         flash = Math.floor(_now / 80) % 2 === 0;
       }
+      if (enemy.type === 'mooggy') drawMooggyAura(enemy);
       Neo.ctx.save();
       Neo.ctx.translate(enemy.x, drawY);
       Neo.ctx.scale(scale, scale);
       drawSpriteFrame(spriteKey, 0, 0, drawSize, {
         alpha: enemy.stun > 0 ? 0.68 : 1,
         flipX: facing < 0,
-        shadowColor: enemy.elite || enemy.type === 'god' ? 'rgba(255,244,180,0.45)' : 'rgba(0,0,0,0.18)',
-        shadowBlur: enemy.type === 'god' ? 14 : enemy.elite ? 10 : 4,
+        shadowColor: enemy.type === 'mooggy' ? 'rgba(255,30,52,0.55)' : enemy.elite || enemy.type === 'god' ? 'rgba(255,244,180,0.45)' : 'rgba(0,0,0,0.18)',
+        shadowBlur: enemy.type === 'mooggy' ? 16 : enemy.type === 'god' ? 14 : enemy.elite ? 10 : 4,
         tint: flash ? 'rgba(255,255,180,0.55)' : (enemy.elite ? 'rgba(255,210,96,0.7)' : null),
       });
       Neo.ctx.restore();

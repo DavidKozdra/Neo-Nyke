@@ -482,6 +482,59 @@
     return result;
   }
 
+  function getMooggyAssassinStats() {
+    const player = Neo.player || {};
+    const itemStats = Neo.getItemStats?.() || {};
+    const attackSpeed = Neo.getAttackSpeedValue?.() || 1;
+    const baseDamage = Neo.getPlayerBaseDamage?.() || 24;
+    const moveSpeed = 228 * (itemStats.moveSpeedMultiplier || 1) * (Neo.godTimer > 0 ? 1.25 : 1);
+    const hp = Math.max(120, Math.round(Number(player.maxHp || 120)));
+    return {
+      r: 15,
+      hp,
+      max: hp,
+      speed: Math.max(120, moveSpeed),
+      dmg: Math.max(14, Math.round(baseDamage * 0.7)),
+      beamDamage: Math.max(5, Math.round(baseDamage * 0.22)),
+      attackCd: 0.2,
+      attackSpeed,
+      bleedImmune: true,
+      fireImmune: false,
+      poisonImmune: false,
+      dark_drainImmune: false,
+      mooggyItems: { ...(player.items || {}) },
+      mooggyBleedStacks: 1,
+      mooggyLaserCooldown: 0.2,
+      mooggyLaserTick: 0.055,
+    };
+  }
+
+  function playMooggySound(kind = 'meow') {
+    try {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContext) return;
+      const ctx = Neo.mooggyAudioContext || new AudioContext();
+      Neo.mooggyAudioContext = ctx;
+      if (ctx.state === 'suspended') ctx.resume?.();
+      const volume = window.NeoSettings?.getVolume?.() || {};
+      const gain = ctx.createGain();
+      const osc = ctx.createOscillator();
+      const now = ctx.currentTime;
+      const master = Math.max(0, Math.min(1, Number(volume.master ?? 80) / 100));
+      const sfx = Math.max(0, Math.min(1, Number(volume.sfx ?? 80) / 100));
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(0.055 * master * sfx, now + 0.018);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + (kind === 'laser' ? 0.12 : 0.24));
+      osc.type = kind === 'laser' ? 'sawtooth' : 'triangle';
+      osc.frequency.setValueAtTime(kind === 'laser' ? 900 : 520, now);
+      osc.frequency.exponentialRampToValueAtTime(kind === 'laser' ? 1320 : 320, now + (kind === 'laser' ? 0.11 : 0.22));
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + (kind === 'laser' ? 0.14 : 0.26));
+    } catch {}
+  }
+
   function spawnEnemy(type, x, y, elite = false) {
     const sandbox = Neo.getActiveSandboxSettings();
     if (sandbox && !sandbox.allowedEnemies.includes(type)) {
@@ -534,7 +587,9 @@
     if (Neo.currentRoom) Neo.currentRoom.enemySpawnSerial = Math.max(0, Number(Neo.currentRoom.enemySpawnSerial || 0)) + 1;
     base.lootSeed = `${Neo.getFloorSeed()}|${roomPart}|enemy:${type}:${Math.round(x)},${Math.round(y)}:${Neo.currentRoom?.enemySpawnSerial || 0}|loot`;
 
-    if (type === 'god') {
+    if (type === 'mooggy') {
+      Object.assign(base, getMooggyAssassinStats());
+    } else if (type === 'god') {
       base.r = 34;
       base.hp = 920;
       base.max = 920;
@@ -668,7 +723,7 @@
       }
     }
 
-    const scaled = scaleEnemyStats(base, type);
+    const scaled = type === 'mooggy' ? { ...base } : scaleEnemyStats(base, type);
     base.hp = scaled.hp;
     base.max = scaled.max;
     base.dmg = scaled.dmg;
@@ -892,6 +947,20 @@
     Neo.spawnParticle({ x: mirror.x, y: mirror.y - 28, life: 1, text: 'MIRROR CHAMPION', c: '#d7f6ff' });
     sayOverEntity(mirror, 'I know every move you make.', { speaker: 'MIRROR', tone: 'mirror', holdTime: 1.9 });
     return mirror;
+  }
+
+  function spawnMooggyAssassin(preferredX = Neo.ROOM_W / 2, preferredY = Neo.ROOM_H / 2 - 110) {
+    if (!Neo.player || Neo.enemies.some(enemy => enemy?.type === 'mooggy')) return null;
+    const safeSpawn = findSafeEnemySpawnPoint(preferredX, preferredY, 16)
+      || findSafeEnemySpawnPoint(Neo.ROOM_W / 2, Neo.ROOM_H / 2 - 120, 16);
+    if (!safeSpawn) return null;
+    const mooggy = spawnEnemy('mooggy', safeSpawn.x, safeSpawn.y, false);
+    mooggy.assassin = true;
+    mooggy.spawnT = Math.max(Number(mooggy.spawnT || 0), 0.9);
+    Neo.spawnParticle({ x: mooggy.x, y: mooggy.y - 30, life: 1.5, text: 'MOOGGY HUNTS YOU', c: '#ff3348' });
+    sayOverEntity(mooggy, 'Mrow.', { speaker: 'MOOGGY', tone: 'boss', holdTime: 1.4, offsetY: mooggy.r + 34 });
+    playMooggySound('meow');
+    return mooggy;
   }
 
   function spawnChallengeStarter(room) {
@@ -2463,6 +2532,67 @@
     }
   }
 
+  function updateMooggyEnemy(enemy, dt) {
+    if (!Neo.player) return;
+    const dx = Neo.player.x - enemy.x;
+    const dy = Neo.player.y - enemy.y;
+    const distance = Math.hypot(dx, dy) || 1;
+
+    if (enemy.beamTime > 0) {
+      Neo.tickEnemyBeam(enemy, dt, {
+        tick: Number(enemy.mooggyLaserTick || 0.055),
+        range: 520,
+        knockback: 96,
+        damage: enemy.beamDamage || enemy.dmg,
+        speedDamp: 0.88,
+        turnRate: 8.8,
+        damageSource: 'mooggy',
+        onHit: () => {
+          Neo.applyBleed?.(Neo.player, Number(enemy.mooggyBleedStacks || 1), 3.2);
+        },
+        onEnd: activeEnemy => {
+          activeEnemy.attackCd = Number(activeEnemy.mooggyLaserCooldown || 0.2);
+        },
+      });
+      return;
+    }
+
+    if (enemy.stun > 0) {
+      enemy.vx *= 0.9;
+      enemy.vy *= 0.9;
+      return;
+    }
+
+    const desired = 220;
+    const direction = distance < desired - 34 ? -1 : distance > desired + 42 ? 1 : 0.15;
+    const strafe = distance < 420 ? 0.44 : 0;
+    steerEnemy(
+      enemy,
+      dx / distance * direction + -dy / distance * strafe,
+      dy / distance * direction + dx / distance * strafe,
+      enemy.speed,
+      6.4,
+      dt
+    );
+
+    if (distance < enemy.r + Neo.player.r + 12 && enemy.attackCd <= 0) {
+      const angle = Math.atan2(dy, dx);
+      Neo.damagePlayer(enemy.dmg, angle, 190, 'mooggy');
+      Neo.applyBleed?.(Neo.player, Number(enemy.mooggyBleedStacks || 1), 3.2);
+      enemy.attackCd = 0.36;
+      return;
+    }
+
+    if (enemy.attackCd <= 0 && distance < 560) {
+      enemy.beamAngle = Math.atan2(dy, dx) + Neo.rollEnemyBeamBias(enemy, 0.035);
+      enemy.beamTime = 0.16;
+      enemy.beamTick = 0;
+      enemy.attackCd = Number(enemy.mooggyLaserCooldown || 0.2);
+      if (Neo.nextRandom('fx') < 0.38) playMooggySound('laser');
+      Neo.spawnParticle({ x: enemy.x, y: enemy.y - 18, life: 0.28, c: '#ff3348', ring: 14 });
+    }
+  }
+
   function updateChallengeRoomState(dt) {
     if (!Neo.currentRoom || Neo.currentRoom.type !== 'challenge' || Neo.currentRoom.cleared || !Neo.currentRoom.challengeStarted) return;
     const type = Neo.currentRoom.challengeType || 'mirror';
@@ -2770,6 +2900,7 @@
   Neo.sayAtPosition = sayAtPosition;
   Neo.getMirrorChampionStats = getMirrorChampionStats;
   Neo.spawnMirrorChampion = spawnMirrorChampion;
+  Neo.spawnMooggyAssassin = spawnMooggyAssassin;
   Neo.spawnChallengeStarter = spawnChallengeStarter;
   Neo.spawnChallengeBombs = spawnChallengeBombs;
   Neo.spawnChallengeRunes = spawnChallengeRunes;
@@ -2808,6 +2939,7 @@
   Neo.startMirrorSmash = startMirrorSmash;
   Neo.startMirrorDash = startMirrorDash;
   Neo.updateMirrorChampion = updateMirrorChampion;
+  Neo.updateMooggyEnemy = updateMooggyEnemy;
 	  Neo.updateChallengeRoomState = updateChallengeRoomState;
 	  Neo.triggerGodPhase = triggerGodPhase;
 	  Neo.updateGod = updateGod;

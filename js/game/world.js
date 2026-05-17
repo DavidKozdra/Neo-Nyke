@@ -1331,6 +1331,8 @@
     Neo.gameElapsedTime = 0;
     Neo.refreshFloorChargeStates();
     Neo.runLoopIndex += 1;
+    Neo.mooggyAssassinSpawnedThisRun = false;
+    Neo.mooggyAssassinSpawnedThisFloor = false;
     window.achievementEvents?.emit('loop:completed', { loopIndex: Neo.runLoopIndex });
     Neo.syncSeedState();
     const crystalBonus = Math.max(0, Math.round(Neo.getActiveChallengeCrystalBonusMultiplier()));

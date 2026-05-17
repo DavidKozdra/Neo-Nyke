@@ -224,6 +224,12 @@
   .challenge-btn,
   .legacy-btn { padding: 7px 9px; font-size: 10px; }
 
+  .challenge-btn { grid-template-columns: 38px minmax(0, 1fr); gap: 9px; }
+  .challenge-btn__icon { width: 34px; height: 34px; font-size: 11px; }
+  .meta-info-summary { grid-template-columns: 1fr; }
+  .meta-challenge-grid,
+  .meta-legacy-grid { grid-template-columns: 1fr; }
+
   /* ── 10. Settings modal ──────────────────────────────────────── */
 
   .modal-backdrop { align-items: flex-end; padding: 0; }

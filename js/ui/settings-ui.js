@@ -470,6 +470,92 @@
     });
   }
 
+  const birthdayInput = document.getElementById('birthdayInput');
+  if (birthdayInput) {
+    const syncBirthday = () => {
+      if (window.Neo?.metaProgress !== undefined)
+        birthdayInput.value = window.Neo.metaProgress.birthday || '';
+    };
+    syncBirthday();
+    window.addEventListener('neo:meta-loaded', syncBirthday);
+    birthdayInput.addEventListener('change', () => {
+      if (window.Neo?.metaProgress) {
+        window.Neo.metaProgress.birthday = birthdayInput.value || '';
+        window.Neo.persistMetaSoon?.();
+      }
+    });
+  }
+
+  // ── Birthday card ──────────────────────────────────────────────
+  (function initBirthdayModal() {
+    const bdModal = document.getElementById('birthdayModal');
+    const bdClose = document.getElementById('birthdayClose');
+    const bdDismiss = document.getElementById('birthdayDismiss');
+    const bdMonsters = document.getElementById('birthdayMonsters');
+    if (!bdModal) return;
+
+    const MONSTER_KEYS = ['hunter','cult_follower','cult_mage','sniper','knave','charger','laser','golem','bulk_golem','queen_cult','artificer_knave','god'];
+    const MONSTER_NAMES = {
+      hunter: 'Hunter', cult_follower: 'Cultist', cult_mage: 'Mage', sniper: 'Sniper',
+      knave: 'Knave', charger: 'Charger', laser: 'Laser', golem: 'Golem',
+      bulk_golem: 'Bulk Golem', queen_cult: 'Queen', artificer_knave: 'Artificer', god: 'GOD',
+    };
+
+    function isBirthday(storedValue) {
+      if (!storedValue) return false;
+      const today = new Date();
+      const [, mm, dd] = storedValue.split('-');
+      return Number(mm) === today.getMonth() + 1 && Number(dd) === today.getDate();
+    }
+
+    function populateMonsters() {
+      if (!bdMonsters || bdMonsters.childElementCount > 0) return;
+      MONSTER_KEYS.forEach(key => {
+        const wrap = document.createElement('div');
+        wrap.className = 'birthday-monster-wrap';
+        const cv = document.createElement('canvas');
+        cv.width = 40;
+        cv.height = 40;
+        cv.className = 'birthday-monster-canvas';
+        const label = document.createElement('span');
+        label.className = 'birthday-monster-name';
+        label.textContent = MONSTER_NAMES[key] || key;
+        wrap.appendChild(cv);
+        wrap.appendChild(label);
+        bdMonsters.appendChild(wrap);
+        if (window.Neo?.drawSpriteToCanvas) {
+          window.Neo.drawSpriteToCanvas(cv, key, 40);
+        }
+      });
+    }
+
+    function openBirthdayModal() {
+      populateMonsters();
+      bdModal.classList.remove('hidden');
+      bdModal.setAttribute('aria-hidden', 'false');
+    }
+
+    function closeBirthdayModal() {
+      bdModal.classList.add('hidden');
+      bdModal.setAttribute('aria-hidden', 'true');
+    }
+
+    bdClose?.addEventListener('click', closeBirthdayModal);
+    bdDismiss?.addEventListener('click', closeBirthdayModal);
+    bdModal.addEventListener('click', e => { if (e.target === bdModal) closeBirthdayModal(); });
+
+    let checked = false;
+    function checkAndShow() {
+      if (checked) return;
+      checked = true;
+      const bd = window.Neo?.metaProgress?.birthday;
+      if (isBirthday(bd)) openBirthdayModal();
+    }
+
+    window.addEventListener('neo:meta-loaded', checkAndShow);
+    if (window.Neo?.metaProgress !== undefined) checkAndShow();
+  })();
+
   document.getElementById('dataExport').addEventListener('click', async () => {
     if (!window.NeoDataAdapter) { alert('Data system not ready.'); return; }
     const data = await window.NeoDataAdapter.exportAll();

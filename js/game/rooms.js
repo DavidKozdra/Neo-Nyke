@@ -898,6 +898,20 @@
     Neo.laserAngle = 0;
     Neo.laserSweepSpeed = 0;
     Neo.turtleWaveHpTimer = 0;
+
+    const pendantCount = Neo.getItemCount?.('veggys_pendant') || 0;
+    if (pendantCount > 0 && Neo.player) {
+      Neo.player.veggysRoomCounter = (Neo.player.veggysRoomCounter || 0) + 1;
+      if (Neo.player.veggysRoomCounter >= 3) {
+        Neo.player.veggysRoomCounter = 0;
+        const gain = pendantCount * 0.10;
+        const oldMax = Neo.player.maxHp;
+        Neo.player.maxHp = Math.round(Neo.player.maxHp * (1 + gain));
+        Neo.player.hp = Math.min(Neo.player.maxHp, Neo.player.hp + (Neo.player.maxHp - oldMax));
+        Neo.markInventoryPanelDirty?.();
+        Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 28, life: 1.2, text: `MAX HP +${Math.round(gain * 100)}%`, c: '#a0e87a' });
+      }
+    }
   });
 
   Neo.gameEvents.on('floor:enter', ({ floor: newFloor }) => {
@@ -906,6 +920,23 @@
 
   function isBossFightActive() {
     return Neo.currentRoom?.type === 'boss' || Neo.currentRoom?.type === 'god' || Neo.enemies.some(enemy => Neo.isBossType(enemy?.type));
+  }
+
+  function trySpawnMooggyAssassin(room) {
+    if (!room || room.cleared || room.mooggyAssassinSpawned) return;
+    if (!Neo.player || Neo.player.character === 'mooggy') return;
+    if (!['normal', 'competitive'].includes(Neo.gameMode)) return;
+    if (Neo.floor < 3 || Neo.mooggyAssassinSpawnedThisRun) return;
+    const defeats = Math.max(0, Number(Neo.metaProgress?.mooggyDefeats || 0));
+    const unlocked = (Neo.metaProgress?.unlockedCharacters || []).includes('mooggy') || defeats >= 3;
+    if (unlocked && Neo.nextRandom('encounter') > 0.08) return;
+    room.mooggyAssassinSpawned = true;
+    Neo.mooggyAssassinSpawnedThisRun = true;
+    const angle = Neo.nextRandom('encounter') * Math.PI * 2;
+    const radius = 170 + Neo.nextRandom('encounter') * 90;
+    const preferredX = Neo.clamp(Neo.ROOM_W / 2 + Math.cos(angle) * radius, 90, Neo.ROOM_W - 90);
+    const preferredY = Neo.clamp(Neo.ROOM_H / 2 + Math.sin(angle) * radius, 90, Neo.ROOM_H - 90);
+    Neo.spawnMooggyAssassin?.(preferredX, preferredY);
   }
 
   function enterRoom(room) {
@@ -944,6 +975,7 @@
       } else {
         Neo.spawnWave(Neo.getWaveCount(3), 'combat');
       }
+      trySpawnMooggyAssassin(room);
     }
     if (room.type === 'shop') {
       ensureShopHasMinimumItemOffers(room, 3);

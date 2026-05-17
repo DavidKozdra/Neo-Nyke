@@ -59,6 +59,21 @@ window.NeoNykeSpriteDefs = {
       '.c....c...',
     ],
   },
+  mooggy: {
+    palette: { a: '#101214', b: '#f4f4ef', c: '#050607', d: '#d31f35' },
+    pixels: [
+      '..c..c....',
+      '.cbccbc...',
+      '.baccab...',
+      '.bbccbb...',
+      '..bddb....',
+      '.bddddb...',
+      '.bdbbdb...',
+      '..b..b....',
+      '.bb..bb...',
+      '.d....d...',
+    ],
+  },
   hunter: {
     palette: { a: '#1a242b', b: '#3f5a67', c: '#d6dcda', d: '#7a1f24' },
     pixels: [

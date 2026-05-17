@@ -164,7 +164,7 @@ export function bindInput() {
       onTutorialNext() {
         Neo.navigateTutorialStep(1);
       },
-      onOpenCharacterSelect() { Neo.gameMode = 'normal'; Neo.setGameState('charselect'); },
+      onOpenCharacterSelect() { Neo.gameMode = 'normal'; Neo.charSelectPhase = null; Neo.setGameState('charselect'); Neo.updateCharacterSelectionUI(); },
       onCloseCharacterSelect() {
         const phases = ['p1','p2','p3','p4'].slice(0, Neo.mpPlayerCount);
         const cur = phases.indexOf(Neo.charSelectPhase);
@@ -191,7 +191,9 @@ export function bindInput() {
         Neo.selectedDifficulty = 'easy';
         Neo.metaProgress.selectedDifficulty = Neo.selectedDifficulty;
         Neo.persistMetaSoon();
+        Neo.charSelectPhase = null;
         Neo.setGameState('charselect');
+        Neo.updateCharacterSelectionUI();
       },
       onStartNew() {
         const phases = ['p1','p2','p3','p4'].slice(0, Neo.mpPlayerCount);

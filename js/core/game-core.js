@@ -251,6 +251,7 @@ export const KILLER_DEATH_QUOTES = {
   rival_metao: ['I saw this ending already.', 'Prediction complete.', 'You never caught up.'],
   rival_granialla: ['A god does not yield.', 'You were judged and found wanting.', 'Kneel.'],
   mirror_knight: ['I know every move you make.', 'I was always one step ahead.', 'You cannot outfight yourself.'],
+  mooggy: ['Mrow.', 'The red scarf remembers.', 'Nine lives. You had one.'],
   hunter: ['Easy prey.', 'You slowed down for one second.', 'The hunt is over.'],
   charger: ['One hit was enough.', 'I only need momentum.', 'You should have dodged.'],
   sniper: ['Clean shot.', 'Distance wins.', 'Never stop moving.'],
@@ -392,6 +393,9 @@ export const CHALLENGE_DEFS = {
   no_hit: {
     key: 'no_hit',
     name: 'Never Get Hit',
+    icon: '!',
+    accent: '#ff5c78',
+    theme: 'Lethal',
     cost: 4,
     unlockLoops: 0,
     reward: '+65% Loop Crystal payout',
@@ -400,6 +404,9 @@ export const CHALLENGE_DEFS = {
   no_items: {
     key: 'no_items',
     name: 'No Items',
+    icon: '0',
+    accent: '#7fd0ff',
+    theme: 'Loadout',
     cost: 3,
     unlockLoops: 0,
     reward: '+40% Loop Crystal payout',
@@ -408,6 +415,9 @@ export const CHALLENGE_DEFS = {
   fragile_body: {
     key: 'fragile_body',
     name: 'Fragile Body',
+    icon: 'HP',
+    accent: '#f28b54',
+    theme: 'Survival',
     cost: 2,
     unlockLoops: 0,
     reward: '+25% Loop Crystal payout',
@@ -416,6 +426,9 @@ export const CHALLENGE_DEFS = {
   swarm_rooms: {
     key: 'swarm_rooms',
     name: 'Swarm Rooms',
+    icon: '++',
+    accent: '#9ce070',
+    theme: 'Rooms',
     cost: 3,
     unlockLoops: 0,
     reward: '+35% Loop Crystal payout',
@@ -424,6 +437,9 @@ export const CHALLENGE_DEFS = {
   elite_hunt: {
     key: 'elite_hunt',
     name: 'Elite Hunt',
+    icon: 'EL',
+    accent: '#d8b0ff',
+    theme: 'Elites',
     cost: 4,
     unlockLoops: 0,
     reward: '+45% Loop Crystal payout',
@@ -432,6 +448,9 @@ export const CHALLENGE_DEFS = {
   cursed_shops: {
     key: 'cursed_shops',
     name: 'Cursed Shops',
+    icon: '$',
+    accent: '#f0c85a',
+    theme: 'Economy',
     cost: 2,
     unlockLoops: 0,
     reward: '+30% Loop Crystal payout',
@@ -440,6 +459,9 @@ export const CHALLENGE_DEFS = {
   glass_cannon: {
     key: 'glass_cannon',
     name: 'Glass Cannon',
+    icon: 'DMG',
+    accent: '#ff8dd2',
+    theme: 'Damage',
     cost: 3,
     unlockLoops: 0,
     reward: '+35% Loop Crystal payout',
@@ -533,6 +555,16 @@ export const CHARACTER_DEFS = {
     skills: { melee: 'Smite', laser: 'Blade Justice', smash: 'Healing Zone', dash: 'Zip Lightning' },
     unlock: 'godslain',
   },
+  mooggy: {
+    key: 'mooggy',
+    name: 'Mooggy',
+    rarity: 'assassin',
+    damageMultiplier: 1.05,
+    hpMultiplier: 1,
+    laserCooldownMultiplier: 0.07,
+    skills: { melee: 'Claw Cut', laser: 'Lazer Eyes', smash: 'Red Aura', dash: 'Silent Pounce' },
+    unlock: 'mooggy3',
+  },
 };
 
 export const HERO_DISPLAY = {
@@ -570,6 +602,15 @@ export const HERO_DISPLAY = {
       { label: 'DMG',   pct: 66, color: '#c08040' },
       { label: 'SPD',   pct: 66, color: '#8080c0' },
       { label: 'RANGE', pct: 66, color: '#60a080' },
+    ],
+  },
+  mooggy: {
+    lore: 'A white and black assassin cat in a red scarf. Defeat Mooggy three times to turn the hunter into a playable hero.',
+    stats: [
+      { label: 'HP',    pct: 70, color: '#f4f4ef' },
+      { label: 'DMG',   pct: 78, color: '#ff5c6f' },
+      { label: 'SPD',   pct: 92, color: '#d31f35' },
+      { label: 'RANGE', pct: 88, color: '#ff9baa' },
     ],
   },
 };
