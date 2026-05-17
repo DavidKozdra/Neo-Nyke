@@ -259,6 +259,9 @@
     if (showPopup && finalAmount >= 1) {
       spawnDamagePopup(Neo.player.x, Neo.player.y - 18, finalAmount, { color: '#ff6b6b', size: 16 });
     }
+    if (window.NeoSettings?.shouldBloodOnHit?.() !== false && options.bloodOnHit !== false) {
+      Neo.spawnBleedSpray?.(Neo.player, 1, 0.72);
+    }
     if (Neo.player.hp <= 0) {
       if (Neo.gameMode === 'practice') {
         Neo.player.hp = Neo.player.maxHp;

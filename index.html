@@ -81,7 +81,7 @@
       position: fixed;
       bottom: 8px;
       right: 8px;
-      font-size: 10px;
+      font-size: 4em;
       color: #333;
       opacity: .5;
     }
@@ -496,6 +496,11 @@
   </div>
   <div class="menu-content">
     <h1 id="menuTitle" class="sr-only">NEO NYKE — DUNGEON GOD</h1>
+    <div id="birthdayBanner" class="birthday-banner hidden" aria-live="polite">
+      <span class="birthday-banner__stars" aria-hidden="true">★ ★ ★</span>
+      <span class="birthday-banner__text">HAPPY BIRTHDAY, DUNGEON GOD!</span>
+      <span class="birthday-banner__stars" aria-hidden="true">★ ★ ★</span>
+    </div>
 
     <div class="main-nav">
       <button id="continueBtn" class="nav-btn hidden">CONTINUE<span class="nav-btn__icon">↺</span></button>
@@ -515,9 +520,11 @@
     </div>
     <span id="runSummary" class="run-summary-line"></span>
 
-    <span class="version-badge" class="run-summary-line">
+    <div class="version-badge run-summary-line">
+      <p>
       version prealpha 1.1.1.1.1.1.1.69420
-      </span>
+    </p>
+    </div>
   </div>
   <section id="runHistoryPanel" class="rh-panel hidden" aria-hidden="true">
     <div class="rh-head">
@@ -625,6 +632,7 @@
           </div>
           <button id="altModeCompetitiveBtn" class="nav-btn altmode-card__btn" style="background:rgba(180,140,0,0.18);border-color:rgba(255,210,0,0.5);">COMPETE</button>
         </div>
+        <div id="seedErrorBanner" class="seed-error-banner hidden">&#9888; Could not reach the server — seed unavailable. A random seed will be used if you start now.</div>
         <div id="competitiveLeaderboardCard" class="competitive-lb-card">
           <h3 class="altmode-card__name">THIS WEEK'S LEADERBOARD</h3>
           <div id="competitiveLbList" class="competitive-lb-list">Loading...</div>
@@ -906,7 +914,7 @@
       <button class="challenge-btn" data-challenge="swarm_rooms" type="button">Swarm Rooms</button>
       <button class="challenge-btn" data-challenge="elite_hunt" type="button">Elite Hunt</button>
       <button class="challenge-btn" data-challenge="cursed_shops" type="button">Cursed Shops</button>
-      <button class="challenge-btn" data-challenge="glass_cannon" type="button">Glass Cannon</button>
+      <button class="challenge-btn" data-challenge="glass_cannon" type="button">Quartz Cannon</button>
     </div>
   </div>
 </section>
@@ -937,14 +945,14 @@
 <script src="assets/sprites/icons.js" defer></script>
 <!-- Birthday modal -->
 <div id="birthdayModal" class="modal-backdrop hidden" aria-hidden="true">
-  <div class="modal-box birthday-box">
-    <button class="modal-close" id="birthdayClose">&#10005;</button>
-    <div class="birthday-stars" aria-hidden="true">★ ★ ★ ★ ★</div>
-    <h2 class="screen-title birthday-title">HAPPY BIRTHDAY!</h2>
-    <p class="birthday-sub">The monsters of the dungeon wish you well.</p>
-    <div class="birthday-monsters" id="birthdayMonsters"></div>
-    <p class="birthday-note">We can't actually verify this. But we believe you.</p>
-    <button class="nav-btn birthday-dismiss" id="birthdayDismiss">THANKS!</button>
+  <div class="birthday-card">
+    <button class="birthday-card__close" id="birthdayClose" aria-label="Close">&#10005;</button>
+    <div class="birthday-card__glow" aria-hidden="true"></div>
+    <div class="birthday-card__stars" aria-hidden="true">★ ★ ★</div>
+    <h2 class="birthday-card__title">HAPPY BIRTHDAY!</h2>
+    <p class="birthday-card__sub">The dungeon celebrates you.</p>
+    <div class="birthday-card__monsters" id="birthdayMonsters"></div>
+    <button class="nav-btn birthday-card__btn" id="birthdayDismiss">THANKS!</button>
   </div>
 </div>
 
@@ -957,6 +965,7 @@
     <!-- Tab bar -->
     <div class="stab-bar" role="tablist">
       <button class="stab active" data-tab="controls" role="tab"><span class="tab-icon">⌨</span>Controls</button>
+      <button class="stab" data-tab="gameplay" role="tab"><span class="tab-icon">◆</span>Gameplay</button>
       <button class="stab" data-tab="volume"   role="tab"><span class="tab-icon">♪</span>Volume</button>
       <button class="stab" data-tab="theme"    role="tab"><span class="tab-icon">◈</span>Theme</button>
       <button class="stab" data-tab="access"   role="tab"><span class="tab-icon">◎</span>Accessibility</button>
@@ -1053,6 +1062,34 @@
           </tbody>
         </table>
         <button class="settings-reset" id="resetTouchBindings">Reset mobile defaults</button>
+      </div>
+    </div>
+
+    <!-- Gameplay tab -->
+    <div class="stab-panel hidden" id="stab-gameplay">
+      <div class="access-row">
+        <div class="access-text">
+          <span class="access-label">Pause in inventory</span>
+          <span class="access-desc">Freeze gameplay while the inventory panel is open.</span>
+        </div>
+        <label class="toggle"><input type="checkbox" id="gameplayPauseInventory"><span class="toggle-track"><span class="toggle-thumb"></span></span></label>
+      </div>
+      <div class="access-row">
+        <div class="access-text">
+          <span class="access-label">Blood amount</span>
+          <span class="access-desc">Scales bleed spray and dead body blood from current amount to 10×.</span>
+        </div>
+        <div class="access-slider-wrap">
+          <input type="range" id="gameplayBloodMultiplier" min="1" max="10" step="1" value="1" class="access-slider">
+          <span id="gameplayBloodMultiplierVal" class="access-slider-val">1×</span>
+        </div>
+      </div>
+      <div class="access-row">
+        <div class="access-text">
+          <span class="access-label">Blood on hit</span>
+          <span class="access-desc">Makes every successful damage hit bloody.</span>
+        </div>
+        <label class="toggle"><input type="checkbox" id="gameplayBloodOnHit" checked><span class="toggle-track"><span class="toggle-thumb"></span></span></label>
       </div>
     </div>
 
@@ -1164,6 +1201,20 @@
           <span class="access-desc">Shows the tutorial intro again at the start of your next run.</span>
         </div>
         <label class="toggle"><input type="checkbox" id="accReplayTutorial"><span class="toggle-track"><span class="toggle-thumb"></span></span></label>
+      </div>
+      <div class="access-row">
+        <div class="access-text">
+          <span class="access-label">Shop — can afford colour</span>
+          <span class="access-desc">Price tag and buy button colour when you have enough coins.</span>
+        </div>
+        <input type="color" id="accShopCanAfford" class="acc-color-input" value="#4caf50">
+      </div>
+      <div class="access-row">
+        <div class="access-text">
+          <span class="access-label">Shop — can't afford colour</span>
+          <span class="access-desc">Price tag and buy button colour when you don't have enough coins.</span>
+        </div>
+        <input type="color" id="accShopCantAfford" class="acc-color-input" value="#e05555">
       </div>
     </div>
   </div>

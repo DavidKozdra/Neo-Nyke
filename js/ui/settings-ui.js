@@ -5,7 +5,16 @@
   const DEFAULT_BINDINGS = { up:'w', down:'s', left:'a', right:'d', dash:'shift', inventory:'i', smash:'r', slash:'lmb', laser:'rmb' };
   const DEFAULT_TOUCH_BINDINGS = { touchA:'slash', touchB:'laser', touchY:'smash', touchX:'ascend', touchDash:'dash' };
   const DEFAULT_VOLUME   = { master:80, sfx:80, music:60 };
-  const DEFAULT_ACCESS   = { reduceFlash:false, reduceMotion:false, reduceParticles:false, highContrast:false, screenShake:true };
+  const DEFAULT_ACCESS   = { reduceFlash:false, reduceMotion:false, reduceParticles:false, highContrast:false, screenShake:true, shopCanAfford:'#4caf50', shopCantAfford:'#e05555' };
+  const DEFAULT_GAMEPLAY = { pauseInventory:true, bloodMultiplier:1, bloodOnHit:true };
+  const BLOOD_MULTIPLIER_MIN = 1;
+  const BLOOD_MULTIPLIER_MAX = 10;
+
+  function normalizeBloodMultiplier(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return DEFAULT_GAMEPLAY.bloodMultiplier;
+    return Math.max(BLOOD_MULTIPLIER_MIN, Math.min(BLOOD_MULTIPLIER_MAX, Math.round(n)));
+  }
 
   // ── Theme system ─────────────────────────────────────────────────────────────
 
@@ -203,6 +212,7 @@
   let touchBindings = { ...DEFAULT_TOUCH_BINDINGS };
   let volume   = { ...DEFAULT_VOLUME };
   let access   = { ...DEFAULT_ACCESS };
+  let gameplay = { ...DEFAULT_GAMEPLAY };
 
   function load() {
     try {
@@ -212,6 +222,12 @@
       if (s.touchBindings) touchBindings = { ...DEFAULT_TOUCH_BINDINGS, ...s.touchBindings };
       if (s.volume)       volume       = { ...DEFAULT_VOLUME,   ...s.volume };
       if (s.access)       access       = { ...DEFAULT_ACCESS,   ...s.access };
+      if (s.gameplay)     gameplay     = { ...DEFAULT_GAMEPLAY, ...s.gameplay };
+      if (s.access?.bloodMultiplier !== undefined && s.gameplay?.bloodMultiplier === undefined) {
+        gameplay.bloodMultiplier = s.access.bloodMultiplier;
+      }
+      gameplay.bloodMultiplier = normalizeBloodMultiplier(gameplay.bloodMultiplier);
+      delete access.bloodMultiplier;
       if (s.activeTheme)  activeTheme  = s.activeTheme;
       if (s.savedThemes && typeof s.savedThemes === 'object') savedThemes = s.savedThemes;
       if (s.customThemeVars && typeof s.customThemeVars === 'object') customThemeVars = { ...customThemeVars, ...s.customThemeVars };
@@ -219,7 +235,7 @@
   }
 
   function save() {
-    localStorage.setItem(STORE_KEY, JSON.stringify({ bindings, touchBindings, volume, access, activeTheme, savedThemes, customThemeVars }));
+    localStorage.setItem(STORE_KEY, JSON.stringify({ bindings, touchBindings, volume, access, gameplay, activeTheme, savedThemes, customThemeVars }));
     window.dispatchEvent(new CustomEvent('neo:settings-changed'));
   }
 
@@ -227,6 +243,9 @@
     document.documentElement.classList.toggle('acc-reduce-flash',    access.reduceFlash);
     document.documentElement.classList.toggle('acc-reduce-motion',   access.reduceMotion);
     document.documentElement.classList.toggle('acc-high-contrast',   access.highContrast);
+    const root = document.documentElement;
+    root.style.setProperty('--shop-can-afford',  access.shopCanAfford  || DEFAULT_ACCESS.shopCanAfford);
+    root.style.setProperty('--shop-cant-afford', access.shopCantAfford || DEFAULT_ACCESS.shopCantAfford);
   }
 
   // ── Mobile detection ─────────────────────────────────────────────────────────
@@ -258,6 +277,10 @@
     getBindings: () => bindings,
     getTouchBindings: () => touchBindings,
     getAccess: () => access,
+    getGameplay: () => gameplay,
+    shouldPauseInventory: () => gameplay.pauseInventory !== false,
+    getBloodMultiplier: () => normalizeBloodMultiplier(gameplay.bloodMultiplier),
+    shouldBloodOnHit: () => gameplay.bloodOnHit !== false,
     getVolume: () => volume,
   };
 
@@ -371,6 +394,38 @@
     save();
   });
 
+  const pauseInventoryEl = document.getElementById('gameplayPauseInventory');
+  if (pauseInventoryEl) {
+    pauseInventoryEl.checked = gameplay.pauseInventory !== false;
+    pauseInventoryEl.addEventListener('change', () => {
+      gameplay.pauseInventory = pauseInventoryEl.checked;
+      save();
+    });
+  }
+
+  const bloodSlider = document.getElementById('gameplayBloodMultiplier');
+  const bloodVal    = document.getElementById('gameplayBloodMultiplierVal');
+  if (bloodSlider && bloodVal) {
+    gameplay.bloodMultiplier = normalizeBloodMultiplier(gameplay.bloodMultiplier);
+    bloodSlider.value = gameplay.bloodMultiplier;
+    bloodVal.textContent = `${gameplay.bloodMultiplier}×`;
+    bloodSlider.addEventListener('input', () => {
+      gameplay.bloodMultiplier = normalizeBloodMultiplier(bloodSlider.value);
+      bloodSlider.value = gameplay.bloodMultiplier;
+      bloodVal.textContent = `${gameplay.bloodMultiplier}×`;
+      save();
+    });
+  }
+
+  const bloodOnHitEl = document.getElementById('gameplayBloodOnHit');
+  if (bloodOnHitEl) {
+    bloodOnHitEl.checked = gameplay.bloodOnHit !== false;
+    bloodOnHitEl.addEventListener('change', () => {
+      gameplay.bloodOnHit = bloodOnHitEl.checked;
+      save();
+    });
+  }
+
   refreshBindButtons();
 
   modal.querySelectorAll('.bind-btn').forEach(btn => {
@@ -420,6 +475,13 @@
     const el = document.getElementById(id);
     el.checked = access[key];
     el.addEventListener('change', () => { access[key] = el.checked; save(); applyAccess(); });
+  });
+
+  [['accShopCanAfford','shopCanAfford'],['accShopCantAfford','shopCantAfford']].forEach(([id, key]) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.value = access[key] || DEFAULT_ACCESS[key];
+    el.addEventListener('input', () => { access[key] = el.value; save(); applyAccess(); });
   });
 
   const replayTutorialEl = document.getElementById('accReplayTutorial');
@@ -482,6 +544,7 @@
       if (window.Neo?.metaProgress) {
         window.Neo.metaProgress.birthday = birthdayInput.value || '';
         window.Neo.persistMetaSoon?.();
+        window._checkBirthdayNow?.();
       }
     });
   }
@@ -512,19 +575,19 @@
       if (!bdMonsters || bdMonsters.childElementCount > 0) return;
       MONSTER_KEYS.forEach(key => {
         const wrap = document.createElement('div');
-        wrap.className = 'birthday-monster-wrap';
+        wrap.className = 'bd-monster';
         const cv = document.createElement('canvas');
-        cv.width = 40;
-        cv.height = 40;
-        cv.className = 'birthday-monster-canvas';
+        cv.width = 48;
+        cv.height = 48;
+        cv.className = 'bd-monster__canvas';
         const label = document.createElement('span');
-        label.className = 'birthday-monster-name';
+        label.className = 'bd-monster__name';
         label.textContent = MONSTER_NAMES[key] || key;
         wrap.appendChild(cv);
         wrap.appendChild(label);
         bdMonsters.appendChild(wrap);
         if (window.Neo?.drawSpriteToCanvas) {
-          window.Neo.drawSpriteToCanvas(cv, key, 40);
+          window.Neo.drawSpriteToCanvas(cv, key, 48);
         }
       });
     }
@@ -544,16 +607,27 @@
     bdDismiss?.addEventListener('click', closeBirthdayModal);
     bdModal.addEventListener('click', e => { if (e.target === bdModal) closeBirthdayModal(); });
 
+    const bdBanner = document.getElementById('birthdayBanner');
+
     let checked = false;
-    function checkAndShow() {
-      if (checked) return;
+    function checkAndShow(force = false) {
+      if (checked && !force) return;
       checked = true;
-      const bd = window.Neo?.metaProgress?.birthday;
-      if (isBirthday(bd)) openBirthdayModal();
+      const meta = window.Neo?.metaProgress;
+      if (isBirthday(meta?.birthday)) {
+        openBirthdayModal();
+        if (bdBanner) {
+          const name = meta?.username?.trim();
+          const textEl = bdBanner.querySelector('.birthday-banner__text');
+          if (textEl) textEl.textContent = name ? `HAPPY BIRTHDAY, ${name.toUpperCase()}!` : 'HAPPY BIRTHDAY, DUNGEON GOD!';
+          bdBanner.classList.remove('hidden');
+        }
+      }
     }
 
     window.addEventListener('neo:meta-loaded', checkAndShow);
     if (window.Neo?.metaProgress !== undefined) checkAndShow();
+    window._checkBirthdayNow = () => checkAndShow(true);
   })();
 
   document.getElementById('dataExport').addEventListener('click', async () => {

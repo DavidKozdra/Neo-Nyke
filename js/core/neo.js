@@ -116,6 +116,7 @@ window.Neo = {
   weaponBurstQueue: [],
   wizardPawSelection: null,
   activeInventorySlot: '',
+  inventoryPauseActive: false,
 
   // --- tracking ---
   lastDamageSource: '',

@@ -1,4 +1,12 @@
 // props.js — standalone IIFE. Drawing world props, pickups, projectiles, corpses.
+  function getVisualBloodMultiplier() {
+    const value = window.NeoSettings?.getBloodMultiplier?.()
+      ?? window.NeoSettings?.getGameplay?.()?.bloodMultiplier
+      ?? window.NeoSettings?.getAccess?.()?.bloodMultiplier
+      ?? 1;
+    return Neo.clamp(Math.round(Number(value) || 1), 1, 10);
+  }
+
   function drawWorldProps() {
     const theme = Neo.getRoomArtTheme();
     Neo.hazards.forEach(hazard => {
@@ -703,16 +711,27 @@
       const squash = 1 - 0.46 * fallEase;
       const rotation = Number(body.angle || 0) + Number(body.fallAngle || 0) * fallEase;
       const poolScale = Neo.clamp(age / 1.2, 0, 1) * alpha;
+      const poolMultiplier = getVisualBloodMultiplier();
+      const poolSizeMultiplier = Math.sqrt(poolMultiplier);
+      const poolAlphaMultiplier = Neo.clamp(0.72 + poolMultiplier * 0.14, 1, 2.1);
 
       Neo.ctx.save();
       Neo.ctx.translate(body.x, body.y);
       Neo.ctx.globalAlpha = alpha;
 
       Neo.ctx.fillStyle = body.type === 'god'
-        ? `rgba(224,220,255,${0.2 * poolScale})`
-        : `rgba(94,0,16,${0.32 * poolScale})`;
+        ? `rgba(224,220,255,${0.2 * poolScale * poolAlphaMultiplier})`
+        : `rgba(94,0,16,${0.32 * poolScale * poolAlphaMultiplier})`;
       Neo.ctx.beginPath();
-      Neo.ctx.ellipse(0, size * 0.26, size * (0.35 + poolScale * 0.14), size * (0.08 + poolScale * 0.05), rotation * 0.25, 0, Math.PI * 2);
+      Neo.ctx.ellipse(
+        0,
+        size * 0.26,
+        size * (0.35 + poolScale * 0.14) * poolSizeMultiplier,
+        size * (0.08 + poolScale * 0.05) * poolSizeMultiplier,
+        rotation * 0.25,
+        0,
+        Math.PI * 2,
+      );
       Neo.ctx.fill();
 
       Neo.ctx.fillStyle = `rgba(0,0,0,${0.28 * alpha})`;
@@ -754,4 +773,3 @@
   Neo.drawProjectileShape = drawProjectileShape;
   Neo.drawProjectiles = drawProjectiles;
   Neo.drawDeadBodies = drawDeadBodies;
-

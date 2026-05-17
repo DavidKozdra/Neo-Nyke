@@ -404,12 +404,13 @@ export function createUIController(view) {
       view.charSelect?.classList.toggle('hidden', show !== 'charselect');
       view.dead.classList.toggle('hidden',      show !== 'dead');
       view.win.classList.toggle('hidden',       show !== 'win');
-      view.pause?.classList.toggle('hidden',    show !== 'pause');
+      const inventoryPause = !!Neo.inventoryPauseActive && !!view.invPanel && !view.invPanel.classList.contains('hidden');
+      view.pause?.classList.toggle('hidden',    show !== 'pause' || inventoryPause);
       const inPlay = show === 'play' || show === 'pause' || show === 'dialogue' || show === 'dying';
       setVisible(view.hud, false, 'none');
       setVisible(view.actionBar, show === 'play' || show === 'pause' || show === 'dying', '');
       setVisible(view.hudLower, show === 'play' || show === 'pause', '');
-      setVisible(view.adapterStatus, show === 'play' || show === 'pause', '');
+      setVisible(view.adapterStatus, show === 'play', '');
       setVisible(view.playerStats, inPlay, '');
       setVisible(view.coinDisplay, inPlay, 'flex');
       setVisible(view.centerDisplay, inPlay, '');

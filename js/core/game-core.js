@@ -458,7 +458,7 @@ export const CHALLENGE_DEFS = {
   },
   glass_cannon: {
     key: 'glass_cannon',
-    name: 'Glass Cannon',
+    name: 'Quartz Cannon',
     icon: 'DMG',
     accent: '#ff8dd2',
     theme: 'Damage',

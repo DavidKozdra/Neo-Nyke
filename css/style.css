@@ -902,6 +902,8 @@ canvas {
   z-index: 20;
   pointer-events: none;
   max-width: min(620px, calc(100vw - 32px));
+  transform: scale(2);
+  transform-origin: bottom left;
 }
 
 #playerStats.player-stats--split {
@@ -1361,8 +1363,8 @@ canvas {
   padding: 6px 10px;
   border-radius: 999px;
   background: var(--menu-surface);
-  border: 1px solid var(--menu-border-strong);
-  color: var(--menu-accent-strong);
+  border: 1px solid var(--shop-can-afford, #4caf50);
+  color: var(--shop-can-afford, #4caf50);
   font-size: 11px;
   font-weight: 800;
   letter-spacing: .08em;
@@ -1376,8 +1378,8 @@ canvas {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: var(--menu-glow);
-  color: var(--menu-accent-strong);
+  background: color-mix(in srgb, var(--shop-can-afford, #4caf50) 18%, transparent);
+  color: var(--shop-can-afford, #4caf50);
 }
 
 .shop-card__copy {
@@ -1402,15 +1404,15 @@ canvas {
 }
 
 .shop-card.shop-card--unaffordable {
-  border-color: var(--menu-danger);
+  border-color: var(--shop-cant-afford, #e05555);
   background:
     linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.01)),
     var(--menu-bg-deep);
 }
 
 .shop-card.shop-card--unaffordable .shop-card__price {
-  color: var(--menu-danger);
-  border-color: var(--menu-danger);
+  color: var(--shop-cant-afford, #e05555);
+  border-color: var(--shop-cant-afford, #e05555);
   background: var(--menu-surface);
 }
 
@@ -1423,7 +1425,7 @@ canvas {
 .shop-card.shop-card--unaffordable .shop-card__footer::before {
   content: "Not enough coins";
   margin-right: auto;
-  color: var(--menu-danger);
+  color: var(--shop-cant-afford, #e05555);
   font-size: 11px;
   letter-spacing: .05em;
   text-transform: uppercase;
@@ -1443,10 +1445,10 @@ canvas {
 
 .shop-buy {
   width: 100%;
-  border: 1px solid var(--menu-border-strong);
+  border: 1px solid var(--shop-can-afford, #4caf50);
   border-radius: 14px;
-  background: linear-gradient(135deg, var(--menu-accent), var(--menu-accent-strong));
-  color: var(--menu-bg-deep);
+  background: color-mix(in srgb, var(--shop-can-afford, #4caf50) 18%, transparent);
+  color: var(--shop-can-afford, #4caf50);
   padding: 11px 12px;
   font-size: 12px;
   font-weight: 800;
@@ -1458,8 +1460,7 @@ canvas {
 
 .shop-buy:hover:not(:disabled) {
   transform: translateY(-1px);
-  filter: brightness(1.08);
-  border-color: var(--menu-border-strong);
+  filter: brightness(1.12);
 }
 
 .shop-buy:disabled {
@@ -1468,9 +1469,10 @@ canvas {
 }
 
 .shop-buy.shop-buy--unaffordable {
-  opacity: .55;
-  border-color: var(--menu-danger);
-  color: var(--menu-danger);
+  opacity: .7;
+  border-color: var(--shop-cant-afford, #e05555);
+  color: var(--shop-cant-afford, #e05555);
+  background: color-mix(in srgb, var(--shop-cant-afford, #e05555) 10%, transparent);
 }
 
 .inv-stats {
@@ -4832,6 +4834,36 @@ button.alt.danger {
   line-height: 1.4;
 }
 
+.access-slider-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.access-slider {
+  width: 110px;
+  accent-color: var(--menu-accent-strong);
+  cursor: pointer;
+}
+.access-slider-val {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--menu-accent-strong);
+  min-width: 26px;
+  text-align: right;
+}
+
+.acc-color-input {
+  flex-shrink: 0;
+  width: 40px;
+  height: 32px;
+  border: 1px solid var(--menu-border-strong);
+  border-radius: 6px;
+  background: var(--menu-surface);
+  cursor: pointer;
+  padding: 2px;
+}
+
 /* --- Data tab --- */
 .data-row {
   display: flex;
@@ -5453,6 +5485,17 @@ button.alt.danger {
   box-shadow: 0 0 16px rgba(104, 191, 255, .2);
 }
 
+.seed-error-banner {
+  background: rgba(200, 30, 30, 0.18);
+  border: 1.5px solid rgba(255, 80, 80, 0.7);
+  border-radius: 8px;
+  color: #ff8888;
+  font-size: 0.83em;
+  font-weight: 600;
+  padding: 10px 14px;
+  line-height: 1.4;
+}
+.seed-error-banner.hidden { display: none; }
 .competitive-lb-card {
   display: flex;
   flex-direction: column;
@@ -6706,59 +6749,124 @@ button.alt.danger {
 .mploby-controls { font-size: 0.72rem; color: #3a5060; margin: 0; }
 
 /* ── Birthday modal ───────────────────────────────────────────── */
-.birthday-box {
-  width: min(560px, calc(100vw - 32px));
-  text-align: center;
-}
-.birthday-stars {
-  color: #ffd700;
-  font-size: 1.1rem;
-  letter-spacing: .3em;
-  margin-bottom: 10px;
-}
-.birthday-title {
-  color: #ffd700;
-  text-shadow: 0 0 24px rgba(255,215,0,.5);
-  margin-bottom: 6px;
-}
-.birthday-sub {
-  color: var(--menu-text-muted);
-  margin: 0 0 20px;
-  font-size: .9rem;
-}
-.birthday-monsters {
+.birthday-banner {
   display: flex;
-  flex-wrap: wrap;
+  align-items: center;
   justify-content: center;
   gap: 10px;
-  margin-bottom: 16px;
+  background: rgba(255, 215, 0, 0.1);
+  border: 1.5px solid rgba(255, 215, 0, 0.55);
+  border-radius: 10px;
+  padding: 10px 20px;
+  margin-bottom: 18px;
+  animation: birthday-banner-pulse 2.4s ease-in-out infinite;
 }
-.birthday-monster-wrap {
+.birthday-banner.hidden { display: none; }
+.birthday-banner__stars {
+  color: #ffd700;
+  font-size: 0.85rem;
+  letter-spacing: .2em;
+}
+.birthday-banner__text {
+  color: #ffd700;
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  text-shadow: 0 0 14px rgba(255, 215, 0, .45);
+}
+@keyframes birthday-banner-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 215, 0, 0); }
+  50% { box-shadow: 0 0 18px 2px rgba(255, 215, 0, .18); }
+}
+
+.birthday-card {
+  position: relative;
+  width: min(420px, calc(100vw - 32px));
+  background: linear-gradient(160deg, var(--menu-surface-strong) 0%, var(--menu-bg-deep) 100%);
+  border: 2px solid rgba(255, 215, 0, .35);
+  border-top-color: rgba(255, 215, 0, .6);
+  border-radius: 14px;
+  padding: 28px 24px 22px;
+  text-align: center;
+  box-shadow: 0 0 48px rgba(255, 215, 0, .08), 0 20px 48px rgba(0,0,0,.5);
+  overflow: hidden;
+}
+.birthday-card__glow {
+  position: absolute;
+  inset: -60px;
+  background: radial-gradient(ellipse at 50% 0%, rgba(255,215,0,.12) 0%, transparent 65%);
+  pointer-events: none;
+}
+.birthday-card__close {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  background: transparent;
+  border: none;
+  color: var(--menu-text-soft);
+  font-size: 15px;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 4px;
+  line-height: 1;
+  transition: color .12s;
+}
+.birthday-card__close:hover { color: #ffd700; }
+.birthday-card__stars {
+  color: #ffd700;
+  font-size: .9rem;
+  letter-spacing: .4em;
+  margin-bottom: 8px;
+  opacity: .8;
+}
+.birthday-card__title {
+  color: #ffd700;
+  font-size: 1.5rem;
+  font-weight: 900;
+  letter-spacing: .12em;
+  text-shadow: 0 0 28px rgba(255,215,0,.55);
+  margin: 0 0 4px;
+}
+.birthday-card__sub {
+  color: var(--menu-text-muted);
+  font-size: .82rem;
+  margin: 0 0 18px;
+  letter-spacing: .04em;
+}
+.birthday-card__monsters {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+  margin-bottom: 18px;
+}
+.bd-monster {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
 }
-.birthday-monster-canvas {
+.bd-monster__canvas {
+  width: 48px;
+  height: 48px;
   image-rendering: pixelated;
   border-radius: 6px;
-  background: rgba(255,215,0,.07);
-  border: 1px solid rgba(255,215,0,.2);
+  background: rgba(255,215,0,.06);
+  border: 1px solid rgba(255,215,0,.18);
+  display: block;
 }
-.birthday-monster-name {
-  font-size: 0.6rem;
-  letter-spacing: .08em;
+.bd-monster__name {
+  font-size: 0.52rem;
+  letter-spacing: .06em;
   text-transform: uppercase;
   color: var(--menu-text-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 52px;
 }
-.birthday-note {
-  font-size: .72rem;
-  color: var(--menu-text-soft);
-  margin: 0 0 20px;
-  font-style: italic;
-}
-.birthday-dismiss {
-  min-width: 160px;
+.birthday-card__btn {
+  min-width: 140px;
 }
 
 .char-card[data-rarity="assassin"] {

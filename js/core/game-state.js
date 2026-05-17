@@ -1490,6 +1490,8 @@ export function resumeGame() {
       if (Neo.ui.seed) Neo.ui.seed.value = '';
       if (Neo._competitiveSeed) {
         if (subtitleEl) subtitleEl.textContent = `Hard · Seed ${Neo._competitiveSeed} · no modifiers`;
+        const banner = document.getElementById('seedErrorBanner');
+        if (banner) banner.classList.add('hidden');
       } else if (!Neo._competitiveSeedFetching) {
         Neo._competitiveSeedFetching = true;
         fetch(`${COMPETITIVE_SERVER_URL}/seed`)
@@ -1499,12 +1501,20 @@ export function resumeGame() {
             Neo._competitiveSeedFetching = false;
             const el = document.getElementById('charSelectSubtitle');
             if (el) el.textContent = `Hard · Seed ${Neo._competitiveSeed} · no modifiers`;
+            const banner = document.getElementById('seedErrorBanner');
+            if (banner) banner.classList.add('hidden');
           })
-          .catch(() => { Neo._competitiveSeedFetching = false; });
+          .catch(() => {
+            Neo._competitiveSeedFetching = false;
+            const banner = document.getElementById('seedErrorBanner');
+            if (banner) banner.classList.remove('hidden');
+          });
       }
     } else {
       Neo._competitiveSeed = null;
       Neo._competitiveSeedFetching = false;
+      const banner = document.getElementById('seedErrorBanner');
+      if (banner) banner.classList.add('hidden');
     }
 
     const activeChar = Neo.charSelectPhase && PHASE_CHAR[Neo.charSelectPhase] ? PHASE_CHAR[Neo.charSelectPhase]() : Neo.chosenCharacter;
@@ -1552,11 +1562,14 @@ export function resumeGame() {
     const isBossRush = Neo.gameMode === 'boss_rush';
     if (Neo.ui.timerFloorSlot) Neo.ui.timerFloorSlot.style.display = isBossRush ? 'none' : '';
     if (Neo.ui.timerBossSlot) Neo.ui.timerBossSlot.style.display = isBossRush ? '' : 'none';
-    if (nextState !== 'pause') document.body.classList.remove('game-paused');
+    if (nextState !== 'pause') {
+      Neo.inventoryPauseActive = false;
+      document.body.classList.remove('game-paused');
+    }
     if (nextState !== 'play' && Neo.ui.interactPrompt) Neo.ui.interactPrompt.classList.add('hidden');
     if (nextState !== 'play') {
       Neo.setShopPanelOpen(false);
-      Neo.setInventoryPanelOpen(false);
+      if (!Neo.inventoryPauseActive) Neo.setInventoryPanelOpen(false);
     }
   }
 

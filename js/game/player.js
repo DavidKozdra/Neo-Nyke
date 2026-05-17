@@ -198,7 +198,7 @@ export function getItemStats() {
     }, 0);
     let critChance = critCharmBonus + keenEyeBonus + pendantOfKronos * godItemStacks * 0.01;
     if (oracleLens) critChance *= 2;
-    critChance = Neo.clamp(critChance, 0, 0.95);
+    critChance = Neo.clamp(critChance, 0.01, 0.95);
     const damageReduction = Neo.clamp(bandaid * 0.005 + shieldOfAegis * 0.2, 0, 0.85);
     const xpProgress = Neo.clamp((Neo.player?.xpToNext || 0) > 0 ? (Neo.player?.xp || 0) / Neo.player.xpToNext : 0, 0, 1);
     Neo.itemStatsCacheValue = {

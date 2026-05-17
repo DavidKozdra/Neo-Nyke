@@ -1,4 +1,7 @@
-const CACHE = 'neonyke-v13';
+const CACHE_VERSION = 'neonyke-v13';
+const CACHE_META = 'neonyke-cache-meta';
+const CACHE_META_KEY = '/__neonyke_cache_meta__';
+const CACHE_REFRESH_INTERVAL_MS = 5 * 60 * 60 * 1000;
 
 const PRECACHE = [
   '/',
@@ -46,19 +49,63 @@ const PRECACHE = [
   '/js/ui/menu-background.js',
 ];
 
-async function precacheApp() {
-  const cache = await caches.open(CACHE);
+function makeCacheName(now = Date.now()) {
+  return `${CACHE_VERSION}-${now}`;
+}
+
+async function readCacheMeta() {
+  try {
+    const cache = await caches.open(CACHE_META);
+    const response = await cache.match(CACHE_META_KEY);
+    return response ? response.json() : null;
+  } catch {
+    return null;
+  }
+}
+
+async function writeCacheMeta(meta) {
+  const cache = await caches.open(CACHE_META);
+  await cache.put(
+    CACHE_META_KEY,
+    new Response(JSON.stringify(meta), { headers: { 'Content-Type': 'application/json' } })
+  );
+}
+
+async function getAppCacheName({ rotateIfStale = false } = {}) {
+  const now = Date.now();
+  const meta = await readCacheMeta();
+  const createdAt = Number(meta?.createdAt || 0);
+  const hasFreshCache = meta?.cacheName && (!rotateIfStale || now - createdAt < CACHE_REFRESH_INTERVAL_MS);
+  if (hasFreshCache) return meta.cacheName;
+  const cacheName = makeCacheName(now);
+  await writeCacheMeta({ cacheName, createdAt: now, version: CACHE_VERSION });
+  return cacheName;
+}
+
+async function cleanupOldAppCaches(activeCacheName) {
+  const keys = await caches.keys();
+  await Promise.all(keys
+    .filter(key => key.startsWith('neonyke-v') && key !== activeCacheName)
+    .map(key => caches.delete(key)));
+}
+
+async function precacheApp(options = {}) {
+  const cacheName = await getAppCacheName(options);
+  const cache = await caches.open(cacheName);
+  let refreshedCount = 0;
   await Promise.all(PRECACHE.map(async path => {
     try {
       const request = new Request(path, { cache: 'reload' });
       const response = await fetch(request);
       if (response && response.status === 200 && response.type !== 'opaque') {
         await cache.put(path, response);
+        refreshedCount += 1;
       }
     } catch {
       // Keep the existing cached copy if a refresh request fails.
     }
   }));
+  if (refreshedCount > 0) await cleanupOldAppCaches(cacheName);
 }
 
 self.addEventListener('install', e => {
@@ -69,9 +116,9 @@ self.addEventListener('install', e => {
 
 self.addEventListener('activate', e => {
   e.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
-    ).then(() => self.clients.claim())
+    getAppCacheName()
+      .then(cacheName => cleanupOldAppCaches(cacheName))
+      .then(() => self.clients.claim())
   );
 });
 
@@ -90,7 +137,7 @@ self.addEventListener('fetch', e => {
         .then(res => {
           if (res && res.status === 200 && res.type !== 'opaque') {
             const clone = res.clone();
-            caches.open(CACHE).then(c => c.put(e.request, clone));
+            getAppCacheName().then(cacheName => caches.open(cacheName)).then(c => c.put(e.request, clone));
           }
           return res;
         })
@@ -105,7 +152,7 @@ self.addEventListener('fetch', e => {
       return fetch(e.request).then(res => {
         if (!res || res.status !== 200 || res.type === 'opaque') return res;
         const clone = res.clone();
-        caches.open(CACHE).then(c => c.put(e.request, clone));
+        getAppCacheName().then(cacheName => caches.open(cacheName)).then(c => c.put(e.request, clone));
         return res;
       });
     })
@@ -114,5 +161,5 @@ self.addEventListener('fetch', e => {
 
 self.addEventListener('message', e => {
   if (e.data?.type !== 'NEONYKE_REFRESH_CACHE') return;
-  e.waitUntil(precacheApp());
+  e.waitUntil(precacheApp({ rotateIfStale: true }));
 });

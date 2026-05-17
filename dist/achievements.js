@@ -6,7 +6,7 @@ const ACHIEVEMENTS = [
   { id: 'yeshua_is_king', name: 'Yeshua Is King',   desc: 'Heal 343 (7×7×7) HP total in one run',  icon: '✝' },
   { id: 'unkillable',     name: 'Unkillable',       desc: 'Beat the game without taking damage',   icon: '⛨' },
   { id: 'hoarder',        name: 'Hoarder',          desc: 'Hold 10 relics at once',                icon: '◈' },
-  { id: 'glass_cannon',   name: 'Glass Cannon',     desc: 'Win a run at 1 HP',                     icon: '✦' },
+  { id: 'glass_cannon',   name: 'Quartz Cannon',     desc: 'Win a run at 1 HP',                     icon: '✦' },
   { id: 'floor_muncher',  name: 'Floor Muncher',    desc: 'Reach floor 10',                        icon: '↟' },
   { id: 'overleveled',    name: 'Overleveled',      desc: 'Reach level 20 in a single run',        icon: '★' },
   { id: 'shopping_spree', name: 'Shopping Spree',   desc: 'Buy 5 items from shops in one run',     icon: '◎' },

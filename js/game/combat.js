@@ -13,6 +13,19 @@
     return Math.round(powered);
   }
 
+  function getBloodMultiplier() {
+    const value = window.NeoSettings?.getBloodMultiplier?.()
+      ?? window.NeoSettings?.getGameplay?.()?.bloodMultiplier
+      ?? window.NeoSettings?.getAccess?.()?.bloodMultiplier
+      ?? 1;
+    return Neo.clamp(Math.round(Number(value) || 1), 1, 10);
+  }
+
+  function shouldBloodOnHit() {
+    return window.NeoSettings?.shouldBloodOnHit?.() !== false
+      && window.NeoSettings?.getGameplay?.()?.bloodOnHit !== false;
+  }
+
   function getEnemyBleedResistance(enemy) {
     const loopNumber = Math.max(1, Math.floor((Neo.floor - 1) / 10) + 1);
     const floorInLoop = ((Neo.floor - 1) % 10) + 1;
@@ -1193,6 +1206,9 @@
     applyEnemyImpactStun(enemy, dealt, appliedKnockback);
     if (!options.noCharmBuff) Neo.grantCritCharmBuff();
     Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.24, vx: Neo.rand(-30, 30, 'fx'), vy: Neo.rand(-30, 30, 'fx'), c: color });
+    if (shouldBloodOnHit() && options.bloodOnHit !== false) {
+      spawnBleedSpray(enemy, 1, isCrit ? 1.2 : 0.72);
+    }
     Neo.spawnDamagePopup(enemy.x, enemy.y - 14, dealt, {
       crit: isCrit,
       color: isCrit ? '#ff9f1c' : '#ff6b6b',
@@ -1269,7 +1285,8 @@
 
   function spawnBleedSpray(enemy, stacks = 1, intensity = 1) {
     if (!enemy) return;
-    const count = Neo.clamp(Math.ceil(Number(stacks || 1) * Number(intensity || 1)) + 1, 2, 9);
+    const bloodMult = getBloodMultiplier();
+    const count = Neo.clamp(Math.ceil(Number(stacks || 1) * Number(intensity || 1) * bloodMult) + 1, 2, Math.ceil(9 * bloodMult));
     const radius = Math.max(8, Number(enemy.r || 12));
     for (let index = 0; index < count; index += 1) {
       const angle = Neo.rand(Math.PI * 2, 0, 'fx');
@@ -1487,7 +1504,8 @@
       Neo.consumeCharge('chrono_spring');
     }
 
-    const deathDust = enemy.elite ? 6 : Neo.isBossType(enemy.type) ? 9 : 4;
+    const bloodMult = getBloodMultiplier();
+    const deathDust = Math.ceil((enemy.elite ? 6 : Neo.isBossType(enemy.type) ? 9 : 4) * bloodMult);
     for (let burst = 0; burst < deathDust; burst += 1) {
       const angle = Neo.rand(Math.PI * 2, 0, 'fx');
       Neo.spawnParticle({

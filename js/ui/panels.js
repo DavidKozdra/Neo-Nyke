@@ -36,6 +36,11 @@ export function bindInput() {
         if (event.key === 'Escape') event.preventDefault();
         return;
       }
+      if (event.key === 'Escape' && isPanelOpen(Neo.ui.invPanel)) {
+        event.preventDefault();
+        setInventoryPanelOpen(false);
+        return;
+      }
       if (event.key === 'Escape') {
         if (Neo.gameState === 'play') { Neo.pauseGame(); return; }
         if (Neo.gameState === 'pause') { Neo.resumeGame(); return; }
@@ -57,7 +62,7 @@ export function bindInput() {
           Neo.anvilKeyLatch = true;
         }
       }
-      if (key === inventoryKey && Neo.gameState === 'play' && !Neo.invKeyLatch) {
+      if (key === inventoryKey && (Neo.gameState === 'play' || isPanelOpen(Neo.ui.invPanel)) && !Neo.invKeyLatch) {
         toggleInventoryPanel();
         Neo.invKeyLatch = true;
       }
@@ -470,8 +475,19 @@ export function setInventoryPanelOpen(open) {
     if (!Neo.ui.invPanel) return;
     Neo.ui.invPanel.classList.toggle('hidden', !open);
     Neo.ui.invPanel.setAttribute('aria-hidden', open ? 'false' : 'true');
-    if (!open) Neo.activeInventorySlot = '';
+    if (!open) {
+      Neo.activeInventorySlot = '';
+      if (Neo.inventoryPauseActive) {
+        Neo.inventoryPauseActive = false;
+        if (Neo.gameState === 'pause') Neo.resumeGame();
+      }
+    }
     if (open) {
+      const shouldPause = window.NeoSettings?.shouldPauseInventory?.() !== false;
+      if (shouldPause && Neo.gameState === 'play') {
+        Neo.inventoryPauseActive = true;
+        Neo.pauseGame();
+      }
       const isCoop = Neo.gameMode === 'coop' && (Neo.player2 || Neo.player3 || Neo.player4);
       if (Neo.ui.invPlayerTabs) Neo.ui.invPlayerTabs.classList.toggle('hidden', !isCoop);
       if (isCoop) updateInvPlayerTabVisibility();
