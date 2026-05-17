@@ -36,15 +36,22 @@ export function createUIController(view) {
     let objectiveExpanded = true;
     const runHistoryPageSize = 8;
 
+    const LC = `<span class="lc-icon">◆</span>`;
+
+    function ensureRunHistoryPanelCanOverlayGame() {
+      if (!view.runHistoryPanel || view.runHistoryPanel.parentElement === document.body) return;
+      document.body.appendChild(view.runHistoryPanel);
+    }
+
     function getChallengeAccent(def) {
       const accent = String(def?.accent || '#8dd4ff').trim();
       return /^#[0-9a-f]{3,8}$/i.test(accent) ? accent : '#8dd4ff';
     }
 
     function getChallengeStatus(def, state) {
-      if (!state.isUnlocked) return `LOCKED UNTIL ${def.unlockLoops} LC`;
+      if (!state.isUnlocked) return `LOCKED UNTIL ${def.unlockLoops} ${LC}`;
       if (state.isOwned) return state.isSelected ? 'ACTIVE THIS RUN' : 'OWNED';
-      return `BUY ${def.cost} LC`;
+      return `BUY ${def.cost} ${LC}`;
     }
 
     function renderChallengeButtonContent(def, state) {
@@ -55,7 +62,7 @@ export function createUIController(view) {
         <span class="challenge-btn__content">
           <span class="challenge-btn__top">
             <b>${Neo.escapeHtml(def.name)}</b>
-            <em>${Neo.escapeHtml(status)}</em>
+            <em>${status}</em>
           </span>
           <span class="challenge-btn__meta">${Neo.escapeHtml(def.theme || 'Challenge')}</span>
           <span class="challenge-btn__desc">${Neo.escapeHtml(def.description)}</span>
@@ -94,7 +101,7 @@ export function createUIController(view) {
         <div class="meta-challenge-card__body">
           <div class="meta-challenge-card__top">
             <b>${Neo.escapeHtml(def.name)}</b>
-            <em>${Neo.escapeHtml(status)}</em>
+            <em>${status}</em>
           </div>
           <div class="meta-challenge-card__tags">
             <span>${Neo.escapeHtml(def.theme || 'Challenge')}</span>
@@ -116,13 +123,13 @@ export function createUIController(view) {
         const def = Neo.LEGACY_UPGRADES[key];
         if (!def) return '';
         const isOwned = ownedLegacy.has(key);
-        const status = isOwned ? 'UNLOCKED' : context.loopCrystals >= def.cost ? `BUY ${def.cost} LC` : `NEED ${def.cost} LC`;
+        const status = isOwned ? 'UNLOCKED' : context.loopCrystals >= def.cost ? `BUY ${def.cost} ${LC}` : `NEED ${def.cost} ${LC}`;
         return `<div class="meta-legacy-card${isOwned ? ' meta-legacy-card--owned' : ''}">
-          <span class="meta-legacy-card__sigil">LC</span>
+          <span class="meta-legacy-card__sigil lc-icon">◆</span>
           <div>
             <div class="meta-legacy-card__top">
               <b>${Neo.escapeHtml(def.name)}</b>
-              <em>${Neo.escapeHtml(status)}</em>
+              <em>${status}</em>
             </div>
             <p>${Neo.escapeHtml(def.effect || def.description || '')}</p>
           </div>
@@ -132,7 +139,7 @@ export function createUIController(view) {
         <div class="meta-info-summary">
           <div class="meta-info-summary__stat"><span>Loop Crystals</span><b>${context.loopCrystals}</b></div>
           <div class="meta-info-summary__stat"><span>Challenges Owned</span><b>${ownedCount}/${(Neo.CHALLENGE_ORDER || []).length}</b></div>
-          <div class="meta-info-summary__stat"><span>Active Bonus</span><b>+${challengeBonus} LC</b></div>
+          <div class="meta-info-summary__stat"><span>Active Bonus</span><b>+${challengeBonus} ${LC}</b></div>
         </div>
         <section class="meta-info-section">
           <div class="meta-info-section__head">
@@ -423,7 +430,8 @@ export function createUIController(view) {
         view.challengeStatus.setAttribute('aria-hidden', 'true');
       }
       if (show !== 'charselect') { setChallengePanelOpen(false); setLegacyPanelOpen(false); }
-      if (show !== 'menu') { setRunHistoryOpen(false); setAltModesPanelOpen(false); setSandboxPanelOpen(false); }
+      if (show !== 'menu' && show !== 'pause') setRunHistoryOpen(false);
+      if (show !== 'menu') { setAltModesPanelOpen(false); setSandboxPanelOpen(false); }
       setVisible(view.endlessHud, inPlay && Neo.gameMode === 'endless', 'flex');
       setVisible(view.practicePanel, inPlay && Neo.gameMode === 'practice' && show !== 'dying', 'block');
       const isBossRush = Neo.gameMode === 'boss_rush';
@@ -450,6 +458,7 @@ export function createUIController(view) {
     let activeInfoTab = 'items';
 
     function setRunHistoryOpen(open) {
+      ensureRunHistoryPanelCanOverlayGame();
       runHistoryOpen = !!open;
       view.runHistoryPanel?.classList.toggle('hidden', !runHistoryOpen);
       view.runHistoryPanel?.setAttribute('aria-hidden', runHistoryOpen ? 'false' : 'true');
@@ -929,6 +938,7 @@ export function createUIController(view) {
       },
       bindMenuActions(handlers) {
         if (menuBound) return;
+        ensureRunHistoryPanelCanOverlayGame();
         view.charButtons.forEach(button => {
           button.addEventListener('click', () => {
             handlers.onCharacterSelect(button.dataset.char || '', button);
@@ -941,15 +951,11 @@ export function createUIController(view) {
         const charOrder = ['princess', 'thorn_knight', 'metao', 'granialla', 'mooggy'];
         function carouselStep(delta) {
           const currentIndex = charOrder.indexOf(handlers._getChosenCharacter ? handlers._getChosenCharacter() : 'princess');
-          let nextIndex = currentIndex;
-          while (nextIndex + delta >= 0 && nextIndex + delta < charOrder.length) {
-            nextIndex += delta;
+          const nextIndex = currentIndex + delta;
+          if (nextIndex >= 0 && nextIndex < charOrder.length) {
             const nextKey = charOrder[nextIndex];
             const btn = view.charButtons.find(b => b.dataset.char === nextKey);
-            if (btn && !btn.classList.contains('locked')) {
-              handlers.onCharacterSelect(nextKey, btn);
-              break;
-            }
+            if (btn) handlers.onCharacterSelect(nextKey, btn);
           }
         }
         carouselPrev?.addEventListener('click', () => carouselStep(-1));
@@ -1320,6 +1326,13 @@ export function createUIController(view) {
             else actions?.onDeadAction?.(action);
           });
         });
+        view.winActions?.forEach(button => {
+          button.addEventListener('click', () => {
+            const action = button.dataset.winAction || 'new-seed';
+            if (typeof actions === 'function') actions();
+            else actions?.onWinAction?.(action);
+          });
+        });
         restartBound = true;
       },
       playDialogue(lines, options) {
@@ -1410,10 +1423,13 @@ export function createUIController(view) {
         // ── Arrow disabled state ─────────────────────────────
         const carouselPrev = document.getElementById('carouselPrev');
         const carouselNext = document.getElementById('carouselNext');
-        const unlockedOrder = CHAR_ORDER.filter(k => unlocked.has(k));
-        const currentPos = unlockedOrder.indexOf(selected);
+        const currentPos = CHAR_ORDER.indexOf(selected);
         if (carouselPrev) carouselPrev.disabled = currentPos <= 0;
-        if (carouselNext) carouselNext.disabled = currentPos >= unlockedOrder.length - 1;
+        if (carouselNext) carouselNext.disabled = currentPos >= CHAR_ORDER.length - 1;
+
+        // ── Go button: disable if selected character is locked ─
+        const goBtn = document.getElementById('go');
+        if (goBtn) goBtn.disabled = !unlocked.has(selected);
 
         // ── Hero detail panel ────────────────────────────────
         const detail = document.getElementById('heroDetail');
@@ -1477,7 +1493,7 @@ export function createUIController(view) {
         if (view.challengeHint) {
           const activeCount = selected.length;
           const bonusCrystals = Math.max(0, Math.round(Neo.getActiveChallengeCrystalBonusMultiplier()));
-          view.challengeHint.textContent = `Loop Crystals: ${loopCrystals}. Buy run types once, then toggle them. Active: ${activeCount}. Loop bonus: +${bonusCrystals} LC.`;
+          view.challengeHint.innerHTML = `${LC} ${loopCrystals} — Buy run types once, then toggle them. Active: ${activeCount}. Loop bonus: +${bonusCrystals} ${LC}.`;
         }
         if (activeInfoTab === 'meta' && view.rhInfoContent) view.rhInfoContent.innerHTML = renderMetaProgressionInfo();
       },
@@ -1490,11 +1506,11 @@ export function createUIController(view) {
           const canAfford = loopCrystals >= def.cost;
           button.classList.toggle('owned', isOwned);
           button.disabled = isOwned;
-          const status = isOwned ? 'UNLOCKED' : canAfford ? `BUY ${def.cost} LC` : `NEED ${def.cost} LC`;
+          const status = isOwned ? 'UNLOCKED' : canAfford ? `BUY ${def.cost} ${LC}` : `NEED ${def.cost} ${LC}`;
           button.innerHTML = `
             <span class="legacy-btn__top">
               <b>${Neo.escapeHtml(def.name)}</b>
-              <em>${Neo.escapeHtml(status)}</em>
+              <em>${status}</em>
             </span>
             <span class="legacy-btn__desc">${Neo.escapeHtml(def.description)}</span>
             <span class="legacy-btn__effect">${Neo.escapeHtml(def.effect)}</span>
@@ -1502,7 +1518,7 @@ export function createUIController(view) {
         });
         if (view.legacyHint) {
           const ownedCount = Neo.LEGACY_ORDER.filter(k => owned.has(k)).length;
-          view.legacyHint.textContent = `Loop Crystals: ${loopCrystals}. Unlocked: ${ownedCount} / ${Neo.LEGACY_ORDER.length}. Upgrades are permanent and apply to all future runs.`;
+          view.legacyHint.innerHTML = `${LC} ${loopCrystals} — Unlocked: ${ownedCount} / ${Neo.LEGACY_ORDER.length}. Upgrades are permanent and apply to all future runs.`;
         }
         if (activeInfoTab === 'meta' && view.rhInfoContent) view.rhInfoContent.innerHTML = renderMetaProgressionInfo();
       },
@@ -1617,7 +1633,7 @@ export function createUIController(view) {
         if (reviveButton) {
           const cost = Neo.getReviveCost();
           const crystals = Number(Neo.metaProgress.loopCrystals || 0);
-          reviveButton.textContent = `REVIVE ${cost} LC`;
+          reviveButton.innerHTML = `REVIVE ${cost} ${LC}`;
           reviveButton.disabled = crystals < cost;
           reviveButton.title = crystals < cost ? `Need ${cost} Loop Crystal${cost === 1 ? '' : 's'}` : `Spend ${cost} Loop Crystal${cost === 1 ? '' : 's'} to revive`;
         }

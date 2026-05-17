@@ -646,6 +646,7 @@
     winRestart: document.querySelector('#win .restart'),
     pause: document.getElementById('pause'),
     pauseResume: document.getElementById('pauseResume'),
+    pauseInfo: document.getElementById('pauseInfo'),
     pauseSettings: document.getElementById('pauseSettings'),
     pauseMain: document.getElementById('pauseMain'),
     interactPrompt: document.getElementById('interactPrompt'),
@@ -1052,7 +1053,7 @@
     metao_fire_staff:         { damage: 22,   cooldown: 0.75, range: 200, knockback: 100 },
     magenta_degale:           { damage: 80,   cooldown: 1.50,             knockback: 480 },
     magenta_p90:              { damage: 18,   cooldown: 1.80,             knockback: 140 },
-    granillia_lightning_spear:{ damage: 45,   cooldown: 0.55,             knockback: 200 },
+    granillia_lightning_spear:{ damage: 45,   cooldown: 2.00,             knockback: 200 },
     excalibur:                { damage: 202,  cooldown: 2.00, range: 120, knockback: 600 },
     golden_fleece:            { damage: 20,   cooldown: 0.50, range: 80,  knockback: 80  },
     void_piercer:             { damage: 55,   cooldown: 0.80,             knockback: 160 },
@@ -1846,7 +1847,6 @@
         return chosenCharacter;
       },
       onCharacterSelect(characterKey, button) {
-        if (button.classList.contains('locked')) return;
         if (charSelectPhase === 'p2') { chosenCharacter2 = characterKey; }
         else if (charSelectPhase === 'p3') { chosenCharacter3 = characterKey; }
         else if (charSelectPhase === 'p4') { chosenCharacter4 = characterKey; }
@@ -2013,6 +2013,9 @@
     });
 
     ui.pauseResume.addEventListener('click', resumeGame);
+    ui.pauseInfo?.addEventListener('click', () => {
+      uiController.setRunHistoryOpen(true);
+    });
     ui.pauseSettings.addEventListener('click', () => {
       document.getElementById('settingsBtn').click();
     });

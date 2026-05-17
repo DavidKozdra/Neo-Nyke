@@ -571,6 +571,20 @@
         Neo.ctx.fillText(String(pickup.label || 'Offer'), 0, -2);
         Neo.ctx.font = 'bold 10px system-ui';
         Neo.ctx.fillText(`${cost} ${usesCoins ? 'C' : 'LC'}`, 0, 12);
+      } else if (pickup.type === 'secret_boss_chest') {
+        const t = Date.now() * 0.003;
+        const glow = '#c9aaff';
+        Neo.ctx.shadowColor = glow;
+        Neo.ctx.shadowBlur = 18 + Math.sin(t) * 6;
+        Neo.ctx.strokeStyle = glow;
+        Neo.ctx.lineWidth = 2.5;
+        Neo.ctx.strokeRect(-16, -12, 32, 24);
+        Neo.ctx.fillStyle = 'rgba(40,10,60,0.88)';
+        Neo.ctx.fillRect(-15, -11, 30, 22);
+        Neo.ctx.fillStyle = glow;
+        Neo.ctx.font = 'bold 9px system-ui';
+        Neo.ctx.textAlign = 'center';
+        Neo.ctx.fillText('CLAIM', 0, 4);
       } else if (pickup.type === 'crown') {
         Neo.ctx.fillStyle = '#fff';
         Neo.ctx.shadowColor = '#fff';

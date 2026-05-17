@@ -451,7 +451,7 @@
       hitOptions: null, trail: null,
       splash: 0, splashDamage: 0, blockedSplashDamage: 0, fireStacks: 0, fireDuration: 0,
       homing: false, homingSpeed: 0, homingAccel: 0, homingTurnRate: 0,
-      fromRival: false,
+      fromRival: false, source: null,
     });
   }
 
@@ -464,8 +464,22 @@
       hitOptions: null, trail: null,
       splash: 0, splashDamage: 0, blockedSplashDamage: 0, fireStacks: 0, fireDuration: 0,
       homing: false, homingSpeed: 0, homingAccel: 0, homingTurnRate: 0,
-      fromRival: false,
+      fromRival: false, source: null,
     };
+  }
+
+  function getProjectileDamageSource(projectile) {
+    if (projectile?.source) return projectile.source;
+    const kindSource = {
+      sniper_round: 'sniper_projectile',
+      machine_round: 'machine_gunner_projectile',
+      cult_missile: 'queen_cult_projectile',
+      sword: 'god_projectile',
+      god_sword: 'god_projectile',
+      mirror_shot: 'mirror_knight_projectile',
+      power_disk: 'laser_projectile',
+    };
+    return kindSource[projectile?.kind] || 'enemy_projectile';
   }
 
   function spawnProjectile(props) {
@@ -494,6 +508,7 @@
     p.homingAccel = props.homingAccel ?? 0;
     p.homingTurnRate = props.homingTurnRate ?? 0;
     p.fromRival = props.fromRival ?? false;
+    p.source = props.source ?? null;
     Neo.projectiles.push(p);
   }
 
@@ -557,7 +572,7 @@
           continue;
         }
       } else if (Neo.dist(projectile.x, projectile.y, Neo.player.x, Neo.player.y) <= projectile.r + Neo.player.r) {
-        damagePlayer(projectile.damage || 10, Math.atan2(projectile.vy, projectile.vx), projectile.knockback || 120, 'enemy_projectile');
+        damagePlayer(projectile.damage || 10, Math.atan2(projectile.vy, projectile.vx), projectile.knockback || 120, getProjectileDamageSource(projectile));
         spawnProjectileImpact(projectile, projectile.x, projectile.y);
         _projectilePool.push(Neo.projectiles.splice(index, 1)[0]);
         continue;
@@ -659,7 +674,7 @@
           const enemy = Neo.enemies[ei];
           if (!enemy) continue;
           if (Neo.dist(enemy.x, enemy.y, hazard.x, hazard.y) < hazard.r + enemy.r) {
-            enemy.hp -= 10 * dt;
+            enemy.hp -= (10 * dt) / Math.max(1, Number(enemy.defenseMultiplier || 1));
             if (enemy.hp <= 0) Neo.onEnemyDie(enemy);
           }
         }
@@ -668,7 +683,7 @@
           const enemy = Neo.enemies[ei];
           if (!enemy) continue;
           if (Neo.dist(enemy.x, enemy.y, hazard.x, hazard.y) > hazard.r + enemy.r) continue;
-          enemy.hp -= (hazard.dps || 16) * dt;
+          enemy.hp -= ((hazard.dps || 16) * dt) / Math.max(1, Number(enemy.defenseMultiplier || 1));
           if (hazard.statusTick <= 0) Neo.applyFire(enemy, 1, 2.8);
           enemy.stun = Math.max(enemy.stun, 0.05);
           if (Neo.nextRandom('fx') < 0.06) Neo.spawnParticle({ x: enemy.x + Neo.rand(-6, 6), y: enemy.y + Neo.rand(-6, 6), life: 0.3, c: '#ff8c3b' });
@@ -1098,6 +1113,16 @@
         Neo.persistMetaSoon();
       }
 
+      if (pickup.type === 'secret_boss_chest') {
+        Neo.pickups.splice(index, 1);
+        Neo.collectItem(Neo.rollItemDrop({ elite: true, random: Neo.createEntityRandom(pickup, 'secret-boss:loot') }));
+        addCoins(60 + Neo.floor * 8);
+        Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 24, life: 1.0, text: 'BANE SLAIN', c: '#c9aaff' });
+        Neo.syncCurrentRoomState();
+        Neo.scheduleRunSave();
+        return;
+      }
+
       if (pickup.type === 'fightGod') {
         Neo.currentRoom.bossStarted = true;
         Neo.pickups = [];
@@ -1272,9 +1297,10 @@
 
   function isRoomLocked() {
     const challengeActive = !!Neo.currentRoom && Neo.CHALLENGE_ROOM_TYPES.has(Neo.currentRoom.type) && !!Neo.currentRoom.challengeStarted && !Neo.currentRoom.cleared;
+    const baneActive = !!Neo.currentRoom && Neo.currentRoom.secret && Neo.currentRoom.secretKind === 'bowman_bane' && !!Neo.currentRoom.bossStarted && !Neo.currentRoom.cleared;
     return !!Neo.currentRoom
       && !Neo.currentRoom.cleared
-      && (Neo.currentRoom.type === 'boss' || Neo.currentRoom.type === 'god' || Neo.currentRoom.type === 'ladder' || challengeActive);
+      && (Neo.currentRoom.type === 'boss' || Neo.currentRoom.type === 'god' || Neo.currentRoom.type === 'ladder' || challengeActive || baneActive);
   }
 
   function updateTransitions(dt) {

@@ -435,6 +435,11 @@
       applyEliteInventory(enemy);
     }
 
+    enemy.max = Math.round(enemy.max * 2);
+    enemy.hp = enemy.max;
+    enemy.defenseMultiplier = Math.max(2, Number(enemy.defenseMultiplier || 1));
+    enemy.eliteDurabilityV2 = true;
+
     if (enemy.eliteTypes.includes('giant')) {
       enemy.max = Math.round(enemy.max * 5);
       enemy.hp = enemy.max;
@@ -714,6 +719,17 @@
       base.dmg = 20;
       base.attackCd = 1.2;
       base.phase = 1;
+    } else if (type === 'bowman_bane') {
+      base.r = 36;
+      base.hp = 2400;
+      base.max = 2400;
+      base.speed = 80;
+      base.dmg = 22;
+      base.attackCd = 1.4;
+      base.phase = 1;
+      base.bleedImmune = true;
+      base.columnCd = 0;
+      base.burstCd = 0;
     } else {
       if (eliteAllowed) {
         base.hp = Math.round(base.hp * 1.35);
@@ -2000,6 +2016,98 @@
     }
   }
 
+  function spawnBowmanBane() {
+    const existing = Neo.enemies.find(enemy => enemy.type === 'bowman_bane');
+    if (existing) return existing;
+    const safeSpawn = findSafeEnemySpawnPoint(Neo.ROOM_W / 2, Neo.ROOM_H / 2 - 40, 20);
+    if (!safeSpawn) return null;
+    const boss = spawnEnemy('bowman_bane', safeSpawn.x, safeSpawn.y, false);
+    const line = Neo.BOSS_OPENING_DIALOGUE['bowman_bane'];
+    if (boss && line) sayOverEntity(boss, line);
+    Neo.spawnParticle({ x: boss.x, y: boss.y - boss.r - 14, life: 1.1, text: "BOWMAN'S BANE", c: '#c9aaff' });
+    return boss;
+  }
+
+  function updateBowmanBane(enemy, dt) {
+    const tuning = Neo.getEnemyDifficultyTuning();
+    const hpPct = enemy.hp / enemy.max;
+    const dx = Neo.player.x - enemy.x;
+    const dy = Neo.player.y - enemy.y;
+    const distance = Math.hypot(dx, dy) || 1;
+
+    if (hpPct < 0.5 && enemy.phase === 1) {
+      enemy.phase = 2;
+      sayOverEntity(enemy, 'You should have feared the dark.', { holdTime: 1.8 });
+    }
+
+    enemy.columnCd = Math.max(0, Number(enemy.columnCd || 0) - dt);
+    if (enemy.columnCd <= 0 && enemy.stun <= 0) {
+      enemy.columnCd = enemy.phase >= 2 ? 2.8 * tuning.rangedCadence : 4.2 * tuning.rangedCadence;
+      const columnCount = enemy.phase >= 2 ? 4 : 2;
+      const predicted = { x: Neo.player.x + (Neo.player.vx || 0) * 0.55, y: Neo.player.y + (Neo.player.vy || 0) * 0.55 };
+      for (let index = 0; index < columnCount; index += 1) {
+        const spread = (index - (columnCount - 1) / 2) * 72;
+        const perpAngle = Math.atan2(dy, dx) + Math.PI / 2;
+        const cx = Neo.clamp(predicted.x + Math.cos(perpAngle) * spread + Neo.rand(-30, 30, 'encounter'), 80, Neo.ROOM_W - 80);
+        const cy = Neo.clamp(predicted.y + Math.sin(perpAngle) * spread + Neo.rand(-30, 30, 'encounter'), 80, Neo.ROOM_H - 80);
+        Neo.hazards.push({
+          kind: 'lightning_column',
+          enemy: true,
+          source: 'bowman_bane',
+          x: cx,
+          y: cy,
+          r: 44,
+          ttl: enemy.phase >= 2 ? 3.4 : 2.6,
+          tick: 0.15,
+          interval: 0.38,
+          damage: Math.round(enemy.dmg * 0.7),
+        });
+        Neo.spawnParticle({ x: cx, y: cy, life: 0.45, ring: 22, c: '#8dd4ff' });
+      }
+    }
+
+    if (enemy.stun > 0) {
+      enemy.vx *= 0.88;
+      enemy.vy *= 0.88;
+      return;
+    }
+
+    if (enemy.windup > 0) {
+      enemy.windup -= dt;
+      enemy.vx *= 0.82;
+      enemy.vy *= 0.82;
+      Neo.aimEnemyBeam(enemy, dt, 2.8 * tuning.reaction);
+      Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.14, c: '#8dd4ff' });
+      if (enemy.windup <= 0) {
+        enemy.beamTime = enemy.phase >= 2 ? 0.72 : 0.52;
+        enemy.beamTick = 0;
+      }
+      return;
+    }
+
+    if (enemy.beamTime > 0) {
+      Neo.tickEnemyBeam(enemy, dt, {
+        tick: 0.1 * Math.max(0.72, tuning.rangedCadence),
+        range: 480,
+        knockback: 170,
+        damage: enemy.dmg,
+        speedDamp: 0.82,
+        turnRate: enemy.phase >= 2 ? 2.8 * tuning.reaction : 2.2 * tuning.reaction,
+      });
+      return;
+    }
+
+    const desired = enemy.phase >= 2 ? 200 : 260;
+    const direction = distance < desired - 30 ? -1 : distance > desired + 30 ? 1 : 0;
+    steerEnemy(enemy, dx / distance * direction, dy / distance * direction, enemy.speed, 3.4, dt);
+
+    if (enemy.attackCd <= 0 && distance < 420) {
+      enemy.windup = (enemy.phase >= 2 ? 0.54 : 0.72) / tuning.reaction;
+      enemy.beamAngle = Math.atan2(dy, dx) + Neo.rollEnemyBeamBias(enemy, 0.18);
+      enemy.attackCd = (enemy.phase >= 2 ? 2.4 : 3.2) * tuning.rangedCadence;
+    }
+  }
+
   function updateLaserEnemy(enemy, dt) {
     const tuning = Neo.getEnemyDifficultyTuning();
     const dx = Neo.player.x - enemy.x;
@@ -2948,6 +3056,8 @@
   Neo.completeChallengeTrial = completeChallengeTrial;
   Neo.failChallengeTrial = failChallengeTrial;
   Neo.isBossType = isBossType;
+  Neo.spawnBowmanBane = spawnBowmanBane;
+  Neo.updateBowmanBane = updateBowmanBane;
 	  Neo.updateHunterEnemy = updateHunterEnemy;
 	  Neo.updateCultMageEnemy = updateCultMageEnemy;
 	  Neo.updateCultQueenBoss = updateCultQueenBoss;

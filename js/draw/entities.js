@@ -203,7 +203,7 @@
       if (enemy.windup > 0) {
         Neo.ctx.save();
         Neo.ctx.translate(enemy.x, enemy.y);
-        Neo.ctx.strokeStyle = (enemy.type === 'charger' || enemy.type === 'golem' || enemy.type === 'bulk_golem') ? '#ff8844' : '#aa66ff';
+        Neo.ctx.strokeStyle = (enemy.type === 'charger' || enemy.type === 'golem' || enemy.type === 'bulk_golem') ? '#ff8844' : enemy.type === 'bowman_bane' ? '#8dd4ff' : '#aa66ff';
         Neo.ctx.lineWidth = 2;
         Neo.ctx.globalAlpha = 0.8;
         Neo.ctx.beginPath();
@@ -212,10 +212,10 @@
         Neo.ctx.restore();
       }
       if (enemy.beamTime > 0) {
-        const range = enemy.type === 'god' ? (enemy.beamRange || 620) : enemy.type === 'mooggy' ? 520 : 430;
+        const range = enemy.type === 'god' ? (enemy.beamRange || 620) : enemy.type === 'mooggy' ? 520 : enemy.type === 'bowman_bane' ? 480 : 430;
         const beamPath = Neo.buildRicochetBeamPath(enemy.x, enemy.y, enemy.beamAngle, range, Neo.getEnemyBeamBounceCount(enemy));
         Neo.strokeBeamPath(beamPath, {
-          color: enemy.type === 'god' ? '#ffffff' : enemy.type === 'mooggy' ? '#ff3348' : '#aa66ff',
+          color: enemy.type === 'god' ? '#ffffff' : enemy.type === 'mooggy' ? '#ff3348' : enemy.type === 'bowman_bane' ? '#8dd4ff' : '#aa66ff',
           width: enemy.type === 'god' && enemy.state === 'godSweep' ? 18 : enemy.type === 'god' ? 10 : enemy.type === 'mooggy' ? 5 : 7,
           shadowBlur: enemy.type === 'god' && enemy.state === 'godSweep' ? 24 : enemy.type === 'mooggy' ? 20 : 14,
         });

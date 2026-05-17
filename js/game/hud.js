@@ -527,7 +527,6 @@
     window.achievementEvents?.emit('run:won', { elapsedSeconds: Neo.gameElapsedTime, playerHp: Math.round(Neo.player?.hp || 0) });
     Neo.setGameState('win');
     Neo.uiController.setWinInfo(`Floor ${entry.floor} cleared with ${entry.coins} run coins banked and ${Neo.metaProgress.coins} total coins saved.`);
-    clearRunSave();
   }
 
   async function clearRunSave() {
@@ -650,6 +649,7 @@
       monsterRoamTimer: Neo.monsterRoamTimer,
       knaveKnightCutscenePlayed: Neo.knaveKnightCutscenePlayed,
       queenMetaoCutscenePlayed: Neo.queenMetaoCutscenePlayed,
+      secretRoomVisitedFloors: Array.isArray(Neo.secretRoomVisitedFloors) ? [...Neo.secretRoomVisitedFloors] : [],
       camera: Neo.camera,
     };
   }
@@ -674,6 +674,7 @@
   Neo.die = die;
   Neo.finalizeDeath = finalizeDeath;
   Neo.win = win;
+  Neo.clearRunSave = clearRunSave;
   Neo.scheduleRunSave = scheduleRunSave;
   Neo.queueMenuRefresh = queueMenuRefresh;
   Neo.queueMetaSave = queueMetaSave;

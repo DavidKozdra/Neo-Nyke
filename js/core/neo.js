@@ -154,6 +154,7 @@ window.Neo = {
   // --- cutscenes / flags ---
   knaveKnightCutscenePlayed: false,
   queenMetaoCutscenePlayed: false,
+  secretRoomVisitedFloors: [],
   cinematicTimer: null,
   pvpState: null,
   loopStarted: false,

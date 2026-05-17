@@ -91,7 +91,6 @@ export function bindInput() {
         return Neo.chosenCharacter;
       },
       onCharacterSelect(characterKey, button) {
-        if (button.classList.contains('locked')) return;
         if (Neo.charSelectPhase === 'p2') { Neo.chosenCharacter2 = characterKey; }
         else if (Neo.charSelectPhase === 'p3') { Neo.chosenCharacter3 = characterKey; }
         else if (Neo.charSelectPhase === 'p4') { Neo.chosenCharacter4 = characterKey; }
@@ -236,6 +235,25 @@ export function bindInput() {
         if (Neo.ui.seed) Neo.ui.seed.value = Neo.baseSeedStr;
         void Neo.startGame(false);
       },
+      onWinAction(action) {
+        if (action === 'loop') {
+          Neo.setGameState('play');
+          Neo.returnToFloorOne();
+          return;
+        }
+        if (action === 'menu') {
+          void Neo.clearRunSave?.();
+          Neo.gameMode = 'normal';
+          Neo.resetMultiplayerState();
+          Neo.setGameState('menu');
+          Neo.refreshMenuState();
+          return;
+        }
+        void Neo.clearRunSave?.();
+        if (Neo.ui.seed) Neo.ui.seed.value = '';
+        Neo.baseSeedStr = Neo.createRandomSeed();
+        void Neo.startGame(false);
+      },
       onDeadAction(action) {
         if (action === 'menu') {
           Neo.gameMode = 'normal';
@@ -260,6 +278,9 @@ export function bindInput() {
     });
 
     Neo.ui.pauseResume.addEventListener('click', Neo.resumeGame);
+    Neo.ui.pauseInfo?.addEventListener('click', () => {
+      Neo.uiController.setRunHistoryOpen(true);
+    });
     Neo.ui.pauseSettings.addEventListener('click', () => {
       document.getElementById('settingsBtn').click();
     });

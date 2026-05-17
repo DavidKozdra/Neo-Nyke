@@ -326,6 +326,7 @@ export function loop(timestamp) {
         else if (enemy.type === 'queen_cult') Neo.updateCultQueenBoss(enemy, dt);
         else if (enemy.type === 'bulk_golem') Neo.updateBulkGolemBoss(enemy, dt);
         else if (enemy.type === 'artificer_knave') Neo.updateArtificerBoss(enemy, dt);
+        else if (enemy.type === 'bowman_bane') Neo.updateBowmanBane(enemy, dt);
         else if (enemy.type === 'mirror_knight') Neo.updateMirrorChampion(enemy, dt);
         else if (enemy.type === 'mooggy') Neo.updateMooggyEnemy(enemy, dt);
         else if (enemy.type === 'rival') Neo.updateRivalEnemy(enemy, dt);

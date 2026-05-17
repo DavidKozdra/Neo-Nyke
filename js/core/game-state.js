@@ -902,7 +902,7 @@ export function resumeGame() {
     if (anvilBase !== null) return anvilBase / attackSpeed;
     if (moveKey === 'warp') return 2.8 / attackSpeed;
     if (moveKey === 'nimrod_stomp') return 4.2 / attackSpeed;
-    if (moveKey === 'zip_lightning') return 5.4 / attackSpeed;
+    if (moveKey === 'zip_lightning') return 2.0 / attackSpeed;
     if (moveKey === 'cowards_way') return 6 / attackSpeed;
     return 3.2 / attackSpeed;
   }
@@ -1111,6 +1111,7 @@ export function resumeGame() {
     if (type === 'queen_cult') return 'Queen of the Cult';
     if (type === 'bulk_golem') return 'Bulk Golem';
     if (type === 'artificer_knave') return 'Artificer Charged Knave';
+    if (type === 'bowman_bane') return "Bowman's Bane";
     if (type === 'god') return 'GOD';
     return titleCase(type);
   }
@@ -1540,10 +1541,10 @@ export function resumeGame() {
     if (!Neo.charSelectPhase || Neo.charSelectPhase === 'p1') {
       if (unlocked.has(preferredCharacter)) {
         Neo.chosenCharacter = preferredCharacter;
-      } else if (!unlocked.has(Neo.chosenCharacter)) {
-        Neo.chosenCharacter = [...unlocked][0] || 'thorn_knight';
       }
-      Neo.metaProgress.selectedCharacter = Neo.chosenCharacter;
+      if (unlocked.has(Neo.chosenCharacter)) {
+        Neo.metaProgress.selectedCharacter = Neo.chosenCharacter;
+      }
     }
     if (!isCompetitive) {
       if (!unlockedDifficulties.has(Neo.selectedDifficulty)) Neo.selectedDifficulty = 'easy';
@@ -1991,11 +1992,11 @@ export function resumeGame() {
 
   function buildPracticeEnemyGrid() {
     if (!Neo.ui.practiceEnemyGrid) return;
-    const BOSS_TYPES_SET = new Set(['queen_cult', 'bulk_golem', 'artificer_knave', 'god']);
+    const BOSS_TYPES_SET = new Set(['queen_cult', 'bulk_golem', 'artificer_knave', 'bowman_bane', 'god']);
     const allTypes = [
       'hunter', 'charger', 'laser', 'knave', 'sniper', 'machine_gunner',
       'golem', 'cult_mage', 'cult_follower', 'summoner', 'shield_unit', 'healer', 'boss_spawner',
-      'queen_cult', 'bulk_golem', 'artificer_knave', 'god', 'mirror_knight', 'mooggy',
+      'queen_cult', 'bulk_golem', 'artificer_knave', 'bowman_bane', 'god', 'mirror_knight', 'mooggy',
     ];
     Neo.ui.practiceEnemyGrid.innerHTML = allTypes.map(type => {
       const isBoss = BOSS_TYPES_SET.has(type);
@@ -2066,6 +2067,7 @@ export function resumeGame() {
     Neo.mooggyAssassinSpawnedThisFloor = false;
     Neo.knaveKnightCutscenePlayed = false;
     Neo.queenMetaoCutscenePlayed = false;
+    Neo.secretRoomVisitedFloors = [];
     Neo.wizardPawSelection = null;
     Neo.setWizardPawModalOpen(false);
     Neo.setShopPanelOpen(false);
@@ -2184,6 +2186,7 @@ export function resumeGame() {
     Neo.monsterRoamTimer = Number(snapshot.monsterRoamTimer || 0);
     Neo.knaveKnightCutscenePlayed = !!snapshot.knaveKnightCutscenePlayed;
     Neo.queenMetaoCutscenePlayed = !!snapshot.queenMetaoCutscenePlayed;
+    Neo.secretRoomVisitedFloors = Array.isArray(snapshot.secretRoomVisitedFloors) ? [...snapshot.secretRoomVisitedFloors] : [];
     Neo.restoreRivals(snapshot.rivals);
     Neo.wizardPawSelection = null;
     Neo.setWizardPawModalOpen(false);

@@ -2,15 +2,21 @@
   function scaleDamageAgainstEnemy(enemy, damage, options = {}) {
     const stats = Neo.getItemStats();
     const applyBleedBonus = options.applyBleedBonus !== false;
+    const defenseMultiplier = Math.max(1, Number(enemy?.defenseMultiplier || 1));
     const characterMultiplier = Neo.getCharacterDef().damageMultiplier || 1;
     const powered = (damage + (Neo.player?.attackPower || 0))
       * characterMultiplier
       * (stats.levelEdgeDamageMultiplier || 1)
       * (Neo.isChallengeActive('glass_cannon') ? 1.25 : 1);
     if (applyBleedBonus && Neo.getStatusStacks(enemy, 'bleed') > 0 && stats.bleedDamageMultiplier > 1) {
-      return Math.round(powered * stats.bleedDamageMultiplier);
+      return Math.max(1, Math.round((powered * stats.bleedDamageMultiplier) / defenseMultiplier));
     }
-    return Math.round(powered);
+    return Math.max(1, Math.round(powered / defenseMultiplier));
+  }
+
+  function scaleRawDamageAgainstEnemy(enemy, damage) {
+    const defenseMultiplier = Math.max(1, Number(enemy?.defenseMultiplier || 1));
+    return Math.max(1, Math.round(Number(damage || 0) / defenseMultiplier));
   }
 
   function getBloodMultiplier() {
@@ -1207,7 +1213,7 @@
     const stats = Neo.getItemStats();
     const sandbox = Neo.getActiveSandboxSettings();
     const critChance = Neo.clamp((stats.critChance || 0) + Number(options.critBonus || 0), 0, 0.98);
-    let dealt = options.rawDamage ? Math.max(1, Math.round(damage)) : scaleDamageAgainstEnemy(enemy, damage);
+    let dealt = options.rawDamage ? scaleRawDamageAgainstEnemy(enemy, damage) : scaleDamageAgainstEnemy(enemy, damage);
     if (sandbox) dealt = Math.max(1, Math.round(dealt * sandbox.playerDamageMultiplier));
     const isCrit = critChance > 0 && Neo.nextRandom('encounter') < critChance;
     const appliedKnockback = knockback * (stats.knockbackMultiplier || 1);
@@ -1333,6 +1339,12 @@
   function migrateEnemyState(enemy) {
     if (!enemy || typeof enemy !== 'object') return enemy;
     Neo.ensureStatuses(enemy);
+    if (enemy.elite && !enemy.eliteDurabilityV2) {
+      enemy.max = Math.max(1, Math.round(Number(enemy.max || enemy.hp || 1) * 2));
+      enemy.hp = Math.max(1, Math.round(Number(enemy.hp || enemy.max) * 2));
+      enemy.defenseMultiplier = Math.max(2, Number(enemy.defenseMultiplier || 1));
+      enemy.eliteDurabilityV2 = true;
+    }
     enemy.bleedImmune = !!enemy.bleedImmune;
     enemy.fireImmune = !!enemy.fireImmune;
     enemy.poisonImmune = !!enemy.poisonImmune;
@@ -1358,7 +1370,7 @@
     state.tick -= dt;
     if (state.tick <= 0) {
       state.tick = config.interval;
-      const damage = Math.max(1, Math.round(config.damage(state.stacks)));
+      const damage = scaleRawDamageAgainstEnemy(enemy, Math.max(1, Math.round(config.damage(state.stacks))));
       enemy.hp -= damage;
       Neo.spawnDamagePopup(enemy.x, enemy.y - 10, damage, { color: config.color, size: 15 });
       if (config.particleColor) {
@@ -1621,6 +1633,15 @@
 
     if (enemy.type === 'mirror_knight' && Neo.currentRoom?.type === 'challenge') {
       Neo.completeChallengeTrial('MIRROR BROKEN');
+    }
+
+    if (enemy.type === 'bowman_bane' && Neo.currentRoom?.secret && Neo.currentRoom?.secretKind === 'bowman_bane') {
+      Neo.currentRoom.cleared = true;
+      Neo.pickups = Neo.pickups.filter(pickup => pickup.type !== 'secret_boss_chest');
+      Neo.pickups.push({ x: enemy.x, y: enemy.y, type: 'secret_boss_chest' });
+      Neo.spawnParticle({ x: enemy.x, y: enemy.y - 40, life: 1.4, text: "BANE DEFEATED", c: '#c9aaff' });
+      Neo.updateObjective();
+      Neo.scheduleRunSave();
     }
 
     if (enemy.type === 'rival') {

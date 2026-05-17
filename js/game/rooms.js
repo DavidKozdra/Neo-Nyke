@@ -1,5 +1,17 @@
 // rooms.js — standalone IIFE. Floor generation, rooms, rival system.
 
+  const LADDER_BOSS_HEALTH_SCALING_START_FLOOR = 5;
+  const LADDER_BOSS_HEALTH_PER_FLOOR = 0.12;
+
+  function applyLadderBossFloorHealthModifier(boss) {
+    if (!boss || Neo.floor <= LADDER_BOSS_HEALTH_SCALING_START_FLOOR) return;
+    const floorNumberModifier = 1 + (Neo.floor - LADDER_BOSS_HEALTH_SCALING_START_FLOOR) * LADDER_BOSS_HEALTH_PER_FLOOR;
+    const previousMax = Math.max(1, Number(boss.max || boss.hp || 1));
+    boss.max = Math.max(1, Math.round(previousMax * floorNumberModifier));
+    boss.hp = Math.min(boss.max, Math.round(Number(boss.hp || previousMax) + (boss.max - previousMax)));
+    boss.ladderBossHealthModifier = floorNumberModifier;
+  }
+
   function generateFloor() {
     Neo.syncSeedState();
     Neo.resetRngStreams();
@@ -104,6 +116,21 @@
     if (room.type === 'start') return;
 
     if (room.type === 'secret') {
+      const visitedFloors = Array.isArray(Neo.secretRoomVisitedFloors) ? Neo.secretRoomVisitedFloors : [];
+      const isSecondVisit = visitedFloors.includes(Neo.floor);
+
+      if (isSecondVisit) {
+        room.cleared = false;
+        room.bossStarted = false;
+        room.secretKind = 'bowman_bane';
+        room.decorations.push(
+          { kind: 'crack', x: Neo.ROOM_W / 2 - 90, y: Neo.ROOM_H / 2 - 80, r: 28 },
+          { kind: 'crack', x: Neo.ROOM_W / 2 + 90, y: Neo.ROOM_H / 2 - 80, r: 28 },
+          { kind: 'crack', x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 + 100, r: 40 },
+        );
+        return;
+      }
+
       room.cleared = true;
       room.decorations.push(
         { kind: 'banner', x: Neo.ROOM_W / 2 - 110, y: Neo.ROOM_H / 2 - 92, r: 14 },
@@ -1013,7 +1040,14 @@
     }
 
     if (room.secret) {
-      Neo.spawnParticle({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 24, life: 1.1, text: 'SECRET ROOM', c: '#8dd4ff' });
+      if (room.secretKind !== 'bowman_bane') {
+        if (!Array.isArray(Neo.secretRoomVisitedFloors)) Neo.secretRoomVisitedFloors = [];
+        if (!Neo.secretRoomVisitedFloors.includes(Neo.floor)) {
+          Neo.secretRoomVisitedFloors.push(Neo.floor);
+          Neo.scheduleRunSave();
+        }
+        Neo.spawnParticle({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 24, life: 1.1, text: 'SECRET ROOM', c: '#8dd4ff' });
+      }
     }
 
     if (room.type === 'ladder') {
@@ -1033,6 +1067,7 @@
           const _ladderBossSpawn = Neo.findSafeEnemySpawnPoint(Neo.ROOM_W / 2, Neo.ROOM_H / 2 - 60, 20);
           if (_ladderBossSpawn) {
             const _ladderBoss = Neo.spawnEnemy(_ladderBossType, _ladderBossSpawn.x, _ladderBossSpawn.y, false);
+            applyLadderBossFloorHealthModifier(_ladderBoss);
             const _playedLadderCutscene = Neo.tryPlayBossIntroCutscene(_ladderBoss, _ladderBossType);
             const _ladderBossLine = Neo.BOSS_OPENING_DIALOGUE[_ladderBossType];
             if (!_playedLadderCutscene && _ladderBoss && _ladderBossLine) Neo.sayOverEntity(_ladderBoss, _ladderBossLine);
@@ -1097,6 +1132,21 @@
           Neo.spawnGodBoss();
         }
         ensureGodIntroDialogue();
+        syncCurrentRoomState();
+        Neo.updateObjective();
+      }
+    }
+
+    if (room.secret && room.secretKind === 'bowman_bane') {
+      if (room.cleared) {
+        if (!Neo.pickups.some(pickup => pickup.type === 'secret_boss_chest')) {
+          Neo.pickups.push({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2, type: 'secret_boss_chest' });
+        }
+      } else if (!room.bossStarted) {
+        room.bossStarted = true;
+        if (!Neo.enemies.some(enemy => enemy.type === 'bowman_bane')) {
+          Neo.spawnBowmanBane();
+        }
         syncCurrentRoomState();
         Neo.updateObjective();
       }

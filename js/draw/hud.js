@@ -177,9 +177,17 @@
 
     let size, gap, minimapScale;
     if (hasGlasses) {
-      size = 28;
-      gap = 3;
-      minimapScale = 1;
+      const baseSize = 28;
+      const baseGap = 3;
+      const baseMapWidth = gridSize * baseSize + (gridSize - 1) * baseGap;
+      const baseMapHeight = (maxGy + 1) * baseSize + maxGy * baseGap;
+      const targetViewportWidth = compact ? Math.min(224, canvasRect.width * 0.45) : Math.min(280, canvasRect.width * 0.35);
+      const targetViewportHeight = compact ? Math.min(224, canvasRect.height * 0.45) : Math.min(280, canvasRect.height * 0.4);
+      const baseViewportWidth = baseMapWidth * scaleX;
+      const baseViewportHeight = baseMapHeight * scaleY;
+      minimapScale = Neo.clamp(Math.min(1, targetViewportWidth / Math.max(1, baseViewportWidth), targetViewportHeight / Math.max(1, baseViewportHeight)), 0.5, 1);
+      size = Math.max(14, Math.round(baseSize * minimapScale));
+      gap = Math.max(2, Math.round(baseGap * minimapScale));
     } else {
       const baseSize = 14;
       const baseGap = 2;
@@ -404,6 +412,7 @@
     if (type === 'queen_cult') return 'QUEEN OF THE CULT';
     if (type === 'bulk_golem') return 'BULK GOLEM';
     if (type === 'artificer_knave') return 'ARTIFICER CHARGED KNAVE';
+    if (type === 'bowman_bane') return "BOWMAN'S BANE";
     if (type === 'god') return 'GOD';
     return type.toUpperCase();
   }
@@ -427,7 +436,7 @@
       Neo.ctx.fillStyle = '#220f28';
       Neo.ctx.fillRect(startX, y, width, height);
 
-      Neo.ctx.fillStyle = boss.type === 'bulk_golem' ? '#ff8e4a' : boss.type === 'artificer_knave' ? '#ffd27d' : '#e4b9ff';
+      Neo.ctx.fillStyle = boss.type === 'bulk_golem' ? '#ff8e4a' : boss.type === 'artificer_knave' ? '#ffd27d' : boss.type === 'bowman_bane' ? '#c9aaff' : '#e4b9ff';
       if (boss.type === 'god') Neo.ctx.fillStyle = '#ffffff';
       Neo.ctx.fillRect(startX, y, width * hpPct, height);
 

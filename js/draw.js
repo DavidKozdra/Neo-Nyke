@@ -3947,7 +3947,8 @@
         view.challengeStatus.setAttribute('aria-hidden', 'true');
       }
       if (show !== 'charselect') { setChallengePanelOpen(false); setLegacyPanelOpen(false); }
-      if (show !== 'menu') { setRunHistoryOpen(false); setAltModesPanelOpen(false); setSandboxPanelOpen(false); }
+      if (show !== 'menu' && show !== 'pause') setRunHistoryOpen(false);
+      if (show !== 'menu') { setAltModesPanelOpen(false); setSandboxPanelOpen(false); }
       setVisible(view.endlessHud, inPlay && gameMode === 'endless', 'flex');
       setVisible(view.practicePanel, inPlay && gameMode === 'practice' && show !== 'dying', 'block');
       const isBossRush = gameMode === 'boss_rush';

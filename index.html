@@ -443,7 +443,11 @@
   <div id="win" class="overlay hidden">
     <h2>GOD SLAIN</h2>
     <p id="winInfo" style="color:#aff;opacity:.9">The climb is broken. Your items remain in memory.</p>
-    <button class="restart">AGAIN</button>
+    <div class="win-actions" aria-label="Victory screen actions">
+      <button class="dead-action dead-action--primary" data-win-action="loop" type="button">LOOP TO FLOOR 1</button>
+      <button class="dead-action" data-win-action="new-seed" type="button">NEW SEED</button>
+      <button class="dead-action dead-action--menu" data-win-action="menu" type="button">MAIN MENU</button>
+    </div>
   </div>
 
   <!-- Pause menu -->
@@ -451,6 +455,7 @@
     <h2 class="screen-title">PAUSED</h2>
     <div class="main-nav">
       <button id="pauseResume" class="nav-btn">RESUME</button>
+      <button id="pauseInfo" class="nav-btn nav-btn--minor">INFO</button>
       <button id="pauseSettings" class="nav-btn nav-btn--minor">SETTINGS</button>
       <button id="pauseMain" class="nav-btn nav-btn--minor">MAIN MENU</button>
     </div>

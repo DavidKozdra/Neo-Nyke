@@ -2600,8 +2600,28 @@ p.sub {
 
 .char-card.locked {
   opacity: .38;
-  filter: grayscale(.7);
+  filter: grayscale(.8);
+  border-color: rgba(120,80,80,.5) !important;
+  cursor: default;
+}
+
+.char-card.locked::after {
+  content: '🔒';
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  font-size: 16px;
+  line-height: 1;
+  filter: grayscale(1) brightness(1.4);
+  opacity: .7;
   pointer-events: none;
+}
+
+#choose .char-card.locked.sel {
+  opacity: .72;
+  filter: grayscale(.5);
+  border-color: rgba(200,100,100,.55) !important;
+  box-shadow: 0 0 20px rgba(180,80,80,.22), 0 6px 20px rgba(0,0,0,.4);
 }
 
 /* Card header */
@@ -3224,6 +3244,14 @@ button#go:hover {
   box-shadow: 0 0 28px rgba(138, 165, 199, .4);
 }
 
+button#go:disabled {
+  background: linear-gradient(90deg, #5a3535, #7a4444);
+  color: rgba(255,200,200,.5);
+  box-shadow: none;
+  cursor: not-allowed;
+  opacity: .7;
+}
+
 .seedrow--panel input#seed,
 .seedrow--panel button#go {
   width: 100%;
@@ -3292,6 +3320,14 @@ button.alt.danger {
   color: var(--menu-text);
   border-radius: 8px;
   cursor: pointer;
+}
+
+.win-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 18px;
 }
 
 /* Start + charSelect overlays fill the whole viewport */
@@ -6452,6 +6488,19 @@ button.alt.danger {
   font-size: 10px;
   font-weight: 900;
   letter-spacing: .03em;
+}
+
+.lc-icon {
+  color: #83f3ff;
+  font-size: .9em;
+  vertical-align: middle;
+  line-height: 1;
+  text-shadow: 0 0 6px rgba(131,243,255,.55);
+}
+.meta-legacy-card__sigil.lc-icon {
+  color: #ffe97a;
+  text-shadow: 0 0 6px rgba(255,220,80,.4);
+  font-size: 16px;
 }
 .info-grid {
   display: grid;
