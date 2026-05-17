@@ -74,7 +74,7 @@ export const MOVE_DEFS = {
       name: 'Nimrod Stomp',
       desc: 'Leap across the room and slam on landing for heavy AOE damage.',
     },
-    warp: { key: 'warp', slot: 'dash', name: 'Warp', desc: 'Phase out and reappear where you click.' },
+    warp: { key: 'warp', slot: 'dash', name: 'Warp', desc: 'Phase out and reappear Phase out and reappear where the mouse is ..' },
     zip_lightning: {
       key: 'zip_lightning',
       slot: 'dash',

@@ -1145,6 +1145,11 @@ export function resumeGame() {
     if (value === 'challenge_bomb') return 'Trial Bomb';
     if (value === 'storm') return 'Storm Trial';
     if (value === 'enemy_projectile') return 'Enemy Projectile';
+    if (value.endsWith('_projectile')) {
+      const owner = value.slice(0, -'_projectile'.length);
+      const ownerLabel = getDamageSourceLabel(owner);
+      return `${ownerLabel === 'Unknown' ? 'Enemy' : ownerLabel} Projectile`;
+    }
     if (value === 'enemy_beam') return 'Enemy Beam';
     if (value === 'god_beam') return 'GOD Beam';
     if (value === 'mirror_beam') return 'Mirror Beam';
@@ -1165,14 +1170,16 @@ export function resumeGame() {
 
   function getKillerDeathQuote(sourceKey) {
     const exact = normalizeDeathQuoteKey(sourceKey);
-    const pool = Neo.KILLER_DEATH_QUOTES[exact] || Neo.DEFAULT_KILLER_DEATH_QUOTES;
+    const ownerKey = exact.endsWith('_projectile') ? exact.slice(0, -'_projectile'.length) : exact;
+    const pool = Neo.KILLER_DEATH_QUOTES[exact] || Neo.KILLER_DEATH_QUOTES[ownerKey] || Neo.DEFAULT_KILLER_DEATH_QUOTES;
     if (!Array.isArray(pool) || pool.length === 0) return '';
     const index = Math.floor(Neo.nextRandom('fx') * pool.length);
     return pool[index] || pool[0] || '';
   }
 
   function findKillerEnemyEntity(sourceKey, sourceLabel) {
-    const key = String(sourceKey || '').trim().toLowerCase();
+    const rawKey = String(sourceKey || '').trim().toLowerCase();
+    const key = rawKey.endsWith('_projectile') ? rawKey.slice(0, -'_projectile'.length) : rawKey;
     const label = String(sourceLabel || '').trim().toLowerCase();
     if (!Array.isArray(Neo.enemies) || Neo.enemies.length === 0) return null;
 
@@ -1408,6 +1415,7 @@ export function resumeGame() {
 
   function resolveKillerSprite(key) {
     if (!key) return 'hunter';
+    if (String(key).endsWith('_projectile')) return resolveKillerSprite(String(key).slice(0, -'_projectile'.length));
     if (Neo.SPRITE_DEFS[key]) return key;
     if (killerSpriteMap[key]) return killerSpriteMap[key];
     return 'hunter';

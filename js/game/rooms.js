@@ -1917,6 +1917,7 @@
             knockback: 160, pierceCount: 0, hitOptions: null,
             enemy: true,
             fromRival: true,
+            source: rival.name || 'rival_projectile',
           });
         }
         enemy.attackCd = rival.attackCd * Number(weapon.cooldownMult || 1) + Neo.nextRandom('encounter') * 0.5;

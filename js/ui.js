@@ -71,7 +71,7 @@
       name: 'Nimrod Stomp',
       desc: 'Leap across the room and slam on landing for heavy AOE damage.',
     },
-    warp: { key: 'warp', slot: 'dash', name: 'Warp', desc: 'Phase out and reappear where you click.' },
+    warp: { key: 'warp', slot: 'dash', name: 'Warp', desc: 'Phase out and reappear where the mouse is .' },
     zip_lightning: {
       key: 'zip_lightning',
       slot: 'dash',
@@ -766,6 +766,7 @@
     anvilClose: document.getElementById('anvilClose'),
     anvilTabs: [...document.querySelectorAll('#anvilPanel .anvil-tab')],
     anvilXp: document.getElementById('anvilXp'),
+    anvilCoins: document.getElementById('anvilCoins'),
     anvilWeaponsTab: document.getElementById('anvilWeaponsTab'),
     anvilMovesTab: document.getElementById('anvilMovesTab'),
     anvilWeaponList: document.getElementById('anvilWeaponList'),
@@ -1031,22 +1032,22 @@
 
   // Upgradeable stat schemas for the anvil panel
   const WEAPON_UPGRADEABLE_STATS = {
-    damage:    { label: 'Damage',       step: 5,     min: 5,    max: 9999, xpPerStep: 15, format: v => Math.round(v) },
-    cooldown:  { label: 'Cooldown (s)', step: -0.05, min: 0.05, max: 9999, xpPerStep: 20, format: v => v.toFixed(2) + 's' },
-    range:     { label: 'Range',        step: 10,    min: 10,   max: 9999, xpPerStep: 13, format: v => Math.round(v) },
-    knockback: { label: 'Knockback',    step: 30,    min: 0,    max: 9999, xpPerStep: 10, format: v => Math.round(v) },
+    damage:    { label: 'Damage',       step: 5,     min: 5,    max: 9999, xpPerStep: 15, goldPerStep: 8,  format: v => Math.round(v) },
+    cooldown:  { label: 'Cooldown (s)', step: -0.05, min: 0.05, max: 9999, xpPerStep: 20, goldPerStep: 10, format: v => v.toFixed(2) + 's' },
+    range:     { label: 'Range',        step: 10,    min: 10,   max: 9999, xpPerStep: 13, goldPerStep: 6,  format: v => Math.round(v) },
+    knockback: { label: 'Knockback',    step: 30,    min: 0,    max: 9999, xpPerStep: 10, goldPerStep: 5,  format: v => Math.round(v) },
   };
   const MOVE_UPGRADEABLE_STATS = {
-    damage:    { label: 'Damage',       step: 5,    min: 5,   max: 9999, xpPerStep: 15, format: v => Math.round(v) },
-    cooldown:  { label: 'Cooldown (s)', step: -0.05,min: 0.05,max: 9999, xpPerStep: 20, format: v => v.toFixed(2) + 's' },
-    duration:  { label: 'Duration (s)', step: 0.1,  min: 0.1, max: 30,   xpPerStep: 13, format: v => v.toFixed(1) + 's' },
-    range:     { label: 'Range / AOE',  step: 10,   min: 10,  max: 9999, xpPerStep: 13, format: v => Math.round(v) },
-    critChance:{ label: 'Crit Chance',  step: 0.05, min: 0,   max: 1.0,  xpPerStep: 25, format: v => Math.round(v * 100) + '%' },
+    damage:    { label: 'Damage',       step: 5,    min: 5,   max: 9999, xpPerStep: 15, goldPerStep: 8,  format: v => Math.round(v) },
+    cooldown:  { label: 'Cooldown (s)', step: -0.05,min: 0.05,max: 9999, xpPerStep: 20, goldPerStep: 10, format: v => v.toFixed(2) + 's' },
+    duration:  { label: 'Duration (s)', step: 0.1,  min: 0.1, max: 30,   xpPerStep: 13, goldPerStep: 6,  format: v => v.toFixed(1) + 's' },
+    range:     { label: 'Range / AOE',  step: 10,   min: 10,  max: 9999, xpPerStep: 13, goldPerStep: 6,  format: v => Math.round(v) },
+    critChance:{ label: 'Crit Chance',  step: 0.05, min: 0,   max: 1.0,  xpPerStep: 25, goldPerStep: 15, format: v => Math.round(v * 100) + '%' },
   };
 
   // Base stat values per weapon (used to compute current upgraded value)
   const WEAPON_BASE_STATS = {
-    extending_staff:          { damage: 38,   cooldown: 0.50, range: 130, knockback: 500 },
+    extending_staff:          { damage: 38,   cooldown: 0.77, range: 130, knockback: 500 },
     hunters_bow:              { damage: 28,   cooldown: 0.40,             knockback: 180 },
     thorns_bleed_blade:       { damage: 32,   cooldown: 0.55, range: 90,  knockback: 120 },
     lazer_glasses:            { damage: 18,   cooldown: 3.60,             knockback: 80  },
@@ -2258,7 +2259,14 @@
     ui.anvilPanel.setAttribute('aria-hidden', open ? 'false' : 'true');
     if (open) {
       anvilStagedUpgrades = {};
-      anvilSelectedItem = null;
+      // Default to equipped weapon on the weapons tab
+      const equipped = player?.equippedWeapon;
+      if (equipped && WEAPON_BASE_STATS[equipped]) {
+        activeAnvilTab = 'weapons';
+        anvilSelectedItem = `weapon:${equipped}`;
+      } else {
+        anvilSelectedItem = null;
+      }
       renderAnvilPanel();
     }
   }
@@ -2296,21 +2304,23 @@
   }
 
   function getAnvilTotalCost() {
-    let total = 0;
+    let xp = 0, gold = 0;
     for (const [key, count] of Object.entries(anvilStagedUpgrades)) {
       if (count === 0) continue;
       const [itemType, , statKey] = key.split(':');
       const schema = itemType === 'weapon' ? WEAPON_UPGRADEABLE_STATS : MOVE_UPGRADEABLE_STATS;
-      total += Math.abs(count) * (schema[statKey]?.xpPerStep ?? 0);
+      const steps = Math.abs(count);
+      xp   += steps * (schema[statKey]?.xpPerStep   ?? 0);
+      gold += steps * (schema[statKey]?.goldPerStep  ?? 0);
     }
-    return total;
+    return { xp, gold };
   }
 
   function renderAnvilPanel() {
     if (!isPanelOpen(ui.anvilPanel) || !player) return;
 
-    // XP display (current XP, not total)
     if (ui.anvilXp) ui.anvilXp.textContent = player.xp ?? 0;
+    if (ui.anvilCoins) ui.anvilCoins.textContent = player.coins ?? 0;
 
     // Tab visibility
     const isWeapons = activeAnvilTab === 'weapons';
@@ -2384,7 +2394,10 @@
       const stagedDisplay = staged !== cur
         ? `<span class="anvil-stat-staged">&rarr; ${format(staged)}</span>`
         : '';
-      const costDisplay = xpPerStep > 0 ? `<span class="anvil-stat-cost">${xpPerStep} XP/step</span>` : '';
+      const goldPerStep = schema[statKey].goldPerStep ?? 0;
+      const costDisplay = xpPerStep > 0
+        ? `<span class="anvil-stat-cost">${xpPerStep} XP + &#9670;${goldPerStep}/step</span>`
+        : '';
 
       return `<div class="anvil-stat-row">
         <span class="anvil-stat-label">${label}</span>
@@ -2404,16 +2417,22 @@
   function renderAnvilFooter() {
     const cost = getAnvilTotalCost();
     const xp = player?.xp ?? 0;
+    const coins = player?.coins ?? 0;
+    const canAfford = xp >= cost.xp && coins >= cost.gold;
     if (ui.anvilCostSummary) {
-      if (cost === 0) {
+      if (cost.xp === 0 && cost.gold === 0) {
         ui.anvilCostSummary.textContent = 'Select stats above and press + to stage upgrades.';
+        ui.anvilCostSummary.style.color = '';
       } else {
-        ui.anvilCostSummary.textContent = `Total: ${cost} XP  (you have ${xp} XP)`;
-        ui.anvilCostSummary.style.color = xp >= cost ? '#7eff9e' : '#ff7c88';
+        const xpColor  = xp    >= cost.xp   ? '#7eff9e' : '#ff7c88';
+        const gldColor = coins >= cost.gold  ? '#ffd15a' : '#ff7c88';
+        ui.anvilCostSummary.innerHTML =
+          `Cost: <span style="color:${xpColor}">${cost.xp} XP (${xp})</span>` +
+          ` + <span style="color:${gldColor}">&#9670; ${cost.gold} gold (${coins})</span>`;
       }
     }
     if (ui.anvilConfirm) {
-      ui.anvilConfirm.disabled = cost === 0 || xp < cost;
+      ui.anvilConfirm.disabled = (cost.xp === 0 && cost.gold === 0) || !canAfford;
     }
   }
 
@@ -2445,9 +2464,10 @@
       const newVal = getAnvilStagedValue(itemKey, statKey, itemType) + statDef.step;
       const capped = statDef.step > 0 ? newVal > statDef.max : newVal < statDef.min;
       if (capped) return;
-      // Check if we could afford one more step
-      const nextCost = getAnvilTotalCost() + statDef.xpPerStep;
-      if (nextCost > (player?.xp ?? 0)) return;
+      // Check if we could afford one more step (both XP and gold)
+      const nextCost = getAnvilTotalCost();
+      if (nextCost.xp + statDef.xpPerStep > (player?.xp ?? 0)) return;
+      if (nextCost.gold + (statDef.goldPerStep ?? 0) > (player?.coins ?? 0)) return;
       anvilStagedUpgrades[stageKey] = currentStaged + 1;
     } else {
       // Remove a staged step (can't undo already-committed upgrades)
@@ -2459,9 +2479,11 @@
 
   function confirmAnvilUpgrades() {
     const cost = getAnvilTotalCost();
-    if (!player || cost === 0 || player.xp < cost) return;
+    if (!player || (cost.xp === 0 && cost.gold === 0)) return;
+    if (player.xp < cost.xp || (player.coins ?? 0) < cost.gold) return;
 
-    player.xp -= cost;
+    player.xp -= cost.xp;
+    player.coins = (player.coins ?? 0) - cost.gold;
 
     if (!player.anvilUpgrades) player.anvilUpgrades = { weapon: {}, move: {} };
 

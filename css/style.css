@@ -5132,8 +5132,15 @@ button.alt.danger {
   border-color: var(--menu-border);
 }
 
-.anvil-xp-display {
+.anvil-resources {
   margin-left: auto;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.anvil-xp-display,
+.anvil-gold-display {
   align-self: center;
   padding: 10px 14px;
   background: var(--menu-surface);
@@ -5147,6 +5154,17 @@ button.alt.danger {
 .anvil-xp-display b {
   font-size: 18px;
   color: var(--menu-accent-strong);
+  margin-left: 4px;
+}
+
+.anvil-gold-display {
+  color: #ffd15a;
+  border-color: #6b4f00;
+}
+
+.anvil-gold-display b {
+  font-size: 18px;
+  color: #ffd15a;
   margin-left: 4px;
 }
 

@@ -1355,6 +1355,7 @@
           life: 1.6,
           enemy: true,
           kind: 'sniper_round',
+          source: 'sniper_projectile',
           damage: enemy.dmg + 5,
         });
       }
@@ -1438,6 +1439,7 @@
           life: 1.45,
           enemy: true,
           kind: 'machine_round',
+          source: 'machine_gunner_projectile',
           damage: enemy.dmg + 2,
         });
         Neo.spawnParticle({ x: enemy.x + Math.cos(fireAngle) * 10, y: enemy.y + Math.sin(fireAngle) * 10, life: 0.12, c: '#ffcf7a' });
@@ -1758,6 +1760,7 @@
         life: 2.45,
         enemy: true,
         kind: 'cult_missile',
+        source: 'queen_cult_projectile',
         damage: Math.round(enemy.dmg * 0.78),
         knockback: 155,
         color: '#b455ff',
@@ -1872,6 +1875,7 @@
         life: 1.25,
         enemy: true,
         kind: 'sword',
+        source: 'god_projectile',
         damage,
       });
     }
@@ -1891,6 +1895,7 @@
         life: 1.5,
         enemy: true,
         kind: 'god_sword',
+        source: 'god_projectile',
         damage,
       });
     }
@@ -2221,6 +2226,7 @@
           life: 1.15,
           enemy: true,
           kind: 'power_disk',
+          source: `${enemy.type || 'laser'}_projectile`,
           damage: Math.round(enemy.dmg * 0.72),
           color: '#d890ff',
           knockback: 110,
@@ -2361,6 +2367,7 @@
         life: options.life || 1.25,
         enemy: true,
         kind: options.kind || 'mirror_shot',
+        source: options.source || 'mirror_knight_projectile',
         color: options.color || '#d7f6ff',
         damage,
         knockback: options.knockback || 120,
