@@ -3,10 +3,12 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "icons": "node generate-icons.js"
+    "icons": "node generate-icons.js",
+    "test": "jest"
   },
   "devDependencies": {
     "canvas": "^3.2.3",
+    "jest": "^30.4.2",
     "terser": "^5.0.0"
   }
 }

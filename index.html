@@ -496,10 +496,9 @@
   </div>
   <div class="menu-content">
     <h1 id="menuTitle" class="sr-only">NEO NYKE — DUNGEON GOD</h1>
-    <div id="birthdayBanner" class="birthday-banner hidden" aria-live="polite">
-      <span class="birthday-banner__stars" aria-hidden="true">★ ★ ★</span>
-      <span class="birthday-banner__text">HAPPY BIRTHDAY, DUNGEON GOD!</span>
-      <span class="birthday-banner__stars" aria-hidden="true">★ ★ ★</span>
+    <div id="specialDayBanner" class="special-day-banner hidden" aria-live="polite">
+      <span class="special-day-banner__icon" id="specialDayIcon" aria-hidden="true"></span>
+      <span class="special-day-banner__text" id="specialDayText"></span>
     </div>
 
     <div class="main-nav">
@@ -535,6 +534,7 @@
           <button class="rh-view-tab" data-view="achievements" type="button">Achievements</button>
           <button class="rh-view-tab" data-view="profile" type="button">Profile</button>
           <button class="rh-view-tab active" data-view="info" type="button">Info</button>
+          <button class="rh-view-tab" data-view="blog" type="button">Blog</button>
         </div>
       </div>
       <button id="runHistoryClose" class="panel-close" aria-label="Close">X</button>
@@ -587,6 +587,9 @@
         <button id="infoTutorialBtn" class="rh-info-tutorial-btn" type="button">&#9654; Tutorial</button>
       </div>
       <div id="rhInfoContent" class="rh-info-content"></div>
+    </div>
+    <div id="rhBlogPanel" class="rh-blog hidden" aria-live="polite">
+      <div id="rhBlogList" class="rh-blog-list"></div>
     </div>
   </section>
 

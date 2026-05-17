@@ -270,3 +270,4 @@ export function drawTileChips(g, ox, oy, def) {
   Neo.drawBarrelTileAsset = drawBarrelTileAsset;
   Neo.drawTileCracks = drawTileCracks;
   Neo.drawTileChips = drawTileChips;
+// 

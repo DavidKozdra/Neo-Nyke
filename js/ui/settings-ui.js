@@ -544,32 +544,53 @@
       if (window.Neo?.metaProgress) {
         window.Neo.metaProgress.birthday = birthdayInput.value || '';
         window.Neo.persistMetaSoon?.();
-        window._checkBirthdayNow?.();
+        window._checkSpecialDaysNow?.();
       }
     });
   }
 
-  // ── Birthday card ──────────────────────────────────────────────
-  (function initBirthdayModal() {
-    const bdModal = document.getElementById('birthdayModal');
-    const bdClose = document.getElementById('birthdayClose');
+  // ── Special days + birthday modal ─────────────────────────────
+  (function initSpecialDays() {
+    const bdModal  = document.getElementById('birthdayModal');
+    const bdClose  = document.getElementById('birthdayClose');
     const bdDismiss = document.getElementById('birthdayDismiss');
     const bdMonsters = document.getElementById('birthdayMonsters');
-    if (!bdModal) return;
+    const banner   = document.getElementById('specialDayBanner');
+    const bannerIcon = document.getElementById('specialDayIcon');
+    const bannerText = document.getElementById('specialDayText');
 
-    const MONSTER_KEYS = ['hunter','cult_follower','cult_mage','sniper','knave','charger','laser','golem','bulk_golem','queen_cult','artificer_knave','god'];
-    const MONSTER_NAMES = {
-      hunter: 'Hunter', cult_follower: 'Cultist', cult_mage: 'Mage', sniper: 'Sniper',
-      knave: 'Knave', charger: 'Charger', laser: 'Laser', golem: 'Golem',
-      bulk_golem: 'Bulk Golem', queen_cult: 'Queen', artificer_knave: 'Artificer', god: 'GOD',
-    };
+    // Hardcoded special days (mirrors server NOTICES for offline use)
+    const SPECIAL_DAYS = [
+      { id: 'kiah-birthday', type: 'birthday', mmdd: '04-06', title: "Happy Birthday, Kiah!", icon: '🎂', accent: '#f47ebd' },
+      { id: 'christmas',     type: 'holiday',  mmdd: '12-25', title: "Merry Christmas!",      icon: '🎄', accent: '#4caf50' },
+      { id: 'festival-of-lights', type: 'holiday', mmdd: '12-01', mmddEnd: '12-08', title: "Festival of Lights", icon: '🕎', accent: '#4fc3f7' },
+    ];
 
-    function isBirthday(storedValue) {
-      if (!storedValue) return false;
-      const today = new Date();
-      const [, mm, dd] = storedValue.split('-');
-      return Number(mm) === today.getMonth() + 1 && Number(dd) === today.getDate();
+    function todayMmdd() {
+      const d = new Date();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      return `${mm}-${dd}`;
     }
+
+    function mmddToNum(s) { const [m, d] = s.split('-'); return Number(m) * 100 + Number(d); }
+
+    function matchesDay(entry) {
+      const today = mmddToNum(todayMmdd());
+      const start = mmddToNum(entry.mmdd);
+      const end   = entry.mmddEnd ? mmddToNum(entry.mmddEnd) : start;
+      return today >= start && today <= end;
+    }
+
+    function isUserBirthday(storedValue) {
+      if (!storedValue) return false;
+      const [, mm, dd] = storedValue.split('-');
+      return `${String(mm).padStart(2,'0')}-${String(dd).padStart(2,'0')}` === todayMmdd();
+    }
+
+    // Birthday modal monsters
+    const MONSTER_KEYS = ['hunter','cult_follower','cult_mage','sniper','knave','charger','laser','golem','bulk_golem','queen_cult','artificer_knave','god'];
+    const MONSTER_NAMES = { hunter:'Hunter', cult_follower:'Cultist', cult_mage:'Mage', sniper:'Sniper', knave:'Knave', charger:'Charger', laser:'Laser', golem:'Golem', bulk_golem:'Bulk Golem', queen_cult:'Queen', artificer_knave:'Artificer', god:'GOD' };
 
     function populateMonsters() {
       if (!bdMonsters || bdMonsters.childElementCount > 0) return;
@@ -577,8 +598,7 @@
         const wrap = document.createElement('div');
         wrap.className = 'bd-monster';
         const cv = document.createElement('canvas');
-        cv.width = 48;
-        cv.height = 48;
+        cv.width = 48; cv.height = 48;
         cv.className = 'bd-monster__canvas';
         const label = document.createElement('span');
         label.className = 'bd-monster__name';
@@ -586,48 +606,117 @@
         wrap.appendChild(cv);
         wrap.appendChild(label);
         bdMonsters.appendChild(wrap);
-        if (window.Neo?.drawSpriteToCanvas) {
-          window.Neo.drawSpriteToCanvas(cv, key, 48);
-        }
+        if (window.Neo?.drawSpriteToCanvas) window.Neo.drawSpriteToCanvas(cv, key, 48);
       });
     }
 
     function openBirthdayModal() {
+      if (!bdModal) return;
       populateMonsters();
       bdModal.classList.remove('hidden');
       bdModal.setAttribute('aria-hidden', 'false');
     }
 
     function closeBirthdayModal() {
+      if (!bdModal) return;
       bdModal.classList.add('hidden');
       bdModal.setAttribute('aria-hidden', 'true');
     }
 
     bdClose?.addEventListener('click', closeBirthdayModal);
     bdDismiss?.addEventListener('click', closeBirthdayModal);
-    bdModal.addEventListener('click', e => { if (e.target === bdModal) closeBirthdayModal(); });
+    bdModal?.addEventListener('click', e => { if (e.target === bdModal) closeBirthdayModal(); });
 
-    const bdBanner = document.getElementById('birthdayBanner');
+    function showBanner(entry, label) {
+      if (!banner) return;
+      banner.style.setProperty('--special-day-accent', entry.accent || '#a8c8ff');
+      if (bannerIcon) bannerIcon.textContent = entry.icon || '★';
+      if (bannerText) bannerText.textContent = label;
+      banner.classList.remove('hidden');
+    }
 
     let checked = false;
     function checkAndShow(force = false) {
       if (checked && !force) return;
       checked = true;
       const meta = window.Neo?.metaProgress;
-      if (isBirthday(meta?.birthday)) {
+
+      // User's own birthday
+      if (isUserBirthday(meta?.birthday)) {
+        const name = meta?.username?.trim();
         openBirthdayModal();
-        if (bdBanner) {
-          const name = meta?.username?.trim();
-          const textEl = bdBanner.querySelector('.birthday-banner__text');
-          if (textEl) textEl.textContent = name ? `HAPPY BIRTHDAY, ${name.toUpperCase()}!` : 'HAPPY BIRTHDAY, DUNGEON GOD!';
-          bdBanner.classList.remove('hidden');
+        showBanner(
+          { icon: '🎂', accent: '#ffd700' },
+          name ? `HAPPY BIRTHDAY, ${name.toUpperCase()}!` : 'HAPPY BIRTHDAY, DUNGEON GOD!'
+        );
+        return;
+      }
+
+      // Global special days
+      for (const entry of SPECIAL_DAYS) {
+        if (matchesDay(entry)) {
+          showBanner(entry, entry.title.toUpperCase());
+          return;
         }
       }
     }
 
     window.addEventListener('neo:meta-loaded', checkAndShow);
     if (window.Neo?.metaProgress !== undefined) checkAndShow();
-    window._checkBirthdayNow = () => checkAndShow(true);
+    window._checkSpecialDaysNow = () => checkAndShow(true);
+  })();
+
+  // ── Blog / notices panel ───────────────────────────────────────
+  (function initBlogPanel() {
+    const SERVER = 'http://localhost:3004';
+    const blogList = document.getElementById('rhBlogList');
+    let loaded = false;
+
+    function renderNotices(notices) {
+      if (!blogList) return;
+      if (!notices || notices.length === 0) {
+        blogList.innerHTML = '<p class="rh-blog-empty">No posts yet.</p>';
+        return;
+      }
+      // Separate special days from updates/events
+      const today = (() => { const d = new Date(); return (d.getMonth()+1)*100 + d.getDate(); })();
+      const active = notices.filter(n => {
+        if (!n.mmdd) return true; // blog posts always show
+        const s = n.mmdd.split('-'); const start = Number(s[0])*100+Number(s[1]);
+        if (n.mmddEnd) { const e = n.mmddEnd.split('-'); const end = Number(e[0])*100+Number(e[1]); return today >= start && today <= end; }
+        return today === start;
+      });
+      const rest = notices.filter(n => !n.mmdd);
+      const toShow = [...active, ...rest.filter(n => !active.includes(n))];
+
+      blogList.innerHTML = toShow.map(n => `
+        <div class="rh-blog-card" style="--blog-accent:${n.accent || '#a8c8ff'}">
+          <div class="rh-blog-card__head">
+            <span class="rh-blog-card__icon">${n.icon || '📌'}</span>
+            <span class="rh-blog-card__title">${n.title}</span>
+            ${n.date ? `<span class="rh-blog-card__date">${n.date}</span>` : ''}
+          </div>
+          <p class="rh-blog-card__body">${n.body || ''}</p>
+        </div>
+      `).join('');
+    }
+
+    function loadBlog() {
+      if (loaded) return;
+      loaded = true;
+      if (!blogList) return;
+      blogList.innerHTML = '<p class="rh-blog-empty">Loading…</p>';
+      fetch(`${SERVER}/notices`, { signal: AbortSignal.timeout(4000) })
+        .then(r => r.ok ? r.json() : Promise.reject(r.status))
+        .then(data => renderNotices(data.notices || []))
+        .catch(() => {
+          blogList.innerHTML = '<p class="rh-blog-empty">Could not load updates (server offline?).</p>';
+        });
+    }
+
+    // Load when blog tab is clicked
+    window.addEventListener('neo:blog-tab-opened', loadBlog);
+    window._loadBlogPanel = loadBlog;
   })();
 
   document.getElementById('dataExport').addEventListener('click', async () => {

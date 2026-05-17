@@ -52,6 +52,55 @@ let leaderboard = [
     { name: 'AnotherPlayer', floor: 35, seed, character: 'Rogue',  time: 4200, submittedAt: Date.now() },
 ];
 
+// ── Special days & blog posts ────────────────────────────────────────────────
+// Add entries here. type: 'birthday' | 'holiday' | 'update' | 'event'
+// Special days use mm-dd matching (year ignored). Blog posts use `date` for display only.
+const NOTICES = [
+  // ── Special days (recur every year) ──
+  {
+    id: 'kiah-birthday',
+    type: 'birthday',
+    mmdd: '04-06',
+    title: "Happy Birthday, Kiah!",
+    body: "Wishing you an amazing day from everyone in the dungeon. 🎂",
+    icon: '🎂',
+    accent: '#f47ebd',
+  },
+  {
+    id: 'christmas',
+    type: 'holiday',
+    mmdd: '12-25',
+    title: "Merry Christmas!",
+    body: "The dungeon is decorated. May your runs be merry and your loot be plentiful.",
+    icon: '🎄',
+    accent: '#4caf50',
+  },
+  {
+    id: 'festival-of-lights',
+    type: 'holiday',
+    mmdd: '12-01',
+    mmddEnd: '12-08',
+    title: "Festival of Lights",
+    body: "The halls of the dungeon glow bright. Happy Hanukkah to all who celebrate!",
+    icon: '🕎',
+    accent: '#4fc3f7',
+  },
+  // ── Blog / update posts ──
+  {
+    id: 'update-gaming-branch',
+    type: 'update',
+    date: '2026-05-16',
+    title: "GAMING Branch — What's New",
+    body: "Birthday cards, inventory pause fix, shop affordability colours, and 2× health HUD. More to come.",
+    icon: '📋',
+    accent: '#a8c8ff',
+  },
+];
+
+app.get('/notices', readLimiter, (req, res) => {
+    res.json({ notices: NOTICES });
+});
+
 app.get('/version', readLimiter, (req, res) => {
     res.json({ version });
 });

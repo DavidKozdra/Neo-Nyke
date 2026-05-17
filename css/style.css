@@ -6748,36 +6748,90 @@ button.alt.danger {
 .charselect-phase-tag.p4 { background: rgba(255,208,128,0.12); border-color: rgba(255,208,128,0.4); color: #ffd080; }
 .mploby-controls { font-size: 0.72rem; color: #3a5060; margin: 0; }
 
-/* ── Birthday modal ───────────────────────────────────────────── */
-.birthday-banner {
+/* ── Special day banner ───────────────────────────────────────── */
+.special-day-banner {
+  --special-day-accent: #ffd700;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 10px;
-  background: rgba(255, 215, 0, 0.1);
-  border: 1.5px solid rgba(255, 215, 0, 0.55);
+  background: color-mix(in srgb, var(--special-day-accent) 10%, transparent);
+  border: 1.5px solid color-mix(in srgb, var(--special-day-accent) 55%, transparent);
   border-radius: 10px;
   padding: 10px 20px;
   margin-bottom: 18px;
-  animation: birthday-banner-pulse 2.4s ease-in-out infinite;
+  animation: special-day-pulse 2.4s ease-in-out infinite;
 }
-.birthday-banner.hidden { display: none; }
-.birthday-banner__stars {
-  color: #ffd700;
-  font-size: 0.85rem;
-  letter-spacing: .2em;
+.special-day-banner.hidden { display: none; }
+.special-day-banner__icon {
+  font-size: 1.1rem;
+  line-height: 1;
 }
-.birthday-banner__text {
-  color: #ffd700;
+.special-day-banner__text {
+  color: var(--special-day-accent);
   font-size: 0.95rem;
   font-weight: 700;
   letter-spacing: .12em;
   text-transform: uppercase;
-  text-shadow: 0 0 14px rgba(255, 215, 0, .45);
+  text-shadow: 0 0 14px color-mix(in srgb, var(--special-day-accent) 45%, transparent);
 }
-@keyframes birthday-banner-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 215, 0, 0); }
-  50% { box-shadow: 0 0 18px 2px rgba(255, 215, 0, .18); }
+@keyframes special-day-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 transparent; }
+  50% { box-shadow: 0 0 18px 2px color-mix(in srgb, var(--special-day-accent) 18%, transparent); }
+}
+
+/* ── Blog panel ───────────────────────────────────────────────── */
+.rh-blog {
+  padding: 4px 0;
+}
+.rh-blog-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.rh-blog-empty {
+  color: var(--menu-text-soft);
+  font-size: 13px;
+  text-align: center;
+  padding: 28px 0;
+}
+.rh-blog-card {
+  --blog-accent: #a8c8ff;
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  background: var(--menu-surface);
+  border: 1px solid var(--menu-border);
+  border-left: 3px solid var(--blog-accent);
+  border-radius: 8px;
+}
+.rh-blog-card__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.rh-blog-card__icon {
+  font-size: 1rem;
+  line-height: 1;
+}
+.rh-blog-card__title {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--blog-accent);
+  letter-spacing: .05em;
+}
+.rh-blog-card__date {
+  font-size: 10px;
+  color: var(--menu-text-soft);
+  letter-spacing: .04em;
+  white-space: nowrap;
+}
+.rh-blog-card__body {
+  margin: 0;
+  font-size: 12px;
+  color: var(--menu-text-muted);
+  line-height: 1.55;
 }
 
 .birthday-card {

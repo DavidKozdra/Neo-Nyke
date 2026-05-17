@@ -778,6 +778,7 @@ export const ui = {
     achievementsList: document.getElementById('achievementsList'),
     rhProfilePanel: document.getElementById('rhProfilePanel'),
     rhInfoPanel: document.getElementById('rhInfoPanel'),
+    rhBlogPanel: document.getElementById('rhBlogPanel'),
     rhInfoContent: document.getElementById('rhInfoContent'),
     rhInfoTabs: [...document.querySelectorAll('#rhInfoPanel .rh-info-tab')],
     infoTutorialBtn: document.getElementById('infoTutorialBtn'),

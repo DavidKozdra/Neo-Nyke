@@ -465,13 +465,15 @@ export function createUIController(view) {
       const showAch     = view_ === 'achievements';
       const showProfile = view_ === 'profile';
       const showInfo    = view_ === 'info';
-      const showRuns    = !showAch && !showProfile && !showInfo;
+      const showBlog    = view_ === 'blog';
+      const showRuns    = !showAch && !showProfile && !showInfo && !showBlog;
       view.runHistoryBody?.classList.toggle('hidden', !showRuns);
       view.runHistoryEmpty?.classList.toggle('hidden', true);
       view.achievementsList?.classList.toggle('hidden', !showAch);
       view.rhProfilePanel?.classList.toggle('hidden', !showProfile);
       view.rhInfoPanel?.classList.toggle('hidden', !showInfo);
-      const titles = { achievements: 'ACHIEVEMENTS', profile: 'PROFILE', runs: 'RUN HISTORY', info: 'INFO' };
+      view.rhBlogPanel?.classList.toggle('hidden', !showBlog);
+      const titles = { achievements: 'ACHIEVEMENTS', profile: 'PROFILE', runs: 'RUN HISTORY', info: 'INFO', blog: 'BLOG' };
       if (view.runHistoryPanelTitle) view.runHistoryPanelTitle.textContent = titles[view_] ?? 'INFO';
       view.runHistoryViewTabs?.forEach(t => t.classList.toggle('active', t.dataset.view === view_));
       if (showAch) populateAchievementsPanel();
@@ -482,6 +484,7 @@ export function createUIController(view) {
         if (view.rhSaveState)  view.rhSaveState.textContent  = view.saveState?.textContent ?? '—';
       }
       else if (showInfo) populateInfoPanel(activeInfoTab);
+      else if (showBlog) window.dispatchEvent(new CustomEvent('neo:blog-tab-opened'));
       else { view.runHistoryEmpty?.classList.toggle('hidden', Neo.runHistory.length > 0); renderRunHistoryPage(); }
     }
 
