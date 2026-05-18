@@ -95,6 +95,18 @@
     spawnRivals();
     Neo.gameEvents.emit('floor:enter', { floor: Neo.floor });
     enterRoom(startRoom);
+    if (Array.isArray(Neo.pendingRivalDescends) && Neo.pendingRivalDescends.length > 0) {
+      Neo.pendingRivalDescends.forEach((rival, i) => {
+        Neo.spawnParticle({
+          x: Neo.ROOM_W / 2,
+          y: Neo.ROOM_H / 2 - 50 - i * 28,
+          life: 2.2,
+          text: `${rival.name.toUpperCase()} DESCENDS`,
+          c: rival.color,
+        });
+      });
+      Neo.pendingRivalDescends = [];
+    }
     Neo.updateObjective();
     Neo.updateHud();
   }
@@ -1389,71 +1401,112 @@
   }
 
   function spawnRivals() {
-    Neo.rivals = [];
-    if (!Neo.rooms || Neo.rooms.length === 0) return;
-    if (Neo.nextRandom('world') > Neo.RIVAL_SPAWN_CHANCE) return;
-    let unchosen = Object.keys(Neo.CHARACTER_DEFS).filter(k => k !== Neo.chosenCharacter && Neo.RIVAL_DEFS[k]);
-    if (Neo.chosenCharacter === 'thorn_knight' && unchosen.includes('princess') && unchosen.length > 1) {
-      // Thorn runs: rival princess is intentionally very rare.
-      if (Neo.nextRandom('world') > 0.05) {
-        unchosen = unchosen.filter(key => key !== 'princess');
-      }
-    }
-    const count = Neo.floor >= 3 ? Math.min(2, unchosen.length) : 1;
+    const carried = Array.isArray(Neo._carriedRivals) ? Neo._carriedRivals : [];
+    Neo._carriedRivals = null;
+
+    if (!Neo.rooms || Neo.rooms.length === 0) { Neo.rivals = []; Neo.pendingRivalDescends = []; return; }
+
     const nonStartRooms = Neo.rooms.filter(r => r.type !== 'start' && r.type !== 'boss' && r.type !== 'god');
-    if (nonStartRooms.length === 0) return;
-    const shuffled = [...unchosen].sort(() => Neo.nextRandom('world') - 0.5);
-    for (let i = 0; i < count && i < shuffled.length; i++) {
-      const charKey = shuffled[i];
-      const def = Neo.RIVAL_DEFS[charKey];
-      const spawnRoom = nonStartRooms[i % nonStartRooms.length];
-      const floorScale = 1 + (Neo.floor - 1) * 0.12;
-      const reputationBonus = Math.max(0, Math.floor(Number(Neo.player?.rivalReputation || 0) / 2));
-      const startingLevel = Math.max(1, 1 + reputationBonus);
-      const baseMoveInterval = Neo.RIVAL_MOVE_INTERVAL_BASE + Neo.nextRandom('world') * 4;
-      Neo.rivals.push({
-        rivalId: `${charKey}-${Neo.floor}-${Math.floor(Neo.nextRandom('world') * 1000000)}`,
-        characterKey: charKey,
-        name: def.name,
-        color: def.color,
-        attackStyle: def.attackStyle,
-        enterLine: def.enterLine,
-        deathLine: def.deathLine,
-        roomGx: spawnRoom.gx,
-        roomGy: spawnRoom.gy,
-        moveTimer: 6 + Neo.nextRandom('world') * 5,
-        moveInterval: baseMoveInterval,
-        baseMoveInterval,
-        baseHp: Math.round(def.hp * floorScale),
-        baseDmg: Math.round(def.dmg * floorScale),
-        baseSpeed: def.speed,
-        baseAttackCd: def.attackCd,
-        hp: Math.round(def.hp * floorScale),
-        max: Math.round(def.hp * floorScale),
-        dmg: Math.round(def.dmg * floorScale),
-        speed: def.speed,
-        r: def.r,
-        attackCd: def.attackCd,
-        level: startingLevel,
-        xp: 0,
-        xpToNext: 22 + Neo.floor * 4,
-        growthTick: 0,
-        weapons: (Neo.RIVAL_WEAPON_LOADOUTS[charKey] || []).map(weapon => ({ ...weapon })),
-        loot: [],
-        homeGx: spawnRoom.gx,
-        homeGy: spawnRoom.gy,
-        objectiveGx: spawnRoom.gx,
-        objectiveGy: spawnRoom.gy,
-        objectiveKind: 'patrol',
-        route: [],
-        aggroTimer: 0,
-        lastKnownPlayerGx: spawnRoom.gx,
-        lastKnownPlayerGy: spawnRoom.gy,
-        hpSnapshot: Math.round(def.hp * floorScale),
-        memory: createDefaultRivalMemory(),
-        dead: false,
-      });
-      applyRivalLevelStats(Neo.rivals[Neo.rivals.length - 1], { syncLiveEnemy: false, keepHpRatio: false });
+    const floorScale = 1 + (Neo.floor - 1) * 0.12;
+
+    Neo.rivals = [];
+    Neo.pendingRivalDescends = [];
+
+    // Reintegrate rivals that were alive when descending
+    for (const old of carried) {
+      const room = nonStartRooms.length > 0
+        ? nonStartRooms[Math.floor(Neo.nextRandom('world') * nonStartRooms.length)]
+        : Neo.rooms[0];
+      if (!room) continue;
+
+      const def = Neo.RIVAL_DEFS[old.characterKey];
+      if (def) {
+        old.baseHp  = Math.round(def.hp  * floorScale);
+        old.baseDmg = Math.round(def.dmg * floorScale);
+      }
+
+      old.roomGx = room.gx;
+      old.roomGy = room.gy;
+      old.homeGx = room.gx;
+      old.homeGy = room.gy;
+      old.objectiveGx = room.gx;
+      old.objectiveGy = room.gy;
+      old.objectiveKind = 'patrol';
+      old.route = [];
+      old.aggroTimer = 0;
+      old.lastKnownPlayerGx = room.gx;
+      old.lastKnownPlayerGy = room.gy;
+
+      applyRivalLevelStats(old, { syncLiveEnemy: false, keepHpRatio: true });
+      Neo.rivals.push(old);
+      Neo.pendingRivalDescends.push(old);
+    }
+
+    // Always consume the spawn-chance roll to keep RNG deterministic
+    const carriedKeys = new Set(carried.map(r => r.characterKey));
+    const rollPassed = Neo.nextRandom('world') <= Neo.RIVAL_SPAWN_CHANCE;
+
+    if (rollPassed && nonStartRooms.length > 0) {
+      let unchosen = Object.keys(Neo.CHARACTER_DEFS).filter(k => k !== Neo.chosenCharacter && Neo.RIVAL_DEFS[k] && !carriedKeys.has(k));
+      if (Neo.chosenCharacter === 'thorn_knight' && unchosen.includes('princess') && unchosen.length > 1) {
+        // Thorn runs: rival princess is intentionally very rare.
+        if (Neo.nextRandom('world') > 0.05) {
+          unchosen = unchosen.filter(key => key !== 'princess');
+        }
+      }
+      const count = Neo.floor >= 3 ? Math.min(2, unchosen.length) : 1;
+      const shuffled = [...unchosen].sort(() => Neo.nextRandom('world') - 0.5);
+      for (let i = 0; i < count && i < shuffled.length; i++) {
+        const charKey = shuffled[i];
+        const def = Neo.RIVAL_DEFS[charKey];
+        const spawnRoom = nonStartRooms[i % nonStartRooms.length];
+        const reputationBonus = Math.max(0, Math.floor(Number(Neo.player?.rivalReputation || 0) / 2));
+        const startingLevel = Math.max(1, 1 + reputationBonus);
+        const baseMoveInterval = Neo.RIVAL_MOVE_INTERVAL_BASE + Neo.nextRandom('world') * 4;
+        Neo.rivals.push({
+          rivalId: `${charKey}-${Neo.floor}-${Math.floor(Neo.nextRandom('world') * 1000000)}`,
+          characterKey: charKey,
+          name: def.name,
+          color: def.color,
+          attackStyle: def.attackStyle,
+          enterLine: def.enterLine,
+          deathLine: def.deathLine,
+          roomGx: spawnRoom.gx,
+          roomGy: spawnRoom.gy,
+          moveTimer: 6 + Neo.nextRandom('world') * 5,
+          moveInterval: baseMoveInterval,
+          baseMoveInterval,
+          baseHp: Math.round(def.hp * floorScale),
+          baseDmg: Math.round(def.dmg * floorScale),
+          baseSpeed: def.speed,
+          baseAttackCd: def.attackCd,
+          hp: Math.round(def.hp * floorScale),
+          max: Math.round(def.hp * floorScale),
+          dmg: Math.round(def.dmg * floorScale),
+          speed: def.speed,
+          r: def.r,
+          attackCd: def.attackCd,
+          level: startingLevel,
+          xp: 0,
+          xpToNext: 22 + Neo.floor * 4,
+          growthTick: 0,
+          weapons: (Neo.RIVAL_WEAPON_LOADOUTS[charKey] || []).map(weapon => ({ ...weapon })),
+          loot: [],
+          homeGx: spawnRoom.gx,
+          homeGy: spawnRoom.gy,
+          objectiveGx: spawnRoom.gx,
+          objectiveGy: spawnRoom.gy,
+          objectiveKind: 'patrol',
+          route: [],
+          aggroTimer: 0,
+          lastKnownPlayerGx: spawnRoom.gx,
+          lastKnownPlayerGy: spawnRoom.gy,
+          hpSnapshot: Math.round(def.hp * floorScale),
+          memory: createDefaultRivalMemory(),
+          dead: false,
+        });
+        applyRivalLevelStats(Neo.rivals[Neo.rivals.length - 1], { syncLiveEnemy: false, keepHpRatio: false });
+      }
     }
   }
 

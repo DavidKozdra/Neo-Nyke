@@ -82,6 +82,7 @@
     else if (weaponKey === 'golden_fleece') base = 0.5;
     else if (weaponKey === 'void_piercer') base = 0.8;
     else if (weaponKey === 'aegis_shield_weapon') base = 8;
+    else if (weaponKey === 'princess_wand') base = 0.55;
     else base = 0.5;
     const bonus = Neo.getAnvilWeaponBonus(weaponKey, 'cooldown');
     return Math.max(0.05, base + bonus);
@@ -232,6 +233,12 @@
       Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.5, ring: 26, c: '#9ae9ff' });
       return true;
     }
+    if (weaponKey === 'princess_wand') {
+      spawnWeaponProjectile({ angle, speed: 680, damage: wDmg(weaponKey), knockback: wKnk(weaponKey), r: 5, life: 1.0, kind: 'princess_wand', color: '#ff9de8', pierceCount: 1 });
+      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.18, ring: 10, c: '#ff9de8' });
+      Neo.player.weaponCooldown = wCd(weaponKey) / attackSpeed;
+      return true;
+    }
     return false;
   }
 
@@ -278,6 +285,12 @@
       const slashBleedChance = move === 'slash' ? 0.10 : 0;
       if (slashBleedChance > 0 && Neo.rng() < slashBleedChance) applyBleed(enemy, 1, 5);
       if (itemStats.bleedChance > 0 && Neo.rng() < itemStats.bleedChance) applyBleed(enemy, 1, 5);
+      if (itemStats.weaponFatigueChance > 0 && Neo.rng() < itemStats.weaponFatigueChance) {
+        Neo.applyStatus(enemy, 'slow', 1, 4);
+      }
+      if (itemStats.snakeKnifePoisonChance > 0 && Neo.rng() < itemStats.snakeKnifePoisonChance) {
+        applyPoison(enemy, 1, 4);
+      }
     }
     Neo.destructibles.forEach(prop => {
       if (prop.broken || prop.hidden) return;
@@ -555,6 +568,32 @@
     const itemStats = Neo.getItemStats();
     const attackSpeed = Neo.getAttackSpeedValue();
     if (!Neo.spendSkillCharge('smash', Neo.getSmashCooldownDuration(attackSpeed))) return;
+    if (itemStats.homingMissileChance > 0 && Neo.nextRandom('encounter') < itemStats.homingMissileChance) {
+      const base = Math.atan2(Neo.mouse.worldY - Neo.player.y, Neo.mouse.worldX - Neo.player.x);
+      for (let index = 0; index < 2; index += 1) {
+        const angle = base + (index === 0 ? -0.12 : 0.12);
+        Neo.spawnProjectile({
+          x: Neo.player.x,
+          y: Neo.player.y,
+          vx: Math.cos(angle) * 260,
+          vy: Math.sin(angle) * 260,
+          r: 6,
+          life: 2.4,
+          enemy: false,
+          kind: 'homing_missile',
+          damage: 18,
+          knockback: 140,
+          color: '#ffe06f',
+          homing: true,
+          homingTarget: 'enemy',
+          homingRadius: 960,
+          homingSpeed: 420,
+          homingAccel: 3.8,
+          homingTurnRate: 3.4,
+        });
+      }
+      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 22, life: 0.5, ring: 18, c: '#ffe06f' });
+    }
     const move = getEquippedMove('smash');
     if (move === 'kicky_kick') {
       castKickyKick();
@@ -1246,6 +1285,16 @@
       color: isCrit ? '#ff9f1c' : '#ff6b6b',
       size: isCrit ? 20 : 16,
     });
+    if (stats.confuseRayStunChance > 0 && Neo.nextRandom('encounter') < stats.confuseRayStunChance) {
+      enemy.stun = Math.max(Number(enemy.stun || 0), 0.55);
+      Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 18, life: 0.5, text: 'STUN', c: '#ffe66d' });
+      Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.28, ring: enemy.r + 12, c: '#ffe66d' });
+    }
+    if (stats.overstimulateStunChance > 0 && (Neo.getActiveStatusCount?.(enemy) || 0) >= 2 && Neo.nextRandom('encounter') < stats.overstimulateStunChance) {
+      enemy.stun = Math.max(Number(enemy.stun || 0), 0.7);
+      Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 18, life: 0.5, text: 'STIMULATED', c: '#ffd27d' });
+      Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.28, ring: enemy.r + 12, c: '#ffd27d' });
+    }
     window.achievementEvents?.emit('damage:dealt', { amount: dealt });
     if (options.fireChance > 0 && Neo.nextRandom('encounter') < options.fireChance) {
       applyFire(enemy, Number(options.fireStacks || 1), Number(options.fireDuration || 2.8));
@@ -1422,6 +1471,18 @@
       particleColor: Neo.STATUS_STYLES.dark_drain.color,
       healScale: 0.35,
     });
+    const slowState = Neo.getStatusState(enemy, 'slow');
+    if (slowState.stacks > 0) {
+      slowState.duration -= dt;
+      slowState.tick -= dt;
+      if (slowState.tick <= 0) {
+        slowState.tick = 0.32;
+        if (Neo.nextRandom('fx') < 0.32) {
+          Neo.spawnParticle({ x: enemy.x + Neo.rand(-7, 7), y: enemy.y + Neo.rand(-7, 7), life: 0.22, c: Neo.STATUS_STYLES.slow.color });
+        }
+      }
+      if (slowState.duration <= 0) Neo.clearStatus(enemy, 'slow');
+    }
     return bleedStacks;
   }
 
@@ -1531,6 +1592,7 @@
     if (index >= 0) Neo.enemies.splice(index, 1);
     const isTutorialDummy = !!enemy.tutorialDummy;
     spawnEnemyCorpse(enemy);
+    const itemStats = Neo.getItemStats();
     if (Neo.player) Neo.player.kills = Math.max(0, Number(Neo.player.kills || 0)) + 1;
     window.achievementEvents?.emit('enemy:killed');
     if (Neo.player?.keenEyeReady) {
@@ -1540,6 +1602,20 @@
     if (Neo.player?.chronoSpringReady) {
       Neo.triggerChronoSpringBuff();
       Neo.consumeCharge('chrono_spring');
+    }
+    if (itemStats.graveZoneChance > 0 && Neo.nextRandom('encounter') < itemStats.graveZoneChance) {
+      const moveSpeed = itemStats.moveSpeedMultiplier || 1;
+      Neo.hazards.push({
+        kind: 'grave_zone',
+        x: enemy.x,
+        y: enemy.y,
+        r: 118,
+        ttl: 2,
+        pushPower: 340 * moveSpeed,
+        moveSpeed,
+        source: 'grave_zone',
+      });
+      Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.45, ring: 118, c: '#c9b3ff' });
     }
 
     const bloodMult = getBloodMultiplier();

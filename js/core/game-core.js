@@ -88,12 +88,13 @@ export const OPPOSITE_DIRECTION = {
   e: 'w',
   w: 'e',
 };
-export const STATUS_KEYS = ['bleed', 'fire', 'poison', 'dark_drain'];
+export const STATUS_KEYS = ['bleed', 'fire', 'poison', 'dark_drain', 'slow'];
 export const STATUS_STYLES = {
   bleed: { color: '#ff4f6d', textColor: '#ff5f5f' },
   fire: { color: '#ff9a3c', textColor: '#ff9a3c' },
   poison: { color: '#85df63', textColor: '#85df63' },
   dark_drain: { color: '#b48cff', textColor: '#b48cff' },
+  slow: { color: '#79d9ff', textColor: '#79d9ff' },
 };
 export const ROOM_ART_THEMES = {
   dungeon: {

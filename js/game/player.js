@@ -108,7 +108,7 @@ export function syncCharacterUiTheme() {
   }
 
 export function getDefaultWeaponForCharacter(characterKey) {
-    if (characterKey === 'princess') return '';
+    if (characterKey === 'princess') return 'princess_wand';
     if (characterKey === 'metao') return 'metao_fire_staff';
     if (characterKey === 'granialla') return 'granillia_lightning_spear';
     if (characterKey === 'mooggy') return 'lazer_glasses';
@@ -195,6 +195,14 @@ export function getItemStats() {
     const anchorCharm = getItemCount('anchor_charm');
     const shieldOfAegis = getItemCount('shield_of_aegis');
     const pendantOfKronos = getItemCount('pendant_of_kronos');
+    const weaponFatigue = getItemCount('weapon_fatigue');
+    const genericHealthItem = getItemCount('generic_health_item');
+    const snakeKnife = getItemCount('snake_knife');
+    const confuseRay = getItemCount('confuse_ray');
+    const overclockedWatch = getItemCount('overclocked_watch');
+    const overstimulate = getItemCount('overstimulate');
+    const graveZone = getItemCount('grave_zone');
+    const homingMissile = getItemCount('homing_missile');
     const oracleLens = getItemCount('oracles_lens') > 0;
     const critCharmBonus = Number(Neo.player?.critCharmBuffTime || 0) > 0 ? getItemCount('crit_charm') * 0.04 : 0;
     const keenEyeBonus = Number(Neo.player?.keenEyeBuffTime || 0) > 0 ? getKeenEyeCritBonus() : 0;
@@ -210,6 +218,14 @@ export function getItemStats() {
     const characterDef = Neo.getCharacterDef?.() || {};
     Neo.itemStatsCacheValue = {
       bleedChance: neoKnife * 0.05,
+      weaponFatigueChance: weaponFatigue * 0.05,
+      genericHealthItemHealRatio: genericHealthItem * 0.05,
+      snakeKnifePoisonChance: snakeKnife * 0.02,
+      confuseRayStunChance: confuseRay * 0.01,
+      overclockedWatchChance: overclockedWatch * 0.02,
+      overstimulateStunChance: overstimulate * 0.2,
+      graveZoneChance: graveZone * 0.2,
+      homingMissileChance: homingMissile * 0.15,
       bleedDamageMultiplier: orbOfBlood > 0 ? 1 + orbOfBlood : 1,
       bleedHealScale: hemesScarf,
       passiveBleedStacks: hemesScarf,
@@ -222,7 +238,7 @@ export function getItemStats() {
       xpGainMultiplier: 1 + scholarSeal * 0.15,
       levelEdgeDamageMultiplier: 1 + scholarCap * xpProgress * 0.45,
       knockbackMultiplier: 1 + pushMan * 0.18,
-      aoeRadiusMultiplier: (1 + explosiveJelly) * Number(characterDef.aoeRadiusMultiplier || 1),
+      aoeRadiusMultiplier: (1 + explosiveJelly * 0.2) * Number(characterDef.aoeRadiusMultiplier || 1),
       aoeDamageMultiplier: Number(characterDef.aoeDamageMultiplier || 1),
       beamDamageMultiplier: 1 + dragonOrb * 0.35,
       beamChainTargets: dragonOrb > 0 ? Math.min(2, dragonOrb) : 0,
@@ -256,9 +272,9 @@ export function openWizardPawSelection() {
     Neo.wizardPawSelection = {
       picks: [],
       options: [
-        { key: 'maxHp', name: 'Max HP', description: `Current ${Math.round(Neo.player.maxHp)}. Triple max HP and scale current HP with it.` },
-        { key: 'attackPower', name: 'Attack Power', description: `Current ${Math.round(Neo.player.attackPower)}. Triple raw attack power.` },
-        { key: 'attackSpeed', name: 'Attack Speed', description: `Current ${getAttackSpeedValue().toFixed(2)}. Triple base attack speed.` },
+        { key: 'maxHp', name: 'Max HP', description: `Current ${Math.round(Neo.player.maxHp)}. Increase max HP by 50% and scale current HP with it.` },
+        { key: 'attackPower', name: 'Attack Power', description: `Current ${Math.round(Neo.player.attackPower)}. Increase raw attack power by 50%.` },
+        { key: 'attackSpeed', name: 'Attack Speed', description: `Current ${getAttackSpeedValue().toFixed(2)}. Increase base attack speed by 50%.` },
       ],
     };
     Neo.setWizardPawModalOpen(true);
@@ -300,17 +316,20 @@ export function handleWizardPawChoiceClick(event) {
   }
 
 export function applyWizardPawStat(stat) {
+    const boost = 1.5;
     if (stat === 'maxHp') {
-      Neo.player.maxHp = Math.max(120, Math.round(Neo.player.maxHp * 3));
-      Neo.player.hp = Math.min(Neo.player.maxHp, Math.round(Neo.player.hp * 3));
+      const previousMaxHp = Math.max(1, Number(Neo.player.maxHp || 120));
+      const nextMaxHp = Math.round(previousMaxHp * boost);
+      Neo.player.maxHp = nextMaxHp;
+      Neo.player.hp = Math.min(nextMaxHp, Math.round(Number(Neo.player.hp || previousMaxHp) * boost));
       return;
     }
     if (stat === 'attackPower') {
-      Neo.player.attackPower = Math.max(3, Math.round(Neo.player.attackPower * 3));
+      Neo.player.attackPower = Math.max(3, Math.round(Neo.player.attackPower * boost));
       return;
     }
     if (stat === 'attackSpeed') {
-      Neo.player.attackSpeed = Math.max(0.2, Neo.player.attackSpeed * 3);
+      Neo.player.attackSpeed = Math.max(0.2, Neo.player.attackSpeed * boost);
     }
   }
 
@@ -355,9 +374,19 @@ export function consumeCharge(chargeType) {
 
   window.achievementEvents?.on('charge:kill', () => {
     if (!Neo.player) return;
+    const stats = getItemStats();
+    const chargeSteps = stats.overclockedWatchChance > 0 && Neo.nextRandom('encounter') < stats.overclockedWatchChance ? 2 : 1;
+    if (stats.genericHealthItemHealRatio > 0 && Neo.player.hp < Neo.player.maxHp) {
+      const heal = Math.min(Neo.player.maxHp - Neo.player.hp, Math.max(0, Neo.player.hp * stats.genericHealthItemHealRatio));
+      if (heal > 0) {
+        Neo.player.hp = Math.min(Neo.player.maxHp, Neo.player.hp + heal);
+        Neo.spawnHealPopup(Neo.player.x, Neo.player.y - 22, heal, { color: '#d9ffe5' });
+        window.achievementEvents?.emit('heal:applied', { amount: heal });
+      }
+    }
 
     if (getItemCount('insurance') > 0 && !Neo.player.insuranceReady) {
-      Neo.player.insuranceChargeKills += 1;
+      Neo.player.insuranceChargeKills += chargeSteps;
       if (Neo.player.insuranceChargeKills >= getChargeRequirement(9)) {
         Neo.player.insuranceReady = true;
         Neo.player.insuranceChargeKills = 0;
@@ -367,7 +396,7 @@ export function consumeCharge(chargeType) {
     }
 
     if (getItemCount('keen_eye') > 0 && !Neo.player.keenEyeReady) {
-      Neo.player.keenEyeChargeKills += 1;
+      Neo.player.keenEyeChargeKills += chargeSteps;
       if (Neo.player.keenEyeChargeKills >= getChargeRequirement(10)) {
         Neo.player.keenEyeReady = true;
         Neo.player.keenEyeChargeKills = 0;
@@ -376,7 +405,7 @@ export function consumeCharge(chargeType) {
     }
 
     if (getItemCount('chrono_spring') > 0 && !Neo.player.chronoSpringReady) {
-      Neo.player.chronoSpringChargeKills += 1;
+      Neo.player.chronoSpringChargeKills += chargeSteps;
       if (Neo.player.chronoSpringChargeKills >= getChargeRequirement(7)) {
         Neo.player.chronoSpringReady = true;
         Neo.player.chronoSpringChargeKills = 0;
@@ -385,7 +414,7 @@ export function consumeCharge(chargeType) {
     }
 
     if (getItemCount('charged_adapter') > 0 && !Neo.player.escapeReady) {
-      Neo.player.escapeChargeKills += 1;
+      Neo.player.escapeChargeKills += chargeSteps;
       if (Neo.player.escapeChargeKills >= getChargeRequirement(10)) {
         Neo.player.escapeReady = true;
         Neo.player.escapeChargeKills = 0;
@@ -395,7 +424,7 @@ export function consumeCharge(chargeType) {
     }
 
     if (getItemCount('hemes_scarf') > 0 && !Neo.player.scarfHealReady) {
-      Neo.player.scarfChargeKills += 1;
+      Neo.player.scarfChargeKills += chargeSteps;
       if (Neo.player.scarfChargeKills >= getChargeRequirement(6)) {
         Neo.player.scarfHealReady = true;
         Neo.player.scarfChargeKills = 0;

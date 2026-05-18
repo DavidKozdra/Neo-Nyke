@@ -123,6 +123,7 @@ window.Neo = {
   lastDamageSourceKey: '',
   nextDoor: null,
   rivals: [],
+  pendingRivalDescends: [],
   monsterRoamTimer: 0,
   mooggyAssassinSpawnedThisRun: false,
   mooggyAssassinSpawnedThisFloor: false,

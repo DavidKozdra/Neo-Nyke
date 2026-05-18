@@ -450,7 +450,7 @@
       knockback: 0, pierceCount: 0,
       hitOptions: null, trail: null,
       splash: 0, splashDamage: 0, blockedSplashDamage: 0, fireStacks: 0, fireDuration: 0,
-      homing: false, homingSpeed: 0, homingAccel: 0, homingTurnRate: 0,
+      homing: false, homingTarget: null, homingSpeed: 0, homingAccel: 0, homingTurnRate: 0, homingRadius: 0,
       fromRival: false, source: null,
     });
   }
@@ -463,7 +463,7 @@
       knockback: 0, pierceCount: 0,
       hitOptions: null, trail: null,
       splash: 0, splashDamage: 0, blockedSplashDamage: 0, fireStacks: 0, fireDuration: 0,
-      homing: false, homingSpeed: 0, homingAccel: 0, homingTurnRate: 0,
+      homing: false, homingTarget: null, homingSpeed: 0, homingAccel: 0, homingTurnRate: 0, homingRadius: 0,
       fromRival: false, source: null,
     };
   }
@@ -504,9 +504,11 @@
     p.fireStacks = props.fireStacks ?? 0;
     p.fireDuration = props.fireDuration ?? 0;
     p.homing = props.homing ?? false;
+    p.homingTarget = props.homingTarget ?? null;
     p.homingSpeed = props.homingSpeed ?? 0;
     p.homingAccel = props.homingAccel ?? 0;
     p.homingTurnRate = props.homingTurnRate ?? 0;
+    p.homingRadius = props.homingRadius ?? 0;
     p.fromRival = props.fromRival ?? false;
     p.source = props.source ?? null;
     Neo.projectiles.push(p);
@@ -517,10 +519,16 @@
       const projectile = Neo.projectiles[index];
       if (!projectile) { Neo.projectiles.splice(index, 1); continue; }
       projectile.life -= dt;
-      if (projectile.enemy && projectile.homing && Neo.player) {
+      if (projectile.homing) {
         const speed = Math.hypot(Number(projectile.vx || 0), Number(projectile.vy || 0)) || Number(projectile.homingSpeed || 180);
-        const targetAngle = Math.atan2(Neo.player.y - projectile.y, Neo.player.x - projectile.x);
         const currentAngle = Math.atan2(Number(projectile.vy || 0), Number(projectile.vx || 1));
+        let targetAngle = currentAngle;
+        if (projectile.enemy && Neo.player) {
+          targetAngle = Math.atan2(Neo.player.y - projectile.y, Neo.player.x - projectile.x);
+        } else if (projectile.homingTarget === 'enemy') {
+          const nearest = Neo.findNearestEnemy(projectile.x, projectile.y, Number(projectile.homingRadius || 960));
+          if (nearest) targetAngle = Math.atan2(nearest.y - projectile.y, nearest.x - projectile.x);
+        }
         const nextAngle = Neo.turnAngleToward(currentAngle, targetAngle, Number(projectile.homingTurnRate || 2) * dt);
         const nextSpeed = speed + (Number(projectile.homingSpeed || speed) - speed) * Number(projectile.homingAccel || 2.5) * dt;
         projectile.vx = Math.cos(nextAngle) * nextSpeed;
@@ -690,6 +698,22 @@
           if (enemy.hp <= 0) Neo.onEnemyDie(enemy);
         }
         if (hazard.statusTick <= 0) hazard.statusTick = 0.45;
+      } else if (hazard.kind === 'grave_zone') {
+        for (let ei = Neo.enemies.length - 1; ei >= 0; ei -= 1) {
+          const enemy = Neo.enemies[ei];
+          if (!enemy) continue;
+          const dx = enemy.x - hazard.x;
+          const dy = enemy.y - hazard.y;
+          const dist = Math.hypot(dx, dy);
+          if (dist > hazard.r + enemy.r || dist <= 0.001) continue;
+          const push = Number(hazard.pushPower || 280) * Math.max(0.12, 1 - dist / (hazard.r + enemy.r));
+          enemy.vx += (dx / dist) * push * dt;
+          enemy.vy += (dy / dist) * push * dt;
+          enemy.stun = Math.max(Number(enemy.stun || 0), 0.05);
+          if (Neo.nextRandom('fx') < 0.15) {
+            Neo.spawnParticle({ x: enemy.x + Neo.rand(-6, 6), y: enemy.y + Neo.rand(-6, 6), life: 0.24, c: '#c9b3ff' });
+          }
+        }
       } else if (hazard.kind === 'lightning_column') {
         hazard.tick -= dt;
         if (hazard.tick <= 0) {
@@ -1054,6 +1078,7 @@
         Neo.persistMetaSoon();
         Neo.showFloorTransition = true;
         Neo.floorTransitionTime = 0;
+        Neo._carriedRivals = Neo.rivals.filter(r => !r.dead && r.hp > 0);
         Neo.generateFloor();
         Neo.scheduleRunSave();
         return;
@@ -1066,6 +1091,7 @@
         Neo.persistMetaSoon();
         Neo.showFloorTransition = true;
         Neo.floorTransitionTime = 0;
+        Neo._carriedRivals = Neo.rivals.filter(r => !r.dead && r.hp > 0);
         Neo.generateFloor();
         Neo.scheduleRunSave();
         return;
@@ -1183,6 +1209,7 @@
         Neo.floorTransitionTime = 0;
         Neo.player.x = Neo.START_X;
         Neo.player.y = Neo.START_Y;
+        Neo._carriedRivals = Neo.rivals.filter(r => !r.dead && r.hp > 0);
         Neo.generateFloor();
         Neo.scheduleRunSave();
         return;

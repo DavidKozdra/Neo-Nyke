@@ -186,6 +186,14 @@
       description: 'Blocks all incoming damage for 2 seconds.',
       color: '#c8f6ff',
     },
+    princess_wand: {
+      key: 'princess_wand',
+      name: "Princess's Wand",
+      rarity: 'princess',
+      description: 'Fires a pink magic bolt that pierces once. Exclusive to Princess.',
+      color: '#ff9de8',
+      exclusiveCharacter: 'princess',
+    },
   };
   const WEAPON_KEYS = Object.keys(WEAPON_DEFS);
   const WHITE_WEAPON_POOL = ['extending_staff', 'hunters_bow', 'thorns_bleed_blade'];
@@ -388,6 +396,56 @@
       category: 'knight',
       tags: ['hp'],
     },
+    weapon_fatigue: {
+      key: 'weapon_fatigue',
+      name: 'Weapon Fatigue',
+      shortName: 'Slow',
+      description: 'Melee hits have a 5% chance to apply a slow stack.',
+      rarity: 'knight',
+      color: '#e7fbff',
+      category: 'knight',
+      tags: ['slow', 'melee'],
+    },
+    generic_health_item: {
+      key: 'generic_health_item',
+      name: 'Generic Health',
+      shortName: 'Heal 5%',
+      description: 'On kill, restore 5% of your current HP, capped by max HP.',
+      rarity: 'knight',
+      color: '#d9ffe5',
+      category: 'knight',
+      tags: ['heal', 'charge'],
+    },
+    snake_knife: {
+      key: 'snake_knife',
+      name: 'Snake Knife',
+      shortName: 'Poison +2%',
+      description: 'Melee hits have a 2% chance to poison enemies.',
+      rarity: 'knight',
+      color: '#d7ffbf',
+      category: 'knight',
+      tags: ['poison', 'melee'],
+    },
+    confuse_ray: {
+      key: 'confuse_ray',
+      name: 'Confuse Ray',
+      shortName: 'Stun 1%',
+      description: 'Hits have a 1% chance to stun enemies no matter what.',
+      rarity: 'knight',
+      color: '#d8f0ff',
+      category: 'knight',
+      tags: ['stun', 'hit'],
+    },
+    overclocked_watch: {
+      key: 'overclocked_watch',
+      name: 'Overclocked Watch',
+      shortName: 'Charge x2',
+      description: '2% chance for kill charge progress to count twice instead of once.',
+      rarity: 'knight',
+      color: '#f0fbff',
+      category: 'knight',
+      tags: ['charge', 'kill'],
+    },
     charged_adapter: {
       key: 'charged_adapter',
       name: 'Charged Adapter',
@@ -417,6 +475,26 @@
       color: '#b77dff',
       category: 'wizard',
       tags: ['beam', 'spell', 'wizard'],
+    },
+    overstimulate: {
+      key: 'overstimulate',
+      name: 'Overstimulate',
+      shortName: 'Status Stun',
+      description: 'Hits have a 20% chance to stun enemies with 2 or more statuses.',
+      rarity: 'wizard',
+      color: '#ffcf80',
+      category: 'wizard',
+      tags: ['stun', 'status', 'wizard'],
+    },
+    grave_zone: {
+      key: 'grave_zone',
+      name: 'Grave Zone',
+      shortName: 'Push Zone',
+      description: 'On kill, 20% chance to create a 2-second knockback field that scales with move speed.',
+      rarity: 'wizard',
+      color: '#c9b3ff',
+      category: 'wizard',
+      tags: ['aoe', 'knockback', 'wizard'],
     },
     turtle_shell: {
       key: 'turtle_shell',
@@ -459,11 +537,21 @@
       reveal: true,
       tags: ['crit', 'god'],
     },
+    homing_missile: {
+      key: 'homing_missile',
+      name: 'Homing Missile',
+      shortName: 'Missiles',
+      description: '15% chance to launch 2 homing missiles when using R.',
+      rarity: 'god',
+      color: '#ffe06f',
+      category: 'god',
+      tags: ['missile', 'god', 'smash'],
+    },
     wizards_paw: {
       key: 'wizards_paw',
       name: "Wizard's Paw",
       shortName: 'Paw',
-      description: 'Randomly chooses 2 stats to triple.',
+      description: 'Choose 2 stats to increase by 50%.',
       rarity: 'god',
       color: '#ffcf80',
       category: 'god',
@@ -517,6 +605,7 @@
     purple: '#b77dff',
     god: '#ff4256',
     red: '#ff4256',
+    princess: '#ff9de8',
   };
   const SHOP_RARITY_PRICE_MULTIPLIERS = {
     knight: 1,
@@ -525,6 +614,7 @@
     purple: 2.15,
     god: 4.75,
     red: 4.75,
+    princess: 1.5,
   };
   const ITEM_KEYS = Object.keys(ITEM_DEFS);
   const SANDBOX_ENEMY_TYPES = [
@@ -1059,6 +1149,7 @@
     golden_fleece:            { damage: 20,   cooldown: 0.50, range: 80,  knockback: 80  },
     void_piercer:             { damage: 55,   cooldown: 0.80,             knockback: 160 },
     aegis_shield_weapon:      { cooldown: 8.00 },
+    princess_wand:            { damage: 30,   cooldown: 0.55,             knockback: 160 },
   };
 
   // Base stat values per move
@@ -1502,7 +1593,7 @@
   }
 
   const ITEM_CINEMATIC_FLAVOR = {
-    wizards_paw: 'Choose 2 stats to triple — choose wisely.',
+    wizards_paw: 'Choose 2 stats to increase by 50% — choose wisely.',
     jesters_dice: 'Skip 3 floors. Chaos blooms in your wake.',
   };
 

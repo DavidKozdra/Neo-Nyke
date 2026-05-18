@@ -2991,8 +2991,10 @@
   }
 
   function steerEnemy(enemy, dirX, dirY, maxSpeed, accel, dt) {
-    enemy.vx += (dirX * maxSpeed - enemy.vx) * accel * dt;
-    enemy.vy += (dirY * maxSpeed - enemy.vy) * accel * dt;
+    const slowMultiplier = Neo.getSlowMultiplier?.(enemy) || 1;
+    const adjustedSpeed = maxSpeed * slowMultiplier;
+    enemy.vx += (dirX * adjustedSpeed - enemy.vx) * accel * dt;
+    enemy.vy += (dirY * adjustedSpeed - enemy.vy) * accel * dt;
   }
 
   function moveCircle(entity, dt) {
@@ -3001,8 +3003,9 @@
       entity.y = Neo.clamp(entity.y, Neo.WALL + entity.r, Neo.ROOM_H - Neo.WALL - entity.r);
       return;
     }
-    const nextX = entity.x + entity.vx * dt;
-    const nextY = entity.y + entity.vy * dt;
+    const slowMultiplier = Neo.getSlowMultiplier?.(entity) || 1;
+    const nextX = entity.x + entity.vx * dt * slowMultiplier;
+    const nextY = entity.y + entity.vy * dt * slowMultiplier;
     if (!Neo.isBlocked(nextX, entity.y, entity.r)) entity.x = nextX;
     else entity.vx *= -0.4;
     if (!Neo.isBlocked(entity.x, nextY, entity.r)) entity.y = nextY;
