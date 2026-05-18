@@ -1715,7 +1715,7 @@ export function resumeGame() {
     if (p2Row) p2Row.style.display = '';
   }
 
-  const COMPETITIVE_SERVER_URL = Neo.COMPETITIVE_SERVER_URL || window.NEO_SERVER_URL || '/api';
+  const COMPETITIVE_SERVER_URL = Neo.COMPETITIVE_SERVER_URL || window.NEO_SERVER_URL || 'https://neonyke.davidkozdra.workers.dev/api';
 
   async function startCompetitive() {
     if (Neo.chosenCharacter === 'princess') {

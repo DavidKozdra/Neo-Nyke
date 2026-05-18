@@ -692,7 +692,7 @@
 
   // ── Blog / notices panel ───────────────────────────────────────
   (function initBlogPanel() {
-    const SERVER = window.NEO_SERVER_URL || '/api';
+    const SERVER = window.NEO_SERVER_URL || 'https://neonyke.davidkozdra.workers.dev/api';
     const blogList = document.getElementById('rhBlogList');
     let loaded = false;
 

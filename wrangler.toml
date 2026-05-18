@@ -2,8 +2,8 @@ name = "neonyke"
 compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat"]
 
-# Serve static game files from repo root
-assets = { directory = "." }
+# Serve static game files from dist/ (populated by build command)
+assets = { directory = "dist" }
 
 # Worker script handles API routes under /api/*
 main = "server/server.js"
