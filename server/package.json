@@ -1,19 +1,14 @@
 {
-	"name": "server",
+	"name": "neonyke-server",
 	"version": "1.0.0",
 	"private": true,
-	"main": "server.js",
 	"scripts": {
-		"start": "node server.js",
-		"dev": "nodemon server.js"
-	},
-	"dependencies": {
-		"express": "^4.21.2",
-		"express-rate-limit": "^8.5.2",
-		"helmet": "^8.1.0",
-		"node-cron": "^3.0.3"
+		"dev": "wrangler dev",
+		"deploy": "wrangler deploy",
+		"kv:create": "wrangler kv namespace create STORE",
+		"kv:create-preview": "wrangler kv namespace create STORE --preview"
 	},
 	"devDependencies": {
-		"nodemon": "^3.1.10"
+		"wrangler": "^4.92.0"
 	}
 }

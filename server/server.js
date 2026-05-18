@@ -1,62 +1,13 @@
-const express = require('express');
-const helmet = require('helmet');
-const rateLimit = require('express-rate-limit');
-const crypto = require('crypto');
-const cron = require('node-cron');
-const { version } = require('./package.json');
+// Cloudflare Worker — NeoNyke backend
+// Bindings required (wrangler.toml):
+//   KV namespace: STORE
+//   Cron trigger: "0 0 * * 1" (weekly seed reset)
 
-const app = express();
-const PORT = process.env.PORT || 3004;
-
-// Cryptographically strong seed
-let seed = crypto.randomInt(0, 1_000_000_000);
-
-// Security headers
-app.use(helmet());
-
-// CORS — restrict to your game's origin in production via env var
-const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || '*';
-app.use((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', ALLOWED_ORIGIN);
-    res.header('Access-Control-Allow-Headers', 'Content-Type');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    if (req.method === 'OPTIONS') return res.sendStatus(204);
-    next();
-});
-
-// Body size cap — prevent memory exhaustion
-app.use(express.json({ limit: '4kb' }));
-app.use(express.urlencoded({ extended: true, limit: '4kb' }));
-
-// Rate limiters
-const readLimiter = rateLimit({
-    windowMs: 60_000,
-    max: 60,
-    standardHeaders: true,
-    legacyHeaders: false,
-});
-const writeLimiter = rateLimit({
-    windowMs: 60_000,
-    max: 10,
-    standardHeaders: true,
-    legacyHeaders: false,
-});
-
-// Constants
 const MAX_FLOOR = 10_000;
-const MAX_TIME  = 86_400; // 24 h in seconds
-const VALID_CHARACTERS = new Set(['Neo', 'Rogue']); // extend as needed
+const MAX_TIME  = 86_400;
+const VALID_CHARACTERS = new Set(['Neo', 'Rogue']);
 
-let leaderboard = [
-    { name: 'ExamplePlayer', floor: 42, seed, character: 'Neo',   time: 3600, submittedAt: Date.now() },
-    { name: 'AnotherPlayer', floor: 35, seed, character: 'Rogue',  time: 4200, submittedAt: Date.now() },
-];
-
-// ── Special days & blog posts ────────────────────────────────────────────────
-// Add entries here. type: 'birthday' | 'holiday' | 'update' | 'event'
-// Special days use mm-dd matching (year ignored). Blog posts use `date` for display only.
 const NOTICES = [
-  // ── Special days (recur every year) ──
   {
     id: 'kiah-birthday',
     type: 'birthday',
@@ -85,7 +36,6 @@ const NOTICES = [
     icon: '🕎',
     accent: '#4fc3f7',
   },
-  // ── Blog / update posts ──
   {
     id: 'update-gaming-branch',
     type: 'update',
@@ -97,91 +47,182 @@ const NOTICES = [
   },
 ];
 
-app.get('/notices', readLimiter, (req, res) => {
-    res.json({ notices: NOTICES });
-});
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'Content-Type',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+};
 
-app.get('/version', readLimiter, (req, res) => {
-    res.json({ version });
-});
+function json(data, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+  });
+}
 
-app.get('/health', readLimiter, (req, res) => {
-    res.json({ ok: true });
-});
+async function getSeed(env) {
+  const val = await env.STORE.get('seed');
+  if (val) return val;
+  // First run — generate and persist a seed
+  const seed = String(Math.floor(Math.random() * 1_000_000_000));
+  await env.STORE.put('seed', seed);
+  return seed;
+}
 
-app.get('/seed', readLimiter, (req, res) => {
-    res.json({ seed });
-});
+async function getLeaderboard(env) {
+  const val = await env.STORE.get('leaderboard');
+  return val ? JSON.parse(val) : [];
+}
 
-app.get('/leadbyPage', readLimiter, (req, res) => {
-    const page     = Math.max(1, parseInt(req.query.page) || 1);
-    const pageSize = 10;
+async function putLeaderboard(env, leaderboard) {
+  await env.STORE.put('leaderboard', JSON.stringify(leaderboard));
+}
+
+// Simple in-memory rate limiter per CF isolate (resets on cold start).
+// For production-grade limiting, use Cloudflare Rate Limiting rules in the dashboard.
+const hits = new Map();
+function rateLimit(key, max, windowMs) {
+  const now = Date.now();
+  const entry = hits.get(key) || { count: 0, reset: now + windowMs };
+  if (now > entry.reset) { entry.count = 0; entry.reset = now + windowMs; }
+  entry.count++;
+  hits.set(key, entry);
+  return entry.count <= max;
+}
+
+async function handleRequest(request, env) {
+  if (request.method === 'OPTIONS') {
+    return new Response(null, { status: 204, headers: CORS_HEADERS });
+  }
+
+  const url = new URL(request.url);
+  const ip  = request.headers.get('CF-Connecting-IP') || 'unknown';
+
+  // Strip optional /api prefix so routes work both standalone and under Pages
+  const path = url.pathname.replace(/^\/api/, '');
+
+  // ── GET /health ──────────────────────────────────────────────────────────
+  if (path === '/health' && request.method === 'GET') {
+    return json({ ok: true });
+  }
+
+  // ── GET /version ─────────────────────────────────────────────────────────
+  if (path === '/version' && request.method === 'GET') {
+    return json({ version: '1.0.0' });
+  }
+
+  // ── GET /notices ─────────────────────────────────────────────────────────
+  if (path === '/notices' && request.method === 'GET') {
+    if (!rateLimit(`notices:${ip}`, 60, 60_000)) {
+      return json({ error: 'Too many requests' }, 429);
+    }
+    return json({ notices: NOTICES });
+  }
+
+  // ── GET /seed ─────────────────────────────────────────────────────────────
+  if (path === '/seed' && request.method === 'GET') {
+    if (!rateLimit(`seed:${ip}`, 60, 60_000)) {
+      return json({ error: 'Too many requests' }, 429);
+    }
+    const seed = await getSeed(env);
+    return json({ seed });
+  }
+
+  // ── GET /leadbyPage ───────────────────────────────────────────────────────
+  if (path === '/leadbyPage' && request.method === 'GET') {
+    if (!rateLimit(`lead:${ip}`, 60, 60_000)) {
+      return json({ error: 'Too many requests' }, 429);
+    }
+    const page      = Math.max(1, parseInt(url.searchParams.get('page')) || 1);
+    const pageSize  = 10;
     const startIndex = (page - 1) * pageSize;
-    const pageData   = leaderboard.slice(startIndex, startIndex + pageSize);
-    res.json({
-        page,
-        pageSize,
-        totalEntries: leaderboard.length,
-        hasMore: startIndex + pageSize < leaderboard.length,
-        data: pageData,
+    const leaderboard = await getLeaderboard(env);
+    const pageData  = leaderboard.slice(startIndex, startIndex + pageSize);
+    return json({
+      page,
+      pageSize,
+      totalEntries: leaderboard.length,
+      hasMore: startIndex + pageSize < leaderboard.length,
+      data: pageData,
     });
-});
+  }
 
-app.post('/leaderboard', writeLimiter, (req, res) => {
-    const { name, floor, seed: runSeed, character, time } = req.body;
-
-    if (!name || floor === undefined || runSeed === undefined) {
-        return res.status(400).json({ error: 'Missing required fields: name, floor, seed' });
+  // ── POST /leaderboard ─────────────────────────────────────────────────────
+  if (path === '/leaderboard' && request.method === 'POST') {
+    if (!rateLimit(`submit:${ip}`, 10, 60_000)) {
+      return json({ error: 'Too many requests' }, 429);
     }
 
-    if (String(runSeed) !== String(seed)) {
-        return res.status(400).json({ error: "Invalid seed for this week's leaderboard" });
+    let body;
+    try {
+      body = await request.json();
+    } catch {
+      return json({ error: 'Invalid JSON' }, 400);
+    }
+
+    const { name, floor, seed: runSeed, character, time } = body;
+
+    if (!name || floor === undefined || runSeed === undefined) {
+      return json({ error: 'Missing required fields: name, floor, seed' }, 400);
+    }
+
+    const currentSeed = await getSeed(env);
+    if (String(runSeed) !== String(currentSeed)) {
+      return json({ error: "Invalid seed for this week's leaderboard" }, 400);
     }
 
     const floorNum = Number(floor);
     const timeNum  = Number(time) || 0;
 
     if (!Number.isInteger(floorNum) || floorNum < 1 || floorNum > MAX_FLOOR) {
-        return res.status(400).json({ error: 'Invalid floor value' });
+      return json({ error: 'Invalid floor value' }, 400);
     }
     if (!Number.isFinite(timeNum) || timeNum < 0 || timeNum > MAX_TIME) {
-        return res.status(400).json({ error: 'Invalid time value' });
+      return json({ error: 'Invalid time value' }, 400);
     }
 
     const cleanName = String(name).trim().slice(0, 32);
-    if (!cleanName) {
-        return res.status(400).json({ error: 'Name cannot be blank' });
-    }
+    if (!cleanName) return json({ error: 'Name cannot be blank' }, 400);
 
     const cleanCharacter = String(character || '').slice(0, 32);
     if (character && !VALID_CHARACTERS.has(cleanCharacter)) {
-        return res.status(400).json({ error: 'Invalid character' });
+      return json({ error: 'Invalid character' }, 400);
     }
 
+    const leaderboard = await getLeaderboard(env);
     const entry = {
-        name: cleanName,
-        floor: floorNum,
-        seed: String(runSeed),
-        character: cleanCharacter,
-        time: timeNum,
-        submittedAt: Date.now(),
+      name: cleanName,
+      floor: floorNum,
+      seed: String(runSeed),
+      character: cleanCharacter,
+      time: timeNum,
+      submittedAt: Date.now(),
     };
 
     leaderboard.push(entry);
     leaderboard.sort((a, b) => b.floor - a.floor || a.time - b.time);
+    await putLeaderboard(env, leaderboard);
 
-    // O(1) rank: entry is the last element with its floor+time combo after sort
     const rank = leaderboard.indexOf(entry) + 1;
-    res.json({ ok: true, rank });
-});
+    return json({ ok: true, rank });
+  }
 
-// Weekly seed reset — every Monday at midnight
-cron.schedule('0 0 * * 1', () => {
-    seed = crypto.randomInt(0, 1_000_000_000);
-    leaderboard = [];
-    console.log('Weekly reset: new seed generated');
-});
+  return json({ error: 'Not found' }, 404);
+}
 
-app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-});
+// Weekly seed reset — fired by Cron Trigger "0 0 * * 1"
+async function handleScheduled(env) {
+  const seed = String(Math.floor(Math.random() * 1_000_000_000));
+  await env.STORE.put('seed', seed);
+  await env.STORE.put('leaderboard', JSON.stringify([]));
+  console.log('Weekly reset: new seed', seed);
+}
+
+export default {
+  async fetch(request, env) {
+    return handleRequest(request, env);
+  },
+  async scheduled(_event, env) {
+    await handleScheduled(env);
+  },
+};
