@@ -77,7 +77,7 @@
     else if (weaponKey === 'metao_fire_staff') base = 0.75;
     else if (weaponKey === 'magenta_degale') base = 1.5;
     else if (weaponKey === 'magenta_p90') base = 1.8;
-    else if (weaponKey === 'granillia_lightning_spear') base = Neo.ATTACKS.melee.baseCooldown;
+    else if (weaponKey === 'granillia_lightning_spear') base = 0.75;
     else if (weaponKey === 'excalibur') base = 2;
     else if (weaponKey === 'golden_fleece') base = 0.5;
     else if (weaponKey === 'void_piercer') base = 0.8;

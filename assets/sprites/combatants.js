@@ -1,6 +1,6 @@
 window.NeoNykeSpriteDefs = {
   princess: {
-    palette: { a: '#241026', b: '#d85fa8', c: '#ffd1ea', d: '#f7e870' },
+    palette: { a: '#241026', b: '#d85fa8', c: '#8b4a2c', d: '#f0c830' },
     pixels: [
       '.ddddddd..',
       'ddcbbbcdd.',

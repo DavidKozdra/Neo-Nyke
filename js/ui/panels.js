@@ -557,7 +557,8 @@ export function setAnvilPanelOpen(open) {
     Neo.ui.anvilPanel.setAttribute('aria-hidden', open ? 'false' : 'true');
     if (open) {
       Neo.anvilStagedUpgrades = {};
-      Neo.anvilSelectedItem = null;
+      const equipped = Neo.player?.equippedWeapon;
+      Neo.anvilSelectedItem = equipped ? `weapon:${equipped}` : null;
       renderAnvilPanel();
     }
   }
