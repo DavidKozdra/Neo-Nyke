@@ -55,7 +55,7 @@ export function applyStatus(entity, key, stacks, duration) {
   const state = getStatusState(entity, key);
   state.stacks = Math.min(6, Math.max(state.stacks, 0) + Math.max(0, Number(stacks || 0)));
   state.duration = Math.max(state.duration, Number(duration || 0));
-  if (entity !== Neo.player) window.achievementEvents?.emit('status:applied', { key });
+  if (entity !== Neo.player) window.achievementEvents?.emit('status:applied', { key, entityId: entity.id });
 }
 
 export const walls = (() => {

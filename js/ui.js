@@ -1225,7 +1225,7 @@
     const state = getStatusState(entity, key);
     state.stacks = Math.min(6, Math.max(state.stacks, 0) + Math.max(0, Number(stacks || 0)));
     state.duration = Math.max(state.duration, Number(duration || 0));
-    if (entity !== player) achievementEvents.emit('status:applied', { key });
+    if (entity !== player) achievementEvents.emit('status:applied', { key, entityId: entity.id });
   }
 
   const walls = (() => {

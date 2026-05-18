@@ -22,6 +22,7 @@ const achievementManager = (() => {
 
   // Per-run counters
   let statusesApplied = new Set();
+  let statusesByEnemy = new Map();
   let runHealTotal = 0;
   let runDamageTaken = 0;
   let runShopBuys = 0;
@@ -200,6 +201,7 @@ const achievementManager = (() => {
 
   function resetRunCounters() {
     statusesApplied = new Set();
+    statusesByEnemy = new Map();
     runHealTotal = 0;
     runDamageTaken = 0;
     runShopBuys = 0;
@@ -238,9 +240,13 @@ const achievementManager = (() => {
     if (amount >= 10000) await unlock('one_punch_man');
   });
 
-  achievementEvents.on('status:applied', async ({ key }) => {
+  achievementEvents.on('status:applied', async ({ key, entityId }) => {
     statusesApplied.add(key);
-    if (statusesApplied.size >= 4) await unlock('the_avatar');
+    if (entityId != null) {
+      if (!statusesByEnemy.has(entityId)) statusesByEnemy.set(entityId, new Set());
+      statusesByEnemy.get(entityId).add(key);
+      if (statusesByEnemy.get(entityId).size >= 4) await unlock('the_avatar');
+    }
   });
 
   achievementEvents.on('rival:killed', async () => {
@@ -265,7 +271,7 @@ const achievementManager = (() => {
 
   achievementEvents.on('item:collected', async ({ totalItems }) => {
     maxRelicCount = Math.max(maxRelicCount, Math.max(0, Number(totalItems) || 0));
-    if (totalItems >= 10) await unlock('hoarder');
+    if (totalItems >= 100) await unlock('hoarder');
   });
 
   achievementEvents.on('floor:reached', async ({ floor }) => {
@@ -290,7 +296,7 @@ const achievementManager = (() => {
 
   achievementEvents.on('meta:coins', async ({ total }) => {
     metaCoins = Math.max(metaCoins, Math.max(0, Number(total) || 0));
-    if (total >= 1000) await unlock('coin_goblin');
+    if (total >= 10000) await unlock('coin_goblin');
   });
 
   achievementEvents.on('god:killed', async () => {
