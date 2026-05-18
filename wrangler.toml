@@ -10,8 +10,8 @@ main = "server/server.js"
 
 [[kv_namespaces]]
 binding = "STORE"
-id = "REPLACE_WITH_KV_NAMESPACE_ID"
-preview_id = "REPLACE_WITH_KV_PREVIEW_ID"
+id = "021d5bfc72ad4344a7ba58f1155c5dee"
+preview_id = "021d5bfc72ad4344a7ba58f1155c5dee"
 
 [triggers]
 crons = ["0 0 * * 1"]
