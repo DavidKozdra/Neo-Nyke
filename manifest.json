@@ -20,13 +20,5 @@
     { "src": "assets/icons/icon-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
     { "src": "assets/icons/icon-maskable-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ],
-  "screenshots": [
-    {
-      "src": "image.png",
-      "sizes": "785x283",
-      "type": "image/png",
-      "form_factor": "wide",
-      "label": "NEO NYKE gameplay"
-    }
-  ]
+  "screenshots": []
 }
