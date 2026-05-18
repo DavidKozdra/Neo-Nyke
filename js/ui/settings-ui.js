@@ -692,7 +692,7 @@
 
   // ── Blog / notices panel ───────────────────────────────────────
   (function initBlogPanel() {
-    const SERVER = 'http://localhost:3004';
+    const SERVER = window.NEO_SERVER_URL || '/api';
     const blogList = document.getElementById('rhBlogList');
     let loaded = false;
 

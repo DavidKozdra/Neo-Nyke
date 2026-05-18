@@ -763,7 +763,7 @@ export function createUIController(view) {
       lbLoading = true;
       const statusEl = document.getElementById('competitiveLbStatus');
       if (statusEl) statusEl.textContent = 'Loading...';
-      fetch(`${Neo.COMPETITIVE_SERVER_URL || 'http://localhost:3004'}/leadbyPage?page=${lbPage}`)
+      fetch(`${Neo.COMPETITIVE_SERVER_URL || window.NEO_SERVER_URL || '/api'}/leadbyPage?page=${lbPage}`)
         .then(r => r.json())
         .then(data => {
           const listEl = document.getElementById('competitiveLbList');

@@ -1,0 +1,10 @@
+node_modules/
+server/node_modules/
+.git/
+.claude/
+.codex/
+.agents/
+Archive.zip
+tests/
+generate-icons.js
+README.md
