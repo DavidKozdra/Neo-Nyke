@@ -218,9 +218,36 @@ async function handleScheduled(env) {
   console.log('Weekly reset: new seed', seed);
 }
 
+const SECURITY_HEADERS = {
+  'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
+  'X-Frame-Options': 'DENY',
+  'X-Content-Type-Options': 'nosniff',
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
+  'Cross-Origin-Opener-Policy': 'same-origin',
+  'Permissions-Policy': 'geolocation=(), camera=(), microphone=()',
+  'Content-Security-Policy': [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline'",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob:",
+    "media-src 'self' blob:",
+    "connect-src 'self' https://neonyke.davidkozdra.workers.dev",
+    "worker-src 'self' blob:",
+    "font-src 'self'",
+    "frame-ancestors 'none'",
+  ].join('; '),
+};
+
+function addSecurityHeaders(response) {
+  const res = new Response(response.body, response);
+  for (const [k, v] of Object.entries(SECURITY_HEADERS)) res.headers.set(k, v);
+  return res;
+}
+
 export default {
   async fetch(request, env) {
-    return handleRequest(request, env);
+    const response = await handleRequest(request, env);
+    return addSecurityHeaders(response);
   },
   async scheduled(_event, env) {
     await handleScheduled(env);
