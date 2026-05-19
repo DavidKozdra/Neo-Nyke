@@ -400,13 +400,16 @@
     
     if (Neo.ui.interactPrompt) {
       const shopHint = Neo.getControlHint('e', 'e');
+      const touchHint = (window.matchMedia?.('(pointer: coarse)').matches || navigator.maxTouchPoints > 0)
+        ? ` / X BUTTON`
+        : '';
       const isShop = Neo.currentRoom?.type === 'shop' && !Neo.isPanelOpen(Neo.ui.shopPanel);
       const isAnvil = Neo.currentRoom?.type === 'anvil' && !Neo.isPanelOpen(Neo.ui.anvilPanel);
       if (isShop) {
-        Neo.ui.interactPrompt.textContent = `[${shopHint}]  Open Shop`;
+        Neo.ui.interactPrompt.textContent = `[${shopHint}]${touchHint}  Open Shop`;
         Neo.ui.interactPrompt.classList.remove('hidden', 'interact-prompt--forge');
       } else if (isAnvil) {
-        Neo.ui.interactPrompt.textContent = `[${shopHint}]  Open Forge`;
+        Neo.ui.interactPrompt.textContent = `[${shopHint}]${touchHint}  Open Forge`;
         Neo.ui.interactPrompt.classList.remove('hidden');
         Neo.ui.interactPrompt.classList.add('interact-prompt--forge');
       } else {

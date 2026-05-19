@@ -161,6 +161,11 @@
       if (!isGameplayTouchAllowed()) return;
       const action = getTouchAction(bindingKey, fallbackAction);
       el.dataset.touchAction = action;
+      if (action === 'ascend' && triggerWorldInteract()) {
+        el.classList.add('pressed');
+        setNTActive();
+        return;
+      }
       NT[action] = true;
       el.classList.add('pressed');
       setNTActive();
@@ -277,6 +282,23 @@
 
   function hasCoarsePointer() {
     return !!(window.matchMedia?.('(pointer: coarse)').matches || navigator.maxTouchPoints > 0);
+  }
+
+  function isPanelOpen(panel) {
+    if (!panel) return false;
+    if (window.Neo?.isPanelOpen) return window.Neo.isPanelOpen(panel);
+    return !panel.classList.contains('hidden');
+  }
+
+  function triggerWorldInteract() {
+    if (window.Neo?.gameState !== 'play') return false;
+    const roomType = window.Neo?.currentRoom?.type;
+    const canShop = roomType === 'shop' && !isPanelOpen(window.Neo?.ui?.shopPanel);
+    const canAnvil = roomType === 'anvil' && !isPanelOpen(window.Neo?.ui?.anvilPanel);
+    if (!canShop && !canAnvil) return false;
+    window._neoGame?.triggerInteract?.();
+    window.setTimeout(syncOverlayMode, 0);
+    return true;
   }
 
   function clearTouchState() {

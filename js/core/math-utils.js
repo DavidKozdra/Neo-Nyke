@@ -380,11 +380,30 @@ export function getBeamEnd(x, y, angle, range) {
   return { x: x + Math.cos(angle) * range, y: y + Math.sin(angle) * range };
 }
 
+function triggerInteract() {
+  if (Neo.gameState !== 'play') return;
+  const inShopRoom = Neo.currentRoom?.type === 'shop';
+  const inAnvilRoom = Neo.currentRoom?.type === 'anvil';
+  if (inShopRoom && !Neo.shopKeyLatch) {
+    if (Neo.toggleShopPanel) Neo.toggleShopPanel();
+    else if (Neo.ui?.shopPanel) Neo.ui.shopPanel.classList.toggle('hidden');
+    Neo.shopKeyLatch = true;
+    setTimeout(() => { Neo.shopKeyLatch = false; }, 200);
+  }
+  if (inAnvilRoom && !Neo.anvilKeyLatch) {
+    if (Neo.toggleAnvilPanel) Neo.toggleAnvilPanel();
+    else if (Neo.ui?.anvilPanel) Neo.ui.anvilPanel.classList.toggle('hidden');
+    Neo.anvilKeyLatch = true;
+    setTimeout(() => { Neo.anvilKeyLatch = false; }, 200);
+  }
+}
+
 // Touch-accessible APIs for mobile hamburger menu
 window._neoGame = {
   pauseGame:            () => Neo.pauseGame(),
   resumeGame:           () => Neo.resumeGame(),
   toggleInventoryPanel: () => Neo.toggleInventoryPanel(),
+  triggerInteract,
 };
 
 // Wire onto Neo for runtime callers that use Neo.X directly

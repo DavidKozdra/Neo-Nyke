@@ -756,7 +756,7 @@ canvas {
   position: fixed;
   top: 154px;
   right: 2px;
-  z-index: 24;
+  z-index: 19;
   width: 142px;
   max-height: calc(100dvh - 158px);
   padding: 6px 8px;
@@ -3343,6 +3343,10 @@ button.alt.danger {
 #pause.overlay {
   background: radial-gradient(ellipse at center, var(--menu-bg-soft) 0%, rgba(0,0,0,.97) 70%);
   backdrop-filter: blur(4px);
+}
+
+#pause.overlay {
+  z-index: 90;
 }
 
 /* ── Death screen layout ─────────────────────────────────────────────────── */
