@@ -5687,4 +5687,21 @@
   }
 
   // Expose touch-accessible APIs for mobile hamburger menu
-  window._neoGame = { pauseGame, resumeGame, toggleInventoryPanel };
+  function triggerInteract() {
+    if (Neo.gameState !== 'play') return;
+    const inShopRoom  = Neo.currentRoom?.type === 'shop';
+    const inAnvilRoom = Neo.currentRoom?.type === 'anvil';
+    if (inShopRoom && !Neo.shopKeyLatch) {
+      if (Neo.toggleShopPanel)  Neo.toggleShopPanel();
+      else if (Neo.ui?.shopPanel) Neo.ui.shopPanel.classList.toggle('hidden');
+      Neo.shopKeyLatch = true;
+      setTimeout(() => { Neo.shopKeyLatch = false; }, 200);
+    }
+    if (inAnvilRoom && !Neo.anvilKeyLatch) {
+      if (Neo.toggleAnvilPanel) Neo.toggleAnvilPanel();
+      else if (Neo.ui?.anvilPanel) Neo.ui.anvilPanel.classList.toggle('hidden');
+      Neo.anvilKeyLatch = true;
+      setTimeout(() => { Neo.anvilKeyLatch = false; }, 200);
+    }
+  }
+  window._neoGame = { pauseGame, resumeGame, toggleInventoryPanel, triggerInteract };

@@ -23,6 +23,7 @@
   const NT = window.NeoTouch;
   const DEFAULT_TOUCH_BINDINGS = { touchA:'slash', touchB:'laser', touchY:'smash', touchX:'ascend', touchDash:'dash' };
   const TOUCH_ACTION_LABELS = { slash: 'SLASH', laser: 'LASER', smash: 'SMASH', ascend: 'CLIMB', dash: 'DASH' };
+  const TOUCH_ACTIONS = Object.keys(TOUCH_ACTION_LABELS);
 
   // ── DOM ────────────────────────────────────────────────────────────────────
 
@@ -65,6 +66,7 @@
 
   joyZone.addEventListener('touchstart', e => {
     e.preventDefault();
+    if (!isGameplayTouchAllowed()) return;
     const t = e.changedTouches[0];
     joyTouch = t.identifier;
     const rect = joyZone.getBoundingClientRect();
@@ -156,6 +158,7 @@
   function bindBtn(el, bindingKey, fallbackAction) {
     el.addEventListener('touchstart', e => {
       e.preventDefault();
+      if (!isGameplayTouchAllowed()) return;
       const action = getTouchAction(bindingKey, fallbackAction);
       el.dataset.touchAction = action;
       NT[action] = true;
@@ -186,12 +189,24 @@
     const b = mkEl('button', 'touch-ham-btn');
     b.setAttribute('type', 'button');
     b.textContent = label;
-    b.addEventListener('touchstart', e => { e.preventDefault(); closeHamMenu(); fn(); }, { passive: false });
+    b.addEventListener('touchstart', e => {
+      e.preventDefault();
+      if (!isGameplayTouchAllowed()) return;
+      closeHamMenu();
+      fn();
+      window.setTimeout(syncOverlayMode, 0);
+    }, { passive: false });
     return b;
   }
 
-  hamMenu.appendChild(mkHamBtn('⏸ PAUSE',     () => { if (window._neoGame?.pauseGame)         window._neoGame.pauseGame();         }));
-  hamMenu.appendChild(mkHamBtn('🎒 INVENTORY', () => { if (window._neoGame?.toggleInventoryPanel) window._neoGame.toggleInventoryPanel(); }));
+  hamMenu.appendChild(mkHamBtn('⏸ PAUSE',     () => { if (window._neoGame?.pauseGame)             window._neoGame.pauseGame();             }));
+  hamMenu.appendChild(mkHamBtn('🎒 INVENTORY', () => { if (window._neoGame?.toggleInventoryPanel)   window._neoGame.toggleInventoryPanel();   }));
+
+  const warpHamBtn = mkHamBtn('⚡ WARP', () => { if (window.Neo?.tryChargedLadderWarp) window.Neo.tryChargedLadderWarp(); });
+  warpHamBtn.id = 'hamWarpBtn';
+  warpHamBtn.classList.add('hidden');
+  hamMenu.appendChild(warpHamBtn);
+
   overlay.appendChild(hamMenu);
 
   let hamOpen = false;
@@ -199,6 +214,14 @@
 
   hamburger.addEventListener('touchstart', e => {
     e.preventDefault();
+    if (!isGameplayTouchAllowed()) return;
+    // Update warp button visibility just before opening
+    const hasAdapter = window.Neo?.getItemCount?.('charged_adapter') > 0;
+    warpHamBtn.classList.toggle('hidden', !hasAdapter);
+    if (hasAdapter) {
+      const ready = window.Neo?.player?.escapeReady;
+      warpHamBtn.textContent = ready ? '⚡ WARP (READY)' : '⚡ WARP (CHARGING)';
+    }
     hamOpen = !hamOpen;
     hamMenu.classList.toggle('open', hamOpen);
     setNTActive();
@@ -209,9 +232,19 @@
     if (hamOpen && !hamMenu.contains(e.target) && e.target !== hamburger) closeHamMenu();
   }, { passive: true });
 
+  // ── Interact prompt (shop / forge) ─────────────────────────────────────────
+  const interactPrompt = document.getElementById('interactPrompt');
+  if (interactPrompt) {
+    interactPrompt.addEventListener('touchstart', e => {
+      e.preventDefault();
+      window._neoGame?.triggerInteract?.();
+    }, { passive: false });
+  }
+
   // ── Visibility ─────────────────────────────────────────────────────────────
 
   function setNTActive() {
+    if (!isGameplayTouchAllowed()) return;
     if (!NT.active) {
       NT.active = true;
       overlay.classList.add('visible');
@@ -219,9 +252,55 @@
   }
 
   // Also show on first touch anywhere (keyboard users never see it)
-  window.addEventListener('touchstart', () => setNTActive(), { once: true, passive: true });
+  window.addEventListener('touchstart', () => {
+    syncOverlayMode();
+    setNTActive();
+  }, { passive: true });
+
+  syncOverlayMode();
+  window.setInterval(syncOverlayMode, 250);
+  window.addEventListener('resize', syncOverlayMode, { passive: true });
+  document.addEventListener('visibilitychange', syncOverlayMode);
 
   // ── Helpers ────────────────────────────────────────────────────────────────
+
+  function hasOpenBlockingPanel() {
+    return !!document.querySelector(
+      '.game-panel:not(.hidden), .modal-backdrop:not(.hidden), ' +
+      '#pause.overlay:not(.hidden), #dead.overlay:not(.hidden), #win.overlay:not(.hidden), #mpLobby.overlay:not(.hidden)'
+    );
+  }
+
+  function isGameplayTouchAllowed() {
+    return window.Neo?.gameState === 'play' && hasCoarsePointer() && !hasOpenBlockingPanel();
+  }
+
+  function hasCoarsePointer() {
+    return !!(window.matchMedia?.('(pointer: coarse)').matches || navigator.maxTouchPoints > 0);
+  }
+
+  function clearTouchState() {
+    joyTouch = null;
+    NT.moveX = 0;
+    NT.moveY = 0;
+    TOUCH_ACTIONS.forEach(action => { NT[action] = false; });
+    joyKnob.style.transform = '';
+    joyBase.classList.remove('joy-active');
+    [btnA, btnB, btnY, btnX, btnDash].forEach(btn => btn.classList.remove('pressed'));
+    closeHamMenu();
+  }
+
+  function syncOverlayMode() {
+    const allowed = isGameplayTouchAllowed();
+    overlay.classList.toggle('touch-overlay--gameplay', allowed);
+    if (!allowed) {
+      clearTouchState();
+      NT.active = false;
+      overlay.classList.remove('visible');
+      return;
+    }
+    if (hasCoarsePointer()) setNTActive();
+  }
 
   function mkEl(tag, cls) {
     const el = document.createElement(tag);

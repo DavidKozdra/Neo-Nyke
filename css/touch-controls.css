@@ -6,12 +6,24 @@
   pointer-events: none;
   z-index: 900;
   opacity: 0;
+  visibility: hidden;
   transition: opacity 0.2s;
   /* keep overlay always present but invisible until a touch fires */
 }
 
-#touch-overlay.visible {
+#touch-overlay.touch-overlay--gameplay {
+  visibility: visible;
+}
+
+#touch-overlay.touch-overlay--gameplay.visible {
   opacity: 1;
+}
+
+#touch-overlay:not(.touch-overlay--gameplay) .joy-zone,
+#touch-overlay:not(.touch-overlay--gameplay) .btn-cluster,
+#touch-overlay:not(.touch-overlay--gameplay) .touch-hamburger,
+#touch-overlay:not(.touch-overlay--gameplay) .touch-ham-menu {
+  pointer-events: none;
 }
 
 /* ── Joystick ──────────────────────────────────────────────────────────────── */
@@ -166,8 +178,9 @@
 .touch-hamburger {
   position: absolute;
   top: calc(8px + env(safe-area-inset-top, 0px));
-  left: 70%;
-  transform: translateX(-50%);
+  right: calc(8px + env(safe-area-inset-right, 0px));
+  left: auto;
+  transform: none;
   width: 38px;
   height: 38px;
   border-radius: 8px;
@@ -196,13 +209,18 @@
 .touch-ham-menu {
   position: absolute;
   top: calc(52px + env(safe-area-inset-top, 0px));
-  left: 60%;
-  transform: translateX(-50%);
+  right: calc(8px + env(safe-area-inset-right, 0px));
+  left: auto;
+  transform: none;
   display: none;
   flex-direction: column;
   gap: 6px;
   z-index: 10;
   pointer-events: all;
+}
+
+.touch-ham-menu .hidden {
+  display: none !important;
 }
 
 .touch-ham-menu.open {
@@ -239,7 +257,48 @@
   .btn-cluster { width: 152px; height: 152px; }
 }
 
+@media (max-width: 380px) {
+  .joy-zone {
+    width: 43vw;
+    height: 43vw;
+  }
+
+  .joy-base {
+    width: 86px;
+    height: 86px;
+    margin-left: -43px;
+    margin-top: -43px;
+  }
+
+  .joy-knob {
+    width: 38px;
+    height: 38px;
+  }
+
+  .btn-cluster {
+    right: calc(8px + env(safe-area-inset-right, 0px));
+    width: 140px;
+    height: 140px;
+  }
+
+  .touch-btn {
+    width: 44px;
+    height: 44px;
+  }
+
+  .btn-a { right: 48px; }
+  .btn-b { bottom: 48px; }
+  .btn-y { right: 48px; }
+  .btn-x { bottom: 48px; right: 96px; }
+  .btn-dash { width: 40px; height: 40px; }
+  .btn-label { font-size: 12px; }
+  .btn-sub { font-size: 7px; }
+}
+
 @media (max-height: 400px) and (orientation: landscape) {
   .joy-zone  { width: 35vw; height: 35vw; }
-  .btn-cluster { bottom: 6px; right: 6px; }
+  .btn-cluster {
+    bottom: calc(6px + env(safe-area-inset-bottom, 0px));
+    right: calc(6px + env(safe-area-inset-right, 0px));
+  }
 }
