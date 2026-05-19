@@ -1283,7 +1283,7 @@
 
   .interact-prompt {
     top: auto;
-    bottom: calc(214px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(252px + env(safe-area-inset-bottom, 0px));
     max-width: calc(100vw - 24px);
     box-sizing: border-box;
     padding: 7px 12px;
@@ -1298,7 +1298,7 @@
   }
 
   .interact-prompt::after {
-    content: ' TAP';
+    content: none;
     font-size: .72em;
     opacity: .65;
   }
@@ -1716,7 +1716,7 @@
   }
 
   .interact-prompt {
-    bottom: calc(50px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(76px + env(safe-area-inset-bottom, 0px));
   }
 
   #itemNotifyStack {
