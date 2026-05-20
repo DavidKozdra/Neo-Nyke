@@ -80,6 +80,7 @@
     if (weaponKey === 'extending_staff') base = 0.77;
     else if (weaponKey === 'hunters_bow') base = 0.4;
     else if (weaponKey === 'thorns_bleed_blade') base = Neo.ATTACKS.melee.baseCooldown;
+    else if (weaponKey === 'claw_gauntlets') base = 0.38;
     else if (weaponKey === 'lazer_glasses') base = 3.6;
     else if (weaponKey === 'metao_fire_staff') base = 0.75;
     else if (weaponKey === 'magenta_degale') base = 1.5;

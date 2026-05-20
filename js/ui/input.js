@@ -1164,6 +1164,7 @@ export const WEAPON_BASE_STATS = {
     extending_staff:          { damage: 38,   cooldown: 0.55, range: 130, knockback: 500 },
     hunters_bow:              { damage: 28,   cooldown: 0.40,             knockback: 180 },
     thorns_bleed_blade:       { damage: 32,   cooldown: 0.55, range: 90,  knockback: 120 },
+    claw_gauntlets:           { damage: 26,   cooldown: 0.38, range: 85,  knockback: 90  },
     lazer_glasses:            { damage: 18,   cooldown: 3.60,             knockback: 80  },
     metao_fire_staff:         { damage: 22,   cooldown: 0.75, range: 200, knockback: 100 },
     magenta_degale:           { damage: 80,   cooldown: 1.50,             knockback: 480 },

@@ -112,7 +112,7 @@ export function getDefaultWeaponForCharacter(characterKey) {
     if (characterKey === 'princess') return 'princess_wand';
     if (characterKey === 'metao') return 'metao_fire_staff';
     if (characterKey === 'granialla') return 'granillia_lightning_spear';
-    if (characterKey === 'mooggy') return 'hunters_bow';
+    if (characterKey === 'mooggy') return 'claw_gauntlets';
     return 'thorns_bleed_blade';
   }
 
