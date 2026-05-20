@@ -185,7 +185,8 @@ export function loop(timestamp) {
       }
     } else {
       const flightBoost = Neo.player.princessFlightTime > 0 ? 2 : 1;
-      const targetSpeed = 228 * flightBoost * (Neo.godTimer > 0 ? 1.25 : 1) * itemStats.moveSpeedMultiplier;
+      const zoomiesBoost = Neo.player.mooggyZoomiesTime > 0 ? 5 : 1;
+      const targetSpeed = 228 * flightBoost * zoomiesBoost * (Neo.godTimer > 0 ? 1.25 : 1) * itemStats.moveSpeedMultiplier;
       Neo.player.vx = Neo.applyResponsiveVelocity(Neo.player.vx, moveX * targetSpeed, dt);
       Neo.player.vy = Neo.applyResponsiveVelocity(Neo.player.vy, moveY * targetSpeed, dt);
       if (Neo.player.princessFlightTime > 0 && (moveX || moveY) && Neo.nextRandom('fx') < 0.35) {
@@ -201,6 +202,12 @@ export function loop(timestamp) {
       Neo.player.inv = Math.max(Neo.player.inv, 0.2);
       if (Neo.nextRandom('fx') < 0.4) {
         Neo.spawnParticle({ x: Neo.player.x + Neo.rand(16, -16, 'fx'), y: Neo.player.y + Neo.rand(16, -16, 'fx'), life: 0.18, c: '#92ffcf' });
+      }
+    }
+    if (Neo.player.mooggyZoomiesTime > 0) {
+      Neo.player.mooggyZoomiesTime = Math.max(0, Neo.player.mooggyZoomiesTime - dt);
+      if (Neo.nextRandom('fx') < 0.45) {
+        Neo.spawnParticle({ x: Neo.player.x + Neo.rand(18, -18, 'fx'), y: Neo.player.y + Neo.rand(18, -18, 'fx'), life: 0.16, c: '#a0ffcc' });
       }
     }
 
@@ -352,7 +359,7 @@ export function loop(timestamp) {
     if (itemStats.bleedHealScale > 0 && totalBleed > 0 && Neo.player.hp < Neo.player.maxHp) {
       if (Neo.player.hp < 50) Neo.player.scarfHealReady = true;
       if (Neo.player.scarfHealReady) {
-        const heal = Neo.player.maxHp * 0.0006 * totalBleed * itemStats.bleedHealScale * dt;
+        const heal = Neo.scalePlayerHealing(Neo.player.maxHp * 0.0006 * totalBleed * itemStats.bleedHealScale * dt);
         const beforeHp = Neo.player.hp;
         Neo.player.hp = Math.min(Neo.player.maxHp, Neo.player.hp + heal);
         const gained = Neo.player.hp - beforeHp;

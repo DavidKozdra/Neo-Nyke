@@ -1711,7 +1711,71 @@ export function createUIController(view) {
           renderItemPage();
         }
       },
-      setWinInfo(text) { view.winInfo.textContent = text; },
+      setWinInfo(text) { if (view.winInfo) view.winInfo.textContent = text; },
+      setWinScreen(entry) {
+        const fmt = (n) => String(n ?? '—');
+        const fmtTime = (s) => {
+          const m = Math.floor(s / 60);
+          const sec = Math.floor(s % 60);
+          return `${m}:${sec.toString().padStart(2, '0')}`;
+        };
+        if (view.winFloor) view.winFloor.textContent = `${fmt(entry.floor)}/10`;
+        if (view.winLevel) view.winLevel.textContent = fmt(entry.level);
+        if (view.winKills) view.winKills.textContent = fmt(entry.kills);
+        if (view.winTime) view.winTime.textContent = fmtTime(entry.elapsedSeconds || 0);
+        if (view.winCoins) view.winCoins.textContent = fmt(entry.coins);
+        if (view.winDifficulty) view.winDifficulty.textContent = (entry.difficultyName || entry.difficulty || '—').toUpperCase();
+
+        const crystalBonus = Math.max(0, Math.round(Neo.getActiveChallengeCrystalBonusMultiplier?.() || 0));
+        const titheBonus = Neo.hasLegacy?.('crystal_tithe') && Neo.HARD_DIFFICULTIES?.has(Neo.selectedDifficulty) ? 1 : 0;
+        const earned = 1 + crystalBonus + titheBonus;
+        const totalAfter = Number(Neo.metaProgress?.loopCrystals || 0) + earned;
+        if (view.winCrystalsEarned) view.winCrystalsEarned.textContent = `+${earned}`;
+        if (view.winCrystalsTotal) view.winCrystalsTotal.textContent = String(totalAfter);
+
+        if (view.winItems) {
+          const items = Array.isArray(entry.items) ? entry.items : [];
+          const PAGE_SIZE = 5;
+          let itemPage = 0;
+          const totalPages = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
+
+          const renderItemPage = () => {
+            view.winItems.innerHTML = '';
+            if (items.length === 0) {
+              view.winItems.innerHTML = '<span class="dead-items-empty">None</span>';
+            } else {
+              const slice = items.slice(itemPage * PAGE_SIZE, itemPage * PAGE_SIZE + PAGE_SIZE);
+              slice.forEach(item => {
+                const itemDef = Neo.ITEM_DEFS[item.key] || {};
+                const rc = { knight: 'knight', white: 'knight', wizard: 'wizard', purple: 'wizard', god: 'god' }[item.rarity] || 'knight';
+                const card = document.createElement('div');
+                card.className = `dead-item-card dead-item-card--${rc}`;
+                const cnv = document.createElement('canvas');
+                cnv.width = 32;
+                cnv.height = 32;
+                cnv.className = 'dead-item-icon';
+                Neo.drawItemToastIcon(cnv, { ...itemDef, key: item.key, rarity: item.rarity, color: itemDef.color, accent: itemDef.accent });
+                const label = document.createElement('span');
+                label.className = 'dead-item-name';
+                label.textContent = item.count > 1 ? `${item.name} ×${item.count}` : item.name;
+                card.appendChild(cnv);
+                card.appendChild(label);
+                view.winItems.appendChild(card);
+              });
+            }
+            if (view.winItemsPage) view.winItemsPage.textContent = totalPages > 1 ? `${itemPage + 1}/${totalPages}` : '';
+            if (view.winItemsPrev) view.winItemsPrev.disabled = itemPage <= 0;
+            if (view.winItemsNext) view.winItemsNext.disabled = itemPage >= totalPages - 1;
+            if (view.winItemsPrev) view.winItemsPrev.classList.toggle('hidden', totalPages <= 1);
+            if (view.winItemsNext) view.winItemsNext.classList.toggle('hidden', totalPages <= 1);
+            if (view.winItemsPage) view.winItemsPage.classList.toggle('hidden', totalPages <= 1);
+          };
+
+          if (view.winItemsPrev) view.winItemsPrev.onclick = () => { itemPage = Math.max(0, itemPage - 1); renderItemPage(); };
+          if (view.winItemsNext) view.winItemsNext.onclick = () => { itemPage = Math.min(totalPages - 1, itemPage + 1); renderItemPage(); };
+          renderItemPage();
+        }
+      },
     };
   }
 

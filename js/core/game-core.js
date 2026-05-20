@@ -566,8 +566,7 @@ export const CHARACTER_DEFS = {
     rarity: 'assassin',
     damageMultiplier: 1.05,
     hpMultiplier: 1,
-    laserCooldownMultiplier: 0.07,
-    skills: { melee: 'Claw Cut', laser: 'Lazer Eyes', smash: 'Red Aura', dash: 'Silent Pounce' },
+    skills: { melee: 'Mooggy Swipe', laser: 'Nail Shot', smash: 'Fangs of Death', dash: 'Zoomies' },
     unlock: 'mooggy3',
   },
 };

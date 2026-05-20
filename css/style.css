@@ -3344,18 +3344,205 @@ button.alt.danger {
   cursor: pointer;
 }
 
-.win-actions {
-  display: flex;
-  flex-wrap: wrap;
+/* ── Win screen layout ───────────────────────────────────────────────────── */
+#win.overlay {
+  background:
+    radial-gradient(ellipse 70% 50% at 50% 30%, rgba(30, 100, 60, .22) 0%, transparent 70%),
+    radial-gradient(ellipse at center, rgba(5, 12, 8, .97) 0%, rgba(2, 4, 3, .99) 70%);
+  backdrop-filter: blur(4px);
+  align-items: center;
   justify-content: center;
-  gap: 10px;
-  margin-top: 18px;
+  padding: 0;
+}
+
+.win-layout {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 0;
+  width: min(740px, calc(100vw - 24px));
+  animation: dead-rise 0.45s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.win-left {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  padding: 28px 24px;
+  border-right: 1px solid rgba(80, 200, 120, .2);
+  min-width: 160px;
+  background: rgba(30, 140, 70, .06);
+}
+
+.win-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 18px;
+  padding: 28px 28px;
+  flex: 1;
+}
+
+.win-crystal-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.win-crystal-icon {
+  font-size: 44px;
+  line-height: 1;
+  color: #7de8c0;
+  text-shadow: 0 0 20px rgba(100, 230, 170, .6), 0 0 48px rgba(60, 200, 130, .3);
+  filter: drop-shadow(0 0 10px rgba(100, 230, 170, .5));
+}
+
+.win-crystal-earned {
+  font-size: 36px;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  color: #7de8c0;
+  text-shadow: 0 0 24px rgba(100, 230, 170, .7);
+  line-height: 1;
+}
+
+.win-crystal-label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: rgba(120, 230, 170, .5);
+  text-align: center;
+}
+
+.win-crystal-total-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  background: rgba(100, 230, 150, .06);
+  border: 1px solid rgba(100, 230, 150, .15);
+  border-radius: 6px;
+  padding: 8px 14px;
+}
+
+.win-crystal-total-label {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,.3);
+}
+
+.win-crystal-total {
+  font-size: 20px;
+  font-weight: 800;
+  color: #b0f0d4;
+  letter-spacing: 0.04em;
+}
+
+.win-title-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.win-kicker {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.36em;
+  text-transform: uppercase;
+  color: rgba(100, 230, 150, .6);
+}
+
+.win-title {
+  font-size: 42px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  color: #e8c840;
+  text-shadow:
+    0 0 32px rgba(220, 180, 30, .6),
+    0 0 80px rgba(180, 140, 20, .3);
+  margin: 0;
+  line-height: 1;
+}
+
+.win-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  width: 100%;
+  margin-top: 0;
+}
+
+.win-action {
+  margin-top: 4px;
+  min-height: 42px;
+  padding: 10px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  text-transform: uppercase;
+  border: 1px solid;
+}
+
+.win-action--primary {
+  background: rgba(30, 160, 80, .22);
+  border-color: rgba(60, 210, 120, .5);
+  color: #7de8b0;
+}
+
+.win-action--primary:hover {
+  background: rgba(30, 160, 80, .34);
+  border-color: rgba(60, 210, 120, .75);
+}
+
+.win-action--secondary {
+  background: rgba(255,255,255,.04);
+  border-color: rgba(255,255,255,.14);
+  color: rgba(255,255,255,.65);
+}
+
+.win-action--secondary:hover {
+  background: rgba(255,255,255,.09);
+  border-color: rgba(255,255,255,.28);
+  color: rgba(255,255,255,.9);
+}
+
+.win-action--menu {
+  background: rgba(255,255,255,.03);
+  border-color: rgba(255,255,255,.09);
+  color: rgba(255,255,255,.45);
+}
+
+.win-action--menu:hover {
+  background: rgba(255,255,255,.07);
+  border-color: rgba(255,255,255,.18);
+  color: rgba(255,255,255,.7);
+}
+
+@media (max-width: 520px) {
+  .win-layout { flex-direction: column; }
+  .win-left {
+    flex-direction: row;
+    border-right: none;
+    border-bottom: 1px solid rgba(80, 200, 120, .2);
+    padding: 18px 20px;
+    justify-content: space-around;
+  }
+  .win-right { padding: 18px 16px; }
 }
 
 /* Start + charSelect overlays fill the whole viewport */
 /* death/win/pause overlays need their own opaque bg since they have no canvas */
 #dead.overlay,
-#win.overlay,
 #pause.overlay {
   background: radial-gradient(ellipse at center, var(--menu-bg-soft) 0%, rgba(0,0,0,.97) 70%);
   backdrop-filter: blur(4px);

@@ -496,6 +496,28 @@
       category: 'wizard',
       tags: ['aoe', 'knockback', 'wizard'],
     },
+    ricocete: {
+      key: 'ricocete',
+      name: 'Ricocete',
+      shortName: 'Bounce +1',
+      description: 'Player projectiles bounce off walls once per stack.',
+      rarity: 'wizard',
+      color: '#9be7ff',
+      accent: '#b77dff',
+      category: 'wizard',
+      tags: ['projectile', 'bounce', 'wizard'],
+    },
+    drink_master: {
+      key: 'drink_master',
+      name: 'Drink Master',
+      shortName: 'Heal +20%',
+      description: 'Potions and other healing sources are 20% more effective per stack.',
+      rarity: 'wizard',
+      color: '#6dff9b',
+      accent: '#f4f6fb',
+      category: 'wizard',
+      tags: ['healing', 'potion', 'wizard'],
+    },
     turtle_shell: {
       key: 'turtle_shell',
       name: 'Turtle Shell',
@@ -597,6 +619,28 @@
       category: 'god',
       tags: ['god', 'speed'],
     },
+    rich_mans_luck: {
+      key: 'rich_mans_luck',
+      name: "Rich Man's Luck",
+      shortName: 'Shop + Drops',
+      description: 'Adds +1 relic offer to shops per stack, and item drops from vases and enemies are 5% more likely per stack.',
+      rarity: 'god',
+      color: '#ffd76d',
+      accent: '#79ffbf',
+      category: 'god',
+      tags: ['god', 'loot', 'shop'],
+    },
+    mooggy_zoomies: {
+      key: 'mooggy_zoomies',
+      name: 'Mooggy Zoomies',
+      shortName: 'Proj Spd',
+      description: 'Projectile speed +20% per stack.',
+      rarity: 'wizard',
+      color: '#ff3348',
+      accent: '#f4f6fb',
+      category: 'wizard',
+      tags: ['projectile', 'speed', 'wizard'],
+    },
   };
   const RARITY_NAME_COLORS = {
     knight: '#f4f6fb',
@@ -639,6 +683,8 @@
     ['charged_adapter', 18],
     ['explosive_jelly', 12],
     ['dragon_orb', 14],
+    ['ricocete', 12],
+    ['drink_master', 14],
     ['turtle_shell', 24],
     ['anchor_charm', 18],
     ['iron_lung', 10],
@@ -648,6 +694,8 @@
     ['shield_of_aegis', 4],
     ['pendant_of_kronos', 5],
     ['robot_arm', 3],
+    ['rich_mans_luck', 5],
+    ['mooggy_zoomies', 0],
   ];
   const ITEM_DROP_TABLE = buildWeightTable(ITEM_DROP_WEIGHTS);
   const ELITE_ITEM_DROP_TABLE = buildWeightTable(
@@ -663,6 +711,8 @@
     'charged_adapter',
     'explosive_jelly',
     'dragon_orb',
+    'ricocete',
+    'drink_master',
     'turtle_shell',
     'anchor_charm',
     'iron_lung',
@@ -670,6 +720,7 @@
     'bandaid',
     'shield_of_aegis',
     'pendant_of_kronos',
+    'rich_mans_luck',
   ];
   const WHITE_ITEM_POOL = ITEM_KEYS.filter(key => ITEM_DEFS[key]?.rarity === 'knight');
   const ELITE_TYPE_DEFS = {

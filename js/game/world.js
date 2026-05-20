@@ -567,7 +567,7 @@
       hitOptions: null, trail: null,
       splash: 0, splashDamage: 0, blockedSplashDamage: 0, fireStacks: 0, fireDuration: 0,
       homing: false, homingTarget: null, homingSpeed: 0, homingAccel: 0, homingTurnRate: 0, homingRadius: 0,
-      fromRival: false, source: null, statusEffects: null,
+      fromRival: false, source: null, statusEffects: null, bouncesRemaining: 0,
     };
   }
 
@@ -587,16 +587,19 @@
 
   function spawnProjectile(props) {
     const p = _acquireProjectile();
+    const enemyProjectile = !!(props.enemy ?? false);
+    const itemStats = enemyProjectile ? {} : (Neo.getItemStats?.() || {});
+    const projectileSpeedMultiplier = Math.max(0.1, Number(itemStats.projectileSpeedMultiplier || 1));
     p.x = props.x;
     p.y = props.y;
-    p.vx = props.vx;
-    p.vy = props.vy;
+    p.vx = Number(props.vx || 0) * projectileSpeedMultiplier;
+    p.vy = Number(props.vy || 0) * projectileSpeedMultiplier;
     p.r = props.r ?? 5;
     p.life = props.life ?? 1.2;
     p.damage = props.damage ?? 0;
     p.kind = props.kind ?? null;
     p.color = props.color ?? null;
-    p.enemy = props.enemy ?? false;
+    p.enemy = enemyProjectile;
     p.knockback = props.knockback ?? 0;
     p.pierceCount = props.pierceCount ?? 0;
     p.hitOptions = props.hitOptions ?? null;
@@ -608,14 +611,42 @@
     p.fireDuration = props.fireDuration ?? 0;
     p.homing = props.homing ?? false;
     p.homingTarget = props.homingTarget ?? null;
-    p.homingSpeed = props.homingSpeed ?? 0;
+    p.homingSpeed = Number(props.homingSpeed ?? 0) * projectileSpeedMultiplier;
     p.homingAccel = props.homingAccel ?? 0;
     p.homingTurnRate = props.homingTurnRate ?? 0;
     p.homingRadius = props.homingRadius ?? 0;
     p.fromRival = props.fromRival ?? false;
     p.source = props.source ?? null;
     p.statusEffects = props.statusEffects ?? null;
+    const defaultBounces = !enemyProjectile ? itemStats.projectileBounces : 0;
+    p.bouncesRemaining = Math.max(0, Math.floor(Number((props.bouncesRemaining ?? defaultBounces) || 0)));
     Neo.projectiles.push(p);
+  }
+
+  function tryBounceProjectile(projectile, prevX, prevY) {
+    const remaining = Math.floor(Number(projectile?.bouncesRemaining || 0));
+    if (remaining <= 0) return false;
+    const hitX = Neo.isBlocked(projectile.x, prevY, projectile.r);
+    const hitY = Neo.isBlocked(prevX, projectile.y, projectile.r);
+    const impactX = projectile.x;
+    const impactY = projectile.y;
+    projectile.x = prevX;
+    projectile.y = prevY;
+    projectile.bouncesRemaining = remaining - 1;
+    if (hitX && !hitY) {
+      projectile.vx *= -1;
+    } else if (hitY && !hitX) {
+      projectile.vy *= -1;
+    } else {
+      projectile.vx *= -1;
+      projectile.vy *= -1;
+    }
+    spawnProjectileImpact(projectile, impactX, impactY, { blocked: true });
+    const speed = Math.hypot(Number(projectile.vx || 0), Number(projectile.vy || 0)) || 1;
+    const nudge = Math.max(2, Number(projectile.r || 0) * 0.6);
+    projectile.x += (projectile.vx / speed) * nudge;
+    projectile.y += (projectile.vy / speed) * nudge;
+    return true;
   }
 
   function applyProjectileStatusEffectsToPlayer(projectile) {
@@ -661,7 +692,13 @@
         _projectilePool.push(Neo.projectiles.splice(index, 1)[0]);
         continue;
       }
-      if (projectile.life <= 0 || Neo.isBlocked(projectile.x, projectile.y, projectile.r)) {
+      if (projectile.life <= 0) {
+        spawnProjectileImpact(projectile, projectile.x, projectile.y, { blocked: true });
+        _projectilePool.push(Neo.projectiles.splice(index, 1)[0]);
+        continue;
+      }
+      if (Neo.isBlocked(projectile.x, projectile.y, projectile.r)) {
+        if (tryBounceProjectile(projectile, prevX, prevY)) continue;
         spawnProjectileImpact(projectile, projectile.x, projectile.y, { blocked: true });
         _projectilePool.push(Neo.projectiles.splice(index, 1)[0]);
         continue;
@@ -789,7 +826,7 @@
         }
         if (Neo.dist(Neo.player.x, Neo.player.y, hazard.x, hazard.y) < hazard.r) {
           const before = Neo.player.hp;
-          Neo.player.hp = Math.min(Neo.player.maxHp, Neo.player.hp + 7.36 * dt);
+          Neo.player.hp = Math.min(Neo.player.maxHp, Neo.player.hp + Neo.scalePlayerHealing(7.36 * dt));
           const healed = Neo.player.hp - before;
           if (healed > 0) {
             hazard.healAccum = (hazard.healAccum || 0) + healed;
@@ -894,8 +931,9 @@
     prop.broken = true;
     if (prop.kind === 'pot') {
       const potRandom = Neo.createEntityRandom(prop, 'pot:reward');
-      if (potRandom() < 0.7) Neo.dropCoins(prop.x, prop.y, 6 + Neo.floor);
-      else Neo.pickups.push({ x: prop.x, y: prop.y, type: 'item', key: Neo.rollItemDrop({ random: potRandom }) });
+      const itemChance = Neo.clamp(0.12 + Number(Neo.getItemStats?.()?.itemDropChanceBonus || 0), 0, 0.5);
+      if (potRandom() < itemChance) Neo.pickups.push({ x: prop.x, y: prop.y, type: 'item', key: Neo.rollItemDrop({ random: potRandom }) });
+      else Neo.dropCoins(prop.x, prop.y, 6 + Neo.floor);
     }
     if (prop.kind === 'barrel') {
       blastRadius(prop.x, prop.y, 130, 55, '#ff5a3d');
@@ -1147,7 +1185,7 @@
       }
 
       if (pickup.type === 'apple' || pickup.type === 'fruit') {
-        const heal = Math.max(10, Number(pickup.heal || 20));
+        const heal = Neo.scalePlayerHealing(Math.max(10, Number(pickup.heal || 20)), 10);
         const before = Neo.player.hp;
         Neo.player.hp = Math.min(Neo.player.maxHp, Neo.player.hp + heal);
         const actual = Neo.player.hp - before;
@@ -1253,7 +1291,7 @@
           Neo.collectItem(pickup.rewardKey || Neo.rollItemDrop({ elite: true, random: Neo.createEntityRandom(pickup, 'secret-vendor:fallback') }));
         } else if (pickup.offerKind === 'vitality') {
           Neo.player.maxHp += 20;
-          Neo.player.hp = Math.min(Neo.player.maxHp, Neo.player.hp + 60);
+          Neo.player.hp = Math.min(Neo.player.maxHp, Neo.player.hp + Neo.scalePlayerHealing(60, 20));
           Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.7, text: '+VIT', c: '#8dffbd' });
         } else if (pickup.offerKind === 'xp') {
           const xpValue = Math.max(1, Number(pickup.xpValue || Neo.getSecretXpOfferAmount()));

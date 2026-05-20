@@ -44,6 +44,7 @@ export const MOVE_DEFS = {
     fire_balls: { key: 'fire_balls', slot: 'melee', name: 'Fire Balls', desc: 'Shoot a spread of fireballs.' },
     smite: { key: 'smite', slot: 'melee', name: 'Smite', desc: 'Physical swing plus chaining lightning.' },
     narwal_fight: { key: 'narwal_fight', slot: 'melee', name: 'Narwal Fight', desc: 'A wide pink spear-sweep with a piercing follow-up.', exclusiveCharacter: 'princess' },
+    mooggy_swipe: { key: 'mooggy_swipe', slot: 'melee', name: 'Mooggy Swipe', desc: 'Wide claw swipe that deals heavy damage and has a small bleed chance.', exclusiveCharacter: 'mooggy' },
 
     blood_beam: { key: 'blood_beam', slot: 'laser', name: 'Blood Beam', desc: 'Sustained piercing beam that causes bleed.' },
     love_beam: { key: 'love_beam', slot: 'laser', name: 'Love Beam', desc: 'A radiant beam that damages enemies and heals you on hit.', exclusiveCharacter: 'princess' },
@@ -52,6 +53,7 @@ export const MOVE_DEFS = {
     blade_justice: { key: 'blade_justice', slot: 'laser', name: 'Blade Justice', desc: 'Divine short-range blade strike.' },
     lightning_columns: { key: 'lightning_columns', slot: 'laser', name: 'Lightning Columns', desc: 'Summon two lightning turrets.' },
     god_sweep: { key: 'god_sweep', slot: 'laser', name: 'God Sweep', desc: 'Spin a massive divine beam around yourself.' },
+    nail_shot: { key: 'nail_shot', slot: 'laser', name: 'Nail Shot', desc: 'Fires a spread of bouncing nails in all directions.', exclusiveCharacter: 'mooggy' },
 
     crimson_smash: { key: 'crimson_smash', slot: 'smash', name: 'Crimson Smash', desc: 'Heavy area smash.' },
     kicky_kick: { key: 'kicky_kick', slot: 'smash', name: 'Kicky Kick', desc: 'A heavy kick that blasts enemies away.', exclusiveCharacter: 'princess' },
@@ -59,6 +61,7 @@ export const MOVE_DEFS = {
     healing_zone: { key: 'healing_zone', slot: 'smash', name: 'Healing Zone', desc: 'Healing and damage zone.' },
     fire_circle: { key: 'fire_circle', slot: 'smash', name: 'Fire Circle', desc: 'Burning aura around you.' },
     floor_lava: { key: 'floor_lava', slot: 'smash', name: 'Floor Is Lava', desc: 'Lava immunity and lava trail.' },
+    fangs_of_death: { key: 'fangs_of_death', slot: 'smash', name: 'Fangs of Death', desc: 'Massive AOE explosion and homing fangs that seek enemies, dealing heavy damage with high crit chance and bleed.', exclusiveCharacter: 'mooggy' },
 
     dash: {
       key: 'dash',
@@ -94,14 +97,21 @@ export const MOVE_DEFS = {
       name: "Coward's Way",
       desc: 'Become invulnerable for 3 seconds, but it ends if you attack.',
     },
+    mooggy_zoomies: {
+      key: 'mooggy_zoomies',
+      slot: 'dash',
+      name: 'Zoomies',
+      desc: '5× move speed for 12 seconds. 20 second cooldown.',
+      exclusiveCharacter: 'mooggy',
+    },
   };
 
 export const SHOP_MOVE_POOL = [
-    'slash', 'fire_balls', 'smite', 'narwal_fight',
+    'slash', 'fire_balls', 'smite', 'narwal_fight', 'mooggy_swipe',
     'blood_beam', 'love_beam', 'turtle_wave', 'power_disks', 'blade_justice', 'lightning_columns',
-    'god_sweep',
-    'crimson_smash', 'kicky_kick', 'chaos_burst', 'healing_zone', 'fire_circle', 'floor_lava',
-    'dash', 'nimrod_stomp', 'warp', 'zip_lightning', 'flying_unhitable', 'cowards_way',
+    'god_sweep', 'nail_shot',
+    'crimson_smash', 'kicky_kick', 'chaos_burst', 'healing_zone', 'fire_circle', 'floor_lava', 'fangs_of_death',
+    'dash', 'nimrod_stomp', 'warp', 'zip_lightning', 'flying_unhitable', 'cowards_way', 'mooggy_zoomies',
   ];
 
 export const WEAPON_DEFS = {
@@ -125,6 +135,13 @@ export const WEAPON_DEFS = {
       rarity: 'knight',
       description: 'Close slash with heavy bleed application.',
       color: '#ffe9ef',
+    },
+    claw_gauntlets: {
+      key: 'claw_gauntlets',
+      name: 'Claw Gauntlets',
+      rarity: 'knight',
+      description: 'Rapid wide claw swipe. High bleed chance on every hit.',
+      color: '#ff7a9a',
     },
     lazer_glasses: {
       key: 'lazer_glasses',
@@ -198,7 +215,7 @@ export const WEAPON_DEFS = {
     },
   };
 export const WEAPON_KEYS = Object.keys(WEAPON_DEFS);
-export const WHITE_WEAPON_POOL = ['extending_staff', 'hunters_bow', 'thorns_bleed_blade'];
+export const WHITE_WEAPON_POOL = ['extending_staff', 'hunters_bow', 'thorns_bleed_blade', 'claw_gauntlets'];
 
 // Rival adventurers: dungeon-roaming NPCs based on unchosen characters.
 export const RIVAL_DEFS = {
@@ -521,6 +538,17 @@ export const ITEM_DEFS = {
       category: 'wizard',
       tags: ['projectile', 'bounce', 'wizard'],
     },
+    drink_master: {
+      key: 'drink_master',
+      name: 'Drink Master',
+      shortName: 'Heal +20%',
+      description: 'Potions and other healing sources are 20% more effective per stack.',
+      rarity: 'wizard',
+      color: '#6dff9b',
+      accent: '#f4f6fb',
+      category: 'wizard',
+      tags: ['healing', 'potion', 'wizard'],
+    },
     turtle_shell: {
       key: 'turtle_shell',
       name: 'Turtle Shell',
@@ -622,6 +650,17 @@ export const ITEM_DEFS = {
       category: 'god',
       tags: ['god', 'speed'],
     },
+    rich_mans_luck: {
+      key: 'rich_mans_luck',
+      name: "Rich Man's Luck",
+      shortName: 'Shop + Drops',
+      description: 'Adds +1 relic offer to shops per stack, and item drops from vases and enemies are 5% more likely per stack.',
+      rarity: 'god',
+      color: '#ffd76d',
+      accent: '#79ffbf',
+      category: 'god',
+      tags: ['god', 'loot', 'shop'],
+    },
     veggys_pendant: {
       key: 'veggys_pendant',
       name: "Veggy's Pendant",
@@ -707,6 +746,7 @@ export const ITEM_DROP_WEIGHTS = [
     ['explosive_jelly', 12],
     ['dragon_orb', 14],
     ['ricocete', 12],
+    ['drink_master', 14],
     ['turtle_shell', 24],
     ['anchor_charm', 18],
     ['iron_lung', 10],
@@ -716,6 +756,7 @@ export const ITEM_DROP_WEIGHTS = [
     ['shield_of_aegis', 4],
     ['pendant_of_kronos', 5],
     ['robot_arm', 3],
+    ['rich_mans_luck', 5],
     ['princes_glasses', 14],
     ['veggys_pendant', 0],
     ['mateos_bag', 10],
@@ -736,6 +777,7 @@ export const ELITE_INVENTORY_POOL = [
     'explosive_jelly',
     'dragon_orb',
     'ricocete',
+    'drink_master',
     'turtle_shell',
     'anchor_charm',
     'iron_lung',
@@ -743,6 +785,7 @@ export const ELITE_INVENTORY_POOL = [
     'bandaid',
     'shield_of_aegis',
     'pendant_of_kronos',
+    'rich_mans_luck',
   ];
 export const WHITE_ITEM_POOL = ITEM_KEYS.filter(key => ITEM_DEFS[key]?.rarity === 'knight');
 export const ELITE_TYPE_DEFS = {
@@ -806,6 +849,18 @@ export const ui = {
     deadActions: [...document.querySelectorAll('#dead [data-dead-action]')],
     win: document.getElementById('win'),
     winInfo: document.getElementById('winInfo'),
+    winFloor: document.getElementById('winFloor'),
+    winLevel: document.getElementById('winLevel'),
+    winKills: document.getElementById('winKills'),
+    winTime: document.getElementById('winTime'),
+    winCoins: document.getElementById('winCoins'),
+    winDifficulty: document.getElementById('winDifficulty'),
+    winCrystalsEarned: document.getElementById('winCrystalsEarned'),
+    winCrystalsTotal: document.getElementById('winCrystalsTotal'),
+    winItems: document.getElementById('winItems'),
+    winItemsPrev: document.getElementById('winItemsPrev'),
+    winItemsNext: document.getElementById('winItemsNext'),
+    winItemsPage: document.getElementById('winItemsPage'),
     winActions: [...document.querySelectorAll('#win [data-win-action]')],
     deadRestart: document.querySelector('#dead .restart'),
     winRestart: document.querySelector('#win .restart'),
@@ -1146,6 +1201,10 @@ export const MOVE_BASE_STATS = {
     zip_lightning:    { damage: 30,  cooldown: 2.00 },
     flying_unhitable: { cooldown: 18.00, duration: 15.0 },
     cowards_way:      { cooldown: 6.00, duration: 3.0 },
+    mooggy_swipe:     { damage: 44,  cooldown: 0.50, range: 130 },
+    nail_shot:        { damage: 18,  cooldown: 2.80, range: 400 },
+    fangs_of_death:   { damage: 52,  cooldown: 5.00, range: 160 },
+    mooggy_zoomies:   { cooldown: 20.00, duration: 12.0 },
   };
 
   // saveStore is created in save-store.js after createSaveStore is defined

@@ -936,6 +936,11 @@
       aoeRadiusMultiplier: (1 + count('explosive_jelly') * 0.2) * Number(characterDef.aoeRadiusMultiplier || 1),
       aoeDamageMultiplier: Number(characterDef.aoeDamageMultiplier || 1),
       beamDamageMultiplier: 1 + count('dragon_orb') * 0.35,
+      projectileBounces: count('ricocete'),
+      projectileSpeedMultiplier: 1 + count('mooggy_zoomies') * 0.2,
+      healingMultiplier: 1 + count('drink_master') * 0.2,
+      itemDropChanceBonus: Math.min(0.3, count('rich_mans_luck') * 0.05),
+      shopExtraItemOffers: Math.min(3, count('rich_mans_luck')),
     };
   }
 
@@ -2553,14 +2558,17 @@
   }
 
   function fireMirrorProjectiles(enemy, angle, count, spread, speed, damage, options = {}) {
+    const projectileSpeedMultiplier = Math.max(0.1, Number(enemy?.mirrorItemStats?.projectileSpeedMultiplier || 1));
+    const projectileSpeed = speed * projectileSpeedMultiplier;
+    const projectileBounces = Math.max(0, Math.floor(Number(enemy?.mirrorItemStats?.projectileBounces || 0)));
     for (let index = 0; index < count; index += 1) {
       const offset = count === 1 ? 0 : (index - (count - 1) / 2) * spread;
       const a = angle + offset;
       Neo.spawnProjectile({
         x: enemy.x + Math.cos(a) * (enemy.r + 7),
         y: enemy.y + Math.sin(a) * (enemy.r + 7),
-        vx: Math.cos(a) * speed,
-        vy: Math.sin(a) * speed,
+        vx: Math.cos(a) * projectileSpeed,
+        vy: Math.sin(a) * projectileSpeed,
         r: options.r || 6,
         life: options.life || 1.25,
         enemy: true,
@@ -2574,6 +2582,7 @@
         homingSpeed: options.homingSpeed,
         homingTurnRate: options.homingTurnRate,
         homingAccel: options.homingAccel,
+        bouncesRemaining: projectileBounces,
       });
     }
   }

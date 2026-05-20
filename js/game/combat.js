@@ -271,6 +271,10 @@
       castSmiteChain();
       return;
     }
+    if (move === 'mooggy_swipe') {
+      castMooggySwipe();
+      return;
+    }
     const angle = Math.atan2(Neo.mouse.worldY - Neo.player.y, Neo.mouse.worldX - Neo.player.x);
     Neo.player.swing = Neo.ATTACKS.melee.active;
     Neo.player.swingA = angle;
@@ -363,7 +367,7 @@
       Neo.player.fleeceTick += dt;
       if (Neo.player.fleeceTick >= 2) {
         Neo.player.fleeceTick = 0;
-        const heal = Neo.player.maxHp * 0.06;
+        const heal = Neo.scalePlayerHealing(Neo.player.maxHp * 0.06);
         const before = Neo.player.hp;
         Neo.player.hp = Math.min(Neo.player.maxHp, Neo.player.hp + heal);
         if (Neo.player.hp > before) Neo.spawnHealPopup(Neo.player.x + Neo.rand(-10, 10), Neo.player.y - 20, Neo.player.hp - before, { color: '#ffe59c' });
@@ -449,6 +453,11 @@
       Neo.turtleWaveHpTimer = 0;
       Neo.laserAngle = Math.atan2(Neo.mouse.worldY - Neo.player.y, Neo.mouse.worldX - Neo.player.x);
       Neo.laserSweepSpeed = (Neo.nextRandom('encounter') < 0.5 ? -1 : 1) * 4.6;
+      return;
+    }
+    if (move === 'nail_shot') {
+      if (!Neo.spendSkillCharge('laser', rechargeTime)) return;
+      castNailShot();
       return;
     }
     if (!Neo.spendSkillCharge('laser', rechargeTime, { deferTimer: true })) return;
@@ -557,7 +566,7 @@
         }
       });
       if (loveBeamHits > 0) {
-        const heal = Math.min(8, loveBeamHits * 1.25);
+        const heal = Neo.scalePlayerHealing(Math.min(8, loveBeamHits * 1.25));
         Neo.player.hp = Math.min(Neo.player.maxHp, Neo.player.hp + heal);
         Neo.spawnHealPopup(Neo.player.x + Neo.rand(-6, 6), Neo.player.y - 22, heal, { color: '#ff9ed6' });
         Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 26, life: 0.22, text: 'LOVE', c: '#ff9ed6' });
@@ -640,6 +649,10 @@
       castFloorLava();
       return;
     }
+    if (move === 'fangs_of_death') {
+      castFangsOfDeath();
+      return;
+    }
     const anvilSmashRange = Neo.getAnvilMoveBonus(move, 'range');
     const smashRadius = (Neo.ATTACKS.smash.radius + anvilSmashRange) * (itemStats.aoeRadiusMultiplier || 1);
     Neo.shake = 16;
@@ -694,7 +707,132 @@
       castNimrodStomp(moveX, moveY);
       return;
     }
+    if (move === 'mooggy_zoomies') {
+      castMooggyZoomies();
+      return;
+    }
     castDashBurst(moveX, moveY);
+  }
+
+  function castMooggySwipe() {
+    const itemStats = Neo.getItemStats();
+    const move = getEquippedMove('melee');
+    const angle = Math.atan2(Neo.mouse.worldY - Neo.player.y, Neo.mouse.worldX - Neo.player.x);
+    Neo.player.swing = Neo.ATTACKS.melee.active;
+    Neo.player.swingA = angle;
+    const anvilDmg = Neo.getAnvilMoveBonus(move, 'damage');
+    const anvilRng = Neo.getAnvilMoveBonus(move, 'range');
+    const damage = (Neo.godTimer > 0 ? 72 : 44) + anvilDmg;
+    const range = 130 + anvilRng;
+    const arc = Math.PI * 0.72;
+    for (let index = Neo.enemies.length - 1; index >= 0; index -= 1) {
+      const enemy = Neo.enemies[index];
+      if (!enemy) continue;
+      if (Neo.dist(Neo.player.x, Neo.player.y, enemy.x, enemy.y) > range + enemy.r) continue;
+      const targetAngle = Math.atan2(enemy.y - Neo.player.y, enemy.x - Neo.player.x);
+      const diff = Math.abs(Math.atan2(Math.sin(targetAngle - angle), Math.cos(targetAngle - angle)));
+      if (diff > arc) continue;
+      hitEnemy(enemy, damage, angle, Neo.ATTACKS.melee.push, '#ff6090');
+      if (Neo.rng() < 0.12 + itemStats.bleedChance) applyBleed(enemy, 1, 5);
+      if (itemStats.snakeKnifePoisonChance > 0 && Neo.rng() < itemStats.snakeKnifePoisonChance) applyPoison(enemy, 1, 4);
+    }
+    Neo.destructibles.forEach(prop => {
+      if (prop.broken || prop.hidden) return;
+      if (Neo.dist(Neo.player.x, Neo.player.y, prop.x, prop.y) > range + prop.r + 8) return;
+      const targetAngle = Math.atan2(prop.y - Neo.player.y, prop.x - Neo.player.x);
+      const diff = Math.abs(Math.atan2(Math.sin(targetAngle - angle), Math.cos(targetAngle - angle)));
+      if (diff > arc + 0.25) return;
+      Neo.damageDestructible(prop, 1);
+    });
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.22, ring: 28, c: '#ff6090' });
+  }
+
+  function castNailShot() {
+    const itemStats = Neo.getItemStats();
+    const move = getEquippedMove('laser');
+    const anvilDmg = Neo.getAnvilMoveBonus(move, 'damage');
+    const damage = 18 + anvilDmg;
+    const nailCount = 12;
+    const speed = 480 * (itemStats.projectileSpeedMultiplier || 1);
+    for (let index = 0; index < nailCount; index += 1) {
+      const angle = (index / nailCount) * Math.PI * 2 + Neo.rng() * 0.22;
+      Neo.spawnProjectile({
+        x: Neo.player.x,
+        y: Neo.player.y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        r: 3,
+        life: 1.8,
+        enemy: false,
+        kind: 'nail',
+        damage,
+        knockback: 80,
+        color: '#c0d8ff',
+        bouncesRemaining: 3 + Math.floor(itemStats.projectileBounces || 0),
+        hitOptions: { bleedChance: 0.08 },
+      });
+    }
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.3, ring: 22, c: '#c0d8ff' });
+  }
+
+  function castFangsOfDeath() {
+    const itemStats = Neo.getItemStats();
+    const move = getEquippedMove('smash');
+    const anvilDmg = Neo.getAnvilMoveBonus(move, 'damage');
+    const anvilRng = Neo.getAnvilMoveBonus(move, 'range');
+    const aoeRadius = (160 + anvilRng) * (itemStats.aoeRadiusMultiplier || 1);
+    const aoeDmgMult = itemStats.aoeDamageMultiplier || 1;
+    const blastDmg = Math.round((Neo.godTimer > 0 ? 78 : 52) * aoeDmgMult) + anvilDmg;
+
+    Neo.shake = Math.max(Neo.shake, 18);
+    Neo.shakeT = Math.max(Neo.shakeT, 0.28);
+    Neo.blastRadius(Neo.player.x, Neo.player.y, aoeRadius, blastDmg, '#ff3070');
+    Neo.spawnAoeShockwave(Neo.player.x, Neo.player.y, aoeRadius, '#ff3070', 'heavy');
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.5, ring: aoeRadius - 24, c: '#ff3070' });
+    applyStatusInRadius(Neo.player.x, Neo.player.y, aoeRadius, 'bleed', 2, 5);
+
+    const fangCount = 8;
+    const targets = Neo.enemies.slice().sort(() => Neo.rng() - 0.5).slice(0, fangCount);
+    for (let index = 0; index < fangCount; index += 1) {
+      const spreadAngle = (index / fangCount) * Math.PI * 2;
+      const target = targets[index % targets.length];
+      let vx, vy;
+      if (target) {
+        const toTarget = Math.atan2(target.y - Neo.player.y, target.x - Neo.player.x);
+        const jitter = (Neo.rng() - 0.5) * 0.5;
+        vx = Math.cos(toTarget + jitter) * 620;
+        vy = Math.sin(toTarget + jitter) * 620;
+      } else {
+        vx = Math.cos(spreadAngle) * 560;
+        vy = Math.sin(spreadAngle) * 560;
+      }
+      const fangDmg = Math.round((Neo.godTimer > 0 ? 34 : 24) * aoeDmgMult) + anvilDmg;
+      Neo.spawnProjectile({
+        x: Neo.player.x,
+        y: Neo.player.y,
+        vx, vy,
+        r: 5,
+        life: 1.1,
+        enemy: false,
+        kind: 'fang',
+        damage: fangDmg,
+        knockback: 180,
+        color: '#ff5090',
+        hitOptions: { bleedChance: 0.55, bleedStacks: 2, bleedDuration: 5, critBonus: 0.35 },
+        homing: targets.length > 0,
+        homingTarget: 'enemy',
+        homingRadius: 380,
+        homingSpeed: 680,
+        homingAccel: 4.2,
+        homingTurnRate: 3.8,
+      });
+    }
+  }
+
+  function castMooggyZoomies() {
+    Neo.player.mooggyZoomiesTime = 12;
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 18, life: 0.9, text: 'ZOOMIES!', c: '#a0ffcc' });
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.35, ring: 24, c: '#a0ffcc' });
   }
 
   function castDashBurst(moveX, moveY) {
@@ -1322,6 +1460,9 @@
       Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.28, ring: enemy.r + 12, c: '#ffd27d' });
     }
     window.achievementEvents?.emit('damage:dealt', { amount: dealt });
+    if (options.bleedChance > 0 && Neo.nextRandom('encounter') < options.bleedChance) {
+      applyBleed(enemy, Number(options.bleedStacks || 1), Number(options.bleedDuration || 4));
+    }
     if (options.fireChance > 0 && Neo.nextRandom('encounter') < options.fireChance) {
       applyFire(enemy, Number(options.fireStacks || 1), Number(options.fireDuration || 2.8));
     }
@@ -1453,7 +1594,7 @@
       }
       if (key === 'bleed') spawnBleedSpray(enemy, state.stacks, 0.7);
       if (config.healScale > 0 && Neo.player && Neo.player.hp < Neo.player.maxHp) {
-        const heal = damage * config.healScale;
+        const heal = Neo.scalePlayerHealing(damage * config.healScale);
         const beforeHp = Neo.player.hp;
         Neo.player.hp = Math.min(Neo.player.maxHp, Neo.player.hp + heal);
         const gained = Neo.player.hp - beforeHp;
@@ -1671,8 +1812,11 @@
       window.achievementEvents?.emit('charge:kill');
     }
 
-    if (!isTutorialDummy && enemy.elite && enemyLootRandom() < 0.18) {
+    const itemDropChanceBonus = Number(Neo.getItemStats?.()?.itemDropChanceBonus || 0);
+    if (!isTutorialDummy && enemy.elite && enemyLootRandom() < Neo.clamp(0.18 + itemDropChanceBonus, 0, 0.65)) {
       Neo.pickups.push({ x: enemy.x, y: enemy.y, type: 'item', key: rollItemDrop({ elite: true, random: enemyLootRandom }) });
+    } else if (!isTutorialDummy && !enemy.elite && itemDropChanceBonus > 0 && enemyLootRandom() < Neo.clamp(itemDropChanceBonus, 0, 0.35)) {
+      Neo.pickups.push({ x: enemy.x, y: enemy.y, type: 'item', key: rollItemDrop({ random: enemyLootRandom }) });
     } else if (!isTutorialDummy && enemyLootRandom() < 0.1) {
       Neo.pickups.push({ x: enemy.x, y: enemy.y, type: 'potion' });
     }

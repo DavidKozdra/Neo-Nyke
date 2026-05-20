@@ -253,6 +253,8 @@ export function resumeGame() {
       charged_adapter: 0,
       explosive_jelly: 0,
       dragon_orb: 0,
+      ricocete: 0,
+      drink_master: 0,
       turtle_shell: 0,
       anchor_charm: 0,
       iron_lung: 0,
@@ -261,10 +263,15 @@ export function resumeGame() {
       jesters_dice: 0,
       shield_of_aegis: 0,
       pendant_of_kronos: 0,
+      rich_mans_luck: 0,
       mateos_bag: 0,
+      mooggy_zoomies: 0,
     };
     const character = Neo.CHARACTER_DEFS[Neo.chosenCharacter] || Neo.CHARACTER_DEFS.thorn_knight;
-    if (character.key === 'mooggy') items.hemes_scarf = 1;
+    if (character.key === 'mooggy') {
+      items.hemes_scarf = 1;
+      items.mooggy_zoomies = 1;
+    }
     if (character.key === 'princess') items.princes_glasses = 1;
     if (character.key === 'metao') items.mateos_bag = 1;
     const equippedMoves = Neo.getDefaultMovesForCharacter(character.key);
@@ -289,6 +296,7 @@ export function resumeGame() {
       dashX: 0,
       dashY: 0,
       cowardsWayTime: 0,
+      mooggyZoomiesTime: 0,
       coins: 0,
       level: 1,
       kills: 0,
@@ -809,12 +817,21 @@ export function resumeGame() {
   }
 
   function scalePotionHealing(baseAmount, minimumAmount = 1) {
-    const scaledAmount = Math.round(Number(baseAmount || 0) * getRunDifficultyScalars().potionHealMultiplier);
+    const scaledAmount = Math.round(Number(baseAmount || 0) * getRunDifficultyScalars().potionHealMultiplier * getPlayerHealingMultiplier());
     return Math.max(Number(minimumAmount || 0), scaledAmount);
   }
 
   function getPotionHealAmount() {
     return scalePotionHealing(40, 24);
+  }
+
+  function getPlayerHealingMultiplier() {
+    return Math.max(0.05, Number(Neo.getItemStats?.()?.healingMultiplier || 1));
+  }
+
+  function scalePlayerHealing(baseAmount, minimumAmount = 0) {
+    const scaledAmount = Number(baseAmount || 0) * getPlayerHealingMultiplier();
+    return Math.max(Number(minimumAmount || 0), scaledAmount);
   }
 
   if (typeof window !== 'undefined') {
@@ -907,6 +924,7 @@ export function resumeGame() {
     if (moveKey === 'blade_justice') return (3.8 / attackSpeed) * characterMult;
     if (moveKey === 'lightning_columns') return (4.8 / attackSpeed) * characterMult;
     if (moveKey === 'god_sweep') return (7.2 / attackSpeed) * characterMult;
+    if (moveKey === 'nail_shot') return 2.8 / attackSpeed;
     return ((Neo.godTimer > 0 ? 2.8 : Neo.ATTACKS.laser.baseCooldown) / attackSpeed) * characterMult;
   }
 
@@ -917,6 +935,7 @@ export function resumeGame() {
     if (moveKey === 'nimrod_stomp') return 4.2 / attackSpeed;
     if (moveKey === 'zip_lightning') return 2.0 / attackSpeed;
     if (moveKey === 'cowards_way') return 6 / attackSpeed;
+    if (moveKey === 'mooggy_zoomies') return 20 / attackSpeed;
     return 3.2 / attackSpeed;
   }
 
@@ -2292,6 +2311,8 @@ export function resumeGame() {
   Neo.scaleChallengeTimer = scaleChallengeTimer;
   Neo.scalePotionHealing = scalePotionHealing;
   Neo.getPotionHealAmount = getPotionHealAmount;
+  Neo.getPlayerHealingMultiplier = getPlayerHealingMultiplier;
+  Neo.scalePlayerHealing = scalePlayerHealing;
   Neo.getShopPriceMultiplier = getShopPriceMultiplier;
   Neo.scaleShopPrice = scaleShopPrice;
   Neo.getShopRarityPriceMultiplier = getShopRarityPriceMultiplier;

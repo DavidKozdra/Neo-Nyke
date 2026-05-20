@@ -544,7 +544,7 @@
     const entry = finalizeRun('win');
     window.achievementEvents?.emit('run:won', { elapsedSeconds: Neo.gameElapsedTime, playerHp: Math.round(Neo.player?.hp || 0) });
     Neo.setGameState('win');
-    Neo.uiController.setWinInfo(`Floor ${entry.floor} cleared with ${entry.coins} run coins banked and ${Neo.metaProgress.coins} total coins saved.`);
+    Neo.uiController.setWinScreen(entry);
   }
 
   async function clearRunSave() {

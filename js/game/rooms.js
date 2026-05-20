@@ -901,6 +901,7 @@
     Neo.player.dashX = 0;
     Neo.player.dashY = 0;
     Neo.player.cowardsWayTime = 0;
+    Neo.player.mooggyZoomiesTime = 0;
     Neo.player.princessFlightTime = 0;
     Neo.loveBeamCasting = false;
     Neo.player.blockActive = false;
@@ -1040,7 +1041,8 @@
       const treasureRandom = Neo.createRoomRandom(room, 'treasure:chests');
       const chestCount = 1 + Math.floor(treasureRandom() * 2);
       for (let index = 0; index < chestCount; index += 1) {
-        const rewardsItem = treasureRandom() < 0.9;
+        const itemChance = Neo.clamp(0.9 + Number(Neo.getItemStats?.()?.itemDropChanceBonus || 0), 0, 0.98);
+        const rewardsItem = treasureRandom() < itemChance;
         Neo.chests.push({
           x: 260 + index * 180,
           y: Neo.ROOM_H / 2,
@@ -1174,14 +1176,23 @@
     if (!room || room.type !== 'shop') return;
     room.shopOffers = Array.isArray(room.shopOffers) ? room.shopOffers : [];
     const itemOffers = room.shopOffers.filter(offer => offer?.type === 'item');
-    if (itemOffers.length >= minItemOffers) return;
+    const extraOffers = Math.max(0, Math.floor(Number(Neo.getItemStats?.()?.shopExtraItemOffers || 0)));
+    const targetItemOffers = minItemOffers + extraOffers;
+    if (itemOffers.length >= targetItemOffers) return;
 
     const shopRandom = Neo.createRoomRandom(room, 'shop:item-offers');
     const occupiedKeys = new Set(itemOffers.map(offer => offer.key));
-    const itemSlotsX = [Neo.ROOM_W / 2 - 180, Neo.ROOM_W / 2, Neo.ROOM_W / 2 + 180, Neo.ROOM_W / 2 - 90, Neo.ROOM_W / 2 + 90];
+    const itemSlots = [
+      { x: Neo.ROOM_W / 2 - 240, y: Neo.ROOM_H / 2 - 16 },
+      { x: Neo.ROOM_W / 2 - 80, y: Neo.ROOM_H / 2 - 16 },
+      { x: Neo.ROOM_W / 2 + 80, y: Neo.ROOM_H / 2 - 16 },
+      { x: Neo.ROOM_W / 2 + 240, y: Neo.ROOM_H / 2 - 16 },
+      { x: Neo.ROOM_W / 2 - 160, y: Neo.ROOM_H / 2 + 48 },
+      { x: Neo.ROOM_W / 2 + 160, y: Neo.ROOM_H / 2 + 48 },
+    ];
     let created = 0;
 
-    while (itemOffers.length + created < minItemOffers) {
+    while (itemOffers.length + created < targetItemOffers) {
       let key = '';
       for (let attempts = 0; attempts < 12; attempts += 1) {
         const candidate = Neo.rollItemDrop({ random: shopRandom });
@@ -1193,13 +1204,14 @@
       if (!key) key = Neo.rollItemDrop({ random: shopRandom });
       occupiedKeys.add(key);
       const itemIndex = itemOffers.length + created;
+      const slot = itemSlots[itemIndex] || { x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 16 };
       const rarity = Neo.itemRegistry.get(key)?.rarity || Neo.ITEM_DEFS[key]?.rarity || 'knight';
       room.shopOffers.push({
         type: 'item',
         key,
         cost: Neo.getShopItemCost(itemIndex, Neo.floor, Neo.selectedDifficulty, rarity),
-        x: itemSlotsX[itemIndex] ?? Neo.ROOM_W / 2,
-        y: Neo.ROOM_H / 2 - 16,
+        x: slot.x,
+        y: slot.y,
         bought: false,
       });
       created += 1;

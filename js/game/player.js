@@ -31,6 +31,7 @@ export function migratePlayerData(source) {
     playerData.dashX = Number(playerData.dashX || 0);
     playerData.dashY = Number(playerData.dashY || 0);
     playerData.cowardsWayTime = Number(playerData.cowardsWayTime || 0);
+    playerData.mooggyZoomiesTime = Number(playerData.mooggyZoomiesTime || 0);
     playerData.lavaWalkTime = Number(playerData.lavaWalkTime || 0);
     playerData.lavaTrailTick = Number(playerData.lavaTrailTick || 0);
     playerData.princessFlightTime = Number(playerData.princessFlightTime || 0);
@@ -111,7 +112,7 @@ export function getDefaultWeaponForCharacter(characterKey) {
     if (characterKey === 'princess') return 'princess_wand';
     if (characterKey === 'metao') return 'metao_fire_staff';
     if (characterKey === 'granialla') return 'granillia_lightning_spear';
-    if (characterKey === 'mooggy') return 'lazer_glasses';
+    if (characterKey === 'mooggy') return 'hunters_bow';
     return 'thorns_bleed_blade';
   }
 
@@ -126,7 +127,7 @@ export function getDefaultMovesForCharacter(characterKey) {
       return { melee: 'smite', laser: 'blade_justice', smash: 'healing_zone', dash: 'zip_lightning' };
     }
     if (characterKey === 'mooggy') {
-      return { melee: 'slash', laser: 'blood_beam', smash: 'fire_circle', dash: 'dash' };
+      return { melee: 'mooggy_swipe', laser: 'nail_shot', smash: 'fangs_of_death', dash: 'mooggy_zoomies' };
     }
     return { melee: 'slash', laser: 'blood_beam', smash: 'crimson_smash', dash: 'dash' };
   }
@@ -191,10 +192,13 @@ export function getItemStats() {
     const pushMan = getItemCount('push_man');
     const explosiveJelly = getItemCount('explosive_jelly');
     const dragonOrb = getItemCount('dragon_orb');
+    const ricocete = getItemCount('ricocete');
+    const drinkMaster = getItemCount('drink_master');
     const turtleShell = getItemCount('turtle_shell');
     const anchorCharm = getItemCount('anchor_charm');
     const shieldOfAegis = getItemCount('shield_of_aegis');
     const pendantOfKronos = getItemCount('pendant_of_kronos');
+    const richMansLuck = getItemCount('rich_mans_luck');
     const weaponFatigue = getItemCount('weapon_fatigue');
     const genericHealthItem = getItemCount('generic_health_item');
     const snakeKnife = getItemCount('snake_knife');
@@ -202,6 +206,7 @@ export function getItemStats() {
     const overclockedWatch = getItemCount('overclocked_watch');
     const overstimulate = getItemCount('overstimulate');
     const graveZone = getItemCount('grave_zone');
+    const mooggyZoomies = getItemCount('mooggy_zoomies');
     const homingMissile = getItemCount('homing_missile');
     const oracleLens = getItemCount('oracles_lens') > 0;
     const critCharmBonus = Number(Neo.player?.critCharmBuffTime || 0) > 0 ? getItemCount('crit_charm') * 0.04 : 0;
@@ -243,6 +248,11 @@ export function getItemStats() {
       beamDamageMultiplier: 1 + dragonOrb * 0.35,
       beamChainTargets: dragonOrb > 0 ? Math.min(2, dragonOrb) : 0,
       beamChainDamageMultiplier: dragonOrb > 0 ? 0.6 + (dragonOrb - 1) * 0.15 : 0,
+      projectileBounces: ricocete,
+      projectileSpeedMultiplier: 1 + mooggyZoomies * 0.2,
+      healingMultiplier: 1 + drinkMaster * 0.2,
+      itemDropChanceBonus: Math.min(0.3, richMansLuck * 0.05),
+      shopExtraItemOffers: Math.min(3, richMansLuck),
       damageReduction,
       stunResistance: anchorCharm,
       hasIronLung: getItemCount('iron_lung') > 0,
@@ -377,7 +387,7 @@ export function consumeCharge(chargeType) {
     const stats = getItemStats();
     const chargeSteps = stats.overclockedWatchChance > 0 && Neo.nextRandom('encounter') < stats.overclockedWatchChance ? 2 : 1;
     if (stats.genericHealthItemHealRatio > 0 && Neo.player.hp < Neo.player.maxHp) {
-      const heal = Math.min(Neo.player.maxHp - Neo.player.hp, Math.max(0, Neo.player.hp * stats.genericHealthItemHealRatio));
+      const heal = Math.min(Neo.player.maxHp - Neo.player.hp, Neo.scalePlayerHealing(Math.max(0, Neo.player.hp * stats.genericHealthItemHealRatio)));
       if (heal > 0) {
         Neo.player.hp = Math.min(Neo.player.maxHp, Neo.player.hp + heal);
         Neo.spawnHealPopup(Neo.player.x, Neo.player.y - 22, heal, { color: '#d9ffe5' });
