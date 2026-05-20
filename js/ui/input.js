@@ -172,7 +172,7 @@ export const WEAPON_DEFS = {
       key: 'golden_fleece',
       name: 'Golden Fleece',
       rarity: 'god',
-      description: 'Heals 20% max HP every 2 seconds while equipped.',
+      description: 'Heals 6% max HP every 2 seconds while equipped.',
       color: '#ffe59c',
     },
     void_piercer: {
@@ -188,6 +188,13 @@ export const WEAPON_DEFS = {
       rarity: 'god',
       description: 'Blocks all incoming damage for 2 seconds.',
       color: '#c8f6ff',
+    },
+    princess_wand: {
+      key: 'princess_wand',
+      name: "Princess's Wand",
+      rarity: 'princess',
+      description: 'A graceful piercing magic shot made for Princess.',
+      color: '#ff9de8',
     },
   };
 export const WEAPON_KEYS = Object.keys(WEAPON_DEFS);
@@ -503,6 +510,17 @@ export const ITEM_DEFS = {
       category: 'wizard',
       tags: ['aoe', 'knockback', 'wizard'],
     },
+    ricocete: {
+      key: 'ricocete',
+      name: 'Ricocete',
+      shortName: 'Bounce +1',
+      description: 'Player projectiles bounce off walls once per stack.',
+      rarity: 'wizard',
+      color: '#9be7ff',
+      accent: '#b77dff',
+      category: 'wizard',
+      tags: ['projectile', 'bounce', 'wizard'],
+    },
     turtle_shell: {
       key: 'turtle_shell',
       name: 'Turtle Shell',
@@ -597,8 +615,8 @@ export const ITEM_DEFS = {
     robot_arm: {
       key: 'robot_arm',
       name: 'Robot Arm',
-      shortName: 'Auto x15 Spd',
-      description: 'Attack speed x15. Automatically attacks with left click.',
+      shortName: 'Auto x8 Spd',
+      description: 'Attack speed x8. Automatically attacks with left click.',
       rarity: 'god',
       color: '#c0e8ff',
       category: 'god',
@@ -636,6 +654,17 @@ export const ITEM_DEFS = {
       category: 'wizard',
       tags: ['potion', 'utility', 'wizard'],
     },
+    mooggy_zoomies: {
+      key: 'mooggy_zoomies',
+      name: 'Mooggy Zoomies',
+      shortName: 'Proj Spd',
+      description: 'Projectile speed +20% per stack.',
+      rarity: 'wizard',
+      color: '#ff3348',
+      accent: '#f4f6fb',
+      category: 'wizard',
+      tags: ['projectile', 'speed', 'wizard'],
+    },
   };
 export const RARITY_NAME_COLORS = {
     knight: '#f4f6fb',
@@ -644,6 +673,7 @@ export const RARITY_NAME_COLORS = {
     purple: '#b77dff',
     god: '#ff4256',
     red: '#ff4256',
+    princess: '#ff9de8',
   };
 export const SHOP_RARITY_PRICE_MULTIPLIERS = {
     knight: 1,
@@ -676,6 +706,7 @@ export const ITEM_DROP_WEIGHTS = [
     ['charged_adapter', 18],
     ['explosive_jelly', 12],
     ['dragon_orb', 14],
+    ['ricocete', 12],
     ['turtle_shell', 24],
     ['anchor_charm', 18],
     ['iron_lung', 10],
@@ -688,6 +719,7 @@ export const ITEM_DROP_WEIGHTS = [
     ['princes_glasses', 14],
     ['veggys_pendant', 0],
     ['mateos_bag', 10],
+    ['mooggy_zoomies', 0],
   ];
 export const ITEM_DROP_TABLE = Neo.buildWeightTable(ITEM_DROP_WEIGHTS);
 export const ELITE_ITEM_DROP_TABLE = Neo.buildWeightTable(
@@ -703,6 +735,7 @@ export const ELITE_INVENTORY_POOL = [
     'charged_adapter',
     'explosive_jelly',
     'dragon_orb',
+    'ricocete',
     'turtle_shell',
     'anchor_charm',
     'iron_lung',
@@ -787,6 +820,9 @@ export const ui = {
     adapterStatus: document.getElementById('adapterStatus'),
     adapterStatusIcon: document.getElementById('adapterStatusIcon'),
     adapterStatusText: document.getElementById('adapterStatusText'),
+    bagStatus: document.getElementById('bagStatus'),
+    bagStatusIcon: document.getElementById('bagStatusIcon'),
+    bagStatusText: document.getElementById('bagStatusText'),
     shopPanel: document.getElementById('shopPanel'),
     shopClose: document.getElementById('shopClose'),
     shopTabs: [...document.querySelectorAll('#shopPanel .shop-tab')],
@@ -1055,17 +1091,17 @@ export const REPLAY_TUTORIAL_KEY = 'neonyke:replayTutorialNextRun';
 
 // Upgradeable stat schemas for the anvil panel
 export const WEAPON_UPGRADEABLE_STATS = {
-    damage:    { label: 'Damage',       step: 5,     min: 5,    max: 9999, xpPerStep: 8,  format: v => Math.round(v) },
-    cooldown:  { label: 'Cooldown (s)', step: -0.05, min: 0.05, max: 9999, xpPerStep: 10, format: v => v.toFixed(2) + 's' },
-    range:     { label: 'Range',        step: 10,    min: 10,   max: 9999, xpPerStep: 7,  format: v => Math.round(v) },
-    knockback: { label: 'Knockback',    step: 30,    min: 0,    max: 9999, xpPerStep: 5,  format: v => Math.round(v) },
+    damage:    { label: 'Damage',       step: 5,     min: 5,    max: 9999, xpPerStep: 15, goldPerStep: 8,  format: v => Math.round(v) },
+    cooldown:  { label: 'Cooldown (s)', step: -0.05, min: 0.05, max: 9999, xpPerStep: 20, goldPerStep: 10, format: v => v.toFixed(2) + 's' },
+    range:     { label: 'Range',        step: 10,    min: 10,   max: 9999, xpPerStep: 13, goldPerStep: 6,  format: v => Math.round(v) },
+    knockback: { label: 'Knockback',    step: 30,    min: 0,    max: 9999, xpPerStep: 10, goldPerStep: 5,  format: v => Math.round(v) },
   };
 export const MOVE_UPGRADEABLE_STATS = {
-    damage:    { label: 'Damage',       step: 5,    min: 5,   max: 9999, xpPerStep: 8,  format: v => Math.round(v) },
-    cooldown:  { label: 'Cooldown (s)', step: -0.05,min: 0.05,max: 9999, xpPerStep: 10, format: v => v.toFixed(2) + 's' },
-    duration:  { label: 'Duration (s)', step: 0.1,  min: 0.1, max: 30,   xpPerStep: 7,  format: v => v.toFixed(1) + 's' },
-    range:     { label: 'Range / AOE',  step: 10,   min: 10,  max: 9999, xpPerStep: 7,  format: v => Math.round(v) },
-    critChance:{ label: 'Crit Chance',  step: 0.05, min: 0,   max: 1.0,  xpPerStep: 12, format: v => Math.round(v * 100) + '%' },
+    damage:    { label: 'Damage',       step: 5,    min: 5,   max: 9999, xpPerStep: 15, goldPerStep: 8,  format: v => Math.round(v) },
+    cooldown:  { label: 'Cooldown (s)', step: -0.05,min: 0.05,max: 9999, xpPerStep: 20, goldPerStep: 10, format: v => v.toFixed(2) + 's' },
+    duration:  { label: 'Duration (s)', step: 0.1,  min: 0.1, max: 30,   xpPerStep: 13, goldPerStep: 6,  format: v => v.toFixed(1) + 's' },
+    range:     { label: 'Range / AOE',  step: 10,   min: 10,  max: 9999, xpPerStep: 13, goldPerStep: 6,  format: v => Math.round(v) },
+    critChance:{ label: 'Crit Chance',  step: 0.05, min: 0,   max: 1.0,  xpPerStep: 25, goldPerStep: 15, format: v => Math.round(v * 100) + '%' },
   };
 
 // Base stat values per weapon (used to compute current upgraded value)
@@ -1082,6 +1118,7 @@ export const WEAPON_BASE_STATS = {
     golden_fleece:            { damage: 20,   cooldown: 0.50, range: 80,  knockback: 80  },
     void_piercer:             { damage: 55,   cooldown: 0.80,             knockback: 160 },
     aegis_shield_weapon:      { cooldown: 8.00 },
+    princess_wand:            { damage: 30,   cooldown: 0.55, range: 120, knockback: 160 },
   };
 
 // Base stat values per move

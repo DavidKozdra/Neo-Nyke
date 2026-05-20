@@ -164,11 +164,6 @@
       <canvas id="hudLoopIcon" class="coin-icon" width="32" height="32"></canvas>
       <span id="hudLoopCount">0</span>
     </div>
-    <div class="currency-line currency-line--potion hidden" id="potionDisplay">
-      <span class="potion-icon">🧪</span>
-      <span id="potionCount">0</span><span class="potion-cap" id="potionCap">/3</span>
-      <span class="potion-hint">[G]</span>
-    </div>
   </div>
 
   <!-- Center Timer and Floor Display -->
@@ -195,6 +190,10 @@
       <canvas id="adapterStatusIcon" class="adapter-status__icon" width="24" height="24" aria-hidden="true"></canvas>
       <span id="adapterStatusText" class="adapter-status__text"></span>
     </div>
+    <button id="bagStatus" class="adapter-status bag-status hidden" type="button" aria-hidden="true">
+      <canvas id="bagStatusIcon" class="adapter-status__icon" width="24" height="24" aria-hidden="true"></canvas>
+      <span id="bagStatusText" class="adapter-status__text"></span>
+    </button>
   </div>
 
   <div id="dialogueOverlay" class="dialogue-overlay hidden" aria-hidden="true">

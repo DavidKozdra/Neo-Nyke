@@ -863,46 +863,189 @@
     });
   }
 
+  function clonePlainObject(value) {
+    if (!value || typeof value !== 'object') return {};
+    try {
+      return JSON.parse(JSON.stringify(value));
+    } catch (_error) {
+      return { ...value };
+    }
+  }
+
+  function createMirrorInventorySnapshot() {
+    const player = Neo.player || {};
+    const character = player.character || Neo.chosenCharacter || 'thorn_knight';
+    const equippedMoves = {
+      ...Neo.getDefaultMovesForCharacter(character),
+      ...(player.equippedMoves || {}),
+    };
+    const items = clonePlainObject(player.items);
+    Neo.ITEM_KEYS.forEach(key => { items[key] = Number(items[key] || 0); });
+    const ownedMoves = clonePlainObject(player.ownedMoves);
+    Object.values(equippedMoves).forEach(key => { if (key) ownedMoves[key] = true; });
+    const ownedWeapons = clonePlainObject(player.ownedWeapons);
+    if (player.equippedWeapon) ownedWeapons[player.equippedWeapon] = true;
+    return {
+      character,
+      level: Number(player.level || 1),
+      xp: Number(player.xp || 0),
+      xpToNext: Number(player.xpToNext || 20),
+      hp: Number(player.hp || player.maxHp || 120),
+      maxHp: Number(player.maxHp || 120),
+      attackPower: Number(player.attackPower || 0),
+      attackSpeed: Number(player.attackSpeed || 1),
+      critCharmBuffTime: Number(player.critCharmBuffTime || 0),
+      keenEyeBuffTime: Number(player.keenEyeBuffTime || 0),
+      chronoSpringBuffTime: Number(player.chronoSpringBuffTime || 0),
+      storedPotions: Number(player.storedPotions || 0),
+      items,
+      ownedMoves,
+      ownedWeapons,
+      equippedMoves,
+      equippedWeapon: player.equippedWeapon || '',
+      anvilUpgrades: clonePlainObject(player.anvilUpgrades || { weapon: {}, move: {} }),
+    };
+  }
+
+  function getMirrorInventoryItemStats(inventory) {
+    const items = inventory?.items || {};
+    const count = key => Number(items[key] || 0);
+    const godItemStacks = Neo.ITEM_KEYS
+      .filter(key => Neo.ITEM_DEFS[key]?.rarity === 'god')
+      .reduce((total, key) => total + count(key), 0);
+    const xpProgress = Neo.clamp((inventory?.xpToNext || 0) > 0 ? Number(inventory.xp || 0) / Number(inventory.xpToNext || 1) : 0, 0, 1);
+    const characterDef = Neo.CHARACTER_DEFS?.[inventory?.character] || {};
+    const attackServo = count('attack_servo');
+    const robotArm = count('robot_arm');
+    const chronoSpringBonus = Number(inventory?.chronoSpringBuffTime || 0) > 0 ? count('chrono_spring') * 0.16 : 0;
+    let critChance = Number(inventory?.critCharmBuffTime || 0) > 0 ? count('crit_charm') * 0.04 : 0;
+    critChance += Number(inventory?.keenEyeBuffTime || 0) > 0 ? count('keen_eye') * 0.1 : 0;
+    critChance += count('pendant_of_kronos') * godItemStacks * 0.01;
+    if (count('oracles_lens') > 0) critChance *= 2;
+    critChance = Neo.clamp(critChance, 0.01, 0.95);
+    return {
+      bleedChance: count('neo_knife') * 0.05,
+      scarfBleedsOnHit: count('hemes_scarf'),
+      snakeKnifePoisonChance: count('snake_knife') * 0.02,
+      critChance,
+      critMultiplier: 1.6 + (count('oracles_lens') > 0 ? critChance * 2.2 : critChance * 0.6),
+      attackSpeedMultiplier: robotArm > 0 ? 8 * (1 + attackServo * 0.12 + chronoSpringBonus) : 1 + attackServo * 0.12 + chronoSpringBonus,
+      moveSpeedMultiplier: 1 + count('turtle_shell') * 0.05,
+      levelEdgeDamageMultiplier: 1 + count('scholar_cap') * xpProgress * 0.45,
+      knockbackMultiplier: 1 + count('push_man') * 0.18,
+      aoeRadiusMultiplier: (1 + count('explosive_jelly') * 0.2) * Number(characterDef.aoeRadiusMultiplier || 1),
+      aoeDamageMultiplier: Number(characterDef.aoeDamageMultiplier || 1),
+      beamDamageMultiplier: 1 + count('dragon_orb') * 0.35,
+    };
+  }
+
+  function getMirrorAnvilBonus(inventory, itemType, itemKey, statKey) {
+    return Number(inventory?.anvilUpgrades?.[itemType]?.[itemKey]?.[statKey] || 0)
+      * Number((itemType === 'weapon' ? Neo.WEAPON_UPGRADEABLE_STATS : Neo.MOVE_UPGRADEABLE_STATS)?.[statKey]?.step || 0);
+  }
+
+  function getMirrorWeaponCooldown(inventory, weaponKey) {
+    const base = Number(Neo.WEAPON_BASE_STATS[weaponKey]?.cooldown || 0.5);
+    return Math.max(base * 0.5, base + getMirrorAnvilBonus(inventory, 'weapon', weaponKey, 'cooldown'));
+  }
+
+  function getMirrorBaseDamage(inventory) {
+    const characterMultiplier = Number(Neo.CHARACTER_DEFS?.[inventory?.character]?.damageMultiplier || 1);
+    return Math.max(1, (Neo.ATTACKS.melee.damage + Number(inventory?.attackPower || 0)) * characterMultiplier);
+  }
+
+  function getMirrorAttackSpeed(inventory, itemStats) {
+    return Math.max(0.2, Number(inventory?.attackSpeed || 1) * Number(itemStats.attackSpeedMultiplier || 1));
+  }
+
   function getMirrorChampionStats() {
-    const attackSpeed = Neo.getAttackSpeedValue();
-    const itemStats = Neo.getItemStats();
-    const equippedMoves = { ...(Neo.player?.equippedMoves || Neo.getDefaultMovesForCharacter(Neo.player?.character || Neo.chosenCharacter)) };
+    const inventory = createMirrorInventorySnapshot();
+    const itemStats = getMirrorInventoryItemStats(inventory);
+    const attackSpeed = getMirrorAttackSpeed(inventory, itemStats);
+    const baseDamage = getMirrorBaseDamage(inventory);
+    const equippedMoves = { ...inventory.equippedMoves };
     const meleeMove = equippedMoves.melee || 'slash';
     const laserMove = equippedMoves.laser || 'blood_beam';
     const smashMove = equippedMoves.smash || 'crimson_smash';
     const dashMove = equippedMoves.dash || 'dash';
     const mirrorCooldownMultiplier = 0.82;
-    const weaponKey = Neo.player?.equippedWeapon || '';
+    const weaponKey = inventory.equippedWeapon || '';
+    const getMoveDamage = moveKey => Math.max(1, Math.round(
+      ((Neo.MOVE_BASE_STATS[moveKey]?.damage ?? baseDamage)
+        + getMirrorAnvilBonus(inventory, 'move', moveKey, 'damage')
+        + Number(inventory.attackPower || 0))
+      * Number(itemStats.levelEdgeDamageMultiplier || 1)
+    ));
+    const getMoveCooldown = (moveKey, slot) => {
+      const base = Neo.MOVE_BASE_STATS[moveKey]?.cooldown ?? null;
+      const characterMult = slot === 'laser' ? Number(Neo.CHARACTER_DEFS?.[inventory.character]?.laserCooldownMultiplier || 1) : 1;
+      if (base !== null) return (Math.max(base * 0.5, base + getMirrorAnvilBonus(inventory, 'move', moveKey, 'cooldown')) / attackSpeed) * characterMult;
+      if (slot === 'laser') {
+        if (moveKey === 'turtle_wave') return (3 / attackSpeed) * characterMult;
+        if (moveKey === 'blade_justice') return (3.8 / attackSpeed) * characterMult;
+        if (moveKey === 'lightning_columns') return (4.8 / attackSpeed) * characterMult;
+        if (moveKey === 'god_sweep') return (7.2 / attackSpeed) * characterMult;
+        return (Neo.ATTACKS.laser.baseCooldown / attackSpeed) * characterMult;
+      }
+      if (slot === 'dash') {
+        if (moveKey === 'warp') return 2.8 / attackSpeed;
+        if (moveKey === 'nimrod_stomp') return 4.2 / attackSpeed;
+        if (moveKey === 'zip_lightning') return 2.0 / attackSpeed;
+        if (moveKey === 'cowards_way') return 6 / attackSpeed;
+        return 3.2 / attackSpeed;
+      }
+      if (slot === 'smash') return Neo.ATTACKS.smash.baseCooldown / attackSpeed;
+      if (moveKey === 'slash') return 0.4 / attackSpeed;
+      return Neo.ATTACKS.melee.baseCooldown / attackSpeed;
+    };
+    const moveStats = {};
+    Object.entries(equippedMoves).forEach(([slot, moveKey]) => {
+      if (!moveKey || !Neo.MOVE_BASE_STATS[moveKey]) return;
+      moveStats[moveKey] = {
+        damage: getMoveDamage(moveKey),
+        cooldown: getMoveCooldown(moveKey, slot),
+        duration: Math.max(0, Number(Neo.MOVE_BASE_STATS[moveKey]?.duration || 0) + getMirrorAnvilBonus(inventory, 'move', moveKey, 'duration')),
+        range: Math.max(0, Number(Neo.MOVE_BASE_STATS[moveKey]?.range || 0) + getMirrorAnvilBonus(inventory, 'move', moveKey, 'range')),
+      };
+    });
     const weaponStats = weaponKey ? {
-      damage: Math.max(1, Math.round((Neo.WEAPON_BASE_STATS[weaponKey]?.damage ?? Neo.getPlayerBaseDamage()) + Neo.getAnvilWeaponBonus(weaponKey, 'damage'))),
-      range: Math.max(40, Math.round((Neo.WEAPON_BASE_STATS[weaponKey]?.range ?? Neo.ATTACKS.melee.range) + Neo.getAnvilWeaponBonus(weaponKey, 'range'))),
-      knockback: Math.max(0, Math.round((Neo.WEAPON_BASE_STATS[weaponKey]?.knockback ?? Neo.ATTACKS.melee.push) + Neo.getAnvilWeaponBonus(weaponKey, 'knockback'))),
-      cooldown: Math.max(0.12, Neo.getWeaponBaseCooldown(weaponKey) * mirrorCooldownMultiplier),
+      damage: Math.max(1, Math.round(
+        (weaponKey === 'excalibur'
+          ? baseDamage * 7.77
+          : (Neo.WEAPON_BASE_STATS[weaponKey]?.damage ?? baseDamage))
+        + getMirrorAnvilBonus(inventory, 'weapon', weaponKey, 'damage')
+      )),
+      range: Math.max(40, Math.round((Neo.WEAPON_BASE_STATS[weaponKey]?.range ?? Neo.ATTACKS.melee.range) + getMirrorAnvilBonus(inventory, 'weapon', weaponKey, 'range'))),
+      knockback: Math.max(0, Math.round((Neo.WEAPON_BASE_STATS[weaponKey]?.knockback ?? Neo.ATTACKS.melee.push) + getMirrorAnvilBonus(inventory, 'weapon', weaponKey, 'knockback'))),
+      cooldown: Math.max(0.12, getMirrorWeaponCooldown(inventory, weaponKey) * mirrorCooldownMultiplier),
     } : null;
     const meleeDamage = weaponStats
       ? weaponStats.damage
-      : Math.round((Neo.MOVE_BASE_STATS[meleeMove]?.damage ?? Neo.getPlayerBaseDamage()) + Neo.getAnvilMoveBonus(meleeMove, 'damage') + (Neo.player?.attackPower || 0) * 0.35);
-    const beamDamage = Math.round((Neo.MOVE_BASE_STATS[laserMove]?.damage ?? Neo.ATTACKS.laser.damage) + Neo.getAnvilMoveBonus(laserMove, 'damage') + (Neo.player?.attackPower || 0) * 0.45);
-    const smashDamage = Math.round((Neo.MOVE_BASE_STATS[smashMove]?.damage ?? Neo.ATTACKS.smash.damage) + Neo.getAnvilMoveBonus(smashMove, 'damage') + (Neo.player?.attackPower || 0) * 0.9);
+      : getMoveDamage(meleeMove);
+    const beamDamage = Math.round(getMoveDamage(laserMove) * Number(itemStats.beamDamageMultiplier || 1));
+    const smashDamage = Math.round(getMoveDamage(smashMove) * Number(itemStats.aoeDamageMultiplier || 1));
     const moveSpeed = Math.round(228 * (itemStats.moveSpeedMultiplier || 1));
     return {
-      hp: Math.max(90, Math.round(Neo.player.maxHp)),
+      hp: Math.max(90, Math.round(inventory.maxHp)),
       dmg: Math.max(18, meleeDamage),
       beamDamage: Math.max(10, beamDamage),
       smashDamage: Math.max(20, smashDamage),
       speed: Math.max(108, moveSpeed),
       attackCd: Math.max(0.22, 0.56 / attackSpeed),
       attackSpeed,
+      inventory,
+      itemStats,
       equippedMoves,
       equippedWeapon: weaponKey,
       weaponStats,
+      moveStats,
       mirrorCooldowns: {
-        melee: weaponStats ? weaponStats.cooldown : Math.max(0.18, Neo.getMeleeCooldownDuration(meleeMove, attackSpeed) * mirrorCooldownMultiplier),
-        laser: Math.max(0.75, Neo.getLaserCooldownDuration(laserMove, attackSpeed) * mirrorCooldownMultiplier),
-        smash: Math.max(1.1, Neo.getSmashCooldownDuration(attackSpeed) * mirrorCooldownMultiplier),
-        dash: Math.max(0.55, Neo.getDashCooldownDuration(dashMove, attackSpeed) * mirrorCooldownMultiplier),
+        melee: weaponStats ? weaponStats.cooldown : Math.max(0.18, getMoveCooldown(meleeMove, 'melee') * mirrorCooldownMultiplier),
+        laser: Math.max(0.75, getMoveCooldown(laserMove, 'laser') * mirrorCooldownMultiplier),
+        smash: Math.max(1.1, getMoveCooldown(smashMove, 'smash') * mirrorCooldownMultiplier),
+        dash: Math.max(0.55, getMoveCooldown(dashMove, 'dash') * mirrorCooldownMultiplier),
       },
-      spriteKey: Neo.player.character,
+      spriteKey: inventory.character,
     };
   }
 
@@ -951,9 +1094,16 @@
       dark_drainImmune: false,
       state: 'idle',
       spriteKey: stats.spriteKey,
+      mirrorInventory: stats.inventory,
+      mirrorItems: stats.inventory.items,
+      mirrorOwnedMoves: stats.inventory.ownedMoves,
+      mirrorOwnedWeapons: stats.inventory.ownedWeapons,
+      mirrorAnvilUpgrades: stats.inventory.anvilUpgrades,
+      mirrorItemStats: stats.itemStats,
       mirrorMoves: stats.equippedMoves,
       mirrorWeapon: stats.equippedWeapon,
       mirrorWeaponStats: stats.weaponStats,
+      mirrorMoveStats: stats.moveStats,
       mirrorCooldowns: stats.mirrorCooldowns,
       mirrorLaserCd: Math.max(0.55, stats.mirrorCooldowns.laser * 0.45),
       mirrorSmashCd: Math.max(0.8, stats.mirrorCooldowns.smash * 0.55),
@@ -2324,9 +2474,59 @@
   }
 
   function getMirrorMoveDamage(enemy, moveKey, fallback) {
+    if (Number.isFinite(enemy?.mirrorMoveStats?.[moveKey]?.damage)) {
+      return Math.max(1, Math.round(enemy.mirrorMoveStats[moveKey].damage));
+    }
     const base = Neo.MOVE_BASE_STATS[moveKey]?.damage ?? fallback;
     const powerBonus = Math.max(0, Number(enemy?.dmg || 0) - 18) * 0.35;
     return Math.max(1, Math.round(base + powerBonus));
+  }
+
+  function rollMirrorDamage(enemy, damage, options = {}) {
+    const stats = enemy?.mirrorItemStats || {};
+    let amount = Number(damage || 0);
+    if (options.beam) amount *= Number(stats.beamDamageMultiplier || 1);
+    if (options.aoe) amount *= Number(stats.aoeDamageMultiplier || 1);
+    const critChance = Neo.clamp(Number(stats.critChance || 0) + Number(options.critBonus || 0), 0, 0.98);
+    const crit = critChance > 0 && Neo.nextRandom('encounter') < critChance;
+    if (crit) amount *= Number(stats.critMultiplier || 1.6);
+    return { amount: Math.max(1, Math.round(amount)), crit };
+  }
+
+  function getMirrorStatusEffects(enemy, options = {}) {
+    const stats = enemy?.mirrorItemStats || {};
+    const effects = [];
+    const bleedChance = Number(options.bleedChance || 0)
+      + Number(stats.bleedChance || 0)
+      + Math.min(0.35, Number(stats.scarfBleedsOnHit || 0) * 0.08);
+    if (bleedChance > 0) effects.push({ key: 'bleed', chance: bleedChance, stacks: 1, duration: 4.2 });
+    const poisonChance = Number(stats.snakeKnifePoisonChance || 0);
+    if (poisonChance > 0) effects.push({ key: 'poison', chance: poisonChance, stacks: 1, duration: 4.2 });
+    if (Number(options.fireStacks || 0) > 0) {
+      effects.push({ key: 'fire', chance: 1, stacks: Number(options.fireStacks || 1), duration: Number(options.fireDuration || 3.2) });
+    }
+    return effects;
+  }
+
+  function applyMirrorStatusEffects(enemy, options = {}) {
+    const effects = options.statusEffects || getMirrorStatusEffects(enemy, options);
+    effects.forEach(effect => {
+      if (!effect?.key) return;
+      if (Neo.nextRandom('encounter') <= Number(effect.chance ?? 1)) {
+        Neo.applyStatus(Neo.player, effect.key, Number(effect.stacks || 1), Number(effect.duration || 3));
+      }
+    });
+  }
+
+  function mirrorDamagePlayer(enemy, damage, angle, knockback, source, options = {}) {
+    const rolled = rollMirrorDamage(enemy, damage, options);
+    const knockbackMultiplier = Number(enemy?.mirrorItemStats?.knockbackMultiplier || 1);
+    Neo.damagePlayer(rolled.amount, angle, Number(knockback || 0) * knockbackMultiplier, source);
+    applyMirrorStatusEffects(enemy, options);
+    if (rolled.crit) {
+      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 24, life: 0.42, text: 'CRIT', c: '#ff9f1c' });
+    }
+    return true;
   }
 
   function getPredictedPlayerPoint(lead = 0.22) {
@@ -2336,22 +2536,20 @@
     };
   }
 
-  function mirrorHitArc(enemy, angle, range, arc, damage, knockback, source = 'mirror_knight') {
+  function mirrorHitArc(enemy, angle, range, arc, damage, knockback, source = 'mirror_knight', options = {}) {
     const d = Neo.dist(enemy.x, enemy.y, Neo.player.x, Neo.player.y);
     if (d > range + Neo.player.r) return false;
     const targetAngle = Math.atan2(Neo.player.y - enemy.y, Neo.player.x - enemy.x);
     const diff = Math.abs(Math.atan2(Math.sin(targetAngle - angle), Math.cos(targetAngle - angle)));
     if (diff > arc) return false;
-    Neo.damagePlayer(damage, angle, knockback, source);
-    return true;
+    return mirrorDamagePlayer(enemy, damage, angle, knockback, source, options);
   }
 
-  function mirrorBlastPlayer(enemy, radius, damage, knockback, color, source = 'mirror_knight') {
+  function mirrorBlastPlayer(enemy, radius, damage, knockback, color, source = 'mirror_knight', options = {}) {
     Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.42, ring: radius, c: color });
     if (Neo.dist(enemy.x, enemy.y, Neo.player.x, Neo.player.y) > radius + Neo.player.r) return false;
     const angle = Math.atan2(Neo.player.y - enemy.y, Neo.player.x - enemy.x);
-    Neo.damagePlayer(damage, angle, knockback, source);
-    return true;
+    return mirrorDamagePlayer(enemy, damage, angle, knockback, source, options);
   }
 
   function fireMirrorProjectiles(enemy, angle, count, spread, speed, damage, options = {}) {
@@ -2369,8 +2567,9 @@
         kind: options.kind || 'mirror_shot',
         source: options.source || 'mirror_knight_projectile',
         color: options.color || '#d7f6ff',
-        damage,
-        knockback: options.knockback || 120,
+        damage: rollMirrorDamage(enemy, damage, options).amount,
+        knockback: (options.knockback || 120) * Number(enemy?.mirrorItemStats?.knockbackMultiplier || 1),
+        statusEffects: options.statusEffects || getMirrorStatusEffects(enemy, options),
         homing: !!options.homing,
         homingSpeed: options.homingSpeed,
         homingTurnRate: options.homingTurnRate,
@@ -2388,18 +2587,19 @@
       const knockback = Math.max(0, Number(weaponStats.knockback || Neo.ATTACKS.melee.push));
       enemy.swingTime = Neo.ATTACKS.melee.active;
       enemy.attackCd = getMirrorSkillCooldown(enemy, 'melee');
-      if (weaponKey === 'hunters_bow' || weaponKey === 'magenta_degale' || weaponKey === 'void_piercer' || weaponKey === 'granillia_lightning_spear') {
+      if (weaponKey === 'hunters_bow' || weaponKey === 'magenta_degale' || weaponKey === 'void_piercer' || weaponKey === 'granillia_lightning_spear' || weaponKey === 'princess_wand') {
         fireMirrorProjectiles(enemy, angleToPlayer, 1, 0, weaponKey === 'magenta_degale' ? 880 : 760, damage, {
           kind: weaponKey,
           color: Neo.WEAPON_DEFS[weaponKey]?.color || '#d7f6ff',
           r: weaponKey === 'magenta_degale' ? 7 : 6,
           life: weaponKey === 'void_piercer' ? 1.2 : 0.9,
+          critBonus: weaponKey === 'hunters_bow' ? 0.1 : weaponKey === 'void_piercer' ? 0.2 : 0,
           knockback,
         });
         return true;
       }
       if (weaponKey === 'metao_fire_staff') {
-        fireMirrorProjectiles(enemy, angleToPlayer, 3, 0.18, 345, damage, { kind: 'fireball', color: '#ffb874', r: 8, life: 1.4, knockback });
+        fireMirrorProjectiles(enemy, angleToPlayer, 3, 0.18, 345, damage, { kind: 'fireball', color: '#ffb874', r: 8, life: 1.4, knockback, fireStacks: 1, fireDuration: 3.2 });
         return true;
       }
       if (weaponKey === 'magenta_p90') {
@@ -2419,7 +2619,9 @@
         Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.44, ring: 34, c: '#9ae9ff' });
         return true;
       }
-      mirrorHitArc(enemy, angleToPlayer, range + 10, weaponKey === 'excalibur' ? Math.PI : Neo.ATTACKS.melee.arc + 0.18, damage, knockback, `mirror_${weaponKey}`);
+      mirrorHitArc(enemy, angleToPlayer, range + 10, weaponKey === 'excalibur' ? Math.PI : Neo.ATTACKS.melee.arc + 0.18, damage, knockback, `mirror_${weaponKey}`, {
+        bleedChance: weaponKey === 'thorns_bleed_blade' ? 0.1 : 0,
+      });
       return true;
     }
     const move = getMirrorMove(enemy, 'melee');
@@ -2427,7 +2629,7 @@
     enemy.swingTime = Neo.ATTACKS.melee.active;
     enemy.attackCd = getMirrorSkillCooldown(enemy, 'melee');
     if (move === 'fire_balls') {
-      fireMirrorProjectiles(enemy, angleToPlayer, 3, 0.16, 340, Math.max(14, damage - 4), { kind: 'fireball', color: '#ff8844', r: 8, life: 1.45, knockback: 110 });
+      fireMirrorProjectiles(enemy, angleToPlayer, 3, 0.16, 340, Math.max(14, damage - 4), { kind: 'fireball', color: '#ff8844', r: 8, life: 1.45, knockback: 110, fireStacks: 1, fireDuration: 3.2 });
       return true;
     }
     if (move === 'narwal_fight') {
@@ -2437,7 +2639,7 @@
     }
     if (move === 'smite') {
       const didHit = mirrorHitArc(enemy, angleToPlayer, Neo.ATTACKS.melee.range + 18, Neo.ATTACKS.melee.arc + 0.18, damage, Neo.ATTACKS.melee.push);
-      if (didHit) Neo.damagePlayer(Math.max(8, Math.round(damage * 0.45)), angleToPlayer, 70, 'mirror_smite');
+      if (didHit) mirrorDamagePlayer(enemy, Math.max(8, Math.round(damage * 0.45)), angleToPlayer, 70, 'mirror_smite');
       Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.24, ring: 18, c: '#eaf2ff' });
       return true;
     }
@@ -2495,7 +2697,7 @@
     enemy.attackCd = 0.6;
     enemy.mirrorSmashCd = getMirrorSkillCooldown(enemy, 'smash');
     if (move === 'kicky_kick') {
-      mirrorBlastPlayer(enemy, 142, Math.max(damage, 84), 680, '#ff7fc2', 'mirror_kick');
+      mirrorBlastPlayer(enemy, 142, Math.max(damage, 84), 680, '#ff7fc2', 'mirror_kick', { aoe: true });
       enemy.vx -= Math.cos(angleToPlayer) * 210;
       enemy.vy -= Math.sin(angleToPlayer) * 210;
       return true;
@@ -2506,17 +2708,19 @@
         const px = Neo.player.x + Math.cos(a) * Neo.rand(46, -46, 'encounter');
         const py = Neo.player.y + Math.sin(a) * Neo.rand(46, -46, 'encounter');
         Neo.spawnParticle({ x: px, y: py, life: 0.38, ring: 36, c: '#c971ff' });
-        if (Neo.dist(Neo.player.x, Neo.player.y, px, py) <= 58 + Neo.player.r) Neo.damagePlayer(Math.max(16, Math.round(damage * 0.62)), Math.atan2(Neo.player.y - py, Neo.player.x - px), 120, 'mirror_chaos');
+        if (Neo.dist(Neo.player.x, Neo.player.y, px, py) <= 58 + Neo.player.r) {
+          mirrorDamagePlayer(enemy, Math.max(16, Math.round(damage * 0.62)), Math.atan2(Neo.player.y - py, Neo.player.x - px), 120, 'mirror_chaos', { aoe: true });
+        }
       }
       return true;
     }
     if (move === 'healing_zone') {
       enemy.hp = Math.min(enemy.max, enemy.hp + enemy.max * 0.08);
-      mirrorBlastPlayer(enemy, 118, Math.max(10, damage), 120, '#35ff6f', 'mirror_zone');
+      mirrorBlastPlayer(enemy, 118, Math.max(10, damage), 120, '#35ff6f', 'mirror_zone', { aoe: true });
       return true;
     }
     if (move === 'fire_circle' || move === 'floor_lava') {
-      mirrorBlastPlayer(enemy, move === 'floor_lava' ? 156 : 108, Math.max(12, damage), 150, '#ff7b32', 'mirror_fire');
+      mirrorBlastPlayer(enemy, move === 'floor_lava' ? 156 : 108, Math.max(12, damage), 150, '#ff7b32', 'mirror_fire', { aoe: true, fireStacks: move === 'floor_lava' ? 2 : 1, fireDuration: 3.2 });
       Neo.applyFire(Neo.player, move === 'floor_lava' ? 2 : 1, 3.2);
       return true;
     }
@@ -2623,6 +2827,7 @@
         onTick: activeEnemy => {
           if (laserMove === 'god_sweep') activeEnemy.beamAngle += 4.4 * dt;
         },
+        onHit: activeEnemy => applyMirrorStatusEffects(activeEnemy, { beam: true }),
         onEnd: activeEnemy => {
           activeEnemy.attackCd = 0.62;
           activeEnemy.mirrorLaserCd = getMirrorSkillCooldown(activeEnemy, 'laser');
@@ -2674,7 +2879,7 @@
     );
 
     const mirrorWeapon = enemy.mirrorWeapon || '';
-    const rangedMirrorWeapon = ['hunters_bow', 'metao_fire_staff', 'magenta_degale', 'magenta_p90', 'granillia_lightning_spear', 'void_piercer', 'lazer_glasses'].includes(mirrorWeapon);
+    const rangedMirrorWeapon = ['hunters_bow', 'metao_fire_staff', 'magenta_degale', 'magenta_p90', 'granillia_lightning_spear', 'void_piercer', 'lazer_glasses', 'princess_wand'].includes(mirrorWeapon);
     const mirrorWeaponRange = Number(enemy.mirrorWeaponStats?.range || 0);
     if (mirrorWeapon && enemy.attackCd <= 0 && (rangedMirrorWeapon ? distance < 520 : distance < mirrorWeaponRange + Neo.player.r + 14)) {
       startMirrorMelee(enemy, angleToPlayer);

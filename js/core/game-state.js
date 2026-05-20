@@ -889,7 +889,7 @@ export function resumeGame() {
   function getMoveCooldownBase(moveKey) {
     const base = Neo.MOVE_BASE_STATS[moveKey]?.cooldown ?? null;
     if (base === null) return null;
-    return Math.max(0.05, base + Neo.getAnvilMoveBonus(moveKey, 'cooldown'));
+    return Math.max(base * 0.5, base + Neo.getAnvilMoveBonus(moveKey, 'cooldown'));
   }
 
   function getMeleeCooldownDuration(moveKey = Neo.getEquippedMove('melee'), attackSpeed = Neo.getAttackSpeedValue()) {

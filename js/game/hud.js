@@ -326,10 +326,21 @@
     if (Neo.ui.coinCount) Neo.ui.coinCount.textContent = Neo.player.coins;
     if (Neo.ui.hudLoopCount) Neo.ui.hudLoopCount.textContent = Number(Neo.metaProgress.loopCrystals || 0);
     const _potionCap = Neo.getPotionCarryCap();
-    if (Neo.ui.potionDisplay) Neo.ui.potionDisplay.classList.toggle('hidden', _potionCap <= 0);
-    if (_potionCap > 0) {
-      if (Neo.ui.potionCount) Neo.ui.potionCount.textContent = String(Number(Neo.player.storedPotions || 0));
-      if (Neo.ui.potionCap) Neo.ui.potionCap.textContent = `/${_potionCap}`;
+    const storedPotions = Number(Neo.player.storedPotions || 0);
+    if (Neo.ui.bagStatus) {
+      const showBag = _potionCap > 0 && (Neo.gameState === 'play' || Neo.gameState === 'pause');
+      Neo.ui.bagStatus.classList.toggle('hidden', !showBag);
+      Neo.ui.bagStatus.setAttribute('aria-hidden', showBag ? 'false' : 'true');
+      Neo.ui.bagStatus.classList.toggle('is-ready', showBag && storedPotions > 0);
+      Neo.ui.bagStatus.classList.toggle('is-empty', showBag && storedPotions <= 0);
+      const bagItem = Neo.itemRegistry.get('mateos_bag') || Neo.ITEM_DEFS.mateos_bag;
+      if (showBag && Neo.ui.bagStatusIcon && bagItem) Neo.drawItemToastIcon(Neo.ui.bagStatusIcon, bagItem);
+      if (Neo.ui.bagStatusText) {
+        const potionKey = Neo.formatControlLabel('g', 'g');
+        Neo.ui.bagStatusText.textContent = showBag
+          ? `Mateo's Bag [${potionKey}]: ${storedPotions}/${_potionCap} potions`
+          : '';
+      }
     }
     if (Neo.ui.timerDisplay) Neo.ui.timerDisplay.textContent = timeStr;
     if (Neo.ui.floorDisplay) Neo.ui.floorDisplay.textContent = Neo.floor;

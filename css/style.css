@@ -181,15 +181,6 @@ canvas {
   font-size: 14px;
 }
 
-.currency-line--potion {
-  color: #a0e8ff;
-  font-size: 14px;
-  gap: 4px;
-}
-.potion-icon { font-size: 15px; line-height: 1; }
-.potion-cap  { opacity: 0.6; }
-.potion-hint { font-size: 10px; opacity: 0.5; margin-left: 2px; text-transform: uppercase; letter-spacing: .06em; }
-
 .coin-icon {
   width: 24px;
   height: 24px;
@@ -2032,6 +2023,7 @@ canvas {
 .adapter-status {
   z-index: 22;
   pointer-events: none;
+  appearance: none;
   padding: 8px 12px;
   border-radius: 999px;
   border: 1px solid rgba(170, 120, 230, .42);
@@ -2039,12 +2031,36 @@ canvas {
   color: #dec4ff;
   font-size: 11px;
   font-weight: 800;
+  font-family: inherit;
   letter-spacing: .08em;
   text-transform: uppercase;
   box-shadow: 0 8px 20px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.06);
   display: inline-flex;
   align-items: center;
   gap: 8px;
+}
+
+.bag-status {
+  pointer-events: auto;
+  cursor: pointer;
+  border-color: rgba(160, 232, 255, .46);
+  background: linear-gradient(180deg, rgba(18, 35, 48, .95), rgba(8, 18, 28, .97));
+  color: #bcefff;
+}
+
+.bag-status:hover {
+  border-color: rgba(190, 246, 255, .72);
+  color: #e8fbff;
+}
+
+.bag-status.is-ready {
+  border-color: rgba(136, 234, 186, .5);
+  color: #baf5d6;
+}
+
+.bag-status.is-empty {
+  border-color: rgba(152, 174, 196, .34);
+  color: #9fb3c8;
 }
 
 .adapter-status__icon {

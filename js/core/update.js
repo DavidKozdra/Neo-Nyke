@@ -353,12 +353,14 @@ export function loop(timestamp) {
       if (Neo.player.hp < 50) Neo.player.scarfHealReady = true;
       if (Neo.player.scarfHealReady) {
         const heal = Neo.player.maxHp * 0.0006 * totalBleed * itemStats.bleedHealScale * dt;
+        const beforeHp = Neo.player.hp;
         Neo.player.hp = Math.min(Neo.player.maxHp, Neo.player.hp + heal);
+        const gained = Neo.player.hp - beforeHp;
         if (Neo.player.hp >= 50 && Neo.player.scarfHealReady) {
           Neo.consumeCharge('hemes_scarf');
         }
-        if (Neo.nextRandom('fx') < 0.14) {
-          Neo.spawnParticle({ x: Neo.player.x + Neo.rand(-10, 10), y: Neo.player.y - 18, life: 0.5, text: `+${Math.max(1, Math.ceil(heal * 10))}`, c: '#0f8' });
+        if (gained > 0 && Neo.nextRandom('fx') < 0.14) {
+          Neo.spawnHealPopup(Neo.player.x + Neo.rand(-10, 10), Neo.player.y - 18, gained, { color: '#0f8' });
         }
       }
     }

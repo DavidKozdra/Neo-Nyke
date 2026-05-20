@@ -1365,8 +1365,8 @@
       applyRivalLevelStats(rival, { keepHpRatio: true });
       leveled = true;
       const liveEnemy = Neo.enemies.find(e => e.type === 'rival' && e.rivalData === rival);
-      if (liveEnemy) {
-        Neo.spawnParticle({ x: liveEnemy.x, y: liveEnemy.y - 20, life: 1.0, text: `${rival.name.toUpperCase()} LV ${rival.level}`, c: rival.color });
+      if (!liveEnemy) {
+        Neo.spawnParticle({ x: 48, y: 60 + rival.level * 2, life: 1.6, text: `${rival.name}: LV ${rival.level}`, c: rival.color, size: 10 });
       }
     }
     if (leveled && reason !== 'silent') {

@@ -359,6 +359,7 @@ export function bindPanelInput() {
     Neo.ui.shopWeapons?.addEventListener('click', handleShopBuyClick);
     Neo.ui.shopMoves?.addEventListener('click', handleShopBuyClick);
     Neo.ui.shopHeals?.addEventListener('click', handleShopBuyClick);
+    Neo.ui.bagStatus?.addEventListener('click', () => Neo.tryUsePotion?.());
     Neo.ui.invMovesList?.addEventListener('click', handleInventoryMoveSelect);
     Neo.ui.invWeaponsList?.addEventListener('click', handleInventoryWeaponSelect);
     Neo.ui.invMovesList?.addEventListener('dragstart', event => {
@@ -577,7 +578,14 @@ export function toggleAnvilPanel() {
     const schema = itemType === 'weapon' ? Neo.WEAPON_UPGRADEABLE_STATS : Neo.MOVE_UPGRADEABLE_STATS;
     return Object.entries(schema)
       .filter(([statKey]) => statKey in base)
-      .map(([statKey, def]) => ({ statKey, ...def, baseValue: base[statKey] }));
+      .map(([statKey, def]) => ({
+        statKey,
+        ...def,
+        min: statKey === 'cooldown'
+          ? Math.max(Number(def.min || 0), Number(base[statKey] || 0) * 0.5)
+          : def.min,
+        baseValue: base[statKey],
+      }));
   }
 
   function getAnvilCurrentValue(itemKey, statKey, itemType) {
@@ -585,7 +593,9 @@ export function toggleAnvilPanel() {
     if (!base || !(statKey in base)) return 0;
     const upgrades = Neo.player.anvilUpgrades?.[itemType]?.[itemKey]?.[statKey] ?? 0;
     const schema = itemType === 'weapon' ? Neo.WEAPON_UPGRADEABLE_STATS : Neo.MOVE_UPGRADEABLE_STATS;
-    return base[statKey] + upgrades * schema[statKey].step;
+    const value = base[statKey] + upgrades * schema[statKey].step;
+    if (statKey === 'cooldown') return Math.max(Number(base[statKey] || 0) * 0.5, value);
+    return value;
   }
 
   function getAnvilStagedValue(itemKey, statKey, itemType) {
@@ -596,14 +606,17 @@ export function toggleAnvilPanel() {
   }
 
   function getAnvilTotalCost() {
-    let total = 0;
+    let xp = 0;
+    let gold = 0;
     for (const [key, count] of Object.entries(Neo.anvilStagedUpgrades)) {
       if (count === 0) continue;
       const [itemType, , statKey] = key.split(':');
       const schema = itemType === 'weapon' ? Neo.WEAPON_UPGRADEABLE_STATS : Neo.MOVE_UPGRADEABLE_STATS;
-      total += Math.abs(count) * (schema[statKey]?.xpPerStep ?? 0);
+      const steps = Math.abs(count);
+      xp += steps * (schema[statKey]?.xpPerStep ?? 0);
+      gold += steps * (schema[statKey]?.goldPerStep ?? 0);
     }
-    return total;
+    return { xp, gold };
   }
 
 export function renderAnvilPanel() {
@@ -670,7 +683,7 @@ export function renderAnvilStatPanel() {
     const stats = getAnvilStatSchema(itemKey, itemType);
     const schema = itemType === 'weapon' ? Neo.WEAPON_UPGRADEABLE_STATS : Neo.MOVE_UPGRADEABLE_STATS;
 
-    const rows = stats.map(({ statKey, label, min, max, xpPerStep, format }) => {
+    const rows = stats.map(({ statKey, label, min, max, xpPerStep, goldPerStep, format }) => {
       const cur = getAnvilCurrentValue(itemKey, statKey, itemType);
       const staged = getAnvilStagedValue(itemKey, statKey, itemType);
       const step = schema[statKey].step;
@@ -684,7 +697,9 @@ export function renderAnvilStatPanel() {
       const stagedDisplay = staged !== cur
         ? `<span class="anvil-stat-staged">&rarr; ${format(staged)}</span>`
         : '';
-      const costDisplay = xpPerStep > 0 ? `<span class="anvil-stat-cost">${xpPerStep} XP/step</span>` : '';
+      const costDisplay = xpPerStep > 0
+        ? `<span class="anvil-stat-cost">${xpPerStep} XP + &#9670;${goldPerStep ?? 0}/step</span>`
+        : '';
 
       return `<div class="anvil-stat-row">
         <span class="anvil-stat-label">${label}</span>
@@ -704,16 +719,19 @@ export function renderAnvilStatPanel() {
   function renderAnvilFooter() {
     const cost = getAnvilTotalCost();
     const xp = Neo.player?.xp ?? 0;
+    const coins = Neo.player?.coins ?? 0;
     if (Neo.ui.anvilCostSummary) {
-      if (cost === 0) {
+      if (cost.xp === 0 && cost.gold === 0) {
         Neo.ui.anvilCostSummary.textContent = 'Select stats above and press + to stage upgrades.';
       } else {
-        Neo.ui.anvilCostSummary.textContent = `Total: ${cost} XP  (you have ${xp} XP)`;
-        Neo.ui.anvilCostSummary.style.color = xp >= cost ? '#7eff9e' : '#ff7c88';
+        Neo.ui.anvilCostSummary.innerHTML =
+          `Total: <span style="color:${xp >= cost.xp ? '#7eff9e' : '#ff7c88'}">${cost.xp} XP (${xp})</span>` +
+          ` + <span style="color:${coins >= cost.gold ? '#ffd15a' : '#ff7c88'}">&#9670; ${cost.gold} gold (${coins})</span>`;
+        Neo.ui.anvilCostSummary.style.color = xp >= cost.xp && coins >= cost.gold ? '#7eff9e' : '#ff7c88';
       }
     }
     if (Neo.ui.anvilConfirm) {
-      Neo.ui.anvilConfirm.disabled = cost === 0 || xp < cost;
+      Neo.ui.anvilConfirm.disabled = (cost.xp === 0 && cost.gold === 0) || xp < cost.xp || coins < cost.gold;
     }
   }
 
@@ -746,8 +764,9 @@ export function renderAnvilStatPanel() {
       const capped = statDef.step > 0 ? newVal > statDef.max : newVal < statDef.min;
       if (capped) return;
       // Check if we could afford one more step
-      const nextCost = getAnvilTotalCost() + statDef.xpPerStep;
-      if (nextCost > (Neo.player?.xp ?? 0)) return;
+      const nextCost = getAnvilTotalCost();
+      if (nextCost.xp + statDef.xpPerStep > (Neo.player?.xp ?? 0)) return;
+      if (nextCost.gold + (statDef.goldPerStep ?? 0) > (Neo.player?.coins ?? 0)) return;
       Neo.anvilStagedUpgrades[stageKey] = currentStaged + 1;
     } else {
       // Remove a staged step (can't undo already-committed upgrades)
@@ -759,9 +778,11 @@ export function renderAnvilStatPanel() {
 
 export function confirmAnvilUpgrades() {
     const cost = getAnvilTotalCost();
-    if (!Neo.player || cost === 0 || Neo.player.xp < cost) return;
+    if (!Neo.player || (cost.xp === 0 && cost.gold === 0)) return;
+    if (Neo.player.xp < cost.xp || (Neo.player.coins ?? 0) < cost.gold) return;
 
-    Neo.player.xp -= cost;
+    Neo.player.xp -= cost.xp;
+    Neo.player.coins = (Neo.player.coins ?? 0) - cost.gold;
 
     if (!Neo.player.anvilUpgrades) Neo.player.anvilUpgrades = { weapon: {}, move: {} };
 
@@ -980,10 +1001,22 @@ export function renderShopPanel() {
       { id: 'small', name: 'Minor Heal', heal: Neo.scalePotionHealing(45, 24), cost: Neo.getShopHealCost('small') },
       { id: 'major', name: 'Major Heal', heal: Neo.scalePotionHealing(100, 52), cost: Neo.getShopHealCost('major') },
     ];
+    const potionCap = Neo.getPotionCarryCap();
+    const storedPotions = Number(Neo.player.storedPotions || 0);
+    const canHealNow = Neo.player.hp < Neo.player.maxHp;
+    const canStorePotion = !canHealNow && potionCap > 0 && storedPotions < potionCap;
     const healCards = heals
       .map(heal => {
         const canAfford = Neo.player.coins >= heal.cost;
-        return `<div class="shop-card${!canAfford ? ' shop-card--unaffordable' : ''}">
+        const canUseRecovery = canHealNow || canStorePotion;
+        const disabled = !canAfford || !canUseRecovery;
+        const copy = canHealNow
+          ? `Restore ${heal.heal} HP and stabilize before the next encounter.`
+          : canStorePotion
+            ? `Store one potion in Mateo's Bag (${storedPotions}/${potionCap}).`
+            : 'Already at full health.';
+        const buttonText = !canAfford ? 'Too Expensive' : canHealNow ? 'Buy Heal' : canStorePotion ? 'Store Potion' : 'Full Health';
+        return `<div class="shop-card${disabled ? ' shop-card--unaffordable' : ''}">
         <span class="shop-card__eyebrow">Recovery</span>
         <div class="shop-card__title-row">
           <canvas class="shop-card__icon" data-heal-icon="${heal.id}" width="30" height="30"></canvas>
@@ -991,10 +1024,10 @@ export function renderShopPanel() {
           <span class="shop-card__price">${heal.cost}</span>
         </div>
         <div class="shop-card__copy">
-          <p>Restore ${heal.heal} HP and stabilize before the next encounter.</p>
+          <p>${copy}</p>
         </div>
         <div class="shop-card__footer">
-          <button class="shop-buy${!canAfford ? ' shop-buy--unaffordable' : ''}" data-kind="heal" data-heal="${heal.heal}" data-cost="${heal.cost}" ${!canAfford ? 'disabled' : ''}>${!canAfford ? 'Too Expensive' : 'Buy Heal'}</button>
+          <button class="shop-buy${disabled ? ' shop-buy--unaffordable' : ''}" data-kind="heal" data-heal="${heal.heal}" data-cost="${heal.cost}" ${disabled ? 'disabled' : ''}>${buttonText}</button>
         </div>
       </div>`;
       })
@@ -1256,12 +1289,25 @@ export function handleShopBuyClick(event) {
       const heal = Number(button.dataset.heal || 0);
       const cost = Number(button.dataset.cost || 0);
       if (!heal || !cost) return;
+      const potionCap = Neo.getPotionCarryCap();
+      const stored = Number(Neo.player.storedPotions || 0);
+      const canHealNow = Neo.player.hp < Neo.player.maxHp;
+      const canStorePotion = !canHealNow && potionCap > 0 && stored < potionCap;
+      if (!canHealNow && !canStorePotion) {
+        Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 24, life: 0.7, text: 'Already full health', c: '#a0ffa0' });
+        return;
+      }
       if (!spendCoins(cost)) return;
-      const before = Neo.player.hp;
-      Neo.player.hp = Math.min(Neo.player.maxHp, Neo.player.hp + heal);
-      const gained = Neo.player.hp - before;
-      if (gained > 0) Neo.spawnHealPopup(Neo.player.x + Neo.rand(-10, 10), Neo.player.y - 20, gained);
-      if (gained > 0) window.achievementEvents?.emit('heal:applied', { amount: gained });
+      if (canHealNow) {
+        const before = Neo.player.hp;
+        Neo.player.hp = Math.min(Neo.player.maxHp, Neo.player.hp + heal);
+        const gained = Neo.player.hp - before;
+        if (gained > 0) Neo.spawnHealPopup(Neo.player.x + Neo.rand(-10, 10), Neo.player.y - 20, gained);
+        if (gained > 0) window.achievementEvents?.emit('heal:applied', { amount: gained });
+      } else {
+        Neo.player.storedPotions = stored + 1;
+        Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.7, text: `POTION STORED (${Neo.player.storedPotions}/${potionCap})`, c: '#a0e8ff' });
+      }
       window.achievementEvents?.emit('shop:bought');
     }
     markShopPanelDirty();

@@ -169,7 +169,7 @@
       key: 'golden_fleece',
       name: 'Golden Fleece',
       rarity: 'god',
-      description: 'Heals 20% max HP every 2 seconds while equipped.',
+      description: 'Heals 6% max HP every 2 seconds while equipped.',
       color: '#ffe59c',
     },
     void_piercer: {
@@ -590,8 +590,8 @@
     robot_arm: {
       key: 'robot_arm',
       name: 'Robot Arm',
-      shortName: 'Auto x15 Spd',
-      description: 'Attack speed x15. Automatically attacks with left click.',
+      shortName: 'Auto x8 Spd',
+      description: 'Attack speed x8. Automatically attacks with left click.',
       rarity: 'god',
       color: '#c0e8ff',
       category: 'god',
@@ -745,6 +745,9 @@
     adapterStatus: document.getElementById('adapterStatus'),
     adapterStatusIcon: document.getElementById('adapterStatusIcon'),
     adapterStatusText: document.getElementById('adapterStatusText'),
+    bagStatus: document.getElementById('bagStatus'),
+    bagStatusIcon: document.getElementById('bagStatusIcon'),
+    bagStatusText: document.getElementById('bagStatusText'),
     shopPanel: document.getElementById('shopPanel'),
     shopClose: document.getElementById('shopClose'),
     shopTabs: [...document.querySelectorAll('#shopPanel .shop-tab')],
@@ -808,9 +811,6 @@
     playerXpTxt: document.getElementById('playerXpTxt'),
     coinCount: document.getElementById('coinCount'),
     hudLoopCount: document.getElementById('hudLoopCount'),
-    potionDisplay: document.getElementById('potionDisplay'),
-    potionCount: document.getElementById('potionCount'),
-    potionCap: document.getElementById('potionCap'),
     timerDisplay: document.getElementById('timerDisplay'),
     floorDisplay: document.getElementById('floorDisplay'),
     difficultyDisplay: document.getElementById('difficultyDisplay'),
@@ -2104,6 +2104,7 @@
       },
     });
 
+    ui.bagStatus?.addEventListener('click', () => Neo.tryUsePotion?.());
     ui.pauseResume.addEventListener('click', resumeGame);
     ui.pauseInfo?.addEventListener('click', () => {
       uiController.setRunHistoryOpen(true);
@@ -2376,7 +2377,14 @@
     const schema = itemType === 'weapon' ? WEAPON_UPGRADEABLE_STATS : MOVE_UPGRADEABLE_STATS;
     return Object.entries(schema)
       .filter(([statKey]) => statKey in base)
-      .map(([statKey, def]) => ({ statKey, ...def, baseValue: base[statKey] }));
+      .map(([statKey, def]) => ({
+        statKey,
+        ...def,
+        min: statKey === 'cooldown'
+          ? Math.max(Number(def.min || 0), Number(base[statKey] || 0) * 0.5)
+          : def.min,
+        baseValue: base[statKey],
+      }));
   }
 
   function getAnvilCurrentValue(itemKey, statKey, itemType) {
@@ -2384,7 +2392,9 @@
     if (!base || !(statKey in base)) return 0;
     const upgrades = player.anvilUpgrades?.[itemType]?.[itemKey]?.[statKey] ?? 0;
     const schema = itemType === 'weapon' ? WEAPON_UPGRADEABLE_STATS : MOVE_UPGRADEABLE_STATS;
-    return base[statKey] + upgrades * schema[statKey].step;
+    const value = base[statKey] + upgrades * schema[statKey].step;
+    if (statKey === 'cooldown') return Math.max(Number(base[statKey] || 0) * 0.5, value);
+    return value;
   }
 
   function getAnvilStagedValue(itemKey, statKey, itemType) {
@@ -2793,10 +2803,22 @@
       { id: 'small', name: 'Minor Heal', heal: scalePotionHealing(45, 24), cost: getShopHealCost('small') },
       { id: 'major', name: 'Major Heal', heal: scalePotionHealing(100, 52), cost: getShopHealCost('major') },
     ];
+    const potionCap = getPotionCarryCap();
+    const storedPotions = Number(player.storedPotions || 0);
+    const canHealNow = player.hp < player.maxHp;
+    const canStorePotion = !canHealNow && potionCap > 0 && storedPotions < potionCap;
     const healCards = heals
       .map(heal => {
         const canAfford = player.coins >= heal.cost;
-        return `<div class="shop-card${!canAfford ? ' shop-card--unaffordable' : ''}">
+        const canUseRecovery = canHealNow || canStorePotion;
+        const disabled = !canAfford || !canUseRecovery;
+        const copy = canHealNow
+          ? `Restore ${heal.heal} HP and stabilize before the next encounter.`
+          : canStorePotion
+            ? `Store one potion in Mateo's Bag (${storedPotions}/${potionCap}).`
+            : 'Already at full health.';
+        const buttonText = !canAfford ? 'Too Expensive' : canHealNow ? 'Buy Heal' : canStorePotion ? 'Store Potion' : 'Full Health';
+        return `<div class="shop-card${disabled ? ' shop-card--unaffordable' : ''}">
         <span class="shop-card__eyebrow">Recovery</span>
         <div class="shop-card__title-row">
           <canvas class="shop-card__icon" data-heal-icon="${heal.id}" width="30" height="30"></canvas>
@@ -2804,10 +2826,10 @@
           <span class="shop-card__price">${heal.cost}</span>
         </div>
         <div class="shop-card__copy">
-          <p>Restore ${heal.heal} HP and stabilize before the next encounter.</p>
+          <p>${copy}</p>
         </div>
         <div class="shop-card__footer">
-          <button class="shop-buy${!canAfford ? ' shop-buy--unaffordable' : ''}" data-kind="heal" data-heal="${heal.heal}" data-cost="${heal.cost}" ${!canAfford ? 'disabled' : ''}>${!canAfford ? 'Too Expensive' : 'Buy Heal'}</button>
+          <button class="shop-buy${disabled ? ' shop-buy--unaffordable' : ''}" data-kind="heal" data-heal="${heal.heal}" data-cost="${heal.cost}" ${disabled ? 'disabled' : ''}>${buttonText}</button>
         </div>
       </div>`;
       })
@@ -3061,12 +3083,25 @@
       const heal = Number(button.dataset.heal || 0);
       const cost = Number(button.dataset.cost || 0);
       if (!heal || !cost) return;
+      const potionCap = getPotionCarryCap();
+      const stored = Number(player.storedPotions || 0);
+      const canHealNow = player.hp < player.maxHp;
+      const canStorePotion = !canHealNow && potionCap > 0 && stored < potionCap;
+      if (!canHealNow && !canStorePotion) {
+        particles.push({ x: player.x, y: player.y - 24, life: 0.7, text: 'Already full health', c: '#a0ffa0' });
+        return;
+      }
       if (!spendCoins(cost)) return;
-      const before = player.hp;
-      player.hp = Math.min(player.maxHp, player.hp + heal);
-      const gained = player.hp - before;
-      if (gained > 0) spawnHealPopup(player.x + rand(-10, 10), player.y - 20, gained);
-      if (gained > 0) achievementEvents.emit('heal:applied', { amount: gained });
+      if (canHealNow) {
+        const before = player.hp;
+        player.hp = Math.min(player.maxHp, player.hp + heal);
+        const gained = player.hp - before;
+        if (gained > 0) spawnHealPopup(player.x + rand(-10, 10), player.y - 20, gained);
+        if (gained > 0) achievementEvents.emit('heal:applied', { amount: gained });
+      } else {
+        player.storedPotions = stored + 1;
+        particles.push({ x: player.x, y: player.y - 20, life: 0.7, text: `POTION STORED (${player.storedPotions}/${potionCap})`, c: '#a0e8ff' });
+      }
       achievementEvents.emit('shop:bought');
     }
     markShopPanelDirty();

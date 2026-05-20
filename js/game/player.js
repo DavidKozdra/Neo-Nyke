@@ -232,7 +232,7 @@ export function getItemStats() {
       scarfBleedsOnHit: hemesScarf,
       critChance,
       critMultiplier: 1.6 + (oracleLens ? critChance * 2.2 : critChance * 0.6),
-      attackSpeedMultiplier: robotArm > 0 ? 15 * (1 + attackServo * 0.12 + chronoSpringBonus) : 1 + attackServo * 0.12 + chronoSpringBonus,
+      attackSpeedMultiplier: robotArm > 0 ? 8 * (1 + attackServo * 0.12 + chronoSpringBonus) : 1 + attackServo * 0.12 + chronoSpringBonus,
       hasRobotArm: robotArm > 0,
       moveSpeedMultiplier: 1 + turtleShell * 0.05,
       xpGainMultiplier: 1 + scholarSeal * 0.15,

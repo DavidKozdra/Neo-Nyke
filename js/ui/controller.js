@@ -418,6 +418,7 @@ export function createUIController(view) {
       setVisible(view.actionBar, show === 'play' || show === 'pause' || show === 'dying', '');
       setVisible(view.hudLower, show === 'play' || show === 'pause', '');
       setVisible(view.adapterStatus, show === 'play', '');
+      setVisible(view.bagStatus, show === 'play', '');
       setVisible(view.playerStats, inPlay, '');
       setVisible(view.coinDisplay, inPlay, 'flex');
       setVisible(view.centerDisplay, inPlay, '');
@@ -880,6 +881,10 @@ export function createUIController(view) {
       });
       manager.registerScreen('adapterStatus', {
         create: () => makeContainer(view.adapterStatus, ''),
+        validStates: ['play', 'pause'],
+      });
+      manager.registerScreen('bagStatus', {
+        create: () => makeContainer(view.bagStatus, ''),
         validStates: ['play', 'pause'],
       });
       manager.registerScreen('dialogue', {

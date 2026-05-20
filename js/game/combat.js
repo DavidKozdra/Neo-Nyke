@@ -92,7 +92,7 @@
     else if (weaponKey === 'princess_wand') base = 0.55;
     else base = 0.5;
     const bonus = Neo.getAnvilWeaponBonus(weaponKey, 'cooldown');
-    return Math.max(0.05, base + bonus);
+    return Math.max(base * 0.5, base + bonus);
   }
 
   function spawnWeaponProjectile(config = {}) {
@@ -169,23 +169,23 @@
     const wCd   = k => getWeaponBaseCooldown(k);
     if (weaponKey === 'extending_staff') {
       fireWeaponSweep(wDmg(weaponKey), wRng(weaponKey), 1.45, wKnk(weaponKey), '#ff3333');
-      Neo.player.weaponCooldown = wCd(weaponKey);
+      Neo.player.weaponCooldown = wCd(weaponKey) / attackSpeed;
       return true;
     }
     if (weaponKey === 'hunters_bow') {
       spawnWeaponProjectile({ angle, speed: 820, damage: wDmg(weaponKey), knockback: wKnk(weaponKey), r: 4, life: 0.9, kind: 'hunters_bow', color: '#f0fbff', pierceCount: 1, hitOptions: { critBonus: 0.1 } });
-      Neo.player.weaponCooldown = wCd(weaponKey);
+      Neo.player.weaponCooldown = wCd(weaponKey) / attackSpeed;
       return true;
     }
     if (weaponKey === 'thorns_bleed_blade') {
       fireWeaponSweep(wDmg(weaponKey), wRng(weaponKey), Neo.ATTACKS.melee.arc, wKnk(weaponKey), '#ff6e8b', { bleedChance: 0.10, bleedStacks: 1, bleedDuration: 5, itemBleedChance: itemStats.bleedChance || 0 });
-      Neo.player.weaponCooldown = wCd(weaponKey);
+      Neo.player.weaponCooldown = wCd(weaponKey) / attackSpeed;
       return true;
     }
     if (weaponKey === 'lazer_glasses') {
       Neo.player.weaponBeamTime = 0.65;
       Neo.player.weaponBeamTick = 0;
-      Neo.player.weaponCooldown = wCd(weaponKey);
+      Neo.player.weaponCooldown = wCd(weaponKey) / attackSpeed;
       return true;
     }
     if (weaponKey === 'metao_fire_staff') {
@@ -197,7 +197,7 @@
       spawnWeaponProjectile({ angle, speed: 920, damage: wDmg(weaponKey), knockback: wKnk(weaponKey), r: 7, life: 0.9, kind: 'magenta_degale', color: '#ff8bd2' });
       Neo.player.vx -= Math.cos(angle) * 280;
       Neo.player.vy -= Math.sin(angle) * 280;
-      Neo.player.weaponCooldown = wCd(weaponKey);
+      Neo.player.weaponCooldown = wCd(weaponKey) / attackSpeed;
       return true;
     }
     if (weaponKey === 'magenta_p90') {
@@ -208,7 +208,7 @@
           weaponKey,
         });
       }
-      Neo.player.weaponCooldown = wCd(weaponKey);
+      Neo.player.weaponCooldown = wCd(weaponKey) / attackSpeed;
       return true;
     }
     if (weaponKey === 'granillia_lightning_spear') {
@@ -220,23 +220,23 @@
       const excaliburDamage = Math.max(1, Math.round(getPlayerBaseDamage() * 7.77 + Neo.getAnvilWeaponBonus(weaponKey, 'damage')));
       fireWeaponSweep(excaliburDamage, wRng(weaponKey), Math.PI, wKnk(weaponKey), '#ffe291', { rawDamage: true });
       Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.6, ring: 56, c: '#ffd26a' });
-      Neo.player.weaponCooldown = wCd(weaponKey);
+      Neo.player.weaponCooldown = wCd(weaponKey) / attackSpeed;
       return true;
     }
     if (weaponKey === 'golden_fleece') {
       fireWeaponSweep(wDmg(weaponKey), wRng(weaponKey), Neo.ATTACKS.melee.arc, wKnk(weaponKey), '#ffe8a0');
-      Neo.player.weaponCooldown = wCd(weaponKey);
+      Neo.player.weaponCooldown = wCd(weaponKey) / attackSpeed;
       return true;
     }
     if (weaponKey === 'void_piercer') {
       spawnWeaponProjectile({ angle, speed: 760, damage: wDmg(weaponKey), knockback: wKnk(weaponKey), r: 6, life: 1.2, kind: 'void_piercer', color: '#ffd2c0', pierceCount: 4, hitOptions: { ignoreBarrier: true, critBonus: 0.2 } });
-      Neo.player.weaponCooldown = wCd(weaponKey);
+      Neo.player.weaponCooldown = wCd(weaponKey) / attackSpeed;
       return true;
     }
     if (weaponKey === 'aegis_shield_weapon') {
       Neo.player.blockActive = true;
       Neo.player.blockTimer = 2;
-      Neo.player.weaponCooldown = wCd(weaponKey);
+      Neo.player.weaponCooldown = wCd(weaponKey) / attackSpeed;
       Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.5, ring: 26, c: '#9ae9ff' });
       return true;
     }
@@ -363,7 +363,7 @@
       Neo.player.fleeceTick += dt;
       if (Neo.player.fleeceTick >= 2) {
         Neo.player.fleeceTick = 0;
-        const heal = Neo.player.maxHp * 0.2;
+        const heal = Neo.player.maxHp * 0.06;
         const before = Neo.player.hp;
         Neo.player.hp = Math.min(Neo.player.maxHp, Neo.player.hp + heal);
         if (Neo.player.hp > before) Neo.spawnHealPopup(Neo.player.x + Neo.rand(-10, 10), Neo.player.y - 20, Neo.player.hp - before, { color: '#ffe59c' });
@@ -1454,8 +1454,10 @@
       if (key === 'bleed') spawnBleedSpray(enemy, state.stacks, 0.7);
       if (config.healScale > 0 && Neo.player && Neo.player.hp < Neo.player.maxHp) {
         const heal = damage * config.healScale;
+        const beforeHp = Neo.player.hp;
         Neo.player.hp = Math.min(Neo.player.maxHp, Neo.player.hp + heal);
-        if (heal > 0.2) Neo.spawnHealPopup(Neo.player.x + Neo.rand(-8, 8), Neo.player.y - 22, heal, { color: config.color });
+        const gained = Neo.player.hp - beforeHp;
+        if (gained > 0.2) Neo.spawnHealPopup(Neo.player.x + Neo.rand(-8, 8), Neo.player.y - 22, gained, { color: config.color });
       }
       if (enemy.hp <= 0) {
         onEnemyDie(enemy);

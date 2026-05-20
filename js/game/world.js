@@ -554,7 +554,7 @@
       hitOptions: null, trail: null,
       splash: 0, splashDamage: 0, blockedSplashDamage: 0, fireStacks: 0, fireDuration: 0,
       homing: false, homingTarget: null, homingSpeed: 0, homingAccel: 0, homingTurnRate: 0, homingRadius: 0,
-      fromRival: false, source: null,
+      fromRival: false, source: null, statusEffects: null,
     });
   }
 
@@ -567,7 +567,7 @@
       hitOptions: null, trail: null,
       splash: 0, splashDamage: 0, blockedSplashDamage: 0, fireStacks: 0, fireDuration: 0,
       homing: false, homingTarget: null, homingSpeed: 0, homingAccel: 0, homingTurnRate: 0, homingRadius: 0,
-      fromRival: false, source: null,
+      fromRival: false, source: null, statusEffects: null,
     };
   }
 
@@ -614,7 +614,18 @@
     p.homingRadius = props.homingRadius ?? 0;
     p.fromRival = props.fromRival ?? false;
     p.source = props.source ?? null;
+    p.statusEffects = props.statusEffects ?? null;
     Neo.projectiles.push(p);
+  }
+
+  function applyProjectileStatusEffectsToPlayer(projectile) {
+    if (!Array.isArray(projectile?.statusEffects)) return;
+    projectile.statusEffects.forEach(effect => {
+      if (!effect?.key) return;
+      if (Neo.nextRandom('encounter') <= Number(effect.chance ?? 1)) {
+        Neo.applyStatus(Neo.player, effect.key, Number(effect.stacks || 1), Number(effect.duration || 3));
+      }
+    });
   }
 
   function updateProjectiles(dt) {
@@ -692,6 +703,7 @@
         }
       } else if (Neo.dist(projectile.x, projectile.y, Neo.player.x, Neo.player.y) <= projectile.r + Neo.player.r) {
         damagePlayer(projectile.damage || 10, Math.atan2(projectile.vy, projectile.vx), projectile.knockback || 120, getProjectileDamageSource(projectile));
+        applyProjectileStatusEffectsToPlayer(projectile);
         spawnProjectileImpact(projectile, projectile.x, projectile.y);
         _projectilePool.push(Neo.projectiles.splice(index, 1)[0]);
         continue;
@@ -948,7 +960,7 @@
   }
 
   function spawnHealPopup(x, y, amount, opts = {}) {
-    const value = Math.max(0, Math.round((amount || 0) * (opts.scale || 8)));
+    const value = Math.max(0, Math.round((amount || 0) * (opts.scale || 1)));
     if (value <= 0) return;
     window.achievementEvents?.emit('heal:applied', { amount: Math.max(0, amount || 0) });
     Neo.spawnParticle({
@@ -1042,7 +1054,8 @@
         }
       } else if (pickup.type === 'potion') {
         const _potionCap = Neo.getPotionCarryCap();
-        const _wantPotion = Neo.player.hp < Neo.player.maxHp || (_potionCap > 0 && Number(Neo.player.storedPotions || 0) < _potionCap);
+        const _wantPotion = Neo.player.hp < Neo.player.maxHp
+          || (_potionCap > 0 && Number(Neo.player.storedPotions || 0) < _potionCap && Neo.player.hp >= Neo.player.maxHp);
         if (_wantPotion) {
           const magnetRadius = 110;
           const d = Neo.dist(pickup.x, pickup.y, Neo.player.x, Neo.player.y);
@@ -1118,16 +1131,16 @@
       if (pickup.type === 'potion') {
         const potionCap = Neo.getPotionCarryCap();
         const stored = Number(Neo.player.storedPotions || 0);
-        if (potionCap > 0 && stored < potionCap) {
-          Neo.player.storedPotions = stored + 1;
-          Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.7, text: `POTION STORED (${Neo.player.storedPotions}/${potionCap})`, c: '#a0e8ff' });
-          Neo.updateHud();
-        } else if (Neo.player.hp < Neo.player.maxHp) {
+        if (Neo.player.hp < Neo.player.maxHp) {
           const potionHeal = Neo.getPotionHealAmount();
           const before = Neo.player.hp;
           Neo.player.hp = Math.min(Neo.player.maxHp, Neo.player.hp + potionHeal);
           const gained = Neo.player.hp - before;
           if (gained > 0) spawnHealPopup(Neo.player.x + Neo.rand(-10, 10), Neo.player.y - 20, gained);
+        } else if (potionCap > 0 && stored < potionCap) {
+          Neo.player.storedPotions = stored + 1;
+          Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.7, text: `POTION STORED (${Neo.player.storedPotions}/${potionCap})`, c: '#a0e8ff' });
+          Neo.updateHud();
         } else {
           continue;
         }
