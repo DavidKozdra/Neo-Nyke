@@ -1,20 +1,27 @@
 // entities.js — standalone IIFE. Sprite atlas, player/enemy drawing.
   function buildSpriteAtlas() {
-    const keys = Object.keys(Neo.SPRITE_DEFS);
+    const entries = [];
+    Object.keys(Neo.SPRITE_DEFS).forEach(key => {
+      const def = Neo.SPRITE_DEFS[key];
+      entries.push({ key, def, pixels: def.pixels });
+      Object.entries(def.frames || {}).forEach(([frameKey, pixels]) => {
+        entries.push({ key: `${key}:${frameKey}`, def, pixels });
+      });
+    });
     const GUTTER = 1;
     const STRIDE = Neo.SPRITE_SOURCE_SIZE + GUTTER;
     const canvasEl = document.createElement('canvas');
-    canvasEl.width = STRIDE * keys.length;
+    canvasEl.width = STRIDE * entries.length;
     canvasEl.height = Neo.SPRITE_SOURCE_SIZE;
     const atlasCtx = canvasEl.getContext('2d');
     atlasCtx.imageSmoothingEnabled = false;
     const frames = {};
-    keys.forEach((key, index) => {
-      const def = Neo.SPRITE_DEFS[key];
+    entries.forEach((entry, index) => {
+      const { key, def, pixels } = entry;
       const ox = index * STRIDE;
       frames[key] = { x: ox, y: 0, w: Neo.SPRITE_SOURCE_SIZE, h: Neo.SPRITE_SOURCE_SIZE };
-      for (let y = 0; y < def.pixels.length; y += 1) {
-        const row = def.pixels[y];
+      for (let y = 0; y < pixels.length; y += 1) {
+        const row = pixels[y];
         for (let x = 0; x < row.length; x += 1) {
           const pixel = row[x];
           if (pixel === '.') continue;
@@ -23,15 +30,15 @@
               if (oxi === 0 && oy === 0) continue;
               const nx = x + oxi;
               const ny = y + oy;
-              if (nx < 0 || ny < 0 || nx >= row.length || ny >= def.pixels.length) continue;
-              if (def.pixels[ny][nx] !== '.') continue;
+              if (nx < 0 || ny < 0 || nx >= row.length || ny >= pixels.length) continue;
+              if (pixels[ny][nx] !== '.') continue;
               atlasCtx.fillStyle = 'rgba(15, 10, 14, 0.92)';
               atlasCtx.fillRect(ox + nx, ny, 1, 1);
             }
           }
         }
       }
-      def.pixels.forEach((row, y) => {
+      pixels.forEach((row, y) => {
         for (let x = 0; x < row.length; x += 1) {
           const pixel = row[x];
           if (pixel === '.') continue;
@@ -62,6 +69,111 @@
   function getFacingDirection(actor, fallbackAngle = 0) {
     if (Math.abs(actor.vx) > 6) return actor.vx < 0 ? -1 : 1;
     return Math.cos(fallbackAngle) < 0 ? -1 : 1;
+  }
+
+  function getActorAnimSeed(actor, fallbackKey = '') {
+    if (Number.isFinite(actor?.animSeed)) return actor.animSeed;
+    const source = `${actor?.type || actor?.character || fallbackKey}:${Math.round(actor?.x || 0)}:${Math.round(actor?.y || 0)}`;
+    let hash = 0;
+    for (let index = 0; index < source.length; index += 1) {
+      hash = ((hash << 5) - hash + source.charCodeAt(index)) | 0;
+    }
+    return Math.abs(hash % 628) / 100;
+  }
+
+  function getActorSpriteFrameKey(spriteKey, actor, options = {}) {
+    const access = window.NeoSettings?.getAccess?.() || {};
+    const def = Neo.SPRITE_DEFS[spriteKey];
+    const animations = def?.animations || {};
+    if (!def || access.reduceMotion) return spriteKey;
+
+    const atlasFrames = Neo.SPRITE_ATLAS?.frames || {};
+    const resolve = variant => {
+      if (!variant || variant === 'idle') return spriteKey;
+      const key = `${spriteKey}:${variant}`;
+      return atlasFrames[key] ? key : spriteKey;
+    };
+
+    const attackFrames = animations.attack || [];
+    if (attackFrames.length && Number(options.attackProgress || 0) > 0) {
+      const progress = Neo.clamp(Number(options.attackProgress || 0), 0, 0.999);
+      return resolve(attackFrames[Math.floor(progress * attackFrames.length)]);
+    }
+
+    const walkFrames = animations.walk || [];
+    const speed = Math.hypot(Number(actor?.vx || 0), Number(actor?.vy || 0));
+    const seed = getActorAnimSeed(actor, spriteKey);
+    if (walkFrames.length && speed > 10) {
+      const stepRate = Number(options.stepRate || 10);
+      const index = Math.floor(Date.now() / 1000 * stepRate + seed) % walkFrames.length;
+      return resolve(walkFrames[index]);
+    }
+
+    const blinkFrames = animations.blink || [];
+    const idleFrames = animations.idle || [];
+    const now = Date.now() / 1000 + seed * 0.37;
+    const blinkCycle = Number(options.blinkCycle || 4.2);
+    const blinkWindow = 0.11 + (seed % 0.05);
+    if (blinkFrames.length && (now % blinkCycle) < blinkWindow) {
+      return resolve(blinkFrames[0]);
+    }
+    if (idleFrames.length) {
+      const idleRate = Number(options.idleRate || 1.15);
+      const index = Math.floor(now * idleRate) % idleFrames.length;
+      return resolve(idleFrames[index]);
+    }
+
+    return spriteKey;
+  }
+
+  function getActorSpriteAnimation(actor, size, options = {}) {
+    const access = window.NeoSettings?.getAccess?.() || {};
+    const base = {
+      spriteOffsetX: 0,
+      spriteOffsetY: 0,
+      scaleX: 1,
+      scaleY: 1,
+      rotation: 0,
+      shadowScaleX: 1,
+      shadowScaleY: 1,
+    };
+    if (!actor || access.reduceMotion) return base;
+
+    const speed = Math.hypot(Number(actor.vx || 0), Number(actor.vy || 0));
+    const maxSpeed = Math.max(1, Number(options.maxSpeed || 220));
+    const moving = Neo.clamp((speed - 8) / maxSpeed, 0, 1);
+    const seed = getActorAnimSeed(actor, options.seedKey);
+    const now = Date.now() / 1000;
+    const stepRate = Number(options.stepRate || 10);
+    const phase = now * stepRate + seed;
+    const step = Math.sin(phase);
+    const footfall = Math.abs(step);
+    const dashPulse = Number(options.dashPulse || (actor.dashTime > 0 ? 1 : 0));
+    const actionPulse = Number(options.actionPulse || 0);
+    const castPulse = Number(options.castPulse || 0);
+    const stunPulse = Number(actor.stun || 0) > 0 ? Math.sin(now * 42 + seed) * 0.035 : 0;
+    const horizontalLean = Neo.clamp(Number(actor.vx || 0) / maxSpeed, -1, 1) * 0.055;
+    const idle = 1 - moving;
+    const breathe = Math.sin(now * Number(options.idleBreathRate || 2.2) + seed) * idle;
+
+    base.spriteOffsetY = -footfall * size * 0.022 * moving - dashPulse * size * 0.015 + breathe * size * 0.01;
+    base.scaleX = 1 + footfall * 0.012 * moving + dashPulse * 0.12 + actionPulse * 0.08 + castPulse * 0.04 - breathe * 0.008;
+    base.scaleY = 1 - footfall * 0.018 * moving - dashPulse * 0.075 + actionPulse * 0.025 + breathe * 0.012;
+    base.rotation = horizontalLean * 0.7 + step * 0.018 * moving + breathe * 0.015 + stunPulse;
+    base.shadowScaleX = 1 + moving * 0.08 + dashPulse * 0.18;
+    base.shadowScaleY = 1 - moving * 0.025;
+    return base;
+  }
+
+  function getAttackPulse(remaining, total = 0.32) {
+    if (!(remaining > 0)) return 0;
+    const progress = 1 - Neo.clamp(remaining / Math.max(0.01, total), 0, 1);
+    return Math.sin(progress * Math.PI);
+  }
+
+  function getAttackProgress(remaining, total = 0.32) {
+    if (!(remaining > 0)) return 0;
+    return 1 - Neo.clamp(remaining / Math.max(0.01, total), 0, 1);
   }
 
   function drawWarpPreview() {
@@ -117,7 +229,8 @@
   function drawSpriteFrame(spriteKey, x, y, size, options = {}) {
     const atlas = Neo.SPRITE_ATLAS;
     if (!atlas?.frames || !atlas.canvas) return;
-    const frame = atlas.frames[spriteKey] || atlas.frames.hunter;
+    const baseKey = String(spriteKey || '').split(':')[0];
+    const frame = atlas.frames[spriteKey] || atlas.frames[baseKey] || atlas.frames.hunter;
     if (!frame) return;
     const {
       alpha = 1,
@@ -125,15 +238,25 @@
       shadowColor = null,
       shadowBlur = 0,
       tint = null,
+      spriteOffsetX = 0,
+      spriteOffsetY = 0,
+      scaleX = 1,
+      scaleY = 1,
+      rotation = 0,
+      shadowScaleX = 1,
+      shadowScaleY = 1,
     } = options;
     Neo.ctx.save();
     Neo.ctx.translate(x, y);
-    if (flipX) Neo.ctx.scale(-1, 1);
     Neo.ctx.globalAlpha = alpha;
     Neo.ctx.fillStyle = 'rgba(0,0,0,0.24)';
     Neo.ctx.beginPath();
-    Neo.ctx.ellipse(0, size * 0.3, size * 0.28, size * 0.11, 0, 0, Math.PI * 2);
+    Neo.ctx.ellipse(0, size * 0.3, size * 0.28 * shadowScaleX, size * 0.11 * shadowScaleY, 0, 0, Math.PI * 2);
     Neo.ctx.fill();
+    if (flipX) Neo.ctx.scale(-1, 1);
+    Neo.ctx.translate(spriteOffsetX, spriteOffsetY);
+    Neo.ctx.rotate(flipX ? -rotation : rotation);
+    Neo.ctx.scale(scaleX, scaleY);
     if (shadowColor && shadowBlur > 0) {
       Neo.ctx.shadowColor = shadowColor;
       Neo.ctx.shadowBlur = shadowBlur;
@@ -462,15 +585,41 @@
         flash = Math.floor(_now / 80) % 2 === 0;
       }
       if (enemy.type === 'mooggy') drawMooggyAura(enemy);
+      const enemyAttackPulse = Math.max(
+        getAttackPulse(enemy.swingTime, 0.36),
+        getAttackPulse(enemy.windup, 0.5) * 0.75,
+        getAttackPulse(enemy.attackAnimT, 0.24),
+      );
+      const enemyAttackProgress = Math.max(
+        getAttackProgress(enemy.swingTime, 0.36),
+        getAttackProgress(enemy.windup, 0.5),
+        getAttackProgress(enemy.attackAnimT, 0.24),
+      );
+      const enemyCastPulse = Math.max(
+        enemy.beamTime > 0 ? Neo.clamp(enemy.beamTime / 0.58, 0, 1) * 0.45 : 0,
+        enemy.aoeTime > 0 ? 0.55 : 0,
+      );
+      const enemyAnimation = {
+        maxSpeed: Math.max(110, Number(enemy.speed || 100) * 1.6),
+        stepRate: enemy.type === 'golem' || enemy.type === 'bulk_golem' ? 5.5 : 7.5,
+        dashPulse: enemy.dashTime > 0 ? 1 : 0,
+        actionPulse: enemyAttackPulse,
+        castPulse: enemyCastPulse,
+        attackProgress: enemyAttackProgress,
+        seedKey: spriteKey,
+      };
+      const enemyAnim = getActorSpriteAnimation(enemy, drawSize, enemyAnimation);
+      const enemyFrameKey = getActorSpriteFrameKey(spriteKey, enemy, enemyAnimation);
       Neo.ctx.save();
       Neo.ctx.translate(enemy.x, drawY);
       Neo.ctx.scale(scale, scale);
-      drawSpriteFrame(spriteKey, 0, 0, drawSize, {
+      drawSpriteFrame(enemyFrameKey, 0, 0, drawSize, {
         alpha: enemy.stun > 0 ? 0.68 : 1,
         flipX: facing < 0,
         shadowColor: enemy.type === 'mooggy' ? 'rgba(255,30,52,0.55)' : enemy.elite || enemy.type === 'god' ? 'rgba(255,244,180,0.45)' : 'rgba(0,0,0,0.18)',
         shadowBlur: enemy.type === 'mooggy' ? 16 : enemy.type === 'god' ? 14 : enemy.elite ? 10 : 4,
         tint: flash ? 'rgba(255,255,180,0.55)' : (enemy.elite ? 'rgba(255,210,96,0.7)' : null),
+        ...enemyAnim,
       });
       Neo.ctx.restore();
       if (bleedStacks > 0) drawBleedOverlay(enemy, bleedStacks);
@@ -557,6 +706,17 @@
         Neo.ctx.fillText(`${Math.max(0, Math.ceil(enemy.bossSpawnTimer))}`, 0, -enemy.r - 30);
       }
       Neo.ctx.restore();
+    });
+  }
+
+  function drawActorSprite(actor, spriteKey, x, y, size, options = {}) {
+    const animation = options.animation || {};
+    const anim = getActorSpriteAnimation(actor, size, animation);
+    const frameKey = getActorSpriteFrameKey(spriteKey, actor, animation);
+    drawSpriteFrame(frameKey, x, y, size, {
+      ...options,
+      ...anim,
+      animation: undefined,
     });
   }
 
@@ -661,12 +821,22 @@
       Neo.ctx.restore();
     });
     drawWarpPreview();
-    drawSpriteFrame(getPlayerSpriteKey(), Neo.player.x, Neo.player.y, Math.max(34, Neo.player.r * 2.5), {
+    const playerSize = Math.max(34, Neo.player.r * 2.5);
+    drawActorSprite(Neo.player, getPlayerSpriteKey(), Neo.player.x, Neo.player.y, playerSize, {
       alpha: (!_reduceFlash && (Neo.player.inv > 0 || Number(Neo.player.stun || 0) > 0)) ? 0.68 : 1,
       flipX: facing < 0,
       shadowColor,
       shadowBlur: Neo.godTimer > 0 ? 18 : 6,
       tint: Neo.godTimer > 0 ? 'rgba(255,245,220,0.6)' : null,
+      animation: {
+        maxSpeed: Neo.player.mooggyZoomiesTime > 0 ? 640 : Neo.player.princessFlightTime > 0 ? 420 : 260,
+        stepRate: Neo.player.mooggyZoomiesTime > 0 ? 11 : 7.5,
+        dashPulse: Neo.player.dashTime > 0 ? 1 : 0,
+        actionPulse: getAttackPulse(Neo.player.swing, Neo.ATTACKS.melee.active),
+        attackProgress: getAttackProgress(Neo.player.swing, Neo.ATTACKS.melee.active),
+        castPulse: Neo.laserActive || Neo.player.weaponBeamTime > 0 ? 0.32 : 0,
+        seedKey: 'player',
+      },
     });
     Neo.ctx.save();
     Neo.ctx.translate(Neo.player.x, Neo.player.y);
@@ -770,12 +940,20 @@
     const aimAngle = Math.atan2(pn.vy || 0, pn.vx || 1);
     const facing = getFacingDirection(pn, aimAngle);
     const spriteKey = Neo.SPRITE_DEFS[charKey] ? charKey : 'thorn_knight';
-    drawSpriteFrame(spriteKey, pn.x, pn.y, Math.max(34, pn.r * 2.5), {
+    drawActorSprite(pn, spriteKey, pn.x, pn.y, Math.max(34, pn.r * 2.5), {
       alpha: pn.inv > 0 ? 0.55 : 1,
       flipX: facing < 0,
       shadowColor: hexToRgba(tintColor, 0.45),
       shadowBlur: 10,
       tint: hexToRgba(tintColor, 0.25),
+      animation: {
+        maxSpeed: 260,
+        stepRate: 7.5,
+        dashPulse: pn.dashTime > 0 ? 1 : 0,
+        actionPulse: getAttackPulse(pn.swing, Neo.ATTACKS.melee.active),
+        attackProgress: getAttackProgress(pn.swing, Neo.ATTACKS.melee.active),
+        seedKey: label || charKey,
+      },
     });
     Neo.ctx.save();
     Neo.ctx.translate(pn.x, pn.y);
@@ -899,6 +1077,8 @@
   Neo.getEnemySpriteKey = getEnemySpriteKey;
   Neo.getPlayerSpriteKey = getPlayerSpriteKey;
   Neo.getFacingDirection = getFacingDirection;
+  Neo.getActorSpriteFrameKey = getActorSpriteFrameKey;
+  Neo.getActorSpriteAnimation = getActorSpriteAnimation;
   Neo.drawWarpPreview = drawWarpPreview;
   Neo.drawSpriteFrame = drawSpriteFrame;
   Neo.drawSpriteToCanvas = drawSpriteToCanvas;

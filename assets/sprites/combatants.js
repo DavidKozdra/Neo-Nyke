@@ -255,3 +255,207 @@ window.NeoNykeSpriteDefs = {
     ],
   },
 };
+
+(() => {
+  const defs = window.NeoNykeSpriteDefs || {};
+  const WIDTH = 10;
+  const HEIGHT = 10;
+
+  function toGrid(pixels) {
+    return pixels.map(row => row.padEnd(WIDTH, '.').slice(0, WIDTH).split(''));
+  }
+
+  function toPixels(grid) {
+    return grid.map(row => row.join(''));
+  }
+
+  function countColors(pixels, yStart = 0, yEnd = HEIGHT) {
+    const counts = {};
+    for (let y = yStart; y < Math.min(yEnd, pixels.length); y += 1) {
+      for (const pixel of pixels[y]) {
+        if (pixel === '.') continue;
+        counts[pixel] = (counts[pixel] || 0) + 1;
+      }
+    }
+    return counts;
+  }
+
+  function commonColor(pixels, yStart, yEnd, fallback = 'b') {
+    const counts = countColors(pixels, yStart, yEnd);
+    return Object.keys(counts).sort((a, b) => counts[b] - counts[a])[0] || fallback;
+  }
+
+  function put(grid, x, y, color) {
+    if (x < 0 || y < 0 || x >= WIDTH || y >= HEIGHT) return;
+    grid[y][x] = color;
+  }
+
+  function clearLowerPose(grid) {
+    for (let y = 7; y <= 9; y += 1) {
+      for (let x = 1; x <= 8; x += 1) {
+        if (grid[y][x] !== '.') grid[y][x] = '.';
+      }
+    }
+  }
+
+  function drawLegs(grid, body, accent, pose) {
+    clearLowerPose(grid);
+    if (pose === 'strideA') {
+      [[3, 7], [6, 7], [2, 8], [3, 8], [6, 8], [7, 8], [2, 9], [4, 9], [7, 9]].forEach(([x, y]) => put(grid, x, y, body));
+      put(grid, 2, 9, accent);
+      put(grid, 7, 9, accent);
+      return;
+    }
+    if (pose === 'strideB') {
+      [[3, 7], [6, 7], [3, 8], [4, 8], [5, 8], [6, 8], [2, 9], [5, 9], [7, 9]].forEach(([x, y]) => put(grid, x, y, body));
+      put(grid, 2, 9, accent);
+      put(grid, 7, 9, accent);
+      return;
+    }
+    [[3, 7], [6, 7], [2, 8], [3, 8], [6, 8], [7, 8], [2, 9], [7, 9]].forEach(([x, y]) => put(grid, x, y, body));
+    put(grid, 2, 9, accent);
+    put(grid, 7, 9, accent);
+  }
+
+  function drawArmPose(grid, body, accent, pose) {
+    const lead = accent || body;
+    if (pose === 'strideA') {
+      [[1, 4, body], [1, 5, body], [8, 5, lead], [8, 6, lead]].forEach(([x, y, color]) => put(grid, x, y, color));
+      return;
+    }
+    if (pose === 'strideB') {
+      [[1, 6, lead], [1, 5, lead], [8, 4, body], [8, 5, body]].forEach(([x, y, color]) => put(grid, x, y, color));
+      return;
+    }
+    if (pose === 'ready') {
+      [[1, 5, body], [2, 6, body], [7, 5, lead], [8, 6, lead]].forEach(([x, y, color]) => put(grid, x, y, color));
+      return;
+    }
+    [[1, 5, body], [8, 5, body]].forEach(([x, y, color]) => put(grid, x, y, color));
+  }
+
+  function shiftRows(grid, rows, dx) {
+    rows.forEach(y => {
+      const next = Array(WIDTH).fill('.');
+      for (let x = 0; x < WIDTH; x += 1) {
+        const pixel = grid[y][x];
+        if (pixel === '.') continue;
+        const nx = Math.max(0, Math.min(WIDTH - 1, x + dx));
+        if (next[nx] === '.') next[nx] = pixel;
+      }
+      grid[y] = next;
+    });
+  }
+
+  function blinkFace(grid, pixels, face, lid) {
+    const candidates = [];
+    for (let y = 1; y <= 3; y += 1) {
+      for (let x = 2; x <= 7; x += 1) {
+        if (pixels[y]?.[x] === face) candidates.push({ x, y });
+      }
+    }
+    if (!candidates.length) return;
+    const rowCounts = candidates.reduce((counts, point) => {
+      counts[point.y] = (counts[point.y] || 0) + 1;
+      return counts;
+    }, {});
+    const blinkY = Number(Object.keys(rowCounts).sort((a, b) => rowCounts[b] - rowCounts[a])[0]);
+    candidates.filter(point => point.y === blinkY).forEach(point => {
+      put(grid, point.x, point.y, lid);
+    });
+  }
+
+  function makeIdleFrame(pixels, pose) {
+    const grid = toGrid(pixels);
+    const body = commonColor(pixels, 4, 8, 'b');
+    const accent = commonColor(pixels, 8, 10, body);
+    const face = commonColor(pixels, 1, 4, 'c');
+    const lid = commonColor(pixels, 4, 7, body);
+    if (pose === 'breathe') {
+      drawArmPose(grid, body, accent, 'center');
+      drawLegs(grid, body, accent, 'center');
+      put(grid, 2, 6, body);
+      put(grid, 7, 6, body);
+      return toPixels(grid);
+    }
+    if (pose === 'ready') {
+      drawArmPose(grid, body, accent, 'ready');
+      drawLegs(grid, body, accent, 'center');
+      return toPixels(grid);
+    }
+    if (pose === 'blink') {
+      drawArmPose(grid, body, accent, 'center');
+      drawLegs(grid, body, accent, 'center');
+      blinkFace(grid, pixels, face, lid);
+      return toPixels(grid);
+    }
+    return toPixels(grid);
+  }
+
+  function makeWalkFrame(pixels, pose) {
+    const grid = toGrid(pixels);
+    const body = commonColor(pixels, 4, 8, 'b');
+    const accent = commonColor(pixels, 8, 10, body);
+    drawArmPose(grid, body, accent, pose);
+    drawLegs(grid, body, accent, pose);
+    return toPixels(grid);
+  }
+
+  function makeAttackFrame(pixels, pose) {
+    const grid = toGrid(pixels);
+    const body = commonColor(pixels, 4, 8, 'b');
+    const bright = commonColor(pixels, 0, 4, 'c');
+    const accent = commonColor(pixels, 4, 10, 'd');
+    if (pose === 'windup') {
+      put(grid, 0, 6, body);
+      put(grid, 1, 5, body);
+      put(grid, 2, 4, body);
+      put(grid, 7, 4, accent);
+      put(grid, 8, 3, bright);
+      put(grid, 9, 2, bright);
+      return toPixels(grid);
+    }
+    if (pose === 'strike') {
+      put(grid, 5, 3, body);
+      put(grid, 6, 4, body);
+      put(grid, 7, 4, body);
+      put(grid, 8, 4, accent);
+      put(grid, 9, 4, bright);
+      put(grid, 7, 5, accent);
+      put(grid, 8, 3, bright);
+      put(grid, 9, 2, bright);
+      put(grid, 9, 6, bright);
+      return toPixels(grid);
+    }
+    put(grid, 1, 5, body);
+    put(grid, 2, 6, body);
+    put(grid, 5, 5, body);
+    put(grid, 6, 6, body);
+    put(grid, 7, 6, accent);
+    put(grid, 8, 7, bright);
+    put(grid, 9, 8, bright);
+    return toPixels(grid);
+  }
+
+  Object.keys(defs).forEach(key => {
+    const def = defs[key];
+    if (!def?.pixels || def.frames) return;
+    def.frames = {
+      idle0: makeIdleFrame(def.pixels, 'breathe'),
+      idle1: makeIdleFrame(def.pixels, 'ready'),
+      idleBlink: makeIdleFrame(def.pixels, 'blink'),
+      walk0: makeWalkFrame(def.pixels, 'strideA'),
+      walk1: makeWalkFrame(def.pixels, 'center'),
+      walk2: makeWalkFrame(def.pixels, 'strideB'),
+      attack0: makeAttackFrame(def.pixels, 'windup'),
+      attack1: makeAttackFrame(def.pixels, 'strike'),
+      attack2: makeAttackFrame(def.pixels, 'recover'),
+    };
+    def.animations = {
+      idle: ['idle0', 'idle1', 'idle0', 'idle'],
+      blink: ['idleBlink'],
+      walk: ['walk0', 'walk1', 'walk2', 'walk1'],
+      attack: ['attack0', 'attack1', 'attack2'],
+    };
+  });
+})();

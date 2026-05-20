@@ -585,6 +585,8 @@
       dark_drainImmune: false,
       state: 'idle',
       spawnT: 0.72,
+      animSeed: (String(type).length * 0.67 + Math.round(x) * 0.013 + Math.round(y) * 0.017) % (Math.PI * 2),
+      attackAnimT: 0,
     };
     const roomPart = Neo.currentRoom
       ? `room:${Neo.currentRoom.gx},${Neo.currentRoom.gy}|type:${Neo.currentRoom.type || 'room'}`
@@ -1358,6 +1360,7 @@
     steerEnemy(enemy, dx / distance, dy / distance, enemy.speed, 4.4, dt);
     if (distance < enemy.r + Neo.player.r + 10 && enemy.attackCd <= 0) {
       const angle = Math.atan2(dy, dx);
+      enemy.attackAnimT = 0.24;
       Neo.damagePlayer(enemy.dmg, angle, 160, enemy.type);
       enemy.attackCd = 1.05;
     }
@@ -1894,6 +1897,7 @@
 
     updateCultMageEnemy(enemy, dt);
     if (enemy.attackCd <= 0 && distance < enemy.r + Neo.player.r + 18) {
+      enemy.attackAnimT = 0.24;
       Neo.damagePlayer(enemy.dmg + 4, Math.atan2(dy, dx), 250, enemy.type);
       enemy.attackCd = 0.95 * tuning.rangedCadence;
     }
@@ -2958,6 +2962,7 @@
 
     if (distance < enemy.r + Neo.player.r + 12 && enemy.attackCd <= 0) {
       const angle = Math.atan2(dy, dx);
+      enemy.attackAnimT = 0.24;
       Neo.damagePlayer(enemy.dmg, angle, 190, 'mooggy');
       Neo.applyBleed?.(Neo.player, Number(enemy.mooggyBleedStacks || 1), 3.2);
       enemy.attackCd = 0.36;

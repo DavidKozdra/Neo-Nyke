@@ -327,6 +327,7 @@ export function loop(timestamp) {
       if (!Neo.enemies.includes(enemy)) continue;
       const eliteTraitControlled = Neo.updateEliteEnemyTraits(enemy, dt);
       if (!Neo.enemies.includes(enemy)) continue;
+      enemy.attackAnimT = Math.max(0, Number(enemy.attackAnimT || 0) - dt);
 
       if (!eliteTraitControlled) {
         if (enemy.type === 'god') Neo.updateGod(enemy, dt);
