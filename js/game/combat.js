@@ -183,6 +183,11 @@
       Neo.player.weaponCooldown = wCd(weaponKey) / attackSpeed;
       return true;
     }
+    if (weaponKey === 'claw_gauntlets') {
+      fireWeaponSweep(wDmg(weaponKey), wRng(weaponKey), Math.PI * 0.7, wKnk(weaponKey), '#ff7a9a', { bleedChance: 0.22, bleedStacks: 1, bleedDuration: 5, itemBleedChance: itemStats.bleedChance || 0 });
+      Neo.player.weaponCooldown = wCd(weaponKey) / attackSpeed;
+      return true;
+    }
     if (weaponKey === 'lazer_glasses') {
       Neo.player.weaponBeamTime = 0.65;
       Neo.player.weaponBeamTick = 0;
