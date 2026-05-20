@@ -174,6 +174,7 @@
       e.preventDefault();
       const action = normalizeTouchAction(el.dataset.touchAction, fallbackAction);
       NT[action] = false;
+      if (action === 'ascend') releaseAscendKey();
       el.classList.remove('pressed');
     };
     el.addEventListener('touchend',    release, { passive: false });
@@ -306,10 +307,16 @@
     NT.moveX = 0;
     NT.moveY = 0;
     TOUCH_ACTIONS.forEach(action => { NT[action] = false; });
+    releaseAscendKey();
     joyKnob.style.transform = '';
     joyBase.classList.remove('joy-active');
     [btnA, btnB, btnY, btnX, btnDash].forEach(btn => btn.classList.remove('pressed'));
     closeHamMenu();
+  }
+
+  function releaseAscendKey() {
+    if (window.Neo?.keys) window.Neo.keys[' '] = false;
+    if (window.Neo) window.Neo.ladderUseKeyLatch = false;
   }
 
   function syncOverlayMode() {

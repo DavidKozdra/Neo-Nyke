@@ -110,7 +110,7 @@
     Neo.ctx.font = 'bold 14px system-ui';
     Neo.ctx.textAlign = 'center';
     Neo.ctx.textBaseline = 'middle';
-    const ladderHint = Neo.formatControlLabel('space', 'space');
+    const ladderHint = Neo.getAscendControlHint ? Neo.getAscendControlHint() : Neo.formatControlLabel('space', 'space');
     const text = `Press [${ladderHint}] to go to next floor`;
     const pad = 14;
     const tw = Neo.ctx.measureText(text).width;
@@ -966,4 +966,3 @@
   Neo.drawChests = drawChests;
   Neo.drawRoomDecor = drawRoomDecor;
   Neo.drawCoverWall = drawCoverWall;
-

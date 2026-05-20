@@ -94,7 +94,7 @@ export function loop(timestamp) {
       if (_nt.slash) { Neo.mouse.down = true; Neo.mouse.downQueued = true; } else { Neo.mouse.down = false; }
       if (_nt.laser) { Neo.mouse.right = true; Neo.mouse.rightQueued = true; } else { Neo.mouse.right = false; }
       if (_nt.smash) { Neo.trySmash(); _nt.smash = false; }
-      if (_nt.ascend) Neo.keys[' '] = true; else if (!Neo.keys[' ']) Neo.keys[' '] = false;
+      if (_nt.ascend) Neo.keys[' '] = true; else Neo.keys[' '] = false;
       if (_nt.dash) Neo.keys[_b ? _b.dash : 'shift'] = true;
       else Neo.keys[_b ? _b.dash : 'shift'] = false;
     }

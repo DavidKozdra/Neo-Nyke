@@ -116,6 +116,21 @@ export function resumeGame() {
     return formatControlLabel(bindings[action], fallback);
   }
 
+  function hasTouchControls() {
+    const coarsePointer = typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches;
+    const maxTouchPoints = typeof navigator !== 'undefined' ? Number(navigator.maxTouchPoints || 0) : 0;
+    return !!(coarsePointer || maxTouchPoints > 0);
+  }
+
+  function getAscendControlHint() {
+    if (!hasTouchControls()) return formatControlLabel('space', 'space');
+    const defaults = { touchA: 'slash', touchB: 'laser', touchY: 'smash', touchX: 'ascend', touchDash: 'dash' };
+    const labels = { touchA: 'A BUTTON', touchB: 'B BUTTON', touchY: 'Y BUTTON', touchX: 'X BUTTON', touchDash: 'DASH BUTTON' };
+    const bindings = { ...defaults, ...(window.NeoSettings?.getTouchBindings?.() || {}) };
+    const entry = Object.entries(bindings).find(([, action]) => String(action).toLowerCase() === 'ascend');
+    return labels[entry?.[0]] || 'X BUTTON';
+  }
+
   function getMovementControlHint() {
     const up = getControlHint('up', 'w');
     const left = getControlHint('left', 'a');
@@ -176,7 +191,7 @@ export function resumeGame() {
     const smashHint = getControlHint('smash', 'r');
     const inventoryHint = getControlHint('inventory', 'i');
     const shopHint = formatControlLabel('e', 'e');
-    const ladderHint = formatControlLabel('space', 'space');
+    const ladderHint = getAscendControlHint();
     if (Neo.tutorialState.step === 'move') return `Tutorial: Move with ${moveHint}.`;
     if (Neo.tutorialState.step === 'fight') return `Tutorial: Defeat the training dummy using ${slashHint}, ${laserHint}, or ${smashHint}.`;
     if (Neo.tutorialState.step === 'relic') return 'Tutorial: Pick up your first relic drop.';
@@ -193,7 +208,7 @@ export function resumeGame() {
     const laserHint = getControlHint('laser', 'rmb');
     const inventoryHint = getControlHint('inventory', 'i');
     const shopHint = formatControlLabel('e', 'e');
-    const ladderHint = formatControlLabel('space', 'space');
+    const ladderHint = getAscendControlHint();
     return [
       { text: `Move (${moveHint})`, state: Neo.tutorialState.moved ? 'done' : 'todo' },
       { text: `Defeat training dummy (${slashHint}/${laserHint})`, state: Neo.tutorialState.gotKill ? 'done' : 'todo' },
@@ -2253,6 +2268,7 @@ export function resumeGame() {
   Neo.consumeReplayTutorialRequest = consumeReplayTutorialRequest;
   Neo.formatControlLabel = formatControlLabel;
   Neo.getControlHint = getControlHint;
+  Neo.getAscendControlHint = getAscendControlHint;
   Neo.getMovementControlHint = getMovementControlHint;
   Neo.ensureTutorialDummyEnemy = ensureTutorialDummyEnemy;
   Neo.getTutorialStepOrder = getTutorialStepOrder;

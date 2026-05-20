@@ -1386,9 +1386,6 @@ export function createUIController(view) {
       },
       updateCharacterSelection(unlocked, selected) {
         const CHAR_ORDER = ['princess', 'thorn_knight', 'metao', 'granialla', 'mooggy'];
-        const CARD_W_ACTIVE = 270;
-        const CARD_W_SIDE   = 200;
-        const CARD_GAP      = 18;
 
         view.charButtons.forEach(button => {
           const itemKey = button.dataset.char;
@@ -1417,11 +1414,11 @@ export function createUIController(view) {
         // ── Carousel position ────────────────────────────────
         const track = document.getElementById('choose');
         const viewport = track?.parentElement;
-        const activeIdx = CHAR_ORDER.indexOf(selected);
-        if (track && viewport && activeIdx >= 0) {
-          const viewW = viewport.offsetWidth || 440;
-          const leftEdge = activeIdx * (CARD_W_SIDE + CARD_GAP);
-          const tx = viewW / 2 - leftEdge - CARD_W_ACTIVE / 2;
+        const activeCard = track?.querySelector(`[data-char="${selected}"]`);
+        if (track && viewport && activeCard) {
+          const viewW = viewport.clientWidth || 440;
+          const activeCenter = activeCard.offsetLeft + activeCard.offsetWidth / 2;
+          const tx = viewW / 2 - activeCenter;
           track.style.transform = `translateX(${tx}px)`;
         }
 
