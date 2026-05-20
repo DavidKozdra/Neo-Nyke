@@ -107,6 +107,10 @@
       }
       return;
     }
+    if (Neo.gameMode === 'pvp' && Neo.pvpState) {
+      setObjective(`PVP: first to ${Neo.pvpState.killsToWin || 3} kills.`);
+      return;
+    }
     if (Neo.floor < Neo.MAX_FLOOR) {
       if (Neo.currentRoom.type === 'shop') {
         setObjective('Shop or move on.');

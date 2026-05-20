@@ -1,4 +1,47 @@
 // world.js — standalone IIFE. Player movement, projectiles, world object updates.
+  function getPvpMoveCooldown(playerState, slot, fallback) {
+    const moveKey = playerState?.equippedMoves?.[slot] || fallback;
+    const fallbackCooldown = slot === 'laser' ? 1.8 : 2.4;
+    return Math.max(0.2, Number(Neo.MOVE_BASE_STATS?.[moveKey]?.cooldown || fallbackCooldown));
+  }
+
+  function tickPvpPlayer2Cooldowns(dt) {
+    if (!Neo.player2) return;
+    Neo.player2.pvpLaserCooldown = Math.max(0, Number(Neo.player2.pvpLaserCooldown || 0) - dt);
+    Neo.player2.pvpSmashCooldown = Math.max(0, Number(Neo.player2.pvpSmashCooldown || 0) - dt);
+  }
+
+  function getPlayer2AimAngle(moveX = 0, moveY = 0, gamepad = null) {
+    if (gamepad?.hasAim) return Math.atan2(gamepad.aimY, gamepad.aimX);
+    if (Math.hypot(moveX, moveY) > 0.12) return Math.atan2(moveY, moveX);
+    if (Math.hypot(Neo.player2?.vx || 0, Neo.player2?.vy || 0) > 4) return Math.atan2(Neo.player2.vy, Neo.player2.vx);
+    return Number(Neo.player2?.lastAimAngle || 0);
+  }
+
+  function castPlayer2PvpLaser(angle) {
+    if (!Neo.player2 || Neo.player2.pvpLaserCooldown > 0) return;
+    const moveKey = Neo.player2.equippedMoves?.laser || 'blood_beam';
+    Neo.player2.pvpLaserCooldown = getPvpMoveCooldown(Neo.player2, 'laser', 'blood_beam');
+    Neo.player2.lastAimAngle = angle;
+    const mode = moveKey === 'turtle_wave' ? 'turtle_wave' : moveKey === 'god_sweep' ? 'god_sweep' : 'beam';
+    const range = Neo.getPlayerBeamRange(mode, moveKey);
+    const path = Neo.buildRicochetBeamPath(Neo.player2.x, Neo.player2.y, angle, range, Neo.getPlayerBeamBounceCount(mode));
+    const baseDamage = Neo.MOVE_BASE_STATS?.[moveKey]?.damage || Neo.ATTACKS.laser.damage;
+    hitPvpPlayer1WithBeamPath(path, mode === 'turtle_wave' ? 14 : 6, baseDamage, mode === 'turtle_wave' ? 155 : 60, 'pvp_p2_beam');
+    const end = Neo.getBeamPathEnd?.(path) || { x: Neo.player2.x + Math.cos(angle) * 90, y: Neo.player2.y + Math.sin(angle) * 90 };
+    Neo.spawnParticle({ x: end.x, y: end.y, life: 0.18, r: 10, c: '#74b8ff' });
+  }
+
+  function castPlayer2PvpSmash() {
+    if (!Neo.player2 || Neo.player2.pvpSmashCooldown > 0) return;
+    const moveKey = Neo.player2.equippedMoves?.smash || 'crimson_smash';
+    Neo.player2.pvpSmashCooldown = getPvpMoveCooldown(Neo.player2, 'smash', 'crimson_smash');
+    const radius = (Neo.ATTACKS.smash.radius || 105) * 0.95;
+    const damage = Neo.MOVE_BASE_STATS?.[moveKey]?.damage || Neo.ATTACKS.smash.damage;
+    Neo.spawnAoeShockwave(Neo.player2.x, Neo.player2.y, radius, '#4ca8ff', 'heavy');
+    hitPvpPlayer1InRadius(Neo.player2.x, Neo.player2.y, radius, damage, 300, 'pvp_p2_smash');
+  }
+
   function updatePlayer2(dt) {
     if (!Neo.player2) return;
     const _gp1 = window.NeoGamepad?.[1];
@@ -24,6 +67,9 @@
       Neo.player2.vx = Neo.applyResponsiveVelocity(Neo.player2.vx, p2NX * targetSpeed, dt);
       Neo.player2.vy = Neo.applyResponsiveVelocity(Neo.player2.vy, p2NY * targetSpeed, dt);
     }
+    tickPvpPlayer2Cooldowns(dt);
+    const p2AimAngle = getPlayer2AimAngle(p2NX, p2NY, _gp1Active ? _gp1 : null);
+    Neo.player2.lastAimAngle = p2AimAngle;
     Neo.moveCircle(Neo.player2, dt);
     Neo.player2.inv = Math.max(0, Neo.player2.inv - dt);
     if (Neo.player2.swing > 0) Neo.player2.swing = Math.max(0, Neo.player2.swing - dt);
@@ -59,6 +105,18 @@
       Neo.player2.inv = Math.max(Neo.player2.inv, 0.18);
     } else if (!Neo.keys[';'] && !(_gp1Active && _gp1.p2DashHeld)) {
       Neo.player2.dashLatch = false;
+    }
+    if (Neo.gameMode === 'pvp' && (Neo.keys.o || _gp1Active && _gp1.laser) && !Neo.player2.laserLatch) {
+      Neo.player2.laserLatch = true;
+      castPlayer2PvpLaser(p2AimAngle);
+    } else if (!Neo.keys.o && !(_gp1Active && _gp1.laser)) {
+      Neo.player2.laserLatch = false;
+    }
+    if (Neo.gameMode === 'pvp' && (Neo.keys.p || _gp1Active && _gp1.smash) && !Neo.player2.smashLatch) {
+      Neo.player2.smashLatch = true;
+      castPlayer2PvpSmash();
+    } else if (!Neo.keys.p && !(_gp1Active && _gp1.smash)) {
+      Neo.player2.smashLatch = false;
     }
     // PVP: P2 melee hits P1
     if (Neo.gameMode === 'pvp' && Neo.player && Neo.player.inv <= 0 && Neo.player2.swing > 0) {
@@ -148,6 +206,50 @@
     }
   }
 
+  function canHitPvpPlayer2() {
+    return Neo.gameMode === 'pvp' && !!Neo.pvpState && !!Neo.player2 && !Neo.p2DeadInCoop && Neo.player2.inv <= 0;
+  }
+
+  function damagePvpPlayer2(amount, x, y, knockback = 120, source = 'pvp_p1') {
+    if (!canHitPvpPlayer2()) return false;
+    const angle = Math.atan2(Neo.player2.y - y, Neo.player2.x - x);
+    damagePlayer2(Math.max(1, Number(amount || 0)), angle, knockback, source);
+    return true;
+  }
+
+  function hitPvpPlayer2InRadius(x, y, radius, damage, knockback = 160, source = 'pvp_p1') {
+    if (!canHitPvpPlayer2()) return false;
+    if (Neo.dist(x, y, Neo.player2.x, Neo.player2.y) > radius + Neo.player2.r) return false;
+    return damagePvpPlayer2(damage, x, y, knockback, source);
+  }
+
+  function hitPvpPlayer2WithBeamPath(path, radiusPadding, damage, knockback = 60, source = 'pvp_p1_beam') {
+    if (!canHitPvpPlayer2()) return null;
+    const hitSegment = Neo.beamPathHitsCircle(path, Neo.player2.x, Neo.player2.y, Neo.player2.r + radiusPadding);
+    if (!hitSegment) return null;
+    damagePlayer2(Math.max(1, Number(damage || 0)), hitSegment.angle, knockback, source);
+    return hitSegment;
+  }
+
+  function canHitPvpPlayer1() {
+    return Neo.gameMode === 'pvp' && !!Neo.pvpState && !!Neo.player && !Neo.p1DeadInCoop && Neo.player.inv <= 0;
+  }
+
+  function hitPvpPlayer1InRadius(x, y, radius, damage, knockback = 160, source = 'pvp_p2') {
+    if (!canHitPvpPlayer1()) return false;
+    if (Neo.dist(x, y, Neo.player.x, Neo.player.y) > radius + Neo.player.r) return false;
+    damagePlayer(Math.max(1, Number(damage || 0)), Math.atan2(Neo.player.y - y, Neo.player.x - x), knockback, source);
+    return true;
+  }
+
+  function hitPvpPlayer1WithBeamPath(path, radiusPadding, damage, knockback = 60, source = 'pvp_p2_beam') {
+    if (!canHitPvpPlayer1()) return null;
+    const hitSegment = Neo.beamPathHitsCircle(path, Neo.player.x, Neo.player.y, Neo.player.r + radiusPadding);
+    if (!hitSegment) return null;
+    damagePlayer(Math.max(1, Number(damage || 0)), hitSegment.angle, knockback, source);
+    return hitSegment;
+  }
+
   function damagePlayer2(amount, angle, knockback, source = '') {
     if (!Neo.player2 || Neo.p2DeadInCoop) return;
     if (Neo.player2.inv > 0) return;
@@ -203,7 +305,7 @@
     }
     if (Neo.isChallengeActive('no_hit')) {
       Neo.lastDamageSource = Neo.getDamageSourceLabel(source || 'no_hit');
-      Neo.lastDamageSourceKey = String(source || 'no_hit');
+      Neo.lastDamageSourceKey = String(options.sourceKey || source || 'no_hit');
       Neo.player.hp = 0;
       Neo.player.inv = 0;
       Neo.shake = 10;
@@ -233,7 +335,7 @@
       return;
     }
     Neo.lastDamageSource = Neo.getDamageSourceLabel(source);
-    Neo.lastDamageSourceKey = String(source || '');
+    Neo.lastDamageSourceKey = String(options.sourceKey || source || '');
 
     Neo.player.hp -= finalAmount;
     window.achievementEvents?.emit('damage:taken', { amount: finalAmount });
@@ -341,6 +443,7 @@
     if (sourceEnemy && Neo.player && Neo.dist(x, y, Neo.player.x, Neo.player.y) <= radius + Neo.player.r) {
       damagePlayer(damage, Math.atan2(Neo.player.y - y, Neo.player.x - x), 200, sourceEnemy.type || 'enemy_aoe');
     }
+    if (!sourceEnemy) hitPvpPlayer2InRadius(x, y, radius, damage, 200, 'pvp_p1_aoe');
     for (let index = Neo.enemies.length - 1; index >= 0; index -= 1) {
       const enemy = Neo.enemies[index];
       if (!enemy) continue;
@@ -553,6 +656,14 @@
         continue;
       }
       if (!projectile.enemy) {
+        if (hitPvpPlayer2InRadius(projectile.x, projectile.y, projectile.r, projectile.damage || 16, projectile.knockback || 90, 'pvp_p1_projectile')) {
+          if (projectile.kind === 'fireball') {
+            blastRadius(projectile.x, projectile.y, projectile.splash || 44, projectile.splashDamage || 14, '#ff8844');
+          }
+          spawnProjectileImpact(projectile, projectile.x, projectile.y);
+          _projectilePool.push(Neo.projectiles.splice(index, 1)[0]);
+          continue;
+        }
         const target = Neo.enemies.find(enemy => enemy && Neo.dist(projectile.x, projectile.y, enemy.x, enemy.y) <= projectile.r + enemy.r);
         if (target) {
           const hitAngle = Math.atan2(projectile.vy, projectile.vx);
@@ -687,6 +798,9 @@
           }
         }
       } else if (hazard.kind === 'fire_circle') {
+        if (canHitPvpPlayer2() && Neo.dist(Neo.player2.x, Neo.player2.y, hazard.x, hazard.y) <= hazard.r + Neo.player2.r) {
+          damagePvpPlayer2(Math.max(4, (hazard.dps || 16) * 0.35), hazard.x, hazard.y, 80, 'pvp_p1_fire_circle');
+        }
         for (let ei = Neo.enemies.length - 1; ei >= 0; ei -= 1) {
           const enemy = Neo.enemies[ei];
           if (!enemy) continue;
@@ -1452,6 +1566,8 @@
   Neo.updatePlayerN = updatePlayerN;
   Neo.damagePlayerN = damagePlayerN;
   Neo.damagePlayer2 = damagePlayer2;
+  Neo.hitPvpPlayer2InRadius = hitPvpPlayer2InRadius;
+  Neo.hitPvpPlayer2WithBeamPath = hitPvpPlayer2WithBeamPath;
   Neo.pvpEndGame = pvpEndGame;
   Neo.damagePlayer = damagePlayer;
   Neo.tickPlayerStatus = tickPlayerStatus;

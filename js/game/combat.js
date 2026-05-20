@@ -68,6 +68,13 @@
     return Neo.WEAPON_DEFS[key] ? key : '';
   }
 
+  function getEnemyBeamDamageSource(enemy, damageSource = null) {
+    const sourceKey = String(damageSource || enemy?.type || 'enemy_beam');
+    if (damageSource) return { label: Neo.getDamageSourceLabel?.(sourceKey) || sourceKey, key: sourceKey };
+    const enemyLabel = Neo.getEliteEnemyLabel?.(enemy) || Neo.getEnemyLabel?.(enemy?.type || '') || 'Enemy';
+    return { label: `${enemyLabel} Beam`, key: String(enemy?.type || 'enemy_beam') };
+  }
+
   function getWeaponBaseCooldown(weaponKey) {
     let base;
     if (weaponKey === 'extending_staff') base = 0.77;
@@ -526,6 +533,24 @@
         if (move === 'blood_beam' && Neo.rng() < 0.05) applyBleed(enemy, 1, 3.2);
         if (move === 'blood_beam' && Neo.rng() < 0.08) applyDarkDrain(enemy, 1, 3.4);
       }
+      const anvilBeamBonus = Neo.getAnvilMoveBonus(move, 'damage');
+      const baseBeamDamage = Neo.laserMode === 'god_sweep'
+        ? 12
+        : Neo.laserMode === 'turtle_wave'
+          ? 34
+          : loveBeamActive
+            ? 18
+            : Neo.godTimer > 0
+              ? 16
+              : Neo.ATTACKS.laser.damage;
+      const pvpBeamDamage = (baseBeamDamage + anvilBeamBonus) * (itemStats.beamDamageMultiplier || 1);
+      Neo.hitPvpPlayer2WithBeamPath?.(
+        beamPath,
+        Neo.laserMode === 'turtle_wave' ? 14 : 6,
+        pvpBeamDamage,
+        Neo.laserMode === 'god_sweep' ? 120 : Neo.laserMode === 'turtle_wave' ? 155 : loveBeamActive ? 52 : 60,
+        'pvp_p1_beam',
+      );
       Neo.destructibles.forEach(prop => {
         if (!prop.broken && !prop.hidden && Neo.beamPathHitsDestructible(beamPath, prop, 4)) {
           Neo.damageDestructible(prop, 1);
@@ -621,6 +646,7 @@
     Neo.shakeT = 0.24;
     Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.4, ring: smashRadius - 30, c: '#ff00aa' });
     Neo.spawnAoeShockwave(Neo.player.x, Neo.player.y, smashRadius, '#ff66cc', 'heavy');
+    Neo.hitPvpPlayer2InRadius?.(Neo.player.x, Neo.player.y, smashRadius, Neo.ATTACKS.smash.damage + Neo.getAnvilMoveBonus(move, 'damage'), 320, 'pvp_p1_smash');
     for (let index = Neo.enemies.length - 1; index >= 0; index -= 1) {
       const enemy = Neo.enemies[index];
       if (!enemy) continue;
@@ -1536,7 +1562,8 @@
       const beamPath = Neo.buildRicochetBeamPath(enemy.x, enemy.y, enemy.beamAngle, range, Neo.getEnemyBeamBounceCount(enemy));
       const hitSegment = Neo.beamPathHitsCircle(beamPath, Neo.player.x, Neo.player.y, Neo.player.r + 5);
       if (hitSegment) {
-        Neo.damagePlayer(damage, hitSegment.angle, knockback, damageSource || (enemy.type === 'god' ? 'god_beam' : enemy.type === 'mirror_knight' ? 'mirror_beam' : 'enemy_beam'));
+        const source = getEnemyBeamDamageSource(enemy, damageSource);
+        Neo.damagePlayer(damage, hitSegment.angle, knockback, source.label, { sourceKey: source.key });
         if (typeof onHit === 'function') onHit(enemy);
       }
     }

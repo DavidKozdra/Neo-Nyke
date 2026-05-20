@@ -504,13 +504,26 @@ export function resumeGame() {
 
   function openMpLobby(mode) {
     Neo.gameMode = mode;
+    if (mode === 'pvp') Neo.mpPlayerCount = 2;
     const titleEl = document.getElementById('mpLobbyTitle');
     const hintEl = document.getElementById('mpLobbyHint');
+    const subEl = document.querySelector('#mpLobby .mploby-sub');
+    const controlsEl = document.querySelector('#mpLobby .mploby-controls');
     if (titleEl) titleEl.textContent = mode === 'pvp' ? 'PVP' : 'CO-OP';
     if (hintEl) {
-      if (mode === 'pvp') hintEl.textContent = 'First to 3 kills wins. Melee your opponent to score.';
+      if (mode === 'pvp') hintEl.textContent = 'First to 3 kills wins. P2 keyboard: IJKL move, U melee, O beam, P smash, ; dash.';
       else hintEl.textContent = 'P1: WASD + Mouse / Gamepad 1  ·  P2: IJKL + U/; / Gamepad 2';
     }
+    if (subEl) subEl.textContent = mode === 'pvp' ? '2-player arena' : 'How many players?';
+    if (controlsEl) {
+      controlsEl.textContent = mode === 'pvp'
+        ? 'P1: WASD+Mouse/Gamepad1 · P2: IJKL+U/O/P/;/Gamepad2'
+        : 'P1: WASD+Mouse/Gamepad1 · P2: IJKL+U/;/Gamepad2 · P3/P4: Gamepad 3/4';
+    }
+    ['mpLobby1Btn', 'mpLobby3Btn', 'mpLobby4Btn'].forEach(id => {
+      const button = document.getElementById(id);
+      if (button) button.style.display = mode === 'pvp' ? 'none' : '';
+    });
     const lobby = document.getElementById('mpLobby');
     if (lobby) lobby.classList.remove('hidden');
   }
@@ -1684,6 +1697,7 @@ export function resumeGame() {
 
   function startPvp() {
     setGameState('play');
+    Neo.mpPlayerCount = 2;
     Neo.baseSeedStr = Neo.ui.seed.value.trim() || createRandomSeed();
     Neo.selectedDifficulty = normalizeDifficulty(Neo.selectedDifficulty);
     Neo.selectedChallenges = [];
@@ -1699,8 +1713,8 @@ export function resumeGame() {
     Neo.player.maxHp = 300; Neo.player.hp = 300;
     Neo.player2 = spawnMpPlayer(Neo.chosenCharacter2 || Object.keys(Neo.CHARACTER_DEFS).find(k => k !== Neo.chosenCharacter) || Neo.chosenCharacter, 80, 0);
     Neo.player2.maxHp = 300; Neo.player2.hp = 300;
-    if (Neo.mpPlayerCount >= 3) { Neo.player3 = spawnMpPlayer(Neo.chosenCharacter3 || Neo.chosenCharacter, -80, 60); Neo.player3.maxHp = 300; Neo.player3.hp = 300; }
-    if (Neo.mpPlayerCount >= 4) { Neo.player4 = spawnMpPlayer(Neo.chosenCharacter4 || Neo.chosenCharacter, 0, 60); Neo.player4.maxHp = 300; Neo.player4.hp = 300; }
+    Neo.player3 = null;
+    Neo.player4 = null;
     Neo.p1DeadInCoop = false; Neo.p2DeadInCoop = false; Neo.p3DeadInCoop = false; Neo.p4DeadInCoop = false;
     Neo.player2.x = Neo.START_X + 80;
     Neo.player2.y = Neo.START_Y;
