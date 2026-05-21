@@ -128,7 +128,7 @@
           setObjective('Trial cleared. Claim the reward or move on.');
         } else if (!Neo.currentRoom.challengeStarted) {
           if (type === 'mirror') setObjective('Touch the sword to face your mirror.');
-          else if (type === 'stillness') setObjective('Begin the prize trial.');
+          else if (type === 'stillness') setObjective('Begin the prize trial: choose one reward, then fight for it.');
           else if (type === 'bomb') setObjective('Begin the bomb trial.');
           else if (type === 'survival') setObjective('Begin the survival trial.');
           else if (type === 'runes') setObjective('Begin the rune hunt.');
@@ -137,9 +137,9 @@
           if (type === 'mirror') setObjective('Defeat your mirror champion.');
           else if (type === 'stillness') {
             const phase = Neo.currentRoom.challengeData?.phase || 'choose';
-            setObjective(phase === 'fight' ? 'Defeat the trial enemies to claim your chosen item.' : 'Pick one item, then fight for it.');
+            setObjective(phase === 'fight' ? 'Defeat the trial enemies to claim your chosen prize.' : 'Pick one prize, then fight for it.');
           }
-          else if (type === 'bomb') setObjective('Find the one bomb you can safely disarm.');
+          else if (type === 'bomb') setObjective('Disarm the blue bomb. Red bombs explode.');
           else if (type === 'survival') setObjective(`Survive for ${Math.ceil(Neo.currentRoom.challengeTimer || 0)}s.`);
           else if (type === 'runes') setObjective(`Collect the remaining runes: ${Math.max(0, Number(Neo.currentRoom.challengeData?.runesLeft || 0))}.`);
           else if (type === 'storm') setObjective(`Live through the storm for ${Math.ceil(Neo.currentRoom.challengeTimer || 0)}s.`);

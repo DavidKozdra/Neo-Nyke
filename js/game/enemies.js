@@ -256,7 +256,7 @@
 
   function getChallengeTrialLabel(type) {
     if (type === 'mirror') return 'MIRROR';
-    if (type === 'stillness') return 'STILL';
+    if (type === 'stillness') return 'PRIZE';
     if (type === 'bomb') return 'BOMB';
     if (type === 'survival') return 'SURVIVE';
     if (type === 'runes') return 'RUNES';
@@ -1149,13 +1149,21 @@
   }
 
   function spawnChallengeBombs(room) {
+    if (!room || room.type !== 'challenge') return;
+    if (Neo.pickups.some(pickup => pickup?.type === 'challengeBomb')) return;
     const slots = [
       [-90, -90], [0, -90], [90, -90],
-      [-90, 0], [0, 0], [90, 0],
+      [-90, 0], [90, 0],
       [-90, 90], [0, 90], [90, 90],
     ];
-    const safeIndex = Neo.irand(0, slots.length - 1, 'loot');
-    room.challengeData = { safeBombIndex: safeIndex };
+    let safeIndex = Number(room.challengeData?.safeBombIndex);
+    if (!Number.isInteger(safeIndex) || safeIndex < 0 || safeIndex >= slots.length) {
+      safeIndex = Neo.irand(0, slots.length - 1, 'loot');
+    }
+    room.challengeData = {
+      ...(room.challengeData || {}),
+      safeBombIndex: safeIndex,
+    };
     slots.forEach(([ox, oy], index) => {
       Neo.pickups.push({
         x: Neo.ROOM_W / 2 + ox,
@@ -1267,7 +1275,7 @@
       sayAtPosition(Neo.ROOM_W / 2, Neo.ROOM_H / 2, 'Choose your prize. Then earn it.', { speaker: 'TRIAL', tone: 'warning' });
     } else if (type === 'bomb') {
       spawnChallengeBombs(room);
-      sayAtPosition(Neo.ROOM_W / 2, Neo.ROOM_H / 2, 'Choose wrong and you get nothing.', { speaker: 'TRIAL', tone: 'warning' });
+      sayAtPosition(Neo.ROOM_W / 2, Neo.ROOM_H / 2, 'Disarm the blue bomb. Red bombs explode.', { speaker: 'TRIAL', tone: 'warning' });
     } else if (type === 'survival') {
       room.challengeTimer = Neo.scaleChallengeTimer(20);
       room.challengeTick = 0.9;

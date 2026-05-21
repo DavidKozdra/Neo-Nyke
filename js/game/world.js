@@ -1350,7 +1350,6 @@
           Neo.spawnParticle({ x: pickup.x, y: pickup.y - 20, life: 0.75, text: 'WRONG', c: '#ff7a7a' });
           Neo.failChallengeTrial('WRONG BOMB');
         }
-        Neo.pickups.splice(index, 1);
         Neo.scheduleRunSave();
         return;
       }
