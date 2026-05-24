@@ -2,8 +2,7 @@
 // the ui object, gameStateManager, uiController, gameEvents, and all input handlers.
 // Shared mutable state lives on Neo (set here to its initial values, then managed via Neo.X).
 export function normalizeMouseBinding(value, fallback) {
-    const normalized = String(value || fallback).toLowerCase();
-    return normalized === 'rmb' || normalized === 'lmb' ? normalized : fallback;
+    return String(value || fallback).toLowerCase();
   }
 
 export function getMouseBindings() {
@@ -15,19 +14,26 @@ export function getMouseBindings() {
   }
 
 export function isMouseActionHeld(action) {
-    const mouseBindings = getMouseBindings();
-    if (mouseBindings[action] === 'rmb') {
+    const bindings = window.NeoSettings?.getBindings?.();
+    const binding = String(action === 'slash' ? (bindings?.slash || 'lmb') : (bindings?.laser || 'rmb')).toLowerCase();
+    if (binding === 'rmb') {
       const held = !!Neo.mouse.right || !!Neo.mouse.rightQueued;
       Neo.mouse.rightQueued = false;
       return held;
     }
-    const held = !!Neo.mouse.down || !!Neo.mouse.downQueued;
-    Neo.mouse.downQueued = false;
-    return held;
+    if (binding === 'lmb') {
+      const held = !!Neo.mouse.down || !!Neo.mouse.downQueued;
+      Neo.mouse.downQueued = false;
+      return held;
+    }
+    return !!Neo.keys?.[binding];
   }
 
 export function formatMouseBindingLabel(value, fallback) {
-    return normalizeMouseBinding(value, fallback) === 'rmb' ? 'RMB' : 'LMB';
+    const v = String(value || fallback).toLowerCase();
+    if (v === 'rmb') return 'RMB';
+    if (v === 'lmb') return 'LMB';
+    return v.toUpperCase();
   }
 
 export function getSlotKeyLabel(slot) {

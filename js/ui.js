@@ -1,6 +1,5 @@
   function normalizeMouseBinding(value, fallback) {
-    const normalized = String(value || fallback).toLowerCase();
-    return normalized === 'rmb' || normalized === 'lmb' ? normalized : fallback;
+    return String(value || fallback).toLowerCase();
   }
 
   function getMouseBindings() {
@@ -12,19 +11,26 @@
   }
 
   function isMouseActionHeld(action) {
-    const mouseBindings = getMouseBindings();
-    if (mouseBindings[action] === 'rmb') {
+    const bindings = window.NeoSettings?.getBindings?.();
+    const binding = String(action === 'slash' ? (bindings?.slash || 'lmb') : (bindings?.laser || 'rmb')).toLowerCase();
+    if (binding === 'rmb') {
       const held = !!mouse.right || !!mouse.rightQueued;
       mouse.rightQueued = false;
       return held;
     }
-    const held = !!mouse.down || !!mouse.downQueued;
-    mouse.downQueued = false;
-    return held;
+    if (binding === 'lmb') {
+      const held = !!mouse.down || !!mouse.downQueued;
+      mouse.downQueued = false;
+      return held;
+    }
+    return !!keys?.[binding];
   }
 
   function formatMouseBindingLabel(value, fallback) {
-    return normalizeMouseBinding(value, fallback) === 'rmb' ? 'RMB' : 'LMB';
+    const v = String(value || fallback).toLowerCase();
+    if (v === 'rmb') return 'RMB';
+    if (v === 'lmb') return 'LMB';
+    return v.toUpperCase();
   }
 
   function getSlotKeyLabel(slot) {
@@ -1935,6 +1941,7 @@
         return;
       }
       keys[key] = true;
+      if (window.Neo?.keys) window.Neo.keys[key] = true;
       const b = window.NeoSettings?.getBindings();
       const inventoryKey = b ? b.inventory : 'i';
       if (isWizardPawOpen()) {
@@ -1976,6 +1983,7 @@
         return;
       }
       keys[key] = false;
+      if (window.Neo?.keys) window.Neo.keys[key] = false;
       const b = window.NeoSettings?.getBindings();
       const inventoryKey = b ? b.inventory : 'i';
       if (key === 'e') { shopKeyLatch = false; anvilKeyLatch = false; }
