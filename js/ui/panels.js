@@ -519,6 +519,35 @@ export function isPanelOpen(panel) {
     });
   }
 
+  function playPanelOpenEffect(element, options = {}) {
+    if (!(element instanceof HTMLElement) || prefersReducedPanelMotion()) return false;
+    const backdrop = options.backdrop instanceof HTMLElement ? options.backdrop : null;
+    if (typeof element._panelPopRafA === 'number') window.cancelAnimationFrame(element._panelPopRafA);
+    if (typeof element._panelPopRafB === 'number') window.cancelAnimationFrame(element._panelPopRafB);
+    if (typeof element._panelPopCleanupTimer === 'number') window.clearTimeout(element._panelPopCleanupTimer);
+
+    element.classList.add('panel-pop-surface', 'panel-pop-enter');
+    if (backdrop) backdrop.classList.add('panel-pop-backdrop', 'panel-pop-backdrop-enter');
+    void element.offsetWidth;
+    if (backdrop) void backdrop.offsetWidth;
+
+    element._panelPopRafA = window.requestAnimationFrame(() => {
+      element._panelPopRafB = window.requestAnimationFrame(() => {
+        element.classList.remove('panel-pop-enter');
+        if (backdrop) backdrop.classList.remove('panel-pop-backdrop-enter');
+      });
+    });
+
+    element._panelPopCleanupTimer = window.setTimeout(() => {
+      element.classList.remove('panel-pop-surface', 'panel-pop-enter');
+      if (backdrop) backdrop.classList.remove('panel-pop-backdrop', 'panel-pop-backdrop-enter');
+      element._panelPopRafA = 0;
+      element._panelPopRafB = 0;
+      element._panelPopCleanupTimer = 0;
+    }, 380);
+    return true;
+  }
+
   function copyCanvasBitmaps(sourceRoot, cloneRoot) {
     const sourceCanvases = Array.from(sourceRoot.querySelectorAll('canvas'));
     const cloneCanvases = Array.from(cloneRoot.querySelectorAll('canvas'));
@@ -656,22 +685,30 @@ export function markInventoryPanelDirty() {
     Neo.inventoryPanelDirty = true;
   }
 
-export function setShopPanelOpen(open) {
+export function setShopPanelOpen(open, options = {}) {
     if (!Neo.ui.shopPanel) return;
-  if (open) clearPanelCloseEffect(Neo.ui.shopPanel);
-  else if (isPanelOpen(Neo.ui.shopPanel)) playPanelCloseEffect(Neo.ui.shopPanel);
-    Neo.ui.shopPanel.classList.toggle('hidden', !open);
-    Neo.ui.shopPanel.setAttribute('aria-hidden', open ? 'false' : 'true');
+  const animateClose = options.animateClose !== false;
     if (open) {
+      clearPanelCloseEffect(Neo.ui.shopPanel);
+      Neo.ui.shopPanel.classList.remove('hidden');
+      Neo.ui.shopPanel.setAttribute('aria-hidden', 'false');
+      playPanelOpenEffect(Neo.ui.shopPanel);
       markShopPanelDirty();
       renderShopPanel();
+      return;
     }
+    if (animateClose && isPanelOpen(Neo.ui.shopPanel)) playPanelCloseEffect(Neo.ui.shopPanel);
+    else clearPanelCloseEffect(Neo.ui.shopPanel);
+    Neo.ui.shopPanel.classList.add('hidden');
+    Neo.ui.shopPanel.setAttribute('aria-hidden', 'true');
   }
 
-export function setInventoryPanelOpen(open) {
+export function setInventoryPanelOpen(open, options = {}) {
     if (!Neo.ui.invPanel) return;
-  if (open) clearPanelCloseEffect(Neo.ui.invPanel);
-  else if (isPanelOpen(Neo.ui.invPanel)) playPanelCloseEffect(Neo.ui.invPanel);
+    const animateClose = options.animateClose !== false;
+    if (open) clearPanelCloseEffect(Neo.ui.invPanel);
+    else if (animateClose && isPanelOpen(Neo.ui.invPanel)) playPanelCloseEffect(Neo.ui.invPanel);
+    else clearPanelCloseEffect(Neo.ui.invPanel);
     Neo.ui.invPanel.classList.toggle('hidden', !open);
     Neo.ui.invPanel.setAttribute('aria-hidden', open ? 'false' : 'true');
     if (!open) {
@@ -713,40 +750,49 @@ export function updateInvPlayerTabVisibility() {
 export function toggleShopPanel() {
     if (Neo.currentRoom?.type !== 'shop') return;
     const next = !isPanelOpen(Neo.ui.shopPanel);
+    if (next) setInventoryPanelOpen(false, { animateClose: false });
     setShopPanelOpen(next);
     if (next && Neo.isFirstRunTutorialActive()) Neo.tutorialState.openedShop = true;
-    if (next) setInventoryPanelOpen(false);
   }
 
 export function toggleInventoryPanel() {
     const next = !isPanelOpen(Neo.ui.invPanel);
+    if (next) setShopPanelOpen(false, { animateClose: false });
     setInventoryPanelOpen(next);
     if (next && Neo.isFirstRunTutorialActive()) Neo.tutorialState.openedInventory = true;
-    if (next) setShopPanelOpen(false);
   }
 
   // ---- Anvil panel ----
 
-export function setAnvilPanelOpen(open) {
+export function setAnvilPanelOpen(open, options = {}) {
     if (!Neo.ui.anvilPanel) return;
-  if (open) clearPanelCloseEffect(Neo.ui.anvilPanel);
-  else if (isPanelOpen(Neo.ui.anvilPanel)) playPanelCloseEffect(Neo.ui.anvilPanel);
-    Neo.ui.anvilPanel.classList.toggle('hidden', !open);
-    Neo.ui.anvilPanel.setAttribute('aria-hidden', open ? 'false' : 'true');
+  const animateClose = options.animateClose !== false;
     if (open) {
+      clearPanelCloseEffect(Neo.ui.anvilPanel);
+      Neo.ui.anvilPanel.classList.remove('hidden');
+      Neo.ui.anvilPanel.setAttribute('aria-hidden', 'false');
+      playPanelOpenEffect(Neo.ui.anvilPanel);
       Neo.anvilStagedUpgrades = {};
       const equipped = Neo.player?.equippedWeapon;
       Neo.anvilSelectedItem = equipped ? `weapon:${equipped}` : null;
       renderAnvilPanel();
+      return;
     }
+    if (animateClose && isPanelOpen(Neo.ui.anvilPanel)) playPanelCloseEffect(Neo.ui.anvilPanel);
+    else clearPanelCloseEffect(Neo.ui.anvilPanel);
+    Neo.ui.anvilPanel.classList.add('hidden');
+    Neo.ui.anvilPanel.setAttribute('aria-hidden', 'true');
   }
 
 export function toggleAnvilPanel() {
     if (Neo.currentRoom?.type !== 'anvil') return;
     const next = !isPanelOpen(Neo.ui.anvilPanel);
     if (!next) Neo.anvilStagedUpgrades = {};
+    if (next) {
+      setShopPanelOpen(false, { animateClose: false });
+      setInventoryPanelOpen(false, { animateClose: false });
+    }
     setAnvilPanelOpen(next);
-    if (next) { setShopPanelOpen(false); setInventoryPanelOpen(false); }
   }
 
   function getAnvilStatSchema(itemKey, itemType) {
@@ -801,6 +847,16 @@ export function renderAnvilPanel() {
 
     // XP display (current XP, not total)
     if (Neo.ui.anvilXp) Neo.ui.anvilXp.textContent = Neo.player.xp ?? 0;
+    if (Neo.ui.anvilCoins) Neo.ui.anvilCoins.textContent = Neo.player.coins ?? 0;
+    if (Neo.ui.anvilCoinIcon && typeof Neo.drawPixelIcon === 'function') {
+      Neo.drawPixelIcon(Neo.ui.anvilCoinIcon, '#ffd15a', [
+        [2, 1], [3, 1], [4, 1],
+        [1, 2], [2, 2], [3, 2], [4, 2], [5, 2],
+        [1, 3], [2, 3], [3, 3], [4, 3], [5, 3],
+        [1, 4], [2, 4], [3, 4], [4, 4], [5, 4],
+        [2, 5], [3, 5], [4, 5],
+      ]);
+    }
 
     // Tab visibility
     const isWeapons = Neo.activeAnvilTab === 'weapons';
@@ -998,14 +1054,22 @@ export function isWizardPawOpen() {
     return !!Neo.wizardPawSelection && isPanelOpen(Neo.ui.wizardPawModal);
   }
 
-export function setWizardPawModalOpen(open) {
+export function setWizardPawModalOpen(open, options = {}) {
     if (!Neo.ui.wizardPawModal) return;
-  const effectTarget = Neo.ui.wizardPawModal.querySelector('.modal-box') || Neo.ui.wizardPawModal;
-  if (effectTarget instanceof HTMLElement) effectTarget.dataset.panelFxKey = 'wizard-paw-modal';
-  if (open) clearPanelCloseEffect(effectTarget);
-  else if (isPanelOpen(Neo.ui.wizardPawModal)) playPanelCloseEffect(effectTarget);
-    Neo.ui.wizardPawModal.classList.toggle('hidden', !open);
-    Neo.ui.wizardPawModal.setAttribute('aria-hidden', open ? 'false' : 'true');
+  const animateClose = options.animateClose !== false;
+    const effectTarget = Neo.ui.wizardPawModal.querySelector('.modal-box') || Neo.ui.wizardPawModal;
+    if (effectTarget instanceof HTMLElement) effectTarget.dataset.panelFxKey = 'wizard-paw-modal';
+    if (open) {
+      clearPanelCloseEffect(effectTarget);
+      Neo.ui.wizardPawModal.classList.remove('hidden');
+      Neo.ui.wizardPawModal.setAttribute('aria-hidden', 'false');
+      if (effectTarget instanceof HTMLElement) playPanelOpenEffect(effectTarget, { backdrop: Neo.ui.wizardPawModal });
+      return;
+    }
+    if (animateClose && isPanelOpen(Neo.ui.wizardPawModal)) playPanelCloseEffect(effectTarget);
+    else clearPanelCloseEffect(effectTarget);
+    Neo.ui.wizardPawModal.classList.add('hidden');
+    Neo.ui.wizardPawModal.setAttribute('aria-hidden', 'true');
   }
 
 export function isOverlayBlockingInput() {

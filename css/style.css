@@ -1213,6 +1213,36 @@ canvas {
   transform: translate(var(--panel-fx-dx, 0), var(--panel-fx-dy, 0)) scale(.58) rotate(var(--panel-fx-rot, 0deg));
 }
 
+.panel-pop-surface {
+  transform-origin: center;
+  will-change: transform, opacity;
+}
+
+.game-panel.panel-pop-surface,
+.modal-box.panel-pop-surface {
+  transition:
+    opacity .22s ease,
+    transform .26s cubic-bezier(.2, .9, .25, 1.08);
+}
+
+.game-panel.panel-pop-surface.panel-pop-enter {
+  opacity: 0;
+  transform: translate(-50%, -47%) scale(.94);
+}
+
+.modal-box.panel-pop-surface.panel-pop-enter {
+  opacity: 0;
+  transform: translateY(16px) scale(.94);
+}
+
+.modal-backdrop.panel-pop-backdrop {
+  transition: opacity .18s ease;
+}
+
+.modal-backdrop.panel-pop-backdrop.panel-pop-backdrop-enter {
+  opacity: 0;
+}
+
 .game-panel {
   position: fixed;
   left: 50%;
@@ -3741,6 +3771,9 @@ button.alt.danger {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .game-panel.panel-pop-surface,
+  .modal-box.panel-pop-surface,
+  .modal-backdrop.panel-pop-backdrop,
   #invPanel.game-panel,
   #invPanel.game-panel.hidden,
   #pause.overlay,
@@ -4249,6 +4282,7 @@ button.alt.danger {
   min-height: 1em;
   text-align: center;
 }
+
 
 /* ── Run History ─────────────────────────────────────────── */
 
@@ -7042,6 +7076,403 @@ button.alt.danger {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 10px;
+}
+
+/* ── Credits — full-screen page (main-menu CREDITS button) ───── */
+.credits-page {
+  z-index: 30;
+  overflow-y: auto;
+  background: #05070f;
+}
+/* Live dungeon scene + hero parade canvases fill the page behind content */
+.credits-page__bg,
+.credits-page__parade {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.credits-page__bg { z-index: 0; }
+.credits-page__parade { z-index: 2; }
+/* Tint + readability scrim over the live scene (under the parade) */
+.credits-page::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background:
+    radial-gradient(120% 80% at 50% -10%, rgba(40,90,160,.28), transparent 60%),
+    radial-gradient(90% 70% at 50% 110%, rgba(150,40,120,.22), transparent 55%),
+    linear-gradient(180deg, rgba(5,7,15,.55), rgba(5,7,15,.35) 40%, rgba(5,7,15,.78));
+}
+/* Larger, animated BACK button */
+.credits-page__back {
+  position: absolute;
+  top: clamp(18px, 3.5vh, 34px);
+  left: clamp(18px, 3.5vw, 40px);
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 26px 14px 22px;
+  border-radius: 12px;
+  border: 1.5px solid rgba(120,196,255,.35);
+  background: linear-gradient(180deg, rgba(22,34,58,.7), rgba(10,16,30,.78));
+  color: #dbe9ff;
+  font-size: clamp(15px, 1.6vw, 18px);
+  font-weight: 800;
+  letter-spacing: .14em;
+  cursor: pointer;
+  box-shadow: 0 8px 26px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.06);
+  backdrop-filter: blur(8px);
+  /* entrance */
+  opacity: 0;
+  transform: translateX(-28px);
+  transition:
+    border-color .18s ease,
+    background .18s ease,
+    box-shadow .18s ease,
+    transform .12s ease;
+}
+.credits-page__back .credits-back__arrow {
+  display: inline-block;
+  font-size: 1.25em;
+  line-height: 1;
+  transition: transform .2s cubic-bezier(.34,1.56,.64,1);
+}
+.credits-page__back:hover,
+.credits-page__back:focus-visible {
+  border-color: rgba(150,210,255,.85);
+  background: linear-gradient(180deg, rgba(34,52,86,.82), rgba(14,22,42,.86));
+  box-shadow: 0 10px 32px rgba(40,110,200,.4), 0 0 22px rgba(120,196,255,.35), inset 0 1px 0 rgba(255,255,255,.1);
+  color: #ffffff;
+  outline: none;
+}
+.credits-page__back:hover .credits-back__arrow,
+.credits-page__back:focus-visible .credits-back__arrow {
+  /* hover: bigger pull, and pause the idle bob so it reads as intentional */
+  transform: translateX(-7px);
+  animation: none;
+}
+.credits-page__back:active {
+  transform: scale(.95);
+}
+
+/* Idle translate loop — gentle leftward bob hinting "go back".
+   Runs on the arrow after the entrance has settled. */
+.credits-page.is-open .credits-back__arrow {
+  animation: creditsBackNudge 1.6s ease-in-out 1s infinite;
+}
+@keyframes creditsBackNudge {
+  0%, 100% { transform: translateX(0); }
+  50%      { transform: translateX(-6px); }
+}
+
+.credits-page .credits {
+  position: relative;
+  z-index: 3;
+  width: 100%;
+}
+.credits-page__back { z-index: 4; }
+
+/* ── Entrance animation: everything flies in when page opens ── */
+/* Each element starts hidden + offset; .is-open triggers the keyframes
+   with a stagger so the title, cards, and footer cascade in. */
+.credits-page__back,
+.credits__hero,
+.credits__person,
+.credits__thanks {
+  opacity: 0;
+}
+.credits-page.is-open .credits-page__back {
+  /* entrance once, then a looping glow flash that starts after it settles */
+  animation:
+    creditsBackIn .5s cubic-bezier(.22,1,.36,1) .05s forwards,
+    creditsBackFlash 1.8s ease-in-out 1s infinite;
+}
+/* hover takes over the look, so stop the flash to avoid fighting it */
+.credits-page.is-open .credits-page__back:hover,
+.credits-page.is-open .credits-page__back:focus-visible {
+  animation: creditsBackIn .5s cubic-bezier(.22,1,.36,1) .05s forwards;
+}
+@keyframes creditsBackFlash {
+  0%, 100% {
+    border-color: rgba(120,196,255,.35);
+    box-shadow: 0 8px 26px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.06);
+  }
+  50% {
+    border-color: rgba(150,210,255,.9);
+    box-shadow: 0 8px 26px rgba(0,0,0,.45), 0 0 26px rgba(120,196,255,.55), inset 0 1px 0 rgba(255,255,255,.12);
+  }
+}
+.credits-page.is-open .credits__hero {
+  animation: creditsFlyUp .6s cubic-bezier(.22,1,.36,1) .12s forwards;
+}
+.credits-page.is-open .credits__person--dev {
+  animation: creditsFlyUp .6s cubic-bezier(.22,1,.36,1) .26s forwards;
+}
+.credits-page.is-open .credits__person--audio {
+  animation: creditsFlyUp .6s cubic-bezier(.22,1,.36,1) .38s forwards;
+}
+.credits-page.is-open .credits__thanks {
+  animation: creditsFlyUp .6s cubic-bezier(.22,1,.36,1) .54s forwards;
+}
+
+@keyframes creditsBackIn {
+  from { opacity: 0; transform: translateX(-28px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes creditsFlyUp {
+  from { opacity: 0; transform: translateY(44px) scale(.96); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Reduced-motion: skip the fly-in, just show everything. */
+.acc-reduce-flash .credits-page__back,
+.acc-reduce-flash .credits-back__arrow,
+.acc-reduce-flash .credits__hero,
+.acc-reduce-flash .credits__person,
+.acc-reduce-flash .credits__thanks {
+  opacity: 1;
+  transform: none;
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .credits-page__back,
+  .credits-back__arrow,
+  .credits__hero,
+  .credits__person,
+  .credits__thanks {
+    opacity: 1 !important;
+    transform: none !important;
+    animation: none !important;
+  }
+}
+
+.credits {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(28px, 5vh, 52px);
+  padding: clamp(72px, 12vh, 120px) 20px clamp(48px, 8vh, 80px);
+  text-align: center;
+}
+
+/* Title mark — animated icy-blue gradient + sweeping shine */
+.credits__hero { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.credits__mark {
+  position: relative;
+  font-family: var(--font-title, inherit);
+  font-size: clamp(40px, 8vw, 80px);
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  /* taller gradient that we slide vertically for a living sheen */
+  background: linear-gradient(180deg,
+    #eaf6ff 0%, #ffffff 14%, #bfe3ff 34%, #6cc3ff 60%, #2f8fe6 84%, #bfe3ff 100%);
+  background-size: 100% 280%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  filter:
+    drop-shadow(0 0 16px rgba(120,196,255,.5))
+    drop-shadow(0 4px 0 rgba(0,0,0,.85));
+  animation: creditsTitleSheen 5s ease-in-out infinite;
+}
+/* diagonal light streak that sweeps across the letters (clipped to glyphs) */
+.credits__mark::before {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(105deg,
+    transparent 40%, rgba(255,255,255,.9) 50%, transparent 60%);
+  background-size: 240% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  mix-blend-mode: screen;
+  animation: creditsTitleShine 4.5s ease-in-out 1.2s infinite;
+}
+@keyframes creditsTitleSheen {
+  0%, 100% { background-position: 50% 0%; }
+  50%      { background-position: 50% 100%; }
+}
+@keyframes creditsTitleShine {
+  0%   { background-position: 180% 0; opacity: 0; }
+  12%  { opacity: 1; }
+  40%  { background-position: -80% 0; opacity: 0; }
+  100% { background-position: -80% 0; opacity: 0; }
+}
+.credits__studio {
+  font-size: clamp(13px, 1.6vw, 17px);
+  letter-spacing: .42em;
+  text-transform: uppercase;
+  color: #ffb3e6;
+  text-shadow: 0 0 18px rgba(255,120,210,.4);
+}
+
+/* Two glass cards, side by side on wide screens */
+.credits__roles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: clamp(16px, 2vw, 26px);
+  width: min(880px, 100%);
+}
+.credits__person {
+  --accent: 120,196,255;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(16px, 2vh, 24px);
+  padding: clamp(24px, 3vw, 36px) clamp(26px, 3vw, 38px);
+  border-radius: 18px;
+  text-align: left;
+  background: linear-gradient(180deg, rgba(18,24,40,.66), rgba(8,11,20,.72));
+  border: 1px solid rgba(var(--accent), .22);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.05), 0 14px 44px rgba(0,0,0,.5);
+  backdrop-filter: blur(10px);
+}
+/* accent rail down the left edge */
+.credits__person::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 18px; bottom: 18px;
+  width: 4px;
+  border-radius: 4px;
+  background: rgba(var(--accent), .9);
+  box-shadow: 0 0 14px rgba(var(--accent), .65);
+}
+.credits__person--audio { --accent: 255,140,214; }
+
+/* hovering a card lifts it and intensifies its accent glow */
+.credits__person {
+  transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+}
+.credits__person:hover {
+  transform: translateY(-4px);
+  border-color: rgba(var(--accent), .5);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.07),
+              0 18px 54px rgba(0,0,0,.55),
+              0 0 30px rgba(var(--accent), .25);
+}
+
+/* Avatar sprite — floats at the card's top-right corner on a glowing disc */
+.credits__avatar {
+  position: absolute;
+  top: -22px;
+  right: -14px;
+  width: 84px;
+  height: 84px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 40%, rgba(var(--accent), .28), rgba(8,11,20,.85) 70%);
+  border: 2px solid rgba(var(--accent), .55);
+  box-shadow: 0 0 22px rgba(var(--accent), .4), inset 0 0 16px rgba(0,0,0,.6);
+  animation: creditsAvatarFloat 3.4s ease-in-out infinite;
+}
+.credits__avatar canvas {
+  width: 72px;
+  height: 72px;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 3px 4px rgba(0,0,0,.6));
+}
+.credits__person--audio .credits__avatar { animation-delay: -1.7s; }
+@keyframes creditsAvatarFloat {
+  0%, 100% { transform: translateY(0) rotate(-2deg); }
+  50%      { transform: translateY(-7px) rotate(2deg); }
+}
+
+.credits__person-head { display: flex; flex-direction: column; gap: 6px; padding-right: 56px; }
+.credits__role {
+  font-size: clamp(11px, 1.2vw, 13px);
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: rgba(var(--accent), 1);
+  opacity: .92;
+}
+.credits__name {
+  margin: 0;
+  font-size: clamp(28px, 3.4vw, 40px);
+  font-weight: 800;
+  letter-spacing: .01em;
+  color: #f4f8ff;
+}
+.credits__tagline {
+  margin: 4px 0 0;
+  font-size: clamp(13px, 1.4vw, 16px);
+  line-height: 1.45;
+  color: var(--menu-text-soft);
+}
+
+.credits__links { display: flex; flex-direction: column; gap: 10px; }
+.credits-link {
+  position: relative;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 18px;
+  border-radius: 12px;
+  font-size: clamp(14px, 1.5vw, 16px);
+  letter-spacing: .02em;
+  color: #eaf2ff;
+  text-decoration: none;
+  background: rgba(var(--accent), .08);
+  border: 1px solid rgba(var(--accent), .22);
+  transition: background .15s ease, border-color .15s ease, transform .12s ease, box-shadow .15s ease;
+}
+.credits-link__text { position: relative; z-index: 1; }
+.credits-link__arrow {
+  position: relative;
+  z-index: 1;
+  opacity: .6;
+  font-size: 15px;
+  transition: transform .18s ease, opacity .18s ease;
+}
+/* sheen that sweeps across the chip on hover */
+.credits-link::before {
+  content: "";
+  position: absolute;
+  top: 0; bottom: 0; left: -60%;
+  width: 50%;
+  background: linear-gradient(105deg, transparent, rgba(255,255,255,.22), transparent);
+  transform: skewX(-18deg);
+  transition: left .55s ease;
+}
+.credits-link:hover,
+.credits-link:focus-visible {
+  background: rgba(var(--accent), .2);
+  border-color: rgba(var(--accent), .65);
+  transform: translateX(4px);
+  box-shadow: 0 0 18px rgba(var(--accent), .3);
+  outline: none;
+}
+.credits-link:hover::before,
+.credits-link:focus-visible::before { left: 130%; }
+.credits-link:hover .credits-link__arrow,
+.credits-link:focus-visible .credits-link__arrow {
+  opacity: 1;
+  transform: translate(3px, -3px);
+}
+
+/* Thanks line — soft pulsing glow */
+.credits__thanks {
+  margin: 0;
+  font-size: clamp(12px, 1.4vw, 15px);
+  letter-spacing: .28em;
+  text-transform: uppercase;
+  color: #cfe0ff;
+  animation: creditsThanksGlow 3s ease-in-out infinite;
+}
+@keyframes creditsThanksGlow {
+  0%, 100% { opacity: .55; text-shadow: 0 0 8px rgba(120,196,255,.2); }
+  50%      { opacity: .95; text-shadow: 0 0 18px rgba(120,196,255,.55); }
 }
 .info-card {
   display: flex;

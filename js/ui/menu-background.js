@@ -1,9 +1,11 @@
 (function menuBackground() {
   const bg  = document.getElementById('menuBg');
   const bg2 = document.getElementById('charBg');
+  const bg3 = document.getElementById('creditsBg');
   if (!bg) return;
   const ctx  = bg.getContext('2d');
   const ctx2 = bg2 ? bg2.getContext('2d') : null;
+  const ctx3 = bg3 ? bg3.getContext('2d') : null;
 
   let tileCache = null;
 
@@ -11,6 +13,7 @@
     bg.width  = window.innerWidth;
     bg.height = window.innerHeight;
     if (bg2) { bg2.width = window.innerWidth; bg2.height = window.innerHeight; }
+    if (bg3) { bg3.width = window.innerWidth; bg3.height = window.innerHeight; }
     tileCache = null;
   }
   resize();
@@ -311,28 +314,34 @@
     const dt = Math.min((ts - lastTs) / 16.67, 2);
     lastTs = ts;
 
-    const startEl = document.getElementById('start');
-    const charEl  = document.getElementById('charSelect');
-    const startVis = startEl && !startEl.classList.contains('hidden');
-    const charVis  = charEl  && !charEl.classList.contains('hidden');
-    if (!startVis && !charVis) { cancelAnimationFrame(raf); return; }
+    const startEl   = document.getElementById('start');
+    const charEl    = document.getElementById('charSelect');
+    const creditsEl = document.getElementById('creditsPanel');
+    const startVis   = startEl   && !startEl.classList.contains('hidden');
+    const charVis    = charEl    && !charEl.classList.contains('hidden');
+    const creditsVis = creditsEl && !creditsEl.classList.contains('hidden');
+    if (!startVis && !charVis && !creditsVis) { cancelAnimationFrame(raf); return; }
 
     const W = bg.width, H = bg.height;
     if (startVis) renderScene(ctx,  W, H, dt);
     if (charVis && ctx2) renderScene(ctx2, W, H, dt);
+    if (creditsVis && ctx3) renderScene(ctx3, W, H, dt);
 
     raf = requestAnimationFrame(draw);
   }
 
   const startEl = document.getElementById('start');
   const charEl  = document.getElementById('charSelect');
+  const creditsEl = document.getElementById('creditsPanel');
   function onVisChange() {
     const startVis = startEl && !startEl.classList.contains('hidden');
     const charVis  = charEl  && !charEl.classList.contains('hidden');
-    if (startVis || charVis) { cancelAnimationFrame(raf); raf = requestAnimationFrame(draw); }
+    const creditsVis = creditsEl && !creditsEl.classList.contains('hidden');
+    if (startVis || charVis || creditsVis) { cancelAnimationFrame(raf); raf = requestAnimationFrame(draw); }
   }
   if (startEl) new MutationObserver(onVisChange).observe(startEl, { attributes: true, attributeFilter: ['class'] });
   if (charEl)  new MutationObserver(onVisChange).observe(charEl,  { attributes: true, attributeFilter: ['class'] });
+  if (creditsEl) new MutationObserver(onVisChange).observe(creditsEl, { attributes: true, attributeFilter: ['class'] });
   document.addEventListener('visibilitychange', () => { if (!document.hidden) { lastTs = 0; onVisChange(); } });
   raf = requestAnimationFrame(draw);
 

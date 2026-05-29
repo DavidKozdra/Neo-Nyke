@@ -319,7 +319,7 @@
       </div>
       <div class="anvil-resources">
         <div class="anvil-xp-display">XP <b id="anvilXp">0</b></div>
-        <div class="anvil-gold-display">&#9670; <b id="anvilCoins">0</b></div>
+        <div class="anvil-gold-display"><canvas id="anvilCoinIcon" class="coin-icon" width="32" height="32"></canvas> <b id="anvilCoins">0</b></div>
       </div>
       <button id="anvilClose" class="panel-close" aria-label="Close anvil">X</button>
     </div>
@@ -597,6 +597,7 @@
       <button id="altModesBtn"   class="nav-btn nav-btn--minor">ALT MODES</button>
       <button id="runHistoryBtn" class="nav-btn nav-btn--minor">INFO</button>
       <button id="settingsBtn" class="nav-btn nav-btn--minor">SETTINGS</button>
+      <button id="creditsBtn" class="nav-btn nav-btn--minor">CREDITS</button>
     </div>
   </div><!-- /.menu-content -->
   <div class="menu-footer">
@@ -880,6 +881,60 @@
       </div>
     </div>
   </section>
+</div>
+
+<!-- Credits — full-screen page -->
+<div id="creditsPanel" class="overlay credits-page hidden" aria-hidden="true">
+  <!-- Live dungeon scene (reuses the menu background renderer) -->
+  <canvas id="creditsBg" class="credits-page__bg" aria-hidden="true"></canvas>
+  <!-- Hero curtain-call parade drifting across -->
+  <canvas id="creditsParade" class="credits-page__parade" aria-hidden="true"></canvas>
+
+  <button id="creditsClose" class="back-btn credits-page__back" type="button">
+    <span class="credits-back__arrow" aria-hidden="true">&#8592;</span>
+    <span class="credits-back__label">BACK</span>
+  </button>
+
+  <div class="credits">
+    <div class="credits__hero">
+      <div class="credits__mark" data-text="NEO NYKE">NEO NYKE</div>
+      <div class="credits__studio">a Magenta Autumn game</div>
+    </div>
+
+    <div class="credits__roles">
+      <article class="credits__person credits__person--dev">
+        <div class="credits__avatar" aria-hidden="true">
+          <canvas data-credits-sprite="thorn_knight" width="72" height="72"></canvas>
+        </div>
+        <header class="credits__person-head">
+          <span class="credits__role">Code · Game Design · Hosting</span>
+          <h3 class="credits__name">David Kozdra</h3>
+        </header>
+        <div class="credits__links">
+          <a class="credits-link" href="https://davidkozdra.com/" target="_blank" rel="noopener noreferrer"><span class="credits-link__text">davidkozdra.com</span><span class="credits-link__arrow">↗</span></a>
+          <a class="credits-link" href="https://magentaautumn.itch.io/" target="_blank" rel="noopener noreferrer"><span class="credits-link__text">magentaautumn.itch.io</span><span class="credits-link__arrow">↗</span></a>
+        </div>
+      </article>
+
+      <article class="credits__person credits__person--audio">
+        <div class="credits__avatar" aria-hidden="true">
+          <canvas data-credits-sprite="metao" width="72" height="72"></canvas>
+        </div>
+        <header class="credits__person-head">
+          <span class="credits__role">Music &amp; Sound</span>
+          <h3 class="credits__name">Explorer2000</h3>
+          <p class="credits__tagline">Seasoned chiptune composer · ExplorerAUDIO</p>
+        </header>
+        <div class="credits__links">
+          <a class="credits-link" href="https://exploreraudio.de" target="_blank" rel="noopener noreferrer"><span class="credits-link__text">exploreraudio.de</span><span class="credits-link__arrow">↗</span></a>
+          <a class="credits-link" href="https://chiptunecomposer.com" target="_blank" rel="noopener noreferrer"><span class="credits-link__text">chiptunecomposer.com</span><span class="credits-link__arrow">↗</span></a>
+          <a class="credits-link" href="https://www.youtube.com/@ExplorerAUDIO" target="_blank" rel="noopener noreferrer"><span class="credits-link__text">YouTube — ExplorerAUDIO</span><span class="credits-link__arrow">↗</span></a>
+        </div>
+      </article>
+    </div>
+
+    <p class="credits__thanks" data-text="Thanks for playing.">Thanks for playing.</p>
+  </div>
 </div>
 
 <!-- Character select screen -->
@@ -1367,6 +1422,7 @@
 <script type="module" src="js/main.js"></script>
 <script src="js/ui/settings-ui.js" defer></script>
 <script src="js/ui/menu-background.js" defer></script>
+<script src="js/ui/credits.js" defer></script>
 <script>
   if ('serviceWorker' in navigator) {
     const CACHE_REFRESH_INTERVAL_MS = 5 * 60 * 60 * 1000;

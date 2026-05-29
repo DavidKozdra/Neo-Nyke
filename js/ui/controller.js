@@ -740,6 +740,28 @@ export function createUIController(view) {
       if (open) setRunHistoryView('achievements');
     }
 
+    function setCreditsPanelOpen(open) {
+      const panel = view.creditsPanel;
+      // Full-screen page swap: hide the main menu while credits is up.
+      view.start?.classList.toggle('hidden', open);
+      panel?.classList.toggle('hidden', !open);
+      panel?.setAttribute('aria-hidden', open ? 'false' : 'true');
+      view.creditsBtn?.setAttribute('aria-expanded', open ? 'true' : 'false');
+
+      if (open) {
+        // Remove then re-add .is-open on the next frame so the fly-in
+        // keyframes replay every time the page is opened.
+        panel?.classList.remove('is-open');
+        requestAnimationFrame(() => {
+          panel?.classList.add('is-open');
+          view.creditsClose?.focus({ preventScroll: true });
+        });
+      } else {
+        panel?.classList.remove('is-open');
+        view.creditsBtn?.focus({ preventScroll: true });
+      }
+    }
+
     function setAltModesPanelOpen(open) {
       view.altModesPanel?.classList.toggle('hidden', !open);
       view.altModesPanel?.setAttribute('aria-hidden', open ? 'false' : 'true');
@@ -1323,6 +1345,13 @@ export function createUIController(view) {
         // Alt modes panel
         view.altModesBtn?.addEventListener('click', () => setAltModesPanelOpen(true));
         view.altModesClose?.addEventListener('click', () => setAltModesPanelOpen(false));
+        view.creditsBtn?.addEventListener('click', () => setCreditsPanelOpen(true));
+        view.creditsClose?.addEventListener('click', () => setCreditsPanelOpen(false));
+        document.addEventListener('keydown', (e) => {
+          if (e.key === 'Escape' && view.creditsPanel && !view.creditsPanel.classList.contains('hidden')) {
+            setCreditsPanelOpen(false);
+          }
+        });
         view.altModeEndlessBtn?.addEventListener('click', () => {
           setAltModesPanelOpen(false);
           handlers.onOpenAltModeCharSelect('endless');
