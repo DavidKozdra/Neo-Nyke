@@ -38,6 +38,8 @@ export function drawEnvironmentTileAsset(g, ox, oy, size, def) {
       drawPotTileAsset(g, ox, oy, size, def);
     } else if (def.kind === 'barrel') {
       drawBarrelTileAsset(g, ox, oy, size, def);
+    } else if (def.kind === 'lava') {
+      drawLavaTileAsset(g, ox, oy, size, def);
     }
 
     drawTileCracks(g, ox, oy, def);
@@ -233,6 +235,31 @@ export function drawBarrelTileAsset(g, ox, oy, size, def) {
     g.fillRect(ox + 4, oy + 10, 9, 1);
   }
 
+export function drawLavaTileAsset(g, ox, oy, size, def) {
+    g.fillStyle = def.base || '#c43412';
+    g.fillRect(ox, oy, size, size);
+    g.fillStyle = def.shade || '#6a1604';
+    g.fillRect(ox, oy + size - 3, size, 3);
+    g.fillRect(ox, oy + 7, size, 1);
+    g.fillStyle = def.edge || '#ff9a3a';
+    g.fillRect(ox + 1, oy + 1, size - 2, 1);
+    g.fillRect(ox + 2, oy + 4, size - 5, 1);
+    g.fillRect(ox + 4, oy + 10, size - 7, 1);
+    g.fillStyle = def.crust || '#2c0a04';
+    g.fillRect(ox + 5, oy + 2, 1, 3);
+    g.fillRect(ox + 6, oy + 5, 3, 1);
+    g.fillRect(ox + 10, oy + 6, 1, 3);
+    g.fillRect(ox + 2, oy + 9, 1, 2);
+    g.fillRect(ox + 11, oy + 11, 3, 1);
+    g.fillRect(ox + 8, oy + 13, 1, 2);
+    g.fillStyle = def.ember || '#ffe27a';
+    g.fillRect(ox + 3, oy + 6, 1, 1);
+    g.fillRect(ox + 12, oy + 3, 1, 1);
+    g.fillRect(ox + 7, oy + 11, 1, 1);
+    g.fillRect(ox + 13, oy + 9, 1, 1);
+    g.fillRect(ox + 5, oy + 14, 1, 1);
+  }
+
 export function drawTileCracks(g, ox, oy, def) {
     if (!Array.isArray(def.cracks)) return;
     g.strokeStyle = def.mortar || '#151917';
@@ -268,6 +295,7 @@ export function drawTileChips(g, ox, oy, def) {
   Neo.drawBlockTileAsset = drawBlockTileAsset;
   Neo.drawPotTileAsset = drawPotTileAsset;
   Neo.drawBarrelTileAsset = drawBarrelTileAsset;
+  Neo.drawLavaTileAsset = drawLavaTileAsset;
   Neo.drawTileCracks = drawTileCracks;
   Neo.drawTileChips = drawTileChips;
 // 

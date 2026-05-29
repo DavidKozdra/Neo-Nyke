@@ -14,31 +14,89 @@
       Neo.ctx.translate(hazard.x, hazard.y);
       if (hazard.kind === 'lava') {
         const t = Neo.lavaAnimTime * (hazard.pulse || 1.5) + (hazard.phase || 0);
-        const wobble = hazard.wobble || 0.6;
-        const pulse = 1 + Math.sin(t * 2.4) * 0.07;
-        const outerRadius = hazard.r * pulse;
+        const tile = Neo.ENV_TILE_SIZE;
+        const isRect = hazard.shape === 'rect';
+        const w = isRect ? hazard.w : hazard.r * 2;
+        const h = isRect ? hazard.h : hazard.r * 2;
+        const left = -w / 2;
+        const top = -h / 2;
 
-        Neo.ctx.shadowColor = '#ff5a3d';
-        Neo.ctx.shadowBlur = 12 + Math.sin(t * 3.1) * 6;
-        Neo.ctx.fillStyle = 'rgba(255,95,42,0.55)';
+        Neo.ctx.save();
         Neo.ctx.beginPath();
-        for (let index = 0; index <= 26; index += 1) {
-          const angle = (index / 26) * Math.PI * 2;
-          const wave = Math.sin(t * 3.2 + angle * 4) * 0.06 * wobble
-            + Math.cos(t * 1.9 + angle * 7) * 0.04 * wobble;
-          const rr = outerRadius * (1 + wave);
-          const px = Math.cos(angle) * rr;
-          const py = Math.sin(angle) * rr;
-          if (index === 0) Neo.ctx.moveTo(px, py);
-          else Neo.ctx.lineTo(px, py);
+        if (isRect) Neo.ctx.rect(left, top, w, h);
+        else Neo.ctx.arc(0, 0, hazard.r, 0, Math.PI * 2);
+        Neo.ctx.clip();
+
+        if (isRect) {
+          for (let ty = 0; ty < h; ty += tile) {
+            for (let tx = 0; tx < w; tx += tile) {
+              Neo.drawEnvironmentTile('floor_lava', left + tx, top + ty, tile, tile);
+            }
+          }
+        } else {
+          const r = hazard.r;
+          const startX = -Math.ceil(r / tile) * tile;
+          const startY = -Math.ceil(r / tile) * tile;
+          const endX = Math.ceil(r / tile) * tile;
+          const endY = Math.ceil(r / tile) * tile;
+          for (let ty = startY; ty < endY; ty += tile) {
+            for (let tx = startX; tx < endX; tx += tile) {
+              Neo.drawEnvironmentTile('floor_lava', tx, ty, tile, tile);
+            }
+          }
         }
-        Neo.ctx.closePath();
-        Neo.ctx.fill();
 
-        Neo.ctx.fillStyle = `rgba(255,170,70,${0.45 + Math.sin(t * 4.5) * 0.12})`;
+        const heatPulse = 0.18 + Math.sin(t * 2.4) * 0.06;
+        Neo.ctx.globalCompositeOperation = 'lighter';
+        Neo.ctx.fillStyle = `rgba(255,140,40,${heatPulse})`;
+        Neo.ctx.fillRect(left, top, w, h);
+        Neo.ctx.globalCompositeOperation = 'source-over';
+
+        const seedBase = (hazard.phase || 0) * 1000 + (hazard.x || 0) * 0.31 + (hazard.y || 0) * 0.17;
+        const bubbleCount = Math.max(3, Math.round((w * h) / 2200));
+        for (let i = 0; i < bubbleCount; i += 1) {
+          const seed = seedBase + i * 137.13;
+          const period = 1.8 + ((Math.sin(seed) + 1) * 0.5) * 1.6;
+          const offset = ((Math.cos(seed * 1.7) + 1) * 0.5) * period;
+          const localT = ((Neo.lavaAnimTime + offset) % period) / period;
+          const bx = left + 6 + ((Math.sin(seed * 2.3) + 1) * 0.5) * (w - 12);
+          const by = top + 6 + ((Math.cos(seed * 3.1) + 1) * 0.5) * (h - 12);
+          const drift = Math.sin(seed * 5 + Neo.lavaAnimTime * 0.6) * 1.4;
+          const maxR = 3.2 + ((Math.sin(seed * 4.7) + 1) * 0.5) * 3.6;
+          const swell = Math.sin(localT * Math.PI);
+          const r = maxR * swell;
+          if (r < 0.6) continue;
+          const alpha = 0.55 * Math.min(1, swell * 1.6);
+
+          Neo.ctx.fillStyle = `rgba(255,210,110,${alpha})`;
+          Neo.ctx.beginPath();
+          Neo.ctx.arc(bx + drift, by, r, 0, Math.PI * 2);
+          Neo.ctx.fill();
+          Neo.ctx.fillStyle = `rgba(255,245,200,${alpha * 0.9})`;
+          Neo.ctx.beginPath();
+          Neo.ctx.arc(bx + drift - r * 0.35, by - r * 0.35, r * 0.45, 0, Math.PI * 2);
+          Neo.ctx.fill();
+
+          if (localT > 0.86) {
+            const popT = (localT - 0.86) / 0.14;
+            Neo.ctx.strokeStyle = `rgba(255,180,80,${(1 - popT) * 0.7})`;
+            Neo.ctx.lineWidth = 1;
+            Neo.ctx.beginPath();
+            Neo.ctx.arc(bx + drift, by, r + popT * 3, 0, Math.PI * 2);
+            Neo.ctx.stroke();
+          }
+        }
+        Neo.ctx.restore();
+
+        Neo.ctx.strokeStyle = `rgba(255,120,60,${0.55 + Math.sin(t * 3.1) * 0.18})`;
+        Neo.ctx.shadowColor = '#ff5a3d';
+        Neo.ctx.shadowBlur = 10 + Math.sin(t * 3.1) * 4;
+        Neo.ctx.lineWidth = 2;
         Neo.ctx.beginPath();
-        Neo.ctx.arc(Math.sin(t * 2.1) * 3, Math.cos(t * 2.6) * 3, hazard.r * 0.55, 0, Math.PI * 2);
-        Neo.ctx.fill();
+        if (isRect) Neo.ctx.rect(left + 1, top + 1, w - 2, h - 2);
+        else Neo.ctx.arc(0, 0, hazard.r - 1, 0, Math.PI * 2);
+        Neo.ctx.stroke();
+        Neo.ctx.shadowBlur = 0;
       } else if (hazard.kind === 'explosive_trap') {
         const now = Date.now();
         const t = now * 0.008 + hazard.x * 0.01;

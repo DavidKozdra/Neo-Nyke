@@ -598,60 +598,113 @@
     return Neo.rand(rangeMax, rangeMin, 'world');
   }
 
+  function randomMoatLaneTiles(axis, tileCount) {
+    const tile = Neo.ENV_TILE_SIZE;
+    const span = axis === 'x' ? Neo.ROOM_W : Neo.ROOM_H;
+    const center = span / 2;
+    const innerMin = Neo.WALL;
+    const innerMax = span - Neo.WALL;
+    const patchSize = tileCount * tile;
+    const doorHalf = Neo.DOOR / 2 + 32;
+    const ranges = [];
+    if (center - doorHalf - patchSize > innerMin) ranges.push([innerMin, center - doorHalf - patchSize]);
+    if (innerMax - patchSize > center + doorHalf) ranges.push([center + doorHalf, innerMax - patchSize]);
+    if (!ranges.length) return innerMin;
+    const [rMin, rMax] = ranges[Neo.irand(0, ranges.length - 1, 'world')];
+    const start = Neo.rand(rMax, rMin, 'world');
+    return Math.round(start / tile) * tile;
+  }
+
   function createMoatLavaHazard() {
-    const r = 44 + Neo.rand(24, 0, 'world');
+    const tile = Neo.ENV_TILE_SIZE;
+    const inCorner = Neo.nextRandom('world') < 0.45;
     const side = Neo.irand(0, 3, 'world');
-    const wallOffset = Neo.WALL + r + 18 + Neo.rand(16, 0, 'world');
+    const wTiles = 2 + Neo.irand(0, 2, 'world');
+    const hTiles = 2 + Neo.irand(0, 2, 'world');
+    const w = wTiles * tile;
+    const h = hTiles * tile;
+    const wallAlignX = Math.round(Neo.WALL / tile) * tile;
+    const wallAlignY = Math.round(Neo.WALL / tile) * tile;
+    const farX = Math.floor((Neo.ROOM_W - Neo.WALL - w) / tile) * tile;
+    const farY = Math.floor((Neo.ROOM_H - Neo.WALL - h) / tile) * tile;
+
     const hazard = {
       kind: 'lava',
-      x: Neo.ROOM_W / 2,
-      y: Neo.ROOM_H / 2,
-      r,
+      shape: 'rect',
+      w,
+      h,
       phase: Neo.rand(Math.PI * 2, 0, 'world'),
       pulse: Neo.rand(1.8, 1.15, 'world'),
-      wobble: Neo.rand(0.75, 0.45, 'world'),
       side,
+      corner: inCorner,
     };
 
-    if (side === 0) {
-      hazard.x = randomMoatLanePosition('x', r);
-      hazard.y = wallOffset;
+    let left;
+    let top;
+    if (inCorner) {
+      const cornerIdx = Neo.irand(0, 3, 'world');
+      left = (cornerIdx % 2 === 0) ? wallAlignX : farX;
+      top = (cornerIdx < 2) ? wallAlignY : farY;
+    } else if (side === 0) {
+      left = randomMoatLaneTiles('x', wTiles);
+      top = wallAlignY;
     } else if (side === 1) {
-      hazard.x = randomMoatLanePosition('x', r);
-      hazard.y = Neo.ROOM_H - wallOffset;
+      left = randomMoatLaneTiles('x', wTiles);
+      top = farY;
     } else if (side === 2) {
-      hazard.x = wallOffset;
-      hazard.y = randomMoatLanePosition('y', r);
+      left = wallAlignX;
+      top = randomMoatLaneTiles('y', hTiles);
     } else {
-      hazard.x = Neo.ROOM_W - wallOffset;
-      hazard.y = randomMoatLanePosition('y', r);
+      left = farX;
+      top = randomMoatLaneTiles('y', hTiles);
     }
 
+    hazard.left = left;
+    hazard.top = top;
+    hazard.x = left + w / 2;
+    hazard.y = top + h / 2;
+    hazard.r = Math.min(w, h) / 2;
     return hazard;
   }
 
   function createCompanionMoatLava(primary) {
-    const companion = {
+    const tile = Neo.ENV_TILE_SIZE;
+    const wTiles = Math.max(2, (primary.w / tile) - Neo.irand(0, 1, 'world'));
+    const hTiles = Math.max(2, (primary.h / tile) - Neo.irand(0, 1, 'world'));
+    const w = wTiles * tile;
+    const h = hTiles * tile;
+    const wallAlignX = Math.round(Neo.WALL / tile) * tile;
+    const wallAlignY = Math.round(Neo.WALL / tile) * tile;
+    const farX = Math.floor((Neo.ROOM_W - Neo.WALL - w) / tile) * tile;
+    const farY = Math.floor((Neo.ROOM_H - Neo.WALL - h) / tile) * tile;
+    const horizontal = primary.side <= 1;
+    const dir = Neo.nextRandom('world') < 0.5 ? -1 : 1;
+    const gapTiles = 1 + Neo.irand(0, 2, 'world');
+    let left = primary.left;
+    let top = primary.top;
+    if (horizontal) {
+      left = Neo.clamp(primary.left + dir * (primary.w + gapTiles * tile), wallAlignX, farX);
+      top = primary.side === 0 ? wallAlignY : farY;
+    } else {
+      top = Neo.clamp(primary.top + dir * (primary.h + gapTiles * tile), wallAlignY, farY);
+      left = primary.side === 2 ? wallAlignX : farX;
+    }
+    left = Math.round(left / tile) * tile;
+    top = Math.round(top / tile) * tile;
+    return {
       kind: 'lava',
-      x: primary.x,
-      y: primary.y,
-      r: primary.r * Neo.rand(0.86, 0.68, 'world'),
+      shape: 'rect',
+      w,
+      h,
+      left,
+      top,
+      x: left + w / 2,
+      y: top + h / 2,
+      r: Math.min(w, h) / 2,
       phase: primary.phase + Neo.rand(1.9, 0.6, 'world'),
       pulse: primary.pulse + Neo.rand(0.35, -0.2, 'world'),
-      wobble: primary.wobble + Neo.rand(0.2, -0.15, 'world'),
       side: primary.side,
     };
-
-    const along = (primary.r + companion.r) * Neo.rand(1.2, 0.75, 'world');
-    if (primary.side <= 1) {
-      companion.x = Neo.clamp(primary.x + (Neo.nextRandom('world') < 0.5 ? -along : along), companion.r + 42, Neo.ROOM_W - companion.r - 42);
-      companion.y = primary.side === 0 ? Neo.WALL + companion.r + 18 : Neo.ROOM_H - Neo.WALL - companion.r - 18;
-    } else {
-      companion.y = Neo.clamp(primary.y + (Neo.nextRandom('world') < 0.5 ? -along : along), companion.r + 42, Neo.ROOM_H - companion.r - 42);
-      companion.x = primary.side === 2 ? Neo.WALL + companion.r + 18 : Neo.ROOM_W - Neo.WALL - companion.r - 18;
-    }
-
-    return companion;
   }
 
   function createExplosiveTrapHazard(room, index = 0) {

@@ -111,7 +111,8 @@ export function collectRoomLightSources(room) {
       if (!hazard) return;
       if (hazard.kind === 'lava') {
         const h = haz.lava;
-        pushLightSource(lights, hazard.x, hazard.y, hazard.r * h.innerScale, hazard.r * h.outerScale, h.strength, h.tint);
+        const lightR = hazard.shape === 'rect' ? Math.max(hazard.w, hazard.h) / 2 : hazard.r;
+        pushLightSource(lights, hazard.x, hazard.y, lightR * h.innerScale, lightR * h.outerScale, h.strength, h.tint);
       } else if (hazard.kind === 'fire_circle') {
         const h = haz.fireCircle;
         pushLightSource(lights, hazard.x, hazard.y, hazard.r * h.innerScale, hazard.r * h.outerScale, h.strength, h.tint);

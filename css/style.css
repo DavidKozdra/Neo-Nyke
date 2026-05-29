@@ -3765,6 +3765,19 @@ button.alt.danger {
   height: 18px;
 }
 
+.dead-stat-val--icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.dead-stat-val--icon .dead-stat-icon {
+  width: 18px;
+  height: 18px;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
 /* ── Dead screen: personal bests records ─────────────────────────────── */
 .dead-records-wrap {
   display: flex;
@@ -4004,6 +4017,21 @@ button.alt.danger {
   cursor: not-allowed;
   background: rgba(255,255,255,.035);
   border-color: rgba(255,255,255,.08);
+}
+
+.dead-action--revive {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.dead-action-lc-icon {
+  width: 16px;
+  height: 16px;
+  vertical-align: middle;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
 }
 
 #start.overlay,
@@ -6094,20 +6122,28 @@ button.alt.danger {
 }
 
 .sandbox-token--stepper {
-  grid-template-columns: 28px 1fr auto;
+  grid-template-columns: 28px 1fr;
+  grid-template-rows: auto auto;
+  row-gap: 6px;
   cursor: default;
 }
 
+.sandbox-token--stepper .sandbox-token__icon { grid-row: 1; grid-column: 1; }
+.sandbox-token--stepper .sandbox-token__label { grid-row: 1; grid-column: 2; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+
 .sandbox-token__stepper {
-  display: inline-flex;
+  grid-row: 2;
+  grid-column: 1 / -1;
+  display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 4px;
-  justify-self: end;
 }
 
 .sandbox-token__step {
+  flex: 0 0 auto;
   width: 22px;
-  height: 22px;
+  height: 20px;
   border: 1px solid rgba(143, 216, 255, .45);
   border-radius: 5px;
   background: rgba(28, 44, 64, .92);
@@ -6127,7 +6163,7 @@ button.alt.danger {
 }
 
 .sandbox-token__count {
-  min-width: 22px;
+  flex: 1 1 auto;
   text-align: center;
   font-size: 12px;
   font-weight: 800;

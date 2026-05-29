@@ -756,9 +756,14 @@
         hazard.y = Neo.player.y;
       }
       hazard.statusTick = Number(hazard.statusTick ?? 0) - dt;
-      if (hazard.kind === 'lava' && Neo.dist(Neo.player.x, Neo.player.y, hazard.x, hazard.y) < hazard.r + Neo.player.r - 10 && Neo.player.lavaWalkTime <= 0) {
-        damagePlayer(6 * dt, 0, 0, 'lava');
-        if (hazard.statusTick <= 0) Neo.applyFire(Neo.player, 1, 2.6);
+      if (hazard.kind === 'lava' && Neo.player.lavaWalkTime <= 0) {
+        const inside = hazard.shape === 'rect'
+          ? Neo.circleRect(Neo.player.x, Neo.player.y, Neo.player.r - 6, hazard.left, hazard.top, hazard.w, hazard.h)
+          : Neo.dist(Neo.player.x, Neo.player.y, hazard.x, hazard.y) < hazard.r + Neo.player.r - 10;
+        if (inside) {
+          damagePlayer(6 * dt, 0, 0, 'lava');
+          if (hazard.statusTick <= 0) Neo.applyFire(Neo.player, 1, 2.6);
+        }
       }
       if (hazard.kind === 'explosive_trap') {
         if (!hazard.triggered) {
@@ -799,7 +804,10 @@
       if (hazard.kind === 'lava') {
         Neo.enemies.forEach(enemy => {
           if (!enemy) return;
-          if (Neo.dist(enemy.x, enemy.y, hazard.x, hazard.y) > hazard.r + enemy.r - 6) return;
+          const inside = hazard.shape === 'rect'
+            ? Neo.circleRect(enemy.x, enemy.y, enemy.r - 4, hazard.left, hazard.top, hazard.w, hazard.h)
+            : Neo.dist(enemy.x, enemy.y, hazard.x, hazard.y) <= hazard.r + enemy.r - 6;
+          if (!inside) return;
           if (hazard.statusTick <= 0) Neo.applyFire(enemy, 1, 2.8);
         });
         if (hazard.statusTick <= 0) hazard.statusTick = 0.45;

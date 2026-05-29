@@ -1680,6 +1680,27 @@ export function createUIController(view) {
         if (view.deadKills) view.deadKills.textContent = fmt(entry.kills);
         if (view.deadTime) view.deadTime.textContent = fmtTime(entry.elapsedSeconds || 0);
         if (view.deadCoins) view.deadCoins.textContent = fmt(entry.coins);
+        if (view.deadCoinIcon && typeof Neo.drawPixelIcon === 'function') {
+          Neo.drawPixelIcon(view.deadCoinIcon, '#ffd15a', [
+            [2, 1], [3, 1], [4, 1],
+            [1, 2], [2, 2], [3, 2], [4, 2], [5, 2],
+            [1, 3], [2, 3], [3, 3], [4, 3], [5, 3],
+            [1, 4], [2, 4], [3, 4], [4, 4], [5, 4],
+            [2, 5], [3, 5], [4, 5],
+          ]);
+        }
+        if (view.deadLoopCrystals) view.deadLoopCrystals.textContent = fmt(Number(Neo.metaProgress?.loopCrystals || 0));
+        if (view.deadLoopIcon && typeof Neo.drawPixelIcon === 'function') {
+          Neo.drawPixelIcon(view.deadLoopIcon, '#83f3ff', [
+            [2, 1], [3, 1], [4, 1],
+            [1, 2], [5, 2],
+            [1, 3], [5, 3],
+            [1, 4], [5, 4],
+            [2, 5], [3, 5], [4, 5],
+            [2, 2], [4, 2], [2, 4], [4, 4],
+            [3, 3],
+          ]);
+        }
         if (view.deadDifficulty) view.deadDifficulty.textContent = (entry.difficultyName || entry.difficulty || '—').toUpperCase();
         if (view.deadDifficultyIcon && typeof Neo.drawDifficultyIconOn === 'function') {
           const difficultyKey = String(entry.difficulty || Neo.selectedDifficulty || 'easy').toLowerCase();
@@ -1689,7 +1710,19 @@ export function createUIController(view) {
         if (reviveButton) {
           const cost = Neo.getReviveCost();
           const crystals = Number(Neo.metaProgress.loopCrystals || 0);
-          reviveButton.innerHTML = `REVIVE ${cost} ${LC}`;
+          reviveButton.innerHTML = `REVIVE ${cost} <canvas class="dead-action-lc-icon" width="20" height="20"></canvas>`;
+          const reviveIcon = reviveButton.querySelector('.dead-action-lc-icon');
+          if (reviveIcon && typeof Neo.drawPixelIcon === 'function') {
+            Neo.drawPixelIcon(reviveIcon, '#83f3ff', [
+              [2, 1], [3, 1], [4, 1],
+              [1, 2], [5, 2],
+              [1, 3], [5, 3],
+              [1, 4], [5, 4],
+              [2, 5], [3, 5], [4, 5],
+              [2, 2], [4, 2], [2, 4], [4, 4],
+              [3, 3],
+            ]);
+          }
           reviveButton.disabled = crystals < cost;
           reviveButton.title = crystals < cost ? `Need ${cost} Loop Crystal${cost === 1 ? '' : 's'}` : `Spend ${cost} Loop Crystal${cost === 1 ? '' : 's'} to revive`;
         }
@@ -1775,6 +1808,15 @@ export function createUIController(view) {
         if (view.winKills) view.winKills.textContent = fmt(entry.kills);
         if (view.winTime) view.winTime.textContent = fmtTime(entry.elapsedSeconds || 0);
         if (view.winCoins) view.winCoins.textContent = fmt(entry.coins);
+        if (view.winCoinIcon && typeof Neo.drawPixelIcon === 'function') {
+          Neo.drawPixelIcon(view.winCoinIcon, '#ffd15a', [
+            [2, 1], [3, 1], [4, 1],
+            [1, 2], [2, 2], [3, 2], [4, 2], [5, 2],
+            [1, 3], [2, 3], [3, 3], [4, 3], [5, 3],
+            [1, 4], [2, 4], [3, 4], [4, 4], [5, 4],
+            [2, 5], [3, 5], [4, 5],
+          ]);
+        }
         if (view.winDifficulty) view.winDifficulty.textContent = (entry.difficultyName || entry.difficulty || '—').toUpperCase();
 
         const crystalBonus = Math.max(0, Math.round(Neo.getActiveChallengeCrystalBonusMultiplier?.() || 0));

@@ -235,5 +235,13 @@ window.NeoNykeEnvironmentTileDefs = {
       edge: '#b17a42',
       band: '#2b2d2c',
     },
+    floor_lava: {
+      kind: 'lava',
+      base: '#c43412',
+      shade: '#6a1604',
+      edge: '#ff9a3a',
+      ember: '#ffe27a',
+      crust: '#2c0a04',
+    },
   },
 };
