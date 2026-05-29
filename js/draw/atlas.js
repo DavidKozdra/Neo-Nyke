@@ -49,85 +49,18 @@ export function drawEnvironmentTileAsset(g, ox, oy, size, def) {
 
 export function drawFloorTileAsset(g, ox, oy, size, def) {
     g.fillStyle = def.shade || '#252823';
-    g.fillRect(ox, oy + size - 2, size, 2);
+    g.fillRect(ox, oy + size - 3, size, 3);
+    g.fillRect(ox + size - 3, oy, 3, size);
     g.fillStyle = def.edge || '#4c5047';
-    g.globalAlpha = 0.42;
-    g.fillRect(ox + 2, oy + 2, size - 4, 1);
-    g.fillRect(ox + 3, oy + 5, size - 7, 1);
-    g.fillRect(ox + 2, oy + 9, size - 5, 1);
-    g.fillRect(ox + 5, oy + 13, size - 8, 1);
-    g.globalAlpha = 1;
+    g.fillRect(ox + 1, oy + 1, size - 3, 1);
+    g.fillRect(ox + 1, oy + 1, 1, size - 3);
     g.strokeStyle = def.mortar || '#1c1f1d';
     g.lineWidth = 1;
-    g.beginPath();
-    g.moveTo(ox + 1.5, oy + size - 2.5);
-    g.lineTo(ox + size - 2.5, oy + 1.5);
-    g.stroke();
-    g.globalAlpha = 0.32;
-    g.beginPath();
-    g.moveTo(ox + 1.5, oy + 7.5);
-    g.lineTo(ox + 7.5, oy + 1.5);
-    g.moveTo(ox + 8.5, oy + size - 1.5);
-    g.lineTo(ox + size - 1.5, oy + 8.5);
-    g.stroke();
-    g.globalAlpha = 1;
-    if (def.moss) {
-      g.fillStyle = def.moss;
-      g.fillRect(ox + 1, oy + size - 4, 5, 2);
-      g.fillRect(ox + size - 5, oy + 2, 3, 1);
-      g.fillRect(ox + 7, oy + 13, 4, 1);
-    }
-    if (def.overgrowth) {
-      g.fillStyle = def.overgrowth;
-      g.fillRect(ox + 2, oy + size - 6, 8, 1);
-      g.fillRect(ox + 9, oy + size - 7, 1, 3);
-      g.fillRect(ox + size - 4, oy + 4, 2, 5);
-    }
-    if (def.leaf) {
-      g.fillStyle = def.leaf;
-      g.fillRect(ox + 2, oy + 3, 1, 1);
-      g.fillRect(ox + 10, oy + 6, 1, 1);
-      g.fillRect(ox + 6, oy + 9, 1, 1);
-      g.fillRect(ox + 12, oy + 12, 1, 1);
-    }
-    if (def.ash) {
-      g.fillStyle = def.ash;
-      g.fillRect(ox + 3, oy + 4, 1, 1);
-      g.fillRect(ox + 8, oy + 12, 2, 1);
-      g.fillRect(ox + 12, oy + 7, 1, 1);
-    }
-    if (def.bone) {
-      g.fillStyle = def.bone;
-      g.fillRect(ox + 4, oy + 10, 4, 1);
-      g.fillRect(ox + 12, oy + 4, 1, 3);
-      g.fillRect(ox + 11, oy + 5, 3, 1);
-    }
-    if (def.blood) {
-      g.fillStyle = def.blood;
-      g.fillRect(ox + 4, oy + 8, 5, 2);
-      g.fillRect(ox + 8, oy + 10, 3, 1);
-      g.fillRect(ox + 12, oy + 11, 1, 1);
-    }
-    if (def.ember) {
-      g.fillStyle = def.ember;
-      g.fillRect(ox + 4, oy + 11, 1, 1);
-      g.fillRect(ox + 12, oy + 5, 1, 1);
-    }
+    g.strokeRect(ox + 0.5, oy + 0.5, size - 1, size - 1);
   }
 
 export function drawPlankTileAsset(g, ox, oy, size, def) {
-    g.fillStyle = def.base || '#4b3320';
-    g.fillRect(ox, oy, size, size);
-    g.fillStyle = def.shade || '#2b1e13';
-    g.fillRect(ox, oy + 5, size, 1);
-    g.fillRect(ox, oy + 11, size, 1);
-    g.fillRect(ox + 7, oy, 1, 5);
-    g.fillRect(ox + 12, oy + 6, 1, 5);
-    g.fillRect(ox + 4, oy + 12, 1, 4);
-    g.fillStyle = def.edge || '#6c4a2c';
-    g.fillRect(ox + 1, oy + 1, size - 2, 1);
-    g.strokeStyle = def.mortar || '#1d140d';
-    g.strokeRect(ox + 0.5, oy + 0.5, size - 1, size - 1);
+    drawFloorTileAsset(g, ox, oy, size, def);
   }
 
 export function drawWallTileAsset(g, ox, oy, size, def) {
