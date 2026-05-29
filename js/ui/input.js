@@ -83,7 +83,7 @@ export const MOVE_DEFS = {
       name: 'Nimrod Stomp',
       desc: 'Leap across the room and slam on landing for heavy AOE damage.',
     },
-    warp: { key: 'warp', slot: 'dash', name: 'Warp', desc: 'Phase out and reappear Phase out and reappear where the mouse is ..' },
+    warp: { key: 'warp', slot: 'dash', name: 'Warp', desc: 'Phase out and reappear where the mouse is. Leaves a silhouette and grants i-frames. 4 charges.', maxStacks: 4 },
     zip_lightning: {
       key: 'zip_lightning',
       slot: 'dash',
@@ -847,6 +847,7 @@ export const ui = {
     deadTime: document.getElementById('deadTime'),
     deadCoins: document.getElementById('deadCoins'),
     deadDifficulty: document.getElementById('deadDifficulty'),
+    deadDifficultyIcon: document.getElementById('deadDifficultyIcon'),
     deadItems: document.getElementById('deadItems'),
     deadItemsPrev: document.getElementById('deadItemsPrev'),
     deadItemsNext: document.getElementById('deadItemsNext'),
@@ -1027,6 +1028,9 @@ export const ui = {
     sandboxSaveClose: document.getElementById('sandboxSaveClose'),
     sandboxEnemyList: document.getElementById('sandboxEnemyList'),
     sandboxItemList: document.getElementById('sandboxItemList'),
+    sandboxStartItemList: document.getElementById('sandboxStartItemList'),
+    sandboxStartItemsAll: document.getElementById('sandboxStartItemsAll'),
+    sandboxStartItemsNone: document.getElementById('sandboxStartItemsNone'),
     sandboxEnemiesAll: document.getElementById('sandboxEnemiesAll'),
     sandboxEnemiesNone: document.getElementById('sandboxEnemiesNone'),
     sandboxItemsAll: document.getElementById('sandboxItemsAll'),
@@ -1127,6 +1131,7 @@ export const SANDBOX_DEFAULT_SETTINGS = {
     godMode: false,
     allowedEnemies: SANDBOX_ENEMY_TYPES.slice(),
     allowedItems: ITEM_KEYS.slice(),
+    startingItems: {},
   };
   // sandboxSettings initial value (metaProgress/tutorialState set later in game-state.js)
   Neo.sandboxSettings = { ...SANDBOX_DEFAULT_SETTINGS };

@@ -453,7 +453,7 @@
           <div class="dead-stat"><span class="dead-stat-label">KILLS</span><b class="dead-stat-val" id="deadKills">—</b></div>
           <div class="dead-stat"><span class="dead-stat-label">TIME</span><b class="dead-stat-val" id="deadTime">—</b></div>
           <div class="dead-stat"><span class="dead-stat-label">COINS</span><b class="dead-stat-val" id="deadCoins">—</b></div>
-          <div class="dead-stat"><span class="dead-stat-label">DIFFICULTY</span><b class="dead-stat-val" id="deadDifficulty">—</b></div>
+          <div class="dead-stat"><span class="dead-stat-label">DIFFICULTY</span><b class="dead-stat-val dead-stat-val--difficulty"><canvas id="deadDifficultyIcon" width="20" height="20" class="difficulty-hud-icon"></canvas><span id="deadDifficulty">—</span></b></div>
         </div>
         <div class="dead-records-wrap">
           <span class="dead-records-title">PERSONAL BESTS</span>
@@ -815,6 +815,14 @@
               <input type="number" class="sandbox-num" min="0" max="999" step="1" value="0">
             </div>
           </div>
+        </div>
+        <div class="sandbox-card">
+          <h4>Starting Inventory</h4>
+          <div class="sandbox-toolbar">
+            <button id="sandboxStartItemsAll" class="sandbox-mini-btn" type="button">All ×1</button>
+            <button id="sandboxStartItemsNone" class="sandbox-mini-btn" type="button">None</button>
+          </div>
+          <div id="sandboxStartItemList" class="sandbox-token-grid sandbox-token-grid--items"></div>
         </div>
         <div class="sandbox-card">
           <h4>Enemy Types</h4>

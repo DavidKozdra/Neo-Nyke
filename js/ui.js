@@ -77,7 +77,7 @@
       name: 'Nimrod Stomp',
       desc: 'Leap across the room and slam on landing for heavy AOE damage.',
     },
-    warp: { key: 'warp', slot: 'dash', name: 'Warp', desc: 'Phase out and reappear where the mouse is .' },
+    warp: { key: 'warp', slot: 'dash', name: 'Warp', desc: 'Phase out and reappear where the mouse is. Leaves a silhouette and grants i-frames. 4 charges.', maxStacks: 4 },
     zip_lightning: {
       key: 'zip_lightning',
       slot: 'dash',
@@ -781,6 +781,7 @@
     deadTime: document.getElementById('deadTime'),
     deadCoins: document.getElementById('deadCoins'),
     deadDifficulty: document.getElementById('deadDifficulty'),
+    deadDifficultyIcon: document.getElementById('deadDifficultyIcon'),
     deadItems: document.getElementById('deadItems'),
     deadItemsPrev: document.getElementById('deadItemsPrev'),
     deadItemsNext: document.getElementById('deadItemsNext'),

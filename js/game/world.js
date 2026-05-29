@@ -1422,6 +1422,7 @@
       line: null, shockwave: null, impact: null, spark: null,
       blood: null, ring: null, style: null,
       maxLife: null, radius: null, angle: null,
+      silhouette: null,
     });
   }
 
@@ -1433,6 +1434,7 @@
       line: null, shockwave: null, impact: null, spark: null,
       blood: null, ring: null, style: null,
       maxLife: null, radius: null, angle: null,
+      silhouette: null,
     };
   }
 
@@ -1457,6 +1459,7 @@
     p.maxLife = props.maxLife ?? null;
     p.radius = props.radius ?? null;
     p.angle = props.angle ?? null;
+    p.silhouette = props.silhouette ?? null;
     Neo.particles.push(p);
   }
 

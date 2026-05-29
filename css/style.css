@@ -3754,6 +3754,17 @@ button.alt.danger {
   letter-spacing: 0.04em;
 }
 
+.dead-stat-val--difficulty {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.dead-stat-val--difficulty .difficulty-hud-icon {
+  width: 18px;
+  height: 18px;
+}
+
 /* ── Dead screen: personal bests records ─────────────────────────────── */
 .dead-records-wrap {
   display: flex;
@@ -6080,6 +6091,48 @@ button.alt.danger {
   background: linear-gradient(180deg, rgba(62, 118, 160, .26), rgba(28, 60, 88, .25));
   color: #e8f8ff;
   box-shadow: 0 0 10px rgba(104, 191, 255, .18);
+}
+
+.sandbox-token--stepper {
+  grid-template-columns: 28px 1fr auto;
+  cursor: default;
+}
+
+.sandbox-token__stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  justify-self: end;
+}
+
+.sandbox-token__step {
+  width: 22px;
+  height: 22px;
+  border: 1px solid rgba(143, 216, 255, .45);
+  border-radius: 5px;
+  background: rgba(28, 44, 64, .92);
+  color: #e8f8ff;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.sandbox-token__step:hover {
+  background: rgba(62, 118, 160, .55);
+}
+
+.sandbox-token__count {
+  min-width: 22px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 800;
+  color: #e8f8ff;
+  font-variant-numeric: tabular-nums;
 }
 
 .sandbox-token--item.sandbox-token--knight .sandbox-token__label { color: #cfe0ef; }

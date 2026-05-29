@@ -133,6 +133,21 @@
         Neo.ctx.beginPath();
         Neo.ctx.ellipse(0, 0, size * 1.8, size * 0.45, 0, 0, Math.PI * 2);
         Neo.ctx.fill();
+      } else if (particle.silhouette) {
+        const maxLife = Number(particle.maxLife || particle.life || 0.6);
+        const progress = Neo.clamp(1 - particle.life / maxLife, 0, 1);
+        const fade = (1 - progress) * 0.65;
+        Neo.ctx.globalAlpha = fade;
+        const sil = particle.silhouette;
+        if (Neo.drawSpriteFrame) {
+          Neo.drawSpriteFrame(sil.spriteKey, 0, 0, sil.size || 40, {
+            alpha: fade,
+            flipX: sil.facing < 0,
+            shadowColor: particle.c || '#b99cff',
+            shadowBlur: 18,
+            tint: particle.c || '#b99cff',
+          });
+        }
       } else if (particle.ring) {
         Neo.ctx.strokeStyle = particle.c;
         Neo.ctx.lineWidth = 3;
@@ -653,6 +668,12 @@
     });
   }
 
+  function drawDifficultyIconOn(canvasEl, difficultyKey) {
+    if (!canvasEl) return;
+    const def = DIFFICULTY_ICON_DEFS[difficultyKey] || DIFFICULTY_ICON_DEFS.easy;
+    drawPixelIcon(canvasEl, def.color, def.pixels);
+  }
+
   function drawPixelIcon(canvasEl, color, pixels) {
     const iconCtx = canvasEl.getContext('2d');
     iconCtx.clearRect(0, 0, canvasEl.width, canvasEl.height);
@@ -675,4 +696,5 @@
   Neo.drawActionIcons = drawActionIcons;
   Neo.drawPixelIcon = drawPixelIcon;
   Neo.drawDifficultyIcons = drawDifficultyIcons;
+  Neo.drawDifficultyIconOn = drawDifficultyIconOn;
 

@@ -1209,7 +1209,7 @@
     const base = Math.atan2(Neo.mouse.worldY - Neo.player.y, Neo.mouse.worldX - Neo.player.x);
     for (let index = -1; index <= 1; index += 1) {
       const angle = base + index * 0.18;
-      Neo.spawnProjectile({ x: Neo.player.x, y: Neo.player.y, vx: Math.cos(angle) * 320, vy: Math.sin(angle) * 320, r: 8, life: 1.6, enemy: false, kind: 'fireball', damage: 22, splash: 48 * aoeRadiusMultiplier, splashDamage: Math.round(14 * aoeDamageMultiplier), blockedSplashDamage: Math.round(16 * aoeDamageMultiplier), fireStacks: 2, fireDuration: 3.4 });
+      Neo.spawnProjectile({ x: Neo.player.x, y: Neo.player.y, vx: Math.cos(angle) * 384, vy: Math.sin(angle) * 384, r: 8, life: 1.6, enemy: false, kind: 'fireball', damage: 22, splash: 48 * aoeRadiusMultiplier, splashDamage: Math.round(14 * aoeDamageMultiplier), blockedSplashDamage: Math.round(16 * aoeDamageMultiplier), fireStacks: 2, fireDuration: 3.4 });
     }
   }
 
@@ -1386,7 +1386,7 @@
     const safePoint = getWarpLandingPoint();
     if (!safePoint) return;
     teleportPlayerTo(safePoint.x, safePoint.y, '#b99cff');
-    Neo.player.inv = Math.max(Neo.player.inv, 0.24);
+    Neo.player.inv = Math.max(Neo.player.inv, 0.6);
   }
 
   function applyEnemyImpactStun(enemy, dealt, appliedKnockback) {

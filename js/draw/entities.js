@@ -217,13 +217,18 @@
     Neo.ctx.beginPath();
     Neo.ctx.arc(landing.x, landing.y, Neo.player.r + 18 + pulse, 0, Math.PI * 2);
     Neo.ctx.fill();
-
-    Neo.ctx.globalAlpha = 0.74;
-    Neo.ctx.fillStyle = '#ffffff';
-    Neo.ctx.beginPath();
-    Neo.ctx.arc(landing.x, landing.y, 3.5, 0, Math.PI * 2);
-    Neo.ctx.fill();
     Neo.ctx.restore();
+
+    const aimAngle = Math.atan2(Neo.mouse.worldY - landing.y, Neo.mouse.worldX - landing.x);
+    const facing = getFacingDirection(Neo.player, aimAngle);
+    const ghostSize = Math.max(34, Neo.player.r * 2.5);
+    drawSpriteFrame(getPlayerSpriteKey(), landing.x, landing.y, ghostSize, {
+      alpha: 0.42 + Math.sin(time) * 0.06,
+      flipX: facing < 0,
+      shadowColor: '#c8a6ff',
+      shadowBlur: 16,
+      tint: '#c8a6ff',
+    });
   }
 
   function drawSpriteFrame(spriteKey, x, y, size, options = {}) {

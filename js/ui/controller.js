@@ -994,6 +994,11 @@ export function createUIController(view) {
             const item = Neo.itemRegistry.get(itemKey) || Neo.ITEM_DEFS[itemKey];
             if (item) Neo.drawItemToastIcon(el, item);
           });
+          view.sandboxStartItemList?.querySelectorAll('[data-sbox-start-item-icon]').forEach(el => {
+            const itemKey = String(el.dataset.sboxStartItemIcon || '');
+            const item = Neo.itemRegistry.get(itemKey) || Neo.ITEM_DEFS[itemKey];
+            if (item) Neo.drawItemToastIcon(el, item);
+          });
         }
 
         function renderSandboxTokenLists() {
@@ -1017,6 +1022,28 @@ export function createUIController(view) {
                 + `<canvas class="sandbox-token__icon sandbox-token__icon--item" data-sbox-item-icon="${Neo.escapeHtml(key)}" width="26" height="26" aria-hidden="true"></canvas>`
                 + `<span class="sandbox-token__label">${Neo.escapeHtml(label)}</span>`
                 + `</button>`;
+            }).join('');
+          }
+          if (view.sandboxStartItemList) {
+            const startingItems = Neo.sandboxSettings.startingItems && typeof Neo.sandboxSettings.startingItems === 'object'
+              ? Neo.sandboxSettings.startingItems
+              : {};
+            view.sandboxStartItemList.innerHTML = Neo.ITEM_KEYS.map(key => {
+              const count = Math.max(0, Math.min(99, Math.round(Number(startingItems[key]) || 0)));
+              const active = count > 0;
+              const item = Neo.itemRegistry.get(key) || Neo.ITEM_DEFS[key];
+              const label = item?.name || key.replace(/_/g, ' ');
+              const rarity = String(item?.rarity || 'knight');
+              const safeKey = Neo.escapeHtml(key);
+              return `<div class="sandbox-token sandbox-token--item sandbox-token--stepper sandbox-token--${Neo.escapeHtml(rarity)}${active ? ' is-active' : ''}" data-sbox-start-item="${safeKey}">`
+                + `<canvas class="sandbox-token__icon sandbox-token__icon--item" data-sbox-start-item-icon="${safeKey}" width="26" height="26" aria-hidden="true"></canvas>`
+                + `<span class="sandbox-token__label">${Neo.escapeHtml(label)}</span>`
+                + `<div class="sandbox-token__stepper">`
+                  + `<button class="sandbox-token__step" data-sbox-start-step="-1" data-sbox-start-item-key="${safeKey}" type="button" aria-label="Decrease ${Neo.escapeHtml(label)}">−</button>`
+                  + `<span class="sandbox-token__count" data-sbox-start-count>${count}</span>`
+                  + `<button class="sandbox-token__step" data-sbox-start-step="1" data-sbox-start-item-key="${safeKey}" type="button" aria-label="Increase ${Neo.escapeHtml(label)}">+</button>`
+                + `</div>`
+                + `</div>`;
             }).join('');
           }
           hydrateSandboxTokenIcons();
@@ -1112,6 +1139,34 @@ export function createUIController(view) {
         view.sandboxItemsNone?.addEventListener('click', () => {
           Neo.sandboxSettings.allowedItems = [];
           Neo.sandboxSettings = Neo.normalizeSandboxSettings(Neo.sandboxSettings);
+          syncSandboxPanelFields();
+          Neo.persistMetaSoon();
+        });
+        view.sandboxStartItemList?.addEventListener('click', event => {
+          const stepBtn = event.target instanceof Element ? event.target.closest('[data-sbox-start-step]') : null;
+          if (!stepBtn) return;
+          const key = String(stepBtn.dataset.sboxStartItemKey || '');
+          if (!Neo.ITEM_KEYS.includes(key)) return;
+          const delta = parseInt(stepBtn.dataset.sboxStartStep, 10) || 0;
+          const current = Neo.sandboxSettings.startingItems && typeof Neo.sandboxSettings.startingItems === 'object'
+            ? { ...Neo.sandboxSettings.startingItems }
+            : {};
+          const next = Math.max(0, Math.min(99, (Math.round(Number(current[key]) || 0)) + delta));
+          if (next > 0) current[key] = next; else delete current[key];
+          Neo.sandboxSettings.startingItems = current;
+          Neo.sandboxSettings = Neo.normalizeSandboxSettings(Neo.sandboxSettings);
+          syncSandboxPanelFields();
+          Neo.persistMetaSoon();
+        });
+        view.sandboxStartItemsAll?.addEventListener('click', () => {
+          const map = {};
+          for (const key of Neo.ITEM_KEYS) map[key] = 1;
+          Neo.sandboxSettings.startingItems = map;
+          syncSandboxPanelFields();
+          Neo.persistMetaSoon();
+        });
+        view.sandboxStartItemsNone?.addEventListener('click', () => {
+          Neo.sandboxSettings.startingItems = {};
           syncSandboxPanelFields();
           Neo.persistMetaSoon();
         });
@@ -1626,6 +1681,10 @@ export function createUIController(view) {
         if (view.deadTime) view.deadTime.textContent = fmtTime(entry.elapsedSeconds || 0);
         if (view.deadCoins) view.deadCoins.textContent = fmt(entry.coins);
         if (view.deadDifficulty) view.deadDifficulty.textContent = (entry.difficultyName || entry.difficulty || '—').toUpperCase();
+        if (view.deadDifficultyIcon && typeof Neo.drawDifficultyIconOn === 'function') {
+          const difficultyKey = String(entry.difficulty || Neo.selectedDifficulty || 'easy').toLowerCase();
+          Neo.drawDifficultyIconOn(view.deadDifficultyIcon, difficultyKey);
+        }
         const reviveButton = view.deadActions?.find(button => button.dataset.deadAction === 'revive');
         if (reviveButton) {
           const cost = Neo.getReviveCost();

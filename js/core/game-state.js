@@ -43,6 +43,18 @@ export function resumeGame() {
     const allowedItems = Array.isArray(source.allowedItems)
       ? Neo.ITEM_KEYS.filter(key => source.allowedItems.includes(key))
       : Neo.ITEM_KEYS.slice();
+    const legacyPerItem = Math.max(1, Math.min(99, Math.round(Number(source.startingItemCount) || 1)));
+    const startingItems = {};
+    if (Array.isArray(source.startingItems)) {
+      for (const key of source.startingItems) {
+        if (Neo.ITEM_KEYS.includes(key)) startingItems[key] = legacyPerItem;
+      }
+    } else if (source.startingItems && typeof source.startingItems === 'object') {
+      for (const key of Neo.ITEM_KEYS) {
+        const n = Math.round(Number(source.startingItems[key]) || 0);
+        if (n > 0) startingItems[key] = Math.min(99, n);
+      }
+    }
     return {
       enemyStatMultiplier: Math.max(0.2, Math.min(4, Number(source.enemyStatMultiplier ?? Neo.SANDBOX_DEFAULT_SETTINGS.enemyStatMultiplier) || 1)),
       enemySpeedMultiplier: Math.max(0.2, Math.min(3, Number(source.enemySpeedMultiplier ?? Neo.SANDBOX_DEFAULT_SETTINGS.enemySpeedMultiplier) || 1)),
@@ -52,6 +64,7 @@ export function resumeGame() {
       godMode: !!source.godMode,
       allowedEnemies: allowedEnemies.length ? allowedEnemies : Neo.SANDBOX_ENEMY_TYPES.slice(0, 1),
       allowedItems: allowedItems.length ? allowedItems : Neo.ITEM_KEYS.slice(),
+      startingItems,
     };
   }
 
@@ -1673,6 +1686,15 @@ export function resumeGame() {
       if (Neo.gameMode === 'sandbox') {
         Neo.player.coins = Number(Neo.sandboxSettings.startingCoins || 0);
         Neo.selectedChallenges = [];
+        const startItems = Neo.sandboxSettings.startingItems && typeof Neo.sandboxSettings.startingItems === 'object'
+          ? Neo.sandboxSettings.startingItems
+          : {};
+        if (Neo.player.items) {
+          for (const key of Neo.ITEM_KEYS) {
+            const count = Math.round(Number(startItems[key]) || 0);
+            if (count > 0) Neo.player.items[key] = (Number(Neo.player.items[key]) || 0) + count;
+          }
+        }
       }
       applyRunChallengeStartModifiers();
       Neo.lastDamageSource = '';

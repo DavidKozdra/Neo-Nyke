@@ -557,20 +557,28 @@
         const canAfford = usesCoins
           ? Number(Neo.player?.coins || 0) >= cost
           : Number(Neo.metaProgress.loopCrystals || 0) >= cost;
-        const color = canAfford ? '#aee7ff' : '#ffb1b1';
+        const frameColor = canAfford ? '#aee7ff' : '#ffb1b1';
+        const currencyColor = usesCoins ? '#ffd54a' : '#83f3ff';
+        const currencySymbol = usesCoins ? '●' : '◆';
+        const costColor = canAfford ? currencyColor : '#ffb1b1';
         Neo.ctx.fillStyle = 'rgba(7,17,22,0.92)';
-        Neo.ctx.strokeStyle = color;
+        Neo.ctx.strokeStyle = frameColor;
         Neo.ctx.lineWidth = 2;
-        Neo.ctx.shadowColor = color;
+        Neo.ctx.shadowColor = frameColor;
         Neo.ctx.shadowBlur = 16;
         Neo.ctx.fillRect(-22, -18, 44, 36);
         Neo.ctx.strokeRect(-22, -18, 44, 36);
-        Neo.ctx.fillStyle = color;
+        Neo.ctx.shadowBlur = 0;
+        Neo.ctx.fillStyle = frameColor;
         Neo.ctx.font = 'bold 11px system-ui';
         Neo.ctx.textAlign = 'center';
         Neo.ctx.fillText(String(pickup.label || 'Offer'), 0, -2);
-        Neo.ctx.font = 'bold 10px system-ui';
-        Neo.ctx.fillText(`${cost} ${usesCoins ? 'C' : 'LC'}`, 0, 12);
+        Neo.ctx.font = 'bold 11px system-ui';
+        Neo.ctx.fillStyle = costColor;
+        Neo.ctx.shadowColor = currencyColor;
+        Neo.ctx.shadowBlur = 6;
+        Neo.ctx.fillText(`${cost} ${currencySymbol}`, 0, 13);
+        Neo.ctx.shadowBlur = 0;
       } else if (pickup.type === 'secret_boss_chest') {
         const t = Date.now() * 0.003;
         const glow = '#c9aaff';
