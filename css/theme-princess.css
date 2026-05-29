@@ -850,10 +850,20 @@ html.princess-ui .entity-dialogue-bubble {
 html.princess-ui .entity-dialogue-name { color: #ff9acf; }
 html.princess-ui .entity-dialogue-text { color: #ffd6ea; }
 
-/* ── Adapter status ───────────────────────────────────────────────────────── */
+/* ── Equipment slots ──────────────────────────────────────────────────────── */
 
-html.princess-ui .adapter-status {
-  background: linear-gradient(180deg, rgba(40, 8, 26, .95), rgba(16, 4, 12, .97));
+html.princess-ui .equipment-slots {
+  background: linear-gradient(180deg, rgba(40, 8, 26, .82), rgba(16, 4, 12, .9));
+  border-color: rgba(255, 154, 207, .3);
+}
+
+html.princess-ui .equip-slot {
+  background: linear-gradient(180deg, rgba(48, 12, 32, .9), rgba(20, 4, 14, .92));
   border-color: rgba(255, 154, 207, .42);
   color: #ffb8de;
+}
+
+html.princess-ui .equip-slot.is-empty {
+  border-color: rgba(255, 154, 207, .25);
+  color: rgba(255, 184, 222, .35);
 }

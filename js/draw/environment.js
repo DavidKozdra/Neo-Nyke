@@ -2,6 +2,7 @@
   function draw() {
     const isDying = Neo.gameState === 'dying';
     const isPlayLike = Neo.gameState === 'play' || Neo.gameState === 'pause' || Neo.gameState === 'dialogue' || isDying;
+    Neo._lightsFrame = (Neo._lightsFrame || 0) + 1;
     let sectionPerfStart = Neo.perfStart();
     Neo.ctx.clearRect(0, 0, Neo.canvas.width, Neo.canvas.height);
     if (isPlayLike) {

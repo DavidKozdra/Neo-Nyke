@@ -68,7 +68,9 @@ export function bindInput() {
       }
       if (b && key === b.smash && Neo.gameState === 'play') Neo.trySmash();
       else if (!b && key === 'r' && Neo.gameState === 'play') Neo.trySmash();
-      if (key === 'g' && Neo.gameState === 'play') Neo.tryUsePotion();
+      if (Neo.gameState === 'play' && Neo.EQUIPMENT_SLOT_KEYS?.includes(key.toUpperCase())) {
+        if (Neo.activateEquipmentSlotKey?.(key.toUpperCase())) event.preventDefault();
+      }
     });
     window.addEventListener('keyup', event => {
       const key = event.key.toLowerCase();
@@ -359,7 +361,7 @@ export function bindPanelInput() {
     Neo.ui.shopWeapons?.addEventListener('click', handleShopBuyClick);
     Neo.ui.shopMoves?.addEventListener('click', handleShopBuyClick);
     Neo.ui.shopHeals?.addEventListener('click', handleShopBuyClick);
-    Neo.ui.bagStatus?.addEventListener('click', () => Neo.tryUsePotion?.());
+    Neo.bindEquipmentSlotClicks?.();
     Neo.ui.invMovesList?.addEventListener('click', handleInventoryMoveSelect);
     Neo.ui.invWeaponsList?.addEventListener('click', handleInventoryWeaponSelect);
     Neo.ui.invMovesList?.addEventListener('dragstart', event => {

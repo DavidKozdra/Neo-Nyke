@@ -247,11 +247,6 @@ export function loop(timestamp) {
       if (!overlayOpen && meleeHeld) Neo.tryMelee();
       if (!overlayOpen && laserHeld) Neo.tryLaser();
     }
-    if (Neo.keys.f && !Neo.teleportKeyLatch) {
-      tryChargedLadderWarp();
-      Neo.teleportKeyLatch = true;
-    }
-    if (!Neo.keys.f) Neo.teleportKeyLatch = false;
 
     if (Neo.player.lavaWalkTime > 0) {
       Neo.player.lavaWalkTime = Math.max(0, Neo.player.lavaWalkTime - dt);

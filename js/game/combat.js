@@ -2052,6 +2052,7 @@
     if (!item) return;
     Neo.player.items[itemKey] = Neo.getItemCount(itemKey) + 1;
     if (Neo.isFirstRunTutorialActive()) Neo.tutorialState.gotRelic = true;
+    Neo.addToEquipmentSlots?.(itemKey);
     Neo.markInventoryPanelDirty();
     Neo.pushItemNotification(itemKey, 1);
     const totalItems = Object.values(Neo.player.items).reduce((s, v) => s + Number(v || 0), 0);
@@ -2068,6 +2069,9 @@
         if (key === 'titan_heart') {
           Neo.player.maxHp = Math.max(120, Math.round(Neo.player.maxHp * 1.08));
           Neo.player.hp = Math.min(Neo.player.maxHp, Math.round(Neo.player.hp * 1.08));
+        }
+        if (key === 'wizards_paw') {
+          Neo.openWizardPawSelection();
         }
       }
       Object.entries(bonusItemCounts).forEach(([key, amount]) => {

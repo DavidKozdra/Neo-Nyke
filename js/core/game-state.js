@@ -350,6 +350,7 @@ export function resumeGame() {
       princessFlightTime: 0,
       anvilUpgrades: { weapon: {}, move: {} },
       storedPotions: 0,
+      equipmentSlots: (character.key === 'metao') ? ['mateos_bag'] : [],
     };
   }
 
@@ -2125,6 +2126,7 @@ export function resumeGame() {
     Neo.queenMetaoCutscenePlayed = false;
     Neo.secretRoomVisitedFloors = [];
     Neo.wizardPawSelection = null;
+    Neo.wizardPawPendingCount = 0;
     Neo.setWizardPawModalOpen(false);
     Neo.setShopPanelOpen(false);
     Neo.setInventoryPanelOpen(false);
@@ -2245,6 +2247,7 @@ export function resumeGame() {
     Neo.secretRoomVisitedFloors = Array.isArray(snapshot.secretRoomVisitedFloors) ? [...snapshot.secretRoomVisitedFloors] : [];
     Neo.restoreRivals(snapshot.rivals);
     Neo.wizardPawSelection = null;
+    Neo.wizardPawPendingCount = 0;
     Neo.setWizardPawModalOpen(false);
     Neo.setShopPanelOpen(false);
     Neo.setInventoryPanelOpen(false);

@@ -64,6 +64,7 @@ export function migratePlayerData(source) {
     playerData.fleeceTick = Number(playerData.fleeceTick || 0);
     playerData.weaponBeamTime = Number(playerData.weaponBeamTime || 0);
     playerData.weaponBeamTick = Number(playerData.weaponBeamTick || 0);
+    if (!Array.isArray(playerData.equipmentSlots)) playerData.equipmentSlots = [];
     if (!playerData.anvilUpgrades || typeof playerData.anvilUpgrades !== 'object') {
       playerData.anvilUpgrades = { weapon: {}, move: {} };
     }
@@ -280,6 +281,11 @@ export function getWizardPawStatCards() {
   }
 
 export function openWizardPawSelection() {
+    if (Neo.wizardPawSelection) {
+      Neo.wizardPawPendingCount = (Neo.wizardPawPendingCount || 0) + 1;
+      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 46, life: 1, text: "WIZARD'S PAW QUEUED!", c: '#ffd27d' });
+      return;
+    }
     Neo.wizardPawSelection = {
       picks: [],
       options: [
@@ -288,6 +294,7 @@ export function openWizardPawSelection() {
         { key: 'attackSpeed', name: 'Attack Speed', description: `Current ${getAttackSpeedValue().toFixed(2)}. Increase base attack speed by 50%.` },
       ],
     };
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 46, life: 1, text: "WIZARD'S PAW!", c: '#ffd27d' });
     Neo.setWizardPawModalOpen(true);
     renderWizardPawPanel();
   }
@@ -347,13 +354,17 @@ export function applyWizardPawStat(stat) {
 export function confirmWizardPawSelection() {
     if (!Neo.wizardPawSelection || Neo.wizardPawSelection.picks.length !== 2) return;
     Neo.wizardPawSelection.picks.forEach(applyWizardPawStat);
-    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 46, life: 1, text: "WIZARD'S PAW!", c: '#ffd27d' });
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 46, life: 1, text: 'PAW APPLIED!', c: '#ffd27d' });
     Neo.wizardPawSelection = null;
     Neo.setWizardPawModalOpen(false);
     Neo.markInventoryPanelDirty();
     Neo.renderInventoryPanel();
     Neo.updateHud();
     Neo.scheduleRunSave();
+    if ((Neo.wizardPawPendingCount || 0) > 0) {
+      Neo.wizardPawPendingCount -= 1;
+      openWizardPawSelection();
+    }
   }
 
 export function consumeCharge(chargeType) {
