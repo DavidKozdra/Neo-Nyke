@@ -423,6 +423,7 @@
       Neo.laserTime = Neo.getLaserCastDuration(move);
       Neo.laserTick = 0;
       Neo.turtleWaveHpTimer = 0;
+      Neo.laserAngle = Math.atan2(Neo.mouse.worldY - Neo.player.y, Neo.mouse.worldX - Neo.player.x);
       return;
     }
     if (move === 'power_disks') {
@@ -443,6 +444,7 @@
       Neo.laserTime = Neo.getLaserCastDuration(move);
       Neo.laserTick = 0;
       Neo.turtleWaveHpTimer = 0;
+      Neo.laserAngle = Math.atan2(Neo.mouse.worldY - Neo.player.y, Neo.mouse.worldX - Neo.player.x);
       return;
     }
     if (move === 'lightning_columns') {
@@ -472,6 +474,7 @@
     Neo.laserTime = Neo.getLaserCastDuration(move);
     Neo.laserTick = 0;
     Neo.turtleWaveHpTimer = 0;
+    Neo.laserAngle = Math.atan2(Neo.mouse.worldY - Neo.player.y, Neo.mouse.worldX - Neo.player.x);
   }
 
   function endActiveLaser() {
@@ -516,9 +519,24 @@
     const move = getEquippedMove('laser');
     const itemStats = Neo.getItemStats();
     const loveBeamActive = Neo.loveBeamCasting && move === 'love_beam';
-    const angle = Neo.laserMode === 'god_sweep'
-      ? Neo.laserAngle
-      : Math.atan2(Neo.mouse.worldY - Neo.player.y, Neo.mouse.worldX - Neo.player.x);
+    const weight = Math.max(0, Number(itemStats.laserWeightMultiplier ?? 1));
+    if (Neo.laserMode !== 'god_sweep') {
+      const targetAngle = Math.atan2(Neo.mouse.worldY - Neo.player.y, Neo.mouse.worldX - Neo.player.x);
+      const baseTurnRate = 3.5;
+      const turnRate = weight > 0 ? baseTurnRate / weight : baseTurnRate * 100;
+      const maxStep = turnRate * dt;
+      let delta = targetAngle - Neo.laserAngle;
+      while (delta > Math.PI) delta -= Math.PI * 2;
+      while (delta < -Math.PI) delta += Math.PI * 2;
+      const step = Math.max(-maxStep, Math.min(maxStep, delta));
+      Neo.laserAngle += step;
+    }
+    const angle = Neo.laserAngle;
+    const recoilAccel = 45 * weight;
+    if (recoilAccel > 0) {
+      Neo.player.vx -= Math.cos(angle) * recoilAccel * dt;
+      Neo.player.vy -= Math.sin(angle) * recoilAccel * dt;
+    }
     if (Neo.laserTick <= 0) {
       if (Neo.laserMode === 'god_sweep') Neo.laserAngle += Neo.laserSweepSpeed * 0.05;
       Neo.laserTick = Neo.laserMode === 'god_sweep' ? 0.05 : Neo.laserMode === 'turtle_wave' ? 0.08 : loveBeamActive ? 0.06 : Neo.ATTACKS.laser.tick;

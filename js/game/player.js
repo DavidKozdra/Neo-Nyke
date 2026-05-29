@@ -240,6 +240,7 @@ export function getItemStats() {
       attackSpeedMultiplier: robotArm > 0 ? 8 * (1 + attackServo * 0.12 + chronoSpringBonus) : 1 + attackServo * 0.12 + chronoSpringBonus,
       hasRobotArm: robotArm > 0,
       moveSpeedMultiplier: 1 + turtleShell * 0.05,
+      laserWeightMultiplier: Math.max(0, 1 - turtleShell * 0.01),
       xpGainMultiplier: 1 + scholarSeal * 0.15,
       levelEdgeDamageMultiplier: 1 + scholarCap * xpProgress * 0.45,
       knockbackMultiplier: 1 + pushMan * 0.18,

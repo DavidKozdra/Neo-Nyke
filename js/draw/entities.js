@@ -1017,9 +1017,7 @@
     }
 
     if (!Neo.laserActive) return;
-    const angle = Neo.laserMode === 'god_sweep'
-      ? Neo.laserAngle
-      : Math.atan2(Neo.mouse.worldY - Neo.player.y, Neo.mouse.worldX - Neo.player.x);
+    const angle = Neo.laserAngle;
     const turtleWaveActive = Neo.laserMode === 'turtle_wave';
     const loveBeamActive = Neo.loveBeamCasting;
     const beamRange = Neo.getPlayerBeamRange(Neo.laserMode, Neo.getEquippedMove('laser'));

@@ -186,7 +186,9 @@ export function loop(timestamp) {
     } else {
       const flightBoost = Neo.player.princessFlightTime > 0 ? 2 : 1;
       const zoomiesBoost = Neo.player.mooggyZoomiesTime > 0 ? 5 : 1;
-      const targetSpeed = 228 * flightBoost * zoomiesBoost * (Neo.godTimer > 0 ? 1.25 : 1) * itemStats.moveSpeedMultiplier;
+      const laserWeight = Math.max(0, Number(itemStats.laserWeightMultiplier ?? 1));
+      const laserSlow = Neo.laserActive ? 1 - 0.6 * laserWeight : 1;
+      const targetSpeed = 228 * flightBoost * zoomiesBoost * (Neo.godTimer > 0 ? 1.25 : 1) * itemStats.moveSpeedMultiplier * laserSlow;
       Neo.player.vx = Neo.applyResponsiveVelocity(Neo.player.vx, moveX * targetSpeed, dt);
       Neo.player.vy = Neo.applyResponsiveVelocity(Neo.player.vy, moveY * targetSpeed, dt);
       if (Neo.player.princessFlightTime > 0 && (moveX || moveY) && Neo.nextRandom('fx') < 0.35) {

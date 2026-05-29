@@ -133,9 +133,7 @@ export function carveSoftLight(x, y, innerRadius, outerRadius, strength = 1, cli
 
 export function carvePlayerBeamLights() {
     if (Neo.laserActive) {
-      const angle = Neo.laserMode === 'god_sweep'
-        ? Neo.laserAngle
-        : Math.atan2(Neo.mouse.worldY - Neo.player.y, Neo.mouse.worldX - Neo.player.x);
+      const angle = Neo.laserAngle;
       const beamPath = Neo.buildRicochetBeamPath(Neo.player.x, Neo.player.y, angle, Neo.getPlayerBeamRange(Neo.laserMode, Neo.getEquippedMove('laser')), Neo.getPlayerBeamBounceCount(Neo.laserMode));
       Neo.carveBeamLight(beamPath, Neo.laserMode === 'god_sweep' ? 42 : Neo.laserMode === 'turtle_wave' ? 34 : 22, Neo.laserMode === 'god_sweep' ? 0.9 : 0.7);
       return;
