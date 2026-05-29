@@ -1164,7 +1164,7 @@ export function renderInventoryPanel() {
         const hintText = isBatterySelectable
           ? `Click to add +1 max stack. Current ${currentMaxStacks}.`
           : (isEquipped ? 'Equipped' : (isMatch ? 'Click or drag to equip' : `Drag to ${slotLabel} slot`));
-        return `<div class="inv-move-chip${isEquipped ? ' is-equipped-move' : ''}${(isMatch || isBatterySelectable) ? ' is-match' : ''}" ${(isEquipped || isBatterySelectable) ? '' : `draggable="true"`} data-move="${key}" data-slot-type="${def.slot}">
+        return `<div class="inv-move-chip${(isEquipped && !isBatterySelectable) ? ' is-equipped-move' : ''}${(isMatch || isBatterySelectable) ? ' is-match' : ''}" ${(isEquipped || isBatterySelectable) ? '' : `draggable="true"`} data-move="${key}" data-slot-type="${def.slot}">
           <canvas class="inv-chip__icon" data-move-icon="${key}" width="30" height="30"></canvas>
           <div class="inv-move-chip__meta">
             <b>${def.name}</b>
