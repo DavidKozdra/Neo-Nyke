@@ -1257,6 +1257,7 @@
 
       if (pickup.type === 'item') {
         Neo.collectItem(pickup.key);
+        Neo.playSfx?.('item_collect');
         if (Neo.floorSkipPending > 0) {
           if (spawnJesterPortalPickup()) {
             Neo.pickups.splice(index, 1);

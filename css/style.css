@@ -5041,7 +5041,7 @@ button.alt.danger {
   border: none;
   border-bottom: 2px solid transparent;
   color: var(--menu-text-soft);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
   letter-spacing: .10em;
   text-transform: uppercase;
@@ -5068,7 +5068,7 @@ button.alt.danger {
 }
 
 .stab-hint {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--menu-text-soft);
   margin: 0 0 14px;
   text-align: center;
@@ -5086,7 +5086,7 @@ button.alt.danger {
 
 .bind-label {
   padding: 9px 16px 9px 4px;
-  font-size: 13px;
+  font-size: 15px;
   color: var(--menu-text);
   white-space: nowrap;
   width: 50%;
@@ -5099,7 +5099,7 @@ button.alt.danger {
   border: 1px solid var(--menu-border);
   border-radius: 6px;
   color: var(--menu-accent-strong);
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 700;
   letter-spacing: .06em;
   cursor: pointer;
@@ -5131,7 +5131,7 @@ button.alt.danger {
   border: 1px solid rgba(128, 146, 170, .34);
   border-radius: 6px;
   color: var(--menu-text-muted);
-  font-size: 11px;
+  font-size: 13px;
   letter-spacing: .08em;
   padding: 6px 14px;
   cursor: pointer;
@@ -5157,7 +5157,7 @@ button.alt.danger {
   border: 1px solid var(--menu-border);
   border-radius: 6px;
   color: var(--menu-accent-strong);
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 700;
   letter-spacing: .04em;
 }
@@ -5196,7 +5196,7 @@ button.alt.danger {
   box-shadow: 0 0 10px var(--menu-glow);
 }
 .theme-card-name {
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
   letter-spacing: .1em;
   text-transform: uppercase;
@@ -5221,7 +5221,7 @@ button.alt.danger {
 .theme-custom-head { margin-bottom: 8px; }
 .theme-custom-label {
   display: block;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 800;
   letter-spacing: .14em;
   color: var(--menu-accent);
@@ -5238,7 +5238,7 @@ button.alt.danger {
   border: 1px solid rgba(128, 146, 170, .3);
   border-radius: 6px;
   color: var(--menu-text);
-  font-size: 12px;
+  font-size: 14px;
   padding: 5px 10px;
   font-family: inherit;
 }
@@ -5249,7 +5249,7 @@ button.alt.danger {
   border: 1px solid rgba(128, 146, 170, .34);
   background: transparent;
   color: var(--menu-text-muted);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
   letter-spacing: .08em;
   text-transform: uppercase;
@@ -5273,14 +5273,14 @@ button.alt.danger {
 
 .theme-var-row {
   display: grid;
-  grid-template-columns: 1fr 32px 58px;
+  grid-template-columns: 1fr 32px 66px;
   align-items: center;
   gap: 8px;
   padding: 4px 2px;
   border-bottom: 1px solid rgba(128,146,170,.08);
 }
 .theme-var-label {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--menu-text-soft);
   letter-spacing: .04em;
 }
@@ -5294,7 +5294,7 @@ button.alt.danger {
   cursor: pointer;
 }
 .theme-var-hex {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--menu-text-soft);
   font-family: var(--font-pixel);
   letter-spacing: .04em;
@@ -5311,9 +5311,9 @@ button.alt.danger {
 .vol-row + .vol-row { border-top: 1px solid rgba(128, 146, 170, .12); }
 
 .vol-label {
-  font-size: 13px;
+  font-size: 15px;
   color: var(--menu-text);
-  width: 56px;
+  width: 60px;
   flex-shrink: 0;
 }
 
@@ -5345,9 +5345,9 @@ button.alt.danger {
 }
 
 .vol-val {
-  font-size: 12px;
+  font-size: 14px;
   color: var(--menu-text-muted);
-  width: 28px;
+  width: 30px;
   text-align: right;
   flex-shrink: 0;
 }
@@ -5371,12 +5371,12 @@ button.alt.danger {
 }
 
 .access-label {
-  font-size: 13px;
+  font-size: 15px;
   color: var(--menu-text);
 }
 
 .access-desc {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--menu-text-soft);
   line-height: 1.4;
 }
@@ -5393,7 +5393,7 @@ button.alt.danger {
   cursor: pointer;
 }
 .access-slider-val {
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 700;
   color: var(--menu-accent-strong);
   min-width: 26px;
@@ -5428,7 +5428,7 @@ button.alt.danger {
   border-radius: 6px;
   color: #e8f0ff;
   font-family: inherit;
-  font-size: 0.85rem;
+  font-size: 0.95rem;
   padding: 5px 10px;
   width: 160px;
   outline: none;
@@ -5437,14 +5437,14 @@ button.alt.danger {
 .settings-text-input:focus { border-color: rgba(120,200,255,0.5); }
 
 .data-label {
-  font-size: 13px;
+  font-size: 15px;
   color: var(--menu-text);
   min-width: 100px;
 }
 
 .data-desc {
   flex: 1;
-  font-size: 11px;
+  font-size: 13px;
   color: var(--menu-text-soft);
 }
 

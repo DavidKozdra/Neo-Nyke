@@ -4,6 +4,7 @@
 
 import './core/game-core.js';
 import './core/math-utils.js';
+import './core/sfx.js';
 import './ui/input.js';
 import './core/status.js';
 import './ui/notifications.js';

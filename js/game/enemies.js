@@ -514,32 +514,6 @@
     };
   }
 
-  function playMooggySound(kind = 'meow') {
-    try {
-      const AudioContext = window.AudioContext || window.webkitAudioContext;
-      if (!AudioContext) return;
-      const ctx = Neo.mooggyAudioContext || new AudioContext();
-      Neo.mooggyAudioContext = ctx;
-      if (ctx.state === 'suspended') ctx.resume?.();
-      const volume = window.NeoSettings?.getVolume?.() || {};
-      const gain = ctx.createGain();
-      const osc = ctx.createOscillator();
-      const now = ctx.currentTime;
-      const master = Math.max(0, Math.min(1, Number(volume.master ?? 80) / 100));
-      const sfx = Math.max(0, Math.min(1, Number(volume.sfx ?? 80) / 100));
-      gain.gain.setValueAtTime(0.0001, now);
-      gain.gain.exponentialRampToValueAtTime(0.055 * master * sfx, now + 0.018);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + (kind === 'laser' ? 0.12 : 0.24));
-      osc.type = kind === 'laser' ? 'sawtooth' : 'triangle';
-      osc.frequency.setValueAtTime(kind === 'laser' ? 900 : 520, now);
-      osc.frequency.exponentialRampToValueAtTime(kind === 'laser' ? 1320 : 320, now + (kind === 'laser' ? 0.11 : 0.22));
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start(now);
-      osc.stop(now + (kind === 'laser' ? 0.14 : 0.26));
-    } catch {}
-  }
-
   function spawnEnemy(type, x, y, elite = false) {
     const sandbox = Neo.getActiveSandboxSettings();
     if (sandbox && !sandbox.allowedEnemies.includes(type)) {
@@ -1132,7 +1106,6 @@
     mooggy.spawnT = Math.max(Number(mooggy.spawnT || 0), 0.9);
     Neo.spawnParticle({ x: mooggy.x, y: mooggy.y - 30, life: 1.5, text: 'MOOGGY HUNTS YOU', c: '#ff3348' });
     sayOverEntity(mooggy, 'Mrow.', { speaker: 'MOOGGY', tone: 'boss', holdTime: 1.4, offsetY: mooggy.r + 34 });
-    playMooggySound('meow');
     return mooggy;
   }
 
@@ -2987,7 +2960,6 @@
       enemy.beamTime = 0.16;
       enemy.beamTick = 0;
       enemy.attackCd = Number(enemy.mooggyLaserCooldown || 0.2);
-      if (Neo.nextRandom('fx') < 0.38) playMooggySound('laser');
       Neo.spawnParticle({ x: enemy.x, y: enemy.y - 18, life: 0.28, c: '#ff3348', ring: 14 });
     }
   }

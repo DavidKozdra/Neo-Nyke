@@ -262,8 +262,8 @@
   .stab-panel { min-width: 0; width: 100%; }
   .stab-tabs { flex-wrap: wrap; gap: 4px; justify-content: center; }
   .stab-tab { font-size: 11px; padding: 6px 10px; flex: 1 1 auto; text-align: center; }
-  .bind-label { font-size: 11px; padding-right: 6px; }
-  .bind-btn { min-width: 54px; font-size: 10px; padding: 4px 7px; }
+  .bind-label { font-size: 13px; padding-right: 6px; }
+  .bind-btn { min-width: 54px; font-size: 12px; padding: 4px 7px; }
 
   /* ── 11. In-game HUD ─────────────────────────────────────────── */
 
@@ -777,7 +777,7 @@
   .stab {
     flex: 0 0 auto;
     padding: 8px 9px 9px;
-    font-size: 10px;
+    font-size: 12px;
     letter-spacing: .07em;
   }
 
@@ -1037,7 +1037,7 @@
 
   .stab {
     padding: 8px 8px 9px;
-    font-size: 9px;
+    font-size: 11px;
   }
 
   .tab-icon {
@@ -1072,7 +1072,7 @@
 
   .bind-label {
     padding: 0 0 5px;
-    font-size: 11px;
+    font-size: 13px;
   }
 
   .bind-btn,
