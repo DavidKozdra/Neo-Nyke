@@ -2027,7 +2027,7 @@
     updateGolemEnemy(enemy, dt);
   }
 
-  function spawnPhaseSwords(count, damage) {
+  function spawnPhaseSwords(count, damage, source = 'god_projectile') {
     for (let index = 0; index < count; index += 1) {
       const angle = (Math.PI * 2 * index) / count + Neo.rng() * 0.25;
       const sx = Neo.player.x + Math.cos(angle) * 110;
@@ -2042,7 +2042,7 @@
         life: 1.25,
         enemy: true,
         kind: 'sword',
-        source: 'god_projectile',
+        source,
         damage,
       });
     }
@@ -2151,7 +2151,7 @@
     if (enemy.phase === 2) {
       enemy.speed = 120;
       if (enemy.attackCd <= 0) {
-        spawnPhaseSwords(8, 14);
+        spawnPhaseSwords(8, 14, 'artificer_knave_projectile');
         enemy.attackCd = 2.35 * tuning.rangedCadence;
       }
       steerEnemy(enemy, dx / distance, dy / distance, enemy.speed, 4.4, dt);

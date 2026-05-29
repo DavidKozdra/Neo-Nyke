@@ -1473,6 +1473,16 @@
       color: isCrit ? '#ff9f1c' : '#ff6b6b',
       size: isCrit ? 20 : 16,
     });
+    if (stats.drainChance > 0 && Neo.player && Neo.player.hp < Neo.player.maxHp && Neo.nextRandom('encounter') < stats.drainChance) {
+      const heal = Neo.scalePlayerHealing(1, 1);
+      const beforeHp = Neo.player.hp;
+      Neo.player.hp = Math.min(Neo.player.maxHp, Neo.player.hp + heal);
+      const gained = Neo.player.hp - beforeHp;
+      if (gained > 0) {
+        Neo.spawnHealPopup(Neo.player.x + Neo.rand(-6, 6), Neo.player.y - 22, gained, { color: '#ff8fb4', size: 13 });
+        window.achievementEvents?.emit('heal:applied', { amount: gained });
+      }
+    }
     if (stats.confuseRayStunChance > 0 && Neo.nextRandom('encounter') < stats.confuseRayStunChance) {
       enemy.stun = Math.max(Number(enemy.stun || 0), 0.55);
       Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 18, life: 0.5, text: 'STUN', c: '#ffe66d' });
@@ -2073,12 +2083,17 @@
         if (key === 'wizards_paw') {
           Neo.openWizardPawSelection();
         }
+        if (key === 'extra_battery') {
+          Neo.openExtraBatterySelection();
+        }
       }
       Object.entries(bonusItemCounts).forEach(([key, amount]) => {
         Neo.pushItemNotification(key, Number(amount), '(Jester bonus)');
       });
     } else if (itemKey === 'wizards_paw') {
       Neo.openWizardPawSelection();
+    } else if (itemKey === 'extra_battery') {
+      Neo.openExtraBatterySelection();
     }
 
     if (itemKey === 'titan_heart') {

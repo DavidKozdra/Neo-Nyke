@@ -55,13 +55,24 @@ export function resumeGame() {
         if (n > 0) startingItems[key] = Math.min(99, n);
       }
     }
+    const slots = ['melee', 'laser', 'smash', 'dash'];
+    const moveSource = source.moveLoadout && typeof source.moveLoadout === 'object' ? source.moveLoadout : {};
+    const moveLoadout = {};
+    for (const slot of slots) {
+      const key = String(moveSource[slot] || '');
+      // '' = use the character default; otherwise the move must exist and match the slot.
+      moveLoadout[slot] = (key && Neo.MOVE_DEFS[key]?.slot === slot) ? key : '';
+    }
     return {
       enemyStatMultiplier: Math.max(0.2, Math.min(4, Number(source.enemyStatMultiplier ?? Neo.SANDBOX_DEFAULT_SETTINGS.enemyStatMultiplier) || 1)),
       enemySpeedMultiplier: Math.max(0.2, Math.min(3, Number(source.enemySpeedMultiplier ?? Neo.SANDBOX_DEFAULT_SETTINGS.enemySpeedMultiplier) || 1)),
       enemyDamageMultiplier: Math.max(0.1, Math.min(3, Number(source.enemyDamageMultiplier ?? Neo.SANDBOX_DEFAULT_SETTINGS.enemyDamageMultiplier) || 1)),
       playerDamageMultiplier: Math.max(0.1, Math.min(6, Number(source.playerDamageMultiplier ?? Neo.SANDBOX_DEFAULT_SETTINGS.playerDamageMultiplier) || 1)),
       startingCoins: Math.max(0, Math.min(999, Math.round(Number(source.startingCoins ?? Neo.SANDBOX_DEFAULT_SETTINGS.startingCoins) || 0))),
+      startingLevel: Math.max(1, Math.min(99, Math.round(Number(source.startingLevel ?? Neo.SANDBOX_DEFAULT_SETTINGS.startingLevel) || 1))),
       godMode: !!source.godMode,
+      unlockEverything: !!source.unlockEverything,
+      moveLoadout,
       allowedEnemies: allowedEnemies.length ? allowedEnemies : Neo.SANDBOX_ENEMY_TYPES.slice(0, 1),
       allowedItems: allowedItems.length ? allowedItems : Neo.ITEM_KEYS.slice(),
       startingItems,
@@ -74,6 +85,44 @@ export function resumeGame() {
 
   function getActiveSandboxSettings() {
     return isSandboxRunActive() ? Neo.sandboxSettings : null;
+  }
+
+  // Applies sandbox loadout/level/unlock settings to a freshly created player.
+  function applySandboxPlayerSetup(playerData) {
+    if (!playerData) return;
+    const settings = Neo.sandboxSettings || {};
+
+    // Override equipped moves per slot (empty string keeps the character default).
+    const loadout = settings.moveLoadout && typeof settings.moveLoadout === 'object' ? settings.moveLoadout : {};
+    playerData.ownedMoves = playerData.ownedMoves || {};
+    for (const slot of ['melee', 'laser', 'smash', 'dash']) {
+      const key = String(loadout[slot] || '');
+      if (key && Neo.MOVE_DEFS[key]?.slot === slot) {
+        playerData.equippedMoves[slot] = key;
+        playerData.ownedMoves[key] = true;
+      }
+    }
+
+    // Unlock everything: own all weapons and all moves so they can be swapped in-run.
+    if (settings.unlockEverything) {
+      playerData.ownedWeapons = playerData.ownedWeapons || {};
+      for (const key of Neo.WEAPON_KEYS) playerData.ownedWeapons[key] = true;
+      for (const key of Object.keys(Neo.MOVE_DEFS)) playerData.ownedMoves[key] = true;
+    }
+
+    // Starting level: replicate per-level gains so stats line up with a leveled run.
+    const startingLevel = Math.max(1, Math.min(99, Math.round(Number(settings.startingLevel) || 1)));
+    const extraLevels = startingLevel - (Number(playerData.level) || 1);
+    if (extraLevels > 0) {
+      for (let i = 0; i < extraLevels; i++) {
+        playerData.level += 1;
+        playerData.xpToNext = Math.round((Number(playerData.xpToNext) || 20) * 1.22);
+        playerData.maxHp += 15;
+        playerData.attackPower += 3;
+        playerData.attackSpeed += 0.01;
+      }
+      playerData.hp = playerData.maxHp;
+    }
   }
 
   function createDefaultTutorialState() {
@@ -266,11 +315,13 @@ export function resumeGame() {
   function createDefaultPlayer() {
     const items = {
       neo_knife: 0,
+      tooth_of_thorn: 0,
       orb_of_blood: 0,
       hemes_scarf: 0,
       insurance: 0,
       crit_charm: 0,
       attack_servo: 0,
+      enemy_magnet: 0,
       keen_eye: 0,
       chrono_spring: 0,
       scholar_seal: 0,
@@ -293,9 +344,11 @@ export function resumeGame() {
       pendant_of_kronos: 0,
       rich_mans_luck: 0,
       mateos_bag: 0,
+      extra_battery: 0,
       mooggy_zoomies: 0,
     };
     const character = Neo.CHARACTER_DEFS[Neo.chosenCharacter] || Neo.CHARACTER_DEFS.thorn_knight;
+    if (character.key === 'thorn_knight') items.tooth_of_thorn = 2;
     if (character.key === 'mooggy') {
       items.hemes_scarf = 1;
       items.mooggy_zoomies = 1;
@@ -358,11 +411,13 @@ export function resumeGame() {
       weaponBeamTick: 0,
       equippedMoves,
       ownedMoves,
+      moveStackOverrides: {},
       lavaWalkTime: 0,
       lavaTrailTick: 0,
       princessFlightTime: 0,
       anvilUpgrades: { weapon: {}, move: {} },
       storedPotions: 0,
+      extraBatteryPendingCount: 0,
       equipmentSlots: (character.key === 'metao') ? ['mateos_bag'] : [],
     };
   }
@@ -975,11 +1030,12 @@ export function resumeGame() {
     return (Neo.godTimer > 0 ? 2 : Neo.ATTACKS.smash.baseCooldown) / attackSpeed;
   }
 
-  function getMoveMaxStacks(moveKey, characterKey = Neo.player?.character || Neo.chosenCharacter) {
+  function getMoveMaxStacks(moveKey, characterKey = Neo.player?.character || Neo.chosenCharacter, playerState = Neo.player) {
     const moveDef = Neo.MOVE_DEFS[moveKey] || {};
     const baseStacks = Math.max(1, Number(moveDef.maxStacks || 1));
-    const overrideStacks = moveDef.stackOverrides?.[characterKey];
-    return Math.max(1, Number(overrideStacks || baseStacks));
+    const characterStacks = Math.max(1, Number(moveDef.stackOverrides?.[characterKey] || baseStacks));
+    const playerOverrideStacks = Math.max(0, Number(playerState?.moveStackOverrides?.[moveKey] || 0));
+    return Math.max(characterStacks, playerOverrideStacks || 0);
   }
 
   function getSlotCooldownDuration(slot, moveKey, attackSpeed = Neo.getAttackSpeedValue()) {
@@ -991,7 +1047,7 @@ export function resumeGame() {
 
   function createCooldownEntry(slot, playerState = Neo.player, source = null) {
     const moveKey = playerState?.equippedMoves?.[slot] || (slot === 'dash' ? 'dash' : slot === 'melee' ? 'slash' : slot === 'laser' ? 'blood_beam' : 'crimson_smash');
-    const maxCharges = getMoveMaxStacks(moveKey, playerState?.character || Neo.chosenCharacter);
+    const maxCharges = getMoveMaxStacks(moveKey, playerState?.character || Neo.chosenCharacter, playerState);
     const sourceIsObject = !!source && typeof source === 'object' && !Array.isArray(source);
     const sourceTimers = sourceIsObject && Array.isArray(source.timers)
       ? source.timers.map(value => Number(value)).filter(value => value > 0)
@@ -1695,6 +1751,7 @@ export function resumeGame() {
             if (count > 0) Neo.player.items[key] = (Number(Neo.player.items[key]) || 0) + count;
           }
         }
+        applySandboxPlayerSetup(Neo.player);
       }
       applyRunChallengeStartModifiers();
       Neo.lastDamageSource = '';
@@ -2287,6 +2344,7 @@ export function resumeGame() {
   Neo.normalizeSandboxSettings = normalizeSandboxSettings;
   Neo.isSandboxRunActive = isSandboxRunActive;
   Neo.getActiveSandboxSettings = getActiveSandboxSettings;
+  Neo.applySandboxPlayerSetup = applySandboxPlayerSetup;
   Neo.createDefaultTutorialState = createDefaultTutorialState;
   Neo.resetTutorialState = resetTutorialState;
   Neo.isFirstRunTutorialActive = isFirstRunTutorialActive;

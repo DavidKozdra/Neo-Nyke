@@ -1049,6 +1049,17 @@ export function createUIController(view) {
           hydrateSandboxTokenIcons();
         }
 
+        // Move-loadout <select> options are static; build them once.
+        function buildSandboxMoveLoadoutOptions() {
+          if (!view.sandboxMoveLoadout) return;
+          view.sandboxMoveLoadout.querySelectorAll('[data-sbox-move-slot-select]').forEach(select => {
+            const slot = select.dataset.sboxMoveSlotSelect;
+            const moves = Object.keys(Neo.MOVE_DEFS).filter(key => Neo.MOVE_DEFS[key].slot === slot);
+            select.innerHTML = `<option value="">Default</option>`
+              + moves.map(key => `<option value="${Neo.escapeHtml(key)}">${Neo.escapeHtml(Neo.MOVE_DEFS[key].name || key)}</option>`).join('');
+          });
+        }
+
         function syncSandboxPanelFields() {
           document.querySelectorAll('#sandboxGrid .sandbox-row').forEach(row => {
             const param = row.dataset.sboxParam;
@@ -1060,15 +1071,21 @@ export function createUIController(view) {
             if (numInput && value !== undefined) numInput.value = value;
           });
           if (view.sandboxGodMode) view.sandboxGodMode.checked = !!Neo.sandboxSettings.godMode;
+          if (view.sandboxUnlockEverything) view.sandboxUnlockEverything.checked = !!Neo.sandboxSettings.unlockEverything;
+          view.sandboxMoveLoadout?.querySelectorAll('[data-sbox-move-slot-select]').forEach(select => {
+            const slot = select.dataset.sboxMoveSlotSelect;
+            select.value = Neo.sandboxSettings.moveLoadout?.[slot] || '';
+          });
           renderSandboxTokenLists();
         }
+        buildSandboxMoveLoadoutOptions();
 
         document.querySelectorAll('#sandboxGrid .sandbox-row').forEach(row => {
           const param = row.dataset.sboxParam;
           if (!param) return;
           const slider = row.querySelector('.sandbox-slider');
           const numInput = row.querySelector('.sandbox-num');
-          const integerParam = param === 'startingCoins';
+          const integerParam = param === 'startingCoins' || param === 'startingLevel';
           function applyValue(raw) {
             const parsed = integerParam ? parseInt(raw, 10) : parseFloat(raw);
             const min = Number(slider?.min ?? 0);
@@ -1087,6 +1104,24 @@ export function createUIController(view) {
 
         view.sandboxGodMode?.addEventListener('change', () => {
           Neo.sandboxSettings.godMode = !!view.sandboxGodMode?.checked;
+          Neo.persistMetaSoon();
+        });
+
+        view.sandboxUnlockEverything?.addEventListener('change', () => {
+          Neo.sandboxSettings.unlockEverything = !!view.sandboxUnlockEverything?.checked;
+          Neo.persistMetaSoon();
+        });
+
+        view.sandboxMoveLoadout?.addEventListener('change', event => {
+          const select = event.target instanceof Element ? event.target.closest('[data-sbox-move-slot-select]') : null;
+          if (!select) return;
+          const slot = select.dataset.sboxMoveSlotSelect;
+          if (!Neo.sandboxSettings.moveLoadout || typeof Neo.sandboxSettings.moveLoadout !== 'object') {
+            Neo.sandboxSettings.moveLoadout = { melee: '', laser: '', smash: '', dash: '' };
+          }
+          Neo.sandboxSettings.moveLoadout[slot] = select.value || '';
+          Neo.sandboxSettings = Neo.normalizeSandboxSettings(Neo.sandboxSettings);
+          syncSandboxPanelFields();
           Neo.persistMetaSoon();
         });
 

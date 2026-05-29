@@ -7,6 +7,40 @@
     return Neo.clamp(Math.round(Number(value) || 1), 1, 10);
   }
 
+  const SECRET_VENDOR_CURRENCY_PIXELS = {
+    coin: [
+      [2, 1], [3, 1], [4, 1],
+      [1, 2], [2, 2], [3, 2], [4, 2], [5, 2],
+      [1, 3], [2, 3], [3, 3], [4, 3], [5, 3],
+      [1, 4], [2, 4], [3, 4], [4, 4], [5, 4],
+      [2, 5], [3, 5], [4, 5],
+    ],
+    loop: [
+      [2, 1], [3, 1], [4, 1],
+      [1, 2], [5, 2],
+      [1, 3], [5, 3],
+      [1, 4], [5, 4],
+      [2, 5], [3, 5], [4, 5],
+      [2, 2], [4, 2], [2, 4], [4, 4],
+      [3, 3],
+    ],
+  };
+
+  function drawSecretVendorCurrencyIcon(x, y, size, usesCoins, color) {
+    const iconCanvas = usesCoins ? Neo.ui.coinIcon : Neo.ui.hudLoopIcon;
+    if (iconCanvas instanceof HTMLCanvasElement && iconCanvas.width > 0 && iconCanvas.height > 0) {
+      Neo.ctx.imageSmoothingEnabled = false;
+      Neo.ctx.drawImage(iconCanvas, x, y, size, size);
+      return;
+    }
+    const pixels = usesCoins ? SECRET_VENDOR_CURRENCY_PIXELS.coin : SECRET_VENDOR_CURRENCY_PIXELS.loop;
+    const pixelSize = size / 8;
+    Neo.ctx.fillStyle = color;
+    pixels.forEach(([px, py]) => {
+      Neo.ctx.fillRect(x + px * pixelSize, y + py * pixelSize, Math.ceil(pixelSize), Math.ceil(pixelSize));
+    });
+  }
+
   function drawWorldProps() {
     const theme = Neo.getRoomArtTheme();
     Neo.hazards.forEach(hazard => {
@@ -617,8 +651,8 @@
           : Number(Neo.metaProgress.loopCrystals || 0) >= cost;
         const frameColor = canAfford ? '#aee7ff' : '#ffb1b1';
         const currencyColor = usesCoins ? '#ffd54a' : '#83f3ff';
-        const currencySymbol = usesCoins ? '●' : '◆';
         const costColor = canAfford ? currencyColor : '#ffb1b1';
+        const currencyIconSize = 12;
         Neo.ctx.fillStyle = 'rgba(7,17,22,0.92)';
         Neo.ctx.strokeStyle = frameColor;
         Neo.ctx.lineWidth = 2;
@@ -635,7 +669,9 @@
         Neo.ctx.fillStyle = costColor;
         Neo.ctx.shadowColor = currencyColor;
         Neo.ctx.shadowBlur = 6;
-        Neo.ctx.fillText(`${cost} ${currencySymbol}`, 0, 13);
+        Neo.ctx.textAlign = 'right';
+        Neo.ctx.fillText(String(cost), 1, 13);
+        drawSecretVendorCurrencyIcon(5, 1, currencyIconSize, usesCoins, costColor);
         Neo.ctx.shadowBlur = 0;
       } else if (pickup.type === 'secret_boss_chest') {
         const t = Date.now() * 0.003;

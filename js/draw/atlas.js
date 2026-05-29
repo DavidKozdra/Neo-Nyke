@@ -106,31 +106,29 @@ export function drawThresholdTileAsset(g, ox, oy, size, def) {
   }
 
 export function drawPillarTileAsset(g, ox, oy, size, def) {
-    g.fillStyle = 'rgba(0,0,0,0.26)';
-    g.fillRect(ox + 3, oy + 12, 10, 2);
-    g.fillStyle = def.shade || '#252b27';
-    g.fillRect(ox + 2, oy + 2, 12, 12);
     g.fillStyle = def.base || '#4a4d43';
-    g.fillRect(ox + 3, oy + 1, 10, 11);
+    g.fillRect(ox + 2, oy + 1, 12, 13);
+    g.fillStyle = def.shade || '#252b27';
+    g.fillRect(ox + 2, oy + 11, 12, 3);
+    g.fillRect(ox + 12, oy + 1, 2, 13);
     g.fillStyle = def.edge || '#727060';
-    g.fillRect(ox + 4, oy + 2, 8, 2);
-    g.fillRect(ox + 4, oy + 10, 8, 2);
+    g.fillRect(ox + 3, oy + 2, 9, 1);
+    g.fillRect(ox + 3, oy + 2, 1, 9);
     g.strokeStyle = def.mortar || '#191d1b';
     g.strokeRect(ox + 2.5, oy + 1.5, 11, 12);
   }
 
 export function drawBlockTileAsset(g, ox, oy, size, def) {
-    g.fillStyle = 'rgba(0,0,0,0.22)';
-    g.fillRect(ox + 2, oy + 12, 12, 2);
-    g.fillStyle = def.shade || '#222823';
-    g.fillRect(ox + 1, oy + 2, 14, 12);
     g.fillStyle = def.base || '#394038';
-    g.fillRect(ox + 2, oy + 1, 12, 11);
+    g.fillRect(ox + 1, oy + 1, 14, 14);
+    g.fillStyle = def.shade || '#222823';
+    g.fillRect(ox + 1, oy + 12, 14, 3);
+    g.fillRect(ox + 12, oy + 1, 3, 14);
     g.fillStyle = def.edge || '#626858';
-    g.fillRect(ox + 2, oy + 2, 12, 1);
-    g.fillRect(ox + 2, oy + 7, 12, 1);
+    g.fillRect(ox + 2, oy + 2, 10, 1);
+    g.fillRect(ox + 2, oy + 2, 1, 10);
     g.strokeStyle = def.mortar || '#171c1a';
-    g.strokeRect(ox + 1.5, oy + 1.5, 13, 12);
+    g.strokeRect(ox + 1.5, oy + 1.5, 13, 13);
     if (def.hiddenMark) {
       g.fillStyle = def.hiddenMark;
       g.fillRect(ox + 7, oy + 4, 2, 1);
@@ -139,33 +137,35 @@ export function drawBlockTileAsset(g, ox, oy, size, def) {
   }
 
 export function drawPotTileAsset(g, ox, oy, size, def) {
-    g.fillStyle = 'rgba(0,0,0,0.24)';
-    g.fillRect(ox + 4, oy + 13, 8, 2);
-    g.fillStyle = def.shade || '#57331f';
-    g.fillRect(ox + 5, oy + 5, 7, 8);
     g.fillStyle = def.base || '#9b6744';
-    g.fillRect(ox + 6, oy + 4, 5, 9);
-    g.fillRect(ox + 5, oy + 6, 7, 5);
+    g.fillRect(ox + 4, oy + 4, 8, 10);
+    g.fillRect(ox + 5, oy + 2, 6, 3);
+    g.fillStyle = def.shade || '#57331f';
+    g.fillRect(ox + 4, oy + 11, 8, 3);
+    g.fillRect(ox + 10, oy + 4, 2, 10);
     g.fillStyle = def.edge || '#d19a68';
-    g.fillRect(ox + 6, oy + 4, 5, 1);
-    g.fillRect(ox + 7, oy + 2, 3, 2);
+    g.fillRect(ox + 5, oy + 3, 5, 1);
+    g.fillRect(ox + 5, oy + 5, 1, 6);
     g.fillStyle = def.mortar || '#25150d';
-    g.fillRect(ox + 5, oy + 11, 7, 1);
+    g.fillRect(ox + 4, oy + 7, 8, 1);
+    g.strokeStyle = def.mortar || '#25150d';
+    g.strokeRect(ox + 4.5, oy + 4.5, 7, 9);
   }
 
 export function drawBarrelTileAsset(g, ox, oy, size, def) {
-    g.fillStyle = 'rgba(0,0,0,0.24)';
-    g.fillRect(ox + 3, oy + 13, 10, 2);
-    g.fillStyle = def.shade || '#3d2414';
-    g.fillRect(ox + 4, oy + 3, 9, 11);
     g.fillStyle = def.base || '#7a4c27';
-    g.fillRect(ox + 5, oy + 2, 7, 11);
+    g.fillRect(ox + 3, oy + 2, 10, 12);
+    g.fillStyle = def.shade || '#3d2414';
+    g.fillRect(ox + 3, oy + 11, 10, 3);
+    g.fillRect(ox + 11, oy + 2, 2, 12);
     g.fillStyle = def.edge || '#b17a42';
-    g.fillRect(ox + 5, oy + 3, 7, 1);
-    g.fillRect(ox + 5, oy + 11, 7, 1);
+    g.fillRect(ox + 4, oy + 3, 7, 1);
+    g.fillRect(ox + 4, oy + 3, 1, 8);
     g.fillStyle = def.band || '#2b2d2c';
-    g.fillRect(ox + 4, oy + 5, 9, 1);
-    g.fillRect(ox + 4, oy + 10, 9, 1);
+    g.fillRect(ox + 3, oy + 5, 10, 1);
+    g.fillRect(ox + 3, oy + 10, 10, 1);
+    g.strokeStyle = def.band || '#2b2d2c';
+    g.strokeRect(ox + 3.5, oy + 2.5, 9, 11);
   }
 
 export function drawLavaTileAsset(g, ox, oy, size, def) {

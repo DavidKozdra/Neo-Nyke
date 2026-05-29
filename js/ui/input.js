@@ -312,6 +312,17 @@ export const ITEM_DEFS = {
       category: 'knight',
       tags: ['bleed'],
     },
+    tooth_of_thorn: {
+      key: 'tooth_of_thorn',
+      name: 'Tooth of Thorn',
+      shortName: 'Drain +2.8%',
+      description: '2.8% drain chance per stack. Procs steal 1 HP on hit.',
+      rarity: 'knight',
+      color: '#ffd7e2',
+      accent: '#ff6e8b',
+      category: 'knight',
+      tags: ['drain', 'heal', 'hit'],
+    },
     orb_of_blood: {
       key: 'orb_of_blood',
       name: 'Orb of Blood',
@@ -362,6 +373,17 @@ export const ITEM_DEFS = {
       color: '#eef5ff',
       category: 'knight',
       tags: ['speed'],
+    },
+    enemy_magnet: {
+      key: 'enemy_magnet',
+      name: 'Enemy Magnet',
+      shortName: 'Homing +5%',
+      description: 'Projectile homing strength +5% per stack. Gives player bullets slight homing.',
+      rarity: 'knight',
+      color: '#dff6ff',
+      accent: '#7ad8ff',
+      category: 'knight',
+      tags: ['projectile', 'homing', 'utility'],
     },
     keen_eye: {
       key: 'keen_eye',
@@ -699,6 +721,17 @@ export const ITEM_DEFS = {
       category: 'wizard',
       tags: ['potion', 'utility', 'wizard'],
     },
+    extra_battery: {
+      key: 'extra_battery',
+      name: 'Extra Battery',
+      shortName: 'Move +1 Stack',
+      description: 'Choose a move in Inventory to grant it +1 max stack.',
+      rarity: 'wizard',
+      color: '#cfd7ff',
+      accent: '#7a9dff',
+      category: 'wizard',
+      tags: ['move', 'stack', 'utility', 'wizard'],
+    },
     mooggy_zoomies: {
       key: 'mooggy_zoomies',
       name: 'Mooggy Zoomies',
@@ -736,11 +769,13 @@ export const SANDBOX_ENEMY_TYPES = [
   ];
 export const ITEM_DROP_WEIGHTS = [
     ['neo_knife', 60],
+  ['tooth_of_thorn', 24],
     ['orb_of_blood', 28],
     ['hemes_scarf', 12],
     ['insurance', 18],
     ['crit_charm', 24],
     ['attack_servo', 22],
+  ['enemy_magnet', 18],
     ['keen_eye', 20],
     ['chrono_spring', 20],
     ['scholar_seal', 18],
@@ -766,6 +801,7 @@ export const ITEM_DROP_WEIGHTS = [
     ['princes_glasses', 14],
     ['veggys_pendant', 0],
     ['mateos_bag', 10],
+    ['extra_battery', 10],
     ['mooggy_zoomies', 0],
   ];
 export const ITEM_DROP_TABLE = Neo.buildWeightTable(ITEM_DROP_WEIGHTS);
@@ -774,10 +810,12 @@ export const ELITE_ITEM_DROP_TABLE = Neo.buildWeightTable(
   );
 export const ELITE_INVENTORY_POOL = [
     'neo_knife',
+  'tooth_of_thorn',
     'orb_of_blood',
     'insurance',
     'crit_charm',
     'attack_servo',
+  'enemy_magnet',
     'scholar_cap',
     'charged_adapter',
     'explosive_jelly',
@@ -792,6 +830,7 @@ export const ELITE_INVENTORY_POOL = [
     'shield_of_aegis',
     'pendant_of_kronos',
     'rich_mans_luck',
+    'extra_battery',
   ];
 export const WHITE_ITEM_POOL = ITEM_KEYS.filter(key => ITEM_DEFS[key]?.rarity === 'knight');
 export const ELITE_TYPE_DEFS = {
@@ -1040,6 +1079,8 @@ export const ui = {
     sandboxItemsAll: document.getElementById('sandboxItemsAll'),
     sandboxItemsNone: document.getElementById('sandboxItemsNone'),
     sandboxGodMode: document.getElementById('sandboxGodMode'),
+    sandboxUnlockEverything: document.getElementById('sandboxUnlockEverything'),
+    sandboxMoveLoadout: document.getElementById('sandboxMoveLoadout'),
     endlessHud: document.getElementById('endlessHud'),
     endlessWaveNum: document.getElementById('endlessWaveNum'),
     bossRushHud: document.getElementById('bossRushHud'),
@@ -1136,6 +1177,10 @@ export const SANDBOX_DEFAULT_SETTINGS = {
     allowedEnemies: SANDBOX_ENEMY_TYPES.slice(),
     allowedItems: ITEM_KEYS.slice(),
     startingItems: {},
+    startingLevel: 1,
+    unlockEverything: false,
+    // '' for a slot means "use the character default" for that move slot.
+    moveLoadout: { melee: '', laser: '', smash: '', dash: '' },
   };
   // sandboxSettings initial value (metaProgress/tutorialState set later in game-state.js)
   Neo.sandboxSettings = { ...SANDBOX_DEFAULT_SETTINGS };

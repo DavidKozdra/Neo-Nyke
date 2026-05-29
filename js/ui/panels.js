@@ -474,6 +474,16 @@ function handleInventoryMoveSelect(event) {
     const target = event.target instanceof Element ? event.target.closest('[data-move]') : null;
     const moveKey = target?.dataset?.move || '';
     if (!moveKey || !Neo.MOVE_DEFS[moveKey]) return;
+    if (Number(Neo.player?.extraBatteryPendingCount || 0) > 0) {
+      const nextMaxStacks = Neo.grantExtraBatteryToMove(moveKey);
+      if (nextMaxStacks > 0) {
+        Neo.activeInventorySlot = '';
+        Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 46, life: 0.8, text: `${Neo.MOVE_DEFS[moveKey].name.toUpperCase()} +1`, c: '#cfd7ff' });
+        markInventoryPanelDirty();
+        renderInventoryPanel();
+      }
+      return;
+    }
     if (Object.values(Neo.player?.equippedMoves || {}).includes(moveKey)) {
       Neo.activeInventorySlot = '';
       markInventoryPanelDirty();
@@ -1056,6 +1066,7 @@ export function renderInventoryPanel() {
     // Resolve which player to display
     const _invPlayers = [Neo.player, Neo.player2, Neo.player3, Neo.player4];
     const _invP = _invPlayers[Neo.activeInvPlayer - 1] || Neo.player;
+  const extraBatteryPendingCount = Math.max(0, Math.floor(Number(_invP.extraBatteryPendingCount || 0)));
 
     if (Neo.gameMode === 'coop' && (Neo.player2 || Neo.player3 || Neo.player4)) updateInvPlayerTabVisibility();
 
@@ -1139,14 +1150,21 @@ export function renderInventoryPanel() {
     const allOwnedMoves = Object.keys(_invP.ownedMoves || {})
       .filter(key => _invP.ownedMoves[key] && Neo.MOVE_DEFS[key] && Neo.isMoveAllowedForCharacter(key, _invP.character))
       .sort((a, b) => Neo.MOVE_DEFS[a].slot.localeCompare(Neo.MOVE_DEFS[b].slot));
-    Neo.ui.invMovesList.innerHTML = allOwnedMoves
+    const extraBatteryNotice = extraBatteryPendingCount > 0
+      ? `<div class="inv-card"><span class="inv-card__eyebrow">Extra Battery</span><h4>${extraBatteryPendingCount} selection${extraBatteryPendingCount === 1 ? '' : 's'} pending</h4><p>Click a move below to grant it +1 max stack.</p></div>`
+      : '';
+    const moveCards = allOwnedMoves
       .map(key => {
         const def = Neo.MOVE_DEFS[key];
         const isEquipped = equippedMoveKeys.has(key);
-        const isMatch = !isEquipped && Neo.activeInventorySlot && Neo.activeInventorySlot === def.slot;
+        const isBatterySelectable = extraBatteryPendingCount > 0;
+        const isMatch = !isBatterySelectable && !isEquipped && Neo.activeInventorySlot && Neo.activeInventorySlot === def.slot;
+        const currentMaxStacks = Neo.getMoveMaxStacks(key, _invP.character, _invP);
         const slotLabel = Neo.SLOT_LABELS[def.slot] || def.slot;
-        const hintText = isEquipped ? 'Equipped' : (isMatch ? 'Click or drag to equip' : `Drag to ${slotLabel} slot`);
-        return `<div class="inv-move-chip${isEquipped ? ' is-equipped-move' : ''}${isMatch ? ' is-match' : ''}" ${isEquipped ? '' : `draggable="true"`} data-move="${key}" data-slot-type="${def.slot}">
+        const hintText = isBatterySelectable
+          ? `Click to add +1 max stack. Current ${currentMaxStacks}.`
+          : (isEquipped ? 'Equipped' : (isMatch ? 'Click or drag to equip' : `Drag to ${slotLabel} slot`));
+        return `<div class="inv-move-chip${isEquipped ? ' is-equipped-move' : ''}${(isMatch || isBatterySelectable) ? ' is-match' : ''}" ${(isEquipped || isBatterySelectable) ? '' : `draggable="true"`} data-move="${key}" data-slot-type="${def.slot}">
           <canvas class="inv-chip__icon" data-move-icon="${key}" width="30" height="30"></canvas>
           <div class="inv-move-chip__meta">
             <b>${def.name}</b>
@@ -1156,7 +1174,8 @@ export function renderInventoryPanel() {
           <span class="inv-move-chip__hint">${hintText}</span>
         </div>`;
       })
-      .join('') || '<div class="inv-card"><span class="inv-card__eyebrow">Empty</span><h4>No moves owned</h4><p>Buy moves from the shop to build your kit.</p></div>';
+      .join('');
+    Neo.ui.invMovesList.innerHTML = extraBatteryNotice + (moveCards || '<div class="inv-card"><span class="inv-card__eyebrow">Empty</span><h4>No moves owned</h4><p>Buy moves from the shop to build your kit.</p></div>');
     Neo.ui.invMovesList.querySelectorAll('[data-move-icon]').forEach(canvas => {
       Neo.drawMoveToastIcon(canvas, Neo.MOVE_DEFS[canvas.dataset.moveIcon]);
     });

@@ -590,6 +590,14 @@
     const enemyProjectile = !!(props.enemy ?? false);
     const itemStats = enemyProjectile ? {} : (Neo.getItemStats?.() || {});
     const projectileSpeedMultiplier = Math.max(0.1, Number(itemStats.projectileSpeedMultiplier || 1));
+    const projectileHomingStrength = Math.max(0, Number(itemStats.projectileHomingStrength || 0));
+    const homingScalar = 1 + projectileHomingStrength;
+    const hasExplicitHoming = Object.prototype.hasOwnProperty.call(props, 'homing');
+    const hasExplicitHomingTarget = Object.prototype.hasOwnProperty.call(props, 'homingTarget');
+    const hasExplicitHomingSpeed = Object.prototype.hasOwnProperty.call(props, 'homingSpeed');
+    const hasExplicitHomingAccel = Object.prototype.hasOwnProperty.call(props, 'homingAccel');
+    const hasExplicitHomingTurnRate = Object.prototype.hasOwnProperty.call(props, 'homingTurnRate');
+    const hasExplicitHomingRadius = Object.prototype.hasOwnProperty.call(props, 'homingRadius');
     p.x = props.x;
     p.y = props.y;
     p.vx = Number(props.vx || 0) * projectileSpeedMultiplier;
@@ -609,12 +617,29 @@
     p.blockedSplashDamage = props.blockedSplashDamage ?? 0;
     p.fireStacks = props.fireStacks ?? 0;
     p.fireDuration = props.fireDuration ?? 0;
-    p.homing = props.homing ?? false;
-    p.homingTarget = props.homingTarget ?? null;
-    p.homingSpeed = Number(props.homingSpeed ?? 0) * projectileSpeedMultiplier;
-    p.homingAccel = props.homingAccel ?? 0;
-    p.homingTurnRate = props.homingTurnRate ?? 0;
-    p.homingRadius = props.homingRadius ?? 0;
+    const baseProjectileSpeed = Math.hypot(p.vx, p.vy) || 180;
+    const grantedHoming = !enemyProjectile && projectileHomingStrength > 0 && !hasExplicitHoming;
+    p.homing = hasExplicitHoming ? !!props.homing : grantedHoming;
+    p.homingTarget = hasExplicitHomingTarget ? props.homingTarget : (p.homing && !enemyProjectile ? 'enemy' : null);
+    if (p.homing) {
+      p.homingSpeed = hasExplicitHomingSpeed
+        ? Number(props.homingSpeed ?? 0) * projectileSpeedMultiplier * homingScalar
+        : baseProjectileSpeed;
+      p.homingAccel = hasExplicitHomingAccel
+        ? Number(props.homingAccel ?? 0) * homingScalar
+        : (grantedHoming ? 1.2 + projectileHomingStrength * 6 : 0);
+      p.homingTurnRate = hasExplicitHomingTurnRate
+        ? Number(props.homingTurnRate ?? 0) * homingScalar
+        : (grantedHoming ? 0.75 + projectileHomingStrength * 3.5 : 0);
+      p.homingRadius = hasExplicitHomingRadius
+        ? Number(props.homingRadius ?? 0) * homingScalar
+        : (grantedHoming ? 220 + projectileHomingStrength * 1400 : 0);
+    } else {
+      p.homingSpeed = 0;
+      p.homingAccel = 0;
+      p.homingTurnRate = 0;
+      p.homingRadius = 0;
+    }
     p.fromRival = props.fromRival ?? false;
     p.source = props.source ?? null;
     p.statusEffects = props.statusEffects ?? null;
