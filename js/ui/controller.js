@@ -413,7 +413,18 @@ export function createUIController(view) {
       view.dead.classList.toggle('hidden',      show !== 'dead');
       view.win.classList.toggle('hidden',       show !== 'win');
       const inventoryPause = !!Neo.inventoryPauseActive && !!view.invPanel && !view.invPanel.classList.contains('hidden');
-      view.pause?.classList.toggle('hidden',    show !== 'pause' || inventoryPause);
+      const pauseVisible = show === 'pause' && !inventoryPause;
+      if (view.pause) {
+        if (pauseVisible) {
+          Neo.clearPanelCloseEffect?.(view.pause);
+          view.pause.classList.remove('hidden');
+          view.pause.setAttribute('aria-hidden', 'false');
+        } else {
+          if (!view.pause.classList.contains('hidden')) Neo.playPanelCloseEffect?.(view.pause);
+          view.pause.classList.add('hidden');
+          view.pause.setAttribute('aria-hidden', 'true');
+        }
+      }
       const inPlay = show === 'play' || show === 'pause' || show === 'dialogue' || show === 'dying';
       setVisible(view.hud, false, 'none');
       setVisible(view.actionBar, show === 'play' || show === 'pause' || show === 'dying', '');

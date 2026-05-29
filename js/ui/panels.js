@@ -498,6 +498,156 @@ export function isPanelOpen(panel) {
     return !!panel && !panel.classList.contains('hidden');
   }
 
+  const PANEL_CLOSE_EFFECT_DURATION_MS = 420;
+  const PANEL_CLOSE_EFFECT_SETTLE_MS = 220;
+
+  function prefersReducedPanelMotion() {
+    return !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  }
+
+  function getPanelCloseEffectKey(target) {
+    if (!target) return '';
+    if (typeof target === 'string') return target;
+    return String(target.id || target.dataset?.panelFxKey || target.className || target.tagName || 'panel');
+  }
+
+  export function clearPanelCloseEffect(target) {
+    const key = getPanelCloseEffectKey(target);
+    if (!key) return;
+    document.querySelectorAll('.panel-disintegrate-fx').forEach(node => {
+      if (node instanceof HTMLElement && node.dataset.fxKey === key) node.remove();
+    });
+  }
+
+  function copyCanvasBitmaps(sourceRoot, cloneRoot) {
+    const sourceCanvases = Array.from(sourceRoot.querySelectorAll('canvas'));
+    const cloneCanvases = Array.from(cloneRoot.querySelectorAll('canvas'));
+    const count = Math.min(sourceCanvases.length, cloneCanvases.length);
+    for (let index = 0; index < count; index += 1) {
+      const sourceCanvas = sourceCanvases[index];
+      const cloneCanvas = cloneCanvases[index];
+      if (!(sourceCanvas instanceof HTMLCanvasElement) || !(cloneCanvas instanceof HTMLCanvasElement)) continue;
+      cloneCanvas.width = sourceCanvas.width;
+      cloneCanvas.height = sourceCanvas.height;
+      const ctx = cloneCanvas.getContext('2d');
+      if (!ctx) continue;
+      ctx.clearRect(0, 0, cloneCanvas.width, cloneCanvas.height);
+      ctx.drawImage(sourceCanvas, 0, 0);
+    }
+  }
+
+  function applyGhostSurfaceStyle(source, clone, rect, offsetX, offsetY) {
+    const computed = window.getComputedStyle(source);
+    [
+      'display',
+      'background',
+      'background-image',
+      'background-color',
+      'border',
+      'border-top',
+      'border-right',
+      'border-bottom',
+      'border-left',
+      'border-radius',
+      'box-shadow',
+      'backdrop-filter',
+      'color',
+      'padding',
+      'overflow',
+      'overflow-x',
+      'overflow-y',
+      'flex-direction',
+      'align-items',
+      'justify-content',
+      'text-align',
+      'box-sizing',
+      'gap',
+    ].forEach(prop => {
+      clone.style.setProperty(prop, computed.getPropertyValue(prop));
+    });
+    clone.classList.remove('hidden');
+    clone.removeAttribute('id');
+    clone.querySelectorAll('[id]').forEach(node => node.removeAttribute('id'));
+    clone.style.position = 'absolute';
+    clone.style.left = `${-offsetX}px`;
+    clone.style.top = `${-offsetY}px`;
+    clone.style.width = `${rect.width}px`;
+    clone.style.height = `${rect.height}px`;
+    clone.style.maxHeight = 'none';
+    clone.style.minHeight = '0';
+    clone.style.margin = '0';
+    clone.style.inset = 'auto';
+    clone.style.transform = 'none';
+    clone.style.transition = 'none';
+    clone.style.animation = 'none';
+    clone.style.opacity = '1';
+    clone.style.visibility = 'visible';
+    clone.style.pointerEvents = 'none';
+    clone.style.willChange = 'auto';
+    clone.setAttribute('aria-hidden', 'true');
+    clone.scrollTop = source.scrollTop;
+    clone.scrollLeft = source.scrollLeft;
+  }
+
+  export function playPanelCloseEffect(element) {
+    if (!(element instanceof HTMLElement) || !element.isConnected) return false;
+    if (element.classList.contains('hidden') || prefersReducedPanelMotion() || !document.body) return false;
+    const rect = element.getBoundingClientRect();
+    if (rect.width < 24 || rect.height < 24) return false;
+
+    const key = getPanelCloseEffectKey(element);
+    clearPanelCloseEffect(key);
+
+    const computed = window.getComputedStyle(element);
+    const ghost = document.createElement('div');
+    ghost.className = 'panel-disintegrate-fx';
+    ghost.dataset.fxKey = key;
+    ghost.style.left = `${rect.left}px`;
+    ghost.style.top = `${rect.top}px`;
+    ghost.style.width = `${rect.width}px`;
+    ghost.style.height = `${rect.height}px`;
+    const parsedZ = Number.parseFloat(computed.zIndex);
+    ghost.style.zIndex = String(Number.isFinite(parsedZ) ? parsedZ + 2 : 100);
+
+    const cols = Math.max(4, Math.min(7, Math.round(rect.width / 180)));
+    const rows = Math.max(4, Math.min(6, Math.round(rect.height / 150)));
+    const tileWidth = rect.width / cols;
+    const tileHeight = rect.height / rows;
+    let maxDelay = 0;
+
+    for (let row = 0; row < rows; row += 1) {
+      for (let col = 0; col < cols; col += 1) {
+        const x = Math.round(col * tileWidth);
+        const y = Math.round(row * tileHeight);
+        const width = col === cols - 1 ? Math.max(1, Math.round(rect.width - x)) : Math.ceil(tileWidth);
+        const height = row === rows - 1 ? Math.max(1, Math.round(rect.height - y)) : Math.ceil(tileHeight);
+        const tile = document.createElement('div');
+        tile.className = 'panel-disintegrate-fx__tile';
+        tile.style.left = `${x}px`;
+        tile.style.top = `${y}px`;
+        tile.style.width = `${width}px`;
+        tile.style.height = `${height}px`;
+        const delay = Math.round((row + col) * 18 + Math.random() * 90);
+        maxDelay = Math.max(maxDelay, delay);
+        tile.style.setProperty('--panel-fx-delay', `${delay}ms`);
+        tile.style.setProperty('--panel-fx-dx', `${((Math.random() - 0.5) * 120).toFixed(1)}px`);
+        tile.style.setProperty('--panel-fx-dy', `${((Math.random() - 0.7) * 120).toFixed(1)}px`);
+        tile.style.setProperty('--panel-fx-rot', `${((Math.random() - 0.5) * 18).toFixed(1)}deg`);
+
+        const clone = element.cloneNode(true);
+        applyGhostSurfaceStyle(element, clone, rect, x, y);
+        copyCanvasBitmaps(element, clone);
+        tile.appendChild(clone);
+        ghost.appendChild(tile);
+      }
+    }
+
+    document.body.appendChild(ghost);
+    window.requestAnimationFrame(() => ghost.classList.add('panel-disintegrate-fx--active'));
+    window.setTimeout(() => ghost.remove(), PANEL_CLOSE_EFFECT_DURATION_MS + maxDelay + PANEL_CLOSE_EFFECT_SETTLE_MS);
+    return true;
+  }
+
 export function markShopPanelDirty() {
     Neo.shopPanelDirty = true;
   }
@@ -508,6 +658,8 @@ export function markInventoryPanelDirty() {
 
 export function setShopPanelOpen(open) {
     if (!Neo.ui.shopPanel) return;
+  if (open) clearPanelCloseEffect(Neo.ui.shopPanel);
+  else if (isPanelOpen(Neo.ui.shopPanel)) playPanelCloseEffect(Neo.ui.shopPanel);
     Neo.ui.shopPanel.classList.toggle('hidden', !open);
     Neo.ui.shopPanel.setAttribute('aria-hidden', open ? 'false' : 'true');
     if (open) {
@@ -518,6 +670,8 @@ export function setShopPanelOpen(open) {
 
 export function setInventoryPanelOpen(open) {
     if (!Neo.ui.invPanel) return;
+  if (open) clearPanelCloseEffect(Neo.ui.invPanel);
+  else if (isPanelOpen(Neo.ui.invPanel)) playPanelCloseEffect(Neo.ui.invPanel);
     Neo.ui.invPanel.classList.toggle('hidden', !open);
     Neo.ui.invPanel.setAttribute('aria-hidden', open ? 'false' : 'true');
     if (!open) {
@@ -575,6 +729,8 @@ export function toggleInventoryPanel() {
 
 export function setAnvilPanelOpen(open) {
     if (!Neo.ui.anvilPanel) return;
+  if (open) clearPanelCloseEffect(Neo.ui.anvilPanel);
+  else if (isPanelOpen(Neo.ui.anvilPanel)) playPanelCloseEffect(Neo.ui.anvilPanel);
     Neo.ui.anvilPanel.classList.toggle('hidden', !open);
     Neo.ui.anvilPanel.setAttribute('aria-hidden', open ? 'false' : 'true');
     if (open) {
@@ -844,6 +1000,10 @@ export function isWizardPawOpen() {
 
 export function setWizardPawModalOpen(open) {
     if (!Neo.ui.wizardPawModal) return;
+  const effectTarget = Neo.ui.wizardPawModal.querySelector('.modal-box') || Neo.ui.wizardPawModal;
+  if (effectTarget instanceof HTMLElement) effectTarget.dataset.panelFxKey = 'wizard-paw-modal';
+  if (open) clearPanelCloseEffect(effectTarget);
+  else if (isPanelOpen(Neo.ui.wizardPawModal)) playPanelCloseEffect(effectTarget);
     Neo.ui.wizardPawModal.classList.toggle('hidden', !open);
     Neo.ui.wizardPawModal.setAttribute('aria-hidden', open ? 'false' : 'true');
   }
@@ -1355,8 +1515,10 @@ export function handleShopBuyClick(event) {
   Neo.bindPanelInput = bindPanelInput;
   Neo.clearInventoryDragState = clearInventoryDragState;
   Neo.isPanelOpen = isPanelOpen;
+  Neo.clearPanelCloseEffect = clearPanelCloseEffect;
   Neo.markShopPanelDirty = markShopPanelDirty;
   Neo.markInventoryPanelDirty = markInventoryPanelDirty;
+  Neo.playPanelCloseEffect = playPanelCloseEffect;
   Neo.setShopPanelOpen = setShopPanelOpen;
   Neo.setInventoryPanelOpen = setInventoryPanelOpen;
   Neo.toggleShopPanel = toggleShopPanel;

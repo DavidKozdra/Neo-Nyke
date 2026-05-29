@@ -1,3 +1,4 @@
+/* VT323 — pixel/terminal font for all UI text (legible digits). */
 @font-face {
   font-family: 'VT323';
   font-style: normal;
@@ -15,9 +16,21 @@
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
 
+/* Press Start 2P — used only for the main-menu title (latin only). */
+@font-face {
+  font-family: 'Press Start 2P';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('../assets/fonts/PressStart2P-Latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
 :root {
   /* Pixel UI font, with fallbacks that still cover decorative symbol glyphs (◆ ⚔ ↺ …). */
   --font-pixel: 'VT323', 'Courier New', ui-monospace, monospace;
+  /* Title font — chunkier arcade pixel face, just for the menu logo. */
+  --font-title: 'Press Start 2P', 'VT323', monospace;
 }
 
 body {
@@ -1163,6 +1176,43 @@ canvas {
 }
 .hidden { display:none !important; }
 
+.panel-disintegrate-fx {
+  position: fixed;
+  pointer-events: none;
+  overflow: visible;
+  contain: layout paint style;
+  isolation: isolate;
+}
+
+.panel-disintegrate-fx__tile {
+  position: absolute;
+  overflow: hidden;
+  transform-origin: center;
+  opacity: 1;
+  filter: blur(0);
+  will-change: transform, opacity, filter;
+  transition:
+    transform .42s cubic-bezier(.22, .72, .2, 1),
+    opacity .34s ease,
+    filter .34s ease;
+  transition-delay: var(--panel-fx-delay, 0ms);
+}
+
+.panel-disintegrate-fx__surface {
+  pointer-events: none !important;
+  user-select: none;
+}
+
+.panel-disintegrate-fx__surface canvas {
+  image-rendering: pixelated;
+}
+
+.panel-disintegrate-fx--active .panel-disintegrate-fx__tile {
+  opacity: 0;
+  filter: blur(3px) saturate(.82);
+  transform: translate(var(--panel-fx-dx, 0), var(--panel-fx-dy, 0)) scale(.58) rotate(var(--panel-fx-rot, 0deg));
+}
+
 .game-panel {
   position: fixed;
   left: 50%;
@@ -1180,6 +1230,30 @@ canvas {
   padding: 22px;
   color: var(--menu-text);
   backdrop-filter: blur(14px);
+}
+
+#invPanel.game-panel {
+  opacity: 1;
+  visibility: visible;
+  transform: translate(-50%, -50%) scale(1);
+  transform-origin: center;
+  transition:
+    opacity .22s ease,
+    transform .26s cubic-bezier(.2, .9, .25, 1.08),
+    visibility 0s linear 0s;
+  will-change: transform, opacity;
+}
+
+#invPanel.game-panel.hidden {
+  display: block !important;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translate(-50%, -47%) scale(.94);
+  transition:
+    opacity .18s ease,
+    transform .18s ease,
+    visibility 0s linear .18s;
 }
 
 .game-panel-head {
@@ -2315,13 +2389,18 @@ canvas {
   display: flex;
   gap: 0;
   margin-bottom: 12px;
+  /* letter-spacing adds a trailing gap after the last glyph, shifting the
+     flex-centered block left; nudge right by one letter-space to recenter. */
+  margin-left: .04em;
 }
 
 .menu-letter {
   display: inline-block;
-  font-size: clamp(78px, 13.5vw, 165px);
-  font-weight: 900;
-  letter-spacing: .12em;
+  font-family: var(--font-title);
+  /* Press Start 2P is ~2× wider per glyph, so the title runs smaller than the body pixel font. */
+  font-size: clamp(40px, 7vw, 92px);
+  font-weight: 400;
+  letter-spacing: .04em;
   text-transform: uppercase;
   /* Icy blue gradient fill */
   background: linear-gradient(180deg, #eaf6ff 0%, #bfe3ff 32%, #6cc3ff 62%, #2f8fe6 100%);
@@ -3632,6 +3711,43 @@ button.alt.danger {
 
 #pause.overlay {
   z-index: 90;
+  opacity: 1;
+  visibility: visible;
+  transition: opacity .2s ease, visibility 0s linear 0s;
+}
+
+#pause.overlay .screen-title,
+#pause.overlay .main-nav {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  transform-origin: center;
+  transition:
+    opacity .24s ease,
+    transform .28s cubic-bezier(.2, .9, .25, 1.08);
+}
+
+#pause.overlay.hidden {
+  display: flex !important;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity .2s ease, visibility 0s linear .2s;
+}
+
+#pause.overlay.hidden .screen-title,
+#pause.overlay.hidden .main-nav {
+  opacity: 0;
+  transform: translateY(16px) scale(.96);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #invPanel.game-panel,
+  #invPanel.game-panel.hidden,
+  #pause.overlay,
+  #pause.overlay .screen-title,
+  #pause.overlay .main-nav {
+    transition: none;
+  }
 }
 
 /* ── Death screen layout ─────────────────────────────────────────────────── */
@@ -4106,14 +4222,6 @@ button.alt.danger {
   justify-content: center;
   gap: 10px;
 }
-
-.nav-btn__icon {
-  font-size: 1.1em;
-  opacity: 0.75;
-  flex-shrink: 0;
-  line-height: 1;
-}
-.nav-btn:hover .nav-btn__icon { opacity: 1; }
 
 .nav-btn:hover {
   border-color: var(--menu-border-strong);
