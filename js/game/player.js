@@ -440,7 +440,9 @@ export function consumeCharge(chargeType) {
       if (Neo.player.escapeChargeKills >= getChargeRequirement(10)) {
         Neo.player.escapeReady = true;
         Neo.player.escapeChargeKills = 0;
-        const warpHint = Neo.formatControlLabel('f', 'f');
+        const slotIdx = Neo.player?.equipmentSlots?.indexOf?.('charged_adapter') ?? -1;
+        const slotLetter = slotIdx >= 0 ? (Neo.EQUIPMENT_SLOT_KEYS?.[slotIdx] || 'F') : 'F';
+        const warpHint = Neo.formatControlLabel(slotLetter.toLowerCase(), slotLetter.toLowerCase());
         Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 36, life: 0.9, text: `ADAPTER READY - PRESS ${warpHint}`, c: '#b88cff' });
       }
     }

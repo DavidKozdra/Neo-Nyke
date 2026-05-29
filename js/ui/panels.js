@@ -69,7 +69,12 @@ export function bindInput() {
       if (b && key === b.smash && Neo.gameState === 'play') Neo.trySmash();
       else if (!b && key === 'r' && Neo.gameState === 'play') Neo.trySmash();
       if (Neo.gameState === 'play' && Neo.EQUIPMENT_SLOT_KEYS?.includes(key.toUpperCase())) {
-        if (Neo.activateEquipmentSlotKey?.(key.toUpperCase())) event.preventDefault();
+        if (!Neo.equipKeyLatch) Neo.equipKeyLatch = {};
+        const letter = key.toUpperCase();
+        if (!Neo.equipKeyLatch[letter]) {
+          Neo.equipKeyLatch[letter] = true;
+          if (Neo.activateEquipmentSlotKey?.(letter)) event.preventDefault();
+        }
       }
     });
     window.addEventListener('keyup', event => {
@@ -84,6 +89,10 @@ export function bindInput() {
       if (key === 'e') { Neo.shopKeyLatch = false; Neo.anvilKeyLatch = false; }
       if (key === ' ') Neo.ladderUseKeyLatch = false;
       if (key === inventoryKey) Neo.invKeyLatch = false;
+      const upper = key.toUpperCase();
+      if (Neo.equipKeyLatch && Neo.EQUIPMENT_SLOT_KEYS?.includes(upper)) {
+        Neo.equipKeyLatch[upper] = false;
+      }
     });
     Neo.uiController.bindMenuActions({
       _getChosenCharacter() {
