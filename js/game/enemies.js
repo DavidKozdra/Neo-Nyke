@@ -2027,12 +2027,14 @@
     updateGolemEnemy(enemy, dt);
   }
 
-  function spawnPhaseSwords(count, damage, source = 'god_projectile') {
+  function spawnPhaseSwords(count, damage, source = 'god_projectile', radius = 190) {
     for (let index = 0; index < count; index += 1) {
       const angle = (Math.PI * 2 * index) / count + Neo.rng() * 0.25;
-      const sx = Neo.player.x + Math.cos(angle) * 110;
-      const sy = Neo.player.y + Math.sin(angle) * 110;
+      const sx = Neo.player.x + Math.cos(angle) * radius;
+      const sy = Neo.player.y + Math.sin(angle) * radius;
       const travel = Math.atan2(Neo.player.y - sy, Neo.player.x - sx);
+      // Telegraph each blade's origin so the convergence reads before it fires.
+      Neo.spawnParticle({ x: sx, y: sy, life: 0.4, ring: 18, c: '#d8c7ff' });
       Neo.spawnProjectile({
         x: sx,
         y: sy,

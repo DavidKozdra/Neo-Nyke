@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'neonyke-v18';
+const CACHE_VERSION = 'neonyke-v19';
 const CACHE_META = 'neonyke-cache-meta';
 const CACHE_META_KEY = '/__neonyke_cache_meta__';
 const CACHE_REFRESH_INTERVAL_MS = 5 * 60 * 60 * 1000;
@@ -10,6 +10,8 @@ const PRECACHE = [
   '/css/theme-princess.css',
   '/css/mobile.css',
   '/css/touch-controls.css',
+  '/assets/fonts/VT323-Regular.woff2',
+  '/assets/fonts/VT323-LatinExt.woff2',
   '/Koz_Engine_Lib/Core/koz-engine.global.js',
   '/assets/sprites/combatants.js',
   '/assets/sprites/environment.js',

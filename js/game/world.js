@@ -287,7 +287,26 @@
 
   function damagePlayer(amount, angle, knockback, source = '', options = {}) {
     const sandbox = Neo.getActiveSandboxSettings();
-    if (sandbox?.godMode) return;
+    // [TEMP DIAGNOSTIC — remove after fix]
+    const __bossDiag = Neo.isBossFightActive();
+    const __diag = (which) => {
+      if (!__bossDiag) return;
+      const is = Neo.getItemStats?.() || {};
+      console.warn('[damagePlayer GUARD]', which, {
+        godMode: sandbox?.godMode,
+        gameMode: Neo.gameMode,
+        gameState: Neo.gameState,
+        inv: Neo.player.inv,
+        blockActive: Neo.player.blockActive,
+        princessFlightTime: Neo.player.princessFlightTime,
+        hasIronLung: is.hasIronLung,
+        isBossFightActive: __bossDiag,
+        roomDamageTaken: Neo.player.roomDamageTaken,
+        roomType: Neo.currentRoom?.type,
+        amount, source,
+      });
+    };
+    if (sandbox?.godMode) { __diag('godMode'); return; }
     const ignoreInv = !!options.ignoreInv;
     const applyHitstop = !options.noInvFrames;
     const showPopup = options.showPopup !== false;
@@ -298,8 +317,9 @@
     }
     if (!Number.isFinite(Number(Neo.player.maxHp)) || Number(Neo.player.maxHp) <= 0) Neo.player.maxHp = 120;
     if (!Number.isFinite(Number(Neo.player.hp))) Neo.player.hp = Neo.player.maxHp;
-    if (!ignoreInv && Neo.player.inv > 0) return;
+    if (!ignoreInv && Neo.player.inv > 0) { __diag('inv>0'); return; }
     if (Neo.player.blockActive && !options.ignoreBlock) {
+      __diag('blockActive');
       Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.3, text: 'BLOCK', c: '#9cefff' });
       return;
     }
@@ -324,6 +344,7 @@
       const roomCap = Neo.player.maxHp * 0.2;
       const remaining = roomCap - (Neo.player.roomDamageTaken || 0);
       if (remaining <= 0) {
+        __diag('ironLungCap');
         if (Neo.player.hp <= 0) Neo.die();
         return;
       }
