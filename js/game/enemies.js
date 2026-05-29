@@ -2181,7 +2181,7 @@
       if (enemy.windup <= 0) {
         const angle = Math.atan2(dy, dx);
         if (distance < enemy.r + Neo.player.r + 54) {
-          Neo.damagePlayer(enemy.dmg + 16, angle, 340, 'storm');
+          Neo.damagePlayer(enemy.dmg + 16, angle, 340, enemy.type);
         }
         Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.6, ring: 86, c: '#ffd27d' });
       }
@@ -2538,7 +2538,10 @@
   function mirrorDamagePlayer(enemy, damage, angle, knockback, source, options = {}) {
     const rolled = rollMirrorDamage(enemy, damage, options);
     const knockbackMultiplier = Number(enemy?.mirrorItemStats?.knockbackMultiplier || 1);
-    Neo.damagePlayer(rolled.amount, angle, Number(knockback || 0) * knockbackMultiplier, source);
+    Neo.damagePlayer(rolled.amount, angle, Number(knockback || 0) * knockbackMultiplier, source, {
+      ...options,
+      sourceKey: enemy?.type || 'mirror_knight',
+    });
     applyMirrorStatusEffects(enemy, options);
     if (rolled.crit) {
       Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 24, life: 0.42, text: 'CRIT', c: '#ff9f1c' });

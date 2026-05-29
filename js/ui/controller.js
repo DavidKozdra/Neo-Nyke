@@ -24,6 +24,7 @@ export function createUIController(view) {
     let hudUpdateHook = null;
     let challengePanelOpen = false;
     let runHistoryOpen = false;
+    let syncSandboxPanelFieldsHook = null;
     let runHistoryPage = 0;
     let runHistoryEntries = [];
     let runHistoryModeFilter = 'all';
@@ -800,6 +801,9 @@ export function createUIController(view) {
     }
 
     function setSandboxPanelOpen(open) {
+      // Refresh fields from current settings each time the panel opens (settings
+      // may have loaded from saved meta after initial wiring).
+      if (open) syncSandboxPanelFieldsHook?.();
       view.sandboxPanel?.classList.toggle('hidden', !open);
       view.sandboxPanel?.classList.toggle('sandbox-panel--open', open);
       view.sandboxPanel?.setAttribute('aria-hidden', open ? 'false' : 'true');
@@ -1079,6 +1083,7 @@ export function createUIController(view) {
           renderSandboxTokenLists();
         }
         buildSandboxMoveLoadoutOptions();
+        syncSandboxPanelFieldsHook = syncSandboxPanelFields;
 
         document.querySelectorAll('#sandboxGrid .sandbox-row').forEach(row => {
           const param = row.dataset.sboxParam;

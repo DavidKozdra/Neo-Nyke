@@ -1271,6 +1271,7 @@ export function resumeGame() {
     if (value === 'god_beam') return 'GOD Beam';
     if (value === 'mirror_beam') return 'Mirror Beam';
     if (Neo.BOSS_TYPES.has(value) || value === 'mirror_knight') return getEnemyLabel(value);
+    if (value.startsWith('mirror_')) return getEnemyLabel('mirror_knight');
     if (Neo.SPRITE_DEFS[value] || ['cult_mage', 'knave', 'sniper', 'machine_gunner', 'golem', 'summoner', 'shield_unit', 'healer', 'boss_spawner', 'laser', 'charger', 'hunter', 'mooggy'].includes(value)) {
       return getEnemyLabel(value);
     }
@@ -1535,6 +1536,8 @@ export function resumeGame() {
     if (String(key).endsWith('_projectile')) return resolveKillerSprite(String(key).slice(0, -'_projectile'.length));
     if (Neo.SPRITE_DEFS[key]) return key;
     if (killerSpriteMap[key]) return killerSpriteMap[key];
+    const normalized = String(key).trim().toLowerCase();
+    if (normalized.startsWith('mirror_') || normalized.startsWith('mirror ')) return 'thorn_knight';
     return 'hunter';
   }
 
