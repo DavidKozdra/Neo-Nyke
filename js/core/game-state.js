@@ -32,6 +32,7 @@ export function resumeGame() {
       unlockedLegacy: [],
       tutorialCompleted: false,
       lastSeenAt: 0,
+      tutorialButtonLastOfferedAt: 0,
       seenTips: {},
       sandboxSettings: { ...Neo.SANDBOX_DEFAULT_SETTINGS },
     };
@@ -160,19 +161,24 @@ export function resumeGame() {
     return requested;
   }
 
-  // Offer the green main-menu tutorial button if the player has never finished
-  // the tutorial, OR it has been 30+ days since they last played.
+  // Offer the green main-menu tutorial button on the first menu visit, then at
+  // most once every 30 days after that.
   const TUTORIAL_REOFFER_MS = 30 * 24 * 60 * 60 * 1000;
   function shouldOfferTutorialButton() {
     const meta = Neo.metaProgress;
     if (!meta) return true;
-    if (!meta.tutorialCompleted) return true;
-    const lastSeen = Number(meta.lastSeenAt || 0);
-    if (!lastSeen) return false;
-    return (Date.now() - lastSeen) > TUTORIAL_REOFFER_MS;
+    const lastOfferedAt = Number(meta.tutorialButtonLastOfferedAt || 0);
+    if (!lastOfferedAt) return true;
+    return (Date.now() - lastOfferedAt) >= TUTORIAL_REOFFER_MS;
   }
 
-  // Stamp "last played" so the 30-day re-offer window resets. Call from the menu.
+  function markTutorialButtonOfferedNow() {
+    if (!Neo.metaProgress) return;
+    Neo.metaProgress.tutorialButtonLastOfferedAt = Date.now();
+    Neo.persistMetaSoon();
+  }
+
+  // Keep a lightweight "last played" stamp in meta for profile/menu context.
   function markPlayerSeenNow() {
     if (!Neo.metaProgress) return;
     Neo.metaProgress.lastSeenAt = Date.now();
@@ -2403,6 +2409,7 @@ export function resumeGame() {
   Neo.resumeGame = resumeGame;
   Neo.createDefaultMeta = createDefaultMeta;
   Neo.shouldOfferTutorialButton = shouldOfferTutorialButton;
+  Neo.markTutorialButtonOfferedNow = markTutorialButtonOfferedNow;
   Neo.markPlayerSeenNow = markPlayerSeenNow;
   Neo.showFirstTip = showFirstTip;
   Neo.normalizeSandboxSettings = normalizeSandboxSettings;

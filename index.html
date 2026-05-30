@@ -578,29 +578,31 @@
 <!-- Main menu — outside #wrap so it fills 100dvw × 100dvh -->
 <div id="start" class="overlay">
   <canvas id="menuBg"></canvas>
-  <!-- Cinematic title layer (sits above canvas, below menu-content) -->
-  <div id="menuCinema" class="menu-cinema">
-    <div id="menuLetters" class="menu-letters" aria-hidden="true"></div>
-    <div id="menuSubtitle" class="menu-subtitle-flash" aria-hidden="true">DUNGEON GOD</div>
-  </div>
-  <div class="menu-content">
-    <h1 id="menuTitle" class="sr-only">NEO NYKE — DUNGEON GOD</h1>
-    <div id="specialDayBanner" class="special-day-banner hidden" aria-live="polite">
-      <span class="special-day-banner__icon" id="specialDayIcon" aria-hidden="true"></span>
-      <span class="special-day-banner__text" id="specialDayText"></span>
+  <div class="menu-stage">
+    <!-- Cinematic title layer (sits above canvas, below menu-content) -->
+    <div id="menuCinema" class="menu-cinema">
+      <div id="menuLetters" class="menu-letters" aria-hidden="true"></div>
+      <div id="menuSubtitle" class="menu-subtitle-flash" aria-hidden="true">DUNGEON GOD</div>
     </div>
+    <div class="menu-content">
+      <h1 id="menuTitle" class="sr-only">NEO NYKE — DUNGEON GOD</h1>
+      <div id="specialDayBanner" class="special-day-banner hidden" aria-live="polite">
+        <span class="special-day-banner__icon" id="specialDayIcon" aria-hidden="true"></span>
+        <span class="special-day-banner__text" id="specialDayText"></span>
+      </div>
 
-    <div class="main-nav">
-      <button id="tutorialMenuBtn" class="nav-btn nav-btn--tutorial hidden">🎓 TUTORIAL</button>
-      <button id="continueBtn" class="nav-btn hidden">CONTINUE</button>
-      <button id="mainCompetitiveBtn" class="nav-btn" style="background:rgba(180,140,0,0.18);border-color:rgba(255,210,0,0.5);color:#ffe566;">COMPETITIVE</button>
-      <button id="newRunBtn"   class="nav-btn">NEW RUN</button>
-      <button id="altModesBtn"   class="nav-btn nav-btn--minor">ALT MODES</button>
-      <button id="runHistoryBtn" class="nav-btn nav-btn--minor">INFO</button>
-      <button id="settingsBtn" class="nav-btn nav-btn--minor">SETTINGS</button>
-      <button id="creditsBtn" class="nav-btn nav-btn--minor">CREDITS</button>
-    </div>
-  </div><!-- /.menu-content -->
+      <div class="main-nav">
+        <button id="tutorialMenuBtn" class="nav-btn nav-btn--tutorial hidden">🎓 TUTORIAL</button>
+        <button id="continueBtn" class="nav-btn hidden">CONTINUE</button>
+        <button id="mainCompetitiveBtn" class="nav-btn" style="background:rgba(180,140,0,0.18);border-color:rgba(255,210,0,0.5);color:#ffe566;">COMPETITIVE</button>
+        <button id="newRunBtn"   class="nav-btn">NEW RUN</button>
+        <button id="altModesBtn"   class="nav-btn nav-btn--minor">ALT MODES</button>
+        <button id="runHistoryBtn" class="nav-btn nav-btn--minor">INFO</button>
+        <button id="settingsBtn" class="nav-btn nav-btn--minor">SETTINGS</button>
+        <button id="creditsBtn" class="nav-btn nav-btn--minor">CREDITS</button>
+      </div>
+    </div><!-- /.menu-content -->
+  </div><!-- /.menu-stage -->
   <div class="menu-footer">
     <div class="meta-row">
       <span class="meta-pill"><canvas id="metaCoinIcon" class="meta-icon" width="32" height="32"></canvas> BANK <b id="bankCoins">0</b></span>

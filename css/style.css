@@ -2386,6 +2386,47 @@ canvas {
   backdrop-filter: blur(18px);
 }
 
+#start.overlay {
+  justify-content: flex-start;
+  overflow: hidden;
+}
+
+#start .menu-stage {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: clamp(18px, 3vh, 34px);
+  width: min(100%, 720px);
+  min-height: 100%;
+  margin: 0 auto;
+  padding: clamp(28px, 7vh, 84px) 20px 132px;
+  box-sizing: border-box;
+}
+
+#start .menu-cinema {
+  position: relative;
+  inset: auto;
+  z-index: auto;
+  justify-content: center;
+  padding-top: 0;
+}
+
+#start .menu-letters {
+  justify-content: center;
+}
+
+#start .menu-content {
+  position: relative;
+  top: auto;
+  left: auto;
+  transform: none;
+  width: min(100%, 420px);
+  min-width: min(320px, 100%);
+  max-width: 100%;
+}
+
 .hidden {
   display: none;
 }
@@ -4261,6 +4302,20 @@ button.alt.danger {
   box-shadow: 0 0 22px var(--menu-glow);
   color: var(--menu-text);
   transform: translateY(-1px);
+}
+
+.nav-btn--tutorial {
+  background: linear-gradient(180deg, rgba(28,96,52,.92), rgba(13,58,31,.94));
+  border-color: rgba(124,236,156,.52);
+  border-top-color: rgba(212,255,224,.78);
+  color: #a9f7bf;
+  box-shadow: 0 0 16px rgba(28,120,58,.3), inset 0 0 18px rgba(178,255,200,.06);
+}
+
+.nav-btn--tutorial:hover {
+  border-color: rgba(156,252,184,.78);
+  box-shadow: 0 0 24px rgba(72,190,104,.34), inset 0 0 22px rgba(196,255,214,.08);
+  color: #dcffe7;
 }
 
 .nav-btn--minor {

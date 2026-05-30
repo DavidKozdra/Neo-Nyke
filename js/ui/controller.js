@@ -35,6 +35,7 @@ export function createUIController(view) {
     let objectiveTrackerVisible = false;
     let objectiveCompactMode = false;
     let objectiveExpanded = true;
+    let tutorialMenuOfferVisible = false;
     const runHistoryPageSize = 8;
 
     const LC = `<span class="lc-icon">◆</span>`;
@@ -444,6 +445,7 @@ export function createUIController(view) {
       if (show !== 'charselect') { setChallengePanelOpen(false); setLegacyPanelOpen(false); }
       if (show !== 'menu' && show !== 'pause') setRunHistoryOpen(false);
       if (show !== 'menu') { setAltModesPanelOpen(false); setSandboxPanelOpen(false); }
+      if (show !== 'menu') tutorialMenuOfferVisible = false;
       setVisible(view.endlessHud, inPlay && Neo.gameMode === 'endless', 'flex');
       setVisible(view.practicePanel, inPlay && Neo.gameMode === 'practice' && show !== 'dying', 'block');
       const isBossRush = Neo.gameMode === 'boss_rush';
@@ -1501,8 +1503,14 @@ export function createUIController(view) {
         view.bestFloor.textContent = bestFloor;
         if (view.loopCount) view.loopCount.textContent = loopCrystals;
         view.saveState.textContent = saveState;
-        // Show the green tutorial CTA only for first-time or long-absent players.
-        view.tutorialMenuBtn?.classList.toggle('hidden', !Neo.shouldOfferTutorialButton?.());
+        // Keep the CTA stable for the current menu view, but only offer it once
+        // per 30-day window across visits.
+        const canOfferTutorial = activeState === 'menu' && (tutorialMenuOfferVisible || !!Neo.shouldOfferTutorialButton?.());
+        if (activeState === 'menu' && canOfferTutorial && !tutorialMenuOfferVisible) {
+          tutorialMenuOfferVisible = true;
+          Neo.markTutorialButtonOfferedNow?.();
+        }
+        view.tutorialMenuBtn?.classList.toggle('hidden', !canOfferTutorial);
       },
       showFirstTip(tip) {
         if (!view.firstTipOverlay || !tip) return;
