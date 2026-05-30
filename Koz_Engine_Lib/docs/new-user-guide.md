@@ -1,6 +1,6 @@
 # Koz Engine New User Guide
 
-This guide is for developers who want to understand or reuse parts of `Koz_Engine_Lib` without first reverse-engineering the whole Bargain Quest codebase.
+This guide is for developers who want to understand or reuse parts of `Koz_Engine_Lib` without first reverse-engineering the whole host game's codebase.
 
 ## What This Library Is
 
@@ -48,7 +48,7 @@ These are the clearest entry points for new users:
 
 ## Avoid Starting With These
 
-These modules still carry significant host, DOM, p5, or Bargain Quest coupling:
+These modules still carry significant host, DOM, p5, or game-specific coupling:
 
 - `Events/eventSystem.js`
 - `Events/notificationManager.js`
@@ -61,7 +61,7 @@ These modules still carry significant host, DOM, p5, or Bargain Quest coupling:
 - `AI/Charictar_controller.js`
 - `Core/GameObject.js`
 
-`AI/astar.js` sits in the middle: it is reusable in concept, but its current implementation still assumes Bargain Quest-style grid cells and global terrain cost data.
+`AI/astar.js` sits in the middle: it is reusable in concept, but its current implementation still assumes game-specific grid cells and global terrain cost data.
 
 ## How To Load Modules
 
@@ -80,7 +80,7 @@ This matches the test suite in `tests/lib/`.
 
 ### Browser Global Bridge: Transitional Only
 
-If you need browser globals, load [`Core/koz-engine.global.js`](/home/davidk/Documents/CODE/GITHUB/Bargain-Quest/Koz_Engine_Lib/Core/koz-engine.global.js). It registers modules under `window.KozEngine` and also publishes some legacy globals.
+If you need browser globals, load [`Core/koz-engine.global.js`](../Core/koz-engine.global.js). It registers modules under `window.KozEngine` and also publishes some legacy globals.
 
 Example:
 
@@ -96,21 +96,14 @@ Prefer direct module loading when possible. The global bridge exists as host glu
 
 ## Best Usage Examples
 
-For concrete examples, read the tests:
-
-- [`tests/lib/gameStateManager.test.js`](/home/davidk/Documents/CODE/GITHUB/Bargain-Quest/tests/lib/gameStateManager.test.js)
-- [`tests/lib/saveApi.test.js`](/home/davidk/Documents/CODE/GITHUB/Bargain-Quest/tests/lib/saveApi.test.js)
-- [`tests/lib/worldSpace.test.js`](/home/davidk/Documents/CODE/GITHUB/Bargain-Quest/tests/lib/worldSpace.test.js)
-- [`tests/lib/worldEditor.test.js`](/home/davidk/Documents/CODE/GITHUB/Bargain-Quest/tests/lib/worldEditor.test.js)
-- [`tests/lib/mobileInput.test.js`](/home/davidk/Documents/CODE/GITHUB/Bargain-Quest/tests/lib/mobileInput.test.js)
-- [`tests/lib/itemFactory.test.js`](/home/davidk/Documents/CODE/GITHUB/Bargain-Quest/tests/lib/itemFactory.test.js)
+For concrete usage, read the module source under each folder and the per-module
+guidance in [`docs/module-catalog.md`](module-catalog.md). How the host game wires
+these modules in the browser is shown in [`Core/koz-engine.global.js`](../Core/koz-engine.global.js).
 
 ## Read The Docs In This Order
 
-1. [`README.md`](/home/davidk/Documents/CODE/GITHUB/Bargain-Quest/Koz_Engine_Lib/README.md) for project status and boundaries
-2. [`docs/module-catalog.md`](/home/davidk/Documents/CODE/GITHUB/Bargain-Quest/Koz_Engine_Lib/docs/module-catalog.md) for per-module guidance
-3. [`docs/migration-roadmap.md`](/home/davidk/Documents/CODE/GITHUB/Bargain-Quest/Koz_Engine_Lib/docs/migration-roadmap.md) for architecture direction
-4. [`docs/class-to-lib-status.md`](/home/davidk/Documents/CODE/GITHUB/Bargain-Quest/Koz_Engine_Lib/docs/class-to-lib-status.md) for extraction status
+1. [`README.md`](../README.md) for project status and boundaries
+2. [`docs/module-catalog.md`](module-catalog.md) for per-module guidance
 
 ## Current Caveats
 

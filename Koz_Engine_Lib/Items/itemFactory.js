@@ -91,22 +91,16 @@
 
     Object.keys(defs).forEach(function createEntry(key) {
       var spec = defs[key] || {};
-      var item = new ItemClass({
-        name: spec.name,
-        sprite: spec.sprite,
-        baseValue: spec.baseValue,
-        category: spec.category,
-        weight: spec.weight,
-        perishable: spec.perishable,
-        rarity: spec.rarity,
-        seasonality: Array.isArray(spec.seasonality) ? spec.seasonality.slice() : [],
-        tradable: spec.tradable,
-        tags: normalizeTags(spec.tags),
+      // Schema-agnostic: pass the host's own fields straight through rather than
+      // imposing a fixed field set. Only `tags` is normalized (to a Set) so that
+      // ItemRegistry.byTag works for hosts that opt into tagging; hosts that
+      // don't define tags get no `tags` property at all.
+      var props = {};
+      Object.keys(spec).forEach(function copyProp(prop) {
+        props[prop] = spec[prop];
       });
-      Object.keys(spec).forEach(function assignExtra(prop) {
-        if (!(prop in item)) item[prop] = spec[prop];
-      });
-      library[key] = item;
+      if ("tags" in spec) props.tags = normalizeTags(spec.tags);
+      library[key] = new ItemClass(props);
     });
 
     return library;

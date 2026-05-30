@@ -1,6 +1,6 @@
 # Koz Engine Lib
 
-`Koz_Engine_Lib` is the reusable engine layer being extracted from Bargain Quest.
+`Koz_Engine_Lib` is the reusable, game-agnostic engine layer.
 
 It is useful today, but it is still **transitional** rather than a finished standalone package.
 
@@ -8,17 +8,17 @@ It is useful today, but it is still **transitional** rather than a finished stan
 
 If you are new to the engine, read these first:
 
-1. [new-user-guide.md](Koz_Engine_Lib/docs/new-user-guide.md)
-2. [module-catalog.md](oz_Engine_Lib/docs/module-catalog.md)
-3. `tests/lib/*.test.js` for real usage examples
+1. [new-user-guide.md](docs/new-user-guide.md)
+2. [module-catalog.md](docs/module-catalog.md)
+3. the module source under each folder for real usage examples
 
 ## What This Folder Is Trying To Guarantee
 
 The intended boundary is:
 
-1. The engine must not know it is being used by Bargain Quest.
-2. Bargain Quest may depend on the engine.
-3. The engine may not depend on Bargain Quest.
+1. The engine must not know which game is using it.
+2. A game may depend on the engine.
+3. The engine may not depend on any specific game.
 
 ## Current State
 
@@ -31,7 +31,7 @@ What remains:
 - the browser global bridge still exists as temporary host glue
 - export format is still mixed across the folder during migration
 
-Use [migration-roadmap.md](Koz_Engine_Lib/docs/migration-roadmap.md) as the source of truth for the final standalone target.
+See [module-catalog.md](docs/module-catalog.md) for the current per-module guidance and caveats.
 
 ## Good First Modules
 
@@ -73,8 +73,6 @@ These are documented, but they are not the right first stop for new users:
 - `README.md`: project boundary and current status
 - `docs/new-user-guide.md`: fastest onboarding path
 - `docs/module-catalog.md`: what each module does today
-- `docs/migration-roadmap.md`: target architecture
-- `docs/class-to-lib-status.md`: what has and has not been cleanly extracted
 
 ## Final Rules
 
@@ -82,7 +80,7 @@ Modules in `Koz_Engine_Lib` should eventually follow these rules:
 
 1. Export code only. No global namespace mutation.
 2. No direct `window`, `document`, `localStorage`, or p5 dependency in engine modules.
-3. No Bargain Quest nouns, globals, content tables, or screen logic.
+3. No game-specific nouns, globals, content tables, or screen logic.
 4. Host-specific bootstrapping belongs in a separate bootstrap/composition layer.
 5. Content packs belong to the game, not the engine.
 
@@ -124,4 +122,4 @@ See [module-catalog.md]
 
 ## Short Principle
 
-If a new game could not use a module without learning Bargain Quest internals, that module is not ready to live in `Koz_Engine_Lib`.
+If a new game could not use a module without learning another game's internals, that module is not ready to live in `Koz_Engine_Lib`.

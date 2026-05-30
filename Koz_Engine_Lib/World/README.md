@@ -9,6 +9,6 @@ Good fits:
 - seeded worldgen helpers
 
 Bad fits:
-- Bargain Quest city placement rules
+- game-specific placement rules
 - game-specific terrain rendering
 - DOM-heavy editor UI

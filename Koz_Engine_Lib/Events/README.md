@@ -8,6 +8,6 @@ Good fits:
 - "show once" onboarding or tutorial-tip state
 
 Bad fits:
-- Bargain Quest event tables
-- city/travel reward logic
+- game-specific event tables
+- game-specific reward logic
 - DOM-heavy screen flow
