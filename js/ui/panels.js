@@ -175,6 +175,15 @@ export function bindInput() {
       onSkipTutorial() {
         Neo.skipFirstRunTutorial();
       },
+      onPlayTutorial() {
+        try {
+          localStorage.setItem(Neo.REPLAY_TUTORIAL_KEY, '1');
+        } catch {}
+        Neo.gameMode = 'normal';
+        Neo.charSelectPhase = null;
+        Neo.setGameState('charselect');
+        Neo.updateCharacterSelectionUI();
+      },
       onDismissFirstTip() {
         Neo.uiController?.hideFirstTip?.();
       },

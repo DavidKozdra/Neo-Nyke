@@ -1008,6 +1008,7 @@ export const ui = {
     challengeHint: document.getElementById('challengeHint'),
     continueRow: document.getElementById('continueRow'),
     continueBtn: document.getElementById('continueBtn'),
+    tutorialMenuBtn: document.getElementById('tutorialMenuBtn'),
     mainCompetitiveBtn: document.getElementById('mainCompetitiveBtn'),
     newRunBtn: document.getElementById('newRunBtn'),
     runHistoryBtn: document.getElementById('runHistoryBtn'),
