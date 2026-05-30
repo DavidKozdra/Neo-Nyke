@@ -175,6 +175,9 @@ export function bindInput() {
       onSkipTutorial() {
         Neo.skipFirstRunTutorial();
       },
+      onDismissFirstTip() {
+        Neo.uiController?.hideFirstTip?.();
+      },
       onTutorialPrev() {
         Neo.navigateTutorialStep(-1);
       },
@@ -768,6 +771,7 @@ export function setAnvilPanelOpen(open, options = {}) {
     if (!Neo.ui.anvilPanel) return;
   const animateClose = options.animateClose !== false;
     if (open) {
+      Neo.showFirstTip?.('forge');
       clearPanelCloseEffect(Neo.ui.anvilPanel);
       Neo.ui.anvilPanel.classList.remove('hidden');
       Neo.ui.anvilPanel.setAttribute('aria-hidden', 'false');

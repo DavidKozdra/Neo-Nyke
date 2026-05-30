@@ -1329,6 +1329,8 @@ export function createUIController(view) {
         view.tutorialPrevBtn?.addEventListener('click', handlers.onTutorialPrev);
         view.tutorialNextBtn?.addEventListener('click', handlers.onTutorialNext);
         view.tutorialSkipBtn?.addEventListener('click', handlers.onSkipTutorial);
+        view.tutorialMenuBtn?.addEventListener('click', handlers.onPlayTutorial);
+        view.firstTipBtn?.addEventListener('click', handlers.onDismissFirstTip);
         // New main-menu nav
         view.mainCompetitiveBtn?.addEventListener('click', () => {
           document.querySelectorAll('.altmodes-tab').forEach(t => t.classList.remove('active'));
@@ -1499,6 +1501,22 @@ export function createUIController(view) {
         view.bestFloor.textContent = bestFloor;
         if (view.loopCount) view.loopCount.textContent = loopCrystals;
         view.saveState.textContent = saveState;
+        // Show the green tutorial CTA only for first-time or long-absent players.
+        view.tutorialMenuBtn?.classList.toggle('hidden', !Neo.shouldOfferTutorialButton?.());
+      },
+      showFirstTip(tip) {
+        if (!view.firstTipOverlay || !tip) return;
+        if (view.firstTipIcon) view.firstTipIcon.textContent = tip.icon || '★';
+        if (view.firstTipTitle) view.firstTipTitle.textContent = tip.title || 'TIP';
+        if (view.firstTipBody) view.firstTipBody.textContent = tip.body || '';
+        view.firstTipOverlay.classList.remove('hidden');
+        view.firstTipOverlay.setAttribute('aria-hidden', 'false');
+        view.firstTipBtn?.focus?.();
+      },
+      hideFirstTip() {
+        if (!view.firstTipOverlay) return;
+        view.firstTipOverlay.classList.add('hidden');
+        view.firstTipOverlay.setAttribute('aria-hidden', 'true');
       },
       setRunSummary(summary) {
         const hasRun = !!summary;

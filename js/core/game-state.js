@@ -31,6 +31,8 @@ export function resumeGame() {
       loopCrystals: 0,
       unlockedLegacy: [],
       tutorialCompleted: false,
+      lastSeenAt: 0,
+      seenTips: {},
       sandboxSettings: { ...Neo.SANDBOX_DEFAULT_SETTINGS },
     };
   }
@@ -156,6 +158,59 @@ export function resumeGame() {
       if (requested) localStorage.removeItem(Neo.REPLAY_TUTORIAL_KEY);
     } catch {}
     return requested;
+  }
+
+  // Offer the green main-menu tutorial button if the player has never finished
+  // the tutorial, OR it has been 30+ days since they last played.
+  const TUTORIAL_REOFFER_MS = 30 * 24 * 60 * 60 * 1000;
+  function shouldOfferTutorialButton() {
+    const meta = Neo.metaProgress;
+    if (!meta) return true;
+    if (!meta.tutorialCompleted) return true;
+    const lastSeen = Number(meta.lastSeenAt || 0);
+    if (!lastSeen) return false;
+    return (Date.now() - lastSeen) > TUTORIAL_REOFFER_MS;
+  }
+
+  // Stamp "last played" so the 30-day re-offer window resets. Call from the menu.
+  function markPlayerSeenNow() {
+    if (!Neo.metaProgress) return;
+    Neo.metaProgress.lastSeenAt = Date.now();
+    Neo.persistMetaSoon();
+  }
+
+  // Contextual explainer copy, shown once the first time each system is reached.
+  const FIRST_TIPS = {
+    forge: {
+      icon: '⚒',
+      title: 'THE FORGE',
+      body: 'Spend XP and gold here to permanently upgrade your weapons and moves for this run. Pick an item, boost its stats, then Confirm. Tip: a weapon that matches your class’s style hits harder.',
+    },
+    weapons: {
+      icon: '⚔',
+      title: 'WEAPONS',
+      body: 'Each weapon has its own attack and type (melee or magic). Any weapon works on any character, but one matching your class’s style deals about 25% more damage. Swapping changes your damage — it does not lower your other stats.',
+    },
+    skills: {
+      icon: '⚡',
+      title: 'SKILLS & MOVES',
+      body: 'Your equipped moves fire from the action bar (F/G/H/J/K/L). Drag owned moves into matching slots to swap your kit anytime. Changing a move swaps what you can do — it never reduces your stats.',
+    },
+  };
+
+  // One-time contextual explainer. Shows a dismissible card the first time a
+  // given system is reached, then never again (tracked in metaProgress.seenTips).
+  function showFirstTip(key, tipOverride) {
+    if (!key) return;
+    const meta = Neo.metaProgress;
+    if (!meta) return;
+    if (!meta.seenTips || typeof meta.seenTips !== 'object') meta.seenTips = {};
+    if (meta.seenTips[key]) return;
+    const tip = tipOverride || FIRST_TIPS[key];
+    if (!tip || !Neo.uiController?.showFirstTip) return;
+    meta.seenTips[key] = true;
+    Neo.persistMetaSoon();
+    Neo.uiController.showFirstTip(tip);
   }
 
   function formatControlLabel(value, fallback = '') {
@@ -471,6 +526,7 @@ export function resumeGame() {
           selectedChallenges: normalizeChallengeSelection(savedMeta.selectedChallenges),
           selectedCharacter: String(savedMeta.selectedCharacter || createDefaultMeta().selectedCharacter),
           unlockedLegacy: normalizeLegacySelection(savedMeta.unlockedLegacy),
+          seenTips: (savedMeta.seenTips && typeof savedMeta.seenTips === 'object') ? { ...savedMeta.seenTips } : {},
         };
       }
       Neo.runHistory = normalizeRunHistory(savedRunHistory || savedMeta?.runHistory);
@@ -1723,6 +1779,8 @@ export function resumeGame() {
     if (Neo.gameMode === 'competitive') { void startCompetitive(); return; }
     const forceTutorialReplay = !resume && consumeReplayTutorialRequest();
     const shouldRunTutorial = Neo.gameMode === 'normal' && (!Neo.metaProgress.tutorialCompleted || forceTutorialReplay);
+    // Stamp "last played" so the green tutorial button only re-offers after a long absence.
+    if (Neo.metaProgress) { Neo.metaProgress.lastSeenAt = Date.now(); Neo.persistMetaSoon(); }
     setGameState('play');
 
     if (resume && Neo.activeRun) {
@@ -2344,6 +2402,9 @@ export function resumeGame() {
   Neo.pauseGame = pauseGame;
   Neo.resumeGame = resumeGame;
   Neo.createDefaultMeta = createDefaultMeta;
+  Neo.shouldOfferTutorialButton = shouldOfferTutorialButton;
+  Neo.markPlayerSeenNow = markPlayerSeenNow;
+  Neo.showFirstTip = showFirstTip;
   Neo.normalizeSandboxSettings = normalizeSandboxSettings;
   Neo.isSandboxRunActive = isSandboxRunActive;
   Neo.getActiveSandboxSettings = getActiveSandboxSettings;
