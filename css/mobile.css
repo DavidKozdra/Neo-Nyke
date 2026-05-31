@@ -93,21 +93,16 @@
 /* ── Portrait phones ──────────────────────────────────────────────────────── */
 @media (max-width: 600px) {
 
-  /* ── 2. Main menu card ───────────────────────────────────────── */
+  /* ── 2. Main menu card — grid row inside #start .menu-stage ──── */
 
   .menu-content {
-    position: fixed;
-    top: auto;
-    bottom: 12px;
-    left: 50%;
-    transform: translateX(-50%);
+    position: relative;
     width: calc(100vw - 24px);
     min-width: 0;
     max-width: 100%;
     padding: 14px 16px 18px;
     border-radius: 12px;
     box-sizing: border-box;
-    /* Title occupies ~38dvh at top; leave it clear */
     max-height: 52dvh;
     overflow-y: auto;
   }
@@ -118,11 +113,10 @@
 
   /* ── 3. Title letters ────────────────────────────────────────── */
 
-  /* Cinema occupies the top ~40dvh — card starts below */
+  /* Cinema: grid row 1 inside #start .menu-stage */
   .menu-cinema {
     padding-top: clamp(10px, 2vh, 24px);
     justify-content: flex-start;
-    height: 40dvh;
   }
 
   .menu-letter {

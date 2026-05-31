@@ -341,14 +341,7 @@
     let finalAmount = numericAmount * (Neo.isChallengeActive('glass_cannon') ? 1.35 : 1) * (1 - (itemStats.damageReduction || 0));
     if (sandbox) finalAmount *= sandbox.enemyDamageMultiplier;
     if (ironLungApplies) {
-      const roomCap = Neo.player.maxHp * 0.2;
-      const remaining = roomCap - (Neo.player.roomDamageTaken || 0);
-      if (remaining <= 0) {
-        __diag('ironLungCap');
-        if (Neo.player.hp <= 0) Neo.die();
-        return;
-      }
-      finalAmount = Math.min(finalAmount, remaining);
+      finalAmount = Math.min(finalAmount, Neo.player.maxHp * 0.2);
     }
     finalAmount = Math.max(0, finalAmount);
     if (finalAmount <= 0) {
@@ -369,8 +362,6 @@
 
     finalAmount = Math.max(0, hpBeforeHit - Neo.player.hp);
     if (finalAmount > 0) Neo.lowHealthHitFlashUntil = Date.now() + Neo.LOW_HEALTH_HIT_FLASH_MS;
-    if (ironLungApplies) Neo.player.roomDamageTaken = (Neo.player.roomDamageTaken || 0) + finalAmount;
-
     if (finalAmount > 0 && itemStats.scarfBleedsOnHit > 0 && !options.noInvFrames) {
       Neo.applyBleed(Neo.player, itemStats.scarfBleedsOnHit, 4);
     }

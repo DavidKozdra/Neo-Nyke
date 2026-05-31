@@ -510,8 +510,8 @@ export function isPanelOpen(panel) {
     return !!panel && !panel.classList.contains('hidden');
   }
 
-  const PANEL_CLOSE_EFFECT_DURATION_MS = 420;
-  const PANEL_CLOSE_EFFECT_SETTLE_MS = 220;
+  const PANEL_CLOSE_EFFECT_DURATION_MS = 640;
+  const PANEL_CLOSE_EFFECT_SETTLE_MS = 260;
 
   function prefersReducedPanelMotion() {
     return !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
@@ -529,35 +529,6 @@ export function isPanelOpen(panel) {
     document.querySelectorAll('.panel-disintegrate-fx').forEach(node => {
       if (node instanceof HTMLElement && node.dataset.fxKey === key) node.remove();
     });
-  }
-
-  function playPanelOpenEffect(element, options = {}) {
-    if (!(element instanceof HTMLElement) || prefersReducedPanelMotion()) return false;
-    const backdrop = options.backdrop instanceof HTMLElement ? options.backdrop : null;
-    if (typeof element._panelPopRafA === 'number') window.cancelAnimationFrame(element._panelPopRafA);
-    if (typeof element._panelPopRafB === 'number') window.cancelAnimationFrame(element._panelPopRafB);
-    if (typeof element._panelPopCleanupTimer === 'number') window.clearTimeout(element._panelPopCleanupTimer);
-
-    element.classList.add('panel-pop-surface', 'panel-pop-enter');
-    if (backdrop) backdrop.classList.add('panel-pop-backdrop', 'panel-pop-backdrop-enter');
-    void element.offsetWidth;
-    if (backdrop) void backdrop.offsetWidth;
-
-    element._panelPopRafA = window.requestAnimationFrame(() => {
-      element._panelPopRafB = window.requestAnimationFrame(() => {
-        element.classList.remove('panel-pop-enter');
-        if (backdrop) backdrop.classList.remove('panel-pop-backdrop-enter');
-      });
-    });
-
-    element._panelPopCleanupTimer = window.setTimeout(() => {
-      element.classList.remove('panel-pop-surface', 'panel-pop-enter');
-      if (backdrop) backdrop.classList.remove('panel-pop-backdrop', 'panel-pop-backdrop-enter');
-      element._panelPopRafA = 0;
-      element._panelPopRafB = 0;
-      element._panelPopCleanupTimer = 0;
-    }, 380);
-    return true;
   }
 
   function copyCanvasBitmaps(sourceRoot, cloneRoot) {
@@ -607,6 +578,7 @@ export function isPanelOpen(panel) {
       clone.style.setProperty(prop, computed.getPropertyValue(prop));
     });
     clone.classList.remove('hidden');
+    clone.classList.add('panel-disintegrate-fx__surface');
     clone.removeAttribute('id');
     clone.querySelectorAll('[id]').forEach(node => node.removeAttribute('id'));
     clone.style.position = 'absolute';
@@ -630,6 +602,67 @@ export function isPanelOpen(panel) {
     clone.scrollLeft = source.scrollLeft;
   }
 
+  function getPanelCloseOrigin(element, rect) {
+    const closeButton = element.querySelector('.panel-close, [aria-label*="Close"], [aria-label*="close"]');
+    if (closeButton instanceof HTMLElement) {
+      const closeRect = closeButton.getBoundingClientRect();
+      return {
+        x: closeRect.left + closeRect.width / 2 - rect.left,
+        y: closeRect.top + closeRect.height / 2 - rect.top,
+      };
+    }
+    return { x: rect.width * 0.86, y: rect.height * 0.14 };
+  }
+
+  function makeFractureClip(row, col, rows, cols) {
+    const topCut = row === 0 ? 0 : 5 + Math.random() * 14;
+    const rightCut = col === cols - 1 ? 0 : 5 + Math.random() * 14;
+    const bottomCut = row === rows - 1 ? 0 : 5 + Math.random() * 14;
+    const leftCut = col === 0 ? 0 : 5 + Math.random() * 14;
+    const notchA = 18 + Math.random() * 24;
+    const notchB = 58 + Math.random() * 24;
+    return `polygon(${leftCut}% 0%, ${notchA}% ${topCut}%, 100% ${rightCut}%, ${100 - rightCut}% ${notchB}%, 100% ${100 - bottomCut}%, ${notchB}% 100%, ${leftCut}% ${100 - leftCut}%, 0% ${100 - leftCut}%, ${topCut}% ${notchA}%)`;
+  }
+
+  function getPanelCloseGrid(rect) {
+    const targetTiles = Math.max(24, Math.min(32, Math.round((rect.width * rect.height) / 22000)));
+    const aspect = rect.width / Math.max(1, rect.height);
+    let cols = Math.max(4, Math.min(8, Math.round(Math.sqrt(targetTiles * aspect))));
+    let rows = Math.max(3, Math.min(6, Math.ceil(targetTiles / cols)));
+
+    while (cols * rows > 32 && rows > 3) rows -= 1;
+    while (cols * rows > 32 && cols > 4) cols -= 1;
+    return { cols, rows };
+  }
+
+  function addPanelCloseSparks(ghost, rect, origin, maxDelay) {
+    const area = rect.width * rect.height;
+    const sparkCount = Math.max(20, Math.min(40, Math.round(area / 15000)));
+    const maxRadius = Math.max(1, Math.hypot(rect.width, rect.height));
+
+    for (let index = 0; index < sparkCount; index += 1) {
+      const spark = document.createElement('span');
+      spark.className = 'panel-disintegrate-fx__spark';
+      const angle = Math.random() * Math.PI * 2;
+      const radius = Math.sqrt(Math.random()) * maxRadius * 0.58;
+      const x = Neo.clamp?.(origin.x + Math.cos(angle) * radius, 0, rect.width) ?? Math.min(rect.width, Math.max(0, origin.x + Math.cos(angle) * radius));
+      const y = Neo.clamp?.(origin.y + Math.sin(angle) * radius, 0, rect.height) ?? Math.min(rect.height, Math.max(0, origin.y + Math.sin(angle) * radius));
+      const vx = x - origin.x;
+      const vy = y - origin.y;
+      const len = Math.hypot(vx, vy) || 1;
+      const drift = 70 + Math.random() * 150;
+      const delay = Math.round((len / maxRadius) * Math.min(maxDelay + 120, 360) + Math.random() * 110);
+
+      spark.style.left = `${x.toFixed(1)}px`;
+      spark.style.top = `${y.toFixed(1)}px`;
+      spark.style.setProperty('--panel-fx-delay', `${delay}ms`);
+      spark.style.setProperty('--panel-fx-dx', `${((vx / len) * drift + (Math.random() - 0.5) * 42).toFixed(1)}px`);
+      spark.style.setProperty('--panel-fx-dy', `${((vy / len) * drift - 24 + (Math.random() - 0.5) * 58).toFixed(1)}px`);
+      spark.style.setProperty('--panel-fx-scale', (0.35 + Math.random() * 0.85).toFixed(2));
+      ghost.appendChild(spark);
+    }
+  }
+
   export function playPanelCloseEffect(element) {
     if (!(element instanceof HTMLElement) || !element.isConnected) return false;
     if (element.classList.contains('hidden') || prefersReducedPanelMotion() || !document.body) return false;
@@ -650,10 +683,18 @@ export function isPanelOpen(panel) {
     const parsedZ = Number.parseFloat(computed.zIndex);
     ghost.style.zIndex = String(Number.isFinite(parsedZ) ? parsedZ + 2 : 100);
 
-    const cols = Math.max(4, Math.min(7, Math.round(rect.width / 180)));
-    const rows = Math.max(4, Math.min(6, Math.round(rect.height / 150)));
+    const flash = document.createElement('div');
+    flash.className = 'panel-disintegrate-fx__flash';
+    ghost.appendChild(flash);
+
+    const origin = getPanelCloseOrigin(element, rect);
+    ghost.style.setProperty('--panel-fx-origin-x', `${origin.x}px`);
+    ghost.style.setProperty('--panel-fx-origin-y', `${origin.y}px`);
+
+    const { cols, rows } = getPanelCloseGrid(rect);
     const tileWidth = rect.width / cols;
     const tileHeight = rect.height / rows;
+    const maxRadius = Math.max(1, Math.hypot(rect.width, rect.height));
     let maxDelay = 0;
 
     for (let row = 0; row < rows; row += 1) {
@@ -662,18 +703,33 @@ export function isPanelOpen(panel) {
         const y = Math.round(row * tileHeight);
         const width = col === cols - 1 ? Math.max(1, Math.round(rect.width - x)) : Math.ceil(tileWidth);
         const height = row === rows - 1 ? Math.max(1, Math.round(rect.height - y)) : Math.ceil(tileHeight);
+        const cx = x + width / 2;
+        const cy = y + height / 2;
+        const vx = cx - origin.x;
+        const vy = cy - origin.y;
+        const distance = Math.hypot(vx, vy);
+        const len = distance || 1;
+        const nx = vx / len;
+        const ny = vy / len;
+        const tangent = Math.random() < 0.5 ? -1 : 1;
+        const force = 86 + (distance / maxRadius) * 170 + Math.random() * 54;
+        const delay = Math.round(70 + (distance / maxRadius) * 280 + Math.random() * 90);
         const tile = document.createElement('div');
         tile.className = 'panel-disintegrate-fx__tile';
         tile.style.left = `${x}px`;
         tile.style.top = `${y}px`;
         tile.style.width = `${width}px`;
         tile.style.height = `${height}px`;
-        const delay = Math.round((row + col) * 18 + Math.random() * 90);
         maxDelay = Math.max(maxDelay, delay);
         tile.style.setProperty('--panel-fx-delay', `${delay}ms`);
-        tile.style.setProperty('--panel-fx-dx', `${((Math.random() - 0.5) * 120).toFixed(1)}px`);
-        tile.style.setProperty('--panel-fx-dy', `${((Math.random() - 0.7) * 120).toFixed(1)}px`);
-        tile.style.setProperty('--panel-fx-rot', `${((Math.random() - 0.5) * 18).toFixed(1)}deg`);
+        tile.style.setProperty('--panel-fx-dx', `${(nx * force + -ny * tangent * Math.random() * 34).toFixed(1)}px`);
+        tile.style.setProperty('--panel-fx-dy', `${(ny * force + nx * tangent * Math.random() * 34 - 26).toFixed(1)}px`);
+        tile.style.setProperty('--panel-fx-rot', `${((Math.random() - 0.5) * 34 + tangent * distance / maxRadius * 20).toFixed(1)}deg`);
+        tile.style.setProperty('--panel-fx-scale', (0.46 + Math.random() * 0.16).toFixed(2));
+        tile.style.setProperty('--panel-fx-bright', (1.12 + Math.random() * 0.26).toFixed(2));
+        const clipPath = makeFractureClip(row, col, rows, cols);
+        tile.style.clipPath = clipPath;
+        tile.style.webkitClipPath = clipPath;
 
         const clone = element.cloneNode(true);
         applyGhostSurfaceStyle(element, clone, rect, x, y);
@@ -683,6 +739,7 @@ export function isPanelOpen(panel) {
       }
     }
 
+    addPanelCloseSparks(ghost, rect, origin, maxDelay);
     document.body.appendChild(ghost);
     window.requestAnimationFrame(() => ghost.classList.add('panel-disintegrate-fx--active'));
     window.setTimeout(() => ghost.remove(), PANEL_CLOSE_EFFECT_DURATION_MS + maxDelay + PANEL_CLOSE_EFFECT_SETTLE_MS);
@@ -704,7 +761,6 @@ export function setShopPanelOpen(open, options = {}) {
       clearPanelCloseEffect(Neo.ui.shopPanel);
       Neo.ui.shopPanel.classList.remove('hidden');
       Neo.ui.shopPanel.setAttribute('aria-hidden', 'false');
-      playPanelOpenEffect(Neo.ui.shopPanel);
       markShopPanelDirty();
       renderShopPanel();
       return;
@@ -784,7 +840,6 @@ export function setAnvilPanelOpen(open, options = {}) {
       clearPanelCloseEffect(Neo.ui.anvilPanel);
       Neo.ui.anvilPanel.classList.remove('hidden');
       Neo.ui.anvilPanel.setAttribute('aria-hidden', 'false');
-      playPanelOpenEffect(Neo.ui.anvilPanel);
       Neo.anvilStagedUpgrades = {};
       const equipped = Neo.player?.equippedWeapon;
       Neo.anvilSelectedItem = equipped ? `weapon:${equipped}` : null;
@@ -1076,7 +1131,6 @@ export function setWizardPawModalOpen(open, options = {}) {
       clearPanelCloseEffect(effectTarget);
       Neo.ui.wizardPawModal.classList.remove('hidden');
       Neo.ui.wizardPawModal.setAttribute('aria-hidden', 'false');
-      if (effectTarget instanceof HTMLElement) playPanelOpenEffect(effectTarget, { backdrop: Neo.ui.wizardPawModal });
       return;
     }
     if (animateClose && isPanelOpen(Neo.ui.wizardPawModal)) playPanelCloseEffect(effectTarget);

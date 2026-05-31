@@ -1180,8 +1180,10 @@ canvas {
   position: fixed;
   pointer-events: none;
   overflow: visible;
-  contain: layout paint style;
+  contain: layout style;
   isolation: isolate;
+  transform-origin: var(--panel-fx-origin-x, 50%) var(--panel-fx-origin-y, 50%);
+  will-change: transform;
 }
 
 .panel-disintegrate-fx__tile {
@@ -1190,12 +1192,26 @@ canvas {
   transform-origin: center;
   opacity: 1;
   filter: blur(0);
+  backface-visibility: hidden;
   will-change: transform, opacity, filter;
   transition:
-    transform .42s cubic-bezier(.22, .72, .2, 1),
-    opacity .34s ease,
-    filter .34s ease;
+    transform .64s cubic-bezier(.14, .78, .12, 1),
+    opacity .52s cubic-bezier(.2, .7, .1, 1),
+    filter .52s ease;
   transition-delay: var(--panel-fx-delay, 0ms);
+}
+
+.panel-disintegrate-fx__tile::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  pointer-events: none;
+  opacity: 0;
+  background:
+    linear-gradient(135deg, rgba(124, 255, 252, .38), transparent 35%),
+    linear-gradient(315deg, rgba(255, 232, 126, .26), transparent 42%);
+  mix-blend-mode: screen;
+  transition: opacity .18s ease;
 }
 
 .panel-disintegrate-fx__surface {
@@ -1207,40 +1223,98 @@ canvas {
   image-rendering: pixelated;
 }
 
+.panel-disintegrate-fx__flash {
+  position: absolute;
+  inset: -10px;
+  border-radius: inherit;
+  opacity: 0;
+  transform: scale(.96);
+  transform-origin: var(--panel-fx-origin-x, 50%) var(--panel-fx-origin-y, 50%);
+  background:
+    radial-gradient(circle at var(--panel-fx-origin-x, 86%) var(--panel-fx-origin-y, 14%), rgba(170, 255, 252, .52), transparent 20%),
+    radial-gradient(ellipse at center, rgba(255, 232, 126, .22), transparent 58%);
+  box-shadow:
+    0 0 0 1px rgba(175, 255, 252, .32),
+    0 0 34px rgba(110, 255, 246, .34),
+    0 0 70px rgba(255, 232, 126, .16);
+  transition:
+    opacity .18s ease,
+    transform .34s cubic-bezier(.14, .78, .12, 1);
+}
+
+.panel-disintegrate-fx__spark {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  margin: -2.5px 0 0 -2.5px;
+  border-radius: 1px;
+  opacity: 0;
+  background: #cffffd;
+  box-shadow:
+    0 0 8px rgba(124, 255, 252, .8),
+    0 0 14px rgba(255, 232, 126, .36);
+  transform: translate(0, 0) scale(.25) rotate(45deg);
+  will-change: transform, opacity, filter;
+  transition:
+    transform .62s cubic-bezier(.12, .8, .14, 1),
+    opacity .54s ease,
+    filter .54s ease;
+  transition-delay: var(--panel-fx-delay, 0ms);
+}
+
+.panel-disintegrate-fx--active .panel-disintegrate-fx__flash {
+  opacity: 1;
+  transform: scale(1.035);
+  animation: panelDisintegrateFlash .34s ease forwards;
+}
+
+.panel-disintegrate-fx--active {
+  animation: panelDisintegrateTension .14s ease-out both;
+}
+
+.panel-disintegrate-fx--active .panel-disintegrate-fx__tile::after {
+  opacity: .86;
+  animation: panelShardGlimmer .42s ease forwards;
+  animation-delay: var(--panel-fx-delay, 0ms);
+}
+
 .panel-disintegrate-fx--active .panel-disintegrate-fx__tile {
   opacity: 0;
-  filter: blur(3px) saturate(.82);
-  transform: translate(var(--panel-fx-dx, 0), var(--panel-fx-dy, 0)) scale(.58) rotate(var(--panel-fx-rot, 0deg));
+  filter: blur(1.35px) saturate(.92) brightness(var(--panel-fx-bright, 1.14));
+  transform: translate3d(var(--panel-fx-dx, 0), var(--panel-fx-dy, 0), 0) scale(var(--panel-fx-scale, .56)) rotate(var(--panel-fx-rot, 0deg));
 }
 
-.panel-pop-surface {
-  transform-origin: center;
-  will-change: transform, opacity;
-}
-
-.game-panel.panel-pop-surface,
-.modal-box.panel-pop-surface {
-  transition:
-    opacity .22s ease,
-    transform .26s cubic-bezier(.2, .9, .25, 1.08);
-}
-
-.game-panel.panel-pop-surface.panel-pop-enter {
+.panel-disintegrate-fx--active .panel-disintegrate-fx__spark {
   opacity: 0;
-  transform: translate(-50%, -47%) scale(.94);
+  filter: blur(1px);
+  transform: translate3d(var(--panel-fx-dx, 0), var(--panel-fx-dy, 0), 0) scale(var(--panel-fx-scale, 1)) rotate(225deg);
+  animation: panelDisintegrateSpark .62s ease forwards;
+  animation-delay: var(--panel-fx-delay, 0ms);
 }
 
-.modal-box.panel-pop-surface.panel-pop-enter {
-  opacity: 0;
-  transform: translateY(16px) scale(.94);
+@keyframes panelDisintegrateTension {
+  0% { transform: translate3d(0, 0, 0) scale(1); }
+  38% { transform: translate3d(-1px, .5px, 0) scale(1.012); }
+  66% { transform: translate3d(1px, -.5px, 0) scale(1.006); }
+  100% { transform: translate3d(0, 0, 0) scale(1); }
 }
 
-.modal-backdrop.panel-pop-backdrop {
-  transition: opacity .18s ease;
+@keyframes panelDisintegrateFlash {
+  0% { opacity: 0; }
+  28% { opacity: .9; }
+  100% { opacity: 0; }
 }
 
-.modal-backdrop.panel-pop-backdrop.panel-pop-backdrop-enter {
-  opacity: 0;
+@keyframes panelShardGlimmer {
+  0% { opacity: 0; }
+  34% { opacity: .86; }
+  100% { opacity: 0; }
+}
+
+@keyframes panelDisintegrateSpark {
+  0% { opacity: 0; }
+  18% { opacity: .92; }
+  100% { opacity: 0; }
 }
 
 .game-panel {
@@ -2395,6 +2469,7 @@ canvas {
   position: relative;
   z-index: 2;
   display: grid;
+  grid-template-rows: auto auto;
   justify-items: center;
   align-content: center;
   gap: clamp(18px, 3vh, 34px);
@@ -3812,9 +3887,6 @@ button.alt.danger {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .game-panel.panel-pop-surface,
-  .modal-box.panel-pop-surface,
-  .modal-backdrop.panel-pop-backdrop,
   #invPanel.game-panel,
   #invPanel.game-panel.hidden,
   #pause.overlay,

@@ -935,32 +935,83 @@
       } : null;
     }
 
-    let awayX = 0;
-    let awayY = 0;
-    liveEnemies.forEach(enemy => {
-      const dx = Neo.player.x - enemy.x;
-      const dy = Neo.player.y - enemy.y;
-      const d = Math.max(1, Math.hypot(dx, dy));
-      if (d > 540) return;
-      const weight = 1 / Math.max(70, d - (enemy.r || 0));
-      awayX += (dx / d) * weight;
-      awayY += (dy / d) * weight;
-    });
-
-    if (Math.hypot(awayX, awayY) < 0.001) {
-      const cursorAngle = Math.atan2(ty - Neo.player.y, tx - Neo.player.x);
-      awayX = Math.cos(cursorAngle);
-      awayY = Math.sin(cursorAngle);
+    const aimX = tx - Neo.player.x;
+    const aimY = ty - Neo.player.y;
+    const aimLen = Math.hypot(aimX, aimY);
+    let awayX;
+    let awayY;
+    if (aimLen > 8) {
+      awayX = -aimX / aimLen;
+      awayY = -aimY / aimLen;
+    } else {
+      awayX = 0;
+      awayY = 0;
+      liveEnemies.forEach(enemy => {
+        const dx = Neo.player.x - enemy.x;
+        const dy = Neo.player.y - enemy.y;
+        const d = Math.max(1, Math.hypot(dx, dy));
+        if (d > 540) return;
+        const weight = 1 / Math.max(70, d - (enemy.r || 0));
+        awayX += (dx / d) * weight;
+        awayY += (dy / d) * weight;
+      });
+      const awayLen = Math.hypot(awayX, awayY);
+      if (awayLen > 0.001) {
+        awayX /= awayLen;
+        awayY /= awayLen;
+      } else {
+        awayX = 1;
+        awayY = 0;
+      }
     }
 
     const awayAngle = Math.atan2(awayY, awayX);
-    [150, 215, 280, 345].forEach(distance => {
-      [-0.78, -0.38, 0, 0.38, 0.78].forEach(offset => {
+    const directBackstepCandidates = [];
+    [220, 280, 160, 340].forEach(distance => {
+      [0, -0.18, 0.18, -0.36, 0.36].forEach(offset => {
+        const point = findSafePointNearTarget(
+          Neo.player.x + Math.cos(awayAngle + offset) * distance,
+          Neo.player.y + Math.sin(awayAngle + offset) * distance,
+          radius,
+          30,
+          10
+        );
+        if (!point) return;
+        const fromPlayerX = point.x - Neo.player.x;
+        const fromPlayerY = point.y - Neo.player.y;
+        const escapeProjection = fromPlayerX * awayX + fromPlayerY * awayY;
+        if (escapeProjection < 90) return;
+        const lateralOffset = Math.abs(fromPlayerX * awayY - fromPlayerY * awayX);
+        const edgeMargin = Math.min(point.x - minX, maxX - point.x, point.y - minY, maxY - point.y);
+        let separation = Infinity;
+        liveEnemies.forEach(enemy => {
+          separation = Math.min(separation, Neo.dist(point.x, point.y, enemy.x, enemy.y) - (enemy.r || 0));
+        });
+        directBackstepCandidates.push({
+          point,
+          score: escapeProjection * 3.2 + separation * 1.7 - lateralOffset * 3 - Math.max(0, 28 - edgeMargin) * 20,
+        });
+      });
+    });
+    if (directBackstepCandidates.length > 0) {
+      directBackstepCandidates.sort((a, b) => b.score - a.score);
+      const point = directBackstepCandidates[0].point;
+      return {
+        x: point.x,
+        y: point.y,
+        targetX: tx,
+        targetY: ty,
+        adjustedFromCursor: true,
+      };
+    }
+
+    [220, 280, 160, 340].forEach(distance => {
+      [0, -0.24, 0.24, -0.48, 0.48].forEach(offset => {
         addCandidate(
           Neo.player.x + Math.cos(awayAngle + offset) * distance,
           Neo.player.y + Math.sin(awayAngle + offset) * distance,
-          74,
-          16
+          34,
+          10
         );
       });
     });
@@ -972,8 +1023,7 @@
       if (d > 300) return;
       const ex = dx / d;
       const ey = dy / d;
-      addCandidate(Neo.player.x + ex * 250, Neo.player.y + ey * 250, 80, 16);
-      addCandidate(tx + ex * 150, ty + ey * 150, 80, 16);
+      addCandidate(Neo.player.x + ex * 180, Neo.player.y + ey * 180, 28, 10);
     });
 
     if (candidates.length === 0) return null;
@@ -996,20 +1046,28 @@
       const fromPlayerX = point.x - Neo.player.x;
       const fromPlayerY = point.y - Neo.player.y;
       const travel = Math.hypot(fromPlayerX, fromPlayerY) || 1;
-      const escapeProjection = ((fromPlayerX / travel) * awayX + (fromPlayerY / travel) * awayY) * travel;
+      const escapeProjection = fromPlayerX * awayX + fromPlayerY * awayY;
+      const lateralOffset = Math.abs(fromPlayerX * awayY - fromPlayerY * awayX);
+      const targetBackstep = currentSeparation < 190 ? 280 : 220;
+      const backstepMiss = Math.abs(escapeProjection - targetBackstep);
+      const edgeMargin = Math.min(point.x - minX, maxX - point.x, point.y - minY, maxY - point.y);
       let closePenalty = 0;
       liveEnemies.forEach(enemy => {
         const sep = Neo.dist(point.x, point.y, enemy.x, enemy.y) - (enemy.r || 0);
         closePenalty += Math.max(0, 210 - sep) ** 2;
       });
 
-      const cursorWeight = currentSeparation < 190 ? 0.14 : 0.72;
-      let score = separation * 5.2
-        + (separation - currentSeparation) * 2.8
-        + escapeProjection * 0.85
+      const cursorWeight = currentSeparation < 190 ? 0.04 : 0.16;
+      let score = separation * 2.1
+        + (separation - currentSeparation) * 1.25
+        + escapeProjection * 3.4
+        - lateralOffset * 2.8
+        - backstepMiss * 1.4
         - cursorDistance * cursorWeight
         - closePenalty * 0.045;
 
+      if (escapeProjection < 80) score -= 2600;
+      if (edgeMargin < 34) score -= (34 - edgeMargin) * 28;
       if (separation < 115) score -= 1800;
       if (currentSeparation < 175 && separation < currentSeparation + 55) score -= 1400;
       if (score > bestScore) {

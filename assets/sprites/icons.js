@@ -379,6 +379,34 @@ window.NeoNykeIconDefs = {
         [3,7],[4,7],
       ],
     },
+    robot_arm: {
+      color: '#c0e8ff',
+      accent: '#5599bb',
+      pixels: [
+        // Shoulder
+        [1,0],[2,0],
+        [1,1],[2,1],[3,1],
+        // Upper arm
+        [2,2],[3,2],
+        // Elbow
+        [3,3],[4,3],
+        // Forearm
+        [4,4],[5,4],
+        [4,5],[5,5],
+        // Wrist / hand
+        [3,6],[4,6],[5,6],[6,6],
+        // Claw (open)
+        [3,7],[5,7],[6,7],
+      ],
+      accentPixels: [
+        // Shoulder bolt
+        [1,0],[2,0],
+        // Elbow joint
+        [3,3],[4,3],
+        // Wrist joint
+        [3,6],[4,6],
+      ],
+    },
     veggys_pendant: {
       color: '#a0e87a',
       accent: '#5fcc2a',

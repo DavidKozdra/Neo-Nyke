@@ -184,34 +184,7 @@ export function drawLightBloom(lights) {
   }
 
 export function drawRoomCeilingMask() {
-    const room = Neo.currentRoom;
-    if (!room || Neo.LIGHTING_CONFIG.clearRoomTypes.has(room.type)) return;
-    const frame = Neo._lightsFrame || 0;
-    let lights;
-    if (Neo._lightsCacheFrame === frame && Neo._lightsCacheRoom === room) {
-      lights = Neo._lightsCache;
-    } else {
-      lights = Neo.collectRoomLightSources(room);
-      Neo._lightsCacheFrame = frame;
-      Neo._lightsCacheRoom = room;
-      Neo._lightsCache = lights;
-    }
-    const darknessAlpha = getRoomDarkness(room, lights);
-    if (darknessAlpha < Neo.LIGHTING_CONFIG.darkness.minVisible) return;
-
-    Neo.ctx.save();
-    Neo.ctx.fillStyle = createRoomDarknessGradient(darknessAlpha);
-    Neo.ctx.fillRect(0, 0, Neo.ROOM_W, Neo.ROOM_H);
-    Neo.ctx.globalCompositeOperation = 'destination-out';
-
-    lights.forEach(light => {
-      carveSoftLight(light.x, light.y, light.inner, light.outer, light.strength, null);
-    });
-
-    carvePlayerBeamLights();
-    carveEnemyBeamLights();
-    drawLightBloom(lights);
-    Neo.ctx.restore();
+    // Disabled: room lighting/darkness compositing can leave isolated dark regions.
   }
 
   // Expose on Neo
