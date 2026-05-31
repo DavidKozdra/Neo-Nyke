@@ -804,6 +804,14 @@ canvas {
   transform-origin: top right;
 }
 
+#menuCinema {
+  background: rgba(0, 0, 0, 0.8);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  margin-top: 20px;
+  padding-top: 20px;
+}
+
 .objective-tracker__head {
   display: flex;
   justify-content: space-between;
@@ -2526,13 +2534,15 @@ canvas {
   flex-direction: column;
   align-items: center;
   justify-content: flex-start;
-  padding-top: clamp(28px, 5vh, 60px);
+  padding: clamp(28px, 5vh, 60px) clamp(16px, 4vw, 48px) 0;
   pointer-events: none;
   /* Sits above canvas (z:0) but below menu-content (z:2) */
 }
 
 .menu-letters {
   display: flex;
+  justify-content: center;
+  max-width: 100%;
   gap: 0;
   margin-bottom: 12px;
   /* letter-spacing adds a trailing gap after the last glyph, shifting the
@@ -2586,7 +2596,11 @@ canvas {
   font-size: clamp(20px, 3.3vw, 39px);
   font-weight: 700;
   letter-spacing: .62em;
+  /* trailing letter-spacing pads the right side; offset it to keep the word centred */
+  text-indent: .62em;
   text-transform: uppercase;
+  text-align: center;
+  max-width: 100%;
   color: #aadfff;
   text-shadow: 0 0 16px rgba(96, 176, 255, .55);
   opacity: 0;

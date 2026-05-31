@@ -1116,8 +1116,8 @@
       const angle = Neo.rng() * Math.PI * 2;
       const px = Neo.player.x + Math.cos(angle) * Neo.rand(160, 40);
       const py = Neo.player.y + Math.sin(angle) * Neo.rand(160, 40);
-      Neo.spawnParticle({ x: px, y: py, life: 0.45, ring: 18 * aoeRadiusMultiplier, c: '#c971ff' });
-      Neo.blastRadius(px, py, 52 * aoeRadiusMultiplier, Math.round(24 * aoeDamageMultiplier), '#c971ff');
+      Neo.spawnParticle({ x: px, y: py, life: 0.45, ring: 18 * aoeRadiusMultiplier, c: 'red' });
+      Neo.blastRadius(px, py, 52 * aoeRadiusMultiplier, Math.round(24 * aoeDamageMultiplier), 'red');
       applyStatusInRadius(px, py, 52 * aoeRadiusMultiplier, 'poison', 1, 4.8);
       if (isMetao) applyStatusInRadius(px, py, 52 * aoeRadiusMultiplier, 'fire', 1, 3.5);
     }
