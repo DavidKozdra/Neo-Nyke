@@ -1798,18 +1798,18 @@
       const rightSpawn = Neo.findSafeEnemySpawnPoint(enemy.x + 70, enemy.y, 15);
 
       if (leftSpawn) {
-        const left = Neo.spawnEnemy('golem', leftSpawn.x, leftSpawn.y, false);
+        const left = Neo.spawnEnemy('golem', leftSpawn.x, leftSpawn.y, true);
         left.spawnedFromBulk = true;
-        left.hp = Math.round(left.max + 200 * 0.9);
+        left.hp = Math.round(left.max * 1.6);
         left.max = left.hp;
-        left.spawnedFromBulk = true;
+        left.dmg = Math.round(left.dmg * 1.35);
       }
       if (rightSpawn) {
-        const right = Neo.spawnEnemy('golem', rightSpawn.x, rightSpawn.y, false);
+        const right = Neo.spawnEnemy('golem', rightSpawn.x, rightSpawn.y, true);
         right.spawnedFromBulk = true;
-        right.hp = Math.round(right.max + 200 * 0.9);
+        right.hp = Math.round(right.max * 1.6);
         right.max = right.hp;
-        right.spawnedFromBulk = true;
+        right.dmg = Math.round(right.dmg * 1.35);
       }
 
 
