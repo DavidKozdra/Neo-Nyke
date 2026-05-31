@@ -514,8 +514,8 @@
     Neo.spawnParticle({
       x,
       y,
-      life: (heavy ? 0.34 : 0.22) * DifficultyMod,
-      maxLife: (heavy ? 0.34 : 0.22) * DifficultyMod,
+      life: (heavy ? 0.34 : 0.22) ,
+      maxLife: (heavy ? 0.34 : 0.22) ,
       impact: true,
       c: color,
       angle,
@@ -523,7 +523,7 @@
       enemy: !!projectile.enemy,
       kind: projectile.kind || 'shot',
       blocked: !!options.blocked,
-      speed: (projectile.speed || 0) * DifficultyMod,
+      speed: (projectile.speed || 0) ,
     });
     const sparks = heavy ? 8 : 4;
     for (let index = 0; index < sparks; index += 1) {
