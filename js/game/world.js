@@ -505,6 +505,8 @@
   }
 
   function spawnProjectileImpact(projectile, x = projectile?.x, y = projectile?.y, options = {}) {
+
+
     if (!projectile || !Number.isFinite(x) || !Number.isFinite(y)) return;
     const color = projectile.color || (projectile.enemy ? '#ff6688' : '#ffd7aa');
     const angle = Math.atan2(Number(projectile.vy || 0), Number(projectile.vx || 1));
@@ -512,8 +514,8 @@
     Neo.spawnParticle({
       x,
       y,
-      life: heavy ? 0.34 : 0.22,
-      maxLife: heavy ? 0.34 : 0.22,
+      life: (heavy ? 0.34 : 0.22) * DifficultyMod,
+      maxLife: (heavy ? 0.34 : 0.22) * DifficultyMod,
       impact: true,
       c: color,
       angle,
@@ -521,6 +523,7 @@
       enemy: !!projectile.enemy,
       kind: projectile.kind || 'shot',
       blocked: !!options.blocked,
+      speed: (projectile.speed || 0) * DifficultyMod,
     });
     const sparks = heavy ? 8 : 4;
     for (let index = 0; index < sparks; index += 1) {
@@ -598,11 +601,18 @@
   }
 
   function spawnProjectile(props) {
+    let difficulty = Neo.selectedDifficulty;
+    
+    let DifficultyMod = difficulty == "easy" ? 0.8 : difficulty == "hard" ? 1.2 : 1;
+
+    if (props.speed) {
+      props.speed = (props.speed || 0) * DifficultyMod;
+    }
     const p = _acquireProjectile();
     const enemyProjectile = !!(props.enemy ?? false);
     const itemStats = enemyProjectile ? {} : (Neo.getItemStats?.() || {});
-    const projectileSpeedMultiplier = Math.max(0.1, Number(itemStats.projectileSpeedMultiplier || 1));
-    const projectileHomingStrength = Math.max(0, Number(itemStats.projectileHomingStrength || 0));
+    const projectileSpeedMultiplier = Math.max(0.1, Number(itemStats.projectileSpeedMultiplier || 1)) * DifficultyMod;
+    const projectileHomingStrength = Math.max(0, Number(itemStats.projectileHomingStrength || 0)) * DifficultyMod;
     const homingScalar = 1 + projectileHomingStrength;
     const hasExplicitHoming = Object.prototype.hasOwnProperty.call(props, 'homing');
     const hasExplicitHomingTarget = Object.prototype.hasOwnProperty.call(props, 'homingTarget');
