@@ -429,10 +429,6 @@ export function loop(timestamp) {
       Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.75, text: 'NO WARP IN BOSS ROOM', c: '#ff9e9e' });
       return;
     }
-    if (Neo.enemies.length === 0) {
-      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.75, text: 'WARP REQUIRES COMBAT', c: '#ffcf8f' });
-      return;
-    }
 
     const ladderRoom = Neo.rooms.find(room => room.type === 'ladder') || Neo.rooms.find(room => room.type === 'boss');
     if (!ladderRoom || ladderRoom === Neo.currentRoom) {

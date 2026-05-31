@@ -650,7 +650,7 @@ export const CHARACTER_DEFS = {
 
 export const HERO_DISPLAY = {
   princess: {
-    lore: 'A dark-skinned princess built for accessible runs. High damage, generous HP, and forgiving cooldowns make her ideal for new adventurers.',
+    lore: 'Best first pick. High damage, high HP.',
     stats: [
       { label: 'HP',    pct: 90, color: '#f47ebd' },
       { label: 'DMG',   pct: 80, color: '#ff9ccf' },
@@ -659,7 +659,7 @@ export const HERO_DISPLAY = {
     ],
   },
   thorn_knight: {
-    lore: 'A bleed-forged warrior who turns wounds into weapons. The longer the fight, the deadlier he becomes.',
+    lore: 'Close-range fighter. Bleed stacks get stronger.',
     stats: [
       { label: 'HP',    pct: 66, color: '#c06060' },
       { label: 'DMG',   pct: 66, color: '#c08040' },
@@ -668,7 +668,7 @@ export const HERO_DISPLAY = {
     ],
   },
   metao: {
-    lore: 'Wizard king of chaos and fire. Slower spell cadence, but larger blasts reward timing and crowd control.',
+    lore: 'Long-range magic. Slower shots, bigger hits.',
     stats: [
       { label: 'HP',    pct: 66, color: '#c06060' },
       { label: 'DMG',   pct: 48, color: '#c08040' },
@@ -677,7 +677,7 @@ export const HERO_DISPLAY = {
     ],
   },
   granialla: {
-    lore: 'A priestess with a crown of golden hair. Divine judgment and self-restoration — earned only by slaying GOD.',
+    lore: 'Balanced divine hero. Unlock by defeating GOD.',
     stats: [
       { label: 'HP',    pct: 66, color: '#c06060' },
       { label: 'DMG',   pct: 66, color: '#c08040' },
@@ -686,7 +686,7 @@ export const HERO_DISPLAY = {
     ],
   },
   mooggy: {
-    lore: 'A white and black assassin cat in a red scarf. Defeat Mooggy three times to turn the hunter into a playable hero.',
+    lore: 'Fast ranged assassin. Unlock by beating Mooggy.',
     stats: [
       { label: 'HP',    pct: 70, color: '#f4f4ef' },
       { label: 'DMG',   pct: 78, color: '#ff5c6f' },

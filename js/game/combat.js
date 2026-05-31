@@ -1955,21 +1955,28 @@
     }
 
     if (enemy.type === 'bulk_golem' && enemy.splitReady) {
+      //Golem Dies 
+
       Neo.sayAtPosition(enemy.x, enemy.y, 'I AM NOT DONE.', { speaker: 'BULK GOLEM', tone: 'boss', holdTime: 1.8, offsetY: enemy.r + 36 });
       const leftSpawn = Neo.findSafeEnemySpawnPoint(enemy.x - 70, enemy.y, 15);
       const rightSpawn = Neo.findSafeEnemySpawnPoint(enemy.x + 70, enemy.y, 15);
+
       if (leftSpawn) {
         const left = Neo.spawnEnemy('golem', leftSpawn.x, leftSpawn.y, false);
         left.spawnedFromBulk = true;
-        left.hp = Math.round(left.max * 0.9);
+        left.hp = Math.round(left.max + 200 * 0.9);
         left.max = left.hp;
+        left.spawnedFromBulk = true;
       }
       if (rightSpawn) {
         const right = Neo.spawnEnemy('golem', rightSpawn.x, rightSpawn.y, false);
         right.spawnedFromBulk = true;
-        right.hp = Math.round(right.max * 0.9);
+        right.hp = Math.round(right.max + 200 * 0.9);
         right.max = right.hp;
+        right.spawnedFromBulk = true;
       }
+
+
     }
 
     if (enemy.type === 'mirror_knight' && Neo.currentRoom?.type === 'challenge') {

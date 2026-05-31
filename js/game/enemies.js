@@ -695,6 +695,7 @@
       base.dmg = 20;
       base.attackCd = 1.2;
       base.phase = 1;
+      base.diveCd = 1.4;
     } else if (type === 'bowman_bane') {
       base.r = 36;
       base.hp = 2400;
@@ -2143,7 +2144,46 @@
     }
 
     enemy.speed = 62;
+
+    // ── Dive windup (phase 3) ─────────────────────────────────────
+    if (enemy.diveWindup > 0) {
+      enemy.diveWindup -= dt;
+      enemy.vx *= 0.7;
+      enemy.vy *= 0.7;
+      Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.13, c: '#c066ff' });
+      if (enemy.diveWindup <= 0) {
+        enemy.diveTime  = 0.28;
+        enemy.diveAngle = Math.atan2(dy, dx);
+        enemy.diveHit   = false;
+      }
+      return;
+    }
+
+    // ── Dive dash (phase 3) ───────────────────────────────────────
+    if (enemy.diveTime > 0) {
+      enemy.diveTime -= dt;
+      enemy.vx = Math.cos(enemy.diveAngle) * 460;
+      enemy.vy = Math.sin(enemy.diveAngle) * 460;
+      if (!enemy.diveHit && Neo.dist(enemy.x, enemy.y, Neo.player.x, Neo.player.y) < enemy.r + Neo.player.r + 7) {
+        enemy.diveHit = true;
+        Neo.damagePlayer(enemy.dmg + 4, enemy.diveAngle, 240, enemy.type);
+        if (Math.random() < 0.02) Neo.applyBleed?.(Neo.player, 1, 4.0);
+      }
+      return;
+    }
+
+    if (enemy.diveCd > 0) enemy.diveCd = Math.max(0, enemy.diveCd - dt);
+
     steerEnemy(enemy, dx / distance, dy / distance, enemy.speed, 3.2, dt);
+
+    // ── Trigger dive when ready ───────────────────────────────────
+    if (enemy.diveCd <= 0 && distance < 400) {
+      enemy.diveWindup = 0.42 / tuning.reaction;
+      enemy.diveCd     = 2.8 * tuning.rangedCadence;
+      return;
+    }
+
+    // ── Heavy swing (slow, infrequent) ────────────────────────────
     if (enemy.attackCd <= 0) {
       enemy.windup = 0.72 / tuning.reaction;
       enemy.state = 'phase3_swing';

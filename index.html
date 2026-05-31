@@ -453,8 +453,8 @@
           <div class="dead-stat"><span class="dead-stat-label">LEVEL</span><b class="dead-stat-val" id="deadLevel">—</b></div>
           <div class="dead-stat"><span class="dead-stat-label">KILLS</span><b class="dead-stat-val" id="deadKills">—</b></div>
           <div class="dead-stat"><span class="dead-stat-label">TIME</span><b class="dead-stat-val" id="deadTime">—</b></div>
-          <div class="dead-stat"><span class="dead-stat-label">COINS</span><b class="dead-stat-val dead-stat-val--icon"><canvas id="deadCoinIcon" width="20" height="20" class="dead-stat-icon"></canvas><span id="deadCoins">—</span></b></div>
-          <div class="dead-stat"><span class="dead-stat-label">LOOP CRYSTALS</span><b class="dead-stat-val dead-stat-val--icon"><canvas id="deadLoopIcon" width="20" height="20" class="dead-stat-icon"></canvas><span id="deadLoopCrystals">—</span></b></div>
+          <div class="dead-stat"><span class="dead-stat-label">COINS</span><b class="dead-stat-val dead-stat-val--icon"><canvas id="deadCoinIcon" width="28" height="28" class="difficulty-hud-icon"></canvas><span id="deadCoins">—</span></b></div>
+          <div class="dead-stat"><span class="dead-stat-label">LOOP CRYSTALS</span><b class="dead-stat-val dead-stat-val--icon"><canvas id="deadLoopIcon" width="28" height="28" class="difficulty-hud-icon"></canvas><span id="deadLoopCrystals">—</span></b></div>
           <div class="dead-stat"><span class="dead-stat-label">DIFFICULTY</span><b class="dead-stat-val dead-stat-val--difficulty"><canvas id="deadDifficultyIcon" width="20" height="20" class="difficulty-hud-icon"></canvas><span id="deadDifficulty">—</span></b></div>
         </div>
         <div class="dead-records-wrap">
@@ -506,7 +506,7 @@
           <div class="dead-stat"><span class="dead-stat-label">LEVEL</span><b class="dead-stat-val" id="winLevel">—</b></div>
           <div class="dead-stat"><span class="dead-stat-label">KILLS</span><b class="dead-stat-val" id="winKills">—</b></div>
           <div class="dead-stat"><span class="dead-stat-label">TIME</span><b class="dead-stat-val" id="winTime">—</b></div>
-          <div class="dead-stat"><span class="dead-stat-label">COINS</span><b class="dead-stat-val dead-stat-val--icon"><canvas id="winCoinIcon" width="20" height="20" class="dead-stat-icon"></canvas><span id="winCoins">—</span></b></div>
+          <div class="dead-stat"><span class="dead-stat-label">COINS</span><b class="dead-stat-val dead-stat-val--icon"><canvas id="winCoinIcon" width="28" height="28" class="dead-stat-icon"></canvas><span id="winCoins">—</span></b></div>
           <div class="dead-stat"><span class="dead-stat-label">DIFFICULTY</span><b class="dead-stat-val" id="winDifficulty">—</b></div>
         </div>
         <div class="dead-items-wrap">
@@ -975,16 +975,16 @@
       <button id="charBackBtn" class="back-btn">&#8592; BACK</button>
       <div class="charselect-titlewrap">
         <div id="charSelectPhaseTag" class="charselect-phase-tag hidden"></div>
-        <h2 class="screen-title" id="charSelectTitle">CHOOSE YOUR WARRIOR</h2>
-        <p class="charselect-subtitle" id="charSelectSubtitle">Pick a fighter, set the run, then enter the dungeon. Challenges live in their own shop panel.</p>
+        <h2 class="screen-title" id="charSelectTitle">PICK HERO</h2>
+        <p class="charselect-subtitle" id="charSelectSubtitle">Choose a hero. Pick difficulty. Enter the dungeon.</p>
       </div>
     </div>
 
     <div class="charselect-main">
       <div class="charselect-roster">
         <div class="char-roster-head">
-          <span class="char-roster-kicker">Roster</span>
-          <span class="char-roster-note">Select one hero</span>
+          <span class="char-roster-kicker">Heroes</span>
+          <span class="char-roster-note">Pick one</span>
         </div>
 
         <!-- Carousel -->
@@ -1002,7 +1002,7 @@
                   <span class="char-card-name">PRINCESS</span>
                   <span class="char-card-tag princess-tag">PINK</span>
                 </div>
-                <small class="char-card-hint" data-base="Starter · high damage, pink theme">Starter · high damage, pink theme</small>
+                <small class="char-card-hint" data-base="Easy starter">Easy starter</small>
               </button>
 
               <!-- Thorn Knight -->
@@ -1014,7 +1014,7 @@
                   <span class="char-card-name">THORN KNIGHT</span>
                   <span class="char-card-tag knight-tag">KNIGHT</span>
                 </div>
-                <small class="char-card-hint" data-base="Starter · bleed stacks, close range">Starter · bleed stacks, close range</small>
+                <small class="char-card-hint" data-base="Bleed melee">Bleed melee</small>
               </button>
 
               <!-- Metao -->
@@ -1026,7 +1026,7 @@
                   <span class="char-card-name">METAO</span>
                   <span class="char-card-tag wizard-tag">WIZARD</span>
                 </div>
-                <small class="char-card-hint" data-base="0.5× damage · compensate with range">0.5× damage · compensate with range</small>
+                <small class="char-card-hint" data-base="Long range">Long range</small>
               </button>
 
               <!-- Granialla -->
@@ -1038,7 +1038,7 @@
                   <span class="char-card-name">GRANIALLA</span>
                   <span class="char-card-tag god-tag">GOD</span>
                 </div>
-                <small class="char-card-hint" data-base="Unlock by killing GOD">Unlock by killing GOD</small>
+                <small class="char-card-hint" data-base="Locked: beat GOD">Locked: beat GOD</small>
               </button>
 
               <!-- Mooggy -->
@@ -1050,7 +1050,7 @@
                   <span class="char-card-name">MOOGGY</span>
                   <span class="char-card-tag assassin-tag">ASSASSIN</span>
                 </div>
-                <small class="char-card-hint" data-base="Red scarf cat · rapid lazer eyes">Unlock by beating Mooggy 3 times</small>
+                <small class="char-card-hint" data-base="Locked: beat Mooggy">Locked: beat Mooggy</small>
               </button>
 
             </div>

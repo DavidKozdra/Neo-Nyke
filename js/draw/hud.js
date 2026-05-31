@@ -732,9 +732,13 @@
     iconCtx.imageSmoothingEnabled = false;
     iconCtx.fillStyle = 'rgba(255,255,255,0.08)';
     iconCtx.fillRect(0, 0, canvasEl.width, canvasEl.height);
+    // Derive cell size from canvas buffer so the icon never gets clipped,
+    // regardless of the canvas width/height attributes.
+    const maxCoord = pixels.reduce((m, [px, py]) => Math.max(m, px, py), 0) + 1;
+    const cell = Math.floor(Math.min(canvasEl.width, canvasEl.height) / (maxCoord + 1));
     iconCtx.fillStyle = color;
     pixels.forEach(([px, py]) => {
-      iconCtx.fillRect(px * 4, py * 4, 4, 4);
+      iconCtx.fillRect(px * cell, py * cell, cell, cell);
     });
   }
 

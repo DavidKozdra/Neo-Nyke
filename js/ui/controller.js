@@ -1624,8 +1624,8 @@ export function createUIController(view) {
         });
         if (view.difficultyHint) {
           view.difficultyHint.textContent = selectedDef.unlockLoops > 0 && !unlocked.has(selected)
-              ? `Unlocks at ${selectedDef.unlockLoops} Loop Crystals. Current crystals: ${loopCrystals}`
-              : `${selectedDef.description} Loop Crystals: ${loopCrystals}.`;
+              ? `Locked: ${selectedDef.unlockLoops} Loop Crystals needed. You have ${loopCrystals}.`
+              : `Loop Crystals: ${loopCrystals}`;
         }
       },
       updateChallengeSelection(unlocked, owned, selected, loopCrystals, bankCoins) {

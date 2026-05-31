@@ -2637,9 +2637,16 @@ p.sub {
   margin-top: 24px;
 }
 
+#charSelect .screen-title {
+  font-size: clamp(26px, 3.8vw, 42px);
+  line-height: 1;
+  letter-spacing: .08em;
+  margin: 0;
+}
+
 .charselect-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 18px;
   margin-bottom: 18px;
 }
@@ -2653,10 +2660,10 @@ p.sub {
 
 .charselect-subtitle {
   margin: 0;
-  max-width: 640px;
+  max-width: 520px;
   color: var(--menu-text-muted);
-  font-size: 13px;
-  line-height: 1.55;
+  font-size: 16px;
+  line-height: 1.35;
 }
 
 .charselect-main {
@@ -2681,16 +2688,16 @@ p.sub {
 }
 
 .char-roster-kicker {
-  font-size: 11px;
-  letter-spacing: .16em;
+  font-size: 15px;
+  letter-spacing: .08em;
   color: var(--menu-accent);
   text-transform: uppercase;
 }
 
 .char-roster-note {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--menu-text-soft);
-  letter-spacing: .05em;
+  letter-spacing: .03em;
 }
 
 /* ── Carousel layout ─────────────────────────────────────── */
@@ -2751,19 +2758,19 @@ p.sub {
   border: 2px solid var(--menu-border);
   border-top-color: var(--menu-border-strong);
   border-radius: 12px;
-  padding: 20px 22px;
+  padding: 22px 24px;
   display: grid;
-  grid-template-columns: minmax(120px, 156px) minmax(0, 1fr);
-  gap: 16px 24px;
-  min-height: 156px;
+  grid-template-columns: minmax(132px, 170px) minmax(0, 1fr);
+  gap: 18px 26px;
+  min-height: 178px;
   transition: opacity .2s;
 }
 
 .hero-detail-lore {
   grid-column: 2;
-  font-size: 12px;
-  color: var(--menu-text-muted);
-  line-height: 1.65;
+  font-size: 18px;
+  color: var(--menu-text);
+  line-height: 1.35;
   margin: 0;
 }
 
@@ -2811,9 +2818,9 @@ p.sub {
 }
 
 .hero-detail-skill-pip {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--menu-text);
-  padding: 3px 8px;
+  padding: 5px 10px;
   background: rgba(255,255,255,.045);
   border: 1px solid rgba(255,255,255,.09);
   border-radius: 4px;
@@ -2831,11 +2838,11 @@ p.sub {
 
 .char-card {
   min-width: 0;
-  flex: 0 0 200px; /* default (side) card width in carousel */
+  flex: 0 0 210px; /* default (side) card width in carousel */
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 18px 16px 14px;
+  padding: 18px 16px 16px;
   background: linear-gradient(180deg, var(--menu-surface-strong), var(--menu-bg-deep));
   border: 2px solid var(--menu-border);
   border-radius: 12px;
@@ -2868,7 +2875,7 @@ p.sub {
 
 /* Inside the carousel track, active card is full-size */
 #choose .char-card.sel {
-  flex: 0 0 270px;
+  flex: 0 0 294px;
   opacity: 1;
   transform: scale(1);
 }
@@ -2962,16 +2969,16 @@ p.sub {
 }
 
 .char-card-name {
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 900;
-  letter-spacing: .12em;
+  letter-spacing: .08em;
   color: var(--menu-text);
 }
 
 .char-card-tag {
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 800;
-  letter-spacing: .14em;
+  letter-spacing: .08em;
   padding: 2px 7px;
   border-radius: 4px;
   text-transform: uppercase;
@@ -3047,9 +3054,9 @@ p.sub {
 /* Bottom hint */
 .char-card-hint {
   display: block;
-  font-size: 10px;
+  font-size: 13px;
   color: var(--menu-text-soft);
-  letter-spacing: .06em;
+  letter-spacing: .03em;
   margin-top: auto;
 }
 
@@ -3063,14 +3070,16 @@ p.sub {
 }
 
 .difficulty-btn {
-  min-width: 108px;
-  padding: 10px 14px;
+  min-width: 116px;
+  min-height: 44px;
+  padding: 11px 16px;
   background: var(--menu-surface);
   border: 1px solid var(--menu-border);
   border-radius: 999px;
   color: var(--menu-text-muted);
+  font-size: 14px;
   font-weight: 800;
-  letter-spacing: .08em;
+  letter-spacing: .04em;
   text-transform: uppercase;
   cursor: pointer;
   transition: border-color .15s, box-shadow .15s, transform .12s, color .15s, opacity .15s;
@@ -3100,9 +3109,9 @@ p.sub {
 
 .difficulty-hint {
   min-height: 16px;
-  font-size: 11px;
+  font-size: 13px;
   color: var(--menu-text-soft);
-  letter-spacing: .05em;
+  letter-spacing: .02em;
   text-align: center;
 }
 
@@ -3449,13 +3458,15 @@ p.sub {
 
 .challenge-toggle {
   width: 100%;
-  padding: 13px 14px;
-  border-radius: 14px;
+  min-height: 48px;
+  padding: 14px 16px;
+  border-radius: 10px;
   border: 1px solid var(--menu-border);
   background: linear-gradient(180deg, var(--menu-surface-strong), var(--menu-bg-deep));
   color: var(--menu-text);
+  font-size: 14px;
   font-weight: 800;
-  letter-spacing: .11em;
+  letter-spacing: .05em;
   text-transform: uppercase;
   cursor: pointer;
   transition: transform .12s, border-color .15s, box-shadow .15s;
@@ -3545,24 +3556,28 @@ p.sub {
 }
 
 input#seed {
-  padding: 10px 12px;
+  padding: 13px 14px;
   background: rgba(0,0,0,.6);
   border: 1px solid rgba(128, 146, 170, .38);
   border-radius: 8px;
   color: var(--menu-text);
   width: 180px;
+  min-height: 48px;
+  font-size: 14px;
   text-align: center;
-  letter-spacing: .1em;
+  letter-spacing: .04em;
 }
 
 button#go {
-  padding: 12px 24px;
+  min-height: 52px;
+  padding: 14px 24px;
   background: linear-gradient(90deg, #8ca7ca, #c8dbf1);
   border: none;
   border-radius: 10px;
   color: #141d28;
+  font-size: 16px;
   font-weight: 900;
-  letter-spacing: .1em;
+  letter-spacing: .05em;
   cursor: pointer;
   box-shadow: 0 0 18px rgba(138, 165, 199, .3);
   transition: .15s;

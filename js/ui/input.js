@@ -509,7 +509,7 @@ export const ITEM_DEFS = {
       key: 'charged_adapter',
       name: 'Charged Adapter',
       shortName: 'Warp F',
-      description: 'Charge requirement -1. When charged, press its equipment slot key during non-boss combat to spend 50% coins and warp to the ladder room (next floor path).',
+      description: 'Charge requirement -1. When charged, press its equipment slot key (outside boss rooms) to spend 50% coins and warp to the ladder room (next floor path).',
       rarity: 'wizard',
       color: '#b66cff',
       category: 'wizard',

@@ -1650,17 +1650,17 @@ export function resumeGame() {
     if (Neo.charSelectPhase && PHASE_LABELS[Neo.charSelectPhase]) {
       const label = PHASE_LABELS[Neo.charSelectPhase];
       if (phaseTag) { phaseTag.textContent = label; phaseTag.className = `charselect-phase-tag ${PHASE_COLORS[Neo.charSelectPhase]}`; phaseTag.classList.remove('hidden'); }
-      if (titleEl) titleEl.textContent = `${label} — CHOOSE YOUR WARRIOR`;
-      if (subtitleEl) subtitleEl.textContent = isLastPhase ? 'Last player — then enter the dungeon.' : `${label} locked. Next player picks after.`;
-      if (goBtn) goBtn.textContent = isLastPhase ? 'ENTER DUNGEON' : `CONFIRM ${label} →`;
+      if (titleEl) titleEl.textContent = `${label}: PICK HERO`;
+      if (subtitleEl) subtitleEl.textContent = isLastPhase ? 'Confirm, then enter the dungeon.' : 'Confirm to pass to the next player.';
+      if (goBtn) goBtn.textContent = isLastPhase ? 'ENTER DUNGEON' : `CONFIRM ${label}`;
     } else {
       if (phaseTag) phaseTag.classList.add('hidden');
-      if (titleEl) titleEl.textContent = 'CHOOSE YOUR WARRIOR';
+      if (titleEl) titleEl.textContent = 'PICK HERO';
       if (Neo.gameMode === 'competitive') {
-        if (subtitleEl) subtitleEl.textContent = 'Hard difficulty · this week\'s shared seed · no modifiers';
+        if (subtitleEl) subtitleEl.textContent = 'Weekly run. Hard difficulty is locked.';
         if (goBtn) goBtn.textContent = 'COMPETE';
       } else {
-        if (subtitleEl) subtitleEl.textContent = 'Pick a fighter, set the run, then enter the dungeon. Challenges live in their own shop panel.';
+        if (subtitleEl) subtitleEl.textContent = 'Choose a hero. Pick difficulty. Enter the dungeon.';
         if (goBtn) goBtn.textContent = 'ENTER DUNGEON';
       }
     }

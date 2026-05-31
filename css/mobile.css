@@ -2297,9 +2297,9 @@
 
   #charSelect .screen-title {
     margin: 0;
-    font-size: clamp(15px, 5vw, 19px);
-    line-height: 1.12;
-    letter-spacing: .12em;
+    font-size: clamp(24px, 8vw, 34px);
+    line-height: 1;
+    letter-spacing: .06em;
   }
 
   #charSelect .charselect-subtitle {
@@ -2346,15 +2346,15 @@
   }
 
   #charSelect .char-card {
-    flex-basis: clamp(92px, 28vw, 118px);
-    padding: 7px 6px;
-    gap: 4px;
+    flex-basis: clamp(106px, 32vw, 132px);
+    padding: 9px 8px;
+    gap: 5px;
     border-width: 1px;
     border-radius: 8px;
   }
 
   #charSelect #choose .char-card.sel {
-    flex-basis: clamp(176px, 62vw, 230px);
+    flex-basis: clamp(200px, 68vw, 256px);
   }
 
   #charSelect .char-card-art-wrap {
@@ -2382,21 +2382,21 @@
 
   #charSelect .char-card-name {
     min-width: 0;
-    font-size: 8px;
+    font-size: 10px;
     line-height: 1.12;
-    letter-spacing: .06em;
+    letter-spacing: .04em;
     overflow-wrap: anywhere;
   }
 
   #charSelect .char-card.sel .char-card-name {
-    font-size: 12px;
-    letter-spacing: .08em;
+    font-size: 15px;
+    letter-spacing: .05em;
   }
 
   #charSelect .char-card-tag {
     padding: 2px 5px;
-    font-size: 7px;
-    letter-spacing: .08em;
+    font-size: 8px;
+    letter-spacing: .04em;
   }
 
   #charSelect .char-card-hint {
@@ -2408,7 +2408,7 @@
     grid-template-columns: 1fr;
     gap: 5px;
     min-height: 0;
-    padding: 6px 8px;
+    padding: 8px 10px;
     border-width: 1px;
     border-radius: 8px;
   }
@@ -2445,7 +2445,7 @@
 
   #charSelect .stat-label {
     width: auto;
-    font-size: 7px;
+    font-size: 9px;
     letter-spacing: .04em;
     text-align: left;
   }
@@ -2456,8 +2456,8 @@
 
   #charSelect .hero-detail-skill-pip,
   #charSelect .skill-pip {
-    padding: 1px 5px;
-    font-size: 8px;
+    padding: 3px 6px;
+    font-size: 10px;
     line-height: 1.2;
     white-space: normal;
   }
@@ -2492,14 +2492,14 @@
     width: auto;
     min-width: 0;
     justify-content: center;
-    min-height: 32px;
-    padding: 7px 9px;
-    font-size: 9px;
+    min-height: 38px;
+    padding: 8px 10px;
+    font-size: 11px;
   }
 
   #charSelect .difficulty-hint {
     min-height: 0;
-    font-size: 10px;
+    font-size: 12px;
     line-height: 1.25;
   }
 
@@ -2518,16 +2518,16 @@
   #charSelect .challenge-toggle,
   #charSelect .legacy-toggle {
     width: 100%;
-    min-height: 34px;
+    min-height: 42px;
     padding: 8px 10px;
-    font-size: 10px;
+    font-size: 12px;
     border-radius: 7px;
   }
 }
 
 @media (max-width: 380px) {
   #charSelect #choose .char-card.sel {
-    flex-basis: clamp(158px, 58vw, 190px);
+    flex-basis: clamp(176px, 62vw, 220px);
   }
 
   #charSelect .char-card.sel .char-card-art-wrap {
@@ -2584,7 +2584,7 @@
 
   #charSelect .screen-title {
     margin: 0;
-    font-size: 16px;
+    font-size: 22px;
     line-height: 1.1;
   }
 
@@ -2621,13 +2621,13 @@
   }
 
   #charSelect .char-card {
-    flex-basis: 98px;
-    padding: 7px;
+    flex-basis: 112px;
+    padding: 8px;
     gap: 4px;
   }
 
   #charSelect #choose .char-card.sel {
-    flex-basis: 174px;
+    flex-basis: 202px;
   }
 
   #charSelect .char-card-art-wrap {
@@ -2649,7 +2649,7 @@
   }
 
   #charSelect .char-card-name {
-    font-size: 8px;
+    font-size: 10px;
     line-height: 1.1;
     overflow-wrap: anywhere;
   }
@@ -2693,9 +2693,9 @@
   #charSelect .seedrow #go,
   #charSelect .challenge-toggle,
   #charSelect .legacy-toggle {
-    min-height: 30px;
+    min-height: 36px;
     padding: 6px 8px;
-    font-size: 9px;
+    font-size: 11px;
   }
 
   #charSelect .seedrow {
