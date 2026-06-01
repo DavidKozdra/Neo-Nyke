@@ -558,54 +558,15 @@
   }
 
   function drawActionIcons() {
-    const mobilityMove = Neo.getEquippedMove('dash');
-    const mobilityIcon = mobilityMove === 'dash'
-      ? {
-        color: '#fff06a',
-        pixels: [
-          [1, 4], [2, 4], [3, 4], [4, 4], [5, 4], [6, 4],
-          [4, 2], [5, 2], [6, 2], [6, 1], [7, 2], [6, 3],
-        ],
+    const drawHudMoveIcon = (slot, canvas, fallbackColor, fallbackPixels) => {
+      const moveKey = Neo.getEquippedMove(slot);
+      const moveDef = Neo.MOVE_DEFS[moveKey];
+      if (canvas && moveDef && typeof Neo.drawMoveToastIcon === 'function') {
+        Neo.drawMoveToastIcon(canvas, moveDef);
+        return;
       }
-      : mobilityMove === 'warp'
-      ? {
-        color: '#c8a6ff',
-        pixels: [
-          [3, 1], [4, 1], [2, 2], [5, 2], [1, 3], [3, 3], [4, 3], [6, 3],
-          [1, 4], [6, 4], [2, 5], [5, 5], [3, 6], [4, 6],
-        ],
-      }
-      : mobilityMove === 'nimrod_stomp'
-        ? {
-          color: '#ffe67a',
-          pixels: [
-            [3, 1], [4, 1], [3, 2], [4, 2], [2, 3], [5, 3], [2, 4], [3, 4], [4, 4], [5, 4],
-            [1, 5], [2, 5], [5, 5], [6, 5], [2, 6], [5, 6],
-          ],
-        }
-      : mobilityMove === 'zip_lightning'
-        ? {
-          color: '#8dd6ff',
-          pixels: [
-            [1, 2], [2, 2], [3, 2], [2, 3], [3, 4], [4, 4], [5, 4], [4, 5], [5, 6], [6, 6],
-            [6, 2], [7, 2], [6, 3],
-          ],
-        }
-        : mobilityMove === 'cowards_way'
-          ? {
-            color: '#8fffca',
-            pixels: [
-              [3, 1], [4, 1], [2, 2], [5, 2], [1, 3], [6, 3], [1, 4], [6, 4],
-              [2, 5], [5, 5], [3, 6], [4, 6], [3, 3], [4, 3], [3, 4], [4, 4],
-            ],
-          }
-          : {
-            color: '#8fffca',
-            pixels: [
-              [3, 1], [4, 1], [2, 2], [5, 2], [1, 3], [6, 3], [1, 4], [6, 4],
-              [2, 5], [5, 5], [3, 6], [4, 6], [3, 3], [4, 3], [3, 4], [4, 4],
-            ],
-          };
+      if (canvas) drawPixelIcon(canvas, fallbackColor, fallbackPixels);
+    };
 
     drawPixelIcon(Neo.ui.coinIcon, '#ffd15a', [
       [2, 1], [3, 1], [4, 1],
@@ -639,14 +600,17 @@
       [2, 2], [4, 2], [2, 4], [4, 4],
       [3, 3],
     ]);
-    drawPixelIcon(Neo.ui.icons.dash, mobilityIcon.color, mobilityIcon.pixels);
-    drawPixelIcon(Neo.ui.icons.melee, '#00ffff', [
+    drawHudMoveIcon('dash', Neo.ui.icons.dash, '#8fffca', [
+      [3, 1], [4, 1], [2, 2], [5, 2], [1, 3], [6, 3], [1, 4], [6, 4],
+      [2, 5], [5, 5], [3, 6], [4, 6], [3, 3], [4, 3], [3, 4], [4, 4],
+    ]);
+    drawHudMoveIcon('melee', Neo.ui.icons.melee, '#00ffff', [
       [2, 6], [3, 5], [4, 4], [5, 3], [6, 2], [5, 4], [6, 3], [7, 2], [6, 5], [7, 4],
     ]);
-    drawPixelIcon(Neo.ui.icons.laser, '#7a9fc4', [
+    drawHudMoveIcon('laser', Neo.ui.icons.laser, '#7a9fc4', [
       [1, 4], [2, 4], [3, 4], [4, 4], [5, 4], [6, 4], [7, 4], [5, 3], [6, 2], [7, 1],
     ]);
-    drawPixelIcon(Neo.ui.icons.smash, '#ffaa00', [
+    drawHudMoveIcon('smash', Neo.ui.icons.smash, '#ffaa00', [
       [4, 1], [3, 2], [4, 2], [5, 2], [2, 3], [3, 3], [4, 3], [5, 3], [6, 3],
       [2, 4], [3, 4], [4, 4], [5, 4], [6, 4], [3, 5], [4, 5], [5, 5], [4, 6],
     ]);
