@@ -265,6 +265,7 @@
     const itemStats = Neo.getItemStats();
     const attackSpeed = Neo.getAttackSpeedValue();
     if (!Neo.spendSkillCharge('melee', Neo.getMeleeCooldownDuration(move, attackSpeed))) return;
+    if (itemStats.hasRobotArm && Neo.player?.robotArmReady) Neo.consumeCharge('robot_arm');
     if (move === 'fire_balls') {
       spawnFireballs();
       return;

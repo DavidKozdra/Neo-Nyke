@@ -460,6 +460,8 @@ export function resumeGame() {
       critCharmBuffTime: 0,
       escapeChargeKills: 0,
       escapeReady: true,
+      robotArmChargeKills: 0,
+      robotArmReady: false,
       statuses: Neo.createStatusMap(),
       items,
       ownedWeapons: defaultWeapon ? { [defaultWeapon]: true } : {},

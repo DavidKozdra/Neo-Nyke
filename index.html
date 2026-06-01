@@ -381,11 +381,12 @@
       <button class="inv-player-tab" data-inv-player="3" role="tab">P3</button>
       <button class="inv-player-tab" data-inv-player="4" role="tab">P4</button>
     </div>
+    <div id="invBuildSummary" class="inv-build-summary" aria-label="Current build"></div>
     <div class="inv-tabs shop-tabs" role="tablist">
-      <button class="inv-tab shop-tab active" data-inv-tab="stats" role="tab"><span class="tab-icon">♦</span>Stats</button>
-      <button class="inv-tab shop-tab" data-inv-tab="items" role="tab"><span class="tab-icon">✦</span>Items</button>
-      <button class="inv-tab shop-tab" data-inv-tab="weapons" role="tab"><span class="tab-icon">⚔</span>Weapons</button>
-      <button class="inv-tab shop-tab" data-inv-tab="equipped" role="tab"><span class="tab-icon">⚡</span>Moves</button>
+      <button class="inv-tab shop-tab active" data-inv-tab="stats" role="tab"><canvas class="tab-icon tab-icon--canvas" width="22" height="22" data-inv-ui-icon="tab-stats" aria-hidden="true"></canvas>Stats</button>
+      <button class="inv-tab shop-tab" data-inv-tab="items" role="tab"><canvas class="tab-icon tab-icon--canvas" width="22" height="22" data-inv-ui-icon="tab-relics" aria-hidden="true"></canvas>Relics</button>
+      <button class="inv-tab shop-tab" data-inv-tab="weapons" role="tab"><canvas class="tab-icon tab-icon--canvas" width="22" height="22" data-inv-ui-icon="tab-weapons" aria-hidden="true"></canvas>Weapons</button>
+      <button class="inv-tab shop-tab" data-inv-tab="equipped" role="tab"><canvas class="tab-icon tab-icon--canvas" width="22" height="22" data-inv-ui-icon="tab-moves" aria-hidden="true"></canvas>Moves</button>
     </div>
     <div class="inv-ux-hints" aria-hidden="true">
       <span class="inv-ux-hint"><b>Drag</b> move chips onto matching slots</span>
@@ -1008,7 +1009,7 @@
                 </div>
                 <div class="char-card-header">
                   <span class="char-card-name">PRINCESS</span>
-                  <span class="char-card-tag princess-tag">PINK</span>
+                  <span class="char-card-tag princess-tag"><canvas class="char-card-tag-icon" data-inv-ui-icon="role-princess" width="18" height="18" aria-hidden="true"></canvas>PINK</span>
                 </div>
                 <small class="char-card-hint" data-base="Easy starter">Easy starter</small>
               </button>
@@ -1020,7 +1021,7 @@
                 </div>
                 <div class="char-card-header">
                   <span class="char-card-name">THORN KNIGHT</span>
-                  <span class="char-card-tag knight-tag">KNIGHT</span>
+                  <span class="char-card-tag knight-tag"><canvas class="char-card-tag-icon" data-inv-ui-icon="role-knight" width="18" height="18" aria-hidden="true"></canvas>KNIGHT</span>
                 </div>
                 <small class="char-card-hint" data-base="Bleed melee">Bleed melee</small>
               </button>
@@ -1032,7 +1033,7 @@
                 </div>
                 <div class="char-card-header">
                   <span class="char-card-name">METAO</span>
-                  <span class="char-card-tag wizard-tag">WIZARD</span>
+                  <span class="char-card-tag wizard-tag"><canvas class="char-card-tag-icon" data-inv-ui-icon="role-wizard" width="18" height="18" aria-hidden="true"></canvas>WIZARD</span>
                 </div>
                 <small class="char-card-hint" data-base="Long range">Long range</small>
               </button>
@@ -1044,7 +1045,7 @@
                 </div>
                 <div class="char-card-header">
                   <span class="char-card-name">GRANIALLA</span>
-                  <span class="char-card-tag god-tag">GOD</span>
+                  <span class="char-card-tag god-tag"><canvas class="char-card-tag-icon" data-inv-ui-icon="role-god" width="18" height="18" aria-hidden="true"></canvas>GOD</span>
                 </div>
                 <small class="char-card-hint" data-base="Locked: beat GOD">Locked: beat GOD</small>
               </button>
@@ -1056,7 +1057,7 @@
                 </div>
                 <div class="char-card-header">
                   <span class="char-card-name">MOOGGY</span>
-                  <span class="char-card-tag assassin-tag">ASSASSIN</span>
+                  <span class="char-card-tag assassin-tag"><canvas class="char-card-tag-icon" data-inv-ui-icon="role-assassin" width="18" height="18" aria-hidden="true"></canvas>ASSASSIN</span>
                 </div>
                 <small class="char-card-hint" data-base="Locked: beat Mooggy">Locked: beat Mooggy</small>
               </button>

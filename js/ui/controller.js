@@ -1610,6 +1610,9 @@ export function createUIController(view) {
               alpha: unlocked.has(itemKey) ? 1 : 0.42,
             });
           }
+          button.querySelectorAll('[data-inv-ui-icon]').forEach(canvas => {
+            Neo.drawInventoryUiIcon?.(canvas, canvas.dataset.invUiIcon);
+          });
         });
 
         // The roster is now a fixed grid; clear old carousel offsets from prior builds.
@@ -1631,8 +1634,9 @@ export function createUIController(view) {
         const detail = document.getElementById('heroDetail');
         const disp = Neo.HERO_DISPLAY[selected];
         if (detail && disp) {
+          const STAT_ICON_KEYS = { HP: 'hp', ATK: 'attack', DMG: 'attack', SPD: 'speed', RANGE: 'range', RNG: 'range', CTRL: 'crit' };
           const statsHtml = disp.stats.map(s =>
-            `<div class="char-stat-row"><span class="stat-label">${s.label}</span>` +
+            `<div class="char-stat-row"><canvas class="char-stat-icon" data-inv-ui-icon="${Neo.escapeHtml(STAT_ICON_KEYS[s.label] || 'crit')}" width="24" height="24" aria-hidden="true"></canvas><span class="stat-label">${s.label}</span>` +
             `<div class="stat-bar"><div class="stat-fill" style="width:${s.pct}%;background:${s.color}"></div></div></div>`
           ).join('');
           const defaultMoves = Neo.getDefaultMovesForCharacter(selected);
@@ -1678,6 +1682,9 @@ export function createUIController(view) {
           detail.querySelectorAll('[data-hero-item]').forEach(el => {
             const item = Neo.ITEM_DEFS[el.dataset.heroItem];
             if (item) Neo.drawItemToastIcon(el, item);
+          });
+          detail.querySelectorAll('[data-inv-ui-icon]').forEach(el => {
+            Neo.drawInventoryUiIcon?.(el, el.dataset.invUiIcon);
           });
         }
       },

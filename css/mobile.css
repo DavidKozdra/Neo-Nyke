@@ -387,13 +387,31 @@
     top: 84px;
   }
 
+  .inv-build-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+  }
+
+  .inv-build-card {
+    padding: 8px;
+    gap: 8px;
+  }
+
+  .inv-build-card--weapon {
+    grid-column: 1 / -1;
+  }
+
+  .inv-build-card b {
+    font-size: 12px;
+  }
+
   .inv-ux-hints {
     gap: 6px;
     margin-bottom: 10px;
   }
 
   .inv-ux-hint {
-    font-size: 9px;
+    font-size: 10px;
     padding: 5px 8px;
   }
 
@@ -407,6 +425,14 @@
   .inv-slots {
     grid-template-columns: 1fr;
     gap: 10px;
+  }
+
+  .inv-chip-footer {
+    align-items: stretch;
+  }
+
+  .inv-chip-action {
+    min-height: 30px;
   }
 
   /* ── 16. Pause / dead / win overlays ─────────────────────────── */
@@ -1095,6 +1121,10 @@
 
   .tab-icon {
     display: none;
+  }
+
+  #invPanel .tab-icon--canvas {
+    display: block;
   }
 
   .controls-desktop-section {
@@ -2438,9 +2468,16 @@
   }
 
   #charSelect .char-card-tag {
-    padding: 2px 5px;
+    padding: 2px 5px 2px 4px;
     font-size: 8px;
     letter-spacing: .04em;
+    gap: 3px;
+  }
+
+  #charSelect .char-card-tag-icon {
+    width: 12px !important;
+    height: 12px !important;
+    flex-basis: 12px;
   }
 
   #charSelect .char-card-hint {
@@ -2486,9 +2523,15 @@
 
   #charSelect .char-stat-row {
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-columns: 14px minmax(0, 1fr);
     align-items: center;
     gap: 3px;
+  }
+
+  #charSelect .char-stat-icon {
+    width: 14px !important;
+    height: 14px !important;
+    border-radius: 4px;
   }
 
   #charSelect .stat-label {
@@ -2620,7 +2663,15 @@
   }
 
   #charSelect .char-card-tag {
-    display: none;
+    display: inline-flex;
+    padding: 2px;
+    font-size: 0;
+  }
+
+  #charSelect .char-card-tag-icon {
+    width: 14px !important;
+    height: 14px !important;
+    flex-basis: 14px;
   }
 }
 

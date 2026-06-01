@@ -103,6 +103,8 @@ export function migratePlayerData(source) {
     playerData.critCharmBuffTime = Number(playerData.critCharmBuffTime || 0);
     playerData.escapeChargeKills = Number(playerData.escapeChargeKills || 0);
     playerData.escapeReady = playerData.escapeReady !== false;
+    playerData.robotArmChargeKills = Number(playerData.robotArmChargeKills || 0);
+    playerData.robotArmReady = !!playerData.robotArmReady;
     playerData.scarfChargeKills = Number(playerData.scarfChargeKills || 0);
     playerData.scarfHealReady = playerData.scarfHealReady !== false;
     return playerData;
@@ -446,6 +448,10 @@ export function consumeCharge(chargeType) {
       Neo.player.escapeReady = false;
       Neo.player.escapeChargeKills = 0;
     }
+    if (chargeType === 'robot_arm') {
+      Neo.player.robotArmReady = false;
+      Neo.player.robotArmChargeKills = 0;
+    }
     if (chargeType === 'hemes_scarf') {
       Neo.player.scarfHealReady = false;
       Neo.player.scarfChargeKills = 0;
@@ -502,6 +508,15 @@ export function consumeCharge(chargeType) {
         const slotLetter = slotIdx >= 0 ? (Neo.EQUIPMENT_SLOT_KEYS?.[slotIdx] || 'F') : 'F';
         const warpHint = Neo.formatControlLabel(slotLetter.toLowerCase(), slotLetter.toLowerCase());
         Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 36, life: 0.9, text: `ADAPTER READY - PRESS ${warpHint}`, c: '#b88cff' });
+      }
+    }
+
+    if (getItemCount('robot_arm') > 0 && !Neo.player.robotArmReady) {
+      Neo.player.robotArmChargeKills += chargeSteps;
+      if (Neo.player.robotArmChargeKills >= getChargeRequirement(8)) {
+        Neo.player.robotArmReady = true;
+        Neo.player.robotArmChargeKills = 0;
+        Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 30, life: 0.8, text: 'ARM READY', c: '#a9e6ff' });
       }
     }
 

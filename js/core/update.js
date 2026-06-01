@@ -33,6 +33,34 @@ export function loop(timestamp) {
     requestAnimationFrame(loop);
   }
 
+  const ENEMY_UPDATE_METHOD_BY_TYPE = {
+    god: 'updateGod',
+    queen_cult: 'updateCultQueenBoss',
+    bulk_golem: 'updateBulkGolemBoss',
+    artificer_knave: 'updateArtificerBoss',
+    bowman_bane: 'updateBowmanBane',
+    mirror_knight: 'updateMirrorChampion',
+    mooggy: 'updateMooggyEnemy',
+    rival: 'updateRivalEnemy',
+    cult_mage: 'updateCultMageEnemy',
+    knave: 'updateKnaveEnemy',
+    sniper: 'updateSniperEnemy',
+    machine_gunner: 'updateMachineGunnerEnemy',
+    golem: 'updateGolemEnemy',
+    summoner: 'updateSummonerEnemy',
+    shield_unit: 'updateShieldUnitEnemy',
+    healer: 'updateHealerEnemy',
+    boss_spawner: 'updateBossSpawnerEnemy',
+    laser: 'updateLaserEnemy',
+    charger: 'updateChargerEnemy',
+  };
+
+  function updateEnemyByType(enemy, dt) {
+    const methodName = ENEMY_UPDATE_METHOD_BY_TYPE[String(enemy?.type || '').toLowerCase()] || 'updateHunterEnemy';
+    const handler = Neo[methodName];
+    if (typeof handler === 'function') handler(enemy, dt);
+  }
+
   function update(dt) {
     let sectionPerfStart = Neo.perfStart();
     const itemStats = Neo.getItemStats();
@@ -241,7 +269,7 @@ export function loop(timestamp) {
       }
     }
     if (!Neo.p1DeadInCoop) {
-      if (Neo.getItemStats().hasRobotArm) { Neo.mouse.down = true; Neo.mouse.downQueued = true; }
+      if (itemStats.hasRobotArm && Neo.player?.robotArmReady) { Neo.mouse.down = true; Neo.mouse.downQueued = true; }
       const meleeHeld = Neo.isMouseActionHeld('slash');
       const laserHeld = Neo.isMouseActionHeld('laser');
       if (!overlayOpen && meleeHeld) Neo.tryMelee();
@@ -327,26 +355,7 @@ export function loop(timestamp) {
       enemy.attackAnimT = Math.max(0, Number(enemy.attackAnimT || 0) - dt);
 
       if (!eliteTraitControlled) {
-        if (enemy.type === 'god') Neo.updateGod(enemy, dt);
-        else if (enemy.type === 'queen_cult') Neo.updateCultQueenBoss(enemy, dt);
-        else if (enemy.type === 'bulk_golem') Neo.updateBulkGolemBoss(enemy, dt);
-        else if (enemy.type === 'artificer_knave') Neo.updateArtificerBoss(enemy, dt);
-        else if (enemy.type === 'bowman_bane') Neo.updateBowmanBane(enemy, dt);
-        else if (enemy.type === 'mirror_knight') Neo.updateMirrorChampion(enemy, dt);
-        else if (enemy.type === 'mooggy') Neo.updateMooggyEnemy(enemy, dt);
-        else if (enemy.type === 'rival') Neo.updateRivalEnemy(enemy, dt);
-        else if (enemy.type === 'cult_mage') Neo.updateCultMageEnemy(enemy, dt);
-        else if (enemy.type === 'knave') Neo.updateKnaveEnemy(enemy, dt);
-        else if (enemy.type === 'sniper') Neo.updateSniperEnemy(enemy, dt);
-        else if (enemy.type === 'machine_gunner') Neo.updateMachineGunnerEnemy(enemy, dt);
-        else if (enemy.type === 'golem') Neo.updateGolemEnemy(enemy, dt);
-        else if (enemy.type === 'summoner') Neo.updateSummonerEnemy(enemy, dt);
-        else if (enemy.type === 'shield_unit') Neo.updateShieldUnitEnemy(enemy, dt);
-        else if (enemy.type === 'healer') Neo.updateHealerEnemy(enemy, dt);
-        else if (enemy.type === 'boss_spawner') Neo.updateBossSpawnerEnemy(enemy, dt);
-        else if (enemy.type === 'laser') Neo.updateLaserEnemy(enemy, dt);
-        else if (enemy.type === 'charger') Neo.updateChargerEnemy(enemy, dt);
-        else Neo.updateHunterEnemy(enemy, dt);
+        updateEnemyByType(enemy, dt);
       }
 
       if (!Neo.enemies.includes(enemy)) continue;

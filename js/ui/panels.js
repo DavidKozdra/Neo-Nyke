@@ -378,12 +378,27 @@ export function bindPanelInput() {
         renderInventoryPanel();
       });
     });
+    Neo.ui.invBuildSummary?.addEventListener('click', event => {
+      const button = event.target instanceof Element ? event.target.closest('[data-inv-tab-jump]') : null;
+      if (!button) return;
+      Neo.activeInvTab = button.dataset.invTabJump || 'equipped';
+      Neo.activeInventorySlot = button.dataset.buildSlot || '';
+      markInventoryPanelDirty();
+      renderInventoryPanel();
+    });
     Neo.ui.shopItems?.addEventListener('click', handleShopBuyClick);
     Neo.ui.shopWeapons?.addEventListener('click', handleShopBuyClick);
     Neo.ui.shopMoves?.addEventListener('click', handleShopBuyClick);
     Neo.ui.shopHeals?.addEventListener('click', handleShopBuyClick);
     Neo.bindEquipmentSlotClicks?.();
     Neo.ui.invMovesList?.addEventListener('click', handleInventoryMoveSelect);
+    Neo.ui.invMovesList?.addEventListener('keydown', event => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      const target = event.target instanceof Element ? event.target.closest('[data-move]') : null;
+      if (!target) return;
+      event.preventDefault();
+      handleInventoryMoveSelect(event);
+    });
     Neo.ui.invWeaponsList?.addEventListener('click', handleInventoryWeaponSelect);
     Neo.ui.invMovesList?.addEventListener('dragstart', event => {
       const target = event.target instanceof Element ? event.target : null;
@@ -1212,6 +1227,53 @@ export function getShopWeaponOffers() {
     return Neo.currentRoom.shopWeaponOffers;
   }
 
+  function getShopPurchaseState(offer, { owned = false, blocked = false } = {}) {
+    const canAfford = !!Neo.player && Neo.player.coins >= Number(offer?.cost || 0);
+    const bought = !!offer?.bought;
+    const disabled = bought || owned || blocked || !canAfford;
+    const showUnaffordable = !canAfford && !owned && !bought;
+    return { canAfford, bought, disabled, showUnaffordable };
+  }
+
+  function renderShopCard({
+    rarityLabel,
+    iconAttr,
+    iconKey,
+    title,
+    titleColor,
+    cost,
+    description,
+    footerExtra = '',
+    kind,
+    index,
+    state,
+    buttonText,
+    buttonExtraAttrs = '',
+  }) {
+    return `<div class="shop-card${state.showUnaffordable ? ' shop-card--unaffordable' : ''}">
+      <span class="shop-card__eyebrow">${rarityLabel}</span>
+      <div class="shop-card__title-row">
+        <canvas class="shop-card__icon" ${iconAttr}="${iconKey}" width="30" height="30"></canvas>
+        <h4${titleColor ? ` style="color:${titleColor}"` : ''}>${title}</h4>
+        <span class="shop-card__price">${cost}</span>
+      </div>
+      <div class="shop-card__copy">
+        <p>${description}</p>
+      </div>
+      ${footerExtra}
+      <div class="shop-card__footer">
+        <button class="shop-buy${state.showUnaffordable ? ' shop-buy--unaffordable' : ''}" data-kind="${kind}" data-index="${index}" ${buttonExtraAttrs} ${state.disabled ? 'disabled' : ''}>${buttonText}</button>
+      </div>
+    </div>`;
+  }
+
+  function drawShopIcons(container, dataAttr, drawIcon, resolveDef) {
+    container?.querySelectorAll(`[${dataAttr}]`).forEach(canvas => {
+      const key = canvas.getAttribute(dataAttr);
+      drawIcon(canvas, resolveDef(key));
+    });
+  }
+
 export function renderShopPanel() {
     if (!Neo.ui.shopPanel || !Neo.player) return;
     Neo.refreshRoomShopCosts(Neo.currentRoom);
@@ -1230,58 +1292,55 @@ export function renderShopPanel() {
     const itemCards = Neo.shopOffers
       .filter(offer => !offer.bought && offer.type === 'item')
       .map((offer, index) => {
-        const item = Neo.itemRegistry.get(offer.key);
-        const canAfford = Neo.player.coins >= offer.cost;
-        const blocked = noItemsChallenge || !canAfford;
-        return `<div class="shop-card${blocked ? ' shop-card--unaffordable' : ''}">
-          <span class="shop-card__eyebrow">Relic</span>
-          <div class="shop-card__title-row">
-            <canvas class="shop-card__icon" data-item-icon="${offer.key}" width="30" height="30"></canvas>
-            <h4 style="color:${Neo.getRarityNameColor(item?.rarity || item?.category)}">${item?.name || 'Item'}</h4>
-            <span class="shop-card__price">${offer.cost}</span>
-          </div>
-          <div class="shop-card__copy">
-            <p>${noItemsChallenge ? 'No Items challenge is active. Relic buys are disabled for this run.' : item?.description || 'No details available.'}</p>
-          </div>
-          <div class="shop-card__footer">
-            <button class="shop-buy${!canAfford ? ' shop-buy--unaffordable' : ''}" data-kind="item" data-index="${index}" ${blocked ? 'disabled' : ''}>${noItemsChallenge ? 'Relics Locked' : !canAfford ? 'Too Expensive' : 'Buy Relic'}</button>
-          </div>
-        </div>`;
+        const item = Neo.itemRegistry.get(offer.key) || Neo.ITEM_DEFS[offer.key];
+        const state = getShopPurchaseState(offer, { blocked: noItemsChallenge });
+        const description = noItemsChallenge
+          ? 'No Items challenge is active. Relic buys are disabled for this run.'
+          : item?.description || 'No details available.';
+        const buttonText = noItemsChallenge ? 'Relics Locked' : !state.canAfford ? 'Too Expensive' : 'Buy Relic';
+        return renderShopCard({
+          rarityLabel: 'Relic',
+          iconAttr: 'data-item-icon',
+          iconKey: offer.key,
+          title: item?.name || 'Item',
+          titleColor: Neo.getRarityNameColor(item?.rarity || item?.category),
+          cost: offer.cost,
+          description,
+          kind: 'item',
+          index,
+          state,
+          buttonText,
+        });
       })
       .join('');
     Neo.ui.shopItems.innerHTML = itemCards || '<div class="shop-card shop-empty"><p>Every relic here is already yours. Clear the floor or check the move shelf.</p></div>';
-    Neo.ui.shopItems.querySelectorAll('[data-item-icon]').forEach(canvas => {
-      Neo.drawItemToastIcon(canvas, Neo.itemRegistry.get(canvas.dataset.itemIcon) || Neo.ITEM_DEFS[canvas.dataset.itemIcon]);
-    });
+    drawShopIcons(Neo.ui.shopItems, 'data-item-icon', Neo.drawItemToastIcon, key => Neo.itemRegistry.get(key) || Neo.ITEM_DEFS[key]);
 
     const weaponOffers = getShopWeaponOffers();
     const weaponCards = weaponOffers
       .map((offer, index) => {
         const weapon = Neo.WEAPON_DEFS[offer.key];
         const owned = !!Neo.player.ownedWeapons?.[offer.key];
-        const canAfford = Neo.player.coins >= offer.cost;
-        const disabled = offer.bought || owned || !canAfford;
-        return `<div class="shop-card${!canAfford && !owned && !offer.bought ? ' shop-card--unaffordable' : ''}">
-          <span class="shop-card__eyebrow">${weapon?.rarity || 'weapon'}</span>
-          <div class="shop-card__title-row">
-            <canvas class="shop-card__icon" data-weapon-icon="${offer.key}" width="30" height="30"></canvas>
-            <h4 style="color:${Neo.getRarityNameColor(weapon?.rarity)}">${weapon?.name || offer.key}</h4>
-            <span class="shop-card__price">${offer.cost}</span>
-          </div>
-          <div class="shop-card__copy">
-            <p>${weapon?.description || 'No weapon description available.'}</p>
-          </div>
-          <div class="shop-card__footer">
-            <button class="shop-buy${!canAfford && !owned && !offer.bought ? ' shop-buy--unaffordable' : ''}" data-kind="weapon" data-index="${index}" ${disabled ? 'disabled' : ''}>${offer.bought || owned ? 'Owned' : !canAfford ? 'Too Expensive' : 'Buy Weapon'}</button>
-          </div>
-        </div>`;
+        const state = getShopPurchaseState(offer, { owned });
+        const buttonText = state.bought || owned ? 'Owned' : !state.canAfford ? 'Too Expensive' : 'Buy Weapon';
+        return renderShopCard({
+          rarityLabel: weapon?.rarity || 'weapon',
+          iconAttr: 'data-weapon-icon',
+          iconKey: offer.key,
+          title: weapon?.name || offer.key,
+          titleColor: Neo.getRarityNameColor(weapon?.rarity),
+          cost: offer.cost,
+          description: weapon?.description || 'No weapon description available.',
+          kind: 'weapon',
+          index,
+          state,
+          buttonText,
+        });
       })
       .join('');
     if (Neo.ui.shopWeapons) {
       Neo.ui.shopWeapons.innerHTML = weaponCards || '<div class="shop-card shop-empty"><p>No weapons in stock right now.</p></div>';
-      Neo.ui.shopWeapons.querySelectorAll('[data-weapon-icon]').forEach(canvas => {
-        Neo.drawWeaponToastIcon(canvas, Neo.WEAPON_DEFS[canvas.dataset.weaponIcon]);
-      });
+      drawShopIcons(Neo.ui.shopWeapons, 'data-weapon-icon', Neo.drawWeaponToastIcon, key => Neo.WEAPON_DEFS[key]);
     }
 
     const moveOffers = getShopMoveOffers();
@@ -1289,35 +1348,31 @@ export function renderShopPanel() {
       .map((offer, index) => {
         const def = Neo.MOVE_DEFS[offer.key];
         const owned = !!Neo.player.ownedMoves?.[offer.key];
-        const canAfford = Neo.player.coins >= offer.cost;
-        const disabled = offer.bought || owned || !canAfford;
+        const state = getShopPurchaseState(offer, { owned });
         const slotLabel = Neo.SLOT_LABELS[def?.slot] || def?.slot || 'move';
         const currentMoveKey = Neo.player.equippedMoves?.[def?.slot];
         const currentMoveName = currentMoveKey ? (Neo.MOVE_DEFS[currentMoveKey]?.name || currentMoveKey) : null;
         const replacesLine = currentMoveName
           ? `<p class="shop-card__replaces">Replaces: <b>${currentMoveName}</b></p>`
           : `<p class="shop-card__replaces">Goes into: <b>${slotLabel} slot</b> (nothing equipped)</p>`;
-        return `<div class="shop-card${!canAfford && !owned && !offer.bought ? ' shop-card--unaffordable' : ''}">
-          <span class="shop-card__eyebrow">${slotLabel}</span>
-          <div class="shop-card__title-row">
-            <canvas class="shop-card__icon" data-move-icon="${offer.key}" width="30" height="30"></canvas>
-            <h4>${def?.name || offer.key}</h4>
-            <span class="shop-card__price">${offer.cost}</span>
-          </div>
-          <div class="shop-card__copy">
-            <p>${def?.desc || 'No move description available.'}</p>
-          </div>
-          ${replacesLine}
-          <div class="shop-card__footer">
-            <button class="shop-buy${!canAfford && !owned && !offer.bought ? ' shop-buy--unaffordable' : ''}" data-kind="move" data-index="${index}" ${disabled ? 'disabled' : ''}>${offer.bought || owned ? 'Owned' : !canAfford ? 'Too Expensive' : 'Buy Move'}</button>
-          </div>
-        </div>`;
+        const buttonText = state.bought || owned ? 'Owned' : !state.canAfford ? 'Too Expensive' : 'Buy Move';
+        return renderShopCard({
+          rarityLabel: slotLabel,
+          iconAttr: 'data-move-icon',
+          iconKey: offer.key,
+          title: def?.name || offer.key,
+          cost: offer.cost,
+          description: def?.desc || 'No move description available.',
+          footerExtra: replacesLine,
+          kind: 'move',
+          index,
+          state,
+          buttonText,
+        });
       })
       .join('');
     Neo.ui.shopMoves.innerHTML = moveCards || '<div class="shop-card shop-empty"><p>No new techniques are on the rack right now.</p></div>';
-    Neo.ui.shopMoves.querySelectorAll('[data-move-icon]').forEach(canvas => {
-      Neo.drawMoveToastIcon(canvas, Neo.MOVE_DEFS[canvas.dataset.moveIcon]);
-    });
+    drawShopIcons(Neo.ui.shopMoves, 'data-move-icon', Neo.drawMoveToastIcon, key => Neo.MOVE_DEFS[key]);
 
     const heals = [
       { id: 'small', name: 'Minor Heal', heal: Neo.scalePotionHealing(45, 24), cost: Neo.getShopHealCost('small') },
@@ -1380,6 +1435,47 @@ export function renderInventoryPanel() {
       if (el) el.classList.toggle('hidden', key !== Neo.activeInvTab);
     });
 
+    if (Neo.ui.invBuildSummary) {
+      const weaponKey = _invP.equippedWeapon || '';
+      const weapon = Neo.WEAPON_DEFS[weaponKey];
+      const weaponIcon = weaponKey
+        ? `<canvas class="inv-build-card__icon" data-weapon-icon="${weaponKey}" width="32" height="32"></canvas>`
+        : '<canvas class="inv-build-card__icon inv-build-card__icon--empty" data-inv-ui-icon="empty-weapon" width="32" height="32"></canvas>';
+      const weaponCard = `<button class="inv-build-card inv-build-card--weapon${weapon ? '' : ' is-empty'}" type="button" data-inv-tab-jump="weapons">
+        ${weaponIcon}
+        <span class="inv-build-card__meta">
+          <span class="inv-build-card__label">Weapon</span>
+          <b style="color:${Neo.getRarityNameColor(weapon?.rarity)}">${weapon?.name || 'Default Melee'}</b>
+        </span>
+      </button>`;
+      const moveCards = Neo.MOVE_SLOTS.map(slot => {
+        const moveKey = _invP.equippedMoves?.[slot] || '';
+        const def = Neo.MOVE_DEFS[moveKey];
+        const slotLabel = Neo.SLOT_LABELS[slot] || slot;
+        const slotKey = Neo.getSlotKeyLabel(slot);
+        const icon = moveKey
+          ? `<canvas class="inv-build-card__icon" data-move-icon="${moveKey}" width="32" height="32"></canvas>`
+          : '<canvas class="inv-build-card__icon inv-build-card__icon--empty" data-inv-ui-icon="empty-move" width="32" height="32"></canvas>';
+        return `<button class="inv-build-card${def ? '' : ' is-empty'}" type="button" data-build-slot="${slot}" data-inv-tab-jump="equipped">
+          ${icon}
+          <span class="inv-build-card__meta">
+            <span class="inv-build-card__label">${slotLabel}${slotKey ? ` / ${slotKey}` : ''}</span>
+            <b>${def?.name || 'Empty Slot'}</b>
+          </span>
+        </button>`;
+      }).join('');
+      Neo.ui.invBuildSummary.innerHTML = weaponCard + moveCards;
+      Neo.ui.invBuildSummary.querySelectorAll('[data-weapon-icon]').forEach(canvas => {
+        Neo.drawWeaponToastIcon(canvas, Neo.WEAPON_DEFS[canvas.dataset.weaponIcon]);
+      });
+      Neo.ui.invBuildSummary.querySelectorAll('[data-move-icon]').forEach(canvas => {
+        Neo.drawMoveToastIcon(canvas, Neo.MOVE_DEFS[canvas.dataset.moveIcon]);
+      });
+      Neo.ui.invBuildSummary.querySelectorAll('[data-inv-ui-icon]').forEach(canvas => {
+        Neo.drawInventoryUiIcon?.(canvas, canvas.dataset.invUiIcon);
+      });
+    }
+
     const stats = Neo.getItemStats();
     const hpPct = Math.round(_invP.hp) / Math.round(_invP.maxHp);
     const hpColor = hpPct > 0.6 ? '#6dde88' : hpPct > 0.3 ? '#f5c842' : '#ff6b6b';
@@ -1389,13 +1485,16 @@ export function renderInventoryPanel() {
     const atkSpeedColor = atkSpeed >= 2 ? '#6dde88' : atkSpeed >= 1.2 ? '#e8f4ff' : '#8ca8c0';
     const dmgReduction = Math.round(stats.damageReduction * 100);
     Neo.ui.invStats.innerHTML = [
-      `<div class="inv-stat-row inv-stat-row--bar"><div class="inv-stat-row__icon inv-stat-row__icon--hp">♥</div><div class="inv-stat-row__body"><span class="inv-stat-row__label">HP</span><span class="inv-stat-row__value" style="color:${hpColor}">${Math.round(_invP.hp)} <span class="inv-stat-row__sub">/ ${Math.round(_invP.maxHp)}</span></span></div><div class="inv-stat-row__bar"><div class="inv-stat-row__bar-fill" style="width:${Math.round(hpPct*100)}%;background:${hpColor}"></div></div></div>`,
-      `<div class="inv-stat-row"><div class="inv-stat-row__icon inv-stat-row__icon--atk">⚔</div><div class="inv-stat-row__body"><span class="inv-stat-row__label">Attack Power</span><span class="inv-stat-row__value">${_invP.attackPower}</span></div></div>`,
-      `<div class="inv-stat-row"><div class="inv-stat-row__icon inv-stat-row__icon--spd">⚡</div><div class="inv-stat-row__body"><span class="inv-stat-row__label">Attack Speed</span><span class="inv-stat-row__value" style="color:${atkSpeedColor}">${atkSpeed.toFixed(2)}x</span></div></div>`,
-      `<div class="inv-stat-row"><div class="inv-stat-row__icon inv-stat-row__icon--crit">◎</div><div class="inv-stat-row__body"><span class="inv-stat-row__label">Crit Chance</span><span class="inv-stat-row__value" style="color:${critColor}">${critPct}%</span></div></div>`,
-      dmgReduction > 0 ? `<div class="inv-stat-row"><div class="inv-stat-row__icon inv-stat-row__icon--def">⛨</div><div class="inv-stat-row__body"><span class="inv-stat-row__label">Damage Reduction</span><span class="inv-stat-row__value" style="color:#6dde88">${dmgReduction}%</span></div></div>` : '',
-      stats.bleedChance > 0 ? `<div class="inv-stat-row"><div class="inv-stat-row__icon inv-stat-row__icon--bleed">✦</div><div class="inv-stat-row__body"><span class="inv-stat-row__label">Bleed Chance</span><span class="inv-stat-row__value" style="color:#e05c5c">${Math.round(stats.bleedChance * 100)}%</span></div></div>` : '',
+      `<div class="inv-stat-row inv-stat-row--bar"><canvas class="inv-stat-row__icon" data-inv-ui-icon="hp" width="36" height="36" aria-hidden="true"></canvas><div class="inv-stat-row__body"><span class="inv-stat-row__label">HP</span><span class="inv-stat-row__value" style="color:${hpColor}">${Math.round(_invP.hp)} <span class="inv-stat-row__sub">/ ${Math.round(_invP.maxHp)}</span></span></div><div class="inv-stat-row__bar"><div class="inv-stat-row__bar-fill" style="width:${Math.round(hpPct*100)}%;background:${hpColor}"></div></div></div>`,
+      `<div class="inv-stat-row"><canvas class="inv-stat-row__icon" data-inv-ui-icon="attack" width="36" height="36" aria-hidden="true"></canvas><div class="inv-stat-row__body"><span class="inv-stat-row__label">Attack Power</span><span class="inv-stat-row__value">${_invP.attackPower}</span></div></div>`,
+      `<div class="inv-stat-row"><canvas class="inv-stat-row__icon" data-inv-ui-icon="speed" width="36" height="36" aria-hidden="true"></canvas><div class="inv-stat-row__body"><span class="inv-stat-row__label">Attack Speed</span><span class="inv-stat-row__value" style="color:${atkSpeedColor}">${atkSpeed.toFixed(2)}x</span></div></div>`,
+      `<div class="inv-stat-row"><canvas class="inv-stat-row__icon" data-inv-ui-icon="crit" width="36" height="36" aria-hidden="true"></canvas><div class="inv-stat-row__body"><span class="inv-stat-row__label">Crit Chance</span><span class="inv-stat-row__value" style="color:${critColor}">${critPct}%</span></div></div>`,
+      dmgReduction > 0 ? `<div class="inv-stat-row"><canvas class="inv-stat-row__icon" data-inv-ui-icon="defense" width="36" height="36" aria-hidden="true"></canvas><div class="inv-stat-row__body"><span class="inv-stat-row__label">Damage Reduction</span><span class="inv-stat-row__value" style="color:#6dde88">${dmgReduction}%</span></div></div>` : '',
+      stats.bleedChance > 0 ? `<div class="inv-stat-row"><canvas class="inv-stat-row__icon" data-inv-ui-icon="bleed" width="36" height="36" aria-hidden="true"></canvas><div class="inv-stat-row__body"><span class="inv-stat-row__label">Bleed Chance</span><span class="inv-stat-row__value" style="color:#e05c5c">${Math.round(stats.bleedChance * 100)}%</span></div></div>` : '',
     ].join('');
+    Neo.ui.invStats.querySelectorAll('[data-inv-ui-icon]').forEach(canvas => {
+      Neo.drawInventoryUiIcon?.(canvas, canvas.dataset.invUiIcon);
+    });
 
     Neo.ui.invItemsList.innerHTML = Neo.ITEM_KEYS
       .filter(key => Number(_invP.items?.[key] || 0) > 0)
@@ -1438,7 +1537,10 @@ export function renderInventoryPanel() {
               <span class="inv-move-chip__slot">${def?.rarity || 'weapon'}</span>
             </div>
             <p>${def?.description || 'No weapon description available.'}</p>
-            <span class="inv-move-chip__hint">${equipped ? 'Equipped On Left Click' : 'Click To Equip On Left Click'}</span>
+            <div class="inv-chip-footer">
+              <span class="inv-move-chip__hint">${equipped ? 'Active weapon' : 'Left-click weapon'}</span>
+              <span class="inv-chip-action${equipped ? ' inv-chip-action--equipped' : ''}">${equipped ? 'Unequip' : 'Equip'}</span>
+            </div>
           </button>`;
         })
         .join('') || '<div class="inv-card"><span class="inv-card__eyebrow">Empty</span><h4>No weapons owned</h4><p>Buy weapons in the shop to unlock left-click weapon loadouts.</p></div>';
@@ -1463,16 +1565,22 @@ export function renderInventoryPanel() {
         const currentMaxStacks = Neo.getMoveMaxStacks(key, _invP.character, _invP);
         const slotLabel = Neo.SLOT_LABELS[def.slot] || def.slot;
         const hintText = isBatterySelectable
-          ? `Click to add +1 max stack. Current ${currentMaxStacks}.`
-          : (isEquipped ? 'Equipped' : (isMatch ? 'Click or drag to equip' : `Drag to ${slotLabel} slot`));
-        return `<div class="inv-move-chip${(isEquipped && !isBatterySelectable) ? ' is-equipped-move' : ''}${(isMatch || isBatterySelectable) ? ' is-match' : ''}" ${(isEquipped || isBatterySelectable) ? '' : `draggable="true"`} data-move="${key}" data-slot-type="${def.slot}">
+          ? `Current max ${currentMaxStacks}`
+          : (isEquipped ? `${slotLabel} slot` : (isMatch ? 'Selected slot' : `Fits ${slotLabel}`));
+        const actionText = isBatterySelectable
+          ? '+1 Stack'
+          : (isEquipped ? 'Equipped' : (isMatch ? 'Equip Here' : 'Equip'));
+        return `<div class="inv-move-chip${(isEquipped && !isBatterySelectable) ? ' is-equipped-move' : ''}${(isMatch || isBatterySelectable) ? ' is-match' : ''}" role="button" tabindex="${isEquipped && !isBatterySelectable ? '-1' : '0'}" ${(isEquipped || isBatterySelectable) ? '' : `draggable="true"`} data-move="${key}" data-slot-type="${def.slot}">
           <canvas class="inv-chip__icon" data-move-icon="${key}" width="30" height="30"></canvas>
           <div class="inv-move-chip__meta">
             <b>${def.name}</b>
             <span class="inv-move-chip__slot">${slotLabel}</span>
           </div>
           <p>${def.desc}</p>
-          <span class="inv-move-chip__hint">${hintText}</span>
+          <div class="inv-chip-footer">
+            <span class="inv-move-chip__hint">${hintText}</span>
+            <span class="inv-chip-action${isEquipped && !isBatterySelectable ? ' inv-chip-action--disabled' : ''}">${actionText}</span>
+          </div>
         </div>`;
       })
       .join('');
@@ -1496,7 +1604,7 @@ export function renderInventoryPanel() {
       node.classList.toggle('is-swap-ready', hasSpareMove);
       const slotLabel = Neo.SLOT_LABELS[slot] || slot;
       const slotKey = Neo.getSlotKeyLabel(slot);
-      const iconHtml = moveKey ? `<canvas class="inv-slot__icon" data-move-icon="${moveKey}" width="36" height="36"></canvas>` : `<div class="inv-slot__icon inv-slot__icon--empty"></div>`;
+      const iconHtml = moveKey ? `<canvas class="inv-slot__icon" data-move-icon="${moveKey}" width="36" height="36"></canvas>` : `<canvas class="inv-slot__icon inv-slot__icon--empty" data-inv-ui-icon="empty-move" width="36" height="36"></canvas>`;
       const statusText = isSelected ? 'Swap Ready' : (def ? 'Equipped' : 'Empty');
       const hintText = isSelected
         ? 'Matching spare moves highlighted below.'
@@ -1513,12 +1621,15 @@ export function renderInventoryPanel() {
     if (Neo.ui.invWeaponSlot) {
       const weapon = Neo.WEAPON_DEFS[_invP.equippedWeapon];
       Neo.ui.invWeaponSlot.dataset.rarity = weapon?.rarity || '';
-      const wIconHtml = weapon ? `<canvas class="inv-slot__icon" data-weapon-icon="${_invP.equippedWeapon}" width="36" height="36"></canvas>` : `<div class="inv-slot__icon inv-slot__icon--empty">⚔️</div>`;
+      const wIconHtml = weapon ? `<canvas class="inv-slot__icon" data-weapon-icon="${_invP.equippedWeapon}" width="36" height="36"></canvas>` : `<canvas class="inv-slot__icon inv-slot__icon--empty" data-inv-ui-icon="empty-weapon" width="36" height="36"></canvas>`;
       Neo.ui.invWeaponSlot.innerHTML = `<div class="inv-slot__top"><span class="inv-slot__kicker">weapon</span><span class="inv-slot__status">${weapon ? 'Equipped Now' : 'No Weapon'}</span></div><div class="inv-slot__main">${wIconHtml}<div class="inv-slot__move-wrap"><div class="inv-slot__move" style="color:${Neo.getRarityNameColor(weapon?.rarity)}">${weapon?.name || 'Default Melee Active'}</div><p class="inv-slot__hint">${weapon ? `${weapon.description} Click to unequip.` : 'Open Weapons tab and click a weapon to equip it.'}</p></div></div>`;
       Neo.ui.invWeaponSlot.querySelectorAll('[data-weapon-icon]').forEach(canvas => {
         Neo.drawWeaponToastIcon(canvas, Neo.WEAPON_DEFS[canvas.dataset.weaponIcon]);
       });
     }
+    Neo.ui.invPanel.querySelectorAll('[data-inv-ui-icon]').forEach(canvas => {
+      Neo.drawInventoryUiIcon?.(canvas, canvas.dataset.invUiIcon);
+    });
     Neo.inventoryPanelDirty = false;
   }
 
@@ -1560,7 +1671,7 @@ export function equipWeapon(weaponKey) {
     const target = event.target instanceof Element ? event.target.closest('[data-weapon]') : null;
     const weaponKey = target?.dataset?.weapon || '';
     if (!weaponKey || !Neo.WEAPON_DEFS[weaponKey]) return;
-    equipWeapon(weaponKey);
+    equipWeapon(Neo.player?.equippedWeapon === weaponKey ? '' : weaponKey);
   }
 
 export function spendCoins(cost) {

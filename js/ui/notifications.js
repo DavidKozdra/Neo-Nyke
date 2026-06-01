@@ -246,6 +246,143 @@ export function drawHealToastIcon(canvas, healId) {
   ctx2d.fillText('+', 15, 15.5);
 }
 
+const INVENTORY_UI_ICON_DEFS = {
+  'tab-stats': {
+    color: '#8fd2ff',
+    accent: '#f0b97d',
+    pixels: [[2,6],[3,6],[4,6],[5,6],[2,4],[3,4],[4,4],[5,4],[2,2],[3,2],[4,2],[5,2]],
+    accentPixels: [[2,5],[3,5],[2,3],[3,3],[2,1],[3,1]],
+  },
+  'tab-relics': {
+    color: '#ffd47a',
+    accent: '#ffffff',
+    pixels: [[3,0],[4,0],[2,1],[5,1],[1,2],[6,2],[0,3],[7,3],[0,4],[7,4],[1,5],[6,5],[2,6],[5,6],[3,7],[4,7]],
+    accentPixels: [[3,3],[4,3],[3,4],[4,4]],
+  },
+  'tab-weapons': {
+    color: '#ff9a6b',
+    accent: '#e8f7ff',
+    pixels: [[5,0],[5,1],[4,2],[4,3],[3,4],[2,5],[1,6],[0,7]],
+    accentPixels: [[1,5],[2,6],[3,6],[2,7]],
+  },
+  'tab-moves': {
+    color: '#79f7bf',
+    accent: '#fff1a8',
+    pixels: [[4,0],[3,1],[3,2],[2,3],[4,3],[3,4],[3,5],[2,6]],
+    accentPixels: [[5,0],[4,1],[5,3],[4,4]],
+  },
+  hp: {
+    color: '#ff6b7a',
+    accent: '#ffd6dd',
+    pixels: [[2,1],[3,1],[5,1],[6,1],[1,2],[4,2],[7,2],[1,3],[7,3],[2,4],[6,4],[3,5],[5,5],[4,6]],
+    accentPixels: [[2,2],[3,2]],
+  },
+  attack: {
+    color: '#ffb46b',
+    accent: '#e8f7ff',
+    pixels: [[5,0],[5,1],[4,2],[4,3],[3,4],[2,5],[1,6],[0,7]],
+    accentPixels: [[1,5],[2,6],[3,6],[2,7]],
+  },
+  speed: {
+    color: '#ffe26b',
+    accent: '#ffffff',
+    pixels: [[4,0],[3,1],[3,2],[2,3],[4,3],[3,4],[3,5],[2,6]],
+    accentPixels: [[5,0],[4,1],[5,3],[4,4]],
+  },
+  crit: {
+    color: '#f5a623',
+    accent: '#fff1c6',
+    pixels: [[3,0],[4,0],[2,1],[5,1],[1,2],[6,2],[0,3],[3,3],[4,3],[7,3],[0,4],[3,4],[4,4],[7,4],[1,5],[6,5],[2,6],[5,6],[3,7],[4,7]],
+    accentPixels: [[3,3],[4,3],[3,4],[4,4]],
+  },
+  range: {
+    color: '#78d7ff',
+    accent: '#ffffff',
+    pixels: [[0,3],[1,3],[2,3],[3,3],[4,3],[5,3],[6,3],[4,1],[5,2],[6,4],[4,5]],
+    accentPixels: [[6,3],[7,3]],
+  },
+  defense: {
+    color: '#6dde88',
+    accent: '#d9ffe1',
+    pixels: [[2,0],[3,0],[4,0],[5,0],[1,1],[6,1],[1,2],[6,2],[1,3],[6,3],[2,4],[5,4],[3,5],[4,5],[4,6]],
+    accentPixels: [[3,1],[4,1],[3,2],[4,2]],
+  },
+  bleed: {
+    color: '#e05c5c',
+    accent: '#ffd0d0',
+    pixels: [[4,0],[3,1],[4,1],[3,2],[4,2],[2,3],[5,3],[2,4],[5,4],[3,5],[4,5],[4,6]],
+    accentPixels: [[3,3],[3,4]],
+  },
+  'empty-weapon': {
+    color: '#93aabc',
+    accent: '#526577',
+    pixels: [[5,0],[5,1],[4,2],[4,3],[3,4],[2,5],[1,6],[0,7]],
+    accentPixels: [[1,5],[2,6],[3,6],[2,7]],
+  },
+  'empty-move': {
+    color: '#93aabc',
+    accent: '#526577',
+    pixels: [[3,1],[4,1],[3,2],[4,2],[1,3],[2,3],[3,3],[4,3],[5,3],[6,3],[1,4],[2,4],[3,4],[4,4],[5,4],[6,4],[3,5],[4,5],[3,6],[4,6]],
+    accentPixels: [],
+  },
+  'role-princess': {
+    color: '#ff9ccf',
+    accent: '#fff1f8',
+    pixels: [[1,2],[2,1],[3,2],[4,1],[5,2],[6,1],[7,2],[1,3],[2,3],[3,3],[4,3],[5,3],[6,3],[1,4],[6,4],[2,5],[3,5],[4,5],[5,5],[2,6],[5,6]],
+    accentPixels: [[3,4],[4,4]],
+  },
+  'role-knight': {
+    color: '#d8d4c8',
+    accent: '#ffffff',
+    pixels: [[3,0],[4,0],[2,1],[5,1],[2,2],[5,2],[1,3],[6,3],[1,4],[6,4],[2,5],[5,5],[3,6],[4,6],[4,7]],
+    accentPixels: [[3,1],[4,1],[3,2],[4,2]],
+  },
+  'role-wizard': {
+    color: '#b985ff',
+    accent: '#fff1a8',
+    pixels: [[4,0],[3,1],[4,1],[5,1],[2,2],[3,2],[4,2],[5,2],[6,2],[3,3],[4,3],[5,3],[3,4],[4,4],[5,4],[2,5],[6,5],[1,6],[7,6]],
+    accentPixels: [[4,2],[4,3],[3,5],[5,5]],
+  },
+  'role-god': {
+    color: '#e8c040',
+    accent: '#fff8cc',
+    pixels: [[3,0],[4,0],[2,1],[5,1],[1,2],[6,2],[0,3],[3,3],[4,3],[7,3],[0,4],[3,4],[4,4],[7,4],[1,5],[6,5],[2,6],[5,6],[3,7],[4,7]],
+    accentPixels: [[3,3],[4,3],[3,4],[4,4]],
+  },
+  'role-assassin': {
+    color: '#ff7a9a',
+    accent: '#d7fff2',
+    pixels: [[5,0],[5,1],[4,2],[4,3],[3,4],[2,5],[1,6],[0,7],[2,2],[3,3],[5,4],[6,5]],
+    accentPixels: [[1,5],[2,6],[3,6],[2,7]],
+  },
+};
+
+export function drawInventoryUiIcon(canvas, iconKey) {
+  const ctx2d = canvas.getContext('2d');
+  if (!ctx2d) return;
+  const iconDef = INVENTORY_UI_ICON_DEFS[iconKey] || INVENTORY_UI_ICON_DEFS['empty-move'];
+  const scale = canvas.width / 32;
+  const cell = 4 * scale;
+  ctx2d.clearRect(0, 0, canvas.width, canvas.height);
+  ctx2d.fillStyle = 'rgba(0,0,0,0.45)';
+  ctx2d.beginPath();
+  ctx2d.roundRect(0, 0, canvas.width, canvas.height, 4 * scale);
+  ctx2d.fill();
+  ctx2d.shadowColor = iconDef.color;
+  ctx2d.shadowBlur = 7 * scale;
+  ctx2d.fillStyle = iconDef.color;
+  iconDef.pixels.forEach(([px, py]) => {
+    ctx2d.fillRect(px * cell, py * cell, cell, cell);
+  });
+  ctx2d.shadowBlur = 0;
+  if (iconDef.accent) {
+    ctx2d.fillStyle = iconDef.accent;
+    (iconDef.accentPixels || []).forEach(([px, py]) => {
+      ctx2d.fillRect(px * cell, py * cell, cell, cell);
+    });
+  }
+}
+
 export function pushMoveNotification(moveKey, amount = 1) {
   const moveDef = Neo.MOVE_DEFS[moveKey];
   if (!moveDef || amount <= 0) return;
@@ -330,5 +467,6 @@ Neo.showItemCinematic = showItemCinematic;
 Neo.drawMoveToastIcon = drawMoveToastIcon;
 Neo.drawWeaponToastIcon = drawWeaponToastIcon;
 Neo.drawHealToastIcon = drawHealToastIcon;
+Neo.drawInventoryUiIcon = drawInventoryUiIcon;
 Neo.pushMoveNotification = pushMoveNotification;
 Neo.pushWeaponNotification = pushWeaponNotification;
