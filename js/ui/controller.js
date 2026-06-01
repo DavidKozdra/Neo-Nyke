@@ -1567,24 +1567,31 @@ export function createUIController(view) {
       },
       updateCharacterSelection(unlocked, selected) {
         const CHAR_ORDER = ['princess', 'thorn_knight', 'metao', 'granialla', 'mooggy'];
+        const ROLE_LABELS = {
+          princess: 'Starter',
+          thorn_knight: 'Bleed melee',
+          metao: 'Range caster',
+          granialla: 'Divine hybrid',
+          mooggy: 'Fast assassin',
+        };
+        const unlockText = (itemKey) => {
+          if (unlocked.has(itemKey)) return ROLE_LABELS[itemKey] || 'Ready';
+          if (itemKey === 'granialla') return 'Unlock: beat GOD';
+          if (itemKey === 'mooggy') {
+            const mooggyProgress = Math.max(0, Math.min(3, Number(Neo.metaProgress?.mooggyDefeats || 0)));
+            return `Unlock: Mooggy ${mooggyProgress}/3`;
+          }
+          return 'Locked';
+        };
 
         view.charButtons.forEach(button => {
           const itemKey = button.dataset.char;
           const hint = button.querySelector('small');
           const spriteCanvas = button.querySelector('[data-char-sprite]');
-          const baseHint = hint?.dataset.base || hint?.textContent || '';
-          if (hint && !hint.dataset.base) hint.dataset.base = baseHint;
           button.classList.toggle('locked', !unlocked.has(itemKey));
           button.classList.toggle('sel', selected === itemKey);
           button.disabled = !unlocked.has(itemKey);
-          if (hint) {
-            const mooggyProgress = Math.max(0, Math.min(3, Number(Neo.metaProgress?.mooggyDefeats || 0)));
-            hint.textContent = unlocked.has(itemKey)
-              ? baseHint
-              : itemKey === 'mooggy'
-                ? `beat Mooggy ${mooggyProgress}/3`
-                : 'locked in bank';
-          }
+          if (hint) hint.textContent = unlockText(itemKey);
           if (spriteCanvas) {
             Neo.drawSpriteToCanvas(spriteCanvas, itemKey, 76, {
               alpha: unlocked.has(itemKey) ? 1 : 0.42,
@@ -1592,16 +1599,9 @@ export function createUIController(view) {
           }
         });
 
-        // ── Carousel position ────────────────────────────────
+        // The roster is now a fixed grid; clear old carousel offsets from prior builds.
         const track = document.getElementById('choose');
-        const viewport = track?.parentElement;
-        const activeCard = track?.querySelector(`[data-char="${selected}"]`);
-        if (track && viewport && activeCard) {
-          const viewW = viewport.clientWidth || 440;
-          const activeCenter = activeCard.offsetLeft + activeCard.offsetWidth / 2;
-          const tx = viewW / 2 - activeCenter;
-          track.style.transform = `translateX(${tx}px)`;
-        }
+        if (track) track.style.transform = '';
 
         // ── Arrow disabled state ─────────────────────────────
         const carouselPrev = document.getElementById('carouselPrev');
@@ -1624,12 +1624,15 @@ export function createUIController(view) {
           ).join('');
           const defaultMoves = Neo.getDefaultMovesForCharacter(selected);
           const kitNames = ['melee', 'laser', 'smash', 'dash']
-            .map(slot => Neo.MOVE_DEFS[defaultMoves[slot]]?.name || defaultMoves[slot]);
+            .map(slot => `${Neo.SLOT_LABELS[slot] || slot}: ${Neo.MOVE_DEFS[defaultMoves[slot]]?.name || defaultMoves[slot]}`);
           const skillsHtml = kitNames.map(s =>
             `<span class="hero-detail-skill-pip">${s}</span>`
           ).join('');
+          const charDef = Neo.CHARACTER_DEFS[selected] || {};
+          const roleLabel = ROLE_LABELS[selected] || String(charDef.rarity || 'Hero');
           detail.innerHTML =
             `<div class="hero-detail-portrait"><canvas id="heroDetailSprite" width="128" height="128" aria-hidden="true"></canvas></div>` +
+            `<div class="hero-detail-head"><span class="hero-detail-name">${Neo.escapeHtml(charDef.name || selected)}</span><span class="hero-detail-role">${Neo.escapeHtml(roleLabel)}</span></div>` +
             `<p class="hero-detail-lore">${disp.lore}</p>` +
             `<div class="hero-detail-stats"><div class="hero-detail-section-label">Stats</div>${statsHtml}</div>` +
             `<div class="hero-detail-skills"><div class="hero-detail-section-label">Kit</div>${skillsHtml}</div>`;
@@ -1907,10 +1910,11 @@ export function createUIController(view) {
             } else {
               const slice = items.slice(itemPage * PAGE_SIZE, itemPage * PAGE_SIZE + PAGE_SIZE);
               slice.forEach(item => {
-                const itemDef = Neo.ITEM_DEFS[item.key] || {};
+                const itemDef = Neo.itemRegistry?.get(item.key) || Neo.ITEM_DEFS[item.key] || {};
                 const rc = { knight: 'knight', white: 'knight', wizard: 'wizard', purple: 'wizard', god: 'god' }[item.rarity] || 'knight';
                 const card = document.createElement('div');
                 card.className = `dead-item-card dead-item-card--${rc}`;
+                card.tabIndex = 0;
                 const cnv = document.createElement('canvas');
                 cnv.width = 32;
                 cnv.height = 32;
@@ -1918,7 +1922,13 @@ export function createUIController(view) {
                 Neo.drawItemToastIcon(cnv, { ...itemDef, key: item.key, rarity: item.rarity, color: itemDef.color, accent: itemDef.accent });
                 const label = document.createElement('span');
                 label.className = 'dead-item-name';
-                label.textContent = item.count > 1 ? `${item.name} ×${item.count}` : item.name;
+                const itemName = item.name || itemDef.name || item.key || 'Unknown';
+                const labelText = item.count > 1 ? `${itemName} ×${item.count}` : itemName;
+                const tooltipText = itemDef.description || item.description || 'No item description available.';
+                label.textContent = labelText;
+                card.title = tooltipText;
+                card.setAttribute('aria-label', `${labelText}. ${tooltipText}`);
+                card.dataset.tooltip = tooltipText;
                 card.appendChild(cnv);
                 card.appendChild(label);
                 view.deadItems.appendChild(card);

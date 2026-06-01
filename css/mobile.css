@@ -502,7 +502,8 @@
     width: 100%;
     inset: auto;
     height: auto;
-    padding-top: 0;
+    padding: 10px 12px 9px;
+    box-sizing: border-box;
     justify-content: flex-start;
   }
 
@@ -537,7 +538,7 @@
     min-width: 0;
     max-width: none;
     max-height: none;
-    padding: 12px;
+    padding: 16px;
     border-width: 1px;
     border-radius: 10px;
     box-sizing: border-box;
@@ -573,20 +574,20 @@
 
   #start .nav-btn {
     width: 100%;
-    min-height: 42px;
+    min-height: 46px;
     max-width: none;
     padding: 0 12px;
     border-width: 1px;
     border-radius: 7px;
-    font-size: 12px;
+    font-size: 14px;
     letter-spacing: .1em;
     gap: 7px;
   }
 
   #start .nav-btn--minor {
-    min-height: 36px;
+    min-height: 40px;
     padding: 0 10px;
-    font-size: 10px;
+    font-size: 12px;
     letter-spacing: .08em;
   }
 
@@ -960,7 +961,7 @@
   #start .menu-content {
     width: 100%;
     max-width: none;
-    padding: 10px;
+    padding: 14px;
   }
 
   #start .main-nav {
@@ -968,13 +969,13 @@
   }
 
   #start .nav-btn {
-    min-height: 40px;
-    font-size: 11px;
+    min-height: 44px;
+    font-size: 13px;
   }
 
   #start .nav-btn--minor {
-    min-height: 34px;
-    font-size: 9px;
+    min-height: 38px;
+    font-size: 11px;
   }
 
   .altmodes-panel {
@@ -1254,13 +1255,13 @@
   }
 
   #start .nav-btn {
-    min-height: 36px;
-    font-size: 10px;
+    min-height: 40px;
+    font-size: 12px;
   }
 
   #start .nav-btn--minor {
-    min-height: 31px;
-    font-size: 8px;
+    min-height: 35px;
+    font-size: 10px;
   }
 
   .altmodes-panel {
@@ -1357,7 +1358,7 @@
     width: 100%;
     max-width: none;
     max-height: calc(100dvh - 24px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
-    padding: 10px;
+    padding: 14px;
   }
 
   #start .main-nav {
@@ -1368,15 +1369,15 @@
 
   #start .nav-btn {
     min-width: 0;
-    min-height: 38px;
-    padding: 0 9px;
-    font-size: 10px;
+    min-height: 42px;
+    padding: 0 10px;
+    font-size: 12px;
     letter-spacing: .08em;
   }
 
   #start .nav-btn--minor {
-    min-height: 34px;
-    font-size: 9px;
+    min-height: 38px;
+    font-size: 11px;
   }
 
   #start #continueBtn:not(.hidden),
@@ -2503,25 +2504,21 @@
     width: auto;
     min-width: 0;
     justify-content: center;
-    min-height: 38px;
-    padding: 8px 10px;
-    font-size: 11px;
+    min-height: 48px;
+    padding: 11px 14px;
+    font-size: 16px;
   }
 
   #charSelect .difficulty-hint {
     min-height: 0;
-    font-size: 12px;
+    font-size: 15px;
     line-height: 1.25;
   }
 
   #charSelect .seedrow {
-    display: grid;
-    grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr);
-    gap: 6px;
-  }
-
-  #charSelect #seedLabel {
-    display: none;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
   }
 
   #charSelect .seedrow input,
@@ -2529,9 +2526,11 @@
   #charSelect .challenge-toggle,
   #charSelect .legacy-toggle {
     width: 100%;
-    min-height: 42px;
-    padding: 8px 10px;
-    font-size: 12px;
+    min-width: 0;
+    box-sizing: border-box;
+    min-height: 52px;
+    padding: 12px 14px;
+    font-size: 16px;
     border-radius: 7px;
   }
 }
@@ -2704,18 +2703,136 @@
   #charSelect .seedrow #go,
   #charSelect .challenge-toggle,
   #charSelect .legacy-toggle {
-    min-height: 36px;
-    padding: 6px 8px;
-    font-size: 11px;
+    min-height: 46px;
+    padding: 10px 12px;
+    font-size: 15px;
   }
 
   #charSelect .seedrow {
-    display: grid;
-    grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr);
+    display: flex;
+    flex-direction: column;
     gap: 6px;
   }
+}
 
-  #charSelect #seedLabel {
+@media (max-width: 700px) {
+  #charSelect .char-carousel-wrap {
+    display: block;
+  }
+
+  #charSelect .char-carousel-viewport {
+    padding: 3px 0;
+    mask-image: none;
+    -webkit-mask-image: none;
+  }
+
+  #charSelect .char-carousel-track {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+    transform: none !important;
+  }
+
+  #charSelect .carousel-arrow {
     display: none;
+  }
+
+  #charSelect .char-card,
+  #charSelect #choose .char-card.sel {
+    flex-basis: auto;
+    min-height: 146px;
+    padding: 10px 8px;
+    transform: none;
+  }
+
+  #charSelect .char-card-art-wrap,
+  #charSelect .char-card.sel .char-card-art-wrap {
+    min-height: 64px;
+  }
+
+  #charSelect .char-card-art,
+  #charSelect .char-card.sel .char-card-art {
+    width: 58px;
+    height: 58px;
+  }
+
+  #charSelect .char-card-name,
+  #charSelect .char-card.sel .char-card-name {
+    min-height: 34px;
+    font-size: 15px;
+    line-height: 1.15;
+    text-align: center;
+  }
+
+  #charSelect .char-card-hint {
+    display: block;
+    min-height: 34px;
+    font-size: 13px;
+    line-height: 1.25;
+  }
+
+  #charSelect .char-card.locked::after {
+    top: 5px;
+    right: 5px;
+    font-size: 9px;
+  }
+
+  #charSelect .hero-detail-panel {
+    grid-template-columns: 1fr;
+  }
+
+  #charSelect .hero-detail-head,
+  #charSelect .hero-detail-stats,
+  #charSelect .hero-detail-skills {
+    grid-column: 1;
+  }
+
+  #charSelect .hero-detail-head {
+    display: flex;
+  }
+
+  #charSelect .hero-detail-name {
+    font-size: 18px;
+  }
+
+  #charSelect .hero-detail-role {
+    font-size: 12px;
+  }
+
+  #charSelect .charselect-control-label,
+  #charSelect #seedLabel {
+    display: block;
+    font-size: 15px;
+    line-height: 1;
+  }
+}
+
+@media (max-height: 500px) and (orientation: landscape) and (max-width: 900px) {
+  #charSelect .char-carousel-wrap {
+    display: block;
+  }
+
+  #charSelect .char-carousel-track {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(74px, 1fr));
+    gap: 6px;
+    transform: none !important;
+  }
+
+  #charSelect .carousel-arrow {
+    display: none;
+  }
+
+  #charSelect .char-card,
+  #charSelect #choose .char-card.sel {
+    flex-basis: auto;
+    min-height: 120px;
+    transform: none;
+  }
+
+  #charSelect .char-card-hint {
+    display: block;
+    min-height: 26px;
+    font-size: 11px;
   }
 }
