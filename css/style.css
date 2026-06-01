@@ -6218,6 +6218,55 @@ button.alt.danger {
 }
 .seed-error-banner.hidden { display: none; }
 #altModeCompetitiveBtn:disabled { opacity: 0.35; cursor: not-allowed; pointer-events: none; }
+.competitive-server-status {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  min-height: 22px;
+  margin-top: 6px;
+  padding: 4px 8px;
+  border: 1px solid rgba(255,255,255,0.16);
+  border-radius: 6px;
+  background: rgba(255,255,255,0.06);
+  color: #cfd8ff;
+  font-size: 0.72em;
+  line-height: 1.25;
+}
+.competitive-server-status--online {
+  border-color: rgba(102, 255, 166, 0.42);
+  background: rgba(34, 160, 92, 0.14);
+  color: #95ffc1;
+}
+.competitive-server-status--offline {
+  border-color: rgba(255, 88, 88, 0.55);
+  background: rgba(200, 30, 30, 0.16);
+  color: #ff9d9d;
+}
+.competitive-server-retry {
+  align-self: flex-start;
+  margin-top: -4px;
+}
+.competitive-server-retry.hidden { display: none; }
+.competitive-submit-status {
+  border: 1px solid rgba(255,210,0,0.26);
+  border-radius: 8px;
+  background: rgba(255,210,0,0.08);
+  color: #ffeaa0;
+  font-size: 0.8em;
+  line-height: 1.45;
+  padding: 9px 12px;
+}
+.competitive-submit-status--ok {
+  border-color: rgba(102, 255, 166, 0.38);
+  background: rgba(34, 160, 92, 0.12);
+  color: #a8ffd0;
+}
+.competitive-submit-status--error {
+  border-color: rgba(255, 88, 88, 0.48);
+  background: rgba(200, 30, 30, 0.14);
+  color: #ffaaaa;
+}
+.competitive-submit-status.hidden { display: none; }
 .competitive-lb-card {
   display: flex;
   flex-direction: column;

@@ -388,6 +388,37 @@
     Neo.updateItemUI();
   }
 
+  function setCompetitiveSubmitStatus(status) {
+    Neo._competitiveSubmitStatus = status;
+    Neo.uiController?.setCompetitiveSubmitStatus?.(status);
+  }
+
+  function submitCompetitiveRun(entry) {
+    const username = Neo.metaProgress?.username?.trim() || 'Anonymous';
+    setCompetitiveSubmitStatus({ state: 'submitting' });
+    Neo.fetchCompetitiveJson('/leaderboard', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: username,
+        floor: entry.floor,
+        seed: entry.seed || Neo.baseSeedStr,
+        character: entry.character || Neo.chosenCharacter,
+        time: entry.elapsedSeconds,
+      }),
+    })
+      .then(data => {
+        entry.competitiveRank = data.rank || null;
+        setCompetitiveSubmitStatus({ state: 'ok', rank: data.rank || null });
+      })
+      .catch(error => {
+        setCompetitiveSubmitStatus({
+          state: 'error',
+          message: error?.message || 'Could not submit competitive run. Server connection is required for leaderboard credit.',
+        });
+      });
+  }
+
   function finalizeRun(result, extra = {}) {
     const previousRecords = Neo.deriveRunRecords(Neo.runHistory);
     const entry = Neo.buildRunHistoryEntry(result, extra);
@@ -401,18 +432,9 @@
     if (nextRecords.coins > previousRecords.coins && entry.coins >= nextRecords.coins) newRecords.coins = true;
     entry._newRecords = newRecords;
     if (Neo.gameMode === 'competitive') {
-      const username = Neo.metaProgress?.username?.trim() || 'Anonymous';
-      fetch(`${Neo.COMPETITIVE_SERVER_URL}/leaderboard`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: username,
-          floor: entry.floor,
-          seed: entry.seed || Neo.baseSeedStr,
-          character: entry.character || Neo.chosenCharacter,
-          time: entry.elapsedSeconds,
-        }),
-      }).catch(() => {});
+      submitCompetitiveRun(entry);
+    } else {
+      setCompetitiveSubmitStatus({ state: 'idle' });
     }
     return entry;
   }

@@ -714,6 +714,17 @@
     font-size: 11px;
   }
 
+  .competitive-server-status {
+    max-width: 100%;
+    font-size: 10px;
+    white-space: normal;
+  }
+
+  .competitive-submit-status {
+    font-size: 11px;
+    padding: 8px 10px;
+  }
+
   .competitive-lb-card {
     gap: 8px;
     padding: 12px;

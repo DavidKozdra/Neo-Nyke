@@ -1638,6 +1638,71 @@ export function resumeGame() {
   const PHASE_LABELS = { p1: 'PLAYER 1', p2: 'PLAYER 2', p3: 'PLAYER 3', p4: 'PLAYER 4' };
   const PHASE_COLORS = { p1: 'p1', p2: 'p2', p3: 'p3', p4: 'p4' };
   const PHASE_CHAR = { p1: () => Neo.chosenCharacter, p2: () => Neo.chosenCharacter2, p3: () => Neo.chosenCharacter3, p4: () => Neo.chosenCharacter4 };
+  const COMPETITIVE_SERVER_URL = Neo.COMPETITIVE_SERVER_URL || window.NEO_SERVER_URL || 'https://neonyke.davidkozdra.workers.dev/api';
+  const COMPETITIVE_FETCH_TIMEOUT_MS = 5000;
+
+  function competitiveAbortSignal(timeoutMs = COMPETITIVE_FETCH_TIMEOUT_MS) {
+    if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') {
+      return AbortSignal.timeout(timeoutMs);
+    }
+    const controller = new AbortController();
+    setTimeout(() => controller.abort(), timeoutMs);
+    return controller.signal;
+  }
+
+  async function fetchCompetitiveJson(path, options = {}) {
+    const { timeoutMs, ...fetchOptions } = options;
+    const res = await fetch(`${COMPETITIVE_SERVER_URL}${path}`, {
+      ...fetchOptions,
+      signal: options.signal || competitiveAbortSignal(timeoutMs),
+    });
+    let data = null;
+    try { data = await res.json(); } catch { data = null; }
+    if (!res.ok) {
+      const message = data?.error || `Competitive server returned ${res.status}`;
+      throw new Error(message);
+    }
+    return data || {};
+  }
+
+  function setCompetitiveServerStatus(state, detail = {}) {
+    Neo._competitiveServerState = {
+      state,
+      seed: detail.seed || Neo._competitiveSeed || '',
+      message: detail.message || '',
+      checkedAt: Date.now(),
+    };
+    Neo.uiController?.setCompetitiveServerStatus?.(Neo._competitiveServerState);
+  }
+
+  async function refreshCompetitiveSeed({ force = false } = {}) {
+    if (Neo._competitiveSeed && !force) {
+      setCompetitiveServerStatus('online', { seed: Neo._competitiveSeed });
+      return Neo._competitiveSeed;
+    }
+    if (Neo._competitiveSeedPromise && !force) return Neo._competitiveSeedPromise;
+
+    Neo._competitiveSeedFetching = true;
+    setCompetitiveServerStatus('checking', { message: 'Checking competitive server...' });
+    const promise = fetchCompetitiveJson('/seed')
+      .then(data => {
+        if (!data.seed) throw new Error('Competitive server did not return a seed');
+        Neo._competitiveSeed = String(data.seed);
+        setCompetitiveServerStatus('online', { seed: Neo._competitiveSeed });
+        return Neo._competitiveSeed;
+      })
+      .catch(error => {
+        Neo._competitiveSeed = null;
+        setCompetitiveServerStatus('offline', { message: error?.message || 'Competitive server is unreachable' });
+        throw error;
+      })
+      .finally(() => {
+        Neo._competitiveSeedFetching = false;
+        if (Neo._competitiveSeedPromise === promise) Neo._competitiveSeedPromise = null;
+      });
+    Neo._competitiveSeedPromise = promise;
+    return promise;
+  }
 
   function updateCharacterSelectionUI() {
     const phaseTag = document.getElementById('charSelectPhaseTag');
@@ -1686,36 +1751,29 @@ export function resumeGame() {
       const competBtn = document.getElementById('altModeCompetitiveBtn');
       if (Neo._competitiveSeed) {
         if (subtitleEl) subtitleEl.textContent = `Hard · Seed ${Neo._competitiveSeed} · no modifiers`;
-        const banner = document.getElementById('seedErrorBanner');
-        if (banner) banner.classList.add('hidden');
+        setCompetitiveServerStatus('online', { seed: Neo._competitiveSeed });
         if (competBtn) competBtn.disabled = false;
       } else if (!Neo._competitiveSeedFetching) {
-        Neo._competitiveSeedFetching = true;
-        fetch(`${COMPETITIVE_SERVER_URL}/health`, { signal: AbortSignal.timeout(4000) })
-          .then(r => { if (!r.ok) throw new Error('Server error'); return r.json(); })
-          .then(() => fetch(`${COMPETITIVE_SERVER_URL}/seed`))
-          .then(r => r.json())
-          .then(data => {
-            Neo._competitiveSeed = String(data.seed);
-            Neo._competitiveSeedFetching = false;
+        if (subtitleEl) subtitleEl.textContent = 'Checking competitive server...';
+        if (competBtn) competBtn.disabled = true;
+        refreshCompetitiveSeed()
+          .then(seed => {
             const el = document.getElementById('charSelectSubtitle');
-            if (el) el.textContent = `Hard · Seed ${Neo._competitiveSeed} · no modifiers`;
-            const banner = document.getElementById('seedErrorBanner');
-            if (banner) banner.classList.add('hidden');
+            if (el) el.textContent = `Hard · Seed ${seed} · no modifiers`;
             if (competBtn) competBtn.disabled = false;
           })
           .catch(() => {
-            Neo._competitiveSeedFetching = false;
-            const banner = document.getElementById('seedErrorBanner');
-            if (banner) banner.classList.remove('hidden');
+            const el = document.getElementById('charSelectSubtitle');
+            if (el) el.textContent = 'Server connection required for Competitive.';
             if (competBtn) competBtn.disabled = true;
           });
+      } else {
+        if (subtitleEl) subtitleEl.textContent = 'Checking competitive server...';
+        if (competBtn) competBtn.disabled = true;
       }
     } else {
       Neo._competitiveSeed = null;
       Neo._competitiveSeedFetching = false;
-      const banner = document.getElementById('seedErrorBanner');
-      if (banner) banner.classList.add('hidden');
       const competBtn = document.getElementById('altModeCompetitiveBtn');
       if (competBtn) competBtn.disabled = false;
     }
@@ -1910,37 +1968,26 @@ export function resumeGame() {
     if (p2Row) p2Row.style.display = '';
   }
 
-  const COMPETITIVE_SERVER_URL = Neo.COMPETITIVE_SERVER_URL || window.NEO_SERVER_URL || 'https://neonyke.davidkozdra.workers.dev/api';
-
   async function startCompetitive() {
     if (Neo.chosenCharacter === 'princess') {
       Neo.chosenCharacter = 'thorn_knight';
     }
-    setGameState('play');
     let serverSeed = Neo._competitiveSeed || null;
     if (!serverSeed) {
       try {
-        const res = await fetch(`${COMPETITIVE_SERVER_URL}/seed`);
-        if (!res.ok) throw new Error(`Server returned ${res.status}`);
-        const data = await res.json();
-        if (!data.seed) throw new Error('No seed in response');
-        serverSeed = String(data.seed);
-      } catch {
+        serverSeed = await refreshCompetitiveSeed({ force: true });
+      } catch (error) {
+        setCompetitiveServerStatus('offline', { message: error?.message || 'Competitive server is unreachable' });
         setGameState('start');
-        Neo._competitiveSeedFetching = false;
-        // Navigate back to the competitive tab and show the red banner
         const altmodesPanel = document.getElementById('altModesPanel');
         if (altmodesPanel) altmodesPanel.classList.remove('hidden');
         document.querySelectorAll('.altmodes-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === 'competitive'));
         document.querySelectorAll('.altmodes-tab-panel').forEach(p => p.classList.toggle('hidden', p.dataset.panel !== 'competitive'));
-        const banner = document.getElementById('seedErrorBanner');
-        if (banner) banner.classList.remove('hidden');
-        const competBtn = document.getElementById('altModeCompetitiveBtn');
-        if (competBtn) competBtn.disabled = true;
         return;
       }
     }
     Neo._competitiveSeed = null;
+    setGameState('play');
     Neo.baseSeedStr = serverSeed;
     Neo.selectedDifficulty = 'hard';
     Neo.selectedChallenges = [];
@@ -2543,6 +2590,9 @@ export function resumeGame() {
   Neo.startPvp = startPvp;
   Neo.startCompetitive = startCompetitive;
   Neo.COMPETITIVE_SERVER_URL = COMPETITIVE_SERVER_URL;
+  Neo.fetchCompetitiveJson = fetchCompetitiveJson;
+  Neo.refreshCompetitiveSeed = refreshCompetitiveSeed;
+  Neo.setCompetitiveServerStatus = setCompetitiveServerStatus;
   Neo.startEndlessRoom = startEndlessRoom;
   Neo.startEndless = startEndless;
   Neo.startPractice = startPractice;

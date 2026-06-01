@@ -461,6 +461,7 @@
           <span class="dead-records-title">PERSONAL BESTS</span>
           <div class="dead-records-row" id="deadRecords"></div>
         </div>
+        <div id="deadCompetitiveStatus" class="competitive-submit-status hidden"></div>
         <div class="dead-items-wrap">
           <div class="dead-items-header">
             <span class="dead-items-label">RELICS HELD</span>
@@ -725,9 +726,11 @@
           <div class="altmode-card__text">
             <h3 class="altmode-card__name">COMPETITIVE RUN</h3>
             <p class="altmode-card__desc">Everyone plays the same weekly seed on Hard difficulty with no modifiers. Climb the leaderboard.</p>
+            <div id="competitiveServerStatus" class="competitive-server-status competitive-server-status--checking">Checking server...</div>
           </div>
           <button id="altModeCompetitiveBtn" class="nav-btn altmode-card__btn" style="background:rgba(180,140,0,0.18);border-color:rgba(255,210,0,0.5);">COMPETE</button>
         </div>
+        <button id="competitiveServerRetryBtn" class="nav-btn nav-btn--minor competitive-server-retry hidden" type="button">RETRY CONNECTION</button>
         <div id="seedErrorBanner" class="seed-error-banner hidden">&#9888; Cannot connect to the competitive server. Check your connection — you will not be able to start a competitive run until it is reachable.</div>
         <div id="competitiveLeaderboardCard" class="competitive-lb-card">
           <h3 class="altmode-card__name">THIS WEEK'S LEADERBOARD</h3>

@@ -786,6 +786,8 @@ export function createUIController(view) {
       const moreBtn = document.getElementById('competitiveLbMoreBtn');
       if (listEl) listEl.textContent = 'Loading...';
       if (moreBtn) moreBtn.style.display = 'none';
+      renderCompetitiveServerStatus(Neo._competitiveServerState || { state: 'checking' });
+      Neo.refreshCompetitiveSeed?.().catch(() => {});
       debouncedLoadLb(true);
     }
 
@@ -799,8 +801,7 @@ export function createUIController(view) {
       lbLoading = true;
       const statusEl = document.getElementById('competitiveLbStatus');
       if (statusEl) statusEl.textContent = 'Loading...';
-      fetch(`${Neo.COMPETITIVE_SERVER_URL || window.NEO_SERVER_URL || 'https://neonyke.davidkozdra.workers.dev/api'}/leadbyPage?page=${lbPage}`)
-        .then(r => r.json())
+      Neo.fetchCompetitiveJson(`/leaderboard?page=${lbPage}`)
         .then(data => {
           const listEl = document.getElementById('competitiveLbList');
           const moreBtn = document.getElementById('competitiveLbMoreBtn');
@@ -823,16 +824,36 @@ export function createUIController(view) {
           if (moreBtn) moreBtn.style.display = lbHasMore ? '' : 'none';
           if (statusEl) statusEl.textContent = data.totalEntries ? `${data.totalEntries} entries total` : '';
         })
-        .catch(() => {
+        .catch(error => {
           const listEl = document.getElementById('competitiveLbList');
-          if (listEl && lbPage === 1) listEl.textContent = 'Could not reach server.';
-          if (statusEl) statusEl.textContent = '';
+          if (listEl && lbPage === 1) listEl.textContent = 'Server connection required to show competitive runs.';
+          if (statusEl) statusEl.textContent = error?.message || '';
         })
         .finally(() => { lbLoading = false; });
     }
 
     function escHtml(str) {
       return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    function renderCompetitiveServerStatus(status = {}) {
+      const state = status.state || 'checking';
+      const statusEl = view.competitiveServerStatus || document.getElementById('competitiveServerStatus');
+      const retryBtn = view.competitiveServerRetryBtn || document.getElementById('competitiveServerRetryBtn');
+      const banner = document.getElementById('seedErrorBanner');
+      const btn = view.altModeCompetitiveBtn || document.getElementById('altModeCompetitiveBtn');
+      if (statusEl) {
+        statusEl.className = `competitive-server-status competitive-server-status--${state}`;
+        if (state === 'online') statusEl.textContent = status.seed ? `Server online - seed ${status.seed}` : 'Server online';
+        else if (state === 'offline') statusEl.textContent = 'Server connection required';
+        else statusEl.textContent = 'Checking server...';
+      }
+      if (banner) banner.classList.toggle('hidden', state !== 'offline');
+      if (retryBtn) retryBtn.classList.toggle('hidden', state !== 'offline');
+      if (btn) {
+        btn.disabled = state !== 'online';
+        btn.textContent = state === 'checking' ? 'CHECKING...' : state === 'offline' ? 'SERVER OFFLINE' : 'COMPETE';
+      }
     }
 
     function setSandboxPanelOpen(open) {
@@ -1380,6 +1401,10 @@ export function createUIController(view) {
           setAltModesPanelOpen(false);
           handlers.onOpenAltModeCharSelect('competitive');
         });
+        view.competitiveServerRetryBtn?.addEventListener('click', () => {
+          renderCompetitiveServerStatus({ state: 'checking' });
+          initCompetitiveLeaderboard();
+        });
         document.getElementById('competitiveLbMoreBtn')?.addEventListener('click', () => debouncedLoadLb(true));
         view.mpLobbyBack?.addEventListener('click', () => {
           Neo.closeMpLobby();
@@ -1770,6 +1795,20 @@ export function createUIController(view) {
           if (dash) setSkillCard('dash', dash.current, dash.max, !!dash.active, dash.charges, dash.maxCharges);
         }
       },
+      setCompetitiveServerStatus(status) {
+        renderCompetitiveServerStatus(status);
+      },
+      setCompetitiveSubmitStatus(status = {}) {
+        const el = view.deadCompetitiveStatus || document.getElementById('deadCompetitiveStatus');
+        if (!el) return;
+        const state = status.state || 'idle';
+        el.className = `competitive-submit-status competitive-submit-status--${state}`;
+        el.classList.toggle('hidden', state === 'idle');
+        if (state === 'submitting') el.textContent = 'Submitting competitive run to the server...';
+        else if (state === 'ok') el.textContent = status.rank ? `Competitive run submitted - rank #${status.rank}.` : 'Competitive run submitted.';
+        else if (state === 'error') el.textContent = status.message || 'Could not submit competitive run. Server connection is required for leaderboard credit.';
+        else el.textContent = '';
+      },
       setDeadScreen(entry) {
         const fmt = (n) => String(n ?? '—');
         const fmtTime = (s) => {
@@ -1812,6 +1851,7 @@ export function createUIController(view) {
           const difficultyKey = String(entry.difficulty || Neo.selectedDifficulty || 'easy').toLowerCase();
           Neo.drawDifficultyIconOn(view.deadDifficultyIcon, difficultyKey);
         }
+        this.setCompetitiveSubmitStatus(Neo.gameMode === 'competitive' ? (Neo._competitiveSubmitStatus || { state: 'idle' }) : { state: 'idle' });
         const reviveButton = view.deadActions?.find(button => button.dataset.deadAction === 'revive');
         if (reviveButton) {
           const cost = Neo.getReviveCost();
