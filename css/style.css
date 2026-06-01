@@ -2664,7 +2664,7 @@ canvas {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: #030610;
+  background: var(--menu-bg-deep);
   text-align: center;
   padding: 20px;
 }
@@ -2729,14 +2729,15 @@ canvas {
   justify-content: center;
   width: min(100%, 720px);
   padding: clamp(14px, 2.2vh, 22px) clamp(18px, 4vw, 42px) clamp(12px, 2vh, 20px);
-  border: 1px solid rgba(140, 185, 230, .22);
+  border: 1px solid var(--menu-border);
   border-radius: 12px;
   background:
-    linear-gradient(180deg, rgba(6, 12, 28, .72), rgba(3, 7, 18, .56)),
-    radial-gradient(ellipse at 50% 0%, rgba(80, 155, 235, .16), transparent 70%);
+    linear-gradient(180deg, color-mix(in srgb, var(--menu-surface-strong) 78%, transparent), color-mix(in srgb, var(--menu-bg-deep) 72%, transparent)),
+    radial-gradient(ellipse at 50% 0%, color-mix(in srgb, var(--menu-accent) 24%, transparent), transparent 70%);
   box-shadow:
     0 18px 52px rgba(0, 0, 0, .5),
-    inset 0 1px 0 rgba(255, 255, 255, .06);
+    inset 0 1px 0 rgba(255, 255, 255, .06),
+    0 0 22px var(--menu-glow);
   backdrop-filter: blur(10px);
 }
 
@@ -2753,14 +2754,15 @@ canvas {
   min-width: min(320px, 100%);
   max-width: 100%;
   padding: 34px 40px 38px;
-  border-color: rgba(140, 185, 230, .34);
+  border-color: var(--menu-border);
+  border-top-color: var(--menu-border-strong);
   background:
-    linear-gradient(180deg, rgba(8, 15, 34, .82), rgba(3, 7, 18, .72)),
-    radial-gradient(ellipse at 50% 0%, rgba(92, 160, 235, .14), transparent 72%);
+    linear-gradient(180deg, color-mix(in srgb, var(--menu-surface-strong) 84%, transparent), color-mix(in srgb, var(--menu-bg-deep) 76%, transparent)),
+    radial-gradient(ellipse at 50% 0%, color-mix(in srgb, var(--menu-accent) 20%, transparent), transparent 72%);
   box-shadow:
     0 22px 70px rgba(0, 0, 0, .62),
     inset 0 1px 0 rgba(255, 255, 255, .07),
-    0 0 28px rgba(82, 145, 225, .18);
+    0 0 28px var(--menu-glow);
 }
 
 .hidden {
@@ -2812,14 +2814,14 @@ canvas {
   letter-spacing: .04em;
   text-transform: uppercase;
   /* Icy blue gradient fill */
-  background: linear-gradient(180deg, #eaf6ff 0%, #bfe3ff 32%, #6cc3ff 62%, #2f8fe6 100%);
+  background: linear-gradient(180deg, var(--menu-accent-strong) 0%, var(--menu-text) 34%, var(--menu-accent) 64%, var(--menu-text-soft) 100%);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
   color: transparent;
   filter:
-    drop-shadow(0 0 8px rgba(120,196,255,.5))
-    drop-shadow(0 0 24px rgba(64,148,236,.4))
+    drop-shadow(0 0 8px var(--menu-glow))
+    drop-shadow(0 0 24px var(--menu-glow))
     drop-shadow(0 3px 0 rgba(0,0,0,.9));
   opacity: 0;
   transform: translateY(-120px) scale(1.4) rotate(var(--tilt, 0deg));
@@ -2841,8 +2843,8 @@ canvas {
 }
 
 @keyframes letterGlow {
-  0%,100% { filter: drop-shadow(0 0 8px rgba(120,196,255,.5))  drop-shadow(0 0 24px rgba(64,148,236,.4))  drop-shadow(0 3px 0 rgba(0,0,0,.9)); }
-  50%      { filter: drop-shadow(0 0 14px rgba(170,222,255,.72)) drop-shadow(0 0 42px rgba(96,176,255,.52)) drop-shadow(0 3px 0 rgba(0,0,0,.9)); }
+  0%,100% { filter: drop-shadow(0 0 8px var(--menu-glow))  drop-shadow(0 0 24px var(--menu-glow))  drop-shadow(0 3px 0 rgba(0,0,0,.9)); }
+  50%      { filter: drop-shadow(0 0 14px var(--menu-accent-strong)) drop-shadow(0 0 42px var(--menu-glow)) drop-shadow(0 3px 0 rgba(0,0,0,.9)); }
 }
 
 .menu-subtitle-flash {
@@ -2854,8 +2856,8 @@ canvas {
   text-transform: uppercase;
   text-align: center;
   max-width: 100%;
-  color: #aadfff;
-  text-shadow: 0 0 16px rgba(96, 176, 255, .55);
+  color: var(--menu-text-muted);
+  text-shadow: 0 0 16px var(--menu-glow);
   opacity: 0;
   transform: scaleX(1.18);
 }

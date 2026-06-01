@@ -143,6 +143,15 @@ export const ENEMY_SCALING = {
   floor: 0.14,
   loop: 0.32,
   minute: 0.12,
+  damageFloor: 0.095,
+  damageLoop: 0.2,
+  damageMinute: 0.055,
+  speedFloor: 0.035,
+  speedLoop: 0.07,
+  speedMinute: 0.018,
+  damageSoftCap: 2.15,
+  bossDamageSoftCap: 2.45,
+  speedSoftCap: 1.38,
 };
 export const BLEED_RESIST_SCALING = {
   floorInLoop: 0.16,

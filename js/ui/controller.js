@@ -536,7 +536,10 @@ export function createUIController(view) {
 
     function getCharacterStartingItems(characterKey) {
       const items = {};
-      if (characterKey === 'thorn_knight') items.tooth_of_thorn = 2;
+      if (characterKey === 'thorn_knight') {
+        items.tooth_of_thorn = 2;
+        items.tough_skin = 1;
+      }
       if (characterKey === 'mooggy') {
         items.hemes_scarf = 1;
         items.mooggy_zoomies = 1;

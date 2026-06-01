@@ -1452,12 +1452,17 @@
   }
 
   function applyStatusInRadius(x, y, radius, statusKey, stacks, duration, sourceEnemy = null) {
-    Neo.enemies.forEach(enemy => {
+    const visitEnemy = enemy => {
       if (!enemy) return;
       if (sourceEnemy && enemy === sourceEnemy) return;
       if (Neo.dist(x, y, enemy.x, enemy.y) > radius + enemy.r) return;
       Neo.applyStatus(enemy, statusKey, stacks, duration);
-    });
+    };
+    if (typeof Neo.forEachEnemyNearCircle === 'function') {
+      Neo.forEachEnemyNearCircle(x, y, radius + 80, visitEnemy, { excludeEnemy: sourceEnemy });
+    } else {
+      Neo.enemies.forEach(visitEnemy);
+    }
   }
 
   function spawnBleedSpray(enemy, stacks = 1, intensity = 1) {
@@ -1547,21 +1552,21 @@
       color: Neo.STATUS_STYLES.bleed.textColor,
       particleColor: Neo.STATUS_STYLES.bleed.color,
     })) return bleedStacks;
-    if (!Neo.enemies.includes(enemy)) return bleedStacks;
+    if (enemy.dead) return bleedStacks;
     if (tickEnemyStatus(enemy, 'fire', dt, {
       interval: 0.45,
       damage: stacks => scaleDamageAgainstEnemy(enemy, 1.5 + stacks * 1.8),
       color: Neo.STATUS_STYLES.fire.textColor,
       particleColor: Neo.STATUS_STYLES.fire.color,
     })) return bleedStacks;
-    if (!Neo.enemies.includes(enemy)) return bleedStacks;
+    if (enemy.dead) return bleedStacks;
     if (tickEnemyStatus(enemy, 'poison', dt, {
       interval: 0.7,
       damage: stacks => Math.max(1, enemy.max * (0.008 * stacks)),
       color: Neo.STATUS_STYLES.poison.textColor,
       particleColor: Neo.STATUS_STYLES.poison.color,
     })) return bleedStacks;
-    if (!Neo.enemies.includes(enemy)) return bleedStacks;
+    if (enemy.dead) return bleedStacks;
     tickEnemyStatus(enemy, 'dark_drain', dt, {
       interval: 0.6,
       damage: stacks => scaleDamageAgainstEnemy(enemy, (1 + stacks * 2) * 0.1),
@@ -1686,6 +1691,8 @@
       Neo.spawnHealPopup(enemy.x, enemy.y - 54, enemy.hp, { color: '#79f7bf' });
       return;
     }
+    if (enemy.dead) return;
+    enemy.dead = true;
 
     const index = Neo.enemies.indexOf(enemy);
     if (index >= 0) Neo.enemies.splice(index, 1);

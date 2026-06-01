@@ -377,6 +377,7 @@ export function resumeGame() {
     const items = {
       neo_knife: 0,
       tooth_of_thorn: 0,
+      tough_skin: 0,
       orb_of_blood: 0,
       hemes_scarf: 0,
       insurance: 0,
@@ -409,7 +410,10 @@ export function resumeGame() {
       mooggy_zoomies: 0,
     };
     const character = Neo.CHARACTER_DEFS[Neo.chosenCharacter] || Neo.CHARACTER_DEFS.thorn_knight;
-    if (character.key === 'thorn_knight') items.tooth_of_thorn = 2;
+    if (character.key === 'thorn_knight') {
+      items.tooth_of_thorn = 2;
+      items.tough_skin = 1;
+    }
     if (character.key === 'mooggy') {
       items.hemes_scarf = 1;
       items.mooggy_zoomies = 1;

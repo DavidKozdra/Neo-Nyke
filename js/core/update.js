@@ -349,16 +349,16 @@ export function loop(timestamp) {
       }
 
       totalBleed += Neo.updateEnemyStatuses(enemy, dt);
-      if (!Neo.enemies.includes(enemy)) continue;
+      if (enemy.dead) continue;
       const eliteTraitControlled = Neo.updateEliteEnemyTraits(enemy, dt);
-      if (!Neo.enemies.includes(enemy)) continue;
+      if (enemy.dead) continue;
       enemy.attackAnimT = Math.max(0, Number(enemy.attackAnimT || 0) - dt);
 
       if (!eliteTraitControlled) {
         updateEnemyByType(enemy, dt);
       }
 
-      if (!Neo.enemies.includes(enemy)) continue;
+      if (enemy.dead) continue;
       Neo.enemyTryBreakBlockingObstacle(enemy, dt);
       Neo.moveCircle(enemy, dt);
     }

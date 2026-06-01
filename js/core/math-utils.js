@@ -103,8 +103,25 @@ export function destructibleIntersectsCircle(prop, x, y, r) {
   return circleRect(x, y, r, rect.x, rect.y, rect.w, rect.h);
 }
 
+export function getClosedDoorBlockerRects(room = Neo.currentRoom) {
+  if (!room) return [];
+  const roomLocked = typeof Neo.isRoomLocked === 'function' ? Neo.isRoomLocked() : false;
+  const hasExit = dir => typeof Neo.hasRoomExit === 'function'
+    ? Neo.hasRoomExit(room, dir)
+    : !!room?.doors?.[dir];
+  const doorX = (Neo.ROOM_W - Neo.DOOR) / 2;
+  const doorY = (Neo.ROOM_H - Neo.DOOR) / 2;
+  const blockers = [];
+  if (roomLocked || !hasExit('n')) blockers.push({ x: doorX, y: 0, w: Neo.DOOR, h: Neo.WALL + 10, door: 'n' });
+  if (roomLocked || !hasExit('s')) blockers.push({ x: doorX, y: Neo.ROOM_H - Neo.WALL - 10, w: Neo.DOOR, h: Neo.WALL + 10, door: 's' });
+  if (roomLocked || !hasExit('w')) blockers.push({ x: 0, y: doorY, w: Neo.WALL + 10, h: Neo.DOOR, door: 'w' });
+  if (roomLocked || !hasExit('e')) blockers.push({ x: Neo.ROOM_W - Neo.WALL - 10, y: doorY, w: Neo.WALL + 10, h: Neo.DOOR, door: 'e' });
+  return blockers;
+}
+
 export function isBlocked(x, y, r) {
   if (Neo.walls.some(wall => circleRect(x, y, r, wall.x, wall.y, wall.w, wall.h))) return true;
+  if (getClosedDoorBlockerRects().some(door => circleRect(x, y, r, door.x, door.y, door.w, door.h))) return true;
   if (Neo.structures.some(s => circleRect(x, y, r, s.x - s.w / 2, s.y - s.h / 2, s.w, s.h))) return true;
   return Neo.destructibles.some(prop => !prop.broken && !prop.hidden && destructibleIntersectsCircle(prop, x, y, r));
 }
@@ -136,7 +153,7 @@ export function getEnemyBeamBounceCount(enemy) {
 }
 
 export function getBeamReflectRects() {
-  const rects = Neo.walls.slice();
+  const rects = Neo.walls.concat(getClosedDoorBlockerRects());
   Neo.structures.forEach(structure => {
     if (!structure || !Number.isFinite(structure.x) || !Number.isFinite(structure.y)) return;
     if (!Number.isFinite(structure.w) || !Number.isFinite(structure.h) || structure.w <= 0 || structure.h <= 0) return;
@@ -421,6 +438,7 @@ Neo.dist = dist;
 Neo.circleRect = circleRect;
 Neo.getDestructibleRect = getDestructibleRect;
 Neo.destructibleIntersectsCircle = destructibleIntersectsCircle;
+Neo.getClosedDoorBlockerRects = getClosedDoorBlockerRects;
 Neo.isBlocked = isBlocked;
 Neo.beamHitsCircle = beamHitsCircle;
 Neo.getPlayerBeamRange = getPlayerBeamRange;

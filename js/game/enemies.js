@@ -462,6 +462,13 @@
     }
   }
 
+  function softCapEnemyScale(value, cap, curve = 0.35) {
+    const numericValue = Math.max(1, Number(value) || 1);
+    const numericCap = Math.max(1, Number(cap) || 1);
+    if (numericValue <= numericCap) return numericValue;
+    return numericCap + Math.sqrt(numericValue - numericCap) * curve;
+  }
+
   function scaleEnemyStats(baseStats, type) {
     const result = { ...baseStats };
     const sandbox = Neo.getActiveSandboxSettings();
@@ -473,11 +480,30 @@
     const loopMultiplier = 1 + (loopNumber - 1) * Neo.ENEMY_SCALING.loop;
     const timerMultiplier = 1 + gameMinutes * Neo.ENEMY_SCALING.minute;
     const difficultyMultiplier = isBossType(type) ? difficulty.bossStatMultiplier : difficulty.statMultiplier;
-    const combinedScaleFactor = floorMultiplier * loopMultiplier * timerMultiplier * difficultyMultiplier;
-    result.hp = Math.round(result.hp * combinedScaleFactor);
+    const hpScale = floorMultiplier * loopMultiplier * timerMultiplier * difficultyMultiplier;
+    const damageFloorMultiplier = 1 + (floorInLoop - 1) * (Neo.ENEMY_SCALING.damageFloor ?? Neo.ENEMY_SCALING.floor);
+    const damageLoopMultiplier = 1 + (loopNumber - 1) * (Neo.ENEMY_SCALING.damageLoop ?? Neo.ENEMY_SCALING.loop);
+    const damageTimerMultiplier = 1 + gameMinutes * (Neo.ENEMY_SCALING.damageMinute ?? Neo.ENEMY_SCALING.minute);
+    const damageSoftCap = isBossType(type)
+      ? (Neo.ENEMY_SCALING.bossDamageSoftCap ?? 2.45)
+      : (Neo.ENEMY_SCALING.damageSoftCap ?? 2.15);
+    const damageScale = softCapEnemyScale(
+      damageFloorMultiplier * damageLoopMultiplier * damageTimerMultiplier * difficultyMultiplier,
+      damageSoftCap,
+      isBossType(type) ? 0.38 : 0.34
+    );
+    const speedFloorMultiplier = 1 + (floorInLoop - 1) * (Neo.ENEMY_SCALING.speedFloor ?? 0.035);
+    const speedLoopMultiplier = 1 + (loopNumber - 1) * (Neo.ENEMY_SCALING.speedLoop ?? 0.07);
+    const speedTimerMultiplier = 1 + gameMinutes * (Neo.ENEMY_SCALING.speedMinute ?? 0.018);
+    const speedScale = softCapEnemyScale(
+      speedFloorMultiplier * speedLoopMultiplier * speedTimerMultiplier * difficulty.speedMultiplier,
+      Neo.ENEMY_SCALING.speedSoftCap ?? 1.38,
+      0.16
+    );
+    result.hp = Math.round(result.hp * hpScale);
     result.max = result.hp;
-    result.dmg = Math.round(result.dmg * combinedScaleFactor);
-    result.speed *= combinedScaleFactor * difficulty.speedMultiplier;
+    result.dmg = Math.round(result.dmg * damageScale);
+    result.speed *= speedScale;
     if (sandbox) {
       result.hp = Math.max(1, Math.round(result.hp * sandbox.enemyStatMultiplier));
       result.max = result.hp;
@@ -558,6 +584,7 @@
       poisonImmune: false,
       dark_drainImmune: false,
       state: 'idle',
+      dead: false,
       spawnT: 0.72,
       animSeed: (String(type).length * 0.67 + Math.round(x) * 0.013 + Math.round(y) * 0.017) % (Math.PI * 2),
       attackAnimT: 0,
@@ -741,8 +768,8 @@
     if (type === 'god') {
       base.hp = Math.round(base.hp * 5);
       base.max = base.hp;
-      base.dmg = Math.round(base.dmg * 5);
-      base.speed *= 1.12;
+      base.dmg = Math.round(base.dmg * 2.2);
+      base.speed *= 1.06;
     }
 
     if (base.elite) applyEliteTypes(base);

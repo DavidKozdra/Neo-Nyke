@@ -323,6 +323,17 @@ export const ITEM_DEFS = {
       category: 'knight',
       tags: ['drain', 'heal', 'hit'],
     },
+    tough_skin: {
+      key: 'tough_skin',
+      name: 'Tough Skin',
+      shortName: 'Bleed Resist',
+      description: 'Bleed damage taken -25% per stack, capped at -80%.',
+      rarity: 'knight',
+      color: '#f0e2cf',
+      accent: '#a87555',
+      category: 'knight',
+      tags: ['bleed', 'defense'],
+    },
     orb_of_blood: {
       key: 'orb_of_blood',
       name: 'Orb of Blood',
@@ -770,6 +781,7 @@ export const SANDBOX_ENEMY_TYPES = [
 export const ITEM_DROP_WEIGHTS = [
     ['neo_knife', 60],
   ['tooth_of_thorn', 24],
+    ['tough_skin', 20],
     ['orb_of_blood', 28],
     ['hemes_scarf', 12],
     ['insurance', 18],
@@ -811,6 +823,7 @@ export const ELITE_ITEM_DROP_TABLE = Neo.buildWeightTable(
 export const ELITE_INVENTORY_POOL = [
     'neo_knife',
   'tooth_of_thorn',
+    'tough_skin',
     'orb_of_blood',
     'insurance',
     'crit_charm',

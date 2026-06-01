@@ -17,8 +17,8 @@
 /* ── Body / canvas / wrap ─────────────────────────────────────────────────── */
 
 html.princess-ui body {
-  background: #160711;
-  color: #ffe3f2;
+  background: var(--menu-bg-deep);
+  color: var(--menu-text);
 }
 
 html.princess-ui #wrap {
@@ -32,30 +32,30 @@ html.princess-ui canvas {
 /* ── HUD bar ──────────────────────────────────────────────────────────────── */
 
 html.princess-ui #hud {
-  background: linear-gradient(180deg, rgba(48, 10, 28, .96), rgba(20, 5, 14, .72));
-  border-bottom-color: rgba(255, 154, 207, .42);
+  background: linear-gradient(180deg, var(--menu-surface-strong), var(--menu-bg-deep));
+  border-bottom-color: var(--menu-border);
 }
 
 /* ── Coin display / timer-floor ───────────────────────────────────────────── */
 
 html.princess-ui .coin-display,
 html.princess-ui .timer-floor {
-  background: linear-gradient(180deg, rgba(56, 16, 36, .96), rgba(25, 8, 18, .98));
-  border-color: rgba(255, 154, 207, .4);
-  border-top-color: rgba(255, 190, 225, .7);
-  color: #ffd6ea;
+  background: linear-gradient(180deg, var(--menu-surface-strong), var(--menu-bg-deep));
+  border-color: var(--menu-border);
+  border-top-color: var(--menu-border-strong);
+  color: var(--menu-text);
 }
 
 /* ── Item toast ───────────────────────────────────────────────────────────── */
 
 html.princess-ui .item-toast {
-  background: linear-gradient(180deg, rgba(54, 12, 34, .97), rgba(22, 6, 16, .99));
-  border-color: rgba(255, 154, 207, .4);
+  background: linear-gradient(180deg, var(--menu-surface-strong), var(--menu-bg-deep));
+  border-color: var(--menu-border);
 }
 
-html.princess-ui .item-toast-title { color: #ffcfe8; }
-html.princess-ui .item-toast-amount { color: #ff9acf; }
-html.princess-ui .item-toast-desc   { color: rgba(255, 200, 230, .7); }
+html.princess-ui .item-toast-title { color: var(--menu-text); }
+html.princess-ui .item-toast-amount { color: var(--menu-accent); }
+html.princess-ui .item-toast-desc   { color: var(--menu-text-soft); }
 
 /* ── Skill cards ──────────────────────────────────────────────────────────── */
 
@@ -119,49 +119,49 @@ html.princess-ui #playerStats {
 
 html.princess-ui #charName,
 html.princess-ui #lv,
-html.princess-ui #xp { color: #ffcce8; }
+html.princess-ui #xp { color: var(--menu-text); }
 
 html.princess-ui .player-level-badge {
-  background: rgba(255, 100, 180, .18);
-  border-color: rgba(255, 154, 207, .4);
-  color: #ffb8de;
+  background: var(--menu-glow);
+  border-color: var(--menu-border);
+  color: var(--menu-accent-strong);
 }
 
-html.princess-ui .player-stat-row span:first-child { color: rgba(255, 210, 235, .65); }
-html.princess-ui .player-stat-row span:last-child  { color: #ffd6ea; }
+html.princess-ui .player-stat-row span:first-child { color: var(--menu-text-muted); }
+html.princess-ui .player-stat-row span:last-child  { color: var(--menu-text); }
 
 /* ── Objective tracker ────────────────────────────────────────────────────── */
 
 html.princess-ui .objective-tracker {
-  background: rgba(20, 4, 14, .74);
-  border-color: rgba(255, 130, 200, .22);
-  color: #ffd6ea;
+  background: var(--menu-bg-soft);
+  border-color: var(--menu-border);
+  color: var(--menu-text);
 }
 
 html.princess-ui .objective-tracker__head {
-  color: #ff9acf;
-  border-bottom-color: rgba(255, 130, 200, .14);
+  color: var(--menu-accent);
+  border-bottom-color: var(--menu-border);
 }
 
-html.princess-ui .objective-tracker__head b { color: #ffb8de; }
+html.princess-ui .objective-tracker__head b { color: var(--menu-accent-strong); }
 
-html.princess-ui .objective-list li { color: #f0c8de; }
+html.princess-ui .objective-list li { color: var(--menu-text); }
 
 html.princess-ui .objective-list li::before {
-  border-color: rgba(255, 154, 207, .7);
-  background: rgba(255, 154, 207, .18);
+  border-color: var(--menu-accent);
+  background: var(--menu-glow);
 }
 
-html.princess-ui .objective-list li[data-state="done"] { color: #ff9acf; }
+html.princess-ui .objective-list li[data-state="done"] { color: var(--menu-accent); }
 html.princess-ui .objective-list li[data-state="done"]::before {
-  background: #ff9acf;
-  border-color: #ff9acf;
+  background: var(--menu-accent);
+  border-color: var(--menu-accent);
 }
 
-html.princess-ui .objective-list li[data-state="warn"] { color: #ffb8de; }
+html.princess-ui .objective-list li[data-state="warn"] { color: var(--menu-accent-strong); }
 html.princess-ui .objective-list li[data-state="warn"]::before {
-  background: rgba(255, 184, 222, .34);
-  border-color: #ffb8de;
+  background: var(--menu-glow);
+  border-color: var(--menu-accent-strong);
 }
 
 /* ── Overlay backgrounds (pause / dead / win / start / charSelect) ─────────── */
@@ -190,17 +190,17 @@ html.princess-ui #win h2 { color: #ffb8de; }
 /* ── Main menu content card ───────────────────────────────────────────────── */
 
 html.princess-ui .menu-content {
-  background: linear-gradient(180deg, rgba(52, 12, 34, .98), rgba(22, 6, 16, .99));
-  border-color: rgba(255, 154, 207, .4);
-  border-top-color: rgba(255, 190, 225, .7);
-  box-shadow: 0 8px 60px rgba(0,0,0,.7), inset 0 1px 0 rgba(255,255,255,.06), 0 0 32px rgba(255, 154, 207, .16);
+  background: linear-gradient(180deg, var(--menu-surface-strong), var(--menu-bg-deep));
+  border-color: var(--menu-border);
+  border-top-color: var(--menu-border-strong);
+  box-shadow: 0 8px 60px rgba(0,0,0,.7), inset 0 1px 0 rgba(255,255,255,.06), 0 0 32px var(--menu-glow);
 }
 
 html.princess-ui .menu-letter {
-  color: #ffd8ea;
+  color: var(--menu-text);
   text-shadow:
-    0 0 8px rgba(255, 154, 207, .44),
-    0 0 24px rgba(196, 102, 154, .34),
+    0 0 8px var(--menu-glow),
+    0 0 24px var(--menu-glow),
     0 3px 0 rgba(0,0,0,.9);
 }
 
@@ -209,43 +209,43 @@ html.princess-ui .menu-letter.landed {
 }
 
 @keyframes princessLetterGlow {
-  0%,100% { text-shadow: 0 0 8px rgba(255, 154, 207, .44), 0 0 24px rgba(196, 102, 154, .34), 0 3px 0 rgba(0,0,0,.9); }
-  50%      { text-shadow: 0 0 14px rgba(255, 210, 236, .66), 0 0 42px rgba(214, 112, 167, .46), 0 3px 0 rgba(0,0,0,.9); }
+  0%,100% { text-shadow: 0 0 8px var(--menu-glow), 0 0 24px var(--menu-glow), 0 3px 0 rgba(0,0,0,.9); }
+  50%      { text-shadow: 0 0 14px var(--menu-accent-strong), 0 0 42px var(--menu-glow), 0 3px 0 rgba(0,0,0,.9); }
 }
 
-html.princess-ui .menu-subtitle-flash { color: rgba(255, 200, 230, .72); }
+html.princess-ui .menu-subtitle-flash { color: var(--menu-text-muted); }
 
-html.princess-ui .run-summary-line { color: rgba(255, 180, 220, .65); }
+html.princess-ui .run-summary-line { color: var(--menu-text-soft); }
 
 /* ── Nav buttons ──────────────────────────────────────────────────────────── */
 
 html.princess-ui .nav-btn {
-  background: rgba(44, 10, 28, .9);
-  border-color: rgba(255, 154, 207, .42);
-  border-top-color: rgba(255, 190, 225, .6);
-  color: #f0c8de;
+  background: var(--menu-surface);
+  border-color: var(--menu-border);
+  border-top-color: var(--menu-border-strong);
+  color: var(--menu-text);
   box-shadow: 0 0 12px rgba(0,0,0,.3), inset 0 0 14px rgba(255,100,180,.04);
 }
 
 html.princess-ui .nav-btn:hover {
-  border-color: rgba(255, 210, 236, .9);
-  box-shadow: 0 0 22px rgba(255, 154, 207, .35);
-  color: #ffe3f2;
+  border-color: var(--menu-border-strong);
+  box-shadow: 0 0 22px var(--menu-glow);
+  color: var(--menu-accent-strong);
 }
 
 html.princess-ui .nav-btn--minor {
-  color: rgba(255, 160, 210, .8);
-  border-color: rgba(200, 100, 160, .35);
+  color: var(--menu-text-muted);
+  border-color: var(--menu-border);
 }
 
-html.princess-ui .nav-btn--minor:hover { color: #ffd6ea; }
+html.princess-ui .nav-btn--minor:hover { color: var(--menu-text); }
 
 /* ── Meta row pills ───────────────────────────────────────────────────────── */
 
 html.princess-ui .meta-pill {
-  background: rgba(54, 12, 34, .92);
-  border-color: rgba(255, 154, 207, .3);
-  color: #ffd6ea;
+  background: var(--menu-surface);
+  border-color: var(--menu-border);
+  color: var(--menu-text);
 }
 
 /* ── Char select ──────────────────────────────────────────────────────────── */
@@ -304,31 +304,31 @@ html.princess-ui .difficulty-btn.sel {
 /* ── Game panels (shop / inventory / anvil) ───────────────────────────────── */
 
 html.princess-ui .game-panel {
-  background: linear-gradient(180deg, rgba(34, 8, 22, .98), rgba(16, 4, 12, .99));
-  border-color: rgba(255, 154, 207, .4);
-  border-top-color: rgba(255, 190, 225, .6);
-  color: #f4e8f0;
+  background: linear-gradient(180deg, var(--menu-surface-strong), var(--menu-bg-deep));
+  border-color: var(--menu-border);
+  border-top-color: var(--menu-border-strong);
+  color: var(--menu-text);
 }
 
-html.princess-ui .game-panel-head h3 { color: #ffeaf5; }
-html.princess-ui .panel-subtitle { color: rgba(255, 180, 220, .7); }
-html.princess-ui .game-panel h4 { color: #ffd6ea; }
+html.princess-ui .game-panel-head h3 { color: var(--menu-text); }
+html.princess-ui .panel-subtitle { color: var(--menu-text-soft); }
+html.princess-ui .game-panel h4 { color: var(--menu-accent-strong); }
 
 html.princess-ui .panel-kicker {
-  background: rgba(255, 80, 160, .12);
-  border-color: rgba(255, 154, 207, .18);
-  color: #ff9acf;
+  background: var(--menu-glow);
+  border-color: var(--menu-border);
+  color: var(--menu-accent);
 }
 
-html.princess-ui .panel-section-title { color: #ff9acf; }
+html.princess-ui .panel-section-title { color: var(--menu-accent); }
 
 html.princess-ui .panel-close {
-  border-color: rgba(255, 154, 207, .2);
-  color: #ffd6ea;
+  border-color: var(--menu-border);
+  color: var(--menu-text);
 }
 
 html.princess-ui .panel-close:hover {
-  border-color: rgba(255, 190, 225, .45);
+  border-color: var(--menu-border-strong);
 }
 
 /* ── Shop tabs ────────────────────────────────────────────────────────────── */

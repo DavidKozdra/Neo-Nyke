@@ -110,7 +110,7 @@ function getPerfCounts() {
 }
 
 function getTopPerfSections(limit = 4) {
-  const ignored = new Set(['frame.work', 'Neo.update', 'Neo.draw', 'Neo.ui']);
+  const ignored = new Set(['frame.work', 'update', 'Neo.draw', 'Neo.ui']);
   return Object.entries(perfState.averages)
     .filter(([name, value]) => !ignored.has(name) && Number(value) > 0.05)
     .sort((a, b) => b[1] - a[1])
@@ -131,11 +131,11 @@ function updatePerfOverlay(force) {
     'NEO PERF  F3 toggles  console: NeoPerf.snapshot()',
     `fps ${formatPerfFps(perfState.fps)} | raf ${formatPerfMs(perfState.rafMs)} | work avg ${formatPerfMs(avg['frame.work'])} last ${formatPerfMs(perfState.workMs)}`,
     `slow>${formatPerfMs(Neo.PERF_BUDGET_60FPS)} ${slowPct.toFixed(1)}% | worst ${formatPerfMs(perfState.worstFrameMs)}`,
-    `totals  Neo.update ${formatPerfMs(avg.update)} | Neo.draw ${formatPerfMs(avg.draw)} | Neo.ui/dom ${formatPerfMs(avg.ui)}`,
-    `Neo.update  player ${formatPerfMs(avg['Neo.update.player'])} | enemies ${formatPerfMs(avg['Neo.update.enemies'])} | projectiles ${formatPerfMs(avg['Neo.update.projectiles'])} | world ${formatPerfMs(avg['Neo.update.world'])}`,
-    `Neo.update  pickups ${formatPerfMs(avg['Neo.update.pickups'])} | corpses ${formatPerfMs(avg['Neo.update.corpses'])} | particles ${formatPerfMs(avg['Neo.update.particles'])} | transitions ${formatPerfMs(avg['Neo.update.transitions'])}`,
-    `Neo.draw    room ${formatPerfMs(avg['Neo.draw.room'])} | items ${formatPerfMs(avg['Neo.draw.items'])} | entities ${formatPerfMs(avg['Neo.draw.entities'])} | particles ${formatPerfMs(avg['Neo.draw.particles'])}`,
-    `Neo.draw    minimap ${formatPerfMs(avg['Neo.draw.minimap'])} | overlays ${formatPerfMs(avg['Neo.draw.overlays'])} | prompts ${formatPerfMs(avg['Neo.draw.prompts'])}`,
+    `totals  update ${formatPerfMs(avg.update)} | draw ${formatPerfMs(avg['Neo.draw'])} | ui/dom ${formatPerfMs(avg['Neo.ui'])}`,
+    `update  player ${formatPerfMs(avg['update.player'])} | enemies ${formatPerfMs(avg['update.enemies'])} | projectiles ${formatPerfMs(avg['update.projectiles'])} | world ${formatPerfMs(avg['update.world'])}`,
+    `update  pickups ${formatPerfMs(avg['update.pickups'])} | corpses ${formatPerfMs(avg['update.corpses'])} | particles ${formatPerfMs(avg['update.particles'])} | transitions ${formatPerfMs(avg['update.transitions'])}`,
+    `draw    room ${formatPerfMs(avg['draw.room'])} | items ${formatPerfMs(avg['draw.items'])} | entities ${formatPerfMs(avg['draw.entities'])} | particles ${formatPerfMs(avg['draw.particles'])}`,
+    `draw    minimap ${formatPerfMs(avg['draw.minimap'])} | overlays ${formatPerfMs(avg['draw.overlays'])} | prompts ${formatPerfMs(avg['draw.prompts'])}`,
     `counts  state ${counts.state} | floor ${counts.floor} | enemies ${counts.enemies} | bodies ${counts.bodies} | shots ${counts.projectiles} | fx ${counts.particles} | pickups ${counts.pickups}`,
     `top     ${top}`,
   ].join('\n');

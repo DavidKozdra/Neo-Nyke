@@ -118,8 +118,31 @@ export function getUiCharacterKey() {
     return Neo.player?.character || Neo.chosenCharacter;
   }
 
+const SETTINGS_STORE_KEY = 'neonyke:settings';
+let settingsThemeSyncBound = false;
+
+function getSettingsActiveTheme() {
+    try {
+      const raw = localStorage.getItem(SETTINGS_STORE_KEY);
+      if (!raw) return '';
+      const parsed = JSON.parse(raw);
+      return typeof parsed?.activeTheme === 'string' ? parsed.activeTheme : '';
+    } catch {
+      return '';
+    }
+  }
+
 export function syncCharacterUiTheme() {
-    document.documentElement.classList.toggle('princess-ui', getUiCharacterKey() === 'princess');
+    const activeTheme = getSettingsActiveTheme();
+    const hasExplicitTheme = !!activeTheme && activeTheme !== '_custom';
+    const princessFromSettings = activeTheme === 'princess';
+    const princessFromCharacter = !hasExplicitTheme && getUiCharacterKey() === 'princess';
+    document.documentElement.classList.toggle('princess-ui', princessFromSettings || princessFromCharacter);
+
+    if (!settingsThemeSyncBound) {
+      settingsThemeSyncBound = true;
+      window.addEventListener('neo:settings-changed', syncCharacterUiTheme);
+    }
   }
 
 export function getDefaultWeaponForCharacter(characterKey) {
@@ -197,6 +220,7 @@ export function getItemStats() {
 
     const neoKnife = getItemCount('neo_knife');
   const toothOfThorn = getItemCount('tooth_of_thorn');
+    const toughSkin = getItemCount('tough_skin');
     const orbOfBlood = getItemCount('orb_of_blood');
     const hemesScarf = getItemCount('hemes_scarf');
     const attackServo = getItemCount('attack_servo');
@@ -240,6 +264,7 @@ export function getItemStats() {
     Neo.itemStatsCacheValue = {
       bleedChance: neoKnife * 0.05,
       drainChance: toothOfThorn * 0.028,
+      bleedResistance: Neo.clamp(toughSkin * 0.25, 0, 0.8),
       weaponFatigueChance: weaponFatigue * 0.05,
       genericHealthItemHealRatio: genericHealthItem * 0.05,
       snakeKnifePoisonChance: snakeKnife * 0.02,
