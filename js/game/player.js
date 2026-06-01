@@ -76,6 +76,8 @@ export function migratePlayerData(source) {
     playerData.weaponBeamTime = Number(playerData.weaponBeamTime || 0);
     playerData.weaponBeamTick = Number(playerData.weaponBeamTick || 0);
     if (!Array.isArray(playerData.equipmentSlots)) playerData.equipmentSlots = [];
+    if (!playerData.equipmentCooldowns || typeof playerData.equipmentCooldowns !== 'object') playerData.equipmentCooldowns = {};
+    if (!playerData.equipmentEffects || typeof playerData.equipmentEffects !== 'object') playerData.equipmentEffects = {};
     if (!playerData.anvilUpgrades || typeof playerData.anvilUpgrades !== 'object') {
       playerData.anvilUpgrades = { weapon: {}, move: {} };
     }
@@ -281,7 +283,7 @@ export function getItemStats() {
       critMultiplier: 1.6 + (oracleLens ? critChance * 2.2 : critChance * 0.6),
       attackSpeedMultiplier: robotArm > 0 ? 8 * (1 + attackServo * 0.12 + chronoSpringBonus) : 1 + attackServo * 0.12 + chronoSpringBonus,
       hasRobotArm: robotArm > 0,
-      moveSpeedMultiplier: 1 + turtleShell * 0.05,
+      moveSpeedMultiplier: (1 + turtleShell * 0.05) * (Number(Neo.player?.equipmentEffects?.turbo_boots?.time || 0) > 0 ? 1.55 : 1),
       laserWeightMultiplier: Math.max(0, 1 - turtleShell * 0.01),
       xpGainMultiplier: 1 + scholarSeal * 0.15,
       levelEdgeDamageMultiplier: 1 + scholarCap * xpProgress * 0.45,

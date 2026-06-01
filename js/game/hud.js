@@ -653,14 +653,201 @@
     Neo.refreshMenuState();
   }
 
-  // ── Equipment slots (F G H J K L) ─────────────────────────────────────────
+  // ── Equipment slots (F G H J K L U I) ─────────────────────────────────────
   // Items that can be activated by pressing a hotkey. Each defines:
   //   key       — item key in ITEM_DEFS
   //   shortName — text shown under icon in slot
   //   activate  — function called when the slot's hotkey is pressed
   //   getState  — returns 'ready' | 'blocked' | 'charging' | 'empty' for slot styling
   //   getStatusText — short status text for tooltip / aria-label
-  const EQUIPMENT_SLOT_KEYS = ['F', 'G', 'H', 'J', 'K', 'L'];
+  const EQUIPMENT_SLOT_KEYS = ['F', 'G', 'H', 'J', 'K', 'L', 'U', 'I'];
+  const EQUIPMENT_ACTIVE_DEFS = {
+    pew_pew_box: { cooldown: 34, duration: 8, label: 'PEW PEW', color: '#ffe06f' },
+    turbo_boots: { cooldown: 46, duration: 20, label: 'TURBO', color: '#79ffbf' },
+    skizzard_tail: { cooldown: 38, duration: 5, label: 'SKIZZARD REGEN', color: '#8fffd2' },
+    zap_to_extreme: { cooldown: 42, duration: 10, label: 'EXTREME ZAP', color: '#8dd4ff' },
+    panic_button: { cooldown: 52, duration: 0, label: 'PANIC', color: '#f4f6fb' },
+    mid_sweepy_box: { cooldown: 36, duration: 6, label: 'SWEEPY', color: '#ff6e8b' },
+  };
+
+  function ensureEquipmentRuntimeState() {
+    if (!Neo.player) return null;
+    if (!Neo.player.equipmentCooldowns || typeof Neo.player.equipmentCooldowns !== 'object') Neo.player.equipmentCooldowns = {};
+    if (!Neo.player.equipmentEffects || typeof Neo.player.equipmentEffects !== 'object') Neo.player.equipmentEffects = {};
+    return Neo.player;
+  }
+
+  function getEquipmentCooldown(itemKey) {
+    return Math.max(0, Number(Neo.player?.equipmentCooldowns?.[itemKey] || 0));
+  }
+
+  function getEquipmentEffectTime(itemKey) {
+    return Math.max(0, Number(Neo.player?.equipmentEffects?.[itemKey]?.time || 0));
+  }
+
+  function isEquipmentReady(itemKey) {
+    return getEquipmentCooldown(itemKey) <= 0 && getEquipmentEffectTime(itemKey) <= 0;
+  }
+
+  function getEquipmentState(itemKey) {
+    if (getEquipmentEffectTime(itemKey) > 0) return 'ready';
+    return getEquipmentCooldown(itemKey) <= 0 ? 'ready' : 'charging';
+  }
+
+  function getEquipmentStatusText(itemKey) {
+    const active = getEquipmentEffectTime(itemKey);
+    if (active > 0) return `${Math.ceil(active)}s`;
+    const cooldown = getEquipmentCooldown(itemKey);
+    return cooldown > 0 ? `${Math.ceil(cooldown)}s` : 'READY';
+  }
+
+  function startTimedEquipment(itemKey) {
+    const player = ensureEquipmentRuntimeState();
+    const def = EQUIPMENT_ACTIVE_DEFS[itemKey];
+    if (!player || !def) return false;
+    if (!isEquipmentReady(itemKey)) {
+      Neo.spawnParticle({ x: player.x, y: player.y - 32, life: 0.5, text: getEquipmentStatusText(itemKey), c: '#ffc880' });
+      return false;
+    }
+    player.equipmentCooldowns[itemKey] = def.cooldown;
+    if (def.duration > 0) player.equipmentEffects[itemKey] = { time: def.duration, tick: 0 };
+    if (itemKey === 'panic_button') activatePanicButton();
+    Neo.itemStatsCacheFrame = -1;
+    Neo.spawnParticle({ x: player.x, y: player.y - 34, life: 0.75, text: def.label, c: def.color });
+    Neo.scheduleRunSave?.();
+    return true;
+  }
+
+  function spawnPewPewMissile() {
+    if (!Neo.player || !Neo.spawnProjectile) return;
+    const targetAngle = Math.atan2(Neo.mouse.worldY - Neo.player.y, Neo.mouse.worldX - Neo.player.x);
+    const angle = Number.isFinite(targetAngle) ? targetAngle + Neo.rand(-0.45, 0.45, 'fx') : Neo.rand(0, Math.PI * 2, 'fx');
+    Neo.spawnProjectile({
+      x: Neo.player.x + Math.cos(angle) * 12,
+      y: Neo.player.y + Math.sin(angle) * 12,
+      vx: Math.cos(angle) * 260,
+      vy: Math.sin(angle) * 260,
+      r: 6,
+      life: 2.5,
+      enemy: false,
+      kind: 'homing_missile',
+      damage: 16,
+      knockback: 120,
+      color: '#ffe06f',
+      homing: true,
+      homingTarget: 'enemy',
+      homingRadius: 920,
+      homingSpeed: 430,
+      homingAccel: 3.8,
+      homingTurnRate: 3.5,
+    });
+  }
+
+  function pulseExtremeZap() {
+    if (!Neo.player) return;
+    const enemies = [];
+    Neo.forEachEnemyNearCircle?.(Neo.player.x, Neo.player.y, 250, enemy => {
+      const dx = enemy.x - Neo.player.x;
+      const dy = enemy.y - Neo.player.y;
+      enemies.push({ enemy, distSq: dx * dx + dy * dy });
+    });
+    enemies.sort((a, b) => a.distSq - b.distSq);
+    enemies.slice(0, 5).forEach(({ enemy }) => {
+      const angle = Math.atan2(enemy.y - Neo.player.y, enemy.x - Neo.player.x);
+      Neo.hitEnemy?.(enemy, 11, angle, 70, '#8dd4ff');
+      Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.2, ring: 14, c: '#bde8ff' });
+    });
+    const angle = Neo.rand(0, Math.PI * 2, 'fx');
+    Neo.hazards.push({
+      kind: 'lightning_column',
+      x: Neo.player.x + Math.cos(angle) * Neo.rand(28, 92, 'fx'),
+      y: Neo.player.y + Math.sin(angle) * Neo.rand(28, 92, 'fx'),
+      r: 42,
+      ttl: 0.55,
+      tick: 0,
+      interval: 0.22,
+      damage: 10,
+    });
+  }
+
+  function activatePanicButton() {
+    if (!Neo.player) return;
+    Neo.STATUS_KEYS?.forEach(key => Neo.clearStatus?.(Neo.player, key));
+    Neo.player.inv = Math.max(Number(Neo.player.inv || 0), 1.5);
+    Neo.forEachEnemyNearCircle?.(Neo.player.x, Neo.player.y, 190, enemy => {
+      const angle = Math.atan2(enemy.y - Neo.player.y, enemy.x - Neo.player.x);
+      const force = 440;
+      enemy.vx += Math.cos(angle) * force;
+      enemy.vy += Math.sin(angle) * force;
+      enemy.stun = Math.max(Number(enemy.stun || 0), 0.28);
+      Neo.hitEnemy?.(enemy, 8, angle, 340, '#f4f6fb');
+    });
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.65, ring: 72, c: '#f4f6fb' });
+  }
+
+  function dropSweepyMine() {
+    if (!Neo.player) return;
+    const angle = Neo.rand(0, Math.PI * 2, 'fx');
+    const distance = Neo.rand(22, 74, 'fx');
+    Neo.hazards.push({
+      kind: 'thorn_mine',
+      x: Neo.player.x + Math.cos(angle) * distance,
+      y: Neo.player.y + Math.sin(angle) * distance,
+      r: 18,
+      ttl: 5,
+      armTime: 0.18,
+      triggerRadius: 34,
+      blastRadius: 62,
+      damage: 18,
+      bleedStacks: 1,
+      bleedDuration: 4.5,
+      statusTick: 0,
+    });
+  }
+
+  function tickSkizzardRegen() {
+    if (!Neo.player || Neo.player.hp >= Neo.player.maxHp) return;
+    const heal = Neo.scalePlayerHealing?.(Neo.player.maxHp * 0.025, 1) ?? Math.max(1, Neo.player.maxHp * 0.025);
+    const before = Neo.player.hp;
+    Neo.player.hp = Math.min(Neo.player.maxHp, Neo.player.hp + heal);
+    const gained = Neo.player.hp - before;
+    if (gained > 0) {
+      Neo.spawnHealPopup?.(Neo.player.x + Neo.rand(-8, 8), Neo.player.y - 22, gained, { color: '#8fffd2', size: 13 });
+      Neo.spawnParticle({ x: Neo.player.x + Neo.rand(-10, 10), y: Neo.player.y + Neo.rand(-10, 10), life: 0.22, c: '#8fffd2' });
+    }
+  }
+
+  function updateEquipmentEffects(dt) {
+    const player = ensureEquipmentRuntimeState();
+    if (!player) return;
+    Object.keys(player.equipmentCooldowns).forEach(key => {
+      player.equipmentCooldowns[key] = Math.max(0, Number(player.equipmentCooldowns[key] || 0) - dt);
+    });
+    Object.entries(player.equipmentEffects).forEach(([key, effect]) => {
+      if (!effect || Number(effect.time || 0) <= 0) return;
+      effect.time = Math.max(0, Number(effect.time || 0) - dt);
+      effect.tick = Math.max(0, Number(effect.tick || 0) - dt);
+      if (key === 'pew_pew_box' && effect.tick <= 0) {
+        spawnPewPewMissile();
+        effect.tick = 0.5;
+      } else if (key === 'skizzard_tail' && effect.tick <= 0) {
+        tickSkizzardRegen();
+        effect.tick = 0.5;
+      } else if (key === 'zap_to_extreme' && effect.tick <= 0) {
+        pulseExtremeZap();
+        effect.tick = 0.45;
+      } else if (key === 'mid_sweepy_box' && effect.tick <= 0) {
+        dropSweepyMine();
+        effect.tick = 0.42;
+      }
+      if (effect.time <= 0) {
+        delete player.equipmentEffects[key];
+        Neo.itemStatsCacheFrame = -1;
+      }
+    });
+  }
+  Neo.updateEquipmentEffects = updateEquipmentEffects;
+
   const ACTIVATABLE_ITEMS = {
     charged_adapter: {
       key: 'charged_adapter',
@@ -694,6 +881,48 @@
         const stored = Number(Neo.player?.storedPotions || 0);
         return `${stored}/${cap}`;
       },
+    },
+    pew_pew_box: {
+      key: 'pew_pew_box',
+      shortName: 'PEW',
+      activate: () => startTimedEquipment('pew_pew_box'),
+      getState: () => getEquipmentState('pew_pew_box'),
+      getStatusText: () => getEquipmentStatusText('pew_pew_box'),
+    },
+    turbo_boots: {
+      key: 'turbo_boots',
+      shortName: 'FAST',
+      activate: () => startTimedEquipment('turbo_boots'),
+      getState: () => getEquipmentState('turbo_boots'),
+      getStatusText: () => getEquipmentStatusText('turbo_boots'),
+    },
+    skizzard_tail: {
+      key: 'skizzard_tail',
+      shortName: 'REGEN',
+      activate: () => startTimedEquipment('skizzard_tail'),
+      getState: () => getEquipmentState('skizzard_tail'),
+      getStatusText: () => getEquipmentStatusText('skizzard_tail'),
+    },
+    zap_to_extreme: {
+      key: 'zap_to_extreme',
+      shortName: 'ZAP',
+      activate: () => startTimedEquipment('zap_to_extreme'),
+      getState: () => getEquipmentState('zap_to_extreme'),
+      getStatusText: () => getEquipmentStatusText('zap_to_extreme'),
+    },
+    panic_button: {
+      key: 'panic_button',
+      shortName: 'PANIC',
+      activate: () => startTimedEquipment('panic_button'),
+      getState: () => getEquipmentState('panic_button'),
+      getStatusText: () => getEquipmentStatusText('panic_button'),
+    },
+    mid_sweepy_box: {
+      key: 'mid_sweepy_box',
+      shortName: 'SWEEP',
+      activate: () => startTimedEquipment('mid_sweepy_box'),
+      getState: () => getEquipmentState('mid_sweepy_box'),
+      getStatusText: () => getEquipmentStatusText('mid_sweepy_box'),
     },
   };
   Neo.EQUIPMENT_SLOT_KEYS = EQUIPMENT_SLOT_KEYS;

@@ -1031,6 +1031,31 @@
         hazard.y = Neo.player.y;
       }
       hazard.statusTick = Number(hazard.statusTick ?? 0) - dt;
+      if (hazard.kind === 'thorn_mine') {
+        hazard.armTime = Math.max(0, Number(hazard.armTime || 0) - dt);
+        if (hazard.armTime <= 0 && !hazard.triggered) {
+          let target = null;
+          forEachEnemyNearCircle(hazard.x, hazard.y, (hazard.triggerRadius || 34) + 80, enemy => {
+            if (target) return;
+            if (Neo.dist(enemy.x, enemy.y, hazard.x, hazard.y) <= (hazard.triggerRadius || 34) + enemy.r) target = enemy;
+          });
+          if (target) {
+            hazard.triggered = true;
+            const blast = Number(hazard.blastRadius || 62);
+            forEachEnemyNearCircle(hazard.x, hazard.y, blast + 80, enemy => {
+              if (Neo.dist(enemy.x, enemy.y, hazard.x, hazard.y) > blast + enemy.r) return;
+              const angle = Math.atan2(enemy.y - hazard.y, enemy.x - hazard.x);
+              Neo.hitEnemy(enemy, hazard.damage || 18, angle, 170, '#ff6e8b', {
+                bleedChance: 1,
+                bleedStacks: hazard.bleedStacks || 1,
+                bleedDuration: hazard.bleedDuration || 4.5,
+              });
+            });
+            Neo.spawnParticle({ x: hazard.x, y: hazard.y, life: 0.35, ring: blast, c: '#ff6e8b' });
+            hazard.ttl = 0;
+          }
+        }
+      }
       if (hazard.kind === 'lava' && Neo.player.lavaWalkTime <= 0) {
         const inside = hazard.shape === 'rect'
           ? Neo.circleRect(Neo.player.x, Neo.player.y, Neo.player.r - 6, hazard.left, hazard.top, hazard.w, hazard.h)

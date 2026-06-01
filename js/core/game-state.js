@@ -392,6 +392,12 @@ export function resumeGame() {
       push_man: 0,
       titan_heart: 0,
       charged_adapter: 0,
+      pew_pew_box: 0,
+      turbo_boots: 0,
+      skizzard_tail: 0,
+      zap_to_extreme: 0,
+      panic_button: 0,
+      mid_sweepy_box: 0,
       explosive_jelly: 0,
       dragon_orb: 0,
       ricocete: 0,
@@ -486,6 +492,8 @@ export function resumeGame() {
       storedPotions: 0,
       extraBatteryPendingCount: 0,
       equipmentSlots: (character.key === 'metao') ? ['mateos_bag'] : [],
+      equipmentCooldowns: {},
+      equipmentEffects: {},
     };
   }
 

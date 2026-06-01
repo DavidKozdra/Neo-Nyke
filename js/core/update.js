@@ -70,6 +70,7 @@ export function loop(timestamp) {
     Neo.floorTransitionTime += dt;
     if (Neo.floorTransitionTime > 2.5) Neo.showFloorTransition = false;
     Neo.tickCooldowns(dt);
+    Neo.updateEquipmentEffects?.(dt);
     if (Neo.godTimer > 0) Neo.godTimer = Math.max(0, Neo.godTimer - dt);
 
     const _b = window.NeoSettings?.getBindings();

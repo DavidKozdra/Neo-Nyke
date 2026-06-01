@@ -333,6 +333,24 @@
           Neo.ctx.lineTo(Math.cos(a - 0.1) * hazard.r * 0.72, Math.sin(a - 0.1) * hazard.r * 0.72);
           Neo.ctx.stroke();
         }
+      } else if (hazard.kind === 'thorn_mine') {
+        const armed = Number(hazard.armTime || 0) <= 0;
+        const pulse = 0.85 + Math.sin(Date.now() * 0.012 + hazard.x) * 0.08;
+        Neo.ctx.fillStyle = armed ? 'rgba(255,110,139,0.22)' : 'rgba(255,215,226,0.14)';
+        Neo.ctx.beginPath();
+        Neo.ctx.arc(0, 0, hazard.r * pulse, 0, Math.PI * 2);
+        Neo.ctx.fill();
+        Neo.ctx.strokeStyle = armed ? '#ff6e8b' : '#ffd7e2';
+        Neo.ctx.lineWidth = 2;
+        Neo.ctx.beginPath();
+        for (let index = 0; index < 8; index += 1) {
+          const a = index * Math.PI / 4;
+          Neo.ctx.moveTo(Math.cos(a) * 5, Math.sin(a) * 5);
+          Neo.ctx.lineTo(Math.cos(a) * hazard.r, Math.sin(a) * hazard.r);
+        }
+        Neo.ctx.stroke();
+        Neo.ctx.fillStyle = '#ffd7e2';
+        Neo.ctx.fillRect(-3, -3, 6, 6);
       }
       Neo.ctx.restore();
     });
