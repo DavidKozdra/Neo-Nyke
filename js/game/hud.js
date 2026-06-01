@@ -752,7 +752,7 @@
     syncEquipmentSlotsFromInventory();
     const inPlay = Neo.gameState === 'play' || Neo.gameState === 'pause';
     const slots = Neo.player?.equipmentSlots || [];
-    const showRow = inPlay && slots.length > 0;
+    const showRow = inPlay;
     root.classList.toggle('hidden', !showRow);
     root.setAttribute('aria-hidden', showRow ? 'false' : 'true');
     nodes.forEach((node, idx) => {

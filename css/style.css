@@ -2470,9 +2470,16 @@ canvas {
 }
 
 .equipment-slots {
+  position: fixed;
+  top: 50%;
+  left: 100vw;
+  right: auto;
+  transform: translate(-100%, -50%) scale(var(--hud-scale, 1));
+  transform-origin: center right;
   z-index: 22;
   pointer-events: auto;
   display: flex;
+  flex-direction: column;
   flex-wrap: nowrap;
   align-items: center;
   gap: 6px;
@@ -2481,13 +2488,14 @@ canvas {
   background: linear-gradient(180deg, rgba(14, 11, 22, .82), rgba(6, 5, 12, .88));
   border: 1px solid rgba(120, 110, 160, .22);
   box-shadow: 0 6px 16px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.04);
-  max-width: 100%;
-  overflow-x: auto;
+  max-height: calc(100vh - 96px);
+  overflow-x: hidden;
+  overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: rgba(180, 156, 255, .35) transparent;
 }
 
-.equipment-slots::-webkit-scrollbar { height: 4px; }
+.equipment-slots::-webkit-scrollbar { width: 4px; }
 .equipment-slots::-webkit-scrollbar-thumb { background: rgba(180, 156, 255, .35); border-radius: 2px; }
 .equipment-slots::-webkit-scrollbar-track { background: transparent; }
 

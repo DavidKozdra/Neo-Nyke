@@ -431,7 +431,7 @@ export function createUIController(view) {
       setVisible(view.hud, false, 'none');
       setVisible(view.actionBar, show === 'play' || show === 'pause' || show === 'dying', '');
       setVisible(view.hudLower, show === 'play' || show === 'pause', '');
-      setVisible(view.equipmentSlots, show === 'play', '');
+      setVisible(view.equipmentSlots, show === 'play' || show === 'pause', '');
       setVisible(view.playerStats, inPlay, '');
       setVisible(view.coinDisplay, inPlay, 'flex');
       setVisible(view.centerDisplay, inPlay, '');

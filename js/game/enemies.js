@@ -415,6 +415,7 @@
     const speedMult = 1 + stacks('attack_servo') * 0.08 + stacks('turtle_shell') * 0.04;
     const attackCdMult = Math.max(0.52, 1 - stacks('charged_adapter') * 0.1);
     const stunResistStacks = stacks('anchor_charm');
+    const bleedResistance = Neo.clamp(stacks('tough_skin') * 0.25, 0, 0.8);
 
     enemy.hp = Math.round(enemy.hp * hpMult);
     enemy.max = enemy.hp;
@@ -423,6 +424,7 @@
     enemy.attackCd *= attackCdMult;
     enemy.r = Math.round(enemy.r * (1 + stacks('iron_lung') * 0.04));
     enemy.stunResistance = Math.max(Number(enemy.stunResistance || 0), stunResistStacks);
+    enemy.bleedResistance = Math.max(Number(enemy.bleedResistance || 0), bleedResistance);
   }
 
   function applyEliteTypes(enemy) {
@@ -928,6 +930,7 @@
     critChance = Neo.clamp(critChance, 0.01, 0.95);
     return {
       bleedChance: count('neo_knife') * 0.05,
+      bleedResistance: Neo.clamp(count('tough_skin') * 0.25, 0, 0.8),
       scarfBleedsOnHit: count('hemes_scarf'),
       snakeKnifePoisonChance: count('snake_knife') * 0.02,
       critChance,
@@ -1097,6 +1100,7 @@
       splitReady: false,
       spawnedFromBulk: false,
       bleedImmune: false,
+      bleedResistance: Number(stats.itemStats.bleedResistance || 0),
       fireImmune: false,
       poisonImmune: false,
       dark_drainImmune: false,

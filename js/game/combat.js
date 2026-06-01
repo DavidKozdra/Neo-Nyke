@@ -48,7 +48,8 @@
   function scaleBleedDamageAgainstEnemy(enemy, stacks) {
     const baseBleed = 1.8 + Math.max(1, Number(stacks || 1)) * 2.2;
     const preResist = scaleDamageAgainstEnemy(enemy, baseBleed, { applyBleedBonus: false });
-    const reduced = preResist / getEnemyBleedResistance(enemy);
+    const itemResistance = Neo.clamp(Number(enemy?.bleedResistance || 0), 0, 0.8);
+    const reduced = (preResist / getEnemyBleedResistance(enemy)) * Math.max(0.2, 1 - itemResistance);
     return Math.max(1, Math.round(reduced));
   }
 

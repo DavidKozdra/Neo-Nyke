@@ -8,7 +8,6 @@
 @media (max-width: 920px) {
 
   .meta-row { display: none; }
-  .equipment-slots { display: none !important; }
 
   .charselect-layout {
     width: calc(100vw - 24px);
