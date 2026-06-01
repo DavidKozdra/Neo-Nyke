@@ -307,14 +307,17 @@ canvas {
 .menu-footer {
   position: fixed;
   bottom: 0;
-  left: 0;
-  right: 0;
+  left: 50%;
+  right: auto;
   z-index: 3;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 6px;
+  width: min(720px, calc(100vw - 40px));
   padding: 12px 20px 16px;
+  transform: translateX(-50%);
+  box-sizing: border-box;
   background: linear-gradient(to top, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0) 100%);
   pointer-events: none;
 }
@@ -1349,23 +1352,16 @@ canvas {
   visibility: visible;
   transform: translate(-50%, -50%) scale(1);
   transform-origin: center;
-  transition:
-    opacity .22s ease,
-    transform .26s cubic-bezier(.2, .9, .25, 1.08),
-    visibility 0s linear 0s;
   will-change: transform, opacity;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(155, 207, 247, .45) rgba(255,255,255,.06);
 }
 
 #invPanel.game-panel.hidden {
-  display: block !important;
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
-  transform: translate(-50%, -47%) scale(.94);
-  transition:
-    opacity .18s ease,
-    transform .18s ease,
-    visibility 0s linear .18s;
+  transform: translate(-50%, -50%) scale(1);
 }
 
 .game-panel-head {
@@ -1796,6 +1792,55 @@ canvas {
 
 .inv-tab-panel {
   display: block;
+  border: 1px solid rgba(129, 175, 211, .16);
+  border-radius: 14px;
+  padding: 12px;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.01)),
+    rgba(11, 21, 34, .72);
+}
+
+#invPanel .game-panel-head {
+  position: sticky;
+  top: -22px;
+  z-index: 4;
+  margin: -22px -22px 12px;
+  padding: 18px 22px 12px;
+  border-bottom: 1px solid rgba(146, 186, 217, .2);
+  background: linear-gradient(180deg, rgba(11, 22, 36, .95), rgba(11, 22, 36, .82));
+  backdrop-filter: blur(12px);
+}
+
+#invPanel .inv-tabs {
+  position: sticky;
+  top: 60px;
+  z-index: 3;
+  margin-top: 0;
+}
+
+.inv-ux-hints {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: -6px 0 12px;
+}
+
+.inv-ux-hint {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 193, 225, .24);
+  background: rgba(130, 175, 205, .1);
+  color: var(--menu-text-soft);
+  font-size: 10px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.inv-ux-hint b {
+  color: var(--menu-text);
+  margin-right: 4px;
 }
 
 .inv-player-tabs {
@@ -1828,7 +1873,26 @@ canvas {
 .inv-items, .inv-moves {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
-  gap: 10px;
+  gap: 12px;
+}
+
+#invItemsList:empty::before,
+#invWeaponsList:empty::before,
+#invMovesList:empty::before,
+#invStats:empty::before {
+  content: "Nothing here yet.";
+  grid-column: 1 / -1;
+  border: 1px dashed rgba(165, 199, 223, .28);
+  border-radius: 12px;
+  padding: 20px 14px;
+  text-align: center;
+  color: var(--menu-text-soft);
+  letter-spacing: .04em;
+  background: rgba(255,255,255,.02);
+}
+
+#invStats:empty::before {
+  content: "Stats will appear once this panel is populated.";
 }
 
 .inv-moves-section {
@@ -1857,6 +1921,13 @@ canvas {
   display: grid;
   gap: 10px;
   min-height: 110px;
+  transition: transform .14s ease, border-color .14s ease, box-shadow .14s ease;
+}
+
+.inv-card:hover {
+  transform: translateY(-1px);
+  border-color: rgba(163, 212, 247, .38);
+  box-shadow: 0 10px 22px rgba(7, 16, 28, .28), inset 0 0 0 1px rgba(173, 218, 249, .08);
 }
 
 .inv-card__title-row {
@@ -1922,6 +1993,7 @@ canvas {
 .inv-move-chip.drag-over {
   border-color: rgba(143, 210, 255, .52);
   box-shadow: 0 0 0 2px rgba(143, 210, 255, .18) inset, 0 0 30px rgba(91, 188, 255, .12);
+  transform: translateY(-1px) scale(1.01);
 }
 
 .inv-move-chip.is-equipped-move {
@@ -1995,6 +2067,7 @@ canvas {
 
 .inv-slot[draggable="true"]:hover {
   border-color: rgba(143, 210, 255, .3);
+  transform: translateY(-1px);
 }
 
 .inv-slot.is-equipped {
@@ -2113,7 +2186,31 @@ canvas {
 .inv-slot.drag-over {
   border-color: #8fd2ff;
   box-shadow: 0 0 0 2px rgba(143, 210, 255, .2) inset, 0 0 30px rgba(91, 188, 255, .12);
-  transform: translateY(-1px);
+  transform: translateY(-2px);
+}
+
+.inv-tab:focus-visible,
+.inv-player-tab:focus-visible,
+.inv-card:focus-visible,
+.inv-move-chip:focus-visible,
+.inv-slot:focus-visible,
+#invClose:focus-visible {
+  outline: 2px solid rgba(160, 219, 255, .9);
+  outline-offset: 2px;
+}
+
+#invPanel::-webkit-scrollbar {
+  width: 10px;
+}
+
+#invPanel::-webkit-scrollbar-track {
+  background: rgba(255,255,255,.04);
+  border-radius: 999px;
+}
+
+#invPanel::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(163, 214, 247, .65), rgba(95, 166, 211, .58));
+  border-radius: 999px;
 }
 
 #invWeaponSlot[data-rarity="knight"],
@@ -2484,7 +2581,7 @@ canvas {
   width: min(100%, 720px);
   min-height: 100%;
   margin: 0 auto;
-  padding: clamp(28px, 7vh, 84px) 20px 132px;
+  padding: clamp(28px, 7vh, 84px) 20px 148px;
   box-sizing: border-box;
 }
 
@@ -2804,7 +2901,7 @@ p.sub {
 
 .hero-detail-portrait {
   grid-column: 1;
-  grid-row: 1 / span 4;
+  grid-row: 1 / span 5;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2831,9 +2928,26 @@ p.sub {
 
 .hero-detail-skills {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 6px;
   grid-column: 2;
+}
+
+.hero-detail-inventory {
+  grid-column: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.hero-detail-inventory-label {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  color: var(--menu-text-soft);
+  text-transform: uppercase;
+  margin-right: 2px;
 }
 
 .hero-detail-section-label {
@@ -2848,17 +2962,55 @@ p.sub {
 
 .hero-detail-skill-pip {
   min-width: 0;
-  font-size: 14px;
+  font-size: 12px;
   color: var(--menu-text);
   padding: 8px 9px;
   background: rgba(255,255,255,.045);
   border: 1px solid rgba(255,255,255,.09);
   border-radius: 4px;
   white-space: nowrap;
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   overflow: hidden;
-  text-align: center;
+}
+
+.hero-detail-skill-icon {
+  width: 20px;
+  height: 20px;
+  image-rendering: pixelated;
+  flex: 0 0 20px;
+}
+
+.hero-detail-skill-text {
+  overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hero-detail-item-pip {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 7px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.1);
+  background: rgba(255,255,255,.035);
+  font-size: 12px;
+  color: var(--menu-text);
+}
+
+.hero-detail-item-icon {
+  width: 16px;
+  height: 16px;
+  image-rendering: pixelated;
+  flex: 0 0 16px;
+}
+
+.hero-detail-item-empty {
+  font-size: 12px;
+  color: var(--menu-text-soft);
 }
 
 /* ── Char cards (carousel variant) ──────────────────────── */
@@ -3962,6 +4114,7 @@ button.alt.danger {
   #pause.overlay .screen-title,
   #pause.overlay .main-nav {
     transition: none;
+    animation: none;
   }
 }
 

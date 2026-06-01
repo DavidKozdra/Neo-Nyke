@@ -377,6 +377,38 @@
   .shop-list { grid-template-columns: 1fr; }
   .inv-layout { grid-template-columns: 1fr; }
 
+  #invPanel .game-panel-head {
+    top: -12px;
+    margin: -12px -10px 10px;
+    padding: 12px 10px 10px;
+  }
+
+  #invPanel .inv-tabs {
+    top: 84px;
+  }
+
+  .inv-ux-hints {
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+
+  .inv-ux-hint {
+    font-size: 9px;
+    padding: 5px 8px;
+  }
+
+  .inv-tab-panel {
+    border-radius: 10px;
+    padding: 10px;
+  }
+
+  .inv-items,
+  .inv-moves,
+  .inv-slots {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
   /* ── 16. Pause / dead / win overlays ─────────────────────────── */
 
   #pause.overlay,
@@ -490,7 +522,7 @@
   }
 
   #start .menu-stage {
-    width: min(330px, 100%);
+    width: min(390px, 100%);
     min-height: auto;
     margin: 0 auto;
     padding: calc(14px + env(safe-area-inset-top, 0px)) 0 calc(14px + env(safe-area-inset-bottom, 0px));
@@ -939,7 +971,7 @@
 @media (max-width: 600px) {
 
   #start .menu-stage {
-    width: min(318px, 100%);
+    width: min(390px, 100%);
     padding: calc(16px + env(safe-area-inset-top, 0px)) 0 calc(12px + env(safe-area-inset-bottom, 0px));
     gap: 8px;
   }
@@ -2434,6 +2466,10 @@
     grid-column: 1;
   }
 
+  #charSelect .hero-detail-inventory {
+    grid-column: 1;
+  }
+
   #charSelect .hero-detail-lore {
     display: none;
   }
@@ -2475,19 +2511,53 @@
   }
 
   #charSelect .hero-detail-skills {
-    display: flex;
-    flex-wrap: nowrap;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 4px;
-    overflow: hidden;
   }
 
   #charSelect .hero-detail-skill-pip {
-    flex: 1 1 0;
     min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 4px;
     overflow: hidden;
-    text-align: center;
+    text-align: left;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  #charSelect .hero-detail-skill-icon {
+    width: 14px;
+    height: 14px;
+    flex: 0 0 14px;
+  }
+
+  #charSelect .hero-detail-skill-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  #charSelect .hero-detail-inventory {
+    grid-column: 1;
+    gap: 4px;
+  }
+
+  #charSelect .hero-detail-inventory-label {
+    font-size: 9px;
+  }
+
+  #charSelect .hero-detail-item-pip {
+    padding: 2px 5px;
+    font-size: 9px;
+    gap: 4px;
+  }
+
+  #charSelect .hero-detail-item-icon {
+    width: 12px;
+    height: 12px;
+    flex: 0 0 12px;
   }
 
   #charSelect .difficulty-select {
@@ -2784,6 +2854,10 @@
   #charSelect .hero-detail-head,
   #charSelect .hero-detail-stats,
   #charSelect .hero-detail-skills {
+    grid-column: 1;
+  }
+
+  #charSelect .hero-detail-inventory {
     grid-column: 1;
   }
 

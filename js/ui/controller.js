@@ -421,7 +421,8 @@ export function createUIController(view) {
           view.pause.classList.remove('hidden');
           view.pause.setAttribute('aria-hidden', 'false');
         } else {
-          if (!view.pause.classList.contains('hidden')) Neo.playPanelCloseEffect?.(view.pause);
+          if (!inventoryPause && !view.pause.classList.contains('hidden')) Neo.playPanelCloseEffect?.(view.pause);
+          else if (inventoryPause) Neo.clearPanelCloseEffect?.(view.pause);
           view.pause.classList.add('hidden');
           view.pause.setAttribute('aria-hidden', 'true');
         }
@@ -532,6 +533,18 @@ export function createUIController(view) {
       { key: 'mooggy',          label: 'Mooggy',          boss: false, hp: 0,    dmg: 0,  speed: 0,   attackStyle: 'assassin',immunities: ['bleed'],                             desc: 'White and black assassin cat with a red aura. Mirrors your stats and items, then fires rapid bleed-stacking eye lasers.' },
       { key: 'god',             label: 'GOD',             boss: true,  hp: 920,  dmg: 18, speed: 108, attackStyle: 'beam',    immunities: ['bleed', 'fire', 'poison', 'dark'],   desc: 'Final boss. Multi-phase deity with beam sweeps, nova blasts, and judgement strikes. Immune to all status effects.' },
     ];
+
+    function getCharacterStartingItems(characterKey) {
+      const items = {};
+      if (characterKey === 'thorn_knight') items.tooth_of_thorn = 2;
+      if (characterKey === 'mooggy') {
+        items.hemes_scarf = 1;
+        items.mooggy_zoomies = 1;
+      }
+      if (characterKey === 'princess') items.princes_glasses = 1;
+      if (characterKey === 'metao') items.mateos_bag = 1;
+      return items;
+    }
 
     function populateInfoPanel(tab) {
       activeInfoTab = tab;
@@ -1623,11 +1636,31 @@ export function createUIController(view) {
             `<div class="stat-bar"><div class="stat-fill" style="width:${s.pct}%;background:${s.color}"></div></div></div>`
           ).join('');
           const defaultMoves = Neo.getDefaultMovesForCharacter(selected);
-          const kitNames = ['melee', 'laser', 'smash', 'dash']
-            .map(slot => `${Neo.SLOT_LABELS[slot] || slot}: ${Neo.MOVE_DEFS[defaultMoves[slot]]?.name || defaultMoves[slot]}`);
-          const skillsHtml = kitNames.map(s =>
-            `<span class="hero-detail-skill-pip">${s}</span>`
-          ).join('');
+          const slots = ['melee', 'laser', 'smash', 'dash'];
+          const skillsHtml = slots.map(slot => {
+            const moveKey = String(defaultMoves[slot] || '');
+            const moveDef = Neo.MOVE_DEFS[moveKey] || {};
+            const slotLabel = Neo.SLOT_LABELS[slot] || Neo.titleCase(slot);
+            const moveLabel = moveDef.name || moveKey || 'Unknown';
+            return `<span class="hero-detail-skill-pip">
+              <canvas class="hero-detail-skill-icon" data-hero-move="${Neo.escapeHtml(moveKey)}" width="24" height="24" aria-hidden="true"></canvas>
+              <span class="hero-detail-skill-text">${Neo.escapeHtml(slotLabel)}: ${Neo.escapeHtml(moveLabel)}</span>
+            </span>`;
+          }).join('');
+          const startingItems = getCharacterStartingItems(selected);
+          const inventoryKeys = Object.keys(startingItems).filter(key => Number(startingItems[key] || 0) > 0);
+          const inventoryHtml = inventoryKeys.length
+            ? inventoryKeys.map(key => {
+              const count = Math.max(1, Math.round(Number(startingItems[key]) || 0));
+              const item = Neo.ITEM_DEFS[key] || {};
+              const itemName = item.name || Neo.titleCase(String(key || '').replace(/_/g, ' '));
+              const countText = count > 1 ? ` x${count}` : '';
+              return `<span class="hero-detail-item-pip">
+                <canvas class="hero-detail-item-icon" data-hero-item="${Neo.escapeHtml(key)}" width="20" height="20" aria-hidden="true"></canvas>
+                <span>${Neo.escapeHtml(itemName)}${Neo.escapeHtml(countText)}</span>
+              </span>`;
+            }).join('')
+            : '<span class="hero-detail-item-empty">No starter items</span>';
           const charDef = Neo.CHARACTER_DEFS[selected] || {};
           const roleLabel = ROLE_LABELS[selected] || String(charDef.rarity || 'Hero');
           detail.innerHTML =
@@ -1635,8 +1668,17 @@ export function createUIController(view) {
             `<div class="hero-detail-head"><span class="hero-detail-name">${Neo.escapeHtml(charDef.name || selected)}</span><span class="hero-detail-role">${Neo.escapeHtml(roleLabel)}</span></div>` +
             `<p class="hero-detail-lore">${disp.lore}</p>` +
             `<div class="hero-detail-stats"><div class="hero-detail-section-label">Stats</div>${statsHtml}</div>` +
-            `<div class="hero-detail-skills"><div class="hero-detail-section-label">Kit</div>${skillsHtml}</div>`;
+            `<div class="hero-detail-skills"><div class="hero-detail-section-label">Kit</div>${skillsHtml}</div>` +
+            `<div class="hero-detail-inventory"><span class="hero-detail-inventory-label">Starting Inventory</span>${inventoryHtml}</div>`;
           Neo.drawSpriteToCanvas(document.getElementById('heroDetailSprite'), selected, 104);
+          detail.querySelectorAll('[data-hero-move]').forEach(el => {
+            const move = Neo.MOVE_DEFS[el.dataset.heroMove];
+            if (move) Neo.drawMoveToastIcon(el, move);
+          });
+          detail.querySelectorAll('[data-hero-item]').forEach(el => {
+            const item = Neo.ITEM_DEFS[el.dataset.heroItem];
+            if (item) Neo.drawItemToastIcon(el, item);
+          });
         }
       },
       updateDifficultySelection(unlocked, selected, loopCrystals) {

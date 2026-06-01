@@ -774,9 +774,19 @@ export function setShopPanelOpen(open, options = {}) {
 export function setInventoryPanelOpen(open, options = {}) {
     if (!Neo.ui.invPanel) return;
     const animateClose = options.animateClose !== false;
-    if (open) clearPanelCloseEffect(Neo.ui.invPanel);
-    else if (animateClose && isPanelOpen(Neo.ui.invPanel)) playPanelCloseEffect(Neo.ui.invPanel);
-    else clearPanelCloseEffect(Neo.ui.invPanel);
+    if (Neo._inventoryOpenAnimTimer) {
+      window.clearTimeout(Neo._inventoryOpenAnimTimer);
+      Neo._inventoryOpenAnimTimer = null;
+    }
+    if (Neo._inventoryCloseClassTimer) {
+      window.clearTimeout(Neo._inventoryCloseClassTimer);
+      Neo._inventoryCloseClassTimer = null;
+    }
+    clearPanelCloseEffect(Neo.ui.invPanel);
+    Neo.ui.invPanel.classList.remove('inv-panel--closing', 'inv-panel--opening');
+    if (!open && animateClose && isPanelOpen(Neo.ui.invPanel)) {
+      playPanelCloseEffect(Neo.ui.invPanel);
+    }
     Neo.ui.invPanel.classList.toggle('hidden', !open);
     Neo.ui.invPanel.setAttribute('aria-hidden', open ? 'false' : 'true');
     if (!open) {
