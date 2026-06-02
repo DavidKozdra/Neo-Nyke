@@ -50,6 +50,7 @@
         const t = Neo.lavaAnimTime * (hazard.pulse || 1.5) + (hazard.phase || 0);
         const tile = Neo.ENV_TILE_SIZE;
         const isRect = hazard.shape === 'rect';
+        const isStaticRoomPool = Neo.isStaticRoomLava?.(hazard);
         const w = isRect ? hazard.w : hazard.r * 2;
         const h = isRect ? hazard.h : hazard.r * 2;
         const left = -w / 2;
@@ -61,7 +62,9 @@
         else Neo.ctx.arc(0, 0, hazard.r, 0, Math.PI * 2);
         Neo.ctx.clip();
 
-        if (isRect) {
+        if (isStaticRoomPool) {
+          // Static room pools are baked into the floor cache so they replace floor tiles.
+        } else if (isRect) {
           for (let ty = 0; ty < h; ty += tile) {
             for (let tx = 0; tx < w; tx += tile) {
               Neo.drawEnvironmentTile('floor_lava', left + tx, top + ty, tile, tile);

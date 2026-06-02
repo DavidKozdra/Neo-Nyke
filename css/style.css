@@ -319,7 +319,7 @@ button, input, select, textarea {
   flex-direction: column;
   align-items: center;
   gap: 6px;
-  width: min(720px, calc(100vw - 40px));
+  width: min(504px, calc(100vw - 40px));
   padding: 12px 20px 16px;
   transform: translateX(-50%);
   box-sizing: border-box;
@@ -329,6 +329,21 @@ button, input, select, textarea {
 .menu-footer .meta-row,
 .menu-footer .run-summary-line {
   pointer-events: auto;
+}
+
+.menu-footer__summary {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  pointer-events: auto;
+}
+
+.menu-footer__version {
+  font-size: 10px;
+  color: var(--menu-text-soft);
+  letter-spacing: .08em;
+  text-transform: uppercase;
 }
 
 .meta-row {

@@ -247,7 +247,85 @@
     target.restore();
   }
 
+  function isStaticRoomLava(hazard) {
+    return hazard?.kind === 'lava' && hazard.shape === 'rect' && hazard.ttl === undefined;
+  }
+
+  function getStaticRoomLavaHazards(room = Neo.currentRoom) {
+    const source = room === Neo.currentRoom && Array.isArray(Neo.hazards)
+      ? Neo.hazards
+      : room?.hazards;
+    return (Array.isArray(source) ? source : []).filter(isStaticRoomLava);
+  }
+
+  function rectsOverlap(a, b) {
+    return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+  }
+
+  function getStaticLavaForTile(tileRect, lavaHazards) {
+    return lavaHazards.find(hazard => rectsOverlap(tileRect, {
+      x: hazard.left,
+      y: hazard.top,
+      w: hazard.w,
+      h: hazard.h,
+    })) || null;
+  }
+
+  function drawStaticLavaBase(lavaHazards, target = Neo.ctx) {
+    if (!lavaHazards.length) return;
+    const tile = Neo.ENV_TILE_SIZE;
+    target.save();
+    lavaHazards.forEach(hazard => {
+      target.save();
+      target.beginPath();
+      target.rect(hazard.left, hazard.top, hazard.w, hazard.h);
+      target.clip();
+      for (let y = hazard.top; y < hazard.top + hazard.h; y += tile) {
+        for (let x = hazard.left; x < hazard.left + hazard.w; x += tile) {
+          drawEnvironmentTile('floor_lava', x, y, tile, tile, { ctx: target });
+        }
+      }
+      target.restore();
+    });
+    target.restore();
+  }
+
+  function drawStaticLavaSeams(lavaHazards, target = Neo.ctx) {
+    if (!lavaHazards.length) return;
+    target.save();
+    lavaHazards.forEach(hazard => {
+      const left = hazard.left;
+      const top = hazard.top;
+      const right = left + hazard.w;
+      const bottom = top + hazard.h;
+      const seam = 5;
+      target.fillStyle = 'rgba(41, 10, 4, 0.82)';
+      if (top > Neo.WALL) target.fillRect(left, top, hazard.w, seam);
+      if (bottom < Neo.ROOM_H - Neo.WALL) target.fillRect(left, bottom - seam, hazard.w, seam);
+      if (left > Neo.WALL) target.fillRect(left, top, seam, hazard.h);
+      if (right < Neo.ROOM_W - Neo.WALL) target.fillRect(right - seam, top, seam, hazard.h);
+
+      target.fillStyle = 'rgba(255, 132, 48, 0.52)';
+      if (top > Neo.WALL) target.fillRect(left + 4, top + seam, Math.max(0, hazard.w - 8), 2);
+      if (bottom < Neo.ROOM_H - Neo.WALL) target.fillRect(left + 4, bottom - seam - 2, Math.max(0, hazard.w - 8), 2);
+      if (left > Neo.WALL) target.fillRect(left + seam, top + 4, 2, Math.max(0, hazard.h - 8));
+      if (right < Neo.ROOM_W - Neo.WALL) target.fillRect(right - seam - 2, top + 4, 2, Math.max(0, hazard.h - 8));
+
+      target.fillStyle = 'rgba(22, 6, 3, 0.9)';
+      [
+        [left, top, left > Neo.WALL && top > Neo.WALL],
+        [right - seam, top, right < Neo.ROOM_W - Neo.WALL && top > Neo.WALL],
+        [left, bottom - seam, left > Neo.WALL && bottom < Neo.ROOM_H - Neo.WALL],
+        [right - seam, bottom - seam, right < Neo.ROOM_W - Neo.WALL && bottom < Neo.ROOM_H - Neo.WALL],
+      ].forEach(([x, y, shouldDraw]) => {
+        if (shouldDraw) target.fillRect(x, y, seam, seam);
+      });
+    });
+    target.restore();
+  }
+
   function drawFloorTiles(theme, target = Neo.ctx) {
+    const staticLava = getStaticRoomLavaHazards();
     target.save();
     target.beginPath();
     target.rect(Neo.WALL, Neo.WALL, Neo.ROOM_W - Neo.WALL * 2, Neo.ROOM_H - Neo.WALL * 2);
@@ -260,10 +338,13 @@
         drawEnvironmentTile(tile, x, y, Neo.ENV_TILE_SIZE, Neo.ENV_TILE_SIZE, { tint: theme.floorTint, ctx: target });
       }
     }
+    drawStaticLavaBase(staticLava, target);
+    drawStaticLavaSeams(staticLava, target);
     target.restore();
   }
 
   function drawFloorDecals(theme, target = Neo.ctx) {
+    const staticLava = getStaticRoomLavaHazards();
     target.save();
     target.beginPath();
     target.rect(Neo.WALL + 8, Neo.WALL + 8, Neo.ROOM_W - Neo.WALL * 2 - 16, Neo.ROOM_H - Neo.WALL * 2 - 16);
@@ -275,6 +356,7 @@
       for (let tx = 0; tx < cols; tx += 1) {
         const x = Neo.WALL + tx * Neo.ENV_TILE_SIZE;
         const y = Neo.WALL + ty * Neo.ENV_TILE_SIZE;
+        if (getStaticLavaForTile({ x, y, w: Neo.ENV_TILE_SIZE, h: Neo.ENV_TILE_SIZE }, staticLava)) continue;
         const stainNoise = artNoise(tx, ty, 12);
         if (stainNoise > 0.84) {
           target.fillStyle = theme.stain;
@@ -580,7 +662,10 @@
       : 'none';
     const doorsKey = Neo.DIRECTIONS.map(dir => Neo.hasVisibleRoomExit(Neo.currentRoom, dir) ? '1' : '0').join('');
     const combatKey = Neo.enemies.length > 0 ? 'combat' : 'calm';
-    return `${Neo.floor}|${roomKey}|${doorsKey}|${combatKey}`;
+    const lavaKey = getStaticRoomLavaHazards()
+      .map(hazard => `${hazard.left},${hazard.top},${hazard.w},${hazard.h}`)
+      .join(';');
+    return `${Neo.floor}|${roomKey}|${doorsKey}|${combatKey}|${lavaKey}`;
   }
 
   function buildEnvironmentBackground(theme) {
@@ -903,6 +988,10 @@
   Neo.getGardenTileBias = getGardenTileBias;
   Neo.drawEnvironmentTile = drawEnvironmentTile;
   Neo.drawTiledRect = drawTiledRect;
+  Neo.isStaticRoomLava = isStaticRoomLava;
+  Neo.getStaticRoomLavaHazards = getStaticRoomLavaHazards;
+  Neo.drawStaticLavaBase = drawStaticLavaBase;
+  Neo.drawStaticLavaSeams = drawStaticLavaSeams;
   Neo.drawFloorTiles = drawFloorTiles;
   Neo.drawFloorDecals = drawFloorDecals;
   Neo.drawLockedDoor = drawLockedDoor;
