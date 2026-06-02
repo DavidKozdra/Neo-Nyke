@@ -31,6 +31,9 @@ export function resumeGame() {
       loopCrystals: 0,
       unlockedLegacy: [],
       tutorialCompleted: false,
+      lastSeenAt: 0,
+      tutorialButtonLastOfferedAt: 0,
+      seenTips: {},
       sandboxSettings: { ...Neo.SANDBOX_DEFAULT_SETTINGS },
     };
   }
@@ -43,15 +46,39 @@ export function resumeGame() {
     const allowedItems = Array.isArray(source.allowedItems)
       ? Neo.ITEM_KEYS.filter(key => source.allowedItems.includes(key))
       : Neo.ITEM_KEYS.slice();
+    const legacyPerItem = Math.max(1, Math.min(99, Math.round(Number(source.startingItemCount) || 1)));
+    const startingItems = {};
+    if (Array.isArray(source.startingItems)) {
+      for (const key of source.startingItems) {
+        if (Neo.ITEM_KEYS.includes(key)) startingItems[key] = legacyPerItem;
+      }
+    } else if (source.startingItems && typeof source.startingItems === 'object') {
+      for (const key of Neo.ITEM_KEYS) {
+        const n = Math.round(Number(source.startingItems[key]) || 0);
+        if (n > 0) startingItems[key] = Math.min(99, n);
+      }
+    }
+    const slots = ['melee', 'laser', 'smash', 'dash'];
+    const moveSource = source.moveLoadout && typeof source.moveLoadout === 'object' ? source.moveLoadout : {};
+    const moveLoadout = {};
+    for (const slot of slots) {
+      const key = String(moveSource[slot] || '');
+      // '' = use the character default; otherwise the move must exist and match the slot.
+      moveLoadout[slot] = (key && Neo.MOVE_DEFS[key]?.slot === slot) ? key : '';
+    }
     return {
       enemyStatMultiplier: Math.max(0.2, Math.min(4, Number(source.enemyStatMultiplier ?? Neo.SANDBOX_DEFAULT_SETTINGS.enemyStatMultiplier) || 1)),
       enemySpeedMultiplier: Math.max(0.2, Math.min(3, Number(source.enemySpeedMultiplier ?? Neo.SANDBOX_DEFAULT_SETTINGS.enemySpeedMultiplier) || 1)),
       enemyDamageMultiplier: Math.max(0.1, Math.min(3, Number(source.enemyDamageMultiplier ?? Neo.SANDBOX_DEFAULT_SETTINGS.enemyDamageMultiplier) || 1)),
       playerDamageMultiplier: Math.max(0.1, Math.min(6, Number(source.playerDamageMultiplier ?? Neo.SANDBOX_DEFAULT_SETTINGS.playerDamageMultiplier) || 1)),
       startingCoins: Math.max(0, Math.min(999, Math.round(Number(source.startingCoins ?? Neo.SANDBOX_DEFAULT_SETTINGS.startingCoins) || 0))),
+      startingLevel: Math.max(1, Math.min(99, Math.round(Number(source.startingLevel ?? Neo.SANDBOX_DEFAULT_SETTINGS.startingLevel) || 1))),
       godMode: !!source.godMode,
+      unlockEverything: !!source.unlockEverything,
+      moveLoadout,
       allowedEnemies: allowedEnemies.length ? allowedEnemies : Neo.SANDBOX_ENEMY_TYPES.slice(0, 1),
       allowedItems: allowedItems.length ? allowedItems : Neo.ITEM_KEYS.slice(),
+      startingItems,
     };
   }
 
@@ -61,6 +88,44 @@ export function resumeGame() {
 
   function getActiveSandboxSettings() {
     return isSandboxRunActive() ? Neo.sandboxSettings : null;
+  }
+
+  // Applies sandbox loadout/level/unlock settings to a freshly created player.
+  function applySandboxPlayerSetup(playerData) {
+    if (!playerData) return;
+    const settings = Neo.sandboxSettings || {};
+
+    // Override equipped moves per slot (empty string keeps the character default).
+    const loadout = settings.moveLoadout && typeof settings.moveLoadout === 'object' ? settings.moveLoadout : {};
+    playerData.ownedMoves = playerData.ownedMoves || {};
+    for (const slot of ['melee', 'laser', 'smash', 'dash']) {
+      const key = String(loadout[slot] || '');
+      if (key && Neo.MOVE_DEFS[key]?.slot === slot) {
+        playerData.equippedMoves[slot] = key;
+        playerData.ownedMoves[key] = true;
+      }
+    }
+
+    // Unlock everything: own all weapons and all moves so they can be swapped in-run.
+    if (settings.unlockEverything) {
+      playerData.ownedWeapons = playerData.ownedWeapons || {};
+      for (const key of Neo.WEAPON_KEYS) playerData.ownedWeapons[key] = true;
+      for (const key of Object.keys(Neo.MOVE_DEFS)) playerData.ownedMoves[key] = true;
+    }
+
+    // Starting level: replicate per-level gains so stats line up with a leveled run.
+    const startingLevel = Math.max(1, Math.min(99, Math.round(Number(settings.startingLevel) || 1)));
+    const extraLevels = startingLevel - (Number(playerData.level) || 1);
+    if (extraLevels > 0) {
+      for (let i = 0; i < extraLevels; i++) {
+        playerData.level += 1;
+        playerData.xpToNext = Math.round((Number(playerData.xpToNext) || 20) * 1.22);
+        playerData.maxHp += 15;
+        playerData.attackPower += 3;
+        playerData.attackSpeed += 0.01;
+      }
+      playerData.hp = playerData.maxHp;
+    }
   }
 
   function createDefaultTutorialState() {
@@ -76,6 +141,22 @@ export function resumeGame() {
       openedShop: false,
       usedLadder: false,
     };
+  }
+
+  function getCharacterStartingItems(characterKey) {
+    const items = {};
+    if (characterKey === 'thorn_knight') {
+      items.neo_knife = 1;
+      items.tooth_of_thorn = 2;
+      items.tough_skin = 1;
+    }
+    if (characterKey === 'mooggy') {
+      items.hemes_scarf = 1;
+      items.mooggy_zoomies = 1;
+    }
+    if (characterKey === 'princess') items.princes_glasses = 1;
+    if (characterKey === 'metao') items.mateos_bag = 1;
+    return items;
   }
 
   function resetTutorialState(active = false) {
@@ -94,6 +175,64 @@ export function resumeGame() {
       if (requested) localStorage.removeItem(Neo.REPLAY_TUTORIAL_KEY);
     } catch {}
     return requested;
+  }
+
+  // Offer the green main-menu tutorial button on the first menu visit, then at
+  // most once every 30 days after that.
+  const TUTORIAL_REOFFER_MS = 30 * 24 * 60 * 60 * 1000;
+  function shouldOfferTutorialButton() {
+    const meta = Neo.metaProgress;
+    if (!meta) return true;
+    const lastOfferedAt = Number(meta.tutorialButtonLastOfferedAt || 0);
+    if (!lastOfferedAt) return true;
+    return (Date.now() - lastOfferedAt) >= TUTORIAL_REOFFER_MS;
+  }
+
+  function markTutorialButtonOfferedNow() {
+    if (!Neo.metaProgress) return;
+    Neo.metaProgress.tutorialButtonLastOfferedAt = Date.now();
+    Neo.persistMetaSoon();
+  }
+
+  // Keep a lightweight "last played" stamp in meta for profile/menu context.
+  function markPlayerSeenNow() {
+    if (!Neo.metaProgress) return;
+    Neo.metaProgress.lastSeenAt = Date.now();
+    Neo.persistMetaSoon();
+  }
+
+  // Contextual explainer copy, shown once the first time each system is reached.
+  const FIRST_TIPS = {
+    forge: {
+      icon: '⚒',
+      title: 'THE FORGE',
+      body: 'Spend XP and gold here to permanently upgrade your weapons and moves for this run. Pick an item, boost its stats, then Confirm. Tip: a weapon that matches your class’s style hits harder.',
+    },
+    weapons: {
+      icon: '⚔',
+      title: 'WEAPONS',
+      body: 'Each weapon has its own attack and type (melee or magic). Any weapon works on any character, but one matching your class’s style deals about 25% more damage. Swapping changes your damage — it does not lower your other stats.',
+    },
+    skills: {
+      icon: '⚡',
+      title: 'SKILLS & MOVES',
+      body: 'Your equipped moves fire from the action bar (F/G/H/J/K/L). Drag owned moves into matching slots to swap your kit anytime. Changing a move swaps what you can do — it never reduces your stats.',
+    },
+  };
+
+  // One-time contextual explainer. Shows a dismissible card the first time a
+  // given system is reached, then never again (tracked in metaProgress.seenTips).
+  function showFirstTip(key, tipOverride) {
+    if (!key) return;
+    const meta = Neo.metaProgress;
+    if (!meta) return;
+    if (!meta.seenTips || typeof meta.seenTips !== 'object') meta.seenTips = {};
+    if (meta.seenTips[key]) return;
+    const tip = tipOverride || FIRST_TIPS[key];
+    if (!tip || !Neo.uiController?.showFirstTip) return;
+    meta.seenTips[key] = true;
+    Neo.persistMetaSoon();
+    Neo.uiController.showFirstTip(tip);
   }
 
   function formatControlLabel(value, fallback = '') {
@@ -253,11 +392,17 @@ export function resumeGame() {
   function createDefaultPlayer() {
     const items = {
       neo_knife: 0,
+      tooth_of_thorn: 0,
+      tough_skin: 0,
       orb_of_blood: 0,
       hemes_scarf: 0,
       insurance: 0,
+      gold_vac: 0,
+      double_dose: 0,
+      copycat_charm: 0,
       crit_charm: 0,
       attack_servo: 0,
+      enemy_magnet: 0,
       keen_eye: 0,
       chrono_spring: 0,
       scholar_seal: 0,
@@ -266,6 +411,12 @@ export function resumeGame() {
       push_man: 0,
       titan_heart: 0,
       charged_adapter: 0,
+      pew_pew_box: 0,
+      turbo_boots: 0,
+      skizzard_tail: 0,
+      zap_to_extreme: 0,
+      panic_button: 0,
+      mid_sweepy_box: 0,
       explosive_jelly: 0,
       dragon_orb: 0,
       ricocete: 0,
@@ -280,15 +431,17 @@ export function resumeGame() {
       pendant_of_kronos: 0,
       rich_mans_luck: 0,
       mateos_bag: 0,
+      extra_battery: 0,
       mooggy_zoomies: 0,
+      el_bartos_cape: 0,
     };
     const character = Neo.CHARACTER_DEFS[Neo.chosenCharacter] || Neo.CHARACTER_DEFS.thorn_knight;
-    if (character.key === 'mooggy') {
-      items.hemes_scarf = 1;
-      items.mooggy_zoomies = 1;
-    }
-    if (character.key === 'princess') items.princes_glasses = 1;
-    if (character.key === 'metao') items.mateos_bag = 1;
+    const starterItems = getCharacterStartingItems(character.key);
+    Object.entries(starterItems).forEach(([key, count]) => {
+      if (Object.prototype.hasOwnProperty.call(items, key)) {
+        items[key] = Math.max(0, Math.round(Number(count) || 0));
+      }
+    });
     const equippedMoves = Neo.getDefaultMovesForCharacter(character.key);
     const defaultWeapon = Neo.getDefaultWeaponForCharacter(character.key);
     const ownedMoves = {};
@@ -333,6 +486,8 @@ export function resumeGame() {
       critCharmBuffTime: 0,
       escapeChargeKills: 0,
       escapeReady: true,
+      robotArmChargeKills: 0,
+      robotArmReady: false,
       statuses: Neo.createStatusMap(),
       items,
       ownedWeapons: defaultWeapon ? { [defaultWeapon]: true } : {},
@@ -345,11 +500,16 @@ export function resumeGame() {
       weaponBeamTick: 0,
       equippedMoves,
       ownedMoves,
+      moveStackOverrides: {},
       lavaWalkTime: 0,
       lavaTrailTick: 0,
       princessFlightTime: 0,
       anvilUpgrades: { weapon: {}, move: {} },
       storedPotions: 0,
+      extraBatteryPendingCount: 0,
+      equipmentSlots: (character.key === 'metao') ? ['mateos_bag'] : [],
+      equipmentCooldowns: {},
+      equipmentEffects: {},
     };
   }
 
@@ -402,6 +562,7 @@ export function resumeGame() {
           selectedChallenges: normalizeChallengeSelection(savedMeta.selectedChallenges),
           selectedCharacter: String(savedMeta.selectedCharacter || createDefaultMeta().selectedCharacter),
           unlockedLegacy: normalizeLegacySelection(savedMeta.unlockedLegacy),
+          seenTips: (savedMeta.seenTips && typeof savedMeta.seenTips === 'object') ? { ...savedMeta.seenTips } : {},
         };
       }
       Neo.runHistory = normalizeRunHistory(savedRunHistory || savedMeta?.runHistory);
@@ -961,11 +1122,12 @@ export function resumeGame() {
     return (Neo.godTimer > 0 ? 2 : Neo.ATTACKS.smash.baseCooldown) / attackSpeed;
   }
 
-  function getMoveMaxStacks(moveKey, characterKey = Neo.player?.character || Neo.chosenCharacter) {
+  function getMoveMaxStacks(moveKey, characterKey = Neo.player?.character || Neo.chosenCharacter, playerState = Neo.player) {
     const moveDef = Neo.MOVE_DEFS[moveKey] || {};
     const baseStacks = Math.max(1, Number(moveDef.maxStacks || 1));
-    const overrideStacks = moveDef.stackOverrides?.[characterKey];
-    return Math.max(1, Number(overrideStacks || baseStacks));
+    const characterStacks = Math.max(1, Number(moveDef.stackOverrides?.[characterKey] || baseStacks));
+    const playerOverrideStacks = Math.max(0, Number(playerState?.moveStackOverrides?.[moveKey] || 0));
+    return Math.max(characterStacks, playerOverrideStacks || 0);
   }
 
   function getSlotCooldownDuration(slot, moveKey, attackSpeed = Neo.getAttackSpeedValue()) {
@@ -977,7 +1139,7 @@ export function resumeGame() {
 
   function createCooldownEntry(slot, playerState = Neo.player, source = null) {
     const moveKey = playerState?.equippedMoves?.[slot] || (slot === 'dash' ? 'dash' : slot === 'melee' ? 'slash' : slot === 'laser' ? 'blood_beam' : 'crimson_smash');
-    const maxCharges = getMoveMaxStacks(moveKey, playerState?.character || Neo.chosenCharacter);
+    const maxCharges = getMoveMaxStacks(moveKey, playerState?.character || Neo.chosenCharacter, playerState);
     const sourceIsObject = !!source && typeof source === 'object' && !Array.isArray(source);
     const sourceTimers = sourceIsObject && Array.isArray(source.timers)
       ? source.timers.map(value => Number(value)).filter(value => value > 0)
@@ -1159,6 +1321,8 @@ export function resumeGame() {
     if (type === 'bulk_golem') return 'Bulk Golem';
     if (type === 'artificer_knave') return 'Artificer Charged Knave';
     if (type === 'bowman_bane') return "Bowman's Bane";
+    if (type === 'antony_blemmye') return 'Antony Blemmye';
+    if (type === 'handsome_devil') return 'Handsome Devil';
     if (type === 'god') return 'GOD';
     return titleCase(type);
   }
@@ -1201,6 +1365,7 @@ export function resumeGame() {
     if (value === 'god_beam') return 'GOD Beam';
     if (value === 'mirror_beam') return 'Mirror Beam';
     if (Neo.BOSS_TYPES.has(value) || value === 'mirror_knight') return getEnemyLabel(value);
+    if (value.startsWith('mirror_')) return getEnemyLabel('mirror_knight');
     if (Neo.SPRITE_DEFS[value] || ['cult_mage', 'knave', 'sniper', 'machine_gunner', 'golem', 'summoner', 'shield_unit', 'healer', 'boss_spawner', 'laser', 'charger', 'hunter', 'mooggy'].includes(value)) {
       return getEnemyLabel(value);
     }
@@ -1448,6 +1613,8 @@ export function resumeGame() {
     'Queen of the Cult': 'queen_cult',
     'Bulk Golem': 'bulk_golem',
     'Artificer Charged Knave': 'artificer_knave',
+    'Antony Blemmye': 'antony_blemmye',
+    'Handsome Devil': 'handsome_devil',
     'GOD': 'god',
     'Mirror Champion': 'thorn_knight',
     'Hunter': 'hunter',
@@ -1465,6 +1632,8 @@ export function resumeGame() {
     if (String(key).endsWith('_projectile')) return resolveKillerSprite(String(key).slice(0, -'_projectile'.length));
     if (Neo.SPRITE_DEFS[key]) return key;
     if (killerSpriteMap[key]) return killerSpriteMap[key];
+    const normalized = String(key).trim().toLowerCase();
+    if (normalized.startsWith('mirror_') || normalized.startsWith('mirror ')) return 'thorn_knight';
     return 'hunter';
   }
 
@@ -1503,6 +1672,71 @@ export function resumeGame() {
   const PHASE_LABELS = { p1: 'PLAYER 1', p2: 'PLAYER 2', p3: 'PLAYER 3', p4: 'PLAYER 4' };
   const PHASE_COLORS = { p1: 'p1', p2: 'p2', p3: 'p3', p4: 'p4' };
   const PHASE_CHAR = { p1: () => Neo.chosenCharacter, p2: () => Neo.chosenCharacter2, p3: () => Neo.chosenCharacter3, p4: () => Neo.chosenCharacter4 };
+  const COMPETITIVE_SERVER_URL = Neo.COMPETITIVE_SERVER_URL || window.NEO_SERVER_URL || 'https://neonyke.davidkozdra.workers.dev/api';
+  const COMPETITIVE_FETCH_TIMEOUT_MS = 5000;
+
+  function competitiveAbortSignal(timeoutMs = COMPETITIVE_FETCH_TIMEOUT_MS) {
+    if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') {
+      return AbortSignal.timeout(timeoutMs);
+    }
+    const controller = new AbortController();
+    setTimeout(() => controller.abort(), timeoutMs);
+    return controller.signal;
+  }
+
+  async function fetchCompetitiveJson(path, options = {}) {
+    const { timeoutMs, ...fetchOptions } = options;
+    const res = await fetch(`${COMPETITIVE_SERVER_URL}${path}`, {
+      ...fetchOptions,
+      signal: options.signal || competitiveAbortSignal(timeoutMs),
+    });
+    let data = null;
+    try { data = await res.json(); } catch { data = null; }
+    if (!res.ok) {
+      const message = data?.error || `Competitive server returned ${res.status}`;
+      throw new Error(message);
+    }
+    return data || {};
+  }
+
+  function setCompetitiveServerStatus(state, detail = {}) {
+    Neo._competitiveServerState = {
+      state,
+      seed: detail.seed || Neo._competitiveSeed || '',
+      message: detail.message || '',
+      checkedAt: Date.now(),
+    };
+    Neo.uiController?.setCompetitiveServerStatus?.(Neo._competitiveServerState);
+  }
+
+  async function refreshCompetitiveSeed({ force = false } = {}) {
+    if (Neo._competitiveSeed && !force) {
+      setCompetitiveServerStatus('online', { seed: Neo._competitiveSeed });
+      return Neo._competitiveSeed;
+    }
+    if (Neo._competitiveSeedPromise && !force) return Neo._competitiveSeedPromise;
+
+    Neo._competitiveSeedFetching = true;
+    setCompetitiveServerStatus('checking', { message: 'Checking competitive server...' });
+    const promise = fetchCompetitiveJson('/seed')
+      .then(data => {
+        if (!data.seed) throw new Error('Competitive server did not return a seed');
+        Neo._competitiveSeed = String(data.seed);
+        setCompetitiveServerStatus('online', { seed: Neo._competitiveSeed });
+        return Neo._competitiveSeed;
+      })
+      .catch(error => {
+        Neo._competitiveSeed = null;
+        setCompetitiveServerStatus('offline', { message: error?.message || 'Competitive server is unreachable' });
+        throw error;
+      })
+      .finally(() => {
+        Neo._competitiveSeedFetching = false;
+        if (Neo._competitiveSeedPromise === promise) Neo._competitiveSeedPromise = null;
+      });
+    Neo._competitiveSeedPromise = promise;
+    return promise;
+  }
 
   function updateCharacterSelectionUI() {
     const phaseTag = document.getElementById('charSelectPhaseTag');
@@ -1515,17 +1749,17 @@ export function resumeGame() {
     if (Neo.charSelectPhase && PHASE_LABELS[Neo.charSelectPhase]) {
       const label = PHASE_LABELS[Neo.charSelectPhase];
       if (phaseTag) { phaseTag.textContent = label; phaseTag.className = `charselect-phase-tag ${PHASE_COLORS[Neo.charSelectPhase]}`; phaseTag.classList.remove('hidden'); }
-      if (titleEl) titleEl.textContent = `${label} — CHOOSE YOUR WARRIOR`;
-      if (subtitleEl) subtitleEl.textContent = isLastPhase ? 'Last player — then enter the dungeon.' : `${label} locked. Next player picks after.`;
-      if (goBtn) goBtn.textContent = isLastPhase ? 'ENTER DUNGEON' : `CONFIRM ${label} →`;
+      if (titleEl) titleEl.textContent = `${label}: PICK HERO`;
+      if (subtitleEl) subtitleEl.textContent = isLastPhase ? 'Confirm, then enter the dungeon.' : 'Confirm to pass to the next player.';
+      if (goBtn) goBtn.textContent = isLastPhase ? 'ENTER DUNGEON' : `CONFIRM ${label}`;
     } else {
       if (phaseTag) phaseTag.classList.add('hidden');
-      if (titleEl) titleEl.textContent = 'CHOOSE YOUR WARRIOR';
+      if (titleEl) titleEl.textContent = 'PICK HERO';
       if (Neo.gameMode === 'competitive') {
-        if (subtitleEl) subtitleEl.textContent = 'Hard difficulty · this week\'s shared seed · no modifiers';
+        if (subtitleEl) subtitleEl.textContent = 'Weekly run. Hard difficulty is locked.';
         if (goBtn) goBtn.textContent = 'COMPETE';
       } else {
-        if (subtitleEl) subtitleEl.textContent = 'Pick a fighter, set the run, then enter the dungeon. Challenges live in their own shop panel.';
+        if (subtitleEl) subtitleEl.textContent = 'Choose a hero. Pick difficulty. Enter the dungeon.';
         if (goBtn) goBtn.textContent = 'ENTER DUNGEON';
       }
     }
@@ -1551,36 +1785,29 @@ export function resumeGame() {
       const competBtn = document.getElementById('altModeCompetitiveBtn');
       if (Neo._competitiveSeed) {
         if (subtitleEl) subtitleEl.textContent = `Hard · Seed ${Neo._competitiveSeed} · no modifiers`;
-        const banner = document.getElementById('seedErrorBanner');
-        if (banner) banner.classList.add('hidden');
+        setCompetitiveServerStatus('online', { seed: Neo._competitiveSeed });
         if (competBtn) competBtn.disabled = false;
       } else if (!Neo._competitiveSeedFetching) {
-        Neo._competitiveSeedFetching = true;
-        fetch(`${COMPETITIVE_SERVER_URL}/health`, { signal: AbortSignal.timeout(4000) })
-          .then(r => { if (!r.ok) throw new Error('Server error'); return r.json(); })
-          .then(() => fetch(`${COMPETITIVE_SERVER_URL}/seed`))
-          .then(r => r.json())
-          .then(data => {
-            Neo._competitiveSeed = String(data.seed);
-            Neo._competitiveSeedFetching = false;
+        if (subtitleEl) subtitleEl.textContent = 'Checking competitive server...';
+        if (competBtn) competBtn.disabled = true;
+        refreshCompetitiveSeed()
+          .then(seed => {
             const el = document.getElementById('charSelectSubtitle');
-            if (el) el.textContent = `Hard · Seed ${Neo._competitiveSeed} · no modifiers`;
-            const banner = document.getElementById('seedErrorBanner');
-            if (banner) banner.classList.add('hidden');
+            if (el) el.textContent = `Hard · Seed ${seed} · no modifiers`;
             if (competBtn) competBtn.disabled = false;
           })
           .catch(() => {
-            Neo._competitiveSeedFetching = false;
-            const banner = document.getElementById('seedErrorBanner');
-            if (banner) banner.classList.remove('hidden');
+            const el = document.getElementById('charSelectSubtitle');
+            if (el) el.textContent = 'Server connection required for Competitive.';
             if (competBtn) competBtn.disabled = true;
           });
+      } else {
+        if (subtitleEl) subtitleEl.textContent = 'Checking competitive server...';
+        if (competBtn) competBtn.disabled = true;
       }
     } else {
       Neo._competitiveSeed = null;
       Neo._competitiveSeedFetching = false;
-      const banner = document.getElementById('seedErrorBanner');
-      if (banner) banner.classList.add('hidden');
       const competBtn = document.getElementById('altModeCompetitiveBtn');
       if (competBtn) competBtn.disabled = false;
     }
@@ -1650,6 +1877,8 @@ export function resumeGame() {
     if (Neo.gameMode === 'competitive') { void startCompetitive(); return; }
     const forceTutorialReplay = !resume && consumeReplayTutorialRequest();
     const shouldRunTutorial = Neo.gameMode === 'normal' && (!Neo.metaProgress.tutorialCompleted || forceTutorialReplay);
+    // Stamp "last played" so the green tutorial button only re-offers after a long absence.
+    if (Neo.metaProgress) { Neo.metaProgress.lastSeenAt = Date.now(); Neo.persistMetaSoon(); }
     setGameState('play');
 
     if (resume && Neo.activeRun) {
@@ -1672,6 +1901,16 @@ export function resumeGame() {
       if (Neo.gameMode === 'sandbox') {
         Neo.player.coins = Number(Neo.sandboxSettings.startingCoins || 0);
         Neo.selectedChallenges = [];
+        const startItems = Neo.sandboxSettings.startingItems && typeof Neo.sandboxSettings.startingItems === 'object'
+          ? Neo.sandboxSettings.startingItems
+          : {};
+        if (Neo.player.items) {
+          for (const key of Neo.ITEM_KEYS) {
+            const count = Math.round(Number(startItems[key]) || 0);
+            if (count > 0) Neo.player.items[key] = (Number(Neo.player.items[key]) || 0) + count;
+          }
+        }
+        applySandboxPlayerSetup(Neo.player);
       }
       applyRunChallengeStartModifiers();
       Neo.lastDamageSource = '';
@@ -1763,37 +2002,26 @@ export function resumeGame() {
     if (p2Row) p2Row.style.display = '';
   }
 
-  const COMPETITIVE_SERVER_URL = Neo.COMPETITIVE_SERVER_URL || window.NEO_SERVER_URL || 'https://neonyke.davidkozdra.workers.dev/api';
-
   async function startCompetitive() {
     if (Neo.chosenCharacter === 'princess') {
       Neo.chosenCharacter = 'thorn_knight';
     }
-    setGameState('play');
     let serverSeed = Neo._competitiveSeed || null;
     if (!serverSeed) {
       try {
-        const res = await fetch(`${COMPETITIVE_SERVER_URL}/seed`);
-        if (!res.ok) throw new Error(`Server returned ${res.status}`);
-        const data = await res.json();
-        if (!data.seed) throw new Error('No seed in response');
-        serverSeed = String(data.seed);
-      } catch {
+        serverSeed = await refreshCompetitiveSeed({ force: true });
+      } catch (error) {
+        setCompetitiveServerStatus('offline', { message: error?.message || 'Competitive server is unreachable' });
         setGameState('start');
-        Neo._competitiveSeedFetching = false;
-        // Navigate back to the competitive tab and show the red banner
         const altmodesPanel = document.getElementById('altModesPanel');
         if (altmodesPanel) altmodesPanel.classList.remove('hidden');
         document.querySelectorAll('.altmodes-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === 'competitive'));
         document.querySelectorAll('.altmodes-tab-panel').forEach(p => p.classList.toggle('hidden', p.dataset.panel !== 'competitive'));
-        const banner = document.getElementById('seedErrorBanner');
-        if (banner) banner.classList.remove('hidden');
-        const competBtn = document.getElementById('altModeCompetitiveBtn');
-        if (competBtn) competBtn.disabled = true;
         return;
       }
     }
     Neo._competitiveSeed = null;
+    setGameState('play');
     Neo.baseSeedStr = serverSeed;
     Neo.selectedDifficulty = 'hard';
     Neo.selectedChallenges = [];
@@ -1886,7 +2114,7 @@ export function resumeGame() {
     if (!Neo.loopStarted) { Neo.loopStarted = true; requestAnimationFrame(Neo.loop); }
   }
 
-  const BOSS_RUSH_ORDER = ['queen_cult', 'bulk_golem', 'artificer_knave', 'god'];
+  const BOSS_RUSH_ORDER = ['queen_cult', 'bulk_golem', 'antony_blemmye', 'handsome_devil', 'artificer_knave', 'god'];
   Neo.BOSS_RUSH_ORDER = BOSS_RUSH_ORDER;
 
   function startBossRush() {
@@ -1989,7 +2217,7 @@ export function resumeGame() {
       }, 1200); // 1.2 seconds delay
     } else {
       boss = Neo.spawnEnemy(bossType, safeSpawn.x, safeSpawn.y, false);
-      const playedCutscene = Neo.tryPlayKnaveKnightCutscene(boss, bossType);
+      const playedCutscene = Neo.tryPlayBossIntroCutscene(boss, bossType);
       const line = Neo.BOSS_OPENING_DIALOGUE[bossType];
       if (!playedCutscene && boss && line) Neo.sayOverEntity(boss, line);
       if (bossType === 'god') Neo.playGodDialogue(1);
@@ -2000,8 +2228,8 @@ export function resumeGame() {
   function onBossRushBossDefeated() {
     Neo.bossRushActive = false;
     Neo.bossRushStage += 1;
-    if (Neo.ui.bossRushStageNum) Neo.ui.bossRushStageNum.textContent = Math.min(Neo.bossRushStage + 1, 4);
-    if (Neo.ui.bossRushStageNum2) Neo.ui.bossRushStageNum2.textContent = Math.min(Neo.bossRushStage + 1, 4);
+    if (Neo.ui.bossRushStageNum) Neo.ui.bossRushStageNum.textContent = Math.min(Neo.bossRushStage + 1, BOSS_RUSH_ORDER.length);
+    if (Neo.ui.bossRushStageNum2) Neo.ui.bossRushStageNum2.textContent = Math.min(Neo.bossRushStage + 1, BOSS_RUSH_ORDER.length);
     if (Neo.bossRushStage >= BOSS_RUSH_ORDER.length) {
       Neo.win();
       return;
@@ -2048,11 +2276,11 @@ export function resumeGame() {
 
   function buildPracticeEnemyGrid() {
     if (!Neo.ui.practiceEnemyGrid) return;
-    const BOSS_TYPES_SET = new Set(['queen_cult', 'bulk_golem', 'artificer_knave', 'bowman_bane', 'god']);
+    const BOSS_TYPES_SET = new Set(['queen_cult', 'bulk_golem', 'artificer_knave', 'bowman_bane', 'antony_blemmye', 'handsome_devil', 'god']);
     const allTypes = [
       'hunter', 'charger', 'laser', 'knave', 'sniper', 'machine_gunner',
       'golem', 'cult_mage', 'cult_follower', 'summoner', 'shield_unit', 'healer', 'boss_spawner',
-      'queen_cult', 'bulk_golem', 'artificer_knave', 'bowman_bane', 'god', 'mirror_knight', 'mooggy',
+      'queen_cult', 'bulk_golem', 'artificer_knave', 'bowman_bane', 'antony_blemmye', 'handsome_devil', 'god', 'mirror_knight', 'mooggy',
     ];
     Neo.ui.practiceEnemyGrid.innerHTML = allTypes.map(type => {
       const isBoss = BOSS_TYPES_SET.has(type);
@@ -2123,8 +2351,10 @@ export function resumeGame() {
     Neo.mooggyAssassinSpawnedThisFloor = false;
     Neo.knaveKnightCutscenePlayed = false;
     Neo.queenMetaoCutscenePlayed = false;
+    Neo.handsomeDevilCutscenePlayed = false;
     Neo.secretRoomVisitedFloors = [];
     Neo.wizardPawSelection = null;
+    Neo.wizardPawPendingCount = 0;
     Neo.setWizardPawModalOpen(false);
     Neo.setShopPanelOpen(false);
     Neo.setInventoryPanelOpen(false);
@@ -2242,9 +2472,11 @@ export function resumeGame() {
     Neo.monsterRoamTimer = Number(snapshot.monsterRoamTimer || 0);
     Neo.knaveKnightCutscenePlayed = !!snapshot.knaveKnightCutscenePlayed;
     Neo.queenMetaoCutscenePlayed = !!snapshot.queenMetaoCutscenePlayed;
+    Neo.handsomeDevilCutscenePlayed = !!snapshot.handsomeDevilCutscenePlayed;
     Neo.secretRoomVisitedFloors = Array.isArray(snapshot.secretRoomVisitedFloors) ? [...snapshot.secretRoomVisitedFloors] : [];
     Neo.restoreRivals(snapshot.rivals);
     Neo.wizardPawSelection = null;
+    Neo.wizardPawPendingCount = 0;
     Neo.setWizardPawModalOpen(false);
     Neo.setShopPanelOpen(false);
     Neo.setInventoryPanelOpen(false);
@@ -2259,9 +2491,14 @@ export function resumeGame() {
   Neo.pauseGame = pauseGame;
   Neo.resumeGame = resumeGame;
   Neo.createDefaultMeta = createDefaultMeta;
+  Neo.shouldOfferTutorialButton = shouldOfferTutorialButton;
+  Neo.markTutorialButtonOfferedNow = markTutorialButtonOfferedNow;
+  Neo.markPlayerSeenNow = markPlayerSeenNow;
+  Neo.showFirstTip = showFirstTip;
   Neo.normalizeSandboxSettings = normalizeSandboxSettings;
   Neo.isSandboxRunActive = isSandboxRunActive;
   Neo.getActiveSandboxSettings = getActiveSandboxSettings;
+  Neo.applySandboxPlayerSetup = applySandboxPlayerSetup;
   Neo.createDefaultTutorialState = createDefaultTutorialState;
   Neo.resetTutorialState = resetTutorialState;
   Neo.isFirstRunTutorialActive = isFirstRunTutorialActive;
@@ -2277,6 +2514,7 @@ export function resumeGame() {
   Neo.getTutorialObjectiveEntries = getTutorialObjectiveEntries;
   Neo.skipFirstRunTutorial = skipFirstRunTutorial;
   Neo.updateFirstRunTutorialProgress = updateFirstRunTutorialProgress;
+  Neo.getCharacterStartingItems = getCharacterStartingItems;
   Neo.createDefaultPlayer = createDefaultPlayer;
   Neo.applyRunChallengeStartModifiers = applyRunChallengeStartModifiers;
   Neo.createItemRegistry = createItemRegistry;
@@ -2389,6 +2627,9 @@ export function resumeGame() {
   Neo.startPvp = startPvp;
   Neo.startCompetitive = startCompetitive;
   Neo.COMPETITIVE_SERVER_URL = COMPETITIVE_SERVER_URL;
+  Neo.fetchCompetitiveJson = fetchCompetitiveJson;
+  Neo.refreshCompetitiveSeed = refreshCompetitiveSeed;
+  Neo.setCompetitiveServerStatus = setCompetitiveServerStatus;
   Neo.startEndlessRoom = startEndlessRoom;
   Neo.startEndless = startEndless;
   Neo.startPractice = startPractice;

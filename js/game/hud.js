@@ -38,7 +38,9 @@
       if (Neo.currentRoom.type === 'shop') entries.push({ text: 'Buy upgrades or move on', state: 'warn' });
       if (Neo.currentRoom.type === 'anvil') entries.push({ text: 'Forge upgrades or move on', state: 'warn' });
       if (Neo.getItemCount('charged_adapter') > 0) {
-        const warpHint = Neo.formatControlLabel('f', 'f');
+        const slotIdx = Neo.player?.equipmentSlots?.indexOf?.('charged_adapter') ?? -1;
+        const slotLetter = slotIdx >= 0 ? Neo.EQUIPMENT_SLOT_KEYS?.[slotIdx] || 'F' : 'F';
+        const warpHint = Neo.formatControlLabel(slotLetter.toLowerCase(), slotLetter.toLowerCase());
         const needed = Neo.getChargeRequirement(10);
         const progress = Math.max(0, Number(Neo.player?.escapeChargeKills || 0));
         if (Neo.player?.escapeReady) {
@@ -128,19 +130,20 @@
           setObjective('Trial cleared. Claim the reward or move on.');
         } else if (!Neo.currentRoom.challengeStarted) {
           if (type === 'mirror') setObjective('Touch the sword to face your mirror.');
-          else if (type === 'stillness') setObjective('Begin the prize trial: choose one reward, then fight for it.');
-          else if (type === 'bomb') setObjective('Begin the bomb trial.');
-          else if (type === 'survival') setObjective('Begin the survival trial.');
+          else if (type === 'stillness') setObjective('Begin the prize trial: choose one reward to clear it.');
+          else if (type === 'bomb') setObjective('Begin the bomb trial before detonation.');
+          else if (type === 'survival') setObjective('Begin the survival trial: protect the central obelisk.');
           else if (type === 'runes') setObjective('Begin the rune hunt.');
           else if (type === 'storm') setObjective('Begin the storm trial.');
         } else {
           if (type === 'mirror') setObjective('Defeat your mirror champion.');
           else if (type === 'stillness') {
             const phase = Neo.currentRoom.challengeData?.phase || 'choose';
-            setObjective(phase === 'fight' ? 'Defeat the trial enemies to claim your chosen prize.' : 'Pick one prize, then fight for it.');
+            const timer = Math.ceil(Neo.currentRoom.challengeTimer || 0);
+            setObjective(phase === 'channel' ? `Hold the center until the prize stabilizes (${timer}s).` : 'Pick one prize, then hold the center to secure it.');
           }
-          else if (type === 'bomb') setObjective('Disarm the blue bomb. Red bombs explode.');
-          else if (type === 'survival') setObjective(`Survive for ${Math.ceil(Neo.currentRoom.challengeTimer || 0)}s.`);
+          else if (type === 'bomb') setObjective(`Disarm the blue bomb before detonation (${Math.ceil(Neo.currentRoom.challengeTimer || 0)}s).`);
+          else if (type === 'survival') setObjective(`Protect the central obelisk and survive for ${Math.ceil(Neo.currentRoom.challengeTimer || 0)}s.`);
           else if (type === 'runes') setObjective(`Collect the remaining runes: ${Math.max(0, Number(Neo.currentRoom.challengeData?.runesLeft || 0))}.`);
           else if (type === 'storm') setObjective(`Live through the storm for ${Math.ceil(Neo.currentRoom.challengeTimer || 0)}s.`);
         }
@@ -327,21 +330,7 @@
     if (Neo.ui.hudLoopCount) Neo.ui.hudLoopCount.textContent = Number(Neo.metaProgress.loopCrystals || 0);
     const _potionCap = Neo.getPotionCarryCap();
     const storedPotions = Number(Neo.player.storedPotions || 0);
-    if (Neo.ui.bagStatus) {
-      const showBag = _potionCap > 0 && (Neo.gameState === 'play' || Neo.gameState === 'pause');
-      Neo.ui.bagStatus.classList.toggle('hidden', !showBag);
-      Neo.ui.bagStatus.setAttribute('aria-hidden', showBag ? 'false' : 'true');
-      Neo.ui.bagStatus.classList.toggle('is-ready', showBag && storedPotions > 0);
-      Neo.ui.bagStatus.classList.toggle('is-empty', showBag && storedPotions <= 0);
-      const bagItem = Neo.itemRegistry.get('mateos_bag') || Neo.ITEM_DEFS.mateos_bag;
-      if (showBag && Neo.ui.bagStatusIcon && bagItem) Neo.drawItemToastIcon(Neo.ui.bagStatusIcon, bagItem);
-      if (Neo.ui.bagStatusText) {
-        const potionKey = Neo.formatControlLabel('g', 'g');
-        Neo.ui.bagStatusText.textContent = showBag
-          ? `Mateo's Bag [${potionKey}]: ${storedPotions}/${_potionCap} potions`
-          : '';
-      }
-    }
+    Neo.updateEquipmentSlots();
     if (Neo.ui.timerDisplay) Neo.ui.timerDisplay.textContent = timeStr;
     if (Neo.ui.floorDisplay) Neo.ui.floorDisplay.textContent = Neo.floor;
     if (Neo.ui.difficultyLabel) Neo.ui.difficultyLabel.textContent = Neo.getDifficultyDef(Neo.selectedDifficulty).name.toUpperCase();
@@ -378,41 +367,6 @@
       }
     }
 
-    if (Neo.ui.adapterStatus) {
-      const hasAdapter = Neo.getItemCount('charged_adapter') > 0;
-      const showAdapter = hasAdapter && (Neo.gameState === 'play' || Neo.gameState === 'pause');
-      if (Neo.ui.hudLower) {
-        Neo.ui.hudLower.classList.toggle('hidden', !showAdapter);
-        Neo.ui.hudLower.setAttribute('aria-hidden', showAdapter ? 'false' : 'true');
-      }
-      Neo.ui.adapterStatus.classList.toggle('hidden', !showAdapter);
-      Neo.ui.adapterStatus.setAttribute('aria-hidden', showAdapter ? 'false' : 'true');
-      Neo.ui.adapterStatus.classList.toggle('is-ready', false);
-      Neo.ui.adapterStatus.classList.toggle('is-blocked', false);
-      const adapterItem = Neo.itemRegistry.get('charged_adapter') || Neo.ITEM_DEFS.charged_adapter;
-      if (showAdapter && Neo.ui.adapterStatusIcon && adapterItem) Neo.drawItemToastIcon(Neo.ui.adapterStatusIcon, adapterItem);
-      if (showAdapter) {
-        const warpKey = Neo.formatControlLabel('f', 'f');
-        const needed = Neo.getChargeRequirement(10);
-        const progress = Math.max(0, Number(Neo.player?.escapeChargeKills || 0));
-        if (!Neo.player.escapeReady) {
-          if (Neo.ui.adapterStatusText) Neo.ui.adapterStatusText.textContent = `Adapter [${warpKey}]: charging ${progress}/${needed}`;
-          Neo.ui.adapterStatus.classList.add('is-blocked');
-        } else if (!Neo.currentRoom || Neo.currentRoom.type === 'boss' || Neo.currentRoom.type === 'god') {
-          if (Neo.ui.adapterStatusText) Neo.ui.adapterStatusText.textContent = `Adapter [${warpKey}]: no warp in boss room`;
-          Neo.ui.adapterStatus.classList.add('is-blocked');
-        } else if (Neo.enemies.length === 0) {
-          if (Neo.ui.adapterStatusText) Neo.ui.adapterStatusText.textContent = `Adapter [${warpKey}]: requires active combat`;
-          Neo.ui.adapterStatus.classList.add('is-blocked');
-        } else {
-          if (Neo.ui.adapterStatusText) Neo.ui.adapterStatusText.textContent = `Adapter [${warpKey}]: ready - warp to ladder (50% coin cost)`;
-          Neo.ui.adapterStatus.classList.add('is-ready');
-        }
-      } else if (Neo.ui.adapterStatusText) {
-        Neo.ui.adapterStatusText.textContent = '';
-      }
-    }
-    
     if (Neo.ui.interactPrompt) {
       const shopHint = Neo.getControlHint('e', 'e');
       const touchHint = (window.matchMedia?.('(pointer: coarse)').matches || navigator.maxTouchPoints > 0)
@@ -435,6 +389,37 @@
     Neo.updateItemUI();
   }
 
+  function setCompetitiveSubmitStatus(status) {
+    Neo._competitiveSubmitStatus = status;
+    Neo.uiController?.setCompetitiveSubmitStatus?.(status);
+  }
+
+  function submitCompetitiveRun(entry) {
+    const username = Neo.metaProgress?.username?.trim() || 'Anonymous';
+    setCompetitiveSubmitStatus({ state: 'submitting' });
+    Neo.fetchCompetitiveJson('/leaderboard', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: username,
+        floor: entry.floor,
+        seed: entry.seed || Neo.baseSeedStr,
+        character: entry.character || Neo.chosenCharacter,
+        time: entry.elapsedSeconds,
+      }),
+    })
+      .then(data => {
+        entry.competitiveRank = data.rank || null;
+        setCompetitiveSubmitStatus({ state: 'ok', rank: data.rank || null });
+      })
+      .catch(error => {
+        setCompetitiveSubmitStatus({
+          state: 'error',
+          message: error?.message || 'Could not submit competitive run. Server connection is required for leaderboard credit.',
+        });
+      });
+  }
+
   function finalizeRun(result, extra = {}) {
     const previousRecords = Neo.deriveRunRecords(Neo.runHistory);
     const entry = Neo.buildRunHistoryEntry(result, extra);
@@ -448,18 +433,9 @@
     if (nextRecords.coins > previousRecords.coins && entry.coins >= nextRecords.coins) newRecords.coins = true;
     entry._newRecords = newRecords;
     if (Neo.gameMode === 'competitive') {
-      const username = Neo.metaProgress?.username?.trim() || 'Anonymous';
-      fetch(`${Neo.COMPETITIVE_SERVER_URL}/leaderboard`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: username,
-          floor: entry.floor,
-          seed: entry.seed || Neo.baseSeedStr,
-          character: entry.character || Neo.chosenCharacter,
-          time: entry.elapsedSeconds,
-        }),
-      }).catch(() => {});
+      submitCompetitiveRun(entry);
+    } else {
+      setCompetitiveSubmitStatus({ state: 'idle' });
     }
     return entry;
   }
@@ -667,6 +643,7 @@
       monsterRoamTimer: Neo.monsterRoamTimer,
       knaveKnightCutscenePlayed: Neo.knaveKnightCutscenePlayed,
       queenMetaoCutscenePlayed: Neo.queenMetaoCutscenePlayed,
+      handsomeDevilCutscenePlayed: Neo.handsomeDevilCutscenePlayed,
       secretRoomVisitedFloors: Array.isArray(Neo.secretRoomVisitedFloors) ? [...Neo.secretRoomVisitedFloors] : [],
       camera: Neo.camera,
     };
@@ -677,6 +654,399 @@
     await Neo.saveStore.delete('run');
     Neo.refreshMenuState();
   }
+
+  // ── Equipment slots (F G H J K L U I) ─────────────────────────────────────
+  // Items that can be activated by pressing a hotkey. Each defines:
+  //   key       — item key in ITEM_DEFS
+  //   shortName — text shown under icon in slot
+  //   activate  — function called when the slot's hotkey is pressed
+  //   getState  — returns 'ready' | 'blocked' | 'charging' | 'empty' for slot styling
+  //   getStatusText — short status text for tooltip / aria-label
+  const EQUIPMENT_SLOT_KEYS = ['F', 'G', 'H', 'J', 'K', 'L', 'U', 'I'];
+  const EQUIPMENT_ACTIVE_DEFS = {
+    pew_pew_box: { cooldown: 34, duration: 8, label: 'PEW PEW', color: '#ffe06f' },
+    turbo_boots: { cooldown: 46, duration: 20, label: 'TURBO', color: '#79ffbf' },
+    skizzard_tail: { cooldown: 38, duration: 5, label: 'SKIZZARD REGEN', color: '#8fffd2' },
+    zap_to_extreme: { cooldown: 42, duration: 10, label: 'EXTREME ZAP', color: '#8dd4ff' },
+    panic_button: { cooldown: 52, duration: 0, label: 'PANIC', color: '#f4f6fb' },
+    mid_sweepy_box: { cooldown: 36, duration: 6, label: 'SWEEPY', color: '#ff6e8b' },
+    el_bartos_cape: { cooldown: 58, duration: 10, label: 'EL BARTO', color: '#ffb37a' },
+  };
+
+  function ensureEquipmentRuntimeState() {
+    if (!Neo.player) return null;
+    if (!Neo.player.equipmentCooldowns || typeof Neo.player.equipmentCooldowns !== 'object') Neo.player.equipmentCooldowns = {};
+    if (!Neo.player.equipmentEffects || typeof Neo.player.equipmentEffects !== 'object') Neo.player.equipmentEffects = {};
+    return Neo.player;
+  }
+
+  function getEquipmentCooldown(itemKey) {
+    return Math.max(0, Number(Neo.player?.equipmentCooldowns?.[itemKey] || 0));
+  }
+
+  function getEquipmentEffectTime(itemKey) {
+    return Math.max(0, Number(Neo.player?.equipmentEffects?.[itemKey]?.time || 0));
+  }
+
+  function isEquipmentReady(itemKey) {
+    return getEquipmentCooldown(itemKey) <= 0 && getEquipmentEffectTime(itemKey) <= 0;
+  }
+
+  function getEquipmentState(itemKey) {
+    if (getEquipmentEffectTime(itemKey) > 0) return 'ready';
+    return getEquipmentCooldown(itemKey) <= 0 ? 'ready' : 'charging';
+  }
+
+  function getEquipmentStatusText(itemKey) {
+    const active = getEquipmentEffectTime(itemKey);
+    if (active > 0) return `${Math.ceil(active)}s`;
+    const cooldown = getEquipmentCooldown(itemKey);
+    return cooldown > 0 ? `${Math.ceil(cooldown)}s` : 'READY';
+  }
+
+  function startTimedEquipment(itemKey) {
+    const player = ensureEquipmentRuntimeState();
+    const def = EQUIPMENT_ACTIVE_DEFS[itemKey];
+    if (!player || !def) return false;
+    if (!isEquipmentReady(itemKey)) {
+      Neo.spawnParticle({ x: player.x, y: player.y - 32, life: 0.5, text: getEquipmentStatusText(itemKey), c: '#ffc880' });
+      return false;
+    }
+    player.equipmentCooldowns[itemKey] = def.cooldown;
+    if (def.duration > 0) {
+      const stackBonus = itemKey === 'el_bartos_cape' ? Math.max(0, Neo.getItemCount(itemKey) - 1) * 5 : 0;
+      player.equipmentEffects[itemKey] = { time: def.duration + stackBonus, tick: 0 };
+    }
+    if (itemKey === 'panic_button') activatePanicButton();
+    Neo.itemStatsCacheFrame = -1;
+    Neo.spawnParticle({ x: player.x, y: player.y - 34, life: 0.75, text: def.label, c: def.color });
+    Neo.scheduleRunSave?.();
+    return true;
+  }
+
+  function spawnPewPewMissile() {
+    if (!Neo.player || !Neo.spawnProjectile) return;
+    const targetAngle = Math.atan2(Neo.mouse.worldY - Neo.player.y, Neo.mouse.worldX - Neo.player.x);
+    const angle = Number.isFinite(targetAngle) ? targetAngle + Neo.rand(-0.45, 0.45, 'fx') : Neo.rand(0, Math.PI * 2, 'fx');
+    Neo.spawnProjectile({
+      x: Neo.player.x + Math.cos(angle) * 12,
+      y: Neo.player.y + Math.sin(angle) * 12,
+      vx: Math.cos(angle) * 260,
+      vy: Math.sin(angle) * 260,
+      r: 6,
+      life: 2.5,
+      enemy: false,
+      kind: 'homing_missile',
+      damage: 16,
+      knockback: 120,
+      color: '#ffe06f',
+      homing: true,
+      homingTarget: 'enemy',
+      homingRadius: 920,
+      homingSpeed: 430,
+      homingAccel: 3.8,
+      homingTurnRate: 3.5,
+    });
+  }
+
+  function pulseExtremeZap() {
+    if (!Neo.player) return;
+    const enemies = [];
+    Neo.forEachEnemyNearCircle?.(Neo.player.x, Neo.player.y, 250, enemy => {
+      const dx = enemy.x - Neo.player.x;
+      const dy = enemy.y - Neo.player.y;
+      enemies.push({ enemy, distSq: dx * dx + dy * dy });
+    });
+    enemies.sort((a, b) => a.distSq - b.distSq);
+    enemies.slice(0, 5).forEach(({ enemy }) => {
+      const angle = Math.atan2(enemy.y - Neo.player.y, enemy.x - Neo.player.x);
+      Neo.hitEnemy?.(enemy, 11, angle, 70, '#8dd4ff');
+      Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.2, ring: 14, c: '#bde8ff' });
+    });
+    const angle = Neo.rand(0, Math.PI * 2, 'fx');
+    Neo.hazards.push({
+      kind: 'lightning_column',
+      x: Neo.player.x + Math.cos(angle) * Neo.rand(28, 92, 'fx'),
+      y: Neo.player.y + Math.sin(angle) * Neo.rand(28, 92, 'fx'),
+      r: 42,
+      ttl: 0.55,
+      tick: 0,
+      interval: 0.22,
+      damage: 10,
+    });
+  }
+
+  function activatePanicButton() {
+    if (!Neo.player) return;
+    Neo.STATUS_KEYS?.forEach(key => Neo.clearStatus?.(Neo.player, key));
+    Neo.player.inv = Math.max(Number(Neo.player.inv || 0), 1.5);
+    Neo.forEachEnemyNearCircle?.(Neo.player.x, Neo.player.y, 190, enemy => {
+      const angle = Math.atan2(enemy.y - Neo.player.y, enemy.x - Neo.player.x);
+      const force = 440;
+      enemy.vx += Math.cos(angle) * force;
+      enemy.vy += Math.sin(angle) * force;
+      enemy.stun = Math.max(Number(enemy.stun || 0), 0.28);
+      Neo.hitEnemy?.(enemy, 8, angle, 340, '#f4f6fb');
+    });
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.65, ring: 72, c: '#f4f6fb' });
+  }
+
+  function dropSweepyMine() {
+    if (!Neo.player) return;
+    const angle = Neo.rand(0, Math.PI * 2, 'fx');
+    const distance = Neo.rand(22, 74, 'fx');
+    Neo.hazards.push({
+      kind: 'thorn_mine',
+      x: Neo.player.x + Math.cos(angle) * distance,
+      y: Neo.player.y + Math.sin(angle) * distance,
+      r: 18,
+      ttl: 5,
+      armTime: 0.18,
+      triggerRadius: 34,
+      blastRadius: 62,
+      damage: 18,
+      bleedStacks: 1,
+      bleedDuration: 4.5,
+      statusTick: 0,
+    });
+  }
+
+  function tickSkizzardRegen() {
+    if (!Neo.player || Neo.player.hp >= Neo.player.maxHp) return;
+    const heal = Neo.scalePlayerHealing?.(Neo.player.maxHp * 0.025, 1) ?? Math.max(1, Neo.player.maxHp * 0.025);
+    const before = Neo.player.hp;
+    Neo.player.hp = Math.min(Neo.player.maxHp, Neo.player.hp + heal);
+    const gained = Neo.player.hp - before;
+    if (gained > 0) {
+      Neo.spawnHealPopup?.(Neo.player.x + Neo.rand(-8, 8), Neo.player.y - 22, gained, { color: '#8fffd2', size: 13 });
+      Neo.spawnParticle({ x: Neo.player.x + Neo.rand(-10, 10), y: Neo.player.y + Neo.rand(-10, 10), life: 0.22, c: '#8fffd2' });
+    }
+  }
+
+  function updateEquipmentEffects(dt) {
+    const player = ensureEquipmentRuntimeState();
+    if (!player) return;
+    Object.keys(player.equipmentCooldowns).forEach(key => {
+      player.equipmentCooldowns[key] = Math.max(0, Number(player.equipmentCooldowns[key] || 0) - dt);
+    });
+    Object.entries(player.equipmentEffects).forEach(([key, effect]) => {
+      if (!effect || Number(effect.time || 0) <= 0) return;
+      effect.time = Math.max(0, Number(effect.time || 0) - dt);
+      effect.tick = Math.max(0, Number(effect.tick || 0) - dt);
+      if (key === 'pew_pew_box' && effect.tick <= 0) {
+        spawnPewPewMissile();
+        effect.tick = 0.5;
+      } else if (key === 'skizzard_tail' && effect.tick <= 0) {
+        tickSkizzardRegen();
+        effect.tick = 0.5;
+      } else if (key === 'zap_to_extreme' && effect.tick <= 0) {
+        pulseExtremeZap();
+        effect.tick = 0.45;
+      } else if (key === 'mid_sweepy_box' && effect.tick <= 0) {
+        dropSweepyMine();
+        effect.tick = 0.42;
+      } else if (key === 'el_bartos_cape') {
+        player.inv = Math.max(Number(player.inv || 0), 0.12);
+      }
+      if (effect.time <= 0) {
+        delete player.equipmentEffects[key];
+        Neo.itemStatsCacheFrame = -1;
+      }
+    });
+  }
+  Neo.updateEquipmentEffects = updateEquipmentEffects;
+
+  const ACTIVATABLE_ITEMS = {
+    charged_adapter: {
+      key: 'charged_adapter',
+      shortName: 'WARP',
+      activate: () => Neo.tryChargedLadderWarp?.(),
+      getState: () => {
+        if (!Neo.player?.escapeReady) return 'charging';
+        if (!Neo.currentRoom || Neo.currentRoom.type === 'boss' || Neo.currentRoom.type === 'god') return 'blocked';
+        if (Neo.enemies?.length === 0) return 'blocked';
+        return 'ready';
+      },
+      getStatusText: () => {
+        if (!Neo.player?.escapeReady) {
+          const needed = Neo.getChargeRequirement(10);
+          const progress = Math.max(0, Number(Neo.player?.escapeChargeKills || 0));
+          return `${progress}/${needed}`;
+        }
+        return 'READY';
+      },
+    },
+    mateos_bag: {
+      key: 'mateos_bag',
+      shortName: 'BAG',
+      activate: () => Neo.tryUsePotion?.(),
+      getState: () => {
+        const stored = Number(Neo.player?.storedPotions || 0);
+        return stored > 0 ? 'ready' : 'blocked';
+      },
+      getStatusText: () => {
+        const cap = Neo.getPotionCarryCap?.() || 0;
+        const stored = Number(Neo.player?.storedPotions || 0);
+        return `${stored}/${cap}`;
+      },
+    },
+    pew_pew_box: {
+      key: 'pew_pew_box',
+      shortName: 'PEW',
+      activate: () => startTimedEquipment('pew_pew_box'),
+      getState: () => getEquipmentState('pew_pew_box'),
+      getStatusText: () => getEquipmentStatusText('pew_pew_box'),
+    },
+    turbo_boots: {
+      key: 'turbo_boots',
+      shortName: 'FAST',
+      activate: () => startTimedEquipment('turbo_boots'),
+      getState: () => getEquipmentState('turbo_boots'),
+      getStatusText: () => getEquipmentStatusText('turbo_boots'),
+    },
+    skizzard_tail: {
+      key: 'skizzard_tail',
+      shortName: 'REGEN',
+      activate: () => startTimedEquipment('skizzard_tail'),
+      getState: () => getEquipmentState('skizzard_tail'),
+      getStatusText: () => getEquipmentStatusText('skizzard_tail'),
+    },
+    zap_to_extreme: {
+      key: 'zap_to_extreme',
+      shortName: 'ZAP',
+      activate: () => startTimedEquipment('zap_to_extreme'),
+      getState: () => getEquipmentState('zap_to_extreme'),
+      getStatusText: () => getEquipmentStatusText('zap_to_extreme'),
+    },
+    panic_button: {
+      key: 'panic_button',
+      shortName: 'PANIC',
+      activate: () => startTimedEquipment('panic_button'),
+      getState: () => getEquipmentState('panic_button'),
+      getStatusText: () => getEquipmentStatusText('panic_button'),
+    },
+    mid_sweepy_box: {
+      key: 'mid_sweepy_box',
+      shortName: 'SWEEP',
+      activate: () => startTimedEquipment('mid_sweepy_box'),
+      getState: () => getEquipmentState('mid_sweepy_box'),
+      getStatusText: () => getEquipmentStatusText('mid_sweepy_box'),
+    },
+    el_bartos_cape: {
+      key: 'el_bartos_cape',
+      shortName: 'CAPE',
+      activate: () => startTimedEquipment('el_bartos_cape'),
+      getState: () => getEquipmentState('el_bartos_cape'),
+      getStatusText: () => getEquipmentStatusText('el_bartos_cape'),
+    },
+  };
+  Neo.EQUIPMENT_SLOT_KEYS = EQUIPMENT_SLOT_KEYS;
+  Neo.ACTIVATABLE_ITEMS = ACTIVATABLE_ITEMS;
+  Neo.isActivatableItem = (itemKey) => Boolean(ACTIVATABLE_ITEMS[itemKey]);
+
+  function syncEquipmentSlotsFromInventory() {
+    if (!Neo.player) return;
+    if (!Array.isArray(Neo.player.equipmentSlots)) Neo.player.equipmentSlots = [];
+    const slots = Neo.player.equipmentSlots;
+    // Drop slot entries for items no longer owned.
+    for (let i = slots.length - 1; i >= 0; i -= 1) {
+      if (Neo.getItemCount(slots[i]) <= 0) slots.splice(i, 1);
+    }
+    // Append any owned activatable items that aren't slotted yet, capped at slot count.
+    for (const itemKey of Object.keys(ACTIVATABLE_ITEMS)) {
+      if (Neo.getItemCount(itemKey) > 0 && !slots.includes(itemKey) && slots.length < EQUIPMENT_SLOT_KEYS.length) {
+        slots.push(itemKey);
+      }
+    }
+  }
+  Neo.syncEquipmentSlotsFromInventory = syncEquipmentSlotsFromInventory;
+
+  function addToEquipmentSlots(itemKey) {
+    if (!ACTIVATABLE_ITEMS[itemKey] || !Neo.player) return;
+    if (!Array.isArray(Neo.player.equipmentSlots)) Neo.player.equipmentSlots = [];
+    if (Neo.player.equipmentSlots.includes(itemKey)) return;
+    if (Neo.player.equipmentSlots.length >= EQUIPMENT_SLOT_KEYS.length) return;
+    Neo.player.equipmentSlots.push(itemKey);
+  }
+  Neo.addToEquipmentSlots = addToEquipmentSlots;
+
+  function getItemKeyForSlotKey(letter) {
+    if (!Neo.player) return null;
+    syncEquipmentSlotsFromInventory();
+    const idx = EQUIPMENT_SLOT_KEYS.indexOf(String(letter || '').toUpperCase());
+    if (idx < 0) return null;
+    return Neo.player.equipmentSlots[idx] || null;
+  }
+  Neo.getItemKeyForSlotKey = getItemKeyForSlotKey;
+
+  function activateEquipmentSlotKey(letter) {
+    const itemKey = getItemKeyForSlotKey(letter);
+    if (!itemKey) return false;
+    const def = ACTIVATABLE_ITEMS[itemKey];
+    if (!def?.activate) return false;
+    def.activate();
+    return true;
+  }
+  Neo.activateEquipmentSlotKey = activateEquipmentSlotKey;
+
+  function updateEquipmentSlots() {
+    const root = Neo.ui.equipmentSlots;
+    const nodes = Neo.ui.equipmentSlotNodes;
+    if (!root || !nodes?.length) return;
+    syncEquipmentSlotsFromInventory();
+    const inPlay = Neo.gameState === 'play' || Neo.gameState === 'pause';
+    const slots = Neo.player?.equipmentSlots || [];
+    const showRow = inPlay;
+    root.classList.toggle('hidden', !showRow);
+    root.setAttribute('aria-hidden', showRow ? 'false' : 'true');
+    nodes.forEach((node, idx) => {
+      const letter = EQUIPMENT_SLOT_KEYS[idx];
+      const itemKey = slots[idx];
+      const def = itemKey ? ACTIVATABLE_ITEMS[itemKey] : null;
+      const itemDef = itemKey ? (Neo.itemRegistry.get(itemKey) || Neo.ITEM_DEFS[itemKey]) : null;
+      const iconCanvas = node.querySelector('.equip-slot__icon');
+      const labelSpan = node.querySelector('.equip-slot__label');
+      node.classList.remove('is-ready', 'is-blocked', 'is-filled', 'is-empty');
+      if (def && itemDef) {
+        node.classList.add('is-filled');
+        const state = def.getState?.() || 'ready';
+        if (state === 'ready') node.classList.add('is-ready');
+        else if (state === 'blocked' || state === 'charging') node.classList.add('is-blocked');
+        if (iconCanvas) Neo.drawItemToastIcon(iconCanvas, itemDef);
+        const statusText = def.getStatusText?.() || '';
+        if (labelSpan) labelSpan.textContent = statusText;
+        const title = `${itemDef.name || itemKey} [${letter}]${statusText ? ' · ' + statusText : ''}`;
+        node.setAttribute('title', title);
+        node.setAttribute('aria-label', title);
+        node.setAttribute('aria-hidden', 'false');
+      } else {
+        node.classList.add('is-empty');
+        if (iconCanvas) {
+          const ctx = iconCanvas.getContext('2d');
+          ctx?.clearRect(0, 0, iconCanvas.width, iconCanvas.height);
+        }
+        if (labelSpan) labelSpan.textContent = '';
+        node.setAttribute('title', `Slot ${letter} (empty)`);
+        node.setAttribute('aria-label', `Slot ${letter} empty`);
+        node.setAttribute('aria-hidden', 'true');
+      }
+    });
+  }
+  Neo.updateEquipmentSlots = updateEquipmentSlots;
+
+  function bindEquipmentSlotClicks() {
+    const nodes = Neo.ui.equipmentSlotNodes;
+    if (!nodes?.length) return;
+    nodes.forEach((node) => {
+      if (node.dataset.equipBound === '1') return;
+      node.dataset.equipBound = '1';
+      node.addEventListener('click', () => {
+        const letter = node.dataset.equipKey || '';
+        Neo.activateEquipmentSlotKey(letter);
+      });
+    });
+  }
+  Neo.bindEquipmentSlotClicks = bindEquipmentSlotClicks;
 
   // Expose on Neo
   Neo.getObjectiveEntries = getObjectiveEntries;

@@ -16,10 +16,22 @@
   <meta property="og:url" content="https://neonyke.davidkozdra.workers.dev/">
   <meta property="og:title" content="NEO NYKE — Browser Dungeon Crawler">
   <meta property="og:description" content="Free browser roguelite. Fight through procedurally generated floors and compete on the weekly leaderboard.">
-  <meta property="og:image" content="https://neonyke.davidkozdra.workers.dev/assets/icons/icon-512x512.png">
+  <meta property="og:image" content="https://neonyke.davidkozdra.workers.dev/assets/icons/NeoNykeTitle.png?v=20260602a">
+  <meta property="og:image:secure_url" content="https://neonyke.davidkozdra.workers.dev/assets/icons/NeoNykeTitle.png?v=20260602a">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="2172">
+  <meta property="og:image:height" content="724">
+  <meta property="og:image:alt" content="NEO NYKE title artwork">
+
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="NEO NYKE — Browser Dungeon Crawler">
+  <meta name="twitter:description" content="Free browser roguelite. Fight through procedurally generated floors and compete on the weekly leaderboard.">
+  <meta name="twitter:image" content="https://neonyke.davidkozdra.workers.dev/assets/icons/NeoNykeTitle.png?v=20260602a">
+  <meta name="twitter:image:alt" content="NEO NYKE title artwork">
 
   <!-- Icons & PWA -->
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230a0a0f'/%3E%3Cfilter id='g'%3E%3CfeGaussianBlur stdDeviation='1.2' result='b'/%3E%3CfeMerge%3E%3CfeMergeNode in='b'/%3E%3CfeMergeNode in='SourceGraphic'/%3E%3C/feMerge%3E%3C/filter%3E%3Cg filter='url(%23g)'%3E%3Cpolygon points='16,4 17.5,14 16,15.5 14.5,14' fill='%23cc3333'/%3E%3Crect x='14.5' y='15' width='3' height='11' rx='1' fill='%23cc3333'/%3E%3Crect x='10' y='14' width='12' height='2.5' rx='1' fill='%23e8a020'/%3E%3Ccircle cx='16' cy='27' r='1.8' fill='%23e8a020'/%3E%3C/g%3E%3C/svg%3E">
+  <link rel="icon" type="image/png" sizes="96x96" href="assets/icons/icon-96x96.png">
   <link rel="icon" type="image/png" sizes="192x192" href="assets/icons/icon-192x192.png">
   <link rel="apple-touch-icon" sizes="152x152" href="assets/icons/icon-152x152.png">
   <link rel="manifest" href="manifest.json">
@@ -100,6 +112,7 @@
       color: #333;
       opacity: .5;
     }
+
   </style>
   <link rel="stylesheet" href="css/style.css">
   <link rel="stylesheet" href="css/theme-princess.css">
@@ -172,7 +185,7 @@
       <span id="timerDisplay">0:00</span>
       <span class="separator">•</span>
       <span id="timerFloorSlot">FL <b id="floorDisplay">1</b>/10</span>
-      <span id="timerBossSlot" style="display:none">BOSS <b id="bossRushStageNum2">1</b>/4</span>
+      <span id="timerBossSlot" style="display:none">BOSS <b id="bossRushStageNum2">1</b>/6</span>
       <span class="separator">•</span>
       <span id="difficultyDisplay" class="difficulty-display"><canvas id="difficultyHudIcon" width="20" height="20" class="difficulty-hud-icon"></canvas><span id="difficultyLabel">EASY</span></span>
       <span id="competitiveSeedDisplay" class="difficulty-display" style="display:none;color:#ffe566;">&#9733; SEED <b id="competitiveSeedValue"></b></span>
@@ -186,13 +199,47 @@
       <span id="challengeStatusLabel">CHALLENGE</span>
       <div class="challenge-progress"><i id="challengeStatusFill"></i></div>
     </div>
-    <div id="adapterStatus" class="adapter-status hidden" aria-hidden="true">
-      <canvas id="adapterStatusIcon" class="adapter-status__icon" width="24" height="24" aria-hidden="true"></canvas>
-      <span id="adapterStatusText" class="adapter-status__text"></span>
-    </div>
-    <button id="bagStatus" class="adapter-status bag-status hidden" type="button" aria-hidden="true">
-      <canvas id="bagStatusIcon" class="adapter-status__icon" width="24" height="24" aria-hidden="true"></canvas>
-      <span id="bagStatusText" class="adapter-status__text"></span>
+  </div>
+  <div id="equipmentSlots" class="equipment-slots hidden" aria-hidden="true" aria-label="Equipment slots">
+    <button class="equip-slot is-empty" type="button" data-equip-slot="0" data-equip-key="F" aria-hidden="true" tabindex="-1">
+      <span class="equip-slot__key">F</span>
+      <canvas class="equip-slot__icon" width="24" height="24" aria-hidden="true"></canvas>
+      <span class="equip-slot__label"></span>
+    </button>
+    <button class="equip-slot is-empty" type="button" data-equip-slot="1" data-equip-key="G" aria-hidden="true" tabindex="-1">
+      <span class="equip-slot__key">G</span>
+      <canvas class="equip-slot__icon" width="24" height="24" aria-hidden="true"></canvas>
+      <span class="equip-slot__label"></span>
+    </button>
+    <button class="equip-slot is-empty" type="button" data-equip-slot="2" data-equip-key="H" aria-hidden="true" tabindex="-1">
+      <span class="equip-slot__key">H</span>
+      <canvas class="equip-slot__icon" width="24" height="24" aria-hidden="true"></canvas>
+      <span class="equip-slot__label"></span>
+    </button>
+    <button class="equip-slot is-empty" type="button" data-equip-slot="3" data-equip-key="J" aria-hidden="true" tabindex="-1">
+      <span class="equip-slot__key">J</span>
+      <canvas class="equip-slot__icon" width="24" height="24" aria-hidden="true"></canvas>
+      <span class="equip-slot__label"></span>
+    </button>
+    <button class="equip-slot is-empty" type="button" data-equip-slot="4" data-equip-key="K" aria-hidden="true" tabindex="-1">
+      <span class="equip-slot__key">K</span>
+      <canvas class="equip-slot__icon" width="24" height="24" aria-hidden="true"></canvas>
+      <span class="equip-slot__label"></span>
+    </button>
+    <button class="equip-slot is-empty" type="button" data-equip-slot="5" data-equip-key="L" aria-hidden="true" tabindex="-1">
+      <span class="equip-slot__key">L</span>
+      <canvas class="equip-slot__icon" width="24" height="24" aria-hidden="true"></canvas>
+      <span class="equip-slot__label"></span>
+    </button>
+    <button class="equip-slot is-empty" type="button" data-equip-slot="6" data-equip-key="U" aria-hidden="true" tabindex="-1">
+      <span class="equip-slot__key">U</span>
+      <canvas class="equip-slot__icon" width="24" height="24" aria-hidden="true"></canvas>
+      <span class="equip-slot__label"></span>
+    </button>
+    <button class="equip-slot is-empty" type="button" data-equip-slot="7" data-equip-key="I" aria-hidden="true" tabindex="-1">
+      <span class="equip-slot__key">I</span>
+      <canvas class="equip-slot__icon" width="24" height="24" aria-hidden="true"></canvas>
+      <span class="equip-slot__label"></span>
     </button>
   </div>
 
@@ -294,7 +341,7 @@
       </div>
       <div class="anvil-resources">
         <div class="anvil-xp-display">XP <b id="anvilXp">0</b></div>
-        <div class="anvil-gold-display">&#9670; <b id="anvilCoins">0</b></div>
+        <div class="anvil-gold-display"><canvas id="anvilCoinIcon" class="coin-icon" width="32" height="32"></canvas> <b id="anvilCoins">0</b></div>
       </div>
       <button id="anvilClose" class="panel-close" aria-label="Close anvil">X</button>
     </div>
@@ -325,15 +372,16 @@
         <span class="panel-kicker">Bazaar</span>
         <h3>SHOP</h3>
         <p class="panel-subtitle">Weapons, relics, and quick repairs for the next room.</p>
+        <span id="shopMetaLabel" class="shop-meta-label">F1 Shop</span>
       </div>
       <div class="shop-coins">Coins <b id="shopCoins">0</b></div>
       <button id="shopClose" class="panel-close" aria-label="Close shop">X</button>
     </div>
     <div class="shop-tabs">
-      <button class="shop-tab active" data-tab="items">Items</button>
-      <button class="shop-tab" data-tab="weapons">Weapons</button>
-      <button class="shop-tab" data-tab="moves">Moves</button>
-      <button class="shop-tab" data-tab="heals">Heal Ups</button>
+      <button class="shop-tab active" data-tab="items"><span class="tab-icon" aria-hidden="true">[]</span><span>Items</span></button>
+      <button class="shop-tab" data-tab="weapons"><span class="tab-icon" aria-hidden="true">W</span><span>Weapons</span></button>
+      <button class="shop-tab" data-tab="moves"><span class="tab-icon" aria-hidden="true">M</span><span>Moves</span></button>
+      <button class="shop-tab" data-tab="heals"><span class="tab-icon" aria-hidden="true">+</span><span>Heal Ups</span></button>
     </div>
     <div id="shopItems" class="shop-list"></div>
     <div id="shopWeapons" class="shop-list hidden"></div>
@@ -356,11 +404,17 @@
       <button class="inv-player-tab" data-inv-player="3" role="tab">P3</button>
       <button class="inv-player-tab" data-inv-player="4" role="tab">P4</button>
     </div>
+    <div id="invBuildSummary" class="inv-build-summary" aria-label="Current build"></div>
     <div class="inv-tabs shop-tabs" role="tablist">
-      <button class="inv-tab shop-tab active" data-inv-tab="stats" role="tab"><span class="tab-icon">♦</span>Stats</button>
-      <button class="inv-tab shop-tab" data-inv-tab="items" role="tab"><span class="tab-icon">✦</span>Items</button>
-      <button class="inv-tab shop-tab" data-inv-tab="weapons" role="tab"><span class="tab-icon">⚔</span>Weapons</button>
-      <button class="inv-tab shop-tab" data-inv-tab="equipped" role="tab"><span class="tab-icon">⚡</span>Moves</button>
+      <button class="inv-tab shop-tab active" data-inv-tab="stats" role="tab"><canvas class="tab-icon tab-icon--canvas" width="22" height="22" data-inv-ui-icon="tab-stats" aria-hidden="true"></canvas>Stats</button>
+      <button class="inv-tab shop-tab" data-inv-tab="items" role="tab"><canvas class="tab-icon tab-icon--canvas" width="22" height="22" data-inv-ui-icon="tab-relics" aria-hidden="true"></canvas>Relics</button>
+      <button class="inv-tab shop-tab" data-inv-tab="weapons" role="tab"><canvas class="tab-icon tab-icon--canvas" width="22" height="22" data-inv-ui-icon="tab-weapons" aria-hidden="true"></canvas>Weapons</button>
+      <button class="inv-tab shop-tab" data-inv-tab="equipped" role="tab"><canvas class="tab-icon tab-icon--canvas" width="22" height="22" data-inv-ui-icon="tab-moves" aria-hidden="true"></canvas>Moves</button>
+    </div>
+    <div class="inv-ux-hints" aria-hidden="true">
+      <span class="inv-ux-hint"><b>Drag</b> move chips onto matching slots</span>
+      <span class="inv-ux-hint"><b>Glow</b> means slot-compatible</span>
+      <span class="inv-ux-hint"><b>Dimmed</b> means already equipped</span>
     </div>
     <div class="inv-tab-panel" id="invTabStats">
       <div id="invStats" class="inv-stats"></div>
@@ -389,10 +443,17 @@
   <div id="wizardPawModal" class="modal-backdrop hidden" aria-hidden="true">
     <div class="modal-box wizard-paw-box">
       <h2 class="screen-title wizard-paw-title">WIZARD'S PAW</h2>
-      <p class="wizard-paw-copy">Choose 2 stats to increase by 50%. Time is stopped until you lock them in.</p>
+      <p class="wizard-paw-copy">Time is stopped until you lock in your picks.</p>
+      <ol class="wizard-paw-steps">
+        <li>Review your current stats below.</li>
+        <li>Pick <b>2 stats</b> to boost by <b>+50%</b> each.</li>
+        <li>Press <b>Confirm</b> to apply them — this can't be undone.</li>
+      </ol>
+      <p class="wizard-paw-section-label">Your current stats</p>
       <div id="wizardPawStats" class="wizard-paw-stats"></div>
+      <p class="wizard-paw-section-label">Pick 2 to boost</p>
       <div id="wizardPawChoices" class="wizard-paw-choices"></div>
-      <button id="wizardPawConfirm" class="nav-btn" disabled>CONFIRM 2 PICKS</button>
+      <button id="wizardPawConfirm" class="nav-btn" disabled>PICK 2 MORE</button>
     </div>
   </div>
 
@@ -428,13 +489,15 @@
           <div class="dead-stat"><span class="dead-stat-label">LEVEL</span><b class="dead-stat-val" id="deadLevel">—</b></div>
           <div class="dead-stat"><span class="dead-stat-label">KILLS</span><b class="dead-stat-val" id="deadKills">—</b></div>
           <div class="dead-stat"><span class="dead-stat-label">TIME</span><b class="dead-stat-val" id="deadTime">—</b></div>
-          <div class="dead-stat"><span class="dead-stat-label">COINS</span><b class="dead-stat-val" id="deadCoins">—</b></div>
-          <div class="dead-stat"><span class="dead-stat-label">DIFFICULTY</span><b class="dead-stat-val" id="deadDifficulty">—</b></div>
+          <div class="dead-stat"><span class="dead-stat-label">COINS</span><b class="dead-stat-val dead-stat-val--icon"><canvas id="deadCoinIcon" width="28" height="28" class="difficulty-hud-icon"></canvas><span id="deadCoins">—</span></b></div>
+          <div class="dead-stat"><span class="dead-stat-label">LOOP CRYSTALS</span><b class="dead-stat-val dead-stat-val--icon"><canvas id="deadLoopIcon" width="28" height="28" class="difficulty-hud-icon"></canvas><span id="deadLoopCrystals">—</span></b></div>
+          <div class="dead-stat"><span class="dead-stat-label">DIFFICULTY</span><b class="dead-stat-val dead-stat-val--difficulty"><canvas id="deadDifficultyIcon" width="20" height="20" class="difficulty-hud-icon"></canvas><span id="deadDifficulty">—</span></b></div>
         </div>
         <div class="dead-records-wrap">
           <span class="dead-records-title">PERSONAL BESTS</span>
           <div class="dead-records-row" id="deadRecords"></div>
         </div>
+        <div id="deadCompetitiveStatus" class="competitive-submit-status hidden"></div>
         <div class="dead-items-wrap">
           <div class="dead-items-header">
             <span class="dead-items-label">RELICS HELD</span>
@@ -480,7 +543,7 @@
           <div class="dead-stat"><span class="dead-stat-label">LEVEL</span><b class="dead-stat-val" id="winLevel">—</b></div>
           <div class="dead-stat"><span class="dead-stat-label">KILLS</span><b class="dead-stat-val" id="winKills">—</b></div>
           <div class="dead-stat"><span class="dead-stat-label">TIME</span><b class="dead-stat-val" id="winTime">—</b></div>
-          <div class="dead-stat"><span class="dead-stat-label">COINS</span><b class="dead-stat-val" id="winCoins">—</b></div>
+          <div class="dead-stat"><span class="dead-stat-label">COINS</span><b class="dead-stat-val dead-stat-val--icon"><canvas id="winCoinIcon" width="28" height="28" class="dead-stat-icon"></canvas><span id="winCoins">—</span></b></div>
           <div class="dead-stat"><span class="dead-stat-label">DIFFICULTY</span><b class="dead-stat-val" id="winDifficulty">—</b></div>
         </div>
         <div class="dead-items-wrap">
@@ -505,6 +568,10 @@
 
   <!-- Pause menu -->
   <div id="pause" class="overlay hidden">
+    <div class="pause-brand" aria-hidden="true">
+      <div class="pause-brand__title">NEO NYKE</div>
+      <div class="pause-brand__subtitle">DUNGEON GOD</div>
+    </div>
     <h2 class="screen-title">PAUSED</h2>
     <div class="main-nav">
       <button id="pauseResume" class="nav-btn">RESUME</button>
@@ -696,9 +763,11 @@
           <div class="altmode-card__text">
             <h3 class="altmode-card__name">COMPETITIVE RUN</h3>
             <p class="altmode-card__desc">Everyone plays the same weekly seed on Hard difficulty with no modifiers. Climb the leaderboard.</p>
+            <div id="competitiveServerStatus" class="competitive-server-status competitive-server-status--checking">Checking server...</div>
           </div>
           <button id="altModeCompetitiveBtn" class="nav-btn altmode-card__btn" style="background:rgba(180,140,0,0.18);border-color:rgba(255,210,0,0.5);">COMPETE</button>
         </div>
+        <button id="competitiveServerRetryBtn" class="nav-btn nav-btn--minor competitive-server-retry hidden" type="button">RETRY CONNECTION</button>
         <div id="seedErrorBanner" class="seed-error-banner hidden">&#9888; Cannot connect to the competitive server. Check your connection — you will not be able to start a competitive run until it is reachable.</div>
         <div id="competitiveLeaderboardCard" class="competitive-lb-card">
           <h3 class="altmode-card__name">THIS WEEK'S LEADERBOARD</h3>
@@ -791,7 +860,42 @@
               <input type="range" class="sandbox-slider" min="0" max="999" step="1" value="0">
               <input type="number" class="sandbox-num" min="0" max="999" step="1" value="0">
             </div>
+            <div class="sandbox-row" data-sbox-param="startingLevel">
+              <span>Starting Level</span>
+              <input type="range" class="sandbox-slider" min="1" max="99" step="1" value="1">
+              <input type="number" class="sandbox-num" min="1" max="99" step="1" value="1">
+            </div>
           </div>
+        </div>
+        <div class="sandbox-card">
+          <h4>Move Loadout</h4>
+          <p class="sandbox-card__hint">Pick a move per slot, or leave on Default to use the character's set.</p>
+          <div class="sandbox-rows" id="sandboxMoveLoadout">
+            <div class="sandbox-row sandbox-row--select" data-sbox-move-slot="melee">
+              <span>Melee</span>
+              <select class="sandbox-select" data-sbox-move-slot-select="melee"></select>
+            </div>
+            <div class="sandbox-row sandbox-row--select" data-sbox-move-slot="laser">
+              <span>Laser</span>
+              <select class="sandbox-select" data-sbox-move-slot-select="laser"></select>
+            </div>
+            <div class="sandbox-row sandbox-row--select" data-sbox-move-slot="smash">
+              <span>Smash</span>
+              <select class="sandbox-select" data-sbox-move-slot-select="smash"></select>
+            </div>
+            <div class="sandbox-row sandbox-row--select" data-sbox-move-slot="dash">
+              <span>Dash</span>
+              <select class="sandbox-select" data-sbox-move-slot-select="dash"></select>
+            </div>
+          </div>
+        </div>
+        <div class="sandbox-card">
+          <h4>Starting Inventory</h4>
+          <div class="sandbox-toolbar">
+            <button id="sandboxStartItemsAll" class="sandbox-mini-btn" type="button">All ×1</button>
+            <button id="sandboxStartItemsNone" class="sandbox-mini-btn" type="button">None</button>
+          </div>
+          <div id="sandboxStartItemList" class="sandbox-token-grid sandbox-token-grid--items"></div>
         </div>
         <div class="sandbox-card">
           <h4>Enemy Types</h4>
@@ -812,6 +916,7 @@
       </div>
       <div class="sandbox-flags">
         <label><input id="sandboxGodMode" type="checkbox"> God mode (ignore incoming damage)</label>
+        <label><input id="sandboxUnlockEverything" type="checkbox"> Unlock everything (own all weapons &amp; moves, swap freely in-run)</label>
       </div>
       <div class="sandbox-panel__actions">
         <button id="sandboxReset" class="sandbox-mini-btn" type="button">Reset Defaults</button>
@@ -819,6 +924,60 @@
       </div>
     </div>
   </section>
+</div>
+
+<!-- Credits — full-screen page -->
+<div id="creditsPanel" class="overlay credits-page hidden" aria-hidden="true">
+  <!-- Live dungeon scene (reuses the menu background renderer) -->
+  <canvas id="creditsBg" class="credits-page__bg" aria-hidden="true"></canvas>
+  <!-- Hero curtain-call parade drifting across -->
+  <canvas id="creditsParade" class="credits-page__parade" aria-hidden="true"></canvas>
+
+  <button id="creditsClose" class="back-btn credits-page__back" type="button">
+    <span class="credits-back__arrow" aria-hidden="true">&#8592;</span>
+    <span class="credits-back__label">BACK</span>
+  </button>
+
+  <div class="credits">
+    <div class="credits__hero">
+      <div class="credits__mark" data-text="NEO NYKE">NEO NYKE</div>
+      <div class="credits__studio">a Magenta Autumn game</div>
+    </div>
+
+    <div class="credits__roles">
+      <article class="credits__person credits__person--dev">
+        <div class="credits__avatar" aria-hidden="true">
+          <canvas data-credits-sprite="thorn_knight" width="72" height="72"></canvas>
+        </div>
+        <header class="credits__person-head">
+          <span class="credits__role">Code · Game Design · Hosting</span>
+          <h3 class="credits__name">David Kozdra</h3>
+        </header>
+        <div class="credits__links">
+          <a class="credits-link" href="https://davidkozdra.com/" target="_blank" rel="noopener noreferrer"><span class="credits-link__text">davidkozdra.com</span><span class="credits-link__arrow">↗</span></a>
+          <a class="credits-link" href="https://magentaautumn.itch.io/" target="_blank" rel="noopener noreferrer"><span class="credits-link__text">magentaautumn.itch.io</span><span class="credits-link__arrow">↗</span></a>
+        </div>
+      </article>
+
+      <article class="credits__person credits__person--audio">
+        <div class="credits__avatar" aria-hidden="true">
+          <canvas data-credits-sprite="metao" width="72" height="72"></canvas>
+        </div>
+        <header class="credits__person-head">
+          <span class="credits__role">Music &amp; Sound</span>
+          <h3 class="credits__name">Explorer2000</h3>
+          <p class="credits__tagline">Seasoned chiptune composer · ExplorerAUDIO</p>
+        </header>
+        <div class="credits__links">
+          <a class="credits-link" href="https://exploreraudio.de" target="_blank" rel="noopener noreferrer"><span class="credits-link__text">exploreraudio.de</span><span class="credits-link__arrow">↗</span></a>
+          <a class="credits-link" href="https://chiptunecomposer.com" target="_blank" rel="noopener noreferrer"><span class="credits-link__text">chiptunecomposer.com</span><span class="credits-link__arrow">↗</span></a>
+          <a class="credits-link" href="https://www.youtube.com/@ExplorerAUDIO" target="_blank" rel="noopener noreferrer"><span class="credits-link__text">YouTube — ExplorerAUDIO</span><span class="credits-link__arrow">↗</span></a>
+        </div>
+      </article>
+    </div>
+
+    <p class="credits__thanks" data-text="Thanks for playing.">Thanks for playing.</p>
+  </div>
 </div>
 
 <!-- Character select screen -->
@@ -856,8 +1015,8 @@
       <button id="charBackBtn" class="back-btn">&#8592; BACK</button>
       <div class="charselect-titlewrap">
         <div id="charSelectPhaseTag" class="charselect-phase-tag hidden"></div>
-        <h2 class="screen-title" id="charSelectTitle">CHOOSE YOUR WARRIOR</h2>
-        <p class="charselect-subtitle" id="charSelectSubtitle">Pick a fighter, set the run, then enter the dungeon. Challenges live in their own shop panel.</p>
+        <h2 class="screen-title" id="charSelectTitle">PICK HERO</h2>
+        <p class="charselect-subtitle" id="charSelectSubtitle">Pick hero. Set difficulty. Start.</p>
       </div>
     </div>
 
@@ -865,7 +1024,7 @@
       <div class="charselect-roster">
         <div class="char-roster-head">
           <span class="char-roster-kicker">Roster</span>
-          <span class="char-roster-note">Select one hero</span>
+          <span class="char-roster-note">Locked cards show unlock goals</span>
         </div>
 
         <!-- Carousel -->
@@ -881,9 +1040,9 @@
                 </div>
                 <div class="char-card-header">
                   <span class="char-card-name">PRINCESS</span>
-                  <span class="char-card-tag princess-tag">PINK</span>
+                  <span class="char-card-tag princess-tag"><canvas class="char-card-tag-icon" data-inv-ui-icon="role-princess" width="18" height="18" aria-hidden="true"></canvas>PINK</span>
                 </div>
-                <small class="char-card-hint" data-base="Starter · high damage, pink theme">Starter · high damage, pink theme</small>
+                <small class="char-card-hint" data-base="Easy starter">Easy starter</small>
               </button>
 
               <!-- Thorn Knight -->
@@ -893,9 +1052,9 @@
                 </div>
                 <div class="char-card-header">
                   <span class="char-card-name">THORN KNIGHT</span>
-                  <span class="char-card-tag knight-tag">KNIGHT</span>
+                  <span class="char-card-tag knight-tag"><canvas class="char-card-tag-icon" data-inv-ui-icon="role-knight" width="18" height="18" aria-hidden="true"></canvas>KNIGHT</span>
                 </div>
-                <small class="char-card-hint" data-base="Starter · bleed stacks, close range">Starter · bleed stacks, close range</small>
+                <small class="char-card-hint" data-base="Bleed melee">Bleed melee</small>
               </button>
 
               <!-- Metao -->
@@ -905,9 +1064,9 @@
                 </div>
                 <div class="char-card-header">
                   <span class="char-card-name">METAO</span>
-                  <span class="char-card-tag wizard-tag">WIZARD</span>
+                  <span class="char-card-tag wizard-tag"><canvas class="char-card-tag-icon" data-inv-ui-icon="role-wizard" width="18" height="18" aria-hidden="true"></canvas>WIZARD</span>
                 </div>
-                <small class="char-card-hint" data-base="0.5× damage · compensate with range">0.5× damage · compensate with range</small>
+                <small class="char-card-hint" data-base="Long range">Long range</small>
               </button>
 
               <!-- Granialla -->
@@ -917,9 +1076,9 @@
                 </div>
                 <div class="char-card-header">
                   <span class="char-card-name">GRANIALLA</span>
-                  <span class="char-card-tag god-tag">GOD</span>
+                  <span class="char-card-tag god-tag"><canvas class="char-card-tag-icon" data-inv-ui-icon="role-god" width="18" height="18" aria-hidden="true"></canvas>GOD</span>
                 </div>
-                <small class="char-card-hint" data-base="Unlock by killing GOD">Unlock by killing GOD</small>
+                <small class="char-card-hint" data-base="Locked: beat GOD">Locked: beat GOD</small>
               </button>
 
               <!-- Mooggy -->
@@ -929,9 +1088,9 @@
                 </div>
                 <div class="char-card-header">
                   <span class="char-card-name">MOOGGY</span>
-                  <span class="char-card-tag assassin-tag">ASSASSIN</span>
+                  <span class="char-card-tag assassin-tag"><canvas class="char-card-tag-icon" data-inv-ui-icon="role-assassin" width="18" height="18" aria-hidden="true"></canvas>ASSASSIN</span>
                 </div>
-                <small class="char-card-hint" data-base="Red scarf cat · rapid lazer eyes">Unlock by beating Mooggy 3 times</small>
+                <small class="char-card-hint" data-base="Locked: beat Mooggy">Locked: beat Mooggy</small>
               </button>
 
             </div>
@@ -944,6 +1103,7 @@
 
       </div>
       <aside class="charselect-sidebar">
+        <div class="charselect-control-label">DIFFICULTY</div>
         <div id="difficultySelect" class="difficulty-select" role="group" aria-label="Difficulty">
           <button class="difficulty-btn sel" data-difficulty="easy" type="button"><canvas class="difficulty-btn-icon" width="20" height="20" data-difficulty-icon="easy"></canvas>Easy</button>
           <button class="difficulty-btn" data-difficulty="medium" type="button"><canvas class="difficulty-btn-icon" width="20" height="20" data-difficulty-icon="medium"></canvas>Medium</button>
@@ -1306,6 +1466,7 @@
 <script type="module" src="js/main.js"></script>
 <script src="js/ui/settings-ui.js" defer></script>
 <script src="js/ui/menu-background.js" defer></script>
+<script src="js/ui/credits.js" defer></script>
 <script>
   if ('serviceWorker' in navigator) {
     const CACHE_REFRESH_INTERVAL_MS = 5 * 60 * 60 * 1000;

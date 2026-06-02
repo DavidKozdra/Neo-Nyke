@@ -4,7 +4,7 @@
   position: fixed;
   inset: 0;
   pointer-events: none;
-  z-index: 900;
+  z-index: 43;
   opacity: 0;
   visibility: hidden;
   transition: opacity 0.2s;
@@ -105,7 +105,7 @@
   cursor: pointer;
   touch-action: none;
   user-select: none;
-  font-family: system-ui, sans-serif;
+  font-family: var(--font-pixel);
   box-shadow: 0 2px 8px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.12);
   transition: filter 0.08s, transform 0.08s;
   opacity: 0.85;
@@ -233,7 +233,7 @@
   border: 1px solid rgba(140, 180, 255, 0.25);
   background: rgba(20, 28, 46, 0.88);
   color: rgba(220, 235, 255, 0.95);
-  font-family: system-ui, sans-serif;
+  font-family: var(--font-pixel);
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.05em;

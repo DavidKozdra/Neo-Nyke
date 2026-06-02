@@ -5,7 +5,7 @@
 
 const MAX_FLOOR = 10_000;
 const MAX_TIME  = 86_400;
-const VALID_CHARACTERS = new Set(['Neo', 'Rogue']);
+const VALID_CHARACTERS = new Set(['thorn_knight', 'metao', 'granialla', 'mooggy']);
 
 const NOTICES = [
   {
@@ -32,7 +32,7 @@ const NOTICES = [
     mmdd: '12-01',
     mmddEnd: '12-08',
     title: "Festival of Lights",
-    body: "The halls of the dungeon glow bright. Happy Hanukkah to all who celebrate!",
+    body: "The halls of the dungeon glow bright. Happy Hanukkah to all!",
     icon: '🕎',
     accent: '#4fc3f7',
   },
@@ -56,8 +56,20 @@ const CORS_HEADERS = {
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...CORS_HEADERS },
   });
+}
+
+function getSeasonInfo(now = Date.now()) {
+  const date = new Date(now);
+  const day = date.getUTCDay();
+  const daysSinceMonday = (day + 6) % 7;
+  const seasonStart = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() - daysSinceMonday, 0, 0, 0, 0);
+  const resetAt = seasonStart + 7 * 24 * 60 * 60 * 1000;
+  return {
+    seasonId: new Date(seasonStart).toISOString().slice(0, 10),
+    resetAt: new Date(resetAt).toISOString(),
+  };
 }
 
 async function getSeed(env) {
@@ -103,7 +115,13 @@ async function handleRequest(request, env) {
 
   // ── GET /health ──────────────────────────────────────────────────────────
   if (path === '/health' && request.method === 'GET') {
-    return json({ ok: true });
+    if (!env?.STORE) return json({ ok: false, error: 'STORE binding missing' }, 503);
+    try {
+      await env.STORE.get('seed');
+      return json({ ok: true, competitive: true, ...getSeasonInfo() });
+    } catch {
+      return json({ ok: false, error: 'STORE unavailable' }, 503);
+    }
   }
 
   // ── GET /version ─────────────────────────────────────────────────────────
@@ -125,11 +143,11 @@ async function handleRequest(request, env) {
       return json({ error: 'Too many requests' }, 429);
     }
     const seed = await getSeed(env);
-    return json({ seed });
+    return json({ seed, ...getSeasonInfo() });
   }
 
-  // ── GET /leadbyPage ───────────────────────────────────────────────────────
-  if (path === '/leadbyPage' && request.method === 'GET') {
+  // ── GET /leaderboard ──────────────────────────────────────────────────────
+  if ((path === '/leaderboard' || path === '/leadbyPage') && request.method === 'GET') {
     if (!rateLimit(`lead:${ip}`, 60, 60_000)) {
       return json({ error: 'Too many requests' }, 429);
     }
@@ -143,6 +161,7 @@ async function handleRequest(request, env) {
       pageSize,
       totalEntries: leaderboard.length,
       hasMore: startIndex + pageSize < leaderboard.length,
+      ...getSeasonInfo(),
       data: pageData,
     });
   }
@@ -194,6 +213,7 @@ async function handleRequest(request, env) {
       name: cleanName,
       floor: floorNum,
       seed: String(runSeed),
+      seasonId: getSeasonInfo().seasonId,
       character: cleanCharacter,
       time: timeNum,
       submittedAt: Date.now(),

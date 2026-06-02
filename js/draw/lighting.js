@@ -1,135 +1,155 @@
 // lighting.js — Light source collection and beam carving.
 export function carveBeamLight(path, maxWidth, strength = 0.5) {
     if (!Array.isArray(path) || path.length < 2) return;
-    Neo.ctx.save();
-    Neo.ctx.globalAlpha = Neo.clamp(strength, 0, 1);
-    Neo.ctx.strokeStyle = '#000';
-    Neo.ctx.lineCap = 'round';
-    Neo.ctx.lineJoin = 'round';
-    Neo.ctx.shadowColor = '#000';
-    Neo.ctx.shadowBlur = Math.max(8, maxWidth * 1.8);
-    for (let index = 0; index < path.length - 1; index += 1) {
-      const start = path[index];
-      const end = path[index + 1];
-      Neo.ctx.lineWidth = maxWidth;
-      Neo.ctx.beginPath();
-      Neo.ctx.moveTo(start.x, start.y);
-      Neo.ctx.lineTo(end.x, end.y);
-      Neo.ctx.stroke();
+    const ctx = Neo.ctx;
+    const clamped = Neo.clamp(strength, 0, 1);
+    ctx.save();
+    ctx.strokeStyle = '#000';
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(path[0].x, path[0].y);
+    for (let index = 1; index < path.length; index += 1) {
+      ctx.lineTo(path[index].x, path[index].y);
     }
-    Neo.ctx.restore();
+    // Soft halo: wide, faint stroke approximates shadowBlur falloff at a fraction of the cost.
+    ctx.globalAlpha = clamped * 0.35;
+    ctx.lineWidth = maxWidth * 2.2;
+    ctx.stroke();
+    // Bright core: narrow, opaque stroke for the carved-out beam itself.
+    ctx.globalAlpha = clamped;
+    ctx.lineWidth = maxWidth;
+    ctx.stroke();
+    ctx.restore();
   }
 
-export function pushLightSource(target, x, y, inner, outer, strength, tint = '') {
-    if (target.length >= Neo.LIGHTING_CONFIG.maxLights) return;
+export function pushLightSource(target, x, y, inner, outer, strength, tint = '', essential = false) {
+    const cfg = Neo.LIGHTING_CONFIG;
     if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(outer) || outer <= 0) return;
     if (x + outer < 0 || x - outer > Neo.ROOM_W || y + outer < 0 || y - outer > Neo.ROOM_H) return;
 
-    const cleanOuter = Neo.clamp(outer, 8, Neo.LIGHTING_CONFIG.maxOuterRadius);
-    const cleanInner = Neo.clamp(Number.isFinite(inner) ? inner : 0, 0, cleanOuter * 0.72);
+    const cleanOuter = Neo.clamp(outer, cfg.minOuter, cfg.maxOuterRadius);
+    const cleanInner = Neo.clamp(Number.isFinite(inner) ? inner : 0, 0, cleanOuter * cfg.innerToOuterCap);
     const cleanStrength = Neo.clamp(Number.isFinite(strength) ? strength : 0.5, 0, 1.1);
-    target.push({ x, y, inner: cleanInner, outer: cleanOuter, strength: cleanStrength, tint });
+    target.push({ x, y, inner: cleanInner, outer: cleanOuter, strength: cleanStrength, tint, essential });
+  }
+
+// Keep only the cap-budgeted lights: all `essential` ones plus the highest-scoring optional ones,
+// where score = strength * outer (rough "visible influence" proxy).
+export function pruneLightsToCap(lights) {
+    const cap = Neo.LIGHTING_CONFIG.maxLights;
+    if (lights.length <= cap) return lights;
+    const essential = [];
+    const optional = [];
+    for (let i = 0; i < lights.length; i += 1) {
+      (lights[i].essential ? essential : optional).push(lights[i]);
+    }
+    const slots = Math.max(0, cap - essential.length);
+    if (optional.length > slots) {
+      optional.sort((a, b) => (b.strength * b.outer) - (a.strength * a.outer));
+      optional.length = slots;
+    }
+    return essential.concat(optional);
   }
 
 export function collectRoomLightSources(room) {
+    const cfg = Neo.LIGHTING_CONFIG;
     const lights = [];
     const activeChamber = Neo.getActiveRoomChamber(room, Neo.player);
     pushLightSource(
       lights,
       Neo.ROOM_W / 2,
       Neo.ROOM_H / 2,
-      Neo.LIGHTING_CONFIG.ambient.inner,
-      Math.max(Neo.ROOM_W, Neo.ROOM_H) * Neo.LIGHTING_CONFIG.ambient.outerScale,
-      room?.type === 'boss' ? Neo.LIGHTING_CONFIG.ambient.bossStrength : Neo.LIGHTING_CONFIG.ambient.strength,
-      Neo.LIGHTING_CONFIG.ambient.tint
+      cfg.ambient.inner,
+      Math.max(Neo.ROOM_W, Neo.ROOM_H) * cfg.ambient.outerScale,
+      cfg.ambient.strength,
+      cfg.ambient.tint,
+      true
     );
     if (activeChamber && Array.isArray(room?.layoutChambers) && room.layoutChambers.length > 1) {
-      pushLightSource(lights, activeChamber.x, activeChamber.y, 36, Math.max(activeChamber.w, activeChamber.h) * 0.58, 0.22, 'rgba(120, 160, 255, 0.05)');
+      pushLightSource(
+        lights,
+        activeChamber.x,
+        activeChamber.y,
+        cfg.chamber.inner,
+        Math.max(activeChamber.w, activeChamber.h) * cfg.chamber.outerScale,
+        cfg.chamber.strength,
+        cfg.chamber.tint,
+        true
+      );
     }
 
     pushLightSource(
       lights,
       Neo.player.x,
       Neo.player.y - 8,
-      Neo.LIGHTING_CONFIG.player.inner,
-      Neo.LIGHTING_CONFIG.player.outer,
-      Neo.LIGHTING_CONFIG.player.strength,
-      Neo.LIGHTING_CONFIG.player.tint
+      cfg.player.inner,
+      cfg.player.outer,
+      cfg.player.strength,
+      cfg.player.tint,
+      true
     );
 
+    const flickerCfg = cfg.flicker;
+    const now = Date.now();
     Neo.decorations.forEach(decor => {
       if (!decor) return;
-      const flameT = Date.now() * 0.007 + decor.x * 0.017 + decor.y * 0.011;
-      const flicker = 1 + Math.sin(flameT) * 0.08 + Math.cos(flameT * 1.9) * 0.05;
+      const flameT = now * flickerCfg.timeScale + decor.x * flickerCfg.xPhase + decor.y * flickerCfg.yPhase;
+      const flicker = 1 + Math.sin(flameT) * flickerCfg.primaryAmp + Math.cos(flameT * flickerCfg.secondaryFreq) * flickerCfg.secondaryAmp;
       if (decor.kind === 'brazier') {
-        pushLightSource(
-          lights,
-          decor.x,
-          decor.y - 8,
-          20,
-          decor.r * 8.8 * flicker,
-          1,
-          'rgba(255, 146, 74, 0.16)'
-        );
+        const b = cfg.brazier;
+        pushLightSource(lights, decor.x, decor.y + b.yOffset, b.inner, decor.r * b.outerScale * flicker, b.strength, b.tint);
       } else if (decor.kind === 'torch') {
-        pushLightSource(
-          lights,
-          decor.x,
-          decor.y - 12,
-          34,
-          286 * flicker,
-          1.1,
-          'rgba(255, 176, 94, 0.24)'
-        );
-        // Add a softer wide spill so torches brighten nearby floor, not just the immediate hotspot.
-        pushLightSource(
-          lights,
-          decor.x,
-          decor.y - 10,
-          96,
-          448 * flicker,
-          0.52,
-          'rgba(255, 206, 142, 0.12)'
-        );
+        const t = cfg.torch;
+        pushLightSource(lights, decor.x, decor.y + t.yOffset, t.inner, t.outer * flicker, t.strength, t.tint);
+        pushLightSource(lights, decor.x, decor.y + t.spillYOffset, t.spillInner, t.spillOuter * flicker, t.spillStrength, t.spillTint);
       }
     });
 
+    const haz = cfg.hazard;
     Neo.hazards.forEach(hazard => {
       if (!hazard) return;
       if (hazard.kind === 'lava') {
-        pushLightSource(lights, hazard.x, hazard.y, hazard.r * 0.25, hazard.r * 2.7, 0.95, 'rgba(255, 92, 44, 0.12)');
+        const h = haz.lava;
+        const lightR = hazard.shape === 'rect' ? Math.max(hazard.w, hazard.h) / 2 : hazard.r;
+        pushLightSource(lights, hazard.x, hazard.y, lightR * h.innerScale, lightR * h.outerScale, h.strength, h.tint);
       } else if (hazard.kind === 'fire_circle') {
-        pushLightSource(lights, hazard.x, hazard.y, hazard.r * 0.35, hazard.r * 1.75, 0.72, 'rgba(255, 120, 54, 0.08)');
+        const h = haz.fireCircle;
+        pushLightSource(lights, hazard.x, hazard.y, hazard.r * h.innerScale, hazard.r * h.outerScale, h.strength, h.tint);
       } else if (hazard.kind === 'lightning_column') {
-        pushLightSource(lights, hazard.x, hazard.y, hazard.r * 0.22, hazard.r * 1.8, 0.82, 'rgba(124, 200, 255, 0.09)');
+        const h = haz.lightningColumn;
+        pushLightSource(lights, hazard.x, hazard.y, hazard.r * h.innerScale, hazard.r * h.outerScale, h.strength, h.tint);
       } else if (hazard.kind === 'explosive_trap') {
         if (hazard.triggered) {
-          const fuseRatio = Neo.clamp(1 - (hazard.fuse || 0) / (hazard.fuseDuration || 0.78), 0, 1);
-          const intensity = 0.12 + fuseRatio * 0.22;
-          const radius = hazard.blastRadius * (0.55 + fuseRatio * 0.35);
-          pushLightSource(lights, hazard.x, hazard.y, (hazard.r || 14) * 0.6, radius, intensity, 'rgba(255, 90, 30, 0.14)');
+          const h = haz.explosiveTrapTriggered;
+          const fuseRatio = Neo.clamp(1 - (hazard.fuse || 0) / (hazard.fuseDuration || haz.explosiveTrapFuseDefault), 0, 1);
+          const intensity = h.minStrength + fuseRatio * h.strengthBoost;
+          const radius = hazard.blastRadius * (h.minRadiusScale + fuseRatio * h.radiusBoost);
+          pushLightSource(lights, hazard.x, hazard.y, (hazard.r || haz.explosiveTrapIdle.defaultR) * h.innerScale, radius, intensity, h.tint);
         } else {
-          pushLightSource(lights, hazard.x, hazard.y, (hazard.r || 14) * 0.3, (hazard.r || 14) * 2.2, 0.18, 'rgba(255, 180, 60, 0.04)');
+          const h = haz.explosiveTrapIdle;
+          const r = hazard.r || h.defaultR;
+          pushLightSource(lights, hazard.x, hazard.y, r * h.innerScale, r * h.outerScale, h.strength, h.tint);
         }
       }
     });
 
+    const proj = cfg.projectiles;
     Neo.projectiles.forEach(projectile => {
       if (!projectile || !Number.isFinite(projectile.x) || !Number.isFinite(projectile.y)) return;
       const kind = projectile.kind || '';
-      if (kind === 'fireball') {
-        pushLightSource(lights, projectile.x, projectile.y, projectile.r * 0.8, 90, 0.86, 'rgba(255, 118, 42, 0.1)');
-      } else if (kind === 'disk' || kind === 'cult_missile') {
-        pushLightSource(lights, projectile.x, projectile.y, projectile.r * 0.7, 70, 0.58, 'rgba(182, 108, 255, 0.08)');
-      } else if (kind === 'sniper_round' || kind === 'machine_round' || kind === 'magenta_degale') {
-        pushLightSource(lights, projectile.x, projectile.y, projectile.r * 0.45, 42, 0.34, 'rgba(255, 148, 92, 0.04)');
-      }
+      let p = null;
+      if (kind === 'fireball') p = proj.fireball;
+      else if (kind === 'disk' || kind === 'cult_missile') p = proj.disk;
+      else if (kind === 'sniper_round' || kind === 'machine_round' || kind === 'magenta_degale') p = proj.bullet;
+      if (p) pushLightSource(lights, projectile.x, projectile.y, projectile.r * p.innerScale, p.outer, p.strength, p.tint);
     });
 
-    return lights;
+    return pruneLightsToCap(lights);
   }
 
   // Expose on Neo
   Neo.carveBeamLight = carveBeamLight;
   Neo.pushLightSource = pushLightSource;
+  Neo.pruneLightsToCap = pruneLightsToCap;
   Neo.collectRoomLightSources = collectRoomLightSources;

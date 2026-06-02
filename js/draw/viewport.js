@@ -97,13 +97,10 @@ export function withRoundedClipRect(rect, radius, drawFn) {
   }
 
 export function getRoomDarkness(room, lights) {
-    const baseDarkness = room?.type === 'boss'
-      ? Neo.LIGHTING_CONFIG.darkness.boss
-      : room?.type === 'challenge'
-        ? Neo.LIGHTING_CONFIG.darkness.challenge
-        : Neo.LIGHTING_CONFIG.darkness.combat;
-    const lightPressure = Math.min(1.2, lights.reduce((sum, light) => sum + light.strength, 0) / 14);
-    return Math.max(0, baseDarkness - lightPressure * Neo.LIGHTING_CONFIG.darkness.lightRelief);
+    const dark = Neo.LIGHTING_CONFIG.darkness;
+    const baseDarkness = room?.type === 'challenge' ? dark.challenge : dark.combat;
+    const lightPressure = Math.min(1.2, lights.reduce((sum, light) => sum + light.strength, 0) / dark.pressureDivisor);
+    return Math.max(0, baseDarkness - lightPressure * dark.lightRelief);
   }
 
 export function createRoomDarknessGradient(alpha) {
@@ -134,34 +131,44 @@ export function carveSoftLight(x, y, innerRadius, outerRadius, strength = 1, cli
   }
 
 export function carvePlayerBeamLights() {
+    const beam = Neo.LIGHTING_CONFIG.beam;
     if (Neo.laserActive) {
-      const angle = Neo.laserMode === 'god_sweep'
-        ? Neo.laserAngle
-        : Math.atan2(Neo.mouse.worldY - Neo.player.y, Neo.mouse.worldX - Neo.player.x);
+      const angle = Neo.laserAngle;
       const beamPath = Neo.buildRicochetBeamPath(Neo.player.x, Neo.player.y, angle, Neo.getPlayerBeamRange(Neo.laserMode, Neo.getEquippedMove('laser')), Neo.getPlayerBeamBounceCount(Neo.laserMode));
-      Neo.carveBeamLight(beamPath, Neo.laserMode === 'god_sweep' ? 42 : Neo.laserMode === 'turtle_wave' ? 34 : 22, Neo.laserMode === 'god_sweep' ? 0.9 : 0.7);
+      const width = Neo.laserMode === 'god_sweep' ? beam.laserGodWidth : Neo.laserMode === 'turtle_wave' ? beam.laserTurtleWidth : beam.laserDefaultWidth;
+      const strength = Neo.laserMode === 'god_sweep' ? beam.laserGodStrength : beam.laserDefaultStrength;
+      Neo.carveBeamLight(beamPath, width, strength);
       return;
     }
 
     if (Neo.getEquippedWeapon() !== 'lazer_glasses' || Neo.player.weaponBeamTime <= 0) return;
     const baseAngle = Math.atan2(Neo.mouse.worldY - Neo.player.y, Neo.mouse.worldX - Neo.player.x);
-    [-0.2, 0.2].forEach(offset => {
-      const beamPath = Neo.buildRicochetBeamPath(Neo.player.x, Neo.player.y, baseAngle + offset, 430, Neo.LAZER_GLASSES_BOUNCES);
-      Neo.carveBeamLight(beamPath, 14, 0.46);
+    [-beam.glassesSpread, beam.glassesSpread].forEach(offset => {
+      const beamPath = Neo.buildRicochetBeamPath(Neo.player.x, Neo.player.y, baseAngle + offset, beam.glassesRange, Neo.LAZER_GLASSES_BOUNCES);
+      Neo.carveBeamLight(beamPath, beam.glassesWidth, beam.glassesStrength);
     });
   }
 
 export function carveEnemyBeamLights() {
+    const beam = Neo.LIGHTING_CONFIG.beam;
     Neo.enemies.forEach(enemy => {
       if (!enemy || Number(enemy.beamTime || 0) <= 0 || !Number.isFinite(enemy.beamAngle)) return;
-      const beamPath = Neo.buildRicochetBeamPath(enemy.x, enemy.y, enemy.beamAngle, enemy.type === 'god' ? 620 : 460, Neo.getEnemyBeamBounceCount(enemy));
-      Neo.carveBeamLight(beamPath, enemy.type === 'god' ? 36 : 18, enemy.type === 'god' ? 0.72 : 0.42);
+      const isGod = enemy.type === 'god';
+      const beamPath = Neo.buildRicochetBeamPath(enemy.x, enemy.y, enemy.beamAngle, isGod ? beam.enemyGodRange : beam.enemyDefaultRange, Neo.getEnemyBeamBounceCount(enemy));
+      Neo.carveBeamLight(beamPath, isGod ? beam.enemyGodWidth : beam.enemyDefaultWidth, isGod ? beam.enemyGodStrength : beam.enemyDefaultStrength);
     });
   }
 
+const tintRgbCache = new Map();
+const TINT_RGB_RE = /^rgba\((\s*\d+\s*,\s*\d+\s*,\s*\d+\s*),\s*[\d.]+\)$/;
 export function lightTintWithAlpha(tint, alpha) {
-    const match = /^rgba\((\s*\d+\s*,\s*\d+\s*,\s*\d+\s*),\s*[\d.]+\)$/.exec(tint);
-    return match ? `rgba(${match[1]}, ${alpha})` : 'rgba(255,255,255,0)';
+    let rgb = tintRgbCache.get(tint);
+    if (rgb === undefined) {
+      const match = TINT_RGB_RE.exec(tint);
+      rgb = match ? match[1] : null;
+      tintRgbCache.set(tint, rgb);
+    }
+    return rgb ? `rgba(${rgb}, ${alpha})` : 'rgba(255,255,255,0)';
   }
 
 export function drawLightBloom(lights) {
@@ -179,25 +186,7 @@ export function drawLightBloom(lights) {
   }
 
 export function drawRoomCeilingMask() {
-    const room = Neo.currentRoom;
-    if (!room || Neo.LIGHTING_CONFIG.clearRoomTypes.has(room.type)) return;
-    const lights = Neo.collectRoomLightSources(room);
-    const darknessAlpha = getRoomDarkness(room, lights);
-    if (darknessAlpha < Neo.LIGHTING_CONFIG.darkness.minVisible) return;
-
-    Neo.ctx.save();
-    Neo.ctx.fillStyle = createRoomDarknessGradient(darknessAlpha);
-    Neo.ctx.fillRect(0, 0, Neo.ROOM_W, Neo.ROOM_H);
-    Neo.ctx.globalCompositeOperation = 'destination-out';
-
-    lights.forEach(light => {
-      carveSoftLight(light.x, light.y, light.inner, light.outer, light.strength, null);
-    });
-
-    carvePlayerBeamLights();
-    carveEnemyBeamLights();
-    drawLightBloom(lights);
-    Neo.ctx.restore();
+    // Disabled: room lighting/darkness compositing can leave isolated dark regions.
   }
 
   // Expose on Neo

@@ -18,6 +18,17 @@ export function migratePlayerData(source) {
     Neo.ITEM_KEYS.forEach(key => {
       playerData.items[key] = Number(playerData.items[key] || 0);
     });
+    if (!playerData.moveStackOverrides || typeof playerData.moveStackOverrides !== 'object') {
+      playerData.moveStackOverrides = {};
+    }
+    const normalizedMoveStackOverrides = {};
+    Object.entries(playerData.moveStackOverrides).forEach(([moveKey, value]) => {
+      if (!Neo.MOVE_DEFS[moveKey]) return;
+      const nextValue = Math.max(1, Math.floor(Number(value || 0)));
+      normalizedMoveStackOverrides[moveKey] = nextValue;
+    });
+    playerData.moveStackOverrides = normalizedMoveStackOverrides;
+    playerData.extraBatteryPendingCount = Math.max(0, Math.floor(Number(playerData.extraBatteryPendingCount || 0)));
     playerData.level = Number(playerData.level || 1);
     playerData.xp = Number(playerData.xp || 0);
     playerData.xpToNext = Number(playerData.xpToNext || 20);
@@ -64,6 +75,9 @@ export function migratePlayerData(source) {
     playerData.fleeceTick = Number(playerData.fleeceTick || 0);
     playerData.weaponBeamTime = Number(playerData.weaponBeamTime || 0);
     playerData.weaponBeamTick = Number(playerData.weaponBeamTick || 0);
+    if (!Array.isArray(playerData.equipmentSlots)) playerData.equipmentSlots = [];
+    if (!playerData.equipmentCooldowns || typeof playerData.equipmentCooldowns !== 'object') playerData.equipmentCooldowns = {};
+    if (!playerData.equipmentEffects || typeof playerData.equipmentEffects !== 'object') playerData.equipmentEffects = {};
     if (!playerData.anvilUpgrades || typeof playerData.anvilUpgrades !== 'object') {
       playerData.anvilUpgrades = { weapon: {}, move: {} };
     }
@@ -91,6 +105,8 @@ export function migratePlayerData(source) {
     playerData.critCharmBuffTime = Number(playerData.critCharmBuffTime || 0);
     playerData.escapeChargeKills = Number(playerData.escapeChargeKills || 0);
     playerData.escapeReady = playerData.escapeReady !== false;
+    playerData.robotArmChargeKills = Number(playerData.robotArmChargeKills || 0);
+    playerData.robotArmReady = !!playerData.robotArmReady;
     playerData.scarfChargeKills = Number(playerData.scarfChargeKills || 0);
     playerData.scarfHealReady = playerData.scarfHealReady !== false;
     return playerData;
@@ -104,8 +120,31 @@ export function getUiCharacterKey() {
     return Neo.player?.character || Neo.chosenCharacter;
   }
 
+const SETTINGS_STORE_KEY = 'neonyke:settings';
+let settingsThemeSyncBound = false;
+
+function getSettingsActiveTheme() {
+    try {
+      const raw = localStorage.getItem(SETTINGS_STORE_KEY);
+      if (!raw) return '';
+      const parsed = JSON.parse(raw);
+      return typeof parsed?.activeTheme === 'string' ? parsed.activeTheme : '';
+    } catch {
+      return '';
+    }
+  }
+
 export function syncCharacterUiTheme() {
-    document.documentElement.classList.toggle('princess-ui', getUiCharacterKey() === 'princess');
+    const activeTheme = getSettingsActiveTheme();
+    const hasExplicitTheme = !!activeTheme && activeTheme !== '_custom';
+    const princessFromSettings = activeTheme === 'princess';
+    const princessFromCharacter = !hasExplicitTheme && getUiCharacterKey() === 'princess';
+    document.documentElement.classList.toggle('princess-ui', princessFromSettings || princessFromCharacter);
+
+    if (!settingsThemeSyncBound) {
+      settingsThemeSyncBound = true;
+      window.addEventListener('neo:settings-changed', syncCharacterUiTheme);
+    }
   }
 
 export function getDefaultWeaponForCharacter(characterKey) {
@@ -182,9 +221,15 @@ export function getItemStats() {
     if (!Neo.godItemKeysCache) Neo.godItemKeysCache = Neo.ITEM_KEYS.filter(key => Neo.ITEM_DEFS[key]?.rarity === 'god');
 
     const neoKnife = getItemCount('neo_knife');
+  const toothOfThorn = getItemCount('tooth_of_thorn');
+    const toughSkin = getItemCount('tough_skin');
     const orbOfBlood = getItemCount('orb_of_blood');
     const hemesScarf = getItemCount('hemes_scarf');
+    const goldVac = getItemCount('gold_vac');
+    const doubleDose = getItemCount('double_dose');
+    const copycatCharm = getItemCount('copycat_charm');
     const attackServo = getItemCount('attack_servo');
+  const enemyMagnet = getItemCount('enemy_magnet');
     const robotArm = getItemCount('robot_arm');
     const scholarSeal = getItemCount('scholar_seal');
     const scholarCap = getItemCount('scholar_cap');
@@ -223,6 +268,8 @@ export function getItemStats() {
     const characterDef = Neo.getCharacterDef?.() || {};
     Neo.itemStatsCacheValue = {
       bleedChance: neoKnife * 0.05,
+      drainChance: toothOfThorn * 0.028,
+      bleedResistance: Neo.clamp(toughSkin * 0.25, 0, 0.8),
       weaponFatigueChance: weaponFatigue * 0.05,
       genericHealthItemHealRatio: genericHealthItem * 0.05,
       snakeKnifePoisonChance: snakeKnife * 0.02,
@@ -235,11 +282,16 @@ export function getItemStats() {
       bleedHealScale: hemesScarf,
       passiveBleedStacks: hemesScarf,
       scarfBleedsOnHit: hemesScarf,
+      pickupVacuumRange: goldVac > 0 ? 9999 : 0,
+      coinPickupMultiplier: goldVac > 0 ? 2 : 1,
+      potionDoubleChance: Neo.clamp(doubleDose * 0.5, 0, 1),
+      itemDuplicateChance: Neo.clamp(copycatCharm * 0.2, 0, 1),
       critChance,
       critMultiplier: 1.6 + (oracleLens ? critChance * 2.2 : critChance * 0.6),
       attackSpeedMultiplier: robotArm > 0 ? 8 * (1 + attackServo * 0.12 + chronoSpringBonus) : 1 + attackServo * 0.12 + chronoSpringBonus,
       hasRobotArm: robotArm > 0,
-      moveSpeedMultiplier: 1 + turtleShell * 0.05,
+      moveSpeedMultiplier: (1 + turtleShell * 0.05) * (Number(Neo.player?.equipmentEffects?.turbo_boots?.time || 0) > 0 ? 1.55 : 1),
+      laserWeightMultiplier: Math.max(0, 1 - turtleShell * 0.01),
       xpGainMultiplier: 1 + scholarSeal * 0.15,
       levelEdgeDamageMultiplier: 1 + scholarCap * xpProgress * 0.45,
       knockbackMultiplier: 1 + pushMan * 0.18,
@@ -249,6 +301,7 @@ export function getItemStats() {
       beamChainTargets: dragonOrb > 0 ? Math.min(2, dragonOrb) : 0,
       beamChainDamageMultiplier: dragonOrb > 0 ? 0.6 + (dragonOrb - 1) * 0.15 : 0,
       projectileBounces: ricocete,
+      projectileHomingStrength: enemyMagnet * 0.05,
       projectileSpeedMultiplier: 1 + mooggyZoomies * 0.2,
       healingMultiplier: 1 + drinkMaster * 0.2,
       itemDropChanceBonus: Math.min(0.3, richMansLuck * 0.05),
@@ -279,6 +332,11 @@ export function getWizardPawStatCards() {
   }
 
 export function openWizardPawSelection() {
+    if (Neo.wizardPawSelection) {
+      Neo.wizardPawPendingCount = (Neo.wizardPawPendingCount || 0) + 1;
+      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 46, life: 1, text: "WIZARD'S PAW QUEUED!", c: '#ffd27d' });
+      return;
+    }
     Neo.wizardPawSelection = {
       picks: [],
       options: [
@@ -287,6 +345,7 @@ export function openWizardPawSelection() {
         { key: 'attackSpeed', name: 'Attack Speed', description: `Current ${getAttackSpeedValue().toFixed(2)}. Increase base attack speed by 50%.` },
       ],
     };
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 46, life: 1, text: "WIZARD'S PAW!", c: '#ffd27d' });
     Neo.setWizardPawModalOpen(true);
     renderWizardPawPanel();
   }
@@ -310,7 +369,7 @@ export function renderWizardPawPanel() {
       Neo.ui.wizardPawConfirm.disabled = Neo.wizardPawSelection.picks.length !== 2;
       Neo.ui.wizardPawConfirm.textContent = Neo.wizardPawSelection.picks.length === 2
         ? 'CONFIRM PICKS'
-        : `CONFIRM ${Neo.wizardPawSelection.picks.length}/2`;
+        : `PICK ${2 - Neo.wizardPawSelection.picks.length} MORE`;
     }
   }
 
@@ -346,13 +405,60 @@ export function applyWizardPawStat(stat) {
 export function confirmWizardPawSelection() {
     if (!Neo.wizardPawSelection || Neo.wizardPawSelection.picks.length !== 2) return;
     Neo.wizardPawSelection.picks.forEach(applyWizardPawStat);
-    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 46, life: 1, text: "WIZARD'S PAW!", c: '#ffd27d' });
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 46, life: 1, text: 'PAW APPLIED!', c: '#ffd27d' });
     Neo.wizardPawSelection = null;
     Neo.setWizardPawModalOpen(false);
     Neo.markInventoryPanelDirty();
     Neo.renderInventoryPanel();
     Neo.updateHud();
     Neo.scheduleRunSave();
+    if ((Neo.wizardPawPendingCount || 0) > 0) {
+      Neo.wizardPawPendingCount -= 1;
+      openWizardPawSelection();
+    }
+  }
+
+function ensureMoveStackOverrides(playerData = Neo.player) {
+    if (!playerData || typeof playerData !== 'object') return null;
+    if (!playerData.moveStackOverrides || typeof playerData.moveStackOverrides !== 'object') {
+      playerData.moveStackOverrides = {};
+    }
+    return playerData.moveStackOverrides;
+  }
+
+export function openExtraBatterySelection(playerData = Neo.player) {
+    if (!playerData) return;
+    playerData.extraBatteryPendingCount = Math.max(0, Math.floor(Number(playerData.extraBatteryPendingCount || 0))) + 1;
+    if (playerData !== Neo.player) return;
+    Neo.activeInvPlayer = 1;
+    Neo.activeInvTab = 'equipped';
+    Neo.activeInventorySlot = '';
+    Neo.markInventoryPanelDirty?.();
+    if (!Neo.isWizardPawOpen?.()) {
+      Neo.setInventoryPanelOpen?.(true);
+      Neo.renderInventoryPanel?.();
+    }
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 46, life: 0.9, text: 'SELECT A MOVE', c: '#cfd7ff' });
+    Neo.scheduleRunSave?.();
+  }
+
+export function grantExtraBatteryToMove(moveKey, playerData = Neo.player) {
+    if (!playerData || !Neo.MOVE_DEFS[moveKey]) return 0;
+    const overrides = ensureMoveStackOverrides(playerData);
+    if (!overrides) return 0;
+    const nextMaxStacks = Neo.getMoveMaxStacks(moveKey, playerData.character, playerData) + 1;
+    overrides[moveKey] = nextMaxStacks;
+    playerData.extraBatteryPendingCount = Math.max(0, Math.floor(Number(playerData.extraBatteryPendingCount || 0)) - 1);
+    if (playerData === Neo.player) {
+      const slot = Neo.MOVE_DEFS[moveKey]?.slot || '';
+      if (slot && playerData.equippedMoves?.[slot] === moveKey) {
+        Neo.cooldowns[slot] = Neo.createCooldownEntry(slot, playerData, Neo.cooldowns[slot]);
+      }
+      Neo.markInventoryPanelDirty?.();
+      Neo.updateHud?.();
+      Neo.scheduleRunSave?.();
+    }
+    return nextMaxStacks;
   }
 
 export function consumeCharge(chargeType) {
@@ -375,6 +481,10 @@ export function consumeCharge(chargeType) {
     if (chargeType === 'escape') {
       Neo.player.escapeReady = false;
       Neo.player.escapeChargeKills = 0;
+    }
+    if (chargeType === 'robot_arm') {
+      Neo.player.robotArmReady = false;
+      Neo.player.robotArmChargeKills = 0;
     }
     if (chargeType === 'hemes_scarf') {
       Neo.player.scarfHealReady = false;
@@ -428,8 +538,19 @@ export function consumeCharge(chargeType) {
       if (Neo.player.escapeChargeKills >= getChargeRequirement(10)) {
         Neo.player.escapeReady = true;
         Neo.player.escapeChargeKills = 0;
-        const warpHint = Neo.formatControlLabel('f', 'f');
+        const slotIdx = Neo.player?.equipmentSlots?.indexOf?.('charged_adapter') ?? -1;
+        const slotLetter = slotIdx >= 0 ? (Neo.EQUIPMENT_SLOT_KEYS?.[slotIdx] || 'F') : 'F';
+        const warpHint = Neo.formatControlLabel(slotLetter.toLowerCase(), slotLetter.toLowerCase());
         Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 36, life: 0.9, text: `ADAPTER READY - PRESS ${warpHint}`, c: '#b88cff' });
+      }
+    }
+
+    if (getItemCount('robot_arm') > 0 && !Neo.player.robotArmReady) {
+      Neo.player.robotArmChargeKills += chargeSteps;
+      if (Neo.player.robotArmChargeKills >= getChargeRequirement(8)) {
+        Neo.player.robotArmReady = true;
+        Neo.player.robotArmChargeKills = 0;
+        Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 30, life: 0.8, text: 'ARM READY', c: '#a9e6ff' });
       }
     }
 
@@ -475,5 +596,7 @@ export function refreshFloorChargeStates() {
   Neo.handleWizardPawChoiceClick = handleWizardPawChoiceClick;
   Neo.applyWizardPawStat = applyWizardPawStat;
   Neo.confirmWizardPawSelection = confirmWizardPawSelection;
+  Neo.openExtraBatterySelection = openExtraBatterySelection;
+  Neo.grantExtraBatteryToMove = grantExtraBatteryToMove;
   Neo.consumeCharge = consumeCharge;
   Neo.refreshFloorChargeStates = refreshFloorChargeStates;

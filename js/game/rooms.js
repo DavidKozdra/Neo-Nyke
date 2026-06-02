@@ -198,11 +198,7 @@
     }
 
     if (Neo.nextRandom('world') < 0.4 && room.type !== 'god' && room.type !== 'challenge' && room.type !== 'anvil') {
-      const primaryLava = createMoatLavaHazard();
-      room.hazards.push(primaryLava);
-      if (Neo.nextRandom('world') < 0.35) {
-        room.hazards.push(createCompanionMoatLava(primaryLava));
-      }
+      room.hazards.push(...createCornerMoatLavaHazards(room));
     }
 
     if ((room.type === 'combat' || room.type === 'boss') && Neo.nextRandom('world') < (room.type === 'boss' ? 0.45 : 0.32)) {
@@ -470,60 +466,186 @@
     return Neo.rand(rangeMax, rangeMin, 'world');
   }
 
-  function createMoatLavaHazard() {
-    const r = 44 + Neo.rand(24, 0, 'world');
-    const side = Neo.irand(0, 3, 'world');
-    const wallOffset = Neo.WALL + r + 18 + Neo.rand(16, 0, 'world');
-    const hazard = {
-      kind: 'lava',
-      x: Neo.ROOM_W / 2,
-      y: Neo.ROOM_H / 2,
-      r,
-      phase: Neo.rand(Math.PI * 2, 0, 'world'),
-      pulse: Neo.rand(1.8, 1.15, 'world'),
-      wobble: Neo.rand(0.75, 0.45, 'world'),
-      side,
-    };
+  function randomMoatLaneTiles(axis, tileCount) {
+    const tile = Neo.ENV_TILE_SIZE;
+    const span = axis === 'x' ? Neo.ROOM_W : Neo.ROOM_H;
+    const center = span / 2;
+    const innerMin = Neo.WALL;
+    const innerMax = span - Neo.WALL;
+    const patchSize = tileCount * tile;
+    const doorHalf = Neo.DOOR / 2 + 32;
+    const ranges = [];
+    if (center - doorHalf - patchSize > innerMin) ranges.push([innerMin, center - doorHalf - patchSize]);
+    if (innerMax - patchSize > center + doorHalf) ranges.push([center + doorHalf, innerMax - patchSize]);
+    if (!ranges.length) return innerMin;
+    const [rMin, rMax] = ranges[Neo.irand(0, ranges.length - 1, 'world')];
+    const start = Neo.rand(rMax, rMin, 'world');
+    return Neo.clamp(Neo.WALL + Math.round((start - Neo.WALL) / tile) * tile, innerMin, innerMax - patchSize);
+  }
 
-    if (side === 0) {
-      hazard.x = randomMoatLanePosition('x', r);
-      hazard.y = wallOffset;
-    } else if (side === 1) {
-      hazard.x = randomMoatLanePosition('x', r);
-      hazard.y = Neo.ROOM_H - wallOffset;
-    } else if (side === 2) {
-      hazard.x = wallOffset;
-      hazard.y = randomMoatLanePosition('y', r);
-    } else {
-      hazard.x = Neo.ROOM_W - wallOffset;
-      hazard.y = randomMoatLanePosition('y', r);
-    }
+  function rectsOverlap(a, b) {
+    return a.left < b.left + b.w
+      && a.left + a.w > b.left
+      && a.top < b.top + b.h
+      && a.top + a.h > b.top;
+  }
 
+  function hasRoomDoorLikeExit(room, direction) {
+    return !!room?.doors?.[direction] || !!room?.secretPassages?.[direction];
+  }
+
+  function getRoomEntranceExclusionRects(room) {
+    const pad = 48;
+    const depth = Neo.WALL + 112;
+    const doorLeft = (Neo.ROOM_W - Neo.DOOR) / 2 - pad;
+    const doorTop = (Neo.ROOM_H - Neo.DOOR) / 2 - pad;
+    const doorW = Neo.DOOR + pad * 2;
+    const doorH = Neo.DOOR + pad * 2;
+    const rects = [];
+    if (hasRoomDoorLikeExit(room, 'n')) rects.push({ left: doorLeft, top: 0, w: doorW, h: depth });
+    if (hasRoomDoorLikeExit(room, 's')) rects.push({ left: doorLeft, top: Neo.ROOM_H - depth, w: doorW, h: depth });
+    if (hasRoomDoorLikeExit(room, 'w')) rects.push({ left: 0, top: doorTop, w: depth, h: doorH });
+    if (hasRoomDoorLikeExit(room, 'e')) rects.push({ left: Neo.ROOM_W - depth, top: doorTop, w: depth, h: doorH });
+    return rects;
+  }
+
+  function isValidMoatLavaRect(room, left, top, w, h) {
+    const rect = { left, top, w, h };
+    return !getRoomEntranceExclusionRects(room).some(entrance => rectsOverlap(rect, entrance));
+  }
+
+  function applyMoatLavaRect(hazard, left, top, w, h) {
+    hazard.left = left;
+    hazard.top = top;
+    hazard.x = left + w / 2;
+    hazard.y = top + h / 2;
+    hazard.r = Math.min(w, h) / 2;
     return hazard;
   }
 
-  function createCompanionMoatLava(primary) {
-    const companion = {
-      kind: 'lava',
-      x: primary.x,
-      y: primary.y,
-      r: primary.r * Neo.rand(0.86, 0.68, 'world'),
-      phase: primary.phase + Neo.rand(1.9, 0.6, 'world'),
-      pulse: primary.pulse + Neo.rand(0.35, -0.2, 'world'),
-      wobble: primary.wobble + Neo.rand(0.2, -0.15, 'world'),
-      side: primary.side,
-    };
+  function createMoatLavaHazard(room = Neo.currentRoom) {
+    const tile = Neo.ENV_TILE_SIZE;
+    for (let attempt = 0; attempt < 16; attempt += 1) {
+      const inCorner = Neo.nextRandom('world') < 0.45;
+      const side = Neo.irand(0, 3, 'world');
+      const wTiles = 2 + Neo.irand(0, 2, 'world');
+      const hTiles = 2 + Neo.irand(0, 2, 'world');
+      const w = wTiles * tile;
+      const h = hTiles * tile;
+      const wallAlignX = Neo.WALL;
+      const wallAlignY = Neo.WALL;
+      const farX = Neo.ROOM_W - Neo.WALL - w;
+      const farY = Neo.ROOM_H - Neo.WALL - h;
+      let left;
+      let top;
 
-    const along = (primary.r + companion.r) * Neo.rand(1.2, 0.75, 'world');
-    if (primary.side <= 1) {
-      companion.x = Neo.clamp(primary.x + (Neo.nextRandom('world') < 0.5 ? -along : along), companion.r + 42, Neo.ROOM_W - companion.r - 42);
-      companion.y = primary.side === 0 ? Neo.WALL + companion.r + 18 : Neo.ROOM_H - Neo.WALL - companion.r - 18;
-    } else {
-      companion.y = Neo.clamp(primary.y + (Neo.nextRandom('world') < 0.5 ? -along : along), companion.r + 42, Neo.ROOM_H - companion.r - 42);
-      companion.x = primary.side === 2 ? Neo.WALL + companion.r + 18 : Neo.ROOM_W - Neo.WALL - companion.r - 18;
+      if (inCorner) {
+        const cornerIdx = Neo.irand(0, 3, 'world');
+        left = (cornerIdx % 2 === 0) ? wallAlignX : farX;
+        top = (cornerIdx < 2) ? wallAlignY : farY;
+      } else if (side === 0) {
+        left = randomMoatLaneTiles('x', wTiles);
+        top = wallAlignY;
+      } else if (side === 1) {
+        left = randomMoatLaneTiles('x', wTiles);
+        top = farY;
+      } else if (side === 2) {
+        left = wallAlignX;
+        top = randomMoatLaneTiles('y', hTiles);
+      } else {
+        left = farX;
+        top = randomMoatLaneTiles('y', hTiles);
+      }
+
+      if (!isValidMoatLavaRect(room, left, top, w, h)) continue;
+      return applyMoatLavaRect({
+        kind: 'lava',
+        shape: 'rect',
+        w,
+        h,
+        phase: Neo.rand(Math.PI * 2, 0, 'world'),
+        pulse: Neo.rand(1.8, 1.15, 'world'),
+        side,
+        corner: inCorner,
+      }, left, top, w, h);
     }
+    return null;
+  }
 
-    return companion;
+  function createCornerMoatLavaHazards(room = Neo.currentRoom) {
+    const tile = Neo.ENV_TILE_SIZE;
+    const wTiles = 2 + Neo.irand(0, 1, 'world');
+    const hTiles = 2 + Neo.irand(0, 1, 'world');
+    const w = wTiles * tile;
+    const h = hTiles * tile;
+    const leftX = Neo.WALL;
+    const rightX = Neo.ROOM_W - Neo.WALL - w;
+    const topY = Neo.WALL;
+    const bottomY = Neo.ROOM_H - Neo.WALL - h;
+    const corners = [
+      { left: leftX, top: topY, side: 0, cornerIdx: 0 },
+      { left: rightX, top: topY, side: 0, cornerIdx: 1 },
+      { left: leftX, top: bottomY, side: 1, cornerIdx: 2 },
+      { left: rightX, top: bottomY, side: 1, cornerIdx: 3 },
+    ];
+
+    return corners
+      .filter(corner => isValidMoatLavaRect(room, corner.left, corner.top, w, h))
+      .map(corner => applyMoatLavaRect({
+        kind: 'lava',
+        shape: 'rect',
+        w,
+        h,
+        phase: Neo.rand(Math.PI * 2, 0, 'world') + corner.cornerIdx * 0.53,
+        pulse: Neo.rand(1.8, 1.15, 'world'),
+        side: corner.side,
+        corner: true,
+        cornerIdx: corner.cornerIdx,
+      }, corner.left, corner.top, w, h));
+  }
+
+  function createCompanionMoatLava(roomOrPrimary, maybePrimary = null) {
+    const room = maybePrimary ? roomOrPrimary : Neo.currentRoom;
+    const primary = maybePrimary || roomOrPrimary;
+    if (!primary) return null;
+    const tile = Neo.ENV_TILE_SIZE;
+    const wTiles = Math.max(2, (primary.w / tile) - Neo.irand(0, 1, 'world'));
+    const hTiles = Math.max(2, (primary.h / tile) - Neo.irand(0, 1, 'world'));
+    const w = wTiles * tile;
+    const h = hTiles * tile;
+    const wallAlignX = Neo.WALL;
+    const wallAlignY = Neo.WALL;
+    const farX = Neo.ROOM_W - Neo.WALL - w;
+    const farY = Neo.ROOM_H - Neo.WALL - h;
+    const horizontal = primary.side <= 1;
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const dir = attempt < 2
+        ? (attempt === 0 ? -1 : 1)
+        : (Neo.nextRandom('world') < 0.5 ? -1 : 1);
+      const gapTiles = 1 + Neo.irand(0, 2, 'world');
+      let left = primary.left;
+      let top = primary.top;
+      if (horizontal) {
+        left = Neo.clamp(primary.left + dir * (primary.w + gapTiles * tile), wallAlignX, farX);
+        top = primary.side === 0 ? wallAlignY : farY;
+      } else {
+        top = Neo.clamp(primary.top + dir * (primary.h + gapTiles * tile), wallAlignY, farY);
+        left = primary.side === 2 ? wallAlignX : farX;
+      }
+      left = Neo.clamp(Neo.WALL + Math.round((left - Neo.WALL) / tile) * tile, wallAlignX, farX);
+      top = Neo.clamp(Neo.WALL + Math.round((top - Neo.WALL) / tile) * tile, wallAlignY, farY);
+      if (!isValidMoatLavaRect(room, left, top, w, h)) continue;
+      return applyMoatLavaRect({
+        kind: 'lava',
+        shape: 'rect',
+        w,
+        h,
+        phase: primary.phase + Neo.rand(1.9, 0.6, 'world'),
+        pulse: primary.pulse + Neo.rand(0.35, -0.2, 'world'),
+        side: primary.side,
+      }, left, top, w, h);
+    }
+    return null;
   }
 
   function createExplosiveTrapHazard(room, index = 0) {
@@ -914,12 +1036,36 @@
     if (room.type === 'treasure' && !room.cleared && Neo.chests.length === 0) {
       const treasureRandom = Neo.createRoomRandom(room, 'treasure:chests');
       const chestCount = 1 + Math.floor(treasureRandom() * 2);
+      const placedChestPositions = [];
+      const chestInsetX = Neo.WALL + 88;
+      const chestInsetY = Neo.WALL + 76;
+      const minChestSpacing = 132;
       for (let index = 0; index < chestCount; index += 1) {
         const itemChance = Neo.clamp(0.9 + Number(Neo.getItemStats?.()?.itemDropChanceBonus || 0), 0, 0.98);
         const rewardsItem = treasureRandom() < itemChance;
+        let chestPos = null;
+        for (let attempt = 0; attempt < 12; attempt += 1) {
+          const preferredX = chestInsetX + treasureRandom() * Math.max(1, Neo.ROOM_W - chestInsetX * 2);
+          const preferredY = chestInsetY + treasureRandom() * Math.max(1, Neo.ROOM_H - chestInsetY * 2);
+          const safeSpawn = Neo.findSafeEnemySpawnPoint?.(preferredX, preferredY, 24)
+            || { x: Neo.clamp(preferredX, chestInsetX, Neo.ROOM_W - chestInsetX), y: Neo.clamp(preferredY, chestInsetY, Neo.ROOM_H - chestInsetY) };
+          const overlapsPlacedChest = placedChestPositions.some(pos => Neo.dist(pos.x, pos.y, safeSpawn.x, safeSpawn.y) < minChestSpacing);
+          if (!overlapsPlacedChest) {
+            chestPos = safeSpawn;
+            break;
+          }
+        }
+        if (!chestPos) {
+          const fallbackSpread = chestCount === 1 ? 0 : (index - (chestCount - 1) / 2) * 150;
+          chestPos = {
+            x: Neo.clamp(Neo.ROOM_W / 2 + fallbackSpread, chestInsetX, Neo.ROOM_W - chestInsetX),
+            y: Neo.ROOM_H / 2 + (index % 2 === 0 ? -36 : 36),
+          };
+        }
+        placedChestPositions.push(chestPos);
         Neo.chests.push({
-          x: 260 + index * 180,
-          y: Neo.ROOM_H / 2,
+          x: chestPos.x,
+          y: chestPos.y,
           open: false,
           rewardType: rewardsItem ? 'item' : 'potion',
           rewardKey: rewardsItem ? Neo.rollItemDrop({ random: treasureRandom }) : '',
@@ -944,7 +1090,7 @@
         // Almost always add a random non-god boss to ladder rooms
         if (!room.ladderBossPlan) {
           const ladderRandom = Neo.createRoomRandom(room, 'ladder:boss');
-          const _ladderBossPool = ['queen_cult', 'bulk_golem', 'artificer_knave'];
+          const _ladderBossPool = ['queen_cult', 'bulk_golem', 'artificer_knave', 'antony_blemmye'];
           room.ladderBossPlan = {
             spawn: ladderRandom() < 0.88,
             type: _ladderBossPool[Math.floor(ladderRandom() * _ladderBossPool.length)],
@@ -1876,6 +2022,7 @@
   Neo.updateGardenGrowth = updateGardenGrowth;
   Neo.randomMoatLanePosition = randomMoatLanePosition;
   Neo.createMoatLavaHazard = createMoatLavaHazard;
+  Neo.createCornerMoatLavaHazards = createCornerMoatLavaHazards;
   Neo.createCompanionMoatLava = createCompanionMoatLava;
   Neo.createExplosiveTrapHazard = createExplosiveTrapHazard;
   Neo.createRoomRecord = createRoomRecord;

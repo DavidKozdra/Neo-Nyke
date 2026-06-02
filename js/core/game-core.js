@@ -42,15 +42,14 @@ export const LIGHTING_CONFIG = {
   darkness: {
     combat: 0.1,
     challenge: 0.16,
-    boss: 0.1,
     minVisible: 0.05,
     lightRelief: 0.12,
+    pressureDivisor: 14,
   },
   ambient: {
     inner: 210,
     outerScale: 1.08,
     strength: 0.5,
-    bossStrength: 0.5,
     tint: 'rgba(126, 165, 226, 0.08)',
   },
   player: {
@@ -59,13 +58,100 @@ export const LIGHTING_CONFIG = {
     strength: 2.16,
     tint: 'rgba(155, 212, 255, 0.12)',
   },
+  chamber: {
+    inner: 36,
+    outerScale: 0.58,
+    strength: 0.22,
+    tint: 'rgba(120, 160, 255, 0.05)',
+  },
+  brazier: {
+    yOffset: -8,
+    inner: 14,
+    outerScale: 3.8,
+    strength: 0.36,
+    tint: 'rgba(230, 170, 92, 0.06)',
+  },
+  torch: {
+    yOffset: -12,
+    inner: 18,
+    outer: 116,
+    strength: 0.42,
+    tint: 'rgba(230, 176, 108, 0.08)',
+    spillYOffset: -10,
+    spillInner: 42,
+    spillOuter: 166,
+    spillStrength: 0.16,
+    spillTint: 'rgba(220, 198, 150, 0.04)',
+  },
+  hazard: {
+    lava: { innerScale: 0.25, outerScale: 2.7, strength: 0.95, tint: 'rgba(255, 92, 44, 0.12)' },
+    fireCircle: { innerScale: 0.35, outerScale: 1.75, strength: 0.72, tint: 'rgba(255, 120, 54, 0.08)' },
+    lightningColumn: { innerScale: 0.22, outerScale: 1.8, strength: 0.82, tint: 'rgba(124, 200, 255, 0.09)' },
+    explosiveTrapFuseDefault: 0.78,
+    explosiveTrapTriggered: {
+      innerScale: 0.6,
+      minStrength: 0.12,
+      strengthBoost: 0.22,
+      minRadiusScale: 0.55,
+      radiusBoost: 0.35,
+      tint: 'rgba(255, 90, 30, 0.14)',
+    },
+    explosiveTrapIdle: {
+      defaultR: 14,
+      innerScale: 0.3,
+      outerScale: 2.2,
+      strength: 0.18,
+      tint: 'rgba(255, 180, 60, 0.04)',
+    },
+  },
+  flicker: {
+    timeScale: 0.007,
+    xPhase: 0.017,
+    yPhase: 0.011,
+    primaryAmp: 0.08,
+    secondaryFreq: 1.9,
+    secondaryAmp: 0.05,
+  },
+  projectiles: {
+    fireball: { innerScale: 0.8, outer: 90, strength: 0.86, tint: 'rgba(255, 118, 42, 0.1)' },
+    disk: { innerScale: 0.7, outer: 70, strength: 0.58, tint: 'rgba(182, 108, 255, 0.08)' },
+    bullet: { innerScale: 0.45, outer: 42, strength: 0.34, tint: 'rgba(255, 148, 92, 0.04)' },
+  },
+  beam: {
+    laserGodWidth: 42,
+    laserTurtleWidth: 34,
+    laserDefaultWidth: 22,
+    laserGodStrength: 0.9,
+    laserDefaultStrength: 0.7,
+    glassesWidth: 14,
+    glassesStrength: 0.46,
+    glassesRange: 430,
+    glassesSpread: 0.2,
+    enemyGodWidth: 36,
+    enemyDefaultWidth: 18,
+    enemyGodStrength: 0.72,
+    enemyDefaultStrength: 0.42,
+    enemyGodRange: 620,
+    enemyDefaultRange: 460,
+  },
   maxLights: 34,
   maxOuterRadius: 700,
+  innerToOuterCap: 0.72,
+  minOuter: 8,
 };
 export const ENEMY_SCALING = {
   floor: 0.14,
   loop: 0.32,
   minute: 0.12,
+  damageFloor: 0.095,
+  damageLoop: 0.2,
+  damageMinute: 0.055,
+  speedFloor: 0.035,
+  speedLoop: 0.07,
+  speedMinute: 0.018,
+  damageSoftCap: 2.15,
+  bossDamageSoftCap: 2.45,
+  speedSoftCap: 1.38,
 };
 export const BLEED_RESIST_SCALING = {
   floorInLoop: 0.16,
@@ -215,7 +301,7 @@ export const PERF_BUDGET_60FPS = 1000 / 60;
 export const PERF_AVG_WEIGHT = 0.12;
 export const PERF_OVERLAY_INTERVAL = 250;
 
-export const BOSS_TYPES = new Set(['god', 'queen_cult', 'bulk_golem', 'artificer_knave', 'bowman_bane']);
+export const BOSS_TYPES = new Set(['god', 'queen_cult', 'bulk_golem', 'artificer_knave', 'bowman_bane', 'antony_blemmye', 'handsome_devil']);
 export const CHALLENGE_ROOM_TYPES = new Set(['challenge']);
 export const CHALLENGE_TRIAL_TYPES = ['mirror', 'stillness', 'bomb', 'survival', 'runes', 'storm'];
 export const KozSeededRngApi = window.KozEngine?.World?.seededRng || {};
@@ -235,6 +321,8 @@ export const BOSS_OPENING_DIALOGUE = {
   bulk_golem: 'Stone remembers every blow.',
   artificer_knave: 'Run. I only need one clean hit.',
   bowman_bane: 'You came back. I was waiting.',
+  antony_blemmye: 'The chest sees. The chest hungers.',
+  handsome_devil: 'Try not to stare.',
 };
 export const DEFAULT_KILLER_DEATH_QUOTES = [
   'Another hero falls.',
@@ -246,6 +334,8 @@ export const DEFAULT_KILLER_DEATH_QUOTES = [
 export const KILLER_DEATH_QUOTES = {
   god: ['Kneel, mortal.', 'Divinity does not miss twice.', 'You challenged a god and paid for it.'],
   bowman_bane: ['The columns remember you.', 'You had one chance to stay away.', 'Second visit, same grave.'],
+  antony_blemmye: ['The chest swallowed your courage.', 'Hammered flat.', 'The face in the ribs smiles.'],
+  handsome_devil: ['Beauty burns.', 'Sin had better aim.', 'You looked too long.'],
   queen_cult: ['The chorus grows louder.', 'Your voice joins the cult now.', 'Sing your last note.'],
   bulk_golem: ['Stone outlasts flesh.', 'I break what stands before me.', 'Crushed.'],
   artificer_knave: ['Precision beats courage.', 'You moved exactly where I wanted.', 'Your logic failed.'],
@@ -573,7 +663,7 @@ export const CHARACTER_DEFS = {
 
 export const HERO_DISPLAY = {
   princess: {
-    lore: 'A dark-skinned princess built for accessible runs. High damage, generous HP, and forgiving cooldowns make her ideal for new adventurers.',
+    lore: 'Best first pick. High damage, high HP.',
     stats: [
       { label: 'HP',    pct: 90, color: '#f47ebd' },
       { label: 'DMG',   pct: 80, color: '#ff9ccf' },
@@ -582,7 +672,7 @@ export const HERO_DISPLAY = {
     ],
   },
   thorn_knight: {
-    lore: 'A bleed-forged warrior who turns wounds into weapons. The longer the fight, the deadlier he becomes.',
+    lore: 'Close-range fighter. Bleed stacks get stronger.',
     stats: [
       { label: 'HP',    pct: 66, color: '#c06060' },
       { label: 'DMG',   pct: 66, color: '#c08040' },
@@ -591,7 +681,7 @@ export const HERO_DISPLAY = {
     ],
   },
   metao: {
-    lore: 'Wizard king of chaos and fire. Slower spell cadence, but larger blasts reward timing and crowd control.',
+    lore: 'Long-range magic. Slower shots, bigger hits.',
     stats: [
       { label: 'HP',    pct: 66, color: '#c06060' },
       { label: 'DMG',   pct: 48, color: '#c08040' },
@@ -600,7 +690,7 @@ export const HERO_DISPLAY = {
     ],
   },
   granialla: {
-    lore: 'A priestess with a crown of golden hair. Divine judgment and self-restoration — earned only by slaying GOD.',
+    lore: 'Balanced divine hero. Unlock by defeating GOD.',
     stats: [
       { label: 'HP',    pct: 66, color: '#c06060' },
       { label: 'DMG',   pct: 66, color: '#c08040' },
@@ -609,7 +699,7 @@ export const HERO_DISPLAY = {
     ],
   },
   mooggy: {
-    lore: 'A white and black assassin cat in a red scarf. Defeat Mooggy three times to turn the hunter into a playable hero.',
+    lore: 'Fast ranged assassin. Unlock by beating Mooggy.',
     stats: [
       { label: 'HP',    pct: 70, color: '#f4f4ef' },
       { label: 'DMG',   pct: 78, color: '#ff5c6f' },

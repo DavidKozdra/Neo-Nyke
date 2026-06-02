@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'neonyke-v18';
+const CACHE_VERSION = 'neonyke-v25';
 const CACHE_META = 'neonyke-cache-meta';
 const CACHE_META_KEY = '/__neonyke_cache_meta__';
 const CACHE_REFRESH_INTERVAL_MS = 5 * 60 * 60 * 1000;
@@ -10,6 +10,10 @@ const PRECACHE = [
   '/css/theme-princess.css',
   '/css/mobile.css',
   '/css/touch-controls.css',
+  '/assets/fonts/VT323-Regular.woff2',
+  '/assets/fonts/VT323-LatinExt.woff2',
+  '/assets/fonts/PressStart2P-Latin.woff2',
+  '/assets/sounds/Item Collect.wav',
   '/Koz_Engine_Lib/Core/koz-engine.global.js',
   '/assets/sprites/combatants.js',
   '/assets/sprites/environment.js',
@@ -20,9 +24,9 @@ const PRECACHE = [
   '/js/touchControls.js',
   '/js/gamepadControls.js',
   '/js/core/neo.js',
-  '/js/source-loader.js',
   '/js/core/game-core.js',
   '/js/core/math-utils.js',
+  '/js/core/sfx.js',
   '/js/ui/input.js',
   '/js/core/status.js',
   '/js/ui/notifications.js',
@@ -31,6 +35,7 @@ const PRECACHE = [
   '/js/game/rooms.js',
   '/js/game/enemies.js',
   '/js/game/player.js',
+  '/js/game/projectile-types.js',
   '/js/game/combat.js',
   '/js/core/update.js',
   '/js/game/world.js',
@@ -47,6 +52,7 @@ const PRECACHE = [
   '/js/core/perf.js',
   '/js/ui/settings-ui.js',
   '/js/ui/menu-background.js',
+  '/js/ui/credits.js',
 ];
 
 function makeCacheName(now = Date.now()) {

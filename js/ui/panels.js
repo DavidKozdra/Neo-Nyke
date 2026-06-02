@@ -68,7 +68,14 @@ export function bindInput() {
       }
       if (b && key === b.smash && Neo.gameState === 'play') Neo.trySmash();
       else if (!b && key === 'r' && Neo.gameState === 'play') Neo.trySmash();
-      if (key === 'g' && Neo.gameState === 'play') Neo.tryUsePotion();
+      if (Neo.gameState === 'play' && Neo.EQUIPMENT_SLOT_KEYS?.includes(key.toUpperCase())) {
+        if (!Neo.equipKeyLatch) Neo.equipKeyLatch = {};
+        const letter = key.toUpperCase();
+        if (!Neo.equipKeyLatch[letter]) {
+          Neo.equipKeyLatch[letter] = true;
+          if (Neo.activateEquipmentSlotKey?.(letter)) event.preventDefault();
+        }
+      }
     });
     window.addEventListener('keyup', event => {
       const key = event.key.toLowerCase();
@@ -82,6 +89,10 @@ export function bindInput() {
       if (key === 'e') { Neo.shopKeyLatch = false; Neo.anvilKeyLatch = false; }
       if (key === ' ') Neo.ladderUseKeyLatch = false;
       if (key === inventoryKey) Neo.invKeyLatch = false;
+      const upper = key.toUpperCase();
+      if (Neo.equipKeyLatch && Neo.EQUIPMENT_SLOT_KEYS?.includes(upper)) {
+        Neo.equipKeyLatch[upper] = false;
+      }
     });
     Neo.uiController.bindMenuActions({
       _getChosenCharacter() {
@@ -163,6 +174,18 @@ export function bindInput() {
       },
       onSkipTutorial() {
         Neo.skipFirstRunTutorial();
+      },
+      onPlayTutorial() {
+        try {
+          localStorage.setItem(Neo.REPLAY_TUTORIAL_KEY, '1');
+        } catch {}
+        Neo.gameMode = 'normal';
+        Neo.charSelectPhase = null;
+        Neo.setGameState('charselect');
+        Neo.updateCharacterSelectionUI();
+      },
+      onDismissFirstTip() {
+        Neo.uiController?.hideFirstTip?.();
       },
       onTutorialPrev() {
         Neo.navigateTutorialStep(-1);
@@ -355,12 +378,27 @@ export function bindPanelInput() {
         renderInventoryPanel();
       });
     });
+    Neo.ui.invBuildSummary?.addEventListener('click', event => {
+      const button = event.target instanceof Element ? event.target.closest('[data-inv-tab-jump]') : null;
+      if (!button) return;
+      Neo.activeInvTab = button.dataset.invTabJump || 'equipped';
+      Neo.activeInventorySlot = button.dataset.buildSlot || '';
+      markInventoryPanelDirty();
+      renderInventoryPanel();
+    });
     Neo.ui.shopItems?.addEventListener('click', handleShopBuyClick);
     Neo.ui.shopWeapons?.addEventListener('click', handleShopBuyClick);
     Neo.ui.shopMoves?.addEventListener('click', handleShopBuyClick);
     Neo.ui.shopHeals?.addEventListener('click', handleShopBuyClick);
-    Neo.ui.bagStatus?.addEventListener('click', () => Neo.tryUsePotion?.());
+    Neo.bindEquipmentSlotClicks?.();
     Neo.ui.invMovesList?.addEventListener('click', handleInventoryMoveSelect);
+    Neo.ui.invMovesList?.addEventListener('keydown', event => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      const target = event.target instanceof Element ? event.target.closest('[data-move]') : null;
+      if (!target) return;
+      event.preventDefault();
+      handleInventoryMoveSelect(event);
+    });
     Neo.ui.invWeaponsList?.addEventListener('click', handleInventoryWeaponSelect);
     Neo.ui.invMovesList?.addEventListener('dragstart', event => {
       const target = event.target instanceof Element ? event.target : null;
@@ -463,6 +501,16 @@ function handleInventoryMoveSelect(event) {
     const target = event.target instanceof Element ? event.target.closest('[data-move]') : null;
     const moveKey = target?.dataset?.move || '';
     if (!moveKey || !Neo.MOVE_DEFS[moveKey]) return;
+    if (Number(Neo.player?.extraBatteryPendingCount || 0) > 0) {
+      const nextMaxStacks = Neo.grantExtraBatteryToMove(moveKey);
+      if (nextMaxStacks > 0) {
+        Neo.activeInventorySlot = '';
+        Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 46, life: 0.8, text: `${Neo.MOVE_DEFS[moveKey].name.toUpperCase()} +1 CHARGE`, c: '#cfd7ff' });
+        markInventoryPanelDirty();
+        renderInventoryPanel();
+      }
+      return;
+    }
     if (Object.values(Neo.player?.equippedMoves || {}).includes(moveKey)) {
       Neo.activeInventorySlot = '';
       markInventoryPanelDirty();
@@ -477,6 +525,242 @@ export function isPanelOpen(panel) {
     return !!panel && !panel.classList.contains('hidden');
   }
 
+  const PANEL_CLOSE_EFFECT_DURATION_MS = 640;
+  const PANEL_CLOSE_EFFECT_SETTLE_MS = 260;
+
+  function prefersReducedPanelMotion() {
+    return !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  }
+
+  function getPanelCloseEffectKey(target) {
+    if (!target) return '';
+    if (typeof target === 'string') return target;
+    return String(target.id || target.dataset?.panelFxKey || target.className || target.tagName || 'panel');
+  }
+
+  export function clearPanelCloseEffect(target) {
+    const key = getPanelCloseEffectKey(target);
+    if (!key) return;
+    document.querySelectorAll('.panel-disintegrate-fx').forEach(node => {
+      if (node instanceof HTMLElement && node.dataset.fxKey === key) node.remove();
+    });
+  }
+
+  function copyCanvasBitmaps(sourceRoot, cloneRoot) {
+    const sourceCanvases = Array.from(sourceRoot.querySelectorAll('canvas'));
+    const cloneCanvases = Array.from(cloneRoot.querySelectorAll('canvas'));
+    const count = Math.min(sourceCanvases.length, cloneCanvases.length);
+    for (let index = 0; index < count; index += 1) {
+      const sourceCanvas = sourceCanvases[index];
+      const cloneCanvas = cloneCanvases[index];
+      if (!(sourceCanvas instanceof HTMLCanvasElement) || !(cloneCanvas instanceof HTMLCanvasElement)) continue;
+      cloneCanvas.width = sourceCanvas.width;
+      cloneCanvas.height = sourceCanvas.height;
+      const ctx = cloneCanvas.getContext('2d');
+      if (!ctx) continue;
+      ctx.clearRect(0, 0, cloneCanvas.width, cloneCanvas.height);
+      ctx.drawImage(sourceCanvas, 0, 0);
+    }
+  }
+
+  function applyGhostSurfaceStyle(source, clone, rect, offsetX, offsetY) {
+    const computed = window.getComputedStyle(source);
+    [
+      'display',
+      'background',
+      'background-image',
+      'background-color',
+      'border',
+      'border-top',
+      'border-right',
+      'border-bottom',
+      'border-left',
+      'border-radius',
+      'box-shadow',
+      'backdrop-filter',
+      'color',
+      'padding',
+      'overflow',
+      'overflow-x',
+      'overflow-y',
+      'flex-direction',
+      'align-items',
+      'justify-content',
+      'text-align',
+      'box-sizing',
+      'gap',
+    ].forEach(prop => {
+      clone.style.setProperty(prop, computed.getPropertyValue(prop));
+    });
+    clone.classList.remove('hidden');
+    clone.classList.add('panel-disintegrate-fx__surface');
+    clone.removeAttribute('id');
+    clone.querySelectorAll('[id]').forEach(node => node.removeAttribute('id'));
+    clone.style.position = 'absolute';
+    clone.style.left = `${-offsetX}px`;
+    clone.style.top = `${-offsetY}px`;
+    clone.style.width = `${rect.width}px`;
+    clone.style.height = `${rect.height}px`;
+    clone.style.maxHeight = 'none';
+    clone.style.minHeight = '0';
+    clone.style.margin = '0';
+    clone.style.inset = 'auto';
+    clone.style.transform = 'none';
+    clone.style.transition = 'none';
+    clone.style.animation = 'none';
+    clone.style.opacity = '1';
+    clone.style.visibility = 'visible';
+    clone.style.pointerEvents = 'none';
+    clone.style.willChange = 'auto';
+    clone.setAttribute('aria-hidden', 'true');
+    clone.scrollTop = source.scrollTop;
+    clone.scrollLeft = source.scrollLeft;
+  }
+
+  function getPanelCloseOrigin(element, rect) {
+    const closeButton = element.querySelector('.panel-close, [aria-label*="Close"], [aria-label*="close"]');
+    if (closeButton instanceof HTMLElement) {
+      const closeRect = closeButton.getBoundingClientRect();
+      return {
+        x: closeRect.left + closeRect.width / 2 - rect.left,
+        y: closeRect.top + closeRect.height / 2 - rect.top,
+      };
+    }
+    return { x: rect.width * 0.86, y: rect.height * 0.14 };
+  }
+
+  function makeFractureClip(row, col, rows, cols) {
+    const topCut = row === 0 ? 0 : 5 + Math.random() * 14;
+    const rightCut = col === cols - 1 ? 0 : 5 + Math.random() * 14;
+    const bottomCut = row === rows - 1 ? 0 : 5 + Math.random() * 14;
+    const leftCut = col === 0 ? 0 : 5 + Math.random() * 14;
+    const notchA = 18 + Math.random() * 24;
+    const notchB = 58 + Math.random() * 24;
+    return `polygon(${leftCut}% 0%, ${notchA}% ${topCut}%, 100% ${rightCut}%, ${100 - rightCut}% ${notchB}%, 100% ${100 - bottomCut}%, ${notchB}% 100%, ${leftCut}% ${100 - leftCut}%, 0% ${100 - leftCut}%, ${topCut}% ${notchA}%)`;
+  }
+
+  function getPanelCloseGrid(rect) {
+    const targetTiles = Math.max(24, Math.min(32, Math.round((rect.width * rect.height) / 22000)));
+    const aspect = rect.width / Math.max(1, rect.height);
+    let cols = Math.max(4, Math.min(8, Math.round(Math.sqrt(targetTiles * aspect))));
+    let rows = Math.max(3, Math.min(6, Math.ceil(targetTiles / cols)));
+
+    while (cols * rows > 32 && rows > 3) rows -= 1;
+    while (cols * rows > 32 && cols > 4) cols -= 1;
+    return { cols, rows };
+  }
+
+  function addPanelCloseSparks(ghost, rect, origin, maxDelay) {
+    const area = rect.width * rect.height;
+    const sparkCount = Math.max(20, Math.min(40, Math.round(area / 15000)));
+    const maxRadius = Math.max(1, Math.hypot(rect.width, rect.height));
+
+    for (let index = 0; index < sparkCount; index += 1) {
+      const spark = document.createElement('span');
+      spark.className = 'panel-disintegrate-fx__spark';
+      const angle = Math.random() * Math.PI * 2;
+      const radius = Math.sqrt(Math.random()) * maxRadius * 0.58;
+      const x = Neo.clamp?.(origin.x + Math.cos(angle) * radius, 0, rect.width) ?? Math.min(rect.width, Math.max(0, origin.x + Math.cos(angle) * radius));
+      const y = Neo.clamp?.(origin.y + Math.sin(angle) * radius, 0, rect.height) ?? Math.min(rect.height, Math.max(0, origin.y + Math.sin(angle) * radius));
+      const vx = x - origin.x;
+      const vy = y - origin.y;
+      const len = Math.hypot(vx, vy) || 1;
+      const drift = 70 + Math.random() * 150;
+      const delay = Math.round((len / maxRadius) * Math.min(maxDelay + 120, 360) + Math.random() * 110);
+
+      spark.style.left = `${x.toFixed(1)}px`;
+      spark.style.top = `${y.toFixed(1)}px`;
+      spark.style.setProperty('--panel-fx-delay', `${delay}ms`);
+      spark.style.setProperty('--panel-fx-dx', `${((vx / len) * drift + (Math.random() - 0.5) * 42).toFixed(1)}px`);
+      spark.style.setProperty('--panel-fx-dy', `${((vy / len) * drift - 24 + (Math.random() - 0.5) * 58).toFixed(1)}px`);
+      spark.style.setProperty('--panel-fx-scale', (0.35 + Math.random() * 0.85).toFixed(2));
+      ghost.appendChild(spark);
+    }
+  }
+
+  export function playPanelCloseEffect(element) {
+    if (!(element instanceof HTMLElement) || !element.isConnected) return false;
+    if (element.classList.contains('hidden') || prefersReducedPanelMotion() || !document.body) return false;
+    const rect = element.getBoundingClientRect();
+    if (rect.width < 24 || rect.height < 24) return false;
+
+    const key = getPanelCloseEffectKey(element);
+    clearPanelCloseEffect(key);
+
+    const computed = window.getComputedStyle(element);
+    const ghost = document.createElement('div');
+    ghost.className = 'panel-disintegrate-fx';
+    ghost.dataset.fxKey = key;
+    ghost.style.left = `${rect.left}px`;
+    ghost.style.top = `${rect.top}px`;
+    ghost.style.width = `${rect.width}px`;
+    ghost.style.height = `${rect.height}px`;
+    const parsedZ = Number.parseFloat(computed.zIndex);
+    ghost.style.zIndex = String(Number.isFinite(parsedZ) ? parsedZ + 2 : 100);
+
+    const flash = document.createElement('div');
+    flash.className = 'panel-disintegrate-fx__flash';
+    ghost.appendChild(flash);
+
+    const origin = getPanelCloseOrigin(element, rect);
+    ghost.style.setProperty('--panel-fx-origin-x', `${origin.x}px`);
+    ghost.style.setProperty('--panel-fx-origin-y', `${origin.y}px`);
+
+    const { cols, rows } = getPanelCloseGrid(rect);
+    const tileWidth = rect.width / cols;
+    const tileHeight = rect.height / rows;
+    const maxRadius = Math.max(1, Math.hypot(rect.width, rect.height));
+    let maxDelay = 0;
+
+    for (let row = 0; row < rows; row += 1) {
+      for (let col = 0; col < cols; col += 1) {
+        const x = Math.round(col * tileWidth);
+        const y = Math.round(row * tileHeight);
+        const width = col === cols - 1 ? Math.max(1, Math.round(rect.width - x)) : Math.ceil(tileWidth);
+        const height = row === rows - 1 ? Math.max(1, Math.round(rect.height - y)) : Math.ceil(tileHeight);
+        const cx = x + width / 2;
+        const cy = y + height / 2;
+        const vx = cx - origin.x;
+        const vy = cy - origin.y;
+        const distance = Math.hypot(vx, vy);
+        const len = distance || 1;
+        const nx = vx / len;
+        const ny = vy / len;
+        const tangent = Math.random() < 0.5 ? -1 : 1;
+        const force = 86 + (distance / maxRadius) * 170 + Math.random() * 54;
+        const delay = Math.round(70 + (distance / maxRadius) * 280 + Math.random() * 90);
+        const tile = document.createElement('div');
+        tile.className = 'panel-disintegrate-fx__tile';
+        tile.style.left = `${x}px`;
+        tile.style.top = `${y}px`;
+        tile.style.width = `${width}px`;
+        tile.style.height = `${height}px`;
+        maxDelay = Math.max(maxDelay, delay);
+        tile.style.setProperty('--panel-fx-delay', `${delay}ms`);
+        tile.style.setProperty('--panel-fx-dx', `${(nx * force + -ny * tangent * Math.random() * 34).toFixed(1)}px`);
+        tile.style.setProperty('--panel-fx-dy', `${(ny * force + nx * tangent * Math.random() * 34 - 26).toFixed(1)}px`);
+        tile.style.setProperty('--panel-fx-rot', `${((Math.random() - 0.5) * 34 + tangent * distance / maxRadius * 20).toFixed(1)}deg`);
+        tile.style.setProperty('--panel-fx-scale', (0.46 + Math.random() * 0.16).toFixed(2));
+        tile.style.setProperty('--panel-fx-bright', (1.12 + Math.random() * 0.26).toFixed(2));
+        const clipPath = makeFractureClip(row, col, rows, cols);
+        tile.style.clipPath = clipPath;
+        tile.style.webkitClipPath = clipPath;
+
+        const clone = element.cloneNode(true);
+        applyGhostSurfaceStyle(element, clone, rect, x, y);
+        copyCanvasBitmaps(element, clone);
+        tile.appendChild(clone);
+        ghost.appendChild(tile);
+      }
+    }
+
+    addPanelCloseSparks(ghost, rect, origin, maxDelay);
+    document.body.appendChild(ghost);
+    window.requestAnimationFrame(() => ghost.classList.add('panel-disintegrate-fx--active'));
+    window.setTimeout(() => ghost.remove(), PANEL_CLOSE_EFFECT_DURATION_MS + maxDelay + PANEL_CLOSE_EFFECT_SETTLE_MS);
+    return true;
+  }
+
 export function markShopPanelDirty() {
     Neo.shopPanelDirty = true;
   }
@@ -485,18 +769,39 @@ export function markInventoryPanelDirty() {
     Neo.inventoryPanelDirty = true;
   }
 
-export function setShopPanelOpen(open) {
+export function setShopPanelOpen(open, options = {}) {
     if (!Neo.ui.shopPanel) return;
-    Neo.ui.shopPanel.classList.toggle('hidden', !open);
-    Neo.ui.shopPanel.setAttribute('aria-hidden', open ? 'false' : 'true');
+  const animateClose = options.animateClose !== false;
     if (open) {
+      clearPanelCloseEffect(Neo.ui.shopPanel);
+      Neo.ui.shopPanel.classList.remove('hidden');
+      Neo.ui.shopPanel.setAttribute('aria-hidden', 'false');
       markShopPanelDirty();
       renderShopPanel();
+      return;
     }
+    if (animateClose && isPanelOpen(Neo.ui.shopPanel)) playPanelCloseEffect(Neo.ui.shopPanel);
+    else clearPanelCloseEffect(Neo.ui.shopPanel);
+    Neo.ui.shopPanel.classList.add('hidden');
+    Neo.ui.shopPanel.setAttribute('aria-hidden', 'true');
   }
 
-export function setInventoryPanelOpen(open) {
+export function setInventoryPanelOpen(open, options = {}) {
     if (!Neo.ui.invPanel) return;
+    const animateClose = options.animateClose !== false;
+    if (Neo._inventoryOpenAnimTimer) {
+      window.clearTimeout(Neo._inventoryOpenAnimTimer);
+      Neo._inventoryOpenAnimTimer = null;
+    }
+    if (Neo._inventoryCloseClassTimer) {
+      window.clearTimeout(Neo._inventoryCloseClassTimer);
+      Neo._inventoryCloseClassTimer = null;
+    }
+    clearPanelCloseEffect(Neo.ui.invPanel);
+    Neo.ui.invPanel.classList.remove('inv-panel--closing', 'inv-panel--opening');
+    if (!open && animateClose && isPanelOpen(Neo.ui.invPanel)) {
+      playPanelCloseEffect(Neo.ui.invPanel);
+    }
     Neo.ui.invPanel.classList.toggle('hidden', !open);
     Neo.ui.invPanel.setAttribute('aria-hidden', open ? 'false' : 'true');
     if (!open) {
@@ -538,38 +843,49 @@ export function updateInvPlayerTabVisibility() {
 export function toggleShopPanel() {
     if (Neo.currentRoom?.type !== 'shop') return;
     const next = !isPanelOpen(Neo.ui.shopPanel);
+    if (next) setInventoryPanelOpen(false, { animateClose: false });
     setShopPanelOpen(next);
     if (next && Neo.isFirstRunTutorialActive()) Neo.tutorialState.openedShop = true;
-    if (next) setInventoryPanelOpen(false);
   }
 
 export function toggleInventoryPanel() {
     const next = !isPanelOpen(Neo.ui.invPanel);
+    if (next) setShopPanelOpen(false, { animateClose: false });
     setInventoryPanelOpen(next);
     if (next && Neo.isFirstRunTutorialActive()) Neo.tutorialState.openedInventory = true;
-    if (next) setShopPanelOpen(false);
   }
 
   // ---- Anvil panel ----
 
-export function setAnvilPanelOpen(open) {
+export function setAnvilPanelOpen(open, options = {}) {
     if (!Neo.ui.anvilPanel) return;
-    Neo.ui.anvilPanel.classList.toggle('hidden', !open);
-    Neo.ui.anvilPanel.setAttribute('aria-hidden', open ? 'false' : 'true');
+  const animateClose = options.animateClose !== false;
     if (open) {
+      Neo.showFirstTip?.('forge');
+      clearPanelCloseEffect(Neo.ui.anvilPanel);
+      Neo.ui.anvilPanel.classList.remove('hidden');
+      Neo.ui.anvilPanel.setAttribute('aria-hidden', 'false');
       Neo.anvilStagedUpgrades = {};
       const equipped = Neo.player?.equippedWeapon;
       Neo.anvilSelectedItem = equipped ? `weapon:${equipped}` : null;
       renderAnvilPanel();
+      return;
     }
+    if (animateClose && isPanelOpen(Neo.ui.anvilPanel)) playPanelCloseEffect(Neo.ui.anvilPanel);
+    else clearPanelCloseEffect(Neo.ui.anvilPanel);
+    Neo.ui.anvilPanel.classList.add('hidden');
+    Neo.ui.anvilPanel.setAttribute('aria-hidden', 'true');
   }
 
 export function toggleAnvilPanel() {
     if (Neo.currentRoom?.type !== 'anvil') return;
     const next = !isPanelOpen(Neo.ui.anvilPanel);
     if (!next) Neo.anvilStagedUpgrades = {};
+    if (next) {
+      setShopPanelOpen(false, { animateClose: false });
+      setInventoryPanelOpen(false, { animateClose: false });
+    }
     setAnvilPanelOpen(next);
-    if (next) { setShopPanelOpen(false); setInventoryPanelOpen(false); }
   }
 
   function getAnvilStatSchema(itemKey, itemType) {
@@ -624,6 +940,16 @@ export function renderAnvilPanel() {
 
     // XP display (current XP, not total)
     if (Neo.ui.anvilXp) Neo.ui.anvilXp.textContent = Neo.player.xp ?? 0;
+    if (Neo.ui.anvilCoins) Neo.ui.anvilCoins.textContent = Neo.player.coins ?? 0;
+    if (Neo.ui.anvilCoinIcon && typeof Neo.drawPixelIcon === 'function') {
+      Neo.drawPixelIcon(Neo.ui.anvilCoinIcon, '#ffd15a', [
+        [2, 1], [3, 1], [4, 1],
+        [1, 2], [2, 2], [3, 2], [4, 2], [5, 2],
+        [1, 3], [2, 3], [3, 3], [4, 3], [5, 3],
+        [1, 4], [2, 4], [3, 4], [4, 4], [5, 4],
+        [2, 5], [3, 5], [4, 5],
+      ]);
+    }
 
     // Tab visibility
     const isWeapons = Neo.activeAnvilTab === 'weapons';
@@ -821,10 +1147,21 @@ export function isWizardPawOpen() {
     return !!Neo.wizardPawSelection && isPanelOpen(Neo.ui.wizardPawModal);
   }
 
-export function setWizardPawModalOpen(open) {
+export function setWizardPawModalOpen(open, options = {}) {
     if (!Neo.ui.wizardPawModal) return;
-    Neo.ui.wizardPawModal.classList.toggle('hidden', !open);
-    Neo.ui.wizardPawModal.setAttribute('aria-hidden', open ? 'false' : 'true');
+  const animateClose = options.animateClose !== false;
+    const effectTarget = Neo.ui.wizardPawModal.querySelector('.modal-box') || Neo.ui.wizardPawModal;
+    if (effectTarget instanceof HTMLElement) effectTarget.dataset.panelFxKey = 'wizard-paw-modal';
+    if (open) {
+      clearPanelCloseEffect(effectTarget);
+      Neo.ui.wizardPawModal.classList.remove('hidden');
+      Neo.ui.wizardPawModal.setAttribute('aria-hidden', 'false');
+      return;
+    }
+    if (animateClose && isPanelOpen(Neo.ui.wizardPawModal)) playPanelCloseEffect(effectTarget);
+    else clearPanelCloseEffect(effectTarget);
+    Neo.ui.wizardPawModal.classList.add('hidden');
+    Neo.ui.wizardPawModal.setAttribute('aria-hidden', 'true');
   }
 
 export function isOverlayBlockingInput() {
@@ -884,10 +1221,219 @@ export function getShopWeaponOffers() {
         bought: false,
         cost: Neo.getShopWeaponCost(Neo.WEAPON_DEFS[weaponKey]?.rarity || 'knight', index, Neo.floor, Neo.selectedDifficulty, weaponKey),
       }));
+      const projectilePool = Neo.getProjectileWeaponKeys?.(filtered) || [];
+      if (offers.length > 0 && projectilePool.length > 0 && !offers.some(offer => Neo.isProjectileWeaponKey?.(offer.key))) {
+        const projectileKey = Neo.shuffleWithRandom(projectilePool, shopRandom)[0];
+        offers[offers.length - 1] = {
+          type: 'weapon',
+          key: projectileKey,
+          bought: false,
+          cost: Neo.getShopWeaponCost(Neo.WEAPON_DEFS[projectileKey]?.rarity || 'knight', offers.length - 1, Neo.floor, Neo.selectedDifficulty, projectileKey),
+        };
+      }
       Neo.currentRoom.shopWeaponOffers = offers;
     }
     Neo.refreshRoomShopCosts(Neo.currentRoom);
     return Neo.currentRoom.shopWeaponOffers;
+  }
+
+  function getShopPurchaseState(offer, { owned = false, blocked = false } = {}) {
+    const canAfford = !!Neo.player && Neo.player.coins >= Number(offer?.cost || 0);
+    const bought = !!offer?.bought;
+    const disabled = bought || owned || blocked || !canAfford;
+    const showUnaffordable = !canAfford && !owned && !bought;
+    const status = bought || owned ? 'owned' : blocked ? 'locked' : showUnaffordable ? 'short' : 'available';
+    const statusLabel = bought || owned ? 'Owned' : blocked ? 'Locked' : showUnaffordable ? 'Need coins' : 'Ready';
+    return { canAfford, bought, disabled, showUnaffordable, status, statusLabel };
+  }
+
+  function escapeShopText(value) {
+    return Neo.escapeHtml ? Neo.escapeHtml(value) : String(value ?? '').replace(/[&<>"']/g, ch => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;',
+    })[ch]);
+  }
+
+  function formatShopStatValue(value, suffix = '') {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return '';
+    const formatted = Math.abs(numeric) >= 100 ? String(Math.round(numeric)) : String(Math.round(numeric * 10) / 10);
+    return `${formatted}${suffix}`;
+  }
+
+  function renderShopChips(chips = []) {
+    const seen = new Set();
+    return chips
+      .filter(Boolean)
+      .map(chip => {
+        const label = typeof chip === 'string' ? chip : chip.label;
+        if (!label) return '';
+        const labelKey = String(label).toLowerCase();
+        if (seen.has(labelKey)) return '';
+        seen.add(labelKey);
+        const toneKey = typeof chip === 'object' && chip.tone ? String(chip.tone).replace(/[^a-z0-9_-]/gi, '') : '';
+        const tone = toneKey ? ` shop-card__chip--${escapeShopText(toneKey)}` : '';
+        return `<span class="shop-card__chip${tone}">${escapeShopText(label)}</span>`;
+      })
+      .join('');
+  }
+
+  function renderShopStats(stats = []) {
+    const rows = stats
+      .filter(stat => stat && stat.label && stat.value !== undefined && stat.value !== null && stat.value !== '')
+      .slice(0, 3)
+      .map(stat => `<span class="shop-card__stat"><span>${escapeShopText(stat.label)}</span><b>${escapeShopText(stat.value)}</b></span>`)
+      .join('');
+    return rows ? `<div class="shop-card__stats">${rows}</div>` : '';
+  }
+
+  function buildWeaponShopChips(weaponKey, weapon) {
+    const chips = [{ label: weapon?.rarity || 'weapon', tone: 'rarity' }];
+    const projectileConfig = Neo.buildWeaponProjectileConfig?.(weaponKey);
+    if (projectileConfig) {
+      chips.push({ label: 'Projectile', tone: 'projectile' });
+      if (projectileConfig.burstCount > 1) chips.push({ label: 'Burst', tone: 'projectile' });
+      if (projectileConfig.pierceCount > 0) chips.push({ label: 'Pierce', tone: 'projectile' });
+    } else if (weaponKey === 'lazer_glasses') {
+      chips.push({ label: 'Beam', tone: 'magic' });
+    } else if (weaponKey === 'aegis_shield_weapon') {
+      chips.push({ label: 'Defense', tone: 'defense' });
+    } else {
+      chips.push({ label: 'Melee', tone: 'melee' });
+    }
+    return chips;
+  }
+
+  function buildWeaponShopStats(weaponKey) {
+    const base = Neo.WEAPON_BASE_STATS?.[weaponKey] || {};
+    const projectileConfig = Neo.buildWeaponProjectileConfig?.(weaponKey);
+    const range = Number(base.range ?? (projectileConfig ? projectileConfig.speed * projectileConfig.life : 0));
+    return [
+      base.damage ? { label: 'DMG', value: formatShopStatValue(base.damage) } : null,
+      base.cooldown ? { label: 'CD', value: Number(base.cooldown).toFixed(2) + 's' } : null,
+      range ? { label: 'RNG', value: formatShopStatValue(range) } : null,
+    ];
+  }
+
+  function buildMoveShopStats(moveKey) {
+    const base = Neo.MOVE_BASE_STATS?.[moveKey] || {};
+    return [
+      base.damage ? { label: 'DMG', value: formatShopStatValue(base.damage) } : null,
+      base.cooldown ? { label: 'CD', value: Number(base.cooldown).toFixed(2) + 's' } : null,
+      base.duration
+        ? { label: 'DUR', value: formatShopStatValue(base.duration, 's') }
+        : base.range
+          ? { label: 'AOE', value: formatShopStatValue(base.range) }
+          : null,
+    ];
+  }
+
+  function buildDescriptorChips(key, description, { slot = '', kind = '' } = {}) {
+    const chips = [];
+    const text = `${String(key || '')} ${String(description || '')}`.toLowerCase();
+    if (text.includes('projectile')) chips.push({ label: 'Projectile', tone: 'projectile' });
+    if (text.includes('homing')) chips.push({ label: 'Homing', tone: 'projectile' });
+    if (text.includes('burst')) chips.push({ label: 'Burst', tone: 'projectile' });
+    if (text.includes('defense') || text.includes('shield') || text.includes('block') || text.includes('armor')) chips.push({ label: 'Defense', tone: 'defense' });
+    if (text.includes('heal') || text.includes('regen') || text.includes('recovery')) chips.push({ label: 'Heal', tone: 'heal' });
+    if (text.includes('magnet')) chips.push({ label: 'Magnet', tone: 'item' });
+    if (slot) chips.push({ label: `Slot: ${Neo.SLOT_LABELS?.[slot] || slot}`, tone: 'move' });
+    if (kind === 'weapon' && Neo.isProjectileWeaponKey?.(key)) chips.push({ label: 'Projectile', tone: 'projectile' });
+    return chips;
+  }
+
+  function isOfferRecommended(kind, key, chips = []) {
+    if (!Neo.player) return false;
+    const itemStats = Neo.getItemStats?.() || {};
+    const projectileBuild = !!Neo.isProjectileWeaponKey?.(Neo.player.equippedWeapon)
+      || Number(itemStats.projectileHomingStrength || 0) > 0
+      || Number(itemStats.projectileCountBonus || 0) > 0;
+    const labels = chips.map(chip => String(chip?.label || '').toLowerCase());
+    if (projectileBuild && kind === 'weapon' && Neo.isProjectileWeaponKey?.(key)) return true;
+    if (projectileBuild && labels.some(label => label.includes('magnet') || label.includes('homing') || label.includes('projectile'))) return true;
+    if (kind === 'move') {
+      const slot = Neo.MOVE_DEFS?.[key]?.slot;
+      if (slot && !Neo.player.equippedMoves?.[slot]) return true;
+    }
+    return false;
+  }
+
+  function renderMoveReplaceRail(slotLabel, currentMoveName, nextMoveName) {
+    const prev = currentMoveName || 'Empty';
+    return `<div class="shop-card__swap-rail">
+      <span class="shop-card__swap-slot">${escapeShopText(slotLabel)}</span>
+      <span class="shop-card__swap-old">${escapeShopText(prev)}</span>
+      <span class="shop-card__swap-arrow">-&gt;</span>
+      <span class="shop-card__swap-new">${escapeShopText(nextMoveName || 'New Move')}</span>
+    </div>`;
+  }
+
+  function renderShopCard({
+    rarityLabel,
+    iconAttr,
+    iconKey,
+    title,
+    titleColor,
+    cost,
+    description,
+    footerExtra = '',
+    chips = [],
+    stats = [],
+    accentColor = '',
+    iconSize = 40,
+    recommended = false,
+    soldStateText = 'SOLD',
+    kind,
+    index,
+    state,
+    buttonText,
+    buttonExtraAttrs = '',
+  }) {
+    const safeKind = escapeShopText(kind || 'offer');
+    const safeIconAttr = escapeShopText(iconAttr);
+    const indexAttr = Number.isInteger(index) ? ` data-index="${index}"` : '';
+    const styleAttr = accentColor ? ` style="--shop-card-accent:${escapeShopText(accentColor)}"` : '';
+    const titleStyle = titleColor ? ` style="color:${escapeShopText(titleColor)}"` : '';
+    const status = state.status || 'available';
+    const statusLabel = state.statusLabel || '';
+    const chipHtml = renderShopChips(chips.length ? chips : [rarityLabel]);
+    const statsHtml = renderShopStats(stats);
+    return `<div class="shop-card shop-card--${safeKind} shop-card--status-${escapeShopText(status)}${state.showUnaffordable ? ' shop-card--unaffordable' : ''}${state.canAfford && !state.disabled ? ' shop-card--affordable' : ''}${recommended ? ' shop-card--recommended' : ''}${state.bought ? ' shop-card--just-bought' : ''}"${styleAttr}>
+      <div class="shop-card__top">
+        <span class="shop-card__icon-frame">
+          <canvas class="shop-card__icon" ${safeIconAttr}="${escapeShopText(iconKey)}" width="${iconSize}" height="${iconSize}"></canvas>
+        </span>
+        <div class="shop-card__heading">
+          <span class="shop-card__eyebrow">${escapeShopText(rarityLabel)}</span>
+          <h4${titleStyle}>${escapeShopText(title)}</h4>
+        </div>
+        <span class="shop-card__price">${escapeShopText(cost)}</span>
+      </div>
+      <div class="shop-card__meta">
+        ${chipHtml}
+        ${recommended ? '<span class="shop-card__recommended-badge">Recommended</span>' : ''}
+        ${statusLabel ? `<span class="shop-card__status shop-card__status--${escapeShopText(status)}">${escapeShopText(statusLabel)}</span>` : ''}
+      </div>
+      <div class="shop-card__copy">
+        <p>${escapeShopText(description)}</p>
+      </div>
+      ${statsHtml}
+      ${footerExtra}
+      <div class="shop-card__footer">
+        <button class="shop-buy${state.showUnaffordable ? ' shop-buy--unaffordable' : ''}" data-kind="${safeKind}"${indexAttr} ${buttonExtraAttrs} ${state.disabled ? 'disabled' : ''}>${escapeShopText(buttonText)}</button>
+      </div>
+      ${(state.bought || status === 'owned') ? `<span class="shop-card__stamp">${escapeShopText(soldStateText)}</span>` : ''}
+    </div>`;
+  }
+
+  function drawShopIcons(container, dataAttr, drawIcon, resolveDef) {
+    container?.querySelectorAll(`[${dataAttr}]`).forEach(canvas => {
+      const key = canvas.getAttribute(dataAttr);
+      drawIcon(canvas, resolveDef(key));
+    });
   }
 
 export function renderShopPanel() {
@@ -895,6 +1441,11 @@ export function renderShopPanel() {
     Neo.refreshRoomShopCosts(Neo.currentRoom);
     Neo.shopOffers = Neo.currentRoom?.shopOffers || Neo.shopOffers;
     Neo.ui.shopCoins.textContent = String(Neo.player.coins);
+    const shopMetaLabel = document.getElementById('shopMetaLabel');
+    if (shopMetaLabel) {
+      const roomType = String(Neo.currentRoom?.type || 'shop').replace(/_/g, ' ');
+      shopMetaLabel.textContent = `F${Neo.floor} • ${Neo.titleCase?.(roomType) || roomType}`;
+    }
     const noItemsChallenge = Neo.isChallengeActive('no_items');
     Neo.ui.shopTabs.forEach(tab => {
       const isActive = tab.dataset.tab === Neo.activeShopTab;
@@ -906,60 +1457,78 @@ export function renderShopPanel() {
     Neo.ui.shopHeals.classList.toggle('hidden', Neo.activeShopTab !== 'heals');
 
     const itemCards = Neo.shopOffers
-      .filter(offer => !offer.bought && offer.type === 'item')
+      .filter(offer => offer.type === 'item')
       .map((offer, index) => {
-        const item = Neo.itemRegistry.get(offer.key);
-        const canAfford = Neo.player.coins >= offer.cost;
-        const blocked = noItemsChallenge || !canAfford;
-        return `<div class="shop-card${blocked ? ' shop-card--unaffordable' : ''}">
-          <span class="shop-card__eyebrow">Relic</span>
-          <div class="shop-card__title-row">
-            <canvas class="shop-card__icon" data-item-icon="${offer.key}" width="30" height="30"></canvas>
-            <h4 style="color:${Neo.getRarityNameColor(item?.rarity || item?.category)}">${item?.name || 'Item'}</h4>
-            <span class="shop-card__price">${offer.cost}</span>
-          </div>
-          <div class="shop-card__copy">
-            <p>${noItemsChallenge ? 'No Items challenge is active. Relic buys are disabled for this run.' : item?.description || 'No details available.'}</p>
-          </div>
-          <div class="shop-card__footer">
-            <button class="shop-buy${!canAfford ? ' shop-buy--unaffordable' : ''}" data-kind="item" data-index="${index}" ${blocked ? 'disabled' : ''}>${noItemsChallenge ? 'Relics Locked' : !canAfford ? 'Too Expensive' : 'Buy Relic'}</button>
-          </div>
-        </div>`;
+        const item = Neo.itemRegistry.get(offer.key) || Neo.ITEM_DEFS[offer.key];
+        const state = getShopPurchaseState(offer, { blocked: noItemsChallenge });
+        const description = noItemsChallenge
+          ? 'No Items challenge is active. Relic buys are disabled for this run.'
+          : item?.description || 'No details available.';
+        const descriptorChips = buildDescriptorChips(offer.key, description, { kind: 'item' });
+        const chips = [
+          { label: 'Relic', tone: 'rarity' },
+          item?.rarity ? { label: item.rarity, tone: 'rarity' } : null,
+          item?.category ? { label: item.category, tone: 'item' } : null,
+          ...descriptorChips,
+        ].filter(Boolean).slice(0, 5);
+        const buttonText = noItemsChallenge ? 'Relics Locked' : state.bought ? 'Sold' : !state.canAfford ? 'Too Expensive' : 'Buy Relic';
+        return renderShopCard({
+          rarityLabel: 'Relic',
+          iconAttr: 'data-item-icon',
+          iconKey: offer.key,
+          title: item?.name || 'Item',
+          titleColor: Neo.getRarityNameColor(item?.rarity || item?.category),
+          accentColor: Neo.getRarityNameColor(item?.rarity || item?.category),
+          cost: offer.cost,
+          description,
+          chips,
+          recommended: isOfferRecommended('item', offer.key, chips),
+          kind: 'item',
+          index,
+          state,
+          buttonText,
+          soldStateText: 'OWNED',
+        });
       })
       .join('');
     Neo.ui.shopItems.innerHTML = itemCards || '<div class="shop-card shop-empty"><p>Every relic here is already yours. Clear the floor or check the move shelf.</p></div>';
-    Neo.ui.shopItems.querySelectorAll('[data-item-icon]').forEach(canvas => {
-      Neo.drawItemToastIcon(canvas, Neo.itemRegistry.get(canvas.dataset.itemIcon) || Neo.ITEM_DEFS[canvas.dataset.itemIcon]);
-    });
+    drawShopIcons(Neo.ui.shopItems, 'data-item-icon', Neo.drawItemToastIcon, key => Neo.itemRegistry.get(key) || Neo.ITEM_DEFS[key]);
 
     const weaponOffers = getShopWeaponOffers();
     const weaponCards = weaponOffers
       .map((offer, index) => {
         const weapon = Neo.WEAPON_DEFS[offer.key];
         const owned = !!Neo.player.ownedWeapons?.[offer.key];
-        const canAfford = Neo.player.coins >= offer.cost;
-        const disabled = offer.bought || owned || !canAfford;
-        return `<div class="shop-card${!canAfford && !owned && !offer.bought ? ' shop-card--unaffordable' : ''}">
-          <span class="shop-card__eyebrow">${weapon?.rarity || 'weapon'}</span>
-          <div class="shop-card__title-row">
-            <canvas class="shop-card__icon" data-weapon-icon="${offer.key}" width="30" height="30"></canvas>
-            <h4 style="color:${Neo.getRarityNameColor(weapon?.rarity)}">${weapon?.name || offer.key}</h4>
-            <span class="shop-card__price">${offer.cost}</span>
-          </div>
-          <div class="shop-card__copy">
-            <p>${weapon?.description || 'No weapon description available.'}</p>
-          </div>
-          <div class="shop-card__footer">
-            <button class="shop-buy${!canAfford && !owned && !offer.bought ? ' shop-buy--unaffordable' : ''}" data-kind="weapon" data-index="${index}" ${disabled ? 'disabled' : ''}>${offer.bought || owned ? 'Owned' : !canAfford ? 'Too Expensive' : 'Buy Weapon'}</button>
-          </div>
-        </div>`;
+        const state = getShopPurchaseState(offer, { owned });
+        const description = weapon?.description || 'No weapon description available.';
+        const chips = [
+          ...buildWeaponShopChips(offer.key, weapon),
+          ...buildDescriptorChips(offer.key, description, { kind: 'weapon' }),
+        ].slice(0, 5);
+        const buttonText = state.bought || owned ? 'Owned' : !state.canAfford ? 'Too Expensive' : 'Buy Weapon';
+        return renderShopCard({
+          rarityLabel: weapon?.rarity || 'weapon',
+          iconAttr: 'data-weapon-icon',
+          iconKey: offer.key,
+          title: weapon?.name || offer.key,
+          titleColor: Neo.getRarityNameColor(weapon?.rarity),
+          accentColor: Neo.getRarityNameColor(weapon?.rarity),
+          cost: offer.cost,
+          description,
+          chips,
+          stats: buildWeaponShopStats(offer.key),
+          recommended: isOfferRecommended('weapon', offer.key, chips),
+          kind: 'weapon',
+          index,
+          state,
+          buttonText,
+          soldStateText: 'OWNED',
+        });
       })
       .join('');
     if (Neo.ui.shopWeapons) {
       Neo.ui.shopWeapons.innerHTML = weaponCards || '<div class="shop-card shop-empty"><p>No weapons in stock right now.</p></div>';
-      Neo.ui.shopWeapons.querySelectorAll('[data-weapon-icon]').forEach(canvas => {
-        Neo.drawWeaponToastIcon(canvas, Neo.WEAPON_DEFS[canvas.dataset.weaponIcon]);
-      });
+      drawShopIcons(Neo.ui.shopWeapons, 'data-weapon-icon', Neo.drawWeaponToastIcon, key => Neo.WEAPON_DEFS[key]);
     }
 
     const moveOffers = getShopMoveOffers();
@@ -967,35 +1536,38 @@ export function renderShopPanel() {
       .map((offer, index) => {
         const def = Neo.MOVE_DEFS[offer.key];
         const owned = !!Neo.player.ownedMoves?.[offer.key];
-        const canAfford = Neo.player.coins >= offer.cost;
-        const disabled = offer.bought || owned || !canAfford;
+        const state = getShopPurchaseState(offer, { owned });
         const slotLabel = Neo.SLOT_LABELS[def?.slot] || def?.slot || 'move';
         const currentMoveKey = Neo.player.equippedMoves?.[def?.slot];
         const currentMoveName = currentMoveKey ? (Neo.MOVE_DEFS[currentMoveKey]?.name || currentMoveKey) : null;
-        const replacesLine = currentMoveName
-          ? `<p class="shop-card__replaces">Replaces: <b>${currentMoveName}</b></p>`
-          : `<p class="shop-card__replaces">Goes into: <b>${slotLabel} slot</b> (nothing equipped)</p>`;
-        return `<div class="shop-card${!canAfford && !owned && !offer.bought ? ' shop-card--unaffordable' : ''}">
-          <span class="shop-card__eyebrow">${slotLabel}</span>
-          <div class="shop-card__title-row">
-            <canvas class="shop-card__icon" data-move-icon="${offer.key}" width="30" height="30"></canvas>
-            <h4>${def?.name || offer.key}</h4>
-            <span class="shop-card__price">${offer.cost}</span>
-          </div>
-          <div class="shop-card__copy">
-            <p>${def?.desc || 'No move description available.'}</p>
-          </div>
-          ${replacesLine}
-          <div class="shop-card__footer">
-            <button class="shop-buy${!canAfford && !owned && !offer.bought ? ' shop-buy--unaffordable' : ''}" data-kind="move" data-index="${index}" ${disabled ? 'disabled' : ''}>${offer.bought || owned ? 'Owned' : !canAfford ? 'Too Expensive' : 'Buy Move'}</button>
-          </div>
-        </div>`;
+        const replacesLine = renderMoveReplaceRail(slotLabel, currentMoveName, def?.name || offer.key);
+        const descriptorChips = buildDescriptorChips(offer.key, def?.desc || '', { slot: def?.slot, kind: 'move' });
+        const buttonText = state.bought || owned ? 'Owned' : !state.canAfford ? 'Too Expensive' : 'Buy Move';
+        return renderShopCard({
+          rarityLabel: slotLabel,
+          iconAttr: 'data-move-icon',
+          iconKey: offer.key,
+          title: def?.name || offer.key,
+          cost: offer.cost,
+          description: def?.desc || 'No move description available.',
+          footerExtra: replacesLine,
+          chips: [
+            { label: slotLabel, tone: 'move' },
+            def?.exclusiveCharacter ? { label: def.exclusiveCharacter, tone: 'exclusive' } : null,
+            ...descriptorChips,
+          ].filter(Boolean).slice(0, 5),
+          stats: buildMoveShopStats(offer.key),
+          recommended: isOfferRecommended('move', offer.key, descriptorChips),
+          kind: 'move',
+          index,
+          state,
+          buttonText,
+          soldStateText: 'OWNED',
+        });
       })
       .join('');
     Neo.ui.shopMoves.innerHTML = moveCards || '<div class="shop-card shop-empty"><p>No new techniques are on the rack right now.</p></div>';
-    Neo.ui.shopMoves.querySelectorAll('[data-move-icon]').forEach(canvas => {
-      Neo.drawMoveToastIcon(canvas, Neo.MOVE_DEFS[canvas.dataset.moveIcon]);
-    });
+    drawShopIcons(Neo.ui.shopMoves, 'data-move-icon', Neo.drawMoveToastIcon, key => Neo.MOVE_DEFS[key]);
 
     const heals = [
       { id: 'small', name: 'Minor Heal', heal: Neo.scalePotionHealing(45, 24), cost: Neo.getShopHealCost('small') },
@@ -1016,20 +1588,30 @@ export function renderShopPanel() {
             ? `Store one potion in Mateo's Bag (${storedPotions}/${potionCap}).`
             : 'Already at full health.';
         const buttonText = !canAfford ? 'Too Expensive' : canHealNow ? 'Buy Heal' : canStorePotion ? 'Store Potion' : 'Full Health';
-        return `<div class="shop-card${disabled ? ' shop-card--unaffordable' : ''}">
-        <span class="shop-card__eyebrow">Recovery</span>
-        <div class="shop-card__title-row">
-          <canvas class="shop-card__icon" data-heal-icon="${heal.id}" width="30" height="30"></canvas>
-          <h4>${heal.name}</h4>
-          <span class="shop-card__price">${heal.cost}</span>
-        </div>
-        <div class="shop-card__copy">
-          <p>${copy}</p>
-        </div>
-        <div class="shop-card__footer">
-          <button class="shop-buy${disabled ? ' shop-buy--unaffordable' : ''}" data-kind="heal" data-heal="${heal.heal}" data-cost="${heal.cost}" ${disabled ? 'disabled' : ''}>${buttonText}</button>
-        </div>
-      </div>`;
+        const state = {
+          canAfford,
+          disabled,
+          showUnaffordable: !canAfford,
+          status: !canAfford ? 'short' : disabled ? 'locked' : 'available',
+          statusLabel: !canAfford ? 'Need coins' : disabled ? 'Full' : 'Ready',
+        };
+        return renderShopCard({
+          rarityLabel: 'Recovery',
+          iconAttr: 'data-heal-icon',
+          iconKey: heal.id,
+          title: heal.name,
+          cost: heal.cost,
+          description: copy,
+          chips: [
+            { label: 'Recovery', tone: 'heal' },
+            canStorePotion ? { label: 'Store', tone: 'heal' } : null,
+          ],
+          stats: [{ label: 'HP', value: `+${heal.heal}` }],
+          kind: 'heal',
+          state,
+          buttonText,
+          buttonExtraAttrs: `data-heal="${heal.heal}" data-cost="${heal.cost}"`,
+        });
       })
       .join('');
     Neo.ui.shopHeals.innerHTML = healCards;
@@ -1045,6 +1627,7 @@ export function renderInventoryPanel() {
     // Resolve which player to display
     const _invPlayers = [Neo.player, Neo.player2, Neo.player3, Neo.player4];
     const _invP = _invPlayers[Neo.activeInvPlayer - 1] || Neo.player;
+  const extraBatteryPendingCount = Math.max(0, Math.floor(Number(_invP.extraBatteryPendingCount || 0)));
 
     if (Neo.gameMode === 'coop' && (Neo.player2 || Neo.player3 || Neo.player4)) updateInvPlayerTabVisibility();
 
@@ -1057,6 +1640,47 @@ export function renderInventoryPanel() {
       if (el) el.classList.toggle('hidden', key !== Neo.activeInvTab);
     });
 
+    if (Neo.ui.invBuildSummary) {
+      const weaponKey = _invP.equippedWeapon || '';
+      const weapon = Neo.WEAPON_DEFS[weaponKey];
+      const weaponIcon = weaponKey
+        ? `<canvas class="inv-build-card__icon" data-weapon-icon="${weaponKey}" width="32" height="32"></canvas>`
+        : '<canvas class="inv-build-card__icon inv-build-card__icon--empty" data-inv-ui-icon="empty-weapon" width="32" height="32"></canvas>';
+      const weaponCard = `<button class="inv-build-card inv-build-card--weapon${weapon ? '' : ' is-empty'}" type="button" data-inv-tab-jump="weapons">
+        ${weaponIcon}
+        <span class="inv-build-card__meta">
+          <span class="inv-build-card__label">Weapon</span>
+          <b style="color:${Neo.getRarityNameColor(weapon?.rarity)}">${weapon?.name || 'Default Melee'}</b>
+        </span>
+      </button>`;
+      const moveCards = Neo.MOVE_SLOTS.map(slot => {
+        const moveKey = _invP.equippedMoves?.[slot] || '';
+        const def = Neo.MOVE_DEFS[moveKey];
+        const slotLabel = Neo.SLOT_LABELS[slot] || slot;
+        const slotKey = Neo.getSlotKeyLabel(slot);
+        const icon = moveKey
+          ? `<canvas class="inv-build-card__icon" data-move-icon="${moveKey}" width="32" height="32"></canvas>`
+          : '<canvas class="inv-build-card__icon inv-build-card__icon--empty" data-inv-ui-icon="empty-move" width="32" height="32"></canvas>';
+        return `<button class="inv-build-card${def ? '' : ' is-empty'}" type="button" data-build-slot="${slot}" data-inv-tab-jump="equipped">
+          ${icon}
+          <span class="inv-build-card__meta">
+            <span class="inv-build-card__label">${slotLabel}${slotKey ? ` / ${slotKey}` : ''}</span>
+            <b>${def?.name || 'Empty Slot'}</b>
+          </span>
+        </button>`;
+      }).join('');
+      Neo.ui.invBuildSummary.innerHTML = weaponCard + moveCards;
+      Neo.ui.invBuildSummary.querySelectorAll('[data-weapon-icon]').forEach(canvas => {
+        Neo.drawWeaponToastIcon(canvas, Neo.WEAPON_DEFS[canvas.dataset.weaponIcon]);
+      });
+      Neo.ui.invBuildSummary.querySelectorAll('[data-move-icon]').forEach(canvas => {
+        Neo.drawMoveToastIcon(canvas, Neo.MOVE_DEFS[canvas.dataset.moveIcon]);
+      });
+      Neo.ui.invBuildSummary.querySelectorAll('[data-inv-ui-icon]').forEach(canvas => {
+        Neo.drawInventoryUiIcon?.(canvas, canvas.dataset.invUiIcon);
+      });
+    }
+
     const stats = Neo.getItemStats();
     const hpPct = Math.round(_invP.hp) / Math.round(_invP.maxHp);
     const hpColor = hpPct > 0.6 ? '#6dde88' : hpPct > 0.3 ? '#f5c842' : '#ff6b6b';
@@ -1065,14 +1689,19 @@ export function renderInventoryPanel() {
     const atkSpeed = Neo.getAttackSpeedValue();
     const atkSpeedColor = atkSpeed >= 2 ? '#6dde88' : atkSpeed >= 1.2 ? '#e8f4ff' : '#8ca8c0';
     const dmgReduction = Math.round(stats.damageReduction * 100);
+    const bleedResistance = Math.round((stats.bleedResistance || 0) * 100);
     Neo.ui.invStats.innerHTML = [
-      `<div class="inv-stat-row inv-stat-row--bar"><div class="inv-stat-row__icon inv-stat-row__icon--hp">♥</div><div class="inv-stat-row__body"><span class="inv-stat-row__label">HP</span><span class="inv-stat-row__value" style="color:${hpColor}">${Math.round(_invP.hp)} <span class="inv-stat-row__sub">/ ${Math.round(_invP.maxHp)}</span></span></div><div class="inv-stat-row__bar"><div class="inv-stat-row__bar-fill" style="width:${Math.round(hpPct*100)}%;background:${hpColor}"></div></div></div>`,
-      `<div class="inv-stat-row"><div class="inv-stat-row__icon inv-stat-row__icon--atk">⚔</div><div class="inv-stat-row__body"><span class="inv-stat-row__label">Attack Power</span><span class="inv-stat-row__value">${_invP.attackPower}</span></div></div>`,
-      `<div class="inv-stat-row"><div class="inv-stat-row__icon inv-stat-row__icon--spd">⚡</div><div class="inv-stat-row__body"><span class="inv-stat-row__label">Attack Speed</span><span class="inv-stat-row__value" style="color:${atkSpeedColor}">${atkSpeed.toFixed(2)}x</span></div></div>`,
-      `<div class="inv-stat-row"><div class="inv-stat-row__icon inv-stat-row__icon--crit">◎</div><div class="inv-stat-row__body"><span class="inv-stat-row__label">Crit Chance</span><span class="inv-stat-row__value" style="color:${critColor}">${critPct}%</span></div></div>`,
-      dmgReduction > 0 ? `<div class="inv-stat-row"><div class="inv-stat-row__icon inv-stat-row__icon--def">⛨</div><div class="inv-stat-row__body"><span class="inv-stat-row__label">Damage Reduction</span><span class="inv-stat-row__value" style="color:#6dde88">${dmgReduction}%</span></div></div>` : '',
-      stats.bleedChance > 0 ? `<div class="inv-stat-row"><div class="inv-stat-row__icon inv-stat-row__icon--bleed">✦</div><div class="inv-stat-row__body"><span class="inv-stat-row__label">Bleed Chance</span><span class="inv-stat-row__value" style="color:#e05c5c">${Math.round(stats.bleedChance * 100)}%</span></div></div>` : '',
+      `<div class="inv-stat-row inv-stat-row--bar"><canvas class="inv-stat-row__icon" data-inv-ui-icon="hp" width="36" height="36" aria-hidden="true"></canvas><div class="inv-stat-row__body"><span class="inv-stat-row__label">HP</span><span class="inv-stat-row__value" style="color:${hpColor}">${Math.round(_invP.hp)} <span class="inv-stat-row__sub">/ ${Math.round(_invP.maxHp)}</span></span></div><div class="inv-stat-row__bar"><div class="inv-stat-row__bar-fill" style="width:${Math.round(hpPct*100)}%;background:${hpColor}"></div></div></div>`,
+      `<div class="inv-stat-row"><canvas class="inv-stat-row__icon" data-inv-ui-icon="attack" width="36" height="36" aria-hidden="true"></canvas><div class="inv-stat-row__body"><span class="inv-stat-row__label">Attack Power</span><span class="inv-stat-row__value">${_invP.attackPower}</span></div></div>`,
+      `<div class="inv-stat-row"><canvas class="inv-stat-row__icon" data-inv-ui-icon="speed" width="36" height="36" aria-hidden="true"></canvas><div class="inv-stat-row__body"><span class="inv-stat-row__label">Attack Speed</span><span class="inv-stat-row__value" style="color:${atkSpeedColor}">${atkSpeed.toFixed(2)}x</span></div></div>`,
+      `<div class="inv-stat-row"><canvas class="inv-stat-row__icon" data-inv-ui-icon="crit" width="36" height="36" aria-hidden="true"></canvas><div class="inv-stat-row__body"><span class="inv-stat-row__label">Crit Chance</span><span class="inv-stat-row__value" style="color:${critColor}">${critPct}%</span></div></div>`,
+      dmgReduction > 0 ? `<div class="inv-stat-row"><canvas class="inv-stat-row__icon" data-inv-ui-icon="defense" width="36" height="36" aria-hidden="true"></canvas><div class="inv-stat-row__body"><span class="inv-stat-row__label">Damage Reduction</span><span class="inv-stat-row__value" style="color:#6dde88">${dmgReduction}%</span></div></div>` : '',
+      bleedResistance > 0 ? `<div class="inv-stat-row"><canvas class="inv-stat-row__icon" data-inv-ui-icon="bleed" width="36" height="36" aria-hidden="true"></canvas><div class="inv-stat-row__body"><span class="inv-stat-row__label">Bleed Resistance</span><span class="inv-stat-row__value" style="color:#f0a080">${bleedResistance}%</span></div></div>` : '',
+      stats.bleedChance > 0 ? `<div class="inv-stat-row"><canvas class="inv-stat-row__icon" data-inv-ui-icon="bleed" width="36" height="36" aria-hidden="true"></canvas><div class="inv-stat-row__body"><span class="inv-stat-row__label">Bleed Chance</span><span class="inv-stat-row__value" style="color:#e05c5c">${Math.round(stats.bleedChance * 100)}%</span></div></div>` : '',
     ].join('');
+    Neo.ui.invStats.querySelectorAll('[data-inv-ui-icon]').forEach(canvas => {
+      Neo.drawInventoryUiIcon?.(canvas, canvas.dataset.invUiIcon);
+    });
 
     Neo.ui.invItemsList.innerHTML = Neo.ITEM_KEYS
       .filter(key => Number(_invP.items?.[key] || 0) > 0)
@@ -1081,7 +1710,7 @@ export function renderInventoryPanel() {
         return `<div class="inv-card">
           <span class="inv-card__eyebrow">Relic</span>
           <div class="inv-card__title-row">
-            <canvas class="inv-card__icon" data-item-icon="${key}" width="30" height="30"></canvas>
+            <canvas class="inv-card__icon" data-item-icon="${key}" width="40" height="40"></canvas>
             <h4 style="color:${Neo.getRarityNameColor(item?.rarity || item?.category)}">${item?.name || key}</h4>
             <span class="inv-card__count">x${_invP.items[key]}</span>
           </div>
@@ -1115,7 +1744,10 @@ export function renderInventoryPanel() {
               <span class="inv-move-chip__slot">${def?.rarity || 'weapon'}</span>
             </div>
             <p>${def?.description || 'No weapon description available.'}</p>
-            <span class="inv-move-chip__hint">${equipped ? 'Equipped On Left Click' : 'Click To Equip On Left Click'}</span>
+            <div class="inv-chip-footer">
+              <span class="inv-move-chip__hint">${equipped ? 'Active weapon' : 'Left-click weapon'}</span>
+              <span class="inv-chip-action${equipped ? ' inv-chip-action--equipped' : ''}">${equipped ? 'Unequip' : 'Equip'}</span>
+            </div>
           </button>`;
         })
         .join('') || '<div class="inv-card"><span class="inv-card__eyebrow">Empty</span><h4>No weapons owned</h4><p>Buy weapons in the shop to unlock left-click weapon loadouts.</p></div>';
@@ -1128,24 +1760,49 @@ export function renderInventoryPanel() {
     const allOwnedMoves = Object.keys(_invP.ownedMoves || {})
       .filter(key => _invP.ownedMoves[key] && Neo.MOVE_DEFS[key] && Neo.isMoveAllowedForCharacter(key, _invP.character))
       .sort((a, b) => Neo.MOVE_DEFS[a].slot.localeCompare(Neo.MOVE_DEFS[b].slot));
-    Neo.ui.invMovesList.innerHTML = allOwnedMoves
+    const extraBatteryNotice = extraBatteryPendingCount > 0
+      ? `<div class="inv-card inv-card--battery">
+          <div class="inv-card__title-row">
+            <span class="inv-card__eyebrow">Extra Battery</span>
+            <span class="inv-card__count">${extraBatteryPendingCount} pending</span>
+          </div>
+          <h4>Add an extra charge to a move</h4>
+          <ol class="inv-battery-steps">
+            <li>Pick a move from the list below.</li>
+            <li>It gains <b>+1 max charge</b> — one more use before the cooldown.</li>
+            <li>Watch for the new charge pip on that move's skill card.</li>
+          </ol>
+        </div>`
+      : '';
+    const moveCards = allOwnedMoves
       .map(key => {
         const def = Neo.MOVE_DEFS[key];
         const isEquipped = equippedMoveKeys.has(key);
-        const isMatch = !isEquipped && Neo.activeInventorySlot && Neo.activeInventorySlot === def.slot;
+        const isBatterySelectable = extraBatteryPendingCount > 0;
+        const isMatch = !isBatterySelectable && !isEquipped && Neo.activeInventorySlot && Neo.activeInventorySlot === def.slot;
+        const currentMaxStacks = Neo.getMoveMaxStacks(key, _invP.character, _invP);
         const slotLabel = Neo.SLOT_LABELS[def.slot] || def.slot;
-        const hintText = isEquipped ? 'Equipped' : (isMatch ? 'Click or drag to equip' : `Drag to ${slotLabel} slot`);
-        return `<div class="inv-move-chip${isEquipped ? ' is-equipped-move' : ''}${isMatch ? ' is-match' : ''}" ${isEquipped ? '' : `draggable="true"`} data-move="${key}" data-slot-type="${def.slot}">
+        const hintText = isBatterySelectable
+          ? `Charges ${currentMaxStacks} → ${currentMaxStacks + 1}`
+          : (isEquipped ? `${slotLabel} slot` : (isMatch ? 'Selected slot' : `Fits ${slotLabel}`));
+        const actionText = isBatterySelectable
+          ? '+1 Charge'
+          : (isEquipped ? 'Equipped' : (isMatch ? 'Equip Here' : 'Equip'));
+        return `<div class="inv-move-chip${(isEquipped && !isBatterySelectable) ? ' is-equipped-move' : ''}${(isMatch || isBatterySelectable) ? ' is-match' : ''}" role="button" tabindex="${isEquipped && !isBatterySelectable ? '-1' : '0'}" ${(isEquipped || isBatterySelectable) ? '' : `draggable="true"`} data-move="${key}" data-slot-type="${def.slot}">
           <canvas class="inv-chip__icon" data-move-icon="${key}" width="30" height="30"></canvas>
           <div class="inv-move-chip__meta">
             <b>${def.name}</b>
             <span class="inv-move-chip__slot">${slotLabel}</span>
           </div>
           <p>${def.desc}</p>
-          <span class="inv-move-chip__hint">${hintText}</span>
+          <div class="inv-chip-footer">
+            <span class="inv-move-chip__hint">${hintText}</span>
+            <span class="inv-chip-action${isEquipped && !isBatterySelectable ? ' inv-chip-action--disabled' : ''}">${actionText}</span>
+          </div>
         </div>`;
       })
-      .join('') || '<div class="inv-card"><span class="inv-card__eyebrow">Empty</span><h4>No moves owned</h4><p>Buy moves from the shop to build your kit.</p></div>';
+      .join('');
+    Neo.ui.invMovesList.innerHTML = extraBatteryNotice + (moveCards || '<div class="inv-card"><span class="inv-card__eyebrow">Empty</span><h4>No moves owned</h4><p>Buy moves from the shop to build your kit.</p></div>');
     Neo.ui.invMovesList.querySelectorAll('[data-move-icon]').forEach(canvas => {
       Neo.drawMoveToastIcon(canvas, Neo.MOVE_DEFS[canvas.dataset.moveIcon]);
     });
@@ -1165,7 +1822,7 @@ export function renderInventoryPanel() {
       node.classList.toggle('is-swap-ready', hasSpareMove);
       const slotLabel = Neo.SLOT_LABELS[slot] || slot;
       const slotKey = Neo.getSlotKeyLabel(slot);
-      const iconHtml = moveKey ? `<canvas class="inv-slot__icon" data-move-icon="${moveKey}" width="36" height="36"></canvas>` : `<div class="inv-slot__icon inv-slot__icon--empty"></div>`;
+      const iconHtml = moveKey ? `<canvas class="inv-slot__icon" data-move-icon="${moveKey}" width="36" height="36"></canvas>` : `<canvas class="inv-slot__icon inv-slot__icon--empty" data-inv-ui-icon="empty-move" width="36" height="36"></canvas>`;
       const statusText = isSelected ? 'Swap Ready' : (def ? 'Equipped' : 'Empty');
       const hintText = isSelected
         ? 'Matching spare moves highlighted below.'
@@ -1182,12 +1839,15 @@ export function renderInventoryPanel() {
     if (Neo.ui.invWeaponSlot) {
       const weapon = Neo.WEAPON_DEFS[_invP.equippedWeapon];
       Neo.ui.invWeaponSlot.dataset.rarity = weapon?.rarity || '';
-      const wIconHtml = weapon ? `<canvas class="inv-slot__icon" data-weapon-icon="${_invP.equippedWeapon}" width="36" height="36"></canvas>` : `<div class="inv-slot__icon inv-slot__icon--empty">⚔️</div>`;
+      const wIconHtml = weapon ? `<canvas class="inv-slot__icon" data-weapon-icon="${_invP.equippedWeapon}" width="36" height="36"></canvas>` : `<canvas class="inv-slot__icon inv-slot__icon--empty" data-inv-ui-icon="empty-weapon" width="36" height="36"></canvas>`;
       Neo.ui.invWeaponSlot.innerHTML = `<div class="inv-slot__top"><span class="inv-slot__kicker">weapon</span><span class="inv-slot__status">${weapon ? 'Equipped Now' : 'No Weapon'}</span></div><div class="inv-slot__main">${wIconHtml}<div class="inv-slot__move-wrap"><div class="inv-slot__move" style="color:${Neo.getRarityNameColor(weapon?.rarity)}">${weapon?.name || 'Default Melee Active'}</div><p class="inv-slot__hint">${weapon ? `${weapon.description} Click to unequip.` : 'Open Weapons tab and click a weapon to equip it.'}</p></div></div>`;
       Neo.ui.invWeaponSlot.querySelectorAll('[data-weapon-icon]').forEach(canvas => {
         Neo.drawWeaponToastIcon(canvas, Neo.WEAPON_DEFS[canvas.dataset.weaponIcon]);
       });
     }
+    Neo.ui.invPanel.querySelectorAll('[data-inv-ui-icon]').forEach(canvas => {
+      Neo.drawInventoryUiIcon?.(canvas, canvas.dataset.invUiIcon);
+    });
     Neo.inventoryPanelDirty = false;
   }
 
@@ -1229,7 +1889,7 @@ export function equipWeapon(weaponKey) {
     const target = event.target instanceof Element ? event.target.closest('[data-weapon]') : null;
     const weaponKey = target?.dataset?.weapon || '';
     if (!weaponKey || !Neo.WEAPON_DEFS[weaponKey]) return;
-    equipWeapon(weaponKey);
+    equipWeapon(Neo.player?.equippedWeapon === weaponKey ? '' : weaponKey);
   }
 
 export function spendCoins(cost) {
@@ -1243,6 +1903,27 @@ export function spendCoins(cost) {
     return true;
   }
 
+  function playShopPurchaseFeedback(button, cost) {
+    const card = button?.closest('.shop-card');
+    if (card) {
+      card.classList.add('shop-card--flash-buy');
+      const burst = document.createElement('div');
+      burst.className = 'shop-card__coin-burst';
+      for (let index = 0; index < 6; index += 1) {
+        const node = document.createElement('span');
+        node.style.setProperty('--burst-index', String(index));
+        burst.appendChild(node);
+      }
+      card.appendChild(burst);
+      window.setTimeout(() => burst.remove(), 550);
+      window.setTimeout(() => card.classList.remove('shop-card--flash-buy'), 460);
+    }
+    Neo.playSfx?.('item_collect');
+    if (Neo.player && Number.isFinite(Number(cost))) {
+      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 24, life: 0.72, text: `-${Math.round(Number(cost))} COINS`, c: '#ffd987' });
+    }
+  }
+
 export function handleShopBuyClick(event) {
     const target = event.target instanceof Element ? event.target : null;
     const button = target?.closest('.shop-buy');
@@ -1254,12 +1935,13 @@ export function handleShopBuyClick(event) {
         return;
       }
       const offerIndex = Number(button.dataset.index || -1);
-      const itemOffers = Neo.shopOffers.filter(offer => !offer.bought && offer.type === 'item');
+      const itemOffers = Neo.shopOffers.filter(offer => offer.type === 'item');
       const offer = itemOffers[offerIndex];
       if (!offer || offer.bought) return;
       if (!spendCoins(offer.cost)) return;
       offer.bought = true;
       Neo.collectItem(offer.key);
+      playShopPurchaseFeedback(button, offer.cost);
       window.achievementEvents?.emit('shop:bought');
     } else if (kind === 'move') {
       const offerIndex = Number(button.dataset.index || -1);
@@ -1269,6 +1951,7 @@ export function handleShopBuyClick(event) {
       if (!spendCoins(offer.cost)) return;
       offer.bought = true;
       Neo.player.ownedMoves[offer.key] = true;
+      playShopPurchaseFeedback(button, offer.cost);
       markInventoryPanelDirty();
       Neo.pushMoveNotification(offer.key, 1);
       window.achievementEvents?.emit('shop:bought');
@@ -1280,6 +1963,7 @@ export function handleShopBuyClick(event) {
       if (!spendCoins(offer.cost)) return;
       offer.bought = true;
       Neo.player.ownedWeapons[offer.key] = true;
+      playShopPurchaseFeedback(button, offer.cost);
       if (!Neo.player.equippedWeapon) equipWeapon(offer.key);
       Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 24, life: 0.8, text: `${Neo.WEAPON_DEFS[offer.key]?.name || 'Weapon'} acquired`, c: Neo.WEAPON_DEFS[offer.key]?.color || '#d9e8ff' });
       Neo.pushWeaponNotification(offer.key);
@@ -1298,6 +1982,7 @@ export function handleShopBuyClick(event) {
         return;
       }
       if (!spendCoins(cost)) return;
+      playShopPurchaseFeedback(button, cost);
       if (canHealNow) {
         const before = Neo.player.hp;
         Neo.player.hp = Math.min(Neo.player.maxHp, Neo.player.hp + heal);
@@ -1325,8 +2010,10 @@ export function handleShopBuyClick(event) {
   Neo.bindPanelInput = bindPanelInput;
   Neo.clearInventoryDragState = clearInventoryDragState;
   Neo.isPanelOpen = isPanelOpen;
+  Neo.clearPanelCloseEffect = clearPanelCloseEffect;
   Neo.markShopPanelDirty = markShopPanelDirty;
   Neo.markInventoryPanelDirty = markInventoryPanelDirty;
+  Neo.playPanelCloseEffect = playPanelCloseEffect;
   Neo.setShopPanelOpen = setShopPanelOpen;
   Neo.setInventoryPanelOpen = setInventoryPanelOpen;
   Neo.toggleShopPanel = toggleShopPanel;

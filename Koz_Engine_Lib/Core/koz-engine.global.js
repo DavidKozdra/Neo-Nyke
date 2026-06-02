@@ -120,8 +120,8 @@
       path: "Koz_Engine_Lib/World/seededRng.js",
       register: ["World", "seededRng"],
       globals: {
-        BQSeededRNG: (api) => api.SeededRNG,
-        BQRandom: (api) => function BQRandom(streamName) {
+        KozSeededRNG: (api) => api.SeededRNG,
+        KozRandom: (api) => function KozRandom(streamName) {
           return api.namedRandom(api.SeededRNG, streamName || "default");
         },
       },

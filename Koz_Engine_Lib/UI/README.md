@@ -8,6 +8,6 @@ Good fits:
 - mobile/touch gesture math used by the UI layer
 
 Bad fits:
-- Bargain Quest menu flow
+- game-specific menu flow
 - game save flow
 - DOM-heavy feature composition

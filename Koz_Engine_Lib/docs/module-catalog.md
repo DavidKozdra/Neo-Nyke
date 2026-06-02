@@ -9,7 +9,7 @@ This is a **current-state** guide, not a promise that every module is fully stan
 - Most modules in this folder are currently consumed via CommonJS-style `require(...)`.
 - The tests in `tests/lib/` are the best concrete usage examples.
 - If you need browser globals, `Core/koz-engine.global.js` publishes modules under `window.KozEngine`, but that bridge is transitional host glue.
-- If you are brand new to the engine, read [new-user-guide.md](/home/davidk/Documents/CODE/GITHUB/Bargain-Quest/Koz_Engine_Lib/docs/new-user-guide.md) first.
+- If you are brand new to the engine, read [new-user-guide.md](new-user-guide.md) first.
 
 ## Core
 
@@ -144,13 +144,13 @@ How to use:
 ### `Events/eventSystem.js`
 
 When to use:
-- Only if you still need the current Bargain Quest travel-event runtime.
+- Only if you still need the legacy host event runtime it was extracted from.
 
 How to use:
 - Construct `new EventSystem(options)` and inject `CountdownTimer` and `eventEngine` where possible.
 
 Current caveat:
-- This still contains Bargain Quest runtime knowledge and should eventually move out or be split further.
+- This still contains host-game runtime knowledge and should eventually move out or be split further.
 
 ### `Events/notificationManager.js`
 
@@ -330,36 +330,14 @@ Good fit:
 ### `AI/astar.js`
 
 When to use:
-- Only if your host data already looks close to Bargain Quest's grid/pathing format.
+- Only if your host data already looks close to the original grid/pathing format.
 
 How to use:
 - Call `aStar(grid, start, goal, allowWater?, portCities?, waterOnly?)`.
 - Use `MinHeap` only if you need the heap separately.
 
 Current caveat:
-- The current implementation still assumes Bargain Quest-style tile objects and terrain-cost globals, so treat it as partially extracted rather than a clean generic pathfinding surface.
-
-### `AI/AI.js`
-
-What it is:
-- A combat AI prototype from a different game/runtime.
-
-When to use:
-- Do not treat this as stable engine surface yet.
-
-Current caveat:
-- It imports project-local combat files and runtime globals, so it is not currently reusable engine code.
-
-### `AI/Charictar_controller.js`
-
-What it is:
-- A character controller prototype tied to p5-style movement, combat, and game-state globals.
-
-When to use:
-- Do not use this as engine API in its current state.
-
-Current caveat:
-- It is tightly coupled to project-local files and browser/game globals and likely belongs outside the reusable engine layer until rewritten.
+- The current implementation still assumes game-specific tile objects and terrain-cost globals, so treat it as partially extracted rather than a clean generic pathfinding surface.
 
 ## Audio
 
@@ -420,7 +398,7 @@ How to use:
 ### `Minigames/minigamesRuntime.js`
 
 When to use:
-- Only if you still need the current Bargain Quest browser runtime for minigames.
+- Only if you still need the legacy host browser runtime for minigames.
 
 Current caveat:
 - This still contains browser/p5 wiring and should be split further.

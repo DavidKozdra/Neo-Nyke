@@ -217,13 +217,18 @@
     Neo.ctx.beginPath();
     Neo.ctx.arc(landing.x, landing.y, Neo.player.r + 18 + pulse, 0, Math.PI * 2);
     Neo.ctx.fill();
-
-    Neo.ctx.globalAlpha = 0.74;
-    Neo.ctx.fillStyle = '#ffffff';
-    Neo.ctx.beginPath();
-    Neo.ctx.arc(landing.x, landing.y, 3.5, 0, Math.PI * 2);
-    Neo.ctx.fill();
     Neo.ctx.restore();
+
+    const aimAngle = Math.atan2(Neo.mouse.worldY - landing.y, Neo.mouse.worldX - landing.x);
+    const facing = getFacingDirection(Neo.player, aimAngle);
+    const ghostSize = Math.max(34, Neo.player.r * 2.5);
+    drawSpriteFrame(getPlayerSpriteKey(), landing.x, landing.y, ghostSize, {
+      alpha: 0.42 + Math.sin(time) * 0.06,
+      flipX: facing < 0,
+      shadowColor: '#c8a6ff',
+      shadowBlur: 16,
+      tint: '#c8a6ff',
+    });
   }
 
   function drawSpriteFrame(spriteKey, x, y, size, options = {}) {
@@ -326,7 +331,7 @@
       if (enemy.windup > 0) {
         Neo.ctx.save();
         Neo.ctx.translate(enemy.x, enemy.y);
-        Neo.ctx.strokeStyle = (enemy.type === 'charger' || enemy.type === 'golem' || enemy.type === 'bulk_golem') ? '#ff8844' : enemy.type === 'bowman_bane' ? '#8dd4ff' : '#aa66ff';
+        Neo.ctx.strokeStyle = (enemy.type === 'charger' || enemy.type === 'golem' || enemy.type === 'bulk_golem') ? '#ff8844' : enemy.type === 'bowman_bane' ? '#8dd4ff' : enemy.type === 'handsome_devil' ? '#ff3348' : enemy.type === 'antony_blemmye' ? '#ffcf8a' : '#aa66ff';
         Neo.ctx.lineWidth = 2;
         Neo.ctx.globalAlpha = 0.8;
         Neo.ctx.beginPath();
@@ -335,12 +340,12 @@
         Neo.ctx.restore();
       }
       if (enemy.beamTime > 0) {
-        const range = enemy.type === 'god' ? (enemy.beamRange || 620) : enemy.type === 'mooggy' ? 520 : enemy.type === 'bowman_bane' ? 480 : 430;
+        const range = enemy.type === 'god' ? (enemy.beamRange || 620) : enemy.type === 'mooggy' ? 520 : enemy.type === 'handsome_devil' ? (enemy.beamRange || 560) : enemy.type === 'bowman_bane' ? 480 : 430;
         const beamPath = Neo.buildRicochetBeamPath(enemy.x, enemy.y, enemy.beamAngle, range, Neo.getEnemyBeamBounceCount(enemy));
         Neo.strokeBeamPath(beamPath, {
-          color: enemy.type === 'god' ? '#ffffff' : enemy.type === 'mooggy' ? '#ff3348' : enemy.type === 'bowman_bane' ? '#8dd4ff' : '#aa66ff',
-          width: enemy.type === 'god' && enemy.state === 'godSweep' ? 18 : enemy.type === 'god' ? 10 : enemy.type === 'mooggy' ? 5 : 7,
-          shadowBlur: enemy.type === 'god' && enemy.state === 'godSweep' ? 24 : enemy.type === 'mooggy' ? 20 : 14,
+          color: enemy.type === 'god' ? '#ffffff' : enemy.type === 'mooggy' ? '#ff3348' : enemy.type === 'handsome_devil' ? '#ff3348' : enemy.type === 'bowman_bane' ? '#8dd4ff' : '#aa66ff',
+          width: enemy.type === 'god' && enemy.state === 'godSweep' ? 18 : enemy.type === 'god' ? 10 : enemy.type === 'mooggy' ? 5 : enemy.type === 'handsome_devil' ? 8 : 7,
+          shadowBlur: enemy.type === 'god' && enemy.state === 'godSweep' ? 24 : enemy.type === 'mooggy' || enemy.type === 'handsome_devil' ? 20 : 14,
         });
       }
     });
@@ -807,6 +812,7 @@
     const facing = getFacingDirection(Neo.player, aimAngle);
     const shadowColor = Neo.godTimer > 0 ? 'rgba(255,248,210,0.65)' : 'rgba(0,0,0,0.25)';
     const _reduceFlash = window.NeoSettings?.getAccess()?.reduceFlash;
+    const capeActive = Number(Neo.player?.equipmentEffects?.el_bartos_cape?.time || 0) > 0;
     Neo.STATUS_KEYS.filter(key => Neo.getStatusStacks(Neo.player, key) > 0).forEach((key, index) => {
       const style = Neo.STATUS_STYLES[key];
       Neo.ctx.save();
@@ -823,7 +829,7 @@
     drawWarpPreview();
     const playerSize = Math.max(34, Neo.player.r * 2.5);
     drawActorSprite(Neo.player, getPlayerSpriteKey(), Neo.player.x, Neo.player.y, playerSize, {
-      alpha: (!_reduceFlash && (Neo.player.inv > 0 || Number(Neo.player.stun || 0) > 0)) ? 0.68 : 1,
+      alpha: capeActive ? 0.34 : (!_reduceFlash && (Neo.player.inv > 0 || Number(Neo.player.stun || 0) > 0)) ? 0.68 : 1,
       flipX: facing < 0,
       shadowColor,
       shadowBlur: Neo.godTimer > 0 ? 18 : 6,
@@ -1017,9 +1023,7 @@
     }
 
     if (!Neo.laserActive) return;
-    const angle = Neo.laserMode === 'god_sweep'
-      ? Neo.laserAngle
-      : Math.atan2(Neo.mouse.worldY - Neo.player.y, Neo.mouse.worldX - Neo.player.x);
+    const angle = Neo.laserAngle;
     const turtleWaveActive = Neo.laserMode === 'turtle_wave';
     const loveBeamActive = Neo.loveBeamCasting;
     const beamRange = Neo.getPlayerBeamRange(Neo.laserMode, Neo.getEquippedMove('laser'));

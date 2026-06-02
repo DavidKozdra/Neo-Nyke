@@ -48,6 +48,36 @@ export function loop(timestamp) {
     requestAnimationFrame(loop);
   }
 
+  const ENEMY_UPDATE_METHOD_BY_TYPE = {
+    god: 'updateGod',
+    queen_cult: 'updateCultQueenBoss',
+    bulk_golem: 'updateBulkGolemBoss',
+    artificer_knave: 'updateArtificerBoss',
+    bowman_bane: 'updateBowmanBane',
+    antony_blemmye: 'updateAntonyBlemmyeBoss',
+    handsome_devil: 'updateHandsomeDevilBoss',
+    mirror_knight: 'updateMirrorChampion',
+    mooggy: 'updateMooggyEnemy',
+    rival: 'updateRivalEnemy',
+    cult_mage: 'updateCultMageEnemy',
+    knave: 'updateKnaveEnemy',
+    sniper: 'updateSniperEnemy',
+    machine_gunner: 'updateMachineGunnerEnemy',
+    golem: 'updateGolemEnemy',
+    summoner: 'updateSummonerEnemy',
+    shield_unit: 'updateShieldUnitEnemy',
+    healer: 'updateHealerEnemy',
+    boss_spawner: 'updateBossSpawnerEnemy',
+    laser: 'updateLaserEnemy',
+    charger: 'updateChargerEnemy',
+  };
+
+  function updateEnemyByType(enemy, dt) {
+    const methodName = ENEMY_UPDATE_METHOD_BY_TYPE[String(enemy?.type || '').toLowerCase()] || 'updateHunterEnemy';
+    const handler = Neo[methodName];
+    if (typeof handler === 'function') handler(enemy, dt);
+  }
+
   function update(dt) {
     let sectionPerfStart = Neo.perfStart();
     const itemStats = Neo.getItemStats();
@@ -57,6 +87,7 @@ export function loop(timestamp) {
     Neo.floorTransitionTime += dt;
     if (Neo.floorTransitionTime > 2.5) Neo.showFloorTransition = false;
     Neo.tickCooldowns(dt);
+    Neo.updateEquipmentEffects?.(dt);
     if (Neo.godTimer > 0) Neo.godTimer = Math.max(0, Neo.godTimer - dt);
 
     const _b = window.NeoSettings?.getBindings();
@@ -201,7 +232,9 @@ export function loop(timestamp) {
     } else {
       const flightBoost = Neo.player.princessFlightTime > 0 ? 2 : 1;
       const zoomiesBoost = Neo.player.mooggyZoomiesTime > 0 ? 5 : 1;
-      const targetSpeed = 228 * flightBoost * zoomiesBoost * (Neo.godTimer > 0 ? 1.25 : 1) * itemStats.moveSpeedMultiplier;
+      const laserWeight = Math.max(0, Number(itemStats.laserWeightMultiplier ?? 1));
+      const laserSlow = Neo.laserActive ? 1 - 0.6 * laserWeight : 1;
+      const targetSpeed = 228 * flightBoost * zoomiesBoost * (Neo.godTimer > 0 ? 1.25 : 1) * itemStats.moveSpeedMultiplier * laserSlow;
       Neo.player.vx = Neo.applyResponsiveVelocity(Neo.player.vx, moveX * targetSpeed, dt);
       Neo.player.vy = Neo.applyResponsiveVelocity(Neo.player.vy, moveY * targetSpeed, dt);
       if (Neo.player.princessFlightTime > 0 && (moveX || moveY) && Neo.nextRandom('fx') < 0.35) {
@@ -254,17 +287,12 @@ export function loop(timestamp) {
       }
     }
     if (!Neo.p1DeadInCoop) {
-      if (Neo.getItemStats().hasRobotArm) { Neo.mouse.down = true; Neo.mouse.downQueued = true; }
+      if (itemStats.hasRobotArm && Neo.player?.robotArmReady) { Neo.mouse.down = true; Neo.mouse.downQueued = true; }
       const meleeHeld = Neo.isMouseActionHeld('slash');
       const laserHeld = Neo.isMouseActionHeld('laser');
       if (!overlayOpen && meleeHeld) Neo.tryMelee();
       if (!overlayOpen && laserHeld) Neo.tryLaser();
     }
-    if (Neo.keys.f && !Neo.teleportKeyLatch) {
-      tryChargedLadderWarp();
-      Neo.teleportKeyLatch = true;
-    }
-    if (!Neo.keys.f) Neo.teleportKeyLatch = false;
 
     if (Neo.player.lavaWalkTime > 0) {
       Neo.player.lavaWalkTime = Math.max(0, Neo.player.lavaWalkTime - dt);
@@ -334,35 +362,16 @@ export function loop(timestamp) {
       }
 
       totalBleed += Neo.updateEnemyStatuses(enemy, dt);
-      if (!Neo.enemies.includes(enemy)) continue;
+      if (enemy.dead) continue;
       const eliteTraitControlled = Neo.updateEliteEnemyTraits(enemy, dt);
-      if (!Neo.enemies.includes(enemy)) continue;
+      if (enemy.dead) continue;
       enemy.attackAnimT = Math.max(0, Number(enemy.attackAnimT || 0) - dt);
 
       if (!eliteTraitControlled) {
-        if (enemy.type === 'god') Neo.updateGod(enemy, dt);
-        else if (enemy.type === 'queen_cult') Neo.updateCultQueenBoss(enemy, dt);
-        else if (enemy.type === 'bulk_golem') Neo.updateBulkGolemBoss(enemy, dt);
-        else if (enemy.type === 'artificer_knave') Neo.updateArtificerBoss(enemy, dt);
-        else if (enemy.type === 'bowman_bane') Neo.updateBowmanBane(enemy, dt);
-        else if (enemy.type === 'mirror_knight') Neo.updateMirrorChampion(enemy, dt);
-        else if (enemy.type === 'mooggy') Neo.updateMooggyEnemy(enemy, dt);
-        else if (enemy.type === 'rival') Neo.updateRivalEnemy(enemy, dt);
-        else if (enemy.type === 'cult_mage') Neo.updateCultMageEnemy(enemy, dt);
-        else if (enemy.type === 'knave') Neo.updateKnaveEnemy(enemy, dt);
-        else if (enemy.type === 'sniper') Neo.updateSniperEnemy(enemy, dt);
-        else if (enemy.type === 'machine_gunner') Neo.updateMachineGunnerEnemy(enemy, dt);
-        else if (enemy.type === 'golem') Neo.updateGolemEnemy(enemy, dt);
-        else if (enemy.type === 'summoner') Neo.updateSummonerEnemy(enemy, dt);
-        else if (enemy.type === 'shield_unit') Neo.updateShieldUnitEnemy(enemy, dt);
-        else if (enemy.type === 'healer') Neo.updateHealerEnemy(enemy, dt);
-        else if (enemy.type === 'boss_spawner') Neo.updateBossSpawnerEnemy(enemy, dt);
-        else if (enemy.type === 'laser') Neo.updateLaserEnemy(enemy, dt);
-        else if (enemy.type === 'charger') Neo.updateChargerEnemy(enemy, dt);
-        else Neo.updateHunterEnemy(enemy, dt);
+        updateEnemyByType(enemy, dt);
       }
 
-      if (!Neo.enemies.includes(enemy)) continue;
+      if (enemy.dead) continue;
       Neo.enemyTryBreakBlockingObstacle(enemy, dt);
       Neo.moveCircle(enemy, dt);
     }
@@ -440,10 +449,6 @@ export function loop(timestamp) {
     }
     if (!Neo.currentRoom || Neo.currentRoom.type === 'boss' || Neo.currentRoom.type === 'god') {
       Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.75, text: 'NO WARP IN BOSS ROOM', c: '#ff9e9e' });
-      return;
-    }
-    if (Neo.enemies.length === 0) {
-      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.75, text: 'WARP REQUIRES COMBAT', c: '#ffcf8f' });
       return;
     }
 

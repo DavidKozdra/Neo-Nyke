@@ -133,6 +133,21 @@
         Neo.ctx.beginPath();
         Neo.ctx.ellipse(0, 0, size * 1.8, size * 0.45, 0, 0, Math.PI * 2);
         Neo.ctx.fill();
+      } else if (particle.silhouette) {
+        const maxLife = Number(particle.maxLife || particle.life || 0.6);
+        const progress = Neo.clamp(1 - particle.life / maxLife, 0, 1);
+        const fade = (1 - progress) * 0.65;
+        Neo.ctx.globalAlpha = fade;
+        const sil = particle.silhouette;
+        if (Neo.drawSpriteFrame) {
+          Neo.drawSpriteFrame(sil.spriteKey, 0, 0, sil.size || 40, {
+            alpha: fade,
+            flipX: sil.facing < 0,
+            shadowColor: particle.c || '#b99cff',
+            shadowBlur: 18,
+            tint: particle.c || '#b99cff',
+          });
+        }
       } else if (particle.ring) {
         Neo.ctx.strokeStyle = particle.c;
         Neo.ctx.lineWidth = 3;
@@ -378,6 +393,58 @@
       });
     }
 
+    // "You are here" emphasis: pulsing ring + YOU tag on the current room so the
+    // player can instantly spot their position among same-colored room dots.
+    const youRoom = Neo.currentRoom;
+    if (youRoom && !youRoom.secret) {
+      const yx = originX + youRoom.gx * (size + gap);
+      const yy = originY + youRoom.gy * (size + gap);
+      const t = Number(Neo.gameElapsedTime || 0);
+      const pulse = 0.5 + 0.5 * Math.sin(t * 5.0);
+      const grow = Math.round(2 + pulse * Math.max(2, size * 0.22));
+      // Animated outer ring.
+      Neo.ctx.globalAlpha = 0.55 + 0.45 * pulse;
+      Neo.ctx.strokeStyle = '#fff7c2';
+      Neo.ctx.lineWidth = Math.max(1.5, Math.round(size * 0.14));
+      Neo.ctx.strokeRect(yx - grow + 0.5, yy - grow + 0.5, size + grow * 2 - 1, size + grow * 2 - 1);
+      // Solid inner highlight border so the cell reads clearly even mid-pulse.
+      Neo.ctx.globalAlpha = 1;
+      Neo.ctx.strokeStyle = '#0a0d14';
+      Neo.ctx.lineWidth = 1;
+      Neo.ctx.strokeRect(yx - 1.5, yy - 1.5, size + 3, size + 3);
+      Neo.ctx.strokeStyle = '#fffbe6';
+      Neo.ctx.lineWidth = Math.max(1.5, Math.round(size * 0.18));
+      Neo.ctx.strokeRect(yx + 0.5, yy + 0.5, size - 1, size - 1);
+
+      // "YOU" tag, pinned above the cell but clamped inside the minimap bounds.
+      const tagFont = `bold ${Math.max(7, Math.round(size * 0.62))}px system-ui`;
+      Neo.ctx.font = tagFont;
+      Neo.ctx.textAlign = 'center';
+      Neo.ctx.textBaseline = 'middle';
+      const label = 'YOU';
+      const padX = Math.max(3, Math.round(size * 0.22));
+      const tagW = Math.ceil(Neo.ctx.measureText(label).width) + padX * 2;
+      const tagH = Math.max(10, Math.round(size * 0.72));
+      let tagCx = yx + size / 2;
+      let tagY = yy - grow - tagH / 2 - 2;
+      // If there's no room above, place the tag below instead.
+      if (tagY - tagH / 2 < originY) tagY = yy + size + grow + tagH / 2 + 2;
+      // Clamp horizontally so the tag never clips off the minimap edges.
+      const halfW = tagW / 2;
+      tagCx = Neo.clamp(tagCx, originX + halfW, originX + mapWidth - halfW);
+      Neo.ctx.globalAlpha = 0.92;
+      Neo.ctx.fillStyle = 'rgba(10,13,20,0.85)';
+      Neo.ctx.beginPath();
+      Neo.ctx.roundRect(tagCx - halfW, tagY - tagH / 2, tagW, tagH, 3);
+      Neo.ctx.fill();
+      Neo.ctx.strokeStyle = '#fff7c2';
+      Neo.ctx.lineWidth = 1;
+      Neo.ctx.stroke();
+      Neo.ctx.globalAlpha = 1;
+      Neo.ctx.fillStyle = '#fffbe6';
+      Neo.ctx.fillText(label, tagCx, tagY + 0.5);
+    }
+
     Neo.ctx.restore();
 
     const viewportBounds = {
@@ -413,6 +480,8 @@
     if (type === 'bulk_golem') return 'BULK GOLEM';
     if (type === 'artificer_knave') return 'ARTIFICER CHARGED KNAVE';
     if (type === 'bowman_bane') return "BOWMAN'S BANE";
+    if (type === 'antony_blemmye') return 'ANTONY BLEMMYE';
+    if (type === 'handsome_devil') return 'HANDSOME DEVIL';
     if (type === 'god') return 'GOD';
     return type.toUpperCase();
   }
@@ -436,7 +505,7 @@
       Neo.ctx.fillStyle = '#220f28';
       Neo.ctx.fillRect(startX, y, width, height);
 
-      Neo.ctx.fillStyle = boss.type === 'bulk_golem' ? '#ff8e4a' : boss.type === 'artificer_knave' ? '#ffd27d' : boss.type === 'bowman_bane' ? '#c9aaff' : '#e4b9ff';
+      Neo.ctx.fillStyle = boss.type === 'bulk_golem' ? '#ff8e4a' : boss.type === 'artificer_knave' ? '#ffd27d' : boss.type === 'bowman_bane' ? '#c9aaff' : boss.type === 'antony_blemmye' ? '#ffcf8a' : boss.type === 'handsome_devil' ? '#ff3348' : '#e4b9ff';
       if (boss.type === 'god') Neo.ctx.fillStyle = '#ffffff';
       Neo.ctx.fillRect(startX, y, width * hpPct, height);
 
@@ -491,54 +560,15 @@
   }
 
   function drawActionIcons() {
-    const mobilityMove = Neo.getEquippedMove('dash');
-    const mobilityIcon = mobilityMove === 'dash'
-      ? {
-        color: '#fff06a',
-        pixels: [
-          [1, 4], [2, 4], [3, 4], [4, 4], [5, 4], [6, 4],
-          [4, 2], [5, 2], [6, 2], [6, 1], [7, 2], [6, 3],
-        ],
+    const drawHudMoveIcon = (slot, canvas, fallbackColor, fallbackPixels) => {
+      const moveKey = Neo.getEquippedMove(slot);
+      const moveDef = Neo.MOVE_DEFS[moveKey];
+      if (canvas && moveDef && typeof Neo.drawMoveToastIcon === 'function') {
+        Neo.drawMoveToastIcon(canvas, moveDef);
+        return;
       }
-      : mobilityMove === 'warp'
-      ? {
-        color: '#c8a6ff',
-        pixels: [
-          [3, 1], [4, 1], [2, 2], [5, 2], [1, 3], [3, 3], [4, 3], [6, 3],
-          [1, 4], [6, 4], [2, 5], [5, 5], [3, 6], [4, 6],
-        ],
-      }
-      : mobilityMove === 'nimrod_stomp'
-        ? {
-          color: '#ffe67a',
-          pixels: [
-            [3, 1], [4, 1], [3, 2], [4, 2], [2, 3], [5, 3], [2, 4], [3, 4], [4, 4], [5, 4],
-            [1, 5], [2, 5], [5, 5], [6, 5], [2, 6], [5, 6],
-          ],
-        }
-      : mobilityMove === 'zip_lightning'
-        ? {
-          color: '#8dd6ff',
-          pixels: [
-            [1, 2], [2, 2], [3, 2], [2, 3], [3, 4], [4, 4], [5, 4], [4, 5], [5, 6], [6, 6],
-            [6, 2], [7, 2], [6, 3],
-          ],
-        }
-        : mobilityMove === 'cowards_way'
-          ? {
-            color: '#8fffca',
-            pixels: [
-              [3, 1], [4, 1], [2, 2], [5, 2], [1, 3], [6, 3], [1, 4], [6, 4],
-              [2, 5], [5, 5], [3, 6], [4, 6], [3, 3], [4, 3], [3, 4], [4, 4],
-            ],
-          }
-          : {
-            color: '#8fffca',
-            pixels: [
-              [3, 1], [4, 1], [2, 2], [5, 2], [1, 3], [6, 3], [1, 4], [6, 4],
-              [2, 5], [5, 5], [3, 6], [4, 6], [3, 3], [4, 3], [3, 4], [4, 4],
-            ],
-          };
+      if (canvas) drawPixelIcon(canvas, fallbackColor, fallbackPixels);
+    };
 
     drawPixelIcon(Neo.ui.coinIcon, '#ffd15a', [
       [2, 1], [3, 1], [4, 1],
@@ -572,14 +602,17 @@
       [2, 2], [4, 2], [2, 4], [4, 4],
       [3, 3],
     ]);
-    drawPixelIcon(Neo.ui.icons.dash, mobilityIcon.color, mobilityIcon.pixels);
-    drawPixelIcon(Neo.ui.icons.melee, '#00ffff', [
+    drawHudMoveIcon('dash', Neo.ui.icons.dash, '#8fffca', [
+      [3, 1], [4, 1], [2, 2], [5, 2], [1, 3], [6, 3], [1, 4], [6, 4],
+      [2, 5], [5, 5], [3, 6], [4, 6], [3, 3], [4, 3], [3, 4], [4, 4],
+    ]);
+    drawHudMoveIcon('melee', Neo.ui.icons.melee, '#00ffff', [
       [2, 6], [3, 5], [4, 4], [5, 3], [6, 2], [5, 4], [6, 3], [7, 2], [6, 5], [7, 4],
     ]);
-    drawPixelIcon(Neo.ui.icons.laser, '#7a9fc4', [
+    drawHudMoveIcon('laser', Neo.ui.icons.laser, '#7a9fc4', [
       [1, 4], [2, 4], [3, 4], [4, 4], [5, 4], [6, 4], [7, 4], [5, 3], [6, 2], [7, 1],
     ]);
-    drawPixelIcon(Neo.ui.icons.smash, '#ffaa00', [
+    drawHudMoveIcon('smash', Neo.ui.icons.smash, '#ffaa00', [
       [4, 1], [3, 2], [4, 2], [5, 2], [2, 3], [3, 3], [4, 3], [5, 3], [6, 3],
       [2, 4], [3, 4], [4, 4], [5, 4], [6, 4], [3, 5], [4, 5], [5, 5], [4, 6],
     ]);
@@ -653,15 +686,25 @@
     });
   }
 
+  function drawDifficultyIconOn(canvasEl, difficultyKey) {
+    if (!canvasEl) return;
+    const def = DIFFICULTY_ICON_DEFS[difficultyKey] || DIFFICULTY_ICON_DEFS.easy;
+    drawPixelIcon(canvasEl, def.color, def.pixels);
+  }
+
   function drawPixelIcon(canvasEl, color, pixels) {
     const iconCtx = canvasEl.getContext('2d');
     iconCtx.clearRect(0, 0, canvasEl.width, canvasEl.height);
     iconCtx.imageSmoothingEnabled = false;
     iconCtx.fillStyle = 'rgba(255,255,255,0.08)';
     iconCtx.fillRect(0, 0, canvasEl.width, canvasEl.height);
+    // Derive cell size from canvas buffer so the icon never gets clipped,
+    // regardless of the canvas width/height attributes.
+    const maxCoord = pixels.reduce((m, [px, py]) => Math.max(m, px, py), 0) + 1;
+    const cell = Math.floor(Math.min(canvasEl.width, canvasEl.height) / (maxCoord + 1));
     iconCtx.fillStyle = color;
     pixels.forEach(([px, py]) => {
-      iconCtx.fillRect(px * 4, py * 4, 4, 4);
+      iconCtx.fillRect(px * cell, py * cell, cell, cell);
     });
   }
 
@@ -675,4 +718,4 @@
   Neo.drawActionIcons = drawActionIcons;
   Neo.drawPixelIcon = drawPixelIcon;
   Neo.drawDifficultyIcons = drawDifficultyIcons;
-
+  Neo.drawDifficultyIconOn = drawDifficultyIconOn;

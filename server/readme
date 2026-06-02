@@ -1,3 +1,7 @@
-basic express server with redis connection 
-generates a seed daily 
-sends seed on request to client 
+Cloudflare Worker backend for NeoNyke.
+
+Deploy from the repository root. The root `wrangler.toml` is the active
+configuration and points to this folder's `server.js`.
+
+The worker exposes the competitive seed, leaderboard, health, version, and
+notices endpoints backed by the `STORE` KV namespace.

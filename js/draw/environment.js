@@ -2,6 +2,7 @@
   function draw() {
     const isDying = Neo.gameState === 'dying';
     const isPlayLike = Neo.gameState === 'play' || Neo.gameState === 'pause' || Neo.gameState === 'dialogue' || isDying;
+    Neo._lightsFrame = (Neo._lightsFrame || 0) + 1;
     let sectionPerfStart = Neo.perfStart();
     Neo.ctx.clearRect(0, 0, Neo.canvas.width, Neo.canvas.height);
     if (isPlayLike) {
@@ -246,7 +247,85 @@
     target.restore();
   }
 
+  function isStaticRoomLava(hazard) {
+    return hazard?.kind === 'lava' && hazard.shape === 'rect' && hazard.ttl === undefined;
+  }
+
+  function getStaticRoomLavaHazards(room = Neo.currentRoom) {
+    const source = room === Neo.currentRoom && Array.isArray(Neo.hazards)
+      ? Neo.hazards
+      : room?.hazards;
+    return (Array.isArray(source) ? source : []).filter(isStaticRoomLava);
+  }
+
+  function rectsOverlap(a, b) {
+    return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+  }
+
+  function getStaticLavaForTile(tileRect, lavaHazards) {
+    return lavaHazards.find(hazard => rectsOverlap(tileRect, {
+      x: hazard.left,
+      y: hazard.top,
+      w: hazard.w,
+      h: hazard.h,
+    })) || null;
+  }
+
+  function drawStaticLavaBase(lavaHazards, target = Neo.ctx) {
+    if (!lavaHazards.length) return;
+    const tile = Neo.ENV_TILE_SIZE;
+    target.save();
+    lavaHazards.forEach(hazard => {
+      target.save();
+      target.beginPath();
+      target.rect(hazard.left, hazard.top, hazard.w, hazard.h);
+      target.clip();
+      for (let y = hazard.top; y < hazard.top + hazard.h; y += tile) {
+        for (let x = hazard.left; x < hazard.left + hazard.w; x += tile) {
+          drawEnvironmentTile('floor_lava', x, y, tile, tile, { ctx: target });
+        }
+      }
+      target.restore();
+    });
+    target.restore();
+  }
+
+  function drawStaticLavaSeams(lavaHazards, target = Neo.ctx) {
+    if (!lavaHazards.length) return;
+    target.save();
+    lavaHazards.forEach(hazard => {
+      const left = hazard.left;
+      const top = hazard.top;
+      const right = left + hazard.w;
+      const bottom = top + hazard.h;
+      const seam = 5;
+      target.fillStyle = 'rgba(41, 10, 4, 0.82)';
+      if (top > Neo.WALL) target.fillRect(left, top, hazard.w, seam);
+      if (bottom < Neo.ROOM_H - Neo.WALL) target.fillRect(left, bottom - seam, hazard.w, seam);
+      if (left > Neo.WALL) target.fillRect(left, top, seam, hazard.h);
+      if (right < Neo.ROOM_W - Neo.WALL) target.fillRect(right - seam, top, seam, hazard.h);
+
+      target.fillStyle = 'rgba(255, 132, 48, 0.52)';
+      if (top > Neo.WALL) target.fillRect(left + 4, top + seam, Math.max(0, hazard.w - 8), 2);
+      if (bottom < Neo.ROOM_H - Neo.WALL) target.fillRect(left + 4, bottom - seam - 2, Math.max(0, hazard.w - 8), 2);
+      if (left > Neo.WALL) target.fillRect(left + seam, top + 4, 2, Math.max(0, hazard.h - 8));
+      if (right < Neo.ROOM_W - Neo.WALL) target.fillRect(right - seam - 2, top + 4, 2, Math.max(0, hazard.h - 8));
+
+      target.fillStyle = 'rgba(22, 6, 3, 0.9)';
+      [
+        [left, top, left > Neo.WALL && top > Neo.WALL],
+        [right - seam, top, right < Neo.ROOM_W - Neo.WALL && top > Neo.WALL],
+        [left, bottom - seam, left > Neo.WALL && bottom < Neo.ROOM_H - Neo.WALL],
+        [right - seam, bottom - seam, right < Neo.ROOM_W - Neo.WALL && bottom < Neo.ROOM_H - Neo.WALL],
+      ].forEach(([x, y, shouldDraw]) => {
+        if (shouldDraw) target.fillRect(x, y, seam, seam);
+      });
+    });
+    target.restore();
+  }
+
   function drawFloorTiles(theme, target = Neo.ctx) {
+    const staticLava = getStaticRoomLavaHazards();
     target.save();
     target.beginPath();
     target.rect(Neo.WALL, Neo.WALL, Neo.ROOM_W - Neo.WALL * 2, Neo.ROOM_H - Neo.WALL * 2);
@@ -259,10 +338,13 @@
         drawEnvironmentTile(tile, x, y, Neo.ENV_TILE_SIZE, Neo.ENV_TILE_SIZE, { tint: theme.floorTint, ctx: target });
       }
     }
+    drawStaticLavaBase(staticLava, target);
+    drawStaticLavaSeams(staticLava, target);
     target.restore();
   }
 
   function drawFloorDecals(theme, target = Neo.ctx) {
+    const staticLava = getStaticRoomLavaHazards();
     target.save();
     target.beginPath();
     target.rect(Neo.WALL + 8, Neo.WALL + 8, Neo.ROOM_W - Neo.WALL * 2 - 16, Neo.ROOM_H - Neo.WALL * 2 - 16);
@@ -274,6 +356,7 @@
       for (let tx = 0; tx < cols; tx += 1) {
         const x = Neo.WALL + tx * Neo.ENV_TILE_SIZE;
         const y = Neo.WALL + ty * Neo.ENV_TILE_SIZE;
+        if (getStaticLavaForTile({ x, y, w: Neo.ENV_TILE_SIZE, h: Neo.ENV_TILE_SIZE }, staticLava)) continue;
         const stainNoise = artNoise(tx, ty, 12);
         if (stainNoise > 0.84) {
           target.fillStyle = theme.stain;
@@ -536,9 +619,9 @@
     // Draw bright arch accent on each open door gap so exits are obvious
     if (!roomLocked) {
       target.strokeStyle = theme.doorAccent;
-      target.lineWidth = 3;
+      target.lineWidth = 2;
       target.shadowColor = theme.doorAccent;
-      target.shadowBlur = 14;
+      target.shadowBlur = 4;
       target.beginPath();
       if (Neo.hasVisibleRoomExit(Neo.currentRoom, 'n')) {
         target.moveTo(doorMinX, top); target.lineTo(doorMaxX, top);
@@ -579,7 +662,10 @@
       : 'none';
     const doorsKey = Neo.DIRECTIONS.map(dir => Neo.hasVisibleRoomExit(Neo.currentRoom, dir) ? '1' : '0').join('');
     const combatKey = Neo.enemies.length > 0 ? 'combat' : 'calm';
-    return `${Neo.floor}|${roomKey}|${doorsKey}|${combatKey}`;
+    const lavaKey = getStaticRoomLavaHazards()
+      .map(hazard => `${hazard.left},${hazard.top},${hazard.w},${hazard.h}`)
+      .join(';');
+    return `${Neo.floor}|${roomKey}|${doorsKey}|${combatKey}|${lavaKey}`;
   }
 
   function buildEnvironmentBackground(theme) {
@@ -618,73 +704,52 @@
 
       Neo.ctx.fillStyle = 'rgba(0,0,0,0.32)';
       Neo.ctx.fillRect(-28, 14, 56, 8);
-      Neo.ctx.fillStyle = 'rgba(0,0,0,0.18)';
-      Neo.ctx.fillRect(-20, 22, 40, 4);
 
       if (!chest.open) {
         Neo.ctx.shadowColor = '#ffd36a';
-        Neo.ctx.shadowBlur = 8 + Math.sin(t) * 3;
-        Neo.ctx.fillStyle = 'rgba(255,190,74,0.16)';
-        Neo.ctx.fillRect(-32, -24, 64, 48);
+        Neo.ctx.shadowBlur = 5 + Math.sin(t) * 2;
+        Neo.ctx.fillStyle = 'rgba(255,190,74,0.10)';
+        Neo.ctx.fillRect(-30, -22, 60, 44);
       }
 
       Neo.ctx.shadowBlur = 0;
 
       if (chest.open) {
-        Neo.ctx.fillStyle = '#1a0d06';
-        Neo.ctx.fillRect(-26, -20, 52, 8);
-        Neo.ctx.fillRect(-30, -12, 60, 8);
-        Neo.ctx.fillStyle = '#6b3718';
-        Neo.ctx.fillRect(-22, -24, 44, 8);
-        Neo.ctx.fillStyle = '#b86825';
-        Neo.ctx.fillRect(-18, -24, 36, 4);
-        Neo.ctx.fillStyle = '#282b31';
-        Neo.ctx.fillRect(-18, -24, 6, 12);
-        Neo.ctx.fillRect(12, -24, 6, 12);
-
-        Neo.ctx.fillStyle = '#1a0d06';
-        Neo.ctx.fillRect(-30, -4, 60, 28);
-        Neo.ctx.fillStyle = '#3d2012';
-        Neo.ctx.fillRect(-26, 0, 52, 20);
-        Neo.ctx.fillStyle = '#120907';
-        Neo.ctx.fillRect(-20, 2, 40, 12);
-        Neo.ctx.fillStyle = '#7f4a24';
-        Neo.ctx.fillRect(-26, 16, 52, 4);
-        Neo.ctx.fillStyle = '#282f38';
-        Neo.ctx.fillRect(-20, -4, 6, 28);
-        Neo.ctx.fillRect(14, -4, 6, 28);
+        Neo.ctx.fillStyle = '#5c3118';
+        Neo.ctx.fillRect(-30, -2, 60, 26);
+        Neo.ctx.fillStyle = '#2b160b';
+        Neo.ctx.fillRect(-30, 16, 60, 8);
+        Neo.ctx.fillRect(20, -2, 10, 26);
+        Neo.ctx.fillStyle = '#a7632d';
+        Neo.ctx.fillRect(-26, 2, 46, 3);
+        Neo.ctx.fillRect(-26, 2, 3, 14);
+        Neo.ctx.fillStyle = '#17100b';
+        Neo.ctx.fillRect(-22, -13, 44, 11);
+        Neo.ctx.fillStyle = '#7e461e';
+        Neo.ctx.fillRect(-20, -24, 40, 11);
+        Neo.ctx.fillStyle = '#c7792f';
+        Neo.ctx.fillRect(-17, -22, 32, 3);
       } else {
-        Neo.ctx.fillStyle = '#1a0d06';
+        Neo.ctx.fillStyle = '#7e431e';
         Neo.ctx.fillRect(-32, -20, 64, 44);
-        Neo.ctx.fillStyle = '#7e3f1a';
-        Neo.ctx.fillRect(-28, -2, 56, 24);
-        Neo.ctx.fillStyle = '#a95f22';
-        Neo.ctx.fillRect(-28, -18, 56, 18);
-        Neo.ctx.fillStyle = '#d3822d';
-        Neo.ctx.fillRect(-24, -18, 48, 6);
-        Neo.ctx.fillStyle = '#efad42';
-        Neo.ctx.fillRect(-20, -16, 40, 4);
-        Neo.ctx.fillStyle = '#5a2a12';
-        Neo.ctx.fillRect(-24, 6, 48, 6);
-
-        Neo.ctx.fillStyle = '#303946';
+        Neo.ctx.fillStyle = '#4b2612';
+        Neo.ctx.fillRect(-32, 12, 64, 12);
+        Neo.ctx.fillRect(22, -20, 10, 44);
+        Neo.ctx.fillStyle = '#c7772d';
+        Neo.ctx.fillRect(-28, -16, 50, 4);
+        Neo.ctx.fillRect(-28, -16, 4, 28);
+        Neo.ctx.fillStyle = '#2f3742';
         Neo.ctx.fillRect(-22, -22, 6, 46);
         Neo.ctx.fillRect(16, -22, 6, 46);
-        Neo.ctx.fillRect(-30, -4, 60, 6);
-        Neo.ctx.fillStyle = '#69727e';
-        Neo.ctx.fillRect(-20, -20, 2, 40);
-        Neo.ctx.fillRect(18, -20, 2, 40);
-
+        Neo.ctx.fillRect(-30, -3, 60, 5);
         Neo.ctx.fillStyle = '#ffd86c';
-        Neo.ctx.fillRect(-8, -2, 16, 16);
-        Neo.ctx.fillStyle = '#271302';
-        Neo.ctx.fillRect(-6, -2, 12, 2);
-        Neo.ctx.fillRect(-6, 12, 12, 2);
-        Neo.ctx.fillRect(-8, 0, 2, 12);
-        Neo.ctx.fillRect(6, 0, 2, 12);
+        Neo.ctx.fillRect(-8, -1, 16, 14);
         Neo.ctx.fillStyle = '#4a260d';
-        Neo.ctx.fillRect(-2, 5, 4, 6);
+        Neo.ctx.fillRect(-2, 4, 4, 7);
       }
+      Neo.ctx.strokeStyle = '#1a0d06';
+      Neo.ctx.lineWidth = 2;
+      Neo.ctx.strokeRect(-31, -19, 62, 42);
       Neo.ctx.restore();
     });
   }
@@ -710,21 +775,18 @@
         Neo.ctx.fillStyle = 'rgba(0,0,0,0.22)';
         Neo.ctx.fillRect(-12, -18, 24, 42);
         Neo.ctx.fillStyle = theme.banner;
-        Neo.ctx.beginPath();
-        Neo.ctx.moveTo(-11, -24);
-        Neo.ctx.lineTo(11, -24);
-        Neo.ctx.lineTo(9, 17);
-        Neo.ctx.lineTo(2, 11);
-        Neo.ctx.lineTo(-6, 20);
-        Neo.ctx.lineTo(-9, 17);
-        Neo.ctx.closePath();
-        Neo.ctx.fill();
-        Neo.ctx.strokeStyle = 'rgba(229,185,98,0.32)';
-        Neo.ctx.lineWidth = 1.5;
-        Neo.ctx.beginPath();
-        Neo.ctx.moveTo(-13, -25);
-        Neo.ctx.lineTo(13, -25);
-        Neo.ctx.stroke();
+        Neo.ctx.fillRect(-10, -24, 20, 38);
+        Neo.ctx.fillStyle = 'rgba(0,0,0,0.24)';
+        Neo.ctx.fillRect(7, -24, 3, 38);
+        Neo.ctx.fillRect(-10, 11, 20, 3);
+        Neo.ctx.fillStyle = 'rgba(255,220,140,0.24)';
+        Neo.ctx.fillRect(-8, -22, 14, 2);
+        Neo.ctx.fillRect(-8, -22, 2, 30);
+        Neo.ctx.strokeStyle = 'rgba(229,185,98,0.36)';
+        Neo.ctx.lineWidth = 1;
+        Neo.ctx.strokeRect(-10.5, -24.5, 20, 38);
+        Neo.ctx.fillStyle = 'rgba(229,185,98,0.45)';
+        Neo.ctx.fillRect(-13, -26, 26, 3);
       } else if (decor.kind === 'crack') {
         Neo.ctx.strokeStyle = theme.crack;
         Neo.ctx.lineWidth = 2.2;
@@ -737,35 +799,22 @@
         Neo.ctx.stroke();
       } else if (decor.kind === 'brazier') {
         Neo.ctx.fillStyle = 'rgba(26,20,14,0.9)';
-        Neo.ctx.beginPath();
-        Neo.ctx.arc(0, 3, decor.r * 0.9, 0, Math.PI * 2);
-        Neo.ctx.fill();
-        Neo.ctx.fillStyle = 'rgba(255,120,60,0.78)';
-        Neo.ctx.shadowColor = '#ff7b39';
-        Neo.ctx.shadowBlur = 10;
-        Neo.ctx.beginPath();
-        Neo.ctx.arc(0, -2, decor.r * 0.55, 0, Math.PI * 2);
-        Neo.ctx.fill();
+        Neo.ctx.fillRect(-decor.r * 0.7, -2, decor.r * 1.4, decor.r * 0.8);
+        Neo.ctx.fillStyle = 'rgba(90,95,92,0.82)';
+        Neo.ctx.fillRect(-decor.r * 0.5, -5, decor.r, 4);
+        Neo.ctx.fillStyle = 'rgba(210,135,72,0.72)';
+        Neo.ctx.fillRect(-3, -10, 6, 8);
+        Neo.ctx.fillStyle = 'rgba(245,202,120,0.72)';
+        Neo.ctx.fillRect(-1, -8, 2, 5);
       } else if (decor.kind === 'torch') {
         Neo.ctx.fillStyle = 'rgba(28, 20, 12, 0.95)';
         Neo.ctx.fillRect(-2, -6, 4, 18);
         Neo.ctx.fillStyle = '#5b6670';
         Neo.ctx.fillRect(-6, -4, 12, 4);
-        Neo.ctx.shadowColor = '#ff9648';
-        Neo.ctx.shadowBlur = 14;
-        Neo.ctx.fillStyle = 'rgba(255, 126, 58, 0.92)';
-        Neo.ctx.beginPath();
-        Neo.ctx.moveTo(0, -18);
-        Neo.ctx.quadraticCurveTo(7, -8, 0, -2);
-        Neo.ctx.quadraticCurveTo(-7, -9, 0, -18);
-        Neo.ctx.fill();
-        Neo.ctx.fillStyle = 'rgba(255, 226, 150, 0.82)';
-        Neo.ctx.beginPath();
-        Neo.ctx.moveTo(0, -15);
-        Neo.ctx.quadraticCurveTo(4, -9, 0, -5);
-        Neo.ctx.quadraticCurveTo(-4, -9, 0, -15);
-        Neo.ctx.fill();
-        Neo.ctx.shadowBlur = 0;
+        Neo.ctx.fillStyle = 'rgba(210,135,72,0.72)';
+        Neo.ctx.fillRect(-3, -16, 6, 10);
+        Neo.ctx.fillStyle = 'rgba(245,202,120,0.72)';
+        Neo.ctx.fillRect(-1, -14, 2, 6);
       } else if (decor.kind === 'tree') {
         // Shadow
         Neo.ctx.fillStyle = 'rgba(20,30,14,0.35)';
@@ -862,44 +911,29 @@
     const hpRatio = Neo.clamp(Number(prop.hp || 0) / Math.max(1, Number(prop.maxHp || prop.hp || 1)), 0, 1);
     const damageAlpha = (1 - hpRatio) * 0.45;
 
-    const wood = Neo.ctx.createLinearGradient(left, top, left + w, top + h);
-    wood.addColorStop(0, '#5b341d');
-    wood.addColorStop(0.5, '#8a5229');
-    wood.addColorStop(1, '#4b2a18');
-    Neo.ctx.fillStyle = wood;
+    Neo.ctx.fillStyle = '#7a4825';
     Neo.ctx.fillRect(left, top, w, h);
+    Neo.ctx.fillStyle = '#4b2a18';
+    Neo.ctx.fillRect(left, top + h - Math.min(10, h * 0.24), w, Math.min(10, h * 0.24));
+    Neo.ctx.fillRect(left + w - Math.min(10, w * 0.24), top, Math.min(10, w * 0.24), h);
+    Neo.ctx.fillStyle = '#b0743d';
+    Neo.ctx.fillRect(left + 3, top + 3, Math.max(0, w - 12), 3);
+    Neo.ctx.fillRect(left + 3, top + 3, 3, Math.max(0, h - 12));
 
     const horizontal = w >= h;
     const plankCount = Math.max(2, Math.floor((horizontal ? h : w) / 18));
-    Neo.ctx.strokeStyle = 'rgba(38,20,10,0.72)';
-    Neo.ctx.lineWidth = 2;
+    Neo.ctx.strokeStyle = 'rgba(38,20,10,0.55)';
+    Neo.ctx.lineWidth = 1;
     for (let index = 1; index < plankCount; index += 1) {
       Neo.ctx.beginPath();
       if (horizontal) {
         const y = top + (h / plankCount) * index;
-        Neo.ctx.moveTo(left + 3, y);
-        Neo.ctx.lineTo(left + w - 3, y);
+        Neo.ctx.moveTo(left + 4, Math.round(y) + 0.5);
+        Neo.ctx.lineTo(left + w - 4, Math.round(y) + 0.5);
       } else {
         const x = left + (w / plankCount) * index;
-        Neo.ctx.moveTo(x, top + 3);
-        Neo.ctx.lineTo(x, top + h - 3);
-      }
-      Neo.ctx.stroke();
-    }
-
-    Neo.ctx.strokeStyle = 'rgba(245,188,104,0.18)';
-    Neo.ctx.lineWidth = 1;
-    for (let index = 0; index < 4; index += 1) {
-      const offset = (index + 0.35) / 4;
-      Neo.ctx.beginPath();
-      if (horizontal) {
-        const y = top + h * offset;
-        Neo.ctx.moveTo(left + 8, y);
-        Neo.ctx.lineTo(left + w - 8, y + Math.sin(index + prop.x * 0.01) * 3);
-      } else {
-        const x = left + w * offset;
-        Neo.ctx.moveTo(x, top + 8);
-        Neo.ctx.lineTo(x + Math.sin(index + prop.y * 0.01) * 3, top + h - 8);
+        Neo.ctx.moveTo(Math.round(x) + 0.5, top + 4);
+        Neo.ctx.lineTo(Math.round(x) + 0.5, top + h - 4);
       }
       Neo.ctx.stroke();
     }
@@ -1041,6 +1075,10 @@
   Neo.getGardenTileBias = getGardenTileBias;
   Neo.drawEnvironmentTile = drawEnvironmentTile;
   Neo.drawTiledRect = drawTiledRect;
+  Neo.isStaticRoomLava = isStaticRoomLava;
+  Neo.getStaticRoomLavaHazards = getStaticRoomLavaHazards;
+  Neo.drawStaticLavaBase = drawStaticLavaBase;
+  Neo.drawStaticLavaSeams = drawStaticLavaSeams;
   Neo.drawFloorTiles = drawFloorTiles;
   Neo.drawFloorDecals = drawFloorDecals;
   Neo.drawLockedDoor = drawLockedDoor;
