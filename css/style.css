@@ -310,18 +310,16 @@ button, input, select, textarea {
 }
 
 .menu-footer {
-  position: fixed;
-  bottom: 0;
-  left: 50%;
-  right: auto;
+  /* Child of .menu-stage, so it shares the stage's centered 720px box and is
+     always aligned with the cinema/content above it. #start .menu-stage pins
+     it to the bottom (position:absolute) and reserves space via padding. */
   z-index: 3;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 6px;
-  width: min(var(--menu-panel-width, 504px), calc(100vw - 40px));
-  padding: 12px 10px 16px;
-  transform: translateX(-50%);
+  width: 100%;
+  padding: 12px 20px 16px;
   box-sizing: border-box;
   background: linear-gradient(to top, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0) 100%);
   pointer-events: none;
@@ -3357,6 +3355,7 @@ button, input, select, textarea {
 }
 
 #start.overlay {
+  --menu-stage-width: 720px;
   --menu-panel-width: 504px;
   --menu-footer-reserve: 124px;
   justify-content: flex-start;
@@ -3366,16 +3365,29 @@ button, input, select, textarea {
 #start .menu-stage {
   position: relative;
   z-index: 2;
-  display: grid;
-  grid-template-rows: auto auto;
-  justify-items: center;
-  align-content: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   gap: clamp(18px, 3vh, 34px);
-  width: min(100%, 720px);
-  min-height: calc(100% - var(--menu-footer-reserve));
-  margin: 0 auto var(--menu-footer-reserve);
-  padding: clamp(28px, 7vh, 84px) 20px;
+  width: min(100%, var(--menu-stage-width));
+  height: 100%;
+  /* Bottom padding reserves room for the absolutely-positioned footer so the
+     centered cinema/nav cluster never overlaps it. */
+  margin: 0 auto;
+  padding: clamp(28px, 7vh, 84px) 20px var(--menu-footer-reserve);
   box-sizing: border-box;
+}
+
+/* Footer is a child of the stage (so it shares the centered 720px box and is
+   always aligned with the cinema/nav above it) but pinned to the stage bottom
+   so it stays screen-anchored rather than floating under the nav. */
+#start .menu-footer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
 }
 
 #start .menu-cinema {
