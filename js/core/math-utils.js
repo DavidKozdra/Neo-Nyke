@@ -143,7 +143,8 @@ export function getBeamReflectRects() {
     rects.push({ x: structure.x - structure.w / 2, y: structure.y - structure.h / 2, w: structure.w, h: structure.h });
   });
   Neo.destructibles.forEach(prop => {
-    if (!prop || prop.broken || prop.hidden || prop.kind !== 'cover_wall') return;
+    if (!prop || prop.broken || prop.hidden) return;
+    if (prop.kind !== 'cover_wall' && prop.kind !== 'wall' && prop.kind !== 'secret_wall') return;
     const rect = getDestructibleRect(prop);
     if (rect.w > 0 && rect.h > 0) rects.push(rect);
   });

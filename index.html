@@ -111,7 +111,7 @@
 <div id="bootLoading" class="boot-loading" role="status" aria-live="polite">
   <div class="boot-loading__box">
     <img class="boot-loading__mark" src="assets/icons/icon-128x128.png" width="64" height="64" alt="" aria-hidden="true">
-    <span class="version">alpha 1.0</span>
+    <span class="version">alpha 1.2</span>
     <h1 class="boot-loading__title">NEO NYKE</h1>
     <div class="boot-loading__bar" aria-hidden="true"><i></i></div>
     <p class="boot-loading__hint">Loading dungeon</p>
@@ -552,42 +552,43 @@
 <!-- Main menu — outside #wrap so it fills 100dvw × 100dvh -->
 <div id="start" class="overlay">
   <canvas id="menuBg"></canvas>
-  <!-- Cinematic title layer (sits above canvas, below menu-content) -->
-  <div id="menuCinema" class="menu-cinema">
-    <div id="menuLetters" class="menu-letters" aria-hidden="true"></div>
-    <div id="menuSubtitle" class="menu-subtitle-flash" aria-hidden="true">DUNGEON GOD</div>
-  </div>
-  <div class="menu-content">
-    <h1 id="menuTitle" class="sr-only">NEO NYKE — DUNGEON GOD</h1>
-    <div id="specialDayBanner" class="special-day-banner hidden" aria-live="polite">
-      <span class="special-day-banner__icon" id="specialDayIcon" aria-hidden="true"></span>
-      <span class="special-day-banner__text" id="specialDayText"></span>
+  <div class="menu-stage">
+    <!-- Cinematic title layer (sits above canvas, below menu-content) -->
+    <div id="menuCinema" class="menu-cinema">
+      <div id="menuLetters" class="menu-letters" aria-hidden="true"></div>
+      <div id="menuSubtitle" class="menu-subtitle-flash" aria-hidden="true">DUNGEON GOD</div>
     </div>
+    <div class="menu-content">
+      <h1 id="menuTitle" class="sr-only">NEO NYKE — DUNGEON GOD</h1>
+      <div id="specialDayBanner" class="special-day-banner hidden" aria-live="polite">
+        <span class="special-day-banner__icon" id="specialDayIcon" aria-hidden="true"></span>
+        <span class="special-day-banner__text" id="specialDayText"></span>
+      </div>
 
-    <div class="main-nav">
-      <button id="continueBtn" class="nav-btn hidden">CONTINUE<span class="nav-btn__icon">↺</span></button>
-      <button id="mainCompetitiveBtn" class="nav-btn" style="background:rgba(180,140,0,0.18);border-color:rgba(255,210,0,0.5);color:#ffe566;">COMPETITIVE<span class="nav-btn__icon">&#9733;</span></button>
-      <button id="newRunBtn"   class="nav-btn">NEW RUN<span class="nav-btn__icon">▶</span></button>
-      <button id="altModesBtn"   class="nav-btn nav-btn--minor">ALT MODES<span class="nav-btn__icon">◈</span></button>
-      <button id="runHistoryBtn" class="nav-btn nav-btn--minor">INFO<span class="nav-btn__icon">◎</span></button>
-      <button id="settingsBtn" class="nav-btn nav-btn--minor">SETTINGS<span class="nav-btn__icon">⚙</span></button>
-    </div>
-  </div><!-- /.menu-content -->
-  <div class="menu-footer">
-    <div class="meta-row">
-      <span class="meta-pill"><canvas id="metaCoinIcon" class="meta-icon" width="32" height="32"></canvas> BANK <b id="bankCoins">0</b></span>
-      <span class="meta-pill"><canvas id="metaLoopIcon" class="meta-icon" width="32" height="32"></canvas> LOOP CRYSTALS <b id="loopCount">0</b></span>
-      <span class="meta-pill"><span class="meta-pill__icon">↟</span> BEST FLOOR <b id="bestFloor">1</b></span>
-      <span class="meta-pill meta-pill--save"><span class="meta-pill__icon">◆</span> SAVE <b id="saveState">BOOTING</b></span>
-    </div>
-    <span id="runSummary" class="run-summary-line"></span>
-
-    <div class="version-badge run-summary-line">
-      <p>
-      version alpha 1.0
-    </p>
-    </div>
-  </div>
+      <div class="main-nav">
+        <button id="tutorialMenuBtn" class="nav-btn nav-btn--tutorial hidden">🎓 TUTORIAL</button>
+        <button id="continueBtn" class="nav-btn hidden">CONTINUE</button>
+        <button id="mainCompetitiveBtn" class="nav-btn" style="background:rgba(180,140,0,0.18);border-color:rgba(255,210,0,0.5);color:#ffe566;">COMPETITIVE</button>
+        <button id="newRunBtn"   class="nav-btn">NEW RUN</button>
+        <button id="altModesBtn"   class="nav-btn nav-btn--minor">ALT MODES</button>
+        <button id="runHistoryBtn" class="nav-btn nav-btn--minor">INFO</button>
+        <button id="settingsBtn" class="nav-btn nav-btn--minor">SETTINGS</button>
+        <button id="creditsBtn" class="nav-btn nav-btn--minor">CREDITS</button>
+      </div>
+    </div><!-- /.menu-content -->
+    <div class="menu-footer">
+      <div class="meta-row">
+        <span class="meta-pill"><canvas id="metaCoinIcon" class="meta-icon" width="32" height="32"></canvas> BANK <b id="bankCoins">0</b></span>
+        <span class="meta-pill"><canvas id="metaLoopIcon" class="meta-icon" width="32" height="32"></canvas> LOOP CRYSTALS <b id="loopCount">0</b></span>
+        <span class="meta-pill"><span class="meta-pill__icon">↟</span> BEST FLOOR <b id="bestFloor">1</b></span>
+        <span class="meta-pill meta-pill--save"><span class="meta-pill__icon">◆</span> SAVE <b id="saveState">BOOTING</b></span>
+      </div>
+      <div class="menu-footer__summary">
+        <span id="runSummary" class="run-summary-line"></span>
+        <span class="menu-footer__version">version alpha 1.2</span>
+      </div>
+    </div><!-- /.menu-footer -->
+  </div><!-- /.menu-stage -->
   <section id="runHistoryPanel" class="rh-panel hidden" aria-hidden="true">
     <div class="rh-head">
       <div class="rh-head-left">

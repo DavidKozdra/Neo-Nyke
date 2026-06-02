@@ -216,12 +216,15 @@
     if (Neo.nextRandom('world') < 0.3 && room.type !== 'shop' && room.type !== 'god' && room.type !== 'challenge') {
       const wallX = Neo.nextRandom('world') < 0.5 ? 76 : Neo.ROOM_W - 76;
       const hiddenX = wallX < Neo.ROOM_W / 2 ? 48 : Neo.ROOM_W - 48;
+      const revealGroup = `wall_${room.gx}_${room.gy}_${room.destructibles.length}`;
       room.destructibles.push({
         kind: 'wall',
         x: wallX,
         y: Neo.ROOM_H / 2 + Neo.rand(120, -120, 'world'),
         r: 26,
         hp: 2,
+        maxHp: 2,
+        revealGroup,
         broken: false,
       });
       room.destructibles.push({
@@ -232,6 +235,7 @@
         hp: 1,
         broken: false,
         hidden: true,
+        revealGroup,
       });
     }
 
@@ -330,146 +334,14 @@
         addTorch(Neo.ROOM_W - edgeInset + 6, Neo.ROOM_H / 2 + pocketInset + 28);
       }
     };
-    const pickCombatArchetype = () => {
-      const pool = ['pillar_ring', 'split_cross', 'side_lanes', 'gate_room', 'broken_halls'];
-      return pool[Neo.irand(0, pool.length - 1, 'world')];
-    };
-    const pickBossArchetype = () => {
-      const pool = ['boss_buttresses', 'boss_crossfire', 'boss_processional'];
-      return pool[Neo.irand(0, pool.length - 1, 'world')];
-    };
-
-    room.layoutArchetype = room.type === 'boss' ? pickBossArchetype() : pickCombatArchetype();
+    // Pick a data-driven template (registry lives in roomTemplates.js) and stamp
+    // it into the room. With equal template weights this consumes RNG identically
+    // to the old pick*Archetype() helpers, so seeded output is unchanged.
     room.layoutChambers = [];
     addDoorFrames();
-
-    if (room.layoutArchetype === 'pillar_ring') {
-      addPillar(Neo.ROOM_W / 2 - 150, Neo.ROOM_H / 2 - 104, 36);
-      addPillar(Neo.ROOM_W / 2 + 150, Neo.ROOM_H / 2 - 104, 36);
-      addPillar(Neo.ROOM_W / 2 - 150, Neo.ROOM_H / 2 + 104, 36);
-      addPillar(Neo.ROOM_W / 2 + 150, Neo.ROOM_H / 2 + 104, 36);
-      addPillar(Neo.ROOM_W / 2, Neo.ROOM_H / 2 - 138, 28);
-      addPillar(Neo.ROOM_W / 2, Neo.ROOM_H / 2 + 138, 28);
-      room.decorations.push(
-        { kind: 'rubble', x: Neo.ROOM_W / 2 - 54, y: Neo.ROOM_H / 2, r: 24 },
-        { kind: 'rubble', x: Neo.ROOM_W / 2 + 54, y: Neo.ROOM_H / 2, r: 24 },
-      );
-      setChambers({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2, w: Neo.ROOM_W - 240, h: Neo.ROOM_H - 220 });
-      return;
-    }
-
-    if (room.layoutArchetype === 'split_cross') {
-      addWall(Neo.ROOM_W / 2, Neo.ROOM_H / 2 - 136, 74, 92);
-      addWall(Neo.ROOM_W / 2, Neo.ROOM_H / 2 + 136, 74, 92);
-      addWall(Neo.ROOM_W / 2 - 182, Neo.ROOM_H / 2, 94, 58);
-      addWall(Neo.ROOM_W / 2 + 182, Neo.ROOM_H / 2, 94, 58);
-      room.decorations.push(
-        { kind: 'brazier', x: Neo.ROOM_W / 2 - 102, y: Neo.ROOM_H / 2 - 84, r: 16 },
-        { kind: 'brazier', x: Neo.ROOM_W / 2 + 102, y: Neo.ROOM_H / 2 + 84, r: 16 },
-        { kind: 'crack', x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2, r: 28 },
-      );
-      setChambers(
-        { x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 150, w: 240, h: 150 },
-        { x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 + 150, w: 240, h: 150 },
-        { x: Neo.ROOM_W / 2 - 210, y: Neo.ROOM_H / 2, w: 180, h: 180 },
-        { x: Neo.ROOM_W / 2 + 210, y: Neo.ROOM_H / 2, w: 180, h: 180 },
-      );
-      return;
-    }
-
-    if (room.layoutArchetype === 'side_lanes') {
-      addWall(Neo.ROOM_W / 2, Neo.ROOM_H / 2 - 124, 228, 46);
-      addWall(Neo.ROOM_W / 2, Neo.ROOM_H / 2 + 124, 228, 46);
-      addPillar(Neo.ROOM_W / 2 - 242, Neo.ROOM_H / 2, 30);
-      addPillar(Neo.ROOM_W / 2 + 242, Neo.ROOM_H / 2, 30);
-      room.decorations.push(
-        { kind: 'banner', x: Neo.ROOM_W / 2 - 188, y: Neo.ROOM_H / 2 - 166, r: 14 },
-        { kind: 'banner', x: Neo.ROOM_W / 2 + 188, y: Neo.ROOM_H / 2 + 166, r: 14 },
-      );
-      setChambers(
-        { x: Neo.ROOM_W / 2 - 238, y: Neo.ROOM_H / 2, w: 170, h: Neo.ROOM_H - 220 },
-        { x: Neo.ROOM_W / 2 + 238, y: Neo.ROOM_H / 2, w: 170, h: Neo.ROOM_H - 220 },
-        { x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2, w: 220, h: 180 },
-      );
-      return;
-    }
-
-    if (room.layoutArchetype === 'gate_room') {
-      addWall(Neo.ROOM_W / 2 - 172, Neo.ROOM_H / 2 - 38, 108, 52);
-      addWall(Neo.ROOM_W / 2 + 172, Neo.ROOM_H / 2 - 38, 108, 52);
-      addWall(Neo.ROOM_W / 2, Neo.ROOM_H / 2 + 148, 86, 82);
-      addPillar(Neo.ROOM_W / 2 - 62, Neo.ROOM_H / 2 + 34, 28);
-      addPillar(Neo.ROOM_W / 2 + 62, Neo.ROOM_H / 2 + 34, 28);
-      room.decorations.push(
-        { kind: 'brazier', x: Neo.ROOM_W / 2 - 130, y: Neo.ROOM_H / 2 + 112, r: 15 },
-        { kind: 'brazier', x: Neo.ROOM_W / 2 + 130, y: Neo.ROOM_H / 2 + 112, r: 15 },
-        { kind: 'crack', x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 104, r: 32 },
-      );
-      setChambers(
-        { x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 146, w: Neo.ROOM_W - 300, h: 150 },
-        { x: Neo.ROOM_W / 2 - 200, y: Neo.ROOM_H / 2 + 40, w: 180, h: 220 },
-        { x: Neo.ROOM_W / 2 + 200, y: Neo.ROOM_H / 2 + 40, w: 180, h: 220 },
-      );
-      return;
-    }
-
-    if (room.layoutArchetype === 'broken_halls') {
-      addWall(Neo.ROOM_W / 2 - 96, Neo.ROOM_H / 2 - 150, 84, 74);
-      addWall(Neo.ROOM_W / 2 + 118, Neo.ROOM_H / 2 - 36, 104, 54);
-      addWall(Neo.ROOM_W / 2 - 148, Neo.ROOM_H / 2 + 112, 122, 46);
-      addPillar(Neo.ROOM_W / 2 + 186, Neo.ROOM_H / 2 + 138, 32);
-      room.decorations.push(
-        { kind: 'rubble', x: Neo.ROOM_W / 2 - 20, y: Neo.ROOM_H / 2 + 10, r: 26 },
-        { kind: 'crack', x: Neo.ROOM_W / 2 + 132, y: Neo.ROOM_H / 2 - 132, r: 28 },
-        { kind: 'banner', x: Neo.ROOM_W / 2 - 170, y: Neo.ROOM_H / 2 - 180, r: 12 },
-      );
-      setChambers(
-        { x: Neo.ROOM_W / 2 - 150, y: Neo.ROOM_H / 2 - 118, w: 240, h: 170 },
-        { x: Neo.ROOM_W / 2 + 172, y: Neo.ROOM_H / 2 - 8, w: 200, h: 180 },
-        { x: Neo.ROOM_W / 2 - 36, y: Neo.ROOM_H / 2 + 170, w: 320, h: 130 },
-      );
-      return;
-    }
-
-    if (room.layoutArchetype === 'boss_buttresses') {
-      addWall(Neo.ROOM_W / 2 - 220, Neo.ROOM_H / 2, 64, 184);
-      addWall(Neo.ROOM_W / 2 + 220, Neo.ROOM_H / 2, 64, 184);
-      addPillar(Neo.ROOM_W / 2 - 84, Neo.ROOM_H / 2 - 126, 30);
-      addPillar(Neo.ROOM_W / 2 + 84, Neo.ROOM_H / 2 - 126, 30);
-      room.decorations.push(
-        { kind: 'brazier', x: Neo.ROOM_W / 2 - 220, y: Neo.ROOM_H / 2 - 136, r: 17 },
-        { kind: 'brazier', x: Neo.ROOM_W / 2 + 220, y: Neo.ROOM_H / 2 - 136, r: 17 },
-      );
-      setChambers({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2, w: Neo.ROOM_W - 220, h: Neo.ROOM_H - 170 });
-      return;
-    }
-
-    if (room.layoutArchetype === 'boss_crossfire') {
-      addWall(Neo.ROOM_W / 2, Neo.ROOM_H / 2 - 162, 68, 70);
-      addWall(Neo.ROOM_W / 2, Neo.ROOM_H / 2 + 162, 68, 70);
-      addPillar(Neo.ROOM_W / 2 - 188, Neo.ROOM_H / 2, 34);
-      addPillar(Neo.ROOM_W / 2 + 188, Neo.ROOM_H / 2, 34);
-      room.decorations.push(
-        { kind: 'crack', x: Neo.ROOM_W / 2 - 128, y: Neo.ROOM_H / 2, r: 26 },
-        { kind: 'crack', x: Neo.ROOM_W / 2 + 128, y: Neo.ROOM_H / 2, r: 26 },
-      );
-      setChambers({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2, w: Neo.ROOM_W - 240, h: Neo.ROOM_H - 210 });
-      return;
-    }
-
-    addWall(Neo.ROOM_W / 2 - 160, Neo.ROOM_H / 2 + 118, 116, 46);
-    addWall(Neo.ROOM_W / 2 + 160, Neo.ROOM_H / 2 + 118, 116, 46);
-    addPillar(Neo.ROOM_W / 2 - 74, Neo.ROOM_H / 2 - 64, 32);
-    addPillar(Neo.ROOM_W / 2 + 74, Neo.ROOM_H / 2 - 64, 32);
-    room.decorations.push(
-      { kind: 'banner', x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 186, r: 14 },
-      { kind: 'brazier', x: Neo.ROOM_W / 2 - 148, y: Neo.ROOM_H / 2 - 10, r: 16 },
-      { kind: 'brazier', x: Neo.ROOM_W / 2 + 148, y: Neo.ROOM_H / 2 - 10, r: 16 },
-    );
-    setChambers(
-      { x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 96, w: Neo.ROOM_W - 260, h: 180 },
-      { x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 + 176, w: Neo.ROOM_W - 220, h: 140 },
-    );
+    const template = Neo.pickRoomTemplate(room);
+    room.layoutArchetype = template ? template.id : 'open';
+    Neo.applyRoomTemplate(room, template, { addWall, addPillar, setChambers });
   }
 
   function decorateGardenRoomData(room) {

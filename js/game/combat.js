@@ -32,6 +32,25 @@
       && window.NeoSettings?.getGameplay?.()?.bloodOnHit !== false;
   }
 
+  // Convert a landed hit into game feel: hitstop (freeze) + screen trauma + a
+  // directional camera kick away from the impact. Magnitude scales with how big
+  // the hit is vs the target's max HP, so chip damage stays calm and heavy
+  // hits/crits genuinely slam. `angle` is the direction of the blow; the kick
+  // points the same way the enemy is knocked (i.e. away from the player).
+  function applyHitFeel(enemy, dealt, angle, isCrit) {
+    const maxHp = enemy && enemy.maxHp ? enemy.maxHp : dealt * 6;
+    const ratio = Neo.clamp(dealt / Math.max(1, maxHp), 0, 1);
+    // Below a small threshold (pure chip), skip feel entirely — keeps DoT ticks
+    // and weak pellets from constantly nudging the camera.
+    if (ratio < 0.04 && !isCrit) return;
+    const heavy = Neo.clamp(ratio * 2.4, 0, 1);          // 0..1 "heaviness"
+    const hitstop = (isCrit ? 0.05 : 0.02) + heavy * 0.05; // 20–100ms
+    const trauma = (isCrit ? 0.32 : 0.16) + heavy * 0.3;   // big hits → big shake
+    const kick = (isCrit ? 5 : 2.5) + heavy * 6;           // px of directional kick
+    Neo.addHitstop?.(hitstop);
+    Neo.addTrauma?.(trauma, angle, kick);
+  }
+
   function getEnemyBleedResistance(enemy) {
     const loopNumber = Math.max(1, Math.floor((Neo.floor - 1) / 10) + 1);
     const floorInLoop = ((Neo.floor - 1) % 10) + 1;
@@ -1450,10 +1469,13 @@
     if (shouldBloodOnHit() && options.bloodOnHit !== false) {
       spawnBleedSpray(enemy, 1, isCrit ? 1.2 : 0.72);
     }
+    // Game feel: hitstop + directional trauma scaled to impact (vs target max HP).
+    // Chip damage gets nothing; crits and big slams get a real freeze + kick away
+    // from the blow. The kill itself adds an extra punch in onEnemyDie.
+    applyHitFeel(enemy, dealt, angle, isCrit);
     Neo.spawnDamagePopup(enemy.x, enemy.y - 14, dealt, {
       crit: isCrit,
-      color: isCrit ? '#ff9f1c' : '#ff6b6b',
-      size: isCrit ? 20 : 16,
+      enemy,
     });
     if (stats.confuseRayStunChance > 0 && Neo.nextRandom('encounter') < stats.confuseRayStunChance) {
       enemy.stun = Math.max(Number(enemy.stun || 0), 0.55);
@@ -1763,6 +1785,13 @@
       Neo.spawnHealPopup(enemy.x, enemy.y - 54, enemy.hp, { color: '#79f7bf' });
       return;
     }
+
+    // Kill punch: a decisive extra freeze + shake so finishing a foe lands.
+    // Bigger/elite/boss kills hit harder.
+    const killWeight = enemy.type === 'god' || enemy.boss ? 1 : enemy.elite ? 0.55 : 0.28;
+    Neo.addHitstop?.(0.03 + killWeight * 0.07);
+    Neo.addTrauma?.(0.22 + killWeight * 0.45);
+    enemy._dmgPopup = null; // close out any combo-merge target
 
     const index = Neo.enemies.indexOf(enemy);
     if (index >= 0) Neo.enemies.splice(index, 1);
