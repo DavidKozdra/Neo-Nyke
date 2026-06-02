@@ -539,19 +539,7 @@ export function createUIController(view) {
     ];
 
     function getCharacterStartingItems(characterKey) {
-      const items = {};
-      if (characterKey === 'thorn_knight') {
-        items.neo_knife = 1;
-        items.tooth_of_thorn = 2;
-        items.tough_skin = 1;
-      }
-      if (characterKey === 'mooggy') {
-        items.hemes_scarf = 1;
-        items.mooggy_zoomies = 1;
-      }
-      if (characterKey === 'princess') items.princes_glasses = 1;
-      if (characterKey === 'metao') items.mateos_bag = 1;
-      return items;
+      return Neo.getCharacterStartingItems?.(characterKey) || {};
     }
 
     function populateInfoPanel(tab) {

@@ -254,6 +254,21 @@ window.NeoNykeSpriteDefs = {
       '...cc.....',
     ],
   },
+  bowman_bane: {
+    palette: { a: '#13222b', b: '#34657d', c: '#dff2ff', d: '#8dd4ff' },
+    pixels: [
+      '..d..d....',
+      '..cbbc.d..',
+      '.bcaacb.d.',
+      '.bccccb.d.',
+      'bbbddbbbd.',
+      '.bbbbbbd..',
+      '.bbddbb...',
+      '.bb..bb...',
+      '.db..bd...',
+      '.d....d...',
+    ],
+  },
   handsome_devil: {
     palette: { a: '#1b1118', b: '#7a1f2d', c: '#ffd6c6', d: '#ff3348' },
     pixels: [

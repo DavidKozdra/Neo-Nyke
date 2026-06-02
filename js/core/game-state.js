@@ -143,6 +143,22 @@ export function resumeGame() {
     };
   }
 
+  function getCharacterStartingItems(characterKey) {
+    const items = {};
+    if (characterKey === 'thorn_knight') {
+      items.neo_knife = 1;
+      items.tooth_of_thorn = 2;
+      items.tough_skin = 1;
+    }
+    if (characterKey === 'mooggy') {
+      items.hemes_scarf = 1;
+      items.mooggy_zoomies = 1;
+    }
+    if (characterKey === 'princess') items.princes_glasses = 1;
+    if (characterKey === 'metao') items.mateos_bag = 1;
+    return items;
+  }
+
   function resetTutorialState(active = false) {
     Neo.tutorialState = createDefaultTutorialState();
     Neo.tutorialState.active = !!active;
@@ -420,17 +436,12 @@ export function resumeGame() {
       el_bartos_cape: 0,
     };
     const character = Neo.CHARACTER_DEFS[Neo.chosenCharacter] || Neo.CHARACTER_DEFS.thorn_knight;
-    if (character.key === 'thorn_knight') {
-      items.neo_knife = 1;
-      items.tooth_of_thorn = 2;
-      items.tough_skin = 1;
-    }
-    if (character.key === 'mooggy') {
-      items.hemes_scarf = 1;
-      items.mooggy_zoomies = 1;
-    }
-    if (character.key === 'princess') items.princes_glasses = 1;
-    if (character.key === 'metao') items.mateos_bag = 1;
+    const starterItems = getCharacterStartingItems(character.key);
+    Object.entries(starterItems).forEach(([key, count]) => {
+      if (Object.prototype.hasOwnProperty.call(items, key)) {
+        items[key] = Math.max(0, Math.round(Number(count) || 0));
+      }
+    });
     const equippedMoves = Neo.getDefaultMovesForCharacter(character.key);
     const defaultWeapon = Neo.getDefaultWeaponForCharacter(character.key);
     const ownedMoves = {};
@@ -2503,6 +2514,7 @@ export function resumeGame() {
   Neo.getTutorialObjectiveEntries = getTutorialObjectiveEntries;
   Neo.skipFirstRunTutorial = skipFirstRunTutorial;
   Neo.updateFirstRunTutorialProgress = updateFirstRunTutorialProgress;
+  Neo.getCharacterStartingItems = getCharacterStartingItems;
   Neo.createDefaultPlayer = createDefaultPlayer;
   Neo.applyRunChallengeStartModifiers = applyRunChallengeStartModifiers;
   Neo.createItemRegistry = createItemRegistry;
