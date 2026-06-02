@@ -307,7 +307,39 @@ export function createUIController(view) {
               ? 'READY'
               : current.toFixed(1);
       }
-      if (card) card.classList.toggle('ready', ready);
+      if (card) {
+        card.classList.toggle('ready', ready);
+        updateSkillCharges(card, charges, maxCharges, partialCharge);
+      }
+    }
+
+    // Render one pip per charge so skills with extra charges read at a glance:
+    // filled pips = charges in hand, the next pip fills as that charge recovers.
+    function updateSkillCharges(card, charges, maxCharges, partialCharge) {
+      let pips = card.querySelector('.skill-charges');
+      if (maxCharges <= 1) {
+        if (pips) pips.remove();
+        return;
+      }
+      if (!pips || pips.childElementCount !== maxCharges) {
+        if (!pips) {
+          pips = document.createElement('div');
+          pips.className = 'skill-charges';
+          card.appendChild(pips);
+        }
+        pips.replaceChildren();
+        for (let i = 0; i < maxCharges; i += 1) {
+          pips.appendChild(document.createElement('i'));
+        }
+      }
+      const dots = pips.children;
+      for (let i = 0; i < dots.length; i += 1) {
+        const filled = i < charges;
+        const filling = i === charges && partialCharge > 0;
+        dots[i].classList.toggle('full', filled);
+        dots[i].classList.toggle('charging', filling);
+        dots[i].style.setProperty('--pip', filling ? partialCharge : filled ? 1 : 0);
+      }
     }
 
     function resolveDialoguePortraitKey(speaker = '') {
