@@ -1783,6 +1783,29 @@
       return;
     }
 
+    if (enemy.spitWindup > 0) {
+      enemy.spitWindup -= dt;
+      enemy.vx *= 0.7;
+      enemy.vy *= 0.7;
+      if (enemy.spitWindup <= 0) {
+        const angle = Math.atan2(Neo.player.y - enemy.y, Neo.player.x - enemy.x);
+        Neo.spawnProjectile({
+          x: enemy.x + Math.cos(angle) * (enemy.r + 6),
+          y: enemy.y + Math.sin(angle) * (enemy.r + 6),
+          vx: Math.cos(angle) * 300,
+          vy: Math.sin(angle) * 300,
+          r: 9,
+          life: 2.2,
+          enemy: true,
+          kind: 'golem_spit',
+          source: 'golem_projectile',
+          damage: enemy.dmg + 4,
+        });
+        Neo.spawnParticle({ x: enemy.x, y: enemy.y - 20, life: 0.5, text: 'SPIT', c: '#9bb05a' });
+      }
+      return;
+    }
+
     if (enemy.windup > 0) {
       enemy.windup -= dt;
       enemy.vx *= 0.7;
@@ -1806,10 +1829,16 @@
     }
 
     steerEnemy(enemy, dx / distance, dy / distance, enemy.speed, 3.1, dt);
-    if (enemy.attackCd <= 0 && distance < 460) {
-      enemy.windup = 0.62;
-      enemy.dashAngle = Math.atan2(dy, dx);
-      enemy.attackCd = 2.6;
+    if (enemy.attackCd <= 0) {
+      if (distance < 460) {
+        enemy.windup = 0.62;
+        enemy.dashAngle = Math.atan2(dy, dx);
+        enemy.attackCd = 2.6;
+      } else {
+        // Too far to close the gap with a dash — hurl a sludge spit instead.
+        enemy.spitWindup = 0.7;
+        enemy.attackCd = 2.6;
+      }
     }
   }
 

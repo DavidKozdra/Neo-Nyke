@@ -267,8 +267,8 @@ button, input, select, textarea {
 }
 
 .item-toast-icon {
-  width: 30px !important;
-  height: 30px !important;
+  width: 40px !important;
+  height: 40px !important;
   border-radius: 6px;
   flex-shrink: 0;
   border: 1px solid rgba(255,255,255,.3);
@@ -1658,8 +1658,8 @@ button, input, select, textarea {
 }
 
 .shop-card__icon {
-  width: 44px !important;
-  height: 44px !important;
+  width: 40px !important;
+  height: 40px !important;
   flex-shrink: 0;
   border-radius: 8px;
   image-rendering: pixelated;
@@ -2070,8 +2070,8 @@ button, input, select, textarea {
 }
 
 .shop-card__icon {
-  width: 48px !important;
-  height: 48px !important;
+  width: 40px !important;
+  height: 40px !important;
   border-radius: 8px;
   box-shadow: 0 0 12px rgba(255,255,255,.12);
 }
@@ -2632,8 +2632,8 @@ button, input, select, textarea {
 }
 
 .inv-card__icon {
-  width: 30px !important;
-  height: 30px !important;
+  width: 40px !important;
+  height: 40px !important;
   flex-shrink: 0;
   border-radius: 6px;
   border: 1px solid rgba(255,255,255,.14);

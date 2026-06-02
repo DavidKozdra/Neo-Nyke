@@ -541,6 +541,7 @@ export function createUIController(view) {
     function getCharacterStartingItems(characterKey) {
       const items = {};
       if (characterKey === 'thorn_knight') {
+        items.neo_knife = 1;
         items.tooth_of_thorn = 2;
         items.tough_skin = 1;
       }

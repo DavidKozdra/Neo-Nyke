@@ -43,26 +43,29 @@ export function drawItemToastIcon(canvas, item) {
   }
   const symbolByRarity = { god: '✦', purple: '◆', wizard: '✹', knight: '⚔', white: '●' };
   const symbol = symbolByRarity[item?.rarity] || '●';
+  const cx = canvas.width / 2;
+  const cy = canvas.height / 2;
+  const r = canvas.width * 0.38;
   ctx2d.fillStyle = color;
   ctx2d.shadowColor = color;
   ctx2d.shadowBlur = item?.rarity === 'god' ? 8 : 5;
   ctx2d.beginPath();
-  ctx2d.arc(15, 15, 12, 0, Math.PI * 2);
+  ctx2d.arc(cx, cy, r, 0, Math.PI * 2);
   ctx2d.fill();
   if (item?.accent) {
     ctx2d.shadowBlur = 0;
     ctx2d.strokeStyle = item.accent;
     ctx2d.lineWidth = 2;
     ctx2d.beginPath();
-    ctx2d.arc(15, 15, 14, 0, Math.PI * 2);
+    ctx2d.arc(cx, cy, r + 2, 0, Math.PI * 2);
     ctx2d.stroke();
   }
   ctx2d.shadowBlur = 0;
   ctx2d.fillStyle = '#071018';
-  ctx2d.font = 'bold 12px system-ui';
+  ctx2d.font = `bold ${Math.round(canvas.width * 0.3)}px system-ui`;
   ctx2d.textAlign = 'center';
   ctx2d.textBaseline = 'middle';
-  ctx2d.fillText(symbol, 15, 15.5);
+  ctx2d.fillText(symbol, cx, cy + 0.5);
 }
 
 export function pushItemNotification(itemKey, amount = 1, note = '') {
@@ -74,8 +77,8 @@ export function pushItemNotification(itemKey, amount = 1, note = '') {
   toast.style.borderColor = item.color || '#9ec6ff';
   const icon = document.createElement('canvas');
   icon.className = 'item-toast-icon';
-  icon.width = 30;
-  icon.height = 30;
+  icon.width = 40;
+  icon.height = 40;
   drawItemToastIcon(icon, item);
   const body = document.createElement('div');
   body.className = 'item-toast-body';
@@ -394,8 +397,8 @@ export function pushMoveNotification(moveKey, amount = 1) {
   toast.style.borderColor = color;
   const icon = document.createElement('canvas');
   icon.className = 'item-toast-icon';
-  icon.width = 30;
-  icon.height = 30;
+  icon.width = 40;
+  icon.height = 40;
   drawMoveToastIcon(icon, moveDef);
   const body = document.createElement('div');
   body.className = 'item-toast-body';
@@ -432,8 +435,8 @@ export function pushWeaponNotification(weaponKey) {
   toast.style.borderColor = color;
   const icon = document.createElement('canvas');
   icon.className = 'item-toast-icon';
-  icon.width = 30;
-  icon.height = 30;
+  icon.width = 40;
+  icon.height = 40;
   drawWeaponToastIcon(icon, def);
   const body = document.createElement('div');
   body.className = 'item-toast-body';

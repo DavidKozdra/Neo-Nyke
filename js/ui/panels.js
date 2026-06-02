@@ -1383,7 +1383,7 @@ export function getShopWeaponOffers() {
     chips = [],
     stats = [],
     accentColor = '',
-    iconSize = 44,
+    iconSize = 40,
     recommended = false,
     soldStateText = 'SOLD',
     kind,
@@ -1710,7 +1710,7 @@ export function renderInventoryPanel() {
         return `<div class="inv-card">
           <span class="inv-card__eyebrow">Relic</span>
           <div class="inv-card__title-row">
-            <canvas class="inv-card__icon" data-item-icon="${key}" width="30" height="30"></canvas>
+            <canvas class="inv-card__icon" data-item-icon="${key}" width="40" height="40"></canvas>
             <h4 style="color:${Neo.getRarityNameColor(item?.rarity || item?.category)}">${item?.name || key}</h4>
             <span class="inv-card__count">x${_invP.items[key]}</span>
           </div>
