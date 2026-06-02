@@ -718,6 +718,8 @@
       hitOptions: null, trail: null,
       splash: 0, splashDamage: 0, blockedSplashDamage: 0, fireStacks: 0, fireDuration: 0,
       homing: false, homingTarget: null, homingSpeed: 0, homingAccel: 0, homingTurnRate: 0, homingRadius: 0,
+      homingPath: null, homingPathTimer: 0,
+      homingTargetRef: null, homingTargetTimer: 0,
       fromRival: false, source: null, statusEffects: null,
     });
   }
@@ -731,6 +733,8 @@
       hitOptions: null, trail: null,
       splash: 0, splashDamage: 0, blockedSplashDamage: 0, fireStacks: 0, fireDuration: 0,
       homing: false, homingTarget: null, homingSpeed: 0, homingAccel: 0, homingTurnRate: 0, homingRadius: 0,
+      homingPath: null, homingPathTimer: 0,
+      homingTargetRef: null, homingTargetTimer: 0,
       fromRival: false, source: null, statusEffects: null, bouncesRemaining: 0,
     };
   }
@@ -811,6 +815,10 @@
       p.homingTurnRate = 0;
       p.homingRadius = 0;
     }
+    p.homingPath = null;
+    p.homingPathTimer = 0;
+    p.homingTargetRef = null;
+    p.homingTargetTimer = 0;
     p.fromRival = props.fromRival ?? false;
     p.source = props.source ?? null;
     p.statusEffects = props.statusEffects ?? null;
@@ -913,6 +921,203 @@
     });
   }
 
+  function projectileHasLineOfSight(projectile, targetX, targetY) {
+    if (!projectile || !Number.isFinite(targetX) || !Number.isFinite(targetY)) return false;
+    const dx = targetX - projectile.x;
+    const dy = targetY - projectile.y;
+    const distance = Math.hypot(dx, dy);
+    if (distance <= 0.001) return true;
+    const dirX = dx / distance;
+    const dirY = dy / distance;
+    const radius = Math.max(0, Number(projectile.r || 0));
+    return !getProjectileBlockerRects(projectile).some(rect => {
+      const expanded = {
+        x: rect.x - radius,
+        y: rect.y - radius,
+        w: rect.w + radius * 2,
+        h: rect.h + radius * 2,
+      };
+      return !!Neo.rayRectHit(projectile.x, projectile.y, dirX, dirY, expanded, distance);
+    });
+  }
+
+  function buildProjectileHomingPath(projectile, targetX, targetY) {
+    const cell = 44;
+    const cols = Math.ceil(Neo.ROOM_W / cell);
+    const rows = Math.ceil(Neo.ROOM_H / cell);
+    const radius = Math.max(4, Number(projectile?.r || 4) + 4);
+    const toCell = (x, y) => ({
+      x: Neo.clamp(Math.floor(x / cell), 0, cols - 1),
+      y: Neo.clamp(Math.floor(y / cell), 0, rows - 1),
+    });
+    const toWorld = (x, y) => ({
+      x: Neo.clamp(x * cell + cell / 2, Neo.WALL + radius, Neo.ROOM_W - Neo.WALL - radius),
+      y: Neo.clamp(y * cell + cell / 2, Neo.WALL + radius, Neo.ROOM_H - Neo.WALL - radius),
+    });
+    const start = toCell(projectile.x, projectile.y);
+    const goal = toCell(targetX, targetY);
+    const nodeCount = cols * rows;
+    const blocked = new Uint8Array(nodeCount);
+    const idx = (x, y) => y * cols + x;
+    for (let y = 0; y < rows; y += 1) {
+      for (let x = 0; x < cols; x += 1) {
+        const p = toWorld(x, y);
+        if (Neo.isBlocked(p.x, p.y, radius)) blocked[idx(x, y)] = 1;
+      }
+    }
+    blocked[idx(start.x, start.y)] = 0;
+    blocked[idx(goal.x, goal.y)] = 0;
+
+    const gScore = new Float32Array(nodeCount);
+    const fScore = new Float32Array(nodeCount);
+    const cameFrom = new Int16Array(nodeCount);
+    const open = new Uint8Array(nodeCount);
+    const closed = new Uint8Array(nodeCount);
+    gScore.fill(Infinity);
+    fScore.fill(Infinity);
+    cameFrom.fill(-1);
+    const startIdx = idx(start.x, start.y);
+    const goalIdx = idx(goal.x, goal.y);
+    const heuristic = (x, y) => Math.abs(goal.x - x) + Math.abs(goal.y - y);
+    gScore[startIdx] = 0;
+    fScore[startIdx] = heuristic(start.x, start.y);
+    open[startIdx] = 1;
+
+    const dirs = [
+      [1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1],
+      [1, 1, 1.35], [1, -1, 1.35], [-1, 1, 1.35], [-1, -1, 1.35],
+    ];
+    const maxIterations = Math.min(nodeCount, 420);
+    for (let iteration = 0; iteration < maxIterations; iteration += 1) {
+      let current = -1;
+      let bestF = Infinity;
+      for (let i = 0; i < nodeCount; i += 1) {
+        if (open[i] && fScore[i] < bestF) {
+          bestF = fScore[i];
+          current = i;
+        }
+      }
+      if (current < 0) break;
+      if (current === goalIdx) {
+        const path = [];
+        let cursor = current;
+        while (cursor >= 0 && cursor !== startIdx) {
+          const cx = cursor % cols;
+          const cy = Math.floor(cursor / cols);
+          path.unshift(toWorld(cx, cy));
+          cursor = cameFrom[cursor];
+        }
+        path.push({ x: targetX, y: targetY });
+        return path;
+      }
+      open[current] = 0;
+      closed[current] = 1;
+      const cx = current % cols;
+      const cy = Math.floor(current / cols);
+      dirs.forEach(([dx, dy, cost]) => {
+        const nx = cx + dx;
+        const ny = cy + dy;
+        if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) return;
+        const ni = idx(nx, ny);
+        if (closed[ni] || blocked[ni]) return;
+        if (dx !== 0 && dy !== 0 && (blocked[idx(cx + dx, cy)] || blocked[idx(cx, cy + dy)])) return;
+        const tentative = gScore[current] + cost;
+        if (tentative >= gScore[ni]) return;
+        cameFrom[ni] = current;
+        gScore[ni] = tentative;
+        fScore[ni] = tentative + heuristic(nx, ny) * 1.15;
+        open[ni] = 1;
+      });
+    }
+    return null;
+  }
+
+  function getPathTravelCost(path, startX, startY, endX, endY) {
+    if (!Array.isArray(path) || path.length === 0) return Infinity;
+    let cost = 0;
+    let px = startX;
+    let py = startY;
+    path.forEach(point => {
+      cost += Math.hypot(point.x - px, point.y - py);
+      px = point.x;
+      py = point.y;
+    });
+    cost += Math.hypot(endX - px, endY - py);
+    return cost;
+  }
+
+  function isValidHomingEnemyTarget(enemy) {
+    return !!enemy && !enemy.dead && !enemy.hidden && Number(enemy.hp ?? 1) > 0;
+  }
+
+  function findProjectileHomingEnemyTarget(projectile, radius) {
+    const searchRadius = Math.max(0, Number(radius || 0));
+    let best = null;
+    let bestScore = Infinity;
+    let bestPath = null;
+    forEachEnemyNearCircle(projectile.x, projectile.y, searchRadius, enemy => {
+      if (!isValidHomingEnemyTarget(enemy)) return;
+      const dx = enemy.x - projectile.x;
+      const dy = enemy.y - projectile.y;
+      const distSq = dx * dx + dy * dy;
+      const dist = Math.sqrt(distSq);
+      let score;
+      let path = null;
+      if (projectileHasLineOfSight(projectile, enemy.x, enemy.y)) {
+        score = distSq;
+      } else {
+        path = buildProjectileHomingPath(projectile, enemy.x, enemy.y);
+        if (!path || path.length === 0) return;
+        const pathCost = getPathTravelCost(path, projectile.x, projectile.y, enemy.x, enemy.y);
+        score = pathCost * pathCost + 180000;
+      }
+      if (score < bestScore) {
+        best = enemy;
+        bestScore = score;
+        bestPath = path;
+      }
+    });
+    if (best && bestPath) {
+      projectile.homingPath = bestPath;
+      projectile.homingPathTimer = 0.16;
+    }
+    return best;
+  }
+
+  function getProjectileHomingTarget(projectile, dt) {
+    if (!projectile?.homing) return null;
+    if (projectile.enemy && Neo.player) return Neo.player;
+    if (projectile.homingTarget !== 'enemy') return null;
+    projectile.homingTargetTimer = Math.max(0, Number(projectile.homingTargetTimer || 0) - dt);
+    if (isValidHomingEnemyTarget(projectile.homingTargetRef) && projectile.homingTargetTimer > 0) {
+      const dx = projectile.homingTargetRef.x - projectile.x;
+      const dy = projectile.homingTargetRef.y - projectile.y;
+      if (dx * dx + dy * dy <= Number(projectile.homingRadius || 960) ** 2) return projectile.homingTargetRef;
+    }
+    projectile.homingTargetRef = findProjectileHomingEnemyTarget(projectile, Number(projectile.homingRadius || 960));
+    projectile.homingTargetTimer = 0.18;
+    return projectile.homingTargetRef;
+  }
+
+  function getProjectileHomingAimPoint(projectile, target, dt) {
+    if (!projectile || !target) return null;
+    if (projectileHasLineOfSight(projectile, target.x, target.y)) {
+      projectile.homingPath = null;
+      projectile.homingPathTimer = 0;
+      return target;
+    }
+    projectile.homingPathTimer = Math.max(0, Number(projectile.homingPathTimer || 0) - dt);
+    if (!Array.isArray(projectile.homingPath) || projectile.homingPath.length === 0 || projectile.homingPathTimer <= 0) {
+      projectile.homingPath = buildProjectileHomingPath(projectile, target.x, target.y);
+      projectile.homingPathTimer = 0.16;
+    }
+    if (!Array.isArray(projectile.homingPath) || projectile.homingPath.length === 0) return target;
+    while (projectile.homingPath.length > 1 && Neo.dist(projectile.x, projectile.y, projectile.homingPath[0].x, projectile.homingPath[0].y) < 22) {
+      projectile.homingPath.shift();
+    }
+    return projectile.homingPath[0] || target;
+  }
+
   function updateProjectiles(dt) {
     Neo.enemySpatialIndex = buildEnemySpatialIndex();
     Neo.enemySpatialIndexFrame = Neo.frameId;
@@ -926,11 +1131,10 @@
         const speed = Math.hypot(Number(projectile.vx || 0), Number(projectile.vy || 0)) || Number(projectile.homingSpeed || 180);
         const currentAngle = Math.atan2(Number(projectile.vy || 0), Number(projectile.vx || 1));
         let targetAngle = currentAngle;
-        if (projectile.enemy && Neo.player) {
-          targetAngle = Math.atan2(Neo.player.y - projectile.y, Neo.player.x - projectile.x);
-        } else if (projectile.homingTarget === 'enemy') {
-          const nearest = Neo.findNearestEnemy(projectile.x, projectile.y, Number(projectile.homingRadius || 960));
-          if (nearest) targetAngle = Math.atan2(nearest.y - projectile.y, nearest.x - projectile.x);
+        const target = getProjectileHomingTarget(projectile, dt);
+        if (target) {
+          const aimPoint = getProjectileHomingAimPoint(projectile, target, dt) || target;
+          targetAngle = Math.atan2(aimPoint.y - projectile.y, aimPoint.x - projectile.x);
         }
         const nextAngle = Neo.turnAngleToward(currentAngle, targetAngle, Number(projectile.homingTurnRate || 2) * dt);
         const nextSpeed = speed + (Number(projectile.homingSpeed || speed) - speed) * Number(projectile.homingAccel || 2.5) * dt;

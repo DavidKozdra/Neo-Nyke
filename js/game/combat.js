@@ -117,6 +117,20 @@
     });
   }
 
+  function fireConfiguredWeaponProjectile(weaponKey, angle, damage, knockback, overrides = {}) {
+    const config = Neo.buildWeaponProjectileConfig?.(weaponKey, { angle, damage, knockback, ...overrides });
+    if (!config) return false;
+    spawnWeaponProjectile(config);
+    if (config.recoil > 0) {
+      Neo.player.vx -= Math.cos(config.angle) * config.recoil;
+      Neo.player.vy -= Math.sin(config.angle) * config.recoil;
+    }
+    if (config.muzzleRing > 0) {
+      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.18, ring: config.muzzleRing, c: config.color });
+    }
+    return true;
+  }
+
   function fireWeaponSweep(damage, range, arc, push, color, options = {}) {
     const angle = Math.atan2(Neo.mouse.worldY - Neo.player.y, Neo.mouse.worldX - Neo.player.x);
     Neo.player.swing = Neo.ATTACKS.melee.active;
@@ -174,11 +188,6 @@
       Neo.player.weaponCooldown = wCd(weaponKey) / attackSpeed;
       return true;
     }
-    if (weaponKey === 'hunters_bow') {
-      spawnWeaponProjectile({ angle, speed: 820, damage: wDmg(weaponKey), knockback: wKnk(weaponKey), r: 4, life: 0.9, kind: 'hunters_bow', color: '#f0fbff', pierceCount: 1, hitOptions: { critBonus: 0.1 } });
-      Neo.player.weaponCooldown = wCd(weaponKey) / attackSpeed;
-      return true;
-    }
     if (weaponKey === 'thorns_bleed_blade') {
       fireWeaponSweep(wDmg(weaponKey), wRng(weaponKey), Neo.ATTACKS.melee.arc, wKnk(weaponKey), '#ff6e8b', { bleedChance: 0.10, bleedStacks: 1, bleedDuration: 5, itemBleedChance: itemStats.bleedChance || 0 });
       Neo.player.weaponCooldown = wCd(weaponKey) / attackSpeed;
@@ -200,18 +209,15 @@
       Neo.player.weaponCooldown = wCd(weaponKey) / attackSpeed;
       return true;
     }
-    if (weaponKey === 'magenta_degale') {
-      spawnWeaponProjectile({ angle, speed: 920, damage: wDmg(weaponKey), knockback: wKnk(weaponKey), r: 7, life: 0.9, kind: 'magenta_degale', color: '#ff8bd2' });
-      Neo.player.vx -= Math.cos(angle) * 280;
-      Neo.player.vy -= Math.sin(angle) * 280;
-      Neo.player.weaponCooldown = wCd(weaponKey) / attackSpeed;
-      return true;
-    }
     if (weaponKey === 'magenta_p90') {
-      for (let shot = 0; shot < 5; shot += 1) {
+      const attack = Neo.getWeaponProjectileAttack?.(weaponKey) || {};
+      const burstCount = Math.max(1, Math.floor(Number(attack.burstCount || 5)));
+      const burstDelay = Number(attack.burstDelay ?? 0.04);
+      const spread = Number(attack.spread ?? 0.05);
+      for (let shot = 0; shot < burstCount; shot += 1) {
         Neo.weaponBurstQueue.push({
-          delay: shot * 0.04,
-          angle: angle + Neo.rand(0.05, -0.05, 'encounter'),
+          delay: shot * burstDelay,
+          angle: angle + Neo.rand(spread, -spread, 'encounter'),
           weaponKey,
         });
       }
@@ -235,11 +241,6 @@
       Neo.player.weaponCooldown = wCd(weaponKey) / attackSpeed;
       return true;
     }
-    if (weaponKey === 'void_piercer') {
-      spawnWeaponProjectile({ angle, speed: 760, damage: wDmg(weaponKey), knockback: wKnk(weaponKey), r: 6, life: 1.2, kind: 'void_piercer', color: '#ffd2c0', pierceCount: 4, hitOptions: { ignoreBarrier: true, critBonus: 0.2 } });
-      Neo.player.weaponCooldown = wCd(weaponKey) / attackSpeed;
-      return true;
-    }
     if (weaponKey === 'aegis_shield_weapon') {
       Neo.player.blockActive = true;
       Neo.player.blockTimer = 2;
@@ -247,9 +248,8 @@
       Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.5, ring: 26, c: '#9ae9ff' });
       return true;
     }
-    if (weaponKey === 'princess_wand') {
-      spawnWeaponProjectile({ angle, speed: 680, damage: wDmg(weaponKey), knockback: wKnk(weaponKey), r: 5, life: 1.0, kind: 'princess_wand', color: '#ff9de8', pierceCount: 1 });
-      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.18, ring: 10, c: '#ff9de8' });
+    if (Neo.isProjectileWeaponKey?.(weaponKey)) {
+      fireConfiguredWeaponProjectile(weaponKey, angle, wDmg(weaponKey), wKnk(weaponKey));
       Neo.player.weaponCooldown = wCd(weaponKey) / attackSpeed;
       return true;
     }
@@ -400,9 +400,7 @@
       if (queued.weaponKey === 'magenta_p90') {
         const p90Dmg = Math.max(1, (Neo.WEAPON_BASE_STATS.magenta_p90?.damage ?? 18) + Neo.getAnvilWeaponBonus('magenta_p90', 'damage'));
         const p90Knk = Math.max(0, (Neo.WEAPON_BASE_STATS.magenta_p90?.knockback ?? 140) + Neo.getAnvilWeaponBonus('magenta_p90', 'knockback'));
-        spawnWeaponProjectile({ angle: queued.angle, speed: 900, damage: p90Dmg, knockback: p90Knk, r: 4, life: 0.8, kind: 'magenta_p90', color: '#ff9dd7' });
-        Neo.player.vx -= Math.cos(queued.angle) * 55;
-        Neo.player.vy -= Math.sin(queued.angle) * 55;
+        fireConfiguredWeaponProjectile('magenta_p90', queued.angle, p90Dmg, p90Knk);
       }
       Neo.weaponBurstQueue.splice(index, 1);
     }

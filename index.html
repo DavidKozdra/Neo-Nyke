@@ -16,7 +16,19 @@
   <meta property="og:url" content="https://neonyke.davidkozdra.workers.dev/">
   <meta property="og:title" content="NEO NYKE — Browser Dungeon Crawler">
   <meta property="og:description" content="Free browser roguelite. Fight through procedurally generated floors and compete on the weekly leaderboard.">
-  <meta property="og:image" content="https://neonyke.davidkozdra.workers.dev/assets/icons/icon-512x512.png">
+  <meta property="og:image" content="https://neonyke.davidkozdra.workers.dev/assets/icons/NeoNykeTitle.png?v=20260602a">
+  <meta property="og:image:secure_url" content="https://neonyke.davidkozdra.workers.dev/assets/icons/NeoNykeTitle.png?v=20260602a">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="2172">
+  <meta property="og:image:height" content="724">
+  <meta property="og:image:alt" content="NEO NYKE title artwork">
+
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="NEO NYKE — Browser Dungeon Crawler">
+  <meta name="twitter:description" content="Free browser roguelite. Fight through procedurally generated floors and compete on the weekly leaderboard.">
+  <meta name="twitter:image" content="https://neonyke.davidkozdra.workers.dev/assets/icons/NeoNykeTitle.png?v=20260602a">
+  <meta name="twitter:image:alt" content="NEO NYKE title artwork">
 
   <!-- Icons & PWA -->
   <link rel="icon" type="image/png" sizes="96x96" href="assets/icons/icon-96x96.png">
@@ -360,15 +372,16 @@
         <span class="panel-kicker">Bazaar</span>
         <h3>SHOP</h3>
         <p class="panel-subtitle">Weapons, relics, and quick repairs for the next room.</p>
+        <span id="shopMetaLabel" class="shop-meta-label">F1 Shop</span>
       </div>
       <div class="shop-coins">Coins <b id="shopCoins">0</b></div>
       <button id="shopClose" class="panel-close" aria-label="Close shop">X</button>
     </div>
     <div class="shop-tabs">
-      <button class="shop-tab active" data-tab="items">Items</button>
-      <button class="shop-tab" data-tab="weapons">Weapons</button>
-      <button class="shop-tab" data-tab="moves">Moves</button>
-      <button class="shop-tab" data-tab="heals">Heal Ups</button>
+      <button class="shop-tab active" data-tab="items"><span class="tab-icon" aria-hidden="true">[]</span><span>Items</span></button>
+      <button class="shop-tab" data-tab="weapons"><span class="tab-icon" aria-hidden="true">W</span><span>Weapons</span></button>
+      <button class="shop-tab" data-tab="moves"><span class="tab-icon" aria-hidden="true">M</span><span>Moves</span></button>
+      <button class="shop-tab" data-tab="heals"><span class="tab-icon" aria-hidden="true">+</span><span>Heal Ups</span></button>
     </div>
     <div id="shopItems" class="shop-list"></div>
     <div id="shopWeapons" class="shop-list hidden"></div>

@@ -1221,6 +1221,16 @@ export function getShopWeaponOffers() {
         bought: false,
         cost: Neo.getShopWeaponCost(Neo.WEAPON_DEFS[weaponKey]?.rarity || 'knight', index, Neo.floor, Neo.selectedDifficulty, weaponKey),
       }));
+      const projectilePool = Neo.getProjectileWeaponKeys?.(filtered) || [];
+      if (offers.length > 0 && projectilePool.length > 0 && !offers.some(offer => Neo.isProjectileWeaponKey?.(offer.key))) {
+        const projectileKey = Neo.shuffleWithRandom(projectilePool, shopRandom)[0];
+        offers[offers.length - 1] = {
+          type: 'weapon',
+          key: projectileKey,
+          bought: false,
+          cost: Neo.getShopWeaponCost(Neo.WEAPON_DEFS[projectileKey]?.rarity || 'knight', offers.length - 1, Neo.floor, Neo.selectedDifficulty, projectileKey),
+        };
+      }
       Neo.currentRoom.shopWeaponOffers = offers;
     }
     Neo.refreshRoomShopCosts(Neo.currentRoom);
@@ -1232,7 +1242,133 @@ export function getShopWeaponOffers() {
     const bought = !!offer?.bought;
     const disabled = bought || owned || blocked || !canAfford;
     const showUnaffordable = !canAfford && !owned && !bought;
-    return { canAfford, bought, disabled, showUnaffordable };
+    const status = bought || owned ? 'owned' : blocked ? 'locked' : showUnaffordable ? 'short' : 'available';
+    const statusLabel = bought || owned ? 'Owned' : blocked ? 'Locked' : showUnaffordable ? 'Need coins' : 'Ready';
+    return { canAfford, bought, disabled, showUnaffordable, status, statusLabel };
+  }
+
+  function escapeShopText(value) {
+    return Neo.escapeHtml ? Neo.escapeHtml(value) : String(value ?? '').replace(/[&<>"']/g, ch => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;',
+    })[ch]);
+  }
+
+  function formatShopStatValue(value, suffix = '') {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return '';
+    const formatted = Math.abs(numeric) >= 100 ? String(Math.round(numeric)) : String(Math.round(numeric * 10) / 10);
+    return `${formatted}${suffix}`;
+  }
+
+  function renderShopChips(chips = []) {
+    const seen = new Set();
+    return chips
+      .filter(Boolean)
+      .map(chip => {
+        const label = typeof chip === 'string' ? chip : chip.label;
+        if (!label) return '';
+        const labelKey = String(label).toLowerCase();
+        if (seen.has(labelKey)) return '';
+        seen.add(labelKey);
+        const toneKey = typeof chip === 'object' && chip.tone ? String(chip.tone).replace(/[^a-z0-9_-]/gi, '') : '';
+        const tone = toneKey ? ` shop-card__chip--${escapeShopText(toneKey)}` : '';
+        return `<span class="shop-card__chip${tone}">${escapeShopText(label)}</span>`;
+      })
+      .join('');
+  }
+
+  function renderShopStats(stats = []) {
+    const rows = stats
+      .filter(stat => stat && stat.label && stat.value !== undefined && stat.value !== null && stat.value !== '')
+      .slice(0, 3)
+      .map(stat => `<span class="shop-card__stat"><span>${escapeShopText(stat.label)}</span><b>${escapeShopText(stat.value)}</b></span>`)
+      .join('');
+    return rows ? `<div class="shop-card__stats">${rows}</div>` : '';
+  }
+
+  function buildWeaponShopChips(weaponKey, weapon) {
+    const chips = [{ label: weapon?.rarity || 'weapon', tone: 'rarity' }];
+    const projectileConfig = Neo.buildWeaponProjectileConfig?.(weaponKey);
+    if (projectileConfig) {
+      chips.push({ label: 'Projectile', tone: 'projectile' });
+      if (projectileConfig.burstCount > 1) chips.push({ label: 'Burst', tone: 'projectile' });
+      if (projectileConfig.pierceCount > 0) chips.push({ label: 'Pierce', tone: 'projectile' });
+    } else if (weaponKey === 'lazer_glasses') {
+      chips.push({ label: 'Beam', tone: 'magic' });
+    } else if (weaponKey === 'aegis_shield_weapon') {
+      chips.push({ label: 'Defense', tone: 'defense' });
+    } else {
+      chips.push({ label: 'Melee', tone: 'melee' });
+    }
+    return chips;
+  }
+
+  function buildWeaponShopStats(weaponKey) {
+    const base = Neo.WEAPON_BASE_STATS?.[weaponKey] || {};
+    const projectileConfig = Neo.buildWeaponProjectileConfig?.(weaponKey);
+    const range = Number(base.range ?? (projectileConfig ? projectileConfig.speed * projectileConfig.life : 0));
+    return [
+      base.damage ? { label: 'DMG', value: formatShopStatValue(base.damage) } : null,
+      base.cooldown ? { label: 'CD', value: Number(base.cooldown).toFixed(2) + 's' } : null,
+      range ? { label: 'RNG', value: formatShopStatValue(range) } : null,
+    ];
+  }
+
+  function buildMoveShopStats(moveKey) {
+    const base = Neo.MOVE_BASE_STATS?.[moveKey] || {};
+    return [
+      base.damage ? { label: 'DMG', value: formatShopStatValue(base.damage) } : null,
+      base.cooldown ? { label: 'CD', value: Number(base.cooldown).toFixed(2) + 's' } : null,
+      base.duration
+        ? { label: 'DUR', value: formatShopStatValue(base.duration, 's') }
+        : base.range
+          ? { label: 'AOE', value: formatShopStatValue(base.range) }
+          : null,
+    ];
+  }
+
+  function buildDescriptorChips(key, description, { slot = '', kind = '' } = {}) {
+    const chips = [];
+    const text = `${String(key || '')} ${String(description || '')}`.toLowerCase();
+    if (text.includes('projectile')) chips.push({ label: 'Projectile', tone: 'projectile' });
+    if (text.includes('homing')) chips.push({ label: 'Homing', tone: 'projectile' });
+    if (text.includes('burst')) chips.push({ label: 'Burst', tone: 'projectile' });
+    if (text.includes('defense') || text.includes('shield') || text.includes('block') || text.includes('armor')) chips.push({ label: 'Defense', tone: 'defense' });
+    if (text.includes('heal') || text.includes('regen') || text.includes('recovery')) chips.push({ label: 'Heal', tone: 'heal' });
+    if (text.includes('magnet')) chips.push({ label: 'Magnet', tone: 'item' });
+    if (slot) chips.push({ label: `Slot: ${Neo.SLOT_LABELS?.[slot] || slot}`, tone: 'move' });
+    if (kind === 'weapon' && Neo.isProjectileWeaponKey?.(key)) chips.push({ label: 'Projectile', tone: 'projectile' });
+    return chips;
+  }
+
+  function isOfferRecommended(kind, key, chips = []) {
+    if (!Neo.player) return false;
+    const itemStats = Neo.getItemStats?.() || {};
+    const projectileBuild = !!Neo.isProjectileWeaponKey?.(Neo.player.equippedWeapon)
+      || Number(itemStats.projectileHomingStrength || 0) > 0
+      || Number(itemStats.projectileCountBonus || 0) > 0;
+    const labels = chips.map(chip => String(chip?.label || '').toLowerCase());
+    if (projectileBuild && kind === 'weapon' && Neo.isProjectileWeaponKey?.(key)) return true;
+    if (projectileBuild && labels.some(label => label.includes('magnet') || label.includes('homing') || label.includes('projectile'))) return true;
+    if (kind === 'move') {
+      const slot = Neo.MOVE_DEFS?.[key]?.slot;
+      if (slot && !Neo.player.equippedMoves?.[slot]) return true;
+    }
+    return false;
+  }
+
+  function renderMoveReplaceRail(slotLabel, currentMoveName, nextMoveName) {
+    const prev = currentMoveName || 'Empty';
+    return `<div class="shop-card__swap-rail">
+      <span class="shop-card__swap-slot">${escapeShopText(slotLabel)}</span>
+      <span class="shop-card__swap-old">${escapeShopText(prev)}</span>
+      <span class="shop-card__swap-arrow">-&gt;</span>
+      <span class="shop-card__swap-new">${escapeShopText(nextMoveName || 'New Move')}</span>
+    </div>`;
   }
 
   function renderShopCard({
@@ -1244,26 +1380,52 @@ export function getShopWeaponOffers() {
     cost,
     description,
     footerExtra = '',
+    chips = [],
+    stats = [],
+    accentColor = '',
+    iconSize = 44,
+    recommended = false,
+    soldStateText = 'SOLD',
     kind,
     index,
     state,
     buttonText,
     buttonExtraAttrs = '',
   }) {
-    return `<div class="shop-card${state.showUnaffordable ? ' shop-card--unaffordable' : ''}">
-      <span class="shop-card__eyebrow">${rarityLabel}</span>
-      <div class="shop-card__title-row">
-        <canvas class="shop-card__icon" ${iconAttr}="${iconKey}" width="30" height="30"></canvas>
-        <h4${titleColor ? ` style="color:${titleColor}"` : ''}>${title}</h4>
-        <span class="shop-card__price">${cost}</span>
+    const safeKind = escapeShopText(kind || 'offer');
+    const safeIconAttr = escapeShopText(iconAttr);
+    const indexAttr = Number.isInteger(index) ? ` data-index="${index}"` : '';
+    const styleAttr = accentColor ? ` style="--shop-card-accent:${escapeShopText(accentColor)}"` : '';
+    const titleStyle = titleColor ? ` style="color:${escapeShopText(titleColor)}"` : '';
+    const status = state.status || 'available';
+    const statusLabel = state.statusLabel || '';
+    const chipHtml = renderShopChips(chips.length ? chips : [rarityLabel]);
+    const statsHtml = renderShopStats(stats);
+    return `<div class="shop-card shop-card--${safeKind} shop-card--status-${escapeShopText(status)}${state.showUnaffordable ? ' shop-card--unaffordable' : ''}${state.canAfford && !state.disabled ? ' shop-card--affordable' : ''}${recommended ? ' shop-card--recommended' : ''}${state.bought ? ' shop-card--just-bought' : ''}"${styleAttr}>
+      <div class="shop-card__top">
+        <span class="shop-card__icon-frame">
+          <canvas class="shop-card__icon" ${safeIconAttr}="${escapeShopText(iconKey)}" width="${iconSize}" height="${iconSize}"></canvas>
+        </span>
+        <div class="shop-card__heading">
+          <span class="shop-card__eyebrow">${escapeShopText(rarityLabel)}</span>
+          <h4${titleStyle}>${escapeShopText(title)}</h4>
+        </div>
+        <span class="shop-card__price">${escapeShopText(cost)}</span>
+      </div>
+      <div class="shop-card__meta">
+        ${chipHtml}
+        ${recommended ? '<span class="shop-card__recommended-badge">Recommended</span>' : ''}
+        ${statusLabel ? `<span class="shop-card__status shop-card__status--${escapeShopText(status)}">${escapeShopText(statusLabel)}</span>` : ''}
       </div>
       <div class="shop-card__copy">
-        <p>${description}</p>
+        <p>${escapeShopText(description)}</p>
       </div>
+      ${statsHtml}
       ${footerExtra}
       <div class="shop-card__footer">
-        <button class="shop-buy${state.showUnaffordable ? ' shop-buy--unaffordable' : ''}" data-kind="${kind}" data-index="${index}" ${buttonExtraAttrs} ${state.disabled ? 'disabled' : ''}>${buttonText}</button>
+        <button class="shop-buy${state.showUnaffordable ? ' shop-buy--unaffordable' : ''}" data-kind="${safeKind}"${indexAttr} ${buttonExtraAttrs} ${state.disabled ? 'disabled' : ''}>${escapeShopText(buttonText)}</button>
       </div>
+      ${(state.bought || status === 'owned') ? `<span class="shop-card__stamp">${escapeShopText(soldStateText)}</span>` : ''}
     </div>`;
   }
 
@@ -1279,6 +1441,11 @@ export function renderShopPanel() {
     Neo.refreshRoomShopCosts(Neo.currentRoom);
     Neo.shopOffers = Neo.currentRoom?.shopOffers || Neo.shopOffers;
     Neo.ui.shopCoins.textContent = String(Neo.player.coins);
+    const shopMetaLabel = document.getElementById('shopMetaLabel');
+    if (shopMetaLabel) {
+      const roomType = String(Neo.currentRoom?.type || 'shop').replace(/_/g, ' ');
+      shopMetaLabel.textContent = `F${Neo.floor} • ${Neo.titleCase?.(roomType) || roomType}`;
+    }
     const noItemsChallenge = Neo.isChallengeActive('no_items');
     Neo.ui.shopTabs.forEach(tab => {
       const isActive = tab.dataset.tab === Neo.activeShopTab;
@@ -1290,26 +1457,37 @@ export function renderShopPanel() {
     Neo.ui.shopHeals.classList.toggle('hidden', Neo.activeShopTab !== 'heals');
 
     const itemCards = Neo.shopOffers
-      .filter(offer => !offer.bought && offer.type === 'item')
+      .filter(offer => offer.type === 'item')
       .map((offer, index) => {
         const item = Neo.itemRegistry.get(offer.key) || Neo.ITEM_DEFS[offer.key];
         const state = getShopPurchaseState(offer, { blocked: noItemsChallenge });
         const description = noItemsChallenge
           ? 'No Items challenge is active. Relic buys are disabled for this run.'
           : item?.description || 'No details available.';
-        const buttonText = noItemsChallenge ? 'Relics Locked' : !state.canAfford ? 'Too Expensive' : 'Buy Relic';
+        const descriptorChips = buildDescriptorChips(offer.key, description, { kind: 'item' });
+        const chips = [
+          { label: 'Relic', tone: 'rarity' },
+          item?.rarity ? { label: item.rarity, tone: 'rarity' } : null,
+          item?.category ? { label: item.category, tone: 'item' } : null,
+          ...descriptorChips,
+        ].filter(Boolean).slice(0, 5);
+        const buttonText = noItemsChallenge ? 'Relics Locked' : state.bought ? 'Sold' : !state.canAfford ? 'Too Expensive' : 'Buy Relic';
         return renderShopCard({
           rarityLabel: 'Relic',
           iconAttr: 'data-item-icon',
           iconKey: offer.key,
           title: item?.name || 'Item',
           titleColor: Neo.getRarityNameColor(item?.rarity || item?.category),
+          accentColor: Neo.getRarityNameColor(item?.rarity || item?.category),
           cost: offer.cost,
           description,
+          chips,
+          recommended: isOfferRecommended('item', offer.key, chips),
           kind: 'item',
           index,
           state,
           buttonText,
+          soldStateText: 'OWNED',
         });
       })
       .join('');
@@ -1322,6 +1500,11 @@ export function renderShopPanel() {
         const weapon = Neo.WEAPON_DEFS[offer.key];
         const owned = !!Neo.player.ownedWeapons?.[offer.key];
         const state = getShopPurchaseState(offer, { owned });
+        const description = weapon?.description || 'No weapon description available.';
+        const chips = [
+          ...buildWeaponShopChips(offer.key, weapon),
+          ...buildDescriptorChips(offer.key, description, { kind: 'weapon' }),
+        ].slice(0, 5);
         const buttonText = state.bought || owned ? 'Owned' : !state.canAfford ? 'Too Expensive' : 'Buy Weapon';
         return renderShopCard({
           rarityLabel: weapon?.rarity || 'weapon',
@@ -1329,12 +1512,17 @@ export function renderShopPanel() {
           iconKey: offer.key,
           title: weapon?.name || offer.key,
           titleColor: Neo.getRarityNameColor(weapon?.rarity),
+          accentColor: Neo.getRarityNameColor(weapon?.rarity),
           cost: offer.cost,
-          description: weapon?.description || 'No weapon description available.',
+          description,
+          chips,
+          stats: buildWeaponShopStats(offer.key),
+          recommended: isOfferRecommended('weapon', offer.key, chips),
           kind: 'weapon',
           index,
           state,
           buttonText,
+          soldStateText: 'OWNED',
         });
       })
       .join('');
@@ -1352,9 +1540,8 @@ export function renderShopPanel() {
         const slotLabel = Neo.SLOT_LABELS[def?.slot] || def?.slot || 'move';
         const currentMoveKey = Neo.player.equippedMoves?.[def?.slot];
         const currentMoveName = currentMoveKey ? (Neo.MOVE_DEFS[currentMoveKey]?.name || currentMoveKey) : null;
-        const replacesLine = currentMoveName
-          ? `<p class="shop-card__replaces">Replaces: <b>${currentMoveName}</b></p>`
-          : `<p class="shop-card__replaces">Goes into: <b>${slotLabel} slot</b> (nothing equipped)</p>`;
+        const replacesLine = renderMoveReplaceRail(slotLabel, currentMoveName, def?.name || offer.key);
+        const descriptorChips = buildDescriptorChips(offer.key, def?.desc || '', { slot: def?.slot, kind: 'move' });
         const buttonText = state.bought || owned ? 'Owned' : !state.canAfford ? 'Too Expensive' : 'Buy Move';
         return renderShopCard({
           rarityLabel: slotLabel,
@@ -1364,10 +1551,18 @@ export function renderShopPanel() {
           cost: offer.cost,
           description: def?.desc || 'No move description available.',
           footerExtra: replacesLine,
+          chips: [
+            { label: slotLabel, tone: 'move' },
+            def?.exclusiveCharacter ? { label: def.exclusiveCharacter, tone: 'exclusive' } : null,
+            ...descriptorChips,
+          ].filter(Boolean).slice(0, 5),
+          stats: buildMoveShopStats(offer.key),
+          recommended: isOfferRecommended('move', offer.key, descriptorChips),
           kind: 'move',
           index,
           state,
           buttonText,
+          soldStateText: 'OWNED',
         });
       })
       .join('');
@@ -1393,20 +1588,30 @@ export function renderShopPanel() {
             ? `Store one potion in Mateo's Bag (${storedPotions}/${potionCap}).`
             : 'Already at full health.';
         const buttonText = !canAfford ? 'Too Expensive' : canHealNow ? 'Buy Heal' : canStorePotion ? 'Store Potion' : 'Full Health';
-        return `<div class="shop-card${disabled ? ' shop-card--unaffordable' : ''}">
-        <span class="shop-card__eyebrow">Recovery</span>
-        <div class="shop-card__title-row">
-          <canvas class="shop-card__icon" data-heal-icon="${heal.id}" width="30" height="30"></canvas>
-          <h4>${heal.name}</h4>
-          <span class="shop-card__price">${heal.cost}</span>
-        </div>
-        <div class="shop-card__copy">
-          <p>${copy}</p>
-        </div>
-        <div class="shop-card__footer">
-          <button class="shop-buy${disabled ? ' shop-buy--unaffordable' : ''}" data-kind="heal" data-heal="${heal.heal}" data-cost="${heal.cost}" ${disabled ? 'disabled' : ''}>${buttonText}</button>
-        </div>
-      </div>`;
+        const state = {
+          canAfford,
+          disabled,
+          showUnaffordable: !canAfford,
+          status: !canAfford ? 'short' : disabled ? 'locked' : 'available',
+          statusLabel: !canAfford ? 'Need coins' : disabled ? 'Full' : 'Ready',
+        };
+        return renderShopCard({
+          rarityLabel: 'Recovery',
+          iconAttr: 'data-heal-icon',
+          iconKey: heal.id,
+          title: heal.name,
+          cost: heal.cost,
+          description: copy,
+          chips: [
+            { label: 'Recovery', tone: 'heal' },
+            canStorePotion ? { label: 'Store', tone: 'heal' } : null,
+          ],
+          stats: [{ label: 'HP', value: `+${heal.heal}` }],
+          kind: 'heal',
+          state,
+          buttonText,
+          buttonExtraAttrs: `data-heal="${heal.heal}" data-cost="${heal.cost}"`,
+        });
       })
       .join('');
     Neo.ui.shopHeals.innerHTML = healCards;
@@ -1687,6 +1892,27 @@ export function spendCoins(cost) {
     return true;
   }
 
+  function playShopPurchaseFeedback(button, cost) {
+    const card = button?.closest('.shop-card');
+    if (card) {
+      card.classList.add('shop-card--flash-buy');
+      const burst = document.createElement('div');
+      burst.className = 'shop-card__coin-burst';
+      for (let index = 0; index < 6; index += 1) {
+        const node = document.createElement('span');
+        node.style.setProperty('--burst-index', String(index));
+        burst.appendChild(node);
+      }
+      card.appendChild(burst);
+      window.setTimeout(() => burst.remove(), 550);
+      window.setTimeout(() => card.classList.remove('shop-card--flash-buy'), 460);
+    }
+    Neo.playSfx?.('item_collect');
+    if (Neo.player && Number.isFinite(Number(cost))) {
+      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 24, life: 0.72, text: `-${Math.round(Number(cost))} COINS`, c: '#ffd987' });
+    }
+  }
+
 export function handleShopBuyClick(event) {
     const target = event.target instanceof Element ? event.target : null;
     const button = target?.closest('.shop-buy');
@@ -1698,12 +1924,13 @@ export function handleShopBuyClick(event) {
         return;
       }
       const offerIndex = Number(button.dataset.index || -1);
-      const itemOffers = Neo.shopOffers.filter(offer => !offer.bought && offer.type === 'item');
+      const itemOffers = Neo.shopOffers.filter(offer => offer.type === 'item');
       const offer = itemOffers[offerIndex];
       if (!offer || offer.bought) return;
       if (!spendCoins(offer.cost)) return;
       offer.bought = true;
       Neo.collectItem(offer.key);
+      playShopPurchaseFeedback(button, offer.cost);
       window.achievementEvents?.emit('shop:bought');
     } else if (kind === 'move') {
       const offerIndex = Number(button.dataset.index || -1);
@@ -1713,6 +1940,7 @@ export function handleShopBuyClick(event) {
       if (!spendCoins(offer.cost)) return;
       offer.bought = true;
       Neo.player.ownedMoves[offer.key] = true;
+      playShopPurchaseFeedback(button, offer.cost);
       markInventoryPanelDirty();
       Neo.pushMoveNotification(offer.key, 1);
       window.achievementEvents?.emit('shop:bought');
@@ -1724,6 +1952,7 @@ export function handleShopBuyClick(event) {
       if (!spendCoins(offer.cost)) return;
       offer.bought = true;
       Neo.player.ownedWeapons[offer.key] = true;
+      playShopPurchaseFeedback(button, offer.cost);
       if (!Neo.player.equippedWeapon) equipWeapon(offer.key);
       Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 24, life: 0.8, text: `${Neo.WEAPON_DEFS[offer.key]?.name || 'Weapon'} acquired`, c: Neo.WEAPON_DEFS[offer.key]?.color || '#d9e8ff' });
       Neo.pushWeaponNotification(offer.key);
@@ -1742,6 +1971,7 @@ export function handleShopBuyClick(event) {
         return;
       }
       if (!spendCoins(cost)) return;
+      playShopPurchaseFeedback(button, cost);
       if (canHealNow) {
         const before = Neo.player.hp;
         Neo.player.hp = Math.min(Neo.player.maxHp, Neo.player.hp + heal);

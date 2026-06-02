@@ -5,6 +5,7 @@
 import './core/game-core.js';
 import './core/math-utils.js';
 import './core/sfx.js';
+import './core/music.js';
 import './ui/input.js';
 import './core/status.js';
 import './ui/notifications.js';
@@ -13,6 +14,7 @@ import './core/game-state.js';
 import './game/rooms.js';
 import './game/enemies.js';
 import './game/player.js';
+import './game/projectile-types.js';
 import './game/combat.js';
 import './core/update.js';
 import './game/world.js';

@@ -130,19 +130,20 @@
           setObjective('Trial cleared. Claim the reward or move on.');
         } else if (!Neo.currentRoom.challengeStarted) {
           if (type === 'mirror') setObjective('Touch the sword to face your mirror.');
-          else if (type === 'stillness') setObjective('Begin the prize trial: choose one reward, then fight for it.');
-          else if (type === 'bomb') setObjective('Begin the bomb trial.');
-          else if (type === 'survival') setObjective('Begin the survival trial.');
+          else if (type === 'stillness') setObjective('Begin the prize trial: choose one reward to clear it.');
+          else if (type === 'bomb') setObjective('Begin the bomb trial before detonation.');
+          else if (type === 'survival') setObjective('Begin the survival trial: protect the central obelisk.');
           else if (type === 'runes') setObjective('Begin the rune hunt.');
           else if (type === 'storm') setObjective('Begin the storm trial.');
         } else {
           if (type === 'mirror') setObjective('Defeat your mirror champion.');
           else if (type === 'stillness') {
             const phase = Neo.currentRoom.challengeData?.phase || 'choose';
-            setObjective(phase === 'fight' ? 'Defeat the trial enemies to claim your chosen prize.' : 'Pick one prize, then fight for it.');
+            const timer = Math.ceil(Neo.currentRoom.challengeTimer || 0);
+            setObjective(phase === 'channel' ? `Hold the center until the prize stabilizes (${timer}s).` : 'Pick one prize, then hold the center to secure it.');
           }
-          else if (type === 'bomb') setObjective('Disarm the blue bomb. Red bombs explode.');
-          else if (type === 'survival') setObjective(`Survive for ${Math.ceil(Neo.currentRoom.challengeTimer || 0)}s.`);
+          else if (type === 'bomb') setObjective(`Disarm the blue bomb before detonation (${Math.ceil(Neo.currentRoom.challengeTimer || 0)}s).`);
+          else if (type === 'survival') setObjective(`Protect the central obelisk and survive for ${Math.ceil(Neo.currentRoom.challengeTimer || 0)}s.`);
           else if (type === 'runes') setObjective(`Collect the remaining runes: ${Math.max(0, Number(Neo.currentRoom.challengeData?.runesLeft || 0))}.`);
           else if (type === 'storm') setObjective(`Live through the storm for ${Math.ceil(Neo.currentRoom.challengeTimer || 0)}s.`);
         }

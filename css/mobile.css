@@ -374,6 +374,62 @@
   .game-panel-head { flex-direction: column; gap: 8px; }
   .shop-tabs { flex-direction: column; gap: 4px; }
   .shop-list { grid-template-columns: 1fr; }
+  .shop-card {
+    min-height: auto;
+    gap: 9px;
+    grid-template-rows: auto auto auto auto auto;
+  }
+  .shop-card__top {
+    grid-template-columns: 46px minmax(0, 1fr) auto;
+    gap: 8px;
+  }
+  .shop-card__icon-frame {
+    width: 46px;
+    height: 46px;
+    border-radius: 8px;
+  }
+  .shop-card__icon {
+    width: 38px !important;
+    height: 38px !important;
+  }
+  .shop-card__heading h4 {
+    font-size: 13px;
+    line-height: 1.2;
+  }
+  .shop-card__price {
+    padding: 5px 8px;
+    font-size: 10px;
+  }
+  .shop-card__copy {
+    min-height: 0;
+  }
+  .shop-card__swap-rail {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+  .shop-card__swap-slot {
+    grid-column: 1;
+  }
+  .shop-card__swap-old {
+    grid-column: 2;
+  }
+  .shop-card__swap-arrow {
+    grid-column: 3;
+  }
+  .shop-card__swap-new {
+    grid-column: 1 / -1;
+  }
+  .shop-card__stamp {
+    right: 10px;
+    bottom: 54px;
+    font-size: 10px;
+  }
+  .shop-card__stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .shop-card__stat {
+    min-height: 34px;
+    padding: 5px 6px;
+  }
   .inv-layout { grid-template-columns: 1fr; }
 
   #invPanel .game-panel-head {
@@ -1577,12 +1633,14 @@
     height: 100dvh;
     max-height: none;
     margin: 0;
+    display: grid;
+    place-items: center;
     border-radius: 0;
   }
 
-  canvas {
-    width: 100dvw;
-    height: 100dvh;
+  #c {
+    width: min(100dvw, calc(100dvh * 1.5));
+    height: min(100dvh, calc(100dvw / 1.5));
   }
 
   .center-display {
@@ -1859,7 +1917,7 @@
     width: calc(100vw - 16px);
     min-height: 0;
     /* Keep clear of the on-screen controls / action bar at the bottom. */
-    margin-bottom: 110px;
+    margin-bottom: calc(188px + env(safe-area-inset-bottom, 0px));
     padding: 10px 12px;
     border-radius: 8px;
   }
@@ -2147,6 +2205,50 @@
     border-radius: 9px;
   }
 
+  .shop-card {
+    min-height: auto;
+    gap: 9px;
+  }
+
+  .shop-card__top {
+    grid-template-columns: 46px minmax(0, 1fr) auto;
+    gap: 8px;
+  }
+
+  .shop-card__icon-frame {
+    width: 46px;
+    height: 46px;
+    border-radius: 8px;
+  }
+
+  .shop-card__icon {
+    width: 38px !important;
+    height: 38px !important;
+  }
+
+  .shop-card__heading h4 {
+    font-size: 13px;
+    line-height: 1.2;
+  }
+
+  .shop-card__copy {
+    min-height: 0;
+  }
+
+  .shop-card__swap-rail {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .shop-card__swap-new {
+    grid-column: 1 / -1;
+  }
+
+  .shop-card__stamp {
+    right: 10px;
+    bottom: 54px;
+    font-size: 10px;
+  }
+
   #dead.overlay {
     padding: calc(8px + env(safe-area-inset-top, 0px)) 8px calc(14px + env(safe-area-inset-bottom, 0px));
   }
@@ -2273,8 +2375,9 @@
   }
 
   .tutorial-box {
-    /* Tight vertical space in short landscape — keep a smaller gap above the controls. */
-    margin-bottom: 78px;
+    /* Keep the prompt in the center lane between the side touch controls. */
+    width: min(520px, max(300px, calc(100vw - 360px)));
+    margin-bottom: calc(78px + env(safe-area-inset-bottom, 0px));
   }
 
   .dialogue-box {

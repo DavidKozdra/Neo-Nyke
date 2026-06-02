@@ -368,7 +368,7 @@ html.princess-ui .inv-slot {
 }
 
 html.princess-ui .shop-card::after {
-  background: radial-gradient(circle, rgba(255, 120, 200, .12), transparent 68%);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--shop-card-accent) 10%, transparent), transparent 42%);
 }
 
 html.princess-ui .shop-card p,
@@ -390,6 +390,12 @@ html.princess-ui .shop-card__price {
 html.princess-ui .shop-card__price::before {
   background: rgba(255, 180, 220, .16);
   color: #ffe3f2;
+}
+
+html.princess-ui .shop-card__chip,
+html.princess-ui .shop-card__stat,
+html.princess-ui .shop-card__status {
+  border-color: rgba(255, 154, 207, .18);
 }
 
 html.princess-ui .shop-card__replaces   { color: #ff9acf; }

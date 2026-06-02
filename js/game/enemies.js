@@ -264,6 +264,55 @@
     return 'TRIAL';
   }
 
+  const CHALLENGE_CLEAR_RATE_TARGETS = {
+    bomb: { min: 0.55, max: 0.65 },
+    survival: { min: 0.6, max: 0.7 },
+    runes: { min: 0.5, max: 0.6 },
+    storm: { min: 0.45, max: 0.55 },
+    mirror: { min: 0.5, max: 0.6 },
+    stillness: { min: 0.4, max: 0.55 },
+  };
+
+  function getChallengeTrialTuning(type) {
+    const floor = Math.max(1, Number(Neo.floor || 1));
+    if (type === 'bomb') {
+      return {
+        timer: Neo.scaleChallengeTimer(17),
+        tick: Math.max(1.2, 2.4 - floor * 0.1),
+        spawnCount: floor >= 7 ? 2 : 1,
+      };
+    }
+    if (type === 'survival') {
+      return {
+        timer: Neo.scaleChallengeTimer(24),
+        tickStart: 2.2,
+        tickEnd: 1.35,
+        spawnCount: floor >= 6 ? 2 : 1,
+      };
+    }
+    if (type === 'runes') {
+      return {
+        timer: Neo.scaleChallengeTimer(26),
+        tick: Math.max(1.6, 2.9 - floor * 0.08),
+        spawnCount: floor >= 7 ? 2 : 1,
+      };
+    }
+    if (type === 'storm') {
+      return {
+        timer: Neo.scaleChallengeTimer(17),
+        tick: Math.max(0.68, 1.05 - floor * 0.02),
+        burstCount: floor >= 7 ? 4 : floor >= 4 ? 3 : 2,
+      };
+    }
+    if (type === 'stillness') {
+      return {
+        timer: Neo.scaleChallengeTimer(7),
+        tick: 0.95,
+      };
+    }
+    return {};
+  }
+
   function buildWavePlan(count, roomType = 'combat') {
     if (Neo.floor < 4) {
       return Array.from({ length: count }, () => rollEnemyType());
@@ -1239,14 +1288,19 @@
     if (!key) return false;
     room.challengeData = {
       ...(room.challengeData || {}),
-      phase: 'fight',
+      phase: 'channel',
       rewardKey: key,
+      targetClearRate: CHALLENGE_CLEAR_RATE_TARGETS.stillness,
     };
+    const tuning = getChallengeTrialTuning('stillness');
+    room.challengeTimer = Number(tuning.timer || 0);
+    room.challengeTick = Number(tuning.tick || 0.95);
+    room.challengeData.maxTimer = room.challengeTimer;
+    room.challengeData.channelRadius = 88;
     Neo.pickups = Neo.pickups.filter(item => item?.type !== 'challengeItemChoice');
-    spawnTrialEnemyWave(3 + Math.min(3, Math.floor(Neo.floor / 3)));
     const itemName = Neo.itemRegistry.get(key)?.name || Neo.titleCase?.(key) || key;
-    Neo.spawnParticle({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 48, life: 1.1, text: 'FIGHT FOR IT', c: '#d7f6ff' });
-    sayAtPosition(Neo.ROOM_W / 2, Neo.ROOM_H / 2, `Win and claim ${itemName}.`, { speaker: 'TRIAL', tone: 'warning' });
+    Neo.spawnParticle({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 48, life: 1.1, text: 'HOLD THE CIRCLE', c: '#d7f6ff' });
+    sayAtPosition(Neo.ROOM_W / 2, Neo.ROOM_H / 2, `Hold center to secure ${itemName}.`, { speaker: 'TRIAL', tone: 'warning' });
     return true;
   }
 
@@ -1276,23 +1330,43 @@
       spawnMirrorChampion();
     } else if (type === 'stillness') {
       spawnStillnessItemChoices(room);
-      sayAtPosition(Neo.ROOM_W / 2, Neo.ROOM_H / 2, 'Choose your prize. Then earn it.', { speaker: 'TRIAL', tone: 'warning' });
+      sayAtPosition(Neo.ROOM_W / 2, Neo.ROOM_H / 2, 'Choose one prize to clear the trial.', { speaker: 'TRIAL', tone: 'warning' });
     } else if (type === 'bomb') {
+      const tuning = getChallengeTrialTuning('bomb');
+      room.challengeTimer = Number(tuning.timer || 0);
+      room.challengeTick = Number(tuning.tick || 1.8);
+      room.challengeData.maxTimer = room.challengeTimer;
+      room.challengeData.spawnCount = Number(tuning.spawnCount || 1);
+      room.challengeData.targetClearRate = CHALLENGE_CLEAR_RATE_TARGETS.bomb;
       spawnChallengeBombs(room);
       sayAtPosition(Neo.ROOM_W / 2, Neo.ROOM_H / 2, 'Disarm the blue bomb. Red bombs explode.', { speaker: 'TRIAL', tone: 'warning' });
     } else if (type === 'survival') {
-      room.challengeTimer = Neo.scaleChallengeTimer(20);
-      room.challengeTick = 0.9;
-      spawnTrialEnemyWave(2);
-      sayAtPosition(Neo.ROOM_W / 2, Neo.ROOM_H / 2, 'Live through it.', { speaker: 'TRIAL', tone: 'warning' });
-    } else if (type === 'runes') {
-      spawnChallengeRunes(room);
-      room.challengeTimer = Neo.scaleChallengeTimer(30);
+      const tuning = getChallengeTrialTuning('survival');
+      room.challengeTimer = Number(tuning.timer || Neo.scaleChallengeTimer(20));
+      room.challengeTick = Number(tuning.tickStart || 2);
       room.challengeData.maxTimer = room.challengeTimer;
+      room.challengeData.spawnCount = Number(tuning.spawnCount || 1);
+      room.challengeData.tickStart = Number(tuning.tickStart || 2);
+      room.challengeData.tickEnd = Number(tuning.tickEnd || 1.35);
+      room.challengeData.targetClearRate = CHALLENGE_CLEAR_RATE_TARGETS.survival;
+      spawnTrialEnemyWave(2);
+      sayAtPosition(Neo.ROOM_W / 2, Neo.ROOM_H / 2, 'Protect the central obelisk and survive.', { speaker: 'TRIAL', tone: 'warning' });
+    } else if (type === 'runes') {
+      const tuning = getChallengeTrialTuning('runes');
+      spawnChallengeRunes(room);
+      room.challengeTimer = Number(tuning.timer || Neo.scaleChallengeTimer(30));
+      room.challengeTick = Number(tuning.tick || 2.7);
+      room.challengeData.maxTimer = room.challengeTimer;
+      room.challengeData.spawnCount = Number(tuning.spawnCount || 1);
+      room.challengeData.targetClearRate = CHALLENGE_CLEAR_RATE_TARGETS.runes;
       sayAtPosition(Neo.ROOM_W / 2, Neo.ROOM_H / 2, 'Claim every rune.', { speaker: 'TRIAL', tone: 'warning' });
     } else if (type === 'storm') {
-      room.challengeTimer = Neo.scaleChallengeTimer(18);
-      room.challengeTick = 0.35;
+      const tuning = getChallengeTrialTuning('storm');
+      room.challengeTimer = Number(tuning.timer || Neo.scaleChallengeTimer(18));
+      room.challengeTick = Number(tuning.tick || 0.85);
+      room.challengeData.maxTimer = room.challengeTimer;
+      room.challengeData.burstCount = Number(tuning.burstCount || 3);
+      room.challengeData.targetClearRate = CHALLENGE_CLEAR_RATE_TARGETS.storm;
       sayAtPosition(Neo.ROOM_W / 2, Neo.ROOM_H / 2, 'Do not stop moving.', { speaker: 'TRIAL', tone: 'warning' });
     }
     Neo.spawnParticle({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 46, life: 0.95, text: getChallengeTrialLabel(type), c: '#d7f6ff' });
@@ -3001,19 +3075,66 @@
 
     if (type === 'stillness') {
       const phase = Neo.currentRoom.challengeData?.phase || 'choose';
-      if (phase === 'fight') {
-        const livingEnemies = Neo.enemies.some(enemy => enemy && enemy.type !== 'rival');
-        if (!livingEnemies) completeChallengeTrial('PRIZE WON');
+      if (phase === 'channel') {
+        const radius = Math.max(42, Number(Neo.currentRoom.challengeData?.channelRadius || 88));
+        const dx = Neo.player.x - Neo.ROOM_W / 2;
+        const dy = Neo.player.y - Neo.ROOM_H / 2;
+        if (Math.hypot(dx, dy) > radius) {
+          failChallengeTrial('STILLNESS BROKEN');
+          return;
+        }
+        Neo.currentRoom.challengeTimer = Math.max(0, (Neo.currentRoom.challengeTimer || 0) - dt);
+        Neo.currentRoom.challengeTick = Math.max(0, (Neo.currentRoom.challengeTick || 0) - dt);
+        if (Neo.currentRoom.challengeTick <= 0) {
+          Neo.currentRoom.challengeTick = 0.95;
+          for (let index = 0; index < 2; index += 1) {
+            const angle = Neo.nextRandom('world') * Math.PI * 2;
+            const radiusOut = 92 + Neo.nextRandom('world') * 84;
+            const px = Neo.ROOM_W / 2 + Math.cos(angle) * radiusOut;
+            const py = Neo.ROOM_H / 2 + Math.sin(angle) * radiusOut;
+            Neo.hazards.push({
+              kind: 'lightning_column',
+              x: px,
+              y: py,
+              r: 44,
+              ttl: 1.2,
+              tick: 0,
+              interval: 0.42,
+              damage: 15 + Math.floor(Neo.floor * 0.7),
+              enemy: true,
+              source: 'stillness',
+            });
+            Neo.spawnParticle({ x: px, y: py, life: 0.3, ring: 16, c: '#8dd4ff' });
+          }
+        }
+        if (Neo.currentRoom.challengeTimer <= 0) completeChallengeTrial('PRIZE SECURED');
+      }
+      return;
+    }
+
+    if (type === 'bomb') {
+      Neo.currentRoom.challengeTimer = Math.max(0, (Neo.currentRoom.challengeTimer || 0) - dt);
+      Neo.currentRoom.challengeTick = Math.max(0, (Neo.currentRoom.challengeTick || 0) - dt);
+      if (Neo.currentRoom.challengeTick <= 0) {
+        Neo.currentRoom.challengeTick = Math.max(1.1, Number(getChallengeTrialTuning('bomb').tick || 1.8));
+        spawnTrialEnemyWave(Math.max(1, Number(Neo.currentRoom.challengeData?.spawnCount || 1)));
+      }
+      if (Neo.currentRoom.challengeTimer <= 0) {
+        failChallengeTrial('BOMB DETONATED');
       }
       return;
     }
 
     if (type === 'survival') {
+      const maxTimer = Math.max(1, Number(Neo.currentRoom.challengeData?.maxTimer || Neo.currentRoom.challengeTimer || 1));
       Neo.currentRoom.challengeTimer = Math.max(0, (Neo.currentRoom.challengeTimer || 0) - dt);
       Neo.currentRoom.challengeTick = Math.max(0, (Neo.currentRoom.challengeTick || 0) - dt);
       if (Neo.currentRoom.challengeTick <= 0) {
-        Neo.currentRoom.challengeTick = 1.7;
-        spawnTrialEnemyWave(Neo.floor >= 6 ? 2 : 1);
+        const timeRatio = Neo.clamp(Neo.currentRoom.challengeTimer / maxTimer, 0, 1);
+        const tickStart = Number(Neo.currentRoom.challengeData?.tickStart || 2.2);
+        const tickEnd = Number(Neo.currentRoom.challengeData?.tickEnd || 1.35);
+        Neo.currentRoom.challengeTick = tickEnd + (tickStart - tickEnd) * timeRatio;
+        spawnTrialEnemyWave(Math.max(1, Number(Neo.currentRoom.challengeData?.spawnCount || 1)));
       }
       if (Neo.currentRoom.challengeTimer <= 0) {
         Neo.enemies.splice(0, Neo.enemies.length);
@@ -3024,6 +3145,11 @@
 
     if (type === 'runes') {
       Neo.currentRoom.challengeTimer = Math.max(0, (Neo.currentRoom.challengeTimer || 0) - dt);
+      Neo.currentRoom.challengeTick = Math.max(0, (Neo.currentRoom.challengeTick || 0) - dt);
+      if (Neo.currentRoom.challengeTick <= 0) {
+        Neo.currentRoom.challengeTick = Math.max(1.45, Number(getChallengeTrialTuning('runes').tick || 2.5));
+        spawnTrialEnemyWave(Math.max(1, Number(Neo.currentRoom.challengeData?.spawnCount || 1)));
+      }
       if (Neo.currentRoom.challengeTimer <= 0) {
         failChallengeTrial('RUNES FADING');
       }
@@ -3034,8 +3160,9 @@
       Neo.currentRoom.challengeTimer = Math.max(0, (Neo.currentRoom.challengeTimer || 0) - dt);
       Neo.currentRoom.challengeTick = Math.max(0, (Neo.currentRoom.challengeTick || 0) - dt);
       if (Neo.currentRoom.challengeTick <= 0) {
-        Neo.currentRoom.challengeTick = 0.85;
-        for (let index = 0; index < 3; index += 1) {
+        Neo.currentRoom.challengeTick = Math.max(0.64, Number(getChallengeTrialTuning('storm').tick || 0.85));
+        const burstCount = Math.max(2, Number(Neo.currentRoom.challengeData?.burstCount || 3));
+        for (let index = 0; index < burstCount; index += 1) {
           const px = 110 + Neo.nextRandom('world') * (Neo.ROOM_W - 220);
           const py = 110 + Neo.nextRandom('world') * (Neo.ROOM_H - 220);
           Neo.hazards.push({
