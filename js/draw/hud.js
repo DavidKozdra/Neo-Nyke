@@ -133,6 +133,14 @@
         Neo.ctx.beginPath();
         Neo.ctx.ellipse(0, 0, size * 1.8, size * 0.45, 0, 0, Math.PI * 2);
         Neo.ctx.fill();
+      } else if (particle.smoke) {
+        const size = Number(particle.size || 4);
+        Neo.ctx.globalAlpha *= Math.min(0.78, Math.max(0.16, particle.life));
+        Neo.ctx.fillStyle = particle.c || 'rgba(45, 38, 32, 0.85)';
+        Neo.ctx.shadowBlur = 0;
+        Neo.ctx.beginPath();
+        Neo.ctx.arc(0, 0, size, 0, Math.PI * 2);
+        Neo.ctx.fill();
       } else if (particle.silhouette) {
         const maxLife = Number(particle.maxLife || particle.life || 0.6);
         const progress = Neo.clamp(1 - particle.life / maxLife, 0, 1);

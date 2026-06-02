@@ -333,10 +333,14 @@
     // Pick a data-driven template (registry lives in roomTemplates.js) and stamp
     // it into the room. With equal template weights this consumes RNG identically
     // to the old pick*Archetype() helpers, so seeded output is unchanged.
-    room.layoutChambers = [];
-    addDoorFrames();
+    // Order matches the original: template selection draws RNG first (one
+    // Neo.irand on the 'world' stream, as the old pick*Archetype did), then door
+    // frames are stamped, then the template geometry. Preserving this order keeps
+    // seeded output byte-identical.
     const template = Neo.pickRoomTemplate(room);
     room.layoutArchetype = template ? template.id : 'open';
+    room.layoutChambers = [];
+    addDoorFrames();
     Neo.applyRoomTemplate(room, template, { addWall, addPillar, setChambers });
   }
 

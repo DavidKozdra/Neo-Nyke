@@ -1026,6 +1026,42 @@
   }
 
   function drawBrokenDestructible(prop) {
+    if (prop?.kind === 'barrel') {
+      const age = Math.max(0, Number(prop.breakAge || 0));
+      const fade = Neo.clamp(1 - Math.max(0, age - 4) / 8, 0.35, 1);
+      const radius = Math.max(20, Number(prop.scorchRadius || 34));
+      const seedBase = (prop.x || 0) * 0.173 + (prop.y || 0) * 0.291 + 91;
+      Neo.ctx.save();
+      Neo.ctx.translate(prop.x, prop.y);
+      Neo.ctx.globalAlpha = fade;
+      const scorch = Neo.ctx.createRadialGradient(0, 0, 2, 0, 0, radius);
+      scorch.addColorStop(0, 'rgba(16, 12, 9, 0.62)');
+      scorch.addColorStop(0.48, 'rgba(44, 26, 16, 0.4)');
+      scorch.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      Neo.ctx.fillStyle = scorch;
+      Neo.ctx.beginPath();
+      Neo.ctx.ellipse(0, 3, radius * 1.12, radius * 0.72, Number(prop.breakAngle || 0) * 0.08, 0, Math.PI * 2);
+      Neo.ctx.fill();
+      for (let index = 0; index < 7; index += 1) {
+        const seed = seedBase + index * 11.19;
+        const angle = Number(prop.breakAngle || 0) + Math.sin(seed) * 1.8;
+        const dist = 6 + ((Math.cos(seed * 1.7) + 1) * 0.5) * radius * 0.64;
+        const x = Math.cos(angle) * dist;
+        const y = Math.sin(angle) * dist * 0.58 + 4;
+        const w = 5 + ((Math.sin(seed * 3.1) + 1) * 0.5) * 10;
+        const h = 3 + ((Math.cos(seed * 2.4) + 1) * 0.5) * 5;
+        Neo.ctx.save();
+        Neo.ctx.translate(x, y);
+        Neo.ctx.rotate(angle + Math.sin(seed * 0.7) * 0.7);
+        Neo.ctx.fillStyle = index % 2 === 0 ? '#5b3a24' : '#2f241d';
+        Neo.ctx.fillRect(-w / 2, -h / 2, w, h);
+        Neo.ctx.fillStyle = 'rgba(255, 150, 60, 0.18)';
+        Neo.ctx.fillRect(-w / 2, -h / 2, w, 1.5);
+        Neo.ctx.restore();
+      }
+      Neo.ctx.restore();
+      return true;
+    }
     if (prop?.kind !== 'wall' && prop?.kind !== 'cover_wall' && prop?.kind !== 'secret_wall') return false;
     const w = Math.max(24, Number(prop.w || prop.r * 2 || 52));
     const h = Math.max(24, Number(prop.h || prop.r * 2 || 52));

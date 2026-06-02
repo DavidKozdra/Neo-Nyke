@@ -38,7 +38,8 @@
   // hits/crits genuinely slam. `angle` is the direction of the blow; the kick
   // points the same way the enemy is knocked (i.e. away from the player).
   function applyHitFeel(enemy, dealt, angle, isCrit) {
-    const maxHp = enemy && enemy.maxHp ? enemy.maxHp : dealt * 6;
+    // Enemies store max HP in `.max` (players use `.maxHp`).
+    const maxHp = enemy ? (enemy.max || enemy.maxHp || dealt * 6) : dealt * 6;
     const ratio = Neo.clamp(dealt / Math.max(1, maxHp), 0, 1);
     // Below a small threshold (pure chip), skip feel entirely — keeps DoT ticks
     // and weak pellets from constantly nudging the camera.
