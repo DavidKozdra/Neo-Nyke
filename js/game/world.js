@@ -610,9 +610,11 @@
     forEachEnemyNearCircle(x, y, radius, enemy => {
       if (Neo.dist(x, y, enemy.x, enemy.y) > radius + enemy.r) return;
       Neo.hitEnemy(enemy, damage, Math.atan2(enemy.y - y, enemy.x - x), 180, color);
-    }, { excludeEnemy: sourceEnemy });
-    forEachDestructibleNearCircle(x, y, radius + 80, prop => {
-      if (!prop.broken && !prop.hidden && Neo.dist(x, y, prop.x, prop.y) <= radius + prop.r) damageDestructible(prop, damage);
+    }
+    Neo.destructibles.forEach(prop => {
+      if (!prop.broken && !prop.hidden && Neo.dist(x, y, prop.x, prop.y) <= radius + prop.r) {
+        damageDestructible(prop, damage, { sourceX: x, sourceY: y, impactType: 'blast', force: 1.6 });
+      }
     });
   }
 
@@ -1152,7 +1154,13 @@
         if (Neo.destructibleIntersectsCircle(prop, projectile.x, projectile.y, projectile.r)) hitProp = prop;
       });
       if (!projectile.enemy && hitProp) {
-        damageDestructible(hitProp, projectile.damage || 1);
+        damageDestructible(hitProp, projectile.damage || 1, {
+          impactX: projectile.x,
+          impactY: projectile.y,
+          angle: Math.atan2(Number(projectile.vy || 0), Number(projectile.vx || 1)),
+          impactType: projectile.kind || 'projectile',
+          force: projectile.kind === 'fireball' ? 1.35 : 1,
+        });
         if (projectile.kind === 'fireball') blastRadius(projectile.x, projectile.y, projectile.splash || 44, projectile.blockedSplashDamage || 16, '#ff8844');
         spawnProjectileImpact(projectile, projectile.x, projectile.y, { blocked: true });
         _projectilePool.push(Neo.projectiles.splice(index, 1)[0]);
@@ -1226,8 +1234,14 @@
   }
 
   function updateWorldProps(dt) {
-    Neo.enemySpatialIndex = buildEnemySpatialIndex();
-    Neo.enemySpatialIndexFrame = Neo.frameId;
+    if (Array.isArray(Neo.destructibles)) {
+      Neo.destructibles.forEach(prop => {
+        if (!prop) return;
+        if (prop.hitFlash > 0) prop.hitFlash = Math.max(0, Number(prop.hitFlash || 0) - dt);
+        if (prop.hitShake > 0) prop.hitShake = Math.max(0, Number(prop.hitShake || 0) - dt);
+        if (prop.broken) prop.breakAge = Number(prop.breakAge || 0) + dt;
+      });
+    }
     Neo.hazards.forEach(hazard => {
       if (hazard.ttl !== undefined) hazard.ttl -= dt;
       if (hazard.followPlayer) {
@@ -1448,19 +1462,115 @@
     Neo.syncCurrentRoomState();
   }
 
-  function damageDestructible(prop, damage) {
+  function isWallLikeDestructible(prop) {
+    return prop?.kind === 'wall' || prop?.kind === 'cover_wall' || prop?.kind === 'secret_wall';
+  }
+
+  function getDestructibleImpactAngle(prop, hit = {}) {
+    if (Number.isFinite(hit.angle)) return hit.angle;
+    if (Number.isFinite(hit.sourceX) && Number.isFinite(hit.sourceY)) {
+      return Math.atan2(prop.y - hit.sourceY, prop.x - hit.sourceX);
+    }
+    if (Number.isFinite(hit.impactX) && Number.isFinite(hit.impactY)) {
+      return Math.atan2(prop.y - hit.impactY, prop.x - hit.impactX);
+    }
+    if (Neo.player && Number.isFinite(Neo.player.x) && Number.isFinite(Neo.player.y)) {
+      return Math.atan2(prop.y - Neo.player.y, prop.x - Neo.player.x);
+    }
+    return Neo.rand(Math.PI * 2, 0, 'fx');
+  }
+
+  function getDestructibleMaterial(prop) {
+    if (prop?.kind === 'pot') return { colors: ['#d19a68', '#9b6744', '#57331f'], size: 2.4, dust: '#caa17a' };
+    if (prop?.kind === 'barrel') return { colors: ['#b0743d', '#7a4825', '#3d2414'], size: 2.8, dust: '#b87838' };
+    if (prop?.kind === 'cover_wall' && !prop.reinforced) return { colors: ['#b87838', '#7a4825', '#4b2a18'], size: 2.8, dust: '#b87838' };
+    if (prop?.reinforced) return { colors: ['#d5dbe2', '#aeb5bd', '#727b86'], size: 2.3, dust: '#aeb5bd' };
+    return { colors: ['#d0c8ba', '#a09080', '#6f685d'], size: 3.1, dust: '#b8aea0' };
+  }
+
+  function getDestructibleImpactPoint(prop, angle, hit = {}) {
+    if (Number.isFinite(hit.impactX) && Number.isFinite(hit.impactY)) return { x: hit.impactX, y: hit.impactY };
+    const radius = Math.max(10, Number(prop.r || Math.hypot(prop.w || 0, prop.h || 0) / 2 || 20));
+    return {
+      x: prop.x - Math.cos(angle) * radius * 0.55,
+      y: prop.y - Math.sin(angle) * radius * 0.55,
+    };
+  }
+
+  function spawnDestructibleHitFx(prop, dealt, hit = {}) {
+    const angle = getDestructibleImpactAngle(prop, hit);
+    const impact = getDestructibleImpactPoint(prop, angle, hit);
+    const material = getDestructibleMaterial(prop);
+    const force = Math.max(0.7, Number(hit.force || 1));
+    const chipCount = isWallLikeDestructible(prop) ? Math.min(7, 2 + Math.max(1, Math.round(dealt / 2))) : 2;
+    prop.hitFlash = 0.12;
+    prop.hitShake = Math.max(Number(prop.hitShake || 0), isWallLikeDestructible(prop) ? 0.13 : 0.08);
+    prop.lastHitAngle = angle;
+    prop.lastHitX = impact.x;
+    prop.lastHitY = impact.y;
+    Neo.spawnParticle({ x: impact.x, y: impact.y, life: 0.16, impact: true, angle, c: material.colors[0], size: material.size + 1 });
+    for (let index = 0; index < chipCount; index += 1) {
+      const spread = angle + Neo.rand(0.72, -0.72, 'fx');
+      const speed = Neo.rand(95, 38, 'fx') * force;
+      Neo.spawnParticle({
+        x: impact.x + Neo.rand(5, -5, 'fx'),
+        y: impact.y + Neo.rand(5, -5, 'fx'),
+        life: Neo.rand(0.26, 0.12, 'fx'),
+        vx: Math.cos(spread) * speed,
+        vy: Math.sin(spread) * speed,
+        c: material.colors[index % material.colors.length],
+        spark: true,
+        size: material.size * Neo.rand(1.05, 0.65, 'fx'),
+      });
+    }
+  }
+
+  function spawnDestructibleBreakFx(prop, hit = {}) {
+    const angle = getDestructibleImpactAngle(prop, hit);
+    const material = getDestructibleMaterial(prop);
+    const force = Math.max(0.85, Number(hit.force || 1.1));
+    const wallLike = isWallLikeDestructible(prop);
+    const radius = Math.max(14, Number(prop.r || Math.hypot(prop.w || 0, prop.h || 0) / 2 || 24));
+    const count = prop.kind === 'pot' ? 10 : prop.kind === 'barrel' ? 8 : prop.reinforced ? 22 : wallLike ? 18 : 12;
+    if (wallLike) {
+      Neo.spawnParticle({ x: prop.x, y: prop.y, life: 0.32, ring: Math.min(58, radius + 18), c: material.dust });
+    }
+    for (let index = 0; index < count; index += 1) {
+      const scatter = angle + Neo.rand(1.35, -1.35, 'fx');
+      const speed = Neo.rand(wallLike ? 145 : 120, 35, 'fx') * force;
+      const side = Neo.rand(radius * 0.5, -radius * 0.5, 'fx');
+      Neo.spawnParticle({
+        x: prop.x + Math.cos(angle + Math.PI / 2) * side + Neo.rand(7, -7, 'fx'),
+        y: prop.y + Math.sin(angle + Math.PI / 2) * side + Neo.rand(7, -7, 'fx'),
+        life: Neo.rand(wallLike ? 0.72 : 0.46, 0.22, 'fx'),
+        vx: Math.cos(scatter) * speed,
+        vy: Math.sin(scatter) * speed,
+        c: material.colors[index % material.colors.length],
+        spark: true,
+        size: material.size * Neo.rand(wallLike ? 1.45 : 1.15, 0.75, 'fx'),
+      });
+    }
+  }
+
+  function damageDestructible(prop, damage, hit = {}) {
     if (prop.broken) return;
-    const dealt = Math.max(0, Math.round(damage || 0));
-    if (dealt > 0) {
+    const numericDamage = Math.max(0, Number(damage || 0));
+    const dealt = Math.max(0, Math.round(numericDamage));
+    if (!Number.isFinite(prop.maxHp) || prop.maxHp <= 0) prop.maxHp = Math.max(1, Number(prop.hp || 0), dealt || 1);
+    if (dealt > 0 && !isWallLikeDestructible(prop)) {
       spawnDamagePopup(prop.x, prop.y - prop.r - 8, dealt, {
         color: prop.kind === 'barrel' ? '#ff9f1c' : prop.reinforced ? '#b8c0ca' : '#ffd27d',
         size: 14,
         outline: prop.reinforced ? '#11151c' : '#2a1800',
       });
     }
-    prop.hp -= damage;
+    if (dealt > 0) spawnDestructibleHitFx(prop, dealt, hit);
+    prop.hp -= numericDamage;
     if (prop.hp > 0) return;
     prop.broken = true;
+    prop.breakAge = 0;
+    prop.breakAngle = getDestructibleImpactAngle(prop, hit);
+    spawnDestructibleBreakFx(prop, hit);
     if (prop.kind === 'pot') {
       const potRandom = Neo.createEntityRandom(prop, 'pot:reward');
       const itemChance = Neo.clamp(0.12 + Number(Neo.getItemStats?.()?.itemDropChanceBonus || 0), 0, 0.5);
@@ -1471,37 +1581,16 @@
       blastRadius(prop.x, prop.y, 130, 55, '#ff5a3d');
     }
     if (prop.kind === 'wall') {
+      const revealGroup = prop.revealGroup;
       Neo.destructibles.forEach(other => {
-        if (other.hidden) other.hidden = false;
+        if (!other.hidden) return;
+        if (revealGroup && other.revealGroup === revealGroup) {
+          other.hidden = false;
+          return;
+        }
+        if (!revealGroup && Neo.dist(other.x, other.y, prop.x, prop.y) <= 220) other.hidden = false;
       });
-      for (let index = 0; index < 16; index += 1) {
-        Neo.spawnParticle({
-          x: prop.x + Neo.rand(22, -22, 'fx'),
-          y: prop.y + Neo.rand(22, -22, 'fx'),
-          life: Neo.rand(0.55, 0.22, 'fx'),
-          vx: Neo.rand(110, -110, 'fx'),
-          vy: Neo.rand(80, -110, 'fx'),
-          c: index % 3 === 0 ? '#a09080' : '#c8bfb0',
-          spark: true,
-          size: Neo.rand(3.2, 1.8, 'fx'),
-        });
-      }
       Neo.spawnParticle({ x: prop.x, y: prop.y - 22, life: 0.75, text: 'CLEAR', c: '#d7f6ff' });
-    }
-    if (prop.kind === 'cover_wall') {
-      const splinters = prop.reinforced ? 18 : 12;
-      for (let index = 0; index < splinters; index += 1) {
-        Neo.spawnParticle({
-          x: prop.x + Neo.rand((prop.w || prop.r) * 0.42, -(prop.w || prop.r) * 0.42, 'fx'),
-          y: prop.y + Neo.rand((prop.h || prop.r) * 0.42, -(prop.h || prop.r) * 0.42, 'fx'),
-          life: Neo.rand(0.42, 0.18, 'fx'),
-          vx: Neo.rand(90, -90, 'fx'),
-          vy: Neo.rand(70, -95, 'fx'),
-          c: prop.reinforced ? '#aeb5bd' : '#b87838',
-          spark: true,
-          size: prop.reinforced ? 2.2 : 2.8,
-        });
-      }
     }
     if (prop.kind === 'secret_wall') {
       const dir = prop.secretDir;
@@ -1510,23 +1599,65 @@
     }
   }
 
+  // Damage number whose size/color/punch ramp with how hard the hit landed,
+  // measured against the target's max HP so a "big" hit reads big regardless of
+  // absolute numbers. Crits get an extra scale-pop + higher arc. Rapid hits on
+  // the same enemy COMBO-MERGE (accumulate into one rising number) instead of
+  // spamming overlapping popups. Pass opts.enemy to enable ramp + merge.
   function spawnDamagePopup(x, y, amount, opts = {}) {
     const value = Math.max(0, Math.round(amount || 0));
     if (value <= 0) return;
     const crit = !!opts.crit;
-    const color = opts.color || (crit ? '#ff9f1c' : '#ff6b6b');
-    const size = opts.size || (crit ? 20 : 16);
+    const enemy = opts.enemy || null;
+
+    // Combo-merge: if this enemy has a live popup, fold the new hit into it.
+    if (enemy && enemy._dmgPopup && enemy._dmgPopup.life > 0 && enemy._dmgPopup.text && Neo.particles.includes(enemy._dmgPopup)) {
+      const p = enemy._dmgPopup;
+      p._dmgTotal = (p._dmgTotal || value) + value;
+      p._dmgCrit = p._dmgCrit || crit;
+      p.text = `-${p._dmgTotal}`;
+      p.life = Math.max(p.life, p._dmgCrit ? 0.62 : 0.5);
+      p.x = x;
+      p.y = y;
+      p.size = Math.min(34, (p.size || 16) + 1.5); // a flurry visibly grows
+      if (p._dmgCrit) p.c = '#ff9f1c';
+      return;
+    }
+
+    // Impact ratio 0..1 of this hit vs the target's max HP → drives the ramp.
+    const maxHp = enemy && enemy.maxHp ? enemy.maxHp : value * 6;
+    const ratio = Neo.clamp(value / Math.max(1, maxHp), 0, 1);
+    const baseSize = 13 + ratio * 13; // chip 13 → slam 26
+    const size = opts.size || Math.round(crit ? baseSize * 1.35 + 4 : baseSize);
+    const color = opts.color || (crit ? '#ff9f1c' : damageRampColor(ratio));
     Neo.spawnParticle({
       x,
       y,
-      life: crit ? 0.62 : 0.46,
+      life: crit ? 0.66 : 0.46 + ratio * 0.12,
       text: `-${value}`,
       c: color,
-      outline: opts.outline || '#120a00',
+      outline: opts.outline || (crit ? '#3a1500' : '#120a00'),
       size,
       vx: Neo.rand(-14, 14),
-      vy: -36 - (crit ? 10 : 0),
+      vy: -36 - (crit ? 16 : ratio * 14), // crits/heavy hits arc higher
     });
+    if (enemy) {
+      const p = Neo.particles[Neo.particles.length - 1];
+      if (p) {
+        p._dmgTotal = value;
+        p._dmgCrit = crit;
+        enemy._dmgPopup = p;
+      }
+    }
+  }
+
+  // Chip damage = muted grey-red; heavy = saturated red. Lerps between the two.
+  function damageRampColor(ratio) {
+    const t = Neo.clamp(ratio * 2.2, 0, 1); // most hits are a small fraction of max HP
+    const r = Math.round(214 + (255 - 214) * t);
+    const g = Math.round(140 + (74 - 140) * t);
+    const b = Math.round(140 + (74 - 140) * t);
+    return `rgb(${r},${g},${b})`;
   }
 
   function spawnHealPopup(x, y, amount, opts = {}) {

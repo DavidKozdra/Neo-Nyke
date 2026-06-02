@@ -11,6 +11,7 @@ import './core/status.js';
 import './ui/notifications.js';
 import './ui/panels.js';
 import './core/game-state.js';
+import './game/roomTemplates.js';
 import './game/rooms.js';
 import './game/enemies.js';
 import './game/player.js';

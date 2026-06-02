@@ -386,15 +386,23 @@
     });
 
     Neo.destructibles.forEach(prop => {
-      if (prop.broken || prop.hidden) return;
+      if (prop.hidden) return;
+      if (prop.broken) {
+        if (Neo.drawBrokenDestructible?.(prop)) return;
+        return;
+      }
       Neo.ctx.save();
-      Neo.ctx.translate(prop.x, prop.y);
+      const shakeRatio = Neo.clamp(Number(prop.hitShake || 0) / 0.13, 0, 1);
+      const hitAngle = Number(prop.lastHitAngle || 0);
+      const shakeOffset = shakeRatio > 0 ? Math.sin(shakeRatio * Math.PI * 3) * 3 * shakeRatio : 0;
+      Neo.ctx.translate(prop.x + Math.cos(hitAngle) * shakeOffset, prop.y + Math.sin(hitAngle) * shakeOffset);
       if (prop.kind === 'pot') {
         Neo.drawEnvironmentTile('pot_clay', -16, -18, 32, 32);
       } else if (prop.kind === 'barrel') {
         Neo.drawEnvironmentTile('barrel_oak', -24, -26, 48, 48);
       } else if (prop.kind === 'wall') {
         Neo.drawEnvironmentTile('wall_block', -26, -26, 52, 52);
+        Neo.drawDestructibleBlockDamage?.(prop, 52, 52);
         Neo.ctx.strokeStyle = theme.wallEdge;
         Neo.ctx.lineWidth = 1.5;
         Neo.ctx.strokeRect(-25, -25, 50, 50);

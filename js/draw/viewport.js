@@ -3,8 +3,10 @@ export function drawWorldViewport(cam, vpX, vpW, vpH, vpY, pLabel, slot = null) 
     const isDying = Neo.gameState === 'dying';
     const slotDead = !!slot?.getDead?.();
     const _shakeOn = window.NeoSettings?.getAccess()?.screenShake !== false;
-    const sX = _shakeOn && pLabel === 'P1' ? (Neo.nextRandom('fx') - 0.5) * Neo.shake * 2 : 0;
-    const sY = _shakeOn && pLabel === 'P1' ? (Neo.nextRandom('fx') - 0.5) * Neo.shake * 2 : 0;
+    // Random jitter (magnitude from the trauma² curve) + a directional kick that
+    // shoves the camera away from the impact source, then springs back.
+    const sX = _shakeOn && pLabel === 'P1' ? (Neo.nextRandom('fx') - 0.5) * Neo.shake * 2 + (Neo.shakeKickX || 0) : 0;
+    const sY = _shakeOn && pLabel === 'P1' ? (Neo.nextRandom('fx') - 0.5) * Neo.shake * 2 + (Neo.shakeKickY || 0) : 0;
     Neo.ctx.save();
     Neo.ctx.beginPath();
     Neo.ctx.rect(vpX, vpY, vpW, vpH);
