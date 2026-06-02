@@ -57,8 +57,6 @@ These modules still carry significant host, DOM, p5, or game-specific coupling:
 - `Assets/atlasHelper.js`
 - `VisualFX/particleSystem.js`
 - `VisualFX/flightPath.js`
-- `AI/AI.js`
-- `AI/Charictar_controller.js`
 - `Core/GameObject.js`
 
 `AI/astar.js` sits in the middle: it is reusable in concept, but its current implementation still assumes game-specific grid cells and global terrain cost data.

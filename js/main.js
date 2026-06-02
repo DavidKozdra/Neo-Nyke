@@ -1,6 +1,6 @@
 // main.js — ES module entry point. Imports all game modules in dependency order.
-// Replaces source-loader.js. Each import runs the module's top-level code,
-// wiring functions and constants onto the Neo global.
+// Each import runs the module's top-level code, wiring functions and constants
+// onto the Neo global.
 
 import './core/game-core.js';
 import './core/math-utils.js';

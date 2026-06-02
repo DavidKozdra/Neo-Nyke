@@ -10,6 +10,7 @@ js/game.bundle.js
 
 # Local agent/tool state
 .claude/
+.codex
 .codex/
 .agents/
 

@@ -64,8 +64,6 @@ These are documented, but they are not the right first stop for new users:
 - `Assets/atlasHelper.js`
 - `VisualFX/particleSystem.js`
 - `VisualFX/flightPath.js`
-- `AI/AI.js`
-- `AI/Charictar_controller.js`
 - `Core/GameObject.js`
 
 ## How To Read The Folder

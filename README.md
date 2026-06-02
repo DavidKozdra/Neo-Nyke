@@ -50,3 +50,9 @@ Controls are fully remappable in Settings.
 ## Running the Game
 
 Open `index.html` in a browser. No build step required.
+
+## Building and Deploying
+
+Run `npm run build` before deploying. The build copies the static game files into `dist/`, which is the asset directory used by the root `wrangler.toml`.
+
+Deploy from the repository root so Wrangler uses the root config and `server/server.js` worker.

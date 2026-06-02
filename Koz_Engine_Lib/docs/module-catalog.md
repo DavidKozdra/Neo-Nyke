@@ -339,28 +339,6 @@ How to use:
 Current caveat:
 - The current implementation still assumes game-specific tile objects and terrain-cost globals, so treat it as partially extracted rather than a clean generic pathfinding surface.
 
-### `AI/AI.js`
-
-What it is:
-- A combat AI prototype from a different game/runtime.
-
-When to use:
-- Do not treat this as stable engine surface yet.
-
-Current caveat:
-- It imports project-local combat files and runtime globals, so it is not currently reusable engine code.
-
-### `AI/Charictar_controller.js`
-
-What it is:
-- A character controller prototype tied to p5-style movement, combat, and game-state globals.
-
-When to use:
-- Do not use this as engine API in its current state.
-
-Current caveat:
-- It is tightly coupled to project-local files and browser/game globals and likely belongs outside the reusable engine layer until rewritten.
-
 ## Audio
 
 ### `Audio/musicSystem.js`
