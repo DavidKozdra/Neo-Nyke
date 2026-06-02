@@ -1,8 +1,24 @@
-Archive.zip
-dist/
-.claude
-.codex
-.agents
-js/game.bundle.js
+# Dependencies
 node_modules/
-./node_modules/
+server/node_modules/
+
+# Build outputs and generated bundles
+dist/
+prod-build/
+*.zip
+js/game.bundle.js
+
+# Local agent/tool state
+.claude/
+.codex/
+.agents/
+
+# Logs and local runtime noise
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS/editor files
+.DS_Store
+.vscode/

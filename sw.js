@@ -24,7 +24,6 @@ const PRECACHE = [
   '/js/touchControls.js',
   '/js/gamepadControls.js',
   '/js/core/neo.js',
-  '/js/source-loader.js',
   '/js/core/game-core.js',
   '/js/core/math-utils.js',
   '/js/core/sfx.js',
