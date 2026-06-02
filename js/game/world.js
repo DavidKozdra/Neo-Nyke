@@ -1552,12 +1552,72 @@
     }
   }
 
+  function spawnBarrelExplosionFx(prop, hit = {}) {
+    const angle = getDestructibleImpactAngle(prop, hit);
+    const radius = 130;
+    prop.breakAngle = angle;
+    prop.scorchRadius = radius * Neo.rand(0.28, 0.22, 'fx');
+    prop.hitFlash = 0;
+    prop.hitShake = 0;
+    Neo.shake = Math.max(Number(Neo.shake || 0), 12);
+    Neo.shakeT = Math.max(Number(Neo.shakeT || 0), 0.18);
+
+    Neo.spawnParticle({ x: prop.x, y: prop.y, life: 0.24, ring: 22, c: '#fff2a8' });
+    Neo.spawnParticle({ x: prop.x, y: prop.y, life: 0.34, ring: 58, c: '#ff9a3d' });
+    Neo.spawnParticle({ x: prop.x, y: prop.y, life: 0.44, ring: radius * 0.72, c: '#ff4a28' });
+
+    for (let index = 0; index < 18; index += 1) {
+      const a = (index / 18) * Math.PI * 2 + Neo.rand(0.18, -0.18, 'fx');
+      const speed = Neo.rand(230, 80, 'fx');
+      Neo.spawnParticle({
+        x: prop.x + Math.cos(a) * Neo.rand(16, 3, 'fx'),
+        y: prop.y + Math.sin(a) * Neo.rand(16, 3, 'fx'),
+        life: Neo.rand(0.42, 0.18, 'fx'),
+        vx: Math.cos(a) * speed,
+        vy: Math.sin(a) * speed,
+        c: index % 4 === 0 ? '#fff2a8' : index % 3 === 0 ? '#ffcf66' : '#ff6a2a',
+        spark: true,
+        size: Neo.rand(4.2, 2.1, 'fx'),
+      });
+    }
+
+    for (let index = 0; index < 14; index += 1) {
+      const a = angle + Math.PI + Neo.rand(2.4, -2.4, 'fx');
+      const speed = Neo.rand(150, 45, 'fx');
+      Neo.spawnParticle({
+        x: prop.x + Neo.rand(15, -15, 'fx'),
+        y: prop.y + Neo.rand(13, -13, 'fx'),
+        life: Neo.rand(0.78, 0.34, 'fx'),
+        vx: Math.cos(a) * speed,
+        vy: Math.sin(a) * speed,
+        c: index % 3 === 0 ? '#2b241f' : index % 3 === 1 ? '#5b3a24' : '#8a542e',
+        spark: true,
+        size: Neo.rand(5.2, 2.4, 'fx'),
+      });
+    }
+
+    for (let index = 0; index < 10; index += 1) {
+      const a = Neo.rand(Math.PI * 2, 0, 'fx');
+      const speed = Neo.rand(42, 12, 'fx');
+      Neo.spawnParticle({
+        x: prop.x + Neo.rand(18, -18, 'fx'),
+        y: prop.y + Neo.rand(18, -18, 'fx'),
+        life: Neo.rand(0.95, 0.42, 'fx'),
+        vx: Math.cos(a) * speed,
+        vy: Math.sin(a) * speed - Neo.rand(30, 8, 'fx'),
+        c: index % 2 === 0 ? 'rgba(45, 38, 32, 0.9)' : 'rgba(92, 72, 52, 0.85)',
+        smoke: true,
+        size: Neo.rand(4.8, 2.6, 'fx'),
+      });
+    }
+  }
+
   function damageDestructible(prop, damage, hit = {}) {
     if (prop.broken) return;
     const numericDamage = Math.max(0, Number(damage || 0));
     const dealt = Math.max(0, Math.round(numericDamage));
     if (!Number.isFinite(prop.maxHp) || prop.maxHp <= 0) prop.maxHp = Math.max(1, Number(prop.hp || 0), dealt || 1);
-    if (dealt > 0 && !isWallLikeDestructible(prop)) {
+    if (dealt > 0 && !isWallLikeDestructible(prop) && prop.kind !== 'barrel') {
       spawnDamagePopup(prop.x, prop.y - prop.r - 8, dealt, {
         color: prop.kind === 'barrel' ? '#ff9f1c' : prop.reinforced ? '#b8c0ca' : '#ffd27d',
         size: 14,
@@ -1570,7 +1630,8 @@
     prop.broken = true;
     prop.breakAge = 0;
     prop.breakAngle = getDestructibleImpactAngle(prop, hit);
-    spawnDestructibleBreakFx(prop, hit);
+    if (prop.kind === 'barrel') spawnBarrelExplosionFx(prop, hit);
+    else spawnDestructibleBreakFx(prop, hit);
     if (prop.kind === 'pot') {
       const potRandom = Neo.createEntityRandom(prop, 'pot:reward');
       const itemChance = Neo.clamp(0.12 + Number(Neo.getItemStats?.()?.itemDropChanceBonus || 0), 0, 0.5);
@@ -1625,7 +1686,9 @@
     }
 
     // Impact ratio 0..1 of this hit vs the target's max HP → drives the ramp.
-    const maxHp = enemy && enemy.maxHp ? enemy.maxHp : value * 6;
+    // Enemies store max HP in `.max`; players use `.maxHp`. Fall back to a
+    // multiple of the hit so popups without a known max still get a sane ramp.
+    const maxHp = enemy ? (enemy.max || enemy.maxHp || value * 6) : value * 6;
     const ratio = Neo.clamp(value / Math.max(1, maxHp), 0, 1);
     const baseSize = 13 + ratio * 13; // chip 13 → slam 26
     const size = opts.size || Math.round(crit ? baseSize * 1.35 + 4 : baseSize);
@@ -2126,6 +2189,7 @@
     p.shockwave = props.shockwave ?? null;
     p.impact = props.impact ?? null;
     p.spark = props.spark ?? null;
+    p.smoke = props.smoke ?? null;
     p.blood = props.blood ?? null;
     p.ring = props.ring ?? null;
     p.style = props.style ?? null;
