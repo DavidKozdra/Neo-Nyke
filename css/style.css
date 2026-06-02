@@ -319,8 +319,8 @@ button, input, select, textarea {
   flex-direction: column;
   align-items: center;
   gap: 6px;
-  width: min(504px, calc(100vw - 40px));
-  padding: 12px 20px 16px;
+  width: min(var(--menu-panel-width, 504px), calc(100vw - 40px));
+  padding: 12px 10px 16px;
   transform: translateX(-50%);
   box-sizing: border-box;
   background: linear-gradient(to top, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0) 100%);
@@ -2631,6 +2631,35 @@ button, input, select, textarea {
   text-transform: uppercase;
 }
 
+/* Extra Battery selection prompt — numbered steps so the pickup flow is clear. */
+.inv-card--battery {
+  border-color: rgba(163, 212, 247, .55);
+  background:
+    linear-gradient(180deg, rgba(120, 175, 225, .14), rgba(7, 16, 28, .2)),
+    var(--menu-surface-strong, rgba(20, 30, 44, .9));
+  box-shadow: 0 0 16px rgba(120, 175, 225, .22), inset 0 0 0 1px rgba(173, 218, 249, .12);
+}
+
+.inv-battery-steps {
+  margin: 2px 0 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 5px;
+  list-style: decimal;
+  color: #c4d4e6;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.inv-battery-steps li::marker {
+  color: #8fb6e6;
+  font-weight: 800;
+}
+
+.inv-battery-steps b {
+  color: #e7f1ff;
+}
+
 .inv-card__icon {
   width: 40px !important;
   height: 40px !important;
@@ -3143,12 +3172,12 @@ button, input, select, textarea {
 
 .equip-slot__key {
   position: absolute;
-  top: 2px;
-  left: 4px;
-  font-size: 9px;
+  top: 1px;
+  left: 3px;
+  font-size: 12px;
   font-weight: 900;
   color: inherit;
-  opacity: .85;
+  opacity: .95;
   pointer-events: none;
 }
 
@@ -3328,6 +3357,8 @@ button, input, select, textarea {
 }
 
 #start.overlay {
+  --menu-panel-width: 504px;
+  --menu-footer-reserve: 124px;
   justify-content: flex-start;
   overflow: hidden;
 }
@@ -3341,9 +3372,9 @@ button, input, select, textarea {
   align-content: center;
   gap: clamp(18px, 3vh, 34px);
   width: min(100%, 720px);
-  min-height: 100%;
-  margin: 0 auto;
-  padding: clamp(28px, 7vh, 84px) 20px 148px;
+  min-height: calc(100% - var(--menu-footer-reserve));
+  margin: 0 auto var(--menu-footer-reserve);
+  padding: clamp(28px, 7vh, 84px) 20px;
   box-sizing: border-box;
 }
 
@@ -3375,9 +3406,10 @@ button, input, select, textarea {
   top: auto;
   left: auto;
   transform: none;
-  width: min(100%, 420px);
+  width: min(100%, var(--menu-panel-width));
   min-width: min(320px, 100%);
   max-width: 100%;
+  box-sizing: border-box;
   padding: 34px 40px 38px;
   border-color: var(--menu-border);
   border-top-color: var(--menu-border-strong);
@@ -6189,6 +6221,36 @@ button.alt.danger {
   color: var(--menu-text-muted);
   line-height: 1.5;
   text-align: center;
+}
+
+/* Numbered steps so the paw's pick-2-and-confirm flow is clear. */
+.wizard-paw-steps {
+  margin: 0 auto 18px;
+  max-width: 460px;
+  padding-left: 22px;
+  display: grid;
+  gap: 6px;
+  list-style: decimal;
+  color: var(--menu-text-muted);
+  line-height: 1.4;
+}
+
+.wizard-paw-steps li::marker {
+  color: #ffd27d;
+  font-weight: 800;
+}
+
+.wizard-paw-steps b {
+  color: #ffe9c2;
+}
+
+.wizard-paw-section-label {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: #ffd27d;
 }
 
 .wizard-paw-stats,

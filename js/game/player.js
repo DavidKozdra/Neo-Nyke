@@ -369,7 +369,7 @@ export function renderWizardPawPanel() {
       Neo.ui.wizardPawConfirm.disabled = Neo.wizardPawSelection.picks.length !== 2;
       Neo.ui.wizardPawConfirm.textContent = Neo.wizardPawSelection.picks.length === 2
         ? 'CONFIRM PICKS'
-        : `CONFIRM ${Neo.wizardPawSelection.picks.length}/2`;
+        : `PICK ${2 - Neo.wizardPawSelection.picks.length} MORE`;
     }
   }
 

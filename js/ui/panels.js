@@ -505,7 +505,7 @@ function handleInventoryMoveSelect(event) {
       const nextMaxStacks = Neo.grantExtraBatteryToMove(moveKey);
       if (nextMaxStacks > 0) {
         Neo.activeInventorySlot = '';
-        Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 46, life: 0.8, text: `${Neo.MOVE_DEFS[moveKey].name.toUpperCase()} +1`, c: '#cfd7ff' });
+        Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 46, life: 0.8, text: `${Neo.MOVE_DEFS[moveKey].name.toUpperCase()} +1 CHARGE`, c: '#cfd7ff' });
         markInventoryPanelDirty();
         renderInventoryPanel();
       }
@@ -1761,7 +1761,18 @@ export function renderInventoryPanel() {
       .filter(key => _invP.ownedMoves[key] && Neo.MOVE_DEFS[key] && Neo.isMoveAllowedForCharacter(key, _invP.character))
       .sort((a, b) => Neo.MOVE_DEFS[a].slot.localeCompare(Neo.MOVE_DEFS[b].slot));
     const extraBatteryNotice = extraBatteryPendingCount > 0
-      ? `<div class="inv-card"><span class="inv-card__eyebrow">Extra Battery</span><h4>${extraBatteryPendingCount} selection${extraBatteryPendingCount === 1 ? '' : 's'} pending</h4><p>Click a move below to grant it +1 max stack.</p></div>`
+      ? `<div class="inv-card inv-card--battery">
+          <div class="inv-card__title-row">
+            <span class="inv-card__eyebrow">Extra Battery</span>
+            <span class="inv-card__count">${extraBatteryPendingCount} pending</span>
+          </div>
+          <h4>Add an extra charge to a move</h4>
+          <ol class="inv-battery-steps">
+            <li>Pick a move from the list below.</li>
+            <li>It gains <b>+1 max charge</b> — one more use before the cooldown.</li>
+            <li>Watch for the new charge pip on that move's skill card.</li>
+          </ol>
+        </div>`
       : '';
     const moveCards = allOwnedMoves
       .map(key => {
@@ -1772,10 +1783,10 @@ export function renderInventoryPanel() {
         const currentMaxStacks = Neo.getMoveMaxStacks(key, _invP.character, _invP);
         const slotLabel = Neo.SLOT_LABELS[def.slot] || def.slot;
         const hintText = isBatterySelectable
-          ? `Current max ${currentMaxStacks}`
+          ? `Charges ${currentMaxStacks} → ${currentMaxStacks + 1}`
           : (isEquipped ? `${slotLabel} slot` : (isMatch ? 'Selected slot' : `Fits ${slotLabel}`));
         const actionText = isBatterySelectable
-          ? '+1 Stack'
+          ? '+1 Charge'
           : (isEquipped ? 'Equipped' : (isMatch ? 'Equip Here' : 'Equip'));
         return `<div class="inv-move-chip${(isEquipped && !isBatterySelectable) ? ' is-equipped-move' : ''}${(isMatch || isBatterySelectable) ? ' is-match' : ''}" role="button" tabindex="${isEquipped && !isBatterySelectable ? '-1' : '0'}" ${(isEquipped || isBatterySelectable) ? '' : `draggable="true"`} data-move="${key}" data-slot-type="${def.slot}">
           <canvas class="inv-chip__icon" data-move-icon="${key}" width="30" height="30"></canvas>
