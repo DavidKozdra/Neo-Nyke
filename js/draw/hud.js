@@ -480,6 +480,8 @@
     if (type === 'bulk_golem') return 'BULK GOLEM';
     if (type === 'artificer_knave') return 'ARTIFICER CHARGED KNAVE';
     if (type === 'bowman_bane') return "BOWMAN'S BANE";
+    if (type === 'antony_blemmye') return 'ANTONY BLEMMYE';
+    if (type === 'handsome_devil') return 'HANDSOME DEVIL';
     if (type === 'god') return 'GOD';
     return type.toUpperCase();
   }
@@ -503,7 +505,7 @@
       Neo.ctx.fillStyle = '#220f28';
       Neo.ctx.fillRect(startX, y, width, height);
 
-      Neo.ctx.fillStyle = boss.type === 'bulk_golem' ? '#ff8e4a' : boss.type === 'artificer_knave' ? '#ffd27d' : boss.type === 'bowman_bane' ? '#c9aaff' : '#e4b9ff';
+      Neo.ctx.fillStyle = boss.type === 'bulk_golem' ? '#ff8e4a' : boss.type === 'artificer_knave' ? '#ffd27d' : boss.type === 'bowman_bane' ? '#c9aaff' : boss.type === 'antony_blemmye' ? '#ffcf8a' : boss.type === 'handsome_devil' ? '#ff3348' : '#e4b9ff';
       if (boss.type === 'god') Neo.ctx.fillStyle = '#ffffff';
       Neo.ctx.fillRect(startX, y, width * hpPct, height);
 
@@ -717,4 +719,3 @@
   Neo.drawPixelIcon = drawPixelIcon;
   Neo.drawDifficultyIcons = drawDifficultyIcons;
   Neo.drawDifficultyIconOn = drawDifficultyIconOn;
-

@@ -3475,6 +3475,41 @@ button, input, select, textarea {
   100% { opacity: 1; transform: scaleX(1);    filter: brightness(1); }
 }
 
+/* Pause overlay branding — static echo of the main-menu title */
+.pause-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 18px;
+  text-align: center;
+}
+.pause-brand__title {
+  font-family: var(--font-title);
+  font-size: clamp(30px, 5vw, 64px);
+  font-weight: 400;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  background: linear-gradient(180deg, var(--menu-accent-strong) 0%, var(--menu-text) 34%, var(--menu-accent) 64%, var(--menu-text-soft) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  filter:
+    drop-shadow(0 0 8px var(--menu-glow))
+    drop-shadow(0 0 24px var(--menu-glow))
+    drop-shadow(0 3px 0 rgba(0,0,0,.9));
+}
+.pause-brand__subtitle {
+  font-size: clamp(13px, 2vw, 22px);
+  font-weight: 700;
+  letter-spacing: .5em;
+  text-indent: .5em;
+  text-transform: uppercase;
+  color: var(--menu-text-muted);
+  text-shadow: 0 0 16px var(--menu-glow);
+}
+
 /* keep old titlePulse keyframe in case referenced elsewhere */
 @keyframes titlePulse {
   0%   { transform: scaleX(1)    scaleY(1); }

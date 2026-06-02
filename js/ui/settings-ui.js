@@ -613,8 +613,8 @@
     }
 
     // Birthday modal monsters
-    const MONSTER_KEYS = ['hunter','cult_follower','cult_mage','sniper','knave','charger','laser','golem','bulk_golem','queen_cult','artificer_knave','god'];
-    const MONSTER_NAMES = { hunter:'Hunter', cult_follower:'Cultist', cult_mage:'Mage', sniper:'Sniper', knave:'Knave', charger:'Charger', laser:'Laser', golem:'Golem', bulk_golem:'Bulk Golem', queen_cult:'Queen', artificer_knave:'Artificer', god:'GOD' };
+    const MONSTER_KEYS = ['hunter','cult_follower','cult_mage','sniper','knave','charger','laser','golem','bulk_golem','queen_cult','artificer_knave','antony_blemmye','handsome_devil','god'];
+    const MONSTER_NAMES = { hunter:'Hunter', cult_follower:'Cultist', cult_mage:'Mage', sniper:'Sniper', knave:'Knave', charger:'Charger', laser:'Laser', golem:'Golem', bulk_golem:'Bulk Golem', queen_cult:'Queen', artificer_knave:'Artificer', antony_blemmye:'Antony', handsome_devil:'Devil', god:'GOD' };
 
     function populateMonsters() {
       if (!bdMonsters || bdMonsters.childElementCount > 0) return;

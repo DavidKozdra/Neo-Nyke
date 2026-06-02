@@ -643,6 +643,7 @@
       monsterRoamTimer: Neo.monsterRoamTimer,
       knaveKnightCutscenePlayed: Neo.knaveKnightCutscenePlayed,
       queenMetaoCutscenePlayed: Neo.queenMetaoCutscenePlayed,
+      handsomeDevilCutscenePlayed: Neo.handsomeDevilCutscenePlayed,
       secretRoomVisitedFloors: Array.isArray(Neo.secretRoomVisitedFloors) ? [...Neo.secretRoomVisitedFloors] : [],
       camera: Neo.camera,
     };
@@ -669,6 +670,7 @@
     zap_to_extreme: { cooldown: 42, duration: 10, label: 'EXTREME ZAP', color: '#8dd4ff' },
     panic_button: { cooldown: 52, duration: 0, label: 'PANIC', color: '#f4f6fb' },
     mid_sweepy_box: { cooldown: 36, duration: 6, label: 'SWEEPY', color: '#ff6e8b' },
+    el_bartos_cape: { cooldown: 58, duration: 10, label: 'EL BARTO', color: '#ffb37a' },
   };
 
   function ensureEquipmentRuntimeState() {
@@ -711,7 +713,10 @@
       return false;
     }
     player.equipmentCooldowns[itemKey] = def.cooldown;
-    if (def.duration > 0) player.equipmentEffects[itemKey] = { time: def.duration, tick: 0 };
+    if (def.duration > 0) {
+      const stackBonus = itemKey === 'el_bartos_cape' ? Math.max(0, Neo.getItemCount(itemKey) - 1) * 5 : 0;
+      player.equipmentEffects[itemKey] = { time: def.duration + stackBonus, tick: 0 };
+    }
     if (itemKey === 'panic_button') activatePanicButton();
     Neo.itemStatsCacheFrame = -1;
     Neo.spawnParticle({ x: player.x, y: player.y - 34, life: 0.75, text: def.label, c: def.color });
@@ -840,6 +845,8 @@
       } else if (key === 'mid_sweepy_box' && effect.tick <= 0) {
         dropSweepyMine();
         effect.tick = 0.42;
+      } else if (key === 'el_bartos_cape') {
+        player.inv = Math.max(Number(player.inv || 0), 0.12);
       }
       if (effect.time <= 0) {
         delete player.equipmentEffects[key];
@@ -924,6 +931,13 @@
       activate: () => startTimedEquipment('mid_sweepy_box'),
       getState: () => getEquipmentState('mid_sweepy_box'),
       getStatusText: () => getEquipmentStatusText('mid_sweepy_box'),
+    },
+    el_bartos_cape: {
+      key: 'el_bartos_cape',
+      shortName: 'CAPE',
+      activate: () => startTimedEquipment('el_bartos_cape'),
+      getState: () => getEquipmentState('el_bartos_cape'),
+      getStatusText: () => getEquipmentStatusText('el_bartos_cape'),
     },
   };
   Neo.EQUIPMENT_SLOT_KEYS = EQUIPMENT_SLOT_KEYS;

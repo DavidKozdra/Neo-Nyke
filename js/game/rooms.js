@@ -1218,7 +1218,7 @@
         // Almost always add a random non-god boss to ladder rooms
         if (!room.ladderBossPlan) {
           const ladderRandom = Neo.createRoomRandom(room, 'ladder:boss');
-          const _ladderBossPool = ['queen_cult', 'bulk_golem', 'artificer_knave'];
+          const _ladderBossPool = ['queen_cult', 'bulk_golem', 'artificer_knave', 'antony_blemmye'];
           room.ladderBossPlan = {
             spawn: ladderRandom() < 0.88,
             type: _ladderBossPool[Math.floor(ladderRandom() * _ladderBossPool.length)],

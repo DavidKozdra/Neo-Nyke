@@ -365,6 +365,39 @@ export const ITEM_DEFS = {
       category: 'knight',
       tags: ['charge', 'defense'],
     },
+    gold_vac: {
+      key: 'gold_vac',
+      name: 'Gold Vac',
+      shortName: 'Vac x2',
+      description: 'Automatically vacuums pickups from across the room and doubles coin pickup value.',
+      rarity: 'knight',
+      color: '#ffe07a',
+      accent: '#fff6c7',
+      category: 'knight',
+      tags: ['loot', 'coin', 'utility'],
+    },
+    double_dose: {
+      key: 'double_dose',
+      name: 'Double Dose',
+      shortName: 'Potion x2',
+      description: '50% chance per stack for potions to apply twice.',
+      rarity: 'knight',
+      color: '#9af7d8',
+      accent: '#dffff4',
+      category: 'knight',
+      tags: ['potion', 'healing', 'utility'],
+    },
+    copycat_charm: {
+      key: 'copycat_charm',
+      name: 'Copycat Charm',
+      shortName: 'Item x2',
+      description: '20% chance per stack to duplicate an item pickup.',
+      rarity: 'knight',
+      color: '#f5efff',
+      accent: '#c8a8ff',
+      category: 'knight',
+      tags: ['loot', 'item', 'utility'],
+    },
     crit_charm: {
       key: 'crit_charm',
       name: 'Crit Charm',
@@ -820,6 +853,17 @@ export const ITEM_DEFS = {
       category: 'wizard',
       tags: ['projectile', 'speed', 'wizard'],
     },
+    el_bartos_cape: {
+      key: 'el_bartos_cape',
+      name: "El Barto's Cape",
+      shortName: 'CAPE',
+      description: 'Equipment. Become invisible for 10 seconds. Each stack adds +5 seconds and attacks do not break it.',
+      rarity: 'red',
+      color: '#ff5b78',
+      accent: '#ffe0b8',
+      category: 'red',
+      tags: ['equipment', 'stealth', 'red'],
+    },
   };
 export const RARITY_NAME_COLORS = {
     knight: '#f4f6fb',
@@ -842,7 +886,7 @@ export const ITEM_KEYS = Object.keys(ITEM_DEFS);
 export const SANDBOX_ENEMY_TYPES = [
     'hunter', 'charger', 'laser', 'knave', 'sniper', 'machine_gunner',
     'golem', 'cult_mage', 'cult_follower', 'summoner', 'shield_unit', 'healer', 'boss_spawner',
-    'queen_cult', 'bulk_golem', 'artificer_knave', 'god', 'mirror_knight', 'mooggy',
+    'queen_cult', 'bulk_golem', 'artificer_knave', 'antony_blemmye', 'handsome_devil', 'god', 'mirror_knight', 'mooggy',
   ];
 export const ITEM_DROP_WEIGHTS = [
     ['neo_knife', 60],
@@ -851,6 +895,9 @@ export const ITEM_DROP_WEIGHTS = [
     ['orb_of_blood', 28],
     ['hemes_scarf', 12],
     ['insurance', 18],
+    ['gold_vac', 12],
+    ['double_dose', 14],
+    ['copycat_charm', 12],
     ['crit_charm', 24],
     ['attack_servo', 22],
   ['enemy_magnet', 28],
@@ -888,6 +935,7 @@ export const ITEM_DROP_WEIGHTS = [
     ['mateos_bag', 10],
     ['extra_battery', 10],
     ['mooggy_zoomies', 14],
+    ['el_bartos_cape', 6],
   ];
 export const ITEM_DROP_TABLE = Neo.buildWeightTable(ITEM_DROP_WEIGHTS);
 export const ELITE_ITEM_DROP_TABLE = Neo.buildWeightTable(
@@ -897,6 +945,9 @@ export const ELITE_INVENTORY_POOL = [
     'neo_knife',
   'tooth_of_thorn',
     'tough_skin',
+    'gold_vac',
+    'double_dose',
+    'copycat_charm',
     'orb_of_blood',
     'insurance',
     'crit_charm',
@@ -917,6 +968,7 @@ export const ELITE_INVENTORY_POOL = [
     'pendant_of_kronos',
     'rich_mans_luck',
     'extra_battery',
+    'el_bartos_cape',
   ];
 export const WHITE_ITEM_POOL = ITEM_KEYS.filter(key => ITEM_DEFS[key]?.rarity === 'knight');
 export const ELITE_TYPE_DEFS = {

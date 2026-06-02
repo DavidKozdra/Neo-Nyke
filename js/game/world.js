@@ -1324,6 +1324,26 @@
         }
         if (hazard.statusTick <= 0) hazard.statusTick = 0.45;
       }
+      if (hazard.kind === 'red_spikes') {
+        hazard.armTime = Math.max(0, Number(hazard.armTime || 0) - dt);
+        if (hazard.armTime <= 0 && !hazard.hit) {
+          hazard.hit = true;
+          Neo.spawnParticle({ x: hazard.x, y: hazard.y, life: 0.28, ring: hazard.r + 10, c: '#ff3348' });
+          if (hazard.enemy) {
+            if (Neo.dist(Neo.player.x, Neo.player.y, hazard.x, hazard.y) <= hazard.r + Neo.player.r) {
+              const angle = Math.atan2(Neo.player.y - hazard.y, Neo.player.x - hazard.x);
+              damagePlayer(hazard.damage || 18, angle, 130, hazard.source || 'red_spikes');
+              Neo.applyBleed?.(Neo.player, 1, 3.4);
+            }
+          } else {
+            forEachEnemyNearCircle(hazard.x, hazard.y, hazard.r + 80, enemy => {
+              if (Neo.dist(enemy.x, enemy.y, hazard.x, hazard.y) > hazard.r + enemy.r) return;
+              const angle = Math.atan2(enemy.y - hazard.y, enemy.x - hazard.x);
+              Neo.hitEnemy(enemy, hazard.damage || 18, angle, 130, '#ff3348');
+            });
+          }
+        }
+      }
       if (hazard.kind === 'healing_zone') {
         hazard.plusTick = (hazard.plusTick ?? 0.08) - dt;
         if (hazard.plusTick <= 0) {
@@ -1588,6 +1608,10 @@
   }
 
   function updatePickups(dt = 0.016) {
+    const itemStats = Neo.getItemStats?.() || {};
+    const autoVacuumRange = Math.max(0, Number(itemStats.pickupVacuumRange || 0));
+    const coinPickupMultiplier = Math.max(1, Number(itemStats.coinPickupMultiplier || 1));
+    const potionDoubleChance = Neo.clamp(Number(itemStats.potionDoubleChance || 0), 0, 1);
     for (let index = Neo.pickups.length - 1; index >= 0; index -= 1) {
       const pickup = Neo.pickups[index];
       if (!pickup || typeof pickup !== 'object' || typeof pickup.type !== 'string') {
@@ -1595,7 +1619,7 @@
         continue;
       }
       if (pickup.type === 'coin') {
-        const magnetRadius = 110;
+        const magnetRadius = autoVacuumRange > 0 ? autoVacuumRange : 110;
         const d = Neo.dist(pickup.x, pickup.y, Neo.player.x, Neo.player.y);
         if (d < magnetRadius && d > 0.001) {
           const pull = 180 + (1 - d / magnetRadius) * 260;
@@ -1607,7 +1631,7 @@
         const _wantPotion = Neo.player.hp < Neo.player.maxHp
           || (_potionCap > 0 && Number(Neo.player.storedPotions || 0) < _potionCap && Neo.player.hp >= Neo.player.maxHp);
         if (_wantPotion) {
-          const magnetRadius = 110;
+          const magnetRadius = autoVacuumRange > 0 ? autoVacuumRange : 110;
           const d = Neo.dist(pickup.x, pickup.y, Neo.player.x, Neo.player.y);
           if (d < magnetRadius && d > 0.001) {
             const pull = 180 + (1 - d / magnetRadius) * 260;
@@ -1616,7 +1640,7 @@
           }
         }
       } else if (pickup.type === 'apple' || pickup.type === 'fruit') {
-        const magnetRadius = 124;
+        const magnetRadius = autoVacuumRange > 0 ? autoVacuumRange : 124;
         const d = Neo.dist(pickup.x, pickup.y, Neo.player.x, Neo.player.y);
         if (d < magnetRadius && d > 0.001) {
           const pull = 190 + (1 - d / magnetRadius) * 240;
@@ -1624,7 +1648,7 @@
           pickup.y += ((Neo.player.y - pickup.y) / d) * 0.016 * pull;
         }
       } else if (pickup.type === 'item') {
-        const magnetRadius = 145;
+        const magnetRadius = autoVacuumRange > 0 ? autoVacuumRange : 145;
         const d = Neo.dist(pickup.x, pickup.y, Neo.player.x, Neo.player.y);
         if (d < magnetRadius && d > 0.001) {
           const pull = 150 + (1 - d / magnetRadius) * 220;
@@ -1675,21 +1699,26 @@
       if (Neo.dist(pickup.x, pickup.y, Neo.player.x, Neo.player.y) >= pickupTriggerRadius) continue;
 
       if (pickup.type === 'coin') {
-        addCoins(pickup.value || 1);
+        addCoins(Math.round((pickup.value || 1) * coinPickupMultiplier));
       }
 
       if (pickup.type === 'potion') {
         const potionCap = Neo.getPotionCarryCap();
         const stored = Number(Neo.player.storedPotions || 0);
+        const doubled = potionDoubleChance > 0 && Neo.rng() < potionDoubleChance;
+        const potionApplications = doubled ? 2 : 1;
         if (Neo.player.hp < Neo.player.maxHp) {
-          const potionHeal = Neo.getPotionHealAmount();
+          const potionHeal = Neo.getPotionHealAmount() * potionApplications;
           const before = Neo.player.hp;
           Neo.player.hp = Math.min(Neo.player.maxHp, Neo.player.hp + potionHeal);
           const gained = Neo.player.hp - before;
           if (gained > 0) spawnHealPopup(Neo.player.x + Neo.rand(-10, 10), Neo.player.y - 20, gained);
+          if (doubled) Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 34, life: 0.7, text: 'DOUBLE POTION', c: '#9af7d8' });
         } else if (potionCap > 0 && stored < potionCap) {
-          Neo.player.storedPotions = stored + 1;
+          const storedGain = Math.min(potionApplications, potionCap - stored);
+          Neo.player.storedPotions = stored + storedGain;
           Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.7, text: `POTION STORED (${Neo.player.storedPotions}/${potionCap})`, c: '#a0e8ff' });
+          if (doubled && storedGain > 1) Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 36, life: 0.7, text: 'DOUBLE POTION', c: '#9af7d8' });
           Neo.updateHud();
         } else {
           continue;

@@ -301,7 +301,7 @@ export const PERF_BUDGET_60FPS = 1000 / 60;
 export const PERF_AVG_WEIGHT = 0.12;
 export const PERF_OVERLAY_INTERVAL = 250;
 
-export const BOSS_TYPES = new Set(['god', 'queen_cult', 'bulk_golem', 'artificer_knave', 'bowman_bane']);
+export const BOSS_TYPES = new Set(['god', 'queen_cult', 'bulk_golem', 'artificer_knave', 'bowman_bane', 'antony_blemmye', 'handsome_devil']);
 export const CHALLENGE_ROOM_TYPES = new Set(['challenge']);
 export const CHALLENGE_TRIAL_TYPES = ['mirror', 'stillness', 'bomb', 'survival', 'runes', 'storm'];
 export const KozSeededRngApi = window.KozEngine?.World?.seededRng || {};
@@ -321,6 +321,8 @@ export const BOSS_OPENING_DIALOGUE = {
   bulk_golem: 'Stone remembers every blow.',
   artificer_knave: 'Run. I only need one clean hit.',
   bowman_bane: 'You came back. I was waiting.',
+  antony_blemmye: 'The chest sees. The chest hungers.',
+  handsome_devil: 'Try not to stare.',
 };
 export const DEFAULT_KILLER_DEATH_QUOTES = [
   'Another hero falls.',
@@ -332,6 +334,8 @@ export const DEFAULT_KILLER_DEATH_QUOTES = [
 export const KILLER_DEATH_QUOTES = {
   god: ['Kneel, mortal.', 'Divinity does not miss twice.', 'You challenged a god and paid for it.'],
   bowman_bane: ['The columns remember you.', 'You had one chance to stay away.', 'Second visit, same grave.'],
+  antony_blemmye: ['The chest swallowed your courage.', 'Hammered flat.', 'The face in the ribs smiles.'],
+  handsome_devil: ['Beauty burns.', 'Sin had better aim.', 'You looked too long.'],
   queen_cult: ['The chorus grows louder.', 'Your voice joins the cult now.', 'Sing your last note.'],
   bulk_golem: ['Stone outlasts flesh.', 'I break what stands before me.', 'Crushed.'],
   artificer_knave: ['Precision beats courage.', 'You moved exactly where I wanted.', 'Your logic failed.'],

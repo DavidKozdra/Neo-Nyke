@@ -336,6 +336,33 @@
           Neo.ctx.lineTo(Math.cos(a - 0.1) * hazard.r * 0.72, Math.sin(a - 0.1) * hazard.r * 0.72);
           Neo.ctx.stroke();
         }
+      } else if (hazard.kind === 'red_spikes') {
+        const armed = Number(hazard.armTime || 0) <= 0;
+        const t = Date.now() * 0.009 + hazard.x * 0.01;
+        const pulse = armed ? 1.06 + Math.sin(t * 2.2) * 0.04 : 0.86 + Math.sin(t * 2.8) * 0.08;
+        Neo.ctx.fillStyle = armed ? 'rgba(255,42,64,0.24)' : 'rgba(255,42,64,0.12)';
+        Neo.ctx.beginPath();
+        Neo.ctx.arc(0, 0, hazard.r * pulse, 0, Math.PI * 2);
+        Neo.ctx.fill();
+        Neo.ctx.strokeStyle = armed ? '#ff3348' : 'rgba(255,80,96,0.72)';
+        Neo.ctx.lineWidth = armed ? 3 : 2;
+        Neo.ctx.beginPath();
+        Neo.ctx.arc(0, 0, hazard.r * (0.76 + Math.sin(t) * 0.05), 0, Math.PI * 2);
+        Neo.ctx.stroke();
+        Neo.ctx.shadowColor = '#ff3348';
+        Neo.ctx.shadowBlur = armed ? 18 : 8;
+        Neo.ctx.fillStyle = armed ? '#ff5264' : '#9b1c2c';
+        for (let index = 0; index < 9; index += 1) {
+          const a = t * 0.22 + index * (Math.PI * 2 / 9);
+          const inner = hazard.r * 0.18;
+          const outer = hazard.r * (armed ? 0.88 : 0.48);
+          Neo.ctx.beginPath();
+          Neo.ctx.moveTo(Math.cos(a - 0.13) * inner, Math.sin(a - 0.13) * inner);
+          Neo.ctx.lineTo(Math.cos(a) * outer, Math.sin(a) * outer);
+          Neo.ctx.lineTo(Math.cos(a + 0.13) * inner, Math.sin(a + 0.13) * inner);
+          Neo.ctx.closePath();
+          Neo.ctx.fill();
+        }
       } else if (hazard.kind === 'thorn_mine') {
         const armed = Number(hazard.armTime || 0) <= 0;
         const pulse = 0.85 + Math.sin(Date.now() * 0.012 + hazard.x) * 0.08;

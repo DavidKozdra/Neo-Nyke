@@ -381,6 +381,9 @@ export function resumeGame() {
       orb_of_blood: 0,
       hemes_scarf: 0,
       insurance: 0,
+      gold_vac: 0,
+      double_dose: 0,
+      copycat_charm: 0,
       crit_charm: 0,
       attack_servo: 0,
       enemy_magnet: 0,
@@ -414,6 +417,7 @@ export function resumeGame() {
       mateos_bag: 0,
       extra_battery: 0,
       mooggy_zoomies: 0,
+      el_bartos_cape: 0,
     };
     const character = Neo.CHARACTER_DEFS[Neo.chosenCharacter] || Neo.CHARACTER_DEFS.thorn_knight;
     if (character.key === 'thorn_knight') {
@@ -1305,6 +1309,8 @@ export function resumeGame() {
     if (type === 'bulk_golem') return 'Bulk Golem';
     if (type === 'artificer_knave') return 'Artificer Charged Knave';
     if (type === 'bowman_bane') return "Bowman's Bane";
+    if (type === 'antony_blemmye') return 'Antony Blemmye';
+    if (type === 'handsome_devil') return 'Handsome Devil';
     if (type === 'god') return 'GOD';
     return titleCase(type);
   }
@@ -1595,6 +1601,8 @@ export function resumeGame() {
     'Queen of the Cult': 'queen_cult',
     'Bulk Golem': 'bulk_golem',
     'Artificer Charged Knave': 'artificer_knave',
+    'Antony Blemmye': 'antony_blemmye',
+    'Handsome Devil': 'handsome_devil',
     'GOD': 'god',
     'Mirror Champion': 'thorn_knight',
     'Hunter': 'hunter',
@@ -2094,7 +2102,7 @@ export function resumeGame() {
     if (!Neo.loopStarted) { Neo.loopStarted = true; requestAnimationFrame(Neo.loop); }
   }
 
-  const BOSS_RUSH_ORDER = ['queen_cult', 'bulk_golem', 'artificer_knave', 'god'];
+  const BOSS_RUSH_ORDER = ['queen_cult', 'bulk_golem', 'antony_blemmye', 'handsome_devil', 'artificer_knave', 'god'];
   Neo.BOSS_RUSH_ORDER = BOSS_RUSH_ORDER;
 
   function startBossRush() {
@@ -2197,7 +2205,7 @@ export function resumeGame() {
       }, 1200); // 1.2 seconds delay
     } else {
       boss = Neo.spawnEnemy(bossType, safeSpawn.x, safeSpawn.y, false);
-      const playedCutscene = Neo.tryPlayKnaveKnightCutscene(boss, bossType);
+      const playedCutscene = Neo.tryPlayBossIntroCutscene(boss, bossType);
       const line = Neo.BOSS_OPENING_DIALOGUE[bossType];
       if (!playedCutscene && boss && line) Neo.sayOverEntity(boss, line);
       if (bossType === 'god') Neo.playGodDialogue(1);
@@ -2208,8 +2216,8 @@ export function resumeGame() {
   function onBossRushBossDefeated() {
     Neo.bossRushActive = false;
     Neo.bossRushStage += 1;
-    if (Neo.ui.bossRushStageNum) Neo.ui.bossRushStageNum.textContent = Math.min(Neo.bossRushStage + 1, 4);
-    if (Neo.ui.bossRushStageNum2) Neo.ui.bossRushStageNum2.textContent = Math.min(Neo.bossRushStage + 1, 4);
+    if (Neo.ui.bossRushStageNum) Neo.ui.bossRushStageNum.textContent = Math.min(Neo.bossRushStage + 1, BOSS_RUSH_ORDER.length);
+    if (Neo.ui.bossRushStageNum2) Neo.ui.bossRushStageNum2.textContent = Math.min(Neo.bossRushStage + 1, BOSS_RUSH_ORDER.length);
     if (Neo.bossRushStage >= BOSS_RUSH_ORDER.length) {
       Neo.win();
       return;
@@ -2256,11 +2264,11 @@ export function resumeGame() {
 
   function buildPracticeEnemyGrid() {
     if (!Neo.ui.practiceEnemyGrid) return;
-    const BOSS_TYPES_SET = new Set(['queen_cult', 'bulk_golem', 'artificer_knave', 'bowman_bane', 'god']);
+    const BOSS_TYPES_SET = new Set(['queen_cult', 'bulk_golem', 'artificer_knave', 'bowman_bane', 'antony_blemmye', 'handsome_devil', 'god']);
     const allTypes = [
       'hunter', 'charger', 'laser', 'knave', 'sniper', 'machine_gunner',
       'golem', 'cult_mage', 'cult_follower', 'summoner', 'shield_unit', 'healer', 'boss_spawner',
-      'queen_cult', 'bulk_golem', 'artificer_knave', 'bowman_bane', 'god', 'mirror_knight', 'mooggy',
+      'queen_cult', 'bulk_golem', 'artificer_knave', 'bowman_bane', 'antony_blemmye', 'handsome_devil', 'god', 'mirror_knight', 'mooggy',
     ];
     Neo.ui.practiceEnemyGrid.innerHTML = allTypes.map(type => {
       const isBoss = BOSS_TYPES_SET.has(type);
@@ -2331,6 +2339,7 @@ export function resumeGame() {
     Neo.mooggyAssassinSpawnedThisFloor = false;
     Neo.knaveKnightCutscenePlayed = false;
     Neo.queenMetaoCutscenePlayed = false;
+    Neo.handsomeDevilCutscenePlayed = false;
     Neo.secretRoomVisitedFloors = [];
     Neo.wizardPawSelection = null;
     Neo.wizardPawPendingCount = 0;
@@ -2451,6 +2460,7 @@ export function resumeGame() {
     Neo.monsterRoamTimer = Number(snapshot.monsterRoamTimer || 0);
     Neo.knaveKnightCutscenePlayed = !!snapshot.knaveKnightCutscenePlayed;
     Neo.queenMetaoCutscenePlayed = !!snapshot.queenMetaoCutscenePlayed;
+    Neo.handsomeDevilCutscenePlayed = !!snapshot.handsomeDevilCutscenePlayed;
     Neo.secretRoomVisitedFloors = Array.isArray(snapshot.secretRoomVisitedFloors) ? [...snapshot.secretRoomVisitedFloors] : [];
     Neo.restoreRivals(snapshot.rivals);
     Neo.wizardPawSelection = null;

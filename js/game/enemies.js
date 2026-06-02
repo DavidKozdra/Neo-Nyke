@@ -242,8 +242,9 @@
   }
 
   function getFloorBossType() {
-    const bossPool = ['queen_cult', 'bulk_golem', 'artificer_knave'];
     const bossRandom = Neo.createScopedRandom('floor-boss:type');
+    if (Neo.floor === 6 && bossRandom() < 0.66) return 'handsome_devil';
+    const bossPool = ['queen_cult', 'bulk_golem', 'artificer_knave', 'antony_blemmye'];
     return bossPool[Math.floor(bossRandom() * bossPool.length)] || bossPool[0];
   }
 
@@ -784,6 +785,30 @@
       base.bleedImmune = true;
       base.columnCd = 0;
       base.burstCd = 0;
+    } else if (type === 'antony_blemmye') {
+      base.r = 42;
+      base.hp = 1540;
+      base.max = 1540;
+      base.speed = 82;
+      base.dmg = 27;
+      base.attackCd = 1.15;
+      base.phase = 1;
+      base.bleedImmune = true;
+      base.hammerCd = 1.2;
+      base.biteCd = 0.85;
+    } else if (type === 'handsome_devil') {
+      base.r = 34;
+      base.hp = 1700;
+      base.max = 1700;
+      base.speed = 104;
+      base.dmg = 23;
+      base.attackCd = 1.1;
+      base.phase = 1;
+      base.fireImmune = true;
+      base.spikeCd = 0.9;
+      base.lavaGridCd = 2.4;
+      base.devilLaserCd = 1.6;
+      base.beamRange = 560;
     } else {
       if (eliteAllowed) {
         base.hp = Math.round(base.hp * 1.35);
@@ -886,9 +911,36 @@
     ], { returnState: 'play' });
   }
 
+  function tryPlayHandsomeDevilCharacterCutscene(enemy, enemyType) {
+    if (!enemy || enemyType !== 'handsome_devil' || !Neo.player) return false;
+    if (Neo.handsomeDevilCutscenePlayed) return false;
+    const character = Neo.player.character;
+    const lineByCharacter = {
+      princess: { speaker: 'PRINCESS', text: 'He is cute.' },
+      granialla: { speaker: 'GRANIALLA', text: 'Sinner.' },
+      mooggy: { speaker: 'MOOGGY', text: 'Uncle.' },
+    };
+    const line = lineByCharacter[character];
+    if (!line) return false;
+
+    Neo.handsomeDevilCutscenePlayed = true;
+    Neo.clearGameplayInput();
+    Neo.setShopPanelOpen(false);
+    Neo.setInventoryPanelOpen(false);
+    enemy.attackCd = Math.max(Number(enemy.attackCd || 0), 1.4);
+    enemy.stun = Math.max(Number(enemy.stun || 0), 0.25);
+    Neo.scheduleRunSave();
+
+    return Neo.uiController.playDialogue([
+      line,
+      { speaker: 'HANDSOME DEVIL', text: character === 'princess' ? 'Naturally.' : character === 'mooggy' ? 'Family is complicated.' : 'Then cast the first stone.' },
+    ], { returnState: 'play' });
+  }
+
   function tryPlayBossIntroCutscene(enemy, enemyType) {
     return tryPlayKnaveKnightCutscene(enemy, enemyType)
-      || tryPlayQueenMetaoCutscene(enemy, enemyType);
+      || tryPlayQueenMetaoCutscene(enemy, enemyType)
+      || tryPlayHandsomeDevilCharacterCutscene(enemy, enemyType);
   }
 
   function sayOverEntity(entity, text, options = {}) {
@@ -2064,8 +2116,8 @@
         enemy.bulkNovaLineShown = true;
         sayOverEntity(enemy, 'Break under the weight.', { holdTime: 1.7 });
       }
-      const aoeRadius = 216;
-      const aoeDamage = Math.round(enemy.dmg * 1.08);
+      const aoeRadius = 173;
+      const aoeDamage = Math.round(enemy.dmg * 0.864);
       Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.5, ring: aoeRadius, c: '#ff8844' });
       Neo.blastRadius(enemy.x, enemy.y, aoeRadius, aoeDamage, '#ff8844', enemy);
       Neo.shake = 12;
@@ -2190,8 +2242,8 @@
   }
 
   function spawnGodCouncil(enemy) {
-    const bossTypes = ['queen_cult', 'bulk_golem', 'artificer_knave'];
-    const spawnAngles = [-Math.PI * 0.5, Math.PI * 0.16, Math.PI * 0.84];
+    const bossTypes = ['queen_cult', 'bulk_golem', 'artificer_knave', 'antony_blemmye'];
+    const spawnAngles = [-Math.PI * 0.5, 0, Math.PI * 0.5, Math.PI];
     bossTypes.forEach((type, index) => {
       const angle = spawnAngles[index] || ((Math.PI * 2 * index) / bossTypes.length);
       const px = Neo.clamp(enemy.x + Math.cos(angle) * 220, 110, Neo.ROOM_W - 110);
@@ -2357,6 +2409,240 @@
       enemy.windup = (enemy.phase >= 2 ? 0.54 : 0.72) / tuning.reaction;
       enemy.beamAngle = Math.atan2(dy, dx) + Neo.rollEnemyBeamBias(enemy, 0.18);
       enemy.attackCd = (enemy.phase >= 2 ? 2.4 : 3.2) * tuning.rangedCadence;
+    }
+  }
+
+  function spawnAntonyHammerSwing(enemy) {
+    const radius = 196;
+    const damage = Math.round(enemy.dmg * 1.18);
+    Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.58, ring: radius, c: '#ffcf8a' });
+    Neo.blastRadius(enemy.x, enemy.y, radius, damage, '#ffcf8a', enemy);
+    Neo.shake = Math.max(Neo.shake, 13);
+    Neo.shakeT = Math.max(Neo.shakeT, 0.22);
+  }
+
+  function updateAntonyBlemmyeBoss(enemy, dt) {
+    const tuning = Neo.getEnemyDifficultyTuning();
+    const dx = Neo.player.x - enemy.x;
+    const dy = Neo.player.y - enemy.y;
+    const distance = Math.hypot(dx, dy) || 1;
+
+    enemy.hammerCd = Math.max(0, Number(enemy.hammerCd || 0) - dt);
+    enemy.biteCd = Math.max(0, Number(enemy.biteCd || 0) - dt);
+
+    if (enemy.windup > 0) {
+      enemy.windup -= dt;
+      enemy.vx *= 0.7;
+      enemy.vy *= 0.7;
+      Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.16, c: '#ffcf8a' });
+      if (enemy.windup <= 0 && enemy.state === 'antonyHammer') {
+        spawnAntonyHammerSwing(enemy);
+        enemy.attackCd = 1.35 * tuning.rangedCadence;
+      }
+      return;
+    }
+
+    if (enemy.stun > 0) {
+      enemy.vx *= 0.88;
+      enemy.vy *= 0.88;
+      return;
+    }
+
+    const desired = 92;
+    const direction = distance < desired - 24 ? -0.6 : 1;
+    steerEnemy(enemy, dx / distance * direction, dy / distance * direction, enemy.speed, 3.7, dt);
+
+    if (enemy.biteCd <= 0 && distance < enemy.r + Neo.player.r + 26) {
+      const angle = Math.atan2(dy, dx);
+      const biteDamage = Math.round(enemy.dmg * 0.92);
+      enemy.attackAnimT = 0.28;
+      Neo.damagePlayer(biteDamage, angle, 240, enemy.type);
+      if (Neo.nextRandom('encounter') < 0.5) {
+        Neo.applyDarkDrain?.(Neo.player, 2, 4.2);
+        const heal = Math.round(biteDamage * 0.5);
+        enemy.hp = Math.min(enemy.max, enemy.hp + heal);
+        Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 12, life: 0.55, text: `+${heal}`, c: '#b48cff' });
+      }
+      enemy.biteCd = 1.65 * tuning.rangedCadence;
+      enemy.attackCd = Math.max(enemy.attackCd, 0.55);
+      return;
+    }
+
+    if (enemy.hammerCd <= 0 && distance < 260 && enemy.attackCd <= 0) {
+      enemy.state = 'antonyHammer';
+      enemy.windup = 0.78 / tuning.reaction;
+      enemy.hammerCd = 3.35 * tuning.rangedCadence;
+      enemy.attackCd = 0.8;
+      if (!enemy.antonyHammerLineShown) {
+        enemy.antonyHammerLineShown = true;
+        sayOverEntity(enemy, 'Open wide.', { holdTime: 1.5 });
+      }
+    }
+  }
+
+  function spawnDevilRedSpikes(enemy, count = 5) {
+    if (!Neo.player) return;
+    const baseAngle = Math.atan2(Neo.player.y - enemy.y, Neo.player.x - enemy.x);
+    const predictedX = Neo.player.x + Number(Neo.player.vx || 0) * 0.42;
+    const predictedY = Neo.player.y + Number(Neo.player.vy || 0) * 0.42;
+    for (let index = 0; index < count; index += 1) {
+      const spread = (index - (count - 1) / 2) * 42;
+      const forward = 18 + Math.abs(index - (count - 1) / 2) * 16;
+      const perp = baseAngle + Math.PI / 2;
+      const x = Neo.clamp(predictedX + Math.cos(perp) * spread + Math.cos(baseAngle) * forward + Neo.rand(-18, 18, 'encounter'), 80, Neo.ROOM_W - 80);
+      const y = Neo.clamp(predictedY + Math.sin(perp) * spread + Math.sin(baseAngle) * forward + Neo.rand(-18, 18, 'encounter'), 80, Neo.ROOM_H - 80);
+      Neo.hazards.push({
+        kind: 'red_spikes',
+        enemy: true,
+        source: 'handsome_devil',
+        x,
+        y,
+        r: 34,
+        ttl: 1.1,
+        armTime: 0.48,
+        damage: Math.round(enemy.dmg * 0.82),
+        hit: false,
+      });
+      Neo.spawnParticle({ x, y, life: 0.35, ring: 18, c: '#ff3348' });
+    }
+  }
+
+  function spawnDevilLavaGrid(enemy) {
+    const tile = 64;
+    const thickness = 22;
+    const margin = Neo.WALL + 38;
+    const verticals = [-1, 0, 1].map(offset => Neo.clamp(Neo.player.x + offset * 150 + Neo.rand(-34, 34, 'encounter'), margin, Neo.ROOM_W - margin));
+    const horizontals = [-1, 1].map(offset => Neo.clamp(Neo.player.y + offset * 110 + Neo.rand(-28, 28, 'encounter'), margin, Neo.ROOM_H - margin));
+    verticals.forEach((x, index) => {
+      const top = Neo.WALL + tile;
+      const h = Neo.ROOM_H - Neo.WALL * 2 - tile * 2;
+      Neo.hazards.push({
+        kind: 'lava',
+        shape: 'rect',
+        enemy: true,
+        source: 'handsome_devil',
+        x,
+        y: top + h / 2,
+        left: x - thickness / 2,
+        top,
+        w: thickness,
+        h,
+        ttl: 4.2,
+        phase: index * 0.7,
+        pulse: 1.9,
+      });
+    });
+    horizontals.forEach((y, index) => {
+      const left = Neo.WALL + tile;
+      const w = Neo.ROOM_W - Neo.WALL * 2 - tile * 2;
+      Neo.hazards.push({
+        kind: 'lava',
+        shape: 'rect',
+        enemy: true,
+        source: 'handsome_devil',
+        x: left + w / 2,
+        y,
+        left,
+        top: y - thickness / 2,
+        w,
+        h: thickness,
+        ttl: 4.2,
+        phase: index * 0.9 + 1.3,
+        pulse: 1.9,
+      });
+    });
+    Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 12, life: 0.58, text: 'LAVA GRID', c: '#ff7a32' });
+  }
+
+  function updateHandsomeDevilBoss(enemy, dt) {
+    const tuning = Neo.getEnemyDifficultyTuning();
+    const hpPct = enemy.hp / enemy.max;
+    const dx = Neo.player.x - enemy.x;
+    const dy = Neo.player.y - enemy.y;
+    const distance = Math.hypot(dx, dy) || 1;
+
+    if (hpPct <= 0.5 && enemy.phase === 1) {
+      enemy.phase = 2;
+      enemy.attackCd = Math.min(enemy.attackCd, 0.65);
+      enemy.devilLaserCd = 0.6;
+      sayOverEntity(enemy, 'Look into my eyes.', { holdTime: 1.7 });
+      Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.8, ring: 124, c: '#ff3348' });
+    }
+
+    enemy.spikeCd = Math.max(0, Number(enemy.spikeCd || 0) - dt);
+    enemy.lavaGridCd = Math.max(0, Number(enemy.lavaGridCd || 0) - dt);
+    enemy.devilLaserCd = Math.max(0, Number(enemy.devilLaserCd || 0) - dt);
+
+    if (enemy.windup > 0) {
+      enemy.windup -= dt;
+      enemy.vx *= 0.76;
+      enemy.vy *= 0.76;
+      if (enemy.state === 'devilLaser') Neo.aimEnemyBeam(enemy, dt, 3.2 * tuning.reaction);
+      Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.14, c: '#ff3348' });
+      if (enemy.windup <= 0 && enemy.state === 'devilLaser') {
+        enemy.beamTime = 0.86;
+        enemy.beamTick = 0;
+      }
+      return;
+    }
+
+    if (enemy.beamTime > 0) {
+      Neo.tickEnemyBeam(enemy, dt, {
+        tick: 0.075 * Math.max(0.68, tuning.rangedCadence),
+        range: enemy.beamRange || 560,
+        knockback: 180,
+        damage: Math.round(enemy.dmg * 0.72),
+        speedDamp: 0.84,
+        turnRate: 1.8 * tuning.reaction,
+        damageSource: 'handsome_devil',
+        onEnd: activeEnemy => {
+          activeEnemy.attackCd = 1.1 * tuning.rangedCadence;
+        },
+      });
+      return;
+    }
+
+    if (enemy.stun > 0) {
+      enemy.vx *= 0.88;
+      enemy.vy *= 0.88;
+      return;
+    }
+
+    if (enemy.phase === 1) {
+      if (enemy.spikeCd <= 0) {
+        spawnDevilRedSpikes(enemy, 5);
+        enemy.spikeCd = 2.2 * tuning.rangedCadence;
+      }
+      if (enemy.lavaGridCd <= 0) {
+        spawnDevilLavaGrid(enemy);
+        enemy.lavaGridCd = 6.6 * tuning.rangedCadence;
+      }
+    } else if (enemy.devilLaserCd <= 0 && distance < 620) {
+      enemy.state = 'devilLaser';
+      enemy.windup = 0.56 / tuning.reaction;
+      enemy.beamAngle = Math.atan2(dy, dx) + Neo.rollEnemyBeamBias(enemy, 0.09);
+      enemy.devilLaserCd = 2.35 * tuning.rangedCadence;
+      return;
+    }
+
+    const desired = enemy.phase >= 2 ? 250 : 170;
+    const direction = distance < desired - 32 ? -1 : distance > desired + 36 ? 1 : 0.2;
+    const strafe = enemy.phase >= 2 && distance < 520 ? 0.38 : 0.18;
+    steerEnemy(
+      enemy,
+      dx / distance * direction + -dy / distance * strafe,
+      dy / distance * direction + dx / distance * strafe,
+      enemy.speed,
+      enemy.phase >= 2 ? 5.2 : 4.1,
+      dt
+    );
+
+    if (distance < enemy.r + Neo.player.r + 12 && enemy.attackCd <= 0) {
+      const angle = Math.atan2(dy, dx);
+      Neo.damagePlayer(enemy.dmg, angle, 210, enemy.type);
+      Neo.applyFire?.(Neo.player, 1, 2.8);
+      enemy.attackAnimT = 0.24;
+      enemy.attackCd = 0.95 * tuning.rangedCadence;
     }
   }
 
@@ -3410,6 +3696,7 @@
   Neo.playGodDialogue = playGodDialogue;
   Neo.tryPlayKnaveKnightCutscene = tryPlayKnaveKnightCutscene;
   Neo.tryPlayQueenMetaoCutscene = tryPlayQueenMetaoCutscene;
+  Neo.tryPlayHandsomeDevilCharacterCutscene = tryPlayHandsomeDevilCharacterCutscene;
   Neo.tryPlayBossIntroCutscene = tryPlayBossIntroCutscene;
   Neo.sayOverEntity = sayOverEntity;
   Neo.sayAtPosition = sayAtPosition;
@@ -3430,6 +3717,8 @@
   Neo.isBossType = isBossType;
   Neo.spawnBowmanBane = spawnBowmanBane;
   Neo.updateBowmanBane = updateBowmanBane;
+  Neo.updateAntonyBlemmyeBoss = updateAntonyBlemmyeBoss;
+  Neo.updateHandsomeDevilBoss = updateHandsomeDevilBoss;
 	  Neo.updateHunterEnemy = updateHunterEnemy;
 	  Neo.updateCultMageEnemy = updateCultMageEnemy;
 	  Neo.updateCultQueenBoss = updateCultQueenBoss;

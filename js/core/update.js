@@ -39,6 +39,8 @@ export function loop(timestamp) {
     bulk_golem: 'updateBulkGolemBoss',
     artificer_knave: 'updateArtificerBoss',
     bowman_bane: 'updateBowmanBane',
+    antony_blemmye: 'updateAntonyBlemmyeBoss',
+    handsome_devil: 'updateHandsomeDevilBoss',
     mirror_knight: 'updateMirrorChampion',
     mooggy: 'updateMooggyEnemy',
     rival: 'updateRivalEnemy',

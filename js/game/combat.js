@@ -1968,11 +1968,17 @@
     }
     const item = Neo.itemRegistry.get(itemKey);
     if (!item) return;
-    Neo.player.items[itemKey] = Neo.getItemCount(itemKey) + 1;
+    const duplicateChance = Neo.clamp(Number(Neo.getItemStats?.()?.itemDuplicateChance || 0), 0, 1);
+    const duplicatePickup = duplicateChance > 0 && Neo.rng() < duplicateChance;
+    const collectCount = duplicatePickup ? 2 : 1;
+    Neo.player.items[itemKey] = Neo.getItemCount(itemKey) + collectCount;
     if (Neo.isFirstRunTutorialActive()) Neo.tutorialState.gotRelic = true;
     Neo.addToEquipmentSlots?.(itemKey);
     Neo.markInventoryPanelDirty();
-    Neo.pushItemNotification(itemKey, 1);
+    Neo.pushItemNotification(itemKey, collectCount);
+    if (duplicatePickup) {
+      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 42, life: 0.85, text: 'ITEM DOUBLED', c: '#d8c0ff' });
+    }
     const totalItems = Object.values(Neo.player.items).reduce((s, v) => s + Number(v || 0), 0);
     window.achievementEvents?.emit('item:collected', { totalItems });
 
@@ -2005,8 +2011,10 @@
     }
 
     if (itemKey === 'titan_heart') {
-      Neo.player.maxHp = Math.max(120, Math.round(Neo.player.maxHp * 1.08));
-      Neo.player.hp = Math.min(Neo.player.maxHp, Math.round(Neo.player.hp * 1.08));
+      for (let index = 0; index < collectCount; index += 1) {
+        Neo.player.maxHp = Math.max(120, Math.round(Neo.player.maxHp * 1.08));
+        Neo.player.hp = Math.min(Neo.player.maxHp, Math.round(Neo.player.hp * 1.08));
+      }
     }
 
     if (!Neo.metaProgress.unlockedItems.includes(itemKey)) {
