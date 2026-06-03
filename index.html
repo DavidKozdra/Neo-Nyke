@@ -870,22 +870,34 @@
         <div class="sandbox-card">
           <h4>Move Loadout</h4>
           <p class="sandbox-card__hint">Pick a move per slot, or leave on Default to use the character's set.</p>
-          <div class="sandbox-rows" id="sandboxMoveLoadout">
-            <div class="sandbox-row sandbox-row--select" data-sbox-move-slot="melee">
-              <span>Melee</span>
-              <select class="sandbox-select" data-sbox-move-slot-select="melee"></select>
+          <div class="sandbox-move-slots" id="sandboxMoveLoadout">
+            <div class="sandbox-move-slot" data-sbox-move-slot="melee">
+              <div class="sandbox-move-slot__head">
+                <span class="sandbox-move-slot__label">Melee</span>
+                <span class="sandbox-move-slot__selected" data-sbox-move-slot-selected="melee">Default</span>
+              </div>
+              <div class="sandbox-move-options" data-sbox-move-options="melee" role="group" aria-label="Melee move"></div>
             </div>
-            <div class="sandbox-row sandbox-row--select" data-sbox-move-slot="laser">
-              <span>Laser</span>
-              <select class="sandbox-select" data-sbox-move-slot-select="laser"></select>
+            <div class="sandbox-move-slot" data-sbox-move-slot="laser">
+              <div class="sandbox-move-slot__head">
+                <span class="sandbox-move-slot__label">Laser</span>
+                <span class="sandbox-move-slot__selected" data-sbox-move-slot-selected="laser">Default</span>
+              </div>
+              <div class="sandbox-move-options" data-sbox-move-options="laser" role="group" aria-label="Laser move"></div>
             </div>
-            <div class="sandbox-row sandbox-row--select" data-sbox-move-slot="smash">
-              <span>Smash</span>
-              <select class="sandbox-select" data-sbox-move-slot-select="smash"></select>
+            <div class="sandbox-move-slot" data-sbox-move-slot="smash">
+              <div class="sandbox-move-slot__head">
+                <span class="sandbox-move-slot__label">Smash</span>
+                <span class="sandbox-move-slot__selected" data-sbox-move-slot-selected="smash">Default</span>
+              </div>
+              <div class="sandbox-move-options" data-sbox-move-options="smash" role="group" aria-label="Smash move"></div>
             </div>
-            <div class="sandbox-row sandbox-row--select" data-sbox-move-slot="dash">
-              <span>Dash</span>
-              <select class="sandbox-select" data-sbox-move-slot-select="dash"></select>
+            <div class="sandbox-move-slot" data-sbox-move-slot="dash">
+              <div class="sandbox-move-slot__head">
+                <span class="sandbox-move-slot__label">Dash</span>
+                <span class="sandbox-move-slot__selected" data-sbox-move-slot-selected="dash">Default</span>
+              </div>
+              <div class="sandbox-move-options" data-sbox-move-options="dash" role="group" aria-label="Dash move"></div>
             </div>
           </div>
         </div>

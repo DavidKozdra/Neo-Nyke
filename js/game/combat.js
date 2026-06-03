@@ -2021,17 +2021,22 @@
         rival.dead = true;
         if (Neo.player) Neo.player.rivalReputation = Math.max(0, Number(Neo.player.rivalReputation || 0)) + 1;
         window.achievementEvents?.emit('rival:killed');
-        rival.loot.forEach(item => {
+        const stolenLoot = Array.isArray(rival.loot) ? rival.loot : [];
+        stolenLoot.forEach(item => {
+          const x = enemy.x + Neo.rand(-22, 22, 'loot');
+          const y = enemy.y + Neo.rand(-14, 14, 'loot');
           if (item.type === 'item' && item.key) {
-            Neo.pickups.push({ x: enemy.x + Neo.rand(-22, 22, 'loot'), y: enemy.y + Neo.rand(-14, 14, 'loot'), type: 'item', key: item.key });
+            Neo.pickups.push({ x, y, type: 'item', key: item.key });
           } else if (item.type === 'potion') {
-            Neo.pickups.push({ x: enemy.x + Neo.rand(-22, 22, 'loot'), y: enemy.y + Neo.rand(-14, 14, 'loot'), type: 'potion' });
+            Neo.pickups.push({ x, y, type: 'potion' });
+          } else if (item.type === 'coin') {
+            Neo.pickups.push({ x, y, type: 'coin', value: Math.max(1, Math.round(Number(item.value) || 1)) });
           }
         });
         if (Neo.nextRandom('loot') < 0.05) {
           Neo.pickups.push({ x: enemy.x, y: enemy.y + 10, type: 'item', key: 'veggys_pendant' });
         }
-        const rivalBase = 18 + Neo.floor * 4 + rival.loot.length * 8;
+        const rivalBase = 18 + Neo.floor * 4 + stolenLoot.length * 8;
         const bonus = Neo.hasLegacy('rival_bounty') ? Math.round(rivalBase * 1.5) : rivalBase;
         dropCoins(enemy.x, enemy.y, bonus);
         Neo.spawnParticle({ x: enemy.x, y: enemy.y - 26, life: 2.0, text: `${rival.name.toUpperCase()} DEFEATED!`, c: rival.color });

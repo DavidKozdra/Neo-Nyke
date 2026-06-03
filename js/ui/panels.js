@@ -983,13 +983,26 @@ export function renderAnvilItemList(itemType) {
     listEl.innerHTML = keys.map(key => {
       const def = itemType === 'weapon' ? Neo.WEAPON_DEFS[key] : Neo.MOVE_DEFS[key];
       const name = def?.name || key;
-      const color = def?.color || '#9ec6ff';
       const isActive = Neo.anvilSelectedItem === `${itemType}:${key}`;
-      return `<button class="anvil-item-btn${isActive ? ' is-active' : ''}" data-item="${key}" data-item-type="${itemType}">
-        <span class="anvil-item-dot" style="background:${color}"></span>
-        <span style="color:${Neo.getRarityNameColor(def?.rarity || def?.category)}">${name}</span>
+      return `<button class="anvil-item-btn${isActive ? ' is-active' : ''}" data-item="${Neo.escapeHtml(key)}" data-item-type="${itemType}">
+        <canvas class="anvil-item-icon" data-anvil-item-icon="${Neo.escapeHtml(key)}" data-anvil-item-icon-type="${itemType}" width="38" height="38" aria-hidden="true"></canvas>
+        <span class="anvil-item-name" style="color:${Neo.getRarityNameColor(def?.rarity || def?.category)}">${Neo.escapeHtml(name)}</span>
       </button>`;
     }).join('');
+    hydrateAnvilItemIcons(listEl);
+  }
+
+  function hydrateAnvilItemIcons(root) {
+    root?.querySelectorAll('[data-anvil-item-icon]').forEach(canvas => {
+      const key = canvas.dataset.anvilItemIcon;
+      if (canvas.dataset.anvilItemIconType === 'weapon') {
+        const weapon = Neo.WEAPON_DEFS[key];
+        if (weapon) Neo.drawWeaponToastIcon(canvas, weapon);
+      } else {
+        const move = Neo.MOVE_DEFS[key];
+        if (move) Neo.drawMoveToastIcon(canvas, move);
+      }
+    });
   }
 
 export function renderAnvilStatPanel() {
@@ -1027,7 +1040,16 @@ export function renderAnvilStatPanel() {
         ? `<span class="anvil-stat-cost">${xpPerStep} XP + &#9670;${goldPerStep ?? 0}/step</span>`
         : '';
 
+      const statIcon = statKey === 'damage' || statKey === 'knockback'
+        ? 'attack'
+        : statKey === 'range'
+          ? 'range'
+          : statKey === 'critChance'
+            ? 'crit'
+            : 'speed';
+
       return `<div class="anvil-stat-row">
+        <canvas class="anvil-stat-icon" data-inv-ui-icon="${statIcon}" width="34" height="34" aria-hidden="true"></canvas>
         <span class="anvil-stat-label">${label}</span>
         <span class="anvil-stat-value">${format(cur)}</span>
         ${stagedDisplay}
@@ -1039,7 +1061,14 @@ export function renderAnvilStatPanel() {
       </div>`;
     });
 
-    statEl.innerHTML = `<div class="anvil-stat-title" style="color:${Neo.getRarityNameColor(def?.rarity || def?.category)}">${def?.name || itemKey}</div>${rows.join('')}`;
+    statEl.innerHTML = `<div class="anvil-stat-title">
+      <canvas class="anvil-stat-title__icon" data-anvil-item-icon="${Neo.escapeHtml(itemKey)}" data-anvil-item-icon-type="${itemType}" width="48" height="48" aria-hidden="true"></canvas>
+      <span style="color:${Neo.getRarityNameColor(def?.rarity || def?.category)}">${Neo.escapeHtml(def?.name || itemKey)}</span>
+    </div>${rows.join('')}`;
+    hydrateAnvilItemIcons(statEl);
+    statEl.querySelectorAll('[data-inv-ui-icon]').forEach(canvas => {
+      Neo.drawInventoryUiIcon?.(canvas, canvas.dataset.invUiIcon);
+    });
   }
 
   function renderAnvilFooter() {

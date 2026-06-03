@@ -1352,6 +1352,11 @@
       xpToNext: Math.max(8, Number(source.xpToNext || (22 + Neo.floor * 4))),
       growthTick: Math.max(0, Number(source.growthTick || 0)),
       weapons: Array.isArray(source.weapons) ? source.weapons : [],
+      loot: Array.isArray(source.loot)
+        ? source.loot
+          .filter(item => item && ['item', 'coin', 'potion'].includes(item.type))
+          .map(item => ({ type: item.type, key: item.key, value: item.value }))
+        : [],
       memory: normalizeRivalMemory(source.memory),
       dead: !!source.dead,
     };

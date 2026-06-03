@@ -534,7 +534,17 @@ export function grantExtraBatteryToMove(moveKey, playerData = Neo.player) {
     if (playerData === Neo.player) {
       const slot = Neo.MOVE_DEFS[moveKey]?.slot || '';
       if (slot && playerData.equippedMoves?.[slot] === moveKey) {
-        Neo.cooldowns[slot] = Neo.createCooldownEntry(slot, playerData, Neo.cooldowns[slot]);
+        const entry = Neo.createCooldownEntry(slot, playerData, Neo.cooldowns[slot]);
+        // The extra battery just raised maxCharges by 1. createCooldownEntry
+        // preserves the existing charges/timers, so when the move was mid-
+        // cooldown the freshly-added slot is neither ready nor recharging — it
+        // would silently vanish. Credit the new capacity as a ready charge so
+        // the player immediately sees (and can use) the charge they paid for.
+        const accounted = entry.charges + entry.timers.length + entry.holding;
+        if (accounted < entry.maxCharges) {
+          entry.charges = Math.min(entry.maxCharges, entry.charges + (entry.maxCharges - accounted));
+        }
+        Neo.cooldowns[slot] = entry;
       }
       Neo.markInventoryPanelDirty?.();
       Neo.updateHud?.();

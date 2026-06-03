@@ -1196,14 +1196,25 @@ export function createUIController(view) {
           hydrateSandboxTokenIcons();
         }
 
-        // Move-loadout <select> options are static; build them once.
+        // Move-loadout options are static; build the visible button groups once.
         function buildSandboxMoveLoadoutOptions() {
           if (!view.sandboxMoveLoadout) return;
-          view.sandboxMoveLoadout.querySelectorAll('[data-sbox-move-slot-select]').forEach(select => {
-            const slot = select.dataset.sboxMoveSlotSelect;
+          view.sandboxMoveLoadout.querySelectorAll('[data-sbox-move-options]').forEach(group => {
+            const slot = group.dataset.sboxMoveOptions;
             const moves = Object.keys(Neo.MOVE_DEFS).filter(key => Neo.MOVE_DEFS[key].slot === slot);
-            select.innerHTML = `<option value="">Default</option>`
-              + moves.map(key => `<option value="${Neo.escapeHtml(key)}">${Neo.escapeHtml(Neo.MOVE_DEFS[key].name || key)}</option>`).join('');
+            group.innerHTML = `<button class="sandbox-move-option sandbox-move-option--default" data-sbox-move-option="" data-sbox-move-option-slot="${Neo.escapeHtml(slot)}" type="button" aria-pressed="false">Default</button>`
+              + moves.map(key => {
+                const move = Neo.MOVE_DEFS[key];
+                const name = move.name || key;
+                return `<button class="sandbox-move-option" data-sbox-move-option="${Neo.escapeHtml(key)}" data-sbox-move-option-slot="${Neo.escapeHtml(slot)}" type="button" aria-pressed="false" title="${Neo.escapeHtml(move.desc || name)}">`
+                  + `<canvas class="sandbox-move-option__icon" data-sbox-move-option-icon="${Neo.escapeHtml(key)}" width="22" height="22" aria-hidden="true"></canvas>`
+                  + `<span class="sandbox-move-option__label">${Neo.escapeHtml(name)}</span>`
+                  + `</button>`;
+              }).join('');
+            group.querySelectorAll('[data-sbox-move-option-icon]').forEach(canvas => {
+              const move = Neo.MOVE_DEFS[canvas.dataset.sboxMoveOptionIcon];
+              if (move) Neo.drawMoveToastIcon(canvas, move);
+            });
           });
         }
 
@@ -1219,9 +1230,17 @@ export function createUIController(view) {
           });
           if (view.sandboxGodMode) view.sandboxGodMode.checked = !!Neo.sandboxSettings.godMode;
           if (view.sandboxUnlockEverything) view.sandboxUnlockEverything.checked = !!Neo.sandboxSettings.unlockEverything;
-          view.sandboxMoveLoadout?.querySelectorAll('[data-sbox-move-slot-select]').forEach(select => {
-            const slot = select.dataset.sboxMoveSlotSelect;
-            select.value = Neo.sandboxSettings.moveLoadout?.[slot] || '';
+          view.sandboxMoveLoadout?.querySelectorAll('[data-sbox-move-slot]').forEach(slotNode => {
+            const slot = slotNode.dataset.sboxMoveSlot;
+            const selectedKey = Neo.sandboxSettings.moveLoadout?.[slot] || '';
+            const selectedMove = Neo.MOVE_DEFS[selectedKey];
+            const selectedLabel = slotNode.querySelector('[data-sbox-move-slot-selected]');
+            if (selectedLabel) selectedLabel.textContent = selectedMove?.name || 'Default';
+            slotNode.querySelectorAll('[data-sbox-move-option]').forEach(button => {
+              const active = button.dataset.sboxMoveOption === selectedKey;
+              button.classList.toggle('is-active', active);
+              button.setAttribute('aria-pressed', active ? 'true' : 'false');
+            });
           });
           if (view.sandboxEnemySearch) view.sandboxEnemySearch.value = sandboxSearch.enemies;
           if (view.sandboxItemSearch) view.sandboxItemSearch.value = sandboxSearch.items;
@@ -1263,14 +1282,14 @@ export function createUIController(view) {
           Neo.persistMetaSoon();
         });
 
-        view.sandboxMoveLoadout?.addEventListener('change', event => {
-          const select = event.target instanceof Element ? event.target.closest('[data-sbox-move-slot-select]') : null;
-          if (!select) return;
-          const slot = select.dataset.sboxMoveSlotSelect;
+        view.sandboxMoveLoadout?.addEventListener('click', event => {
+          const button = event.target instanceof Element ? event.target.closest('[data-sbox-move-option]') : null;
+          if (!button) return;
+          const slot = button.dataset.sboxMoveOptionSlot;
           if (!Neo.sandboxSettings.moveLoadout || typeof Neo.sandboxSettings.moveLoadout !== 'object') {
             Neo.sandboxSettings.moveLoadout = { melee: '', laser: '', smash: '', dash: '' };
           }
-          Neo.sandboxSettings.moveLoadout[slot] = select.value || '';
+          Neo.sandboxSettings.moveLoadout[slot] = button.dataset.sboxMoveOption || '';
           Neo.sandboxSettings = Neo.normalizeSandboxSettings(Neo.sandboxSettings);
           syncSandboxPanelFields();
           Neo.persistMetaSoon();
