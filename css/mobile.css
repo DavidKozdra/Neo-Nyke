@@ -17,6 +17,8 @@
     overflow: scroll;
   }
 
+  
+
   /* collapse roster + sidebar side-by-side into single column */
   .charselect-main {
     grid-template-columns: 1fr;
@@ -154,6 +156,7 @@
     margin: 14px auto 0;
     box-sizing: border-box;
     overflow: scroll;
+
   }
 
   .charselect-header {

@@ -1880,10 +1880,9 @@ export function createUIController(view) {
             }).join('')
             : '<span class="hero-detail-item-empty">No starter items</span>';
           const charDef = Neo.CHARACTER_DEFS[selected] || {};
-          const roleLabel = ROLE_LABELS[selected] || String(charDef.rarity || 'Hero');
           detail.innerHTML =
             `<div class="hero-detail-portrait"><canvas id="heroDetailSprite" width="128" height="128" aria-hidden="true"></canvas></div>` +
-            `<div class="hero-detail-head"><span class="hero-detail-name">${Neo.escapeHtml(charDef.name || selected)}</span><span class="hero-detail-role">${Neo.escapeHtml(roleLabel)}</span></div>` +
+            `<div class="hero-detail-head"><span class="hero-detail-name">${Neo.escapeHtml(charDef.name || selected)}</span></div>` +
             `<p class="hero-detail-lore">${disp.lore}</p>` +
             `<div class="hero-detail-stats"><div class="hero-detail-section-label">Stats</div>${statsHtml}</div>` +
             `<div class="hero-detail-skills"><div class="hero-detail-section-label">Kit</div>${skillsHtml}</div>` +
@@ -1910,11 +1909,7 @@ export function createUIController(view) {
           button.disabled = !isUnlocked;
           button.title = isUnlocked ? def.description : `Unlock at ${def.unlockLoops} Loop Crystals`;
         });
-        if (view.difficultyHint) {
-          view.difficultyHint.textContent = selectedDef.unlockLoops > 0 && !unlocked.has(selected)
-              ? `Locked: ${selectedDef.unlockLoops} Loop Crystals needed. You have ${loopCrystals}.`
-              : `Loop Crystals: ${loopCrystals}`;
-        }
+      
       },
       updateChallengeSelection(unlocked, owned, selected, loopCrystals, bankCoins) {
         view.challengeButtons.forEach(button => {

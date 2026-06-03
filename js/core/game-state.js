@@ -1783,7 +1783,6 @@ export function resumeGame() {
         if (subtitleEl) subtitleEl.textContent = 'Weekly run. Hard difficulty is locked.';
         if (goBtn) goBtn.textContent = 'COMPETE';
       } else {
-        if (subtitleEl) subtitleEl.textContent = 'Choose a hero. Pick difficulty. Enter the dungeon.';
         if (goBtn) goBtn.textContent = 'ENTER DUNGEON';
       }
     }

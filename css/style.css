@@ -3460,7 +3460,7 @@ button, input, select, textarea {
   min-width: 320px;
   border-radius: 14px;
   border: 1px solid var(--menu-border);
-
+  background: var(--menu-bg-deep);
 }
 
 
@@ -3766,7 +3766,6 @@ p.sub {
 /* ── Hero detail panel ───────────────────────────────────── */
 .hero-detail-panel {
   background: rgba(0, 0, 0, .2);
-  border: 1px solid var(--menu-border);
   border-radius: 8px;
   padding: 14px;
   display: grid;
@@ -4608,9 +4607,8 @@ p.sub {
 }
 
 .challenge-toggle:hover {
-  transform: translateY(-1px);
+  transform: scale(1.1);
   border-color: var(--menu-border-strong);
-  box-shadow: 0 0 18px rgba(139, 166, 200, .2);
 }
 
 /* ── Legacy Upgrades panel ────────────────────────────────���── */
@@ -4706,7 +4704,6 @@ input#seed {
 button#go {
   min-height: 62px;
   padding: 14px 18px;
-  background: linear-gradient(90deg, #8ca7ca, #c8dbf1);
   border: none;
   border-radius: 10px;
   color: #141d28;
@@ -4714,13 +4711,11 @@ button#go {
   font-weight: 900;
   letter-spacing: .05em;
   cursor: pointer;
-  box-shadow: 0 0 18px rgba(138, 165, 199, .3);
   transition: .15s;
 }
 
 button#go:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 0 28px rgba(138, 165, 199, .4);
+  transform: scale(1.1);
 }
 
 button#go:disabled {
@@ -6229,7 +6224,6 @@ button.alt.danger {
   top: 24px;
   left: 28px;
   background: transparent;
-  border: 1px solid var(--menu-border);
   border-radius: 8px;
   color: var(--menu-text-muted);
   font-size: 13px;
@@ -6238,11 +6232,41 @@ button.alt.danger {
   cursor: pointer;
   letter-spacing: .08em;
   transition: .15s;
+  animation: border-glow 2s infinite;
 }
 
 .back-btn:hover {
-  color: var(--menu-accent-strong);
-  border-color: var(--menu-border-strong);
+  transform: scale(1.08);
+}
+
+#mpLobby .back-btn,
+#charSelect .back-btn {
+  top: auto;
+  left: 50%;
+  bottom: 20px;
+  transform: translateX(-50%) scale(1.12);
+}
+
+#mpLobby .back-btn:hover,
+#charSelect .back-btn:hover {
+  transform: translateX(-50%) scale(1.22);
+}
+
+#charSelect #charBackBtn {
+  font-size: 15px;
+  padding: 10px 18px;
+}
+
+@keyframes border-glow {
+  0% {
+    border-color: var(--menu-border);
+  }
+  50% {
+    border-color: var(--menu-border-strong);
+  }
+  100% {
+    border-color: var(--menu-border);
+  }
 }
 
 /* Settings modal */
