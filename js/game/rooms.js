@@ -1172,6 +1172,9 @@
     syncCurrentRoomState();
     Neo.updateObjective();
     Neo.scheduleRunSave();
+    // A panel-item choice owed from a prior room (picked up mid-cinematic, during
+    // a shop, etc.) opens now that the player is back in control in a fresh room.
+    Neo.requestPanelItemSelection?.();
   }
 
   function ensureShopHasMinimumItemOffers(room, minItemOffers = 3) {

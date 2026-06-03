@@ -29,6 +29,7 @@ export function migratePlayerData(source) {
     });
     playerData.moveStackOverrides = normalizedMoveStackOverrides;
     playerData.extraBatteryPendingCount = Math.max(0, Math.floor(Number(playerData.extraBatteryPendingCount || 0)));
+    playerData.wizardPawPendingCount = Math.max(0, Math.floor(Number(playerData.wizardPawPendingCount || 0)));
     playerData.level = Number(playerData.level || 1);
     playerData.xp = Number(playerData.xp || 0);
     playerData.xpToNext = Number(playerData.xpToNext || 20);
@@ -260,7 +261,7 @@ export function triggerChronoSpringBuff() {
 
 export function getItemStats() {
     if (Neo.itemStatsCacheFrame === Neo.frameId && Neo.itemStatsCacheValue) return Neo.itemStatsCacheValue;
-    if (!Neo.godItemKeysCache) Neo.godItemKeysCache = Neo.ITEM_KEYS.filter(key => Neo.ITEM_DEFS[key]?.rarity === 'god');
+    if (!Neo.godItemKeysCache) Neo.godItemKeysCache = Neo.ITEM_KEYS.filter(key => Neo.isGodTier?.(Neo.ITEM_DEFS[key]?.rarity));
 
     const neoKnife = getItemCount('neo_knife');
   const toothOfThorn = getItemCount('tooth_of_thorn');
@@ -427,12 +428,21 @@ export function getWizardPawStatCards() {
     ];
   }
 
+// Pickup records an owed paw on the player (persists with the run save) and
+// asks the dispatcher to open the modal when it is safe to do so. The selection
+// is never silently dropped: if the modal can't open now it stays queued.
 export function openWizardPawSelection() {
-    if (Neo.wizardPawSelection) {
-      Neo.wizardPawPendingCount = (Neo.wizardPawPendingCount || 0) + 1;
-      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 46, life: 1, text: "WIZARD'S PAW QUEUED!", c: '#ffd27d' });
-      return;
-    }
+    if (!Neo.player) return;
+    Neo.player.wizardPawPendingCount = Math.max(0, Math.floor(Number(Neo.player.wizardPawPendingCount || 0))) + 1;
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 46, life: 1, text: "WIZARD'S PAW!", c: '#ffd27d' });
+    Neo.scheduleRunSave?.();
+    // Opened the modal now? Done. Otherwise leave a reminder — the choice is owed.
+    if (!requestPanelItemSelection()) notifyPanelItemDeferred('wizards_paw');
+  }
+
+// Actually build and show the time-stop modal for one owed paw. Guarded by the
+// caller (requestPanelItemSelection) so it only fires when safe and not already open.
+function beginWizardPawModal() {
     Neo.wizardPawSelection = {
       picks: [],
       options: [
@@ -441,9 +451,54 @@ export function openWizardPawSelection() {
         { key: 'attackSpeed', name: 'Attack Speed', description: `Current ${getAttackSpeedValue().toFixed(2)}. Increase base attack speed by 50%.` },
       ],
     };
-    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 46, life: 1, text: "WIZARD'S PAW!", c: '#ffd27d' });
     Neo.setWizardPawModalOpen(true);
     renderWizardPawPanel();
+  }
+
+// Single entry point that decides whether to open a pending panel-item selection
+// now or leave it queued. Safe to call repeatedly (idempotent): guarded by the
+// owed counts and the already-open checks, so it can be wired into pause/resume,
+// panel-close, room-entry and HUD-refresh hooks without any polling timer.
+export function requestPanelItemSelection(options = {}) {
+    const player = Neo.player;
+    if (!player) return false;
+    const pawPending = Math.max(0, Math.floor(Number(player.wizardPawPendingCount || 0)));
+    const batteryPending = Math.max(0, Math.floor(Number(player.extraBatteryPendingCount || 0)));
+    if (pawPending <= 0 && batteryPending <= 0) return false;
+    // Don't fight a cinematic, transition, death, or another blocking overlay.
+    if (Neo.gameState !== 'play') return false;
+    // The paw modal is itself a blocking overlay; if it's already up, wait for confirm.
+    if (Neo.isWizardPawOpen?.()) return false;
+    if (Neo.isOverlayBlockingInput?.()) return false;
+    // Paw first: it stops time and is the higher-tier reward.
+    if (pawPending > 0) {
+      beginWizardPawModal();
+      return true;
+    }
+    // The battery prompt re-uses the inventory panel. When the player just
+    // dismissed the inventory we must NOT auto-reopen it (that would trap them);
+    // they re-open it themselves via the HUD alert chip. Callers that close the
+    // inventory pass { suppressBatteryOpen: true } for exactly this reason.
+    if (options.suppressBatteryOpen) return false;
+    if (batteryPending > 0) {
+      Neo.activeInvPlayer = 1;
+      Neo.activeInvTab = 'equipped';
+      Neo.activeInventorySlot = '';
+      Neo.markInventoryPanelDirty?.();
+      Neo.setInventoryPanelOpen?.(true);
+      Neo.renderInventoryPanel?.();
+      return true;
+    }
+    return false;
+  }
+
+// Pickup couldn't open the selection right now (boss cinematic, transition,
+// shop/anvil open, ...). Show one reminder toast so the player knows a choice is
+// owed, gated to at most once per room so retries don't spam.
+function notifyPanelItemDeferred(itemKey) {
+    if (Neo.panelItemDeferredToastRoom === Neo.currentRoom) return;
+    Neo.panelItemDeferredToastRoom = Neo.currentRoom || null;
+    Neo.pushItemNotification?.(itemKey, 1, '— choice pending. Resolve it from the red banner / objectives.');
   }
 
 export function renderWizardPawPanel() {
@@ -504,14 +559,15 @@ export function confirmWizardPawSelection() {
     Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 46, life: 1, text: 'PAW APPLIED!', c: '#ffd27d' });
     Neo.wizardPawSelection = null;
     Neo.setWizardPawModalOpen(false);
+    if (Neo.player) {
+      Neo.player.wizardPawPendingCount = Math.max(0, Math.floor(Number(Neo.player.wizardPawPendingCount || 0)) - 1);
+    }
     Neo.markInventoryPanelDirty();
     Neo.renderInventoryPanel();
     Neo.updateHud();
     Neo.scheduleRunSave();
-    if ((Neo.wizardPawPendingCount || 0) > 0) {
-      Neo.wizardPawPendingCount -= 1;
-      openWizardPawSelection();
-    }
+    // Chain into the next owed paw/battery (if any) now that the modal is closed.
+    requestPanelItemSelection();
   }
 
 function ensureMoveStackOverrides(playerData = Neo.player) {
@@ -525,17 +581,13 @@ function ensureMoveStackOverrides(playerData = Neo.player) {
 export function openExtraBatterySelection(playerData = Neo.player) {
     if (!playerData) return;
     playerData.extraBatteryPendingCount = Math.max(0, Math.floor(Number(playerData.extraBatteryPendingCount || 0))) + 1;
-    if (playerData !== Neo.player) return;
-    Neo.activeInvPlayer = 1;
-    Neo.activeInvTab = 'equipped';
-    Neo.activeInventorySlot = '';
-    Neo.markInventoryPanelDirty?.();
-    if (!Neo.isWizardPawOpen?.()) {
-      Neo.setInventoryPanelOpen?.(true);
-      Neo.renderInventoryPanel?.();
-    }
-    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 46, life: 0.9, text: 'SELECT A MOVE', c: '#cfd7ff' });
     Neo.scheduleRunSave?.();
+    // Co-op AI / non-active players just bank the charge; only the active player
+    // gets the inventory prompt, routed through the dispatcher so it respects
+    // the safe-to-open checks and paw priority.
+    if (playerData !== Neo.player) return;
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 46, life: 0.9, text: 'SELECT A MOVE', c: '#cfd7ff' });
+    if (!requestPanelItemSelection()) notifyPanelItemDeferred('extra_battery');
   }
 
 export function grantExtraBatteryToMove(moveKey, playerData = Neo.player) {
@@ -702,6 +754,7 @@ export function refreshFloorChargeStates() {
   Neo.applyPlayerHealing = applyPlayerHealing;
   Neo.getWizardPawStatCards = getWizardPawStatCards;
   Neo.openWizardPawSelection = openWizardPawSelection;
+  Neo.requestPanelItemSelection = requestPanelItemSelection;
   Neo.renderWizardPawPanel = renderWizardPawPanel;
   Neo.handleWizardPawChoiceClick = handleWizardPawChoiceClick;
   Neo.applyWizardPawStat = applyWizardPawStat;

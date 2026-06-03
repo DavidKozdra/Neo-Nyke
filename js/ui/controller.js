@@ -1979,7 +1979,13 @@ export function createUIController(view) {
           return `${m}:${sec.toString().padStart(2, '0')}`;
         };
         if (view.deadKillerCanvas) {
-          Neo.drawSpriteToCanvas(view.deadKillerCanvas, Neo.resolveKillerSprite(entry.killerKey || ''), 120);
+          const killerLookup = entry.killerKey || entry.killedBy || '';
+          const hazardIcon = Neo.resolveKillerHazardIcon?.(killerLookup);
+          if (hazardIcon && typeof Neo.drawHazardKillerIcon === 'function') {
+            Neo.drawHazardKillerIcon(view.deadKillerCanvas, hazardIcon);
+          } else {
+            Neo.drawSpriteToCanvas(view.deadKillerCanvas, Neo.resolveKillerSprite(entry.killerKey || ''), 120);
+          }
         }
         if (view.deadKillerName) view.deadKillerName.textContent = entry.killedBy || 'Unknown';
         if (view.deadFloor) view.deadFloor.textContent = `${fmt(entry.floor)}/10`;
@@ -2070,7 +2076,7 @@ export function createUIController(view) {
               const slice = items.slice(itemPage * PAGE_SIZE, itemPage * PAGE_SIZE + PAGE_SIZE);
               slice.forEach(item => {
                 const itemDef = Neo.itemRegistry?.get(item.key) || Neo.ITEM_DEFS[item.key] || {};
-                const rc = { knight: 'knight', white: 'knight', wizard: 'wizard', purple: 'wizard', god: 'god' }[item.rarity] || 'knight';
+                const rc = { knight: 'knight', white: 'knight', wizard: 'wizard', purple: 'wizard', god: 'god', red: 'god' }[item.rarity] || 'knight';
                 const card = document.createElement('div');
                 card.className = `dead-item-card dead-item-card--${rc}`;
                 card.tabIndex = 0;
@@ -2155,7 +2161,7 @@ export function createUIController(view) {
               const slice = items.slice(itemPage * PAGE_SIZE, itemPage * PAGE_SIZE + PAGE_SIZE);
               slice.forEach(item => {
                 const itemDef = Neo.ITEM_DEFS[item.key] || {};
-                const rc = { knight: 'knight', white: 'knight', wizard: 'wizard', purple: 'wizard', god: 'god' }[item.rarity] || 'knight';
+                const rc = { knight: 'knight', white: 'knight', wizard: 'wizard', purple: 'wizard', god: 'god', red: 'god' }[item.rarity] || 'knight';
                 const card = document.createElement('div');
                 card.className = `dead-item-card dead-item-card--${rc}`;
                 const cnv = document.createElement('canvas');

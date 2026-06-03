@@ -513,6 +513,51 @@ button, input, select, textarea {
   color: #ff9aaa;
 }
 
+/* Pending panel-item action (Wizard's Paw / Extra Battery) — a red, clickable
+   nudge that an owed choice is waiting. Mirrors the rarity-count--red red. */
+.panel-item-alert {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 3px 8px;
+  font-family: inherit;
+  font-size: 11px;
+  letter-spacing: 1px;
+  cursor: pointer;
+  color: #ff9aaa;
+  background: rgba(255,66,86,.12);
+  border: 2px solid #ff4256;
+  border-radius: 6px;
+  box-shadow: 0 0 8px rgba(255,66,86,.55);
+  animation: panel-item-alert-pulse 1.4s ease-in-out infinite;
+}
+
+.panel-item-alert.hidden { display: none; }
+
+.panel-item-alert__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ff4256;
+  box-shadow: 0 0 6px #ff4256;
+}
+
+.panel-item-alert__count {
+  min-width: 16px;
+  padding: 0 4px;
+  text-align: center;
+  font-weight: bold;
+  color: #fff;
+  background: #ff4256;
+  border-radius: 8px;
+}
+
+@keyframes panel-item-alert-pulse {
+  0%, 100% { box-shadow: 0 0 6px rgba(255,66,86,.45); }
+  50% { box-shadow: 0 0 14px rgba(255,66,86,.85); }
+}
+
 .timer-floor #bossRushStageNum2 {
   color: #ff8b8b;
 }
@@ -1297,10 +1342,10 @@ button, input, select, textarea {
 
 .panel-disintegrate-fx__spark {
   position: absolute;
-  width: 5px;
-  height: 5px;
-  margin: -2.5px 0 0 -2.5px;
-  border-radius: 1px;
+  width: 20px;
+  height: 20px;
+  margin: -10px 0 0 -10px;
+  border-radius: 3px;
   opacity: 0;
   background: #cffffd;
   box-shadow:
@@ -3305,6 +3350,48 @@ button, input, select, textarea {
   height: 0%;
   background: linear-gradient(180deg, rgba(80,100,130,0), rgba(80,100,130,.58));
   transition: height .08s linear;
+}
+
+/* Per-charge pips for moves with an Extra Battery (maxCharges > 1). Filled pips
+   are charges in hand; the next pip fills via --pip as that charge recovers, so
+   a recharging extra charge still reads as "charging" at a glance. */
+.skill-charges {
+  position: absolute;
+  top: 4px;
+  right: 5px;
+  z-index: 3;
+  display: flex;
+  gap: 3px;
+}
+
+.skill-charges i {
+  position: relative;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .14);
+  border: 1px solid rgba(168, 190, 219, .45);
+  overflow: hidden;
+}
+
+.skill-charges i::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: rgba(156, 179, 212, .95);
+  transform: scale(var(--pip, 0));
+  transform-origin: center;
+  transition: transform .1s linear;
+}
+
+.skill-charges i.full {
+  border-color: rgba(200, 218, 243, .9);
+  box-shadow: 0 0 5px rgba(156, 179, 212, .5);
+}
+
+.skill-charges i.charging::after {
+  background: rgba(120, 200, 255, .95);
 }
 
 .skill-meta,
@@ -5566,7 +5653,9 @@ button.alt.danger {
 
 /* Inherits frame from .panel-shell; overrides only what differs. */
 .rh-panel {
-  z-index: 30;
+  /* Above the pause overlay (z-index 90) so the INFO panel opened from the pause
+     menu isn't buried behind it; stays below the settings modal (100). */
+  z-index: 95;
   display: flex;
   flex-direction: column;
   width: min(900px, 94vw);

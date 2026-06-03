@@ -687,8 +687,9 @@
         const color = item?.color || '#fff';
         const iconDef = window.NeoNykeIconDefs?.items?.[pickup.key];
         Neo.ctx.shadowColor = color;
-        Neo.ctx.shadowBlur = item?.rarity === 'god' ? 20 : 14;
-        if (item?.rarity === 'god' && item?.accent) {
+        const godTier = Neo.isGodTier?.(item?.rarity);
+        Neo.ctx.shadowBlur = godTier ? 20 : 14;
+        if (godTier && item?.accent) {
           Neo.ctx.strokeStyle = item.accent;
           Neo.ctx.lineWidth = 2;
           Neo.ctx.beginPath();

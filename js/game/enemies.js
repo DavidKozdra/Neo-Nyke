@@ -1051,7 +1051,7 @@
     const items = inventory?.items || {};
     const count = key => Number(items[key] || 0);
     const godItemStacks = Neo.ITEM_KEYS
-      .filter(key => Neo.ITEM_DEFS[key]?.rarity === 'god')
+      .filter(key => Neo.isGodTier?.(Neo.ITEM_DEFS[key]?.rarity))
       .reduce((total, key) => total + count(key), 0);
     const xpProgress = Neo.clamp((inventory?.xpToNext || 0) > 0 ? Number(inventory.xp || 0) / Number(inventory.xpToNext || 1) : 0, 0, 1);
     const characterDef = Neo.CHARACTER_DEFS?.[inventory?.character] || {};

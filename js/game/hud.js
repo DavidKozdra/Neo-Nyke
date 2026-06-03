@@ -70,6 +70,7 @@
       }
       if (Neo.enemies.some(enemy => enemy.miniBoss)) entries.push({ text: 'Defeat the mini boss', state: 'warn' });
       if (Neo.selectedChallenges.length > 0) entries.push({ text: `${Neo.selectedChallenges.length} challenge${Neo.selectedChallenges.length === 1 ? '' : 's'} active`, state: 'todo' });
+      pushPanelItemObjectives(entries);
       return entries.slice(0, 5);
     }
 
@@ -84,7 +85,21 @@
       });
       if (Neo.currentRoom.cleared) entries.push({ text: Neo.hasLegacy('endless_descent') ? 'Crown, Descend, or Loop' : 'Take the crown or loop', state: 'warn' });
     }
+    pushPanelItemObjectives(entries);
     return entries.slice(0, 5);
+  }
+
+  // Owed panel-item selections (Wizard's Paw / Extra Battery) surface as urgent
+  // objective entries so they can't be forgotten while waiting to be resolved.
+  function pushPanelItemObjectives(entries) {
+    const pawPending = Math.max(0, Math.floor(Number(Neo.player?.wizardPawPendingCount || 0)));
+    const batteryPending = Math.max(0, Math.floor(Number(Neo.player?.extraBatteryPendingCount || 0)));
+    if (pawPending > 0) {
+      entries.push({ text: `Wizard's Paw ready: pick 2 stats to boost${pawPending > 1 ? ` (×${pawPending})` : ''}`, state: 'warn' });
+    }
+    if (batteryPending > 0) {
+      entries.push({ text: `Extra Battery ready: pick a move for +1 charge${batteryPending > 1 ? ` (×${batteryPending})` : ''}`, state: 'warn' });
+    }
   }
 
   function updateObjective() {
@@ -380,6 +395,20 @@
       if (white) white.textContent = String(rarityCounts.white);
       if (purple) purple.textContent = String(rarityCounts.purple);
       if (red) red.textContent = String(rarityCounts.red);
+    }
+    if (Neo.ui.panelItemAlert) {
+      const pawPending = Math.max(0, Math.floor(Number(Neo.player?.wizardPawPendingCount || 0)));
+      const batteryPending = Math.max(0, Math.floor(Number(Neo.player?.extraBatteryPendingCount || 0)));
+      const pendingTotal = pawPending + batteryPending;
+      Neo.ui.panelItemAlert.classList.toggle('hidden', pendingTotal <= 0);
+      if (pendingTotal > 0) {
+        const countEl = Neo.ui.panelItemAlert.querySelector('.panel-item-alert__count');
+        if (countEl) countEl.textContent = String(pendingTotal);
+        const label = pawPending > 0
+          ? "Wizard's Paw: pick 2 stats"
+          : 'Extra Battery: pick a move';
+        Neo.ui.panelItemAlert.title = `${label}${pendingTotal > 1 ? ` (+${pendingTotal - 1} more)` : ''}`;
+      }
     }
     if (Neo.ui.challengeStatus && Neo.ui.challengeStatusFill) {
       const timedChallengeType = Neo.currentRoom
@@ -1096,6 +1125,7 @@
         const header = `${itemName} [${letter}]${statusText ? ' · ' + statusText : ''}`;
         node.dataset.tipName = header;
         node.dataset.tipDesc = itemDesc;
+        node.dataset.tipRarity = itemDef.rarity || itemDef.category || '';
         node.removeAttribute('title');
         node.setAttribute('aria-label', itemDesc ? `${header}. ${itemDesc}` : header);
         node.setAttribute('aria-hidden', 'false');
@@ -1108,6 +1138,7 @@
         if (labelSpan) labelSpan.textContent = '';
         delete node.dataset.tipName;
         delete node.dataset.tipDesc;
+        delete node.dataset.tipRarity;
         node.removeAttribute('title');
         node.setAttribute('aria-label', `Slot ${letter} empty`);
         node.setAttribute('aria-hidden', 'true');
@@ -1132,16 +1163,20 @@
     const name = node.dataset.tipName;
     if (!name || !node.classList.contains('is-filled')) return;
     const desc = node.dataset.tipDesc || '';
+    // Color name + description by rarity.
+    const rarityColor = Neo.getRarityNameColor?.(node.dataset.tipRarity);
     const el = getEquipTooltipEl();
     el.innerHTML = '';
     const nameEl = document.createElement('div');
     nameEl.className = 'equip-tooltip__name';
     nameEl.textContent = name;
+    if (rarityColor) nameEl.style.color = rarityColor;
     el.appendChild(nameEl);
     if (desc) {
       const descEl = document.createElement('div');
       descEl.className = 'equip-tooltip__desc';
       descEl.textContent = desc;
+      if (rarityColor) descEl.style.color = rarityColor;
       el.appendChild(descEl);
     }
     // Position to the left of the slot, vertically centered, clamped on-screen.

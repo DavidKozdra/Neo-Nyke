@@ -344,6 +344,9 @@ export function clearGameplayInput() {
 export function bindPanelInput() {
     Neo.ui.shopClose?.addEventListener('click', () => setShopPanelOpen(false));
     Neo.ui.invClose?.addEventListener('click', () => setInventoryPanelOpen(false));
+    // Re-open path: click the HUD pending-action chip to resume an owed
+    // Wizard's Paw / Extra Battery selection that was dismissed or deferred.
+    Neo.ui.panelItemAlert?.addEventListener('click', () => Neo.requestPanelItemSelection?.());
     Neo.ui.anvilClose?.addEventListener('click', () => setAnvilPanelOpen(false));
     Neo.ui.anvilCancel?.addEventListener('click', () => { Neo.anvilStagedUpgrades = {}; setAnvilPanelOpen(false); });
     Neo.ui.anvilConfirm?.addEventListener('click', confirmAnvilUpgrades);
@@ -506,8 +509,15 @@ function handleInventoryMoveSelect(event) {
       if (nextMaxStacks > 0) {
         Neo.activeInventorySlot = '';
         Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 46, life: 0.8, text: `${Neo.MOVE_DEFS[moveKey].name.toUpperCase()} +1 CHARGE`, c: '#cfd7ff' });
-        markInventoryPanelDirty();
-        renderInventoryPanel();
+        // No batteries left: close the inventory so a still-owed Wizard's Paw can
+        // take over (the close hook surfaces it). More batteries still queued?
+        // Stay open in battery-select mode for the next pick.
+        if (Number(Neo.player?.extraBatteryPendingCount || 0) <= 0) {
+          setInventoryPanelOpen(false);
+        } else {
+          markInventoryPanelDirty();
+          renderInventoryPanel();
+        }
       }
       return;
     }
@@ -674,6 +684,10 @@ export function isPanelOpen(panel) {
       spark.style.setProperty('--panel-fx-dx', `${((vx / len) * drift + (Math.random() - 0.5) * 42).toFixed(1)}px`);
       spark.style.setProperty('--panel-fx-dy', `${((vy / len) * drift - 24 + (Math.random() - 0.5) * 58).toFixed(1)}px`);
       spark.style.setProperty('--panel-fx-scale', (0.35 + Math.random() * 0.85).toFixed(2));
+      spark.style.backgroundImage = 'url(assets/icons/icon-72x72.png)';
+      spark.style.backgroundSize = 'contain';
+      spark.style.backgroundRepeat = 'no-repeat';
+      spark.style.backgroundPosition = 'center';
       ghost.appendChild(spark);
     }
   }
@@ -746,10 +760,11 @@ export function isPanelOpen(panel) {
         tile.style.clipPath = clipPath;
         tile.style.webkitClipPath = clipPath;
 
-        const clone = element.cloneNode(true);
-        applyGhostSurfaceStyle(element, clone, rect, x, y);
-        copyCanvasBitmaps(element, clone);
-        tile.appendChild(clone);
+        tile.style.backgroundImage = 'url(assets/icons/icon-72x72.png)';
+        tile.style.backgroundSize = 'contain';
+        tile.style.backgroundRepeat = 'no-repeat';
+        tile.style.backgroundPosition = 'center';
+        tile.style.backgroundColor = 'rgba(180, 156, 255, 0.15)';
         ghost.appendChild(tile);
       }
     }
@@ -810,6 +825,9 @@ export function setInventoryPanelOpen(open, options = {}) {
         Neo.inventoryPauseActive = false;
         if (Neo.gameState === 'pause') Neo.resumeGame();
       }
+      // If a Wizard's Paw is still owed, surface it now that the inventory is
+      // closed. Suppress battery auto-reopen so closing isn't undone instantly.
+      Neo.requestPanelItemSelection?.({ suppressBatteryOpen: true });
     }
     if (open) {
       const shouldPause = window.NeoSettings?.shouldPauseInventory?.() !== false;
@@ -1459,6 +1477,7 @@ export function getShopWeaponOffers() {
     iconKey,
     title,
     titleColor,
+    descColor = '', // rarity color for the description text
     cost,
     description,
     footerExtra = '',
@@ -1479,6 +1498,7 @@ export function getShopWeaponOffers() {
     const indexAttr = Number.isInteger(index) ? ` data-index="${index}"` : '';
     const styleAttr = accentColor ? ` style="--shop-card-accent:${escapeShopText(accentColor)}"` : '';
     const titleStyle = titleColor ? ` style="color:${escapeShopText(titleColor)}"` : '';
+    const descStyle = descColor ? ` style="color:${escapeShopText(descColor)}"` : '';
     const status = state.status || 'available';
     const statusLabel = state.statusLabel || '';
     const chipHtml = renderShopChips(chips.length ? chips : [rarityLabel]);
@@ -1500,7 +1520,7 @@ export function getShopWeaponOffers() {
         ${statusLabel ? `<span class="shop-card__status shop-card__status--${escapeShopText(status)}">${escapeShopText(statusLabel)}</span>` : ''}
       </div>
       <div class="shop-card__copy">
-        <p>${escapeShopText(description)}</p>
+        <p${descStyle}>${escapeShopText(description)}</p>
       </div>
       ${statsHtml}
       ${footerExtra}
@@ -1564,6 +1584,7 @@ export function renderShopPanel() {
           iconKey: offer.key,
           title: item?.name || 'Item',
           titleColor: Neo.getRarityNameColor(item?.rarity || item?.category),
+          descColor: Neo.getRarityNameColor(item?.rarity || item?.category),
           accentColor: Neo.getRarityNameColor(item?.rarity || item?.category),
           cost: offer.cost,
           description,
@@ -1602,6 +1623,7 @@ export function renderShopPanel() {
           iconKey: offer.key,
           title: weapon?.name || offer.key,
           titleColor: Neo.getRarityNameColor(weapon?.rarity),
+          descColor: Neo.getRarityNameColor(weapon?.rarity),
           accentColor: Neo.getRarityNameColor(weapon?.rarity),
           cost: offer.cost,
           description,
@@ -1813,7 +1835,7 @@ export function renderInventoryPanel() {
             <h4 style="color:${Neo.getRarityNameColor(item?.rarity || item?.category)}">${item?.name || key}</h4>
             <span class="inv-card__count">x${_invP.items[key]}</span>
           </div>
-          <p>${item?.description || 'No item description available.'}</p>
+          <p style="color:${Neo.getRarityNameColor(item?.rarity || item?.category)}">${item?.description || 'No item description available.'}</p>
         </div>`;
       })
       .join('') || '<div class="inv-card"><span class="inv-card__eyebrow">Empty</span><h4>No relics yet</h4><p>Your pockets are clear. Loot rooms or buy from the shop to start a build.</p></div>';

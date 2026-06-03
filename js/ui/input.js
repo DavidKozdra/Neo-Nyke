@@ -381,10 +381,10 @@ export const ITEM_DEFS = {
       name: 'Double Dose',
       shortName: 'Potion x2',
       description: '50% chance per stack for potions to apply twice.',
-      rarity: 'knight',
+      rarity: 'god',
       color: '#9af7d8',
       accent: '#dffff4',
-      category: 'knight',
+      category: 'god',
       tags: ['potion', 'healing', 'utility'],
     },
     copycat_charm: {
@@ -392,10 +392,10 @@ export const ITEM_DEFS = {
       name: 'Copycat Charm',
       shortName: 'Item x2',
       description: '20% chance per stack to duplicate an item pickup.',
-      rarity: 'knight',
+      rarity: 'god',
       color: '#f5efff',
       accent: '#c8a8ff',
-      category: 'knight',
+      category: 'god',
       tags: ['loot', 'item', 'utility'],
     },
     crit_charm: {
@@ -869,20 +869,22 @@ export const ITEM_DEFS = {
       name: "El Barto's Cape",
       shortName: 'CAPE',
       description: 'Tool. Become invisible for 10 seconds. Each stack adds +5 seconds and attacks do not break it.',
-      rarity: 'red',
+      rarity: 'god',
       color: '#ff5b78',
       accent: '#ffe0b8',
-      category: 'red',
-      tags: ['tools', 'stealth', 'red'],
+      category: 'god',
+      tags: ['tools', 'stealth', 'god'],
     },
   };
+// Rarity -> name/description text color. GOD is the top tier and renders red (#ff4256).
+// ('white' and 'purple'/'red' are legacy aliases of knight/wizard/god kept for old save data.)
 export const RARITY_NAME_COLORS = {
     knight: '#f4f6fb',
     white: '#f4f6fb',
     wizard: '#b77dff',
     purple: '#b77dff',
-    god: '#ff4256',
-    red: '#ff4256',
+    god: '#ff4256',   // GOD tier
+    red: '#ff4256',   // legacy alias of god
     princess: '#ff9de8',
   };
 export const SHOP_RARITY_PRICE_MULTIPLIERS = {
@@ -1148,6 +1150,7 @@ export const ui = {
     competitiveSeedDisplay: document.getElementById('competitiveSeedDisplay'),
     competitiveSeedValue: document.getElementById('competitiveSeedValue'),
     itemRarityCounts: document.getElementById('itemRarityCounts'),
+    panelItemAlert: document.getElementById('panelItemAlert'),
     seed: document.getElementById('seed'),
     go: document.getElementById('go'),
     difficultyHint: document.getElementById('difficultyHint'),
