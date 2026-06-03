@@ -1,5 +1,6 @@
 # NEO NYKE: DUNGEON GOD
-![alt text](image.png)
+<img width="732" height="162" alt="image" src="https://github.com/user-attachments/assets/a15bd69a-0700-44df-8c2f-8fa153a0a83b" />
+
 
 A top-down roguelike dungeon crawler. Fight through 10 floors of procedurally arranged rooms, collect relics, upgrade your moves, and defeat the God boss.
 
