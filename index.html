@@ -1204,7 +1204,11 @@
 <div id="settingsModal" class="modal-backdrop hidden">
   <div class="modal-box">
     <button class="modal-close" id="settingsClose">&#10005;</button>
-    <h2 class="screen-title" style="margin-bottom:18px">SETTINGS</h2>
+    <div class="settings-head">
+      <span class="panel-kicker">Configure</span>
+      <h2 class="screen-title">SETTINGS</h2>
+      <p class="settings-subtitle">Controls, audio, accessibility, and your save data.</p>
+    </div>
 
     <!-- Tab bar -->
     <div class="stab-bar" role="tablist">
@@ -1381,30 +1385,40 @@
 
     <!-- Data tab -->
     <div class="stab-panel hidden" id="stab-data">
-      <div class="data-row">
-        <span class="data-label">Display name</span>
-        <span class="data-desc">Shown on the competitive leaderboard.</span>
+      <div class="access-row">
+        <div class="access-text">
+          <span class="access-label">Display name</span>
+          <span class="access-desc">Shown on the competitive leaderboard.</span>
+        </div>
         <input id="usernameInput" class="settings-text-input" type="text" maxlength="24" placeholder="Enter name..." autocomplete="off" spellcheck="false">
       </div>
-      <div class="data-row">
-        <span class="data-label">Birthday</span>
-        <span class="data-desc">Get a surprise on your birthday. We have no way of knowing if this is real.</span>
+      <div class="access-row">
+        <div class="access-text">
+          <span class="access-label">Birthday</span>
+          <span class="access-desc">Get a surprise on your birthday. We have no way of knowing if this is real.</span>
+        </div>
         <input id="birthdayInput" class="settings-text-input" type="date" autocomplete="off">
       </div>
-      <div class="data-row">
-        <span class="data-label">Export save</span>
-        <span class="data-desc">Download all stored game data as a JSON file.</span>
+      <div class="access-row">
+        <div class="access-text">
+          <span class="access-label">Export save</span>
+          <span class="access-desc">Download all stored game data as a JSON file.</span>
+        </div>
         <button class="settings-reset" id="dataExport">Export</button>
       </div>
-      <div class="data-row">
-        <span class="data-label">Import save</span>
-        <span class="data-desc">Restore all stored game data from a JSON file.</span>
+      <div class="access-row">
+        <div class="access-text">
+          <span class="access-label">Import save</span>
+          <span class="access-desc">Restore all stored game data from a JSON file.</span>
+        </div>
         <button class="settings-reset" id="dataImport">Import</button>
         <input type="file" id="dataImportFile" accept=".json" style="display:none">
       </div>
-      <div class="data-row data-row--danger">
-        <span class="data-label">Delete all data</span>
-        <span class="data-desc">Wipes saves, run history, achievements, and settings. Cannot be undone.</span>
+      <div class="access-row data-row--danger">
+        <div class="access-text">
+          <span class="access-label">Delete all data</span>
+          <span class="access-desc">Wipes saves, run history, achievements, and settings. Cannot be undone.</span>
+        </div>
         <button class="settings-reset settings-reset--danger" id="dataDelete">Delete</button>
       </div>
     </div>

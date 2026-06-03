@@ -134,3 +134,16 @@ html.princess-ui {
 .hero-detail-panel {
   border: 1px solid #000;
 }
+
+/* Tab icons: black-bordered chip, consistent across shop / inventory / settings tabs.
+   Every tab bar is a flex button with its own `gap`, so the icon already sits clear
+   of the label — we only add the border treatment here. */
+.panel-tab .tab-icon,
+.shop-tab .tab-icon,
+.inv-tab .tab-icon,
+.stab .tab-icon {
+  border: 1px solid #000 !important;
+  border-radius: 5px;
+  padding: 2px;
+  box-sizing: content-box;
+}

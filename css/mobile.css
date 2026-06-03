@@ -895,6 +895,19 @@
     font-size: 18px;
   }
 
+  .settings-head {
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+
+  .settings-head .screen-title {
+    font-size: 18px;
+  }
+
+  .settings-subtitle {
+    font-size: 12px;
+  }
+
   .stab-bar {
     flex-wrap: nowrap;
     justify-content: flex-start;
@@ -1239,8 +1252,8 @@
   .access-row .toggle,
   .access-slider-wrap,
   .acc-color-input,
-  .data-row .settings-reset,
-  .data-row .settings-text-input {
+  #stab-data .settings-reset,
+  #stab-data .settings-text-input {
     align-self: stretch;
   }
 
