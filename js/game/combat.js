@@ -723,7 +723,6 @@
         Neo.spawnParticle({ x: enemy.x, y: enemy.y - 16, life: 0.6, text: 'POP', c: '#a0f' });
       }
       hitEnemy(enemy, damage, angle, 320, smashColor);
-      enemy.stun = 0.5;
     }
     Neo.destructibles.forEach(prop => {
       if (!prop.broken && !prop.hidden && Neo.dist(Neo.player.x, Neo.player.y, prop.x, prop.y) <= smashRadius + prop.r) {
@@ -1090,7 +1089,6 @@
       const enemyAngle = Math.atan2(enemy.y - Neo.player.y, enemy.x - Neo.player.x);
       enemy.vx += Math.cos(enemyAngle) * kickKnockback;
       enemy.vy += Math.sin(enemyAngle) * kickKnockback;
-      enemy.stun = Math.max(enemy.stun, 0.7);
     });
     Neo.player.vx -= Math.cos(angle) * 260;
     Neo.player.vy -= Math.sin(angle) * 260;
@@ -1327,9 +1325,12 @@
       const knockbackOverThreshold = (appliedKnockback - knockbackThreshold) / knockbackThreshold;
       stunDuration = Math.max(stunDuration, Neo.HEAVY_KNOCKBACK_STUN + Neo.clamp(knockbackOverThreshold, 0, 1) * 0.18);
     }
+    const now = Number(Neo.gameElapsedTime || 0);
+    if (now < Number(enemy?.heavyStunImmuneUntil || 0)) return false;
     stunDuration *= durationMultiplier;
     if (Neo.BOSS_TYPES.has(enemy.type)) stunDuration *= Neo.HEAVY_IMPACT_BOSS_STUN_MULTIPLIER;
     enemy.stun = Math.max(enemy.stun || 0, stunDuration);
+    enemy.heavyStunImmuneUntil = now + 0.35;
     Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 18, life: 0.55, text: 'STUN', c: '#ffe66d' });
     Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.36, ring: enemy.r + 18, c: '#ffe66d' });
     return true;
