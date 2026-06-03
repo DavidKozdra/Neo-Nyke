@@ -1361,7 +1361,9 @@
     const critChance = Neo.clamp((stats.critChance || 0) + Number(options.critBonus || 0), 0, 0.98);
     let dealt = options.rawDamage ? scaleRawDamageAgainstEnemy(enemy, damage) : scaleDamageAgainstEnemy(enemy, damage);
     if (sandbox) dealt = Math.max(1, Math.round(dealt * sandbox.playerDamageMultiplier));
-    const isCrit = critChance > 0 && Neo.nextRandom('encounter') < critChance;
+    // Sparkle Charm marks enemies so every hit against them is a guaranteed crit.
+    const sparkled = Number(enemy.critSparkle || 0) > 0;
+    const isCrit = sparkled || (critChance > 0 && Neo.nextRandom('encounter') < critChance);
     const appliedKnockback = knockback * (stats.knockbackMultiplier || 1);
     if (isCrit) dealt = Math.round(dealt * stats.critMultiplier);
     if (!options.ignoreBarrier && (enemy.barrier || 0) > 0) {

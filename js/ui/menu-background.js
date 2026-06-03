@@ -345,24 +345,36 @@
   document.addEventListener('visibilitychange', () => { if (!document.hidden) { lastTs = 0; onVisChange(); } });
   raf = requestAnimationFrame(draw);
 
-  (function animateTitle() {
-    const container  = document.getElementById('menuLetters');
-    const subtitleEl = document.getElementById('menuSubtitle');
-    if (!container) return;
-
-    const TITLE = 'NEO NYKE';
-    const TILTS = ['-8deg','5deg','-4deg','6deg','0deg','-5deg','7deg','-3deg'];
-
-    TITLE.split('').forEach((ch, i) => {
-      const span = document.createElement('span');
-      span.textContent = ch === ' ' ? ' ' : ch;
-      span.className   = ch === ' ' ? 'menu-letter space' : 'menu-letter';
-      span.style.setProperty('--tilt', TILTS[i] || '0deg');
-      container.appendChild(span);
-      if (ch !== ' ') setTimeout(() => span.classList.add('landed'), 320 + i * 95);
-    });
-
-    const lastDelay = 320 + (TITLE.replace(/ /g, '').length - 1) * 95;
-    setTimeout(() => subtitleEl && subtitleEl.classList.add('visible'), lastDelay + 260);
-  })();
+  animateMenuTitle(
+    document.getElementById('menuLetters'),
+    document.getElementById('menuSubtitle')
+  );
 })();
+
+/**
+ * Build + animate the cinematic "NEO NYKE" title (the same component used on
+ * the main menu and the pause overlay). Clears any prior letters so it can be
+ * replayed each time the host overlay opens.
+ */
+function animateMenuTitle(container, subtitleEl) {
+  if (!container) return;
+
+  const TITLE = 'NEO NYKE';
+  const TILTS = ['-8deg','5deg','-4deg','6deg','0deg','-5deg','7deg','-3deg'];
+
+  container.replaceChildren();
+  subtitleEl && subtitleEl.classList.remove('visible');
+
+  TITLE.split('').forEach((ch, i) => {
+    const span = document.createElement('span');
+    span.textContent = ch === ' ' ? ' ' : ch;
+    span.className   = ch === ' ' ? 'menu-letter space' : 'menu-letter';
+    span.style.setProperty('--tilt', TILTS[i] || '0deg');
+    container.appendChild(span);
+    if (ch !== ' ') setTimeout(() => span.classList.add('landed'), 320 + i * 95);
+  });
+
+  const lastDelay = 320 + (TITLE.replace(/ /g, '').length - 1) * 95;
+  setTimeout(() => subtitleEl && subtitleEl.classList.add('visible'), lastDelay + 260);
+}
+window.NeoAnimateMenuTitle = animateMenuTitle;

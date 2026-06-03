@@ -681,6 +681,7 @@
     panic_button: { cooldown: 52, duration: 0, label: 'PANIC', color: '#f4f6fb' },
     mid_sweepy_box: { cooldown: 36, duration: 6, label: 'SWEEPY', color: '#ff6e8b' },
     el_bartos_cape: { cooldown: 58, duration: 10, label: 'EL BARTO', color: '#ffb37a' },
+    sparkle_charm: { cooldown: 40, duration: 0, label: 'SPARKLE', color: '#ffe8a3' },
   };
 
   function ensureEquipmentRuntimeState() {
@@ -728,6 +729,7 @@
       player.equipmentEffects[itemKey] = { time: def.duration + stackBonus, tick: 0 };
     }
     if (itemKey === 'panic_button') activatePanicButton();
+    if (itemKey === 'sparkle_charm') activateSparkleCharm();
     Neo.itemStatsCacheFrame = -1;
     Neo.spawnParticle({ x: player.x, y: player.y - 34, life: 0.75, text: def.label, c: def.color });
     Neo.scheduleRunSave?.();
@@ -799,6 +801,30 @@
       Neo.hitEnemy?.(enemy, 8, angle, 340, '#f4f6fb');
     });
     Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.65, ring: 72, c: '#f4f6fb' });
+  }
+
+  // Mark the nearest 5 enemies with a "crit sparkle": while marked, every hit
+  // against them is a guaranteed crit (see hitEnemy). Purely offensive setup tool.
+  function activateSparkleCharm() {
+    if (!Neo.player) return;
+    const SPARKLE_DURATION = 6;
+    const candidates = [];
+    Neo.forEachEnemyNearCircle?.(Neo.player.x, Neo.player.y, 9999, enemy => {
+      if (!enemy || enemy.dead || (enemy.spawnT || 0) > 0) return;
+      const dx = enemy.x - Neo.player.x;
+      const dy = enemy.y - Neo.player.y;
+      candidates.push({ enemy, distSq: dx * dx + dy * dy });
+    });
+    candidates.sort((a, b) => a.distSq - b.distSq);
+    const marked = candidates.slice(0, 5);
+    marked.forEach(({ enemy }) => {
+      enemy.critSparkle = Math.max(Number(enemy.critSparkle || 0), SPARKLE_DURATION);
+      Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.5, ring: enemy.r + 10, c: '#ffe8a3' });
+      Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 14, life: 0.6, text: 'SPARKLED', c: '#ffe8a3' });
+    });
+    if (marked.length > 0) {
+      Neo.playSfx?.('item_collect');
+    }
   }
 
   function dropSweepyMine() {
@@ -946,6 +972,13 @@
       activate: () => startTimedEquipment('el_bartos_cape'),
       getState: () => getEquipmentState('el_bartos_cape'),
       getStatusText: () => getEquipmentStatusText('el_bartos_cape'),
+    },
+    sparkle_charm: {
+      key: 'sparkle_charm',
+      shortName: 'SPARKLE',
+      activate: () => startTimedEquipment('sparkle_charm'),
+      getState: () => getEquipmentState('sparkle_charm'),
+      getStatusText: () => getEquipmentStatusText('sparkle_charm'),
     },
   };
   Neo.EQUIPMENT_SLOT_KEYS = EQUIPMENT_SLOT_KEYS;

@@ -434,6 +434,7 @@ export function resumeGame() {
       extra_battery: 0,
       mooggy_zoomies: 0,
       el_bartos_cape: 0,
+      sparkle_charm: 0,
     };
     const character = Neo.CHARACTER_DEFS[Neo.chosenCharacter] || Neo.CHARACTER_DEFS.thorn_knight;
     const starterItems = getCharacterStartingItems(character.key);

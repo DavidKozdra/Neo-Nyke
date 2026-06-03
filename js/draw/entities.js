@@ -665,6 +665,26 @@
         });
         Neo.ctx.restore();
       }
+      if (Number(enemy.critSparkle || 0) > 0) {
+        Neo.ctx.save();
+        Neo.ctx.translate(enemy.x, drawY);
+        const sparkleCount = 4;
+        const baseR = enemy.r + 8;
+        for (let s = 0; s < sparkleCount; s += 1) {
+          const spin = _reduceFlash ? 0 : _now / 320;
+          const a = (s / sparkleCount) * Math.PI * 2 + spin;
+          const px = Math.cos(a) * baseR;
+          const py = Math.sin(a) * baseR;
+          const tw = _reduceFlash ? 1 : 0.55 + Math.abs(Math.sin(_now / 140 + s)) * 0.9;
+          Neo.ctx.fillStyle = '#ffe8a3';
+          Neo.ctx.shadowColor = '#ffd05a';
+          Neo.ctx.shadowBlur = 8;
+          Neo.ctx.beginPath();
+          Neo.ctx.arc(px, py, 2.2 * tw, 0, Math.PI * 2);
+          Neo.ctx.fill();
+        }
+        Neo.ctx.restore();
+      }
       const spriteKey = getEnemySpriteKey(enemy);
       const facing = getFacingDirection(enemy, enemy.beamAngle || enemy.dashAngle || 0);
       const drawSize = Math.max(30, enemy.r * 2.4);

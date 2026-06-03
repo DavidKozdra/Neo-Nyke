@@ -200,7 +200,7 @@
       <div class="challenge-progress"><i id="challengeStatusFill"></i></div>
     </div>
   </div>
-  <div id="equipmentSlots" class="equipment-slots hidden" aria-hidden="true" aria-label="Equipment slots">
+  <div id="equipmentSlots" class="equipment-slots hidden" aria-hidden="true" aria-label="Tool slots">
     <button class="equip-slot is-empty" type="button" data-equip-slot="0" data-equip-key="F" aria-hidden="true" tabindex="-1">
       <span class="equip-slot__key">F</span>
       <canvas class="equip-slot__icon" width="24" height="24" aria-hidden="true"></canvas>
@@ -568,9 +568,11 @@
 
   <!-- Pause menu -->
   <div id="pause" class="overlay hidden">
-    <div class="pause-brand" aria-hidden="true">
-      <div class="pause-brand__title">NEO NYKE</div>
-      <div class="pause-brand__subtitle">DUNGEON GOD</div>
+    <div class="menu-cinema pause-cinema" aria-hidden="true">
+      <div id="pauseMenuLetters" class="menu-letters">
+        <span class="menu-letter landed" style="--tilt:-8deg">N</span><span class="menu-letter landed" style="--tilt:5deg">E</span><span class="menu-letter landed" style="--tilt:-4deg">O</span><span class="menu-letter space"> </span><span class="menu-letter landed" style="--tilt:-5deg">N</span><span class="menu-letter landed" style="--tilt:7deg">Y</span><span class="menu-letter landed" style="--tilt:-3deg">K</span><span class="menu-letter landed" style="--tilt:4deg">E</span>
+      </div>
+      <div id="pauseMenuSubtitle" class="menu-subtitle-flash visible">DUNGEON GOD</div>
     </div>
     <h2 class="screen-title">PAUSED</h2>
     <div class="main-nav">

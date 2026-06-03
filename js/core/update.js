@@ -363,6 +363,7 @@ export function loop(timestamp) {
       enemy.attackCd = Math.max(0, enemy.attackCd - dt);
       enemy.stun = Math.max(0, enemy.stun - dt);
       enemy.inv = Math.max(0, enemy.inv - dt);
+      if (enemy.critSparkle > 0) enemy.critSparkle = Math.max(0, enemy.critSparkle - dt);
       if (enemy.spawnT > 0) { enemy.spawnT = Math.max(0, enemy.spawnT - dt); continue; }
 
       if (!enemy.bleedImmune && itemStats.passiveBleedStacks > 0 && enemy.type !== 'god') {

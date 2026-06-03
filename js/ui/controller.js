@@ -451,9 +451,17 @@ export function createUIController(view) {
       const pauseVisible = show === 'pause' && !inventoryPause;
       if (view.pause) {
         if (pauseVisible) {
+          const wasHidden = view.pause.classList.contains('hidden');
           Neo.clearPanelCloseEffect?.(view.pause);
           view.pause.classList.remove('hidden');
           view.pause.setAttribute('aria-hidden', 'false');
+          // Replay the same cinematic title component the main menu uses.
+          if (wasHidden) {
+            window.NeoAnimateMenuTitle?.(
+              document.getElementById('pauseMenuLetters'),
+              document.getElementById('pauseMenuSubtitle')
+            );
+          }
         } else {
           if (!inventoryPause && !view.pause.classList.contains('hidden')) Neo.playPanelCloseEffect?.(view.pause);
           else if (inventoryPause) Neo.clearPanelCloseEffect?.(view.pause);

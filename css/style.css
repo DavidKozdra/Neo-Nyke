@@ -117,6 +117,16 @@ button, input, select, textarea {
     animation: none !important;
     transition: none !important;
   }
+  /* Letters/subtitle rely on their land animation to fade in from opacity:0;
+     with animations killed, force the resting (visible) state. */
+  .menu-letter.landed {
+    opacity: 1;
+    transform: translateY(0) scale(1) rotate(0deg);
+  }
+  .menu-subtitle-flash.visible {
+    opacity: 1;
+    transform: scaleX(1);
+  }
 }
 
 /* Controls tab – hide irrelevant platform section */
@@ -1478,6 +1488,7 @@ button, input, select, textarea {
   text-transform: uppercase;
 }
 
+.panel-tabs,
 .shop-tabs {
   display: flex;
   gap: 10px;
@@ -1491,6 +1502,7 @@ button, input, select, textarea {
   backdrop-filter: blur(12px);
 }
 
+.panel-tab,
 .shop-tab {
   flex: 1;
   border: 1px solid var(--menu-border);
@@ -1506,6 +1518,7 @@ button, input, select, textarea {
   transition: transform .14s ease, border-color .14s ease, background .14s ease, color .14s ease;
 }
 
+.panel-tab.active,
 .shop-tab.active {
   background: linear-gradient(135deg, var(--menu-surface-strong), var(--menu-surface));
   border-color: var(--menu-border-strong);
@@ -1513,6 +1526,7 @@ button, input, select, textarea {
   box-shadow: 0 12px 28px rgba(0,0,0,.22), inset 0 0 20px var(--menu-glow);
 }
 
+.panel-tab:hover,
 .shop-tab:hover {
   transform: translateY(-1px);
   border-color: var(--menu-border-strong);
@@ -1533,7 +1547,9 @@ button, input, select, textarea {
   image-rendering: pixelated;
 }
 
+.panel-tab.active .tab-icon,
 .shop-tab.active .tab-icon { opacity: 1; }
+.panel-tab:hover .tab-icon,
 .shop-tab:hover .tab-icon { opacity: 0.85; }
 
 .shop-list {
@@ -4848,6 +4864,17 @@ button.alt.danger {
 #pause.overlay.hidden .main-nav {
   opacity: 0;
   transform: translateY(16px) scale(.96);
+}
+
+/* Pause overlay reuses the main-menu cinematic title component; lay it out
+   in-flow (the default .menu-cinema is absolute/inset:0) above "PAUSED". */
+#pause.overlay .pause-cinema {
+  position: relative;
+  inset: auto;
+  z-index: auto;
+  justify-content: center;
+  padding: 0 clamp(16px, 4vw, 48px);
+  margin-bottom: clamp(8px, 2vh, 18px);
 }
 
 @media (prefers-reduced-motion: reduce) {
