@@ -1380,6 +1380,10 @@
     enemy.hp -= dealt;
     enemy.vx += Math.cos(angle) * appliedKnockback;
     enemy.vy += Math.sin(angle) * appliedKnockback;
+    if (Number.isFinite(angle)) {
+      enemy._lastHitAngle = angle;
+      enemy._lastHitAt = performance.now();
+    }
     enemy.stun = Math.max(enemy.stun, 0.08);
     applyEnemyImpactStun(enemy, dealt, appliedKnockback);
     if (!options.noCharmBuff) Neo.grantCritCharmBuff();
@@ -1761,12 +1765,51 @@
     return false;
   }
 
+  // Combine two headings as 2D vectors so opposing angles cancel instead of
+  // averaging into a meaningless sideways value (the trap with raw angle math).
+  function blendAngles(a, weightA, b, weightB) {
+    const x = Math.cos(a) * weightA + Math.cos(b) * weightB;
+    const y = Math.sin(a) * weightA + Math.sin(b) * weightB;
+    if (Math.hypot(x, y) < 1e-4) return a;
+    return Math.atan2(y, x);
+  }
+
+  function resolveCorpseFallbackDirection(enemy) {
+    // Prefer the killing blow's direction; otherwise shove the body away from
+    // the player (reads as "I killed it" for DoT/contact kills).
+    let base;
+    const hitIsRecent = Number.isFinite(enemy._lastHitAngle)
+      && (performance.now() - Number(enemy._lastHitAt || 0)) < 600;
+    if (hitIsRecent) {
+      base = enemy._lastHitAngle;
+    } else if (Neo.player) {
+      base = Math.atan2(enemy.y - Neo.player.y, enemy.x - Neo.player.x);
+    } else {
+      return Neo.rand(Math.PI * 2, 0, 'fx');
+    }
+    // Bias toward the enemy's own travel heading when it was actually moving,
+    // so a charger keeps barreling forward and a fleeing foe pitches ahead.
+    const moveSpeed = Math.hypot(Number(enemy.vx || 0), Number(enemy.vy || 0));
+    if (moveSpeed > 4) {
+      const moveAngle = Math.atan2(Number(enemy.vy || 0), Number(enemy.vx || 0));
+      base = blendAngles(base, 1, moveAngle, Neo.clamp(moveSpeed / 90, 0, 0.6));
+    }
+    // Small scatter so stacked deaths don't all fly in lockstep.
+    return base + Neo.rand(0.35, -0.35, 'fx');
+  }
+
   function spawnEnemyCorpse(enemy) {
     if (!enemy || enemy.type === 'boss_spawner') return;
     const speed = Math.min(150, Math.hypot(Number(enemy.vx || 0), Number(enemy.vy || 0)));
+    // Ragdoll launch heading. The killing blow's residual velocity is the best
+    // signal (it already bakes in the hit's knockback + direction). When that's
+    // too weak to read — DoT/low-knockback kills leave the body nearly still —
+    // fall back to the last hit angle, else the direction away from the player,
+    // then nudge that by the enemy's own travel heading so a fleeing/charging
+    // foe still tumbles believably. Pure random is the last resort.
     const direction = speed > 8
       ? Math.atan2(Number(enemy.vy || 0), Number(enemy.vx || 0))
-      : Neo.rand(Math.PI * 2, 0, 'fx');
+      : resolveCorpseFallbackDirection(enemy);
     const boss = Neo.isBossType(enemy.type);
     const elite = !!enemy.elite;
     const launchScale = boss ? 1.45 : elite ? 1.22 : 1;

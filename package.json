@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "icons": "node generate-icons.js",
-    "test": "jest",
+    "test": "node scripts/run-tests.js",
     "build": "rm -rf dist && mkdir -p dist && cp -r index.html game.html sw.js manifest.json css js assets Koz_Engine_Lib dist/"
   },
   "devDependencies": {

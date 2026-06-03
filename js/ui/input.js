@@ -1355,7 +1355,12 @@ export const SANDBOX_DEFAULT_SETTINGS = {
   window.addEventListener('blur', () => {
     if (window.NeoSettings?.shouldPauseOnBlur?.() === false) return;
     if (Neo.gameState === 'play') Neo.pauseGame();
+    // If we died but haven't reached the death screen yet, the death animation is
+    // still playing ('dying'). Freeze it here so we don't blow past the death moment
+    // while the window is unfocused — it resumes on focus.
+    else if (Neo.gameState === 'dying') Neo.windowBlurred = true;
   });
+  window.addEventListener('focus', () => { Neo.windowBlurred = false; });
 
 export const JESTER_PORTAL_ACTIVATE_DELAY = 0.44;
 export const JESTER_PORTAL_TRIGGER_RADIUS = 42;

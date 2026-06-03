@@ -44,7 +44,7 @@
   const SHOP_GREETINGS = [
     'Coin for your courage, traveler?',
     'Everything here outlives you. Browse well.',
-    'No refunds past the ladder.',
+    'Give Me every penny you have',
     'Steel and salves — pick your poison.',
     'You break it down there, you buy it up here.',
     'The deeper you go, the more you’ll wish you bought.',
@@ -110,7 +110,8 @@
 
     // Greeting line.
     Neo.ctx.shadowBlur = 0;
-    Neo.ctx.font = 'italic 12px system-ui';
+
+    Neo.ctx.font = 'italic 0.5em system-ui';
     Neo.ctx.fillStyle = 'rgba(240, 214, 170, 0.85)';
     Neo.ctx.fillText(getShopGreeting(room), 0, 16);
 
