@@ -1,5 +1,7 @@
 // enemies.js — standalone IIFE. Enemy spawning, AI, boss logic.
 
+  const BREAKABLE_OBSTACLE_KINDS = new Set(['cover_wall', 'wall', 'secret_wall']);
+
   function findSafeEnemySpawnPoint(preferredX, preferredY, radius = 18) {
     const isSpawnUsable = (x, y) => !Neo.isBlocked(x, y, radius) && hasNavigableSpawnSpace(x, y, radius, Neo.player);
     if (isSpawnUsable(preferredX, preferredY)) {
@@ -23,6 +25,10 @@
 
   function compactEnemyList() {
     if (!Array.isArray(Neo.enemies) || Neo.enemies.length === 0) return;
+    const frame = Number(Neo.frameId || 0);
+    const nextScanFrame = Number(Neo._nextEnemyCompactionScanFrame || 0);
+    if (frame < nextScanFrame) return;
+    Neo._nextEnemyCompactionScanFrame = frame + 12;
     let needsCompaction = false;
     for (let index = 0; index < Neo.enemies.length; index += 1) {
       const enemy = Neo.enemies[index];
@@ -34,7 +40,10 @@
     if (!needsCompaction) return;
     const before = Neo.enemies.length;
     Neo.enemies = Neo.enemies.filter(enemy => enemy && typeof enemy === 'object');
-    if (Neo.enemies.length !== before) Neo.syncCurrentRoomState();
+    if (Neo.enemies.length !== before) {
+      Neo._nextEnemyCompactionScanFrame = frame + 1;
+      Neo.syncCurrentRoomState();
+    }
   }
 
   function getCoverObstacles() {
@@ -174,10 +183,9 @@
   }
 
   function findBlockingBreakableDestructible(x, y, r) {
-    const breakableKinds = new Set(['cover_wall', 'wall', 'secret_wall']);
     return Neo.destructibles.find(prop => {
       if (!prop || prop.broken || prop.hidden) return false;
-      if (!breakableKinds.has(prop.kind)) return false;
+      if (!BREAKABLE_OBSTACLE_KINDS.has(prop.kind)) return false;
       return Neo.destructibleIntersectsCircle(prop, x, y, r);
     }) || null;
   }

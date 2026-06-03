@@ -36,6 +36,27 @@ export function createUIController(view) {
     let objectiveCompactMode = false;
     let objectiveExpanded = true;
     let tutorialMenuOfferVisible = false;
+    let objectiveLayoutCache = null;
+    const dialogueRenderCache = { active: null, speaker: null, text: null, hint: null, portraitKey: null };
+    const entityDialogueNodes = new Map();
+    const hudRenderCache = {
+      floor: null,
+      level: null,
+      xpText: null,
+      gameTime: null,
+      difficultyName: null,
+      character: null,
+      hpWidth: null,
+      hpText: null,
+      itemRarityWhite: null,
+      itemRarityPurple: null,
+      itemRarityRed: null,
+      cdM: null,
+      cdL: null,
+      cdS: null,
+      cdD: null,
+      skills: { melee: null, laser: null, smash: null, dash: null },
+    };
     const runHistoryPageSize = 8;
 
     const LC = `<span class="lc-icon">◆</span>`;
@@ -214,11 +235,14 @@ export function createUIController(view) {
     function setObjectiveLayout(layout) {
       if (!view.objectiveTracker) return;
       if (!layout) {
-        view.objectiveTracker.style.removeProperty('top');
-        view.objectiveTracker.style.removeProperty('right');
-        view.objectiveTracker.style.removeProperty('width');
-        view.objectiveTracker.style.removeProperty('max-height');
-        view.objectiveTracker.style.removeProperty('overflow-y');
+        if (objectiveLayoutCache !== null) {
+          view.objectiveTracker.style.removeProperty('top');
+          view.objectiveTracker.style.removeProperty('right');
+          view.objectiveTracker.style.removeProperty('width');
+          view.objectiveTracker.style.removeProperty('max-height');
+          view.objectiveTracker.style.removeProperty('overflow-y');
+          objectiveLayoutCache = null;
+        }
         return;
       }
 
@@ -236,11 +260,24 @@ export function createUIController(view) {
         maxHeight = Math.floor(window.innerHeight - top - margin);
       }
 
-      view.objectiveTracker.style.top = `${top}px`;
-      view.objectiveTracker.style.right = `${right}px`;
-      view.objectiveTracker.style.width = `${trackerWidth}px`;
-      view.objectiveTracker.style.maxHeight = `${Math.max(74, maxHeight)}px`;
-      view.objectiveTracker.style.overflowY = 'auto';
+      const nextLayout = {
+        top,
+        right,
+        width: trackerWidth,
+        maxHeight: Math.max(74, maxHeight),
+      };
+      if (!objectiveLayoutCache
+        || objectiveLayoutCache.top !== nextLayout.top
+        || objectiveLayoutCache.right !== nextLayout.right
+        || objectiveLayoutCache.width !== nextLayout.width
+        || objectiveLayoutCache.maxHeight !== nextLayout.maxHeight) {
+        view.objectiveTracker.style.top = `${nextLayout.top}px`;
+        view.objectiveTracker.style.right = `${nextLayout.right}px`;
+        view.objectiveTracker.style.width = `${nextLayout.width}px`;
+        view.objectiveTracker.style.maxHeight = `${nextLayout.maxHeight}px`;
+        view.objectiveTracker.style.overflowY = 'auto';
+        objectiveLayoutCache = nextLayout;
+      }
       syncObjectiveTrackerCompactState();
     }
 
@@ -259,6 +296,25 @@ export function createUIController(view) {
     function getVisibleRunHistoryEntries() {
       if (runHistoryModeFilter === 'all') return runHistoryEntries;
       return runHistoryEntries.filter(entry => Neo.normalizeGameMode(entry.mode) === runHistoryModeFilter);
+    }
+
+    function setTextIfChanged(node, nextValue) {
+      if (!node) return;
+      const value = String(nextValue ?? '');
+      if (node.textContent !== value) node.textContent = value;
+    }
+
+    function getSkillCacheValue(skill) {
+      if (!skill) return null;
+      return `${skill.current}|${skill.max}|${!!skill.active}|${skill.charges}|${skill.maxCharges}`;
+    }
+
+    function updateSkillCardIfChanged(name, skill) {
+      if (!skill) return;
+      const nextCache = getSkillCacheValue(skill);
+      if (hudRenderCache.skills[name] === nextCache) return;
+      hudRenderCache.skills[name] = nextCache;
+      setSkillCard(name, skill.current, skill.max, !!skill.active, skill.charges, skill.maxCharges);
     }
 
     function renderRunHistoryModeTabs() {
@@ -380,24 +436,43 @@ export function createUIController(view) {
     function renderDialogue() {
       if (!view.dialogueOverlay || !view.dialogueSpeaker || !view.dialogueText) return;
       const snapshot = dialogueRuntime?.getSnapshot?.() || { active: false, speaker: 'GOD', visibleText: '', isFullyTyped: false };
-      view.dialogueOverlay.classList.toggle('hidden', !snapshot.active);
-      view.dialogueOverlay.style.display = snapshot.active ? 'flex' : 'none';
-      view.dialogueOverlay.setAttribute('aria-hidden', snapshot.active ? 'false' : 'true');
+      if (dialogueRenderCache.active !== snapshot.active) {
+        view.dialogueOverlay.classList.toggle('hidden', !snapshot.active);
+        view.dialogueOverlay.style.display = snapshot.active ? 'flex' : 'none';
+        view.dialogueOverlay.setAttribute('aria-hidden', snapshot.active ? 'false' : 'true');
+        dialogueRenderCache.active = snapshot.active;
+      }
       if (!snapshot.active) {
+        dialogueRenderCache.portraitKey = null;
         if (view.dialoguePortrait instanceof HTMLCanvasElement) {
           const portraitCtx = view.dialoguePortrait.getContext('2d');
           portraitCtx?.clearRect(0, 0, view.dialoguePortrait.width, view.dialoguePortrait.height);
         }
         return;
       }
-      view.dialogueSpeaker.textContent = snapshot.speaker || 'GOD';
-      view.dialogueText.textContent = snapshot.visibleText || '';
+      const speaker = snapshot.speaker || 'GOD';
+      const text = snapshot.visibleText || '';
+      if (dialogueRenderCache.speaker !== speaker) {
+        view.dialogueSpeaker.textContent = speaker;
+        dialogueRenderCache.speaker = speaker;
+      }
+      if (dialogueRenderCache.text !== text) {
+        view.dialogueText.textContent = text;
+        dialogueRenderCache.text = text;
+      }
       if (view.dialoguePortrait instanceof HTMLCanvasElement) {
-        const spriteKey = resolveDialoguePortraitKey(snapshot.speaker || '');
-        Neo.drawSpriteToCanvas(view.dialoguePortrait, spriteKey, view.dialoguePortrait.width);
+        const spriteKey = resolveDialoguePortraitKey(speaker);
+        if (dialogueRenderCache.portraitKey !== spriteKey) {
+          Neo.drawSpriteToCanvas(view.dialoguePortrait, spriteKey, view.dialoguePortrait.width);
+          dialogueRenderCache.portraitKey = spriteKey;
+        }
       }
       if (view.dialogueHint) {
-        view.dialogueHint.textContent = snapshot.isFullyTyped ? 'ENTER TO CONTINUE' : 'ENTER TO SKIP';
+        const hint = snapshot.isFullyTyped ? 'ENTER TO CONTINUE' : 'ENTER TO SKIP';
+        if (dialogueRenderCache.hint !== hint) {
+          view.dialogueHint.textContent = hint;
+          dialogueRenderCache.hint = hint;
+        }
       }
     }
 
@@ -405,34 +480,73 @@ export function createUIController(view) {
       const layer = view.entityDialogueLayer;
       if (!layer) return;
       const bubbles = worldSpeechRuntime?.getActive?.() || [];
-      layer.innerHTML = '';
       layer.classList.toggle('hidden', bubbles.length === 0);
       layer.style.display = bubbles.length ? 'block' : 'none';
       layer.setAttribute('aria-hidden', bubbles.length ? 'false' : 'true');
-      if (!bubbles.length) return;
+      if (!bubbles.length) {
+        if (entityDialogueNodes.size) {
+          entityDialogueNodes.forEach(node => node.el.remove());
+          entityDialogueNodes.clear();
+        }
+        return;
+      }
       const rect = Neo.canvas.getBoundingClientRect();
       const scaleX = rect.width / Neo.canvas.width;
       const scaleY = rect.height / Neo.canvas.height;
-      bubbles.forEach((bubble) => {
+      const activeKeys = new Set();
+      bubbles.forEach((bubble, index) => {
+        const key = String(bubble.id || `${bubble.speaker || ''}:${index}`);
+        activeKeys.add(key);
         const screenX = (bubble.anchor.x - Neo.camera.x) * scaleX;
         const screenY = (bubble.anchor.y - Neo.camera.y - (bubble.offsetY || 48)) * scaleY;
-        if (screenX < -140 || screenX > rect.width + 140 || screenY < -140 || screenY > rect.height + 80) return;
-        const el = document.createElement('div');
-        el.className = 'entity-dialogue-bubble';
-        el.dataset.tone = bubble.tone || 'boss';
-        el.style.left = `${screenX}px`;
-        el.style.top = `${screenY}px`;
-        if (bubble.speaker) {
-          const name = document.createElement('div');
-          name.className = 'entity-dialogue-name';
-          name.textContent = bubble.speaker;
-          el.appendChild(name);
+        let node = entityDialogueNodes.get(key);
+        if (!node) {
+          const el = document.createElement('div');
+          el.className = 'entity-dialogue-bubble';
+          const textNode = document.createElement('div');
+          textNode.className = 'entity-dialogue-text';
+          el.appendChild(textNode);
+          node = { el, textNode, nameNode: null, visible: false };
+          entityDialogueNodes.set(key, node);
         }
-        const text = document.createElement('div');
-        text.className = 'entity-dialogue-text';
-        text.textContent = bubble.visibleText || '';
-        el.appendChild(text);
-        layer.appendChild(el);
+        if (screenX < -140 || screenX > rect.width + 140 || screenY < -140 || screenY > rect.height + 80) {
+          if (node.visible) {
+            node.el.style.display = 'none';
+            node.visible = false;
+          }
+          return;
+        }
+        const tone = bubble.tone || 'boss';
+        if (node.el.dataset.tone !== tone) node.el.dataset.tone = tone;
+        const left = `${screenX}px`;
+        const top = `${screenY}px`;
+        if (node.el.style.left !== left) node.el.style.left = left;
+        if (node.el.style.top !== top) node.el.style.top = top;
+        if (!node.visible) {
+          node.el.style.display = '';
+          node.visible = true;
+        }
+        const speaker = bubble.speaker || '';
+        if (speaker) {
+          if (!node.nameNode) {
+            const name = document.createElement('div');
+            name.className = 'entity-dialogue-name';
+            node.nameNode = name;
+            node.el.insertBefore(name, node.textNode);
+          }
+          if (node.nameNode.textContent !== speaker) node.nameNode.textContent = speaker;
+        } else if (node.nameNode) {
+          node.nameNode.remove();
+          node.nameNode = null;
+        }
+        const text = bubble.visibleText || '';
+        if (node.textNode.textContent !== text) node.textNode.textContent = text;
+        if (!node.el.isConnected) layer.appendChild(node.el);
+      });
+      entityDialogueNodes.forEach((node, key) => {
+        if (activeKeys.has(key)) return;
+        node.el.remove();
+        entityDialogueNodes.delete(key);
       });
     }
 
@@ -1925,36 +2039,87 @@ export function createUIController(view) {
       },
       setObjectiveLayout,
       setHudValues(payload) {
-        view.fl.textContent = payload.floor;
-        view.lv.textContent = payload.level;
-        view.xp.textContent = payload.xpText;
-        if (view.gameTime) view.gameTime.textContent = payload.gameTime;
-        if (view.difficultyLabel) view.difficultyLabel.textContent = String(payload.difficultyName || '').toUpperCase();
-        else if (view.difficultyDisplay) view.difficultyDisplay.textContent = String(payload.difficultyName || '').toUpperCase();
+        if (hudRenderCache.floor !== payload.floor) {
+          hudRenderCache.floor = payload.floor;
+          setTextIfChanged(view.fl, payload.floor);
+        }
+        if (hudRenderCache.level !== payload.level) {
+          hudRenderCache.level = payload.level;
+          setTextIfChanged(view.lv, payload.level);
+        }
+        if (hudRenderCache.xpText !== payload.xpText) {
+          hudRenderCache.xpText = payload.xpText;
+          setTextIfChanged(view.xp, payload.xpText);
+        }
+        if (view.gameTime && hudRenderCache.gameTime !== payload.gameTime) {
+          hudRenderCache.gameTime = payload.gameTime;
+          setTextIfChanged(view.gameTime, payload.gameTime);
+        }
+        const difficultyName = String(payload.difficultyName || '').toUpperCase();
+        if (hudRenderCache.difficultyName !== difficultyName) {
+          hudRenderCache.difficultyName = difficultyName;
+          if (view.difficultyLabel) setTextIfChanged(view.difficultyLabel, difficultyName);
+          else if (view.difficultyDisplay) setTextIfChanged(view.difficultyDisplay, difficultyName);
+        }
         if (view.itemRarityCounts && payload.itemRarityCounts) {
           const white = view.itemRarityCounts.querySelector('.rarity-count--white');
           const purple = view.itemRarityCounts.querySelector('.rarity-count--purple');
           const red = view.itemRarityCounts.querySelector('.rarity-count--red');
-          if (white) white.textContent = String(payload.itemRarityCounts.white || 0);
-          if (purple) purple.textContent = String(payload.itemRarityCounts.purple || 0);
-          if (red) red.textContent = String(payload.itemRarityCounts.red || 0);
+          const whiteValue = String(payload.itemRarityCounts.white || 0);
+          const purpleValue = String(payload.itemRarityCounts.purple || 0);
+          const redValue = String(payload.itemRarityCounts.red || 0);
+          if (hudRenderCache.itemRarityWhite !== whiteValue) {
+            hudRenderCache.itemRarityWhite = whiteValue;
+            setTextIfChanged(white, whiteValue);
+          }
+          if (hudRenderCache.itemRarityPurple !== purpleValue) {
+            hudRenderCache.itemRarityPurple = purpleValue;
+            setTextIfChanged(purple, purpleValue);
+          }
+          if (hudRenderCache.itemRarityRed !== redValue) {
+            hudRenderCache.itemRarityRed = redValue;
+            setTextIfChanged(red, redValue);
+          }
         }
-        view.charName.textContent = payload.character;
-        view.hpFill.style.width = `${Math.max(0, payload.hp / payload.maxHp) * 100}%`;
-        view.hpTxt.textContent = Math.ceil(payload.hp);
-        if (view.cdM) view.cdM.textContent = payload.meleeCd.toFixed(1);
-        if (view.cdL) view.cdL.textContent = payload.laserCd.toFixed(1);
-        if (view.cdS) view.cdS.textContent = payload.smashCd.toFixed(1);
-        if (view.cdD) view.cdD.textContent = payload.dashCd.toFixed(1);
+        if (hudRenderCache.character !== payload.character) {
+          hudRenderCache.character = payload.character;
+          setTextIfChanged(view.charName, payload.character);
+        }
+        const hpWidth = `${Math.max(0, payload.hp / payload.maxHp) * 100}%`;
+        if (hudRenderCache.hpWidth !== hpWidth) {
+          hudRenderCache.hpWidth = hpWidth;
+          if (view.hpFill && view.hpFill.style.width !== hpWidth) view.hpFill.style.width = hpWidth;
+        }
+        const hpText = String(Math.ceil(payload.hp));
+        if (hudRenderCache.hpText !== hpText) {
+          hudRenderCache.hpText = hpText;
+          setTextIfChanged(view.hpTxt, hpText);
+        }
+        const cdM = payload.meleeCd.toFixed(1);
+        const cdL = payload.laserCd.toFixed(1);
+        const cdS = payload.smashCd.toFixed(1);
+        const cdD = payload.dashCd.toFixed(1);
+        if (view.cdM && hudRenderCache.cdM !== cdM) {
+          hudRenderCache.cdM = cdM;
+          setTextIfChanged(view.cdM, cdM);
+        }
+        if (view.cdL && hudRenderCache.cdL !== cdL) {
+          hudRenderCache.cdL = cdL;
+          setTextIfChanged(view.cdL, cdL);
+        }
+        if (view.cdS && hudRenderCache.cdS !== cdS) {
+          hudRenderCache.cdS = cdS;
+          setTextIfChanged(view.cdS, cdS);
+        }
+        if (view.cdD && hudRenderCache.cdD !== cdD) {
+          hudRenderCache.cdD = cdD;
+          setTextIfChanged(view.cdD, cdD);
+        }
         if (payload.skills) {
-          const melee = payload.skills.melee;
-          const laser = payload.skills.laser;
-          const smash = payload.skills.smash;
-          const dash = payload.skills.dash;
-          if (melee) setSkillCard('melee', melee.current, melee.max, !!melee.active, melee.charges, melee.maxCharges);
-          if (laser) setSkillCard('laser', laser.current, laser.max, !!laser.active, laser.charges, laser.maxCharges);
-          if (smash) setSkillCard('smash', smash.current, smash.max, !!smash.active, smash.charges, smash.maxCharges);
-          if (dash) setSkillCard('dash', dash.current, dash.max, !!dash.active, dash.charges, dash.maxCharges);
+          updateSkillCardIfChanged('melee', payload.skills.melee);
+          updateSkillCardIfChanged('laser', payload.skills.laser);
+          updateSkillCardIfChanged('smash', payload.skills.smash);
+          updateSkillCardIfChanged('dash', payload.skills.dash);
         }
       },
       setCompetitiveServerStatus(status) {

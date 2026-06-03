@@ -224,7 +224,16 @@ export function findBeamRicochetHit(originX, originY, dirX, dirY, maxDistance, r
   return closest;
 }
 
-export function buildRicochetBeamPath(originX, originY, angle, range, maxBounces = 0) {
+let beamPathCacheFrame = -1;
+const beamPathCache = new Map();
+
+function quantizeBeamCacheValue(value) {
+  const numeric = Number(value || 0);
+  if (!Number.isFinite(numeric)) return 'NaN';
+  return numeric.toFixed(3);
+}
+
+function buildRicochetBeamPathUncached(originX, originY, angle, range, maxBounces = 0) {
   const path = [];
   let remaining = Math.max(0, Number(range || 0));
   let startX = originX;
@@ -256,6 +265,29 @@ export function buildRicochetBeamPath(originX, originY, angle, range, maxBounces
     startX = hit.x + reflectX * nudge;
     startY = hit.y + reflectY * nudge;
   }
+  return path;
+}
+
+export function buildRicochetBeamPath(originX, originY, angle, range, maxBounces = 0) {
+  const frameId = Number(Neo.frameId || 0);
+  if (beamPathCacheFrame !== frameId) {
+    beamPathCacheFrame = frameId;
+    beamPathCache.clear();
+  }
+
+  const key = [
+    quantizeBeamCacheValue(originX),
+    quantizeBeamCacheValue(originY),
+    quantizeBeamCacheValue(angle),
+    quantizeBeamCacheValue(range),
+    Math.max(0, Math.floor(Number(maxBounces || 0))),
+  ].join('|');
+
+  const cached = beamPathCache.get(key);
+  if (cached) return cached;
+
+  const path = buildRicochetBeamPathUncached(originX, originY, angle, range, maxBounces);
+  beamPathCache.set(key, path);
   return path;
 }
 
