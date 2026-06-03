@@ -1602,8 +1602,12 @@
     if (!enemy || typeof enemy !== 'object') return enemy;
     Neo.ensureStatuses(enemy);
     if (enemy.elite && !enemy.eliteDurabilityV2) {
-      enemy.max = Math.max(1, Math.round(Number(enemy.max || enemy.hp || 1) * 2));
-      enemy.hp = Math.max(1, Math.round(Number(enemy.hp || enemy.max) * 2));
+      // Capture originals first — otherwise the hp fallback below would read the
+      // already-doubled max and quadruple hp when the stored hp is falsy.
+      const baseMax = Number(enemy.max || enemy.hp || 1);
+      const baseHp = Number(enemy.hp || enemy.max || 1);
+      enemy.max = Math.max(1, Math.round(baseMax * 2));
+      enemy.hp = Math.max(1, Math.round(baseHp * 2));
       enemy.defenseMultiplier = Math.max(2, Number(enemy.defenseMultiplier || 1));
       enemy.eliteDurabilityV2 = true;
     }
@@ -2043,9 +2047,10 @@
         Neo.sayAtPosition(enemy.x, enemy.y, rival.deathLine, { speaker: rival.name, tone: 'boss', holdTime: 1.8, offsetY: enemy.r + 36 });
         grantXp(20 + Neo.floor * 3);
       }
-      const rivalIdx = Neo.enemies.indexOf(enemy);
-      if (rivalIdx >= 0) Neo.enemies.splice(rivalIdx, 1);
-      if (Neo.player) Neo.player.kills = Math.max(0, Number(Neo.player.kills || 0)) + 1;
+      // Note: the enemy is already removed from Neo.enemies and player.kills is
+      // already incremented in the shared death handler above (see the splice +
+      // kills bump near enemy.dead = true). Don't repeat them here or rivals
+      // count as two kills.
     }
     if (enemy.type === 'rival') return;
 

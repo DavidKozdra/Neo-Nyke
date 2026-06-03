@@ -1963,6 +1963,8 @@
       return best;
     }, null);
     const target = nearestWounded?.enemy || Neo.player;
+    // No wounded ally and no player (e.g. the post-death frame) — nothing to move toward.
+    if (!target) { enemy.vx *= 0.9; enemy.vy *= 0.9; return; }
     const dx = target.x - enemy.x;
     const dy = target.y - enemy.y;
     const distance = Math.hypot(dx, dy) || 1;

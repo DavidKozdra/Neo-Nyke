@@ -66,7 +66,9 @@ export function createSaveStore() {
       const api = createFallbackApi(key);
       if (api) return api.load();
       const raw = localStorage.getItem(localPrefix + key);
-      return raw ? JSON.parse(raw) : null;
+      if (!raw) return null;
+      // Corrupt/truncated JSON must not crash the load — start fresh instead.
+      try { return JSON.parse(raw); } catch { return null; }
     },
     async put(key, value) {
       const api = createFallbackApi(key);

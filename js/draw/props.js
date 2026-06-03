@@ -252,40 +252,81 @@
           Neo.ctx.setLineDash([]);
         }
 
-        // mine body
+        // Ground plate keeps the bomb visually anchored as a floor trap.
         const bodyPulse = armed ? 1 + Math.sin(t * (3 + fuseRatio * 5)) * (0.06 + fuseRatio * 0.1) : 1;
+        Neo.ctx.fillStyle = armed ? 'rgba(92,20,14,0.92)' : 'rgba(42,38,32,0.94)';
+        Neo.ctx.strokeStyle = armed ? `rgba(255,${Math.round(110 - fuseRatio * 70)},40,0.9)` : 'rgba(200,160,64,0.78)';
+        Neo.ctx.lineWidth = 2;
+        Neo.ctx.beginPath();
+        Neo.ctx.arc(0, 2, r * 1.08, 0, Math.PI * 2);
+        Neo.ctx.fill();
+        Neo.ctx.stroke();
+        Neo.ctx.fillStyle = armed ? '#ff6030' : '#b89040';
+        for (let bolt = 0; bolt < 4; bolt += 1) {
+          const a = bolt * Math.PI / 2 + Math.PI / 4;
+          Neo.ctx.beginPath();
+          Neo.ctx.arc(Math.cos(a) * r * 0.8, 2 + Math.sin(a) * r * 0.8, 1.4, 0, Math.PI * 2);
+          Neo.ctx.fill();
+        }
+
+        // Classic round bomb body, neck, and fuse.
+        const bodyR = r * 0.82 * bodyPulse;
+        const bodyY = 3;
         Neo.ctx.shadowColor = armed ? `rgba(255,${Math.round(100 - fuseRatio * 80)},40,0.9)` : 'rgba(255,160,60,0.4)';
         Neo.ctx.shadowBlur = armed ? 14 + fuseRatio * 20 : 8;
-        Neo.ctx.fillStyle = armed ? `rgb(${Math.round(40 + fuseRatio * 30)},10,6)` : 'rgb(28,28,32)';
+        Neo.ctx.fillStyle = armed ? `rgb(${Math.round(42 + fuseRatio * 28)},10,7)` : 'rgb(18,20,24)';
         Neo.ctx.beginPath();
-        Neo.ctx.arc(0, 0, r * bodyPulse, 0, Math.PI * 2);
+        Neo.ctx.arc(0, bodyY, bodyR, 0, Math.PI * 2);
         Neo.ctx.fill();
 
-        // outer ring
         Neo.ctx.strokeStyle = armed
           ? `rgb(255,${Math.round(100 - fuseRatio * 80)},40)`
-          : '#c8a040';
-        Neo.ctx.lineWidth = armed ? 3 : 2;
+          : '#e0b84c';
+        Neo.ctx.lineWidth = armed ? 3 : 2.5;
         Neo.ctx.beginPath();
-        Neo.ctx.arc(0, 0, r * bodyPulse, 0, Math.PI * 2);
+        Neo.ctx.arc(0, bodyY, bodyR, 0, Math.PI * 2);
         Neo.ctx.stroke();
         Neo.ctx.shadowBlur = 0;
 
-        // warning stripes on body (hazard pattern)
-        Neo.ctx.save();
-        Neo.ctx.clip();
-        const stripeColor = armed
-          ? `rgba(255,${Math.round(80 - fuseRatio * 60)},30,${0.7 + fuseRatio * 0.3})`
-          : 'rgba(220,170,40,0.55)';
-        Neo.ctx.strokeStyle = stripeColor;
-        Neo.ctx.lineWidth = 3;
-        for (let si = -3; si <= 3; si += 1) {
-          Neo.ctx.beginPath();
-          Neo.ctx.moveTo(si * 7 - r, r);
-          Neo.ctx.lineTo(si * 7 + r, -r);
-          Neo.ctx.stroke();
+        Neo.ctx.fillStyle = armed ? 'rgba(255,120,76,0.38)' : 'rgba(255,255,255,0.18)';
+        Neo.ctx.beginPath();
+        Neo.ctx.arc(-bodyR * 0.3, bodyY - bodyR * 0.3, bodyR * 0.28, 0, Math.PI * 2);
+        Neo.ctx.fill();
+
+        const neckW = Math.max(5, r * 0.42);
+        const neckTop = bodyY - bodyR - 4;
+        Neo.ctx.fillStyle = armed ? '#ff6030' : '#b89040';
+        Neo.ctx.fillRect(-neckW / 2, neckTop, neckW, 5);
+        Neo.ctx.strokeStyle = armed ? '#ffb060' : '#f0cf70';
+        Neo.ctx.lineWidth = 1.5;
+        Neo.ctx.strokeRect(-neckW / 2, neckTop, neckW, 5);
+
+        const fuseEndX = r * 0.72;
+        const fuseEndY = -r * 1.2;
+        Neo.ctx.strokeStyle = armed ? '#ffb347' : '#a9813d';
+        Neo.ctx.lineWidth = Math.max(2, r * 0.15);
+        Neo.ctx.lineCap = 'round';
+        Neo.ctx.beginPath();
+        Neo.ctx.moveTo(0, neckTop);
+        Neo.ctx.quadraticCurveTo(r * 0.62, -r * 0.9, fuseEndX, fuseEndY);
+        Neo.ctx.stroke();
+        Neo.ctx.lineCap = 'butt';
+
+        if (armed) {
+          const sparkPulse = 0.8 + Math.sin(t * 7) * 0.2;
+          Neo.ctx.strokeStyle = '#fff3a0';
+          Neo.ctx.shadowColor = '#ff9a32';
+          Neo.ctx.shadowBlur = 10 + fuseRatio * 8;
+          Neo.ctx.lineWidth = 2;
+          for (let ray = 0; ray < 4; ray += 1) {
+            const a = ray * Math.PI / 2 + t * 0.45;
+            Neo.ctx.beginPath();
+            Neo.ctx.moveTo(fuseEndX + Math.cos(a) * 2, fuseEndY + Math.sin(a) * 2);
+            Neo.ctx.lineTo(fuseEndX + Math.cos(a) * (5 * sparkPulse), fuseEndY + Math.sin(a) * (5 * sparkPulse));
+            Neo.ctx.stroke();
+          }
+          Neo.ctx.shadowBlur = 0;
         }
-        Neo.ctx.restore();
 
         // fuse countdown arc when armed
         if (armed) {
@@ -300,12 +341,6 @@
           Neo.ctx.lineCap = 'butt';
           Neo.ctx.shadowBlur = 0;
         }
-
-        // pressure-plate nub on top
-        Neo.ctx.fillStyle = armed ? '#ff6030' : '#b89040';
-        Neo.ctx.beginPath();
-        Neo.ctx.arc(0, -r * 0.55, r * 0.22, 0, Math.PI * 2);
-        Neo.ctx.fill();
       } else if (hazard.kind === 'healing_zone') {
         const t = Date.now() * 0.004 + (hazard.ttl || 0);
         const pulse = 1 + Math.sin(t * 2.2) * 0.08;
@@ -417,7 +452,7 @@
       } else if (hazard.kind === 'red_spikes') {
         const armed = Number(hazard.armTime || 0) <= 0;
         const t = Date.now() * 0.009 + hazard.x * 0.01;
-        const pulse = armed ? 1.06 + Math.sin(t * 2.2) * 0.04 : 0.86 + Math.sin(t * 2.8) * 0.08;
+        const pulse = armed ? 1.02 + Math.sin(t * 2.2) * 0.025 : 0.86 + Math.sin(t * 2.8) * 0.08;
         Neo.ctx.fillStyle = armed ? 'rgba(255,42,64,0.24)' : 'rgba(255,42,64,0.12)';
         Neo.ctx.beginPath();
         Neo.ctx.arc(0, 0, hazard.r * pulse, 0, Math.PI * 2);
@@ -427,20 +462,60 @@
         Neo.ctx.beginPath();
         Neo.ctx.arc(0, 0, hazard.r * (0.76 + Math.sin(t) * 0.05), 0, Math.PI * 2);
         Neo.ctx.stroke();
+
+        // Cracks make the telegraph read as spikes about to erupt from the floor.
+        Neo.ctx.strokeStyle = armed ? 'rgba(255,92,104,0.82)' : 'rgba(155,28,44,0.72)';
+        Neo.ctx.lineWidth = 1.5;
+        for (let index = 0; index < 7; index += 1) {
+          const a = index * (Math.PI * 2 / 7) + 0.18;
+          const inner = hazard.r * 0.28;
+          const outer = hazard.r * (0.62 + (index % 2) * 0.13);
+          Neo.ctx.beginPath();
+          Neo.ctx.moveTo(Math.cos(a) * inner, Math.sin(a) * inner);
+          Neo.ctx.lineTo(Math.cos(a + 0.07) * outer, Math.sin(a + 0.07) * outer);
+          Neo.ctx.stroke();
+        }
+
+        const rise = armed ? 1 : 0.22;
+        const spikes = [
+          { x: 0, y: 11, scale: 1 },
+          { x: -16, y: 13, scale: 0.72 },
+          { x: 16, y: 13, scale: 0.72 },
+          { x: -9, y: 1, scale: 0.62 },
+          { x: 10, y: -1, scale: 0.58 },
+        ];
         Neo.ctx.shadowColor = '#ff3348';
         Neo.ctx.shadowBlur = armed ? 18 : 8;
-        Neo.ctx.fillStyle = armed ? '#ff5264' : '#9b1c2c';
-        for (let index = 0; index < 9; index += 1) {
-          const a = t * 0.22 + index * (Math.PI * 2 / 9);
-          const inner = hazard.r * 0.18;
-          const outer = hazard.r * (armed ? 0.88 : 0.48);
+        spikes.forEach(spike => {
+          const height = hazard.r * spike.scale * rise;
+          const halfBase = hazard.r * 0.24 * spike.scale;
+          const tipX = spike.x - halfBase * 0.1;
+          const tipY = spike.y - height;
+
+          Neo.ctx.fillStyle = armed ? '#8f1425' : '#5b1822';
           Neo.ctx.beginPath();
-          Neo.ctx.moveTo(Math.cos(a - 0.13) * inner, Math.sin(a - 0.13) * inner);
-          Neo.ctx.lineTo(Math.cos(a) * outer, Math.sin(a) * outer);
-          Neo.ctx.lineTo(Math.cos(a + 0.13) * inner, Math.sin(a + 0.13) * inner);
+          Neo.ctx.moveTo(spike.x - halfBase, spike.y);
+          Neo.ctx.lineTo(tipX, tipY);
+          Neo.ctx.lineTo(spike.x, spike.y + halfBase * 0.3);
           Neo.ctx.closePath();
           Neo.ctx.fill();
-        }
+
+          Neo.ctx.fillStyle = armed ? '#ff5264' : '#9b1c2c';
+          Neo.ctx.beginPath();
+          Neo.ctx.moveTo(spike.x, spike.y + halfBase * 0.3);
+          Neo.ctx.lineTo(tipX, tipY);
+          Neo.ctx.lineTo(spike.x + halfBase, spike.y);
+          Neo.ctx.closePath();
+          Neo.ctx.fill();
+
+          Neo.ctx.strokeStyle = armed ? '#ffb0b8' : '#c74252';
+          Neo.ctx.lineWidth = 1.2;
+          Neo.ctx.beginPath();
+          Neo.ctx.moveTo(tipX, tipY);
+          Neo.ctx.lineTo(spike.x, spike.y + halfBase * 0.3);
+          Neo.ctx.stroke();
+        });
+        Neo.ctx.shadowBlur = 0;
       } else if (hazard.kind === 'thorn_mine') {
         const armed = Number(hazard.armTime || 0) <= 0;
         const pulse = 0.85 + Math.sin(Date.now() * 0.012 + hazard.x) * 0.08;

@@ -1415,6 +1415,15 @@ button, input, select, textarea {
   transform: translate(-50%, -50%) scale(1);
 }
 
+/* Match the inventory panel: shop inventory and forge (anvil) panels render
+   at 1.5x scale. .hidden still uses display:none, so no open/close transform
+   override is needed here. */
+#shopPanel.game-panel,
+#anvilPanel.game-panel {
+  transform: translate(-50%, -50%) scale(1.5);
+  transform-origin: center;
+}
+
 .game-panel-head {
   display: flex;
   align-items: flex-start;
