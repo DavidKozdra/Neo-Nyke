@@ -319,7 +319,7 @@ export function getItemStats() {
       itemDuplicateChance: Neo.clamp(copycatCharm * 0.2, 0, 1),
       critChance,
       critMultiplier: 1.6 + (oracleLens ? critChance * 2.2 : critChance * 0.6),
-      attackSpeedMultiplier: robotArm > 0 ? 8 * (1 + attackServo * 0.12 + chronoSpringBonus) : 1 + attackServo * 0.12 + chronoSpringBonus,
+      attackSpeedMultiplier: 1 + attackServo * 0.12 + chronoSpringBonus,
       hasRobotArm: robotArm > 0,
       moveSpeedMultiplier: (1 + turtleShell * 0.05) * (Number(Neo.player?.equipmentEffects?.turbo_boots?.time || 0) > 0 ? 1.55 : 1),
       laserWeightMultiplier: Math.max(0, 1 - turtleShell * 0.01),
@@ -358,7 +358,8 @@ export function getItemStats() {
 
 export function getAttackSpeedValue() {
     const stats = getItemStats();
-    return Math.max(0.2, (Neo.player?.attackSpeed || 1) * (stats.attackSpeedMultiplier || 1));
+    const robotArmMultiplier = stats.hasRobotArm && Neo.player?.robotArmReady ? 8 : 1;
+    return Math.max(0.2, (Neo.player?.attackSpeed || 1) * (stats.attackSpeedMultiplier || 1) * robotArmMultiplier);
   }
 
 export function applyPlayerHealing(amount, options = {}) {

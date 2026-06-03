@@ -1036,6 +1036,7 @@
       critCharmBuffTime: Number(player.critCharmBuffTime || 0),
       keenEyeBuffTime: Number(player.keenEyeBuffTime || 0),
       chronoSpringBuffTime: Number(player.chronoSpringBuffTime || 0),
+      robotArmReady: !!player.robotArmReady,
       storedPotions: Number(player.storedPotions || 0),
       items,
       ownedMoves,
@@ -1069,7 +1070,9 @@
       snakeKnifePoisonChance: count('snake_knife') * 0.02,
       critChance,
       critMultiplier: 1.6 + (count('oracles_lens') > 0 ? critChance * 2.2 : critChance * 0.6),
-      attackSpeedMultiplier: robotArm > 0 ? 8 * (1 + attackServo * 0.12 + chronoSpringBonus) : 1 + attackServo * 0.12 + chronoSpringBonus,
+      attackSpeedMultiplier: robotArm > 0 && inventory?.robotArmReady
+        ? 8 * (1 + attackServo * 0.12 + chronoSpringBonus)
+        : 1 + attackServo * 0.12 + chronoSpringBonus,
       moveSpeedMultiplier: 1 + count('turtle_shell') * 0.05,
       levelEdgeDamageMultiplier: 1 + count('scholar_cap') * xpProgress * 0.45,
       knockbackMultiplier: 1 + count('push_man') * 0.18,
@@ -2597,7 +2600,7 @@
       y: enemy.y + Math.sin(angle) * (enemy.r + 14),
       vx: Math.cos(angle) * 190,
       vy: Math.sin(angle) * 190,
-      r: 22,
+      r: 44,
       life: 3.4,
       enemy: true,
       kind: 'cold_death',
@@ -2605,8 +2608,13 @@
       damage: Math.round(enemy.dmg * 1.3),
       knockback: 280,
       color: '#9fe8ff',
-      // No dedicated "cold" status exists; the game's icy debuff is `slow`.
+      // The icy "cold" debuff is the `slow` status: it slows movement AND makes
+      // the player brittle (strips defense per stack via getBrittleDefenseMultiplier).
+      // Cold lifetime on the player is auto-scaled to 15s per stack in applyStatus,
+      // so the duration passed here is only a floor for non-player targets.
       statusEffects: [{ key: 'slow', chance: 1, stacks: 2, duration: 4 }],
+      // AOE frost burst when the ball lands (wall, expiry, or hitting player).
+      enemyBlast: { radius: 150, damage: Math.round(enemy.dmg * 0.8), color: '#9fe8ff', statusKey: 'slow', statusStacks: 1, statusDuration: 3 },
       homing: true,
       homingTurnRate: 0.9,
       homingSpeed: 215,

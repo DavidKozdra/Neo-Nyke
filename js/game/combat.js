@@ -278,18 +278,19 @@
     return false;
   }
 
-  function tryMelee() {
+  function tryMelee(options = {}) {
     cancelCowardsWayOnAttack();
     const itemStats = Neo.getItemStats();
+    const useRobotArmCharge = !!options.useRobotArmCharge && itemStats.hasRobotArm && Neo.player?.robotArmReady;
     if (getEquippedWeapon()) {
       const attacked = tryWeaponAttack();
-      if (attacked && itemStats.hasRobotArm && Neo.player?.robotArmReady) Neo.consumeCharge('robot_arm');
+      if (attacked && useRobotArmCharge) Neo.consumeCharge('robot_arm');
       return;
     }
     const move = getEquippedMove('melee');
     const attackSpeed = Neo.getAttackSpeedValue();
     if (!Neo.spendSkillCharge('melee', Neo.getMeleeCooldownDuration(move, attackSpeed))) return;
-    if (itemStats.hasRobotArm && Neo.player?.robotArmReady) Neo.consumeCharge('robot_arm');
+    if (useRobotArmCharge) Neo.consumeCharge('robot_arm');
     if (move === 'fire_balls') {
       spawnFireballs();
       return;

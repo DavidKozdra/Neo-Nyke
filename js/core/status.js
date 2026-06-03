@@ -42,6 +42,14 @@ export function getSlowMultiplier(entity) {
   return Math.max(0.45, 1 - stacks * 0.1);
 }
 
+// Cold/brittle: each slow (cold) stack strips a quarter of the target's defense,
+// so it takes more damage. 4+ stacks remove all defense (multiplier 0).
+export function getBrittleDefenseMultiplier(entity) {
+  const stacks = Math.max(0, Number(getStatusStacks(entity, 'slow') || 0));
+  if (stacks <= 0) return 1;
+  return Math.max(0, 1 - stacks * 0.25);
+}
+
 export function clearStatus(entity, key) {
   const state = getStatusState(entity, key);
   state.stacks = 0;
@@ -49,12 +57,21 @@ export function clearStatus(entity, key) {
   state.tick = 0;
 }
 
+// Cold (slow) lasts a long time and scales with stacks: 15s per stack, total.
+export const COLD_SECONDS_PER_STACK = 15;
+
 export function applyStatus(entity, key, stacks, duration) {
   if (!entity || !Neo.STATUS_KEYS.includes(key)) return;
   if (entity[`${key}Immune`]) return;
   const state = getStatusState(entity, key);
   state.stacks = Math.min(6, Math.max(state.stacks, 0) + Math.max(0, Number(stacks || 0)));
-  state.duration = Math.max(state.duration, Number(duration || 0));
+  if (key === 'slow' && entity === Neo.player) {
+    // Cold on the player tracks total stacks (15s each); enemy "slow" procs
+    // (e.g. weapon fatigue) keep their own short explicit duration.
+    state.duration = Math.max(state.duration, state.stacks * COLD_SECONDS_PER_STACK);
+  } else {
+    state.duration = Math.max(state.duration, Number(duration || 0));
+  }
   if (entity !== Neo.player) window.achievementEvents?.emit('status:applied', { key, entityId: entity.id });
 }
 
@@ -80,5 +97,6 @@ Neo.getStatusState = getStatusState;
 Neo.getStatusStacks = getStatusStacks;
 Neo.getActiveStatusCount = getActiveStatusCount;
 Neo.getSlowMultiplier = getSlowMultiplier;
+Neo.getBrittleDefenseMultiplier = getBrittleDefenseMultiplier;
 Neo.clearStatus = clearStatus;
 Neo.applyStatus = applyStatus;

@@ -216,7 +216,7 @@ export const STATUS_ICON_DEFS = {
     accentPixels: [[4,2],[3,3],[3,4],[4,5]],
   },
   slow: {
-    label: 'Slow',
+    label: 'Frostbite',
     color: '#79d9ff',
     accent: '#e5f8ff',
     bg: 'rgba(0,32,48,0.86)',

@@ -322,6 +322,13 @@
     Neo.ui.skillNames.melee.textContent = weaponDef?.name || meleeMove?.name || character.skills.melee;
     Neo.ui.skillNames.laser.textContent = laserMove?.name || character.skills.laser;
     Neo.ui.skillNames.smash.textContent = smashMove?.name || character.skills.smash;
+    // Redraw the HUD action icons whenever the equipped loadout changes. They are
+    // canvas-rendered once, so without this they keep the icon drawn at boot.
+    const loadoutSig = `${weaponKey}|${meleeMove?.key || ''}|${laserMove?.key || ''}|${smashMove?.key || ''}|${dashMove?.key || ''}`;
+    if (loadoutSig !== Neo._hudActionIconSig) {
+      Neo._hudActionIconSig = loadoutSig;
+      Neo.drawActionIcons?.();
+    }
     Neo.syncCharacterUiTheme();
     renderPlayerStatsPanel();
     

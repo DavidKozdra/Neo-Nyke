@@ -109,8 +109,9 @@ export function loop(timestamp) {
       let cached = false;
       let nearest = null;
       return () => {
-        if (cached) return nearest;
+        if (cached && nearest && !nearest.dead && Neo.enemies.includes(nearest)) return nearest;
         cached = true;
+        nearest = null;
         let bestDistSq = Infinity;
         for (const en of Neo.enemies) {
           if (!en || en.dead) continue;
@@ -303,14 +304,14 @@ export function loop(timestamp) {
         ? _getNearestEnemyForAim()
         : null;
       if (!overlayOpen && !playerStunned && (meleeHeld || robotArmTarget)) {
-        const restoreAim = !meleeHeld && robotArmTarget
+        const restoreAim = robotArmTarget
           ? { worldX: Neo.mouse.worldX, worldY: Neo.mouse.worldY }
           : null;
         if (restoreAim) {
           Neo.mouse.worldX = robotArmTarget.x;
           Neo.mouse.worldY = robotArmTarget.y;
         }
-        Neo.tryMelee();
+        Neo.tryMelee({ useRobotArmCharge: !!robotArmTarget });
         if (restoreAim) {
           Neo.mouse.worldX = restoreAim.worldX;
           Neo.mouse.worldY = restoreAim.worldY;

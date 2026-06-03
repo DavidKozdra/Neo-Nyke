@@ -343,7 +343,11 @@
     const hpBeforeHit = Neo.player.hp;
     const halfHpThreshold = Neo.player.maxHp * 0.5;
     const ironLungApplies = itemStats.hasIronLung && !Neo.isBossFightActive();
-    let finalAmount = numericAmount * (Neo.isChallengeActive('glass_cannon') ? 1.35 : 1) * (1 - (itemStats.damageReduction || 0));
+    // Cold (slow) stacks make the player brittle: scale down their effective
+    // damage reduction so they take more damage per stack.
+    const brittleDefenseMult = Neo.getBrittleDefenseMultiplier?.(Neo.player) ?? 1;
+    const effectiveDamageReduction = (itemStats.damageReduction || 0) * brittleDefenseMult;
+    let finalAmount = numericAmount * (Neo.isChallengeActive('glass_cannon') ? 1.35 : 1) * (1 - effectiveDamageReduction);
     if (sandbox) finalAmount *= sandbox.enemyDamageMultiplier;
     if (ironLungApplies) {
       finalAmount = Math.min(finalAmount, Neo.player.maxHp * 0.2);
@@ -489,6 +493,21 @@
       damage: stacks => (1 + stacks * 1.7) * 0.1,
       color: Neo.STATUS_STYLES.dark_drain.color,
     });
+    // Cold (slow) deals no damage-over-time; it just slows + makes brittle, so
+    // it isn't routed through tickPlayerStatus. Decay its duration here, else it
+    // would never expire on the player.
+    const coldState = Neo.getStatusState(Neo.player, 'slow');
+    if (coldState.stacks > 0) {
+      coldState.duration -= dt;
+      coldState.tick -= dt;
+      if (coldState.tick <= 0) {
+        coldState.tick = 0.32;
+        if (Neo.nextRandom('fx') < 0.3) {
+          Neo.spawnParticle({ x: Neo.player.x + Neo.rand(-8, 8), y: Neo.player.y + Neo.rand(-8, 8), life: 0.25, c: Neo.STATUS_STYLES.slow.color });
+        }
+      }
+      if (coldState.duration <= 0) Neo.clearStatus(Neo.player, 'slow');
+    }
   }
 
   const ENEMY_QUERY_CELL_SIZE = 128;
@@ -637,6 +656,29 @@
     forEachDestructibleNearCircle(x, y, radius + 80, prop => {
       if (!prop.broken && !prop.hidden && Neo.dist(x, y, prop.x, prop.y) <= radius + prop.r) {
         damageDestructible(prop, damage, { sourceX: x, sourceY: y, impactType: 'blast', force: 1.6 });
+      }
+    });
+  }
+
+  // Detonates an enemy projectile's `enemyBlast` config at (x, y): a frost/AOE
+  // burst that damages the player (and props) in a radius and applies a status.
+  function detonateEnemyProjectileBlast(projectile, x = projectile?.x, y = projectile?.y) {
+    const blast = projectile?.enemyBlast;
+    if (!blast || !Number.isFinite(x) || !Number.isFinite(y)) return;
+    const radius = Math.max(1, Number(blast.radius || 0));
+    const damage = Math.max(0, Number(blast.damage || 0));
+    const color = blast.color || projectile.color || '#9fe8ff';
+    spawnAoeShockwave(x, y, radius, color, damage >= 28 ? 'heavy' : 'normal');
+    Neo.spawnParticle({ x, y, life: 0.5, ring: radius, c: color });
+    if (damage > 0 && Neo.player && Neo.dist(x, y, Neo.player.x, Neo.player.y) <= radius + Neo.player.r) {
+      damagePlayer(damage, Math.atan2(Neo.player.y - y, Neo.player.x - x), Number(blast.knockback || 220), projectile.source || 'enemy_aoe');
+      if (blast.statusKey) {
+        Neo.applyStatus?.(Neo.player, blast.statusKey, Number(blast.statusStacks || 1), Number(blast.statusDuration || 3));
+      }
+    }
+    forEachDestructibleNearCircle(x, y, radius + 80, prop => {
+      if (!prop.broken && !prop.hidden && Neo.dist(x, y, prop.x, prop.y) <= radius + prop.r) {
+        damageDestructible(prop, damage, { sourceX: x, sourceY: y, impactType: 'blast', force: 1.4 });
       }
     });
   }
@@ -849,6 +891,7 @@
     p.fromRival = props.fromRival ?? false;
     p.source = props.source ?? null;
     p.statusEffects = props.statusEffects ?? null;
+    p.enemyBlast = props.enemyBlast ?? null;
     const defaultBounces = !enemyProjectile ? itemStats.projectileBounces : 0;
     p.bouncesRemaining = Math.max(0, Math.floor(Number((props.bouncesRemaining ?? defaultBounces) || 0)));
     Neo.projectiles.push(p);
@@ -1192,6 +1235,7 @@
         continue;
       }
       if (projectile.life <= 0) {
+        detonateEnemyProjectileBlast(projectile, projectile.x, projectile.y);
         spawnProjectileImpact(projectile, projectile.x, projectile.y, { blocked: true });
         _projectilePool.push(Neo.projectiles.splice(index, 1)[0]);
         continue;
@@ -1199,12 +1243,14 @@
       const sweepBlockHit = findProjectileSweepBlockHit(projectile, prevX, prevY);
       if (sweepBlockHit) {
         if (tryBounceProjectileAtSweepHit(projectile, sweepBlockHit)) continue;
+        detonateEnemyProjectileBlast(projectile, sweepBlockHit.x, sweepBlockHit.y);
         spawnProjectileImpact(projectile, sweepBlockHit.x, sweepBlockHit.y, { blocked: true });
         _projectilePool.push(Neo.projectiles.splice(index, 1)[0]);
         continue;
       }
       if (Neo.isBlocked(projectile.x, projectile.y, projectile.r)) {
         if (tryBounceProjectile(projectile, prevX, prevY)) continue;
+        detonateEnemyProjectileBlast(projectile, projectile.x, projectile.y);
         spawnProjectileImpact(projectile, projectile.x, projectile.y, { blocked: true });
         _projectilePool.push(Neo.projectiles.splice(index, 1)[0]);
         continue;
@@ -1258,6 +1304,7 @@
       } else if (Neo.dist(projectile.x, projectile.y, Neo.player.x, Neo.player.y) <= projectile.r + Neo.player.r) {
         damagePlayer(projectile.damage || 10, Math.atan2(projectile.vy, projectile.vx), projectile.knockback || 120, getProjectileDamageSource(projectile));
         applyProjectileStatusEffectsToPlayer(projectile);
+        detonateEnemyProjectileBlast(projectile, projectile.x, projectile.y);
         spawnProjectileImpact(projectile, projectile.x, projectile.y);
         _projectilePool.push(Neo.projectiles.splice(index, 1)[0]);
         continue;
