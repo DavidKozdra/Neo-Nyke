@@ -5072,6 +5072,7 @@ button.alt.danger {
   gap: 0;
   width: min(740px, calc(100vw - 24px));
   animation: dead-rise 0.45s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  transform: scale(1.5) !important;
 }
 
 @keyframes dead-rise {
@@ -8725,22 +8726,10 @@ border-bottom: black solid 2px;
 }
 .credits-page__back:hover .credits-back__arrow,
 .credits-page__back:focus-visible .credits-back__arrow {
-  /* hover: bigger pull, and pause the idle bob so it reads as intentional */
-  transform: translateX(-7px);
-  animation: none;
+  transform: translateX(-4px);
 }
 .credits-page__back:active {
   transform: scale(.95);
-}
-
-/* Idle translate loop — gentle leftward bob hinting "go back".
-   Runs on the arrow after the entrance has settled. */
-.credits-page.is-open .credits-back__arrow {
-  animation: creditsBackNudge 1.6s ease-in-out 1s infinite;
-}
-@keyframes creditsBackNudge {
-  0%, 100% { transform: translateX(0); }
-  50%      { transform: translateX(-6px); }
 }
 
 .credits-page .credits {
@@ -8760,24 +8749,12 @@ border-bottom: black solid 2px;
   opacity: 0;
 }
 .credits-page.is-open .credits-page__back {
-  animation:
-    creditsBackIn .5s cubic-bezier(.22,1,.36,1) .05s forwards,
-    creditsBackFlash 1.8s ease-in-out 1s infinite;
+  animation: creditsBackIn .5s cubic-bezier(.22,1,.36,1) .05s forwards;
 }
 /* hover takes over the look, so stop the flash to avoid fighting it */
 .credits-page.is-open .credits-page__back:hover,
 .credits-page.is-open .credits-page__back:focus-visible {
   animation: creditsBackIn .5s cubic-bezier(.22,1,.36,1) .05s forwards;
-}
-@keyframes creditsBackFlash {
-  0%, 100% {
-    border-color: rgba(120,196,255,.35);
-    box-shadow: 0 8px 26px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.06);
-  }
-  50% {
-    border-color: rgba(150,210,255,.9);
-    box-shadow: 0 8px 26px rgba(0,0,0,.45), 0 0 26px rgba(120,196,255,.55), inset 0 1px 0 rgba(255,255,255,.12);
-  }
 }
 .credits-page.is-open .credits__hero {
   animation: creditsFlyUp .6s cubic-bezier(.22,1,.36,1) .12s forwards;
@@ -8848,14 +8825,11 @@ border-bottom: black solid 2px;
   background-clip: text;
   -webkit-text-fill-color: transparent;
   color: transparent;
-  filter:
-    drop-shadow(0 0 16px rgba(120,196,255,.5))
-    drop-shadow(0 4px 0 rgba(0,0,0,.85));
-  animation: creditsTitleSheen 5s ease-in-out infinite;
+  filter: drop-shadow(0 4px 0 rgba(0,0,0,.85));
 }
 /* diagonal light streak that sweeps across the letters (clipped to glyphs) */
 .credits__mark::before {
-  content: attr(data-text);
+  content: none;
   position: absolute;
   inset: 0;
   pointer-events: none;
@@ -8866,18 +8840,6 @@ border-bottom: black solid 2px;
   background-clip: text;
   -webkit-text-fill-color: transparent;
   color: transparent;
-  mix-blend-mode: screen;
-  animation: creditsTitleShine 4.5s ease-in-out 1.2s infinite;
-}
-@keyframes creditsTitleSheen {
-  0%, 100% { background-position: 50% 0%; }
-  50%      { background-position: 50% 100%; }
-}
-@keyframes creditsTitleShine {
-  0%   { background-position: 180% 0; opacity: 0; }
-  12%  { opacity: 1; }
-  40%  { background-position: -80% 0; opacity: 0; }
-  100% { background-position: -80% 0; opacity: 0; }
 }
 .credits__studio {
   font-size: clamp(13px, 1.6vw, 17px);
@@ -8916,7 +8878,6 @@ border-bottom: black solid 2px;
   width: 4px;
   border-radius: 4px;
   background: rgba(var(--accent), .9);
-  box-shadow: 0 0 14px rgba(var(--accent), .65);
 }
 .credits__person--audio { --accent: 255,140,214; }
 
@@ -8927,9 +8888,7 @@ border-bottom: black solid 2px;
 .credits__person:hover {
   transform: translateY(-4px);
   border-color: rgba(var(--accent), .5);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.07),
-              0 18px 54px rgba(0,0,0,.55),
-              0 0 30px rgba(var(--accent), .25);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.07), 0 18px 54px rgba(0,0,0,.55);
 }
 
 /* Avatar sprite — floats at the card's top-right corner on a glowing disc */
@@ -8944,19 +8903,13 @@ border-bottom: black solid 2px;
   border-radius: 50%;
   background: radial-gradient(circle at 50% 40%, rgba(var(--accent), .28), rgba(8,11,20,.85) 70%);
   border: 2px solid rgba(var(--accent), .55);
-  box-shadow: 0 0 22px rgba(var(--accent), .4), inset 0 0 16px rgba(0,0,0,.6);
-  animation: creditsAvatarFloat 3.4s ease-in-out infinite;
+  box-shadow: inset 0 0 16px rgba(0,0,0,.6);
 }
 .credits__avatar canvas {
   width: 72px;
   height: 72px;
   image-rendering: pixelated;
   filter: drop-shadow(0 3px 4px rgba(0,0,0,.6));
-}
-.credits__person--audio .credits__avatar { animation-delay: -1.7s; }
-@keyframes creditsAvatarFloat {
-  0%, 100% { transform: translateY(0) rotate(-2deg); }
-  50%      { transform: translateY(-7px) rotate(2deg); }
 }
 
 .credits__person-head { display: flex; flex-direction: column; gap: 6px; padding-right: 56px; }
@@ -8997,7 +8950,7 @@ border-bottom: black solid 2px;
   text-decoration: none;
   background: rgba(var(--accent), .08);
   border: 1px solid rgba(var(--accent), .22);
-  transition: background .15s ease, border-color .15s ease, transform .12s ease, box-shadow .15s ease;
+  transition: background .15s ease, border-color .15s ease, transform .12s ease;
 }
 .credits-link__text { position: relative; z-index: 1; }
 .credits-link__arrow {
@@ -9007,26 +8960,13 @@ border-bottom: black solid 2px;
   font-size: 15px;
   transition: transform .18s ease, opacity .18s ease;
 }
-/* sheen that sweeps across the chip on hover */
-.credits-link::before {
-  content: "";
-  position: absolute;
-  top: 0; bottom: 0; left: -60%;
-  width: 50%;
-  background: linear-gradient(105deg, transparent, rgba(255,255,255,.22), transparent);
-  transform: skewX(-18deg);
-  transition: left .55s ease;
-}
 .credits-link:hover,
 .credits-link:focus-visible {
   background: rgba(var(--accent), .2);
   border-color: rgba(var(--accent), .65);
   transform: translateX(4px);
-  box-shadow: 0 0 18px rgba(var(--accent), .3);
   outline: none;
 }
-.credits-link:hover::before,
-.credits-link:focus-visible::before { left: 130%; }
 .credits-link:hover .credits-link__arrow,
 .credits-link:focus-visible .credits-link__arrow {
   opacity: 1;
@@ -9040,11 +8980,7 @@ border-bottom: black solid 2px;
   letter-spacing: .28em;
   text-transform: uppercase;
   color: #cfe0ff;
-  animation: creditsThanksGlow 3s ease-in-out infinite;
-}
-@keyframes creditsThanksGlow {
-  0%, 100% { opacity: .55; text-shadow: 0 0 8px rgba(120,196,255,.2); }
-  50%      { opacity: .95; text-shadow: 0 0 18px rgba(120,196,255,.55); }
+  opacity: .9;
 }
 .info-card {
   display: flex;
