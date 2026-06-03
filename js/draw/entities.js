@@ -403,28 +403,114 @@
       Neo.ctx.stroke();
     }
     Neo.ctx.restore();
+  }
 
+  function drawStatusIcon(statusKey, x, y, size = 12, options = {}) {
+    const def = Neo.STATUS_ICON_DEFS?.[statusKey] || Neo.STATUS_ICON_DEFS?.bleed;
+    if (!def) return;
+    const cell = size / 8;
+    const drawPixels = (pixels, color) => {
+      Neo.ctx.fillStyle = color;
+      (pixels || []).forEach(([px, py]) => {
+        Neo.ctx.fillRect(Math.round(x + px * cell), Math.round(y + py * cell), Math.ceil(cell), Math.ceil(cell));
+      });
+    };
     Neo.ctx.save();
-    Neo.ctx.translate(enemy.x, enemy.y);
-    const label = `BLEED x${stackCount}`;
-    const y = enemy.type === 'rival' ? -enemy.r - 40 : -enemy.r - 32;
-    Neo.ctx.font = 'bold 10px system-ui';
-    Neo.ctx.textAlign = 'center';
-    Neo.ctx.textBaseline = 'middle';
-    const width = Math.max(50, Neo.ctx.measureText(label).width + 14);
-    const height = 15;
-    Neo.ctx.fillStyle = 'rgba(62, 0, 12, 0.86)';
-    Neo.ctx.strokeStyle = '#ff4f6d';
+    Neo.ctx.shadowColor = options.shadow === false ? 'transparent' : def.color;
+    Neo.ctx.shadowBlur = options.shadow === false ? 0 : Math.max(4, size * 0.45);
+    drawPixels(def.pixels, def.color);
+    Neo.ctx.shadowBlur = 0;
+    drawPixels(def.accentPixels, def.accent || '#fff');
+    Neo.ctx.restore();
+  }
+
+  function getStatusIconBadgeWidth(stacks) {
+    return Number(stacks || 0) > 1 ? 27 : 18;
+  }
+
+  function drawStatusIconBadge(statusKey, stacks, x, y) {
+    const def = Neo.STATUS_ICON_DEFS?.[statusKey] || Neo.STATUS_ICON_DEFS?.bleed;
+    if (!def) return;
+    const count = Math.max(0, Math.round(Number(stacks || 0)));
+    const width = getStatusIconBadgeWidth(count);
+    const height = 16;
+    Neo.ctx.save();
+    Neo.ctx.fillStyle = def.bg || 'rgba(0,0,0,0.78)';
+    Neo.ctx.strokeStyle = def.color;
     Neo.ctx.lineWidth = 1;
-    Neo.ctx.shadowColor = '#ff2445';
-    Neo.ctx.shadowBlur = 8 + flash * 8;
+    Neo.ctx.shadowColor = def.color;
+    Neo.ctx.shadowBlur = 7;
     Neo.ctx.beginPath();
-    Neo.ctx.roundRect(-width / 2, y, width, height, 5);
+    Neo.ctx.roundRect(x, y, width, height, 5);
     Neo.ctx.fill();
     Neo.ctx.stroke();
     Neo.ctx.shadowBlur = 0;
-    Neo.ctx.fillStyle = '#ffe3e7';
-    Neo.ctx.fillText(label, 0, y + height / 2 + 0.5);
+    drawStatusIcon(statusKey, x + 3, y + 2, 12, { shadow: false });
+    if (count > 1) {
+      Neo.ctx.font = 'bold 9px system-ui';
+      Neo.ctx.textAlign = 'right';
+      Neo.ctx.textBaseline = 'middle';
+      Neo.ctx.fillStyle = def.accent || '#fff';
+      Neo.ctx.fillText(String(Math.min(99, count)), x + width - 3, y + height / 2 + 0.5);
+    }
+    Neo.ctx.restore();
+  }
+
+  function drawEnemyStatusIconRow(enemy, drawY) {
+    const entries = [];
+    Neo.STATUS_KEYS.forEach(key => {
+      const stacks = Neo.getStatusStacks(enemy, key);
+      if (stacks > 0) entries.push({ key, stacks });
+    });
+    if (Number(enemy.stun || 0) > 0) entries.push({ key: 'stun', stacks: 1 });
+    if (!entries.length) return;
+    const gap = 3;
+    const widths = entries.map(entry => getStatusIconBadgeWidth(entry.stacks));
+    const totalWidth = widths.reduce((sum, width) => sum + width, 0) + gap * Math.max(0, entries.length - 1);
+    const y = drawY + (enemy.type === 'rival' ? -enemy.r - 43 : -enemy.r - 35);
+    let x = enemy.x - totalWidth / 2;
+    entries.forEach((entry, index) => {
+      drawStatusIconBadge(entry.key, entry.stacks, x, y);
+      x += widths[index] + gap;
+    });
+  }
+
+  function drawStunStars(entity, drawY) {
+    const stunTime = Number(entity?.stun || 0);
+    if (stunTime <= 0) return;
+    const reduceFlash = window.NeoSettings?.getAccess()?.reduceFlash;
+    const t = Date.now() / 260;
+    const starCount = stunTime > 0.75 ? 3 : stunTime > 0.35 ? 2 : 1;
+    const orbitR = Math.max(10, Number(entity.r || 12) * 0.72);
+    const y = drawY - Number(entity.r || 12) - 10;
+    Neo.ctx.save();
+    Neo.ctx.translate(entity.x, y);
+    Neo.ctx.globalAlpha = reduceFlash ? 0.78 : 0.72 + Math.sin(t * 4) * 0.12;
+    for (let index = 0; index < starCount; index += 1) {
+      const angle = t + (index / starCount) * Math.PI * 2;
+      const sx = Math.cos(angle) * orbitR;
+      const sy = Math.sin(angle) * orbitR * 0.34;
+      drawPixelStar(sx, sy, index === 0 ? 7 : 6);
+    }
+    Neo.ctx.restore();
+  }
+
+  function drawPixelStar(x, y, size = 6) {
+    const scale = Math.max(1, size / 6);
+    const pixels = [[2,0],[3,0],[2,1],[3,1],[0,2],[1,2],[2,2],[3,2],[4,2],[5,2],[2,3],[3,3],[1,4],[4,4],[0,5],[5,5]];
+    Neo.ctx.save();
+    Neo.ctx.translate(Math.round(x - size / 2), Math.round(y - size / 2));
+    Neo.ctx.shadowColor = '#ffe66d';
+    Neo.ctx.shadowBlur = 8;
+    Neo.ctx.fillStyle = '#ffe66d';
+    pixels.forEach(([px, py]) => {
+      Neo.ctx.fillRect(Math.round(px * scale), Math.round(py * scale), Math.ceil(scale), Math.ceil(scale));
+    });
+    Neo.ctx.shadowBlur = 0;
+    Neo.ctx.fillStyle = '#fff8c8';
+    [[2,2],[3,2],[2,3],[3,3]].forEach(([px, py]) => {
+      Neo.ctx.fillRect(Math.round(px * scale), Math.round(py * scale), Math.ceil(scale), Math.ceil(scale));
+    });
     Neo.ctx.restore();
   }
 
@@ -628,30 +714,8 @@
       });
       Neo.ctx.restore();
       if (bleedStacks > 0) drawBleedOverlay(enemy, bleedStacks);
-      const badgeBaseY = enemy.type === 'rival' ? -enemy.r - 40 : -enemy.r - 32;
-      let badgeOffset = bleedStacks > 0 ? 18 : 0;
-      const fireStacks = Neo.getStatusStacks(enemy, 'fire');
-      const poisonStacks = Neo.getStatusStacks(enemy, 'poison');
-      const darkStacks = Neo.getStatusStacks(enemy, 'dark_drain');
-      if (fireStacks > 0 || poisonStacks > 0 || darkStacks > 0) {
-        Neo.ctx.save();
-        Neo.ctx.font = 'bold 10px system-ui';
-        Neo.ctx.textAlign = 'center';
-        Neo.ctx.textBaseline = 'middle';
-        Neo.ctx.lineWidth = 1;
-        if (fireStacks > 0) {
-          drawStatusBadge(enemy, `FIRE x${fireStacks}`, 'rgba(62,22,0,0.86)', Neo.STATUS_STYLES.fire.color, '#ffe5c0', badgeBaseY + badgeOffset);
-          badgeOffset += 18;
-        }
-        if (poisonStacks > 0) {
-          drawStatusBadge(enemy, `POISON x${poisonStacks}`, 'rgba(10,38,0,0.86)', Neo.STATUS_STYLES.poison.color, '#d8ffc0', badgeBaseY + badgeOffset);
-          badgeOffset += 18;
-        }
-        if (darkStacks > 0) {
-          drawStatusBadge(enemy, `DRAIN x${darkStacks}`, 'rgba(20,8,48,0.86)', Neo.STATUS_STYLES.dark_drain.color, '#e8d8ff', badgeBaseY + badgeOffset);
-        }
-        Neo.ctx.restore();
-      }
+      drawStunStars(enemy, drawY);
+      drawEnemyStatusIconRow(enemy, drawY);
       if (enemy.elite) {
         Neo.ctx.save();
         Neo.ctx.translate(enemy.x, drawY - enemy.r - 10);
@@ -844,6 +908,8 @@
         seedKey: 'player',
       },
     });
+    drawStunStars(Neo.player, Neo.player.y);
+    drawEnemyStatusIconRow(Neo.player, Neo.player.y);
     Neo.ctx.save();
     Neo.ctx.translate(Neo.player.x, Neo.player.y);
     Neo.ctx.strokeStyle = '#f5f1e8';
@@ -1088,6 +1154,10 @@
   Neo.drawSpriteToCanvas = drawSpriteToCanvas;
   Neo.drawEnemyTelegraphs = drawEnemyTelegraphs;
   Neo.drawBleedOverlay = drawBleedOverlay;
+  Neo.drawStatusIcon = drawStatusIcon;
+  Neo.drawStatusIconBadge = drawStatusIconBadge;
+  Neo.drawEnemyStatusIconRow = drawEnemyStatusIconRow;
+  Neo.drawStunStars = drawStunStars;
   Neo.drawStatusBadge = drawStatusBadge;
   Neo.drawSpawnPortal = drawSpawnPortal;
   Neo.drawEnemies = drawEnemies;

@@ -1368,7 +1368,7 @@ button, input, select, textarea {
 #invPanel.game-panel {
   opacity: 1;
   visibility: visible;
-  transform: translate(-50%, -50%) scale(1);
+  transform: translate(-50%, -50%) scale(1.5);
   transform-origin: center;
   will-change: transform, opacity;
   scrollbar-width: thin;
@@ -1491,6 +1491,10 @@ button, input, select, textarea {
   text-transform: uppercase;
 }
 
+/* Shared tab bar for shop / anvil / inventory panels.
+   .panel-tabs/.panel-tab is the parent style; .shop-tab/.anvil-tab/.inv-tab
+   are kept as aliases so existing markup and theme overrides keep matching. */
+.panel-tabs,
 .shop-tabs {
   display: flex;
   gap: 10px;
@@ -1504,6 +1508,7 @@ button, input, select, textarea {
   backdrop-filter: blur(12px);
 }
 
+.panel-tab,
 .shop-tab {
   flex: 1;
   border: 1px solid var(--menu-border);
@@ -1519,6 +1524,7 @@ button, input, select, textarea {
   transition: transform .14s ease, border-color .14s ease, background .14s ease, color .14s ease;
 }
 
+.panel-tab.active,
 .shop-tab.active {
   background: linear-gradient(135deg, var(--menu-surface-strong), var(--menu-surface));
   border-color: var(--menu-border-strong);
@@ -1526,6 +1532,7 @@ button, input, select, textarea {
   box-shadow: 0 12px 28px rgba(0,0,0,.22), inset 0 0 20px var(--menu-glow);
 }
 
+.panel-tab:hover,
 .shop-tab:hover {
   transform: translateY(-1px);
   border-color: var(--menu-border-strong);
@@ -1546,7 +1553,9 @@ button, input, select, textarea {
   image-rendering: pixelated;
 }
 
+.panel-tab.active .tab-icon,
 .shop-tab.active .tab-icon { opacity: 1; }
+.panel-tab:hover .tab-icon,
 .shop-tab:hover .tab-icon { opacity: 0.85; }
 
 .shop-list {
@@ -1989,11 +1998,13 @@ button, input, select, textarea {
 }
 
 /* Shop refresh: shelf layout + richer cards */
+.panel-tabs,
 .shop-tabs {
   border: 1px solid color-mix(in srgb, var(--menu-border) 80%, transparent);
   gap: 8px;
 }
 
+.panel-tab,
 .shop-tab {
   border-radius: 10px;
   padding: 9px 10px;
@@ -2028,15 +2039,7 @@ button, input, select, textarea {
 }
 
 .shop-card::before {
-  content: "";
-  position: absolute;
-  top: 10px;
-  bottom: 10px;
-  left: 8px;
-  width: 4px;
-  border-radius: 999px;
-  background: var(--shop-card-accent, color-mix(in srgb, var(--menu-accent) 70%, #fff));
-  opacity: .95;
+  content: none;
 }
 
 .shop-card__top {
@@ -2044,7 +2047,7 @@ button, input, select, textarea {
   grid-template-columns: auto 1fr auto;
   gap: 10px;
   align-items: start;
-  margin-left: 8px;
+  margin-left: 0;
 }
 
 .shop-card__heading {
@@ -3166,6 +3169,47 @@ button, input, select, textarea {
 .equip-slot.is-blocked {
   border-color: rgba(255, 196, 128, .55);
   color: #ffd39f;
+}
+
+/* Equipment slot tooltip — a body-level element (see hud.js showEquipTooltip)
+   so it escapes the equipment bar's scroll container and is never clipped. */
+.equip-tooltip {
+  position: fixed;
+  z-index: 200;
+  width: max-content;
+  max-width: min(240px, 60vw);
+  padding: 8px 10px;
+  border: 1px solid rgba(180, 156, 255, .28);
+  border-radius: 7px;
+  background: rgba(10, 7, 14, .97);
+  box-shadow: 0 10px 26px rgba(0,0,0,.5), 0 0 18px rgba(150, 110, 255, .14);
+  color: rgba(245,240,255,.94);
+  text-align: left;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateX(6px);
+  transition: opacity .12s ease, transform .12s ease;
+}
+
+.equip-tooltip.is-visible {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.equip-tooltip__name {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .03em;
+  color: #e7defc;
+}
+
+.equip-tooltip__desc {
+  margin-top: 3px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
+  letter-spacing: .02em;
+  color: rgba(220, 210, 245, .85);
 }
 
 .equip-slot__key {
@@ -7534,6 +7578,30 @@ button.alt.danger {
   text-transform: uppercase;
 }
 
+.sandbox-search-row {
+  margin-bottom: 8px;
+}
+
+.sandbox-search {
+  width: 100%;
+  padding: 6px 9px;
+  font-size: 11px;
+  color: #e8f4ff;
+  background: rgba(10, 22, 38, .86);
+  border: 1px solid rgba(130, 196, 255, .28);
+  border-radius: 6px;
+  outline: none;
+}
+
+.sandbox-search::placeholder {
+  color: #7f99b3;
+}
+
+.sandbox-search:focus {
+  border-color: rgba(141, 204, 255, .62);
+  box-shadow: 0 0 0 1px rgba(141, 204, 255, .24);
+}
+
 .sandbox-rows {
   display: grid;
   gap: 8px;
@@ -7636,6 +7704,17 @@ button.alt.danger {
 
 .sandbox-token-grid--items {
   grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+}
+
+.sandbox-empty {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 14px 8px;
+  font-size: 11px;
+  color: #8ea8c1;
+  border: 1px dashed rgba(130, 182, 227, .26);
+  border-radius: 8px;
+  background: rgba(20, 28, 40, .58);
 }
 
 .sandbox-token {

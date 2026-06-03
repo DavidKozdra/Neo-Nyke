@@ -333,21 +333,25 @@ html.princess-ui .panel-close:hover {
 
 /* ── Shop tabs ────────────────────────────────────────────────────────────── */
 
+html.princess-ui .panel-tabs,
 html.princess-ui .shop-tabs {
   background: rgba(20, 4, 14, .8);
 }
 
+html.princess-ui .panel-tab,
 html.princess-ui .shop-tab {
   border-color: rgba(200, 80, 150, .2);
   color: rgba(255, 180, 220, .8);
 }
 
+html.princess-ui .panel-tab.active,
 html.princess-ui .shop-tab.active {
   background: linear-gradient(135deg, rgba(255, 100, 180, .2), rgba(200, 60, 140, .14));
   border-color: rgba(255, 154, 207, .55);
   color: #ffe3f2;
 }
 
+html.princess-ui .panel-tab:hover,
 html.princess-ui .shop-tab:hover {
   border-color: rgba(255, 154, 207, .4);
 }

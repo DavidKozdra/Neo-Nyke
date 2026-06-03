@@ -181,7 +181,95 @@ function generateDungeonMaze(options) {
     };
   }
 
+/**
+ * Room-graph topology utilities.
+ *
+ * These operate on the game's full-screen-room graph (nodes keyed by gx,gy with
+ * orthogonal door connections), NOT on tile mazes. They give the floor generator
+ * a vocabulary for "intent": dead-ends, distances, and connectivity — the
+ * structure Spelunky/Isaac use to place rewards off the critical path.
+ *
+ * A node is any object exposing { gx, gy }. Adjacency is derived from a key set
+ * of occupied cells, so the caller does not need a pre-built door map.
+ */
+function keyOf(node) {
+    return node.gx + ',' + node.gy;
+  }
+
+const ROOM_GRAPH_DIRS = [
+    { dx: 0, dy: -1 }, { dx: 0, dy: 1 }, { dx: 1, dy: 0 }, { dx: -1, dy: 0 },
+  ];
+
+/**
+ * Builds an adjacency map (key -> array of neighbour keys) from a list of room
+ * nodes, treating orthogonally-adjacent occupied cells as connected.
+ */
+function buildRoomGraph(nodes) {
+    const occupied = new Set((nodes || []).map(keyOf));
+    const adjacency = new Map();
+    for (const node of nodes || []) {
+      const neighbours = [];
+      for (const dir of ROOM_GRAPH_DIRS) {
+        const nk = (node.gx + dir.dx) + ',' + (node.gy + dir.dy);
+        if (occupied.has(nk)) neighbours.push(nk);
+      }
+      adjacency.set(keyOf(node), neighbours);
+    }
+    return adjacency;
+  }
+
+/**
+ * BFS distances (in rooms) from a start node to every reachable node.
+ * Returns a Map of key -> distance. Unreachable nodes are absent.
+ */
+function roomDistances(startNode, adjacency) {
+    const distances = new Map();
+    if (!startNode || !adjacency) return distances;
+    const startKey = keyOf(startNode);
+    if (!adjacency.has(startKey)) return distances;
+    const queue = [startKey];
+    distances.set(startKey, 0);
+    while (queue.length) {
+      const current = queue.shift();
+      const depth = distances.get(current);
+      for (const neighbour of adjacency.get(current) || []) {
+        if (distances.has(neighbour)) continue;
+        distances.set(neighbour, depth + 1);
+        queue.push(neighbour);
+      }
+    }
+    return distances;
+  }
+
+/**
+ * Returns the keys of dead-end nodes (degree 1) in the graph.
+ */
+function deadEndKeys(adjacency) {
+    const ends = [];
+    if (!adjacency) return ends;
+    for (const [key, neighbours] of adjacency.entries()) {
+      if ((neighbours || []).length === 1) ends.push(key);
+    }
+    return ends;
+  }
+
+/**
+ * True if every node is reachable from the start node (single connected
+ * component). The room generator already grows a connected blob, but this lets
+ * the floor grammar assert it after any rewiring.
+ */
+function isFullyConnected(startNode, adjacency) {
+    if (!adjacency || adjacency.size === 0) return true;
+    const distances = roomDistances(startNode, adjacency);
+    return distances.size === adjacency.size;
+  }
+
   return {
     generateDungeonMaze: generateDungeonMaze,
+    buildRoomGraph: buildRoomGraph,
+    roomDistances: roomDistances,
+    deadEndKeys: deadEndKeys,
+    isFullyConnected: isFullyConnected,
+    roomGraphKey: keyOf,
   };
 });

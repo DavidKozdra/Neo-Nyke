@@ -58,6 +58,10 @@ window.Neo = {
   gameState: 'menu',
   gameMode: 'normal',
   floor: 1,
+  // Opt-in floor "shape grammar": biases rewards toward dead-end rooms during
+  // floor generation (see biasRewardPoolToDeadEnds in rooms.js). Off by default
+  // so generation matches the current behaviour until explicitly enabled.
+  useFloorGrammar: false,
   runLoopIndex: 0,
   baseSeedStr: '',
   seedStr: '',

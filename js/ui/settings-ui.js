@@ -6,7 +6,7 @@
   const DEFAULT_TOUCH_BINDINGS = { touchA:'slash', touchB:'laser', touchY:'smash', touchX:'ascend', touchDash:'dash' };
   const DEFAULT_VOLUME   = { master:80, sfx:80, music:60 };
   const DEFAULT_ACCESS   = { reduceFlash:false, reduceMotion:false, reduceParticles:false, highContrast:false, screenShake:true, shopCanAfford:'#4caf50', shopCantAfford:'#e05555', hudScale:1 };
-  const DEFAULT_GAMEPLAY = { pauseInventory:true, bloodMultiplier:1, bloodOnHit:true };
+  const DEFAULT_GAMEPLAY = { pauseInventory:true, pauseOnBlur:true, bloodMultiplier:1, bloodOnHit:true };
   const BLOOD_MULTIPLIER_MIN = 1;
   const BLOOD_MULTIPLIER_MAX = 10;
 
@@ -289,6 +289,7 @@
     getAccess: () => access,
     getGameplay: () => gameplay,
     shouldPauseInventory: () => gameplay.pauseInventory !== false,
+    shouldPauseOnBlur: () => gameplay.pauseOnBlur !== false,
     getBloodMultiplier: () => normalizeBloodMultiplier(gameplay.bloodMultiplier),
     shouldBloodOnHit: () => gameplay.bloodOnHit !== false,
     getVolume: () => volume,
@@ -409,6 +410,15 @@
     pauseInventoryEl.checked = gameplay.pauseInventory !== false;
     pauseInventoryEl.addEventListener('change', () => {
       gameplay.pauseInventory = pauseInventoryEl.checked;
+      save();
+    });
+  }
+
+  const pauseOnBlurEl = document.getElementById('gameplayPauseOnBlur');
+  if (pauseOnBlurEl) {
+    pauseOnBlurEl.checked = gameplay.pauseOnBlur !== false;
+    pauseOnBlurEl.addEventListener('change', () => {
+      gameplay.pauseOnBlur = pauseOnBlurEl.checked;
       save();
     });
   }

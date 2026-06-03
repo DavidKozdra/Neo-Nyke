@@ -1334,6 +1334,13 @@ export function getShopWeaponOffers() {
   function buildDescriptorChips(key, description, { slot = '', kind = '' } = {}) {
     const chips = [];
     const text = `${String(key || '')} ${String(description || '')}`.toLowerCase();
+    if (text.includes('bleed')) chips.push({ label: 'Bleed', tone: 'status' });
+    if (text.includes('fire') || text.includes('burn')) chips.push({ label: 'Fire', tone: 'status' });
+    if (text.includes('poison')) chips.push({ label: 'Poison', tone: 'status' });
+    if (text.includes('stun') || text.includes('slow')) chips.push({ label: 'Status', tone: 'status' });
+    if (text.includes('beam')) chips.push({ label: 'Beam', tone: 'projectile' });
+    if (text.includes('aoe') || text.includes('area') || text.includes('explosion')) chips.push({ label: 'AOE', tone: 'item' });
+    if (text.includes('charge')) chips.push({ label: 'Charge', tone: 'item' });
     if (text.includes('projectile')) chips.push({ label: 'Projectile', tone: 'projectile' });
     if (text.includes('homing')) chips.push({ label: 'Homing', tone: 'projectile' });
     if (text.includes('burst')) chips.push({ label: 'Burst', tone: 'projectile' });
@@ -1345,6 +1352,51 @@ export function getShopWeaponOffers() {
     return chips;
   }
 
+  function normalizeOfferTag(label) {
+    const value = String(label || '').toLowerCase();
+    if (value.includes('bleed')) return 'bleed';
+    if (value.includes('fire') || value.includes('burn')) return 'fire';
+    if (value.includes('poison')) return 'poison';
+    if (value.includes('status') || value.includes('stun') || value.includes('slow')) return 'status';
+    if (value.includes('projectile') || value.includes('homing') || value.includes('burst') || value.includes('missile')) return 'projectile';
+    if (value.includes('beam')) return 'beam';
+    if (value.includes('heal') || value.includes('recovery') || value.includes('regen')) return 'heal';
+    if (value.includes('charge')) return 'charge';
+    if (value.includes('aoe')) return 'aoe';
+    if (value.includes('defense')) return 'defense';
+    if (value.includes('speed')) return 'speed';
+    return value.replace(/[^a-z0-9_]+/g, '_');
+  }
+
+  function getOfferSynergyTags(kind, key, chips = []) {
+    const tags = new Set();
+    if (kind === 'item') {
+      const itemTags = Neo.ITEM_DEFS?.[key]?.tags || Neo.itemRegistry?.get?.(key)?.tags || [];
+      const tagList = itemTags instanceof Set ? [...itemTags] : itemTags;
+      if (Array.isArray(tagList)) tagList.forEach(tag => tags.add(normalizeOfferTag(tag)));
+    }
+    if (kind === 'weapon' && Neo.isProjectileWeaponKey?.(key)) tags.add('projectile');
+    chips.forEach(chip => {
+      const tag = normalizeOfferTag(chip?.label);
+      if (tag) tags.add(tag);
+    });
+    return tags;
+  }
+
+  function getOfferBuildMatch(kind, key, chips = []) {
+    const activeTags = Neo.getActiveBuildTags?.(Neo.player, 2) || [];
+    if (!activeTags.length) return null;
+    const offerTags = getOfferSynergyTags(kind, key, chips);
+    const match = activeTags.find(entry => offerTags.has(normalizeOfferTag(entry.tag)));
+    return match || null;
+  }
+
+  function buildOfferBuildChip(kind, key, chips = []) {
+    const match = getOfferBuildMatch(kind, key, chips);
+    if (!match) return null;
+    return { label: `${match.tag.replace(/_/g, ' ')} build`, tone: 'item' };
+  }
+
   function isOfferRecommended(kind, key, chips = []) {
     if (!Neo.player) return false;
     const itemStats = Neo.getItemStats?.() || {};
@@ -1352,6 +1404,7 @@ export function getShopWeaponOffers() {
       || Number(itemStats.projectileHomingStrength || 0) > 0
       || Number(itemStats.projectileCountBonus || 0) > 0;
     const labels = chips.map(chip => String(chip?.label || '').toLowerCase());
+    if (getOfferBuildMatch(kind, key, chips)) return true;
     if (projectileBuild && kind === 'weapon' && Neo.isProjectileWeaponKey?.(key)) return true;
     if (projectileBuild && labels.some(label => label.includes('magnet') || label.includes('homing') || label.includes('projectile'))) return true;
     if (kind === 'move') {
@@ -1465,11 +1518,15 @@ export function renderShopPanel() {
           ? 'No Items challenge is active. Relic buys are disabled for this run.'
           : item?.description || 'No details available.';
         const descriptorChips = buildDescriptorChips(offer.key, description, { kind: 'item' });
-        const chips = [
+        const baseChips = [
           { label: 'Relic', tone: 'rarity' },
           item?.rarity ? { label: item.rarity, tone: 'rarity' } : null,
           item?.category ? { label: item.category, tone: 'item' } : null,
           ...descriptorChips,
+        ].filter(Boolean);
+        const chips = [
+          ...baseChips,
+          buildOfferBuildChip('item', offer.key, baseChips),
         ].filter(Boolean).slice(0, 5);
         const buttonText = noItemsChallenge ? 'Relics Locked' : state.bought ? 'Sold' : !state.canAfford ? 'Too Expensive' : 'Buy Relic';
         return renderShopCard({
@@ -1501,10 +1558,14 @@ export function renderShopPanel() {
         const owned = !!Neo.player.ownedWeapons?.[offer.key];
         const state = getShopPurchaseState(offer, { owned });
         const description = weapon?.description || 'No weapon description available.';
-        const chips = [
+        const baseChips = [
           ...buildWeaponShopChips(offer.key, weapon),
           ...buildDescriptorChips(offer.key, description, { kind: 'weapon' }),
-        ].slice(0, 5);
+        ];
+        const chips = [
+          ...baseChips,
+          buildOfferBuildChip('weapon', offer.key, baseChips),
+        ].filter(Boolean).slice(0, 5);
         const buttonText = state.bought || owned ? 'Owned' : !state.canAfford ? 'Too Expensive' : 'Buy Weapon';
         return renderShopCard({
           rarityLabel: weapon?.rarity || 'weapon',
@@ -1542,6 +1603,15 @@ export function renderShopPanel() {
         const currentMoveName = currentMoveKey ? (Neo.MOVE_DEFS[currentMoveKey]?.name || currentMoveKey) : null;
         const replacesLine = renderMoveReplaceRail(slotLabel, currentMoveName, def?.name || offer.key);
         const descriptorChips = buildDescriptorChips(offer.key, def?.desc || '', { slot: def?.slot, kind: 'move' });
+        const moveChips = [
+          { label: slotLabel, tone: 'move' },
+          def?.exclusiveCharacter ? { label: def.exclusiveCharacter, tone: 'exclusive' } : null,
+          ...descriptorChips,
+        ].filter(Boolean);
+        const chips = [
+          ...moveChips,
+          buildOfferBuildChip('move', offer.key, moveChips),
+        ].filter(Boolean).slice(0, 5);
         const buttonText = state.bought || owned ? 'Owned' : !state.canAfford ? 'Too Expensive' : 'Buy Move';
         return renderShopCard({
           rarityLabel: slotLabel,
@@ -1551,13 +1621,9 @@ export function renderShopPanel() {
           cost: offer.cost,
           description: def?.desc || 'No move description available.',
           footerExtra: replacesLine,
-          chips: [
-            { label: slotLabel, tone: 'move' },
-            def?.exclusiveCharacter ? { label: def.exclusiveCharacter, tone: 'exclusive' } : null,
-            ...descriptorChips,
-          ].filter(Boolean).slice(0, 5),
+          chips,
           stats: buildMoveShopStats(offer.key),
-          recommended: isOfferRecommended('move', offer.key, descriptorChips),
+          recommended: isOfferRecommended('move', offer.key, chips),
           kind: 'move',
           index,
           state,
@@ -1690,14 +1756,18 @@ export function renderInventoryPanel() {
     const atkSpeedColor = atkSpeed >= 2 ? '#6dde88' : atkSpeed >= 1.2 ? '#e8f4ff' : '#8ca8c0';
     const dmgReduction = Math.round(stats.damageReduction * 100);
     const bleedResistance = Math.round((stats.bleedResistance || 0) * 100);
+    const barrier = Math.round(Number(_invP.overhealBarrier || 0));
+    const activeBuildTags = (stats.buildTags || []).slice(0, 3).map(entry => `${entry.tag.replace(/_/g, ' ')} ${entry.count}`).join(' / ');
     Neo.ui.invStats.innerHTML = [
       `<div class="inv-stat-row inv-stat-row--bar"><canvas class="inv-stat-row__icon" data-inv-ui-icon="hp" width="36" height="36" aria-hidden="true"></canvas><div class="inv-stat-row__body"><span class="inv-stat-row__label">HP</span><span class="inv-stat-row__value" style="color:${hpColor}">${Math.round(_invP.hp)} <span class="inv-stat-row__sub">/ ${Math.round(_invP.maxHp)}</span></span></div><div class="inv-stat-row__bar"><div class="inv-stat-row__bar-fill" style="width:${Math.round(hpPct*100)}%;background:${hpColor}"></div></div></div>`,
+      barrier > 0 ? `<div class="inv-stat-row"><canvas class="inv-stat-row__icon" data-inv-ui-icon="defense" width="36" height="36" aria-hidden="true"></canvas><div class="inv-stat-row__body"><span class="inv-stat-row__label">Overheal Barrier</span><span class="inv-stat-row__value" style="color:#9cefff">${barrier}</span></div></div>` : '',
       `<div class="inv-stat-row"><canvas class="inv-stat-row__icon" data-inv-ui-icon="attack" width="36" height="36" aria-hidden="true"></canvas><div class="inv-stat-row__body"><span class="inv-stat-row__label">Attack Power</span><span class="inv-stat-row__value">${_invP.attackPower}</span></div></div>`,
       `<div class="inv-stat-row"><canvas class="inv-stat-row__icon" data-inv-ui-icon="speed" width="36" height="36" aria-hidden="true"></canvas><div class="inv-stat-row__body"><span class="inv-stat-row__label">Attack Speed</span><span class="inv-stat-row__value" style="color:${atkSpeedColor}">${atkSpeed.toFixed(2)}x</span></div></div>`,
       `<div class="inv-stat-row"><canvas class="inv-stat-row__icon" data-inv-ui-icon="crit" width="36" height="36" aria-hidden="true"></canvas><div class="inv-stat-row__body"><span class="inv-stat-row__label">Crit Chance</span><span class="inv-stat-row__value" style="color:${critColor}">${critPct}%</span></div></div>`,
       dmgReduction > 0 ? `<div class="inv-stat-row"><canvas class="inv-stat-row__icon" data-inv-ui-icon="defense" width="36" height="36" aria-hidden="true"></canvas><div class="inv-stat-row__body"><span class="inv-stat-row__label">Damage Reduction</span><span class="inv-stat-row__value" style="color:#6dde88">${dmgReduction}%</span></div></div>` : '',
       bleedResistance > 0 ? `<div class="inv-stat-row"><canvas class="inv-stat-row__icon" data-inv-ui-icon="bleed" width="36" height="36" aria-hidden="true"></canvas><div class="inv-stat-row__body"><span class="inv-stat-row__label">Bleed Resistance</span><span class="inv-stat-row__value" style="color:#f0a080">${bleedResistance}%</span></div></div>` : '',
       stats.bleedChance > 0 ? `<div class="inv-stat-row"><canvas class="inv-stat-row__icon" data-inv-ui-icon="bleed" width="36" height="36" aria-hidden="true"></canvas><div class="inv-stat-row__body"><span class="inv-stat-row__label">Bleed Chance</span><span class="inv-stat-row__value" style="color:#e05c5c">${Math.round(stats.bleedChance * 100)}%</span></div></div>` : '',
+      activeBuildTags ? `<div class="inv-stat-row"><canvas class="inv-stat-row__icon" data-inv-ui-icon="item" width="36" height="36" aria-hidden="true"></canvas><div class="inv-stat-row__body"><span class="inv-stat-row__label">Build Tags</span><span class="inv-stat-row__value">${activeBuildTags}</span></div></div>` : '',
     ].join('');
     Neo.ui.invStats.querySelectorAll('[data-inv-ui-icon]').forEach(canvas => {
       Neo.drawInventoryUiIcon?.(canvas, canvas.dataset.invUiIcon);
@@ -1984,11 +2054,8 @@ export function handleShopBuyClick(event) {
       if (!spendCoins(cost)) return;
       playShopPurchaseFeedback(button, cost);
       if (canHealNow) {
-        const before = Neo.player.hp;
-        Neo.player.hp = Math.min(Neo.player.maxHp, Neo.player.hp + heal);
-        const gained = Neo.player.hp - before;
+        const gained = Neo.applyPlayerHealing?.(heal) ?? 0;
         if (gained > 0) Neo.spawnHealPopup(Neo.player.x + Neo.rand(-10, 10), Neo.player.y - 20, gained);
-        if (gained > 0) window.achievementEvents?.emit('heal:applied', { amount: gained });
       } else {
         Neo.player.storedPotions = stored + 1;
         Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.7, text: `POTION STORED (${Neo.player.storedPotions}/${potionCap})`, c: '#a0e8ff' });

@@ -41,8 +41,85 @@
     });
   }
 
+  const SHOP_GREETINGS = [
+    'Coin for your courage, traveler?',
+    'Everything here outlives you. Browse well.',
+    'No refunds past the ladder.',
+    'Steel and salves — pick your poison.',
+    'You break it down there, you buy it up here.',
+    'The deeper you go, the more you’ll wish you bought.',
+    'Best prices this side of the GOD.',
+    'Spend it. You can’t take coins to the grave.',
+  ];
+
+  function getShopGreeting(room) {
+    if (!room) return SHOP_GREETINGS[0];
+    // Stable per-room so the line doesn't flicker frame to frame.
+    const seed = (Number(room.gx) || 0) * 31 + (Number(room.gy) || 0) * 17 + (Number(room.floor) || Neo.floor || 0) * 7;
+    return SHOP_GREETINGS[Math.abs(seed) % SHOP_GREETINGS.length];
+  }
+
+  function drawShopSign() {
+    const room = Neo.currentRoom;
+    if (!room || room.type !== 'shop') return;
+    const theme = Neo.ROOM_ART_THEMES.shop;
+    const cx = Neo.ROOM_W / 2;
+    const y = 84;
+    const t = Date.now() / 1000;
+    const sway = Math.sin(t * 1.6) * 1.5;
+
+    Neo.ctx.save();
+    Neo.ctx.translate(cx, y);
+
+    // Hanging chains to the signboard.
+    Neo.ctx.strokeStyle = 'rgba(180, 150, 90, 0.5)';
+    Neo.ctx.lineWidth = 2;
+    Neo.ctx.beginPath();
+    Neo.ctx.moveTo(-92, -34); Neo.ctx.lineTo(-92 + sway, -8);
+    Neo.ctx.moveTo(92, -34); Neo.ctx.lineTo(92 + sway, -8);
+    Neo.ctx.stroke();
+
+    Neo.ctx.translate(sway, 0);
+
+    // Signboard plaque.
+    const w = 232;
+    const h = 70;
+    Neo.ctx.fillStyle = 'rgba(28, 18, 10, 0.92)';
+    Neo.ctx.strokeStyle = theme.banner || '#9a5830';
+    Neo.ctx.lineWidth = 3;
+    Neo.ctx.beginPath();
+    Neo.ctx.roundRect(-w / 2, -h / 2, w, h, 8);
+    Neo.ctx.fill();
+    Neo.ctx.stroke();
+
+    // Inner gold rule.
+    Neo.ctx.strokeStyle = 'rgba(255, 176, 78, 0.32)';
+    Neo.ctx.lineWidth = 1;
+    Neo.ctx.beginPath();
+    Neo.ctx.roundRect(-w / 2 + 6, -h / 2 + 6, w - 12, h - 12, 5);
+    Neo.ctx.stroke();
+
+    // SHOP title.
+    Neo.ctx.textAlign = 'center';
+    Neo.ctx.textBaseline = 'middle';
+    Neo.ctx.font = 'bold 26px system-ui';
+    Neo.ctx.shadowColor = 'rgba(255, 176, 78, 0.7)';
+    Neo.ctx.shadowBlur = 10;
+    Neo.ctx.fillStyle = '#ffd07a';
+    Neo.ctx.fillText('❖ SHOP ❖', 0, -8);
+
+    // Greeting line.
+    Neo.ctx.shadowBlur = 0;
+    Neo.ctx.font = 'italic 12px system-ui';
+    Neo.ctx.fillStyle = 'rgba(240, 214, 170, 0.85)';
+    Neo.ctx.fillText(getShopGreeting(room), 0, 16);
+
+    Neo.ctx.restore();
+  }
+
   function drawWorldProps() {
     const theme = Neo.getRoomArtTheme();
+    drawShopSign();
     Neo.hazards.forEach(hazard => {
       Neo.ctx.save();
       Neo.ctx.translate(hazard.x, hazard.y);
@@ -1015,8 +1092,14 @@
       const size = Number(body.size || Math.max(30, Number(body.r || 12) * 2.4));
       const frame = Neo.SPRITE_ATLAS.frames[body.spriteKey] || Neo.SPRITE_ATLAS.frames.hunter;
       if (!frame) return;
-      const squash = 1 - 0.46 * fallEase;
-      const rotation = Number(body.angle || 0) + Number(body.fallAngle || 0) * fallEase;
+      const z = Math.max(0, Number(body.z || 0));
+      const velocityMag = Math.hypot(Number(body.vx || 0), Number(body.vy || 0)) + Math.abs(Number(body.vz || 0)) * 0.35;
+      const impactStretch = Neo.clamp(z / 140 + velocityMag / 240, 0, 1);
+      const squash = Math.max(0.5, 1 - 0.46 * fallEase - impactStretch * 0.18);
+      const stretchX = 1 + impactStretch * 0.1;
+      const rotation = Number(body.angle || 0)
+        + Number(body.fallAngle || 0) * fallEase
+        + Number(body.angularOffset || 0);
       const poolScale = Neo.clamp(age / 1.2, 0, 1) * alpha;
       const poolMultiplier = getVisualBloodMultiplier();
       const poolSizeMultiplier = Math.sqrt(poolMultiplier);
@@ -1081,9 +1164,10 @@
       Neo.ctx.ellipse(0, size * 0.32, size * 0.34, size * 0.09, 0, 0, Math.PI * 2);
       Neo.ctx.fill();
 
+      Neo.ctx.translate(0, -z);
       Neo.ctx.rotate(rotation);
       if (Number(body.face || 1) < 0) Neo.ctx.scale(-1, 1);
-      Neo.ctx.scale(1 + 0.05 * fallEase, squash);
+      Neo.ctx.scale((1 + 0.05 * fallEase) * stretchX, squash);
       Neo.ctx.imageSmoothingEnabled = false;
       Neo.ctx.shadowColor = body.elite ? 'rgba(255,170,64,0.35)' : 'rgba(0,0,0,0.2)';
       Neo.ctx.shadowBlur = body.elite ? 8 : 3;

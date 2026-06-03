@@ -34,8 +34,18 @@ export function loop(timestamp) {
       Neo.tickPlayerTransientDefenseTimers(dt);
       Neo.stepActiveTransitionFade(dt);
     } else if (Neo.gameState === 'dying' && Neo.playerDeathAnim) {
-      Neo.playerDeathAnim.timer += dt;
-      if (Neo.playerDeathAnim.timer >= Neo.playerDeathAnim.duration) Neo.finalizeDeath();
+      const anim = Neo.playerDeathAnim;
+      anim.timer += dt;
+      // Apply knockback drift, decaying as the corpse settles.
+      if (anim.vx || anim.vy) {
+        anim.x += anim.vx * dt;
+        anim.y += anim.vy * dt;
+        const decay = Math.exp(-7 * dt);
+        anim.vx *= decay;
+        anim.vy *= decay;
+        if (Math.hypot(anim.vx, anim.vy) < 2) { anim.vx = 0; anim.vy = 0; }
+      }
+      if (anim.timer >= anim.duration + (anim.holdDelay || 0)) Neo.finalizeDeath();
     }
     Neo.perfEnd('update', updatePerfStart);
     const uiPerfStart = Neo.perfStart();
@@ -380,9 +390,7 @@ export function loop(timestamp) {
       if (Neo.player.hp < 50) Neo.player.scarfHealReady = true;
       if (Neo.player.scarfHealReady) {
         const heal = Neo.scalePlayerHealing(Neo.player.maxHp * 0.0006 * totalBleed * itemStats.bleedHealScale * dt);
-        const beforeHp = Neo.player.hp;
-        Neo.player.hp = Math.min(Neo.player.maxHp, Neo.player.hp + heal);
-        const gained = Neo.player.hp - beforeHp;
+        const gained = Neo.applyPlayerHealing?.(heal, { showBarrier: false }) ?? 0;
         if (Neo.player.hp >= 50 && Neo.player.scarfHealReady) {
           Neo.consumeCharge('hemes_scarf');
         }

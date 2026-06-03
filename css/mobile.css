@@ -372,6 +372,7 @@
   }
 
   .game-panel-head { flex-direction: column; gap: 8px; }
+  .panel-tabs,
   .shop-tabs { flex-direction: column; gap: 4px; }
   .shop-list { grid-template-columns: 1fr; }
   .shop-card {
@@ -2177,6 +2178,7 @@
     margin-left: 0;
   }
 
+  .panel-tabs,
   .shop-tabs {
     display: flex;
     flex-direction: row;
@@ -2187,6 +2189,7 @@
     border-radius: 9px;
   }
 
+  .panel-tab,
   .shop-tab {
     flex: 1 0 auto;
     min-width: 72px;
@@ -2196,6 +2199,7 @@
     letter-spacing: .07em;
   }
 
+  .anvil-tabs .panel-tab,
   .anvil-tabs .shop-tab { flex: 1 1 0; }
 
   .shop-card,

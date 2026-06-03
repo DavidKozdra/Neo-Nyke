@@ -77,6 +77,12 @@
 
     const pool = Neo.rooms.filter(room => room !== startRoom && room !== farRoom);
     Neo.shuffle(pool, 'world');
+    // Floor grammar (opt-in via Neo.useFloorGrammar): bias rewards toward dead-end
+    // rooms so treasure/shop/etc. live off the critical start->exit path, the way
+    // Spelunky/Isaac do. This is a STABLE reorder of the already-shuffled pool, so
+    // it consumes no extra RNG — the draws below are unchanged; only which rooms
+    // receive the reward types shifts. With the flag off, behaviour is identical.
+    if (Neo.useFloorGrammar) biasRewardPoolToDeadEnds(pool, startRoom);
     const treasureCount = Math.min(3, 1 + Math.floor(Neo.nextRandom('world') * 3));
     for (let index = 0; index < treasureCount; index += 1) {
       if (pool[index]) pool[index].type = 'treasure';
@@ -109,6 +115,31 @@
     }
     Neo.updateObjective();
     Neo.updateHud();
+  }
+
+  // Stable-partitions an already-shuffled reward pool so dead-end rooms (graph
+  // degree 1) come first, without changing relative order within each group and
+  // without consuming RNG. Uses the engine's room-graph topology utilities; if
+  // they are unavailable it leaves the pool untouched (falls back to current
+  // behaviour). startRoom is excluded from the pool already, but is passed so the
+  // graph is built over the full room set for accurate degree/connectivity.
+  function biasRewardPoolToDeadEnds(pool, startRoom) {
+    const maze = (typeof window !== 'undefined' ? window.KozEngine : globalThis.KozEngine)?.World?.dungeonMaze;
+    if (!maze || typeof maze.buildRoomGraph !== 'function') return pool;
+
+    const adjacency = maze.buildRoomGraph(Neo.rooms);
+    if (!maze.isFullyConnected(startRoom, adjacency)) return pool; // safety: never strand rewards
+    const deadEnds = new Set(maze.deadEndKeys(adjacency));
+    const keyOf = maze.roomGraphKey || (room => `${room.gx},${room.gy}`);
+
+    const ends = [];
+    const rest = [];
+    for (const room of pool) {
+      (deadEnds.has(keyOf(room)) ? ends : rest).push(room);
+    }
+    pool.length = 0;
+    pool.push(...ends, ...rest);
+    return pool;
   }
 
   function decorateRoomData(room) {
@@ -174,66 +205,13 @@
       decorateRoomStructures(room);
     }
 
-    const potCount = room.type === 'shop' ? 1 : (room.type === 'challenge' || room.type === 'anvil') ? 0 : Neo.irand(1, 3, 'world');
-    for (let index = 0; index < potCount; index += 1) {
-      room.destructibles.push({
-        kind: 'pot',
-        x: 150 + Neo.rand(Neo.ROOM_W - 300, 0, 'world'),
-        y: 120 + Neo.rand(Neo.ROOM_H - 240, 0, 'world'),
-        r: 12,
-        hp: 1,
-        broken: false,
-      });
-    }
-
-    if (Neo.nextRandom('world') < 0.45 && room.type !== 'shop' && room.type !== 'challenge' && room.type !== 'anvil') {
-      room.destructibles.push({
-        kind: 'barrel',
-        x: 180 + Neo.rand(Neo.ROOM_W - 360, 0, 'world'),
-        y: 140 + Neo.rand(Neo.ROOM_H - 280, 0, 'world'),
-        r: 20,
-        hp: 1,
-        broken: false,
-      });
-    }
-
-    if (Neo.nextRandom('world') < 0.4 && room.type !== 'god' && room.type !== 'challenge' && room.type !== 'anvil') {
-      room.hazards.push(...createCornerMoatLavaHazards(room));
-    }
-
-    if ((room.type === 'combat' || room.type === 'boss') && Neo.nextRandom('world') < (room.type === 'boss' ? 0.45 : 0.32)) {
-      const trapCount = room.type === 'boss' ? 2 : (Neo.nextRandom('world') < 0.45 ? 2 : 1);
-      for (let index = 0; index < trapCount; index += 1) {
-        const trap = createExplosiveTrapHazard(room, index);
-        if (trap) room.hazards.push(trap);
-      }
-    }
-
-    if (Neo.nextRandom('world') < 0.3 && room.type !== 'shop' && room.type !== 'god' && room.type !== 'challenge') {
-      const wallX = Neo.nextRandom('world') < 0.5 ? 76 : Neo.ROOM_W - 76;
-      const hiddenX = wallX < Neo.ROOM_W / 2 ? 48 : Neo.ROOM_W - 48;
-      const revealGroup = `wall_${room.gx}_${room.gy}_${room.destructibles.length}`;
-      room.destructibles.push({
-        kind: 'wall',
-        x: wallX,
-        y: Neo.ROOM_H / 2 + Neo.rand(120, -120, 'world'),
-        r: 26,
-        hp: 2,
-        maxHp: 2,
-        revealGroup,
-        broken: false,
-      });
-      room.destructibles.push({
-        kind: 'pot',
-        x: hiddenX,
-        y: Neo.ROOM_H / 2 + Neo.rand(140, -140, 'world'),
-        r: 12,
-        hp: 1,
-        broken: false,
-        hidden: true,
-        revealGroup,
-      });
-    }
+    // Procedural prop/hazard population (rules live in roomTemplates.js). The
+    // hazard factories below are injected so the rules can stay data-only. RNG
+    // consumption order is preserved, so seeded output is unchanged.
+    Neo.populateRoomProps(room, {
+      createCornerMoatLavaHazards,
+      createExplosiveTrapHazard,
+    });
 
     Object.entries(room.secretPassages || {}).forEach(([dir, passage]) => {
       const targetRoom = findRoomAt(passage.targetGx, passage.targetGy);

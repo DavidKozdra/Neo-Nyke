@@ -38,7 +38,12 @@
     Neo.player2.pvpSmashCooldown = getPvpMoveCooldown(Neo.player2, 'smash', 'crimson_smash');
     const radius = (Neo.ATTACKS.smash.radius || 105) * 0.95;
     const damage = Neo.MOVE_BASE_STATS?.[moveKey]?.damage || Neo.ATTACKS.smash.damage;
-    Neo.spawnAoeShockwave(Neo.player2.x, Neo.player2.y, radius, '#4ca8ff', 'heavy');
+    const smashColor = moveKey === 'crimson_smash'
+      ? '#ff3048'
+      : moveKey === 'chaos_burst'
+        ? '#a857ff'
+        : '#4ca8ff';
+    Neo.spawnAoeShockwave(Neo.player2.x, Neo.player2.y, radius, smashColor, 'heavy');
     hitPvpPlayer1InRadius(Neo.player2.x, Neo.player2.y, radius, damage, 300, 'pvp_p2_smash');
   }
 
@@ -344,6 +349,24 @@
       finalAmount = Math.min(finalAmount, Neo.player.maxHp * 0.2);
     }
     finalAmount = Math.max(0, finalAmount);
+    const barrierBeforeHit = Math.max(0, Number(Neo.player.overhealBarrier || 0));
+    if (barrierBeforeHit > 0 && finalAmount > 0) {
+      const absorbed = Math.min(barrierBeforeHit, finalAmount);
+      Neo.player.overhealBarrier = Math.max(0, barrierBeforeHit - absorbed);
+      finalAmount = Math.max(0, finalAmount - absorbed);
+      if (absorbed >= 1 && showPopup) {
+        spawnDamagePopup(Neo.player.x, Neo.player.y - 34, absorbed, { color: '#9cefff', size: 14 });
+      }
+      if (finalAmount <= 0) {
+        Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 22, life: 0.34, text: 'BARRIER', c: '#9cefff' });
+        if (applyHitstop) {
+          Neo.player.inv = Math.max(Neo.player.inv, 0.18);
+          Neo.shake = Math.max(Neo.shake, 3);
+          Neo.shakeT = Math.max(Neo.shakeT, 0.08);
+        }
+        return;
+      }
+    }
     if (applyHitstop && !options.ignoreOneShotGuard && Neo.player.maxHp > 0) {
       const sourceKey = String(options.sourceKey || source || '').toLowerCase();
       const bossLike = Neo.isBossFightActive?.()
@@ -786,7 +809,7 @@
     p.color = props.color ?? null;
     p.enemy = enemyProjectile;
     p.knockback = props.knockback ?? 0;
-    p.pierceCount = props.pierceCount ?? 0;
+    p.pierceCount = Math.max(0, Math.floor(Number(props.pierceCount ?? 0) + (!enemyProjectile ? Number(itemStats.projectilePierceBonus || 0) : 0)));
     p.hitOptions = props.hitOptions ?? null;
     p.trail = props.trail ?? [];
     p.splash = props.splash ?? 0;
@@ -1200,14 +1223,21 @@
         });
         if (target) {
           const hitAngle = Math.atan2(projectile.vy, projectile.vx);
+          const hitOptions = { ...(projectile.hitOptions || {}) };
+          if (Neo.player?.character === 'mooggy' && Neo.getStatusStacks?.(target, 'bleed') > 0) {
+            hitOptions.critBonus = Number(hitOptions.critBonus || 0) + 0.18;
+          }
           Neo.hitEnemy(
             target,
             projectile.damage || 16,
             hitAngle,
             projectile.knockback || 90,
             projectile.color || (projectile.kind === 'fireball' ? '#ff8844' : '#a857ff'),
-            projectile.hitOptions || {}
+            hitOptions
           );
+          if (Neo.player?.character === 'princess' && projectile.pierceCount > 0) {
+            Neo.applyPlayerHealing?.(1.2, { showBarrier: false });
+          }
           if (projectile.kind === 'fireball') {
             Neo.applyFire(target, projectile.fireStacks || 2, projectile.fireDuration || 3);
             blastRadius(projectile.x, projectile.y, projectile.splash || 44, projectile.splashDamage || 14, '#ff8844');
@@ -1349,7 +1379,11 @@
             if (Neo.dist(Neo.player.x, Neo.player.y, hazard.x, hazard.y) <= hazard.r + Neo.player.r) {
               const angle = Math.atan2(Neo.player.y - hazard.y, Neo.player.x - hazard.x);
               damagePlayer(hazard.damage || 18, angle, 130, hazard.source || 'red_spikes');
-              Neo.applyBleed?.(Neo.player, 1, 3.4);
+              const statusKey = String(hazard.statusKey || 'bleed');
+              const stacks = Math.max(1, Number(hazard.statusStacks || 1));
+              const duration = Math.max(0.2, Number(hazard.statusDuration || (statusKey === 'fire' ? 2.8 : 3.4)));
+              if (statusKey === 'fire') Neo.applyFire?.(Neo.player, stacks, duration);
+              else Neo.applyStatus?.(Neo.player, statusKey, stacks, duration);
             }
           } else {
             forEachEnemyNearCircle(hazard.x, hazard.y, hazard.r + 80, enemy => {
@@ -1381,9 +1415,7 @@
           hazard.plusTick = Neo.rand(0.16, 0.07);
         }
         if (Neo.dist(Neo.player.x, Neo.player.y, hazard.x, hazard.y) < hazard.r) {
-          const before = Neo.player.hp;
-          Neo.player.hp = Math.min(Neo.player.maxHp, Neo.player.hp + Neo.scalePlayerHealing(7.36 * dt));
-          const healed = Neo.player.hp - before;
+          const healed = Neo.applyPlayerHealing?.(Neo.scalePlayerHealing(7.36 * dt), { showBarrier: false }) ?? 0;
           if (healed > 0) {
             hazard.healAccum = (hazard.healAccum || 0) + healed;
             hazard.healTick = (hazard.healTick ?? 0.24) - dt;
@@ -1440,7 +1472,7 @@
             forEachEnemyNearCircle(hazard.x, hazard.y, hazard.r + 80, enemy => {
               if (Neo.dist(enemy.x, enemy.y, hazard.x, hazard.y) > hazard.r + enemy.r) return;
               const angle = Math.atan2(enemy.y - hazard.y, enemy.x - hazard.x);
-              Neo.hitEnemy(enemy, hazard.damage || 16, angle, 90, '#8dd4ff');
+              Neo.hitEnemy(enemy, hazard.damage || 16, angle, 90, '#8dd4ff', { lightning: true });
             });
           }
           Neo.spawnParticle({
@@ -1905,9 +1937,7 @@
         const potionApplications = doubled ? 2 : 1;
         if (Neo.player.hp < Neo.player.maxHp) {
           const potionHeal = Neo.getPotionHealAmount() * potionApplications;
-          const before = Neo.player.hp;
-          Neo.player.hp = Math.min(Neo.player.maxHp, Neo.player.hp + potionHeal);
-          const gained = Neo.player.hp - before;
+          const gained = Neo.applyPlayerHealing?.(potionHeal) ?? 0;
           if (gained > 0) spawnHealPopup(Neo.player.x + Neo.rand(-10, 10), Neo.player.y - 20, gained);
           if (doubled) Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 34, life: 0.7, text: 'DOUBLE POTION', c: '#9af7d8' });
         } else if (potionCap > 0 && stored < potionCap) {
@@ -1923,9 +1953,7 @@
 
       if (pickup.type === 'apple' || pickup.type === 'fruit') {
         const heal = Neo.scalePlayerHealing(Math.max(10, Number(pickup.heal || 20)), 10);
-        const before = Neo.player.hp;
-        Neo.player.hp = Math.min(Neo.player.maxHp, Neo.player.hp + heal);
-        const actual = Neo.player.hp - before;
+        const actual = Neo.applyPlayerHealing?.(heal) ?? 0;
         if (actual > 0) {
           spawnHealPopup(Neo.player.x + Neo.rand(-8, 8), Neo.player.y - 22, actual, { color: '#79ff8f', size: 14 });
           Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 18, life: 0.55, text: `+${Math.ceil(actual)}`, c: '#79ff8f' });
@@ -2029,7 +2057,7 @@
           Neo.collectItem(pickup.rewardKey || Neo.rollItemDrop({ elite: true, random: Neo.createEntityRandom(pickup, 'secret-vendor:fallback') }));
         } else if (pickup.offerKind === 'vitality') {
           Neo.player.maxHp += 20;
-          Neo.player.hp = Math.min(Neo.player.maxHp, Neo.player.hp + Neo.scalePlayerHealing(60, 20));
+          Neo.applyPlayerHealing?.(Neo.scalePlayerHealing(60, 20));
           Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.7, text: '+VIT', c: '#8dffbd' });
         } else if (pickup.offerKind === 'xp') {
           const xpValue = Math.max(1, Number(pickup.xpValue || Neo.getSecretXpOfferAmount()));
@@ -2140,11 +2168,52 @@
     for (let index = Neo.deadBodies.length - 1; index >= 0; index -= 1) {
       const body = Neo.deadBodies[index];
       body.age = Number(body.age || 0) + dt;
-      if (body.age <= Number(body.fallTime || Neo.CORPSE_FALL_TIME)) {
+      if (!Number.isFinite(Number(body.z))) body.z = 0;
+      if (!Number.isFinite(Number(body.vz))) body.vz = 0;
+      if (!Number.isFinite(Number(body.angularOffset))) body.angularOffset = 0;
+      if (!Number.isFinite(Number(body.angularV))) body.angularV = 0;
+
+      const fallTime = Math.max(0.01, Number(body.fallTime || Neo.CORPSE_FALL_TIME));
+      const horizontalSpeed = Math.hypot(Number(body.vx || 0), Number(body.vy || 0));
+      const stillMoving = body.age <= fallTime
+        || Number(body.z || 0) > 0.15
+        || Number(body.vz || 0) > 8
+        || horizontalSpeed > 2.2
+        || Math.abs(Number(body.angularV || 0)) > 0.14;
+
+      if (stillMoving) {
+        const gravity = Math.max(260, Number(body.gravity || 560));
+        const bounce = Neo.clamp(Number(body.bounce || 0.24), 0, 0.8);
+        const slideDrag = Math.max(0, Number(body.slideDrag || 5.8));
+        const airDrag = Math.max(0, Number(body.airDrag || 1.9));
+        const angularDrag = Math.max(0, Number(body.angularDrag || 2.3));
+
+        body.vz -= gravity * dt;
+        body.z += Number(body.vz || 0) * dt;
         body.x += Number(body.vx || 0) * dt;
         body.y += Number(body.vy || 0) * dt;
-        body.vx *= Math.max(0, 1 - 6.2 * dt);
-        body.vy *= Math.max(0, 1 - 6.2 * dt);
+        body.angularOffset += Number(body.angularV || 0) * dt;
+
+        if (body.z <= 0) {
+          body.z = 0;
+          if (body.vz < -40) {
+            body.vz = -body.vz * bounce;
+            body.vx *= 0.82;
+            body.vy *= 0.82;
+            body.angularV *= 0.72;
+          } else {
+            body.vz = 0;
+          }
+          const groundDamp = Math.max(0, 1 - slideDrag * dt);
+          body.vx *= groundDamp;
+          body.vy *= groundDamp;
+        } else {
+          const airDamp = Math.max(0, 1 - airDrag * dt);
+          body.vx *= airDamp;
+          body.vy *= airDamp;
+        }
+
+        body.angularV *= Math.max(0, 1 - angularDrag * dt);
       }
       if (body.age >= Number(body.life || Neo.CORPSE_LIFETIME)) Neo.deadBodies.splice(index, 1);
     }

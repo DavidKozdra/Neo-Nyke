@@ -46,6 +46,8 @@ export function migratePlayerData(source) {
     playerData.lavaWalkTime = Number(playerData.lavaWalkTime || 0);
     playerData.lavaTrailTick = Number(playerData.lavaTrailTick || 0);
     playerData.princessFlightTime = Number(playerData.princessFlightTime || 0);
+    playerData.overhealBarrier = Math.max(0, Number(playerData.overhealBarrier || 0));
+    playerData.graniallaHealPulseFrame = Number(playerData.graniallaHealPulseFrame || 0);
     Neo.ensureStatuses(playerData);
     if (!playerData.equippedMoves || typeof playerData.equippedMoves !== 'object') {
       playerData.equippedMoves = getDefaultMovesForCharacter(playerData.character);
@@ -181,6 +183,31 @@ export function getItemCount(key) {
     return Number(Neo.player?.items?.[key] || 0);
   }
 
+export function getItemTagCounts(playerData = Neo.player) {
+    const counts = {};
+    if (!playerData?.items) return counts;
+    Neo.ITEM_KEYS.forEach(key => {
+      const stacks = Math.max(0, Number(playerData.items[key] || 0));
+      if (stacks <= 0) return;
+      const tags = Neo.ITEM_DEFS[key]?.tags || Neo.itemRegistry?.get?.(key)?.tags || [];
+      const tagList = tags instanceof Set ? [...tags] : tags;
+      if (!Array.isArray(tagList)) return;
+      tagList.forEach(tag => {
+        if (!tag) return;
+        counts[tag] = (counts[tag] || 0) + stacks;
+      });
+    });
+    return counts;
+  }
+
+export function getActiveBuildTags(playerData = Neo.player, minimumStacks = 3) {
+    const counts = getItemTagCounts(playerData);
+    return Object.entries(counts)
+      .filter(([, count]) => count >= minimumStacks)
+      .sort((a, b) => b[1] - a[1])
+      .map(([tag, count]) => ({ tag, count }));
+  }
+
 export function getPotionCarryCap() {
     const stacks = getItemCount('mateos_bag');
     if (stacks <= 0) return 0;
@@ -188,7 +215,9 @@ export function getPotionCarryCap() {
   }
 
 export function getChargeRequirement(baseRequirement) {
-    return Math.max(1, baseRequirement - getItemCount('charged_adapter'));
+    const chargeStacks = getItemTagCounts().charge || 0;
+    const synergyReduction = chargeStacks >= 6 ? 2 : chargeStacks >= 3 ? 1 : 0;
+    return Math.max(1, baseRequirement - getItemCount('charged_adapter') - synergyReduction);
   }
 
 export function getKeenEyeCritBonus() {
@@ -257,6 +286,8 @@ export function getItemStats() {
     const critCharmBonus = Number(Neo.player?.critCharmBuffTime || 0) > 0 ? getItemCount('crit_charm') * 0.04 : 0;
     const keenEyeBonus = Number(Neo.player?.keenEyeBuffTime || 0) > 0 ? getKeenEyeCritBonus() : 0;
     const chronoSpringBonus = Number(Neo.player?.chronoSpringBuffTime || 0) > 0 ? getChronoSpringAttackSpeedBonus() : 0;
+    const tagCounts = getItemTagCounts();
+    const healingTagStacks = Number(tagCounts.heal || 0) + Number(tagCounts.healing || 0);
     const godItemStacks = Neo.godItemKeysCache.reduce((total, key) => {
       return total + getItemCount(key);
     }, 0);
@@ -301,15 +332,25 @@ export function getItemStats() {
       beamChainTargets: dragonOrb > 0 ? Math.min(2, dragonOrb) : 0,
       beamChainDamageMultiplier: dragonOrb > 0 ? 0.6 + (dragonOrb - 1) * 0.15 : 0,
       projectileBounces: ricocete,
+      projectilePierceBonus: tagCounts.projectile >= 9 ? 2 : tagCounts.projectile >= 4 ? 1 : 0,
       projectileHomingStrength: enemyMagnet * 0.05,
       projectileSpeedMultiplier: 1 + mooggyZoomies * 0.2,
       healingMultiplier: 1 + drinkMaster * 0.2,
+      overhealBarrierRatio: healingTagStacks >= 3 ? 0.35 : 0,
+      overhealBarrierCapRatio: healingTagStacks >= 6 ? 0.28 : healingTagStacks >= 3 ? 0.16 : 0,
       itemDropChanceBonus: Math.min(0.3, richMansLuck * 0.05),
       shopExtraItemOffers: Math.min(3, richMansLuck),
       damageReduction,
       stunResistance: anchorCharm,
       hasIronLung: getItemCount('iron_lung') > 0,
       hasPrincesGlasses: getItemCount('princes_glasses') > 0,
+      tagCounts,
+      bleedCritChance: tagCounts.bleed >= 8 ? 0.18 : tagCounts.bleed >= 3 ? 0.08 : 0,
+      bleedSplashStacks: tagCounts.bleed >= 5 ? Math.min(3, 1 + Math.floor((tagCounts.bleed - 5) / 4)) : 0,
+      statusDurationMultiplier: tagCounts.wizard >= 4 ? 1.18 : 1,
+      aoeStatusDurationMultiplier: tagCounts.wizard >= 7 ? 1.28 : tagCounts.wizard >= 4 ? 1.14 : 1,
+      chargeSynergyReduction: tagCounts.charge >= 6 ? 2 : tagCounts.charge >= 3 ? 1 : 0,
+      buildTags: getActiveBuildTags(),
     };
     Neo.itemStatsCacheFrame = Neo.frameId;
     return Neo.itemStatsCacheValue;
@@ -318,6 +359,47 @@ export function getItemStats() {
 export function getAttackSpeedValue() {
     const stats = getItemStats();
     return Math.max(0.2, (Neo.player?.attackSpeed || 1) * (stats.attackSpeedMultiplier || 1));
+  }
+
+export function applyPlayerHealing(amount, options = {}) {
+    if (!Neo.player) return 0;
+    const healAmount = Math.max(0, Number(amount || 0));
+    if (healAmount <= 0) return 0;
+    const beforeHp = Number(Neo.player.hp || 0);
+    const maxHp = Math.max(1, Number(Neo.player.maxHp || 1));
+    const missing = Math.max(0, maxHp - beforeHp);
+    const gained = Math.min(missing, healAmount);
+    if (gained > 0) {
+      Neo.player.hp = Math.min(maxHp, beforeHp + gained);
+      window.achievementEvents?.emit('heal:applied', { amount: gained });
+    }
+    const overflow = Math.max(0, healAmount - gained);
+    const stats = Neo.getItemStats?.() || {};
+    const barrierRatio = Number(stats.overhealBarrierRatio || 0);
+    const barrierCap = maxHp * Number(stats.overhealBarrierCapRatio || 0);
+    if (overflow > 0 && barrierRatio > 0 && barrierCap > 0) {
+      const addedBarrier = Math.min(barrierCap - Number(Neo.player.overhealBarrier || 0), overflow * barrierRatio);
+      if (addedBarrier > 0) {
+        Neo.player.overhealBarrier = Math.min(barrierCap, Number(Neo.player.overhealBarrier || 0) + addedBarrier);
+        if (options.showBarrier !== false && Neo.spawnHealPopup) {
+          Neo.spawnHealPopup(Neo.player.x + Neo.rand(-8, 8), Neo.player.y - 36, addedBarrier, { color: '#9cefff', size: 12 });
+        }
+      }
+    }
+    if ((gained > 0 || overflow > 0) && Neo.player.character === 'granialla') {
+      const now = Number(Neo.frameId || 0);
+      if (now - Number(Neo.player.graniallaHealPulseFrame || -9999) >= 24) {
+        Neo.player.graniallaHealPulseFrame = now;
+        const radius = 86;
+        const pulseDamage = Math.max(2, Math.min(18, (gained + overflow) * 0.45));
+        Neo.forEachEnemyNearCircle?.(Neo.player.x, Neo.player.y, radius + 80, enemy => {
+          if (Neo.dist(Neo.player.x, Neo.player.y, enemy.x, enemy.y) > radius + enemy.r) return;
+          Neo.hitEnemy?.(enemy, pulseDamage, Math.atan2(enemy.y - Neo.player.y, enemy.x - Neo.player.x), 55, '#dfffea', { rawDamage: true, noCharmBuff: true });
+        });
+        Neo.spawnParticle?.({ x: Neo.player.x, y: Neo.player.y, life: 0.25, ring: radius, c: '#dfffea' });
+      }
+    }
+    return gained;
   }
 
 export function getWizardPawStatCards() {
@@ -495,13 +577,13 @@ export function consumeCharge(chargeType) {
   window.achievementEvents?.on('charge:kill', () => {
     if (!Neo.player) return;
     const stats = getItemStats();
-    const chargeSteps = stats.overclockedWatchChance > 0 && Neo.nextRandom('encounter') < stats.overclockedWatchChance ? 2 : 1;
+    const chargeSteps = (stats.overclockedWatchChance > 0 && Neo.nextRandom('encounter') < stats.overclockedWatchChance ? 2 : 1)
+      + (Neo.isChallengeActive?.('overcharged') ? 1 : 0);
     if (stats.genericHealthItemHealRatio > 0 && Neo.player.hp < Neo.player.maxHp) {
-      const heal = Math.min(Neo.player.maxHp - Neo.player.hp, Neo.scalePlayerHealing(Math.max(0, Neo.player.hp * stats.genericHealthItemHealRatio)));
-      if (heal > 0) {
-        Neo.player.hp = Math.min(Neo.player.maxHp, Neo.player.hp + heal);
-        Neo.spawnHealPopup(Neo.player.x, Neo.player.y - 22, heal, { color: '#d9ffe5' });
-        window.achievementEvents?.emit('heal:applied', { amount: heal });
+      const heal = Neo.scalePlayerHealing(Math.max(0, Neo.player.hp * stats.genericHealthItemHealRatio));
+      const gained = Neo.applyPlayerHealing(heal);
+      if (gained > 0) {
+        Neo.spawnHealPopup(Neo.player.x, Neo.player.y - 22, gained, { color: '#d9ffe5' });
       }
     }
 
@@ -581,6 +663,8 @@ export function refreshFloorChargeStates() {
   Neo.getDefaultMovesForCharacter = getDefaultMovesForCharacter;
   Neo.isMoveAllowedForCharacter = isMoveAllowedForCharacter;
   Neo.getItemCount = getItemCount;
+  Neo.getItemTagCounts = getItemTagCounts;
+  Neo.getActiveBuildTags = getActiveBuildTags;
   Neo.getPotionCarryCap = getPotionCarryCap;
   Neo.getChargeRequirement = getChargeRequirement;
   Neo.getKeenEyeCritBonus = getKeenEyeCritBonus;
@@ -590,6 +674,7 @@ export function refreshFloorChargeStates() {
   Neo.triggerChronoSpringBuff = triggerChronoSpringBuff;
   Neo.getItemStats = getItemStats;
   Neo.getAttackSpeedValue = getAttackSpeedValue;
+  Neo.applyPlayerHealing = applyPlayerHealing;
   Neo.getWizardPawStatCards = getWizardPawStatCards;
   Neo.openWizardPawSelection = openWizardPawSelection;
   Neo.renderWizardPawPanel = renderWizardPawPanel;
