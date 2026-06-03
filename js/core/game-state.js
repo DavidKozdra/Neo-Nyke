@@ -1675,11 +1675,7 @@ export function resumeGame() {
       }
       Neo.drawSpriteToCanvas(el, resolveKillerSprite(el.dataset.runKiller), el.width);
     });
-    root.querySelectorAll('[data-item-icon]').forEach(el => {
-      if (!(el instanceof HTMLCanvasElement)) return;
-      const item = Neo.itemRegistry.get(el.dataset.itemIcon) || Neo.ITEM_DEFS[el.dataset.itemIcon];
-      if (item) Neo.drawItemToastIcon(el, item);
-    });
+    Neo.drawItemIconCanvases?.(root, 'data-item-icon');
     root.querySelectorAll('[data-move-icon]').forEach(el => {
       if (!(el instanceof HTMLCanvasElement)) return;
       const move = Neo.MOVE_DEFS[el.dataset.moveIcon];

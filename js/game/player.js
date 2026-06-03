@@ -300,6 +300,18 @@ export function getItemStats() {
     const critCharmBonus = Number(Neo.player?.critCharmBuffTime || 0) > 0 ? getItemCount('crit_charm') * 0.04 : 0;
     const keenEyeBonus = Number(Neo.player?.keenEyeBuffTime || 0) > 0 ? getKeenEyeCritBonus() : 0;
     const chronoSpringBonus = Number(Neo.player?.chronoSpringBuffTime || 0) > 0 ? getChronoSpringAttackSpeedBonus() : 0;
+    const equippedWeaponKey = String(Neo.player?.equippedWeapon || '');
+    const weaponBleedBonus = equippedWeaponKey === 'claw_gauntlets'
+      ? 0.22
+      : equippedWeaponKey === 'thorns_bleed_blade'
+        ? 0.10
+        : 0;
+    const weaponCritBonus = equippedWeaponKey === 'hunters_bow'
+      ? 0.10
+      : equippedWeaponKey === 'void_piercer'
+        ? 0.20
+        : 0;
+    const baseBleedChance = neoKnife * 0.05;
     const tagCounts = getItemTagCounts();
     const healingTagStacks = Number(tagCounts.heal || 0) + Number(tagCounts.healing || 0);
     const godItemStacks = Neo.godItemKeysCache.reduce((total, key) => {
@@ -312,7 +324,11 @@ export function getItemStats() {
     const xpProgress = Neo.clamp((Neo.player?.xpToNext || 0) > 0 ? (Neo.player?.xp || 0) / Neo.player.xpToNext : 0, 0, 1);
     const characterDef = Neo.getCharacterDef?.() || {};
     Neo.itemStatsCacheValue = {
-      bleedChance: neoKnife * 0.05,
+      bleedChance: baseBleedChance,
+      weaponBleedChance: weaponBleedBonus,
+      displayedBleedChance: baseBleedChance + weaponBleedBonus,
+      weaponCritChance: weaponCritBonus,
+      displayedCritChance: critChance + weaponCritBonus,
       drainChance: toothOfThorn * 0.028,
       bleedResistance: Neo.clamp(toughSkin * 0.25, 0, 0.8),
       weaponFatigueChance: weaponFatigue * 0.05,

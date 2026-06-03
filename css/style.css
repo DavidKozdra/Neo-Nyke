@@ -343,9 +343,8 @@ button, input, select, textarea {
   align-items: center;
   gap: 6px;
   width: 100%;
-  padding: 12px 20px 16px;
+  padding: 14px 22px 18px;
   box-sizing: border-box;
-  background: linear-gradient(to top, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0) 100%);
   pointer-events: none;
 }
 .menu-footer .meta-row,
@@ -3459,16 +3458,11 @@ button, input, select, textarea {
   align-items: center;
   padding: 32px 48px 36px;
   min-width: 320px;
-  border: 2px solid var(--menu-border);
-  border-top-color: var(--menu-border-strong);
   border-radius: 14px;
-  background: linear-gradient(180deg, var(--menu-surface-strong), var(--menu-bg-deep));
-  box-shadow:
-    0 8px 60px rgba(0,0,0,.7),
-    inset 0 1px 0 rgba(255,255,255,.06),
-    0 0 32px var(--menu-glow);
-  backdrop-filter: blur(18px);
+  border: 1px solid var(--menu-border);
+
 }
+
 
 #start.overlay {
   --menu-stage-width: 720px;
@@ -3513,11 +3507,7 @@ button, input, select, textarea {
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--menu-surface-strong) 78%, transparent), color-mix(in srgb, var(--menu-bg-deep) 72%, transparent)),
     radial-gradient(ellipse at 50% 0%, color-mix(in srgb, var(--menu-accent) 24%, transparent), transparent 70%);
-  box-shadow:
-    0 18px 52px rgba(0, 0, 0, .5),
-    inset 0 1px 0 rgba(255, 255, 255, .06),
-    0 0 22px var(--menu-glow);
-  backdrop-filter: blur(10px);
+
 }
 
 #start .menu-letters {
@@ -5609,9 +5599,9 @@ button.alt.danger {
 
 .nav-btn:hover {
   border-color: var(--menu-border-strong);
-  box-shadow: 0 0 22px var(--menu-glow);
   color: var(--menu-text);
   transform: translateY(-1px);
+  transform: scale(1.2);
 }
 
 .nav-btn--tutorial {

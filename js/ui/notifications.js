@@ -74,8 +74,24 @@ export function drawItemToastIcon(canvas, item) {
   ctx2d.fillText(symbol, cx, cy + 0.5);
 }
 
+export function resolveItemIconDef(itemKey) {
+  return Neo.itemRegistry?.get?.(itemKey) || Neo.ITEM_DEFS?.[itemKey] || null;
+}
+
+export function drawItemIconByKey(canvas, itemKey, overrides = null) {
+  const item = resolveItemIconDef(itemKey);
+  if (!item) return;
+  drawItemToastIcon(canvas, overrides ? { ...item, ...overrides, key: itemKey } : item);
+}
+
+export function drawItemIconCanvases(container, dataAttr = 'data-item-icon') {
+  container?.querySelectorAll?.(`[${dataAttr}]`).forEach(canvas => {
+    drawItemIconByKey(canvas, canvas.getAttribute(dataAttr));
+  });
+}
+
 export function pushItemNotification(itemKey, amount = 1, note = '') {
-  const item = Neo.itemRegistry.get(itemKey) || Neo.ITEM_DEFS[itemKey];
+  const item = resolveItemIconDef(itemKey);
   if (!item || amount <= 0) return;
   const stack = ensureItemNotifyStack();
   const toast = document.createElement('div');
@@ -121,7 +137,7 @@ export const ITEM_CINEMATIC_FLAVOR = {
 let cinematicTimer = null;
 
 export function showItemCinematic(itemKey, onDone) {
-  const item = Neo.itemRegistry.get(itemKey) || Neo.ITEM_DEFS[itemKey];
+  const item = resolveItemIconDef(itemKey);
   if (!item) { if (onDone) onDone(); return; }
   const el = document.getElementById('itemCinematic');
   const canvas = document.getElementById('itemCinematicCanvas');
@@ -501,6 +517,9 @@ Neo.ensureItemNotifyStack = ensureItemNotifyStack;
 Neo.getRarityNameColor = getRarityNameColor;
 Neo.isGodTier = isGodTier;
 Neo.drawItemToastIcon = drawItemToastIcon;
+Neo.resolveItemIconDef = resolveItemIconDef;
+Neo.drawItemIconByKey = drawItemIconByKey;
+Neo.drawItemIconCanvases = drawItemIconCanvases;
 Neo.pushItemNotification = pushItemNotification;
 Neo.showItemCinematic = showItemCinematic;
 Neo.drawMoveToastIcon = drawMoveToastIcon;

@@ -1621,10 +1621,12 @@ export function getShopWeaponOffers() {
 
   function buildInventoryTabSignature(tabKey, playerRef, extraBatteryPendingCount) {
     if (!playerRef) return `tab:${tabKey}:none`;
+    const equippedWeapon = playerRef.equippedWeapon || '';
     if (tabKey === 'stats') {
       return [
         'stats',
         Number(playerRef.level || 1),
+        equippedWeapon,
         Math.round(Number(playerRef.hp || 0)),
         Math.round(Number(playerRef.maxHp || 0)),
         Math.round(Number(playerRef.attackPower || 0)),
@@ -1640,7 +1642,7 @@ export function getShopWeaponOffers() {
     }
     const ownedMoves = getTruthyKeys(playerRef.ownedMoves);
     const equipped = (Neo.MOVE_SLOTS || []).map(slot => `${slot}:${playerRef.equippedMoves?.[slot] || ''}`).join(',');
-    return `equipped|owned:${ownedMoves}|eq:${equipped}|slot:${Neo.activeInventorySlot || ''}|bat:${Math.max(0, Math.floor(Number(extraBatteryPendingCount || 0)))}`;
+    return `equipped|w:${equippedWeapon}|owned:${ownedMoves}|eq:${equipped}|slot:${Neo.activeInventorySlot || ''}|bat:${Math.max(0, Math.floor(Number(extraBatteryPendingCount || 0)))}`;
   }
 
 export function renderShopPanel() {
@@ -1713,7 +1715,7 @@ export function renderShopPanel() {
         })
         .join('');
       Neo.ui.shopItems.innerHTML = itemCards || '<div class="shop-card shop-empty"><p>Every relic here is already yours. Clear the floor or check the move shelf.</p></div>';
-      drawShopIcons(Neo.ui.shopItems, 'data-item-icon', Neo.drawItemToastIcon, key => Neo.itemRegistry.get(key) || Neo.ITEM_DEFS[key]);
+      Neo.drawItemIconCanvases?.(Neo.ui.shopItems, 'data-item-icon');
       panelRenderCache.shop.tabSigs.items = activeShopSig;
     } else if (Neo.activeShopTab === 'weapons') {
       const weaponOffers = getShopWeaponOffers();
@@ -1936,12 +1938,13 @@ export function renderInventoryPanel() {
       const stats = Neo.getItemStats();
       const hpPct = Math.round(_invP.hp) / Math.round(_invP.maxHp);
       const hpColor = hpPct > 0.6 ? '#6dde88' : hpPct > 0.3 ? '#f5c842' : '#ff6b6b';
-      const critPct = Math.round(stats.critChance * 100);
+      const critPct = Math.round(Number(stats.displayedCritChance ?? stats.critChance ?? 0) * 100);
       const critColor = critPct >= 30 ? '#f5a623' : critPct >= 10 ? '#e8f4ff' : '#8ca8c0';
       const atkSpeed = Neo.getAttackSpeedValue();
       const atkSpeedColor = atkSpeed >= 2 ? '#6dde88' : atkSpeed >= 1.2 ? '#e8f4ff' : '#8ca8c0';
       const dmgReduction = Math.round(stats.damageReduction * 100);
       const bleedResistance = Math.round((stats.bleedResistance || 0) * 100);
+      const displayedBleedChance = Number(stats.displayedBleedChance ?? stats.bleedChance ?? 0);
       const barrier = Math.round(Number(_invP.overhealBarrier || 0));
       const activeBuildTags = (stats.buildTags || []).slice(0, 3).map(entry => `${entry.tag.replace(/_/g, ' ')} ${entry.count}`).join(' / ');
       Neo.ui.invStats.innerHTML = [
@@ -1952,7 +1955,7 @@ export function renderInventoryPanel() {
         `<div class="inv-stat-row"><canvas class="inv-stat-row__icon" data-inv-ui-icon="crit" width="36" height="36" aria-hidden="true"></canvas><div class="inv-stat-row__body"><span class="inv-stat-row__label">Crit Chance</span><span class="inv-stat-row__value" style="color:${critColor}">${critPct}%</span></div></div>`,
         dmgReduction > 0 ? `<div class="inv-stat-row"><canvas class="inv-stat-row__icon" data-inv-ui-icon="defense" width="36" height="36" aria-hidden="true"></canvas><div class="inv-stat-row__body"><span class="inv-stat-row__label">Damage Reduction</span><span class="inv-stat-row__value" style="color:#6dde88">${dmgReduction}%</span></div></div>` : '',
         bleedResistance > 0 ? `<div class="inv-stat-row"><canvas class="inv-stat-row__icon" data-inv-ui-icon="bleed" width="36" height="36" aria-hidden="true"></canvas><div class="inv-stat-row__body"><span class="inv-stat-row__label">Bleed Resistance</span><span class="inv-stat-row__value" style="color:#f0a080">${bleedResistance}%</span></div></div>` : '',
-        stats.bleedChance > 0 ? `<div class="inv-stat-row"><canvas class="inv-stat-row__icon" data-inv-ui-icon="bleed" width="36" height="36" aria-hidden="true"></canvas><div class="inv-stat-row__body"><span class="inv-stat-row__label">Bleed Chance</span><span class="inv-stat-row__value" style="color:#e05c5c">${Math.round(stats.bleedChance * 100)}%</span></div></div>` : '',
+        displayedBleedChance > 0 ? `<div class="inv-stat-row"><canvas class="inv-stat-row__icon" data-inv-ui-icon="bleed" width="36" height="36" aria-hidden="true"></canvas><div class="inv-stat-row__body"><span class="inv-stat-row__label">Bleed Chance</span><span class="inv-stat-row__value" style="color:#e05c5c">${Math.round(displayedBleedChance * 100)}%</span></div></div>` : '',
         activeBuildTags ? `<div class="inv-stat-row"><canvas class="inv-stat-row__icon" data-inv-ui-icon="item" width="36" height="36" aria-hidden="true"></canvas><div class="inv-stat-row__body"><span class="inv-stat-row__label">Build Tags</span><span class="inv-stat-row__value">${activeBuildTags}</span></div></div>` : '',
       ].join('');
       Neo.ui.invStats.querySelectorAll('[data-inv-ui-icon]').forEach(canvas => {
@@ -1975,9 +1978,7 @@ export function renderInventoryPanel() {
         })
         .join('') || '<div class="inv-card"><span class="inv-card__eyebrow">Empty</span><h4>No relics yet</h4><p>Your pockets are clear. Loot rooms or buy from the shop to start a build.</p></div>';
 
-      Neo.ui.invItemsList.querySelectorAll('[data-item-icon]').forEach(canvas => {
-        Neo.drawItemToastIcon(canvas, Neo.itemRegistry.get(canvas.dataset.itemIcon) || Neo.ITEM_DEFS[canvas.dataset.itemIcon]);
-      });
+      Neo.drawItemIconCanvases?.(Neo.ui.invItemsList, 'data-item-icon');
     } else if (Neo.activeInvTab === 'weapons') {
       const ownedWeapons = Neo.WEAPON_KEYS
         .filter(key => _invP.ownedWeapons?.[key])

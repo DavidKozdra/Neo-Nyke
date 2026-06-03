@@ -717,10 +717,7 @@ export function createUIController(view) {
             <div class="info-card__desc">${item.description || ''}</div>
           </div>`;
         }).join('')}</div>`;
-        view.rhInfoContent.querySelectorAll('[data-info-item]').forEach(el => {
-          const item = Neo.ITEM_DEFS[el.dataset.infoItem];
-          if (item) Neo.drawItemToastIcon(el, item);
-        });
+        Neo.drawItemIconCanvases?.(view.rhInfoContent, 'data-info-item');
 
       } else if (tab === 'weapons') {
         const rarityOrder = ['knight', 'wizard', 'god'];
@@ -1237,16 +1234,8 @@ export function createUIController(view) {
             const key = String(el.dataset.sboxEnemyIcon || 'hunter');
             Neo.drawSpriteToCanvas(el, getSandboxEnemySpriteKey(key), 22);
           });
-          view.sandboxItemList?.querySelectorAll('[data-sbox-item-icon]').forEach(el => {
-            const itemKey = String(el.dataset.sboxItemIcon || '');
-            const item = Neo.itemRegistry.get(itemKey) || Neo.ITEM_DEFS[itemKey];
-            if (item) Neo.drawItemToastIcon(el, item);
-          });
-          view.sandboxStartItemList?.querySelectorAll('[data-sbox-start-item-icon]').forEach(el => {
-            const itemKey = String(el.dataset.sboxStartItemIcon || '');
-            const item = Neo.itemRegistry.get(itemKey) || Neo.ITEM_DEFS[itemKey];
-            if (item) Neo.drawItemToastIcon(el, item);
-          });
+          Neo.drawItemIconCanvases?.(view.sandboxItemList, 'data-sbox-item-icon');
+          Neo.drawItemIconCanvases?.(view.sandboxStartItemList, 'data-sbox-start-item-icon');
         }
 
         function renderSandboxTokenLists() {
@@ -1904,10 +1893,7 @@ export function createUIController(view) {
             const move = Neo.MOVE_DEFS[el.dataset.heroMove];
             if (move) Neo.drawMoveToastIcon(el, move);
           });
-          detail.querySelectorAll('[data-hero-item]').forEach(el => {
-            const item = Neo.ITEM_DEFS[el.dataset.heroItem];
-            if (item) Neo.drawItemToastIcon(el, item);
-          });
+          Neo.drawItemIconCanvases?.(detail, 'data-hero-item');
           detail.querySelectorAll('[data-inv-ui-icon]').forEach(el => {
             Neo.drawInventoryUiIcon?.(el, el.dataset.invUiIcon);
           });

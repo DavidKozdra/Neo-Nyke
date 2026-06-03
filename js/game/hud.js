@@ -1108,7 +1108,7 @@
       const letter = EQUIPMENT_SLOT_KEYS[idx];
       const itemKey = slots[idx];
       const def = itemKey ? ACTIVATABLE_ITEMS[itemKey] : null;
-      const itemDef = itemKey ? (Neo.itemRegistry.get(itemKey) || Neo.ITEM_DEFS[itemKey]) : null;
+      const itemDef = itemKey ? Neo.resolveItemIconDef?.(itemKey) : null;
       const iconCanvas = node.querySelector('.equip-slot__icon');
       const labelSpan = node.querySelector('.equip-slot__label');
       node.classList.remove('is-ready', 'is-blocked', 'is-filled', 'is-empty');
@@ -1117,7 +1117,7 @@
         const state = def.getState?.() || 'ready';
         if (state === 'ready') node.classList.add('is-ready');
         else if (state === 'blocked' || state === 'charging') node.classList.add('is-blocked');
-        if (iconCanvas) Neo.drawItemToastIcon(iconCanvas, itemDef);
+        if (iconCanvas) Neo.drawItemIconByKey?.(iconCanvas, itemKey);
         const statusText = def.getStatusText?.() || '';
         if (labelSpan) labelSpan.textContent = statusText;
         const itemName = itemDef.name || itemKey;
