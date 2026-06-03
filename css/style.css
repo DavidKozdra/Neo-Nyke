@@ -327,18 +327,14 @@ button, input, select, textarea {
 }
 
 .menu-footer {
-  position: fixed;
-  bottom: 0;
-  left: 50%;
-  right: auto;
+  margin-top: auto;
   z-index: 3;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 6px;
-  width: min(720px, calc(100vw - 40px));
+  width: 100%;
   padding: 12px 20px 16px;
-  transform: translateX(-50%);
   box-sizing: border-box;
   background: linear-gradient(to top, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0) 100%);
   pointer-events: none;
@@ -346,6 +342,21 @@ button, input, select, textarea {
 .menu-footer .meta-row,
 .menu-footer .run-summary-line {
   pointer-events: auto;
+}
+
+.menu-footer__summary {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  pointer-events: auto;
+}
+
+.menu-footer__version {
+  font-size: 10px;
+  color: var(--menu-text-soft);
+  letter-spacing: .08em;
+  text-transform: uppercase;
 }
 
 .meta-row {
