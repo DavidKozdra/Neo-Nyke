@@ -50,7 +50,18 @@ Controls are fully remappable in Settings.
 
 ## Running the Game
 
-Open `index.html` in a browser. No build step required.
+Do not open the game with the `file://` protocol. ES modules and the Koz engine bridge require `http://` or `https://`.
+
+Local run (recommended):
+
+1. Run `npm install`.
+2. Run `npm start`.
+3. Open `http://localhost:5173`.
+
+Alternative if Python is installed as `python` instead of `python3`:
+
+1. Run `npm run start:py`.
+2. Open `http://localhost:5173`.
 
 ## Development
 

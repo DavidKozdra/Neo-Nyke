@@ -569,7 +569,7 @@
   const birthdayInput = document.getElementById('birthdayInput');
   if (birthdayInput) {
     const syncBirthday = () => {
-      if (window.Neo?.metaProgress !== undefined)
+      if (window.Neo?.metaProgress)
         birthdayInput.value = window.Neo.metaProgress.birthday || '';
     };
     syncBirthday();
@@ -696,7 +696,7 @@
     }
 
     window.addEventListener('neo:meta-loaded', checkAndShow);
-    if (window.Neo?.metaProgress !== undefined) checkAndShow();
+    if (window.Neo?.metaProgress) checkAndShow();
     window._checkSpecialDaysNow = () => checkAndShow(true);
   })();
 
