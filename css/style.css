@@ -4184,6 +4184,32 @@ p.sub {
   line-height: 1.25;
 }
 
+#charSelect:not(.charselect-cards-ready) #choose .char-card {
+  opacity: 0;
+  transform: translateY(14px) scale(.98);
+  pointer-events: none;
+}
+
+#charSelect.charselect-cards-ready #choose .char-card {
+  animation: char-select-card-enter .36s ease;
+}
+
+#charSelect.charselect-cards-ready #choose .char-card:nth-child(2) { animation-delay: .06s; }
+#charSelect.charselect-cards-ready #choose .char-card:nth-child(3) { animation-delay: .12s; }
+#charSelect.charselect-cards-ready #choose .char-card:nth-child(4) { animation-delay: .18s; }
+#charSelect.charselect-cards-ready #choose .char-card:nth-child(5) { animation-delay: .24s; }
+
+@keyframes char-select-card-enter {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(.98);
+  }
+  to {
+    opacity: .82;
+    transform: translateY(0) scale(1);
+  }
+}
+
 
 
 .difficulty-select {
@@ -5576,8 +5602,6 @@ button.alt.danger {
   width: 260px;
   padding: 16px 28px;
   background: var(--menu-surface);
-  border: 2px solid var(--menu-border);
-  border-top-color: var(--menu-border-strong);
   border-radius: 8px;
   color: var(--menu-text);
   font-size: 24px;
@@ -5585,7 +5609,7 @@ button.alt.danger {
   letter-spacing: .14em;
   cursor: pointer;
   transition: .15s;
-  box-shadow: 0 0 12px rgba(0,0,0,.24), inset 0 0 14px rgba(255,255,255,.03);
+  box-shadow: 0 0 14px rgba(0,0,0,.24), inset 0 0 20px rgba(255,255,255,.03);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -5618,7 +5642,6 @@ button.alt.danger {
   padding: 11px 24px;
   width: 200px;
   color: var(--menu-text-muted);
-  border-color: var(--menu-border);
 }
 
 .nav-btn--minor:hover {
@@ -8759,7 +8782,6 @@ button.alt.danger {
   opacity: 0;
 }
 .credits-page.is-open .credits-page__back {
-  /* entrance once, then a looping glow flash that starts after it settles */
   animation:
     creditsBackIn .5s cubic-bezier(.22,1,.36,1) .05s forwards,
     creditsBackFlash 1.8s ease-in-out 1s infinite;

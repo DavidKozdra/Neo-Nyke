@@ -30,6 +30,7 @@ export function createUIController(view) {
     let runHistoryModeFilter = 'all';
     let selectedRunHistoryId = '';
     let activeRunHistoryTab = 'stats';
+    let charSelectRevealTimer = null;
     let tutorialBannerCache = { open: null, text: null, hint: null, prevDisabled: null, nextDisabled: null };
     let objectiveEntriesCache = [];
     let objectiveTrackerVisible = false;
@@ -559,6 +560,24 @@ export function createUIController(view) {
       }
       view.start.classList.toggle('hidden',     show !== 'menu');
       view.charSelect?.classList.toggle('hidden', show !== 'charselect');
+      if (show === 'charselect' && view.charSelect) {
+        if (charSelectRevealTimer) {
+          clearTimeout(charSelectRevealTimer);
+          charSelectRevealTimer = null;
+        }
+        view.charSelect.classList.remove('charselect-cards-ready');
+        charSelectRevealTimer = setTimeout(() => {
+          if (!view.charSelect || view.charSelect.classList.contains('hidden')) return;
+          view.charSelect.classList.add('charselect-cards-ready');
+          charSelectRevealTimer = null;
+        }, 3000);
+      } else if (view.charSelect) {
+        if (charSelectRevealTimer) {
+          clearTimeout(charSelectRevealTimer);
+          charSelectRevealTimer = null;
+        }
+        view.charSelect.classList.remove('charselect-cards-ready');
+      }
       view.dead.classList.toggle('hidden',      show !== 'dead');
       view.win.classList.toggle('hidden',       show !== 'win');
       const inventoryPause = !!Neo.inventoryPauseActive && !!view.invPanel && !view.invPanel.classList.contains('hidden');
