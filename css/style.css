@@ -337,18 +337,13 @@ button, input, select, textarea {
 }
 
 .menu-footer {
-  position: fixed;
-  bottom: 0;
-  left: 50%;
-  right: auto;
   z-index: 3;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 6px;
-  width: min(720px, calc(100vw - 40px));
+  width: 100%;
   padding: 12px 20px 16px;
-  transform: translateX(-50%);
   box-sizing: border-box;
   background: linear-gradient(to top, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0) 100%);
   pointer-events: none;
@@ -3380,6 +3375,9 @@ button, input, select, textarea {
 }
 
 #start.overlay {
+  --menu-stage-width: 720px;
+  --menu-panel-width: 504px;
+  --menu-footer-reserve: 124px;
   justify-content: flex-start;
   overflow: hidden;
 }
@@ -3387,16 +3385,24 @@ button, input, select, textarea {
 #start .menu-stage {
   position: relative;
   z-index: 2;
-  display: grid;
-  grid-template-rows: auto auto;
-  justify-items: center;
-  align-content: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   gap: clamp(18px, 3vh, 34px);
-  width: min(100%, 720px);
-  min-height: 100%;
+  width: min(100%, var(--menu-stage-width));
+  height: 100%;
   margin: 0 auto;
-  padding: clamp(28px, 7vh, 84px) 20px 148px;
+  padding: clamp(28px, 7vh, 84px) 20px var(--menu-footer-reserve);
   box-sizing: border-box;
+}
+
+#start .menu-footer {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  width: 100%;
 }
 
 #start .menu-cinema {
@@ -3427,9 +3433,10 @@ button, input, select, textarea {
   top: auto;
   left: auto;
   transform: none;
-  width: min(100%, 420px);
+  width: min(100%, var(--menu-panel-width));
   min-width: min(320px, 100%);
   max-width: 100%;
+  box-sizing: border-box;
   padding: 34px 40px 38px;
   border-color: var(--menu-border);
   border-top-color: var(--menu-border-strong);
