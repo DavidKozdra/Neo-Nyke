@@ -42,6 +42,7 @@ export function migratePlayerData(source) {
     playerData.dashX = Number(playerData.dashX || 0);
     playerData.dashY = Number(playerData.dashY || 0);
     playerData.cowardsWayTime = Number(playerData.cowardsWayTime || 0);
+    playerData.warpHideTime = Number(playerData.warpHideTime || 0);
     playerData.mooggyZoomiesTime = Number(playerData.mooggyZoomiesTime || 0);
     playerData.lavaWalkTime = Number(playerData.lavaWalkTime || 0);
     playerData.lavaTrailTick = Number(playerData.lavaTrailTick || 0);
@@ -177,6 +178,18 @@ export function isMoveAllowedForCharacter(moveKey, characterKey = Neo.player?.ch
     const def = Neo.MOVE_DEFS[moveKey];
     if (!def) return false;
     return !def.exclusiveCharacter || def.exclusiveCharacter === characterKey;
+  }
+
+  // True while the player is concealed from enemy AI: invisible (El Barto's Cape),
+  // flying untouchable, mid-warp phase-out, or holding Coward's Way. Enemies should
+  // not chase or attack a hidden player.
+export function isPlayerHidden(playerData = Neo.player) {
+    if (!playerData) return false;
+    if (Number(playerData.equipmentEffects?.el_bartos_cape?.time || 0) > 0) return true;
+    if (Number(playerData.princessFlightTime || 0) > 0) return true;
+    if (Number(playerData.cowardsWayTime || 0) > 0) return true;
+    if (Number(playerData.warpHideTime || 0) > 0) return true;
+    return false;
   }
 
 export function getItemCount(key) {
@@ -673,6 +686,7 @@ export function refreshFloorChargeStates() {
   Neo.getDefaultWeaponForCharacter = getDefaultWeaponForCharacter;
   Neo.getDefaultMovesForCharacter = getDefaultMovesForCharacter;
   Neo.isMoveAllowedForCharacter = isMoveAllowedForCharacter;
+  Neo.isPlayerHidden = isPlayerHidden;
   Neo.getItemCount = getItemCount;
   Neo.getItemTagCounts = getItemTagCounts;
   Neo.getActiveBuildTags = getActiveBuildTags;

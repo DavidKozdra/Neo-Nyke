@@ -1,4 +1,23 @@
 // hud.js — standalone IIFE. HUD updates, death/win, save scheduling.
+
+  // Format an "hp/maxHp" readout, guarding against non-finite values so the HUD
+  // bars never render "Inf"/"NaN" if hp or maxHp goes bad upstream. Also repairs
+  // the stored values in place, so the bad number doesn't keep feeding combat math.
+  function formatHpText(hp, maxHp, entity = null) {
+    let safeMax = Number(maxHp);
+    if (!Number.isFinite(safeMax) || safeMax <= 0) safeMax = 120;
+    safeMax = Math.round(safeMax);
+    let safeHp = Number(hp);
+    if (!Number.isFinite(safeHp)) safeHp = safeMax;
+    safeHp = Math.max(0, Math.min(safeMax, Math.ceil(safeHp)));
+    if (entity) {
+      if (!Number.isFinite(Number(entity.maxHp)) || Number(entity.maxHp) <= 0) entity.maxHp = safeMax;
+      if (!Number.isFinite(Number(entity.hp))) entity.hp = safeHp;
+    }
+    return `${safeHp}/${safeMax}`;
+  }
+  Neo.formatHpText = formatHpText;
+
   function getObjectiveEntries(lineObjective = '') {
     if (Neo.isFirstRunTutorialActive()) return Neo.getTutorialObjectiveEntries();
     if (!Neo.currentRoom) return [];
@@ -199,11 +218,14 @@
       if (!entity) return;
       const character = Neo.CHARACTER_DEFS[entity.character || slot.getCharacter()] || Neo.CHARACTER_DEFS.thorn_knight;
       const dead = slot.getDead();
+      // formatHpText also repairs non-finite hp/maxHp on the entity in place, so
+      // call it before deriving the bar percentage below.
+      const hpText = dead ? 'DOWN' : formatHpText(entity.hp, entity.maxHp, entity);
       const hpPercent = dead ? 0 : Math.max(0, Math.min(100, (entity.hp / Math.max(1, entity.maxHp)) * 100));
       const xpPercent = Math.max(0, Math.min(100, (Number(entity.xp || 0) / Math.max(1, Number(entity.xpToNext || 1))) * 100));
+      // Meta row shows the PvP kill score only; coins live in the top-left coin
+      // display, so this row stays hidden in normal play.
       const scoreText = getPlayerSlotScoreText(slot);
-      const hpText = dead ? 'DOWN' : `${Math.ceil(entity.hp)}/${entity.maxHp}`;
-      const metaText = scoreText || `${entity.coins || 0} coins`;
       const showPlayerLabel = slots.length > 1;
       let card = Neo.ui.playerStats.querySelector(`[data-player-slot="${slot.id}"]`);
       if (!card) {
@@ -226,8 +248,8 @@
             <div class="bar player-xp-bar"><i class="player-stat-fill player-stat-fill--xp" data-player-field="xpFill"></i></div>
             <span data-player-field="xpText"></span>
           </div>
-          <div class="player-stat-row">
-            <span>INF</span>
+          <div class="player-stat-row" data-player-field="metaRow">
+            <span data-player-field="metaLabel">SCORE</span>
             <span></span>
             <span data-player-field="meta"></span>
           </div>`;
@@ -241,7 +263,11 @@
       card.querySelector('[data-player-field="hpText"]').textContent = hpText;
       card.querySelector('[data-player-field="level"]').textContent = `Lv.${entity.level || 1}`;
       card.querySelector('[data-player-field="xpText"]').textContent = `${entity.xp || 0}/${entity.xpToNext || 0}`;
-      card.querySelector('[data-player-field="meta"]').textContent = metaText;
+      const metaRow = card.querySelector('[data-player-field="metaRow"]');
+      if (metaRow) {
+        metaRow.style.display = scoreText ? '' : 'none';
+        if (scoreText) card.querySelector('[data-player-field="meta"]').textContent = scoreText;
+      }
       const hpFill = card.querySelector('[data-player-field="hpFill"]');
       const xpFill = card.querySelector('[data-player-field="xpFill"]');
       if (hpFill) {
@@ -252,12 +278,14 @@
     });
 
     if (Neo.ui.playerHpFill && Neo.player) {
+      // Repair any non-finite hp/maxHp first, then derive the bar fill from it.
+      const hpText = formatHpText(Neo.player.hp, Neo.player.maxHp, Neo.player);
       const p1Percent = Math.max(0, Math.min(100, (Neo.player.hp / Math.max(1, Neo.player.maxHp)) * 100));
       Neo.ui.playerHpFill.style.width = `${p1Percent}%`;
       Neo.ui.playerHpFill.style.background = getHpFillColor(p1Percent, Neo.PLAYER_SLOT_CONFIG[0].color);
       Neo.ui.playerHpTxt.textContent = Neo.gameMode === 'pvp' && Neo.pvpState
         ? `${Math.ceil(Neo.player.hp)} | ${getPlayerSlotScoreText(Neo.PLAYER_SLOT_CONFIG[0])}`
-        : `${Math.ceil(Neo.player.hp)}/${Neo.player.maxHp}`;
+        : hpText;
     }
     if (Neo.ui.playerXpFill && Neo.player) {
       const xpPercent = Math.max(0, Math.min(100, (Neo.player.xp / Math.max(1, Neo.player.xpToNext)) * 100));
@@ -509,9 +537,9 @@
     const dir = speed > 4 ? Math.atan2(pvy, pvx) : aimAngle + Math.PI;
     Neo.playerDeathAnim = {
       timer: 0,
-      duration: 2.2,
-      // Extra hold (1.6s) after the fall finishes before the death screen shows.
-      holdDelay: 1.6,
+      duration: 1.1,
+      // Extra hold (0.8s) after the fall finishes before the death screen shows.
+      holdDelay: 0.8,
       x: Neo.player?.x ?? 0,
       y: Neo.player?.y ?? 0,
       r: Neo.player?.r ?? 14,

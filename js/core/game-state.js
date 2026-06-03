@@ -465,6 +465,7 @@ export function resumeGame() {
       dashX: 0,
       dashY: 0,
       cowardsWayTime: 0,
+      warpHideTime: 0,
       mooggyZoomiesTime: 0,
       coins: 0,
       level: 1,

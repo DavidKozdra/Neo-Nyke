@@ -1000,7 +1000,6 @@ export const ui = {
     xp: document.getElementById('xp'),
     fl: document.getElementById('fl'),
     gameTime: document.getElementById('gameTime'),
-    coins: document.getElementById('coins'),
     charName: document.getElementById('charName'),
     objective: document.getElementById('objective'),
     objectiveTracker: document.getElementById('objectiveTracker'),

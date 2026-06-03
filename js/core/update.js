@@ -271,6 +271,7 @@ export function loop(timestamp) {
     }
 
     Neo.player.inv = Math.max(0, Neo.player.inv - dt);
+    Neo.player.warpHideTime = Math.max(0, Number(Neo.player.warpHideTime || 0) - dt);
     Neo.player.stun = Math.max(0, Number(Neo.player.stun || 0) - dt);
     if (Neo.player.swing > 0) Neo.player.swing = Math.max(0, Neo.player.swing - dt);
 
@@ -373,6 +374,7 @@ export function loop(timestamp) {
 
     sectionPerfStart = Neo.perfStart();
     let totalBleed = 0;
+    const playerHidden = Neo.isPlayerHidden?.(Neo.player) || false;
     for (let index = Neo.enemies.length - 1; index >= 0; index -= 1) {
       const enemy = Neo.enemies[index];
       if (!enemy) continue;
@@ -390,12 +392,21 @@ export function loop(timestamp) {
 
       totalBleed += Neo.updateEnemyStatuses(enemy, dt);
       if (enemy.dead) continue;
-      const eliteTraitControlled = Neo.updateEliteEnemyTraits(enemy, dt);
-      if (enemy.dead) continue;
       enemy.attackAnimT = Math.max(0, Number(enemy.attackAnimT || 0) - dt);
 
-      if (!eliteTraitControlled) {
-        updateEnemyByType(enemy, dt);
+      if (playerHidden) {
+        // Player is invisible/untouchable (cape, flying, coward's way, warp): enemies
+        // lose their target. Skip all AI/attack logic, drop any in-progress beam, and
+        // coast to a stop so they hold position instead of chasing or shooting.
+        if (enemy.beamTime > 0) { enemy.beamTime = 0; if (enemy.state === 'elite_laser') enemy.state = 'idle'; }
+        enemy.vx *= Math.pow(0.0001, dt);
+        enemy.vy *= Math.pow(0.0001, dt);
+      } else {
+        const eliteTraitControlled = Neo.updateEliteEnemyTraits(enemy, dt);
+        if (enemy.dead) continue;
+        if (!eliteTraitControlled) {
+          updateEnemyByType(enemy, dt);
+        }
       }
 
       if (enemy.dead) continue;

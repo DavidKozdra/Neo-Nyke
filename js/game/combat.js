@@ -1308,6 +1308,8 @@
     if (!safePoint) return;
     teleportPlayerTo(safePoint.x, safePoint.y, '#b99cff');
     Neo.player.inv = Math.max(Neo.player.inv, 0.6);
+    // Enemies lose track of the player during the warp phase-out window.
+    Neo.player.warpHideTime = Math.max(Number(Neo.player.warpHideTime || 0), 0.6);
   }
 
   function applyEnemyImpactStun(enemy, dealt, appliedKnockback) {

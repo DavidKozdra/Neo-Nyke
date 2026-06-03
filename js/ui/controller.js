@@ -1939,7 +1939,6 @@ export function createUIController(view) {
           if (purple) purple.textContent = String(payload.itemRarityCounts.purple || 0);
           if (red) red.textContent = String(payload.itemRarityCounts.red || 0);
         }
-        view.coins.textContent = payload.coins;
         view.charName.textContent = payload.character;
         view.hpFill.style.width = `${Math.max(0, payload.hp / payload.maxHp) * 100}%`;
         view.hpTxt.textContent = Math.ceil(payload.hp);
