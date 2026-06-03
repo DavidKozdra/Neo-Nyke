@@ -7517,8 +7517,8 @@ button.alt.danger {
 }
 
 .sandbox-card h4 {
-  margin: 0 0 8px;
-  font-size: 11px;
+  margin: 0 0 12px;
+  font-size: 13px;
   letter-spacing: .12em;
   color: #cfe7ff;
   text-transform: uppercase;
@@ -7550,19 +7550,19 @@ button.alt.danger {
 
 .sandbox-rows {
   display: grid;
-  gap: 8px;
+  gap: 14px;
 }
 
 .sandbox-row {
   display: grid;
-  grid-template-columns: 106px 1fr 58px;
-  gap: 8px;
+  grid-template-columns: 132px 1fr 74px;
+  gap: 12px;
   align-items: center;
 }
 
 .sandbox-row span {
-  font-size: 10px;
-  color: #96adc5;
+  font-size: 13px;
+  color: #c2d6ea;
   letter-spacing: .06em;
 }
 
@@ -7669,29 +7669,40 @@ button.alt.danger {
 .sandbox-slider {
   -webkit-appearance: none;
   appearance: none;
-  height: 4px;
-  border-radius: 2px;
+  height: 7px;
+  border-radius: 4px;
   background: rgba(130, 196, 255, .22);
   outline: none;
 }
 
 .sandbox-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 12px;
-  height: 12px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
   background: #8dccff;
   box-shadow: 0 0 8px rgba(141, 204, 255, .45);
+  cursor: pointer;
+}
+
+.sandbox-slider::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 50%;
+  background: #8dccff;
+  box-shadow: 0 0 8px rgba(141, 204, 255, .45);
+  cursor: pointer;
 }
 
 .sandbox-num {
   width: 100%;
-  font-size: 11px;
+  font-size: 14px;
   color: #d8eaff;
   background: rgba(16, 24, 35, .95);
   border: 1px solid rgba(122, 166, 209, .34);
   border-radius: 6px;
-  padding: 3px 5px;
+  padding: 6px 7px;
   text-align: right;
 }
 
@@ -7862,7 +7873,7 @@ button.alt.danger {
     grid-template-columns: 1fr;
   }
   .sandbox-row {
-    grid-template-columns: 98px 1fr 56px;
+    grid-template-columns: 118px 1fr 70px;
   }
 }
 

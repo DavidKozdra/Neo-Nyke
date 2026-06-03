@@ -140,7 +140,7 @@ export function collectRoomLightSources(room) {
       const kind = projectile.kind || '';
       let p = null;
       if (kind === 'fireball') p = proj.fireball;
-      else if (kind === 'disk' || kind === 'cult_missile') p = proj.disk;
+      else if (kind === 'disk' || kind === 'cult_missile' || kind === 'cold_death') p = proj.disk;
       else if (kind === 'sniper_round' || kind === 'machine_round' || kind === 'magenta_degale') p = proj.bullet;
       if (p) pushLightSource(lights, projectile.x, projectile.y, projectile.r * p.innerScale, p.outer, p.strength, p.tint);
     });

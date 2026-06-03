@@ -297,10 +297,25 @@ export function loop(timestamp) {
       }
     }
     if (!Neo.p1DeadInCoop) {
-      if (itemStats.hasRobotArm && Neo.player?.robotArmReady) { Neo.mouse.down = true; Neo.mouse.downQueued = true; }
       const meleeHeld = Neo.isMouseActionHeld('slash');
       const laserHeld = Neo.isMouseActionHeld('laser');
-      if (!overlayOpen && meleeHeld) Neo.tryMelee();
+      const robotArmTarget = itemStats.hasRobotArm && Neo.player?.robotArmReady
+        ? _getNearestEnemyForAim()
+        : null;
+      if (!overlayOpen && !playerStunned && (meleeHeld || robotArmTarget)) {
+        const restoreAim = !meleeHeld && robotArmTarget
+          ? { worldX: Neo.mouse.worldX, worldY: Neo.mouse.worldY }
+          : null;
+        if (restoreAim) {
+          Neo.mouse.worldX = robotArmTarget.x;
+          Neo.mouse.worldY = robotArmTarget.y;
+        }
+        Neo.tryMelee();
+        if (restoreAim) {
+          Neo.mouse.worldX = restoreAim.worldX;
+          Neo.mouse.worldY = restoreAim.worldY;
+        }
+      }
       if (!overlayOpen && laserHeld) Neo.tryLaser();
     }
 

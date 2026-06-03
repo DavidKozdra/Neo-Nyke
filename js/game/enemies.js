@@ -827,6 +827,8 @@
       base.bleedImmune = true;
       base.hammerCd = 1.2;
       base.biteCd = 0.85;
+      base.slashCd = 1.6;
+      base.deathBallCd = 4.5;
     } else if (type === 'handsome_devil') {
       base.r = 34;
       base.hp = 1700;
@@ -2475,13 +2477,144 @@
     }
   }
 
+  // Directional hammer shockwave: a wave of damage that travels forward in the
+  // facing direction instead of a full circle. Implemented as a series of
+  // advancing damage arcs spawned over a few frames via a lightweight pulse.
   function spawnAntonyHammerSwing(enemy) {
-    const radius = 196;
-    const damage = Math.round(enemy.dmg * 1.18);
-    Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.58, ring: radius, c: '#ffcf8a' });
-    Neo.blastRadius(enemy.x, enemy.y, radius, damage, '#ffcf8a', enemy);
+    const angle = Number.isFinite(enemy.antonyHammerAngle)
+      ? enemy.antonyHammerAngle
+      : Math.atan2(Neo.player.y - enemy.y, Neo.player.x - enemy.x);
+    enemy.antonyShockwave = {
+      angle,
+      damage: Math.round(enemy.dmg * 1.18),
+      // Wave geometry: travels `range` px outward, only hits within `halfArc`
+      // of the facing direction, in a band `bandWidth` thick.
+      range: 360,
+      speed: 720,
+      travelled: enemy.r + 12,
+      halfArc: 0.62,
+      bandWidth: 64,
+      hit: false,
+    };
+    Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.34, ring: 70, c: '#ffcf8a' });
     Neo.shake = Math.max(Neo.shake, 13);
     Neo.shakeT = Math.max(Neo.shakeT, 0.22);
+  }
+
+  // Advance the active directional shockwave: move the wave front outward, draw
+  // a crescent of motes along it, and damage the player when the front reaches
+  // them inside the arc. Returns true while the wave is still alive.
+  function updateAntonyShockwave(enemy, dt) {
+    const wave = enemy.antonyShockwave;
+    if (!wave) return false;
+    const prev = wave.travelled;
+    wave.travelled += wave.speed * dt;
+    const front = wave.travelled;
+
+    // Telegraph / visual: scatter motes along the advancing crescent.
+    const moteCount = 7;
+    for (let i = 0; i < moteCount; i += 1) {
+      const a = wave.angle + (i / (moteCount - 1) - 0.5) * 2 * wave.halfArc;
+      Neo.spawnParticle({
+        x: enemy.x + Math.cos(a) * front,
+        y: enemy.y + Math.sin(a) * front,
+        life: 0.22,
+        c: '#ffcf8a',
+        size: 3.2,
+      });
+    }
+
+    if (!wave.hit && Neo.player) {
+      const pdx = Neo.player.x - enemy.x;
+      const pdy = Neo.player.y - enemy.y;
+      const pDist = Math.hypot(pdx, pdy) || 1;
+      const pAngle = Math.atan2(pdy, pdx);
+      let delta = Math.abs(pAngle - wave.angle);
+      if (delta > Math.PI) delta = Math.PI * 2 - delta;
+      const inArc = delta <= wave.halfArc;
+      // The band swept this frame, padded by the player radius.
+      const reached = pDist >= prev - wave.bandWidth / 2 - Neo.player.r
+        && pDist <= front + wave.bandWidth / 2 + Neo.player.r;
+      if (inArc && reached) {
+        wave.hit = true;
+        Neo.damagePlayer(wave.damage, pAngle, 320, enemy.type);
+      }
+    }
+
+    if (wave.travelled >= wave.range) {
+      enemy.antonyShockwave = null;
+      return false;
+    }
+    return true;
+  }
+
+  // Close-range sweeping slash: a wide melee arc in front of the boss, distinct
+  // from the short bite. Hits anything inside a forward cone within reach.
+  function spawnAntonySlash(enemy) {
+    const angle = Math.atan2(Neo.player.y - enemy.y, Neo.player.x - enemy.x);
+    const reach = enemy.r + Neo.player.r + 78;
+    const halfArc = 0.95;
+    const damage = Math.round(enemy.dmg * 1.05);
+    enemy.attackAnimT = 0.3;
+    enemy.swingTime = 0.32;
+
+    // Slash arc visual.
+    const arcMotes = 9;
+    for (let i = 0; i < arcMotes; i += 1) {
+      const t = i / (arcMotes - 1) - 0.5;
+      const a = angle + t * 2 * halfArc;
+      const reachAt = reach * (0.7 + 0.3 * (1 - Math.abs(t) * 1.4));
+      Neo.spawnParticle({
+        x: enemy.x + Math.cos(a) * reachAt,
+        y: enemy.y + Math.sin(a) * reachAt,
+        life: 0.26,
+        c: '#fff0c4',
+        size: 3.6,
+      });
+    }
+
+    if (Neo.player) {
+      const pdx = Neo.player.x - enemy.x;
+      const pdy = Neo.player.y - enemy.y;
+      const pDist = Math.hypot(pdx, pdy) || 1;
+      let delta = Math.abs(Math.atan2(pdy, pdx) - angle);
+      if (delta > Math.PI) delta = Math.PI * 2 - delta;
+      if (pDist <= reach && delta <= halfArc) {
+        Neo.damagePlayer(damage, Math.atan2(pdy, pdx), 300, enemy.type);
+      }
+    }
+    Neo.shake = Math.max(Neo.shake, 7);
+    Neo.shakeT = Math.max(Neo.shakeT, 0.12);
+  }
+
+  // Charged "cold death ball": a slow, heavy frost orb fired after a windup.
+  function spawnAntonyDeathBall(enemy) {
+    const angle = Number.isFinite(enemy.antonyDeathBallAngle)
+      ? enemy.antonyDeathBallAngle
+      : Math.atan2(Neo.player.y - enemy.y, Neo.player.x - enemy.x);
+    Neo.spawnProjectile({
+      x: enemy.x + Math.cos(angle) * (enemy.r + 14),
+      y: enemy.y + Math.sin(angle) * (enemy.r + 14),
+      vx: Math.cos(angle) * 190,
+      vy: Math.sin(angle) * 190,
+      r: 22,
+      life: 3.4,
+      enemy: true,
+      kind: 'cold_death',
+      source: 'antony_death_ball',
+      damage: Math.round(enemy.dmg * 1.3),
+      knockback: 280,
+      color: '#9fe8ff',
+      // No dedicated "cold" status exists; the game's icy debuff is `slow`.
+      statusEffects: [{ key: 'slow', chance: 1, stacks: 2, duration: 4 }],
+      homing: true,
+      homingTurnRate: 0.9,
+      homingSpeed: 215,
+      homingAccel: 1.4,
+    });
+    Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.45, ring: 46, c: '#9fe8ff' });
+    Neo.shake = Math.max(Neo.shake, 9);
+    Neo.shakeT = Math.max(Neo.shakeT, 0.16);
   }
 
   function updateAntonyBlemmyeBoss(enemy, dt) {
@@ -2492,15 +2625,34 @@
 
     enemy.hammerCd = Math.max(0, Number(enemy.hammerCd || 0) - dt);
     enemy.biteCd = Math.max(0, Number(enemy.biteCd || 0) - dt);
+    enemy.slashCd = Math.max(0, Number(enemy.slashCd || 0) - dt);
+    enemy.deathBallCd = Math.max(0, Number(enemy.deathBallCd || 0) - dt);
+
+    // Drive an in-flight directional hammer shockwave independent of windup.
+    if (enemy.antonyShockwave) updateAntonyShockwave(enemy, dt);
 
     if (enemy.windup > 0) {
       enemy.windup -= dt;
       enemy.vx *= 0.7;
       enemy.vy *= 0.7;
-      Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.16, c: '#ffcf8a' });
-      if (enemy.windup <= 0 && enemy.state === 'antonyHammer') {
-        spawnAntonyHammerSwing(enemy);
-        enemy.attackCd = 1.35 * tuning.rangedCadence;
+      // Telegraph charging attacks toward the locked facing direction.
+      if (enemy.state === 'antonyHammer' && Number.isFinite(enemy.antonyHammerAngle)) {
+        const a = enemy.antonyHammerAngle;
+        Neo.spawnParticle({ x: enemy.x + Math.cos(a) * (enemy.r + 30), y: enemy.y + Math.sin(a) * (enemy.r + 30), life: 0.18, c: '#ffcf8a', size: 3 });
+      } else if (enemy.state === 'antonyDeathBall') {
+        Neo.spawnParticle({ x: enemy.x + Neo.rand(-14, 14), y: enemy.y + Neo.rand(-14, 14), life: 0.2, c: '#9fe8ff', size: 3 });
+      } else {
+        Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.16, c: '#ffcf8a' });
+      }
+      if (enemy.windup <= 0) {
+        if (enemy.state === 'antonyHammer') {
+          spawnAntonyHammerSwing(enemy);
+          enemy.attackCd = 1.35 * tuning.rangedCadence;
+        } else if (enemy.state === 'antonyDeathBall') {
+          spawnAntonyDeathBall(enemy);
+          enemy.attackCd = 1.2 * tuning.rangedCadence;
+        }
+        enemy.state = null;
       }
       return;
     }
@@ -2515,6 +2667,7 @@
     const direction = distance < desired - 24 ? -0.6 : 1;
     steerEnemy(enemy, dx / distance * direction, dy / distance * direction, enemy.speed, 3.7, dt);
 
+    // Bite: very short range life-drain chomp (unchanged).
     if (enemy.biteCd <= 0 && distance < enemy.r + Neo.player.r + 26) {
       const angle = Math.atan2(dy, dx);
       const biteDamage = Math.round(enemy.dmg * 0.92);
@@ -2531,9 +2684,38 @@
       return;
     }
 
-    if (enemy.hammerCd <= 0 && distance < 260 && enemy.attackCd <= 0) {
+    // Slash: wide sweeping melee arc when the player is close (longer reach than
+    // the bite, no windup so it punishes hugging the boss).
+    if (enemy.slashCd <= 0 && enemy.attackCd <= 0 && distance < enemy.r + Neo.player.r + 70) {
+      spawnAntonySlash(enemy);
+      enemy.slashCd = 2.0 * tuning.rangedCadence;
+      enemy.attackCd = 0.7;
+      if (!enemy.antonySlashLineShown) {
+        enemy.antonySlashLineShown = true;
+        sayOverEntity(enemy, 'Carve you open.', { holdTime: 1.4 });
+      }
+      return;
+    }
+
+    // Cold death ball: charged frost orb fired at mid/long range.
+    if (enemy.deathBallCd <= 0 && enemy.attackCd <= 0 && distance > enemy.r + Neo.player.r + 40) {
+      enemy.state = 'antonyDeathBall';
+      enemy.windup = 0.9 / tuning.reaction;
+      enemy.antonyDeathBallAngle = Math.atan2(dy, dx);
+      enemy.deathBallCd = 6.0 * tuning.rangedCadence;
+      enemy.attackCd = 1.0;
+      if (!enemy.antonyDeathBallLineShown) {
+        enemy.antonyDeathBallLineShown = true;
+        sayOverEntity(enemy, 'Feel the cold.', { holdTime: 1.5 });
+      }
+      return;
+    }
+
+    // Hammer: directional shockwave that travels forward (no longer a circle).
+    if (enemy.hammerCd <= 0 && distance < 320 && enemy.attackCd <= 0) {
       enemy.state = 'antonyHammer';
       enemy.windup = 0.78 / tuning.reaction;
+      enemy.antonyHammerAngle = Math.atan2(dy, dx);
       enemy.hammerCd = 3.35 * tuning.rangedCadence;
       enemy.attackCd = 0.8;
       if (!enemy.antonyHammerLineShown) {

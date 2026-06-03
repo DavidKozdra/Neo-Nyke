@@ -793,7 +793,7 @@ export const ITEM_DEFS = {
       key: 'robot_arm',
       name: 'Robot Arm',
       shortName: 'Auto x8 Spd',
-      description: 'Attack speed x8. Charges on 8 kills; when charged, your next melee auto-attack triggers once.',
+      description: 'Attack speed x8. Starts ready, then charges on 8 kills to automatically use your primary attack once.',
       rarity: 'god',
       color: '#c0e8ff',
       category: 'god',

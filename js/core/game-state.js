@@ -488,7 +488,7 @@ export function resumeGame() {
       escapeChargeKills: 0,
       escapeReady: true,
       robotArmChargeKills: 0,
-      robotArmReady: false,
+      robotArmReady: Number(items.robot_arm || 0) > 0,
       statuses: Neo.createStatusMap(),
       items,
       ownedWeapons: defaultWeapon ? { [defaultWeapon]: true } : {},
@@ -1913,6 +1913,7 @@ export function resumeGame() {
             if (count > 0) Neo.player.items[key] = (Number(Neo.player.items[key]) || 0) + count;
           }
         }
+        if (Number(Neo.player.items?.robot_arm || 0) > 0) Neo.player.robotArmReady = true;
         applySandboxPlayerSetup(Neo.player);
       }
       applyRunChallengeStartModifiers();

@@ -280,12 +280,13 @@
 
   function tryMelee() {
     cancelCowardsWayOnAttack();
+    const itemStats = Neo.getItemStats();
     if (getEquippedWeapon()) {
-      tryWeaponAttack();
+      const attacked = tryWeaponAttack();
+      if (attacked && itemStats.hasRobotArm && Neo.player?.robotArmReady) Neo.consumeCharge('robot_arm');
       return;
     }
     const move = getEquippedMove('melee');
-    const itemStats = Neo.getItemStats();
     const attackSpeed = Neo.getAttackSpeedValue();
     if (!Neo.spendSkillCharge('melee', Neo.getMeleeCooldownDuration(move, attackSpeed))) return;
     if (itemStats.hasRobotArm && Neo.player?.robotArmReady) Neo.consumeCharge('robot_arm');
@@ -2151,6 +2152,13 @@
     Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.9, text: `LV ${Neo.player.level}`, c: '#7dff9e' });
   }
 
+  function readyRobotArmOnFirstPickup(itemKey, previousCount) {
+    if (itemKey !== 'robot_arm' || previousCount > 0 || !Neo.player) return;
+    Neo.player.robotArmReady = true;
+    Neo.player.robotArmChargeKills = 0;
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 30, life: 0.8, text: 'ARM READY', c: '#a9e6ff' });
+  }
+
   function collectItem(itemKey) {
     if (Neo.isChallengeActive('no_items')) {
       Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 28, life: 0.85, text: 'NO ITEMS', c: '#ff8a98' });
@@ -2161,7 +2169,9 @@
     const duplicateChance = Neo.clamp(Number(Neo.getItemStats?.()?.itemDuplicateChance || 0), 0, 1);
     const duplicatePickup = duplicateChance > 0 && Neo.rng() < duplicateChance;
     const collectCount = duplicatePickup ? 2 : 1;
-    Neo.player.items[itemKey] = Neo.getItemCount(itemKey) + collectCount;
+    const previousCount = Neo.getItemCount(itemKey);
+    Neo.player.items[itemKey] = previousCount + collectCount;
+    readyRobotArmOnFirstPickup(itemKey, previousCount);
     if (Neo.isFirstRunTutorialActive()) Neo.tutorialState.gotRelic = true;
     Neo.addToEquipmentSlots?.(itemKey);
     Neo.markInventoryPanelDirty();
@@ -2178,7 +2188,9 @@
       for (let index = 0; index < 10; index += 1) {
         const rewardPool = Neo.ITEM_KEYS.filter(key => key !== 'jesters_dice');
         const key = rewardPool[Neo.irand(0, rewardPool.length - 1, 'loot')];
-        Neo.player.items[key] = Neo.getItemCount(key) + 1;
+        const previousBonusCount = Neo.getItemCount(key);
+        Neo.player.items[key] = previousBonusCount + 1;
+        readyRobotArmOnFirstPickup(key, previousBonusCount);
         bonusItemCounts[key] = (bonusItemCounts[key] || 0) + 1;
         if (key === 'titan_heart') {
           Neo.player.maxHp = Math.max(120, Math.round(Neo.player.maxHp * 1.08));
