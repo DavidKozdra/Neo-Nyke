@@ -740,7 +740,7 @@ export function createUIController(view) {
         }).join('')}</div>`;
         view.rhInfoContent.querySelectorAll('[data-info-weapon]').forEach(el => {
           const w = Neo.WEAPON_DEFS[el.dataset.infoWeapon];
-          if (w) Neo.drawItemToastIcon(el, w);
+          if (w) Neo.drawWeaponToastIcon(el, w);
         });
 
       } else if (tab === 'moves') {
