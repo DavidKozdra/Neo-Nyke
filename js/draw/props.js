@@ -950,7 +950,7 @@
       return { color: projectile.color || '#ff6688', core: '#ffe4eb', trail: projectile.color || '#ff6688', shape: 'dart', length: 24 };
     }
     if (kind === 'fireball') return { color: '#ff7b32', core: '#fff1a6', trail: '#ff2f17', shape: 'fireball', length: 30 };
-    if (kind === 'disk') return { color: '#b66cff', core: '#f0d8ff', trail: '#7d4dff', shape: 'disk', length: 20 };
+    if (kind === 'disk' || kind === 'power_disk') return { color: kind === 'power_disk' ? '#d890ff' : '#b66cff', core: '#f0d8ff', trail: kind === 'power_disk' ? '#f7ccff' : '#7d4dff', shape: 'disk', length: 20 };
     if (kind === 'magenta_p90') return { color: '#ff9dd7', core: '#fff0fb', trail: '#ff4aa8', shape: 'tracer', length: 26 };
     if (kind === 'magenta_degale') return { color: '#ff8bd2', core: '#fff0fb', trail: '#ff3eb7', shape: 'slug', length: 34 };
     if (kind === 'hunters_bow') return { color: '#dff8ff', core: '#ffffff', trail: '#7edcff', shape: 'arrow', length: 32 };
@@ -1022,19 +1022,69 @@
       Neo.ctx.arc(0, 0, r * 0.55, 0, Math.PI * 2);
       Neo.ctx.fill();
     } else if (visual.shape === 'disk') {
-      const spin = Date.now() * 0.018;
+      const seed = Number.isFinite(projectile.animSeed) ? projectile.animSeed : 0;
+      const maxLife = Math.max(0.001, Number(projectile.maxLife || projectile.life || 1));
+      const lifeRatio = Neo.clamp(Number(projectile.life || 0) / maxLife, 0, 1);
+      const age = 1 - lifeRatio;
+      const spin = Date.now() * (0.03 + (projectile.enemy ? 0.004 : 0.008)) + seed;
+      const pulse = 1 + Math.sin(Date.now() * 0.02 + seed * 3.1) * 0.09;
+      const widthPulse = 1 + Math.sin(Date.now() * 0.025 + seed * 1.7) * 0.18;
+      const activeScale = 0.88 + age * 0.18;
       Neo.ctx.rotate(spin);
-      Neo.ctx.globalAlpha = 0.45;
+
+      Neo.ctx.save();
+      Neo.ctx.globalAlpha = 0.24 + (1 - lifeRatio) * 0.2;
+      Neo.ctx.strokeStyle = visual.trail;
+      Neo.ctx.shadowColor = visual.trail;
+      Neo.ctx.shadowBlur = 10;
+      Neo.ctx.lineWidth = Math.max(1.2, r * 0.22);
       Neo.ctx.beginPath();
-      Neo.ctx.arc(0, 0, r * 1.45, 0.25, Math.PI * 1.35);
+      Neo.ctx.arc(0, 0, r * (1.45 * pulse), -0.45, Math.PI * 1.62);
       Neo.ctx.stroke();
-      Neo.ctx.globalAlpha = 1;
+      Neo.ctx.restore();
+
+      Neo.ctx.save();
+      Neo.ctx.rotate(spin * 0.55);
+      Neo.ctx.globalAlpha = 0.9;
       Neo.ctx.fillStyle = visual.color;
+      Neo.ctx.shadowBlur = projectile.enemy ? 12 : 16;
       Neo.ctx.beginPath();
-      Neo.ctx.ellipse(0, 0, r * 1.25, r * 0.48, 0, 0, Math.PI * 2);
+      Neo.ctx.ellipse(0, 0, r * 1.28 * pulse, r * 0.52 * widthPulse, 0, 0, Math.PI * 2);
       Neo.ctx.fill();
+
+      Neo.ctx.shadowBlur = 0;
+      Neo.ctx.strokeStyle = visual.core;
+      Neo.ctx.lineWidth = Math.max(1, r * 0.12);
+      Neo.ctx.globalAlpha = 0.95;
+      Neo.ctx.beginPath();
+      Neo.ctx.arc(0, 0, r * 0.78 * activeScale, 0, Math.PI * 2);
+      Neo.ctx.stroke();
+
+      Neo.ctx.globalAlpha = 0.82;
       Neo.ctx.fillStyle = visual.core;
-      Neo.ctx.fillRect(-r * 0.75, -1, r * 1.5, 2);
+      Neo.ctx.beginPath();
+      Neo.ctx.arc(0, 0, r * 0.34, 0, Math.PI * 2);
+      Neo.ctx.fill();
+
+      Neo.ctx.rotate(spin * 0.75);
+      Neo.ctx.globalAlpha = 0.45;
+      Neo.ctx.fillStyle = visual.core;
+      for (let index = 0; index < 6; index += 1) {
+        const segmentAngle = (index / 6) * Math.PI * 2;
+        Neo.ctx.save();
+        Neo.ctx.rotate(segmentAngle);
+        Neo.ctx.fillRect(r * 0.92, -r * 0.06 * pulse, r * 0.42, r * 0.12 * pulse);
+        Neo.ctx.restore();
+      }
+
+      Neo.ctx.globalAlpha = 1;
+      Neo.ctx.strokeStyle = visual.core;
+      Neo.ctx.lineWidth = Math.max(1, r * 0.09);
+      Neo.ctx.beginPath();
+      Neo.ctx.moveTo(-r * 0.86, 0);
+      Neo.ctx.lineTo(r * 0.86, 0);
+      Neo.ctx.stroke();
+      Neo.ctx.restore();
     } else if (visual.shape === 'blade' || visual.shape === 'arrow') {
       Neo.ctx.beginPath();
       Neo.ctx.moveTo(r * 1.8, 0);

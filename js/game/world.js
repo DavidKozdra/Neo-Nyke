@@ -804,10 +804,12 @@
     p.vy = Number(props.vy || 0) * projectileSpeedMultiplier;
     p.r = props.r ?? 5;
     p.life = props.life ?? 1.2;
+    p.maxLife = p.life;
     p.damage = props.damage ?? 0;
     p.kind = props.kind ?? null;
     p.color = props.color ?? null;
     p.enemy = enemyProjectile;
+    p.animSeed = Number.isFinite(props.animSeed) ? Number(props.animSeed) : Math.random() * Math.PI * 2;
     p.knockback = props.knockback ?? 0;
     p.pierceCount = Math.max(0, Math.floor(Number(props.pierceCount ?? 0) + (!enemyProjectile ? Number(itemStats.projectilePierceBonus || 0) : 0)));
     p.hitOptions = props.hitOptions ?? null;

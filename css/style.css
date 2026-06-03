@@ -103,6 +103,13 @@ button, input, select, textarea {
   animation-play-state: paused !important;
 }
 
+/* …except the pause overlay's own cinematic title, which is *meant* to play
+   while paused (it lives inside #wrap, so the rule above would freeze it). */
+.game-paused #pause .menu-letter,
+.game-paused #pause .menu-subtitle-flash {
+  animation-play-state: running !important;
+}
+
 /* Stop all CSS animations and transitions when reduce-flash is on */
 .acc-reduce-flash *,
 .acc-reduce-flash *::before,
