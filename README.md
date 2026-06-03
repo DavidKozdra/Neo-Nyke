@@ -52,6 +52,11 @@ Controls are fully remappable in Settings.
 
 Open `index.html` in a browser. No build step required.
 
+## Development
+
+Run `npm install` to install dependencies and configure the tracked Git hooks. The
+pre-commit hook runs `npm test` and blocks commits when the test suite fails.
+
 ## Building and Deploying
 
 Run `npm run build` before deploying. The build copies the static game files into `dist/`, which is the asset directory used by the root `wrangler.toml`.
