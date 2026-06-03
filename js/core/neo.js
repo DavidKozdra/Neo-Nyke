@@ -78,6 +78,7 @@ window.Neo = {
   showFloorTransition: false,
   lavaAnimTime: 0,
   playerDeathAnim: null,
+  windowBlurred: false,
   lowHealthHitFlashUntil: 0,
 
   // --- laser ---

@@ -33,7 +33,7 @@ export function loop(timestamp) {
     else if (Neo.player && (Neo.gameState === 'dialogue' || Neo.gameState === 'pause')) {
       Neo.tickPlayerTransientDefenseTimers(dt);
       Neo.stepActiveTransitionFade(dt);
-    } else if (Neo.gameState === 'dying' && Neo.playerDeathAnim) {
+    } else if (Neo.gameState === 'dying' && Neo.playerDeathAnim && !Neo.windowBlurred) {
       const anim = Neo.playerDeathAnim;
       anim.timer += dt;
       // Apply knockback drift, decaying as the corpse settles.

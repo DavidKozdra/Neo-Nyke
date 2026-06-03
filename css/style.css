@@ -1346,23 +1346,32 @@ button, input, select, textarea {
   100% { opacity: 0; }
 }
 
-.game-panel {
+/* Shared parent frame for all centered popup panels (shop/anvil/inventory,
+   run history, alt modes, sandbox). Each panel keeps its own class for
+   width/radius/accent overrides; .panel-shell holds the common geometry. */
+.panel-shell {
   position: fixed;
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
   width: min(920px, 94vw);
-  max-height: min(84vh, 860px);
+  max-height: min(86vh, 860px);
   overflow: auto;
   z-index: 22;
   background: linear-gradient(180deg, var(--menu-surface-strong), var(--menu-bg-deep));
-  border: 2px solid var(--menu-border);
-  border-top-color: var(--menu-border-strong);
+  border: 1px solid var(--menu-border);
   border-radius: 14px;
   box-shadow: 0 24px 60px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.06);
   padding: 22px;
   color: var(--menu-text);
   backdrop-filter: blur(14px);
+}
+
+/* Inherits frame from .panel-shell; overrides only what differs. */
+.game-panel {
+  max-height: min(84vh, 860px);
+  border: 2px solid var(--menu-border);
+  border-top-color: var(--menu-border-strong);
 }
 
 #invPanel.game-panel {
@@ -5608,23 +5617,18 @@ button.alt.danger {
 
 /* ── Run History ─────────────────────────────────────────── */
 
+/* Inherits frame from .panel-shell; overrides only what differs. */
 .rh-panel {
-  position: fixed;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
   z-index: 30;
   display: flex;
   flex-direction: column;
   width: min(900px, 94vw);
   max-height: min(88vh, 860px);
   padding: 18px 20px 16px;
-  border: 1px solid var(--menu-border);
   border-radius: 18px;
   background: linear-gradient(180deg, var(--menu-bg-soft), var(--menu-bg-deep));
   box-shadow: 0 24px 80px rgba(0,0,0,.65), inset 0 0 0 1px rgba(255,255,255,.03);
   backdrop-filter: blur(12px);
-  color: var(--menu-text);
   overflow: hidden;
 }
 
@@ -7283,22 +7287,18 @@ button.alt.danger {
 /* ═══════════════════════════════════════════════════
    ALT MODES PANEL
    ═══════════════════════════════════════════════════ */
+/* Inherits frame from .panel-shell; overrides only what differs. */
 .altmodes-panel {
-  position: fixed;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
   z-index: 30;
   display: flex;
   flex-direction: column;
   width: min(720px, 94vw);
   max-height: min(86vh, 820px);
-  border: 1px solid var(--menu-border);
+  padding: 0;
   border-radius: 18px;
   background: linear-gradient(180deg, var(--menu-bg-soft), var(--menu-bg-deep));
   box-shadow: 0 24px 80px rgba(0,0,0,.65), inset 0 0 0 1px rgba(255,255,255,.03);
   backdrop-filter: blur(12px);
-  color: var(--menu-text);
   overflow: hidden;
   transition: opacity .16s, transform .16s, filter .16s;
 }
