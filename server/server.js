@@ -53,6 +53,13 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
 };
 
+/**
+ * Build a JSON HTTP response with shared API headers.
+ *
+ * @param {unknown} data Payload to serialize as JSON.
+ * @param {number} [status=200] HTTP status code.
+ * @returns {Response} JSON response object.
+ */
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -60,6 +67,13 @@ function json(data, status = 200) {
   });
 }
 
+/**
+ * Compute current competitive season boundaries.
+ * Seasons reset weekly at Monday 00:00 UTC.
+ *
+ * @param {number} [now=Date.now()] Epoch milliseconds used for calculation.
+ * @returns {{seasonId: string, resetAt: string}} Current season metadata.
+ */
 function getSeasonInfo(now = Date.now()) {
   const date = new Date(now);
   const day = date.getUTCDay();
@@ -72,6 +86,13 @@ function getSeasonInfo(now = Date.now()) {
   };
 }
 
+/**
+ * Read current competitive seed from KV.
+ * If no seed exists yet, generate and persist one.
+ *
+ * @param {{STORE: {get: Function, put: Function}}} env Worker environment bindings.
+ * @returns {Promise<string>} Seed string.
+ */
 async function getSeed(env) {
   const val = await env.STORE.get('seed');
   if (val) return val;
@@ -81,11 +102,24 @@ async function getSeed(env) {
   return seed;
 }
 
+/**
+ * Load leaderboard entries from KV.
+ *
+ * @param {{STORE: {get: Function}}} env Worker environment bindings.
+ * @returns {Promise<Array<object>>} Parsed leaderboard entries.
+ */
 async function getLeaderboard(env) {
   const val = await env.STORE.get('leaderboard');
   return val ? JSON.parse(val) : [];
 }
 
+/**
+ * Persist leaderboard entries to KV.
+ *
+ * @param {{STORE: {put: Function}}} env Worker environment bindings.
+ * @param {Array<object>} leaderboard Entries sorted by ranking rules.
+ * @returns {Promise<void>}
+ */
 async function putLeaderboard(env, leaderboard) {
   await env.STORE.put('leaderboard', JSON.stringify(leaderboard));
 }
@@ -93,6 +127,15 @@ async function putLeaderboard(env, leaderboard) {
 // Simple in-memory rate limiter per CF isolate (resets on cold start).
 // For production-grade limiting, use Cloudflare Rate Limiting rules in the dashboard.
 const hits = new Map();
+
+/**
+ * In-isolate request limiter keyed by route and client identifier.
+ *
+ * @param {string} key Rate limit bucket key.
+ * @param {number} max Maximum requests allowed in the current window.
+ * @param {number} windowMs Window size in milliseconds.
+ * @returns {boolean} True when request is allowed.
+ */
 function rateLimit(key, max, windowMs) {
   const now = Date.now();
   const entry = hits.get(key) || { count: 0, reset: now + windowMs };
@@ -102,6 +145,13 @@ function rateLimit(key, max, windowMs) {
   return entry.count <= max;
 }
 
+/**
+ * Main router for all API endpoints.
+ *
+ * @param {Request} request Incoming Worker request.
+ * @param {{STORE?: {get: Function, put: Function}}} env Worker bindings.
+ * @returns {Promise<Response>} Route response.
+ */
 async function handleRequest(request, env) {
   if (request.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: CORS_HEADERS });
@@ -251,10 +301,18 @@ async function handleRequest(request, env) {
 }
 
 // Weekly seed reset — fired by Cron Trigger "0 0 * * 1"
+/**
+ * Scheduled weekly reset.
+ * Generates a new seed and clears leaderboard standings.
+ *
+ * @param {{STORE: {put: Function}}} env Worker bindings.
+ * @returns {Promise<void>}
+ */
 async function handleScheduled(env) {
   const seed = String(Math.floor(Math.random() * 1_000_000_000));
   await env.STORE.put('seed', seed);
   await env.STORE.put('leaderboard', JSON.stringify([]));
+
   console.log('Weekly reset: new seed', seed);
 }
 
@@ -278,6 +336,12 @@ const SECURITY_HEADERS = {
   ].join('; '),
 };
 
+/**
+ * Merge security headers into any response returned by route handlers.
+ *
+ * @param {Response} response Route response.
+ * @returns {Response} Cloned response with security headers.
+ */
 function addSecurityHeaders(response) {
   const res = new Response(response.body, response);
   for (const [k, v] of Object.entries(SECURITY_HEADERS)) res.headers.set(k, v);
