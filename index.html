@@ -345,9 +345,9 @@
       </div>
       <button id="anvilClose" class="panel-close" aria-label="Close anvil">X</button>
     </div>
-    <div class="anvil-tabs shop-tabs">
-      <button class="anvil-tab shop-tab active" data-anvil-tab="weapons">Weapons</button>
-      <button class="anvil-tab shop-tab" data-anvil-tab="moves">Moves</button>
+    <div class="anvil-tabs panel-tabs">
+      <button class="anvil-tab panel-tab active" data-anvil-tab="weapons">Weapons</button>
+      <button class="anvil-tab panel-tab" data-anvil-tab="moves">Moves</button>
     </div>
     <div id="anvilWeaponsTab" class="anvil-tab-panel">
       <div id="anvilWeaponList" class="anvil-item-list"></div>
@@ -377,11 +377,11 @@
       <div class="shop-coins">Coins <b id="shopCoins">0</b></div>
       <button id="shopClose" class="panel-close" aria-label="Close shop">X</button>
     </div>
-    <div class="shop-tabs">
-      <button class="shop-tab active" data-tab="items"><span class="tab-icon" aria-hidden="true">[]</span><span>Items</span></button>
-      <button class="shop-tab" data-tab="weapons"><span class="tab-icon" aria-hidden="true">W</span><span>Weapons</span></button>
-      <button class="shop-tab" data-tab="moves"><span class="tab-icon" aria-hidden="true">M</span><span>Moves</span></button>
-      <button class="shop-tab" data-tab="heals"><span class="tab-icon" aria-hidden="true">+</span><span>Heal Ups</span></button>
+    <div class="shop-tabs panel-tabs">
+      <button class="shop-tab panel-tab active" data-tab="items"><span class="tab-icon" aria-hidden="true">[]</span><span>Items</span></button>
+      <button class="shop-tab panel-tab" data-tab="weapons"><span class="tab-icon" aria-hidden="true">W</span><span>Weapons</span></button>
+      <button class="shop-tab panel-tab" data-tab="moves"><span class="tab-icon" aria-hidden="true">M</span><span>Moves</span></button>
+      <button class="shop-tab panel-tab" data-tab="heals"><span class="tab-icon" aria-hidden="true">+</span><span>Heal Ups</span></button>
     </div>
     <div id="shopItems" class="shop-list"></div>
     <div id="shopWeapons" class="shop-list hidden"></div>
@@ -405,11 +405,11 @@
       <button class="inv-player-tab" data-inv-player="4" role="tab">P4</button>
     </div>
     <div id="invBuildSummary" class="inv-build-summary" aria-label="Current build"></div>
-    <div class="inv-tabs shop-tabs" role="tablist">
-      <button class="inv-tab shop-tab active" data-inv-tab="stats" role="tab"><canvas class="tab-icon tab-icon--canvas" width="22" height="22" data-inv-ui-icon="tab-stats" aria-hidden="true"></canvas>Stats</button>
-      <button class="inv-tab shop-tab" data-inv-tab="items" role="tab"><canvas class="tab-icon tab-icon--canvas" width="22" height="22" data-inv-ui-icon="tab-relics" aria-hidden="true"></canvas>Relics</button>
-      <button class="inv-tab shop-tab" data-inv-tab="weapons" role="tab"><canvas class="tab-icon tab-icon--canvas" width="22" height="22" data-inv-ui-icon="tab-weapons" aria-hidden="true"></canvas>Weapons</button>
-      <button class="inv-tab shop-tab" data-inv-tab="equipped" role="tab"><canvas class="tab-icon tab-icon--canvas" width="22" height="22" data-inv-ui-icon="tab-moves" aria-hidden="true"></canvas>Moves</button>
+    <div class="inv-tabs panel-tabs" role="tablist">
+      <button class="inv-tab panel-tab active" data-inv-tab="stats" role="tab"><canvas class="tab-icon tab-icon--canvas" width="22" height="22" data-inv-ui-icon="tab-stats" aria-hidden="true"></canvas>Stats</button>
+      <button class="inv-tab panel-tab" data-inv-tab="items" role="tab"><canvas class="tab-icon tab-icon--canvas" width="22" height="22" data-inv-ui-icon="tab-relics" aria-hidden="true"></canvas>Relics</button>
+      <button class="inv-tab panel-tab" data-inv-tab="weapons" role="tab"><canvas class="tab-icon tab-icon--canvas" width="22" height="22" data-inv-ui-icon="tab-weapons" aria-hidden="true"></canvas>Weapons</button>
+      <button class="inv-tab panel-tab" data-inv-tab="equipped" role="tab"><canvas class="tab-icon tab-icon--canvas" width="22" height="22" data-inv-ui-icon="tab-moves" aria-hidden="true"></canvas>Moves</button>
     </div>
     <div class="inv-ux-hints" aria-hidden="true">
       <span class="inv-ux-hint"><b>Drag</b> move chips onto matching slots</span>
@@ -891,6 +891,9 @@
         </div>
         <div class="sandbox-card">
           <h4>Starting Inventory</h4>
+          <div class="sandbox-search-row">
+            <input id="sandboxStartItemSearch" class="sandbox-search" type="search" placeholder="Search starting items..." aria-label="Search starting inventory items" autocomplete="off" spellcheck="false">
+          </div>
           <div class="sandbox-toolbar">
             <button id="sandboxStartItemsAll" class="sandbox-mini-btn" type="button">All ×1</button>
             <button id="sandboxStartItemsNone" class="sandbox-mini-btn" type="button">None</button>
@@ -899,6 +902,9 @@
         </div>
         <div class="sandbox-card">
           <h4>Enemy Types</h4>
+          <div class="sandbox-search-row">
+            <input id="sandboxEnemySearch" class="sandbox-search" type="search" placeholder="Search enemy types..." aria-label="Search enemy types" autocomplete="off" spellcheck="false">
+          </div>
           <div class="sandbox-toolbar">
             <button id="sandboxEnemiesAll" class="sandbox-mini-btn" type="button">All</button>
             <button id="sandboxEnemiesNone" class="sandbox-mini-btn" type="button">None</button>
@@ -907,6 +913,9 @@
         </div>
         <div class="sandbox-card">
           <h4>Items</h4>
+          <div class="sandbox-search-row">
+            <input id="sandboxItemSearch" class="sandbox-search" type="search" placeholder="Search items..." aria-label="Search items" autocomplete="off" spellcheck="false">
+          </div>
           <div class="sandbox-toolbar">
             <button id="sandboxItemsAll" class="sandbox-mini-btn" type="button">All</button>
             <button id="sandboxItemsNone" class="sandbox-mini-btn" type="button">None</button>
@@ -1300,6 +1309,13 @@
           <span class="access-desc">Freeze gameplay while the inventory panel is open.</span>
         </div>
         <label class="toggle"><input type="checkbox" id="gameplayPauseInventory"><span class="toggle-track"><span class="toggle-thumb"></span></span></label>
+      </div>
+      <div class="access-row">
+        <div class="access-text">
+          <span class="access-label">Pause on window unfocus</span>
+          <span class="access-desc">Pause the game when the window loses focus (e.g. switching tabs or apps).</span>
+        </div>
+        <label class="toggle"><input type="checkbox" id="gameplayPauseOnBlur" checked><span class="toggle-track"><span class="toggle-thumb"></span></span></label>
       </div>
       <div class="access-row">
         <div class="access-text">

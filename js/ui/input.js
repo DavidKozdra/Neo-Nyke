@@ -1225,6 +1225,9 @@ export const ui = {
     sandboxEnemyList: document.getElementById('sandboxEnemyList'),
     sandboxItemList: document.getElementById('sandboxItemList'),
     sandboxStartItemList: document.getElementById('sandboxStartItemList'),
+    sandboxEnemySearch: document.getElementById('sandboxEnemySearch'),
+    sandboxItemSearch: document.getElementById('sandboxItemSearch'),
+    sandboxStartItemSearch: document.getElementById('sandboxStartItemSearch'),
     sandboxStartItemsAll: document.getElementById('sandboxStartItemsAll'),
     sandboxStartItemsNone: document.getElementById('sandboxStartItemsNone'),
     sandboxEnemiesAll: document.getElementById('sandboxEnemiesAll'),
@@ -1346,6 +1349,12 @@ export const SANDBOX_DEFAULT_SETTINGS = {
     if (Neo.metaProgress) Neo.metaProgress.loopCrystals = Number(Neo.metaProgress.loopCrystals || 0) + 1;
     Neo.persistMetaSoon();
     Neo.refreshMenuState();
+  });
+
+  // Auto-pause when the window loses focus (gameplay setting, defaults on).
+  window.addEventListener('blur', () => {
+    if (window.NeoSettings?.shouldPauseOnBlur?.() === false) return;
+    if (Neo.gameState === 'play') Neo.pauseGame();
   });
 
 export const JESTER_PORTAL_ACTIVATE_DELAY = 0.44;

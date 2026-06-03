@@ -495,6 +495,8 @@ export function resumeGame() {
       weaponCooldown: 0,
       blockActive: false,
       blockTimer: 0,
+      overhealBarrier: 0,
+      graniallaHealPulseFrame: 0,
       fleeceTick: 0,
       weaponBeamTime: 0,
       weaponBeamTick: 0,

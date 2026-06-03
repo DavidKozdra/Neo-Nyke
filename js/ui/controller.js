@@ -1085,6 +1085,32 @@ export function createUIController(view) {
           return type;
         }
 
+        const sandboxSearch = { enemies: '', items: '', startItems: '' };
+
+        function normalizeSandboxSearchValue(value) {
+          return String(value || '').trim().toLowerCase();
+        }
+
+        function enemyMatchesSandboxSearch(type, query) {
+          if (!query) return true;
+          const key = String(type || '').toLowerCase();
+          const label = String(Neo.getEnemyLabel(type) || type).toLowerCase();
+          return key.includes(query) || label.includes(query);
+        }
+
+        function itemMatchesSandboxSearch(key, query) {
+          if (!query) return true;
+          const item = Neo.itemRegistry.get(key) || Neo.ITEM_DEFS[key] || {};
+          const label = String(item.name || key).toLowerCase();
+          const rarity = String(item.rarity || '').toLowerCase();
+          const idKey = String(key || '').toLowerCase();
+          return label.includes(query) || idKey.includes(query) || rarity.includes(query);
+        }
+
+        function renderSandboxEmptyState(text) {
+          return `<div class="sandbox-empty">${Neo.escapeHtml(text)}</div>`;
+        }
+
         function hydrateSandboxTokenIcons() {
           view.sandboxEnemyList?.querySelectorAll('[data-sbox-enemy-icon]').forEach(el => {
             const key = String(el.dataset.sboxEnemyIcon || 'hunter');
@@ -1103,18 +1129,27 @@ export function createUIController(view) {
         }
 
         function renderSandboxTokenLists() {
+          const enemyQuery = normalizeSandboxSearchValue(sandboxSearch.enemies);
+          const itemQuery = normalizeSandboxSearchValue(sandboxSearch.items);
+          const startItemQuery = normalizeSandboxSearchValue(sandboxSearch.startItems);
+
           if (view.sandboxEnemyList) {
-            view.sandboxEnemyList.innerHTML = Neo.SANDBOX_ENEMY_TYPES.map(type => {
+            const filteredEnemies = Neo.SANDBOX_ENEMY_TYPES.filter(type => enemyMatchesSandboxSearch(type, enemyQuery));
+            view.sandboxEnemyList.innerHTML = filteredEnemies.length
+              ? filteredEnemies.map(type => {
               const active = Neo.sandboxSettings.allowedEnemies.includes(type);
               const label = Neo.getEnemyLabel(type);
               return `<button class="sandbox-token${active ? ' is-active' : ''}" data-sbox-enemy="${type}" type="button">`
                 + `<canvas class="sandbox-token__icon" data-sbox-enemy-icon="${Neo.escapeHtml(type)}" width="28" height="28" aria-hidden="true"></canvas>`
                 + `<span class="sandbox-token__label">${Neo.escapeHtml(label)}</span>`
                 + `</button>`;
-            }).join('');
+            }).join('')
+              : renderSandboxEmptyState('No enemy types match your search.');
           }
           if (view.sandboxItemList) {
-            view.sandboxItemList.innerHTML = Neo.ITEM_KEYS.map(key => {
+            const filteredItems = Neo.ITEM_KEYS.filter(key => itemMatchesSandboxSearch(key, itemQuery));
+            view.sandboxItemList.innerHTML = filteredItems.length
+              ? filteredItems.map(key => {
               const active = Neo.sandboxSettings.allowedItems.includes(key);
               const item = Neo.itemRegistry.get(key) || Neo.ITEM_DEFS[key];
               const label = item?.name || key.replace(/_/g, ' ');
@@ -1123,13 +1158,16 @@ export function createUIController(view) {
                 + `<canvas class="sandbox-token__icon sandbox-token__icon--item" data-sbox-item-icon="${Neo.escapeHtml(key)}" width="26" height="26" aria-hidden="true"></canvas>`
                 + `<span class="sandbox-token__label">${Neo.escapeHtml(label)}</span>`
                 + `</button>`;
-            }).join('');
+            }).join('')
+              : renderSandboxEmptyState('No items match your search.');
           }
           if (view.sandboxStartItemList) {
             const startingItems = Neo.sandboxSettings.startingItems && typeof Neo.sandboxSettings.startingItems === 'object'
               ? Neo.sandboxSettings.startingItems
               : {};
-            view.sandboxStartItemList.innerHTML = Neo.ITEM_KEYS.map(key => {
+            const filteredStartItems = Neo.ITEM_KEYS.filter(key => itemMatchesSandboxSearch(key, startItemQuery));
+            view.sandboxStartItemList.innerHTML = filteredStartItems.length
+              ? filteredStartItems.map(key => {
               const count = Math.max(0, Math.min(99, Math.round(Number(startingItems[key]) || 0)));
               const active = count > 0;
               const item = Neo.itemRegistry.get(key) || Neo.ITEM_DEFS[key];
@@ -1145,7 +1183,8 @@ export function createUIController(view) {
                   + `<button class="sandbox-token__step" data-sbox-start-step="1" data-sbox-start-item-key="${safeKey}" type="button" aria-label="Increase ${Neo.escapeHtml(label)}">+</button>`
                 + `</div>`
                 + `</div>`;
-            }).join('');
+              }).join('')
+                : renderSandboxEmptyState('No starting items match your search.');
           }
           hydrateSandboxTokenIcons();
         }
@@ -1177,6 +1216,9 @@ export function createUIController(view) {
             const slot = select.dataset.sboxMoveSlotSelect;
             select.value = Neo.sandboxSettings.moveLoadout?.[slot] || '';
           });
+          if (view.sandboxEnemySearch) view.sandboxEnemySearch.value = sandboxSearch.enemies;
+          if (view.sandboxItemSearch) view.sandboxItemSearch.value = sandboxSearch.items;
+          if (view.sandboxStartItemSearch) view.sandboxStartItemSearch.value = sandboxSearch.startItems;
           renderSandboxTokenLists();
         }
         buildSandboxMoveLoadoutOptions();
@@ -1225,6 +1267,21 @@ export function createUIController(view) {
           Neo.sandboxSettings = Neo.normalizeSandboxSettings(Neo.sandboxSettings);
           syncSandboxPanelFields();
           Neo.persistMetaSoon();
+        });
+
+        view.sandboxEnemySearch?.addEventListener('input', () => {
+          sandboxSearch.enemies = String(view.sandboxEnemySearch?.value || '');
+          renderSandboxTokenLists();
+        });
+
+        view.sandboxItemSearch?.addEventListener('input', () => {
+          sandboxSearch.items = String(view.sandboxItemSearch?.value || '');
+          renderSandboxTokenLists();
+        });
+
+        view.sandboxStartItemSearch?.addEventListener('input', () => {
+          sandboxSearch.startItems = String(view.sandboxStartItemSearch?.value || '');
+          renderSandboxTokenLists();
         });
 
         view.sandboxEnemyList?.addEventListener('click', event => {

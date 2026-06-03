@@ -388,21 +388,52 @@
   }
 
   function spawnWave(count, roomType = 'combat') {
-    const plan = buildWavePlan(count, roomType);
+    // Optional template-authored encounter (see roomTemplates.js spawnHint). When
+    // absent, every branch below collapses to the original behaviour and draws the
+    // exact same 'encounter' RNG sequence, so non-hinted rooms are unchanged.
+    const hint = (Neo.currentRoom && Neo.currentRoom.spawnHint) || null;
+    const effectiveCount = hint && Number.isFinite(hint.count) ? Math.max(1, Math.floor(hint.count)) : count;
+    const plan = hint && Array.isArray(hint.types) && hint.types.length
+      ? buildHintedWavePlan(effectiveCount, hint.types)
+      : buildWavePlan(effectiveCount, roomType);
+    const chambers = hint && hint.inChambers && Array.isArray(Neo.currentRoom.layoutChambers) && Neo.currentRoom.layoutChambers.length
+      ? Neo.currentRoom.layoutChambers
+      : null;
+
     for (let index = 0; index < plan.length; index += 1) {
       const type = plan[index] || rollEnemyType();
       const eliteChance = Neo.getDifficultyDef().eliteChance + (Neo.isChallengeActive('elite_hunt') ? 0.18 : 0);
-      const eliteRoll = canSpawnEliteEnemies() && Neo.nextRandom('encounter') < Math.min(0.85, eliteChance);
+      const baseElite = canSpawnEliteEnemies() && Neo.nextRandom('encounter') < Math.min(0.85, eliteChance);
+      const eliteRoll = (hint && hint.elite) ? canSpawnEliteEnemies() : baseElite;
       const angle = Neo.nextRandom('encounter') * Math.PI * 2;
       const radius = 140 + Neo.nextRandom('encounter') * 170;
-      const preferredX = Neo.clamp(Neo.ROOM_W / 2 + Math.cos(angle) * radius, 90, Neo.ROOM_W - 90);
-      const preferredY = Neo.clamp(Neo.ROOM_H / 2 + Math.sin(angle) * radius, 90, Neo.ROOM_H - 90);
+      // Preferred point: inside a designated chamber when the template asks for it,
+      // otherwise the original centre-ring placement. The two RNG draws above are
+      // always consumed (identical order) so chamber mode doesn't desync the stream.
+      let preferredX = Neo.clamp(Neo.ROOM_W / 2 + Math.cos(angle) * radius, 90, Neo.ROOM_W - 90);
+      let preferredY = Neo.clamp(Neo.ROOM_H / 2 + Math.sin(angle) * radius, 90, Neo.ROOM_H - 90);
+      if (chambers) {
+        const chamber = chambers[index % chambers.length];
+        preferredX = Neo.clamp(chamber.x + Math.cos(angle) * Math.min(radius, chamber.w / 2 - 24), 90, Neo.ROOM_W - 90);
+        preferredY = Neo.clamp(chamber.y + Math.sin(angle) * Math.min(radius, chamber.h / 2 - 24), 90, Neo.ROOM_H - 90);
+      }
       const safeSpawn = findSafeEnemySpawnPoint(preferredX, preferredY, 15)
         || findSafeEnemySpawnPoint(Neo.ROOM_W / 2, Neo.ROOM_H / 2, 15);
       if (!safeSpawn) continue;
       spawnEnemy(type, safeSpawn.x, safeSpawn.y, eliteRoll);
     }
     spawnMiniBoss(roomType);
+  }
+
+  // Builds a wave plan from a template-authored type pool, cycling through the
+  // listed types so the designer controls the composition. Unknown types fall
+  // through to rollEnemyType at spawn time (the `|| rollEnemyType()` guard above).
+  function buildHintedWavePlan(count, types) {
+    const plan = [];
+    for (let index = 0; index < count; index += 1) {
+      plan.push(types[index % types.length]);
+    }
+    return plan;
   }
 
   function spawnFloorBoss() {
@@ -1800,6 +1831,7 @@
           kind: 'golem_spit',
           source: 'golem_projectile',
           damage: enemy.dmg + 4,
+          statusEffects: [{ key: 'poison', chance: 1, stacks: 1, duration: 4.2 }],
         });
         Neo.spawnParticle({ x: enemy.x, y: enemy.y - 20, life: 0.5, text: 'SPIT', c: '#9bb05a' });
       }
@@ -2530,6 +2562,9 @@
         ttl: 1.1,
         armTime: 0.48,
         damage: Math.round(enemy.dmg * 0.82),
+        statusKey: 'fire',
+        statusStacks: 1,
+        statusDuration: 3,
         hit: false,
       });
       Neo.spawnParticle({ x, y, life: 0.35, ring: 18, c: '#ff3348' });
@@ -2624,6 +2659,9 @@
         speedDamp: 0.84,
         turnRate: 1.8 * tuning.reaction,
         damageSource: 'handsome_devil',
+        onHit: () => {
+          Neo.applyFire?.(Neo.player, 1, 2.8);
+        },
         onEnd: activeEnemy => {
           activeEnemy.attackCd = 1.1 * tuning.rangedCadence;
         },
@@ -3143,6 +3181,11 @@
       Neo.applyFire(Neo.player, move === 'floor_lava' ? 2 : 1, 3.2);
       return true;
     }
+    enemy.mirrorSmashColor = move === 'crimson_smash'
+      ? '#ff3048'
+      : move === 'chaos_burst'
+        ? '#a857ff'
+        : '#ff6dc7';
     enemy.state = 'mirrorSmash';
     enemy.windup = 0.38;
     return true;
@@ -3223,7 +3266,7 @@
           enemy.dashTime = 0.18;
           enemy.dashHit = false;
         } else if (enemy.state === 'mirrorSmash') {
-          mirrorBlastPlayer(enemy, Neo.ATTACKS.smash.radius + 8, enemy.smashDamage || enemy.dmg + 18, 300, '#ff6dc7');
+          mirrorBlastPlayer(enemy, Neo.ATTACKS.smash.radius + 8, enemy.smashDamage || enemy.dmg + 18, 300, enemy.mirrorSmashColor || '#ff6dc7');
           enemy.attackCd = 0.75;
         }
       }

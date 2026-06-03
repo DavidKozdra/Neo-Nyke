@@ -494,12 +494,22 @@
     const entry = finalizeRun('dead', { killedBy: Neo.lastDamageSource, killerKey: Neo.lastDamageSourceKey });
     Neo.lastDeathEntryId = entry.id;
     const aimAngle = Neo.player ? Math.atan2(Neo.mouse.worldY - Neo.player.y, Neo.mouse.worldX - Neo.player.x) : 0;
+    // Carry the killing blow's residual velocity into the corpse so it gets a
+    // little knockback slide instead of dropping straight down.
+    const pvx = Number(Neo.player?.vx || 0);
+    const pvy = Number(Neo.player?.vy || 0);
+    const speed = Math.hypot(pvx, pvy);
+    const dir = speed > 4 ? Math.atan2(pvy, pvx) : aimAngle + Math.PI;
     Neo.playerDeathAnim = {
       timer: 0,
       duration: 2.2,
+      // Extra hold (1.6s) after the fall finishes before the death screen shows.
+      holdDelay: 1.6,
       x: Neo.player?.x ?? 0,
       y: Neo.player?.y ?? 0,
       r: Neo.player?.r ?? 14,
+      vx: Math.cos(dir) * (60 + speed * 0.6),
+      vy: Math.sin(dir) * (60 + speed * 0.6),
       spriteKey: Neo.getPlayerSpriteKey(),
       facing: Neo.getFacingDirection(Neo.player, aimAngle),
       entry,
@@ -814,9 +824,7 @@
   function tickSkizzardRegen() {
     if (!Neo.player || Neo.player.hp >= Neo.player.maxHp) return;
     const heal = Neo.scalePlayerHealing?.(Neo.player.maxHp * 0.025, 1) ?? Math.max(1, Neo.player.maxHp * 0.025);
-    const before = Neo.player.hp;
-    Neo.player.hp = Math.min(Neo.player.maxHp, Neo.player.hp + heal);
-    const gained = Neo.player.hp - before;
+    const gained = Neo.applyPlayerHealing?.(heal) ?? 0;
     if (gained > 0) {
       Neo.spawnHealPopup?.(Neo.player.x + Neo.rand(-8, 8), Neo.player.y - 22, gained, { color: '#8fffd2', size: 13 });
       Neo.spawnParticle({ x: Neo.player.x + Neo.rand(-10, 10), y: Neo.player.y + Neo.rand(-10, 10), life: 0.22, c: '#8fffd2' });
@@ -1015,9 +1023,13 @@
         if (iconCanvas) Neo.drawItemToastIcon(iconCanvas, itemDef);
         const statusText = def.getStatusText?.() || '';
         if (labelSpan) labelSpan.textContent = statusText;
-        const title = `${itemDef.name || itemKey} [${letter}]${statusText ? ' · ' + statusText : ''}`;
-        node.setAttribute('title', title);
-        node.setAttribute('aria-label', title);
+        const itemName = itemDef.name || itemKey;
+        const itemDesc = itemDef.description || itemDef.desc || '';
+        const header = `${itemName} [${letter}]${statusText ? ' · ' + statusText : ''}`;
+        node.dataset.tipName = header;
+        node.dataset.tipDesc = itemDesc;
+        node.removeAttribute('title');
+        node.setAttribute('aria-label', itemDesc ? `${header}. ${itemDesc}` : header);
         node.setAttribute('aria-hidden', 'false');
       } else {
         node.classList.add('is-empty');
@@ -1026,13 +1038,59 @@
           ctx?.clearRect(0, 0, iconCanvas.width, iconCanvas.height);
         }
         if (labelSpan) labelSpan.textContent = '';
-        node.setAttribute('title', `Slot ${letter} (empty)`);
+        delete node.dataset.tipName;
+        delete node.dataset.tipDesc;
+        node.removeAttribute('title');
         node.setAttribute('aria-label', `Slot ${letter} empty`);
         node.setAttribute('aria-hidden', 'true');
       }
     });
   }
   Neo.updateEquipmentSlots = updateEquipmentSlots;
+
+  // Shared, body-level tooltip element for equipment slots. Lives on <body> so
+  // it escapes the equipment bar's scroll/clip container and never gets cut off.
+  let equipTooltipEl = null;
+  function getEquipTooltipEl() {
+    if (equipTooltipEl && equipTooltipEl.isConnected) return equipTooltipEl;
+    equipTooltipEl = document.createElement('div');
+    equipTooltipEl.className = 'equip-tooltip';
+    equipTooltipEl.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(equipTooltipEl);
+    return equipTooltipEl;
+  }
+
+  function showEquipTooltip(node) {
+    const name = node.dataset.tipName;
+    if (!name || !node.classList.contains('is-filled')) return;
+    const desc = node.dataset.tipDesc || '';
+    const el = getEquipTooltipEl();
+    el.innerHTML = '';
+    const nameEl = document.createElement('div');
+    nameEl.className = 'equip-tooltip__name';
+    nameEl.textContent = name;
+    el.appendChild(nameEl);
+    if (desc) {
+      const descEl = document.createElement('div');
+      descEl.className = 'equip-tooltip__desc';
+      descEl.textContent = desc;
+      el.appendChild(descEl);
+    }
+    // Position to the left of the slot, vertically centered, clamped on-screen.
+    el.classList.add('is-visible');
+    const rect = node.getBoundingClientRect();
+    const tipRect = el.getBoundingClientRect();
+    let top = rect.top + rect.height / 2 - tipRect.height / 2;
+    top = Math.max(8, Math.min(top, window.innerHeight - tipRect.height - 8));
+    let left = rect.left - tipRect.width - 11;
+    if (left < 8) left = rect.right + 11; // fall back to the right if no room
+    el.style.top = `${Math.round(top)}px`;
+    el.style.left = `${Math.round(left)}px`;
+  }
+
+  function hideEquipTooltip() {
+    if (equipTooltipEl) equipTooltipEl.classList.remove('is-visible');
+  }
 
   function bindEquipmentSlotClicks() {
     const nodes = Neo.ui.equipmentSlotNodes;
@@ -1044,6 +1102,10 @@
         const letter = node.dataset.equipKey || '';
         Neo.activateEquipmentSlotKey(letter);
       });
+      node.addEventListener('mouseenter', () => showEquipTooltip(node));
+      node.addEventListener('mouseleave', hideEquipTooltip);
+      node.addEventListener('focus', () => showEquipTooltip(node));
+      node.addEventListener('blur', hideEquipTooltip);
     });
   }
   Neo.bindEquipmentSlotClicks = bindEquipmentSlotClicks;
