@@ -569,6 +569,15 @@
 
   function drawActionIcons() {
     const drawHudMoveIcon = (slot, canvas, fallbackColor, fallbackPixels) => {
+      // The melee/LMB slot shows the equipped weapon's icon when one is equipped,
+      // matching the inventory/shop. Falls back to the melee move, then pixels.
+      if (slot === 'melee' && canvas && typeof Neo.drawWeaponToastIcon === 'function') {
+        const weaponDef = Neo.WEAPON_DEFS[Neo.getEquippedWeapon()];
+        if (weaponDef) {
+          Neo.drawWeaponToastIcon(canvas, weaponDef);
+          return;
+        }
+      }
       const moveKey = Neo.getEquippedMove(slot);
       const moveDef = Neo.MOVE_DEFS[moveKey];
       if (canvas && moveDef && typeof Neo.drawMoveToastIcon === 'function') {

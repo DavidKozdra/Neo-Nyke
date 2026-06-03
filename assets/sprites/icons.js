@@ -1349,6 +1349,22 @@ window.NeoNykeIconDefs = {
         [3,3],[4,3],[3,4],[4,4],
       ],
     },
+    princess_wand: {
+      color: '#ff9de8',
+      pixels: [
+        // four-point sparkle star at the tip (top-right)
+        [5,0],
+        [4,1],[5,1],[6,1],
+        [3,2],[4,2],[5,2],[6,2],[7,2],
+        [4,3],[5,3],[6,3],
+        [5,4],
+        // wand shaft running down to bottom-left
+        [4,4],
+        [3,5],
+        [2,6],
+        [1,7],
+      ],
+    },
   },
 
   heals: {
