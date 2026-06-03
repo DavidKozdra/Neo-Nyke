@@ -551,7 +551,7 @@
   const usernameInput = document.getElementById('usernameInput');
   if (usernameInput) {
     const syncUsername = () => {
-      if (window.Neo?.metaProgress !== undefined) {
+      if (window.Neo?.metaProgress) {
         usernameInput.value = window.Neo.metaProgress.username || '';
       }
     };

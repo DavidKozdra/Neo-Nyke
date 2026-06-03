@@ -633,7 +633,7 @@
     forEachEnemyNearCircle(x, y, radius, enemy => {
       if (Neo.dist(x, y, enemy.x, enemy.y) > radius + enemy.r) return;
       Neo.hitEnemy(enemy, damage, Math.atan2(enemy.y - y, enemy.x - x), 180, color);
-    }
+    });
     Neo.destructibles.forEach(prop => {
       if (!prop.broken && !prop.hidden && Neo.dist(x, y, prop.x, prop.y) <= radius + prop.r) {
         damageDestructible(prop, damage, { sourceX: x, sourceY: y, impactType: 'blast', force: 1.6 });
