@@ -1,24 +1,8 @@
 const { spawnSync } = require('node:child_process');
 
-const DEFAULT_API_BASE = 'https://neonyke.davidkozdra.workers.dev/api';
+const DEFAULT_API_BASE = 'http://localhost:8787/api';
 
 
-let yesterdayseed;
-
-
-function getLogData(){
-
-}
-
-function getYesterdaySeed(){
-   
-
-}
-
-function readCSV(table, row ) {
-    
-    /* get file info and break */
-}
 
 
 function createRequestUrl(base, path) {
@@ -34,6 +18,15 @@ function parseSeed(payload) {
   }
   return 'unavailable';
 }
+
+function parseServerInfo(payload) {
+  const serverInfo = payload && payload.serverInfo;
+  if (typeof serverInfo === 'string' || typeof serverInfo === 'number') {
+    return String(serverInfo);
+  }
+  return 'not getting data from parseServerInfo';
+}
+
 
 function parseWinnersCount(payload) {
   if (payload && Number.isFinite(payload.totalEntries)) {
@@ -63,18 +56,25 @@ async function fetchJson(url) {
 async function loadServerStats(apiBase) {
   const seedUrl = createRequestUrl(apiBase, '/seed');
   const leaderboardUrl = createRequestUrl(apiBase, '/leaderboard?page=1');
+  const serverInfoUrl = createRequestUrl(apiBase, '/server-info-testing');
 
-  const [seedResult, leaderboardResult] = await Promise.allSettled([
+  const [seedResult, leaderboardResult, serverInfoResult] = await Promise.allSettled([
     fetchJson(seedUrl),
     fetchJson(leaderboardUrl),
+    fetchJson(serverInfoUrl),
   ]);
 
+  //console.log('Loaded server stats:', { seedResult, leaderboardResult, serverInfoResult }); 
   return {
     seed: seedResult.status === 'fulfilled' ? parseSeed(seedResult.value) : 'unavailable',
     winnersCount: leaderboardResult.status === 'fulfilled' ? parseWinnersCount(leaderboardResult.value) : 'unavailable',
+    serverInfo: serverInfoResult.status === 'fulfilled' ? parseServerInfo(serverInfoResult.value) : 'not getting data from server',
     seedError: seedResult.status === 'rejected' ? seedResult.reason : null,
     leaderboardError: leaderboardResult.status === 'rejected' ? leaderboardResult.reason : null,
+    serverInfoError: serverInfoResult.status === 'rejected' ? serverInfoResult.reason : null,
   };
+
+
 }
 
 function runJest() {
@@ -88,12 +88,12 @@ function runJest() {
 async function main() {
   const apiBase = process.env.NEONYKE_API_BASE || DEFAULT_API_BASE;
   const stats = await loadServerStats(apiBase);
-
   console.log(`Date (UTC): ${toUtcDateString()}`);
-  console.log(`Today's seed: ${stats.seed}`);
+  console.log(`Week's seed: ${stats.seed}`);
   console.log(`Count of winners: ${stats.winnersCount}`);
+  console.log(`Server info: ${JSON.stringify(stats.serverInfo)}`);
 
-  if (stats.seedError || stats.leaderboardError) {
+  if (stats.seedError || stats.leaderboardError || stats.serverInfoError) {
     console.warn('Server stats warning: unable to read one or more endpoints. Unit tests will still run.');
   }
 

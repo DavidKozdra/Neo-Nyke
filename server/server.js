@@ -124,6 +124,26 @@ async function handleRequest(request, env) {
     }
   }
 
+  // ── GET /server-info-testing ────────────────────────────────────────────
+  if (path === '/server-info-testing' && request.method === 'GET') {
+    if (!rateLimit(`srvinfo:${ip}`, 60, 60_000)) {
+      return json({ error: 'Too many requests' }, 429);
+    }
+
+    const seed = await getSeed(env);
+    const leaderboard = await getLeaderboard(env);
+    //const lastWeek = await env.STORE.get('lastWeek-seed');
+    
+
+
+    return json({
+      seed,
+      winnersCount: leaderboard.length,
+      ...getSeasonInfo(),
+    });
+  }
+  
+
   // ── GET /version ─────────────────────────────────────────────────────────
   if (path === '/version' && request.method === 'GET') {
     return json({ version: '1.0.0' });
@@ -273,3 +293,5 @@ export default {
     await handleScheduled(env);
   },
 };
+
+
