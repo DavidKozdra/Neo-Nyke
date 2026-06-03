@@ -1461,15 +1461,7 @@ export function getShopWeaponOffers() {
     return false;
   }
 
-  function renderMoveReplaceRail(slotLabel, currentMoveName, nextMoveName) {
-    const prev = currentMoveName || 'Empty';
-    return `<div class="shop-card__swap-rail">
-      <span class="shop-card__swap-slot">${escapeShopText(slotLabel)}</span>
-      <span class="shop-card__swap-old">${escapeShopText(prev)}</span>
-      <span class="shop-card__swap-arrow">-&gt;</span>
-      <span class="shop-card__swap-new">${escapeShopText(nextMoveName || 'New Move')}</span>
-    </div>`;
-  }
+
 
   function renderShopCard({
     rarityLabel,
@@ -1514,11 +1506,7 @@ export function getShopWeaponOffers() {
         </div>
         <span class="shop-card__price">${escapeShopText(cost)}</span>
       </div>
-      <div class="shop-card__meta">
-        ${chipHtml}
-        ${recommended ? '<span class="shop-card__recommended-badge">Recommended</span>' : ''}
-        ${statusLabel ? `<span class="shop-card__status shop-card__status--${escapeShopText(status)}">${escapeShopText(statusLabel)}</span>` : ''}
-      </div>
+
       <div class="shop-card__copy">
         <p${descStyle}>${escapeShopText(description)}</p>
       </div>
@@ -1650,12 +1638,6 @@ export function renderShopPanel() {
   if (!isPanelOpen(Neo.ui.shopPanel)) return;
     Neo.refreshRoomShopCosts(Neo.currentRoom);
     Neo.shopOffers = Neo.currentRoom?.shopOffers || Neo.shopOffers;
-    Neo.ui.shopCoins.textContent = String(Neo.player.coins);
-    const shopMetaLabel = document.getElementById('shopMetaLabel');
-    if (shopMetaLabel) {
-      const roomType = String(Neo.currentRoom?.type || 'shop').replace(/_/g, ' ');
-      shopMetaLabel.textContent = `F${Neo.floor} • ${Neo.titleCase?.(roomType) || roomType}`;
-    }
     const noItemsChallenge = Neo.isChallengeActive('no_items');
     Neo.ui.shopTabs.forEach(tab => {
       const isActive = tab.dataset.tab === Neo.activeShopTab;
@@ -1770,7 +1752,6 @@ export function renderShopPanel() {
           const slotLabel = Neo.SLOT_LABELS[def?.slot] || def?.slot || 'move';
           const currentMoveKey = Neo.player.equippedMoves?.[def?.slot];
           const currentMoveName = currentMoveKey ? (Neo.MOVE_DEFS[currentMoveKey]?.name || currentMoveKey) : null;
-          const replacesLine = renderMoveReplaceRail(slotLabel, currentMoveName, def?.name || offer.key);
           const descriptorChips = buildDescriptorChips(offer.key, def?.desc || '', { slot: def?.slot, kind: 'move' });
           const moveChips = [
             { label: slotLabel, tone: 'move' },
@@ -1789,7 +1770,6 @@ export function renderShopPanel() {
             title: def?.name || offer.key,
             cost: offer.cost,
             description: def?.desc || 'No move description available.',
-            footerExtra: replacesLine,
             chips,
             stats: buildMoveShopStats(offer.key),
             recommended: isOfferRecommended('move', offer.key, chips),

@@ -1745,9 +1745,6 @@ button, input, select, textarea {
   display: grid;
   place-items: center;
   border-radius: 10px;
-  border: 1px solid color-mix(in srgb, var(--shop-card-accent) 34%, rgba(255,255,255,.12));
-  background: color-mix(in srgb, var(--shop-card-accent) 12%, var(--menu-surface));
-  box-shadow: inset 0 0 14px rgba(255,255,255,.035), 0 0 14px color-mix(in srgb, var(--shop-card-accent) 18%, transparent);
 }
 
 .shop-card__icon {
@@ -1891,18 +1888,19 @@ button, input, select, textarea {
   border-radius: 10px;
   border: 1px solid var(--menu-border);
   background: rgba(0,0,0,.12);
-}
+  font-size: 2em;
+  }
 
 .shop-card__stat span {
   color: var(--menu-text-soft);
-  font-size: 9px;
+  font-size: 1em;
   font-weight: 800;
   letter-spacing: .1em;
 }
 
 .shop-card__stat b {
   color: var(--menu-text);
-  font-size: 12px;
+  font-size: 1.2em;
   font-weight: 900;
   letter-spacing: .02em;
 }
@@ -2064,6 +2062,7 @@ button, input, select, textarea {
   text-transform: uppercase;
   cursor: pointer;
   transition: transform .14s ease, filter .14s ease, border-color .14s ease, opacity .14s ease;
+  margin-top: 10px;
 }
 
 .shop-buy:hover:not(:disabled) {
@@ -2086,7 +2085,6 @@ button, input, select, textarea {
 /* Shop refresh: shelf layout + richer cards */
 .panel-tabs,
 .shop-tabs {
-  border: 1px solid color-mix(in srgb, var(--menu-border) 80%, transparent);
   gap: 8px;
 }
 
@@ -2118,9 +2116,9 @@ button, input, select, textarea {
 }
 
 .shop-card {
-  min-height: 278px;
+  min-height: 132px;
   grid-template-rows: auto auto auto auto 1fr auto;
-  gap: 10px;
+  gap: 8px;
   isolation: isolate;
 }
 
@@ -2150,9 +2148,6 @@ button, input, select, textarea {
 
 .shop-card__icon-frame {
   border-radius: 12px;
-  border: 1px solid color-mix(in srgb, var(--menu-border-strong) 60%, transparent);
-  background: color-mix(in srgb, var(--menu-surface) 85%, transparent);
-  box-shadow: 0 0 0 1px rgba(255,255,255,.04), inset 0 0 0 1px rgba(0,0,0,.18);
   padding: 4px;
 }
 
@@ -2193,9 +2188,9 @@ button, input, select, textarea {
   border: 1px solid color-mix(in srgb, var(--menu-border) 80%, transparent);
   background: color-mix(in srgb, var(--menu-surface) 85%, transparent);
   color: var(--menu-text-muted);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: .05em;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: .08em;
   text-transform: uppercase;
 }
 
@@ -2208,12 +2203,12 @@ button, input, select, textarea {
   display: inline-flex;
   align-items: center;
   margin-left: auto;
-  padding: 2px 8px;
+  padding: 3px 9px;
   border-radius: 999px;
   border: 1px solid color-mix(in srgb, #7ad0ff 68%, transparent);
   color: #b6e8ff;
   background: color-mix(in srgb, #7ad0ff 20%, transparent);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 800;
   letter-spacing: .08em;
   text-transform: uppercase;
@@ -2223,10 +2218,10 @@ button, input, select, textarea {
   display: inline-flex;
   align-items: center;
   margin-left: auto;
-  padding: 2px 8px;
+  padding: 3px 9px;
   border-radius: 999px;
   border: 1px solid var(--menu-border);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 800;
   letter-spacing: .08em;
   text-transform: uppercase;
@@ -2258,7 +2253,7 @@ button, input, select, textarea {
   padding: 5px 7px;
   display: grid;
   gap: 2px;
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: .04em;
   text-transform: uppercase;
   color: var(--menu-text-soft);
@@ -2266,7 +2261,7 @@ button, input, select, textarea {
 
 .shop-card__stat b {
   color: var(--menu-text);
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .shop-card__swap-rail {
@@ -2281,7 +2276,7 @@ button, input, select, textarea {
 }
 
 .shop-card__swap-slot {
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: .09em;
   text-transform: uppercase;
   color: var(--menu-text-soft);
@@ -2290,7 +2285,7 @@ button, input, select, textarea {
 .shop-card__swap-old,
 .shop-card__swap-new,
 .shop-card__swap-arrow {
-  font-size: 11px;
+  font-size: 13px;
   letter-spacing: .05em;
 }
 
@@ -3096,29 +3091,20 @@ button, input, select, textarea {
   text-transform: uppercase;
   white-space: nowrap;
   background: rgba(8, 16, 24, 0.88);
-  border: 1.5px solid rgba(0, 220, 255, 0.5);
-  color: #00dfff;
-  box-shadow: 0 0 18px rgba(0, 200, 255, 0.18), 0 2px 12px rgba(0,0,0,.5);
-  animation: interact-prompt-in 0.18s ease forwards, interact-prompt-pulse 1.6s ease-in-out 0.18s infinite;
+  animation: interact-prompt-in 0.18s ease forwards, interact-prompt-grow 1.6s ease-in-out 0.18s infinite;
 }
 .interact-prompt.interact-prompt--forge {
   border-color: rgba(255, 180, 40, 0.55);
   color: #ffb840;
   box-shadow: 0 0 18px rgba(255, 160, 20, 0.18), 0 2px 12px rgba(0,0,0,.5);
-  animation: interact-prompt-in 0.18s ease forwards, interact-prompt-pulse-forge 1.6s ease-in-out 0.18s infinite;
+  animation: interact-prompt-in 0.18s ease forwards, interact-prompt-grow 1.6s ease-in-out 0.18s infinite;
 }
-@keyframes interact-prompt-in {
-  from { opacity: 0; transform: translateX(-50%) translateY(-6px); }
-  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+@keyframes interact-prompt-grow {
+  0%, 100% { transform: translateX(-50%) translateY(0) scale(1); }
+  50%       { transform: translateX(-50%) translateY(-2px) scale(1.05); }
 }
-@keyframes interact-prompt-pulse {
-  0%, 100% { box-shadow: 0 0 18px rgba(0, 200, 255, 0.18), 0 2px 12px rgba(0,0,0,.5); }
-  50%       { box-shadow: 0 0 32px rgba(0, 200, 255, 0.55), 0 2px 16px rgba(0,0,0,.5); }
-}
-@keyframes interact-prompt-pulse-forge {
-  0%, 100% { box-shadow: 0 0 18px rgba(255, 160, 20, 0.18), 0 2px 12px rgba(0,0,0,.5); }
-  50%       { box-shadow: 0 0 32px rgba(255, 160, 20, 0.55), 0 2px 16px rgba(0,0,0,.5); }
-}
+
 
 #actionBar {
   position: absolute;

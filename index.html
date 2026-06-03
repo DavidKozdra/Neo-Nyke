@@ -373,12 +373,9 @@
   <div id="shopPanel" class="panel-shell game-panel game-panel--shop hidden" aria-hidden="true">
     <div class="game-panel-head">
       <div class="panel-title-wrap">
-        <span class="panel-kicker">Bazaar</span>
         <h3>SHOP</h3>
         <p class="panel-subtitle">Weapons, relics, and quick repairs for the next room.</p>
-        <span id="shopMetaLabel" class="shop-meta-label">F1 Shop</span>
       </div>
-      <div class="shop-coins">Coins <b id="shopCoins">0</b></div>
       <button id="shopClose" class="panel-close" aria-label="Close shop">X</button>
     </div>
     <div class="shop-tabs panel-tabs">
@@ -398,7 +395,6 @@
       <div class="panel-title-wrap">
         <span class="panel-kicker">Loadout</span>
         <h3>INVENTORY</h3>
-        <p class="panel-subtitle">Drag owned moves into matching slots to swap your kit.</p>
       </div>
       <button id="invClose" class="panel-close" aria-label="Close inventory">X</button>
     </div>
@@ -408,7 +404,6 @@
       <button class="inv-player-tab" data-inv-player="3" role="tab">P3</button>
       <button class="inv-player-tab" data-inv-player="4" role="tab">P4</button>
     </div>
-    <div id="invBuildSummary" class="inv-build-summary" aria-label="Current build"></div>
     <div class="inv-tabs panel-tabs" role="tablist">
       <button class="inv-tab panel-tab active" data-inv-tab="stats" role="tab"><canvas class="tab-icon tab-icon--canvas" width="22" height="22" data-inv-ui-icon="tab-stats" aria-hidden="true"></canvas>Stats</button>
       <button class="inv-tab panel-tab" data-inv-tab="items" role="tab"><canvas class="tab-icon tab-icon--canvas" width="22" height="22" data-inv-ui-icon="tab-relics" aria-hidden="true"></canvas>Relics</button>
@@ -416,9 +411,6 @@
       <button class="inv-tab panel-tab" data-inv-tab="equipped" role="tab"><canvas class="tab-icon tab-icon--canvas" width="22" height="22" data-inv-ui-icon="tab-moves" aria-hidden="true"></canvas>Moves</button>
     </div>
     <div class="inv-ux-hints" aria-hidden="true">
-      <span class="inv-ux-hint"><b>Drag</b> move chips onto matching slots</span>
-      <span class="inv-ux-hint"><b>Glow</b> means slot-compatible</span>
-      <span class="inv-ux-hint"><b>Dimmed</b> means already equipped</span>
     </div>
     <div class="inv-tab-panel" id="invTabStats">
       <div id="invStats" class="inv-stats"></div>
