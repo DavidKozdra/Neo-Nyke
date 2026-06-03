@@ -342,6 +342,12 @@ export function clearGameplayInput() {
   }
 
 export function bindPanelInput() {
+    const drawInventoryTabIcons = () => {
+      document.querySelectorAll('#invPanel .inv-tabs [data-inv-ui-icon]').forEach(canvas => {
+        Neo.drawInventoryUiIcon?.(canvas, canvas.dataset.invUiIcon);
+      });
+    };
+
     Neo.ui.shopClose?.addEventListener('click', () => setShopPanelOpen(false));
     Neo.ui.invClose?.addEventListener('click', () => setInventoryPanelOpen(false));
     // Re-open path: click the HUD pending-action chip to resume an owed
@@ -373,8 +379,10 @@ export function bindPanelInput() {
       tab.addEventListener('click', () => {
         Neo.activeInvTab = tab.dataset.invTab || 'stats';
         renderInventoryPanel();
+        drawInventoryTabIcons();
       });
     });
+    drawInventoryTabIcons();
     Neo.ui.invPlayerTabBtns.forEach(tab => {
       tab.addEventListener('click', () => {
         Neo.activeInvPlayer = Number(tab.dataset.invPlayer) || 1;
