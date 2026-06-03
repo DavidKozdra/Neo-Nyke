@@ -605,11 +605,12 @@
 
   #start .menu-stage {
     width: min(390px, 100%);
+    height: auto;
     min-height: auto;
     margin: 0 auto;
     padding: calc(14px + env(safe-area-inset-top, 0px)) 0 calc(14px + env(safe-area-inset-bottom, 0px));
     gap: 10px;
-    align-content: flex-start;
+    justify-content: flex-start;
   }
 
   #start .menu-cinema {
@@ -1431,7 +1432,9 @@
   }
 
   #start .menu-stage {
+    display: grid;
     width: min(720px, 100%);
+    height: auto;
     min-height: auto;
     margin: 0 auto;
     padding: 12px 0;
