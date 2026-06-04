@@ -414,6 +414,8 @@
       Neo.player.vx += Math.cos(angle) * knockback;
       Neo.player.vy += Math.sin(angle) * knockback;
       Neo.applyPlayerImpactStun(finalAmount, knockback);
+      const hitRatio = Neo.clamp(finalAmount / Math.max(1, Neo.player.maxHp), 0, 1);
+      Neo.addHitstop?.(0.025 + hitRatio * 0.055);
       Neo.shake = 8;
       Neo.shakeT = 0.15;
     }

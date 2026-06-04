@@ -91,11 +91,11 @@
       && window.NeoSettings?.getGameplay?.()?.bloodOnHit !== false;
   }
 
-  // Convert a landed hit into game feel: hitstop (freeze) + screen trauma + a
-  // directional camera kick away from the impact. Magnitude scales with how big
+  // Convert a landed enemy hit into game feel: screen trauma + a directional
+  // camera kick away from the impact. Magnitude scales with how big
   // the hit is vs the target's max HP, so chip damage stays calm and heavy
-  // hits/crits genuinely slam. `angle` is the direction of the blow; the kick
-  // points the same way the enemy is knocked (i.e. away from the player).
+  // hits/crits genuinely slam without freezing enemy combat. `angle` is the
+  // direction of the blow; the kick points the same way the enemy is knocked.
   function applyHitFeel(enemy, dealt, angle, isCrit) {
     // Enemies store max HP in `.max` (players use `.maxHp`).
     const maxHp = enemy ? (enemy.max || enemy.maxHp || dealt * 6) : dealt * 6;
@@ -104,10 +104,8 @@
     // and weak pellets from constantly nudging the camera.
     if (ratio < 0.04 && !isCrit) return;
     const heavy = Neo.clamp(ratio * 2.4, 0, 1);          // 0..1 "heaviness"
-    const hitstop = (isCrit ? 0.05 : 0.02) + heavy * 0.05; // 20–100ms
     const trauma = (isCrit ? 0.32 : 0.16) + heavy * 0.3;   // big hits → big shake
     const kick = (isCrit ? 5 : 2.5) + heavy * 6;           // px of directional kick
-    Neo.addHitstop?.(hitstop);
     Neo.addTrauma?.(trauma, angle, kick);
   }
 
@@ -1453,9 +1451,8 @@
         spawnBleedSpray(enemy, 1, isCrit ? 1.2 : 0.72);
       }
     }
-    // Game feel: hitstop + directional trauma scaled to impact (vs target max HP).
-    // Chip damage gets nothing; crits and big slams get a real freeze + kick away
-    // from the blow. The kill itself adds an extra punch in onEnemyDie.
+    // Game feel: directional trauma scaled to impact (vs target max HP).
+    // Chip damage gets nothing; crits and big slams get a kick away from the blow.
     applyHitFeel(enemy, dealt, angle, isCrit);
     Neo.spawnDamagePopup(enemy.x, enemy.y - 14, dealt, {
       crit: isCrit,
@@ -1931,10 +1928,8 @@
     if (enemy.dead) return;
     enemy.dead = true;
 
-    // Kill punch: a decisive extra freeze + shake so finishing a foe lands.
-    // Bigger/elite/boss kills hit harder.
-    const killWeight = enemy.type === 'god' || enemy.boss ? 1 : enemy.elite ? 0.55 : 0.28;
-    Neo.addHitstop?.(0.03 + killWeight * 0.07);
+    // Kill punch: shake without hitstop so enemy deaths do not read as frame drops.
+    const killWeight = enemy.type === 'god' || enemy.boss ? 1 : enemy.elite ? 0.55 : 0.2;
     Neo.addTrauma?.(0.22 + killWeight * 0.45);
     enemy._dmgPopup = null; // close out any combo-merge target
 
