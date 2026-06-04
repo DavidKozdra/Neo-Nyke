@@ -1156,7 +1156,9 @@
 
     if (room.secret && room.secretKind === 'bowman_bane') {
       if (room.cleared) {
-        if (!Neo.pickups.some(pickup => pickup.type === 'secret_boss_chest')) {
+        // Only (re)spawn the reward chest if it was never looted. Without this
+        // guard, leaving and re-entering a cleared room farms the chest forever.
+        if (!room.secretChestLooted && !Neo.pickups.some(pickup => pickup.type === 'secret_boss_chest')) {
           Neo.pickups.push({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2, type: 'secret_boss_chest' });
         }
       } else if (!room.bossStarted) {

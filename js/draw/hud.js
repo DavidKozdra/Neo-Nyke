@@ -625,6 +625,7 @@
       });
     });
 
+    
     Neo.ctx.restore();
 
     const viewportBounds = {

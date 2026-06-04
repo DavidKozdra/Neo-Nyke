@@ -2072,6 +2072,7 @@
     }
 
     if (enemy.type === 'bowman_bane' && Neo.currentRoom?.secret && Neo.currentRoom?.secretKind === 'bowman_bane') {
+      window.achievementEvents?.emit('bowman:killed');
       Neo.currentRoom.cleared = true;
       Neo.pickups = Neo.pickups.filter(pickup => pickup.type !== 'secret_boss_chest');
       Neo.pickups.push({ x: enemy.x, y: enemy.y, type: 'secret_boss_chest' });
@@ -2255,9 +2256,9 @@
     window.achievementEvents?.emit('item:collected', { totalItems });
 
     if (itemKey === 'jesters_dice') {
-      Neo.floorSkipPending += 3;
+      Neo.floorSkipPending += 3 * collectCount;
       const bonusItemCounts = {};
-      for (let index = 0; index < 10; index += 1) {
+      for (let index = 0; index < 10 * collectCount; index += 1) {
         const rewardPool = Neo.ITEM_KEYS.filter(key => key !== 'jesters_dice');
         const key = rewardPool[Neo.irand(0, rewardPool.length - 1, 'loot')];
         const previousBonusCount = Neo.getItemCount(key);
@@ -2279,9 +2280,9 @@
         Neo.pushItemNotification(key, Number(amount), '(Jester bonus)');
       });
     } else if (itemKey === 'wizards_paw') {
-      Neo.openWizardPawSelection();
+      for (let index = 0; index < collectCount; index += 1) Neo.openWizardPawSelection();
     } else if (itemKey === 'extra_battery') {
-      Neo.openExtraBatterySelection();
+      for (let index = 0; index < collectCount; index += 1) Neo.openExtraBatterySelection();
     }
 
     if (itemKey === 'titan_heart') {

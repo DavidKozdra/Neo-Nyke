@@ -76,6 +76,10 @@ export function bindInput() {
           if (Neo.activateEquipmentSlotKey?.(letter)) event.preventDefault();
         }
       }
+      if (key === ' ' && Neo.gameState === 'play' && !Neo.activateAllKeyLatch) {
+        Neo.activateAllKeyLatch = true;
+        Neo.activateAllEquipmentSlots?.();
+      }
     });
     window.addEventListener('keyup', event => {
       const key = event.key.toLowerCase();
@@ -87,7 +91,7 @@ export function bindInput() {
       const b = window.NeoSettings?.getBindings();
       const inventoryKey = b ? b.inventory : 'i';
       if (key === 'e') { Neo.shopKeyLatch = false; Neo.anvilKeyLatch = false; }
-      if (key === ' ') Neo.ladderUseKeyLatch = false;
+      if (key === ' ') { Neo.ladderUseKeyLatch = false; Neo.activateAllKeyLatch = false; }
       if (key === inventoryKey) Neo.invKeyLatch = false;
       const upper = key.toUpperCase();
       if (Neo.equipKeyLatch && Neo.EQUIPMENT_SLOT_KEYS?.includes(upper)) {

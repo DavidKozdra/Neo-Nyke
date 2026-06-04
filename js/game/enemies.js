@@ -2427,7 +2427,19 @@
 
     if (hpPct < 0.5 && enemy.phase === 1) {
       enemy.phase = 2;
-      sayOverEntity(enemy, 'You should have feared the dark.', { holdTime: 1.8 });
+      sayOverEntity(enemy, 'JUSTICE OF SONICHU!', { holdTime: 1.8 });
+      spawnJusticeOfSonichu(enemy);
+      enemy.sonichuCd = 6.5;
+    }
+
+    // Phase 2: re-cast the room-spanning lightning barrage on a cooldown.
+    if (enemy.phase >= 2) {
+      enemy.sonichuCd = Math.max(0, Number(enemy.sonichuCd || 0) - dt);
+      if (enemy.sonichuCd <= 0 && enemy.stun <= 0) {
+        enemy.sonichuCd = 7.5 * tuning.rangedCadence;
+        sayOverEntity(enemy, 'JUSTICE OF SONICHU!', { holdTime: 1.2 });
+        spawnJusticeOfSonichu(enemy);
+      }
     }
 
     enemy.columnCd = Math.max(0, Number(enemy.columnCd || 0) - dt);
@@ -2496,6 +2508,48 @@
       enemy.beamAngle = Math.atan2(dy, dx) + Neo.rollEnemyBeamBias(enemy, 0.18);
       enemy.attackCd = (enemy.phase >= 2 ? 2.4 : 3.2) * tuning.rangedCadence;
     }
+  }
+
+  // "Justice of Sonichu": Bowman's Bane's phase-2 ultimate. Calls down a fan of
+  // room-spanning lightning bolts that streak across the arena like lasers. Each
+  // bolt telegraphs along its line for a beat, then strikes. One bolt is aimed
+  // through the player's position; the rest sweep the room at staggered angles.
+  function spawnJusticeOfSonichu(enemy) {
+    const tuning = Neo.getEnemyDifficultyTuning();
+    const cx = Neo.ROOM_W / 2;
+    const cy = Neo.ROOM_H / 2;
+    // Long enough to always span the whole room from the center pivot.
+    const reach = Math.hypot(Neo.ROOM_W, Neo.ROOM_H);
+    const boltCount = 5;
+    const aimAngle = Math.atan2(Neo.player.y - cy, Neo.player.x - cx);
+    for (let index = 0; index < boltCount; index += 1) {
+      // Spread the bolts evenly around the room, anchored on the player's bearing.
+      const angle = aimAngle + (index - (boltCount - 1) / 2) * (Math.PI / boltCount);
+      const dirX = Math.cos(angle);
+      const dirY = Math.sin(angle);
+      // Stagger the strikes so they cascade rather than all landing at once.
+      const warn = (0.7 + index * 0.16) / Math.max(0.6, tuning.reaction);
+      Neo.hazards.push({
+        kind: 'lightning_strike_line',
+        enemy: true,
+        source: 'justice_of_sonichu',
+        x1: cx - dirX * reach,
+        y1: cy - dirY * reach,
+        x2: cx + dirX * reach,
+        y2: cy + dirY * reach,
+        r: 30,
+        warn,
+        warnTick: 0,
+        tick: 0,
+        interval: 0.12,
+        // ~0.55s active strike window after the telegraph.
+        ttl: warn + 0.55,
+        damage: Math.round(enemy.dmg * 0.85),
+      });
+    }
+    Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.5, ring: 60, c: '#bfe4ff' });
+    Neo.shake = Math.max(Neo.shake, 9);
+    Neo.shakeT = Math.max(Neo.shakeT, 0.18);
   }
 
   // Directional hammer shockwave: a wave of damage that travels forward in the

@@ -6289,6 +6289,20 @@ border-bottom: black solid 2px;
   color: #ffffff;
 }
 
+.bind-static {
+  display: inline-block;
+  min-width: 84px;
+  padding: 8px 14px;
+  border: 1px dashed var(--menu-border);
+  border-radius: 8px;
+  color: var(--menu-accent-strong);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-align: center;
+  opacity: .85;
+}
+
 .bind-btn.listening {
   border-color: var(--menu-border-strong);
   background: rgba(34, 42, 56, .96);

@@ -807,6 +807,10 @@
     return getEquipmentCooldown(itemKey) <= 0 && getEquipmentEffectTime(itemKey) <= 0;
   }
 
+  function getEquipmentStackCount(itemKey) {
+    return Math.max(1, Math.floor(Number(Neo.getItemCount?.(itemKey) || 0)));
+  }
+
   function getEquipmentState(itemKey) {
     if (getEquipmentEffectTime(itemKey) > 0) return 'ready';
     return getEquipmentCooldown(itemKey) <= 0 ? 'ready' : 'charging';
@@ -827,10 +831,20 @@
       Neo.spawnParticle({ x: player.x, y: player.y - 32, life: 0.5, text: getEquipmentStatusText(itemKey), c: '#ffc880' });
       return false;
     }
+    const stacks = getEquipmentStackCount(itemKey);
     player.equipmentCooldowns[itemKey] = def.cooldown;
     if (def.duration > 0) {
-      const stackBonus = itemKey === 'el_bartos_cape' ? Math.max(0, Neo.getItemCount(itemKey) - 1) * 5 : 0;
-      player.equipmentEffects[itemKey] = { time: def.duration + stackBonus, tick: 0 };
+      const extraStacks = stacks - 1;
+      const durationBonus = {
+        pew_pew_box: 1.5,
+        turbo_boots: 3,
+        skizzard_tail: 1.5,
+        zap_to_extreme: 2,
+        mid_sweepy_box: 1.5,
+        el_bartos_cape: 5,
+        gold_vac: 30,
+      }[itemKey] || 0;
+      player.equipmentEffects[itemKey] = { time: def.duration + extraStacks * durationBonus, tick: 0, stacks };
     }
     if (itemKey === 'panic_button') activatePanicButton();
     if (itemKey === 'sparkle_charm') activateSparkleCharm();
@@ -840,43 +854,51 @@
     return true;
   }
 
-  function spawnPewPewMissile() {
+  function spawnPewPewMissile(stacks = 1) {
     if (!Neo.player || !Neo.spawnProjectile) return;
-    const targetAngle = Math.atan2(Neo.mouse.worldY - Neo.player.y, Neo.mouse.worldX - Neo.player.x);
-    const angle = Number.isFinite(targetAngle) ? targetAngle + Neo.rand(-0.45, 0.45, 'fx') : Neo.rand(0, Math.PI * 2, 'fx');
-    Neo.spawnProjectile({
-      x: Neo.player.x + Math.cos(angle) * 12,
-      y: Neo.player.y + Math.sin(angle) * 12,
-      vx: Math.cos(angle) * 260,
-      vy: Math.sin(angle) * 260,
-      r: 6,
-      life: 2.5,
-      enemy: false,
-      kind: 'homing_missile',
-      damage: 16,
-      knockback: 120,
-      color: '#ffe06f',
-      homing: true,
-      homingTarget: 'enemy',
-      homingRadius: 920,
-      homingSpeed: 430,
-      homingAccel: 3.8,
-      homingTurnRate: 3.5,
-    });
+    const missileCount = Math.min(4, getEquipmentStackCount('pew_pew_box'), Math.max(1, Math.floor(Number(stacks || 1))));
+    for (let index = 0; index < missileCount; index += 1) {
+      const targetAngle = Math.atan2(Neo.mouse.worldY - Neo.player.y, Neo.mouse.worldX - Neo.player.x);
+      const angle = Number.isFinite(targetAngle) ? targetAngle + Neo.rand(-0.45, 0.45, 'fx') : Neo.rand(0, Math.PI * 2, 'fx');
+      const power = 1 + (missileCount - 1) * 0.12;
+      Neo.spawnProjectile({
+        x: Neo.player.x + Math.cos(angle) * 12,
+        y: Neo.player.y + Math.sin(angle) * 12,
+        vx: Math.cos(angle) * 260,
+        vy: Math.sin(angle) * 260,
+        r: 6,
+        life: 2.5,
+        enemy: false,
+        kind: 'homing_missile',
+        damage: 16 * power,
+        knockback: 120,
+        color: '#ffe06f',
+        homing: true,
+        homingTarget: 'enemy',
+        homingRadius: 920,
+        homingSpeed: 430,
+        homingAccel: 3.8,
+        homingTurnRate: 3.5,
+      });
+    }
   }
 
-  function pulseExtremeZap() {
+  function pulseExtremeZap(stacks = 1) {
     if (!Neo.player) return;
+    stacks = Math.max(1, Math.floor(Number(stacks || 1)));
+    const targetCount = Math.min(10, 5 + (stacks - 1));
+    const damage = 11 + (stacks - 1) * 3;
+    const radius = 250 + (stacks - 1) * 22;
     const enemies = [];
-    Neo.forEachEnemyNearCircle?.(Neo.player.x, Neo.player.y, 250, enemy => {
+    Neo.forEachEnemyNearCircle?.(Neo.player.x, Neo.player.y, radius, enemy => {
       const dx = enemy.x - Neo.player.x;
       const dy = enemy.y - Neo.player.y;
       enemies.push({ enemy, distSq: dx * dx + dy * dy });
     });
     enemies.sort((a, b) => a.distSq - b.distSq);
-    enemies.slice(0, 5).forEach(({ enemy }) => {
+    enemies.slice(0, targetCount).forEach(({ enemy }) => {
       const angle = Math.atan2(enemy.y - Neo.player.y, enemy.x - Neo.player.x);
-      Neo.hitEnemy?.(enemy, 11, angle, 70, '#8dd4ff');
+      Neo.hitEnemy?.(enemy, damage, angle, 70, '#8dd4ff');
       Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.2, ring: 14, c: '#bde8ff' });
     });
     const angle = Neo.rand(0, Math.PI * 2, 'fx');
@@ -888,23 +910,26 @@
       ttl: 0.55,
       tick: 0,
       interval: 0.22,
-      damage: 10,
+      damage: 10 + (stacks - 1) * 2,
     });
   }
 
   function activatePanicButton() {
     if (!Neo.player) return;
+    const stacks = getEquipmentStackCount('panic_button');
+    const radius = 190 + (stacks - 1) * 28;
+    const invTime = 1.5 + (stacks - 1) * 0.35;
     Neo.STATUS_KEYS?.forEach(key => Neo.clearStatus?.(Neo.player, key));
-    Neo.player.inv = Math.max(Number(Neo.player.inv || 0), 1.5);
-    Neo.forEachEnemyNearCircle?.(Neo.player.x, Neo.player.y, 190, enemy => {
+    Neo.player.inv = Math.max(Number(Neo.player.inv || 0), invTime);
+    Neo.forEachEnemyNearCircle?.(Neo.player.x, Neo.player.y, radius, enemy => {
       const angle = Math.atan2(enemy.y - Neo.player.y, enemy.x - Neo.player.x);
-      const force = 440;
+      const force = 440 + (stacks - 1) * 55;
       enemy.vx += Math.cos(angle) * force;
       enemy.vy += Math.sin(angle) * force;
-      enemy.stun = Math.max(Number(enemy.stun || 0), 0.28);
-      Neo.hitEnemy?.(enemy, 8, angle, 340, '#f4f6fb');
+      enemy.stun = Math.max(Number(enemy.stun || 0), 0.28 + (stacks - 1) * 0.05);
+      Neo.hitEnemy?.(enemy, 8 + (stacks - 1) * 4, angle, 340, '#f4f6fb');
     });
-    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.65, ring: 72, c: '#f4f6fb' });
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.65, ring: Math.min(128, 72 + (stacks - 1) * 12), c: '#f4f6fb' });
   }
 
   // Mark the nearest 5 enemies with a "crit sparkle": while marked, every hit
@@ -912,6 +937,8 @@
   function activateSparkleCharm() {
     if (!Neo.player) return;
     const SPARKLE_DURATION = 6;
+    const stacks = getEquipmentStackCount('sparkle_charm');
+    const targetCount = Math.min(12, 5 + (stacks - 1) * 2);
     const candidates = [];
     Neo.forEachEnemyNearCircle?.(Neo.player.x, Neo.player.y, 9999, enemy => {
       if (!enemy || enemy.dead || (enemy.spawnT || 0) > 0) return;
@@ -920,9 +947,9 @@
       candidates.push({ enemy, distSq: dx * dx + dy * dy });
     });
     candidates.sort((a, b) => a.distSq - b.distSq);
-    const marked = candidates.slice(0, 5);
+    const marked = candidates.slice(0, targetCount);
     marked.forEach(({ enemy }) => {
-      enemy.critSparkle = Math.max(Number(enemy.critSparkle || 0), SPARKLE_DURATION);
+      enemy.critSparkle = Math.max(Number(enemy.critSparkle || 0), SPARKLE_DURATION + (stacks - 1));
       Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.5, ring: enemy.r + 10, c: '#ffe8a3' });
       Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 14, life: 0.6, text: 'SPARKLED', c: '#ffe8a3' });
     });
@@ -931,30 +958,36 @@
     }
   }
 
-  function dropSweepyMine() {
+  function dropSweepyMine(stacks = 1) {
     if (!Neo.player) return;
-    const angle = Neo.rand(0, Math.PI * 2, 'fx');
-    const distance = Neo.rand(22, 74, 'fx');
-    Neo.hazards.push({
-      kind: 'thorn_mine',
-      owner: 'player',
-      x: Neo.player.x + Math.cos(angle) * distance,
-      y: Neo.player.y + Math.sin(angle) * distance,
-      r: 18,
-      ttl: 5,
-      armTime: 0.18,
-      triggerRadius: 34,
-      blastRadius: 62,
-      damage: 18,
-      bleedStacks: 1,
-      bleedDuration: 4.5,
-      statusTick: 0,
-    });
+    stacks = Math.max(1, Math.floor(Number(stacks || 1)));
+    const mineCount = Math.min(3, stacks);
+    for (let index = 0; index < mineCount; index += 1) {
+      const angle = Neo.rand(0, Math.PI * 2, 'fx');
+      const distance = Neo.rand(22, 74, 'fx');
+      Neo.hazards.push({
+        kind: 'thorn_mine',
+        owner: 'player',
+        x: Neo.player.x + Math.cos(angle) * distance,
+        y: Neo.player.y + Math.sin(angle) * distance,
+        r: 18,
+        ttl: 5,
+        armTime: 0.18,
+        triggerRadius: 34,
+        blastRadius: 62 + (stacks - 1) * 6,
+        damage: 18 + (stacks - 1) * 4,
+        bleedStacks: Math.min(4, 1 + Math.floor((stacks - 1) / 2)),
+        bleedDuration: 4.5 + (stacks - 1) * 0.4,
+        statusTick: 0,
+      });
+    }
   }
 
-  function tickSkizzardRegen() {
+  function tickSkizzardRegen(stacks = 1) {
     if (!Neo.player || Neo.player.hp >= Neo.player.maxHp) return;
-    const heal = Neo.scalePlayerHealing?.(Neo.player.maxHp * 0.025, 1) ?? Math.max(1, Neo.player.maxHp * 0.025);
+    stacks = Math.max(1, Math.floor(Number(stacks || 1)));
+    const healRatio = 0.025 * (1 + (stacks - 1) * 0.45);
+    const heal = Neo.scalePlayerHealing?.(Neo.player.maxHp * healRatio, 1) ?? Math.max(1, Neo.player.maxHp * healRatio);
     const gained = Neo.applyPlayerHealing?.(heal) ?? 0;
     if (gained > 0) {
       Neo.spawnHealPopup?.(Neo.player.x + Neo.rand(-8, 8), Neo.player.y - 22, gained, { color: '#8fffd2', size: 13 });
@@ -973,16 +1006,16 @@
       effect.time = Math.max(0, Number(effect.time || 0) - dt);
       effect.tick = Math.max(0, Number(effect.tick || 0) - dt);
       if (key === 'pew_pew_box' && effect.tick <= 0) {
-        spawnPewPewMissile();
+        spawnPewPewMissile(effect.stacks);
         effect.tick = 0.5;
       } else if (key === 'skizzard_tail' && effect.tick <= 0) {
-        tickSkizzardRegen();
+        tickSkizzardRegen(effect.stacks);
         effect.tick = 0.5;
       } else if (key === 'zap_to_extreme' && effect.tick <= 0) {
-        pulseExtremeZap();
+        pulseExtremeZap(effect.stacks);
         effect.tick = 0.45;
       } else if (key === 'mid_sweepy_box' && effect.tick <= 0) {
-        dropSweepyMine();
+        dropSweepyMine(effect.stacks);
         effect.tick = 0.42;
       } else if (key === 'el_bartos_cape') {
         player.inv = Math.max(Number(player.inv || 0), 0.12);
@@ -1170,6 +1203,19 @@
     return true;
   }
   Neo.activateEquipmentSlotKey = activateEquipmentSlotKey;
+
+  // Fire every equipped tool at once (Space activates all). Returns true if any fired.
+  function activateAllEquipmentSlots() {
+    if (!Neo.player) return false;
+    syncEquipmentSlotsFromInventory();
+    let activated = false;
+    (Neo.player.equipmentSlots || []).forEach(itemKey => {
+      const def = itemKey ? ACTIVATABLE_ITEMS[itemKey] : null;
+      if (def?.activate) { def.activate(); activated = true; }
+    });
+    return activated;
+  }
+  Neo.activateAllEquipmentSlots = activateAllEquipmentSlots;
 
   function updateEquipmentSlots() {
     const root = Neo.ui.equipmentSlots;

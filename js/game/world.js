@@ -1667,6 +1667,49 @@
             },
           });
         }
+      } else if (hazard.kind === 'lightning_strike_line') {
+        // "Justice of Sonichu": a laser-like lightning bolt spanning the whole
+        // room. First telegraphs along its line for `warn` seconds (faint, no
+        // damage), then strikes — dealing damage to anyone within `r` of the
+        // segment for a brief active window.
+        hazard.warn = Math.max(0, Number(hazard.warn || 0) - dt);
+        const striking = hazard.warn <= 0;
+        if (!striking) {
+          // Telegraph: pulsing faint bolt so the player can read the line.
+          hazard.warnTick = Number(hazard.warnTick || 0) - dt;
+          if (hazard.warnTick <= 0) {
+            hazard.warnTick = 0.08;
+            Neo.spawnParticle({
+              x: hazard.x1, y: hazard.y1, life: 0.12, c: '#5a86c8',
+              line: {
+                x1: hazard.x1, y1: hazard.y1, x2: hazard.x2, y2: hazard.y2,
+                w: 2, jag: 6, seg: 10, phase: Neo.rng() * Math.PI * 2,
+              },
+            });
+          }
+        } else {
+          if (!hazard.struck) {
+            hazard.struck = true;
+            Neo.shake = Math.max(Neo.shake, 11);
+            Neo.shakeT = Math.max(Neo.shakeT, 0.2);
+          }
+          hazard.tick = Number(hazard.tick || 0) - dt;
+          if (hazard.tick <= 0) {
+            hazard.tick = hazard.interval || 0.12;
+            const reach = (hazard.r || 26) + Neo.player.r;
+            if (Neo.distToSegment(Neo.player.x, Neo.player.y, hazard.x1, hazard.y1, hazard.x2, hazard.y2) <= reach) {
+              const angle = Math.atan2(hazard.y2 - hazard.y1, hazard.x2 - hazard.x1) + Math.PI / 2;
+              damagePlayer(hazard.damage || 18, angle, 120, hazard.source || 'justice_of_sonichu');
+            }
+            Neo.spawnParticle({
+              x: hazard.x1, y: hazard.y1, life: 0.16, c: '#bfe4ff',
+              line: {
+                x1: hazard.x1, y1: hazard.y1, x2: hazard.x2, y2: hazard.y2,
+                w: 5, jag: 14, seg: 12, phase: Neo.rng() * Math.PI * 2,
+              },
+            });
+          }
+        }
       }
     });
     // Drop expired hazards in place (write-index compaction) so the common case
@@ -2260,6 +2303,9 @@
 
       if (pickup.type === 'secret_boss_chest') {
         removePickupAt(index);
+        // Mark the chest as looted so re-entering the cleared room doesn't
+        // re-spawn it (which previously let players farm the reward forever).
+        if (Neo.currentRoom) Neo.currentRoom.secretChestLooted = true;
         Neo.collectItem(Neo.rollItemDrop({ elite: true, random: Neo.createEntityRandom(pickup, 'secret-boss:loot') }));
         addCoins(60 + Neo.floor * 8);
         Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 24, life: 1.0, text: 'BANE SLAIN', c: '#c9aaff' });

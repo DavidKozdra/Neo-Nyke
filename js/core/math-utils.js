@@ -95,6 +95,16 @@ export function dist(ax, ay, bx, by) {
   return Math.hypot(ax - bx, ay - by);
 }
 
+// Shortest distance from point (px,py) to the line segment (ax,ay)-(bx,by).
+export function distToSegment(px, py, ax, ay, bx, by) {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const lenSq = dx * dx + dy * dy;
+  if (lenSq === 0) return Math.hypot(px - ax, py - ay);
+  const t = clamp(((px - ax) * dx + (py - ay) * dy) / lenSq, 0, 1);
+  return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
+}
+
 export function circleRect(cx, cy, r, rx, ry, rw, rh) {
   const testX = clamp(cx, rx, rx + rw);
   const testY = clamp(cy, ry, ry + rh);
@@ -532,6 +542,7 @@ Neo.shuffleWithRandom = shuffleWithRandom;
 Neo.unorderedRemoveAt = unorderedRemoveAt;
 Neo.clamp = clamp;
 Neo.dist = dist;
+Neo.distToSegment = distToSegment;
 Neo.circleRect = circleRect;
 Neo.getDestructibleRect = getDestructibleRect;
 Neo.destructibleIntersectsCircle = destructibleIntersectsCircle;

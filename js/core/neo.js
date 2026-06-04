@@ -152,6 +152,7 @@ window.Neo = {
   floorSkipPending: 0,
   teleportKeyLatch: false,
   ladderUseKeyLatch: false,
+  activateAllKeyLatch: false,
   shopKeyLatch: false,
   invKeyLatch: false,
   anvilKeyLatch: false,

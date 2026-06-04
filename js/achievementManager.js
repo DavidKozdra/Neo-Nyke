@@ -36,6 +36,7 @@ const achievementManager = (() => {
   let maxPlayerLevel = 1;
   let maxLoopIndex = 0;
   let metaCoins = 0;
+  let runBowmanKills = 0;
 
   function openDB() {
     return new Promise((resolve, reject) => {
@@ -221,6 +222,7 @@ const achievementManager = (() => {
     maxFloorReached = 1;
     maxPlayerLevel = 1;
     maxLoopIndex = 0;
+    runBowmanKills = 0;
   }
 
   async function getProgressSnapshot() {
@@ -241,6 +243,7 @@ const achievementManager = (() => {
       maxPlayerLevel,
       maxLoopIndex,
       metaCoins,
+      runBowmanKills,
     };
   }
 
@@ -318,6 +321,11 @@ const achievementManager = (() => {
   achievementEvents.on('enemy:killed', async () => {
     const count = await incrementCumulativeCount('enemies_killed');
     if (count >= 1000) await unlock('extinction');
+  });
+
+  achievementEvents.on('bowman:killed', async () => {
+    runBowmanKills += 1;
+    if (runBowmanKills >= 2) await unlock('double_bane');
   });
 
   if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {

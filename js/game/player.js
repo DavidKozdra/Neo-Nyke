@@ -313,6 +313,12 @@ export function getItemStats() {
     const baseBleedChance = neoKnife * 0.05;
     const tagCounts = getItemTagCounts();
     const healingTagStacks = Number(tagCounts.heal || 0) + Number(tagCounts.healing || 0);
+    const activeTurboStacks = Number(Neo.player?.equipmentEffects?.turbo_boots?.time || 0) > 0
+      ? Math.max(1, Math.floor(Number(Neo.player?.equipmentEffects?.turbo_boots?.stacks || getItemCount('turbo_boots') || 1)))
+      : 0;
+    const activeGoldVacStacks = Number(Neo.player?.equipmentEffects?.gold_vac?.time || 0) > 0
+      ? Math.max(1, Math.floor(Number(Neo.player?.equipmentEffects?.gold_vac?.stacks || getItemCount('gold_vac') || 1)))
+      : 0;
     const godItemStacks = Neo.godItemKeysCache.reduce((total, key) => {
       return total + getItemCount(key);
     }, 0);
@@ -342,15 +348,15 @@ export function getItemStats() {
       bleedHealScale: hemesScarf,
       passiveBleedStacks: hemesScarf,
       scarfBleedsOnHit: hemesScarf,
-      pickupVacuumRange: Number(Neo.player?.equipmentEffects?.gold_vac?.time || 0) > 0 ? 9999 : 0,
-      coinPickupMultiplier: Number(Neo.player?.equipmentEffects?.gold_vac?.time || 0) > 0 ? 2 : 1,
+      pickupVacuumRange: activeGoldVacStacks > 0 ? 9999 : 0,
+      coinPickupMultiplier: activeGoldVacStacks > 0 ? 2 + (activeGoldVacStacks - 1) * 0.5 : 1,
       potionDoubleChance: Neo.clamp(doubleDose * 0.5, 0, 1),
       itemDuplicateChance: Neo.clamp(copycatCharm * 0.3, 0, 1),
       critChance,
       critMultiplier: 1.6 + (oracleLens ? critChance * 2.2 : critChance * 0.6),
       attackSpeedMultiplier: 1 + attackServo * 0.12 + chronoSpringBonus,
       hasRobotArm: robotArm > 0,
-      moveSpeedMultiplier: (1 + turtleShell * 0.05) * (Number(Neo.player?.equipmentEffects?.turbo_boots?.time || 0) > 0 ? 1.55 : 1),
+      moveSpeedMultiplier: (1 + turtleShell * 0.05) * (activeTurboStacks > 0 ? 1.55 + (activeTurboStacks - 1) * 0.15 : 1),
       laserWeightMultiplier: Math.max(0, 1 - turtleShell * 0.01),
       xpGainMultiplier: 1 + scholarSeal * 0.15,
       levelEdgeDamageMultiplier: 1 + scholarCap * xpProgress * 0.45,

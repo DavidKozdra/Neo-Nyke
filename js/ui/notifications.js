@@ -130,7 +130,7 @@ export function pushItemNotification(itemKey, amount = 1, note = '') {
 }
 
 export const ITEM_CINEMATIC_FLAVOR = {
-  wizards_paw: 'Choose 2 stats to triple — choose wisely.',
+  wizards_paw: 'Choose 2 stats to increase by 50% — choose wisely.',
   jesters_dice: 'Skip 3 floors. Chaos blooms in your wake.',
 };
 
