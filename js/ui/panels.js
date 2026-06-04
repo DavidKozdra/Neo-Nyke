@@ -735,10 +735,6 @@ export function isPanelOpen(panel) {
       spark.style.setProperty('--panel-fx-dx', `${((vx / len) * drift + (Math.random() - 0.5) * 42).toFixed(1)}px`);
       spark.style.setProperty('--panel-fx-dy', `${((vy / len) * drift - 24 + (Math.random() - 0.5) * 58).toFixed(1)}px`);
       spark.style.setProperty('--panel-fx-scale', (0.35 + Math.random() * 0.85).toFixed(2));
-      spark.style.backgroundImage = 'url(assets/icons/icon-72x72.png)';
-      spark.style.backgroundSize = 'contain';
-      spark.style.backgroundRepeat = 'no-repeat';
-      spark.style.backgroundPosition = 'center';
       ghost.appendChild(spark);
     }
   }
@@ -811,11 +807,10 @@ export function isPanelOpen(panel) {
         tile.style.clipPath = clipPath;
         tile.style.webkitClipPath = clipPath;
 
-        tile.style.backgroundImage = 'url(assets/icons/icon-72x72.png)';
-        tile.style.backgroundSize = 'contain';
-        tile.style.backgroundRepeat = 'no-repeat';
-        tile.style.backgroundPosition = 'center';
-        tile.style.backgroundColor = 'rgba(180, 156, 255, 0.15)';
+        const surface = element.cloneNode(true);
+        applyGhostSurfaceStyle(element, surface, rect, x, y);
+        copyCanvasBitmaps(element, surface);
+        tile.appendChild(surface);
         ghost.appendChild(tile);
       }
     }

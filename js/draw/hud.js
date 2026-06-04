@@ -246,15 +246,31 @@
     const originX = Neo.canvas.width - mapWidth - 2;
     const originY = Math.round(-10 * minimapScale);
     const markerFont = `${Math.max(7, Math.round(size * 0.62))}px system-ui`;
+    const youLabel = 'YOU';
+    const youTagFont = `bold ${Math.max(8, Math.round(size * 0.66))}px system-ui`;
+    const youTagPadX = Math.max(4, Math.round(size * 0.26));
+    const youTagH = Math.max(12, Math.round(size * 0.82));
+    const youFooterPad = Math.max(3, Math.round(4 * minimapScale));
+    const minimapFrameHeight = mapHeight + youFooterPad * 2 + youTagH;
+    let minimapVisualLeft = originX;
+    let minimapVisualTop = originY;
+    let minimapVisualRight = originX + mapWidth;
+    let minimapVisualBottom = originY + minimapFrameHeight;
     Neo.ctx.save();
     Neo.ctx.globalAlpha = 1;
     Neo.ctx.fillStyle = '#2a2e38';
     Neo.ctx.beginPath();
-    Neo.ctx.roundRect(originX, originY, mapWidth, mapHeight, 6);
+    Neo.ctx.roundRect(originX, originY, mapWidth, minimapFrameHeight, 6);
     Neo.ctx.fill();
     Neo.ctx.globalAlpha = 0.45;
     Neo.ctx.strokeStyle = '#5a6070';
     Neo.ctx.lineWidth = 1;
+    Neo.ctx.stroke();
+    Neo.ctx.globalAlpha = 0.28;
+    Neo.ctx.strokeStyle = '#5a6070';
+    Neo.ctx.beginPath();
+    Neo.ctx.moveTo(originX + 2, originY + mapHeight + 0.5);
+    Neo.ctx.lineTo(originX + mapWidth - 2, originY + mapHeight + 0.5);
     Neo.ctx.stroke();
     Neo.ctx.globalAlpha = 1;
     Neo.rooms.forEach(room => {
@@ -418,21 +434,25 @@
       });
     }
 
-    // "You are here" emphasis: pulsing ring + YOU tag on the current room so the
-    // player can instantly spot their position among same-colored room dots.
+    // Strong current-room emphasis. The label stays inside the minimap frame,
+    // but in the footer so it does not cover rooms, pickups, enemies, or doors.
     const youRoom = Neo.currentRoom;
     if (youRoom && !youRoom.secret) {
       const yx = originX + youRoom.gx * (size + gap);
       const yy = originY + youRoom.gy * (size + gap);
       const t = Number(Neo.gameElapsedTime || 0);
       const pulse = 0.5 + 0.5 * Math.sin(t * 5.0);
-      const grow = Math.round(2 + pulse * Math.max(2, size * 0.22));
+      const grow = Math.round(2 + pulse * Math.max(2, size * 0.24));
+      const lineW = Math.max(1.5, Math.round(size * 0.16));
+      const cellCx = yx + size / 2;
+      const cellCy = yy + size / 2;
+
       // Animated outer ring.
-      Neo.ctx.globalAlpha = 0.55 + 0.45 * pulse;
+      Neo.ctx.globalAlpha = 0.58 + 0.42 * pulse;
       Neo.ctx.strokeStyle = '#fff7c2';
-      Neo.ctx.lineWidth = Math.max(1.5, Math.round(size * 0.14));
+      Neo.ctx.lineWidth = lineW;
       Neo.ctx.strokeRect(yx - grow + 0.5, yy - grow + 0.5, size + grow * 2 - 1, size + grow * 2 - 1);
-      // Solid inner highlight border so the cell reads clearly even mid-pulse.
+      // Solid inner contrast keeps the current cell readable over all room colors.
       Neo.ctx.globalAlpha = 1;
       Neo.ctx.strokeStyle = '#0a0d14';
       Neo.ctx.lineWidth = 1;
@@ -441,48 +461,52 @@
       Neo.ctx.lineWidth = Math.max(1.5, Math.round(size * 0.18));
       Neo.ctx.strokeRect(yx + 0.5, yy + 0.5, size - 1, size - 1);
 
-      // "YOU" tag, pinned above the cell but clamped inside the minimap bounds.
-      const tagFont = `bold ${Math.max(7, Math.round(size * 0.62))}px system-ui`;
-      Neo.ctx.font = tagFont;
+      Neo.ctx.font = youTagFont;
       Neo.ctx.textAlign = 'center';
       Neo.ctx.textBaseline = 'middle';
-      const label = 'YOU';
-      const padX = Math.max(3, Math.round(size * 0.22));
-      const tagW = Math.ceil(Neo.ctx.measureText(label).width) + padX * 2;
-      const tagH = Math.max(10, Math.round(size * 0.72));
-      let tagCx = yx + size / 2;
-      let tagY = yy - grow - tagH / 2 - 2;
-      // If there's no room above, place the tag below instead.
-      if (tagY - tagH / 2 < originY) tagY = yy + size + grow + tagH / 2 + 2;
-      // Clamp horizontally so the tag never clips off the minimap edges.
-      const halfW = tagW / 2;
-      tagCx = Neo.clamp(tagCx, originX + halfW, originX + mapWidth - halfW);
-      Neo.ctx.globalAlpha = 0.92;
-      Neo.ctx.fillStyle = 'rgba(10,13,20,0.85)';
+      const tagW = Math.ceil(Neo.ctx.measureText(youLabel).width) + youTagPadX * 2;
+      const tagMinX = originX + 2;
+      const tagMaxX = Math.max(tagMinX, originX + mapWidth - tagW - 2);
+      const tagX = Neo.clamp(cellCx - tagW / 2, tagMinX, tagMaxX);
+      const tagY = originY + mapHeight + youFooterPad;
+      const tagCx = tagX + tagW / 2;
+      const tagCy = tagY + youTagH / 2;
+
+      Neo.ctx.globalAlpha = 0.62 + 0.24 * pulse;
+      Neo.ctx.fillStyle = '#fff7c2';
       Neo.ctx.beginPath();
-      Neo.ctx.roundRect(tagCx - halfW, tagY - tagH / 2, tagW, tagH, 3);
+      Neo.ctx.moveTo(Neo.clamp(cellCx, originX + 5, originX + mapWidth - 5), tagY - 1);
+      Neo.ctx.lineTo(tagCx - 4, tagY + 3);
+      Neo.ctx.lineTo(tagCx + 4, tagY + 3);
+      Neo.ctx.closePath();
+      Neo.ctx.fill();
+
+      Neo.ctx.globalAlpha = 0.94;
+      Neo.ctx.fillStyle = 'rgba(10,13,20,0.88)';
+      Neo.ctx.beginPath();
+      Neo.ctx.roundRect(tagX, tagY, tagW, youTagH, 3);
       Neo.ctx.fill();
       Neo.ctx.strokeStyle = '#fff7c2';
       Neo.ctx.lineWidth = 1;
       Neo.ctx.stroke();
       Neo.ctx.globalAlpha = 1;
       Neo.ctx.fillStyle = '#fffbe6';
-      Neo.ctx.fillText(label, tagCx, tagY + 0.5);
+      Neo.ctx.fillText(youLabel, tagCx, tagCy + 0.5);
     }
 
     Neo.ctx.restore();
 
     const viewportBounds = {
-      left: canvasRect.left + originX * scaleX,
-      top: canvasRect.top + originY * scaleY,
-      right: canvasRect.left + (originX + mapWidth) * scaleX,
-      bottom: canvasRect.top + (originY + mapHeight) * scaleY,
+      left: canvasRect.left + minimapVisualLeft * scaleX,
+      top: canvasRect.top + minimapVisualTop * scaleY,
+      right: canvasRect.left + minimapVisualRight * scaleX,
+      bottom: canvasRect.top + minimapVisualBottom * scaleY,
     };
     Neo.minimapLayoutState = {
       x: originX,
       y: originY,
       width: mapWidth,
-      height: mapHeight,
+      height: minimapFrameHeight,
       scale: minimapScale,
       viewportBounds,
     };
