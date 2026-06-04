@@ -551,6 +551,7 @@ export const ITEM_DEFS = {
     },
     charged_adapter: {
       key: 'charged_adapter',
+      tool: true,
       name: 'Charged Adapter',
       shortName: 'Warp F',
       description: 'Charge requirement -1. When charged, press its tool slot key (outside boss rooms) to spend 50% coins and warp to the ladder room (next floor path).',
@@ -561,6 +562,7 @@ export const ITEM_DEFS = {
     },
     pew_pew_box: {
       key: 'pew_pew_box',
+      tool: true,
       name: 'Pew Pew Box',
       shortName: 'Missile Box',
       description: 'Tool. Fire homing missiles for 8 seconds.',
@@ -572,6 +574,7 @@ export const ITEM_DEFS = {
     },
     turbo_boots: {
       key: 'turbo_boots',
+      tool: true,
       name: 'Turbo Boots',
       shortName: 'Speed Burst',
       description: 'Tool. Move much faster for 20 seconds.',
@@ -583,6 +586,7 @@ export const ITEM_DEFS = {
     },
     skizzard_tail: {
       key: 'skizzard_tail',
+      tool: true,
       name: 'Skizzard Tail',
       shortName: 'Regen',
       description: 'Tool. Regenerate health for 5 seconds.',
@@ -594,6 +598,7 @@ export const ITEM_DEFS = {
     },
     zap_to_extreme: {
       key: 'zap_to_extreme',
+      tool: true,
       name: 'Zap to the Extreme',
       shortName: 'Zap Extreme',
       description: 'Tool. Chain lightning around you for 10 seconds.',
@@ -605,6 +610,7 @@ export const ITEM_DEFS = {
     },
     panic_button: {
       key: 'panic_button',
+      tool: true,
       name: 'Panic Button',
       shortName: 'Panic',
       description: 'Tool. Clear statuses, shove enemies away, and gain brief invulnerability.',
@@ -616,6 +622,7 @@ export const ITEM_DEFS = {
     },
     mid_sweepy_box: {
       key: 'mid_sweepy_box',
+      tool: true,
       name: 'Mid Sweepy Box',
       shortName: 'Sweep Mines',
       description: 'Tool. Sweep thorn mines around you for 6 seconds.',
@@ -627,6 +634,7 @@ export const ITEM_DEFS = {
     },
     sparkle_charm: {
       key: 'sparkle_charm',
+      tool: true,
       name: 'Sparkle Charm',
       shortName: 'Sparkle',
       description: 'Tool. Sparkle the nearest 5 enemies for 6 seconds. Every hit against a sparkled enemy is a guaranteed crit.',
@@ -834,6 +842,7 @@ export const ITEM_DEFS = {
     },
     mateos_bag: {
       key: 'mateos_bag',
+      tool: true,
       name: "Mateo's Bag",
       shortName: 'Bag',
       description: 'Carry potions instead of consuming them immediately. First stack: +3 slots. Each additional stack: +1 slot. Press its tool slot key to use a stored potion.',
@@ -866,6 +875,7 @@ export const ITEM_DEFS = {
     },
     el_bartos_cape: {
       key: 'el_bartos_cape',
+      tool: true,
       name: "El Barto's Cape",
       shortName: 'CAPE',
       description: 'Tool. Become invisible for 10 seconds. Each stack adds +5 seconds and attacks do not break it.',
@@ -1093,6 +1103,7 @@ export const ui = {
     wizardPawChoices: document.getElementById('wizardPawChoices'),
     wizardPawConfirm: document.getElementById('wizardPawConfirm'),
     invItemsList: document.getElementById('invItemsList'),
+    invToolsList: document.getElementById('invToolsList'),
     invWeaponsList: document.getElementById('invWeaponsList'),
     invWeaponSlot: document.getElementById('invWeaponSlot'),
     invStats: document.getElementById('invStats'),

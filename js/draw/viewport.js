@@ -143,10 +143,11 @@ export function carvePlayerBeamLights() {
 
     if (Neo.getEquippedWeapon() !== 'lazer_glasses' || Neo.player.weaponBeamTime <= 0) return;
     const baseAngle = Math.atan2(Neo.mouse.worldY - Neo.player.y, Neo.mouse.worldX - Neo.player.x);
-    [-beam.glassesSpread, beam.glassesSpread].forEach(offset => {
+    for (let beamIndex = 0; beamIndex < 2; beamIndex += 1) {
+      const offset = beamIndex === 0 ? -beam.glassesSpread : beam.glassesSpread;
       const beamPath = Neo.buildRicochetBeamPath(Neo.player.x, Neo.player.y, baseAngle + offset, beam.glassesRange, Neo.LAZER_GLASSES_BOUNCES);
       Neo.carveBeamLight(beamPath, beam.glassesWidth, beam.glassesStrength);
-    });
+    }
   }
 
 export function carveEnemyBeamLights() {

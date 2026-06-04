@@ -1087,7 +1087,8 @@
       const alpha = Math.min(1, Neo.player.weaponBeamTime / 0.3);
       Neo.ctx.save();
       Neo.ctx.globalAlpha = alpha;
-      [-0.2, 0.2].forEach(offset => {
+      for (let beamIndex = 0; beamIndex < 2; beamIndex += 1) {
+        const offset = beamIndex === 0 ? -0.2 : 0.2;
         const beamAngle = baseAngle + offset;
         const beamPath = Neo.buildRicochetBeamPath(Neo.player.x, Neo.player.y, beamAngle, 430, Neo.LAZER_GLASSES_BOUNCES);
         Neo.drawTaperedBeamPath(beamPath, {
@@ -1101,7 +1102,7 @@
           const end = Neo.getBeamPathEnd(beamPath);
           Neo.spawnParticle({ x: end.x + (Neo.rng() - 0.5) * 5, y: end.y + (Neo.rng() - 0.5) * 5, life: 0.1 + Neo.rng() * 0.08, vx: (Neo.rng() - 0.5) * 35, vy: (Neo.rng() - 0.5) * 35, c: '#cda8ff' });
         }
-      });
+      }
       Neo.ctx.restore();
       Neo.ctx.shadowBlur = 0;
       Neo.ctx.globalAlpha = 1;

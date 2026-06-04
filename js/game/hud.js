@@ -1075,6 +1075,34 @@
   }
   Neo.addToEquipmentSlots = addToEquipmentSlots;
 
+  // Reorder a tool within the equipment slot array (the toolbar editor uses this).
+  // fromIdx/toIdx are positions in Neo.player.equipmentSlots; the item at fromIdx
+  // is removed and re-inserted at toIdx, shifting the others — so its hotkey
+  // (F G H J K L U I, by index) changes to match its new position.
+  function reorderEquipmentSlot(fromIdx, toIdx) {
+    if (!Neo.player) return false;
+    syncEquipmentSlotsFromInventory();
+    const slots = Neo.player.equipmentSlots;
+    const len = slots.length;
+    fromIdx = Math.trunc(Number(fromIdx));
+    toIdx = Math.trunc(Number(toIdx));
+    if (!Number.isInteger(fromIdx) || !Number.isInteger(toIdx)) return false;
+    if (fromIdx < 0 || fromIdx >= len || toIdx < 0 || toIdx >= len || fromIdx === toIdx) return false;
+    const [moved] = slots.splice(fromIdx, 1);
+    slots.splice(toIdx, 0, moved);
+    Neo.scheduleRunSave?.();
+    return true;
+  }
+  Neo.reorderEquipmentSlot = reorderEquipmentSlot;
+
+  // Owned tool item keys in their current slot order. Drives the toolbar editor.
+  function getEquippedToolKeys() {
+    if (!Neo.player) return [];
+    syncEquipmentSlotsFromInventory();
+    return (Neo.player.equipmentSlots || []).filter(key => ACTIVATABLE_ITEMS[key] && Neo.getItemCount(key) > 0);
+  }
+  Neo.getEquippedToolKeys = getEquippedToolKeys;
+
   function getItemKeyForSlotKey(letter) {
     if (!Neo.player) return null;
     syncEquipmentSlotsFromInventory();

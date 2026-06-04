@@ -2320,18 +2320,29 @@
     Neo.particles.push(p);
   }
 
+  // Hard ceiling on simultaneous non-text particles. Holding a continuous beam
+  // can spawn blood/hit flecks faster than they expire; without a cap the array
+  // grows unbounded and drawParticles() (one shadowBlur per particle) tanks FPS.
+  const MAX_PARTICLES = 260;
+
+  function cullNonTextParticles(maxCount) {
+    if (Neo.particles.length <= maxCount) return;
+    // Drop oldest non-text particles first (text = damage popups, kept for readability).
+    for (let index = 0; index < Neo.particles.length && Neo.particles.length > maxCount; index++) {
+      if (!Neo.particles[index].text) {
+        _particlePool.push(Neo.particles.splice(index, 1)[0]);
+        index--;
+      }
+    }
+  }
+
   function updateParticles(dt) {
     // With reduceParticles: cull non-text particles to keep count low
     if (window.NeoSettings?.getAccess()?.reduceParticles) {
-      const MAX_REDUCED = 24;
-      if (Neo.particles.length > MAX_REDUCED) {
-        for (let index = 0; index < Neo.particles.length && Neo.particles.length > MAX_REDUCED; index++) {
-          if (!Neo.particles[index].text) {
-            _particlePool.push(Neo.particles.splice(index, 1)[0]);
-            index--;
-          }
-        }
-      }
+      cullNonTextParticles(24);
+    } else if (window.NeoSettings?.isPerformanceMode?.() !== false) {
+      // Performance mode (default on): generous cap that only bites during floods.
+      cullNonTextParticles(MAX_PARTICLES);
     }
     for (let index = Neo.particles.length - 1; index >= 0; index -= 1) {
       const particle = Neo.particles[index];

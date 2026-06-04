@@ -358,7 +358,8 @@
 
   function fireLazerGlassesTick() {
     const baseAngle = Math.atan2(Neo.mouse.worldY - Neo.player.y, Neo.mouse.worldX - Neo.player.x);
-    [-0.2, 0.2].forEach(offset => {
+    for (let beamIndex = 0; beamIndex < 2; beamIndex += 1) {
+      const offset = beamIndex === 0 ? -0.2 : 0.2;
       const angle = baseAngle + offset;
       const beamPath = Neo.buildRicochetBeamPath(Neo.player.x, Neo.player.y, angle, 430, Neo.LAZER_GLASSES_BOUNCES);
       let target = null;
@@ -373,14 +374,14 @@
         }
       }
       if (target) {
-        hitEnemy(target, 9, hitSegment?.angle ?? angle, 80, '#cda8ff', { fireChance: 0.05, fireStacks: 1, fireDuration: 3 });
+        hitEnemy(target, 9, hitSegment?.angle ?? angle, 80, '#cda8ff', { fireChance: 0.05, fireStacks: 1, fireDuration: 3, beamFx: true });
       }
       Neo.destructibles.forEach(prop => {
         if (!prop.broken && !prop.hidden && Neo.beamPathHitsDestructible(beamPath, prop, 4)) {
           Neo.damageDestructible(prop, 1);
         }
       });
-    });
+    }
   }
 
   function updateWeaponSystems(dt) {
@@ -566,31 +567,7 @@
       Neo.laserTick = Neo.laserMode === 'god_sweep' ? 0.05 : Neo.laserMode === 'turtle_wave' ? 0.08 : loveBeamActive ? 0.06 : Neo.ATTACKS.laser.tick;
       const range = Neo.getPlayerBeamRange(Neo.laserMode, move);
       const beamPath = Neo.buildRicochetBeamPath(Neo.player.x, Neo.player.y, angle, range, Neo.getPlayerBeamBounceCount(Neo.laserMode));
-      let loveBeamHits = 0;
-      for (let index = Neo.enemies.length - 1; index >= 0; index -= 1) {
-        const enemy = Neo.enemies[index];
-        if (!enemy) continue;
-        const hitSegment = Neo.beamPathHitsCircle(beamPath, enemy.x, enemy.y, enemy.r + (Neo.laserMode === 'turtle_wave' ? 14 : 6));
-        if (!hitSegment) continue;
-        const anvilBeamBonus = Neo.getAnvilMoveBonus(move, 'damage');
-        const baseBeamDamage = Neo.laserMode === 'god_sweep'
-          ? 12
-          : Neo.laserMode === 'turtle_wave'
-            ? 34
-            : loveBeamActive
-              ? 18
-              : Neo.godTimer > 0
-                ? 16
-                : Neo.ATTACKS.laser.damage;
-        const beamDamage = (baseBeamDamage + anvilBeamBonus) * (itemStats.beamDamageMultiplier || 1);
-        const anvilCritBonus = Neo.getAnvilMoveBonus(move, 'critChance');
-        hitEnemy(enemy, beamDamage, hitSegment.angle, Neo.laserMode === 'god_sweep' ? 120 : Neo.laserMode === 'turtle_wave' ? 155 : loveBeamActive ? 52 : 60, loveBeamActive ? '#ff9ed6' : '#f0f', anvilCritBonus > 0 ? { critBonus: anvilCritBonus } : {});
-        chainBeamHit(enemy, beamDamage, hitSegment.angle, loveBeamActive ? '#ffb8e0' : '#d890ff');
-        if (loveBeamActive) loveBeamHits += 1;
-        if (move === 'blood_beam' && Neo.rng() < 0.05) applyBleed(enemy, 1, 3.2);
-        if (move === 'blood_beam' && Neo.rng() < 0.08) applyDarkDrain(enemy, 1, 3.4);
-      }
-      const anvilBeamBonus = Neo.getAnvilMoveBonus(move, 'damage');
+      const radiusPadding = Neo.laserMode === 'turtle_wave' ? 14 : 6;
       const baseBeamDamage = Neo.laserMode === 'god_sweep'
         ? 12
         : Neo.laserMode === 'turtle_wave'
@@ -600,12 +577,30 @@
             : Neo.godTimer > 0
               ? 16
               : Neo.ATTACKS.laser.damage;
-      const pvpBeamDamage = (baseBeamDamage + anvilBeamBonus) * (itemStats.beamDamageMultiplier || 1);
+      const anvilBeamBonus = Neo.getAnvilMoveBonus(move, 'damage');
+      const beamDamage = (baseBeamDamage + anvilBeamBonus) * (itemStats.beamDamageMultiplier || 1);
+      const anvilCritBonus = Neo.getAnvilMoveBonus(move, 'critChance');
+      const beamKnockback = Neo.laserMode === 'god_sweep' ? 120 : Neo.laserMode === 'turtle_wave' ? 155 : loveBeamActive ? 52 : 60;
+      const beamColor = loveBeamActive ? '#ff9ed6' : '#f0f';
+      const hitOptions = anvilCritBonus > 0 ? { critBonus: anvilCritBonus, beamFx: true } : { beamFx: true };
+      const bloodBeamActive = move === 'blood_beam';
+      let loveBeamHits = 0;
+      for (let index = Neo.enemies.length - 1; index >= 0; index -= 1) {
+        const enemy = Neo.enemies[index];
+        if (!enemy) continue;
+        const hitSegment = Neo.beamPathHitsCircle(beamPath, enemy.x, enemy.y, enemy.r + radiusPadding);
+        if (!hitSegment) continue;
+        hitEnemy(enemy, beamDamage, hitSegment.angle, beamKnockback, beamColor, hitOptions);
+        chainBeamHit(enemy, beamDamage, hitSegment.angle, loveBeamActive ? '#ffb8e0' : '#d890ff');
+        if (loveBeamActive) loveBeamHits += 1;
+        if (bloodBeamActive && Neo.rng() < 0.05) applyBleed(enemy, 1, 3.2);
+        if (bloodBeamActive && Neo.rng() < 0.08) applyDarkDrain(enemy, 1, 3.4);
+      }
       Neo.hitPvpPlayer2WithBeamPath?.(
         beamPath,
-        Neo.laserMode === 'turtle_wave' ? 14 : 6,
-        pvpBeamDamage,
-        Neo.laserMode === 'god_sweep' ? 120 : Neo.laserMode === 'turtle_wave' ? 155 : loveBeamActive ? 52 : 60,
+        radiusPadding,
+        beamDamage,
+        beamKnockback,
         'pvp_p1_beam',
       );
       Neo.destructibles.forEach(prop => {
@@ -1394,9 +1389,16 @@
     enemy.stun = Math.max(enemy.stun, 0.08);
     applyEnemyImpactStun(enemy, dealt, appliedKnockback);
     if (!options.noCharmBuff) Neo.grantCritCharmBuff();
-    Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.24, vx: Neo.rand(-30, 30, 'fx'), vy: Neo.rand(-30, 30, 'fx'), c: color });
-    if (shouldBloodOnHit() && options.bloodOnHit !== false) {
-      spawnBleedSpray(enemy, 1, isCrit ? 1.2 : 0.72);
+    // Continuous beams call hitEnemy on the same target several times a second.
+    // Damage/knockback/popups still apply every tick, but throttle the cosmetic
+    // hit fleck + blood spray per enemy so a held laser can't flood particles.
+    const perfMode = window.NeoSettings?.isPerformanceMode?.() !== false;
+    const allowHitFx = !(perfMode && options.beamFx) || canTriggerStatusReaction(enemy, 'beamHitFx', 7);
+    if (allowHitFx) {
+      Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.24, vx: Neo.rand(-30, 30, 'fx'), vy: Neo.rand(-30, 30, 'fx'), c: color });
+      if (shouldBloodOnHit() && options.bloodOnHit !== false) {
+        spawnBleedSpray(enemy, 1, isCrit ? 1.2 : 0.72);
+      }
     }
     // Game feel: hitstop + directional trauma scaled to impact (vs target max HP).
     // Chip damage gets nothing; crits and big slams get a real freeze + kick away
@@ -1461,7 +1463,7 @@
       if (!nextEnemy) break;
       visited.add(nextEnemy);
       const chainDamage = Math.max(1, Math.round(baseDamage * (stats.beamChainDamageMultiplier || 0.6)));
-      hitEnemy(nextEnemy, chainDamage, Math.atan2(nextEnemy.y - source.y, nextEnemy.x - source.x), 55, color);
+      hitEnemy(nextEnemy, chainDamage, Math.atan2(nextEnemy.y - source.y, nextEnemy.x - source.x), 55, color, { beamFx: true });
       Neo.spawnParticle({ x: (source.x + nextEnemy.x) / 2, y: (source.y + nextEnemy.y) / 2, life: 0.22, c: '#d890ff' });
       source = nextEnemy;
     }

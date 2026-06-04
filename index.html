@@ -408,6 +408,7 @@
     <div class="inv-tabs panel-tabs" role="tablist">
       <button class="inv-tab panel-tab active" data-inv-tab="stats" role="tab"><canvas class="tab-icon tab-icon--canvas" width="22" height="22" data-inv-ui-icon="tab-stats" aria-hidden="true"></canvas>Stats</button>
       <button class="inv-tab panel-tab" data-inv-tab="items" role="tab"><canvas class="tab-icon tab-icon--canvas" width="22" height="22" data-inv-ui-icon="tab-relics" aria-hidden="true"></canvas>Relics</button>
+      <button class="inv-tab panel-tab" data-inv-tab="tools" role="tab"><canvas class="tab-icon tab-icon--canvas" width="22" height="22" data-inv-ui-icon="tab-relics" aria-hidden="true"></canvas>Tools</button>
       <button class="inv-tab panel-tab" data-inv-tab="weapons" role="tab"><canvas class="tab-icon tab-icon--canvas" width="22" height="22" data-inv-ui-icon="tab-weapons" aria-hidden="true"></canvas>Weapons</button>
       <button class="inv-tab panel-tab" data-inv-tab="equipped" role="tab"><canvas class="tab-icon tab-icon--canvas" width="22" height="22" data-inv-ui-icon="tab-moves" aria-hidden="true"></canvas>Moves</button>
     </div>
@@ -418,6 +419,10 @@
     </div>
     <div class="inv-tab-panel hidden" id="invTabItems">
       <div id="invItemsList" class="inv-items"></div>
+    </div>
+    <div class="inv-tab-panel hidden" id="invTabTools">
+      <div class="inv-moves-section__label">Toolbar — drag or use the arrows to reorder</div>
+      <div id="invToolsList" class="inv-tools"></div>
     </div>
     <div class="inv-tab-panel hidden" id="invTabWeapons">
       <div id="invWeaponsList" class="inv-moves"></div>
@@ -1345,6 +1350,13 @@
           <span class="access-desc">Makes every successful damage hit bloody.</span>
         </div>
         <label class="toggle"><input type="checkbox" id="gameplayBloodOnHit" checked><span class="toggle-track"><span class="toggle-thumb"></span></span></label>
+      </div>
+      <div class="access-row">
+        <div class="access-text">
+          <span class="access-label">Performance mode</span>
+          <span class="access-desc">Caps total on-screen particles and trims heavy glow effects when the screen gets busy (e.g. holding the laser). Keeps the same look with far fewer frame drops. Recommended on.</span>
+        </div>
+        <label class="toggle"><input type="checkbox" id="gameplayPerformanceMode" checked><span class="toggle-track"><span class="toggle-thumb"></span></span></label>
       </div>
     </div>
 

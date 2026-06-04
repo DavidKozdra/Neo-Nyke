@@ -411,6 +411,49 @@ export function bindPanelInput() {
       handleInventoryMoveSelect(event);
     });
     Neo.ui.invWeaponsList?.addEventListener('click', handleInventoryWeaponSelect);
+    // Toolbar editor: arrow buttons swap a tool one slot up/down.
+    Neo.ui.invToolsList?.addEventListener('click', event => {
+      const button = event.target instanceof Element ? event.target.closest('[data-tool-move]') : null;
+      if (!button) return;
+      const fromIdx = Number(button.dataset.toolIdx);
+      const toIdx = button.dataset.toolMove === 'up' ? fromIdx - 1 : fromIdx + 1;
+      if (Neo.reorderEquipmentSlot?.(fromIdx, toIdx)) {
+        markInventoryPanelDirty();
+        renderInventoryPanel();
+      }
+    });
+    // Toolbar editor: drag a tool card onto another to reorder.
+    Neo.ui.invToolsList?.addEventListener('dragstart', event => {
+      const card = event.target instanceof Element ? event.target.closest('[data-tool-key]') : null;
+      if (!card) return;
+      Neo.draggingToolIdx = Number(card.dataset.toolIdx);
+      event.dataTransfer?.setData('text/plain', card.dataset.toolKey || '');
+    });
+    Neo.ui.invToolsList?.addEventListener('dragover', event => {
+      const card = event.target instanceof Element ? event.target.closest('[data-tool-key]') : null;
+      if (!card || !Number.isInteger(Neo.draggingToolIdx)) return;
+      event.preventDefault();
+      card.classList.add('drag-over');
+    });
+    Neo.ui.invToolsList?.addEventListener('dragleave', event => {
+      const card = event.target instanceof Element ? event.target.closest('[data-tool-key]') : null;
+      card?.classList.remove('drag-over');
+    });
+    Neo.ui.invToolsList?.addEventListener('drop', event => {
+      const card = event.target instanceof Element ? event.target.closest('[data-tool-key]') : null;
+      card?.classList.remove('drag-over');
+      if (!card || !Number.isInteger(Neo.draggingToolIdx)) return;
+      event.preventDefault();
+      const toIdx = Number(card.dataset.toolIdx);
+      if (Neo.reorderEquipmentSlot?.(Neo.draggingToolIdx, toIdx)) {
+        markInventoryPanelDirty();
+        renderInventoryPanel();
+      }
+    });
+    Neo.ui.invToolsList?.addEventListener('dragend', () => {
+      Neo.draggingToolIdx = null;
+      Neo.ui.invToolsList?.querySelectorAll('.drag-over').forEach(node => node.classList.remove('drag-over'));
+    });
     Neo.ui.invMovesList?.addEventListener('dragstart', event => {
       const target = event.target instanceof Element ? event.target : null;
       const moveKey = target?.closest('[data-move]')?.dataset?.move;
@@ -1601,9 +1644,11 @@ export function getShopWeaponOffers() {
       ? 'invTabStats'
       : tabKey === 'items'
         ? 'invTabItems'
-        : tabKey === 'weapons'
-          ? 'invTabWeapons'
-          : 'invTabEquipped';
+        : tabKey === 'tools'
+          ? 'invTabTools'
+          : tabKey === 'weapons'
+            ? 'invTabWeapons'
+            : 'invTabEquipped';
     return document.getElementById(id);
   }
 
@@ -1632,6 +1677,10 @@ export function getShopWeaponOffers() {
     }
     if (tabKey === 'items') {
       return `items|${getCountedKeys(playerRef.items)}|${playerRef.character || ''}`;
+    }
+    if (tabKey === 'tools') {
+      const order = Array.isArray(playerRef.equipmentSlots) ? playerRef.equipmentSlots.join(',') : '';
+      return `tools|${getCountedKeys(playerRef.items)}|order:${order}`;
     }
     if (tabKey === 'weapons') {
       return `weapons|eq:${playerRef.equippedWeapon || ''}|owned:${getTruthyKeys(playerRef.ownedWeapons)}`;
@@ -1861,7 +1910,7 @@ export function renderInventoryPanel() {
     Neo.ui.invTabs.forEach(tab => {
       tab.classList.toggle('active', tab.dataset.invTab === Neo.activeInvTab);
     });
-    const tabPanels = { stats: 'invTabStats', items: 'invTabItems', weapons: 'invTabWeapons', equipped: 'invTabEquipped' };
+    const tabPanels = { stats: 'invTabStats', items: 'invTabItems', tools: 'invTabTools', weapons: 'invTabWeapons', equipped: 'invTabEquipped' };
     Object.entries(tabPanels).forEach(([key, id]) => {
       const el = document.getElementById(id);
       if (el) el.classList.toggle('hidden', key !== Neo.activeInvTab);
@@ -1967,6 +2016,32 @@ export function renderInventoryPanel() {
         .join('') || '<div class="inv-card"><span class="inv-card__eyebrow">Empty</span><h4>No relics yet</h4><p>Your pockets are clear. Loot rooms or buy from the shop to start a build.</p></div>';
 
       Neo.drawItemIconCanvases?.(Neo.ui.invItemsList, 'data-item-icon');
+    } else if (Neo.activeInvTab === 'tools') {
+      const toolKeys = Neo.getEquippedToolKeys?.() || [];
+      const slotKeys = Neo.EQUIPMENT_SLOT_KEYS || [];
+      if (Neo.ui.invToolsList) {
+        Neo.ui.invToolsList.innerHTML = toolKeys
+          .map((key, idx) => {
+            const item = Neo.itemRegistry.get(key);
+            const hotkey = slotKeys[idx] || '';
+            const rarityColor = Neo.getRarityNameColor(item?.rarity || item?.category);
+            const count = Number(_invP.items?.[key] || 0);
+            return `<div class="inv-tool-card" draggable="true" data-tool-key="${key}" data-tool-idx="${idx}">
+              <span class="inv-tool-card__key">${hotkey}</span>
+              <canvas class="inv-tool-card__icon" data-item-icon="${key}" width="36" height="36"></canvas>
+              <div class="inv-tool-card__meta">
+                <b style="color:${rarityColor}">${item?.name || key}${count > 1 ? ` <span class="inv-tool-card__count">x${count}</span>` : ''}</b>
+                <p>${item?.description || 'No item description available.'}</p>
+              </div>
+              <div class="inv-tool-card__reorder">
+                <button class="inv-tool-card__move" type="button" data-tool-move="up" data-tool-idx="${idx}" aria-label="Move up" ${idx === 0 ? 'disabled' : ''}>▲</button>
+                <button class="inv-tool-card__move" type="button" data-tool-move="down" data-tool-idx="${idx}" aria-label="Move down" ${idx === toolKeys.length - 1 ? 'disabled' : ''}>▼</button>
+              </div>
+            </div>`;
+          })
+          .join('') || '<div class="inv-card"><span class="inv-card__eyebrow">Empty</span><h4>No tools yet</h4><p>Tools are activatable relics like Pew Pew Box or Turbo Boots. Their position here sets which hotkey (F, G, H…) fires them.</p></div>';
+        Neo.drawItemIconCanvases?.(Neo.ui.invToolsList, 'data-item-icon');
+      }
     } else if (Neo.activeInvTab === 'weapons') {
       const ownedWeapons = Neo.WEAPON_KEYS
         .filter(key => _invP.ownedWeapons?.[key])
