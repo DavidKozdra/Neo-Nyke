@@ -857,6 +857,48 @@
     Neo.ctx.restore();
   }
 
+  // Trace a rounded, organic "blood pool" edge that creeps inward from one side
+  // of the screen. The inner boundary is a chain of quadratic curves with
+  // deterministic bulges (seeded per-edge so it's stable across frames, not
+  // jittery), giving the wet-rounded look of pooling blood rather than a flat
+  // rectangular bar. `depth` is how far the blood has crept in (px); `axis` is
+  // 'top'|'bottom'|'left'|'right'. The path is left open for the caller to fill.
+  function traceBloodPoolEdge(ctx, w, h, axis, depth, seed) {
+    const horizontal = axis === 'top' || axis === 'bottom';
+    const span = horizontal ? w : h;
+    // Lobe count scales with screen span so bulges stay a consistent size.
+    const lobes = Math.max(4, Math.round(span / 140));
+    const step = span / lobes;
+    // Map a position `u` along the edge + inward offset `d` into screen coords,
+    // so the same curve logic serves all four sides.
+    const toXY = (u, d) => {
+      switch (axis) {
+        case 'top': return [u, d];
+        case 'bottom': return [u, h - d];
+        case 'left': return [d, u];
+        default: return [w - d, u]; // right
+      }
+    };
+    const start = toXY(0, 0);
+    ctx.moveTo(start[0], start[1]);
+    ctx.lineTo(...toXY(span, 0));
+    ctx.lineTo(...toXY(span, depth));
+    // Walk back along the inner edge, drawing a rounded lobe per segment.
+    for (let i = lobes; i > 0; i -= 1) {
+      const u0 = i * step;
+      const u1 = (i - 1) * step;
+      const mid = (u0 + u1) / 2;
+      // Deterministic per-lobe wobble: alternating bulge depth + a seeded ripple.
+      const wob = 0.55 + 0.45 * Math.sin(seed + i * 1.7);
+      const bulge = depth * (0.55 + 0.65 * wob);
+      const cp = toXY(mid, bulge);
+      const end = toXY(u1, depth * (0.7 + 0.3 * Math.sin(seed + i * 0.9)));
+      ctx.quadraticCurveTo(cp[0], cp[1], end[0], end[1]);
+    }
+    ctx.lineTo(...toXY(0, 0));
+    ctx.closePath();
+  }
+
   function drawDeathOverlay(anim) {
     const t = Neo.clamp(anim.timer / anim.duration, 0, 1);
     const fadeIn = Neo.clamp(t * 2, 0, 1);
@@ -873,10 +915,17 @@
     const edgeAlpha = Neo.clamp(t * 0.7, 0, 0.62);
     const edgeSize = Math.min(w, h) * 0.28;
     Neo.ctx.fillStyle = `rgba(140,0,0,${edgeAlpha})`;
-    Neo.ctx.fillRect(0, 0, w, edgeSize * 0.35);
-    Neo.ctx.fillRect(0, h - edgeSize * 0.35, w, edgeSize * 0.35);
-    Neo.ctx.fillRect(0, 0, edgeSize * 0.28, h);
-    Neo.ctx.fillRect(w - edgeSize * 0.28, 0, edgeSize * 0.28, h);
+    Neo.ctx.shadowColor = 'rgba(80,0,0,0.5)';
+    Neo.ctx.shadowBlur = edgeSize * 0.12;
+    // Blood creeps inward as the death animation plays.
+    const creep = Neo.clamp(t * 1.4, 0, 1);
+    Neo.ctx.beginPath();
+    traceBloodPoolEdge(Neo.ctx, w, h, 'top', edgeSize * 0.35 * creep, 0.7);
+    traceBloodPoolEdge(Neo.ctx, w, h, 'bottom', edgeSize * 0.35 * creep, 2.3);
+    traceBloodPoolEdge(Neo.ctx, w, h, 'left', edgeSize * 0.28 * creep, 4.1);
+    traceBloodPoolEdge(Neo.ctx, w, h, 'right', edgeSize * 0.28 * creep, 5.6);
+    Neo.ctx.fill();
+    Neo.ctx.shadowBlur = 0;
 
     if (t > 0.55) {
       const textAlpha = Neo.clamp((t - 0.55) / 0.35, 0, 1);

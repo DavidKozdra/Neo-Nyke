@@ -1752,7 +1752,9 @@
     if (enemy.dead) return bleedStacks;
     tickEnemyStatus(enemy, 'dark_drain', dt, {
       interval: 0.6,
-      damage: (stacks, cachedStats) => scaleDamageAgainstEnemy(enemy, (1 + stacks * 2) * 0.1, DEFAULT_DAMAGE_OPTIONS, cachedStats),
+      // % max HP, mirroring poison so it stays meaningful against high-HP enemies.
+      // The siphon (healScale) rides on this same value, so healing scales with it.
+      damage: stacks => Math.max(1, enemy.max * (0.006 * stacks)),
       color: Neo.STATUS_STYLES.dark_drain.textColor,
       particleColor: Neo.STATUS_STYLES.dark_drain.color,
       healScale: 0.35,

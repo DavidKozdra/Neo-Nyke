@@ -490,7 +490,8 @@
     });
     tickPlayerStatus('dark_drain', dt, {
       interval: 0.6,
-      damage: stacks => (1 + stacks * 1.7) * 0.1,
+      // % max HP, same system as poison/the enemy-side drain tick.
+      damage: stacks => Neo.player.maxHp * (0.003 + stacks * 0.002),
       color: Neo.STATUS_STYLES.dark_drain.color,
     });
     // Cold (slow) deals no damage-over-time; it just slows + makes brittle, so
