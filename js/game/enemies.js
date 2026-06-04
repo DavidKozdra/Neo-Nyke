@@ -1,5 +1,7 @@
 // enemies.js — standalone IIFE. Enemy spawning, AI, boss logic.
 
+  const BREAKABLE_OBSTACLE_KINDS = new Set(['cover_wall', 'wall', 'secret_wall']);
+
   function findSafeEnemySpawnPoint(preferredX, preferredY, radius = 18) {
     const isSpawnUsable = (x, y) => !Neo.isBlocked(x, y, radius) && hasNavigableSpawnSpace(x, y, radius, Neo.player);
     if (isSpawnUsable(preferredX, preferredY)) {
@@ -23,6 +25,10 @@
 
   function compactEnemyList() {
     if (!Array.isArray(Neo.enemies) || Neo.enemies.length === 0) return;
+    const frame = Number(Neo.frameId || 0);
+    const nextScanFrame = Number(Neo._nextEnemyCompactionScanFrame || 0);
+    if (frame < nextScanFrame) return;
+    Neo._nextEnemyCompactionScanFrame = frame + 12;
     let needsCompaction = false;
     for (let index = 0; index < Neo.enemies.length; index += 1) {
       const enemy = Neo.enemies[index];
@@ -34,7 +40,10 @@
     if (!needsCompaction) return;
     const before = Neo.enemies.length;
     Neo.enemies = Neo.enemies.filter(enemy => enemy && typeof enemy === 'object');
-    if (Neo.enemies.length !== before) Neo.syncCurrentRoomState();
+    if (Neo.enemies.length !== before) {
+      Neo._nextEnemyCompactionScanFrame = frame + 1;
+      Neo.syncCurrentRoomState();
+    }
   }
 
   function getCoverObstacles() {
@@ -174,10 +183,9 @@
   }
 
   function findBlockingBreakableDestructible(x, y, r) {
-    const breakableKinds = new Set(['cover_wall', 'wall', 'secret_wall']);
     return Neo.destructibles.find(prop => {
       if (!prop || prop.broken || prop.hidden) return false;
-      if (!breakableKinds.has(prop.kind)) return false;
+      if (!BREAKABLE_OBSTACLE_KINDS.has(prop.kind)) return false;
       return Neo.destructibleIntersectsCircle(prop, x, y, r);
     }) || null;
   }
@@ -388,21 +396,52 @@
   }
 
   function spawnWave(count, roomType = 'combat') {
-    const plan = buildWavePlan(count, roomType);
+    // Optional template-authored encounter (see roomTemplates.js spawnHint). When
+    // absent, every branch below collapses to the original behaviour and draws the
+    // exact same 'encounter' RNG sequence, so non-hinted rooms are unchanged.
+    const hint = (Neo.currentRoom && Neo.currentRoom.spawnHint) || null;
+    const effectiveCount = hint && Number.isFinite(hint.count) ? Math.max(1, Math.floor(hint.count)) : count;
+    const plan = hint && Array.isArray(hint.types) && hint.types.length
+      ? buildHintedWavePlan(effectiveCount, hint.types)
+      : buildWavePlan(effectiveCount, roomType);
+    const chambers = hint && hint.inChambers && Array.isArray(Neo.currentRoom.layoutChambers) && Neo.currentRoom.layoutChambers.length
+      ? Neo.currentRoom.layoutChambers
+      : null;
+
     for (let index = 0; index < plan.length; index += 1) {
       const type = plan[index] || rollEnemyType();
       const eliteChance = Neo.getDifficultyDef().eliteChance + (Neo.isChallengeActive('elite_hunt') ? 0.18 : 0);
-      const eliteRoll = canSpawnEliteEnemies() && Neo.nextRandom('encounter') < Math.min(0.85, eliteChance);
+      const baseElite = canSpawnEliteEnemies() && Neo.nextRandom('encounter') < Math.min(0.85, eliteChance);
+      const eliteRoll = (hint && hint.elite) ? canSpawnEliteEnemies() : baseElite;
       const angle = Neo.nextRandom('encounter') * Math.PI * 2;
       const radius = 140 + Neo.nextRandom('encounter') * 170;
-      const preferredX = Neo.clamp(Neo.ROOM_W / 2 + Math.cos(angle) * radius, 90, Neo.ROOM_W - 90);
-      const preferredY = Neo.clamp(Neo.ROOM_H / 2 + Math.sin(angle) * radius, 90, Neo.ROOM_H - 90);
+      // Preferred point: inside a designated chamber when the template asks for it,
+      // otherwise the original centre-ring placement. The two RNG draws above are
+      // always consumed (identical order) so chamber mode doesn't desync the stream.
+      let preferredX = Neo.clamp(Neo.ROOM_W / 2 + Math.cos(angle) * radius, 90, Neo.ROOM_W - 90);
+      let preferredY = Neo.clamp(Neo.ROOM_H / 2 + Math.sin(angle) * radius, 90, Neo.ROOM_H - 90);
+      if (chambers) {
+        const chamber = chambers[index % chambers.length];
+        preferredX = Neo.clamp(chamber.x + Math.cos(angle) * Math.min(radius, chamber.w / 2 - 24), 90, Neo.ROOM_W - 90);
+        preferredY = Neo.clamp(chamber.y + Math.sin(angle) * Math.min(radius, chamber.h / 2 - 24), 90, Neo.ROOM_H - 90);
+      }
       const safeSpawn = findSafeEnemySpawnPoint(preferredX, preferredY, 15)
         || findSafeEnemySpawnPoint(Neo.ROOM_W / 2, Neo.ROOM_H / 2, 15);
       if (!safeSpawn) continue;
       spawnEnemy(type, safeSpawn.x, safeSpawn.y, eliteRoll);
     }
     spawnMiniBoss(roomType);
+  }
+
+  // Builds a wave plan from a template-authored type pool, cycling through the
+  // listed types so the designer controls the composition. Unknown types fall
+  // through to rollEnemyType at spawn time (the `|| rollEnemyType()` guard above).
+  function buildHintedWavePlan(count, types) {
+    const plan = [];
+    for (let index = 0; index < count; index += 1) {
+      plan.push(types[index % types.length]);
+    }
+    return plan;
   }
 
   function spawnFloorBoss() {
@@ -749,8 +788,8 @@
       base.bossSpawnWarnAt = 30;
     } else if (type === 'queen_cult') {
       base.r = 38;
-      base.hp = 760;
-      base.max = 760;
+      base.hp = 912;
+      base.max = 912;
       base.speed = 96;
       base.dmg = 20;
       base.attackCd = 1.2;
@@ -787,8 +826,8 @@
       base.burstCd = 0;
     } else if (type === 'antony_blemmye') {
       base.r = 42;
-      base.hp = 1540;
-      base.max = 1540;
+      base.hp = 1400;
+      base.max = 1400;
       base.speed = 82;
       base.dmg = 27;
       base.attackCd = 1.15;
@@ -796,6 +835,8 @@
       base.bleedImmune = true;
       base.hammerCd = 1.2;
       base.biteCd = 0.85;
+      base.slashCd = 1.6;
+      base.deathBallCd = 4.5;
     } else if (type === 'handsome_devil') {
       base.r = 34;
       base.hp = 1700;
@@ -1003,6 +1044,7 @@
       critCharmBuffTime: Number(player.critCharmBuffTime || 0),
       keenEyeBuffTime: Number(player.keenEyeBuffTime || 0),
       chronoSpringBuffTime: Number(player.chronoSpringBuffTime || 0),
+      robotArmReady: !!player.robotArmReady,
       storedPotions: Number(player.storedPotions || 0),
       items,
       ownedMoves,
@@ -1017,7 +1059,7 @@
     const items = inventory?.items || {};
     const count = key => Number(items[key] || 0);
     const godItemStacks = Neo.ITEM_KEYS
-      .filter(key => Neo.ITEM_DEFS[key]?.rarity === 'god')
+      .filter(key => Neo.isGodTier?.(Neo.ITEM_DEFS[key]?.rarity))
       .reduce((total, key) => total + count(key), 0);
     const xpProgress = Neo.clamp((inventory?.xpToNext || 0) > 0 ? Number(inventory.xp || 0) / Number(inventory.xpToNext || 1) : 0, 0, 1);
     const characterDef = Neo.CHARACTER_DEFS?.[inventory?.character] || {};
@@ -1036,7 +1078,9 @@
       snakeKnifePoisonChance: count('snake_knife') * 0.02,
       critChance,
       critMultiplier: 1.6 + (count('oracles_lens') > 0 ? critChance * 2.2 : critChance * 0.6),
-      attackSpeedMultiplier: robotArm > 0 ? 8 * (1 + attackServo * 0.12 + chronoSpringBonus) : 1 + attackServo * 0.12 + chronoSpringBonus,
+      attackSpeedMultiplier: robotArm > 0 && inventory?.robotArmReady
+        ? 8 * (1 + attackServo * 0.12 + chronoSpringBonus)
+        : 1 + attackServo * 0.12 + chronoSpringBonus,
       moveSpeedMultiplier: 1 + count('turtle_shell') * 0.05,
       levelEdgeDamageMultiplier: 1 + count('scholar_cap') * xpProgress * 0.45,
       knockbackMultiplier: 1 + count('push_man') * 0.18,
@@ -1401,6 +1445,16 @@
       room.challengeData.tickStart = Number(tuning.tickStart || 2);
       room.challengeData.tickEnd = Number(tuning.tickEnd || 1.35);
       room.challengeData.targetClearRate = CHALLENGE_CLEAR_RATE_TARGETS.survival;
+      const obeliskHp = Math.round(120 + Neo.floor * 30);
+      room.challengeData.obelisk = {
+        x: Neo.ROOM_W / 2,
+        y: Neo.ROOM_H / 2,
+        r: 22,
+        hp: obeliskHp,
+        maxHp: obeliskHp,
+        hitFlash: 0,
+        guardRange: 96,
+      };
       spawnTrialEnemyWave(2);
       sayAtPosition(Neo.ROOM_W / 2, Neo.ROOM_H / 2, 'Protect the central obelisk and survive.', { speaker: 'TRIAL', tone: 'warning' });
     } else if (type === 'runes') {
@@ -1800,6 +1854,7 @@
           kind: 'golem_spit',
           source: 'golem_projectile',
           damage: enemy.dmg + 4,
+          statusEffects: [{ key: 'poison', chance: 1, stacks: 1, duration: 4.2 }],
         });
         Neo.spawnParticle({ x: enemy.x, y: enemy.y - 20, life: 0.5, text: 'SPIT', c: '#9bb05a' });
       }
@@ -1931,6 +1986,8 @@
       return best;
     }, null);
     const target = nearestWounded?.enemy || Neo.player;
+    // No wounded ally and no player (e.g. the post-death frame) — nothing to move toward.
+    if (!target) { enemy.vx *= 0.9; enemy.vy *= 0.9; return; }
     const dx = target.x - enemy.x;
     const dy = target.y - enemy.y;
     const distance = Math.hypot(dx, dy) || 1;
@@ -2441,13 +2498,149 @@
     }
   }
 
+  // Directional hammer shockwave: a wave of damage that travels forward in the
+  // facing direction instead of a full circle. Implemented as a series of
+  // advancing damage arcs spawned over a few frames via a lightweight pulse.
   function spawnAntonyHammerSwing(enemy) {
-    const radius = 196;
-    const damage = Math.round(enemy.dmg * 1.18);
-    Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.58, ring: radius, c: '#ffcf8a' });
-    Neo.blastRadius(enemy.x, enemy.y, radius, damage, '#ffcf8a', enemy);
+    const angle = Number.isFinite(enemy.antonyHammerAngle)
+      ? enemy.antonyHammerAngle
+      : Math.atan2(Neo.player.y - enemy.y, Neo.player.x - enemy.x);
+    enemy.antonyShockwave = {
+      angle,
+      damage: Math.round(enemy.dmg * 1.18),
+      // Wave geometry: travels `range` px outward, only hits within `halfArc`
+      // of the facing direction, in a band `bandWidth` thick.
+      range: 360,
+      speed: 720,
+      travelled: enemy.r + 12,
+      halfArc: 0.62,
+      bandWidth: 64,
+      hit: false,
+    };
+    Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.34, ring: 70, c: '#ffcf8a' });
     Neo.shake = Math.max(Neo.shake, 13);
     Neo.shakeT = Math.max(Neo.shakeT, 0.22);
+  }
+
+  // Advance the active directional shockwave: move the wave front outward, draw
+  // a crescent of motes along it, and damage the player when the front reaches
+  // them inside the arc. Returns true while the wave is still alive.
+  function updateAntonyShockwave(enemy, dt) {
+    const wave = enemy.antonyShockwave;
+    if (!wave) return false;
+    const prev = wave.travelled;
+    wave.travelled += wave.speed * dt;
+    const front = wave.travelled;
+
+    // Telegraph / visual: scatter motes along the advancing crescent.
+    const moteCount = 7;
+    for (let i = 0; i < moteCount; i += 1) {
+      const a = wave.angle + (i / (moteCount - 1) - 0.5) * 2 * wave.halfArc;
+      Neo.spawnParticle({
+        x: enemy.x + Math.cos(a) * front,
+        y: enemy.y + Math.sin(a) * front,
+        life: 0.22,
+        c: '#ffcf8a',
+        size: 3.2,
+      });
+    }
+
+    if (!wave.hit && Neo.player) {
+      const pdx = Neo.player.x - enemy.x;
+      const pdy = Neo.player.y - enemy.y;
+      const pDist = Math.hypot(pdx, pdy) || 1;
+      const pAngle = Math.atan2(pdy, pdx);
+      let delta = Math.abs(pAngle - wave.angle);
+      if (delta > Math.PI) delta = Math.PI * 2 - delta;
+      const inArc = delta <= wave.halfArc;
+      // The band swept this frame, padded by the player radius.
+      const reached = pDist >= prev - wave.bandWidth / 2 - Neo.player.r
+        && pDist <= front + wave.bandWidth / 2 + Neo.player.r;
+      if (inArc && reached) {
+        wave.hit = true;
+        Neo.damagePlayer(wave.damage, pAngle, 320, enemy.type);
+      }
+    }
+
+    if (wave.travelled >= wave.range) {
+      enemy.antonyShockwave = null;
+      return false;
+    }
+    return true;
+  }
+
+  // Close-range sweeping slash: a wide melee arc in front of the boss, distinct
+  // from the short bite. Hits anything inside a forward cone within reach.
+  function spawnAntonySlash(enemy) {
+    const angle = Math.atan2(Neo.player.y - enemy.y, Neo.player.x - enemy.x);
+    const reach = enemy.r + Neo.player.r + 78;
+    const halfArc = 0.95;
+    const damage = Math.round(enemy.dmg * 1.05);
+    enemy.attackAnimT = 0.3;
+    enemy.swingTime = 0.32;
+
+    // Slash arc visual.
+    const arcMotes = 9;
+    for (let i = 0; i < arcMotes; i += 1) {
+      const t = i / (arcMotes - 1) - 0.5;
+      const a = angle + t * 2 * halfArc;
+      const reachAt = reach * (0.7 + 0.3 * (1 - Math.abs(t) * 1.4));
+      Neo.spawnParticle({
+        x: enemy.x + Math.cos(a) * reachAt,
+        y: enemy.y + Math.sin(a) * reachAt,
+        life: 0.26,
+        c: '#fff0c4',
+        size: 3.6,
+      });
+    }
+
+    if (Neo.player) {
+      const pdx = Neo.player.x - enemy.x;
+      const pdy = Neo.player.y - enemy.y;
+      const pDist = Math.hypot(pdx, pdy) || 1;
+      let delta = Math.abs(Math.atan2(pdy, pdx) - angle);
+      if (delta > Math.PI) delta = Math.PI * 2 - delta;
+      if (pDist <= reach && delta <= halfArc) {
+        Neo.damagePlayer(damage, Math.atan2(pdy, pdx), 300, enemy.type);
+      }
+    }
+    Neo.shake = Math.max(Neo.shake, 7);
+    Neo.shakeT = Math.max(Neo.shakeT, 0.12);
+  }
+
+  // Charged "cold death ball": a slow, heavy frost orb fired after a windup.
+  function spawnAntonyDeathBall(enemy) {
+    const angle = Number.isFinite(enemy.antonyDeathBallAngle)
+      ? enemy.antonyDeathBallAngle
+      : Math.atan2(Neo.player.y - enemy.y, Neo.player.x - enemy.x);
+    Neo.spawnProjectile({
+      x: enemy.x + Math.cos(angle) * (enemy.r + 14),
+      y: enemy.y + Math.sin(angle) * (enemy.r + 14),
+      vx: Math.cos(angle) * 190,
+      vy: Math.sin(angle) * 190,
+      r: 44,
+      life: 3.4,
+      enemy: true,
+      kind: 'cold_death',
+      source: 'antony_death_ball',
+      damage: Math.round(enemy.dmg * 1.3),
+      knockback: 280,
+      color: '#9fe8ff',
+      // The icy "cold" debuff is the `slow` status: it slows movement AND makes
+      // the player brittle (strips defense per stack via getBrittleDefenseMultiplier).
+      // Cold lifetime on the player is auto-scaled to 15s per stack in applyStatus,
+      // so the duration passed here is only a floor for non-player targets.
+      statusEffects: [{ key: 'slow', chance: 1, stacks: 2, duration: 4 }],
+      // AOE frost burst when the ball lands (wall, expiry, or hitting player).
+      enemyBlast: { radius: 150, damage: Math.round(enemy.dmg * 0.8), color: '#9fe8ff', statusKey: 'slow', statusStacks: 1, statusDuration: 3 },
+      homing: true,
+      homingTurnRate: 0.9,
+      homingSpeed: 215,
+      homingAccel: 1.4,
+    });
+    Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.45, ring: 46, c: '#9fe8ff' });
+    Neo.shake = Math.max(Neo.shake, 9);
+    Neo.shakeT = Math.max(Neo.shakeT, 0.16);
   }
 
   function updateAntonyBlemmyeBoss(enemy, dt) {
@@ -2458,15 +2651,34 @@
 
     enemy.hammerCd = Math.max(0, Number(enemy.hammerCd || 0) - dt);
     enemy.biteCd = Math.max(0, Number(enemy.biteCd || 0) - dt);
+    enemy.slashCd = Math.max(0, Number(enemy.slashCd || 0) - dt);
+    enemy.deathBallCd = Math.max(0, Number(enemy.deathBallCd || 0) - dt);
+
+    // Drive an in-flight directional hammer shockwave independent of windup.
+    if (enemy.antonyShockwave) updateAntonyShockwave(enemy, dt);
 
     if (enemy.windup > 0) {
       enemy.windup -= dt;
       enemy.vx *= 0.7;
       enemy.vy *= 0.7;
-      Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.16, c: '#ffcf8a' });
-      if (enemy.windup <= 0 && enemy.state === 'antonyHammer') {
-        spawnAntonyHammerSwing(enemy);
-        enemy.attackCd = 1.35 * tuning.rangedCadence;
+      // Telegraph charging attacks toward the locked facing direction.
+      if (enemy.state === 'antonyHammer' && Number.isFinite(enemy.antonyHammerAngle)) {
+        const a = enemy.antonyHammerAngle;
+        Neo.spawnParticle({ x: enemy.x + Math.cos(a) * (enemy.r + 30), y: enemy.y + Math.sin(a) * (enemy.r + 30), life: 0.18, c: '#ffcf8a', size: 3 });
+      } else if (enemy.state === 'antonyDeathBall') {
+        Neo.spawnParticle({ x: enemy.x + Neo.rand(-14, 14), y: enemy.y + Neo.rand(-14, 14), life: 0.2, c: '#9fe8ff', size: 3 });
+      } else {
+        Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.16, c: '#ffcf8a' });
+      }
+      if (enemy.windup <= 0) {
+        if (enemy.state === 'antonyHammer') {
+          spawnAntonyHammerSwing(enemy);
+          enemy.attackCd = 1.35 * tuning.rangedCadence;
+        } else if (enemy.state === 'antonyDeathBall') {
+          spawnAntonyDeathBall(enemy);
+          enemy.attackCd = 1.2 * tuning.rangedCadence;
+        }
+        enemy.state = null;
       }
       return;
     }
@@ -2481,6 +2693,7 @@
     const direction = distance < desired - 24 ? -0.6 : 1;
     steerEnemy(enemy, dx / distance * direction, dy / distance * direction, enemy.speed, 3.7, dt);
 
+    // Bite: very short range life-drain chomp (unchanged).
     if (enemy.biteCd <= 0 && distance < enemy.r + Neo.player.r + 26) {
       const angle = Math.atan2(dy, dx);
       const biteDamage = Math.round(enemy.dmg * 0.92);
@@ -2497,9 +2710,38 @@
       return;
     }
 
-    if (enemy.hammerCd <= 0 && distance < 260 && enemy.attackCd <= 0) {
+    // Slash: wide sweeping melee arc when the player is close (longer reach than
+    // the bite, no windup so it punishes hugging the boss).
+    if (enemy.slashCd <= 0 && enemy.attackCd <= 0 && distance < enemy.r + Neo.player.r + 70) {
+      spawnAntonySlash(enemy);
+      enemy.slashCd = 2.0 * tuning.rangedCadence;
+      enemy.attackCd = 0.7;
+      if (!enemy.antonySlashLineShown) {
+        enemy.antonySlashLineShown = true;
+        sayOverEntity(enemy, 'Carve you open.', { holdTime: 1.4 });
+      }
+      return;
+    }
+
+    // Cold death ball: charged frost orb fired at mid/long range.
+    if (enemy.deathBallCd <= 0 && enemy.attackCd <= 0 && distance > enemy.r + Neo.player.r + 40) {
+      enemy.state = 'antonyDeathBall';
+      enemy.windup = 0.9 / tuning.reaction;
+      enemy.antonyDeathBallAngle = Math.atan2(dy, dx);
+      enemy.deathBallCd = 6.0 * tuning.rangedCadence;
+      enemy.attackCd = 1.0;
+      if (!enemy.antonyDeathBallLineShown) {
+        enemy.antonyDeathBallLineShown = true;
+        sayOverEntity(enemy, 'Feel the cold.', { holdTime: 1.5 });
+      }
+      return;
+    }
+
+    // Hammer: directional shockwave that travels forward (no longer a circle).
+    if (enemy.hammerCd <= 0 && distance < 320 && enemy.attackCd <= 0) {
       enemy.state = 'antonyHammer';
       enemy.windup = 0.78 / tuning.reaction;
+      enemy.antonyHammerAngle = Math.atan2(dy, dx);
       enemy.hammerCd = 3.35 * tuning.rangedCadence;
       enemy.attackCd = 0.8;
       if (!enemy.antonyHammerLineShown) {
@@ -2530,6 +2772,9 @@
         ttl: 1.1,
         armTime: 0.48,
         damage: Math.round(enemy.dmg * 0.82),
+        statusKey: 'fire',
+        statusStacks: 1,
+        statusDuration: 3,
         hit: false,
       });
       Neo.spawnParticle({ x, y, life: 0.35, ring: 18, c: '#ff3348' });
@@ -2624,6 +2869,9 @@
         speedDamp: 0.84,
         turnRate: 1.8 * tuning.reaction,
         damageSource: 'handsome_devil',
+        onHit: () => {
+          Neo.applyFire?.(Neo.player, 1, 2.8);
+        },
         onEnd: activeEnemy => {
           activeEnemy.attackCd = 1.1 * tuning.rangedCadence;
         },
@@ -3143,6 +3391,11 @@
       Neo.applyFire(Neo.player, move === 'floor_lava' ? 2 : 1, 3.2);
       return true;
     }
+    enemy.mirrorSmashColor = move === 'crimson_smash'
+      ? '#ff3048'
+      : move === 'chaos_burst'
+        ? '#a857ff'
+        : '#ff6dc7';
     enemy.state = 'mirrorSmash';
     enemy.windup = 0.38;
     return true;
@@ -3223,7 +3476,7 @@
           enemy.dashTime = 0.18;
           enemy.dashHit = false;
         } else if (enemy.state === 'mirrorSmash') {
-          mirrorBlastPlayer(enemy, Neo.ATTACKS.smash.radius + 8, enemy.smashDamage || enemy.dmg + 18, 300, '#ff6dc7');
+          mirrorBlastPlayer(enemy, Neo.ATTACKS.smash.radius + 8, enemy.smashDamage || enemy.dmg + 18, 300, enemy.mirrorSmashColor || '#ff6dc7');
           enemy.attackCd = 0.75;
         }
       }
@@ -3451,6 +3704,36 @@
         Neo.currentRoom.challengeTick = tickEnd + (tickStart - tickEnd) * timeRatio;
         spawnTrialEnemyWave(Math.max(1, Number(Neo.currentRoom.challengeData?.spawnCount || 1)));
       }
+
+      // Enemies that crowd the obelisk drain its hp. The player must clear adds to keep it standing.
+      const obelisk = Neo.currentRoom.challengeData?.obelisk;
+      if (obelisk) {
+        obelisk.hitFlash = Math.max(0, (obelisk.hitFlash || 0) - dt);
+        let attackers = 0;
+        for (let index = 0; index < Neo.enemies.length; index += 1) {
+          const enemy = Neo.enemies[index];
+          if (!enemy || enemy.dead) continue;
+          if (Neo.dist(enemy.x, enemy.y, obelisk.x, obelisk.y) < obelisk.guardRange + (enemy.r || 12)) {
+            attackers += 1;
+          }
+        }
+        if (attackers > 0) {
+          const drain = attackers * (6 + Neo.floor * 0.8) * dt;
+          obelisk.hp = Math.max(0, obelisk.hp - drain);
+          obelisk.hitFlash = 0.18;
+          if (Neo.nextRandom('world') < dt * attackers * 2) {
+            Neo.spawnParticle({ x: obelisk.x + (Neo.nextRandom('world') - 0.5) * 30, y: obelisk.y - 6, life: 0.3, c: '#ff8b98', ring: 8 });
+          }
+        }
+        if (obelisk.hp <= 0) {
+          Neo.spawnParticle({ x: obelisk.x, y: obelisk.y, life: 0.6, ring: 40, c: '#ff5566' });
+          Neo.shake = Math.max(Neo.shake || 0, 14);
+          Neo.shakeT = Math.max(Neo.shakeT || 0, 0.3);
+          failChallengeTrial('OBELISK DESTROYED');
+          return;
+        }
+      }
+
       if (Neo.currentRoom.challengeTimer <= 0) {
         Neo.enemies.splice(0, Neo.enemies.length);
         completeChallengeTrial('SURVIVED');

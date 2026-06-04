@@ -1,0 +1,157 @@
+/* Final UI border pass: keep menu/panel frames black across themes and states. */
+:root,
+html.princess-ui {
+  --menu-border: #000;
+  --menu-border-strong: #000;
+}
+
+:is(
+  #hud,
+  #playerStats,
+  .coin-display,
+  .timer-floor,
+  .objective-tracker,
+  .equipment-slots,
+  .equip-slot,
+  .skill-card,
+  .skill-icon,
+  .panel-shell,
+  .game-panel,
+  .game-panel-head,
+  .panel-tabs,
+  .panel-tab,
+  .shop-tab,
+  .panel-close,
+  .panel-kicker,
+  .shop-coins,
+  .shop-meta-label,
+  .shop-card,
+  .inv-card,
+  .inv-slot,
+  .shop-card__eyebrow,
+  .inv-card__eyebrow,
+  .shop-card__price,
+  .shop-card__chip,
+  .shop-card__status,
+  .shop-card__recommended-badge,
+  .shop-card__stat,
+  .shop-card__swap-rail,
+  .shop-card__stamp,
+  .shop-buy,
+  .inv-stat-row,
+  .inv-stat-row__icon,
+  .inv-tab-panel,
+  .inv-ux-hint,
+  .inv-player-tab,
+  .inv-build-card,
+  .inv-build-card__icon,
+  .inv-card__count,
+  .inv-card__icon,
+  .inv-chip__icon,
+  .inv-move-chip,
+  .inv-move-chip__slot,
+  .inv-chip-action,
+  .inv-slot__key,
+  .inv-slot__status,
+  .inv-slot__icon,
+  .menu-content,
+  #start .menu-cinema,
+  .nav-btn,
+  .charselect-roster,
+  .charselect-sidebar,
+  .hero-detail-panel,
+  .hero-detail-portrait,
+  .hero-detail-skill-pip,
+  .hero-detail-item-pip,
+  .char-card,
+  .char-card-art-wrap,
+  .setup-panel,
+  .difficulty-btn,
+  .challenge-toggle,
+  .challenge-btn,
+  .legacy-toggle,
+  .legacy-btn,
+  input#seed,
+  button.alt,
+  .kbd,
+  .overlay button.restart,
+  .floating-panel,
+  .floating-panel__head,
+  .altmode-card,
+  .competitive-lb-card,
+  .competitive-server-status,
+  .competitive-submit-status,
+  .seed-error-banner,
+  .sandbox-panel__dialog,
+  .sandbox-card,
+  .sandbox-search,
+  .modal-box,
+  .birthday-card,
+  .birthday-card__monster,
+  .bd-monster__canvas,
+  .rh-panel,
+  .rh-rail,
+  .rh-row,
+  .rh-profile-row,
+  .rh-info-tab,
+  .rh-info-tutorial-btn,
+  .meta-info-summary__stat,
+  .meta-challenge-card,
+  .meta-challenge-card__icon,
+  .meta-legacy-card,
+  .meta-legacy-card__sigil,
+  .ach-card,
+  .achievement-toast,
+  .rh-blog-card,
+  .info-card,
+  .info-card__tag,
+  .info-char-card,
+  .info-enemy-card,
+  .info-enemy-card__tag,
+  .info-enemy-detail,
+  .ied-stat,
+  .dead-left,
+  .dead-stat,
+  .dead-record,
+  .dead-item-card,
+  .dead-items-pgbtn,
+  .win-left,
+  .win-crystal-total-wrap,
+  .win-action,
+  .practice-panel,
+  .practice-spawn-btn,
+  .practice-num,
+  .practice-action-btn,
+  .endless-hud,
+  .boss-rush-hud,
+  .touch-hamburger,
+  .touch-ham-btn,
+  .joy-base
+) {
+  border-color: #000 !important;
+}
+
+/* Exception: the gold "TOOL" chip keeps its distinctive amber outline. The black
+   border pass above (and the princess-theme chip override) would otherwise flatten
+   it into a generic chip, making the tool tag read as missing. */
+.shop-card__chip.shop-card__chip--tool,
+html.princess-ui .shop-card__chip.shop-card__chip--tool {
+  border-color: #ffcf6a !important;
+}
+
+.hero-detail-panel {
+  border: 1px solid #000;
+}
+
+/* Tab icons: black-bordered chip, consistent across shop / inventory / settings tabs.
+   Every tab bar is a flex button with its own `gap`, so the icon already sits clear
+   of the label — we only add the border treatment here. */
+.panel-tab .tab-icon,
+.shop-tab .tab-icon,
+.inv-tab .tab-icon,
+.stab .tab-icon {
+  border: 1px solid #000 !important;
+  border-radius: 5px;
+  padding: 2px;
+  box-sizing: content-box;
+}

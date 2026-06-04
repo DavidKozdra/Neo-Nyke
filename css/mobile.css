@@ -17,6 +17,8 @@
     overflow: scroll;
   }
 
+  
+
   /* collapse roster + sidebar side-by-side into single column */
   .charselect-main {
     grid-template-columns: 1fr;
@@ -154,6 +156,7 @@
     margin: 14px auto 0;
     box-sizing: border-box;
     overflow: scroll;
+
   }
 
   .charselect-header {
@@ -372,6 +375,7 @@
   }
 
   .game-panel-head { flex-direction: column; gap: 8px; }
+  .panel-tabs,
   .shop-tabs { flex-direction: column; gap: 4px; }
   .shop-list { grid-template-columns: 1fr; }
   .shop-card {
@@ -604,11 +608,12 @@
 
   #start .menu-stage {
     width: min(390px, 100%);
+    height: auto;
     min-height: auto;
     margin: 0 auto;
     padding: calc(14px + env(safe-area-inset-top, 0px)) 0 calc(14px + env(safe-area-inset-bottom, 0px));
     gap: 10px;
-    align-content: flex-start;
+    justify-content: flex-start;
   }
 
   #start .menu-cinema {
@@ -888,6 +893,19 @@
   .modal-box > .screen-title {
     margin-bottom: 10px !important;
     font-size: 18px;
+  }
+
+  .settings-head {
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+
+  .settings-head .screen-title {
+    font-size: 18px;
+  }
+
+  .settings-subtitle {
+    font-size: 12px;
   }
 
   .stab-bar {
@@ -1234,8 +1252,8 @@
   .access-row .toggle,
   .access-slider-wrap,
   .acc-color-input,
-  .data-row .settings-reset,
-  .data-row .settings-text-input {
+  #stab-data .settings-reset,
+  #stab-data .settings-text-input {
     align-self: stretch;
   }
 
@@ -1430,7 +1448,9 @@
   }
 
   #start .menu-stage {
+    display: grid;
     width: min(720px, 100%);
+    height: auto;
     min-height: auto;
     margin: 0 auto;
     padding: 12px 0;
@@ -2177,6 +2197,7 @@
     margin-left: 0;
   }
 
+  .panel-tabs,
   .shop-tabs {
     display: flex;
     flex-direction: row;
@@ -2187,6 +2208,7 @@
     border-radius: 9px;
   }
 
+  .panel-tab,
   .shop-tab {
     flex: 1 0 auto;
     min-width: 72px;
@@ -2196,7 +2218,51 @@
     letter-spacing: .07em;
   }
 
+  .anvil-tabs .panel-tab,
   .anvil-tabs .shop-tab { flex: 1 1 0; }
+
+  .anvil-tab-panel {
+    flex-direction: column;
+    gap: 12px;
+    min-height: 0;
+    padding-bottom: 10px;
+  }
+
+  .anvil-item-list {
+    width: 100%;
+    max-height: 180px;
+    padding-right: 2px;
+  }
+
+  .anvil-stat-panel {
+    max-height: none;
+  }
+
+  .anvil-stat-row {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 9px 10px;
+  }
+
+  .anvil-stat-label {
+    min-width: calc(100% - 50px);
+  }
+
+  .anvil-stat-cost {
+    flex: 1;
+    min-width: 110px;
+    text-align: left;
+  }
+
+  .anvil-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .anvil-footer-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
 
   .shop-card,
   .inv-card,

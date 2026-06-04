@@ -3,8 +3,11 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
+    "prepare": "node scripts/install-git-hooks.js",
     "icons": "node generate-icons.js",
-    "test": "jest",
+    "test": "node scripts/run-tests.js",
+    "start": "python3 -m http.server 5173",
+    "start:py": "python -m http.server 5173",
     "build": "rm -rf dist && mkdir -p dist && cp -r index.html game.html sw.js manifest.json css js assets Koz_Engine_Lib dist/"
   },
   "devDependencies": {

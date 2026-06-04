@@ -47,11 +47,21 @@ window.Neo = {
   camera4: { x: 0, y: 0 },
   shake: 0,
   shakeT: 0,
+  // --- game feel: trauma-based screen shake (offset ∝ trauma²) + directional kick ---
+  trauma: 0,        // 0..1, decays each frame; render offset uses trauma²
+  shakeKickX: 0,    // directional camera kick (world px), decays fast
+  shakeKickY: 0,
+  // --- game feel: hitstop / freeze-frame accumulator (seconds of frozen sim) ---
+  hitstop: 0,
 
   // --- flow ---
   gameState: 'menu',
   gameMode: 'normal',
   floor: 1,
+  // Opt-in floor "shape grammar": biases rewards toward dead-end rooms during
+  // floor generation (see biasRewardPoolToDeadEnds in rooms.js). Off by default
+  // so generation matches the current behaviour until explicitly enabled.
+  useFloorGrammar: false,
   runLoopIndex: 0,
   baseSeedStr: '',
   seedStr: '',
@@ -68,6 +78,7 @@ window.Neo = {
   showFloorTransition: false,
   lavaAnimTime: 0,
   playerDeathAnim: null,
+  windowBlurred: false,
   lowHealthHitFlashUntil: 0,
 
   // --- laser ---

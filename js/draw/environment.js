@@ -53,6 +53,29 @@
     Neo.perfEnd('draw.overlays', sectionPerfStart);
   }
 
+  // Cached low-health edge gradient, rebuilt only when the canvas size changes.
+  // Color stops carry their relative weights at full opacity; the caller applies
+  // the per-frame alpha via ctx.globalAlpha.
+  let _lowHpGradient = null;
+  let _lowHpGradientW = -1;
+  let _lowHpGradientH = -1;
+  function getLowHealthEdgeGradient() {
+    const w = Neo.canvas.width;
+    const h = Neo.canvas.height;
+    if (_lowHpGradient && _lowHpGradientW === w && _lowHpGradientH === h) return _lowHpGradient;
+    const grad = Neo.ctx.createRadialGradient(
+      w / 2, h / 2, Math.min(w, h) * 0.34,
+      w / 2, h / 2, Math.max(w, h) * 0.72,
+    );
+    grad.addColorStop(0, 'rgba(255,0,0,0)');
+    grad.addColorStop(0.62, 'rgba(190,0,18,0.42)');
+    grad.addColorStop(1, 'rgba(255,0,22,1)');
+    _lowHpGradient = grad;
+    _lowHpGradientW = w;
+    _lowHpGradientH = h;
+    return grad;
+  }
+
   function drawLowHealthEdgeGlow() {
     if (!Neo.player || Neo.gameState !== 'play' || !Number.isFinite(Neo.player.hp) || !Number.isFinite(Neo.player.maxHp) || Neo.player.maxHp <= 0) return;
     const access = window.NeoSettings?.getAccess() || {};
@@ -75,19 +98,14 @@
     Neo.ctx.save();
     Neo.ctx.globalCompositeOperation = 'source-over';
 
-    const center = Neo.ctx.createRadialGradient(
-      Neo.canvas.width / 2,
-      Neo.canvas.height / 2,
-      Math.min(Neo.canvas.width, Neo.canvas.height) * 0.34,
-      Neo.canvas.width / 2,
-      Neo.canvas.height / 2,
-      Math.max(Neo.canvas.width, Neo.canvas.height) * 0.72,
-    );
-    center.addColorStop(0, 'rgba(255,0,0,0)');
-    center.addColorStop(0.62, `rgba(190,0,18,${alpha * 0.42})`);
-    center.addColorStop(1, `rgba(255,0,22,${alpha})`);
+    // The gradient geometry depends only on canvas size; only the alpha varies
+    // (per-frame pulse). Cache it at full alpha and modulate via globalAlpha so
+    // we don't rebuild the gradient + interpolate color-stop strings every frame.
+    const center = getLowHealthEdgeGradient();
+    Neo.ctx.globalAlpha = alpha;
     Neo.ctx.fillStyle = center;
     Neo.ctx.fillRect(0, 0, Neo.canvas.width, Neo.canvas.height);
+    Neo.ctx.globalAlpha = 1;
 
     Neo.ctx.fillStyle = `rgba(255,24,32,${alpha * 0.55})`;
     Neo.ctx.shadowColor = '#ff1e28';
@@ -975,6 +993,129 @@
     Neo.ctx.strokeStyle = prop.reinforced ? 'rgba(198, 205, 214, 0.58)' : 'rgba(38, 20, 10, 0.92)';
     Neo.ctx.lineWidth = prop.reinforced ? 2.5 : 2;
     Neo.ctx.strokeRect(left + 1, top + 1, w - 2, h - 2);
+
+    if (prop.hitFlash > 0) {
+      const flash = Neo.clamp(Number(prop.hitFlash || 0) / 0.12, 0, 1);
+      Neo.ctx.fillStyle = `rgba(255, 244, 190, ${flash * 0.22})`;
+      Neo.ctx.fillRect(left, top, w, h);
+      Neo.ctx.strokeStyle = `rgba(255, 244, 190, ${flash * 0.7})`;
+      Neo.ctx.lineWidth = 2;
+      Neo.ctx.strokeRect(left + 1, top + 1, w - 2, h - 2);
+    }
+  }
+
+  function drawDestructibleBlockDamage(prop, w = 52, h = 52) {
+    const maxHp = Math.max(1, Number(prop.maxHp || prop.hp || 1));
+    const hpRatio = Neo.clamp(Number(prop.hp || 0) / maxHp, 0, 1);
+    const damage = 1 - hpRatio;
+    const left = -w / 2;
+    const top = -h / 2;
+
+    if (damage > 0.02) {
+      Neo.ctx.fillStyle = `rgba(18, 16, 13, ${damage * 0.42})`;
+      Neo.ctx.fillRect(left + 2, top + 2, w - 4, h - 4);
+      Neo.ctx.strokeStyle = `rgba(235, 218, 184, ${0.22 + damage * 0.45})`;
+      Neo.ctx.lineWidth = 1.5;
+      Neo.ctx.beginPath();
+      Neo.ctx.moveTo(left + w * 0.28, top + h * 0.18);
+      Neo.ctx.lineTo(left + w * 0.42, top + h * 0.43);
+      Neo.ctx.lineTo(left + w * 0.34, top + h * 0.68);
+      if (damage > 0.35) {
+        Neo.ctx.moveTo(left + w * 0.64, top + h * 0.16);
+        Neo.ctx.lineTo(left + w * 0.54, top + h * 0.47);
+        Neo.ctx.lineTo(left + w * 0.76, top + h * 0.72);
+      }
+      if (damage > 0.65) {
+        Neo.ctx.moveTo(left + w * 0.18, top + h * 0.78);
+        Neo.ctx.lineTo(left + w * 0.5, top + h * 0.62);
+        Neo.ctx.lineTo(left + w * 0.86, top + h * 0.82);
+      }
+      Neo.ctx.stroke();
+    }
+
+    if (prop.hitFlash > 0) {
+      const flash = Neo.clamp(Number(prop.hitFlash || 0) / 0.12, 0, 1);
+      Neo.ctx.fillStyle = `rgba(255, 244, 190, ${flash * 0.24})`;
+      Neo.ctx.fillRect(left + 1, top + 1, w - 2, h - 2);
+      Neo.ctx.strokeStyle = `rgba(255, 244, 190, ${flash * 0.68})`;
+      Neo.ctx.lineWidth = 2;
+      Neo.ctx.strokeRect(left + 1, top + 1, w - 2, h - 2);
+    }
+  }
+
+  function drawBrokenDestructible(prop) {
+    if (prop?.kind === 'barrel') {
+      const age = Math.max(0, Number(prop.breakAge || 0));
+      const fade = Neo.clamp(1 - Math.max(0, age - 4) / 8, 0.35, 1);
+      const radius = Math.max(20, Number(prop.scorchRadius || 34));
+      const seedBase = (prop.x || 0) * 0.173 + (prop.y || 0) * 0.291 + 91;
+      Neo.ctx.save();
+      Neo.ctx.translate(prop.x, prop.y);
+      Neo.ctx.globalAlpha = fade;
+      const scorch = Neo.ctx.createRadialGradient(0, 0, 2, 0, 0, radius);
+      scorch.addColorStop(0, 'rgba(16, 12, 9, 0.62)');
+      scorch.addColorStop(0.48, 'rgba(44, 26, 16, 0.4)');
+      scorch.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      Neo.ctx.fillStyle = scorch;
+      Neo.ctx.beginPath();
+      Neo.ctx.ellipse(0, 3, radius * 1.12, radius * 0.72, Number(prop.breakAngle || 0) * 0.08, 0, Math.PI * 2);
+      Neo.ctx.fill();
+      for (let index = 0; index < 7; index += 1) {
+        const seed = seedBase + index * 11.19;
+        const angle = Number(prop.breakAngle || 0) + Math.sin(seed) * 1.8;
+        const dist = 6 + ((Math.cos(seed * 1.7) + 1) * 0.5) * radius * 0.64;
+        const x = Math.cos(angle) * dist;
+        const y = Math.sin(angle) * dist * 0.58 + 4;
+        const w = 5 + ((Math.sin(seed * 3.1) + 1) * 0.5) * 10;
+        const h = 3 + ((Math.cos(seed * 2.4) + 1) * 0.5) * 5;
+        Neo.ctx.save();
+        Neo.ctx.translate(x, y);
+        Neo.ctx.rotate(angle + Math.sin(seed * 0.7) * 0.7);
+        Neo.ctx.fillStyle = index % 2 === 0 ? '#5b3a24' : '#2f241d';
+        Neo.ctx.fillRect(-w / 2, -h / 2, w, h);
+        Neo.ctx.fillStyle = 'rgba(255, 150, 60, 0.18)';
+        Neo.ctx.fillRect(-w / 2, -h / 2, w, 1.5);
+        Neo.ctx.restore();
+      }
+      Neo.ctx.restore();
+      return true;
+    }
+    if (prop?.kind !== 'wall' && prop?.kind !== 'cover_wall' && prop?.kind !== 'secret_wall') return false;
+    const w = Math.max(24, Number(prop.w || prop.r * 2 || 52));
+    const h = Math.max(24, Number(prop.h || prop.r * 2 || 52));
+    const angle = Number(prop.breakAngle || 0);
+    const seedBase = (prop.x || 0) * 0.173 + (prop.y || 0) * 0.291 + String(prop.kind || '').length * 17;
+    const colors = prop.kind === 'cover_wall' && !prop.reinforced
+      ? ['#7a4825', '#5a321c', '#b0743d']
+      : prop.reinforced
+        ? ['#727b86', '#aeb5bd', '#3f464d']
+        : ['#6f685d', '#a09080', '#d0c8ba'];
+    const chunkCount = prop.reinforced ? 11 : 9;
+
+    Neo.ctx.save();
+    Neo.ctx.translate(prop.x, prop.y);
+    Neo.ctx.rotate(angle * 0.04);
+    Neo.ctx.globalAlpha = 0.92;
+    for (let index = 0; index < chunkCount; index += 1) {
+      const seed = seedBase + index * 13.37;
+      const side = Math.sin(seed * 1.7) * w * 0.34;
+      const spread = Math.cos(seed * 2.1) * h * 0.26;
+      const push = 5 + ((Math.sin(seed * 3.4) + 1) * 0.5) * 15;
+      const x = Math.cos(angle + Math.PI / 2) * side + Math.cos(angle) * push;
+      const y = Math.sin(angle + Math.PI / 2) * side + Math.sin(angle) * push + spread * 0.24;
+      const cw = 5 + ((Math.cos(seed * 4.2) + 1) * 0.5) * 10;
+      const ch = 4 + ((Math.sin(seed * 5.3) + 1) * 0.5) * 8;
+      Neo.ctx.save();
+      Neo.ctx.translate(x, y);
+      Neo.ctx.rotate(angle + Math.sin(seed) * 0.9);
+      Neo.ctx.fillStyle = colors[index % colors.length];
+      Neo.ctx.fillRect(-cw / 2, -ch / 2, cw, ch);
+      Neo.ctx.fillStyle = 'rgba(0, 0, 0, 0.24)';
+      Neo.ctx.fillRect(-cw / 2, ch / 2 - 2, cw, 2);
+      Neo.ctx.restore();
+    }
+    Neo.ctx.restore();
+    return true;
   }
 
   // Expose on Neo
@@ -1004,3 +1145,5 @@
   Neo.drawChests = drawChests;
   Neo.drawRoomDecor = drawRoomDecor;
   Neo.drawCoverWall = drawCoverWall;
+  Neo.drawDestructibleBlockDamage = drawDestructibleBlockDamage;
+  Neo.drawBrokenDestructible = drawBrokenDestructible;

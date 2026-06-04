@@ -13,14 +13,39 @@ export function loop(timestamp) {
       Neo.clearGameplayInput();
     }
 
+    // --- Hitstop / freeze-frame ---------------------------------------------
+    // Drain the hitstop accumulator BEFORE gameplay sim. While frozen, the world
+    // simulation is paused (gives hits a satisfying "connect"), but visual feel
+    // systems — shake/trauma and particles — keep advancing so the freeze reads
+    // as impact, not a stutter.
+    let simDt = dt;
+    let frozen = false;
+    if (Neo.hitstop > 0) {
+      Neo.hitstop = Math.max(0, Neo.hitstop - dt);
+      frozen = Neo.gameState === 'play';
+      if (frozen) simDt = 0;
+    }
+    if (frozen) Neo.tickGameFeel(dt);
+
     const updatePerfStart = Neo.perfStart();
-    if (Neo.gameState === 'play' && !Neo.isWizardPawOpen()) update(dt);
+    if (frozen) { /* sim paused this frame; feel systems already ticked above */ }
+    else if (Neo.gameState === 'play' && !Neo.isWizardPawOpen()) update(simDt);
     else if (Neo.player && (Neo.gameState === 'dialogue' || Neo.gameState === 'pause')) {
       Neo.tickPlayerTransientDefenseTimers(dt);
       Neo.stepActiveTransitionFade(dt);
-    } else if (Neo.gameState === 'dying' && Neo.playerDeathAnim) {
-      Neo.playerDeathAnim.timer += dt;
-      if (Neo.playerDeathAnim.timer >= Neo.playerDeathAnim.duration) Neo.finalizeDeath();
+    } else if (Neo.gameState === 'dying' && Neo.playerDeathAnim && !Neo.windowBlurred) {
+      const anim = Neo.playerDeathAnim;
+      anim.timer += dt;
+      // Apply knockback drift, decaying as the corpse settles.
+      if (anim.vx || anim.vy) {
+        anim.x += anim.vx * dt;
+        anim.y += anim.vy * dt;
+        const decay = Math.exp(-7 * dt);
+        anim.vx *= decay;
+        anim.vy *= decay;
+        if (Math.hypot(anim.vx, anim.vy) < 2) { anim.vx = 0; anim.vy = 0; }
+      }
+      if (anim.timer >= anim.duration + (anim.holdDelay || 0)) Neo.finalizeDeath();
     }
     Neo.perfEnd('update', updatePerfStart);
     const uiPerfStart = Neo.perfStart();
@@ -84,8 +109,9 @@ export function loop(timestamp) {
       let cached = false;
       let nearest = null;
       return () => {
-        if (cached) return nearest;
+        if (cached && nearest && !nearest.dead && Neo.enemies.includes(nearest)) return nearest;
         cached = true;
+        nearest = null;
         let bestDistSq = Infinity;
         for (const en of Neo.enemies) {
           if (!en || en.dead) continue;
@@ -245,6 +271,7 @@ export function loop(timestamp) {
     }
 
     Neo.player.inv = Math.max(0, Neo.player.inv - dt);
+    Neo.player.warpHideTime = Math.max(0, Number(Neo.player.warpHideTime || 0) - dt);
     Neo.player.stun = Math.max(0, Number(Neo.player.stun || 0) - dt);
     if (Neo.player.swing > 0) Neo.player.swing = Math.max(0, Neo.player.swing - dt);
 
@@ -272,10 +299,25 @@ export function loop(timestamp) {
       }
     }
     if (!Neo.p1DeadInCoop) {
-      if (itemStats.hasRobotArm && Neo.player?.robotArmReady) { Neo.mouse.down = true; Neo.mouse.downQueued = true; }
       const meleeHeld = Neo.isMouseActionHeld('slash');
       const laserHeld = Neo.isMouseActionHeld('laser');
-      if (!overlayOpen && meleeHeld) Neo.tryMelee();
+      const robotArmTarget = itemStats.hasRobotArm && Neo.player?.robotArmReady
+        ? _getNearestEnemyForAim()
+        : null;
+      if (!overlayOpen && !playerStunned && (meleeHeld || robotArmTarget)) {
+        const restoreAim = robotArmTarget
+          ? { worldX: Neo.mouse.worldX, worldY: Neo.mouse.worldY }
+          : null;
+        if (restoreAim) {
+          Neo.mouse.worldX = robotArmTarget.x;
+          Neo.mouse.worldY = robotArmTarget.y;
+        }
+        Neo.tryMelee({ useRobotArmCharge: !!robotArmTarget });
+        if (restoreAim) {
+          Neo.mouse.worldX = restoreAim.worldX;
+          Neo.mouse.worldY = restoreAim.worldY;
+        }
+      }
       if (!overlayOpen && laserHeld) Neo.tryLaser();
     }
 
@@ -327,22 +369,19 @@ export function loop(timestamp) {
         trackCamera(slot.getCamera(), slot.getEntity(), slotW, slotH);
       });
     }
-    if (Neo.shakeT > 0) {
-      Neo.shakeT -= dt;
-      Neo.shake *= 0.88;
-    } else {
-      Neo.shake = 0;
-    }
+    Neo.tickGameFeel(dt);
     Neo.perfEnd('update.player', sectionPerfStart);
 
     sectionPerfStart = Neo.perfStart();
     let totalBleed = 0;
+    const playerHidden = Neo.isPlayerHidden?.(Neo.player) || false;
     for (let index = Neo.enemies.length - 1; index >= 0; index -= 1) {
       const enemy = Neo.enemies[index];
       if (!enemy) continue;
       enemy.attackCd = Math.max(0, enemy.attackCd - dt);
       enemy.stun = Math.max(0, enemy.stun - dt);
       enemy.inv = Math.max(0, enemy.inv - dt);
+      if (enemy.critSparkle > 0) enemy.critSparkle = Math.max(0, enemy.critSparkle - dt);
       if (enemy.spawnT > 0) { enemy.spawnT = Math.max(0, enemy.spawnT - dt); continue; }
 
       if (!enemy.bleedImmune && itemStats.passiveBleedStacks > 0 && enemy.type !== 'god') {
@@ -353,12 +392,21 @@ export function loop(timestamp) {
 
       totalBleed += Neo.updateEnemyStatuses(enemy, dt);
       if (enemy.dead) continue;
-      const eliteTraitControlled = Neo.updateEliteEnemyTraits(enemy, dt);
-      if (enemy.dead) continue;
       enemy.attackAnimT = Math.max(0, Number(enemy.attackAnimT || 0) - dt);
 
-      if (!eliteTraitControlled) {
-        updateEnemyByType(enemy, dt);
+      if (playerHidden) {
+        // Player is invisible/untouchable (cape, flying, coward's way, warp): enemies
+        // lose their target. Skip all AI/attack logic, drop any in-progress beam, and
+        // coast to a stop so they hold position instead of chasing or shooting.
+        if (enemy.beamTime > 0) { enemy.beamTime = 0; if (enemy.state === 'elite_laser') enemy.state = 'idle'; }
+        enemy.vx *= Math.pow(0.0001, dt);
+        enemy.vy *= Math.pow(0.0001, dt);
+      } else {
+        const eliteTraitControlled = Neo.updateEliteEnemyTraits(enemy, dt);
+        if (enemy.dead) continue;
+        if (!eliteTraitControlled) {
+          updateEnemyByType(enemy, dt);
+        }
       }
 
       if (enemy.dead) continue;
@@ -370,9 +418,7 @@ export function loop(timestamp) {
       if (Neo.player.hp < 50) Neo.player.scarfHealReady = true;
       if (Neo.player.scarfHealReady) {
         const heal = Neo.scalePlayerHealing(Neo.player.maxHp * 0.0006 * totalBleed * itemStats.bleedHealScale * dt);
-        const beforeHp = Neo.player.hp;
-        Neo.player.hp = Math.min(Neo.player.maxHp, Neo.player.hp + heal);
-        const gained = Neo.player.hp - beforeHp;
+        const gained = Neo.applyPlayerHealing?.(heal, { showBarrier: false }) ?? 0;
         if (Neo.player.hp >= 50 && Neo.player.scarfHealReady) {
           Neo.consumeCharge('hemes_scarf');
         }
@@ -460,8 +506,64 @@ export function loop(timestamp) {
     Neo.scheduleRunSave();
   }
 
+// --- Game feel: trauma shake + directional kick + hitstop --------------------
+
+const FEEL = {
+  maxShake: 22,        // px, the offset magnitude at trauma === 1
+  traumaDecay: 2.6,    // trauma units/sec (≈0.38s to fully settle from 1.0)
+  kickDecay: 14,       // directional kick spring-back rate
+  maxHitstop: 0.12,    // clamp so chained hits can't lock the sim
+};
+
+// Add screen trauma (0..1, accumulates). Offset rendered ∝ trauma² so light hits
+// barely shake and heavy hits slam. Optional `angle` points AWAY from the impact
+// source so the camera kicks back from the blow.
+function addTrauma(amount, angle = null, kick = 0) {
+  Neo.trauma = Neo.clamp((Neo.trauma || 0) + amount, 0, 1);
+  if (angle !== null && kick > 0) {
+    Neo.shakeKickX += Math.cos(angle) * kick;
+    Neo.shakeKickY += Math.sin(angle) * kick;
+  }
+}
+
+// Freeze the gameplay sim for `seconds` (visual feel keeps running). Stacks up to
+// a clamp so combos still feel punchy without locking up.
+function addHitstop(seconds) {
+  if (!(seconds > 0)) return;
+  Neo.hitstop = Math.min(FEEL.maxHitstop, (Neo.hitstop || 0) + seconds);
+}
+
+// Advance feel timers. Called from update() during normal play AND directly from
+// loop() during a hitstop freeze, so shake/kick never stall mid-impact.
+function tickGameFeel(dt) {
+  if (Neo.trauma > 0) {
+    Neo.trauma = Math.max(0, Neo.trauma - FEEL.traumaDecay * dt);
+  }
+  // Legacy compatibility: older call sites still set Neo.shake/shakeT directly.
+  // Fold any such linear shake into trauma-equivalent so both models coexist.
+  if (Neo.shakeT > 0) {
+    Neo.shakeT = Math.max(0, Neo.shakeT - dt);
+    const legacyTrauma = Neo.clamp((Neo.shake || 0) / FEEL.maxShake, 0, 1);
+    if (legacyTrauma > Neo.trauma) Neo.trauma = legacyTrauma;
+    Neo.shake = (Neo.shake || 0) * 0.88;
+  }
+  // Derive the render-facing shake magnitude from the trauma curve (offset ∝ t²).
+  const t = Neo.trauma;
+  Neo.shake = Math.max(Neo.shake || 0, FEEL.maxShake * t * t);
+  if (Neo.shakeT <= 0 && t <= 0) Neo.shake = 0;
+  // Spring the directional kick back toward zero.
+  const decay = Math.max(0, 1 - FEEL.kickDecay * dt);
+  Neo.shakeKickX *= decay;
+  Neo.shakeKickY *= decay;
+  if (Math.abs(Neo.shakeKickX) < 0.05) Neo.shakeKickX = 0;
+  if (Math.abs(Neo.shakeKickY) < 0.05) Neo.shakeKickY = 0;
+}
+
 export { update, tryChargedLadderWarp };
 
 Neo.loop = loop;
 Neo.update = update;
 Neo.tryChargedLadderWarp = tryChargedLadderWarp;
+Neo.addTrauma = addTrauma;
+Neo.addHitstop = addHitstop;
+Neo.tickGameFeel = tickGameFeel;

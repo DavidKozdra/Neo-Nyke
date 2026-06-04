@@ -118,13 +118,14 @@
   <link rel="stylesheet" href="css/theme-princess.css">
   <link rel="stylesheet" href="css/mobile.css">
   <link rel="stylesheet" href="css/touch-controls.css">
+  <link rel="stylesheet" href="css/panel-borders.css">
 </head>
 <body>
 
 <div id="bootLoading" class="boot-loading" role="status" aria-live="polite">
   <div class="boot-loading__box">
     <img class="boot-loading__mark" src="assets/icons/icon-128x128.png" width="64" height="64" alt="" aria-hidden="true">
-    <span class="version">alpha 1.1</span>
+    <span class="version">alpha 1.2</span>
     <h1 class="boot-loading__title">NEO NYKE</h1>
     <div class="boot-loading__bar" aria-hidden="true"><i></i></div>
     <p class="boot-loading__hint">Loading dungeon</p>
@@ -145,7 +146,6 @@
     <div>XP <b id="xp">0/20</b></div>
     <div>FL <b id="fl">1</b>/10</div>
     <div>TIME <b id="gameTime">0:00</b></div>
-    <div>COINS <b id="coins">0</b></div>
     <div>CHR <b id="charName">THORN KNIGHT</b></div>
     <div id="objective">Find the ladder.</div>
     <div class="relics">
@@ -153,6 +153,11 @@
       <div class="relic" id="rr-orb-blood" data-t="wizard" title="Orb of Blood"><span id="countOrbBlood">0</span></div>
       <div class="relic" id="rr-hemes-scarf" data-t="god" title="Heme's Scarf"><span id="countHemesScarf">0</span></div>
     </div>
+    <button id="panelItemAlert" class="panel-item-alert hidden" type="button" aria-label="Pending item choice — open to use">
+      <span class="panel-item-alert__dot"></span>
+      <span class="panel-item-alert__label">USE ITEM</span>
+      <span class="panel-item-alert__count">1</span>
+    </button>
   </div>
 
   <div id="objectiveTracker" class="objective-tracker hidden" aria-hidden="true">
@@ -200,7 +205,7 @@
       <div class="challenge-progress"><i id="challengeStatusFill"></i></div>
     </div>
   </div>
-  <div id="equipmentSlots" class="equipment-slots hidden" aria-hidden="true" aria-label="Equipment slots">
+  <div id="equipmentSlots" class="equipment-slots hidden" aria-hidden="true" aria-label="Tool slots">
     <button class="equip-slot is-empty" type="button" data-equip-slot="0" data-equip-key="F" aria-hidden="true" tabindex="-1">
       <span class="equip-slot__key">F</span>
       <canvas class="equip-slot__icon" width="24" height="24" aria-hidden="true"></canvas>
@@ -332,7 +337,7 @@
   <div id="hudLower" class="hud-lower hidden" aria-hidden="true">
   </div>
 
-  <div id="anvilPanel" class="game-panel game-panel--anvil hidden" aria-hidden="true">
+  <div id="anvilPanel" class="panel-shell game-panel game-panel--anvil hidden" aria-hidden="true">
     <div class="game-panel-head">
       <div class="panel-title-wrap">
         <span class="panel-kicker">Forge</span>
@@ -345,9 +350,9 @@
       </div>
       <button id="anvilClose" class="panel-close" aria-label="Close anvil">X</button>
     </div>
-    <div class="anvil-tabs shop-tabs">
-      <button class="anvil-tab shop-tab active" data-anvil-tab="weapons">Weapons</button>
-      <button class="anvil-tab shop-tab" data-anvil-tab="moves">Moves</button>
+    <div class="anvil-tabs panel-tabs">
+      <button class="anvil-tab panel-tab active" data-anvil-tab="weapons">Weapons</button>
+      <button class="anvil-tab panel-tab" data-anvil-tab="moves">Moves</button>
     </div>
     <div id="anvilWeaponsTab" class="anvil-tab-panel">
       <div id="anvilWeaponList" class="anvil-item-list"></div>
@@ -366,22 +371,19 @@
     </div>
   </div>
 
-  <div id="shopPanel" class="game-panel game-panel--shop hidden" aria-hidden="true">
+  <div id="shopPanel" class="panel-shell game-panel game-panel--shop hidden" aria-hidden="true">
     <div class="game-panel-head">
       <div class="panel-title-wrap">
-        <span class="panel-kicker">Bazaar</span>
         <h3>SHOP</h3>
         <p class="panel-subtitle">Weapons, relics, and quick repairs for the next room.</p>
-        <span id="shopMetaLabel" class="shop-meta-label">F1 Shop</span>
       </div>
-      <div class="shop-coins">Coins <b id="shopCoins">0</b></div>
       <button id="shopClose" class="panel-close" aria-label="Close shop">X</button>
     </div>
-    <div class="shop-tabs">
-      <button class="shop-tab active" data-tab="items"><span class="tab-icon" aria-hidden="true">[]</span><span>Items</span></button>
-      <button class="shop-tab" data-tab="weapons"><span class="tab-icon" aria-hidden="true">W</span><span>Weapons</span></button>
-      <button class="shop-tab" data-tab="moves"><span class="tab-icon" aria-hidden="true">M</span><span>Moves</span></button>
-      <button class="shop-tab" data-tab="heals"><span class="tab-icon" aria-hidden="true">+</span><span>Heal Ups</span></button>
+    <div class="shop-tabs panel-tabs">
+      <button class="shop-tab panel-tab active" data-tab="items"><span class="tab-icon" aria-hidden="true">[]</span><span>Items</span></button>
+      <button class="shop-tab panel-tab" data-tab="weapons"><span class="tab-icon" aria-hidden="true">W</span><span>Weapons</span></button>
+      <button class="shop-tab panel-tab" data-tab="moves"><span class="tab-icon" aria-hidden="true">M</span><span>Moves</span></button>
+      <button class="shop-tab panel-tab" data-tab="heals"><span class="tab-icon" aria-hidden="true">+</span><span>Heal Ups</span></button>
     </div>
     <div id="shopItems" class="shop-list"></div>
     <div id="shopWeapons" class="shop-list hidden"></div>
@@ -389,12 +391,11 @@
     <div id="shopHeals" class="shop-list hidden"></div>
   </div>
 
-  <div id="invPanel" class="game-panel game-panel--inventory hidden" aria-hidden="true">
+  <div id="invPanel" class="panel-shell game-panel game-panel--inventory hidden" aria-hidden="true">
     <div class="game-panel-head">
       <div class="panel-title-wrap">
         <span class="panel-kicker">Loadout</span>
         <h3>INVENTORY</h3>
-        <p class="panel-subtitle">Drag owned moves into matching slots to swap your kit.</p>
       </div>
       <button id="invClose" class="panel-close" aria-label="Close inventory">X</button>
     </div>
@@ -404,23 +405,24 @@
       <button class="inv-player-tab" data-inv-player="3" role="tab">P3</button>
       <button class="inv-player-tab" data-inv-player="4" role="tab">P4</button>
     </div>
-    <div id="invBuildSummary" class="inv-build-summary" aria-label="Current build"></div>
-    <div class="inv-tabs shop-tabs" role="tablist">
-      <button class="inv-tab shop-tab active" data-inv-tab="stats" role="tab"><canvas class="tab-icon tab-icon--canvas" width="22" height="22" data-inv-ui-icon="tab-stats" aria-hidden="true"></canvas>Stats</button>
-      <button class="inv-tab shop-tab" data-inv-tab="items" role="tab"><canvas class="tab-icon tab-icon--canvas" width="22" height="22" data-inv-ui-icon="tab-relics" aria-hidden="true"></canvas>Relics</button>
-      <button class="inv-tab shop-tab" data-inv-tab="weapons" role="tab"><canvas class="tab-icon tab-icon--canvas" width="22" height="22" data-inv-ui-icon="tab-weapons" aria-hidden="true"></canvas>Weapons</button>
-      <button class="inv-tab shop-tab" data-inv-tab="equipped" role="tab"><canvas class="tab-icon tab-icon--canvas" width="22" height="22" data-inv-ui-icon="tab-moves" aria-hidden="true"></canvas>Moves</button>
+    <div class="inv-tabs panel-tabs" role="tablist">
+      <button class="inv-tab panel-tab active" data-inv-tab="stats" role="tab"><canvas class="tab-icon tab-icon--canvas" width="22" height="22" data-inv-ui-icon="tab-stats" aria-hidden="true"></canvas>Stats</button>
+      <button class="inv-tab panel-tab" data-inv-tab="items" role="tab"><canvas class="tab-icon tab-icon--canvas" width="22" height="22" data-inv-ui-icon="tab-relics" aria-hidden="true"></canvas>Relics</button>
+      <button class="inv-tab panel-tab" data-inv-tab="tools" role="tab"><canvas class="tab-icon tab-icon--canvas" width="22" height="22" data-inv-ui-icon="tab-relics" aria-hidden="true"></canvas>Tools</button>
+      <button class="inv-tab panel-tab" data-inv-tab="weapons" role="tab"><canvas class="tab-icon tab-icon--canvas" width="22" height="22" data-inv-ui-icon="tab-weapons" aria-hidden="true"></canvas>Weapons</button>
+      <button class="inv-tab panel-tab" data-inv-tab="equipped" role="tab"><canvas class="tab-icon tab-icon--canvas" width="22" height="22" data-inv-ui-icon="tab-moves" aria-hidden="true"></canvas>Moves</button>
     </div>
     <div class="inv-ux-hints" aria-hidden="true">
-      <span class="inv-ux-hint"><b>Drag</b> move chips onto matching slots</span>
-      <span class="inv-ux-hint"><b>Glow</b> means slot-compatible</span>
-      <span class="inv-ux-hint"><b>Dimmed</b> means already equipped</span>
     </div>
     <div class="inv-tab-panel" id="invTabStats">
       <div id="invStats" class="inv-stats"></div>
     </div>
     <div class="inv-tab-panel hidden" id="invTabItems">
       <div id="invItemsList" class="inv-items"></div>
+    </div>
+    <div class="inv-tab-panel hidden" id="invTabTools">
+      <div class="inv-moves-section__label">Toolbar — drag or use the arrows to reorder</div>
+      <div id="invToolsList" class="inv-tools"></div>
     </div>
     <div class="inv-tab-panel hidden" id="invTabWeapons">
       <div id="invWeaponsList" class="inv-moves"></div>
@@ -568,9 +570,9 @@
 
   <!-- Pause menu -->
   <div id="pause" class="overlay hidden">
-    <div class="pause-brand" aria-hidden="true">
-      <div class="pause-brand__title">NEO NYKE</div>
-      <div class="pause-brand__subtitle">DUNGEON GOD</div>
+    <div class="menu-cinema pause-cinema" aria-hidden="true">
+      <div id="pauseMenuLetters" class="menu-letters"></div>
+      <div id="pauseMenuSubtitle" class="menu-subtitle-flash">DUNGEON GOD</div>
     </div>
     <h2 class="screen-title">PAUSED</h2>
     <div class="main-nav">
@@ -626,7 +628,7 @@
       <div id="menuSubtitle" class="menu-subtitle-flash" aria-hidden="true">DUNGEON GOD</div>
     </div>
     <div class="menu-content">
-      <h1 id="menuTitle" class="sr-only">NEO NYKE — DUNGEON GOD</h1>
+      <h1 id="menuTitle" class="sr-only">NEO-NYKE — DUNGEON GOD</h1>
       <div id="specialDayBanner" class="special-day-banner hidden" aria-live="polite">
         <span class="special-day-banner__icon" id="specialDayIcon" aria-hidden="true"></span>
         <span class="special-day-banner__text" id="specialDayText"></span>
@@ -652,11 +654,11 @@
       </div>
       <div class="menu-footer__summary">
         <span id="runSummary" class="run-summary-line"></span>
-        <span class="menu-footer__version">version alpha 1.1</span>
+        <span class="menu-footer__version">version alpha 1.2</span>
       </div>
     </div><!-- /.menu-footer -->
   </div><!-- /.menu-stage -->
-  <section id="runHistoryPanel" class="rh-panel hidden" aria-hidden="true">
+  <section id="runHistoryPanel" class="panel-shell rh-panel hidden" aria-hidden="true">
     <div class="rh-head">
       <div class="rh-head-left">
         <span class="rh-title" id="runHistoryPanelTitle">INFO</span>
@@ -725,7 +727,7 @@
   </section>
 
   <!-- Alt Modes panel (slides in over main menu) -->
-  <section id="altModesPanel" class="altmodes-panel hidden" aria-hidden="true">
+  <section id="altModesPanel" class="panel-shell altmodes-panel hidden" aria-hidden="true">
     <div class="altmodes-head">
       <span class="altmodes-title">ALTERNATIVE MODES</span>
       <button id="altModesClose" class="panel-close" aria-label="Close alt modes">X</button>
@@ -870,27 +872,42 @@
         <div class="sandbox-card">
           <h4>Move Loadout</h4>
           <p class="sandbox-card__hint">Pick a move per slot, or leave on Default to use the character's set.</p>
-          <div class="sandbox-rows" id="sandboxMoveLoadout">
-            <div class="sandbox-row sandbox-row--select" data-sbox-move-slot="melee">
-              <span>Melee</span>
-              <select class="sandbox-select" data-sbox-move-slot-select="melee"></select>
+          <div class="sandbox-move-slots" id="sandboxMoveLoadout">
+            <div class="sandbox-move-slot" data-sbox-move-slot="melee">
+              <div class="sandbox-move-slot__head">
+                <span class="sandbox-move-slot__label">Melee</span>
+                <span class="sandbox-move-slot__selected" data-sbox-move-slot-selected="melee">Default</span>
+              </div>
+              <div class="sandbox-move-options" data-sbox-move-options="melee" role="group" aria-label="Melee move"></div>
             </div>
-            <div class="sandbox-row sandbox-row--select" data-sbox-move-slot="laser">
-              <span>Laser</span>
-              <select class="sandbox-select" data-sbox-move-slot-select="laser"></select>
+            <div class="sandbox-move-slot" data-sbox-move-slot="laser">
+              <div class="sandbox-move-slot__head">
+                <span class="sandbox-move-slot__label">Laser</span>
+                <span class="sandbox-move-slot__selected" data-sbox-move-slot-selected="laser">Default</span>
+              </div>
+              <div class="sandbox-move-options" data-sbox-move-options="laser" role="group" aria-label="Laser move"></div>
             </div>
-            <div class="sandbox-row sandbox-row--select" data-sbox-move-slot="smash">
-              <span>Smash</span>
-              <select class="sandbox-select" data-sbox-move-slot-select="smash"></select>
+            <div class="sandbox-move-slot" data-sbox-move-slot="smash">
+              <div class="sandbox-move-slot__head">
+                <span class="sandbox-move-slot__label">Smash</span>
+                <span class="sandbox-move-slot__selected" data-sbox-move-slot-selected="smash">Default</span>
+              </div>
+              <div class="sandbox-move-options" data-sbox-move-options="smash" role="group" aria-label="Smash move"></div>
             </div>
-            <div class="sandbox-row sandbox-row--select" data-sbox-move-slot="dash">
-              <span>Dash</span>
-              <select class="sandbox-select" data-sbox-move-slot-select="dash"></select>
+            <div class="sandbox-move-slot" data-sbox-move-slot="dash">
+              <div class="sandbox-move-slot__head">
+                <span class="sandbox-move-slot__label">Dash</span>
+                <span class="sandbox-move-slot__selected" data-sbox-move-slot-selected="dash">Default</span>
+              </div>
+              <div class="sandbox-move-options" data-sbox-move-options="dash" role="group" aria-label="Dash move"></div>
             </div>
           </div>
         </div>
         <div class="sandbox-card">
           <h4>Starting Inventory</h4>
+          <div class="sandbox-search-row">
+            <input id="sandboxStartItemSearch" class="sandbox-search" type="search" placeholder="Search starting items..." aria-label="Search starting inventory items" autocomplete="off" spellcheck="false">
+          </div>
           <div class="sandbox-toolbar">
             <button id="sandboxStartItemsAll" class="sandbox-mini-btn" type="button">All ×1</button>
             <button id="sandboxStartItemsNone" class="sandbox-mini-btn" type="button">None</button>
@@ -899,6 +916,9 @@
         </div>
         <div class="sandbox-card">
           <h4>Enemy Types</h4>
+          <div class="sandbox-search-row">
+            <input id="sandboxEnemySearch" class="sandbox-search" type="search" placeholder="Search enemy types..." aria-label="Search enemy types" autocomplete="off" spellcheck="false">
+          </div>
           <div class="sandbox-toolbar">
             <button id="sandboxEnemiesAll" class="sandbox-mini-btn" type="button">All</button>
             <button id="sandboxEnemiesNone" class="sandbox-mini-btn" type="button">None</button>
@@ -907,6 +927,9 @@
         </div>
         <div class="sandbox-card">
           <h4>Items</h4>
+          <div class="sandbox-search-row">
+            <input id="sandboxItemSearch" class="sandbox-search" type="search" placeholder="Search items..." aria-label="Search items" autocomplete="off" spellcheck="false">
+          </div>
           <div class="sandbox-toolbar">
             <button id="sandboxItemsAll" class="sandbox-mini-btn" type="button">All</button>
             <button id="sandboxItemsNone" class="sandbox-mini-btn" type="button">None</button>
@@ -1012,11 +1035,9 @@
   <canvas id="charBg"></canvas>
   <div class="menu-content charselect-layout">
     <div class="charselect-header">
-      <button id="charBackBtn" class="back-btn">&#8592; BACK</button>
       <div class="charselect-titlewrap">
         <div id="charSelectPhaseTag" class="charselect-phase-tag hidden"></div>
         <h2 class="screen-title" id="charSelectTitle">PICK HERO</h2>
-        <p class="charselect-subtitle" id="charSelectSubtitle">Pick hero. Set difficulty. Start.</p>
       </div>
     </div>
 
@@ -1024,7 +1045,6 @@
       <div class="charselect-roster">
         <div class="char-roster-head">
           <span class="char-roster-kicker">Roster</span>
-          <span class="char-roster-note">Locked cards show unlock goals</span>
         </div>
 
         <!-- Carousel -->
@@ -1124,6 +1144,8 @@
     <!-- legacy hidden row kept for JS compatibility -->
     <div id="continueRow" class="hidden"></div>
   </div>
+
+      <button id="charBackBtn" class="back-btn">&#8592; BACK</button>
 </div>
 
 <!-- Challenge Shop floating panel -->
@@ -1187,7 +1209,11 @@
 <div id="settingsModal" class="modal-backdrop hidden">
   <div class="modal-box">
     <button class="modal-close" id="settingsClose">&#10005;</button>
-    <h2 class="screen-title" style="margin-bottom:18px">SETTINGS</h2>
+    <div class="settings-head">
+      <span class="panel-kicker">Configure</span>
+      <h2 class="screen-title">SETTINGS</h2>
+      <p class="settings-subtitle">Controls, audio, accessibility, and your save data.</p>
+    </div>
 
     <!-- Tab bar -->
     <div class="stab-bar" role="tablist">
@@ -1303,6 +1329,13 @@
       </div>
       <div class="access-row">
         <div class="access-text">
+          <span class="access-label">Pause on window unfocus</span>
+          <span class="access-desc">Pause the game when the window loses focus (e.g. switching tabs or apps).</span>
+        </div>
+        <label class="toggle"><input type="checkbox" id="gameplayPauseOnBlur" checked><span class="toggle-track"><span class="toggle-thumb"></span></span></label>
+      </div>
+      <div class="access-row">
+        <div class="access-text">
           <span class="access-label">Blood amount</span>
           <span class="access-desc">Scales bleed spray and dead body blood from current amount to 10×.</span>
         </div>
@@ -1317,6 +1350,13 @@
           <span class="access-desc">Makes every successful damage hit bloody.</span>
         </div>
         <label class="toggle"><input type="checkbox" id="gameplayBloodOnHit" checked><span class="toggle-track"><span class="toggle-thumb"></span></span></label>
+      </div>
+      <div class="access-row">
+        <div class="access-text">
+          <span class="access-label">Performance mode</span>
+          <span class="access-desc">Caps total on-screen particles and trims heavy glow effects when the screen gets busy (e.g. holding the laser). Keeps the same look with far fewer frame drops. Recommended on.</span>
+        </div>
+        <label class="toggle"><input type="checkbox" id="gameplayPerformanceMode" checked><span class="toggle-track"><span class="toggle-thumb"></span></span></label>
       </div>
     </div>
 
@@ -1357,30 +1397,40 @@
 
     <!-- Data tab -->
     <div class="stab-panel hidden" id="stab-data">
-      <div class="data-row">
-        <span class="data-label">Display name</span>
-        <span class="data-desc">Shown on the competitive leaderboard.</span>
+      <div class="access-row">
+        <div class="access-text">
+          <span class="access-label">Display name</span>
+          <span class="access-desc">Shown on the competitive leaderboard.</span>
+        </div>
         <input id="usernameInput" class="settings-text-input" type="text" maxlength="24" placeholder="Enter name..." autocomplete="off" spellcheck="false">
       </div>
-      <div class="data-row">
-        <span class="data-label">Birthday</span>
-        <span class="data-desc">Get a surprise on your birthday. We have no way of knowing if this is real.</span>
+      <div class="access-row">
+        <div class="access-text">
+          <span class="access-label">Birthday</span>
+          <span class="access-desc">Get a surprise on your birthday. We have no way of knowing if this is real.</span>
+        </div>
         <input id="birthdayInput" class="settings-text-input" type="date" autocomplete="off">
       </div>
-      <div class="data-row">
-        <span class="data-label">Export save</span>
-        <span class="data-desc">Download all stored game data as a JSON file.</span>
+      <div class="access-row">
+        <div class="access-text">
+          <span class="access-label">Export save</span>
+          <span class="access-desc">Download all stored game data as a JSON file.</span>
+        </div>
         <button class="settings-reset" id="dataExport">Export</button>
       </div>
-      <div class="data-row">
-        <span class="data-label">Import save</span>
-        <span class="data-desc">Restore all stored game data from a JSON file.</span>
+      <div class="access-row">
+        <div class="access-text">
+          <span class="access-label">Import save</span>
+          <span class="access-desc">Restore all stored game data from a JSON file.</span>
+        </div>
         <button class="settings-reset" id="dataImport">Import</button>
         <input type="file" id="dataImportFile" accept=".json" style="display:none">
       </div>
-      <div class="data-row data-row--danger">
-        <span class="data-label">Delete all data</span>
-        <span class="data-desc">Wipes saves, run history, achievements, and settings. Cannot be undone.</span>
+      <div class="access-row data-row--danger">
+        <div class="access-text">
+          <span class="access-label">Delete all data</span>
+          <span class="access-desc">Wipes saves, run history, achievements, and settings. Cannot be undone.</span>
+        </div>
         <button class="settings-reset settings-reset--danger" id="dataDelete">Delete</button>
       </div>
     </div>

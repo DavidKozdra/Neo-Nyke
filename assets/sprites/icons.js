@@ -787,6 +787,81 @@ window.NeoNykeIconDefs = {
         [0,4],[7,4],
       ],
     },
+
+    // --- Missing-icon backfill (adapted from related icons) ---
+    // Sparkle Charm: 4-point sparkle, adapted from crit_charm.
+    sparkle_charm: {
+      color: '#ffe8a3',
+      accent: '#ffd05a',
+      pixels: [
+        [3,0],[4,0],
+        [3,1],[4,1],
+        [0,3],[1,3],[2,3],[3,3],[4,3],[5,3],[6,3],[7,3],
+        [3,4],[4,4],
+        [3,5],[4,5],
+        [3,6],[4,6],
+      ],
+      accentPixels: [
+        [3,3],[4,3],
+        [0,3],[7,3],
+        [3,0],[4,7],
+      ],
+    },
+    // Overstimulate: lightning/stun bolt, adapted from explosive_trap.
+    overstimulate: {
+      color: '#ffcf80',
+      accent: '#fff2cf',
+      pixels: [
+        [4,0],[5,0],
+        [3,1],[4,1],
+        [2,2],[3,2],[4,2],[5,2],
+        [3,3],[4,3],
+        [2,4],[3,4],
+        [1,5],[2,5],
+        [2,6],
+        [1,7],
+      ],
+      accentPixels: [
+        [4,1],[3,3],[2,5],
+      ],
+    },
+    // Grave Zone: knockback field ring, adapted from explosive_jelly outline.
+    grave_zone: {
+      color: '#c9b3ff',
+      accent: '#8a6fd6',
+      pixels: [
+        [3,0],[4,0],
+        [2,1],[5,1],
+        [1,2],[6,2],
+        [0,3],[7,3],
+        [0,4],[7,4],
+        [1,5],[6,5],
+        [2,6],[5,6],
+        [3,7],[4,7],
+      ],
+      accentPixels: [
+        [3,3],[4,3],
+        [3,4],[4,4],
+      ],
+    },
+    // Homing Missile: diagonal rocket with trail, adapted from snake_knife.
+    homing_missile: {
+      color: '#ffe06f',
+      accent: '#ff8a3c',
+      pixels: [
+        [5,0],[6,0],[7,0],
+        [4,1],[5,1],[6,1],
+        [3,2],[4,2],[5,2],
+        [2,3],[3,3],[4,3],
+        [1,4],[2,4],[3,4],
+        [0,5],[1,5],
+        [0,6],
+      ],
+      accentPixels: [
+        [5,0],[6,0],
+        [0,5],[1,5],[0,6],
+      ],
+    },
   },
 
   pickups: {
@@ -1349,8 +1424,41 @@ window.NeoNykeIconDefs = {
         [3,3],[4,3],[3,4],[4,4],
       ],
     },
+    princess_wand: {
+      color: '#ff9de8',
+      pixels: [
+        // four-point sparkle star at the tip (top-right)
+        [5,0],
+        [4,1],[5,1],[6,1],
+        [3,2],[4,2],[5,2],[6,2],[7,2],
+        [4,3],[5,3],[6,3],
+        [5,4],
+        // wand shaft running down to bottom-left
+        [4,4],
+        [3,5],
+        [2,6],
+        [1,7],
+      ],
+    },
   },
 
+  hazards: {
+    // Killer icons for environmental deaths (shown on the death/run-history "KILLED BY"
+    // banner where there is no enemy sprite to draw).
+    explosive_trap: {
+      color: '#ff6030',
+      pixels: [
+        [5,0],
+        [4,1],[5,1],
+        [3,2],[4,2],
+        [2,3],[3,3],[4,3],[5,3],
+        [1,4],[2,4],[3,4],[4,4],[5,4],[6,4],
+        [1,5],[2,5],[3,5],[4,5],[5,5],[6,5],
+        [2,6],[3,6],[4,6],[5,6],
+        [3,7],[4,7],
+      ],
+    },
+  },
   heals: {
     small: {
       color: '#50e880',

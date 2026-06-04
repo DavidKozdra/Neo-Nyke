@@ -1,4 +1,23 @@
 // hud.js — standalone IIFE. HUD updates, death/win, save scheduling.
+
+  // Format an "hp/maxHp" readout, guarding against non-finite values so the HUD
+  // bars never render "Inf"/"NaN" if hp or maxHp goes bad upstream. Also repairs
+  // the stored values in place, so the bad number doesn't keep feeding combat math.
+  function formatHpText(hp, maxHp, entity = null) {
+    let safeMax = Number(maxHp);
+    if (!Number.isFinite(safeMax) || safeMax <= 0) safeMax = 120;
+    safeMax = Math.round(safeMax);
+    let safeHp = Number(hp);
+    if (!Number.isFinite(safeHp)) safeHp = safeMax;
+    safeHp = Math.max(0, Math.min(safeMax, Math.ceil(safeHp)));
+    if (entity) {
+      if (!Number.isFinite(Number(entity.maxHp)) || Number(entity.maxHp) <= 0) entity.maxHp = safeMax;
+      if (!Number.isFinite(Number(entity.hp))) entity.hp = safeHp;
+    }
+    return `${safeHp}/${safeMax}`;
+  }
+  Neo.formatHpText = formatHpText;
+
   function getObjectiveEntries(lineObjective = '') {
     if (Neo.isFirstRunTutorialActive()) return Neo.getTutorialObjectiveEntries();
     if (!Neo.currentRoom) return [];
@@ -51,6 +70,7 @@
       }
       if (Neo.enemies.some(enemy => enemy.miniBoss)) entries.push({ text: 'Defeat the mini boss', state: 'warn' });
       if (Neo.selectedChallenges.length > 0) entries.push({ text: `${Neo.selectedChallenges.length} challenge${Neo.selectedChallenges.length === 1 ? '' : 's'} active`, state: 'todo' });
+      pushPanelItemObjectives(entries);
       return entries.slice(0, 5);
     }
 
@@ -65,7 +85,21 @@
       });
       if (Neo.currentRoom.cleared) entries.push({ text: Neo.hasLegacy('endless_descent') ? 'Crown, Descend, or Loop' : 'Take the crown or loop', state: 'warn' });
     }
+    pushPanelItemObjectives(entries);
     return entries.slice(0, 5);
+  }
+
+  // Owed panel-item selections (Wizard's Paw / Extra Battery) surface as urgent
+  // objective entries so they can't be forgotten while waiting to be resolved.
+  function pushPanelItemObjectives(entries) {
+    const pawPending = Math.max(0, Math.floor(Number(Neo.player?.wizardPawPendingCount || 0)));
+    const batteryPending = Math.max(0, Math.floor(Number(Neo.player?.extraBatteryPendingCount || 0)));
+    if (pawPending > 0) {
+      entries.push({ text: `Wizard's Paw ready: pick 2 stats to boost${pawPending > 1 ? ` (×${pawPending})` : ''}`, state: 'warn' });
+    }
+    if (batteryPending > 0) {
+      entries.push({ text: `Extra Battery ready: pick a move for +1 charge${batteryPending > 1 ? ` (×${batteryPending})` : ''}`, state: 'warn' });
+    }
   }
 
   function updateObjective() {
@@ -143,7 +177,11 @@
             setObjective(phase === 'channel' ? `Hold the center until the prize stabilizes (${timer}s).` : 'Pick one prize, then hold the center to secure it.');
           }
           else if (type === 'bomb') setObjective(`Disarm the blue bomb before detonation (${Math.ceil(Neo.currentRoom.challengeTimer || 0)}s).`);
-          else if (type === 'survival') setObjective(`Protect the central obelisk and survive for ${Math.ceil(Neo.currentRoom.challengeTimer || 0)}s.`);
+          else if (type === 'survival') {
+            const obelisk = Neo.currentRoom.challengeData?.obelisk;
+            const hpPct = obelisk ? Math.ceil(Neo.clamp((obelisk.hp || 0) / Math.max(1, obelisk.maxHp || 1), 0, 1) * 100) : 100;
+            setObjective(`Keep enemies off the obelisk (${hpPct}%) — survive ${Math.ceil(Neo.currentRoom.challengeTimer || 0)}s.`);
+          }
           else if (type === 'runes') setObjective(`Collect the remaining runes: ${Math.max(0, Number(Neo.currentRoom.challengeData?.runesLeft || 0))}.`);
           else if (type === 'storm') setObjective(`Live through the storm for ${Math.ceil(Neo.currentRoom.challengeTimer || 0)}s.`);
         }
@@ -199,11 +237,14 @@
       if (!entity) return;
       const character = Neo.CHARACTER_DEFS[entity.character || slot.getCharacter()] || Neo.CHARACTER_DEFS.thorn_knight;
       const dead = slot.getDead();
+      // formatHpText also repairs non-finite hp/maxHp on the entity in place, so
+      // call it before deriving the bar percentage below.
+      const hpText = dead ? 'DOWN' : formatHpText(entity.hp, entity.maxHp, entity);
       const hpPercent = dead ? 0 : Math.max(0, Math.min(100, (entity.hp / Math.max(1, entity.maxHp)) * 100));
       const xpPercent = Math.max(0, Math.min(100, (Number(entity.xp || 0) / Math.max(1, Number(entity.xpToNext || 1))) * 100));
+      // Meta row shows the PvP kill score only; coins live in the top-left coin
+      // display, so this row stays hidden in normal play.
       const scoreText = getPlayerSlotScoreText(slot);
-      const hpText = dead ? 'DOWN' : `${Math.ceil(entity.hp)}/${entity.maxHp}`;
-      const metaText = scoreText || `${entity.coins || 0} coins`;
       const showPlayerLabel = slots.length > 1;
       let card = Neo.ui.playerStats.querySelector(`[data-player-slot="${slot.id}"]`);
       if (!card) {
@@ -226,38 +267,78 @@
             <div class="bar player-xp-bar"><i class="player-stat-fill player-stat-fill--xp" data-player-field="xpFill"></i></div>
             <span data-player-field="xpText"></span>
           </div>
-          <div class="player-stat-row">
-            <span>INF</span>
+          <div class="player-stat-row" data-player-field="metaRow">
+            <span data-player-field="metaLabel">SCORE</span>
             <span></span>
             <span data-player-field="meta"></span>
           </div>`;
+        // This panel renders every frame, so cache element refs on the card
+        // (instead of re-querying ~10× per slot per frame) and diff every write
+        // below via card._last to avoid needless DOM mutations / reflows.
+        card._refs = {
+          label: card.querySelector('[data-player-field="label"]'),
+          name: card.querySelector('[data-player-field="name"]'),
+          hpText: card.querySelector('[data-player-field="hpText"]'),
+          level: card.querySelector('[data-player-field="level"]'),
+          xpText: card.querySelector('[data-player-field="xpText"]'),
+          metaRow: card.querySelector('[data-player-field="metaRow"]'),
+          meta: card.querySelector('[data-player-field="meta"]'),
+          hpFill: card.querySelector('[data-player-field="hpFill"]'),
+          xpFill: card.querySelector('[data-player-field="xpFill"]'),
+        };
+        card._last = {};
         Neo.ui.playerStats.appendChild(card);
       }
-      card.style.setProperty('--player-color', slot.color);
-      card.classList.toggle('player-stat-card--dead', dead);
-      card.classList.toggle('player-stat-card--solo', !showPlayerLabel);
-      card.querySelector('[data-player-field="label"]').textContent = showPlayerLabel ? slot.label : '';
-      card.querySelector('[data-player-field="name"]').textContent = character.name || slot.getCharacter();
-      card.querySelector('[data-player-field="hpText"]').textContent = hpText;
-      card.querySelector('[data-player-field="level"]').textContent = `Lv.${entity.level || 1}`;
-      card.querySelector('[data-player-field="xpText"]').textContent = `${entity.xp || 0}/${entity.xpToNext || 0}`;
-      card.querySelector('[data-player-field="meta"]').textContent = metaText;
-      const hpFill = card.querySelector('[data-player-field="hpFill"]');
-      const xpFill = card.querySelector('[data-player-field="xpFill"]');
-      if (hpFill) {
-        hpFill.style.width = `${hpPercent.toFixed(1)}%`;
-        hpFill.style.background = getHpFillColor(hpPercent, slot.color);
+      const refs = card._refs;
+      const last = card._last;
+      if (last.color !== slot.color) {
+        last.color = slot.color;
+        card.style.setProperty('--player-color', slot.color);
       }
-      if (xpFill) xpFill.style.width = `${xpPercent.toFixed(1)}%`;
+      if (last.dead !== dead) {
+        last.dead = dead;
+        card.classList.toggle('player-stat-card--dead', dead);
+      }
+      const solo = !showPlayerLabel;
+      if (last.solo !== solo) {
+        last.solo = solo;
+        card.classList.toggle('player-stat-card--solo', solo);
+      }
+      const labelText = showPlayerLabel ? slot.label : '';
+      if (last.label !== labelText) { last.label = labelText; refs.label.textContent = labelText; }
+      const nameText = character.name || slot.getCharacter();
+      if (last.name !== nameText) { last.name = nameText; refs.name.textContent = nameText; }
+      if (last.hpText !== hpText) { last.hpText = hpText; refs.hpText.textContent = hpText; }
+      const levelText = `Lv.${entity.level || 1}`;
+      if (last.level !== levelText) { last.level = levelText; refs.level.textContent = levelText; }
+      const xpText = `${entity.xp || 0}/${entity.xpToNext || 0}`;
+      if (last.xpText !== xpText) { last.xpText = xpText; refs.xpText.textContent = xpText; }
+      if (refs.metaRow) {
+        const metaDisplay = scoreText ? '' : 'none';
+        if (last.metaDisplay !== metaDisplay) { last.metaDisplay = metaDisplay; refs.metaRow.style.display = metaDisplay; }
+        if (scoreText && last.meta !== scoreText) { last.meta = scoreText; refs.meta.textContent = scoreText; }
+      }
+      if (refs.hpFill) {
+        const hpWidth = `${hpPercent.toFixed(1)}%`;
+        if (last.hpWidth !== hpWidth) { last.hpWidth = hpWidth; refs.hpFill.style.width = hpWidth; }
+        const hpColor = getHpFillColor(hpPercent, slot.color);
+        if (last.hpColor !== hpColor) { last.hpColor = hpColor; refs.hpFill.style.background = hpColor; }
+      }
+      if (refs.xpFill) {
+        const xpWidth = `${xpPercent.toFixed(1)}%`;
+        if (last.xpWidth !== xpWidth) { last.xpWidth = xpWidth; refs.xpFill.style.width = xpWidth; }
+      }
     });
 
     if (Neo.ui.playerHpFill && Neo.player) {
+      // Repair any non-finite hp/maxHp first, then derive the bar fill from it.
+      const hpText = formatHpText(Neo.player.hp, Neo.player.maxHp, Neo.player);
       const p1Percent = Math.max(0, Math.min(100, (Neo.player.hp / Math.max(1, Neo.player.maxHp)) * 100));
       Neo.ui.playerHpFill.style.width = `${p1Percent}%`;
       Neo.ui.playerHpFill.style.background = getHpFillColor(p1Percent, Neo.PLAYER_SLOT_CONFIG[0].color);
       Neo.ui.playerHpTxt.textContent = Neo.gameMode === 'pvp' && Neo.pvpState
         ? `${Math.ceil(Neo.player.hp)} | ${getPlayerSlotScoreText(Neo.PLAYER_SLOT_CONFIG[0])}`
-        : `${Math.ceil(Neo.player.hp)}/${Neo.player.maxHp}`;
+        : hpText;
     }
     if (Neo.ui.playerXpFill && Neo.player) {
       const xpPercent = Math.max(0, Math.min(100, (Neo.player.xp / Math.max(1, Neo.player.xpToNext)) * 100));
@@ -322,6 +403,13 @@
     Neo.ui.skillNames.melee.textContent = weaponDef?.name || meleeMove?.name || character.skills.melee;
     Neo.ui.skillNames.laser.textContent = laserMove?.name || character.skills.laser;
     Neo.ui.skillNames.smash.textContent = smashMove?.name || character.skills.smash;
+    // Redraw the HUD action icons whenever the equipped loadout changes. They are
+    // canvas-rendered once, so without this they keep the icon drawn at boot.
+    const loadoutSig = `${weaponKey}|${meleeMove?.key || ''}|${laserMove?.key || ''}|${smashMove?.key || ''}|${dashMove?.key || ''}`;
+    if (loadoutSig !== Neo._hudActionIconSig) {
+      Neo._hudActionIconSig = loadoutSig;
+      Neo.drawActionIcons?.();
+    }
     Neo.syncCharacterUiTheme();
     renderPlayerStatsPanel();
     
@@ -345,6 +433,20 @@
       if (white) white.textContent = String(rarityCounts.white);
       if (purple) purple.textContent = String(rarityCounts.purple);
       if (red) red.textContent = String(rarityCounts.red);
+    }
+    if (Neo.ui.panelItemAlert) {
+      const pawPending = Math.max(0, Math.floor(Number(Neo.player?.wizardPawPendingCount || 0)));
+      const batteryPending = Math.max(0, Math.floor(Number(Neo.player?.extraBatteryPendingCount || 0)));
+      const pendingTotal = pawPending + batteryPending;
+      Neo.ui.panelItemAlert.classList.toggle('hidden', pendingTotal <= 0);
+      if (pendingTotal > 0) {
+        const countEl = Neo.ui.panelItemAlert.querySelector('.panel-item-alert__count');
+        if (countEl) countEl.textContent = String(pendingTotal);
+        const label = pawPending > 0
+          ? "Wizard's Paw: pick 2 stats"
+          : 'Extra Battery: pick a move';
+        Neo.ui.panelItemAlert.title = `${label}${pendingTotal > 1 ? ` (+${pendingTotal - 1} more)` : ''}`;
+      }
     }
     if (Neo.ui.challengeStatus && Neo.ui.challengeStatusFill) {
       const timedChallengeType = Neo.currentRoom
@@ -494,17 +596,28 @@
     const entry = finalizeRun('dead', { killedBy: Neo.lastDamageSource, killerKey: Neo.lastDamageSourceKey });
     Neo.lastDeathEntryId = entry.id;
     const aimAngle = Neo.player ? Math.atan2(Neo.mouse.worldY - Neo.player.y, Neo.mouse.worldX - Neo.player.x) : 0;
+    // Carry the killing blow's residual velocity into the corpse so it gets a
+    // little knockback slide instead of dropping straight down.
+    const pvx = Number(Neo.player?.vx || 0);
+    const pvy = Number(Neo.player?.vy || 0);
+    const speed = Math.hypot(pvx, pvy);
+    const dir = speed > 4 ? Math.atan2(pvy, pvx) : aimAngle + Math.PI;
     Neo.playerDeathAnim = {
       timer: 0,
-      duration: 2.2,
+      duration: 1.1,
+      // Extra hold (0.8s) after the fall finishes before the death screen shows.
+      holdDelay: 0.8,
       x: Neo.player?.x ?? 0,
       y: Neo.player?.y ?? 0,
       r: Neo.player?.r ?? 14,
+      vx: Math.cos(dir) * (60 + speed * 0.6),
+      vy: Math.sin(dir) * (60 + speed * 0.6),
       spriteKey: Neo.getPlayerSpriteKey(),
       facing: Neo.getFacingDirection(Neo.player, aimAngle),
       entry,
     };
     Neo.setGameState('dying');
+    Neo.playSfx?.('player_death');
     clearRunSave();
   }
 
@@ -671,6 +784,7 @@
     panic_button: { cooldown: 52, duration: 0, label: 'PANIC', color: '#f4f6fb' },
     mid_sweepy_box: { cooldown: 36, duration: 6, label: 'SWEEPY', color: '#ff6e8b' },
     el_bartos_cape: { cooldown: 58, duration: 10, label: 'EL BARTO', color: '#ffb37a' },
+    sparkle_charm: { cooldown: 40, duration: 0, label: 'SPARKLE', color: '#ffe8a3' },
   };
 
   function ensureEquipmentRuntimeState() {
@@ -718,6 +832,7 @@
       player.equipmentEffects[itemKey] = { time: def.duration + stackBonus, tick: 0 };
     }
     if (itemKey === 'panic_button') activatePanicButton();
+    if (itemKey === 'sparkle_charm') activateSparkleCharm();
     Neo.itemStatsCacheFrame = -1;
     Neo.spawnParticle({ x: player.x, y: player.y - 34, life: 0.75, text: def.label, c: def.color });
     Neo.scheduleRunSave?.();
@@ -791,12 +906,37 @@
     Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.65, ring: 72, c: '#f4f6fb' });
   }
 
+  // Mark the nearest 5 enemies with a "crit sparkle": while marked, every hit
+  // against them is a guaranteed crit (see hitEnemy). Purely offensive setup tool.
+  function activateSparkleCharm() {
+    if (!Neo.player) return;
+    const SPARKLE_DURATION = 6;
+    const candidates = [];
+    Neo.forEachEnemyNearCircle?.(Neo.player.x, Neo.player.y, 9999, enemy => {
+      if (!enemy || enemy.dead || (enemy.spawnT || 0) > 0) return;
+      const dx = enemy.x - Neo.player.x;
+      const dy = enemy.y - Neo.player.y;
+      candidates.push({ enemy, distSq: dx * dx + dy * dy });
+    });
+    candidates.sort((a, b) => a.distSq - b.distSq);
+    const marked = candidates.slice(0, 5);
+    marked.forEach(({ enemy }) => {
+      enemy.critSparkle = Math.max(Number(enemy.critSparkle || 0), SPARKLE_DURATION);
+      Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.5, ring: enemy.r + 10, c: '#ffe8a3' });
+      Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 14, life: 0.6, text: 'SPARKLED', c: '#ffe8a3' });
+    });
+    if (marked.length > 0) {
+      Neo.playSfx?.('item_collect');
+    }
+  }
+
   function dropSweepyMine() {
     if (!Neo.player) return;
     const angle = Neo.rand(0, Math.PI * 2, 'fx');
     const distance = Neo.rand(22, 74, 'fx');
     Neo.hazards.push({
       kind: 'thorn_mine',
+      owner: 'player',
       x: Neo.player.x + Math.cos(angle) * distance,
       y: Neo.player.y + Math.sin(angle) * distance,
       r: 18,
@@ -814,9 +954,7 @@
   function tickSkizzardRegen() {
     if (!Neo.player || Neo.player.hp >= Neo.player.maxHp) return;
     const heal = Neo.scalePlayerHealing?.(Neo.player.maxHp * 0.025, 1) ?? Math.max(1, Neo.player.maxHp * 0.025);
-    const before = Neo.player.hp;
-    Neo.player.hp = Math.min(Neo.player.maxHp, Neo.player.hp + heal);
-    const gained = Neo.player.hp - before;
+    const gained = Neo.applyPlayerHealing?.(heal) ?? 0;
     if (gained > 0) {
       Neo.spawnHealPopup?.(Neo.player.x + Neo.rand(-8, 8), Neo.player.y - 22, gained, { color: '#8fffd2', size: 13 });
       Neo.spawnParticle({ x: Neo.player.x + Neo.rand(-10, 10), y: Neo.player.y + Neo.rand(-10, 10), life: 0.22, c: '#8fffd2' });
@@ -939,6 +1077,13 @@
       getState: () => getEquipmentState('el_bartos_cape'),
       getStatusText: () => getEquipmentStatusText('el_bartos_cape'),
     },
+    sparkle_charm: {
+      key: 'sparkle_charm',
+      shortName: 'SPARKLE',
+      activate: () => startTimedEquipment('sparkle_charm'),
+      getState: () => getEquipmentState('sparkle_charm'),
+      getStatusText: () => getEquipmentStatusText('sparkle_charm'),
+    },
   };
   Neo.EQUIPMENT_SLOT_KEYS = EQUIPMENT_SLOT_KEYS;
   Neo.ACTIVATABLE_ITEMS = ACTIVATABLE_ITEMS;
@@ -969,6 +1114,34 @@
     Neo.player.equipmentSlots.push(itemKey);
   }
   Neo.addToEquipmentSlots = addToEquipmentSlots;
+
+  // Reorder a tool within the equipment slot array (the toolbar editor uses this).
+  // fromIdx/toIdx are positions in Neo.player.equipmentSlots; the item at fromIdx
+  // is removed and re-inserted at toIdx, shifting the others — so its hotkey
+  // (F G H J K L U I, by index) changes to match its new position.
+  function reorderEquipmentSlot(fromIdx, toIdx) {
+    if (!Neo.player) return false;
+    syncEquipmentSlotsFromInventory();
+    const slots = Neo.player.equipmentSlots;
+    const len = slots.length;
+    fromIdx = Math.trunc(Number(fromIdx));
+    toIdx = Math.trunc(Number(toIdx));
+    if (!Number.isInteger(fromIdx) || !Number.isInteger(toIdx)) return false;
+    if (fromIdx < 0 || fromIdx >= len || toIdx < 0 || toIdx >= len || fromIdx === toIdx) return false;
+    const [moved] = slots.splice(fromIdx, 1);
+    slots.splice(toIdx, 0, moved);
+    Neo.scheduleRunSave?.();
+    return true;
+  }
+  Neo.reorderEquipmentSlot = reorderEquipmentSlot;
+
+  // Owned tool item keys in their current slot order. Drives the toolbar editor.
+  function getEquippedToolKeys() {
+    if (!Neo.player) return [];
+    syncEquipmentSlotsFromInventory();
+    return (Neo.player.equipmentSlots || []).filter(key => ACTIVATABLE_ITEMS[key] && Neo.getItemCount(key) > 0);
+  }
+  Neo.getEquippedToolKeys = getEquippedToolKeys;
 
   function getItemKeyForSlotKey(letter) {
     if (!Neo.player) return null;
@@ -1003,7 +1176,7 @@
       const letter = EQUIPMENT_SLOT_KEYS[idx];
       const itemKey = slots[idx];
       const def = itemKey ? ACTIVATABLE_ITEMS[itemKey] : null;
-      const itemDef = itemKey ? (Neo.itemRegistry.get(itemKey) || Neo.ITEM_DEFS[itemKey]) : null;
+      const itemDef = itemKey ? Neo.resolveItemIconDef?.(itemKey) : null;
       const iconCanvas = node.querySelector('.equip-slot__icon');
       const labelSpan = node.querySelector('.equip-slot__label');
       node.classList.remove('is-ready', 'is-blocked', 'is-filled', 'is-empty');
@@ -1012,12 +1185,17 @@
         const state = def.getState?.() || 'ready';
         if (state === 'ready') node.classList.add('is-ready');
         else if (state === 'blocked' || state === 'charging') node.classList.add('is-blocked');
-        if (iconCanvas) Neo.drawItemToastIcon(iconCanvas, itemDef);
+        if (iconCanvas) Neo.drawItemIconByKey?.(iconCanvas, itemKey);
         const statusText = def.getStatusText?.() || '';
         if (labelSpan) labelSpan.textContent = statusText;
-        const title = `${itemDef.name || itemKey} [${letter}]${statusText ? ' · ' + statusText : ''}`;
-        node.setAttribute('title', title);
-        node.setAttribute('aria-label', title);
+        const itemName = itemDef.name || itemKey;
+        const itemDesc = itemDef.description || itemDef.desc || '';
+        const header = `${itemName} [${letter}]${statusText ? ' · ' + statusText : ''}`;
+        node.dataset.tipName = header;
+        node.dataset.tipDesc = itemDesc;
+        node.dataset.tipRarity = itemDef.rarity || itemDef.category || '';
+        node.removeAttribute('title');
+        node.setAttribute('aria-label', itemDesc ? `${header}. ${itemDesc}` : header);
         node.setAttribute('aria-hidden', 'false');
       } else {
         node.classList.add('is-empty');
@@ -1026,13 +1204,64 @@
           ctx?.clearRect(0, 0, iconCanvas.width, iconCanvas.height);
         }
         if (labelSpan) labelSpan.textContent = '';
-        node.setAttribute('title', `Slot ${letter} (empty)`);
+        delete node.dataset.tipName;
+        delete node.dataset.tipDesc;
+        delete node.dataset.tipRarity;
+        node.removeAttribute('title');
         node.setAttribute('aria-label', `Slot ${letter} empty`);
         node.setAttribute('aria-hidden', 'true');
       }
     });
   }
   Neo.updateEquipmentSlots = updateEquipmentSlots;
+
+  // Shared, body-level tooltip element for equipment slots. Lives on <body> so
+  // it escapes the equipment bar's scroll/clip container and never gets cut off.
+  let equipTooltipEl = null;
+  function getEquipTooltipEl() {
+    if (equipTooltipEl && equipTooltipEl.isConnected) return equipTooltipEl;
+    equipTooltipEl = document.createElement('div');
+    equipTooltipEl.className = 'equip-tooltip';
+    equipTooltipEl.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(equipTooltipEl);
+    return equipTooltipEl;
+  }
+
+  function showEquipTooltip(node) {
+    const name = node.dataset.tipName;
+    if (!name || !node.classList.contains('is-filled')) return;
+    const desc = node.dataset.tipDesc || '';
+    // Color name + description by rarity.
+    const rarityColor = Neo.getRarityNameColor?.(node.dataset.tipRarity);
+    const el = getEquipTooltipEl();
+    el.innerHTML = '';
+    const nameEl = document.createElement('div');
+    nameEl.className = 'equip-tooltip__name';
+    nameEl.textContent = name;
+    if (rarityColor) nameEl.style.color = rarityColor;
+    el.appendChild(nameEl);
+    if (desc) {
+      const descEl = document.createElement('div');
+      descEl.className = 'equip-tooltip__desc';
+      descEl.textContent = desc;
+      if (rarityColor) descEl.style.color = rarityColor;
+      el.appendChild(descEl);
+    }
+    // Position to the left of the slot, vertically centered, clamped on-screen.
+    el.classList.add('is-visible');
+    const rect = node.getBoundingClientRect();
+    const tipRect = el.getBoundingClientRect();
+    let top = rect.top + rect.height / 2 - tipRect.height / 2;
+    top = Math.max(8, Math.min(top, window.innerHeight - tipRect.height - 8));
+    let left = rect.left - tipRect.width - 11;
+    if (left < 8) left = rect.right + 11; // fall back to the right if no room
+    el.style.top = `${Math.round(top)}px`;
+    el.style.left = `${Math.round(left)}px`;
+  }
+
+  function hideEquipTooltip() {
+    if (equipTooltipEl) equipTooltipEl.classList.remove('is-visible');
+  }
 
   function bindEquipmentSlotClicks() {
     const nodes = Neo.ui.equipmentSlotNodes;
@@ -1044,6 +1273,10 @@
         const letter = node.dataset.equipKey || '';
         Neo.activateEquipmentSlotKey(letter);
       });
+      node.addEventListener('mouseenter', () => showEquipTooltip(node));
+      node.addEventListener('mouseleave', hideEquipTooltip);
+      node.addEventListener('focus', () => showEquipTooltip(node));
+      node.addEventListener('blur', hideEquipTooltip);
     });
   }
   Neo.bindEquipmentSlotClicks = bindEquipmentSlotClicks;

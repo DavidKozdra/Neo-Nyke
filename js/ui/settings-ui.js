@@ -6,7 +6,7 @@
   const DEFAULT_TOUCH_BINDINGS = { touchA:'slash', touchB:'laser', touchY:'smash', touchX:'ascend', touchDash:'dash' };
   const DEFAULT_VOLUME   = { master:80, sfx:80, music:60 };
   const DEFAULT_ACCESS   = { reduceFlash:false, reduceMotion:false, reduceParticles:false, highContrast:false, screenShake:true, shopCanAfford:'#4caf50', shopCantAfford:'#e05555', hudScale:1 };
-  const DEFAULT_GAMEPLAY = { pauseInventory:true, bloodMultiplier:1, bloodOnHit:true };
+  const DEFAULT_GAMEPLAY = { pauseInventory:true, pauseOnBlur:true, bloodMultiplier:1, bloodOnHit:true, performanceMode:true };
   const BLOOD_MULTIPLIER_MIN = 1;
   const BLOOD_MULTIPLIER_MAX = 10;
 
@@ -289,8 +289,10 @@
     getAccess: () => access,
     getGameplay: () => gameplay,
     shouldPauseInventory: () => gameplay.pauseInventory !== false,
+    shouldPauseOnBlur: () => gameplay.pauseOnBlur !== false,
     getBloodMultiplier: () => normalizeBloodMultiplier(gameplay.bloodMultiplier),
     shouldBloodOnHit: () => gameplay.bloodOnHit !== false,
+    isPerformanceMode: () => gameplay.performanceMode !== false,
     getVolume: () => volume,
   };
 
@@ -413,6 +415,15 @@
     });
   }
 
+  const pauseOnBlurEl = document.getElementById('gameplayPauseOnBlur');
+  if (pauseOnBlurEl) {
+    pauseOnBlurEl.checked = gameplay.pauseOnBlur !== false;
+    pauseOnBlurEl.addEventListener('change', () => {
+      gameplay.pauseOnBlur = pauseOnBlurEl.checked;
+      save();
+    });
+  }
+
   const bloodSlider = document.getElementById('gameplayBloodMultiplier');
   const bloodVal    = document.getElementById('gameplayBloodMultiplierVal');
   if (bloodSlider && bloodVal) {
@@ -432,6 +443,15 @@
     bloodOnHitEl.checked = gameplay.bloodOnHit !== false;
     bloodOnHitEl.addEventListener('change', () => {
       gameplay.bloodOnHit = bloodOnHitEl.checked;
+      save();
+    });
+  }
+
+  const performanceModeEl = document.getElementById('gameplayPerformanceMode');
+  if (performanceModeEl) {
+    performanceModeEl.checked = gameplay.performanceMode !== false;
+    performanceModeEl.addEventListener('change', () => {
+      gameplay.performanceMode = performanceModeEl.checked;
       save();
     });
   }
@@ -541,7 +561,7 @@
   const usernameInput = document.getElementById('usernameInput');
   if (usernameInput) {
     const syncUsername = () => {
-      if (window.Neo?.metaProgress !== undefined) {
+      if (window.Neo?.metaProgress) {
         usernameInput.value = window.Neo.metaProgress.username || '';
       }
     };
@@ -559,7 +579,7 @@
   const birthdayInput = document.getElementById('birthdayInput');
   if (birthdayInput) {
     const syncBirthday = () => {
-      if (window.Neo?.metaProgress !== undefined)
+      if (window.Neo?.metaProgress)
         birthdayInput.value = window.Neo.metaProgress.birthday || '';
     };
     syncBirthday();
@@ -686,7 +706,7 @@
     }
 
     window.addEventListener('neo:meta-loaded', checkAndShow);
-    if (window.Neo?.metaProgress !== undefined) checkAndShow();
+    if (window.Neo?.metaProgress) checkAndShow();
     window._checkSpecialDaysNow = () => checkAndShow(true);
   })();
 

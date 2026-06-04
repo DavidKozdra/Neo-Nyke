@@ -16,6 +16,10 @@ const achievementManager = (() => {
   const STORE = 'achievements';
   let db = null;
   const cumulativeCounts = new Map();
+  // Synchronous in-flight guard so two async unlock() calls for the same id
+  // (fired close together) can't both pass the isUnlocked() check before either
+  // commits its write — which previously showed the toast twice.
+  const unlockingInFlight = new Set();
   const pendingCumulativeWrites = new Map();
   let cumulativeFlushTimer = 0;
   let cumulativeFlushPromise = Promise.resolve();
@@ -132,18 +136,25 @@ const achievementManager = (() => {
   }
 
   async function unlock(id) {
-    if (await isUnlocked(id)) return;
-    const d = await getDB();
-    await new Promise((resolve, reject) => {
-      const tx = d.transaction(STORE, 'readwrite');
-      const req = tx.objectStore(STORE).put({ id, unlockedAt: Date.now() });
-      req.onsuccess = () => resolve();
-      req.onerror = () => reject(req.error);
-    });
-    const def = ACHIEVEMENTS.find(a => a.id === id);
-    if (def) {
-      pushAchievementToast(def);
-      window.dispatchEvent(new CustomEvent('achievement:unlocked', { detail: { id } }));
+    // Set synchronously (before any await) so concurrent calls bail out here.
+    if (unlockingInFlight.has(id)) return;
+    unlockingInFlight.add(id);
+    try {
+      if (await isUnlocked(id)) return;
+      const d = await getDB();
+      await new Promise((resolve, reject) => {
+        const tx = d.transaction(STORE, 'readwrite');
+        const req = tx.objectStore(STORE).put({ id, unlockedAt: Date.now() });
+        req.onsuccess = () => resolve();
+        req.onerror = () => reject(req.error);
+      });
+      const def = ACHIEVEMENTS.find(a => a.id === id);
+      if (def) {
+        pushAchievementToast(def);
+        window.dispatchEvent(new CustomEvent('achievement:unlocked', { detail: { id } }));
+      }
+    } finally {
+      unlockingInFlight.delete(id);
     }
   }
 

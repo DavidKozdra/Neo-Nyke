@@ -19,7 +19,7 @@ export const ATTACKS = {
 };
 export const SLASH_KNOCKBACK = 340;
 export const HEAVY_HIT_HEALTH_RATIO = 0.5;
-export const HEAVY_KNOCKBACK_THRESHOLD = 1200;
+export const HEAVY_KNOCKBACK_THRESHOLD = 2200;
 export const HEAVY_HIT_STUN = 0.62;
 export const HEAVY_KNOCKBACK_STUN = 0.46;
 export const HEAVY_IMPACT_BOSS_STUN_MULTIPLIER = 0.65;
@@ -181,6 +181,56 @@ export const STATUS_STYLES = {
   poison: { color: '#85df63', textColor: '#85df63' },
   dark_drain: { color: '#b48cff', textColor: '#b48cff' },
   slow: { color: '#79d9ff', textColor: '#79d9ff' },
+};
+export const STATUS_ICON_DEFS = {
+  bleed: {
+    label: 'Bleed',
+    color: '#ff4f6d',
+    accent: '#ffe3e7',
+    bg: 'rgba(62,0,12,0.86)',
+    pixels: [[4,0],[3,1],[4,1],[3,2],[4,2],[2,3],[5,3],[2,4],[5,4],[3,5],[4,5],[4,6]],
+    accentPixels: [[3,3],[3,4]],
+  },
+  fire: {
+    label: 'Fire',
+    color: '#ff9a3c',
+    accent: '#ffe5c0',
+    bg: 'rgba(62,22,0,0.86)',
+    pixels: [[4,0],[3,1],[4,1],[5,2],[2,3],[4,3],[5,3],[2,4],[3,4],[5,4],[2,5],[3,5],[4,5],[5,5],[3,6],[4,6]],
+    accentPixels: [[3,3],[3,4],[4,4]],
+  },
+  poison: {
+    label: 'Poison',
+    color: '#85df63',
+    accent: '#d8ffc0',
+    bg: 'rgba(10,38,0,0.86)',
+    pixels: [[3,0],[4,0],[2,1],[5,1],[2,2],[5,2],[1,3],[6,3],[1,4],[6,4],[2,5],[5,5],[3,6],[4,6]],
+    accentPixels: [[3,2],[4,2],[3,4],[4,4]],
+  },
+  dark_drain: {
+    label: 'Dark Drain',
+    color: '#b48cff',
+    accent: '#e8d8ff',
+    bg: 'rgba(20,8,48,0.86)',
+    pixels: [[5,0],[4,1],[3,1],[2,2],[2,3],[2,4],[3,5],[4,5],[5,6],[3,6],[4,7],[5,7]],
+    accentPixels: [[4,2],[3,3],[3,4],[4,5]],
+  },
+  slow: {
+    label: 'Frostbite',
+    color: '#79d9ff',
+    accent: '#e5f8ff',
+    bg: 'rgba(0,32,48,0.86)',
+    pixels: [[3,0],[4,0],[3,1],[4,1],[1,2],[2,2],[5,2],[6,2],[0,3],[3,3],[4,3],[7,3],[0,4],[3,4],[4,4],[7,4],[1,5],[2,5],[5,5],[6,5],[3,6],[4,6],[3,7],[4,7]],
+    accentPixels: [[3,3],[4,3],[3,4],[4,4]],
+  },
+  stun: {
+    label: 'Stun',
+    color: '#ffe66d',
+    accent: '#fff8c8',
+    bg: 'rgba(58,42,0,0.86)',
+    pixels: [[3,0],[4,0],[3,1],[4,1],[2,2],[5,2],[0,3],[1,3],[3,3],[4,3],[6,3],[7,3],[2,4],[5,4],[3,5],[4,5],[2,6],[5,6]],
+    accentPixels: [[3,2],[4,2],[3,4],[4,4]],
+  },
 };
 export const ROOM_ART_THEMES = {
   dungeon: {
@@ -560,6 +610,28 @@ export const CHALLENGE_DEFS = {
     reward: '+35% Loop Crystal payout',
     description: 'Deal 25% more damage, but incoming damage is 35% higher.',
   },
+  cursed_blood: {
+    key: 'cursed_blood',
+    name: 'Cursed Blood',
+    icon: 'DOT',
+    accent: '#85df63',
+    theme: 'Status',
+    cost: 3,
+    unlockLoops: 1,
+    reward: '+35% Loop Crystal payout',
+    description: 'Enemy status damage is 35% stronger, making bleed, fire, poison, and drain builds more valuable.',
+  },
+  overcharged: {
+    key: 'overcharged',
+    name: 'Overcharged',
+    icon: 'CHG',
+    accent: '#9adfff',
+    theme: 'Charge',
+    cost: 3,
+    unlockLoops: 1,
+    reward: '+35% Loop Crystal payout',
+    description: 'Kill-charge relics gain +1 extra charge progress per kill.',
+  },
 };
 export const CHALLENGE_ORDER = Object.keys(CHALLENGE_DEFS);
 
@@ -758,6 +830,7 @@ Neo.DIRECTION_VECTORS = DIRECTION_VECTORS;
 Neo.OPPOSITE_DIRECTION = OPPOSITE_DIRECTION;
 Neo.STATUS_KEYS = STATUS_KEYS;
 Neo.STATUS_STYLES = STATUS_STYLES;
+Neo.STATUS_ICON_DEFS = STATUS_ICON_DEFS;
 Neo.ROOM_ART_THEMES = ROOM_ART_THEMES;
 Neo.BLEED_BLOOD_COLORS = BLEED_BLOOD_COLORS;
 Neo.PERF_BUDGET_60FPS = PERF_BUDGET_60FPS;

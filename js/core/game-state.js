@@ -8,6 +8,11 @@ export function pauseGame() {
 export function resumeGame() {
     document.body.classList.remove('game-paused');
     setGameState('play');
+    // Returning to play is a safe moment to surface an owed Wizard's Paw modal.
+    // Batteries are NOT auto-reopened here: resume often follows closing the
+    // inventory, and force-reopening it would trap the player — the HUD alert
+    // chip lets them reopen the battery prompt on demand instead.
+    Neo.requestPanelItemSelection?.({ suppressBatteryOpen: true });
   }
 
   function createDefaultMeta() {
@@ -434,6 +439,7 @@ export function resumeGame() {
       extra_battery: 0,
       mooggy_zoomies: 0,
       el_bartos_cape: 0,
+      sparkle_charm: 0,
     };
     const character = Neo.CHARACTER_DEFS[Neo.chosenCharacter] || Neo.CHARACTER_DEFS.thorn_knight;
     const starterItems = getCharacterStartingItems(character.key);
@@ -464,6 +470,7 @@ export function resumeGame() {
       dashX: 0,
       dashY: 0,
       cowardsWayTime: 0,
+      warpHideTime: 0,
       mooggyZoomiesTime: 0,
       coins: 0,
       level: 1,
@@ -487,7 +494,7 @@ export function resumeGame() {
       escapeChargeKills: 0,
       escapeReady: true,
       robotArmChargeKills: 0,
-      robotArmReady: false,
+      robotArmReady: Number(items.robot_arm || 0) > 0,
       statuses: Neo.createStatusMap(),
       items,
       ownedWeapons: defaultWeapon ? { [defaultWeapon]: true } : {},
@@ -495,6 +502,8 @@ export function resumeGame() {
       weaponCooldown: 0,
       blockActive: false,
       blockTimer: 0,
+      overhealBarrier: 0,
+      graniallaHealPulseFrame: 0,
       fleeceTick: 0,
       weaponBeamTime: 0,
       weaponBeamTick: 0,
@@ -507,6 +516,7 @@ export function resumeGame() {
       anvilUpgrades: { weapon: {}, move: {} },
       storedPotions: 0,
       extraBatteryPendingCount: 0,
+      wizardPawPendingCount: 0,
       equipmentSlots: (character.key === 'metao') ? ['mateos_bag'] : [],
       equipmentCooldowns: {},
       equipmentEffects: {},
@@ -1353,6 +1363,7 @@ export function resumeGame() {
     if (!value) return 'Unknown';
     if (value === 'no_hit') return 'Never Get Hit';
     if (value === 'lava') return 'Lava';
+    if (value === 'thorn_mine') return 'Thorn Trap';
     if (value === 'challenge_bomb') return 'Trial Bomb';
     if (value === 'storm') return 'Storm Trial';
     if (value === 'enemy_projectile') return 'Enemy Projectile';
@@ -1621,10 +1632,11 @@ export function resumeGame() {
     'Charger': 'charger',
     'Laser': 'laser',
     'Sniper': 'sniper',
-    'Machine Gunner': 'sniper',
+    'Machine Gunner': 'machine_gunner',
     'Golem': 'golem',
     'Knave': 'knave',
     'Cult Mage': 'cult_mage',
+    'Summoner': 'summoner',
   };
 
   function resolveKillerSprite(key) {
@@ -1637,6 +1649,19 @@ export function resumeGame() {
     return 'hunter';
   }
 
+  // Environmental killers have no enemy sprite, so they draw a dedicated hazard icon.
+  // Accepts either the source key (explosive_trap) or an old label ("Explosive Trap").
+  const killerHazardIconMap = {
+    explosive_trap: 'explosive_trap',
+    'Explosive Trap': 'explosive_trap',
+  };
+
+  function resolveKillerHazardIcon(key) {
+    if (!key) return '';
+    if (killerHazardIconMap[key]) return killerHazardIconMap[key];
+    return '';
+  }
+
   function hydrateRunHistorySprites(root = Neo.ui.runHistoryList) {
     if (!(root instanceof Element)) return;
     root.querySelectorAll('[data-run-character]').forEach(el => {
@@ -1645,13 +1670,14 @@ export function resumeGame() {
     });
     root.querySelectorAll('[data-run-killer]').forEach(el => {
       if (!(el instanceof HTMLCanvasElement)) return;
+      const hazardIcon = resolveKillerHazardIcon(el.dataset.runKiller);
+      if (hazardIcon && typeof Neo.drawHazardKillerIcon === 'function') {
+        Neo.drawHazardKillerIcon(el, hazardIcon);
+        return;
+      }
       Neo.drawSpriteToCanvas(el, resolveKillerSprite(el.dataset.runKiller), el.width);
     });
-    root.querySelectorAll('[data-item-icon]').forEach(el => {
-      if (!(el instanceof HTMLCanvasElement)) return;
-      const item = Neo.itemRegistry.get(el.dataset.itemIcon) || Neo.ITEM_DEFS[el.dataset.itemIcon];
-      if (item) Neo.drawItemToastIcon(el, item);
-    });
+    Neo.drawItemIconCanvases?.(root, 'data-item-icon');
     root.querySelectorAll('[data-move-icon]').forEach(el => {
       if (!(el instanceof HTMLCanvasElement)) return;
       const move = Neo.MOVE_DEFS[el.dataset.moveIcon];
@@ -1759,7 +1785,6 @@ export function resumeGame() {
         if (subtitleEl) subtitleEl.textContent = 'Weekly run. Hard difficulty is locked.';
         if (goBtn) goBtn.textContent = 'COMPETE';
       } else {
-        if (subtitleEl) subtitleEl.textContent = 'Choose a hero. Pick difficulty. Enter the dungeon.';
         if (goBtn) goBtn.textContent = 'ENTER DUNGEON';
       }
     }
@@ -1910,6 +1935,7 @@ export function resumeGame() {
             if (count > 0) Neo.player.items[key] = (Number(Neo.player.items[key]) || 0) + count;
           }
         }
+        if (Number(Neo.player.items?.robot_arm || 0) > 0) Neo.player.robotArmReady = true;
         applySandboxPlayerSetup(Neo.player);
       }
       applyRunChallengeStartModifiers();
@@ -2354,7 +2380,7 @@ export function resumeGame() {
     Neo.handsomeDevilCutscenePlayed = false;
     Neo.secretRoomVisitedFloors = [];
     Neo.wizardPawSelection = null;
-    Neo.wizardPawPendingCount = 0;
+    Neo.panelItemDeferredToastRoom = null;
     Neo.setWizardPawModalOpen(false);
     Neo.setShopPanelOpen(false);
     Neo.setInventoryPanelOpen(false);
@@ -2476,7 +2502,7 @@ export function resumeGame() {
     Neo.secretRoomVisitedFloors = Array.isArray(snapshot.secretRoomVisitedFloors) ? [...snapshot.secretRoomVisitedFloors] : [];
     Neo.restoreRivals(snapshot.rivals);
     Neo.wizardPawSelection = null;
-    Neo.wizardPawPendingCount = 0;
+    Neo.panelItemDeferredToastRoom = null;
     Neo.setWizardPawModalOpen(false);
     Neo.setShopPanelOpen(false);
     Neo.setInventoryPanelOpen(false);
@@ -2617,6 +2643,7 @@ export function resumeGame() {
   Neo.renderRunHistoryHero = renderRunHistoryHero;
   Neo.renderRunHistoryTabContent = renderRunHistoryTabContent;
   Neo.resolveKillerSprite = resolveKillerSprite;
+  Neo.resolveKillerHazardIcon = resolveKillerHazardIcon;
   Neo.hydrateRunHistorySprites = hydrateRunHistorySprites;
   Neo.refreshMenuState = refreshMenuState;
   Neo.updateCharacterSelectionUI = updateCharacterSelectionUI;

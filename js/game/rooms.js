@@ -77,6 +77,12 @@
 
     const pool = Neo.rooms.filter(room => room !== startRoom && room !== farRoom);
     Neo.shuffle(pool, 'world');
+    // Floor grammar (opt-in via Neo.useFloorGrammar): bias rewards toward dead-end
+    // rooms so treasure/shop/etc. live off the critical start->exit path, the way
+    // Spelunky/Isaac do. This is a STABLE reorder of the already-shuffled pool, so
+    // it consumes no extra RNG — the draws below are unchanged; only which rooms
+    // receive the reward types shifts. With the flag off, behaviour is identical.
+    if (Neo.useFloorGrammar) biasRewardPoolToDeadEnds(pool, startRoom);
     const treasureCount = Math.min(3, 1 + Math.floor(Neo.nextRandom('world') * 3));
     for (let index = 0; index < treasureCount; index += 1) {
       if (pool[index]) pool[index].type = 'treasure';
@@ -109,6 +115,31 @@
     }
     Neo.updateObjective();
     Neo.updateHud();
+  }
+
+  // Stable-partitions an already-shuffled reward pool so dead-end rooms (graph
+  // degree 1) come first, without changing relative order within each group and
+  // without consuming RNG. Uses the engine's room-graph topology utilities; if
+  // they are unavailable it leaves the pool untouched (falls back to current
+  // behaviour). startRoom is excluded from the pool already, but is passed so the
+  // graph is built over the full room set for accurate degree/connectivity.
+  function biasRewardPoolToDeadEnds(pool, startRoom) {
+    const maze = (typeof window !== 'undefined' ? window.KozEngine : globalThis.KozEngine)?.World?.dungeonMaze;
+    if (!maze || typeof maze.buildRoomGraph !== 'function') return pool;
+
+    const adjacency = maze.buildRoomGraph(Neo.rooms);
+    if (!maze.isFullyConnected(startRoom, adjacency)) return pool; // safety: never strand rewards
+    const deadEnds = new Set(maze.deadEndKeys(adjacency));
+    const keyOf = maze.roomGraphKey || (room => `${room.gx},${room.gy}`);
+
+    const ends = [];
+    const rest = [];
+    for (const room of pool) {
+      (deadEnds.has(keyOf(room)) ? ends : rest).push(room);
+    }
+    pool.length = 0;
+    pool.push(...ends, ...rest);
+    return pool;
   }
 
   function decorateRoomData(room) {
@@ -174,62 +205,13 @@
       decorateRoomStructures(room);
     }
 
-    const potCount = room.type === 'shop' ? 1 : (room.type === 'challenge' || room.type === 'anvil') ? 0 : Neo.irand(1, 3, 'world');
-    for (let index = 0; index < potCount; index += 1) {
-      room.destructibles.push({
-        kind: 'pot',
-        x: 150 + Neo.rand(Neo.ROOM_W - 300, 0, 'world'),
-        y: 120 + Neo.rand(Neo.ROOM_H - 240, 0, 'world'),
-        r: 12,
-        hp: 1,
-        broken: false,
-      });
-    }
-
-    if (Neo.nextRandom('world') < 0.45 && room.type !== 'shop' && room.type !== 'challenge' && room.type !== 'anvil') {
-      room.destructibles.push({
-        kind: 'barrel',
-        x: 180 + Neo.rand(Neo.ROOM_W - 360, 0, 'world'),
-        y: 140 + Neo.rand(Neo.ROOM_H - 280, 0, 'world'),
-        r: 20,
-        hp: 1,
-        broken: false,
-      });
-    }
-
-    if (Neo.nextRandom('world') < 0.4 && room.type !== 'god' && room.type !== 'challenge' && room.type !== 'anvil') {
-      room.hazards.push(...createCornerMoatLavaHazards(room));
-    }
-
-    if ((room.type === 'combat' || room.type === 'boss') && Neo.nextRandom('world') < (room.type === 'boss' ? 0.45 : 0.32)) {
-      const trapCount = room.type === 'boss' ? 2 : (Neo.nextRandom('world') < 0.45 ? 2 : 1);
-      for (let index = 0; index < trapCount; index += 1) {
-        const trap = createExplosiveTrapHazard(room, index);
-        if (trap) room.hazards.push(trap);
-      }
-    }
-
-    if (Neo.nextRandom('world') < 0.3 && room.type !== 'shop' && room.type !== 'god' && room.type !== 'challenge') {
-      const wallX = Neo.nextRandom('world') < 0.5 ? 76 : Neo.ROOM_W - 76;
-      const hiddenX = wallX < Neo.ROOM_W / 2 ? 48 : Neo.ROOM_W - 48;
-      room.destructibles.push({
-        kind: 'wall',
-        x: wallX,
-        y: Neo.ROOM_H / 2 + Neo.rand(120, -120, 'world'),
-        r: 26,
-        hp: 2,
-        broken: false,
-      });
-      room.destructibles.push({
-        kind: 'pot',
-        x: hiddenX,
-        y: Neo.ROOM_H / 2 + Neo.rand(140, -140, 'world'),
-        r: 12,
-        hp: 1,
-        broken: false,
-        hidden: true,
-      });
-    }
+    // Procedural prop/hazard population (rules live in roomTemplates.js). The
+    // hazard factories below are injected so the rules can stay data-only. RNG
+    // consumption order is preserved, so seeded output is unchanged.
+    Neo.populateRoomProps(room, {
+      createCornerMoatLavaHazards,
+      createExplosiveTrapHazard,
+    });
 
     Object.entries(room.secretPassages || {}).forEach(([dir, passage]) => {
       const targetRoom = findRoomAt(passage.targetGx, passage.targetGy);
@@ -326,146 +308,18 @@
         addTorch(Neo.ROOM_W - edgeInset + 6, Neo.ROOM_H / 2 + pocketInset + 28);
       }
     };
-    const pickCombatArchetype = () => {
-      const pool = ['pillar_ring', 'split_cross', 'side_lanes', 'gate_room', 'broken_halls'];
-      return pool[Neo.irand(0, pool.length - 1, 'world')];
-    };
-    const pickBossArchetype = () => {
-      const pool = ['boss_buttresses', 'boss_crossfire', 'boss_processional'];
-      return pool[Neo.irand(0, pool.length - 1, 'world')];
-    };
-
-    room.layoutArchetype = room.type === 'boss' ? pickBossArchetype() : pickCombatArchetype();
+    // Pick a data-driven template (registry lives in roomTemplates.js) and stamp
+    // it into the room. With equal template weights this consumes RNG identically
+    // to the old pick*Archetype() helpers, so seeded output is unchanged.
+    // Order matches the original: template selection draws RNG first (one
+    // Neo.irand on the 'world' stream, as the old pick*Archetype did), then door
+    // frames are stamped, then the template geometry. Preserving this order keeps
+    // seeded output byte-identical.
+    const template = Neo.pickRoomTemplate(room);
+    room.layoutArchetype = template ? template.id : 'open';
     room.layoutChambers = [];
     addDoorFrames();
-
-    if (room.layoutArchetype === 'pillar_ring') {
-      addPillar(Neo.ROOM_W / 2 - 150, Neo.ROOM_H / 2 - 104, 36);
-      addPillar(Neo.ROOM_W / 2 + 150, Neo.ROOM_H / 2 - 104, 36);
-      addPillar(Neo.ROOM_W / 2 - 150, Neo.ROOM_H / 2 + 104, 36);
-      addPillar(Neo.ROOM_W / 2 + 150, Neo.ROOM_H / 2 + 104, 36);
-      addPillar(Neo.ROOM_W / 2, Neo.ROOM_H / 2 - 138, 28);
-      addPillar(Neo.ROOM_W / 2, Neo.ROOM_H / 2 + 138, 28);
-      room.decorations.push(
-        { kind: 'rubble', x: Neo.ROOM_W / 2 - 54, y: Neo.ROOM_H / 2, r: 24 },
-        { kind: 'rubble', x: Neo.ROOM_W / 2 + 54, y: Neo.ROOM_H / 2, r: 24 },
-      );
-      setChambers({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2, w: Neo.ROOM_W - 240, h: Neo.ROOM_H - 220 });
-      return;
-    }
-
-    if (room.layoutArchetype === 'split_cross') {
-      addWall(Neo.ROOM_W / 2, Neo.ROOM_H / 2 - 136, 74, 92);
-      addWall(Neo.ROOM_W / 2, Neo.ROOM_H / 2 + 136, 74, 92);
-      addWall(Neo.ROOM_W / 2 - 182, Neo.ROOM_H / 2, 94, 58);
-      addWall(Neo.ROOM_W / 2 + 182, Neo.ROOM_H / 2, 94, 58);
-      room.decorations.push(
-        { kind: 'brazier', x: Neo.ROOM_W / 2 - 102, y: Neo.ROOM_H / 2 - 84, r: 16 },
-        { kind: 'brazier', x: Neo.ROOM_W / 2 + 102, y: Neo.ROOM_H / 2 + 84, r: 16 },
-        { kind: 'crack', x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2, r: 28 },
-      );
-      setChambers(
-        { x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 150, w: 240, h: 150 },
-        { x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 + 150, w: 240, h: 150 },
-        { x: Neo.ROOM_W / 2 - 210, y: Neo.ROOM_H / 2, w: 180, h: 180 },
-        { x: Neo.ROOM_W / 2 + 210, y: Neo.ROOM_H / 2, w: 180, h: 180 },
-      );
-      return;
-    }
-
-    if (room.layoutArchetype === 'side_lanes') {
-      addWall(Neo.ROOM_W / 2, Neo.ROOM_H / 2 - 124, 228, 46);
-      addWall(Neo.ROOM_W / 2, Neo.ROOM_H / 2 + 124, 228, 46);
-      addPillar(Neo.ROOM_W / 2 - 242, Neo.ROOM_H / 2, 30);
-      addPillar(Neo.ROOM_W / 2 + 242, Neo.ROOM_H / 2, 30);
-      room.decorations.push(
-        { kind: 'banner', x: Neo.ROOM_W / 2 - 188, y: Neo.ROOM_H / 2 - 166, r: 14 },
-        { kind: 'banner', x: Neo.ROOM_W / 2 + 188, y: Neo.ROOM_H / 2 + 166, r: 14 },
-      );
-      setChambers(
-        { x: Neo.ROOM_W / 2 - 238, y: Neo.ROOM_H / 2, w: 170, h: Neo.ROOM_H - 220 },
-        { x: Neo.ROOM_W / 2 + 238, y: Neo.ROOM_H / 2, w: 170, h: Neo.ROOM_H - 220 },
-        { x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2, w: 220, h: 180 },
-      );
-      return;
-    }
-
-    if (room.layoutArchetype === 'gate_room') {
-      addWall(Neo.ROOM_W / 2 - 172, Neo.ROOM_H / 2 - 38, 108, 52);
-      addWall(Neo.ROOM_W / 2 + 172, Neo.ROOM_H / 2 - 38, 108, 52);
-      addWall(Neo.ROOM_W / 2, Neo.ROOM_H / 2 + 148, 86, 82);
-      addPillar(Neo.ROOM_W / 2 - 62, Neo.ROOM_H / 2 + 34, 28);
-      addPillar(Neo.ROOM_W / 2 + 62, Neo.ROOM_H / 2 + 34, 28);
-      room.decorations.push(
-        { kind: 'brazier', x: Neo.ROOM_W / 2 - 130, y: Neo.ROOM_H / 2 + 112, r: 15 },
-        { kind: 'brazier', x: Neo.ROOM_W / 2 + 130, y: Neo.ROOM_H / 2 + 112, r: 15 },
-        { kind: 'crack', x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 104, r: 32 },
-      );
-      setChambers(
-        { x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 146, w: Neo.ROOM_W - 300, h: 150 },
-        { x: Neo.ROOM_W / 2 - 200, y: Neo.ROOM_H / 2 + 40, w: 180, h: 220 },
-        { x: Neo.ROOM_W / 2 + 200, y: Neo.ROOM_H / 2 + 40, w: 180, h: 220 },
-      );
-      return;
-    }
-
-    if (room.layoutArchetype === 'broken_halls') {
-      addWall(Neo.ROOM_W / 2 - 96, Neo.ROOM_H / 2 - 150, 84, 74);
-      addWall(Neo.ROOM_W / 2 + 118, Neo.ROOM_H / 2 - 36, 104, 54);
-      addWall(Neo.ROOM_W / 2 - 148, Neo.ROOM_H / 2 + 112, 122, 46);
-      addPillar(Neo.ROOM_W / 2 + 186, Neo.ROOM_H / 2 + 138, 32);
-      room.decorations.push(
-        { kind: 'rubble', x: Neo.ROOM_W / 2 - 20, y: Neo.ROOM_H / 2 + 10, r: 26 },
-        { kind: 'crack', x: Neo.ROOM_W / 2 + 132, y: Neo.ROOM_H / 2 - 132, r: 28 },
-        { kind: 'banner', x: Neo.ROOM_W / 2 - 170, y: Neo.ROOM_H / 2 - 180, r: 12 },
-      );
-      setChambers(
-        { x: Neo.ROOM_W / 2 - 150, y: Neo.ROOM_H / 2 - 118, w: 240, h: 170 },
-        { x: Neo.ROOM_W / 2 + 172, y: Neo.ROOM_H / 2 - 8, w: 200, h: 180 },
-        { x: Neo.ROOM_W / 2 - 36, y: Neo.ROOM_H / 2 + 170, w: 320, h: 130 },
-      );
-      return;
-    }
-
-    if (room.layoutArchetype === 'boss_buttresses') {
-      addWall(Neo.ROOM_W / 2 - 220, Neo.ROOM_H / 2, 64, 184);
-      addWall(Neo.ROOM_W / 2 + 220, Neo.ROOM_H / 2, 64, 184);
-      addPillar(Neo.ROOM_W / 2 - 84, Neo.ROOM_H / 2 - 126, 30);
-      addPillar(Neo.ROOM_W / 2 + 84, Neo.ROOM_H / 2 - 126, 30);
-      room.decorations.push(
-        { kind: 'brazier', x: Neo.ROOM_W / 2 - 220, y: Neo.ROOM_H / 2 - 136, r: 17 },
-        { kind: 'brazier', x: Neo.ROOM_W / 2 + 220, y: Neo.ROOM_H / 2 - 136, r: 17 },
-      );
-      setChambers({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2, w: Neo.ROOM_W - 220, h: Neo.ROOM_H - 170 });
-      return;
-    }
-
-    if (room.layoutArchetype === 'boss_crossfire') {
-      addWall(Neo.ROOM_W / 2, Neo.ROOM_H / 2 - 162, 68, 70);
-      addWall(Neo.ROOM_W / 2, Neo.ROOM_H / 2 + 162, 68, 70);
-      addPillar(Neo.ROOM_W / 2 - 188, Neo.ROOM_H / 2, 34);
-      addPillar(Neo.ROOM_W / 2 + 188, Neo.ROOM_H / 2, 34);
-      room.decorations.push(
-        { kind: 'crack', x: Neo.ROOM_W / 2 - 128, y: Neo.ROOM_H / 2, r: 26 },
-        { kind: 'crack', x: Neo.ROOM_W / 2 + 128, y: Neo.ROOM_H / 2, r: 26 },
-      );
-      setChambers({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2, w: Neo.ROOM_W - 240, h: Neo.ROOM_H - 210 });
-      return;
-    }
-
-    addWall(Neo.ROOM_W / 2 - 160, Neo.ROOM_H / 2 + 118, 116, 46);
-    addWall(Neo.ROOM_W / 2 + 160, Neo.ROOM_H / 2 + 118, 116, 46);
-    addPillar(Neo.ROOM_W / 2 - 74, Neo.ROOM_H / 2 - 64, 32);
-    addPillar(Neo.ROOM_W / 2 + 74, Neo.ROOM_H / 2 - 64, 32);
-    room.decorations.push(
-      { kind: 'banner', x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 186, r: 14 },
-      { kind: 'brazier', x: Neo.ROOM_W / 2 - 148, y: Neo.ROOM_H / 2 - 10, r: 16 },
-      { kind: 'brazier', x: Neo.ROOM_W / 2 + 148, y: Neo.ROOM_H / 2 - 10, r: 16 },
-    );
-    setChambers(
-      { x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 96, w: Neo.ROOM_W - 260, h: 180 },
-      { x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 + 176, w: Neo.ROOM_W - 220, h: 140 },
-    );
+    Neo.applyRoomTemplate(room, template, { addWall, addPillar, setChambers });
   }
 
   function decorateGardenRoomData(room) {
@@ -1318,6 +1172,9 @@
     syncCurrentRoomState();
     Neo.updateObjective();
     Neo.scheduleRunSave();
+    // A panel-item choice owed from a prior room (picked up mid-cinematic, during
+    // a shop, etc.) opens now that the player is back in control in a fresh room.
+    Neo.requestPanelItemSelection?.();
   }
 
   function ensureShopHasMinimumItemOffers(room, minItemOffers = 3) {
@@ -1498,6 +1355,11 @@
       xpToNext: Math.max(8, Number(source.xpToNext || (22 + Neo.floor * 4))),
       growthTick: Math.max(0, Number(source.growthTick || 0)),
       weapons: Array.isArray(source.weapons) ? source.weapons : [],
+      loot: Array.isArray(source.loot)
+        ? source.loot
+          .filter(item => item && ['item', 'coin', 'potion'].includes(item.type))
+          .map(item => ({ type: item.type, key: item.key, value: item.value }))
+        : [],
       memory: normalizeRivalMemory(source.memory),
       dead: !!source.dead,
     };

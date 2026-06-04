@@ -31,15 +31,18 @@ await page.waitForTimeout(500);
 const controls = await page.evaluate(() => {
   const q = id => document.getElementById(id);
   const levelRow = document.querySelector('.sandbox-row[data-sbox-param="startingLevel"]');
-  const selects = [...document.querySelectorAll('#sandboxMoveLoadout [data-sbox-move-slot-select]')]
-    .map(s => ({ slot: s.dataset.sboxMoveSlotSelect, options: [...s.options].map(o => o.value) }));
+  const moveGroups = [...document.querySelectorAll('#sandboxMoveLoadout [data-sbox-move-options]')]
+    .map(group => ({
+      slot: group.dataset.sboxMoveOptions,
+      options: [...group.querySelectorAll('[data-sbox-move-option]')].map(button => button.dataset.sboxMoveOption),
+    }));
   const vis = el => !!(el && el.offsetParent !== null);
   return {
     startingLevelRowVisible: vis(levelRow),
     levelSlider: levelRow ? levelRow.querySelector('.sandbox-slider')?.value : null,
     unlockCheckboxVisible: vis(q('sandboxUnlockEverything')),
     moveLoadoutVisible: vis(q('sandboxMoveLoadout')),
-    selects,
+    moveGroups,
   };
 });
 console.log('CONTROLS=' + JSON.stringify(controls));
@@ -55,13 +58,11 @@ await page.evaluate(() => {
     slider.dispatchEvent(new Event('input', { bubbles: true }));
   };
   setRange('startingLevel', 25);
-  const setSel = (slot, val) => {
-    const sel = document.querySelector(`[data-sbox-move-slot-select="${slot}"]`);
-    sel.value = val;
-    sel.dispatchEvent(new Event('change', { bubbles: true }));
+  const pickMove = (slot, val) => {
+    document.querySelector(`[data-sbox-move-option-slot="${slot}"][data-sbox-move-option="${val}"]`).click();
   };
-  setSel('melee', 'fire_balls');
-  setSel('dash', 'warp');
+  pickMove('melee', 'fire_balls');
+  pickMove('dash', 'warp');
   const cb = document.getElementById('sandboxUnlockEverything');
   cb.checked = true;
   cb.dispatchEvent(new Event('change', { bubbles: true }));
@@ -96,8 +97,8 @@ const uiReflect = await page.evaluate(() => {
   return {
     levelSlider: row.querySelector('.sandbox-slider').value,
     levelNum: row.querySelector('.sandbox-num').value,
-    melee: document.querySelector('[data-sbox-move-slot-select="melee"]').value,
-    dash: document.querySelector('[data-sbox-move-slot-select="dash"]').value,
+    melee: document.querySelector('[data-sbox-move-option-slot="melee"].is-active')?.dataset.sboxMoveOption,
+    dash: document.querySelector('[data-sbox-move-option-slot="dash"].is-active')?.dataset.sboxMoveOption,
     unlock: document.getElementById('sandboxUnlockEverything').checked,
   };
 });

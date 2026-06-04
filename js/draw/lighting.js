@@ -1,6 +1,6 @@
 // lighting.js — Light source collection and beam carving.
 export function carveBeamLight(path, maxWidth, strength = 0.5) {
-    if (!Array.isArray(path) || path.length < 2) return;
+    if (!Array.isArray(path) || !path.length) return;
     const ctx = Neo.ctx;
     const clamped = Neo.clamp(strength, 0, 1);
     ctx.save();
@@ -8,9 +8,9 @@ export function carveBeamLight(path, maxWidth, strength = 0.5) {
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     ctx.beginPath();
-    ctx.moveTo(path[0].x, path[0].y);
-    for (let index = 1; index < path.length; index += 1) {
-      ctx.lineTo(path[index].x, path[index].y);
+    ctx.moveTo(path[0].x1, path[0].y1);
+    for (let index = 0; index < path.length; index += 1) {
+      ctx.lineTo(path[index].x2, path[index].y2);
     }
     // Soft halo: wide, faint stroke approximates shadowBlur falloff at a fraction of the cost.
     ctx.globalAlpha = clamped * 0.35;
@@ -140,7 +140,7 @@ export function collectRoomLightSources(room) {
       const kind = projectile.kind || '';
       let p = null;
       if (kind === 'fireball') p = proj.fireball;
-      else if (kind === 'disk' || kind === 'cult_missile') p = proj.disk;
+      else if (kind === 'disk' || kind === 'cult_missile' || kind === 'cold_death') p = proj.disk;
       else if (kind === 'sniper_round' || kind === 'machine_round' || kind === 'magenta_degale') p = proj.bullet;
       if (p) pushLightSource(lights, projectile.x, projectile.y, projectile.r * p.innerScale, p.outer, p.strength, p.tint);
     });

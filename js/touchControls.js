@@ -63,13 +63,23 @@
   let joyTouch = null;
   let joyOriginX = 0;
   let joyOriginY = 0;
+  let joyZoneRect = null;
+
+  function refreshJoyZoneRect() {
+    joyZoneRect = joyZone.getBoundingClientRect();
+    return joyZoneRect;
+  }
+
+  function invalidateJoyZoneRect() {
+    joyZoneRect = null;
+  }
 
   joyZone.addEventListener('touchstart', e => {
     e.preventDefault();
     if (!isGameplayTouchAllowed()) return;
     const t = e.changedTouches[0];
     joyTouch = t.identifier;
-    const rect = joyZone.getBoundingClientRect();
+    const rect = refreshJoyZoneRect();
     joyOriginX = t.clientX - rect.left;
     joyOriginY = t.clientY - rect.top;
     joyBase.style.left = joyOriginX + 'px';
@@ -80,9 +90,9 @@
 
   joyZone.addEventListener('touchmove', e => {
     e.preventDefault();
+    const rect = joyZoneRect || refreshJoyZoneRect();
     for (const t of e.changedTouches) {
       if (t.identifier !== joyTouch) continue;
-      const rect = joyZone.getBoundingClientRect();
       let dx = (t.clientX - rect.left) - joyOriginX;
       let dy = (t.clientY - rect.top)  - joyOriginY;
       const dist = Math.hypot(dx, dy);
@@ -110,10 +120,14 @@
       NT.moveY = 0;
       joyKnob.style.transform = '';
       joyBase.classList.remove('joy-active');
+      invalidateJoyZoneRect();
     }
   }
   joyZone.addEventListener('touchend',    joyRelease, { passive: false });
   joyZone.addEventListener('touchcancel', joyRelease, { passive: false });
+  window.addEventListener('resize', invalidateJoyZoneRect, { passive: true });
+  window.addEventListener('orientationchange', invalidateJoyZoneRect, { passive: true });
+  window.addEventListener('scroll', invalidateJoyZoneRect, { passive: true });
 
   // ── Button logic ───────────────────────────────────────────────────────────
 

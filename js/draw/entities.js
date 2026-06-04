@@ -53,8 +53,8 @@
   function getEnemySpriteKey(enemy) {
     if (enemy.type === 'rival') return enemy.rivalKey;
     if (enemy.type === 'mirror_knight') return enemy.spriteKey || getPlayerSpriteKey();
-    if (enemy.type === 'machine_gunner') return 'sniper';
-    if (enemy.type === 'summoner') return 'cult_mage';
+    if (enemy.type === 'machine_gunner') return Neo.SPRITE_DEFS.machine_gunner ? 'machine_gunner' : 'sniper';
+    if (enemy.type === 'summoner') return Neo.SPRITE_DEFS.summoner ? 'summoner' : 'cult_mage';
     if (enemy.type === 'shield_unit') return 'golem';
     if (enemy.type === 'healer') return 'cult_follower';
     if (enemy.type === 'boss_spawner') return 'laser';
@@ -403,28 +403,114 @@
       Neo.ctx.stroke();
     }
     Neo.ctx.restore();
+  }
 
+  function drawStatusIcon(statusKey, x, y, size = 12, options = {}) {
+    const def = Neo.STATUS_ICON_DEFS?.[statusKey] || Neo.STATUS_ICON_DEFS?.bleed;
+    if (!def) return;
+    const cell = size / 8;
+    const drawPixels = (pixels, color) => {
+      Neo.ctx.fillStyle = color;
+      (pixels || []).forEach(([px, py]) => {
+        Neo.ctx.fillRect(Math.round(x + px * cell), Math.round(y + py * cell), Math.ceil(cell), Math.ceil(cell));
+      });
+    };
     Neo.ctx.save();
-    Neo.ctx.translate(enemy.x, enemy.y);
-    const label = `BLEED x${stackCount}`;
-    const y = enemy.type === 'rival' ? -enemy.r - 40 : -enemy.r - 32;
-    Neo.ctx.font = 'bold 10px system-ui';
-    Neo.ctx.textAlign = 'center';
-    Neo.ctx.textBaseline = 'middle';
-    const width = Math.max(50, Neo.ctx.measureText(label).width + 14);
-    const height = 15;
-    Neo.ctx.fillStyle = 'rgba(62, 0, 12, 0.86)';
-    Neo.ctx.strokeStyle = '#ff4f6d';
+    Neo.ctx.shadowColor = options.shadow === false ? 'transparent' : def.color;
+    Neo.ctx.shadowBlur = options.shadow === false ? 0 : Math.max(4, size * 0.45);
+    drawPixels(def.pixels, def.color);
+    Neo.ctx.shadowBlur = 0;
+    drawPixels(def.accentPixels, def.accent || '#fff');
+    Neo.ctx.restore();
+  }
+
+  function getStatusIconBadgeWidth(stacks) {
+    return Number(stacks || 0) > 1 ? 27 : 18;
+  }
+
+  function drawStatusIconBadge(statusKey, stacks, x, y) {
+    const def = Neo.STATUS_ICON_DEFS?.[statusKey] || Neo.STATUS_ICON_DEFS?.bleed;
+    if (!def) return;
+    const count = Math.max(0, Math.round(Number(stacks || 0)));
+    const width = getStatusIconBadgeWidth(count);
+    const height = 16;
+    Neo.ctx.save();
+    Neo.ctx.fillStyle = def.bg || 'rgba(0,0,0,0.78)';
+    Neo.ctx.strokeStyle = def.color;
     Neo.ctx.lineWidth = 1;
-    Neo.ctx.shadowColor = '#ff2445';
-    Neo.ctx.shadowBlur = 8 + flash * 8;
+    Neo.ctx.shadowColor = def.color;
+    Neo.ctx.shadowBlur = 7;
     Neo.ctx.beginPath();
-    Neo.ctx.roundRect(-width / 2, y, width, height, 5);
+    Neo.ctx.roundRect(x, y, width, height, 5);
     Neo.ctx.fill();
     Neo.ctx.stroke();
     Neo.ctx.shadowBlur = 0;
-    Neo.ctx.fillStyle = '#ffe3e7';
-    Neo.ctx.fillText(label, 0, y + height / 2 + 0.5);
+    drawStatusIcon(statusKey, x + 3, y + 2, 12, { shadow: false });
+    if (count > 1) {
+      Neo.ctx.font = 'bold 9px system-ui';
+      Neo.ctx.textAlign = 'right';
+      Neo.ctx.textBaseline = 'middle';
+      Neo.ctx.fillStyle = def.accent || '#fff';
+      Neo.ctx.fillText(String(Math.min(99, count)), x + width - 3, y + height / 2 + 0.5);
+    }
+    Neo.ctx.restore();
+  }
+
+  function drawEnemyStatusIconRow(enemy, drawY) {
+    const entries = [];
+    Neo.STATUS_KEYS.forEach(key => {
+      const stacks = Neo.getStatusStacks(enemy, key);
+      if (stacks > 0) entries.push({ key, stacks });
+    });
+    if (Number(enemy.stun || 0) > 0) entries.push({ key: 'stun', stacks: 1 });
+    if (!entries.length) return;
+    const gap = 3;
+    const widths = entries.map(entry => getStatusIconBadgeWidth(entry.stacks));
+    const totalWidth = widths.reduce((sum, width) => sum + width, 0) + gap * Math.max(0, entries.length - 1);
+    const y = drawY + (enemy.type === 'rival' ? -enemy.r - 43 : -enemy.r - 35);
+    let x = enemy.x - totalWidth / 2;
+    entries.forEach((entry, index) => {
+      drawStatusIconBadge(entry.key, entry.stacks, x, y);
+      x += widths[index] + gap;
+    });
+  }
+
+  function drawStunStars(entity, drawY) {
+    const stunTime = Number(entity?.stun || 0);
+    if (stunTime <= 0) return;
+    const reduceFlash = window.NeoSettings?.getAccess()?.reduceFlash;
+    const t = Date.now() / 260;
+    const starCount = stunTime > 0.75 ? 3 : stunTime > 0.35 ? 2 : 1;
+    const orbitR = Math.max(10, Number(entity.r || 12) * 0.72);
+    const y = drawY - Number(entity.r || 12) - 10;
+    Neo.ctx.save();
+    Neo.ctx.translate(entity.x, y);
+    Neo.ctx.globalAlpha = reduceFlash ? 0.78 : 0.72 + Math.sin(t * 4) * 0.12;
+    for (let index = 0; index < starCount; index += 1) {
+      const angle = t + (index / starCount) * Math.PI * 2;
+      const sx = Math.cos(angle) * orbitR;
+      const sy = Math.sin(angle) * orbitR * 0.34;
+      drawPixelStar(sx, sy, index === 0 ? 7 : 6);
+    }
+    Neo.ctx.restore();
+  }
+
+  function drawPixelStar(x, y, size = 6) {
+    const scale = Math.max(1, size / 6);
+    const pixels = [[2,0],[3,0],[2,1],[3,1],[0,2],[1,2],[2,2],[3,2],[4,2],[5,2],[2,3],[3,3],[1,4],[4,4],[0,5],[5,5]];
+    Neo.ctx.save();
+    Neo.ctx.translate(Math.round(x - size / 2), Math.round(y - size / 2));
+    Neo.ctx.shadowColor = '#ffe66d';
+    Neo.ctx.shadowBlur = 8;
+    Neo.ctx.fillStyle = '#ffe66d';
+    pixels.forEach(([px, py]) => {
+      Neo.ctx.fillRect(Math.round(px * scale), Math.round(py * scale), Math.ceil(scale), Math.ceil(scale));
+    });
+    Neo.ctx.shadowBlur = 0;
+    Neo.ctx.fillStyle = '#fff8c8';
+    [[2,2],[3,2],[2,3],[3,3]].forEach(([px, py]) => {
+      Neo.ctx.fillRect(Math.round(px * scale), Math.round(py * scale), Math.ceil(scale), Math.ceil(scale));
+    });
     Neo.ctx.restore();
   }
 
@@ -563,20 +649,49 @@
       if (enemy.spawnT > 0) { drawSpawnPortal(enemy); return; }
       const drawY = enemy.y - Math.max(0, Number(enemy.jumpZ || 0));
       const bleedStacks = Neo.getStatusStacks(enemy, 'bleed');
-      const activeStatuses = Neo.STATUS_KEYS.filter(key => Neo.getStatusStacks(enemy, key) > 0);
-      if (activeStatuses.length > 0) {
+      // Count active statuses first (no array allocation), then draw a ring per
+      // active status. This runs per enemy per frame, so avoid filter()/forEach.
+      let activeStatusCount = 0;
+      for (let s = 0; s < Neo.STATUS_KEYS.length; s += 1) {
+        if (Neo.getStatusStacks(enemy, Neo.STATUS_KEYS[s]) > 0) activeStatusCount += 1;
+      }
+      if (activeStatusCount > 0) {
         Neo.ctx.save();
         Neo.ctx.translate(enemy.x, drawY);
         Neo.ctx.lineWidth = 2;
-        activeStatuses.forEach((key, index) => {
+        let ringIndex = 0;
+        for (let s = 0; s < Neo.STATUS_KEYS.length; s += 1) {
+          const key = Neo.STATUS_KEYS[s];
+          if (Neo.getStatusStacks(enemy, key) <= 0) continue;
           const style = Neo.STATUS_STYLES[key];
           Neo.ctx.strokeStyle = style.color;
           Neo.ctx.shadowColor = style.color;
           Neo.ctx.shadowBlur = 10;
           Neo.ctx.beginPath();
-          Neo.ctx.arc(0, 0, enemy.r + 6 + index * 4 + (_reduceFlash ? 0 : Math.sin(_now / (180 + index * 40)) * 2), 0, Math.PI * 2);
+          Neo.ctx.arc(0, 0, enemy.r + 6 + ringIndex * 4 + (_reduceFlash ? 0 : Math.sin(_now / (180 + ringIndex * 40)) * 2), 0, Math.PI * 2);
           Neo.ctx.stroke();
-        });
+          ringIndex += 1;
+        }
+        Neo.ctx.restore();
+      }
+      if (Number(enemy.critSparkle || 0) > 0) {
+        Neo.ctx.save();
+        Neo.ctx.translate(enemy.x, drawY);
+        const sparkleCount = 4;
+        const baseR = enemy.r + 8;
+        for (let s = 0; s < sparkleCount; s += 1) {
+          const spin = _reduceFlash ? 0 : _now / 320;
+          const a = (s / sparkleCount) * Math.PI * 2 + spin;
+          const px = Math.cos(a) * baseR;
+          const py = Math.sin(a) * baseR;
+          const tw = _reduceFlash ? 1 : 0.55 + Math.abs(Math.sin(_now / 140 + s)) * 0.9;
+          Neo.ctx.fillStyle = '#ffe8a3';
+          Neo.ctx.shadowColor = '#ffd05a';
+          Neo.ctx.shadowBlur = 8;
+          Neo.ctx.beginPath();
+          Neo.ctx.arc(px, py, 2.2 * tw, 0, Math.PI * 2);
+          Neo.ctx.fill();
+        }
         Neo.ctx.restore();
       }
       const spriteKey = getEnemySpriteKey(enemy);
@@ -628,30 +743,8 @@
       });
       Neo.ctx.restore();
       if (bleedStacks > 0) drawBleedOverlay(enemy, bleedStacks);
-      const badgeBaseY = enemy.type === 'rival' ? -enemy.r - 40 : -enemy.r - 32;
-      let badgeOffset = bleedStacks > 0 ? 18 : 0;
-      const fireStacks = Neo.getStatusStacks(enemy, 'fire');
-      const poisonStacks = Neo.getStatusStacks(enemy, 'poison');
-      const darkStacks = Neo.getStatusStacks(enemy, 'dark_drain');
-      if (fireStacks > 0 || poisonStacks > 0 || darkStacks > 0) {
-        Neo.ctx.save();
-        Neo.ctx.font = 'bold 10px system-ui';
-        Neo.ctx.textAlign = 'center';
-        Neo.ctx.textBaseline = 'middle';
-        Neo.ctx.lineWidth = 1;
-        if (fireStacks > 0) {
-          drawStatusBadge(enemy, `FIRE x${fireStacks}`, 'rgba(62,22,0,0.86)', Neo.STATUS_STYLES.fire.color, '#ffe5c0', badgeBaseY + badgeOffset);
-          badgeOffset += 18;
-        }
-        if (poisonStacks > 0) {
-          drawStatusBadge(enemy, `POISON x${poisonStacks}`, 'rgba(10,38,0,0.86)', Neo.STATUS_STYLES.poison.color, '#d8ffc0', badgeBaseY + badgeOffset);
-          badgeOffset += 18;
-        }
-        if (darkStacks > 0) {
-          drawStatusBadge(enemy, `DRAIN x${darkStacks}`, 'rgba(20,8,48,0.86)', Neo.STATUS_STYLES.dark_drain.color, '#e8d8ff', badgeBaseY + badgeOffset);
-        }
-        Neo.ctx.restore();
-      }
+      drawStunStars(enemy, drawY);
+      drawEnemyStatusIconRow(enemy, drawY);
       if (enemy.elite) {
         Neo.ctx.save();
         Neo.ctx.translate(enemy.x, drawY - enemy.r - 10);
@@ -764,6 +857,48 @@
     Neo.ctx.restore();
   }
 
+  // Trace a rounded, organic "blood pool" edge that creeps inward from one side
+  // of the screen. The inner boundary is a chain of quadratic curves with
+  // deterministic bulges (seeded per-edge so it's stable across frames, not
+  // jittery), giving the wet-rounded look of pooling blood rather than a flat
+  // rectangular bar. `depth` is how far the blood has crept in (px); `axis` is
+  // 'top'|'bottom'|'left'|'right'. The path is left open for the caller to fill.
+  function traceBloodPoolEdge(ctx, w, h, axis, depth, seed) {
+    const horizontal = axis === 'top' || axis === 'bottom';
+    const span = horizontal ? w : h;
+    // Lobe count scales with screen span so bulges stay a consistent size.
+    const lobes = Math.max(4, Math.round(span / 140));
+    const step = span / lobes;
+    // Map a position `u` along the edge + inward offset `d` into screen coords,
+    // so the same curve logic serves all four sides.
+    const toXY = (u, d) => {
+      switch (axis) {
+        case 'top': return [u, d];
+        case 'bottom': return [u, h - d];
+        case 'left': return [d, u];
+        default: return [w - d, u]; // right
+      }
+    };
+    const start = toXY(0, 0);
+    ctx.moveTo(start[0], start[1]);
+    ctx.lineTo(...toXY(span, 0));
+    ctx.lineTo(...toXY(span, depth));
+    // Walk back along the inner edge, drawing a rounded lobe per segment.
+    for (let i = lobes; i > 0; i -= 1) {
+      const u0 = i * step;
+      const u1 = (i - 1) * step;
+      const mid = (u0 + u1) / 2;
+      // Deterministic per-lobe wobble: alternating bulge depth + a seeded ripple.
+      const wob = 0.55 + 0.45 * Math.sin(seed + i * 1.7);
+      const bulge = depth * (0.55 + 0.65 * wob);
+      const cp = toXY(mid, bulge);
+      const end = toXY(u1, depth * (0.7 + 0.3 * Math.sin(seed + i * 0.9)));
+      ctx.quadraticCurveTo(cp[0], cp[1], end[0], end[1]);
+    }
+    ctx.lineTo(...toXY(0, 0));
+    ctx.closePath();
+  }
+
   function drawDeathOverlay(anim) {
     const t = Neo.clamp(anim.timer / anim.duration, 0, 1);
     const fadeIn = Neo.clamp(t * 2, 0, 1);
@@ -780,10 +915,17 @@
     const edgeAlpha = Neo.clamp(t * 0.7, 0, 0.62);
     const edgeSize = Math.min(w, h) * 0.28;
     Neo.ctx.fillStyle = `rgba(140,0,0,${edgeAlpha})`;
-    Neo.ctx.fillRect(0, 0, w, edgeSize * 0.35);
-    Neo.ctx.fillRect(0, h - edgeSize * 0.35, w, edgeSize * 0.35);
-    Neo.ctx.fillRect(0, 0, edgeSize * 0.28, h);
-    Neo.ctx.fillRect(w - edgeSize * 0.28, 0, edgeSize * 0.28, h);
+    Neo.ctx.shadowColor = 'rgba(80,0,0,0.5)';
+    Neo.ctx.shadowBlur = edgeSize * 0.12;
+    // Blood creeps inward as the death animation plays.
+    const creep = Neo.clamp(t * 1.4, 0, 1);
+    Neo.ctx.beginPath();
+    traceBloodPoolEdge(Neo.ctx, w, h, 'top', edgeSize * 0.35 * creep, 0.7);
+    traceBloodPoolEdge(Neo.ctx, w, h, 'bottom', edgeSize * 0.35 * creep, 2.3);
+    traceBloodPoolEdge(Neo.ctx, w, h, 'left', edgeSize * 0.28 * creep, 4.1);
+    traceBloodPoolEdge(Neo.ctx, w, h, 'right', edgeSize * 0.28 * creep, 5.6);
+    Neo.ctx.fill();
+    Neo.ctx.shadowBlur = 0;
 
     if (t > 0.55) {
       const textAlpha = Neo.clamp((t - 0.55) / 0.35, 0, 1);
@@ -813,7 +955,10 @@
     const shadowColor = Neo.godTimer > 0 ? 'rgba(255,248,210,0.65)' : 'rgba(0,0,0,0.25)';
     const _reduceFlash = window.NeoSettings?.getAccess()?.reduceFlash;
     const capeActive = Number(Neo.player?.equipmentEffects?.el_bartos_cape?.time || 0) > 0;
-    Neo.STATUS_KEYS.filter(key => Neo.getStatusStacks(Neo.player, key) > 0).forEach((key, index) => {
+    let playerRingIndex = 0;
+    for (let s = 0; s < Neo.STATUS_KEYS.length; s += 1) {
+      const key = Neo.STATUS_KEYS[s];
+      if (Neo.getStatusStacks(Neo.player, key) <= 0) continue;
       const style = Neo.STATUS_STYLES[key];
       Neo.ctx.save();
       Neo.ctx.translate(Neo.player.x, Neo.player.y);
@@ -822,10 +967,11 @@
       Neo.ctx.shadowColor = style.color;
       Neo.ctx.shadowBlur = 10;
       Neo.ctx.beginPath();
-      Neo.ctx.arc(0, 0, Neo.player.r + 6 + index * 4 + (_reduceFlash ? 0 : Math.sin(Date.now() / (160 + index * 40)) * 2), 0, Math.PI * 2);
+      Neo.ctx.arc(0, 0, Neo.player.r + 6 + playerRingIndex * 4 + (_reduceFlash ? 0 : Math.sin(Date.now() / (160 + playerRingIndex * 40)) * 2), 0, Math.PI * 2);
       Neo.ctx.stroke();
       Neo.ctx.restore();
-    });
+      playerRingIndex += 1;
+    }
     drawWarpPreview();
     const playerSize = Math.max(34, Neo.player.r * 2.5);
     drawActorSprite(Neo.player, getPlayerSpriteKey(), Neo.player.x, Neo.player.y, playerSize, {
@@ -844,6 +990,8 @@
         seedKey: 'player',
       },
     });
+    drawStunStars(Neo.player, Neo.player.y);
+    drawEnemyStatusIconRow(Neo.player, Neo.player.y);
     Neo.ctx.save();
     Neo.ctx.translate(Neo.player.x, Neo.player.y);
     Neo.ctx.strokeStyle = '#f5f1e8';
@@ -1001,7 +1149,8 @@
       const alpha = Math.min(1, Neo.player.weaponBeamTime / 0.3);
       Neo.ctx.save();
       Neo.ctx.globalAlpha = alpha;
-      [-0.2, 0.2].forEach(offset => {
+      for (let beamIndex = 0; beamIndex < 2; beamIndex += 1) {
+        const offset = beamIndex === 0 ? -0.2 : 0.2;
         const beamAngle = baseAngle + offset;
         const beamPath = Neo.buildRicochetBeamPath(Neo.player.x, Neo.player.y, beamAngle, 430, Neo.LAZER_GLASSES_BOUNCES);
         Neo.drawTaperedBeamPath(beamPath, {
@@ -1015,7 +1164,7 @@
           const end = Neo.getBeamPathEnd(beamPath);
           Neo.spawnParticle({ x: end.x + (Neo.rng() - 0.5) * 5, y: end.y + (Neo.rng() - 0.5) * 5, life: 0.1 + Neo.rng() * 0.08, vx: (Neo.rng() - 0.5) * 35, vy: (Neo.rng() - 0.5) * 35, c: '#cda8ff' });
         }
-      });
+      }
       Neo.ctx.restore();
       Neo.ctx.shadowBlur = 0;
       Neo.ctx.globalAlpha = 1;
@@ -1088,6 +1237,10 @@
   Neo.drawSpriteToCanvas = drawSpriteToCanvas;
   Neo.drawEnemyTelegraphs = drawEnemyTelegraphs;
   Neo.drawBleedOverlay = drawBleedOverlay;
+  Neo.drawStatusIcon = drawStatusIcon;
+  Neo.drawStatusIconBadge = drawStatusIconBadge;
+  Neo.drawEnemyStatusIconRow = drawEnemyStatusIconRow;
+  Neo.drawStunStars = drawStunStars;
   Neo.drawStatusBadge = drawStatusBadge;
   Neo.drawSpawnPortal = drawSpawnPortal;
   Neo.drawEnemies = drawEnemies;

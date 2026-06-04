@@ -3,8 +3,10 @@ export function drawWorldViewport(cam, vpX, vpW, vpH, vpY, pLabel, slot = null) 
     const isDying = Neo.gameState === 'dying';
     const slotDead = !!slot?.getDead?.();
     const _shakeOn = window.NeoSettings?.getAccess()?.screenShake !== false;
-    const sX = _shakeOn && pLabel === 'P1' ? (Neo.nextRandom('fx') - 0.5) * Neo.shake * 2 : 0;
-    const sY = _shakeOn && pLabel === 'P1' ? (Neo.nextRandom('fx') - 0.5) * Neo.shake * 2 : 0;
+    // Random jitter (magnitude from the trauma² curve) + a directional kick that
+    // shoves the camera away from the impact source, then springs back.
+    const sX = _shakeOn && pLabel === 'P1' ? (Neo.nextRandom('fx') - 0.5) * Neo.shake * 2 + (Neo.shakeKickX || 0) : 0;
+    const sY = _shakeOn && pLabel === 'P1' ? (Neo.nextRandom('fx') - 0.5) * Neo.shake * 2 + (Neo.shakeKickY || 0) : 0;
     Neo.ctx.save();
     Neo.ctx.beginPath();
     Neo.ctx.rect(vpX, vpY, vpW, vpH);
@@ -13,6 +15,7 @@ export function drawWorldViewport(cam, vpX, vpW, vpH, vpY, pLabel, slot = null) 
     Neo.drawFloor();
     Neo.drawRoomDecor();
     Neo.drawWorldProps();
+    Neo.drawChallengeObelisk();
     Neo.drawDeadBodies();
     Neo.drawChests();
     Neo.drawPickups();
@@ -141,10 +144,11 @@ export function carvePlayerBeamLights() {
 
     if (Neo.getEquippedWeapon() !== 'lazer_glasses' || Neo.player.weaponBeamTime <= 0) return;
     const baseAngle = Math.atan2(Neo.mouse.worldY - Neo.player.y, Neo.mouse.worldX - Neo.player.x);
-    [-beam.glassesSpread, beam.glassesSpread].forEach(offset => {
+    for (let beamIndex = 0; beamIndex < 2; beamIndex += 1) {
+      const offset = beamIndex === 0 ? -beam.glassesSpread : beam.glassesSpread;
       const beamPath = Neo.buildRicochetBeamPath(Neo.player.x, Neo.player.y, baseAngle + offset, beam.glassesRange, Neo.LAZER_GLASSES_BOUNCES);
       Neo.carveBeamLight(beamPath, beam.glassesWidth, beam.glassesStrength);
-    });
+    }
   }
 
 export function carveEnemyBeamLights() {

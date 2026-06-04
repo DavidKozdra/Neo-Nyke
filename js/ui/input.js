@@ -381,21 +381,21 @@ export const ITEM_DEFS = {
       name: 'Double Dose',
       shortName: 'Potion x2',
       description: '50% chance per stack for potions to apply twice.',
-      rarity: 'knight',
+      rarity: 'god',
       color: '#9af7d8',
       accent: '#dffff4',
-      category: 'knight',
+      category: 'god',
       tags: ['potion', 'healing', 'utility'],
     },
     copycat_charm: {
       key: 'copycat_charm',
       name: 'Copycat Charm',
       shortName: 'Item x2',
-      description: '20% chance per stack to duplicate an item pickup.',
-      rarity: 'knight',
+      description: '30% chance per stack to duplicate an item pickup.',
+      rarity: 'god',
       color: '#f5efff',
       accent: '#c8a8ff',
-      category: 'knight',
+      category: 'god',
       tags: ['loot', 'item', 'utility'],
     },
     crit_charm: {
@@ -551,9 +551,10 @@ export const ITEM_DEFS = {
     },
     charged_adapter: {
       key: 'charged_adapter',
+      tool: true,
       name: 'Charged Adapter',
       shortName: 'Warp F',
-      description: 'Charge requirement -1. When charged, press its equipment slot key (outside boss rooms) to spend 50% coins and warp to the ladder room (next floor path).',
+      description: 'Charge requirement -1. When charged, press its tool slot key (outside boss rooms) to spend 50% coins and warp to the ladder room (next floor path).',
       rarity: 'wizard',
       color: '#b66cff',
       category: 'wizard',
@@ -561,69 +562,87 @@ export const ITEM_DEFS = {
     },
     pew_pew_box: {
       key: 'pew_pew_box',
+      tool: true,
       name: 'Pew Pew Box',
       shortName: 'Missile Box',
-      description: 'Equipment. Fire homing missiles for 8 seconds.',
+      description: 'Tool. Fire homing missiles for 8 seconds.',
       rarity: 'wizard',
       color: '#ffe06f',
       accent: '#ff8f3d',
       category: 'wizard',
-      tags: ['equipment', 'projectile', 'missile', 'wizard'],
+      tags: ['tools', 'projectile', 'missile', 'wizard'],
     },
     turbo_boots: {
       key: 'turbo_boots',
+      tool: true,
       name: 'Turbo Boots',
       shortName: 'Speed Burst',
-      description: 'Equipment. Move much faster for 20 seconds.',
+      description: 'Tool. Move much faster for 20 seconds.',
       rarity: 'wizard',
       color: '#79ffbf',
       accent: '#45b7ff',
       category: 'wizard',
-      tags: ['equipment', 'speed', 'mobility', 'wizard'],
+      tags: ['tools', 'speed', 'mobility', 'wizard'],
     },
     skizzard_tail: {
       key: 'skizzard_tail',
+      tool: true,
       name: 'Skizzard Tail',
       shortName: 'Regen',
-      description: 'Equipment. Regenerate health for 5 seconds.',
+      description: 'Tool. Regenerate health for 5 seconds.',
       rarity: 'wizard',
       color: '#8fffd2',
       accent: '#6fd7ff',
       category: 'wizard',
-      tags: ['equipment', 'regen', 'heal', 'wizard'],
+      tags: ['tools', 'regen', 'heal', 'wizard'],
     },
     zap_to_extreme: {
       key: 'zap_to_extreme',
+      tool: true,
       name: 'Zap to the Extreme',
       shortName: 'Zap Extreme',
-      description: 'Equipment. Chain lightning around you for 10 seconds.',
+      description: 'Tool. Chain lightning around you for 10 seconds.',
       rarity: 'wizard',
       color: '#8dd4ff',
       accent: '#f4fbff',
       category: 'wizard',
-      tags: ['equipment', 'lightning', 'aoe', 'wizard'],
+      tags: ['tools', 'lightning', 'aoe', 'wizard'],
     },
     panic_button: {
       key: 'panic_button',
+      tool: true,
       name: 'Panic Button',
       shortName: 'Panic',
-      description: 'Equipment. Clear statuses, shove enemies away, and gain brief invulnerability.',
+      description: 'Tool. Clear statuses, shove enemies away, and gain brief invulnerability.',
       rarity: 'wizard',
       color: '#f4f6fb',
       accent: '#ff6b7f',
       category: 'wizard',
-      tags: ['equipment', 'defense', 'knockback', 'wizard'],
+      tags: ['tools', 'defense', 'knockback', 'wizard'],
     },
     mid_sweepy_box: {
       key: 'mid_sweepy_box',
+      tool: true,
       name: 'Mid Sweepy Box',
       shortName: 'Sweep Mines',
-      description: 'Equipment. Sweep thorn mines around you for 6 seconds.',
+      description: 'Tool. Sweep thorn mines around you for 6 seconds.',
       rarity: 'wizard',
       color: '#ffd7e2',
       accent: '#ff6e8b',
       category: 'wizard',
-      tags: ['equipment', 'bleed', 'mine', 'wizard'],
+      tags: ['tools', 'bleed', 'mine', 'wizard'],
+    },
+    sparkle_charm: {
+      key: 'sparkle_charm',
+      tool: true,
+      name: 'Sparkle Charm',
+      shortName: 'Sparkle',
+      description: 'Tool. Sparkle the nearest 5 enemies for 6 seconds. Every hit against a sparkled enemy is a guaranteed crit.',
+      rarity: 'wizard',
+      color: '#ffe8a3',
+      accent: '#ffd05a',
+      category: 'wizard',
+      tags: ['tools', 'crit', 'wizard'],
     },
     explosive_jelly: {
       key: 'explosive_jelly',
@@ -782,7 +801,7 @@ export const ITEM_DEFS = {
       key: 'robot_arm',
       name: 'Robot Arm',
       shortName: 'Auto x8 Spd',
-      description: 'Attack speed x8. Charges on 8 kills; when charged, your next melee auto-attack triggers once.',
+      description: 'While charged, attack speed x8 and your primary attack automatically fires once. Starts ready, then recharges on 8 kills.',
       rarity: 'god',
       color: '#c0e8ff',
       category: 'god',
@@ -823,9 +842,10 @@ export const ITEM_DEFS = {
     },
     mateos_bag: {
       key: 'mateos_bag',
+      tool: true,
       name: "Mateo's Bag",
       shortName: 'Bag',
-      description: 'Carry potions instead of consuming them immediately. First stack: +3 slots. Each additional stack: +1 slot. Press its equipment slot key to use a stored potion.',
+      description: 'Carry potions instead of consuming them immediately. First stack: +3 slots. Each additional stack: +1 slot. Press its tool slot key to use a stored potion.',
       rarity: 'wizard',
       color: '#b49cff',
       category: 'wizard',
@@ -855,23 +875,26 @@ export const ITEM_DEFS = {
     },
     el_bartos_cape: {
       key: 'el_bartos_cape',
+      tool: true,
       name: "El Barto's Cape",
       shortName: 'CAPE',
-      description: 'Equipment. Become invisible for 10 seconds. Each stack adds +5 seconds and attacks do not break it.',
-      rarity: 'red',
+      description: 'Tool. Become invisible for 10 seconds. Each stack adds +5 seconds and attacks do not break it.',
+      rarity: 'god',
       color: '#ff5b78',
       accent: '#ffe0b8',
-      category: 'red',
-      tags: ['equipment', 'stealth', 'red'],
+      category: 'god',
+      tags: ['tools', 'stealth', 'god'],
     },
   };
+// Rarity -> name/description text color. GOD is the top tier and renders red (#ff4256).
+// ('white' and 'purple'/'red' are legacy aliases of knight/wizard/god kept for old save data.)
 export const RARITY_NAME_COLORS = {
     knight: '#f4f6fb',
     white: '#f4f6fb',
     wizard: '#b77dff',
     purple: '#b77dff',
-    god: '#ff4256',
-    red: '#ff4256',
+    god: '#ff4256',   // GOD tier
+    red: '#ff4256',   // legacy alias of god
     princess: '#ff9de8',
   };
 export const SHOP_RARITY_PRICE_MULTIPLIERS = {
@@ -989,7 +1012,6 @@ export const ui = {
     xp: document.getElementById('xp'),
     fl: document.getElementById('fl'),
     gameTime: document.getElementById('gameTime'),
-    coins: document.getElementById('coins'),
     charName: document.getElementById('charName'),
     objective: document.getElementById('objective'),
     objectiveTracker: document.getElementById('objectiveTracker'),
@@ -1081,6 +1103,7 @@ export const ui = {
     wizardPawChoices: document.getElementById('wizardPawChoices'),
     wizardPawConfirm: document.getElementById('wizardPawConfirm'),
     invItemsList: document.getElementById('invItemsList'),
+    invToolsList: document.getElementById('invToolsList'),
     invWeaponsList: document.getElementById('invWeaponsList'),
     invWeaponSlot: document.getElementById('invWeaponSlot'),
     invStats: document.getElementById('invStats'),
@@ -1138,6 +1161,7 @@ export const ui = {
     competitiveSeedDisplay: document.getElementById('competitiveSeedDisplay'),
     competitiveSeedValue: document.getElementById('competitiveSeedValue'),
     itemRarityCounts: document.getElementById('itemRarityCounts'),
+    panelItemAlert: document.getElementById('panelItemAlert'),
     seed: document.getElementById('seed'),
     go: document.getElementById('go'),
     difficultyHint: document.getElementById('difficultyHint'),
@@ -1225,6 +1249,9 @@ export const ui = {
     sandboxEnemyList: document.getElementById('sandboxEnemyList'),
     sandboxItemList: document.getElementById('sandboxItemList'),
     sandboxStartItemList: document.getElementById('sandboxStartItemList'),
+    sandboxEnemySearch: document.getElementById('sandboxEnemySearch'),
+    sandboxItemSearch: document.getElementById('sandboxItemSearch'),
+    sandboxStartItemSearch: document.getElementById('sandboxStartItemSearch'),
     sandboxStartItemsAll: document.getElementById('sandboxStartItemsAll'),
     sandboxStartItemsNone: document.getElementById('sandboxStartItemsNone'),
     sandboxEnemiesAll: document.getElementById('sandboxEnemiesAll'),
@@ -1347,6 +1374,17 @@ export const SANDBOX_DEFAULT_SETTINGS = {
     Neo.persistMetaSoon();
     Neo.refreshMenuState();
   });
+
+  // Auto-pause when the window loses focus (gameplay setting, defaults on).
+  window.addEventListener('blur', () => {
+    if (window.NeoSettings?.shouldPauseOnBlur?.() === false) return;
+    if (Neo.gameState === 'play') Neo.pauseGame();
+    // If we died but haven't reached the death screen yet, the death animation is
+    // still playing ('dying'). Freeze it here so we don't blow past the death moment
+    // while the window is unfocused — it resumes on focus.
+    else if (Neo.gameState === 'dying') Neo.windowBlurred = true;
+  });
+  window.addEventListener('focus', () => { Neo.windowBlurred = false; });
 
 export const JESTER_PORTAL_ACTIVATE_DELAY = 0.44;
 export const JESTER_PORTAL_TRIGGER_RADIUS = 42;

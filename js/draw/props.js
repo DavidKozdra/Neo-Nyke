@@ -41,8 +41,86 @@
     });
   }
 
+  const SHOP_GREETINGS = [
+    'Coin for your courage, traveler?',
+    'Everything here outlives you. Browse well.',
+    'Give Me every penny you have',
+    'Steel and salves — pick your poison.',
+    'You break it down there, you buy it up here.',
+    'The deeper you go, the more you’ll wish you bought.',
+    'Best prices this side of the GOD.',
+    'Spend it. You can’t take coins to the grave.',
+  ];
+
+  function getShopGreeting(room) {
+    if (!room) return SHOP_GREETINGS[0];
+    // Stable per-room so the line doesn't flicker frame to frame.
+    const seed = (Number(room.gx) || 0) * 31 + (Number(room.gy) || 0) * 17 + (Number(room.floor) || Neo.floor || 0) * 7;
+    return SHOP_GREETINGS[Math.abs(seed) % SHOP_GREETINGS.length];
+  }
+
+  function drawShopSign() {
+    const room = Neo.currentRoom;
+    if (!room || room.type !== 'shop') return;
+    const theme = Neo.ROOM_ART_THEMES.shop;
+    const cx = Neo.ROOM_W / 2;
+    const y = 84;
+    const t = Date.now() / 1000;
+    const sway = Math.sin(t * 1.6) * 1.5;
+
+    Neo.ctx.save();
+    Neo.ctx.translate(cx, y);
+
+    // Hanging chains to the signboard.
+    Neo.ctx.strokeStyle = 'rgba(180, 150, 90, 0.5)';
+    Neo.ctx.lineWidth = 2;
+    Neo.ctx.beginPath();
+    Neo.ctx.moveTo(-92, -34); Neo.ctx.lineTo(-92 + sway, -8);
+    Neo.ctx.moveTo(92, -34); Neo.ctx.lineTo(92 + sway, -8);
+    Neo.ctx.stroke();
+
+    Neo.ctx.translate(sway, 0);
+
+    // Signboard plaque.
+    const w = 232;
+    const h = 70;
+    Neo.ctx.fillStyle = 'rgba(28, 18, 10, 0.92)';
+    Neo.ctx.strokeStyle = theme.banner || '#9a5830';
+    Neo.ctx.lineWidth = 3;
+    Neo.ctx.beginPath();
+    Neo.ctx.roundRect(-w / 2, -h / 2, w, h, 8);
+    Neo.ctx.fill();
+    Neo.ctx.stroke();
+
+    // Inner gold rule.
+    Neo.ctx.strokeStyle = 'rgba(255, 176, 78, 0.32)';
+    Neo.ctx.lineWidth = 1;
+    Neo.ctx.beginPath();
+    Neo.ctx.roundRect(-w / 2 + 6, -h / 2 + 6, w - 12, h - 12, 5);
+    Neo.ctx.stroke();
+
+    // SHOP title.
+    Neo.ctx.textAlign = 'center';
+    Neo.ctx.textBaseline = 'middle';
+    Neo.ctx.font = 'bold 26px system-ui';
+    Neo.ctx.shadowColor = 'rgba(255, 176, 78, 0.7)';
+    Neo.ctx.shadowBlur = 10;
+    Neo.ctx.fillStyle = '#ffd07a';
+    Neo.ctx.fillText('❖ SHOP ❖', 0, -8);
+
+    // Greeting line.
+    Neo.ctx.shadowBlur = 0;
+
+    Neo.ctx.font = 'italic 0.5em system-ui';
+    Neo.ctx.fillStyle = 'rgba(240, 214, 170, 0.85)';
+    Neo.ctx.fillText(getShopGreeting(room), 0, 16);
+
+    Neo.ctx.restore();
+  }
+
   function drawWorldProps() {
     const theme = Neo.getRoomArtTheme();
+    drawShopSign();
     Neo.hazards.forEach(hazard => {
       Neo.ctx.save();
       Neo.ctx.translate(hazard.x, hazard.y);
@@ -174,40 +252,81 @@
           Neo.ctx.setLineDash([]);
         }
 
-        // mine body
+        // Ground plate keeps the bomb visually anchored as a floor trap.
         const bodyPulse = armed ? 1 + Math.sin(t * (3 + fuseRatio * 5)) * (0.06 + fuseRatio * 0.1) : 1;
+        Neo.ctx.fillStyle = armed ? 'rgba(92,20,14,0.92)' : 'rgba(42,38,32,0.94)';
+        Neo.ctx.strokeStyle = armed ? `rgba(255,${Math.round(110 - fuseRatio * 70)},40,0.9)` : 'rgba(200,160,64,0.78)';
+        Neo.ctx.lineWidth = 2;
+        Neo.ctx.beginPath();
+        Neo.ctx.arc(0, 2, r * 1.08, 0, Math.PI * 2);
+        Neo.ctx.fill();
+        Neo.ctx.stroke();
+        Neo.ctx.fillStyle = armed ? '#ff6030' : '#b89040';
+        for (let bolt = 0; bolt < 4; bolt += 1) {
+          const a = bolt * Math.PI / 2 + Math.PI / 4;
+          Neo.ctx.beginPath();
+          Neo.ctx.arc(Math.cos(a) * r * 0.8, 2 + Math.sin(a) * r * 0.8, 1.4, 0, Math.PI * 2);
+          Neo.ctx.fill();
+        }
+
+        // Classic round bomb body, neck, and fuse.
+        const bodyR = r * 0.82 * bodyPulse;
+        const bodyY = 3;
         Neo.ctx.shadowColor = armed ? `rgba(255,${Math.round(100 - fuseRatio * 80)},40,0.9)` : 'rgba(255,160,60,0.4)';
         Neo.ctx.shadowBlur = armed ? 14 + fuseRatio * 20 : 8;
-        Neo.ctx.fillStyle = armed ? `rgb(${Math.round(40 + fuseRatio * 30)},10,6)` : 'rgb(28,28,32)';
+        Neo.ctx.fillStyle = armed ? `rgb(${Math.round(42 + fuseRatio * 28)},10,7)` : 'rgb(18,20,24)';
         Neo.ctx.beginPath();
-        Neo.ctx.arc(0, 0, r * bodyPulse, 0, Math.PI * 2);
+        Neo.ctx.arc(0, bodyY, bodyR, 0, Math.PI * 2);
         Neo.ctx.fill();
 
-        // outer ring
         Neo.ctx.strokeStyle = armed
           ? `rgb(255,${Math.round(100 - fuseRatio * 80)},40)`
-          : '#c8a040';
-        Neo.ctx.lineWidth = armed ? 3 : 2;
+          : '#e0b84c';
+        Neo.ctx.lineWidth = armed ? 3 : 2.5;
         Neo.ctx.beginPath();
-        Neo.ctx.arc(0, 0, r * bodyPulse, 0, Math.PI * 2);
+        Neo.ctx.arc(0, bodyY, bodyR, 0, Math.PI * 2);
         Neo.ctx.stroke();
         Neo.ctx.shadowBlur = 0;
 
-        // warning stripes on body (hazard pattern)
-        Neo.ctx.save();
-        Neo.ctx.clip();
-        const stripeColor = armed
-          ? `rgba(255,${Math.round(80 - fuseRatio * 60)},30,${0.7 + fuseRatio * 0.3})`
-          : 'rgba(220,170,40,0.55)';
-        Neo.ctx.strokeStyle = stripeColor;
-        Neo.ctx.lineWidth = 3;
-        for (let si = -3; si <= 3; si += 1) {
-          Neo.ctx.beginPath();
-          Neo.ctx.moveTo(si * 7 - r, r);
-          Neo.ctx.lineTo(si * 7 + r, -r);
-          Neo.ctx.stroke();
+        Neo.ctx.fillStyle = armed ? 'rgba(255,120,76,0.38)' : 'rgba(255,255,255,0.18)';
+        Neo.ctx.beginPath();
+        Neo.ctx.arc(-bodyR * 0.3, bodyY - bodyR * 0.3, bodyR * 0.28, 0, Math.PI * 2);
+        Neo.ctx.fill();
+
+        const neckW = Math.max(5, r * 0.42);
+        const neckTop = bodyY - bodyR - 4;
+        Neo.ctx.fillStyle = armed ? '#ff6030' : '#b89040';
+        Neo.ctx.fillRect(-neckW / 2, neckTop, neckW, 5);
+        Neo.ctx.strokeStyle = armed ? '#ffb060' : '#f0cf70';
+        Neo.ctx.lineWidth = 1.5;
+        Neo.ctx.strokeRect(-neckW / 2, neckTop, neckW, 5);
+
+        const fuseEndX = r * 0.72;
+        const fuseEndY = -r * 1.2;
+        Neo.ctx.strokeStyle = armed ? '#ffb347' : '#a9813d';
+        Neo.ctx.lineWidth = Math.max(2, r * 0.15);
+        Neo.ctx.lineCap = 'round';
+        Neo.ctx.beginPath();
+        Neo.ctx.moveTo(0, neckTop);
+        Neo.ctx.quadraticCurveTo(r * 0.62, -r * 0.9, fuseEndX, fuseEndY);
+        Neo.ctx.stroke();
+        Neo.ctx.lineCap = 'butt';
+
+        if (armed) {
+          const sparkPulse = 0.8 + Math.sin(t * 7) * 0.2;
+          Neo.ctx.strokeStyle = '#fff3a0';
+          Neo.ctx.shadowColor = '#ff9a32';
+          Neo.ctx.shadowBlur = 10 + fuseRatio * 8;
+          Neo.ctx.lineWidth = 2;
+          for (let ray = 0; ray < 4; ray += 1) {
+            const a = ray * Math.PI / 2 + t * 0.45;
+            Neo.ctx.beginPath();
+            Neo.ctx.moveTo(fuseEndX + Math.cos(a) * 2, fuseEndY + Math.sin(a) * 2);
+            Neo.ctx.lineTo(fuseEndX + Math.cos(a) * (5 * sparkPulse), fuseEndY + Math.sin(a) * (5 * sparkPulse));
+            Neo.ctx.stroke();
+          }
+          Neo.ctx.shadowBlur = 0;
         }
-        Neo.ctx.restore();
 
         // fuse countdown arc when armed
         if (armed) {
@@ -222,12 +341,6 @@
           Neo.ctx.lineCap = 'butt';
           Neo.ctx.shadowBlur = 0;
         }
-
-        // pressure-plate nub on top
-        Neo.ctx.fillStyle = armed ? '#ff6030' : '#b89040';
-        Neo.ctx.beginPath();
-        Neo.ctx.arc(0, -r * 0.55, r * 0.22, 0, Math.PI * 2);
-        Neo.ctx.fill();
       } else if (hazard.kind === 'healing_zone') {
         const t = Date.now() * 0.004 + (hazard.ttl || 0);
         const pulse = 1 + Math.sin(t * 2.2) * 0.08;
@@ -339,7 +452,7 @@
       } else if (hazard.kind === 'red_spikes') {
         const armed = Number(hazard.armTime || 0) <= 0;
         const t = Date.now() * 0.009 + hazard.x * 0.01;
-        const pulse = armed ? 1.06 + Math.sin(t * 2.2) * 0.04 : 0.86 + Math.sin(t * 2.8) * 0.08;
+        const pulse = armed ? 1.02 + Math.sin(t * 2.2) * 0.025 : 0.86 + Math.sin(t * 2.8) * 0.08;
         Neo.ctx.fillStyle = armed ? 'rgba(255,42,64,0.24)' : 'rgba(255,42,64,0.12)';
         Neo.ctx.beginPath();
         Neo.ctx.arc(0, 0, hazard.r * pulse, 0, Math.PI * 2);
@@ -349,20 +462,60 @@
         Neo.ctx.beginPath();
         Neo.ctx.arc(0, 0, hazard.r * (0.76 + Math.sin(t) * 0.05), 0, Math.PI * 2);
         Neo.ctx.stroke();
+
+        // Cracks make the telegraph read as spikes about to erupt from the floor.
+        Neo.ctx.strokeStyle = armed ? 'rgba(255,92,104,0.82)' : 'rgba(155,28,44,0.72)';
+        Neo.ctx.lineWidth = 1.5;
+        for (let index = 0; index < 7; index += 1) {
+          const a = index * (Math.PI * 2 / 7) + 0.18;
+          const inner = hazard.r * 0.28;
+          const outer = hazard.r * (0.62 + (index % 2) * 0.13);
+          Neo.ctx.beginPath();
+          Neo.ctx.moveTo(Math.cos(a) * inner, Math.sin(a) * inner);
+          Neo.ctx.lineTo(Math.cos(a + 0.07) * outer, Math.sin(a + 0.07) * outer);
+          Neo.ctx.stroke();
+        }
+
+        const rise = armed ? 1 : 0.22;
+        const spikes = [
+          { x: 0, y: 11, scale: 1 },
+          { x: -16, y: 13, scale: 0.72 },
+          { x: 16, y: 13, scale: 0.72 },
+          { x: -9, y: 1, scale: 0.62 },
+          { x: 10, y: -1, scale: 0.58 },
+        ];
         Neo.ctx.shadowColor = '#ff3348';
         Neo.ctx.shadowBlur = armed ? 18 : 8;
-        Neo.ctx.fillStyle = armed ? '#ff5264' : '#9b1c2c';
-        for (let index = 0; index < 9; index += 1) {
-          const a = t * 0.22 + index * (Math.PI * 2 / 9);
-          const inner = hazard.r * 0.18;
-          const outer = hazard.r * (armed ? 0.88 : 0.48);
+        spikes.forEach(spike => {
+          const height = hazard.r * spike.scale * rise;
+          const halfBase = hazard.r * 0.24 * spike.scale;
+          const tipX = spike.x - halfBase * 0.1;
+          const tipY = spike.y - height;
+
+          Neo.ctx.fillStyle = armed ? '#8f1425' : '#5b1822';
           Neo.ctx.beginPath();
-          Neo.ctx.moveTo(Math.cos(a - 0.13) * inner, Math.sin(a - 0.13) * inner);
-          Neo.ctx.lineTo(Math.cos(a) * outer, Math.sin(a) * outer);
-          Neo.ctx.lineTo(Math.cos(a + 0.13) * inner, Math.sin(a + 0.13) * inner);
+          Neo.ctx.moveTo(spike.x - halfBase, spike.y);
+          Neo.ctx.lineTo(tipX, tipY);
+          Neo.ctx.lineTo(spike.x, spike.y + halfBase * 0.3);
           Neo.ctx.closePath();
           Neo.ctx.fill();
-        }
+
+          Neo.ctx.fillStyle = armed ? '#ff5264' : '#9b1c2c';
+          Neo.ctx.beginPath();
+          Neo.ctx.moveTo(spike.x, spike.y + halfBase * 0.3);
+          Neo.ctx.lineTo(tipX, tipY);
+          Neo.ctx.lineTo(spike.x + halfBase, spike.y);
+          Neo.ctx.closePath();
+          Neo.ctx.fill();
+
+          Neo.ctx.strokeStyle = armed ? '#ffb0b8' : '#c74252';
+          Neo.ctx.lineWidth = 1.2;
+          Neo.ctx.beginPath();
+          Neo.ctx.moveTo(tipX, tipY);
+          Neo.ctx.lineTo(spike.x, spike.y + halfBase * 0.3);
+          Neo.ctx.stroke();
+        });
+        Neo.ctx.shadowBlur = 0;
       } else if (hazard.kind === 'thorn_mine') {
         const armed = Number(hazard.armTime || 0) <= 0;
         const pulse = 0.85 + Math.sin(Date.now() * 0.012 + hazard.x) * 0.08;
@@ -386,15 +539,23 @@
     });
 
     Neo.destructibles.forEach(prop => {
-      if (prop.broken || prop.hidden) return;
+      if (prop.hidden) return;
+      if (prop.broken) {
+        if (Neo.drawBrokenDestructible?.(prop)) return;
+        return;
+      }
       Neo.ctx.save();
-      Neo.ctx.translate(prop.x, prop.y);
+      const shakeRatio = Neo.clamp(Number(prop.hitShake || 0) / 0.13, 0, 1);
+      const hitAngle = Number(prop.lastHitAngle || 0);
+      const shakeOffset = shakeRatio > 0 ? Math.sin(shakeRatio * Math.PI * 3) * 3 * shakeRatio : 0;
+      Neo.ctx.translate(prop.x + Math.cos(hitAngle) * shakeOffset, prop.y + Math.sin(hitAngle) * shakeOffset);
       if (prop.kind === 'pot') {
         Neo.drawEnvironmentTile('pot_clay', -16, -18, 32, 32);
       } else if (prop.kind === 'barrel') {
         Neo.drawEnvironmentTile('barrel_oak', -24, -26, 48, 48);
       } else if (prop.kind === 'wall') {
         Neo.drawEnvironmentTile('wall_block', -26, -26, 52, 52);
+        Neo.drawDestructibleBlockDamage?.(prop, 52, 52);
         Neo.ctx.strokeStyle = theme.wallEdge;
         Neo.ctx.lineWidth = 1.5;
         Neo.ctx.strokeRect(-25, -25, 50, 50);
@@ -526,8 +687,9 @@
         const color = item?.color || '#fff';
         const iconDef = window.NeoNykeIconDefs?.items?.[pickup.key];
         Neo.ctx.shadowColor = color;
-        Neo.ctx.shadowBlur = item?.rarity === 'god' ? 20 : 14;
-        if (item?.rarity === 'god' && item?.accent) {
+        const godTier = Neo.isGodTier?.(item?.rarity);
+        Neo.ctx.shadowBlur = godTier ? 20 : 14;
+        if (godTier && item?.accent) {
           Neo.ctx.strokeStyle = item.accent;
           Neo.ctx.lineWidth = 2;
           Neo.ctx.beginPath();
@@ -860,11 +1022,12 @@
       if (kind === 'sniper_round') return { color: '#ff5d72', core: '#ffe1e6', trail: '#ff314d', shape: 'dart', length: 34 };
       if (kind === 'machine_round') return { color: '#ffb35a', core: '#fff1ba', trail: '#ff6738', shape: 'tracer', length: 22 };
       if (kind === 'cult_missile') return { color: '#b455ff', core: '#f2ddff', trail: '#7d39ff', shape: 'orb', length: 120 };
+      if (kind === 'cold_death') return { color: '#9fe8ff', core: '#eafbff', trail: '#3fb4ff', shape: 'orb', length: 140 };
       if (kind === 'golem_spit') return { color: '#9bb05a', core: '#e6f0b8', trail: '#5f7a2e', shape: 'orb', length: 70 };
       return { color: projectile.color || '#ff6688', core: '#ffe4eb', trail: projectile.color || '#ff6688', shape: 'dart', length: 24 };
     }
     if (kind === 'fireball') return { color: '#ff7b32', core: '#fff1a6', trail: '#ff2f17', shape: 'fireball', length: 30 };
-    if (kind === 'disk') return { color: '#b66cff', core: '#f0d8ff', trail: '#7d4dff', shape: 'disk', length: 20 };
+    if (kind === 'disk' || kind === 'power_disk') return { color: kind === 'power_disk' ? '#d890ff' : '#b66cff', core: '#f0d8ff', trail: kind === 'power_disk' ? '#f7ccff' : '#7d4dff', shape: 'disk', length: 20 };
     if (kind === 'magenta_p90') return { color: '#ff9dd7', core: '#fff0fb', trail: '#ff4aa8', shape: 'tracer', length: 26 };
     if (kind === 'magenta_degale') return { color: '#ff8bd2', core: '#fff0fb', trail: '#ff3eb7', shape: 'slug', length: 34 };
     if (kind === 'hunters_bow') return { color: '#dff8ff', core: '#ffffff', trail: '#7edcff', shape: 'arrow', length: 32 };
@@ -936,19 +1099,69 @@
       Neo.ctx.arc(0, 0, r * 0.55, 0, Math.PI * 2);
       Neo.ctx.fill();
     } else if (visual.shape === 'disk') {
-      const spin = Date.now() * 0.018;
+      const seed = Number.isFinite(projectile.animSeed) ? projectile.animSeed : 0;
+      const maxLife = Math.max(0.001, Number(projectile.maxLife || projectile.life || 1));
+      const lifeRatio = Neo.clamp(Number(projectile.life || 0) / maxLife, 0, 1);
+      const age = 1 - lifeRatio;
+      const spin = Date.now() * (0.03 + (projectile.enemy ? 0.004 : 0.008)) + seed;
+      const pulse = 1 + Math.sin(Date.now() * 0.02 + seed * 3.1) * 0.09;
+      const widthPulse = 1 + Math.sin(Date.now() * 0.025 + seed * 1.7) * 0.18;
+      const activeScale = 0.88 + age * 0.18;
       Neo.ctx.rotate(spin);
-      Neo.ctx.globalAlpha = 0.45;
+
+      Neo.ctx.save();
+      Neo.ctx.globalAlpha = 0.24 + (1 - lifeRatio) * 0.2;
+      Neo.ctx.strokeStyle = visual.trail;
+      Neo.ctx.shadowColor = visual.trail;
+      Neo.ctx.shadowBlur = 10;
+      Neo.ctx.lineWidth = Math.max(1.2, r * 0.22);
       Neo.ctx.beginPath();
-      Neo.ctx.arc(0, 0, r * 1.45, 0.25, Math.PI * 1.35);
+      Neo.ctx.arc(0, 0, r * (1.45 * pulse), -0.45, Math.PI * 1.62);
       Neo.ctx.stroke();
-      Neo.ctx.globalAlpha = 1;
+      Neo.ctx.restore();
+
+      Neo.ctx.save();
+      Neo.ctx.rotate(spin * 0.55);
+      Neo.ctx.globalAlpha = 0.9;
       Neo.ctx.fillStyle = visual.color;
+      Neo.ctx.shadowBlur = projectile.enemy ? 12 : 16;
       Neo.ctx.beginPath();
-      Neo.ctx.ellipse(0, 0, r * 1.25, r * 0.48, 0, 0, Math.PI * 2);
+      Neo.ctx.ellipse(0, 0, r * 1.28 * pulse, r * 0.52 * widthPulse, 0, 0, Math.PI * 2);
       Neo.ctx.fill();
+
+      Neo.ctx.shadowBlur = 0;
+      Neo.ctx.strokeStyle = visual.core;
+      Neo.ctx.lineWidth = Math.max(1, r * 0.12);
+      Neo.ctx.globalAlpha = 0.95;
+      Neo.ctx.beginPath();
+      Neo.ctx.arc(0, 0, r * 0.78 * activeScale, 0, Math.PI * 2);
+      Neo.ctx.stroke();
+
+      Neo.ctx.globalAlpha = 0.82;
       Neo.ctx.fillStyle = visual.core;
-      Neo.ctx.fillRect(-r * 0.75, -1, r * 1.5, 2);
+      Neo.ctx.beginPath();
+      Neo.ctx.arc(0, 0, r * 0.34, 0, Math.PI * 2);
+      Neo.ctx.fill();
+
+      Neo.ctx.rotate(spin * 0.75);
+      Neo.ctx.globalAlpha = 0.45;
+      Neo.ctx.fillStyle = visual.core;
+      for (let index = 0; index < 6; index += 1) {
+        const segmentAngle = (index / 6) * Math.PI * 2;
+        Neo.ctx.save();
+        Neo.ctx.rotate(segmentAngle);
+        Neo.ctx.fillRect(r * 0.92, -r * 0.06 * pulse, r * 0.42, r * 0.12 * pulse);
+        Neo.ctx.restore();
+      }
+
+      Neo.ctx.globalAlpha = 1;
+      Neo.ctx.strokeStyle = visual.core;
+      Neo.ctx.lineWidth = Math.max(1, r * 0.09);
+      Neo.ctx.beginPath();
+      Neo.ctx.moveTo(-r * 0.86, 0);
+      Neo.ctx.lineTo(r * 0.86, 0);
+      Neo.ctx.stroke();
+      Neo.ctx.restore();
     } else if (visual.shape === 'blade' || visual.shape === 'arrow') {
       Neo.ctx.beginPath();
       Neo.ctx.moveTo(r * 1.8, 0);
@@ -1007,8 +1220,14 @@
       const size = Number(body.size || Math.max(30, Number(body.r || 12) * 2.4));
       const frame = Neo.SPRITE_ATLAS.frames[body.spriteKey] || Neo.SPRITE_ATLAS.frames.hunter;
       if (!frame) return;
-      const squash = 1 - 0.46 * fallEase;
-      const rotation = Number(body.angle || 0) + Number(body.fallAngle || 0) * fallEase;
+      const z = Math.max(0, Number(body.z || 0));
+      const velocityMag = Math.hypot(Number(body.vx || 0), Number(body.vy || 0)) + Math.abs(Number(body.vz || 0)) * 0.35;
+      const impactStretch = Neo.clamp(z / 140 + velocityMag / 240, 0, 1);
+      const squash = Math.max(0.5, 1 - 0.46 * fallEase - impactStretch * 0.18);
+      const stretchX = 1 + impactStretch * 0.1;
+      const rotation = Number(body.angle || 0)
+        + Number(body.fallAngle || 0) * fallEase
+        + Number(body.angularOffset || 0);
       const poolScale = Neo.clamp(age / 1.2, 0, 1) * alpha;
       const poolMultiplier = getVisualBloodMultiplier();
       const poolSizeMultiplier = Math.sqrt(poolMultiplier);
@@ -1073,9 +1292,10 @@
       Neo.ctx.ellipse(0, size * 0.32, size * 0.34, size * 0.09, 0, 0, Math.PI * 2);
       Neo.ctx.fill();
 
+      Neo.ctx.translate(0, -z);
       Neo.ctx.rotate(rotation);
       if (Number(body.face || 1) < 0) Neo.ctx.scale(-1, 1);
-      Neo.ctx.scale(1 + 0.05 * fallEase, squash);
+      Neo.ctx.scale((1 + 0.05 * fallEase) * stretchX, squash);
       Neo.ctx.imageSmoothingEnabled = false;
       Neo.ctx.shadowColor = body.elite ? 'rgba(255,170,64,0.35)' : 'rgba(0,0,0,0.2)';
       Neo.ctx.shadowBlur = body.elite ? 8 : 3;
@@ -1099,9 +1319,77 @@
     });
   }
 
+  function drawChallengeObelisk() {
+    const room = Neo.currentRoom;
+    if (!room || room.type !== 'challenge' || room.cleared || !room.challengeStarted) return;
+    const obelisk = room.challengeData?.obelisk;
+    if (!obelisk) return;
+
+    const t = Date.now() / 1000;
+    const hpRatio = Neo.clamp((obelisk.hp || 0) / Math.max(1, obelisk.maxHp || 1), 0, 1);
+    const flash = obelisk.hitFlash || 0;
+    const r = obelisk.r || 22;
+
+    Neo.ctx.save();
+    Neo.ctx.translate(obelisk.x, obelisk.y);
+
+    // Guard-range ring: shows the zone enemies must be kept out of.
+    Neo.ctx.strokeStyle = flash > 0 ? 'rgba(255,120,134,0.5)' : 'rgba(141,212,255,0.28)';
+    Neo.ctx.lineWidth = 2;
+    Neo.ctx.setLineDash([8, 10]);
+    Neo.ctx.lineDashOffset = -t * 22;
+    Neo.ctx.beginPath();
+    Neo.ctx.arc(0, 0, obelisk.guardRange || 96, 0, Math.PI * 2);
+    Neo.ctx.stroke();
+    Neo.ctx.setLineDash([]);
+
+    // Base shadow
+    Neo.ctx.fillStyle = 'rgba(0,0,0,0.32)';
+    Neo.ctx.beginPath();
+    Neo.ctx.ellipse(0, r * 0.7, r * 0.95, r * 0.4, 0, 0, Math.PI * 2);
+    Neo.ctx.fill();
+
+    // Obelisk body — a tapered crystal pillar.
+    const bodyColor = flash > 0 ? '#ffd0d6' : '#bfe6ff';
+    const coreGlow = `rgba(141,212,255,${0.35 + Math.sin(t * 2) * 0.12})`;
+    Neo.ctx.shadowColor = flash > 0 ? '#ff5566' : '#5ab8ff';
+    Neo.ctx.shadowBlur = 18;
+    Neo.ctx.fillStyle = bodyColor;
+    Neo.ctx.beginPath();
+    Neo.ctx.moveTo(0, -r * 2.2);
+    Neo.ctx.lineTo(r * 0.7, -r * 0.4);
+    Neo.ctx.lineTo(r * 0.5, r * 0.7);
+    Neo.ctx.lineTo(-r * 0.5, r * 0.7);
+    Neo.ctx.lineTo(-r * 0.7, -r * 0.4);
+    Neo.ctx.closePath();
+    Neo.ctx.fill();
+
+    // Inner core sheen
+    Neo.ctx.shadowBlur = 0;
+    Neo.ctx.fillStyle = coreGlow;
+    Neo.ctx.beginPath();
+    Neo.ctx.moveTo(0, -r * 1.9);
+    Neo.ctx.lineTo(r * 0.22, -r * 0.3);
+    Neo.ctx.lineTo(-r * 0.22, -r * 0.3);
+    Neo.ctx.closePath();
+    Neo.ctx.fill();
+
+    // HP bar above the obelisk
+    const barW = r * 2.4;
+    const barH = 5;
+    const barY = -r * 2.2 - 14;
+    Neo.ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    Neo.ctx.fillRect(-barW / 2 - 1, barY - 1, barW + 2, barH + 2);
+    Neo.ctx.fillStyle = hpRatio > 0.5 ? '#6fe09a' : hpRatio > 0.25 ? '#f5d24a' : '#ff6a78';
+    Neo.ctx.fillRect(-barW / 2, barY, barW * hpRatio, barH);
+
+    Neo.ctx.restore();
+  }
+
   // Expose on Neo
   Neo.drawWorldProps = drawWorldProps;
   Neo.drawPickups = drawPickups;
+  Neo.drawChallengeObelisk = drawChallengeObelisk;
   Neo.getProjectileVisual = getProjectileVisual;
   Neo.drawProjectileTrail = drawProjectileTrail;
   Neo.drawProjectileShape = drawProjectileShape;

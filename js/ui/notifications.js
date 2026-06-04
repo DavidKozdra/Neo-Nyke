@@ -13,6 +13,12 @@ export function getRarityNameColor(rarity) {
   return Neo.RARITY_NAME_COLORS[String(rarity || '').toLowerCase()] || '#d8e9ff';
 }
 
+// GOD is the top rarity tier. ('red' is a legacy alias kept for old save data.)
+export function isGodTier(rarity) {
+  const r = String(rarity || '').toLowerCase();
+  return r === 'god' || r === 'red';
+}
+
 export function drawItemToastIcon(canvas, item) {
   const ctx2d = canvas.getContext('2d');
   if (!ctx2d) return;
@@ -26,7 +32,7 @@ export function drawItemToastIcon(canvas, item) {
     ctx2d.roundRect(0, 0, canvas.width, canvas.height, 4 * scale);
     ctx2d.fill();
     ctx2d.shadowColor = iconDef.accent || color;
-    ctx2d.shadowBlur = item?.rarity === 'god' ? 8 * scale : 5 * scale;
+    ctx2d.shadowBlur = isGodTier(item?.rarity) ? 8 * scale : 5 * scale;
     ctx2d.fillStyle = color;
     iconDef.pixels.forEach(([px, py]) => {
       ctx2d.fillRect(px * 4 * scale, py * 4 * scale, 4 * scale, 4 * scale);
@@ -41,14 +47,14 @@ export function drawItemToastIcon(canvas, item) {
     ctx2d.shadowBlur = 0;
     return;
   }
-  const symbolByRarity = { god: '✦', purple: '◆', wizard: '✹', knight: '⚔', white: '●' };
+  const symbolByRarity = { god: '✦', red: '✦', purple: '◆', wizard: '✹', knight: '⚔', white: '●' };
   const symbol = symbolByRarity[item?.rarity] || '●';
   const cx = canvas.width / 2;
   const cy = canvas.height / 2;
   const r = canvas.width * 0.38;
   ctx2d.fillStyle = color;
   ctx2d.shadowColor = color;
-  ctx2d.shadowBlur = item?.rarity === 'god' ? 8 : 5;
+  ctx2d.shadowBlur = isGodTier(item?.rarity) ? 8 : 5;
   ctx2d.beginPath();
   ctx2d.arc(cx, cy, r, 0, Math.PI * 2);
   ctx2d.fill();
@@ -68,8 +74,24 @@ export function drawItemToastIcon(canvas, item) {
   ctx2d.fillText(symbol, cx, cy + 0.5);
 }
 
+export function resolveItemIconDef(itemKey) {
+  return Neo.itemRegistry?.get?.(itemKey) || Neo.ITEM_DEFS?.[itemKey] || null;
+}
+
+export function drawItemIconByKey(canvas, itemKey, overrides = null) {
+  const item = resolveItemIconDef(itemKey);
+  if (!item) return;
+  drawItemToastIcon(canvas, overrides ? { ...item, ...overrides, key: itemKey } : item);
+}
+
+export function drawItemIconCanvases(container, dataAttr = 'data-item-icon') {
+  container?.querySelectorAll?.(`[${dataAttr}]`).forEach(canvas => {
+    drawItemIconByKey(canvas, canvas.getAttribute(dataAttr));
+  });
+}
+
 export function pushItemNotification(itemKey, amount = 1, note = '') {
-  const item = Neo.itemRegistry.get(itemKey) || Neo.ITEM_DEFS[itemKey];
+  const item = resolveItemIconDef(itemKey);
   if (!item || amount <= 0) return;
   const stack = ensureItemNotifyStack();
   const toast = document.createElement('div');
@@ -86,12 +108,15 @@ export function pushItemNotification(itemKey, amount = 1, note = '') {
   title.className = 'item-toast-title';
   const name = document.createElement('span');
   name.textContent = item.name;
-  name.style.color = getRarityNameColor(item.rarity || item.category);
+  // Name AND description share the rarity color.
+  const rarityColor = getRarityNameColor(item.rarity || item.category);
+  name.style.color = rarityColor;
   const plus = document.createElement('span');
   plus.className = 'item-toast-amount';
   plus.textContent = `+${amount}`;
   const desc = document.createElement('div');
   desc.className = 'item-toast-desc';
+  desc.style.color = rarityColor;
   desc.textContent = note ? `${item.description} ${note}` : item.description;
   title.append(name, plus);
   body.append(title, desc);
@@ -112,7 +137,7 @@ export const ITEM_CINEMATIC_FLAVOR = {
 let cinematicTimer = null;
 
 export function showItemCinematic(itemKey, onDone) {
-  const item = Neo.itemRegistry.get(itemKey) || Neo.ITEM_DEFS[itemKey];
+  const item = resolveItemIconDef(itemKey);
   if (!item) { if (onDone) onDone(); return; }
   const el = document.getElementById('itemCinematic');
   const canvas = document.getElementById('itemCinematicCanvas');
@@ -249,6 +274,22 @@ export function drawHealToastIcon(canvas, healId) {
   ctx2d.fillText('+', 15, 15.5);
 }
 
+export function drawHazardKillerIcon(canvas, hazardId) {
+  const ctx2d = canvas.getContext('2d');
+  if (!ctx2d) return;
+  const iconDef = window.NeoNykeIconDefs?.hazards?.[hazardId];
+  if (!iconDef) return;
+  const scale = canvas.width / 32;
+  ctx2d.clearRect(0, 0, canvas.width, canvas.height);
+  ctx2d.shadowColor = iconDef.color;
+  ctx2d.shadowBlur = 7 * scale;
+  ctx2d.fillStyle = iconDef.color;
+  iconDef.pixels.forEach(([px, py]) => {
+    ctx2d.fillRect(px * 4 * scale, py * 4 * scale, 4 * scale, 4 * scale);
+  });
+  ctx2d.shadowBlur = 0;
+}
+
 const INVENTORY_UI_ICON_DEFS = {
   'tab-stats': {
     color: '#8fd2ff',
@@ -297,6 +338,12 @@ const INVENTORY_UI_ICON_DEFS = {
     accent: '#fff1c6',
     pixels: [[3,0],[4,0],[2,1],[5,1],[1,2],[6,2],[0,3],[3,3],[4,3],[7,3],[0,4],[3,4],[4,4],[7,4],[1,5],[6,5],[2,6],[5,6],[3,7],[4,7]],
     accentPixels: [[3,3],[4,3],[3,4],[4,4]],
+  },
+  item: {
+    color: '#ffd47a',
+    accent: '#ffffff',
+    pixels: [[3,0],[4,0],[2,1],[5,1],[1,2],[6,2],[1,3],[3,3],[4,3],[6,3],[1,4],[6,4],[2,5],[5,5],[3,6],[4,6]],
+    accentPixels: [[3,2],[4,2],[3,4],[4,4]],
   },
   range: {
     color: '#78d7ff',
@@ -412,6 +459,7 @@ export function pushMoveNotification(moveKey, amount = 1) {
   plus.textContent = `+${amount}`;
   const desc = document.createElement('div');
   desc.className = 'item-toast-desc';
+  desc.style.color = color; // moves have no rarity — match the slot color used for the name
   desc.textContent = moveDef.desc || 'New move unlocked.';
   title.append(name, plus);
   body.append(title, desc);
@@ -444,12 +492,15 @@ export function pushWeaponNotification(weaponKey) {
   title.className = 'item-toast-title';
   const name = document.createElement('span');
   name.textContent = `Weapon: ${def.name}`;
-  name.style.color = getRarityNameColor(def.rarity);
+  // Name AND description share the rarity color (god tier shows full red).
+  const nameColor = getRarityNameColor(def.rarity);
+  name.style.color = nameColor;
   const plus = document.createElement('span');
   plus.className = 'item-toast-amount';
   plus.textContent = '+1';
   const desc = document.createElement('div');
   desc.className = 'item-toast-desc';
+  desc.style.color = nameColor;
   desc.textContent = def.description || 'New weapon acquired.';
   title.append(name, plus);
   body.append(title, desc);
@@ -464,12 +515,17 @@ export function pushWeaponNotification(weaponKey) {
 
 Neo.ensureItemNotifyStack = ensureItemNotifyStack;
 Neo.getRarityNameColor = getRarityNameColor;
+Neo.isGodTier = isGodTier;
 Neo.drawItemToastIcon = drawItemToastIcon;
+Neo.resolveItemIconDef = resolveItemIconDef;
+Neo.drawItemIconByKey = drawItemIconByKey;
+Neo.drawItemIconCanvases = drawItemIconCanvases;
 Neo.pushItemNotification = pushItemNotification;
 Neo.showItemCinematic = showItemCinematic;
 Neo.drawMoveToastIcon = drawMoveToastIcon;
 Neo.drawWeaponToastIcon = drawWeaponToastIcon;
 Neo.drawHealToastIcon = drawHealToastIcon;
+Neo.drawHazardKillerIcon = drawHazardKillerIcon;
 Neo.drawInventoryUiIcon = drawInventoryUiIcon;
 Neo.pushMoveNotification = pushMoveNotification;
 Neo.pushWeaponNotification = pushWeaponNotification;

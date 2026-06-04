@@ -1,5 +1,25 @@
 // draw/hud.js — standalone IIFE. HUD canvas drawing (particles, minimap, boss bars, transitions, action icons).
+  let _lineParticlePointScratch = new Float32Array(64);
+
   function drawParticles() {
+    // Per-particle shadowBlur is the dominant draw cost. In performance mode,
+    // once the screen is busy (e.g. holding a laser) drop the glow entirely —
+    // the particles stay, they just don't each trigger an expensive blur pass.
+    const perfMode = window.NeoSettings?.isPerformanceMode?.() !== false;
+    // shadowBlur is the dominant draw cost; drop it earlier under load so a busy
+    // screen (held laser, blood floods) doesn't pay per-particle blur on dozens
+    // of flecks before the cull kicks in.
+    const lowFx = perfMode && Neo.particles.length > 48;
+    const pfx = n => (lowFx ? 0 : n);
+    // Under lowFx the glow is dropped, so skip both shadow writes entirely —
+    // setting shadowColor to a string every particle is wasted state churn when
+    // shadowBlur is 0. save()/restore() already resets shadowBlur to the 0 default
+    // each iteration, so we don't need to clear it here.
+    const setGlow = (color, blur) => {
+      if (lowFx) return;
+      Neo.ctx.shadowColor = color;
+      Neo.ctx.shadowBlur = blur;
+    };
     Neo.particles.forEach(particle => {
       if (particle.line) {
         const line = particle.line;
@@ -13,7 +33,11 @@
         const phase = (line.phase || 0) + particle.life * 22;
 
         // Compute segment offsets once; reuse for both stroke passes.
-        const pts = new Float32Array(segs * 2);
+        const pointCount = Math.max(0, (segs - 1) * 2);
+        if (_lineParticlePointScratch.length < pointCount) {
+          _lineParticlePointScratch = new Float32Array(pointCount * 2);
+        }
+        const pts = _lineParticlePointScratch;
         for (let index = 1; index < segs; index += 1) {
           const t = index / segs;
           const wave = Math.sin((t * 18) + phase + index * 0.9);
@@ -24,12 +48,11 @@
 
         Neo.ctx.save();
         Neo.ctx.globalAlpha = Math.min(1, particle.life * 2.1);
-        Neo.ctx.shadowColor = particle.c || '#dfe8ff';
 
         // Outer glow pass
         Neo.ctx.strokeStyle = particle.c || '#dfe8ff';
         Neo.ctx.lineWidth = (line.w || 4.5) + 3;
-        Neo.ctx.shadowBlur = 18;
+        setGlow(particle.c || '#dfe8ff', 18);
         Neo.ctx.beginPath();
         Neo.ctx.moveTo(line.x1, line.y1);
         for (let index = 1; index < segs; index += 1) {
@@ -42,7 +65,7 @@
         // pts stores the fully-displaced coords; lerp back toward the straight baseline.
         Neo.ctx.strokeStyle = '#ffffff';
         Neo.ctx.lineWidth = Math.max(2, (line.w || 4.5) * 0.5);
-        Neo.ctx.shadowBlur = 8;
+        if (!lowFx) Neo.ctx.shadowBlur = 8;
         Neo.ctx.beginPath();
         Neo.ctx.moveTo(line.x1, line.y1);
         for (let index = 1; index < segs; index += 1) {
@@ -66,8 +89,7 @@
         Neo.ctx.font = `bold ${particle.size || 14}px system-ui`;
         Neo.ctx.textAlign = 'center';
         Neo.ctx.textBaseline = 'middle';
-        Neo.ctx.shadowColor = particle.c;
-        Neo.ctx.shadowBlur = 8;
+        setGlow(particle.c, 8);
         Neo.ctx.lineWidth = 3;
         Neo.ctx.strokeStyle = particle.outline || 'rgba(0,0,0,0.7)';
         Neo.ctx.strokeText(particle.text, 0, -particle.life * 20);
@@ -79,8 +101,7 @@
         const waveRadius = radius * (0.22 + progress * 0.92);
         Neo.ctx.globalAlpha = (1 - progress) * 0.8;
         Neo.ctx.strokeStyle = particle.c || '#ff66cc';
-        Neo.ctx.shadowColor = particle.c || '#ff66cc';
-        Neo.ctx.shadowBlur = 18;
+        setGlow(particle.c || '#ff66cc', 18);
         Neo.ctx.lineWidth = particle.style === 'heavy' ? 5 : 3;
         Neo.ctx.beginPath();
         if (particle.style === 'heavy') {
@@ -109,8 +130,7 @@
         Neo.ctx.rotate(Number(particle.angle || 0));
         Neo.ctx.globalAlpha = (1 - progress) * 0.85;
         Neo.ctx.strokeStyle = particle.c || '#fff';
-        Neo.ctx.shadowColor = particle.c || '#fff';
-        Neo.ctx.shadowBlur = 10;
+        setGlow(particle.c || '#fff', 10);
         Neo.ctx.lineWidth = 2;
         for (let index = 0; index < 4; index += 1) {
           const a = (index - 1.5) * 0.5;
@@ -125,13 +145,20 @@
         Neo.ctx.fill();
       } else if (particle.spark) {
         const size = Number(particle.size || 2.2);
-        const angle = Math.atan2(Number(particle.vy || 0), Number(particle.vx || 1));
+        const angle = Math.atan2(particle.vy, particle.vx || 1);
         Neo.ctx.rotate(angle);
         Neo.ctx.fillStyle = particle.c || '#fff';
-        Neo.ctx.shadowColor = particle.c || '#fff';
-        Neo.ctx.shadowBlur = 7;
+        setGlow(particle.c || '#fff', 7);
         Neo.ctx.beginPath();
         Neo.ctx.ellipse(0, 0, size * 1.8, size * 0.45, 0, 0, Math.PI * 2);
+        Neo.ctx.fill();
+      } else if (particle.smoke) {
+        const size = Number(particle.size || 4);
+        Neo.ctx.globalAlpha *= Math.min(0.78, Math.max(0.16, particle.life));
+        Neo.ctx.fillStyle = particle.c || 'rgba(45, 38, 32, 0.85)';
+        Neo.ctx.shadowBlur = 0;
+        Neo.ctx.beginPath();
+        Neo.ctx.arc(0, 0, size, 0, Math.PI * 2);
         Neo.ctx.fill();
       } else if (particle.silhouette) {
         const maxLife = Number(particle.maxLife || particle.life || 0.6);
@@ -144,7 +171,7 @@
             alpha: fade,
             flipX: sil.facing < 0,
             shadowColor: particle.c || '#b99cff',
-            shadowBlur: 18,
+            shadowBlur: pfx(18),
             tint: particle.c || '#b99cff',
           });
         }
@@ -156,10 +183,9 @@
         Neo.ctx.stroke();
       } else if (particle.blood) {
         const size = particle.size || 3;
-        const tilt = Math.atan2(Number(particle.vy || 0), Number(particle.vx || 1)) + Math.PI / 2;
+        const tilt = Math.atan2(particle.vy, particle.vx || 1) + Math.PI / 2;
         Neo.ctx.fillStyle = particle.c || '#a5001e';
-        Neo.ctx.shadowColor = particle.c || '#a5001e';
-        Neo.ctx.shadowBlur = 5;
+        setGlow(particle.c || '#a5001e', 5);
         Neo.ctx.rotate(tilt);
         Neo.ctx.beginPath();
         Neo.ctx.ellipse(0, 0, size * 0.72, size * 1.18, 0, 0, Math.PI * 2);
@@ -170,8 +196,7 @@
         Neo.ctx.fill();
       } else {
         Neo.ctx.fillStyle = particle.c || '#0ff';
-        Neo.ctx.shadowColor = particle.c || '#0ff';
-        Neo.ctx.shadowBlur = 6;
+        setGlow(particle.c || '#0ff', 6);
         Neo.ctx.beginPath();
         Neo.ctx.arc(0, 0, 3, 0, Math.PI * 2);
         Neo.ctx.fill();
@@ -486,81 +511,235 @@
     return type.toUpperCase();
   }
 
+  // Accent color per boss; drives both the bar fill and its glow.
+  function getBossColor(type) {
+    switch (type) {
+      case 'god': return '#ffffff';
+      case 'bulk_golem': return '#ff8e4a';
+      case 'artificer_knave': return '#ffd27d';
+      case 'bowman_bane': return '#c9aaff';
+      case 'antony_blemmye': return '#ffcf8a';
+      case 'handsome_devil': return '#ff3348';
+      default: return '#e4b9ff';
+    }
+  }
+
   function drawBossHealthBars() {
     const bosses = Neo.enemies.filter(enemy => Neo.isBossType(enemy.type));
     if (!bosses.length) return;
 
-    const width = 420;
-    const height = 10;
-    const gap = 18;
-    const startX = (Neo.canvas.width - width) / 2;
-    const startY = 76;
+    const perfMode = window.NeoSettings?.isPerformanceMode?.() !== false;
+    const lowFx = perfMode && Neo.particles.length > 48;
+
+    const width = 440;
+    const height = 16;
+    const gap = 30;
+    const radius = height / 2;
+    const startX = Math.round((Neo.canvas.width - width) / 2);
+    const startY = 50;
+    const centerX = Neo.canvas.width / 2;
+
+    const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+    const ctx = Neo.ctx;
 
     bosses.forEach((boss, index) => {
       const y = startY + index * gap;
       const hpPct = Neo.clamp(boss.hp / boss.max, 0, 1);
 
-      Neo.ctx.fillStyle = 'rgba(0,0,0,0.65)';
-      Neo.ctx.fillRect(startX - 2, y - 2, width + 4, height + 4);
-      Neo.ctx.fillStyle = '#220f28';
-      Neo.ctx.fillRect(startX, y, width, height);
+      // Lagging "damage trail": a lighter ghost that drains toward real HP so
+      // each hit reads as a satisfying chunk rather than an instant snap.
+      if (boss._barTrail == null || boss._barTrail < hpPct) boss._barTrail = hpPct;
+      if (boss._barTrailAt == null) boss._barTrailAt = now;
+      const dt = Math.min(0.05, (now - boss._barTrailAt) / 1000);
+      boss._barTrailAt = now;
+      // Hold briefly after a hit, then ease the trail down to current HP.
+      boss._barTrail = Math.max(hpPct, boss._barTrail - dt * 0.55);
+      const trailPct = boss._barTrail;
 
-      Neo.ctx.fillStyle = boss.type === 'bulk_golem' ? '#ff8e4a' : boss.type === 'artificer_knave' ? '#ffd27d' : boss.type === 'bowman_bane' ? '#c9aaff' : boss.type === 'antony_blemmye' ? '#ffcf8a' : boss.type === 'handsome_devil' ? '#ff3348' : '#e4b9ff';
-      if (boss.type === 'god') Neo.ctx.fillStyle = '#ffffff';
-      Neo.ctx.fillRect(startX, y, width * hpPct, height);
+      const color = getBossColor(boss.type);
+      const fillW = Math.max(0, width * hpPct);
+      const trailW = Math.max(0, width * trailPct);
 
-      Neo.ctx.fillStyle = '#fff';
-      Neo.ctx.font = 'bold 11px system-ui';
-      Neo.ctx.textAlign = 'center';
-      Neo.ctx.fillText(getBossLabel(boss.type), Neo.canvas.width / 2, y - 4);
+      ctx.save();
+
+      // Drop shadow plate behind the whole bar for separation from the scene.
+      ctx.fillStyle = 'rgba(0,0,0,0.55)';
+      ctx.beginPath();
+      ctx.roundRect(startX - 4, y - 3, width + 8, height + 6, radius + 3);
+      ctx.fill();
+
+      // Track (empty bar) with a dark vertical gradient for depth.
+      const track = ctx.createLinearGradient(0, y, 0, y + height);
+      track.addColorStop(0, '#1a0a20');
+      track.addColorStop(1, '#2c1335');
+      ctx.fillStyle = track;
+      ctx.beginPath();
+      ctx.roundRect(startX, y, width, height, radius);
+      ctx.fill();
+
+      // Clip everything else to the rounded track so fills keep clean caps.
+      ctx.save();
+      ctx.beginPath();
+      ctx.roundRect(startX, y, width, height, radius);
+      ctx.clip();
+
+      // Damage trail segment (dim wash of the boss color).
+      if (trailW > fillW + 0.5) {
+        ctx.fillStyle = 'rgba(255,255,255,0.16)';
+        ctx.fillRect(startX, y, trailW, height);
+        ctx.fillStyle = color;
+        ctx.globalAlpha = 0.22;
+        ctx.fillRect(startX, y, trailW, height);
+        ctx.globalAlpha = 1;
+      }
+
+      // Main fill: vertical gradient gives the bar a glossy, metallic body.
+      if (fillW > 0) {
+        const fill = ctx.createLinearGradient(0, y, 0, y + height);
+        fill.addColorStop(0, 'rgba(255,255,255,0.55)');
+        fill.addColorStop(0.18, color);
+        fill.addColorStop(0.85, color);
+        fill.addColorStop(1, 'rgba(0,0,0,0.35)');
+        if (!lowFx) {
+          ctx.shadowColor = color;
+          ctx.shadowBlur = 10;
+        }
+        ctx.fillStyle = fill;
+        ctx.fillRect(startX, y, fillW, height);
+        ctx.shadowBlur = 0;
+
+        // Top glossy highlight strip.
+        ctx.fillStyle = 'rgba(255,255,255,0.35)';
+        ctx.fillRect(startX, y + 1, fillW, Math.max(1, height * 0.28));
+
+        // Bright leading edge tick — reads as an "energy" cap.
+        const edgeX = startX + fillW;
+        ctx.fillStyle = 'rgba(255,255,255,0.9)';
+        ctx.fillRect(edgeX - 2, y, 2, height);
+      }
+
+      ctx.restore(); // end clip
+
+      // Crisp inner border around the track.
+      ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(startX + 0.5, y + 0.5, width - 1, height - 1, radius);
+      ctx.stroke();
+
+      // Label above the bar, letter-spaced and shadowed for legibility.
+      const label = getBossLabel(boss.type);
+      ctx.font = 'bold 12px system-ui';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'alphabetic';
+      if (ctx.letterSpacing !== undefined) ctx.letterSpacing = '2px';
+      ctx.shadowColor = 'rgba(0,0,0,0.85)';
+      ctx.shadowBlur = 4;
+      ctx.fillStyle = '#fff';
+      ctx.fillText(label, centerX, y - 6);
+      ctx.shadowBlur = 0;
+      if (ctx.letterSpacing !== undefined) ctx.letterSpacing = '0px';
+
+      ctx.restore();
     });
   }
 
+
+  // floor transition animation
   function drawFloorTransition() {
     if (!Neo.showFloorTransition || Neo.floorTransitionTime > 2.5) return;
     const _access = window.NeoSettings?.getAccess() || {};
     // With reduceMotion: skip the animated banner entirely
     if (_access.reduceMotion) return;
+    
 
-    const progress = Neo.floorTransitionTime / 2.5;
-    const scaleProgress = Math.min(progress * 1.5, 1);
-    const fadeInProgress = Math.min(progress * 2, 1);
-    const fadeOutProgress = Math.max((progress - 0.7) / 0.3, 0);
-
-    const baseScale = 0.3 + scaleProgress * 0.7;
+    const progress = Neo.clamp(Neo.floorTransitionTime / 2.5, 0, 1);
+    const easeOut = t => 1 - Math.pow(1 - Neo.clamp(t, 0, 1), 3);
+    const easeIn = t => Math.pow(Neo.clamp(t, 0, 1), 3);
+    const fadeInProgress = easeOut(progress * 2.6);
+    const fadeOutProgress = easeIn((progress - 0.68) / 0.32);
     const alpha = fadeInProgress * (1 - fadeOutProgress);
+    const surge = Math.sin(progress * Math.PI);
+    const w = Neo.canvas.width;
+    const h = Neo.canvas.height;
+    const centerX = w / 2;
+    const centerY = h / 2;
+    const minSide = Math.min(w, h);
+    const textScale = 0.92 + easeOut(progress * 1.5) * 0.08;
 
     Neo.ctx.save();
+    Neo.ctx.globalCompositeOperation = 'source-over';
+
+    const overlay = Neo.ctx.createRadialGradient(centerX, centerY, minSide * 0.08, centerX, centerY, Math.max(w, h) * 0.75);
+    overlay.addColorStop(0, `rgba(24, 205, 210, ${0.10 * alpha})`);
+    overlay.addColorStop(0.42, `rgba(16, 18, 32, ${0.22 * alpha})`);
+    overlay.addColorStop(1, `rgba(0, 0, 0, ${0.46 * alpha})`);
+    Neo.ctx.fillStyle = overlay;
+    Neo.ctx.fillRect(0, 0, w, h);
+
+    Neo.ctx.globalAlpha = alpha * (0.22 + surge * 0.16);
+    Neo.ctx.shadowColor = '#00f6ff';
+    Neo.ctx.shadowBlur = 14 + surge * 12;
+    Neo.ctx.strokeStyle = '#00d8e8';
+    Neo.ctx.lineWidth = 2;
+    Neo.ctx.beginPath();
+    Neo.ctx.ellipse(centerX, centerY + 4, minSide * (0.36 + surge * 0.04), minSide * (0.085 + surge * 0.015), 0, 0, Math.PI * 2);
+    Neo.ctx.stroke();
+
+    Neo.ctx.globalAlpha = alpha * 0.72;
+    Neo.ctx.shadowColor = '#00f6ff';
+    Neo.ctx.shadowBlur = 12;
+    Neo.ctx.strokeStyle = '#80f5ff';
+    Neo.ctx.lineWidth = 2;
+    Neo.ctx.beginPath();
+    Neo.ctx.moveTo(centerX - minSide * 0.24, centerY - 56);
+    Neo.ctx.lineTo(centerX + minSide * 0.24, centerY - 56);
+    Neo.ctx.moveTo(centerX - minSide * 0.20, centerY + 60);
+    Neo.ctx.lineTo(centerX + minSide * 0.20, centerY + 60);
+    Neo.ctx.stroke();
+
     Neo.ctx.globalAlpha = alpha;
-
-    const centerX = Neo.canvas.width / 2;
-    const centerY = Neo.canvas.height / 2;
-    const offsetY = (1 - scaleProgress) * 80;
-
-    Neo.ctx.translate(centerX, centerY - offsetY);
-    Neo.ctx.scale(baseScale, baseScale);
-    Neo.ctx.translate(-centerX, -centerY);
-
-    Neo.ctx.fillStyle = '#00ffff';
-    Neo.ctx.shadowColor = '#00ffff';
-    Neo.ctx.shadowBlur = 40 * alpha;
-    Neo.ctx.font = 'bold 72px system-ui';
+    Neo.ctx.translate(centerX, centerY);
+    Neo.ctx.scale(textScale, textScale);
     Neo.ctx.textAlign = 'center';
     Neo.ctx.textBaseline = 'middle';
 
-    Neo.ctx.fillText(`FLOOR ${Neo.floor}`, centerX, centerY);
+    Neo.ctx.font = 'bold 16px system-ui';
+    Neo.ctx.fillStyle = '#8ff6df';
+    Neo.ctx.shadowColor = '#8ff6df';
+    Neo.ctx.shadowBlur = 8 * alpha;
+    Neo.ctx.fillText('ENTERING', 0, -52);
 
-    Neo.ctx.font = 'bold 24px system-ui';
-    Neo.ctx.fillStyle = '#7dff9e';
-    Neo.ctx.shadowColor = '#7dff9e';
-    Neo.ctx.shadowBlur = 20 * alpha;
-    Neo.ctx.fillText('▼ ▼ ▼', centerX, centerY + 50);
+    const floorLabel = `FLOOR ${Neo.floor}`;
+    const maxLabelWidth = Math.max(160, w * 0.84 / textScale);
+    let floorFontSize = Math.min(78, Math.max(46, minSide * 0.14));
+    Neo.ctx.font = `900 ${floorFontSize}px system-ui`;
+    while (floorFontSize > 42 && Neo.ctx.measureText(floorLabel).width > maxLabelWidth) {
+      floorFontSize -= 4;
+      Neo.ctx.font = `900 ${floorFontSize}px system-ui`;
+    }
+    Neo.ctx.lineWidth = 8;
+    Neo.ctx.strokeStyle = 'rgba(2, 6, 18, 0.9)';
+    Neo.ctx.strokeText(floorLabel, 0, 0);
+    Neo.ctx.fillStyle = '#f8ffff';
+    Neo.ctx.shadowColor = '#00f6ff';
+    Neo.ctx.shadowBlur = 18 * alpha;
+    Neo.ctx.fillText(floorLabel, 0, 0);
 
     Neo.ctx.restore();
   }
 
   function drawActionIcons() {
     const drawHudMoveIcon = (slot, canvas, fallbackColor, fallbackPixels) => {
+      // The melee/LMB slot shows the equipped weapon's icon when one is equipped,
+      // matching the inventory/shop. Falls back to the melee move, then pixels.
+      if (slot === 'melee' && canvas && typeof Neo.drawWeaponToastIcon === 'function') {
+        const weaponDef = Neo.WEAPON_DEFS[Neo.getEquippedWeapon()];
+        if (weaponDef) {
+          Neo.drawWeaponToastIcon(canvas, weaponDef);
+          return;
+        }
+      }
       const moveKey = Neo.getEquippedMove(slot);
       const moveDef = Neo.MOVE_DEFS[moveKey];
       if (canvas && moveDef && typeof Neo.drawMoveToastIcon === 'function') {
