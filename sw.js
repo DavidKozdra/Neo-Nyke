@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'neonyke-v25';
+const CACHE_VERSION = 'neonyke-v26';
 const CACHE_META = 'neonyke-cache-meta';
 const CACHE_META_KEY = '/__neonyke_cache_meta__';
 const CACHE_REFRESH_INTERVAL_MS = 5 * 60 * 60 * 1000;
@@ -14,6 +14,9 @@ const PRECACHE = [
   '/assets/fonts/VT323-LatinExt.woff2',
   '/assets/fonts/PressStart2P-Latin.woff2',
   '/assets/sounds/Item Collect.wav',
+  '/assets/sounds/Coin.wav',
+  '/assets/sounds/Heal_player.wav',
+  '/assets/sounds/Player Death.wav',
   '/Koz_Engine_Lib/Core/koz-engine.global.js',
   '/assets/sprites/combatants.js',
   '/assets/sprites/environment.js',

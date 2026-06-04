@@ -403,6 +403,13 @@ export function applyPlayerHealing(amount, options = {}) {
     if (gained > 0) {
       Neo.player.hp = Math.min(maxHp, beforeHp + gained);
       window.achievementEvents?.emit('heal:applied', { amount: gained });
+
+      // only play the heal sound if it hasn't been played in the last 2 seconds (~120 frames)
+      const nowFrame = Number(Neo.frameId || 0);
+      if (nowFrame - Number(Neo.player.lastHealSfxFrame || -9999) >= 120) {
+        Neo.player.lastHealSfxFrame = nowFrame;
+        Neo.playSfx?.('heal_player');
+      }
     }
     const overflow = Math.max(0, healAmount - gained);
     const stats = Neo.getItemStats?.() || {};

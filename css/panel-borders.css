@@ -131,6 +131,14 @@ html.princess-ui {
   border-color: #000 !important;
 }
 
+/* Exception: the gold "TOOL" chip keeps its distinctive amber outline. The black
+   border pass above (and the princess-theme chip override) would otherwise flatten
+   it into a generic chip, making the tool tag read as missing. */
+.shop-card__chip.shop-card__chip--tool,
+html.princess-ui .shop-card__chip.shop-card__chip--tool {
+  border-color: #ffcf6a !important;
+}
+
 .hero-detail-panel {
   border: 1px solid #000;
 }

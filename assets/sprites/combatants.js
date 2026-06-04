@@ -75,18 +75,20 @@ window.NeoNykeSpriteDefs = {
     ],
   },
   hunter: {
-    palette: { a: '#1a242b', b: '#3f5a67', c: '#d6dcda', d: '#7a1f24' },
+    // Hooded ranger: pointed hood, shadowed face, leather greens with a slung
+    // bow curving down the right side (d = bowstave/quiver accent).
+    palette: { a: '#10180f', b: '#3c5232', c: '#b7d39a', d: '#8a5a2b' },
     pixels: [
-      '...cc.....',
-      '..cbbc....',
-      '..bbbb....',
-      '.bbddbb...',
-      '.bbbbbb...',
-      '..bbbbd...',
-      '.bb..bdd..',
-      '..b..bb...',
-      '.bb..bb...',
-      '..........',
+      '..bb.d....',
+      '.bbbbd....',
+      '.baacd....',
+      '.bbbbd....',
+      'bbbbbbd...',
+      'bbbbbbd...',
+      'dbbbbd....',
+      '.b..b.....',
+      'bb..bb....',
+      'd....d....',
     ],
   },
   cult_follower: {
@@ -297,6 +299,40 @@ window.NeoNykeSpriteDefs = {
       '.db..bd...',
       'c.c..c.c..',
       '....d.....',
+    ],
+  },
+  machine_gunner: {
+    // Bulky armored trooper: helmet with an orange visor slit, wide pauldrons,
+    // an ammo belt across the chest, and a heavy gun barrel at the right.
+    palette: { a: '#14171c', b: '#566273', c: '#aeb8c6', d: '#f08a2c' },
+    pixels: [
+      '..cbbc....',
+      '..bddb....',
+      '.cbbbbc...',
+      'ccbbbbcc..',
+      '.bdbdbdd..',
+      '.bbbbbddd.',
+      '.cbbbbc...',
+      '..b..b....',
+      '.cb..bc...',
+      '.c....c...',
+    ],
+  },
+  summoner: {
+    // Robed caster: tall horned hood, sunken glowing eyes, long dark robe, and a
+    // conjured orb (d) floating off the right hand.
+    palette: { a: '#160f24', b: '#3a2a5c', c: '#cdbdf2', d: '#46e0c8' },
+    pixels: [
+      '.d...d....',
+      '.bb.bb....',
+      '..bbbb....',
+      '..bddb....',
+      '.bbbbbb..d',
+      '.bbbbbbb.d',
+      '.bcbbcb...',
+      '.bbbbbb...',
+      '.bbbbbb...',
+      '.c.bb.c...',
     ],
   },
 };

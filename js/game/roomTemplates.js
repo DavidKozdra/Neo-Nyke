@@ -614,6 +614,9 @@
       // indefinitely until an enemy walks into triggerRadius, then detonates once.
       // (red_spikes/lightning_column etc. are one-shot/timed and are intentionally
       // NOT supported as static terrain — see neonyke-hazard-persistence memory.)
+      // Mark as dungeon-owned so the hazard loop arms it against the player too
+      // (the player's tool-spawned mines default to owner 'player' = anti-enemy).
+      if (out.owner == null) out.owner = 'dungeon';
       if (out.r == null) out.r = 18;
       if (out.armTime == null) out.armTime = 0.18;
       if (out.triggerRadius == null) out.triggerRadius = 34;

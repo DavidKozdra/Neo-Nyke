@@ -1363,6 +1363,7 @@ export function resumeGame() {
     if (!value) return 'Unknown';
     if (value === 'no_hit') return 'Never Get Hit';
     if (value === 'lava') return 'Lava';
+    if (value === 'thorn_mine') return 'Thorn Trap';
     if (value === 'challenge_bomb') return 'Trial Bomb';
     if (value === 'storm') return 'Storm Trial';
     if (value === 'enemy_projectile') return 'Enemy Projectile';
@@ -1631,10 +1632,11 @@ export function resumeGame() {
     'Charger': 'charger',
     'Laser': 'laser',
     'Sniper': 'sniper',
-    'Machine Gunner': 'sniper',
+    'Machine Gunner': 'machine_gunner',
     'Golem': 'golem',
     'Knave': 'knave',
     'Cult Mage': 'cult_mage',
+    'Summoner': 'summoner',
   };
 
   function resolveKillerSprite(key) {

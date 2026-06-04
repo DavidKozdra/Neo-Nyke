@@ -617,6 +617,7 @@
       entry,
     };
     Neo.setGameState('dying');
+    Neo.playSfx?.('player_death');
     clearRunSave();
   }
 
@@ -935,6 +936,7 @@
     const distance = Neo.rand(22, 74, 'fx');
     Neo.hazards.push({
       kind: 'thorn_mine',
+      owner: 'player',
       x: Neo.player.x + Math.cos(angle) * distance,
       y: Neo.player.y + Math.sin(angle) * distance,
       r: 18,

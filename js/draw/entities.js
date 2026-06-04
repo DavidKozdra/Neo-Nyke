@@ -53,8 +53,8 @@
   function getEnemySpriteKey(enemy) {
     if (enemy.type === 'rival') return enemy.rivalKey;
     if (enemy.type === 'mirror_knight') return enemy.spriteKey || getPlayerSpriteKey();
-    if (enemy.type === 'machine_gunner') return 'sniper';
-    if (enemy.type === 'summoner') return 'cult_mage';
+    if (enemy.type === 'machine_gunner') return Neo.SPRITE_DEFS.machine_gunner ? 'machine_gunner' : 'sniper';
+    if (enemy.type === 'summoner') return Neo.SPRITE_DEFS.summoner ? 'summoner' : 'cult_mage';
     if (enemy.type === 'shield_unit') return 'golem';
     if (enemy.type === 'healer') return 'cult_follower';
     if (enemy.type === 'boss_spawner') return 'laser';

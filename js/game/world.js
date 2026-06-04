@@ -1440,14 +1440,22 @@
       }
       hazard.statusTick = Number(hazard.statusTick ?? 0) - dt;
       if (hazard.kind === 'thorn_mine') {
+        // owner distinguishes the player's "sweepy mine" tool (owner 'player' →
+        // anti-enemy only) from dungeon-authored mines (owner 'dungeon' → also
+        // arm against and damage the player). Default to 'player' so the legacy
+        // tool-spawned mines keep their old behavior.
+        const dungeonOwned = hazard.owner === 'dungeon';
+        const triggerR = hazard.triggerRadius || 34;
         hazard.armTime = Math.max(0, Number(hazard.armTime || 0) - dt);
         if (hazard.armTime <= 0 && !hazard.triggered) {
           let target = null;
-          forEachEnemyNearCircle(hazard.x, hazard.y, (hazard.triggerRadius || 34) + 80, enemy => {
+          forEachEnemyNearCircle(hazard.x, hazard.y, triggerR + 80, enemy => {
             if (target) return;
-            if (Neo.dist(enemy.x, enemy.y, hazard.x, hazard.y) <= (hazard.triggerRadius || 34) + enemy.r) target = enemy;
+            if (Neo.dist(enemy.x, enemy.y, hazard.x, hazard.y) <= triggerR + enemy.r) target = enemy;
           });
-          if (target) {
+          const playerTrips = dungeonOwned
+            && Neo.dist(Neo.player.x, Neo.player.y, hazard.x, hazard.y) <= triggerR + Neo.player.r;
+          if (target || playerTrips) {
             hazard.triggered = true;
             const blast = Number(hazard.blastRadius || 62);
             forEachEnemyNearCircle(hazard.x, hazard.y, blast + 80, enemy => {
@@ -1459,6 +1467,11 @@
                 bleedDuration: hazard.bleedDuration || 4.5,
               });
             });
+            if (dungeonOwned && Neo.dist(Neo.player.x, Neo.player.y, hazard.x, hazard.y) <= blast + Neo.player.r) {
+              const angle = Math.atan2(Neo.player.y - hazard.y, Neo.player.x - hazard.x);
+              damagePlayer(hazard.damage || 18, angle, 170, hazard.source || 'thorn_mine');
+              Neo.applyStatus?.(Neo.player, 'bleed', hazard.bleedStacks || 1, hazard.bleedDuration || 4.5);
+            }
             Neo.spawnParticle({ x: hazard.x, y: hazard.y, life: 0.35, ring: blast, c: '#ff6e8b' });
             hazard.ttl = 0;
           }
@@ -2094,6 +2107,7 @@
 
       if (pickup.type === 'coin') {
         addCoins(Math.round((pickup.value || 1) * coinPickupMultiplier));
+        Neo.playSfx?.('coin');
       }
 
       if (pickup.type === 'potion') {

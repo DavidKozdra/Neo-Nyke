@@ -11,6 +11,9 @@
   // Game sound list. Paths are relative to the page (index.html / game.html).
   const SOUNDS = [
     { id: 'item_collect', path: 'assets/sounds/Item Collect.wav', volume: 0.7 },
+    { id: 'coin', path: 'assets/sounds/Coin.wav', volume: 0.6 },
+    { id: 'heal_player', path: 'assets/sounds/Heal_player.wav', volume: 0.7 },
+    { id: 'player_death', path: 'assets/sounds/Player Death.wav', volume: 0.8 },
   ];
 
   if (registry) {
