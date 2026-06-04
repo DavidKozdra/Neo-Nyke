@@ -391,7 +391,7 @@ export const ITEM_DEFS = {
       key: 'copycat_charm',
       name: 'Copycat Charm',
       shortName: 'Item x2',
-      description: '20% chance per stack to duplicate an item pickup.',
+      description: '30% chance per stack to duplicate an item pickup.',
       rarity: 'god',
       color: '#f5efff',
       accent: '#c8a8ff',

@@ -177,7 +177,11 @@
             setObjective(phase === 'channel' ? `Hold the center until the prize stabilizes (${timer}s).` : 'Pick one prize, then hold the center to secure it.');
           }
           else if (type === 'bomb') setObjective(`Disarm the blue bomb before detonation (${Math.ceil(Neo.currentRoom.challengeTimer || 0)}s).`);
-          else if (type === 'survival') setObjective(`Protect the central obelisk and survive for ${Math.ceil(Neo.currentRoom.challengeTimer || 0)}s.`);
+          else if (type === 'survival') {
+            const obelisk = Neo.currentRoom.challengeData?.obelisk;
+            const hpPct = obelisk ? Math.ceil(Neo.clamp((obelisk.hp || 0) / Math.max(1, obelisk.maxHp || 1), 0, 1) * 100) : 100;
+            setObjective(`Keep enemies off the obelisk (${hpPct}%) — survive ${Math.ceil(Neo.currentRoom.challengeTimer || 0)}s.`);
+          }
           else if (type === 'runes') setObjective(`Collect the remaining runes: ${Math.max(0, Number(Neo.currentRoom.challengeData?.runesLeft || 0))}.`);
           else if (type === 'storm') setObjective(`Live through the storm for ${Math.ceil(Neo.currentRoom.challengeTimer || 0)}s.`);
         }

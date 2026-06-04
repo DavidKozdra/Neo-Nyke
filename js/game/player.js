@@ -346,7 +346,7 @@ export function getItemStats() {
       pickupVacuumRange: goldVac > 0 ? 9999 : 0,
       coinPickupMultiplier: goldVac > 0 ? 2 : 1,
       potionDoubleChance: Neo.clamp(doubleDose * 0.5, 0, 1),
-      itemDuplicateChance: Neo.clamp(copycatCharm * 0.2, 0, 1),
+      itemDuplicateChance: Neo.clamp(copycatCharm * 0.3, 0, 1),
       critChance,
       critMultiplier: 1.6 + (oracleLens ? critChance * 2.2 : critChance * 0.6),
       attackSpeedMultiplier: 1 + attackServo * 0.12 + chronoSpringBonus,

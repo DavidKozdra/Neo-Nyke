@@ -1319,9 +1319,77 @@
     });
   }
 
+  function drawChallengeObelisk() {
+    const room = Neo.currentRoom;
+    if (!room || room.type !== 'challenge' || room.cleared || !room.challengeStarted) return;
+    const obelisk = room.challengeData?.obelisk;
+    if (!obelisk) return;
+
+    const t = Date.now() / 1000;
+    const hpRatio = Neo.clamp((obelisk.hp || 0) / Math.max(1, obelisk.maxHp || 1), 0, 1);
+    const flash = obelisk.hitFlash || 0;
+    const r = obelisk.r || 22;
+
+    Neo.ctx.save();
+    Neo.ctx.translate(obelisk.x, obelisk.y);
+
+    // Guard-range ring: shows the zone enemies must be kept out of.
+    Neo.ctx.strokeStyle = flash > 0 ? 'rgba(255,120,134,0.5)' : 'rgba(141,212,255,0.28)';
+    Neo.ctx.lineWidth = 2;
+    Neo.ctx.setLineDash([8, 10]);
+    Neo.ctx.lineDashOffset = -t * 22;
+    Neo.ctx.beginPath();
+    Neo.ctx.arc(0, 0, obelisk.guardRange || 96, 0, Math.PI * 2);
+    Neo.ctx.stroke();
+    Neo.ctx.setLineDash([]);
+
+    // Base shadow
+    Neo.ctx.fillStyle = 'rgba(0,0,0,0.32)';
+    Neo.ctx.beginPath();
+    Neo.ctx.ellipse(0, r * 0.7, r * 0.95, r * 0.4, 0, 0, Math.PI * 2);
+    Neo.ctx.fill();
+
+    // Obelisk body — a tapered crystal pillar.
+    const bodyColor = flash > 0 ? '#ffd0d6' : '#bfe6ff';
+    const coreGlow = `rgba(141,212,255,${0.35 + Math.sin(t * 2) * 0.12})`;
+    Neo.ctx.shadowColor = flash > 0 ? '#ff5566' : '#5ab8ff';
+    Neo.ctx.shadowBlur = 18;
+    Neo.ctx.fillStyle = bodyColor;
+    Neo.ctx.beginPath();
+    Neo.ctx.moveTo(0, -r * 2.2);
+    Neo.ctx.lineTo(r * 0.7, -r * 0.4);
+    Neo.ctx.lineTo(r * 0.5, r * 0.7);
+    Neo.ctx.lineTo(-r * 0.5, r * 0.7);
+    Neo.ctx.lineTo(-r * 0.7, -r * 0.4);
+    Neo.ctx.closePath();
+    Neo.ctx.fill();
+
+    // Inner core sheen
+    Neo.ctx.shadowBlur = 0;
+    Neo.ctx.fillStyle = coreGlow;
+    Neo.ctx.beginPath();
+    Neo.ctx.moveTo(0, -r * 1.9);
+    Neo.ctx.lineTo(r * 0.22, -r * 0.3);
+    Neo.ctx.lineTo(-r * 0.22, -r * 0.3);
+    Neo.ctx.closePath();
+    Neo.ctx.fill();
+
+    // HP bar above the obelisk
+    const barW = r * 2.4;
+    const barH = 5;
+    const barY = -r * 2.2 - 14;
+    Neo.ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    Neo.ctx.fillRect(-barW / 2 - 1, barY - 1, barW + 2, barH + 2);
+    Neo.ctx.fillStyle = hpRatio > 0.5 ? '#6fe09a' : hpRatio > 0.25 ? '#f5d24a' : '#ff6a78';
+    Neo.ctx.fillRect(-barW / 2, barY, barW * hpRatio, barH);
+
+    Neo.ctx.restore();
+  }
+
   // Expose on Neo
   Neo.drawWorldProps = drawWorldProps;
   Neo.drawPickups = drawPickups;
+  Neo.drawChallengeObelisk = drawChallengeObelisk;
   Neo.getProjectileVisual = getProjectileVisual;
   Neo.drawProjectileTrail = drawProjectileTrail;
   Neo.drawProjectileShape = drawProjectileShape;

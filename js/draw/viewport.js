@@ -15,6 +15,7 @@ export function drawWorldViewport(cam, vpX, vpW, vpH, vpY, pLabel, slot = null) 
     Neo.drawFloor();
     Neo.drawRoomDecor();
     Neo.drawWorldProps();
+    Neo.drawChallengeObelisk();
     Neo.drawDeadBodies();
     Neo.drawChests();
     Neo.drawPickups();

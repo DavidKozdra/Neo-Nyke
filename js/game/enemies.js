@@ -788,8 +788,8 @@
       base.bossSpawnWarnAt = 30;
     } else if (type === 'queen_cult') {
       base.r = 38;
-      base.hp = 760;
-      base.max = 760;
+      base.hp = 912;
+      base.max = 912;
       base.speed = 96;
       base.dmg = 20;
       base.attackCd = 1.2;
@@ -826,8 +826,8 @@
       base.burstCd = 0;
     } else if (type === 'antony_blemmye') {
       base.r = 42;
-      base.hp = 1540;
-      base.max = 1540;
+      base.hp = 1400;
+      base.max = 1400;
       base.speed = 82;
       base.dmg = 27;
       base.attackCd = 1.15;
@@ -1445,6 +1445,16 @@
       room.challengeData.tickStart = Number(tuning.tickStart || 2);
       room.challengeData.tickEnd = Number(tuning.tickEnd || 1.35);
       room.challengeData.targetClearRate = CHALLENGE_CLEAR_RATE_TARGETS.survival;
+      const obeliskHp = Math.round(120 + Neo.floor * 30);
+      room.challengeData.obelisk = {
+        x: Neo.ROOM_W / 2,
+        y: Neo.ROOM_H / 2,
+        r: 22,
+        hp: obeliskHp,
+        maxHp: obeliskHp,
+        hitFlash: 0,
+        guardRange: 96,
+      };
       spawnTrialEnemyWave(2);
       sayAtPosition(Neo.ROOM_W / 2, Neo.ROOM_H / 2, 'Protect the central obelisk and survive.', { speaker: 'TRIAL', tone: 'warning' });
     } else if (type === 'runes') {
@@ -3694,6 +3704,36 @@
         Neo.currentRoom.challengeTick = tickEnd + (tickStart - tickEnd) * timeRatio;
         spawnTrialEnemyWave(Math.max(1, Number(Neo.currentRoom.challengeData?.spawnCount || 1)));
       }
+
+      // Enemies that crowd the obelisk drain its hp. The player must clear adds to keep it standing.
+      const obelisk = Neo.currentRoom.challengeData?.obelisk;
+      if (obelisk) {
+        obelisk.hitFlash = Math.max(0, (obelisk.hitFlash || 0) - dt);
+        let attackers = 0;
+        for (let index = 0; index < Neo.enemies.length; index += 1) {
+          const enemy = Neo.enemies[index];
+          if (!enemy || enemy.dead) continue;
+          if (Neo.dist(enemy.x, enemy.y, obelisk.x, obelisk.y) < obelisk.guardRange + (enemy.r || 12)) {
+            attackers += 1;
+          }
+        }
+        if (attackers > 0) {
+          const drain = attackers * (6 + Neo.floor * 0.8) * dt;
+          obelisk.hp = Math.max(0, obelisk.hp - drain);
+          obelisk.hitFlash = 0.18;
+          if (Neo.nextRandom('world') < dt * attackers * 2) {
+            Neo.spawnParticle({ x: obelisk.x + (Neo.nextRandom('world') - 0.5) * 30, y: obelisk.y - 6, life: 0.3, c: '#ff8b98', ring: 8 });
+          }
+        }
+        if (obelisk.hp <= 0) {
+          Neo.spawnParticle({ x: obelisk.x, y: obelisk.y, life: 0.6, ring: 40, c: '#ff5566' });
+          Neo.shake = Math.max(Neo.shake || 0, 14);
+          Neo.shakeT = Math.max(Neo.shakeT || 0, 0.3);
+          failChallengeTrial('OBELISK DESTROYED');
+          return;
+        }
+      }
+
       if (Neo.currentRoom.challengeTimer <= 0) {
         Neo.enemies.splice(0, Neo.enemies.length);
         completeChallengeTrial('SURVIVED');

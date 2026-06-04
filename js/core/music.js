@@ -1,11 +1,23 @@
-// music.js — title/menu music playback for the main game runtime.
-// Plays the title track in menu-like states and respects settings volume.
+// music.js — menu and in-game music playback for the main game runtime.
+// Menu plays a one-shot title intro that hands off into a looping title theme.
+// In-game states play one of several gameplay tracks, picked at random.
 (function initMusic() {
-  const TITLE_TRACK_PATH = 'assets/sounds/music/Neo Nyke - Title.mp3';
-  const MENU_STATES = new Set(['menu', 'charselect', 'start']);
+  const TITLE_INTRO_PATH = 'assets/sounds/music/Neo Nyke - Title Intro.wav';
+  const TITLE_LOOP_PATH = 'assets/sounds/music/Neo Nyke - Title Loop.wav';
+  const GAME_TRACK_PATHS = [
+    'assets/sounds/music/Neo Nyke - main theme.mp3',
+  ];
 
-  let titleTrack = null;
+  const MENU_STATES = new Set(['menu', 'charselect', 'start']);
+  const GAME_STATES = new Set(['play', 'dying', 'dialogue', 'boss_rush', 'endless']);
+
+  let titleIntro = null;
+  let titleLoop = null;
+  let gameTrack = null;
+  let gameTrackPath = null;
   let unlockedByGesture = false;
+  // Which musical context is currently meant to be sounding: 'menu', 'game', or null.
+  let activeContext = null;
 
   function clamp01(value) {
     const n = Number(value);
@@ -20,61 +32,122 @@
     return master * music;
   }
 
-  function ensureTrack() {
-    if (titleTrack) return titleTrack;
-    const src = encodeURI(TITLE_TRACK_PATH);
-    titleTrack = new Audio(src);
-    titleTrack.loop = true;
-    titleTrack.preload = 'auto';
-    titleTrack.volume = getMusicGain();
-    return titleTrack;
+  function makeAudio(path, { loop }) {
+    const audio = new Audio(encodeURI(path));
+    audio.loop = loop;
+    audio.preload = 'auto';
+    audio.volume = getMusicGain();
+    return audio;
   }
 
-  function isMenuLikeState() {
-    return MENU_STATES.has(String(Neo.gameState || '').toLowerCase());
+  function ensureTitleTracks() {
+    if (!titleLoop) {
+      titleLoop = makeAudio(TITLE_LOOP_PATH, { loop: true });
+    }
+    if (!titleIntro) {
+      titleIntro = makeAudio(TITLE_INTRO_PATH, { loop: false });
+      // Hand off from the one-shot intro into the looping theme seamlessly.
+      titleIntro.addEventListener('ended', () => {
+        if (activeContext !== 'menu') return;
+        applyVolume();
+        if (titleLoop.volume <= 0) return;
+        void titleLoop.play().catch(() => {});
+      });
+    }
+  }
+
+  function pickGameTrackPath() {
+    if (GAME_TRACK_PATHS.length === 0) return null;
+    const index = Math.floor(Math.random() * GAME_TRACK_PATHS.length);
+    return GAME_TRACK_PATHS[index];
+  }
+
+  function ensureGameTrack() {
+    if (gameTrack && gameTrackPath) return gameTrack;
+    gameTrackPath = pickGameTrackPath();
+    if (!gameTrackPath) return null;
+    gameTrack = makeAudio(gameTrackPath, { loop: true });
+    return gameTrack;
+  }
+
+  function currentContext() {
+    const state = String(Neo.gameState || '').toLowerCase();
+    if (MENU_STATES.has(state)) return 'menu';
+    if (GAME_STATES.has(state)) return 'game';
+    return null;
   }
 
   function applyVolume() {
-    if (!titleTrack) return;
-    titleTrack.volume = getMusicGain();
+    const gain = getMusicGain();
+    if (titleIntro) titleIntro.volume = gain;
+    if (titleLoop) titleLoop.volume = gain;
+    if (gameTrack) gameTrack.volume = gain;
   }
 
-  function pauseTrack() {
-    if (!titleTrack) return;
-    try {
-      titleTrack.pause();
-    } catch {}
+  function pauseMenuMusic() {
+    try { titleIntro?.pause(); } catch {}
+    try { titleLoop?.pause(); } catch {}
   }
 
-  async function playTrack() {
-    const track = ensureTrack();
+  function pauseGameMusic() {
+    try { gameTrack?.pause(); } catch {}
+  }
+
+  function pauseAll() {
+    pauseMenuMusic();
+    pauseGameMusic();
+  }
+
+  function playMenuMusic() {
+    ensureTitleTracks();
     applyVolume();
-    if (track.volume <= 0) {
-      pauseTrack();
+    if (getMusicGain() <= 0) {
+      pauseMenuMusic();
       return;
     }
-    if (!isMenuLikeState()) {
-      pauseTrack();
+    // If the loop is already going, leave it; otherwise start (or resume) the intro.
+    if (!titleLoop.paused && titleLoop.currentTime > 0) return;
+    if (!titleIntro.paused) return;
+    void titleIntro.play().catch(() => {});
+  }
+
+  function playGameMusic() {
+    const track = ensureGameTrack();
+    if (!track) return;
+    applyVolume();
+    if (getMusicGain() <= 0) {
+      pauseGameMusic();
       return;
     }
-    try {
-      await track.play();
-    } catch {}
+    void track.play().catch(() => {});
   }
 
   function syncMusicState() {
-    ensureTrack();
+    const context = currentContext();
     applyVolume();
-    if (isMenuLikeState() && unlockedByGesture) {
-      void playTrack();
-      return;
+
+    if (context !== activeContext) {
+      // Context changed: stop whatever the previous context was playing.
+      if (activeContext === 'menu') pauseMenuMusic();
+      if (activeContext === 'game') pauseGameMusic();
+      activeContext = context;
     }
-    if (!isMenuLikeState()) pauseTrack();
+
+    if (!unlockedByGesture) return;
+
+    if (context === 'menu') {
+      playMenuMusic();
+    } else if (context === 'game') {
+      pauseMenuMusic();
+      playGameMusic();
+    } else {
+      pauseAll();
+    }
   }
 
   function unlockAndPlay() {
     unlockedByGesture = true;
-    if (isMenuLikeState()) void playTrack();
+    syncMusicState();
   }
 
   const unlockEvents = ['pointerdown', 'keydown', 'touchstart'];
@@ -88,7 +161,7 @@
 
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
-      pauseTrack();
+      pauseAll();
       return;
     }
     syncMusicState();
@@ -99,8 +172,9 @@
 
   Neo.playTitleMusic = () => {
     unlockedByGesture = true;
-    void playTrack();
+    syncMusicState();
   };
-  Neo.pauseTitleMusic = pauseTrack;
+  Neo.pauseTitleMusic = pauseMenuMusic;
   Neo.syncTitleMusic = syncMusicState;
+  Neo.pauseGameMusic = pauseGameMusic;
 })();

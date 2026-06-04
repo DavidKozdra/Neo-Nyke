@@ -1754,7 +1754,7 @@ export function renderShopPanel() {
             : item?.description || 'No details available.';
           const descriptorChips = buildDescriptorChips(offer.key, description, { kind: 'item' });
           const baseChips = [
-            { label: 'Relic', tone: 'rarity' },
+            item?.tool ? { label: 'Tool', tone: 'tool' } : { label: 'Relic', tone: 'rarity' },
             item?.rarity ? { label: item.rarity, tone: 'rarity' } : null,
             item?.category ? { label: item.category, tone: 'item' } : null,
             ...descriptorChips,
@@ -2035,10 +2035,10 @@ export function renderInventoryPanel() {
         .map(key => {
           const item = Neo.itemRegistry.get(key);
           return `<div class="inv-card">
-            <span class="inv-card__eyebrow">Relic</span>
+            <span class="inv-card__eyebrow">${item?.tool ? 'Tool' : 'Relic'}</span>
             <div class="inv-card__title-row">
               <canvas class="inv-card__icon" data-item-icon="${key}" width="40" height="40"></canvas>
-              <h4 style="color:${Neo.getRarityNameColor(item?.rarity || item?.category)}">${item?.name || key}</h4>
+              <h4 style="color:${Neo.getRarityNameColor(item?.rarity || item?.category)}">${item?.name || key}${item?.tool ? '<span class="item-tool-badge">TOOL</span>' : ''}</h4>
               <span class="inv-card__count">x${_invP.items[key]}</span>
             </div>
             <p style="color:${Neo.getRarityNameColor(item?.rarity || item?.category)}">${item?.description || 'No item description available.'}</p>
@@ -2061,7 +2061,7 @@ export function renderInventoryPanel() {
               <span class="inv-tool-card__key">${hotkey}</span>
               <canvas class="inv-tool-card__icon" data-item-icon="${key}" width="36" height="36"></canvas>
               <div class="inv-tool-card__meta">
-                <b style="color:${rarityColor}">${item?.name || key}${count > 1 ? ` <span class="inv-tool-card__count">x${count}</span>` : ''}</b>
+                <b style="color:${rarityColor}">${item?.name || key}<span class="item-tool-badge">TOOL</span>${count > 1 ? ` <span class="inv-tool-card__count">x${count}</span>` : ''}</b>
                 <p>${item?.description || 'No item description available.'}</p>
               </div>
               <div class="inv-tool-card__reorder">
