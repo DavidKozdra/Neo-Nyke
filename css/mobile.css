@@ -360,8 +360,8 @@
 
   .objective-tracker {
     right: 8px;
-    width: min(130px, calc(100vw - 16px));
-    font-size: 10px;
+    width: min(260px, calc(100vw - 16px));
+    font-size: 20px;
   }
 
   /* ── 15. In-game panels (shop, inventory, anvil) ─────────────── */
@@ -1865,22 +1865,22 @@
   .objective-tracker {
     top: calc(82px + env(safe-area-inset-top, 0px));
     right: calc(8px + env(safe-area-inset-right, 0px));
-    width: min(126px, calc(100vw - 16px));
+    width: min(252px, calc(100vw - 16px));
     max-height: calc(100dvh - 92px - env(safe-area-inset-top, 0px));
-    padding: 5px 6px;
-    font-size: 8px;
+    padding: 10px 12px;
+    font-size: 16px;
     transform: scale(var(--hud-scale, 1));
   }
 
   .objective-tracker__head {
-    gap: 4px;
-    font-size: 7px;
+    gap: 8px;
+    font-size: 14px;
     letter-spacing: .08em;
   }
 
   .objective-tracker__summary,
   .objective-list li {
-    font-size: 8px;
+    font-size: 16px;
     line-height: 1.15;
   }
 
@@ -2142,7 +2142,7 @@
 
   .objective-tracker {
     top: calc(96px + env(safe-area-inset-top, 0px));
-    width: min(118px, calc(100vw - 16px));
+    width: min(236px, calc(100vw - 16px));
   }
 
   #itemNotifyStack {
@@ -2429,7 +2429,7 @@
 
   .objective-tracker {
     top: calc(58px + env(safe-area-inset-top, 0px));
-    width: 118px;
+    width: min(236px, calc(100vw - 16px));
   }
 
   .interact-prompt {

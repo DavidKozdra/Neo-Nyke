@@ -879,13 +879,13 @@ button, input, select, textarea {
   top: 154px;
   right: 2px;
   z-index: 19;
-  width: 142px;
+  width: 284px;
   max-height: calc(100dvh - 158px);
-  padding: 6px 8px;
+  padding: 12px 16px;
   border: 1px solid rgba(126, 200, 255, .18);
-  border-radius: 4px;
+  border-radius: 8px;
   background: rgba(8, 13, 21, .68);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, .18), inset 0 0 10px rgba(80, 160, 220, .035);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .18), inset 0 0 20px rgba(80, 160, 220, .035);
   color: #d8e9ff;
   pointer-events: none;
   overflow-y: auto;
@@ -904,12 +904,12 @@ button, input, select, textarea {
 .objective-tracker__head {
   display: flex;
   justify-content: space-between;
-  gap: 6px;
-  margin-bottom: 4px;
-  padding-bottom: 3px;
+  gap: 12px;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
   border-bottom: 1px solid rgba(126, 200, 255, .1);
   color: #8fd2ff;
-  font-size: 8px;
+  font-size: 16px;
   font-weight: 900;
   letter-spacing: .12em;
 }
@@ -917,11 +917,11 @@ button, input, select, textarea {
 .objective-tracker__meta {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 12px;
 }
 
 .objective-tracker__head b {
-  max-width: 54px;
+  max-width: 108px;
   overflow: hidden;
   color: #ffd27d;
   text-align: right;
@@ -931,22 +931,22 @@ button, input, select, textarea {
 
 .objective-tracker__toggle {
   border: 1px solid rgba(143, 210, 255, .42);
-  border-radius: 3px;
+  border-radius: 6px;
   background: rgba(10, 18, 30, .78);
   color: #b9e5ff;
-  font-size: 8px;
+  font-size: 16px;
   font-weight: 800;
   letter-spacing: .08em;
   text-transform: uppercase;
-  padding: 1px 5px;
+  padding: 2px 10px;
   pointer-events: auto;
   cursor: pointer;
 }
 
 .objective-tracker__summary {
-  margin-bottom: 4px;
+  margin-bottom: 8px;
   color: #c9ddf3;
-  font-size: 9px;
+  font-size: 18px;
   font-weight: 700;
   line-height: 1.2;
   text-shadow: 0 1px 0 rgba(0, 0, 0, .65);
@@ -954,7 +954,7 @@ button, input, select, textarea {
 
 .objective-list {
   display: grid;
-  gap: 3px;
+  gap: 6px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -962,11 +962,11 @@ button, input, select, textarea {
 
 .objective-list li {
   display: grid;
-  grid-template-columns: 8px 1fr;
-  gap: 5px;
+  grid-template-columns: 16px 1fr;
+  gap: 10px;
   align-items: start;
   color: #c7d4e6;
-  font-size: 9px;
+  font-size: 18px;
   font-weight: 700;
   line-height: 1.2;
   text-shadow: 0 1px 0 rgba(0, 0, 0, .65);
@@ -974,12 +974,12 @@ button, input, select, textarea {
 
 .objective-list li::before {
   content: "";
-  width: 5px;
-  height: 5px;
-  margin-top: 3px;
+  width: 10px;
+  height: 10px;
+  margin-top: 6px;
   border: 1px solid rgba(141, 212, 255, .7);
   background: rgba(141, 212, 255, .18);
-  box-shadow: 0 0 6px rgba(141, 212, 255, .12);
+  box-shadow: 0 0 12px rgba(141, 212, 255, .12);
 }
 
 .objective-list li[data-state="done"] {
@@ -1006,7 +1006,7 @@ button, input, select, textarea {
   .objective-tracker {
     top: 118px;
     right: 2px;
-    width: min(142px, calc(100vw - 16px));
+    width: min(284px, calc(100vw - 16px));
   }
 }
 
@@ -1016,11 +1016,11 @@ button, input, select, textarea {
   }
 
   .objective-tracker.objective-tracker--compact .objective-tracker__head {
-    margin-bottom: 2px;
+    margin-bottom: 4px;
   }
 
   .objective-tracker.objective-tracker--compact:not(.objective-tracker--expanded) {
-    padding-bottom: 5px;
+    padding-bottom: 10px;
   }
 }
 

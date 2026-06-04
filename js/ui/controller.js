@@ -246,17 +246,18 @@ export function createUIController(view) {
         return;
       }
 
-      const margin = 4;
-      const gap = window.innerWidth <= 920 ? 8 : 12;
-      const trackerWidth = Math.round(Neo.clamp(window.innerWidth <= 920 ? 124 : 142, 108, window.innerWidth - margin * 2));
-      let right = Math.round(Neo.clamp(window.innerWidth - layout.right, margin, window.innerWidth - trackerWidth - margin));
-      let top = Math.max(margin, Math.round(layout.bottom + gap));
+      const margin = 8;
+      const gap = window.innerWidth <= 920 ? 16 : 24;
+      const trackerWidth = Math.round(Neo.clamp(window.innerWidth <= 920 ? 248 : 284, 216, window.innerWidth - margin * 2));
+      let right = Math.round(Neo.clamp(window.innerWidth - layout.left + gap, margin, window.innerWidth - trackerWidth - margin));
+      let top = Math.max(margin, Math.round(layout.top));
       let maxHeight = Math.floor(window.innerHeight - top - margin);
 
-      // If there is not enough room below the minimap, place objectives left of it.
-      if (maxHeight < 92) {
-        top = Math.max(margin, Math.round(layout.top));
-        right = Math.round(Neo.clamp(window.innerWidth - layout.left + gap, margin, window.innerWidth - trackerWidth - margin));
+      // Keep objectives beside the minimap when possible; if vertical space is
+      // too tight, drop below the map as the fallback.
+      if (maxHeight < 184) {
+        top = Math.max(margin, Math.round(layout.bottom + gap));
+        right = Math.round(Neo.clamp(window.innerWidth - layout.right, margin, window.innerWidth - trackerWidth - margin));
         maxHeight = Math.floor(window.innerHeight - top - margin);
       }
 
@@ -264,7 +265,7 @@ export function createUIController(view) {
         top,
         right,
         width: trackerWidth,
-        maxHeight: Math.max(74, maxHeight),
+        maxHeight: Math.max(148, maxHeight),
       };
       if (!objectiveLayoutCache
         || objectiveLayoutCache.top !== nextLayout.top
