@@ -521,8 +521,14 @@
     };
   }
 
+  // Pack a (cellX, cellY) pair into a single integer key. Cell coords are
+  // Math.floor(px / 128) and can be negative, so bias by a large offset before
+  // packing. A string key here would allocate + hash on every cell every frame
+  // (the index is rebuilt per frame); an integer key avoids both.
+  const ENEMY_CELL_OFFSET = 4096;
+  const ENEMY_CELL_STRIDE = 8192;
   function getEnemyCellKey(cellX, cellY) {
-    return `${cellX},${cellY}`;
+    return (cellX + ENEMY_CELL_OFFSET) * ENEMY_CELL_STRIDE + (cellY + ENEMY_CELL_OFFSET);
   }
 
   function buildEnemySpatialIndex() {
@@ -545,6 +551,35 @@
       }
     }
     return { cells };
+  }
+
+  // Build (or reuse) the spatial indexes at most once per frame. The per-query
+  // consumers below already honor the `...IndexFrame === Neo.frameId` cache;
+  // these ensure-helpers let the per-frame update functions populate that cache
+  // instead of rebuilding unconditionally.
+  function ensureEnemySpatialIndex() {
+    if (Neo.enemySpatialIndexFrame !== Neo.frameId || !Neo.enemySpatialIndex) {
+      Neo.enemySpatialIndex = buildEnemySpatialIndex();
+      Neo.enemySpatialIndexFrame = Neo.frameId;
+    }
+    return Neo.enemySpatialIndex;
+  }
+
+  // Force a fresh enemy index for the current frame. Used right after enemy
+  // movement so projectile collision sees post-movement positions (any index
+  // built earlier this frame, e.g. during enemy AI, predates that movement).
+  function rebuildEnemySpatialIndex() {
+    Neo.enemySpatialIndex = buildEnemySpatialIndex();
+    Neo.enemySpatialIndexFrame = Neo.frameId;
+    return Neo.enemySpatialIndex;
+  }
+
+  function ensureDestructibleSpatialIndex() {
+    if (Neo.destructibleSpatialIndexFrame !== Neo.frameId || !Neo.destructibleSpatialIndex) {
+      Neo.destructibleSpatialIndex = buildDestructibleSpatialIndex();
+      Neo.destructibleSpatialIndexFrame = Neo.frameId;
+    }
+    return Neo.destructibleSpatialIndex;
   }
 
   function queryEnemyIndexCells(index, bounds, visitor) {
@@ -894,7 +929,25 @@
     p.enemyBlast = props.enemyBlast ?? null;
     const defaultBounces = !enemyProjectile ? itemStats.projectileBounces : 0;
     p.bouncesRemaining = Math.max(0, Math.floor(Number((props.bouncesRemaining ?? defaultBounces) || 0)));
+    capProjectiles();
     Neo.projectiles.push(p);
+  }
+
+  // Hard ceiling on simultaneous projectiles. Long-life shots plus dense enemy
+  // fire can grow the array unbounded, and every projectile runs the per-frame
+  // blocker sweep — cost is super-linear in count. When over cap, drop the oldest
+  // enemy projectile first (gameplay-safe), falling back to the oldest overall,
+  // and return it to the pool.
+  const MAX_PROJECTILES = 320;
+  function removeProjectileAt(index, recycle = true) {
+    return Neo.unorderedRemoveAt(Neo.projectiles, index, recycle ? _projectilePool : null);
+  }
+
+  function capProjectiles() {
+    if (Neo.projectiles.length < MAX_PROJECTILES) return;
+    let dropIndex = Neo.projectiles.findIndex(proj => proj && proj.enemy);
+    if (dropIndex < 0) dropIndex = 0;
+    removeProjectileAt(dropIndex);
   }
 
   function tryBounceProjectile(projectile, prevX, prevY) {
@@ -923,19 +976,45 @@
     return true;
   }
 
-  function getProjectileBlockerRects(projectile) {
-    const rects = Neo.walls.concat(typeof Neo.getClosedDoorBlockerRects === 'function' ? Neo.getClosedDoorBlockerRects() : []);
+  // Static (per-frame) blocker rects: walls + closed doors + structures. These do
+  // not change between projectile updates within a frame, so build the list once
+  // per frame instead of re-concatenating + re-pushing for every projectile.
+  let _staticBlockerRects = [];
+  let _staticBlockerRectsFrame = -1;
+  // Reused output scratch array so per-projectile queries don't allocate.
+  const _blockerRectScratch = [];
+
+  function getStaticBlockerRects() {
+    if (_staticBlockerRectsFrame === Neo.frameId) return _staticBlockerRects;
+    const rects = Neo.walls.slice();
+    if (typeof Neo.getClosedDoorBlockerRects === 'function') {
+      const doors = Neo.getClosedDoorBlockerRects();
+      for (let i = 0; i < doors.length; i += 1) rects.push(doors[i]);
+    }
     Neo.structures.forEach(structure => {
       if (!structure || !Number.isFinite(structure.x) || !Number.isFinite(structure.y)) return;
       if (!Number.isFinite(structure.w) || !Number.isFinite(structure.h) || structure.w <= 0 || structure.h <= 0) return;
       rects.push({ x: structure.x - structure.w / 2, y: structure.y - structure.h / 2, w: structure.w, h: structure.h });
     });
-    if (projectile && projectile.enemy) {
-      Neo.destructibles.forEach(prop => {
-        if (!prop || prop.broken || prop.hidden) return;
-        rects.push(Neo.getDestructibleRect(prop));
-      });
-    }
+    _staticBlockerRects = rects;
+    _staticBlockerRectsFrame = Neo.frameId;
+    return _staticBlockerRects;
+  }
+
+  function getProjectileBlockerRects(projectile) {
+    const staticRects = getStaticBlockerRects();
+    // Non-enemy projectiles only ever hit the static set — return it directly,
+    // no per-call allocation.
+    if (!projectile || !projectile.enemy) return staticRects;
+    // Enemy projectiles also collide with destructibles; assemble into a reused
+    // scratch array (cleared each call) to avoid allocating a fresh array.
+    const rects = _blockerRectScratch;
+    rects.length = 0;
+    for (let i = 0; i < staticRects.length; i += 1) rects.push(staticRects[i]);
+    Neo.destructibles.forEach(prop => {
+      if (!prop || prop.broken || prop.hidden) return;
+      rects.push(Neo.getDestructibleRect(prop));
+    });
     return rects;
   }
 
@@ -1011,6 +1090,30 @@
     });
   }
 
+  // Reused A* scratch buffers for homing pathfinding. Allocated lazily and grown
+  // only when a larger room grid appears, so the common case (many homing shots
+  // re-pathing every 0.16s) does no per-call typed-array allocation. The needed
+  // prefix is reset each call below. `dirs` is constant.
+  let _homingScratch = null;
+  const _homingDirs = [
+    [1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1],
+    [1, 1, 1.35], [1, -1, 1.35], [-1, 1, 1.35], [-1, -1, 1.35],
+  ];
+  function getHomingScratch(nodeCount) {
+    if (!_homingScratch || _homingScratch.capacity < nodeCount) {
+      _homingScratch = {
+        capacity: nodeCount,
+        blocked: new Uint8Array(nodeCount),
+        gScore: new Float32Array(nodeCount),
+        fScore: new Float32Array(nodeCount),
+        cameFrom: new Int16Array(nodeCount),
+        open: new Uint8Array(nodeCount),
+        closed: new Uint8Array(nodeCount),
+      };
+    }
+    return _homingScratch;
+  }
+
   function buildProjectileHomingPath(projectile, targetX, targetY) {
     const cell = 44;
     const cols = Math.ceil(Neo.ROOM_W / cell);
@@ -1027,7 +1130,9 @@
     const start = toCell(projectile.x, projectile.y);
     const goal = toCell(targetX, targetY);
     const nodeCount = cols * rows;
-    const blocked = new Uint8Array(nodeCount);
+    const scratch = getHomingScratch(nodeCount);
+    const blocked = scratch.blocked;
+    blocked.fill(0, 0, nodeCount);
     const idx = (x, y) => y * cols + x;
     for (let y = 0; y < rows; y += 1) {
       for (let x = 0; x < cols; x += 1) {
@@ -1038,14 +1143,16 @@
     blocked[idx(start.x, start.y)] = 0;
     blocked[idx(goal.x, goal.y)] = 0;
 
-    const gScore = new Float32Array(nodeCount);
-    const fScore = new Float32Array(nodeCount);
-    const cameFrom = new Int16Array(nodeCount);
-    const open = new Uint8Array(nodeCount);
-    const closed = new Uint8Array(nodeCount);
-    gScore.fill(Infinity);
-    fScore.fill(Infinity);
-    cameFrom.fill(-1);
+    const gScore = scratch.gScore;
+    const fScore = scratch.fScore;
+    const cameFrom = scratch.cameFrom;
+    const open = scratch.open;
+    const closed = scratch.closed;
+    gScore.fill(Infinity, 0, nodeCount);
+    fScore.fill(Infinity, 0, nodeCount);
+    cameFrom.fill(-1, 0, nodeCount);
+    open.fill(0, 0, nodeCount);
+    closed.fill(0, 0, nodeCount);
     const startIdx = idx(start.x, start.y);
     const goalIdx = idx(goal.x, goal.y);
     const heuristic = (x, y) => Math.abs(goal.x - x) + Math.abs(goal.y - y);
@@ -1053,10 +1160,7 @@
     fScore[startIdx] = heuristic(start.x, start.y);
     open[startIdx] = 1;
 
-    const dirs = [
-      [1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1],
-      [1, 1, 1.35], [1, -1, 1.35], [-1, 1, 1.35], [-1, -1, 1.35],
-    ];
+    const dirs = _homingDirs;
     const maxIterations = Math.min(nodeCount, 420);
     for (let iteration = 0; iteration < maxIterations; iteration += 1) {
       let current = -1;
@@ -1189,13 +1293,11 @@
   }
 
   function updateProjectiles(dt) {
-    Neo.enemySpatialIndex = buildEnemySpatialIndex();
-    Neo.enemySpatialIndexFrame = Neo.frameId;
-    Neo.destructibleSpatialIndex = buildDestructibleSpatialIndex();
-    Neo.destructibleSpatialIndexFrame = Neo.frameId;
+    rebuildEnemySpatialIndex();
+    ensureDestructibleSpatialIndex();
     for (let index = Neo.projectiles.length - 1; index >= 0; index -= 1) {
       const projectile = Neo.projectiles[index];
-      if (!projectile) { Neo.projectiles.splice(index, 1); continue; }
+      if (!projectile) { removeProjectileAt(index, false); continue; }
       projectile.life -= dt;
       if (projectile.homing) {
         const speed = Math.hypot(Number(projectile.vx || 0), Number(projectile.vy || 0)) || Number(projectile.homingSpeed || 180);
@@ -1231,13 +1333,13 @@
         });
         if (projectile.kind === 'fireball') blastRadius(projectile.x, projectile.y, projectile.splash || 44, projectile.blockedSplashDamage || 16, '#ff8844');
         spawnProjectileImpact(projectile, projectile.x, projectile.y, { blocked: true });
-        _projectilePool.push(Neo.projectiles.splice(index, 1)[0]);
+        removeProjectileAt(index);
         continue;
       }
       if (projectile.life <= 0) {
         detonateEnemyProjectileBlast(projectile, projectile.x, projectile.y);
         spawnProjectileImpact(projectile, projectile.x, projectile.y, { blocked: true });
-        _projectilePool.push(Neo.projectiles.splice(index, 1)[0]);
+        removeProjectileAt(index);
         continue;
       }
       const sweepBlockHit = findProjectileSweepBlockHit(projectile, prevX, prevY);
@@ -1245,14 +1347,14 @@
         if (tryBounceProjectileAtSweepHit(projectile, sweepBlockHit)) continue;
         detonateEnemyProjectileBlast(projectile, sweepBlockHit.x, sweepBlockHit.y);
         spawnProjectileImpact(projectile, sweepBlockHit.x, sweepBlockHit.y, { blocked: true });
-        _projectilePool.push(Neo.projectiles.splice(index, 1)[0]);
+        removeProjectileAt(index);
         continue;
       }
       if (Neo.isBlocked(projectile.x, projectile.y, projectile.r)) {
         if (tryBounceProjectile(projectile, prevX, prevY)) continue;
         detonateEnemyProjectileBlast(projectile, projectile.x, projectile.y);
         spawnProjectileImpact(projectile, projectile.x, projectile.y, { blocked: true });
-        _projectilePool.push(Neo.projectiles.splice(index, 1)[0]);
+        removeProjectileAt(index);
         continue;
       }
       if (!projectile.enemy) {
@@ -1261,13 +1363,16 @@
             blastRadius(projectile.x, projectile.y, projectile.splash || 44, projectile.splashDamage || 14, '#ff8844');
           }
           spawnProjectileImpact(projectile, projectile.x, projectile.y);
-          _projectilePool.push(Neo.projectiles.splice(index, 1)[0]);
+          removeProjectileAt(index);
           continue;
         }
         let target = null;
         forEachEnemyNearCircle(projectile.x, projectile.y, projectile.r + 80, enemy => {
           if (target) return;
-          if (Neo.dist(projectile.x, projectile.y, enemy.x, enemy.y) <= projectile.r + enemy.r) target = enemy;
+          const hitRadius = projectile.r + enemy.r;
+          const dx = projectile.x - enemy.x;
+          const dy = projectile.y - enemy.y;
+          if (dx * dx + dy * dy <= hitRadius * hitRadius) target = enemy;
         });
         if (target) {
           const hitAngle = Math.atan2(projectile.vy, projectile.vx);
@@ -1297,24 +1402,27 @@
             projectile.x += projectile.vx * 0.03;
             projectile.y += projectile.vy * 0.03;
           } else {
-            _projectilePool.push(Neo.projectiles.splice(index, 1)[0]);
+            removeProjectileAt(index);
           }
           continue;
         }
-      } else if (Neo.dist(projectile.x, projectile.y, Neo.player.x, Neo.player.y) <= projectile.r + Neo.player.r) {
+      } else {
+        const hitRadius = projectile.r + Neo.player.r;
+        const dx = projectile.x - Neo.player.x;
+        const dy = projectile.y - Neo.player.y;
+        if (dx * dx + dy * dy > hitRadius * hitRadius) continue;
         damagePlayer(projectile.damage || 10, Math.atan2(projectile.vy, projectile.vx), projectile.knockback || 120, getProjectileDamageSource(projectile));
         applyProjectileStatusEffectsToPlayer(projectile);
         detonateEnemyProjectileBlast(projectile, projectile.x, projectile.y);
         spawnProjectileImpact(projectile, projectile.x, projectile.y);
-        _projectilePool.push(Neo.projectiles.splice(index, 1)[0]);
+        removeProjectileAt(index);
         continue;
       }
     }
   }
 
   function updateWorldProps(dt) {
-    Neo.enemySpatialIndex = buildEnemySpatialIndex();
-    Neo.enemySpatialIndexFrame = Neo.frameId;
+    ensureEnemySpatialIndex();
     if (Array.isArray(Neo.destructibles)) {
       Neo.destructibles.forEach(prop => {
         if (!prop) return;
@@ -1541,7 +1649,20 @@
         }
       }
     });
-    Neo.hazards = Neo.hazards.filter(hazard => hazard.ttl === undefined || hazard.ttl > 0);
+    // Drop expired hazards in place (write-index compaction) so the common case
+    // of nothing expiring allocates no new array.
+    {
+      const hazards = Neo.hazards;
+      let write = 0;
+      for (let read = 0; read < hazards.length; read += 1) {
+        const hazard = hazards[read];
+        if (hazard.ttl === undefined || hazard.ttl > 0) {
+          if (write !== read) hazards[write] = hazard;
+          write += 1;
+        }
+      }
+      hazards.length = write;
+    }
     Neo.syncCurrentRoomState();
   }
 
@@ -1755,7 +1876,7 @@
     const enemy = opts.enemy || null;
 
     // Combo-merge: if this enemy has a live popup, fold the new hit into it.
-    if (enemy && enemy._dmgPopup && enemy._dmgPopup.life > 0 && enemy._dmgPopup.text && Neo.particles.includes(enemy._dmgPopup)) {
+    if (enemy && enemy._dmgPopup && enemy._dmgPopup._active && enemy._dmgPopup._particleList === Neo.particles && enemy._dmgPopup._dmgOwner === enemy && enemy._dmgPopup.life > 0 && enemy._dmgPopup.text) {
       const p = enemy._dmgPopup;
       p._dmgTotal = (p._dmgTotal || value) + value;
       p._dmgCrit = p._dmgCrit || crit;
@@ -1792,6 +1913,7 @@
       if (p) {
         p._dmgTotal = value;
         p._dmgCrit = crit;
+        p._dmgOwner = enemy;
         enemy._dmgPopup = p;
       }
     }
@@ -1869,6 +1991,10 @@
     return true;
   }
 
+  function removePickupAt(index) {
+    return Neo.unorderedRemoveAt(Neo.pickups, index);
+  }
+
   function useJesterPortal(pickup) {
     const skipFloors = Neo.clamp(Number(pickup?.skipFloors || 0), 1, Neo.MAX_FLOOR - Neo.floor);
     if (skipFloors <= 0) return false;
@@ -1889,49 +2015,42 @@
     const autoVacuumRange = Math.max(0, Number(itemStats.pickupVacuumRange || 0));
     const coinPickupMultiplier = Math.max(1, Number(itemStats.coinPickupMultiplier || 1));
     const potionDoubleChance = Neo.clamp(Number(itemStats.potionDoubleChance || 0), 0, 1);
+    const playerX = Neo.player.x;
+    const playerY = Neo.player.y;
+    const pullPickupTowardPlayer = (pickup, magnetRadius, basePull, bonusPull) => {
+      const dx = playerX - pickup.x;
+      const dy = playerY - pickup.y;
+      const distSq = dx * dx + dy * dy;
+      const magnetSq = magnetRadius * magnetRadius;
+      if (distSq >= magnetSq || distSq <= 0.000001) return;
+      const distance = Math.sqrt(distSq);
+      const pull = basePull + (1 - distance / magnetRadius) * bonusPull;
+      pickup.x += (dx / distance) * 0.016 * pull;
+      pickup.y += (dy / distance) * 0.016 * pull;
+    };
     for (let index = Neo.pickups.length - 1; index >= 0; index -= 1) {
       const pickup = Neo.pickups[index];
       if (!pickup || typeof pickup !== 'object' || typeof pickup.type !== 'string') {
-        Neo.pickups.splice(index, 1);
+        removePickupAt(index);
         continue;
       }
       if (pickup.type === 'coin') {
         const magnetRadius = autoVacuumRange > 0 ? autoVacuumRange : 110;
-        const d = Neo.dist(pickup.x, pickup.y, Neo.player.x, Neo.player.y);
-        if (d < magnetRadius && d > 0.001) {
-          const pull = 180 + (1 - d / magnetRadius) * 260;
-          pickup.x += ((Neo.player.x - pickup.x) / d) * 0.016 * pull;
-          pickup.y += ((Neo.player.y - pickup.y) / d) * 0.016 * pull;
-        }
+        pullPickupTowardPlayer(pickup, magnetRadius, 180, 260);
       } else if (pickup.type === 'potion') {
         const _potionCap = Neo.getPotionCarryCap();
         const _wantPotion = Neo.player.hp < Neo.player.maxHp
           || (_potionCap > 0 && Number(Neo.player.storedPotions || 0) < _potionCap && Neo.player.hp >= Neo.player.maxHp);
         if (_wantPotion) {
           const magnetRadius = autoVacuumRange > 0 ? autoVacuumRange : 110;
-          const d = Neo.dist(pickup.x, pickup.y, Neo.player.x, Neo.player.y);
-          if (d < magnetRadius && d > 0.001) {
-            const pull = 180 + (1 - d / magnetRadius) * 260;
-            pickup.x += ((Neo.player.x - pickup.x) / d) * 0.016 * pull;
-            pickup.y += ((Neo.player.y - pickup.y) / d) * 0.016 * pull;
-          }
+          pullPickupTowardPlayer(pickup, magnetRadius, 180, 260);
         }
       } else if (pickup.type === 'apple' || pickup.type === 'fruit') {
         const magnetRadius = autoVacuumRange > 0 ? autoVacuumRange : 124;
-        const d = Neo.dist(pickup.x, pickup.y, Neo.player.x, Neo.player.y);
-        if (d < magnetRadius && d > 0.001) {
-          const pull = 190 + (1 - d / magnetRadius) * 240;
-          pickup.x += ((Neo.player.x - pickup.x) / d) * 0.016 * pull;
-          pickup.y += ((Neo.player.y - pickup.y) / d) * 0.016 * pull;
-        }
+        pullPickupTowardPlayer(pickup, magnetRadius, 190, 240);
       } else if (pickup.type === 'item') {
         const magnetRadius = autoVacuumRange > 0 ? autoVacuumRange : 145;
-        const d = Neo.dist(pickup.x, pickup.y, Neo.player.x, Neo.player.y);
-        if (d < magnetRadius && d > 0.001) {
-          const pull = 150 + (1 - d / magnetRadius) * 220;
-          pickup.x += ((Neo.player.x - pickup.x) / d) * 0.016 * pull;
-          pickup.y += ((Neo.player.y - pickup.y) / d) * 0.016 * pull;
-        }
+        pullPickupTowardPlayer(pickup, magnetRadius, 150, 220);
       } else if (pickup.type === 'jesterPortal') {
         pickup.spawnT = Math.max(0, Number(pickup.spawnT || 0) + dt);
         const activateAt = Math.max(0.01, Number(pickup.activateAt || Neo.JESTER_PORTAL_ACTIVATE_DELAY));
@@ -1961,19 +2080,16 @@
           pickup.y = Neo.clamp(pickup.y, minY, maxY);
           pickup.vy *= -1;
         }
-        const d = Neo.dist(pickup.x, pickup.y, Neo.player.x, Neo.player.y);
-        if (d < 130 && d > 0.001) {
-          const pull = 160 + (1 - d / 130) * 180;
-          pickup.x += ((Neo.player.x - pickup.x) / d) * 0.016 * pull;
-          pickup.y += ((Neo.player.y - pickup.y) / d) * 0.016 * pull;
-        }
+        pullPickupTowardPlayer(pickup, 130, 160, 180);
       }
       const pickupTriggerRadius = pickup.type === 'jesterPortal'
         ? Neo.JESTER_PORTAL_TRIGGER_RADIUS
         : pickup.type === 'ladder'
           ? Neo.LADDER_TRIGGER_RADIUS
           : 26;
-      if (Neo.dist(pickup.x, pickup.y, Neo.player.x, Neo.player.y) >= pickupTriggerRadius) continue;
+      const triggerDx = pickup.x - playerX;
+      const triggerDy = pickup.y - playerY;
+      if (triggerDx * triggerDx + triggerDy * triggerDy >= pickupTriggerRadius * pickupTriggerRadius) continue;
 
       if (pickup.type === 'coin') {
         addCoins(Math.round((pickup.value || 1) * coinPickupMultiplier));
@@ -2020,7 +2136,7 @@
         Neo.playSfx?.('item_collect');
         if (Neo.floorSkipPending > 0) {
           if (spawnJesterPortalPickup()) {
-            Neo.pickups.splice(index, 1);
+            removePickupAt(index);
             Neo.scheduleRunSave();
             continue;
           }
@@ -2085,7 +2201,7 @@
         const canAfford = usesCoins ? coins >= cost : crystals >= cost;
         const costLabel = usesCoins ? `${cost} C` : `${cost} LC`;
         if (pickup.bought) {
-          Neo.pickups.splice(index, 1);
+          removePickupAt(index);
           continue;
         }
         if (!canAfford) {
@@ -2120,7 +2236,7 @@
       }
 
       if (pickup.type === 'secret_boss_chest') {
-        Neo.pickups.splice(index, 1);
+        removePickupAt(index);
         Neo.collectItem(Neo.rollItemDrop({ elite: true, random: Neo.createEntityRandom(pickup, 'secret-boss:loot') }));
         addCoins(60 + Neo.floor * 8);
         Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 24, life: 1.0, text: 'BANE SLAIN', c: '#c9aaff' });
@@ -2208,13 +2324,14 @@
         return;
       }
 
-      Neo.pickups.splice(index, 1);
+      removePickupAt(index);
       Neo.scheduleRunSave();
     }
   }
 
   function updateDeadBodies(dt) {
-    for (let index = Neo.deadBodies.length - 1; index >= 0; index -= 1) {
+    let writeIndex = 0;
+    for (let index = 0; index < Neo.deadBodies.length; index += 1) {
       const body = Neo.deadBodies[index];
       body.age = Number(body.age || 0) + dt;
       if (!Number.isFinite(Number(body.z))) body.z = 0;
@@ -2264,8 +2381,12 @@
 
         body.angularV *= Math.max(0, 1 - angularDrag * dt);
       }
-      if (body.age >= Number(body.life || Neo.CORPSE_LIFETIME)) Neo.deadBodies.splice(index, 1);
+      if (body.age < Number(body.life || Neo.CORPSE_LIFETIME)) {
+        Neo.deadBodies[writeIndex] = body;
+        writeIndex += 1;
+      }
     }
+    Neo.deadBodies.length = writeIndex;
   }
 
   const _PARTICLE_POOL_SIZE = 600;
@@ -2279,6 +2400,7 @@
       blood: null, ring: null, style: null,
       maxLife: null, radius: null, angle: null,
       silhouette: null,
+      _active: false, _particleList: null, _dmgOwner: null, _dmgTotal: 0, _dmgCrit: false,
     });
   }
 
@@ -2291,6 +2413,7 @@
       blood: null, ring: null, style: null,
       maxLife: null, radius: null, angle: null,
       silhouette: null,
+      _active: false, _particleList: null, _dmgOwner: null, _dmgTotal: 0, _dmgCrit: false,
     };
   }
 
@@ -2317,6 +2440,11 @@
     p.radius = props.radius ?? null;
     p.angle = props.angle ?? null;
     p.silhouette = props.silhouette ?? null;
+    p._active = true;
+    p._particleList = Neo.particles;
+    p._dmgOwner = null;
+    p._dmgTotal = 0;
+    p._dmgCrit = false;
     Neo.particles.push(p);
   }
 
@@ -2327,13 +2455,22 @@
 
   function cullNonTextParticles(maxCount) {
     if (Neo.particles.length <= maxCount) return;
+    let removeCount = Neo.particles.length - maxCount;
+    let writeIndex = 0;
     // Drop oldest non-text particles first (text = damage popups, kept for readability).
-    for (let index = 0; index < Neo.particles.length && Neo.particles.length > maxCount; index++) {
-      if (!Neo.particles[index].text) {
-        _particlePool.push(Neo.particles.splice(index, 1)[0]);
-        index--;
+    for (let index = 0; index < Neo.particles.length; index += 1) {
+      const particle = Neo.particles[index];
+      if (removeCount > 0 && !particle.text) {
+        particle._active = false;
+        particle._particleList = null;
+        _particlePool.push(particle);
+        removeCount -= 1;
+      } else {
+        Neo.particles[writeIndex] = particle;
+        writeIndex += 1;
       }
     }
+    Neo.particles.length = writeIndex;
   }
 
   function updateParticles(dt) {
@@ -2344,17 +2481,24 @@
       // Performance mode (default on): generous cap that only bites during floods.
       cullNonTextParticles(MAX_PARTICLES);
     }
-    for (let index = Neo.particles.length - 1; index >= 0; index -= 1) {
+    let writeIndex = 0;
+    for (let index = 0; index < Neo.particles.length; index += 1) {
       const particle = Neo.particles[index];
       particle.life -= dt;
-      if (particle.blood) particle.vy = Math.min(220, Number(particle.vy || 0) + 390 * dt);
+      if (particle.blood) particle.vy = Math.min(220, particle.vy + 390 * dt);
       if (particle.vx) particle.x += particle.vx * dt;
       if (particle.vy) particle.y += particle.vy * dt;
       if (particle.ring) particle.ring += 200 * dt;
       if (particle.life <= 0) {
-        _particlePool.push(Neo.particles.splice(index, 1)[0]);
+        particle._active = false;
+        particle._particleList = null;
+        _particlePool.push(particle);
+      } else {
+        Neo.particles[writeIndex] = particle;
+        writeIndex += 1;
       }
     }
+    Neo.particles.length = writeIndex;
   }
 
   function isRoomLocked() {
@@ -2500,6 +2644,7 @@
   Neo.buildEnemySpatialIndex = buildEnemySpatialIndex;
   Neo.forEachEnemyNearCircle = forEachEnemyNearCircle;
   Neo.forEachEnemyNearRect = forEachEnemyNearRect;
+  Neo.forEachDestructibleNearCircle = forEachDestructibleNearCircle;
   Neo.findNearestEnemy = findNearestEnemy;
   Neo.updateProjectiles = updateProjectiles;
   Neo.updateWorldProps = updateWorldProps;

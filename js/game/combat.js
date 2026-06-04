@@ -1,6 +1,65 @@
 // combat.js — standalone IIFE. Player attacks, hit resolution, status effects, XP/loot.
-  function scaleDamageAgainstEnemy(enemy, damage, options = {}) {
-    const stats = Neo.getItemStats();
+  const COMBAT_SPATIAL_PADDING = 180;
+  const DEFAULT_DAMAGE_OPTIONS = {};
+  const NO_BLEED_BONUS_DAMAGE_OPTIONS = { applyBleedBonus: false };
+
+  function distanceSq(ax, ay, bx, by) {
+    const dx = ax - bx;
+    const dy = ay - by;
+    return dx * dx + dy * dy;
+  }
+
+  function isWithinRadiusSq(x, y, target, radius, extra = 0) {
+    const reach = radius + Number(target?.r || 0) + extra;
+    return distanceSq(x, y, target.x, target.y) <= reach * reach;
+  }
+
+  function angleDifferenceAbs(targetAngle, sourceAngle) {
+    return Math.abs(Math.atan2(Math.sin(targetAngle - sourceAngle), Math.cos(targetAngle - sourceAngle)));
+  }
+
+  function forEachEnemyNearPlayer(radius, visitor) {
+    if (typeof Neo.forEachEnemyNearCircle === 'function') {
+      Neo.forEachEnemyNearCircle(Neo.player.x, Neo.player.y, radius + COMBAT_SPATIAL_PADDING, visitor);
+      return;
+    }
+    for (let index = Neo.enemies.length - 1; index >= 0; index -= 1) {
+      const enemy = Neo.enemies[index];
+      if (enemy) visitor(enemy);
+    }
+  }
+
+  function forEachDestructibleNearPlayer(radius, visitor) {
+    if (typeof Neo.forEachDestructibleNearCircle === 'function') {
+      Neo.forEachDestructibleNearCircle(Neo.player.x, Neo.player.y, radius + COMBAT_SPATIAL_PADDING, visitor);
+      return;
+    }
+    Neo.destructibles.forEach(prop => {
+      if (prop) visitor(prop);
+    });
+  }
+
+  function pickRandomEnemies(limit) {
+    const count = Math.max(0, Math.floor(Number(limit || 0)));
+    if (count <= 0) return [];
+    const picked = [];
+    let seen = 0;
+    for (let index = 0; index < Neo.enemies.length; index += 1) {
+      const enemy = Neo.enemies[index];
+      if (!enemy) continue;
+      seen += 1;
+      if (picked.length < count) {
+        picked.push(enemy);
+        continue;
+      }
+      const replaceIndex = Math.floor(Neo.rng() * seen);
+      if (replaceIndex < count) picked[replaceIndex] = enemy;
+    }
+    return picked;
+  }
+
+  function scaleDamageAgainstEnemy(enemy, damage, options = {}, cachedStats = null) {
+    const stats = cachedStats || options.stats || Neo.getItemStats();
     const applyBleedBonus = options.applyBleedBonus !== false;
     const defenseMultiplier = Math.max(1, Number(enemy?.defenseMultiplier || 1));
     const characterMultiplier = Neo.getCharacterDef().damageMultiplier || 1;
@@ -65,9 +124,9 @@
     return Math.max(1, resistance);
   }
 
-  function scaleBleedDamageAgainstEnemy(enemy, stacks) {
+  function scaleBleedDamageAgainstEnemy(enemy, stacks, cachedStats = null) {
     const baseBleed = 1.8 + Math.max(1, Number(stacks || 1)) * 2.2;
-    const preResist = scaleDamageAgainstEnemy(enemy, baseBleed, { applyBleedBonus: false });
+    const preResist = scaleDamageAgainstEnemy(enemy, baseBleed, NO_BLEED_BONUS_DAMAGE_OPTIONS, cachedStats);
     const itemResistance = Neo.clamp(Number(enemy?.bleedResistance || 0), 0, 0.8);
     const reduced = (preResist / getEnemyBleedResistance(enemy)) * Math.max(0.2, 1 - itemResistance);
     return Math.max(1, Math.round(reduced));
@@ -157,14 +216,12 @@
     const adjustedRange = range + (Neo.player?.character === 'thorn_knight' ? Math.min(34, Number(itemStats.tagCounts?.bleed || 0) * 3) : 0);
     Neo.player.swing = Neo.ATTACKS.melee.active;
     Neo.player.swingA = angle;
-    for (let index = Neo.enemies.length - 1; index >= 0; index -= 1) {
-      const enemy = Neo.enemies[index];
-      if (!enemy) continue;
-      const distance = Neo.dist(Neo.player.x, Neo.player.y, enemy.x, enemy.y);
-      if (distance > adjustedRange + enemy.r) continue;
+    forEachEnemyNearPlayer(adjustedRange, enemy => {
+      if (!enemy) return;
+      if (!isWithinRadiusSq(Neo.player.x, Neo.player.y, enemy, adjustedRange)) return;
       const targetAngle = Math.atan2(enemy.y - Neo.player.y, enemy.x - Neo.player.x);
-      const difference = Math.abs(Math.atan2(Math.sin(targetAngle - angle), Math.cos(targetAngle - angle)));
-      if (difference > arc) continue;
+      const difference = angleDifferenceAbs(targetAngle, angle);
+      if (difference > arc) return;
       hitEnemy(enemy, damage, angle, push, color, options);
       if (options.bleedChance > 0 && Neo.nextRandom('encounter') < options.bleedChance) {
         applyBleed(enemy, Number(options.bleedStacks || 1), Number(options.bleedDuration || 4));
@@ -172,23 +229,22 @@
       if (options.itemBleedChance > 0 && Neo.nextRandom('encounter') < options.itemBleedChance) {
         applyBleed(enemy, 1, 5);
       }
-    }
+    });
 
-    Neo.destructibles.forEach(prop => {
+    forEachDestructibleNearPlayer(adjustedRange + 32, prop => {
       if (prop.broken || prop.hidden) return;
       const potAssist = prop.kind === 'pot';
       const reachBonus = potAssist ? 24 : 10;
       const arcBonus = potAssist ? 0.4 : 0.2;
       const touchingBonus = potAssist ? 30 : 18;
-      const propDistance = Neo.dist(Neo.player.x, Neo.player.y, prop.x, prop.y);
-      if (propDistance > adjustedRange + prop.r + reachBonus) return;
-      if (potAssist && propDistance <= adjustedRange + prop.r + 26) {
+      if (!isWithinRadiusSq(Neo.player.x, Neo.player.y, prop, adjustedRange, reachBonus)) return;
+      if (potAssist && isWithinRadiusSq(Neo.player.x, Neo.player.y, prop, adjustedRange, 26)) {
         Neo.damageDestructible(prop, 1);
         return;
       }
       const targetAngle = Math.atan2(prop.y - Neo.player.y, prop.x - Neo.player.x);
-      const difference = Math.abs(Math.atan2(Math.sin(targetAngle - angle), Math.cos(targetAngle - angle)));
-      const touching = propDistance <= Neo.player.r + prop.r + touchingBonus;
+      const difference = angleDifferenceAbs(targetAngle, angle);
+      const touching = isWithinRadiusSq(Neo.player.x, Neo.player.y, prop, Neo.player.r, touchingBonus);
       if (!touching && difference > arc + arcBonus) return;
       Neo.damageDestructible(prop, 1);
     });
@@ -317,16 +373,14 @@
     const thornBleedReach = Neo.player?.character === 'thorn_knight' ? Math.min(34, Number(itemStats.tagCounts?.bleed || 0) * 3) : 0;
     const meleeRange = Neo.ATTACKS.melee.range + anvilRngBonus + thornBleedReach;
     const meleeKnockback = move === 'slash' ? Neo.SLASH_KNOCKBACK : Neo.ATTACKS.melee.push;
-    for (let index = Neo.enemies.length - 1; index >= 0; index -= 1) {
-      const enemy = Neo.enemies[index];
-      if (!enemy) continue;
-      const distance = Neo.dist(Neo.player.x, Neo.player.y, enemy.x, enemy.y);
-      if (distance > meleeRange + enemy.r) continue;
+    const slashBleedChance = move === 'slash' ? 0.10 : 0;
+    forEachEnemyNearPlayer(meleeRange, enemy => {
+      if (!enemy) return;
+      if (!isWithinRadiusSq(Neo.player.x, Neo.player.y, enemy, meleeRange)) return;
       const targetAngle = Math.atan2(enemy.y - Neo.player.y, enemy.x - Neo.player.x);
-      const difference = Math.abs(Math.atan2(Math.sin(targetAngle - angle), Math.cos(targetAngle - angle)));
-      if (difference > Neo.ATTACKS.melee.arc) continue;
+      const difference = angleDifferenceAbs(targetAngle, angle);
+      if (difference > Neo.ATTACKS.melee.arc) return;
       hitEnemy(enemy, damage, angle, meleeKnockback, '#0ff');
-      const slashBleedChance = move === 'slash' ? 0.10 : 0;
       if (slashBleedChance > 0 && Neo.rng() < slashBleedChance) applyBleed(enemy, 1, 5);
       if (itemStats.bleedChance > 0 && Neo.rng() < itemStats.bleedChance) applyBleed(enemy, 1, 5);
       if (itemStats.weaponFatigueChance > 0 && Neo.rng() < itemStats.weaponFatigueChance) {
@@ -335,22 +389,21 @@
       if (itemStats.snakeKnifePoisonChance > 0 && Neo.rng() < itemStats.snakeKnifePoisonChance) {
         applyPoison(enemy, 1, 4);
       }
-    }
-    Neo.destructibles.forEach(prop => {
+    });
+    forEachDestructibleNearPlayer(meleeRange + 32, prop => {
       if (prop.broken || prop.hidden) return;
       const slashPotAssist = move === 'slash' && prop.kind === 'pot';
       const destructibleReachBonus = slashPotAssist ? 24 : 8;
       const destructibleArcBonus = slashPotAssist ? 0.45 : 0.25;
       const touchingBonus = slashPotAssist ? 32 : 18;
-      const propDistance = Neo.dist(Neo.player.x, Neo.player.y, prop.x, prop.y);
-      if (propDistance > meleeRange + prop.r + destructibleReachBonus) return;
-      if (slashPotAssist && propDistance <= meleeRange + prop.r + 24) {
+      if (!isWithinRadiusSq(Neo.player.x, Neo.player.y, prop, meleeRange, destructibleReachBonus)) return;
+      if (slashPotAssist && isWithinRadiusSq(Neo.player.x, Neo.player.y, prop, meleeRange, 24)) {
         Neo.damageDestructible(prop, 1);
         return;
       }
       const targetAngle = Math.atan2(prop.y - Neo.player.y, prop.x - Neo.player.x);
-      const difference = Math.abs(Math.atan2(Math.sin(targetAngle - angle), Math.cos(targetAngle - angle)));
-      const touching = propDistance <= Neo.player.r + prop.r + touchingBonus;
+      const difference = angleDifferenceAbs(targetAngle, angle);
+      const touching = isWithinRadiusSq(Neo.player.x, Neo.player.y, prop, Neo.player.r, touchingBonus);
       if (!touching && difference > Neo.ATTACKS.melee.arc + destructibleArcBonus) return;
       Neo.damageDestructible(prop, 1);
     });
@@ -706,22 +759,21 @@
     Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.4, ring: smashRadius - 30, c: smashColor });
     Neo.spawnAoeShockwave(Neo.player.x, Neo.player.y, smashRadius, smashColor, 'heavy');
     Neo.hitPvpPlayer2InRadius?.(Neo.player.x, Neo.player.y, smashRadius, Neo.ATTACKS.smash.damage + Neo.getAnvilMoveBonus(move, 'damage'), 320, 'pvp_p1_smash');
-    for (let index = Neo.enemies.length - 1; index >= 0; index -= 1) {
-      const enemy = Neo.enemies[index];
-      if (!enemy) continue;
-      const distance = Neo.dist(Neo.player.x, Neo.player.y, enemy.x, enemy.y);
-      if (distance > smashRadius + enemy.r) continue;
+    const baseSmashDamage = (Neo.godTimer > 0 ? 82 : Neo.ATTACKS.smash.damage) + Neo.getAnvilMoveBonus(move, 'damage');
+    forEachEnemyNearPlayer(smashRadius, enemy => {
+      if (!enemy) return;
+      if (!isWithinRadiusSq(Neo.player.x, Neo.player.y, enemy, smashRadius)) return;
       const angle = Math.atan2(enemy.y - Neo.player.y, enemy.x - Neo.player.x);
-      let damage = (Neo.godTimer > 0 ? 82 : Neo.ATTACKS.smash.damage) + Neo.getAnvilMoveBonus(move, 'damage');
+      let damage = baseSmashDamage;
       if (itemStats.bleedDamageMultiplier > 1 && Neo.getStatusStacks(enemy, 'bleed') > 0) {
         damage += Neo.ATTACKS.smash.bonus;
         Neo.spawnParticle({ x: enemy.x, y: enemy.y - 16, life: 0.6, text: 'POP', c: '#a0f' });
       }
       hitEnemy(enemy, damage, angle, 320, smashColor);
-    }
-    Neo.destructibles.forEach(prop => {
-      if (!prop.broken && !prop.hidden && Neo.dist(Neo.player.x, Neo.player.y, prop.x, prop.y) <= smashRadius + prop.r) {
-      Neo.damageDestructible(prop, 2);
+    });
+    forEachDestructibleNearPlayer(smashRadius, prop => {
+      if (!prop.broken && !prop.hidden && isWithinRadiusSq(Neo.player.x, Neo.player.y, prop, smashRadius)) {
+        Neo.damageDestructible(prop, 2);
       }
     });
   }
@@ -770,22 +822,21 @@
     const damage = (Neo.godTimer > 0 ? 72 : 44) + anvilDmg;
     const range = 130 + anvilRng;
     const arc = Math.PI * 0.72;
-    for (let index = Neo.enemies.length - 1; index >= 0; index -= 1) {
-      const enemy = Neo.enemies[index];
-      if (!enemy) continue;
-      if (Neo.dist(Neo.player.x, Neo.player.y, enemy.x, enemy.y) > range + enemy.r) continue;
+    forEachEnemyNearPlayer(range, enemy => {
+      if (!enemy) return;
+      if (!isWithinRadiusSq(Neo.player.x, Neo.player.y, enemy, range)) return;
       const targetAngle = Math.atan2(enemy.y - Neo.player.y, enemy.x - Neo.player.x);
-      const diff = Math.abs(Math.atan2(Math.sin(targetAngle - angle), Math.cos(targetAngle - angle)));
-      if (diff > arc) continue;
+      const diff = angleDifferenceAbs(targetAngle, angle);
+      if (diff > arc) return;
       hitEnemy(enemy, damage, angle, Neo.ATTACKS.melee.push, '#ff6090');
       if (Neo.rng() < 0.12 + itemStats.bleedChance) applyBleed(enemy, 1, 5);
       if (itemStats.snakeKnifePoisonChance > 0 && Neo.rng() < itemStats.snakeKnifePoisonChance) applyPoison(enemy, 1, 4);
-    }
-    Neo.destructibles.forEach(prop => {
+    });
+    forEachDestructibleNearPlayer(range + 8, prop => {
       if (prop.broken || prop.hidden) return;
-      if (Neo.dist(Neo.player.x, Neo.player.y, prop.x, prop.y) > range + prop.r + 8) return;
+      if (!isWithinRadiusSq(Neo.player.x, Neo.player.y, prop, range, 8)) return;
       const targetAngle = Math.atan2(prop.y - Neo.player.y, prop.x - Neo.player.x);
-      const diff = Math.abs(Math.atan2(Math.sin(targetAngle - angle), Math.cos(targetAngle - angle)));
+      const diff = angleDifferenceAbs(targetAngle, angle);
       if (diff > arc + 0.25) return;
       Neo.damageDestructible(prop, 1);
     });
@@ -837,7 +888,7 @@
     applyStatusInRadius(Neo.player.x, Neo.player.y, aoeRadius, 'bleed', 2, 5);
 
     const fangCount = 8;
-    const targets = Neo.enemies.slice().sort(() => Neo.rng() - 0.5).slice(0, fangCount);
+    const targets = pickRandomEnemies(fangCount);
     for (let index = 0; index < fangCount; index += 1) {
       const spreadAngle = (index / fangCount) * Math.PI * 2;
       const target = targets[index % targets.length];
@@ -1078,9 +1129,9 @@
     const kickDamage = 92;
     const kickKnockback = 720;
     Neo.blastRadius(Neo.player.x, Neo.player.y, radius, kickDamage, '#ff7fc2');
-    Neo.enemies.forEach(enemy => {
+    forEachEnemyNearPlayer(radius, enemy => {
       if (!enemy) return;
-      if (Neo.dist(Neo.player.x, Neo.player.y, enemy.x, enemy.y) > radius + enemy.r) return;
+      if (!isWithinRadiusSq(Neo.player.x, Neo.player.y, enemy, radius)) return;
       const enemyAngle = Math.atan2(enemy.y - Neo.player.y, enemy.x - Neo.player.x);
       enemy.vx += Math.cos(enemyAngle) * kickKnockback;
       enemy.vy += Math.sin(enemyAngle) * kickKnockback;
@@ -1145,21 +1196,19 @@
 
   function castBladeOfJustice() {
     const angle = Math.atan2(Neo.mouse.worldY - Neo.player.y, Neo.mouse.worldX - Neo.player.x);
-    for (let index = Neo.enemies.length - 1; index >= 0; index -= 1) {
-      const enemy = Neo.enemies[index];
-      if (!enemy) continue;
-      const distance = Neo.dist(Neo.player.x, Neo.player.y, enemy.x, enemy.y);
-      if (distance > 110 + enemy.r) continue;
+    forEachEnemyNearPlayer(110, enemy => {
+      if (!enemy) return;
+      if (!isWithinRadiusSq(Neo.player.x, Neo.player.y, enemy, 110)) return;
       const targetAngle = Math.atan2(enemy.y - Neo.player.y, enemy.x - Neo.player.x);
-      const difference = Math.abs(Math.atan2(Math.sin(targetAngle - angle), Math.cos(targetAngle - angle)));
-      if (difference > 1.3) continue;
+      const difference = angleDifferenceAbs(targetAngle, angle);
+      if (difference > 1.3) return;
       hitEnemy(enemy, 34, angle, 280, '#fff6a3');
-    }
-    Neo.destructibles.forEach(prop => {
+    });
+    forEachDestructibleNearPlayer(110, prop => {
       if (prop.broken || prop.hidden) return;
-      if (Neo.dist(Neo.player.x, Neo.player.y, prop.x, prop.y) > 110 + prop.r) return;
+      if (!isWithinRadiusSq(Neo.player.x, Neo.player.y, prop, 110)) return;
       const targetAngle = Math.atan2(prop.y - Neo.player.y, prop.x - Neo.player.x);
-      const difference = Math.abs(Math.atan2(Math.sin(targetAngle - angle), Math.cos(targetAngle - angle)));
+      const difference = angleDifferenceAbs(targetAngle, angle);
       if (difference > 1.3) return;
       Neo.damageDestructible(prop, 2);
     });
@@ -1173,22 +1222,20 @@
 
     // Physical swing: hits enemies and destructibles in an arc.
     const physicalDamage = 20;
-    for (let index = Neo.enemies.length - 1; index >= 0; index -= 1) {
-      const enemy = Neo.enemies[index];
-      if (!enemy) continue;
-      const distance = Neo.dist(Neo.player.x, Neo.player.y, enemy.x, enemy.y);
-      if (distance > Neo.ATTACKS.melee.range + enemy.r + 4) continue;
+    const smiteRange = Neo.ATTACKS.melee.range + 4;
+    forEachEnemyNearPlayer(smiteRange, enemy => {
+      if (!enemy) return;
+      if (!isWithinRadiusSq(Neo.player.x, Neo.player.y, enemy, smiteRange)) return;
       const targetAngle = Math.atan2(enemy.y - Neo.player.y, enemy.x - Neo.player.x);
-      const difference = Math.abs(Math.atan2(Math.sin(targetAngle - angle), Math.cos(targetAngle - angle)));
-      if (difference > Neo.ATTACKS.melee.arc + 0.15) continue;
+      const difference = angleDifferenceAbs(targetAngle, angle);
+      if (difference > Neo.ATTACKS.melee.arc + 0.15) return;
       hitEnemy(enemy, physicalDamage, angle, Neo.ATTACKS.melee.push, '#fff6a3', { lightning: true });
-    }
-    Neo.destructibles.forEach(prop => {
+    });
+    forEachDestructibleNearPlayer(smiteRange, prop => {
       if (prop.broken || prop.hidden) return;
-      const distance = Neo.dist(Neo.player.x, Neo.player.y, prop.x, prop.y);
-      if (distance > Neo.ATTACKS.melee.range + prop.r + 4) return;
+      if (!isWithinRadiusSq(Neo.player.x, Neo.player.y, prop, smiteRange)) return;
       const targetAngle = Math.atan2(prop.y - Neo.player.y, prop.x - Neo.player.x);
-      const difference = Math.abs(Math.atan2(Math.sin(targetAngle - angle), Math.cos(targetAngle - angle)));
+      const difference = angleDifferenceAbs(targetAngle, angle);
       if (difference > Neo.ATTACKS.melee.arc + 0.15) return;
       Neo.damageDestructible(prop, 2);
     });
@@ -1231,26 +1278,32 @@
 
   function findNearestSmiteTarget(x, y, radius, exclude = new Set()) {
     let best = null;
-    let bestDist = radius;
+    let bestDistSq = radius * radius;
 
-    Neo.enemies.forEach(enemy => {
+    const visitEnemy = enemy => {
       if (!enemy) return;
       if (exclude.has(enemy)) return;
-      const d = Neo.dist(x, y, enemy.x, enemy.y);
-      if (d < bestDist) {
+      const dSq = distanceSq(x, y, enemy.x, enemy.y);
+      if (dSq < bestDistSq) {
         best = { type: 'enemy', ref: enemy, x: enemy.x, y: enemy.y, r: enemy.r };
-        bestDist = d;
+        bestDistSq = dSq;
       }
-    });
+    };
 
-    Neo.destructibles.forEach(prop => {
+    const visitProp = prop => {
       if (prop.broken || prop.hidden || exclude.has(prop)) return;
-      const d = Neo.dist(x, y, prop.x, prop.y);
-      if (d < bestDist) {
+      const dSq = distanceSq(x, y, prop.x, prop.y);
+      if (dSq < bestDistSq) {
         best = { type: 'prop', ref: prop, x: prop.x, y: prop.y, r: prop.r };
-        bestDist = d;
+        bestDistSq = dSq;
       }
-    });
+    };
+
+    if (typeof Neo.forEachEnemyNearCircle === 'function') Neo.forEachEnemyNearCircle(x, y, radius, visitEnemy);
+    else Neo.enemies.forEach(visitEnemy);
+
+    if (typeof Neo.forEachDestructibleNearCircle === 'function') Neo.forEachDestructibleNearCircle(x, y, radius, visitProp);
+    else Neo.destructibles.forEach(visitProp);
 
     return best;
   }
@@ -1359,7 +1412,7 @@
     const stats = Neo.getItemStats();
     const sandbox = Neo.getActiveSandboxSettings();
     const critChance = Neo.clamp((stats.critChance || 0) + Number(options.critBonus || 0), 0, 0.98);
-    let dealt = options.rawDamage ? scaleRawDamageAgainstEnemy(enemy, damage) : scaleDamageAgainstEnemy(enemy, damage);
+    let dealt = options.rawDamage ? scaleRawDamageAgainstEnemy(enemy, damage) : scaleDamageAgainstEnemy(enemy, damage, options, stats);
     if (sandbox) dealt = Math.max(1, Math.round(dealt * sandbox.playerDamageMultiplier));
     // Sparkle Charm marks enemies so every hit against them is a guaranteed crit.
     const sparkled = Number(enemy.critSparkle || 0) > 0;
@@ -1573,7 +1626,7 @@
     const visitEnemy = enemy => {
       if (!enemy) return;
       if (sourceEnemy && enemy === sourceEnemy) return;
-      if (Neo.dist(x, y, enemy.x, enemy.y) > radius + enemy.r) return;
+      if (!isWithinRadiusSq(x, y, enemy, radius)) return;
       Neo.applyStatus(enemy, statusKey, stacks, adjustedDuration);
       triggerStatusReactions(enemy, statusKey);
     };
@@ -1643,8 +1696,8 @@
     state.tick -= dt;
     if (state.tick <= 0) {
       state.tick = config.interval;
-      const stats = Neo.getItemStats?.() || {};
-      let damage = scaleRawDamageAgainstEnemy(enemy, Math.max(1, Math.round(config.damage(state.stacks))));
+      const stats = config.stats || Neo.getItemStats?.() || {};
+      let damage = scaleRawDamageAgainstEnemy(enemy, Math.max(1, Math.round(config.damage(state.stacks, stats))));
       if (Neo.isChallengeActive?.('cursed_blood')) damage = Math.max(1, Math.round(damage * 1.35));
       const bleedCrit = key === 'bleed' && Number(stats.bleedCritChance || 0) > 0 && Neo.nextRandom('encounter') < Number(stats.bleedCritChance || 0);
       if (bleedCrit) damage = Math.max(1, Math.round(damage * Number(stats.critMultiplier || 1.6)));
@@ -1671,19 +1724,22 @@
 
   function updateEnemyStatuses(enemy, dt) {
     if (enemy.bleedFlash > 0) enemy.bleedFlash = Math.max(0, enemy.bleedFlash - dt);
+    const stats = Neo.getItemStats?.() || {};
     const bleedStacks = Neo.getStatusStacks(enemy, 'bleed');
     if (tickEnemyStatus(enemy, 'bleed', dt, {
       interval: 0.5,
-      damage: stacks => scaleBleedDamageAgainstEnemy(enemy, stacks),
+      damage: (stacks, cachedStats) => scaleBleedDamageAgainstEnemy(enemy, stacks, cachedStats),
       color: Neo.STATUS_STYLES.bleed.textColor,
       particleColor: Neo.STATUS_STYLES.bleed.color,
+      stats,
     })) return bleedStacks;
     if (enemy.dead) return bleedStacks;
     if (tickEnemyStatus(enemy, 'fire', dt, {
       interval: 0.45,
-      damage: stacks => scaleDamageAgainstEnemy(enemy, 1.5 + stacks * 1.8),
+      damage: (stacks, cachedStats) => scaleDamageAgainstEnemy(enemy, 1.5 + stacks * 1.8, DEFAULT_DAMAGE_OPTIONS, cachedStats),
       color: Neo.STATUS_STYLES.fire.textColor,
       particleColor: Neo.STATUS_STYLES.fire.color,
+      stats,
     })) return bleedStacks;
     if (enemy.dead) return bleedStacks;
     if (tickEnemyStatus(enemy, 'poison', dt, {
@@ -1691,14 +1747,16 @@
       damage: stacks => Math.max(1, enemy.max * (0.008 * stacks)),
       color: Neo.STATUS_STYLES.poison.textColor,
       particleColor: Neo.STATUS_STYLES.poison.color,
+      stats,
     })) return bleedStacks;
     if (enemy.dead) return bleedStacks;
     tickEnemyStatus(enemy, 'dark_drain', dt, {
       interval: 0.6,
-      damage: stacks => scaleDamageAgainstEnemy(enemy, (1 + stacks * 2) * 0.1),
+      damage: (stacks, cachedStats) => scaleDamageAgainstEnemy(enemy, (1 + stacks * 2) * 0.1, DEFAULT_DAMAGE_OPTIONS, cachedStats),
       color: Neo.STATUS_STYLES.dark_drain.textColor,
       particleColor: Neo.STATUS_STYLES.dark_drain.color,
       healScale: 0.35,
+      stats,
     });
     const slowState = Neo.getStatusState(enemy, 'slow');
     if (slowState.stacks > 0) {
@@ -2061,7 +2119,7 @@
     }
     if (enemy.type === 'rival') return;
 
-    if (Neo.enemies.filter(e => e.type !== 'rival').length === 0 && !Neo.currentRoom.cleared) {
+    if (!Neo.enemies.some(e => e.type !== 'rival') && !Neo.currentRoom.cleared) {
       if (Neo.currentRoom.type === 'challenge') {
         Neo.updateObjective();
         return;

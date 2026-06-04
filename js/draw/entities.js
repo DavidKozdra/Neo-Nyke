@@ -649,20 +649,29 @@
       if (enemy.spawnT > 0) { drawSpawnPortal(enemy); return; }
       const drawY = enemy.y - Math.max(0, Number(enemy.jumpZ || 0));
       const bleedStacks = Neo.getStatusStacks(enemy, 'bleed');
-      const activeStatuses = Neo.STATUS_KEYS.filter(key => Neo.getStatusStacks(enemy, key) > 0);
-      if (activeStatuses.length > 0) {
+      // Count active statuses first (no array allocation), then draw a ring per
+      // active status. This runs per enemy per frame, so avoid filter()/forEach.
+      let activeStatusCount = 0;
+      for (let s = 0; s < Neo.STATUS_KEYS.length; s += 1) {
+        if (Neo.getStatusStacks(enemy, Neo.STATUS_KEYS[s]) > 0) activeStatusCount += 1;
+      }
+      if (activeStatusCount > 0) {
         Neo.ctx.save();
         Neo.ctx.translate(enemy.x, drawY);
         Neo.ctx.lineWidth = 2;
-        activeStatuses.forEach((key, index) => {
+        let ringIndex = 0;
+        for (let s = 0; s < Neo.STATUS_KEYS.length; s += 1) {
+          const key = Neo.STATUS_KEYS[s];
+          if (Neo.getStatusStacks(enemy, key) <= 0) continue;
           const style = Neo.STATUS_STYLES[key];
           Neo.ctx.strokeStyle = style.color;
           Neo.ctx.shadowColor = style.color;
           Neo.ctx.shadowBlur = 10;
           Neo.ctx.beginPath();
-          Neo.ctx.arc(0, 0, enemy.r + 6 + index * 4 + (_reduceFlash ? 0 : Math.sin(_now / (180 + index * 40)) * 2), 0, Math.PI * 2);
+          Neo.ctx.arc(0, 0, enemy.r + 6 + ringIndex * 4 + (_reduceFlash ? 0 : Math.sin(_now / (180 + ringIndex * 40)) * 2), 0, Math.PI * 2);
           Neo.ctx.stroke();
-        });
+          ringIndex += 1;
+        }
         Neo.ctx.restore();
       }
       if (Number(enemy.critSparkle || 0) > 0) {
@@ -897,7 +906,10 @@
     const shadowColor = Neo.godTimer > 0 ? 'rgba(255,248,210,0.65)' : 'rgba(0,0,0,0.25)';
     const _reduceFlash = window.NeoSettings?.getAccess()?.reduceFlash;
     const capeActive = Number(Neo.player?.equipmentEffects?.el_bartos_cape?.time || 0) > 0;
-    Neo.STATUS_KEYS.filter(key => Neo.getStatusStacks(Neo.player, key) > 0).forEach((key, index) => {
+    let playerRingIndex = 0;
+    for (let s = 0; s < Neo.STATUS_KEYS.length; s += 1) {
+      const key = Neo.STATUS_KEYS[s];
+      if (Neo.getStatusStacks(Neo.player, key) <= 0) continue;
       const style = Neo.STATUS_STYLES[key];
       Neo.ctx.save();
       Neo.ctx.translate(Neo.player.x, Neo.player.y);
@@ -906,10 +918,11 @@
       Neo.ctx.shadowColor = style.color;
       Neo.ctx.shadowBlur = 10;
       Neo.ctx.beginPath();
-      Neo.ctx.arc(0, 0, Neo.player.r + 6 + index * 4 + (_reduceFlash ? 0 : Math.sin(Date.now() / (160 + index * 40)) * 2), 0, Math.PI * 2);
+      Neo.ctx.arc(0, 0, Neo.player.r + 6 + playerRingIndex * 4 + (_reduceFlash ? 0 : Math.sin(Date.now() / (160 + playerRingIndex * 40)) * 2), 0, Math.PI * 2);
       Neo.ctx.stroke();
       Neo.ctx.restore();
-    });
+      playerRingIndex += 1;
+    }
     drawWarpPreview();
     const playerSize = Math.max(34, Neo.player.r * 2.5);
     drawActorSprite(Neo.player, getPlayerSpriteKey(), Neo.player.x, Neo.player.y, playerSize, {

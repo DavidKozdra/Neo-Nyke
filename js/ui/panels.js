@@ -1099,7 +1099,14 @@ export function renderAnvilStatPanel() {
 
       // next value after pressing +: staged + step
       const nextVal = staged + step;
-      const canIncrease = step > 0 ? nextVal <= max : nextVal >= min;
+      const withinCap = step > 0 ? nextVal <= max : nextVal >= min;
+      // The + must also reflect affordability, or it looks clickable but the
+      // click handler silently rejects it (no feedback = "anvil is broken").
+      const nextCost = getAnvilTotalCost();
+      const canAfford =
+        nextCost.xp + (xpPerStep ?? 0) <= (Neo.player?.xp ?? 0) &&
+        nextCost.gold + (goldPerStep ?? 0) <= (Neo.player?.coins ?? 0);
+      const canIncrease = withinCap && canAfford;
       const canDecrease = stagedCount > 0;
 
       const stagedDisplay = staged !== cur
@@ -1168,6 +1175,21 @@ export function renderAnvilStatPanel() {
     renderAnvilPanel();
   }
 
+  // Flash a short rejection message in the anvil footer (in-modal, so it's
+  // visible even though the panel covers the game canvas), then restore it.
+  let anvilRejectToastTimer = null;
+  function anvilRejectToast(message) {
+    const el = Neo.ui.anvilCostSummary;
+    if (!el) return;
+    if (anvilRejectToastTimer) clearTimeout(anvilRejectToastTimer);
+    el.textContent = message;
+    el.style.color = '#ff7c88';
+    anvilRejectToastTimer = setTimeout(() => {
+      anvilRejectToastTimer = null;
+      renderAnvilFooter();
+    }, 1100);
+  }
+
   function handleAnvilStatClick(event) {
     const btn = event.target.closest('[data-stat]');
     if (!btn || btn.disabled) return;
@@ -1186,11 +1208,20 @@ export function renderAnvilStatPanel() {
       // Check cap
       const newVal = getAnvilStagedValue(itemKey, statKey, itemType) + statDef.step;
       const capped = statDef.step > 0 ? newVal > statDef.max : newVal < statDef.min;
-      if (capped) return;
+      if (capped) {
+        anvilRejectToast('MAXED OUT');
+        return;
+      }
       // Check if we could afford one more step
       const nextCost = getAnvilTotalCost();
-      if (nextCost.xp + statDef.xpPerStep > (Neo.player?.xp ?? 0)) return;
-      if (nextCost.gold + (statDef.goldPerStep ?? 0) > (Neo.player?.coins ?? 0)) return;
+      if (nextCost.xp + statDef.xpPerStep > (Neo.player?.xp ?? 0)) {
+        anvilRejectToast('NEED MORE XP');
+        return;
+      }
+      if (nextCost.gold + (statDef.goldPerStep ?? 0) > (Neo.player?.coins ?? 0)) {
+        anvilRejectToast('NEED MORE GOLD');
+        return;
+      }
       Neo.anvilStagedUpgrades[stageKey] = currentStaged + 1;
     } else {
       // Remove a staged step (can't undo already-committed upgrades)

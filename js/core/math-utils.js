@@ -76,6 +76,17 @@ export function shuffleWithRandom(array, random) {
   return copy;
 }
 
+export function unorderedRemoveAt(array, index, recyclePool = null) {
+  if (!array) return null;
+  const lastIndex = array.length - 1;
+  if (index < 0 || index > lastIndex) return null;
+  const removed = array[index];
+  if (index !== lastIndex) array[index] = array[lastIndex];
+  array.pop();
+  if (recyclePool && removed) recyclePool.push(removed);
+  return removed;
+}
+
 export function clamp(value, min, max) {
   return value < min ? min : value > max ? max : value;
 }
@@ -518,6 +529,7 @@ Neo.rand = rand;
 Neo.irand = irand;
 Neo.shuffle = shuffle;
 Neo.shuffleWithRandom = shuffleWithRandom;
+Neo.unorderedRemoveAt = unorderedRemoveAt;
 Neo.clamp = clamp;
 Neo.dist = dist;
 Neo.circleRect = circleRect;

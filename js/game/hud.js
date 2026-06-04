@@ -268,28 +268,62 @@
             <span></span>
             <span data-player-field="meta"></span>
           </div>`;
+        // This panel renders every frame, so cache element refs on the card
+        // (instead of re-querying ~10× per slot per frame) and diff every write
+        // below via card._last to avoid needless DOM mutations / reflows.
+        card._refs = {
+          label: card.querySelector('[data-player-field="label"]'),
+          name: card.querySelector('[data-player-field="name"]'),
+          hpText: card.querySelector('[data-player-field="hpText"]'),
+          level: card.querySelector('[data-player-field="level"]'),
+          xpText: card.querySelector('[data-player-field="xpText"]'),
+          metaRow: card.querySelector('[data-player-field="metaRow"]'),
+          meta: card.querySelector('[data-player-field="meta"]'),
+          hpFill: card.querySelector('[data-player-field="hpFill"]'),
+          xpFill: card.querySelector('[data-player-field="xpFill"]'),
+        };
+        card._last = {};
         Neo.ui.playerStats.appendChild(card);
       }
-      card.style.setProperty('--player-color', slot.color);
-      card.classList.toggle('player-stat-card--dead', dead);
-      card.classList.toggle('player-stat-card--solo', !showPlayerLabel);
-      card.querySelector('[data-player-field="label"]').textContent = showPlayerLabel ? slot.label : '';
-      card.querySelector('[data-player-field="name"]').textContent = character.name || slot.getCharacter();
-      card.querySelector('[data-player-field="hpText"]').textContent = hpText;
-      card.querySelector('[data-player-field="level"]').textContent = `Lv.${entity.level || 1}`;
-      card.querySelector('[data-player-field="xpText"]').textContent = `${entity.xp || 0}/${entity.xpToNext || 0}`;
-      const metaRow = card.querySelector('[data-player-field="metaRow"]');
-      if (metaRow) {
-        metaRow.style.display = scoreText ? '' : 'none';
-        if (scoreText) card.querySelector('[data-player-field="meta"]').textContent = scoreText;
+      const refs = card._refs;
+      const last = card._last;
+      if (last.color !== slot.color) {
+        last.color = slot.color;
+        card.style.setProperty('--player-color', slot.color);
       }
-      const hpFill = card.querySelector('[data-player-field="hpFill"]');
-      const xpFill = card.querySelector('[data-player-field="xpFill"]');
-      if (hpFill) {
-        hpFill.style.width = `${hpPercent.toFixed(1)}%`;
-        hpFill.style.background = getHpFillColor(hpPercent, slot.color);
+      if (last.dead !== dead) {
+        last.dead = dead;
+        card.classList.toggle('player-stat-card--dead', dead);
       }
-      if (xpFill) xpFill.style.width = `${xpPercent.toFixed(1)}%`;
+      const solo = !showPlayerLabel;
+      if (last.solo !== solo) {
+        last.solo = solo;
+        card.classList.toggle('player-stat-card--solo', solo);
+      }
+      const labelText = showPlayerLabel ? slot.label : '';
+      if (last.label !== labelText) { last.label = labelText; refs.label.textContent = labelText; }
+      const nameText = character.name || slot.getCharacter();
+      if (last.name !== nameText) { last.name = nameText; refs.name.textContent = nameText; }
+      if (last.hpText !== hpText) { last.hpText = hpText; refs.hpText.textContent = hpText; }
+      const levelText = `Lv.${entity.level || 1}`;
+      if (last.level !== levelText) { last.level = levelText; refs.level.textContent = levelText; }
+      const xpText = `${entity.xp || 0}/${entity.xpToNext || 0}`;
+      if (last.xpText !== xpText) { last.xpText = xpText; refs.xpText.textContent = xpText; }
+      if (refs.metaRow) {
+        const metaDisplay = scoreText ? '' : 'none';
+        if (last.metaDisplay !== metaDisplay) { last.metaDisplay = metaDisplay; refs.metaRow.style.display = metaDisplay; }
+        if (scoreText && last.meta !== scoreText) { last.meta = scoreText; refs.meta.textContent = scoreText; }
+      }
+      if (refs.hpFill) {
+        const hpWidth = `${hpPercent.toFixed(1)}%`;
+        if (last.hpWidth !== hpWidth) { last.hpWidth = hpWidth; refs.hpFill.style.width = hpWidth; }
+        const hpColor = getHpFillColor(hpPercent, slot.color);
+        if (last.hpColor !== hpColor) { last.hpColor = hpColor; refs.hpFill.style.background = hpColor; }
+      }
+      if (refs.xpFill) {
+        const xpWidth = `${xpPercent.toFixed(1)}%`;
+        if (last.xpWidth !== xpWidth) { last.xpWidth = xpWidth; refs.xpFill.style.width = xpWidth; }
+      }
     });
 
     if (Neo.ui.playerHpFill && Neo.player) {

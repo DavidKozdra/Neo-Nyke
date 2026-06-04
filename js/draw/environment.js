@@ -53,6 +53,29 @@
     Neo.perfEnd('draw.overlays', sectionPerfStart);
   }
 
+  // Cached low-health edge gradient, rebuilt only when the canvas size changes.
+  // Color stops carry their relative weights at full opacity; the caller applies
+  // the per-frame alpha via ctx.globalAlpha.
+  let _lowHpGradient = null;
+  let _lowHpGradientW = -1;
+  let _lowHpGradientH = -1;
+  function getLowHealthEdgeGradient() {
+    const w = Neo.canvas.width;
+    const h = Neo.canvas.height;
+    if (_lowHpGradient && _lowHpGradientW === w && _lowHpGradientH === h) return _lowHpGradient;
+    const grad = Neo.ctx.createRadialGradient(
+      w / 2, h / 2, Math.min(w, h) * 0.34,
+      w / 2, h / 2, Math.max(w, h) * 0.72,
+    );
+    grad.addColorStop(0, 'rgba(255,0,0,0)');
+    grad.addColorStop(0.62, 'rgba(190,0,18,0.42)');
+    grad.addColorStop(1, 'rgba(255,0,22,1)');
+    _lowHpGradient = grad;
+    _lowHpGradientW = w;
+    _lowHpGradientH = h;
+    return grad;
+  }
+
   function drawLowHealthEdgeGlow() {
     if (!Neo.player || Neo.gameState !== 'play' || !Number.isFinite(Neo.player.hp) || !Number.isFinite(Neo.player.maxHp) || Neo.player.maxHp <= 0) return;
     const access = window.NeoSettings?.getAccess() || {};
@@ -75,19 +98,14 @@
     Neo.ctx.save();
     Neo.ctx.globalCompositeOperation = 'source-over';
 
-    const center = Neo.ctx.createRadialGradient(
-      Neo.canvas.width / 2,
-      Neo.canvas.height / 2,
-      Math.min(Neo.canvas.width, Neo.canvas.height) * 0.34,
-      Neo.canvas.width / 2,
-      Neo.canvas.height / 2,
-      Math.max(Neo.canvas.width, Neo.canvas.height) * 0.72,
-    );
-    center.addColorStop(0, 'rgba(255,0,0,0)');
-    center.addColorStop(0.62, `rgba(190,0,18,${alpha * 0.42})`);
-    center.addColorStop(1, `rgba(255,0,22,${alpha})`);
+    // The gradient geometry depends only on canvas size; only the alpha varies
+    // (per-frame pulse). Cache it at full alpha and modulate via globalAlpha so
+    // we don't rebuild the gradient + interpolate color-stop strings every frame.
+    const center = getLowHealthEdgeGradient();
+    Neo.ctx.globalAlpha = alpha;
     Neo.ctx.fillStyle = center;
     Neo.ctx.fillRect(0, 0, Neo.canvas.width, Neo.canvas.height);
+    Neo.ctx.globalAlpha = 1;
 
     Neo.ctx.fillStyle = `rgba(255,24,32,${alpha * 0.55})`;
     Neo.ctx.shadowColor = '#ff1e28';

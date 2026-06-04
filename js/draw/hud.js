@@ -1,11 +1,25 @@
 // draw/hud.js — standalone IIFE. HUD canvas drawing (particles, minimap, boss bars, transitions, action icons).
+  let _lineParticlePointScratch = new Float32Array(64);
+
   function drawParticles() {
     // Per-particle shadowBlur is the dominant draw cost. In performance mode,
     // once the screen is busy (e.g. holding a laser) drop the glow entirely —
     // the particles stay, they just don't each trigger an expensive blur pass.
     const perfMode = window.NeoSettings?.isPerformanceMode?.() !== false;
-    const lowFx = perfMode && Neo.particles.length > 80;
+    // shadowBlur is the dominant draw cost; drop it earlier under load so a busy
+    // screen (held laser, blood floods) doesn't pay per-particle blur on dozens
+    // of flecks before the cull kicks in.
+    const lowFx = perfMode && Neo.particles.length > 48;
     const pfx = n => (lowFx ? 0 : n);
+    // Under lowFx the glow is dropped, so skip both shadow writes entirely —
+    // setting shadowColor to a string every particle is wasted state churn when
+    // shadowBlur is 0. save()/restore() already resets shadowBlur to the 0 default
+    // each iteration, so we don't need to clear it here.
+    const setGlow = (color, blur) => {
+      if (lowFx) return;
+      Neo.ctx.shadowColor = color;
+      Neo.ctx.shadowBlur = blur;
+    };
     Neo.particles.forEach(particle => {
       if (particle.line) {
         const line = particle.line;
@@ -19,7 +33,11 @@
         const phase = (line.phase || 0) + particle.life * 22;
 
         // Compute segment offsets once; reuse for both stroke passes.
-        const pts = new Float32Array(segs * 2);
+        const pointCount = Math.max(0, (segs - 1) * 2);
+        if (_lineParticlePointScratch.length < pointCount) {
+          _lineParticlePointScratch = new Float32Array(pointCount * 2);
+        }
+        const pts = _lineParticlePointScratch;
         for (let index = 1; index < segs; index += 1) {
           const t = index / segs;
           const wave = Math.sin((t * 18) + phase + index * 0.9);
@@ -30,12 +48,11 @@
 
         Neo.ctx.save();
         Neo.ctx.globalAlpha = Math.min(1, particle.life * 2.1);
-        Neo.ctx.shadowColor = particle.c || '#dfe8ff';
 
         // Outer glow pass
         Neo.ctx.strokeStyle = particle.c || '#dfe8ff';
         Neo.ctx.lineWidth = (line.w || 4.5) + 3;
-        Neo.ctx.shadowBlur = pfx(18);
+        setGlow(particle.c || '#dfe8ff', 18);
         Neo.ctx.beginPath();
         Neo.ctx.moveTo(line.x1, line.y1);
         for (let index = 1; index < segs; index += 1) {
@@ -48,7 +65,7 @@
         // pts stores the fully-displaced coords; lerp back toward the straight baseline.
         Neo.ctx.strokeStyle = '#ffffff';
         Neo.ctx.lineWidth = Math.max(2, (line.w || 4.5) * 0.5);
-        Neo.ctx.shadowBlur = pfx(8);
+        if (!lowFx) Neo.ctx.shadowBlur = 8;
         Neo.ctx.beginPath();
         Neo.ctx.moveTo(line.x1, line.y1);
         for (let index = 1; index < segs; index += 1) {
@@ -72,8 +89,7 @@
         Neo.ctx.font = `bold ${particle.size || 14}px system-ui`;
         Neo.ctx.textAlign = 'center';
         Neo.ctx.textBaseline = 'middle';
-        Neo.ctx.shadowColor = particle.c;
-        Neo.ctx.shadowBlur = pfx(8);
+        setGlow(particle.c, 8);
         Neo.ctx.lineWidth = 3;
         Neo.ctx.strokeStyle = particle.outline || 'rgba(0,0,0,0.7)';
         Neo.ctx.strokeText(particle.text, 0, -particle.life * 20);
@@ -85,8 +101,7 @@
         const waveRadius = radius * (0.22 + progress * 0.92);
         Neo.ctx.globalAlpha = (1 - progress) * 0.8;
         Neo.ctx.strokeStyle = particle.c || '#ff66cc';
-        Neo.ctx.shadowColor = particle.c || '#ff66cc';
-        Neo.ctx.shadowBlur = pfx(18);
+        setGlow(particle.c || '#ff66cc', 18);
         Neo.ctx.lineWidth = particle.style === 'heavy' ? 5 : 3;
         Neo.ctx.beginPath();
         if (particle.style === 'heavy') {
@@ -115,8 +130,7 @@
         Neo.ctx.rotate(Number(particle.angle || 0));
         Neo.ctx.globalAlpha = (1 - progress) * 0.85;
         Neo.ctx.strokeStyle = particle.c || '#fff';
-        Neo.ctx.shadowColor = particle.c || '#fff';
-        Neo.ctx.shadowBlur = pfx(10);
+        setGlow(particle.c || '#fff', 10);
         Neo.ctx.lineWidth = 2;
         for (let index = 0; index < 4; index += 1) {
           const a = (index - 1.5) * 0.5;
@@ -131,11 +145,10 @@
         Neo.ctx.fill();
       } else if (particle.spark) {
         const size = Number(particle.size || 2.2);
-        const angle = Math.atan2(Number(particle.vy || 0), Number(particle.vx || 1));
+        const angle = Math.atan2(particle.vy, particle.vx || 1);
         Neo.ctx.rotate(angle);
         Neo.ctx.fillStyle = particle.c || '#fff';
-        Neo.ctx.shadowColor = particle.c || '#fff';
-        Neo.ctx.shadowBlur = pfx(7);
+        setGlow(particle.c || '#fff', 7);
         Neo.ctx.beginPath();
         Neo.ctx.ellipse(0, 0, size * 1.8, size * 0.45, 0, 0, Math.PI * 2);
         Neo.ctx.fill();
@@ -170,10 +183,9 @@
         Neo.ctx.stroke();
       } else if (particle.blood) {
         const size = particle.size || 3;
-        const tilt = Math.atan2(Number(particle.vy || 0), Number(particle.vx || 1)) + Math.PI / 2;
+        const tilt = Math.atan2(particle.vy, particle.vx || 1) + Math.PI / 2;
         Neo.ctx.fillStyle = particle.c || '#a5001e';
-        Neo.ctx.shadowColor = particle.c || '#a5001e';
-        Neo.ctx.shadowBlur = pfx(5);
+        setGlow(particle.c || '#a5001e', 5);
         Neo.ctx.rotate(tilt);
         Neo.ctx.beginPath();
         Neo.ctx.ellipse(0, 0, size * 0.72, size * 1.18, 0, 0, Math.PI * 2);
@@ -184,8 +196,7 @@
         Neo.ctx.fill();
       } else {
         Neo.ctx.fillStyle = particle.c || '#0ff';
-        Neo.ctx.shadowColor = particle.c || '#0ff';
-        Neo.ctx.shadowBlur = pfx(6);
+        setGlow(particle.c || '#0ff', 6);
         Neo.ctx.beginPath();
         Neo.ctx.arc(0, 0, 3, 0, Math.PI * 2);
         Neo.ctx.fill();
