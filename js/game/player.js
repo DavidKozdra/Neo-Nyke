@@ -268,7 +268,6 @@ export function getItemStats() {
     const toughSkin = getItemCount('tough_skin');
     const orbOfBlood = getItemCount('orb_of_blood');
     const hemesScarf = getItemCount('hemes_scarf');
-    const goldVac = getItemCount('gold_vac');
     const doubleDose = getItemCount('double_dose');
     const copycatCharm = getItemCount('copycat_charm');
     const attackServo = getItemCount('attack_servo');
@@ -343,8 +342,8 @@ export function getItemStats() {
       bleedHealScale: hemesScarf,
       passiveBleedStacks: hemesScarf,
       scarfBleedsOnHit: hemesScarf,
-      pickupVacuumRange: goldVac > 0 ? 9999 : 0,
-      coinPickupMultiplier: goldVac > 0 ? 2 : 1,
+      pickupVacuumRange: Number(Neo.player?.equipmentEffects?.gold_vac?.time || 0) > 0 ? 9999 : 0,
+      coinPickupMultiplier: Number(Neo.player?.equipmentEffects?.gold_vac?.time || 0) > 0 ? 2 : 1,
       potionDoubleChance: Neo.clamp(doubleDose * 0.5, 0, 1),
       itemDuplicateChance: Neo.clamp(copycatCharm * 0.3, 0, 1),
       critChance,

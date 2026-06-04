@@ -368,13 +368,13 @@ export const ITEM_DEFS = {
     gold_vac: {
       key: 'gold_vac',
       name: 'Gold Vac',
-      shortName: 'Vac x2',
-      description: 'Automatically vacuums pickups from across the room and doubles coin pickup value.',
+      shortName: 'Vac x1',
+      description: 'Tool: runs for 2 minutes. Automatically vacuums pickups from across the room and doubles coin pickup value.',
       rarity: 'knight',
       color: '#ffe07a',
       accent: '#fff6c7',
       category: 'knight',
-      tags: ['loot', 'coin', 'utility'],
+      tags: ['tools', 'loot', 'coin', 'utility'],
     },
     double_dose: {
       key: 'double_dose',

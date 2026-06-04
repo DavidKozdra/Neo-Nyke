@@ -630,9 +630,52 @@
       Neo.ctx.translate(pickup.x, pickup.y + bob);
       Neo.ctx.globalAlpha = 0.88 + Math.sin(t) * 0.12;
       if (pickup.type === 'coin') {
-        Neo.ctx.shadowColor = '#ffd966';
-        Neo.ctx.shadowBlur = 12;
-        if (Neo.ui.coinIcon instanceof HTMLCanvasElement) {
+        const value = Math.max(1, Math.round(Number(pickup.value || 1)));
+        const tier = value >= 15 ? 15 : value >= 10 ? 10 : value >= 5 ? 5 : 1;
+        const color = tier >= 15 ? '#ffe27a' : tier >= 10 ? '#8dd4ff' : tier >= 5 ? '#73ffb2' : '#ffd966';
+        Neo.ctx.shadowColor = color;
+        Neo.ctx.shadowBlur = tier >= 10 ? 18 : 12;
+        if (tier >= 15) {
+          Neo.ctx.fillStyle = color;
+          Neo.ctx.strokeStyle = '#fff6c8';
+          Neo.ctx.lineWidth = 2;
+          Neo.ctx.beginPath();
+          Neo.ctx.moveTo(-12, 5);
+          Neo.ctx.lineTo(-9, -8);
+          Neo.ctx.lineTo(-3, -2);
+          Neo.ctx.lineTo(0, -12);
+          Neo.ctx.lineTo(3, -2);
+          Neo.ctx.lineTo(9, -8);
+          Neo.ctx.lineTo(12, 5);
+          Neo.ctx.closePath();
+          Neo.ctx.fill();
+          Neo.ctx.stroke();
+          Neo.ctx.fillRect(-10, 6, 20, 4);
+        } else if (tier >= 10) {
+          Neo.ctx.fillStyle = color;
+          Neo.ctx.strokeStyle = '#d7f6ff';
+          Neo.ctx.lineWidth = 2;
+          Neo.ctx.beginPath();
+          Neo.ctx.moveTo(0, -14);
+          Neo.ctx.lineTo(12, -2);
+          Neo.ctx.lineTo(0, 14);
+          Neo.ctx.lineTo(-12, -2);
+          Neo.ctx.closePath();
+          Neo.ctx.fill();
+          Neo.ctx.stroke();
+        } else if (tier >= 5) {
+          Neo.ctx.fillStyle = color;
+          Neo.ctx.strokeStyle = '#d9ffe8';
+          Neo.ctx.lineWidth = 2;
+          Neo.ctx.beginPath();
+          Neo.ctx.moveTo(0, -11);
+          Neo.ctx.lineTo(10, 0);
+          Neo.ctx.lineTo(0, 11);
+          Neo.ctx.lineTo(-10, 0);
+          Neo.ctx.closePath();
+          Neo.ctx.fill();
+          Neo.ctx.stroke();
+        } else if (Neo.ui.coinIcon instanceof HTMLCanvasElement) {
           const s = 18;
           Neo.ctx.imageSmoothingEnabled = false;
           Neo.ctx.drawImage(Neo.ui.coinIcon, -s / 2, -s / 2, s, s);

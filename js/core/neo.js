@@ -159,6 +159,8 @@ window.Neo = {
   // --- cache ---
   environmentBackgroundCache: { key: '', canvas: null },
   minimapLayoutState: null,
+  minimapLegendCache: null,
+  minimapLegendDirty: true,
   itemStatsCacheFrame: -1,
   itemStatsCacheValue: null,
   godItemKeysCache: null,

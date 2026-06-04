@@ -1425,7 +1425,6 @@
       if (dealt <= 0) {
         enemy.vx += Math.cos(angle) * appliedKnockback * 0.35;
         enemy.vy += Math.sin(angle) * appliedKnockback * 0.35;
-        enemy.stun = Math.max(enemy.stun, 0.04);
         applyEnemyImpactStun(enemy, 0, appliedKnockback * 0.35);
         return;
       }
@@ -1437,7 +1436,6 @@
       enemy._lastHitAngle = angle;
       enemy._lastHitAt = performance.now();
     }
-    enemy.stun = Math.max(enemy.stun, 0.08);
     applyEnemyImpactStun(enemy, dealt, appliedKnockback);
     if (!options.noCharmBuff) Neo.grantCritCharmBuff();
     // Continuous beams call hitEnemy on the same target several times a second.
@@ -1935,6 +1933,7 @@
 
     const index = Neo.enemies.indexOf(enemy);
     if (index >= 0) Neo.enemies.splice(index, 1);
+    Neo.minimapLegendDirty = true;
     const isTutorialDummy = !!enemy.tutorialDummy;
     spawnEnemyCorpse(enemy);
     const itemStats = Neo.getItemStats();
@@ -2165,15 +2164,27 @@
 
   function dropCoins(x, y, amount) {
     const scaledAmount = Math.max(1, Math.round(Number(amount || 0) * Neo.getRunDifficultyScalars().coinRewardMultiplier));
-    const chunks = Math.max(1, Math.ceil(scaledAmount / 4));
-    for (let index = 0; index < chunks; index += 1) {
+    let remaining = scaledAmount;
+    while (remaining > 0) {
+      const roll = Neo.nextRandom ? Neo.nextRandom('loot') : Neo.rng();
+      let value = 1;
+      if (remaining >= 15 && roll < 0.05) {
+        value = 15;
+      } else if (remaining >= 10 && roll < 0.12) {
+        value = 10;
+      } else if (remaining >= 5 && roll < 0.28) {
+        value = 5;
+      }
+      const spread = value >= 15 ? 26 : value >= 10 ? 22 : value >= 5 ? 18 : 14;
       Neo.pickups.push({
-        x: x + Neo.rand(-18, 18, 'loot'),
-        y: y + Neo.rand(-18, 18, 'loot'),
+        x: x + Neo.rand(-spread, spread, 'loot'),
+        y: y + Neo.rand(-spread, spread, 'loot'),
         type: 'coin',
-        value: Math.ceil(scaledAmount / chunks),
+        value,
       });
+      remaining -= value;
     }
+    Neo.minimapLegendDirty = true;
   }
 
   function rollItemDrop(options = {}) {

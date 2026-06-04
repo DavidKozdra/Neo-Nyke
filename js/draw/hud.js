@@ -278,36 +278,32 @@
       secret: ['secret', 'SECRET', '#b58cff', 'square'],
     };
 
-    const liveEnemies = Array.isArray(Neo.enemies) ? Neo.enemies.filter(enemy => enemy && enemy.hp > 0) : [];
-    const eliteCount = liveEnemies.filter(enemy => enemy.elite).length;
-    const normalEnemyCount = Math.max(0, liveEnemies.length - eliteCount);
-    const currentHazards = Array.isArray(Neo.hazards) ? Neo.hazards : [];
-    const hasTrap = currentHazards.some(hazard => hazard?.kind === 'explosive_trap');
-    const hasLava = currentHazards.some(hazard => hazard?.kind === 'lava' || hazard?.kind === 'lava_moat');
-    const hasHealZone = currentHazards.some(hazard => hazard?.kind === 'healing_zone');
-    const hasFire = currentHazards.some(hazard => hazard?.kind === 'fire_circle');
-    const currentPickups = Array.isArray(Neo.pickups) ? Neo.pickups : [];
-    const potionCount = currentPickups.filter(pickup => pickup?.type === 'potion').length;
-    const coinCount = currentPickups.filter(pickup => pickup?.type === 'coin').length;
-    const itemCount = currentPickups.filter(pickup => pickup?.type === 'item').length;
-    const exitVisible = showsExit(currentRoom);
-    const chestCount = Array.isArray(Neo.chests) ? Neo.chests.filter(chest => chest && !chest.opened).length : 0;
-    const legendSignature = [
+    const legendLayoutSignature = [
       currentRoom?.gx ?? '-', currentRoom?.gy ?? '-', currentRoom?.type || '',
-      exitVisible ? 1 : 0,
-      eliteCount, normalEnemyCount,
-      hasTrap ? 1 : 0, hasLava ? 1 : 0, hasHealZone ? 1 : 0, hasFire ? 1 : 0,
-      itemCount, potionCount, coinCount, chestCount,
       mapWidth, keyFontSize, keyIconSize, keyPadX,
     ].join('|');
 
     let legendRows;
     let legendRowWidths;
     const cachedLegend = Neo.minimapLegendCache;
-    if (cachedLegend?.signature === legendSignature) {
+    if (cachedLegend?.layoutSignature === legendLayoutSignature && !Neo.minimapLegendDirty) {
       legendRows = cachedLegend.rows;
       legendRowWidths = cachedLegend.rowWidths;
     } else {
+      const liveEnemies = Array.isArray(Neo.enemies) ? Neo.enemies.filter(enemy => enemy && enemy.hp > 0) : [];
+      const eliteCount = liveEnemies.filter(enemy => enemy.elite).length;
+      const normalEnemyCount = Math.max(0, liveEnemies.length - eliteCount);
+      const currentHazards = Array.isArray(Neo.hazards) ? Neo.hazards : [];
+      const hasTrap = currentHazards.some(hazard => hazard?.kind === 'explosive_trap');
+      const hasLava = currentHazards.some(hazard => hazard?.kind === 'lava' || hazard?.kind === 'lava_moat');
+      const hasHealZone = currentHazards.some(hazard => hazard?.kind === 'healing_zone');
+      const hasFire = currentHazards.some(hazard => hazard?.kind === 'fire_circle');
+      const currentPickups = Array.isArray(Neo.pickups) ? Neo.pickups : [];
+      const potionCount = currentPickups.filter(pickup => pickup?.type === 'potion').length;
+      const coinCount = currentPickups.filter(pickup => pickup?.type === 'coin').length;
+      const itemCount = currentPickups.filter(pickup => pickup?.type === 'item').length;
+      const exitVisible = showsExit(currentRoom);
+      const chestCount = Array.isArray(Neo.chests) ? Neo.chests.filter(chest => chest && !chest.open).length : 0;
       const legendEntries = [{ key: 'you', label: 'YOU', color: '#fff7c2', mode: 'you' }];
       const addLegendEntry = (key, label, color, mode = 'dot') => {
         if (!legendEntries.some(entry => entry.key === key)) legendEntries.push({ key, label, color, mode });
@@ -343,7 +339,8 @@
         legendRows[rowIndex].push(entry);
         legendRowWidths[rowIndex] += (legendRows[rowIndex].length > 1 ? keyEntryGap : 0) + entry.width;
       });
-      Neo.minimapLegendCache = { signature: legendSignature, rows: legendRows, rowWidths: legendRowWidths };
+      Neo.minimapLegendCache = { layoutSignature: legendLayoutSignature, rows: legendRows, rowWidths: legendRowWidths };
+      Neo.minimapLegendDirty = false;
     }
     const keyContentH = legendRows.length * keyPillH + Math.max(0, legendRows.length - 1) * keyRowGap;
     const minimapFrameHeight = mapHeight + keyFooterPad * 2 + keyContentH;

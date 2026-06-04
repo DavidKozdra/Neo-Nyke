@@ -785,6 +785,7 @@
     mid_sweepy_box: { cooldown: 36, duration: 6, label: 'SWEEPY', color: '#ff6e8b' },
     el_bartos_cape: { cooldown: 58, duration: 10, label: 'EL BARTO', color: '#ffb37a' },
     sparkle_charm: { cooldown: 40, duration: 0, label: 'SPARKLE', color: '#ffe8a3' },
+    gold_vac: { cooldown: 120, duration: 120, label: 'GOLD VAC', color: '#ffe07a' },
   };
 
   function ensureEquipmentRuntimeState() {
@@ -986,6 +987,7 @@
       } else if (key === 'el_bartos_cape') {
         player.inv = Math.max(Number(player.inv || 0), 0.12);
       }
+      if (key === 'gold_vac') Neo.itemStatsCacheFrame = -1;
       if (effect.time <= 0) {
         delete player.equipmentEffects[key];
         Neo.itemStatsCacheFrame = -1;
@@ -1083,6 +1085,13 @@
       activate: () => startTimedEquipment('sparkle_charm'),
       getState: () => getEquipmentState('sparkle_charm'),
       getStatusText: () => getEquipmentStatusText('sparkle_charm'),
+    },
+    gold_vac: {
+      key: 'gold_vac',
+      shortName: 'VAC',
+      activate: () => startTimedEquipment('gold_vac'),
+      getState: () => getEquipmentState('gold_vac'),
+      getStatusText: () => getEquipmentStatusText('gold_vac'),
     },
   };
   Neo.EQUIPMENT_SLOT_KEYS = EQUIPMENT_SLOT_KEYS;

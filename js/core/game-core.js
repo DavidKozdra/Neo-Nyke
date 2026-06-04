@@ -19,7 +19,7 @@ export const ATTACKS = {
 };
 export const SLASH_KNOCKBACK = 340;
 export const HEAVY_HIT_HEALTH_RATIO = 0.5;
-export const HEAVY_KNOCKBACK_THRESHOLD = 2200;
+export const HEAVY_KNOCKBACK_THRESHOLD = 6600;
 export const HEAVY_HIT_STUN = 0.62;
 export const HEAVY_KNOCKBACK_STUN = 0.46;
 export const HEAVY_IMPACT_BOSS_STUN_MULTIPLIER = 0.65;

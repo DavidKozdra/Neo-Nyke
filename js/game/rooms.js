@@ -960,6 +960,7 @@
     Neo.setShopPanelOpen(false);
     Neo.setInventoryPanelOpen(false);
     Neo.currentRoom = room;
+    Neo.minimapLegendDirty = true;
     room.explored = true;
     room.visited = true;
     Neo.enemies = room.enemies || [];

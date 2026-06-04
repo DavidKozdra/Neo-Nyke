@@ -1966,6 +1966,7 @@
       if (chest.open) return;
       if (Neo.dist(chest.x, chest.y, Neo.player.x, Neo.player.y) >= 36) return;
       chest.open = true;
+      Neo.minimapLegendDirty = true;
       Neo.dropCoins(chest.x, chest.y, 12 + Neo.floor * 2);
       if ((chest.rewardType || 'item') === 'item') {
         Neo.pickups.push({ x: chest.x, y: chest.y - 20, type: 'item', key: chest.rewardKey || Neo.rollItemDrop({ random: Neo.createEntityRandom(chest, 'chest:fallback') }) });
@@ -2008,6 +2009,7 @@
   }
 
   function removePickupAt(index) {
+    Neo.minimapLegendDirty = true;
     return Neo.unorderedRemoveAt(Neo.pickups, index);
   }
 
