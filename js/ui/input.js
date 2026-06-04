@@ -1368,6 +1368,17 @@ export const SANDBOX_DEFAULT_SETTINGS = {
   Neo.SANDBOX_DEFAULT_SETTINGS = SANDBOX_DEFAULT_SETTINGS;
   Neo.SANDBOX_ENEMY_TYPES = SANDBOX_ENEMY_TYPES;
 
+  // Achievement unlocks are one-time rewards, so each newly unlocked
+  // achievement grants one Loop Crystal.
+  window.addEventListener('achievement:unlocked', () => {
+    if (Neo.metaProgress) Neo.metaProgress.loopCrystals = Number(Neo.metaProgress.loopCrystals || 0) + 1;
+    if (Neo.player && Neo.gameState === 'play') {
+      Neo.spawnParticle?.({ x: Neo.player.x, y: Neo.player.y - 54, life: 1.1, text: '+1 ACHIEVEMENT LC', c: '#83f3ff' });
+    }
+    Neo.persistMetaSoon();
+    Neo.refreshMenuState();
+  });
+
   // Auto-pause when the window loses focus (gameplay setting, defaults on).
   window.addEventListener('blur', () => {
     if (window.NeoSettings?.shouldPauseOnBlur?.() === false) return;
