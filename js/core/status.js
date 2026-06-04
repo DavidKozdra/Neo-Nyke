@@ -57,19 +57,28 @@ export function clearStatus(entity, key) {
   state.tick = 0;
 }
 
-// Cold (slow) lasts a long time and scales with stacks: 15s per stack, total.
+// Player cold (slow) uses duration as a stack-time budget: each stack is 15s.
+// The update loop recomputes visible stacks from the remaining budget so one
+// stack falls off every 15s instead of all stacks sticking until the end.
 export const COLD_SECONDS_PER_STACK = 15;
+
+export function getColdStacksFromDuration(duration) {
+  return Math.min(6, Math.max(0, Math.ceil((Number(duration || 0) - 0.001) / COLD_SECONDS_PER_STACK)));
+}
 
 export function applyStatus(entity, key, stacks, duration) {
   if (!entity || !Neo.STATUS_KEYS.includes(key)) return;
   if (entity[`${key}Immune`]) return;
   const state = getStatusState(entity, key);
-  state.stacks = Math.min(6, Math.max(state.stacks, 0) + Math.max(0, Number(stacks || 0)));
+  const addedStacks = Math.max(0, Number(stacks || 0));
   if (key === 'slow' && entity === Neo.player) {
-    // Cold on the player tracks total stacks (15s each); enemy "slow" procs
-    // (e.g. weapon fatigue) keep their own short explicit duration.
-    state.duration = Math.max(state.duration, state.stacks * COLD_SECONDS_PER_STACK);
+    const existingBudget = Number(state.duration || 0) > 0
+      ? Number(state.duration || 0)
+      : Math.max(0, Number(state.stacks || 0)) * COLD_SECONDS_PER_STACK;
+    state.duration = Math.min(6 * COLD_SECONDS_PER_STACK, existingBudget + addedStacks * COLD_SECONDS_PER_STACK);
+    state.stacks = getColdStacksFromDuration(state.duration);
   } else {
+    state.stacks = Math.min(6, Math.max(state.stacks, 0) + addedStacks);
     state.duration = Math.max(state.duration, Number(duration || 0));
   }
   if (entity !== Neo.player) window.achievementEvents?.emit('status:applied', { key, entityId: entity.id });
@@ -100,3 +109,5 @@ Neo.getSlowMultiplier = getSlowMultiplier;
 Neo.getBrittleDefenseMultiplier = getBrittleDefenseMultiplier;
 Neo.clearStatus = clearStatus;
 Neo.applyStatus = applyStatus;
+Neo.COLD_SECONDS_PER_STACK = COLD_SECONDS_PER_STACK;
+Neo.getColdStacksFromDuration = getColdStacksFromDuration;

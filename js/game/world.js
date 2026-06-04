@@ -496,9 +496,9 @@
       damage: stacks => Neo.player.maxHp * (0.003 + stacks * 0.002),
       color: Neo.STATUS_STYLES.dark_drain.color,
     });
-    // Cold (slow) deals no damage-over-time; it just slows + makes brittle, so
-    // it isn't routed through tickPlayerStatus. Decay its duration here, else it
-    // would never expire on the player.
+    // Cold (slow) deals no damage-over-time; it just slows + makes brittle.
+    // Player cold stores 15s of duration per stack, so visible stacks drop one
+    // at a time as that budget decays.
     const coldState = Neo.getStatusState(Neo.player, 'slow');
     if (coldState.stacks > 0) {
       coldState.duration -= dt;
@@ -509,7 +509,11 @@
           Neo.spawnParticle({ x: Neo.player.x + Neo.rand(-8, 8), y: Neo.player.y + Neo.rand(-8, 8), life: 0.25, c: Neo.STATUS_STYLES.slow.color });
         }
       }
-      if (coldState.duration <= 0) Neo.clearStatus(Neo.player, 'slow');
+      if (coldState.duration <= 0) {
+        Neo.clearStatus(Neo.player, 'slow');
+      } else {
+        coldState.stacks = Neo.getColdStacksFromDuration?.(coldState.duration) ?? Math.min(6, Math.ceil(coldState.duration / Neo.COLD_SECONDS_PER_STACK));
+      }
     }
   }
 

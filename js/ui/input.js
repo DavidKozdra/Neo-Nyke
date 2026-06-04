@@ -1368,13 +1368,6 @@ export const SANDBOX_DEFAULT_SETTINGS = {
   Neo.SANDBOX_DEFAULT_SETTINGS = SANDBOX_DEFAULT_SETTINGS;
   Neo.SANDBOX_ENEMY_TYPES = SANDBOX_ENEMY_TYPES;
 
-  // achievement listener — needs Neo.metaProgress (set later), but persists via closure
-  window.addEventListener('achievement:unlocked', () => {
-    if (Neo.metaProgress) Neo.metaProgress.loopCrystals = Number(Neo.metaProgress.loopCrystals || 0) + 1;
-    Neo.persistMetaSoon();
-    Neo.refreshMenuState();
-  });
-
   // Auto-pause when the window loses focus (gameplay setting, defaults on).
   window.addEventListener('blur', () => {
     if (window.NeoSettings?.shouldPauseOnBlur?.() === false) return;

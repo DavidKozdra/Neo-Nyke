@@ -1317,35 +1317,42 @@ button, input, select, textarea {
 
 .panel-disintegrate-fx__tile {
   position: absolute;
-  overflow: hidden;
+  overflow: visible;
   transform-origin: center;
-  opacity: 1;
-  filter: blur(0);
+  opacity: .34;
+  border-radius: 2px;
+  background:
+    linear-gradient(90deg, rgba(198, 255, 252, .48), rgba(255, 232, 126, .2), transparent);
+  box-shadow: 0 0 8px rgba(124, 255, 252, .22);
+  filter: blur(.15px) saturate(.88);
   backface-visibility: hidden;
   will-change: transform, opacity, filter;
   transition:
-    transform .64s cubic-bezier(.14, .78, .12, 1),
-    opacity .52s cubic-bezier(.2, .7, .1, 1),
-    filter .52s ease;
+    transform .34s cubic-bezier(.14, .78, .12, 1),
+    opacity .3s cubic-bezier(.2, .7, .1, 1),
+    filter .3s ease;
   transition-delay: var(--panel-fx-delay, 0ms);
 }
 
-.panel-disintegrate-fx__tile::after {
-  content: "";
+.panel-disintegrate-fx__ghost-surface {
   position: absolute;
-  inset: -2px;
-  pointer-events: none;
-  opacity: 0;
-  background:
-    linear-gradient(135deg, rgba(124, 255, 252, .38), transparent 35%),
-    linear-gradient(315deg, rgba(255, 232, 126, .26), transparent 42%);
-  mix-blend-mode: screen;
-  transition: opacity .18s ease;
+  inset: 0;
+  overflow: hidden;
+  transform-origin: var(--panel-fx-origin-x, 50%) var(--panel-fx-origin-y, 50%);
+  opacity: .46;
+  filter: blur(.1px) saturate(.82) brightness(.88);
+  will-change: transform, opacity, filter;
+  transition:
+    transform .34s cubic-bezier(.14, .78, .12, 1),
+    opacity .28s ease,
+    filter .28s ease;
 }
 
 .panel-disintegrate-fx__surface {
   pointer-events: none !important;
   user-select: none;
+  opacity: .78 !important;
+  filter: saturate(.82) brightness(.88);
 }
 
 .panel-disintegrate-fx__surface canvas {
@@ -1360,12 +1367,12 @@ button, input, select, textarea {
   transform: scale(.96);
   transform-origin: var(--panel-fx-origin-x, 50%) var(--panel-fx-origin-y, 50%);
   background:
-    radial-gradient(circle at var(--panel-fx-origin-x, 86%) var(--panel-fx-origin-y, 14%), rgba(170, 255, 252, .52), transparent 20%),
-    radial-gradient(ellipse at center, rgba(255, 232, 126, .22), transparent 58%);
+    radial-gradient(circle at var(--panel-fx-origin-x, 86%) var(--panel-fx-origin-y, 14%), rgba(170, 255, 252, .22), transparent 20%),
+    radial-gradient(ellipse at center, rgba(255, 232, 126, .1), transparent 58%);
   box-shadow:
-    0 0 0 1px rgba(175, 255, 252, .32),
-    0 0 34px rgba(110, 255, 246, .34),
-    0 0 70px rgba(255, 232, 126, .16);
+    0 0 0 1px rgba(175, 255, 252, .14),
+    0 0 26px rgba(110, 255, 246, .16),
+    0 0 54px rgba(255, 232, 126, .08);
   transition:
     opacity .18s ease,
     transform .34s cubic-bezier(.14, .78, .12, 1);
@@ -1378,38 +1385,38 @@ button, input, select, textarea {
   margin: -10px 0 0 -10px;
   border-radius: 3px;
   opacity: 0;
-  background: #cffffd;
+  background: rgba(207, 255, 253, .62);
   box-shadow:
-    0 0 8px rgba(124, 255, 252, .8),
-    0 0 14px rgba(255, 232, 126, .36);
+    0 0 7px rgba(124, 255, 252, .34),
+    0 0 12px rgba(255, 232, 126, .16);
   transform: translate(0, 0) scale(.25) rotate(45deg);
   will-change: transform, opacity, filter;
   transition:
-    transform .62s cubic-bezier(.12, .8, .14, 1),
-    opacity .54s ease,
-    filter .54s ease;
+    transform .34s cubic-bezier(.12, .8, .14, 1),
+    opacity .3s ease,
+    filter .3s ease;
   transition-delay: var(--panel-fx-delay, 0ms);
 }
 
 .panel-disintegrate-fx--active .panel-disintegrate-fx__flash {
-  opacity: 1;
+  opacity: .36;
   transform: scale(1.035);
-  animation: panelDisintegrateFlash .34s ease forwards;
+  animation: panelDisintegrateFlash .18s ease forwards;
 }
 
 .panel-disintegrate-fx--active {
   animation: panelDisintegrateTension .14s ease-out both;
 }
 
-.panel-disintegrate-fx--active .panel-disintegrate-fx__tile::after {
-  opacity: .86;
-  animation: panelShardGlimmer .42s ease forwards;
-  animation-delay: var(--panel-fx-delay, 0ms);
+.panel-disintegrate-fx--active .panel-disintegrate-fx__ghost-surface {
+  opacity: 0;
+  filter: blur(1.2px) saturate(.58) brightness(.78);
+  transform: translate3d(0, -10px, 0) scale(.982);
 }
 
 .panel-disintegrate-fx--active .panel-disintegrate-fx__tile {
   opacity: 0;
-  filter: blur(1.35px) saturate(.92) brightness(var(--panel-fx-bright, 1.14));
+  filter: blur(1.65px) saturate(.62) brightness(var(--panel-fx-bright, .9));
   transform: translate3d(var(--panel-fx-dx, 0), var(--panel-fx-dy, 0), 0) scale(var(--panel-fx-scale, .56)) rotate(var(--panel-fx-rot, 0deg));
 }
 
@@ -1417,7 +1424,7 @@ button, input, select, textarea {
   opacity: 0;
   filter: blur(1px);
   transform: translate3d(var(--panel-fx-dx, 0), var(--panel-fx-dy, 0), 0) scale(var(--panel-fx-scale, 1)) rotate(225deg);
-  animation: panelDisintegrateSpark .62s ease forwards;
+  animation: panelDisintegrateSpark .34s ease forwards;
   animation-delay: var(--panel-fx-delay, 0ms);
 }
 
@@ -1430,19 +1437,13 @@ button, input, select, textarea {
 
 @keyframes panelDisintegrateFlash {
   0% { opacity: 0; }
-  28% { opacity: .9; }
-  100% { opacity: 0; }
-}
-
-@keyframes panelShardGlimmer {
-  0% { opacity: 0; }
-  34% { opacity: .86; }
+  24% { opacity: .34; }
   100% { opacity: 0; }
 }
 
 @keyframes panelDisintegrateSpark {
   0% { opacity: 0; }
-  18% { opacity: .92; }
+  18% { opacity: .38; }
   100% { opacity: 0; }
 }
 

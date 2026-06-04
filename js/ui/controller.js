@@ -307,7 +307,8 @@ export function createUIController(view) {
 
     function getSkillCacheValue(skill) {
       if (!skill) return null;
-      return `${skill.current}|${skill.max}|${!!skill.active}|${skill.charges}|${skill.maxCharges}`;
+      const timers = Array.isArray(skill.timers) ? skill.timers.join(',') : '';
+      return `${skill.current}|${skill.max}|${!!skill.active}|${skill.charges}|${skill.maxCharges}|${timers}`;
     }
 
     function updateSkillCardIfChanged(name, skill) {
@@ -315,7 +316,7 @@ export function createUIController(view) {
       const nextCache = getSkillCacheValue(skill);
       if (hudRenderCache.skills[name] === nextCache) return;
       hudRenderCache.skills[name] = nextCache;
-      setSkillCard(name, skill.current, skill.max, !!skill.active, skill.charges, skill.maxCharges);
+      setSkillCard(name, skill.current, skill.max, !!skill.active, skill.charges, skill.maxCharges, skill.timers);
     }
 
     function renderRunHistoryModeTabs() {
@@ -341,7 +342,7 @@ export function createUIController(view) {
       };
     }
 
-    function setSkillCard(name, current, max, active = false, charges = 0, maxCharges = 1) {
+    function setSkillCard(name, current, max, active = false, charges = 0, maxCharges = 1, timers = null) {
       const fill = name === 'melee' ? view.fillMelee
         : name === 'laser' ? view.fillLaser
           : name === 'smash' ? view.fillSmash
@@ -352,7 +353,11 @@ export function createUIController(view) {
             : view.timeDash;
       const card = view.actionCards[name];
       const ready = charges > 0 && !active;
-      const partialCharge = charges < maxCharges && max > 0 ? Neo.clamp(1 - (current / max), 0, 1) : 0;
+      // One fill fraction per recovering charge, derived from its own timer, so a
+      // freshly-spent pip starts near empty instead of inheriting the progress of
+      // an earlier in-flight timer (which made extra charges look auto-loaded).
+      const pipFills = computePipFills(charges, maxCharges, max, current, timers);
+      const partialCharge = pipFills[charges] || 0;
       const ratio = maxCharges <= 0 ? 0 : Neo.clamp((charges + partialCharge) / maxCharges, 0, 1);
       if (fill) fill.style.height = `${ratio * 100}%`;
       if (time) {
@@ -366,13 +371,31 @@ export function createUIController(view) {
       }
       if (card) {
         card.classList.toggle('ready', ready);
-        updateSkillCharges(card, charges, maxCharges, partialCharge);
+        updateSkillCharges(card, charges, maxCharges, pipFills);
       }
     }
 
+    // Build a per-pip fill array of length maxCharges: charges in hand read full,
+    // each recovering charge reads the progress of its own timer. Timers are
+    // sorted most-progressed first so pips fill left-to-right as charges return.
+    function computePipFills(charges, maxCharges, max, current, timers) {
+      const fills = new Array(Math.max(0, maxCharges)).fill(0);
+      for (let i = 0; i < charges && i < fills.length; i += 1) fills[i] = 1;
+      if (max <= 0) return fills;
+      const list = Array.isArray(timers) && timers.length
+        ? timers.slice()
+        : (current > 0 ? [current] : []);
+      // Least time remaining first -> fullest pip first, placed after the held charges.
+      list.sort((a, b) => a - b);
+      for (let i = 0; i < list.length && charges + i < fills.length; i += 1) {
+        fills[charges + i] = Neo.clamp(1 - (list[i] / max), 0, 1);
+      }
+      return fills;
+    }
+
     // Render one pip per charge so skills with extra charges read at a glance:
-    // filled pips = charges in hand, the next pip fills as that charge recovers.
-    function updateSkillCharges(card, charges, maxCharges, partialCharge) {
+    // filled pips = charges in hand, recovering pips fill from their own timers.
+    function updateSkillCharges(card, charges, maxCharges, pipFills) {
       let pips = card.querySelector('.skill-charges');
       if (maxCharges <= 1) {
         if (pips) pips.remove();
@@ -391,11 +414,12 @@ export function createUIController(view) {
       }
       const dots = pips.children;
       for (let i = 0; i < dots.length; i += 1) {
+        const value = pipFills[i] || 0;
         const filled = i < charges;
-        const filling = i === charges && partialCharge > 0;
+        const filling = !filled && value > 0;
         dots[i].classList.toggle('full', filled);
         dots[i].classList.toggle('charging', filling);
-        dots[i].style.setProperty('--pip', filling ? partialCharge : filled ? 1 : 0);
+        dots[i].style.setProperty('--pip', value);
       }
     }
 
@@ -2287,10 +2311,8 @@ export function createUIController(view) {
         }
         if (view.winDifficulty) view.winDifficulty.textContent = (entry.difficultyName || entry.difficulty || '—').toUpperCase();
 
-        const crystalBonus = Math.max(0, Math.round(Neo.getActiveChallengeCrystalBonusMultiplier?.() || 0));
-        const titheBonus = Neo.hasLegacy?.('crystal_tithe') && Neo.HARD_DIFFICULTIES?.has(Neo.selectedDifficulty) ? 1 : 0;
-        const earned = 1 + crystalBonus + titheBonus;
-        const totalAfter = Number(Neo.metaProgress?.loopCrystals || 0) + earned;
+        const earned = Number(entry.loopCrystalsEarned || 0);
+        const totalAfter = Number(Neo.metaProgress?.loopCrystals || 0);
         if (view.winCrystalsEarned) view.winCrystalsEarned.textContent = `+${earned}`;
         if (view.winCrystalsTotal) view.winCrystalsTotal.textContent = String(totalAfter);
 

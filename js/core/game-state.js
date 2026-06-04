@@ -1240,6 +1240,10 @@ export function resumeGame() {
       charges: state.charges,
       maxCharges: state.maxCharges,
       current: state.timers.length ? Math.min(...state.timers) : 0,
+      // Every in-flight recharge, so the HUD can fill one pip per timer instead
+      // of dumping the most-progressed timer onto the freshly-spent pip (which
+      // made an extra charge look like it instantly reloaded).
+      timers: state.timers.slice(),
       max: getSlotCooldownDuration(slot, moveKey, attackSpeed),
     };
   }
