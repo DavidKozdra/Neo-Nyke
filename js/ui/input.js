@@ -834,7 +834,7 @@ export const ITEM_DEFS = {
       key: 'princes_glasses',
       name: "Prince's Glasses",
       shortName: 'Map Vision',
-      description: 'Pink, not that anything is wrong with that. Upgrades the minimap: larger zoom, skull markers for traps, enemy dots, green for healing, yellow for coins.',
+      description: 'Pink, not that anything is wrong with that. Upgrades the minimap: larger zoom, skull markers for traps, enemy dots, green for healing, yellow for coins. Also grants +5% gold from all sources.',
       rarity: 'wizard',
       color: '#ff9de8',
       accent: '#ff55cc',

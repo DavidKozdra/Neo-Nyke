@@ -2314,7 +2314,8 @@ export function handleShopBuyClick(event) {
       if (!spendCoins(cost)) return;
       playShopPurchaseFeedback(button, cost);
       if (canHealNow) {
-        const gained = Neo.applyPlayerHealing?.(heal) ?? 0;
+        const scaledHeal = Neo.scalePlayerHealing?.(heal, heal) ?? heal;
+        const gained = Neo.applyPlayerHealing?.(scaledHeal) ?? 0;
         if (gained > 0) Neo.spawnHealPopup(Neo.player.x + Neo.rand(-10, 10), Neo.player.y - 20, gained);
       } else {
         Neo.player.storedPotions = stored + 1;

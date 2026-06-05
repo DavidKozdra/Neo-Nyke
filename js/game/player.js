@@ -379,6 +379,7 @@ export function getItemStats() {
       stunResistance: anchorCharm,
       hasIronLung: getItemCount('iron_lung') > 0,
       hasPrincesGlasses: getItemCount('princes_glasses') > 0,
+      goldGainMultiplier: 1 + getItemCount('princes_glasses') * 0.05,
       tagCounts,
       bleedCritChance: tagCounts.bleed >= 8 ? 0.18 : tagCounts.bleed >= 3 ? 0.08 : 0,
       bleedSplashStacks: tagCounts.bleed >= 5 ? Math.min(3, 1 + Math.floor((tagCounts.bleed - 5) / 4)) : 0,

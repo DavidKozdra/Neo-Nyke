@@ -415,6 +415,11 @@ export function resumeGame() {
       bandaid: 0,
       push_man: 0,
       titan_heart: 0,
+      weapon_fatigue: 0,
+      generic_health_item: 0,
+      snake_knife: 0,
+      confuse_ray: 0,
+      overclocked_watch: 0,
       charged_adapter: 0,
       pew_pew_box: 0,
       turbo_boots: 0,
@@ -426,15 +431,21 @@ export function resumeGame() {
       dragon_orb: 0,
       ricocete: 0,
       drink_master: 0,
+      overstimulate: 0,
+      grave_zone: 0,
       turtle_shell: 0,
       anchor_charm: 0,
       iron_lung: 0,
       oracles_lens: 0,
+      homing_missile: 0,
       wizards_paw: 0,
       jesters_dice: 0,
       shield_of_aegis: 0,
       pendant_of_kronos: 0,
+      robot_arm: 0,
       rich_mans_luck: 0,
+      veggys_pendant: 0,
+      princes_glasses: 0,
       mateos_bag: 0,
       extra_battery: 0,
       mooggy_zoomies: 0,
@@ -1335,7 +1346,7 @@ export function resumeGame() {
     if (type === 'bulk_golem') return 'Bulk Golem';
     if (type === 'artificer_knave') return 'Artificer Charged Knave';
     if (type === 'bowman_bane') return "Bowman's Bane";
-    if (type === 'antony_blemmye') return 'Antony Blemmye';
+    if (type === 'antony_blemmye') return 'Antony Blemmyae';
     if (type === 'handsome_devil') return 'Handsome Devil';
     if (type === 'god') return 'GOD';
     return titleCase(type);
@@ -1628,7 +1639,8 @@ export function resumeGame() {
     'Queen of the Cult': 'queen_cult',
     'Bulk Golem': 'bulk_golem',
     'Artificer Charged Knave': 'artificer_knave',
-    'Antony Blemmye': 'antony_blemmye',
+    'Antony Blemmyae': 'antony_blemmye',
+    'Antony Blemmye': 'antony_blemmye', // legacy spelling in old death-history records
     'Handsome Devil': 'handsome_devil',
     'GOD': 'god',
     'Mirror Champion': 'thorn_knight',

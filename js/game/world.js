@@ -2689,8 +2689,13 @@
   }
 
   function addCoins(amount) {
-    Neo.player.coins += amount;
-    Neo.metaProgress.coins += amount;
+    // Prince's Glasses (and any future gold-boost items) grant a flat % more
+    // gold across every source — pickups, chests, kills. Only scale positive
+    // gains so spends (negative amounts) pass through untouched.
+    const goldMult = Math.max(1, Number(Neo.getItemStats?.()?.goldGainMultiplier || 1));
+    const gained = amount > 0 ? Math.round(amount * goldMult) : amount;
+    Neo.player.coins += gained;
+    Neo.metaProgress.coins += gained;
     Neo.persistMetaSoon();
     window.achievementEvents?.emit('meta:coins', { total: Neo.metaProgress.coins });
   }

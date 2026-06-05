@@ -1076,6 +1076,10 @@
       bleedResistance: Neo.clamp(count('tough_skin') * 0.25, 0, 0.8),
       scarfBleedsOnHit: count('hemes_scarf'),
       snakeKnifePoisonChance: count('snake_knife') * 0.02,
+      weaponFatigueChance: count('weapon_fatigue') * 0.05,
+      confuseRayStunChance: count('confuse_ray') * 0.01,
+      overstimulateStunChance: count('overstimulate') * 0.2,
+      homingMissileChance: count('homing_missile') * 0.15,
       critChance,
       critMultiplier: 1.6 + (count('oracles_lens') > 0 ? critChance * 2.2 : critChance * 0.6),
       attackSpeedMultiplier: robotArm > 0 && inventory?.robotArmReady
@@ -1088,6 +1092,7 @@
       aoeDamageMultiplier: Number(characterDef.aoeDamageMultiplier || 1),
       beamDamageMultiplier: 1 + count('dragon_orb') * 0.35,
       projectileBounces: count('ricocete'),
+      projectileHomingStrength: count('enemy_magnet') * 0.05,
       projectileSpeedMultiplier: 1 + count('mooggy_zoomies') * 0.2,
       healingMultiplier: 1 + count('drink_master') * 0.2,
       itemDropChanceBonus: Math.min(0.3, count('rich_mans_luck') * 0.05),
@@ -3216,6 +3221,11 @@
     if (bleedChance > 0) effects.push({ key: 'bleed', chance: bleedChance, stacks: 1, duration: 4.2 });
     const poisonChance = Number(stats.snakeKnifePoisonChance || 0);
     if (poisonChance > 0) effects.push({ key: 'poison', chance: poisonChance, stacks: 1, duration: 4.2 });
+    const slowChance = Number(stats.weaponFatigueChance || 0);
+    if (slowChance > 0) effects.push({ key: 'slow', chance: slowChance, stacks: 1, duration: 4 });
+    const stunChance = Number(stats.confuseRayStunChance || 0)
+      + (Number(stats.overstimulateStunChance || 0) > 0 && Neo.getActiveStatusCount?.(Neo.player) >= 2 ? Number(stats.overstimulateStunChance || 0) : 0);
+    if (stunChance > 0) effects.push({ key: 'stun', chance: stunChance, stacks: 1, duration: 0.55 });
     if (Number(options.fireStacks || 0) > 0) {
       effects.push({ key: 'fire', chance: 1, stacks: Number(options.fireStacks || 1), duration: Number(options.fireDuration || 3.2) });
     }
@@ -3227,7 +3237,11 @@
     effects.forEach(effect => {
       if (!effect?.key) return;
       if (Neo.nextRandom('encounter') <= Number(effect.chance ?? 1)) {
-        Neo.applyStatus(Neo.player, effect.key, Number(effect.stacks || 1), Number(effect.duration || 3));
+        if (effect.key === 'stun') {
+          Neo.player.stun = Math.max(Number(Neo.player.stun || 0), Number(effect.duration || 0.55));
+        } else {
+          Neo.applyStatus(Neo.player, effect.key, Number(effect.stacks || 1), Number(effect.duration || 3));
+        }
       }
     });
   }
@@ -3273,6 +3287,8 @@
     const projectileSpeedMultiplier = Math.max(0.1, Number(enemy?.mirrorItemStats?.projectileSpeedMultiplier || 1));
     const projectileSpeed = speed * projectileSpeedMultiplier;
     const projectileBounces = Math.max(0, Math.floor(Number(enemy?.mirrorItemStats?.projectileBounces || 0)));
+    const homingStrength = Math.max(0, Number(enemy?.mirrorItemStats?.projectileHomingStrength || 0));
+    const grantedHoming = homingStrength > 0 && !Object.prototype.hasOwnProperty.call(options, 'homing');
     for (let index = 0; index < count; index += 1) {
       const offset = count === 1 ? 0 : (index - (count - 1) / 2) * spread;
       const a = angle + offset;
@@ -3290,10 +3306,11 @@
         damage: rollMirrorDamage(enemy, damage, options).amount,
         knockback: (options.knockback || 120) * Number(enemy?.mirrorItemStats?.knockbackMultiplier || 1),
         statusEffects: options.statusEffects || getMirrorStatusEffects(enemy, options),
-        homing: !!options.homing,
-        homingSpeed: options.homingSpeed,
-        homingTurnRate: options.homingTurnRate,
-        homingAccel: options.homingAccel,
+        homing: Object.prototype.hasOwnProperty.call(options, 'homing') ? !!options.homing : grantedHoming,
+        homingSpeed: options.homingSpeed ?? (grantedHoming ? projectileSpeed : undefined),
+        homingTurnRate: options.homingTurnRate ?? (grantedHoming ? 0.75 + homingStrength * 3.5 : undefined),
+        homingAccel: options.homingAccel ?? (grantedHoming ? 1.2 + homingStrength * 6 : undefined),
+        homingRadius: options.homingRadius ?? (grantedHoming ? 220 + homingStrength * 1400 : undefined),
         bouncesRemaining: projectileBounces,
       });
     }
@@ -3415,8 +3432,26 @@
   function startMirrorSmash(enemy, angleToPlayer) {
     const move = getMirrorMove(enemy, 'smash');
     const damage = getMirrorMoveDamage(enemy, move, enemy.smashDamage || Neo.ATTACKS.smash.damage);
+    const itemStats = enemy?.mirrorItemStats || {};
     enemy.attackCd = 0.6;
     enemy.mirrorSmashCd = getMirrorSkillCooldown(enemy, 'smash');
+    if (Number(itemStats.homingMissileChance || 0) > 0 && Neo.nextRandom('encounter') < Number(itemStats.homingMissileChance || 0)) {
+      for (let index = 0; index < 2; index += 1) {
+        const missileAngle = angleToPlayer + (index === 0 ? -0.12 : 0.12);
+        fireMirrorProjectiles(enemy, missileAngle, 1, 0, 260, 18, {
+          kind: 'homing_missile',
+          color: '#ffe06f',
+          r: 6,
+          life: 2.4,
+          knockback: 120,
+          homing: true,
+          homingSpeed: 430,
+          homingAccel: 3.8,
+          homingTurnRate: 3.5,
+          homingRadius: 960,
+        });
+      }
+    }
     if (move === 'kicky_kick') {
       mirrorBlastPlayer(enemy, 142, Math.max(damage, 84), 680, '#ff7fc2', 'mirror_kick', { aoe: true });
       enemy.vx -= Math.cos(angleToPlayer) * 210;

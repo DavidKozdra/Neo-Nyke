@@ -683,9 +683,12 @@
       return;
     }
     Neo.player.storedPotions = stored - 1;
-    const heal = Neo.getPotionHealAmount();
+    const itemStats = Neo.getItemStats?.() || {};
+    const doubled = Neo.clamp(Number(itemStats.potionDoubleChance || 0), 0, 1) > 0 && Neo.rng() < Neo.clamp(Number(itemStats.potionDoubleChance || 0), 0, 1);
+    const heal = Neo.getPotionHealAmount() * (doubled ? 2 : 1);
     const gained = Neo.applyPlayerHealing(heal);
     if (gained > 0) Neo.spawnHealPopup(Neo.player.x + Neo.rand(-10, 10), Neo.player.y - 20, gained);
+    if (doubled) Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 34, life: 0.7, text: 'DOUBLE POTION', c: '#9af7d8' });
     Neo.updateHud();
   }
 
