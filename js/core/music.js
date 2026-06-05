@@ -27,8 +27,8 @@
 
   function getMusicGain() {
     const volume = window.NeoSettings?.getVolume?.() || {};
-    const master = clamp01(Number(volume.master ?? 80) / 100);
-    const music = clamp01(Number(volume.music ?? 60) / 100);
+    const master = clamp01(Number(volume.master ?? 20) / 100);
+    const music = clamp01(Number(volume.music ?? 20) / 100);
     return master * music;
   }
 

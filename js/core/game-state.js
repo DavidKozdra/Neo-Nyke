@@ -483,6 +483,7 @@ export function resumeGame() {
       cowardsWayTime: 0,
       warpHideTime: 0,
       mooggyZoomiesTime: 0,
+      mooggySwipeCharge: 0,
       coins: 0,
       level: 1,
       kills: 0,

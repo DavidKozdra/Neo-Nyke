@@ -1242,8 +1242,20 @@
             <tr><td class="bind-label">Slash</td>     <td><button class="bind-btn" data-action="slash">LMB</button></td></tr>
             <tr><td class="bind-label">Laser beam</td><td><button class="bind-btn" data-action="laser">RMB</button></td></tr>
             <tr><td class="bind-label">Smash</td>     <td><button class="bind-btn" data-action="smash">R</button></td></tr>
-            <tr><td class="bind-label">Activate Tool</td>  <td><span class="bind-static">F · G · H · …</span></td></tr>
-            <tr><td class="bind-label">Activate All Tools</td><td><span class="bind-static">SPACE</span></td></tr>
+            <tr><td class="bind-label">Activate All Tools</td><td><button class="bind-btn" data-action="activateAll">SPACE</button></td></tr>
+          </tbody>
+        </table>
+        <p class="stab-hint">Tool slots — keys for each equipped tool, in order.</p>
+        <table class="bind-table">
+          <tbody>
+            <tr><td class="bind-label">Tool Slot 1</td><td><button class="bind-btn" data-action="tool1">F</button></td></tr>
+            <tr><td class="bind-label">Tool Slot 2</td><td><button class="bind-btn" data-action="tool2">G</button></td></tr>
+            <tr><td class="bind-label">Tool Slot 3</td><td><button class="bind-btn" data-action="tool3">H</button></td></tr>
+            <tr><td class="bind-label">Tool Slot 4</td><td><button class="bind-btn" data-action="tool4">J</button></td></tr>
+            <tr><td class="bind-label">Tool Slot 5</td><td><button class="bind-btn" data-action="tool5">K</button></td></tr>
+            <tr><td class="bind-label">Tool Slot 6</td><td><button class="bind-btn" data-action="tool6">L</button></td></tr>
+            <tr><td class="bind-label">Tool Slot 7</td><td><button class="bind-btn" data-action="tool7">U</button></td></tr>
+            <tr><td class="bind-label">Tool Slot 8</td><td><button class="bind-btn" data-action="tool8">I</button></td></tr>
           </tbody>
         </table>
         <button class="settings-reset" id="resetBindings">Reset to defaults</button>
@@ -1359,6 +1371,13 @@
           <span class="access-desc">Caps total on-screen particles and trims heavy glow effects when the screen gets busy (e.g. holding the laser). Keeps the same look with far fewer frame drops. Recommended on.</span>
         </div>
         <label class="toggle"><input type="checkbox" id="gameplayPerformanceMode" checked><span class="toggle-track"><span class="toggle-thumb"></span></span></label>
+      </div>
+      <div class="access-row">
+        <div class="access-text">
+          <span class="access-label">Objective panel</span>
+          <span class="access-desc">Shows the room objective tracker on the HUD. Turn off to hide it during play.</span>
+        </div>
+        <label class="toggle"><input type="checkbox" id="gameplayObjectivePanel" checked><span class="toggle-track"><span class="toggle-thumb"></span></span></label>
       </div>
     </div>
 

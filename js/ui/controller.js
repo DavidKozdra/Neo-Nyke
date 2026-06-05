@@ -2033,7 +2033,8 @@ export function createUIController(view) {
       },
       setObjectiveList(roomLabel, entries = []) {
         if (!view.objectiveTracker || !view.objectiveList) return;
-        const visible = Neo.gameState === 'play' && entries.length > 0;
+        const panelEnabled = window.NeoSettings?.showObjectivePanel?.() !== false;
+        const visible = panelEnabled && Neo.gameState === 'play' && entries.length > 0;
         objectiveTrackerVisible = visible;
         objectiveEntriesCache = Array.isArray(entries) ? entries.slice() : [];
         view.objectiveTracker.classList.toggle('hidden', !visible);

@@ -932,6 +932,7 @@
     p.homingTargetTimer = 0;
     p.fromRival = props.fromRival ?? false;
     p.source = props.source ?? null;
+    p.subSpawn = props.subSpawn ? { ...props.subSpawn } : null;
     p.statusEffects = props.statusEffects ?? null;
     p.enemyBlast = props.enemyBlast ?? null;
     const defaultBounces = !enemyProjectile ? itemStats.projectileBounces : 0;
@@ -1299,6 +1300,36 @@
     return projectile.homingPath[0] || target;
   }
 
+  // Sheds faster sub-projectiles from a parent projectile on a fixed interval.
+  // Shards fire perpendicular to the parent's travel direction (both sides),
+  // giving disks a spreading, chaotic spray as they fly.
+  function emitProjectileSubSpawn(projectile, dt) {
+    const cfg = projectile.subSpawn;
+    cfg.timer -= dt;
+    if (cfg.timer > 0) return;
+    cfg.timer += cfg.interval || 0.2;
+    const travel = Math.atan2(Number(projectile.vy || 0), Number(projectile.vx || 1));
+    const speed = cfg.speed || 480;
+    const count = Math.max(1, cfg.count || 2);
+    for (let i = 0; i < count; i += 1) {
+      // Alternate sides (perpendicular), with a touch of jitter so it feels random.
+      const side = i % 2 === 0 ? 1 : -1;
+      const angle = travel + side * (Math.PI / 2) + (Neo.rng() - 0.5) * 0.5;
+      spawnProjectile({
+        x: projectile.x,
+        y: projectile.y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        r: cfg.r ?? 4,
+        life: cfg.life ?? 0.7,
+        enemy: projectile.enemy,
+        kind: cfg.kind || projectile.kind,
+        damage: cfg.damage ?? Math.round((projectile.damage || 0) / 2),
+        hitOptions: cfg.hitOptions ?? projectile.hitOptions ?? null,
+      });
+    }
+  }
+
   function updateProjectiles(dt) {
     rebuildEnemySpatialIndex();
     ensureDestructibleSpatialIndex();
@@ -1325,6 +1356,7 @@
       projectile.x += projectile.vx * dt;
       projectile.y += projectile.vy * dt;
       recordProjectileTrail(projectile, prevX, prevY);
+      if (projectile.subSpawn && projectile.life > 0) emitProjectileSubSpawn(projectile, dt);
       let hitProp = null;
       forEachDestructibleNearCircle(projectile.x, projectile.y, projectile.r + 80, prop => {
         if (hitProp) return;
@@ -1636,6 +1668,21 @@
             Neo.spawnParticle({ x: enemy.x + Neo.rand(-6, 6), y: enemy.y + Neo.rand(-6, 6), life: 0.24, c: '#c9b3ff' });
           }
         });
+      } else if (hazard.kind === 'chaos_burst') {
+        // Lingering chaos field: keeps erupting random AOE blasts around its
+        // centre. Follows the player so the storm travels with them.
+        if (hazard.followPlayer) {
+          hazard.x = Neo.player.x;
+          hazard.y = Neo.player.y;
+        }
+        hazard.tick -= dt;
+        if (hazard.tick <= 0) {
+          hazard.tick = hazard.interval || 0.16;
+          const blasts = 1 + (Neo.nextRandom('fx') < 0.45 ? 1 : 0);
+          for (let b = 0; b < blasts; b += 1) {
+            Neo.spawnChaosBlast(hazard.x, hazard.y, hazard.aoeRadiusMultiplier || 1, hazard.aoeDamageMultiplier || 1, !!hazard.isMetao);
+          }
+        }
       } else if (hazard.kind === 'lightning_column') {
         hazard.tick -= dt;
         if (hazard.tick <= 0) {

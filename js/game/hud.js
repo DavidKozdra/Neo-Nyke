@@ -403,6 +403,10 @@
     Neo.ui.skillNames.melee.textContent = weaponDef?.name || meleeMove?.name || character.skills.melee;
     Neo.ui.skillNames.laser.textContent = laserMove?.name || character.skills.laser;
     Neo.ui.skillNames.smash.textContent = smashMove?.name || character.skills.smash;
+    // Mirror the hotkey-settings bindings onto the skill cards' key labels so the
+    // HUD shows the player's actual controls (slash/laser/smash/dash) rather than
+    // the hardcoded defaults. Guarded by a signature since rebinds are rare.
+    updateSkillKeyLabels();
     // Redraw the HUD action icons whenever the equipped loadout changes. They are
     // canvas-rendered once, so without this they keep the icon drawn at boot.
     const loadoutSig = `${weaponKey}|${meleeMove?.key || ''}|${laserMove?.key || ''}|${smashMove?.key || ''}|${dashMove?.key || ''}`;
@@ -775,7 +779,35 @@
   //   activate  — function called when the slot's hotkey is pressed
   //   getState  — returns 'ready' | 'blocked' | 'charging' | 'empty' for slot styling
   //   getStatusText — short status text for tooltip / aria-label
-  const EQUIPMENT_SLOT_KEYS = ['F', 'G', 'H', 'J', 'K', 'L', 'U', 'I'];
+  const DEFAULT_EQUIPMENT_SLOT_KEYS = ['F', 'G', 'H', 'J', 'K', 'L', 'U', 'I'];
+  // Live tool-slot keys, honoring custom bindings from settings. Falls back to defaults.
+  function getEquipmentSlotKeys() {
+    const custom = window.NeoSettings?.getEquipmentSlotKeys?.();
+    if (Array.isArray(custom) && custom.length === DEFAULT_EQUIPMENT_SLOT_KEYS.length) return custom;
+    return DEFAULT_EQUIPMENT_SLOT_KEYS;
+  }
+  // Skill card -> binding action. Melee uses the 'slash' binding; the rest match.
+  const SKILL_KEY_ACTIONS = { dash: 'dash', melee: 'slash', laser: 'laser', smash: 'smash' };
+  // Hardcoded fallbacks matching index.html, used if NeoSettings isn't ready yet.
+  const SKILL_KEY_FALLBACK = { dash: 'SHIFT', melee: 'LMB', laser: 'RMB', smash: 'R' };
+  function updateSkillKeyLabels() {
+    const keys = Neo.ui?.skillKeys;
+    if (!keys) return;
+    const getLabel = window.NeoSettings?.getBindingLabel;
+    let sig = '';
+    const labels = {};
+    for (const skill in SKILL_KEY_ACTIONS) {
+      const label = (getLabel ? getLabel(SKILL_KEY_ACTIONS[skill]) : '') || SKILL_KEY_FALLBACK[skill];
+      labels[skill] = label;
+      sig += skill + ':' + label + '|';
+    }
+    if (sig === Neo._hudSkillKeySig) return;
+    Neo._hudSkillKeySig = sig;
+    for (const skill in labels) {
+      if (keys[skill]) keys[skill].textContent = labels[skill];
+    }
+  }
+
   const EQUIPMENT_ACTIVE_DEFS = {
     pew_pew_box: { cooldown: 34, duration: 8, label: 'PEW PEW', color: '#ffe06f' },
     turbo_boots: { cooldown: 46, duration: 20, label: 'TURBO', color: '#79ffbf' },
@@ -1127,7 +1159,9 @@
       getStatusText: () => getEquipmentStatusText('gold_vac'),
     },
   };
-  Neo.EQUIPMENT_SLOT_KEYS = EQUIPMENT_SLOT_KEYS;
+  // Live getter so remapped tool-slot keys are honored everywhere without rewiring.
+  Object.defineProperty(Neo, 'EQUIPMENT_SLOT_KEYS', { get: getEquipmentSlotKeys, configurable: true });
+  Neo.getEquipmentSlotKeys = getEquipmentSlotKeys;
   Neo.ACTIVATABLE_ITEMS = ACTIVATABLE_ITEMS;
   Neo.isActivatableItem = (itemKey) => Boolean(ACTIVATABLE_ITEMS[itemKey]);
 
@@ -1141,7 +1175,7 @@
     }
     // Append any owned activatable items that aren't slotted yet, capped at slot count.
     for (const itemKey of Object.keys(ACTIVATABLE_ITEMS)) {
-      if (Neo.getItemCount(itemKey) > 0 && !slots.includes(itemKey) && slots.length < EQUIPMENT_SLOT_KEYS.length) {
+      if (Neo.getItemCount(itemKey) > 0 && !slots.includes(itemKey) && slots.length < DEFAULT_EQUIPMENT_SLOT_KEYS.length) {
         slots.push(itemKey);
       }
     }
@@ -1152,7 +1186,7 @@
     if (!ACTIVATABLE_ITEMS[itemKey] || !Neo.player) return;
     if (!Array.isArray(Neo.player.equipmentSlots)) Neo.player.equipmentSlots = [];
     if (Neo.player.equipmentSlots.includes(itemKey)) return;
-    if (Neo.player.equipmentSlots.length >= EQUIPMENT_SLOT_KEYS.length) return;
+    if (Neo.player.equipmentSlots.length >= DEFAULT_EQUIPMENT_SLOT_KEYS.length) return;
     Neo.player.equipmentSlots.push(itemKey);
   }
   Neo.addToEquipmentSlots = addToEquipmentSlots;
@@ -1188,7 +1222,7 @@
   function getItemKeyForSlotKey(letter) {
     if (!Neo.player) return null;
     syncEquipmentSlotsFromInventory();
-    const idx = EQUIPMENT_SLOT_KEYS.indexOf(String(letter || '').toUpperCase());
+    const idx = getEquipmentSlotKeys().indexOf(String(letter || '').toUpperCase());
     if (idx < 0) return null;
     return Neo.player.equipmentSlots[idx] || null;
   }
@@ -1228,7 +1262,7 @@
     root.classList.toggle('hidden', !showRow);
     root.setAttribute('aria-hidden', showRow ? 'false' : 'true');
     nodes.forEach((node, idx) => {
-      const letter = EQUIPMENT_SLOT_KEYS[idx];
+      const letter = getEquipmentSlotKeys()[idx];
       const itemKey = slots[idx];
       const def = itemKey ? ACTIVATABLE_ITEMS[itemKey] : null;
       const itemDef = itemKey ? Neo.resolveItemIconDef?.(itemKey) : null;
@@ -1339,6 +1373,9 @@
   // Expose on Neo
   Neo.getObjectiveEntries = getObjectiveEntries;
   Neo.updateObjective = updateObjective;
+  // Re-applies objective tracker visibility/content (e.g. after the settings
+  // toggle changes). Safe no-op outside of play since updateObjective guards.
+  Neo.refreshObjectiveTracker = () => { if (Neo.player) updateObjective(); };
   Neo.getPlayerSlotScoreText = getPlayerSlotScoreText;
   Neo.getHpFillColor = getHpFillColor;
   Neo.renderPlayerStatsPanel = renderPlayerStatsPanel;

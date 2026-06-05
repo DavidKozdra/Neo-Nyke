@@ -1,5 +1,8 @@
 // update.js — main game loop and update tick.
 
+// Seconds of holding the melee button to reach a full-power Mooggy Swipe.
+const MOOGGY_SWIPE_CHARGE_MAX = 0.8;
+
 export function loop(timestamp) {
     const framePerfStart = Neo.perfBeginFrame(timestamp);
     const dt = Math.min(0.033, (timestamp - Neo.lastTime) / 1000 || 0.016);
@@ -301,10 +304,40 @@ export function loop(timestamp) {
     if (!Neo.p1DeadInCoop) {
       const meleeHeld = Neo.isMouseActionHeld('slash');
       const laserHeld = Neo.isMouseActionHeld('laser');
-      const robotArmTarget = itemStats.hasRobotArm && Neo.player?.robotArmReady
+      // Robot Arm auto-runs M1: whenever it's equipped and an enemy is present,
+      // it auto-aims and swings without holding the button. The charged-ready
+      // state additionally applies the 8x attack-speed burst (via robotArmCharge).
+      const robotArmTarget = itemStats.hasRobotArm
         ? _getNearestEnemyForAim()
         : null;
-      if (!overlayOpen && !playerStunned && (meleeHeld || robotArmTarget)) {
+      // Mooggy Swipe: charge-on-hold. Holding the melee button builds a charge
+      // meter (suppressing the per-frame swing); releasing unleashes one swipe
+      // scaled by how long it was held. A quick tap still fires a normal swipe.
+      const mooggyCharging = !overlayOpen && !playerStunned && Neo.isMooggySwipeActive?.();
+      if (mooggyCharging) {
+        if (meleeHeld) {
+          Neo.player.mooggySwipeCharge = Math.min(MOOGGY_SWIPE_CHARGE_MAX, Number(Neo.player.mooggySwipeCharge || 0) + dt);
+          const ratio = Neo.player.mooggySwipeCharge / MOOGGY_SWIPE_CHARGE_MAX;
+          // Telegraph: pulsing motes around Mooggy that intensify as she winds up.
+          if (ratio > 0.15 && Math.random() < 0.35 + ratio * 0.5) {
+            const a = Math.random() * Math.PI * 2;
+            const rad = 18 + ratio * 16;
+            Neo.spawnParticle({
+              x: Neo.player.x + Math.cos(a) * rad, y: Neo.player.y + Math.sin(a) * rad,
+              life: 0.2 + ratio * 0.2, vx: -Math.cos(a) * 40, vy: -Math.sin(a) * 40,
+              c: ratio >= 0.99 ? '#ffd0e6' : '#ff6090',
+            });
+          }
+        } else if (Number(Neo.player.mooggySwipeCharge || 0) > 0) {
+          const ratio = Math.min(1, Number(Neo.player.mooggySwipeCharge || 0) / MOOGGY_SWIPE_CHARGE_MAX);
+          Neo.player.mooggySwipeCharge = 0;
+          Neo.releaseMooggySwipe?.(ratio);
+        }
+      } else if (Neo.player && Number(Neo.player.mooggySwipeCharge || 0) > 0) {
+        // Charging interrupted (overlay/stun/move swap): drop the wind-up.
+        Neo.player.mooggySwipeCharge = 0;
+      } else if (!overlayOpen && !playerStunned && (meleeHeld || robotArmTarget)) {
+        if (Neo.player) Neo.player.mooggySwipeCharge = 0;
         const restoreAim = robotArmTarget
           ? { worldX: Neo.mouse.worldX, worldY: Neo.mouse.worldY }
           : null;
@@ -318,7 +351,13 @@ export function loop(timestamp) {
           Neo.mouse.worldY = restoreAim.worldY;
         }
       }
-      if (!overlayOpen && laserHeld) Neo.tryLaser();
+      // Instant laser moves (e.g. Nail Shot) fire once per press instead of
+      // auto-repeating every frame — otherwise holding the button drains the
+      // whole charge pool in a few frames. Beam moves keep their held behavior.
+      const laserPressEdge = laserHeld && !Neo._laserWasHeld;
+      const fireLaser = laserHeld && (laserPressEdge || !Neo.isInstantLaserMove?.());
+      if (!overlayOpen && fireLaser) Neo.tryLaser();
+      Neo._laserWasHeld = laserHeld;
     }
 
     if (Neo.player.lavaWalkTime > 0) {

@@ -45,6 +45,7 @@ export function migratePlayerData(source) {
     playerData.cowardsWayTime = Number(playerData.cowardsWayTime || 0);
     playerData.warpHideTime = Number(playerData.warpHideTime || 0);
     playerData.mooggyZoomiesTime = Number(playerData.mooggyZoomiesTime || 0);
+    playerData.mooggySwipeCharge = Number(playerData.mooggySwipeCharge || 0);
     playerData.lavaWalkTime = Number(playerData.lavaWalkTime || 0);
     playerData.lavaTrailTick = Number(playerData.lavaTrailTick || 0);
     playerData.princessFlightTime = Number(playerData.princessFlightTime || 0);

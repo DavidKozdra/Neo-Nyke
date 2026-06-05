@@ -50,7 +50,7 @@ export const MOVE_DEFS = {
     fire_balls: { key: 'fire_balls', slot: 'melee', name: 'Fire Balls', desc: 'Shoot a spread of fireballs.' },
     smite: { key: 'smite', slot: 'melee', name: 'Smite', desc: 'Physical swing plus chaining lightning.' },
     narwal_fight: { key: 'narwal_fight', slot: 'melee', name: 'Narwal Fight', desc: 'A wide pink spear-sweep with a piercing follow-up.', exclusiveCharacter: 'princess' },
-    mooggy_swipe: { key: 'mooggy_swipe', slot: 'melee', name: 'Mooggy Swipe', desc: 'Wide claw swipe that deals heavy damage and has a small bleed chance.', exclusiveCharacter: 'mooggy' },
+    mooggy_swipe: { key: 'mooggy_swipe', slot: 'melee', name: 'Mooggy Swipe', desc: 'Wide claw swipe with a small bleed chance. Hold to charge: a full wind-up unleashes a wider, far heavier slash.', exclusiveCharacter: 'mooggy' },
 
     blood_beam: { key: 'blood_beam', slot: 'laser', name: 'Blood Beam', desc: 'Sustained piercing beam that causes bleed.' },
     love_beam: { key: 'love_beam', slot: 'laser', name: 'Love Beam', desc: 'A radiant beam that damages enemies and heals you on hit.', exclusiveCharacter: 'princess' },
@@ -1310,6 +1310,12 @@ export const ui = {
       melee: document.querySelector('[data-skill="melee"] .skill-name'),
       laser: document.querySelector('[data-skill="laser"] .skill-name'),
       smash: document.querySelector('[data-skill="smash"] .skill-name'),
+    },
+    skillKeys: {
+      dash: document.querySelector('[data-skill="dash"] .skill-key'),
+      melee: document.querySelector('[data-skill="melee"] .skill-key'),
+      laser: document.querySelector('[data-skill="laser"] .skill-key'),
+      smash: document.querySelector('[data-skill="smash"] .skill-key'),
     },
     icons: {
       dash: document.getElementById('iconDash'),

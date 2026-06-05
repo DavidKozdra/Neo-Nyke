@@ -31,7 +31,7 @@
 
   function getSfxGain() {
     const volume = window.NeoSettings?.getVolume?.() || {};
-    const master = Math.max(0, Math.min(1, Number(volume.master ?? 80) / 100));
+    const master = Math.max(0, Math.min(1, Number(volume.master ?? 20) / 100));
     const sfx = Math.max(0, Math.min(1, Number(volume.sfx ?? 80) / 100));
     return master * sfx;
   }

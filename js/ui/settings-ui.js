@@ -2,11 +2,16 @@
   const STORE_KEY = 'neonyke:settings';
   const REPLAY_TUTORIAL_KEY = 'neonyke:replayTutorialNextRun';
 
-  const DEFAULT_BINDINGS = { up:'w', down:'s', left:'a', right:'d', dash:'shift', inventory:'i', smash:'r', slash:'lmb', laser:'rmb' };
+  const DEFAULT_EQUIPMENT_SLOT_KEYS = ['f', 'g', 'h', 'j', 'k', 'l', 'u', 'i'];
+  const DEFAULT_BINDINGS = {
+    up:'w', down:'s', left:'a', right:'d', dash:'shift', inventory:'i', smash:'r', slash:'lmb', laser:'rmb',
+    activateAll:' ',
+    tool1:'f', tool2:'g', tool3:'h', tool4:'j', tool5:'k', tool6:'l', tool7:'u', tool8:'i',
+  };
   const DEFAULT_TOUCH_BINDINGS = { touchA:'slash', touchB:'laser', touchY:'smash', touchX:'ascend', touchDash:'dash' };
-  const DEFAULT_VOLUME   = { master:80, sfx:80, music:60 };
+  const DEFAULT_VOLUME   = { master:20, sfx:80, music:20 };
   const DEFAULT_ACCESS   = { reduceFlash:false, reduceMotion:false, reduceParticles:false, highContrast:false, screenShake:true, shopCanAfford:'#4caf50', shopCantAfford:'#e05555', hudScale:1 };
-  const DEFAULT_GAMEPLAY = { pauseInventory:true, pauseOnBlur:true, bloodMultiplier:1, bloodOnHit:true, performanceMode:true };
+  const DEFAULT_GAMEPLAY = { pauseInventory:true, pauseOnBlur:true, bloodMultiplier:1, bloodOnHit:true, performanceMode:true, objectivePanel:true };
   const BLOOD_MULTIPLIER_MIN = 1;
   const BLOOD_MULTIPLIER_MAX = 10;
 
@@ -283,9 +288,22 @@
     applyThemeVars(customThemeVars);
   }
 
+  // Equipment tool slot keys, in slot order, honoring custom bindings.
+  // Falls back to the default letter for any slot left unbound.
+  function getEquipmentSlotKeys() {
+    return DEFAULT_EQUIPMENT_SLOT_KEYS.map((def, i) => {
+      const v = bindings['tool' + (i + 1)];
+      return String(v || def).toUpperCase();
+    });
+  }
+
   window.NeoSettings = {
     getBindings: () => bindings,
     getTouchBindings: () => touchBindings,
+    getEquipmentSlotKeys,
+    getActivateAllKey: () => String(bindings.activateAll || ' '),
+    // Display label for a bound action (e.g. 'smash' -> 'R'), honoring rebinds.
+    getBindingLabel: action => keyLabel(bindings[action]),
     getAccess: () => access,
     getGameplay: () => gameplay,
     shouldPauseInventory: () => gameplay.pauseInventory !== false,
@@ -293,6 +311,7 @@
     getBloodMultiplier: () => normalizeBloodMultiplier(gameplay.bloodMultiplier),
     shouldBloodOnHit: () => gameplay.bloodOnHit !== false,
     isPerformanceMode: () => gameplay.performanceMode !== false,
+    showObjectivePanel: () => gameplay.objectivePanel !== false,
     getVolume: () => volume,
   };
 
@@ -365,9 +384,22 @@
 
   let listeningBtn = null;
 
+  function keyLabel(v) {
+    v = String(v ?? '');
+    if (v === 'lmb') return 'LMB';
+    if (v === 'rmb') return 'RMB';
+    if (v === ' ') return 'SPACE';
+    if (v === 'shift')   return 'SHIFT';
+    if (v === 'control') return 'CTRL';
+    if (v === 'arrowup')    return '↑';
+    if (v === 'arrowdown')  return '↓';
+    if (v === 'arrowleft')  return '←';
+    if (v === 'arrowright') return '→';
+    return v.toUpperCase();
+  }
+
   function label(action) {
-    const v = bindings[action];
-    return v === 'lmb' ? 'LMB' : v === 'rmb' ? 'RMB' : v.toUpperCase();
+    return keyLabel(bindings[action]);
   }
 
   function refreshBindButtons() {
@@ -453,6 +485,17 @@
     performanceModeEl.addEventListener('change', () => {
       gameplay.performanceMode = performanceModeEl.checked;
       save();
+    });
+  }
+
+  const objectivePanelEl = document.getElementById('gameplayObjectivePanel');
+  if (objectivePanelEl) {
+    objectivePanelEl.checked = gameplay.objectivePanel !== false;
+    objectivePanelEl.addEventListener('change', () => {
+      gameplay.objectivePanel = objectivePanelEl.checked;
+      save();
+      // Apply immediately so the panel hides/shows without needing a room change.
+      window.Neo?.refreshObjectiveTracker?.();
     });
   }
 

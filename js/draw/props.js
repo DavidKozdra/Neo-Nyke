@@ -449,6 +449,35 @@
           Neo.ctx.lineTo(Math.cos(a - 0.1) * hazard.r * 0.72, Math.sin(a - 0.1) * hazard.r * 0.72);
           Neo.ctx.stroke();
         }
+      } else if (hazard.kind === 'chaos_burst') {
+        const t = Date.now() * 0.005 + hazard.x * 0.01;
+        const pulse = 1 + Math.sin(t * 2.4) * 0.05;
+        Neo.ctx.fillStyle = 'rgba(168,87,255,0.08)';
+        Neo.ctx.beginPath();
+        Neo.ctx.arc(0, 0, hazard.r * 0.94, 0, Math.PI * 2);
+        Neo.ctx.fill();
+        Neo.ctx.strokeStyle = 'rgba(168,87,255,0.55)';
+        Neo.ctx.shadowColor = '#a857ff';
+        Neo.ctx.shadowBlur = 14;
+        Neo.ctx.lineWidth = 2.5;
+        Neo.ctx.beginPath();
+        Neo.ctx.arc(0, 0, hazard.r * pulse, 0, Math.PI * 2);
+        Neo.ctx.stroke();
+        Neo.ctx.globalAlpha = 0.7;
+        Neo.ctx.strokeStyle = 'rgba(214,170,255,0.8)';
+        Neo.ctx.lineWidth = 2;
+        for (let index = 0; index < 9; index += 1) {
+          const a = t * 1.3 + index * (Math.PI * 2 / 9);
+          const r0 = hazard.r * (0.35 + 0.1 * Math.sin(t * 1.7 + index));
+          const r1 = hazard.r * (0.7 + 0.1 * Math.cos(t * 1.4 + index));
+          Neo.ctx.beginPath();
+          Neo.ctx.arc(0, 0, r0, a, a + 0.5);
+          Neo.ctx.stroke();
+          Neo.ctx.beginPath();
+          Neo.ctx.arc(0, 0, r1, -a, -a + 0.4);
+          Neo.ctx.stroke();
+        }
+        Neo.ctx.globalAlpha = 1;
       } else if (hazard.kind === 'red_spikes') {
         const armed = Number(hazard.armTime || 0) <= 0;
         const t = Date.now() * 0.009 + hazard.x * 0.01;
@@ -1071,6 +1100,7 @@
     }
     if (kind === 'fireball') return { color: '#ff7b32', core: '#fff1a6', trail: '#ff2f17', shape: 'fireball', length: 30 };
     if (kind === 'disk' || kind === 'power_disk') return { color: kind === 'power_disk' ? '#d890ff' : '#b66cff', core: '#f0d8ff', trail: kind === 'power_disk' ? '#f7ccff' : '#7d4dff', shape: 'disk', length: 20 };
+    if (kind === 'disk_shard') return { color: '#c98bff', core: '#f0d8ff', trail: '#8a55ff', shape: 'disk', length: 12 };
     if (kind === 'magenta_p90') return { color: '#ff9dd7', core: '#fff0fb', trail: '#ff4aa8', shape: 'tracer', length: 26 };
     if (kind === 'magenta_degale') return { color: '#ff8bd2', core: '#fff0fb', trail: '#ff3eb7', shape: 'slug', length: 34 };
     if (kind === 'hunters_bow') return { color: '#dff8ff', core: '#ffffff', trail: '#7edcff', shape: 'arrow', length: 32 };

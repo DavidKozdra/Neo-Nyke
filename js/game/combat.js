@@ -482,6 +482,15 @@
     }
   }
 
+  // Instant ("one-shot") laser moves fire-and-finish instead of opening a held
+  // beam. They must NOT auto-repeat every frame while the button is held — with
+  // a multi-charge pool that would drain every charge in a few frames. Beam
+  // moves are absent here because Neo.laserActive already blocks their re-entry.
+  const INSTANT_LASER_MOVES = new Set(['power_disks', 'blade_justice', 'lightning_columns', 'nail_shot']);
+  function isInstantLaserMove(move) {
+    return INSTANT_LASER_MOVES.has(move || getEquippedMove('laser'));
+  }
+
   function tryLaser() {
     cancelCowardsWayOnAttack();
     if (Neo.laserActive) return;
@@ -812,7 +821,10 @@
     castDashBurst(moveX, moveY);
   }
 
-  function castMooggySwipe() {
+  // chargeFactor (0..1) scales up the swipe when released from a hold: a full
+  // charge boosts damage, reach, arc and knockback for a meaty empowered slash.
+  function castMooggySwipe(chargeFactor = 0) {
+    const charge = Neo.clamp(Number(chargeFactor) || 0, 0, 1);
     const itemStats = Neo.getItemStats();
     const move = getEquippedMove('melee');
     const angle = Math.atan2(Neo.mouse.worldY - Neo.player.y, Neo.mouse.worldX - Neo.player.x);
@@ -820,17 +832,20 @@
     Neo.player.swingA = angle;
     const anvilDmg = Neo.getAnvilMoveBonus(move, 'damage');
     const anvilRng = Neo.getAnvilMoveBonus(move, 'range');
-    const damage = (Neo.godTimer > 0 ? 72 : 44) + anvilDmg;
-    const range = 130 + anvilRng;
-    const arc = Math.PI * 0.72;
+    // Full charge: +150% damage, +40% reach, wider arc, +80% knockback.
+    const damage = Math.round(((Neo.godTimer > 0 ? 72 : 44) + anvilDmg) * (1 + charge * 1.5));
+    const range = (130 + anvilRng) * (1 + charge * 0.4);
+    const arc = Math.PI * (0.72 + charge * 0.28);
+    const knockback = Neo.ATTACKS.melee.push * (1 + charge * 0.8);
+    const bleedChance = 0.12 + charge * 0.4 + itemStats.bleedChance;
     forEachEnemyNearPlayer(range, enemy => {
       if (!enemy) return;
       if (!isWithinRadiusSq(Neo.player.x, Neo.player.y, enemy, range)) return;
       const targetAngle = Math.atan2(enemy.y - Neo.player.y, enemy.x - Neo.player.x);
       const diff = angleDifferenceAbs(targetAngle, angle);
       if (diff > arc) return;
-      hitEnemy(enemy, damage, angle, Neo.ATTACKS.melee.push, '#ff6090');
-      if (Neo.rng() < 0.12 + itemStats.bleedChance) applyBleed(enemy, 1, 5);
+      hitEnemy(enemy, damage, angle, knockback, '#ff6090');
+      if (Neo.rng() < bleedChance) applyBleed(enemy, charge >= 0.99 ? 2 : 1, 5);
       if (itemStats.snakeKnifePoisonChance > 0 && Neo.rng() < itemStats.snakeKnifePoisonChance) applyPoison(enemy, 1, 4);
     });
     forEachDestructibleNearPlayer(range + 8, prop => {
@@ -841,7 +856,27 @@
       if (diff > arc + 0.25) return;
       Neo.damageDestructible(prop, 1);
     });
-    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.22, ring: 28, c: '#ff6090' });
+    const ring = 28 * (1 + charge * 0.9);
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.22 + charge * 0.18, ring, c: charge >= 0.99 ? '#ffd0e6' : '#ff6090' });
+    if (charge > 0.25) {
+      Neo.addTrauma?.(0.12 + charge * 0.22);
+    }
+  }
+
+  // True only while Mooggy Swipe is the active melee (no weapon override). The
+  // charge-on-hold loop in update.js uses this to decide whether to charge.
+  function isMooggySwipeActive() {
+    return !getEquippedWeapon() && getEquippedMove('melee') === 'mooggy_swipe';
+  }
+
+  // Release of a held Mooggy Swipe: spend a melee charge and swing scaled by how
+  // long the button was held. Returns true if it fired (charge was available).
+  function releaseMooggySwipe(chargeFactor = 0) {
+    const move = getEquippedMove('melee');
+    const attackSpeed = Neo.getAttackSpeedValue();
+    if (!Neo.spendSkillCharge('melee', Neo.getMeleeCooldownDuration(move, attackSpeed))) return false;
+    castMooggySwipe(chargeFactor);
+    return true;
   }
 
   function castNailShot() {
@@ -1161,10 +1196,33 @@
   }
 
   function spawnPlayerDiskBurst() {
+    const isMetao = Neo.player?.character === 'metao';
     for (let index = 0; index < 8; index += 1) {
       const angle = index * (Math.PI * 2 / 8);
-      const isMetao = Neo.player?.character === 'metao';
-      Neo.spawnProjectile({ x: Neo.player.x, y: Neo.player.y, vx: Math.cos(angle) * 280, vy: Math.sin(angle) * 280, r: 7, life: 1.2, enemy: false, kind: 'disk', damage: 20, hitOptions: isMetao ? { fireChance: 0.4, fireStacks: 1, fireDuration: 3 } : {} });
+      Neo.spawnProjectile({
+        x: Neo.player.x,
+        y: Neo.player.y,
+        vx: Math.cos(angle) * 440,
+        vy: Math.sin(angle) * 440,
+        r: 7,
+        life: 1.8,
+        enemy: false,
+        kind: 'disk',
+        damage: 20,
+        hitOptions: isMetao ? { fireChance: 0.4, fireStacks: 1, fireDuration: 3 } : {},
+        // Disks periodically shed faster sub-projectiles perpendicular to travel.
+        subSpawn: {
+          kind: 'disk_shard',
+          interval: 0.18,
+          timer: 0.18,
+          speed: 620,
+          r: 4,
+          life: 0.7,
+          damage: 8,
+          count: 2,
+          hitOptions: isMetao ? { fireChance: 0.25, fireStacks: 1, fireDuration: 2 } : {},
+        },
+      });
     }
   }
 
@@ -1175,8 +1233,12 @@
     const base = Math.atan2(Neo.mouse.worldY - Neo.player.y, Neo.mouse.worldX - Neo.player.x);
     for (let index = -1; index <= 1; index += 1) {
       const angle = base + index * 0.18;
-      Neo.spawnProjectile({ x: Neo.player.x, y: Neo.player.y, vx: Math.cos(angle) * 384, vy: Math.sin(angle) * 384, r: 8, life: 1.6, enemy: false, kind: 'fireball', damage: 22, splash: 48 * aoeRadiusMultiplier, splashDamage: Math.round(14 * aoeDamageMultiplier), blockedSplashDamage: Math.round(16 * aoeDamageMultiplier), fireStacks: 2, fireDuration: 3.4 });
+      Neo.spawnProjectile({ x: Neo.player.x, y: Neo.player.y, vx: Math.cos(angle) * 560, vy: Math.sin(angle) * 560, r: 8, life: 1.6, enemy: false, kind: 'fireball', damage: 22, splash: 48 * aoeRadiusMultiplier, splashDamage: Math.round(14 * aoeDamageMultiplier), blockedSplashDamage: Math.round(16 * aoeDamageMultiplier), fireStacks: 2, fireDuration: 3.4 });
     }
+    // Recoil kick for the whole volley, along the aim direction (once, not per-fireball).
+    const recoil = 150;
+    Neo.player.vx -= Math.cos(base) * recoil;
+    Neo.player.vy -= Math.sin(base) * recoil;
   }
 
   function castChaosBurst() {
@@ -1184,15 +1246,37 @@
     const aoeRadiusMultiplier = itemStats.aoeRadiusMultiplier || 1;
     const aoeDamageMultiplier = itemStats.aoeDamageMultiplier || 1;
     const isMetao = Neo.player?.character === 'metao';
+    // Fire an immediate volley so the cast feels punchy...
     for (let index = 0; index < 6; index += 1) {
-      const angle = Neo.rng() * Math.PI * 2;
-      const px = Neo.player.x + Math.cos(angle) * Neo.rand(160, 40);
-      const py = Neo.player.y + Math.sin(angle) * Neo.rand(160, 40);
-      Neo.spawnParticle({ x: px, y: py, life: 0.45, ring: 18 * aoeRadiusMultiplier, c: '#a857ff' });
-      Neo.blastRadius(px, py, 52 * aoeRadiusMultiplier, Math.round(24 * aoeDamageMultiplier), '#a857ff');
-      applyStatusInRadius(px, py, 52 * aoeRadiusMultiplier, 'poison', 1, 4.8);
-      if (isMetao) applyStatusInRadius(px, py, 52 * aoeRadiusMultiplier, 'fire', 1, 3.5);
+      spawnChaosBlast(Neo.player.x, Neo.player.y, aoeRadiusMultiplier, aoeDamageMultiplier, isMetao);
     }
+    // ...then drop a lingering chaos field that keeps erupting random AOEs
+    // around the player for several seconds (follows the player).
+    Neo.hazards.push({
+      kind: 'chaos_burst',
+      x: Neo.player.x,
+      y: Neo.player.y,
+      r: 180 * aoeRadiusMultiplier,
+      ttl: 2.25,
+      tick: 0,
+      interval: 0.16,
+      followPlayer: true,
+      aoeRadiusMultiplier,
+      aoeDamageMultiplier,
+      isMetao,
+    });
+  }
+
+  // One random chaos AOE blast around (ox, oy). Shared by the initial cast
+  // volley and the lingering chaos_burst hazard's per-tick eruptions.
+  function spawnChaosBlast(ox, oy, aoeRadiusMultiplier, aoeDamageMultiplier, isMetao) {
+    const angle = Neo.rng() * Math.PI * 2;
+    const px = ox + Math.cos(angle) * Neo.rand(180, 30);
+    const py = oy + Math.sin(angle) * Neo.rand(180, 30);
+    Neo.spawnParticle({ x: px, y: py, life: 0.45, ring: 18 * aoeRadiusMultiplier, c: '#a857ff' });
+    Neo.blastRadius(px, py, 52 * aoeRadiusMultiplier, Math.round(24 * aoeDamageMultiplier), '#a857ff');
+    applyStatusInRadius(px, py, 52 * aoeRadiusMultiplier, 'poison', 1, 4.8);
+    if (isMetao) applyStatusInRadius(px, py, 52 * aoeRadiusMultiplier, 'fire', 1, 3.5);
   }
 
   function castBladeOfJustice() {
@@ -2337,6 +2421,9 @@
   Neo.fireLazerGlassesTick = fireLazerGlassesTick;
   Neo.updateWeaponSystems = updateWeaponSystems;
   Neo.tryLaser = tryLaser;
+  Neo.isInstantLaserMove = isInstantLaserMove;
+  Neo.isMooggySwipeActive = isMooggySwipeActive;
+  Neo.releaseMooggySwipe = releaseMooggySwipe;
   Neo.endActiveLaser = endActiveLaser;
   Neo.tickTurtleWaveHpDrain = tickTurtleWaveHpDrain;
   Neo.updatePlayerLaser = updatePlayerLaser;
@@ -2358,6 +2445,7 @@
   Neo.spawnPlayerDiskBurst = spawnPlayerDiskBurst;
   Neo.spawnFireballs = spawnFireballs;
   Neo.castChaosBurst = castChaosBurst;
+  Neo.spawnChaosBlast = spawnChaosBlast;
   Neo.castBladeOfJustice = castBladeOfJustice;
   Neo.castSmiteChain = castSmiteChain;
   Neo.findNearestSmiteTarget = findNearestSmiteTarget;
