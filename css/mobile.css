@@ -1031,6 +1031,11 @@
     display: none;
   }
 
+  .rh-info-search {
+    width: 100%;
+    min-width: 0;
+  }
+
   .floating-panel__head {
     padding: 12px;
   }

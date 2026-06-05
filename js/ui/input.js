@@ -1196,6 +1196,7 @@ export const ui = {
     rhBlogPanel: document.getElementById('rhBlogPanel'),
     rhInfoContent: document.getElementById('rhInfoContent'),
     rhInfoTabs: [...document.querySelectorAll('#rhInfoPanel .rh-info-tab')],
+    rhInfoSearch: document.getElementById('rhInfoSearch'),
     infoTutorialBtn: document.getElementById('infoTutorialBtn'),
     rhBankCoins: document.getElementById('rhBankCoins'),
     rhLoopCount: document.getElementById('rhLoopCount'),

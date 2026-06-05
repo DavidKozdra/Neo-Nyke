@@ -719,6 +719,8 @@ export function createUIController(view) {
 
     let runHistoryView = 'info';
     let activeInfoTab = 'items';
+    const infoSearchQueries = { items: '', weapons: '', moves: '', enemies: '' };
+    const searchableInfoTabs = new Set(['items', 'weapons', 'moves', 'enemies']);
 
     function setRunHistoryOpen(open) {
       ensureRunHistoryPanelCanOverlayGame();
@@ -789,18 +791,57 @@ export function createUIController(view) {
       return Neo.getCharacterStartingItems?.(characterKey) || {};
     }
 
+    function normalizeInfoSearch(value) {
+      return String(value || '').trim().toLowerCase();
+    }
+
+    function infoSearchMatches(entry, fields) {
+      const query = normalizeInfoSearch(infoSearchQueries[activeInfoTab]);
+      if (!query) return true;
+      return fields(entry)
+        .filter(value => value !== undefined && value !== null)
+        .some(value => String(value).toLowerCase().includes(query));
+    }
+
+    function renderInfoEmpty(label) {
+      const query = infoSearchQueries[activeInfoTab] || '';
+      return `<div class="info-empty">No ${label} match "${Neo.escapeHtml(query)}".</div>`;
+    }
+
+    function syncInfoSearchControl(tab) {
+      if (!view.rhInfoSearch) return;
+      const searchable = searchableInfoTabs.has(tab);
+      view.rhInfoSearch.classList.toggle('hidden', !searchable);
+      view.rhInfoSearch.disabled = !searchable;
+      if (!searchable) {
+        view.rhInfoSearch.value = '';
+        return;
+      }
+      const label = tab === 'items' ? 'items' : tab === 'weapons' ? 'weapons' : tab === 'moves' ? 'moves' : 'enemies';
+      view.rhInfoSearch.placeholder = `Search ${label}...`;
+      view.rhInfoSearch.setAttribute('aria-label', `Search ${label}`);
+      view.rhInfoSearch.value = infoSearchQueries[tab] || '';
+    }
+
     function populateInfoPanel(tab) {
       activeInfoTab = tab;
       if (!view.rhInfoContent) return;
       view.rhInfoTabs?.forEach(t => t.classList.toggle('active', t.dataset.infoTab === tab));
+      syncInfoSearchControl(tab);
 
       if (tab === 'items') {
         const rarityOrder = ['knight', 'wizard', 'god'];
         const sorted = Object.values(Neo.ITEM_DEFS).sort((a, b) => {
           const ri = rarityOrder.indexOf(a.rarity ?? a.category) - rarityOrder.indexOf(b.rarity ?? b.category);
           return ri !== 0 ? ri : (a.name || '').localeCompare(b.name || '');
-        });
-        view.rhInfoContent.innerHTML = `<div class="info-grid">${sorted.map(item => {
+        }).filter(item => infoSearchMatches(item, item_ => [
+          item_.name,
+          item_.key,
+          item_.rarity,
+          item_.category,
+          item_.description,
+        ]));
+        view.rhInfoContent.innerHTML = sorted.length ? `<div class="info-grid">${sorted.map(item => {
           const rarity = item.rarity || item.category || 'knight';
           return `<div class="info-card">
             <div class="info-card__header">
@@ -810,7 +851,7 @@ export function createUIController(view) {
             </div>
             <div class="info-card__desc">${item.description || ''}</div>
           </div>`;
-        }).join('')}</div>`;
+        }).join('')}</div>` : renderInfoEmpty('items');
         Neo.drawItemIconCanvases?.(view.rhInfoContent, 'data-info-item');
 
       } else if (tab === 'weapons') {
@@ -818,8 +859,13 @@ export function createUIController(view) {
         const sorted = Object.values(Neo.WEAPON_DEFS).sort((a, b) => {
           const ri = rarityOrder.indexOf(a.rarity) - rarityOrder.indexOf(b.rarity);
           return ri !== 0 ? ri : (a.name || '').localeCompare(b.name || '');
-        });
-        view.rhInfoContent.innerHTML = `<div class="info-grid">${sorted.map(w => {
+        }).filter(w => infoSearchMatches(w, weapon => [
+          weapon.name,
+          weapon.key,
+          weapon.rarity,
+          weapon.description,
+        ]));
+        view.rhInfoContent.innerHTML = sorted.length ? `<div class="info-grid">${sorted.map(w => {
           return `<div class="info-card">
             <div class="info-card__header">
               <canvas class="info-card__icon" data-info-weapon="${w.key}" width="32" height="32"></canvas>
@@ -828,7 +874,7 @@ export function createUIController(view) {
             </div>
             <div class="info-card__desc">${w.description || ''}</div>
           </div>`;
-        }).join('')}</div>`;
+        }).join('')}</div>` : renderInfoEmpty('weapons');
         view.rhInfoContent.querySelectorAll('[data-info-weapon]').forEach(el => {
           const w = Neo.WEAPON_DEFS[el.dataset.infoWeapon];
           if (w) Neo.drawWeaponToastIcon(el, w);
@@ -839,8 +885,15 @@ export function createUIController(view) {
         const sorted = Object.values(Neo.MOVE_DEFS).sort((a, b) => {
           const si = slotOrder.indexOf(a.slot) - slotOrder.indexOf(b.slot);
           return si !== 0 ? si : (a.name || '').localeCompare(b.name || '');
-        });
-        view.rhInfoContent.innerHTML = `<div class="info-grid">${sorted.map(m => {
+        }).filter(m => infoSearchMatches(m, move => [
+          move.name,
+          move.key,
+          move.slot,
+          Neo.SLOT_LABELS[move.slot],
+          move.exclusiveCharacter,
+          move.desc,
+        ]));
+        view.rhInfoContent.innerHTML = sorted.length ? `<div class="info-grid">${sorted.map(m => {
           const slotLabel = Neo.SLOT_LABELS[m.slot] || m.slot;
           const exclusive = m.exclusiveCharacter
             ? `<br><em style="color:rgba(200,200,255,0.5)">${Neo.titleCase(m.exclusiveCharacter.replace(/_/g, ' '))} only</em>`
@@ -853,7 +906,7 @@ export function createUIController(view) {
             </div>
             <div class="info-card__desc">${m.desc || ''}${exclusive}</div>
           </div>`;
-        }).join('')}</div>`;
+        }).join('')}</div>` : renderInfoEmpty('moves');
         view.rhInfoContent.querySelectorAll('[data-info-move]').forEach(el => {
           const move = Neo.MOVE_DEFS[el.dataset.infoMove];
           if (move) Neo.drawMoveToastIcon(el, move);
@@ -861,16 +914,28 @@ export function createUIController(view) {
 
       } else if (tab === 'enemies') {
         const attackStyleLabel = { melee: 'Melee', dash: 'Dash', ranged: 'Ranged', burst: 'Burst', summon: 'Summoner', support: 'Support', mirror: 'Mirror', assassin: 'Assassin', beam: 'Beam' };
+        const filteredEnemies = ENEMY_INFO.filter(e => infoSearchMatches(e, enemy => [
+          enemy.label,
+          enemy.key,
+          enemy.boss ? 'boss' : 'enemy',
+          enemy.attackStyle,
+          attackStyleLabel[enemy.attackStyle],
+          enemy.immunities.join(' '),
+          enemy.hp,
+          enemy.dmg,
+          enemy.speed,
+          enemy.desc,
+        ]));
         view.rhInfoContent.innerHTML = `
           <div class="info-enemy-layout">
-            <div class="info-enemy-grid">${ENEMY_INFO.map(e => {
+            <div class="info-enemy-grid">${filteredEnemies.length ? filteredEnemies.map(e => {
               const tagClass = e.boss ? 'info-enemy-card__tag--boss' : 'info-enemy-card__tag--normal';
               return `<div class="info-enemy-card" data-enemy-select="${e.key}" tabindex="0">
                 <canvas class="info-enemy-card__sprite" data-info-enemy="${e.key}" width="52" height="52"></canvas>
                 <div class="info-enemy-card__name">${e.label}</div>
                 <span class="info-enemy-card__tag ${tagClass}">${e.boss ? 'Boss' : 'Enemy'}</span>
               </div>`;
-            }).join('')}</div>
+            }).join('') : renderInfoEmpty('enemies')}</div>
             <div class="info-enemy-detail hidden" id="infoEnemyDetail">
               <canvas class="info-enemy-detail__sprite" id="infoEnemySprite" width="80" height="80"></canvas>
               <div class="info-enemy-detail__name" id="infoEnemyName"></div>
@@ -915,7 +980,7 @@ export function createUIController(view) {
           card.addEventListener('click', () => showEnemyDetail(card.dataset.enemySelect));
           card.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' ') showEnemyDetail(card.dataset.enemySelect); });
         });
-        showEnemyDetail(ENEMY_INFO[0].key);
+        if (filteredEnemies.length) showEnemyDetail(filteredEnemies[0].key);
 
       } else if (tab === 'characters') {
         view.rhInfoContent.innerHTML = `<div class="info-char-grid">${Object.values(Neo.CHARACTER_DEFS).map(c => {
@@ -1676,6 +1741,11 @@ export function createUIController(view) {
         });
         view.rhInfoTabs?.forEach(tab => {
           tab.addEventListener('click', () => populateInfoPanel(tab.dataset.infoTab || 'items'));
+        });
+        view.rhInfoSearch?.addEventListener('input', () => {
+          if (!searchableInfoTabs.has(activeInfoTab)) return;
+          infoSearchQueries[activeInfoTab] = view.rhInfoSearch.value || '';
+          populateInfoPanel(activeInfoTab);
         });
         view.infoTutorialBtn?.addEventListener('click', () => {
           localStorage.setItem(Neo.REPLAY_TUTORIAL_KEY, '1');

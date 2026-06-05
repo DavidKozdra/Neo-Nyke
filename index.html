@@ -710,15 +710,18 @@
     </div>
     <div id="rhInfoPanel" class="rh-info hidden">
       <div class="rh-info-head">
-        <div class="rh-info-tabs" role="tablist">
-          <button class="rh-info-tab active" data-info-tab="items" type="button">Items</button>
-          <button class="rh-info-tab" data-info-tab="weapons" type="button">Weapons</button>
-          <button class="rh-info-tab" data-info-tab="moves" type="button">Moves</button>
-          <button class="rh-info-tab" data-info-tab="enemies" type="button">Enemies</button>
-          <button class="rh-info-tab" data-info-tab="characters" type="button">Characters</button>
-          <button class="rh-info-tab" data-info-tab="meta" type="button">Meta</button>
+        <div class="rh-info-head__top">
+          <div class="rh-info-tabs" role="tablist">
+            <button class="rh-info-tab active" data-info-tab="items" type="button">Items</button>
+            <button class="rh-info-tab" data-info-tab="weapons" type="button">Weapons</button>
+            <button class="rh-info-tab" data-info-tab="moves" type="button">Moves</button>
+            <button class="rh-info-tab" data-info-tab="enemies" type="button">Enemies</button>
+            <button class="rh-info-tab" data-info-tab="characters" type="button">Characters</button>
+            <button class="rh-info-tab" data-info-tab="meta" type="button">Meta</button>
+          </div>
+          <button id="infoTutorialBtn" class="rh-info-tutorial-btn" type="button">&#9654; Tutorial</button>
         </div>
-        <button id="infoTutorialBtn" class="rh-info-tutorial-btn" type="button">&#9654; Tutorial</button>
+        <input id="rhInfoSearch" class="rh-info-search" type="search" placeholder="Search items..." aria-label="Search info entries" autocomplete="off" spellcheck="false">
       </div>
       <div id="rhInfoContent" class="rh-info-content"></div>
     </div>
