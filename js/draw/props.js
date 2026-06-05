@@ -579,7 +579,7 @@
       const shakeOffset = shakeRatio > 0 ? Math.sin(shakeRatio * Math.PI * 3) * 3 * shakeRatio : 0;
       Neo.ctx.translate(prop.x + Math.cos(hitAngle) * shakeOffset, prop.y + Math.sin(hitAngle) * shakeOffset);
       if (prop.kind === 'pot') {
-        Neo.drawEnvironmentTile('pot_clay', -16, -18, 32, 32);
+        drawClayVase(prop);
       } else if (prop.kind === 'barrel') {
         Neo.drawEnvironmentTile('barrel_oak', -24, -26, 48, 48);
       } else if (prop.kind === 'wall') {
@@ -1457,6 +1457,83 @@
     Neo.ctx.fillRect(-barW / 2, barY, barW * hpRatio, barH);
 
     Neo.ctx.restore();
+  }
+
+  // Procedural clay vase, drawn centered at (0,0) — caller has translated to the
+  // pot's position. A bulbous body with a narrow neck and flared lip, with a
+  // terracotta gradient, rim shading and a soft highlight. Small per-pot variety
+  // (tint + proportions) is seeded from position so it's stable across frames.
+  function drawClayVase(prop) {
+    const ctx = Neo.ctx;
+    const r = Math.max(10, Number(prop.r || 12));
+    // Stable pseudo-random in [0,1) from the pot's spawn position.
+    const seed = Math.abs(Math.sin((prop.x || 0) * 0.13 + (prop.y || 0) * 0.07)) % 1;
+    const bodyR = r * 1.15;            // widest radius of the belly
+    const bodyCy = r * 0.32;           // belly centre, sits a touch low
+    const neckW = r * (0.5 + seed * 0.12);
+    const lipW = neckW * 1.5;
+    const topY = -r * 1.35;            // lip height
+    const neckY = -r * 0.55;           // where neck meets the shoulder
+    const baseW = r * 0.62;            // foot width
+    const baseY = r * 1.32;            // foot sits on the ground
+
+    // Ground shadow.
+    ctx.fillStyle = 'rgba(0,0,0,0.22)';
+    ctx.beginPath();
+    ctx.ellipse(0, baseY - 1, bodyR * 0.92, r * 0.34, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Three clay palettes for a little variety.
+    const palettes = [
+      { lo: '#7a3f24', mid: '#b5673a', hi: '#d98a52' },
+      { lo: '#6f4a2c', mid: '#9c6a3e', hi: '#c79061' },
+      { lo: '#84381f', mid: '#bd6034', hi: '#e08a4e' },
+    ];
+    const pal = palettes[Math.floor(seed * palettes.length) % palettes.length];
+
+    // Vase body: a closed bezier silhouette (lip -> neck -> belly -> foot).
+    ctx.beginPath();
+    ctx.moveTo(-lipW, topY);                                   // left lip
+    ctx.quadraticCurveTo(-neckW * 1.05, topY + r * 0.18, -neckW, neckY); // lip to neck
+    ctx.bezierCurveTo(-bodyR, neckY + r * 0.5, -bodyR, bodyCy + bodyR * 0.5, -baseW, baseY); // shoulder->belly->foot (left)
+    ctx.lineTo(baseW, baseY);                                  // foot
+    ctx.bezierCurveTo(bodyR, bodyCy + bodyR * 0.5, bodyR, neckY + r * 0.5, neckW, neckY); // foot->belly->shoulder (right)
+    ctx.quadraticCurveTo(neckW * 1.05, topY + r * 0.18, lipW, topY); // neck to lip
+    ctx.closePath();
+
+    // Left→right terracotta gradient for round volume.
+    const grad = ctx.createLinearGradient(-bodyR, 0, bodyR, 0);
+    grad.addColorStop(0, pal.lo);
+    grad.addColorStop(0.42, pal.mid);
+    grad.addColorStop(0.6, pal.hi);
+    grad.addColorStop(1, pal.lo);
+    ctx.fillStyle = grad;
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(40,20,8,0.7)';
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+
+    // Inner-lip (dark mouth of the vase).
+    ctx.fillStyle = 'rgba(30,15,6,0.85)';
+    ctx.beginPath();
+    ctx.ellipse(0, topY, lipW * 0.78, r * 0.16, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Decorative band around the belly.
+    ctx.strokeStyle = 'rgba(247,225,180,0.55)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-bodyR * 0.92, bodyCy - r * 0.05);
+    ctx.quadraticCurveTo(0, bodyCy + r * 0.18, bodyR * 0.92, bodyCy - r * 0.05);
+    ctx.stroke();
+
+    // Specular highlight down the left of the belly.
+    ctx.strokeStyle = 'rgba(255,240,215,0.4)';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(-bodyR * 0.45, neckY + r * 0.2);
+    ctx.quadraticCurveTo(-bodyR * 0.62, bodyCy, -bodyR * 0.4, bodyCy + bodyR * 0.55);
+    ctx.stroke();
   }
 
   // Expose on Neo

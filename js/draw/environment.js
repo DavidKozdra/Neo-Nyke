@@ -1051,7 +1051,32 @@
     ctx.strokeRect(topX - capHalf, topY - h * 0.05, capW, h * 0.16);
   }
 
+  // Classify a cover_wall into a furniture variant ('table' | 'chair') or null
+  // (plain wood wall). Reinforced/secret walls stay as walls. The choice is
+  // stable per-prop (seeded from position) and size-aware: wide/large pieces
+  // become tables, small near-square pieces become chairs.
+  function coverWallFurnitureVariant(prop) {
+    if (prop.reinforced || prop.kind === 'secret_wall') return null;
+    if (prop._furniture !== undefined) return prop._furniture; // memoized
+    const w = Math.max(16, Number(prop.w || prop.r * 2 || 48));
+    const h = Math.max(16, Number(prop.h || prop.r * 2 || 48));
+    const seed = Math.abs(Math.sin((prop.x || 0) * 0.11 + (prop.y || 0) * 0.083)) % 1;
+    const long = Math.max(w, h);
+    const short = Math.min(w, h);
+    let variant = null;
+    // Long, reasonably-thick barricades read well as tables/benches.
+    if (long >= 90 && short >= 28 && seed < 0.55) variant = 'table';
+    // Shorter stubby pieces become chairs.
+    else if (long <= 100 && short >= 28 && seed >= 0.55 && seed < 0.85) variant = 'chair';
+    prop._furniture = variant;
+    return variant;
+  }
+
   function drawCoverWall(prop) {
+    const variant = coverWallFurnitureVariant(prop);
+    if (variant === 'table') { drawWoodTable(prop); return; }
+    if (variant === 'chair') { drawWoodChair(prop); return; }
+
     const w = Math.max(16, Number(prop.w || prop.r * 2 || 48));
     const h = Math.max(16, Number(prop.h || prop.r * 2 || 48));
     const left = -w / 2;
@@ -1132,6 +1157,129 @@
       Neo.ctx.lineWidth = 2;
       Neo.ctx.strokeRect(left + 1, top + 1, w - 2, h - 2);
     }
+  }
+
+  // Brief warm flash overlay for furniture pieces when hit (mirrors the cover
+  // wall hit feedback). `w`/`h` are the footprint extents.
+  function furnitureHitFlash(prop, w, h) {
+    if (!(prop.hitFlash > 0)) return;
+    const flash = Neo.clamp(Number(prop.hitFlash || 0) / 0.12, 0, 1);
+    Neo.ctx.fillStyle = `rgba(255, 244, 190, ${flash * 0.3})`;
+    Neo.ctx.fillRect(-w / 2, -h / 2, w, h);
+  }
+
+  // Top-down wooden table: a plank top with a darker rim and four corner legs
+  // peeking out. Fills the prop footprint so it still reads as the obstacle.
+  function drawWoodTable(prop) {
+    const ctx = Neo.ctx;
+    const w = Math.max(20, Number(prop.w || prop.r * 2 || 64));
+    const h = Math.max(20, Number(prop.h || prop.r * 2 || 64));
+    const hw = w / 2;
+    const hh = h / 2;
+    const legR = Math.max(3, Math.min(w, h) * 0.1);
+
+    // Ground shadow.
+    ctx.fillStyle = 'rgba(0,0,0,0.22)';
+    ctx.fillRect(-hw + 3, -hh + 4, w, h);
+
+    // Legs at the corners (drawn first so the top overlaps them).
+    ctx.fillStyle = '#4a2c17';
+    [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sy]) => {
+      ctx.beginPath();
+      ctx.arc(sx * (hw - legR - 1), sy * (hh - legR - 1), legR, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    // Table top: inset from the footprint, wood gradient.
+    const tw = w * 0.86;
+    const th = h * 0.86;
+    const grad = ctx.createLinearGradient(-tw / 2, 0, tw / 2, 0);
+    grad.addColorStop(0, '#7a4a26');
+    grad.addColorStop(0.5, '#a06736');
+    grad.addColorStop(1, '#6f4222');
+    ctx.fillStyle = grad;
+    ctx.fillRect(-tw / 2, -th / 2, tw, th);
+    // Darker rim.
+    ctx.strokeStyle = '#3f2412';
+    ctx.lineWidth = 2.5;
+    ctx.strokeRect(-tw / 2, -th / 2, tw, th);
+
+    // Plank seams along the long axis.
+    const horizontal = tw >= th;
+    const planks = Math.max(2, Math.floor((horizontal ? th : tw) / 14));
+    ctx.strokeStyle = 'rgba(40,22,10,0.5)';
+    ctx.lineWidth = 1;
+    for (let i = 1; i < planks; i += 1) {
+      ctx.beginPath();
+      if (horizontal) {
+        const y = -th / 2 + (th / planks) * i;
+        ctx.moveTo(-tw / 2 + 3, Math.round(y) + 0.5);
+        ctx.lineTo(tw / 2 - 3, Math.round(y) + 0.5);
+      } else {
+        const x = -tw / 2 + (tw / planks) * i;
+        ctx.moveTo(Math.round(x) + 0.5, -th / 2 + 3);
+        ctx.lineTo(Math.round(x) + 0.5, th / 2 - 3);
+      }
+      ctx.stroke();
+    }
+    // Top-edge highlight.
+    ctx.strokeStyle = 'rgba(214,150,90,0.6)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(-tw / 2 + 2, -th / 2 + 2);
+    ctx.lineTo(tw / 2 - 2, -th / 2 + 2);
+    ctx.stroke();
+
+    furnitureHitFlash(prop, w, h);
+  }
+
+  // Top-down wooden chair: a square seat with a back rail on the upper edge and
+  // four small legs. Sized to the prop footprint.
+  function drawWoodChair(prop) {
+    const ctx = Neo.ctx;
+    const w = Math.max(16, Number(prop.w || prop.r * 2 || 40));
+    const h = Math.max(16, Number(prop.h || prop.r * 2 || 40));
+    const hw = w / 2;
+    const hh = h / 2;
+    const legR = Math.max(2.5, Math.min(w, h) * 0.1);
+
+    ctx.fillStyle = 'rgba(0,0,0,0.2)';
+    ctx.fillRect(-hw + 2, -hh + 3, w, h);
+
+    // Legs.
+    ctx.fillStyle = '#43280f';
+    [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sy]) => {
+      ctx.beginPath();
+      ctx.arc(sx * (hw - legR - 1), sy * (hh - legR - 1), legR, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    // Back rail along the top edge (so it reads as a chair facing down).
+    ctx.fillStyle = '#5e3315';
+    ctx.fillRect(-hw + 2, -hh, w - 4, Math.max(4, h * 0.18));
+
+    // Seat: inset square with a wood gradient.
+    const sw = w * 0.72;
+    const sh = h * 0.62;
+    const seatY = h * 0.08;
+    const grad = ctx.createLinearGradient(-sw / 2, 0, sw / 2, 0);
+    grad.addColorStop(0, '#7a4a26');
+    grad.addColorStop(0.5, '#9c6334');
+    grad.addColorStop(1, '#6a3f20');
+    ctx.fillStyle = grad;
+    ctx.fillRect(-sw / 2, seatY - sh / 2, sw, sh);
+    ctx.strokeStyle = '#3a2110';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(-sw / 2, seatY - sh / 2, sw, sh);
+    // Seat highlight.
+    ctx.strokeStyle = 'rgba(210,148,88,0.55)';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(-sw / 2 + 2, seatY - sh / 2 + 2);
+    ctx.lineTo(sw / 2 - 2, seatY - sh / 2 + 2);
+    ctx.stroke();
+
+    furnitureHitFlash(prop, w, h);
   }
 
   function drawDestructibleBlockDamage(prop, w = 52, h = 52) {

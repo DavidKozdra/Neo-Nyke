@@ -3085,7 +3085,7 @@ button, input, select, textarea {
   position: absolute;
   left: 50%;
   bottom: 18px;
-  transform: translateX(-50%) scale(var(--hud-scale, 1));
+  transform: translateX(-50%) scale(calc(1.5 * var(--hud-scale, 1)));
   transform-origin: bottom center;
   display: flex;
   gap: 14px;
