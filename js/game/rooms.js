@@ -991,6 +991,7 @@
     if (room.type === 'combat' && !room.cleared && Neo.enemies.length === 0) {
       if (Neo.gameMode === 'endless') {
         Neo.endlessWaveActive = true;
+        Neo.updateEndlessWaveHud?.();
         const firstWaveSize = 4 + Neo.floor;
         Neo.spawnWave(firstWaveSize, 'combat');
         Neo.spawnParticle({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 40, life: 1.2, text: 'WAVE 1', c: '#ff8b8b' });

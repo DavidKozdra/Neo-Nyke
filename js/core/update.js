@@ -446,11 +446,9 @@ export function loop(timestamp) {
 
       if (playerHidden) {
         // Player is invisible/untouchable (cape, flying, coward's way, warp): enemies
-        // lose their target. Skip all AI/attack logic, drop any in-progress beam, and
-        // coast to a stop so they hold position instead of chasing or shooting.
-        if (enemy.beamTime > 0) { enemy.beamTime = 0; if (enemy.state === 'elite_laser') enemy.state = 'idle'; }
-        enemy.vx *= Math.pow(0.0001, dt);
-        enemy.vy *= Math.pow(0.0001, dt);
+        // lose their target. Skip all AI/attack logic and let them wander to random
+        // points so they roam the room instead of standing frozen in place.
+        Neo.wanderEnemy(enemy, dt);
       } else {
         const eliteTraitControlled = Neo.updateEliteEnemyTraits(enemy, dt);
         if (enemy.dead) continue;

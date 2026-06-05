@@ -1133,6 +1133,7 @@ export const ui = {
     timerFloorSlot: document.getElementById('timerFloorSlot'),
     timerBossSlot: document.getElementById('timerBossSlot'),
     bossRushStageNum2: document.getElementById('bossRushStageNum2'),
+    bossRushNextTimer: document.getElementById('bossRushNextTimer'),
     challengeStatus: document.getElementById('challengeStatus'),
     challengeStatusLabel: document.getElementById('challengeStatusLabel'),
     challengeStatusFill: document.getElementById('challengeStatusFill'),

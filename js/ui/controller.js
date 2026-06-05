@@ -11,6 +11,7 @@ export function createUIController(view) {
         defaultSpeaker: 'GOD',
         typeSpeed: 0.028,
         autoAdvanceDelay: 1.35,
+        autoAdvanceEnabled: () => window.NeoSettings?.shouldAutoAdvanceCutscenes?.() === true,
         onOpen: () => Neo.clearGameplayInput(),
         onClose: () => Neo.clearGameplayInput(),
       })
@@ -64,6 +65,58 @@ export function createUIController(view) {
     function ensureRunHistoryPanelCanOverlayGame() {
       if (!view.runHistoryPanel || view.runHistoryPanel.parentElement === document.body) return;
       document.body.appendChild(view.runHistoryPanel);
+    }
+
+    function bindPracticePanelDrag() {
+      const panel = view.practicePanel;
+      const handle = panel?.querySelector('.practice-head');
+      if (!panel || !handle || panel.dataset.dragBound === 'true') return;
+      panel.dataset.dragBound = 'true';
+      let drag = null;
+      const clampPanel = (left, top) => {
+        const rect = panel.getBoundingClientRect();
+        const margin = 8;
+        return {
+          left: Neo.clamp(left, margin, Math.max(margin, window.innerWidth - rect.width - margin)),
+          top: Neo.clamp(top, margin, Math.max(margin, window.innerHeight - rect.height - margin)),
+        };
+      };
+      handle.addEventListener('pointerdown', event => {
+        if (event.button !== 0) return;
+        if (event.target instanceof Element && event.target.closest('button, input, select, textarea, a')) return;
+        const rect = panel.getBoundingClientRect();
+        drag = {
+          pointerId: event.pointerId,
+          dx: event.clientX - rect.left,
+          dy: event.clientY - rect.top,
+        };
+        panel.classList.add('is-dragging');
+        panel.style.right = 'auto';
+        panel.style.left = `${rect.left}px`;
+        panel.style.top = `${rect.top}px`;
+        handle.setPointerCapture?.(event.pointerId);
+        event.preventDefault();
+      });
+      handle.addEventListener('pointermove', event => {
+        if (!drag || event.pointerId !== drag.pointerId) return;
+        const next = clampPanel(event.clientX - drag.dx, event.clientY - drag.dy);
+        panel.style.left = `${next.left}px`;
+        panel.style.top = `${next.top}px`;
+      });
+      const endDrag = event => {
+        if (!drag || event.pointerId !== drag.pointerId) return;
+        drag = null;
+        panel.classList.remove('is-dragging');
+      };
+      handle.addEventListener('pointerup', endDrag);
+      handle.addEventListener('pointercancel', endDrag);
+      window.addEventListener('resize', () => {
+        if (panel.classList.contains('hidden') || panel.style.left === '') return;
+        const rect = panel.getBoundingClientRect();
+        const next = clampPanel(rect.left, rect.top);
+        panel.style.left = `${next.left}px`;
+        panel.style.top = `${next.top}px`;
+      });
     }
 
     function getChallengeAccent(def) {
@@ -1731,6 +1784,7 @@ export function createUIController(view) {
         view.practicePanelToggle?.addEventListener('click', () => {
           view.practicePanelBody?.classList.toggle('hidden');
         });
+        bindPracticePanelDrag();
         view.practiceMaxHpSlider?.addEventListener('input', () => {
           Neo.setPracticeMaxHp(view.practiceMaxHpSlider.value);
         });

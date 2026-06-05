@@ -561,6 +561,15 @@ button, input, select, textarea {
   color: #ff8b8b;
 }
 
+.boss-rush-next {
+  margin-left: 8px;
+  color: #ffcf8a;
+  font-size: 12px;
+  letter-spacing: .08em;
+}
+
+.boss-rush-next.hidden { display: none; }
+
 .challenge-status {
   min-width: 240px;
   display: flex;
@@ -7838,8 +7847,7 @@ border-bottom: black solid 2px;
 .endless-hud {
   position: fixed;
   top: 14px;
-  left: 50%;
-  transform: translateX(-50%);
+  right: 14px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -7887,7 +7895,11 @@ border-bottom: black solid 2px;
   justify-content: space-between;
   padding: 10px 14px 8px;
   border-bottom: 1px solid rgba(255,255,255,0.07);
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
 }
+.practice-panel.is-dragging .practice-head { cursor: grabbing; }
 .practice-title {
   font-size: 0.72rem;
   font-weight: 700;

@@ -425,6 +425,7 @@
     Neo.updateEquipmentSlots();
     if (Neo.ui.timerDisplay) Neo.ui.timerDisplay.textContent = timeStr;
     if (Neo.ui.floorDisplay) Neo.ui.floorDisplay.textContent = Neo.floor;
+    Neo.updateBossRushHud?.();
     if (Neo.ui.difficultyLabel) Neo.ui.difficultyLabel.textContent = Neo.getDifficultyDef(Neo.selectedDifficulty).name.toUpperCase();
     const isCompetitive = Neo.gameMode === 'competitive';
     if (Neo.ui.competitiveSeedDisplay) Neo.ui.competitiveSeedDisplay.style.display = isCompetitive ? '' : 'none';

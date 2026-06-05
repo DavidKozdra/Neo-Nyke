@@ -112,6 +112,8 @@ window.Neo = {
   endlessWaveActive: false,
   bossRushStage: 0,
   bossRushActive: false,
+  bossRushNextSpawnAt: 0,
+  bossRushNextSpawnTimeout: null,
   runRevivesUsed: 0,
   lastDeathEntryId: '',
 

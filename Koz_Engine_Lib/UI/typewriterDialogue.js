@@ -13,6 +13,9 @@
       this.autoAdvanceDelay = Math.max(0, Number(opts.autoAdvanceDelay) || 1.15);
       this.punctuationPause = Math.max(0, Number(opts.punctuationPause) || 0.045);
       this.defaultSpeaker = String(opts.defaultSpeaker || "GOD");
+      // When provided, auto-advance only happens if this returns truthy.
+      // Otherwise dialogue waits for an explicit advance() (click/key).
+      this.autoAdvanceEnabled = typeof opts.autoAdvanceEnabled === "function" ? opts.autoAdvanceEnabled : null;
       this.onOpen = typeof opts.onOpen === "function" ? opts.onOpen : null;
       this.onClose = typeof opts.onClose === "function" ? opts.onClose : null;
       this.changeListeners = [];
@@ -110,6 +113,8 @@
         this._emitChange();
         return;
       }
+      // Skip auto-advance when disabled — wait for an explicit advance() instead.
+      if (this.autoAdvanceEnabled && !this.autoAdvanceEnabled()) return;
       this.holdTimer += step;
       if (this.holdTimer >= this.current.autoAdvanceDelay) {
         this.advance();

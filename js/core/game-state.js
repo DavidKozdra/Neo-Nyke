@@ -2129,7 +2129,7 @@ export function resumeGame() {
     resetScene();
     resetRngStreams();
     startEndlessRoom();
-    if (Neo.ui.endlessWaveNum) Neo.ui.endlessWaveNum.textContent = Neo.endlessWave;
+    Neo.updateEndlessWaveHud();
     if (!Neo.loopStarted) { Neo.loopStarted = true; requestAnimationFrame(Neo.loop); }
   }
 
@@ -2183,6 +2183,7 @@ export function resumeGame() {
     window.achievementManager?.resetRunCounters();
     Neo.bossRushStage = 0;
     Neo.bossRushActive = false;
+    clearBossRushNextSpawn();
     resetTutorialState(false);
     resetMultiplayerState();
     invalidateRunStatCaches();
@@ -2205,8 +2206,7 @@ export function resumeGame() {
       if (key) Neo.collectItem(key);
     }
     Neo.addCoins(120);
-    if (Neo.ui.bossRushStageNum) Neo.ui.bossRushStageNum.textContent = 1;
-    if (Neo.ui.bossRushStageNum2) Neo.ui.bossRushStageNum2.textContent = 1;
+    updateBossRushHud();
     // Spawn first boss immediately
     spawnBossRushBoss();
     if (!Neo.loopStarted) { Neo.loopStarted = true; requestAnimationFrame(Neo.loop); }
@@ -2215,14 +2215,21 @@ export function resumeGame() {
   function spawnBossRushBoss() {
     const bossType = BOSS_RUSH_ORDER[Neo.bossRushStage];
     if (!bossType) return;
+    const safeSpawn = findBossRushSpawnPoint();
+    if (!safeSpawn) {
+      Neo.bossRushActive = false;
+      Neo.currentRoom.cleared = true;
+      Neo.spawnParticle({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 50, life: 1.2, text: 'NO SAFE BOSS SPAWN', c: '#ff8b8b' });
+      return;
+    }
     Neo.bossRushActive = true;
     Neo.currentRoom.cleared = false;
-    const safeSpawn = Neo.findSafeEnemySpawnPoint(Neo.ROOM_W / 2, Neo.ROOM_H / 2 - 40, 15);
-    if (!safeSpawn) return;
+    clearBossRushNextSpawn();
     let boss;
     if (bossType === 'artificer_knave') {
       // Step 1: Spawn as a regular knave
       boss = Neo.spawnEnemy('knave', safeSpawn.x, safeSpawn.y, false);
+      boss.bossRushStage = Neo.bossRushStage;
       boss.isTransforming = true;
       // Visual cue: show particles or text
       Neo.spawnParticle({ x: boss.x, y: boss.y - 40, life: 1.2, text: '???', c: '#ffd27d' });
@@ -2269,6 +2276,7 @@ export function resumeGame() {
       }, 1200); // 1.2 seconds delay
     } else {
       boss = Neo.spawnEnemy(bossType, safeSpawn.x, safeSpawn.y, false);
+      boss.bossRushStage = Neo.bossRushStage;
       const playedCutscene = Neo.tryPlayBossIntroCutscene(boss, bossType);
       const line = Neo.BOSS_OPENING_DIALOGUE[bossType];
       if (!playedCutscene && boss && line) Neo.sayOverEntity(boss, line);
@@ -2277,12 +2285,33 @@ export function resumeGame() {
     Neo.spawnParticle({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 50, life: 1.4, text: `BOSS ${Neo.bossRushStage + 1}: ${getBossDisplayName(bossType).toUpperCase()}`, c: '#ff8b8b' });
   }
 
+  function findBossRushSpawnPoint(radius = 18) {
+    const candidates = [
+      { x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 40 },
+      { x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 + 120 },
+      { x: Neo.ROOM_W / 2 - 190, y: Neo.ROOM_H / 2 },
+      { x: Neo.ROOM_W / 2 + 190, y: Neo.ROOM_H / 2 },
+      { x: Neo.ROOM_W / 2 - 220, y: Neo.ROOM_H / 2 - 140 },
+      { x: Neo.ROOM_W / 2 + 220, y: Neo.ROOM_H / 2 - 140 },
+      { x: Neo.ROOM_W / 2 - 220, y: Neo.ROOM_H / 2 + 140 },
+      { x: Neo.ROOM_W / 2 + 220, y: Neo.ROOM_H / 2 + 140 },
+    ];
+    for (const candidate of candidates) {
+      const x = Neo.clamp(candidate.x, Neo.WALL + radius, Neo.ROOM_W - Neo.WALL - radius);
+      const y = Neo.clamp(candidate.y, Neo.WALL + radius, Neo.ROOM_H - Neo.WALL - radius);
+      const safeSpawn = Neo.findSafeEnemySpawnPoint(x, y, radius);
+      if (safeSpawn) return safeSpawn;
+    }
+    return null;
+  }
+
   function onBossRushBossDefeated() {
+    if (Neo.gameMode !== 'boss_rush') return;
     Neo.bossRushActive = false;
     Neo.bossRushStage += 1;
-    if (Neo.ui.bossRushStageNum) Neo.ui.bossRushStageNum.textContent = Math.min(Neo.bossRushStage + 1, BOSS_RUSH_ORDER.length);
-    if (Neo.ui.bossRushStageNum2) Neo.ui.bossRushStageNum2.textContent = Math.min(Neo.bossRushStage + 1, BOSS_RUSH_ORDER.length);
+    updateBossRushHud();
     if (Neo.bossRushStage >= BOSS_RUSH_ORDER.length) {
+      clearBossRushNextSpawn();
       Neo.win();
       return;
     }
@@ -2299,10 +2328,49 @@ export function resumeGame() {
       if (Neo.gameMode !== 'boss_rush' || Neo.gameState !== 'play') return;
       Neo.spawnParticle({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 50, life: 1.2, text: `NEXT: ${nextName}`, c: '#ffb347' });
     }, 1500);
-    setTimeout(() => {
-      if (Neo.gameMode !== 'boss_rush' || Neo.gameState !== 'play') return;
+    scheduleBossRushNextSpawn(4);
+  }
+
+  function scheduleBossRushNextSpawn(delaySeconds = 4) {
+    clearBossRushNextSpawn();
+    const stage = Neo.bossRushStage;
+    Neo.bossRushNextSpawnAt = Date.now() + delaySeconds * 1000;
+    const tick = () => {
+      if (Neo.gameMode !== 'boss_rush' || Neo.bossRushStage !== stage) {
+        clearBossRushNextSpawn();
+        return;
+      }
+      if (Neo.gameState !== 'play') {
+        Neo.bossRushNextSpawnTimeout = setTimeout(tick, 250);
+        return;
+      }
+      if (Date.now() < Neo.bossRushNextSpawnAt) {
+        Neo.bossRushNextSpawnTimeout = setTimeout(tick, 100);
+        return;
+      }
+      clearBossRushNextSpawn();
       spawnBossRushBoss();
-    }, 4000);
+    };
+    Neo.bossRushNextSpawnTimeout = setTimeout(tick, 100);
+    updateBossRushHud();
+  }
+
+  function clearBossRushNextSpawn() {
+    if (Neo.bossRushNextSpawnTimeout) clearTimeout(Neo.bossRushNextSpawnTimeout);
+    Neo.bossRushNextSpawnTimeout = null;
+    Neo.bossRushNextSpawnAt = 0;
+    updateBossRushHud();
+  }
+
+  function updateBossRushHud() {
+    const displayStage = Math.min(Neo.bossRushStage + 1, BOSS_RUSH_ORDER.length);
+    if (Neo.ui.bossRushStageNum) Neo.ui.bossRushStageNum.textContent = displayStage;
+    if (Neo.ui.bossRushStageNum2) Neo.ui.bossRushStageNum2.textContent = displayStage;
+    if (!Neo.ui.bossRushNextTimer) return;
+    const remainingMs = Math.max(0, Number(Neo.bossRushNextSpawnAt || 0) - Date.now());
+    const showTimer = Neo.gameMode === 'boss_rush' && !Neo.bossRushActive && remainingMs > 0;
+    Neo.ui.bossRushNextTimer.classList.toggle('hidden', !showTimer);
+    Neo.ui.bossRushNextTimer.textContent = showTimer ? `NEXT ${(remainingMs / 1000).toFixed(1)}s` : '';
   }
 
   function clampPracticeMaxHp(value) {
@@ -2344,12 +2412,60 @@ export function resumeGame() {
       if (!btn || !Neo.player) return;
       const type = btn.dataset.enemy;
       const elite = Neo.ui.practiceEliteToggle?.checked ?? false;
-      const angle = Neo.nextRandom('encounter') * Math.PI * 2;
-      const dist = 160 + Neo.nextRandom('encounter') * 120;
-      const x = Neo.clamp(Neo.player.x + Math.cos(angle) * Neo.dist, 80, Neo.ROOM_W - 80);
-      const y = Neo.clamp(Neo.player.y + Math.sin(angle) * Neo.dist, 80, Neo.ROOM_H - 80);
-      Neo.spawnEnemy(type, x, y, elite);
+      const safeSpawn = findPracticeEnemySpawnPoint();
+      if (!safeSpawn) {
+        Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 28, life: 0.9, text: 'NO SAFE SPAWN', c: '#ff8b8b' });
+        return;
+      }
+      Neo.spawnEnemy(type, safeSpawn.x, safeSpawn.y, elite);
     });
+  }
+
+  function findPracticeEnemySpawnPoint(radius = 18) {
+    if (!Neo.player) return null;
+    const samples = [
+      { x: Neo.player.x + 190, y: Neo.player.y },
+      { x: Neo.player.x - 190, y: Neo.player.y },
+      { x: Neo.player.x, y: Neo.player.y + 150 },
+      { x: Neo.player.x, y: Neo.player.y - 150 },
+      { x: Neo.ROOM_W / 2 + 180, y: Neo.ROOM_H / 2 },
+      { x: Neo.ROOM_W / 2 - 180, y: Neo.ROOM_H / 2 },
+      { x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 + 140 },
+      { x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 140 },
+    ];
+    let best = null;
+    let bestScore = -Infinity;
+    samples.forEach(sample => {
+      const x = Neo.clamp(sample.x, Neo.WALL + radius, Neo.ROOM_W - Neo.WALL - radius);
+      const y = Neo.clamp(sample.y, Neo.WALL + radius, Neo.ROOM_H - Neo.WALL - radius);
+      const safeSpawn = Neo.findSafeEnemySpawnPoint(x, y, radius);
+      if (!safeSpawn) return;
+      const playerDistance = Neo.dist(safeSpawn.x, safeSpawn.y, Neo.player.x, Neo.player.y);
+      const nearestEnemyDistance = Neo.enemies.reduce((nearest, enemy) => {
+        if (!enemy || enemy.dead) return nearest;
+        return Math.min(nearest, Neo.dist(safeSpawn.x, safeSpawn.y, enemy.x, enemy.y));
+      }, Infinity);
+      const score = playerDistance + Math.min(nearestEnemyDistance, 260);
+      if (score > bestScore) {
+        bestScore = score;
+        best = safeSpawn;
+      }
+    });
+    if (best) return best;
+    for (let attempt = 0; attempt < 24; attempt += 1) {
+      const angle = Neo.nextRandom('encounter') * Math.PI * 2;
+      const distance = 150 + Neo.nextRandom('encounter') * 220;
+      const x = Neo.clamp(Neo.player.x + Math.cos(angle) * distance, Neo.WALL + radius, Neo.ROOM_W - Neo.WALL - radius);
+      const y = Neo.clamp(Neo.player.y + Math.sin(angle) * distance, Neo.WALL + radius, Neo.ROOM_H - Neo.WALL - radius);
+      const safeSpawn = Neo.findSafeEnemySpawnPoint(x, y, radius);
+      if (safeSpawn) return safeSpawn;
+    }
+    return null;
+  }
+
+  function updateEndlessWaveHud() {
+    if (!Neo.ui.endlessWaveNum) return;
+    Neo.ui.endlessWaveNum.textContent = String(Neo.endlessWave + (Neo.endlessWaveActive ? 1 : 0));
   }
 
   function resetScene() {
@@ -2361,8 +2477,12 @@ export function resumeGame() {
     Neo.endlessWaveActive = false;
     Neo.bossRushStage = 0;
     Neo.bossRushActive = false;
+    clearBossRushNextSpawn();
     Neo.projectiles = [];
     Neo.justiceBlades = [];
+    Neo.healingZoneCharging = false;
+    Neo.healingZoneChargeTime = 0;
+    Neo.smashHeld = false;
     Neo.chests = [];
     Neo.pickups = [];
     Neo.destructibles = [];
@@ -2691,11 +2811,15 @@ export function resumeGame() {
   Neo.startPractice = startPractice;
   Neo.startBossRush = startBossRush;
   Neo.spawnBossRushBoss = spawnBossRushBoss;
+  Neo.findBossRushSpawnPoint = findBossRushSpawnPoint;
   Neo.onBossRushBossDefeated = onBossRushBossDefeated;
+  Neo.updateBossRushHud = updateBossRushHud;
   Neo.clampPracticeMaxHp = clampPracticeMaxHp;
   Neo.syncPracticeMaxHpControls = syncPracticeMaxHpControls;
   Neo.setPracticeMaxHp = setPracticeMaxHp;
   Neo.buildPracticeEnemyGrid = buildPracticeEnemyGrid;
+  Neo.findPracticeEnemySpawnPoint = findPracticeEnemySpawnPoint;
+  Neo.updateEndlessWaveHud = updateEndlessWaveHud;
   Neo.resetScene = resetScene;
   Neo.sanitizePickupList = sanitizePickupList;
   Neo.restoreRun = restoreRun;

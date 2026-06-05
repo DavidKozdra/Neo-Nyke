@@ -1457,23 +1457,20 @@
     const itemStats = Neo.getItemStats();
     const baseDamage = (Neo.godTimer > 0 ? 24 : 18) * (itemStats.beamDamageMultiplier || 1);
     const bladeDamage = Math.max(1, Math.round(baseDamage));
-    const offsets = [-0.07, 0.07]; // a tight pair, barely splayed
-    offsets.forEach(offset => {
-      const bladeAngle = angle + offset;
-      spawnWeaponProjectile({
-        x: Neo.player.x + Math.cos(bladeAngle) * 24,
-        y: Neo.player.y + Math.sin(bladeAngle) * 24,
-        angle: bladeAngle,
-        speed: 820,
-        damage: bladeDamage,
-        knockback: 150,
-        r: 7,
-        life: 0.5,
-        kind: 'blade_justice',
-        color: '#bfe4ff',
-        pierceCount: 99,
-        hitOptions: { lightning: true },
-      });
+    // A single straight lightning blade — toned down from the old splayed pair.
+    spawnWeaponProjectile({
+      x: Neo.player.x + Math.cos(angle) * 24,
+      y: Neo.player.y + Math.sin(angle) * 24,
+      angle,
+      speed: 820,
+      damage: bladeDamage,
+      knockback: 80,
+      r: 7,
+      life: 0.5,
+      kind: 'blade_justice',
+      color: '#bfe4ff',
+      pierceCount: 99,
+      hitOptions: { lightning: true },
     });
   }
 
@@ -2374,6 +2371,7 @@
       if (leftSpawn) {
         const left = Neo.spawnEnemy('golem', leftSpawn.x, leftSpawn.y, true);
         left.spawnedFromBulk = true;
+        if (Neo.gameMode === 'boss_rush') left.bossRushStage = Neo.bossRushStage;
         left.hp = Math.round(left.max * 1.6);
         left.max = left.hp;
         left.dmg = Math.round(left.dmg * 1.35);
@@ -2381,6 +2379,7 @@
       if (rightSpawn) {
         const right = Neo.spawnEnemy('golem', rightSpawn.x, rightSpawn.y, true);
         right.spawnedFromBulk = true;
+        if (Neo.gameMode === 'boss_rush') right.bossRushStage = Neo.bossRushStage;
         right.hp = Math.round(right.max * 1.6);
         right.max = right.hp;
         right.dmg = Math.round(right.dmg * 1.35);
@@ -2451,7 +2450,7 @@
         Neo.endlessWaveActive = false;
         onEndlessWaveCleared();
       }
-      if (Neo.gameMode === 'boss_rush' && Neo.bossRushActive) {
+      if (Neo.gameMode === 'boss_rush' && Neo.bossRushActive && enemy.bossRushStage === Neo.bossRushStage) {
         Neo.bossRushActive = false;
         Neo.onBossRushBossDefeated();
       }
@@ -2462,7 +2461,7 @@
 
   function onEndlessWaveCleared() {
     Neo.endlessWave += 1;
-    if (Neo.ui.endlessWaveNum) Neo.ui.endlessWaveNum.textContent = Neo.endlessWave;
+    Neo.updateEndlessWaveHud?.();
     const cx = Neo.ROOM_W / 2;
     const cy = Neo.ROOM_H / 2;
     const rewardRandom = Neo.createScopedRandom(`endless:wave:${Neo.endlessWave}:reward`);
@@ -2479,6 +2478,7 @@
       if (Neo.gameMode !== 'endless' || Neo.gameState !== 'play') return;
       Neo.currentRoom.cleared = false;
       Neo.endlessWaveActive = true;
+      Neo.updateEndlessWaveHud?.();
       const waveSize = Math.min(4 + Neo.endlessWave + Math.floor(Neo.endlessWave / 3), 18);
       Neo.spawnWave(waveSize, 'combat');
       Neo.spawnParticle({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 40, life: 1.1, text: `WAVE ${Neo.endlessWave + 1}`, c: '#ff8b8b' });

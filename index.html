@@ -191,7 +191,7 @@
       <span id="timerDisplay">0:00</span>
       <span class="separator">•</span>
       <span id="timerFloorSlot">FL <b id="floorDisplay">1</b>/10</span>
-      <span id="timerBossSlot" style="display:none">BOSS <b id="bossRushStageNum2">1</b>/6</span>
+      <span id="timerBossSlot" style="display:none">BOSS <b id="bossRushStageNum2">1</b>/6 <span id="bossRushNextTimer" class="boss-rush-next hidden"></span></span>
       <span class="separator">•</span>
       <span id="difficultyDisplay" class="difficulty-display"><canvas id="difficultyHudIcon" width="20" height="20" class="difficulty-hud-icon"></canvas><span id="difficultyLabel">EASY</span></span>
       <span id="competitiveSeedDisplay" class="difficulty-display" style="display:none;color:#ffe566;">&#9733; SEED <b id="competitiveSeedValue"></b></span>
@@ -1379,6 +1379,13 @@
           <span class="access-desc">Shows the room objective tracker on the HUD. Turn off to hide it during play.</span>
         </div>
         <label class="toggle"><input type="checkbox" id="gameplayObjectivePanel" checked><span class="toggle-track"><span class="toggle-thumb"></span></span></label>
+      </div>
+      <div class="access-row">
+        <div class="access-text">
+          <span class="access-label">Cutscene auto-advance</span>
+          <span class="access-desc">Automatically advance cutscene dialogue after a short pause. Off by default so lines wait for a click or ENTER, giving you time to read.</span>
+        </div>
+        <label class="toggle"><input type="checkbox" id="gameplayCutsceneAutoAdvance"><span class="toggle-track"><span class="toggle-thumb"></span></span></label>
       </div>
     </div>
 

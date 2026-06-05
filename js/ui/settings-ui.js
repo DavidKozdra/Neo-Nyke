@@ -11,7 +11,7 @@
   const DEFAULT_TOUCH_BINDINGS = { touchA:'slash', touchB:'laser', touchY:'smash', touchX:'ascend', touchDash:'dash' };
   const DEFAULT_VOLUME   = { master:20, sfx:80, music:20 };
   const DEFAULT_ACCESS   = { reduceFlash:false, reduceMotion:false, reduceParticles:false, highContrast:false, screenShake:true, shopCanAfford:'#4caf50', shopCantAfford:'#e05555', hudScale:1 };
-  const DEFAULT_GAMEPLAY = { pauseInventory:true, pauseOnBlur:true, bloodMultiplier:1, bloodOnHit:true, performanceMode:true, objectivePanel:true };
+  const DEFAULT_GAMEPLAY = { pauseInventory:true, pauseOnBlur:true, bloodMultiplier:1, bloodOnHit:true, performanceMode:true, objectivePanel:true, cutsceneAutoAdvance:false };
   const BLOOD_MULTIPLIER_MIN = 1;
   const BLOOD_MULTIPLIER_MAX = 10;
 
@@ -312,6 +312,7 @@
     shouldBloodOnHit: () => gameplay.bloodOnHit !== false,
     isPerformanceMode: () => gameplay.performanceMode !== false,
     showObjectivePanel: () => gameplay.objectivePanel !== false,
+    shouldAutoAdvanceCutscenes: () => gameplay.cutsceneAutoAdvance === true,
     setShowObjectivePanel: on => {
       gameplay.objectivePanel = !!on;
       const el = document.getElementById('gameplayObjectivePanel');
@@ -503,6 +504,15 @@
       save();
       // Apply immediately so the panel hides/shows without needing a room change.
       window.Neo?.refreshObjectiveTracker?.();
+    });
+  }
+
+  const cutsceneAutoAdvanceEl = document.getElementById('gameplayCutsceneAutoAdvance');
+  if (cutsceneAutoAdvanceEl) {
+    cutsceneAutoAdvanceEl.checked = gameplay.cutsceneAutoAdvance === true;
+    cutsceneAutoAdvanceEl.addEventListener('change', () => {
+      gameplay.cutsceneAutoAdvance = cutsceneAutoAdvanceEl.checked;
+      save();
     });
   }
 

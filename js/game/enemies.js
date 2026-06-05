@@ -4039,6 +4039,33 @@
     }
   }
 
+  // When the player is hidden (cape/flying/warp), enemies have no target. Instead of
+  // freezing in place, they pick random points in the room and amble toward them so the
+  // room still feels alive. Targets are re-rolled on arrival or after a short timer.
+  function wanderEnemy(enemy, dt) {
+    if (enemy.beamTime > 0) { enemy.beamTime = 0; if (enemy.state === 'elite_laser') enemy.state = 'idle'; }
+    enemy.wanderT = Math.max(0, (enemy.wanderT || 0) - dt);
+    const margin = (enemy.r || 8) + Neo.WALL + 4;
+    const reached = enemy.wanderTx != null
+      && Math.hypot(enemy.wanderTx - enemy.x, enemy.wanderTy - enemy.y) < 16;
+    if (enemy.wanderTx == null || reached || enemy.wanderT <= 0) {
+      enemy.wanderTx = Neo.rand(margin, Neo.ROOM_W - margin);
+      enemy.wanderTy = Neo.rand(margin, Neo.ROOM_H - margin);
+      enemy.wanderT = Neo.rand(1.4, 3.2);
+    }
+    const dx = enemy.wanderTx - enemy.x;
+    const dy = enemy.wanderTy - enemy.y;
+    const distance = Math.hypot(dx, dy);
+    if (distance > 1) {
+      // Wander at a relaxed pace, not full chase speed.
+      const speed = Math.max(20, (enemy.speed || 60) * 0.45);
+      steerEnemy(enemy, dx / distance, dy / distance, speed, 2.0, dt);
+    } else {
+      enemy.vx *= Math.pow(0.0001, dt);
+      enemy.vy *= Math.pow(0.0001, dt);
+    }
+  }
+
   function steerEnemy(enemy, dirX, dirY, maxSpeed, accel, dt) {
     const slowMultiplier = Neo.getSlowMultiplier?.(enemy) || 1;
     const adjustedSpeed = maxSpeed * slowMultiplier;
@@ -4153,4 +4180,5 @@
 	  Neo.triggerGodPhase = triggerGodPhase;
 	  Neo.updateGod = updateGod;
   Neo.steerEnemy = steerEnemy;
+  Neo.wanderEnemy = wanderEnemy;
   Neo.moveCircle = moveCircle;
