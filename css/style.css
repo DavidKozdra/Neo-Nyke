@@ -165,10 +165,8 @@ button, input, select, textarea {
 
 #c {
   display: block;
-  width: min(100dvw, calc(100dvh * 1.5));
-  height: min(100dvh, calc(100dvw / 1.5));
-  max-width: 100dvw;
-  max-height: 100dvh;
+  width: max(100dvw, calc(100dvh * 1.5));
+  height: max(100dvh, calc(100dvw / 1.5));
   background: #02030a;
   image-rendering: pixelated;
 }
@@ -3128,8 +3126,8 @@ button, input, select, textarea {
   flex-direction: column;
   flex-wrap: nowrap;
   align-items: center;
-  gap: 6px;
-  padding: 4px 8px;
+  gap: 9px;
+  padding: 7px 11px;
   border-radius: 10px;
   background: linear-gradient(180deg, rgba(14, 11, 22, .82), rgba(6, 5, 12, .88));
   border: 1px solid rgba(120, 110, 160, .22);
@@ -3149,9 +3147,9 @@ button, input, select, textarea {
   appearance: none;
   position: relative;
   flex: 0 0 auto;
-  width: 48px;
-  height: 48px;
-  padding: 4px;
+  width: 66px;
+  height: 66px;
+  padding: 6px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -3162,7 +3160,7 @@ button, input, select, textarea {
   background: linear-gradient(180deg, rgba(24, 18, 36, .9), rgba(12, 8, 22, .92));
   color: #cabaf0;
   font-family: inherit;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 800;
   letter-spacing: .06em;
   text-transform: uppercase;
@@ -3241,9 +3239,9 @@ button, input, select, textarea {
 
 .equip-slot__key {
   position: absolute;
-  top: 2px;
-  left: 4px;
-  font-size: 9px;
+  top: 4px;
+  left: 6px;
+  font-size: 11px;
   font-weight: 900;
   color: inherit;
   opacity: .85;
@@ -3251,8 +3249,8 @@ button, input, select, textarea {
 }
 
 .equip-slot__icon {
-  width: 24px;
-  height: 24px;
+  width: 36px;
+  height: 36px;
   image-rendering: pixelated;
   border-radius: 4px;
   background: rgba(10, 8, 16, .55);
@@ -3265,7 +3263,7 @@ button, input, select, textarea {
 }
 
 .equip-slot__label {
-  font-size: 8px;
+  font-size: 10px;
   line-height: 1;
   letter-spacing: .04em;
   color: inherit;
@@ -3435,7 +3433,7 @@ button, input, select, textarea {
 
 
 #start.overlay {
-  --menu-stage-width: 720px;
+  --menu-stage-width: 960px;
   --menu-panel-width: 504px;
   --menu-footer-reserve: 124px;
   justify-content: flex-start;
@@ -3470,8 +3468,8 @@ button, input, select, textarea {
   inset: auto;
   z-index: auto;
   justify-content: center;
-  width: min(100%, 720px);
-  padding: clamp(14px, 2.2vh, 22px) clamp(18px, 4vw, 42px) clamp(12px, 2vh, 20px);
+  width: min(100%, 960px);
+  padding: clamp(14px, 2.2vh, 22px) clamp(14px, 2.5vw, 32px) clamp(12px, 2vh, 20px);
   border: 1px solid var(--menu-border);
   border-radius: 12px;
   background:
@@ -3549,7 +3547,7 @@ button, input, select, textarea {
   display: inline-block;
   font-family: var(--font-title);
   /* Press Start 2P is ~2× wider per glyph, so the title runs smaller than the body pixel font. */
-  font-size: clamp(40px, 7vw, 92px);
+  font-size: clamp(38px, 6.2vw, 82px);
   font-weight: 400;
   letter-spacing: .04em;
   text-transform: uppercase;
@@ -6758,8 +6756,8 @@ border-bottom: black solid 2px;
   }
 
   #c {
-    width: min(100dvw, calc(100dvh * 1.5));
-    height: min(100dvh, calc(100dvw / 1.5));
+    width: max(100dvw, calc(100dvh * 1.5));
+    height: max(100dvh, calc(100dvw / 1.5));
   }
 
   #hud {

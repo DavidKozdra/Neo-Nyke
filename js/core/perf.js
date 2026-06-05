@@ -178,6 +178,7 @@ export async function boot() {
   if (!Neo.metaProgress) Neo.metaProgress = Neo.createDefaultMeta();
   Neo.SPRITE_ATLAS = Neo.buildSpriteAtlas();
   Neo.ENV_TILE_ATLAS = Neo.buildEnvironmentTileAtlas();
+  Neo.bindCanvasRecovery?.();
   Neo.bindInput();
   Neo.bindPanelInput();
   Neo.drawActionIcons();

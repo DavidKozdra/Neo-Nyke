@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'neonyke-v26';
+const CACHE_VERSION = 'neonyke-v27';
 const CACHE_META = 'neonyke-cache-meta';
 const CACHE_META_KEY = '/__neonyke_cache_meta__';
 const CACHE_REFRESH_INTERVAL_MS = 5 * 60 * 60 * 1000;
@@ -50,6 +50,7 @@ const PRECACHE = [
   '/js/draw/atlas.js',
   '/js/draw/entities.js',
   '/js/draw/hud.js',
+  '/js/core/canvas-recovery.js',
   '/js/ui/controller.js',
   '/js/core/save-store.js',
   '/js/core/perf.js',
