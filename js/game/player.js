@@ -363,10 +363,14 @@ export function getItemStats() {
     const godItemStacks = Neo.godItemKeysCache.reduce((total, key) => {
       return total + getItemCount(key);
     }, 0);
-    let critChance = critCharmBonus + keenEyeBonus + pendantOfKronos * godItemStacks * 0.01;
+    const princesGlasses = getItemCount('princes_glasses');
+    // Prince's Glasses: first stack grants a flat bonus, each extra stack a smaller one.
+    const princesGlassesCrit = princesGlasses > 0 ? 0.05 + (princesGlasses - 1) * 0.02 : 0;
+    const princesGlassesDefense = princesGlasses > 0 ? 0.10 + (princesGlasses - 1) * 0.02 : 0;
+    let critChance = critCharmBonus + keenEyeBonus + pendantOfKronos * godItemStacks * 0.01 + princesGlassesCrit;
     if (oracleLens) critChance *= 2;
     critChance = Neo.clamp(critChance, 0.01, 0.95);
-    const damageReduction = Neo.clamp(bandaid * 0.005 + shieldOfAegis * 0.2, 0, 0.85);
+    const damageReduction = Neo.clamp(bandaid * 0.005 + shieldOfAegis * 0.2 + princesGlassesDefense, 0, 0.85);
     const xpProgress = Neo.clamp((Neo.player?.xpToNext || 0) > 0 ? (Neo.player?.xp || 0) / Neo.player.xpToNext : 0, 0, 1);
     const characterDef = Neo.getCharacterDef?.() || {};
     Neo.itemStatsCacheValue = {
@@ -419,8 +423,7 @@ export function getItemStats() {
       damageReduction,
       stunResistance: anchorCharm,
       hasIronLung: getItemCount('iron_lung') > 0,
-      hasPrincesGlasses: getItemCount('princes_glasses') > 0,
-      goldGainMultiplier: 1 + getItemCount('princes_glasses') * 0.05,
+      hasPrincesGlasses: princesGlasses > 0,
       tagCounts,
       bleedCritChance: tagCounts.bleed >= 8 ? 0.18 : tagCounts.bleed >= 3 ? 0.08 : 0,
       bleedSplashStacks: tagCounts.bleed >= 5 ? Math.min(3, 1 + Math.floor((tagCounts.bleed - 5) / 4)) : 0,
@@ -896,6 +899,132 @@ export function confirmWizardPawSelection() {
     Neo.setScrollControlModalOpen?.(false);
   }
 
+  // ── Voucher redemption ────────────────────────────────────────────────────
+
+  function getVoucherCount() {
+    return Math.max(0, Math.floor(Number(Neo.player?.items?.[Neo.VOUCHER_KEY] || 0)));
+  }
+
+  // Keys that can never be granted as a voucher reward (the voucher itself and
+  // the scroll-of-control utility relics, which require manual targeting).
+  function getVoucherExcludedKeys() {
+    return new Set([Neo.VOUCHER_KEY, ...(Neo.SCROLL_OF_CONTROL_KEYS || [])]);
+  }
+
+  function getVoucherRarityPool(rarity) {
+    const targetRarity = String(rarity || '').toLowerCase();
+    const excluded = getVoucherExcludedKeys();
+    return (Neo.ITEM_KEYS || []).filter(key => {
+      if (excluded.has(key)) return false;
+      const item = Neo.ITEM_DEFS?.[key];
+      if (!item) return false;
+      return String(item.rarity || item.category || 'knight').toLowerCase() === targetRarity;
+    });
+  }
+
+  function grantRandomItemOfRarity(rarity, random) {
+    const pool = getVoucherRarityPool(rarity);
+    if (!pool.length) return '';
+    const roll = typeof random === 'function' ? random() : Neo.rng();
+    const key = pool[Math.floor(roll * pool.length)] || pool[0];
+    Neo.collectItem(key);
+    return key;
+  }
+
+  function renderVoucherModal() {
+    if (!Neo.ui.voucherChoices) return;
+    const count = getVoucherCount();
+    if (Neo.ui.voucherMeta) {
+      Neo.ui.voucherMeta.textContent = count === 1 ? '1 voucher held' : `${count} vouchers held`;
+    }
+    const colors = Neo.VOUCHER_COLORS || [];
+    Neo.ui.voucherChoices.innerHTML = colors.map(color => {
+      const poolSize = getVoucherRarityPool(color.rarity).length;
+      const disabled = poolSize <= 0;
+      return `<button class="wizard-paw-choice voucher-choice${disabled ? ' is-disabled' : ''}" type="button" data-voucher-color="${Neo.escapeHtml(color.id)}"${disabled ? ' disabled' : ''} style="--voucher-color:${Neo.escapeHtml(color.color)}">
+        <span class="wizard-paw-choice__eyebrow">${Neo.escapeHtml(color.label)}</span>
+        <span class="voucher-choice__swatch" style="background:${Neo.escapeHtml(color.color)}"></span>
+        <p>${disabled ? 'No relics available.' : `Random ${Neo.escapeHtml(color.label.toLowerCase())} relic.`}</p>
+      </button>`;
+    }).join('');
+  }
+
+  function openVoucherRedeem() {
+    if (!Neo.player) return false;
+    if (Neo.currentRoom?.type !== 'shop') return false;
+    if (Neo.isChallengeActive?.('no_items')) {
+      Neo.spawnParticle?.({ x: Neo.player.x, y: Neo.player.y - 24, life: 0.8, text: 'No Items challenge', c: '#ff8894' });
+      return false;
+    }
+    if (getVoucherCount() <= 0) return false;
+    Neo.voucherRedeemOpen = true;
+    Neo.setVoucherModalOpen?.(true);
+    renderVoucherModal();
+    return true;
+  }
+
+  function cancelVoucherRedeem() {
+    Neo.voucherRedeemOpen = false;
+    Neo.setVoucherModalOpen?.(false);
+  }
+
+  function handleVoucherChoiceClick(event) {
+    const target = event.target instanceof Element ? event.target.closest('[data-voucher-color]') : null;
+    const colorId = target?.dataset?.voucherColor || '';
+    if (!colorId || target?.disabled) return;
+    redeemVoucherColor(colorId);
+  }
+
+  function redeemVoucherColor(colorId) {
+    if (!Neo.player) return false;
+    if (Neo.isChallengeActive?.('no_items')) return false;
+    if (getVoucherCount() <= 0) return false;
+    const color = (Neo.VOUCHER_COLORS || []).find(entry => entry.id === colorId);
+    if (!color) return false;
+    if (getVoucherRarityPool(color.rarity).length <= 0) return false;
+    // Consume one voucher.
+    Neo.player.items[Neo.VOUCHER_KEY] = Math.max(0, getVoucherCount() - 1);
+    if (Neo.player.items[Neo.VOUCHER_KEY] <= 0) delete Neo.player.items[Neo.VOUCHER_KEY];
+    Neo.syncEquipmentSlotsFromInventory?.();
+    Neo.player.voucherUseSerial = Math.max(0, Math.floor(Number(Neo.player.voucherUseSerial || 0))) + 1;
+    const random = Neo.createScopedRandom?.(`voucher:${color.id}:use:${Neo.player.voucherUseSerial}:floor:${Neo.floor}`) || Neo.rng;
+    const grantedKey = grantRandomItemOfRarity(color.rarity, random);
+    if (grantedKey) {
+      const grantedName = Neo.itemRegistry?.get?.(grantedKey)?.name || Neo.ITEM_DEFS?.[grantedKey]?.name || grantedKey;
+      Neo.spawnParticle?.({ x: Neo.player.x, y: Neo.player.y - 24, life: 0.9, text: `VOUCHER: ${grantedName}`, c: color.color });
+      Neo.playSfx?.('item_collect');
+      window.achievementEvents?.emit?.('shop:bought');
+    }
+    // Keep the modal open if more vouchers remain, otherwise close it.
+    if (getVoucherCount() > 0) renderVoucherModal();
+    else cancelVoucherRedeem();
+    Neo.markShopPanelDirty?.();
+    Neo.markInventoryPanelDirty?.();
+    Neo.renderShopPanel?.();
+    Neo.renderInventoryPanel?.();
+    Neo.refreshShopVoucherBanner?.();
+    Neo.scheduleRunSave?.();
+    Neo.syncCurrentRoomState?.();
+    Neo.updateHud?.();
+    return true;
+  }
+
+  function refreshShopVoucherBanner() {
+    const banner = Neo.ui?.shopVoucherBanner;
+    if (!banner) return;
+    const show = Neo.currentRoom?.type === 'shop'
+      && getVoucherCount() > 0
+      && !Neo.isChallengeActive?.('no_items');
+    banner.classList.toggle('hidden', !show);
+    banner.setAttribute('aria-hidden', show ? 'false' : 'true');
+    if (show && Neo.ui.shopVoucherBannerSub) {
+      const count = getVoucherCount();
+      Neo.ui.shopVoucherBannerSub.textContent = count > 1
+        ? `${count} vouchers ready — redeem for a relic of your chosen colour.`
+        : 'Redeem for a relic of your chosen colour.';
+    }
+  }
+
   function applyScrollAbundanceForFloor() {
     const state = Neo.player?.scrollAbundance;
     if (!state || Neo.floor < Number(state.nextCheckFloor || 999) || Neo.floor > Number(state.expiresFloor || 0)) return;
@@ -1112,6 +1241,14 @@ export function refreshFloorChargeStates() {
   Neo.handleScrollControlChoiceClick = handleScrollControlChoiceClick;
   Neo.confirmScrollControlSelection = confirmScrollControlSelection;
   Neo.cancelScrollControlSelection = cancelScrollControlSelection;
+  Neo.getVoucherCount = getVoucherCount;
+  Neo.grantRandomItemOfRarity = grantRandomItemOfRarity;
+  Neo.openVoucherRedeem = openVoucherRedeem;
+  Neo.cancelVoucherRedeem = cancelVoucherRedeem;
+  Neo.handleVoucherChoiceClick = handleVoucherChoiceClick;
+  Neo.redeemVoucherColor = redeemVoucherColor;
+  Neo.renderVoucherModal = renderVoucherModal;
+  Neo.refreshShopVoucherBanner = refreshShopVoucherBanner;
   Neo.applyScrollAbundanceForFloor = applyScrollAbundanceForFloor;
   Neo.openExtraBatterySelection = openExtraBatterySelection;
   Neo.grantExtraBatteryToMove = grantExtraBatteryToMove;

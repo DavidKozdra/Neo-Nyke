@@ -2813,9 +2813,9 @@
   }
 
   function addCoins(amount) {
-    // Prince's Glasses (and any future gold-boost items) grant a flat % more
-    // gold across every source — pickups, chests, kills. Only scale positive
-    // gains so spends (negative amounts) pass through untouched.
+    // Gold-boost items can scale positive gains via goldGainMultiplier; spends
+    // (negative amounts) always pass through untouched. No item grants this
+    // multiplier today, so it defaults to 1.
     const goldMult = Math.max(1, Number(Neo.getItemStats?.()?.goldGainMultiplier || 1));
     const gained = amount > 0 ? Math.round(amount * goldMult) : amount;
     Neo.player.coins += gained;

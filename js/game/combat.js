@@ -2761,6 +2761,7 @@
     if (Neo.isFirstRunTutorialActive()) Neo.tutorialState.gotRelic = true;
     Neo.addToEquipmentSlots?.(itemKey);
     Neo.markInventoryPanelDirty();
+    if (itemKey === Neo.VOUCHER_KEY) Neo.refreshShopVoucherBanner?.();
     Neo.pushItemNotification(itemKey, collectCount);
     if (duplicatePickup) {
       Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 42, life: 0.85, text: 'ITEM DOUBLED', c: '#d8c0ff' });

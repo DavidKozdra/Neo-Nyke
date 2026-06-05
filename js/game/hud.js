@@ -826,6 +826,7 @@
     mid_sweepy_box: { cooldown: 36, duration: 6, label: 'SWEEPY', color: '#ff6e8b' },
     el_bartos_cape: { cooldown: 58, duration: 10, label: 'EL BARTO', color: '#ffb37a' },
     sparkle_charm: { cooldown: 40, duration: 0, label: 'SPARKLE', color: '#ffe8a3' },
+    churu_stick: { cooldown: 40, duration: 0, label: 'CHURU', color: '#ffb6d5' },
     gold_vac: { cooldown: 120, duration: 120, label: 'GOLD VAC', color: '#ffe07a' },
   };
 
@@ -873,7 +874,11 @@
       return false;
     }
     const stacks = getEquipmentStackCount(itemKey);
-    player.equipmentCooldowns[itemKey] = def.cooldown;
+    // Churu Stick: extra stacks shorten the cooldown (40s base, -4s per extra stack, floored at 20s).
+    const cooldown = itemKey === 'churu_stick'
+      ? Math.max(20, def.cooldown - (stacks - 1) * 4)
+      : def.cooldown;
+    player.equipmentCooldowns[itemKey] = cooldown;
     if (def.duration > 0) {
       const extraStacks = stacks - 1;
       const durationBonus = {
@@ -889,6 +894,7 @@
     }
     if (itemKey === 'panic_button') activatePanicButton();
     if (itemKey === 'sparkle_charm') activateSparkleCharm();
+    if (itemKey === 'churu_stick') activateChuruStick();
     Neo.itemStatsCacheFrame = -1;
     Neo.spawnParticle({ x: player.x, y: player.y - 34, life: 0.75, text: def.label, c: def.color });
     Neo.scheduleRunSave?.();
@@ -999,6 +1005,17 @@
     }
   }
 
+  // Instantly heal 30% of max HP. Fired manually from the tool slot, or
+  // automatically by updateEquipmentEffects when HP drops below 15%.
+  function activateChuruStick() {
+    if (!Neo.player) return;
+    const heal = Neo.scalePlayerHealing?.(Neo.player.maxHp * 0.3, 1) ?? Math.max(1, Neo.player.maxHp * 0.3);
+    const gained = Neo.applyPlayerHealing?.(heal) ?? 0;
+    Neo.spawnHealPopup?.(Neo.player.x, Neo.player.y - 24, gained, { color: '#ffb6d5', size: 16 });
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.6, ring: 60, c: '#ffb6d5' });
+    Neo.playSfx?.('heal_player');
+  }
+
   function dropSweepyMine(stacks = 1) {
     if (!Neo.player) return;
     stacks = Math.max(1, Math.floor(Number(stacks || 1)));
@@ -1042,6 +1059,14 @@
     Object.keys(player.equipmentCooldowns).forEach(key => {
       player.equipmentCooldowns[key] = Math.max(0, Number(player.equipmentCooldowns[key] || 0) - dt);
     });
+    // Churu Stick auto-fires the moment HP drops below 15%, as long as it's off cooldown.
+    if (Neo.getItemCount?.('churu_stick') > 0
+      && player.maxHp > 0
+      && player.hp > 0
+      && player.hp < player.maxHp * 0.15
+      && isEquipmentReady('churu_stick')) {
+      startTimedEquipment('churu_stick');
+    }
     Object.entries(player.equipmentEffects).forEach(([key, effect]) => {
       if (!effect || Number(effect.time || 0) <= 0) return;
       effect.time = Math.max(0, Number(effect.time || 0) - dt);
@@ -1202,12 +1227,27 @@
       getState: () => getEquipmentState('sparkle_charm'),
       getStatusText: () => getEquipmentStatusText('sparkle_charm'),
     },
+    churu_stick: {
+      key: 'churu_stick',
+      shortName: 'CHURU',
+      activate: () => startTimedEquipment('churu_stick'),
+      getState: () => getEquipmentState('churu_stick'),
+      getStatusText: () => getEquipmentStatusText('churu_stick'),
+    },
     gold_vac: {
       key: 'gold_vac',
       shortName: 'VAC',
       activate: () => startTimedEquipment('gold_vac'),
       getState: () => getEquipmentState('gold_vac'),
       getStatusText: () => getEquipmentStatusText('gold_vac'),
+    },
+    voucher: {
+      key: 'voucher',
+      shortName: 'VOUCH',
+      // Vouchers can only be redeemed at a shop counter.
+      activate: () => Neo.openVoucherRedeem?.(),
+      getState: () => (Neo.getItemCount('voucher') > 0 && Neo.currentRoom?.type === 'shop') ? 'ready' : 'blocked',
+      getStatusText: () => String(Neo.getItemCount('voucher') || 0),
     },
   };
   // Live getter so remapped tool-slot keys are honored everywhere without rewiring.

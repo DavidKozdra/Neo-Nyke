@@ -6414,6 +6414,79 @@ border-bottom: black solid 2px;
   justify-content: flex-end;
 }
 
+/* --- Voucher redeem banner + modal --- */
+.shop-voucher-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 12px 16px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, #ffe27a 60%, rgba(255,255,255,0.16));
+  background: linear-gradient(135deg, color-mix(in srgb, #ffe27a 16%, transparent), rgba(0,0,0,0.18));
+  box-shadow: 0 0 18px color-mix(in srgb, #ffe27a 22%, transparent);
+}
+
+.shop-voucher-banner.hidden {
+  display: none;
+}
+
+.shop-voucher-banner__info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.shop-voucher-banner__title {
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: #ffe27a;
+}
+
+.shop-voucher-banner__sub {
+  font-size: 12px;
+  color: var(--menu-text-soft);
+}
+
+.shop-voucher-banner__btn {
+  flex: 0 0 auto;
+}
+
+.voucher-choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.voucher-choice {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  border-color: color-mix(in srgb, var(--voucher-color, #d8e9ff) 62%, rgba(255,255,255,0.16));
+}
+
+.voucher-choice:hover:not(.is-disabled) {
+  box-shadow: 0 0 0 2px var(--voucher-color, #d8e9ff), 0 0 24px color-mix(in srgb, var(--voucher-color, #d8e9ff) 36%, transparent);
+}
+
+.voucher-choice.is-disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.voucher-choice__swatch {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  border: 2px solid rgba(255,255,255,0.35);
+  margin: 6px auto;
+  box-shadow: 0 0 16px color-mix(in srgb, var(--voucher-color, #d8e9ff) 60%, transparent);
+}
+
 /* --- Tab bar (mirrors the shop/inventory .panel-tabs pill bar) --- */
 .stab-bar {
   display: flex;

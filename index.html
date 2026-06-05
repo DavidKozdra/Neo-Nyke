@@ -380,6 +380,13 @@
       </div>
       <button id="shopClose" class="panel-close" aria-label="Close shop">X</button>
     </div>
+    <div id="shopVoucherBanner" class="shop-voucher-banner hidden" aria-hidden="true">
+      <div class="shop-voucher-banner__info">
+        <span class="shop-voucher-banner__title">Voucher available</span>
+        <span class="shop-voucher-banner__sub" id="shopVoucherBannerSub">Redeem for a relic of your chosen colour.</span>
+      </div>
+      <button id="shopVoucherRedeem" class="nav-btn shop-voucher-banner__btn" type="button">REDEEM VOUCHER</button>
+    </div>
     <div class="shop-tabs panel-tabs">
       <button class="shop-tab panel-tab active" data-tab="items"><span class="tab-icon" aria-hidden="true">[]</span><span>Items</span></button>
       <button class="shop-tab panel-tab" data-tab="weapons"><span class="tab-icon" aria-hidden="true">W</span><span>Weapons</span></button>
@@ -472,6 +479,18 @@
       <div class="scroll-control-actions">
         <button id="scrollControlCancel" class="nav-btn">CANCEL</button>
         <button id="scrollControlConfirm" class="nav-btn" disabled>CONFIRM</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="voucherModal" class="modal-backdrop hidden" aria-hidden="true">
+    <div class="modal-box voucher-box">
+      <h2 class="screen-title wizard-paw-title">REDEEM VOUCHER</h2>
+      <p class="wizard-paw-copy">Choose a colour. You will receive a random relic of that rarity.</p>
+      <div id="voucherMeta" class="scroll-control-meta"></div>
+      <div id="voucherChoices" class="voucher-choices"></div>
+      <div class="scroll-control-actions">
+        <button id="voucherCancel" class="nav-btn">CANCEL</button>
       </div>
     </div>
   </div>

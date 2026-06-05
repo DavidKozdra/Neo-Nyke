@@ -807,6 +807,28 @@ window.NeoNykeIconDefs = {
         [3,0],[4,7],
       ],
     },
+    // Churu Stick: long diagonal foil tube of cat-food slurry, torn open at the
+    // top-right corner with a slurry blob oozing out.
+    churu_stick: {
+      color: '#ffb6d5',
+      accent: '#ff7eb0',
+      pixels: [
+        [0,7],[1,7],            // crimped bottom tail
+        [0,6],[1,6],[2,6],
+        [1,5],[2,5],[3,5],      // tube body running diagonally up-right
+        [2,4],[3,4],[4,4],
+        [3,3],[4,3],[5,3],
+        [4,2],[5,2],            // torn open neck
+        [6,1],[7,1],            // slurry blob oozing out the top
+        [5,0],[6,0],[7,0],
+      ],
+      accentPixels: [
+        [0,7],[0,6],            // crimped tail shading
+        [1,6],[2,5],[3,4],[4,3],// dark seam down the tube
+        [6,1],[7,1],            // oozing slurry blob
+        [5,0],[6,0],[7,0],
+      ],
+    },
     // Overstimulate: lightning/stun bolt, adapted from explosive_trap.
     overstimulate: {
       color: '#ffcf80',

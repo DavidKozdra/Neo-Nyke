@@ -158,6 +158,7 @@ export function resumeGame() {
     if (characterKey === 'mooggy') {
       items.hemes_scarf = 1;
       items.mooggy_zoomies = 1;
+      items.churu_stick = 1;
     }
     if (characterKey === 'princess') items.princes_glasses = 1;
     if (characterKey === 'metao') items.mateos_bag = 1;
@@ -452,6 +453,7 @@ export function resumeGame() {
       mooggy_zoomies: 0,
       el_bartos_cape: 0,
       sparkle_charm: 0,
+      churu_stick: 0,
     };
     const character = Neo.CHARACTER_DEFS[Neo.chosenCharacter] || Neo.CHARACTER_DEFS.thorn_knight;
     const starterItems = getCharacterStartingItems(character.key);

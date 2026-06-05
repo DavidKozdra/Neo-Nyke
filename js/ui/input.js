@@ -649,6 +649,18 @@ export const ITEM_DEFS = {
       category: 'wizard',
       tags: ['tools', 'crit', 'wizard'],
     },
+    churu_stick: {
+      key: 'churu_stick',
+      tool: true,
+      name: 'Churu Stick',
+      shortName: 'Heal 30%',
+      description: 'Tool. Instantly heal 30% of max HP. Long 40s cooldown. Auto-fires when health drops below 15%. Extra stacks shorten the cooldown.',
+      rarity: 'wizard',
+      color: '#ffb6d5',
+      accent: '#ff7eb0',
+      category: 'wizard',
+      tags: ['tools', 'heal', 'regen', 'wizard'],
+    },
     explosive_jelly: {
       key: 'explosive_jelly',
       name: 'Explosive Jelly',
@@ -904,7 +916,7 @@ export const ITEM_DEFS = {
       key: 'princes_glasses',
       name: "Prince's Glasses",
       shortName: 'Map Vision',
-      description: 'Pink, not that anything is wrong with that. Upgrades the minimap: larger zoom, skull markers for traps, enemy dots, green for healing, yellow for coins. Also grants +5% gold from all sources.',
+      description: 'Pink, not that anything is wrong with that. Upgrades the minimap: larger zoom, skull markers for traps, enemy dots, green for healing, yellow for coins. First stack grants +5% crit chance and +10% defense; each extra stack adds +2% to both.',
       rarity: 'wizard',
       color: '#ff9de8',
       accent: '#ff55cc',
@@ -956,6 +968,18 @@ export const ITEM_DEFS = {
       category: 'god',
       tags: ['tools', 'stealth', 'god'],
     },
+    voucher: {
+      key: 'voucher',
+      name: 'Voucher',
+      shortName: 'Voucher',
+      description: 'Tool. Redeem at a shop to claim a random relic of the colour you choose: white, purple, or red.',
+      rarity: 'knight',
+      color: '#ffe27a',
+      accent: '#fff6cf',
+      category: 'knight',
+      tool: true,
+      tags: ['tools', 'voucher', 'choice'],
+    },
   };
 // Rarity -> name/description text color. GOD is the top tier and renders red (#ff4256).
 // ('white' and 'purple'/'red' are legacy aliases of knight/wizard/god kept for old save data.)
@@ -984,6 +1008,13 @@ export const SCROLL_OF_CONTROL_KEYS = [
   'scroll_abundance',
   'scroll_pool_weight',
   'scroll_ego',
+];
+export const VOUCHER_KEY = 'voucher';
+// Colour the player can redeem a voucher for, mapped to the relic rarity granted.
+export const VOUCHER_COLORS = [
+  { id: 'white', label: 'White', rarity: 'knight', color: RARITY_NAME_COLORS.knight },
+  { id: 'purple', label: 'Purple', rarity: 'wizard', color: RARITY_NAME_COLORS.wizard },
+  { id: 'red', label: 'Red', rarity: 'god', color: RARITY_NAME_COLORS.god },
 ];
 export const SANDBOX_ENEMY_TYPES = [
     'hunter', 'charger', 'laser', 'knave', 'sniper', 'machine_gunner',
@@ -1017,6 +1048,7 @@ export const ITEM_DROP_WEIGHTS = [
     ['zap_to_extreme', 10],
     ['panic_button', 10],
     ['mid_sweepy_box', 12],
+    ['churu_stick', 10],
     ['explosive_jelly', 12],
     ['dragon_orb', 14],
     ['ricocete', 20],
@@ -1038,6 +1070,7 @@ export const ITEM_DROP_WEIGHTS = [
     ['extra_battery', 10],
     ['mooggy_zoomies', 14],
     ['el_bartos_cape', 6],
+    ['voucher', 8],
   ];
 export const ITEM_DROP_TABLE = Neo.buildWeightTable(ITEM_DROP_WEIGHTS);
 export const ELITE_ITEM_DROP_TABLE = Neo.buildWeightTable(
@@ -1172,6 +1205,9 @@ export const ui = {
     shopMoves: document.getElementById('shopMoves'),
     shopTrades: document.getElementById('shopTrades'),
     shopHeals: document.getElementById('shopHeals'),
+    shopVoucherBanner: document.getElementById('shopVoucherBanner'),
+    shopVoucherBannerSub: document.getElementById('shopVoucherBannerSub'),
+    shopVoucherRedeem: document.getElementById('shopVoucherRedeem'),
     shopCoins: document.getElementById('shopCoins'),
     invPanel: document.getElementById('invPanel'),
     invClose: document.getElementById('invClose'),
@@ -1191,6 +1227,10 @@ export const ui = {
     scrollControlChoices: document.getElementById('scrollControlChoices'),
     scrollControlCancel: document.getElementById('scrollControlCancel'),
     scrollControlConfirm: document.getElementById('scrollControlConfirm'),
+    voucherModal: document.getElementById('voucherModal'),
+    voucherMeta: document.getElementById('voucherMeta'),
+    voucherChoices: document.getElementById('voucherChoices'),
+    voucherCancel: document.getElementById('voucherCancel'),
     invItemsList: document.getElementById('invItemsList'),
     invToolsList: document.getElementById('invToolsList'),
     invWeaponsList: document.getElementById('invWeaponsList'),
@@ -1583,6 +1623,8 @@ export const MOVE_BASE_STATS = {
   Neo.ITEM_DEFS = ITEM_DEFS;
   Neo.ITEM_KEYS = ITEM_KEYS;
   Neo.SCROLL_OF_CONTROL_KEYS = SCROLL_OF_CONTROL_KEYS;
+  Neo.VOUCHER_KEY = VOUCHER_KEY;
+  Neo.VOUCHER_COLORS = VOUCHER_COLORS;
   Neo.ITEM_DROP_WEIGHTS = ITEM_DROP_WEIGHTS;
   Neo.ITEM_DROP_TABLE = ITEM_DROP_TABLE;
   Neo.ELITE_ITEM_DROP_TABLE = ELITE_ITEM_DROP_TABLE;

@@ -36,6 +36,10 @@ export function bindInput() {
         if (event.key === 'Escape') event.preventDefault();
         return;
       }
+      if (isVoucherModalOpen()) {
+        if (event.key === 'Escape') { event.preventDefault(); Neo.cancelVoucherRedeem?.(); }
+        return;
+      }
       if (event.key === 'Escape' && isPanelOpen(Neo.ui.invPanel)) {
         event.preventDefault();
         setInventoryPanelOpen(false);
@@ -325,6 +329,9 @@ export function bindInput() {
     Neo.ui.scrollControlConfirm?.addEventListener('click', () => Neo.confirmScrollControlSelection?.());
     Neo.ui.scrollControlCancel?.addEventListener('click', () => Neo.cancelScrollControlSelection?.());
     Neo.ui.scrollControlSearch?.addEventListener('input', event => Neo.updateScrollControlSearch?.(event.target?.value || ''));
+    Neo.ui.shopVoucherRedeem?.addEventListener('click', () => Neo.openVoucherRedeem?.());
+    Neo.ui.voucherChoices?.addEventListener('click', event => Neo.handleVoucherChoiceClick?.(event));
+    Neo.ui.voucherCancel?.addEventListener('click', () => Neo.cancelVoucherRedeem?.());
 
     window.addEventListener('beforeunload', () => {
       if (Neo.gameState === 'play') {
@@ -1297,8 +1304,29 @@ export function setScrollControlModalOpen(open, options = {}) {
     Neo.ui.scrollControlModal.setAttribute('aria-hidden', 'true');
   }
 
+export function isVoucherModalOpen() {
+    return !!Neo.voucherRedeemOpen && isPanelOpen(Neo.ui.voucherModal);
+  }
+
+export function setVoucherModalOpen(open, options = {}) {
+    if (!Neo.ui.voucherModal) return;
+    const animateClose = options.animateClose !== false;
+    const effectTarget = Neo.ui.voucherModal.querySelector('.modal-box') || Neo.ui.voucherModal;
+    if (effectTarget instanceof HTMLElement) effectTarget.dataset.panelFxKey = 'voucher-modal';
+    if (open) {
+      clearPanelCloseEffect(effectTarget);
+      Neo.ui.voucherModal.classList.remove('hidden');
+      Neo.ui.voucherModal.setAttribute('aria-hidden', 'false');
+      return;
+    }
+    if (animateClose && isPanelOpen(Neo.ui.voucherModal)) playPanelCloseEffect(effectTarget);
+    else clearPanelCloseEffect(effectTarget);
+    Neo.ui.voucherModal.classList.add('hidden');
+    Neo.ui.voucherModal.setAttribute('aria-hidden', 'true');
+  }
+
 export function isOverlayBlockingInput() {
-    return isPanelOpen(Neo.ui.shopPanel) || isPanelOpen(Neo.ui.invPanel) || isPanelOpen(Neo.ui.anvilPanel) || isWizardPawOpen() || isScrollControlOpen();
+    return isPanelOpen(Neo.ui.shopPanel) || isPanelOpen(Neo.ui.invPanel) || isPanelOpen(Neo.ui.anvilPanel) || isWizardPawOpen() || isScrollControlOpen() || isVoucherModalOpen();
   }
 
 export function isGodSweepUnlocked() {
@@ -1830,6 +1858,7 @@ export function getShopWeaponOffers() {
 export function renderShopPanel() {
     if (!Neo.ui.shopPanel || !Neo.player) return;
   if (!isPanelOpen(Neo.ui.shopPanel)) return;
+    Neo.refreshShopVoucherBanner?.();
     Neo.refreshRoomShopCosts(Neo.currentRoom);
     Neo.shopOffers = Neo.currentRoom?.shopOffers || Neo.shopOffers;
     const noItemsChallenge = Neo.isChallengeActive('no_items');
@@ -2506,6 +2535,8 @@ export function handleShopBuyClick(event) {
   Neo.toggleAnvilPanel = toggleAnvilPanel;
   Neo.isWizardPawOpen = isWizardPawOpen;
   Neo.isScrollControlOpen = isScrollControlOpen;
+  Neo.isVoucherModalOpen = isVoucherModalOpen;
+  Neo.setVoucherModalOpen = setVoucherModalOpen;
   Neo.setWizardPawModalOpen = setWizardPawModalOpen;
   Neo.setScrollControlModalOpen = setScrollControlModalOpen;
   Neo.isOverlayBlockingInput = isOverlayBlockingInput;
