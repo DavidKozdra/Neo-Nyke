@@ -220,7 +220,7 @@ export const WEAPON_DEFS = {
       key: 'princess_wand',
       name: "Princess's Wand",
       rarity: 'princess',
-      description: 'A graceful piercing magic shot made for Princess.',
+      description: 'A graceful piercing magic shot made for Princess. 3 charges.',
       color: '#ff9de8',
     },
   };

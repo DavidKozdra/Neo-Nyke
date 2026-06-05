@@ -93,6 +93,12 @@ export function migratePlayerData(source) {
     }
     if (playerData.equippedWeapon) playerData.ownedWeapons[playerData.equippedWeapon] = true;
     playerData.weaponCooldown = Number(playerData.weaponCooldown || 0);
+    playerData.weaponChargeKey = typeof playerData.weaponChargeKey === 'string' ? playerData.weaponChargeKey : '';
+    playerData.weaponCharges = Math.max(0, Math.floor(Number(playerData.weaponCharges ?? 0)));
+    playerData.weaponMaxCharges = Math.max(0, Math.floor(Number(playerData.weaponMaxCharges ?? 0)));
+    playerData.weaponChargeTimers = Array.isArray(playerData.weaponChargeTimers)
+      ? playerData.weaponChargeTimers.map(value => Number(value)).filter(value => value > 0)
+      : [];
     playerData.blockActive = !!playerData.blockActive;
     playerData.blockTimer = Number(playerData.blockTimer || 0);
     playerData.fleeceTick = Number(playerData.fleeceTick || 0);

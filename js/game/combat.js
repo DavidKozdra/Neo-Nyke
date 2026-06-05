@@ -174,6 +174,82 @@
     return Math.max(base * 0.5, base + bonus);
   }
 
+  const CHARGED_WEAPON_MAX_CHARGES = {
+    princess_wand: 3,
+  };
+
+  function isChargedWeaponKey(weaponKey) {
+    return Number(CHARGED_WEAPON_MAX_CHARGES[weaponKey] || 0) > 1;
+  }
+
+  function ensureWeaponChargeState(weaponKey, playerState = Neo.player) {
+    if (!playerState || !isChargedWeaponKey(weaponKey)) return null;
+    const maxCharges = CHARGED_WEAPON_MAX_CHARGES[weaponKey];
+    const timers = Array.isArray(playerState.weaponChargeTimers)
+      ? playerState.weaponChargeTimers.map(value => Number(value)).filter(value => value > 0)
+      : [];
+    if (playerState.weaponChargeKey !== weaponKey || Number(playerState.weaponMaxCharges || 0) !== maxCharges) {
+      playerState.weaponChargeKey = weaponKey;
+      playerState.weaponCharges = maxCharges;
+      playerState.weaponMaxCharges = maxCharges;
+      playerState.weaponChargeTimers = [];
+      return { charges: maxCharges, maxCharges, timers: [] };
+    }
+    const charges = Math.max(0, Math.min(maxCharges, Math.floor(Number(playerState.weaponCharges ?? maxCharges))));
+    const normalizedTimers = timers.slice(0, Math.max(0, maxCharges - charges));
+    playerState.weaponCharges = charges;
+    playerState.weaponMaxCharges = maxCharges;
+    playerState.weaponChargeTimers = normalizedTimers;
+    return { charges, maxCharges, timers: normalizedTimers };
+  }
+
+  function spendWeaponCharge(weaponKey, rechargeTime) {
+    const state = ensureWeaponChargeState(weaponKey);
+    if (!state || state.charges <= 0) return false;
+    Neo.player.weaponCharges = state.charges - 1;
+    Neo.player.weaponChargeTimers = [...state.timers, rechargeTime];
+    Neo.updateHud();
+    return true;
+  }
+
+  function tickWeaponCharges(dt) {
+    if (!Neo.player?.weaponChargeKey || !isChargedWeaponKey(Neo.player.weaponChargeKey)) return;
+    const state = ensureWeaponChargeState(Neo.player.weaponChargeKey);
+    if (!state || !state.timers.length) return;
+    const nextTimers = [];
+    let restoredCharges = 0;
+    state.timers.forEach(timer => {
+      const nextTimer = timer - dt;
+      if (nextTimer <= 0) restoredCharges += 1;
+      else nextTimers.push(nextTimer);
+    });
+    Neo.player.weaponChargeTimers = nextTimers;
+    Neo.player.weaponCharges = Math.min(state.maxCharges, state.charges + restoredCharges);
+  }
+
+  function getWeaponCooldownInfo(weaponKey, attackSpeed = Neo.getAttackSpeedValue()) {
+    if (!isChargedWeaponKey(weaponKey)) {
+      const max = getWeaponBaseCooldown(weaponKey);
+      const current = Number(Neo.player?.weaponCooldown || 0);
+      return {
+        current,
+        max,
+        charges: current > 0 ? 0 : 1,
+        maxCharges: 1,
+        timers: current > 0 ? [current] : [],
+      };
+    }
+    const state = ensureWeaponChargeState(weaponKey);
+    const max = getWeaponBaseCooldown(weaponKey) / attackSpeed;
+    return {
+      current: state?.timers?.length ? Math.min(...state.timers) : 0,
+      max,
+      charges: state?.charges ?? CHARGED_WEAPON_MAX_CHARGES[weaponKey],
+      maxCharges: state?.maxCharges ?? CHARGED_WEAPON_MAX_CHARGES[weaponKey],
+      timers: state?.timers?.slice?.() || [],
+    };
+  }
+
   function spawnWeaponProjectile(config = {}) {
     const angle = Number(config.angle || 0);
     const speed = Number(config.speed || 520);
@@ -256,9 +332,13 @@
   function tryWeaponAttack() {
     const weaponKey = getEquippedWeapon();
     if (!weaponKey) return false;
-    if (Neo.player.weaponCooldown > 0) return false;
     const angle = Math.atan2(Neo.mouse.worldY - Neo.player.y, Neo.mouse.worldX - Neo.player.x);
     const attackSpeed = Neo.getAttackSpeedValue();
+    if (isChargedWeaponKey(weaponKey)) {
+      if (!spendWeaponCharge(weaponKey, getWeaponBaseCooldown(weaponKey) / attackSpeed)) return false;
+    } else if (Neo.player.weaponCooldown > 0) {
+      return false;
+    }
     const itemStats = Neo.getItemStats();
     const wDmg  = k => Math.max(1, (Neo.WEAPON_BASE_STATS[k]?.damage  ?? 0) + Neo.getAnvilWeaponBonus(k, 'damage'));
     const wKnk  = k => Math.max(0, (Neo.WEAPON_BASE_STATS[k]?.knockback ?? 0) + Neo.getAnvilWeaponBonus(k, 'knockback'));
@@ -335,7 +415,7 @@
     }
     if (Neo.isProjectileWeaponKey?.(weaponKey)) {
       fireConfiguredWeaponProjectile(weaponKey, angle, wDmg(weaponKey), wKnk(weaponKey));
-      Neo.player.weaponCooldown = wCd(weaponKey) / attackSpeed;
+      if (!isChargedWeaponKey(weaponKey)) Neo.player.weaponCooldown = wCd(weaponKey) / attackSpeed;
       return true;
     }
     return false;
@@ -447,6 +527,7 @@
 
   function updateWeaponSystems(dt) {
     Neo.player.weaponCooldown = Math.max(0, Number(Neo.player.weaponCooldown || 0) - dt);
+    tickWeaponCharges(dt);
     if (Neo.player.blockTimer > 0) {
       Neo.player.blockTimer = Math.max(0, Neo.player.blockTimer - dt);
       Neo.player.blockActive = Neo.player.blockTimer > 0;
@@ -2649,6 +2730,9 @@
   Neo.getEquippedMove = getEquippedMove;
   Neo.getEquippedWeapon = getEquippedWeapon;
   Neo.getWeaponBaseCooldown = getWeaponBaseCooldown;
+  Neo.isChargedWeaponKey = isChargedWeaponKey;
+  Neo.ensureWeaponChargeState = ensureWeaponChargeState;
+  Neo.getWeaponCooldownInfo = getWeaponCooldownInfo;
   Neo.spawnWeaponProjectile = spawnWeaponProjectile;
   Neo.fireWeaponSweep = fireWeaponSweep;
   Neo.tryWeaponAttack = tryWeaponAttack;

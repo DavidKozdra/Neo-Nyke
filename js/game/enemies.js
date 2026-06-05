@@ -826,17 +826,17 @@
       base.burstCd = 0;
     } else if (type === 'antony_blemmye') {
       base.r = 42;
-      base.hp = 1400;
-      base.max = 1400;
-      base.speed = 82;
-      base.dmg = 27;
-      base.attackCd = 1.15;
+      base.hp = 1250;
+      base.max = 1250;
+      base.speed = 78;
+      base.dmg = 24;
+      base.attackCd = 1.35;
       base.phase = 1;
       base.bleedImmune = true;
-      base.hammerCd = 1.2;
-      base.biteCd = 0.85;
-      base.slashCd = 1.6;
-      base.deathBallCd = 4.5;
+      base.hammerCd = 1.55;
+      base.biteCd = 1.15;
+      base.slashCd = 2.05;
+      base.deathBallCd = 5.4;
     } else if (type === 'handsome_devil') {
       base.r = 34;
       base.hp = 1700;
@@ -978,10 +978,28 @@
     ], { returnState: 'play' });
   }
 
+  function tryPlayAntonyBlemmyeCutscene(enemy, enemyType) {
+    if (!enemy || enemyType !== 'antony_blemmye' || !Neo.player) return false;
+    if (Neo.antonyBlemmyeCutscenePlayed) return false;
+
+    Neo.antonyBlemmyeCutscenePlayed = true;
+    Neo.clearGameplayInput();
+    Neo.setShopPanelOpen(false);
+    Neo.setInventoryPanelOpen(false);
+    enemy.attackCd = Math.max(Number(enemy.attackCd || 0), 1.4);
+    enemy.stun = Math.max(Number(enemy.stun || 0), 0.25);
+    Neo.scheduleRunSave();
+
+    return Neo.uiController.playDialogue([
+      { speaker: 'ANTONY BLEMMYAE', text: 'gorba borba' },
+    ], { returnState: 'play' });
+  }
+
   function tryPlayBossIntroCutscene(enemy, enemyType) {
     return tryPlayKnaveKnightCutscene(enemy, enemyType)
       || tryPlayQueenMetaoCutscene(enemy, enemyType)
-      || tryPlayHandsomeDevilCharacterCutscene(enemy, enemyType);
+      || tryPlayHandsomeDevilCharacterCutscene(enemy, enemyType)
+      || tryPlayAntonyBlemmyeCutscene(enemy, enemyType);
   }
 
   function sayOverEntity(entity, text, options = {}) {
@@ -2566,14 +2584,14 @@
       : Math.atan2(Neo.player.y - enemy.y, Neo.player.x - enemy.x);
     enemy.antonyShockwave = {
       angle,
-      damage: Math.round(enemy.dmg * 1.18),
+      damage: Math.round(enemy.dmg * 1.05),
       // Wave geometry: travels `range` px outward, only hits within `halfArc`
       // of the facing direction, in a band `bandWidth` thick.
-      range: 360,
-      speed: 720,
+      range: 320,
+      speed: 620,
       travelled: enemy.r + 12,
-      halfArc: 0.62,
-      bandWidth: 64,
+      halfArc: 0.54,
+      bandWidth: 56,
       hit: false,
     };
     Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.34, ring: 70, c: '#ffcf8a' });
@@ -2632,9 +2650,9 @@
   // from the short bite. Hits anything inside a forward cone within reach.
   function spawnAntonySlash(enemy) {
     const angle = Math.atan2(Neo.player.y - enemy.y, Neo.player.x - enemy.x);
-    const reach = enemy.r + Neo.player.r + 78;
-    const halfArc = 0.95;
-    const damage = Math.round(enemy.dmg * 1.05);
+    const reach = enemy.r + Neo.player.r + 66;
+    const halfArc = 0.82;
+    const damage = Math.round(enemy.dmg * 0.92);
     enemy.attackAnimT = 0.3;
     enemy.swingTime = 0.32;
 
@@ -2675,27 +2693,27 @@
     Neo.spawnProjectile({
       x: enemy.x + Math.cos(angle) * (enemy.r + 14),
       y: enemy.y + Math.sin(angle) * (enemy.r + 14),
-      vx: Math.cos(angle) * 190,
-      vy: Math.sin(angle) * 190,
-      r: 44,
+      vx: Math.cos(angle) * 175,
+      vy: Math.sin(angle) * 175,
+      r: 38,
       life: 3.4,
       enemy: true,
       kind: 'cold_death',
       source: 'antony_death_ball',
-      damage: Math.round(enemy.dmg * 1.3),
-      knockback: 280,
+      damage: Math.round(enemy.dmg * 1.1),
+      knockback: 230,
       color: '#9fe8ff',
       // The icy "cold" debuff is the `slow` status: it slows movement AND makes
       // the player brittle (strips defense per stack via getBrittleDefenseMultiplier).
       // Cold lifetime on the player is auto-scaled to 15s per stack in applyStatus,
       // so the duration passed here is only a floor for non-player targets.
-      statusEffects: [{ key: 'slow', chance: 1, stacks: 2, duration: 4 }],
+      statusEffects: [{ key: 'slow', chance: 1, stacks: 1, duration: 4 }],
       // AOE frost burst when the ball lands (wall, expiry, or hitting player).
-      enemyBlast: { radius: 150, damage: Math.round(enemy.dmg * 0.8), color: '#9fe8ff', statusKey: 'slow', statusStacks: 1, statusDuration: 3 },
+      enemyBlast: { radius: 120, damage: Math.round(enemy.dmg * 0.65), color: '#9fe8ff', statusKey: 'slow', statusStacks: 1, statusDuration: 3 },
       homing: true,
-      homingTurnRate: 0.9,
-      homingSpeed: 215,
-      homingAccel: 1.4,
+      homingTurnRate: 0.65,
+      homingSpeed: 190,
+      homingAccel: 1.1,
     });
     Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.45, ring: 46, c: '#9fe8ff' });
     Neo.shake = Math.max(Neo.shake, 9);
@@ -2755,16 +2773,16 @@
     // Bite: very short range life-drain chomp (unchanged).
     if (enemy.biteCd <= 0 && distance < enemy.r + Neo.player.r + 26) {
       const angle = Math.atan2(dy, dx);
-      const biteDamage = Math.round(enemy.dmg * 0.92);
+      const biteDamage = Math.round(enemy.dmg * 0.82);
       enemy.attackAnimT = 0.28;
       Neo.damagePlayer(biteDamage, angle, 240, enemy.type);
-      if (Neo.nextRandom('encounter') < 0.5) {
+      if (Neo.nextRandom('encounter') < 0.35) {
         Neo.applyDarkDrain?.(Neo.player, 2, 4.2);
-        const heal = Math.round(biteDamage * 0.5);
+        const heal = Math.round(biteDamage * 0.35);
         enemy.hp = Math.min(enemy.max, enemy.hp + heal);
         Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 12, life: 0.55, text: `+${heal}`, c: '#b48cff' });
       }
-      enemy.biteCd = 1.65 * tuning.rangedCadence;
+      enemy.biteCd = 1.9 * tuning.rangedCadence;
       enemy.attackCd = Math.max(enemy.attackCd, 0.55);
       return;
     }
@@ -2773,8 +2791,8 @@
     // the bite, no windup so it punishes hugging the boss).
     if (enemy.slashCd <= 0 && enemy.attackCd <= 0 && distance < enemy.r + Neo.player.r + 70) {
       spawnAntonySlash(enemy);
-      enemy.slashCd = 2.0 * tuning.rangedCadence;
-      enemy.attackCd = 0.7;
+      enemy.slashCd = 2.45 * tuning.rangedCadence;
+      enemy.attackCd = 0.85;
       if (!enemy.antonySlashLineShown) {
         enemy.antonySlashLineShown = true;
         sayOverEntity(enemy, 'Carve you open.', { holdTime: 1.4 });
@@ -2785,10 +2803,10 @@
     // Cold death ball: charged frost orb fired at mid/long range.
     if (enemy.deathBallCd <= 0 && enemy.attackCd <= 0 && distance > enemy.r + Neo.player.r + 40) {
       enemy.state = 'antonyDeathBall';
-      enemy.windup = 0.9 / tuning.reaction;
+      enemy.windup = 1.05 / tuning.reaction;
       enemy.antonyDeathBallAngle = Math.atan2(dy, dx);
-      enemy.deathBallCd = 6.0 * tuning.rangedCadence;
-      enemy.attackCd = 1.0;
+      enemy.deathBallCd = 7.2 * tuning.rangedCadence;
+      enemy.attackCd = 1.2;
       if (!enemy.antonyDeathBallLineShown) {
         enemy.antonyDeathBallLineShown = true;
         sayOverEntity(enemy, 'Feel the cold.', { holdTime: 1.5 });
@@ -2799,10 +2817,10 @@
     // Hammer: directional shockwave that travels forward (no longer a circle).
     if (enemy.hammerCd <= 0 && distance < 320 && enemy.attackCd <= 0) {
       enemy.state = 'antonyHammer';
-      enemy.windup = 0.78 / tuning.reaction;
+      enemy.windup = 0.9 / tuning.reaction;
       enemy.antonyHammerAngle = Math.atan2(dy, dx);
-      enemy.hammerCd = 3.35 * tuning.rangedCadence;
-      enemy.attackCd = 0.8;
+      enemy.hammerCd = 4.1 * tuning.rangedCadence;
+      enemy.attackCd = 1.0;
       if (!enemy.antonyHammerLineShown) {
         enemy.antonyHammerLineShown = true;
         sayOverEntity(enemy, 'Open wide.', { holdTime: 1.5 });

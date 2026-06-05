@@ -2523,6 +2523,7 @@ export function resumeGame() {
     Neo.knaveKnightCutscenePlayed = false;
     Neo.queenMetaoCutscenePlayed = false;
     Neo.handsomeDevilCutscenePlayed = false;
+    Neo.antonyBlemmyeCutscenePlayed = false;
     Neo.secretRoomVisitedFloors = [];
     Neo.wizardPawSelection = null;
     Neo.panelItemDeferredToastRoom = null;
@@ -2645,6 +2646,7 @@ export function resumeGame() {
     Neo.knaveKnightCutscenePlayed = !!snapshot.knaveKnightCutscenePlayed;
     Neo.queenMetaoCutscenePlayed = !!snapshot.queenMetaoCutscenePlayed;
     Neo.handsomeDevilCutscenePlayed = !!snapshot.handsomeDevilCutscenePlayed;
+    Neo.antonyBlemmyeCutscenePlayed = !!snapshot.antonyBlemmyeCutscenePlayed;
     Neo.secretRoomVisitedFloors = Array.isArray(snapshot.secretRoomVisitedFloors) ? [...snapshot.secretRoomVisitedFloors] : [];
     Neo.restoreRivals(snapshot.rivals);
     Neo.wizardPawSelection = null;

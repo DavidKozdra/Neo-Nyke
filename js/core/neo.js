@@ -173,6 +173,7 @@ window.Neo = {
   knaveKnightCutscenePlayed: false,
   queenMetaoCutscenePlayed: false,
   handsomeDevilCutscenePlayed: false,
+  antonyBlemmyeCutscenePlayed: false,
   secretRoomVisitedFloors: [],
   cinematicTimer: null,
   pvpState: null,

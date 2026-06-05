@@ -347,21 +347,27 @@ export function loop(timestamp) {
       } else if (Neo.player && Number(Neo.player.mooggySwipeCharge || 0) > 0) {
         // Charging interrupted (overlay/stun/move swap): drop the wind-up.
         Neo.player.mooggySwipeCharge = 0;
-      } else if (!overlayOpen && !playerStunned && (meleeHeld || robotArmTarget)) {
-        if (Neo.player) Neo.player.mooggySwipeCharge = 0;
-        const restoreAim = robotArmTarget
-          ? { worldX: Neo.mouse.worldX, worldY: Neo.mouse.worldY }
-          : null;
-        if (restoreAim) {
-          Neo.mouse.worldX = robotArmTarget.x;
-          Neo.mouse.worldY = robotArmTarget.y;
-        }
-        Neo.tryMelee({ useRobotArmCharge: !!robotArmTarget });
-        if (restoreAim) {
-          Neo.mouse.worldX = restoreAim.worldX;
-          Neo.mouse.worldY = restoreAim.worldY;
+      } else {
+        const chargedWeaponHeld = !!Neo.isChargedWeaponKey?.(Neo.getEquippedWeapon?.());
+        const meleePressEdge = meleeHeld && !Neo._meleeWasHeld;
+        const fireMelee = (meleeHeld && (!chargedWeaponHeld || meleePressEdge)) || robotArmTarget;
+        if (!overlayOpen && !playerStunned && fireMelee) {
+          if (Neo.player) Neo.player.mooggySwipeCharge = 0;
+          const restoreAim = robotArmTarget
+            ? { worldX: Neo.mouse.worldX, worldY: Neo.mouse.worldY }
+            : null;
+          if (restoreAim) {
+            Neo.mouse.worldX = robotArmTarget.x;
+            Neo.mouse.worldY = robotArmTarget.y;
+          }
+          Neo.tryMelee({ useRobotArmCharge: !!robotArmTarget });
+          if (restoreAim) {
+            Neo.mouse.worldX = restoreAim.worldX;
+            Neo.mouse.worldY = restoreAim.worldY;
+          }
         }
       }
+      Neo._meleeWasHeld = meleeHeld;
       // Instant laser moves (e.g. Nail Shot) fire once per press instead of
       // auto-repeating every frame — otherwise holding the button drains the
       // whole charge pool in a few frames. Beam moves keep their held behavior.

@@ -369,10 +369,12 @@
       laserSkill.max = Neo.getLaserCastDuration(laserMoveKey);
     }
     if (weaponDef) {
-      meleeSkill.current = Number(Neo.player.weaponCooldown || 0);
-      meleeSkill.max = Neo.getWeaponBaseCooldown(weaponKey);
-      meleeSkill.charges = meleeSkill.current > 0 ? 0 : 1;
-      meleeSkill.maxCharges = 1;
+      const weaponSkill = Neo.getWeaponCooldownInfo?.(weaponKey, attackSpeed);
+      meleeSkill.current = Number(weaponSkill?.current || Neo.player.weaponCooldown || 0);
+      meleeSkill.max = Number(weaponSkill?.max || Neo.getWeaponBaseCooldown(weaponKey));
+      meleeSkill.charges = Number(weaponSkill?.charges ?? (meleeSkill.current > 0 ? 0 : 1));
+      meleeSkill.maxCharges = Number(weaponSkill?.maxCharges || 1);
+      meleeSkill.timers = Array.isArray(weaponSkill?.timers) ? weaponSkill.timers : (meleeSkill.current > 0 ? [meleeSkill.current] : []);
     }
     const minutes = Math.floor(Neo.gameElapsedTime / 60);
     const seconds = Math.floor(Neo.gameElapsedTime % 60);
@@ -767,6 +769,7 @@
       knaveKnightCutscenePlayed: Neo.knaveKnightCutscenePlayed,
       queenMetaoCutscenePlayed: Neo.queenMetaoCutscenePlayed,
       handsomeDevilCutscenePlayed: Neo.handsomeDevilCutscenePlayed,
+      antonyBlemmyeCutscenePlayed: Neo.antonyBlemmyeCutscenePlayed,
       secretRoomVisitedFloors: Array.isArray(Neo.secretRoomVisitedFloors) ? [...Neo.secretRoomVisitedFloors] : [],
       camera: Neo.camera,
     };
