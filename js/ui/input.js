@@ -59,7 +59,7 @@ export const MOVE_DEFS = {
     blade_justice: { key: 'blade_justice', slot: 'laser', name: 'Blade Justice', desc: 'Divine short-range blade strike.' },
     lightning_columns: { key: 'lightning_columns', slot: 'laser', name: 'Lightning Columns', desc: 'Summon two lightning turrets.' },
     god_sweep: { key: 'god_sweep', slot: 'laser', name: 'God Sweep', desc: 'Spin a massive divine beam around yourself.' },
-    nail_shot: { key: 'nail_shot', slot: 'laser', name: 'Nail Shot', desc: 'Fires a spread of bouncing nails in all directions.', exclusiveCharacter: 'mooggy' },
+    nail_shot: { key: 'nail_shot', slot: 'laser', name: 'Nail Shot', desc: 'Fires a spread of bouncing nails in all directions. 3 charges.', exclusiveCharacter: 'mooggy', maxStacks: 3 },
 
     crimson_smash: { key: 'crimson_smash', slot: 'smash', name: 'Crimson Smash', desc: 'Heavy area smash.' },
     kicky_kick: { key: 'kicky_kick', slot: 'smash', name: 'Kicky Kick', desc: 'A heavy kick that blasts enemies away.', exclusiveCharacter: 'princess' },
@@ -107,8 +107,9 @@ export const MOVE_DEFS = {
       key: 'mooggy_zoomies',
       slot: 'dash',
       name: 'Zoomies',
-      desc: '5× move speed for 12 seconds. 20 second cooldown.',
+      desc: '5× move speed for 12 seconds. 20 second cooldown. 2 charges.',
       exclusiveCharacter: 'mooggy',
+      maxStacks: 2,
     },
   };
 
