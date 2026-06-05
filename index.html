@@ -727,6 +727,32 @@
     </div>
   </section>
 
+  <section id="competitivePanel" class="panel-shell competitive-panel hidden" aria-hidden="true">
+    <div class="altmodes-head">
+      <span class="altmodes-title">COMPETITIVE</span>
+      <button id="competitiveClose" class="panel-close" aria-label="Close competitive screen">X</button>
+    </div>
+    <div class="competitive-screen-body">
+      <div class="altmode-card" id="altModeCompetitiveCard">
+        <div class="altmode-card__icon">&#9733;</div>
+        <div class="altmode-card__text">
+          <h3 class="altmode-card__name">COMPETITIVE RUN</h3>
+          <p class="altmode-card__desc">Everyone plays the same weekly seed on Hard difficulty with no modifiers. Only winning runs are accepted.</p>
+          <div id="competitiveServerStatus" class="competitive-server-status competitive-server-status--checking">Checking server...</div>
+        </div>
+        <button id="altModeCompetitiveBtn" class="nav-btn altmode-card__btn" style="background:rgba(180,140,0,0.18);border-color:rgba(255,210,0,0.5);">COMPETE</button>
+      </div>
+      <button id="competitiveServerRetryBtn" class="nav-btn nav-btn--minor competitive-server-retry hidden" type="button">RETRY CONNECTION</button>
+      <div id="seedErrorBanner" class="seed-error-banner hidden">&#9888; Cannot connect to the competitive server. Check your connection — you will not be able to start a competitive run until it is reachable.</div>
+      <div id="competitiveLeaderboardCard" class="competitive-lb-card">
+        <h3 class="altmode-card__name">THIS WEEK'S LEADERBOARD</h3>
+        <div id="competitiveLbList" class="competitive-lb-list">Loading...</div>
+        <div id="competitiveLbStatus" class="competitive-lb-status"></div>
+        <button id="competitiveLbMoreBtn" class="nav-btn nav-btn--minor" style="display:none;">LOAD MORE</button>
+      </div>
+    </div>
+  </section>
+
   <!-- Alt Modes panel (slides in over main menu) -->
   <section id="altModesPanel" class="panel-shell altmodes-panel hidden" aria-hidden="true">
     <div class="altmodes-head">
@@ -735,7 +761,6 @@
     </div>
     <div class="altmodes-tabs" role="tablist">
       <button class="altmodes-tab active" data-tab="challenges" type="button">CHALLENGES</button>
-      <button class="altmodes-tab" data-tab="competitive" type="button">COMPETITIVE</button>
       <button class="altmodes-tab" data-tab="multiplayer" type="button">MULTIPLAYER</button>
       <button class="altmodes-tab" data-tab="testing" type="button">TESTING</button>
     </div>
@@ -757,26 +782,6 @@
             <p class="altmode-card__desc">Face all four bosses back to back. Collect loot between each fight. Defeat God to win.</p>
           </div>
           <button id="altModeBossRushBtn" class="nav-btn altmode-card__btn">PLAY</button>
-        </div>
-      </div>
-      <!-- COMPETITIVE -->
-      <div class="altmodes-tab-panel hidden" data-panel="competitive">
-        <div class="altmode-card" id="altModeCompetitiveCard">
-          <div class="altmode-card__icon">&#9733;</div>
-          <div class="altmode-card__text">
-            <h3 class="altmode-card__name">COMPETITIVE RUN</h3>
-            <p class="altmode-card__desc">Everyone plays the same weekly seed on Hard difficulty with no modifiers. Climb the leaderboard.</p>
-            <div id="competitiveServerStatus" class="competitive-server-status competitive-server-status--checking">Checking server...</div>
-          </div>
-          <button id="altModeCompetitiveBtn" class="nav-btn altmode-card__btn" style="background:rgba(180,140,0,0.18);border-color:rgba(255,210,0,0.5);">COMPETE</button>
-        </div>
-        <button id="competitiveServerRetryBtn" class="nav-btn nav-btn--minor competitive-server-retry hidden" type="button">RETRY CONNECTION</button>
-        <div id="seedErrorBanner" class="seed-error-banner hidden">&#9888; Cannot connect to the competitive server. Check your connection — you will not be able to start a competitive run until it is reachable.</div>
-        <div id="competitiveLeaderboardCard" class="competitive-lb-card">
-          <h3 class="altmode-card__name">THIS WEEK'S LEADERBOARD</h3>
-          <div id="competitiveLbList" class="competitive-lb-list">Loading...</div>
-          <div id="competitiveLbStatus" class="competitive-lb-status"></div>
-          <button id="competitiveLbMoreBtn" class="nav-btn nav-btn--minor" style="display:none;">LOAD MORE</button>
         </div>
       </div>
       <!-- MULTIPLAYER -->

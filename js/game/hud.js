@@ -502,6 +502,10 @@
   }
 
   function submitCompetitiveRun(entry) {
+    if (entry?.result !== 'win') {
+      setCompetitiveSubmitStatus({ state: 'idle' });
+      return;
+    }
     const username = Neo.metaProgress?.username?.trim() || 'Anonymous';
     setCompetitiveSubmitStatus({ state: 'submitting' });
     Neo.fetchCompetitiveJson('/leaderboard', {
@@ -511,6 +515,7 @@
         name: username,
         floor: entry.floor,
         seed: entry.seed || Neo.baseSeedStr,
+        result: entry.result,
         character: entry.character || Neo.chosenCharacter,
         time: entry.elapsedSeconds,
       }),
@@ -539,7 +544,7 @@
     if (nextRecords.time > previousRecords.time && entry.elapsedSeconds >= nextRecords.time) newRecords.time = true;
     if (nextRecords.coins > previousRecords.coins && entry.coins >= nextRecords.coins) newRecords.coins = true;
     entry._newRecords = newRecords;
-    if (Neo.gameMode === 'competitive') {
+    if (Neo.gameMode === 'competitive' && entry.result === 'win') {
       submitCompetitiveRun(entry);
     } else {
       setCompetitiveSubmitStatus({ state: 'idle' });

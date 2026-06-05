@@ -2065,10 +2065,7 @@ export function resumeGame() {
       } catch (error) {
         setCompetitiveServerStatus('offline', { message: error?.message || 'Competitive server is unreachable' });
         setGameState('start');
-        const altmodesPanel = document.getElementById('altModesPanel');
-        if (altmodesPanel) altmodesPanel.classList.remove('hidden');
-        document.querySelectorAll('.altmodes-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === 'competitive'));
-        document.querySelectorAll('.altmodes-tab-panel').forEach(p => p.classList.toggle('hidden', p.dataset.panel !== 'competitive'));
+        Neo.uiController?.setCompetitivePanelOpen?.(true);
         return;
       }
     }

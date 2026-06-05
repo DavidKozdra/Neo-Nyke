@@ -1180,6 +1180,8 @@ export const ui = {
     continueBtn: document.getElementById('continueBtn'),
     tutorialMenuBtn: document.getElementById('tutorialMenuBtn'),
     mainCompetitiveBtn: document.getElementById('mainCompetitiveBtn'),
+    competitivePanel: document.getElementById('competitivePanel'),
+    competitiveClose: document.getElementById('competitiveClose'),
     competitiveServerStatus: document.getElementById('competitiveServerStatus'),
     competitiveServerRetryBtn: document.getElementById('competitiveServerRetryBtn'),
     deadCompetitiveStatus: document.getElementById('deadCompetitiveStatus'),

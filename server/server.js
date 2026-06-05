@@ -5,6 +5,7 @@
 
 const MAX_FLOOR = 10_000;
 const MAX_TIME  = 86_400;
+const COMPETITIVE_WIN_FLOOR = 10;
 const VALID_CHARACTERS = new Set(['thorn_knight', 'metao', 'gelleh', 'granialla', 'mooggy']);
 
 const NOTICES = [
@@ -110,7 +111,21 @@ async function getSeed(env) {
  */
 async function getLeaderboard(env) {
   const val = await env.STORE.get('leaderboard');
-  return val ? JSON.parse(val) : [];
+  const entries = val ? JSON.parse(val) : [];
+  return Array.isArray(entries) ? entries.filter(isEligibleLeaderboardEntry) : [];
+}
+
+function isEligibleLeaderboardEntry(entry) {
+  if (!entry || typeof entry !== 'object') return false;
+  if (entry.result !== 'win') return false;
+  const floorNum = Number(entry.floor);
+  const timeNum = Number(entry.time);
+  return Number.isInteger(floorNum)
+    && floorNum >= COMPETITIVE_WIN_FLOOR
+    && floorNum <= MAX_FLOOR
+    && Number.isFinite(timeNum)
+    && timeNum >= 0
+    && timeNum <= MAX_TIME;
 }
 
 /**
@@ -249,10 +264,14 @@ async function handleRequest(request, env) {
       return json({ error: 'Invalid JSON' }, 400);
     }
 
-    const { name, floor, seed: runSeed, character, time } = body;
+    const { name, floor, seed: runSeed, character, time, result } = body;
 
-    if (!name || floor === undefined || runSeed === undefined) {
-      return json({ error: 'Missing required fields: name, floor, seed' }, 400);
+    if (!name || floor === undefined || runSeed === undefined || result === undefined) {
+      return json({ error: 'Missing required fields: name, floor, seed, result' }, 400);
+    }
+
+    if (result !== 'win') {
+      return json({ error: 'Only winning competitive runs can enter the leaderboard' }, 400);
     }
 
     const currentSeed = await getSeed(env);
@@ -265,6 +284,9 @@ async function handleRequest(request, env) {
 
     if (!Number.isInteger(floorNum) || floorNum < 1 || floorNum > MAX_FLOOR) {
       return json({ error: 'Invalid floor value' }, 400);
+    }
+    if (floorNum < COMPETITIVE_WIN_FLOOR) {
+      return json({ error: 'Competitive leaderboard entries require a completed winning run' }, 400);
     }
     if (!Number.isFinite(timeNum) || timeNum < 0 || timeNum > MAX_TIME) {
       return json({ error: 'Invalid time value' }, 400);
@@ -283,6 +305,7 @@ async function handleRequest(request, env) {
       name: cleanName,
       floor: floorNum,
       seed: String(runSeed),
+      result: 'win',
       seasonId: getSeasonInfo().seasonId,
       character: cleanCharacter,
       time: timeNum,
@@ -357,5 +380,3 @@ export default {
     await handleScheduled(env);
   },
 };
-
-

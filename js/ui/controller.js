@@ -693,7 +693,7 @@ export function createUIController(view) {
       }
       if (show !== 'charselect') { setChallengePanelOpen(false); setLegacyPanelOpen(false); }
       if (show !== 'menu' && show !== 'pause') setRunHistoryOpen(false);
-      if (show !== 'menu') { setAltModesPanelOpen(false); setSandboxPanelOpen(false); }
+      if (show !== 'menu') { setAltModesPanelOpen(false); setCompetitivePanelOpen(false); setSandboxPanelOpen(false); }
       if (show !== 'menu') tutorialMenuOfferVisible = false;
       setVisible(view.endlessHud, inPlay && Neo.gameMode === 'endless', 'flex');
       setVisible(view.practicePanel, inPlay && Neo.gameMode === 'practice' && show !== 'dying', 'block');
@@ -1020,9 +1020,14 @@ export function createUIController(view) {
     function setAltModesPanelOpen(open) {
       view.altModesPanel?.classList.toggle('hidden', !open);
       view.altModesPanel?.setAttribute('aria-hidden', open ? 'false' : 'true');
+    }
+
+    function setCompetitivePanelOpen(open) {
+      view.competitivePanel?.classList.toggle('hidden', !open);
+      view.competitivePanel?.setAttribute('aria-hidden', open ? 'false' : 'true');
       if (open) {
-        const activeTab = view.altModesPanel?.querySelector('.altmodes-tab.active');
-        if (activeTab?.dataset?.tab === 'competitive') initCompetitiveLeaderboard();
+        setAltModesPanelOpen(false);
+        initCompetitiveLeaderboard();
       }
     }
 
@@ -1060,11 +1065,12 @@ export function createUIController(view) {
           const moreBtn = document.getElementById('competitiveLbMoreBtn');
           if (!listEl) return;
           if (lbPage === 1) listEl.innerHTML = '';
-          if (!data.data || data.data.length === 0) {
+          const entries = (Array.isArray(data.data) ? data.data : []).filter(entry => entry?.result === 'win' && Number(entry.floor) >= 10);
+          if (entries.length === 0) {
             if (lbPage === 1) listEl.textContent = 'No runs this week — be the first!';
           } else {
             const startRank = (lbPage - 1) * data.pageSize + 1;
-            data.data.forEach((entry, i) => {
+            entries.forEach((entry, i) => {
               const rank = startRank + i;
               const row = document.createElement('div');
               row.style.cssText = 'display:flex;gap:8px;align-items:baseline;border-bottom:1px solid rgba(255,255,255,0.06);padding:2px 0';
@@ -1682,20 +1688,14 @@ export function createUIController(view) {
         view.firstTipBtn?.addEventListener('click', handlers.onDismissFirstTip);
         // New main-menu nav
         view.mainCompetitiveBtn?.addEventListener('click', () => {
-          document.querySelectorAll('.altmodes-tab').forEach(t => t.classList.remove('active'));
-          document.querySelectorAll('.altmodes-tab-panel').forEach(p => p.classList.add('hidden'));
-          const compTab = document.querySelector('.altmodes-tab[data-tab="competitive"]');
-          const compPanel = document.querySelector('.altmodes-tab-panel[data-panel="competitive"]');
-          if (compTab) compTab.classList.add('active');
-          if (compPanel) compPanel.classList.remove('hidden');
-          setAltModesPanelOpen(true);
-          initCompetitiveLeaderboard();
+          setCompetitivePanelOpen(true);
         });
         view.newRunBtn?.addEventListener('click', handlers.onOpenCharacterSelect);
         view.charBackBtn?.addEventListener('click', handlers.onCloseCharacterSelect);
         // Alt modes panel
         view.altModesBtn?.addEventListener('click', () => setAltModesPanelOpen(true));
         view.altModesClose?.addEventListener('click', () => setAltModesPanelOpen(false));
+        view.competitiveClose?.addEventListener('click', () => setCompetitivePanelOpen(false));
         view.creditsBtn?.addEventListener('click', () => setCreditsPanelOpen(true));
         view.creditsClose?.addEventListener('click', () => setCreditsPanelOpen(false));
         document.addEventListener('keydown', (e) => {
@@ -1724,7 +1724,7 @@ export function createUIController(view) {
           handlers.onOpenAltModeCharSelect('pvp');
         });
         view.altModeCompetitiveBtn?.addEventListener('click', () => {
-          setAltModesPanelOpen(false);
+          setCompetitivePanelOpen(false);
           handlers.onOpenAltModeCharSelect('competitive');
         });
         view.competitiveServerRetryBtn?.addEventListener('click', () => {
@@ -1772,7 +1772,6 @@ export function createUIController(view) {
             tab.classList.add('active');
             const panel = document.querySelector(`.altmodes-tab-panel[data-panel="${tab.dataset.tab}"]`);
             if (panel) panel.classList.remove('hidden');
-            if (tab.dataset.tab === 'competitive') initCompetitiveLeaderboard();
           });
         });
         view.altModeSandboxConfigBtn?.addEventListener('click', handlers.onOpenSandboxConfig);
@@ -2226,6 +2225,9 @@ export function createUIController(view) {
       },
       setCompetitiveServerStatus(status) {
         renderCompetitiveServerStatus(status);
+      },
+      setCompetitivePanelOpen(open) {
+        setCompetitivePanelOpen(open);
       },
       setCompetitiveSubmitStatus(status = {}) {
         const el = view.deadCompetitiveStatus || document.getElementById('deadCompetitiveStatus');
