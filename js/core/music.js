@@ -16,6 +16,10 @@
   let gameTrack = null;
   let gameTrackPath = null;
   let unlockedByGesture = false;
+  // True once the one-shot intro has finished and handed off to the looping
+  // theme. Guards against the 400ms sync tick restarting the intro on top of
+  // the loop (which sounds like the song playing twice, layered).
+  let titleHandedOff = false;
   // Which musical context is currently meant to be sounding: 'menu', 'game', or null.
   let activeContext = null;
 
@@ -48,6 +52,7 @@
       titleIntro = makeAudio(TITLE_INTRO_PATH, { loop: false });
       // Hand off from the one-shot intro into the looping theme seamlessly.
       titleIntro.addEventListener('ended', () => {
+        titleHandedOff = true;
         if (activeContext !== 'menu') return;
         applyVolume();
         if (titleLoop.volume <= 0) return;
@@ -105,8 +110,16 @@
       pauseMenuMusic();
       return;
     }
-    // If the loop is already going, leave it; otherwise start (or resume) the intro.
+    // Once the intro has handed off, only ever drive the looping theme. This
+    // prevents a sync tick during the handoff window from restarting the intro
+    // on top of the loop (the doubled/layered audio bug).
+    if (titleHandedOff) {
+      if (titleLoop.paused) void titleLoop.play().catch(() => {});
+      return;
+    }
+    // Loop already running (e.g. resumed) — leave it be.
     if (!titleLoop.paused && titleLoop.currentTime > 0) return;
+    // Otherwise start (or resume) the one-shot intro.
     if (!titleIntro.paused) return;
     void titleIntro.play().catch(() => {});
   }
@@ -128,7 +141,14 @@
 
     if (context !== activeContext) {
       // Context changed: stop whatever the previous context was playing.
-      if (activeContext === 'menu') pauseMenuMusic();
+      if (activeContext === 'menu') {
+        pauseMenuMusic();
+        // Rewind the intro so returning to the menu starts it from the top
+        // rather than mid-track, and re-arm the intro→loop handoff.
+        if (titleIntro) titleIntro.currentTime = 0;
+        if (titleLoop) titleLoop.currentTime = 0;
+        titleHandedOff = false;
+      }
       if (activeContext === 'game') pauseGameMusic();
       activeContext = context;
     }

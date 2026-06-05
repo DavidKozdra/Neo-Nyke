@@ -719,8 +719,8 @@ export function createUIController(view) {
 
     let runHistoryView = 'info';
     let activeInfoTab = 'items';
-    const infoSearchQueries = { items: '', weapons: '', moves: '', enemies: '' };
-    const searchableInfoTabs = new Set(['items', 'weapons', 'moves', 'enemies']);
+    const infoSearchQueries = { items: '', scrolls: '', weapons: '', moves: '', enemies: '' };
+    const searchableInfoTabs = new Set(['items', 'scrolls', 'weapons', 'moves', 'enemies']);
 
     function setRunHistoryOpen(open) {
       ensureRunHistoryPanelCanOverlayGame();
@@ -817,7 +817,7 @@ export function createUIController(view) {
         view.rhInfoSearch.value = '';
         return;
       }
-      const label = tab === 'items' ? 'items' : tab === 'weapons' ? 'weapons' : tab === 'moves' ? 'moves' : 'enemies';
+      const label = tab === 'items' ? 'items' : tab === 'scrolls' ? 'scrolls' : tab === 'weapons' ? 'weapons' : tab === 'moves' ? 'moves' : 'enemies';
       view.rhInfoSearch.placeholder = `Search ${label}...`;
       view.rhInfoSearch.setAttribute('aria-label', `Search ${label}`);
       view.rhInfoSearch.value = infoSearchQueries[tab] || '';
@@ -852,6 +852,24 @@ export function createUIController(view) {
             <div class="info-card__desc">${item.description || ''}</div>
           </div>`;
         }).join('')}</div>` : renderInfoEmpty('items');
+        Neo.drawItemIconCanvases?.(view.rhInfoContent, 'data-info-item');
+
+      } else if (tab === 'scrolls') {
+        // Scrolls are their own system (Neo.SCROLL_DEFS), shown on a dedicated tab
+        // rather than mixed into the relic Items tab.
+        const scrolls = Object.values(Neo.SCROLL_DEFS || {})
+          .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+          .filter(scroll => infoSearchMatches(scroll, s => [s.name, s.key, s.description]));
+        view.rhInfoContent.innerHTML = scrolls.length ? `<div class="info-grid">${scrolls.map(scroll => {
+          return `<div class="info-card">
+            <div class="info-card__header">
+              <canvas class="info-card__icon" data-info-item="${scroll.key}" width="32" height="32"></canvas>
+              <span class="info-card__name">${scroll.name}</span>
+              <span class="info-card__tag info-card__tag--knight">scroll</span>
+            </div>
+            <div class="info-card__desc">${scroll.description || ''}</div>
+          </div>`;
+        }).join('')}</div>` : renderInfoEmpty('scrolls');
         Neo.drawItemIconCanvases?.(view.rhInfoContent, 'data-info-item');
 
       } else if (tab === 'weapons') {

@@ -784,72 +784,6 @@ export const ITEM_DEFS = {
       category: 'god',
       tags: ['god', 'stat'],
     },
-    scroll_reroll: {
-      key: 'scroll_reroll',
-      name: 'Scroll of Reroll',
-      shortName: 'Reroll',
-      description: 'Choose one owned relic and replace one stack with a new relic of the same rarity.',
-      rarity: 'knight',
-      color: '#d9f2ff',
-      category: 'knight',
-      tool: true,
-      tags: ['scroll', 'control', 'choice'],
-    },
-    scroll_branching: {
-      key: 'scroll_branching',
-      name: 'Scroll of Branching',
-      shortName: 'Branch',
-      description: 'Choose a relic. The next reward of that relic rarity becomes your chosen relic.',
-      rarity: 'knight',
-      color: '#d8ffc5',
-      category: 'knight',
-      tool: true,
-      tags: ['scroll', 'control', 'choice'],
-    },
-    scroll_replace: {
-      key: 'scroll_replace',
-      name: 'Scroll of Replace',
-      shortName: 'Replace',
-      description: 'Choose an unwanted relic, then choose a same-rarity replacement. Future rewards swap it.',
-      rarity: 'knight',
-      color: '#ffd9d9',
-      category: 'knight',
-      tool: true,
-      tags: ['scroll', 'control', 'choice'],
-    },
-    scroll_abundance: {
-      key: 'scroll_abundance',
-      name: 'Scroll of Abundance',
-      shortName: 'Abundance',
-      description: 'Choose two relics. Every two floors has a chance to grant one selected relic or one random relic.',
-      rarity: 'knight',
-      color: '#fff2a8',
-      category: 'knight',
-      tool: true,
-      tags: ['scroll', 'control', 'choice'],
-    },
-    scroll_pool_weight: {
-      key: 'scroll_pool_weight',
-      name: 'Scroll of Pool Weight',
-      shortName: 'Weight',
-      description: 'Choose an item tag. Future rewards favor that tag for a limited time, with rarity-scaled strength.',
-      rarity: 'knight',
-      color: '#c8e2ff',
-      category: 'knight',
-      tool: true,
-      tags: ['scroll', 'control', 'tag'],
-    },
-    scroll_ego: {
-      key: 'scroll_ego',
-      name: 'Scroll of Ego',
-      shortName: 'Ego',
-      description: 'For this floor, relics already in your build are 10% more common.',
-      rarity: 'knight',
-      color: '#f4d4ff',
-      category: 'knight',
-      tool: true,
-      tags: ['scroll', 'control', 'build'],
-    },
     jesters_dice: {
       key: 'jesters_dice',
       name: "Jester's Dice",
@@ -981,6 +915,86 @@ export const ITEM_DEFS = {
       tags: ['tools', 'voucher', 'choice'],
     },
   };
+// Scrolls are their own system, kept out of ITEM_DEFS / the relic pools. They are
+// registered into the item registry (see createItemRegistry) so runtime lookups —
+// icons, rarity, tags, names, shop offers, save/load — resolve scroll keys the same
+// way as relics, but they never appear in the relic codex tab or random relic pools.
+// Each scroll resolves its selection popup on pickup/purchase (see enqueueScrollSelection).
+export const SCROLL_DEFS = {
+    scroll_reroll: {
+      key: 'scroll_reroll',
+      name: 'Scroll of Reroll',
+      shortName: 'Reroll',
+      description: 'Choose one owned relic and replace one stack with a new relic of the same rarity.',
+      rarity: 'knight',
+      color: '#d9f2ff',
+      category: 'knight',
+      tool: true,
+      scroll: true,
+      tags: ['scroll', 'control', 'choice'],
+    },
+    scroll_branching: {
+      key: 'scroll_branching',
+      name: 'Scroll of Branching',
+      shortName: 'Branch',
+      description: 'Choose a relic. The next reward of that relic rarity becomes your chosen relic.',
+      rarity: 'knight',
+      color: '#d8ffc5',
+      category: 'knight',
+      tool: true,
+      scroll: true,
+      tags: ['scroll', 'control', 'choice'],
+    },
+    scroll_replace: {
+      key: 'scroll_replace',
+      name: 'Scroll of Replace',
+      shortName: 'Replace',
+      description: 'Choose an unwanted relic, then choose a same-rarity replacement. Future rewards swap it.',
+      rarity: 'knight',
+      color: '#ffd9d9',
+      category: 'knight',
+      tool: true,
+      scroll: true,
+      tags: ['scroll', 'control', 'choice'],
+    },
+    scroll_abundance: {
+      key: 'scroll_abundance',
+      name: 'Scroll of Abundance',
+      shortName: 'Abundance',
+      description: 'Choose two relics. Every two floors has a chance to grant one selected relic or one random relic.',
+      rarity: 'knight',
+      color: '#fff2a8',
+      category: 'knight',
+      tool: true,
+      scroll: true,
+      tags: ['scroll', 'control', 'choice'],
+    },
+    scroll_pool_weight: {
+      key: 'scroll_pool_weight',
+      name: 'Scroll of Pool Weight',
+      shortName: 'Weight',
+      description: 'Choose an item tag. Future rewards favor that tag for a limited time, with rarity-scaled strength.',
+      rarity: 'knight',
+      color: '#c8e2ff',
+      category: 'knight',
+      tool: true,
+      scroll: true,
+      tags: ['scroll', 'control', 'tag'],
+    },
+    scroll_ego: {
+      key: 'scroll_ego',
+      name: 'Scroll of Ego',
+      shortName: 'Ego',
+      description: 'For this floor, relics already in your build are 10% more common.',
+      rarity: 'knight',
+      color: '#f4d4ff',
+      category: 'knight',
+      tool: true,
+      scroll: true,
+      tags: ['scroll', 'control', 'build'],
+    },
+  };
+export const SCROLL_KEYS = Object.keys(SCROLL_DEFS);
 // Rarity -> name/description text color. GOD is the top tier and renders red (#ff4256).
 // ('white' and 'purple'/'red' are legacy aliases of knight/wizard/god kept for old save data.)
 export const RARITY_NAME_COLORS = {
@@ -1001,14 +1015,9 @@ export const SHOP_RARITY_PRICE_MULTIPLIERS = {
     red: 4.75,
   };
 export const ITEM_KEYS = Object.keys(ITEM_DEFS);
-export const SCROLL_OF_CONTROL_KEYS = [
-  'scroll_reroll',
-  'scroll_branching',
-  'scroll_replace',
-  'scroll_abundance',
-  'scroll_pool_weight',
-  'scroll_ego',
-];
+// Legacy alias retained for call sites that reference SCROLL_OF_CONTROL_KEYS; the
+// canonical list is SCROLL_KEYS (derived from SCROLL_DEFS).
+export const SCROLL_OF_CONTROL_KEYS = SCROLL_KEYS;
 export const VOUCHER_KEY = 'voucher';
 // Colour the player can redeem a voucher for, mapped to the relic rarity granted.
 export const VOUCHER_COLORS = [
@@ -1622,6 +1631,8 @@ export const MOVE_BASE_STATS = {
   Neo.RIVAL_WEAPON_LOADOUTS = RIVAL_WEAPON_LOADOUTS;
   Neo.ITEM_DEFS = ITEM_DEFS;
   Neo.ITEM_KEYS = ITEM_KEYS;
+  Neo.SCROLL_DEFS = SCROLL_DEFS;
+  Neo.SCROLL_KEYS = SCROLL_KEYS;
   Neo.SCROLL_OF_CONTROL_KEYS = SCROLL_OF_CONTROL_KEYS;
   Neo.VOUCHER_KEY = VOUCHER_KEY;
   Neo.VOUCHER_COLORS = VOUCHER_COLORS;

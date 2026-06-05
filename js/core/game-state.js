@@ -552,6 +552,11 @@ export function resumeGame() {
   }
 
   function createItemRegistry() {
+    // Scrolls are their own system (Neo.SCROLL_DEFS) but are registered alongside
+    // relics so runtime lookups (icons, rarity, tags, names, shop offers, save/load)
+    // resolve scroll keys. Relic-only consumers iterate Neo.ITEM_KEYS, which excludes
+    // scrolls, so this does not leak scrolls into relic pools or the relic codex.
+    const allDefs = { ...Neo.ITEM_DEFS, ...(Neo.SCROLL_DEFS || {}) };
     const factory = window.KozEngine?.Items?.itemFactory;
     if (factory?.createLibrary && factory?.createRegistryFromLibrary) {
       class RuntimeItem {
@@ -559,12 +564,12 @@ export function resumeGame() {
           Object.assign(this, spec);
         }
       }
-      const library = factory.createLibrary(Neo.ITEM_DEFS, RuntimeItem);
+      const library = factory.createLibrary(allDefs, RuntimeItem);
       return factory.createRegistryFromLibrary(library);
     }
     return {
       get(key) {
-        return Neo.ITEM_DEFS[key] || null;
+        return allDefs[key] || null;
       },
       keys() {
         return Neo.ITEM_KEYS.slice();

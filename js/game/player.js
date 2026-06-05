@@ -654,7 +654,15 @@ export function confirmWizardPawSelection() {
     requestPanelItemSelection();
   }
 
-  const SCROLL_KEYS = new Set(['scroll_reroll', 'scroll_branching', 'scroll_replace', 'scroll_abundance', 'scroll_pool_weight', 'scroll_ego']);
+  // Scrolls are their own system (Neo.SCROLL_DEFS); this set mirrors its keys so
+  // scrolls stay out of relic pools/choices. Resolved lazily since Neo.SCROLL_KEYS
+  // is assigned during input.js init. Falls back to the known list pre-init.
+  const SCROLL_KEYS = {
+    has(key) {
+      const keys = Neo.SCROLL_KEYS || ['scroll_reroll', 'scroll_branching', 'scroll_replace', 'scroll_abundance', 'scroll_pool_weight', 'scroll_ego'];
+      return keys.includes(key);
+    },
+  };
 
   function getScrollChoiceItems({ ownedOnly = false, rarity = '', exclude = [] } = {}) {
     const excluded = new Set([...exclude, ...SCROLL_KEYS]);
@@ -703,7 +711,7 @@ export function confirmWizardPawSelection() {
   }
 
   function getScrollControlConfig(scrollKey, phase = 'main') {
-    const item = Neo.ITEM_DEFS?.[scrollKey];
+    const item = Neo.SCROLL_DEFS?.[scrollKey] || Neo.itemRegistry?.get?.(scrollKey) || Neo.ITEM_DEFS?.[scrollKey];
     if (scrollKey === 'scroll_reroll') {
       return {
         title: 'SCROLL OF REROLL',
