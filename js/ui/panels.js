@@ -411,6 +411,7 @@ export function bindPanelInput() {
     Neo.ui.shopItems?.addEventListener('click', handleShopBuyClick);
     Neo.ui.shopWeapons?.addEventListener('click', handleShopBuyClick);
     Neo.ui.shopMoves?.addEventListener('click', handleShopBuyClick);
+    Neo.ui.shopTrades?.addEventListener('click', handleShopBuyClick);
     Neo.ui.shopHeals?.addEventListener('click', handleShopBuyClick);
     Neo.bindEquipmentSlotClicks?.();
     Neo.ui.invMovesList?.addEventListener('click', handleInventoryMoveSelect);
@@ -1579,7 +1580,7 @@ export function getShopWeaponOffers() {
     const state = getShopTradeState(tradeOffer, noItemsChallenge);
     const description = noItemsChallenge
       ? 'No Items challenge is active. Trades are disabled for this run.'
-      : `Trade ${costNames.join(' + ')} for this higher-rarity relic.`;
+      : `Hand over ${costNames.join(' + ')} to receive this higher-rarity relic.`;
     const buttonText = noItemsChallenge
       ? 'Trades Locked'
       : tradeOffer.bought
@@ -1587,6 +1588,37 @@ export function getShopWeaponOffers() {
         : state.canAfford
           ? 'Trade Relics'
           : 'Missing Relics';
+    // Visual "give -> get" exchange row so it is obvious which relics you hand over.
+    const giveTiles = costKeys.map(key => {
+      const giveItem = Neo.itemRegistry.get(key) || Neo.ITEM_DEFS[key];
+      const giveName = giveItem?.name || Neo.titleCase?.(key) || key;
+      const owned = Number(Neo.player?.items?.[key] || 0) > 0;
+      const tone = giveItem?.rarity || giveItem?.category || '';
+      const accent = tone ? Neo.getRarityNameColor(tone) : '';
+      const accentStyle = accent ? ` style="--shop-card-accent:${escapeShopText(accent)}"` : '';
+      return `<div class="shop-trade__tile${owned ? '' : ' shop-trade__tile--missing'}"${accentStyle}>
+        <canvas class="shop-trade__icon" data-item-icon="${escapeShopText(key)}" width="34" height="34"></canvas>
+        <span class="shop-trade__tile-name">${escapeShopText(giveName)}</span>
+      </div>`;
+    }).join('<span class="shop-trade__plus">+</span>');
+    const getItem = item;
+    const getAccent = Neo.getRarityNameColor(getItem?.rarity || getItem?.category) || '';
+    const getAccentStyle = getAccent ? ` style="--shop-card-accent:${escapeShopText(getAccent)}"` : '';
+    const getTile = `<div class="shop-trade__tile shop-trade__tile--get"${getAccentStyle}>
+      <canvas class="shop-trade__icon" data-item-icon="${escapeShopText(tradeOffer.key)}" width="34" height="34"></canvas>
+      <span class="shop-trade__tile-name">${escapeShopText(getItem?.name || 'Relic')}</span>
+    </div>`;
+    const footerExtra = noItemsChallenge ? '' : `<div class="shop-trade">
+      <div class="shop-trade__side shop-trade__side--give">
+        <span class="shop-trade__label">You give</span>
+        <div class="shop-trade__tiles">${giveTiles}</div>
+      </div>
+      <span class="shop-trade__arrow" aria-hidden="true">➜</span>
+      <div class="shop-trade__side shop-trade__side--get">
+        <span class="shop-trade__label">You get</span>
+        <div class="shop-trade__tiles">${getTile}</div>
+      </div>
+    </div>`;
     return renderShopCard({
       rarityLabel: 'Trade',
       iconAttr: 'data-item-icon',
@@ -1602,10 +1634,7 @@ export function getShopWeaponOffers() {
         item?.rarity ? { label: item.rarity, tone: 'rarity' } : null,
         { label: '2-for-1', tone: 'item' },
       ].filter(Boolean),
-      stats: costKeys.map(key => ({
-        label: 'Give',
-        value: Neo.itemRegistry.get(key)?.name || Neo.titleCase?.(key) || key,
-      })),
+      footerExtra,
       recommended: true,
       kind: 'trade',
       state,
@@ -1717,6 +1746,7 @@ export function getShopWeaponOffers() {
     if (tabKey === 'items') return Neo.ui.shopItems;
     if (tabKey === 'weapons') return Neo.ui.shopWeapons;
     if (tabKey === 'moves') return Neo.ui.shopMoves;
+    if (tabKey === 'trades') return Neo.ui.shopTrades;
     return Neo.ui.shopHeals;
   }
 
@@ -1724,9 +1754,12 @@ export function getShopWeaponOffers() {
     const coins = Number(Neo.player?.coins || 0);
     if (tabKey === 'items') {
       const offers = (Neo.shopOffers || []).filter(offer => offer.type === 'item');
+      return `items|${coins}|${noItemsChallenge ? 1 : 0}|held:${getCountedKeys(Neo.player?.items)}|${offers.map(o => `${o.key}:${o.cost}:${o.bought ? 1 : 0}`).join(';')}`;
+    }
+    if (tabKey === 'trades') {
       const trade = Neo.currentRoom?.shopTradeOffer || {};
       const tradeSig = `${trade.key || ''}:${(trade.costKeys || []).join(',')}:${trade.bought ? 1 : 0}:${trade.unavailable ? 1 : 0}`;
-      return `items|${coins}|${noItemsChallenge ? 1 : 0}|held:${getCountedKeys(Neo.player?.items)}|trade:${tradeSig}|${offers.map(o => `${o.key}:${o.cost}:${o.bought ? 1 : 0}`).join(';')}`;
+      return `trades|${coins}|${noItemsChallenge ? 1 : 0}|held:${getCountedKeys(Neo.player?.items)}|trade:${tradeSig}`;
     }
     if (tabKey === 'weapons') {
       const offers = Neo.currentRoom?.shopWeaponOffers || [];
@@ -1807,6 +1840,7 @@ export function renderShopPanel() {
     Neo.ui.shopItems.classList.toggle('hidden', Neo.activeShopTab !== 'items');
     Neo.ui.shopWeapons?.classList.toggle('hidden', Neo.activeShopTab !== 'weapons');
     Neo.ui.shopMoves.classList.toggle('hidden', Neo.activeShopTab !== 'moves');
+    Neo.ui.shopTrades?.classList.toggle('hidden', Neo.activeShopTab !== 'trades');
     Neo.ui.shopHeals.classList.toggle('hidden', Neo.activeShopTab !== 'heals');
     const panelRenderCache = ensurePanelRenderCache();
     const activeShopTab = Neo.activeShopTab || 'items';
@@ -1857,10 +1891,14 @@ export function renderShopPanel() {
           });
         })
         .join('');
-      const tradeCard = renderShopTradeCard(noItemsChallenge);
-      Neo.ui.shopItems.innerHTML = (itemCards + tradeCard) || '<div class="shop-card shop-empty"><p>Every relic here is already yours. Clear the floor or check the move shelf.</p></div>';
+      Neo.ui.shopItems.innerHTML = itemCards || '<div class="shop-card shop-empty"><p>Every relic here is already yours. Clear the floor or check the move shelf.</p></div>';
       Neo.drawItemIconCanvases?.(Neo.ui.shopItems, 'data-item-icon');
       panelRenderCache.shop.tabSigs.items = activeShopSig;
+    } else if (Neo.activeShopTab === 'trades') {
+      const tradeCard = renderShopTradeCard(noItemsChallenge);
+      Neo.ui.shopTrades.innerHTML = tradeCard || '<div class="shop-card shop-empty"><p>No relic trade is on offer in this shop.</p></div>';
+      Neo.drawItemIconCanvases?.(Neo.ui.shopTrades, 'data-item-icon');
+      panelRenderCache.shop.tabSigs.trades = activeShopSig;
     } else if (Neo.activeShopTab === 'weapons') {
       const weaponOffers = getShopWeaponOffers();
       const weaponCards = weaponOffers

@@ -1170,6 +1170,7 @@ export const ui = {
     shopItems: document.getElementById('shopItems'),
     shopWeapons: document.getElementById('shopWeapons'),
     shopMoves: document.getElementById('shopMoves'),
+    shopTrades: document.getElementById('shopTrades'),
     shopHeals: document.getElementById('shopHeals'),
     shopCoins: document.getElementById('shopCoins'),
     invPanel: document.getElementById('invPanel'),

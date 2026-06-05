@@ -1887,6 +1887,102 @@ button, input, select, textarea {
   margin-top: auto;
 }
 
+/* Trade exchange "you give -> you get" row */
+.shop-trade {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  margin: 4px 0 2px;
+}
+
+.shop-trade__side {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 8px;
+  border-radius: 12px;
+  border: 1px solid var(--menu-border);
+  background: rgba(0,0,0,.14);
+}
+
+.shop-trade__side--get {
+  border-color: color-mix(in srgb, var(--shop-card-accent, var(--menu-border)) 55%, var(--menu-border));
+  background: color-mix(in srgb, var(--shop-card-accent, transparent) 12%, rgba(0,0,0,.14));
+}
+
+.shop-trade__label {
+  font-size: 1.5em;
+  font-weight: 800;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--menu-text-soft);
+}
+
+.shop-trade__tiles {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.shop-trade__tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  flex: 1 1 0;
+  min-width: 52px;
+  padding: 6px 4px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--shop-card-accent, var(--menu-border)) 45%, var(--menu-border));
+  background: rgba(0,0,0,.18);
+}
+
+.shop-trade__tile--missing {
+  opacity: .45;
+  filter: grayscale(.7);
+}
+
+.shop-trade__tile--missing .shop-trade__tile-name {
+  color: var(--shop-cant-afford, #e05555);
+}
+
+.shop-trade__icon {
+  width: 34px;
+  height: 34px;
+  image-rendering: pixelated;
+}
+
+.shop-trade__tile-name {
+  font-size: 1.35em;
+  font-weight: 700;
+  line-height: 1.15;
+  text-align: center;
+  color: var(--menu-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.shop-trade__plus {
+  align-self: center;
+  font-size: 1.6em;
+  font-weight: 900;
+  color: var(--menu-text-soft);
+  padding: 0 1px;
+}
+
+.shop-trade__arrow {
+  align-self: center;
+  font-size: 2.2em;
+  font-weight: 900;
+  color: var(--shop-card-accent, var(--menu-text));
+}
+
 .shop-card.shop-card--unaffordable {
   border-color: color-mix(in srgb, var(--shop-cant-afford, #e05555) 42%, var(--menu-border));
   background:
