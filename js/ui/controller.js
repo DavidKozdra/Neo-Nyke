@@ -964,7 +964,7 @@ export function createUIController(view) {
           ? renderAchievementProgress(progressDef, progressSnapshot)
           : '';
         return `<div class="ach-card${unlocked ? '' : ' ach-card--locked'}">
-          <span class="ach-icon">${a.icon}</span>
+          <canvas class="ach-icon" data-achievement-icon="${Neo.escapeHtml(a.id)}" width="44" height="44" aria-hidden="true"></canvas>
           <div>
             <div class="ach-name">${a.name}</div>
             <div class="ach-desc">${a.desc}</div>
@@ -974,6 +974,53 @@ export function createUIController(view) {
         </div>`;
       }));
       view.achievementsList.innerHTML = cards.join('');
+      drawAchievementIcons(view.achievementsList);
+    }
+
+    function drawAchievementIcons(root) {
+      root?.querySelectorAll?.('[data-achievement-icon]').forEach(canvas => {
+        drawAchievementIcon(canvas, canvas.dataset.achievementIcon);
+      });
+    }
+
+    const ACHIEVEMENT_ICON_REFS = {
+      one_punch_man: { type: 'move', key: 'nimrod_stomp' },
+      the_avatar: { type: 'item', key: 'overstimulate' },
+      rival_rumble: { type: 'weapon', key: 'thorns_bleed_blade' },
+      gotta_meet_god: { type: 'move', key: 'turtle_wave' },
+      yeshua_is_king: { type: 'item', key: 'drink_master' },
+      unkillable: { type: 'item', key: 'veggys_pendant' },
+      hoarder: { type: 'item', key: 'wizards_paw' },
+      glass_cannon: { type: 'pixel', color: '#e6fbff', pixels: [[3,0],[2,1],[4,1],[1,2],[5,2],[2,3],[3,3],[4,3],[2,4],[4,4],[1,5],[5,5],[3,6]] },
+      floor_muncher: { type: 'pixel', color: '#8dd4ff', pixels: [[3,1],[2,2],[3,2],[4,2],[1,3],[3,3],[5,3],[3,4],[3,5],[3,6]] },
+      overleveled: { type: 'pixel', color: '#f0c040', pixels: [[3,0],[2,2],[3,2],[4,2],[1,3],[2,3],[3,3],[4,3],[5,3],[2,4],[4,4],[1,6],[2,6],[3,6],[4,6],[5,6]] },
+      shopping_spree: { type: 'item', key: 'rich_mans_luck' },
+      loop_lord: { type: 'item', key: 'jesters_dice' },
+      coin_goblin: { type: 'pixel', color: '#ffd15a', pixels: [[2,1],[3,1],[4,1],[1,2],[2,2],[3,2],[4,2],[5,2],[1,3],[2,3],[3,3],[4,3],[5,3],[1,4],[2,4],[3,4],[4,4],[5,4],[2,5],[3,5],[4,5]] },
+      god_slayer: { type: 'enemy', key: 'god' },
+      extinction: { type: 'enemy', key: 'hunter' },
+      double_bane: { type: 'enemy', key: 'bowman_bane' },
+    };
+
+    function drawAchievementIcon(canvas, achievementId) {
+      const ref = ACHIEVEMENT_ICON_REFS[achievementId] || { type: 'pixel', color: '#f0c040', pixels: [[3,1],[2,2],[3,2],[4,2],[1,3],[2,3],[3,3],[4,3],[5,3],[2,4],[3,4],[4,4],[3,5]] };
+      if (ref.type === 'item' && Neo.ITEM_DEFS?.[ref.key]) {
+        Neo.drawItemIconByKey?.(canvas, ref.key);
+        return;
+      }
+      if (ref.type === 'move' && Neo.MOVE_DEFS?.[ref.key]) {
+        Neo.drawMoveToastIcon?.(canvas, Neo.MOVE_DEFS[ref.key]);
+        return;
+      }
+      if (ref.type === 'weapon' && Neo.WEAPON_DEFS?.[ref.key]) {
+        Neo.drawWeaponToastIcon?.(canvas, Neo.WEAPON_DEFS[ref.key]);
+        return;
+      }
+      if (ref.type === 'enemy') {
+        Neo.drawSpriteToCanvas?.(canvas, ref.key, 40);
+        return;
+      }
+      Neo.drawPixelIcon?.(canvas, ref.color || '#f0c040', ref.pixels || []);
     }
 
     function renderAchievementProgress(progressDef, progressSnapshot) {

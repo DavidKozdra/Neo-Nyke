@@ -8110,17 +8110,20 @@ border-bottom: black solid 2px;
   background: rgba(20,24,34,0.4);
 }
 .ach-icon {
-  font-size: 2rem;
-  line-height: 1;
   flex-shrink: 0;
   width: 44px;
-  text-align: center;
-  color: #f0c040;
+  height: 44px;
+  image-rendering: pixelated;
+  border-radius: 7px;
+  background: rgba(20,26,36,.9);
+  border: 1px solid rgba(240,192,64,0.28);
+  box-shadow: 0 0 12px rgba(240,192,64,0.08);
 }
 .ach-card--locked .ach-icon {
-  color: #8090a8;
-  opacity: 0.35;
-  filter: none;
+  opacity: 0.42;
+  filter: grayscale(1) saturate(0.25);
+  border-color: rgba(128,140,160,0.18);
+  box-shadow: none;
 }
 .ach-name {
   font-size: 13px;
@@ -9055,44 +9058,50 @@ border-bottom: black solid 2px;
 
 /* ── Info panel readability scale-up ─────────────────────────────
    Single consolidated override so every piece of the INFO panel
-   (top tabs + all content) reads at a much larger size. */
-.rh-title { font-size: 22px !important; }
-.rh-view-tab { font-size: 14px !important; padding: 6px 14px !important; }
+   (top tabs + all content) reads at a much larger size. Cards use
+   a wide 2-column layout so each entry has room for big text. */
+.rh-title { font-size: 26px !important; }
+.rh-view-tab { font-size: 16px !important; padding: 8px 18px !important; }
 
 /* Info sub-tabs (Items / Weapons / Moves / Enemies / Characters / Meta) */
-.rh-info-tab { font-size: 15px !important; padding: 7px 16px !important; }
-.rh-info-tutorial-btn { font-size: 14px !important; padding: 6px 16px !important; }
+.rh-info-tab { font-size: 17px !important; padding: 9px 20px !important; }
+.rh-info-tutorial-btn { font-size: 16px !important; padding: 8px 20px !important; }
 
-/* Items / Weapons / Moves cards */
-.info-grid { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)) !important; }
-.info-card__name { font-size: 18px !important; }
-.info-card__tag  { font-size: 13px !important; }
-.info-card__desc { font-size: 16px !important; line-height: 1.5 !important; }
+/* Items / Weapons / Moves cards — wide 2-up grid, large text */
+.info-grid { grid-template-columns: repeat(auto-fill, minmax(440px, 1fr)) !important; gap: 16px !important; }
+.info-card { padding: 16px 18px !important; gap: 9px !important; }
+.info-card__icon { width: 42px !important; height: 42px !important; }
+.info-card__name { font-size: 22px !important; }
+.info-card__tag  { font-size: 15px !important; padding: 3px 9px !important; }
+.info-card__desc { font-size: 19px !important; line-height: 1.5 !important; }
 
-/* Characters */
-.info-char-card__name { font-size: 19px !important; }
-.info-char-card__lore { font-size: 16px !important; line-height: 1.55 !important; }
-.info-char-stat__label { font-size: 13px !important; width: 46px !important; }
+/* Characters — wide 2-up grid */
+.info-char-grid { grid-template-columns: repeat(auto-fill, minmax(460px, 1fr)) !important; }
+.info-char-card__sprite { width: 84px !important; height: 84px !important; }
+.info-char-card__name { font-size: 23px !important; }
+.info-char-card__lore { font-size: 18px !important; line-height: 1.55 !important; }
+.info-char-stat__label { font-size: 15px !important; width: 56px !important; }
 
 /* Enemies grid + detail */
-.info-enemy-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)) !important; }
-.info-enemy-card__name { font-size: 15px !important; }
-.info-enemy-card__tag  { font-size: 12px !important; }
-.info-enemy-detail__name { font-size: 20px !important; }
-.info-enemy-detail__style-tag { font-size: 12px !important; }
-.ied-stat__label { font-size: 12px !important; }
-.ied-stat__value { font-size: 20px !important; }
-.ied-imm-row, .info-enemy-detail__imm { font-size: 13px !important; }
-.info-enemy-detail__desc { font-size: 16px !important; line-height: 1.6 !important; }
+.info-enemy-grid { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)) !important; }
+.info-enemy-card__sprite { width: 64px !important; height: 64px !important; }
+.info-enemy-card__name { font-size: 17px !important; }
+.info-enemy-card__tag  { font-size: 14px !important; }
+.info-enemy-detail__name { font-size: 24px !important; }
+.info-enemy-detail__style-tag { font-size: 14px !important; }
+.ied-stat__label { font-size: 14px !important; }
+.ied-stat__value { font-size: 24px !important; }
+.ied-imm-row, .info-enemy-detail__imm { font-size: 15px !important; }
+.info-enemy-detail__desc { font-size: 19px !important; line-height: 1.6 !important; }
 
 /* Meta tab */
-.meta-info-summary__stat span { font-size: 12px !important; }
-.meta-info-summary__stat b { font-size: 26px !important; }
-.meta-info-section__head h3 { font-size: 17px !important; }
-.meta-info-section__head span { font-size: 12px !important; }
-.meta-challenge-card__top b, .meta-legacy-card__top b { font-size: 15px !important; }
-.meta-challenge-card__tags span { font-size: 11px !important; }
-.meta-challenge-card p, .meta-legacy-card p { font-size: 15px !important; line-height: 1.45 !important; }
+.meta-info-summary__stat span { font-size: 14px !important; }
+.meta-info-summary__stat b { font-size: 30px !important; }
+.meta-info-section__head h3 { font-size: 20px !important; }
+.meta-info-section__head span { font-size: 14px !important; }
+.meta-challenge-card__top b, .meta-legacy-card__top b { font-size: 18px !important; }
+.meta-challenge-card__tags span { font-size: 13px !important; }
+.meta-challenge-card p, .meta-legacy-card p { font-size: 18px !important; line-height: 1.45 !important; }
 
 
 /* ── MP Lobby ─────────────────────────────────────────────────── */
