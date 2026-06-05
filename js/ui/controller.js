@@ -1325,7 +1325,12 @@ export function createUIController(view) {
               const label = item?.name || key.replace(/_/g, ' ');
               const rarity = String(item?.rarity || 'knight');
               const safeKey = Neo.escapeHtml(key);
-              return `<div class="sandbox-token sandbox-token--item sandbox-token--stepper sandbox-token--${Neo.escapeHtml(rarity)}${active ? ' is-active' : ''}" data-sbox-start-item="${safeKey}">`
+              // Tooltip parity with the death screen: title + aria-label + data-tooltip
+              // carry the item description (with the same fallback text).
+              const tooltipText = item?.description || 'No item description available.';
+              const safeTooltip = Neo.escapeHtml(tooltipText);
+              const safeAria = Neo.escapeHtml(`${label}. ${tooltipText}`);
+              return `<div class="sandbox-token sandbox-token--item sandbox-token--stepper sandbox-token--${Neo.escapeHtml(rarity)}${active ? ' is-active' : ''}" data-sbox-start-item="${safeKey}" title="${safeTooltip}" aria-label="${safeAria}" data-tooltip="${safeTooltip}">`
                 + `<canvas class="sandbox-token__icon sandbox-token__icon--item" data-sbox-start-item-icon="${safeKey}" width="26" height="26" aria-hidden="true"></canvas>`
                 + `<span class="sandbox-token__label">${Neo.escapeHtml(label)}</span>`
                 + `<div class="sandbox-token__stepper">`
@@ -1914,7 +1919,11 @@ export function createUIController(view) {
               const item = Neo.ITEM_DEFS[key] || {};
               const itemName = item.name || Neo.titleCase(String(key || '').replace(/_/g, ' '));
               const countText = count > 1 ? ` x${count}` : '';
-              return `<span class="hero-detail-item-pip">
+              // Tooltip parity with the death screen: description on hover/focus.
+              const tooltipText = item.description || 'No item description available.';
+              const safeTooltip = Neo.escapeHtml(tooltipText);
+              const safeAria = Neo.escapeHtml(`${itemName}${countText}. ${tooltipText}`);
+              return `<span class="hero-detail-item-pip" tabindex="0" title="${safeTooltip}" aria-label="${safeAria}" data-tooltip="${safeTooltip}">
                 <canvas class="hero-detail-item-icon" data-hero-item="${Neo.escapeHtml(key)}" width="20" height="20" aria-hidden="true"></canvas>
                 <span>${Neo.escapeHtml(itemName)}${Neo.escapeHtml(countText)}</span>
               </span>`;

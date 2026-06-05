@@ -727,7 +727,7 @@ export const CHARACTER_DEFS = {
     name: 'Mooggy',
     rarity: 'assassin',
     damageMultiplier: 1.05,
-    hpMultiplier: 1,
+    hpMultiplier: 1.08,
     skills: { melee: 'Mooggy Swipe', laser: 'Nail Shot', smash: 'Fangs of Death', dash: 'Zoomies' },
     unlock: 'mooggy3',
   },

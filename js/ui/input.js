@@ -349,7 +349,7 @@ export const ITEM_DEFS = {
       key: 'hemes_scarf',
       name: "Heme's Scarf",
       shortName: 'Scarf',
-      description: 'Maintains 1 enemy bleed stack per stack, makes bleed heal more, and reflects bleed onto you when hit.',
+      description: 'Per stack: nearby enemies always bleed, and taking a hit bleeds you too. Kills charge the scarf; below 50 HP it discharges, draining all active bleed — yours and theirs — into rapid healing until you recover.',
       rarity: 'god',
       color: '#ff4256',
       accent: '#35ff6f',

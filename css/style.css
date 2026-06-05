@@ -3195,8 +3195,8 @@ button, input, select, textarea {
   position: fixed;
   z-index: 200;
   width: max-content;
-  max-width: min(240px, 60vw);
-  padding: 8px 10px;
+  max-width: min(300px, 60vw);
+  padding: 9px 12px;
   border: 1px solid rgba(180, 156, 255, .28);
   border-radius: 7px;
   background: rgba(10, 7, 14, .97);
@@ -3215,7 +3215,7 @@ button, input, select, textarea {
 }
 
 .equip-tooltip__name {
-  font-size: 11px;
+  font-size: 14px;
   font-weight: 800;
   letter-spacing: .03em;
   color: #e7defc;
@@ -3223,9 +3223,9 @@ button, input, select, textarea {
 
 .equip-tooltip__desc {
   margin-top: 3px;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 500;
-  line-height: 1.4;
+  line-height: 1.45;
   letter-spacing: .02em;
   color: rgba(220, 210, 245, .85);
 }
@@ -3836,6 +3836,7 @@ p.sub {
 }
 
 .hero-detail-item-pip {
+  position: relative;
   min-width: 0;
   display: inline-flex;
   align-items: center;
@@ -5170,12 +5171,18 @@ button.alt.danger {
   outline: none;
 }
 
-.dead-item-card[data-tooltip] {
+.dead-item-card[data-tooltip],
+.sandbox-token[data-tooltip],
+.hero-detail-item-pip[data-tooltip] {
   cursor: help;
 }
 
 .dead-item-card[data-tooltip]::before,
-.dead-item-card[data-tooltip]::after {
+.dead-item-card[data-tooltip]::after,
+.sandbox-token[data-tooltip]::before,
+.sandbox-token[data-tooltip]::after,
+.hero-detail-item-pip[data-tooltip]::before,
+.hero-detail-item-pip[data-tooltip]::after {
   position: absolute;
   left: 50%;
   z-index: 15;
@@ -5185,26 +5192,30 @@ button.alt.danger {
   transition: opacity 0.12s ease, transform 0.12s ease;
 }
 
-.dead-item-card[data-tooltip]::before {
+.dead-item-card[data-tooltip]::before,
+.sandbox-token[data-tooltip]::before,
+.hero-detail-item-pip[data-tooltip]::before {
   content: attr(data-tooltip);
   bottom: calc(100% + 9px);
   width: max-content;
-  max-width: min(260px, calc(100vw - 36px));
-  padding: 8px 10px;
+  max-width: min(300px, calc(100vw - 36px));
+  padding: 9px 12px;
   border: 1px solid rgba(255,255,255,.16);
   border-radius: 6px;
   background: rgba(10, 7, 14, .96);
   box-shadow: 0 10px 26px rgba(0,0,0,.42), 0 0 18px rgba(200, 60, 60, .12);
   color: rgba(255,245,230,.92);
-  font-size: 10px;
+  font-size: 13px;
   font-weight: 500;
-  line-height: 1.35;
+  line-height: 1.4;
   letter-spacing: 0.03em;
   text-align: left;
   white-space: normal;
 }
 
-.dead-item-card[data-tooltip]::after {
+.dead-item-card[data-tooltip]::after,
+.sandbox-token[data-tooltip]::after,
+.hero-detail-item-pip[data-tooltip]::after {
   content: '';
   bottom: calc(100% + 4px);
   width: 8px;
@@ -5218,14 +5229,42 @@ button.alt.danger {
 .dead-item-card[data-tooltip]:hover::before,
 .dead-item-card[data-tooltip]:hover::after,
 .dead-item-card[data-tooltip]:focus-visible::before,
-.dead-item-card[data-tooltip]:focus-visible::after {
+.dead-item-card[data-tooltip]:focus-visible::after,
+.sandbox-token[data-tooltip]:hover::before,
+.sandbox-token[data-tooltip]:hover::after,
+.sandbox-token[data-tooltip]:focus-within::before,
+.sandbox-token[data-tooltip]:focus-within::after,
+.hero-detail-item-pip[data-tooltip]:hover::before,
+.hero-detail-item-pip[data-tooltip]:hover::after,
+.hero-detail-item-pip[data-tooltip]:focus-visible::before,
+.hero-detail-item-pip[data-tooltip]:focus-visible::after {
   opacity: 1;
   transform: translate(-50%, 0);
 }
 
 .dead-item-card[data-tooltip]:hover::after,
-.dead-item-card[data-tooltip]:focus-visible::after {
+.dead-item-card[data-tooltip]:focus-visible::after,
+.sandbox-token[data-tooltip]:hover::after,
+.sandbox-token[data-tooltip]:focus-within::after,
+.hero-detail-item-pip[data-tooltip]:hover::after,
+.hero-detail-item-pip[data-tooltip]:focus-visible::after {
   transform: translate(-50%, 0) rotate(45deg);
+}
+
+/* Sandbox tokens live in a scrollable grid, so their tooltip drops BELOW the
+   token (the top row would clip an above tooltip). Same styled look, flipped. */
+.sandbox-token[data-tooltip]::before {
+  bottom: auto;
+  top: calc(100% + 9px);
+}
+.sandbox-token[data-tooltip]::after {
+  bottom: auto;
+  top: calc(100% + 4px);
+  /* Arrow points up toward the token: light the top/left edges instead. */
+  border-right: none;
+  border-bottom: none;
+  border-top: 1px solid rgba(255,255,255,.16);
+  border-left: 1px solid rgba(255,255,255,.16);
 }
 
 .dead-item-card:focus-visible {
@@ -7664,6 +7703,7 @@ border-bottom: black solid 2px;
 }
 
 .sandbox-token {
+  position: relative;
   border: 1px solid rgba(126, 158, 191, .32);
   border-radius: 8px;
   padding: 6px 8px;

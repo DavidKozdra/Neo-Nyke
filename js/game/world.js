@@ -405,8 +405,16 @@
 
     finalAmount = Math.max(0, hpBeforeHit - Neo.player.hp);
     if (finalAmount > 0) Neo.lowHealthHitFlashUntil = Date.now() + Neo.LOW_HEALTH_HIT_FLASH_MS;
+    // Heme's Scarf retaliates: when hit, a chance per scarf stack to bleed the
+    // attacker. Bleeds the enemy, never the player.
     if (finalAmount > 0 && itemStats.scarfBleedsOnHit > 0 && !options.noInvFrames) {
-      Neo.applyBleed(Neo.player, itemStats.scarfBleedsOnHit, 4);
+      const scarfBleedChance = Math.min(0.75, itemStats.scarfBleedsOnHit * 0.25);
+      if (Neo.nextRandom('encounter') < scarfBleedChance) {
+        const attacker = Neo.findKillerEnemyEntity?.(options.sourceKey || source, Neo.lastDamageSource);
+        if (attacker && !attacker.dead && !attacker.bleedImmune) {
+          Neo.applyBleed(attacker, 1, 4);
+        }
+      }
     }
 
     if (applyHitstop) {
