@@ -163,7 +163,7 @@
     else if (weaponKey === 'metao_fire_staff') base = 0.75;
     else if (weaponKey === 'magenta_degale') base = 1.5;
     else if (weaponKey === 'magenta_p90') base = 1.8;
-    else if (weaponKey === 'granillia_lightning_spear') base = 0.75;
+    else if (weaponKey === 'gelleh_lightning_spear') base = 0.75;
     else if (weaponKey === 'excalibur') base = 2;
     else if (weaponKey === 'golden_fleece') base = 0.5;
     else if (weaponKey === 'void_piercer') base = 0.8;
@@ -208,12 +208,17 @@
     return true;
   }
 
+  // Delay before the claw gauntlets' second swipe lands, in seconds. Short
+  // enough to read as a single quick one-two flurry rather than two attacks.
+  const CLAW_GAUNTLETS_SECOND_DELAY = 0.12;
+
   function fireWeaponSweep(damage, range, arc, push, color, options = {}) {
-    const angle = Math.atan2(Neo.mouse.worldY - Neo.player.y, Neo.mouse.worldX - Neo.player.x);
+    const angle = Math.atan2(Neo.mouse.worldY - Neo.player.y, Neo.mouse.worldX - Neo.player.x) + Number(options.angleOffset || 0);
     const itemStats = Neo.getItemStats?.() || {};
     const adjustedRange = range + (Neo.player?.character === 'thorn_knight' ? Math.min(34, Number(itemStats.tagCounts?.bleed || 0) * 3) : 0);
     Neo.player.swing = Neo.ATTACKS.melee.active;
     Neo.player.swingA = angle;
+    Neo.player.stabSwing = false;
     forEachEnemyNearPlayer(adjustedRange, enemy => {
       if (!enemy) return;
       if (!isWithinRadiusSq(Neo.player.x, Neo.player.y, enemy, adjustedRange)) return;
@@ -270,7 +275,11 @@
       return true;
     }
     if (weaponKey === 'claw_gauntlets') {
-      fireWeaponSweep(wDmg(weaponKey), wRng(weaponKey), Math.PI * 0.7, wKnk(weaponKey), '#ff7a9a', { bleedChance: 0.22, bleedStacks: 1, bleedDuration: 5, itemBleedChance: itemStats.bleedChance || 0 });
+      // Claws strike twice: an immediate swipe leaning one way, then a mirrored
+      // follow-up 0.12s later for a quick one-two "X" flurry across the cursor.
+      const clawOpts = { bleedChance: 0.22, bleedStacks: 1, bleedDuration: 5, itemBleedChance: itemStats.bleedChance || 0 };
+      fireWeaponSweep(wDmg(weaponKey), wRng(weaponKey), Math.PI * 0.7, wKnk(weaponKey), '#ff7a9a', { ...clawOpts, angleOffset: -0.18 });
+      Neo.clawSwipeQueue.push({ delay: CLAW_GAUNTLETS_SECOND_DELAY, damage: wDmg(weaponKey), range: wRng(weaponKey), push: wKnk(weaponKey), options: { ...clawOpts, angleOffset: 0.18 } });
       Neo.player.weaponCooldown = wCd(weaponKey) / attackSpeed;
       return true;
     }
@@ -300,7 +309,7 @@
       Neo.player.weaponCooldown = wCd(weaponKey) / attackSpeed;
       return true;
     }
-    if (weaponKey === 'granillia_lightning_spear') {
+    if (weaponKey === 'gelleh_lightning_spear') {
       castSmiteChain();
       Neo.player.weaponCooldown = wCd(weaponKey) / attackSpeed;
       return true;
@@ -364,6 +373,7 @@
     const angle = Math.atan2(Neo.mouse.worldY - Neo.player.y, Neo.mouse.worldX - Neo.player.x);
     Neo.player.swing = Neo.ATTACKS.melee.active;
     Neo.player.swingA = angle;
+    Neo.player.stabSwing = false;
 
     const anvilDmgBonus = Neo.getAnvilMoveBonus(move, 'damage');
     const anvilRngBonus = Neo.getAnvilMoveBonus(move, 'range');
@@ -479,6 +489,14 @@
         fireConfiguredWeaponProjectile('magenta_p90', queued.angle, p90Dmg, p90Knk);
       }
       Neo.weaponBurstQueue.splice(index, 1);
+    }
+
+    for (let index = Neo.clawSwipeQueue.length - 1; index >= 0; index -= 1) {
+      const queued = Neo.clawSwipeQueue[index];
+      queued.delay -= dt;
+      if (queued.delay > 0) continue;
+      fireWeaponSweep(queued.damage, queued.range, Math.PI * 0.7, queued.push, '#ff7a9a', queued.options);
+      Neo.clawSwipeQueue.splice(index, 1);
     }
   }
 
@@ -701,10 +719,22 @@
     Neo.updateHud();
   }
 
+  const HEALING_ZONE_MAX_CHARGE = 5; // seconds of hold for a full-power zone
+
   function trySmash() {
     cancelCowardsWayOnAttack();
     const itemStats = Neo.getItemStats();
     const attackSpeed = Neo.getAttackSpeedValue();
+    // Healing Zone is hold-to-charge: holding the smash key winds it up (up to
+    // 5s) for a bigger, stronger zone, released in updateHealingZoneCharge().
+    if (getEquippedMove('smash') === 'healing_zone') {
+      if (Neo.healingZoneCharging) return; // already winding up
+      if (!Neo.spendSkillCharge('smash', Neo.getSmashCooldownDuration(attackSpeed), { deferTimer: true })) return;
+      Neo.healingZoneCharging = true;
+      Neo.healingZoneChargeTime = 0;
+      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 16, life: 0.5, text: 'CHARGING', c: '#47ff7d' });
+      return;
+    }
     if (!Neo.spendSkillCharge('smash', Neo.getSmashCooldownDuration(attackSpeed))) return;
     if (itemStats.homingMissileChance > 0 && Neo.nextRandom('encounter') < itemStats.homingMissileChance) {
       const base = Math.atan2(Neo.mouse.worldY - Neo.player.y, Neo.mouse.worldX - Neo.player.x);
@@ -741,10 +771,6 @@
       castChaosBurst();
       return;
     }
-    if (move === 'healing_zone') {
-      castHealingZone();
-      return;
-    }
     if (move === 'fire_circle') {
       castFireCircle();
       return;
@@ -753,8 +779,8 @@
       castFloorLava();
       return;
     }
-    if (move === 'fangs_of_death') {
-      castFangsOfDeath();
+    if (move === 'random_pounce') {
+      castRandomPounce();
       return;
     }
     const anvilSmashRange = Neo.getAnvilMoveBonus(move, 'range');
@@ -830,6 +856,7 @@
     const angle = Math.atan2(Neo.mouse.worldY - Neo.player.y, Neo.mouse.worldX - Neo.player.x);
     Neo.player.swing = Neo.ATTACKS.melee.active;
     Neo.player.swingA = angle;
+    Neo.player.stabSwing = false;
     const anvilDmg = Neo.getAnvilMoveBonus(move, 'damage');
     const anvilRng = Neo.getAnvilMoveBonus(move, 'range');
     // Full charge: +150% damage, +40% reach, wider arc, +80% knockback.
@@ -907,7 +934,7 @@
     Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.3, ring: 22, c: '#c0d8ff' });
   }
 
-  function castFangsOfDeath() {
+  function castRandomPounce() {
     const itemStats = Neo.getItemStats();
     const move = getEquippedMove('smash');
     const anvilDmg = Neo.getAnvilMoveBonus(move, 'damage');
@@ -1070,11 +1097,39 @@
     Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 18, life: 0.72, text: "COWARD'S WAY", c: '#8dffcf' });
   }
 
+  // Lightning left in the wake of a Zip dash: damages every enemy near the line
+  // travelled from (x1,y1) to (x2,y2) and draws a jagged bolt along it.
+  function strikeZipLine(x1, y1, x2, y2, lineDamage, lineRadius) {
+    const length = Math.hypot(x2 - x1, y2 - y1);
+    if (length < 4) return;
+    const midX = (x1 + x2) * 0.5;
+    const midY = (y1 + y2) * 0.5;
+    const reach = lineRadius + length * 0.5;
+    Neo.forEachEnemyNearCircle?.(midX, midY, reach + 80, enemy => {
+      if (Neo.distToSegment(enemy.x, enemy.y, x1, y1, x2, y2) > lineRadius + enemy.r) return;
+      const angle = Math.atan2(enemy.y - y1, enemy.x - x1);
+      hitEnemy(enemy, lineDamage, angle, 150, '#95deff', { lightning: true });
+    });
+    if (typeof Neo.forEachDestructibleNearCircle === 'function') {
+      Neo.forEachDestructibleNearCircle(midX, midY, reach + COMBAT_SPATIAL_PADDING, prop => {
+        if (prop.broken || prop.hidden) return;
+        if (Neo.distToSegment(prop.x, prop.y, x1, y1, x2, y2) > lineRadius + (prop.r || 12)) return;
+        Neo.damageDestructible(prop, 2);
+      });
+    }
+    Neo.spawnParticle({
+      x: x1, y: y1, life: 0.26, c: '#bfe4ff',
+      line: { x1, y1, x2, y2, w: 4.2, jag: 13, seg: Math.max(6, Math.round(length / 26)), phase: Neo.rng() * Math.PI * 2 },
+    });
+  }
+
   function castZipLightning(moveX, moveY) {
     const itemStats = Neo.getItemStats();
     const visited = new Set();
     const hops = 3;
     const baseDamage = Neo.godTimer > 0 ? 34 : 26;
+    const lineRadius = 46 * (itemStats.aoeRadiusMultiplier || 1);
+    const lineDamage = Math.max(1, Math.round(baseDamage * 0.6));
     let sourceX = Neo.player.x;
     let sourceY = Neo.player.y;
     let performedHop = false;
@@ -1094,10 +1149,15 @@
         90,
         14
       );
+      const fromX = sourceX;
+      const fromY = sourceY;
       if (landing) teleportPlayerTo(landing.x, landing.y, '#95deff');
       sourceX = Neo.player.x;
       sourceY = Neo.player.y;
       performedHop = true;
+
+      // Lightning streaks along the path the dash just travelled.
+      strikeZipLine(fromX, fromY, Neo.player.x, Neo.player.y, lineDamage, lineRadius);
 
       const hitAngle = Math.atan2(target.y - Neo.player.y, target.x - Neo.player.x);
       hitEnemy(target, baseDamage, hitAngle, 185, '#95deff', { lightning: true });
@@ -1127,8 +1187,14 @@
       const angle = Math.hypot(moveX, moveY) > 0.15
         ? Math.atan2(moveY, moveX)
         : Math.atan2(Neo.mouse.worldY - Neo.player.y, Neo.mouse.worldX - Neo.player.x);
+      const fromX = Neo.player.x;
+      const fromY = Neo.player.y;
       const fallback = findSafePointNearTarget(Neo.player.x + Math.cos(angle) * 190, Neo.player.y + Math.sin(angle) * 190, Neo.player.r, 120, 16);
-      if (fallback) teleportPlayerTo(fallback.x, fallback.y, '#95deff');
+      if (fallback) {
+        teleportPlayerTo(fallback.x, fallback.y, '#95deff');
+        // No enemy to chain to — still leave a lightning trail along the dash.
+        strikeZipLine(fromX, fromY, Neo.player.x, Neo.player.y, lineDamage, lineRadius);
+      }
     }
 
     Neo.shake = Math.max(Neo.shake, 8);
@@ -1279,41 +1345,156 @@
     if (isMetao) applyStatusInRadius(px, py, 52 * aoeRadiusMultiplier, 'fire', 1, 3.5);
   }
 
+  const JUSTICE_BLADE_LIFE = 2.1; // swords swing for 2.1s before despawning
+
   function castBladeOfJustice() {
-    const angle = Math.atan2(Neo.mouse.worldY - Neo.player.y, Neo.mouse.worldX - Neo.player.x);
-    forEachEnemyNearPlayer(110, enemy => {
-      if (!enemy) return;
-      if (!isWithinRadiusSq(Neo.player.x, Neo.player.y, enemy, 110)) return;
-      const targetAngle = Math.atan2(enemy.y - Neo.player.y, enemy.x - Neo.player.x);
-      const difference = angleDifferenceAbs(targetAngle, angle);
-      if (difference > 1.3) return;
-      hitEnemy(enemy, 34, angle, 280, '#fff6a3');
+    // Summon three flying swords that hover in front of the player and slash in
+    // whatever direction the mouse points — control them like a laser. Each
+    // sword swings (sweeps its tip back and forth) for 2.1 seconds, slicing
+    // enemies it passes over, then despawns.
+    const itemStats = Neo.getItemStats();
+    const anvilBonus = Neo.getAnvilMoveBonus('blade_justice', 'damage') || 0;
+    const baseDamage = (Neo.godTimer > 0 ? 30 : 22) + anvilBonus;
+    const bladeDamage = Math.max(1, Math.round(baseDamage * (itemStats.beamDamageMultiplier || 1)));
+    const aimAngle = Math.atan2(Neo.mouse.worldY - Neo.player.y, Neo.mouse.worldX - Neo.player.x);
+    if (!Array.isArray(Neo.justiceBlades)) Neo.justiceBlades = [];
+    const count = 3;
+    for (let index = 0; index < count; index += 1) {
+      // Fan the three swords across a forward arc; each keeps a fixed offset from
+      // the formation's aim direction and swings around that.
+      const fanOffset = (index - (count - 1) / 2) * 0.5;
+      Neo.justiceBlades.push({
+        index,
+        fanOffset,
+        aim: aimAngle,            // formation facing — eased toward the mouse each frame
+        swingPhase: index * 0.7,  // desync the swings so they read as separate blades
+        life: JUSTICE_BLADE_LIFE,
+        maxLife: JUSTICE_BLADE_LIFE,
+        damage: bladeDamage,
+        radius: 16,
+        reach: 120,               // how far in front of the player the sword orbits
+        hitCooldowns: new Map(),  // per-enemy re-hit gate
+        x: Neo.player.x,
+        y: Neo.player.y,
+        angle: aimAngle,
+      });
+    }
+    Neo.shake = Math.max(Neo.shake, 6);
+    Neo.shakeT = Math.max(Neo.shakeT, 0.1);
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.4, ring: 30, c: '#fff6a3' });
+  }
+
+  // Per-frame flying-sword behaviour for Blade Justice.
+  function updateJusticeBlades(dt) {
+    const blades = Neo.justiceBlades;
+    if (!Array.isArray(blades) || blades.length === 0) return;
+    if (!Neo.player) { blades.length = 0; return; }
+
+    // Whole formation tracks the mouse so the swords feel mouse-controlled.
+    const mouseAim = Math.atan2(Neo.mouse.worldY - Neo.player.y, Neo.mouse.worldX - Neo.player.x);
+    let write = 0;
+    for (let read = 0; read < blades.length; read += 1) {
+      const blade = blades[read];
+      blade.life -= dt;
+      if (blade.life <= 0) continue; // drop it
+
+      // Ease the blade's aim toward the mouse (smooth, controllable steering).
+      blade.aim = Neo.turnAngleToward
+        ? Neo.turnAngleToward(blade.aim, mouseAim, 9 * dt)
+        : mouseAim;
+      // Swing: the sword sweeps its angle around the aim direction.
+      blade.swingPhase += dt * 7.5;
+      const swing = Math.sin(blade.swingPhase) * 0.7;
+      const dirAngle = blade.aim + blade.fanOffset + swing;
+      // Position the sword out in front along its swing direction.
+      const orbit = blade.reach * (0.82 + 0.18 * Math.cos(blade.swingPhase));
+      blade.x = Neo.player.x + Math.cos(dirAngle) * orbit;
+      blade.y = Neo.player.y + Math.sin(dirAngle) * orbit;
+      // The blade points outward along its orbit (tip leads the sweep).
+      blade.angle = dirAngle + Math.sign(Math.cos(blade.swingPhase)) * 0.5;
+
+      // Decay per-enemy hit cooldowns.
+      if (blade.hitCooldowns.size) {
+        blade.hitCooldowns.forEach((value, key) => {
+          const next = value - dt;
+          if (next <= 0) blade.hitCooldowns.delete(key);
+          else blade.hitCooldowns.set(key, next);
+        });
+      }
+
+      // Damage enemies the sword body overlaps.
+      Neo.forEachEnemyNearCircle?.(blade.x, blade.y, blade.radius + 80, enemy => {
+        const hitRadius = blade.radius + enemy.r;
+        if (Neo.dist(blade.x, blade.y, enemy.x, enemy.y) > hitRadius) return;
+        if (blade.hitCooldowns.has(enemy)) return;
+        blade.hitCooldowns.set(enemy, 0.22);
+        const angle = Math.atan2(enemy.y - Neo.player.y, enemy.x - Neo.player.x);
+        hitEnemy(enemy, blade.damage, angle, 180, '#fff6a3', { lightning: false });
+      });
+      // Chip destructibles too.
+      if (typeof Neo.forEachDestructibleNearCircle === 'function') {
+        Neo.forEachDestructibleNearCircle(blade.x, blade.y, blade.radius + COMBAT_SPATIAL_PADDING, prop => {
+          if (prop.broken || prop.hidden) return;
+          if (Neo.dist(blade.x, blade.y, prop.x, prop.y) > blade.radius + (prop.r || 12)) return;
+          if (blade.hitCooldowns.has(prop)) return;
+          blade.hitCooldowns.set(prop, 0.4);
+          Neo.damageDestructible(prop, 2);
+        });
+      }
+
+      // Faint trailing sparkle.
+      if (Neo.nextRandom('fx') < 0.5) {
+        Neo.spawnParticle({ x: blade.x, y: blade.y, life: 0.18, c: '#fff6a3', spark: true, size: 2 });
+      }
+
+      blades[write++] = blade;
+    }
+    blades.length = write;
+  }
+
+  // Two lightning blades thrown straight ahead by the spear jab.
+  function spawnSpearBlades(angle) {
+    const itemStats = Neo.getItemStats();
+    const baseDamage = (Neo.godTimer > 0 ? 24 : 18) * (itemStats.beamDamageMultiplier || 1);
+    const bladeDamage = Math.max(1, Math.round(baseDamage));
+    const offsets = [-0.07, 0.07]; // a tight pair, barely splayed
+    offsets.forEach(offset => {
+      const bladeAngle = angle + offset;
+      spawnWeaponProjectile({
+        x: Neo.player.x + Math.cos(bladeAngle) * 24,
+        y: Neo.player.y + Math.sin(bladeAngle) * 24,
+        angle: bladeAngle,
+        speed: 820,
+        damage: bladeDamage,
+        knockback: 150,
+        r: 7,
+        life: 0.5,
+        kind: 'blade_justice',
+        color: '#bfe4ff',
+        pierceCount: 99,
+        hitOptions: { lightning: true },
+      });
     });
-    forEachDestructibleNearPlayer(110, prop => {
-      if (prop.broken || prop.hidden) return;
-      if (!isWithinRadiusSq(Neo.player.x, Neo.player.y, prop, 110)) return;
-      const targetAngle = Math.atan2(prop.y - Neo.player.y, prop.x - Neo.player.x);
-      const difference = angleDifferenceAbs(targetAngle, angle);
-      if (difference > 1.3) return;
-      Neo.damageDestructible(prop, 2);
-    });
-    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.5, ring: 36, c: '#fff6a3' });
   }
 
   function castSmiteChain() {
     const angle = Math.atan2(Neo.mouse.worldY - Neo.player.y, Neo.mouse.worldX - Neo.player.x);
+    // Spear is a jab, not a swipe: a tight forward thrust rather than a wide arc.
     Neo.player.swing = Neo.ATTACKS.melee.active;
     Neo.player.swingA = angle;
+    Neo.player.stabSwing = true;
 
-    // Physical swing: hits enemies and destructibles in an arc.
+    // Physical thrust: a narrow forward stab that reaches a little further than a
+    // swipe but only hits what is roughly in front of the player.
     const physicalDamage = 20;
-    const smiteRange = Neo.ATTACKS.melee.range + 4;
+    const stabArc = 0.45; // ~26 degrees to each side — tight, jab-like
+    const smiteRange = Neo.ATTACKS.melee.range + 18;
     forEachEnemyNearPlayer(smiteRange, enemy => {
       if (!enemy) return;
       if (!isWithinRadiusSq(Neo.player.x, Neo.player.y, enemy, smiteRange)) return;
       const targetAngle = Math.atan2(enemy.y - Neo.player.y, enemy.x - Neo.player.x);
       const difference = angleDifferenceAbs(targetAngle, angle);
-      if (difference > Neo.ATTACKS.melee.arc + 0.15) return;
+      if (difference > stabArc) return;
       hitEnemy(enemy, physicalDamage, angle, Neo.ATTACKS.melee.push, '#fff6a3', { lightning: true });
     });
     forEachDestructibleNearPlayer(smiteRange, prop => {
@@ -1321,9 +1502,13 @@
       if (!isWithinRadiusSq(Neo.player.x, Neo.player.y, prop, smiteRange)) return;
       const targetAngle = Math.atan2(prop.y - Neo.player.y, prop.x - Neo.player.x);
       const difference = angleDifferenceAbs(targetAngle, angle);
-      if (difference > Neo.ATTACKS.melee.arc + 0.15) return;
+      if (difference > stabArc) return;
       Neo.damageDestructible(prop, 2);
     });
+
+    // The jab launches two lightning blades straight ahead (same flying-blade
+    // projectiles as Blade Justice, but a tighter pair).
+    spawnSpearBlades(angle);
 
     const origin = findNearestSmiteTarget(Neo.player.x, Neo.player.y, 280);
     if (!origin) return;
@@ -1393,10 +1578,60 @@
     return best;
   }
 
-  function castHealingZone() {
+  function castHealingZone(chargeRatio = 0) {
     const aoeRadiusMultiplier = Neo.getItemStats().aoeRadiusMultiplier || 1;
-    Neo.hazards.push({ kind: 'healing_zone', x: Neo.player.x, y: Neo.player.y, r: 62 * aoeRadiusMultiplier, ttl: 6, healTick: 0.24, healAccum: 0, plusTick: 0.08 });
-    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.7, ring: 30, c: '#35ff6f' });
+    // A full 5s charge roughly doubles the radius and ttl and boosts heal/damage.
+    const charge = Neo.clamp(Number(chargeRatio) || 0, 0, 1);
+    const radius = 62 * aoeRadiusMultiplier * (1 + charge);
+    const ttl = 6 * (1 + charge);
+    Neo.hazards.push({
+      kind: 'healing_zone',
+      x: Neo.player.x,
+      y: Neo.player.y,
+      r: radius,
+      ttl,
+      healTick: 0.24,
+      healAccum: 0,
+      plusTick: 0.08,
+      healMult: 1 + charge * 1.2,
+      damageMult: 1 + charge * 1.5,
+    });
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.7, ring: radius * 0.5, c: '#35ff6f' });
+    if (charge > 0.05) {
+      Neo.shake = Math.max(Neo.shake, 4 + charge * 6);
+      Neo.shakeT = Math.max(Neo.shakeT, 0.14);
+    }
+  }
+
+  // Drives the Healing Zone charge: grows while the smash input is held (capped
+  // at 5s), then releases a zone scaled by how long it was held.
+  function updateHealingZoneCharge(dt) {
+    if (!Neo.healingZoneCharging) return;
+    if (!Neo.player || Neo.gameState !== 'play') {
+      // Bail out cleanly (e.g. on death / room change) — refund the cooldown timer.
+      Neo.healingZoneCharging = false;
+      Neo.queueHeldSkillRecharge?.('smash', Neo.getSmashCooldownDuration(Neo.getAttackSpeedValue()));
+      return;
+    }
+    Neo.healingZoneChargeTime = Math.min(
+      HEALING_ZONE_MAX_CHARGE,
+      Number(Neo.healingZoneChargeTime || 0) + dt
+    );
+    const atMax = Neo.healingZoneChargeTime >= HEALING_ZONE_MAX_CHARGE;
+    // Charge tier sparkle so the player can read the wind-up.
+    if (Neo.nextRandom('fx') < 0.6) {
+      const ratio = Neo.healingZoneChargeTime / HEALING_ZONE_MAX_CHARGE;
+      const ring = 18 + ratio * 48;
+      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.22, ring, c: '#47ff7d' });
+    }
+    // Release when the key is let go, or auto-release at full charge.
+    if (!Neo.smashHeld || atMax) {
+      const ratio = Neo.healingZoneChargeTime / HEALING_ZONE_MAX_CHARGE;
+      castHealingZone(ratio);
+      Neo.queueHeldSkillRecharge?.('smash', Neo.getSmashCooldownDuration(Neo.getAttackSpeedValue()));
+      Neo.healingZoneCharging = false;
+      Neo.healingZoneChargeTime = 0;
+    }
   }
 
   function castFireCircle() {
@@ -2106,7 +2341,7 @@
     if (enemy.type === 'god') {
       Neo.metaProgress.godsKilled = Number(Neo.metaProgress.godsKilled || 0) + 1;
       window.achievementEvents?.emit('god:killed');
-      if (!Neo.metaProgress.unlockedCharacters.includes('granialla')) Neo.metaProgress.unlockedCharacters.push('granialla');
+      if (!Neo.metaProgress.unlockedCharacters.includes('gelleh')) Neo.metaProgress.unlockedCharacters.push('gelleh');
       if (Neo.gameMode === 'boss_rush') {
         Neo.currentRoom.cleared = true;
         Neo.bossRushActive = false;
@@ -2447,9 +2682,12 @@
   Neo.castChaosBurst = castChaosBurst;
   Neo.spawnChaosBlast = spawnChaosBlast;
   Neo.castBladeOfJustice = castBladeOfJustice;
+  Neo.updateJusticeBlades = updateJusticeBlades;
   Neo.castSmiteChain = castSmiteChain;
   Neo.findNearestSmiteTarget = findNearestSmiteTarget;
   Neo.castHealingZone = castHealingZone;
+  Neo.updateHealingZoneCharge = updateHealingZoneCharge;
+  Neo.HEALING_ZONE_MAX_CHARGE = HEALING_ZONE_MAX_CHARGE;
   Neo.castFireCircle = castFireCircle;
   Neo.castFloorLava = castFloorLava;
   Neo.castLightningColumns = castLightningColumns;

@@ -66,8 +66,8 @@ export function bindInput() {
         toggleInventoryPanel();
         Neo.invKeyLatch = true;
       }
-      if (b && key === b.smash && Neo.gameState === 'play') Neo.trySmash();
-      else if (!b && key === 'r' && Neo.gameState === 'play') Neo.trySmash();
+      if (b && key === b.smash && Neo.gameState === 'play') { Neo.smashHeld = true; Neo.trySmash(); }
+      else if (!b && key === 'r' && Neo.gameState === 'play') { Neo.smashHeld = true; Neo.trySmash(); }
       if (Neo.gameState === 'play' && Neo.EQUIPMENT_SLOT_KEYS?.includes(key.toUpperCase())) {
         if (!Neo.equipKeyLatch) Neo.equipKeyLatch = {};
         const letter = key.toUpperCase();
@@ -91,6 +91,7 @@ export function bindInput() {
       Neo.keys[key] = false;
       const b = window.NeoSettings?.getBindings();
       const inventoryKey = b ? b.inventory : 'i';
+      if ((b && key === b.smash) || (!b && key === 'r')) Neo.smashHeld = false;
       if (key === 'e') { Neo.shopKeyLatch = false; Neo.anvilKeyLatch = false; }
       if (key === ' ') Neo.ladderUseKeyLatch = false;
       if (key === String(b?.activateAll ?? ' ').toLowerCase()) Neo.activateAllKeyLatch = false;

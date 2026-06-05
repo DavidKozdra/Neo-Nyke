@@ -1647,7 +1647,8 @@
           hazard.plusTick = Neo.rand(0.16, 0.07);
         }
         if (Neo.dist(Neo.player.x, Neo.player.y, hazard.x, hazard.y) < hazard.r) {
-          const healed = Neo.applyPlayerHealing?.(Neo.scalePlayerHealing(7.36 * dt), { showBarrier: false }) ?? 0;
+          const healMult = Number(hazard.healMult || 1);
+          const healed = Neo.applyPlayerHealing?.(Neo.scalePlayerHealing(7.36 * healMult * dt), { showBarrier: false }) ?? 0;
           if (healed > 0) {
             hazard.healAccum = (hazard.healAccum || 0) + healed;
             hazard.healTick = (hazard.healTick ?? 0.24) - dt;
@@ -1658,9 +1659,10 @@
             }
           }
         }
+        const zoneDamageMult = Number(hazard.damageMult || 1);
         forEachEnemyNearCircle(hazard.x, hazard.y, hazard.r + 80, enemy => {
           if (Neo.dist(enemy.x, enemy.y, hazard.x, hazard.y) < hazard.r + enemy.r) {
-            enemy.hp -= (10 * dt) / Math.max(1, Number(enemy.defenseMultiplier || 1));
+            enemy.hp -= (10 * zoneDamageMult * dt) / Math.max(1, Number(enemy.defenseMultiplier || 1));
             if (enemy.hp <= 0) Neo.onEnemyDie(enemy);
           }
         });

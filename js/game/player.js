@@ -1,4 +1,11 @@
 // player.js — Player data migration, stats, abilities, charge.
+
+// Moves renamed across versions: { oldSavedKey: currentKey }. Applied during
+// migration so saves referencing the old key keep the move.
+const RENAMED_MOVE_KEYS = {
+  fangs_of_death: 'random_pounce',
+};
+
 export function migratePlayerData(source) {
     const playerData = source || Neo.createDefaultPlayer();
     playerData.character = playerData.character || 'thorn_knight';
@@ -50,7 +57,7 @@ export function migratePlayerData(source) {
     playerData.lavaTrailTick = Number(playerData.lavaTrailTick || 0);
     playerData.princessFlightTime = Number(playerData.princessFlightTime || 0);
     playerData.overhealBarrier = Math.max(0, Number(playerData.overhealBarrier || 0));
-    playerData.graniallaHealPulseFrame = Number(playerData.graniallaHealPulseFrame || 0);
+    playerData.gellehHealPulseFrame = Number(playerData.gellehHealPulseFrame || 0);
     Neo.ensureStatuses(playerData);
     if (!playerData.equippedMoves || typeof playerData.equippedMoves !== 'object') {
       playerData.equippedMoves = getDefaultMovesForCharacter(playerData.character);
@@ -58,6 +65,17 @@ export function migratePlayerData(source) {
     if (!playerData.ownedMoves || typeof playerData.ownedMoves !== 'object') {
       playerData.ownedMoves = {};
     }
+    // Back-compat: remap moves renamed across versions so old saves keep them
+    // instead of silently resetting to the character default.
+    Object.entries(RENAMED_MOVE_KEYS).forEach(([oldKey, newKey]) => {
+      Neo.MOVE_SLOTS.forEach(slot => {
+        if (playerData.equippedMoves[slot] === oldKey) playerData.equippedMoves[slot] = newKey;
+      });
+      if (playerData.ownedMoves[oldKey]) {
+        playerData.ownedMoves[newKey] = true;
+        delete playerData.ownedMoves[oldKey];
+      }
+    });
     if (!playerData.ownedWeapons || typeof playerData.ownedWeapons !== 'object') {
       playerData.ownedWeapons = {};
     }
@@ -155,23 +173,27 @@ export function syncCharacterUiTheme() {
 export function getDefaultWeaponForCharacter(characterKey) {
     if (characterKey === 'princess') return 'princess_wand';
     if (characterKey === 'metao') return 'metao_fire_staff';
-    if (characterKey === 'granialla') return 'granillia_lightning_spear';
+    if (characterKey === 'gelleh') return 'gelleh_lightning_spear';
     if (characterKey === 'mooggy') return 'claw_gauntlets';
     return 'thorns_bleed_blade';
   }
 
 export function getDefaultMovesForCharacter(characterKey) {
+    // The melee slot is the bare-hands fallback only: it is the attack you get
+    // when no weapon is equipped, so every character defaults to the generic
+    // `slash`. Signature melee attacks (smite, fire_balls, narwal_fight,
+    // mooggy_swipe) live on each character's weapon, not the M1 move slot.
     if (characterKey === 'princess') {
-      return { melee: 'narwal_fight', laser: 'love_beam', smash: 'kicky_kick', dash: 'flying_unhitable' };
+      return { melee: 'slash', laser: 'love_beam', smash: 'kicky_kick', dash: 'flying_unhitable' };
     }
     if (characterKey === 'metao') {
-      return { melee: 'fire_balls', laser: 'power_disks', smash: 'chaos_burst', dash: 'warp' };
+      return { melee: 'slash', laser: 'power_disks', smash: 'chaos_burst', dash: 'warp' };
     }
-    if (characterKey === 'granialla') {
-      return { melee: 'smite', laser: 'blade_justice', smash: 'healing_zone', dash: 'zip_lightning' };
+    if (characterKey === 'gelleh') {
+      return { melee: 'slash', laser: 'blade_justice', smash: 'healing_zone', dash: 'zip_lightning' };
     }
     if (characterKey === 'mooggy') {
-      return { melee: 'mooggy_swipe', laser: 'nail_shot', smash: 'fangs_of_death', dash: 'mooggy_zoomies' };
+      return { melee: 'slash', laser: 'nail_shot', smash: 'random_pounce', dash: 'mooggy_zoomies' };
     }
     return { melee: 'slash', laser: 'blood_beam', smash: 'crimson_smash', dash: 'dash' };
   }
@@ -431,10 +453,10 @@ export function applyPlayerHealing(amount, options = {}) {
         }
       }
     }
-    if ((gained > 0 || overflow > 0) && Neo.player.character === 'granialla') {
+    if ((gained > 0 || overflow > 0) && Neo.player.character === 'gelleh') {
       const now = Number(Neo.frameId || 0);
-      if (now - Number(Neo.player.graniallaHealPulseFrame || -9999) >= 24) {
-        Neo.player.graniallaHealPulseFrame = now;
+      if (now - Number(Neo.player.gellehHealPulseFrame || -9999) >= 24) {
+        Neo.player.gellehHealPulseFrame = now;
         const radius = 86;
         const pulseDamage = Math.max(2, Math.min(18, (gained + overflow) * 0.45));
         Neo.forEachEnemyNearCircle?.(Neo.player.x, Neo.player.y, radius + 80, enemy => {

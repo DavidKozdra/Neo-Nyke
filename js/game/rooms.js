@@ -1963,7 +1963,7 @@
         }
         enemy.attackCd = rival.attackCd * Number(weapon.cooldownMult || 1) + Neo.nextRandom('encounter') * 0.4;
         enemy.swingTime = 0.22;
-        // Heal on hit for granialla-style
+        // Heal on hit for gelleh-style
         if (attackStyle === 'melee_heal' && Neo.nextRandom('encounter') < 0.25) {
           const heal = Math.round(enemy.max * 0.06);
           enemy.hp = Math.min(enemy.max, enemy.hp + heal);

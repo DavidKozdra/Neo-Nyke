@@ -460,7 +460,7 @@ export function createUIController(view) {
       if (normalized.includes('thorn')) return 'thorn_knight';
       if (normalized.includes('princess')) return 'princess';
       if (normalized.includes('metao')) return 'metao';
-      if (normalized.includes('granialla')) return 'granialla';
+      if (normalized.includes('gelleh') || normalized.includes('granialla')) return 'gelleh';
       if (normalized.includes('mooggy')) return 'mooggy';
       if (normalized.includes('queen') && normalized.includes('cult')) return 'queen_cult';
       if (normalized.includes('bulk') && normalized.includes('golem')) return 'bulk_golem';
@@ -1208,7 +1208,7 @@ export function createUIController(view) {
         // Carousel prev/next arrows
         const carouselPrev = document.getElementById('carouselPrev');
         const carouselNext = document.getElementById('carouselNext');
-        const charOrder = ['princess', 'thorn_knight', 'metao', 'granialla', 'mooggy'];
+        const charOrder = ['princess', 'thorn_knight', 'metao', 'gelleh', 'mooggy'];
         function carouselStep(delta) {
           const currentIndex = charOrder.indexOf(handlers._getChosenCharacter ? handlers._getChosenCharacter() : 'princess');
           const nextIndex = currentIndex + delta;
@@ -1839,17 +1839,17 @@ export function createUIController(view) {
         renderRunHistoryPage();
       },
       updateCharacterSelection(unlocked, selected) {
-        const CHAR_ORDER = ['princess', 'thorn_knight', 'metao', 'granialla', 'mooggy'];
+        const CHAR_ORDER = ['princess', 'thorn_knight', 'metao', 'gelleh', 'mooggy'];
         const ROLE_LABELS = {
           princess: 'Starter',
           thorn_knight: 'Bleed melee',
           metao: 'Range caster',
-          granialla: 'Divine hybrid',
+          gelleh: 'Divine hybrid',
           mooggy: 'Fast assassin',
         };
         const unlockText = (itemKey) => {
           if (unlocked.has(itemKey)) return ROLE_LABELS[itemKey] || 'Ready';
-          if (itemKey === 'granialla') return 'Unlock: beat GOD';
+          if (itemKey === 'gelleh') return 'Unlock: beat GOD';
           if (itemKey === 'mooggy') {
             const mooggyProgress = Math.max(0, Math.min(3, Number(Neo.metaProgress?.mooggyDefeats || 0)));
             return `Unlock: Mooggy ${mooggyProgress}/3`;
@@ -1900,11 +1900,23 @@ export function createUIController(view) {
             `<div class="stat-bar"><div class="stat-fill" style="width:${s.pct}%;background:${s.color}"></div></div></div>`
           ).join('');
           const defaultMoves = Neo.getDefaultMovesForCharacter(selected);
+          const defaultWeapon = Neo.getDefaultWeaponForCharacter(selected);
           const slots = ['melee', 'laser', 'smash', 'dash'];
           const skillsHtml = slots.map(slot => {
+            const slotLabel = Neo.SLOT_LABELS[slot] || Neo.titleCase(slot);
+            // The melee (M1) slot is driven by the equipped weapon — characters
+            // start with their signature weapon, so show that here rather than the
+            // bare-hands `slash` fallback the move slot defaults to.
+            if (slot === 'melee' && defaultWeapon) {
+              const weaponDef = Neo.WEAPON_DEFS[defaultWeapon] || {};
+              const weaponLabel = weaponDef.name || defaultWeapon || 'Unknown';
+              return `<span class="hero-detail-skill-pip">
+              <canvas class="hero-detail-skill-icon" data-hero-weapon="${Neo.escapeHtml(defaultWeapon)}" width="24" height="24" aria-hidden="true"></canvas>
+              <span class="hero-detail-skill-text">${Neo.escapeHtml(slotLabel)}: ${Neo.escapeHtml(weaponLabel)}</span>
+            </span>`;
+            }
             const moveKey = String(defaultMoves[slot] || '');
             const moveDef = Neo.MOVE_DEFS[moveKey] || {};
-            const slotLabel = Neo.SLOT_LABELS[slot] || Neo.titleCase(slot);
             const moveLabel = moveDef.name || moveKey || 'Unknown';
             return `<span class="hero-detail-skill-pip">
               <canvas class="hero-detail-skill-icon" data-hero-move="${Neo.escapeHtml(moveKey)}" width="24" height="24" aria-hidden="true"></canvas>
@@ -1941,6 +1953,10 @@ export function createUIController(view) {
           detail.querySelectorAll('[data-hero-move]').forEach(el => {
             const move = Neo.MOVE_DEFS[el.dataset.heroMove];
             if (move) Neo.drawMoveToastIcon(el, move);
+          });
+          detail.querySelectorAll('[data-hero-weapon]').forEach(el => {
+            const weapon = Neo.WEAPON_DEFS[el.dataset.heroWeapon];
+            if (weapon) Neo.drawWeaponToastIcon(el, weapon);
           });
           Neo.drawItemIconCanvases?.(detail, 'data-hero-item');
           detail.querySelectorAll('[data-inv-ui-icon]').forEach(el => {

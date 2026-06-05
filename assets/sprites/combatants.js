@@ -44,7 +44,7 @@ window.NeoNykeSpriteDefs = {
       '.c....c...',
     ],
   },
-  granialla: {
+  gelleh: {
     palette: { a: '#1e1018', b: '#6b3a22', c: '#c8824a', d: '#f5d84a' },
     pixels: [
       '.ddddddd..',

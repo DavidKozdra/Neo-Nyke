@@ -39,6 +39,7 @@ export function drawWorldViewport(cam, vpX, vpW, vpH, vpY, pLabel, slot = null) 
     // in drawRoomDecor (before the player).
     Neo.drawStructuresOverPlayer?.();
     if (!isDying) Neo.drawPlayerLaser();
+    Neo.drawJusticeBlades?.();
     if (isDying && Neo.playerDeathAnim) Neo.drawPlayerCorpseAnim(Neo.playerDeathAnim);
     Neo.drawParticles();
     if (!isDying) Neo.drawLadderPrompt();

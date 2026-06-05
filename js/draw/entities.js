@@ -1024,7 +1024,53 @@
       Neo.ctx.arc(previewX, previewY, 4, 0, Math.PI * 2);
       Neo.ctx.fill();
     }
-    if (Neo.player.swing > 0) {
+    if (Neo.player.swing > 0 && Neo.player.stabSwing) {
+      // Jab: a straight forward thrust that lunges out and snaps back, instead
+      // of the sweeping arc used by swipes.
+      const swingTotal = Neo.ATTACKS.melee.active;
+      const t = 1 - (Neo.player.swing / swingTotal);
+      // Ease out then back in so the tip punches forward and recoils.
+      const lunge = Math.sin(Math.min(1, t) * Math.PI);
+      const reach = 30 + lunge * 60;
+      const fade = 0.9 * (Neo.player.swing / swingTotal);
+      const stabColor = Neo.godTimer > 0 ? '#f6e8c8' : '#bfe4ff';
+      const cos = Math.cos(Neo.player.swingA);
+      const sin = Math.sin(Neo.player.swingA);
+      // Glow shaft
+      Neo.ctx.globalAlpha = fade * 0.4;
+      Neo.ctx.strokeStyle = stabColor;
+      Neo.ctx.lineWidth = 9;
+      Neo.ctx.shadowColor = stabColor;
+      Neo.ctx.shadowBlur = 16;
+      Neo.ctx.beginPath();
+      Neo.ctx.moveTo(cos * 12, sin * 12);
+      Neo.ctx.lineTo(cos * reach, sin * reach);
+      Neo.ctx.stroke();
+      // Sharp core
+      Neo.ctx.globalAlpha = fade;
+      Neo.ctx.strokeStyle = '#ffffff';
+      Neo.ctx.lineWidth = 2.5;
+      Neo.ctx.shadowBlur = 6;
+      Neo.ctx.beginPath();
+      Neo.ctx.moveTo(cos * 12, sin * 12);
+      Neo.ctx.lineTo(cos * reach, sin * reach);
+      Neo.ctx.stroke();
+      // Spear tip
+      Neo.ctx.globalAlpha = fade;
+      Neo.ctx.fillStyle = stabColor;
+      Neo.ctx.shadowBlur = 8;
+      const tipX = cos * reach;
+      const tipY = sin * reach;
+      const perpX = -sin;
+      const perpY = cos;
+      Neo.ctx.beginPath();
+      Neo.ctx.moveTo(tipX + cos * 10, tipY + sin * 10);
+      Neo.ctx.lineTo(tipX + perpX * 5, tipY + perpY * 5);
+      Neo.ctx.lineTo(tipX - perpX * 5, tipY - perpY * 5);
+      Neo.ctx.closePath();
+      Neo.ctx.fill();
+      Neo.ctx.shadowBlur = 0;
+    } else if (Neo.player.swing > 0) {
       const swingRange = extendingStaffEquipped ? 130 : 55;
       const swingArc = extendingStaffEquipped ? 1.45 : Neo.ATTACKS.melee.arc;
       const swingTotal = Neo.ATTACKS.melee.active;

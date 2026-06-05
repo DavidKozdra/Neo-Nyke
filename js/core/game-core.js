@@ -392,7 +392,7 @@ export const KILLER_DEATH_QUOTES = {
   rival_princess: ['You were always late.', 'You should have fought for me.', 'Too slow, too weak.'],
   rival_thorn: ['You should have run.', 'Your loot is mine.', 'You fought hard, still lost.'],
   rival_metao: ['I saw this ending already.', 'Prediction complete.', 'You never caught up.'],
-  rival_granialla: ['A god does not yield.', 'You were judged and found wanting.', 'Kneel.'],
+  rival_gelleh: ['A god does not yield.', 'You were judged and found wanting.', 'Kneel.'],
   mirror_knight: ['I know every move you make.', 'I was always one step ahead.', 'You cannot outfight yourself.'],
   mooggy: ['Mrow.', 'The red scarf remembers.', 'Nine lives. You had one.'],
   hunter: ['Easy prey.', 'You slowed down for one second.', 'The hunt is over.'],
@@ -714,12 +714,12 @@ export const CHARACTER_DEFS = {
     aoeDamageMultiplier: 1.35,
     skills: { melee: 'Fire Balls', laser: 'Power Disks', smash: 'Chaos Burst', dash: 'Warp' },
   },
-  granialla: {
-    key: 'granialla',
-    name: 'Granialla',
+  gelleh: {
+    key: 'gelleh',
+    name: 'Gelleh',
     rarity: 'god',
     damageMultiplier: 1,
-    skills: { melee: 'Smite', laser: 'Blade Justice', smash: 'Healing Zone', dash: 'Zip Lightning' },
+    skills: { melee: 'Spear of Lightning', laser: 'Blade Justice', smash: 'Healing Zone', dash: 'Zip Lightning' },
     unlock: 'godslain',
   },
   mooggy: {
@@ -728,7 +728,7 @@ export const CHARACTER_DEFS = {
     rarity: 'assassin',
     damageMultiplier: 1.05,
     hpMultiplier: 1.08,
-    skills: { melee: 'Mooggy Swipe', laser: 'Nail Shot', smash: 'Fangs of Death', dash: 'Zoomies' },
+    skills: { melee: 'Mooggy Swipe', laser: 'Nail Shot', smash: 'Random Pounce', dash: 'Zoomies' },
     unlock: 'mooggy3',
   },
 };
@@ -761,7 +761,7 @@ export const HERO_DISPLAY = {
       { label: 'RANGE', pct: 90, color: '#60a080' },
     ],
   },
-  granialla: {
+  gelleh: {
     lore: 'Balanced divine hero. Unlock by defeating GOD.',
     stats: [
       { label: 'HP',    pct: 66, color: '#c06060' },

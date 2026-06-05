@@ -1143,7 +1143,7 @@ window.NeoNykeIconDefs = {
         [5,5],[6,5],[7,5],
       ],
     },
-    fangs_of_death: {
+    random_pounce: {
       color: '#ff5f72',
       pixels: [
         [2,0],[5,0],
@@ -1354,7 +1354,7 @@ window.NeoNykeIconDefs = {
         [3,7],[4,7],
       ],
     },
-    granillia_lightning_spear: {
+    gelleh_lightning_spear: {
       color: '#9bd9ff',
       pixels: [
         [7,0],

@@ -958,7 +958,7 @@
     const character = Neo.player.character;
     const lineByCharacter = {
       princess: { speaker: 'PRINCESS', text: 'He is cute.' },
-      granialla: { speaker: 'GRANIALLA', text: 'Sinner.' },
+      gelleh: { speaker: 'GELLEH', text: 'Sinner.' },
       mooggy: { speaker: 'MOOGGY', text: 'Uncle.' },
     };
     const line = lineByCharacter[character];
@@ -3325,7 +3325,7 @@
       const knockback = Math.max(0, Number(weaponStats.knockback || Neo.ATTACKS.melee.push));
       enemy.swingTime = Neo.ATTACKS.melee.active;
       enemy.attackCd = getMirrorSkillCooldown(enemy, 'melee');
-      if (weaponKey === 'hunters_bow' || weaponKey === 'magenta_degale' || weaponKey === 'void_piercer' || weaponKey === 'granillia_lightning_spear' || weaponKey === 'princess_wand') {
+      if (weaponKey === 'hunters_bow' || weaponKey === 'magenta_degale' || weaponKey === 'void_piercer' || weaponKey === 'gelleh_lightning_spear' || weaponKey === 'princess_wand') {
         fireMirrorProjectiles(enemy, angleToPlayer, 1, 0, weaponKey === 'magenta_degale' ? 880 : 760, damage, {
           kind: weaponKey,
           color: Neo.WEAPON_DEFS[weaponKey]?.color || '#d7f6ff',
@@ -3640,7 +3640,7 @@
     );
 
     const mirrorWeapon = enemy.mirrorWeapon || '';
-    const rangedMirrorWeapon = ['hunters_bow', 'metao_fire_staff', 'magenta_degale', 'magenta_p90', 'granillia_lightning_spear', 'void_piercer', 'lazer_glasses', 'princess_wand'].includes(mirrorWeapon);
+    const rangedMirrorWeapon = ['hunters_bow', 'metao_fire_staff', 'magenta_degale', 'magenta_p90', 'gelleh_lightning_spear', 'void_piercer', 'lazer_glasses', 'princess_wand'].includes(mirrorWeapon);
     const mirrorWeaponRange = Number(enemy.mirrorWeaponStats?.range || 0);
     if (mirrorWeapon && enemy.attackCd <= 0 && (rangedMirrorWeapon ? distance < 520 : distance < mirrorWeaponRange + Neo.player.r + 14)) {
       startMirrorMelee(enemy, angleToPlayer);

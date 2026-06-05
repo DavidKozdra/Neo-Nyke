@@ -1098,6 +1098,7 @@
       if (kind === 'golem_spit') return { color: '#9bb05a', core: '#e6f0b8', trail: '#5f7a2e', shape: 'orb', length: 70 };
       return { color: projectile.color || '#ff6688', core: '#ffe4eb', trail: projectile.color || '#ff6688', shape: 'dart', length: 24 };
     }
+    if (kind === 'blade_justice') return { color: '#fff6a3', core: '#ffffff', trail: '#ffd86a', shape: 'blade', length: 40 };
     if (kind === 'fireball') return { color: '#ff7b32', core: '#fff1a6', trail: '#ff2f17', shape: 'fireball', length: 30 };
     if (kind === 'disk' || kind === 'power_disk') return { color: kind === 'power_disk' ? '#d890ff' : '#b66cff', core: '#f0d8ff', trail: kind === 'power_disk' ? '#f7ccff' : '#7d4dff', shape: 'disk', length: 20 };
     if (kind === 'disk_shard') return { color: '#c98bff', core: '#f0d8ff', trail: '#8a55ff', shape: 'disk', length: 12 };
@@ -1275,6 +1276,58 @@
     });
     Neo.ctx.shadowBlur = 0;
     Neo.ctx.globalAlpha = 1;
+  }
+
+  // Blade Justice flying swords: glowing golden blades that swing near the player.
+  function drawJusticeBlades() {
+    const blades = Neo.justiceBlades;
+    if (!Array.isArray(blades) || blades.length === 0) return;
+    const ctx = Neo.ctx;
+    const lowFx = window.NeoSettings?.isPerformanceMode?.() !== false && (Neo.particles?.length || 0) > 80;
+    blades.forEach(blade => {
+      // Fade out over the last 0.4s of life.
+      const alpha = blade.life < 0.4 ? blade.life / 0.4 : 1;
+      const len = (blade.radius || 16) * 2.6;
+      const w = (blade.radius || 16) * 0.8;
+      ctx.save();
+      ctx.translate(blade.x, blade.y);
+      ctx.rotate(blade.angle);
+      ctx.globalAlpha = alpha;
+      if (!lowFx) {
+        ctx.shadowColor = '#fff6a3';
+        ctx.shadowBlur = 14;
+      }
+      // Blade body (kite shape, tip leading).
+      ctx.fillStyle = '#fff6a3';
+      ctx.strokeStyle = '#ffd86a';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(len, 0);
+      ctx.lineTo(-len * 0.4, -w * 0.5);
+      ctx.lineTo(-len * 0.62, 0);
+      ctx.lineTo(-len * 0.4, w * 0.5);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      // Bright core highlight.
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha = alpha * 0.9;
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.moveTo(len * 0.86, 0);
+      ctx.lineTo(-len * 0.2, -w * 0.16);
+      ctx.lineTo(-len * 0.4, 0);
+      ctx.lineTo(-len * 0.2, w * 0.16);
+      ctx.closePath();
+      ctx.fill();
+      // Hilt.
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = '#ffd86a';
+      ctx.fillRect(-len * 0.62, -w * 0.42, w * 0.32, w * 0.84);
+      ctx.restore();
+    });
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1;
   }
 
   function drawDeadBodies() {
@@ -1543,5 +1596,43 @@
   Neo.getProjectileVisual = getProjectileVisual;
   Neo.drawProjectileTrail = drawProjectileTrail;
   Neo.drawProjectileShape = drawProjectileShape;
+  // Wind-up bar above the player while charging a Healing Zone.
+  function drawHealingZoneChargeBar() {
+    if (!Neo.healingZoneCharging || !Neo.player) return;
+    const max = Neo.HEALING_ZONE_MAX_CHARGE || 5;
+    const ratio = Neo.clamp((Number(Neo.healingZoneChargeTime || 0)) / max, 0, 1);
+    const ctx = Neo.ctx;
+    const w = 46;
+    const h = 6;
+    const x = Neo.player.x - w / 2;
+    const y = Neo.player.y - (Neo.player.r || 14) - 20;
+    ctx.save();
+    ctx.globalAlpha = 0.92;
+    // Track
+    ctx.fillStyle = 'rgba(5,30,12,0.78)';
+    ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
+    // Fill — brightens to white as it tops out.
+    ctx.fillStyle = ratio >= 1 ? '#ffffff' : '#3bff77';
+    ctx.shadowColor = '#3bff77';
+    ctx.shadowBlur = ratio >= 1 ? 12 : 6;
+    ctx.fillRect(x, y, w * ratio, h);
+    ctx.shadowBlur = 0;
+    // Outline
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = 'rgba(150,255,180,0.85)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x - 1, y - 1, w + 2, h + 2);
+    // "MAX" flash when fully charged.
+    if (ratio >= 1) {
+      ctx.fillStyle = '#eafff0';
+      ctx.font = '700 9px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('MAX', Neo.player.x, y - 4);
+    }
+    ctx.restore();
+  }
+
   Neo.drawProjectiles = drawProjectiles;
+  Neo.drawJusticeBlades = drawJusticeBlades;
+  Neo.drawHealingZoneChargeBar = drawHealingZoneChargeBar;
   Neo.drawDeadBodies = drawDeadBodies;

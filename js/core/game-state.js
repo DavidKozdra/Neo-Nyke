@@ -161,6 +161,7 @@ export function resumeGame() {
     }
     if (characterKey === 'princess') items.princes_glasses = 1;
     if (characterKey === 'metao') items.mateos_bag = 1;
+    if (characterKey === 'gelleh') items.zap_to_extreme = 1;
     return items;
   }
 
@@ -515,7 +516,7 @@ export function resumeGame() {
       blockActive: false,
       blockTimer: 0,
       overhealBarrier: 0,
-      graniallaHealPulseFrame: 0,
+      gellehHealPulseFrame: 0,
       fleeceTick: 0,
       weaponBeamTime: 0,
       weaponBeamTick: 0,
@@ -582,7 +583,7 @@ export function resumeGame() {
           unlockedChallenges: normalizeChallengeSelection(savedMeta.unlockedChallenges),
           selectedDifficulty: normalizeDifficulty(savedMeta.selectedDifficulty),
           selectedChallenges: normalizeChallengeSelection(savedMeta.selectedChallenges),
-          selectedCharacter: String(savedMeta.selectedCharacter || createDefaultMeta().selectedCharacter),
+          selectedCharacter: migrateCharacterKey(String(savedMeta.selectedCharacter || createDefaultMeta().selectedCharacter)),
           unlockedLegacy: normalizeLegacySelection(savedMeta.unlockedLegacy),
           seenTips: (savedMeta.seenTips && typeof savedMeta.seenTips === 'object') ? { ...savedMeta.seenTips } : {},
         };
@@ -599,7 +600,7 @@ export function resumeGame() {
       Neo.selectedChallenges = normalizeChallengeSelection(Neo.metaProgress.selectedChallenges);
       {
         const unlocked = new Set(Neo.metaProgress.unlockedCharacters || ['princess', 'thorn_knight', 'metao']);
-        if (Neo.metaProgress.godsKilled > 0) unlocked.add('granialla');
+        if (Neo.metaProgress.godsKilled > 0) unlocked.add('gelleh');
         if (Number(Neo.metaProgress.mooggyDefeats || 0) >= 3) unlocked.add('mooggy');
         const preferredCharacter = String(Neo.metaProgress.selectedCharacter || Neo.chosenCharacter);
         Neo.chosenCharacter = unlocked.has(preferredCharacter) ? preferredCharacter : [...unlocked][0] || 'thorn_knight';
@@ -631,10 +632,18 @@ export function resumeGame() {
     return items.length ? items : fallback;
   }
 
+  // Legacy character keys from older saves -> current keys.
+  const LEGACY_CHARACTER_KEYS = { granialla: 'gelleh' };
+
+  function migrateCharacterKey(key) {
+    return LEGACY_CHARACTER_KEYS[key] || key;
+  }
+
   function normalizeUnlockedCharacters(input) {
     const fallback = ['princess', 'thorn_knight', 'metao'];
     if (!Array.isArray(input)) return fallback;
-    const chars = Object.keys(Neo.CHARACTER_DEFS).filter(name => input.includes(name));
+    const remapped = input.map(migrateCharacterKey);
+    const chars = Object.keys(Neo.CHARACTER_DEFS).filter(name => remapped.includes(name));
     return [...new Set([...fallback, ...chars])];
   }
 
@@ -1859,7 +1868,7 @@ export function resumeGame() {
     const unlockedDifficulties = getUnlockedDifficultySet();
     const unlockedChallenges = getUnlockedChallengeSet();
     const ownedChallenges = getOwnedChallengeSet();
-    if (Neo.metaProgress.godsKilled > 0) unlocked.add('granialla');
+    if (Neo.metaProgress.godsKilled > 0) unlocked.add('gelleh');
     if (Number(Neo.metaProgress.mooggyDefeats || 0) >= 3) unlocked.add('mooggy');
     const preferredCharacter = String(Neo.metaProgress.selectedCharacter || Neo.chosenCharacter);
     if (!Neo.charSelectPhase || Neo.charSelectPhase === 'p1') {
@@ -2353,6 +2362,7 @@ export function resumeGame() {
     Neo.bossRushStage = 0;
     Neo.bossRushActive = false;
     Neo.projectiles = [];
+    Neo.justiceBlades = [];
     Neo.chests = [];
     Neo.pickups = [];
     Neo.destructibles = [];
@@ -2388,6 +2398,7 @@ export function resumeGame() {
     Neo.activeShopTab = 'items';
     Neo.draggingMoveKey = '';
     Neo.weaponBurstQueue = [];
+    Neo.clawSwipeQueue = [];
     Neo.rivals = [];
     Neo.monsterRoamTimer = 0;
     Neo.mooggyAssassinSpawnedThisRun = false;
@@ -2512,6 +2523,7 @@ export function resumeGame() {
     Neo.activeShopTab = 'items';
     Neo.draggingMoveKey = '';
     Neo.weaponBurstQueue = [];
+    Neo.clawSwipeQueue = [];
     Neo.monsterRoamTimer = Number(snapshot.monsterRoamTimer || 0);
     Neo.knaveKnightCutscenePlayed = !!snapshot.knaveKnightCutscenePlayed;
     Neo.queenMetaoCutscenePlayed = !!snapshot.queenMetaoCutscenePlayed;

@@ -125,6 +125,7 @@ window.Neo = {
   anvilStagedUpgrades: {},
   draggingMoveKey: '',
   weaponBurstQueue: [],
+  clawSwipeQueue: [],
   wizardPawSelection: null,
   activeInventorySlot: '',
   inventoryPauseActive: false,

@@ -5,7 +5,7 @@
 
 const MAX_FLOOR = 10_000;
 const MAX_TIME  = 86_400;
-const VALID_CHARACTERS = new Set(['thorn_knight', 'metao', 'granialla', 'mooggy']);
+const VALID_CHARACTERS = new Set(['thorn_knight', 'metao', 'gelleh', 'granialla', 'mooggy']);
 
 const NOTICES = [
   {

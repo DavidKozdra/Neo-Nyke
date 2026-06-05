@@ -48,7 +48,7 @@ export function getSlotKeyLabel(slot) {
 export const MOVE_DEFS = {
     slash: { key: 'slash', slot: 'melee', name: 'Slash', desc: 'Close-range arc attack.' },
     fire_balls: { key: 'fire_balls', slot: 'melee', name: 'Fire Balls', desc: 'Shoot a spread of fireballs.' },
-    smite: { key: 'smite', slot: 'melee', name: 'Smite', desc: 'Physical swing plus chaining lightning.' },
+    smite: { key: 'smite', slot: 'melee', name: 'Spear of Lightning', desc: 'Lightning spear jab that chains between enemies — the same strike as the equipped spear.' },
     narwal_fight: { key: 'narwal_fight', slot: 'melee', name: 'Narwal Fight', desc: 'A wide pink spear-sweep with a piercing follow-up.', exclusiveCharacter: 'princess' },
     mooggy_swipe: { key: 'mooggy_swipe', slot: 'melee', name: 'Mooggy Swipe', desc: 'Wide claw swipe with a small bleed chance. Hold to charge: a full wind-up unleashes a wider, far heavier slash.', exclusiveCharacter: 'mooggy' },
 
@@ -67,7 +67,7 @@ export const MOVE_DEFS = {
     healing_zone: { key: 'healing_zone', slot: 'smash', name: 'Healing Zone', desc: 'Healing and damage zone.' },
     fire_circle: { key: 'fire_circle', slot: 'smash', name: 'Fire Circle', desc: 'Burning aura around you.' },
     floor_lava: { key: 'floor_lava', slot: 'smash', name: 'Floor Is Lava', desc: 'Lava immunity and lava trail.' },
-    fangs_of_death: { key: 'fangs_of_death', slot: 'smash', name: 'Fangs of Death', desc: 'Massive AOE explosion and homing fangs that seek enemies, dealing heavy damage with high crit chance and bleed.', exclusiveCharacter: 'mooggy' },
+    random_pounce: { key: 'random_pounce', slot: 'smash', name: 'Random Pounce', desc: 'Massive AOE explosion and homing fangs that seek enemies, dealing heavy damage with high crit chance and bleed.', exclusiveCharacter: 'mooggy' },
 
     dash: {
       key: 'dash',
@@ -114,10 +114,13 @@ export const MOVE_DEFS = {
   };
 
 export const SHOP_MOVE_POOL = [
-    'slash', 'fire_balls', 'smite', 'narwal_fight', 'mooggy_swipe',
+    // No melee moves are sold: the M1 slot is the bare-hands fallback (always
+    // `slash`) and every "real" primary attack comes from an equipped weapon.
+    // The old melee moves (fire_balls, smite, narwal_fight, mooggy_swipe) are
+    // now duplicated by each character's weapon, so they're no longer buyable.
     'blood_beam', 'love_beam', 'turtle_wave', 'power_disks', 'blade_justice', 'lightning_columns',
     'god_sweep', 'nail_shot',
-    'crimson_smash', 'kicky_kick', 'chaos_burst', 'healing_zone', 'fire_circle', 'floor_lava', 'fangs_of_death',
+    'crimson_smash', 'kicky_kick', 'chaos_burst', 'healing_zone', 'fire_circle', 'floor_lava', 'random_pounce',
     'dash', 'nimrod_stomp', 'warp', 'zip_lightning', 'flying_unhitable', 'cowards_way', 'mooggy_zoomies',
   ];
 
@@ -178,9 +181,9 @@ export const WEAPON_DEFS = {
       description: 'Rapid burst fire with controlled recoil.',
       color: '#ff9dd7',
     },
-    granillia_lightning_spear: {
-      key: 'granillia_lightning_spear',
-      name: "Granillia's Spear of Lightning",
+    gelleh_lightning_spear: {
+      key: 'gelleh_lightning_spear',
+      name: "Gelleh's Spear of Lightning",
       rarity: 'god',
       description: 'Piercing lightning spear that chains on impact.',
       color: '#9bd9ff',
@@ -250,8 +253,8 @@ export const RIVAL_DEFS = {
       deathLine: 'Impossible...',
       attackStyle: 'ranged',
     },
-    granialla: {
-      name: 'Rival Granialla',
+    gelleh: {
+      name: 'Rival Gelleh',
       color: '#a8aaff',
       hp: 240, dmg: 20, speed: 94, r: 17, attackCd: 1.0,
       enterLine: 'You dare compete with a god?',
@@ -275,7 +278,7 @@ export const RIVAL_WEAPON_SWAP_BASE = 3.6;
 export const MONSTER_ROAM_INTERVAL_SECONDS = 60;
 export const MONSTER_ROAM_MOVE_CHANCE = 0.28;
 export const PURPLE_WEAPON_POOL = ['lazer_glasses', 'metao_fire_staff', 'magenta_degale', 'magenta_p90'];
-export const RED_WEAPON_POOL = ['granillia_lightning_spear', 'excalibur', 'golden_fleece', 'void_piercer', 'aegis_shield_weapon'];
+export const RED_WEAPON_POOL = ['gelleh_lightning_spear', 'excalibur', 'golden_fleece', 'void_piercer', 'aegis_shield_weapon'];
 
 export const RIVAL_WEAPON_LOADOUTS = {
     princess: [
@@ -291,8 +294,8 @@ export const RIVAL_WEAPON_LOADOUTS = {
       { key: 'magenta_p90', class: 'burst', range: 390, preferredRange: 250, damageMult: 0.72, cooldownMult: 1.0, projectileCount: 4, spread: 0.16, projectileSpeed: 360 },
       { key: 'lazer_glasses', class: 'ranged', range: 470, preferredRange: 300, damageMult: 0.92, cooldownMult: 1.14, projectileCount: 1, spread: 0.02, projectileSpeed: 460 },
     ],
-    granialla: [
-      { key: 'granillia_lightning_spear', class: 'ranged', range: 420, preferredRange: 260, damageMult: 0.94, cooldownMult: 1.0, projectileCount: 2, spread: 0.08, projectileSpeed: 390 },
+    gelleh: [
+      { key: 'gelleh_lightning_spear', class: 'ranged', range: 420, preferredRange: 260, damageMult: 0.94, cooldownMult: 1.0, projectileCount: 2, spread: 0.08, projectileSpeed: 390 },
       { key: 'excalibur', class: 'melee_heal', range: 50, preferredRange: 130, damageMult: 1.12, cooldownMult: 0.95, knockback: 320 },
       { key: 'void_piercer', class: 'burst', range: 340, preferredRange: 220, damageMult: 0.95, cooldownMult: 1.12, projectileCount: 3, spread: 0.1, projectileSpeed: 380 },
     ],
@@ -1429,7 +1432,7 @@ export const WEAPON_BASE_STATS = {
     metao_fire_staff:         { damage: 22,   cooldown: 0.75, range: 200, knockback: 100 },
     magenta_degale:           { damage: 80,   cooldown: 1.50,             knockback: 480 },
     magenta_p90:              { damage: 18,   cooldown: 1.80,             knockback: 140 },
-    granillia_lightning_spear:{ damage: 45,   cooldown: 2.00,             knockback: 200 },
+    gelleh_lightning_spear:{ damage: 45,   cooldown: 2.00,             knockback: 200 },
     excalibur:                { damage: 202,  cooldown: 2.00, range: 120, knockback: 600 },
     golden_fleece:            { damage: 20,   cooldown: 0.50, range: 80,  knockback: 80  },
     void_piercer:             { damage: 55,   cooldown: 0.80,             knockback: 160 },
@@ -1464,7 +1467,7 @@ export const MOVE_BASE_STATS = {
     cowards_way:      { cooldown: 6.00, duration: 3.0 },
     mooggy_swipe:     { damage: 44,  cooldown: 0.50, range: 130 },
     nail_shot:        { damage: 18,  cooldown: 2.80, range: 400 },
-    fangs_of_death:   { damage: 52,  cooldown: 5.00, range: 160 },
+    random_pounce:   { damage: 52,  cooldown: 5.00, range: 160 },
     mooggy_zoomies:   { cooldown: 20.00, duration: 12.0 },
   };
 

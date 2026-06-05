@@ -153,7 +153,11 @@ export function loop(timestamp) {
       // Attack buttons — hold while button pressed, release otherwise
       if (_nt.slash) { Neo.mouse.down = true; Neo.mouse.downQueued = true; } else { Neo.mouse.down = false; }
       if (_nt.laser) { Neo.mouse.right = true; Neo.mouse.rightQueued = true; } else { Neo.mouse.right = false; }
-      if (_nt.smash) { Neo.trySmash(); _nt.smash = false; }
+      // Touch smash: NT.smash stays true while the button is held (cleared on
+      // touchend), so use it directly for hold-to-charge. Edge-latch the cast.
+      Neo.smashHeld = !!_nt.smash;
+      if (_nt.smash) { if (!_nt.smashLatch) { _nt.smashLatch = true; Neo.trySmash(); } }
+      else { _nt.smashLatch = false; }
       if (_nt.ascend) Neo.keys[' '] = true; else Neo.keys[' '] = false;
       if (_nt.dash) Neo.keys[_b ? _b.dash : 'shift'] = true;
       else Neo.keys[_b ? _b.dash : 'shift'] = false;
@@ -179,7 +183,11 @@ export function loop(timestamp) {
       Neo.mouse.y = Neo.mouse.worldY - Neo.camera.y;
       if (_gp0.slash) { Neo.mouse.down = true; Neo.mouse.downQueued = true; } else { Neo.mouse.down = false; }
       if (_gp0.laser) { Neo.mouse.right = true; Neo.mouse.rightQueued = true; } else { Neo.mouse.right = false; }
-      if (_gp0.smash) { Neo.trySmash(); _gp0.smash = false; }
+      // Gamepad smash button is re-polled each frame from its held state, so use
+      // it for hold-to-charge. Edge-latch so the cast only fires once per press.
+      Neo.smashHeld = !!_gp0.smash;
+      if (_gp0.smash) { if (!_gp0.smashLatch) { _gp0.smashLatch = true; Neo.trySmash(); } }
+      else { _gp0.smashLatch = false; }
       if (_gp0.dash) Neo.keys[_b ? _b.dash : 'shift'] = true;
       else if (!Neo.keys[_b ? _b.dash : 'shift']) Neo.keys[_b ? _b.dash : 'shift'] = false;
       if (_gp0.start) {
@@ -276,7 +284,10 @@ export function loop(timestamp) {
     Neo.player.inv = Math.max(0, Neo.player.inv - dt);
     Neo.player.warpHideTime = Math.max(0, Number(Neo.player.warpHideTime || 0) - dt);
     Neo.player.stun = Math.max(0, Number(Neo.player.stun || 0) - dt);
-    if (Neo.player.swing > 0) Neo.player.swing = Math.max(0, Neo.player.swing - dt);
+    if (Neo.player.swing > 0) {
+      Neo.player.swing = Math.max(0, Neo.player.swing - dt);
+      if (Neo.player.swing === 0) Neo.player.stabSwing = false;
+    }
 
     const _vpW = Neo.isSplitScreen() ? Neo.canvas.width / 2 : Neo.canvas.width;
     const _clampedMouseX = Neo.isSplitScreen() ? Math.min(Neo.mouse.x, _vpW) : Neo.mouse.x;
@@ -472,6 +483,10 @@ export function loop(timestamp) {
     sectionPerfStart = Neo.perfStart();
     Neo.updateProjectiles(dt);
     Neo.perfEnd('update.projectiles', sectionPerfStart);
+    if (Neo.gameState !== 'play') return;
+    Neo.updateJusticeBlades?.(dt);
+    if (Neo.gameState !== 'play') return;
+    Neo.updateHealingZoneCharge?.(dt);
     if (Neo.gameState !== 'play') return;
     sectionPerfStart = Neo.perfStart();
     Neo.updateWorldProps(dt);
