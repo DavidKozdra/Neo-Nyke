@@ -1667,11 +1667,11 @@
     }
   }
 
-  function applyBleed(enemy, stacks, duration) {
+  function applyBleed(enemy, stacks, duration, source = null) {
     if (!enemy) return;
     const beforeStacks = Neo.getStatusStacks(enemy, 'bleed');
     const adjustedDuration = Number(duration || 0) * (enemy === Neo.player ? 1 : Number(Neo.getItemStats?.()?.statusDurationMultiplier || 1));
-    Neo.applyStatus(enemy, 'bleed', stacks, adjustedDuration);
+    Neo.applyStatus(enemy, 'bleed', stacks, adjustedDuration, source);
     const afterStacks = Neo.getStatusStacks(enemy, 'bleed');
     if (afterStacks > beforeStacks) {
       enemy.bleedFlash = 0.34;
@@ -1680,25 +1680,25 @@
     triggerStatusReactions(enemy, 'bleed');
   }
 
-  function applyFire(entity, stacks, duration) {
+  function applyFire(entity, stacks, duration, source = null) {
     const characterBoost = Neo.player?.character === 'metao' && entity !== Neo.player ? 1.15 : 1;
     const statusBoost = entity === Neo.player ? 1 : Number(Neo.getItemStats?.()?.statusDurationMultiplier || 1);
     const adjustedDuration = Number(duration || 0) * statusBoost * characterBoost;
-    Neo.applyStatus(entity, 'fire', stacks, adjustedDuration);
+    Neo.applyStatus(entity, 'fire', stacks, adjustedDuration, source);
     triggerStatusReactions(entity, 'fire');
   }
 
-  function applyPoison(entity, stacks, duration) {
+  function applyPoison(entity, stacks, duration, source = null) {
     const characterBoost = Neo.player?.character === 'metao' && entity !== Neo.player ? 1.15 : 1;
     const statusBoost = entity === Neo.player ? 1 : Number(Neo.getItemStats?.()?.statusDurationMultiplier || 1);
     const adjustedDuration = Number(duration || 0) * statusBoost * characterBoost;
-    Neo.applyStatus(entity, 'poison', stacks, adjustedDuration);
+    Neo.applyStatus(entity, 'poison', stacks, adjustedDuration, source);
     triggerStatusReactions(entity, 'poison');
   }
 
-  function applyDarkDrain(entity, stacks, duration) {
+  function applyDarkDrain(entity, stacks, duration, source = null) {
     const adjustedDuration = Number(duration || 0) * (entity === Neo.player ? 1 : Number(Neo.getItemStats?.()?.statusDurationMultiplier || 1));
-    Neo.applyStatus(entity, 'dark_drain', stacks, adjustedDuration);
+    Neo.applyStatus(entity, 'dark_drain', stacks, adjustedDuration, source);
     triggerStatusReactions(entity, 'dark_drain');
   }
 

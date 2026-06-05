@@ -391,7 +391,7 @@
       if (Neo.player.hp <= 0) Neo.die();
       return;
     }
-    Neo.lastDamageSource = Neo.getDamageSourceLabel(source);
+    Neo.lastDamageSource = options.sourceLabel ? String(options.sourceLabel) : Neo.getDamageSourceLabel(source);
     Neo.lastDamageSourceKey = String(options.sourceKey || source || '');
 
     Neo.player.hp -= finalAmount;
@@ -462,7 +462,22 @@
       const resistance = key === 'bleed' ? Number(Neo.getItemStats?.()?.bleedResistance || 0) : 0;
       const damageMultiplier = Math.max(0.2, 1 - resistance);
       const damage = Math.max(0.25, config.damage(state.stacks) * damageMultiplier);
-      damagePlayer(damage, 0, 0, key, { ignoreInv: true, noInvFrames: true });
+      // Attribute the kill to whoever inflicted the status (e.g. "Mooggy"),
+      // falling back to the status name when the source is unknown.
+      const inflictorKey = String(state.sourceKey || '').trim();
+      if (inflictorKey) {
+        const inflictorLabel = state.sourceLabel || Neo.getDamageSourceLabel(inflictorKey);
+        damagePlayer(damage, 0, 0, inflictorKey, {
+          ignoreInv: true,
+          noInvFrames: true,
+          // Keep the killer key (for death quotes / killer icon) but label the
+          // death screen with the status that finished the player off.
+          sourceKey: inflictorKey,
+          sourceLabel: `${inflictorLabel} (${key})`,
+        });
+      } else {
+        damagePlayer(damage, 0, 0, key, { ignoreInv: true, noInvFrames: true });
+      }
       if (Neo.nextRandom('fx') < 0.3) {
         Neo.spawnParticle({ x: Neo.player.x + Neo.rand(-8, 8), y: Neo.player.y + Neo.rand(-8, 8), life: 0.25, c: config.color });
       }
@@ -1073,7 +1088,7 @@
     projectile.statusEffects.forEach(effect => {
       if (!effect?.key) return;
       if (Neo.nextRandom('encounter') <= Number(effect.chance ?? 1)) {
-        Neo.applyStatus(Neo.player, effect.key, Number(effect.stacks || 1), Number(effect.duration || 3));
+        Neo.applyStatus(Neo.player, effect.key, Number(effect.stacks || 1), Number(effect.duration || 3), getProjectileDamageSource(projectile));
       }
     });
   }
@@ -1521,7 +1536,7 @@
           : Neo.dist(Neo.player.x, Neo.player.y, hazard.x, hazard.y) < hazard.r + Neo.player.r - 10;
         if (inside) {
           damagePlayer(6 * dt, 0, 0, 'lava');
-          if (hazard.statusTick <= 0) Neo.applyFire(Neo.player, 1, 2.6);
+          if (hazard.statusTick <= 0) Neo.applyFire(Neo.player, 1, 2.6, hazard.source || 'lava');
         }
       }
       if (hazard.kind === 'explosive_trap') {

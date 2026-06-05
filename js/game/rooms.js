@@ -975,6 +975,11 @@
     Neo.hazards = room.hazards || [];
     Neo.shopOffers = room.shopOffers || [];
     Neo.structures = room.structures || [];
+    // Banners/flags are retired — strip them from any room (incl. authored
+    // templates and older save snapshots) as rooms are activated.
+    if (Array.isArray(room.decorations)) {
+      room.decorations = room.decorations.filter(decor => decor && decor.kind !== 'banner');
+    }
     Neo.decorations = room.decorations || [];
     Neo.mouse.right = false;
     Neo.mouse.rightQueued = false;

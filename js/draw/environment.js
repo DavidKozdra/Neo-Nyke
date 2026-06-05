@@ -790,21 +790,7 @@
           Neo.ctx.fillRect(rx - 3, ry - 2, 6, 4);
         }
       } else if (decor.kind === 'banner') {
-        Neo.ctx.fillStyle = 'rgba(0,0,0,0.22)';
-        Neo.ctx.fillRect(-12, -18, 24, 42);
-        Neo.ctx.fillStyle = theme.banner;
-        Neo.ctx.fillRect(-10, -24, 20, 38);
-        Neo.ctx.fillStyle = 'rgba(0,0,0,0.24)';
-        Neo.ctx.fillRect(7, -24, 3, 38);
-        Neo.ctx.fillRect(-10, 11, 20, 3);
-        Neo.ctx.fillStyle = 'rgba(255,220,140,0.24)';
-        Neo.ctx.fillRect(-8, -22, 14, 2);
-        Neo.ctx.fillRect(-8, -22, 2, 30);
-        Neo.ctx.strokeStyle = 'rgba(229,185,98,0.36)';
-        Neo.ctx.lineWidth = 1;
-        Neo.ctx.strokeRect(-10.5, -24.5, 20, 38);
-        Neo.ctx.fillStyle = 'rgba(229,185,98,0.45)';
-        Neo.ctx.fillRect(-13, -26, 26, 3);
+        // Banners/flags retired — draw nothing (also stripped at room load).
       } else if (decor.kind === 'crack') {
         Neo.ctx.strokeStyle = theme.crack;
         Neo.ctx.lineWidth = 2.2;
@@ -825,14 +811,7 @@
         Neo.ctx.fillStyle = 'rgba(245,202,120,0.72)';
         Neo.ctx.fillRect(-1, -8, 2, 5);
       } else if (decor.kind === 'torch') {
-        Neo.ctx.fillStyle = 'rgba(28, 20, 12, 0.95)';
-        Neo.ctx.fillRect(-2, -6, 4, 18);
-        Neo.ctx.fillStyle = '#5b6670';
-        Neo.ctx.fillRect(-6, -4, 12, 4);
-        Neo.ctx.fillStyle = 'rgba(210,135,72,0.72)';
-        Neo.ctx.fillRect(-3, -16, 6, 10);
-        Neo.ctx.fillStyle = 'rgba(245,202,120,0.72)';
-        Neo.ctx.fillRect(-1, -14, 2, 6);
+        drawCandle(decor);
       } else if (decor.kind === 'tree') {
         // Shadow
         Neo.ctx.fillStyle = 'rgba(20,30,14,0.35)';
@@ -959,6 +938,98 @@
     Neo.structures.forEach(structure => {
       if (structureIsBehindPlayer(structure, playerFeetY)) drawStructure(structure, theme);
     });
+  }
+
+  // A lit candle on a small dish, drawn centered at (0,0) — the caller has
+  // translated to position. Tapered wax body with a side highlight, a wick, and
+  // an animated layered teardrop flame with a soft warm glow. Flicker is phased
+  // by position so neighbouring candles don't pulse in sync.
+  function drawCandle(decor) {
+    const ctx = Neo.ctx;
+    const t = Date.now() * 0.006 + (decor.x || 0) * 0.05 + (decor.y || 0) * 0.03;
+    const flick = 1 + Math.sin(t) * 0.12 + Math.sin(t * 2.7) * 0.06; // 0.82..1.18
+    const sway = Math.sin(t * 1.6) * 0.8;
+
+    // Holder dish + drop shadow.
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.beginPath();
+    ctx.ellipse(0, 13, 9, 3.2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#6b7077';
+    ctx.beginPath();
+    ctx.ellipse(0, 11, 8, 3, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#878d95';
+    ctx.beginPath();
+    ctx.ellipse(0, 10, 5.5, 2, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Wax body (slightly tapered), warm cream with a lit side highlight.
+    const bodyTop = -8;
+    const bodyBot = 10;
+    ctx.beginPath();
+    ctx.moveTo(-3.5, bodyBot);
+    ctx.lineTo(-3, bodyTop);
+    ctx.quadraticCurveTo(0, bodyTop - 2, 3, bodyTop);
+    ctx.lineTo(3.5, bodyBot);
+    ctx.closePath();
+    const wax = ctx.createLinearGradient(-3.5, 0, 3.5, 0);
+    wax.addColorStop(0, '#cdbf9a');
+    wax.addColorStop(0.45, '#f3ead0');
+    wax.addColorStop(1, '#b3a079');
+    ctx.fillStyle = wax;
+    ctx.fill();
+    // Soft wax pool / lip at the top.
+    ctx.fillStyle = 'rgba(255,248,224,0.8)';
+    ctx.beginPath();
+    ctx.ellipse(0, bodyTop, 3, 1.1, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // Drip down the lit side.
+    ctx.strokeStyle = 'rgba(255,250,232,0.5)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(-1.6, bodyTop + 1);
+    ctx.lineTo(-1.9, bodyTop + 7);
+    ctx.stroke();
+
+    // Wick.
+    ctx.strokeStyle = '#2a2018';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(0, bodyTop);
+    ctx.lineTo(0, bodyTop - 3);
+    ctx.stroke();
+
+    // Warm glow halo behind the flame.
+    const glowY = bodyTop - 8;
+    const glow = ctx.createRadialGradient(0, glowY, 1, 0, glowY, 16 * flick);
+    glow.addColorStop(0, 'rgba(255,210,130,0.45)');
+    glow.addColorStop(1, 'rgba(255,180,90,0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(0, glowY, 16 * flick, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Flame: outer (orange) teardrop, then inner (yellow), then bright core.
+    const fh = 11 * flick;   // flame height
+    const fw = 3.4;          // flame half-width
+    const tipX = sway;       // flame tip sways slightly
+    const drawTeardrop = (height, width, topColor, botColor) => {
+      const top = bodyTop - 3 - height;
+      const g = ctx.createLinearGradient(0, top, 0, bodyTop - 3);
+      g.addColorStop(0, topColor);
+      g.addColorStop(1, botColor);
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.moveTo(tipX, top);
+      ctx.bezierCurveTo(tipX + width, top + height * 0.5, width, bodyTop - 4, 0, bodyTop - 3);
+      ctx.bezierCurveTo(-width, bodyTop - 4, tipX - width, top + height * 0.5, tipX, top);
+      ctx.closePath();
+      ctx.fill();
+    };
+    drawTeardrop(fh, fw, 'rgba(255,150,40,0.95)', 'rgba(255,90,20,0.6)');           // outer orange
+    drawTeardrop(fh * 0.66, fw * 0.62, 'rgba(255,224,120,0.98)', 'rgba(255,170,60,0.7)'); // inner yellow
+    drawTeardrop(fh * 0.34, fw * 0.34, 'rgba(255,255,240,1)', 'rgba(255,230,170,0.9)');   // white core
   }
 
   // Tall Greek column in oblique 3/4 view: the square collision footprint sits

@@ -3042,7 +3042,7 @@
       if (enemy.burningTick <= 0) {
         enemy.burningTick = 1.15;
         Neo.spawnParticle({ x: enemy.x + Neo.rand(-10, 10, 'fx'), y: enemy.y + Neo.rand(-10, 10, 'fx'), life: 0.24, c: '#ff9a3c' });
-        if (distanceToPlayer < enemy.r + Neo.player.r + 34) Neo.applyFire(Neo.player, 1, 2.8);
+        if (distanceToPlayer < enemy.r + Neo.player.r + 34) Neo.applyFire(Neo.player, 1, 2.8, enemy.type);
       }
     }
 
@@ -3051,7 +3051,7 @@
       if (enemy.bleedingTick <= 0) {
         enemy.bleedingTick = 1.25;
         Neo.spawnParticle({ x: enemy.x + Neo.rand(-8, 8, 'fx'), y: enemy.y + Neo.rand(-8, 8, 'fx'), life: 0.22, c: '#ff4256' });
-        if (distanceToPlayer < enemy.r + Neo.player.r + 28) Neo.applyStatus(Neo.player, 'bleed', 1, 2.2);
+        if (distanceToPlayer < enemy.r + Neo.player.r + 28) Neo.applyStatus(Neo.player, 'bleed', 1, 2.2, enemy.type);
       }
     }
 
@@ -3240,7 +3240,7 @@
         if (effect.key === 'stun') {
           Neo.player.stun = Math.max(Number(Neo.player.stun || 0), Number(effect.duration || 0.55));
         } else {
-          Neo.applyStatus(Neo.player, effect.key, Number(effect.stacks || 1), Number(effect.duration || 3));
+          Neo.applyStatus(Neo.player, effect.key, Number(effect.stacks || 1), Number(effect.duration || 3), enemy?.type || 'mirror_knight');
         }
       }
     });
@@ -3477,7 +3477,7 @@
     }
     if (move === 'fire_circle' || move === 'floor_lava') {
       mirrorBlastPlayer(enemy, move === 'floor_lava' ? 156 : 108, Math.max(12, damage), 150, '#ff7b32', 'mirror_fire', { aoe: true, fireStacks: move === 'floor_lava' ? 2 : 1, fireDuration: 3.2 });
-      Neo.applyFire(Neo.player, move === 'floor_lava' ? 2 : 1, 3.2);
+      Neo.applyFire(Neo.player, move === 'floor_lava' ? 2 : 1, 3.2, enemy?.type || 'mirror_knight');
       return true;
     }
     enemy.mirrorSmashColor = move === 'crimson_smash'

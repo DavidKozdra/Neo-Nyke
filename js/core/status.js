@@ -55,6 +55,8 @@ export function clearStatus(entity, key) {
   state.stacks = 0;
   state.duration = 0;
   state.tick = 0;
+  state.sourceKey = '';
+  state.sourceLabel = '';
 }
 
 // Player cold (slow) uses duration as a stack-time budget: each stack is 15s.
@@ -66,11 +68,20 @@ export function getColdStacksFromDuration(duration) {
   return Math.min(6, Math.max(0, Math.ceil((Number(duration || 0) - 0.001) / COLD_SECONDS_PER_STACK)));
 }
 
-export function applyStatus(entity, key, stacks, duration) {
+export function applyStatus(entity, key, stacks, duration, source = null) {
   if (!entity || !Neo.STATUS_KEYS.includes(key)) return;
   if (entity[`${key}Immune`]) return;
   const state = getStatusState(entity, key);
   const addedStacks = Math.max(0, Number(stacks || 0));
+  // Remember who inflicted a damaging status on the player so the death screen
+  // can attribute a DoT kill (bleed/poison/fire) to the enemy, not the tick.
+  if (entity === Neo.player && source && addedStacks > 0) {
+    const rawKey = String(source.sourceKey ?? source.key ?? source.type ?? source ?? '').trim();
+    if (rawKey) {
+      state.sourceKey = rawKey;
+      state.sourceLabel = String(source.sourceLabel ?? Neo.getDamageSourceLabel?.(rawKey) ?? rawKey);
+    }
+  }
   if (key === 'slow' && entity === Neo.player) {
     const existingBudget = Number(state.duration || 0) > 0
       ? Number(state.duration || 0)
