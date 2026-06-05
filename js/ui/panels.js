@@ -839,6 +839,8 @@ export function setShopPanelOpen(open, options = {}) {
     else clearPanelCloseEffect(Neo.ui.shopPanel);
     Neo.ui.shopPanel.classList.add('hidden');
     Neo.ui.shopPanel.setAttribute('aria-hidden', 'true');
+    // A scroll bought here defers its popup while the shop is open; surface it now.
+    Neo.requestPanelItemSelection?.({ suppressBatteryOpen: true });
   }
 
 export function setInventoryPanelOpen(open, options = {}) {
@@ -933,6 +935,8 @@ export function setAnvilPanelOpen(open, options = {}) {
     else clearPanelCloseEffect(Neo.ui.anvilPanel);
     Neo.ui.anvilPanel.classList.add('hidden');
     Neo.ui.anvilPanel.setAttribute('aria-hidden', 'true');
+    // Surface any selection (scroll/paw/battery) deferred while the anvil was open.
+    Neo.requestPanelItemSelection?.({ suppressBatteryOpen: true });
   }
 
 export function toggleAnvilPanel() {
@@ -1679,7 +1683,7 @@ export function getShopWeaponOffers() {
     iconKey,
     title,
     titleColor,
-    descColor = '', // rarity color for the description text
+    descColor = '', // description text stays white regardless of rarity
     cost,
     description,
     footerExtra = '',
@@ -1700,7 +1704,7 @@ export function getShopWeaponOffers() {
     const indexAttr = Number.isInteger(index) ? ` data-index="${index}"` : '';
     const styleAttr = accentColor ? ` style="--shop-card-accent:${escapeShopText(accentColor)}"` : '';
     const titleStyle = titleColor ? ` style="color:${escapeShopText(titleColor)}"` : '';
-    const descStyle = descColor ? ` style="color:${escapeShopText(descColor)}"` : '';
+    const descStyle = ' style="color:#ffffff"'; // descriptions always render white; rarity only colors the title
     const status = state.status || 'available';
     const statusLabel = state.statusLabel || '';
     const chipHtml = renderShopChips(chips.length ? chips : [rarityLabel]);
@@ -2182,7 +2186,7 @@ export function renderInventoryPanel() {
               <h4 style="color:${Neo.getRarityNameColor(item?.rarity || item?.category)}">${item?.name || key}${item?.tool ? '<span class="item-tool-badge">TOOL</span>' : ''}</h4>
               <span class="inv-card__count">x${_invP.items[key]}</span>
             </div>
-            <p style="color:${Neo.getRarityNameColor(item?.rarity || item?.category)}">${item?.description || 'No item description available.'}</p>
+            <p style="color:#ffffff">${item?.description || 'No item description available.'}</p>
           </div>`;
         })
         .join('') || '<div class="inv-card"><span class="inv-card__eyebrow">Empty</span><h4>No relics yet</h4><p>Your pockets are clear. Loot rooms or buy from the shop to start a build.</p></div>';

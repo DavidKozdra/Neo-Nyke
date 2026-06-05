@@ -2107,7 +2107,6 @@
               key,
               groupId,
               picksRemaining: 1,
-              label: 'A/B',
             });
           });
         } else {
@@ -2148,6 +2147,24 @@
     Neo.floorSkipPending = 0;
     Neo.spawnParticle({ x: spawnPoint.x, y: spawnPoint.y, life: 0.5, ring: 28, c: '#ff8bd8' });
     Neo.spawnParticle({ x: spawnPoint.x, y: spawnPoint.y - 20, life: 0.8, text: 'CHAOS GATE', c: '#ffc2f0' });
+    return true;
+  }
+
+  function useAdapterPortal(pickup) {
+    const ladderRoom = Neo.rooms.find(room => room.gx === pickup?.targetGx && room.gy === pickup?.targetGy);
+    // Target room may have been invalidated (e.g. floor regenerated); bail safely.
+    if (!ladderRoom || ladderRoom === Neo.currentRoom) return false;
+
+    // Coin cost is paid here, on walk-in — not when the portal was opened.
+    const goldSpent = Math.floor(Neo.player.coins / 2);
+    if (goldSpent > 0) {
+      Neo.player.coins -= goldSpent;
+      Neo.metaProgress.coins = Math.max(0, Neo.metaProgress.coins - goldSpent);
+    }
+
+    Neo.enterRoom(ladderRoom);
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.9, text: 'WARPED TO LADDER (-50% COINS)', c: '#b66cff' });
+    Neo.scheduleRunSave();
     return true;
   }
 
@@ -2212,12 +2229,13 @@
       } else if (pickup.type === 'item') {
         const magnetRadius = autoVacuumRange > 0 ? autoVacuumRange : 145;
         pullPickupTowardPlayer(pickup, magnetRadius, 150, 220);
-      } else if (pickup.type === 'jesterPortal') {
+      } else if (pickup.type === 'jesterPortal' || pickup.type === 'adapterPortal') {
         pickup.spawnT = Math.max(0, Number(pickup.spawnT || 0) + dt);
         const activateAt = Math.max(0.01, Number(pickup.activateAt || Neo.JESTER_PORTAL_ACTIVATE_DELAY));
         if (!pickup.active && pickup.spawnT >= activateAt) {
           pickup.active = true;
-          Neo.spawnParticle({ x: pickup.x, y: pickup.y - 16, life: 0.6, text: 'READY', c: '#ffc2f0' });
+          const readyColor = pickup.type === 'adapterPortal' ? '#d6c4ff' : '#ffc2f0';
+          Neo.spawnParticle({ x: pickup.x, y: pickup.y - 16, life: 0.6, text: 'READY', c: readyColor });
         }
       } else if (pickup.type === 'challengeRune') {
         const runeRadius = 16;
@@ -2243,7 +2261,7 @@
         }
         pullPickupTowardPlayer(pickup, 130, 160, 180);
       }
-      const pickupTriggerRadius = pickup.type === 'jesterPortal'
+      const pickupTriggerRadius = (pickup.type === 'jesterPortal' || pickup.type === 'adapterPortal')
         ? Neo.JESTER_PORTAL_TRIGGER_RADIUS
         : pickup.type === 'ladder'
           ? Neo.LADDER_TRIGGER_RADIUS
@@ -2346,6 +2364,15 @@
       if (pickup.type === 'jesterPortal') {
         if (!pickup.active) continue;
         if (useJesterPortal(pickup)) return;
+        continue;
+      }
+
+      if (pickup.type === 'adapterPortal') {
+        if (!pickup.active) continue;
+        // On success enterRoom rebuilds Neo.pickups, so stop iterating this stale
+        // list. On failure (target room gone) drop the dead portal and move on.
+        if (useAdapterPortal(pickup)) return;
+        removePickupAt(index);
         continue;
       }
 

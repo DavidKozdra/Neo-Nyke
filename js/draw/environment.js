@@ -147,27 +147,31 @@
 
   function drawJesterPortalPrompt() {
     if (Neo.gameState !== 'play') return;
-    const portal = Neo.pickups.find(pickup => pickup?.type === 'jesterPortal' && pickup.active);
+    const portal = Neo.pickups.find(pickup => (pickup?.type === 'jesterPortal' || pickup?.type === 'adapterPortal') && pickup.active);
     if (!portal) return;
     if (Neo.dist(Neo.player.x, Neo.player.y, portal.x, portal.y) > 74) return;
     const cx = portal.x;
     const cy = portal.y - 38;
-    const floors = Math.max(1, Number(portal.skipFloors || 1));
+    const adapter = portal.type === 'adapterPortal';
+    const text = adapter
+      ? 'Touch to warp to ladder (-50% coins)'
+      : `Touch to skip ${Math.max(1, Number(portal.skipFloors || 1))} floors`;
+    const stroke = adapter ? 'rgba(184,140,255,0.62)' : 'rgba(255,155,228,0.62)';
+    const fill = adapter ? '#d6c9ff' : '#ffc9ef';
     Neo.ctx.save();
     Neo.ctx.font = 'bold 14px system-ui';
     Neo.ctx.textAlign = 'center';
     Neo.ctx.textBaseline = 'middle';
-    const text = `Touch to skip ${floors} floors`;
     const pad = 14;
     const tw = Neo.ctx.measureText(text).width;
     Neo.ctx.fillStyle = 'rgba(28,11,32,0.86)';
     Neo.ctx.beginPath();
     Neo.ctx.roundRect(cx - tw / 2 - pad, cy - 13, tw + pad * 2, 26, 8);
     Neo.ctx.fill();
-    Neo.ctx.strokeStyle = 'rgba(255,155,228,0.62)';
+    Neo.ctx.strokeStyle = stroke;
     Neo.ctx.lineWidth = 1.5;
     Neo.ctx.stroke();
-    Neo.ctx.fillStyle = '#ffc9ef';
+    Neo.ctx.fillStyle = fill;
     Neo.ctx.fillText(text, cx, cy);
     Neo.ctx.restore();
   }

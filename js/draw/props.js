@@ -602,9 +602,13 @@
       const canAfford = !!Neo.player && Neo.player.coins >= offer.cost;
       Neo.ctx.save();
       Neo.ctx.translate(offer.x, offer.y);
-      Neo.ctx.fillStyle = blockedByChallenge || !canAfford ? 'rgba(36,18,24,0.95)' : 'rgba(0,30,44,0.95)';
-      Neo.ctx.strokeStyle = blockedByChallenge || !canAfford ? '#ff8b98' : '#ffd966';
+      // Red is reserved for challenge-blocked offers (a hard "forbidden" state).
+      // Unaffordable offers are dimmed/greyed instead, so the red-affordability cue
+      // no longer gets confused with red-rarity item coloring.
+      Neo.ctx.fillStyle = blockedByChallenge ? 'rgba(36,18,24,0.95)' : 'rgba(0,30,44,0.95)';
+      Neo.ctx.strokeStyle = blockedByChallenge ? '#ff8b98' : !canAfford ? '#6b7480' : '#ffd966';
       Neo.ctx.lineWidth = 2;
+      if (!blockedByChallenge && !canAfford) Neo.ctx.globalAlpha = 0.5;
       Neo.ctx.fillRect(-26, -26, 52, 52);
       Neo.ctx.strokeRect(-26, -26, 52, 52);
 
@@ -642,7 +646,8 @@
       }
 
       Neo.ctx.shadowBlur = 0;
-      Neo.ctx.fillStyle = blockedByChallenge || !canAfford ? '#ffccd2' : '#fff';
+      // Blocked → red price; unaffordable → neutral (tile is already dimmed); else white.
+      Neo.ctx.fillStyle = blockedByChallenge ? '#ffccd2' : !canAfford ? '#c4cdd6' : '#fff';
       Neo.ctx.font = 'bold 11px system-ui';
       Neo.ctx.textAlign = 'center';
       Neo.ctx.fillText(String(offer.cost), 0, 22);
@@ -805,10 +810,13 @@
           Neo.ctx.fill();
         }
         Neo.ctx.shadowBlur = 0;
+        // Show the actual item name so a choice (A/B chest, challenge reward) is
+        // identifiable, instead of a generic "A/B" / "PICK" label.
+        const choiceLabel = item?.name || Neo.titleCase?.(pickup.key) || pickup.label || 'PICK';
         Neo.ctx.fillStyle = '#ffffff';
         Neo.ctx.font = 'bold 9px system-ui';
         Neo.ctx.textAlign = 'center';
-        Neo.ctx.fillText(pickup.label || 'PICK', 0, 33);
+        Neo.ctx.fillText(choiceLabel, 0, 33);
       } else if (pickup.type === 'ladder') {
         Neo.ctx.strokeStyle = '#7dff9e';
         Neo.ctx.shadowColor = '#7dff9e';
@@ -822,7 +830,12 @@
         Neo.ctx.moveTo(-6, 0); Neo.ctx.lineTo(6, 0);
         Neo.ctx.moveTo(-6, 6); Neo.ctx.lineTo(6, 6);
         Neo.ctx.stroke();
-      } else if (pickup.type === 'jesterPortal') {
+      } else if (pickup.type === 'jesterPortal' || pickup.type === 'adapterPortal') {
+        const adapter = pickup.type === 'adapterPortal';
+        // Per-type palette: jester is pink/chaos, adapter is violet/tech.
+        const pal = adapter
+          ? { shadow: '#b88cff', ringA: '#b88cff', ringB: '#e3d1ff', base: 'rgba(24,8,66,0.65)', core0: 'rgba(214,196,255,0.92)', core1: 'rgba(150,108,255,0)', label: 'WARP', labelColor: '#e0d6ff' }
+          : { shadow: '#ff8bd8', ringA: '#ff8bd8', ringB: '#ffd1f5', base: 'rgba(48,8,66,0.65)', core0: 'rgba(255,188,236,0.92)', core1: 'rgba(255,95,194,0)', label: 'JUMP', labelColor: '#ffd6f7' };
         const spawnT = Math.max(0, Number(pickup.spawnT || 0));
         const activateAt = Math.max(0.01, Number(pickup.activateAt || Neo.JESTER_PORTAL_ACTIVATE_DELAY));
         const reveal = Neo.clamp(spawnT / activateAt, 0, 1);
@@ -831,18 +844,18 @@
         const portalR = 16 + ease * 11;
 
         Neo.ctx.globalAlpha = 0.34 + ease * 0.56;
-        Neo.ctx.fillStyle = 'rgba(48,8,66,0.65)';
+        Neo.ctx.fillStyle = pal.base;
         Neo.ctx.beginPath();
         Neo.ctx.ellipse(0, 8, portalR * 0.95, portalR * 0.34, 0, 0, Math.PI * 2);
         Neo.ctx.fill();
 
         Neo.ctx.globalAlpha = 0.9;
-        Neo.ctx.shadowColor = '#ff8bd8';
+        Neo.ctx.shadowColor = pal.shadow;
         Neo.ctx.shadowBlur = 20;
         for (let ring = 0; ring < 2; ring += 1) {
           const ringR = portalR * (0.72 + ring * 0.3);
           const segments = 9 + ring * 3;
-          Neo.ctx.strokeStyle = ring === 0 ? '#ff8bd8' : '#ffd1f5';
+          Neo.ctx.strokeStyle = ring === 0 ? pal.ringA : pal.ringB;
           Neo.ctx.lineWidth = ring === 0 ? 2.4 : 1.5;
           Neo.ctx.beginPath();
           for (let seg = 0; seg < segments; seg += 1) {
@@ -856,8 +869,8 @@
 
         Neo.ctx.shadowBlur = 0;
         const core = Neo.ctx.createRadialGradient(0, 0, 0, 0, 0, portalR * 0.72);
-        core.addColorStop(0, 'rgba(255,188,236,0.92)');
-        core.addColorStop(1, 'rgba(255,95,194,0)');
+        core.addColorStop(0, pal.core0);
+        core.addColorStop(1, pal.core1);
         Neo.ctx.fillStyle = core;
         Neo.ctx.beginPath();
         Neo.ctx.ellipse(0, 0, portalR * 0.72, portalR * 0.27, 0, 0, Math.PI * 2);
@@ -865,10 +878,10 @@
 
         if (pickup.active) {
           Neo.ctx.globalAlpha = 0.9;
-          Neo.ctx.fillStyle = '#ffd6f7';
+          Neo.ctx.fillStyle = pal.labelColor;
           Neo.ctx.font = 'bold 10px system-ui';
           Neo.ctx.textAlign = 'center';
-          Neo.ctx.fillText('JUMP', 0, 3);
+          Neo.ctx.fillText(pal.label, 0, 3);
         }
       } else if (pickup.type === 'fightGod') {
         Neo.ctx.strokeStyle = '#fff';

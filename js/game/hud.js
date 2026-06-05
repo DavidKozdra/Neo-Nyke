@@ -94,8 +94,12 @@
   function pushPanelItemObjectives(entries) {
     const pawPending = Math.max(0, Math.floor(Number(Neo.player?.wizardPawPendingCount || 0)));
     const batteryPending = Math.max(0, Math.floor(Number(Neo.player?.extraBatteryPendingCount || 0)));
+    const scrollPending = Array.isArray(Neo.player?.scrollPendingQueue) ? Neo.player.scrollPendingQueue.length : 0;
     if (pawPending > 0) {
       entries.push({ text: `Wizard's Paw ready: pick 2 stats to boost${pawPending > 1 ? ` (×${pawPending})` : ''}`, state: 'warn' });
+    }
+    if (scrollPending > 0) {
+      entries.push({ text: `Scroll of Control ready: choose its target${scrollPending > 1 ? ` (×${scrollPending})` : ''}`, state: 'warn' });
     }
     if (batteryPending > 0) {
       entries.push({ text: `Extra Battery ready: pick a move for +1 charge${batteryPending > 1 ? ` (×${batteryPending})` : ''}`, state: 'warn' });
@@ -444,14 +448,17 @@
     if (Neo.ui.panelItemAlert) {
       const pawPending = Math.max(0, Math.floor(Number(Neo.player?.wizardPawPendingCount || 0)));
       const batteryPending = Math.max(0, Math.floor(Number(Neo.player?.extraBatteryPendingCount || 0)));
-      const pendingTotal = pawPending + batteryPending;
+      const scrollPending = Array.isArray(Neo.player?.scrollPendingQueue) ? Neo.player.scrollPendingQueue.length : 0;
+      const pendingTotal = pawPending + scrollPending + batteryPending;
       Neo.ui.panelItemAlert.classList.toggle('hidden', pendingTotal <= 0);
       if (pendingTotal > 0) {
         const countEl = Neo.ui.panelItemAlert.querySelector('.panel-item-alert__count');
         if (countEl) countEl.textContent = String(pendingTotal);
         const label = pawPending > 0
           ? "Wizard's Paw: pick 2 stats"
-          : 'Extra Battery: pick a move';
+          : scrollPending > 0
+            ? 'Scroll of Control: choose target'
+            : 'Extra Battery: pick a move';
         Neo.ui.panelItemAlert.title = `${label}${pendingTotal > 1 ? ` (+${pendingTotal - 1} more)` : ''}`;
       }
     }
@@ -1095,49 +1102,10 @@
   }
   Neo.updateEquipmentEffects = updateEquipmentEffects;
 
+  // Scrolls of Control are intentionally NOT activatable tools: they resolve their
+  // selection popup on pickup/purchase (see collectItem → enqueueScrollSelection),
+  // so they never occupy a tool slot.
   const ACTIVATABLE_ITEMS = {
-    scroll_reroll: {
-      key: 'scroll_reroll',
-      shortName: 'REROLL',
-      activate: () => Neo.openScrollControlSelection?.('scroll_reroll'),
-      getState: () => Neo.getItemCount('scroll_reroll') > 0 ? 'ready' : 'blocked',
-      getStatusText: () => String(Neo.getItemCount('scroll_reroll') || 0),
-    },
-    scroll_branching: {
-      key: 'scroll_branching',
-      shortName: 'BRANCH',
-      activate: () => Neo.openScrollControlSelection?.('scroll_branching'),
-      getState: () => Neo.getItemCount('scroll_branching') > 0 ? 'ready' : 'blocked',
-      getStatusText: () => String(Neo.getItemCount('scroll_branching') || 0),
-    },
-    scroll_replace: {
-      key: 'scroll_replace',
-      shortName: 'REPLACE',
-      activate: () => Neo.openScrollControlSelection?.('scroll_replace'),
-      getState: () => Neo.getItemCount('scroll_replace') > 0 ? 'ready' : 'blocked',
-      getStatusText: () => String(Neo.getItemCount('scroll_replace') || 0),
-    },
-    scroll_abundance: {
-      key: 'scroll_abundance',
-      shortName: 'ABUND',
-      activate: () => Neo.openScrollControlSelection?.('scroll_abundance'),
-      getState: () => Neo.getItemCount('scroll_abundance') > 0 ? 'ready' : 'blocked',
-      getStatusText: () => String(Neo.getItemCount('scroll_abundance') || 0),
-    },
-    scroll_pool_weight: {
-      key: 'scroll_pool_weight',
-      shortName: 'WEIGHT',
-      activate: () => Neo.openScrollControlSelection?.('scroll_pool_weight'),
-      getState: () => Neo.getItemCount('scroll_pool_weight') > 0 ? 'ready' : 'blocked',
-      getStatusText: () => String(Neo.getItemCount('scroll_pool_weight') || 0),
-    },
-    scroll_ego: {
-      key: 'scroll_ego',
-      shortName: 'EGO',
-      activate: () => Neo.openScrollControlSelection?.('scroll_ego'),
-      getState: () => Neo.getItemCount('scroll_ego') > 0 ? 'ready' : 'blocked',
-      getStatusText: () => String(Neo.getItemCount('scroll_ego') || 0),
-    },
     charged_adapter: {
       key: 'charged_adapter',
       shortName: 'WARP',
@@ -1260,9 +1228,10 @@
     if (!Neo.player) return;
     if (!Array.isArray(Neo.player.equipmentSlots)) Neo.player.equipmentSlots = [];
     const slots = Neo.player.equipmentSlots;
-    // Drop slot entries for items no longer owned.
+    // Drop slot entries for items no longer owned, or that are no longer activatable
+    // tools (e.g. scrolls from an older save, now resolved on pickup instead).
     for (let i = slots.length - 1; i >= 0; i -= 1) {
-      if (Neo.getItemCount(slots[i]) <= 0) slots.splice(i, 1);
+      if (Neo.getItemCount(slots[i]) <= 0 || !ACTIVATABLE_ITEMS[slots[i]]) slots.splice(i, 1);
     }
     // Append any owned activatable items that aren't slotted yet, capped at slot count.
     for (const itemKey of Object.keys(ACTIVATABLE_ITEMS)) {

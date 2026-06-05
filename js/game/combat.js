@@ -2797,6 +2797,10 @@
       for (let index = 0; index < collectCount; index += 1) Neo.openWizardPawSelection();
     } else if (itemKey === 'extra_battery') {
       for (let index = 0; index < collectCount; index += 1) Neo.openExtraBatterySelection();
+    } else if (Neo.isScrollControlItem?.(itemKey)) {
+      // Scrolls resolve their selection popup on acquisition (pickup/buy/reward),
+      // not as an activatable tool. Queue one prompt per copy collected.
+      Neo.enqueueScrollSelection?.(itemKey, collectCount);
     }
 
     if (itemKey === 'titan_heart') {

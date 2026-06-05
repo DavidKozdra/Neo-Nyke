@@ -38,6 +38,11 @@ export function migratePlayerData(source) {
     playerData.extraBatteryPendingCount = Math.max(0, Math.floor(Number(playerData.extraBatteryPendingCount || 0)));
     playerData.wizardPawPendingCount = Math.max(0, Math.floor(Number(playerData.wizardPawPendingCount || 0)));
     playerData.scrollUseSerial = Math.max(0, Math.floor(Number(playerData.scrollUseSerial || 0)));
+    // Scrolls picked up/bought open their selection popup on acquisition. Any that
+    // couldn't open immediately (shop/cinematic) wait here until presentable.
+    playerData.scrollPendingQueue = Array.isArray(playerData.scrollPendingQueue)
+      ? playerData.scrollPendingQueue.filter(key => SCROLL_KEYS.has(key))
+      : [];
     playerData.scrollBranchingTargets = (playerData.scrollBranchingTargets && typeof playerData.scrollBranchingTargets === 'object') ? playerData.scrollBranchingTargets : {};
     playerData.scrollReplaceMap = (playerData.scrollReplaceMap && typeof playerData.scrollReplaceMap === 'object') ? playerData.scrollReplaceMap : {};
     playerData.scrollPoolWeights = Array.isArray(playerData.scrollPoolWeights) ? playerData.scrollPoolWeights.filter(buff => buff && buff.tag) : [];
@@ -537,7 +542,8 @@ export function requestPanelItemSelection(options = {}) {
     if (!player) return false;
     const pawPending = Math.max(0, Math.floor(Number(player.wizardPawPendingCount || 0)));
     const batteryPending = Math.max(0, Math.floor(Number(player.extraBatteryPendingCount || 0)));
-    if (pawPending <= 0 && batteryPending <= 0) return false;
+    const scrollPending = Array.isArray(player.scrollPendingQueue) && player.scrollPendingQueue.length > 0;
+    if (pawPending <= 0 && batteryPending <= 0 && !scrollPending) return false;
     // Don't fight a cinematic, transition, death, or another blocking overlay.
     if (Neo.gameState !== 'play') return false;
     // The paw modal is itself a blocking overlay; if it's already up, wait for confirm.
@@ -546,6 +552,11 @@ export function requestPanelItemSelection(options = {}) {
     // Paw first: it stops time and is the higher-tier reward.
     if (pawPending > 0) {
       beginWizardPawModal();
+      return true;
+    }
+    // Scrolls next: each owed scroll opens its own control modal.
+    if (scrollPending) {
+      beginScrollControlSelection(player.scrollPendingQueue[0]);
       return true;
     }
     // The battery prompt re-uses the inventory panel. When the player just
@@ -749,18 +760,40 @@ export function confirmWizardPawSelection() {
         choices: getScrollTagChoices(),
       };
     }
+    if (scrollKey === 'scroll_ego') {
+      return {
+        title: 'SCROLL OF EGO',
+        copy: 'Confirm to make items already in your build 10% more common for this floor.',
+        minPicks: 0,
+        maxPicks: 0,
+        choices: [],
+      };
+    }
+    // Unknown scroll key — surface its own name and let the player dismiss it
+    // rather than silently mislabelling it as Ego.
     return {
-      title: item?.name?.toUpperCase?.() || 'SCROLL OF EGO',
-      copy: 'Confirm to make items already in your build 10% more common for this floor.',
+      title: item?.name?.toUpperCase?.() || 'SCROLL OF CONTROL',
+      copy: 'Confirm to use this scroll.',
       minPicks: 0,
       maxPicks: 0,
       choices: [],
     };
   }
 
+  // The scroll-control modal elements live in Neo.ui, but if that cache was built
+  // before this markup existed (or a refactor renamed a sibling), re-resolve the
+  // ids by hand so the searchable grid never silently fails to render.
+  function ensureScrollControlRefs() {
+    const ui = Neo.ui;
+    if (!ui) return false;
+    const ids = ['scrollControlModal', 'scrollControlTitle', 'scrollControlCopy', 'scrollControlSearch', 'scrollControlMeta', 'scrollControlChoices', 'scrollControlCancel', 'scrollControlConfirm'];
+    ids.forEach(id => { if (!ui[id]) ui[id] = document.getElementById(id); });
+    return !!ui.scrollControlChoices;
+  }
+
   function renderScrollControlPanel() {
     const state = Neo.scrollControlSelection;
-    if (!state || !Neo.ui.scrollControlChoices) return;
+    if (!state || !ensureScrollControlRefs()) return;
     const config = getScrollControlConfig(state.scrollKey, state.phase);
     state.config = config;
     const query = String(state.query || '').trim().toLowerCase();
@@ -783,7 +816,9 @@ export function confirmWizardPawSelection() {
         <span class="scroll-control-choice__title">${icon}<b>${Neo.escapeHtml(choice.name)}</b></span>
         <p>${Neo.escapeHtml(choice.description || '')}</p>
       </button>`;
-    }).join('') || '<div class="inv-card"><span class="inv-card__eyebrow">Empty</span><h4>No choices match</h4><p>Clear the search to see available choices.</p></div>';
+    }).join('') || (config.choices.length === 0
+      ? '<div class="inv-card"><span class="inv-card__eyebrow">Empty</span><h4>Nothing to choose</h4><p>This scroll has no valid targets right now. Cancel to discard it.</p></div>'
+      : '<div class="inv-card"><span class="inv-card__eyebrow">Empty</span><h4>No matches</h4><p>Clear the search to see available choices.</p></div>');
     Neo.drawItemIconCanvases?.(Neo.ui.scrollControlChoices, 'data-item-icon');
     if (Neo.ui.scrollControlConfirm) {
       const canConfirm = state.picks.length >= config.minPicks && state.picks.length <= config.maxPicks;
@@ -796,14 +831,43 @@ export function confirmWizardPawSelection() {
     }
   }
 
-  function openScrollControlSelection(scrollKey) {
+  function isScrollControlItem(itemKey) {
+    return SCROLL_KEYS.has(itemKey);
+  }
+
+  // Queue `count` scroll selections owed by a pickup/purchase, then try to present
+  // the first one now (defers via requestPanelItemSelection if an overlay is open).
+  function enqueueScrollSelection(scrollKey, count = 1) {
     if (!Neo.player || !SCROLL_KEYS.has(scrollKey)) return false;
-    if (Neo.getItemCount(scrollKey) <= 0) return false;
-    if (Neo.gameState !== 'play' || Neo.isOverlayBlockingInput?.()) return false;
+    if (!Array.isArray(Neo.player.scrollPendingQueue)) Neo.player.scrollPendingQueue = [];
+    const copies = Math.max(1, Math.floor(Number(count) || 1));
+    for (let index = 0; index < copies; index += 1) Neo.player.scrollPendingQueue.push(scrollKey);
+    Neo.scheduleRunSave?.();
+    if (!requestPanelItemSelection()) notifyPanelItemDeferred(scrollKey);
+    return true;
+  }
+
+  // Actually open the scroll control modal for `scrollKey`. Callers (the dispatcher)
+  // are responsible for the gameState / overlay guards.
+  function beginScrollControlSelection(scrollKey) {
+    if (!Neo.player || !SCROLL_KEYS.has(scrollKey)) return false;
+    if (Neo.getItemCount(scrollKey) <= 0) {
+      // Owed a prompt but the scroll is gone (e.g. rerolled away) — drop the entry.
+      dequeueScrollSelection(scrollKey);
+      return false;
+    }
     Neo.scrollControlSelection = { scrollKey, phase: 'main', picks: [], fromKeys: [], query: '' };
     Neo.setScrollControlModalOpen?.(true);
     renderScrollControlPanel();
     return true;
+  }
+
+  // Remove a single queued entry for scrollKey (the one being resolved).
+  function dequeueScrollSelection(scrollKey) {
+    const queue = Neo.player?.scrollPendingQueue;
+    if (!Array.isArray(queue)) return;
+    const idx = queue.indexOf(scrollKey);
+    if (idx >= 0) queue.splice(idx, 1);
   }
 
   function updateScrollControlSearch(query = '') {
@@ -886,17 +950,34 @@ export function confirmWizardPawSelection() {
       Neo.player.scrollEgoFloor = Neo.floor;
     }
     Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 28, life: 0.9, text: 'SCROLL SET', c: '#d7f6ff' });
+    dequeueScrollSelection(state.scrollKey);
     Neo.scrollControlSelection = null;
     Neo.setScrollControlModalOpen?.(false);
     Neo.markInventoryPanelDirty?.();
     Neo.renderInventoryPanel?.();
     Neo.updateHud?.();
     Neo.scheduleRunSave?.();
+    // Chain into the next owed scroll/paw/battery now that the modal is closed.
+    requestPanelItemSelection();
   }
 
   function cancelScrollControlSelection() {
+    const state = Neo.scrollControlSelection;
     Neo.scrollControlSelection = null;
     Neo.setScrollControlModalOpen?.(false);
+    // Scrolls are spent on acquisition: dismissing the popup still consumes the
+    // scroll (no effect applied) and clears its queued prompt — no take-backs.
+    if (state?.scrollKey) {
+      consumeScroll(state.scrollKey);
+      dequeueScrollSelection(state.scrollKey);
+      Neo.spawnParticle?.({ x: Neo.player?.x || 0, y: (Neo.player?.y || 0) - 28, life: 0.8, text: 'SCROLL DISCARDED', c: '#9aa6b2' });
+      Neo.markInventoryPanelDirty?.();
+      Neo.renderInventoryPanel?.();
+      Neo.updateHud?.();
+      Neo.scheduleRunSave?.();
+    }
+    // Present the next owed selection (if any).
+    requestPanelItemSelection();
   }
 
   // ── Voucher redemption ────────────────────────────────────────────────────
@@ -1235,7 +1316,8 @@ export function refreshFloorChargeStates() {
   Neo.handleWizardPawChoiceClick = handleWizardPawChoiceClick;
   Neo.applyWizardPawStat = applyWizardPawStat;
   Neo.confirmWizardPawSelection = confirmWizardPawSelection;
-  Neo.openScrollControlSelection = openScrollControlSelection;
+  Neo.isScrollControlItem = isScrollControlItem;
+  Neo.enqueueScrollSelection = enqueueScrollSelection;
   Neo.renderScrollControlPanel = renderScrollControlPanel;
   Neo.updateScrollControlSearch = updateScrollControlSearch;
   Neo.handleScrollControlChoiceClick = handleScrollControlChoiceClick;

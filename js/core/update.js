@@ -552,15 +552,33 @@ export function loop(timestamp) {
       return;
     }
 
-    const goldSpent = Math.floor(Neo.player.coins / 2);
-    if (goldSpent > 0) {
-      Neo.player.coins -= goldSpent;
-      Neo.metaProgress.coins = Math.max(0, Neo.metaProgress.coins - goldSpent);
+    // Don't stack a second gate if one is already open in this room.
+    if (Neo.pickups.some(pickup => pickup?.type === 'adapterPortal')) {
+      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.6, text: 'PORTAL ALREADY OPEN', c: '#b88cff' });
+      return;
     }
 
+    // Spend the adapter charge now (the press is what opens the gate), but defer
+    // the coin cost and the actual warp until the player walks into the portal.
     Neo.consumeCharge('escape');
-    Neo.enterRoom(ladderRoom);
-    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.9, text: 'WARPED TO LADDER (-50% COINS)', c: '#b66cff' });
+
+    const preferred = Neo.findSafePointNearTarget(Neo.player.x, Neo.player.y - 96, 24, 180, 20);
+    const fallback = Neo.findSafePointNearTarget(Neo.ROOM_W / 2, Neo.ROOM_H / 2, 24, 240, 20) || Neo.findSafeSpawnPoint();
+    const spawnPoint = preferred || fallback;
+    Neo.pickups.push({
+      x: spawnPoint.x,
+      y: spawnPoint.y,
+      type: 'adapterPortal',
+      // Store grid coords, not the room object — keeps the pickup serializable and
+      // avoids a stale reference after save/restore (resolved at walk-in time).
+      targetGx: ladderRoom.gx,
+      targetGy: ladderRoom.gy,
+      spawnT: 0,
+      activateAt: Neo.JESTER_PORTAL_ACTIVATE_DELAY,
+      active: false,
+    });
+    Neo.spawnParticle({ x: spawnPoint.x, y: spawnPoint.y, life: 0.5, ring: 28, c: '#b88cff' });
+    Neo.spawnParticle({ x: spawnPoint.x, y: spawnPoint.y - 20, life: 0.8, text: 'LADDER PORTAL', c: '#d6c4ff' });
     Neo.scheduleRunSave();
   }
 
