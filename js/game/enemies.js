@@ -1516,8 +1516,10 @@
     if (!Neo.currentRoom || Neo.currentRoom.type !== 'challenge' || Neo.currentRoom.challengeRewardSpawned) return;
     Neo.currentRoom.challengeRewardSpawned = true;
     const rewardRandom = Neo.createRoomRandom(Neo.currentRoom, 'challenge:reward');
+    const scrollRandom = Neo.createRoomRandom(Neo.currentRoom, 'challenge:scroll-reward');
     const challengeData = Neo.currentRoom.challengeData || {};
-    const rewardKey = challengeData.rewardKey || Neo.rollItemDrop({ elite: true, random: rewardRandom });
+    const scrollReward = Neo.floor > 3 && scrollRandom() < 0.2 ? Neo.rollScrollOfControl?.(scrollRandom) : '';
+    const rewardKey = challengeData.rewardKey || scrollReward || Neo.rollItemDrop({ elite: true, random: rewardRandom });
     Neo.pickups = Neo.pickups.filter(pickup => !['challengeBomb', 'challengeRune', 'challengeStarter', 'challengeItemChoice'].includes(pickup?.type));
     Neo.pickups.push({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 16, type: 'item', key: rewardKey });
     Neo.pickups.push({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 + 36, type: 'potion' });

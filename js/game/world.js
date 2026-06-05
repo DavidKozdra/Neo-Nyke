@@ -2088,7 +2088,31 @@
       Neo.minimapLegendDirty = true;
       Neo.dropCoins(chest.x, chest.y, 12 + Neo.floor * 2);
       if ((chest.rewardType || 'item') === 'item') {
-        Neo.pickups.push({ x: chest.x, y: chest.y - 20, type: 'item', key: chest.rewardKey || Neo.rollItemDrop({ random: Neo.createEntityRandom(chest, 'chest:fallback') }) });
+        if (chest.choiceType === 'ab') {
+          const choiceRandom = Neo.createEntityRandom(chest, 'chest:ab-choice');
+          const choices = Array.isArray(chest.rewardChoices) && chest.rewardChoices.length >= 2
+            ? chest.rewardChoices.slice(0, 2)
+            : Neo.createSeededItemChoices?.(2, choiceRandom) || [
+              chest.rewardKey || Neo.rollItemDrop({ random: choiceRandom }),
+              Neo.rollItemDrop({ random: choiceRandom }),
+            ];
+          chest.rewardChoices = choices;
+          const groupId = chest.choiceGroupId || `chest:${Neo.currentRoom?.gx ?? 0}:${Neo.currentRoom?.gy ?? 0}:${Math.round(chest.x)}:${Math.round(chest.y)}`;
+          chest.choiceGroupId = groupId;
+          choices.forEach((key, choiceIndex) => {
+            Neo.pickups.push({
+              x: chest.x + (choiceIndex === 0 ? -34 : 34),
+              y: chest.y - 28,
+              type: 'rewardChoice',
+              key,
+              groupId,
+              picksRemaining: 1,
+              label: 'A/B',
+            });
+          });
+        } else {
+          Neo.pickups.push({ x: chest.x, y: chest.y - 20, type: 'item', key: chest.rewardKey || Neo.rollItemDrop({ random: Neo.createEntityRandom(chest, 'chest:fallback') }) });
+        }
       } else {
         Neo.pickups.push({ x: chest.x, y: chest.y - 20, type: 'potion' });
       }
@@ -2289,6 +2313,34 @@
           Neo.scheduleRunSave();
           return;
         }
+      }
+
+      if (pickup.type === 'rewardChoice') {
+        const groupId = String(pickup.groupId || '');
+        const key = pickup.key;
+        if (!groupId || !key) {
+          removePickupAt(index);
+          continue;
+        }
+        Neo.collectItem(key);
+        Neo.playSfx?.('item_collect');
+        const remainingBeforePick = Math.max(1, Math.floor(Number(pickup.picksRemaining || 1)));
+        const remainingAfterPick = remainingBeforePick - 1;
+        Neo.pickups = Neo.pickups.filter(item => {
+          if (item === pickup) return false;
+          if (item?.type !== 'rewardChoice' || String(item.groupId || '') !== groupId) return true;
+          if (remainingAfterPick <= 0) return false;
+          item.picksRemaining = remainingAfterPick;
+          if (String(item.label || '').includes('/5')) item.label = `${remainingAfterPick}/5`;
+          return true;
+        });
+        if (remainingAfterPick > 0) {
+          Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 24, life: 0.75, text: `${remainingAfterPick} PICK LEFT`, c: '#d7f6ff' });
+        }
+        Neo.syncCurrentRoomState();
+        Neo.scheduleRunSave();
+        Neo.updateObjective();
+        continue;
       }
 
       if (pickup.type === 'jesterPortal') {

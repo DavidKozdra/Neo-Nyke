@@ -530,6 +530,11 @@ export function resumeGame() {
       storedPotions: 0,
       extraBatteryPendingCount: 0,
       wizardPawPendingCount: 0,
+      scrollUseSerial: 0,
+      scrollBranchingTargets: {},
+      scrollReplaceMap: {},
+      scrollPoolWeights: [],
+      scrollEgoFloor: 0,
       equipmentSlots: (character.key === 'metao') ? ['mateos_bag'] : [],
       equipmentCooldowns: {},
       equipmentEffects: {},
@@ -2526,8 +2531,10 @@ export function resumeGame() {
     Neo.antonyBlemmyeCutscenePlayed = false;
     Neo.secretRoomVisitedFloors = [];
     Neo.wizardPawSelection = null;
+    Neo.scrollControlSelection = null;
     Neo.panelItemDeferredToastRoom = null;
     Neo.setWizardPawModalOpen(false);
+    Neo.setScrollControlModalOpen?.(false, { animateClose: false });
     Neo.setShopPanelOpen(false);
     Neo.setInventoryPanelOpen(false);
     Neo.mouse.down = false;
@@ -2650,8 +2657,10 @@ export function resumeGame() {
     Neo.secretRoomVisitedFloors = Array.isArray(snapshot.secretRoomVisitedFloors) ? [...snapshot.secretRoomVisitedFloors] : [];
     Neo.restoreRivals(snapshot.rivals);
     Neo.wizardPawSelection = null;
+    Neo.scrollControlSelection = null;
     Neo.panelItemDeferredToastRoom = null;
     Neo.setWizardPawModalOpen(false);
+    Neo.setScrollControlModalOpen?.(false, { animateClose: false });
     Neo.setShopPanelOpen(false);
     Neo.setInventoryPanelOpen(false);
     Neo.updateItemUI();

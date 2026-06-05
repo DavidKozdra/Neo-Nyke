@@ -1071,6 +1071,48 @@
   Neo.updateEquipmentEffects = updateEquipmentEffects;
 
   const ACTIVATABLE_ITEMS = {
+    scroll_reroll: {
+      key: 'scroll_reroll',
+      shortName: 'REROLL',
+      activate: () => Neo.openScrollControlSelection?.('scroll_reroll'),
+      getState: () => Neo.getItemCount('scroll_reroll') > 0 ? 'ready' : 'blocked',
+      getStatusText: () => String(Neo.getItemCount('scroll_reroll') || 0),
+    },
+    scroll_branching: {
+      key: 'scroll_branching',
+      shortName: 'BRANCH',
+      activate: () => Neo.openScrollControlSelection?.('scroll_branching'),
+      getState: () => Neo.getItemCount('scroll_branching') > 0 ? 'ready' : 'blocked',
+      getStatusText: () => String(Neo.getItemCount('scroll_branching') || 0),
+    },
+    scroll_replace: {
+      key: 'scroll_replace',
+      shortName: 'REPLACE',
+      activate: () => Neo.openScrollControlSelection?.('scroll_replace'),
+      getState: () => Neo.getItemCount('scroll_replace') > 0 ? 'ready' : 'blocked',
+      getStatusText: () => String(Neo.getItemCount('scroll_replace') || 0),
+    },
+    scroll_abundance: {
+      key: 'scroll_abundance',
+      shortName: 'ABUND',
+      activate: () => Neo.openScrollControlSelection?.('scroll_abundance'),
+      getState: () => Neo.getItemCount('scroll_abundance') > 0 ? 'ready' : 'blocked',
+      getStatusText: () => String(Neo.getItemCount('scroll_abundance') || 0),
+    },
+    scroll_pool_weight: {
+      key: 'scroll_pool_weight',
+      shortName: 'WEIGHT',
+      activate: () => Neo.openScrollControlSelection?.('scroll_pool_weight'),
+      getState: () => Neo.getItemCount('scroll_pool_weight') > 0 ? 'ready' : 'blocked',
+      getStatusText: () => String(Neo.getItemCount('scroll_pool_weight') || 0),
+    },
+    scroll_ego: {
+      key: 'scroll_ego',
+      shortName: 'EGO',
+      activate: () => Neo.openScrollControlSelection?.('scroll_ego'),
+      getState: () => Neo.getItemCount('scroll_ego') > 0 ? 'ready' : 'blocked',
+      getStatusText: () => String(Neo.getItemCount('scroll_ego') || 0),
+    },
     charged_adapter: {
       key: 'charged_adapter',
       shortName: 'WARP',

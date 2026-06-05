@@ -129,6 +129,7 @@ window.Neo = {
   weaponBurstQueue: [],
   clawSwipeQueue: [],
   wizardPawSelection: null,
+  scrollControlSelection: null,
   activeInventorySlot: '',
   inventoryPauseActive: false,
 

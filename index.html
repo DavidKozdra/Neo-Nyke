@@ -460,6 +460,20 @@
     </div>
   </div>
 
+  <div id="scrollControlModal" class="modal-backdrop hidden" aria-hidden="true">
+    <div class="modal-box scroll-control-box">
+      <h2 class="screen-title wizard-paw-title" id="scrollControlTitle">SCROLL OF CONTROL</h2>
+      <p class="wizard-paw-copy" id="scrollControlCopy">Choose a target, then confirm.</p>
+      <input id="scrollControlSearch" class="rh-info-search scroll-control-search" type="search" placeholder="Search choices..." aria-label="Search scroll choices" autocomplete="off" spellcheck="false">
+      <div id="scrollControlMeta" class="scroll-control-meta"></div>
+      <div id="scrollControlChoices" class="wizard-paw-choices scroll-control-choices"></div>
+      <div class="scroll-control-actions">
+        <button id="scrollControlCancel" class="nav-btn">CANCEL</button>
+        <button id="scrollControlConfirm" class="nav-btn" disabled>CONFIRM</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Item cinematic overlay -->
   <div id="itemCinematic" class="item-cinematic hidden" aria-hidden="true">
     <canvas id="itemCinematicCanvas" class="item-cinematic__icon" width="64" height="64"></canvas>

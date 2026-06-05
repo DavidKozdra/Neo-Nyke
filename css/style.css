@@ -6258,6 +6258,66 @@ border-bottom: black solid 2px;
   display: block;
 }
 
+.scroll-control-box {
+  width: min(920px, calc(100vw - 28px));
+  max-height: min(760px, calc(100vh - 28px));
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.scroll-control-search {
+  width: 100%;
+  flex: 0 0 auto;
+}
+
+.scroll-control-meta {
+  color: var(--menu-text-soft);
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0;
+}
+
+.scroll-control-choices {
+  overflow: auto;
+  padding-right: 4px;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+}
+
+.scroll-control-choice {
+  border-color: color-mix(in srgb, var(--scroll-choice-color, #d8e9ff) 62%, rgba(255,255,255,0.16));
+}
+
+.scroll-control-choice.is-selected {
+  box-shadow: 0 0 0 2px var(--scroll-choice-color, #d8e9ff), 0 0 24px color-mix(in srgb, var(--scroll-choice-color, #d8e9ff) 36%, transparent);
+}
+
+.scroll-control-choice__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.scroll-control-choice__icon {
+  flex: 0 0 auto;
+}
+
+.scroll-control-choice__tag {
+  width: 26px;
+  height: 26px;
+  border: 2px solid #c8e2ff;
+  display: inline-block;
+  background: rgba(200,226,255,0.12);
+}
+
+.scroll-control-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
 /* --- Tab bar (mirrors the shop/inventory .panel-tabs pill bar) --- */
 .stab-bar {
   display: flex;

@@ -871,8 +871,10 @@
         ? '#a857ff'
         : '#ff66cc';
     const smashRadius = (Neo.ATTACKS.smash.radius + anvilSmashRange) * (itemStats.aoeRadiusMultiplier || 1);
-    Neo.shake = 16;
-    Neo.shakeT = 0.24;
+    // Heavy ground slam: trauma-based shake (matches melee feel) plus a big
+    // downward camera lurch and a brief hitstop so the impact reads.
+    Neo.addTrauma?.(0.8, Math.PI / 2, 26);
+    Neo.addHitstop?.(0.06);
     Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.4, ring: smashRadius - 30, c: smashColor });
     Neo.spawnAoeShockwave(Neo.player.x, Neo.player.y, smashRadius, smashColor, 'heavy');
     Neo.hitPvpPlayer2InRadius?.(Neo.player.x, Neo.player.y, smashRadius, Neo.ATTACKS.smash.damage + Neo.getAnvilMoveBonus(move, 'damage'), 320, 'pvp_p1_smash');
@@ -893,6 +895,33 @@
         Neo.damageDestructible(prop, 2);
       }
     });
+    // Crimson Smash also hurls a ring of rock shards outward — the slam kicks up
+    // debris that keeps dealing damage past the AOE edge.
+    if (move === 'crimson_smash') {
+      const aimBase = Math.atan2(Neo.mouse.worldY - Neo.player.y, Neo.mouse.worldX - Neo.player.x);
+      const rockCount = 8;
+      const rockDamage = Math.round(baseSmashDamage * 0.45);
+      for (let index = 0; index < rockCount; index += 1) {
+        const angle = aimBase + (index / rockCount) * Math.PI * 2;
+        const speed = 460 + Neo.nextRandom('fx') * 120;
+        Neo.spawnProjectile({
+          x: Neo.player.x + Math.cos(angle) * (smashRadius * 0.4),
+          y: Neo.player.y + Math.sin(angle) * (smashRadius * 0.4),
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          r: 7,
+          life: 0.62,
+          enemy: false,
+          kind: 'rock',
+          damage: rockDamage,
+          knockback: 200,
+          // Impact fx match the floor the debris was kicked up from.
+          color: Neo.getRoomArtTheme?.()?.backdrop || '#8a5a3c',
+          pierceCount: 1,
+          hitOptions: { bleedChance: 0.2, bleedStacks: 1, bleedDuration: 4 },
+        });
+      }
+    }
   }
 
   function tryDash(moveX, moveY) {
@@ -1024,8 +1053,9 @@
     const aoeDmgMult = itemStats.aoeDamageMultiplier || 1;
     const blastDmg = Math.round((Neo.godTimer > 0 ? 78 : 52) * aoeDmgMult) + anvilDmg;
 
-    Neo.shake = Math.max(Neo.shake, 18);
-    Neo.shakeT = Math.max(Neo.shakeT, 0.28);
+    // Massive AOE explosion: strong trauma + big downward camera lurch + hitstop.
+    Neo.addTrauma?.(0.9, Math.PI / 2, 30);
+    Neo.addHitstop?.(0.07);
     Neo.blastRadius(Neo.player.x, Neo.player.y, aoeRadius, blastDmg, '#ff3070');
     Neo.spawnAoeShockwave(Neo.player.x, Neo.player.y, aoeRadius, '#ff3070', 'heavy');
     Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.5, ring: aoeRadius - 24, c: '#ff3070' });
@@ -1166,8 +1196,9 @@
     const aoeRadius = 108 * (itemStats.aoeRadiusMultiplier || 1);
     const stompDamage = Neo.godTimer > 0 ? 64 : 46;
     Neo.blastRadius(Neo.player.x, Neo.player.y, aoeRadius, stompDamage, '#ffe67a');
-    Neo.shake = Math.max(Neo.shake, 14);
-    Neo.shakeT = Math.max(Neo.shakeT, 0.22);
+    // Landing slam: trauma shake with a downward camera lurch.
+    Neo.addTrauma?.(0.66, Math.PI / 2, 20);
+    Neo.addHitstop?.(0.05);
     Neo.player.inv = Math.max(Neo.player.inv, 0.32);
     Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.44, ring: aoeRadius, c: '#ffe67a' });
   }
@@ -1321,8 +1352,8 @@
     });
     Neo.player.vx -= Math.cos(angle) * 260;
     Neo.player.vy -= Math.sin(angle) * 260;
-    Neo.shake = Math.max(Neo.shake, 10);
-    Neo.shakeT = Math.max(Neo.shakeT, 0.18);
+    // Kick the camera back along the recoil direction (away from the strike).
+    Neo.addTrauma?.(0.58, angle + Math.PI, 18);
     Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.42, ring: radius * 0.85, c: '#ff7fc2' });
   }
 
@@ -2524,6 +2555,9 @@
         return;
       }
       Neo.currentRoom.cleared = true;
+      if (Neo.currentRoom.type === 'boss' && Neo.gameMode !== 'endless' && Neo.gameMode !== 'boss_rush') {
+        spawnBossRewardChoices(enemy);
+      }
       if ((Neo.currentRoom.type === 'ladder' || Neo.currentRoom.type === 'boss') && Neo.gameMode !== 'endless' && Neo.gameMode !== 'boss_rush') {
         Neo.pickups.push({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2, type: 'ladder' });
       }
@@ -2538,6 +2572,37 @@
       Neo.updateObjective();
       Neo.scheduleRunSave();
     }
+  }
+
+  function spawnBossRewardChoices(enemy = null) {
+    const room = Neo.currentRoom;
+    if (!room || room.bossRewardSpawned) return;
+    room.bossRewardSpawned = true;
+    const rewardRandom = Neo.createRoomRandom(room, 'boss:reward-five');
+    const choices = Array.isArray(room.bossRewardChoices) && room.bossRewardChoices.length >= 5
+      ? room.bossRewardChoices.slice(0, 5)
+      : Neo.createSeededItemChoices?.(5, rewardRandom, { elite: true }) || [];
+    room.bossRewardChoices = choices;
+    const picksRemaining = Neo.getBossRewardPickCount?.(Neo.floor, room) || 1;
+    const groupId = room.bossRewardGroupId || `boss:${room.gx ?? 0}:${room.gy ?? 0}:${Neo.floor}`;
+    room.bossRewardGroupId = groupId;
+    const cx = Neo.ROOM_W / 2;
+    const cy = Neo.ROOM_H / 2 + 68;
+    const offsets = [-144, -72, 0, 72, 144];
+    choices.forEach((key, index) => {
+      Neo.pickups.push({
+        x: cx + offsets[index],
+        y: cy,
+        type: 'rewardChoice',
+        key,
+        groupId,
+        picksRemaining,
+        label: `${picksRemaining}/5`,
+      });
+    });
+    const announceX = enemy?.x || cx;
+    const announceY = enemy?.y || cy;
+    Neo.spawnParticle({ x: announceX, y: announceY - 42, life: 1.2, text: `PICK ${picksRemaining} OF 5`, c: '#d7f6ff' });
   }
 
   function onEndlessWaveCleared() {
@@ -2592,6 +2657,47 @@
   }
 
   function rollItemDrop(options = {}) {
+    const adjustEntriesForScrollControl = (entries) => {
+      if (!Neo.player) return entries;
+      const activeWeightTags = (Array.isArray(Neo.player.scrollPoolWeights) ? Neo.player.scrollPoolWeights : [])
+        .filter(buff => buff && Number(buff.expiresFloor || 0) >= Neo.floor && buff.tag);
+      const egoActive = Number(Neo.player.scrollEgoFloor || 0) === Neo.floor;
+      if (!activeWeightTags.length && !egoActive) return entries;
+      const owned = Neo.player.items || {};
+      return entries.map(([key, weight]) => {
+        const item = Neo.ITEM_DEFS?.[key];
+        let nextWeight = Number(weight || 0);
+        if (egoActive && Number(owned[key] || 0) > 0) nextWeight *= 1.1;
+        if (activeWeightTags.length) {
+          const tags = Array.isArray(item?.tags) ? item.tags : [];
+          activeWeightTags.forEach(buff => {
+            if (!tags.includes(buff.tag)) return;
+            const rarity = String(item?.rarity || 'knight').toLowerCase();
+            const boost = rarity === 'god' || rarity === 'red'
+              ? 1.2
+              : rarity === 'wizard' || rarity === 'purple'
+                ? 1.3
+                : 1.5;
+            nextWeight *= boost;
+          });
+        }
+        return [key, nextWeight];
+      });
+    };
+    const applyScrollReplacement = (key) => {
+      if (!Neo.player || !key) return key;
+      const replaceMap = Neo.player.scrollReplaceMap || {};
+      if (replaceMap[key] && Neo.ITEM_DEFS?.[replaceMap[key]]) return replaceMap[key];
+      const rarity = String(Neo.ITEM_DEFS?.[key]?.rarity || 'knight').toLowerCase();
+      const branching = Neo.player.scrollBranchingTargets || {};
+      if (branching[rarity] && Neo.ITEM_DEFS?.[branching[rarity]]) {
+        const nextKey = branching[rarity];
+        delete branching[rarity];
+        Neo.player.scrollBranchingTargets = branching;
+        return nextKey;
+      }
+      return key;
+    };
     const sandbox = Neo.getActiveSandboxSettings();
     if (sandbox) {
       const baseEntries = options.elite
@@ -2599,11 +2705,15 @@
         : Neo.ITEM_DROP_WEIGHTS;
       const filteredEntries = baseEntries.filter(([key]) => sandbox.allowedItems.includes(key));
       if (filteredEntries.length > 0) {
-        return Neo.rollFromWeightTable(Neo.buildWeightTable(filteredEntries), options.stream || 'loot', options.random);
+        const rolled = Neo.rollFromWeightTable(Neo.buildWeightTable(adjustEntriesForScrollControl(filteredEntries)), options.stream || 'loot', options.random);
+        return applyScrollReplacement(rolled);
       }
     }
-    const table = options.elite ? Neo.ELITE_ITEM_DROP_TABLE : Neo.ITEM_DROP_TABLE;
-    return Neo.rollFromWeightTable(table, options.stream || 'loot', options.random);
+    const entries = options.elite
+      ? Neo.ITEM_DROP_WEIGHTS.map(([key, weight]) => [key, weight + (key !== 'neo_knife' ? 4 : 0)])
+      : Neo.ITEM_DROP_WEIGHTS;
+    const rolled = Neo.rollFromWeightTable(Neo.buildWeightTable(adjustEntriesForScrollControl(entries)), options.stream || 'loot', options.random);
+    return applyScrollReplacement(rolled);
   }
 
   function grantXp(amount) {

@@ -780,12 +780,13 @@
           Neo.ctx.arc(0, 0, 12, 0, Math.PI * 2);
           Neo.ctx.fill();
         }
-      } else if (pickup.type === 'challengeItemChoice') {
+      } else if (pickup.type === 'challengeItemChoice' || pickup.type === 'rewardChoice') {
         const item = Neo.itemRegistry.get(pickup.key);
         const color = item?.color || '#d7f6ff';
+        const ringColor = Neo.getRarityNameColor?.(item?.rarity || item?.category) || color;
         const iconDef = window.NeoNykeIconDefs?.items?.[pickup.key];
-        Neo.ctx.strokeStyle = color;
-        Neo.ctx.shadowColor = color;
+        Neo.ctx.strokeStyle = ringColor;
+        Neo.ctx.shadowColor = ringColor;
         Neo.ctx.shadowBlur = 18;
         Neo.ctx.lineWidth = 2;
         Neo.ctx.beginPath();
@@ -807,7 +808,7 @@
         Neo.ctx.fillStyle = '#ffffff';
         Neo.ctx.font = 'bold 9px system-ui';
         Neo.ctx.textAlign = 'center';
-        Neo.ctx.fillText('PICK', 0, 33);
+        Neo.ctx.fillText(pickup.label || 'PICK', 0, 33);
       } else if (pickup.type === 'ladder') {
         Neo.ctx.strokeStyle = '#7dff9e';
         Neo.ctx.shadowColor = '#7dff9e';
@@ -1100,6 +1101,11 @@
     }
     if (kind === 'blade_justice') return { color: '#fff6a3', core: '#ffffff', trail: '#ffd86a', shape: 'blade', length: 40 };
     if (kind === 'fireball') return { color: '#ff7b32', core: '#fff1a6', trail: '#ff2f17', shape: 'fireball', length: 30 };
+    if (kind === 'rock') {
+      // Tint the debris to match the current floor so it reads as torn-up ground.
+      const floor = Neo.getRoomArtTheme?.()?.backdrop || '#8a5a3c';
+      return { color: floor, core: floor, trail: floor, shape: 'rock', length: 16 };
+    }
     if (kind === 'disk' || kind === 'power_disk') return { color: kind === 'power_disk' ? '#d890ff' : '#b66cff', core: '#f0d8ff', trail: kind === 'power_disk' ? '#f7ccff' : '#7d4dff', shape: 'disk', length: 20 };
     if (kind === 'disk_shard') return { color: '#c98bff', core: '#f0d8ff', trail: '#8a55ff', shape: 'disk', length: 12 };
     if (kind === 'magenta_p90') return { color: '#ff9dd7', core: '#fff0fb', trail: '#ff4aa8', shape: 'tracer', length: 26 };
@@ -1257,6 +1263,37 @@
       Neo.ctx.beginPath();
       Neo.ctx.ellipse(r * 0.42, 0, r * 0.48, r * 0.22, 0, 0, Math.PI * 2);
       Neo.ctx.fill();
+    } else if (visual.shape === 'rock') {
+      // Chunky tumbling boulder torn from the floor: an irregular polygon tinted to
+      // the tile color, with a crisp white outline so it pops against dark ground.
+      // Seeded per projectile so each shard has a stable silhouette as it spins.
+      const seed = Number.isFinite(projectile.animSeed) ? projectile.animSeed : 0;
+      Neo.ctx.rotate(Date.now() * 0.006 + seed);
+      const verts = 7;
+      const buildPath = () => {
+        Neo.ctx.beginPath();
+        for (let index = 0; index < verts; index += 1) {
+          const a = (index / verts) * Math.PI * 2;
+          const jag = 0.74 + (Math.sin(seed * 7.3 + index * 2.1) * 0.5 + 0.5) * 0.5;
+          const x = Math.cos(a) * r * 1.25 * jag;
+          const y = Math.sin(a) * r * 1.25 * jag;
+          if (index === 0) Neo.ctx.moveTo(x, y);
+          else Neo.ctx.lineTo(x, y);
+        }
+        Neo.ctx.closePath();
+      };
+      Neo.ctx.shadowColor = 'rgba(0,0,0,0.5)';
+      Neo.ctx.shadowBlur = 6;
+      Neo.ctx.fillStyle = visual.color;
+      buildPath();
+      Neo.ctx.fill();
+      // White outline.
+      Neo.ctx.shadowBlur = 0;
+      Neo.ctx.strokeStyle = '#ffffff';
+      Neo.ctx.lineWidth = 1.6;
+      Neo.ctx.lineJoin = 'round';
+      buildPath();
+      Neo.ctx.stroke();
     } else {
       Neo.ctx.beginPath();
       Neo.ctx.arc(0, 0, r, 0, Math.PI * 2);

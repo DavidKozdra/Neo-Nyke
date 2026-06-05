@@ -772,6 +772,72 @@ export const ITEM_DEFS = {
       category: 'god',
       tags: ['god', 'stat'],
     },
+    scroll_reroll: {
+      key: 'scroll_reroll',
+      name: 'Scroll of Reroll',
+      shortName: 'Reroll',
+      description: 'Choose one owned relic and replace one stack with a new relic of the same rarity.',
+      rarity: 'knight',
+      color: '#d9f2ff',
+      category: 'knight',
+      tool: true,
+      tags: ['scroll', 'control', 'choice'],
+    },
+    scroll_branching: {
+      key: 'scroll_branching',
+      name: 'Scroll of Branching',
+      shortName: 'Branch',
+      description: 'Choose a relic. The next reward of that relic rarity becomes your chosen relic.',
+      rarity: 'knight',
+      color: '#d8ffc5',
+      category: 'knight',
+      tool: true,
+      tags: ['scroll', 'control', 'choice'],
+    },
+    scroll_replace: {
+      key: 'scroll_replace',
+      name: 'Scroll of Replace',
+      shortName: 'Replace',
+      description: 'Choose an unwanted relic, then choose a same-rarity replacement. Future rewards swap it.',
+      rarity: 'knight',
+      color: '#ffd9d9',
+      category: 'knight',
+      tool: true,
+      tags: ['scroll', 'control', 'choice'],
+    },
+    scroll_abundance: {
+      key: 'scroll_abundance',
+      name: 'Scroll of Abundance',
+      shortName: 'Abundance',
+      description: 'Choose two relics. Every two floors has a chance to grant one selected relic or one random relic.',
+      rarity: 'knight',
+      color: '#fff2a8',
+      category: 'knight',
+      tool: true,
+      tags: ['scroll', 'control', 'choice'],
+    },
+    scroll_pool_weight: {
+      key: 'scroll_pool_weight',
+      name: 'Scroll of Pool Weight',
+      shortName: 'Weight',
+      description: 'Choose an item tag. Future rewards favor that tag for a limited time, with rarity-scaled strength.',
+      rarity: 'knight',
+      color: '#c8e2ff',
+      category: 'knight',
+      tool: true,
+      tags: ['scroll', 'control', 'tag'],
+    },
+    scroll_ego: {
+      key: 'scroll_ego',
+      name: 'Scroll of Ego',
+      shortName: 'Ego',
+      description: 'For this floor, relics already in your build are 10% more common.',
+      rarity: 'knight',
+      color: '#f4d4ff',
+      category: 'knight',
+      tool: true,
+      tags: ['scroll', 'control', 'build'],
+    },
     jesters_dice: {
       key: 'jesters_dice',
       name: "Jester's Dice",
@@ -911,6 +977,14 @@ export const SHOP_RARITY_PRICE_MULTIPLIERS = {
     red: 4.75,
   };
 export const ITEM_KEYS = Object.keys(ITEM_DEFS);
+export const SCROLL_OF_CONTROL_KEYS = [
+  'scroll_reroll',
+  'scroll_branching',
+  'scroll_replace',
+  'scroll_abundance',
+  'scroll_pool_weight',
+  'scroll_ego',
+];
 export const SANDBOX_ENEMY_TYPES = [
     'hunter', 'charger', 'laser', 'knave', 'sniper', 'machine_gunner',
     'golem', 'cult_mage', 'cult_follower', 'summoner', 'shield_unit', 'healer', 'boss_spawner',
@@ -1108,6 +1182,14 @@ export const ui = {
     wizardPawStats: document.getElementById('wizardPawStats'),
     wizardPawChoices: document.getElementById('wizardPawChoices'),
     wizardPawConfirm: document.getElementById('wizardPawConfirm'),
+    scrollControlModal: document.getElementById('scrollControlModal'),
+    scrollControlTitle: document.getElementById('scrollControlTitle'),
+    scrollControlCopy: document.getElementById('scrollControlCopy'),
+    scrollControlSearch: document.getElementById('scrollControlSearch'),
+    scrollControlMeta: document.getElementById('scrollControlMeta'),
+    scrollControlChoices: document.getElementById('scrollControlChoices'),
+    scrollControlCancel: document.getElementById('scrollControlCancel'),
+    scrollControlConfirm: document.getElementById('scrollControlConfirm'),
     invItemsList: document.getElementById('invItemsList'),
     invToolsList: document.getElementById('invToolsList'),
     invWeaponsList: document.getElementById('invWeaponsList'),
@@ -1499,6 +1581,7 @@ export const MOVE_BASE_STATS = {
   Neo.RIVAL_WEAPON_LOADOUTS = RIVAL_WEAPON_LOADOUTS;
   Neo.ITEM_DEFS = ITEM_DEFS;
   Neo.ITEM_KEYS = ITEM_KEYS;
+  Neo.SCROLL_OF_CONTROL_KEYS = SCROLL_OF_CONTROL_KEYS;
   Neo.ITEM_DROP_WEIGHTS = ITEM_DROP_WEIGHTS;
   Neo.ITEM_DROP_TABLE = ITEM_DROP_TABLE;
   Neo.ELITE_ITEM_DROP_TABLE = ELITE_ITEM_DROP_TABLE;

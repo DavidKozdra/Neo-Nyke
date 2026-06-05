@@ -321,6 +321,10 @@ export function bindInput() {
     });
     Neo.ui.wizardPawChoices?.addEventListener('click', Neo.handleWizardPawChoiceClick);
     Neo.ui.wizardPawConfirm?.addEventListener('click', Neo.confirmWizardPawSelection);
+    Neo.ui.scrollControlChoices?.addEventListener('click', event => Neo.handleScrollControlChoiceClick?.(event));
+    Neo.ui.scrollControlConfirm?.addEventListener('click', () => Neo.confirmScrollControlSelection?.());
+    Neo.ui.scrollControlCancel?.addEventListener('click', () => Neo.cancelScrollControlSelection?.());
+    Neo.ui.scrollControlSearch?.addEventListener('input', event => Neo.updateScrollControlSearch?.(event.target?.value || ''));
 
     window.addEventListener('beforeunload', () => {
       if (Neo.gameState === 'play') {
@@ -1253,6 +1257,10 @@ export function isWizardPawOpen() {
     return !!Neo.wizardPawSelection && isPanelOpen(Neo.ui.wizardPawModal);
   }
 
+export function isScrollControlOpen() {
+    return !!Neo.scrollControlSelection && isPanelOpen(Neo.ui.scrollControlModal);
+  }
+
 export function setWizardPawModalOpen(open, options = {}) {
     if (!Neo.ui.wizardPawModal) return;
   const animateClose = options.animateClose !== false;
@@ -1270,8 +1278,26 @@ export function setWizardPawModalOpen(open, options = {}) {
     Neo.ui.wizardPawModal.setAttribute('aria-hidden', 'true');
   }
 
+export function setScrollControlModalOpen(open, options = {}) {
+    if (!Neo.ui.scrollControlModal) return;
+  const animateClose = options.animateClose !== false;
+    const effectTarget = Neo.ui.scrollControlModal.querySelector('.modal-box') || Neo.ui.scrollControlModal;
+    if (effectTarget instanceof HTMLElement) effectTarget.dataset.panelFxKey = 'scroll-control-modal';
+    if (open) {
+      clearPanelCloseEffect(effectTarget);
+      Neo.ui.scrollControlModal.classList.remove('hidden');
+      Neo.ui.scrollControlModal.setAttribute('aria-hidden', 'false');
+      Neo.ui.scrollControlSearch?.focus?.();
+      return;
+    }
+    if (animateClose && isPanelOpen(Neo.ui.scrollControlModal)) playPanelCloseEffect(effectTarget);
+    else clearPanelCloseEffect(effectTarget);
+    Neo.ui.scrollControlModal.classList.add('hidden');
+    Neo.ui.scrollControlModal.setAttribute('aria-hidden', 'true');
+  }
+
 export function isOverlayBlockingInput() {
-    return isPanelOpen(Neo.ui.shopPanel) || isPanelOpen(Neo.ui.invPanel) || isPanelOpen(Neo.ui.anvilPanel) || isWizardPawOpen();
+    return isPanelOpen(Neo.ui.shopPanel) || isPanelOpen(Neo.ui.invPanel) || isPanelOpen(Neo.ui.anvilPanel) || isWizardPawOpen() || isScrollControlOpen();
   }
 
 export function isGodSweepUnlocked() {
@@ -1520,6 +1546,74 @@ export function getShopWeaponOffers() {
     return false;
   }
 
+  function getShopTradeState(tradeOffer, noItemsChallenge = false) {
+    if (!tradeOffer || tradeOffer.unavailable || !tradeOffer.key) {
+      return {
+        canAfford: false,
+        disabled: true,
+        showUnaffordable: false,
+        status: 'locked',
+        statusLabel: 'No trade',
+        bought: !!tradeOffer?.bought,
+      };
+    }
+    const costKeys = Array.isArray(tradeOffer.costKeys) ? tradeOffer.costKeys : [];
+    const hasCosts = costKeys.length >= 2 && costKeys.every(key => Number(Neo.player?.items?.[key] || 0) > 0);
+    const disabled = !!tradeOffer.bought || noItemsChallenge || !hasCosts;
+    return {
+      canAfford: hasCosts && !noItemsChallenge && !tradeOffer.bought,
+      disabled,
+      showUnaffordable: !hasCosts && !tradeOffer.bought,
+      status: tradeOffer.bought ? 'owned' : noItemsChallenge ? 'locked' : hasCosts ? 'available' : 'short',
+      statusLabel: tradeOffer.bought ? 'Done' : noItemsChallenge ? 'Locked' : hasCosts ? 'Ready' : 'Missing relic',
+      bought: !!tradeOffer.bought,
+    };
+  }
+
+  function renderShopTradeCard(noItemsChallenge = false) {
+    const tradeOffer = Neo.ensureShopTradeOffer?.(Neo.currentRoom) || Neo.currentRoom?.shopTradeOffer;
+    if (!tradeOffer || tradeOffer.unavailable || !tradeOffer.key) return '';
+    const item = Neo.itemRegistry.get(tradeOffer.key) || Neo.ITEM_DEFS[tradeOffer.key];
+    const costKeys = Array.isArray(tradeOffer.costKeys) ? tradeOffer.costKeys.slice(0, 2) : [];
+    const costNames = costKeys.map(key => Neo.itemRegistry.get(key)?.name || Neo.titleCase?.(key) || key);
+    const state = getShopTradeState(tradeOffer, noItemsChallenge);
+    const description = noItemsChallenge
+      ? 'No Items challenge is active. Trades are disabled for this run.'
+      : `Trade ${costNames.join(' + ')} for this higher-rarity relic.`;
+    const buttonText = noItemsChallenge
+      ? 'Trades Locked'
+      : tradeOffer.bought
+        ? 'Traded'
+        : state.canAfford
+          ? 'Trade Relics'
+          : 'Missing Relics';
+    return renderShopCard({
+      rarityLabel: 'Trade',
+      iconAttr: 'data-item-icon',
+      iconKey: tradeOffer.key,
+      title: item?.name || 'Trade Relic',
+      titleColor: Neo.getRarityNameColor(item?.rarity || item?.category),
+      descColor: Neo.getRarityNameColor(item?.rarity || item?.category),
+      accentColor: Neo.getRarityNameColor(item?.rarity || item?.category),
+      cost: costNames.join(' + '),
+      description,
+      chips: [
+        { label: 'Merchant', tone: 'item' },
+        item?.rarity ? { label: item.rarity, tone: 'rarity' } : null,
+        { label: '2-for-1', tone: 'item' },
+      ].filter(Boolean),
+      stats: costKeys.map(key => ({
+        label: 'Give',
+        value: Neo.itemRegistry.get(key)?.name || Neo.titleCase?.(key) || key,
+      })),
+      recommended: true,
+      kind: 'trade',
+      state,
+      buttonText,
+      soldStateText: 'TRADED',
+    });
+  }
+
 
 
   function renderShopCard({
@@ -1630,7 +1724,9 @@ export function getShopWeaponOffers() {
     const coins = Number(Neo.player?.coins || 0);
     if (tabKey === 'items') {
       const offers = (Neo.shopOffers || []).filter(offer => offer.type === 'item');
-      return `items|${coins}|${noItemsChallenge ? 1 : 0}|${offers.map(o => `${o.key}:${o.cost}:${o.bought ? 1 : 0}`).join(';')}`;
+      const trade = Neo.currentRoom?.shopTradeOffer || {};
+      const tradeSig = `${trade.key || ''}:${(trade.costKeys || []).join(',')}:${trade.bought ? 1 : 0}:${trade.unavailable ? 1 : 0}`;
+      return `items|${coins}|${noItemsChallenge ? 1 : 0}|held:${getCountedKeys(Neo.player?.items)}|trade:${tradeSig}|${offers.map(o => `${o.key}:${o.cost}:${o.bought ? 1 : 0}`).join(';')}`;
     }
     if (tabKey === 'weapons') {
       const offers = Neo.currentRoom?.shopWeaponOffers || [];
@@ -1761,7 +1857,8 @@ export function renderShopPanel() {
           });
         })
         .join('');
-      Neo.ui.shopItems.innerHTML = itemCards || '<div class="shop-card shop-empty"><p>Every relic here is already yours. Clear the floor or check the move shelf.</p></div>';
+      const tradeCard = renderShopTradeCard(noItemsChallenge);
+      Neo.ui.shopItems.innerHTML = (itemCards + tradeCard) || '<div class="shop-card shop-empty"><p>Every relic here is already yours. Clear the floor or check the move shelf.</p></div>';
       Neo.drawItemIconCanvases?.(Neo.ui.shopItems, 'data-item-icon');
       panelRenderCache.shop.tabSigs.items = activeShopSig;
     } else if (Neo.activeShopTab === 'weapons') {
@@ -2276,6 +2373,24 @@ export function handleShopBuyClick(event) {
       Neo.collectItem(offer.key);
       playShopPurchaseFeedback(button, offer.cost);
       window.achievementEvents?.emit('shop:bought');
+    } else if (kind === 'trade') {
+      if (Neo.isChallengeActive('no_items')) {
+        Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 24, life: 0.8, text: 'No Items challenge', c: '#ff8894' });
+        return;
+      }
+      const tradeOffer = Neo.ensureShopTradeOffer?.(Neo.currentRoom) || Neo.currentRoom?.shopTradeOffer;
+      const state = getShopTradeState(tradeOffer, false);
+      if (!tradeOffer || tradeOffer.bought || !state.canAfford) return;
+      const costKeys = Array.isArray(tradeOffer.costKeys) ? tradeOffer.costKeys.slice(0, 2) : [];
+      costKeys.forEach(key => {
+        Neo.player.items[key] = Math.max(0, Number(Neo.player.items[key] || 0) - 1);
+        if (Neo.player.items[key] <= 0) delete Neo.player.items[key];
+      });
+      tradeOffer.bought = true;
+      Neo.collectItem(tradeOffer.key);
+      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 24, life: 0.85, text: 'TRADE MADE', c: '#d7f6ff' });
+      Neo.playSfx?.('item_collect');
+      window.achievementEvents?.emit('shop:bought');
     } else if (kind === 'move') {
       const offerIndex = Number(button.dataset.index || -1);
       const moveOffers = getShopMoveOffers();
@@ -2352,7 +2467,9 @@ export function handleShopBuyClick(event) {
   Neo.setAnvilPanelOpen = setAnvilPanelOpen;
   Neo.toggleAnvilPanel = toggleAnvilPanel;
   Neo.isWizardPawOpen = isWizardPawOpen;
+  Neo.isScrollControlOpen = isScrollControlOpen;
   Neo.setWizardPawModalOpen = setWizardPawModalOpen;
+  Neo.setScrollControlModalOpen = setScrollControlModalOpen;
   Neo.isOverlayBlockingInput = isOverlayBlockingInput;
   Neo.getShopMoveOffers = getShopMoveOffers;
   Neo.getShopWeaponOffers = getShopWeaponOffers;

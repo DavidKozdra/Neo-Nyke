@@ -716,6 +716,7 @@
   function drawChests() {
     Neo.chests.forEach(chest => {
       const t = Date.now() / 260 + chest.x * 0.01;
+      const isAbChest = chest.choiceType === 'ab';
       Neo.ctx.save();
       Neo.ctx.translate(chest.x, chest.y);
       Neo.ctx.imageSmoothingEnabled = false;
@@ -733,29 +734,71 @@
       Neo.ctx.shadowBlur = 0;
 
       if (chest.open) {
-        Neo.ctx.fillStyle = '#5c3118';
-        Neo.ctx.fillRect(-30, -2, 60, 26);
+        if (isAbChest) {
+          Neo.ctx.fillStyle = '#315c2d';
+          Neo.ctx.fillRect(-30, -2, 30, 26);
+          Neo.ctx.fillStyle = '#6d2525';
+          Neo.ctx.fillRect(0, -2, 30, 26);
+        } else {
+          Neo.ctx.fillStyle = '#5c3118';
+          Neo.ctx.fillRect(-30, -2, 60, 26);
+        }
         Neo.ctx.fillStyle = '#2b160b';
         Neo.ctx.fillRect(-30, 16, 60, 8);
         Neo.ctx.fillRect(20, -2, 10, 26);
-        Neo.ctx.fillStyle = '#a7632d';
-        Neo.ctx.fillRect(-26, 2, 46, 3);
-        Neo.ctx.fillRect(-26, 2, 3, 14);
+        if (isAbChest) {
+          Neo.ctx.fillStyle = '#62c76b';
+          Neo.ctx.fillRect(-26, 2, 22, 3);
+          Neo.ctx.fillStyle = '#ff6b6b';
+          Neo.ctx.fillRect(2, 2, 18, 3);
+          Neo.ctx.fillStyle = '#62c76b';
+          Neo.ctx.fillRect(-26, 2, 3, 14);
+        } else {
+          Neo.ctx.fillStyle = '#a7632d';
+          Neo.ctx.fillRect(-26, 2, 46, 3);
+          Neo.ctx.fillRect(-26, 2, 3, 14);
+        }
         Neo.ctx.fillStyle = '#17100b';
         Neo.ctx.fillRect(-22, -13, 44, 11);
-        Neo.ctx.fillStyle = '#7e461e';
-        Neo.ctx.fillRect(-20, -24, 40, 11);
-        Neo.ctx.fillStyle = '#c7792f';
-        Neo.ctx.fillRect(-17, -22, 32, 3);
+        if (isAbChest) {
+          Neo.ctx.fillStyle = '#315c2d';
+          Neo.ctx.fillRect(-20, -24, 20, 11);
+          Neo.ctx.fillStyle = '#6d2525';
+          Neo.ctx.fillRect(0, -24, 20, 11);
+          Neo.ctx.fillStyle = '#62c76b';
+          Neo.ctx.fillRect(-17, -22, 14, 3);
+          Neo.ctx.fillStyle = '#ff6b6b';
+          Neo.ctx.fillRect(3, -22, 14, 3);
+        } else {
+          Neo.ctx.fillStyle = '#7e461e';
+          Neo.ctx.fillRect(-20, -24, 40, 11);
+          Neo.ctx.fillStyle = '#c7792f';
+          Neo.ctx.fillRect(-17, -22, 32, 3);
+        }
       } else {
-        Neo.ctx.fillStyle = '#7e431e';
-        Neo.ctx.fillRect(-32, -20, 64, 44);
+        if (isAbChest) {
+          Neo.ctx.fillStyle = '#2f7d43';
+          Neo.ctx.fillRect(-32, -20, 32, 44);
+          Neo.ctx.fillStyle = '#923030';
+          Neo.ctx.fillRect(0, -20, 32, 44);
+        } else {
+          Neo.ctx.fillStyle = '#7e431e';
+          Neo.ctx.fillRect(-32, -20, 64, 44);
+        }
         Neo.ctx.fillStyle = '#4b2612';
         Neo.ctx.fillRect(-32, 12, 64, 12);
         Neo.ctx.fillRect(22, -20, 10, 44);
-        Neo.ctx.fillStyle = '#c7772d';
-        Neo.ctx.fillRect(-28, -16, 50, 4);
-        Neo.ctx.fillRect(-28, -16, 4, 28);
+        if (isAbChest) {
+          Neo.ctx.fillStyle = '#69d174';
+          Neo.ctx.fillRect(-28, -16, 24, 4);
+          Neo.ctx.fillRect(-28, -16, 4, 28);
+          Neo.ctx.fillStyle = '#ff6a6a';
+          Neo.ctx.fillRect(4, -16, 22, 4);
+        } else {
+          Neo.ctx.fillStyle = '#c7772d';
+          Neo.ctx.fillRect(-28, -16, 50, 4);
+          Neo.ctx.fillRect(-28, -16, 4, 28);
+        }
         Neo.ctx.fillStyle = '#2f3742';
         Neo.ctx.fillRect(-22, -22, 6, 46);
         Neo.ctx.fillRect(16, -22, 6, 46);

@@ -567,9 +567,9 @@ export function loop(timestamp) {
 // --- Game feel: trauma shake + directional kick + hitstop --------------------
 
 const FEEL = {
-  maxShake: 22,        // px, the offset magnitude at trauma === 1
-  traumaDecay: 2.6,    // trauma units/sec (≈0.38s to fully settle from 1.0)
-  kickDecay: 14,       // directional kick spring-back rate
+  maxShake: 28,        // px, the offset magnitude at trauma === 1
+  traumaDecay: 2.2,    // trauma units/sec (≈0.45s to fully settle from 1.0)
+  kickDecay: 7,        // directional kick spring-back rate (lower = camera lurch lingers)
   maxHitstop: 0.12,    // clamp so chained hits can't lock the sim
 };
 
