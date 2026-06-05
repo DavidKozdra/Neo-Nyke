@@ -814,83 +814,57 @@
 
   // floor transition animation
   function drawFloorTransition() {
-    if (!Neo.showFloorTransition || Neo.floorTransitionTime > 2.5) return;
+    const duration = 1.25;
+    if (!Neo.showFloorTransition || Neo.floorTransitionTime > duration) return;
     const _access = window.NeoSettings?.getAccess() || {};
-    // With reduceMotion: skip the animated banner entirely
     if (_access.reduceMotion) return;
-    
 
-    const progress = Neo.clamp(Neo.floorTransitionTime / 2.5, 0, 1);
-    const easeOut = t => 1 - Math.pow(1 - Neo.clamp(t, 0, 1), 3);
-    const easeIn = t => Math.pow(Neo.clamp(t, 0, 1), 3);
-    const fadeInProgress = easeOut(progress * 2.6);
-    const fadeOutProgress = easeIn((progress - 0.68) / 0.32);
-    const alpha = fadeInProgress * (1 - fadeOutProgress);
-    const surge = Math.sin(progress * Math.PI);
+    const progress = Neo.clamp(Neo.floorTransitionTime / duration, 0, 1);
+    const smooth = t => {
+      const clamped = Neo.clamp(t, 0, 1);
+      return clamped * clamped * (3 - 2 * clamped);
+    };
     const w = Neo.canvas.width;
     const h = Neo.canvas.height;
     const centerX = w / 2;
     const centerY = h / 2;
     const minSide = Math.min(w, h);
-    const textScale = 0.92 + easeOut(progress * 1.5) * 0.08;
+    const wipeIn = smooth(progress / 0.34);
+    const wipeOut = smooth((progress - 0.66) / 0.34);
+    const overlayAlpha = Math.max(0, Math.min(1, wipeIn - wipeOut));
+    const labelAlpha = progress < 0.72
+      ? smooth((progress - 0.28) / 0.18)
+      : 1 - smooth((progress - 0.72) / 0.2);
+    const wipeWidth = w * (progress < 0.5 ? smooth(progress / 0.42) : 1);
 
     Neo.ctx.save();
     Neo.ctx.globalCompositeOperation = 'source-over';
 
-    const overlay = Neo.ctx.createRadialGradient(centerX, centerY, minSide * 0.08, centerX, centerY, Math.max(w, h) * 0.75);
-    overlay.addColorStop(0, `rgba(24, 205, 210, ${0.10 * alpha})`);
-    overlay.addColorStop(0.42, `rgba(16, 18, 32, ${0.22 * alpha})`);
-    overlay.addColorStop(1, `rgba(0, 0, 0, ${0.46 * alpha})`);
-    Neo.ctx.fillStyle = overlay;
+    Neo.ctx.globalAlpha = overlayAlpha;
+    Neo.ctx.fillStyle = '#05070d';
     Neo.ctx.fillRect(0, 0, w, h);
 
-    Neo.ctx.globalAlpha = alpha * (0.22 + surge * 0.16);
-    Neo.ctx.shadowColor = '#00f6ff';
-    Neo.ctx.shadowBlur = 14 + surge * 12;
-    Neo.ctx.strokeStyle = '#00d8e8';
-    Neo.ctx.lineWidth = 2;
-    Neo.ctx.beginPath();
-    Neo.ctx.ellipse(centerX, centerY + 4, minSide * (0.36 + surge * 0.04), minSide * (0.085 + surge * 0.015), 0, 0, Math.PI * 2);
-    Neo.ctx.stroke();
+    if (progress < 0.5) {
+      Neo.ctx.globalAlpha = 1;
+      Neo.ctx.fillStyle = '#05070d';
+      Neo.ctx.fillRect(0, 0, wipeWidth, h);
+      Neo.ctx.fillStyle = 'rgba(128, 160, 190, 0.16)';
+      Neo.ctx.fillRect(Math.max(0, wipeWidth - 2), 0, 2, h);
+    }
 
-    Neo.ctx.globalAlpha = alpha * 0.72;
-    Neo.ctx.shadowColor = '#00f6ff';
-    Neo.ctx.shadowBlur = 12;
-    Neo.ctx.strokeStyle = '#80f5ff';
-    Neo.ctx.lineWidth = 2;
-    Neo.ctx.beginPath();
-    Neo.ctx.moveTo(centerX - minSide * 0.24, centerY - 56);
-    Neo.ctx.lineTo(centerX + minSide * 0.24, centerY - 56);
-    Neo.ctx.moveTo(centerX - minSide * 0.20, centerY + 60);
-    Neo.ctx.lineTo(centerX + minSide * 0.20, centerY + 60);
-    Neo.ctx.stroke();
-
-    Neo.ctx.globalAlpha = alpha;
+    Neo.ctx.globalAlpha = Math.max(0, Math.min(1, labelAlpha));
     Neo.ctx.translate(centerX, centerY);
-    Neo.ctx.scale(textScale, textScale);
     Neo.ctx.textAlign = 'center';
     Neo.ctx.textBaseline = 'middle';
-
-    Neo.ctx.font = 'bold 16px system-ui';
-    Neo.ctx.fillStyle = '#8ff6df';
-    Neo.ctx.shadowColor = '#8ff6df';
-    Neo.ctx.shadowBlur = 8 * alpha;
-    Neo.ctx.fillText('ENTERING', 0, -52);
-
     const floorLabel = `FLOOR ${Neo.floor}`;
-    const maxLabelWidth = Math.max(160, w * 0.84 / textScale);
-    let floorFontSize = Math.min(78, Math.max(46, minSide * 0.14));
+    const maxLabelWidth = Math.max(160, w * 0.84);
+    let floorFontSize = Math.min(64, Math.max(38, minSide * 0.115));
     Neo.ctx.font = `900 ${floorFontSize}px system-ui`;
-    while (floorFontSize > 42 && Neo.ctx.measureText(floorLabel).width > maxLabelWidth) {
+    while (floorFontSize > 34 && Neo.ctx.measureText(floorLabel).width > maxLabelWidth) {
       floorFontSize -= 4;
       Neo.ctx.font = `900 ${floorFontSize}px system-ui`;
     }
-    Neo.ctx.lineWidth = 8;
-    Neo.ctx.strokeStyle = 'rgba(2, 6, 18, 0.9)';
-    Neo.ctx.strokeText(floorLabel, 0, 0);
-    Neo.ctx.fillStyle = '#f8ffff';
-    Neo.ctx.shadowColor = '#00f6ff';
-    Neo.ctx.shadowBlur = 18 * alpha;
+    Neo.ctx.fillStyle = '#f4f7fb';
     Neo.ctx.fillText(floorLabel, 0, 0);
 
     Neo.ctx.restore();

@@ -98,7 +98,7 @@ export function loop(timestamp) {
     Neo.gameElapsedTime += dt;
     Neo.lavaAnimTime += dt;
     Neo.floorTransitionTime += dt;
-    if (Neo.floorTransitionTime > 2.5) Neo.showFloorTransition = false;
+    if (Neo.floorTransitionTime > 1.25) Neo.showFloorTransition = false;
     Neo.tickCooldowns(dt);
     Neo.updateEquipmentEffects?.(dt);
     if (Neo.godTimer > 0) Neo.godTimer = Math.max(0, Neo.godTimer - dt);
