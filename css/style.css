@@ -943,6 +943,29 @@ button, input, select, textarea {
   cursor: pointer;
 }
 
+.objective-tracker__close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid rgba(143, 210, 255, .42);
+  border-radius: 6px;
+  background: rgba(10, 18, 30, .78);
+  color: #b9e5ff;
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1;
+  padding: 0;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.objective-tracker__close:hover {
+  border-color: rgba(255, 120, 140, .7);
+  color: #ff9aa8;
+}
+
 .objective-tracker__summary {
   margin-bottom: 8px;
   color: #c9ddf3;

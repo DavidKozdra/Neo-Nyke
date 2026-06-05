@@ -1019,6 +1019,7 @@ export const ui = {
     objectiveTracker: document.getElementById('objectiveTracker'),
     objectiveRoomLabel: document.getElementById('objectiveRoomLabel'),
     objectiveToggle: document.getElementById('objectiveToggle'),
+    objectiveClose: document.getElementById('objectiveClose'),
     objectiveSummary: document.getElementById('objectiveSummary'),
     objectiveList: document.getElementById('objectiveList'),
     cdM: document.getElementById('cdM'),

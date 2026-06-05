@@ -290,6 +290,21 @@ export function createUIController(view) {
       });
     }
 
+    if (view.objectiveClose) {
+      // Closing the panel turns off the "Objective panel" gameplay setting, so it
+      // stays hidden (and persists) until re-enabled from Settings.
+      view.objectiveClose.addEventListener('click', () => {
+        if (window.NeoSettings?.setShowObjectivePanel) {
+          window.NeoSettings.setShowObjectivePanel(false);
+        } else {
+          objectiveTrackerVisible = false;
+          view.objectiveTracker?.classList.add('hidden');
+          view.objectiveTracker?.setAttribute('aria-hidden', 'true');
+          syncObjectiveTrackerCompactState();
+        }
+      });
+    }
+
     window.addEventListener('resize', () => {
       syncObjectiveTrackerCompactState();
     });

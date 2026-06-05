@@ -312,6 +312,13 @@
     shouldBloodOnHit: () => gameplay.bloodOnHit !== false,
     isPerformanceMode: () => gameplay.performanceMode !== false,
     showObjectivePanel: () => gameplay.objectivePanel !== false,
+    setShowObjectivePanel: on => {
+      gameplay.objectivePanel = !!on;
+      const el = document.getElementById('gameplayObjectivePanel');
+      if (el) el.checked = !!on;
+      save();
+      window.Neo?.refreshObjectiveTracker?.();
+    },
     getVolume: () => volume,
   };
 
