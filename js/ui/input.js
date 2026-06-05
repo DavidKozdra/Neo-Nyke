@@ -1564,7 +1564,7 @@ export const WEAPON_BASE_STATS = {
     golden_fleece:            { damage: 20,   cooldown: 0.50, range: 80,  knockback: 80  },
     void_piercer:             { damage: 55,   cooldown: 0.80,             knockback: 160 },
     aegis_shield_weapon:      { cooldown: 8.00 },
-    princess_wand:            { damage: 30,   cooldown: 0.55, range: 120, knockback: 160 },
+    princess_wand:            { damage: 30,   cooldown: 0.77, range: 120, knockback: 160 },
   };
 
 // Base stat values per move

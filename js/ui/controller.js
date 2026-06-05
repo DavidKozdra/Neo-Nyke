@@ -1184,9 +1184,11 @@ export function createUIController(view) {
             const startRank = (lbPage - 1) * data.pageSize + 1;
             entries.forEach((entry, i) => {
               const rank = startRank + i;
+              const charDef = Neo.CHARACTER_DEFS?.[entry.character];
+              const charName = charDef ? escHtml(charDef.name) : '';
               const row = document.createElement('div');
               row.style.cssText = 'display:flex;gap:8px;align-items:baseline;border-bottom:1px solid rgba(255,255,255,0.06);padding:2px 0';
-              row.innerHTML = `<span style="width:24px;text-align:right;color:#ffe566;font-weight:bold">${rank}.</span><span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(entry.name)}</span><span style="color:#aaa">Fl.${entry.floor}</span>`;
+              row.innerHTML = `<span style="width:24px;text-align:right;color:#ffe566;font-weight:bold">${rank}.</span><span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(entry.name)}</span>${charName ? `<span style="color:#7fb8ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:90px">${charName}</span>` : ''}<span style="color:#aaa">Fl.${entry.floor}</span>`;
               listEl.appendChild(row);
             });
           }

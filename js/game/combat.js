@@ -168,7 +168,7 @@
     else if (weaponKey === 'golden_fleece') base = 0.5;
     else if (weaponKey === 'void_piercer') base = 0.8;
     else if (weaponKey === 'aegis_shield_weapon') base = 8;
-    else if (weaponKey === 'princess_wand') base = 0.55;
+    else if (weaponKey === 'princess_wand') base = 0.77;
     else base = 0.5;
     const bonus = Neo.getAnvilWeaponBonus(weaponKey, 'cooldown');
     return Math.max(base * 0.5, base + bonus);
