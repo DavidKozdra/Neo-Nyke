@@ -903,22 +903,152 @@
       Neo.ctx.restore();
     });
 
+    // Tall structures (columns) need depth sorting against the player: draw the
+    // ones the player is in FRONT of here (player feet below the base), and defer
+    // the ones the player is BEHIND to drawStructuresOverPlayer() — called after
+    // the player so they occlude them. Non-tall structures always draw here.
+    const playerFeetY = Number(Neo.player?.y ?? -Infinity);
     Neo.structures.forEach(structure => {
-      Neo.ctx.save();
-      Neo.ctx.translate(structure.x, structure.y);
-      if (structure.kind === 'pillar') {
-        drawEnvironmentTile('pillar_stone', -structure.w / 2, -structure.h / 2, structure.w, structure.h);
-        Neo.ctx.strokeStyle = theme.wallEdge;
-        Neo.ctx.lineWidth = 1.5;
-        Neo.ctx.strokeRect(-structure.w / 2, -structure.h / 2, structure.w, structure.h);
-      } else {
-        drawEnvironmentTile('wall_block', -structure.w / 2, -structure.h / 2, structure.w, structure.h);
-        Neo.ctx.strokeStyle = theme.wallEdge;
-        Neo.ctx.lineWidth = 1.5;
-        Neo.ctx.strokeRect(-structure.w / 2, -structure.h / 2, structure.w, structure.h);
-      }
-      Neo.ctx.restore();
+      if (structureIsBehindPlayer(structure, playerFeetY)) return;
+      drawStructure(structure, theme);
     });
+  }
+
+  // True when the player should render IN FRONT of this structure (i.e. the
+  // structure is "behind" the player and was deferred to drawRoomDecor's pass).
+  // Tall columns occlude the player only when the player stands above their base.
+  function structureIsBehindPlayer(structure, playerFeetY) {
+    if (structure.kind !== 'pillar') return false;
+    // Column base (ground line) sits at structure.y + h/2. If the player's feet
+    // are above (smaller Y) that line, the player is behind the column.
+    const baseY = structure.y + structure.h / 2;
+    return playerFeetY < baseY;
+  }
+
+  function drawStructure(structure, theme = getRoomArtTheme()) {
+    Neo.ctx.save();
+    Neo.ctx.translate(structure.x, structure.y);
+    if (structure.kind === 'pillar') {
+      drawGreekColumn(structure.w, structure.h, theme);
+    } else {
+      drawEnvironmentTile('wall_block', -structure.w / 2, -structure.h / 2, structure.w, structure.h);
+      Neo.ctx.strokeStyle = theme.wallEdge;
+      Neo.ctx.lineWidth = 1.5;
+      Neo.ctx.strokeRect(-structure.w / 2, -structure.h / 2, structure.w, structure.h);
+    }
+    Neo.ctx.restore();
+  }
+
+  // Second structures pass: redraw the tall columns the player is standing
+  // behind, so they render over the player. Called from the viewport after the
+  // player is drawn.
+  function drawStructuresOverPlayer() {
+    if (!Neo.structures?.length) return;
+    const theme = getRoomArtTheme();
+    // Use the frontmost (largest Y) active player as the depth threshold so a
+    // column only draws over the player(s) it is genuinely behind. In single
+    // player this is just the player; in co-op it picks the nearest player.
+    let playerFeetY = Number(Neo.player?.y ?? -Infinity);
+    if (Neo.isMultiplayerMode?.() && Neo.getActivePlayerSlots) {
+      Neo.getActivePlayerSlots().forEach(slot => {
+        if (slot?.getDead?.()) return;
+        const p = slot?.getEntity?.();
+        if (p && Number.isFinite(p.y)) playerFeetY = Math.max(playerFeetY, p.y);
+      });
+    }
+    Neo.structures.forEach(structure => {
+      if (structureIsBehindPlayer(structure, playerFeetY)) drawStructure(structure, theme);
+    });
+  }
+
+  // Tall Greek column in oblique 3/4 view: the square collision footprint sits
+  // at the base, and a long fluted shaft rises up the screen with a capital and
+  // entablature on top. Lit from the upper-left; casts an angled ground shadow.
+  // Drawn centered at (0,0) — the caller has already translated to position.
+  function drawGreekColumn(w, h, theme) {
+    const ctx = Neo.ctx;
+    const baseW = w;                       // footprint width (== collision)
+    const baseHalf = baseW / 2;
+    const shaftW = baseW * 0.62;           // shaft is narrower than the base
+    const shaftHalf = shaftW / 2;
+    const baseY = h / 2;                   // bottom of the footprint (ground line)
+    const height = h * 2.6;                // how far up the screen the column rises
+    const topY = baseY - height;           // top of the shaft
+    const lean = baseW * 0.12;             // slight rightward angle for perspective
+
+    // Angled ground shadow cast to the lower-right.
+    ctx.fillStyle = 'rgba(0,0,0,0.26)';
+    ctx.beginPath();
+    ctx.moveTo(-baseHalf, baseY);
+    ctx.lineTo(baseHalf, baseY);
+    ctx.lineTo(baseHalf + baseW * 0.9, baseY + h * 0.5);
+    ctx.lineTo(-baseHalf + baseW * 0.5, baseY + h * 0.5);
+    ctx.closePath();
+    ctx.fill();
+
+    // Stepped base (plinth + torus) at the footprint.
+    ctx.fillStyle = '#8d877b';
+    ctx.fillRect(-baseHalf, baseY - h * 0.42, baseW, h * 0.42);
+    ctx.fillStyle = '#a59f93';
+    ctx.fillRect(-baseHalf * 0.92, baseY - h * 0.6, baseW * 0.92, h * 0.22);
+
+    // Column shaft: a tall quad leaning slightly right, with a left→right
+    // gradient that gives it round, carved volume.
+    const topX = lean;
+    const shaftGrad = ctx.createLinearGradient(-shaftHalf, 0, shaftHalf, 0);
+    shaftGrad.addColorStop(0, '#7f7a6e');
+    shaftGrad.addColorStop(0.32, '#ddd6c8');
+    shaftGrad.addColorStop(0.5, '#efe9dc');
+    shaftGrad.addColorStop(0.72, '#c7c0b1');
+    shaftGrad.addColorStop(1, '#6f6a5f');
+    ctx.fillStyle = shaftGrad;
+    ctx.beginPath();
+    ctx.moveTo(-shaftHalf, baseY - h * 0.55);
+    ctx.lineTo(shaftHalf, baseY - h * 0.55);
+    ctx.lineTo(topX + shaftHalf, topY + h * 0.3);
+    ctx.lineTo(topX - shaftHalf, topY + h * 0.3);
+    ctx.closePath();
+    ctx.fill();
+
+    // Vertical fluting: grooves run up the shaft, interpolated base→top so they
+    // follow the lean.
+    const flutes = 5;
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(70,64,52,0.4)';
+    for (let i = 1; i < flutes; i += 1) {
+      const f = i / flutes;
+      const bx = -shaftHalf + f * shaftW;
+      const tx = topX - shaftHalf + f * shaftW;
+      ctx.beginPath();
+      ctx.moveTo(bx, baseY - h * 0.55);
+      ctx.lineTo(tx, topY + h * 0.3);
+      ctx.stroke();
+    }
+    // Bright left-edge highlight on the shaft.
+    ctx.strokeStyle = 'rgba(255,250,240,0.45)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(-shaftHalf + 2, baseY - h * 0.55);
+    ctx.lineTo(topX - shaftHalf + 2, topY + h * 0.3);
+    ctx.stroke();
+
+    // Capital (flared top) + entablature slab, also leaning with the shaft.
+    const capW = shaftW * 1.45;
+    const capHalf = capW / 2;
+    ctx.fillStyle = '#cfc8ba';
+    ctx.beginPath();
+    ctx.moveTo(topX - shaftHalf, topY + h * 0.34);
+    ctx.lineTo(topX + shaftHalf, topY + h * 0.34);
+    ctx.lineTo(topX + capHalf, topY + h * 0.08);
+    ctx.lineTo(topX - capHalf, topY + h * 0.08);
+    ctx.closePath();
+    ctx.fill();
+    // Abacus block on top.
+    ctx.fillStyle = '#e6dfd0';
+    ctx.fillRect(topX - capHalf, topY - h * 0.05, capW, h * 0.16);
+    ctx.strokeStyle = (theme && theme.wallEdge) || 'rgba(40,35,28,0.5)';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(topX - capHalf, topY - h * 0.05, capW, h * 0.16);
   }
 
   function drawCoverWall(prop) {
@@ -1144,6 +1274,7 @@
   Neo.drawFloor = drawFloor;
   Neo.drawChests = drawChests;
   Neo.drawRoomDecor = drawRoomDecor;
+  Neo.drawStructuresOverPlayer = drawStructuresOverPlayer;
   Neo.drawCoverWall = drawCoverWall;
   Neo.drawDestructibleBlockDamage = drawDestructibleBlockDamage;
   Neo.drawBrokenDestructible = drawBrokenDestructible;

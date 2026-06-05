@@ -34,6 +34,10 @@ export function drawWorldViewport(cam, vpX, vpW, vpH, vpY, pLabel, slot = null) 
         Neo.drawPlayer();
       }
     }
+    // Depth sorting: redraw tall columns the player is standing behind, so they
+    // occlude the player. Columns the player is in front of were already drawn
+    // in drawRoomDecor (before the player).
+    Neo.drawStructuresOverPlayer?.();
     if (!isDying) Neo.drawPlayerLaser();
     if (isDying && Neo.playerDeathAnim) Neo.drawPlayerCorpseAnim(Neo.playerDeathAnim);
     Neo.drawParticles();
