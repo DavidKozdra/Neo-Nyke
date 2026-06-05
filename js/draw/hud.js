@@ -1,5 +1,6 @@
 // draw/hud.js — standalone IIFE. HUD canvas drawing (particles, minimap, boss bars, transitions, action icons).
   let _lineParticlePointScratch = new Float32Array(64);
+  const CANVAS_PIXEL_FONT = '"VT323", "Courier New", ui-monospace, monospace';
 
   function drawParticles() {
     // Per-particle shadowBlur is the dominant draw cost. In performance mode,
@@ -86,7 +87,7 @@
       Neo.ctx.translate(particle.x, particle.y);
       if (particle.text) {
         Neo.ctx.fillStyle = particle.c || '#fff';
-        Neo.ctx.font = `bold ${particle.size || 14}px system-ui`;
+        Neo.ctx.font = `${particle.size || 14}px ${CANVAS_PIXEL_FONT}`;
         Neo.ctx.textAlign = 'center';
         Neo.ctx.textBaseline = 'middle';
         setGlow(particle.c, 8);
@@ -687,117 +688,127 @@
     const perfMode = window.NeoSettings?.isPerformanceMode?.() !== false;
     const lowFx = perfMode && Neo.particles.length > 48;
 
-    const width = 440;
-    const height = 16;
-    const gap = 30;
+    const count = bosses.length;
+    const crowd = Math.min(count - 1, 5);
+    const width = Math.max(210, Math.round(440 - crowd * 44));
+    const height = Math.max(9, Math.round(16 - crowd * 1.2));
+    const gap = height + Math.max(12, Math.round(18 - crowd * 1.3));
+    const labelFontSize = Math.max(8, Math.round(12 - crowd * 0.65));
     const radius = height / 2;
-    const startX = Math.round((Neo.canvas.width - width) / 2);
+    const startX = Math.round(Neo.canvas.width <= 700 ? 12 : 24);
     const startY = 50;
-    const centerX = Neo.canvas.width / 2;
+    const labelX = startX + width / 2;
 
     const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
     const ctx = Neo.ctx;
 
-    bosses.forEach((boss, index) => {
-      const y = startY + index * gap;
-      const hpPct = Neo.clamp(boss.hp / boss.max, 0, 1);
+    bosses
+      .slice()
+      .sort((a, b) => Number(b.max || b.maxHp || 0) - Number(a.max || a.maxHp || 0))
+      .forEach((boss, index) => {
+        const y = startY + index * gap;
+        const hpPct = Neo.clamp(
+          Number(boss.hp || 0) / Math.max(1, Number(boss.max || boss.maxHp || 1)),
+          0,
+          1
+        );
+        const label = getBossLabel(boss.type);
+        const color = getBossColor(boss.type);
 
-      // Lagging "damage trail": a lighter ghost that drains toward real HP so
-      // each hit reads as a satisfying chunk rather than an instant snap.
-      if (boss._barTrail == null || boss._barTrail < hpPct) boss._barTrail = hpPct;
-      if (boss._barTrailAt == null) boss._barTrailAt = now;
-      const dt = Math.min(0.05, (now - boss._barTrailAt) / 1000);
-      boss._barTrailAt = now;
-      // Hold briefly after a hit, then ease the trail down to current HP.
-      boss._barTrail = Math.max(hpPct, boss._barTrail - dt * 0.55);
-      const trailPct = boss._barTrail;
+        // Lagging "damage trail": a lighter ghost that drains toward real HP so
+        // each hit reads as a satisfying chunk rather than an instant snap.
+        if (boss._barTrail == null || boss._barTrail < hpPct) boss._barTrail = hpPct;
+        if (boss._barTrailAt == null) boss._barTrailAt = now;
+        const dt = Math.min(0.05, (now - boss._barTrailAt) / 1000);
+        boss._barTrailAt = now;
+        // Hold briefly after a hit, then ease the trail down to current HP.
+        boss._barTrail = Math.max(hpPct, boss._barTrail - dt * 0.55);
+        const trailPct = boss._barTrail;
 
-      const color = getBossColor(boss.type);
-      const fillW = Math.max(0, width * hpPct);
-      const trailW = Math.max(0, width * trailPct);
+        const fillW = Math.max(0, width * hpPct);
+        const trailW = Math.max(0, width * trailPct);
 
-      ctx.save();
+        ctx.save();
 
-      // Drop shadow plate behind the whole bar for separation from the scene.
-      ctx.fillStyle = 'rgba(0,0,0,0.55)';
-      ctx.beginPath();
-      ctx.roundRect(startX - 4, y - 3, width + 8, height + 6, radius + 3);
-      ctx.fill();
+        // Drop shadow plate behind the whole bar for separation from the scene.
+        ctx.fillStyle = 'rgba(0,0,0,0.55)';
+        ctx.beginPath();
+        ctx.roundRect(startX - 4, y - 3, width + 8, height + 6, radius + 3);
+        ctx.fill();
 
-      // Track (empty bar) with a dark vertical gradient for depth.
-      const track = ctx.createLinearGradient(0, y, 0, y + height);
-      track.addColorStop(0, '#1a0a20');
-      track.addColorStop(1, '#2c1335');
-      ctx.fillStyle = track;
-      ctx.beginPath();
-      ctx.roundRect(startX, y, width, height, radius);
-      ctx.fill();
+        // Track (empty bar) with a dark vertical gradient for depth.
+        const track = ctx.createLinearGradient(0, y, 0, y + height);
+        track.addColorStop(0, '#1a0a20');
+        track.addColorStop(1, '#2c1335');
+        ctx.fillStyle = track;
+        ctx.beginPath();
+        ctx.roundRect(startX, y, width, height, radius);
+        ctx.fill();
 
-      // Clip everything else to the rounded track so fills keep clean caps.
-      ctx.save();
-      ctx.beginPath();
-      ctx.roundRect(startX, y, width, height, radius);
-      ctx.clip();
+        // Clip everything else to the rounded track so fills keep clean caps.
+        ctx.save();
+        ctx.beginPath();
+        ctx.roundRect(startX, y, width, height, radius);
+        ctx.clip();
 
-      // Damage trail segment (dim wash of the boss color).
-      if (trailW > fillW + 0.5) {
-        ctx.fillStyle = 'rgba(255,255,255,0.16)';
-        ctx.fillRect(startX, y, trailW, height);
-        ctx.fillStyle = color;
-        ctx.globalAlpha = 0.22;
-        ctx.fillRect(startX, y, trailW, height);
-        ctx.globalAlpha = 1;
-      }
-
-      // Main fill: vertical gradient gives the bar a glossy, metallic body.
-      if (fillW > 0) {
-        const fill = ctx.createLinearGradient(0, y, 0, y + height);
-        fill.addColorStop(0, 'rgba(255,255,255,0.55)');
-        fill.addColorStop(0.18, color);
-        fill.addColorStop(0.85, color);
-        fill.addColorStop(1, 'rgba(0,0,0,0.35)');
-        if (!lowFx) {
-          ctx.shadowColor = color;
-          ctx.shadowBlur = 10;
+        // Damage trail segment (dim wash of the boss color).
+        if (trailW > fillW + 0.5) {
+          ctx.fillStyle = 'rgba(255,255,255,0.16)';
+          ctx.fillRect(startX, y, trailW, height);
+          ctx.fillStyle = color;
+          ctx.globalAlpha = 0.22;
+          ctx.fillRect(startX, y, trailW, height);
+          ctx.globalAlpha = 1;
         }
-        ctx.fillStyle = fill;
-        ctx.fillRect(startX, y, fillW, height);
+
+        // Main fill: vertical gradient gives the bar a glossy, metallic body.
+        if (fillW > 0) {
+          const fill = ctx.createLinearGradient(0, y, 0, y + height);
+          fill.addColorStop(0, 'rgba(255,255,255,0.55)');
+          fill.addColorStop(0.18, color);
+          fill.addColorStop(0.85, color);
+          fill.addColorStop(1, 'rgba(0,0,0,0.35)');
+          if (!lowFx) {
+            ctx.shadowColor = color;
+            ctx.shadowBlur = 10;
+          }
+          ctx.fillStyle = fill;
+          ctx.fillRect(startX, y, fillW, height);
+          ctx.shadowBlur = 0;
+
+          // Top glossy highlight strip.
+          ctx.fillStyle = 'rgba(255,255,255,0.35)';
+          ctx.fillRect(startX, y + 1, fillW, Math.max(1, height * 0.28));
+
+          // Bright leading edge tick — reads as an "energy" cap.
+          const edgeX = startX + fillW;
+          ctx.fillStyle = 'rgba(255,255,255,0.9)';
+          ctx.fillRect(edgeX - 2, y, 2, height);
+        }
+
+        ctx.restore(); // end clip
+
+        // Crisp inner border around the track.
+        ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.roundRect(startX + 0.5, y + 0.5, width - 1, height - 1, radius);
+        ctx.stroke();
+
+        // Label above the bar, letter-spaced and shadowed for legibility.
+        ctx.font = `${labelFontSize}px ${CANVAS_PIXEL_FONT}`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'alphabetic';
+        if (ctx.letterSpacing !== undefined) ctx.letterSpacing = count > 1 ? '1px' : '2px';
+        ctx.shadowColor = 'rgba(0,0,0,0.85)';
+        ctx.shadowBlur = 4;
+        ctx.fillStyle = '#fff';
+        ctx.fillText(label, labelX, y - 5);
         ctx.shadowBlur = 0;
+        if (ctx.letterSpacing !== undefined) ctx.letterSpacing = '0px';
 
-        // Top glossy highlight strip.
-        ctx.fillStyle = 'rgba(255,255,255,0.35)';
-        ctx.fillRect(startX, y + 1, fillW, Math.max(1, height * 0.28));
-
-        // Bright leading edge tick — reads as an "energy" cap.
-        const edgeX = startX + fillW;
-        ctx.fillStyle = 'rgba(255,255,255,0.9)';
-        ctx.fillRect(edgeX - 2, y, 2, height);
-      }
-
-      ctx.restore(); // end clip
-
-      // Crisp inner border around the track.
-      ctx.strokeStyle = 'rgba(255,255,255,0.22)';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.roundRect(startX + 0.5, y + 0.5, width - 1, height - 1, radius);
-      ctx.stroke();
-
-      // Label above the bar, letter-spaced and shadowed for legibility.
-      const label = getBossLabel(boss.type);
-      ctx.font = 'bold 12px system-ui';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'alphabetic';
-      if (ctx.letterSpacing !== undefined) ctx.letterSpacing = '2px';
-      ctx.shadowColor = 'rgba(0,0,0,0.85)';
-      ctx.shadowBlur = 4;
-      ctx.fillStyle = '#fff';
-      ctx.fillText(label, centerX, y - 6);
-      ctx.shadowBlur = 0;
-      if (ctx.letterSpacing !== undefined) ctx.letterSpacing = '0px';
-
-      ctx.restore();
-    });
+        ctx.restore();
+      });
   }
 
 
