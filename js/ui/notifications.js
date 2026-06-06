@@ -475,7 +475,7 @@ export function pushMoveNotification(moveKey, amount = 1) {
 export function pushWeaponNotification(weaponKey) {
   const def = Neo.WEAPON_DEFS[weaponKey];
   if (!def) return;
-  const rarityColor = { knight: '#e8f0ff', wizard: '#c08cff', god: '#ff7070', white: '#e8f0ff', purple: '#c08cff', red: '#ff7070' };
+  const rarityColor = { knight: '#e8f0ff', wizard: '#c08cff', god: '#ffd23f', white: '#e8f0ff', purple: '#c08cff', red: '#ffd23f' };
   const color = def.color || rarityColor[def.rarity] || '#d9e8ff';
   const stack = ensureItemNotifyStack();
   const toast = document.createElement('div');
@@ -492,7 +492,7 @@ export function pushWeaponNotification(weaponKey) {
   title.className = 'item-toast-title';
   const name = document.createElement('span');
   name.textContent = `Weapon: ${def.name}`;
-  // Only the name takes the rarity color (god tier shows full red); description stays white.
+  // Only the name takes the rarity color (god tier shows full gold); description stays white.
   const nameColor = getRarityNameColor(def.rarity);
   name.style.color = nameColor;
   const plus = document.createElement('span');

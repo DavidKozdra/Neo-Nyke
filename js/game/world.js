@@ -2259,7 +2259,18 @@
           pickup.y = Neo.clamp(pickup.y, minY, maxY);
           pickup.vy *= -1;
         }
-        pullPickupTowardPlayer(pickup, 130, 160, 180);
+        // Runes flee from the player so collecting them feels like a puzzle/chase
+        // rather than a passive vacuum. Closer = stronger shove away.
+        const fleeRadius = 150;
+        const fdx = pickup.x - playerX;
+        const fdy = pickup.y - playerY;
+        const fleeDistSq = fdx * fdx + fdy * fdy;
+        if (fleeDistSq < fleeRadius * fleeRadius && fleeDistSq > 0.000001) {
+          const fleeDist = Math.sqrt(fleeDistSq);
+          const fleeForce = (250 + (1 - fleeDist / fleeRadius) * 260) * dt;
+          pickup.x = Neo.clamp(pickup.x + (fdx / fleeDist) * fleeForce, minX, maxX);
+          pickup.y = Neo.clamp(pickup.y + (fdy / fleeDist) * fleeForce, minY, maxY);
+        }
       }
       const pickupTriggerRadius = (pickup.type === 'jesterPortal' || pickup.type === 'adapterPortal')
         ? Neo.JESTER_PORTAL_TRIGGER_RADIUS

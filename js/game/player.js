@@ -665,10 +665,12 @@ export function confirmWizardPawSelection() {
   };
 
   function getScrollChoiceItems({ ownedOnly = false, rarity = '', exclude = [] } = {}) {
-    const excluded = new Set([...exclude, ...SCROLL_KEYS]);
+    // SCROLL_KEYS is a {has()} shim (not iterable), so filter scrolls out via .has()
+    // rather than spreading it — spreading silently excluded nothing before.
+    const excluded = new Set(exclude);
     const owned = Neo.player?.items || {};
     return (Neo.ITEM_KEYS || [])
-      .filter(key => Neo.ITEM_DEFS?.[key] && !excluded.has(key))
+      .filter(key => Neo.ITEM_DEFS?.[key] && !excluded.has(key) && !SCROLL_KEYS.has(key))
       .filter(key => !ownedOnly || Number(owned[key] || 0) > 0)
       .filter(key => !rarity || String(Neo.ITEM_DEFS[key]?.rarity || '').toLowerCase() === rarity)
       .map(key => {
@@ -809,24 +811,48 @@ export function confirmWizardPawSelection() {
     if (Neo.ui.scrollControlTitle) Neo.ui.scrollControlTitle.textContent = config.title;
     if (Neo.ui.scrollControlCopy) Neo.ui.scrollControlCopy.textContent = config.copy;
     if (Neo.ui.scrollControlSearch) Neo.ui.scrollControlSearch.value = state.query || '';
+    // Hide the search box for confirm-only scrolls (e.g. Ego) that have no list to filter.
+    const hasChoices = config.choices.length > 0;
+    const searchWrap = Neo.ui.scrollControlSearch?.closest('.scroll-control-search-wrap');
+    if (searchWrap) searchWrap.classList.toggle('hidden', !hasChoices);
     if (Neo.ui.scrollControlMeta) {
       const picked = state.picks.length;
-      Neo.ui.scrollControlMeta.textContent = config.maxPicks > 0 ? `${picked}/${config.maxPicks} selected` : 'Ready to confirm';
+      if (config.maxPicks <= 0) {
+        Neo.ui.scrollControlMeta.textContent = 'Ready to confirm';
+        Neo.ui.scrollControlMeta.dataset.tone = 'ready';
+      } else {
+        const remaining = Math.max(0, config.minPicks - picked);
+        Neo.ui.scrollControlMeta.textContent = `${picked} / ${config.maxPicks} selected`;
+        Neo.ui.scrollControlMeta.dataset.tone = remaining === 0 ? 'ready' : 'pending';
+      }
     }
-    Neo.ui.scrollControlChoices.innerHTML = choices.map(choice => {
+    const ownedItems = Neo.player?.items || {};
+    Neo.ui.scrollControlChoices.innerHTML = choices.map((choice, index) => {
       const selected = state.picks.includes(choice.key);
+      const pickOrder = selected ? state.picks.indexOf(choice.key) + 1 : 0;
       const color = choice.type === 'item' ? Neo.getRarityNameColor?.(choice.rarity) || choice.color : choice.color;
       const icon = choice.type === 'item'
-        ? `<canvas class="scroll-control-choice__icon" data-item-icon="${Neo.escapeHtml(choice.key)}" width="34" height="34"></canvas>`
-        : `<span class="scroll-control-choice__tag" style="border-color:${Neo.escapeHtml(color)}"></span>`;
-      return `<button class="wizard-paw-choice scroll-control-choice${selected ? ' is-selected' : ''}" type="button" data-scroll-choice="${Neo.escapeHtml(choice.key)}" style="--scroll-choice-color:${Neo.escapeHtml(color)}">
-        <span class="wizard-paw-choice__eyebrow">${selected ? 'Selected' : (choice.type === 'tag' ? 'Tag' : choice.rarity)}</span>
-        <span class="scroll-control-choice__title">${icon}<b>${Neo.escapeHtml(choice.name)}</b></span>
-        <p>${Neo.escapeHtml(choice.description || '')}</p>
+        ? `<canvas class="scroll-control-choice__icon" data-item-icon="${Neo.escapeHtml(choice.key)}" width="48" height="48"></canvas>`
+        : `<span class="scroll-control-choice__tag" aria-hidden="true">#</span>`;
+      const owned = Math.max(0, Math.floor(Number(ownedItems[choice.key] || 0)));
+      const ownedBadge = owned > 0 ? `<span class="scroll-control-choice__owned">×${owned}</span>` : '';
+      // When more than one pick is allowed, show the pick order so multi-select reads clearly.
+      const orderBadge = (selected && config.maxPicks > 1)
+        ? `<span class="scroll-control-choice__order">${pickOrder}</span>`
+        : (selected ? '<span class="scroll-control-choice__order scroll-control-choice__order--check">✓</span>' : '');
+      const eyebrow = choice.type === 'tag' ? 'Tag' : (choice.rarity || 'relic');
+      return `<button class="scroll-control-choice${selected ? ' is-selected' : ''}" type="button" role="option" aria-selected="${selected}" data-scroll-choice="${Neo.escapeHtml(choice.key)}" style="--scroll-choice-color:${Neo.escapeHtml(color)};animation-delay:${Math.min(index, 12) * 18}ms">
+        ${orderBadge}
+        <span class="scroll-control-choice__iconwrap">${icon}${ownedBadge}</span>
+        <span class="scroll-control-choice__body">
+          <span class="scroll-control-choice__eyebrow">${Neo.escapeHtml(eyebrow)}</span>
+          <span class="scroll-control-choice__name">${Neo.escapeHtml(choice.name)}</span>
+          <span class="scroll-control-choice__desc">${Neo.escapeHtml(choice.description || '')}</span>
+        </span>
       </button>`;
     }).join('') || (config.choices.length === 0
-      ? '<div class="inv-card"><span class="inv-card__eyebrow">Empty</span><h4>Nothing to choose</h4><p>This scroll has no valid targets right now. Cancel to discard it.</p></div>'
-      : '<div class="inv-card"><span class="inv-card__eyebrow">Empty</span><h4>No matches</h4><p>Clear the search to see available choices.</p></div>');
+      ? '<div class="scroll-control-empty"><span class="scroll-control-empty__glyph">∅</span><h4>Nothing to choose</h4><p>This scroll has no valid targets right now. Cancel to discard it.</p></div>'
+      : '<div class="scroll-control-empty"><span class="scroll-control-empty__glyph">🔍</span><h4>No matches</h4><p>Clear the search to see available choices.</p></div>');
     Neo.drawItemIconCanvases?.(Neo.ui.scrollControlChoices, 'data-item-icon');
     if (Neo.ui.scrollControlConfirm) {
       const canConfirm = state.picks.length >= config.minPicks && state.picks.length <= config.maxPicks;

@@ -301,7 +301,7 @@
     }
     if (type === 'runes') {
       return {
-        timer: Neo.scaleChallengeTimer(26),
+        timer: Neo.scaleChallengeTimer(22),
         tick: Math.max(1.6, 2.9 - floor * 0.08),
         spawnCount: floor >= 7 ? 2 : 1,
       };

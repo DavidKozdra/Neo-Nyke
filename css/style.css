@@ -506,8 +506,8 @@ button, input, select, textarea {
 }
 
 .rarity-count--red {
-  border-color: #ff4256;
-  color: #ff9aaa;
+  border-color: #ffd23f;
+  color: #ffe08a;
 }
 
 /* Pending panel-item action (Wizard's Paw / Extra Battery) — a red, clickable
@@ -3117,8 +3117,8 @@ button, input, select, textarea {
 
 #invWeaponSlot[data-rarity="god"],
 #invWeaponSlot[data-rarity="red"] {
-  border-color: rgba(255, 94, 94, .6);
-  box-shadow: 0 0 0 1px rgba(255, 94, 94, .2) inset;
+  border-color: rgba(255, 210, 63, .6);
+  box-shadow: 0 0 0 1px rgba(255, 210, 63, .2) inset;
 }
 
 @media (max-width: 860px) {
@@ -3315,6 +3315,16 @@ button, input, select, textarea {
 .equip-tooltip.is-visible {
   opacity: 1;
   transform: translateX(0);
+}
+
+/* Reward-choice hover tooltip rides above the in-game HUD and follows the
+   cursor (positioned in JS), so it skips the equip slot's slide-in offset. */
+.reward-choice-tooltip {
+  z-index: 240;
+  transform: none;
+}
+.reward-choice-tooltip.is-visible {
+  transform: none;
 }
 
 .equip-tooltip__name {
@@ -6354,64 +6364,350 @@ border-bottom: black solid 2px;
   display: block;
 }
 
+/* ===== Scroll of Control modal (redesigned) ===================== */
 .scroll-control-box {
-  width: min(920px, calc(100vw - 28px));
-  max-height: min(760px, calc(100vh - 28px));
+  width: min(960px, calc(100vw - 24px));
+  max-height: min(82vh, 820px);
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 0;
+  padding: 0;
+  text-align: left;
+}
+
+/* --- Sticky header: glyph + title + copy + search + meta --- */
+.scroll-control-head {
+  flex: 0 0 auto;
+  padding: 22px 24px 16px;
+  border-bottom: 1px solid rgba(128, 146, 170, .22);
+  background: linear-gradient(180deg, rgba(38, 48, 64, .55), transparent);
+}
+
+.scroll-control-head__row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.scroll-control-glyph {
+  flex: 0 0 auto;
+  width: 50px;
+  height: 50px;
+  display: grid;
+  place-items: center;
+  font-size: 26px;
+  border-radius: 14px;
+  background: radial-gradient(circle at 30% 25%, rgba(215, 246, 255, .22), rgba(26, 33, 44, .9));
+  border: 1px solid var(--menu-border-strong);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 6px 18px rgba(0,0,0,.35);
+}
+
+.scroll-control-head__text { min-width: 0; }
+
+.scroll-control-title {
+  margin: 0;
+  font-size: 22px;
+  letter-spacing: .06em;
+}
+
+.scroll-control-copy {
+  margin: 4px 0 0;
+  color: var(--menu-text-muted);
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+
+.scroll-control-tools {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.scroll-control-search-wrap {
+  position: relative;
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+}
+
+.scroll-control-search-wrap.hidden { display: none; }
+
+.scroll-control-search-icon {
+  position: absolute;
+  left: 12px;
+  font-size: 13px;
+  opacity: .6;
+  pointer-events: none;
 }
 
 .scroll-control-search {
   width: 100%;
-  flex: 0 0 auto;
+  padding: 10px 12px 10px 34px;
+  border-radius: 10px;
+  border: 1px solid var(--menu-border);
+  background: rgba(12, 16, 22, .7);
+  color: var(--menu-text);
+  font-size: 14px;
+  transition: border-color .14s ease, box-shadow .14s ease;
+}
+
+.scroll-control-search:focus {
+  outline: none;
+  border-color: var(--menu-border-strong);
+  box-shadow: 0 0 0 3px var(--menu-glow);
 }
 
 .scroll-control-meta {
-  color: var(--menu-text-soft);
-  font-size: 13px;
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .1em;
   text-transform: uppercase;
-  letter-spacing: 0;
+  white-space: nowrap;
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--menu-border);
+  color: var(--menu-text-soft);
 }
 
+.scroll-control-meta[data-tone="ready"] {
+  color: #071018;
+  background: linear-gradient(180deg, #aef0c4, #6fd79a);
+  border-color: transparent;
+}
+
+.scroll-control-meta[data-tone="pending"] {
+  color: var(--menu-text);
+  border-color: var(--menu-border-strong);
+}
+
+/* --- Scrollable tile grid --- */
 .scroll-control-choices {
-  overflow: auto;
-  padding-right: 4px;
-  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+  padding: 18px 24px 8px;
+  align-content: start;
+  scrollbar-width: thin;
+  scrollbar-color: var(--menu-border-strong) transparent;
 }
 
+.scroll-control-choices::-webkit-scrollbar { width: 10px; }
+.scroll-control-choices::-webkit-scrollbar-thumb {
+  background: var(--menu-border-strong);
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+/* --- Choice tile --- */
 .scroll-control-choice {
-  border-color: color-mix(in srgb, var(--scroll-choice-color, #d8e9ff) 62%, rgba(255,255,255,0.16));
-}
-
-.scroll-control-choice.is-selected {
-  box-shadow: 0 0 0 2px var(--scroll-choice-color, #d8e9ff), 0 0 24px color-mix(in srgb, var(--scroll-choice-color, #d8e9ff) 36%, transparent);
-}
-
-.scroll-control-choice__title {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
+  text-align: left;
+  padding: 12px 12px 12px 14px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--scroll-choice-color, #d8e9ff) 40%, rgba(128,146,170,.3));
+  background: linear-gradient(180deg, rgba(30, 38, 50, .92), rgba(20, 26, 35, .92));
+  color: var(--menu-text);
+  cursor: pointer;
+  transition: transform .12s ease, border-color .14s ease, box-shadow .16s ease, background .16s ease;
+  /* subtle rarity rail on the left edge */
+  box-shadow: inset 3px 0 0 var(--scroll-choice-color, #d8e9ff);
+  animation: scrollChoiceIn .26s ease backwards;
+}
+
+@keyframes scrollChoiceIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.scroll-control-choice:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--scroll-choice-color, #d8e9ff) 75%, white);
+  box-shadow: inset 3px 0 0 var(--scroll-choice-color, #d8e9ff), 0 10px 22px rgba(0,0,0,.4);
+}
+
+.scroll-control-choice:active { transform: translateY(0) scale(.985); }
+
+.scroll-control-choice.is-selected {
+  border-color: var(--scroll-choice-color, #d8e9ff);
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--scroll-choice-color, #d8e9ff) 22%, rgba(30,38,50,.95)),
+      rgba(20, 26, 35, .95));
+  box-shadow:
+    inset 3px 0 0 var(--scroll-choice-color, #d8e9ff),
+    0 0 0 2px var(--scroll-choice-color, #d8e9ff),
+    0 0 26px color-mix(in srgb, var(--scroll-choice-color, #d8e9ff) 40%, transparent);
+}
+
+/* Children should never swallow the click target. */
+.scroll-control-choice * { pointer-events: none; }
+
+.scroll-control-choice__iconwrap {
+  position: relative;
+  flex: 0 0 auto;
+  width: 52px;
+  height: 52px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: rgba(8, 12, 18, .6);
+  border: 1px solid rgba(255,255,255,.06);
+}
+
+.scroll-control-choice__icon { display: block; image-rendering: pixelated; }
+
+.scroll-control-choice__tag {
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--scroll-choice-color, #c8e2ff);
+}
+
+.scroll-control-choice__owned {
+  position: absolute;
+  bottom: -5px;
+  right: -5px;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  padding: 3px 5px;
+  border-radius: 8px;
+  color: #071018;
+  background: var(--scroll-choice-color, #d8e9ff);
+  box-shadow: 0 2px 6px rgba(0,0,0,.45);
+}
+
+.scroll-control-choice__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   min-width: 0;
 }
 
-.scroll-control-choice__icon {
-  flex: 0 0 auto;
+.scroll-control-choice__eyebrow {
+  font-size: 9.5px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--scroll-choice-color, #d8e9ff) 80%, var(--menu-text-soft));
 }
 
-.scroll-control-choice__tag {
-  width: 26px;
-  height: 26px;
-  border: 2px solid #c8e2ff;
-  display: inline-block;
-  background: rgba(200,226,255,0.12);
+.scroll-control-choice__name {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: .02em;
+  color: var(--menu-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
+.scroll-control-choice__desc {
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: var(--menu-text-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Selected check / pick-order badge (top-right) */
+.scroll-control-choice__order {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 800;
+  color: #071018;
+  background: var(--scroll-choice-color, #d8e9ff);
+  box-shadow: 0 2px 8px rgba(0,0,0,.5);
+  animation: scrollChoicePop .18s ease;
+}
+
+@keyframes scrollChoicePop {
+  from { transform: scale(.4); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+/* Empty / no-match state */
+.scroll-control-empty {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 36px 20px;
+  color: var(--menu-text-muted);
+}
+
+.scroll-control-empty__glyph {
+  display: block;
+  font-size: 34px;
+  margin-bottom: 8px;
+  opacity: .65;
+}
+
+.scroll-control-empty h4 {
+  margin: 0 0 6px;
+  color: var(--menu-text);
+  letter-spacing: .04em;
+}
+
+.scroll-control-empty p { margin: 0; font-size: 13px; }
+
+/* --- Sticky footer actions --- */
 .scroll-control-actions {
+  flex: 0 0 auto;
   display: flex;
-  gap: 10px;
+  gap: 12px;
   justify-content: flex-end;
+  padding: 14px 24px 20px;
+  border-top: 1px solid rgba(128, 146, 170, .22);
+  background: linear-gradient(0deg, rgba(38, 48, 64, .45), transparent);
+}
+
+.scroll-control-btn {
+  min-width: 150px;
+  font-weight: 800;
+  letter-spacing: .08em;
+}
+
+.scroll-control-btn--primary:not(:disabled) {
+  background: linear-gradient(180deg, #cfeeff, #7fc8ff);
+  color: #06121f;
+  border-color: transparent;
+  box-shadow: 0 8px 22px rgba(80, 170, 255, .35);
+}
+
+.scroll-control-btn--primary:not(:disabled):hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 26px rgba(80, 170, 255, .5);
+}
+
+.scroll-control-btn:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+@media (max-width: 560px) {
+  .scroll-control-box { max-height: 90vh; }
+  .scroll-control-tools { flex-direction: column; align-items: stretch; }
+  .scroll-control-meta { align-self: flex-start; }
+  .scroll-control-choices { grid-template-columns: 1fr; padding: 14px 16px 8px; }
+  .scroll-control-head { padding: 18px 16px 14px; }
+  .scroll-control-actions { padding: 12px 16px 16px; }
+  .scroll-control-btn { flex: 1 1 0; min-width: 0; }
 }
 
 /* --- Voucher redeem banner + modal --- */
@@ -8061,7 +8357,7 @@ border-bottom: black solid 2px;
 .sandbox-token--item.sandbox-token--wizard .sandbox-token__label,
 .sandbox-token--item.sandbox-token--purple .sandbox-token__label { color: #cdb8ff; }
 .sandbox-token--item.sandbox-token--god .sandbox-token__label,
-.sandbox-token--item.sandbox-token--red .sandbox-token__label { color: #ffd3a8; }
+.sandbox-token--item.sandbox-token--red .sandbox-token__label { color: #ffd23f; }
 
 .sandbox-flags {
   margin-top: 10px;
@@ -9096,7 +9392,7 @@ border-bottom: black solid 2px;
 }
 .info-card__tag--knight  { background: rgba(200,210,230,0.1); color: #c8d2e8; border: 1px solid rgba(200,210,230,0.2); }
 .info-card__tag--wizard  { background: rgba(180,120,255,0.12); color: #c48fff; border: 1px solid rgba(180,120,255,0.3); }
-.info-card__tag--god     { background: rgba(255,60,80,0.12); color: #ff6070; border: 1px solid rgba(255,60,80,0.3); }
+.info-card__tag--god     { background: rgba(255,210,63,0.12); color: #ffd23f; border: 1px solid rgba(255,210,63,0.32); }
 .info-card__tag--princess { background: rgba(255,140,200,0.12); color: #ff9ccc; border: 1px solid rgba(255,140,200,0.3); }
 .info-card__tag--melee   { background: rgba(255,130,60,0.12); color: #ffa870; border: 1px solid rgba(255,130,60,0.25); }
 .info-card__tag--laser   { background: rgba(80,180,255,0.12); color: #70c8ff; border: 1px solid rgba(80,180,255,0.25); }

@@ -5,6 +5,10 @@ export function bindInput() {
       const rect = Neo.canvas.getBoundingClientRect();
       Neo.mouse.x = (event.clientX - rect.left) * (Neo.canvas.width / rect.width);
       Neo.mouse.y = (event.clientY - rect.top) * (Neo.canvas.height / rect.height);
+      // Raw page coords, kept for DOM overlays (e.g. reward-choice hover tooltip)
+      // that must be positioned in CSS pixels rather than canvas space.
+      Neo.mouse.clientX = event.clientX;
+      Neo.mouse.clientY = event.clientY;
     });
     Neo.canvas.addEventListener('mousedown', event => {
       if (event.button === 0) { Neo.mouse.down = true; Neo.mouse.downQueued = true; }

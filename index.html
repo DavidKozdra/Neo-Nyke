@@ -196,9 +196,9 @@
       <span id="difficultyDisplay" class="difficulty-display"><canvas id="difficultyHudIcon" width="20" height="20" class="difficulty-hud-icon"></canvas><span id="difficultyLabel">EASY</span></span>
       <span id="competitiveSeedDisplay" class="difficulty-display" style="display:none;color:#ffe566;">&#9733; SEED <b id="competitiveSeedValue"></b></span>
       <span id="itemRarityCounts" class="item-rarity-counts" aria-label="Relic counts by rarity">
-        <span class="rarity-count rarity-count--white" title="White relics">0</span>
-        <span class="rarity-count rarity-count--purple" title="Purple relics">0</span>
-        <span class="rarity-count rarity-count--red" title="Red relics">0</span>
+        <span class="rarity-count rarity-count--white" title="Knight relics">0</span>
+        <span class="rarity-count rarity-count--purple" title="Wizard relics">0</span>
+        <span class="rarity-count rarity-count--red" title="GOD relics">0</span>
       </span>
     </div>
     <div id="challengeStatus" class="challenge-status hidden" aria-hidden="true">
@@ -471,14 +471,26 @@
 
   <div id="scrollControlModal" class="modal-backdrop hidden" aria-hidden="true">
     <div class="modal-box scroll-control-box">
-      <h2 class="screen-title wizard-paw-title" id="scrollControlTitle">SCROLL OF CONTROL</h2>
-      <p class="wizard-paw-copy" id="scrollControlCopy">Choose a target, then confirm.</p>
-      <input id="scrollControlSearch" class="rh-info-search scroll-control-search" type="search" placeholder="Search choices..." aria-label="Search scroll choices" autocomplete="off" spellcheck="false">
-      <div id="scrollControlMeta" class="scroll-control-meta"></div>
-      <div id="scrollControlChoices" class="wizard-paw-choices scroll-control-choices"></div>
+      <div class="scroll-control-head">
+        <div class="scroll-control-head__row">
+          <span class="scroll-control-glyph" aria-hidden="true">📜</span>
+          <div class="scroll-control-head__text">
+            <h2 class="screen-title scroll-control-title" id="scrollControlTitle">SCROLL OF CONTROL</h2>
+            <p class="scroll-control-copy" id="scrollControlCopy">Choose a target, then confirm.</p>
+          </div>
+        </div>
+        <div class="scroll-control-tools">
+          <label class="scroll-control-search-wrap">
+            <span class="scroll-control-search-icon" aria-hidden="true">🔍</span>
+            <input id="scrollControlSearch" class="scroll-control-search" type="search" placeholder="Search relics, tags, rarity…" aria-label="Search scroll choices" autocomplete="off" spellcheck="false">
+          </label>
+          <span id="scrollControlMeta" class="scroll-control-meta" aria-live="polite"></span>
+        </div>
+      </div>
+      <div id="scrollControlChoices" class="scroll-control-choices" role="listbox" aria-label="Scroll choices"></div>
       <div class="scroll-control-actions">
-        <button id="scrollControlCancel" class="nav-btn">CANCEL</button>
-        <button id="scrollControlConfirm" class="nav-btn" disabled>CONFIRM</button>
+        <button id="scrollControlCancel" class="nav-btn scroll-control-btn scroll-control-btn--ghost" type="button">CANCEL</button>
+        <button id="scrollControlConfirm" class="nav-btn scroll-control-btn scroll-control-btn--primary" type="button" disabled>CONFIRM</button>
       </div>
     </div>
   </div>

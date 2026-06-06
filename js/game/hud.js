@@ -1412,6 +1412,89 @@
     if (equipTooltipEl) equipTooltipEl.classList.remove('is-visible');
   }
 
+  // --- Reward-choice hover tooltip ----------------------------------------
+  // Boss/chest/challenge reward pickups are drawn on the canvas, so they have no
+  // DOM node to anchor a tooltip to. We hit-test the cursor against those pickups
+  // in WORLD space (works for both mouse and controller aim) each frame and show a
+  // body-level tooltip — reusing the .equip-tooltip styling — anchored to the raw
+  // page cursor position.
+  const REWARD_CHOICE_TYPES = new Set(['rewardChoice', 'challengeItemChoice']);
+  const REWARD_CHOICE_HOVER_RADIUS = 24; // matches the drawn choice ring + label
+  let rewardChoiceTooltipEl = null;
+  let rewardChoiceTooltipKey = null;
+
+  function getRewardChoiceTooltipEl() {
+    if (rewardChoiceTooltipEl && rewardChoiceTooltipEl.isConnected) return rewardChoiceTooltipEl;
+    rewardChoiceTooltipEl = document.createElement('div');
+    rewardChoiceTooltipEl.className = 'equip-tooltip reward-choice-tooltip';
+    rewardChoiceTooltipEl.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(rewardChoiceTooltipEl);
+    return rewardChoiceTooltipEl;
+  }
+
+  function hideRewardChoiceTooltip() {
+    rewardChoiceTooltipKey = null;
+    if (rewardChoiceTooltipEl) rewardChoiceTooltipEl.classList.remove('is-visible');
+  }
+  Neo.hideRewardChoiceTooltip = hideRewardChoiceTooltip;
+
+  function updateRewardChoiceTooltip() {
+    // Only meaningful during play, with a real mouse cursor on the canvas.
+    if (Neo.gameState !== 'play' || !Array.isArray(Neo.pickups)
+        || typeof Neo.mouse?.clientX !== 'number') {
+      hideRewardChoiceTooltip();
+      return;
+    }
+    const mx = Neo.mouse.worldX;
+    const my = Neo.mouse.worldY;
+    if (typeof mx !== 'number' || typeof my !== 'number') { hideRewardChoiceTooltip(); return; }
+
+    let hovered = null;
+    let bestDist = REWARD_CHOICE_HOVER_RADIUS;
+    for (const pickup of Neo.pickups) {
+      if (!pickup || !REWARD_CHOICE_TYPES.has(pickup.type)) continue;
+      const d = Math.hypot(pickup.x - mx, pickup.y - my);
+      if (d <= bestDist) { bestDist = d; hovered = pickup; }
+    }
+    if (!hovered) { hideRewardChoiceTooltip(); return; }
+
+    const item = Neo.itemRegistry?.get?.(hovered.key);
+    const name = item?.name || Neo.titleCase?.(hovered.key) || hovered.key;
+    const desc = item?.description || '';
+    const rarity = item?.rarity || item?.category;
+    const rarityColor = Neo.getRarityNameColor?.(rarity);
+
+    const el = getRewardChoiceTooltipEl();
+    // Only rebuild contents when the hovered item changes.
+    if (rewardChoiceTooltipKey !== hovered.key) {
+      rewardChoiceTooltipKey = hovered.key;
+      el.innerHTML = '';
+      const nameEl = document.createElement('div');
+      nameEl.className = 'equip-tooltip__name';
+      nameEl.textContent = name;
+      if (rarityColor) nameEl.style.color = rarityColor;
+      el.appendChild(nameEl);
+      if (desc) {
+        const descEl = document.createElement('div');
+        descEl.className = 'equip-tooltip__desc';
+        descEl.textContent = desc;
+        el.appendChild(descEl);
+      }
+    }
+    el.classList.add('is-visible');
+    // Anchor above-right of the cursor, clamped on-screen.
+    const tipRect = el.getBoundingClientRect();
+    let left = Neo.mouse.clientX + 16;
+    let top = Neo.mouse.clientY - tipRect.height - 12;
+    if (left + tipRect.width > window.innerWidth - 8) left = Neo.mouse.clientX - tipRect.width - 16;
+    if (left < 8) left = 8;
+    if (top < 8) top = Neo.mouse.clientY + 18;
+    top = Math.min(top, window.innerHeight - tipRect.height - 8);
+    el.style.left = `${Math.round(left)}px`;
+    el.style.top = `${Math.round(top)}px`;
+  }
+  Neo.updateRewardChoiceTooltip = updateRewardChoiceTooltip;
+
   function bindEquipmentSlotClicks() {
     const nodes = Neo.ui.equipmentSlotNodes;
     if (!nodes?.length) return;

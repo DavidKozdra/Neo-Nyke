@@ -995,15 +995,15 @@ export const SCROLL_DEFS = {
     },
   };
 export const SCROLL_KEYS = Object.keys(SCROLL_DEFS);
-// Rarity -> name/description text color. GOD is the top tier and renders red (#ff4256).
+// Rarity -> name/description text color. GOD is the top tier and renders gold (#ffd23f).
 // ('white' and 'purple'/'red' are legacy aliases of knight/wizard/god kept for old save data.)
 export const RARITY_NAME_COLORS = {
     knight: '#f4f6fb',
     white: '#f4f6fb',
     wizard: '#b77dff',
     purple: '#b77dff',
-    god: '#ff4256',   // GOD tier
-    red: '#ff4256',   // legacy alias of god
+    god: '#ffd23f',   // GOD tier (gold/yellow)
+    red: '#ffd23f',   // legacy alias of god
     princess: '#ff9de8',
   };
 export const SHOP_RARITY_PRICE_MULTIPLIERS = {

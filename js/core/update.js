@@ -57,6 +57,7 @@ export function loop(timestamp) {
     const drawPerfStart = Neo.perfStart();
     if (Neo.gameState !== 'pause') Neo.draw();
     Neo.perfEnd('Neo.draw', drawPerfStart);
+    Neo.updateRewardChoiceTooltip?.();
     Neo.perfEndFrame(framePerfStart);
     requestAnimationFrame(loop);
   }
