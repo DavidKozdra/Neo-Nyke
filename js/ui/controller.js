@@ -2394,7 +2394,11 @@ export function createUIController(view) {
           }
         }
         if (view.deadKillerName) view.deadKillerName.textContent = entry.killedBy || 'Unknown';
-        if (view.deadFloor) view.deadFloor.textContent = `${fmt(entry.floor)}/10`;
+        // Endless mode is single-floor, so the FLOOR stat is repurposed to show
+        // the wave reached — the meaningful score for that mode.
+        const isEndlessEntry = entry.mode === 'endless';
+        if (view.deadFloorLabel) view.deadFloorLabel.textContent = isEndlessEntry ? 'WAVE' : 'FLOOR';
+        if (view.deadFloor) view.deadFloor.textContent = isEndlessEntry ? fmt(entry.endlessWave) : `${fmt(entry.floor)}/10`;
         if (view.deadLevel) view.deadLevel.textContent = fmt(entry.level);
         if (view.deadKills) view.deadKills.textContent = fmt(entry.kills);
         if (view.deadTime) view.deadTime.textContent = fmtTime(entry.elapsedSeconds || 0);
@@ -2451,8 +2455,12 @@ export function createUIController(view) {
         if (view.deadRecords) {
           const nr = entry._newRecords || {};
           const records = Neo.deriveRunRecords(Neo.runHistory, Neo.metaProgress);
+          // Endless mode swaps the FLOOR best for the WAVE best — floor is always 1.
+          const progressBest = entry.mode === 'endless'
+            ? { label: 'WAVE', val: fmt(records.endlessWave), isNew: nr.endlessWave }
+            : { label: 'FLOOR', val: `${records.floor}/10`, isNew: nr.floor };
           const bests = [
-            { label: 'FLOOR',  val: `${records.floor}/10`,         isNew: nr.floor },
+            progressBest,
             { label: 'KILLS',  val: fmt(records.kills),            isNew: nr.kills },
             { label: 'LEVEL',  val: fmt(records.level),            isNew: nr.level },
             { label: 'TIME',   val: fmtTime(records.time),         isNew: nr.time  },

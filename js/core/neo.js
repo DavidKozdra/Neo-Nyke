@@ -110,6 +110,7 @@ window.Neo = {
   },
   endlessWave: 0,
   endlessWaveActive: false,
+  endlessRespawnTimer: 0,
   bossRushStage: 0,
   bossRushActive: false,
   bossRushNextSpawnAt: 0,

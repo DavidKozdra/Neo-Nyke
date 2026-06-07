@@ -994,8 +994,8 @@
         Neo.endlessWaveActive = true;
         Neo.updateEndlessWaveHud?.();
         const firstWaveSize = 4 + Neo.floor;
-        Neo.spawnWave(firstWaveSize, 'combat');
-        Neo.spawnParticle({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 40, life: 1.2, text: 'WAVE 1', c: '#ff8b8b' });
+        Neo.spawnEndlessWave(Neo.endlessWave + 1, firstWaveSize);
+        Neo.spawnParticle({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 40, life: 1.2, text: `WAVE ${Neo.endlessWave + 1}`, c: '#ff8b8b' });
       } else {
         Neo.spawnWave(Neo.getWaveCount(3), 'combat');
       }

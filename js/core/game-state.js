@@ -25,6 +25,7 @@ export function resumeGame() {
       bestLevel: 1,
       bestTime: 0,
       bestCoins: 0,
+      bestEndlessWave: 0,
       unlockedItems: [],
       unlockedCharacters: ['princess', 'thorn_knight', 'metao'],
       unlockedChallenges: [],
@@ -804,6 +805,7 @@ export function resumeGame() {
           difficultyName: String(entry.difficultyName || getDifficultyDef(entry.difficulty).name),
           floor: Math.max(1, Number(entry.floor || 1)),
           loop: Math.max(0, Number(entry.loop || 0)),
+          endlessWave: Math.max(0, Number(entry.endlessWave || 0)),
           coins: Math.max(0, Number(entry.coins || 0)),
           level: Math.max(1, Number(entry.level || 1)),
           kills: Math.max(0, Number(entry.kills || 0)),
@@ -855,6 +857,7 @@ export function resumeGame() {
       level: Math.max(1, Number(fallback.bestLevel || 1)),
       time: Math.max(0, Number(fallback.bestTime || 0)),
       coins: Math.max(0, Number(fallback.bestCoins || 0)),
+      endlessWave: Math.max(0, Number(fallback.bestEndlessWave || 0)),
     };
     normalizeRunHistory(entries).forEach(entry => {
       records.floor = Math.max(records.floor, Number(entry.floor || 1));
@@ -862,6 +865,7 @@ export function resumeGame() {
       records.level = Math.max(records.level, Number(entry.level || 1));
       records.time = Math.max(records.time, Number(entry.elapsedSeconds || 0));
       records.coins = Math.max(records.coins, Number(entry.coins || 0));
+      records.endlessWave = Math.max(records.endlessWave, Number(entry.endlessWave || 0));
     });
     return records;
   }
@@ -873,6 +877,7 @@ export function resumeGame() {
     Neo.metaProgress.bestLevel = records.level;
     Neo.metaProgress.bestTime = records.time;
     Neo.metaProgress.bestCoins = records.coins;
+    Neo.metaProgress.bestEndlessWave = records.endlessWave;
     return records;
   }
 
@@ -1533,6 +1538,11 @@ export function resumeGame() {
       difficultyName: getDifficultyDef(difficulty).name,
       floor: Neo.floor,
       loop: Neo.runLoopIndex,
+      // Endless mode score: the wave reached (the wave being fought when the run
+      // ended, or the last cleared wave). 0 for non-endless modes.
+      endlessWave: Neo.gameMode === 'endless'
+        ? Neo.endlessWave + (Neo.endlessWaveActive ? 1 : 0)
+        : 0,
       coins: Math.max(0, Number(Neo.player?.coins || 0)),
       level: Math.max(1, Number(Neo.player?.level || 1)),
       kills: Math.max(0, Number(Neo.player?.kills || 0)),
@@ -1561,6 +1571,7 @@ export function resumeGame() {
   function renderRunHistoryListEntry(entry, selected = false) {
     const cause = entry.result === 'win' ? 'Cleared' : (entry.killedBy || 'Unknown');
     const modeLabel = getRunModeLabel(entry.mode);
+    const progressLabel = entry.mode === 'endless' ? `Wave ${entry.endlessWave || 0}` : `Fl.${entry.floor}`;
     const killerLookup = entry.killerKey || entry.killedBy || '';
     const killerCanvas = entry.result !== 'win' && killerLookup
       ? `<canvas class="rh-row-killer" data-run-killer="${escapeHtml(killerLookup)}" width="28" height="28" aria-hidden="true" title="${escapeHtml(entry.killedBy || '')}"></canvas>`
@@ -1572,7 +1583,7 @@ export function resumeGame() {
           <span class="rh-row-name">${escapeHtml(entry.characterName)}</span>
           <span class="rh-row-badge">${entry.result === 'win' ? 'WIN' : 'DEAD'}</span>
         </span>
-        <span class="rh-row-sub">${escapeHtml(modeLabel)} · Fl.${entry.floor} · ${escapeHtml(cause)} · ${escapeHtml(formatRunEndedAt(entry.endedAt))}</span>
+        <span class="rh-row-sub">${escapeHtml(modeLabel)} · ${escapeHtml(progressLabel)} · ${escapeHtml(cause)} · ${escapeHtml(formatRunEndedAt(entry.endedAt))}</span>
       </span>
       ${killerCanvas}
     </button>`;
@@ -1595,7 +1606,7 @@ export function resumeGame() {
       <div class="rh-hero-info">
         <span class="rh-outcome">${win ? 'VICTORY' : 'DEFEAT'}</span>
         <strong class="rh-hero-name">${escapeHtml(entry.characterName)}</strong>
-        <span class="rh-hero-meta">${escapeHtml(entry.difficultyName)} · ${escapeHtml(getRunModeLabel(entry.mode))} · Floor ${entry.floor} · Loop ${entry.loop}</span>
+        <span class="rh-hero-meta">${escapeHtml(entry.difficultyName)} · ${escapeHtml(getRunModeLabel(entry.mode))} · ${entry.mode === 'endless' ? `Wave ${entry.endlessWave || 0}` : `Floor ${entry.floor} · Loop ${entry.loop}`}</span>
         <span class="rh-hero-date">${escapeHtml(formatRunEndedAt(entry.endedAt))}</span>
       </div>
       <div class="rh-hero-right">
@@ -1624,9 +1635,12 @@ export function resumeGame() {
            </div>
          </div>`
       : '';
+    const progressStat = entry.mode === 'endless'
+      ? `<div class="rh-stat"><span class="rh-stat-label">Wave</span><b class="rh-stat-val">${entry.endlessWave || 0}</b></div>`
+      : `<div class="rh-stat"><span class="rh-stat-label">Floor</span><b class="rh-stat-val">${entry.floor}</b></div>
+      <div class="rh-stat"><span class="rh-stat-label">Loop</span><b class="rh-stat-val">${entry.loop}</b></div>`;
     return `${killerBanner}<div class="rh-stats-grid">
-      <div class="rh-stat"><span class="rh-stat-label">Floor</span><b class="rh-stat-val">${entry.floor}</b></div>
-      <div class="rh-stat"><span class="rh-stat-label">Loop</span><b class="rh-stat-val">${entry.loop}</b></div>
+      ${progressStat}
       <div class="rh-stat"><span class="rh-stat-label">Time</span><b class="rh-stat-val">${escapeHtml(formatElapsedTime(entry.elapsedSeconds))}</b></div>
       <div class="rh-stat"><span class="rh-stat-label">Kills</span><b class="rh-stat-val">${entry.kills}</b></div>
       <div class="rh-stat"><span class="rh-stat-label">Coins</span><b class="rh-stat-val">${entry.coins}</b></div>
@@ -1912,6 +1926,17 @@ export function resumeGame() {
   }
 
   function setGameState(nextState) {
+    // Healing Zone is hold-to-charge and only ticks/releases inside the play-state
+    // update loop. If we leave 'play' mid-charge (pause, inventory/shop/anvil,
+    // dialogue, room transition, death) the charge would otherwise be stranded:
+    // its smash charge was spent with a deferred timer, so the pip sits empty at
+    // 0 cooldown forever. Cancel it here and queue the recharge so the pip recovers.
+    if (nextState !== 'play' && Neo.healingZoneCharging) {
+      Neo.healingZoneCharging = false;
+      Neo.healingZoneChargeTime = 0;
+      Neo.smashHeld = false;
+      queueHeldSkillRecharge('smash', getSmashCooldownDuration(Neo.getAttackSpeedValue()));
+    }
     if (Neo.gameStateManager) Neo.gameStateManager.setState(nextState);
     else {
       Neo.gameState = nextState;
@@ -2129,6 +2154,7 @@ export function resumeGame() {
     window.achievementManager?.resetRunCounters();
     Neo.endlessWave = 0;
     Neo.endlessWaveActive = false;
+    Neo.endlessRespawnTimer = 0;
     resetTutorialState(false);
     resetMultiplayerState();
     invalidateRunStatCaches();
@@ -2139,6 +2165,7 @@ export function resumeGame() {
     resetRngStreams();
     startEndlessRoom();
     Neo.updateEndlessWaveHud();
+    Neo.scheduleRunSave();
     if (!Neo.loopStarted) { Neo.loopStarted = true; requestAnimationFrame(Neo.loop); }
   }
 
@@ -2484,6 +2511,7 @@ export function resumeGame() {
     Neo.playerDeathAnim = null;
     Neo.endlessWave = 0;
     Neo.endlessWaveActive = false;
+    Neo.endlessRespawnTimer = 0;
     Neo.bossRushStage = 0;
     Neo.bossRushActive = false;
     clearBossRushNextSpawn();
@@ -2638,6 +2666,9 @@ export function resumeGame() {
     Neo.laserSweepSpeed = Number(snapshot.laserSweepSpeed || 0);
     Neo.turtleWaveHpTimer = Number(snapshot.turtleWaveHpTimer || 0);
     Neo.godTimer = snapshot.godTimer || 0;
+    Neo.endlessWave = Math.max(0, Number(snapshot.endlessWave || 0));
+    Neo.endlessWaveActive = !!snapshot.endlessWaveActive;
+    Neo.endlessRespawnTimer = Math.max(0, Number(snapshot.endlessRespawnTimer || 0));
     Neo.gameElapsedTime = snapshot.gameElapsedTime || 0;
     Neo.camera = snapshot.camera || { x: 0, y: 0 };
     Neo.shake = 0;
@@ -2674,6 +2705,7 @@ export function resumeGame() {
     Neo.injectRivalsToCurrentRoom();
     Neo.updateObjective();
     Neo.updateHud();
+    Neo.updateEndlessWaveHud();
     Neo.persistMetaSoon();
   }
 

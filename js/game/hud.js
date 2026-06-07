@@ -552,6 +552,7 @@
     if (nextRecords.level > previousRecords.level && entry.level >= nextRecords.level) newRecords.level = true;
     if (nextRecords.time > previousRecords.time && entry.elapsedSeconds >= nextRecords.time) newRecords.time = true;
     if (nextRecords.coins > previousRecords.coins && entry.coins >= nextRecords.coins) newRecords.coins = true;
+    if (nextRecords.endlessWave > previousRecords.endlessWave && entry.endlessWave >= nextRecords.endlessWave) newRecords.endlessWave = true;
     entry._newRecords = newRecords;
     if (Neo.gameMode === 'competitive' && entry.result === 'win') {
       submitCompetitiveRun(entry);
@@ -771,6 +772,9 @@
       laserSweepSpeed: Neo.laserSweepSpeed,
       turtleWaveHpTimer: Neo.turtleWaveHpTimer,
       godTimer: Neo.godTimer,
+      endlessWave: Neo.endlessWave,
+      endlessWaveActive: Neo.endlessWaveActive,
+      endlessRespawnTimer: Neo.endlessRespawnTimer,
       gameElapsedTime: Neo.gameElapsedTime,
       monsterRoamTimer: Neo.monsterRoamTimer,
       knaveKnightCutscenePlayed: Neo.knaveKnightCutscenePlayed,

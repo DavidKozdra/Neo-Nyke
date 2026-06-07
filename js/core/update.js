@@ -103,6 +103,13 @@ export function loop(timestamp) {
     Neo.tickCooldowns(dt);
     Neo.updateEquipmentEffects?.(dt);
     if (Neo.godTimer > 0) Neo.godTimer = Math.max(0, Neo.godTimer - dt);
+    // Endless mode: tick down the between-waves intermission and spawn the next
+    // wave when it elapses. Frame-driven (not setTimeout) so it pauses with the
+    // game and survives a save/restore.
+    if (Neo.gameMode === 'endless' && Neo.endlessRespawnTimer > 0) {
+      Neo.endlessRespawnTimer = Math.max(0, Neo.endlessRespawnTimer - dt);
+      if (Neo.endlessRespawnTimer === 0) Neo.spawnNextEndlessWave?.();
+    }
 
     const _b = window.NeoSettings?.getBindings();
     const _right = _b ? _b.right : 'd';

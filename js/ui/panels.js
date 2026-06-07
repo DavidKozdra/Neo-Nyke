@@ -2423,7 +2423,7 @@ export function spendCoins(cost) {
       window.setTimeout(() => burst.remove(), 550);
       window.setTimeout(() => card.classList.remove('shop-card--flash-buy'), 460);
     }
-    Neo.playSfx?.('item_collect');
+    Neo.playSfx?.('buy_sell');
     if (Neo.player && Number.isFinite(Number(cost))) {
       Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 24, life: 0.72, text: `-${Math.round(Number(cost))} COINS`, c: '#ffd987' });
     }
@@ -2464,7 +2464,7 @@ export function handleShopBuyClick(event) {
       tradeOffer.bought = true;
       Neo.collectItem(tradeOffer.key);
       Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 24, life: 0.85, text: 'TRADE MADE', c: '#d7f6ff' });
-      Neo.playSfx?.('item_collect');
+      Neo.playSfx?.('buy_sell');
       window.achievementEvents?.emit('shop:bought');
     } else if (kind === 'move') {
       const offerIndex = Number(button.dataset.index || -1);

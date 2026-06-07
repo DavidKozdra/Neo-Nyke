@@ -1163,6 +1163,7 @@ export const ui = {
     deadKillerCanvas: document.getElementById('deadKillerCanvas'),
     deadKillerName: document.getElementById('deadKillerName'),
     deadFloor: document.getElementById('deadFloor'),
+    deadFloorLabel: document.getElementById('deadFloorLabel'),
     deadLevel: document.getElementById('deadLevel'),
     deadKills: document.getElementById('deadKills'),
     deadTime: document.getElementById('deadTime'),

@@ -152,6 +152,15 @@ export const ENEMY_SCALING = {
   damageSoftCap: 2.15,
   bossDamageSoftCap: 2.45,
   speedSoftCap: 1.38,
+  // Endless mode pins floor at 1, so floor/loop multipliers never grow. These
+  // per-wave multipliers stand in for that progression, scaling enemies up as
+  // the wave counter climbs. Damage/speed are softer than HP and reuse the
+  // softCap treatment so late waves stay survivable.
+  endlessWaveHp: 0.12,
+  endlessWaveDamage: 0.06,
+  endlessWaveSpeed: 0.012,
+  endlessWaveDamageSoftCap: 2.6,
+  endlessWaveSpeedSoftCap: 1.5,
 };
 export const BLEED_RESIST_SCALING = {
   floorInLoop: 0.16,

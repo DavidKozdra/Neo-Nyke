@@ -455,12 +455,36 @@
     return boss;
   }
 
+  // True when an endless wave should be a boss encounter (every 10th wave).
+  function isEndlessBossWave(waveNumber) {
+    return Number(waveNumber) > 0 && Number(waveNumber) % 10 === 0;
+  }
+
+  // Spawns the enemies for a single endless wave. `waveNumber` is the wave the
+  // player is about to fight (1-based). Every 10th wave is a boss wave (the
+  // floor boss plus a small honor-guard pack); other waves spawn a normal wave
+  // of the given size. Centralized so the first-wave (rooms.js) and respawn
+  // (combat.js) paths stay in sync.
+  function spawnEndlessWave(waveNumber, count) {
+    if (isEndlessBossWave(waveNumber)) {
+      spawnFloorBoss();
+      // A handful of adds so the boss room isn't a pure duel.
+      spawnWave(Math.min(2 + Math.floor(waveNumber / 10), 6), 'combat');
+      Neo.spawnParticle({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 70, life: 1.6, text: 'BOSS WAVE', c: '#ff5a5a' });
+      return;
+    }
+    spawnWave(count, 'combat');
+  }
+
   function getEnemyDifficultyMultiplier() {
     const gameMinutes = Neo.gameElapsedTime / 60;
     return 1 + gameMinutes * Neo.floor * 0.15;
   }
 
   function canSpawnEliteEnemies() {
+    // Endless mode pins floor at 1, so the floor-based gate never opens. Gate on
+    // the wave counter instead: elites start appearing once a few waves are done.
+    if (Neo.gameMode === 'endless') return Number(Neo.endlessWave || 0) >= 2;
     return Neo.floor >= Neo.getDifficultyDef().eliteFloor && Neo.floor <= 10;
   }
 
@@ -571,7 +595,14 @@
     const loopMultiplier = 1 + (loopNumber - 1) * Neo.ENEMY_SCALING.loop;
     const timerMultiplier = 1 + gameMinutes * Neo.ENEMY_SCALING.minute;
     const difficultyMultiplier = isBossType(type) ? difficulty.bossStatMultiplier : difficulty.statMultiplier;
-    const hpScale = floorMultiplier * loopMultiplier * timerMultiplier * difficultyMultiplier;
+    // Endless mode: enemies "level up" with each wave. The wave the current
+    // enemies belong to is endlessWave + 1 (endlessWave counts cleared waves).
+    // Outside endless mode this collapses to 1 and changes nothing.
+    const endlessWaveIndex = Neo.gameMode === 'endless' ? Math.max(0, Number(Neo.endlessWave || 0)) : 0;
+    const endlessHpMultiplier = 1 + endlessWaveIndex * Neo.ENEMY_SCALING.endlessWaveHp;
+    const endlessDamageMultiplier = 1 + endlessWaveIndex * Neo.ENEMY_SCALING.endlessWaveDamage;
+    const endlessSpeedMultiplier = 1 + endlessWaveIndex * Neo.ENEMY_SCALING.endlessWaveSpeed;
+    const hpScale = floorMultiplier * loopMultiplier * timerMultiplier * difficultyMultiplier * endlessHpMultiplier;
     const damageFloorMultiplier = 1 + (floorInLoop - 1) * (Neo.ENEMY_SCALING.damageFloor ?? Neo.ENEMY_SCALING.floor);
     const damageLoopMultiplier = 1 + (loopNumber - 1) * (Neo.ENEMY_SCALING.damageLoop ?? Neo.ENEMY_SCALING.loop);
     const damageTimerMultiplier = 1 + gameMinutes * (Neo.ENEMY_SCALING.damageMinute ?? Neo.ENEMY_SCALING.minute);
@@ -579,16 +610,16 @@
       ? (Neo.ENEMY_SCALING.bossDamageSoftCap ?? 2.45)
       : (Neo.ENEMY_SCALING.damageSoftCap ?? 2.15);
     const damageScale = softCapEnemyScale(
-      damageFloorMultiplier * damageLoopMultiplier * damageTimerMultiplier * difficultyMultiplier,
-      damageSoftCap,
+      damageFloorMultiplier * damageLoopMultiplier * damageTimerMultiplier * difficultyMultiplier * endlessDamageMultiplier,
+      endlessWaveIndex > 0 ? Math.max(damageSoftCap, Neo.ENEMY_SCALING.endlessWaveDamageSoftCap) : damageSoftCap,
       isBossType(type) ? 0.38 : 0.34
     );
     const speedFloorMultiplier = 1 + (floorInLoop - 1) * (Neo.ENEMY_SCALING.speedFloor ?? 0.035);
     const speedLoopMultiplier = 1 + (loopNumber - 1) * (Neo.ENEMY_SCALING.speedLoop ?? 0.07);
     const speedTimerMultiplier = 1 + gameMinutes * (Neo.ENEMY_SCALING.speedMinute ?? 0.018);
     const speedScale = softCapEnemyScale(
-      speedFloorMultiplier * speedLoopMultiplier * speedTimerMultiplier * difficulty.speedMultiplier,
-      Neo.ENEMY_SCALING.speedSoftCap ?? 1.38,
+      speedFloorMultiplier * speedLoopMultiplier * speedTimerMultiplier * difficulty.speedMultiplier * endlessSpeedMultiplier,
+      endlessWaveIndex > 0 ? Math.max(Neo.ENEMY_SCALING.speedSoftCap ?? 1.38, Neo.ENEMY_SCALING.endlessWaveSpeedSoftCap) : (Neo.ENEMY_SCALING.speedSoftCap ?? 1.38),
       0.16
     );
     result.hp = Math.round(result.hp * hpScale);
@@ -4131,6 +4162,8 @@
   Neo.spawnMiniBoss = spawnMiniBoss;
   Neo.spawnWave = spawnWave;
   Neo.spawnFloorBoss = spawnFloorBoss;
+  Neo.spawnEndlessWave = spawnEndlessWave;
+  Neo.isEndlessBossWave = isEndlessBossWave;
   Neo.getEnemyDifficultyMultiplier = getEnemyDifficultyMultiplier;
   Neo.canSpawnEliteEnemies = canSpawnEliteEnemies;
   Neo.rollEliteInventory = rollEliteInventory;

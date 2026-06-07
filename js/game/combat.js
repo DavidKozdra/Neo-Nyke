@@ -295,6 +295,7 @@
     Neo.player.swing = Neo.ATTACKS.melee.active;
     Neo.player.swingA = angle;
     Neo.player.stabSwing = false;
+    Neo.playSfx?.('sword_swing');
     forEachEnemyNearPlayer(adjustedRange, enemy => {
       if (!enemy) return;
       if (!isWithinRadiusSq(Neo.player.x, Neo.player.y, enemy, adjustedRange)) return;
@@ -454,6 +455,7 @@
     Neo.player.swing = Neo.ATTACKS.melee.active;
     Neo.player.swingA = angle;
     Neo.player.stabSwing = false;
+    Neo.playSfx?.('sword_swing');
 
     const anvilDmgBonus = Neo.getAnvilMoveBonus(move, 'damage');
     const anvilRngBonus = Neo.getAnvilMoveBonus(move, 'range');
@@ -2608,6 +2610,7 @@
   function onEndlessWaveCleared() {
     Neo.endlessWave += 1;
     Neo.updateEndlessWaveHud?.();
+    window.achievementEvents?.emit('endless:wave', { wave: Neo.endlessWave });
     const cx = Neo.ROOM_W / 2;
     const cy = Neo.ROOM_H / 2;
     const rewardRandom = Neo.createScopedRandom(`endless:wave:${Neo.endlessWave}:reward`);
@@ -2619,16 +2622,28 @@
     }
     dropCoins(cx, cy - 20, 30 + Neo.endlessWave * 8);
     grantXp(20 + Neo.endlessWave * 4);
+    // Arm a frame-driven countdown instead of a bare setTimeout. The timer is
+    // serialized with the run (see serializeRun) and ticked in update.js, so a
+    // reload during the intermission resumes correctly instead of stranding the
+    // player in an empty cleared room with no next wave.
     const delay = Neo.endlessWave <= 2 ? 4 : Neo.endlessWave <= 5 ? 3 : 2;
-    setTimeout(() => {
-      if (Neo.gameMode !== 'endless' || Neo.gameState !== 'play') return;
-      Neo.currentRoom.cleared = false;
-      Neo.endlessWaveActive = true;
-      Neo.updateEndlessWaveHud?.();
-      const waveSize = Math.min(4 + Neo.endlessWave + Math.floor(Neo.endlessWave / 3), 18);
-      Neo.spawnWave(waveSize, 'combat');
-      Neo.spawnParticle({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 40, life: 1.1, text: `WAVE ${Neo.endlessWave + 1}`, c: '#ff8b8b' });
-    }, delay * 1000);
+    Neo.endlessRespawnTimer = delay;
+    Neo.scheduleRunSave?.();
+  }
+
+  // Spawns the next endless wave once the intermission countdown elapses. Called
+  // from the update loop (and on restore when the saved timer has run out).
+  function spawnNextEndlessWave() {
+    Neo.endlessRespawnTimer = 0;
+    if (Neo.gameMode !== 'endless' || Neo.gameState !== 'play' || !Neo.currentRoom) return;
+    Neo.currentRoom.cleared = false;
+    Neo.endlessWaveActive = true;
+    Neo.updateEndlessWaveHud?.();
+    const nextWave = Neo.endlessWave + 1;
+    const waveSize = Math.min(4 + Neo.endlessWave + Math.floor(Neo.endlessWave / 3), 18);
+    Neo.spawnEndlessWave(nextWave, waveSize);
+    Neo.spawnParticle({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 40, life: 1.1, text: `WAVE ${nextWave}`, c: '#ff8b8b' });
+    Neo.scheduleRunSave?.();
   }
 
   function dropCoins(x, y, amount) {
@@ -2912,6 +2927,7 @@
   Neo.spawnEnemyCorpse = spawnEnemyCorpse;
   Neo.onEnemyDie = onEnemyDie;
   Neo.onEndlessWaveCleared = onEndlessWaveCleared;
+  Neo.spawnNextEndlessWave = spawnNextEndlessWave;
   Neo.dropCoins = dropCoins;
   Neo.rollItemDrop = rollItemDrop;
   Neo.grantXp = grantXp;
