@@ -391,7 +391,7 @@
       if (Neo.player.hp <= 0) Neo.die();
       return;
     }
-    Neo.lastDamageSource = Neo.getDamageSourceLabel(source);
+    Neo.lastDamageSource = options.sourceLabel ? String(options.sourceLabel) : Neo.getDamageSourceLabel(source);
     Neo.lastDamageSourceKey = String(options.sourceKey || source || '');
 
     Neo.player.hp -= finalAmount;
@@ -405,8 +405,16 @@
 
     finalAmount = Math.max(0, hpBeforeHit - Neo.player.hp);
     if (finalAmount > 0) Neo.lowHealthHitFlashUntil = Date.now() + Neo.LOW_HEALTH_HIT_FLASH_MS;
+    // Heme's Scarf retaliates: when hit, a chance per scarf stack to bleed the
+    // attacker. Bleeds the enemy, never the player.
     if (finalAmount > 0 && itemStats.scarfBleedsOnHit > 0 && !options.noInvFrames) {
-      Neo.applyBleed(Neo.player, itemStats.scarfBleedsOnHit, 4);
+      const scarfBleedChance = Math.min(0.75, itemStats.scarfBleedsOnHit * 0.25);
+      if (Neo.nextRandom('encounter') < scarfBleedChance) {
+        const attacker = Neo.findKillerEnemyEntity?.(options.sourceKey || source, Neo.lastDamageSource);
+        if (attacker && !attacker.dead && !attacker.bleedImmune) {
+          Neo.applyBleed(attacker, 1, 4);
+        }
+      }
     }
 
     if (applyHitstop) {
@@ -414,6 +422,8 @@
       Neo.player.vx += Math.cos(angle) * knockback;
       Neo.player.vy += Math.sin(angle) * knockback;
       Neo.applyPlayerImpactStun(finalAmount, knockback);
+      const hitRatio = Neo.clamp(finalAmount / Math.max(1, Neo.player.maxHp), 0, 1);
+      Neo.addHitstop?.(0.025 + hitRatio * 0.055);
       Neo.shake = 8;
       Neo.shakeT = 0.15;
     }
@@ -460,7 +470,22 @@
       const resistance = key === 'bleed' ? Number(Neo.getItemStats?.()?.bleedResistance || 0) : 0;
       const damageMultiplier = Math.max(0.2, 1 - resistance);
       const damage = Math.max(0.25, config.damage(state.stacks) * damageMultiplier);
-      damagePlayer(damage, 0, 0, key, { ignoreInv: true, noInvFrames: true });
+      // Attribute the kill to whoever inflicted the status (e.g. "Mooggy"),
+      // falling back to the status name when the source is unknown.
+      const inflictorKey = String(state.sourceKey || '').trim();
+      if (inflictorKey) {
+        const inflictorLabel = state.sourceLabel || Neo.getDamageSourceLabel(inflictorKey);
+        damagePlayer(damage, 0, 0, inflictorKey, {
+          ignoreInv: true,
+          noInvFrames: true,
+          // Keep the killer key (for death quotes / killer icon) but label the
+          // death screen with the status that finished the player off.
+          sourceKey: inflictorKey,
+          sourceLabel: `${inflictorLabel} (${key})`,
+        });
+      } else {
+        damagePlayer(damage, 0, 0, key, { ignoreInv: true, noInvFrames: true });
+      }
       if (Neo.nextRandom('fx') < 0.3) {
         Neo.spawnParticle({ x: Neo.player.x + Neo.rand(-8, 8), y: Neo.player.y + Neo.rand(-8, 8), life: 0.25, c: config.color });
       }
@@ -494,9 +519,9 @@
       damage: stacks => Neo.player.maxHp * (0.003 + stacks * 0.002),
       color: Neo.STATUS_STYLES.dark_drain.color,
     });
-    // Cold (slow) deals no damage-over-time; it just slows + makes brittle, so
-    // it isn't routed through tickPlayerStatus. Decay its duration here, else it
-    // would never expire on the player.
+    // Cold (slow) deals no damage-over-time; it just slows + makes brittle.
+    // Player cold stores 15s of duration per stack, so visible stacks drop one
+    // at a time as that budget decays.
     const coldState = Neo.getStatusState(Neo.player, 'slow');
     if (coldState.stacks > 0) {
       coldState.duration -= dt;
@@ -507,7 +532,11 @@
           Neo.spawnParticle({ x: Neo.player.x + Neo.rand(-8, 8), y: Neo.player.y + Neo.rand(-8, 8), life: 0.25, c: Neo.STATUS_STYLES.slow.color });
         }
       }
-      if (coldState.duration <= 0) Neo.clearStatus(Neo.player, 'slow');
+      if (coldState.duration <= 0) {
+        Neo.clearStatus(Neo.player, 'slow');
+      } else {
+        coldState.stacks = Neo.getColdStacksFromDuration?.(coldState.duration) ?? Math.min(6, Math.ceil(coldState.duration / Neo.COLD_SECONDS_PER_STACK));
+      }
     }
   }
 
@@ -926,6 +955,7 @@
     p.homingTargetTimer = 0;
     p.fromRival = props.fromRival ?? false;
     p.source = props.source ?? null;
+    p.subSpawn = props.subSpawn ? { ...props.subSpawn } : null;
     p.statusEffects = props.statusEffects ?? null;
     p.enemyBlast = props.enemyBlast ?? null;
     const defaultBounces = !enemyProjectile ? itemStats.projectileBounces : 0;
@@ -1066,7 +1096,7 @@
     projectile.statusEffects.forEach(effect => {
       if (!effect?.key) return;
       if (Neo.nextRandom('encounter') <= Number(effect.chance ?? 1)) {
-        Neo.applyStatus(Neo.player, effect.key, Number(effect.stacks || 1), Number(effect.duration || 3));
+        Neo.applyStatus(Neo.player, effect.key, Number(effect.stacks || 1), Number(effect.duration || 3), getProjectileDamageSource(projectile));
       }
     });
   }
@@ -1293,6 +1323,36 @@
     return projectile.homingPath[0] || target;
   }
 
+  // Sheds faster sub-projectiles from a parent projectile on a fixed interval.
+  // Shards fire perpendicular to the parent's travel direction (both sides),
+  // giving disks a spreading, chaotic spray as they fly.
+  function emitProjectileSubSpawn(projectile, dt) {
+    const cfg = projectile.subSpawn;
+    cfg.timer -= dt;
+    if (cfg.timer > 0) return;
+    cfg.timer += cfg.interval || 0.2;
+    const travel = Math.atan2(Number(projectile.vy || 0), Number(projectile.vx || 1));
+    const speed = cfg.speed || 480;
+    const count = Math.max(1, cfg.count || 2);
+    for (let i = 0; i < count; i += 1) {
+      // Alternate sides (perpendicular), with a touch of jitter so it feels random.
+      const side = i % 2 === 0 ? 1 : -1;
+      const angle = travel + side * (Math.PI / 2) + (Neo.rng() - 0.5) * 0.5;
+      spawnProjectile({
+        x: projectile.x,
+        y: projectile.y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        r: cfg.r ?? 4,
+        life: cfg.life ?? 0.7,
+        enemy: projectile.enemy,
+        kind: cfg.kind || projectile.kind,
+        damage: cfg.damage ?? Math.round((projectile.damage || 0) / 2),
+        hitOptions: cfg.hitOptions ?? projectile.hitOptions ?? null,
+      });
+    }
+  }
+
   function updateProjectiles(dt) {
     rebuildEnemySpatialIndex();
     ensureDestructibleSpatialIndex();
@@ -1319,6 +1379,7 @@
       projectile.x += projectile.vx * dt;
       projectile.y += projectile.vy * dt;
       recordProjectileTrail(projectile, prevX, prevY);
+      if (projectile.subSpawn && projectile.life > 0) emitProjectileSubSpawn(projectile, dt);
       let hitProp = null;
       forEachDestructibleNearCircle(projectile.x, projectile.y, projectile.r + 80, prop => {
         if (hitProp) return;
@@ -1483,7 +1544,7 @@
           : Neo.dist(Neo.player.x, Neo.player.y, hazard.x, hazard.y) < hazard.r + Neo.player.r - 10;
         if (inside) {
           damagePlayer(6 * dt, 0, 0, 'lava');
-          if (hazard.statusTick <= 0) Neo.applyFire(Neo.player, 1, 2.6);
+          if (hazard.statusTick <= 0) Neo.applyFire(Neo.player, 1, 2.6, hazard.source || 'lava');
         }
       }
       if (hazard.kind === 'explosive_trap') {
@@ -1586,7 +1647,8 @@
           hazard.plusTick = Neo.rand(0.16, 0.07);
         }
         if (Neo.dist(Neo.player.x, Neo.player.y, hazard.x, hazard.y) < hazard.r) {
-          const healed = Neo.applyPlayerHealing?.(Neo.scalePlayerHealing(7.36 * dt), { showBarrier: false }) ?? 0;
+          const healMult = Number(hazard.healMult || 1);
+          const healed = Neo.applyPlayerHealing?.(Neo.scalePlayerHealing(7.36 * healMult * dt), { showBarrier: false }) ?? 0;
           if (healed > 0) {
             hazard.healAccum = (hazard.healAccum || 0) + healed;
             hazard.healTick = (hazard.healTick ?? 0.24) - dt;
@@ -1597,9 +1659,10 @@
             }
           }
         }
+        const zoneDamageMult = Number(hazard.damageMult || 1);
         forEachEnemyNearCircle(hazard.x, hazard.y, hazard.r + 80, enemy => {
           if (Neo.dist(enemy.x, enemy.y, hazard.x, hazard.y) < hazard.r + enemy.r) {
-            enemy.hp -= (10 * dt) / Math.max(1, Number(enemy.defenseMultiplier || 1));
+            enemy.hp -= (10 * zoneDamageMult * dt) / Math.max(1, Number(enemy.defenseMultiplier || 1));
             if (enemy.hp <= 0) Neo.onEnemyDie(enemy);
           }
         });
@@ -1630,6 +1693,21 @@
             Neo.spawnParticle({ x: enemy.x + Neo.rand(-6, 6), y: enemy.y + Neo.rand(-6, 6), life: 0.24, c: '#c9b3ff' });
           }
         });
+      } else if (hazard.kind === 'chaos_burst') {
+        // Lingering chaos field: keeps erupting random AOE blasts around its
+        // centre. Follows the player so the storm travels with them.
+        if (hazard.followPlayer) {
+          hazard.x = Neo.player.x;
+          hazard.y = Neo.player.y;
+        }
+        hazard.tick -= dt;
+        if (hazard.tick <= 0) {
+          hazard.tick = hazard.interval || 0.16;
+          const blasts = 1 + (Neo.nextRandom('fx') < 0.45 ? 1 : 0);
+          for (let b = 0; b < blasts; b += 1) {
+            Neo.spawnChaosBlast(hazard.x, hazard.y, hazard.aoeRadiusMultiplier || 1, hazard.aoeDamageMultiplier || 1, !!hazard.isMetao);
+          }
+        }
       } else if (hazard.kind === 'lightning_column') {
         hazard.tick -= dt;
         if (hazard.tick <= 0) {
@@ -1660,6 +1738,49 @@
               phase: Neo.rng() * Math.PI * 2,
             },
           });
+        }
+      } else if (hazard.kind === 'lightning_strike_line') {
+        // "Justice of Sonichu": a laser-like lightning bolt spanning the whole
+        // room. First telegraphs along its line for `warn` seconds (faint, no
+        // damage), then strikes — dealing damage to anyone within `r` of the
+        // segment for a brief active window.
+        hazard.warn = Math.max(0, Number(hazard.warn || 0) - dt);
+        const striking = hazard.warn <= 0;
+        if (!striking) {
+          // Telegraph: pulsing faint bolt so the player can read the line.
+          hazard.warnTick = Number(hazard.warnTick || 0) - dt;
+          if (hazard.warnTick <= 0) {
+            hazard.warnTick = 0.08;
+            Neo.spawnParticle({
+              x: hazard.x1, y: hazard.y1, life: 0.12, c: '#5a86c8',
+              line: {
+                x1: hazard.x1, y1: hazard.y1, x2: hazard.x2, y2: hazard.y2,
+                w: 2, jag: 6, seg: 10, phase: Neo.rng() * Math.PI * 2,
+              },
+            });
+          }
+        } else {
+          if (!hazard.struck) {
+            hazard.struck = true;
+            Neo.shake = Math.max(Neo.shake, 11);
+            Neo.shakeT = Math.max(Neo.shakeT, 0.2);
+          }
+          hazard.tick = Number(hazard.tick || 0) - dt;
+          if (hazard.tick <= 0) {
+            hazard.tick = hazard.interval || 0.12;
+            const reach = (hazard.r || 26) + Neo.player.r;
+            if (Neo.distToSegment(Neo.player.x, Neo.player.y, hazard.x1, hazard.y1, hazard.x2, hazard.y2) <= reach) {
+              const angle = Math.atan2(hazard.y2 - hazard.y1, hazard.x2 - hazard.x1) + Math.PI / 2;
+              damagePlayer(hazard.damage || 18, angle, 120, hazard.source || 'justice_of_sonichu');
+            }
+            Neo.spawnParticle({
+              x: hazard.x1, y: hazard.y1, life: 0.16, c: '#bfe4ff',
+              line: {
+                x1: hazard.x1, y1: hazard.y1, x2: hazard.x2, y2: hazard.y2,
+                w: 5, jag: 14, seg: 12, phase: Neo.rng() * Math.PI * 2,
+              },
+            });
+          }
         }
       }
     });
@@ -1964,9 +2085,33 @@
       if (chest.open) return;
       if (Neo.dist(chest.x, chest.y, Neo.player.x, Neo.player.y) >= 36) return;
       chest.open = true;
+      Neo.minimapLegendDirty = true;
       Neo.dropCoins(chest.x, chest.y, 12 + Neo.floor * 2);
       if ((chest.rewardType || 'item') === 'item') {
-        Neo.pickups.push({ x: chest.x, y: chest.y - 20, type: 'item', key: chest.rewardKey || Neo.rollItemDrop({ random: Neo.createEntityRandom(chest, 'chest:fallback') }) });
+        if (chest.choiceType === 'ab') {
+          const choiceRandom = Neo.createEntityRandom(chest, 'chest:ab-choice');
+          const choices = Array.isArray(chest.rewardChoices) && chest.rewardChoices.length >= 2
+            ? chest.rewardChoices.slice(0, 2)
+            : Neo.createSeededItemChoices?.(2, choiceRandom) || [
+              chest.rewardKey || Neo.rollItemDrop({ random: choiceRandom }),
+              Neo.rollItemDrop({ random: choiceRandom }),
+            ];
+          chest.rewardChoices = choices;
+          const groupId = chest.choiceGroupId || `chest:${Neo.currentRoom?.gx ?? 0}:${Neo.currentRoom?.gy ?? 0}:${Math.round(chest.x)}:${Math.round(chest.y)}`;
+          chest.choiceGroupId = groupId;
+          choices.forEach((key, choiceIndex) => {
+            Neo.pickups.push({
+              x: chest.x + (choiceIndex === 0 ? -34 : 34),
+              y: chest.y - 28,
+              type: 'rewardChoice',
+              key,
+              groupId,
+              picksRemaining: 1,
+            });
+          });
+        } else {
+          Neo.pickups.push({ x: chest.x, y: chest.y - 20, type: 'item', key: chest.rewardKey || Neo.rollItemDrop({ random: Neo.createEntityRandom(chest, 'chest:fallback') }) });
+        }
       } else {
         Neo.pickups.push({ x: chest.x, y: chest.y - 20, type: 'potion' });
       }
@@ -2005,7 +2150,26 @@
     return true;
   }
 
+  function useAdapterPortal(pickup) {
+    const ladderRoom = Neo.rooms.find(room => room.gx === pickup?.targetGx && room.gy === pickup?.targetGy);
+    // Target room may have been invalidated (e.g. floor regenerated); bail safely.
+    if (!ladderRoom || ladderRoom === Neo.currentRoom) return false;
+
+    // Coin cost is paid here, on walk-in — not when the portal was opened.
+    const goldSpent = Math.floor(Neo.player.coins / 2);
+    if (goldSpent > 0) {
+      Neo.player.coins -= goldSpent;
+      Neo.metaProgress.coins = Math.max(0, Neo.metaProgress.coins - goldSpent);
+    }
+
+    Neo.enterRoom(ladderRoom);
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.9, text: 'WARPED TO LADDER (-50% COINS)', c: '#b66cff' });
+    Neo.scheduleRunSave();
+    return true;
+  }
+
   function removePickupAt(index) {
+    Neo.minimapLegendDirty = true;
     return Neo.unorderedRemoveAt(Neo.pickups, index);
   }
 
@@ -2065,12 +2229,13 @@
       } else if (pickup.type === 'item') {
         const magnetRadius = autoVacuumRange > 0 ? autoVacuumRange : 145;
         pullPickupTowardPlayer(pickup, magnetRadius, 150, 220);
-      } else if (pickup.type === 'jesterPortal') {
+      } else if (pickup.type === 'jesterPortal' || pickup.type === 'adapterPortal') {
         pickup.spawnT = Math.max(0, Number(pickup.spawnT || 0) + dt);
         const activateAt = Math.max(0.01, Number(pickup.activateAt || Neo.JESTER_PORTAL_ACTIVATE_DELAY));
         if (!pickup.active && pickup.spawnT >= activateAt) {
           pickup.active = true;
-          Neo.spawnParticle({ x: pickup.x, y: pickup.y - 16, life: 0.6, text: 'READY', c: '#ffc2f0' });
+          const readyColor = pickup.type === 'adapterPortal' ? '#d6c4ff' : '#ffc2f0';
+          Neo.spawnParticle({ x: pickup.x, y: pickup.y - 16, life: 0.6, text: 'READY', c: readyColor });
         }
       } else if (pickup.type === 'challengeRune') {
         const runeRadius = 16;
@@ -2094,9 +2259,20 @@
           pickup.y = Neo.clamp(pickup.y, minY, maxY);
           pickup.vy *= -1;
         }
-        pullPickupTowardPlayer(pickup, 130, 160, 180);
+        // Runes flee from the player so collecting them feels like a puzzle/chase
+        // rather than a passive vacuum. Closer = stronger shove away.
+        const fleeRadius = 150;
+        const fdx = pickup.x - playerX;
+        const fdy = pickup.y - playerY;
+        const fleeDistSq = fdx * fdx + fdy * fdy;
+        if (fleeDistSq < fleeRadius * fleeRadius && fleeDistSq > 0.000001) {
+          const fleeDist = Math.sqrt(fleeDistSq);
+          const fleeForce = (250 + (1 - fleeDist / fleeRadius) * 260) * dt;
+          pickup.x = Neo.clamp(pickup.x + (fdx / fleeDist) * fleeForce, minX, maxX);
+          pickup.y = Neo.clamp(pickup.y + (fdy / fleeDist) * fleeForce, minY, maxY);
+        }
       }
-      const pickupTriggerRadius = pickup.type === 'jesterPortal'
+      const pickupTriggerRadius = (pickup.type === 'jesterPortal' || pickup.type === 'adapterPortal')
         ? Neo.JESTER_PORTAL_TRIGGER_RADIUS
         : pickup.type === 'ladder'
           ? Neo.LADDER_TRIGGER_RADIUS
@@ -2168,9 +2344,46 @@
         }
       }
 
+      if (pickup.type === 'rewardChoice') {
+        const groupId = String(pickup.groupId || '');
+        const key = pickup.key;
+        if (!groupId || !key) {
+          removePickupAt(index);
+          continue;
+        }
+        Neo.collectItem(key);
+        Neo.playSfx?.('item_collect');
+        const remainingBeforePick = Math.max(1, Math.floor(Number(pickup.picksRemaining || 1)));
+        const remainingAfterPick = remainingBeforePick - 1;
+        Neo.pickups = Neo.pickups.filter(item => {
+          if (item === pickup) return false;
+          if (item?.type !== 'rewardChoice' || String(item.groupId || '') !== groupId) return true;
+          if (remainingAfterPick <= 0) return false;
+          item.picksRemaining = remainingAfterPick;
+          if (String(item.label || '').includes('/5')) item.label = `${remainingAfterPick}/5`;
+          return true;
+        });
+        if (remainingAfterPick > 0) {
+          Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 24, life: 0.75, text: `${remainingAfterPick} PICK LEFT`, c: '#d7f6ff' });
+        }
+        Neo.syncCurrentRoomState();
+        Neo.scheduleRunSave();
+        Neo.updateObjective();
+        continue;
+      }
+
       if (pickup.type === 'jesterPortal') {
         if (!pickup.active) continue;
         if (useJesterPortal(pickup)) return;
+        continue;
+      }
+
+      if (pickup.type === 'adapterPortal') {
+        if (!pickup.active) continue;
+        // On success enterRoom rebuilds Neo.pickups, so stop iterating this stale
+        // list. On failure (target room gone) drop the dead portal and move on.
+        if (useAdapterPortal(pickup)) return;
+        removePickupAt(index);
         continue;
       }
 
@@ -2252,6 +2465,9 @@
 
       if (pickup.type === 'secret_boss_chest') {
         removePickupAt(index);
+        // Mark the chest as looted so re-entering the cleared room doesn't
+        // re-spawn it (which previously let players farm the reward forever).
+        if (Neo.currentRoom) Neo.currentRoom.secretChestLooted = true;
         Neo.collectItem(Neo.rollItemDrop({ elite: true, random: Neo.createEntityRandom(pickup, 'secret-boss:loot') }));
         addCoins(60 + Neo.floor * 8);
         Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 24, life: 1.0, text: 'BANE SLAIN', c: '#c9aaff' });
@@ -2635,8 +2851,13 @@
   }
 
   function addCoins(amount) {
-    Neo.player.coins += amount;
-    Neo.metaProgress.coins += amount;
+    // Gold-boost items can scale positive gains via goldGainMultiplier; spends
+    // (negative amounts) always pass through untouched. No item grants this
+    // multiplier today, so it defaults to 1.
+    const goldMult = Math.max(1, Number(Neo.getItemStats?.()?.goldGainMultiplier || 1));
+    const gained = amount > 0 ? Math.round(amount * goldMult) : amount;
+    Neo.player.coins += gained;
+    Neo.metaProgress.coins += gained;
     Neo.persistMetaSoon();
     window.achievementEvents?.emit('meta:coins', { total: Neo.metaProgress.coins });
   }

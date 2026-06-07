@@ -14,6 +14,7 @@ const ACHIEVEMENTS = [
   { id: 'coin_goblin',    name: 'Coin Goblin',      desc: 'Accumulate 10,000 total coins',         icon: '◆' },
   { id: 'god_slayer',     name: 'God Slayer',        desc: 'Slay 10 gods',                          icon: '✟' },
   { id: 'extinction',     name: 'Extinction',       desc: 'Kill 1,000 enemies total',              icon: '☠' },
+  { id: 'double_bane',    name: 'Twice the Grave',  desc: "Find and kill Bowman's Bane twice in one run", icon: '🏹' },
 ];
 
 const ACHIEVEMENT_PROGRESS = {
@@ -29,6 +30,7 @@ const ACHIEVEMENT_PROGRESS = {
   coin_goblin:    { key: 'metaCoins', target: 10000, label: 'Coins banked' },
   god_slayer:     { key: 'gods_killed', target: 10, label: 'Gods slain' },
   extinction:     { key: 'enemies_killed', target: 1000, label: 'Enemies slain' },
+  double_bane:    { key: 'runBowmanKills', target: 2, label: "Banes slain this run" },
 };
 
 window.ACHIEVEMENTS = ACHIEVEMENTS;

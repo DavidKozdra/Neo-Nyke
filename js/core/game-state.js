@@ -25,6 +25,7 @@ export function resumeGame() {
       bestLevel: 1,
       bestTime: 0,
       bestCoins: 0,
+      bestEndlessWave: 0,
       unlockedItems: [],
       unlockedCharacters: ['princess', 'thorn_knight', 'metao'],
       unlockedChallenges: [],
@@ -158,9 +159,11 @@ export function resumeGame() {
     if (characterKey === 'mooggy') {
       items.hemes_scarf = 1;
       items.mooggy_zoomies = 1;
+      items.churu_stick = 1;
     }
     if (characterKey === 'princess') items.princes_glasses = 1;
     if (characterKey === 'metao') items.mateos_bag = 1;
+    if (characterKey === 'gelleh') items.zap_to_extreme = 1;
     return items;
   }
 
@@ -415,6 +418,11 @@ export function resumeGame() {
       bandaid: 0,
       push_man: 0,
       titan_heart: 0,
+      weapon_fatigue: 0,
+      generic_health_item: 0,
+      snake_knife: 0,
+      confuse_ray: 0,
+      overclocked_watch: 0,
       charged_adapter: 0,
       pew_pew_box: 0,
       turbo_boots: 0,
@@ -426,20 +434,27 @@ export function resumeGame() {
       dragon_orb: 0,
       ricocete: 0,
       drink_master: 0,
+      overstimulate: 0,
+      grave_zone: 0,
       turtle_shell: 0,
       anchor_charm: 0,
       iron_lung: 0,
       oracles_lens: 0,
+      homing_missile: 0,
       wizards_paw: 0,
       jesters_dice: 0,
       shield_of_aegis: 0,
       pendant_of_kronos: 0,
+      robot_arm: 0,
       rich_mans_luck: 0,
+      veggys_pendant: 0,
+      princes_glasses: 0,
       mateos_bag: 0,
       extra_battery: 0,
       mooggy_zoomies: 0,
       el_bartos_cape: 0,
       sparkle_charm: 0,
+      churu_stick: 0,
     };
     const character = Neo.CHARACTER_DEFS[Neo.chosenCharacter] || Neo.CHARACTER_DEFS.thorn_knight;
     const starterItems = getCharacterStartingItems(character.key);
@@ -472,6 +487,7 @@ export function resumeGame() {
       cowardsWayTime: 0,
       warpHideTime: 0,
       mooggyZoomiesTime: 0,
+      mooggySwipeCharge: 0,
       coins: 0,
       level: 1,
       kills: 0,
@@ -503,7 +519,7 @@ export function resumeGame() {
       blockActive: false,
       blockTimer: 0,
       overhealBarrier: 0,
-      graniallaHealPulseFrame: 0,
+      gellehHealPulseFrame: 0,
       fleeceTick: 0,
       weaponBeamTime: 0,
       weaponBeamTick: 0,
@@ -517,6 +533,11 @@ export function resumeGame() {
       storedPotions: 0,
       extraBatteryPendingCount: 0,
       wizardPawPendingCount: 0,
+      scrollUseSerial: 0,
+      scrollBranchingTargets: {},
+      scrollReplaceMap: {},
+      scrollPoolWeights: [],
+      scrollEgoFloor: 0,
       equipmentSlots: (character.key === 'metao') ? ['mateos_bag'] : [],
       equipmentCooldowns: {},
       equipmentEffects: {},
@@ -532,6 +553,11 @@ export function resumeGame() {
   }
 
   function createItemRegistry() {
+    // Scrolls are their own system (Neo.SCROLL_DEFS) but are registered alongside
+    // relics so runtime lookups (icons, rarity, tags, names, shop offers, save/load)
+    // resolve scroll keys. Relic-only consumers iterate Neo.ITEM_KEYS, which excludes
+    // scrolls, so this does not leak scrolls into relic pools or the relic codex.
+    const allDefs = { ...Neo.ITEM_DEFS, ...(Neo.SCROLL_DEFS || {}) };
     const factory = window.KozEngine?.Items?.itemFactory;
     if (factory?.createLibrary && factory?.createRegistryFromLibrary) {
       class RuntimeItem {
@@ -539,12 +565,12 @@ export function resumeGame() {
           Object.assign(this, spec);
         }
       }
-      const library = factory.createLibrary(Neo.ITEM_DEFS, RuntimeItem);
+      const library = factory.createLibrary(allDefs, RuntimeItem);
       return factory.createRegistryFromLibrary(library);
     }
     return {
       get(key) {
-        return Neo.ITEM_DEFS[key] || null;
+        return allDefs[key] || null;
       },
       keys() {
         return Neo.ITEM_KEYS.slice();
@@ -570,7 +596,7 @@ export function resumeGame() {
           unlockedChallenges: normalizeChallengeSelection(savedMeta.unlockedChallenges),
           selectedDifficulty: normalizeDifficulty(savedMeta.selectedDifficulty),
           selectedChallenges: normalizeChallengeSelection(savedMeta.selectedChallenges),
-          selectedCharacter: String(savedMeta.selectedCharacter || createDefaultMeta().selectedCharacter),
+          selectedCharacter: migrateCharacterKey(String(savedMeta.selectedCharacter || createDefaultMeta().selectedCharacter)),
           unlockedLegacy: normalizeLegacySelection(savedMeta.unlockedLegacy),
           seenTips: (savedMeta.seenTips && typeof savedMeta.seenTips === 'object') ? { ...savedMeta.seenTips } : {},
         };
@@ -587,7 +613,7 @@ export function resumeGame() {
       Neo.selectedChallenges = normalizeChallengeSelection(Neo.metaProgress.selectedChallenges);
       {
         const unlocked = new Set(Neo.metaProgress.unlockedCharacters || ['princess', 'thorn_knight', 'metao']);
-        if (Neo.metaProgress.godsKilled > 0) unlocked.add('granialla');
+        if (Neo.metaProgress.godsKilled > 0) unlocked.add('gelleh');
         if (Number(Neo.metaProgress.mooggyDefeats || 0) >= 3) unlocked.add('mooggy');
         const preferredCharacter = String(Neo.metaProgress.selectedCharacter || Neo.chosenCharacter);
         Neo.chosenCharacter = unlocked.has(preferredCharacter) ? preferredCharacter : [...unlocked][0] || 'thorn_knight';
@@ -619,10 +645,18 @@ export function resumeGame() {
     return items.length ? items : fallback;
   }
 
+  // Legacy character keys from older saves -> current keys.
+  const LEGACY_CHARACTER_KEYS = { granialla: 'gelleh' };
+
+  function migrateCharacterKey(key) {
+    return LEGACY_CHARACTER_KEYS[key] || key;
+  }
+
   function normalizeUnlockedCharacters(input) {
     const fallback = ['princess', 'thorn_knight', 'metao'];
     if (!Array.isArray(input)) return fallback;
-    const chars = Object.keys(Neo.CHARACTER_DEFS).filter(name => input.includes(name));
+    const remapped = input.map(migrateCharacterKey);
+    const chars = Object.keys(Neo.CHARACTER_DEFS).filter(name => remapped.includes(name));
     return [...new Set([...fallback, ...chars])];
   }
 
@@ -771,6 +805,7 @@ export function resumeGame() {
           difficultyName: String(entry.difficultyName || getDifficultyDef(entry.difficulty).name),
           floor: Math.max(1, Number(entry.floor || 1)),
           loop: Math.max(0, Number(entry.loop || 0)),
+          endlessWave: Math.max(0, Number(entry.endlessWave || 0)),
           coins: Math.max(0, Number(entry.coins || 0)),
           level: Math.max(1, Number(entry.level || 1)),
           kills: Math.max(0, Number(entry.kills || 0)),
@@ -822,6 +857,7 @@ export function resumeGame() {
       level: Math.max(1, Number(fallback.bestLevel || 1)),
       time: Math.max(0, Number(fallback.bestTime || 0)),
       coins: Math.max(0, Number(fallback.bestCoins || 0)),
+      endlessWave: Math.max(0, Number(fallback.bestEndlessWave || 0)),
     };
     normalizeRunHistory(entries).forEach(entry => {
       records.floor = Math.max(records.floor, Number(entry.floor || 1));
@@ -829,6 +865,7 @@ export function resumeGame() {
       records.level = Math.max(records.level, Number(entry.level || 1));
       records.time = Math.max(records.time, Number(entry.elapsedSeconds || 0));
       records.coins = Math.max(records.coins, Number(entry.coins || 0));
+      records.endlessWave = Math.max(records.endlessWave, Number(entry.endlessWave || 0));
     });
     return records;
   }
@@ -840,6 +877,7 @@ export function resumeGame() {
     Neo.metaProgress.bestLevel = records.level;
     Neo.metaProgress.bestTime = records.time;
     Neo.metaProgress.bestCoins = records.coins;
+    Neo.metaProgress.bestEndlessWave = records.endlessWave;
     return records;
   }
 
@@ -1240,6 +1278,10 @@ export function resumeGame() {
       charges: state.charges,
       maxCharges: state.maxCharges,
       current: state.timers.length ? Math.min(...state.timers) : 0,
+      // Every in-flight recharge, so the HUD can fill one pip per timer instead
+      // of dumping the most-progressed timer onto the freshly-spent pip (which
+      // made an extra charge look like it instantly reloaded).
+      timers: state.timers.slice(),
       max: getSlotCooldownDuration(slot, moveKey, attackSpeed),
     };
   }
@@ -1331,7 +1373,7 @@ export function resumeGame() {
     if (type === 'bulk_golem') return 'Bulk Golem';
     if (type === 'artificer_knave') return 'Artificer Charged Knave';
     if (type === 'bowman_bane') return "Bowman's Bane";
-    if (type === 'antony_blemmye') return 'Antony Blemmye';
+    if (type === 'antony_blemmye') return 'Antony Blemmyae';
     if (type === 'handsome_devil') return 'Handsome Devil';
     if (type === 'god') return 'GOD';
     return titleCase(type);
@@ -1496,6 +1538,11 @@ export function resumeGame() {
       difficultyName: getDifficultyDef(difficulty).name,
       floor: Neo.floor,
       loop: Neo.runLoopIndex,
+      // Endless mode score: the wave reached (the wave being fought when the run
+      // ended, or the last cleared wave). 0 for non-endless modes.
+      endlessWave: Neo.gameMode === 'endless'
+        ? Neo.endlessWave + (Neo.endlessWaveActive ? 1 : 0)
+        : 0,
       coins: Math.max(0, Number(Neo.player?.coins || 0)),
       level: Math.max(1, Number(Neo.player?.level || 1)),
       kills: Math.max(0, Number(Neo.player?.kills || 0)),
@@ -1524,6 +1571,7 @@ export function resumeGame() {
   function renderRunHistoryListEntry(entry, selected = false) {
     const cause = entry.result === 'win' ? 'Cleared' : (entry.killedBy || 'Unknown');
     const modeLabel = getRunModeLabel(entry.mode);
+    const progressLabel = entry.mode === 'endless' ? `Wave ${entry.endlessWave || 0}` : `Fl.${entry.floor}`;
     const killerLookup = entry.killerKey || entry.killedBy || '';
     const killerCanvas = entry.result !== 'win' && killerLookup
       ? `<canvas class="rh-row-killer" data-run-killer="${escapeHtml(killerLookup)}" width="28" height="28" aria-hidden="true" title="${escapeHtml(entry.killedBy || '')}"></canvas>`
@@ -1535,7 +1583,7 @@ export function resumeGame() {
           <span class="rh-row-name">${escapeHtml(entry.characterName)}</span>
           <span class="rh-row-badge">${entry.result === 'win' ? 'WIN' : 'DEAD'}</span>
         </span>
-        <span class="rh-row-sub">${escapeHtml(modeLabel)} · Fl.${entry.floor} · ${escapeHtml(cause)} · ${escapeHtml(formatRunEndedAt(entry.endedAt))}</span>
+        <span class="rh-row-sub">${escapeHtml(modeLabel)} · ${escapeHtml(progressLabel)} · ${escapeHtml(cause)} · ${escapeHtml(formatRunEndedAt(entry.endedAt))}</span>
       </span>
       ${killerCanvas}
     </button>`;
@@ -1558,7 +1606,7 @@ export function resumeGame() {
       <div class="rh-hero-info">
         <span class="rh-outcome">${win ? 'VICTORY' : 'DEFEAT'}</span>
         <strong class="rh-hero-name">${escapeHtml(entry.characterName)}</strong>
-        <span class="rh-hero-meta">${escapeHtml(entry.difficultyName)} · ${escapeHtml(getRunModeLabel(entry.mode))} · Floor ${entry.floor} · Loop ${entry.loop}</span>
+        <span class="rh-hero-meta">${escapeHtml(entry.difficultyName)} · ${escapeHtml(getRunModeLabel(entry.mode))} · ${entry.mode === 'endless' ? `Wave ${entry.endlessWave || 0}` : `Floor ${entry.floor} · Loop ${entry.loop}`}</span>
         <span class="rh-hero-date">${escapeHtml(formatRunEndedAt(entry.endedAt))}</span>
       </div>
       <div class="rh-hero-right">
@@ -1587,9 +1635,12 @@ export function resumeGame() {
            </div>
          </div>`
       : '';
+    const progressStat = entry.mode === 'endless'
+      ? `<div class="rh-stat"><span class="rh-stat-label">Wave</span><b class="rh-stat-val">${entry.endlessWave || 0}</b></div>`
+      : `<div class="rh-stat"><span class="rh-stat-label">Floor</span><b class="rh-stat-val">${entry.floor}</b></div>
+      <div class="rh-stat"><span class="rh-stat-label">Loop</span><b class="rh-stat-val">${entry.loop}</b></div>`;
     return `${killerBanner}<div class="rh-stats-grid">
-      <div class="rh-stat"><span class="rh-stat-label">Floor</span><b class="rh-stat-val">${entry.floor}</b></div>
-      <div class="rh-stat"><span class="rh-stat-label">Loop</span><b class="rh-stat-val">${entry.loop}</b></div>
+      ${progressStat}
       <div class="rh-stat"><span class="rh-stat-label">Time</span><b class="rh-stat-val">${escapeHtml(formatElapsedTime(entry.elapsedSeconds))}</b></div>
       <div class="rh-stat"><span class="rh-stat-label">Kills</span><b class="rh-stat-val">${entry.kills}</b></div>
       <div class="rh-stat"><span class="rh-stat-label">Coins</span><b class="rh-stat-val">${entry.coins}</b></div>
@@ -1624,7 +1675,8 @@ export function resumeGame() {
     'Queen of the Cult': 'queen_cult',
     'Bulk Golem': 'bulk_golem',
     'Artificer Charged Knave': 'artificer_knave',
-    'Antony Blemmye': 'antony_blemmye',
+    'Antony Blemmyae': 'antony_blemmye',
+    'Antony Blemmye': 'antony_blemmye', // legacy spelling in old death-history records
     'Handsome Devil': 'handsome_devil',
     'GOD': 'god',
     'Mirror Champion': 'thorn_knight',
@@ -1842,7 +1894,7 @@ export function resumeGame() {
     const unlockedDifficulties = getUnlockedDifficultySet();
     const unlockedChallenges = getUnlockedChallengeSet();
     const ownedChallenges = getOwnedChallengeSet();
-    if (Neo.metaProgress.godsKilled > 0) unlocked.add('granialla');
+    if (Neo.metaProgress.godsKilled > 0) unlocked.add('gelleh');
     if (Number(Neo.metaProgress.mooggyDefeats || 0) >= 3) unlocked.add('mooggy');
     const preferredCharacter = String(Neo.metaProgress.selectedCharacter || Neo.chosenCharacter);
     if (!Neo.charSelectPhase || Neo.charSelectPhase === 'p1') {
@@ -1874,6 +1926,17 @@ export function resumeGame() {
   }
 
   function setGameState(nextState) {
+    // Healing Zone is hold-to-charge and only ticks/releases inside the play-state
+    // update loop. If we leave 'play' mid-charge (pause, inventory/shop/anvil,
+    // dialogue, room transition, death) the charge would otherwise be stranded:
+    // its smash charge was spent with a deferred timer, so the pip sits empty at
+    // 0 cooldown forever. Cancel it here and queue the recharge so the pip recovers.
+    if (nextState !== 'play' && Neo.healingZoneCharging) {
+      Neo.healingZoneCharging = false;
+      Neo.healingZoneChargeTime = 0;
+      Neo.smashHeld = false;
+      queueHeldSkillRecharge('smash', getSmashCooldownDuration(Neo.getAttackSpeedValue()));
+    }
     if (Neo.gameStateManager) Neo.gameStateManager.setState(nextState);
     else {
       Neo.gameState = nextState;
@@ -2039,10 +2102,7 @@ export function resumeGame() {
       } catch (error) {
         setCompetitiveServerStatus('offline', { message: error?.message || 'Competitive server is unreachable' });
         setGameState('start');
-        const altmodesPanel = document.getElementById('altModesPanel');
-        if (altmodesPanel) altmodesPanel.classList.remove('hidden');
-        document.querySelectorAll('.altmodes-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === 'competitive'));
-        document.querySelectorAll('.altmodes-tab-panel').forEach(p => p.classList.toggle('hidden', p.dataset.panel !== 'competitive'));
+        Neo.uiController?.setCompetitivePanelOpen?.(true);
         return;
       }
     }
@@ -2094,6 +2154,7 @@ export function resumeGame() {
     window.achievementManager?.resetRunCounters();
     Neo.endlessWave = 0;
     Neo.endlessWaveActive = false;
+    Neo.endlessRespawnTimer = 0;
     resetTutorialState(false);
     resetMultiplayerState();
     invalidateRunStatCaches();
@@ -2103,7 +2164,8 @@ export function resumeGame() {
     resetScene();
     resetRngStreams();
     startEndlessRoom();
-    if (Neo.ui.endlessWaveNum) Neo.ui.endlessWaveNum.textContent = Neo.endlessWave;
+    Neo.updateEndlessWaveHud();
+    Neo.scheduleRunSave();
     if (!Neo.loopStarted) { Neo.loopStarted = true; requestAnimationFrame(Neo.loop); }
   }
 
@@ -2157,6 +2219,7 @@ export function resumeGame() {
     window.achievementManager?.resetRunCounters();
     Neo.bossRushStage = 0;
     Neo.bossRushActive = false;
+    clearBossRushNextSpawn();
     resetTutorialState(false);
     resetMultiplayerState();
     invalidateRunStatCaches();
@@ -2179,8 +2242,7 @@ export function resumeGame() {
       if (key) Neo.collectItem(key);
     }
     Neo.addCoins(120);
-    if (Neo.ui.bossRushStageNum) Neo.ui.bossRushStageNum.textContent = 1;
-    if (Neo.ui.bossRushStageNum2) Neo.ui.bossRushStageNum2.textContent = 1;
+    updateBossRushHud();
     // Spawn first boss immediately
     spawnBossRushBoss();
     if (!Neo.loopStarted) { Neo.loopStarted = true; requestAnimationFrame(Neo.loop); }
@@ -2189,14 +2251,21 @@ export function resumeGame() {
   function spawnBossRushBoss() {
     const bossType = BOSS_RUSH_ORDER[Neo.bossRushStage];
     if (!bossType) return;
+    const safeSpawn = findBossRushSpawnPoint();
+    if (!safeSpawn) {
+      Neo.bossRushActive = false;
+      Neo.currentRoom.cleared = true;
+      Neo.spawnParticle({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 50, life: 1.2, text: 'NO SAFE BOSS SPAWN', c: '#ff8b8b' });
+      return;
+    }
     Neo.bossRushActive = true;
     Neo.currentRoom.cleared = false;
-    const safeSpawn = Neo.findSafeEnemySpawnPoint(Neo.ROOM_W / 2, Neo.ROOM_H / 2 - 40, 15);
-    if (!safeSpawn) return;
+    clearBossRushNextSpawn();
     let boss;
     if (bossType === 'artificer_knave') {
       // Step 1: Spawn as a regular knave
       boss = Neo.spawnEnemy('knave', safeSpawn.x, safeSpawn.y, false);
+      boss.bossRushStage = Neo.bossRushStage;
       boss.isTransforming = true;
       // Visual cue: show particles or text
       Neo.spawnParticle({ x: boss.x, y: boss.y - 40, life: 1.2, text: '???', c: '#ffd27d' });
@@ -2243,6 +2312,7 @@ export function resumeGame() {
       }, 1200); // 1.2 seconds delay
     } else {
       boss = Neo.spawnEnemy(bossType, safeSpawn.x, safeSpawn.y, false);
+      boss.bossRushStage = Neo.bossRushStage;
       const playedCutscene = Neo.tryPlayBossIntroCutscene(boss, bossType);
       const line = Neo.BOSS_OPENING_DIALOGUE[bossType];
       if (!playedCutscene && boss && line) Neo.sayOverEntity(boss, line);
@@ -2251,12 +2321,33 @@ export function resumeGame() {
     Neo.spawnParticle({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 50, life: 1.4, text: `BOSS ${Neo.bossRushStage + 1}: ${getBossDisplayName(bossType).toUpperCase()}`, c: '#ff8b8b' });
   }
 
+  function findBossRushSpawnPoint(radius = 18) {
+    const candidates = [
+      { x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 40 },
+      { x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 + 120 },
+      { x: Neo.ROOM_W / 2 - 190, y: Neo.ROOM_H / 2 },
+      { x: Neo.ROOM_W / 2 + 190, y: Neo.ROOM_H / 2 },
+      { x: Neo.ROOM_W / 2 - 220, y: Neo.ROOM_H / 2 - 140 },
+      { x: Neo.ROOM_W / 2 + 220, y: Neo.ROOM_H / 2 - 140 },
+      { x: Neo.ROOM_W / 2 - 220, y: Neo.ROOM_H / 2 + 140 },
+      { x: Neo.ROOM_W / 2 + 220, y: Neo.ROOM_H / 2 + 140 },
+    ];
+    for (const candidate of candidates) {
+      const x = Neo.clamp(candidate.x, Neo.WALL + radius, Neo.ROOM_W - Neo.WALL - radius);
+      const y = Neo.clamp(candidate.y, Neo.WALL + radius, Neo.ROOM_H - Neo.WALL - radius);
+      const safeSpawn = Neo.findSafeEnemySpawnPoint(x, y, radius);
+      if (safeSpawn) return safeSpawn;
+    }
+    return null;
+  }
+
   function onBossRushBossDefeated() {
+    if (Neo.gameMode !== 'boss_rush') return;
     Neo.bossRushActive = false;
     Neo.bossRushStage += 1;
-    if (Neo.ui.bossRushStageNum) Neo.ui.bossRushStageNum.textContent = Math.min(Neo.bossRushStage + 1, BOSS_RUSH_ORDER.length);
-    if (Neo.ui.bossRushStageNum2) Neo.ui.bossRushStageNum2.textContent = Math.min(Neo.bossRushStage + 1, BOSS_RUSH_ORDER.length);
+    updateBossRushHud();
     if (Neo.bossRushStage >= BOSS_RUSH_ORDER.length) {
+      clearBossRushNextSpawn();
       Neo.win();
       return;
     }
@@ -2273,10 +2364,49 @@ export function resumeGame() {
       if (Neo.gameMode !== 'boss_rush' || Neo.gameState !== 'play') return;
       Neo.spawnParticle({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 50, life: 1.2, text: `NEXT: ${nextName}`, c: '#ffb347' });
     }, 1500);
-    setTimeout(() => {
-      if (Neo.gameMode !== 'boss_rush' || Neo.gameState !== 'play') return;
+    scheduleBossRushNextSpawn(4);
+  }
+
+  function scheduleBossRushNextSpawn(delaySeconds = 4) {
+    clearBossRushNextSpawn();
+    const stage = Neo.bossRushStage;
+    Neo.bossRushNextSpawnAt = Date.now() + delaySeconds * 1000;
+    const tick = () => {
+      if (Neo.gameMode !== 'boss_rush' || Neo.bossRushStage !== stage) {
+        clearBossRushNextSpawn();
+        return;
+      }
+      if (Neo.gameState !== 'play') {
+        Neo.bossRushNextSpawnTimeout = setTimeout(tick, 250);
+        return;
+      }
+      if (Date.now() < Neo.bossRushNextSpawnAt) {
+        Neo.bossRushNextSpawnTimeout = setTimeout(tick, 100);
+        return;
+      }
+      clearBossRushNextSpawn();
       spawnBossRushBoss();
-    }, 4000);
+    };
+    Neo.bossRushNextSpawnTimeout = setTimeout(tick, 100);
+    updateBossRushHud();
+  }
+
+  function clearBossRushNextSpawn() {
+    if (Neo.bossRushNextSpawnTimeout) clearTimeout(Neo.bossRushNextSpawnTimeout);
+    Neo.bossRushNextSpawnTimeout = null;
+    Neo.bossRushNextSpawnAt = 0;
+    updateBossRushHud();
+  }
+
+  function updateBossRushHud() {
+    const displayStage = Math.min(Neo.bossRushStage + 1, BOSS_RUSH_ORDER.length);
+    if (Neo.ui.bossRushStageNum) Neo.ui.bossRushStageNum.textContent = displayStage;
+    if (Neo.ui.bossRushStageNum2) Neo.ui.bossRushStageNum2.textContent = displayStage;
+    if (!Neo.ui.bossRushNextTimer) return;
+    const remainingMs = Math.max(0, Number(Neo.bossRushNextSpawnAt || 0) - Date.now());
+    const showTimer = Neo.gameMode === 'boss_rush' && !Neo.bossRushActive && remainingMs > 0;
+    Neo.ui.bossRushNextTimer.classList.toggle('hidden', !showTimer);
+    Neo.ui.bossRushNextTimer.textContent = showTimer ? `NEXT ${(remainingMs / 1000).toFixed(1)}s` : '';
   }
 
   function clampPracticeMaxHp(value) {
@@ -2318,12 +2448,60 @@ export function resumeGame() {
       if (!btn || !Neo.player) return;
       const type = btn.dataset.enemy;
       const elite = Neo.ui.practiceEliteToggle?.checked ?? false;
-      const angle = Neo.nextRandom('encounter') * Math.PI * 2;
-      const dist = 160 + Neo.nextRandom('encounter') * 120;
-      const x = Neo.clamp(Neo.player.x + Math.cos(angle) * Neo.dist, 80, Neo.ROOM_W - 80);
-      const y = Neo.clamp(Neo.player.y + Math.sin(angle) * Neo.dist, 80, Neo.ROOM_H - 80);
-      Neo.spawnEnemy(type, x, y, elite);
+      const safeSpawn = findPracticeEnemySpawnPoint();
+      if (!safeSpawn) {
+        Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 28, life: 0.9, text: 'NO SAFE SPAWN', c: '#ff8b8b' });
+        return;
+      }
+      Neo.spawnEnemy(type, safeSpawn.x, safeSpawn.y, elite);
     });
+  }
+
+  function findPracticeEnemySpawnPoint(radius = 18) {
+    if (!Neo.player) return null;
+    const samples = [
+      { x: Neo.player.x + 190, y: Neo.player.y },
+      { x: Neo.player.x - 190, y: Neo.player.y },
+      { x: Neo.player.x, y: Neo.player.y + 150 },
+      { x: Neo.player.x, y: Neo.player.y - 150 },
+      { x: Neo.ROOM_W / 2 + 180, y: Neo.ROOM_H / 2 },
+      { x: Neo.ROOM_W / 2 - 180, y: Neo.ROOM_H / 2 },
+      { x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 + 140 },
+      { x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 140 },
+    ];
+    let best = null;
+    let bestScore = -Infinity;
+    samples.forEach(sample => {
+      const x = Neo.clamp(sample.x, Neo.WALL + radius, Neo.ROOM_W - Neo.WALL - radius);
+      const y = Neo.clamp(sample.y, Neo.WALL + radius, Neo.ROOM_H - Neo.WALL - radius);
+      const safeSpawn = Neo.findSafeEnemySpawnPoint(x, y, radius);
+      if (!safeSpawn) return;
+      const playerDistance = Neo.dist(safeSpawn.x, safeSpawn.y, Neo.player.x, Neo.player.y);
+      const nearestEnemyDistance = Neo.enemies.reduce((nearest, enemy) => {
+        if (!enemy || enemy.dead) return nearest;
+        return Math.min(nearest, Neo.dist(safeSpawn.x, safeSpawn.y, enemy.x, enemy.y));
+      }, Infinity);
+      const score = playerDistance + Math.min(nearestEnemyDistance, 260);
+      if (score > bestScore) {
+        bestScore = score;
+        best = safeSpawn;
+      }
+    });
+    if (best) return best;
+    for (let attempt = 0; attempt < 24; attempt += 1) {
+      const angle = Neo.nextRandom('encounter') * Math.PI * 2;
+      const distance = 150 + Neo.nextRandom('encounter') * 220;
+      const x = Neo.clamp(Neo.player.x + Math.cos(angle) * distance, Neo.WALL + radius, Neo.ROOM_W - Neo.WALL - radius);
+      const y = Neo.clamp(Neo.player.y + Math.sin(angle) * distance, Neo.WALL + radius, Neo.ROOM_H - Neo.WALL - radius);
+      const safeSpawn = Neo.findSafeEnemySpawnPoint(x, y, radius);
+      if (safeSpawn) return safeSpawn;
+    }
+    return null;
+  }
+
+  function updateEndlessWaveHud() {
+    if (!Neo.ui.endlessWaveNum) return;
+    Neo.ui.endlessWaveNum.textContent = String(Neo.endlessWave + (Neo.endlessWaveActive ? 1 : 0));
   }
 
   function resetScene() {
@@ -2333,9 +2511,15 @@ export function resumeGame() {
     Neo.playerDeathAnim = null;
     Neo.endlessWave = 0;
     Neo.endlessWaveActive = false;
+    Neo.endlessRespawnTimer = 0;
     Neo.bossRushStage = 0;
     Neo.bossRushActive = false;
+    clearBossRushNextSpawn();
     Neo.projectiles = [];
+    Neo.justiceBlades = [];
+    Neo.healingZoneCharging = false;
+    Neo.healingZoneChargeTime = 0;
+    Neo.smashHeld = false;
     Neo.chests = [];
     Neo.pickups = [];
     Neo.destructibles = [];
@@ -2371,6 +2555,7 @@ export function resumeGame() {
     Neo.activeShopTab = 'items';
     Neo.draggingMoveKey = '';
     Neo.weaponBurstQueue = [];
+    Neo.clawSwipeQueue = [];
     Neo.rivals = [];
     Neo.monsterRoamTimer = 0;
     Neo.mooggyAssassinSpawnedThisRun = false;
@@ -2378,10 +2563,13 @@ export function resumeGame() {
     Neo.knaveKnightCutscenePlayed = false;
     Neo.queenMetaoCutscenePlayed = false;
     Neo.handsomeDevilCutscenePlayed = false;
+    Neo.antonyBlemmyeCutscenePlayed = false;
     Neo.secretRoomVisitedFloors = [];
     Neo.wizardPawSelection = null;
+    Neo.scrollControlSelection = null;
     Neo.panelItemDeferredToastRoom = null;
     Neo.setWizardPawModalOpen(false);
+    Neo.setScrollControlModalOpen?.(false, { animateClose: false });
     Neo.setShopPanelOpen(false);
     Neo.setInventoryPanelOpen(false);
     Neo.mouse.down = false;
@@ -2478,6 +2666,9 @@ export function resumeGame() {
     Neo.laserSweepSpeed = Number(snapshot.laserSweepSpeed || 0);
     Neo.turtleWaveHpTimer = Number(snapshot.turtleWaveHpTimer || 0);
     Neo.godTimer = snapshot.godTimer || 0;
+    Neo.endlessWave = Math.max(0, Number(snapshot.endlessWave || 0));
+    Neo.endlessWaveActive = !!snapshot.endlessWaveActive;
+    Neo.endlessRespawnTimer = Math.max(0, Number(snapshot.endlessRespawnTimer || 0));
     Neo.gameElapsedTime = snapshot.gameElapsedTime || 0;
     Neo.camera = snapshot.camera || { x: 0, y: 0 };
     Neo.shake = 0;
@@ -2495,21 +2686,26 @@ export function resumeGame() {
     Neo.activeShopTab = 'items';
     Neo.draggingMoveKey = '';
     Neo.weaponBurstQueue = [];
+    Neo.clawSwipeQueue = [];
     Neo.monsterRoamTimer = Number(snapshot.monsterRoamTimer || 0);
     Neo.knaveKnightCutscenePlayed = !!snapshot.knaveKnightCutscenePlayed;
     Neo.queenMetaoCutscenePlayed = !!snapshot.queenMetaoCutscenePlayed;
     Neo.handsomeDevilCutscenePlayed = !!snapshot.handsomeDevilCutscenePlayed;
+    Neo.antonyBlemmyeCutscenePlayed = !!snapshot.antonyBlemmyeCutscenePlayed;
     Neo.secretRoomVisitedFloors = Array.isArray(snapshot.secretRoomVisitedFloors) ? [...snapshot.secretRoomVisitedFloors] : [];
     Neo.restoreRivals(snapshot.rivals);
     Neo.wizardPawSelection = null;
+    Neo.scrollControlSelection = null;
     Neo.panelItemDeferredToastRoom = null;
     Neo.setWizardPawModalOpen(false);
+    Neo.setScrollControlModalOpen?.(false, { animateClose: false });
     Neo.setShopPanelOpen(false);
     Neo.setInventoryPanelOpen(false);
     Neo.updateItemUI();
     Neo.injectRivalsToCurrentRoom();
     Neo.updateObjective();
     Neo.updateHud();
+    Neo.updateEndlessWaveHud();
     Neo.persistMetaSoon();
   }
 
@@ -2662,11 +2858,15 @@ export function resumeGame() {
   Neo.startPractice = startPractice;
   Neo.startBossRush = startBossRush;
   Neo.spawnBossRushBoss = spawnBossRushBoss;
+  Neo.findBossRushSpawnPoint = findBossRushSpawnPoint;
   Neo.onBossRushBossDefeated = onBossRushBossDefeated;
+  Neo.updateBossRushHud = updateBossRushHud;
   Neo.clampPracticeMaxHp = clampPracticeMaxHp;
   Neo.syncPracticeMaxHpControls = syncPracticeMaxHpControls;
   Neo.setPracticeMaxHp = setPracticeMaxHp;
   Neo.buildPracticeEnemyGrid = buildPracticeEnemyGrid;
+  Neo.findPracticeEnemySpawnPoint = findPracticeEnemySpawnPoint;
+  Neo.updateEndlessWaveHud = updateEndlessWaveHud;
   Neo.resetScene = resetScene;
   Neo.sanitizePickupList = sanitizePickupList;
   Neo.restoreRun = restoreRun;

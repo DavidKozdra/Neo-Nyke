@@ -48,9 +48,9 @@ export function getSlotKeyLabel(slot) {
 export const MOVE_DEFS = {
     slash: { key: 'slash', slot: 'melee', name: 'Slash', desc: 'Close-range arc attack.' },
     fire_balls: { key: 'fire_balls', slot: 'melee', name: 'Fire Balls', desc: 'Shoot a spread of fireballs.' },
-    smite: { key: 'smite', slot: 'melee', name: 'Smite', desc: 'Physical swing plus chaining lightning.' },
+    smite: { key: 'smite', slot: 'melee', name: 'Spear of Lightning', desc: 'Lightning spear jab that chains between enemies — the same strike as the equipped spear.' },
     narwal_fight: { key: 'narwal_fight', slot: 'melee', name: 'Narwal Fight', desc: 'A wide pink spear-sweep with a piercing follow-up.', exclusiveCharacter: 'princess' },
-    mooggy_swipe: { key: 'mooggy_swipe', slot: 'melee', name: 'Mooggy Swipe', desc: 'Wide claw swipe that deals heavy damage and has a small bleed chance.', exclusiveCharacter: 'mooggy' },
+    mooggy_swipe: { key: 'mooggy_swipe', slot: 'melee', name: 'Mooggy Swipe', desc: 'Wide claw swipe with a small bleed chance. Hold to charge: a full wind-up unleashes a wider, far heavier slash.', exclusiveCharacter: 'mooggy' },
 
     blood_beam: { key: 'blood_beam', slot: 'laser', name: 'Blood Beam', desc: 'Sustained piercing beam that causes bleed.' },
     love_beam: { key: 'love_beam', slot: 'laser', name: 'Love Beam', desc: 'A radiant beam that damages enemies and heals you on hit.', exclusiveCharacter: 'princess' },
@@ -59,7 +59,7 @@ export const MOVE_DEFS = {
     blade_justice: { key: 'blade_justice', slot: 'laser', name: 'Blade Justice', desc: 'Divine short-range blade strike.' },
     lightning_columns: { key: 'lightning_columns', slot: 'laser', name: 'Lightning Columns', desc: 'Summon two lightning turrets.' },
     god_sweep: { key: 'god_sweep', slot: 'laser', name: 'God Sweep', desc: 'Spin a massive divine beam around yourself.' },
-    nail_shot: { key: 'nail_shot', slot: 'laser', name: 'Nail Shot', desc: 'Fires a spread of bouncing nails in all directions.', exclusiveCharacter: 'mooggy' },
+    nail_shot: { key: 'nail_shot', slot: 'laser', name: 'Nail Shot', desc: 'Fires a spread of bouncing nails in all directions. 3 charges.', exclusiveCharacter: 'mooggy', maxStacks: 3 },
 
     crimson_smash: { key: 'crimson_smash', slot: 'smash', name: 'Crimson Smash', desc: 'Heavy area smash.' },
     kicky_kick: { key: 'kicky_kick', slot: 'smash', name: 'Kicky Kick', desc: 'A heavy kick that blasts enemies away.', exclusiveCharacter: 'princess' },
@@ -67,7 +67,7 @@ export const MOVE_DEFS = {
     healing_zone: { key: 'healing_zone', slot: 'smash', name: 'Healing Zone', desc: 'Healing and damage zone.' },
     fire_circle: { key: 'fire_circle', slot: 'smash', name: 'Fire Circle', desc: 'Burning aura around you.' },
     floor_lava: { key: 'floor_lava', slot: 'smash', name: 'Floor Is Lava', desc: 'Lava immunity and lava trail.' },
-    fangs_of_death: { key: 'fangs_of_death', slot: 'smash', name: 'Fangs of Death', desc: 'Massive AOE explosion and homing fangs that seek enemies, dealing heavy damage with high crit chance and bleed.', exclusiveCharacter: 'mooggy' },
+    random_pounce: { key: 'random_pounce', slot: 'smash', name: 'Random Pounce', desc: 'Massive AOE explosion and homing fangs that seek enemies, dealing heavy damage with high crit chance and bleed.', exclusiveCharacter: 'mooggy' },
 
     dash: {
       key: 'dash',
@@ -107,16 +107,20 @@ export const MOVE_DEFS = {
       key: 'mooggy_zoomies',
       slot: 'dash',
       name: 'Zoomies',
-      desc: '5× move speed for 12 seconds. 20 second cooldown.',
+      desc: '5× move speed for 12 seconds. 20 second cooldown. 2 charges.',
       exclusiveCharacter: 'mooggy',
+      maxStacks: 2,
     },
   };
 
 export const SHOP_MOVE_POOL = [
-    'slash', 'fire_balls', 'smite', 'narwal_fight', 'mooggy_swipe',
+    // No melee moves are sold: the M1 slot is the bare-hands fallback (always
+    // `slash`) and every "real" primary attack comes from an equipped weapon.
+    // The old melee moves (fire_balls, smite, narwal_fight, mooggy_swipe) are
+    // now duplicated by each character's weapon, so they're no longer buyable.
     'blood_beam', 'love_beam', 'turtle_wave', 'power_disks', 'blade_justice', 'lightning_columns',
     'god_sweep', 'nail_shot',
-    'crimson_smash', 'kicky_kick', 'chaos_burst', 'healing_zone', 'fire_circle', 'floor_lava', 'fangs_of_death',
+    'crimson_smash', 'kicky_kick', 'chaos_burst', 'healing_zone', 'fire_circle', 'floor_lava', 'random_pounce',
     'dash', 'nimrod_stomp', 'warp', 'zip_lightning', 'flying_unhitable', 'cowards_way', 'mooggy_zoomies',
   ];
 
@@ -177,9 +181,9 @@ export const WEAPON_DEFS = {
       description: 'Rapid burst fire with controlled recoil.',
       color: '#ff9dd7',
     },
-    granillia_lightning_spear: {
-      key: 'granillia_lightning_spear',
-      name: "Granillia's Spear of Lightning",
+    gelleh_lightning_spear: {
+      key: 'gelleh_lightning_spear',
+      name: "Gelleh's Spear of Lightning",
       rarity: 'god',
       description: 'Piercing lightning spear that chains on impact.',
       color: '#9bd9ff',
@@ -216,7 +220,7 @@ export const WEAPON_DEFS = {
       key: 'princess_wand',
       name: "Princess's Wand",
       rarity: 'princess',
-      description: 'A graceful piercing magic shot made for Princess.',
+      description: 'A graceful piercing magic shot made for Princess. 3 charges.',
       color: '#ff9de8',
     },
   };
@@ -249,8 +253,8 @@ export const RIVAL_DEFS = {
       deathLine: 'Impossible...',
       attackStyle: 'ranged',
     },
-    granialla: {
-      name: 'Rival Granialla',
+    gelleh: {
+      name: 'Rival Gelleh',
       color: '#a8aaff',
       hp: 240, dmg: 20, speed: 94, r: 17, attackCd: 1.0,
       enterLine: 'You dare compete with a god?',
@@ -274,7 +278,7 @@ export const RIVAL_WEAPON_SWAP_BASE = 3.6;
 export const MONSTER_ROAM_INTERVAL_SECONDS = 60;
 export const MONSTER_ROAM_MOVE_CHANCE = 0.28;
 export const PURPLE_WEAPON_POOL = ['lazer_glasses', 'metao_fire_staff', 'magenta_degale', 'magenta_p90'];
-export const RED_WEAPON_POOL = ['granillia_lightning_spear', 'excalibur', 'golden_fleece', 'void_piercer', 'aegis_shield_weapon'];
+export const RED_WEAPON_POOL = ['gelleh_lightning_spear', 'excalibur', 'golden_fleece', 'void_piercer', 'aegis_shield_weapon'];
 
 export const RIVAL_WEAPON_LOADOUTS = {
     princess: [
@@ -290,8 +294,8 @@ export const RIVAL_WEAPON_LOADOUTS = {
       { key: 'magenta_p90', class: 'burst', range: 390, preferredRange: 250, damageMult: 0.72, cooldownMult: 1.0, projectileCount: 4, spread: 0.16, projectileSpeed: 360 },
       { key: 'lazer_glasses', class: 'ranged', range: 470, preferredRange: 300, damageMult: 0.92, cooldownMult: 1.14, projectileCount: 1, spread: 0.02, projectileSpeed: 460 },
     ],
-    granialla: [
-      { key: 'granillia_lightning_spear', class: 'ranged', range: 420, preferredRange: 260, damageMult: 0.94, cooldownMult: 1.0, projectileCount: 2, spread: 0.08, projectileSpeed: 390 },
+    gelleh: [
+      { key: 'gelleh_lightning_spear', class: 'ranged', range: 420, preferredRange: 260, damageMult: 0.94, cooldownMult: 1.0, projectileCount: 2, spread: 0.08, projectileSpeed: 390 },
       { key: 'excalibur', class: 'melee_heal', range: 50, preferredRange: 130, damageMult: 1.12, cooldownMult: 0.95, knockback: 320 },
       { key: 'void_piercer', class: 'burst', range: 340, preferredRange: 220, damageMult: 0.95, cooldownMult: 1.12, projectileCount: 3, spread: 0.1, projectileSpeed: 380 },
     ],
@@ -306,7 +310,7 @@ export const ITEM_DEFS = {
       key: 'neo_knife',
       name: 'Neo-Knife',
       shortName: 'Knife',
-      description: 'Bleed chance +5%.',
+      description: 'Bleed chance +5% per stack.',
       rarity: 'knight',
       color: '#f4f6fb',
       category: 'knight',
@@ -316,7 +320,7 @@ export const ITEM_DEFS = {
       key: 'tooth_of_thorn',
       name: 'Tooth of Thorn',
       shortName: 'Drain +2.8%',
-      description: '2.8% chance per stack to drain. Successful procs steal 1 HP on hit..',
+      description: '2.8% chance per stack to drain. Successful procs steal 1 HP on hit.',
       rarity: 'knight',
       color: '#ffd7e2',
       accent: '#ff6e8b',
@@ -338,7 +342,7 @@ export const ITEM_DEFS = {
       key: 'orb_of_blood',
       name: 'Orb of Blood',
       shortName: 'Orb',
-      description: 'Bleeding enemies take double damage.',
+      description: 'Bleeding enemies take +100% damage per stack.',
       rarity: 'wizard',
       color: '#a857ff',
       category: 'wizard',
@@ -348,7 +352,7 @@ export const ITEM_DEFS = {
       key: 'hemes_scarf',
       name: "Heme's Scarf",
       shortName: 'Scarf',
-      description: 'All enemies bleed and each bleed stack heals you.',
+      description: 'Per stack: nearby enemies always bleed, and taking a hit bleeds you too. Kills charge the scarf; below 50 HP it discharges, draining all active bleed — yours and theirs — into rapid healing until you recover.',
       rarity: 'god',
       color: '#ff4256',
       accent: '#35ff6f',
@@ -367,20 +371,21 @@ export const ITEM_DEFS = {
     },
     gold_vac: {
       key: 'gold_vac',
+      tool: true,
       name: 'Gold Vac',
-      shortName: 'Vac x2',
-      description: 'Automatically vacuums pickups from across the room and doubles coin pickup value.',
+      shortName: 'Vac x1',
+      description: 'Tool: runs for 2 minutes. Automatically vacuums pickups from across the room and doubles coin pickup value. Each extra stack adds +30s and +50% coin value.',
       rarity: 'knight',
       color: '#ffe07a',
       accent: '#fff6c7',
       category: 'knight',
-      tags: ['loot', 'coin', 'utility'],
+      tags: ['tools', 'loot', 'coin', 'utility'],
     },
     double_dose: {
       key: 'double_dose',
       name: 'Double Dose',
       shortName: 'Potion x2',
-      description: '50% chance per stack for potions to apply twice.',
+      description: '50% chance per stack for potions to apply twice, capped at 100%.',
       rarity: 'god',
       color: '#9af7d8',
       accent: '#dffff4',
@@ -391,7 +396,7 @@ export const ITEM_DEFS = {
       key: 'copycat_charm',
       name: 'Copycat Charm',
       shortName: 'Item x2',
-      description: '30% chance per stack to duplicate an item pickup.',
+      description: '30% chance per stack to duplicate an item pickup, capped at 100%.',
       rarity: 'god',
       color: '#f5efff',
       accent: '#c8a8ff',
@@ -453,7 +458,7 @@ export const ITEM_DEFS = {
       key: 'scholar_seal',
       name: 'Scholar Seal',
       shortName: 'XP +15%',
-      description: 'Gain 15% more XP on enemy kill.',
+      description: 'Gain 15% more XP on enemy kill per stack.',
       rarity: 'knight',
       color: '#d0ecff',
       category: 'knight',
@@ -463,7 +468,7 @@ export const ITEM_DEFS = {
       key: 'scholar_cap',
       name: "Scholar's Cap",
       shortName: 'Level Edge',
-      description: 'Deal more damage the closer you are to leveling up.',
+      description: 'Deal up to +45% damage per stack as you get closer to leveling up.',
       rarity: 'wizard',
       color: '#b49cff',
       category: 'wizard',
@@ -473,7 +478,7 @@ export const ITEM_DEFS = {
       key: 'bandaid',
       name: 'Bandaid',
       shortName: 'DEF +0.5%',
-      description: 'Defense +0.5%.',
+      description: 'Defense +0.5% per stack, capped with other defense at 85%.',
       rarity: 'knight',
       color: '#fff5f7',
       category: 'knight',
@@ -483,7 +488,7 @@ export const ITEM_DEFS = {
       key: 'push_man',
       name: 'Push Man',
       shortName: 'KB +18%',
-      description: 'Knockback +18%.',
+      description: 'Knockback +18% per stack.',
       rarity: 'knight',
       color: '#fff2cf',
       category: 'knight',
@@ -493,7 +498,7 @@ export const ITEM_DEFS = {
       key: 'titan_heart',
       name: 'Titan Heart',
       shortName: 'Max HP +8%',
-      description: 'Max HP +8%.',
+      description: 'Max HP +8% per stack on pickup.',
       rarity: 'knight',
       color: '#ffd9de',
       category: 'knight',
@@ -503,7 +508,7 @@ export const ITEM_DEFS = {
       key: 'weapon_fatigue',
       name: 'Weapon Fatigue',
       shortName: 'Slow',
-      description: 'Melee hits have a 5% chance to apply a slow stack.',
+      description: 'Melee hits have a 5% chance per stack to apply a slow stack.',
       rarity: 'knight',
       color: '#e7fbff',
       category: 'knight',
@@ -513,7 +518,7 @@ export const ITEM_DEFS = {
       key: 'generic_health_item',
       name: 'Generic Health',
       shortName: 'Heal 5%',
-      description: 'On kill, restore 5% of your current HP, capped by max HP.',
+      description: 'On kill, restore 5% of your current HP per stack, capped by max HP.',
       rarity: 'knight',
       color: '#d9ffe5',
       category: 'knight',
@@ -523,7 +528,7 @@ export const ITEM_DEFS = {
       key: 'snake_knife',
       name: 'Snake Knife',
       shortName: 'Poison +2%',
-      description: 'Melee hits have a 2% chance to poison enemies.',
+      description: 'Melee hits have a 2% chance per stack to poison enemies.',
       rarity: 'knight',
       color: '#d7ffbf',
       category: 'knight',
@@ -533,7 +538,7 @@ export const ITEM_DEFS = {
       key: 'confuse_ray',
       name: 'Confuse Ray',
       shortName: 'Stun 1%',
-      description: 'Hits have a 1% chance to stun enemies no matter what.',
+      description: 'Hits have a 1% chance per stack to stun enemies no matter what.',
       rarity: 'knight',
       color: '#d8f0ff',
       category: 'knight',
@@ -543,7 +548,7 @@ export const ITEM_DEFS = {
       key: 'overclocked_watch',
       name: 'Overclocked Watch',
       shortName: 'Charge x2',
-      description: '2% chance for kill charge progress to count twice instead of once.',
+      description: '2% chance per stack for kill charge progress to count twice instead of once.',
       rarity: 'knight',
       color: '#f0fbff',
       category: 'knight',
@@ -554,7 +559,7 @@ export const ITEM_DEFS = {
       tool: true,
       name: 'Charged Adapter',
       shortName: 'Warp F',
-      description: 'Charge requirement -1. When charged, press its tool slot key (outside boss rooms) to spend 50% coins and warp to the ladder room (next floor path).',
+      description: 'Charge requirement -1 per stack. When charged, press its tool slot key (outside boss rooms) to spend 50% coins and warp to the ladder room (next floor path).',
       rarity: 'wizard',
       color: '#b66cff',
       category: 'wizard',
@@ -565,7 +570,7 @@ export const ITEM_DEFS = {
       tool: true,
       name: 'Pew Pew Box',
       shortName: 'Missile Box',
-      description: 'Tool. Fire homing missiles for 8 seconds.',
+      description: 'Tool. Fire homing missiles for 8 seconds. Extra stacks add duration, missiles per volley, and missile damage.',
       rarity: 'wizard',
       color: '#ffe06f',
       accent: '#ff8f3d',
@@ -577,7 +582,7 @@ export const ITEM_DEFS = {
       tool: true,
       name: 'Turbo Boots',
       shortName: 'Speed Burst',
-      description: 'Tool. Move much faster for 20 seconds.',
+      description: 'Tool. Move much faster for 20 seconds. Each extra stack adds +3s and more speed.',
       rarity: 'wizard',
       color: '#79ffbf',
       accent: '#45b7ff',
@@ -589,7 +594,7 @@ export const ITEM_DEFS = {
       tool: true,
       name: 'Skizzard Tail',
       shortName: 'Regen',
-      description: 'Tool. Regenerate health for 5 seconds.',
+      description: 'Tool. Regenerate health for 5 seconds. Extra stacks add duration and stronger healing ticks.',
       rarity: 'wizard',
       color: '#8fffd2',
       accent: '#6fd7ff',
@@ -601,7 +606,7 @@ export const ITEM_DEFS = {
       tool: true,
       name: 'Zap to the Extreme',
       shortName: 'Zap Extreme',
-      description: 'Tool. Chain lightning around you for 10 seconds.',
+      description: 'Tool. Chain lightning around you for 10 seconds. Extra stacks add duration, range, targets, and damage.',
       rarity: 'wizard',
       color: '#8dd4ff',
       accent: '#f4fbff',
@@ -613,7 +618,7 @@ export const ITEM_DEFS = {
       tool: true,
       name: 'Panic Button',
       shortName: 'Panic',
-      description: 'Tool. Clear statuses, shove enemies away, and gain brief invulnerability.',
+      description: 'Tool. Clear statuses, shove enemies away, and gain brief invulnerability. Extra stacks increase radius, shove, damage, stun, and invulnerability time.',
       rarity: 'wizard',
       color: '#f4f6fb',
       accent: '#ff6b7f',
@@ -625,7 +630,7 @@ export const ITEM_DEFS = {
       tool: true,
       name: 'Mid Sweepy Box',
       shortName: 'Sweep Mines',
-      description: 'Tool. Sweep thorn mines around you for 6 seconds.',
+      description: 'Tool. Sweep thorn mines around you for 6 seconds. Extra stacks add duration, mines per tick, blast size, damage, and bleed.',
       rarity: 'wizard',
       color: '#ffd7e2',
       accent: '#ff6e8b',
@@ -637,18 +642,30 @@ export const ITEM_DEFS = {
       tool: true,
       name: 'Sparkle Charm',
       shortName: 'Sparkle',
-      description: 'Tool. Sparkle the nearest 5 enemies for 6 seconds. Every hit against a sparkled enemy is a guaranteed crit.',
+      description: 'Tool. Sparkle the nearest 5 enemies for 6 seconds. Every hit against a sparkled enemy is a guaranteed crit. Extra stacks mark more enemies for longer.',
       rarity: 'wizard',
       color: '#ffe8a3',
       accent: '#ffd05a',
       category: 'wizard',
       tags: ['tools', 'crit', 'wizard'],
     },
+    churu_stick: {
+      key: 'churu_stick',
+      tool: true,
+      name: 'Churu Stick',
+      shortName: 'Heal 30%',
+      description: 'Tool. Instantly heal 30% of max HP. Long 40s cooldown. Auto-fires when health drops below 15%. Extra stacks shorten the cooldown.',
+      rarity: 'wizard',
+      color: '#ffb6d5',
+      accent: '#ff7eb0',
+      category: 'wizard',
+      tags: ['tools', 'heal', 'regen', 'wizard'],
+    },
     explosive_jelly: {
       key: 'explosive_jelly',
       name: 'Explosive Jelly',
       shortName: 'AOE +20%',
-      description: 'All player AOE ranges are increased by 20%.',
+      description: 'All player AOE ranges are increased by 20% per stack.',
       rarity: 'wizard',
       color: '#ffb27d',
       category: 'wizard',
@@ -658,7 +675,7 @@ export const ITEM_DEFS = {
       key: 'dragon_orb',
       name: 'Dragon Orb',
       shortName: 'Beam Chain',
-      description: 'Beam attacks deal more damage and chain to a nearby enemy after locking on.',
+      description: 'Beam damage +35% per stack and chains to up to 2 nearby enemies.',
       rarity: 'wizard',
       color: '#b77dff',
       category: 'wizard',
@@ -668,7 +685,7 @@ export const ITEM_DEFS = {
       key: 'overstimulate',
       name: 'Overstimulate',
       shortName: 'Status Stun',
-      description: 'Hits have a 20% chance to stun enemies with 2 or more statuses.',
+      description: 'Hits have a 20% chance per stack to stun enemies with 2 or more statuses.',
       rarity: 'wizard',
       color: '#ffcf80',
       category: 'wizard',
@@ -678,7 +695,7 @@ export const ITEM_DEFS = {
       key: 'grave_zone',
       name: 'Grave Zone',
       shortName: 'Push Zone',
-      description: 'On kill, 20% chance to create a 2-second knockback field that scales with move speed.',
+      description: 'On kill, 20% chance per stack to create a 2-second knockback field that scales with move speed.',
       rarity: 'wizard',
       color: '#c9b3ff',
       category: 'wizard',
@@ -710,7 +727,7 @@ export const ITEM_DEFS = {
       key: 'turtle_shell',
       name: 'Turtle Shell',
       shortName: 'Shell +5%',
-      description: 'Move speed +5%.',
+      description: 'Move speed +5% per stack.',
       rarity: 'knight',
       color: '#d2ffd8',
       category: 'knight',
@@ -720,7 +737,7 @@ export const ITEM_DEFS = {
       key: 'anchor_charm',
       name: 'Anchor Charm',
       shortName: 'Stun Resist',
-      description: 'Stun resistance. Impact stuns last less and require harder hits or stronger knockback.',
+      description: 'Stun resistance per stack. Impact stuns last less and require harder hits or stronger knockback.',
       rarity: 'knight',
       color: '#d7e4f2',
       category: 'knight',
@@ -740,7 +757,7 @@ export const ITEM_DEFS = {
       key: 'oracles_lens',
       name: "Oracle's Lens",
       shortName: 'Oracle',
-      description: 'Critical hit chance is doubled on pickup, and crits scale harder with your crit chance.',
+      description: 'Having at least one doubles critical hit chance, and crits scale harder with your crit chance.',
       rarity: 'god',
       color: '#8ee6ff',
       category: 'god',
@@ -751,7 +768,7 @@ export const ITEM_DEFS = {
       key: 'homing_missile',
       name: 'Homing Missile',
       shortName: 'Missiles',
-      description: '15% chance to launch 2 homing missiles when using R.',
+      description: '15% chance per stack to launch 2 homing missiles when using R.',
       rarity: 'god',
       color: '#ffe06f',
       category: 'god',
@@ -761,7 +778,7 @@ export const ITEM_DEFS = {
       key: 'wizards_paw',
       name: "Wizard's Paw",
       shortName: 'Paw',
-      description: 'Choose 2 stats to increase by 50%.',
+      description: 'Choose 2 stats to increase by 50%. Duplicated pickups grant another choice.',
       rarity: 'god',
       color: '#ffcf80',
       category: 'god',
@@ -771,7 +788,7 @@ export const ITEM_DEFS = {
       key: 'jesters_dice',
       name: "Jester's Dice",
       shortName: 'Dice',
-      description: 'Skip 3 floors and gain 10 random items.',
+      description: 'Skip 3 floors and gain 10 random items per stack collected.',
       rarity: 'god',
       color: '#ff8bd8',
       category: 'god',
@@ -781,7 +798,7 @@ export const ITEM_DEFS = {
       key: 'shield_of_aegis',
       name: 'Shield of Aegis',
       shortName: 'DEF +20%',
-      description: 'Defense +20%.',
+      description: 'Defense +20% per stack, capped with other defense at 85%.',
       rarity: 'god',
       color: '#ffe7a8',
       category: 'god',
@@ -822,7 +839,7 @@ export const ITEM_DEFS = {
       key: 'veggys_pendant',
       name: "Veggy's Pendant",
       shortName: 'Pendant',
-      description: 'Every 3 rooms entered, gain +10% max HP.',
+      description: 'Every 3 rooms entered, gain +10% max HP per stack.',
       rarity: 'wizard',
       color: '#a0e87a',
       accent: '#5fcc2a',
@@ -833,7 +850,7 @@ export const ITEM_DEFS = {
       key: 'princes_glasses',
       name: "Prince's Glasses",
       shortName: 'Map Vision',
-      description: 'Pink, not that anything is wrong with that. Upgrades the minimap: larger zoom, skull markers for traps, enemy dots, green for healing, yellow for coins.',
+      description: 'Pink, not that anything is wrong with that. Upgrades the minimap: larger zoom, skull markers for traps, enemy dots, green for healing, yellow for coins. First stack grants +5% crit chance and +10% defense; each extra stack adds +2% to both.',
       rarity: 'wizard',
       color: '#ff9de8',
       accent: '#ff55cc',
@@ -855,7 +872,7 @@ export const ITEM_DEFS = {
       key: 'extra_battery',
       name: 'Extra Battery',
       shortName: 'Move +1 Stack',
-      description: 'Choose a move in Inventory to grant it +1 max stack.',
+      description: 'Choose a move in Inventory to grant it +1 max stack. Duplicated pickups grant another choice.',
       rarity: 'wizard',
       color: '#cfd7ff',
       accent: '#7a9dff',
@@ -885,16 +902,108 @@ export const ITEM_DEFS = {
       category: 'god',
       tags: ['tools', 'stealth', 'god'],
     },
+    voucher: {
+      key: 'voucher',
+      name: 'Voucher',
+      shortName: 'Voucher',
+      description: 'Tool. Redeem at a shop to claim a random relic of the colour you choose: white, purple, or red.',
+      rarity: 'knight',
+      color: '#ffe27a',
+      accent: '#fff6cf',
+      category: 'knight',
+      tool: true,
+      tags: ['tools', 'voucher', 'choice'],
+    },
   };
-// Rarity -> name/description text color. GOD is the top tier and renders red (#ff4256).
+// Scrolls are their own system, kept out of ITEM_DEFS / the relic pools. They are
+// registered into the item registry (see createItemRegistry) so runtime lookups —
+// icons, rarity, tags, names, shop offers, save/load — resolve scroll keys the same
+// way as relics, but they never appear in the relic codex tab or random relic pools.
+// Each scroll resolves its selection popup on pickup/purchase (see enqueueScrollSelection).
+export const SCROLL_DEFS = {
+    scroll_reroll: {
+      key: 'scroll_reroll',
+      name: 'Scroll of Reroll',
+      shortName: 'Reroll',
+      description: 'Choose one owned relic and replace one stack with a new relic of the same rarity.',
+      rarity: 'knight',
+      color: '#d9f2ff',
+      category: 'knight',
+      tool: true,
+      scroll: true,
+      tags: ['scroll', 'control', 'choice'],
+    },
+    scroll_branching: {
+      key: 'scroll_branching',
+      name: 'Scroll of Branching',
+      shortName: 'Branch',
+      description: 'Choose a relic. The next reward of that relic rarity becomes your chosen relic.',
+      rarity: 'knight',
+      color: '#d8ffc5',
+      category: 'knight',
+      tool: true,
+      scroll: true,
+      tags: ['scroll', 'control', 'choice'],
+    },
+    scroll_replace: {
+      key: 'scroll_replace',
+      name: 'Scroll of Replace',
+      shortName: 'Replace',
+      description: 'Choose an unwanted relic, then choose a same-rarity replacement. Future rewards swap it.',
+      rarity: 'knight',
+      color: '#ffd9d9',
+      category: 'knight',
+      tool: true,
+      scroll: true,
+      tags: ['scroll', 'control', 'choice'],
+    },
+    scroll_abundance: {
+      key: 'scroll_abundance',
+      name: 'Scroll of Abundance',
+      shortName: 'Abundance',
+      description: 'Choose two relics. Every two floors has a chance to grant one selected relic or one random relic.',
+      rarity: 'knight',
+      color: '#fff2a8',
+      category: 'knight',
+      tool: true,
+      scroll: true,
+      tags: ['scroll', 'control', 'choice'],
+    },
+    scroll_pool_weight: {
+      key: 'scroll_pool_weight',
+      name: 'Scroll of Pool Weight',
+      shortName: 'Weight',
+      description: 'Choose an item tag. Future rewards favor that tag for a limited time, with rarity-scaled strength.',
+      rarity: 'knight',
+      color: '#c8e2ff',
+      category: 'knight',
+      tool: true,
+      scroll: true,
+      tags: ['scroll', 'control', 'tag'],
+    },
+    scroll_ego: {
+      key: 'scroll_ego',
+      name: 'Scroll of Ego',
+      shortName: 'Ego',
+      description: 'For this floor, relics already in your build are 10% more common.',
+      rarity: 'knight',
+      color: '#f4d4ff',
+      category: 'knight',
+      tool: true,
+      scroll: true,
+      tags: ['scroll', 'control', 'build'],
+    },
+  };
+export const SCROLL_KEYS = Object.keys(SCROLL_DEFS);
+// Rarity -> name/description text color. GOD is the top tier and renders gold (#ffd23f).
 // ('white' and 'purple'/'red' are legacy aliases of knight/wizard/god kept for old save data.)
 export const RARITY_NAME_COLORS = {
     knight: '#f4f6fb',
     white: '#f4f6fb',
     wizard: '#b77dff',
     purple: '#b77dff',
-    god: '#ff4256',   // GOD tier
-    red: '#ff4256',   // legacy alias of god
+    god: '#ffd23f',   // GOD tier (gold/yellow)
+    red: '#ffd23f',   // legacy alias of god
     princess: '#ff9de8',
   };
 export const SHOP_RARITY_PRICE_MULTIPLIERS = {
@@ -906,6 +1015,16 @@ export const SHOP_RARITY_PRICE_MULTIPLIERS = {
     red: 4.75,
   };
 export const ITEM_KEYS = Object.keys(ITEM_DEFS);
+// Legacy alias retained for call sites that reference SCROLL_OF_CONTROL_KEYS; the
+// canonical list is SCROLL_KEYS (derived from SCROLL_DEFS).
+export const SCROLL_OF_CONTROL_KEYS = SCROLL_KEYS;
+export const VOUCHER_KEY = 'voucher';
+// Colour the player can redeem a voucher for, mapped to the relic rarity granted.
+export const VOUCHER_COLORS = [
+  { id: 'white', label: 'White', rarity: 'knight', color: RARITY_NAME_COLORS.knight },
+  { id: 'purple', label: 'Purple', rarity: 'wizard', color: RARITY_NAME_COLORS.wizard },
+  { id: 'red', label: 'Red', rarity: 'god', color: RARITY_NAME_COLORS.god },
+];
 export const SANDBOX_ENEMY_TYPES = [
     'hunter', 'charger', 'laser', 'knave', 'sniper', 'machine_gunner',
     'golem', 'cult_mage', 'cult_follower', 'summoner', 'shield_unit', 'healer', 'boss_spawner',
@@ -938,6 +1057,7 @@ export const ITEM_DROP_WEIGHTS = [
     ['zap_to_extreme', 10],
     ['panic_button', 10],
     ['mid_sweepy_box', 12],
+    ['churu_stick', 10],
     ['explosive_jelly', 12],
     ['dragon_orb', 14],
     ['ricocete', 20],
@@ -959,6 +1079,7 @@ export const ITEM_DROP_WEIGHTS = [
     ['extra_battery', 10],
     ['mooggy_zoomies', 14],
     ['el_bartos_cape', 6],
+    ['voucher', 8],
   ];
 export const ITEM_DROP_TABLE = Neo.buildWeightTable(ITEM_DROP_WEIGHTS);
 export const ELITE_ITEM_DROP_TABLE = Neo.buildWeightTable(
@@ -1017,6 +1138,7 @@ export const ui = {
     objectiveTracker: document.getElementById('objectiveTracker'),
     objectiveRoomLabel: document.getElementById('objectiveRoomLabel'),
     objectiveToggle: document.getElementById('objectiveToggle'),
+    objectiveClose: document.getElementById('objectiveClose'),
     objectiveSummary: document.getElementById('objectiveSummary'),
     objectiveList: document.getElementById('objectiveList'),
     cdM: document.getElementById('cdM'),
@@ -1041,6 +1163,7 @@ export const ui = {
     deadKillerCanvas: document.getElementById('deadKillerCanvas'),
     deadKillerName: document.getElementById('deadKillerName'),
     deadFloor: document.getElementById('deadFloor'),
+    deadFloorLabel: document.getElementById('deadFloorLabel'),
     deadLevel: document.getElementById('deadLevel'),
     deadKills: document.getElementById('deadKills'),
     deadTime: document.getElementById('deadTime'),
@@ -1090,7 +1213,11 @@ export const ui = {
     shopItems: document.getElementById('shopItems'),
     shopWeapons: document.getElementById('shopWeapons'),
     shopMoves: document.getElementById('shopMoves'),
+    shopTrades: document.getElementById('shopTrades'),
     shopHeals: document.getElementById('shopHeals'),
+    shopVoucherBanner: document.getElementById('shopVoucherBanner'),
+    shopVoucherBannerSub: document.getElementById('shopVoucherBannerSub'),
+    shopVoucherRedeem: document.getElementById('shopVoucherRedeem'),
     shopCoins: document.getElementById('shopCoins'),
     invPanel: document.getElementById('invPanel'),
     invClose: document.getElementById('invClose'),
@@ -1102,6 +1229,18 @@ export const ui = {
     wizardPawStats: document.getElementById('wizardPawStats'),
     wizardPawChoices: document.getElementById('wizardPawChoices'),
     wizardPawConfirm: document.getElementById('wizardPawConfirm'),
+    scrollControlModal: document.getElementById('scrollControlModal'),
+    scrollControlTitle: document.getElementById('scrollControlTitle'),
+    scrollControlCopy: document.getElementById('scrollControlCopy'),
+    scrollControlSearch: document.getElementById('scrollControlSearch'),
+    scrollControlMeta: document.getElementById('scrollControlMeta'),
+    scrollControlChoices: document.getElementById('scrollControlChoices'),
+    scrollControlCancel: document.getElementById('scrollControlCancel'),
+    scrollControlConfirm: document.getElementById('scrollControlConfirm'),
+    voucherModal: document.getElementById('voucherModal'),
+    voucherMeta: document.getElementById('voucherMeta'),
+    voucherChoices: document.getElementById('voucherChoices'),
+    voucherCancel: document.getElementById('voucherCancel'),
     invItemsList: document.getElementById('invItemsList'),
     invToolsList: document.getElementById('invToolsList'),
     invWeaponsList: document.getElementById('invWeaponsList'),
@@ -1127,6 +1266,7 @@ export const ui = {
     timerFloorSlot: document.getElementById('timerFloorSlot'),
     timerBossSlot: document.getElementById('timerBossSlot'),
     bossRushStageNum2: document.getElementById('bossRushStageNum2'),
+    bossRushNextTimer: document.getElementById('bossRushNextTimer'),
     challengeStatus: document.getElementById('challengeStatus'),
     challengeStatusLabel: document.getElementById('challengeStatusLabel'),
     challengeStatusFill: document.getElementById('challengeStatusFill'),
@@ -1173,6 +1313,8 @@ export const ui = {
     continueBtn: document.getElementById('continueBtn'),
     tutorialMenuBtn: document.getElementById('tutorialMenuBtn'),
     mainCompetitiveBtn: document.getElementById('mainCompetitiveBtn'),
+    competitivePanel: document.getElementById('competitivePanel'),
+    competitiveClose: document.getElementById('competitiveClose'),
     competitiveServerStatus: document.getElementById('competitiveServerStatus'),
     competitiveServerRetryBtn: document.getElementById('competitiveServerRetryBtn'),
     deadCompetitiveStatus: document.getElementById('deadCompetitiveStatus'),
@@ -1187,6 +1329,7 @@ export const ui = {
     rhBlogPanel: document.getElementById('rhBlogPanel'),
     rhInfoContent: document.getElementById('rhInfoContent'),
     rhInfoTabs: [...document.querySelectorAll('#rhInfoPanel .rh-info-tab')],
+    rhInfoSearch: document.getElementById('rhInfoSearch'),
     infoTutorialBtn: document.getElementById('infoTutorialBtn'),
     rhBankCoins: document.getElementById('rhBankCoins'),
     rhLoopCount: document.getElementById('rhLoopCount'),
@@ -1309,6 +1452,12 @@ export const ui = {
       laser: document.querySelector('[data-skill="laser"] .skill-name'),
       smash: document.querySelector('[data-skill="smash"] .skill-name'),
     },
+    skillKeys: {
+      dash: document.querySelector('[data-skill="dash"] .skill-key'),
+      melee: document.querySelector('[data-skill="melee"] .skill-key'),
+      laser: document.querySelector('[data-skill="laser"] .skill-key'),
+      smash: document.querySelector('[data-skill="smash"] .skill-key'),
+    },
     icons: {
       dash: document.getElementById('iconDash'),
       melee: document.getElementById('iconMelee'),
@@ -1368,9 +1517,13 @@ export const SANDBOX_DEFAULT_SETTINGS = {
   Neo.SANDBOX_DEFAULT_SETTINGS = SANDBOX_DEFAULT_SETTINGS;
   Neo.SANDBOX_ENEMY_TYPES = SANDBOX_ENEMY_TYPES;
 
-  // achievement listener — needs Neo.metaProgress (set later), but persists via closure
+  // Achievement unlocks are one-time rewards, so each newly unlocked
+  // achievement grants one Loop Crystal.
   window.addEventListener('achievement:unlocked', () => {
     if (Neo.metaProgress) Neo.metaProgress.loopCrystals = Number(Neo.metaProgress.loopCrystals || 0) + 1;
+    if (Neo.player && Neo.gameState === 'play') {
+      Neo.spawnParticle?.({ x: Neo.player.x, y: Neo.player.y - 54, life: 1.1, text: '+1 ACHIEVEMENT LC', c: '#83f3ff' });
+    }
     Neo.persistMetaSoon();
     Neo.refreshMenuState();
   });
@@ -1416,12 +1569,12 @@ export const WEAPON_BASE_STATS = {
     metao_fire_staff:         { damage: 22,   cooldown: 0.75, range: 200, knockback: 100 },
     magenta_degale:           { damage: 80,   cooldown: 1.50,             knockback: 480 },
     magenta_p90:              { damage: 18,   cooldown: 1.80,             knockback: 140 },
-    granillia_lightning_spear:{ damage: 45,   cooldown: 2.00,             knockback: 200 },
+    gelleh_lightning_spear:{ damage: 45,   cooldown: 2.00,             knockback: 200 },
     excalibur:                { damage: 202,  cooldown: 2.00, range: 120, knockback: 600 },
     golden_fleece:            { damage: 20,   cooldown: 0.50, range: 80,  knockback: 80  },
     void_piercer:             { damage: 55,   cooldown: 0.80,             knockback: 160 },
     aegis_shield_weapon:      { cooldown: 8.00 },
-    princess_wand:            { damage: 30,   cooldown: 0.55, range: 120, knockback: 160 },
+    princess_wand:            { damage: 30,   cooldown: 0.77, range: 120, knockback: 160 },
   };
 
 // Base stat values per move
@@ -1451,7 +1604,7 @@ export const MOVE_BASE_STATS = {
     cowards_way:      { cooldown: 6.00, duration: 3.0 },
     mooggy_swipe:     { damage: 44,  cooldown: 0.50, range: 130 },
     nail_shot:        { damage: 18,  cooldown: 2.80, range: 400 },
-    fangs_of_death:   { damage: 52,  cooldown: 5.00, range: 160 },
+    random_pounce:   { damage: 52,  cooldown: 5.00, range: 160 },
     mooggy_zoomies:   { cooldown: 20.00, duration: 12.0 },
   };
 
@@ -1479,6 +1632,11 @@ export const MOVE_BASE_STATS = {
   Neo.RIVAL_WEAPON_LOADOUTS = RIVAL_WEAPON_LOADOUTS;
   Neo.ITEM_DEFS = ITEM_DEFS;
   Neo.ITEM_KEYS = ITEM_KEYS;
+  Neo.SCROLL_DEFS = SCROLL_DEFS;
+  Neo.SCROLL_KEYS = SCROLL_KEYS;
+  Neo.SCROLL_OF_CONTROL_KEYS = SCROLL_OF_CONTROL_KEYS;
+  Neo.VOUCHER_KEY = VOUCHER_KEY;
+  Neo.VOUCHER_COLORS = VOUCHER_COLORS;
   Neo.ITEM_DROP_WEIGHTS = ITEM_DROP_WEIGHTS;
   Neo.ITEM_DROP_TABLE = ITEM_DROP_TABLE;
   Neo.ELITE_ITEM_DROP_TABLE = ELITE_ITEM_DROP_TABLE;

@@ -35,7 +35,9 @@ const achievementManager = (() => {
   let maxFloorReached = 1;
   let maxPlayerLevel = 1;
   let maxLoopIndex = 0;
+  let maxEndlessWave = 0;
   let metaCoins = 0;
+  let runBowmanKills = 0;
 
   function openDB() {
     return new Promise((resolve, reject) => {
@@ -221,6 +223,8 @@ const achievementManager = (() => {
     maxFloorReached = 1;
     maxPlayerLevel = 1;
     maxLoopIndex = 0;
+    maxEndlessWave = 0;
+    runBowmanKills = 0;
   }
 
   async function getProgressSnapshot() {
@@ -240,7 +244,9 @@ const achievementManager = (() => {
       maxFloorReached,
       maxPlayerLevel,
       maxLoopIndex,
+      maxEndlessWave,
       metaCoins,
+      runBowmanKills,
     };
   }
 
@@ -290,6 +296,10 @@ const achievementManager = (() => {
     if (floor >= 10) await unlock('floor_muncher');
   });
 
+  achievementEvents.on('endless:wave', ({ wave }) => {
+    maxEndlessWave = Math.max(maxEndlessWave, Math.max(0, Number(wave) || 0));
+  });
+
   achievementEvents.on('player:leveled', async ({ level }) => {
     maxPlayerLevel = Math.max(maxPlayerLevel, Math.max(0, Number(level) || 0));
     if (level >= 20) await unlock('overleveled');
@@ -318,6 +328,11 @@ const achievementManager = (() => {
   achievementEvents.on('enemy:killed', async () => {
     const count = await incrementCumulativeCount('enemies_killed');
     if (count >= 1000) await unlock('extinction');
+  });
+
+  achievementEvents.on('bowman:killed', async () => {
+    runBowmanKills += 1;
+    if (runBowmanKills >= 2) await unlock('double_bane');
   });
 
   if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {

@@ -115,6 +115,7 @@
     }
     Neo.updateObjective();
     Neo.updateHud();
+    Neo.applyScrollAbundanceForFloor?.();
   }
 
   // Stable-partitions an already-shuffled reward pool so dead-end rooms (graph
@@ -960,6 +961,7 @@
     Neo.setShopPanelOpen(false);
     Neo.setInventoryPanelOpen(false);
     Neo.currentRoom = room;
+    Neo.minimapLegendDirty = true;
     room.explored = true;
     room.visited = true;
     Neo.enemies = room.enemies || [];
@@ -974,6 +976,11 @@
     Neo.hazards = room.hazards || [];
     Neo.shopOffers = room.shopOffers || [];
     Neo.structures = room.structures || [];
+    // Banners/flags are retired — strip them from any room (incl. authored
+    // templates and older save snapshots) as rooms are activated.
+    if (Array.isArray(room.decorations)) {
+      room.decorations = room.decorations.filter(decor => decor && decor.kind !== 'banner');
+    }
     Neo.decorations = room.decorations || [];
     Neo.mouse.right = false;
     Neo.mouse.rightQueued = false;
@@ -985,9 +992,10 @@
     if (room.type === 'combat' && !room.cleared && Neo.enemies.length === 0) {
       if (Neo.gameMode === 'endless') {
         Neo.endlessWaveActive = true;
+        Neo.updateEndlessWaveHud?.();
         const firstWaveSize = 4 + Neo.floor;
-        Neo.spawnWave(firstWaveSize, 'combat');
-        Neo.spawnParticle({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 40, life: 1.2, text: 'WAVE 1', c: '#ff8b8b' });
+        Neo.spawnEndlessWave(Neo.endlessWave + 1, firstWaveSize);
+        Neo.spawnParticle({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 40, life: 1.2, text: `WAVE ${Neo.endlessWave + 1}`, c: '#ff8b8b' });
       } else {
         Neo.spawnWave(Neo.getWaveCount(3), 'combat');
       }
@@ -1024,7 +1032,8 @@
       const minChestSpacing = 132;
       for (let index = 0; index < chestCount; index += 1) {
         const itemChance = Neo.clamp(0.9 + Number(Neo.getItemStats?.()?.itemDropChanceBonus || 0), 0, 0.98);
-        const rewardsItem = treasureRandom() < itemChance;
+        const isAbChest = Neo.floor > 4 && treasureRandom() < 0.2;
+        const rewardsItem = isAbChest || treasureRandom() < itemChance;
         let chestPos = null;
         for (let attempt = 0; attempt < 12; attempt += 1) {
           const preferredX = chestInsetX + treasureRandom() * Math.max(1, Neo.ROOM_W - chestInsetX * 2);
@@ -1049,6 +1058,7 @@
           x: chestPos.x,
           y: chestPos.y,
           open: false,
+          choiceType: isAbChest ? 'ab' : '',
           rewardType: rewardsItem ? 'item' : 'potion',
           rewardKey: rewardsItem ? Neo.rollItemDrop({ random: treasureRandom }) : '',
         });
@@ -1155,7 +1165,9 @@
 
     if (room.secret && room.secretKind === 'bowman_bane') {
       if (room.cleared) {
-        if (!Neo.pickups.some(pickup => pickup.type === 'secret_boss_chest')) {
+        // Only (re)spawn the reward chest if it was never looted. Without this
+        // guard, leaving and re-entering a cleared room farms the chest forever.
+        if (!room.secretChestLooted && !Neo.pickups.some(pickup => pickup.type === 'secret_boss_chest')) {
           Neo.pickups.push({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2, type: 'secret_boss_chest' });
         }
       } else if (!room.bossStarted) {
@@ -1183,7 +1195,11 @@
     const itemOffers = room.shopOffers.filter(offer => offer?.type === 'item');
     const extraOffers = Math.max(0, Math.floor(Number(Neo.getItemStats?.()?.shopExtraItemOffers || 0)));
     const targetItemOffers = minItemOffers + extraOffers;
-    if (itemOffers.length >= targetItemOffers) return;
+    if (itemOffers.length >= targetItemOffers) {
+      ensureShopScrollOffer(room);
+      ensureShopTradeOffer(room);
+      return;
+    }
 
     const shopRandom = Neo.createRoomRandom(room, 'shop:item-offers');
     const occupiedKeys = new Set(itemOffers.map(offer => offer.key));
@@ -1221,6 +1237,104 @@
       });
       created += 1;
     }
+    ensureShopScrollOffer(room);
+    ensureShopTradeOffer(room);
+  }
+
+  function rollScrollOfControl(random = Neo.rng) {
+    const pool = Neo.SCROLL_OF_CONTROL_KEYS || [];
+    if (!pool.length) return '';
+    return pool[Math.floor(random() * pool.length)] || pool[0];
+  }
+
+  function ensureShopScrollOffer(room) {
+    if (!room || room.type !== 'shop' || Neo.floor <= 3) return null;
+    room.shopOffers = Array.isArray(room.shopOffers) ? room.shopOffers : [];
+    if (room.shopOffers.some(offer => offer?.type === 'item' && (Neo.SCROLL_OF_CONTROL_KEYS || []).includes(offer.key))) return null;
+    const shopRandom = Neo.createRoomRandom(room, 'shop:scroll-offer');
+    if (shopRandom() >= 0.2) return null;
+    const key = rollScrollOfControl(shopRandom);
+    if (!key) return null;
+    const itemIndex = room.shopOffers.filter(offer => offer?.type === 'item').length;
+    room.shopOffers.push({
+      type: 'item',
+      key,
+      cost: Neo.getShopItemCost(itemIndex, Neo.floor, Neo.selectedDifficulty, 'knight'),
+      x: Neo.ROOM_W / 2 + 260,
+      y: Neo.ROOM_H / 2 + 56,
+      bought: false,
+      scrollOffer: true,
+    });
+    return key;
+  }
+
+  function createSeededItemChoices(count, random, options = {}) {
+    const targetCount = Math.max(1, Math.floor(Number(count || 1)));
+    const choices = [];
+    const seen = new Set();
+    let guard = 0;
+    while (choices.length < targetCount && guard < targetCount * 18) {
+      guard += 1;
+      const key = Neo.rollItemDrop({ elite: !!options.elite, random });
+      if (key && !seen.has(key)) {
+        seen.add(key);
+        choices.push(key);
+      }
+    }
+    for (const key of Neo.ITEM_KEYS || []) {
+      if (choices.length >= targetCount) break;
+      if (key && !seen.has(key)) {
+        seen.add(key);
+        choices.push(key);
+      }
+    }
+    return choices;
+  }
+
+  function getBossRewardPickCount(floorValue = Neo.floor, room = Neo.currentRoom) {
+    const floorPickBonus = Math.floor(Math.max(0, Number(floorValue || 1) - 1) / 4);
+    const bossBonus = room?.type === 'god' ? 1 : 0;
+    const difficultyBonus = { easy: 0, normal: 0, hard: 1, nightmare: 1 }[String(Neo.selectedDifficulty || '').toLowerCase()] || 0;
+    return Neo.clamp(1 + floorPickBonus + bossBonus + difficultyBonus, 1, 3);
+  }
+
+  function getItemRarityRank(key) {
+    const rarity = String(Neo.itemRegistry?.get?.(key)?.rarity || Neo.ITEM_DEFS?.[key]?.rarity || 'knight').toLowerCase();
+    if (rarity === 'god' || rarity === 'red') return 3;
+    if (rarity === 'wizard' || rarity === 'purple') return 2;
+    return 1;
+  }
+
+  function getTradeTargetRarityRank(costKeys) {
+    const highestCostRank = Math.max(1, ...costKeys.map(getItemRarityRank));
+    return Math.min(3, highestCostRank + 1);
+  }
+
+  function ensureShopTradeOffer(room) {
+    if (!room || room.type !== 'shop') return null;
+    const playerItems = Neo.player?.items || {};
+    const costPool = Object.keys(playerItems)
+      .filter(key => Number(playerItems[key] || 0) > 0 && getItemRarityRank(key) < 3);
+    if (room.shopTradeOffer && typeof room.shopTradeOffer === 'object' && !(room.shopTradeOffer.unavailable && costPool.length >= 2)) return room.shopTradeOffer;
+    if (costPool.length < 2) {
+      room.shopTradeOffer = { type: 'trade', unavailable: true, bought: false };
+      return room.shopTradeOffer;
+    }
+    const tradeRandom = Neo.createRoomRandom(room, 'shop:trade-offer');
+    const shuffledCostPool = Neo.shuffleWithRandom(costPool, tradeRandom);
+    const costKeys = shuffledCostPool.slice(0, 2);
+    const targetRank = getTradeTargetRarityRank(costKeys);
+    const targetPool = (Neo.ITEM_KEYS || []).filter(key => getItemRarityRank(key) === targetRank && !costKeys.includes(key));
+    const shuffledTargetPool = Neo.shuffleWithRandom(targetPool.length ? targetPool : Neo.ITEM_KEYS, tradeRandom);
+    room.shopTradeOffer = {
+      type: 'trade',
+      key: shuffledTargetPool[0] || '',
+      costKeys,
+      targetRank,
+      unavailable: false,
+      bought: false,
+    };
+    return room.shopTradeOffer;
   }
 
   // ── Rival Adventurer System ──────────────────────────────────────────────
@@ -1955,7 +2069,7 @@
         }
         enemy.attackCd = rival.attackCd * Number(weapon.cooldownMult || 1) + Neo.nextRandom('encounter') * 0.4;
         enemy.swingTime = 0.22;
-        // Heal on hit for granialla-style
+        // Heal on hit for gelleh-style
         if (attackStyle === 'melee_heal' && Neo.nextRandom('encounter') < 0.25) {
           const heal = Math.round(enemy.max * 0.06);
           enemy.hp = Math.min(enemy.max, enemy.hp + heal);
@@ -2033,6 +2147,11 @@
   Neo.isBossFightActive = isBossFightActive;
   Neo.enterRoom = enterRoom;
   Neo.ensureShopHasMinimumItemOffers = ensureShopHasMinimumItemOffers;
+  Neo.createSeededItemChoices = createSeededItemChoices;
+  Neo.getBossRewardPickCount = getBossRewardPickCount;
+  Neo.ensureShopTradeOffer = ensureShopTradeOffer;
+  Neo.rollScrollOfControl = rollScrollOfControl;
+  Neo.ensureShopScrollOffer = ensureShopScrollOffer;
   Neo.createDefaultRivalMemory = createDefaultRivalMemory;
   Neo.normalizeRivalMemory = normalizeRivalMemory;
   Neo.tryPlayPrincessKnightCutscene = tryPlayPrincessKnightCutscene;

@@ -126,7 +126,7 @@
   <div class="boot-loading__box">
     <img class="boot-loading__mark" src="assets/icons/icon-128x128.png" width="64" height="64" alt="" aria-hidden="true">
     <span class="version">alpha 1.2</span>
-    <h1 class="boot-loading__title">NEO NYKE</h1>
+    <h1 class="boot-loading__title">NEO - NYKE</h1>
     <div class="boot-loading__bar" aria-hidden="true"><i></i></div>
     <p class="boot-loading__hint">Loading dungeon</p>
   </div>
@@ -166,6 +166,7 @@
       <div class="objective-tracker__meta">
         <b id="objectiveRoomLabel">ROOM</b>
         <button id="objectiveToggle" class="objective-tracker__toggle hidden" type="button" aria-expanded="false" aria-controls="objectiveList">Show</button>
+        <button id="objectiveClose" class="objective-tracker__close" type="button" aria-label="Hide objectives panel" title="Hide objectives (re-enable in Settings)">×</button>
       </div>
     </div>
     <div id="objectiveSummary" class="objective-tracker__summary hidden"></div>
@@ -190,14 +191,14 @@
       <span id="timerDisplay">0:00</span>
       <span class="separator">•</span>
       <span id="timerFloorSlot">FL <b id="floorDisplay">1</b>/10</span>
-      <span id="timerBossSlot" style="display:none">BOSS <b id="bossRushStageNum2">1</b>/6</span>
+      <span id="timerBossSlot" style="display:none">BOSS <b id="bossRushStageNum2">1</b>/6 <span id="bossRushNextTimer" class="boss-rush-next hidden"></span></span>
       <span class="separator">•</span>
       <span id="difficultyDisplay" class="difficulty-display"><canvas id="difficultyHudIcon" width="20" height="20" class="difficulty-hud-icon"></canvas><span id="difficultyLabel">EASY</span></span>
       <span id="competitiveSeedDisplay" class="difficulty-display" style="display:none;color:#ffe566;">&#9733; SEED <b id="competitiveSeedValue"></b></span>
       <span id="itemRarityCounts" class="item-rarity-counts" aria-label="Relic counts by rarity">
-        <span class="rarity-count rarity-count--white" title="White relics">0</span>
-        <span class="rarity-count rarity-count--purple" title="Purple relics">0</span>
-        <span class="rarity-count rarity-count--red" title="Red relics">0</span>
+        <span class="rarity-count rarity-count--white" title="Knight relics">0</span>
+        <span class="rarity-count rarity-count--purple" title="Wizard relics">0</span>
+        <span class="rarity-count rarity-count--red" title="GOD relics">0</span>
       </span>
     </div>
     <div id="challengeStatus" class="challenge-status hidden" aria-hidden="true">
@@ -208,42 +209,42 @@
   <div id="equipmentSlots" class="equipment-slots hidden" aria-hidden="true" aria-label="Tool slots">
     <button class="equip-slot is-empty" type="button" data-equip-slot="0" data-equip-key="F" aria-hidden="true" tabindex="-1">
       <span class="equip-slot__key">F</span>
-      <canvas class="equip-slot__icon" width="24" height="24" aria-hidden="true"></canvas>
+      <canvas class="equip-slot__icon" width="36" height="36" aria-hidden="true"></canvas>
       <span class="equip-slot__label"></span>
     </button>
     <button class="equip-slot is-empty" type="button" data-equip-slot="1" data-equip-key="G" aria-hidden="true" tabindex="-1">
       <span class="equip-slot__key">G</span>
-      <canvas class="equip-slot__icon" width="24" height="24" aria-hidden="true"></canvas>
+      <canvas class="equip-slot__icon" width="36" height="36" aria-hidden="true"></canvas>
       <span class="equip-slot__label"></span>
     </button>
     <button class="equip-slot is-empty" type="button" data-equip-slot="2" data-equip-key="H" aria-hidden="true" tabindex="-1">
       <span class="equip-slot__key">H</span>
-      <canvas class="equip-slot__icon" width="24" height="24" aria-hidden="true"></canvas>
+      <canvas class="equip-slot__icon" width="36" height="36" aria-hidden="true"></canvas>
       <span class="equip-slot__label"></span>
     </button>
     <button class="equip-slot is-empty" type="button" data-equip-slot="3" data-equip-key="J" aria-hidden="true" tabindex="-1">
       <span class="equip-slot__key">J</span>
-      <canvas class="equip-slot__icon" width="24" height="24" aria-hidden="true"></canvas>
+      <canvas class="equip-slot__icon" width="36" height="36" aria-hidden="true"></canvas>
       <span class="equip-slot__label"></span>
     </button>
     <button class="equip-slot is-empty" type="button" data-equip-slot="4" data-equip-key="K" aria-hidden="true" tabindex="-1">
       <span class="equip-slot__key">K</span>
-      <canvas class="equip-slot__icon" width="24" height="24" aria-hidden="true"></canvas>
+      <canvas class="equip-slot__icon" width="36" height="36" aria-hidden="true"></canvas>
       <span class="equip-slot__label"></span>
     </button>
     <button class="equip-slot is-empty" type="button" data-equip-slot="5" data-equip-key="L" aria-hidden="true" tabindex="-1">
       <span class="equip-slot__key">L</span>
-      <canvas class="equip-slot__icon" width="24" height="24" aria-hidden="true"></canvas>
+      <canvas class="equip-slot__icon" width="36" height="36" aria-hidden="true"></canvas>
       <span class="equip-slot__label"></span>
     </button>
     <button class="equip-slot is-empty" type="button" data-equip-slot="6" data-equip-key="U" aria-hidden="true" tabindex="-1">
       <span class="equip-slot__key">U</span>
-      <canvas class="equip-slot__icon" width="24" height="24" aria-hidden="true"></canvas>
+      <canvas class="equip-slot__icon" width="36" height="36" aria-hidden="true"></canvas>
       <span class="equip-slot__label"></span>
     </button>
     <button class="equip-slot is-empty" type="button" data-equip-slot="7" data-equip-key="I" aria-hidden="true" tabindex="-1">
       <span class="equip-slot__key">I</span>
-      <canvas class="equip-slot__icon" width="24" height="24" aria-hidden="true"></canvas>
+      <canvas class="equip-slot__icon" width="36" height="36" aria-hidden="true"></canvas>
       <span class="equip-slot__label"></span>
     </button>
   </div>
@@ -379,15 +380,24 @@
       </div>
       <button id="shopClose" class="panel-close" aria-label="Close shop">X</button>
     </div>
+    <div id="shopVoucherBanner" class="shop-voucher-banner hidden" aria-hidden="true">
+      <div class="shop-voucher-banner__info">
+        <span class="shop-voucher-banner__title">Voucher available</span>
+        <span class="shop-voucher-banner__sub" id="shopVoucherBannerSub">Redeem for a relic of your chosen colour.</span>
+      </div>
+      <button id="shopVoucherRedeem" class="nav-btn shop-voucher-banner__btn" type="button">REDEEM VOUCHER</button>
+    </div>
     <div class="shop-tabs panel-tabs">
       <button class="shop-tab panel-tab active" data-tab="items"><span class="tab-icon" aria-hidden="true">[]</span><span>Items</span></button>
       <button class="shop-tab panel-tab" data-tab="weapons"><span class="tab-icon" aria-hidden="true">W</span><span>Weapons</span></button>
       <button class="shop-tab panel-tab" data-tab="moves"><span class="tab-icon" aria-hidden="true">M</span><span>Moves</span></button>
+      <button class="shop-tab panel-tab" data-tab="trades"><span class="tab-icon" aria-hidden="true">⇄</span><span>Trades</span></button>
       <button class="shop-tab panel-tab" data-tab="heals"><span class="tab-icon" aria-hidden="true">+</span><span>Heal Ups</span></button>
     </div>
     <div id="shopItems" class="shop-list"></div>
     <div id="shopWeapons" class="shop-list hidden"></div>
     <div id="shopMoves" class="shop-list hidden"></div>
+    <div id="shopTrades" class="shop-list hidden"></div>
     <div id="shopHeals" class="shop-list hidden"></div>
   </div>
 
@@ -459,6 +469,44 @@
     </div>
   </div>
 
+  <div id="scrollControlModal" class="modal-backdrop hidden" aria-hidden="true">
+    <div class="modal-box scroll-control-box">
+      <div class="scroll-control-head">
+        <div class="scroll-control-head__row">
+          <span class="scroll-control-glyph" aria-hidden="true">📜</span>
+          <div class="scroll-control-head__text">
+            <h2 class="screen-title scroll-control-title" id="scrollControlTitle">SCROLL OF CONTROL</h2>
+            <p class="scroll-control-copy" id="scrollControlCopy">Choose a target, then confirm.</p>
+          </div>
+        </div>
+        <div class="scroll-control-tools">
+          <label class="scroll-control-search-wrap">
+            <span class="scroll-control-search-icon" aria-hidden="true">🔍</span>
+            <input id="scrollControlSearch" class="scroll-control-search" type="search" placeholder="Search relics, tags, rarity…" aria-label="Search scroll choices" autocomplete="off" spellcheck="false">
+          </label>
+          <span id="scrollControlMeta" class="scroll-control-meta" aria-live="polite"></span>
+        </div>
+      </div>
+      <div id="scrollControlChoices" class="scroll-control-choices" role="listbox" aria-label="Scroll choices"></div>
+      <div class="scroll-control-actions">
+        <button id="scrollControlCancel" class="nav-btn scroll-control-btn scroll-control-btn--ghost" type="button">CANCEL</button>
+        <button id="scrollControlConfirm" class="nav-btn scroll-control-btn scroll-control-btn--primary" type="button" disabled>CONFIRM</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="voucherModal" class="modal-backdrop hidden" aria-hidden="true">
+    <div class="modal-box voucher-box">
+      <h2 class="screen-title wizard-paw-title">REDEEM VOUCHER</h2>
+      <p class="wizard-paw-copy">Choose a colour. You will receive a random relic of that rarity.</p>
+      <div id="voucherMeta" class="scroll-control-meta"></div>
+      <div id="voucherChoices" class="voucher-choices"></div>
+      <div class="scroll-control-actions">
+        <button id="voucherCancel" class="nav-btn">CANCEL</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Item cinematic overlay -->
   <div id="itemCinematic" class="item-cinematic hidden" aria-hidden="true">
     <canvas id="itemCinematicCanvas" class="item-cinematic__icon" width="64" height="64"></canvas>
@@ -487,7 +535,7 @@
           <h2 class="dead-title">YOU DIED</h2>
         </div>
         <div class="dead-stats-grid">
-          <div class="dead-stat"><span class="dead-stat-label">FLOOR</span><b class="dead-stat-val" id="deadFloor">—</b></div>
+          <div class="dead-stat"><span class="dead-stat-label" id="deadFloorLabel">FLOOR</span><b class="dead-stat-val" id="deadFloor">—</b></div>
           <div class="dead-stat"><span class="dead-stat-label">LEVEL</span><b class="dead-stat-val" id="deadLevel">—</b></div>
           <div class="dead-stat"><span class="dead-stat-label">KILLS</span><b class="dead-stat-val" id="deadKills">—</b></div>
           <div class="dead-stat"><span class="dead-stat-label">TIME</span><b class="dead-stat-val" id="deadTime">—</b></div>
@@ -628,7 +676,7 @@
       <div id="menuSubtitle" class="menu-subtitle-flash" aria-hidden="true">DUNGEON GOD</div>
     </div>
     <div class="menu-content">
-      <h1 id="menuTitle" class="sr-only">NEO-NYKE — DUNGEON GOD</h1>
+      <h1 id="menuTitle" class="sr-only">NEO - NYKE — DUNGEON GOD</h1>
       <div id="specialDayBanner" class="special-day-banner hidden" aria-live="polite">
         <span class="special-day-banner__icon" id="specialDayIcon" aria-hidden="true"></span>
         <span class="special-day-banner__text" id="specialDayText"></span>
@@ -709,20 +757,50 @@
     </div>
     <div id="rhInfoPanel" class="rh-info hidden">
       <div class="rh-info-head">
-        <div class="rh-info-tabs" role="tablist">
-          <button class="rh-info-tab active" data-info-tab="items" type="button">Items</button>
-          <button class="rh-info-tab" data-info-tab="weapons" type="button">Weapons</button>
-          <button class="rh-info-tab" data-info-tab="moves" type="button">Moves</button>
-          <button class="rh-info-tab" data-info-tab="enemies" type="button">Enemies</button>
-          <button class="rh-info-tab" data-info-tab="characters" type="button">Characters</button>
-          <button class="rh-info-tab" data-info-tab="meta" type="button">Meta</button>
+        <div class="rh-info-head__top">
+          <div class="rh-info-tabs" role="tablist">
+            <button class="rh-info-tab active" data-info-tab="items" type="button">Items</button>
+            <button class="rh-info-tab" data-info-tab="scrolls" type="button">Scrolls</button>
+            <button class="rh-info-tab" data-info-tab="weapons" type="button">Weapons</button>
+            <button class="rh-info-tab" data-info-tab="moves" type="button">Moves</button>
+            <button class="rh-info-tab" data-info-tab="enemies" type="button">Enemies</button>
+            <button class="rh-info-tab" data-info-tab="characters" type="button">Characters</button>
+            <button class="rh-info-tab" data-info-tab="meta" type="button">Meta</button>
+          </div>
+          <button id="infoTutorialBtn" class="rh-info-tutorial-btn" type="button">&#9654; Tutorial</button>
         </div>
-        <button id="infoTutorialBtn" class="rh-info-tutorial-btn" type="button">&#9654; Tutorial</button>
+        <input id="rhInfoSearch" class="rh-info-search" type="search" placeholder="Search items..." aria-label="Search info entries" autocomplete="off" spellcheck="false">
       </div>
       <div id="rhInfoContent" class="rh-info-content"></div>
     </div>
     <div id="rhBlogPanel" class="rh-blog hidden" aria-live="polite">
       <div id="rhBlogList" class="rh-blog-list"></div>
+    </div>
+  </section>
+
+  <section id="competitivePanel" class="panel-shell competitive-panel hidden" aria-hidden="true">
+    <div class="altmodes-head">
+      <span class="altmodes-title">COMPETITIVE</span>
+      <button id="competitiveClose" class="panel-close" aria-label="Close competitive screen">X</button>
+    </div>
+    <div class="competitive-screen-body">
+      <div class="altmode-card" id="altModeCompetitiveCard">
+        <div class="altmode-card__icon">&#9733;</div>
+        <div class="altmode-card__text">
+          <h3 class="altmode-card__name">COMPETITIVE RUN</h3>
+          <p class="altmode-card__desc">Everyone plays the same weekly seed on Hard difficulty with no modifiers. Only winning runs are accepted.</p>
+          <div id="competitiveServerStatus" class="competitive-server-status competitive-server-status--checking">Checking server...</div>
+        </div>
+        <button id="altModeCompetitiveBtn" class="nav-btn altmode-card__btn" style="background:rgba(180,140,0,0.18);border-color:rgba(255,210,0,0.5);">COMPETE</button>
+      </div>
+      <button id="competitiveServerRetryBtn" class="nav-btn nav-btn--minor competitive-server-retry hidden" type="button">RETRY CONNECTION</button>
+      <div id="seedErrorBanner" class="seed-error-banner hidden">&#9888; Cannot connect to the competitive server. Check your connection — you will not be able to start a competitive run until it is reachable.</div>
+      <div id="competitiveLeaderboardCard" class="competitive-lb-card">
+        <h3 class="altmode-card__name">THIS WEEK'S LEADERBOARD</h3>
+        <div id="competitiveLbList" class="competitive-lb-list">Loading...</div>
+        <div id="competitiveLbStatus" class="competitive-lb-status"></div>
+        <button id="competitiveLbMoreBtn" class="nav-btn nav-btn--minor" style="display:none;">LOAD MORE</button>
+      </div>
     </div>
   </section>
 
@@ -734,7 +812,6 @@
     </div>
     <div class="altmodes-tabs" role="tablist">
       <button class="altmodes-tab active" data-tab="challenges" type="button">CHALLENGES</button>
-      <button class="altmodes-tab" data-tab="competitive" type="button">COMPETITIVE</button>
       <button class="altmodes-tab" data-tab="multiplayer" type="button">MULTIPLAYER</button>
       <button class="altmodes-tab" data-tab="testing" type="button">TESTING</button>
     </div>
@@ -756,26 +833,6 @@
             <p class="altmode-card__desc">Face all four bosses back to back. Collect loot between each fight. Defeat God to win.</p>
           </div>
           <button id="altModeBossRushBtn" class="nav-btn altmode-card__btn">PLAY</button>
-        </div>
-      </div>
-      <!-- COMPETITIVE -->
-      <div class="altmodes-tab-panel hidden" data-panel="competitive">
-        <div class="altmode-card" id="altModeCompetitiveCard">
-          <div class="altmode-card__icon">&#9733;</div>
-          <div class="altmode-card__text">
-            <h3 class="altmode-card__name">COMPETITIVE RUN</h3>
-            <p class="altmode-card__desc">Everyone plays the same weekly seed on Hard difficulty with no modifiers. Climb the leaderboard.</p>
-            <div id="competitiveServerStatus" class="competitive-server-status competitive-server-status--checking">Checking server...</div>
-          </div>
-          <button id="altModeCompetitiveBtn" class="nav-btn altmode-card__btn" style="background:rgba(180,140,0,0.18);border-color:rgba(255,210,0,0.5);">COMPETE</button>
-        </div>
-        <button id="competitiveServerRetryBtn" class="nav-btn nav-btn--minor competitive-server-retry hidden" type="button">RETRY CONNECTION</button>
-        <div id="seedErrorBanner" class="seed-error-banner hidden">&#9888; Cannot connect to the competitive server. Check your connection — you will not be able to start a competitive run until it is reachable.</div>
-        <div id="competitiveLeaderboardCard" class="competitive-lb-card">
-          <h3 class="altmode-card__name">THIS WEEK'S LEADERBOARD</h3>
-          <div id="competitiveLbList" class="competitive-lb-list">Loading...</div>
-          <div id="competitiveLbStatus" class="competitive-lb-status"></div>
-          <button id="competitiveLbMoreBtn" class="nav-btn nav-btn--minor" style="display:none;">LOAD MORE</button>
         </div>
       </div>
       <!-- MULTIPLAYER -->
@@ -1060,7 +1117,7 @@
                 </div>
                 <div class="char-card-header">
                   <span class="char-card-name">PRINCESS</span>
-                  <span class="char-card-tag princess-tag"><canvas class="char-card-tag-icon" data-inv-ui-icon="role-princess" width="18" height="18" aria-hidden="true"></canvas>PINK</span>
+                  <span class="char-card-tag princess-tag"><canvas class="char-card-tag-icon" data-inv-ui-icon="role-princess" width="18" height="18" aria-hidden="true"></canvas>PRINCESS</span>
                 </div>
                 <small class="char-card-hint" data-base="Easy starter">Easy starter</small>
               </button>
@@ -1089,13 +1146,13 @@
                 <small class="char-card-hint" data-base="Long range">Long range</small>
               </button>
 
-              <!-- Granialla -->
-              <button class="char-card" data-char="granialla" data-rarity="god">
+              <!-- Gelleh -->
+              <button class="char-card" data-char="gelleh" data-rarity="god">
                 <div class="char-card-art-wrap">
-                  <canvas class="char-card-art" data-char-sprite="granialla" width="96" height="96" aria-hidden="true"></canvas>
+                  <canvas class="char-card-art" data-char-sprite="gelleh" width="96" height="96" aria-hidden="true"></canvas>
                 </div>
                 <div class="char-card-header">
-                  <span class="char-card-name">GRANIALLA</span>
+                  <span class="char-card-name">GELLEH</span>
                   <span class="char-card-tag god-tag"><canvas class="char-card-tag-icon" data-inv-ui-icon="role-god" width="18" height="18" aria-hidden="true"></canvas>GOD</span>
                 </div>
                 <small class="char-card-hint" data-base="Locked: beat GOD">Locked: beat GOD</small>
@@ -1210,9 +1267,7 @@
   <div class="modal-box">
     <button class="modal-close" id="settingsClose">&#10005;</button>
     <div class="settings-head">
-      <span class="panel-kicker">Configure</span>
       <h2 class="screen-title">SETTINGS</h2>
-      <p class="settings-subtitle">Controls, audio, accessibility, and your save data.</p>
     </div>
 
     <!-- Tab bar -->
@@ -1242,6 +1297,20 @@
             <tr><td class="bind-label">Slash</td>     <td><button class="bind-btn" data-action="slash">LMB</button></td></tr>
             <tr><td class="bind-label">Laser beam</td><td><button class="bind-btn" data-action="laser">RMB</button></td></tr>
             <tr><td class="bind-label">Smash</td>     <td><button class="bind-btn" data-action="smash">R</button></td></tr>
+            <tr><td class="bind-label">Activate All Tools</td><td><button class="bind-btn" data-action="activateAll">SPACE</button></td></tr>
+          </tbody>
+        </table>
+        <p class="stab-hint">Tool slots — keys for each equipped tool, in order.</p>
+        <table class="bind-table">
+          <tbody>
+            <tr><td class="bind-label">Tool Slot 1</td><td><button class="bind-btn" data-action="tool1">F</button></td></tr>
+            <tr><td class="bind-label">Tool Slot 2</td><td><button class="bind-btn" data-action="tool2">G</button></td></tr>
+            <tr><td class="bind-label">Tool Slot 3</td><td><button class="bind-btn" data-action="tool3">H</button></td></tr>
+            <tr><td class="bind-label">Tool Slot 4</td><td><button class="bind-btn" data-action="tool4">J</button></td></tr>
+            <tr><td class="bind-label">Tool Slot 5</td><td><button class="bind-btn" data-action="tool5">K</button></td></tr>
+            <tr><td class="bind-label">Tool Slot 6</td><td><button class="bind-btn" data-action="tool6">L</button></td></tr>
+            <tr><td class="bind-label">Tool Slot 7</td><td><button class="bind-btn" data-action="tool7">U</button></td></tr>
+            <tr><td class="bind-label">Tool Slot 8</td><td><button class="bind-btn" data-action="tool8">I</button></td></tr>
           </tbody>
         </table>
         <button class="settings-reset" id="resetBindings">Reset to defaults</button>
@@ -1357,6 +1426,20 @@
           <span class="access-desc">Caps total on-screen particles and trims heavy glow effects when the screen gets busy (e.g. holding the laser). Keeps the same look with far fewer frame drops. Recommended on.</span>
         </div>
         <label class="toggle"><input type="checkbox" id="gameplayPerformanceMode" checked><span class="toggle-track"><span class="toggle-thumb"></span></span></label>
+      </div>
+      <div class="access-row">
+        <div class="access-text">
+          <span class="access-label">Objective panel</span>
+          <span class="access-desc">Shows the room objective tracker on the HUD. Turn off to hide it during play.</span>
+        </div>
+        <label class="toggle"><input type="checkbox" id="gameplayObjectivePanel" checked><span class="toggle-track"><span class="toggle-thumb"></span></span></label>
+      </div>
+      <div class="access-row">
+        <div class="access-text">
+          <span class="access-label">Cutscene auto-advance</span>
+          <span class="access-desc">Automatically advance cutscene dialogue after a short pause. Off by default so lines wait for a click or ENTER, giving you time to read.</span>
+        </div>
+        <label class="toggle"><input type="checkbox" id="gameplayCutsceneAutoAdvance"><span class="toggle-track"><span class="toggle-thumb"></span></span></label>
       </div>
     </div>
 

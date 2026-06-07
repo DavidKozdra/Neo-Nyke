@@ -449,6 +449,35 @@
           Neo.ctx.lineTo(Math.cos(a - 0.1) * hazard.r * 0.72, Math.sin(a - 0.1) * hazard.r * 0.72);
           Neo.ctx.stroke();
         }
+      } else if (hazard.kind === 'chaos_burst') {
+        const t = Date.now() * 0.005 + hazard.x * 0.01;
+        const pulse = 1 + Math.sin(t * 2.4) * 0.05;
+        Neo.ctx.fillStyle = 'rgba(168,87,255,0.08)';
+        Neo.ctx.beginPath();
+        Neo.ctx.arc(0, 0, hazard.r * 0.94, 0, Math.PI * 2);
+        Neo.ctx.fill();
+        Neo.ctx.strokeStyle = 'rgba(168,87,255,0.55)';
+        Neo.ctx.shadowColor = '#a857ff';
+        Neo.ctx.shadowBlur = 14;
+        Neo.ctx.lineWidth = 2.5;
+        Neo.ctx.beginPath();
+        Neo.ctx.arc(0, 0, hazard.r * pulse, 0, Math.PI * 2);
+        Neo.ctx.stroke();
+        Neo.ctx.globalAlpha = 0.7;
+        Neo.ctx.strokeStyle = 'rgba(214,170,255,0.8)';
+        Neo.ctx.lineWidth = 2;
+        for (let index = 0; index < 9; index += 1) {
+          const a = t * 1.3 + index * (Math.PI * 2 / 9);
+          const r0 = hazard.r * (0.35 + 0.1 * Math.sin(t * 1.7 + index));
+          const r1 = hazard.r * (0.7 + 0.1 * Math.cos(t * 1.4 + index));
+          Neo.ctx.beginPath();
+          Neo.ctx.arc(0, 0, r0, a, a + 0.5);
+          Neo.ctx.stroke();
+          Neo.ctx.beginPath();
+          Neo.ctx.arc(0, 0, r1, -a, -a + 0.4);
+          Neo.ctx.stroke();
+        }
+        Neo.ctx.globalAlpha = 1;
       } else if (hazard.kind === 'red_spikes') {
         const armed = Number(hazard.armTime || 0) <= 0;
         const t = Date.now() * 0.009 + hazard.x * 0.01;
@@ -550,7 +579,7 @@
       const shakeOffset = shakeRatio > 0 ? Math.sin(shakeRatio * Math.PI * 3) * 3 * shakeRatio : 0;
       Neo.ctx.translate(prop.x + Math.cos(hitAngle) * shakeOffset, prop.y + Math.sin(hitAngle) * shakeOffset);
       if (prop.kind === 'pot') {
-        Neo.drawEnvironmentTile('pot_clay', -16, -18, 32, 32);
+        drawClayVase(prop);
       } else if (prop.kind === 'barrel') {
         Neo.drawEnvironmentTile('barrel_oak', -24, -26, 48, 48);
       } else if (prop.kind === 'wall') {
@@ -573,9 +602,13 @@
       const canAfford = !!Neo.player && Neo.player.coins >= offer.cost;
       Neo.ctx.save();
       Neo.ctx.translate(offer.x, offer.y);
-      Neo.ctx.fillStyle = blockedByChallenge || !canAfford ? 'rgba(36,18,24,0.95)' : 'rgba(0,30,44,0.95)';
-      Neo.ctx.strokeStyle = blockedByChallenge || !canAfford ? '#ff8b98' : '#ffd966';
+      // Red is reserved for challenge-blocked offers (a hard "forbidden" state).
+      // Unaffordable offers are dimmed/greyed instead, so the red-affordability cue
+      // no longer gets confused with red-rarity item coloring.
+      Neo.ctx.fillStyle = blockedByChallenge ? 'rgba(36,18,24,0.95)' : 'rgba(0,30,44,0.95)';
+      Neo.ctx.strokeStyle = blockedByChallenge ? '#ff8b98' : !canAfford ? '#6b7480' : '#ffd966';
       Neo.ctx.lineWidth = 2;
+      if (!blockedByChallenge && !canAfford) Neo.ctx.globalAlpha = 0.5;
       Neo.ctx.fillRect(-26, -26, 52, 52);
       Neo.ctx.strokeRect(-26, -26, 52, 52);
 
@@ -613,7 +646,8 @@
       }
 
       Neo.ctx.shadowBlur = 0;
-      Neo.ctx.fillStyle = blockedByChallenge || !canAfford ? '#ffccd2' : '#fff';
+      // Blocked → red price; unaffordable → neutral (tile is already dimmed); else white.
+      Neo.ctx.fillStyle = blockedByChallenge ? '#ffccd2' : !canAfford ? '#c4cdd6' : '#fff';
       Neo.ctx.font = 'bold 11px system-ui';
       Neo.ctx.textAlign = 'center';
       Neo.ctx.fillText(String(offer.cost), 0, 22);
@@ -630,9 +664,52 @@
       Neo.ctx.translate(pickup.x, pickup.y + bob);
       Neo.ctx.globalAlpha = 0.88 + Math.sin(t) * 0.12;
       if (pickup.type === 'coin') {
-        Neo.ctx.shadowColor = '#ffd966';
-        Neo.ctx.shadowBlur = 12;
-        if (Neo.ui.coinIcon instanceof HTMLCanvasElement) {
+        const value = Math.max(1, Math.round(Number(pickup.value || 1)));
+        const tier = value >= 15 ? 15 : value >= 10 ? 10 : value >= 5 ? 5 : 1;
+        const color = tier >= 15 ? '#ffe27a' : tier >= 10 ? '#8dd4ff' : tier >= 5 ? '#73ffb2' : '#ffd966';
+        Neo.ctx.shadowColor = color;
+        Neo.ctx.shadowBlur = tier >= 10 ? 18 : 12;
+        if (tier >= 15) {
+          Neo.ctx.fillStyle = color;
+          Neo.ctx.strokeStyle = '#fff6c8';
+          Neo.ctx.lineWidth = 2;
+          Neo.ctx.beginPath();
+          Neo.ctx.moveTo(-12, 5);
+          Neo.ctx.lineTo(-9, -8);
+          Neo.ctx.lineTo(-3, -2);
+          Neo.ctx.lineTo(0, -12);
+          Neo.ctx.lineTo(3, -2);
+          Neo.ctx.lineTo(9, -8);
+          Neo.ctx.lineTo(12, 5);
+          Neo.ctx.closePath();
+          Neo.ctx.fill();
+          Neo.ctx.stroke();
+          Neo.ctx.fillRect(-10, 6, 20, 4);
+        } else if (tier >= 10) {
+          Neo.ctx.fillStyle = color;
+          Neo.ctx.strokeStyle = '#d7f6ff';
+          Neo.ctx.lineWidth = 2;
+          Neo.ctx.beginPath();
+          Neo.ctx.moveTo(0, -14);
+          Neo.ctx.lineTo(12, -2);
+          Neo.ctx.lineTo(0, 14);
+          Neo.ctx.lineTo(-12, -2);
+          Neo.ctx.closePath();
+          Neo.ctx.fill();
+          Neo.ctx.stroke();
+        } else if (tier >= 5) {
+          Neo.ctx.fillStyle = color;
+          Neo.ctx.strokeStyle = '#d9ffe8';
+          Neo.ctx.lineWidth = 2;
+          Neo.ctx.beginPath();
+          Neo.ctx.moveTo(0, -11);
+          Neo.ctx.lineTo(10, 0);
+          Neo.ctx.lineTo(0, 11);
+          Neo.ctx.lineTo(-10, 0);
+          Neo.ctx.closePath();
+          Neo.ctx.fill();
+          Neo.ctx.stroke();
+        } else if (Neo.ui.coinIcon instanceof HTMLCanvasElement) {
           const s = 18;
           Neo.ctx.imageSmoothingEnabled = false;
           Neo.ctx.drawImage(Neo.ui.coinIcon, -s / 2, -s / 2, s, s);
@@ -708,12 +785,13 @@
           Neo.ctx.arc(0, 0, 12, 0, Math.PI * 2);
           Neo.ctx.fill();
         }
-      } else if (pickup.type === 'challengeItemChoice') {
+      } else if (pickup.type === 'challengeItemChoice' || pickup.type === 'rewardChoice') {
         const item = Neo.itemRegistry.get(pickup.key);
         const color = item?.color || '#d7f6ff';
+        const ringColor = Neo.getRarityNameColor?.(item?.rarity || item?.category) || color;
         const iconDef = window.NeoNykeIconDefs?.items?.[pickup.key];
-        Neo.ctx.strokeStyle = color;
-        Neo.ctx.shadowColor = color;
+        Neo.ctx.strokeStyle = ringColor;
+        Neo.ctx.shadowColor = ringColor;
         Neo.ctx.shadowBlur = 18;
         Neo.ctx.lineWidth = 2;
         Neo.ctx.beginPath();
@@ -732,10 +810,13 @@
           Neo.ctx.fill();
         }
         Neo.ctx.shadowBlur = 0;
+        // Show the actual item name so a choice (A/B chest, challenge reward) is
+        // identifiable, instead of a generic "A/B" / "PICK" label.
+        const choiceLabel = item?.name || Neo.titleCase?.(pickup.key) || pickup.label || 'PICK';
         Neo.ctx.fillStyle = '#ffffff';
         Neo.ctx.font = 'bold 9px system-ui';
         Neo.ctx.textAlign = 'center';
-        Neo.ctx.fillText('PICK', 0, 33);
+        Neo.ctx.fillText(choiceLabel, 0, 33);
       } else if (pickup.type === 'ladder') {
         Neo.ctx.strokeStyle = '#7dff9e';
         Neo.ctx.shadowColor = '#7dff9e';
@@ -749,7 +830,12 @@
         Neo.ctx.moveTo(-6, 0); Neo.ctx.lineTo(6, 0);
         Neo.ctx.moveTo(-6, 6); Neo.ctx.lineTo(6, 6);
         Neo.ctx.stroke();
-      } else if (pickup.type === 'jesterPortal') {
+      } else if (pickup.type === 'jesterPortal' || pickup.type === 'adapterPortal') {
+        const adapter = pickup.type === 'adapterPortal';
+        // Per-type palette: jester is pink/chaos, adapter is violet/tech.
+        const pal = adapter
+          ? { shadow: '#b88cff', ringA: '#b88cff', ringB: '#e3d1ff', base: 'rgba(24,8,66,0.65)', core0: 'rgba(214,196,255,0.92)', core1: 'rgba(150,108,255,0)', label: 'WARP', labelColor: '#e0d6ff' }
+          : { shadow: '#ff8bd8', ringA: '#ff8bd8', ringB: '#ffd1f5', base: 'rgba(48,8,66,0.65)', core0: 'rgba(255,188,236,0.92)', core1: 'rgba(255,95,194,0)', label: 'JUMP', labelColor: '#ffd6f7' };
         const spawnT = Math.max(0, Number(pickup.spawnT || 0));
         const activateAt = Math.max(0.01, Number(pickup.activateAt || Neo.JESTER_PORTAL_ACTIVATE_DELAY));
         const reveal = Neo.clamp(spawnT / activateAt, 0, 1);
@@ -758,18 +844,18 @@
         const portalR = 16 + ease * 11;
 
         Neo.ctx.globalAlpha = 0.34 + ease * 0.56;
-        Neo.ctx.fillStyle = 'rgba(48,8,66,0.65)';
+        Neo.ctx.fillStyle = pal.base;
         Neo.ctx.beginPath();
         Neo.ctx.ellipse(0, 8, portalR * 0.95, portalR * 0.34, 0, 0, Math.PI * 2);
         Neo.ctx.fill();
 
         Neo.ctx.globalAlpha = 0.9;
-        Neo.ctx.shadowColor = '#ff8bd8';
+        Neo.ctx.shadowColor = pal.shadow;
         Neo.ctx.shadowBlur = 20;
         for (let ring = 0; ring < 2; ring += 1) {
           const ringR = portalR * (0.72 + ring * 0.3);
           const segments = 9 + ring * 3;
-          Neo.ctx.strokeStyle = ring === 0 ? '#ff8bd8' : '#ffd1f5';
+          Neo.ctx.strokeStyle = ring === 0 ? pal.ringA : pal.ringB;
           Neo.ctx.lineWidth = ring === 0 ? 2.4 : 1.5;
           Neo.ctx.beginPath();
           for (let seg = 0; seg < segments; seg += 1) {
@@ -783,8 +869,8 @@
 
         Neo.ctx.shadowBlur = 0;
         const core = Neo.ctx.createRadialGradient(0, 0, 0, 0, 0, portalR * 0.72);
-        core.addColorStop(0, 'rgba(255,188,236,0.92)');
-        core.addColorStop(1, 'rgba(255,95,194,0)');
+        core.addColorStop(0, pal.core0);
+        core.addColorStop(1, pal.core1);
         Neo.ctx.fillStyle = core;
         Neo.ctx.beginPath();
         Neo.ctx.ellipse(0, 0, portalR * 0.72, portalR * 0.27, 0, 0, Math.PI * 2);
@@ -792,10 +878,10 @@
 
         if (pickup.active) {
           Neo.ctx.globalAlpha = 0.9;
-          Neo.ctx.fillStyle = '#ffd6f7';
+          Neo.ctx.fillStyle = pal.labelColor;
           Neo.ctx.font = 'bold 10px system-ui';
           Neo.ctx.textAlign = 'center';
-          Neo.ctx.fillText('JUMP', 0, 3);
+          Neo.ctx.fillText(pal.label, 0, 3);
         }
       } else if (pickup.type === 'fightGod') {
         Neo.ctx.strokeStyle = '#fff';
@@ -1026,8 +1112,15 @@
       if (kind === 'golem_spit') return { color: '#9bb05a', core: '#e6f0b8', trail: '#5f7a2e', shape: 'orb', length: 70 };
       return { color: projectile.color || '#ff6688', core: '#ffe4eb', trail: projectile.color || '#ff6688', shape: 'dart', length: 24 };
     }
+    if (kind === 'blade_justice') return { color: '#fff6a3', core: '#ffffff', trail: '#ffd86a', shape: 'blade', length: 40 };
     if (kind === 'fireball') return { color: '#ff7b32', core: '#fff1a6', trail: '#ff2f17', shape: 'fireball', length: 30 };
+    if (kind === 'rock') {
+      // Tint the debris to match the current floor so it reads as torn-up ground.
+      const floor = Neo.getRoomArtTheme?.()?.backdrop || '#8a5a3c';
+      return { color: floor, core: floor, trail: floor, shape: 'rock', length: 16 };
+    }
     if (kind === 'disk' || kind === 'power_disk') return { color: kind === 'power_disk' ? '#d890ff' : '#b66cff', core: '#f0d8ff', trail: kind === 'power_disk' ? '#f7ccff' : '#7d4dff', shape: 'disk', length: 20 };
+    if (kind === 'disk_shard') return { color: '#c98bff', core: '#f0d8ff', trail: '#8a55ff', shape: 'disk', length: 12 };
     if (kind === 'magenta_p90') return { color: '#ff9dd7', core: '#fff0fb', trail: '#ff4aa8', shape: 'tracer', length: 26 };
     if (kind === 'magenta_degale') return { color: '#ff8bd2', core: '#fff0fb', trail: '#ff3eb7', shape: 'slug', length: 34 };
     if (kind === 'hunters_bow') return { color: '#dff8ff', core: '#ffffff', trail: '#7edcff', shape: 'arrow', length: 32 };
@@ -1183,6 +1276,37 @@
       Neo.ctx.beginPath();
       Neo.ctx.ellipse(r * 0.42, 0, r * 0.48, r * 0.22, 0, 0, Math.PI * 2);
       Neo.ctx.fill();
+    } else if (visual.shape === 'rock') {
+      // Chunky tumbling boulder torn from the floor: an irregular polygon tinted to
+      // the tile color, with a crisp white outline so it pops against dark ground.
+      // Seeded per projectile so each shard has a stable silhouette as it spins.
+      const seed = Number.isFinite(projectile.animSeed) ? projectile.animSeed : 0;
+      Neo.ctx.rotate(Date.now() * 0.006 + seed);
+      const verts = 7;
+      const buildPath = () => {
+        Neo.ctx.beginPath();
+        for (let index = 0; index < verts; index += 1) {
+          const a = (index / verts) * Math.PI * 2;
+          const jag = 0.74 + (Math.sin(seed * 7.3 + index * 2.1) * 0.5 + 0.5) * 0.5;
+          const x = Math.cos(a) * r * 1.25 * jag;
+          const y = Math.sin(a) * r * 1.25 * jag;
+          if (index === 0) Neo.ctx.moveTo(x, y);
+          else Neo.ctx.lineTo(x, y);
+        }
+        Neo.ctx.closePath();
+      };
+      Neo.ctx.shadowColor = 'rgba(0,0,0,0.5)';
+      Neo.ctx.shadowBlur = 6;
+      Neo.ctx.fillStyle = visual.color;
+      buildPath();
+      Neo.ctx.fill();
+      // White outline.
+      Neo.ctx.shadowBlur = 0;
+      Neo.ctx.strokeStyle = '#ffffff';
+      Neo.ctx.lineWidth = 1.6;
+      Neo.ctx.lineJoin = 'round';
+      buildPath();
+      Neo.ctx.stroke();
     } else {
       Neo.ctx.beginPath();
       Neo.ctx.arc(0, 0, r, 0, Math.PI * 2);
@@ -1202,6 +1326,58 @@
     });
     Neo.ctx.shadowBlur = 0;
     Neo.ctx.globalAlpha = 1;
+  }
+
+  // Blade Justice flying swords: glowing golden blades that swing near the player.
+  function drawJusticeBlades() {
+    const blades = Neo.justiceBlades;
+    if (!Array.isArray(blades) || blades.length === 0) return;
+    const ctx = Neo.ctx;
+    const lowFx = window.NeoSettings?.isPerformanceMode?.() !== false && (Neo.particles?.length || 0) > 80;
+    blades.forEach(blade => {
+      // Fade out over the last 0.4s of life.
+      const alpha = blade.life < 0.4 ? blade.life / 0.4 : 1;
+      const len = (blade.radius || 16) * 2.6;
+      const w = (blade.radius || 16) * 0.8;
+      ctx.save();
+      ctx.translate(blade.x, blade.y);
+      ctx.rotate(blade.angle);
+      ctx.globalAlpha = alpha;
+      if (!lowFx) {
+        ctx.shadowColor = '#fff6a3';
+        ctx.shadowBlur = 14;
+      }
+      // Blade body (kite shape, tip leading).
+      ctx.fillStyle = '#fff6a3';
+      ctx.strokeStyle = '#ffd86a';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(len, 0);
+      ctx.lineTo(-len * 0.4, -w * 0.5);
+      ctx.lineTo(-len * 0.62, 0);
+      ctx.lineTo(-len * 0.4, w * 0.5);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      // Bright core highlight.
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha = alpha * 0.9;
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.moveTo(len * 0.86, 0);
+      ctx.lineTo(-len * 0.2, -w * 0.16);
+      ctx.lineTo(-len * 0.4, 0);
+      ctx.lineTo(-len * 0.2, w * 0.16);
+      ctx.closePath();
+      ctx.fill();
+      // Hilt.
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = '#ffd86a';
+      ctx.fillRect(-len * 0.62, -w * 0.42, w * 0.32, w * 0.84);
+      ctx.restore();
+    });
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1;
   }
 
   function drawDeadBodies() {
@@ -1386,6 +1562,83 @@
     Neo.ctx.restore();
   }
 
+  // Procedural clay vase, drawn centered at (0,0) — caller has translated to the
+  // pot's position. A bulbous body with a narrow neck and flared lip, with a
+  // terracotta gradient, rim shading and a soft highlight. Small per-pot variety
+  // (tint + proportions) is seeded from position so it's stable across frames.
+  function drawClayVase(prop) {
+    const ctx = Neo.ctx;
+    const r = Math.max(10, Number(prop.r || 12));
+    // Stable pseudo-random in [0,1) from the pot's spawn position.
+    const seed = Math.abs(Math.sin((prop.x || 0) * 0.13 + (prop.y || 0) * 0.07)) % 1;
+    const bodyR = r * 1.15;            // widest radius of the belly
+    const bodyCy = r * 0.32;           // belly centre, sits a touch low
+    const neckW = r * (0.5 + seed * 0.12);
+    const lipW = neckW * 1.5;
+    const topY = -r * 1.35;            // lip height
+    const neckY = -r * 0.55;           // where neck meets the shoulder
+    const baseW = r * 0.62;            // foot width
+    const baseY = r * 1.32;            // foot sits on the ground
+
+    // Ground shadow.
+    ctx.fillStyle = 'rgba(0,0,0,0.22)';
+    ctx.beginPath();
+    ctx.ellipse(0, baseY - 1, bodyR * 0.92, r * 0.34, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Three clay palettes for a little variety.
+    const palettes = [
+      { lo: '#7a3f24', mid: '#b5673a', hi: '#d98a52' },
+      { lo: '#6f4a2c', mid: '#9c6a3e', hi: '#c79061' },
+      { lo: '#84381f', mid: '#bd6034', hi: '#e08a4e' },
+    ];
+    const pal = palettes[Math.floor(seed * palettes.length) % palettes.length];
+
+    // Vase body: a closed bezier silhouette (lip -> neck -> belly -> foot).
+    ctx.beginPath();
+    ctx.moveTo(-lipW, topY);                                   // left lip
+    ctx.quadraticCurveTo(-neckW * 1.05, topY + r * 0.18, -neckW, neckY); // lip to neck
+    ctx.bezierCurveTo(-bodyR, neckY + r * 0.5, -bodyR, bodyCy + bodyR * 0.5, -baseW, baseY); // shoulder->belly->foot (left)
+    ctx.lineTo(baseW, baseY);                                  // foot
+    ctx.bezierCurveTo(bodyR, bodyCy + bodyR * 0.5, bodyR, neckY + r * 0.5, neckW, neckY); // foot->belly->shoulder (right)
+    ctx.quadraticCurveTo(neckW * 1.05, topY + r * 0.18, lipW, topY); // neck to lip
+    ctx.closePath();
+
+    // Left→right terracotta gradient for round volume.
+    const grad = ctx.createLinearGradient(-bodyR, 0, bodyR, 0);
+    grad.addColorStop(0, pal.lo);
+    grad.addColorStop(0.42, pal.mid);
+    grad.addColorStop(0.6, pal.hi);
+    grad.addColorStop(1, pal.lo);
+    ctx.fillStyle = grad;
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(40,20,8,0.7)';
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+
+    // Inner-lip (dark mouth of the vase).
+    ctx.fillStyle = 'rgba(30,15,6,0.85)';
+    ctx.beginPath();
+    ctx.ellipse(0, topY, lipW * 0.78, r * 0.16, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Decorative band around the belly.
+    ctx.strokeStyle = 'rgba(247,225,180,0.55)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-bodyR * 0.92, bodyCy - r * 0.05);
+    ctx.quadraticCurveTo(0, bodyCy + r * 0.18, bodyR * 0.92, bodyCy - r * 0.05);
+    ctx.stroke();
+
+    // Specular highlight down the left of the belly.
+    ctx.strokeStyle = 'rgba(255,240,215,0.4)';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(-bodyR * 0.45, neckY + r * 0.2);
+    ctx.quadraticCurveTo(-bodyR * 0.62, bodyCy, -bodyR * 0.4, bodyCy + bodyR * 0.55);
+    ctx.stroke();
+  }
+
   // Expose on Neo
   Neo.drawWorldProps = drawWorldProps;
   Neo.drawPickups = drawPickups;
@@ -1393,5 +1646,43 @@
   Neo.getProjectileVisual = getProjectileVisual;
   Neo.drawProjectileTrail = drawProjectileTrail;
   Neo.drawProjectileShape = drawProjectileShape;
+  // Wind-up bar above the player while charging a Healing Zone.
+  function drawHealingZoneChargeBar() {
+    if (!Neo.healingZoneCharging || !Neo.player) return;
+    const max = Neo.HEALING_ZONE_MAX_CHARGE || 5;
+    const ratio = Neo.clamp((Number(Neo.healingZoneChargeTime || 0)) / max, 0, 1);
+    const ctx = Neo.ctx;
+    const w = 46;
+    const h = 6;
+    const x = Neo.player.x - w / 2;
+    const y = Neo.player.y - (Neo.player.r || 14) - 20;
+    ctx.save();
+    ctx.globalAlpha = 0.92;
+    // Track
+    ctx.fillStyle = 'rgba(5,30,12,0.78)';
+    ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
+    // Fill — brightens to white as it tops out.
+    ctx.fillStyle = ratio >= 1 ? '#ffffff' : '#3bff77';
+    ctx.shadowColor = '#3bff77';
+    ctx.shadowBlur = ratio >= 1 ? 12 : 6;
+    ctx.fillRect(x, y, w * ratio, h);
+    ctx.shadowBlur = 0;
+    // Outline
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = 'rgba(150,255,180,0.85)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x - 1, y - 1, w + 2, h + 2);
+    // "MAX" flash when fully charged.
+    if (ratio >= 1) {
+      ctx.fillStyle = '#eafff0';
+      ctx.font = '700 9px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('MAX', Neo.player.x, y - 4);
+    }
+    ctx.restore();
+  }
+
   Neo.drawProjectiles = drawProjectiles;
+  Neo.drawJusticeBlades = drawJusticeBlades;
+  Neo.drawHealingZoneChargeBar = drawHealingZoneChargeBar;
   Neo.drawDeadBodies = drawDeadBodies;

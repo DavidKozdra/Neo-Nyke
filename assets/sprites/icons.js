@@ -807,6 +807,28 @@ window.NeoNykeIconDefs = {
         [3,0],[4,7],
       ],
     },
+    // Churu Stick: long diagonal foil tube of cat-food slurry, torn open at the
+    // top-right corner with a slurry blob oozing out.
+    churu_stick: {
+      color: '#ffb6d5',
+      accent: '#ff7eb0',
+      pixels: [
+        [0,7],[1,7],            // crimped bottom tail
+        [0,6],[1,6],[2,6],
+        [1,5],[2,5],[3,5],      // tube body running diagonally up-right
+        [2,4],[3,4],[4,4],
+        [3,3],[4,3],[5,3],
+        [4,2],[5,2],            // torn open neck
+        [6,1],[7,1],            // slurry blob oozing out the top
+        [5,0],[6,0],[7,0],
+      ],
+      accentPixels: [
+        [0,7],[0,6],            // crimped tail shading
+        [1,6],[2,5],[3,4],[4,3],// dark seam down the tube
+        [6,1],[7,1],            // oozing slurry blob
+        [5,0],[6,0],[7,0],
+      ],
+    },
     // Overstimulate: lightning/stun bolt, adapted from explosive_trap.
     overstimulate: {
       color: '#ffcf80',
@@ -860,6 +882,134 @@ window.NeoNykeIconDefs = {
       accentPixels: [
         [5,0],[6,0],
         [0,5],[1,5],[0,6],
+      ],
+    },
+
+    // --- Scrolls (control tools) ---
+    // Shared base: a rolled parchment with curled top/bottom rolls.
+    // Each scroll carries a distinct accent glyph in the parchment field.
+    scroll_reroll: {
+      color: '#d9f2ff',
+      accent: '#5bb6ff',
+      pixels: [
+        [1,0],[2,0],[3,0],[4,0],[5,0],[6,0],
+        [1,1],[6,1],
+        [2,2],[3,2],[4,2],[5,2],
+        [2,3],[5,3],
+        [2,4],[3,4],[4,4],[5,4],
+        [2,5],[5,5],
+        [1,6],[6,6],
+        [1,7],[2,7],[3,7],[4,7],[5,7],[6,7],
+      ],
+      // Circular arrows = reroll.
+      accentPixels: [
+        [3,2],[4,2],
+        [2,3],
+        [5,4],
+        [3,5],[4,5],
+      ],
+    },
+    scroll_branching: {
+      color: '#d8ffc5',
+      accent: '#52d65b',
+      pixels: [
+        [1,0],[2,0],[3,0],[4,0],[5,0],[6,0],
+        [1,1],[6,1],
+        [3,2],[4,2],
+        [3,3],[4,3],
+        [2,4],[3,4],[4,4],[5,4],
+        [2,5],[5,5],
+        [1,6],[6,6],
+        [1,7],[2,7],[3,7],[4,7],[5,7],[6,7],
+      ],
+      // Forking branch.
+      accentPixels: [
+        [3,2],[4,2],
+        [3,3],[4,3],
+        [2,4],[5,4],
+        [2,5],[5,5],
+      ],
+    },
+    scroll_replace: {
+      color: '#ffd9d9',
+      accent: '#ff5b6b',
+      pixels: [
+        [1,0],[2,0],[3,0],[4,0],[5,0],[6,0],
+        [1,1],[6,1],
+        [2,2],[3,2],[4,2],[5,2],
+        [2,3],[5,3],
+        [2,4],[5,4],
+        [2,5],[3,5],[4,5],[5,5],
+        [1,6],[6,6],
+        [1,7],[2,7],[3,7],[4,7],[5,7],[6,7],
+      ],
+      // Two opposing swap arrows.
+      accentPixels: [
+        [2,2],[3,2],
+        [5,3],
+        [2,4],
+        [4,5],[5,5],
+      ],
+    },
+    scroll_abundance: {
+      color: '#fff2a8',
+      accent: '#ffc83c',
+      pixels: [
+        [1,0],[2,0],[3,0],[4,0],[5,0],[6,0],
+        [1,1],[6,1],
+        [3,2],[4,2],
+        [2,3],[3,3],[4,3],[5,3],
+        [3,4],[4,4],
+        [2,5],[5,5],
+        [1,6],[6,6],
+        [1,7],[2,7],[3,7],[4,7],[5,7],[6,7],
+      ],
+      // Plus / bounty cross.
+      accentPixels: [
+        [3,2],[4,2],
+        [2,3],[3,3],[4,3],[5,3],
+        [3,4],[4,4],
+      ],
+    },
+    scroll_pool_weight: {
+      color: '#c8e2ff',
+      accent: '#5b8dff',
+      pixels: [
+        [1,0],[2,0],[3,0],[4,0],[5,0],[6,0],
+        [1,1],[6,1],
+        [3,2],[4,2],
+        [1,3],[2,3],[3,3],[4,3],[5,3],[6,3],
+        [1,4],[6,4],
+        [2,5],[5,5],
+        [1,6],[6,6],
+        [1,7],[2,7],[3,7],[4,7],[5,7],[6,7],
+      ],
+      // Balance scale beam.
+      accentPixels: [
+        [3,2],[4,2],
+        [1,3],[2,3],[5,3],[6,3],
+        [1,4],[6,4],
+      ],
+    },
+    scroll_ego: {
+      color: '#f4d4ff',
+      accent: '#c45bff',
+      pixels: [
+        [1,0],[2,0],[3,0],[4,0],[5,0],[6,0],
+        [1,1],[6,1],
+        [3,2],[4,2],
+        [2,3],[3,3],[4,3],[5,3],
+        [3,4],[4,4],
+        [2,5],[3,5],[4,5],[5,5],
+        [1,6],[6,6],
+        [1,7],[2,7],[3,7],[4,7],[5,7],[6,7],
+      ],
+      // Star = ego / self.
+      accentPixels: [
+        [3,2],[4,2],
+        [2,3],[3,3],[4,3],[5,3],
+        [3,4],[4,4],
+        [2,5],[5,5],
       ],
     },
   },
@@ -1143,7 +1293,7 @@ window.NeoNykeIconDefs = {
         [5,5],[6,5],[7,5],
       ],
     },
-    fangs_of_death: {
+    random_pounce: {
       color: '#ff5f72',
       pixels: [
         [2,0],[5,0],
@@ -1354,7 +1504,7 @@ window.NeoNykeIconDefs = {
         [3,7],[4,7],
       ],
     },
-    granillia_lightning_spear: {
+    gelleh_lightning_spear: {
       color: '#9bd9ff',
       pixels: [
         [7,0],

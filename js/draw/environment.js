@@ -147,27 +147,31 @@
 
   function drawJesterPortalPrompt() {
     if (Neo.gameState !== 'play') return;
-    const portal = Neo.pickups.find(pickup => pickup?.type === 'jesterPortal' && pickup.active);
+    const portal = Neo.pickups.find(pickup => (pickup?.type === 'jesterPortal' || pickup?.type === 'adapterPortal') && pickup.active);
     if (!portal) return;
     if (Neo.dist(Neo.player.x, Neo.player.y, portal.x, portal.y) > 74) return;
     const cx = portal.x;
     const cy = portal.y - 38;
-    const floors = Math.max(1, Number(portal.skipFloors || 1));
+    const adapter = portal.type === 'adapterPortal';
+    const text = adapter
+      ? 'Touch to warp to ladder (-50% coins)'
+      : `Touch to skip ${Math.max(1, Number(portal.skipFloors || 1))} floors`;
+    const stroke = adapter ? 'rgba(184,140,255,0.62)' : 'rgba(255,155,228,0.62)';
+    const fill = adapter ? '#d6c9ff' : '#ffc9ef';
     Neo.ctx.save();
     Neo.ctx.font = 'bold 14px system-ui';
     Neo.ctx.textAlign = 'center';
     Neo.ctx.textBaseline = 'middle';
-    const text = `Touch to skip ${floors} floors`;
     const pad = 14;
     const tw = Neo.ctx.measureText(text).width;
     Neo.ctx.fillStyle = 'rgba(28,11,32,0.86)';
     Neo.ctx.beginPath();
     Neo.ctx.roundRect(cx - tw / 2 - pad, cy - 13, tw + pad * 2, 26, 8);
     Neo.ctx.fill();
-    Neo.ctx.strokeStyle = 'rgba(255,155,228,0.62)';
+    Neo.ctx.strokeStyle = stroke;
     Neo.ctx.lineWidth = 1.5;
     Neo.ctx.stroke();
-    Neo.ctx.fillStyle = '#ffc9ef';
+    Neo.ctx.fillStyle = fill;
     Neo.ctx.fillText(text, cx, cy);
     Neo.ctx.restore();
   }
@@ -716,6 +720,7 @@
   function drawChests() {
     Neo.chests.forEach(chest => {
       const t = Date.now() / 260 + chest.x * 0.01;
+      const isAbChest = chest.choiceType === 'ab';
       Neo.ctx.save();
       Neo.ctx.translate(chest.x, chest.y);
       Neo.ctx.imageSmoothingEnabled = false;
@@ -733,29 +738,71 @@
       Neo.ctx.shadowBlur = 0;
 
       if (chest.open) {
-        Neo.ctx.fillStyle = '#5c3118';
-        Neo.ctx.fillRect(-30, -2, 60, 26);
+        if (isAbChest) {
+          Neo.ctx.fillStyle = '#315c2d';
+          Neo.ctx.fillRect(-30, -2, 30, 26);
+          Neo.ctx.fillStyle = '#6d2525';
+          Neo.ctx.fillRect(0, -2, 30, 26);
+        } else {
+          Neo.ctx.fillStyle = '#5c3118';
+          Neo.ctx.fillRect(-30, -2, 60, 26);
+        }
         Neo.ctx.fillStyle = '#2b160b';
         Neo.ctx.fillRect(-30, 16, 60, 8);
         Neo.ctx.fillRect(20, -2, 10, 26);
-        Neo.ctx.fillStyle = '#a7632d';
-        Neo.ctx.fillRect(-26, 2, 46, 3);
-        Neo.ctx.fillRect(-26, 2, 3, 14);
+        if (isAbChest) {
+          Neo.ctx.fillStyle = '#62c76b';
+          Neo.ctx.fillRect(-26, 2, 22, 3);
+          Neo.ctx.fillStyle = '#ff6b6b';
+          Neo.ctx.fillRect(2, 2, 18, 3);
+          Neo.ctx.fillStyle = '#62c76b';
+          Neo.ctx.fillRect(-26, 2, 3, 14);
+        } else {
+          Neo.ctx.fillStyle = '#a7632d';
+          Neo.ctx.fillRect(-26, 2, 46, 3);
+          Neo.ctx.fillRect(-26, 2, 3, 14);
+        }
         Neo.ctx.fillStyle = '#17100b';
         Neo.ctx.fillRect(-22, -13, 44, 11);
-        Neo.ctx.fillStyle = '#7e461e';
-        Neo.ctx.fillRect(-20, -24, 40, 11);
-        Neo.ctx.fillStyle = '#c7792f';
-        Neo.ctx.fillRect(-17, -22, 32, 3);
+        if (isAbChest) {
+          Neo.ctx.fillStyle = '#315c2d';
+          Neo.ctx.fillRect(-20, -24, 20, 11);
+          Neo.ctx.fillStyle = '#6d2525';
+          Neo.ctx.fillRect(0, -24, 20, 11);
+          Neo.ctx.fillStyle = '#62c76b';
+          Neo.ctx.fillRect(-17, -22, 14, 3);
+          Neo.ctx.fillStyle = '#ff6b6b';
+          Neo.ctx.fillRect(3, -22, 14, 3);
+        } else {
+          Neo.ctx.fillStyle = '#7e461e';
+          Neo.ctx.fillRect(-20, -24, 40, 11);
+          Neo.ctx.fillStyle = '#c7792f';
+          Neo.ctx.fillRect(-17, -22, 32, 3);
+        }
       } else {
-        Neo.ctx.fillStyle = '#7e431e';
-        Neo.ctx.fillRect(-32, -20, 64, 44);
+        if (isAbChest) {
+          Neo.ctx.fillStyle = '#2f7d43';
+          Neo.ctx.fillRect(-32, -20, 32, 44);
+          Neo.ctx.fillStyle = '#923030';
+          Neo.ctx.fillRect(0, -20, 32, 44);
+        } else {
+          Neo.ctx.fillStyle = '#7e431e';
+          Neo.ctx.fillRect(-32, -20, 64, 44);
+        }
         Neo.ctx.fillStyle = '#4b2612';
         Neo.ctx.fillRect(-32, 12, 64, 12);
         Neo.ctx.fillRect(22, -20, 10, 44);
-        Neo.ctx.fillStyle = '#c7772d';
-        Neo.ctx.fillRect(-28, -16, 50, 4);
-        Neo.ctx.fillRect(-28, -16, 4, 28);
+        if (isAbChest) {
+          Neo.ctx.fillStyle = '#69d174';
+          Neo.ctx.fillRect(-28, -16, 24, 4);
+          Neo.ctx.fillRect(-28, -16, 4, 28);
+          Neo.ctx.fillStyle = '#ff6a6a';
+          Neo.ctx.fillRect(4, -16, 22, 4);
+        } else {
+          Neo.ctx.fillStyle = '#c7772d';
+          Neo.ctx.fillRect(-28, -16, 50, 4);
+          Neo.ctx.fillRect(-28, -16, 4, 28);
+        }
         Neo.ctx.fillStyle = '#2f3742';
         Neo.ctx.fillRect(-22, -22, 6, 46);
         Neo.ctx.fillRect(16, -22, 6, 46);
@@ -790,21 +837,7 @@
           Neo.ctx.fillRect(rx - 3, ry - 2, 6, 4);
         }
       } else if (decor.kind === 'banner') {
-        Neo.ctx.fillStyle = 'rgba(0,0,0,0.22)';
-        Neo.ctx.fillRect(-12, -18, 24, 42);
-        Neo.ctx.fillStyle = theme.banner;
-        Neo.ctx.fillRect(-10, -24, 20, 38);
-        Neo.ctx.fillStyle = 'rgba(0,0,0,0.24)';
-        Neo.ctx.fillRect(7, -24, 3, 38);
-        Neo.ctx.fillRect(-10, 11, 20, 3);
-        Neo.ctx.fillStyle = 'rgba(255,220,140,0.24)';
-        Neo.ctx.fillRect(-8, -22, 14, 2);
-        Neo.ctx.fillRect(-8, -22, 2, 30);
-        Neo.ctx.strokeStyle = 'rgba(229,185,98,0.36)';
-        Neo.ctx.lineWidth = 1;
-        Neo.ctx.strokeRect(-10.5, -24.5, 20, 38);
-        Neo.ctx.fillStyle = 'rgba(229,185,98,0.45)';
-        Neo.ctx.fillRect(-13, -26, 26, 3);
+        // Banners/flags retired — draw nothing (also stripped at room load).
       } else if (decor.kind === 'crack') {
         Neo.ctx.strokeStyle = theme.crack;
         Neo.ctx.lineWidth = 2.2;
@@ -825,14 +858,7 @@
         Neo.ctx.fillStyle = 'rgba(245,202,120,0.72)';
         Neo.ctx.fillRect(-1, -8, 2, 5);
       } else if (decor.kind === 'torch') {
-        Neo.ctx.fillStyle = 'rgba(28, 20, 12, 0.95)';
-        Neo.ctx.fillRect(-2, -6, 4, 18);
-        Neo.ctx.fillStyle = '#5b6670';
-        Neo.ctx.fillRect(-6, -4, 12, 4);
-        Neo.ctx.fillStyle = 'rgba(210,135,72,0.72)';
-        Neo.ctx.fillRect(-3, -16, 6, 10);
-        Neo.ctx.fillStyle = 'rgba(245,202,120,0.72)';
-        Neo.ctx.fillRect(-1, -14, 2, 6);
+        drawCandle(decor);
       } else if (decor.kind === 'tree') {
         // Shadow
         Neo.ctx.fillStyle = 'rgba(20,30,14,0.35)';
@@ -903,25 +929,272 @@
       Neo.ctx.restore();
     });
 
+    // Tall structures (columns) need depth sorting against the player: draw the
+    // ones the player is in FRONT of here (player feet below the base), and defer
+    // the ones the player is BEHIND to drawStructuresOverPlayer() — called after
+    // the player so they occlude them. Non-tall structures always draw here.
+    const playerFeetY = Number(Neo.player?.y ?? -Infinity);
     Neo.structures.forEach(structure => {
-      Neo.ctx.save();
-      Neo.ctx.translate(structure.x, structure.y);
-      if (structure.kind === 'pillar') {
-        drawEnvironmentTile('pillar_stone', -structure.w / 2, -structure.h / 2, structure.w, structure.h);
-        Neo.ctx.strokeStyle = theme.wallEdge;
-        Neo.ctx.lineWidth = 1.5;
-        Neo.ctx.strokeRect(-structure.w / 2, -structure.h / 2, structure.w, structure.h);
-      } else {
-        drawEnvironmentTile('wall_block', -structure.w / 2, -structure.h / 2, structure.w, structure.h);
-        Neo.ctx.strokeStyle = theme.wallEdge;
-        Neo.ctx.lineWidth = 1.5;
-        Neo.ctx.strokeRect(-structure.w / 2, -structure.h / 2, structure.w, structure.h);
-      }
-      Neo.ctx.restore();
+      if (structureIsBehindPlayer(structure, playerFeetY)) return;
+      drawStructure(structure, theme);
     });
   }
 
+  // True when the player should render IN FRONT of this structure (i.e. the
+  // structure is "behind" the player and was deferred to drawRoomDecor's pass).
+  // Tall columns occlude the player only when the player stands above their base.
+  function structureIsBehindPlayer(structure, playerFeetY) {
+    if (structure.kind !== 'pillar') return false;
+    // Column base (ground line) sits at structure.y + h/2. If the player's feet
+    // are above (smaller Y) that line, the player is behind the column.
+    const baseY = structure.y + structure.h / 2;
+    return playerFeetY < baseY;
+  }
+
+  function drawStructure(structure, theme = getRoomArtTheme()) {
+    Neo.ctx.save();
+    Neo.ctx.translate(structure.x, structure.y);
+    if (structure.kind === 'pillar') {
+      drawGreekColumn(structure.w, structure.h, theme);
+    } else {
+      drawEnvironmentTile('wall_block', -structure.w / 2, -structure.h / 2, structure.w, structure.h);
+      Neo.ctx.strokeStyle = theme.wallEdge;
+      Neo.ctx.lineWidth = 1.5;
+      Neo.ctx.strokeRect(-structure.w / 2, -structure.h / 2, structure.w, structure.h);
+    }
+    Neo.ctx.restore();
+  }
+
+  // Second structures pass: redraw the tall columns the player is standing
+  // behind, so they render over the player. Called from the viewport after the
+  // player is drawn.
+  function drawStructuresOverPlayer() {
+    if (!Neo.structures?.length) return;
+    const theme = getRoomArtTheme();
+    // Use the frontmost (largest Y) active player as the depth threshold so a
+    // column only draws over the player(s) it is genuinely behind. In single
+    // player this is just the player; in co-op it picks the nearest player.
+    let playerFeetY = Number(Neo.player?.y ?? -Infinity);
+    if (Neo.isMultiplayerMode?.() && Neo.getActivePlayerSlots) {
+      Neo.getActivePlayerSlots().forEach(slot => {
+        if (slot?.getDead?.()) return;
+        const p = slot?.getEntity?.();
+        if (p && Number.isFinite(p.y)) playerFeetY = Math.max(playerFeetY, p.y);
+      });
+    }
+    Neo.structures.forEach(structure => {
+      if (structureIsBehindPlayer(structure, playerFeetY)) drawStructure(structure, theme);
+    });
+  }
+
+  // A lit candle on a small dish, drawn centered at (0,0) — the caller has
+  // translated to position. Tapered wax body with a side highlight, a wick, and
+  // an animated layered teardrop flame with a soft warm glow. Flicker is phased
+  // by position so neighbouring candles don't pulse in sync.
+  function drawCandle(decor) {
+    const ctx = Neo.ctx;
+    const t = Date.now() * 0.006 + (decor.x || 0) * 0.05 + (decor.y || 0) * 0.03;
+    const flick = 1 + Math.sin(t) * 0.12 + Math.sin(t * 2.7) * 0.06; // 0.82..1.18
+    const sway = Math.sin(t * 1.6) * 0.8;
+
+    // Holder dish + drop shadow.
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.beginPath();
+    ctx.ellipse(0, 13, 9, 3.2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#6b7077';
+    ctx.beginPath();
+    ctx.ellipse(0, 11, 8, 3, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#878d95';
+    ctx.beginPath();
+    ctx.ellipse(0, 10, 5.5, 2, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Wax body (slightly tapered), warm cream with a lit side highlight.
+    const bodyTop = -8;
+    const bodyBot = 10;
+    ctx.beginPath();
+    ctx.moveTo(-3.5, bodyBot);
+    ctx.lineTo(-3, bodyTop);
+    ctx.quadraticCurveTo(0, bodyTop - 2, 3, bodyTop);
+    ctx.lineTo(3.5, bodyBot);
+    ctx.closePath();
+    const wax = ctx.createLinearGradient(-3.5, 0, 3.5, 0);
+    wax.addColorStop(0, '#cdbf9a');
+    wax.addColorStop(0.45, '#f3ead0');
+    wax.addColorStop(1, '#b3a079');
+    ctx.fillStyle = wax;
+    ctx.fill();
+    // Soft wax pool / lip at the top.
+    ctx.fillStyle = 'rgba(255,248,224,0.8)';
+    ctx.beginPath();
+    ctx.ellipse(0, bodyTop, 3, 1.1, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // Drip down the lit side.
+    ctx.strokeStyle = 'rgba(255,250,232,0.5)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(-1.6, bodyTop + 1);
+    ctx.lineTo(-1.9, bodyTop + 7);
+    ctx.stroke();
+
+    // Wick.
+    ctx.strokeStyle = '#2a2018';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(0, bodyTop);
+    ctx.lineTo(0, bodyTop - 3);
+    ctx.stroke();
+
+    // Warm glow halo behind the flame.
+    const glowY = bodyTop - 8;
+    const glow = ctx.createRadialGradient(0, glowY, 1, 0, glowY, 16 * flick);
+    glow.addColorStop(0, 'rgba(255,210,130,0.45)');
+    glow.addColorStop(1, 'rgba(255,180,90,0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(0, glowY, 16 * flick, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Flame: outer (orange) teardrop, then inner (yellow), then bright core.
+    const fh = 11 * flick;   // flame height
+    const fw = 3.4;          // flame half-width
+    const tipX = sway;       // flame tip sways slightly
+    const drawTeardrop = (height, width, topColor, botColor) => {
+      const top = bodyTop - 3 - height;
+      const g = ctx.createLinearGradient(0, top, 0, bodyTop - 3);
+      g.addColorStop(0, topColor);
+      g.addColorStop(1, botColor);
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.moveTo(tipX, top);
+      ctx.bezierCurveTo(tipX + width, top + height * 0.5, width, bodyTop - 4, 0, bodyTop - 3);
+      ctx.bezierCurveTo(-width, bodyTop - 4, tipX - width, top + height * 0.5, tipX, top);
+      ctx.closePath();
+      ctx.fill();
+    };
+    drawTeardrop(fh, fw, 'rgba(255,150,40,0.95)', 'rgba(255,90,20,0.6)');           // outer orange
+    drawTeardrop(fh * 0.66, fw * 0.62, 'rgba(255,224,120,0.98)', 'rgba(255,170,60,0.7)'); // inner yellow
+    drawTeardrop(fh * 0.34, fw * 0.34, 'rgba(255,255,240,1)', 'rgba(255,230,170,0.9)');   // white core
+  }
+
+  // Tall Greek column in oblique 3/4 view: the square collision footprint sits
+  // at the base, and a long fluted shaft rises up the screen with a capital and
+  // entablature on top. Lit from the upper-left; casts an angled ground shadow.
+  // Drawn centered at (0,0) — the caller has already translated to position.
+  function drawGreekColumn(w, h, theme) {
+    const ctx = Neo.ctx;
+    const baseW = w;                       // footprint width (== collision)
+    const baseHalf = baseW / 2;
+    const shaftW = baseW * 0.62;           // shaft is narrower than the base
+    const shaftHalf = shaftW / 2;
+    const baseY = h / 2;                   // bottom of the footprint (ground line)
+    const height = h * 2.6;                // how far up the screen the column rises
+    const topY = baseY - height;           // top of the shaft
+    const lean = baseW * 0.12;             // slight rightward angle for perspective
+
+    // Angled ground shadow cast to the lower-right.
+    ctx.fillStyle = 'rgba(0,0,0,0.26)';
+    ctx.beginPath();
+    ctx.moveTo(-baseHalf, baseY);
+    ctx.lineTo(baseHalf, baseY);
+    ctx.lineTo(baseHalf + baseW * 0.9, baseY + h * 0.5);
+    ctx.lineTo(-baseHalf + baseW * 0.5, baseY + h * 0.5);
+    ctx.closePath();
+    ctx.fill();
+
+    // Stepped base (plinth + torus) at the footprint.
+    ctx.fillStyle = '#8d877b';
+    ctx.fillRect(-baseHalf, baseY - h * 0.42, baseW, h * 0.42);
+    ctx.fillStyle = '#a59f93';
+    ctx.fillRect(-baseHalf * 0.92, baseY - h * 0.6, baseW * 0.92, h * 0.22);
+
+    // Column shaft: a tall quad leaning slightly right, with a left→right
+    // gradient that gives it round, carved volume.
+    const topX = lean;
+    const shaftGrad = ctx.createLinearGradient(-shaftHalf, 0, shaftHalf, 0);
+    shaftGrad.addColorStop(0, '#7f7a6e');
+    shaftGrad.addColorStop(0.32, '#ddd6c8');
+    shaftGrad.addColorStop(0.5, '#efe9dc');
+    shaftGrad.addColorStop(0.72, '#c7c0b1');
+    shaftGrad.addColorStop(1, '#6f6a5f');
+    ctx.fillStyle = shaftGrad;
+    ctx.beginPath();
+    ctx.moveTo(-shaftHalf, baseY - h * 0.55);
+    ctx.lineTo(shaftHalf, baseY - h * 0.55);
+    ctx.lineTo(topX + shaftHalf, topY + h * 0.3);
+    ctx.lineTo(topX - shaftHalf, topY + h * 0.3);
+    ctx.closePath();
+    ctx.fill();
+
+    // Vertical fluting: grooves run up the shaft, interpolated base→top so they
+    // follow the lean.
+    const flutes = 5;
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(70,64,52,0.4)';
+    for (let i = 1; i < flutes; i += 1) {
+      const f = i / flutes;
+      const bx = -shaftHalf + f * shaftW;
+      const tx = topX - shaftHalf + f * shaftW;
+      ctx.beginPath();
+      ctx.moveTo(bx, baseY - h * 0.55);
+      ctx.lineTo(tx, topY + h * 0.3);
+      ctx.stroke();
+    }
+    // Bright left-edge highlight on the shaft.
+    ctx.strokeStyle = 'rgba(255,250,240,0.45)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(-shaftHalf + 2, baseY - h * 0.55);
+    ctx.lineTo(topX - shaftHalf + 2, topY + h * 0.3);
+    ctx.stroke();
+
+    // Capital (flared top) + entablature slab, also leaning with the shaft.
+    const capW = shaftW * 1.45;
+    const capHalf = capW / 2;
+    ctx.fillStyle = '#cfc8ba';
+    ctx.beginPath();
+    ctx.moveTo(topX - shaftHalf, topY + h * 0.34);
+    ctx.lineTo(topX + shaftHalf, topY + h * 0.34);
+    ctx.lineTo(topX + capHalf, topY + h * 0.08);
+    ctx.lineTo(topX - capHalf, topY + h * 0.08);
+    ctx.closePath();
+    ctx.fill();
+    // Abacus block on top.
+    ctx.fillStyle = '#e6dfd0';
+    ctx.fillRect(topX - capHalf, topY - h * 0.05, capW, h * 0.16);
+    ctx.strokeStyle = (theme && theme.wallEdge) || 'rgba(40,35,28,0.5)';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(topX - capHalf, topY - h * 0.05, capW, h * 0.16);
+  }
+
+  // Classify a cover_wall into a furniture variant ('table' | 'chair') or null
+  // (plain wood wall). Reinforced/secret walls stay as walls. The choice is
+  // stable per-prop (seeded from position) and size-aware: wide/large pieces
+  // become tables, small near-square pieces become chairs.
+  function coverWallFurnitureVariant(prop) {
+    if (prop.reinforced || prop.kind === 'secret_wall') return null;
+    if (prop._furniture !== undefined) return prop._furniture; // memoized
+    const w = Math.max(16, Number(prop.w || prop.r * 2 || 48));
+    const h = Math.max(16, Number(prop.h || prop.r * 2 || 48));
+    const seed = Math.abs(Math.sin((prop.x || 0) * 0.11 + (prop.y || 0) * 0.083)) % 1;
+    const long = Math.max(w, h);
+    const short = Math.min(w, h);
+    let variant = null;
+    // Long, reasonably-thick barricades read well as tables/benches.
+    if (long >= 90 && short >= 28 && seed < 0.55) variant = 'table';
+    // Shorter stubby pieces become chairs.
+    else if (long <= 100 && short >= 28 && seed >= 0.55 && seed < 0.85) variant = 'chair';
+    prop._furniture = variant;
+    return variant;
+  }
+
   function drawCoverWall(prop) {
+    const variant = coverWallFurnitureVariant(prop);
+    if (variant === 'table') { drawWoodTable(prop); return; }
+    if (variant === 'chair') { drawWoodChair(prop); return; }
+
     const w = Math.max(16, Number(prop.w || prop.r * 2 || 48));
     const h = Math.max(16, Number(prop.h || prop.r * 2 || 48));
     const left = -w / 2;
@@ -1002,6 +1275,129 @@
       Neo.ctx.lineWidth = 2;
       Neo.ctx.strokeRect(left + 1, top + 1, w - 2, h - 2);
     }
+  }
+
+  // Brief warm flash overlay for furniture pieces when hit (mirrors the cover
+  // wall hit feedback). `w`/`h` are the footprint extents.
+  function furnitureHitFlash(prop, w, h) {
+    if (!(prop.hitFlash > 0)) return;
+    const flash = Neo.clamp(Number(prop.hitFlash || 0) / 0.12, 0, 1);
+    Neo.ctx.fillStyle = `rgba(255, 244, 190, ${flash * 0.3})`;
+    Neo.ctx.fillRect(-w / 2, -h / 2, w, h);
+  }
+
+  // Top-down wooden table: a plank top with a darker rim and four corner legs
+  // peeking out. Fills the prop footprint so it still reads as the obstacle.
+  function drawWoodTable(prop) {
+    const ctx = Neo.ctx;
+    const w = Math.max(20, Number(prop.w || prop.r * 2 || 64));
+    const h = Math.max(20, Number(prop.h || prop.r * 2 || 64));
+    const hw = w / 2;
+    const hh = h / 2;
+    const legR = Math.max(3, Math.min(w, h) * 0.1);
+
+    // Ground shadow.
+    ctx.fillStyle = 'rgba(0,0,0,0.22)';
+    ctx.fillRect(-hw + 3, -hh + 4, w, h);
+
+    // Legs at the corners (drawn first so the top overlaps them).
+    ctx.fillStyle = '#4a2c17';
+    [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sy]) => {
+      ctx.beginPath();
+      ctx.arc(sx * (hw - legR - 1), sy * (hh - legR - 1), legR, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    // Table top: inset from the footprint, wood gradient.
+    const tw = w * 0.86;
+    const th = h * 0.86;
+    const grad = ctx.createLinearGradient(-tw / 2, 0, tw / 2, 0);
+    grad.addColorStop(0, '#7a4a26');
+    grad.addColorStop(0.5, '#a06736');
+    grad.addColorStop(1, '#6f4222');
+    ctx.fillStyle = grad;
+    ctx.fillRect(-tw / 2, -th / 2, tw, th);
+    // Darker rim.
+    ctx.strokeStyle = '#3f2412';
+    ctx.lineWidth = 2.5;
+    ctx.strokeRect(-tw / 2, -th / 2, tw, th);
+
+    // Plank seams along the long axis.
+    const horizontal = tw >= th;
+    const planks = Math.max(2, Math.floor((horizontal ? th : tw) / 14));
+    ctx.strokeStyle = 'rgba(40,22,10,0.5)';
+    ctx.lineWidth = 1;
+    for (let i = 1; i < planks; i += 1) {
+      ctx.beginPath();
+      if (horizontal) {
+        const y = -th / 2 + (th / planks) * i;
+        ctx.moveTo(-tw / 2 + 3, Math.round(y) + 0.5);
+        ctx.lineTo(tw / 2 - 3, Math.round(y) + 0.5);
+      } else {
+        const x = -tw / 2 + (tw / planks) * i;
+        ctx.moveTo(Math.round(x) + 0.5, -th / 2 + 3);
+        ctx.lineTo(Math.round(x) + 0.5, th / 2 - 3);
+      }
+      ctx.stroke();
+    }
+    // Top-edge highlight.
+    ctx.strokeStyle = 'rgba(214,150,90,0.6)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(-tw / 2 + 2, -th / 2 + 2);
+    ctx.lineTo(tw / 2 - 2, -th / 2 + 2);
+    ctx.stroke();
+
+    furnitureHitFlash(prop, w, h);
+  }
+
+  // Top-down wooden chair: a square seat with a back rail on the upper edge and
+  // four small legs. Sized to the prop footprint.
+  function drawWoodChair(prop) {
+    const ctx = Neo.ctx;
+    const w = Math.max(16, Number(prop.w || prop.r * 2 || 40));
+    const h = Math.max(16, Number(prop.h || prop.r * 2 || 40));
+    const hw = w / 2;
+    const hh = h / 2;
+    const legR = Math.max(2.5, Math.min(w, h) * 0.1);
+
+    ctx.fillStyle = 'rgba(0,0,0,0.2)';
+    ctx.fillRect(-hw + 2, -hh + 3, w, h);
+
+    // Legs.
+    ctx.fillStyle = '#43280f';
+    [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sy]) => {
+      ctx.beginPath();
+      ctx.arc(sx * (hw - legR - 1), sy * (hh - legR - 1), legR, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    // Back rail along the top edge (so it reads as a chair facing down).
+    ctx.fillStyle = '#5e3315';
+    ctx.fillRect(-hw + 2, -hh, w - 4, Math.max(4, h * 0.18));
+
+    // Seat: inset square with a wood gradient.
+    const sw = w * 0.72;
+    const sh = h * 0.62;
+    const seatY = h * 0.08;
+    const grad = ctx.createLinearGradient(-sw / 2, 0, sw / 2, 0);
+    grad.addColorStop(0, '#7a4a26');
+    grad.addColorStop(0.5, '#9c6334');
+    grad.addColorStop(1, '#6a3f20');
+    ctx.fillStyle = grad;
+    ctx.fillRect(-sw / 2, seatY - sh / 2, sw, sh);
+    ctx.strokeStyle = '#3a2110';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(-sw / 2, seatY - sh / 2, sw, sh);
+    // Seat highlight.
+    ctx.strokeStyle = 'rgba(210,148,88,0.55)';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(-sw / 2 + 2, seatY - sh / 2 + 2);
+    ctx.lineTo(sw / 2 - 2, seatY - sh / 2 + 2);
+    ctx.stroke();
+
+    furnitureHitFlash(prop, w, h);
   }
 
   function drawDestructibleBlockDamage(prop, w = 52, h = 52) {
@@ -1144,6 +1540,7 @@
   Neo.drawFloor = drawFloor;
   Neo.drawChests = drawChests;
   Neo.drawRoomDecor = drawRoomDecor;
+  Neo.drawStructuresOverPlayer = drawStructuresOverPlayer;
   Neo.drawCoverWall = drawCoverWall;
   Neo.drawDestructibleBlockDamage = drawDestructibleBlockDamage;
   Neo.drawBrokenDestructible = drawBrokenDestructible;

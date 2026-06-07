@@ -11,6 +11,7 @@ export function createUIController(view) {
         defaultSpeaker: 'GOD',
         typeSpeed: 0.028,
         autoAdvanceDelay: 1.35,
+        autoAdvanceEnabled: () => window.NeoSettings?.shouldAutoAdvanceCutscenes?.() === true,
         onOpen: () => Neo.clearGameplayInput(),
         onClose: () => Neo.clearGameplayInput(),
       })
@@ -64,6 +65,58 @@ export function createUIController(view) {
     function ensureRunHistoryPanelCanOverlayGame() {
       if (!view.runHistoryPanel || view.runHistoryPanel.parentElement === document.body) return;
       document.body.appendChild(view.runHistoryPanel);
+    }
+
+    function bindPracticePanelDrag() {
+      const panel = view.practicePanel;
+      const handle = panel?.querySelector('.practice-head');
+      if (!panel || !handle || panel.dataset.dragBound === 'true') return;
+      panel.dataset.dragBound = 'true';
+      let drag = null;
+      const clampPanel = (left, top) => {
+        const rect = panel.getBoundingClientRect();
+        const margin = 8;
+        return {
+          left: Neo.clamp(left, margin, Math.max(margin, window.innerWidth - rect.width - margin)),
+          top: Neo.clamp(top, margin, Math.max(margin, window.innerHeight - rect.height - margin)),
+        };
+      };
+      handle.addEventListener('pointerdown', event => {
+        if (event.button !== 0) return;
+        if (event.target instanceof Element && event.target.closest('button, input, select, textarea, a')) return;
+        const rect = panel.getBoundingClientRect();
+        drag = {
+          pointerId: event.pointerId,
+          dx: event.clientX - rect.left,
+          dy: event.clientY - rect.top,
+        };
+        panel.classList.add('is-dragging');
+        panel.style.right = 'auto';
+        panel.style.left = `${rect.left}px`;
+        panel.style.top = `${rect.top}px`;
+        handle.setPointerCapture?.(event.pointerId);
+        event.preventDefault();
+      });
+      handle.addEventListener('pointermove', event => {
+        if (!drag || event.pointerId !== drag.pointerId) return;
+        const next = clampPanel(event.clientX - drag.dx, event.clientY - drag.dy);
+        panel.style.left = `${next.left}px`;
+        panel.style.top = `${next.top}px`;
+      });
+      const endDrag = event => {
+        if (!drag || event.pointerId !== drag.pointerId) return;
+        drag = null;
+        panel.classList.remove('is-dragging');
+      };
+      handle.addEventListener('pointerup', endDrag);
+      handle.addEventListener('pointercancel', endDrag);
+      window.addEventListener('resize', () => {
+        if (panel.classList.contains('hidden') || panel.style.left === '') return;
+        const rect = panel.getBoundingClientRect();
+        const next = clampPanel(rect.left, rect.top);
+        panel.style.left = `${next.left}px`;
+        panel.style.top = `${next.top}px`;
+      });
     }
 
     function getChallengeAccent(def) {
@@ -246,17 +299,18 @@ export function createUIController(view) {
         return;
       }
 
-      const margin = 4;
-      const gap = window.innerWidth <= 920 ? 8 : 12;
-      const trackerWidth = Math.round(Neo.clamp(window.innerWidth <= 920 ? 124 : 142, 108, window.innerWidth - margin * 2));
-      let right = Math.round(Neo.clamp(window.innerWidth - layout.right, margin, window.innerWidth - trackerWidth - margin));
-      let top = Math.max(margin, Math.round(layout.bottom + gap));
+      const margin = 8;
+      const gap = window.innerWidth <= 920 ? 16 : 24;
+      const trackerWidth = Math.round(Neo.clamp(window.innerWidth <= 920 ? 248 : 284, 216, window.innerWidth - margin * 2));
+      let right = Math.round(Neo.clamp(window.innerWidth - layout.left + gap, margin, window.innerWidth - trackerWidth - margin));
+      let top = Math.max(margin, Math.round(layout.top));
       let maxHeight = Math.floor(window.innerHeight - top - margin);
 
-      // If there is not enough room below the minimap, place objectives left of it.
-      if (maxHeight < 92) {
-        top = Math.max(margin, Math.round(layout.top));
-        right = Math.round(Neo.clamp(window.innerWidth - layout.left + gap, margin, window.innerWidth - trackerWidth - margin));
+      // Keep objectives beside the minimap when possible; if vertical space is
+      // too tight, drop below the map as the fallback.
+      if (maxHeight < 184) {
+        top = Math.max(margin, Math.round(layout.bottom + gap));
+        right = Math.round(Neo.clamp(window.innerWidth - layout.right, margin, window.innerWidth - trackerWidth - margin));
         maxHeight = Math.floor(window.innerHeight - top - margin);
       }
 
@@ -264,7 +318,7 @@ export function createUIController(view) {
         top,
         right,
         width: trackerWidth,
-        maxHeight: Math.max(74, maxHeight),
+        maxHeight: Math.max(148, maxHeight),
       };
       if (!objectiveLayoutCache
         || objectiveLayoutCache.top !== nextLayout.top
@@ -289,6 +343,21 @@ export function createUIController(view) {
       });
     }
 
+    if (view.objectiveClose) {
+      // Closing the panel turns off the "Objective panel" gameplay setting, so it
+      // stays hidden (and persists) until re-enabled from Settings.
+      view.objectiveClose.addEventListener('click', () => {
+        if (window.NeoSettings?.setShowObjectivePanel) {
+          window.NeoSettings.setShowObjectivePanel(false);
+        } else {
+          objectiveTrackerVisible = false;
+          view.objectiveTracker?.classList.add('hidden');
+          view.objectiveTracker?.setAttribute('aria-hidden', 'true');
+          syncObjectiveTrackerCompactState();
+        }
+      });
+    }
+
     window.addEventListener('resize', () => {
       syncObjectiveTrackerCompactState();
     });
@@ -306,7 +375,8 @@ export function createUIController(view) {
 
     function getSkillCacheValue(skill) {
       if (!skill) return null;
-      return `${skill.current}|${skill.max}|${!!skill.active}|${skill.charges}|${skill.maxCharges}`;
+      const timers = Array.isArray(skill.timers) ? skill.timers.join(',') : '';
+      return `${skill.current}|${skill.max}|${!!skill.active}|${skill.charges}|${skill.maxCharges}|${timers}`;
     }
 
     function updateSkillCardIfChanged(name, skill) {
@@ -314,7 +384,7 @@ export function createUIController(view) {
       const nextCache = getSkillCacheValue(skill);
       if (hudRenderCache.skills[name] === nextCache) return;
       hudRenderCache.skills[name] = nextCache;
-      setSkillCard(name, skill.current, skill.max, !!skill.active, skill.charges, skill.maxCharges);
+      setSkillCard(name, skill.current, skill.max, !!skill.active, skill.charges, skill.maxCharges, skill.timers);
     }
 
     function renderRunHistoryModeTabs() {
@@ -340,7 +410,7 @@ export function createUIController(view) {
       };
     }
 
-    function setSkillCard(name, current, max, active = false, charges = 0, maxCharges = 1) {
+    function setSkillCard(name, current, max, active = false, charges = 0, maxCharges = 1, timers = null) {
       const fill = name === 'melee' ? view.fillMelee
         : name === 'laser' ? view.fillLaser
           : name === 'smash' ? view.fillSmash
@@ -351,7 +421,11 @@ export function createUIController(view) {
             : view.timeDash;
       const card = view.actionCards[name];
       const ready = charges > 0 && !active;
-      const partialCharge = charges < maxCharges && max > 0 ? Neo.clamp(1 - (current / max), 0, 1) : 0;
+      // One fill fraction per recovering charge, derived from its own timer, so a
+      // freshly-spent pip starts near empty instead of inheriting the progress of
+      // an earlier in-flight timer (which made extra charges look auto-loaded).
+      const pipFills = computePipFills(charges, maxCharges, max, current, timers);
+      const partialCharge = pipFills[charges] || 0;
       const ratio = maxCharges <= 0 ? 0 : Neo.clamp((charges + partialCharge) / maxCharges, 0, 1);
       if (fill) fill.style.height = `${ratio * 100}%`;
       if (time) {
@@ -365,13 +439,31 @@ export function createUIController(view) {
       }
       if (card) {
         card.classList.toggle('ready', ready);
-        updateSkillCharges(card, charges, maxCharges, partialCharge);
+        updateSkillCharges(card, charges, maxCharges, pipFills);
       }
     }
 
+    // Build a per-pip fill array of length maxCharges: charges in hand read full,
+    // each recovering charge reads the progress of its own timer. Timers are
+    // sorted most-progressed first so pips fill left-to-right as charges return.
+    function computePipFills(charges, maxCharges, max, current, timers) {
+      const fills = new Array(Math.max(0, maxCharges)).fill(0);
+      for (let i = 0; i < charges && i < fills.length; i += 1) fills[i] = 1;
+      if (max <= 0) return fills;
+      const list = Array.isArray(timers) && timers.length
+        ? timers.slice()
+        : (current > 0 ? [current] : []);
+      // Least time remaining first -> fullest pip first, placed after the held charges.
+      list.sort((a, b) => a - b);
+      for (let i = 0; i < list.length && charges + i < fills.length; i += 1) {
+        fills[charges + i] = Neo.clamp(1 - (list[i] / max), 0, 1);
+      }
+      return fills;
+    }
+
     // Render one pip per charge so skills with extra charges read at a glance:
-    // filled pips = charges in hand, the next pip fills as that charge recovers.
-    function updateSkillCharges(card, charges, maxCharges, partialCharge) {
+    // filled pips = charges in hand, recovering pips fill from their own timers.
+    function updateSkillCharges(card, charges, maxCharges, pipFills) {
       let pips = card.querySelector('.skill-charges');
       if (maxCharges <= 1) {
         if (pips) pips.remove();
@@ -390,11 +482,12 @@ export function createUIController(view) {
       }
       const dots = pips.children;
       for (let i = 0; i < dots.length; i += 1) {
+        const value = pipFills[i] || 0;
         const filled = i < charges;
-        const filling = i === charges && partialCharge > 0;
+        const filling = !filled && value > 0;
         dots[i].classList.toggle('full', filled);
         dots[i].classList.toggle('charging', filling);
-        dots[i].style.setProperty('--pip', filling ? partialCharge : filled ? 1 : 0);
+        dots[i].style.setProperty('--pip', value);
       }
     }
 
@@ -420,7 +513,7 @@ export function createUIController(view) {
       if (normalized.includes('thorn')) return 'thorn_knight';
       if (normalized.includes('princess')) return 'princess';
       if (normalized.includes('metao')) return 'metao';
-      if (normalized.includes('granialla')) return 'granialla';
+      if (normalized.includes('gelleh') || normalized.includes('granialla')) return 'gelleh';
       if (normalized.includes('mooggy')) return 'mooggy';
       if (normalized.includes('queen') && normalized.includes('cult')) return 'queen_cult';
       if (normalized.includes('bulk') && normalized.includes('golem')) return 'bulk_golem';
@@ -600,7 +693,7 @@ export function createUIController(view) {
       }
       if (show !== 'charselect') { setChallengePanelOpen(false); setLegacyPanelOpen(false); }
       if (show !== 'menu' && show !== 'pause') setRunHistoryOpen(false);
-      if (show !== 'menu') { setAltModesPanelOpen(false); setSandboxPanelOpen(false); }
+      if (show !== 'menu') { setAltModesPanelOpen(false); setCompetitivePanelOpen(false); setSandboxPanelOpen(false); }
       if (show !== 'menu') tutorialMenuOfferVisible = false;
       setVisible(view.endlessHud, inPlay && Neo.gameMode === 'endless', 'flex');
       setVisible(view.practicePanel, inPlay && Neo.gameMode === 'practice' && show !== 'dying', 'block');
@@ -626,6 +719,8 @@ export function createUIController(view) {
 
     let runHistoryView = 'info';
     let activeInfoTab = 'items';
+    const infoSearchQueries = { items: '', scrolls: '', weapons: '', moves: '', enemies: '' };
+    const searchableInfoTabs = new Set(['items', 'scrolls', 'weapons', 'moves', 'enemies']);
 
     function setRunHistoryOpen(open) {
       ensureRunHistoryPanelCanOverlayGame();
@@ -684,8 +779,9 @@ export function createUIController(view) {
       { key: 'bulk_golem',      label: 'Bulk Golem',      boss: true,  hp: 1280, dmg: 31, speed: 88,  attackStyle: 'melee',   immunities: ['bleed'],                             desc: 'Boss. Massive golem that splits into smaller golems at low HP. Ground-slam AOE attack.' },
       { key: 'artificer_knave', label: 'Artificer Knave', boss: true,  hp: 1880, dmg: 20, speed: 124, attackStyle: 'melee',   immunities: [],                                    desc: 'Boss. High-speed multi-phase fighter. Becomes more aggressive at each phase threshold.' },
       { key: 'queen_cult',      label: 'Queen Cult',      boss: true,  hp: 912,  dmg: 20, speed: 96,  attackStyle: 'summon',  immunities: [],                                    desc: 'Boss. Cult leader that summons followers and mages while striking with projectiles.' },
-      { key: 'antony_blemmye',  label: 'Antony Blemmye',  boss: true,  hp: 1400, dmg: 27, speed: 82,  attackStyle: 'melee',   immunities: ['bleed'],                             desc: 'Boss. Chest-faced bruiser. Up close he bites to drain HP or sweeps a wide slash; his hammer sends a shockwave forward and he charges a cold death ball at range.' },
+      { key: 'antony_blemmye',  label: 'Antony Blemmyae',  boss: true,  hp: 1250, dmg: 24, speed: 78,  attackStyle: 'melee',   immunities: ['bleed'],                             desc: 'Boss. Chest-faced bruiser. Up close he bites to drain HP or sweeps a wide slash; his hammer sends a shockwave forward and he charges a cold death ball at range.' },
       { key: 'handsome_devil',  label: 'Handsome Devil',  boss: true,  hp: 1700, dmg: 23, speed: 104, attackStyle: 'hazard',  immunities: ['fire'],                              desc: 'Floor 6 boss. Phase 1 raises red floor spikes and lava grids. Phase 2 fires red laser eyes.' },
+      { key: 'bowman_bane',     label: "Bowman's Bane",   boss: true,  hp: 2400, dmg: 22, speed: 80,  attackStyle: 'beam',    immunities: [],                                    desc: 'Secret boss. Found by revisiting a cleared secret room. Drops lightning columns and sweeps a tracking beam. At half HP he unleashes Justice of Sonichu — a fan of room-spanning lightning bolts that strike across the arena.' },
       { key: 'mirror_knight',   label: 'Mirror Champion', boss: true,  hp: 0,    dmg: 0,  speed: 0,   attackStyle: 'mirror',  immunities: [],                                    desc: 'Elite. Copies the player\'s equipped moves and items. The perfect counter to your build.' },
       { key: 'mooggy',          label: 'Mooggy',          boss: false, hp: 0,    dmg: 0,  speed: 0,   attackStyle: 'assassin',immunities: ['bleed'],                             desc: 'White and black assassin cat with a red aura. Mirrors your stats and items, then fires rapid bleed-stacking eye lasers.' },
       { key: 'god',             label: 'GOD',             boss: true,  hp: 920,  dmg: 18, speed: 108, attackStyle: 'beam',    immunities: ['bleed', 'fire', 'poison', 'dark'],   desc: 'Final boss. Multi-phase deity with beam sweeps, nova blasts, and judgement strikes. Immune to all status effects.' },
@@ -695,18 +791,57 @@ export function createUIController(view) {
       return Neo.getCharacterStartingItems?.(characterKey) || {};
     }
 
+    function normalizeInfoSearch(value) {
+      return String(value || '').trim().toLowerCase();
+    }
+
+    function infoSearchMatches(entry, fields) {
+      const query = normalizeInfoSearch(infoSearchQueries[activeInfoTab]);
+      if (!query) return true;
+      return fields(entry)
+        .filter(value => value !== undefined && value !== null)
+        .some(value => String(value).toLowerCase().includes(query));
+    }
+
+    function renderInfoEmpty(label) {
+      const query = infoSearchQueries[activeInfoTab] || '';
+      return `<div class="info-empty">No ${label} match "${Neo.escapeHtml(query)}".</div>`;
+    }
+
+    function syncInfoSearchControl(tab) {
+      if (!view.rhInfoSearch) return;
+      const searchable = searchableInfoTabs.has(tab);
+      view.rhInfoSearch.classList.toggle('hidden', !searchable);
+      view.rhInfoSearch.disabled = !searchable;
+      if (!searchable) {
+        view.rhInfoSearch.value = '';
+        return;
+      }
+      const label = tab === 'items' ? 'items' : tab === 'scrolls' ? 'scrolls' : tab === 'weapons' ? 'weapons' : tab === 'moves' ? 'moves' : 'enemies';
+      view.rhInfoSearch.placeholder = `Search ${label}...`;
+      view.rhInfoSearch.setAttribute('aria-label', `Search ${label}`);
+      view.rhInfoSearch.value = infoSearchQueries[tab] || '';
+    }
+
     function populateInfoPanel(tab) {
       activeInfoTab = tab;
       if (!view.rhInfoContent) return;
       view.rhInfoTabs?.forEach(t => t.classList.toggle('active', t.dataset.infoTab === tab));
+      syncInfoSearchControl(tab);
 
       if (tab === 'items') {
         const rarityOrder = ['knight', 'wizard', 'god'];
         const sorted = Object.values(Neo.ITEM_DEFS).sort((a, b) => {
           const ri = rarityOrder.indexOf(a.rarity ?? a.category) - rarityOrder.indexOf(b.rarity ?? b.category);
           return ri !== 0 ? ri : (a.name || '').localeCompare(b.name || '');
-        });
-        view.rhInfoContent.innerHTML = `<div class="info-grid">${sorted.map(item => {
+        }).filter(item => infoSearchMatches(item, item_ => [
+          item_.name,
+          item_.key,
+          item_.rarity,
+          item_.category,
+          item_.description,
+        ]));
+        view.rhInfoContent.innerHTML = sorted.length ? `<div class="info-grid">${sorted.map(item => {
           const rarity = item.rarity || item.category || 'knight';
           return `<div class="info-card">
             <div class="info-card__header">
@@ -716,7 +851,25 @@ export function createUIController(view) {
             </div>
             <div class="info-card__desc">${item.description || ''}</div>
           </div>`;
-        }).join('')}</div>`;
+        }).join('')}</div>` : renderInfoEmpty('items');
+        Neo.drawItemIconCanvases?.(view.rhInfoContent, 'data-info-item');
+
+      } else if (tab === 'scrolls') {
+        // Scrolls are their own system (Neo.SCROLL_DEFS), shown on a dedicated tab
+        // rather than mixed into the relic Items tab.
+        const scrolls = Object.values(Neo.SCROLL_DEFS || {})
+          .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+          .filter(scroll => infoSearchMatches(scroll, s => [s.name, s.key, s.description]));
+        view.rhInfoContent.innerHTML = scrolls.length ? `<div class="info-grid">${scrolls.map(scroll => {
+          return `<div class="info-card">
+            <div class="info-card__header">
+              <canvas class="info-card__icon" data-info-item="${scroll.key}" width="32" height="32"></canvas>
+              <span class="info-card__name">${scroll.name}</span>
+              <span class="info-card__tag info-card__tag--knight">scroll</span>
+            </div>
+            <div class="info-card__desc">${scroll.description || ''}</div>
+          </div>`;
+        }).join('')}</div>` : renderInfoEmpty('scrolls');
         Neo.drawItemIconCanvases?.(view.rhInfoContent, 'data-info-item');
 
       } else if (tab === 'weapons') {
@@ -724,8 +877,13 @@ export function createUIController(view) {
         const sorted = Object.values(Neo.WEAPON_DEFS).sort((a, b) => {
           const ri = rarityOrder.indexOf(a.rarity) - rarityOrder.indexOf(b.rarity);
           return ri !== 0 ? ri : (a.name || '').localeCompare(b.name || '');
-        });
-        view.rhInfoContent.innerHTML = `<div class="info-grid">${sorted.map(w => {
+        }).filter(w => infoSearchMatches(w, weapon => [
+          weapon.name,
+          weapon.key,
+          weapon.rarity,
+          weapon.description,
+        ]));
+        view.rhInfoContent.innerHTML = sorted.length ? `<div class="info-grid">${sorted.map(w => {
           return `<div class="info-card">
             <div class="info-card__header">
               <canvas class="info-card__icon" data-info-weapon="${w.key}" width="32" height="32"></canvas>
@@ -734,7 +892,7 @@ export function createUIController(view) {
             </div>
             <div class="info-card__desc">${w.description || ''}</div>
           </div>`;
-        }).join('')}</div>`;
+        }).join('')}</div>` : renderInfoEmpty('weapons');
         view.rhInfoContent.querySelectorAll('[data-info-weapon]').forEach(el => {
           const w = Neo.WEAPON_DEFS[el.dataset.infoWeapon];
           if (w) Neo.drawWeaponToastIcon(el, w);
@@ -745,8 +903,15 @@ export function createUIController(view) {
         const sorted = Object.values(Neo.MOVE_DEFS).sort((a, b) => {
           const si = slotOrder.indexOf(a.slot) - slotOrder.indexOf(b.slot);
           return si !== 0 ? si : (a.name || '').localeCompare(b.name || '');
-        });
-        view.rhInfoContent.innerHTML = `<div class="info-grid">${sorted.map(m => {
+        }).filter(m => infoSearchMatches(m, move => [
+          move.name,
+          move.key,
+          move.slot,
+          Neo.SLOT_LABELS[move.slot],
+          move.exclusiveCharacter,
+          move.desc,
+        ]));
+        view.rhInfoContent.innerHTML = sorted.length ? `<div class="info-grid">${sorted.map(m => {
           const slotLabel = Neo.SLOT_LABELS[m.slot] || m.slot;
           const exclusive = m.exclusiveCharacter
             ? `<br><em style="color:rgba(200,200,255,0.5)">${Neo.titleCase(m.exclusiveCharacter.replace(/_/g, ' '))} only</em>`
@@ -759,7 +924,7 @@ export function createUIController(view) {
             </div>
             <div class="info-card__desc">${m.desc || ''}${exclusive}</div>
           </div>`;
-        }).join('')}</div>`;
+        }).join('')}</div>` : renderInfoEmpty('moves');
         view.rhInfoContent.querySelectorAll('[data-info-move]').forEach(el => {
           const move = Neo.MOVE_DEFS[el.dataset.infoMove];
           if (move) Neo.drawMoveToastIcon(el, move);
@@ -767,16 +932,28 @@ export function createUIController(view) {
 
       } else if (tab === 'enemies') {
         const attackStyleLabel = { melee: 'Melee', dash: 'Dash', ranged: 'Ranged', burst: 'Burst', summon: 'Summoner', support: 'Support', mirror: 'Mirror', assassin: 'Assassin', beam: 'Beam' };
+        const filteredEnemies = ENEMY_INFO.filter(e => infoSearchMatches(e, enemy => [
+          enemy.label,
+          enemy.key,
+          enemy.boss ? 'boss' : 'enemy',
+          enemy.attackStyle,
+          attackStyleLabel[enemy.attackStyle],
+          enemy.immunities.join(' '),
+          enemy.hp,
+          enemy.dmg,
+          enemy.speed,
+          enemy.desc,
+        ]));
         view.rhInfoContent.innerHTML = `
           <div class="info-enemy-layout">
-            <div class="info-enemy-grid">${ENEMY_INFO.map(e => {
+            <div class="info-enemy-grid">${filteredEnemies.length ? filteredEnemies.map(e => {
               const tagClass = e.boss ? 'info-enemy-card__tag--boss' : 'info-enemy-card__tag--normal';
               return `<div class="info-enemy-card" data-enemy-select="${e.key}" tabindex="0">
                 <canvas class="info-enemy-card__sprite" data-info-enemy="${e.key}" width="52" height="52"></canvas>
                 <div class="info-enemy-card__name">${e.label}</div>
                 <span class="info-enemy-card__tag ${tagClass}">${e.boss ? 'Boss' : 'Enemy'}</span>
               </div>`;
-            }).join('')}</div>
+            }).join('') : renderInfoEmpty('enemies')}</div>
             <div class="info-enemy-detail hidden" id="infoEnemyDetail">
               <canvas class="info-enemy-detail__sprite" id="infoEnemySprite" width="80" height="80"></canvas>
               <div class="info-enemy-detail__name" id="infoEnemyName"></div>
@@ -821,7 +998,7 @@ export function createUIController(view) {
           card.addEventListener('click', () => showEnemyDetail(card.dataset.enemySelect));
           card.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' ') showEnemyDetail(card.dataset.enemySelect); });
         });
-        showEnemyDetail(ENEMY_INFO[0].key);
+        if (filteredEnemies.length) showEnemyDetail(filteredEnemies[0].key);
 
       } else if (tab === 'characters') {
         view.rhInfoContent.innerHTML = `<div class="info-char-grid">${Object.values(Neo.CHARACTER_DEFS).map(c => {
@@ -870,7 +1047,7 @@ export function createUIController(view) {
           ? renderAchievementProgress(progressDef, progressSnapshot)
           : '';
         return `<div class="ach-card${unlocked ? '' : ' ach-card--locked'}">
-          <span class="ach-icon">${a.icon}</span>
+          <canvas class="ach-icon" data-achievement-icon="${Neo.escapeHtml(a.id)}" width="44" height="44" aria-hidden="true"></canvas>
           <div>
             <div class="ach-name">${a.name}</div>
             <div class="ach-desc">${a.desc}</div>
@@ -880,6 +1057,53 @@ export function createUIController(view) {
         </div>`;
       }));
       view.achievementsList.innerHTML = cards.join('');
+      drawAchievementIcons(view.achievementsList);
+    }
+
+    function drawAchievementIcons(root) {
+      root?.querySelectorAll?.('[data-achievement-icon]').forEach(canvas => {
+        drawAchievementIcon(canvas, canvas.dataset.achievementIcon);
+      });
+    }
+
+    const ACHIEVEMENT_ICON_REFS = {
+      one_punch_man: { type: 'move', key: 'nimrod_stomp' },
+      the_avatar: { type: 'item', key: 'overstimulate' },
+      rival_rumble: { type: 'weapon', key: 'thorns_bleed_blade' },
+      gotta_meet_god: { type: 'move', key: 'turtle_wave' },
+      yeshua_is_king: { type: 'item', key: 'drink_master' },
+      unkillable: { type: 'item', key: 'veggys_pendant' },
+      hoarder: { type: 'item', key: 'wizards_paw' },
+      glass_cannon: { type: 'pixel', color: '#e6fbff', pixels: [[3,0],[2,1],[4,1],[1,2],[5,2],[2,3],[3,3],[4,3],[2,4],[4,4],[1,5],[5,5],[3,6]] },
+      floor_muncher: { type: 'pixel', color: '#8dd4ff', pixels: [[3,1],[2,2],[3,2],[4,2],[1,3],[3,3],[5,3],[3,4],[3,5],[3,6]] },
+      overleveled: { type: 'pixel', color: '#f0c040', pixels: [[3,0],[2,2],[3,2],[4,2],[1,3],[2,3],[3,3],[4,3],[5,3],[2,4],[4,4],[1,6],[2,6],[3,6],[4,6],[5,6]] },
+      shopping_spree: { type: 'item', key: 'rich_mans_luck' },
+      loop_lord: { type: 'item', key: 'jesters_dice' },
+      coin_goblin: { type: 'pixel', color: '#ffd15a', pixels: [[2,1],[3,1],[4,1],[1,2],[2,2],[3,2],[4,2],[5,2],[1,3],[2,3],[3,3],[4,3],[5,3],[1,4],[2,4],[3,4],[4,4],[5,4],[2,5],[3,5],[4,5]] },
+      god_slayer: { type: 'enemy', key: 'god' },
+      extinction: { type: 'enemy', key: 'hunter' },
+      double_bane: { type: 'enemy', key: 'bowman_bane' },
+    };
+
+    function drawAchievementIcon(canvas, achievementId) {
+      const ref = ACHIEVEMENT_ICON_REFS[achievementId] || { type: 'pixel', color: '#f0c040', pixels: [[3,1],[2,2],[3,2],[4,2],[1,3],[2,3],[3,3],[4,3],[5,3],[2,4],[3,4],[4,4],[3,5]] };
+      if (ref.type === 'item' && Neo.ITEM_DEFS?.[ref.key]) {
+        Neo.drawItemIconByKey?.(canvas, ref.key);
+        return;
+      }
+      if (ref.type === 'move' && Neo.MOVE_DEFS?.[ref.key]) {
+        Neo.drawMoveToastIcon?.(canvas, Neo.MOVE_DEFS[ref.key]);
+        return;
+      }
+      if (ref.type === 'weapon' && Neo.WEAPON_DEFS?.[ref.key]) {
+        Neo.drawWeaponToastIcon?.(canvas, Neo.WEAPON_DEFS[ref.key]);
+        return;
+      }
+      if (ref.type === 'enemy') {
+        Neo.drawSpriteToCanvas?.(canvas, ref.key, 40);
+        return;
+      }
+      Neo.drawPixelIcon?.(canvas, ref.color || '#f0c040', ref.pixels || []);
     }
 
     function renderAchievementProgress(progressDef, progressSnapshot) {
@@ -926,9 +1150,14 @@ export function createUIController(view) {
     function setAltModesPanelOpen(open) {
       view.altModesPanel?.classList.toggle('hidden', !open);
       view.altModesPanel?.setAttribute('aria-hidden', open ? 'false' : 'true');
+    }
+
+    function setCompetitivePanelOpen(open) {
+      view.competitivePanel?.classList.toggle('hidden', !open);
+      view.competitivePanel?.setAttribute('aria-hidden', open ? 'false' : 'true');
       if (open) {
-        const activeTab = view.altModesPanel?.querySelector('.altmodes-tab.active');
-        if (activeTab?.dataset?.tab === 'competitive') initCompetitiveLeaderboard();
+        setAltModesPanelOpen(false);
+        initCompetitiveLeaderboard();
       }
     }
 
@@ -966,15 +1195,18 @@ export function createUIController(view) {
           const moreBtn = document.getElementById('competitiveLbMoreBtn');
           if (!listEl) return;
           if (lbPage === 1) listEl.innerHTML = '';
-          if (!data.data || data.data.length === 0) {
+          const entries = (Array.isArray(data.data) ? data.data : []).filter(entry => entry?.result === 'win' && Number(entry.floor) >= 10);
+          if (entries.length === 0) {
             if (lbPage === 1) listEl.textContent = 'No runs this week — be the first!';
           } else {
             const startRank = (lbPage - 1) * data.pageSize + 1;
-            data.data.forEach((entry, i) => {
+            entries.forEach((entry, i) => {
               const rank = startRank + i;
+              const charDef = Neo.CHARACTER_DEFS?.[entry.character];
+              const charName = charDef ? escHtml(charDef.name) : '';
               const row = document.createElement('div');
               row.style.cssText = 'display:flex;gap:8px;align-items:baseline;border-bottom:1px solid rgba(255,255,255,0.06);padding:2px 0';
-              row.innerHTML = `<span style="width:24px;text-align:right;color:#ffe566;font-weight:bold">${rank}.</span><span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(entry.name)}</span><span style="color:#aaa">Fl.${entry.floor}</span>`;
+              row.innerHTML = `<span style="width:24px;text-align:right;color:#ffe566;font-weight:bold">${rank}.</span><span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(entry.name)}</span>${charName ? `<span style="color:#7fb8ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:90px">${charName}</span>` : ''}<span style="color:#aaa">Fl.${entry.floor}</span>`;
               listEl.appendChild(row);
             });
           }
@@ -1167,7 +1399,7 @@ export function createUIController(view) {
         // Carousel prev/next arrows
         const carouselPrev = document.getElementById('carouselPrev');
         const carouselNext = document.getElementById('carouselNext');
-        const charOrder = ['princess', 'thorn_knight', 'metao', 'granialla', 'mooggy'];
+        const charOrder = ['princess', 'thorn_knight', 'metao', 'gelleh', 'mooggy'];
         function carouselStep(delta) {
           const currentIndex = charOrder.indexOf(handlers._getChosenCharacter ? handlers._getChosenCharacter() : 'princess');
           const nextIndex = currentIndex + delta;
@@ -1284,7 +1516,12 @@ export function createUIController(view) {
               const label = item?.name || key.replace(/_/g, ' ');
               const rarity = String(item?.rarity || 'knight');
               const safeKey = Neo.escapeHtml(key);
-              return `<div class="sandbox-token sandbox-token--item sandbox-token--stepper sandbox-token--${Neo.escapeHtml(rarity)}${active ? ' is-active' : ''}" data-sbox-start-item="${safeKey}">`
+              // Tooltip parity with the death screen: title + aria-label + data-tooltip
+              // carry the item description (with the same fallback text).
+              const tooltipText = item?.description || 'No item description available.';
+              const safeTooltip = Neo.escapeHtml(tooltipText);
+              const safeAria = Neo.escapeHtml(`${label}. ${tooltipText}`);
+              return `<div class="sandbox-token sandbox-token--item sandbox-token--stepper sandbox-token--${Neo.escapeHtml(rarity)}${active ? ' is-active' : ''}" data-sbox-start-item="${safeKey}" title="${safeTooltip}" aria-label="${safeAria}" data-tooltip="${safeTooltip}">`
                 + `<canvas class="sandbox-token__icon sandbox-token__icon--item" data-sbox-start-item-icon="${safeKey}" width="26" height="26" aria-hidden="true"></canvas>`
                 + `<span class="sandbox-token__label">${Neo.escapeHtml(label)}</span>`
                 + `<div class="sandbox-token__stepper">`
@@ -1525,6 +1762,11 @@ export function createUIController(view) {
         view.rhInfoTabs?.forEach(tab => {
           tab.addEventListener('click', () => populateInfoPanel(tab.dataset.infoTab || 'items'));
         });
+        view.rhInfoSearch?.addEventListener('input', () => {
+          if (!searchableInfoTabs.has(activeInfoTab)) return;
+          infoSearchQueries[activeInfoTab] = view.rhInfoSearch.value || '';
+          populateInfoPanel(activeInfoTab);
+        });
         view.infoTutorialBtn?.addEventListener('click', () => {
           localStorage.setItem(Neo.REPLAY_TUTORIAL_KEY, '1');
           view.infoTutorialBtn.textContent = '✓ Set for next run';
@@ -1583,20 +1825,14 @@ export function createUIController(view) {
         view.firstTipBtn?.addEventListener('click', handlers.onDismissFirstTip);
         // New main-menu nav
         view.mainCompetitiveBtn?.addEventListener('click', () => {
-          document.querySelectorAll('.altmodes-tab').forEach(t => t.classList.remove('active'));
-          document.querySelectorAll('.altmodes-tab-panel').forEach(p => p.classList.add('hidden'));
-          const compTab = document.querySelector('.altmodes-tab[data-tab="competitive"]');
-          const compPanel = document.querySelector('.altmodes-tab-panel[data-panel="competitive"]');
-          if (compTab) compTab.classList.add('active');
-          if (compPanel) compPanel.classList.remove('hidden');
-          setAltModesPanelOpen(true);
-          initCompetitiveLeaderboard();
+          setCompetitivePanelOpen(true);
         });
         view.newRunBtn?.addEventListener('click', handlers.onOpenCharacterSelect);
         view.charBackBtn?.addEventListener('click', handlers.onCloseCharacterSelect);
         // Alt modes panel
         view.altModesBtn?.addEventListener('click', () => setAltModesPanelOpen(true));
         view.altModesClose?.addEventListener('click', () => setAltModesPanelOpen(false));
+        view.competitiveClose?.addEventListener('click', () => setCompetitivePanelOpen(false));
         view.creditsBtn?.addEventListener('click', () => setCreditsPanelOpen(true));
         view.creditsClose?.addEventListener('click', () => setCreditsPanelOpen(false));
         document.addEventListener('keydown', (e) => {
@@ -1625,7 +1861,7 @@ export function createUIController(view) {
           handlers.onOpenAltModeCharSelect('pvp');
         });
         view.altModeCompetitiveBtn?.addEventListener('click', () => {
-          setAltModesPanelOpen(false);
+          setCompetitivePanelOpen(false);
           handlers.onOpenAltModeCharSelect('competitive');
         });
         view.competitiveServerRetryBtn?.addEventListener('click', () => {
@@ -1673,7 +1909,6 @@ export function createUIController(view) {
             tab.classList.add('active');
             const panel = document.querySelector(`.altmodes-tab-panel[data-panel="${tab.dataset.tab}"]`);
             if (panel) panel.classList.remove('hidden');
-            if (tab.dataset.tab === 'competitive') initCompetitiveLeaderboard();
           });
         });
         view.altModeSandboxConfigBtn?.addEventListener('click', handlers.onOpenSandboxConfig);
@@ -1685,6 +1920,7 @@ export function createUIController(view) {
         view.practicePanelToggle?.addEventListener('click', () => {
           view.practicePanelBody?.classList.toggle('hidden');
         });
+        bindPracticePanelDrag();
         view.practiceMaxHpSlider?.addEventListener('input', () => {
           Neo.setPracticeMaxHp(view.practiceMaxHpSlider.value);
         });
@@ -1793,17 +2029,17 @@ export function createUIController(view) {
         renderRunHistoryPage();
       },
       updateCharacterSelection(unlocked, selected) {
-        const CHAR_ORDER = ['princess', 'thorn_knight', 'metao', 'granialla', 'mooggy'];
+        const CHAR_ORDER = ['princess', 'thorn_knight', 'metao', 'gelleh', 'mooggy'];
         const ROLE_LABELS = {
           princess: 'Starter',
           thorn_knight: 'Bleed melee',
           metao: 'Range caster',
-          granialla: 'Divine hybrid',
+          gelleh: 'Divine hybrid',
           mooggy: 'Fast assassin',
         };
         const unlockText = (itemKey) => {
           if (unlocked.has(itemKey)) return ROLE_LABELS[itemKey] || 'Ready';
-          if (itemKey === 'granialla') return 'Unlock: beat GOD';
+          if (itemKey === 'gelleh') return 'Unlock: beat GOD';
           if (itemKey === 'mooggy') {
             const mooggyProgress = Math.max(0, Math.min(3, Number(Neo.metaProgress?.mooggyDefeats || 0)));
             return `Unlock: Mooggy ${mooggyProgress}/3`;
@@ -1854,11 +2090,23 @@ export function createUIController(view) {
             `<div class="stat-bar"><div class="stat-fill" style="width:${s.pct}%;background:${s.color}"></div></div></div>`
           ).join('');
           const defaultMoves = Neo.getDefaultMovesForCharacter(selected);
+          const defaultWeapon = Neo.getDefaultWeaponForCharacter(selected);
           const slots = ['melee', 'laser', 'smash', 'dash'];
           const skillsHtml = slots.map(slot => {
+            const slotLabel = Neo.SLOT_LABELS[slot] || Neo.titleCase(slot);
+            // The melee (M1) slot is driven by the equipped weapon — characters
+            // start with their signature weapon, so show that here rather than the
+            // bare-hands `slash` fallback the move slot defaults to.
+            if (slot === 'melee' && defaultWeapon) {
+              const weaponDef = Neo.WEAPON_DEFS[defaultWeapon] || {};
+              const weaponLabel = weaponDef.name || defaultWeapon || 'Unknown';
+              return `<span class="hero-detail-skill-pip">
+              <canvas class="hero-detail-skill-icon" data-hero-weapon="${Neo.escapeHtml(defaultWeapon)}" width="24" height="24" aria-hidden="true"></canvas>
+              <span class="hero-detail-skill-text">${Neo.escapeHtml(slotLabel)}: ${Neo.escapeHtml(weaponLabel)}</span>
+            </span>`;
+            }
             const moveKey = String(defaultMoves[slot] || '');
             const moveDef = Neo.MOVE_DEFS[moveKey] || {};
-            const slotLabel = Neo.SLOT_LABELS[slot] || Neo.titleCase(slot);
             const moveLabel = moveDef.name || moveKey || 'Unknown';
             return `<span class="hero-detail-skill-pip">
               <canvas class="hero-detail-skill-icon" data-hero-move="${Neo.escapeHtml(moveKey)}" width="24" height="24" aria-hidden="true"></canvas>
@@ -1873,7 +2121,11 @@ export function createUIController(view) {
               const item = Neo.ITEM_DEFS[key] || {};
               const itemName = item.name || Neo.titleCase(String(key || '').replace(/_/g, ' '));
               const countText = count > 1 ? ` x${count}` : '';
-              return `<span class="hero-detail-item-pip">
+              // Tooltip parity with the death screen: description on hover/focus.
+              const tooltipText = item.description || 'No item description available.';
+              const safeTooltip = Neo.escapeHtml(tooltipText);
+              const safeAria = Neo.escapeHtml(`${itemName}${countText}. ${tooltipText}`);
+              return `<span class="hero-detail-item-pip" tabindex="0" title="${safeTooltip}" aria-label="${safeAria}" data-tooltip="${safeTooltip}">
                 <canvas class="hero-detail-item-icon" data-hero-item="${Neo.escapeHtml(key)}" width="20" height="20" aria-hidden="true"></canvas>
                 <span>${Neo.escapeHtml(itemName)}${Neo.escapeHtml(countText)}</span>
               </span>`;
@@ -1891,6 +2143,10 @@ export function createUIController(view) {
           detail.querySelectorAll('[data-hero-move]').forEach(el => {
             const move = Neo.MOVE_DEFS[el.dataset.heroMove];
             if (move) Neo.drawMoveToastIcon(el, move);
+          });
+          detail.querySelectorAll('[data-hero-weapon]').forEach(el => {
+            const weapon = Neo.WEAPON_DEFS[el.dataset.heroWeapon];
+            if (weapon) Neo.drawWeaponToastIcon(el, weapon);
           });
           Neo.drawItemIconCanvases?.(detail, 'data-hero-item');
           detail.querySelectorAll('[data-inv-ui-icon]').forEach(el => {
@@ -2007,7 +2263,8 @@ export function createUIController(view) {
       },
       setObjectiveList(roomLabel, entries = []) {
         if (!view.objectiveTracker || !view.objectiveList) return;
-        const visible = Neo.gameState === 'play' && entries.length > 0;
+        const panelEnabled = window.NeoSettings?.showObjectivePanel?.() !== false;
+        const visible = panelEnabled && Neo.gameState === 'play' && entries.length > 0;
         objectiveTrackerVisible = visible;
         objectiveEntriesCache = Array.isArray(entries) ? entries.slice() : [];
         view.objectiveTracker.classList.toggle('hidden', !visible);
@@ -2106,6 +2363,9 @@ export function createUIController(view) {
       setCompetitiveServerStatus(status) {
         renderCompetitiveServerStatus(status);
       },
+      setCompetitivePanelOpen(open) {
+        setCompetitivePanelOpen(open);
+      },
       setCompetitiveSubmitStatus(status = {}) {
         const el = view.deadCompetitiveStatus || document.getElementById('deadCompetitiveStatus');
         if (!el) return;
@@ -2134,7 +2394,11 @@ export function createUIController(view) {
           }
         }
         if (view.deadKillerName) view.deadKillerName.textContent = entry.killedBy || 'Unknown';
-        if (view.deadFloor) view.deadFloor.textContent = `${fmt(entry.floor)}/10`;
+        // Endless mode is single-floor, so the FLOOR stat is repurposed to show
+        // the wave reached — the meaningful score for that mode.
+        const isEndlessEntry = entry.mode === 'endless';
+        if (view.deadFloorLabel) view.deadFloorLabel.textContent = isEndlessEntry ? 'WAVE' : 'FLOOR';
+        if (view.deadFloor) view.deadFloor.textContent = isEndlessEntry ? fmt(entry.endlessWave) : `${fmt(entry.floor)}/10`;
         if (view.deadLevel) view.deadLevel.textContent = fmt(entry.level);
         if (view.deadKills) view.deadKills.textContent = fmt(entry.kills);
         if (view.deadTime) view.deadTime.textContent = fmtTime(entry.elapsedSeconds || 0);
@@ -2191,8 +2455,12 @@ export function createUIController(view) {
         if (view.deadRecords) {
           const nr = entry._newRecords || {};
           const records = Neo.deriveRunRecords(Neo.runHistory, Neo.metaProgress);
+          // Endless mode swaps the FLOOR best for the WAVE best — floor is always 1.
+          const progressBest = entry.mode === 'endless'
+            ? { label: 'WAVE', val: fmt(records.endlessWave), isNew: nr.endlessWave }
+            : { label: 'FLOOR', val: `${records.floor}/10`, isNew: nr.floor };
           const bests = [
-            { label: 'FLOOR',  val: `${records.floor}/10`,         isNew: nr.floor },
+            progressBest,
             { label: 'KILLS',  val: fmt(records.kills),            isNew: nr.kills },
             { label: 'LEVEL',  val: fmt(records.level),            isNew: nr.level },
             { label: 'TIME',   val: fmtTime(records.time),         isNew: nr.time  },
@@ -2286,10 +2554,8 @@ export function createUIController(view) {
         }
         if (view.winDifficulty) view.winDifficulty.textContent = (entry.difficultyName || entry.difficulty || '—').toUpperCase();
 
-        const crystalBonus = Math.max(0, Math.round(Neo.getActiveChallengeCrystalBonusMultiplier?.() || 0));
-        const titheBonus = Neo.hasLegacy?.('crystal_tithe') && Neo.HARD_DIFFICULTIES?.has(Neo.selectedDifficulty) ? 1 : 0;
-        const earned = 1 + crystalBonus + titheBonus;
-        const totalAfter = Number(Neo.metaProgress?.loopCrystals || 0) + earned;
+        const earned = Number(entry.loopCrystalsEarned || 0);
+        const totalAfter = Number(Neo.metaProgress?.loopCrystals || 0);
         if (view.winCrystalsEarned) view.winCrystalsEarned.textContent = `+${earned}`;
         if (view.winCrystalsTotal) view.winCrystalsTotal.textContent = String(totalAfter);
 

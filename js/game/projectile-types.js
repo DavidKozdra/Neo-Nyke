@@ -43,6 +43,7 @@ const PROJECTILE_TYPE_DEFS = {
     life: 1,
     pierceCount: 1,
     muzzleRing: 10,
+    recoil: 160,
   },
 };
 

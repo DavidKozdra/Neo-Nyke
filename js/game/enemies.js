@@ -301,7 +301,7 @@
     }
     if (type === 'runes') {
       return {
-        timer: Neo.scaleChallengeTimer(26),
+        timer: Neo.scaleChallengeTimer(22),
         tick: Math.max(1.6, 2.9 - floor * 0.08),
         spawnCount: floor >= 7 ? 2 : 1,
       };
@@ -455,12 +455,36 @@
     return boss;
   }
 
+  // True when an endless wave should be a boss encounter (every 10th wave).
+  function isEndlessBossWave(waveNumber) {
+    return Number(waveNumber) > 0 && Number(waveNumber) % 10 === 0;
+  }
+
+  // Spawns the enemies for a single endless wave. `waveNumber` is the wave the
+  // player is about to fight (1-based). Every 10th wave is a boss wave (the
+  // floor boss plus a small honor-guard pack); other waves spawn a normal wave
+  // of the given size. Centralized so the first-wave (rooms.js) and respawn
+  // (combat.js) paths stay in sync.
+  function spawnEndlessWave(waveNumber, count) {
+    if (isEndlessBossWave(waveNumber)) {
+      spawnFloorBoss();
+      // A handful of adds so the boss room isn't a pure duel.
+      spawnWave(Math.min(2 + Math.floor(waveNumber / 10), 6), 'combat');
+      Neo.spawnParticle({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 70, life: 1.6, text: 'BOSS WAVE', c: '#ff5a5a' });
+      return;
+    }
+    spawnWave(count, 'combat');
+  }
+
   function getEnemyDifficultyMultiplier() {
     const gameMinutes = Neo.gameElapsedTime / 60;
     return 1 + gameMinutes * Neo.floor * 0.15;
   }
 
   function canSpawnEliteEnemies() {
+    // Endless mode pins floor at 1, so the floor-based gate never opens. Gate on
+    // the wave counter instead: elites start appearing once a few waves are done.
+    if (Neo.gameMode === 'endless') return Number(Neo.endlessWave || 0) >= 2;
     return Neo.floor >= Neo.getDifficultyDef().eliteFloor && Neo.floor <= 10;
   }
 
@@ -571,7 +595,14 @@
     const loopMultiplier = 1 + (loopNumber - 1) * Neo.ENEMY_SCALING.loop;
     const timerMultiplier = 1 + gameMinutes * Neo.ENEMY_SCALING.minute;
     const difficultyMultiplier = isBossType(type) ? difficulty.bossStatMultiplier : difficulty.statMultiplier;
-    const hpScale = floorMultiplier * loopMultiplier * timerMultiplier * difficultyMultiplier;
+    // Endless mode: enemies "level up" with each wave. The wave the current
+    // enemies belong to is endlessWave + 1 (endlessWave counts cleared waves).
+    // Outside endless mode this collapses to 1 and changes nothing.
+    const endlessWaveIndex = Neo.gameMode === 'endless' ? Math.max(0, Number(Neo.endlessWave || 0)) : 0;
+    const endlessHpMultiplier = 1 + endlessWaveIndex * Neo.ENEMY_SCALING.endlessWaveHp;
+    const endlessDamageMultiplier = 1 + endlessWaveIndex * Neo.ENEMY_SCALING.endlessWaveDamage;
+    const endlessSpeedMultiplier = 1 + endlessWaveIndex * Neo.ENEMY_SCALING.endlessWaveSpeed;
+    const hpScale = floorMultiplier * loopMultiplier * timerMultiplier * difficultyMultiplier * endlessHpMultiplier;
     const damageFloorMultiplier = 1 + (floorInLoop - 1) * (Neo.ENEMY_SCALING.damageFloor ?? Neo.ENEMY_SCALING.floor);
     const damageLoopMultiplier = 1 + (loopNumber - 1) * (Neo.ENEMY_SCALING.damageLoop ?? Neo.ENEMY_SCALING.loop);
     const damageTimerMultiplier = 1 + gameMinutes * (Neo.ENEMY_SCALING.damageMinute ?? Neo.ENEMY_SCALING.minute);
@@ -579,16 +610,16 @@
       ? (Neo.ENEMY_SCALING.bossDamageSoftCap ?? 2.45)
       : (Neo.ENEMY_SCALING.damageSoftCap ?? 2.15);
     const damageScale = softCapEnemyScale(
-      damageFloorMultiplier * damageLoopMultiplier * damageTimerMultiplier * difficultyMultiplier,
-      damageSoftCap,
+      damageFloorMultiplier * damageLoopMultiplier * damageTimerMultiplier * difficultyMultiplier * endlessDamageMultiplier,
+      endlessWaveIndex > 0 ? Math.max(damageSoftCap, Neo.ENEMY_SCALING.endlessWaveDamageSoftCap) : damageSoftCap,
       isBossType(type) ? 0.38 : 0.34
     );
     const speedFloorMultiplier = 1 + (floorInLoop - 1) * (Neo.ENEMY_SCALING.speedFloor ?? 0.035);
     const speedLoopMultiplier = 1 + (loopNumber - 1) * (Neo.ENEMY_SCALING.speedLoop ?? 0.07);
     const speedTimerMultiplier = 1 + gameMinutes * (Neo.ENEMY_SCALING.speedMinute ?? 0.018);
     const speedScale = softCapEnemyScale(
-      speedFloorMultiplier * speedLoopMultiplier * speedTimerMultiplier * difficulty.speedMultiplier,
-      Neo.ENEMY_SCALING.speedSoftCap ?? 1.38,
+      speedFloorMultiplier * speedLoopMultiplier * speedTimerMultiplier * difficulty.speedMultiplier * endlessSpeedMultiplier,
+      endlessWaveIndex > 0 ? Math.max(Neo.ENEMY_SCALING.speedSoftCap ?? 1.38, Neo.ENEMY_SCALING.endlessWaveSpeedSoftCap) : (Neo.ENEMY_SCALING.speedSoftCap ?? 1.38),
       0.16
     );
     result.hp = Math.round(result.hp * hpScale);
@@ -826,17 +857,17 @@
       base.burstCd = 0;
     } else if (type === 'antony_blemmye') {
       base.r = 42;
-      base.hp = 1400;
-      base.max = 1400;
-      base.speed = 82;
-      base.dmg = 27;
-      base.attackCd = 1.15;
+      base.hp = 1250;
+      base.max = 1250;
+      base.speed = 78;
+      base.dmg = 24;
+      base.attackCd = 1.35;
       base.phase = 1;
       base.bleedImmune = true;
-      base.hammerCd = 1.2;
-      base.biteCd = 0.85;
-      base.slashCd = 1.6;
-      base.deathBallCd = 4.5;
+      base.hammerCd = 1.55;
+      base.biteCd = 1.15;
+      base.slashCd = 2.05;
+      base.deathBallCd = 5.4;
     } else if (type === 'handsome_devil') {
       base.r = 34;
       base.hp = 1700;
@@ -958,7 +989,7 @@
     const character = Neo.player.character;
     const lineByCharacter = {
       princess: { speaker: 'PRINCESS', text: 'He is cute.' },
-      granialla: { speaker: 'GRANIALLA', text: 'Sinner.' },
+      gelleh: { speaker: 'GELLEH', text: 'Sinner.' },
       mooggy: { speaker: 'MOOGGY', text: 'Uncle.' },
     };
     const line = lineByCharacter[character];
@@ -978,10 +1009,28 @@
     ], { returnState: 'play' });
   }
 
+  function tryPlayAntonyBlemmyeCutscene(enemy, enemyType) {
+    if (!enemy || enemyType !== 'antony_blemmye' || !Neo.player) return false;
+    if (Neo.antonyBlemmyeCutscenePlayed) return false;
+
+    Neo.antonyBlemmyeCutscenePlayed = true;
+    Neo.clearGameplayInput();
+    Neo.setShopPanelOpen(false);
+    Neo.setInventoryPanelOpen(false);
+    enemy.attackCd = Math.max(Number(enemy.attackCd || 0), 1.4);
+    enemy.stun = Math.max(Number(enemy.stun || 0), 0.25);
+    Neo.scheduleRunSave();
+
+    return Neo.uiController.playDialogue([
+      { speaker: 'ANTONY BLEMMYAE', text: 'gorba borba' },
+    ], { returnState: 'play' });
+  }
+
   function tryPlayBossIntroCutscene(enemy, enemyType) {
     return tryPlayKnaveKnightCutscene(enemy, enemyType)
       || tryPlayQueenMetaoCutscene(enemy, enemyType)
-      || tryPlayHandsomeDevilCharacterCutscene(enemy, enemyType);
+      || tryPlayHandsomeDevilCharacterCutscene(enemy, enemyType)
+      || tryPlayAntonyBlemmyeCutscene(enemy, enemyType);
   }
 
   function sayOverEntity(entity, text, options = {}) {
@@ -1076,6 +1125,10 @@
       bleedResistance: Neo.clamp(count('tough_skin') * 0.25, 0, 0.8),
       scarfBleedsOnHit: count('hemes_scarf'),
       snakeKnifePoisonChance: count('snake_knife') * 0.02,
+      weaponFatigueChance: count('weapon_fatigue') * 0.05,
+      confuseRayStunChance: count('confuse_ray') * 0.01,
+      overstimulateStunChance: count('overstimulate') * 0.2,
+      homingMissileChance: count('homing_missile') * 0.15,
       critChance,
       critMultiplier: 1.6 + (count('oracles_lens') > 0 ? critChance * 2.2 : critChance * 0.6),
       attackSpeedMultiplier: robotArm > 0 && inventory?.robotArmReady
@@ -1088,6 +1141,7 @@
       aoeDamageMultiplier: Number(characterDef.aoeDamageMultiplier || 1),
       beamDamageMultiplier: 1 + count('dragon_orb') * 0.35,
       projectileBounces: count('ricocete'),
+      projectileHomingStrength: count('enemy_magnet') * 0.05,
       projectileSpeedMultiplier: 1 + count('mooggy_zoomies') * 0.2,
       healingMultiplier: 1 + count('drink_master') * 0.2,
       itemDropChanceBonus: Math.min(0.3, count('rich_mans_luck') * 0.05),
@@ -1493,8 +1547,10 @@
     if (!Neo.currentRoom || Neo.currentRoom.type !== 'challenge' || Neo.currentRoom.challengeRewardSpawned) return;
     Neo.currentRoom.challengeRewardSpawned = true;
     const rewardRandom = Neo.createRoomRandom(Neo.currentRoom, 'challenge:reward');
+    const scrollRandom = Neo.createRoomRandom(Neo.currentRoom, 'challenge:scroll-reward');
     const challengeData = Neo.currentRoom.challengeData || {};
-    const rewardKey = challengeData.rewardKey || Neo.rollItemDrop({ elite: true, random: rewardRandom });
+    const scrollReward = Neo.floor > 3 && scrollRandom() < 0.2 ? Neo.rollScrollOfControl?.(scrollRandom) : '';
+    const rewardKey = challengeData.rewardKey || scrollReward || Neo.rollItemDrop({ elite: true, random: rewardRandom });
     Neo.pickups = Neo.pickups.filter(pickup => !['challengeBomb', 'challengeRune', 'challengeStarter', 'challengeItemChoice'].includes(pickup?.type));
     Neo.pickups.push({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 16, type: 'item', key: rewardKey });
     Neo.pickups.push({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 + 36, type: 'potion' });
@@ -2427,7 +2483,19 @@
 
     if (hpPct < 0.5 && enemy.phase === 1) {
       enemy.phase = 2;
-      sayOverEntity(enemy, 'You should have feared the dark.', { holdTime: 1.8 });
+      sayOverEntity(enemy, 'JUSTICE OF SONICHU!', { holdTime: 1.8 });
+      spawnJusticeOfSonichu(enemy);
+      enemy.sonichuCd = 6.5;
+    }
+
+    // Phase 2: re-cast the room-spanning lightning barrage on a cooldown.
+    if (enemy.phase >= 2) {
+      enemy.sonichuCd = Math.max(0, Number(enemy.sonichuCd || 0) - dt);
+      if (enemy.sonichuCd <= 0 && enemy.stun <= 0) {
+        enemy.sonichuCd = 7.5 * tuning.rangedCadence;
+        sayOverEntity(enemy, 'JUSTICE OF SONICHU!', { holdTime: 1.2 });
+        spawnJusticeOfSonichu(enemy);
+      }
     }
 
     enemy.columnCd = Math.max(0, Number(enemy.columnCd || 0) - dt);
@@ -2498,6 +2566,48 @@
     }
   }
 
+  // "Justice of Sonichu": Bowman's Bane's phase-2 ultimate. Calls down a fan of
+  // room-spanning lightning bolts that streak across the arena like lasers. Each
+  // bolt telegraphs along its line for a beat, then strikes. One bolt is aimed
+  // through the player's position; the rest sweep the room at staggered angles.
+  function spawnJusticeOfSonichu(enemy) {
+    const tuning = Neo.getEnemyDifficultyTuning();
+    const cx = Neo.ROOM_W / 2;
+    const cy = Neo.ROOM_H / 2;
+    // Long enough to always span the whole room from the center pivot.
+    const reach = Math.hypot(Neo.ROOM_W, Neo.ROOM_H);
+    const boltCount = 5;
+    const aimAngle = Math.atan2(Neo.player.y - cy, Neo.player.x - cx);
+    for (let index = 0; index < boltCount; index += 1) {
+      // Spread the bolts evenly around the room, anchored on the player's bearing.
+      const angle = aimAngle + (index - (boltCount - 1) / 2) * (Math.PI / boltCount);
+      const dirX = Math.cos(angle);
+      const dirY = Math.sin(angle);
+      // Stagger the strikes so they cascade rather than all landing at once.
+      const warn = (0.7 + index * 0.16) / Math.max(0.6, tuning.reaction);
+      Neo.hazards.push({
+        kind: 'lightning_strike_line',
+        enemy: true,
+        source: 'justice_of_sonichu',
+        x1: cx - dirX * reach,
+        y1: cy - dirY * reach,
+        x2: cx + dirX * reach,
+        y2: cy + dirY * reach,
+        r: 30,
+        warn,
+        warnTick: 0,
+        tick: 0,
+        interval: 0.12,
+        // ~0.55s active strike window after the telegraph.
+        ttl: warn + 0.55,
+        damage: Math.round(enemy.dmg * 0.85),
+      });
+    }
+    Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.5, ring: 60, c: '#bfe4ff' });
+    Neo.shake = Math.max(Neo.shake, 9);
+    Neo.shakeT = Math.max(Neo.shakeT, 0.18);
+  }
+
   // Directional hammer shockwave: a wave of damage that travels forward in the
   // facing direction instead of a full circle. Implemented as a series of
   // advancing damage arcs spawned over a few frames via a lightweight pulse.
@@ -2507,14 +2617,14 @@
       : Math.atan2(Neo.player.y - enemy.y, Neo.player.x - enemy.x);
     enemy.antonyShockwave = {
       angle,
-      damage: Math.round(enemy.dmg * 1.18),
+      damage: Math.round(enemy.dmg * 1.05),
       // Wave geometry: travels `range` px outward, only hits within `halfArc`
       // of the facing direction, in a band `bandWidth` thick.
-      range: 360,
-      speed: 720,
+      range: 320,
+      speed: 620,
       travelled: enemy.r + 12,
-      halfArc: 0.62,
-      bandWidth: 64,
+      halfArc: 0.54,
+      bandWidth: 56,
       hit: false,
     };
     Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.34, ring: 70, c: '#ffcf8a' });
@@ -2573,9 +2683,9 @@
   // from the short bite. Hits anything inside a forward cone within reach.
   function spawnAntonySlash(enemy) {
     const angle = Math.atan2(Neo.player.y - enemy.y, Neo.player.x - enemy.x);
-    const reach = enemy.r + Neo.player.r + 78;
-    const halfArc = 0.95;
-    const damage = Math.round(enemy.dmg * 1.05);
+    const reach = enemy.r + Neo.player.r + 66;
+    const halfArc = 0.82;
+    const damage = Math.round(enemy.dmg * 0.92);
     enemy.attackAnimT = 0.3;
     enemy.swingTime = 0.32;
 
@@ -2616,27 +2726,27 @@
     Neo.spawnProjectile({
       x: enemy.x + Math.cos(angle) * (enemy.r + 14),
       y: enemy.y + Math.sin(angle) * (enemy.r + 14),
-      vx: Math.cos(angle) * 190,
-      vy: Math.sin(angle) * 190,
-      r: 44,
+      vx: Math.cos(angle) * 175,
+      vy: Math.sin(angle) * 175,
+      r: 38,
       life: 3.4,
       enemy: true,
       kind: 'cold_death',
       source: 'antony_death_ball',
-      damage: Math.round(enemy.dmg * 1.3),
-      knockback: 280,
+      damage: Math.round(enemy.dmg * 1.1),
+      knockback: 230,
       color: '#9fe8ff',
       // The icy "cold" debuff is the `slow` status: it slows movement AND makes
       // the player brittle (strips defense per stack via getBrittleDefenseMultiplier).
       // Cold lifetime on the player is auto-scaled to 15s per stack in applyStatus,
       // so the duration passed here is only a floor for non-player targets.
-      statusEffects: [{ key: 'slow', chance: 1, stacks: 2, duration: 4 }],
+      statusEffects: [{ key: 'slow', chance: 1, stacks: 1, duration: 4 }],
       // AOE frost burst when the ball lands (wall, expiry, or hitting player).
-      enemyBlast: { radius: 150, damage: Math.round(enemy.dmg * 0.8), color: '#9fe8ff', statusKey: 'slow', statusStacks: 1, statusDuration: 3 },
+      enemyBlast: { radius: 120, damage: Math.round(enemy.dmg * 0.65), color: '#9fe8ff', statusKey: 'slow', statusStacks: 1, statusDuration: 3 },
       homing: true,
-      homingTurnRate: 0.9,
-      homingSpeed: 215,
-      homingAccel: 1.4,
+      homingTurnRate: 0.65,
+      homingSpeed: 190,
+      homingAccel: 1.1,
     });
     Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.45, ring: 46, c: '#9fe8ff' });
     Neo.shake = Math.max(Neo.shake, 9);
@@ -2696,16 +2806,16 @@
     // Bite: very short range life-drain chomp (unchanged).
     if (enemy.biteCd <= 0 && distance < enemy.r + Neo.player.r + 26) {
       const angle = Math.atan2(dy, dx);
-      const biteDamage = Math.round(enemy.dmg * 0.92);
+      const biteDamage = Math.round(enemy.dmg * 0.82);
       enemy.attackAnimT = 0.28;
       Neo.damagePlayer(biteDamage, angle, 240, enemy.type);
-      if (Neo.nextRandom('encounter') < 0.5) {
+      if (Neo.nextRandom('encounter') < 0.35) {
         Neo.applyDarkDrain?.(Neo.player, 2, 4.2);
-        const heal = Math.round(biteDamage * 0.5);
+        const heal = Math.round(biteDamage * 0.35);
         enemy.hp = Math.min(enemy.max, enemy.hp + heal);
         Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 12, life: 0.55, text: `+${heal}`, c: '#b48cff' });
       }
-      enemy.biteCd = 1.65 * tuning.rangedCadence;
+      enemy.biteCd = 1.9 * tuning.rangedCadence;
       enemy.attackCd = Math.max(enemy.attackCd, 0.55);
       return;
     }
@@ -2714,8 +2824,8 @@
     // the bite, no windup so it punishes hugging the boss).
     if (enemy.slashCd <= 0 && enemy.attackCd <= 0 && distance < enemy.r + Neo.player.r + 70) {
       spawnAntonySlash(enemy);
-      enemy.slashCd = 2.0 * tuning.rangedCadence;
-      enemy.attackCd = 0.7;
+      enemy.slashCd = 2.45 * tuning.rangedCadence;
+      enemy.attackCd = 0.85;
       if (!enemy.antonySlashLineShown) {
         enemy.antonySlashLineShown = true;
         sayOverEntity(enemy, 'Carve you open.', { holdTime: 1.4 });
@@ -2726,10 +2836,10 @@
     // Cold death ball: charged frost orb fired at mid/long range.
     if (enemy.deathBallCd <= 0 && enemy.attackCd <= 0 && distance > enemy.r + Neo.player.r + 40) {
       enemy.state = 'antonyDeathBall';
-      enemy.windup = 0.9 / tuning.reaction;
+      enemy.windup = 1.05 / tuning.reaction;
       enemy.antonyDeathBallAngle = Math.atan2(dy, dx);
-      enemy.deathBallCd = 6.0 * tuning.rangedCadence;
-      enemy.attackCd = 1.0;
+      enemy.deathBallCd = 7.2 * tuning.rangedCadence;
+      enemy.attackCd = 1.2;
       if (!enemy.antonyDeathBallLineShown) {
         enemy.antonyDeathBallLineShown = true;
         sayOverEntity(enemy, 'Feel the cold.', { holdTime: 1.5 });
@@ -2740,10 +2850,10 @@
     // Hammer: directional shockwave that travels forward (no longer a circle).
     if (enemy.hammerCd <= 0 && distance < 320 && enemy.attackCd <= 0) {
       enemy.state = 'antonyHammer';
-      enemy.windup = 0.78 / tuning.reaction;
+      enemy.windup = 0.9 / tuning.reaction;
       enemy.antonyHammerAngle = Math.atan2(dy, dx);
-      enemy.hammerCd = 3.35 * tuning.rangedCadence;
-      enemy.attackCd = 0.8;
+      enemy.hammerCd = 4.1 * tuning.rangedCadence;
+      enemy.attackCd = 1.0;
       if (!enemy.antonyHammerLineShown) {
         enemy.antonyHammerLineShown = true;
         sayOverEntity(enemy, 'Open wide.', { holdTime: 1.5 });
@@ -2983,7 +3093,7 @@
       if (enemy.burningTick <= 0) {
         enemy.burningTick = 1.15;
         Neo.spawnParticle({ x: enemy.x + Neo.rand(-10, 10, 'fx'), y: enemy.y + Neo.rand(-10, 10, 'fx'), life: 0.24, c: '#ff9a3c' });
-        if (distanceToPlayer < enemy.r + Neo.player.r + 34) Neo.applyFire(Neo.player, 1, 2.8);
+        if (distanceToPlayer < enemy.r + Neo.player.r + 34) Neo.applyFire(Neo.player, 1, 2.8, enemy.type);
       }
     }
 
@@ -2992,7 +3102,7 @@
       if (enemy.bleedingTick <= 0) {
         enemy.bleedingTick = 1.25;
         Neo.spawnParticle({ x: enemy.x + Neo.rand(-8, 8, 'fx'), y: enemy.y + Neo.rand(-8, 8, 'fx'), life: 0.22, c: '#ff4256' });
-        if (distanceToPlayer < enemy.r + Neo.player.r + 28) Neo.applyStatus(Neo.player, 'bleed', 1, 2.2);
+        if (distanceToPlayer < enemy.r + Neo.player.r + 28) Neo.applyStatus(Neo.player, 'bleed', 1, 2.2, enemy.type);
       }
     }
 
@@ -3162,6 +3272,11 @@
     if (bleedChance > 0) effects.push({ key: 'bleed', chance: bleedChance, stacks: 1, duration: 4.2 });
     const poisonChance = Number(stats.snakeKnifePoisonChance || 0);
     if (poisonChance > 0) effects.push({ key: 'poison', chance: poisonChance, stacks: 1, duration: 4.2 });
+    const slowChance = Number(stats.weaponFatigueChance || 0);
+    if (slowChance > 0) effects.push({ key: 'slow', chance: slowChance, stacks: 1, duration: 4 });
+    const stunChance = Number(stats.confuseRayStunChance || 0)
+      + (Number(stats.overstimulateStunChance || 0) > 0 && Neo.getActiveStatusCount?.(Neo.player) >= 2 ? Number(stats.overstimulateStunChance || 0) : 0);
+    if (stunChance > 0) effects.push({ key: 'stun', chance: stunChance, stacks: 1, duration: 0.55 });
     if (Number(options.fireStacks || 0) > 0) {
       effects.push({ key: 'fire', chance: 1, stacks: Number(options.fireStacks || 1), duration: Number(options.fireDuration || 3.2) });
     }
@@ -3173,7 +3288,11 @@
     effects.forEach(effect => {
       if (!effect?.key) return;
       if (Neo.nextRandom('encounter') <= Number(effect.chance ?? 1)) {
-        Neo.applyStatus(Neo.player, effect.key, Number(effect.stacks || 1), Number(effect.duration || 3));
+        if (effect.key === 'stun') {
+          Neo.player.stun = Math.max(Number(Neo.player.stun || 0), Number(effect.duration || 0.55));
+        } else {
+          Neo.applyStatus(Neo.player, effect.key, Number(effect.stacks || 1), Number(effect.duration || 3), enemy?.type || 'mirror_knight');
+        }
       }
     });
   }
@@ -3219,6 +3338,8 @@
     const projectileSpeedMultiplier = Math.max(0.1, Number(enemy?.mirrorItemStats?.projectileSpeedMultiplier || 1));
     const projectileSpeed = speed * projectileSpeedMultiplier;
     const projectileBounces = Math.max(0, Math.floor(Number(enemy?.mirrorItemStats?.projectileBounces || 0)));
+    const homingStrength = Math.max(0, Number(enemy?.mirrorItemStats?.projectileHomingStrength || 0));
+    const grantedHoming = homingStrength > 0 && !Object.prototype.hasOwnProperty.call(options, 'homing');
     for (let index = 0; index < count; index += 1) {
       const offset = count === 1 ? 0 : (index - (count - 1) / 2) * spread;
       const a = angle + offset;
@@ -3236,10 +3357,11 @@
         damage: rollMirrorDamage(enemy, damage, options).amount,
         knockback: (options.knockback || 120) * Number(enemy?.mirrorItemStats?.knockbackMultiplier || 1),
         statusEffects: options.statusEffects || getMirrorStatusEffects(enemy, options),
-        homing: !!options.homing,
-        homingSpeed: options.homingSpeed,
-        homingTurnRate: options.homingTurnRate,
-        homingAccel: options.homingAccel,
+        homing: Object.prototype.hasOwnProperty.call(options, 'homing') ? !!options.homing : grantedHoming,
+        homingSpeed: options.homingSpeed ?? (grantedHoming ? projectileSpeed : undefined),
+        homingTurnRate: options.homingTurnRate ?? (grantedHoming ? 0.75 + homingStrength * 3.5 : undefined),
+        homingAccel: options.homingAccel ?? (grantedHoming ? 1.2 + homingStrength * 6 : undefined),
+        homingRadius: options.homingRadius ?? (grantedHoming ? 220 + homingStrength * 1400 : undefined),
         bouncesRemaining: projectileBounces,
       });
     }
@@ -3254,7 +3376,7 @@
       const knockback = Math.max(0, Number(weaponStats.knockback || Neo.ATTACKS.melee.push));
       enemy.swingTime = Neo.ATTACKS.melee.active;
       enemy.attackCd = getMirrorSkillCooldown(enemy, 'melee');
-      if (weaponKey === 'hunters_bow' || weaponKey === 'magenta_degale' || weaponKey === 'void_piercer' || weaponKey === 'granillia_lightning_spear' || weaponKey === 'princess_wand') {
+      if (weaponKey === 'hunters_bow' || weaponKey === 'magenta_degale' || weaponKey === 'void_piercer' || weaponKey === 'gelleh_lightning_spear' || weaponKey === 'princess_wand') {
         fireMirrorProjectiles(enemy, angleToPlayer, 1, 0, weaponKey === 'magenta_degale' ? 880 : 760, damage, {
           kind: weaponKey,
           color: Neo.WEAPON_DEFS[weaponKey]?.color || '#d7f6ff',
@@ -3361,8 +3483,26 @@
   function startMirrorSmash(enemy, angleToPlayer) {
     const move = getMirrorMove(enemy, 'smash');
     const damage = getMirrorMoveDamage(enemy, move, enemy.smashDamage || Neo.ATTACKS.smash.damage);
+    const itemStats = enemy?.mirrorItemStats || {};
     enemy.attackCd = 0.6;
     enemy.mirrorSmashCd = getMirrorSkillCooldown(enemy, 'smash');
+    if (Number(itemStats.homingMissileChance || 0) > 0 && Neo.nextRandom('encounter') < Number(itemStats.homingMissileChance || 0)) {
+      for (let index = 0; index < 2; index += 1) {
+        const missileAngle = angleToPlayer + (index === 0 ? -0.12 : 0.12);
+        fireMirrorProjectiles(enemy, missileAngle, 1, 0, 260, 18, {
+          kind: 'homing_missile',
+          color: '#ffe06f',
+          r: 6,
+          life: 2.4,
+          knockback: 120,
+          homing: true,
+          homingSpeed: 430,
+          homingAccel: 3.8,
+          homingTurnRate: 3.5,
+          homingRadius: 960,
+        });
+      }
+    }
     if (move === 'kicky_kick') {
       mirrorBlastPlayer(enemy, 142, Math.max(damage, 84), 680, '#ff7fc2', 'mirror_kick', { aoe: true });
       enemy.vx -= Math.cos(angleToPlayer) * 210;
@@ -3388,7 +3528,7 @@
     }
     if (move === 'fire_circle' || move === 'floor_lava') {
       mirrorBlastPlayer(enemy, move === 'floor_lava' ? 156 : 108, Math.max(12, damage), 150, '#ff7b32', 'mirror_fire', { aoe: true, fireStacks: move === 'floor_lava' ? 2 : 1, fireDuration: 3.2 });
-      Neo.applyFire(Neo.player, move === 'floor_lava' ? 2 : 1, 3.2);
+      Neo.applyFire(Neo.player, move === 'floor_lava' ? 2 : 1, 3.2, enemy?.type || 'mirror_knight');
       return true;
     }
     enemy.mirrorSmashColor = move === 'crimson_smash'
@@ -3551,7 +3691,7 @@
     );
 
     const mirrorWeapon = enemy.mirrorWeapon || '';
-    const rangedMirrorWeapon = ['hunters_bow', 'metao_fire_staff', 'magenta_degale', 'magenta_p90', 'granillia_lightning_spear', 'void_piercer', 'lazer_glasses', 'princess_wand'].includes(mirrorWeapon);
+    const rangedMirrorWeapon = ['hunters_bow', 'metao_fire_staff', 'magenta_degale', 'magenta_p90', 'gelleh_lightning_spear', 'void_piercer', 'lazer_glasses', 'princess_wand'].includes(mirrorWeapon);
     const mirrorWeaponRange = Number(enemy.mirrorWeaponStats?.range || 0);
     if (mirrorWeapon && enemy.attackCd <= 0 && (rangedMirrorWeapon ? distance < 520 : distance < mirrorWeaponRange + Neo.player.r + 14)) {
       startMirrorMelee(enemy, angleToPlayer);
@@ -3950,6 +4090,33 @@
     }
   }
 
+  // When the player is hidden (cape/flying/warp), enemies have no target. Instead of
+  // freezing in place, they pick random points in the room and amble toward them so the
+  // room still feels alive. Targets are re-rolled on arrival or after a short timer.
+  function wanderEnemy(enemy, dt) {
+    if (enemy.beamTime > 0) { enemy.beamTime = 0; if (enemy.state === 'elite_laser') enemy.state = 'idle'; }
+    enemy.wanderT = Math.max(0, (enemy.wanderT || 0) - dt);
+    const margin = (enemy.r || 8) + Neo.WALL + 4;
+    const reached = enemy.wanderTx != null
+      && Math.hypot(enemy.wanderTx - enemy.x, enemy.wanderTy - enemy.y) < 16;
+    if (enemy.wanderTx == null || reached || enemy.wanderT <= 0) {
+      enemy.wanderTx = Neo.rand(margin, Neo.ROOM_W - margin);
+      enemy.wanderTy = Neo.rand(margin, Neo.ROOM_H - margin);
+      enemy.wanderT = Neo.rand(1.4, 3.2);
+    }
+    const dx = enemy.wanderTx - enemy.x;
+    const dy = enemy.wanderTy - enemy.y;
+    const distance = Math.hypot(dx, dy);
+    if (distance > 1) {
+      // Wander at a relaxed pace, not full chase speed.
+      const speed = Math.max(20, (enemy.speed || 60) * 0.45);
+      steerEnemy(enemy, dx / distance, dy / distance, speed, 2.0, dt);
+    } else {
+      enemy.vx *= Math.pow(0.0001, dt);
+      enemy.vy *= Math.pow(0.0001, dt);
+    }
+  }
+
   function steerEnemy(enemy, dirX, dirY, maxSpeed, accel, dt) {
     const slowMultiplier = Neo.getSlowMultiplier?.(enemy) || 1;
     const adjustedSpeed = maxSpeed * slowMultiplier;
@@ -3995,6 +4162,8 @@
   Neo.spawnMiniBoss = spawnMiniBoss;
   Neo.spawnWave = spawnWave;
   Neo.spawnFloorBoss = spawnFloorBoss;
+  Neo.spawnEndlessWave = spawnEndlessWave;
+  Neo.isEndlessBossWave = isEndlessBossWave;
   Neo.getEnemyDifficultyMultiplier = getEnemyDifficultyMultiplier;
   Neo.canSpawnEliteEnemies = canSpawnEliteEnemies;
   Neo.rollEliteInventory = rollEliteInventory;
@@ -4064,4 +4233,5 @@
 	  Neo.triggerGodPhase = triggerGodPhase;
 	  Neo.updateGod = updateGod;
   Neo.steerEnemy = steerEnemy;
+  Neo.wanderEnemy = wanderEnemy;
   Neo.moveCircle = moveCircle;

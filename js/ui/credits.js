@@ -15,7 +15,7 @@
     { key: 'princess',     glow: 'rgba(255,120,210,0.5)' },
     { key: 'thorn_knight', glow: 'rgba(120,196,255,0.5)' },
     { key: 'metao',        glow: 'rgba(150,120,255,0.5)' },
-    { key: 'granialla',    glow: 'rgba(255,210,120,0.5)' },
+    { key: 'gelleh',       glow: 'rgba(255,210,120,0.5)' },
     { key: 'mooggy',       glow: 'rgba(255,90,90,0.5)'   },
   ];
 

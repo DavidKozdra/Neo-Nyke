@@ -5,6 +5,10 @@ export function bindInput() {
       const rect = Neo.canvas.getBoundingClientRect();
       Neo.mouse.x = (event.clientX - rect.left) * (Neo.canvas.width / rect.width);
       Neo.mouse.y = (event.clientY - rect.top) * (Neo.canvas.height / rect.height);
+      // Raw page coords, kept for DOM overlays (e.g. reward-choice hover tooltip)
+      // that must be positioned in CSS pixels rather than canvas space.
+      Neo.mouse.clientX = event.clientX;
+      Neo.mouse.clientY = event.clientY;
     });
     Neo.canvas.addEventListener('mousedown', event => {
       if (event.button === 0) { Neo.mouse.down = true; Neo.mouse.downQueued = true; }
@@ -34,6 +38,10 @@ export function bindInput() {
       const inventoryKey = b ? b.inventory : 'i';
       if (isWizardPawOpen()) {
         if (event.key === 'Escape') event.preventDefault();
+        return;
+      }
+      if (isVoucherModalOpen()) {
+        if (event.key === 'Escape') { event.preventDefault(); Neo.cancelVoucherRedeem?.(); }
         return;
       }
       if (event.key === 'Escape' && isPanelOpen(Neo.ui.invPanel)) {
@@ -66,8 +74,8 @@ export function bindInput() {
         toggleInventoryPanel();
         Neo.invKeyLatch = true;
       }
-      if (b && key === b.smash && Neo.gameState === 'play') Neo.trySmash();
-      else if (!b && key === 'r' && Neo.gameState === 'play') Neo.trySmash();
+      if (b && key === b.smash && Neo.gameState === 'play') { Neo.smashHeld = true; Neo.trySmash(); }
+      else if (!b && key === 'r' && Neo.gameState === 'play') { Neo.smashHeld = true; Neo.trySmash(); }
       if (Neo.gameState === 'play' && Neo.EQUIPMENT_SLOT_KEYS?.includes(key.toUpperCase())) {
         if (!Neo.equipKeyLatch) Neo.equipKeyLatch = {};
         const letter = key.toUpperCase();
@@ -75,6 +83,11 @@ export function bindInput() {
           Neo.equipKeyLatch[letter] = true;
           if (Neo.activateEquipmentSlotKey?.(letter)) event.preventDefault();
         }
+      }
+      const activateAllKey = String(b?.activateAll ?? ' ').toLowerCase();
+      if (key === activateAllKey && Neo.gameState === 'play' && !Neo.activateAllKeyLatch) {
+        Neo.activateAllKeyLatch = true;
+        Neo.activateAllEquipmentSlots?.();
       }
     });
     window.addEventListener('keyup', event => {
@@ -86,8 +99,10 @@ export function bindInput() {
       Neo.keys[key] = false;
       const b = window.NeoSettings?.getBindings();
       const inventoryKey = b ? b.inventory : 'i';
+      if ((b && key === b.smash) || (!b && key === 'r')) Neo.smashHeld = false;
       if (key === 'e') { Neo.shopKeyLatch = false; Neo.anvilKeyLatch = false; }
       if (key === ' ') Neo.ladderUseKeyLatch = false;
+      if (key === String(b?.activateAll ?? ' ').toLowerCase()) Neo.activateAllKeyLatch = false;
       if (key === inventoryKey) Neo.invKeyLatch = false;
       const upper = key.toUpperCase();
       if (Neo.equipKeyLatch && Neo.EQUIPMENT_SLOT_KEYS?.includes(upper)) {
@@ -314,6 +329,13 @@ export function bindInput() {
     });
     Neo.ui.wizardPawChoices?.addEventListener('click', Neo.handleWizardPawChoiceClick);
     Neo.ui.wizardPawConfirm?.addEventListener('click', Neo.confirmWizardPawSelection);
+    Neo.ui.scrollControlChoices?.addEventListener('click', event => Neo.handleScrollControlChoiceClick?.(event));
+    Neo.ui.scrollControlConfirm?.addEventListener('click', () => Neo.confirmScrollControlSelection?.());
+    Neo.ui.scrollControlCancel?.addEventListener('click', () => Neo.cancelScrollControlSelection?.());
+    Neo.ui.scrollControlSearch?.addEventListener('input', event => Neo.updateScrollControlSearch?.(event.target?.value || ''));
+    Neo.ui.shopVoucherRedeem?.addEventListener('click', () => Neo.openVoucherRedeem?.());
+    Neo.ui.voucherChoices?.addEventListener('click', event => Neo.handleVoucherChoiceClick?.(event));
+    Neo.ui.voucherCancel?.addEventListener('click', () => Neo.cancelVoucherRedeem?.());
 
     window.addEventListener('beforeunload', () => {
       if (Neo.gameState === 'play') {
@@ -400,6 +422,7 @@ export function bindPanelInput() {
     Neo.ui.shopItems?.addEventListener('click', handleShopBuyClick);
     Neo.ui.shopWeapons?.addEventListener('click', handleShopBuyClick);
     Neo.ui.shopMoves?.addEventListener('click', handleShopBuyClick);
+    Neo.ui.shopTrades?.addEventListener('click', handleShopBuyClick);
     Neo.ui.shopHeals?.addEventListener('click', handleShopBuyClick);
     Neo.bindEquipmentSlotClicks?.();
     Neo.ui.invMovesList?.addEventListener('click', handleInventoryMoveSelect);
@@ -586,8 +609,8 @@ export function isPanelOpen(panel) {
     return !!panel && !panel.classList.contains('hidden');
   }
 
-  const PANEL_CLOSE_EFFECT_DURATION_MS = 640;
-  const PANEL_CLOSE_EFFECT_SETTLE_MS = 260;
+  const PANEL_CLOSE_EFFECT_DURATION_MS = 340;
+  const PANEL_CLOSE_EFFECT_SETTLE_MS = 40;
 
   function prefersReducedPanelMotion() {
     return !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
@@ -690,30 +713,9 @@ export function isPanelOpen(panel) {
     return { x: rect.width * 0.86, y: rect.height * 0.14 };
   }
 
-  function makeFractureClip(row, col, rows, cols) {
-    const topCut = row === 0 ? 0 : 5 + Math.random() * 14;
-    const rightCut = col === cols - 1 ? 0 : 5 + Math.random() * 14;
-    const bottomCut = row === rows - 1 ? 0 : 5 + Math.random() * 14;
-    const leftCut = col === 0 ? 0 : 5 + Math.random() * 14;
-    const notchA = 18 + Math.random() * 24;
-    const notchB = 58 + Math.random() * 24;
-    return `polygon(${leftCut}% 0%, ${notchA}% ${topCut}%, 100% ${rightCut}%, ${100 - rightCut}% ${notchB}%, 100% ${100 - bottomCut}%, ${notchB}% 100%, ${leftCut}% ${100 - leftCut}%, 0% ${100 - leftCut}%, ${topCut}% ${notchA}%)`;
-  }
-
-  function getPanelCloseGrid(rect) {
-    const targetTiles = Math.max(24, Math.min(32, Math.round((rect.width * rect.height) / 22000)));
-    const aspect = rect.width / Math.max(1, rect.height);
-    let cols = Math.max(4, Math.min(8, Math.round(Math.sqrt(targetTiles * aspect))));
-    let rows = Math.max(3, Math.min(6, Math.ceil(targetTiles / cols)));
-
-    while (cols * rows > 32 && rows > 3) rows -= 1;
-    while (cols * rows > 32 && cols > 4) cols -= 1;
-    return { cols, rows };
-  }
-
   function addPanelCloseSparks(ghost, rect, origin, maxDelay) {
     const area = rect.width * rect.height;
-    const sparkCount = Math.max(20, Math.min(40, Math.round(area / 15000)));
+    const sparkCount = Math.max(8, Math.min(18, Math.round(area / 30000)));
     const maxRadius = Math.max(1, Math.hypot(rect.width, rect.height));
 
     for (let index = 0; index < sparkCount; index += 1) {
@@ -726,8 +728,8 @@ export function isPanelOpen(panel) {
       const vx = x - origin.x;
       const vy = y - origin.y;
       const len = Math.hypot(vx, vy) || 1;
-      const drift = 70 + Math.random() * 150;
-      const delay = Math.round((len / maxRadius) * Math.min(maxDelay + 120, 360) + Math.random() * 110);
+      const drift = 50 + Math.random() * 105;
+      const delay = Math.round((len / maxRadius) * Math.min(maxDelay + 40, 120) + Math.random() * 35);
 
       spark.style.left = `${x.toFixed(1)}px`;
       spark.style.top = `${y.toFixed(1)}px`;
@@ -735,12 +737,42 @@ export function isPanelOpen(panel) {
       spark.style.setProperty('--panel-fx-dx', `${((vx / len) * drift + (Math.random() - 0.5) * 42).toFixed(1)}px`);
       spark.style.setProperty('--panel-fx-dy', `${((vy / len) * drift - 24 + (Math.random() - 0.5) * 58).toFixed(1)}px`);
       spark.style.setProperty('--panel-fx-scale', (0.35 + Math.random() * 0.85).toFixed(2));
-      spark.style.backgroundImage = 'url(assets/icons/icon-72x72.png)';
-      spark.style.backgroundSize = 'contain';
-      spark.style.backgroundRepeat = 'no-repeat';
-      spark.style.backgroundPosition = 'center';
       ghost.appendChild(spark);
     }
+  }
+
+  function addPanelCloseShards(ghost, rect, origin) {
+    const area = rect.width * rect.height;
+    const shardCount = Math.max(8, Math.min(14, Math.round(area / 42000)));
+    const maxRadius = Math.max(1, Math.hypot(rect.width, rect.height));
+    let maxDelay = 0;
+
+    for (let index = 0; index < shardCount; index += 1) {
+      const shard = document.createElement('span');
+      shard.className = 'panel-disintegrate-fx__tile';
+      const x = Math.random() * rect.width;
+      const y = Math.random() * rect.height;
+      const vx = x - origin.x;
+      const vy = y - origin.y;
+      const distance = Math.hypot(vx, vy);
+      const len = distance || 1;
+      const force = 58 + (distance / maxRadius) * 110 + Math.random() * 28;
+      const delay = Math.round((distance / maxRadius) * 55 + Math.random() * 22);
+      maxDelay = Math.max(maxDelay, delay);
+
+      shard.style.left = `${x.toFixed(1)}px`;
+      shard.style.top = `${y.toFixed(1)}px`;
+      shard.style.width = `${(12 + Math.random() * 28).toFixed(1)}px`;
+      shard.style.height = `${(3 + Math.random() * 8).toFixed(1)}px`;
+      shard.style.setProperty('--panel-fx-delay', `${delay}ms`);
+      shard.style.setProperty('--panel-fx-dx', `${((vx / len) * force + (Math.random() - 0.5) * 28).toFixed(1)}px`);
+      shard.style.setProperty('--panel-fx-dy', `${((vy / len) * force - 18 + (Math.random() - 0.5) * 34).toFixed(1)}px`);
+      shard.style.setProperty('--panel-fx-rot', `${((Math.random() - 0.5) * 52).toFixed(1)}deg`);
+      shard.style.setProperty('--panel-fx-scale', (0.58 + Math.random() * 0.3).toFixed(2));
+      ghost.appendChild(shard);
+    }
+
+    return maxDelay;
   }
 
   export function playPanelCloseEffect(element) {
@@ -763,62 +795,23 @@ export function isPanelOpen(panel) {
     const parsedZ = Number.parseFloat(computed.zIndex);
     ghost.style.zIndex = String(Number.isFinite(parsedZ) ? parsedZ + 2 : 100);
 
-    const flash = document.createElement('div');
-    flash.className = 'panel-disintegrate-fx__flash';
-    ghost.appendChild(flash);
-
     const origin = getPanelCloseOrigin(element, rect);
     ghost.style.setProperty('--panel-fx-origin-x', `${origin.x}px`);
     ghost.style.setProperty('--panel-fx-origin-y', `${origin.y}px`);
 
-    const { cols, rows } = getPanelCloseGrid(rect);
-    const tileWidth = rect.width / cols;
-    const tileHeight = rect.height / rows;
-    const maxRadius = Math.max(1, Math.hypot(rect.width, rect.height));
-    let maxDelay = 0;
+    const surfaceLayer = document.createElement('div');
+    surfaceLayer.className = 'panel-disintegrate-fx__ghost-surface';
+    const surface = element.cloneNode(true);
+    applyGhostSurfaceStyle(element, surface, rect, 0, 0);
+    copyCanvasBitmaps(element, surface);
+    surfaceLayer.appendChild(surface);
+    ghost.appendChild(surfaceLayer);
 
-    for (let row = 0; row < rows; row += 1) {
-      for (let col = 0; col < cols; col += 1) {
-        const x = Math.round(col * tileWidth);
-        const y = Math.round(row * tileHeight);
-        const width = col === cols - 1 ? Math.max(1, Math.round(rect.width - x)) : Math.ceil(tileWidth);
-        const height = row === rows - 1 ? Math.max(1, Math.round(rect.height - y)) : Math.ceil(tileHeight);
-        const cx = x + width / 2;
-        const cy = y + height / 2;
-        const vx = cx - origin.x;
-        const vy = cy - origin.y;
-        const distance = Math.hypot(vx, vy);
-        const len = distance || 1;
-        const nx = vx / len;
-        const ny = vy / len;
-        const tangent = Math.random() < 0.5 ? -1 : 1;
-        const force = 86 + (distance / maxRadius) * 170 + Math.random() * 54;
-        const delay = Math.round(70 + (distance / maxRadius) * 280 + Math.random() * 90);
-        const tile = document.createElement('div');
-        tile.className = 'panel-disintegrate-fx__tile';
-        tile.style.left = `${x}px`;
-        tile.style.top = `${y}px`;
-        tile.style.width = `${width}px`;
-        tile.style.height = `${height}px`;
-        maxDelay = Math.max(maxDelay, delay);
-        tile.style.setProperty('--panel-fx-delay', `${delay}ms`);
-        tile.style.setProperty('--panel-fx-dx', `${(nx * force + -ny * tangent * Math.random() * 34).toFixed(1)}px`);
-        tile.style.setProperty('--panel-fx-dy', `${(ny * force + nx * tangent * Math.random() * 34 - 26).toFixed(1)}px`);
-        tile.style.setProperty('--panel-fx-rot', `${((Math.random() - 0.5) * 34 + tangent * distance / maxRadius * 20).toFixed(1)}deg`);
-        tile.style.setProperty('--panel-fx-scale', (0.46 + Math.random() * 0.16).toFixed(2));
-        tile.style.setProperty('--panel-fx-bright', (1.12 + Math.random() * 0.26).toFixed(2));
-        const clipPath = makeFractureClip(row, col, rows, cols);
-        tile.style.clipPath = clipPath;
-        tile.style.webkitClipPath = clipPath;
+    const flash = document.createElement('div');
+    flash.className = 'panel-disintegrate-fx__flash';
+    ghost.appendChild(flash);
 
-        tile.style.backgroundImage = 'url(assets/icons/icon-72x72.png)';
-        tile.style.backgroundSize = 'contain';
-        tile.style.backgroundRepeat = 'no-repeat';
-        tile.style.backgroundPosition = 'center';
-        tile.style.backgroundColor = 'rgba(180, 156, 255, 0.15)';
-        ghost.appendChild(tile);
-      }
-    }
+    const maxDelay = addPanelCloseShards(ghost, rect, origin);
 
     addPanelCloseSparks(ghost, rect, origin, maxDelay);
     document.body.appendChild(ghost);
@@ -850,6 +843,8 @@ export function setShopPanelOpen(open, options = {}) {
     else clearPanelCloseEffect(Neo.ui.shopPanel);
     Neo.ui.shopPanel.classList.add('hidden');
     Neo.ui.shopPanel.setAttribute('aria-hidden', 'true');
+    // A scroll bought here defers its popup while the shop is open; surface it now.
+    Neo.requestPanelItemSelection?.({ suppressBatteryOpen: true });
   }
 
 export function setInventoryPanelOpen(open, options = {}) {
@@ -944,6 +939,8 @@ export function setAnvilPanelOpen(open, options = {}) {
     else clearPanelCloseEffect(Neo.ui.anvilPanel);
     Neo.ui.anvilPanel.classList.add('hidden');
     Neo.ui.anvilPanel.setAttribute('aria-hidden', 'true');
+    // Surface any selection (scroll/paw/battery) deferred while the anvil was open.
+    Neo.requestPanelItemSelection?.({ suppressBatteryOpen: true });
   }
 
 export function toggleAnvilPanel() {
@@ -1276,6 +1273,10 @@ export function isWizardPawOpen() {
     return !!Neo.wizardPawSelection && isPanelOpen(Neo.ui.wizardPawModal);
   }
 
+export function isScrollControlOpen() {
+    return !!Neo.scrollControlSelection && isPanelOpen(Neo.ui.scrollControlModal);
+  }
+
 export function setWizardPawModalOpen(open, options = {}) {
     if (!Neo.ui.wizardPawModal) return;
   const animateClose = options.animateClose !== false;
@@ -1293,8 +1294,47 @@ export function setWizardPawModalOpen(open, options = {}) {
     Neo.ui.wizardPawModal.setAttribute('aria-hidden', 'true');
   }
 
+export function setScrollControlModalOpen(open, options = {}) {
+    if (!Neo.ui.scrollControlModal) return;
+  const animateClose = options.animateClose !== false;
+    const effectTarget = Neo.ui.scrollControlModal.querySelector('.modal-box') || Neo.ui.scrollControlModal;
+    if (effectTarget instanceof HTMLElement) effectTarget.dataset.panelFxKey = 'scroll-control-modal';
+    if (open) {
+      clearPanelCloseEffect(effectTarget);
+      Neo.ui.scrollControlModal.classList.remove('hidden');
+      Neo.ui.scrollControlModal.setAttribute('aria-hidden', 'false');
+      Neo.ui.scrollControlSearch?.focus?.();
+      return;
+    }
+    if (animateClose && isPanelOpen(Neo.ui.scrollControlModal)) playPanelCloseEffect(effectTarget);
+    else clearPanelCloseEffect(effectTarget);
+    Neo.ui.scrollControlModal.classList.add('hidden');
+    Neo.ui.scrollControlModal.setAttribute('aria-hidden', 'true');
+  }
+
+export function isVoucherModalOpen() {
+    return !!Neo.voucherRedeemOpen && isPanelOpen(Neo.ui.voucherModal);
+  }
+
+export function setVoucherModalOpen(open, options = {}) {
+    if (!Neo.ui.voucherModal) return;
+    const animateClose = options.animateClose !== false;
+    const effectTarget = Neo.ui.voucherModal.querySelector('.modal-box') || Neo.ui.voucherModal;
+    if (effectTarget instanceof HTMLElement) effectTarget.dataset.panelFxKey = 'voucher-modal';
+    if (open) {
+      clearPanelCloseEffect(effectTarget);
+      Neo.ui.voucherModal.classList.remove('hidden');
+      Neo.ui.voucherModal.setAttribute('aria-hidden', 'false');
+      return;
+    }
+    if (animateClose && isPanelOpen(Neo.ui.voucherModal)) playPanelCloseEffect(effectTarget);
+    else clearPanelCloseEffect(effectTarget);
+    Neo.ui.voucherModal.classList.add('hidden');
+    Neo.ui.voucherModal.setAttribute('aria-hidden', 'true');
+  }
+
 export function isOverlayBlockingInput() {
-    return isPanelOpen(Neo.ui.shopPanel) || isPanelOpen(Neo.ui.invPanel) || isPanelOpen(Neo.ui.anvilPanel) || isWizardPawOpen();
+    return isPanelOpen(Neo.ui.shopPanel) || isPanelOpen(Neo.ui.invPanel) || isPanelOpen(Neo.ui.anvilPanel) || isWizardPawOpen() || isScrollControlOpen() || isVoucherModalOpen();
   }
 
 export function isGodSweepUnlocked() {
@@ -1543,6 +1583,102 @@ export function getShopWeaponOffers() {
     return false;
   }
 
+  function getShopTradeState(tradeOffer, noItemsChallenge = false) {
+    if (!tradeOffer || tradeOffer.unavailable || !tradeOffer.key) {
+      return {
+        canAfford: false,
+        disabled: true,
+        showUnaffordable: false,
+        status: 'locked',
+        statusLabel: 'No trade',
+        bought: !!tradeOffer?.bought,
+      };
+    }
+    const costKeys = Array.isArray(tradeOffer.costKeys) ? tradeOffer.costKeys : [];
+    const hasCosts = costKeys.length >= 2 && costKeys.every(key => Number(Neo.player?.items?.[key] || 0) > 0);
+    const disabled = !!tradeOffer.bought || noItemsChallenge || !hasCosts;
+    return {
+      canAfford: hasCosts && !noItemsChallenge && !tradeOffer.bought,
+      disabled,
+      showUnaffordable: !hasCosts && !tradeOffer.bought,
+      status: tradeOffer.bought ? 'owned' : noItemsChallenge ? 'locked' : hasCosts ? 'available' : 'short',
+      statusLabel: tradeOffer.bought ? 'Done' : noItemsChallenge ? 'Locked' : hasCosts ? 'Ready' : 'Missing relic',
+      bought: !!tradeOffer.bought,
+    };
+  }
+
+  function renderShopTradeCard(noItemsChallenge = false) {
+    const tradeOffer = Neo.ensureShopTradeOffer?.(Neo.currentRoom) || Neo.currentRoom?.shopTradeOffer;
+    if (!tradeOffer || tradeOffer.unavailable || !tradeOffer.key) return '';
+    const item = Neo.itemRegistry.get(tradeOffer.key) || Neo.ITEM_DEFS[tradeOffer.key];
+    const costKeys = Array.isArray(tradeOffer.costKeys) ? tradeOffer.costKeys.slice(0, 2) : [];
+    const costNames = costKeys.map(key => Neo.itemRegistry.get(key)?.name || Neo.titleCase?.(key) || key);
+    const state = getShopTradeState(tradeOffer, noItemsChallenge);
+    const description = noItemsChallenge
+      ? 'No Items challenge is active. Trades are disabled for this run.'
+      : `Hand over ${costNames.join(' + ')} to receive this higher-rarity relic.`;
+    const buttonText = noItemsChallenge
+      ? 'Trades Locked'
+      : tradeOffer.bought
+        ? 'Traded'
+        : state.canAfford
+          ? 'Trade Relics'
+          : 'Missing Relics';
+    // Visual "give -> get" exchange row so it is obvious which relics you hand over.
+    const giveTiles = costKeys.map(key => {
+      const giveItem = Neo.itemRegistry.get(key) || Neo.ITEM_DEFS[key];
+      const giveName = giveItem?.name || Neo.titleCase?.(key) || key;
+      const owned = Number(Neo.player?.items?.[key] || 0) > 0;
+      const tone = giveItem?.rarity || giveItem?.category || '';
+      const accent = tone ? Neo.getRarityNameColor(tone) : '';
+      const accentStyle = accent ? ` style="--shop-card-accent:${escapeShopText(accent)}"` : '';
+      return `<div class="shop-trade__tile${owned ? '' : ' shop-trade__tile--missing'}"${accentStyle}>
+        <canvas class="shop-trade__icon" data-item-icon="${escapeShopText(key)}" width="34" height="34"></canvas>
+        <span class="shop-trade__tile-name">${escapeShopText(giveName)}</span>
+      </div>`;
+    }).join('<span class="shop-trade__plus">+</span>');
+    const getItem = item;
+    const getAccent = Neo.getRarityNameColor(getItem?.rarity || getItem?.category) || '';
+    const getAccentStyle = getAccent ? ` style="--shop-card-accent:${escapeShopText(getAccent)}"` : '';
+    const getTile = `<div class="shop-trade__tile shop-trade__tile--get"${getAccentStyle}>
+      <canvas class="shop-trade__icon" data-item-icon="${escapeShopText(tradeOffer.key)}" width="34" height="34"></canvas>
+      <span class="shop-trade__tile-name">${escapeShopText(getItem?.name || 'Relic')}</span>
+    </div>`;
+    const footerExtra = noItemsChallenge ? '' : `<div class="shop-trade">
+      <div class="shop-trade__side shop-trade__side--give">
+        <span class="shop-trade__label">You give</span>
+        <div class="shop-trade__tiles">${giveTiles}</div>
+      </div>
+      <span class="shop-trade__arrow" aria-hidden="true">➜</span>
+      <div class="shop-trade__side shop-trade__side--get">
+        <span class="shop-trade__label">You get</span>
+        <div class="shop-trade__tiles">${getTile}</div>
+      </div>
+    </div>`;
+    return renderShopCard({
+      rarityLabel: 'Trade',
+      iconAttr: 'data-item-icon',
+      iconKey: tradeOffer.key,
+      title: item?.name || 'Trade Relic',
+      titleColor: Neo.getRarityNameColor(item?.rarity || item?.category),
+      descColor: Neo.getRarityNameColor(item?.rarity || item?.category),
+      accentColor: Neo.getRarityNameColor(item?.rarity || item?.category),
+      cost: costNames.join(' + '),
+      description,
+      chips: [
+        { label: 'Merchant', tone: 'item' },
+        item?.rarity ? { label: item.rarity, tone: 'rarity' } : null,
+        { label: '2-for-1', tone: 'item' },
+      ].filter(Boolean),
+      footerExtra,
+      recommended: true,
+      kind: 'trade',
+      state,
+      buttonText,
+      soldStateText: 'TRADED',
+    });
+  }
+
 
 
   function renderShopCard({
@@ -1551,7 +1687,7 @@ export function getShopWeaponOffers() {
     iconKey,
     title,
     titleColor,
-    descColor = '', // rarity color for the description text
+    descColor = '', // description text stays white regardless of rarity
     cost,
     description,
     footerExtra = '',
@@ -1572,7 +1708,7 @@ export function getShopWeaponOffers() {
     const indexAttr = Number.isInteger(index) ? ` data-index="${index}"` : '';
     const styleAttr = accentColor ? ` style="--shop-card-accent:${escapeShopText(accentColor)}"` : '';
     const titleStyle = titleColor ? ` style="color:${escapeShopText(titleColor)}"` : '';
-    const descStyle = descColor ? ` style="color:${escapeShopText(descColor)}"` : '';
+    const descStyle = ' style="color:#ffffff"'; // descriptions always render white; rarity only colors the title
     const status = state.status || 'available';
     const statusLabel = state.statusLabel || '';
     const chipHtml = renderShopChips(chips.length ? chips : [rarityLabel]);
@@ -1646,6 +1782,7 @@ export function getShopWeaponOffers() {
     if (tabKey === 'items') return Neo.ui.shopItems;
     if (tabKey === 'weapons') return Neo.ui.shopWeapons;
     if (tabKey === 'moves') return Neo.ui.shopMoves;
+    if (tabKey === 'trades') return Neo.ui.shopTrades;
     return Neo.ui.shopHeals;
   }
 
@@ -1653,7 +1790,12 @@ export function getShopWeaponOffers() {
     const coins = Number(Neo.player?.coins || 0);
     if (tabKey === 'items') {
       const offers = (Neo.shopOffers || []).filter(offer => offer.type === 'item');
-      return `items|${coins}|${noItemsChallenge ? 1 : 0}|${offers.map(o => `${o.key}:${o.cost}:${o.bought ? 1 : 0}`).join(';')}`;
+      return `items|${coins}|${noItemsChallenge ? 1 : 0}|held:${getCountedKeys(Neo.player?.items)}|${offers.map(o => `${o.key}:${o.cost}:${o.bought ? 1 : 0}`).join(';')}`;
+    }
+    if (tabKey === 'trades') {
+      const trade = Neo.currentRoom?.shopTradeOffer || {};
+      const tradeSig = `${trade.key || ''}:${(trade.costKeys || []).join(',')}:${trade.bought ? 1 : 0}:${trade.unavailable ? 1 : 0}`;
+      return `trades|${coins}|${noItemsChallenge ? 1 : 0}|held:${getCountedKeys(Neo.player?.items)}|trade:${tradeSig}`;
     }
     if (tabKey === 'weapons') {
       const offers = Neo.currentRoom?.shopWeaponOffers || [];
@@ -1724,6 +1866,7 @@ export function getShopWeaponOffers() {
 export function renderShopPanel() {
     if (!Neo.ui.shopPanel || !Neo.player) return;
   if (!isPanelOpen(Neo.ui.shopPanel)) return;
+    Neo.refreshShopVoucherBanner?.();
     Neo.refreshRoomShopCosts(Neo.currentRoom);
     Neo.shopOffers = Neo.currentRoom?.shopOffers || Neo.shopOffers;
     const noItemsChallenge = Neo.isChallengeActive('no_items');
@@ -1734,6 +1877,7 @@ export function renderShopPanel() {
     Neo.ui.shopItems.classList.toggle('hidden', Neo.activeShopTab !== 'items');
     Neo.ui.shopWeapons?.classList.toggle('hidden', Neo.activeShopTab !== 'weapons');
     Neo.ui.shopMoves.classList.toggle('hidden', Neo.activeShopTab !== 'moves');
+    Neo.ui.shopTrades?.classList.toggle('hidden', Neo.activeShopTab !== 'trades');
     Neo.ui.shopHeals.classList.toggle('hidden', Neo.activeShopTab !== 'heals');
     const panelRenderCache = ensurePanelRenderCache();
     const activeShopTab = Neo.activeShopTab || 'items';
@@ -1787,6 +1931,11 @@ export function renderShopPanel() {
       Neo.ui.shopItems.innerHTML = itemCards || '<div class="shop-card shop-empty"><p>Every relic here is already yours. Clear the floor or check the move shelf.</p></div>';
       Neo.drawItemIconCanvases?.(Neo.ui.shopItems, 'data-item-icon');
       panelRenderCache.shop.tabSigs.items = activeShopSig;
+    } else if (Neo.activeShopTab === 'trades') {
+      const tradeCard = renderShopTradeCard(noItemsChallenge);
+      Neo.ui.shopTrades.innerHTML = tradeCard || '<div class="shop-card shop-empty"><p>No relic trade is on offer in this shop.</p></div>';
+      Neo.drawItemIconCanvases?.(Neo.ui.shopTrades, 'data-item-icon');
+      panelRenderCache.shop.tabSigs.trades = activeShopSig;
     } else if (Neo.activeShopTab === 'weapons') {
       const weaponOffers = getShopWeaponOffers();
       const weaponCards = weaponOffers
@@ -2041,7 +2190,7 @@ export function renderInventoryPanel() {
               <h4 style="color:${Neo.getRarityNameColor(item?.rarity || item?.category)}">${item?.name || key}${item?.tool ? '<span class="item-tool-badge">TOOL</span>' : ''}</h4>
               <span class="inv-card__count">x${_invP.items[key]}</span>
             </div>
-            <p style="color:${Neo.getRarityNameColor(item?.rarity || item?.category)}">${item?.description || 'No item description available.'}</p>
+            <p style="color:#ffffff">${item?.description || 'No item description available.'}</p>
           </div>`;
         })
         .join('') || '<div class="inv-card"><span class="inv-card__eyebrow">Empty</span><h4>No relics yet</h4><p>Your pockets are clear. Loot rooms or buy from the shop to start a build.</p></div>';
@@ -2274,7 +2423,7 @@ export function spendCoins(cost) {
       window.setTimeout(() => burst.remove(), 550);
       window.setTimeout(() => card.classList.remove('shop-card--flash-buy'), 460);
     }
-    Neo.playSfx?.('item_collect');
+    Neo.playSfx?.('buy_sell');
     if (Neo.player && Number.isFinite(Number(cost))) {
       Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 24, life: 0.72, text: `-${Math.round(Number(cost))} COINS`, c: '#ffd987' });
     }
@@ -2298,6 +2447,24 @@ export function handleShopBuyClick(event) {
       offer.bought = true;
       Neo.collectItem(offer.key);
       playShopPurchaseFeedback(button, offer.cost);
+      window.achievementEvents?.emit('shop:bought');
+    } else if (kind === 'trade') {
+      if (Neo.isChallengeActive('no_items')) {
+        Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 24, life: 0.8, text: 'No Items challenge', c: '#ff8894' });
+        return;
+      }
+      const tradeOffer = Neo.ensureShopTradeOffer?.(Neo.currentRoom) || Neo.currentRoom?.shopTradeOffer;
+      const state = getShopTradeState(tradeOffer, false);
+      if (!tradeOffer || tradeOffer.bought || !state.canAfford) return;
+      const costKeys = Array.isArray(tradeOffer.costKeys) ? tradeOffer.costKeys.slice(0, 2) : [];
+      costKeys.forEach(key => {
+        Neo.player.items[key] = Math.max(0, Number(Neo.player.items[key] || 0) - 1);
+        if (Neo.player.items[key] <= 0) delete Neo.player.items[key];
+      });
+      tradeOffer.bought = true;
+      Neo.collectItem(tradeOffer.key);
+      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 24, life: 0.85, text: 'TRADE MADE', c: '#d7f6ff' });
+      Neo.playSfx?.('buy_sell');
       window.achievementEvents?.emit('shop:bought');
     } else if (kind === 'move') {
       const offerIndex = Number(button.dataset.index || -1);
@@ -2340,7 +2507,8 @@ export function handleShopBuyClick(event) {
       if (!spendCoins(cost)) return;
       playShopPurchaseFeedback(button, cost);
       if (canHealNow) {
-        const gained = Neo.applyPlayerHealing?.(heal) ?? 0;
+        const scaledHeal = Neo.scalePlayerHealing?.(heal, heal) ?? heal;
+        const gained = Neo.applyPlayerHealing?.(scaledHeal) ?? 0;
         if (gained > 0) Neo.spawnHealPopup(Neo.player.x + Neo.rand(-10, 10), Neo.player.y - 20, gained);
       } else {
         Neo.player.storedPotions = stored + 1;
@@ -2374,7 +2542,11 @@ export function handleShopBuyClick(event) {
   Neo.setAnvilPanelOpen = setAnvilPanelOpen;
   Neo.toggleAnvilPanel = toggleAnvilPanel;
   Neo.isWizardPawOpen = isWizardPawOpen;
+  Neo.isScrollControlOpen = isScrollControlOpen;
+  Neo.isVoucherModalOpen = isVoucherModalOpen;
+  Neo.setVoucherModalOpen = setVoucherModalOpen;
   Neo.setWizardPawModalOpen = setWizardPawModalOpen;
+  Neo.setScrollControlModalOpen = setScrollControlModalOpen;
   Neo.isOverlayBlockingInput = isOverlayBlockingInput;
   Neo.getShopMoveOffers = getShopMoveOffers;
   Neo.getShopWeaponOffers = getShopWeaponOffers;

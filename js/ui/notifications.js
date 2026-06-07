@@ -108,7 +108,7 @@ export function pushItemNotification(itemKey, amount = 1, note = '') {
   title.className = 'item-toast-title';
   const name = document.createElement('span');
   name.textContent = item.name;
-  // Name AND description share the rarity color.
+  // Only the name takes the rarity color; the description stays white.
   const rarityColor = getRarityNameColor(item.rarity || item.category);
   name.style.color = rarityColor;
   const plus = document.createElement('span');
@@ -116,7 +116,7 @@ export function pushItemNotification(itemKey, amount = 1, note = '') {
   plus.textContent = `+${amount}`;
   const desc = document.createElement('div');
   desc.className = 'item-toast-desc';
-  desc.style.color = rarityColor;
+  desc.style.color = '#ffffff';
   desc.textContent = note ? `${item.description} ${note}` : item.description;
   title.append(name, plus);
   body.append(title, desc);
@@ -130,7 +130,7 @@ export function pushItemNotification(itemKey, amount = 1, note = '') {
 }
 
 export const ITEM_CINEMATIC_FLAVOR = {
-  wizards_paw: 'Choose 2 stats to triple — choose wisely.',
+  wizards_paw: 'Choose 2 stats to increase by 50% — choose wisely.',
   jesters_dice: 'Skip 3 floors. Chaos blooms in your wake.',
 };
 
@@ -475,7 +475,7 @@ export function pushMoveNotification(moveKey, amount = 1) {
 export function pushWeaponNotification(weaponKey) {
   const def = Neo.WEAPON_DEFS[weaponKey];
   if (!def) return;
-  const rarityColor = { knight: '#e8f0ff', wizard: '#c08cff', god: '#ff7070', white: '#e8f0ff', purple: '#c08cff', red: '#ff7070' };
+  const rarityColor = { knight: '#e8f0ff', wizard: '#c08cff', god: '#ffd23f', white: '#e8f0ff', purple: '#c08cff', red: '#ffd23f' };
   const color = def.color || rarityColor[def.rarity] || '#d9e8ff';
   const stack = ensureItemNotifyStack();
   const toast = document.createElement('div');
@@ -492,7 +492,7 @@ export function pushWeaponNotification(weaponKey) {
   title.className = 'item-toast-title';
   const name = document.createElement('span');
   name.textContent = `Weapon: ${def.name}`;
-  // Name AND description share the rarity color (god tier shows full red).
+  // Only the name takes the rarity color (god tier shows full gold); description stays white.
   const nameColor = getRarityNameColor(def.rarity);
   name.style.color = nameColor;
   const plus = document.createElement('span');
@@ -500,7 +500,7 @@ export function pushWeaponNotification(weaponKey) {
   plus.textContent = '+1';
   const desc = document.createElement('div');
   desc.className = 'item-toast-desc';
-  desc.style.color = nameColor;
+  desc.style.color = '#ffffff';
   desc.textContent = def.description || 'New weapon acquired.';
   title.append(name, plus);
   body.append(title, desc);

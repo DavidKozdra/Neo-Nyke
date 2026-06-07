@@ -1,5 +1,8 @@
 // update.js — main game loop and update tick.
 
+// Seconds of holding the melee button to reach a full-power Mooggy Swipe.
+const MOOGGY_SWIPE_CHARGE_MAX = 0.8;
+
 export function loop(timestamp) {
     const framePerfStart = Neo.perfBeginFrame(timestamp);
     const dt = Math.min(0.033, (timestamp - Neo.lastTime) / 1000 || 0.016);
@@ -54,6 +57,7 @@ export function loop(timestamp) {
     const drawPerfStart = Neo.perfStart();
     if (Neo.gameState !== 'pause') Neo.draw();
     Neo.perfEnd('Neo.draw', drawPerfStart);
+    Neo.updateRewardChoiceTooltip?.();
     Neo.perfEndFrame(framePerfStart);
     requestAnimationFrame(loop);
   }
@@ -95,10 +99,17 @@ export function loop(timestamp) {
     Neo.gameElapsedTime += dt;
     Neo.lavaAnimTime += dt;
     Neo.floorTransitionTime += dt;
-    if (Neo.floorTransitionTime > 2.5) Neo.showFloorTransition = false;
+    if (Neo.floorTransitionTime > 1.25) Neo.showFloorTransition = false;
     Neo.tickCooldowns(dt);
     Neo.updateEquipmentEffects?.(dt);
     if (Neo.godTimer > 0) Neo.godTimer = Math.max(0, Neo.godTimer - dt);
+    // Endless mode: tick down the between-waves intermission and spawn the next
+    // wave when it elapses. Frame-driven (not setTimeout) so it pauses with the
+    // game and survives a save/restore.
+    if (Neo.gameMode === 'endless' && Neo.endlessRespawnTimer > 0) {
+      Neo.endlessRespawnTimer = Math.max(0, Neo.endlessRespawnTimer - dt);
+      if (Neo.endlessRespawnTimer === 0) Neo.spawnNextEndlessWave?.();
+    }
 
     const _b = window.NeoSettings?.getBindings();
     const _right = _b ? _b.right : 'd';
@@ -150,7 +161,11 @@ export function loop(timestamp) {
       // Attack buttons — hold while button pressed, release otherwise
       if (_nt.slash) { Neo.mouse.down = true; Neo.mouse.downQueued = true; } else { Neo.mouse.down = false; }
       if (_nt.laser) { Neo.mouse.right = true; Neo.mouse.rightQueued = true; } else { Neo.mouse.right = false; }
-      if (_nt.smash) { Neo.trySmash(); _nt.smash = false; }
+      // Touch smash: NT.smash stays true while the button is held (cleared on
+      // touchend), so use it directly for hold-to-charge. Edge-latch the cast.
+      Neo.smashHeld = !!_nt.smash;
+      if (_nt.smash) { if (!_nt.smashLatch) { _nt.smashLatch = true; Neo.trySmash(); } }
+      else { _nt.smashLatch = false; }
       if (_nt.ascend) Neo.keys[' '] = true; else Neo.keys[' '] = false;
       if (_nt.dash) Neo.keys[_b ? _b.dash : 'shift'] = true;
       else Neo.keys[_b ? _b.dash : 'shift'] = false;
@@ -176,7 +191,11 @@ export function loop(timestamp) {
       Neo.mouse.y = Neo.mouse.worldY - Neo.camera.y;
       if (_gp0.slash) { Neo.mouse.down = true; Neo.mouse.downQueued = true; } else { Neo.mouse.down = false; }
       if (_gp0.laser) { Neo.mouse.right = true; Neo.mouse.rightQueued = true; } else { Neo.mouse.right = false; }
-      if (_gp0.smash) { Neo.trySmash(); _gp0.smash = false; }
+      // Gamepad smash button is re-polled each frame from its held state, so use
+      // it for hold-to-charge. Edge-latch so the cast only fires once per press.
+      Neo.smashHeld = !!_gp0.smash;
+      if (_gp0.smash) { if (!_gp0.smashLatch) { _gp0.smashLatch = true; Neo.trySmash(); } }
+      else { _gp0.smashLatch = false; }
       if (_gp0.dash) Neo.keys[_b ? _b.dash : 'shift'] = true;
       else if (!Neo.keys[_b ? _b.dash : 'shift']) Neo.keys[_b ? _b.dash : 'shift'] = false;
       if (_gp0.start) {
@@ -273,7 +292,10 @@ export function loop(timestamp) {
     Neo.player.inv = Math.max(0, Neo.player.inv - dt);
     Neo.player.warpHideTime = Math.max(0, Number(Neo.player.warpHideTime || 0) - dt);
     Neo.player.stun = Math.max(0, Number(Neo.player.stun || 0) - dt);
-    if (Neo.player.swing > 0) Neo.player.swing = Math.max(0, Neo.player.swing - dt);
+    if (Neo.player.swing > 0) {
+      Neo.player.swing = Math.max(0, Neo.player.swing - dt);
+      if (Neo.player.swing === 0) Neo.player.stabSwing = false;
+    }
 
     const _vpW = Neo.isSplitScreen() ? Neo.canvas.width / 2 : Neo.canvas.width;
     const _clampedMouseX = Neo.isSplitScreen() ? Math.min(Neo.mouse.x, _vpW) : Neo.mouse.x;
@@ -301,24 +323,66 @@ export function loop(timestamp) {
     if (!Neo.p1DeadInCoop) {
       const meleeHeld = Neo.isMouseActionHeld('slash');
       const laserHeld = Neo.isMouseActionHeld('laser');
-      const robotArmTarget = itemStats.hasRobotArm && Neo.player?.robotArmReady
+      // Robot Arm auto-runs M1: whenever it's equipped and an enemy is present,
+      // it auto-aims and swings without holding the button. The charged-ready
+      // state additionally applies the 8x attack-speed burst (via robotArmCharge).
+      const robotArmTarget = itemStats.hasRobotArm
         ? _getNearestEnemyForAim()
         : null;
-      if (!overlayOpen && !playerStunned && (meleeHeld || robotArmTarget)) {
-        const restoreAim = robotArmTarget
-          ? { worldX: Neo.mouse.worldX, worldY: Neo.mouse.worldY }
-          : null;
-        if (restoreAim) {
-          Neo.mouse.worldX = robotArmTarget.x;
-          Neo.mouse.worldY = robotArmTarget.y;
+      // Mooggy Swipe: charge-on-hold. Holding the melee button builds a charge
+      // meter (suppressing the per-frame swing); releasing unleashes one swipe
+      // scaled by how long it was held. A quick tap still fires a normal swipe.
+      const mooggyCharging = !overlayOpen && !playerStunned && Neo.isMooggySwipeActive?.();
+      if (mooggyCharging) {
+        if (meleeHeld) {
+          Neo.player.mooggySwipeCharge = Math.min(MOOGGY_SWIPE_CHARGE_MAX, Number(Neo.player.mooggySwipeCharge || 0) + dt);
+          const ratio = Neo.player.mooggySwipeCharge / MOOGGY_SWIPE_CHARGE_MAX;
+          // Telegraph: pulsing motes around Mooggy that intensify as she winds up.
+          if (ratio > 0.15 && Math.random() < 0.35 + ratio * 0.5) {
+            const a = Math.random() * Math.PI * 2;
+            const rad = 18 + ratio * 16;
+            Neo.spawnParticle({
+              x: Neo.player.x + Math.cos(a) * rad, y: Neo.player.y + Math.sin(a) * rad,
+              life: 0.2 + ratio * 0.2, vx: -Math.cos(a) * 40, vy: -Math.sin(a) * 40,
+              c: ratio >= 0.99 ? '#ffd0e6' : '#ff6090',
+            });
+          }
+        } else if (Number(Neo.player.mooggySwipeCharge || 0) > 0) {
+          const ratio = Math.min(1, Number(Neo.player.mooggySwipeCharge || 0) / MOOGGY_SWIPE_CHARGE_MAX);
+          Neo.player.mooggySwipeCharge = 0;
+          Neo.releaseMooggySwipe?.(ratio);
         }
-        Neo.tryMelee({ useRobotArmCharge: !!robotArmTarget });
-        if (restoreAim) {
-          Neo.mouse.worldX = restoreAim.worldX;
-          Neo.mouse.worldY = restoreAim.worldY;
+      } else if (Neo.player && Number(Neo.player.mooggySwipeCharge || 0) > 0) {
+        // Charging interrupted (overlay/stun/move swap): drop the wind-up.
+        Neo.player.mooggySwipeCharge = 0;
+      } else {
+        const chargedWeaponHeld = !!Neo.isChargedWeaponKey?.(Neo.getEquippedWeapon?.());
+        const meleePressEdge = meleeHeld && !Neo._meleeWasHeld;
+        const fireMelee = (meleeHeld && (!chargedWeaponHeld || meleePressEdge)) || robotArmTarget;
+        if (!overlayOpen && !playerStunned && fireMelee) {
+          if (Neo.player) Neo.player.mooggySwipeCharge = 0;
+          const restoreAim = robotArmTarget
+            ? { worldX: Neo.mouse.worldX, worldY: Neo.mouse.worldY }
+            : null;
+          if (restoreAim) {
+            Neo.mouse.worldX = robotArmTarget.x;
+            Neo.mouse.worldY = robotArmTarget.y;
+          }
+          Neo.tryMelee({ useRobotArmCharge: !!robotArmTarget });
+          if (restoreAim) {
+            Neo.mouse.worldX = restoreAim.worldX;
+            Neo.mouse.worldY = restoreAim.worldY;
+          }
         }
       }
-      if (!overlayOpen && laserHeld) Neo.tryLaser();
+      Neo._meleeWasHeld = meleeHeld;
+      // Instant laser moves (e.g. Nail Shot) fire once per press instead of
+      // auto-repeating every frame — otherwise holding the button drains the
+      // whole charge pool in a few frames. Beam moves keep their held behavior.
+      const laserPressEdge = laserHeld && !Neo._laserWasHeld;
+      const fireLaser = laserHeld && (laserPressEdge || !Neo.isInstantLaserMove?.());
+      if (!overlayOpen && fireLaser) Neo.tryLaser();
+      Neo._laserWasHeld = laserHeld;
     }
 
     if (Neo.player.lavaWalkTime > 0) {
@@ -396,11 +460,9 @@ export function loop(timestamp) {
 
       if (playerHidden) {
         // Player is invisible/untouchable (cape, flying, coward's way, warp): enemies
-        // lose their target. Skip all AI/attack logic, drop any in-progress beam, and
-        // coast to a stop so they hold position instead of chasing or shooting.
-        if (enemy.beamTime > 0) { enemy.beamTime = 0; if (enemy.state === 'elite_laser') enemy.state = 'idle'; }
-        enemy.vx *= Math.pow(0.0001, dt);
-        enemy.vy *= Math.pow(0.0001, dt);
+        // lose their target. Skip all AI/attack logic and let them wander to random
+        // points so they roam the room instead of standing frozen in place.
+        Neo.wanderEnemy(enemy, dt);
       } else {
         const eliteTraitControlled = Neo.updateEliteEnemyTraits(enemy, dt);
         if (enemy.dead) continue;
@@ -433,6 +495,10 @@ export function loop(timestamp) {
     sectionPerfStart = Neo.perfStart();
     Neo.updateProjectiles(dt);
     Neo.perfEnd('update.projectiles', sectionPerfStart);
+    if (Neo.gameState !== 'play') return;
+    Neo.updateJusticeBlades?.(dt);
+    if (Neo.gameState !== 'play') return;
+    Neo.updateHealingZoneCharge?.(dt);
     if (Neo.gameState !== 'play') return;
     sectionPerfStart = Neo.perfStart();
     Neo.updateWorldProps(dt);
@@ -494,24 +560,42 @@ export function loop(timestamp) {
       return;
     }
 
-    const goldSpent = Math.floor(Neo.player.coins / 2);
-    if (goldSpent > 0) {
-      Neo.player.coins -= goldSpent;
-      Neo.metaProgress.coins = Math.max(0, Neo.metaProgress.coins - goldSpent);
+    // Don't stack a second gate if one is already open in this room.
+    if (Neo.pickups.some(pickup => pickup?.type === 'adapterPortal')) {
+      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.6, text: 'PORTAL ALREADY OPEN', c: '#b88cff' });
+      return;
     }
 
+    // Spend the adapter charge now (the press is what opens the gate), but defer
+    // the coin cost and the actual warp until the player walks into the portal.
     Neo.consumeCharge('escape');
-    Neo.enterRoom(ladderRoom);
-    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.9, text: 'WARPED TO LADDER (-50% COINS)', c: '#b66cff' });
+
+    const preferred = Neo.findSafePointNearTarget(Neo.player.x, Neo.player.y - 96, 24, 180, 20);
+    const fallback = Neo.findSafePointNearTarget(Neo.ROOM_W / 2, Neo.ROOM_H / 2, 24, 240, 20) || Neo.findSafeSpawnPoint();
+    const spawnPoint = preferred || fallback;
+    Neo.pickups.push({
+      x: spawnPoint.x,
+      y: spawnPoint.y,
+      type: 'adapterPortal',
+      // Store grid coords, not the room object — keeps the pickup serializable and
+      // avoids a stale reference after save/restore (resolved at walk-in time).
+      targetGx: ladderRoom.gx,
+      targetGy: ladderRoom.gy,
+      spawnT: 0,
+      activateAt: Neo.JESTER_PORTAL_ACTIVATE_DELAY,
+      active: false,
+    });
+    Neo.spawnParticle({ x: spawnPoint.x, y: spawnPoint.y, life: 0.5, ring: 28, c: '#b88cff' });
+    Neo.spawnParticle({ x: spawnPoint.x, y: spawnPoint.y - 20, life: 0.8, text: 'LADDER PORTAL', c: '#d6c4ff' });
     Neo.scheduleRunSave();
   }
 
 // --- Game feel: trauma shake + directional kick + hitstop --------------------
 
 const FEEL = {
-  maxShake: 22,        // px, the offset magnitude at trauma === 1
-  traumaDecay: 2.6,    // trauma units/sec (≈0.38s to fully settle from 1.0)
-  kickDecay: 14,       // directional kick spring-back rate
+  maxShake: 28,        // px, the offset magnitude at trauma === 1
+  traumaDecay: 2.2,    // trauma units/sec (≈0.45s to fully settle from 1.0)
+  kickDecay: 7,        // directional kick spring-back rate (lower = camera lurch lingers)
   maxHitstop: 0.12,    // clamp so chained hits can't lock the sim
 };
 

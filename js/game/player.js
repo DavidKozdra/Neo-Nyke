@@ -1,4 +1,11 @@
 // player.js — Player data migration, stats, abilities, charge.
+
+// Moves renamed across versions: { oldSavedKey: currentKey }. Applied during
+// migration so saves referencing the old key keep the move.
+const RENAMED_MOVE_KEYS = {
+  fangs_of_death: 'random_pounce',
+};
+
 export function migratePlayerData(source) {
     const playerData = source || Neo.createDefaultPlayer();
     playerData.character = playerData.character || 'thorn_knight';
@@ -30,6 +37,23 @@ export function migratePlayerData(source) {
     playerData.moveStackOverrides = normalizedMoveStackOverrides;
     playerData.extraBatteryPendingCount = Math.max(0, Math.floor(Number(playerData.extraBatteryPendingCount || 0)));
     playerData.wizardPawPendingCount = Math.max(0, Math.floor(Number(playerData.wizardPawPendingCount || 0)));
+    playerData.scrollUseSerial = Math.max(0, Math.floor(Number(playerData.scrollUseSerial || 0)));
+    // Scrolls picked up/bought open their selection popup on acquisition. Any that
+    // couldn't open immediately (shop/cinematic) wait here until presentable.
+    playerData.scrollPendingQueue = Array.isArray(playerData.scrollPendingQueue)
+      ? playerData.scrollPendingQueue.filter(key => SCROLL_KEYS.has(key))
+      : [];
+    playerData.scrollBranchingTargets = (playerData.scrollBranchingTargets && typeof playerData.scrollBranchingTargets === 'object') ? playerData.scrollBranchingTargets : {};
+    playerData.scrollReplaceMap = (playerData.scrollReplaceMap && typeof playerData.scrollReplaceMap === 'object') ? playerData.scrollReplaceMap : {};
+    playerData.scrollPoolWeights = Array.isArray(playerData.scrollPoolWeights) ? playerData.scrollPoolWeights.filter(buff => buff && buff.tag) : [];
+    if (playerData.scrollAbundance && typeof playerData.scrollAbundance === 'object') {
+      playerData.scrollAbundance.items = Array.isArray(playerData.scrollAbundance.items) ? playerData.scrollAbundance.items.filter(key => Neo.ITEM_DEFS[key]).slice(0, 2) : [];
+      playerData.scrollAbundance.nextCheckFloor = Math.max(1, Math.floor(Number(playerData.scrollAbundance.nextCheckFloor || 1)));
+      playerData.scrollAbundance.expiresFloor = Math.max(1, Math.floor(Number(playerData.scrollAbundance.expiresFloor || 1)));
+    } else {
+      delete playerData.scrollAbundance;
+    }
+    playerData.scrollEgoFloor = Math.max(0, Math.floor(Number(playerData.scrollEgoFloor || 0)));
     playerData.level = Number(playerData.level || 1);
     playerData.xp = Number(playerData.xp || 0);
     playerData.xpToNext = Number(playerData.xpToNext || 20);
@@ -45,11 +69,12 @@ export function migratePlayerData(source) {
     playerData.cowardsWayTime = Number(playerData.cowardsWayTime || 0);
     playerData.warpHideTime = Number(playerData.warpHideTime || 0);
     playerData.mooggyZoomiesTime = Number(playerData.mooggyZoomiesTime || 0);
+    playerData.mooggySwipeCharge = Number(playerData.mooggySwipeCharge || 0);
     playerData.lavaWalkTime = Number(playerData.lavaWalkTime || 0);
     playerData.lavaTrailTick = Number(playerData.lavaTrailTick || 0);
     playerData.princessFlightTime = Number(playerData.princessFlightTime || 0);
     playerData.overhealBarrier = Math.max(0, Number(playerData.overhealBarrier || 0));
-    playerData.graniallaHealPulseFrame = Number(playerData.graniallaHealPulseFrame || 0);
+    playerData.gellehHealPulseFrame = Number(playerData.gellehHealPulseFrame || 0);
     Neo.ensureStatuses(playerData);
     if (!playerData.equippedMoves || typeof playerData.equippedMoves !== 'object') {
       playerData.equippedMoves = getDefaultMovesForCharacter(playerData.character);
@@ -57,6 +82,17 @@ export function migratePlayerData(source) {
     if (!playerData.ownedMoves || typeof playerData.ownedMoves !== 'object') {
       playerData.ownedMoves = {};
     }
+    // Back-compat: remap moves renamed across versions so old saves keep them
+    // instead of silently resetting to the character default.
+    Object.entries(RENAMED_MOVE_KEYS).forEach(([oldKey, newKey]) => {
+      Neo.MOVE_SLOTS.forEach(slot => {
+        if (playerData.equippedMoves[slot] === oldKey) playerData.equippedMoves[slot] = newKey;
+      });
+      if (playerData.ownedMoves[oldKey]) {
+        playerData.ownedMoves[newKey] = true;
+        delete playerData.ownedMoves[oldKey];
+      }
+    });
     if (!playerData.ownedWeapons || typeof playerData.ownedWeapons !== 'object') {
       playerData.ownedWeapons = {};
     }
@@ -74,6 +110,12 @@ export function migratePlayerData(source) {
     }
     if (playerData.equippedWeapon) playerData.ownedWeapons[playerData.equippedWeapon] = true;
     playerData.weaponCooldown = Number(playerData.weaponCooldown || 0);
+    playerData.weaponChargeKey = typeof playerData.weaponChargeKey === 'string' ? playerData.weaponChargeKey : '';
+    playerData.weaponCharges = Math.max(0, Math.floor(Number(playerData.weaponCharges ?? 0)));
+    playerData.weaponMaxCharges = Math.max(0, Math.floor(Number(playerData.weaponMaxCharges ?? 0)));
+    playerData.weaponChargeTimers = Array.isArray(playerData.weaponChargeTimers)
+      ? playerData.weaponChargeTimers.map(value => Number(value)).filter(value => value > 0)
+      : [];
     playerData.blockActive = !!playerData.blockActive;
     playerData.blockTimer = Number(playerData.blockTimer || 0);
     playerData.fleeceTick = Number(playerData.fleeceTick || 0);
@@ -154,23 +196,27 @@ export function syncCharacterUiTheme() {
 export function getDefaultWeaponForCharacter(characterKey) {
     if (characterKey === 'princess') return 'princess_wand';
     if (characterKey === 'metao') return 'metao_fire_staff';
-    if (characterKey === 'granialla') return 'granillia_lightning_spear';
+    if (characterKey === 'gelleh') return 'gelleh_lightning_spear';
     if (characterKey === 'mooggy') return 'claw_gauntlets';
     return 'thorns_bleed_blade';
   }
 
 export function getDefaultMovesForCharacter(characterKey) {
+    // The melee slot is the bare-hands fallback only: it is the attack you get
+    // when no weapon is equipped, so every character defaults to the generic
+    // `slash`. Signature melee attacks (smite, fire_balls, narwal_fight,
+    // mooggy_swipe) live on each character's weapon, not the M1 move slot.
     if (characterKey === 'princess') {
-      return { melee: 'narwal_fight', laser: 'love_beam', smash: 'kicky_kick', dash: 'flying_unhitable' };
+      return { melee: 'slash', laser: 'love_beam', smash: 'kicky_kick', dash: 'flying_unhitable' };
     }
     if (characterKey === 'metao') {
-      return { melee: 'fire_balls', laser: 'power_disks', smash: 'chaos_burst', dash: 'warp' };
+      return { melee: 'slash', laser: 'power_disks', smash: 'chaos_burst', dash: 'warp' };
     }
-    if (characterKey === 'granialla') {
-      return { melee: 'smite', laser: 'blade_justice', smash: 'healing_zone', dash: 'zip_lightning' };
+    if (characterKey === 'gelleh') {
+      return { melee: 'slash', laser: 'blade_justice', smash: 'healing_zone', dash: 'zip_lightning' };
     }
     if (characterKey === 'mooggy') {
-      return { melee: 'mooggy_swipe', laser: 'nail_shot', smash: 'fangs_of_death', dash: 'mooggy_zoomies' };
+      return { melee: 'slash', laser: 'nail_shot', smash: 'random_pounce', dash: 'mooggy_zoomies' };
     }
     return { melee: 'slash', laser: 'blood_beam', smash: 'crimson_smash', dash: 'dash' };
   }
@@ -268,7 +314,6 @@ export function getItemStats() {
     const toughSkin = getItemCount('tough_skin');
     const orbOfBlood = getItemCount('orb_of_blood');
     const hemesScarf = getItemCount('hemes_scarf');
-    const goldVac = getItemCount('gold_vac');
     const doubleDose = getItemCount('double_dose');
     const copycatCharm = getItemCount('copycat_charm');
     const attackServo = getItemCount('attack_servo');
@@ -314,13 +359,23 @@ export function getItemStats() {
     const baseBleedChance = neoKnife * 0.05;
     const tagCounts = getItemTagCounts();
     const healingTagStacks = Number(tagCounts.heal || 0) + Number(tagCounts.healing || 0);
+    const activeTurboStacks = Number(Neo.player?.equipmentEffects?.turbo_boots?.time || 0) > 0
+      ? Math.max(1, Math.floor(Number(Neo.player?.equipmentEffects?.turbo_boots?.stacks || getItemCount('turbo_boots') || 1)))
+      : 0;
+    const activeGoldVacStacks = Number(Neo.player?.equipmentEffects?.gold_vac?.time || 0) > 0
+      ? Math.max(1, Math.floor(Number(Neo.player?.equipmentEffects?.gold_vac?.stacks || getItemCount('gold_vac') || 1)))
+      : 0;
     const godItemStacks = Neo.godItemKeysCache.reduce((total, key) => {
       return total + getItemCount(key);
     }, 0);
-    let critChance = critCharmBonus + keenEyeBonus + pendantOfKronos * godItemStacks * 0.01;
+    const princesGlasses = getItemCount('princes_glasses');
+    // Prince's Glasses: first stack grants a flat bonus, each extra stack a smaller one.
+    const princesGlassesCrit = princesGlasses > 0 ? 0.05 + (princesGlasses - 1) * 0.02 : 0;
+    const princesGlassesDefense = princesGlasses > 0 ? 0.10 + (princesGlasses - 1) * 0.02 : 0;
+    let critChance = critCharmBonus + keenEyeBonus + pendantOfKronos * godItemStacks * 0.01 + princesGlassesCrit;
     if (oracleLens) critChance *= 2;
     critChance = Neo.clamp(critChance, 0.01, 0.95);
-    const damageReduction = Neo.clamp(bandaid * 0.005 + shieldOfAegis * 0.2, 0, 0.85);
+    const damageReduction = Neo.clamp(bandaid * 0.005 + shieldOfAegis * 0.2 + princesGlassesDefense, 0, 0.85);
     const xpProgress = Neo.clamp((Neo.player?.xpToNext || 0) > 0 ? (Neo.player?.xp || 0) / Neo.player.xpToNext : 0, 0, 1);
     const characterDef = Neo.getCharacterDef?.() || {};
     Neo.itemStatsCacheValue = {
@@ -343,15 +398,15 @@ export function getItemStats() {
       bleedHealScale: hemesScarf,
       passiveBleedStacks: hemesScarf,
       scarfBleedsOnHit: hemesScarf,
-      pickupVacuumRange: goldVac > 0 ? 9999 : 0,
-      coinPickupMultiplier: goldVac > 0 ? 2 : 1,
+      pickupVacuumRange: activeGoldVacStacks > 0 ? 9999 : 0,
+      coinPickupMultiplier: activeGoldVacStacks > 0 ? 2 + (activeGoldVacStacks - 1) * 0.5 : 1,
       potionDoubleChance: Neo.clamp(doubleDose * 0.5, 0, 1),
       itemDuplicateChance: Neo.clamp(copycatCharm * 0.3, 0, 1),
       critChance,
       critMultiplier: 1.6 + (oracleLens ? critChance * 2.2 : critChance * 0.6),
       attackSpeedMultiplier: 1 + attackServo * 0.12 + chronoSpringBonus,
       hasRobotArm: robotArm > 0,
-      moveSpeedMultiplier: (1 + turtleShell * 0.05) * (Number(Neo.player?.equipmentEffects?.turbo_boots?.time || 0) > 0 ? 1.55 : 1),
+      moveSpeedMultiplier: (1 + turtleShell * 0.05) * (activeTurboStacks > 0 ? 1.55 + (activeTurboStacks - 1) * 0.15 : 1),
       laserWeightMultiplier: Math.max(0, 1 - turtleShell * 0.01),
       xpGainMultiplier: 1 + scholarSeal * 0.15,
       levelEdgeDamageMultiplier: 1 + scholarCap * xpProgress * 0.45,
@@ -373,7 +428,7 @@ export function getItemStats() {
       damageReduction,
       stunResistance: anchorCharm,
       hasIronLung: getItemCount('iron_lung') > 0,
-      hasPrincesGlasses: getItemCount('princes_glasses') > 0,
+      hasPrincesGlasses: princesGlasses > 0,
       tagCounts,
       bleedCritChance: tagCounts.bleed >= 8 ? 0.18 : tagCounts.bleed >= 3 ? 0.08 : 0,
       bleedSplashStacks: tagCounts.bleed >= 5 ? Math.min(3, 1 + Math.floor((tagCounts.bleed - 5) / 4)) : 0,
@@ -424,10 +479,10 @@ export function applyPlayerHealing(amount, options = {}) {
         }
       }
     }
-    if ((gained > 0 || overflow > 0) && Neo.player.character === 'granialla') {
+    if ((gained > 0 || overflow > 0) && Neo.player.character === 'gelleh') {
       const now = Number(Neo.frameId || 0);
-      if (now - Number(Neo.player.graniallaHealPulseFrame || -9999) >= 24) {
-        Neo.player.graniallaHealPulseFrame = now;
+      if (now - Number(Neo.player.gellehHealPulseFrame || -9999) >= 24) {
+        Neo.player.gellehHealPulseFrame = now;
         const radius = 86;
         const pulseDamage = Math.max(2, Math.min(18, (gained + overflow) * 0.45));
         Neo.forEachEnemyNearCircle?.(Neo.player.x, Neo.player.y, radius + 80, enemy => {
@@ -487,7 +542,8 @@ export function requestPanelItemSelection(options = {}) {
     if (!player) return false;
     const pawPending = Math.max(0, Math.floor(Number(player.wizardPawPendingCount || 0)));
     const batteryPending = Math.max(0, Math.floor(Number(player.extraBatteryPendingCount || 0)));
-    if (pawPending <= 0 && batteryPending <= 0) return false;
+    const scrollPending = Array.isArray(player.scrollPendingQueue) && player.scrollPendingQueue.length > 0;
+    if (pawPending <= 0 && batteryPending <= 0 && !scrollPending) return false;
     // Don't fight a cinematic, transition, death, or another blocking overlay.
     if (Neo.gameState !== 'play') return false;
     // The paw modal is itself a blocking overlay; if it's already up, wait for confirm.
@@ -496,6 +552,11 @@ export function requestPanelItemSelection(options = {}) {
     // Paw first: it stops time and is the higher-tier reward.
     if (pawPending > 0) {
       beginWizardPawModal();
+      return true;
+    }
+    // Scrolls next: each owed scroll opens its own control modal.
+    if (scrollPending) {
+      beginScrollControlSelection(player.scrollPendingQueue[0]);
       return true;
     }
     // The battery prompt re-uses the inventory panel. When the player just
@@ -591,6 +652,513 @@ export function confirmWizardPawSelection() {
     Neo.scheduleRunSave();
     // Chain into the next owed paw/battery (if any) now that the modal is closed.
     requestPanelItemSelection();
+  }
+
+  // Scrolls are their own system (Neo.SCROLL_DEFS); this set mirrors its keys so
+  // scrolls stay out of relic pools/choices. Resolved lazily since Neo.SCROLL_KEYS
+  // is assigned during input.js init. Falls back to the known list pre-init.
+  const SCROLL_KEYS = {
+    has(key) {
+      const keys = Neo.SCROLL_KEYS || ['scroll_reroll', 'scroll_branching', 'scroll_replace', 'scroll_abundance', 'scroll_pool_weight', 'scroll_ego'];
+      return keys.includes(key);
+    },
+  };
+
+  function getScrollChoiceItems({ ownedOnly = false, rarity = '', exclude = [] } = {}) {
+    // SCROLL_KEYS is a {has()} shim (not iterable), so filter scrolls out via .has()
+    // rather than spreading it — spreading silently excluded nothing before.
+    const excluded = new Set(exclude);
+    const owned = Neo.player?.items || {};
+    return (Neo.ITEM_KEYS || [])
+      .filter(key => Neo.ITEM_DEFS?.[key] && !excluded.has(key) && !SCROLL_KEYS.has(key))
+      .filter(key => !ownedOnly || Number(owned[key] || 0) > 0)
+      .filter(key => !rarity || String(Neo.ITEM_DEFS[key]?.rarity || '').toLowerCase() === rarity)
+      .map(key => {
+        const item = Neo.itemRegistry?.get?.(key) || Neo.ITEM_DEFS[key];
+        return {
+          key,
+          type: 'item',
+          name: item?.name || Neo.titleCase?.(key) || key,
+          description: item?.description || '',
+          rarity: item?.rarity || item?.category || 'knight',
+          color: item?.color || Neo.getRarityNameColor?.(item?.rarity) || '#d8e9ff',
+          search: `${item?.name || key} ${item?.description || ''} ${item?.rarity || ''} ${(item?.tags || []).join(' ')}`.toLowerCase(),
+        };
+      });
+  }
+
+  function getScrollTagChoices() {
+    const tags = new Map();
+    (Neo.ITEM_KEYS || []).forEach(key => {
+      if (SCROLL_KEYS.has(key)) return;
+      const item = Neo.ITEM_DEFS?.[key];
+      const list = Array.isArray(item?.tags) ? item.tags : [];
+      list.forEach(tag => {
+        const clean = String(tag || '').trim();
+        if (!clean || clean === 'god' || clean === 'wizard') return;
+        tags.set(clean, (tags.get(clean) || 0) + 1);
+      });
+    });
+    return [...tags.entries()]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .map(([tag, count]) => ({
+        key: tag,
+        type: 'tag',
+        name: tag.replace(/_/g, ' '),
+        description: `${count} relics use this tag.`,
+        rarity: 'knight',
+        color: '#c8e2ff',
+        search: `${tag} ${count}`.toLowerCase(),
+      }));
+  }
+
+  function getScrollControlConfig(scrollKey, phase = 'main') {
+    const item = Neo.SCROLL_DEFS?.[scrollKey] || Neo.itemRegistry?.get?.(scrollKey) || Neo.ITEM_DEFS?.[scrollKey];
+    if (scrollKey === 'scroll_reroll') {
+      return {
+        title: 'SCROLL OF REROLL',
+        copy: 'Choose one owned relic. One stack is replaced by a seeded relic of the same rarity.',
+        minPicks: 1,
+        maxPicks: 1,
+        choices: getScrollChoiceItems({ ownedOnly: true }),
+      };
+    }
+    if (scrollKey === 'scroll_branching') {
+      return {
+        title: 'SCROLL OF BRANCHING',
+        copy: 'Choose up to 3 relics. The next reward of each selected rarity becomes that relic.',
+        minPicks: 1,
+        maxPicks: 3,
+        choices: getScrollChoiceItems(),
+      };
+    }
+    if (scrollKey === 'scroll_replace') {
+      if (phase === 'to') {
+        const fromKeys = Neo.scrollControlSelection?.fromKeys || [];
+        const fromRarity = String(Neo.ITEM_DEFS?.[fromKeys[0]]?.rarity || 'knight').toLowerCase();
+        return {
+          title: 'SCROLL OF REPLACE',
+          copy: 'Choose the relic that should appear instead.',
+          minPicks: 1,
+          maxPicks: 1,
+          choices: getScrollChoiceItems({ rarity: fromRarity, exclude: fromKeys }),
+        };
+      }
+      return {
+        title: 'SCROLL OF REPLACE',
+        copy: 'Choose up to 3 relics you do not want to see. Confirm to pick the replacement.',
+        minPicks: 1,
+        maxPicks: 3,
+        choices: getScrollChoiceItems(),
+      };
+    }
+    if (scrollKey === 'scroll_abundance') {
+      return {
+        title: 'SCROLL OF ABUNDANCE',
+        copy: 'Choose 2 relics. Every two floors has a 50% chance to grant one selected relic or one random relic.',
+        minPicks: 2,
+        maxPicks: 2,
+        choices: getScrollChoiceItems(),
+      };
+    }
+    if (scrollKey === 'scroll_pool_weight') {
+      return {
+        title: 'SCROLL OF POOL WEIGHT',
+        copy: 'Choose one tag. Future rewards favor that tag for the next 3 floors.',
+        minPicks: 1,
+        maxPicks: 1,
+        choices: getScrollTagChoices(),
+      };
+    }
+    if (scrollKey === 'scroll_ego') {
+      return {
+        title: 'SCROLL OF EGO',
+        copy: 'Confirm to make items already in your build 10% more common for this floor.',
+        minPicks: 0,
+        maxPicks: 0,
+        choices: [],
+      };
+    }
+    // Unknown scroll key — surface its own name and let the player dismiss it
+    // rather than silently mislabelling it as Ego.
+    return {
+      title: item?.name?.toUpperCase?.() || 'SCROLL OF CONTROL',
+      copy: 'Confirm to use this scroll.',
+      minPicks: 0,
+      maxPicks: 0,
+      choices: [],
+    };
+  }
+
+  // The scroll-control modal elements live in Neo.ui, but if that cache was built
+  // before this markup existed (or a refactor renamed a sibling), re-resolve the
+  // ids by hand so the searchable grid never silently fails to render.
+  function ensureScrollControlRefs() {
+    const ui = Neo.ui;
+    if (!ui) return false;
+    const ids = ['scrollControlModal', 'scrollControlTitle', 'scrollControlCopy', 'scrollControlSearch', 'scrollControlMeta', 'scrollControlChoices', 'scrollControlCancel', 'scrollControlConfirm'];
+    ids.forEach(id => { if (!ui[id]) ui[id] = document.getElementById(id); });
+    return !!ui.scrollControlChoices;
+  }
+
+  function renderScrollControlPanel() {
+    const state = Neo.scrollControlSelection;
+    if (!state || !ensureScrollControlRefs()) return;
+    const config = getScrollControlConfig(state.scrollKey, state.phase);
+    state.config = config;
+    const query = String(state.query || '').trim().toLowerCase();
+    const choices = query ? config.choices.filter(choice => choice.search.includes(query)) : config.choices;
+    if (Neo.ui.scrollControlTitle) Neo.ui.scrollControlTitle.textContent = config.title;
+    if (Neo.ui.scrollControlCopy) Neo.ui.scrollControlCopy.textContent = config.copy;
+    if (Neo.ui.scrollControlSearch) Neo.ui.scrollControlSearch.value = state.query || '';
+    // Hide the search box for confirm-only scrolls (e.g. Ego) that have no list to filter.
+    const hasChoices = config.choices.length > 0;
+    const searchWrap = Neo.ui.scrollControlSearch?.closest('.scroll-control-search-wrap');
+    if (searchWrap) searchWrap.classList.toggle('hidden', !hasChoices);
+    if (Neo.ui.scrollControlMeta) {
+      const picked = state.picks.length;
+      if (config.maxPicks <= 0) {
+        Neo.ui.scrollControlMeta.textContent = 'Ready to confirm';
+        Neo.ui.scrollControlMeta.dataset.tone = 'ready';
+      } else {
+        const remaining = Math.max(0, config.minPicks - picked);
+        Neo.ui.scrollControlMeta.textContent = `${picked} / ${config.maxPicks} selected`;
+        Neo.ui.scrollControlMeta.dataset.tone = remaining === 0 ? 'ready' : 'pending';
+      }
+    }
+    const ownedItems = Neo.player?.items || {};
+    Neo.ui.scrollControlChoices.innerHTML = choices.map((choice, index) => {
+      const selected = state.picks.includes(choice.key);
+      const pickOrder = selected ? state.picks.indexOf(choice.key) + 1 : 0;
+      const color = choice.type === 'item' ? Neo.getRarityNameColor?.(choice.rarity) || choice.color : choice.color;
+      const icon = choice.type === 'item'
+        ? `<canvas class="scroll-control-choice__icon" data-item-icon="${Neo.escapeHtml(choice.key)}" width="48" height="48"></canvas>`
+        : `<span class="scroll-control-choice__tag" aria-hidden="true">#</span>`;
+      const owned = Math.max(0, Math.floor(Number(ownedItems[choice.key] || 0)));
+      const ownedBadge = owned > 0 ? `<span class="scroll-control-choice__owned">×${owned}</span>` : '';
+      // When more than one pick is allowed, show the pick order so multi-select reads clearly.
+      const orderBadge = (selected && config.maxPicks > 1)
+        ? `<span class="scroll-control-choice__order">${pickOrder}</span>`
+        : (selected ? '<span class="scroll-control-choice__order scroll-control-choice__order--check">✓</span>' : '');
+      const eyebrow = choice.type === 'tag' ? 'Tag' : (choice.rarity || 'relic');
+      return `<button class="scroll-control-choice${selected ? ' is-selected' : ''}" type="button" role="option" aria-selected="${selected}" data-scroll-choice="${Neo.escapeHtml(choice.key)}" style="--scroll-choice-color:${Neo.escapeHtml(color)};animation-delay:${Math.min(index, 12) * 18}ms">
+        ${orderBadge}
+        <span class="scroll-control-choice__iconwrap">${icon}${ownedBadge}</span>
+        <span class="scroll-control-choice__body">
+          <span class="scroll-control-choice__eyebrow">${Neo.escapeHtml(eyebrow)}</span>
+          <span class="scroll-control-choice__name">${Neo.escapeHtml(choice.name)}</span>
+          <span class="scroll-control-choice__desc">${Neo.escapeHtml(choice.description || '')}</span>
+        </span>
+      </button>`;
+    }).join('') || (config.choices.length === 0
+      ? '<div class="scroll-control-empty"><span class="scroll-control-empty__glyph">∅</span><h4>Nothing to choose</h4><p>This scroll has no valid targets right now. Cancel to discard it.</p></div>'
+      : '<div class="scroll-control-empty"><span class="scroll-control-empty__glyph">🔍</span><h4>No matches</h4><p>Clear the search to see available choices.</p></div>');
+    Neo.drawItemIconCanvases?.(Neo.ui.scrollControlChoices, 'data-item-icon');
+    if (Neo.ui.scrollControlConfirm) {
+      const canConfirm = state.picks.length >= config.minPicks && state.picks.length <= config.maxPicks;
+      Neo.ui.scrollControlConfirm.disabled = !canConfirm;
+      if (state.scrollKey === 'scroll_replace' && state.phase !== 'to') {
+        Neo.ui.scrollControlConfirm.textContent = canConfirm ? 'CHOOSE REPLACEMENT' : 'PICK UNWANTED RELICS';
+      } else {
+        Neo.ui.scrollControlConfirm.textContent = canConfirm ? 'CONFIRM' : `PICK ${config.minPicks - state.picks.length} MORE`;
+      }
+    }
+  }
+
+  function isScrollControlItem(itemKey) {
+    return SCROLL_KEYS.has(itemKey);
+  }
+
+  // Queue `count` scroll selections owed by a pickup/purchase, then try to present
+  // the first one now (defers via requestPanelItemSelection if an overlay is open).
+  function enqueueScrollSelection(scrollKey, count = 1) {
+    if (!Neo.player || !SCROLL_KEYS.has(scrollKey)) return false;
+    if (!Array.isArray(Neo.player.scrollPendingQueue)) Neo.player.scrollPendingQueue = [];
+    const copies = Math.max(1, Math.floor(Number(count) || 1));
+    for (let index = 0; index < copies; index += 1) Neo.player.scrollPendingQueue.push(scrollKey);
+    Neo.scheduleRunSave?.();
+    if (!requestPanelItemSelection()) notifyPanelItemDeferred(scrollKey);
+    return true;
+  }
+
+  // Actually open the scroll control modal for `scrollKey`. Callers (the dispatcher)
+  // are responsible for the gameState / overlay guards.
+  function beginScrollControlSelection(scrollKey) {
+    if (!Neo.player || !SCROLL_KEYS.has(scrollKey)) return false;
+    if (Neo.getItemCount(scrollKey) <= 0) {
+      // Owed a prompt but the scroll is gone (e.g. rerolled away) — drop the entry.
+      dequeueScrollSelection(scrollKey);
+      return false;
+    }
+    Neo.scrollControlSelection = { scrollKey, phase: 'main', picks: [], fromKeys: [], query: '' };
+    Neo.setScrollControlModalOpen?.(true);
+    renderScrollControlPanel();
+    return true;
+  }
+
+  // Remove a single queued entry for scrollKey (the one being resolved).
+  function dequeueScrollSelection(scrollKey) {
+    const queue = Neo.player?.scrollPendingQueue;
+    if (!Array.isArray(queue)) return;
+    const idx = queue.indexOf(scrollKey);
+    if (idx >= 0) queue.splice(idx, 1);
+  }
+
+  function updateScrollControlSearch(query = '') {
+    if (!Neo.scrollControlSelection) return;
+    Neo.scrollControlSelection.query = String(query || '');
+    renderScrollControlPanel();
+  }
+
+  function handleScrollControlChoiceClick(event) {
+    const target = event.target instanceof Element ? event.target.closest('[data-scroll-choice]') : null;
+    const choiceKey = target?.dataset?.scrollChoice || '';
+    const state = Neo.scrollControlSelection;
+    if (!state || !choiceKey) return;
+    const config = getScrollControlConfig(state.scrollKey, state.phase);
+    const picks = state.picks;
+    const existing = picks.indexOf(choiceKey);
+    if (existing >= 0) picks.splice(existing, 1);
+    else {
+      if (picks.length >= config.maxPicks) picks.shift();
+      picks.push(choiceKey);
+    }
+    renderScrollControlPanel();
+  }
+
+  function consumeScroll(scrollKey) {
+    if (!Neo.player?.items || Number(Neo.player.items[scrollKey] || 0) <= 0) return false;
+    Neo.player.items[scrollKey] = Math.max(0, Number(Neo.player.items[scrollKey] || 0) - 1);
+    if (Neo.player.items[scrollKey] <= 0) delete Neo.player.items[scrollKey];
+    Neo.syncEquipmentSlotsFromInventory?.();
+    return true;
+  }
+
+  function getSameRarityRandomItem(sourceKey, random) {
+    const rarity = String(Neo.ITEM_DEFS?.[sourceKey]?.rarity || 'knight').toLowerCase();
+    const pool = (Neo.ITEM_KEYS || []).filter(key => !SCROLL_KEYS.has(key) && key !== sourceKey && String(Neo.ITEM_DEFS?.[key]?.rarity || '').toLowerCase() === rarity);
+    const pickPool = pool.length ? pool : (Neo.ITEM_KEYS || []).filter(key => !SCROLL_KEYS.has(key) && key !== sourceKey);
+    return pickPool[Math.floor((typeof random === 'function' ? random() : Neo.rng()) * pickPool.length)] || 'neo_knife';
+  }
+
+  function confirmScrollControlSelection() {
+    const state = Neo.scrollControlSelection;
+    if (!state || !Neo.player) return;
+    const config = getScrollControlConfig(state.scrollKey, state.phase);
+    if (state.picks.length < config.minPicks) return;
+    if (state.scrollKey === 'scroll_replace' && state.phase !== 'to') {
+      state.fromKeys = state.picks.slice(0, 3);
+      state.phase = 'to';
+      state.picks = [];
+      state.query = '';
+      renderScrollControlPanel();
+      return;
+    }
+    if (!consumeScroll(state.scrollKey)) return;
+    Neo.player.scrollUseSerial = Math.max(0, Math.floor(Number(Neo.player.scrollUseSerial || 0))) + 1;
+    const selectedScope = [...state.fromKeys, ...state.picks].join(',');
+    const random = Neo.createScopedRandom?.(`scroll:${state.scrollKey}:use:${Neo.player.scrollUseSerial}:floor:${Neo.floor}:choices:${selectedScope}`) || Neo.rng;
+    if (state.scrollKey === 'scroll_reroll') {
+      const oldKey = state.picks[0];
+      const newKey = getSameRarityRandomItem(oldKey, random);
+      Neo.player.items[oldKey] = Math.max(0, Number(Neo.player.items[oldKey] || 0) - 1);
+      if (Neo.player.items[oldKey] <= 0) delete Neo.player.items[oldKey];
+      Neo.collectItem(newKey);
+    } else if (state.scrollKey === 'scroll_branching') {
+      Neo.player.scrollBranchingTargets = { ...(Neo.player.scrollBranchingTargets || {}) };
+      state.picks.forEach(key => {
+        const rarity = String(Neo.ITEM_DEFS?.[key]?.rarity || 'knight').toLowerCase();
+        Neo.player.scrollBranchingTargets[rarity] = key;
+      });
+    } else if (state.scrollKey === 'scroll_replace') {
+      const toKey = state.picks[0];
+      Neo.player.scrollReplaceMap = { ...(Neo.player.scrollReplaceMap || {}) };
+      state.fromKeys.forEach(fromKey => { Neo.player.scrollReplaceMap[fromKey] = toKey; });
+    } else if (state.scrollKey === 'scroll_abundance') {
+      Neo.player.scrollAbundance = { items: state.picks.slice(0, 2), nextCheckFloor: Neo.floor + 2, expiresFloor: Neo.floor + 8 };
+    } else if (state.scrollKey === 'scroll_pool_weight') {
+      const buffs = Array.isArray(Neo.player.scrollPoolWeights) ? Neo.player.scrollPoolWeights : [];
+      buffs.push({ tag: state.picks[0], expiresFloor: Neo.floor + 3 });
+      Neo.player.scrollPoolWeights = buffs.slice(-4);
+    } else if (state.scrollKey === 'scroll_ego') {
+      Neo.player.scrollEgoFloor = Neo.floor;
+    }
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 28, life: 0.9, text: 'SCROLL SET', c: '#d7f6ff' });
+    dequeueScrollSelection(state.scrollKey);
+    Neo.scrollControlSelection = null;
+    Neo.setScrollControlModalOpen?.(false);
+    Neo.markInventoryPanelDirty?.();
+    Neo.renderInventoryPanel?.();
+    Neo.updateHud?.();
+    Neo.scheduleRunSave?.();
+    // Chain into the next owed scroll/paw/battery now that the modal is closed.
+    requestPanelItemSelection();
+  }
+
+  function cancelScrollControlSelection() {
+    const state = Neo.scrollControlSelection;
+    Neo.scrollControlSelection = null;
+    Neo.setScrollControlModalOpen?.(false);
+    // Scrolls are spent on acquisition: dismissing the popup still consumes the
+    // scroll (no effect applied) and clears its queued prompt — no take-backs.
+    if (state?.scrollKey) {
+      consumeScroll(state.scrollKey);
+      dequeueScrollSelection(state.scrollKey);
+      Neo.spawnParticle?.({ x: Neo.player?.x || 0, y: (Neo.player?.y || 0) - 28, life: 0.8, text: 'SCROLL DISCARDED', c: '#9aa6b2' });
+      Neo.markInventoryPanelDirty?.();
+      Neo.renderInventoryPanel?.();
+      Neo.updateHud?.();
+      Neo.scheduleRunSave?.();
+    }
+    // Present the next owed selection (if any).
+    requestPanelItemSelection();
+  }
+
+  // ── Voucher redemption ────────────────────────────────────────────────────
+
+  function getVoucherCount() {
+    return Math.max(0, Math.floor(Number(Neo.player?.items?.[Neo.VOUCHER_KEY] || 0)));
+  }
+
+  // Keys that can never be granted as a voucher reward (the voucher itself and
+  // the scroll-of-control utility relics, which require manual targeting).
+  function getVoucherExcludedKeys() {
+    return new Set([Neo.VOUCHER_KEY, ...(Neo.SCROLL_OF_CONTROL_KEYS || [])]);
+  }
+
+  function getVoucherRarityPool(rarity) {
+    const targetRarity = String(rarity || '').toLowerCase();
+    const excluded = getVoucherExcludedKeys();
+    return (Neo.ITEM_KEYS || []).filter(key => {
+      if (excluded.has(key)) return false;
+      const item = Neo.ITEM_DEFS?.[key];
+      if (!item) return false;
+      return String(item.rarity || item.category || 'knight').toLowerCase() === targetRarity;
+    });
+  }
+
+  function grantRandomItemOfRarity(rarity, random) {
+    const pool = getVoucherRarityPool(rarity);
+    if (!pool.length) return '';
+    const roll = typeof random === 'function' ? random() : Neo.rng();
+    const key = pool[Math.floor(roll * pool.length)] || pool[0];
+    Neo.collectItem(key);
+    return key;
+  }
+
+  function renderVoucherModal() {
+    if (!Neo.ui.voucherChoices) return;
+    const count = getVoucherCount();
+    if (Neo.ui.voucherMeta) {
+      Neo.ui.voucherMeta.textContent = count === 1 ? '1 voucher held' : `${count} vouchers held`;
+    }
+    const colors = Neo.VOUCHER_COLORS || [];
+    Neo.ui.voucherChoices.innerHTML = colors.map(color => {
+      const poolSize = getVoucherRarityPool(color.rarity).length;
+      const disabled = poolSize <= 0;
+      return `<button class="wizard-paw-choice voucher-choice${disabled ? ' is-disabled' : ''}" type="button" data-voucher-color="${Neo.escapeHtml(color.id)}"${disabled ? ' disabled' : ''} style="--voucher-color:${Neo.escapeHtml(color.color)}">
+        <span class="wizard-paw-choice__eyebrow">${Neo.escapeHtml(color.label)}</span>
+        <span class="voucher-choice__swatch" style="background:${Neo.escapeHtml(color.color)}"></span>
+        <p>${disabled ? 'No relics available.' : `Random ${Neo.escapeHtml(color.label.toLowerCase())} relic.`}</p>
+      </button>`;
+    }).join('');
+  }
+
+  function openVoucherRedeem() {
+    if (!Neo.player) return false;
+    if (Neo.currentRoom?.type !== 'shop') return false;
+    if (Neo.isChallengeActive?.('no_items')) {
+      Neo.spawnParticle?.({ x: Neo.player.x, y: Neo.player.y - 24, life: 0.8, text: 'No Items challenge', c: '#ff8894' });
+      return false;
+    }
+    if (getVoucherCount() <= 0) return false;
+    Neo.voucherRedeemOpen = true;
+    Neo.setVoucherModalOpen?.(true);
+    renderVoucherModal();
+    return true;
+  }
+
+  function cancelVoucherRedeem() {
+    Neo.voucherRedeemOpen = false;
+    Neo.setVoucherModalOpen?.(false);
+  }
+
+  function handleVoucherChoiceClick(event) {
+    const target = event.target instanceof Element ? event.target.closest('[data-voucher-color]') : null;
+    const colorId = target?.dataset?.voucherColor || '';
+    if (!colorId || target?.disabled) return;
+    redeemVoucherColor(colorId);
+  }
+
+  function redeemVoucherColor(colorId) {
+    if (!Neo.player) return false;
+    if (Neo.isChallengeActive?.('no_items')) return false;
+    if (getVoucherCount() <= 0) return false;
+    const color = (Neo.VOUCHER_COLORS || []).find(entry => entry.id === colorId);
+    if (!color) return false;
+    if (getVoucherRarityPool(color.rarity).length <= 0) return false;
+    // Consume one voucher.
+    Neo.player.items[Neo.VOUCHER_KEY] = Math.max(0, getVoucherCount() - 1);
+    if (Neo.player.items[Neo.VOUCHER_KEY] <= 0) delete Neo.player.items[Neo.VOUCHER_KEY];
+    Neo.syncEquipmentSlotsFromInventory?.();
+    Neo.player.voucherUseSerial = Math.max(0, Math.floor(Number(Neo.player.voucherUseSerial || 0))) + 1;
+    const random = Neo.createScopedRandom?.(`voucher:${color.id}:use:${Neo.player.voucherUseSerial}:floor:${Neo.floor}`) || Neo.rng;
+    const grantedKey = grantRandomItemOfRarity(color.rarity, random);
+    if (grantedKey) {
+      const grantedName = Neo.itemRegistry?.get?.(grantedKey)?.name || Neo.ITEM_DEFS?.[grantedKey]?.name || grantedKey;
+      Neo.spawnParticle?.({ x: Neo.player.x, y: Neo.player.y - 24, life: 0.9, text: `VOUCHER: ${grantedName}`, c: color.color });
+      Neo.playSfx?.('item_collect');
+      window.achievementEvents?.emit?.('shop:bought');
+    }
+    // Keep the modal open if more vouchers remain, otherwise close it.
+    if (getVoucherCount() > 0) renderVoucherModal();
+    else cancelVoucherRedeem();
+    Neo.markShopPanelDirty?.();
+    Neo.markInventoryPanelDirty?.();
+    Neo.renderShopPanel?.();
+    Neo.renderInventoryPanel?.();
+    Neo.refreshShopVoucherBanner?.();
+    Neo.scheduleRunSave?.();
+    Neo.syncCurrentRoomState?.();
+    Neo.updateHud?.();
+    return true;
+  }
+
+  function refreshShopVoucherBanner() {
+    const banner = Neo.ui?.shopVoucherBanner;
+    if (!banner) return;
+    const show = Neo.currentRoom?.type === 'shop'
+      && getVoucherCount() > 0
+      && !Neo.isChallengeActive?.('no_items');
+    banner.classList.toggle('hidden', !show);
+    banner.setAttribute('aria-hidden', show ? 'false' : 'true');
+    if (show && Neo.ui.shopVoucherBannerSub) {
+      const count = getVoucherCount();
+      Neo.ui.shopVoucherBannerSub.textContent = count > 1
+        ? `${count} vouchers ready — redeem for a relic of your chosen colour.`
+        : 'Redeem for a relic of your chosen colour.';
+    }
+  }
+
+  function applyScrollAbundanceForFloor() {
+    const state = Neo.player?.scrollAbundance;
+    if (!state || Neo.floor < Number(state.nextCheckFloor || 999) || Neo.floor > Number(state.expiresFloor || 0)) return;
+    const random = Neo.createScopedRandom?.(`scroll:abundance:${Neo.baseSeedStr || ''}:${Neo.floor}`) || Neo.rng;
+    state.nextCheckFloor = Neo.floor + 2;
+    if (random() >= 0.5) return;
+    const selected = Array.isArray(state.items) ? state.items.filter(key => Neo.ITEM_DEFS?.[key]) : [];
+    const randomPool = (Neo.ITEM_KEYS || []).filter(key => Neo.ITEM_DEFS?.[key] && !SCROLL_KEYS.has(key));
+    const offerPool = [
+      ...selected.slice(0, 2),
+      randomPool[Math.floor(random() * randomPool.length)],
+      randomPool[Math.floor(random() * randomPool.length)],
+    ].filter(Boolean);
+    const key = offerPool[Math.floor(random() * offerPool.length)];
+    if (key) {
+      Neo.collectItem(key);
+      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 42, life: 1.0, text: 'ABUNDANCE', c: '#fff2a8' });
+    }
+    if (Neo.floor >= Number(state.expiresFloor || 0)) delete Neo.player.scrollAbundance;
   }
 
 function ensureMoveStackOverrides(playerData = Neo.player) {
@@ -782,6 +1350,22 @@ export function refreshFloorChargeStates() {
   Neo.handleWizardPawChoiceClick = handleWizardPawChoiceClick;
   Neo.applyWizardPawStat = applyWizardPawStat;
   Neo.confirmWizardPawSelection = confirmWizardPawSelection;
+  Neo.isScrollControlItem = isScrollControlItem;
+  Neo.enqueueScrollSelection = enqueueScrollSelection;
+  Neo.renderScrollControlPanel = renderScrollControlPanel;
+  Neo.updateScrollControlSearch = updateScrollControlSearch;
+  Neo.handleScrollControlChoiceClick = handleScrollControlChoiceClick;
+  Neo.confirmScrollControlSelection = confirmScrollControlSelection;
+  Neo.cancelScrollControlSelection = cancelScrollControlSelection;
+  Neo.getVoucherCount = getVoucherCount;
+  Neo.grantRandomItemOfRarity = grantRandomItemOfRarity;
+  Neo.openVoucherRedeem = openVoucherRedeem;
+  Neo.cancelVoucherRedeem = cancelVoucherRedeem;
+  Neo.handleVoucherChoiceClick = handleVoucherChoiceClick;
+  Neo.redeemVoucherColor = redeemVoucherColor;
+  Neo.renderVoucherModal = renderVoucherModal;
+  Neo.refreshShopVoucherBanner = refreshShopVoucherBanner;
+  Neo.applyScrollAbundanceForFloor = applyScrollAbundanceForFloor;
   Neo.openExtraBatterySelection = openExtraBatterySelection;
   Neo.grantExtraBatteryToMove = grantExtraBatteryToMove;
   Neo.consumeCharge = consumeCharge;

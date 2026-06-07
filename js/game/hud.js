@@ -94,8 +94,12 @@
   function pushPanelItemObjectives(entries) {
     const pawPending = Math.max(0, Math.floor(Number(Neo.player?.wizardPawPendingCount || 0)));
     const batteryPending = Math.max(0, Math.floor(Number(Neo.player?.extraBatteryPendingCount || 0)));
+    const scrollPending = Array.isArray(Neo.player?.scrollPendingQueue) ? Neo.player.scrollPendingQueue.length : 0;
     if (pawPending > 0) {
       entries.push({ text: `Wizard's Paw ready: pick 2 stats to boost${pawPending > 1 ? ` (×${pawPending})` : ''}`, state: 'warn' });
+    }
+    if (scrollPending > 0) {
+      entries.push({ text: `Scroll of Control ready: choose its target${scrollPending > 1 ? ` (×${scrollPending})` : ''}`, state: 'warn' });
     }
     if (batteryPending > 0) {
       entries.push({ text: `Extra Battery ready: pick a move for +1 charge${batteryPending > 1 ? ` (×${batteryPending})` : ''}`, state: 'warn' });
@@ -369,10 +373,12 @@
       laserSkill.max = Neo.getLaserCastDuration(laserMoveKey);
     }
     if (weaponDef) {
-      meleeSkill.current = Number(Neo.player.weaponCooldown || 0);
-      meleeSkill.max = Neo.getWeaponBaseCooldown(weaponKey);
-      meleeSkill.charges = meleeSkill.current > 0 ? 0 : 1;
-      meleeSkill.maxCharges = 1;
+      const weaponSkill = Neo.getWeaponCooldownInfo?.(weaponKey, attackSpeed);
+      meleeSkill.current = Number(weaponSkill?.current || Neo.player.weaponCooldown || 0);
+      meleeSkill.max = Number(weaponSkill?.max || Neo.getWeaponBaseCooldown(weaponKey));
+      meleeSkill.charges = Number(weaponSkill?.charges ?? (meleeSkill.current > 0 ? 0 : 1));
+      meleeSkill.maxCharges = Number(weaponSkill?.maxCharges || 1);
+      meleeSkill.timers = Array.isArray(weaponSkill?.timers) ? weaponSkill.timers : (meleeSkill.current > 0 ? [meleeSkill.current] : []);
     }
     const minutes = Math.floor(Neo.gameElapsedTime / 60);
     const seconds = Math.floor(Neo.gameElapsedTime % 60);
@@ -393,16 +399,20 @@
       difficultyName: Neo.getDifficultyDef(Neo.selectedDifficulty).name,
       itemRarityCounts: Neo.getItemRarityCounts(Neo.player),
       skills: {
-        melee: { current: meleeSkill.current, max: meleeSkill.max, active: false, charges: meleeSkill.charges, maxCharges: meleeSkill.maxCharges },
-        laser: { current: laserSkill.current, max: laserSkill.max, active: Neo.laserActive, charges: laserSkill.charges, maxCharges: laserSkill.maxCharges },
-        smash: { current: smashSkill.current, max: smashSkill.max, active: false, charges: smashSkill.charges, maxCharges: smashSkill.maxCharges },
-        dash: { current: dashSkill.current, max: dashSkill.max, active: Neo.player.dashTime > 0 || Neo.player.cowardsWayTime > 0 || Neo.player.princessFlightTime > 0, charges: dashSkill.charges, maxCharges: dashSkill.maxCharges },
+        melee: { current: meleeSkill.current, max: meleeSkill.max, active: false, charges: meleeSkill.charges, maxCharges: meleeSkill.maxCharges, timers: meleeSkill.timers },
+        laser: { current: laserSkill.current, max: laserSkill.max, active: Neo.laserActive, charges: laserSkill.charges, maxCharges: laserSkill.maxCharges, timers: laserSkill.timers },
+        smash: { current: smashSkill.current, max: smashSkill.max, active: false, charges: smashSkill.charges, maxCharges: smashSkill.maxCharges, timers: smashSkill.timers },
+        dash: { current: dashSkill.current, max: dashSkill.max, active: Neo.player.dashTime > 0 || Neo.player.cowardsWayTime > 0 || Neo.player.princessFlightTime > 0, charges: dashSkill.charges, maxCharges: dashSkill.maxCharges, timers: dashSkill.timers },
       },
     });
     Neo.ui.skillNames.dash.textContent = dashMove?.name || character.skills.dash;
     Neo.ui.skillNames.melee.textContent = weaponDef?.name || meleeMove?.name || character.skills.melee;
     Neo.ui.skillNames.laser.textContent = laserMove?.name || character.skills.laser;
     Neo.ui.skillNames.smash.textContent = smashMove?.name || character.skills.smash;
+    // Mirror the hotkey-settings bindings onto the skill cards' key labels so the
+    // HUD shows the player's actual controls (slash/laser/smash/dash) rather than
+    // the hardcoded defaults. Guarded by a signature since rebinds are rare.
+    updateSkillKeyLabels();
     // Redraw the HUD action icons whenever the equipped loadout changes. They are
     // canvas-rendered once, so without this they keep the icon drawn at boot.
     const loadoutSig = `${weaponKey}|${meleeMove?.key || ''}|${laserMove?.key || ''}|${smashMove?.key || ''}|${dashMove?.key || ''}`;
@@ -421,6 +431,7 @@
     Neo.updateEquipmentSlots();
     if (Neo.ui.timerDisplay) Neo.ui.timerDisplay.textContent = timeStr;
     if (Neo.ui.floorDisplay) Neo.ui.floorDisplay.textContent = Neo.floor;
+    Neo.updateBossRushHud?.();
     if (Neo.ui.difficultyLabel) Neo.ui.difficultyLabel.textContent = Neo.getDifficultyDef(Neo.selectedDifficulty).name.toUpperCase();
     const isCompetitive = Neo.gameMode === 'competitive';
     if (Neo.ui.competitiveSeedDisplay) Neo.ui.competitiveSeedDisplay.style.display = isCompetitive ? '' : 'none';
@@ -437,14 +448,17 @@
     if (Neo.ui.panelItemAlert) {
       const pawPending = Math.max(0, Math.floor(Number(Neo.player?.wizardPawPendingCount || 0)));
       const batteryPending = Math.max(0, Math.floor(Number(Neo.player?.extraBatteryPendingCount || 0)));
-      const pendingTotal = pawPending + batteryPending;
+      const scrollPending = Array.isArray(Neo.player?.scrollPendingQueue) ? Neo.player.scrollPendingQueue.length : 0;
+      const pendingTotal = pawPending + scrollPending + batteryPending;
       Neo.ui.panelItemAlert.classList.toggle('hidden', pendingTotal <= 0);
       if (pendingTotal > 0) {
         const countEl = Neo.ui.panelItemAlert.querySelector('.panel-item-alert__count');
         if (countEl) countEl.textContent = String(pendingTotal);
         const label = pawPending > 0
           ? "Wizard's Paw: pick 2 stats"
-          : 'Extra Battery: pick a move';
+          : scrollPending > 0
+            ? 'Scroll of Control: choose target'
+            : 'Extra Battery: pick a move';
         Neo.ui.panelItemAlert.title = `${label}${pendingTotal > 1 ? ` (+${pendingTotal - 1} more)` : ''}`;
       }
     }
@@ -497,6 +511,10 @@
   }
 
   function submitCompetitiveRun(entry) {
+    if (entry?.result !== 'win') {
+      setCompetitiveSubmitStatus({ state: 'idle' });
+      return;
+    }
     const username = Neo.metaProgress?.username?.trim() || 'Anonymous';
     setCompetitiveSubmitStatus({ state: 'submitting' });
     Neo.fetchCompetitiveJson('/leaderboard', {
@@ -506,6 +524,7 @@
         name: username,
         floor: entry.floor,
         seed: entry.seed || Neo.baseSeedStr,
+        result: entry.result,
         character: entry.character || Neo.chosenCharacter,
         time: entry.elapsedSeconds,
       }),
@@ -533,8 +552,9 @@
     if (nextRecords.level > previousRecords.level && entry.level >= nextRecords.level) newRecords.level = true;
     if (nextRecords.time > previousRecords.time && entry.elapsedSeconds >= nextRecords.time) newRecords.time = true;
     if (nextRecords.coins > previousRecords.coins && entry.coins >= nextRecords.coins) newRecords.coins = true;
+    if (nextRecords.endlessWave > previousRecords.endlessWave && entry.endlessWave >= nextRecords.endlessWave) newRecords.endlessWave = true;
     entry._newRecords = newRecords;
-    if (Neo.gameMode === 'competitive') {
+    if (Neo.gameMode === 'competitive' && entry.result === 'win') {
       submitCompetitiveRun(entry);
     } else {
       setCompetitiveSubmitStatus({ state: 'idle' });
@@ -752,11 +772,15 @@
       laserSweepSpeed: Neo.laserSweepSpeed,
       turtleWaveHpTimer: Neo.turtleWaveHpTimer,
       godTimer: Neo.godTimer,
+      endlessWave: Neo.endlessWave,
+      endlessWaveActive: Neo.endlessWaveActive,
+      endlessRespawnTimer: Neo.endlessRespawnTimer,
       gameElapsedTime: Neo.gameElapsedTime,
       monsterRoamTimer: Neo.monsterRoamTimer,
       knaveKnightCutscenePlayed: Neo.knaveKnightCutscenePlayed,
       queenMetaoCutscenePlayed: Neo.queenMetaoCutscenePlayed,
       handsomeDevilCutscenePlayed: Neo.handsomeDevilCutscenePlayed,
+      antonyBlemmyeCutscenePlayed: Neo.antonyBlemmyeCutscenePlayed,
       secretRoomVisitedFloors: Array.isArray(Neo.secretRoomVisitedFloors) ? [...Neo.secretRoomVisitedFloors] : [],
       camera: Neo.camera,
     };
@@ -775,7 +799,35 @@
   //   activate  — function called when the slot's hotkey is pressed
   //   getState  — returns 'ready' | 'blocked' | 'charging' | 'empty' for slot styling
   //   getStatusText — short status text for tooltip / aria-label
-  const EQUIPMENT_SLOT_KEYS = ['F', 'G', 'H', 'J', 'K', 'L', 'U', 'I'];
+  const DEFAULT_EQUIPMENT_SLOT_KEYS = ['F', 'G', 'H', 'J', 'K', 'L', 'U', 'I'];
+  // Live tool-slot keys, honoring custom bindings from settings. Falls back to defaults.
+  function getEquipmentSlotKeys() {
+    const custom = window.NeoSettings?.getEquipmentSlotKeys?.();
+    if (Array.isArray(custom) && custom.length === DEFAULT_EQUIPMENT_SLOT_KEYS.length) return custom;
+    return DEFAULT_EQUIPMENT_SLOT_KEYS;
+  }
+  // Skill card -> binding action. Melee uses the 'slash' binding; the rest match.
+  const SKILL_KEY_ACTIONS = { dash: 'dash', melee: 'slash', laser: 'laser', smash: 'smash' };
+  // Hardcoded fallbacks matching index.html, used if NeoSettings isn't ready yet.
+  const SKILL_KEY_FALLBACK = { dash: 'SHIFT', melee: 'LMB', laser: 'RMB', smash: 'R' };
+  function updateSkillKeyLabels() {
+    const keys = Neo.ui?.skillKeys;
+    if (!keys) return;
+    const getLabel = window.NeoSettings?.getBindingLabel;
+    let sig = '';
+    const labels = {};
+    for (const skill in SKILL_KEY_ACTIONS) {
+      const label = (getLabel ? getLabel(SKILL_KEY_ACTIONS[skill]) : '') || SKILL_KEY_FALLBACK[skill];
+      labels[skill] = label;
+      sig += skill + ':' + label + '|';
+    }
+    if (sig === Neo._hudSkillKeySig) return;
+    Neo._hudSkillKeySig = sig;
+    for (const skill in labels) {
+      if (keys[skill]) keys[skill].textContent = labels[skill];
+    }
+  }
+
   const EQUIPMENT_ACTIVE_DEFS = {
     pew_pew_box: { cooldown: 34, duration: 8, label: 'PEW PEW', color: '#ffe06f' },
     turbo_boots: { cooldown: 46, duration: 20, label: 'TURBO', color: '#79ffbf' },
@@ -785,6 +837,8 @@
     mid_sweepy_box: { cooldown: 36, duration: 6, label: 'SWEEPY', color: '#ff6e8b' },
     el_bartos_cape: { cooldown: 58, duration: 10, label: 'EL BARTO', color: '#ffb37a' },
     sparkle_charm: { cooldown: 40, duration: 0, label: 'SPARKLE', color: '#ffe8a3' },
+    churu_stick: { cooldown: 40, duration: 0, label: 'CHURU', color: '#ffb6d5' },
+    gold_vac: { cooldown: 120, duration: 120, label: 'GOLD VAC', color: '#ffe07a' },
   };
 
   function ensureEquipmentRuntimeState() {
@@ -804,6 +858,10 @@
 
   function isEquipmentReady(itemKey) {
     return getEquipmentCooldown(itemKey) <= 0 && getEquipmentEffectTime(itemKey) <= 0;
+  }
+
+  function getEquipmentStackCount(itemKey) {
+    return Math.max(1, Math.floor(Number(Neo.getItemCount?.(itemKey) || 0)));
   }
 
   function getEquipmentState(itemKey) {
@@ -826,56 +884,79 @@
       Neo.spawnParticle({ x: player.x, y: player.y - 32, life: 0.5, text: getEquipmentStatusText(itemKey), c: '#ffc880' });
       return false;
     }
-    player.equipmentCooldowns[itemKey] = def.cooldown;
+    const stacks = getEquipmentStackCount(itemKey);
+    // Churu Stick: extra stacks shorten the cooldown (40s base, -4s per extra stack, floored at 20s).
+    const cooldown = itemKey === 'churu_stick'
+      ? Math.max(20, def.cooldown - (stacks - 1) * 4)
+      : def.cooldown;
+    player.equipmentCooldowns[itemKey] = cooldown;
     if (def.duration > 0) {
-      const stackBonus = itemKey === 'el_bartos_cape' ? Math.max(0, Neo.getItemCount(itemKey) - 1) * 5 : 0;
-      player.equipmentEffects[itemKey] = { time: def.duration + stackBonus, tick: 0 };
+      const extraStacks = stacks - 1;
+      const durationBonus = {
+        pew_pew_box: 1.5,
+        turbo_boots: 3,
+        skizzard_tail: 1.5,
+        zap_to_extreme: 2,
+        mid_sweepy_box: 1.5,
+        el_bartos_cape: 5,
+        gold_vac: 30,
+      }[itemKey] || 0;
+      player.equipmentEffects[itemKey] = { time: def.duration + extraStacks * durationBonus, tick: 0, stacks };
     }
     if (itemKey === 'panic_button') activatePanicButton();
     if (itemKey === 'sparkle_charm') activateSparkleCharm();
+    if (itemKey === 'churu_stick') activateChuruStick();
     Neo.itemStatsCacheFrame = -1;
     Neo.spawnParticle({ x: player.x, y: player.y - 34, life: 0.75, text: def.label, c: def.color });
     Neo.scheduleRunSave?.();
     return true;
   }
 
-  function spawnPewPewMissile() {
+  function spawnPewPewMissile(stacks = 1) {
     if (!Neo.player || !Neo.spawnProjectile) return;
-    const targetAngle = Math.atan2(Neo.mouse.worldY - Neo.player.y, Neo.mouse.worldX - Neo.player.x);
-    const angle = Number.isFinite(targetAngle) ? targetAngle + Neo.rand(-0.45, 0.45, 'fx') : Neo.rand(0, Math.PI * 2, 'fx');
-    Neo.spawnProjectile({
-      x: Neo.player.x + Math.cos(angle) * 12,
-      y: Neo.player.y + Math.sin(angle) * 12,
-      vx: Math.cos(angle) * 260,
-      vy: Math.sin(angle) * 260,
-      r: 6,
-      life: 2.5,
-      enemy: false,
-      kind: 'homing_missile',
-      damage: 16,
-      knockback: 120,
-      color: '#ffe06f',
-      homing: true,
-      homingTarget: 'enemy',
-      homingRadius: 920,
-      homingSpeed: 430,
-      homingAccel: 3.8,
-      homingTurnRate: 3.5,
-    });
+    const missileCount = Math.min(4, getEquipmentStackCount('pew_pew_box'), Math.max(1, Math.floor(Number(stacks || 1))));
+    for (let index = 0; index < missileCount; index += 1) {
+      const targetAngle = Math.atan2(Neo.mouse.worldY - Neo.player.y, Neo.mouse.worldX - Neo.player.x);
+      const angle = Number.isFinite(targetAngle) ? targetAngle + Neo.rand(-0.45, 0.45, 'fx') : Neo.rand(0, Math.PI * 2, 'fx');
+      const power = 1 + (missileCount - 1) * 0.12;
+      Neo.spawnProjectile({
+        x: Neo.player.x + Math.cos(angle) * 12,
+        y: Neo.player.y + Math.sin(angle) * 12,
+        vx: Math.cos(angle) * 260,
+        vy: Math.sin(angle) * 260,
+        r: 6,
+        life: 2.5,
+        enemy: false,
+        kind: 'homing_missile',
+        damage: 16 * power,
+        knockback: 120,
+        color: '#ffe06f',
+        homing: true,
+        homingTarget: 'enemy',
+        homingRadius: 920,
+        homingSpeed: 430,
+        homingAccel: 3.8,
+        homingTurnRate: 3.5,
+      });
+    }
   }
 
-  function pulseExtremeZap() {
+  function pulseExtremeZap(stacks = 1) {
     if (!Neo.player) return;
+    stacks = Math.max(1, Math.floor(Number(stacks || 1)));
+    const targetCount = Math.min(10, 5 + (stacks - 1));
+    const damage = 11 + (stacks - 1) * 3;
+    const radius = 250 + (stacks - 1) * 22;
     const enemies = [];
-    Neo.forEachEnemyNearCircle?.(Neo.player.x, Neo.player.y, 250, enemy => {
+    Neo.forEachEnemyNearCircle?.(Neo.player.x, Neo.player.y, radius, enemy => {
       const dx = enemy.x - Neo.player.x;
       const dy = enemy.y - Neo.player.y;
       enemies.push({ enemy, distSq: dx * dx + dy * dy });
     });
     enemies.sort((a, b) => a.distSq - b.distSq);
-    enemies.slice(0, 5).forEach(({ enemy }) => {
+    enemies.slice(0, targetCount).forEach(({ enemy }) => {
       const angle = Math.atan2(enemy.y - Neo.player.y, enemy.x - Neo.player.x);
-      Neo.hitEnemy?.(enemy, 11, angle, 70, '#8dd4ff');
+      Neo.hitEnemy?.(enemy, damage, angle, 70, '#8dd4ff');
       Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.2, ring: 14, c: '#bde8ff' });
     });
     const angle = Neo.rand(0, Math.PI * 2, 'fx');
@@ -887,23 +968,26 @@
       ttl: 0.55,
       tick: 0,
       interval: 0.22,
-      damage: 10,
+      damage: 10 + (stacks - 1) * 2,
     });
   }
 
   function activatePanicButton() {
     if (!Neo.player) return;
+    const stacks = getEquipmentStackCount('panic_button');
+    const radius = 190 + (stacks - 1) * 28;
+    const invTime = 1.5 + (stacks - 1) * 0.35;
     Neo.STATUS_KEYS?.forEach(key => Neo.clearStatus?.(Neo.player, key));
-    Neo.player.inv = Math.max(Number(Neo.player.inv || 0), 1.5);
-    Neo.forEachEnemyNearCircle?.(Neo.player.x, Neo.player.y, 190, enemy => {
+    Neo.player.inv = Math.max(Number(Neo.player.inv || 0), invTime);
+    Neo.forEachEnemyNearCircle?.(Neo.player.x, Neo.player.y, radius, enemy => {
       const angle = Math.atan2(enemy.y - Neo.player.y, enemy.x - Neo.player.x);
-      const force = 440;
+      const force = 440 + (stacks - 1) * 55;
       enemy.vx += Math.cos(angle) * force;
       enemy.vy += Math.sin(angle) * force;
-      enemy.stun = Math.max(Number(enemy.stun || 0), 0.28);
-      Neo.hitEnemy?.(enemy, 8, angle, 340, '#f4f6fb');
+      enemy.stun = Math.max(Number(enemy.stun || 0), 0.28 + (stacks - 1) * 0.05);
+      Neo.hitEnemy?.(enemy, 8 + (stacks - 1) * 4, angle, 340, '#f4f6fb');
     });
-    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.65, ring: 72, c: '#f4f6fb' });
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.65, ring: Math.min(128, 72 + (stacks - 1) * 12), c: '#f4f6fb' });
   }
 
   // Mark the nearest 5 enemies with a "crit sparkle": while marked, every hit
@@ -911,6 +995,8 @@
   function activateSparkleCharm() {
     if (!Neo.player) return;
     const SPARKLE_DURATION = 6;
+    const stacks = getEquipmentStackCount('sparkle_charm');
+    const targetCount = Math.min(12, 5 + (stacks - 1) * 2);
     const candidates = [];
     Neo.forEachEnemyNearCircle?.(Neo.player.x, Neo.player.y, 9999, enemy => {
       if (!enemy || enemy.dead || (enemy.spawnT || 0) > 0) return;
@@ -919,9 +1005,9 @@
       candidates.push({ enemy, distSq: dx * dx + dy * dy });
     });
     candidates.sort((a, b) => a.distSq - b.distSq);
-    const marked = candidates.slice(0, 5);
+    const marked = candidates.slice(0, targetCount);
     marked.forEach(({ enemy }) => {
-      enemy.critSparkle = Math.max(Number(enemy.critSparkle || 0), SPARKLE_DURATION);
+      enemy.critSparkle = Math.max(Number(enemy.critSparkle || 0), SPARKLE_DURATION + (stacks - 1));
       Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.5, ring: enemy.r + 10, c: '#ffe8a3' });
       Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 14, life: 0.6, text: 'SPARKLED', c: '#ffe8a3' });
     });
@@ -930,30 +1016,47 @@
     }
   }
 
-  function dropSweepyMine() {
+  // Instantly heal 30% of max HP. Fired manually from the tool slot, or
+  // automatically by updateEquipmentEffects when HP drops below 15%.
+  function activateChuruStick() {
     if (!Neo.player) return;
-    const angle = Neo.rand(0, Math.PI * 2, 'fx');
-    const distance = Neo.rand(22, 74, 'fx');
-    Neo.hazards.push({
-      kind: 'thorn_mine',
-      owner: 'player',
-      x: Neo.player.x + Math.cos(angle) * distance,
-      y: Neo.player.y + Math.sin(angle) * distance,
-      r: 18,
-      ttl: 5,
-      armTime: 0.18,
-      triggerRadius: 34,
-      blastRadius: 62,
-      damage: 18,
-      bleedStacks: 1,
-      bleedDuration: 4.5,
-      statusTick: 0,
-    });
+    const heal = Neo.scalePlayerHealing?.(Neo.player.maxHp * 0.3, 1) ?? Math.max(1, Neo.player.maxHp * 0.3);
+    const gained = Neo.applyPlayerHealing?.(heal) ?? 0;
+    Neo.spawnHealPopup?.(Neo.player.x, Neo.player.y - 24, gained, { color: '#ffb6d5', size: 16 });
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.6, ring: 60, c: '#ffb6d5' });
+    Neo.playSfx?.('heal_player');
   }
 
-  function tickSkizzardRegen() {
+  function dropSweepyMine(stacks = 1) {
+    if (!Neo.player) return;
+    stacks = Math.max(1, Math.floor(Number(stacks || 1)));
+    const mineCount = Math.min(3, stacks);
+    for (let index = 0; index < mineCount; index += 1) {
+      const angle = Neo.rand(0, Math.PI * 2, 'fx');
+      const distance = Neo.rand(22, 74, 'fx');
+      Neo.hazards.push({
+        kind: 'thorn_mine',
+        owner: 'player',
+        x: Neo.player.x + Math.cos(angle) * distance,
+        y: Neo.player.y + Math.sin(angle) * distance,
+        r: 18,
+        ttl: 5,
+        armTime: 0.18,
+        triggerRadius: 34,
+        blastRadius: 62 + (stacks - 1) * 6,
+        damage: 18 + (stacks - 1) * 4,
+        bleedStacks: Math.min(4, 1 + Math.floor((stacks - 1) / 2)),
+        bleedDuration: 4.5 + (stacks - 1) * 0.4,
+        statusTick: 0,
+      });
+    }
+  }
+
+  function tickSkizzardRegen(stacks = 1) {
     if (!Neo.player || Neo.player.hp >= Neo.player.maxHp) return;
-    const heal = Neo.scalePlayerHealing?.(Neo.player.maxHp * 0.025, 1) ?? Math.max(1, Neo.player.maxHp * 0.025);
+    stacks = Math.max(1, Math.floor(Number(stacks || 1)));
+    const healRatio = 0.025 * (1 + (stacks - 1) * 0.45);
+    const heal = Neo.scalePlayerHealing?.(Neo.player.maxHp * healRatio, 1) ?? Math.max(1, Neo.player.maxHp * healRatio);
     const gained = Neo.applyPlayerHealing?.(heal) ?? 0;
     if (gained > 0) {
       Neo.spawnHealPopup?.(Neo.player.x + Neo.rand(-8, 8), Neo.player.y - 22, gained, { color: '#8fffd2', size: 13 });
@@ -967,25 +1070,34 @@
     Object.keys(player.equipmentCooldowns).forEach(key => {
       player.equipmentCooldowns[key] = Math.max(0, Number(player.equipmentCooldowns[key] || 0) - dt);
     });
+    // Churu Stick auto-fires the moment HP drops below 15%, as long as it's off cooldown.
+    if (Neo.getItemCount?.('churu_stick') > 0
+      && player.maxHp > 0
+      && player.hp > 0
+      && player.hp < player.maxHp * 0.15
+      && isEquipmentReady('churu_stick')) {
+      startTimedEquipment('churu_stick');
+    }
     Object.entries(player.equipmentEffects).forEach(([key, effect]) => {
       if (!effect || Number(effect.time || 0) <= 0) return;
       effect.time = Math.max(0, Number(effect.time || 0) - dt);
       effect.tick = Math.max(0, Number(effect.tick || 0) - dt);
       if (key === 'pew_pew_box' && effect.tick <= 0) {
-        spawnPewPewMissile();
+        spawnPewPewMissile(effect.stacks);
         effect.tick = 0.5;
       } else if (key === 'skizzard_tail' && effect.tick <= 0) {
-        tickSkizzardRegen();
+        tickSkizzardRegen(effect.stacks);
         effect.tick = 0.5;
       } else if (key === 'zap_to_extreme' && effect.tick <= 0) {
-        pulseExtremeZap();
+        pulseExtremeZap(effect.stacks);
         effect.tick = 0.45;
       } else if (key === 'mid_sweepy_box' && effect.tick <= 0) {
-        dropSweepyMine();
+        dropSweepyMine(effect.stacks);
         effect.tick = 0.42;
       } else if (key === 'el_bartos_cape') {
         player.inv = Math.max(Number(player.inv || 0), 0.12);
       }
+      if (key === 'gold_vac') Neo.itemStatsCacheFrame = -1;
       if (effect.time <= 0) {
         delete player.equipmentEffects[key];
         Neo.itemStatsCacheFrame = -1;
@@ -994,6 +1106,9 @@
   }
   Neo.updateEquipmentEffects = updateEquipmentEffects;
 
+  // Scrolls of Control are intentionally NOT activatable tools: they resolve their
+  // selection popup on pickup/purchase (see collectItem → enqueueScrollSelection),
+  // so they never occupy a tool slot.
   const ACTIVATABLE_ITEMS = {
     charged_adapter: {
       key: 'charged_adapter',
@@ -1084,8 +1199,32 @@
       getState: () => getEquipmentState('sparkle_charm'),
       getStatusText: () => getEquipmentStatusText('sparkle_charm'),
     },
+    churu_stick: {
+      key: 'churu_stick',
+      shortName: 'CHURU',
+      activate: () => startTimedEquipment('churu_stick'),
+      getState: () => getEquipmentState('churu_stick'),
+      getStatusText: () => getEquipmentStatusText('churu_stick'),
+    },
+    gold_vac: {
+      key: 'gold_vac',
+      shortName: 'VAC',
+      activate: () => startTimedEquipment('gold_vac'),
+      getState: () => getEquipmentState('gold_vac'),
+      getStatusText: () => getEquipmentStatusText('gold_vac'),
+    },
+    voucher: {
+      key: 'voucher',
+      shortName: 'VOUCH',
+      // Vouchers can only be redeemed at a shop counter.
+      activate: () => Neo.openVoucherRedeem?.(),
+      getState: () => (Neo.getItemCount('voucher') > 0 && Neo.currentRoom?.type === 'shop') ? 'ready' : 'blocked',
+      getStatusText: () => String(Neo.getItemCount('voucher') || 0),
+    },
   };
-  Neo.EQUIPMENT_SLOT_KEYS = EQUIPMENT_SLOT_KEYS;
+  // Live getter so remapped tool-slot keys are honored everywhere without rewiring.
+  Object.defineProperty(Neo, 'EQUIPMENT_SLOT_KEYS', { get: getEquipmentSlotKeys, configurable: true });
+  Neo.getEquipmentSlotKeys = getEquipmentSlotKeys;
   Neo.ACTIVATABLE_ITEMS = ACTIVATABLE_ITEMS;
   Neo.isActivatableItem = (itemKey) => Boolean(ACTIVATABLE_ITEMS[itemKey]);
 
@@ -1093,13 +1232,14 @@
     if (!Neo.player) return;
     if (!Array.isArray(Neo.player.equipmentSlots)) Neo.player.equipmentSlots = [];
     const slots = Neo.player.equipmentSlots;
-    // Drop slot entries for items no longer owned.
+    // Drop slot entries for items no longer owned, or that are no longer activatable
+    // tools (e.g. scrolls from an older save, now resolved on pickup instead).
     for (let i = slots.length - 1; i >= 0; i -= 1) {
-      if (Neo.getItemCount(slots[i]) <= 0) slots.splice(i, 1);
+      if (Neo.getItemCount(slots[i]) <= 0 || !ACTIVATABLE_ITEMS[slots[i]]) slots.splice(i, 1);
     }
     // Append any owned activatable items that aren't slotted yet, capped at slot count.
     for (const itemKey of Object.keys(ACTIVATABLE_ITEMS)) {
-      if (Neo.getItemCount(itemKey) > 0 && !slots.includes(itemKey) && slots.length < EQUIPMENT_SLOT_KEYS.length) {
+      if (Neo.getItemCount(itemKey) > 0 && !slots.includes(itemKey) && slots.length < DEFAULT_EQUIPMENT_SLOT_KEYS.length) {
         slots.push(itemKey);
       }
     }
@@ -1110,7 +1250,7 @@
     if (!ACTIVATABLE_ITEMS[itemKey] || !Neo.player) return;
     if (!Array.isArray(Neo.player.equipmentSlots)) Neo.player.equipmentSlots = [];
     if (Neo.player.equipmentSlots.includes(itemKey)) return;
-    if (Neo.player.equipmentSlots.length >= EQUIPMENT_SLOT_KEYS.length) return;
+    if (Neo.player.equipmentSlots.length >= DEFAULT_EQUIPMENT_SLOT_KEYS.length) return;
     Neo.player.equipmentSlots.push(itemKey);
   }
   Neo.addToEquipmentSlots = addToEquipmentSlots;
@@ -1146,7 +1286,7 @@
   function getItemKeyForSlotKey(letter) {
     if (!Neo.player) return null;
     syncEquipmentSlotsFromInventory();
-    const idx = EQUIPMENT_SLOT_KEYS.indexOf(String(letter || '').toUpperCase());
+    const idx = getEquipmentSlotKeys().indexOf(String(letter || '').toUpperCase());
     if (idx < 0) return null;
     return Neo.player.equipmentSlots[idx] || null;
   }
@@ -1162,6 +1302,19 @@
   }
   Neo.activateEquipmentSlotKey = activateEquipmentSlotKey;
 
+  // Fire every equipped tool at once (Space activates all). Returns true if any fired.
+  function activateAllEquipmentSlots() {
+    if (!Neo.player) return false;
+    syncEquipmentSlotsFromInventory();
+    let activated = false;
+    (Neo.player.equipmentSlots || []).forEach(itemKey => {
+      const def = itemKey ? ACTIVATABLE_ITEMS[itemKey] : null;
+      if (def?.activate) { def.activate(); activated = true; }
+    });
+    return activated;
+  }
+  Neo.activateAllEquipmentSlots = activateAllEquipmentSlots;
+
   function updateEquipmentSlots() {
     const root = Neo.ui.equipmentSlots;
     const nodes = Neo.ui.equipmentSlotNodes;
@@ -1173,7 +1326,7 @@
     root.classList.toggle('hidden', !showRow);
     root.setAttribute('aria-hidden', showRow ? 'false' : 'true');
     nodes.forEach((node, idx) => {
-      const letter = EQUIPMENT_SLOT_KEYS[idx];
+      const letter = getEquipmentSlotKeys()[idx];
       const itemKey = slots[idx];
       const def = itemKey ? ACTIVATABLE_ITEMS[itemKey] : null;
       const itemDef = itemKey ? Neo.resolveItemIconDef?.(itemKey) : null;
@@ -1263,6 +1416,89 @@
     if (equipTooltipEl) equipTooltipEl.classList.remove('is-visible');
   }
 
+  // --- Reward-choice hover tooltip ----------------------------------------
+  // Boss/chest/challenge reward pickups are drawn on the canvas, so they have no
+  // DOM node to anchor a tooltip to. We hit-test the cursor against those pickups
+  // in WORLD space (works for both mouse and controller aim) each frame and show a
+  // body-level tooltip — reusing the .equip-tooltip styling — anchored to the raw
+  // page cursor position.
+  const REWARD_CHOICE_TYPES = new Set(['rewardChoice', 'challengeItemChoice']);
+  const REWARD_CHOICE_HOVER_RADIUS = 24; // matches the drawn choice ring + label
+  let rewardChoiceTooltipEl = null;
+  let rewardChoiceTooltipKey = null;
+
+  function getRewardChoiceTooltipEl() {
+    if (rewardChoiceTooltipEl && rewardChoiceTooltipEl.isConnected) return rewardChoiceTooltipEl;
+    rewardChoiceTooltipEl = document.createElement('div');
+    rewardChoiceTooltipEl.className = 'equip-tooltip reward-choice-tooltip';
+    rewardChoiceTooltipEl.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(rewardChoiceTooltipEl);
+    return rewardChoiceTooltipEl;
+  }
+
+  function hideRewardChoiceTooltip() {
+    rewardChoiceTooltipKey = null;
+    if (rewardChoiceTooltipEl) rewardChoiceTooltipEl.classList.remove('is-visible');
+  }
+  Neo.hideRewardChoiceTooltip = hideRewardChoiceTooltip;
+
+  function updateRewardChoiceTooltip() {
+    // Only meaningful during play, with a real mouse cursor on the canvas.
+    if (Neo.gameState !== 'play' || !Array.isArray(Neo.pickups)
+        || typeof Neo.mouse?.clientX !== 'number') {
+      hideRewardChoiceTooltip();
+      return;
+    }
+    const mx = Neo.mouse.worldX;
+    const my = Neo.mouse.worldY;
+    if (typeof mx !== 'number' || typeof my !== 'number') { hideRewardChoiceTooltip(); return; }
+
+    let hovered = null;
+    let bestDist = REWARD_CHOICE_HOVER_RADIUS;
+    for (const pickup of Neo.pickups) {
+      if (!pickup || !REWARD_CHOICE_TYPES.has(pickup.type)) continue;
+      const d = Math.hypot(pickup.x - mx, pickup.y - my);
+      if (d <= bestDist) { bestDist = d; hovered = pickup; }
+    }
+    if (!hovered) { hideRewardChoiceTooltip(); return; }
+
+    const item = Neo.itemRegistry?.get?.(hovered.key);
+    const name = item?.name || Neo.titleCase?.(hovered.key) || hovered.key;
+    const desc = item?.description || '';
+    const rarity = item?.rarity || item?.category;
+    const rarityColor = Neo.getRarityNameColor?.(rarity);
+
+    const el = getRewardChoiceTooltipEl();
+    // Only rebuild contents when the hovered item changes.
+    if (rewardChoiceTooltipKey !== hovered.key) {
+      rewardChoiceTooltipKey = hovered.key;
+      el.innerHTML = '';
+      const nameEl = document.createElement('div');
+      nameEl.className = 'equip-tooltip__name';
+      nameEl.textContent = name;
+      if (rarityColor) nameEl.style.color = rarityColor;
+      el.appendChild(nameEl);
+      if (desc) {
+        const descEl = document.createElement('div');
+        descEl.className = 'equip-tooltip__desc';
+        descEl.textContent = desc;
+        el.appendChild(descEl);
+      }
+    }
+    el.classList.add('is-visible');
+    // Anchor above-right of the cursor, clamped on-screen.
+    const tipRect = el.getBoundingClientRect();
+    let left = Neo.mouse.clientX + 16;
+    let top = Neo.mouse.clientY - tipRect.height - 12;
+    if (left + tipRect.width > window.innerWidth - 8) left = Neo.mouse.clientX - tipRect.width - 16;
+    if (left < 8) left = 8;
+    if (top < 8) top = Neo.mouse.clientY + 18;
+    top = Math.min(top, window.innerHeight - tipRect.height - 8);
+    el.style.left = `${Math.round(left)}px`;
+    el.style.top = `${Math.round(top)}px`;
+  }
+  Neo.updateRewardChoiceTooltip = updateRewardChoiceTooltip;
+
   function bindEquipmentSlotClicks() {
     const nodes = Neo.ui.equipmentSlotNodes;
     if (!nodes?.length) return;
@@ -1284,6 +1520,9 @@
   // Expose on Neo
   Neo.getObjectiveEntries = getObjectiveEntries;
   Neo.updateObjective = updateObjective;
+  // Re-applies objective tracker visibility/content (e.g. after the settings
+  // toggle changes). Safe no-op outside of play since updateObjective guards.
+  Neo.refreshObjectiveTracker = () => { if (Neo.player) updateObjective(); };
   Neo.getPlayerSlotScoreText = getPlayerSlotScoreText;
   Neo.getHpFillColor = getHpFillColor;
   Neo.renderPlayerStatsPanel = renderPlayerStatsPanel;

@@ -3,9 +3,18 @@
   const bg2 = document.getElementById('charBg');
   const bg3 = document.getElementById('creditsBg');
   if (!bg) return;
-  const ctx  = bg.getContext('2d');
-  const ctx2 = bg2 ? bg2.getContext('2d') : null;
-  const ctx3 = bg3 ? bg3.getContext('2d') : null;
+  let ctx  = bg.getContext('2d');
+  let ctx2 = bg2 ? bg2.getContext('2d') : null;
+  let ctx3 = bg3 ? bg3.getContext('2d') : null;
+  function resetContexts() {
+    ctx = bg.getContext('2d');
+    ctx2 = bg2 ? bg2.getContext('2d') : null;
+    ctx3 = bg3 ? bg3.getContext('2d') : null;
+    [ctx, ctx2, ctx3].forEach(g => { if (g) g.imageSmoothingEnabled = false; });
+    tileCache = null;
+    atlas = null;
+    atlasIndex = {};
+  }
 
   let tileCache = null;
 
@@ -339,6 +348,15 @@
     const creditsVis = creditsEl && !creditsEl.classList.contains('hidden');
     if (startVis || charVis || creditsVis) { cancelAnimationFrame(raf); raf = requestAnimationFrame(draw); }
   }
+  [bg, bg2, bg3].forEach(canvas => {
+    if (!canvas) return;
+    canvas.addEventListener('contextlost', event => event.preventDefault());
+    canvas.addEventListener('contextrestored', () => {
+      resetContexts();
+      lastTs = 0;
+      onVisChange();
+    });
+  });
   if (startEl) new MutationObserver(onVisChange).observe(startEl, { attributes: true, attributeFilter: ['class'] });
   if (charEl)  new MutationObserver(onVisChange).observe(charEl,  { attributes: true, attributeFilter: ['class'] });
   if (creditsEl) new MutationObserver(onVisChange).observe(creditsEl, { attributes: true, attributeFilter: ['class'] });
@@ -352,14 +370,14 @@
 })();
 
 /**
- * Build + animate the cinematic "NEO NYKE" title (the same component used on
+ * Build + animate the cinematic "NEO - NYKE" title (the same component used on
  * the main menu and the pause overlay). Clears any prior letters so it can be
  * replayed each time the host overlay opens.
  */
 function animateMenuTitle(container, subtitleEl) {
   if (!container) return;
 
-  const TITLE = 'NEO NYKE';
+  const TITLE = 'NEO - NYKE';
   const TILTS = ['-8deg','5deg','-4deg','6deg','0deg','-5deg','7deg','-3deg'];
 
   container.replaceChildren();
