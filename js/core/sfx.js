@@ -25,16 +25,6 @@
         'assets/sounds/sfx_Buy:Sell 3.wav',
       ],
     },
-    {
-      id: 'sword_swing',
-      volume: 0.5,
-      paths: [
-        'assets/sounds/sfx_sword swing 1.mp3',
-        'assets/sounds/sfx_sword swing 2.mp3',
-        'assets/sounds/sfx_sword swing 3.mp3',
-        'assets/sounds/sfx_sword swing 4.mp3',
-      ],
-    },
   ];
 
   // Local source of truth for playback: id -> { paths[], volume }. We keep this

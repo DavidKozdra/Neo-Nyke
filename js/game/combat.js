@@ -295,7 +295,6 @@
     Neo.player.swing = Neo.ATTACKS.melee.active;
     Neo.player.swingA = angle;
     Neo.player.stabSwing = false;
-    Neo.playSfx?.('sword_swing');
     forEachEnemyNearPlayer(adjustedRange, enemy => {
       if (!enemy) return;
       if (!isWithinRadiusSq(Neo.player.x, Neo.player.y, enemy, adjustedRange)) return;
@@ -455,7 +454,6 @@
     Neo.player.swing = Neo.ATTACKS.melee.active;
     Neo.player.swingA = angle;
     Neo.player.stabSwing = false;
-    Neo.playSfx?.('sword_swing');
 
     const anvilDmgBonus = Neo.getAnvilMoveBonus(move, 'damage');
     const anvilRngBonus = Neo.getAnvilMoveBonus(move, 'range');
