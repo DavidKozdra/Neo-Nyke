@@ -866,8 +866,8 @@
     el_bartos_cape: { cooldown: 25, duration: 10, label: 'EL BARTO', color: '#ffb37a' },
     sparkle_charm: { cooldown: 40, duration: 0, label: 'SPARKLE', color: '#ffe8a3' },
     churu_stick: { cooldown: 40, duration: 0, label: 'CHURU', color: '#ffb6d5' },
-    iron_helm: { cooldown: 120, duration: 0, label: 'DIAMOND SHIELD', color: '#c8fbff' },
-    gold_vac: { cooldown: 120, duration: 120, label: 'GOLD VAC', color: '#ffe07a' },
+    iron_helm: { cooldown: 60, duration: 0, label: 'DIAMOND SHIELD', color: '#c8fbff' },
+    gold_vac: { cooldown: 40, duration: 120, label: 'GOLD VAC', color: '#ffe07a' },
   };
 
   function ensureEquipmentRuntimeState() {
@@ -1095,7 +1095,7 @@
 
   function activateIronHelm() {
     if (!Neo.player) return;
-    const shield = Math.round(Math.max(1, Number(Neo.player.maxHp || 1)) * 1.8);
+    const shield = Math.round(Math.max(1, Number(Neo.player.maxHp || 1)) * 0.5);
     Neo.player.overhealBarrier = shield;
     Neo.player.overhealBarrierMax = shield;
     Neo.player.overhealBarrierColor = '#c8fbff';

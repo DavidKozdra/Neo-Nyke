@@ -2178,14 +2178,20 @@
           chest.rewardChoices = choices;
           const groupId = chest.choiceGroupId || `chest:${Neo.currentRoom?.gx ?? 0}:${Neo.currentRoom?.gy ?? 0}:${Math.round(chest.x)}:${Math.round(chest.y)}`;
           chest.choiceGroupId = groupId;
+          // A/B chest: spawn one stand-in "area" to the left and one to the
+          // right of the chest. The player confirms a pick by dwelling inside an
+          // area until its circular meter fills (see updatePickups / drawPickups).
           choices.forEach((key, choiceIndex) => {
             Neo.pickups.push({
-              x: chest.x + (choiceIndex === 0 ? -34 : 34),
-              y: chest.y - 28,
+              x: chest.x + (choiceIndex === 0 ? -72 : 72),
+              y: chest.y - 4,
               type: 'rewardChoice',
               key,
               groupId,
               picksRemaining: 1,
+              dwellMode: true,
+              dwell: 0,
+              side: choiceIndex === 0 ? 'left' : 'right',
             });
           });
         } else {
@@ -2351,6 +2357,26 @@
           pickup.y = Neo.clamp(pickup.y + (fdy / fleeDist) * fleeForce, minY, maxY);
         }
       }
+      // A/B chest dwell areas fill a meter while the player stands inside, and
+      // only grant once full. Run this before the generic instant-pickup gate so
+      // the meter can fill/decay every frame using the larger dwell radius.
+      if (pickup.type === 'rewardChoice' && pickup.dwellMode) {
+        const dwellRadius = Neo.AB_CHEST_DWELL_RADIUS || 44;
+        const dwellTarget = Neo.AB_CHEST_DWELL_SECONDS || 5;
+        const ddx = pickup.x - playerX;
+        const ddy = pickup.y - playerY;
+        const inside = ddx * ddx + ddy * ddy < dwellRadius * dwellRadius;
+        if (inside) {
+          pickup.dwell = Math.min(dwellTarget, Number(pickup.dwell || 0) + dt);
+        } else {
+          // Drain a bit faster than it fills so stepping out is a real commitment
+          // cost, but not so fast that a brief nudge wipes all progress.
+          pickup.dwell = Math.max(0, Number(pickup.dwell || 0) - dt * 1.5);
+        }
+        if (pickup.dwell < dwellTarget) continue;
+        // Meter is full → fall through to the grant block below.
+      }
+
       const pickupTriggerRadius = (pickup.type === 'jesterPortal' || pickup.type === 'adapterPortal')
         ? Neo.JESTER_PORTAL_TRIGGER_RADIUS
         : pickup.type === 'ladder'
@@ -2358,7 +2384,8 @@
           : 26;
       const triggerDx = pickup.x - playerX;
       const triggerDy = pickup.y - playerY;
-      if (triggerDx * triggerDx + triggerDy * triggerDy >= pickupTriggerRadius * pickupTriggerRadius) continue;
+      if ((pickup.type !== 'rewardChoice' || !pickup.dwellMode)
+        && triggerDx * triggerDx + triggerDy * triggerDy >= pickupTriggerRadius * pickupTriggerRadius) continue;
 
       if (pickup.type === 'coin') {
         addCoins(Math.round((pickup.value || 1) * coinPickupMultiplier));

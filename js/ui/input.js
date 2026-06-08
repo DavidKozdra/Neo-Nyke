@@ -164,7 +164,7 @@ export const WEAPON_DEFS = {
       key: 'metao_fire_staff',
       name: "Metao's Fire Staff",
       rarity: 'wizard',
-      description: 'Fan cast of burning fire bolts.',
+      description: 'Fan cast of burning fire bolts. 2 charges.',
       color: '#ffb874',
     },
     magenta_degale: {
@@ -758,7 +758,7 @@ export const ITEM_DEFS = {
       tool: true,
       name: 'Iron Helm',
       shortName: 'Diamond Shield',
-      description: 'Tool. Add a diamond shield worth 180% of max HP. Reusing refreshes the shield to that amount. 120s cooldown.',
+      description: 'Tool. Add a diamond shield worth 50% of max HP. Reusing refreshes the shield to that amount. 120s cooldown.',
       rarity: 'god',
       color: '#c8fbff',
       accent: '#f5feff',
@@ -1578,21 +1578,25 @@ export const SANDBOX_DEFAULT_SETTINGS = {
 export const JESTER_PORTAL_ACTIVATE_DELAY = 0.44;
 export const JESTER_PORTAL_TRIGGER_RADIUS = 42;
 export const LADDER_TRIGGER_RADIUS = 64;
+// A/B chest: stand inside one of the two choice "areas" for this long (seconds)
+// to confirm the pick. The dwell radius is the size of each stand-in area.
+export const AB_CHEST_DWELL_SECONDS = 5;
+export const AB_CHEST_DWELL_RADIUS = 44;
 export const REPLAY_TUTORIAL_KEY = 'neonyke:replayTutorialNextRun';
 
 // Upgradeable stat schemas for the anvil panel
 export const WEAPON_UPGRADEABLE_STATS = {
-    damage:    { label: 'Damage',       step: 5,     min: 5,    max: 9999, xpPerStep: 15, goldPerStep: 8,  format: v => Math.round(v) },
-    cooldown:  { label: 'Cooldown (s)', step: -0.05, min: 0.05, max: 9999, xpPerStep: 20, goldPerStep: 10, format: v => v.toFixed(2) + 's' },
-    range:     { label: 'Range',        step: 10,    min: 10,   max: 9999, xpPerStep: 13, goldPerStep: 6,  format: v => Math.round(v) },
-    knockback: { label: 'Knockback',    step: 30,    min: 0,    max: 9999, xpPerStep: 10, goldPerStep: 5,  format: v => Math.round(v) },
+    damage:    { label: 'Damage',       step: 5,     min: 5,    max: 9999, xpPerStep: 15, goldPerStep: 45, format: v => Math.round(v) },
+    cooldown:  { label: 'Cooldown (s)', step: -0.05, min: 0.05, max: 9999, xpPerStep: 20, goldPerStep: 60, format: v => v.toFixed(2) + 's' },
+    range:     { label: 'Range',        step: 10,    min: 10,   max: 9999, xpPerStep: 13, goldPerStep: 39, format: v => Math.round(v) },
+    knockback: { label: 'Knockback',    step: 30,    min: 0,    max: 9999, xpPerStep: 10, goldPerStep: 30, format: v => Math.round(v) },
   };
 export const MOVE_UPGRADEABLE_STATS = {
-    damage:    { label: 'Damage',       step: 5,    min: 5,   max: 9999, xpPerStep: 15, goldPerStep: 8,  format: v => Math.round(v) },
-    cooldown:  { label: 'Cooldown (s)', step: -0.05,min: 0.05,max: 9999, xpPerStep: 20, goldPerStep: 10, format: v => v.toFixed(2) + 's' },
-    duration:  { label: 'Duration (s)', step: 0.1,  min: 0.1, max: 30,   xpPerStep: 13, goldPerStep: 6,  format: v => v.toFixed(1) + 's' },
-    range:     { label: 'Range / AOE',  step: 10,   min: 10,  max: 9999, xpPerStep: 13, goldPerStep: 6,  format: v => Math.round(v) },
-    critChance:{ label: 'Crit Chance',  step: 0.05, min: 0,   max: 1.0,  xpPerStep: 25, goldPerStep: 15, format: v => Math.round(v * 100) + '%' },
+    damage:    { label: 'Damage',       step: 5,    min: 5,   max: 9999, xpPerStep: 15, goldPerStep: 45, format: v => Math.round(v) },
+    cooldown:  { label: 'Cooldown (s)', step: -0.05,min: 0.05,max: 9999, xpPerStep: 20, goldPerStep: 60, format: v => v.toFixed(2) + 's' },
+    duration:  { label: 'Duration (s)', step: 0.1,  min: 0.1, max: 30,   xpPerStep: 13, goldPerStep: 39, format: v => v.toFixed(1) + 's' },
+    range:     { label: 'Range / AOE',  step: 10,   min: 10,  max: 9999, xpPerStep: 13, goldPerStep: 39, format: v => Math.round(v) },
+    critChance:{ label: 'Crit Chance',  step: 0.05, min: 0,   max: 1.0,  xpPerStep: 25, goldPerStep: 75, format: v => Math.round(v * 100) + '%' },
   };
 
 // Base stat values per weapon (used to compute current upgraded value)
@@ -1683,6 +1687,8 @@ export const MOVE_BASE_STATS = {
   Neo.JESTER_PORTAL_ACTIVATE_DELAY = JESTER_PORTAL_ACTIVATE_DELAY;
   Neo.JESTER_PORTAL_TRIGGER_RADIUS = JESTER_PORTAL_TRIGGER_RADIUS;
   Neo.LADDER_TRIGGER_RADIUS = LADDER_TRIGGER_RADIUS;
+  Neo.AB_CHEST_DWELL_SECONDS = AB_CHEST_DWELL_SECONDS;
+  Neo.AB_CHEST_DWELL_RADIUS = AB_CHEST_DWELL_RADIUS;
   Neo.REPLAY_TUTORIAL_KEY = REPLAY_TUTORIAL_KEY;
   Neo.WEAPON_UPGRADEABLE_STATS = WEAPON_UPGRADEABLE_STATS;
   Neo.MOVE_UPGRADEABLE_STATS = MOVE_UPGRADEABLE_STATS;

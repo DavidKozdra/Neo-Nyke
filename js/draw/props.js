@@ -821,6 +821,49 @@
         const color = item?.color || '#d7f6ff';
         const ringColor = Neo.getRarityNameColor?.(item?.rarity || item?.category) || color;
         const iconDef = window.NeoNykeIconDefs?.items?.[pickup.key];
+
+        // A/B chest dwell area: a ground circle the player stands in, plus a
+        // circular meter that fills as they hold the spot. Drawn under the icon.
+        if (pickup.type === 'rewardChoice' && pickup.dwellMode) {
+          const dwellTarget = Neo.AB_CHEST_DWELL_SECONDS || 5;
+          const areaR = Neo.AB_CHEST_DWELL_RADIUS || 44;
+          const progress = Neo.clamp(Number(pickup.dwell || 0) / dwellTarget, 0, 1);
+          // Pull the canvas back up by the bob so the ground area sits still.
+          Neo.ctx.save();
+          Neo.ctx.translate(0, -bob);
+          // Faint stand-in disc.
+          Neo.ctx.globalAlpha = 0.16 + progress * 0.24;
+          Neo.ctx.fillStyle = ringColor;
+          Neo.ctx.beginPath();
+          Neo.ctx.ellipse(0, 6, areaR, areaR * 0.5, 0, 0, Math.PI * 2);
+          Neo.ctx.fill();
+          // Dashed boundary ring.
+          Neo.ctx.globalAlpha = 0.7;
+          Neo.ctx.setLineDash([6, 5]);
+          Neo.ctx.lineWidth = 2;
+          Neo.ctx.strokeStyle = ringColor;
+          Neo.ctx.beginPath();
+          Neo.ctx.ellipse(0, 6, areaR, areaR * 0.5, 0, 0, Math.PI * 2);
+          Neo.ctx.stroke();
+          Neo.ctx.setLineDash([]);
+          // Circular fill meter around the item, starting at the top.
+          if (progress > 0) {
+            Neo.ctx.globalAlpha = 1;
+            Neo.ctx.lineWidth = 4;
+            Neo.ctx.lineCap = 'round';
+            Neo.ctx.strokeStyle = progress >= 1 ? '#ffffff' : ringColor;
+            Neo.ctx.shadowColor = ringColor;
+            Neo.ctx.shadowBlur = 12;
+            Neo.ctx.beginPath();
+            Neo.ctx.arc(0, 0, 25, -Math.PI / 2, -Math.PI / 2 + progress * Math.PI * 2);
+            Neo.ctx.stroke();
+            Neo.ctx.shadowBlur = 0;
+            Neo.ctx.lineCap = 'butt';
+          }
+          Neo.ctx.restore();
+          Neo.ctx.globalAlpha = 1;
+        }
+
         Neo.ctx.strokeStyle = ringColor;
         Neo.ctx.shadowColor = ringColor;
         Neo.ctx.shadowBlur = 18;
@@ -848,6 +891,21 @@
         Neo.ctx.font = 'bold 9px system-ui';
         Neo.ctx.textAlign = 'center';
         Neo.ctx.fillText(choiceLabel, 0, 33);
+        if (pickup.type === 'rewardChoice' && pickup.dwellMode) {
+          // Explain the mechanic right on the area: stand in it to fill the meter.
+          const dwellTarget = Neo.AB_CHEST_DWELL_SECONDS || 5;
+          const progress = Neo.clamp(Number(pickup.dwell || 0) / dwellTarget, 0, 1);
+          Neo.ctx.fillStyle = progress > 0 ? '#d7f6ff' : '#9fb4c4';
+          Neo.ctx.font = 'bold 8px system-ui';
+          if (progress >= 1) {
+            Neo.ctx.fillText('CLAIMED', 0, 44);
+          } else if (progress > 0) {
+            const remaining = Math.ceil(dwellTarget - progress * dwellTarget);
+            Neo.ctx.fillText(`HOLD… ${remaining}s`, 0, 44);
+          } else {
+            Neo.ctx.fillText('STAND HERE 5s', 0, 44);
+          }
+        }
       } else if (pickup.type === 'ladder') {
         Neo.ctx.strokeStyle = '#7dff9e';
         Neo.ctx.shadowColor = '#7dff9e';

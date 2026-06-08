@@ -43,9 +43,30 @@ export function migratePlayerData(source) {
     playerData.scrollPendingQueue = Array.isArray(playerData.scrollPendingQueue)
       ? playerData.scrollPendingQueue.filter(key => SCROLL_KEYS.has(key))
       : [];
-    playerData.scrollBranchingTargets = (playerData.scrollBranchingTargets && typeof playerData.scrollBranchingTargets === 'object') ? playerData.scrollBranchingTargets : {};
-    playerData.scrollReplaceMap = (playerData.scrollReplaceMap && typeof playerData.scrollReplaceMap === 'object') ? playerData.scrollReplaceMap : {};
-    playerData.scrollPoolWeights = Array.isArray(playerData.scrollPoolWeights) ? playerData.scrollPoolWeights.filter(buff => buff && buff.tag) : [];
+    const normalizedBranchingTargets = {};
+    if (playerData.scrollBranchingTargets && typeof playerData.scrollBranchingTargets === 'object') {
+      Object.entries(playerData.scrollBranchingTargets).forEach(([rarity, key]) => {
+        const cleanRarity = String(rarity || '').toLowerCase();
+        if (Neo.ITEM_DEFS?.[key] && String(Neo.ITEM_DEFS[key]?.rarity || '').toLowerCase() === cleanRarity) {
+          normalizedBranchingTargets[cleanRarity] = key;
+        }
+      });
+    }
+    playerData.scrollBranchingTargets = normalizedBranchingTargets;
+    const normalizedReplaceMap = {};
+    if (playerData.scrollReplaceMap && typeof playerData.scrollReplaceMap === 'object') {
+      Object.entries(playerData.scrollReplaceMap).forEach(([fromKey, toKey]) => {
+        const fromRarity = String(Neo.ITEM_DEFS?.[fromKey]?.rarity || '').toLowerCase();
+        const toRarity = String(Neo.ITEM_DEFS?.[toKey]?.rarity || '').toLowerCase();
+        if (fromRarity && fromRarity === toRarity) normalizedReplaceMap[fromKey] = toKey;
+      });
+    }
+    playerData.scrollReplaceMap = normalizedReplaceMap;
+    playerData.scrollPoolWeights = Array.isArray(playerData.scrollPoolWeights)
+      ? playerData.scrollPoolWeights
+        .filter(buff => buff && buff.tag && Number(buff.expiresFloor || 0) > 0)
+        .map(buff => ({ tag: String(buff.tag), expiresFloor: Math.max(1, Math.floor(Number(buff.expiresFloor || 1))) }))
+      : [];
     if (playerData.scrollAbundance && typeof playerData.scrollAbundance === 'object') {
       playerData.scrollAbundance.items = Array.isArray(playerData.scrollAbundance.items) ? playerData.scrollAbundance.items.filter(key => Neo.ITEM_DEFS[key]).slice(0, 2) : [];
       playerData.scrollAbundance.nextCheckFloor = Math.max(1, Math.floor(Number(playerData.scrollAbundance.nextCheckFloor || 1)));
@@ -743,6 +764,7 @@ export function confirmWizardPawSelection() {
       .filter(key => !rarity || String(Neo.ITEM_DEFS[key]?.rarity || '').toLowerCase() === rarity)
       .map(key => {
         const item = Neo.itemRegistry?.get?.(key) || Neo.ITEM_DEFS[key];
+        const tags = Array.from(item?.tags || []);
         return {
           key,
           type: 'item',
@@ -750,7 +772,7 @@ export function confirmWizardPawSelection() {
           description: item?.description || '',
           rarity: item?.rarity || item?.category || 'knight',
           color: item?.color || Neo.getRarityNameColor?.(item?.rarity) || '#d8e9ff',
-          search: `${item?.name || key} ${item?.description || ''} ${item?.rarity || ''} ${(item?.tags || []).join(' ')}`.toLowerCase(),
+          search: `${item?.name || key} ${item?.description || ''} ${item?.rarity || ''} ${tags.join(' ')}`.toLowerCase(),
         };
       });
   }
@@ -778,6 +800,10 @@ export function confirmWizardPawSelection() {
         color: '#c8e2ff',
         search: `${tag} ${count}`.toLowerCase(),
       }));
+  }
+
+  function getScrollChoiceRarity(key) {
+    return String(Neo.ITEM_DEFS?.[key]?.rarity || Neo.ITEM_DEFS?.[key]?.category || 'knight').toLowerCase();
   }
 
   function getScrollControlConfig(scrollKey, phase = 'main') {
@@ -814,7 +840,7 @@ export function confirmWizardPawSelection() {
       }
       return {
         title: 'SCROLL OF REPLACE',
-        copy: 'Choose up to 3 relics you do not want to see. Confirm to pick the replacement.',
+        copy: 'Choose up to 3 unwanted relics from one rarity. Confirm to pick a replacement from that same class.',
         minPicks: 1,
         maxPicks: 3,
         choices: getScrollChoiceItems(),
@@ -875,7 +901,12 @@ export function confirmWizardPawSelection() {
     const config = getScrollControlConfig(state.scrollKey, state.phase);
     state.config = config;
     const query = String(state.query || '').trim().toLowerCase();
-    const choices = query ? config.choices.filter(choice => choice.search.includes(query)) : config.choices;
+    let availableChoices = config.choices;
+    if (state.scrollKey === 'scroll_replace' && state.phase !== 'to' && state.picks.length > 0) {
+      const selectedRarity = getScrollChoiceRarity(state.picks[0]);
+      availableChoices = availableChoices.filter(choice => choice.type !== 'item' || getScrollChoiceRarity(choice.key) === selectedRarity);
+    }
+    const choices = query ? availableChoices.filter(choice => choice.search.includes(query)) : availableChoices;
     if (Neo.ui.scrollControlTitle) Neo.ui.scrollControlTitle.textContent = config.title;
     if (Neo.ui.scrollControlCopy) Neo.ui.scrollControlCopy.textContent = config.copy;
     if (Neo.ui.scrollControlSearch) Neo.ui.scrollControlSearch.value = state.query || '';
@@ -895,7 +926,7 @@ export function confirmWizardPawSelection() {
       }
     }
     const ownedItems = Neo.player?.items || {};
-    Neo.ui.scrollControlChoices.innerHTML = choices.map((choice, index) => {
+    const renderChoice = choice => {
       const selected = state.picks.includes(choice.key);
       const pickOrder = selected ? state.picks.indexOf(choice.key) + 1 : 0;
       const color = choice.type === 'item' ? Neo.getRarityNameColor?.(choice.rarity) || choice.color : choice.color;
@@ -909,17 +940,52 @@ export function confirmWizardPawSelection() {
         ? `<span class="scroll-control-choice__order">${pickOrder}</span>`
         : (selected ? '<span class="scroll-control-choice__order scroll-control-choice__order--check">✓</span>' : '');
       const eyebrow = choice.type === 'tag' ? 'Tag' : (choice.rarity || 'relic');
-      return `<button class="scroll-control-choice${selected ? ' is-selected' : ''}" type="button" role="option" aria-selected="${selected}" data-scroll-choice="${Neo.escapeHtml(choice.key)}" style="--scroll-choice-color:${Neo.escapeHtml(color)};animation-delay:${Math.min(index, 12) * 18}ms">
+      const accessibleDescription = choice.description ? `. ${choice.description}` : '';
+      return `<button class="scroll-control-choice${selected ? ' is-selected' : ''}" type="button" role="option" aria-selected="${selected}" aria-label="${Neo.escapeHtml(choice.name + accessibleDescription)}" title="${Neo.escapeHtml(choice.description || choice.name)}" data-scroll-choice="${Neo.escapeHtml(choice.key)}" style="--scroll-choice-color:${Neo.escapeHtml(color)}">
         ${orderBadge}
         <span class="scroll-control-choice__iconwrap">${icon}${ownedBadge}</span>
         <span class="scroll-control-choice__body">
           <span class="scroll-control-choice__eyebrow">${Neo.escapeHtml(eyebrow)}</span>
           <span class="scroll-control-choice__name">${Neo.escapeHtml(choice.name)}</span>
-          <span class="scroll-control-choice__desc">${Neo.escapeHtml(choice.description || '')}</span>
         </span>
       </button>`;
-    }).join('') || (config.choices.length === 0
-      ? '<div class="scroll-control-empty"><span class="scroll-control-empty__glyph">∅</span><h4>Nothing to choose</h4><p>This scroll has no valid targets right now. Cancel to discard it.</p></div>'
+    };
+    let choicesMarkup = '';
+    if (choices.length && choices.every(choice => choice.type === 'item')) {
+      const rarityOrder = ['knight', 'wizard', 'god'];
+      const rarityLabels = { knight: 'Knight', wizard: 'Wizard', god: 'God' };
+      const groupedChoices = new Map();
+      choices.forEach(choice => {
+        const rarity = String(choice.rarity || 'knight').toLowerCase();
+        if (!groupedChoices.has(rarity)) groupedChoices.set(rarity, []);
+        groupedChoices.get(rarity).push(choice);
+      });
+      const orderedRarities = [
+        ...rarityOrder.filter(rarity => groupedChoices.has(rarity)),
+        ...[...groupedChoices.keys()].filter(rarity => !rarityOrder.includes(rarity)).sort(),
+      ];
+      choicesMarkup = orderedRarities.map(rarity => {
+        const groupChoices = groupedChoices.get(rarity)
+          .slice()
+          .sort((a, b) => a.name.localeCompare(b.name));
+        const label = rarityLabels[rarity] || Neo.titleCase?.(rarity) || rarity;
+        return `<section class="scroll-control-group" role="group" aria-label="${Neo.escapeHtml(label)} relics">
+          <div class="scroll-control-group__head">
+            <span class="scroll-control-group__title">${Neo.escapeHtml(label)} relics</span>
+            <span class="scroll-control-group__count">${groupChoices.length}</span>
+          </div>
+          <div class="scroll-control-group__grid">${groupChoices.map(renderChoice).join('')}</div>
+        </section>`;
+      }).join('');
+    } else if (choices.length) {
+      choicesMarkup = choices.map(renderChoice).join('');
+    }
+    Neo.ui.scrollControlChoices.classList.toggle('is-item-grid', choices.some(choice => choice.type === 'item'));
+    Neo.ui.scrollControlChoices.classList.toggle('is-tag-grid', choices.length > 0 && choices.every(choice => choice.type === 'tag'));
+    Neo.ui.scrollControlChoices.innerHTML = choicesMarkup || (config.maxPicks <= 0
+      ? '<div class="scroll-control-empty"><span class="scroll-control-empty__glyph">✓</span><h4>Ready to apply</h4><p>Confirm to activate this scroll.</p></div>'
+      : config.choices.length === 0
+        ? '<div class="scroll-control-empty"><span class="scroll-control-empty__glyph">∅</span><h4>Nothing to choose</h4><p>This scroll has no valid targets right now. Cancel to discard it.</p></div>'
       : '<div class="scroll-control-empty"><span class="scroll-control-empty__glyph">🔍</span><h4>No matches</h4><p>Clear the search to see available choices.</p></div>');
     Neo.drawItemIconCanvases?.(Neo.ui.scrollControlChoices, 'data-item-icon');
     if (Neo.ui.scrollControlConfirm) {
@@ -984,10 +1050,23 @@ export function confirmWizardPawSelection() {
     const state = Neo.scrollControlSelection;
     if (!state || !choiceKey) return;
     const config = getScrollControlConfig(state.scrollKey, state.phase);
+    if (!config.choices.some(choice => choice.key === choiceKey)) return;
     const picks = state.picks;
     const existing = picks.indexOf(choiceKey);
     if (existing >= 0) picks.splice(existing, 1);
     else {
+      if (state.scrollKey === 'scroll_branching') {
+        const rarity = getScrollChoiceRarity(choiceKey);
+        for (let index = picks.length - 1; index >= 0; index -= 1) {
+          if (getScrollChoiceRarity(picks[index]) === rarity) picks.splice(index, 1);
+        }
+      }
+      if (state.scrollKey === 'scroll_replace' && state.phase !== 'to' && picks.length > 0) {
+        const activeRarity = getScrollChoiceRarity(picks[0]);
+        if (getScrollChoiceRarity(choiceKey) !== activeRarity) {
+          picks.splice(0, picks.length);
+        }
+      }
       if (picks.length >= config.maxPicks) picks.shift();
       picks.push(choiceKey);
     }
@@ -1014,8 +1093,15 @@ export function confirmWizardPawSelection() {
     if (!state || !Neo.player) return;
     const config = getScrollControlConfig(state.scrollKey, state.phase);
     if (state.picks.length < config.minPicks) return;
+    if (state.picks.length > config.maxPicks) return;
+    const validChoiceKeys = new Set(config.choices.map(choice => choice.key));
+    if (state.picks.some(key => !validChoiceKeys.has(key))) return;
     if (state.scrollKey === 'scroll_replace' && state.phase !== 'to') {
-      state.fromKeys = state.picks.slice(0, 3);
+      const fromRarity = getScrollChoiceRarity(state.picks[0]);
+      state.fromKeys = state.picks
+        .filter(key => getScrollChoiceRarity(key) === fromRarity)
+        .slice(0, 3);
+      if (!state.fromKeys.length) return;
       state.phase = 'to';
       state.picks = [];
       state.query = '';
@@ -1040,8 +1126,11 @@ export function confirmWizardPawSelection() {
       });
     } else if (state.scrollKey === 'scroll_replace') {
       const toKey = state.picks[0];
+      const toRarity = getScrollChoiceRarity(toKey);
       Neo.player.scrollReplaceMap = { ...(Neo.player.scrollReplaceMap || {}) };
-      state.fromKeys.forEach(fromKey => { Neo.player.scrollReplaceMap[fromKey] = toKey; });
+      state.fromKeys.forEach(fromKey => {
+        if (getScrollChoiceRarity(fromKey) === toRarity) Neo.player.scrollReplaceMap[fromKey] = toKey;
+      });
     } else if (state.scrollKey === 'scroll_abundance') {
       Neo.player.scrollAbundance = { items: state.picks.slice(0, 2), nextCheckFloor: Neo.floor + 2, expiresFloor: Neo.floor + 8 };
     } else if (state.scrollKey === 'scroll_pool_weight') {
@@ -1210,23 +1299,32 @@ export function confirmWizardPawSelection() {
 
   function applyScrollAbundanceForFloor() {
     const state = Neo.player?.scrollAbundance;
-    if (!state || Neo.floor < Number(state.nextCheckFloor || 999) || Neo.floor > Number(state.expiresFloor || 0)) return;
+    if (!state) return;
+    if (Neo.floor > Number(state.expiresFloor || 0)) {
+      delete Neo.player.scrollAbundance;
+      Neo.scheduleRunSave?.();
+      return;
+    }
+    if (Neo.floor < Number(state.nextCheckFloor || 999)) return;
     const random = Neo.createScopedRandom?.(`scroll:abundance:${Neo.baseSeedStr || ''}:${Neo.floor}`) || Neo.rng;
     state.nextCheckFloor = Neo.floor + 2;
-    if (random() >= 0.5) return;
-    const selected = Array.isArray(state.items) ? state.items.filter(key => Neo.ITEM_DEFS?.[key]) : [];
-    const randomPool = (Neo.ITEM_KEYS || []).filter(key => Neo.ITEM_DEFS?.[key] && !SCROLL_KEYS.has(key));
-    const offerPool = [
-      ...selected.slice(0, 2),
-      randomPool[Math.floor(random() * randomPool.length)],
-      randomPool[Math.floor(random() * randomPool.length)],
-    ].filter(Boolean);
-    const key = offerPool[Math.floor(random() * offerPool.length)];
-    if (key) {
-      Neo.collectItem(key);
-      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 42, life: 1.0, text: 'ABUNDANCE', c: '#fff2a8' });
+    const shouldExpire = Neo.floor >= Number(state.expiresFloor || 0);
+    if (random() < 0.5) {
+      const selected = Array.isArray(state.items) ? state.items.filter(key => Neo.ITEM_DEFS?.[key]) : [];
+      const randomPool = (Neo.ITEM_KEYS || []).filter(key => Neo.ITEM_DEFS?.[key] && !SCROLL_KEYS.has(key));
+      const offerPool = [
+        ...selected.slice(0, 2),
+        randomPool[Math.floor(random() * randomPool.length)],
+        randomPool[Math.floor(random() * randomPool.length)],
+      ].filter(Boolean);
+      const key = offerPool[Math.floor(random() * offerPool.length)];
+      if (key) {
+        Neo.collectItem(key);
+        Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 42, life: 1.0, text: 'ABUNDANCE', c: '#fff2a8' });
+      }
     }
-    if (Neo.floor >= Number(state.expiresFloor || 0)) delete Neo.player.scrollAbundance;
+    if (shouldExpire) delete Neo.player.scrollAbundance;
+    Neo.scheduleRunSave?.();
   }
 
 function ensureMoveStackOverrides(playerData = Neo.player) {

@@ -176,6 +176,7 @@
 
   const CHARGED_WEAPON_MAX_CHARGES = {
     princess_wand: 3,
+    metao_fire_staff: 2,
   };
 
   function isChargedWeaponKey(weaponKey) {
@@ -268,6 +269,7 @@
       hitOptions: config.hitOptions || null,
       trail: [],
     });
+    Neo.playSfx?.('fire');
   }
 
   function fireConfiguredWeaponProjectile(weaponKey, angle, damage, knockback, overrides = {}) {
@@ -295,6 +297,7 @@
     Neo.player.swing = Neo.ATTACKS.melee.active;
     Neo.player.swingA = angle;
     Neo.player.stabSwing = false;
+    Neo.playSfx?.('sword_swing');
     forEachEnemyNearPlayer(adjustedRange, enemy => {
       if (!enemy) return;
       if (!isWithinRadiusSq(Neo.player.x, Neo.player.y, enemy, adjustedRange)) return;
@@ -371,7 +374,7 @@
     }
     if (weaponKey === 'metao_fire_staff') {
       spawnFireballs();
-      Neo.player.weaponCooldown = wCd(weaponKey) / attackSpeed;
+      if (!isChargedWeaponKey(weaponKey)) Neo.player.weaponCooldown = wCd(weaponKey) / attackSpeed;
       return true;
     }
     if (weaponKey === 'magenta_p90') {
@@ -454,6 +457,7 @@
     Neo.player.swing = Neo.ATTACKS.melee.active;
     Neo.player.swingA = angle;
     Neo.player.stabSwing = false;
+    Neo.playSfx?.('sword_swing');
 
     const anvilDmgBonus = Neo.getAnvilMoveBonus(move, 'damage');
     const anvilRngBonus = Neo.getAnvilMoveBonus(move, 'range');
@@ -1878,6 +1882,7 @@
       if (shouldBloodOnHit() && options.bloodOnHit !== false) {
         spawnBleedSpray(enemy, 1, isCrit ? 1.2 : 0.72);
       }
+      Neo.playSfx?.('enemy_hit');
     }
     // Game feel: directional trauma scaled to impact (vs target max HP).
     // Chip damage gets nothing; crits and big slams get a kick away from the blow.
@@ -2802,8 +2807,13 @@
   function rollItemDrop(options = {}) {
     const adjustEntriesForScrollControl = (entries) => {
       if (!Neo.player) return entries;
-      const activeWeightTags = (Array.isArray(Neo.player.scrollPoolWeights) ? Neo.player.scrollPoolWeights : [])
+      const storedWeightTags = Array.isArray(Neo.player.scrollPoolWeights) ? Neo.player.scrollPoolWeights : [];
+      const activeWeightTags = storedWeightTags
         .filter(buff => buff && Number(buff.expiresFloor || 0) >= Neo.floor && buff.tag);
+      if (activeWeightTags.length !== storedWeightTags.length) {
+        Neo.player.scrollPoolWeights = activeWeightTags;
+        Neo.scheduleRunSave?.();
+      }
       const egoActive = Number(Neo.player.scrollEgoFloor || 0) === Neo.floor;
       if (!activeWeightTags.length && !egoActive) return entries;
       const owned = Neo.player.items || {};
@@ -2830,13 +2840,18 @@
     const applyScrollReplacement = (key) => {
       if (!Neo.player || !key) return key;
       const replaceMap = Neo.player.scrollReplaceMap || {};
-      if (replaceMap[key] && Neo.ITEM_DEFS?.[replaceMap[key]]) return replaceMap[key];
       const rarity = String(Neo.ITEM_DEFS?.[key]?.rarity || 'knight').toLowerCase();
+      const replacementKey = replaceMap[key];
+      const replacementRarity = String(Neo.ITEM_DEFS?.[replacementKey]?.rarity || '').toLowerCase();
+      if (replacementKey && replacementRarity === rarity) return replacementKey;
       const branching = Neo.player.scrollBranchingTargets || {};
-      if (branching[rarity] && Neo.ITEM_DEFS?.[branching[rarity]]) {
+      const branchingKey = branching[rarity];
+      const branchingRarity = String(Neo.ITEM_DEFS?.[branchingKey]?.rarity || '').toLowerCase();
+      if (branchingKey && branchingRarity === rarity) {
         const nextKey = branching[rarity];
         delete branching[rarity];
         Neo.player.scrollBranchingTargets = branching;
+        Neo.scheduleRunSave?.();
         return nextKey;
       }
       return key;

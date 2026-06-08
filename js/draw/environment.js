@@ -815,6 +815,25 @@
       Neo.ctx.strokeStyle = '#1a0d06';
       Neo.ctx.lineWidth = 2;
       Neo.ctx.strokeRect(-31, -19, 62, 42);
+
+      // Once an A/B chest is open, two choice areas flank it. Explain the rule
+      // above the chest so the dwell-to-confirm mechanic is discoverable.
+      if (isAbChest && chest.open) {
+        const stillChoosing = Array.isArray(Neo.pickups)
+          && Neo.pickups.some(pickup => pickup?.type === 'rewardChoice'
+            && pickup.dwellMode
+            && String(pickup.groupId || '') === String(chest.choiceGroupId || ''));
+        if (stillChoosing) {
+          Neo.ctx.shadowBlur = 0;
+          Neo.ctx.textAlign = 'center';
+          Neo.ctx.fillStyle = '#ffe9a8';
+          Neo.ctx.font = 'bold 11px system-ui';
+          Neo.ctx.fillText('CHOOSE ONE', 0, -36);
+          Neo.ctx.fillStyle = '#cfe6f5';
+          Neo.ctx.font = '9px system-ui';
+          Neo.ctx.fillText('stand in a circle to confirm', 0, -25);
+        }
+      }
       Neo.ctx.restore();
     });
   }

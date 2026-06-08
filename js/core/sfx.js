@@ -25,6 +25,16 @@
         'assets/sounds/sfx_Buy:Sell 3.wav',
       ],
     },
+    { id: 'enemy_hit', path: 'assets/sounds/sfx_Enemy Hit.wav', volume: 0.6 },
+    { id: 'fire', path: 'assets/sounds/sfx_Fire.wav', volume: 0.5 },
+    {
+      id: 'sword_swing',
+      volume: 0.6,
+      paths: [
+        'assets/sounds/sfx_Sword Swing 1.wav',
+        'assets/sounds/sfx_Sword Swing 2.wav',
+      ],
+    },
   ];
 
   // Local source of truth for playback: id -> { paths[], volume }. We keep this

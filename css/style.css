@@ -6491,8 +6491,10 @@ border-bottom: black solid 2px;
 
 /* ===== Scroll of Control modal (redesigned) ===================== */
 .scroll-control-box {
-  width: min(960px, calc(100vw - 24px));
-  max-height: min(82vh, 820px);
+  width: min(1120px, calc(100vw - 24px));
+  height: min(88vh, 860px);
+  max-height: calc(100vh - 24px);
+  min-width: 0;
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -6517,12 +6519,12 @@ border-bottom: black solid 2px;
 
 .scroll-control-glyph {
   flex: 0 0 auto;
-  width: 50px;
-  height: 50px;
+  width: 46px;
+  height: 46px;
   display: grid;
   place-items: center;
-  font-size: 26px;
-  border-radius: 14px;
+  font-size: 24px;
+  border-radius: 8px;
   background: radial-gradient(circle at 30% 25%, rgba(215, 246, 255, .22), rgba(26, 33, 44, .9));
   border: 1px solid var(--menu-border-strong);
   box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 6px 18px rgba(0,0,0,.35);
@@ -6570,7 +6572,7 @@ border-bottom: black solid 2px;
 .scroll-control-search {
   width: 100%;
   padding: 10px 12px 10px 34px;
-  border-radius: 10px;
+  border-radius: 6px;
   border: 1px solid var(--menu-border);
   background: rgba(12, 16, 22, .7);
   color: var(--menu-text);
@@ -6592,7 +6594,7 @@ border-bottom: black solid 2px;
   text-transform: uppercase;
   white-space: nowrap;
   padding: 7px 12px;
-  border-radius: 999px;
+  border-radius: 6px;
   border: 1px solid var(--menu-border);
   color: var(--menu-text-soft);
 }
@@ -6611,15 +6613,59 @@ border-bottom: black solid 2px;
 /* --- Scrollable tile grid --- */
 .scroll-control-choices {
   flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   gap: 12px;
-  padding: 18px 24px 8px;
+  padding: 16px 24px;
   align-content: start;
   scrollbar-width: thin;
   scrollbar-color: var(--menu-border-strong) transparent;
+}
+
+.scroll-control-choices.is-item-grid {
+  display: block;
+}
+
+.scroll-control-group + .scroll-control-group {
+  margin-top: 18px;
+}
+
+.scroll-control-group__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(128, 146, 170, .22);
+}
+
+.scroll-control-group__title {
+  color: var(--menu-text);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+.scroll-control-group__count {
+  min-width: 22px;
+  padding: 2px 6px;
+  border: 1px solid var(--menu-border);
+  border-radius: 5px;
+  color: var(--menu-text-muted);
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.scroll-control-group__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  gap: 8px;
 }
 
 .scroll-control-choices::-webkit-scrollbar { width: 10px; }
@@ -6634,30 +6680,27 @@ border-bottom: black solid 2px;
 .scroll-control-choice {
   position: relative;
   display: flex;
+  min-width: 0;
+  min-height: 116px;
   align-items: center;
-  gap: 12px;
-  text-align: left;
-  padding: 12px 12px 12px 14px;
-  border-radius: 14px;
+  justify-content: flex-start;
+  flex-direction: column;
+  gap: 7px;
+  text-align: center;
+  padding: 10px 8px 9px;
+  border-radius: 6px;
   border: 1px solid color-mix(in srgb, var(--scroll-choice-color, #d8e9ff) 40%, rgba(128,146,170,.3));
   background: linear-gradient(180deg, rgba(30, 38, 50, .92), rgba(20, 26, 35, .92));
   color: var(--menu-text);
   cursor: pointer;
   transition: transform .12s ease, border-color .14s ease, box-shadow .16s ease, background .16s ease;
-  /* subtle rarity rail on the left edge */
-  box-shadow: inset 3px 0 0 var(--scroll-choice-color, #d8e9ff);
-  animation: scrollChoiceIn .26s ease backwards;
-}
-
-@keyframes scrollChoiceIn {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: translateY(0); }
+  box-shadow: inset 0 3px 0 var(--scroll-choice-color, #d8e9ff);
 }
 
 .scroll-control-choice:hover {
   transform: translateY(-2px);
   border-color: color-mix(in srgb, var(--scroll-choice-color, #d8e9ff) 75%, white);
-  box-shadow: inset 3px 0 0 var(--scroll-choice-color, #d8e9ff), 0 10px 22px rgba(0,0,0,.4);
+  box-shadow: inset 0 3px 0 var(--scroll-choice-color, #d8e9ff), 0 8px 18px rgba(0,0,0,.4);
 }
 
 .scroll-control-choice:active { transform: translateY(0) scale(.985); }
@@ -6669,7 +6712,7 @@ border-bottom: black solid 2px;
       color-mix(in srgb, var(--scroll-choice-color, #d8e9ff) 22%, rgba(30,38,50,.95)),
       rgba(20, 26, 35, .95));
   box-shadow:
-    inset 3px 0 0 var(--scroll-choice-color, #d8e9ff),
+    inset 0 3px 0 var(--scroll-choice-color, #d8e9ff),
     0 0 0 2px var(--scroll-choice-color, #d8e9ff),
     0 0 26px color-mix(in srgb, var(--scroll-choice-color, #d8e9ff) 40%, transparent);
 }
@@ -6684,7 +6727,7 @@ border-bottom: black solid 2px;
   height: 52px;
   display: grid;
   place-items: center;
-  border-radius: 12px;
+  border-radius: 6px;
   background: rgba(8, 12, 18, .6);
   border: 1px solid rgba(255,255,255,.06);
 }
@@ -6715,6 +6758,7 @@ border-bottom: black solid 2px;
   display: flex;
   flex-direction: column;
   gap: 2px;
+  width: 100%;
   min-width: 0;
 }
 
@@ -6726,23 +6770,16 @@ border-bottom: black solid 2px;
 }
 
 .scroll-control-choice__name {
-  font-size: 15px;
+  min-height: 30px;
+  font-size: 12px;
   font-weight: 800;
-  letter-spacing: .02em;
+  line-height: 1.2;
   color: var(--menu-text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.scroll-control-choice__desc {
-  font-size: 11.5px;
-  line-height: 1.35;
-  color: var(--menu-text-muted);
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  overflow-wrap: anywhere;
 }
 
 /* Selected check / pick-order badge (top-right) */
@@ -6826,10 +6863,18 @@ border-bottom: black solid 2px;
 }
 
 @media (max-width: 560px) {
-  .scroll-control-box { max-height: 90vh; }
+  .scroll-control-box {
+    width: calc(100vw - 12px);
+    height: calc(100dvh - 12px);
+    max-height: calc(100dvh - 12px);
+  }
   .scroll-control-tools { flex-direction: column; align-items: stretch; }
   .scroll-control-meta { align-self: flex-start; }
-  .scroll-control-choices { grid-template-columns: 1fr; padding: 14px 16px 8px; }
+  .scroll-control-choices { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 12px; }
+  .scroll-control-group__grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  .scroll-control-choice { min-height: 108px; padding: 8px 5px; }
+  .scroll-control-choice__iconwrap { width: 48px; height: 48px; }
+  .scroll-control-choice__name { font-size: 11px; }
   .scroll-control-head { padding: 18px 16px 14px; }
   .scroll-control-actions { padding: 12px 16px 16px; }
   .scroll-control-btn { flex: 1 1 0; min-width: 0; }
