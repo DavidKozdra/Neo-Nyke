@@ -1056,7 +1056,51 @@
       </article>
     </div>
 
+    <!-- Triggers: each opens its own overlay (gallery / jukebox) -->
+    <div class="credits-extras" aria-label="Bonus features">
+      <button id="creditsGalleryBtn" class="credits-extra-btn" type="button">
+        <span class="credits-extra-btn__icon" aria-hidden="true">&#9654;</span>
+        <span class="credits-extra-btn__label">CUTSCENE GALLERY</span>
+        <span class="credits-extra-btn__hint">Replay every scene</span>
+      </button>
+      <button id="creditsJukeboxBtn" class="credits-extra-btn" type="button">
+        <span class="credits-extra-btn__icon" aria-hidden="true">&#9835;</span>
+        <span class="credits-extra-btn__label">JUKEBOX</span>
+        <span class="credits-extra-btn__hint">Play the soundtrack</span>
+      </button>
+    </div>
+
     <p class="credits__thanks" data-text="Thanks for playing.">Thanks for playing.</p>
+  </div>
+
+  <!-- Cutscene gallery overlay -->
+  <div id="galleryOverlay" class="credits-modal hidden" role="dialog" aria-modal="true" aria-labelledby="galleryOverlayTitle" aria-hidden="true">
+    <div class="credits-modal__panel">
+      <div class="credits-modal__head">
+        <h3 id="galleryOverlayTitle" class="credits-modal__title">CUTSCENE GALLERY</h3>
+        <button id="galleryClose" class="credits-modal__close" type="button" aria-label="Close gallery">&#10005;</button>
+      </div>
+      <div id="creditsSceneList" class="credits-gallery__list" role="list"></div>
+    </div>
+  </div>
+
+  <!-- Jukebox overlay -->
+  <div id="jukeboxOverlay" class="credits-modal hidden" role="dialog" aria-modal="true" aria-labelledby="jukeboxOverlayTitle" aria-hidden="true">
+    <div class="credits-modal__panel">
+      <div class="credits-modal__head">
+        <h3 id="jukeboxOverlayTitle" class="credits-modal__title">JUKEBOX</h3>
+        <button id="jukeboxClose" class="credits-modal__close" type="button" aria-label="Close jukebox">&#10005;</button>
+      </div>
+      <div class="jukebox">
+        <div id="jukeboxNowPlaying" class="jukebox__now">Select a track</div>
+        <div class="jukebox__controls">
+          <button id="jukeboxPrev" class="jukebox__btn" type="button" aria-label="Previous track">&#9198;</button>
+          <button id="jukeboxToggle" class="jukebox__btn jukebox__btn--play" type="button" aria-label="Play or pause">&#9654;</button>
+          <button id="jukeboxNext" class="jukebox__btn" type="button" aria-label="Next track">&#9197;</button>
+        </div>
+        <div id="jukeboxList" class="jukebox__list" role="list"></div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -1558,6 +1602,14 @@
           <span id="accHudScaleVal" class="access-slider-val">100%</span>
         </div>
       </div>
+      <div class="access-row access-row--column">
+        <div class="access-text">
+          <span class="access-label">HUD layout — per element</span>
+          <span class="access-desc">Resize or hide each HUD widget on its own. Each size starts at "Auto" (follows the HUD scale above). Open the preview to see where everything sits.</span>
+        </div>
+        <button type="button" class="settings-reset" id="hudLayoutPreviewBtn">Preview layout</button>
+        <div id="hudElementRows" class="hud-element-rows"></div>
+      </div>
       <div class="access-row">
         <div class="access-text">
           <span class="access-label">Screen shake</span>
@@ -1588,6 +1640,21 @@
       </div>
     </div>
   </div>
+</div>
+
+<!-- HUD layout preview: schematic boxes standing in for each HUD widget, on a
+     play-screen-shaped frame. Toggling a widget here mirrors the settings rows. -->
+<div id="hudPreviewOverlay" class="hud-preview-overlay hidden" aria-hidden="true">
+  <div class="hud-preview-frame" id="hudPreviewFrame">
+    <span class="hud-preview-watermark">PLAY SCREEN PREVIEW</span>
+    <div class="hud-preview-box hud-preview-box--coins"      data-preview="coins">Coins</div>
+    <div class="hud-preview-box hud-preview-box--center"     data-preview="center">Timer / Floor</div>
+    <div class="hud-preview-box hud-preview-box--objectives" data-preview="objectives">Objectives</div>
+    <div class="hud-preview-box hud-preview-box--stats"      data-preview="stats">Player Stats</div>
+    <div class="hud-preview-box hud-preview-box--actions"    data-preview="actions">Action Bar</div>
+    <div class="hud-preview-box hud-preview-box--equipment"  data-preview="equipment">Tools</div>
+  </div>
+  <button type="button" class="hud-preview-close" id="hudPreviewClose">Done</button>
 </div>
 
 <script src="js/achievements.js" defer></script>

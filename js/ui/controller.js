@@ -512,10 +512,12 @@ export function createUIController(view) {
       if (normalized.includes('knave')) return 'artificer_knave';
       if (normalized.includes('thorn')) return 'thorn_knight';
       if (normalized.includes('princess')) return 'princess';
-      if (normalized.includes('metao')) return 'metao';
+      // The Metao hero is sometimes addressed as "Mateo" in dialogue — accept
+      // both spellings so the portrait still resolves to the metao sprite.
+      if (normalized.includes('metao') || normalized.includes('mateo')) return 'metao';
       if (normalized.includes('gelleh') || normalized.includes('granialla')) return 'gelleh';
       if (normalized.includes('mooggy')) return 'mooggy';
-      if (normalized.includes('queen') && normalized.includes('cult')) return 'queen_cult';
+      if (normalized.includes('queen')) return 'queen_cult';
       if (normalized.includes('bulk') && normalized.includes('golem')) return 'bulk_golem';
       if (normalized.includes('artificer')) return 'artificer_knave';
       if (normalized.includes('antony') || normalized.includes('blemmye')) return 'antony_blemmye';

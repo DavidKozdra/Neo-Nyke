@@ -133,10 +133,158 @@
   }
   function stop() { cancelAnimationFrame(raf); raf = 0; }
 
+  // ── Cutscene gallery ────────────────────────────────────────────────────
+  const sceneList = document.getElementById('creditsSceneList');
+  let galleryBuilt = false;
+
+  function playScene(scene) {
+    if (!scene || !Array.isArray(scene.lines) || !scene.lines.length) return;
+    const ctrl = Neo.uiController;
+    if (!ctrl || typeof ctrl.playDialogue !== 'function') return;
+    // Close the gallery so the dialogue overlay plays unobstructed over the
+    // credits backdrop. Dialogue runs as its own game state and returns to the
+    // menu (which the credits page is layered over) when it closes.
+    setModalOpen(galleryOverlay, false);
+    ctrl.playDialogue(scene.lines, { returnState: 'menu' });
+  }
+
+  function buildGallery() {
+    if (galleryBuilt || !sceneList) return;
+    const scenes = Array.isArray(Neo.CUTSCENE_GALLERY) ? Neo.CUTSCENE_GALLERY : [];
+    if (!scenes.length) return; // game-core not ready yet; retry on next open
+    sceneList.textContent = '';
+    scenes.forEach((scene) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'credits-gallery__item';
+      btn.setAttribute('role', 'listitem');
+      const title = document.createElement('span');
+      title.className = 'credits-gallery__item-title';
+      title.textContent = scene.title || scene.id || 'Scene';
+      btn.appendChild(title);
+      if (scene.subtitle) {
+        const sub = document.createElement('span');
+        sub.className = 'credits-gallery__item-sub';
+        sub.textContent = scene.subtitle;
+        btn.appendChild(sub);
+      }
+      btn.addEventListener('click', () => playScene(scene));
+      sceneList.appendChild(btn);
+    });
+    galleryBuilt = true;
+  }
+
+  // ── Jukebox ─────────────────────────────────────────────────────────────
+  const jukeboxList = document.getElementById('jukeboxList');
+  const jukeboxNow = document.getElementById('jukeboxNowPlaying');
+  const jukeboxToggleBtn = document.getElementById('jukeboxToggle');
+  const jukeboxPrevBtn = document.getElementById('jukeboxPrev');
+  const jukeboxNextBtn = document.getElementById('jukeboxNext');
+  let jukeboxBuilt = false;
+  let jukeboxUnsub = null;
+
+  function renderJukebox(state) {
+    if (!state) return;
+    const playing = state.playing;
+    if (jukeboxToggleBtn) {
+      jukeboxToggleBtn.innerHTML = playing ? '&#10074;&#10074;' : '&#9654;';
+      jukeboxToggleBtn.setAttribute('aria-label', playing ? 'Pause' : 'Play');
+    }
+    const current = (state.tracks || []).find((t) => t.id === state.trackId);
+    if (jukeboxNow) {
+      jukeboxNow.textContent = current
+        ? `${playing ? '♫ ' : ''}${current.title}`
+        : 'Select a track';
+    }
+    if (jukeboxList) {
+      jukeboxList.querySelectorAll('[data-track-id]').forEach((el) => {
+        el.classList.toggle('is-active', el.dataset.trackId === state.trackId);
+      });
+    }
+  }
+
+  function buildJukebox() {
+    if (jukeboxBuilt || !jukeboxList || !Neo.jukebox) return;
+    const state = Neo.jukebox.getState();
+    jukeboxList.textContent = '';
+    (state.tracks || []).forEach((track) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'jukebox__track';
+      btn.dataset.trackId = track.id;
+      btn.setAttribute('role', 'listitem');
+      btn.textContent = track.title;
+      btn.addEventListener('click', () => Neo.jukebox.play(track.id));
+      jukeboxList.appendChild(btn);
+    });
+    jukeboxToggleBtn?.addEventListener('click', () => Neo.jukebox.toggle());
+    jukeboxPrevBtn?.addEventListener('click', () => Neo.jukebox.prev());
+    jukeboxNextBtn?.addEventListener('click', () => Neo.jukebox.next());
+    jukeboxBuilt = true;
+  }
+
+  // ── Overlay triggers ────────────────────────────────────────────────────
+  // Each feature lives in its own modal opened from a small credits button.
+  const galleryBtn = document.getElementById('creditsGalleryBtn');
+  const jukeboxBtn = document.getElementById('creditsJukeboxBtn');
+  const galleryOverlay = document.getElementById('galleryOverlay');
+  const jukeboxOverlay = document.getElementById('jukeboxOverlay');
+  const galleryCloseBtn = document.getElementById('galleryClose');
+  const jukeboxCloseBtn = document.getElementById('jukeboxClose');
+
+  function setModalOpen(overlay, open) {
+    if (!overlay) return;
+    overlay.classList.toggle('hidden', !open);
+    overlay.setAttribute('aria-hidden', open ? 'false' : 'true');
+  }
+
+  function openGallery() {
+    buildGallery();
+    setModalOpen(galleryOverlay, true);
+    galleryCloseBtn?.focus({ preventScroll: true });
+  }
+
+  function openJukebox() {
+    buildJukebox();
+    if (Neo.jukebox && !jukeboxUnsub) {
+      jukeboxUnsub = Neo.jukebox.onChange(renderJukebox);
+    }
+    renderJukebox(Neo.jukebox?.getState?.());
+    setModalOpen(jukeboxOverlay, true);
+    jukeboxCloseBtn?.focus({ preventScroll: true });
+  }
+
+  function closeModals() {
+    setModalOpen(galleryOverlay, false);
+    setModalOpen(jukeboxOverlay, false);
+  }
+
+  galleryBtn?.addEventListener('click', openGallery);
+  jukeboxBtn?.addEventListener('click', openJukebox);
+  galleryCloseBtn?.addEventListener('click', () => setModalOpen(galleryOverlay, false));
+  jukeboxCloseBtn?.addEventListener('click', () => setModalOpen(jukeboxOverlay, false));
+  // Click the dim backdrop (outside the panel) to dismiss.
+  galleryOverlay?.addEventListener('click', (e) => { if (e.target === galleryOverlay) setModalOpen(galleryOverlay, false); });
+  jukeboxOverlay?.addEventListener('click', (e) => { if (e.target === jukeboxOverlay) setModalOpen(jukeboxOverlay, false); });
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    if (galleryOverlay && !galleryOverlay.classList.contains('hidden')) setModalOpen(galleryOverlay, false);
+    else if (jukeboxOverlay && !jukeboxOverlay.classList.contains('hidden')) setModalOpen(jukeboxOverlay, false);
+  });
+
   function onVisChange() {
     const open = !panel.classList.contains('hidden');
-    if (open) { ensureAvatars(); start(); }
-    else stop();
+    if (open) {
+      ensureAvatars();
+      start();
+    } else {
+      stop();
+      // Leaving credits closes any open modal and hands music back to the
+      // normal title-sync.
+      closeModals();
+      Neo.jukebox?.release?.();
+      if (jukeboxUnsub) { jukeboxUnsub(); jukeboxUnsub = null; }
+    }
   }
 
   window.addEventListener('resize', () => { resize(); built = false; });

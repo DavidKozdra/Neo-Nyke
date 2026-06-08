@@ -135,7 +135,92 @@
     void track.play().catch(() => {});
   }
 
+  // ── Jukebox (Credits gallery) ─────────────────────────────────────────────
+  // The Credits jukebox lets the player audition any track. While it owns
+  // playback we suspend the automatic title-music sync so the loop above does
+  // not fight the player's selection. Releasing the override restores normal
+  // menu/game music on the next tick.
+  const JUKEBOX_TRACKS = [
+    { id: 'main_theme', title: 'Main Theme', path: 'assets/sounds/music/Neo Nyke - main theme.mp3' },
+    { id: 'title_intro', title: 'Title Intro', path: 'assets/sounds/music/Neo Nyke - Title Intro.wav' },
+    { id: 'title_loop', title: 'Title Loop', path: 'assets/sounds/music/Neo Nyke - Title Loop.wav' },
+  ];
+  let jukeboxActive = false;
+  let jukeboxAudio = null;
+  let jukeboxTrackId = null;
+  const jukeboxListeners = new Set();
+
+  function emitJukeboxState() {
+    const snapshot = getJukeboxState();
+    for (const listener of [...jukeboxListeners]) {
+      try { listener(snapshot); } catch (_) {}
+    }
+  }
+
+  function getJukeboxState() {
+    return {
+      active: jukeboxActive,
+      trackId: jukeboxTrackId,
+      playing: !!(jukeboxAudio && !jukeboxAudio.paused),
+      tracks: JUKEBOX_TRACKS.map((t) => ({ id: t.id, title: t.title })),
+    };
+  }
+
+  function stopJukeboxAudio() {
+    if (!jukeboxAudio) return;
+    try { jukeboxAudio.pause(); } catch {}
+    jukeboxAudio = null;
+    jukeboxTrackId = null;
+  }
+
+  function jukeboxPlay(trackId) {
+    const track = JUKEBOX_TRACKS.find((t) => t.id === trackId) || JUKEBOX_TRACKS[0];
+    if (!track) return;
+    jukeboxActive = true;
+    unlockedByGesture = true;
+    // Silence whatever the auto-sync was playing so only the chosen track sounds.
+    pauseAll();
+    if (jukeboxTrackId !== track.id) {
+      stopJukeboxAudio();
+      jukeboxAudio = makeAudio(track.path, { loop: true });
+      jukeboxTrackId = track.id;
+    }
+    jukeboxAudio.volume = getMusicGain();
+    void jukeboxAudio.play().catch(() => {});
+    emitJukeboxState();
+  }
+
+  function jukeboxPause() {
+    if (jukeboxAudio) { try { jukeboxAudio.pause(); } catch {} }
+    emitJukeboxState();
+  }
+
+  function jukeboxToggle() {
+    if (jukeboxAudio && !jukeboxAudio.paused) { jukeboxPause(); return; }
+    if (jukeboxAudio && jukeboxTrackId) { jukeboxPlay(jukeboxTrackId); return; }
+    jukeboxPlay(JUKEBOX_TRACKS[0].id);
+  }
+
+  function jukeboxStep(delta) {
+    const currentIndex = Math.max(0, JUKEBOX_TRACKS.findIndex((t) => t.id === jukeboxTrackId));
+    const nextIndex = (currentIndex + delta + JUKEBOX_TRACKS.length) % JUKEBOX_TRACKS.length;
+    jukeboxPlay(JUKEBOX_TRACKS[nextIndex].id);
+  }
+
+  function jukeboxRelease() {
+    stopJukeboxAudio();
+    jukeboxActive = false;
+    emitJukeboxState();
+    syncMusicState();
+  }
+
   function syncMusicState() {
+    // While the jukebox owns playback, leave its selection alone.
+    if (jukeboxActive) {
+      applyVolume();
+      if (jukeboxAudio) jukeboxAudio.volume = getMusicGain();
+      return;
+    }
     const context = currentContext();
     applyVolume();
 
@@ -197,4 +282,14 @@
   Neo.pauseTitleMusic = pauseMenuMusic;
   Neo.syncTitleMusic = syncMusicState;
   Neo.pauseGameMusic = pauseGameMusic;
+  Neo.jukebox = {
+    play: jukeboxPlay,
+    pause: jukeboxPause,
+    toggle: jukeboxToggle,
+    next: () => jukeboxStep(1),
+    prev: () => jukeboxStep(-1),
+    release: jukeboxRelease,
+    getState: getJukeboxState,
+    onChange: (fn) => { if (typeof fn === 'function') jukeboxListeners.add(fn); return () => jukeboxListeners.delete(fn); },
+  };
 })();

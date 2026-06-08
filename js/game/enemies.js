@@ -943,6 +943,24 @@
     return Neo.uiController.playDialogue([{ speaker: 'GOD', text: line }], { returnState: 'play' });
   }
 
+  // Cutscenes read best when the speakers share the frame, so when a boss intro
+  // plays we pull the player in just below the boss (the boss faces "up" toward
+  // the camera) instead of leaving them stranded at the entry door.
+  function positionPlayerNearEntity(entity, options = {}) {
+    if (!entity || !Neo.player) return;
+    const gap = Number(options.gap ?? 70);
+    const radius = Number(Neo.player.r || 14);
+    const preferredX = entity.x;
+    const preferredY = entity.y + (Number(entity.r || 24) + gap);
+    const spot = findSafeEnemySpawnPoint(preferredX, preferredY, radius)
+      || findSafeEnemySpawnPoint(entity.x, entity.y + gap, radius);
+    if (!spot) return;
+    Neo.player.x = spot.x;
+    Neo.player.y = spot.y;
+    Neo.player.vx = 0;
+    Neo.player.vy = 0;
+  }
+
   function tryPlayKnaveKnightCutscene(enemy, enemyType) {
     if (!enemy || enemyType !== 'artificer_knave' || !Neo.player) return false;
     if (Neo.player.character !== 'thorn_knight') return false;
@@ -952,6 +970,7 @@
     Neo.clearGameplayInput();
     Neo.setShopPanelOpen(false);
     Neo.setInventoryPanelOpen(false);
+    positionPlayerNearEntity(enemy);
     enemy.attackCd = Math.max(Number(enemy.attackCd || 0), 1.4);
     enemy.stun = Math.max(Number(enemy.stun || 0), 0.25);
     Neo.scheduleRunSave();
@@ -972,13 +991,14 @@
     Neo.clearGameplayInput();
     Neo.setShopPanelOpen(false);
     Neo.setInventoryPanelOpen(false);
+    positionPlayerNearEntity(enemy);
     enemy.attackCd = Math.max(Number(enemy.attackCd || 0), 1.4);
     enemy.stun = Math.max(Number(enemy.stun || 0), 0.25);
     Neo.scheduleRunSave();
 
     return Neo.uiController.playDialogue([
       { speaker: 'QUEEN', text: 'once my champion planning to kill me again are you apostate' },
-      { speaker: 'MATEO', text: '...' },
+      { speaker: 'METAO', text: '...' },
       { speaker: 'QUEEN', text: 'Your life will be mine !' },
     ], { returnState: 'play' });
   }
@@ -999,6 +1019,7 @@
     Neo.clearGameplayInput();
     Neo.setShopPanelOpen(false);
     Neo.setInventoryPanelOpen(false);
+    positionPlayerNearEntity(enemy);
     enemy.attackCd = Math.max(Number(enemy.attackCd || 0), 1.4);
     enemy.stun = Math.max(Number(enemy.stun || 0), 0.25);
     Neo.scheduleRunSave();
@@ -1017,12 +1038,13 @@
     Neo.clearGameplayInput();
     Neo.setShopPanelOpen(false);
     Neo.setInventoryPanelOpen(false);
+    positionPlayerNearEntity(enemy);
     enemy.attackCd = Math.max(Number(enemy.attackCd || 0), 1.4);
     enemy.stun = Math.max(Number(enemy.stun || 0), 0.25);
     Neo.scheduleRunSave();
 
     return Neo.uiController.playDialogue([
-      { speaker: 'ANTONY BLEMMYAE', text: 'gorba borba' },
+      { speaker: 'ANTONY BLEMMYE', text: 'gorba borba' },
     ], { returnState: 'play' });
   }
 
@@ -1115,8 +1137,9 @@
     const attackServo = count('attack_servo');
     const robotArm = count('robot_arm');
     const chronoSpringBonus = Number(inventory?.chronoSpringBuffTime || 0) > 0 ? count('chrono_spring') * 0.16 : 0;
+    const keenEyeActive = Number(inventory?.keenEyeBuffTime || 0) > 0;
     let critChance = Number(inventory?.critCharmBuffTime || 0) > 0 ? count('crit_charm') * 0.04 : 0;
-    critChance += Number(inventory?.keenEyeBuffTime || 0) > 0 ? count('keen_eye') * 0.1 : 0;
+    critChance += keenEyeActive ? count('keen_eye') * 0.2 : 0;
     critChance += count('pendant_of_kronos') * godItemStacks * 0.01;
     if (count('oracles_lens') > 0) critChance *= 2;
     critChance = Neo.clamp(critChance, 0.01, 0.95);
@@ -1131,7 +1154,8 @@
       overstimulateStunChance: count('overstimulate') * 0.2,
       homingMissileChance: count('homing_missile') * 0.15,
       critChance,
-      critMultiplier: 1.6 + (count('oracles_lens') > 0 ? critChance * 2.2 : critChance * 0.6),
+      critMultiplier: 1.6 + (count('oracles_lens') > 0 ? critChance * 2.2 : critChance * 0.6)
+        + (keenEyeActive ? count('keen_eye') * 0.025 : 0),
       attackSpeedMultiplier: robotArm > 0 && inventory?.robotArmReady
         ? 8 * (1 + attackServo * 0.12 + chronoSpringBonus)
         : 1 + attackServo * 0.12 + chronoSpringBonus,

@@ -30,6 +30,44 @@
     return Math.max(HUD_SCALE_MIN, Math.min(HUD_SCALE_MAX, Math.round(n / HUD_SCALE_STEP) * HUD_SCALE_STEP));
   }
 
+  // ── Per-element HUD layout ────────────────────────────────────────────────────
+  // The six widgets the legacy global HUD-scale slider drove. Each gets its own
+  // scale + visibility now; the global slider is kept as the fallback default so
+  // old saves and the "everything" knob still work. `cssVar` feeds a transform in
+  // style.css; `hideClass` toggles a body class that hides just that widget.
+  const HUD_ELEMENTS = [
+    { key: 'coins',      label: 'Coins & Loop',     cssVar: '--hud-scale-coins',      hideClass: 'hud-hide-coins' },
+    { key: 'center',     label: 'Timer / Floor',    cssVar: '--hud-scale-center',     hideClass: 'hud-hide-center' },
+    { key: 'objectives', label: 'Objective Panel',  cssVar: '--hud-scale-objectives', hideClass: 'hud-hide-objectives' },
+    { key: 'stats',      label: 'Player Stats',     cssVar: '--hud-scale-stats',      hideClass: 'hud-hide-stats' },
+    { key: 'actions',    label: 'Action Bar',       cssVar: '--hud-scale-actions',    hideClass: 'hud-hide-actions' },
+    { key: 'equipment',  label: 'Tool Slots',       cssVar: '--hud-scale-equipment',  hideClass: 'hud-hide-equipment' },
+  ];
+
+  function defaultHudElements() {
+    const out = {};
+    HUD_ELEMENTS.forEach(el => { out[el.key] = { scale: null, visible: true }; });
+    return out;
+  }
+
+  // scale === null means "inherit the global HUD scale". Otherwise clamp it.
+  function normalizeHudElement(entry) {
+    const scale = entry?.scale === null || entry?.scale === undefined
+      ? null
+      : normalizeHudScale(entry.scale);
+    return { scale, visible: entry?.visible !== false };
+  }
+
+  function normalizeHudElements(raw) {
+    const out = defaultHudElements();
+    if (raw && typeof raw === 'object') {
+      HUD_ELEMENTS.forEach(el => {
+        if (raw[el.key]) out[el.key] = normalizeHudElement(raw[el.key]);
+      });
+    }
+    return out;
+  }
+
   // ── Theme system ─────────────────────────────────────────────────────────────
 
   const THEME_VARS = [
@@ -227,6 +265,7 @@
   let volume   = { ...DEFAULT_VOLUME };
   let access   = { ...DEFAULT_ACCESS };
   let gameplay = { ...DEFAULT_GAMEPLAY };
+  let hudElements = defaultHudElements();
 
   function load() {
     try {
@@ -237,6 +276,7 @@
       if (s.volume)       volume       = { ...DEFAULT_VOLUME,   ...s.volume };
       if (s.access)       access       = { ...DEFAULT_ACCESS,   ...s.access };
       if (s.gameplay)     gameplay     = { ...DEFAULT_GAMEPLAY, ...s.gameplay };
+      if (s.hudElements)  hudElements  = normalizeHudElements(s.hudElements);
       if (s.access?.bloodMultiplier !== undefined && s.gameplay?.bloodMultiplier === undefined) {
         gameplay.bloodMultiplier = s.access.bloodMultiplier;
       }
@@ -249,7 +289,7 @@
   }
 
   function save() {
-    localStorage.setItem(STORE_KEY, JSON.stringify({ bindings, touchBindings, volume, access, gameplay, activeTheme, savedThemes, customThemeVars }));
+    localStorage.setItem(STORE_KEY, JSON.stringify({ bindings, touchBindings, volume, access, gameplay, hudElements, activeTheme, savedThemes, customThemeVars }));
     window.dispatchEvent(new CustomEvent('neo:settings-changed'));
   }
 
@@ -261,6 +301,21 @@
     root.style.setProperty('--shop-can-afford',  access.shopCanAfford  || DEFAULT_ACCESS.shopCanAfford);
     root.style.setProperty('--shop-cant-afford', access.shopCantAfford || DEFAULT_ACCESS.shopCantAfford);
     root.style.setProperty('--hud-scale', String(normalizeHudScale(access.hudScale)));
+  }
+
+  // Push each HUD element's per-widget scale + visibility to the DOM. A null
+  // scale removes the override so the widget falls back to the global --hud-scale.
+  function applyHudElements() {
+    const root = document.documentElement;
+    HUD_ELEMENTS.forEach(el => {
+      const entry = hudElements[el.key] || {};
+      if (entry.scale === null || entry.scale === undefined) {
+        root.style.removeProperty(el.cssVar);
+      } else {
+        root.style.setProperty(el.cssVar, String(normalizeHudScale(entry.scale)));
+      }
+      root.classList.toggle(el.hideClass, entry.visible === false);
+    });
   }
 
   // ── Mobile detection ─────────────────────────────────────────────────────────
@@ -280,6 +335,7 @@
 
   load();
   applyAccess();
+  applyHudElements();
   applyControlsSectionVisibility();
   // Apply saved theme on boot (before any UI is queried)
   if (activeTheme && (PRESET_THEMES[activeTheme] || savedThemes[activeTheme])) {
@@ -321,6 +377,8 @@
       window.Neo?.refreshObjectiveTracker?.();
     },
     getVolume: () => volume,
+    getHudElements: () => hudElements,
+    getHudElementDefs: () => HUD_ELEMENTS.map(el => ({ key: el.key, label: el.label })),
   };
 
   const modal = document.getElementById('settingsModal');
@@ -585,8 +643,137 @@
       hudScaleVal.textContent = fmt(access.hudScale);
       save();
       applyAccess();
+      // Rows/preview on "Auto" inherit this value, so refresh their readouts.
+      HUD_ELEMENTS.forEach(el => refreshHudElementRow(el.key));
+      refreshHudPreviewBoxes();
     });
   }
+
+  // ── Per-element HUD layout rows + schematic preview ─────────────────────────
+  // Each row carries a scale slider (50–200%, plus an "Auto" floor that inherits
+  // the global HUD scale) and a show/hide toggle. The preview overlay mirrors the
+  // same state on labelled boxes so the player sees the result before closing.
+  const hudRowEls = {};
+
+  function effectiveHudScale(key) {
+    const entry = hudElements[key] || {};
+    return entry.scale === null || entry.scale === undefined
+      ? normalizeHudScale(access.hudScale)
+      : normalizeHudScale(entry.scale);
+  }
+
+  function formatHudElementScale(entry) {
+    if (!entry || entry.scale === null || entry.scale === undefined) return 'Auto';
+    return `${Math.round(normalizeHudScale(entry.scale) * 100)}%`;
+  }
+
+  function refreshHudPreviewBoxes() {
+    HUD_ELEMENTS.forEach(el => {
+      const box = document.querySelector(`.hud-preview-box[data-preview="${el.key}"]`);
+      if (!box) return;
+      const entry = hudElements[el.key] || {};
+      const hidden = entry.visible === false;
+      box.classList.toggle('hud-preview-box--hidden', hidden);
+      // Compose the per-element scale onto whatever centering transform the anchor
+      // already applies, so the box grows/shrinks like the real widget.
+      const base = box.classList.contains('hud-preview-box--center') || box.classList.contains('hud-preview-box--actions')
+        ? 'translateX(-50%) '
+        : box.classList.contains('hud-preview-box--equipment')
+          ? 'translateY(-50%) '
+          : '';
+      box.style.transform = `${base}scale(${effectiveHudScale(el.key)})`;
+    });
+  }
+
+  function refreshHudElementRow(key) {
+    const refs = hudRowEls[key];
+    if (!refs) return;
+    const entry = hudElements[key] || {};
+    const hidden = entry.visible === false;
+    refs.row.classList.toggle('hud-element-row--hidden', hidden);
+    refs.slider.value = entry.scale === null || entry.scale === undefined
+      ? HUD_SCALE_MIN
+      : normalizeHudScale(entry.scale);
+    refs.val.textContent = formatHudElementScale(entry);
+    refs.vis.setAttribute('aria-pressed', hidden ? 'false' : 'true');
+    refs.vis.textContent = hidden ? 'Hidden' : 'Shown';
+  }
+
+  function buildHudElementRows() {
+    const host = document.getElementById('hudElementRows');
+    if (!host || host.childElementCount) return;
+    HUD_ELEMENTS.forEach(el => {
+      const row = document.createElement('div');
+      row.className = 'hud-element-row';
+      const name = document.createElement('span');
+      name.className = 'hud-element-row__name';
+      name.textContent = el.label;
+      // Slider min is one step below HUD_SCALE_MIN so the leftmost notch means
+      // "Auto" (inherit global scale) rather than a fixed 50%.
+      const slider = document.createElement('input');
+      slider.type = 'range';
+      slider.className = 'hud-element-row__slider';
+      slider.min = String(HUD_SCALE_MIN - HUD_SCALE_STEP);
+      slider.max = String(HUD_SCALE_MAX);
+      slider.step = String(HUD_SCALE_STEP);
+      const val = document.createElement('span');
+      val.className = 'hud-element-row__val';
+      const vis = document.createElement('button');
+      vis.type = 'button';
+      vis.className = 'hud-element-row__vis';
+      row.append(name, slider, val, vis);
+      host.appendChild(row);
+      hudRowEls[el.key] = { row, slider, val, vis };
+
+      slider.addEventListener('input', () => {
+        const raw = Number(slider.value);
+        hudElements[el.key].scale = raw < HUD_SCALE_MIN ? null : normalizeHudScale(raw);
+        applyHudElements();
+        refreshHudElementRow(el.key);
+        refreshHudPreviewBoxes();
+        save();
+      });
+      vis.addEventListener('click', () => {
+        hudElements[el.key].visible = hudElements[el.key].visible === false;
+        applyHudElements();
+        refreshHudElementRow(el.key);
+        refreshHudPreviewBoxes();
+        save();
+      });
+      refreshHudElementRow(el.key);
+    });
+  }
+  buildHudElementRows();
+
+  document.getElementById('hudLayoutPreviewBtn')?.addEventListener('click', () => {
+    const overlay = document.getElementById('hudPreviewOverlay');
+    if (!overlay) return;
+    refreshHudPreviewBoxes();
+    overlay.classList.remove('hidden');
+    overlay.setAttribute('aria-hidden', 'false');
+  });
+  const hudPreviewClose = () => {
+    const overlay = document.getElementById('hudPreviewOverlay');
+    if (!overlay) return;
+    overlay.classList.add('hidden');
+    overlay.setAttribute('aria-hidden', 'true');
+  };
+  document.getElementById('hudPreviewClose')?.addEventListener('click', hudPreviewClose);
+  document.getElementById('hudPreviewOverlay')?.addEventListener('click', e => {
+    if (e.target.id === 'hudPreviewOverlay') hudPreviewClose();
+  });
+  // Toggle a widget directly from the preview by clicking its box.
+  document.querySelectorAll('.hud-preview-box').forEach(box => {
+    box.addEventListener('click', () => {
+      const key = box.dataset.preview;
+      if (!hudElements[key]) return;
+      hudElements[key].visible = hudElements[key].visible === false;
+      applyHudElements();
+      refreshHudElementRow(key);
+      refreshHudPreviewBoxes();
+      save();
+    });
+  });
 
   const replayTutorialEl = document.getElementById('accReplayTutorial');
   if (replayTutorialEl) {

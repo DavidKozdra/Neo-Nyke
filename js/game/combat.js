@@ -1940,6 +1940,8 @@
         );
       }
     }
+    // Procy Pickle: a crit can fling the target's statuses onto nearby enemies.
+    if (isCrit && enemy.hp > 0) procyPickleSpread(enemy);
     if (enemy.hp <= 0) onEnemyDie(enemy);
   }
 
@@ -2021,6 +2023,10 @@
       Neo.applyPlayerHealing?.(Math.max(0.5, darkStacks * 0.65), { showBarrier: false });
       Neo.spawnParticle({ x: entity.x, y: entity.y - 8, life: 0.24, c: '#b48cff' });
     }
+
+    // Procy Pickle: whenever a status-applying item procs a status onto this enemy,
+    // roll to spread that enemy's whole status cocktail to its neighbours.
+    if (Number(stats.procyPickleSpreadChance || 0) > 0) procyPickleSpread(entity);
   }
 
   function applyBleed(enemy, stacks, duration, source = null) {
@@ -2072,6 +2078,53 @@
       Neo.forEachEnemyNearCircle(x, y, radius + 80, visitEnemy, { excludeEnemy: sourceEnemy });
     } else {
       Neo.enemies.forEach(visitEnemy);
+    }
+  }
+
+  // Procy Pickle: copy every damaging status currently on `source` onto nearby
+  // enemies, so a single crit/proc can chain a build's bleeds, fires and poisons
+  // across a pack. Throttled per source so held beams can't spam it.
+  // `procyPickleSpreading` guards against runaway recursion: applying statuses to
+  // the spread targets re-enters triggerStatusReactions, and we don't want that to
+  // kick off a fresh spread on every neighbour in the same frame.
+  let procyPickleSpreading = false;
+  function procyPickleSpread(source, options = {}) {
+    if (procyPickleSpreading) return;
+    if (!source || source === Neo.player || source.dead) return;
+    const stats = Neo.getItemStats?.() || {};
+    const chance = Number(stats.procyPickleSpreadChance || 0);
+    if (chance <= 0) return;
+    if (!options.guaranteed && Neo.nextRandom('encounter') >= chance) return;
+    if (!canTriggerStatusReaction(source, 'procy_pickle_spread', 26)) return;
+    const carried = Neo.STATUS_KEYS.filter(key => Neo.getStatusStacks(source, key) > 0);
+    if (!carried.length) return;
+    const radius = 130 * Number(stats.aoeRadiusMultiplier || 1);
+    let spread = false;
+    const visitEnemy = enemy => {
+      if (!enemy || enemy === source || enemy.dead) return;
+      if (!isWithinRadiusSq(source.x, source.y, enemy, radius)) return;
+      carried.forEach(key => {
+        // Spread one stack of each carried status, with the source's remaining
+        // duration so the copy isn't a permanent fresh DoT.
+        const duration = Math.max(1.6, Number(Neo.getStatusState(source, key)?.duration || 0) * 0.6);
+        Neo.applyStatus(enemy, key, 1, duration);
+        triggerStatusReactions(enemy, key);
+      });
+      spread = true;
+    };
+    procyPickleSpreading = true;
+    try {
+      if (typeof Neo.forEachEnemyNearCircle === 'function') {
+        Neo.forEachEnemyNearCircle(source.x, source.y, radius + 80, visitEnemy, { excludeEnemy: source });
+      } else {
+        Neo.enemies.forEach(visitEnemy);
+      }
+    } finally {
+      procyPickleSpreading = false;
+    }
+    if (spread) {
+      Neo.spawnParticle({ x: source.x, y: source.y, life: 0.3, ring: source.r + 22, c: '#9be25a' });
+      Neo.spawnParticle({ x: source.x, y: source.y - source.r - 14, life: 0.4, text: 'SPREAD', c: '#cdf58f' });
     }
   }
 
@@ -2987,6 +3040,7 @@
   Neo.applyPoison = applyPoison;
   Neo.applyDarkDrain = applyDarkDrain;
   Neo.applyStatusInRadius = applyStatusInRadius;
+  Neo.procyPickleSpread = procyPickleSpread;
   Neo.spawnBleedSpray = spawnBleedSpray;
   Neo.migrateEnemyState = migrateEnemyState;
   Neo.tickEnemyStatus = tickEnemyStatus;

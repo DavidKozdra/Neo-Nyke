@@ -1671,7 +1671,7 @@
   .center-display {
     top: calc(4px + env(safe-area-inset-top, 0px));
     width: min(360px, calc(100vw - 112px));
-    transform: translateX(-50%) scale(var(--hud-scale, 1));
+    transform: translateX(-50%) scale(var(--hud-scale-center, var(--hud-scale, 1)));
     transform-origin: top center;
   }
 
@@ -1748,7 +1748,7 @@
     gap: 3px;
     font-size: 11px;
     letter-spacing: .05em;
-    transform: scale(var(--hud-scale, 1));
+    transform: scale(var(--hud-scale-coins, var(--hud-scale, 1)));
   }
 
   .currency-line {
@@ -1778,7 +1778,7 @@
     grid-template-columns: minmax(0, 1fr);
     font-size: 8px;
     letter-spacing: .04em;
-    transform: scale(var(--hud-scale, 1));
+    transform: scale(var(--hud-scale-stats, var(--hud-scale, 1)));
     transform-origin: top left;
   }
 
@@ -1839,7 +1839,7 @@
     width: min(284px, calc(100vw - 16px));
     gap: 3px;
     justify-content: center;
-    transform: translateX(-50%) scale(var(--hud-scale, 1));
+    transform: translateX(-50%) scale(var(--hud-scale-actions, var(--hud-scale, 1)));
     transform-origin: bottom center;
   }
 
@@ -1874,7 +1874,7 @@
     max-height: calc(100dvh - 92px - env(safe-area-inset-top, 0px));
     padding: 10px 12px;
     font-size: 16px;
-    transform: scale(var(--hud-scale, 1));
+    transform: scale(var(--hud-scale-objectives, var(--hud-scale, 1)));
   }
 
   .objective-tracker__head {
@@ -1887,6 +1887,38 @@
   .objective-list li {
     font-size: 16px;
     line-height: 1.15;
+  }
+
+  /* Tool slots HUD — compact for touch screens. Keeps the same right-edge
+     column but shrinks each slot so it doesn't crowd the play area. */
+  .equipment-slots {
+    gap: 5px;
+    padding: 5px 6px;
+    border-radius: 8px;
+    max-height: calc(100dvh - 72px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  }
+
+  .equip-slot {
+    width: 44px;
+    height: 44px;
+    padding: 3px;
+    border-radius: 6px;
+    font-size: 9px;
+  }
+
+  .equip-slot__key {
+    top: 2px;
+    left: 4px;
+    font-size: 8px;
+  }
+
+  .equip-slot__icon {
+    width: 26px;
+    height: 26px;
+  }
+
+  .equip-slot__label {
+    font-size: 7px;
   }
 
   #itemNotifyStack {
@@ -2023,6 +2055,9 @@
     min-height: 0;
     margin: auto;
     flex-direction: column;
+    /* Desktop applies scale(1.5) !important — neutralize it so the
+       layout fits the viewport instead of overflowing on mobile. */
+    transform: none !important;
   }
 
   #dead .dead-left {
@@ -2152,6 +2187,16 @@
 
   #itemNotifyStack {
     top: calc(136px + env(safe-area-inset-top, 0px));
+  }
+
+  .equip-slot {
+    width: 38px;
+    height: 38px;
+  }
+
+  .equip-slot__icon {
+    width: 22px;
+    height: 22px;
   }
 
   .game-panel {

@@ -355,14 +355,16 @@
     finalAmount = Math.max(0, finalAmount);
     const barrierBeforeHit = Math.max(0, Number(Neo.player.overhealBarrier || 0));
     if (barrierBeforeHit > 0 && finalAmount > 0) {
+      const barrierColor = Neo.player.overhealBarrierColor || '#9cefff';
       const absorbed = Math.min(barrierBeforeHit, finalAmount);
       Neo.player.overhealBarrier = Math.max(0, barrierBeforeHit - absorbed);
+      if (Neo.player.overhealBarrier <= 0) Neo.player.overhealBarrierColor = '';
       finalAmount = Math.max(0, finalAmount - absorbed);
       if (absorbed >= 1 && showPopup) {
-        spawnDamagePopup(Neo.player.x, Neo.player.y - 34, absorbed, { color: '#9cefff', size: 14 });
+        spawnDamagePopup(Neo.player.x, Neo.player.y - 34, absorbed, { color: barrierColor, size: 14 });
       }
       if (finalAmount <= 0) {
-        Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 22, life: 0.34, text: 'BARRIER', c: '#9cefff' });
+        Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 22, life: 0.34, text: 'BARRIER', c: barrierColor });
         if (applyHitstop) {
           Neo.player.inv = Math.max(Neo.player.inv, 0.18);
           Neo.shake = Math.max(Neo.shake, 3);
@@ -1717,6 +1719,17 @@
           if (enemy.hp <= 0) Neo.onEnemyDie(enemy);
         });
         if (hazard.statusTick <= 0) hazard.statusTick = 0.45;
+      } else if (hazard.kind === 'el_barto_graffiti') {
+        hazard.tick = Math.max(0, Number(hazard.tick || 0) - dt);
+        if (hazard.tick <= 0) {
+          hazard.tick = Number(hazard.interval || 0.65);
+          forEachEnemyNearCircle(hazard.x, hazard.y, hazard.r + 80, enemy => {
+            if (Neo.dist(enemy.x, enemy.y, hazard.x, hazard.y) > hazard.r + enemy.r) return;
+            const angle = Math.atan2(enemy.y - hazard.y, enemy.x - hazard.x);
+            Neo.hitEnemy(enemy, hazard.damage || 18, angle, 55, '#ff5b78', { rawDamage: true, noCharmBuff: true });
+            Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 10, life: 0.3, text: 'TAGGED', c: '#ffe0b8', size: 9 });
+          });
+        }
       } else if (hazard.kind === 'grave_zone') {
         forEachEnemyNearCircle(hazard.x, hazard.y, hazard.r + 80, enemy => {
           const dx = enemy.x - hazard.x;

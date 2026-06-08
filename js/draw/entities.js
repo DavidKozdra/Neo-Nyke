@@ -973,6 +973,20 @@
       playerRingIndex += 1;
     }
     drawWarpPreview();
+    if (Number(Neo.player.overhealBarrier || 0) > 0) {
+      const barrierColor = Neo.player.overhealBarrierColor || '#9cefff';
+      const pulse = _reduceFlash ? 0 : Math.sin(Date.now() / 180) * 2;
+      const radius = Neo.player.r + 12 + pulse;
+      Neo.ctx.save();
+      Neo.ctx.translate(Neo.player.x, Neo.player.y);
+      Neo.ctx.rotate(Math.PI / 4);
+      Neo.ctx.strokeStyle = barrierColor;
+      Neo.ctx.lineWidth = 2.5;
+      Neo.ctx.shadowColor = barrierColor;
+      Neo.ctx.shadowBlur = 14;
+      Neo.ctx.strokeRect(-radius, -radius, radius * 2, radius * 2);
+      Neo.ctx.restore();
+    }
     const playerSize = Math.max(34, Neo.player.r * 2.5);
     drawActorSprite(Neo.player, getPlayerSpriteKey(), Neo.player.x, Neo.player.y, playerSize, {
       alpha: capeActive ? 0.34 : (!_reduceFlash && (Neo.player.inv > 0 || Number(Neo.player.stun || 0) > 0)) ? 0.68 : 1,

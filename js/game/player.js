@@ -281,7 +281,11 @@ export function getChargeRequirement(baseRequirement) {
   }
 
 export function getKeenEyeCritBonus() {
-    return getItemCount('keen_eye') * 0.1;
+    return getItemCount('keen_eye') * 0.2;
+  }
+
+export function getKeenEyeCritDamageBonus() {
+    return getItemCount('keen_eye') * 0.025;
   }
 
 export function getChronoSpringAttackSpeedBonus() {
@@ -296,7 +300,7 @@ export function grantCritCharmBuff() {
 export function triggerKeenEyeBuff() {
     if (!Neo.player || getItemCount('keen_eye') <= 0) return;
     Neo.player.keenEyeBuffTime = Math.max(Number(Neo.player.keenEyeBuffTime || 0), 7);
-    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 24, life: 0.7, text: 'KEEN EYE', c: '#f8fdff' });
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 24, life: 0.7, text: 'GLITTER', c: '#f8fdff' });
   }
 
 export function triggerChronoSpringBuff() {
@@ -341,9 +345,20 @@ export function getItemStats() {
     const graveZone = getItemCount('grave_zone');
     const mooggyZoomies = getItemCount('mooggy_zoomies');
     const homingMissile = getItemCount('homing_missile');
+    const procyPickle = getItemCount('procy_pickle');
+    // Count distinct tool relics the player owns (items flagged `tool: true`),
+    // so Procy Pickle's poison-on-tool-use chance scales with how tool-heavy the
+    // build is. Procy Pickle itself isn't a tool, so it never counts toward this.
+    const ownedToolCount = procyPickle > 0
+      ? Neo.ITEM_KEYS.reduce((total, key) => (
+          getItemCount(key) > 0 && Neo.ITEM_DEFS[key]?.tool ? total + 1 : total
+        ), 0)
+      : 0;
     const oracleLens = getItemCount('oracles_lens') > 0;
     const critCharmBonus = Number(Neo.player?.critCharmBuffTime || 0) > 0 ? getItemCount('crit_charm') * 0.04 : 0;
-    const keenEyeBonus = Number(Neo.player?.keenEyeBuffTime || 0) > 0 ? getKeenEyeCritBonus() : 0;
+    const keenEyeActive = Number(Neo.player?.keenEyeBuffTime || 0) > 0;
+    const keenEyeBonus = keenEyeActive ? getKeenEyeCritBonus() : 0;
+    const keenEyeCritDamageBonus = keenEyeActive ? getKeenEyeCritDamageBonus() : 0;
     const chronoSpringBonus = Number(Neo.player?.chronoSpringBuffTime || 0) > 0 ? getChronoSpringAttackSpeedBonus() : 0;
     const equippedWeaponKey = String(Neo.player?.equippedWeapon || '');
     const weaponBleedBonus = equippedWeaponKey === 'claw_gauntlets'
@@ -398,6 +413,12 @@ export function getItemStats() {
       overstimulateStunChance: overstimulate * 0.2,
       graveZoneChance: graveZone * 0.2,
       homingMissileChance: homingMissile * 0.15,
+      // Procy Pickle: chance to spread an enemy's statuses to nearby foes when you
+      // crit or a status-applying item procs (+5% per stack, capped 60%), and the
+      // chance for a tool activation to splash self-spreading poison (2% per stack
+      // per tool owned, capped 75%).
+      procyPickleSpreadChance: Neo.clamp(procyPickle * 0.05, 0, 0.6),
+      procyPickleToolPoisonChance: Neo.clamp(procyPickle * 0.02 * ownedToolCount, 0, 0.75),
       bleedDamageMultiplier: orbOfBlood > 0 ? 1 + orbOfBlood : 1,
       bleedHealScale: hemesScarf,
       passiveBleedStacks: hemesScarf,
@@ -407,7 +428,7 @@ export function getItemStats() {
       potionDoubleChance: Neo.clamp(doubleDose * 0.5, 0, 1),
       itemDuplicateChance: Neo.clamp(copycatCharm * 0.3, 0, 1),
       critChance,
-      critMultiplier: 1.6 + (oracleLens ? critChance * 2.2 : critChance * 0.6),
+      critMultiplier: 1.6 + (oracleLens ? critChance * 2.2 : critChance * 0.6) + keenEyeCritDamageBonus,
       attackSpeedMultiplier: 1 + attackServo * 0.12 + chronoSpringBonus,
       hasRobotArm: robotArm > 0,
       moveSpeedMultiplier: (1 + turtleShell * 0.05) * (activeTurboStacks > 0 ? 1.55 + (activeTurboStacks - 1) * 0.15 : 1),

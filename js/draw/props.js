@@ -421,6 +421,29 @@
           Neo.ctx.stroke();
         }
         Neo.ctx.globalAlpha = 1;
+      } else if (hazard.kind === 'el_barto_graffiti') {
+        const t = Date.now() * 0.004 + hazard.x * 0.01;
+        const pulse = 1 + Math.sin(t * 2.4) * 0.025;
+        Neo.ctx.rotate(-0.12);
+        Neo.ctx.scale(pulse, pulse * 0.7);
+        Neo.ctx.fillStyle = 'rgba(255,91,120,0.16)';
+        Neo.ctx.strokeStyle = '#ff5b78';
+        Neo.ctx.shadowColor = '#ff5b78';
+        Neo.ctx.shadowBlur = 12;
+        Neo.ctx.lineWidth = 3;
+        Neo.ctx.beginPath();
+        Neo.ctx.roundRect(-hazard.r, -hazard.r * 0.48, hazard.r * 2, hazard.r * 0.96, 8);
+        Neo.ctx.fill();
+        Neo.ctx.stroke();
+        Neo.ctx.shadowBlur = 0;
+        Neo.ctx.fillStyle = '#ffe0b8';
+        Neo.ctx.strokeStyle = '#2b1018';
+        Neo.ctx.lineWidth = 4;
+        Neo.ctx.font = `bold ${Math.max(12, Math.round(hazard.r * 0.38))}px system-ui`;
+        Neo.ctx.textAlign = 'center';
+        Neo.ctx.textBaseline = 'middle';
+        Neo.ctx.strokeText('BARTO', 0, 1);
+        Neo.ctx.fillText('BARTO', 0, 1);
       } else if (hazard.kind === 'lightning_column') {
         const t = Date.now() * 0.006 + hazard.x * 0.01;
         Neo.ctx.fillStyle = 'rgba(112,180,255,0.12)';

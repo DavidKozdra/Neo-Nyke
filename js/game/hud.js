@@ -835,9 +835,10 @@
     zap_to_extreme: { cooldown: 42, duration: 10, label: 'EXTREME ZAP', color: '#8dd4ff' },
     panic_button: { cooldown: 52, duration: 0, label: 'PANIC', color: '#f4f6fb' },
     mid_sweepy_box: { cooldown: 36, duration: 6, label: 'SWEEPY', color: '#ff6e8b' },
-    el_bartos_cape: { cooldown: 58, duration: 10, label: 'EL BARTO', color: '#ffb37a' },
+    el_bartos_cape: { cooldown: 25, duration: 10, label: 'EL BARTO', color: '#ffb37a' },
     sparkle_charm: { cooldown: 40, duration: 0, label: 'SPARKLE', color: '#ffe8a3' },
     churu_stick: { cooldown: 40, duration: 0, label: 'CHURU', color: '#ffb6d5' },
+    iron_helm: { cooldown: 72, duration: 0, label: 'DIAMOND SHIELD', color: '#c8fbff' },
     gold_vac: { cooldown: 120, duration: 120, label: 'GOLD VAC', color: '#ffe07a' },
   };
 
@@ -876,6 +877,40 @@
     return cooldown > 0 ? `${Math.ceil(cooldown)}s` : 'READY';
   }
 
+  // Procy Pickle: activating any tool can splash self-spreading poison onto nearby
+  // enemies. Chance scales with Pickle stacks and how many tools you own (computed
+  // in getItemStats). Each poisoned enemy then rolls Pickle's status-spread so the
+  // poison leaps onward through the pack.
+  function triggerProcyPickleOnToolUse() {
+    const player = Neo.player;
+    if (!player) return;
+    const stats = Neo.getItemStats?.() || {};
+    const chance = Number(stats.procyPickleToolPoisonChance || 0);
+    if (chance <= 0) return;
+    if (Neo.nextRandom('encounter') >= chance) return;
+    const stacks = Math.max(1, Math.floor(Number(Neo.getItemCount?.('procy_pickle') || 0)));
+    const radius = 170 * Number(stats.aoeRadiusMultiplier || 1);
+    let hit = false;
+    const visitEnemy = enemy => {
+      if (!enemy || enemy.dead) return;
+      const dx = enemy.x - player.x;
+      const dy = enemy.y - player.y;
+      if (dx * dx + dy * dy > radius * radius) return;
+      Neo.applyPoison?.(enemy, Math.min(3, 1 + Math.floor(stacks / 2)), 4.5);
+      Neo.procyPickleSpread?.(enemy, { guaranteed: true });
+      hit = true;
+    };
+    if (typeof Neo.forEachEnemyNearCircle === 'function') {
+      Neo.forEachEnemyNearCircle(player.x, player.y, radius + 80, visitEnemy);
+    } else {
+      Neo.enemies?.forEach(visitEnemy);
+    }
+    if (hit) {
+      Neo.spawnParticle({ x: player.x, y: player.y, life: 0.36, ring: radius * 0.5, c: '#9be25a' });
+      Neo.spawnParticle({ x: player.x, y: player.y - 30, life: 0.5, text: 'PICKLE', c: '#cdf58f' });
+    }
+  }
+
   function startTimedEquipment(itemKey) {
     const player = ensureEquipmentRuntimeState();
     const def = EQUIPMENT_ACTIVE_DEFS[itemKey];
@@ -906,7 +941,10 @@
     if (itemKey === 'panic_button') activatePanicButton();
     if (itemKey === 'sparkle_charm') activateSparkleCharm();
     if (itemKey === 'churu_stick') activateChuruStick();
+    if (itemKey === 'iron_helm') activateIronHelm();
+    if (itemKey === 'el_bartos_cape') activateElBartosCape(stacks);
     Neo.itemStatsCacheFrame = -1;
+    triggerProcyPickleOnToolUse();
     Neo.spawnParticle({ x: player.x, y: player.y - 34, life: 0.75, text: def.label, c: def.color });
     Neo.scheduleRunSave?.();
     return true;
@@ -1025,6 +1063,44 @@
     Neo.spawnHealPopup?.(Neo.player.x, Neo.player.y - 24, gained, { color: '#ffb6d5', size: 16 });
     Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.6, ring: 60, c: '#ffb6d5' });
     Neo.playSfx?.('heal_player');
+  }
+
+  function activateIronHelm() {
+    if (!Neo.player) return;
+    const shield = Math.round(Math.max(1, Number(Neo.player.maxHp || 1)) * 2.5);
+    Neo.player.overhealBarrier = Math.max(Number(Neo.player.overhealBarrier || 0), shield);
+    Neo.player.overhealBarrierColor = '#c8fbff';
+    Neo.spawnHealPopup?.(Neo.player.x, Neo.player.y - 34, shield, { color: '#c8fbff', size: 16 });
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.75, ring: Math.min(150, 58 + Math.sqrt(shield) * 3), c: '#c8fbff' });
+    Neo.playSfx?.('item_collect');
+  }
+
+  function activateElBartosCape(stacks = 1) {
+    if (!Neo.player) return;
+    stacks = Math.max(1, Math.floor(Number(stacks || 1)));
+    if (Neo.nextRandom('encounter') >= Math.min(1, stacks * 0.1)) return;
+    const radius = 44 + (stacks - 1) * 4;
+    Neo.hazards.push({
+      kind: 'el_barto_graffiti',
+      owner: 'player',
+      x: Neo.player.x,
+      y: Neo.player.y + 8,
+      r: radius,
+      ttl: 12,
+      tick: 0,
+      interval: 0.65,
+      damage: 18 + (stacks - 1) * 6,
+    });
+    Neo.spawnParticle({
+      x: Neo.player.x,
+      y: Neo.player.y - 30,
+      life: 2,
+      text: 'EL BARTO!',
+      c: '#ff5b78',
+      size: 10,
+      outline: '#2b1018',
+    });
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.45, impact: true, angle: -Math.PI / 2, c: '#ffe0b8', size: 5 });
   }
 
   function dropSweepyMine(stacks = 1) {
@@ -1205,6 +1281,13 @@
       activate: () => startTimedEquipment('churu_stick'),
       getState: () => getEquipmentState('churu_stick'),
       getStatusText: () => getEquipmentStatusText('churu_stick'),
+    },
+    iron_helm: {
+      key: 'iron_helm',
+      shortName: 'HELM',
+      activate: () => startTimedEquipment('iron_helm'),
+      getState: () => getEquipmentState('iron_helm'),
+      getStatusText: () => getEquipmentStatusText('iron_helm'),
     },
     gold_vac: {
       key: 'gold_vac',

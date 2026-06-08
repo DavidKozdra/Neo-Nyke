@@ -383,6 +383,93 @@ export const BOSS_OPENING_DIALOGUE = {
   antony_blemmye: 'The chest sees. The chest hungers.',
   handsome_devil: 'Try not to stare.',
 };
+// Archive of story beats playable from the Credits gallery. Each entry is a
+// self-contained list of dialogue lines (speaker labels match the portrait
+// resolver in controller.js). Kept in one place so the gallery and the live
+// encounters stay in sync — the boss-intro lines below mirror the scripts in
+// enemies.js tryPlay*Cutscene().
+export const CUTSCENE_GALLERY = [
+  {
+    id: 'knave_knight',
+    title: 'The Knave & the Knight',
+    subtitle: 'Thorn Knight vs the Artificer Knave',
+    lines: [
+      { speaker: 'KNAVE', text: 'You think you can out fight me you couldnt out argue me! your logic is false' },
+      { speaker: 'KNIGHT', text: 'The kingdom of God has come for you ...' },
+      { speaker: 'KNAVE', text: 'Violence it is' },
+    ],
+  },
+  {
+    id: 'queen_metao',
+    title: 'The Apostate',
+    subtitle: 'Metao vs the Cult Queen',
+    lines: [
+      { speaker: 'QUEEN', text: 'once my champion planning to kill me again are you apostate' },
+      { speaker: 'METAO', text: '...' },
+      { speaker: 'QUEEN', text: 'Your life will be mine !' },
+    ],
+  },
+  {
+    id: 'handsome_devil_princess',
+    title: 'A Cute Devil',
+    subtitle: 'Princess meets the Handsome Devil',
+    lines: [
+      { speaker: 'PRINCESS', text: 'He is cute.' },
+      { speaker: 'HANDSOME DEVIL', text: 'Naturally.' },
+    ],
+  },
+  {
+    id: 'handsome_devil_gelleh',
+    title: 'Cast the First Stone',
+    subtitle: 'Gelleh meets the Handsome Devil',
+    lines: [
+      { speaker: 'GELLEH', text: 'Sinner.' },
+      { speaker: 'HANDSOME DEVIL', text: 'Then cast the first stone.' },
+    ],
+  },
+  {
+    id: 'handsome_devil_mooggy',
+    title: 'Family is Complicated',
+    subtitle: 'Mooggy meets the Handsome Devil',
+    lines: [
+      { speaker: 'MOOGGY', text: 'Uncle.' },
+      { speaker: 'HANDSOME DEVIL', text: 'Family is complicated.' },
+    ],
+  },
+  {
+    id: 'antony_blemmye',
+    title: 'Gorba Borba',
+    subtitle: 'Antony Blemmye stirs',
+    lines: [
+      { speaker: 'ANTONY BLEMMYE', text: 'gorba borba' },
+    ],
+  },
+  {
+    id: 'god_phases',
+    title: 'The Wrath of GOD',
+    subtitle: 'Every phase of the final duel',
+    lines: [
+      { speaker: 'GOD', text: GOD_PHASE_DIALOGUE[1] },
+      { speaker: 'GOD', text: GOD_PHASE_DIALOGUE[2] },
+      { speaker: 'GOD', text: GOD_PHASE_DIALOGUE[3] },
+      { speaker: 'GOD', text: GOD_PHASE_DIALOGUE[4] },
+      { speaker: 'GOD', text: GOD_PHASE_DIALOGUE[5] },
+    ],
+  },
+  {
+    id: 'boss_openings',
+    title: 'Boss Taunts',
+    subtitle: 'Opening lines from every boss',
+    lines: [
+      { speaker: 'QUEEN', text: BOSS_OPENING_DIALOGUE.queen_cult },
+      { speaker: 'BULK GOLEM', text: BOSS_OPENING_DIALOGUE.bulk_golem },
+      { speaker: 'KNAVE', text: BOSS_OPENING_DIALOGUE.artificer_knave },
+      { speaker: 'BOWMAN BANE', text: BOSS_OPENING_DIALOGUE.bowman_bane },
+      { speaker: 'ANTONY BLEMMYE', text: BOSS_OPENING_DIALOGUE.antony_blemmye },
+      { speaker: 'HANDSOME DEVIL', text: BOSS_OPENING_DIALOGUE.handsome_devil },
+    ],
+  },
+];
 export const DEFAULT_KILLER_DEATH_QUOTES = [
   'Another hero falls.',
   'Your story ends here.',
@@ -868,6 +955,7 @@ Neo.SLOT_LABELS = SLOT_LABELS;
 Neo.SLOT_KEYS = SLOT_KEYS;
 Neo.GOD_PHASE_DIALOGUE = GOD_PHASE_DIALOGUE;
 Neo.BOSS_OPENING_DIALOGUE = BOSS_OPENING_DIALOGUE;
+Neo.CUTSCENE_GALLERY = CUTSCENE_GALLERY;
 Neo.DEFAULT_KILLER_DEATH_QUOTES = DEFAULT_KILLER_DEATH_QUOTES;
 Neo.KILLER_DEATH_QUOTES = KILLER_DEATH_QUOTES;
 Neo.KozSeededRngApi = KozSeededRngApi;
