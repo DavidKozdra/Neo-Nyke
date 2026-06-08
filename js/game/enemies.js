@@ -4359,6 +4359,25 @@
       return;
     }
     const slowMultiplier = Neo.getSlowMultiplier?.(entity) || 1;
+    // If the entity is already overlapping a wall (e.g. teleported there by a
+    // cutscene), axis-separated movement would block on both axes and trap it
+    // forever. Push it toward the nearest free spot instead of freezing.
+    if (Neo.isBlocked(entity.x, entity.y, entity.r)) {
+      const escape = unstickCircle(entity);
+      if (escape) {
+        // Ease toward freedom rather than snapping, but always make progress so
+        // the entity never stays wedged.
+        const ex = escape.x - entity.x;
+        const ey = escape.y - entity.y;
+        const dist = Math.hypot(ex, ey) || 1;
+        const stepDist = Math.min(dist, Math.max(220 * dt, 6));
+        entity.x += (ex / dist) * stepDist;
+        entity.y += (ey / dist) * stepDist;
+        entity.vx = 0;
+        entity.vy = 0;
+        return;
+      }
+    }
     const nextX = entity.x + entity.vx * dt * slowMultiplier;
     const nextY = entity.y + entity.vy * dt * slowMultiplier;
     if (!Neo.isBlocked(nextX, entity.y, entity.r)) entity.x = nextX;
@@ -4367,6 +4386,22 @@
     else entity.vy *= -0.4;
     entity.x = Neo.clamp(entity.x, Neo.WALL + entity.r, Neo.ROOM_W - Neo.WALL - entity.r);
     entity.y = Neo.clamp(entity.y, Neo.WALL + entity.r, Neo.ROOM_H - Neo.WALL - entity.r);
+  }
+
+  // Spiral outward from a stuck position to find the closest unblocked spot so a
+  // wedged entity can climb back into open floor over a few frames.
+  function unstickCircle(entity) {
+    const rings = [8, 16, 26, 38, 52, 70];
+    const steps = 12;
+    for (const ring of rings) {
+      for (let step = 0; step < steps; step += 1) {
+        const angle = (step / steps) * Math.PI * 2;
+        const x = Neo.clamp(entity.x + Math.cos(angle) * ring, Neo.WALL + entity.r, Neo.ROOM_W - Neo.WALL - entity.r);
+        const y = Neo.clamp(entity.y + Math.sin(angle) * ring, Neo.WALL + entity.r, Neo.ROOM_H - Neo.WALL - entity.r);
+        if (!Neo.isBlocked(x, y, entity.r)) return { x, y };
+      }
+    }
+    return null;
   }
 
   // Expose on Neo
