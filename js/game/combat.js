@@ -110,8 +110,12 @@
   }
 
   function getEnemyBleedResistance(enemy) {
-    const loopNumber = Math.max(1, Math.floor((Neo.floor - 1) / 10) + 1);
-    const floorInLoop = ((Neo.floor - 1) % 10) + 1;
+    // Use cumulative floors entered (across loops) so bleed resistance keeps pace
+    // with enemy HP/damage scaling instead of resetting every loop. See
+    // getProgressionDepth() / scaleEnemyStats() in enemies.js.
+    const progressionDepth = Neo.getProgressionDepth ? Neo.getProgressionDepth() : Math.max(1, Number(Neo.floor) || 1);
+    const loopNumber = Math.max(1, Math.floor((progressionDepth - 1) / Neo.MAX_FLOOR) + 1);
+    const floorInLoop = ((progressionDepth - 1) % Neo.MAX_FLOOR) + 1;
     let resistance = 1;
     resistance += Math.max(0, floorInLoop - 1) * Neo.BLEED_RESIST_SCALING.floorInLoop;
     resistance += Math.max(0, loopNumber - 1) * Neo.BLEED_RESIST_SCALING.loop;
@@ -160,7 +164,7 @@
     else if (weaponKey === 'thorns_bleed_blade') base = Neo.ATTACKS.melee.baseCooldown;
     else if (weaponKey === 'claw_gauntlets') base = 0.38;
     else if (weaponKey === 'lazer_glasses') base = 3.6;
-    else if (weaponKey === 'metao_fire_staff') base = 0.75;
+    else if (weaponKey === 'metao_fire_staff') base = 1.75;
     else if (weaponKey === 'magenta_degale') base = 1.5;
     else if (weaponKey === 'magenta_p90') base = 1.8;
     else if (weaponKey === 'gelleh_lightning_spear') base = 0.75;

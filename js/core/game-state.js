@@ -2196,6 +2196,9 @@ export function resumeGame() {
     Neo.lastDamageSource = '';
     Neo.lastDamageSourceKey = '';
     resetScene();
+    // Endless builds rooms via startEndlessRoom (no generateFloor) and scales off
+    // the wave counter, so pin the cumulative floor count to the (fixed) floor.
+    Neo.floorsEntered = Neo.floor;
     resetRngStreams();
     startEndlessRoom();
     Neo.updateEndlessWaveHud();
@@ -2224,6 +2227,9 @@ export function resumeGame() {
     Neo.lastDamageSource = '';
     Neo.lastDamageSourceKey = '';
     resetScene();
+    // Practice builds its room manually (no generateFloor), so set the cumulative
+    // floor count to match the practice floor directly.
+    Neo.floorsEntered = Neo.floor;
     resetRngStreams();
     Neo.rooms = [];
     const room = Neo.createRoomRecord({ x: 4, y: 4 }, { type: 'combat', doors: { n: false, s: false, e: false, w: false }, cleared: true });
@@ -2261,6 +2267,9 @@ export function resumeGame() {
     Neo.lastDamageSource = '';
     Neo.lastDamageSourceKey = '';
     resetScene();
+    // Boss rush builds its room manually (no generateFloor); match the floor count
+    // to the starting floor so enemy scaling stays consistent.
+    Neo.floorsEntered = Neo.floor;
     resetRngStreams();
     Neo.rooms = [];
     const room = Neo.createRoomRecord({ x: 4, y: 4 }, { type: 'combat', doors: { n: false, s: false, e: false, w: false }, cleared: false });
@@ -2539,6 +2548,11 @@ export function resumeGame() {
   }
 
   function resetScene() {
+    // Baseline for cumulative floor tracking. The run-start path calls
+    // generateFloor() right after resetScene(), and generateFloor bumps this to 1.
+    // Dev-jump modes (practice/boss rush) that build rooms manually instead set
+    // floorsEntered to their starting floor explicitly.
+    Neo.floorsEntered = 0;
     Neo.enemies = [];
     Neo.deadBodies = [];
     Neo.particles = [];
@@ -2633,6 +2647,12 @@ export function resumeGame() {
     Neo.lastDeathEntryId = '';
     syncSeedState();
     Neo.floor = snapshot.floor;
+    // Resume restores rooms from the snapshot (no generateFloor call), so assign
+    // the cumulative floor count directly. Old saves predate the field — estimate
+    // from loop+floor so scaling doesn't reset on resumed looped runs.
+    Neo.floorsEntered = Number.isFinite(Number(snapshot.floorsEntered))
+      ? Math.max(1, Number(snapshot.floorsEntered))
+      : Math.max(1, Neo.runLoopIndex * Neo.MAX_FLOOR + Number(snapshot.floor || 1));
     Neo.selectedDifficulty = normalizeDifficulty(snapshot.difficulty);
     Neo.selectedChallenges = normalizeChallengeSelection(snapshot.challenges);
     Neo.metaProgress.bestFloor = Math.max(Neo.metaProgress.bestFloor, Neo.floor);

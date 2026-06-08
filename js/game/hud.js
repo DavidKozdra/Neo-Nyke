@@ -769,6 +769,7 @@
       difficulty: Neo.selectedDifficulty,
       challenges: Neo.normalizeChallengeSelection(Neo.selectedChallenges),
       floor: Neo.floor,
+      floorsEntered: Neo.floorsEntered,
       rooms: Neo.rooms,
       currentRoom: { gx: Neo.currentRoom.gx, gy: Neo.currentRoom.gy },
       player: Neo.player,

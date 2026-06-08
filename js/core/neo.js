@@ -58,6 +58,12 @@ window.Neo = {
   gameState: 'menu',
   gameMode: 'normal',
   floor: 1,
+  // Cumulative count of floors the player has actually entered this run, across
+  // loops. Unlike `floor` (1..MAX_FLOOR, resets each loop) this only ever climbs,
+  // and floor-skips (jester's dice etc.) advance it by one — the skipped floors
+  // were never played, so they don't count. Drives enemy scaling. See
+  // getProgressionDepth() and scaleEnemyStats() in enemies.js.
+  floorsEntered: 1,
   // Opt-in floor "shape grammar": biases rewards toward dead-end rooms during
   // floor generation (see biasRewardPoolToDeadEnds in rooms.js). Off by default
   // so generation matches the current behaviour until explicitly enabled.

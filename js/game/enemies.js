@@ -410,7 +410,9 @@
 
     for (let index = 0; index < plan.length; index += 1) {
       const type = plan[index] || rollEnemyType();
-      const eliteChance = Neo.getDifficultyDef().eliteChance + (Neo.isChallengeActive('elite_hunt') ? 0.18 : 0);
+      const eliteChance = Neo.getDifficultyDef().eliteChance
+        + (Neo.isChallengeActive('elite_hunt') ? 0.18 : 0)
+        + getEliteLoopBonus();
       const baseElite = canSpawnEliteEnemies() && Neo.nextRandom('encounter') < Math.min(0.85, eliteChance);
       const eliteRoll = (hint && hint.elite) ? canSpawnEliteEnemies() : baseElite;
       const angle = Neo.nextRandom('encounter') * Math.PI * 2;
@@ -584,13 +586,37 @@
     return numericCap + Math.sqrt(numericValue - numericCap) * curve;
   }
 
+  // Cumulative floor depth that drives enemy scaling: the number of floors the
+  // player has actually entered this run (across loops, excluding skipped floors).
+  // Falls back to `floor` for safety if the counter is ever unset.
+  function getProgressionDepth() {
+    return Math.max(1, Number(Neo.floorsEntered) || Number(Neo.floor) || 1);
+  }
+  Neo.getProgressionDepth = getProgressionDepth;
+
+  // Looping makes elites more common: +10% (absolute) elite spawn chance per
+  // completed loop. Loop number is derived from cumulative floor depth so it
+  // matches HP/damage scaling and survives the per-loop `floor` reset. Loop 1
+  // adds nothing; loop 2 adds 0.10, loop 3 adds 0.20, etc.
+  function getEliteLoopBonus() {
+    const loopNumber = Math.max(1, Math.floor((getProgressionDepth() - 1) / Neo.MAX_FLOOR) + 1);
+    return (loopNumber - 1) * 0.10;
+  }
+  Neo.getEliteLoopBonus = getEliteLoopBonus;
+
   function scaleEnemyStats(baseStats, type) {
     const result = { ...baseStats };
     const sandbox = Neo.getActiveSandboxSettings();
     const difficulty = Neo.getDifficultyDef();
     const gameMinutes = Neo.gameElapsedTime / 60;
-    const loopNumber = Math.max(1, Math.floor((Neo.floor - 1) / 10) + 1);
-    const floorInLoop = ((Neo.floor - 1) % 10) + 1;
+    // Scale off the cumulative number of floors the player has entered this run
+    // (floorsEntered), not the raw `floor` — `floor` resets to 1 every loop, which
+    // would make enemies weak again after each loop. floorsEntered keeps climbing
+    // and ignores skipped floors. Split it back into a within-loop floor index and
+    // a loop number so the existing per-floor / per-loop multipliers still apply.
+    const progressionDepth = getProgressionDepth();
+    const loopNumber = Math.max(1, Math.floor((progressionDepth - 1) / Neo.MAX_FLOOR) + 1);
+    const floorInLoop = ((progressionDepth - 1) % Neo.MAX_FLOOR) + 1;
     const floorMultiplier = 1 + (floorInLoop - 1) * Neo.ENEMY_SCALING.floor;
     const loopMultiplier = 1 + (loopNumber - 1) * Neo.ENEMY_SCALING.loop;
     const timerMultiplier = 1 + gameMinutes * Neo.ENEMY_SCALING.minute;

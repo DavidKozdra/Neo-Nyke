@@ -13,6 +13,10 @@
   }
 
   function generateFloor() {
+    // Every floor the player enters funnels through here exactly once (normal
+    // ladder, secret warp, floor-skip, and the loop reset all call generateFloor).
+    // Run starts reset floorsEntered in resetScene() so the first floor lands on 1.
+    Neo.floorsEntered = Math.max(1, Number(Neo.floorsEntered || 0) + 1);
     Neo.syncSeedState();
     Neo.resetRngStreams();
     Neo.rooms = [];
