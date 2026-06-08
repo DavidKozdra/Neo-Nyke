@@ -170,7 +170,9 @@ export const ENEMY_SCALING = {
 };
 export const BLEED_RESIST_SCALING = {
   floorInLoop: 0.16,
-  loop: 0.65,
+  // Raised so infinitely-stacking DoT builds fall off deeper into a run instead
+  // of trivializing late loops — bleed resistance now keeps pace with HP scaling.
+  loop: 0.95,
   elite: 0.45,
   miniBoss: 0.4,
   boss: 1.1,

@@ -58,24 +58,45 @@
     return picked;
   }
 
+  // Current loop number (1-based) derived from cumulative floor depth, matching
+  // the enemy stat scaling in enemies.js. Loop 1 = first time through the floors.
+  function getCurrentLoopNumber() {
+    const depth = Neo.getProgressionDepth ? Neo.getProgressionDepth() : Math.max(1, Number(Neo.floor) || 1);
+    return Math.max(1, Math.floor((depth - 1) / Neo.MAX_FLOOR) + 1);
+  }
+
+  // Damage taken multiplier for an enemy. Two stacking effects:
+  //  - Elites take 5% less damage from all sources.
+  //  - Every enemy takes more chip off as loops climb: starts at 10% reduction
+  //    on loop 2, +10% per loop, capped at 30% (reached loop 4), so raw player
+  //    damage matters more deep in a run instead of one-shotting everything.
+  // Applied on top of defenseMultiplier so it stacks with depth scaling.
+  function getEliteDamageMultiplier(enemy) {
+    const eliteFactor = enemy?.elite ? 0.95 : 1;
+    const loopReduction = Math.min(0.30, (getCurrentLoopNumber() - 1) * 0.10);
+    return eliteFactor * (1 - loopReduction);
+  }
+
   function scaleDamageAgainstEnemy(enemy, damage, options = {}, cachedStats = null) {
     const stats = cachedStats || options.stats || Neo.getItemStats();
     const applyBleedBonus = options.applyBleedBonus !== false;
     const defenseMultiplier = Math.max(1, Number(enemy?.defenseMultiplier || 1));
+    const eliteMultiplier = getEliteDamageMultiplier(enemy);
     const characterMultiplier = Neo.getCharacterDef().damageMultiplier || 1;
     const powered = (damage + (Neo.player?.attackPower || 0))
       * characterMultiplier
       * (stats.levelEdgeDamageMultiplier || 1)
       * (Neo.isChallengeActive('glass_cannon') ? 1.25 : 1);
     if (applyBleedBonus && Neo.getStatusStacks(enemy, 'bleed') > 0 && stats.bleedDamageMultiplier > 1) {
-      return Math.max(1, Math.round((powered * stats.bleedDamageMultiplier) / defenseMultiplier));
+      return Math.max(1, Math.round((powered * stats.bleedDamageMultiplier * eliteMultiplier) / defenseMultiplier));
     }
-    return Math.max(1, Math.round(powered / defenseMultiplier));
+    return Math.max(1, Math.round((powered * eliteMultiplier) / defenseMultiplier));
   }
 
   function scaleRawDamageAgainstEnemy(enemy, damage) {
     const defenseMultiplier = Math.max(1, Number(enemy?.defenseMultiplier || 1));
-    return Math.max(1, Math.round(Number(damage || 0) / defenseMultiplier));
+    const eliteMultiplier = getEliteDamageMultiplier(enemy);
+    return Math.max(1, Math.round((Number(damage || 0) * eliteMultiplier) / defenseMultiplier));
   }
 
   function getBloodMultiplier() {

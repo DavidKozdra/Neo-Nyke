@@ -430,7 +430,15 @@
       const safeSpawn = findSafeEnemySpawnPoint(preferredX, preferredY, 15)
         || findSafeEnemySpawnPoint(Neo.ROOM_W / 2, Neo.ROOM_H / 2, 15);
       if (!safeSpawn) continue;
-      spawnEnemy(type, safeSpawn.x, safeSpawn.y, eliteRoll);
+      // Deep-loop danger: a regular wave enemy can spawn as a random boss instead
+      // (loop 5+, see rollWaveBossUpgrade). A boss-upgraded spawn is never also an
+      // elite — boss stat code handles its scaling on its own.
+      const bossUpgrade = rollWaveBossUpgrade(type);
+      if (bossUpgrade) {
+        spawnEnemy(bossUpgrade, safeSpawn.x, safeSpawn.y, false);
+      } else {
+        spawnEnemy(type, safeSpawn.x, safeSpawn.y, eliteRoll);
+      }
     }
     spawnMiniBoss(roomType);
   }
@@ -487,7 +495,13 @@
     // Endless mode pins floor at 1, so the floor-based gate never opens. Gate on
     // the wave counter instead: elites start appearing once a few waves are done.
     if (Neo.gameMode === 'endless') return Number(Neo.endlessWave || 0) >= 2;
-    return Neo.floor >= Neo.getDifficultyDef().eliteFloor && Neo.floor <= 10;
+    // Elites normally only show up in the last floors of a loop (>= eliteFloor).
+    // Deeper loops open that gate earlier: each completed loop lowers the elite
+    // floor by 2 (min 1), so loop 2+ keeps elite pressure across the whole loop
+    // instead of giving the player elite-free breather floors at the start.
+    const loopNumber = Math.max(1, Math.floor((getProgressionDepth() - 1) / Neo.MAX_FLOOR) + 1);
+    const eliteFloor = Math.max(1, Neo.getDifficultyDef().eliteFloor - (loopNumber - 1) * 2);
+    return Neo.floor >= eliteFloor && Neo.floor <= Neo.MAX_FLOOR;
   }
 
   function rollEliteInventory() {
@@ -516,7 +530,12 @@
   function rollEliteTypes() {
     const pool = ['burning', 'bleeding', 'giant', 'blessed', 'lasered'];
     const shuffled = Neo.shuffle(pool, 'encounter');
-    const count = Neo.nextRandom('encounter') < 0.18 ? 3 : Neo.nextRandom('encounter') < 0.58 ? 2 : 1;
+    let count = Neo.nextRandom('encounter') < 0.18 ? 3 : Neo.nextRandom('encounter') < 0.58 ? 2 : 1;
+    // Deeper loops stack more affixes onto elites: +1 to the rolled affix count
+    // per completed loop, so late-loop elites can wear the full set of modifiers
+    // at once. Clamped to the pool size.
+    const loopNumber = Math.max(1, Math.floor((getProgressionDepth() - 1) / Neo.MAX_FLOOR) + 1);
+    count = Math.min(pool.length, count + (loopNumber - 1));
     return shuffled.slice(0, count);
   }
 
@@ -603,6 +622,23 @@
     return (loopNumber - 1) * 0.10;
   }
   Neo.getEliteLoopBonus = getEliteLoopBonus;
+
+  // Roamable bosses a regular wave enemy can be upgraded into deep in a run.
+  // Excludes 'god' (the final boss) so it never appears as a random spawn.
+  const RANDOM_BOSS_POOL = ['queen_cult', 'bulk_golem', 'artificer_knave', 'bowman_bane', 'antony_blemmye', 'handsome_devil'];
+
+  // Past loop 4, regular wave enemies can spawn as a random boss instead. Chance
+  // starts at 40% on loop 5 and climbs +10% per loop, capped at 60%. Returns the
+  // chosen boss type, or null to leave the enemy as its rolled type. Bosses, the
+  // god type, and already-boss requests are never upgraded.
+  function rollWaveBossUpgrade(type) {
+    if (isBossType(type) || type === 'mooggy') return null;
+    const loopNumber = Math.max(1, Math.floor((getProgressionDepth() - 1) / Neo.MAX_FLOOR) + 1);
+    if (loopNumber < 5) return null;
+    const chance = Math.min(0.60, 0.40 + (loopNumber - 5) * 0.10);
+    if (Neo.nextRandom('encounter') >= chance) return null;
+    return RANDOM_BOSS_POOL[Neo.irand(0, RANDOM_BOSS_POOL.length - 1, 'encounter')];
+  }
 
   function scaleEnemyStats(baseStats, type) {
     const result = { ...baseStats };
@@ -937,13 +973,21 @@
 
     const difficultyTuning = Neo.getEnemyDifficultyTuning();
     if (!isBossType(type) && Neo.floor >= 4) {
+      // Deeper loops shield more enemies, with bigger barriers: +12% (absolute)
+      // barrier chance and +20% barrier size per completed loop. This rewards
+      // burst damage over chip/DoT late in a run since a held barrier blocks the
+      // first slice of every hit (see hitEnemy in combat.js).
+      const loopNumber = Math.max(1, Math.floor((getProgressionDepth() - 1) / Neo.MAX_FLOOR) + 1);
+      const loopChanceBonus = (loopNumber - 1) * 0.12;
+      const loopSizeMult = 1 + (loopNumber - 1) * 0.20;
       const barrierChance = type === 'shield_unit'
         ? 1
         : (type === 'healer' || type === 'summoner' || type === 'laser' || type === 'sniper' || type === 'machine_gunner')
-          ? 0.12 * difficultyTuning.supportPower
-          : 0.05 * Math.max(1, difficultyTuning.supportPower - 0.02);
+          ? 0.12 * difficultyTuning.supportPower + loopChanceBonus
+          : 0.05 * Math.max(1, difficultyTuning.supportPower - 0.02) + loopChanceBonus;
       if (Neo.nextRandom('encounter') < barrierChance) {
-        base.barrier = Math.round(base.max * (type === 'shield_unit' ? 0.24 : 0.12 * difficultyTuning.supportPower));
+        const baseFraction = type === 'shield_unit' ? 0.24 : 0.12 * difficultyTuning.supportPower;
+        base.barrier = Math.round(base.max * baseFraction * loopSizeMult);
       }
     }
 
