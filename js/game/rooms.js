@@ -216,7 +216,7 @@
 
     Object.entries(room.secretPassages || {}).forEach(([dir, passage]) => {
       const targetRoom = findRoomAt(passage.targetGx, passage.targetGy);
-      const wall = createSecretWall(dir, targetRoom);
+      const wall = createSecretWall(dir, targetRoom, room);
       if (wall) room.destructibles.push(wall);
     });
 
@@ -728,7 +728,7 @@
     }
   }
 
-  function createSecretWall(direction, targetRoom) {
+  function createSecretWall(direction, targetRoom, room = null) {
     if (!targetRoom) return null;
     const position = {
       n: { x: Neo.ROOM_W / 2, y: 48 },
@@ -737,6 +737,13 @@
       w: { x: 48, y: Neo.ROOM_H / 2 },
     }[direction];
     if (!position) return null;
+    // Most secret walls read as a crate (drawCoverWall) the player breaks open.
+    // ~20% are "disguised": they look like ordinary wall and aren't solid — the
+    // passage just opens when the player walks into the spot (see updateWorldProps).
+    const disguiseRoll = room
+      ? Neo.createRoomRandom(room, `secret-wall:disguise:${direction}`)()
+      : Neo.nextRandom('world');
+    const disguised = disguiseRoll < 0.2;
     return {
       kind: 'secret_wall',
       x: position.x,
@@ -747,6 +754,8 @@
       hp: 2,
       maxHp: 2,
       broken: false,
+      disguised,
+      secretRevealed: false,
       secretDir: direction,
       targetGx: targetRoom.gx,
       targetGy: targetRoom.gy,
@@ -754,25 +763,39 @@
   }
 
   function createSecretVendorOffer(kind, x, y, room = Neo.currentRoom, index = 0) {
+    // Every offer carries an explicit give -> get descriptor so the vendor box
+    // can spell out the trade (pay X, receive Y) instead of a vague one-word label.
     if (kind === 'relic') {
       const vendorRandom = Neo.createRoomRandom(room, `secret-vendor:relic:${index}`);
-      return { x, y, type: 'secretVendor', offerKind: 'relic', cost: 1, label: 'Relic', rewardKey: Neo.rollItemDrop({ elite: true, random: vendorRandom }) };
+      return {
+        x, y, type: 'secretVendor', offerKind: 'relic', cost: 1, label: 'Relic',
+        rewardKey: Neo.rollItemDrop({ elite: true, random: vendorRandom }),
+        getLabel: 'Elite Item',
+      };
     }
     if (kind === 'vitality') {
-      return { x, y, type: 'secretVendor', offerKind: 'vitality', cost: 1, label: 'Vital' };
+      return {
+        x, y, type: 'secretVendor', offerKind: 'vitality', cost: 1, label: 'Vital',
+        getLabel: '+20 Max HP',
+      };
     }
     if (kind === 'xp') {
+      const xpValue = Neo.getSecretXpOfferAmount();
       return {
         x,
         y,
         type: 'secretVendor',
         offerKind: 'xp',
         cost: Neo.getSecretXpOfferCost(),
-        xpValue: Neo.getSecretXpOfferAmount(),
+        xpValue,
         label: 'XP',
+        getLabel: `+${xpValue} XP`,
       };
     }
-    return { x, y, type: 'secretVendor', offerKind: 'wealth', cost: 2, label: 'Wealth' };
+    return {
+      x, y, type: 'secretVendor', offerKind: 'wealth', cost: 2, label: 'Wealth',
+      getLabel: `+${90 + Neo.floor * 12} Coins`,
+    };
   }
 
   function assignSecretRoom(roomMap) {

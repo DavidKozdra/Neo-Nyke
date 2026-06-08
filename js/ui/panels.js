@@ -2456,6 +2456,11 @@ export function handleShopBuyClick(event) {
       const tradeOffer = Neo.ensureShopTradeOffer?.(Neo.currentRoom) || Neo.currentRoom?.shopTradeOffer;
       const state = getShopTradeState(tradeOffer, false);
       if (!tradeOffer || tradeOffer.bought || !state.canAfford) return;
+      // Trade must be atomic: confirm the reward relic can actually be granted
+      // before consuming the cost relics, otherwise a missing/unresolvable target
+      // would silently take the player's items and give nothing back.
+      const rewardItem = Neo.itemRegistry?.get?.(tradeOffer.key) || Neo.ITEM_DEFS?.[tradeOffer.key];
+      if (!rewardItem) return;
       const costKeys = Array.isArray(tradeOffer.costKeys) ? tradeOffer.costKeys.slice(0, 2) : [];
       costKeys.forEach(key => {
         Neo.player.items[key] = Math.max(0, Number(Neo.player.items[key] || 0) - 1);

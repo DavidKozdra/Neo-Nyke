@@ -1072,8 +1072,19 @@ export function resumeGame() {
     return Number(getDifficultyDef(difficultyKey)?.shopPriceMultiplier || 1) * challengeMultiplier;
   }
 
+  // Scholar Seal discount: the closer you are to leveling up, the cheaper shops
+  // get. At 90% of the way to a level, prices are 9% cheaper (xpProgress × 10%).
+  // Requires owning at least one Scholar Seal; magnitude does not scale per stack.
+  function getScholarSealShopDiscount() {
+    if (!Neo.player || Number(Neo.getItemCount?.('scholar_seal') || 0) <= 0) return 0;
+    const xpToNext = Number(Neo.player.xpToNext || 0);
+    const xpProgress = xpToNext > 0 ? Neo.clamp(Number(Neo.player.xp || 0) / xpToNext, 0, 1) : 0;
+    return xpProgress * 0.10;
+  }
+
   function scaleShopPrice(baseCost, difficultyKey = Neo.selectedDifficulty) {
-    return Math.max(1, Math.round(baseCost * getShopPriceMultiplier(difficultyKey)));
+    const scholarDiscount = 1 - getScholarSealShopDiscount();
+    return Math.max(1, Math.round(baseCost * getShopPriceMultiplier(difficultyKey) * scholarDiscount));
   }
 
   function getShopRarityPriceMultiplier(rarity = 'knight') {

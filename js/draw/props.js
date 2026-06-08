@@ -591,7 +591,15 @@
       } else if (prop.kind === 'cover_wall') {
         Neo.drawCoverWall(prop);
       } else if (prop.kind === 'secret_wall') {
-        Neo.drawCoverWall(prop);
+        if (prop.disguised) {
+          // Disguised secret walls masquerade as ordinary wall until walked into.
+          Neo.drawEnvironmentTile('wall_block', -26, -26, 52, 52);
+          Neo.ctx.strokeStyle = theme.wallEdge;
+          Neo.ctx.lineWidth = 1.5;
+          Neo.ctx.strokeRect(-25, -25, 50, 50);
+        } else {
+          Neo.drawCoverWall(prop);
+        }
       }
       Neo.ctx.restore();
     });
@@ -942,33 +950,58 @@
       } else if (pickup.type === 'secretVendor') {
         const cost = Number(pickup.cost || 0);
         const usesCoins = pickup.offerKind === 'xp';
+        // Derive the reward text for runs saved before getLabel existed.
+        const getLabel = pickup.getLabel || ({
+          relic: 'Elite Item',
+          vitality: '+20 Max HP',
+          xp: `+${Math.max(1, Number(pickup.xpValue || 0))} XP`,
+          wealth: 'Coins',
+        }[pickup.offerKind]) || pickup.label || 'Offer';
         const canAfford = usesCoins
           ? Number(Neo.player?.coins || 0) >= cost
           : Number(Neo.metaProgress.loopCrystals || 0) >= cost;
         const frameColor = canAfford ? '#aee7ff' : '#ffb1b1';
         const currencyColor = usesCoins ? '#ffd54a' : '#83f3ff';
         const costColor = canAfford ? currencyColor : '#ffb1b1';
-        const currencyIconSize = 12;
+        const currencyIconSize = 11;
+        // Taller box laid out as an explicit trade: what you GET on top, the
+        // currency you PAY on the bottom, separated by a "for" divider.
+        const boxW = 92;
+        const boxH = 50;
+        const left = -boxW / 2;
+        const top = -boxH / 2;
         Neo.ctx.fillStyle = 'rgba(7,17,22,0.92)';
         Neo.ctx.strokeStyle = frameColor;
         Neo.ctx.lineWidth = 2;
         Neo.ctx.shadowColor = frameColor;
         Neo.ctx.shadowBlur = 16;
-        Neo.ctx.fillRect(-22, -18, 44, 36);
-        Neo.ctx.strokeRect(-22, -18, 44, 36);
+        Neo.ctx.fillRect(left, top, boxW, boxH);
+        Neo.ctx.strokeRect(left, top, boxW, boxH);
         Neo.ctx.shadowBlur = 0;
+        // GET line: the reward you receive.
         Neo.ctx.fillStyle = frameColor;
-        Neo.ctx.font = 'bold 11px system-ui';
+        Neo.ctx.font = 'bold 12px system-ui';
         Neo.ctx.textAlign = 'center';
-        Neo.ctx.fillText(String(pickup.label || 'Offer'), 0, -2);
-        Neo.ctx.font = 'bold 11px system-ui';
+        Neo.ctx.fillText(String(getLabel), 0, top + 16);
+        // Divider word so the give/get relationship reads as a trade.
+        Neo.ctx.fillStyle = 'rgba(174,231,255,0.5)';
+        Neo.ctx.font = '9px system-ui';
+        Neo.ctx.fillText('— for —', 0, top + 28);
+        // PAY line: cost value + currency icon, centered as a unit.
+        const costText = String(cost);
+        Neo.ctx.font = 'bold 12px system-ui';
+        const costTextW = Neo.ctx.measureText(costText).width;
+        const payGroupW = costTextW + 4 + currencyIconSize;
+        const payX = -payGroupW / 2;
+        const payY = top + 36;
         Neo.ctx.fillStyle = costColor;
         Neo.ctx.shadowColor = currencyColor;
         Neo.ctx.shadowBlur = 6;
-        Neo.ctx.textAlign = 'right';
-        Neo.ctx.fillText(String(cost), 1, 13);
-        drawSecretVendorCurrencyIcon(5, 1, currencyIconSize, usesCoins, costColor);
+        Neo.ctx.textAlign = 'left';
+        Neo.ctx.fillText(costText, payX, payY + 9);
+        drawSecretVendorCurrencyIcon(payX + costTextW + 4, payY, currencyIconSize, usesCoins, costColor);
         Neo.ctx.shadowBlur = 0;
+        Neo.ctx.textAlign = 'center';
       } else if (pickup.type === 'secret_boss_chest') {
         const t = Date.now() * 0.003;
         const glow = '#c9aaff';

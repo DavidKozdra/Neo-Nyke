@@ -1009,9 +1009,6 @@ export function createUIController(view) {
               <div class="info-char-stat__bar"><div class="info-char-stat__fill" style="width:${s.pct}%;background:${s.color}"></div></div>
             </div>`
           ).join('');
-          const lockNote = c.unlock === 'godslain'
-            ? '<div style="font-size:11px;color:rgba(255,110,80,0.75);margin-top:6px">Unlock: Slay GOD</div>'
-            : '';
           return `<div class="info-char-card">
             <canvas class="info-char-card__sprite" data-info-char="${c.key}" width="64" height="64"></canvas>
             <div class="info-char-card__body">

@@ -386,10 +386,14 @@ export function getItemStats() {
       displayedCritChance: critChance + weaponCritBonus,
       drainChance: toothOfThorn * 0.028,
       bleedResistance: Neo.clamp(toughSkin * 0.25, 0, 0.8),
+      // Tough Skin also makes bleed wear off faster: each stack speeds the bleed
+      // timer decay by 20% (so bleeds tick fewer times), capped at 3x faster.
+      bleedDurationDecayMultiplier: Neo.clamp(1 + toughSkin * 0.2, 1, 3),
       weaponFatigueChance: weaponFatigue * 0.05,
+      weaponFatigueFreezeChance: weaponFatigue * 0.02,
       genericHealthItemHealRatio: genericHealthItem * 0.05,
       snakeKnifePoisonChance: snakeKnife * 0.02,
-      confuseRayStunChance: confuseRay * 0.01,
+      confuseRayStunChance: Neo.clamp(confuseRay * 0.05, 0, 0.45),
       overclockedWatchChance: overclockedWatch * 0.02,
       overstimulateStunChance: overstimulate * 0.2,
       graveZoneChance: graveZone * 0.2,
@@ -418,7 +422,9 @@ export function getItemStats() {
       beamChainDamageMultiplier: dragonOrb > 0 ? 0.6 + (dragonOrb - 1) * 0.15 : 0,
       projectileBounces: ricocete,
       projectilePierceBonus: tagCounts.projectile >= 9 ? 2 : tagCounts.projectile >= 4 ? 1 : 0,
-      projectileHomingStrength: enemyMagnet * 0.05,
+      // 15% per stack, plus a quadratic bonus of 2% × stacks per stack
+      // (so n stacks = 0.15n + 0.02n²): homing ramps up the more you invest.
+      projectileHomingStrength: enemyMagnet * 0.15 + enemyMagnet * enemyMagnet * 0.02,
       projectileSpeedMultiplier: 1 + mooggyZoomies * 0.2,
       healingMultiplier: 1 + drinkMaster * 0.2,
       overhealBarrierRatio: healingTagStacks >= 3 ? 0.35 : 0,
@@ -1340,6 +1346,18 @@ export function refreshFloorChargeStates() {
   Neo.grantCritCharmBuff = grantCritCharmBuff;
   Neo.triggerKeenEyeBuff = triggerKeenEyeBuff;
   Neo.triggerChronoSpringBuff = triggerChronoSpringBuff;
+  // Ricocete bounce roll: 1 guaranteed bounce if any stack is owned, then a 50%
+  // chance per stack to add another. Rolled per-projectile so shots vary.
+  function rollRicoceteBounces(stacks) {
+    const n = Math.max(0, Math.floor(Number(stacks || 0)));
+    if (n <= 0) return 0;
+    let bounces = 1;
+    for (let i = 0; i < n; i += 1) {
+      if (Neo.nextRandom('encounter') < 0.5) bounces += 1;
+    }
+    return bounces;
+  }
+  Neo.rollRicoceteBounces = rollRicoceteBounces;
   Neo.getItemStats = getItemStats;
   Neo.getAttackSpeedValue = getAttackSpeedValue;
   Neo.applyPlayerHealing = applyPlayerHealing;

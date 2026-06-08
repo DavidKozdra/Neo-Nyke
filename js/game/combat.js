@@ -471,12 +471,6 @@
       hitEnemy(enemy, damage, angle, meleeKnockback, '#0ff');
       if (slashBleedChance > 0 && Neo.rng() < slashBleedChance) applyBleed(enemy, 1, 5);
       if (itemStats.bleedChance > 0 && Neo.rng() < itemStats.bleedChance) applyBleed(enemy, 1, 5);
-      if (itemStats.weaponFatigueChance > 0 && Neo.rng() < itemStats.weaponFatigueChance) {
-        Neo.applyStatus(enemy, 'slow', 1, 4);
-      }
-      if (itemStats.snakeKnifePoisonChance > 0 && Neo.rng() < itemStats.snakeKnifePoisonChance) {
-        applyPoison(enemy, 1, 4);
-      }
     });
     forEachDestructibleNearPlayer(meleeRange + 32, prop => {
       if (prop.broken || prop.hidden) return;
@@ -824,21 +818,24 @@
         Neo.spawnProjectile({
           x: Neo.player.x,
           y: Neo.player.y,
-          vx: Math.cos(angle) * 260,
-          vy: Math.sin(angle) * 260,
+          // 3x faster than the old missiles (780 vs 260 launch, 1260 vs 420 homing).
+          vx: Math.cos(angle) * 780,
+          vy: Math.sin(angle) * 780,
           r: 6,
           life: 2.4,
           enemy: false,
           kind: 'homing_missile',
-          damage: 18,
+          damage: 20, // +10% over the old 18.
           knockback: 140,
           color: '#ffe06f',
           homing: true,
           homingTarget: 'enemy',
           homingRadius: 960,
-          homingSpeed: 420,
+          homingSpeed: 1260,
           homingAccel: 3.8,
           homingTurnRate: 3.4,
+          // 5% chance to ignite on hit.
+          hitOptions: { fireChance: 0.05, fireStacks: 1, fireDuration: 2.8 },
         });
       }
       Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 22, life: 0.5, ring: 18, c: '#ffe06f' });
@@ -983,7 +980,6 @@
       if (diff > arc) return;
       hitEnemy(enemy, damage, angle, knockback, '#ff6090');
       if (Neo.rng() < bleedChance) applyBleed(enemy, charge >= 0.99 ? 2 : 1, 5);
-      if (itemStats.snakeKnifePoisonChance > 0 && Neo.rng() < itemStats.snakeKnifePoisonChance) applyPoison(enemy, 1, 4);
     });
     forEachDestructibleNearPlayer(range + 8, prop => {
       if (prop.broken || prop.hidden) return;
@@ -1037,7 +1033,7 @@
         damage,
         knockback: 80,
         color: '#c0d8ff',
-        bouncesRemaining: 3 + Math.floor(itemStats.projectileBounces || 0),
+        bouncesRemaining: 3 + Neo.rollRicoceteBounces(itemStats.projectileBounces),
         hitOptions: { bleedChance: 0.08 },
       });
     }
@@ -1899,6 +1895,22 @@
       Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 18, life: 0.5, text: 'STUN', c: '#ffe66d' });
       Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.28, ring: enemy.r + 12, c: '#ffe66d' });
     }
+    // Snake Knife poisons on ANY hit (melee or ranged), so it lives on the shared
+    // hit path rather than inside individual melee moves.
+    if (stats.snakeKnifePoisonChance > 0 && Neo.nextRandom('encounter') < stats.snakeKnifePoisonChance) {
+      applyPoison(enemy, 1, 4);
+    }
+    // Weapon Fatigue chills on ANY hit too: a slow stack, plus a smaller chance to
+    // briefly freeze (hard stun) the target solid.
+    if (stats.weaponFatigueChance > 0 && Neo.nextRandom('encounter') < stats.weaponFatigueChance) {
+      Neo.applyStatus(enemy, 'slow', 1, 4);
+    }
+    if (stats.weaponFatigueFreezeChance > 0 && Neo.nextRandom('encounter') < stats.weaponFatigueFreezeChance) {
+      enemy.stun = Math.max(Number(enemy.stun || 0), 0.6);
+      Neo.applyStatus(enemy, 'slow', 1, 4);
+      Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 18, life: 0.5, text: 'FROZEN', c: '#9fe8ff' });
+      Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.3, ring: enemy.r + 12, c: '#9fe8ff' });
+    }
     if (stats.overstimulateStunChance > 0 && (Neo.getActiveStatusCount?.(enemy) || 0) >= 2 && Neo.nextRandom('encounter') < stats.overstimulateStunChance) {
       enemy.stun = Math.max(Number(enemy.stun || 0), 0.7);
       Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 18, life: 0.5, text: 'STIMULATED', c: '#ffd27d' });
@@ -2354,6 +2366,17 @@
       Neo.spawnHealPopup(enemy.x, enemy.y - 54, enemy.hp, { color: '#79f7bf' });
       return;
     }
+    // The Cult Queen cheats death once: instead of dying she channels a final
+    // desperation AOE (see updateCultQueenBoss), then detonates and dies for real.
+    if (enemy.type === 'queen_cult' && !enemy.queenFinisherDone && !enemy.queenFinisherActive) {
+      enemy.queenFinisherActive = true;
+      enemy.queenFinisherTimer = Neo.QUEEN_FINISHER_WINDUP;
+      enemy.hp = 1;
+      enemy.inv = Math.max(Number(enemy.inv || 0), Neo.QUEEN_FINISHER_WINDUP + 0.2);
+      Neo.sayOverEntity?.(enemy, 'Then burn with me!', { holdTime: 1.6 });
+      Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 12, life: 0.6, text: 'CHARGING', c: '#ff6ad5' });
+      return;
+    }
     if (enemy.dead) return;
     enemy.dead = true;
 
@@ -2386,17 +2409,68 @@
     }
     if (itemStats.graveZoneChance > 0 && Neo.nextRandom('encounter') < itemStats.graveZoneChance) {
       const moveSpeed = itemStats.moveSpeedMultiplier || 1;
+      const graveX = enemy.x;
+      const graveY = enemy.y;
+      const graveRadius = 118;
       Neo.hazards.push({
         kind: 'grave_zone',
-        x: enemy.x,
-        y: enemy.y,
-        r: 118,
+        x: graveX,
+        y: graveY,
+        r: graveRadius,
         ttl: 2,
         pushPower: 340 * moveSpeed,
         moveSpeed,
         source: 'grave_zone',
       });
-      Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.45, ring: 118, c: '#c9b3ff' });
+      Neo.spawnParticle({ x: graveX, y: graveY, life: 0.45, ring: graveRadius, c: '#c9b3ff' });
+
+      // Small burst of damage to everything caught in the field, with 20% of the
+      // damage dealt drained back to the player as healing.
+      const graveDamage = Math.max(1, Math.round(getPlayerBaseDamage() * 0.4));
+      let graveDamageDealt = 0;
+      for (let gi = Neo.enemies.length - 1; gi >= 0; gi -= 1) {
+        const other = Neo.enemies[gi];
+        if (!other || other === enemy) continue;
+        if (!isWithinRadiusSq(graveX, graveY, other, graveRadius, other.r)) continue;
+        const before = Number(other.hp || 0);
+        const angle = Math.atan2(other.y - graveY, other.x - graveX);
+        hitEnemy(other, graveDamage, angle, 120, '#c9b3ff');
+        graveDamageDealt += Math.max(0, before - Number(other.hp || 0));
+        // 2% chance to briefly freeze (hard stun) anything caught in the grave.
+        if (Neo.nextRandom('encounter') < 0.02) {
+          other.stun = Math.max(Number(other.stun || 0), 0.6);
+          Neo.applyStatus(other, 'slow', 1, 4);
+          Neo.spawnParticle({ x: other.x, y: other.y - other.r - 18, life: 0.5, text: 'FROZEN', c: '#9fe8ff' });
+        }
+      }
+      if (graveDamageDealt > 0 && Neo.player && Neo.player.hp < Neo.player.maxHp) {
+        const heal = Neo.applyPlayerHealing(Neo.scalePlayerHealing(graveDamageDealt * 0.2, 1));
+        if (heal > 0) {
+          Neo.spawnHealPopup(Neo.player.x + Neo.rand(-6, 6), Neo.player.y - 22, heal, { color: '#c9b3ff', size: 13 });
+        }
+      }
+
+      // Crimson-Smash-style rock debris hurled outward from the grave.
+      const graveRockCount = 6;
+      const graveRockDamage = Math.max(1, Math.round(getPlayerBaseDamage() * 0.3));
+      for (let ri = 0; ri < graveRockCount; ri += 1) {
+        const rockAngle = (ri / graveRockCount) * Math.PI * 2 + Neo.nextRandom('fx') * 0.3;
+        const rockSpeed = 420 + Neo.nextRandom('fx') * 120;
+        Neo.spawnProjectile({
+          x: graveX + Math.cos(rockAngle) * (graveRadius * 0.3),
+          y: graveY + Math.sin(rockAngle) * (graveRadius * 0.3),
+          vx: Math.cos(rockAngle) * rockSpeed,
+          vy: Math.sin(rockAngle) * rockSpeed,
+          r: 7,
+          life: 0.6,
+          enemy: false,
+          kind: 'rock',
+          damage: graveRockDamage,
+          knockback: 180,
+          color: '#c9b3ff',
+          pierceCount: 1,
+        });
+      }
     }
 
     const bloodMult = getBloodMultiplier();

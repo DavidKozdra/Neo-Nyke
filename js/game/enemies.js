@@ -1126,7 +1126,8 @@
       scarfBleedsOnHit: count('hemes_scarf'),
       snakeKnifePoisonChance: count('snake_knife') * 0.02,
       weaponFatigueChance: count('weapon_fatigue') * 0.05,
-      confuseRayStunChance: count('confuse_ray') * 0.01,
+      weaponFatigueFreezeChance: count('weapon_fatigue') * 0.02,
+      confuseRayStunChance: Neo.clamp(count('confuse_ray') * 0.05, 0, 0.45),
       overstimulateStunChance: count('overstimulate') * 0.2,
       homingMissileChance: count('homing_missile') * 0.15,
       critChance,
@@ -1141,7 +1142,7 @@
       aoeDamageMultiplier: Number(characterDef.aoeDamageMultiplier || 1),
       beamDamageMultiplier: 1 + count('dragon_orb') * 0.35,
       projectileBounces: count('ricocete'),
-      projectileHomingStrength: count('enemy_magnet') * 0.05,
+      projectileHomingStrength: count('enemy_magnet') * 0.15 + count('enemy_magnet') ** 2 * 0.02,
       projectileSpeedMultiplier: 1 + count('mooggy_zoomies') * 0.2,
       healingMultiplier: 1 + count('drink_master') * 0.2,
       itemDropChanceBonus: Math.min(0.3, count('rich_mans_luck') * 0.05),
@@ -2146,16 +2147,60 @@
     }
   }
 
+  // Telegraph + detonation radius for the Queen's dying desperation blast.
+  // Exposed on Neo so onEnemyDie (combat.js) can trigger the same windup.
+  const QUEEN_FINISHER_WINDUP = 1.6;
+  const QUEEN_FINISHER_RADIUS = 260;
+  Neo.QUEEN_FINISHER_WINDUP = QUEEN_FINISHER_WINDUP;
+  Neo.QUEEN_FINISHER_RADIUS = QUEEN_FINISHER_RADIUS;
+
   function updateCultQueenBoss(enemy, dt) {
     const tuning = Neo.getEnemyDifficultyTuning();
     const dx = Neo.player.x - enemy.x;
     const dy = Neo.player.y - enemy.y;
     const distance = Math.hypot(dx, dy) || 1;
 
+    // Death-defying finisher. Triggered two ways: proactively once she drops
+    // below 5% HP, or as a catch-all from onEnemyDie if a single blow would have
+    // killed her outright. She holds in place, immune, charging a telegraphed
+    // AOE, then detonates for 2.5x her attack power and dies with the blast.
+    if (!enemy.queenFinisherActive && !enemy.queenFinisherDone && enemy.hp <= enemy.max * 0.05) {
+      enemy.queenFinisherActive = true;
+      enemy.queenFinisherTimer = QUEEN_FINISHER_WINDUP;
+      enemy.hp = Math.max(1, enemy.hp);
+      sayOverEntity(enemy, 'Then burn with me!', { holdTime: 1.6 });
+      Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 12, life: 0.6, text: 'CHARGING', c: '#ff6ad5' });
+    }
+    if (enemy.queenFinisherActive && !enemy.queenFinisherDone) {
+      // Hold her in place and immune while the blast charges.
+      enemy.inv = Math.max(Number(enemy.inv || 0), 0.2);
+      enemy.hp = Math.max(1, enemy.hp);
+      enemy.vx = 0;
+      enemy.vy = 0;
+      enemy.stun = 0;
+      enemy.queenFinisherTimer = Math.max(0, Number(enemy.queenFinisherTimer || 0) - dt);
+      // Growing telegraph ring so the player can read the danger zone.
+      const charge = 1 - enemy.queenFinisherTimer / QUEEN_FINISHER_WINDUP;
+      Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.16, ring: QUEEN_FINISHER_RADIUS * charge, c: '#ff6ad5' });
+      if (enemy.queenFinisherTimer <= 0) {
+        enemy.queenFinisherDone = true;
+        const blastDamage = Math.round(enemy.dmg * 2.5);
+        Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.7, ring: QUEEN_FINISHER_RADIUS, c: '#ff6ad5' });
+        Neo.blastRadius(enemy.x, enemy.y, QUEEN_FINISHER_RADIUS, blastDamage, '#ff6ad5', enemy);
+        // Take herself out with the blast.
+        enemy.inv = 0;
+        enemy.hp = 0;
+        Neo.onEnemyDie(enemy);
+      }
+      return;
+    }
+
     enemy.queenMissileCd = Math.max(0, Number(enemy.queenMissileCd || 0) - dt);
     if (enemy.queenMissileCd <= 0 && distance > 95 && distance < 580 && enemy.stun <= 0) {
       spawnCultQueenMissile(enemy, tuning);
-      enemy.queenMissileCd = 3.4 * Math.max(0.78, tuning.rangedCadence);
+      // Deeper-floor Queens fire missile volleys more frequently.
+      const floorCadence = Math.max(0.5, 1 - Math.max(0, Neo.floor - 5) * 0.1);
+      enemy.queenMissileCd = 3.4 * Math.max(0.78, tuning.rangedCadence) * floorCadence;
     }
 
     enemy.summonCd = Math.max(0, enemy.summonCd - dt);
@@ -2166,12 +2211,19 @@
         sayOverEntity(enemy, 'Come forth, faithful.', { holdTime: 1.7 });
       }
       const summonCount = tuning.supportPower >= 1.22 ? 4 : 3;
+      // Deeper-floor Queens have a chance to call up a heavy golem instead of a follower,
+      // and her summoned faithful can come through as elites.
+      const golemChance = Neo.clamp(0.12 + Math.max(0, Neo.floor - 5) * 0.06, 0.12, 0.4);
+      const eliteChance = Neo.clamp(0.18 + Math.max(0, Neo.floor - 5) * 0.07, 0.18, 0.5);
       for (let index = 0; index < summonCount; index += 1) {
         const angle = (Math.PI * 2 * index) / 3 + Neo.rng() * 0.8;
         const px = enemy.x + Math.cos(angle) * 54;
         const py = enemy.y + Math.sin(angle) * 54;
         const safeSpawn = findSafeEnemySpawnPoint(Neo.clamp(px, 90, Neo.ROOM_W - 90), Neo.clamp(py, 90, Neo.ROOM_H - 90), 15);
-        if (safeSpawn) spawnEnemy('cult_follower', safeSpawn.x, safeSpawn.y, false);
+        if (!safeSpawn) continue;
+        const summonType = Neo.nextRandom('encounter') < golemChance ? 'golem' : 'cult_follower';
+        const summonElite = Neo.nextRandom('encounter') < eliteChance;
+        spawnEnemy(summonType, safeSpawn.x, safeSpawn.y, summonElite);
       }
     }
 
@@ -2185,28 +2237,41 @@
 
   function spawnCultQueenMissile(enemy, tuning = Neo.getEnemyDifficultyTuning()) {
     if (!enemy || !Neo.player) return;
-    const count = tuning.supportPower >= 1.22 ? 2 : 1;
+    // Higher-floor Queens fire more homing missiles per volley.
+    const floorBonus = Math.max(0, Math.floor((Neo.floor - 5) / 2));
+    const count = (tuning.supportPower >= 1.22 ? 2 : 1) + floorBonus;
+    // Missiles get faster with each floor (the Queen's "level"), capped so they
+    // stay dodgeable. Scales both travel speed and homing pursuit speed.
+    const floorSpeed = 1 + Math.max(0, Neo.floor - 5) * 0.08;
+    const travelSpeed = 165 * floorSpeed;
+    const damage = Math.round(enemy.dmg * 0.78);
     const baseAngle = Math.atan2(Neo.player.y - enemy.y, Neo.player.x - enemy.x);
     for (let index = 0; index < count; index += 1) {
-      const spread = count === 1 ? 0 : (index === 0 ? -0.22 : 0.22);
+      // Fan the volley out symmetrically around the aim direction.
+      const spread = count === 1 ? 0 : ((index - (count - 1) / 2) / Math.max(1, count - 1)) * 0.44;
       const angle = baseAngle + spread + (Neo.nextRandom('encounter') - 0.5) * 0.24;
       Neo.spawnProjectile({
         x: enemy.x + Math.cos(angle) * (enemy.r + 8),
         y: enemy.y + Math.sin(angle) * (enemy.r + 8),
-        vx: Math.cos(angle) * 165,
-        vy: Math.sin(angle) * 165,
+        vx: Math.cos(angle) * travelSpeed,
+        vy: Math.sin(angle) * travelSpeed,
         r: 8,
         life: 2.45,
         enemy: true,
         kind: 'cult_missile',
         source: 'queen_cult_projectile',
-        damage: Math.round(enemy.dmg * 0.78),
+        damage,
         knockback: 155,
         color: '#b455ff',
         homing: true,
         homingTurnRate: 2.15 * Math.min(1.24, tuning.reaction),
-        homingSpeed: 235 * Math.min(1.18, tuning.reaction),
+        homingSpeed: 235 * Math.min(1.18, tuning.reaction) * floorSpeed,
         homingAccel: 3.2,
+        // Drain: inflict Dark Drain DoT on the player and heal the Queen on hit
+        // (mirrors Thorn's lifesteal). Heal scales with the missile's damage.
+        owner: enemy,
+        drainHeal: Math.max(2, Math.round(damage * 0.5)),
+        statusEffects: [{ key: 'dark_drain', stacks: 1, duration: 3.5, chance: 1 }],
       });
     }
     Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 12, life: 0.55, text: 'MISSILE', c: '#d59bff' });
@@ -2617,7 +2682,7 @@
       : Math.atan2(Neo.player.y - enemy.y, Neo.player.x - enemy.x);
     enemy.antonyShockwave = {
       angle,
-      damage: Math.round(enemy.dmg * 1.05),
+      damage: Math.round(enemy.dmg * 0.7),
       // Wave geometry: travels `range` px outward, only hits within `halfArc`
       // of the facing direction, in a band `bandWidth` thick.
       range: 320,
@@ -3275,6 +3340,7 @@
     const slowChance = Number(stats.weaponFatigueChance || 0);
     if (slowChance > 0) effects.push({ key: 'slow', chance: slowChance, stacks: 1, duration: 4 });
     const stunChance = Number(stats.confuseRayStunChance || 0)
+      + Number(stats.weaponFatigueFreezeChance || 0)
       + (Number(stats.overstimulateStunChance || 0) > 0 && Neo.getActiveStatusCount?.(Neo.player) >= 2 ? Number(stats.overstimulateStunChance || 0) : 0);
     if (stunChance > 0) effects.push({ key: 'stun', chance: stunChance, stacks: 1, duration: 0.55 });
     if (Number(options.fireStacks || 0) > 0) {
@@ -3489,17 +3555,19 @@
     if (Number(itemStats.homingMissileChance || 0) > 0 && Neo.nextRandom('encounter') < Number(itemStats.homingMissileChance || 0)) {
       for (let index = 0; index < 2; index += 1) {
         const missileAngle = angleToPlayer + (index === 0 ? -0.12 : 0.12);
-        fireMirrorProjectiles(enemy, missileAngle, 1, 0, 260, 18, {
+        fireMirrorProjectiles(enemy, missileAngle, 1, 0, 780, 20, {
           kind: 'homing_missile',
           color: '#ffe06f',
           r: 6,
           life: 2.4,
           knockback: 120,
           homing: true,
-          homingSpeed: 430,
+          homingSpeed: 1290,
           homingAccel: 3.8,
           homingTurnRate: 3.5,
           homingRadius: 960,
+          // 5% chance to ignite the player on hit (mirrors the player-side buff).
+          statusEffects: [{ key: 'fire', chance: 0.05, stacks: 1, duration: 2.8 }],
         });
       }
     }

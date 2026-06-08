@@ -463,7 +463,11 @@
   function tickPlayerStatus(key, dt, config) {
     const state = Neo.getStatusState(Neo.player, key);
     if (state.stacks <= 0) return;
-    state.duration -= dt;
+    // Tough Skin shortens player bleeds by decaying their duration faster.
+    const durationDecay = key === 'bleed'
+      ? Number(Neo.getItemStats?.()?.bleedDurationDecayMultiplier || 1)
+      : 1;
+    state.duration -= dt * durationDecay;
     state.tick -= dt;
     if (state.tick <= 0) {
       state.tick = config.interval;
@@ -958,7 +962,13 @@
     p.subSpawn = props.subSpawn ? { ...props.subSpawn } : null;
     p.statusEffects = props.statusEffects ?? null;
     p.enemyBlast = props.enemyBlast ?? null;
-    const defaultBounces = !enemyProjectile ? itemStats.projectileBounces : 0;
+    // Drain: enemy projectiles can heal their owner for `drainHeal` HP on hit.
+    p.owner = props.owner ?? null;
+    p.drainHeal = Number(props.drainHeal || 0);
+    // Ricocete: 1 guaranteed bounce if you own any stack, then each stack rolls a
+    // 50% chance to grant one additional bounce (rolled per-projectile via the
+    // shared helper so the value genuinely varies shot to shot).
+    const defaultBounces = !enemyProjectile ? Neo.rollRicoceteBounces(itemStats.projectileBounces) : 0;
     p.bouncesRemaining = Math.max(0, Math.floor(Number((props.bouncesRemaining ?? defaultBounces) || 0)));
     capProjectiles();
     Neo.projectiles.push(p);
@@ -1099,6 +1109,23 @@
         Neo.applyStatus(Neo.player, effect.key, Number(effect.stacks || 1), Number(effect.duration || 3), getProjectileDamageSource(projectile));
       }
     });
+  }
+
+  // Drain: heal the projectile's owner when it lands on the player (mirrors the
+  // player's Tooth of Thorn lifesteal). The owner must still be alive in the room.
+  function applyProjectileDrainToOwner(projectile) {
+    const heal = Number(projectile?.drainHeal || 0);
+    const owner = projectile?.owner;
+    if (heal <= 0 || !owner || owner.dead) return;
+    const maxHp = Number(owner.max || owner.maxHp || owner.hp || 0);
+    if (maxHp <= 0 || owner.hp >= maxHp) return;
+    const before = Number(owner.hp || 0);
+    owner.hp = Math.min(maxHp, before + heal);
+    const gained = Math.round(owner.hp - before);
+    if (gained > 0) {
+      Neo.spawnHealPopup?.(owner.x + Neo.rand(-6, 6), owner.y - owner.r - 10, gained, { color: '#c98dff', size: 12 });
+      Neo.spawnParticle({ x: owner.x, y: owner.y, life: 0.4, ring: owner.r + 8, c: '#c98dff' });
+    }
   }
 
   function projectileHasLineOfSight(projectile, targetX, targetY) {
@@ -1475,6 +1502,7 @@
         if (dx * dx + dy * dy > hitRadius * hitRadius) continue;
         damagePlayer(projectile.damage || 10, Math.atan2(projectile.vy, projectile.vx), projectile.knockback || 120, getProjectileDamageSource(projectile));
         applyProjectileStatusEffectsToPlayer(projectile);
+        applyProjectileDrainToOwner(projectile);
         detonateEnemyProjectileBlast(projectile, projectile.x, projectile.y);
         spawnProjectileImpact(projectile, projectile.x, projectile.y);
         removeProjectileAt(index);
@@ -1491,6 +1519,16 @@
         if (prop.hitFlash > 0) prop.hitFlash = Math.max(0, Number(prop.hitFlash || 0) - dt);
         if (prop.hitShake > 0) prop.hitShake = Math.max(0, Number(prop.hitShake || 0) - dt);
         if (prop.broken) prop.breakAge = Number(prop.breakAge || 0) + dt;
+        // Disguised secret walls look like ordinary wall and let the player walk
+        // into them; stepping onto the spot opens the passage and breaks the wall.
+        if (prop.kind === 'secret_wall' && prop.disguised && !prop.secretRevealed && !prop.broken
+          && Neo.player && Neo.destructibleIntersectsCircle(prop, Neo.player.x, Neo.player.y, Neo.player.r)) {
+          revealSecretWall(prop);
+          prop.broken = true;
+          prop.breakAge = 0;
+          prop.breakAngle = getDestructibleImpactAngle(prop, {});
+          spawnDestructibleBreakFx(prop, {});
+        }
       });
     }
     Neo.hazards.forEach(hazard => {
@@ -1992,11 +2030,17 @@
       });
       Neo.spawnParticle({ x: prop.x, y: prop.y - 22, life: 0.75, text: 'CLEAR', c: '#d7f6ff' });
     }
-    if (prop.kind === 'secret_wall') {
-      const dir = prop.secretDir;
-      if (dir) Neo.setSecretPassageOpen(Neo.currentRoom, dir, true);
-      Neo.spawnParticle({ x: prop.x, y: prop.y - 18, life: 0.9, text: 'SECRET', c: '#8dd4ff' });
-    }
+    if (prop.kind === 'secret_wall') revealSecretWall(prop);
+  }
+
+  // Open the passage a secret wall guards. Shared by the break path (crate-style
+  // secret walls) and the walk-over path (disguised wall-look secret walls).
+  function revealSecretWall(prop) {
+    if (!prop || prop.secretRevealed) return;
+    prop.secretRevealed = true;
+    const dir = prop.secretDir;
+    if (dir) Neo.setSecretPassageOpen(Neo.currentRoom, dir, true);
+    Neo.spawnParticle({ x: prop.x, y: prop.y - 18, life: 0.9, text: 'SECRET', c: '#8dd4ff' });
   }
 
   // Damage number whose size/color/punch ramp with how hard the hit landed,

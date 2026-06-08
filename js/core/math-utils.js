@@ -144,7 +144,11 @@ export function isBlocked(x, y, r) {
   if (Neo.walls.some(wall => circleRect(x, y, r, wall.x, wall.y, wall.w, wall.h))) return true;
   if (getClosedDoorBlockerRects().some(door => circleRect(x, y, r, door.x, door.y, door.w, door.h))) return true;
   if (Neo.structures.some(s => circleRect(x, y, r, s.x - s.w / 2, s.y - s.h / 2, s.w, s.h))) return true;
-  return Neo.destructibles.some(prop => !prop.broken && !prop.hidden && destructibleIntersectsCircle(prop, x, y, r));
+  // Disguised secret walls are pass-through: the player walks into them to open
+  // the passage (see updateWorldProps), so they never act as a solid blocker.
+  return Neo.destructibles.some(prop => !prop.broken && !prop.hidden
+    && !(prop.kind === 'secret_wall' && prop.disguised)
+    && destructibleIntersectsCircle(prop, x, y, r));
 }
 
 export function beamHitsCircle(x1, y1, x2, y2, cx, cy, radius) {
