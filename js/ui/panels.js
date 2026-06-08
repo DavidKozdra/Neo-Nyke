@@ -419,6 +419,21 @@ export function bindPanelInput() {
       markInventoryPanelDirty();
       renderInventoryPanel();
     });
+    Neo.ui.invItemsList?.addEventListener('click', event => {
+      const card = event.target instanceof Element ? event.target.closest('[data-open-ui-item]') : null;
+      if (!card) return;
+      const itemKey = card.dataset.openUiItem || '';
+      const item = Neo.itemRegistry?.get?.(itemKey);
+      if (Neo.getPendingUiItemCount?.(itemKey, Neo.player) <= 0) return;
+      if (item?.opensUi === 'extraBattery') {
+        Neo.activeInvTab = 'equipped';
+        markInventoryPanelDirty();
+        renderInventoryPanel();
+        return;
+      }
+      setInventoryPanelOpen(false, { suppressPanelItemSelection: true });
+      Neo.requestPanelItemSelection?.({ itemKey });
+    });
     Neo.ui.shopItems?.addEventListener('click', handleShopBuyClick);
     Neo.ui.shopWeapons?.addEventListener('click', handleShopBuyClick);
     Neo.ui.shopMoves?.addEventListener('click', handleShopBuyClick);
@@ -862,6 +877,9 @@ export function setInventoryPanelOpen(open, options = {}) {
     Neo.ui.invPanel.classList.remove('inv-panel--closing', 'inv-panel--opening');
     if (!open && animateClose && isPanelOpen(Neo.ui.invPanel)) {
       playPanelCloseEffect(Neo.ui.invPanel);
+    }
+    if (!open && options.suppressPanelItemSelection) {
+      Neo.suppressPanelItemSelectionUntil = Date.now() + 250;
     }
     Neo.ui.invPanel.classList.toggle('hidden', !open);
     Neo.ui.invPanel.setAttribute('aria-hidden', open ? 'false' : 'true');
@@ -1849,7 +1867,8 @@ export function getShopWeaponOffers() {
       ].join('|');
     }
     if (tabKey === 'items') {
-      return `items|${getCountedKeys(playerRef.items)}|${playerRef.character || ''}`;
+      const pending = (Neo.getPendingUiItems?.(playerRef) || []).map(entry => `${entry.key}:${entry.count}`).join(',');
+      return `items|${getCountedKeys(playerRef.items)}|${playerRef.character || ''}|pending:${pending}`;
     }
     if (tabKey === 'tools') {
       const order = Array.isArray(playerRef.equipmentSlots) ? playerRef.equipmentSlots.join(',') : '';
@@ -2179,18 +2198,30 @@ export function renderInventoryPanel() {
         Neo.drawInventoryUiIcon?.(canvas, canvas.dataset.invUiIcon);
       });
     } else if (Neo.activeInvTab === 'items') {
-      Neo.ui.invItemsList.innerHTML = Neo.ITEM_KEYS
+      Neo.ui.invItemsList.innerHTML = Object.keys(_invP.items || {})
         .filter(key => Number(_invP.items?.[key] || 0) > 0)
+        .filter(key => Neo.itemRegistry?.get?.(key))
         .map(key => {
           const item = Neo.itemRegistry.get(key);
-          return `<div class="inv-card">
+          const safeKey = Neo.escapeHtml(key);
+          const pendingCount = Neo.getPendingUiItemCount?.(key, _invP) || 0;
+          return `<div class="inv-card${pendingCount > 0 ? ' inv-card--unread' : ''}">
             <span class="inv-card__eyebrow">${item?.tool ? 'Tool' : 'Relic'}</span>
             <div class="inv-card__title-row">
-              <canvas class="inv-card__icon" data-item-icon="${key}" width="40" height="40"></canvas>
+              <span class="inv-card__icon-wrap">
+                <canvas class="inv-card__icon" data-item-icon="${safeKey}" width="40" height="40"></canvas>
+                ${pendingCount > 0 ? '<span class="inv-card__unread-dot" aria-hidden="true"></span>' : ''}
+              </span>
               <h4 style="color:${Neo.getRarityNameColor(item?.rarity || item?.category)}">${item?.name || key}${item?.tool ? '<span class="item-tool-badge">TOOL</span>' : ''}</h4>
               <span class="inv-card__count">x${_invP.items[key]}</span>
             </div>
             <p style="color:#ffffff">${item?.description || 'No item description available.'}</p>
+            ${pendingCount > 0
+              ? `<button class="inv-card__open" type="button" data-open-ui-item="${safeKey}" aria-label="Open ${Neo.escapeHtml(item?.name || key)}, ${pendingCount} pending">
+                  <span class="inv-card__open-dot" aria-hidden="true"></span>
+                  OPEN${pendingCount > 1 ? ` (${pendingCount})` : ''}
+                </button>`
+              : ''}
           </div>`;
         })
         .join('') || '<div class="inv-card"><span class="inv-card__eyebrow">Empty</span><h4>No relics yet</h4><p>Your pockets are clear. Loot rooms or buy from the shop to start a build.</p></div>';

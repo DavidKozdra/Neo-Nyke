@@ -135,17 +135,20 @@
 
   // ── Cutscene gallery ────────────────────────────────────────────────────
   const sceneList = document.getElementById('creditsSceneList');
+  const allTab = document.getElementById('galleryAllTab');
   const scenesTab = document.getElementById('galleryScenesTab');
   const tauntsTab = document.getElementById('galleryTauntsTab');
-  let galleryBuilt = false;
-  let gallerySection = 'scenes';
+  const rivalsTab = document.getElementById('galleryRivalsTab');
+  let gallerySection = 'all';
 
   function drawGalleryPortraits(tries = 0) {
     if (!sceneList || typeof Neo.drawSpriteToCanvas !== 'function') return;
     let drewAll = true;
     sceneList.querySelectorAll('[data-gallery-speaker]').forEach((canvas) => {
       const speaker = canvas.dataset.gallerySpeaker || '';
-      const key = Neo.uiController?.resolveDialoguePortraitKey?.(speaker) || 'hunter';
+      const key = canvas.dataset.gallerySprite
+        || Neo.uiController?.resolveDialoguePortraitKey?.(speaker)
+        || 'hunter';
       Neo.drawSpriteToCanvas(canvas, key, canvas.width);
       const ctx = canvas.getContext('2d');
       try {
@@ -173,15 +176,36 @@
     if (!sceneList) return;
     const scenes = Array.isArray(Neo.CUTSCENE_GALLERY) ? Neo.CUTSCENE_GALLERY : [];
     if (!scenes.length) return false; // game-core not ready yet; retry on next open
+    const selectedCharacter = Neo.player?.character || Neo.chosenCharacter || Neo.metaProgress?.selectedCharacter || 'thorn_knight';
+    const matchesSelectedCharacter = scene => !scene.character || scene.character === selectedCharacter;
     const bossTaunts = scenes.find(scene => scene.id === 'boss_openings');
-    const entries = gallerySection === 'taunts'
-      ? (bossTaunts?.lines || []).map((line, index) => ({
-        id: `boss_taunt_${index}`,
-        title: line.speaker,
-        subtitle: line.text,
-        lines: [line],
-      }))
-      : scenes.filter(scene => scene.id !== 'boss_openings');
+    const storyEntries = scenes.filter(scene => scene.id !== 'boss_openings' && matchesSelectedCharacter(scene));
+    const tauntEntries = (bossTaunts?.lines || []).map((line, index) => ({
+      id: `boss_taunt_${index}`,
+      title: line.speaker,
+      subtitle: line.text,
+      lines: [line],
+    }));
+    const rivalEntries = Object.entries(Neo.RIVAL_DEFS || {}).map(([character, rival]) => ({
+      id: `rival_${character}`,
+      title: rival.name || `Rival ${Neo.CHARACTER_DEFS?.[character]?.name || character}`,
+      subtitle: 'Entrance and defeat dialogue',
+      portraitCharacter: character,
+      lines: [
+        { speaker: rival.name || `Rival ${character}`, text: rival.enterLine },
+        { speaker: rival.name || `Rival ${character}`, text: rival.deathLine },
+      ].filter(line => line.text),
+    }));
+    let entries;
+    if (gallerySection === 'taunts') {
+      entries = tauntEntries;
+    } else if (gallerySection === 'rivals') {
+      entries = rivalEntries;
+    } else if (gallerySection === 'scenes') {
+      entries = storyEntries;
+    } else {
+      entries = [...storyEntries, ...tauntEntries, ...rivalEntries];
+    }
 
     sceneList.textContent = '';
     entries.forEach((scene) => {
@@ -193,25 +217,37 @@
       const portraits = document.createElement('span');
       portraits.className = 'credits-gallery__portraits';
       const speakers = [...new Set(scene.lines.map(line => String(line.speaker || '').trim()).filter(Boolean))];
-      if (speakers.length) {
-        const visibleSpeakers = speakers.length > 3 ? speakers.slice(0, 1) : speakers;
-        visibleSpeakers.forEach((speaker) => {
+      const requiredCharacter = scene.portraitCharacter || (scene.required && scene.character ? scene.character : '');
+      const requiredLabel = Neo.CHARACTER_DEFS?.[requiredCharacter]?.name || requiredCharacter;
+      const requiredSpriteKey = requiredCharacter || '';
+      const visibleSpeakers = speakers.filter((speaker) => {
+        if (!requiredSpriteKey) return true;
+        return Neo.uiController?.resolveDialoguePortraitKey?.(speaker) !== requiredSpriteKey;
+      });
+      const portraitEntries = [
+        ...(requiredSpriteKey ? [{ speaker: requiredLabel, spriteKey: requiredSpriteKey }] : []),
+        ...visibleSpeakers.map(speaker => ({ speaker, spriteKey: '' })),
+      ];
+      if (portraitEntries.length) {
+        const visiblePortraits = portraitEntries.length > 3 ? portraitEntries.slice(0, 1) : portraitEntries;
+        visiblePortraits.forEach(({ speaker, spriteKey }) => {
           const portrait = document.createElement('canvas');
           portrait.width = 48;
           portrait.height = 48;
           portrait.className = 'credits-gallery__portrait';
           portrait.dataset.gallerySpeaker = speaker;
+          if (spriteKey) portrait.dataset.gallerySprite = spriteKey;
           portrait.setAttribute('role', 'img');
           portrait.setAttribute('aria-label', speaker);
           portrait.title = speaker;
           portraits.appendChild(portrait);
         });
-        if (speakers.length > 3) {
+        if (portraitEntries.length > 3) {
           const more = document.createElement('span');
           more.className = 'credits-gallery__portrait-more';
           more.textContent = '...';
-          more.setAttribute('aria-label', `${speakers.length - 1} more speakers`);
-          more.title = `${speakers.length - 1} more speakers`;
+          more.setAttribute('aria-label', `${portraitEntries.length - 1} more characters`);
+          more.title = `${portraitEntries.length - 1} more characters`;
           portraits.appendChild(more);
         }
         btn.appendChild(portraits);
@@ -238,22 +274,33 @@
   }
 
   function setGallerySection(section) {
-    gallerySection = section === 'taunts' ? 'taunts' : 'scenes';
+    gallerySection = ['scenes', 'taunts', 'rivals'].includes(section) ? section : 'all';
+    const showAll = gallerySection === 'all';
     const showTaunts = gallerySection === 'taunts';
-    scenesTab?.classList.toggle('is-active', !showTaunts);
+    const showRivals = gallerySection === 'rivals';
+    const showScenes = gallerySection === 'scenes';
+    allTab?.classList.toggle('is-active', showAll);
+    scenesTab?.classList.toggle('is-active', showScenes);
     tauntsTab?.classList.toggle('is-active', showTaunts);
-    scenesTab?.setAttribute('aria-selected', showTaunts ? 'false' : 'true');
+    rivalsTab?.classList.toggle('is-active', showRivals);
+    allTab?.setAttribute('aria-selected', showAll ? 'true' : 'false');
+    scenesTab?.setAttribute('aria-selected', showScenes ? 'true' : 'false');
     tauntsTab?.setAttribute('aria-selected', showTaunts ? 'true' : 'false');
+    rivalsTab?.setAttribute('aria-selected', showRivals ? 'true' : 'false');
     renderGallery();
   }
 
-  function buildGallery() {
-    if (galleryBuilt || !sceneList) return;
-    if (!renderGallery()) return;
-    scenesTab?.addEventListener('click', () => setGallerySection('scenes'));
-    tauntsTab?.addEventListener('click', () => setGallerySection('taunts'));
-    galleryBuilt = true;
+  function buildGallery(tries = 0) {
+    if (!sceneList) return;
+    if (renderGallery() === false && tries < 20) {
+      setTimeout(() => buildGallery(tries + 1), 100);
+    }
   }
+
+  allTab?.addEventListener('click', () => setGallerySection('all'));
+  scenesTab?.addEventListener('click', () => setGallerySection('scenes'));
+  tauntsTab?.addEventListener('click', () => setGallerySection('taunts'));
+  rivalsTab?.addEventListener('click', () => setGallerySection('rivals'));
 
   // ── Jukebox ─────────────────────────────────────────────────────────────
   const jukeboxList = document.getElementById('jukeboxList');

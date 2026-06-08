@@ -23,6 +23,9 @@
     if (!Neo.currentRoom) return [];
     const entries = [];
     if (Neo.floor < Neo.MAX_FLOOR || Neo.floor > Neo.MAX_FLOOR) {
+      const thornBaneEscape = Neo.currentRoom.secretKind === 'bowman_bane'
+        && Neo.player?.character === 'thorn_knight'
+        && !Neo.currentRoom.cleared;
       const ladderRoom = Neo.rooms.find(room => room.type === 'ladder');
       entries.push({
         text: ladderRoom?.explored ? 'Reach the ladder room' : 'Find the ladder',
@@ -56,6 +59,12 @@
       }
       if (Neo.currentRoom.type === 'shop') entries.push({ text: 'Buy upgrades or move on', state: 'warn' });
       if (Neo.currentRoom.type === 'anvil') entries.push({ text: 'Forge upgrades or move on', state: 'warn' });
+      if (thornBaneEscape) {
+        entries.push({
+          text: Neo.currentRoom.baneEscapeRevealed ? 'Escape through the hidden door' : 'Listen to Bowman Bane',
+          state: 'warn',
+        });
+      }
       if (Neo.getItemCount('charged_adapter') > 0) {
         const slotIdx = Neo.player?.equipmentSlots?.indexOf?.('charged_adapter') ?? -1;
         const slotLetter = slotIdx >= 0 ? Neo.EQUIPMENT_SLOT_KEYS?.[slotIdx] || 'F' : 'F';
@@ -92,18 +101,12 @@
   // Owed panel-item selections (Wizard's Paw / Extra Battery) surface as urgent
   // objective entries so they can't be forgotten while waiting to be resolved.
   function pushPanelItemObjectives(entries) {
-    const pawPending = Math.max(0, Math.floor(Number(Neo.player?.wizardPawPendingCount || 0)));
-    const batteryPending = Math.max(0, Math.floor(Number(Neo.player?.extraBatteryPendingCount || 0)));
-    const scrollPending = Array.isArray(Neo.player?.scrollPendingQueue) ? Neo.player.scrollPendingQueue.length : 0;
-    if (pawPending > 0) {
-      entries.push({ text: `Wizard's Paw ready: pick 2 stats to boost${pawPending > 1 ? ` (×${pawPending})` : ''}`, state: 'warn' });
-    }
-    if (scrollPending > 0) {
-      entries.push({ text: `Scroll of Control ready: choose its target${scrollPending > 1 ? ` (×${scrollPending})` : ''}`, state: 'warn' });
-    }
-    if (batteryPending > 0) {
-      entries.push({ text: `Extra Battery ready: pick a move for +1 charge${batteryPending > 1 ? ` (×${batteryPending})` : ''}`, state: 'warn' });
-    }
+    Neo.getPendingUiItems?.().forEach(({ item, count }) => {
+      entries.push({
+        text: `${item.name} ready: open to choose${count > 1 ? ` (×${count})` : ''}`,
+        state: 'warn',
+      });
+    });
   }
 
   function updateObjective() {
@@ -152,6 +155,14 @@
       return;
     }
     if (Neo.floor < Neo.MAX_FLOOR) {
+      if (Neo.currentRoom.secretKind === 'bowman_bane'
+        && Neo.player?.character === 'thorn_knight'
+        && !Neo.currentRoom.cleared) {
+        setObjective(Neo.currentRoom.baneEscapeRevealed
+          ? 'Escape through the hidden door!'
+          : 'Listen to Bowman Bane.');
+        return;
+      }
       if (Neo.currentRoom.type === 'shop') {
         setObjective('Shop or move on.');
         return;
@@ -446,20 +457,15 @@
       if (red) red.textContent = String(rarityCounts.red);
     }
     if (Neo.ui.panelItemAlert) {
-      const pawPending = Math.max(0, Math.floor(Number(Neo.player?.wizardPawPendingCount || 0)));
-      const batteryPending = Math.max(0, Math.floor(Number(Neo.player?.extraBatteryPendingCount || 0)));
-      const scrollPending = Array.isArray(Neo.player?.scrollPendingQueue) ? Neo.player.scrollPendingQueue.length : 0;
-      const pendingTotal = pawPending + scrollPending + batteryPending;
+      const pendingItems = Neo.getPendingUiItems?.() || [];
+      const pendingTotal = pendingItems.reduce((sum, entry) => sum + entry.count, 0);
       Neo.ui.panelItemAlert.classList.toggle('hidden', pendingTotal <= 0);
       if (pendingTotal > 0) {
         const countEl = Neo.ui.panelItemAlert.querySelector('.panel-item-alert__count');
         if (countEl) countEl.textContent = String(pendingTotal);
-        const label = pawPending > 0
-          ? "Wizard's Paw: pick 2 stats"
-          : scrollPending > 0
-            ? 'Scroll of Control: choose target'
-            : 'Extra Battery: pick a move';
+        const label = `${pendingItems[0].item.name}: ready to open`;
         Neo.ui.panelItemAlert.title = `${label}${pendingTotal > 1 ? ` (+${pendingTotal - 1} more)` : ''}`;
+        Neo.ui.panelItemAlert.setAttribute('aria-label', Neo.ui.panelItemAlert.title);
       }
     }
     if (Neo.ui.challengeStatus && Neo.ui.challengeStatusFill) {

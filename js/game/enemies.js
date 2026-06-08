@@ -977,7 +977,7 @@
 
     return Neo.uiController.playDialogue([
       { speaker: 'KNAVE', text: 'You think you can out fight me you couldnt out argue me! your logic is false' },
-      { speaker: 'KNIGHT', text: 'The kingdom of God has come for you ...' },
+      { speaker: 'THORN', text: 'The kingdom of God has come for you ...' },
       { speaker: 'KNAVE', text: 'Violence it is' },
     ], { returnState: 'play' });
   }
@@ -1000,6 +1000,23 @@
       { speaker: 'QUEEN', text: 'once my champion planning to kill me again are you apostate' },
       { speaker: 'METAO', text: '...' },
       { speaker: 'QUEEN', text: 'Your life will be mine !' },
+    ], { returnState: 'play' });
+  }
+
+  function tryPlayBulkGolemThornCutscene(enemy, enemyType) {
+    if (!enemy || enemyType !== 'bulk_golem' || !Neo.player) return false;
+    if (Neo.player.character !== 'thorn_knight' || enemy.thornIntroPlayed) return false;
+
+    enemy.thornIntroPlayed = true;
+    Neo.clearGameplayInput();
+    Neo.setShopPanelOpen(false);
+    Neo.setInventoryPanelOpen(false);
+    positionPlayerNearEntity(enemy);
+    enemy.attackCd = Math.max(Number(enemy.attackCd || 0), 1.4);
+    enemy.stun = Math.max(Number(enemy.stun || 0), 0.25);
+
+    return Neo.uiController.playDialogue([
+      { speaker: 'BULK GOLEM', text: Neo.BOSS_OPENING_DIALOGUE.bulk_golem },
     ], { returnState: 'play' });
   }
 
@@ -1057,11 +1074,31 @@
     ], { returnState: 'play' });
   }
 
+  function tryPlayGenericBossOpening(enemy, enemyType) {
+    if (!enemy || !enemyType || enemy.genericIntroPlayed) return false;
+    const text = Neo.BOSS_OPENING_DIALOGUE[enemyType];
+    if (!text) return false;
+
+    enemy.genericIntroPlayed = true;
+    Neo.clearGameplayInput();
+    Neo.setShopPanelOpen(false);
+    Neo.setInventoryPanelOpen(false);
+    positionPlayerNearEntity(enemy);
+    enemy.attackCd = Math.max(Number(enemy.attackCd || 0), 1.4);
+    enemy.stun = Math.max(Number(enemy.stun || 0), 0.25);
+
+    return Neo.uiController.playDialogue([
+      { speaker: Neo.getBossLabel(enemyType), text },
+    ], { returnState: 'play' });
+  }
+
   function tryPlayBossIntroCutscene(enemy, enemyType) {
     return tryPlayKnaveKnightCutscene(enemy, enemyType)
       || tryPlayQueenMetaoCutscene(enemy, enemyType)
+      || tryPlayBulkGolemThornCutscene(enemy, enemyType)
       || tryPlayHandsomeDevilCharacterCutscene(enemy, enemyType)
-      || tryPlayAntonyBlemmyeCutscene(enemy, enemyType);
+      || tryPlayAntonyBlemmyeCutscene(enemy, enemyType)
+      || tryPlayGenericBossOpening(enemy, enemyType);
   }
 
   function sayOverEntity(entity, text, options = {}) {
@@ -2567,7 +2604,23 @@
     if (!safeSpawn) return null;
     const boss = spawnEnemy('bowman_bane', safeSpawn.x, safeSpawn.y, false);
     const line = Neo.BOSS_OPENING_DIALOGUE['bowman_bane'];
-    if (boss && line) sayOverEntity(boss, line);
+    if (boss && Neo.player?.character === 'thorn_knight') {
+      const encounterRoom = Neo.currentRoom;
+      if (encounterRoom) encounterRoom.baneEscapeWarningPlayed = true;
+      positionPlayerNearEntity(boss);
+      boss.attackCd = Math.max(Number(boss.attackCd || 0), 2);
+      boss.stun = Math.max(Number(boss.stun || 0), 0.4);
+      Neo.uiController.playDialogue([
+        { speaker: 'BOWMAN BANE', text: 'Run, Thorn!!' },
+        { speaker: 'BOWMAN BANE', text: 'You cannot win this fight. The entrance is sealed. Find the hidden door and escape!' },
+        { speaker: 'THORN', text: 'Thank you, Sarge.' },
+      ], {
+        returnState: 'play',
+        onComplete: () => Neo.revealBowmanBaneEscape?.(encounterRoom),
+      });
+    } else if (boss && line) {
+      sayOverEntity(boss, line);
+    }
     Neo.spawnParticle({ x: boss.x, y: boss.y - boss.r - 14, life: 1.1, text: "BOWMAN'S BANE", c: '#c9aaff' });
     return boss;
   }

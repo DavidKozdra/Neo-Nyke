@@ -215,6 +215,7 @@
     });
 
     Object.entries(room.secretPassages || {}).forEach(([dir, passage]) => {
+      if (passage?.baneEscape) return;
       const targetRoom = findRoomAt(passage.targetGx, passage.targetGy);
       const wall = createSecretWall(dir, targetRoom, room);
       if (wall) room.destructibles.push(wall);
@@ -728,6 +729,65 @@
     }
   }
 
+  function prepareBowmanBaneEscape(room) {
+    if (!room?.secret || room.secretKind !== 'bowman_bane' || Neo.player?.character !== 'thorn_knight') return null;
+    if (room.baneEscapeDirection && room.secretPassages?.[room.baneEscapeDirection]) {
+      return room.baneEscapeDirection;
+    }
+
+    const entrance = Object.entries(room.secretPassages || {})
+      .find(([, passage]) => passage && !passage.baneEscape);
+    if (!entrance) return null;
+    const [entranceDirection, target] = entrance;
+    const preferredDirections = [
+      Neo.OPPOSITE_DIRECTION[entranceDirection],
+      ...Neo.DIRECTIONS.filter(direction => direction !== entranceDirection),
+    ];
+    const escapeDirection = preferredDirections.find(direction =>
+      direction && direction !== entranceDirection && !room.doors?.[direction] && !room.secretPassages?.[direction]);
+    if (!escapeDirection) return null;
+
+    room.baneEntranceDirection = entranceDirection;
+    room.baneEscapeDirection = escapeDirection;
+    room.baneEscapeRevealed = false;
+    room.secretPassages[escapeDirection] = {
+      targetGx: target.targetGx,
+      targetGy: target.targetGy,
+      open: false,
+      baneEscape: true,
+    };
+    return escapeDirection;
+  }
+
+  function revealBowmanBaneEscape(room = Neo.currentRoom) {
+    if (!room?.secret || room.secretKind !== 'bowman_bane' || Neo.player?.character !== 'thorn_knight') return false;
+    const direction = prepareBowmanBaneEscape(room);
+    const passage = direction ? room.secretPassages?.[direction] : null;
+    if (!passage) return false;
+
+    Object.entries(room.secretPassages || {}).forEach(([otherDirection, otherPassage]) => {
+      if (otherDirection !== direction && otherPassage?.open) {
+        setSecretPassageOpen(room, otherDirection, false);
+      }
+    });
+    passage.open = true;
+    room.baneEscapeRevealed = true;
+
+    const marker = {
+      n: { x: Neo.ROOM_W / 2, y: Neo.WALL + 34 },
+      s: { x: Neo.ROOM_W / 2, y: Neo.ROOM_H - Neo.WALL - 34 },
+      w: { x: Neo.WALL + 34, y: Neo.ROOM_H / 2 },
+      e: { x: Neo.ROOM_W - Neo.WALL - 34, y: Neo.ROOM_H / 2 },
+    }[direction];
+    if (marker) {
+      Neo.spawnParticle({ ...marker, life: 1.8, text: 'HIDDEN EXIT', c: '#8dd4ff' });
+      Neo.spawnParticle({ ...marker, life: 0.8, ring: 44, c: '#c9aaff' });
+    }
+    Neo.updateObjective();
+    Neo.scheduleRunSave();
+    return true;
+  }
+
   function createSecretWall(direction, targetRoom, room = null) {
     if (!targetRoom) return null;
     const position = {
@@ -1187,6 +1247,7 @@
     }
 
     if (room.secret && room.secretKind === 'bowman_bane') {
+      prepareBowmanBaneEscape(room);
       if (room.cleared) {
         // Only (re)spawn the reward chest if it was never looted. Without this
         // guard, leaving and re-entering a cleared room farms the chest forever.
@@ -1409,7 +1470,7 @@
         text: "Oh, you're here. You were supposed to be fighting for me, but you took too long, so now we fight!",
       },
       {
-        speaker: 'THORN KNIGHT',
+        speaker: 'THORN',
         text: 'Then draw your blade.',
       },
     ], { returnState: 'play' });
@@ -2158,6 +2219,8 @@
   Neo.hasRoomExit = hasRoomExit;
   Neo.hasVisibleRoomExit = hasVisibleRoomExit;
   Neo.setSecretPassageOpen = setSecretPassageOpen;
+  Neo.prepareBowmanBaneEscape = prepareBowmanBaneEscape;
+  Neo.revealBowmanBaneEscape = revealBowmanBaneEscape;
   Neo.createSecretWall = createSecretWall;
   Neo.createSecretVendorOffer = createSecretVendorOffer;
   Neo.assignSecretRoom = assignSecretRoom;

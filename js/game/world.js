@@ -2791,7 +2791,8 @@
 
   function isRoomLocked() {
     const challengeActive = !!Neo.currentRoom && Neo.CHALLENGE_ROOM_TYPES.has(Neo.currentRoom.type) && !!Neo.currentRoom.challengeStarted && !Neo.currentRoom.cleared;
-    const baneActive = !!Neo.currentRoom && Neo.currentRoom.secret && Neo.currentRoom.secretKind === 'bowman_bane' && !!Neo.currentRoom.bossStarted && !Neo.currentRoom.cleared;
+    const baneActive = !!Neo.currentRoom && Neo.currentRoom.secret && Neo.currentRoom.secretKind === 'bowman_bane'
+      && !!Neo.currentRoom.bossStarted && !Neo.currentRoom.cleared && !Neo.currentRoom.baneEscapeRevealed;
     return !!Neo.currentRoom
       && !Neo.currentRoom.cleared
       && (Neo.currentRoom.type === 'boss' || Neo.currentRoom.type === 'god' || Neo.currentRoom.type === 'ladder' || challengeActive || baneActive);

@@ -28,6 +28,7 @@
       this.charIndex = 0;
       this.charTimer = 0;
       this.holdTimer = 0;
+      this.completeCallback = null;
     }
 
     onChange(callback) {
@@ -68,6 +69,7 @@
       }
       const currentState = this.gameStateManager?.getState?.() || "play";
       this.returnState = String(options.returnState || (currentState === "dialogue" ? "play" : currentState));
+      this.completeCallback = typeof options.onComplete === "function" ? options.onComplete : null;
       this.active = true;
       this.index = -1;
       this.current = null;
@@ -136,6 +138,7 @@
 
     close() {
       const shouldRestoreState = this.active;
+      const completeCallback = shouldRestoreState ? this.completeCallback : null;
       this.active = false;
       this.lines = [];
       this.index = -1;
@@ -144,11 +147,17 @@
       this.charIndex = 0;
       this.charTimer = 0;
       this.holdTimer = 0;
+      this.completeCallback = null;
       if (this.onClose) this.onClose();
       if (shouldRestoreState && this.gameStateManager?.getState?.() === "dialogue") {
         this.gameStateManager?.setState?.(this.returnState || "play");
       }
       this._emitChange();
+      if (completeCallback) {
+        try {
+          completeCallback();
+        } catch (_err) {}
+      }
       return true;
     }
 

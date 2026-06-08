@@ -560,6 +560,33 @@ function beginWizardPawModal() {
     renderWizardPawPanel();
   }
 
+export function getPendingUiItemCount(itemKey, playerData = Neo.player) {
+    if (!playerData || !itemKey) return 0;
+    const item = Neo.itemRegistry?.get?.(itemKey) || Neo.ITEM_DEFS?.[itemKey] || Neo.SCROLL_DEFS?.[itemKey];
+    if (item?.opensUi === 'wizardPaw') {
+      return Math.max(0, Math.floor(Number(playerData.wizardPawPendingCount || 0)));
+    }
+    if (item?.opensUi === 'extraBattery') {
+      return Math.max(0, Math.floor(Number(playerData.extraBatteryPendingCount || 0)));
+    }
+    if (item?.opensUi === 'scrollControl') {
+      return Array.isArray(playerData.scrollPendingQueue)
+        ? playerData.scrollPendingQueue.filter(key => key === itemKey).length
+        : 0;
+    }
+    return 0;
+  }
+
+export function getPendingUiItems(playerData = Neo.player) {
+    if (!playerData) return [];
+    const keys = new Set(['wizards_paw', 'extra_battery', ...(playerData.scrollPendingQueue || [])]);
+    return [...keys].map(key => {
+      const item = Neo.itemRegistry?.get?.(key) || Neo.ITEM_DEFS?.[key] || Neo.SCROLL_DEFS?.[key];
+      const count = getPendingUiItemCount(key, playerData);
+      return item?.opensUi && count > 0 ? { key, item, count } : null;
+    }).filter(Boolean);
+  }
+
 // Single entry point that decides whether to open a pending panel-item selection
 // now or leave it queued. Safe to call repeatedly (idempotent): guarded by the
 // owed counts and the already-open checks, so it can be wired into pause/resume,
@@ -571,19 +598,27 @@ export function requestPanelItemSelection(options = {}) {
     const batteryPending = Math.max(0, Math.floor(Number(player.extraBatteryPendingCount || 0)));
     const scrollPending = Array.isArray(player.scrollPendingQueue) && player.scrollPendingQueue.length > 0;
     if (pawPending <= 0 && batteryPending <= 0 && !scrollPending) return false;
+    if (!options.itemKey && Number(Neo.suppressPanelItemSelectionUntil || 0) > Date.now()) return false;
     // Don't fight a cinematic, transition, death, or another blocking overlay.
     if (Neo.gameState !== 'play') return false;
     // The paw modal is itself a blocking overlay; if it's already up, wait for confirm.
     if (Neo.isWizardPawOpen?.()) return false;
     if (Neo.isOverlayBlockingInput?.()) return false;
-    // Paw first: it stops time and is the higher-tier reward.
-    if (pawPending > 0) {
+    const preferredItemKey = String(options.itemKey || '');
+    const preferredItem = preferredItemKey
+      ? (Neo.itemRegistry?.get?.(preferredItemKey) || Neo.ITEM_DEFS?.[preferredItemKey] || Neo.SCROLL_DEFS?.[preferredItemKey])
+      : null;
+    const preferredUi = getPendingUiItemCount(preferredItemKey, player) > 0 ? preferredItem?.opensUi : '';
+    // Explicit card clicks open that card. Automatic dispatch keeps the normal
+    // paw -> scroll -> battery priority.
+    if (pawPending > 0 && (!preferredUi || preferredUi === 'wizardPaw')) {
       beginWizardPawModal();
       return true;
     }
     // Scrolls next: each owed scroll opens its own control modal.
-    if (scrollPending) {
-      beginScrollControlSelection(player.scrollPendingQueue[0]);
+    if (scrollPending && (!preferredUi || preferredUi === 'scrollControl')) {
+      const scrollKey = preferredUi === 'scrollControl' ? preferredItemKey : player.scrollPendingQueue[0];
+      beginScrollControlSelection(scrollKey);
       return true;
     }
     // The battery prompt re-uses the inventory panel. When the player just
@@ -591,7 +626,7 @@ export function requestPanelItemSelection(options = {}) {
     // they re-open it themselves via the HUD alert chip. Callers that close the
     // inventory pass { suppressBatteryOpen: true } for exactly this reason.
     if (options.suppressBatteryOpen) return false;
-    if (batteryPending > 0) {
+    if (batteryPending > 0 && (!preferredUi || preferredUi === 'extraBattery')) {
       Neo.activeInvPlayer = 1;
       Neo.activeInvTab = 'equipped';
       Neo.activeInventorySlot = '';
@@ -1384,6 +1419,8 @@ export function refreshFloorChargeStates() {
   Neo.applyPlayerHealing = applyPlayerHealing;
   Neo.getWizardPawStatCards = getWizardPawStatCards;
   Neo.openWizardPawSelection = openWizardPawSelection;
+  Neo.getPendingUiItemCount = getPendingUiItemCount;
+  Neo.getPendingUiItems = getPendingUiItems;
   Neo.requestPanelItemSelection = requestPanelItemSelection;
   Neo.renderWizardPawPanel = renderWizardPawPanel;
   Neo.handleWizardPawChoiceClick = handleWizardPawChoiceClick;

@@ -791,6 +791,7 @@ export const ITEM_DEFS = {
       name: "Wizard's Paw",
       shortName: 'Paw',
       description: 'Choose 2 stats to increase by 50%. Duplicated pickups grant another choice.',
+      opensUi: 'wizardPaw',
       rarity: 'god',
       color: '#ffcf80',
       category: 'god',
@@ -896,6 +897,7 @@ export const ITEM_DEFS = {
       name: 'Extra Battery',
       shortName: 'Move +1 Stack',
       description: 'Choose a move in Inventory to grant it +1 max stack. Duplicated pickups grant another choice.',
+      opensUi: 'extraBattery',
       rarity: 'wizard',
       color: '#cfd7ff',
       accent: '#7a9dff',
@@ -954,6 +956,7 @@ export const SCROLL_DEFS = {
       category: 'knight',
       tool: true,
       scroll: true,
+      opensUi: 'scrollControl',
       tags: ['scroll', 'control', 'choice'],
     },
     scroll_branching: {
@@ -966,6 +969,7 @@ export const SCROLL_DEFS = {
       category: 'knight',
       tool: true,
       scroll: true,
+      opensUi: 'scrollControl',
       tags: ['scroll', 'control', 'choice'],
     },
     scroll_replace: {
@@ -978,6 +982,7 @@ export const SCROLL_DEFS = {
       category: 'knight',
       tool: true,
       scroll: true,
+      opensUi: 'scrollControl',
       tags: ['scroll', 'control', 'choice'],
     },
     scroll_abundance: {
@@ -990,6 +995,7 @@ export const SCROLL_DEFS = {
       category: 'knight',
       tool: true,
       scroll: true,
+      opensUi: 'scrollControl',
       tags: ['scroll', 'control', 'choice'],
     },
     scroll_pool_weight: {
@@ -1002,6 +1008,7 @@ export const SCROLL_DEFS = {
       category: 'knight',
       tool: true,
       scroll: true,
+      opensUi: 'scrollControl',
       tags: ['scroll', 'control', 'tag'],
     },
     scroll_ego: {
@@ -1014,6 +1021,7 @@ export const SCROLL_DEFS = {
       category: 'knight',
       tool: true,
       scroll: true,
+      opensUi: 'scrollControl',
       tags: ['scroll', 'control', 'build'],
     },
   };

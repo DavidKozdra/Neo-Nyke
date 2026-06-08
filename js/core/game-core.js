@@ -393,9 +393,11 @@ export const CUTSCENE_GALLERY = [
     id: 'knave_knight',
     title: 'The Knave & the Knight',
     subtitle: 'Thorn Knight vs the Artificer Knave',
+    character: 'thorn_knight',
+    required: true,
     lines: [
       { speaker: 'KNAVE', text: 'You think you can out fight me you couldnt out argue me! your logic is false' },
-      { speaker: 'KNIGHT', text: 'The kingdom of God has come for you ...' },
+      { speaker: 'THORN', text: 'The kingdom of God has come for you ...' },
       { speaker: 'KNAVE', text: 'Violence it is' },
     ],
   },
@@ -403,6 +405,8 @@ export const CUTSCENE_GALLERY = [
     id: 'queen_metao',
     title: 'The Apostate',
     subtitle: 'Metao vs the Cult Queen',
+    character: 'metao',
+    required: true,
     lines: [
       { speaker: 'QUEEN', text: 'once my champion planning to kill me again are you apostate' },
       { speaker: 'METAO', text: '...' },
@@ -410,9 +414,35 @@ export const CUTSCENE_GALLERY = [
     ],
   },
   {
+    id: 'bulk_golem_thorn',
+    title: 'Stone Remembers',
+    subtitle: 'Bulk Golem confronts Thorn',
+    character: 'thorn_knight',
+    required: true,
+    lines: [
+      { speaker: 'BULK GOLEM', text: BOSS_OPENING_DIALOGUE.bulk_golem },
+    ],
+  },
+  {
+    id: 'rival_princess_thorn',
+    title: 'The Princess Descends',
+    subtitle: 'Rival Princess confronts Thorn',
+    character: 'thorn_knight',
+    required: true,
+    lines: [
+      {
+        speaker: 'RIVAL PRINCESS',
+        text: "Oh, you're here. You were supposed to be fighting for me, but you took too long, so now we fight!",
+      },
+      { speaker: 'THORN', text: 'Then draw your blade.' },
+    ],
+  },
+  {
     id: 'handsome_devil_thorn',
     title: 'An Old Acquaintance',
     subtitle: 'The Handsome Devil greets Thorn',
+    character: 'thorn_knight',
+    required: true,
     lines: [
       { speaker: 'HANDSOME DEVIL', text: "Hello, Thorn. I see you're well..." },
     ],
@@ -421,6 +451,8 @@ export const CUTSCENE_GALLERY = [
     id: 'handsome_devil_princess',
     title: 'A Cute Devil',
     subtitle: 'Princess meets the Handsome Devil',
+    character: 'princess',
+    required: true,
     lines: [
       { speaker: 'PRINCESS', text: 'He is cute.' },
       { speaker: 'HANDSOME DEVIL', text: 'Naturally.' },
@@ -430,6 +462,8 @@ export const CUTSCENE_GALLERY = [
     id: 'handsome_devil_gelleh',
     title: 'Cast the First Stone',
     subtitle: 'Gelleh meets the Handsome Devil',
+    character: 'gelleh',
+    required: true,
     lines: [
       { speaker: 'GELLEH', text: 'Sinner.' },
       { speaker: 'HANDSOME DEVIL', text: 'Then cast the first stone.' },
@@ -439,6 +473,8 @@ export const CUTSCENE_GALLERY = [
     id: 'handsome_devil_mooggy',
     title: 'Family is Complicated',
     subtitle: 'Mooggy meets the Handsome Devil',
+    character: 'mooggy',
+    required: true,
     lines: [
       { speaker: 'MOOGGY', text: 'Uncle.' },
       { speaker: 'HANDSOME DEVIL', text: 'Family is complicated.' },
@@ -450,6 +486,18 @@ export const CUTSCENE_GALLERY = [
     subtitle: 'Antony Blemmye stirs',
     lines: [
       { speaker: 'ANTONY BLEMMYE', text: 'gorba Gorba' },
+    ],
+  },
+  {
+    id: 'bowman_bane_thorn',
+    title: 'The Hidden Escape',
+    subtitle: 'Bowman Bane warns Thorn to run',
+    character: 'thorn_knight',
+    required: true,
+    lines: [
+      { speaker: 'BOWMAN BANE', text: 'Run, Thorn!!' },
+      { speaker: 'BOWMAN BANE', text: 'You cannot win this fight. The entrance is sealed. Find the hidden door and escape!' },
+      { speaker: 'THORN', text: 'Thank you, Sarge.' },
     ],
   },
   {

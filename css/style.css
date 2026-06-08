@@ -2663,6 +2663,17 @@ button, input, select, textarea {
   box-shadow: 0 10px 22px rgba(7, 16, 28, .28), inset 0 0 0 1px rgba(173, 218, 249, .08);
 }
 
+.inv-card--unread {
+  border-color: rgba(255, 66, 86, .7);
+  box-shadow: inset 0 0 0 1px rgba(255, 66, 86, .12), 0 0 12px rgba(255, 66, 86, .16);
+}
+
+.inv-card--unread:hover,
+.inv-card--unread:focus-visible {
+  border-color: #ff4256;
+  box-shadow: inset 0 0 0 1px rgba(255, 66, 86, .2), 0 0 16px rgba(255, 66, 86, .28);
+}
+
 .inv-card__title-row {
   display: flex;
   align-items: flex-start;
@@ -2692,6 +2703,56 @@ button, input, select, textarea {
   border: 1px solid rgba(255,255,255,.14);
   image-rendering: pixelated;
   box-shadow: 0 0 8px rgba(255,255,255,.08);
+}
+
+.inv-card__icon-wrap {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.inv-card__unread-dot {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 10px;
+  height: 10px;
+  border: 2px solid #101924;
+  border-radius: 50%;
+  background: #ff4256;
+  box-shadow: 0 0 7px rgba(255, 66, 86, .9);
+}
+
+.inv-card__open {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 7px 12px;
+  color: #fff;
+  background: rgba(255, 66, 86, .16);
+  border: 1px solid #ff4256;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  cursor: pointer;
+}
+
+.inv-card__open:hover,
+.inv-card__open:focus-visible {
+  background: rgba(255, 66, 86, .28);
+  box-shadow: 0 0 10px rgba(255, 66, 86, .35);
+}
+
+.inv-card__open-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ff4256;
+  box-shadow: 0 0 6px #ff4256;
 }
 
 .inv-chip__icon {
@@ -9240,7 +9301,7 @@ border-bottom: black solid 2px;
 
 .credits-gallery__tabs {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 4px;
   margin-bottom: 10px;
   padding: 4px;
@@ -9259,6 +9320,7 @@ border-bottom: black solid 2px;
   background: transparent;
   border: 1px solid transparent;
   border-radius: 6px;
+  overflow-wrap: anywhere;
 }
 .credits-gallery__tab:hover,
 .credits-gallery__tab:focus-visible {
