@@ -2362,7 +2362,7 @@
       // the meter can fill/decay every frame using the larger dwell radius.
       if (pickup.type === 'rewardChoice' && pickup.dwellMode) {
         const dwellRadius = Neo.AB_CHEST_DWELL_RADIUS || 44;
-        const dwellTarget = Neo.AB_CHEST_DWELL_SECONDS || 5;
+        const dwellTarget = Neo.AB_CHEST_DWELL_SECONDS || 2.2;
         const ddx = pickup.x - playerX;
         const ddy = pickup.y - playerY;
         const inside = ddx * ddx + ddy * ddy < dwellRadius * dwellRadius;

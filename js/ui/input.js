@@ -1580,7 +1580,7 @@ export const JESTER_PORTAL_TRIGGER_RADIUS = 42;
 export const LADDER_TRIGGER_RADIUS = 64;
 // A/B chest: stand inside one of the two choice "areas" for this long (seconds)
 // to confirm the pick. The dwell radius is the size of each stand-in area.
-export const AB_CHEST_DWELL_SECONDS = 5;
+export const AB_CHEST_DWELL_SECONDS = 2.2;
 export const AB_CHEST_DWELL_RADIUS = 44;
 export const REPLAY_TUTORIAL_KEY = 'neonyke:replayTutorialNextRun';
 

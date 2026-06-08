@@ -825,7 +825,7 @@
         // A/B chest dwell area: a ground circle the player stands in, plus a
         // circular meter that fills as they hold the spot. Drawn under the icon.
         if (pickup.type === 'rewardChoice' && pickup.dwellMode) {
-          const dwellTarget = Neo.AB_CHEST_DWELL_SECONDS || 5;
+          const dwellTarget = Neo.AB_CHEST_DWELL_SECONDS || 2.2;
           const areaR = Neo.AB_CHEST_DWELL_RADIUS || 44;
           const progress = Neo.clamp(Number(pickup.dwell || 0) / dwellTarget, 0, 1);
           // Pull the canvas back up by the bob so the ground area sits still.
@@ -893,7 +893,7 @@
         Neo.ctx.fillText(choiceLabel, 0, 33);
         if (pickup.type === 'rewardChoice' && pickup.dwellMode) {
           // Explain the mechanic right on the area: stand in it to fill the meter.
-          const dwellTarget = Neo.AB_CHEST_DWELL_SECONDS || 5;
+          const dwellTarget = Neo.AB_CHEST_DWELL_SECONDS || 2.2;
           const progress = Neo.clamp(Number(pickup.dwell || 0) / dwellTarget, 0, 1);
           Neo.ctx.fillStyle = progress > 0 ? '#d7f6ff' : '#9fb4c4';
           Neo.ctx.font = 'bold 8px system-ui';
