@@ -426,82 +426,94 @@ export function drawTaperedBeamPath(path, options = {}) {
   const color = options.color || '#ff00aa';
   const glow = options.glow || color;
   const maxWidth = Number(options.maxWidth || 8);
+  const minWidthRatio = clamp(Number(options.minWidthRatio || 0), 0, 1);
+  const taperPower = Math.max(0.25, Number(options.taperPower || 2));
+  const requestedSegmentLength = Math.max(24, Number(options.segmentLength || 32));
   const alpha = Neo.clamp ? Neo.clamp(Number(options.alpha ?? 0.92), 0, 1) : Math.max(0, Math.min(1, Number(options.alpha ?? 0.92)));
+  const coreColor = options.coreColor === false ? '' : String(options.coreColor || 'rgba(255,255,255,0.7)');
+  const coreAlpha = clamp(Number(options.coreAlpha ?? 1), 0, 1);
+  const coreWidth = Math.max(0, Number(options.coreWidth ?? Math.max(1.5, maxWidth * 0.22)));
   let traversed = 0;
-  const ctx = Neo.ctx;
 
   // When the screen is busy in performance mode, drop the beam's shadow glow —
   // shadowBlur is costly and the beam reads fine without it during a particle flood.
-  const lowFx = window.NeoSettings?.isPerformanceMode?.() !== false && (Neo.particles?.length || 0) > 80;
+  const lowFx = options.lowFx === true
+    || (window.NeoSettings?.isPerformanceMode?.() !== false && (Neo.particles?.length || 0) > 80);
+  const segmentLength = lowFx ? Math.max(64, requestedSegmentLength) : requestedSegmentLength;
   Neo.ctx.save();
   Neo.ctx.globalAlpha *= alpha;
   Neo.ctx.shadowColor = glow;
   Neo.ctx.shadowBlur = lowFx ? 0 : Number(options.shadowBlur || 18);
-  path.forEach(segment => {
+  Neo.ctx.fillStyle = color;
+  Neo.ctx.beginPath();
+  for (let segmentIndex = 0; segmentIndex < path.length; segmentIndex += 1) {
+    const segment = path[segmentIndex];
     const dx = segment.x2 - segment.x1;
     const dy = segment.y2 - segment.y1;
     const length = segment.length || Math.hypot(dx, dy);
-    if (!length) return;
+    if (!length) continue;
     const dirX = dx / length;
     const dirY = dy / length;
     const normalX = -dirY;
     const normalY = dirX;
-    const subSegments = Math.max(2, Math.ceil(length / 32));
+    const subSegments = Math.max(1, Math.ceil(length / segmentLength));
     for (let index = 0; index < subSegments; index += 1) {
       const t0 = index / subSegments;
       const t1 = (index + 1) / subSegments;
       const globalT0 = (traversed + length * t0) / totalLength;
       const globalT1 = (traversed + length * t1) / totalLength;
-      const taper0 = 1 - globalT0 * globalT0;
-      const taper1 = 1 - globalT1 * globalT1;
+      const taper0 = minWidthRatio + (1 - minWidthRatio) * (1 - Math.pow(globalT0, taperPower));
+      const taper1 = minWidthRatio + (1 - minWidthRatio) * (1 - Math.pow(globalT1, taperPower));
       const w0 = maxWidth * taper0 * 0.5;
       const w1 = maxWidth * taper1 * 0.5;
       const x0 = segment.x1 + dx * t0;
       const y0 = segment.y1 + dy * t0;
       const x1 = segment.x1 + dx * t1;
       const y1 = segment.y1 + dy * t1;
-      Neo.ctx.beginPath();
       Neo.ctx.moveTo(x0 + normalX * w0, y0 + normalY * w0);
       Neo.ctx.lineTo(x1 + normalX * w1, y1 + normalY * w1);
       Neo.ctx.lineTo(x1 - normalX * w1, y1 - normalY * w1);
       Neo.ctx.lineTo(x0 - normalX * w0, y0 - normalY * w0);
       Neo.ctx.closePath();
-      Neo.ctx.fillStyle = color;
-      Neo.ctx.fill();
     }
     traversed += length;
-  });
-  Neo.ctx.shadowBlur = lowFx ? 0 : 6;
-  Neo.ctx.strokeStyle = 'rgba(255,255,255,0.7)';
-  Neo.ctx.lineWidth = Math.max(1.5, maxWidth * 0.22);
-  Neo.ctx.lineCap = 'round';
-  path.forEach(segment => {
+  }
+  Neo.ctx.fill();
+
+  if (coreColor && coreWidth > 0 && coreAlpha > 0) {
+    Neo.ctx.globalAlpha *= coreAlpha;
+    Neo.ctx.shadowBlur = lowFx ? 0 : Number(options.coreShadowBlur ?? 6);
+    Neo.ctx.strokeStyle = coreColor;
+    Neo.ctx.lineWidth = coreWidth;
+    Neo.ctx.lineCap = 'round';
+    Neo.ctx.lineJoin = 'round';
     Neo.ctx.beginPath();
-    Neo.ctx.moveTo(segment.x1, segment.y1);
-    Neo.ctx.lineTo(segment.x2, segment.y2);
+    path.forEach((segment, index) => {
+      if (index === 0) Neo.ctx.moveTo(segment.x1, segment.y1);
+      else if (segment.x1 !== path[index - 1].x2 || segment.y1 !== path[index - 1].y2) Neo.ctx.moveTo(segment.x1, segment.y1);
+      Neo.ctx.lineTo(segment.x2, segment.y2);
+    });
     Neo.ctx.stroke();
-  });
+  }
   Neo.ctx.restore();
 }
 
 export function strokeBeamPath(path, options = {}) {
-  if (!path.length) return;
-  const color = options.color || '#aa66ff';
-  const ctx = Neo.ctx;
-  Neo.ctx.save();
-  Neo.ctx.strokeStyle = color;
-  Neo.ctx.lineWidth = Number(options.width || 7);
-  Neo.ctx.shadowColor = color;
-  Neo.ctx.shadowBlur = Number(options.shadowBlur || 14);
-  Neo.ctx.lineCap = 'round';
-  Neo.ctx.lineJoin = 'round';
-  path.forEach(segment => {
-    Neo.ctx.beginPath();
-    Neo.ctx.moveTo(segment.x1, segment.y1);
-    Neo.ctx.lineTo(segment.x2, segment.y2);
-    Neo.ctx.stroke();
+  drawTaperedBeamPath(path, {
+    color: options.color || '#aa66ff',
+    glow: options.glow || options.color || '#aa66ff',
+    maxWidth: Number(options.width || 7),
+    minWidthRatio: Number(options.minWidthRatio ?? 0.18),
+    taperPower: Number(options.taperPower || 1.5),
+    segmentLength: Number(options.segmentLength || 56),
+    shadowBlur: Number(options.shadowBlur || 14),
+    alpha: Number(options.alpha ?? 0.92),
+    coreColor: options.coreColor || 'rgba(255,255,255,0.58)',
+    coreAlpha: Number(options.coreAlpha ?? 1),
+    coreWidth: Number(options.coreWidth ?? Math.max(1.2, Number(options.width || 7) * 0.18)),
+    coreShadowBlur: Number(options.coreShadowBlur ?? 4),
+    lowFx: options.lowFx === true,
   });
-  Neo.ctx.restore();
 }
 
 export function getBeamEnd(x, y, angle, range) {

@@ -454,6 +454,7 @@
 
   <div id="wizardPawModal" class="modal-backdrop hidden" aria-hidden="true">
     <div class="modal-box wizard-paw-box">
+      <canvas class="wizard-paw-stamp" data-item-icon="wizards_paw" width="40" height="40" aria-hidden="true"></canvas>
       <h2 class="screen-title wizard-paw-title">WIZARD'S PAW</h2>
       <p class="wizard-paw-copy">Time is stopped until you lock in your picks.</p>
       <ol class="wizard-paw-steps">
@@ -1653,12 +1654,84 @@
 <div id="hudPreviewOverlay" class="hud-preview-overlay hidden" aria-hidden="true">
   <div class="hud-preview-frame" id="hudPreviewFrame">
     <span class="hud-preview-watermark">PLAY SCREEN PREVIEW</span>
-    <div class="hud-preview-box hud-preview-box--coins"      data-preview="coins">Coins</div>
-    <div class="hud-preview-box hud-preview-box--center"     data-preview="center">Timer / Floor</div>
-    <div class="hud-preview-box hud-preview-box--objectives" data-preview="objectives">Objectives</div>
-    <div class="hud-preview-box hud-preview-box--stats"      data-preview="stats">Player Stats</div>
-    <div class="hud-preview-box hud-preview-box--actions"    data-preview="actions">Action Bar</div>
-    <div class="hud-preview-box hud-preview-box--equipment"  data-preview="equipment">Tools</div>
+    <!-- Each box renders a mini-mockup of the real HUD widget using the live HUD
+         CSS classes; settings-ui.js fills the data- slots from save data on open. -->
+    <div class="hud-preview-box hud-preview-box--mock hud-preview-box--coins" data-preview="coins">
+      <div class="coin-display hud-preview-widget">
+        <div class="currency-line">
+          <canvas class="coin-icon" width="32" height="32" data-preview-coin-icon aria-hidden="true"></canvas>
+          <span data-preview-field="coins">0</span>
+        </div>
+        <div class="currency-line currency-line--loop">
+          <canvas class="coin-icon" width="32" height="32" data-preview-loop-icon aria-hidden="true"></canvas>
+          <span data-preview-field="loop">0</span>
+        </div>
+      </div>
+    </div>
+    <div class="hud-preview-box hud-preview-box--mock hud-preview-box--center" data-preview="center">
+      <div class="center-display hud-preview-widget">
+        <div class="timer-floor">
+          <span data-preview-field="timer">0:00</span>
+          <span class="separator">•</span>
+          <span>FL <b data-preview-field="floor">1</b>/10</span>
+          <span class="separator">•</span>
+          <span class="difficulty-display"><span data-preview-field="difficulty">EASY</span></span>
+          <span class="item-rarity-counts">
+            <span class="rarity-count rarity-count--white" title="Knight relics" data-preview-field="rarityWhite">0</span>
+            <span class="rarity-count rarity-count--purple" title="Wizard relics" data-preview-field="rarityPurple">0</span>
+            <span class="rarity-count rarity-count--red" title="GOD relics" data-preview-field="rarityRed">0</span>
+          </span>
+        </div>
+      </div>
+    </div>
+    <div class="hud-preview-box hud-preview-box--mock hud-preview-box--objectives" data-preview="objectives">
+      <div class="objective-tracker hud-preview-widget">
+        <div class="objective-tracker__head">
+          <span>OBJECTIVES</span>
+          <div class="objective-tracker__meta"><b data-preview-field="roomLabel">ROOM</b></div>
+        </div>
+        <ul class="objective-list">
+          <li data-state="todo">Find the ladder</li>
+          <li data-state="warn">Clear the room</li>
+        </ul>
+      </div>
+    </div>
+    <div class="hud-preview-box hud-preview-box--mock hud-preview-box--stats" data-preview="stats">
+      <div class="player-stats hud-preview-widget">
+        <section class="player-stat-card player-stat-card--solo">
+          <div class="player-stat-head">
+            <span class="player-stat-name" data-preview-field="character">THORN KNIGHT</span>
+          </div>
+          <div class="player-stat-row">
+            <span>HP</span>
+            <div class="bar player-hp-bar"><i class="player-stat-fill" style="width:72%;background:#4cbb5a"></i></div>
+            <span data-preview-field="hp">120/120</span>
+          </div>
+          <div class="player-stat-row">
+            <span>XP</span>
+            <span class="player-level-badge" data-preview-field="level">Lv.1</span>
+            <div class="bar player-xp-bar"><i class="player-stat-fill player-stat-fill--xp" style="width:40%"></i></div>
+            <span data-preview-field="xp">8/20</span>
+          </div>
+        </section>
+      </div>
+    </div>
+    <div class="hud-preview-box hud-preview-box--mock hud-preview-box--actions" data-preview="actions">
+      <div class="hud-preview-widget hud-preview-actions">
+        <div class="skill-card"><div class="skill-meta"><span class="skill-key">SHIFT</span><span class="skill-name">Move</span></div><b class="skill-time">READY</b></div>
+        <div class="skill-card"><div class="skill-meta"><span class="skill-key">LMB</span><span class="skill-name">Slash</span></div><b class="skill-time">READY</b></div>
+        <div class="skill-card"><div class="skill-meta"><span class="skill-key">RMB</span><span class="skill-name">Beam</span></div><b class="skill-time">READY</b></div>
+        <div class="skill-card"><div class="skill-meta"><span class="skill-key">R</span><span class="skill-name">Smash</span></div><b class="skill-time">READY</b></div>
+      </div>
+    </div>
+    <div class="hud-preview-box hud-preview-box--mock hud-preview-box--equipment" data-preview="equipment">
+      <div class="equipment-slots hud-preview-widget" data-preview-equipment>
+        <span class="equip-slot is-empty"><span class="equip-slot__key">F</span></span>
+        <span class="equip-slot is-empty"><span class="equip-slot__key">G</span></span>
+        <span class="equip-slot is-empty"><span class="equip-slot__key">H</span></span>
+        <span class="equip-slot is-empty"><span class="equip-slot__key">J</span></span>
+      </div>
+    </div>
   </div>
   <button type="button" class="hud-preview-close" id="hudPreviewClose">Done</button>
 </div>

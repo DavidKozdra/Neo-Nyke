@@ -100,6 +100,25 @@ export function resumeGame() {
   function applySandboxPlayerSetup(playerData) {
     if (!playerData) return;
     const settings = Neo.sandboxSettings || {};
+    const startingItems = settings.startingItems && typeof settings.startingItems === 'object'
+      ? settings.startingItems
+      : {};
+
+    // Practice items are inserted directly into inventory, bypassing collectItem().
+    // Mirror the acquisition queues for items whose effect is resolved in a UI.
+    playerData.wizardPawPendingCount = 0;
+    playerData.extraBatteryPendingCount = 0;
+    playerData.scrollPendingQueue = [];
+    Object.entries(startingItems).forEach(([key, rawCount]) => {
+      const count = Math.max(0, Math.floor(Number(rawCount) || 0));
+      if (count <= 0) return;
+      const item = Neo.itemRegistry?.get?.(key) || Neo.ITEM_DEFS?.[key] || Neo.SCROLL_DEFS?.[key];
+      if (item?.opensUi === 'wizardPaw') playerData.wizardPawPendingCount += count;
+      else if (item?.opensUi === 'extraBattery') playerData.extraBatteryPendingCount += count;
+      else if (item?.opensUi === 'scrollControl') {
+        for (let index = 0; index < count; index += 1) playerData.scrollPendingQueue.push(key);
+      }
+    });
 
     // Override equipped moves per slot (empty string keeps the character default).
     const loadout = settings.moveLoadout && typeof settings.moveLoadout === 'object' ? settings.moveLoadout : {};

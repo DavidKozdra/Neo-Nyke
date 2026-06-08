@@ -1304,6 +1304,7 @@ export function setWizardPawModalOpen(open, options = {}) {
       clearPanelCloseEffect(effectTarget);
       Neo.ui.wizardPawModal.classList.remove('hidden');
       Neo.ui.wizardPawModal.setAttribute('aria-hidden', 'false');
+      Neo.drawItemIconCanvases?.(Neo.ui.wizardPawModal, 'data-item-icon');
       return;
     }
     if (animateClose && isPanelOpen(Neo.ui.wizardPawModal)) playPanelCloseEffect(effectTarget);
@@ -2293,6 +2294,9 @@ export function renderInventoryPanel() {
         .sort((a, b) => Neo.MOVE_DEFS[a].slot.localeCompare(Neo.MOVE_DEFS[b].slot));
       const extraBatteryNotice = extraBatteryPendingCount > 0
         ? `<div class="inv-card inv-card--battery">
+            <span class="inv-card__stamp" aria-hidden="true">
+              <canvas class="inv-card__stamp-icon" data-item-icon="extra_battery" width="40" height="40"></canvas>
+            </span>
             <div class="inv-card__title-row">
               <span class="inv-card__eyebrow">Extra Battery</span>
               <span class="inv-card__count">${extraBatteryPendingCount} pending</span>
@@ -2337,6 +2341,7 @@ export function renderInventoryPanel() {
       Neo.ui.invMovesList.querySelectorAll('[data-move-icon]').forEach(canvas => {
         Neo.drawMoveToastIcon(canvas, Neo.MOVE_DEFS[canvas.dataset.moveIcon]);
       });
+      Neo.drawItemIconCanvases?.(Neo.ui.invMovesList, 'data-item-icon');
 
       Neo.MOVE_SLOTS.forEach(slot => {
         const node = Neo.ui.invSlots[slot];

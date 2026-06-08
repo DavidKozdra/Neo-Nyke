@@ -745,9 +745,78 @@
   }
   buildHudElementRows();
 
+  // Fill the preview mock widgets from save data so "Preview layout" shows the
+  // player's real numbers (current run when one exists, otherwise meta records).
+  // Field markers are data-preview-field="..." inside each .hud-preview-box--mock.
+  function populateHudPreviewContent() {
+    const frame = document.getElementById('hudPreviewFrame');
+    if (!frame) return;
+    const meta = Neo.metaProgress || {};
+    const run = Neo.activeRun || null;
+    const runPlayer = run?.player || null;
+    const setField = (key, value) => {
+      const el = frame.querySelector(`[data-preview-field="${key}"]`);
+      if (el) el.textContent = String(value);
+    };
+
+    // Coins & Loop — current run coins if mid-run, else lifetime/meta coins.
+    setField('coins', Number(runPlayer?.coins ?? meta.coins ?? 0));
+    setField('loop', Number(meta.loopCrystals || 0));
+
+    // Timer / Floor row.
+    const floor = Number(run?.floor ?? meta.bestFloor ?? 1);
+    setField('floor', floor);
+    setField('timer', runPlayer ? (Neo.ui?.timerDisplay?.textContent || '0:00') : '0:00');
+    const diffKey = run?.difficulty || meta.selectedDifficulty || Neo.selectedDifficulty;
+    setField('difficulty', String(Neo.getDifficultyDef?.(diffKey)?.name || diffKey || 'EASY').toUpperCase());
+    const rarity = Neo.getItemRarityCounts?.(runPlayer || { items: {} }) || { white: 0, purple: 0, red: 0 };
+    setField('rarityWhite', rarity.white);
+    setField('rarityPurple', rarity.purple);
+    setField('rarityRed', rarity.red);
+
+    // Objective panel room label.
+    const roomLabel = run && Neo.currentRoom ? Neo.getRoomLabel?.(Neo.currentRoom.type) : 'ROOM';
+    setField('roomLabel', String(roomLabel || 'ROOM').toUpperCase());
+
+    // Player stats card.
+    const charKey = runPlayer?.character || meta.selectedCharacter || Neo.chosenCharacter;
+    const charDef = Neo.CHARACTER_DEFS?.[charKey] || Neo.CHARACTER_DEFS?.thorn_knight || {};
+    setField('character', String(charDef.name || charKey || 'CHARACTER').toUpperCase());
+    if (runPlayer) {
+      setField('hp', Neo.formatHpText?.(runPlayer.hp, runPlayer.maxHp) || `${runPlayer.hp}/${runPlayer.maxHp}`);
+      setField('level', `Lv.${runPlayer.level || 1}`);
+      setField('xp', `${runPlayer.xp || 0}/${runPlayer.xpToNext || 0}`);
+    }
+
+    // Pixel icons for the coin/loop canvases (same art as the live HUD).
+    if (typeof Neo.drawPixelIcon === 'function') {
+      const coinPx = [[2,1],[3,1],[4,1],[1,2],[2,2],[3,2],[4,2],[5,2],[1,3],[2,3],[3,3],[4,3],[5,3],[1,4],[2,4],[3,4],[4,4],[5,4],[2,5],[3,5],[4,5]];
+      const loopPx = [[2,1],[3,1],[4,1],[1,2],[5,2],[1,3],[5,3],[1,4],[5,4],[2,5],[3,5],[4,5],[2,2],[4,2],[2,4],[4,4],[3,3]];
+      const coinIcon = frame.querySelector('[data-preview-coin-icon]');
+      const loopIcon = frame.querySelector('[data-preview-loop-icon]');
+      if (coinIcon) Neo.drawPixelIcon(coinIcon, '#ffd15a', coinPx);
+      if (loopIcon) Neo.drawPixelIcon(loopIcon, '#83f3ff', loopPx);
+    }
+
+    // Tool slots — show the live run's equipped tools when present, else placeholders.
+    const equipHost = frame.querySelector('[data-preview-equipment]');
+    if (equipHost) {
+      const keys = ['F', 'G', 'H', 'J'];
+      const slots = Array.isArray(runPlayer?.equipmentSlots) ? runPlayer.equipmentSlots : [];
+      equipHost.querySelectorAll('.equip-slot').forEach((slot, idx) => {
+        const itemKey = slots[idx] || '';
+        const def = itemKey ? (Neo.itemRegistry?.get?.(itemKey) || Neo.ITEM_DEFS?.[itemKey]) : null;
+        slot.classList.toggle('is-empty', !def);
+        const keyEl = slot.querySelector('.equip-slot__key');
+        if (keyEl) keyEl.textContent = keys[idx] || '';
+      });
+    }
+  }
+
   document.getElementById('hudLayoutPreviewBtn')?.addEventListener('click', () => {
     const overlay = document.getElementById('hudPreviewOverlay');
     if (!overlay) return;
+    populateHudPreviewContent();
     refreshHudPreviewBoxes();
     overlay.classList.remove('hidden');
     overlay.setAttribute('aria-hidden', 'false');

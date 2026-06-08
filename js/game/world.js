@@ -1578,6 +1578,25 @@
           }
         }
       }
+      if (hazard.kind === 'bomb_aoe') {
+        // Telegraphed fallout from a botched defusal: a growing ring warns the
+        // player, then it detonates for full damage if they haven't fled.
+        hazard.fuse = Number(hazard.fuse || 0) - dt;
+        const charge = Neo.clamp(1 - hazard.fuse / (hazard.fuseDuration || 3), 0, 1);
+        hazard.sparkTick = Number(hazard.sparkTick || 0) - dt;
+        if (hazard.sparkTick <= 0) {
+          Neo.spawnParticle({ x: hazard.x, y: hazard.y, life: 0.2, ring: (hazard.blastRadius || 150) * charge, c: '#ff7a66' });
+          hazard.sparkTick = 0.12;
+        }
+        if (hazard.fuse <= 0) {
+          if (Neo.dist(Neo.player.x, Neo.player.y, hazard.x, hazard.y) <= (hazard.blastRadius || 150) + Neo.player.r) {
+            const angle = Math.atan2(Neo.player.y - hazard.y, Neo.player.x - hazard.x);
+            damagePlayer(hazard.damage || 250, angle, 240, 'bomb_aoe');
+          }
+          blastRadius(hazard.x, hazard.y, hazard.blastRadius || 150, hazard.damage || 250, '#ff7a66');
+          hazard.ttl = 0;
+        }
+      }
       if (hazard.kind === 'lava' && Neo.player.lavaWalkTime <= 0) {
         const inside = hazard.shape === 'rect'
           ? Neo.circleRect(Neo.player.x, Neo.player.y, Neo.player.r - 6, hazard.left, hazard.top, hazard.w, hazard.h)
@@ -2567,6 +2586,7 @@
         } else {
           blastRadius(pickup.x, pickup.y, 76, 28 + Neo.floor * 2, '#ff7a66');
           Neo.spawnParticle({ x: pickup.x, y: pickup.y - 20, life: 0.75, text: 'WRONG', c: '#ff7a7a' });
+          Neo.spawnBombFailAoe(pickup.x, pickup.y);
           Neo.failChallengeTrial('WRONG BOMB');
         }
         Neo.scheduleRunSave();

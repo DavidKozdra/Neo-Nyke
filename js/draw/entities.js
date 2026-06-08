@@ -327,6 +327,9 @@
   }
 
   function drawEnemyTelegraphs() {
+    const performanceMode = window.NeoSettings?.isPerformanceMode?.() !== false;
+    const activeBeamCount = Neo.enemies.reduce((count, enemy) => count + (enemy?.beamTime > 0 ? 1 : 0), 0);
+    const lowBeamFx = performanceMode && (activeBeamCount > 3 || (Neo.particles?.length || 0) > 64);
     Neo.enemies.forEach(enemy => {
       if (enemy.windup > 0) {
         Neo.ctx.save();
@@ -342,10 +345,20 @@
       if (enemy.beamTime > 0) {
         const range = enemy.type === 'god' ? (enemy.beamRange || 620) : enemy.type === 'mooggy' ? 520 : enemy.type === 'handsome_devil' ? (enemy.beamRange || 560) : enemy.type === 'bowman_bane' ? 480 : 430;
         const beamPath = Neo.buildRicochetBeamPath(enemy.x, enemy.y, enemy.beamAngle, range, Neo.getEnemyBeamBounceCount(enemy));
-        Neo.strokeBeamPath(beamPath, {
-          color: enemy.type === 'god' ? '#ffffff' : enemy.type === 'mooggy' ? '#ff3348' : enemy.type === 'handsome_devil' ? '#ff3348' : enemy.type === 'bowman_bane' ? '#8dd4ff' : '#aa66ff',
-          width: enemy.type === 'god' && enemy.state === 'godSweep' ? 18 : enemy.type === 'god' ? 10 : enemy.type === 'mooggy' ? 5 : enemy.type === 'handsome_devil' ? 8 : 7,
+        const color = enemy.type === 'god' ? '#ffffff' : enemy.type === 'mooggy' ? '#ff3348' : enemy.type === 'handsome_devil' ? '#ff3348' : enemy.type === 'bowman_bane' ? '#8dd4ff' : '#aa66ff';
+        const width = enemy.type === 'god' && enemy.state === 'godSweep' ? 18 : enemy.type === 'god' ? 10 : enemy.type === 'mooggy' ? 6 : enemy.type === 'handsome_devil' ? 9 : 8;
+        Neo.drawTaperedBeamPath(beamPath, {
+          color,
+          glow: color,
+          maxWidth: width,
+          minWidthRatio: enemy.type === 'god' ? 0.12 : 0.2,
+          taperPower: enemy.type === 'god' ? 1.8 : 1.35,
+          segmentLength: lowBeamFx ? 80 : 48,
           shadowBlur: enemy.type === 'god' && enemy.state === 'godSweep' ? 24 : enemy.type === 'mooggy' || enemy.type === 'handsome_devil' ? 20 : 14,
+          coreColor: enemy.type === 'god' ? '#ffffff' : 'rgba(255,255,255,0.66)',
+          coreWidth: Math.max(1.4, width * 0.22),
+          coreShadowBlur: lowBeamFx ? 0 : 4,
+          lowFx: lowBeamFx,
         });
       }
     });

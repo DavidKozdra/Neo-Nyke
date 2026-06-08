@@ -757,6 +757,10 @@
       base.speed = 104;
       base.dmg = 12;
       base.attackCd = 1.55;
+      // Roll a personality: aggressive snipers close in and shoot, staybacks
+      // hold their distance (classic sniper), and meleers prefer the rifle butt.
+      const behaviorRoll = Neo.nextRandom('encounter');
+      base.sniperBehavior = behaviorRoll < 1 / 3 ? 'aggressive' : behaviorRoll < 2 / 3 ? 'stayback' : 'melee';
     } else if (type === 'machine_gunner') {
       base.r = 17;
       base.hp = 96;
@@ -1422,30 +1426,55 @@
     });
   }
 
+  const CHALLENGE_BOMB_SAFE_COUNT = 3;
+  const CHALLENGE_BOMB_UNSAFE_COUNT = 2;
+  const CHALLENGE_BOMB_DRIFT_SPEED = 26;
+
   function spawnChallengeBombs(room) {
     if (!room || room.type !== 'challenge') return;
     if (Neo.pickups.some(pickup => pickup?.type === 'challengeBomb')) return;
-    const slots = [
-      [-90, -90], [0, -90], [90, -90],
-      [-90, 0], [90, 0],
-      [-90, 90], [0, 90], [90, 90],
-    ];
-    let safeIndex = Number(room.challengeData?.safeBombIndex);
-    if (!Number.isInteger(safeIndex) || safeIndex < 0 || safeIndex >= slots.length) {
-      safeIndex = Neo.irand(0, slots.length - 1, 'loot');
+    // 3 safe + 2 unsafe bombs scattered at random spots; grabbing any safe one
+    // disarms the trial, so the extra safe bombs just improve the odds.
+    const total = CHALLENGE_BOMB_SAFE_COUNT + CHALLENGE_BOMB_UNSAFE_COUNT;
+    const safeFlags = Array.from({ length: total }, (_, index) => index < CHALLENGE_BOMB_SAFE_COUNT);
+    // Fisher-Yates shuffle so which spawns are safe is randomized each trial.
+    for (let i = safeFlags.length - 1; i > 0; i -= 1) {
+      const j = Neo.irand(0, i, 'loot');
+      [safeFlags[i], safeFlags[j]] = [safeFlags[j], safeFlags[i]];
     }
-    room.challengeData = {
-      ...(room.challengeData || {}),
-      safeBombIndex: safeIndex,
-    };
-    slots.forEach(([ox, oy], index) => {
+    const margin = 90;
+    safeFlags.forEach(safe => {
+      const x = Neo.rand(Neo.ROOM_W - margin, margin, 'loot');
+      const y = Neo.rand(Neo.ROOM_H - margin, margin, 'loot');
+      const heading = Neo.nextRandom('loot') * Math.PI * 2;
       Neo.pickups.push({
-        x: Neo.ROOM_W / 2 + ox,
-        y: Neo.ROOM_H / 2 + oy,
+        x,
+        y,
+        vx: Math.cos(heading) * CHALLENGE_BOMB_DRIFT_SPEED,
+        vy: Math.sin(heading) * CHALLENGE_BOMB_DRIFT_SPEED,
         type: 'challengeBomb',
-        safe: index === safeIndex,
+        safe,
       });
     });
+  }
+
+  // A failed bomb defusal leaves a telegraphed blast that detonates after a
+  // short fuse, punishing the player for 250 per floor if they stay in range.
+  const BOMB_FAIL_AOE_FUSE = 3;
+  const BOMB_FAIL_AOE_RADIUS = 150;
+  function spawnBombFailAoe(x = Neo.ROOM_W / 2, y = Neo.ROOM_H / 2) {
+    Neo.hazards.push({
+      kind: 'bomb_aoe',
+      x,
+      y,
+      r: BOMB_FAIL_AOE_RADIUS,
+      blastRadius: BOMB_FAIL_AOE_RADIUS,
+      fuse: BOMB_FAIL_AOE_FUSE,
+      fuseDuration: BOMB_FAIL_AOE_FUSE,
+      damage: 250 * Math.max(1, Neo.floor),
+      sparkTick: 0,
+    });
+    Neo.spawnParticle({ x, y: y - 20, life: 0.6, text: 'DETONATING', c: '#ff7a66', size: 12 });
   }
 
   function spawnChallengeRunes(room) {
@@ -1560,6 +1589,18 @@
       room.challengeData.spawnCount = Number(tuning.spawnCount || 1);
       room.challengeData.targetClearRate = CHALLENGE_CLEAR_RATE_TARGETS.bomb;
       spawnChallengeBombs(room);
+      // Five snipers ring the bomb floor; each rolls its own behaviour on spawn.
+      for (let index = 0; index < 5; index += 1) {
+        const angle = (Math.PI * 2 * index) / 5 + Neo.nextRandom('encounter') * 0.4;
+        const radius = 200 + Neo.nextRandom('encounter') * 70;
+        const safeSpawn = findSafeEnemySpawnPoint(
+          Neo.clamp(Neo.ROOM_W / 2 + Math.cos(angle) * radius, 90, Neo.ROOM_W - 90),
+          Neo.clamp(Neo.ROOM_H / 2 + Math.sin(angle) * radius, 90, Neo.ROOM_H - 90),
+          15,
+        );
+        if (!safeSpawn) continue;
+        spawnEnemy('sniper', safeSpawn.x, safeSpawn.y, false);
+      }
       sayAtPosition(Neo.ROOM_W / 2, Neo.ROOM_H / 2, 'Disarm the blue bomb. Red bombs explode.', { speaker: 'TRIAL', tone: 'warning' });
     } else if (type === 'survival') {
       const tuning = getChallengeTrialTuning('survival');
@@ -1849,9 +1890,30 @@
       return;
     }
 
-    const desired = 290;
+    const behavior = enemy.sniperBehavior || 'stayback';
+
+    if (behavior === 'melee') {
+      // Closes the gap and favours the weaker melee swing; only falls back to a
+      // ranged shot when the player keeps it at arm's length.
+      steerEnemy(enemy, dx / distance, dy / distance, enemy.speed, 3.6, dt);
+      if (enemy.attackCd <= 0) {
+        if (distance <= enemy.r + Neo.player.r + 22) {
+          enemy.swingTime = 0.16;
+          enemy.attackCd = 0.9 * tuning.rangedCadence;
+        } else if (distance < 520) {
+          enemy.windup = 0.6 / tuning.reaction;
+          enemy.beamAngle = Math.atan2(dy, dx);
+          enemy.attackCd = 2.2 * tuning.rangedCadence;
+        }
+      }
+      return;
+    }
+
+    // Aggressive snipers march into mid-range to fire; staybacks hold a long
+    // line and relocate to cover between shots.
+    const desired = behavior === 'aggressive' ? 150 : 290;
     const direction = distance < desired - 20 ? -1 : distance > desired + 20 ? 1 : 0;
-    if (enemy.attackCd > 0.35 && trySteerEnemyToCover(enemy, dt, desired, 3.8)) {
+    if (behavior === 'stayback' && enemy.attackCd > 0.35 && trySteerEnemyToCover(enemy, dt, desired, 3.8)) {
       // Snipers should relocate behind obstacles between shots.
     } else {
       steerEnemy(enemy, dx / distance * direction, dy / distance * direction, enemy.speed, 3.6, dt);
@@ -3977,11 +4039,23 @@
     if (type === 'bomb') {
       Neo.currentRoom.challengeTimer = Math.max(0, (Neo.currentRoom.challengeTimer || 0) - dt);
       Neo.currentRoom.challengeTick = Math.max(0, (Neo.currentRoom.challengeTick || 0) - dt);
+      // Drift each bomb slowly along its set path, bouncing off the room edges.
+      const margin = 90;
+      for (const pickup of Neo.pickups) {
+        if (pickup?.type !== 'challengeBomb' || pickup.vx === undefined) continue;
+        pickup.x += pickup.vx * dt;
+        pickup.y += pickup.vy * dt;
+        if (pickup.x < margin) { pickup.x = margin; pickup.vx = Math.abs(pickup.vx); }
+        else if (pickup.x > Neo.ROOM_W - margin) { pickup.x = Neo.ROOM_W - margin; pickup.vx = -Math.abs(pickup.vx); }
+        if (pickup.y < margin) { pickup.y = margin; pickup.vy = Math.abs(pickup.vy); }
+        else if (pickup.y > Neo.ROOM_H - margin) { pickup.y = Neo.ROOM_H - margin; pickup.vy = -Math.abs(pickup.vy); }
+      }
       if (Neo.currentRoom.challengeTick <= 0) {
         Neo.currentRoom.challengeTick = Math.max(1.1, Number(getChallengeTrialTuning('bomb').tick || 1.8));
         spawnTrialEnemyWave(Math.max(1, Number(Neo.currentRoom.challengeData?.spawnCount || 1)));
       }
       if (Neo.currentRoom.challengeTimer <= 0) {
+        spawnBombFailAoe();
         failChallengeTrial('BOMB DETONATED');
       }
       return;
@@ -4340,6 +4414,7 @@
   Neo.spawnMooggyAssassin = spawnMooggyAssassin;
   Neo.spawnChallengeStarter = spawnChallengeStarter;
   Neo.spawnChallengeBombs = spawnChallengeBombs;
+  Neo.spawnBombFailAoe = spawnBombFailAoe;
   Neo.spawnChallengeRunes = spawnChallengeRunes;
   Neo.spawnStillnessItemChoices = spawnStillnessItemChoices;
   Neo.chooseStillnessChallengeReward = chooseStillnessChallengeReward;

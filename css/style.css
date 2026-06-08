@@ -2674,6 +2674,11 @@ button, input, select, textarea {
   box-shadow: inset 0 0 0 1px rgba(255, 66, 86, .2), 0 0 16px rgba(255, 66, 86, .28);
 }
 
+.inv-card--battery {
+  position: relative;
+  padding-top: 18px;
+}
+
 .inv-card__title-row {
   display: flex;
   align-items: flex-start;
@@ -2753,6 +2758,34 @@ button, input, select, textarea {
   border-radius: 50%;
   background: #ff4256;
   box-shadow: 0 0 6px #ff4256;
+}
+
+.inv-card__stamp,
+.wizard-paw-stamp {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, .14);
+  background: rgba(10, 16, 24, .56);
+  box-shadow: 0 0 0 1px rgba(255, 66, 86, .18), 0 6px 14px rgba(0, 0, 0, .24);
+}
+
+.inv-card__stamp-icon,
+.wizard-paw-stamp {
+  image-rendering: pixelated;
+}
+
+.wizard-paw-box {
+  position: relative;
+}
+
+.wizard-paw-title {
+  padding-right: 56px;
 }
 
 .inv-chip__icon {
@@ -10391,6 +10424,43 @@ border-bottom: black solid 2px;
   border-color: var(--menu-text-soft);
   background: rgba(120,120,140,.08);
 }
+/* Mock boxes render a real HUD widget instead of a flat label: drop the pill
+   chrome and let the embedded widget supply its own look. */
+.hud-preview-box--mock {
+  padding: 0;
+  border: none;
+  background: none;
+  box-shadow: none;
+  white-space: normal;
+}
+.hud-preview-box--mock.hud-preview-box--hidden { opacity: .28; }
+/* The live HUD widgets are position:fixed/absolute + .hidden; inside the preview
+   they must flow normally and stay visible. The watermark/scale stays readable
+   by shrinking the heavier widgets a touch. */
+.hud-preview-widget,
+.hud-preview-widget.coin-display,
+.hud-preview-widget.center-display,
+.hud-preview-widget.objective-tracker,
+.hud-preview-widget.player-stats,
+.hud-preview-widget.equipment-slots {
+  position: static !important;
+  inset: auto !important;
+  transform: none !important;
+  display: flex !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: none;
+  margin: 0;
+}
+.hud-preview-widget.objective-tracker { display: block !important; min-width: 180px; }
+.hud-preview-widget.player-stats { display: block !important; }
+.hud-preview-widget.equipment-slots { flex-direction: column; gap: 4px; }
+.hud-preview-actions { display: flex; gap: 6px; }
+.hud-preview-actions .skill-card { pointer-events: none; }
+/* Keep the schematic compact regardless of the live HUD's full-size widgets. */
+.hud-preview-frame .hud-preview-widget { font-size: 11px; }
+.hud-preview-frame .hud-preview-widget .objective-list li { font-size: 11px; }
+.hud-preview-frame .hud-preview-widget .skill-card { transform: scale(.72); transform-origin: top center; }
 /* Anchors mirror the real CSS placement of each widget. */
 .hud-preview-box--coins      { top: 4%;  left: 3%; }
 .hud-preview-box--center     { top: 2%;  left: 50%; transform: translateX(-50%); }
