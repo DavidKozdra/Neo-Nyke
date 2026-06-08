@@ -113,6 +113,7 @@ window.Neo = {
     rangedCadenceMultiplier: 1,
     supportPowerMultiplier: 1,
     shopPriceMultiplier: 1,
+    ccResistScale: 0,
   },
   endlessWave: 0,
   endlessWaveActive: false,
@@ -122,6 +123,7 @@ window.Neo = {
   bossRushNextSpawnAt: 0,
   bossRushNextSpawnTimeout: null,
   runRevivesUsed: 0,
+  runCrystalsEarned: 0,
   lastDeathEntryId: '',
 
   // --- ui ---

@@ -1017,8 +1017,10 @@ export function toggleAnvilPanel() {
   // Per-step cost for a stat in the currently selected pay currency.
   function getAnvilStepCost(statDef) {
     if (!statDef) return 0;
+    // Gold upgrades cost double the listed goldPerStep; XP cost is unchanged. This
+    // is the single chokepoint for forge cost (per-step display, total, and spend).
     return Neo.anvilPayCurrency === 'gold'
-      ? (statDef.goldPerStep ?? 0)
+      ? (statDef.goldPerStep ?? 0) * 2
       : (statDef.xpPerStep ?? 0);
   }
 

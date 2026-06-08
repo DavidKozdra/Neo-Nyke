@@ -628,7 +628,16 @@
     const endlessHpMultiplier = 1 + endlessWaveIndex * Neo.ENEMY_SCALING.endlessWaveHp;
     const endlessDamageMultiplier = 1 + endlessWaveIndex * Neo.ENEMY_SCALING.endlessWaveDamage;
     const endlessSpeedMultiplier = 1 + endlessWaveIndex * Neo.ENEMY_SCALING.endlessWaveSpeed;
-    const hpScale = floorMultiplier * loopMultiplier * timerMultiplier * difficultyMultiplier * endlessHpMultiplier;
+    // Bosses get an extra per-loop boost on top of the generic loop scaling above.
+    // HP folds into hpScale (no cap); damage is applied after the soft cap below so
+    // it always contributes full value. Non-bosses and loop 1 collapse to 1.
+    const bossLoopHpMultiplier = isBossType(type)
+      ? 1 + (loopNumber - 1) * (Neo.ENEMY_SCALING.bossLoopHp ?? 0)
+      : 1;
+    const bossLoopDamageMultiplier = isBossType(type)
+      ? 1 + (loopNumber - 1) * (Neo.ENEMY_SCALING.bossLoopDamage ?? 0)
+      : 1;
+    const hpScale = floorMultiplier * loopMultiplier * timerMultiplier * difficultyMultiplier * endlessHpMultiplier * bossLoopHpMultiplier;
     const damageFloorMultiplier = 1 + (floorInLoop - 1) * (Neo.ENEMY_SCALING.damageFloor ?? Neo.ENEMY_SCALING.floor);
     const damageLoopMultiplier = 1 + (loopNumber - 1) * (Neo.ENEMY_SCALING.damageLoop ?? Neo.ENEMY_SCALING.loop);
     const damageTimerMultiplier = 1 + gameMinutes * (Neo.ENEMY_SCALING.damageMinute ?? Neo.ENEMY_SCALING.minute);
@@ -639,7 +648,7 @@
       damageFloorMultiplier * damageLoopMultiplier * damageTimerMultiplier * difficultyMultiplier * endlessDamageMultiplier,
       endlessWaveIndex > 0 ? Math.max(damageSoftCap, Neo.ENEMY_SCALING.endlessWaveDamageSoftCap) : damageSoftCap,
       isBossType(type) ? 0.38 : 0.34
-    );
+    ) * bossLoopDamageMultiplier;
     const speedFloorMultiplier = 1 + (floorInLoop - 1) * (Neo.ENEMY_SCALING.speedFloor ?? 0.035);
     const speedLoopMultiplier = 1 + (loopNumber - 1) * (Neo.ENEMY_SCALING.speedLoop ?? 0.07);
     const speedTimerMultiplier = 1 + gameMinutes * (Neo.ENEMY_SCALING.speedMinute ?? 0.018);

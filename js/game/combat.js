@@ -1794,9 +1794,33 @@
     Neo.player.warpHideTime = Math.max(Number(Neo.player.warpHideTime || 0), 0.6);
   }
 
+  // How strongly an enemy resists crowd control (knockback + stun). Grows with how
+  // far/long the run has gone (cumulative floors entered + elapsed minutes), scaled
+  // by the difficulty's ccResistScale (easy ~negligible, hard+ steep), with an extra
+  // bump for bosses/elites. No cap — deep/late enemies can become CC-immune.
+  // hard (ccResistScale 0.30) reaches ~1.0 after roughly one full loop, which halves
+  // applied knockback via the 1/(1+level) factor in hitEnemy().
+  function getEnemyCcLevel(enemy) {
+    const diff = Neo.getDifficultyDef?.() || {};
+    const scale = Number(diff.ccResistScale ?? 0);
+    const isBoss = Neo.isBossType?.(enemy?.type) || enemy?.type === 'god';
+    const isElite = !!enemy?.elite;
+    if (scale <= 0 && !isBoss && !isElite) return 0;
+    const depth = Neo.getProgressionDepth ? Neo.getProgressionDepth() : Math.max(1, Number(Neo.floor) || 1);
+    const minutes = Math.max(0, Number(Neo.gameElapsedTime || 0) / 60);
+    const progress = (depth - 1) / Neo.MAX_FLOOR + minutes / 6;
+    let level = scale * progress;
+    if (isBoss) level += 0.6;
+    else if (isElite) level += 0.3;
+    return Math.max(0, level);
+  }
+  Neo.getEnemyCcLevel = getEnemyCcLevel;
+
   function applyEnemyImpactStun(enemy, dealt, appliedKnockback) {
     const maxHealth = Number(enemy?.max) || 0;
-    const stunResistance = Math.max(0, Number(enemy?.stunResistance || 0));
+    // Base stun resistance (e.g. elite anchor_charm) plus the depth/time/difficulty
+    // scaling, so deep/late enemies are stunned less often and for less time.
+    const stunResistance = Math.max(0, Number(enemy?.stunResistance || 0)) + getEnemyCcLevel(enemy);
     const thresholdMultiplier = 1 + stunResistance * 0.35;
     const durationMultiplier = Math.max(0.28, 1 - stunResistance * 0.28);
     const lostHalfHealth = maxHealth > 0 && dealt >= maxHealth * Neo.HEAVY_HIT_HEALTH_RATIO * thresholdMultiplier;
@@ -1853,7 +1877,11 @@
     // Sparkle Charm marks enemies so every hit against them is a guaranteed crit.
     const sparkled = Number(enemy.critSparkle || 0) > 0;
     const isCrit = sparkled || (critChance > 0 && Neo.nextRandom('encounter') < critChance);
-    const appliedKnockback = knockback * (stats.knockbackMultiplier || 1);
+    // Higher-level enemies (deeper/later runs, scaled by difficulty) resist
+    // knockback: the impulse is divided by 1+ccLevel, so they need a bigger hit to
+    // be moved and to cross the heavy-knockback stun threshold. No cap.
+    const knockbackResistFactor = 1 / (1 + getEnemyCcLevel(enemy));
+    const appliedKnockback = knockback * (stats.knockbackMultiplier || 1) * knockbackResistFactor;
     if (isCrit) dealt = Math.round(dealt * stats.critMultiplier);
     if (!options.ignoreBarrier && (enemy.barrier || 0) > 0) {
       const absorbed = Math.min(enemy.barrier, dealt);

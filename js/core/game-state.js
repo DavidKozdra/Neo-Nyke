@@ -1589,6 +1589,7 @@ export function resumeGame() {
       killedBy: getDamageSourceLabel(extra.killedBy || ''),
       killerKey: String(extra.killerKey || ''),
       challengeBonusCrystals: Math.max(0, Number(extra.challengeBonusCrystals || 0)),
+      loopCrystalsEarned: Math.max(0, Number(Neo.runCrystalsEarned || 0)),
       challengeKeys: normalizeChallengeSelection(Neo.selectedChallenges),
       challenges: normalizeChallengeSelection(Neo.selectedChallenges).map(key => Neo.CHALLENGE_DEFS[key]?.name || titleCase(key)),
       items: historyItems,
@@ -2012,6 +2013,7 @@ export function resumeGame() {
       Neo.selectedChallenges = normalizeChallengeSelection(Neo.metaProgress.selectedChallenges);
       Neo.runLoopIndex = 0;
       Neo.runRevivesUsed = 0;
+      Neo.runCrystalsEarned = 0;
       Neo.lastDeathEntryId = '';
       syncSeedState();
       Neo.floor = 1;
@@ -2069,6 +2071,7 @@ export function resumeGame() {
     Neo.selectedChallenges = [];
     Neo.runLoopIndex = 0;
     Neo.runRevivesUsed = 0;
+    Neo.runCrystalsEarned = 0;
     Neo.lastDeathEntryId = '';
     syncSeedState();
     Neo.floor = 1;
@@ -2099,6 +2102,7 @@ export function resumeGame() {
     Neo.selectedChallenges = [];
     Neo.runLoopIndex = 0;
     Neo.runRevivesUsed = 0;
+    Neo.runCrystalsEarned = 0;
     Neo.lastDeathEntryId = '';
     syncSeedState();
     Neo.floor = 1;
@@ -2147,6 +2151,7 @@ export function resumeGame() {
     Neo.selectedChallenges = [];
     Neo.runLoopIndex = 0;
     Neo.runRevivesUsed = 0;
+    Neo.runCrystalsEarned = 0;
     Neo.lastDeathEntryId = '';
     syncSeedState();
     Neo.floor = 1;
@@ -2181,6 +2186,7 @@ export function resumeGame() {
     Neo.selectedChallenges = [];
     Neo.runLoopIndex = 0;
     Neo.runRevivesUsed = 0;
+    Neo.runCrystalsEarned = 0;
     Neo.lastDeathEntryId = '';
     syncSeedState();
     Neo.floor = 1;
@@ -2213,6 +2219,7 @@ export function resumeGame() {
     Neo.selectedChallenges = [];
     Neo.runLoopIndex = 0;
     Neo.runRevivesUsed = 0;
+    Neo.runCrystalsEarned = 0;
     Neo.lastDeathEntryId = '';
     syncSeedState();
     Neo.floor = 5;
@@ -2252,6 +2259,7 @@ export function resumeGame() {
     Neo.selectedChallenges = [];
     Neo.runLoopIndex = 0;
     Neo.runRevivesUsed = 0;
+    Neo.runCrystalsEarned = 0;
     Neo.lastDeathEntryId = '';
     syncSeedState();
     Neo.floor = 5;
@@ -2644,6 +2652,7 @@ export function resumeGame() {
     Neo.lastDamageSourceKey = '';
     Neo.runLoopIndex = Number(snapshot.runLoopIndex || 0);
     Neo.runRevivesUsed = Math.max(0, Number(snapshot.runRevivesUsed || 0));
+    Neo.runCrystalsEarned = Math.max(0, Number(snapshot.runCrystalsEarned || 0));
     Neo.lastDeathEntryId = '';
     syncSeedState();
     Neo.floor = snapshot.floor;

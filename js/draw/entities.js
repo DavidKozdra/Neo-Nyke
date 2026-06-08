@@ -780,7 +780,9 @@
       const _enemyLabel = (enemy.type === 'rival' && enemy.rivalData)
         ? enemy.rivalData.name
         : Neo.getEliteEnemyLabel(enemy);
-      const _levelStr = `Lv.${Neo.floor}`;
+      // Enemy level = total floors entered this run (climbs across loops), not the
+      // per-loop `floor` which resets each loop. Matches enemy scaling.
+      const _levelStr = `Lv.${Neo.floorsEntered ?? Neo.floor}`;
       Neo.ctx.font = '9px system-ui';
       Neo.ctx.textAlign = 'center';
       Neo.ctx.shadowColor = '#000';

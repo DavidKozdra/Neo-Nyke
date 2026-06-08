@@ -765,6 +765,7 @@
       seedStr: Neo.seedStr,
       runLoopIndex: Neo.runLoopIndex,
       runRevivesUsed: Neo.runRevivesUsed,
+      runCrystalsEarned: Neo.runCrystalsEarned,
       rngState: Neo.getRngState(),
       difficulty: Neo.selectedDifficulty,
       challenges: Neo.normalizeChallengeSelection(Neo.selectedChallenges),

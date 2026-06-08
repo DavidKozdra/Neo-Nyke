@@ -152,6 +152,12 @@ export const ENEMY_SCALING = {
   damageSoftCap: 2.15,
   bossDamageSoftCap: 2.45,
   speedSoftCap: 1.38,
+  // Bosses get an EXTRA per-loop boost on top of the generic loop scaling above,
+  // so they stay threatening as the player out-scales regular enemies each loop.
+  // HP applies cleanly (no cap); damage is applied after the soft cap so it always
+  // contributes full value. Loop 1 adds nothing.
+  bossLoopHp: 0.20,
+  bossLoopDamage: 0.05,
   // Endless mode pins floor at 1, so floor/loop multipliers never grow. These
   // per-wave multipliers stand in for that progression, scaling enemies up as
   // the wave counter climbs. Damage/speed are softer than HP and reuse the
@@ -592,6 +598,9 @@ export const DIFFICULTY_DEFS = {
     rangedCadenceMultiplier: 1,
     supportPowerMultiplier: 1,
     shopPriceMultiplier: 1,
+    // How fast enemies build knockback/stun resistance with run depth + time.
+    // 0 = none; higher = steeper. See getEnemyCcLevel() in combat.js.
+    ccResistScale: 0.04,
   },
   medium: {
     key: 'medium',
@@ -610,6 +619,7 @@ export const DIFFICULTY_DEFS = {
     rangedCadenceMultiplier: 0.95,
     supportPowerMultiplier: 1.08,
     shopPriceMultiplier: 1.08,
+    ccResistScale: 0.12,
   },
   hard: {
     key: 'hard',
@@ -628,6 +638,7 @@ export const DIFFICULTY_DEFS = {
     rangedCadenceMultiplier: 0.9,
     supportPowerMultiplier: 1.14,
     shopPriceMultiplier: 1.16,
+    ccResistScale: 0.30,
   },
   impossible: {
     key: 'impossible',
@@ -646,6 +657,7 @@ export const DIFFICULTY_DEFS = {
     rangedCadenceMultiplier: 0.82,
     supportPowerMultiplier: 1.22,
     shopPriceMultiplier: 1.28,
+    ccResistScale: 0.45,
   },
   god: {
     key: 'god',
@@ -664,6 +676,7 @@ export const DIFFICULTY_DEFS = {
     rangedCadenceMultiplier: 0.74,
     supportPowerMultiplier: 1.3,
     shopPriceMultiplier: 1.42,
+    ccResistScale: 0.6,
   },
   custom: {
     key: 'custom',
@@ -682,6 +695,7 @@ export const DIFFICULTY_DEFS = {
     rangedCadenceMultiplier: 1,
     supportPowerMultiplier: 1,
     shopPriceMultiplier: 1,
+    ccResistScale: 0,
   },
 };
 export const CHALLENGE_DEFS = {
