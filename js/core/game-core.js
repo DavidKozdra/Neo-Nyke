@@ -377,7 +377,7 @@ export const GOD_PHASE_DIALOGUE = {
 };
 export const BOSS_OPENING_DIALOGUE = {
   queen_cult: 'Kneel and join the chorus.',
-  bulk_golem: 'Stone remembers every blow.',
+  bulk_golem: '........',
   artificer_knave: 'Run. I only need one clean hit.',
   bowman_bane: 'You came back. I was waiting.',
   antony_blemmye: '. GOrba GORBA !.',
@@ -415,7 +415,7 @@ export const CUTSCENE_GALLERY = [
   },
   {
     id: 'bulk_golem_thorn',
-    title: 'Stone Remembers',
+    title: 'word of GOD',
     subtitle: 'Bulk Golem confronts Thorn',
     character: 'thorn_knight',
     required: true,
