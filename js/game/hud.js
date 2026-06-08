@@ -276,6 +276,11 @@
             <div class="bar player-hp-bar"><i class="player-stat-fill" data-player-field="hpFill"></i></div>
             <span data-player-field="hpText"></span>
           </div>
+          <div class="player-stat-row player-shield-row" data-player-field="shieldRow">
+            <span>SHLD</span>
+            <div class="bar player-shield-bar"><i class="player-stat-fill player-stat-fill--shield" data-player-field="shieldFill"></i></div>
+            <span data-player-field="shieldText"></span>
+          </div>
           <div class="player-stat-row">
             <span>XP</span>
             <span class="player-level-badge" data-player-field="level"></span>
@@ -294,11 +299,14 @@
           label: card.querySelector('[data-player-field="label"]'),
           name: card.querySelector('[data-player-field="name"]'),
           hpText: card.querySelector('[data-player-field="hpText"]'),
+          shieldRow: card.querySelector('[data-player-field="shieldRow"]'),
+          shieldText: card.querySelector('[data-player-field="shieldText"]'),
           level: card.querySelector('[data-player-field="level"]'),
           xpText: card.querySelector('[data-player-field="xpText"]'),
           metaRow: card.querySelector('[data-player-field="metaRow"]'),
           meta: card.querySelector('[data-player-field="meta"]'),
           hpFill: card.querySelector('[data-player-field="hpFill"]'),
+          shieldFill: card.querySelector('[data-player-field="shieldFill"]'),
           xpFill: card.querySelector('[data-player-field="xpFill"]'),
         };
         card._last = {};
@@ -338,6 +346,20 @@
         if (last.hpWidth !== hpWidth) { last.hpWidth = hpWidth; refs.hpFill.style.width = hpWidth; }
         const hpColor = getHpFillColor(hpPercent, slot.color);
         if (last.hpColor !== hpColor) { last.hpColor = hpColor; refs.hpFill.style.background = hpColor; }
+      }
+      const shieldValue = dead ? 0 : Math.max(0, Number(entity.overhealBarrier || 0));
+      const shieldMax = Math.max(shieldValue, Number(entity.overhealBarrierMax) || 0);
+      const shieldVisible = shieldValue > 0 && shieldMax > 0;
+      if (refs.shieldRow && last.shieldVisible !== shieldVisible) {
+        last.shieldVisible = shieldVisible;
+        refs.shieldRow.style.display = shieldVisible ? 'flex' : 'none';
+      }
+      if (shieldVisible) {
+        const shieldPercent = Neo.clamp(shieldValue / Math.max(1, shieldMax), 0, 1) * 100;
+        const shieldWidth = `${shieldPercent.toFixed(1)}%`;
+        const shieldText = `${Math.ceil(shieldValue)}/${Math.ceil(shieldMax)}`;
+        if (refs.shieldFill && last.shieldWidth !== shieldWidth) { last.shieldWidth = shieldWidth; refs.shieldFill.style.width = shieldWidth; }
+        if (refs.shieldText && last.shieldText !== shieldText) { last.shieldText = shieldText; refs.shieldText.textContent = shieldText; }
       }
       if (refs.xpFill) {
         const xpWidth = `${xpPercent.toFixed(1)}%`;
@@ -844,7 +866,7 @@
     el_bartos_cape: { cooldown: 25, duration: 10, label: 'EL BARTO', color: '#ffb37a' },
     sparkle_charm: { cooldown: 40, duration: 0, label: 'SPARKLE', color: '#ffe8a3' },
     churu_stick: { cooldown: 40, duration: 0, label: 'CHURU', color: '#ffb6d5' },
-    iron_helm: { cooldown: 72, duration: 0, label: 'DIAMOND SHIELD', color: '#c8fbff' },
+    iron_helm: { cooldown: 120, duration: 0, label: 'DIAMOND SHIELD', color: '#c8fbff' },
     gold_vac: { cooldown: 120, duration: 120, label: 'GOLD VAC', color: '#ffe07a' },
   };
 
@@ -1073,8 +1095,9 @@
 
   function activateIronHelm() {
     if (!Neo.player) return;
-    const shield = Math.round(Math.max(1, Number(Neo.player.maxHp || 1)) * 2.5);
-    Neo.player.overhealBarrier = Math.max(Number(Neo.player.overhealBarrier || 0), shield);
+    const shield = Math.round(Math.max(1, Number(Neo.player.maxHp || 1)) * 1.8);
+    Neo.player.overhealBarrier = shield;
+    Neo.player.overhealBarrierMax = shield;
     Neo.player.overhealBarrierColor = '#c8fbff';
     Neo.spawnHealPopup?.(Neo.player.x, Neo.player.y - 34, shield, { color: '#c8fbff', size: 16 });
     Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.75, ring: Math.min(150, 58 + Math.sqrt(shield) * 3), c: '#c8fbff' });

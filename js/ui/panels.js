@@ -378,6 +378,15 @@ export function bindPanelInput() {
     Neo.ui.anvilClose?.addEventListener('click', () => setAnvilPanelOpen(false));
     Neo.ui.anvilCancel?.addEventListener('click', () => { Neo.anvilStagedUpgrades = {}; setAnvilPanelOpen(false); });
     Neo.ui.anvilConfirm?.addEventListener('click', confirmAnvilUpgrades);
+    const setAnvilPayCurrency = (currency) => {
+      if (Neo.anvilPayCurrency === currency) return;
+      Neo.anvilPayCurrency = currency;
+      // Affordability differs between currencies, so drop any staged steps.
+      Neo.anvilStagedUpgrades = {};
+      renderAnvilPanel();
+    };
+    Neo.ui.anvilPayXp?.addEventListener('click', () => setAnvilPayCurrency('xp'));
+    Neo.ui.anvilPayGold?.addEventListener('click', () => setAnvilPayCurrency('gold'));
     Neo.ui.anvilTabs.forEach(tab => {
       tab.addEventListener('click', () => {
         Neo.activeAnvilTab = tab.dataset.anvilTab || 'weapons';
@@ -1005,18 +1014,27 @@ export function toggleAnvilPanel() {
     return cur + staged * schema[statKey].step;
   }
 
+  // Per-step cost for a stat in the currently selected pay currency.
+  function getAnvilStepCost(statDef) {
+    if (!statDef) return 0;
+    return Neo.anvilPayCurrency === 'gold'
+      ? (statDef.goldPerStep ?? 0)
+      : (statDef.xpPerStep ?? 0);
+  }
+
+  // Total cost of all staged upgrades, charged entirely in the selected
+  // currency (XP or gold). The other currency is always 0.
   function getAnvilTotalCost() {
-    let xp = 0;
-    let gold = 0;
+    let total = 0;
     for (const [key, count] of Object.entries(Neo.anvilStagedUpgrades)) {
       if (count === 0) continue;
       const [itemType, , statKey] = key.split(':');
       const schema = itemType === 'weapon' ? Neo.WEAPON_UPGRADEABLE_STATS : Neo.MOVE_UPGRADEABLE_STATS;
-      const steps = Math.abs(count);
-      xp += steps * (schema[statKey]?.xpPerStep ?? 0);
-      gold += steps * (schema[statKey]?.goldPerStep ?? 0);
+      total += Math.abs(count) * getAnvilStepCost(schema[statKey]);
     }
-    return { xp, gold };
+    return Neo.anvilPayCurrency === 'gold'
+      ? { xp: 0, gold: total }
+      : { xp: total, gold: 0 };
   }
 
 export function renderAnvilPanel() {
@@ -1117,18 +1135,19 @@ export function renderAnvilStatPanel() {
       const withinCap = step > 0 ? nextVal <= max : nextVal >= min;
       // The + must also reflect affordability, or it looks clickable but the
       // click handler silently rejects it (no feedback = "anvil is broken").
-      const nextCost = getAnvilTotalCost();
-      const canAfford =
-        nextCost.xp + (xpPerStep ?? 0) <= (Neo.player?.xp ?? 0) &&
-        nextCost.gold + (goldPerStep ?? 0) <= (Neo.player?.coins ?? 0);
+      const payGold = Neo.anvilPayCurrency === 'gold';
+      const stepCost = payGold ? (goldPerStep ?? 0) : (xpPerStep ?? 0);
+      const wallet = payGold ? (Neo.player?.coins ?? 0) : (Neo.player?.xp ?? 0);
+      const spent = payGold ? getAnvilTotalCost().gold : getAnvilTotalCost().xp;
+      const canAfford = spent + stepCost <= wallet;
       const canIncrease = withinCap && canAfford;
       const canDecrease = stagedCount > 0;
 
       const stagedDisplay = staged !== cur
         ? `<span class="anvil-stat-staged">&rarr; ${format(staged)}</span>`
         : '';
-      const costDisplay = xpPerStep > 0
-        ? `<span class="anvil-stat-cost">${xpPerStep} XP + &#9670;${goldPerStep ?? 0}/step</span>`
+      const costDisplay = stepCost > 0
+        ? `<span class="anvil-stat-cost">${payGold ? `&#9670;${stepCost}` : `${stepCost} XP`}/step</span>`
         : '';
 
       const statIcon = statKey === 'damage' || statKey === 'knockback'
@@ -1166,18 +1185,29 @@ export function renderAnvilStatPanel() {
     const cost = getAnvilTotalCost();
     const xp = Neo.player?.xp ?? 0;
     const coins = Neo.player?.coins ?? 0;
+    const payGold = Neo.anvilPayCurrency === 'gold';
+    const total = payGold ? cost.gold : cost.xp;
+    const wallet = payGold ? coins : xp;
+    const affordable = wallet >= total;
+
+    // Reflect the active currency in the toggle buttons.
+    Neo.ui.anvilPayXp?.classList.toggle('is-active', !payGold);
+    Neo.ui.anvilPayGold?.classList.toggle('is-active', payGold);
+
     if (Neo.ui.anvilCostSummary) {
-      if (cost.xp === 0 && cost.gold === 0) {
+      if (total === 0) {
         Neo.ui.anvilCostSummary.textContent = 'Select stats above and press + to stage upgrades.';
+        Neo.ui.anvilCostSummary.style.color = '';
       } else {
-        Neo.ui.anvilCostSummary.innerHTML =
-          `Total: <span style="color:${xp >= cost.xp ? '#7eff9e' : '#ff7c88'}">${cost.xp} XP (${xp})</span>` +
-          ` + <span style="color:${coins >= cost.gold ? '#ffd15a' : '#ff7c88'}">&#9670; ${cost.gold} gold (${coins})</span>`;
-        Neo.ui.anvilCostSummary.style.color = xp >= cost.xp && coins >= cost.gold ? '#7eff9e' : '#ff7c88';
+        const label = payGold
+          ? `<span style="color:${affordable ? '#ffd15a' : '#ff7c88'}">&#9670; ${total} gold (${coins})</span>`
+          : `<span style="color:${affordable ? '#7eff9e' : '#ff7c88'}">${total} XP (${xp})</span>`;
+        Neo.ui.anvilCostSummary.innerHTML = `Total: ${label}`;
+        Neo.ui.anvilCostSummary.style.color = affordable ? '#7eff9e' : '#ff7c88';
       }
     }
     if (Neo.ui.anvilConfirm) {
-      Neo.ui.anvilConfirm.disabled = (cost.xp === 0 && cost.gold === 0) || xp < cost.xp || coins < cost.gold;
+      Neo.ui.anvilConfirm.disabled = total === 0 || !affordable;
     }
   }
 
@@ -1227,14 +1257,13 @@ export function renderAnvilStatPanel() {
         anvilRejectToast('MAXED OUT');
         return;
       }
-      // Check if we could afford one more step
+      // Check if we could afford one more step in the selected currency.
+      const payGold = Neo.anvilPayCurrency === 'gold';
       const nextCost = getAnvilTotalCost();
-      if (nextCost.xp + statDef.xpPerStep > (Neo.player?.xp ?? 0)) {
-        anvilRejectToast('NEED MORE XP');
-        return;
-      }
-      if (nextCost.gold + (statDef.goldPerStep ?? 0) > (Neo.player?.coins ?? 0)) {
-        anvilRejectToast('NEED MORE GOLD');
+      const spent = payGold ? nextCost.gold : nextCost.xp;
+      const wallet = payGold ? (Neo.player?.coins ?? 0) : (Neo.player?.xp ?? 0);
+      if (spent + getAnvilStepCost(statDef) > wallet) {
+        anvilRejectToast(payGold ? 'NEED MORE GOLD' : 'NEED MORE XP');
         return;
       }
       Neo.anvilStagedUpgrades[stageKey] = currentStaged + 1;

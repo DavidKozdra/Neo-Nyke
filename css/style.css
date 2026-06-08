@@ -1243,6 +1243,21 @@ button, input, select, textarea {
   box-shadow: inset 0 1px 3px rgba(0,0,0,.55), 0 1px 2px rgba(0,0,0,.4);
 }
 
+.player-shield-row {
+  display: none;
+}
+
+.player-shield-bar {
+  position: relative;
+  width: 118px;
+  height: 10px;
+  background: linear-gradient(180deg, #061722, #092537);
+  border: 1px solid rgba(126, 214, 255, .54);
+  border-radius: 999px;
+  overflow: hidden;
+  box-shadow: inset 0 1px 3px rgba(0,0,0,.58), 0 0 10px rgba(126,214,255,.12);
+}
+
 #playerHpFill {
   position: relative;
   display: block;
@@ -1299,6 +1314,11 @@ button, input, select, textarea {
 .player-stat-fill--xp {
   background: linear-gradient(90deg, #ff8800, #ffdd00);
   box-shadow: 0 0 12px rgba(255,136,0,.72);
+}
+
+.player-stat-fill--shield {
+  background: linear-gradient(90deg, #3dbbea, #c8fbff);
+  box-shadow: 0 0 12px rgba(126,214,255,.72);
 }
 
 .relics {
@@ -7693,6 +7713,43 @@ border-bottom: black solid 2px;
   padding-top: 14px;
   border-top: 1px solid rgba(255,160,40,.16);
   margin-top: 8px;
+}
+
+.anvil-pay-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.anvil-pay-label {
+  font-size: 12px;
+  letter-spacing: .08em;
+  color: #91a8be;
+  text-transform: uppercase;
+  margin-right: 2px;
+}
+
+.anvil-pay-btn {
+  padding: 7px 14px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  cursor: pointer;
+  color: #c7d6e6;
+  background: rgba(255,255,255,.05);
+  border: 1px solid rgba(255,160,40,.22);
+  transition: background .14s, border-color .14s, color .14s;
+}
+
+.anvil-pay-btn:hover {
+  background: rgba(255,160,40,.12);
+}
+
+.anvil-pay-btn.is-active {
+  color: #1a1206;
+  background: #ffb840;
+  border-color: #ffb840;
 }
 
 .anvil-cost-summary {

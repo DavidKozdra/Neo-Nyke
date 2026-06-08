@@ -52,6 +52,7 @@
   }
 
   .player-hp-bar,
+  .player-shield-bar,
   .player-xp-bar {
     width: 90px;
     height: 7px;
@@ -350,6 +351,7 @@
   }
 
   .player-hp-bar { width: 90px; height: 8px; }
+  .player-shield-bar { width: 90px; height: 7px; }
   .player-xp-bar { width: 90px; height: 6px; }
   .player-stat-row { gap: 5px; }
   .player-stat-row span:first-child { font-size: 9px; min-width: 16px; }
@@ -569,6 +571,7 @@
   }
 
   .player-hp-bar,
+  .player-shield-bar,
   .player-xp-bar { width: 80px; height: 6px; }
 
   .player-stat-row { gap: 4px; }
@@ -1816,6 +1819,7 @@
   }
 
   .player-hp-bar,
+  .player-shield-bar,
   .player-xp-bar {
     flex: 1 1 64px;
     width: auto;
@@ -1824,6 +1828,7 @@
   }
 
   .player-hp-bar { height: 6px; }
+  .player-shield-bar { height: 5px; }
   .player-xp-bar { height: 5px; }
 
   .player-level-badge {
@@ -2307,6 +2312,10 @@
   .anvil-footer {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .anvil-pay-toggle {
+    justify-content: center;
   }
 
   .anvil-footer-actions {

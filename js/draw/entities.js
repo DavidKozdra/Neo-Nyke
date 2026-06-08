@@ -988,6 +988,8 @@
     drawWarpPreview();
     if (Number(Neo.player.overhealBarrier || 0) > 0) {
       const barrierColor = Neo.player.overhealBarrierColor || '#9cefff';
+      const barrierMax = Math.max(Number(Neo.player.overhealBarrier || 0), Number(Neo.player.overhealBarrierMax) || 0, 1);
+      const barrierPct = Neo.clamp(Number(Neo.player.overhealBarrier || 0) / barrierMax, 0, 1);
       const pulse = _reduceFlash ? 0 : Math.sin(Date.now() / 180) * 2;
       const radius = Neo.player.r + 12 + pulse;
       Neo.ctx.save();
@@ -998,6 +1000,17 @@
       Neo.ctx.shadowColor = barrierColor;
       Neo.ctx.shadowBlur = 14;
       Neo.ctx.strokeRect(-radius, -radius, radius * 2, radius * 2);
+      Neo.ctx.restore();
+      Neo.ctx.save();
+      Neo.ctx.translate(Neo.player.x, Neo.player.y);
+      Neo.ctx.fillStyle = 'rgba(8, 15, 24, 0.74)';
+      Neo.ctx.fillRect(-20, -Neo.player.r - 27, 40, 5);
+      Neo.ctx.fillStyle = 'rgba(80, 215, 255, 0.24)';
+      Neo.ctx.fillRect(-19, -Neo.player.r - 26, 38, 3);
+      Neo.ctx.fillStyle = barrierColor;
+      Neo.ctx.shadowColor = barrierColor;
+      Neo.ctx.shadowBlur = 8;
+      Neo.ctx.fillRect(-19, -Neo.player.r - 26, 38 * barrierPct, 3);
       Neo.ctx.restore();
     }
     const playerSize = Math.max(34, Neo.player.r * 2.5);

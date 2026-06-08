@@ -233,7 +233,7 @@ export function resumeGame() {
     forge: {
       icon: '⚒',
       title: 'THE FORGE',
-      body: 'Spend XP and gold here to permanently upgrade your weapons and moves for this run. Pick an item, boost its stats, then Confirm. Tip: a weapon that matches your class’s style hits harder.',
+      body: 'Spend XP or gold here to permanently upgrade your weapons and moves for this run. Pick an item, choose to pay with XP or gold, boost its stats, then Confirm. Tip: a weapon that matches your class’s style hits harder.',
     },
     weapons: {
       icon: '⚔',
@@ -540,6 +540,8 @@ export function resumeGame() {
       blockActive: false,
       blockTimer: 0,
       overhealBarrier: 0,
+      overhealBarrierMax: 0,
+      overhealBarrierColor: '',
       gellehHealPulseFrame: 0,
       fleeceTick: 0,
       weaponBeamTime: 0,

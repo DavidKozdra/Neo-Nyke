@@ -358,10 +358,13 @@
       const barrierColor = Neo.player.overhealBarrierColor || '#9cefff';
       const absorbed = Math.min(barrierBeforeHit, finalAmount);
       Neo.player.overhealBarrier = Math.max(0, barrierBeforeHit - absorbed);
-      if (Neo.player.overhealBarrier <= 0) Neo.player.overhealBarrierColor = '';
+      if (Neo.player.overhealBarrier <= 0) {
+        Neo.player.overhealBarrierMax = 0;
+        Neo.player.overhealBarrierColor = '';
+      }
       finalAmount = Math.max(0, finalAmount - absorbed);
       if (absorbed >= 1 && showPopup) {
-        spawnDamagePopup(Neo.player.x, Neo.player.y - 34, absorbed, { color: barrierColor, size: 14 });
+        Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 34, life: 0.4, text: `BLOCK ${Math.ceil(absorbed)}`, c: barrierColor });
       }
       if (finalAmount <= 0) {
         Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 22, life: 0.34, text: 'BARRIER', c: barrierColor });

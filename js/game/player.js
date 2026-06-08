@@ -74,6 +74,10 @@ export function migratePlayerData(source) {
     playerData.lavaTrailTick = Number(playerData.lavaTrailTick || 0);
     playerData.princessFlightTime = Number(playerData.princessFlightTime || 0);
     playerData.overhealBarrier = Math.max(0, Number(playerData.overhealBarrier || 0));
+    playerData.overhealBarrierMax = playerData.overhealBarrier > 0
+      ? Math.max(playerData.overhealBarrier, Number(playerData.overhealBarrierMax) || 0)
+      : 0;
+    playerData.overhealBarrierColor = String(playerData.overhealBarrierColor || '');
     playerData.gellehHealPulseFrame = Number(playerData.gellehHealPulseFrame || 0);
     Neo.ensureStatuses(playerData);
     if (!playerData.equippedMoves || typeof playerData.equippedMoves !== 'object') {
@@ -501,6 +505,8 @@ export function applyPlayerHealing(amount, options = {}) {
       const addedBarrier = Math.min(barrierCap - Number(Neo.player.overhealBarrier || 0), overflow * barrierRatio);
       if (addedBarrier > 0) {
         Neo.player.overhealBarrier = Math.min(barrierCap, Number(Neo.player.overhealBarrier || 0) + addedBarrier);
+        Neo.player.overhealBarrierMax = Math.max(Number(Neo.player.overhealBarrierMax || 0), barrierCap);
+        Neo.player.overhealBarrierColor = Neo.player.overhealBarrierColor || '#9cefff';
         if (options.showBarrier !== false && Neo.spawnHealPopup) {
           Neo.spawnHealPopup(Neo.player.x + Neo.rand(-8, 8), Neo.player.y - 36, addedBarrier, { color: '#9cefff', size: 12 });
         }

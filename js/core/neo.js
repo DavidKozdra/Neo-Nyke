@@ -126,6 +126,8 @@ window.Neo = {
   activeInvPlayer: 1,
   anvilSelectedItem: null,
   anvilStagedUpgrades: {},
+  // Which currency the Forge charges for staged upgrades: 'xp' or 'gold'.
+  anvilPayCurrency: 'xp',
   draggingMoveKey: '',
   weaponBurstQueue: [],
   clawSwipeQueue: [],
