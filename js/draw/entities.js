@@ -1207,12 +1207,24 @@
     if (!Neo.laserActive && Neo.getEquippedWeapon() === 'lazer_glasses' && Neo.player.weaponBeamTime > 0) {
       const baseAngle = Math.atan2(Neo.mouse.worldY - Neo.player.y, Neo.mouse.worldX - Neo.player.x);
       const alpha = Math.min(1, Neo.player.weaponBeamTime / 0.3);
+      const dragonOrbStacks = Math.max(0, Number(Neo.getItemCount?.('dragon_orb') || 0));
+      const outerPulse = dragonOrbStacks > 0 ? 1 + Math.sin(Number(Neo.frameId || 0) * 0.42) * 0.12 : 1;
+      const dragonOuterW = 5 + Math.min(18, dragonOrbStacks * 3.5) * outerPulse;
       Neo.ctx.save();
       Neo.ctx.globalAlpha = alpha;
       for (let beamIndex = 0; beamIndex < 2; beamIndex += 1) {
         const offset = beamIndex === 0 ? -0.2 : 0.2;
         const beamAngle = baseAngle + offset;
         const beamPath = Neo.buildRicochetBeamPath(Neo.player.x, Neo.player.y, beamAngle, 430, Neo.LAZER_GLASSES_BOUNCES);
+        if (dragonOrbStacks > 0) {
+          Neo.drawTaperedBeamPath(beamPath, {
+            color: '#b77dff',
+            glow: '#b77dff',
+            maxWidth: dragonOuterW,
+            shadowBlur: 22,
+            alpha: Math.min(0.58, 0.25 + dragonOrbStacks * 0.08),
+          });
+        }
         Neo.drawTaperedBeamPath(beamPath, {
           color: '#cda8ff',
           glow: '#e0c8ff',
@@ -1241,6 +1253,21 @@
     const beamColor = turtleWaveActive ? '#74f5ff' : loveBeamActive ? '#ff9ed6' : Neo.laserMode === 'god_sweep' ? '#ffffff' : '#ff00aa';
     const beamGlow = turtleWaveActive ? '#9bf7ff' : loveBeamActive ? '#ffd1ea' : Neo.laserMode === 'god_sweep' ? '#e8f0ff' : '#f0f';
     const maxW = Neo.laserMode === 'god_sweep' ? 16 : turtleWaveActive ? 18 : loveBeamActive ? 10 : 8;
+    const dragonOrbStacks = Math.max(0, Number(Neo.getItemCount?.('dragon_orb') || 0));
+    const outerPulse = dragonOrbStacks > 0 ? 1 + Math.sin(Number(Neo.frameId || 0) * 0.42) * 0.12 : 1;
+    const dragonOuterW = dragonOrbStacks > 0
+      ? maxW + Math.min(22, dragonOrbStacks * 4.5) * outerPulse
+      : 0;
+
+    if (dragonOrbStacks > 0) {
+      Neo.drawTaperedBeamPath(beamPath, {
+        color: loveBeamActive ? '#ffb4ea' : turtleWaveActive ? '#a8fbff' : '#b77dff',
+        glow: '#b77dff',
+        maxWidth: dragonOuterW,
+        shadowBlur: Neo.laserMode === 'god_sweep' || turtleWaveActive ? 34 : 24,
+        alpha: Math.min(0.58, 0.25 + dragonOrbStacks * 0.08),
+      });
+    }
 
     Neo.drawTaperedBeamPath(beamPath, {
       color: beamColor,

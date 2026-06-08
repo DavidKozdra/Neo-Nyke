@@ -371,7 +371,7 @@ export function getItemStats() {
       : equippedWeaponKey === 'void_piercer'
         ? 0.20
         : 0;
-    const baseBleedChance = neoKnife * 0.05;
+    const baseBleedChance = neoKnife * 0.05 + bandaid * 0.02;
     const tagCounts = getItemTagCounts();
     const healingTagStacks = Number(tagCounts.heal || 0) + Number(tagCounts.healing || 0);
     const activeTurboStacks = Number(Neo.player?.equipmentEffects?.turbo_boots?.time || 0) > 0
@@ -400,7 +400,7 @@ export function getItemStats() {
       weaponCritChance: weaponCritBonus,
       displayedCritChance: critChance + weaponCritBonus,
       drainChance: toothOfThorn * 0.028,
-      bleedResistance: Neo.clamp(toughSkin * 0.25, 0, 0.8),
+      bleedResistance: Neo.clamp(toughSkin * 0.25 + bandaid * 0.04, 0, 0.8),
       // Tough Skin also makes bleed wear off faster: each stack speeds the bleed
       // timer decay by 20% (so bleeds tick fewer times), capped at 3x faster.
       bleedDurationDecayMultiplier: Neo.clamp(1 + toughSkin * 0.2, 1, 3),

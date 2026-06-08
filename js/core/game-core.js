@@ -380,7 +380,7 @@ export const BOSS_OPENING_DIALOGUE = {
   bulk_golem: 'Stone remembers every blow.',
   artificer_knave: 'Run. I only need one clean hit.',
   bowman_bane: 'You came back. I was waiting.',
-  antony_blemmye: 'The chest sees. The chest hungers.',
+  antony_blemmye: '. GOrba GORBA !.',
   handsome_devil: 'Try not to stare.',
 };
 // Archive of story beats playable from the Credits gallery. Each entry is a
@@ -407,6 +407,14 @@ export const CUTSCENE_GALLERY = [
       { speaker: 'QUEEN', text: 'once my champion planning to kill me again are you apostate' },
       { speaker: 'METAO', text: '...' },
       { speaker: 'QUEEN', text: 'Your life will be mine !' },
+    ],
+  },
+  {
+    id: 'handsome_devil_thorn',
+    title: 'An Old Acquaintance',
+    subtitle: 'The Handsome Devil greets Thorn',
+    lines: [
+      { speaker: 'HANDSOME DEVIL', text: "Hello, Thorn. I see you're well..." },
     ],
   },
   {
@@ -438,10 +446,10 @@ export const CUTSCENE_GALLERY = [
   },
   {
     id: 'antony_blemmye',
-    title: 'Gorba Borba',
+    title: 'Gorba Gorba',
     subtitle: 'Antony Blemmye stirs',
     lines: [
-      { speaker: 'ANTONY BLEMMYE', text: 'gorba borba' },
+      { speaker: 'ANTONY BLEMMYE', text: 'gorba Gorba' },
     ],
   },
   {

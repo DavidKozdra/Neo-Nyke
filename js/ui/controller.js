@@ -1974,6 +1974,7 @@ export function createUIController(view) {
       isDialogueOpen() {
         return !!dialogueRuntime?.isOpen?.();
       },
+      resolveDialoguePortraitKey,
       sayAtWorldAnchor(input) {
         const id = worldSpeechRuntime?.say?.(input);
         renderEntityDialogue();

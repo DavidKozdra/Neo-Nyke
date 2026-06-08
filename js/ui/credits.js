@@ -135,7 +135,28 @@
 
   // ── Cutscene gallery ────────────────────────────────────────────────────
   const sceneList = document.getElementById('creditsSceneList');
+  const scenesTab = document.getElementById('galleryScenesTab');
+  const tauntsTab = document.getElementById('galleryTauntsTab');
   let galleryBuilt = false;
+  let gallerySection = 'scenes';
+
+  function drawGalleryPortraits(tries = 0) {
+    if (!sceneList || typeof Neo.drawSpriteToCanvas !== 'function') return;
+    let drewAll = true;
+    sceneList.querySelectorAll('[data-gallery-speaker]').forEach((canvas) => {
+      const speaker = canvas.dataset.gallerySpeaker || '';
+      const key = Neo.uiController?.resolveDialoguePortraitKey?.(speaker) || 'hunter';
+      Neo.drawSpriteToCanvas(canvas, key, canvas.width);
+      const ctx = canvas.getContext('2d');
+      try {
+        const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+        if (!pixels.some((value, index) => index % 4 === 3 && value !== 0)) drewAll = false;
+      } catch (_) { drewAll = false; }
+    });
+    if (!drewAll && tries < 20) {
+      setTimeout(() => drawGalleryPortraits(tries + 1), 150);
+    }
+  }
 
   function playScene(scene) {
     if (!scene || !Array.isArray(scene.lines) || !scene.lines.length) return;
@@ -148,29 +169,89 @@
     ctrl.playDialogue(scene.lines, { returnState: 'menu' });
   }
 
-  function buildGallery() {
-    if (galleryBuilt || !sceneList) return;
+  function renderGallery() {
+    if (!sceneList) return;
     const scenes = Array.isArray(Neo.CUTSCENE_GALLERY) ? Neo.CUTSCENE_GALLERY : [];
-    if (!scenes.length) return; // game-core not ready yet; retry on next open
+    if (!scenes.length) return false; // game-core not ready yet; retry on next open
+    const bossTaunts = scenes.find(scene => scene.id === 'boss_openings');
+    const entries = gallerySection === 'taunts'
+      ? (bossTaunts?.lines || []).map((line, index) => ({
+        id: `boss_taunt_${index}`,
+        title: line.speaker,
+        subtitle: line.text,
+        lines: [line],
+      }))
+      : scenes.filter(scene => scene.id !== 'boss_openings');
+
     sceneList.textContent = '';
-    scenes.forEach((scene) => {
+    entries.forEach((scene) => {
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'credits-gallery__item';
       btn.setAttribute('role', 'listitem');
+
+      const portraits = document.createElement('span');
+      portraits.className = 'credits-gallery__portraits';
+      const speakers = [...new Set(scene.lines.map(line => String(line.speaker || '').trim()).filter(Boolean))];
+      if (speakers.length) {
+        const visibleSpeakers = speakers.length > 3 ? speakers.slice(0, 1) : speakers;
+        visibleSpeakers.forEach((speaker) => {
+          const portrait = document.createElement('canvas');
+          portrait.width = 48;
+          portrait.height = 48;
+          portrait.className = 'credits-gallery__portrait';
+          portrait.dataset.gallerySpeaker = speaker;
+          portrait.setAttribute('role', 'img');
+          portrait.setAttribute('aria-label', speaker);
+          portrait.title = speaker;
+          portraits.appendChild(portrait);
+        });
+        if (speakers.length > 3) {
+          const more = document.createElement('span');
+          more.className = 'credits-gallery__portrait-more';
+          more.textContent = '...';
+          more.setAttribute('aria-label', `${speakers.length - 1} more speakers`);
+          more.title = `${speakers.length - 1} more speakers`;
+          portraits.appendChild(more);
+        }
+        btn.appendChild(portraits);
+      }
+
+      const copy = document.createElement('span');
+      copy.className = 'credits-gallery__copy';
       const title = document.createElement('span');
       title.className = 'credits-gallery__item-title';
       title.textContent = scene.title || scene.id || 'Scene';
-      btn.appendChild(title);
+      copy.appendChild(title);
       if (scene.subtitle) {
         const sub = document.createElement('span');
         sub.className = 'credits-gallery__item-sub';
         sub.textContent = scene.subtitle;
-        btn.appendChild(sub);
+        copy.appendChild(sub);
       }
+      btn.appendChild(copy);
       btn.addEventListener('click', () => playScene(scene));
       sceneList.appendChild(btn);
     });
+    drawGalleryPortraits();
+    return true;
+  }
+
+  function setGallerySection(section) {
+    gallerySection = section === 'taunts' ? 'taunts' : 'scenes';
+    const showTaunts = gallerySection === 'taunts';
+    scenesTab?.classList.toggle('is-active', !showTaunts);
+    tauntsTab?.classList.toggle('is-active', showTaunts);
+    scenesTab?.setAttribute('aria-selected', showTaunts ? 'false' : 'true');
+    tauntsTab?.setAttribute('aria-selected', showTaunts ? 'true' : 'false');
+    renderGallery();
+  }
+
+  function buildGallery() {
+    if (galleryBuilt || !sceneList) return;
+    if (!renderGallery()) return;
+    scenesTab?.addEventListener('click', () => setGallerySection('scenes'));
+    tauntsTab?.addEventListener('click', () => setGallerySection('taunts'));
     galleryBuilt = true;
   }
 
@@ -240,6 +321,7 @@
 
   function openGallery() {
     buildGallery();
+    drawGalleryPortraits();
     setModalOpen(galleryOverlay, true);
     galleryCloseBtn?.focus({ preventScroll: true });
   }

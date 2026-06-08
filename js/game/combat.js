@@ -492,6 +492,8 @@
   }
 
   function fireLazerGlassesTick() {
+    const itemStats = Neo.getItemStats?.() || {};
+    const beamDamage = 9 * Number(itemStats.beamDamageMultiplier || 1);
     const baseAngle = Math.atan2(Neo.mouse.worldY - Neo.player.y, Neo.mouse.worldX - Neo.player.x);
     for (let beamIndex = 0; beamIndex < 2; beamIndex += 1) {
       const offset = beamIndex === 0 ? -0.2 : 0.2;
@@ -509,7 +511,8 @@
         }
       }
       if (target) {
-        hitEnemy(target, 9, hitSegment?.angle ?? angle, 80, '#cda8ff', { fireChance: 0.05, fireStacks: 1, fireDuration: 3, beamFx: true });
+        hitEnemy(target, beamDamage, hitSegment?.angle ?? angle, 80, '#cda8ff', { fireChance: 0.05, fireStacks: 1, fireDuration: 3, beamFx: true });
+        chainBeamHit(target, beamDamage, hitSegment?.angle ?? angle, '#d890ff');
       }
       Neo.destructibles.forEach(prop => {
         if (!prop.broken && !prop.hidden && Neo.beamPathHitsDestructible(beamPath, prop, 4)) {

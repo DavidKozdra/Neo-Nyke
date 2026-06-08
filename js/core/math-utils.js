@@ -426,6 +426,7 @@ export function drawTaperedBeamPath(path, options = {}) {
   const color = options.color || '#ff00aa';
   const glow = options.glow || color;
   const maxWidth = Number(options.maxWidth || 8);
+  const alpha = Neo.clamp ? Neo.clamp(Number(options.alpha ?? 0.92), 0, 1) : Math.max(0, Math.min(1, Number(options.alpha ?? 0.92)));
   let traversed = 0;
   const ctx = Neo.ctx;
 
@@ -433,7 +434,7 @@ export function drawTaperedBeamPath(path, options = {}) {
   // shadowBlur is costly and the beam reads fine without it during a particle flood.
   const lowFx = window.NeoSettings?.isPerformanceMode?.() !== false && (Neo.particles?.length || 0) > 80;
   Neo.ctx.save();
-  Neo.ctx.globalAlpha = 0.92;
+  Neo.ctx.globalAlpha *= alpha;
   Neo.ctx.shadowColor = glow;
   Neo.ctx.shadowBlur = lowFx ? 0 : Number(options.shadowBlur || 18);
   path.forEach(segment => {

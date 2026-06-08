@@ -1007,13 +1007,25 @@
     if (!enemy || enemyType !== 'handsome_devil' || !Neo.player) return false;
     if (Neo.handsomeDevilCutscenePlayed) return false;
     const character = Neo.player.character;
-    const lineByCharacter = {
-      princess: { speaker: 'PRINCESS', text: 'He is cute.' },
-      gelleh: { speaker: 'GELLEH', text: 'Sinner.' },
-      mooggy: { speaker: 'MOOGGY', text: 'Uncle.' },
+    const dialogueByCharacter = {
+      thorn_knight: [
+        { speaker: 'HANDSOME DEVIL', text: "Hello, Thorn. I see you're well..." },
+      ],
+      princess: [
+        { speaker: 'PRINCESS', text: 'He is cute.' },
+        { speaker: 'HANDSOME DEVIL', text: 'Naturally.' },
+      ],
+      gelleh: [
+        { speaker: 'GELLEH', text: 'Sinner.' },
+        { speaker: 'HANDSOME DEVIL', text: 'Then cast the first stone.' },
+      ],
+      mooggy: [
+        { speaker: 'MOOGGY', text: 'Uncle.' },
+        { speaker: 'HANDSOME DEVIL', text: 'Family is complicated.' },
+      ],
     };
-    const line = lineByCharacter[character];
-    if (!line) return false;
+    const dialogue = dialogueByCharacter[character];
+    if (!dialogue) return false;
 
     Neo.handsomeDevilCutscenePlayed = true;
     Neo.clearGameplayInput();
@@ -1024,10 +1036,7 @@
     enemy.stun = Math.max(Number(enemy.stun || 0), 0.25);
     Neo.scheduleRunSave();
 
-    return Neo.uiController.playDialogue([
-      line,
-      { speaker: 'HANDSOME DEVIL', text: character === 'princess' ? 'Naturally.' : character === 'mooggy' ? 'Family is complicated.' : 'Then cast the first stone.' },
-    ], { returnState: 'play' });
+    return Neo.uiController.playDialogue(dialogue, { returnState: 'play' });
   }
 
   function tryPlayAntonyBlemmyeCutscene(enemy, enemyType) {
@@ -1044,7 +1053,7 @@
     Neo.scheduleRunSave();
 
     return Neo.uiController.playDialogue([
-      { speaker: 'ANTONY BLEMMYE', text: 'gorba borba' },
+      { speaker: 'ANTONY BLEMMYE', text: 'gorba Gorba' },
     ], { returnState: 'play' });
   }
 
@@ -1144,8 +1153,8 @@
     if (count('oracles_lens') > 0) critChance *= 2;
     critChance = Neo.clamp(critChance, 0.01, 0.95);
     return {
-      bleedChance: count('neo_knife') * 0.05,
-      bleedResistance: Neo.clamp(count('tough_skin') * 0.25, 0, 0.8),
+      bleedChance: count('neo_knife') * 0.05 + count('bandaid') * 0.02,
+      bleedResistance: Neo.clamp(count('tough_skin') * 0.25 + count('bandaid') * 0.04, 0, 0.8),
       scarfBleedsOnHit: count('hemes_scarf'),
       snakeKnifePoisonChance: count('snake_knife') * 0.02,
       weaponFatigueChance: count('weapon_fatigue') * 0.05,
