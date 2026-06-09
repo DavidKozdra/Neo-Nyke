@@ -1652,8 +1652,8 @@
         ctx.rotate(Math.PI / 2); // tip down
         if (!lowFx) { ctx.shadowColor = '#ffd980'; ctx.shadowBlur = 18; }
         drawBlade(70, 16);
-      } else if (sword.phase === 'flying') {
-        // Hovering/seeking blade oriented along its travel angle.
+      } else if (sword.phase === 'hover') {
+        // Embedded blade spinning in place for a brief flourish.
         ctx.translate(sword.x, sword.y);
         ctx.rotate(sword.angle || 0);
         if (!lowFx) { ctx.shadowColor = '#ffd980'; ctx.shadowBlur = 14; }

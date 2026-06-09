@@ -39,6 +39,29 @@
     });
   }
 
+  function forEachEnemyNearBeamPath(path, padding, visitor) {
+    const bounds = Neo.getBeamPathBounds(path);
+    if (bounds && typeof Neo.forEachEnemyNearRect === 'function') {
+      Neo.forEachEnemyNearRect(bounds.left, bounds.top, bounds.width, bounds.height, visitor, { padding });
+      return;
+    }
+    for (let index = Neo.enemies.length - 1; index >= 0; index -= 1) {
+      const enemy = Neo.enemies[index];
+      if (enemy) visitor(enemy);
+    }
+  }
+
+  function forEachDestructibleNearBeamPath(path, padding, visitor) {
+    const bounds = Neo.getBeamPathBounds(path);
+    if (bounds && typeof Neo.forEachDestructibleNearRect === 'function') {
+      Neo.forEachDestructibleNearRect(bounds.left, bounds.top, bounds.width, bounds.height, visitor, { padding });
+      return;
+    }
+    Neo.destructibles.forEach(prop => {
+      if (prop) visitor(prop);
+    });
+  }
+
   function pickRandomEnemies(limit) {
     const count = Math.max(0, Math.floor(Number(limit || 0)));
     if (count <= 0) return [];
@@ -544,7 +567,7 @@
         hitEnemy(target, beamDamage, hitSegment?.angle ?? angle, 80, '#cda8ff', { fireChance: 0.05, fireStacks: 1, fireDuration: 3, beamFx: true });
         chainBeamHit(target, beamDamage, hitSegment?.angle ?? angle, '#d890ff');
       }
-      Neo.destructibles.forEach(prop => {
+      forEachDestructibleNearBeamPath(beamPath, 4, prop => {
         if (!prop.broken && !prop.hidden && Neo.beamPathHitsDestructible(beamPath, prop, 4)) {
           Neo.damageDestructible(prop, 1);
         }
@@ -822,14 +845,12 @@
       const hitThisTick = new Set();
       for (let pathIndex = 0; pathIndex < beamPaths.length; pathIndex += 1) {
         const path = beamPaths[pathIndex];
-        for (let index = Neo.enemies.length - 1; index >= 0; index -= 1) {
-          const enemy = Neo.enemies[index];
-          if (!enemy) continue;
+        forEachEnemyNearBeamPath(path, radiusPadding, enemy => {
           const hitSegment = Neo.beamPathHitsCircle(path, enemy.x, enemy.y, enemy.r + radiusPadding);
-          if (!hitSegment) continue;
+          if (!hitSegment) return;
           // A single enemy straddling two of Thorn's beams shouldn't take the full
           // hit from each beam in the same tick.
-          if (hitThisTick.has(enemy)) continue;
+          if (hitThisTick.has(enemy)) return;
           hitThisTick.add(enemy);
           hitEnemy(enemy, beamDamage, hitSegment.angle, beamKnockback, beamColor, hitOptions);
           chainBeamHit(enemy, beamDamage, hitSegment.angle, beamChainColor);
@@ -843,9 +864,9 @@
             if (Neo.rng() < 0.5) applyPoison(enemy, 2, 5);
             if (Neo.rng() < 0.18) freezeEnemy(enemy);
           }
-        }
+        });
         Neo.hitPvpPlayer2WithBeamPath?.(path, radiusPadding, beamDamage, beamKnockback, 'pvp_p1_beam');
-        Neo.destructibles.forEach(prop => {
+        forEachDestructibleNearBeamPath(path, 4, prop => {
           if (!prop.broken && !prop.hidden && Neo.beamPathHitsDestructible(path, prop, 4)) {
             Neo.damageDestructible(prop, 1);
           }
@@ -2030,46 +2051,44 @@
   }
 
   const EXCALIBUR_FALL_TIME = 0.34;   // descent before impact
-  const EXCALIBUR_FLY_TIME = 2.6;     // how long swords hover/seek after landing
+  const EXCALIBUR_HOVER_TIME = 0.7;   // brief spin-in-place flourish after impact
+  const EXCALIBUR_STRIKE_RADIUS = 150; // swords cluster within this of the cursor
 
-  // Gelleh Summon Excalibur: a barrage of giant divine swords that plunge from
-  // the ceiling all across the room, slam for AOE, then lift back up and fly
-  // around the area seeking enemies before dissipating.
+  // Gelleh Summon Excalibur: a focused volley of divine swords that plunge from
+  // the ceiling around the aimed point, slam for AOE, then spin in place for a
+  // brief flourish before dissipating. A strong AIMED strike — it does not chase
+  // enemies or sweep the whole room.
   function castExcaliburStrike() {
     const itemStats = Neo.getItemStats();
     const aoeRadiusMultiplier = itemStats.aoeRadiusMultiplier || 1;
     const aoeDamageMultiplier = itemStats.aoeDamageMultiplier || 1;
     if (!Array.isArray(Neo.skySwords)) Neo.skySwords = [];
-    const count = 8;
+    const count = 5;
     const edgePad = Neo.WALL + 24;
-    const slamDamage = Math.round((Neo.godTimer > 0 ? 96 : 78) * aoeDamageMultiplier);
-    const flyDamage = Math.round((Neo.godTimer > 0 ? 30 : 24) * aoeDamageMultiplier);
+    const slamDamage = Math.round((Neo.godTimer > 0 ? 58 : 46) * aoeDamageMultiplier);
+    const cx = Neo.clamp(Neo.mouse.worldX, edgePad, Neo.ROOM_W - edgePad);
+    const cy = Neo.clamp(Neo.mouse.worldY, edgePad, Neo.ROOM_H - edgePad);
+    const cluster = EXCALIBUR_STRIKE_RADIUS * aoeRadiusMultiplier;
     for (let index = 0; index < count; index += 1) {
-      // First sword targets the cursor; the rest scatter across the whole room.
-      const tx = index === 0
-        ? Neo.clamp(Neo.mouse.worldX, edgePad, Neo.ROOM_W - edgePad)
-        : Neo.rand(edgePad, Neo.ROOM_W - edgePad, 'fx');
-      const ty = index === 0
-        ? Neo.clamp(Neo.mouse.worldY, edgePad, Neo.ROOM_H - edgePad)
-        : Neo.rand(edgePad, Neo.ROOM_H - edgePad, 'fx');
+      // First sword hits the cursor exactly; the rest cluster tightly around it.
+      const offAngle = Neo.rng() * Math.PI * 2;
+      const offDist = index === 0 ? 0 : Neo.rand(28, cluster, 'fx');
+      const tx = Neo.clamp(cx + Math.cos(offAngle) * offDist, edgePad, Neo.ROOM_W - edgePad);
+      const ty = Neo.clamp(cy + Math.sin(offAngle) * offDist, edgePad, Neo.ROOM_H - edgePad);
       Neo.skySwords.push({
         x: tx, y: ty,
         phase: 'falling',
-        delay: index * 0.08,          // stagger the rain
+        delay: index * 0.07,          // stagger the rain
         fall: EXCALIBUR_FALL_TIME,
-        radius: 92 * aoeRadiusMultiplier,
+        radius: 76 * aoeRadiusMultiplier,
         damage: slamDamage,
-        // Flying phase state:
-        flyTime: EXCALIBUR_FLY_TIME + Neo.rand(0, 0.6, 'fx'),
+        // Hover flourish state (spins in place, no tracking):
+        hoverTime: EXCALIBUR_HOVER_TIME,
         angle: Neo.rng() * Math.PI * 2,
-        spin: (Neo.rng() < 0.5 ? -1 : 1) * (4 + Neo.rng() * 3),
-        flyDamage,
-        flyRadius: 30 * aoeRadiusMultiplier,
-        hitCooldowns: new Map(),
-        target: null,
+        spin: (Neo.rng() < 0.5 ? -1 : 1) * (5 + Neo.rng() * 3),
       });
     }
-    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.5, ring: 36, c: '#ffd980' });
+    Neo.spawnParticle({ x: cx, y: cy, life: 0.5, ring: 36, c: '#ffd980' });
     Neo.addTrauma?.(0.4, Math.PI / 2, 12);
   }
 
@@ -2092,8 +2111,8 @@
           Neo.spawnParticle({ x: sword.x, y: sword.y, life: 0.18, ring: 16 + ratio * 60, c: '#ffe6a3' });
         }
         if (sword.fall <= 0) {
-          // Impact slam.
-          sword.phase = 'flying';
+          // Impact slam — the only damage this ability deals.
+          sword.phase = 'hover';
           Neo.addTrauma?.(0.5, Math.PI / 2, 14);
           Neo.addHitstop?.(0.04);
           Neo.spawnAoeShockwave(sword.x, sword.y, sword.radius, '#ffd980', 'heavy');
@@ -2103,41 +2122,15 @@
         swords[write++] = sword;
         continue;
       }
-      if (sword.phase === 'flying') {
-        sword.flyTime -= dt;
-        if (sword.flyTime <= 0) { sword.phase = 'fade'; sword.fadeT = 0.3; swords[write++] = sword; continue; }
-        // Seek the nearest enemy; drift if none.
-        if (!sword.target || sword.target.dead) {
-          sword.target = Neo.findNearestEnemy?.(sword.x, sword.y, 520) || null;
-        }
-        if (sword.target && !sword.target.dead) {
-          const toAngle = Math.atan2(sword.target.y - sword.y, sword.target.x - sword.x);
-          sword.angle = Neo.turnAngleToward ? Neo.turnAngleToward(sword.angle, toAngle, 7 * dt) : toAngle;
-        } else {
-          sword.angle += sword.spin * dt; // no target: spin/orbit in place
-        }
-        const speed = 360;
-        sword.x = Neo.clamp(sword.x + Math.cos(sword.angle) * speed * dt, Neo.WALL + 8, Neo.ROOM_W - Neo.WALL - 8);
-        sword.y = Neo.clamp(sword.y + Math.sin(sword.angle) * speed * dt, Neo.WALL + 8, Neo.ROOM_H - Neo.WALL - 8);
-        // Decay per-enemy re-hit gate.
-        if (sword.hitCooldowns.size) {
-          sword.hitCooldowns.forEach((v, k) => {
-            const n = v - dt;
-            if (n <= 0) sword.hitCooldowns.delete(k); else sword.hitCooldowns.set(k, n);
-          });
-        }
-        // Slash enemies the flying blade overlaps.
-        Neo.forEachEnemyNearCircle?.(sword.x, sword.y, sword.flyRadius + 80, enemy => {
-          if (!enemy || enemy.dead) return;
-          if (Neo.dist(sword.x, sword.y, enemy.x, enemy.y) > sword.flyRadius + enemy.r) return;
-          if (sword.hitCooldowns.has(enemy)) return;
-          sword.hitCooldowns.set(enemy, 0.3);
-          const a = Math.atan2(enemy.y - sword.y, enemy.x - sword.x);
-          hitEnemy(enemy, sword.flyDamage, a, 150, '#ffd980');
-        });
-        if (Neo.nextRandom('fx') < 0.4) {
+      if (sword.phase === 'hover') {
+        // Brief flourish: the embedded blade spins in place (no movement, no
+        // tracking, no extra damage) then fades.
+        sword.hoverTime -= dt;
+        sword.angle += sword.spin * dt;
+        if (Neo.nextRandom('fx') < 0.3) {
           Neo.spawnParticle({ x: sword.x, y: sword.y, life: 0.16, c: '#ffe6a3', spark: true, size: 2 });
         }
+        if (sword.hoverTime <= 0) { sword.phase = 'fade'; sword.fadeT = 0.3; }
         swords[write++] = sword;
         continue;
       }

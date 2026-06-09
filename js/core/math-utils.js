@@ -185,27 +185,110 @@ export function getEnemyBeamBounceCount(enemy) {
   return enemy.type === 'god' ? Neo.HEAVY_BEAM_BOUNCES : Neo.ENEMY_BEAM_BOUNCES;
 }
 
-let beamReflectRectsCacheFrame = -1;
 let beamReflectRectsCache = null;
+let beamReflectRoom = null;
+let beamReflectWalls = null;
+let beamReflectStructures = null;
+let beamReflectDestructibles = null;
+let beamReflectWallsLength = -1;
+let beamReflectStructuresLength = -1;
+let beamReflectDestructiblesLength = -1;
+let beamReflectDoorState = -1;
+let beamReflectRevision = 0;
+const BEAM_REFLECT_CELL_SIZE = 128;
+const BEAM_REFLECT_CELL_OFFSET = 4096;
+const BEAM_REFLECT_CELL_STRIDE = 8192;
+
+function getBeamReflectCellKey(cellX, cellY) {
+  return (cellX + BEAM_REFLECT_CELL_OFFSET) * BEAM_REFLECT_CELL_STRIDE + (cellY + BEAM_REFLECT_CELL_OFFSET);
+}
+
+function getBeamDoorState() {
+  const room = Neo.currentRoom;
+  if (!room) return 0;
+  const locked = typeof Neo.isRoomLocked === 'function' && Neo.isRoomLocked();
+  const hasExit = dir => typeof Neo.hasRoomExit === 'function'
+    ? Neo.hasRoomExit(room, dir)
+    : !!room?.doors?.[dir];
+  return (locked ? 16 : 0)
+    | (hasExit('n') ? 8 : 0)
+    | (hasExit('s') ? 4 : 0)
+    | (hasExit('w') ? 2 : 0)
+    | (hasExit('e') ? 1 : 0);
+}
+
+function buildBeamReflectSpatialIndex(rects) {
+  const cells = new Map();
+  for (let index = 0; index < rects.length; index += 1) {
+    const rect = rects[index];
+    const minCellX = Math.floor(rect.x / BEAM_REFLECT_CELL_SIZE);
+    const maxCellX = Math.floor((rect.x + rect.w) / BEAM_REFLECT_CELL_SIZE);
+    const minCellY = Math.floor(rect.y / BEAM_REFLECT_CELL_SIZE);
+    const maxCellY = Math.floor((rect.y + rect.h) / BEAM_REFLECT_CELL_SIZE);
+    for (let cellY = minCellY; cellY <= maxCellY; cellY += 1) {
+      for (let cellX = minCellX; cellX <= maxCellX; cellX += 1) {
+        const key = getBeamReflectCellKey(cellX, cellY);
+        let bucket = cells.get(key);
+        if (!bucket) {
+          bucket = [];
+          cells.set(key, bucket);
+        }
+        bucket.push(index);
+      }
+    }
+  }
+  return { cells, marks: new Uint32Array(rects.length), queryId: 0 };
+}
+
+export function invalidateBeamReflectGeometry() {
+  beamReflectRevision += 1;
+  beamReflectRectsCache = null;
+}
 
 export function getBeamReflectRects() {
-  const frameId = Number(Neo.frameId || 0);
-  if (beamReflectRectsCacheFrame === frameId && beamReflectRectsCache) return beamReflectRectsCache;
+  const walls = Array.isArray(Neo.walls) ? Neo.walls : [];
+  const structures = Array.isArray(Neo.structures) ? Neo.structures : [];
+  const destructibles = Array.isArray(Neo.destructibles) ? Neo.destructibles : [];
+  const doorState = getBeamDoorState();
+  const geometryUnchanged = beamReflectRectsCache
+    && beamReflectRoom === Neo.currentRoom
+    && beamReflectWalls === walls
+    && beamReflectStructures === structures
+    && beamReflectDestructibles === destructibles
+    && beamReflectWallsLength === walls.length
+    && beamReflectStructuresLength === structures.length
+    && beamReflectDestructiblesLength === destructibles.length
+    && beamReflectDoorState === doorState;
+  if (geometryUnchanged) return beamReflectRectsCache;
 
-  const rects = Neo.walls.concat(getClosedDoorBlockerRects());
-  Neo.structures.forEach(structure => {
+  const rects = walls.slice();
+  const doorRects = getClosedDoorBlockerRects();
+  for (let index = 0; index < doorRects.length; index += 1) rects.push(doorRects[index]);
+  structures.forEach(structure => {
     if (!structure || !Number.isFinite(structure.x) || !Number.isFinite(structure.y)) return;
     if (!Number.isFinite(structure.w) || !Number.isFinite(structure.h) || structure.w <= 0 || structure.h <= 0) return;
     rects.push({ x: structure.x - structure.w / 2, y: structure.y - structure.h / 2, w: structure.w, h: structure.h });
   });
-  Neo.destructibles.forEach(prop => {
+  destructibles.forEach(prop => {
     if (!prop || prop.broken || prop.hidden) return;
     if (prop.kind !== 'cover_wall' && prop.kind !== 'wall' && prop.kind !== 'secret_wall') return;
     const rect = getDestructibleRect(prop);
     if (rect.w > 0 && rect.h > 0) rects.push(rect);
   });
-  beamReflectRectsCacheFrame = frameId;
+  Object.defineProperty(rects, 'beamSpatialIndex', {
+    configurable: true,
+    value: buildBeamReflectSpatialIndex(rects),
+  });
+  beamReflectRoom = Neo.currentRoom;
+  beamReflectWalls = walls;
+  beamReflectStructures = structures;
+  beamReflectDestructibles = destructibles;
+  beamReflectWallsLength = walls.length;
+  beamReflectStructuresLength = structures.length;
+  beamReflectDestructiblesLength = destructibles.length;
+  beamReflectDoorState = doorState;
   beamReflectRectsCache = rects;
+  beamReflectRevision += 1;
   return rects;
 }
 
@@ -256,22 +339,90 @@ export function rayRectHit(originX, originY, dirX, dirY, rect, maxDistance) {
 }
 
 export function findBeamRicochetHit(originX, originY, dirX, dirY, maxDistance, rects) {
+  const spatialIndex = rects?.beamSpatialIndex;
+  if (spatialIndex?.cells && rects.length > 8) {
+    spatialIndex.queryId += 1;
+    if (spatialIndex.queryId >= 0xffffffff) {
+      spatialIndex.marks.fill(0);
+      spatialIndex.queryId = 1;
+    }
+    const queryId = spatialIndex.queryId;
+    const marks = spatialIndex.marks;
+    let cellX = Math.floor(originX / BEAM_REFLECT_CELL_SIZE);
+    let cellY = Math.floor(originY / BEAM_REFLECT_CELL_SIZE);
+    const stepX = dirX > 0 ? 1 : dirX < 0 ? -1 : 0;
+    const stepY = dirY > 0 ? 1 : dirY < 0 ? -1 : 0;
+    const nextBoundaryX = stepX > 0 ? (cellX + 1) * BEAM_REFLECT_CELL_SIZE : cellX * BEAM_REFLECT_CELL_SIZE;
+    const nextBoundaryY = stepY > 0 ? (cellY + 1) * BEAM_REFLECT_CELL_SIZE : cellY * BEAM_REFLECT_CELL_SIZE;
+    let tMaxX = stepX ? (nextBoundaryX - originX) / dirX : Infinity;
+    let tMaxY = stepY ? (nextBoundaryY - originY) / dirY : Infinity;
+    const tDeltaX = stepX ? BEAM_REFLECT_CELL_SIZE / Math.abs(dirX) : Infinity;
+    const tDeltaY = stepY ? BEAM_REFLECT_CELL_SIZE / Math.abs(dirY) : Infinity;
+    let closest = null;
+
+    while (true) {
+      const bucket = spatialIndex.cells.get(getBeamReflectCellKey(cellX, cellY));
+      if (bucket) {
+        for (let index = 0; index < bucket.length; index += 1) {
+          const rectIndex = bucket[index];
+          if (marks[rectIndex] === queryId) continue;
+          marks[rectIndex] = queryId;
+          const hit = rayRectHit(originX, originY, dirX, dirY, rects[rectIndex], maxDistance);
+          if (hit && (!closest || hit.distance < closest.distance)) closest = hit;
+        }
+      }
+
+      const nextCellDistance = Math.min(tMaxX, tMaxY);
+      if (closest && closest.distance <= nextCellDistance + Neo.BEAM_RICOCHET_EPSILON) return closest;
+      if (nextCellDistance > maxDistance) return closest;
+      const crossX = tMaxX <= tMaxY;
+      const crossY = tMaxY <= tMaxX;
+      if (crossX) {
+        cellX += stepX;
+        tMaxX += tDeltaX;
+      }
+      if (crossY) {
+        cellY += stepY;
+        tMaxY += tDeltaY;
+      }
+    }
+  }
+
   let closest = null;
-  rects.forEach(rect => {
+  for (let index = 0; index < rects.length; index += 1) {
+    const rect = rects[index];
     const hit = rayRectHit(originX, originY, dirX, dirY, rect, maxDistance);
-    if (!hit) return;
+    if (!hit) continue;
     if (!closest || hit.distance < closest.distance) closest = hit;
-  });
+  }
   return closest;
 }
 
-let beamPathCacheFrame = -1;
-const beamPathCache = new Map();
+const BEAM_PATH_CACHE_SIZE = 128;
+const beamPathCache = Array.from({ length: BEAM_PATH_CACHE_SIZE }, () => ({
+  frameId: -1,
+  revision: -1,
+  originX: 0,
+  originY: 0,
+  angle: 0,
+  range: 0,
+  bounces: 0,
+  path: null,
+}));
 
 function quantizeBeamCacheValue(value) {
   const numeric = Number(value || 0);
-  if (!Number.isFinite(numeric)) return 'NaN';
-  return numeric.toFixed(3);
+  if (!Number.isFinite(numeric)) return 0x7fffffff;
+  return Math.round(numeric * 1000);
+}
+
+function getBeamPathCacheSlot(originX, originY, angle, range, bounces) {
+  const hash = Math.imul(originX, 73856093)
+    ^ Math.imul(originY, 19349663)
+    ^ Math.imul(angle, 83492791)
+    ^ Math.imul(range, 2654435761)
+    ^ Math.imul(bounces, 97531);
+  return beamPathCache[(hash >>> 0) & (BEAM_PATH_CACHE_SIZE - 1)];
 }
 
 function finalizeBeamPath(path) {
@@ -335,19 +486,37 @@ function buildRicochetBeamPathUncached(originX, originY, angle, range, maxBounce
 }
 
 export function buildRicochetBeamPath(originX, originY, angle, range, maxBounces = 0) {
+  // Validate room geometry before consulting the path cache so a room/door
+  // change within the same animation frame cannot reuse an obsolete path.
+  getBeamReflectRects();
   const frameId = Number(Neo.frameId || 0);
-  if (beamPathCacheFrame !== frameId) {
-    beamPathCacheFrame = frameId;
-    beamPathCache.clear();
+  const quantizedOriginX = quantizeBeamCacheValue(originX);
+  const quantizedOriginY = quantizeBeamCacheValue(originY);
+  const quantizedAngle = quantizeBeamCacheValue(angle);
+  const quantizedRange = quantizeBeamCacheValue(range);
+  const bounces = Math.max(0, Math.floor(Number(maxBounces || 0)));
+  const slot = getBeamPathCacheSlot(quantizedOriginX, quantizedOriginY, quantizedAngle, quantizedRange, bounces);
+  if (
+    slot.frameId === frameId
+    && slot.revision === beamReflectRevision
+    && slot.originX === quantizedOriginX
+    && slot.originY === quantizedOriginY
+    && slot.angle === quantizedAngle
+    && slot.range === quantizedRange
+    && slot.bounces === bounces
+  ) {
+    return slot.path;
   }
 
-  const key = `${quantizeBeamCacheValue(originX)}|${quantizeBeamCacheValue(originY)}|${quantizeBeamCacheValue(angle)}|${quantizeBeamCacheValue(range)}|${Math.max(0, Math.floor(Number(maxBounces || 0)))}`;
-
-  const cached = beamPathCache.get(key);
-  if (cached) return cached;
-
   const path = buildRicochetBeamPathUncached(originX, originY, angle, range, maxBounces);
-  beamPathCache.set(key, path);
+  slot.frameId = frameId;
+  slot.revision = beamReflectRevision;
+  slot.originX = quantizedOriginX;
+  slot.originY = quantizedOriginY;
+  slot.angle = quantizedAngle;
+  slot.range = quantizedRange;
+  slot.bounces = bounces;
+  slot.path = path;
   return path;
 }
 
@@ -424,42 +593,21 @@ export function sampleBeamPath(path, amount) {
   return null;
 }
 
-export function drawTaperedBeamPath(path, options = {}) {
+// Emit the filled tapered-quad geometry for one path into the current ctx path.
+// Assumes beginPath()/fill() are managed by the caller, so several beams can
+// share a single fill (and thus a single shadowBlur pass).
+function emitTaperedBeamFill(path, maxWidth, minWidthRatio, taperPower, segmentLength) {
   const totalLength = getBeamPathLength(path);
   if (!totalLength) return;
-  const color = options.color || '#ff00aa';
-  const glow = options.glow || color;
-  const maxWidth = Number(options.maxWidth || 8);
-  const minWidthRatio = clamp(Number(options.minWidthRatio || 0), 0, 1);
-  const taperPower = Math.max(0.25, Number(options.taperPower || 2));
-  const requestedSegmentLength = Math.max(24, Number(options.segmentLength || 32));
-  const alpha = Neo.clamp ? Neo.clamp(Number(options.alpha ?? 0.92), 0, 1) : Math.max(0, Math.min(1, Number(options.alpha ?? 0.92)));
-  const coreColor = options.coreColor === false ? '' : String(options.coreColor || 'rgba(255,255,255,0.7)');
-  const coreAlpha = clamp(Number(options.coreAlpha ?? 1), 0, 1);
-  const coreWidth = Math.max(0, Number(options.coreWidth ?? Math.max(1.5, maxWidth * 0.22)));
   let traversed = 0;
-
-  // When the screen is busy in performance mode, drop the beam's shadow glow —
-  // shadowBlur is costly and the beam reads fine without it during a particle flood.
-  const lowFx = options.lowFx === true
-    || (window.NeoSettings?.isPerformanceMode?.() !== false && (Neo.particles?.length || 0) > 80);
-  const segmentLength = lowFx ? Math.max(64, requestedSegmentLength) : requestedSegmentLength;
-  Neo.ctx.save();
-  Neo.ctx.globalAlpha *= alpha;
-  Neo.ctx.shadowColor = glow;
-  Neo.ctx.shadowBlur = lowFx ? 0 : Number(options.shadowBlur || 18);
-  Neo.ctx.fillStyle = color;
-  Neo.ctx.beginPath();
   for (let segmentIndex = 0; segmentIndex < path.length; segmentIndex += 1) {
     const segment = path[segmentIndex];
     const dx = segment.x2 - segment.x1;
     const dy = segment.y2 - segment.y1;
     const length = segment.length || Math.hypot(dx, dy);
     if (!length) continue;
-    const dirX = dx / length;
-    const dirY = dy / length;
-    const normalX = -dirY;
-    const normalY = dirX;
+    const normalX = -dy / length;
+    const normalY = dx / length;
     const subSegments = Math.max(1, Math.ceil(length / segmentLength));
     for (let index = 0; index < subSegments; index += 1) {
       const t0 = index / subSegments;
@@ -482,6 +630,49 @@ export function drawTaperedBeamPath(path, options = {}) {
     }
     traversed += length;
   }
+}
+
+function emitBeamCoreStroke(path) {
+  for (let index = 0; index < path.length; index += 1) {
+    const segment = path[index];
+    if (index === 0) Neo.ctx.moveTo(segment.x1, segment.y1);
+    else if (segment.x1 !== path[index - 1].x2 || segment.y1 !== path[index - 1].y2) Neo.ctx.moveTo(segment.x1, segment.y1);
+    Neo.ctx.lineTo(segment.x2, segment.y2);
+  }
+}
+
+// Draw one or more beams that share identical styling in a single fill pass.
+// shadowBlur is the dominant cost of a held beam; batching the fan into one
+// save/shadow/fill instead of one per beam is the big perf win.
+export function drawTaperedBeamPaths(paths, options = {}) {
+  const list = Array.isArray(paths) ? paths.filter(p => p && p.length) : [];
+  if (!list.length) return;
+  const color = options.color || '#ff00aa';
+  const glow = options.glow || color;
+  const maxWidth = Number(options.maxWidth || 8);
+  const minWidthRatio = clamp(Number(options.minWidthRatio || 0), 0, 1);
+  const taperPower = Math.max(0.25, Number(options.taperPower || 2));
+  const requestedSegmentLength = Math.max(24, Number(options.segmentLength || 32));
+  const alpha = clamp(Number(options.alpha ?? 0.92), 0, 1);
+  const coreColor = options.coreColor === false ? '' : String(options.coreColor || 'rgba(255,255,255,0.7)');
+  const coreAlpha = clamp(Number(options.coreAlpha ?? 1), 0, 1);
+  const coreWidth = Math.max(0, Number(options.coreWidth ?? Math.max(1.5, maxWidth * 0.22)));
+
+  // When the screen is busy in performance mode, drop the beam's shadow glow —
+  // shadowBlur is costly and the beam reads fine without it during a particle flood.
+  const lowFx = options.lowFx === true
+    || (window.NeoSettings?.isPerformanceMode?.() !== false && (Neo.particles?.length || 0) > 80);
+  const segmentLength = lowFx ? Math.max(64, requestedSegmentLength) : requestedSegmentLength;
+
+  Neo.ctx.save();
+  Neo.ctx.globalAlpha *= alpha;
+  Neo.ctx.shadowColor = glow;
+  Neo.ctx.shadowBlur = lowFx ? 0 : Number(options.shadowBlur || 18);
+  Neo.ctx.fillStyle = color;
+  Neo.ctx.beginPath();
+  for (let i = 0; i < list.length; i += 1) {
+    emitTaperedBeamFill(list[i], maxWidth, minWidthRatio, taperPower, segmentLength);
+  }
   Neo.ctx.fill();
 
   if (coreColor && coreWidth > 0 && coreAlpha > 0) {
@@ -492,14 +683,17 @@ export function drawTaperedBeamPath(path, options = {}) {
     Neo.ctx.lineCap = 'round';
     Neo.ctx.lineJoin = 'round';
     Neo.ctx.beginPath();
-    path.forEach((segment, index) => {
-      if (index === 0) Neo.ctx.moveTo(segment.x1, segment.y1);
-      else if (segment.x1 !== path[index - 1].x2 || segment.y1 !== path[index - 1].y2) Neo.ctx.moveTo(segment.x1, segment.y1);
-      Neo.ctx.lineTo(segment.x2, segment.y2);
-    });
+    for (let i = 0; i < list.length; i += 1) {
+      emitBeamCoreStroke(list[i]);
+    }
     Neo.ctx.stroke();
   }
   Neo.ctx.restore();
+}
+
+export function drawTaperedBeamPath(path, options = {}) {
+  if (!path || !path.length) return;
+  drawTaperedBeamPaths([path], options);
 }
 
 export function strokeBeamPath(path, options = {}) {
@@ -573,6 +767,7 @@ Neo.beamHitsCircle = beamHitsCircle;
 Neo.getPlayerBeamRange = getPlayerBeamRange;
 Neo.getPlayerBeamBounceCount = getPlayerBeamBounceCount;
 Neo.getEnemyBeamBounceCount = getEnemyBeamBounceCount;
+Neo.invalidateBeamReflectGeometry = invalidateBeamReflectGeometry;
 Neo.getBeamReflectRects = getBeamReflectRects;
 Neo.rayRectHit = rayRectHit;
 Neo.findBeamRicochetHit = findBeamRicochetHit;
@@ -584,5 +779,6 @@ Neo.getBeamPathBounds = getBeamPathBounds;
 Neo.getBeamPathEnd = getBeamPathEnd;
 Neo.sampleBeamPath = sampleBeamPath;
 Neo.drawTaperedBeamPath = drawTaperedBeamPath;
+Neo.drawTaperedBeamPaths = drawTaperedBeamPaths;
 Neo.strokeBeamPath = strokeBeamPath;
 Neo.getBeamEnd = getBeamEnd;

@@ -1193,6 +1193,9 @@ export function resumeGame() {
     if (moveKey === 'lightning_columns') return (5.1 / attackSpeed) * characterMult;
     if (moveKey === 'god_sweep') return (7.2 / attackSpeed) * characterMult;
     if (moveKey === 'nail_shot') return 2.8 / attackSpeed;
+    // Thorn's Infinite Blood Beam fires a four-beam fan — at least double the
+    // normal blood beam cooldown to keep it from being a constant channel.
+    if (moveKey === 'thorn_blood_beams') return ((Neo.ATTACKS.laser.baseCooldown * 2) / attackSpeed) * characterMult;
     return ((Neo.godTimer > 0 ? 2.8 : Neo.ATTACKS.laser.baseCooldown) / attackSpeed) * characterMult;
   }
 

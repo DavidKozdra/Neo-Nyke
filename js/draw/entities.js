@@ -330,6 +330,7 @@
     const performanceMode = window.NeoSettings?.isPerformanceMode?.() !== false;
     const activeBeamCount = Neo.enemies.reduce((count, enemy) => count + (enemy?.beamTime > 0 ? 1 : 0), 0);
     const lowBeamFx = performanceMode && (activeBeamCount > 3 || (Neo.particles?.length || 0) > 64);
+    const beamGroups = new Map();
     Neo.enemies.forEach(enemy => {
       if (enemy.windup > 0) {
         Neo.ctx.save();
@@ -347,7 +348,7 @@
         const beamPath = Neo.buildRicochetBeamPath(enemy.x, enemy.y, enemy.beamAngle, range, Neo.getEnemyBeamBounceCount(enemy));
         const color = enemy.type === 'god' ? '#ffffff' : enemy.type === 'mooggy' ? '#ff3348' : enemy.type === 'handsome_devil' ? '#ff3348' : enemy.type === 'bowman_bane' ? '#8dd4ff' : '#aa66ff';
         const width = enemy.type === 'god' && enemy.state === 'godSweep' ? 18 : enemy.type === 'god' ? 10 : enemy.type === 'mooggy' ? 6 : enemy.type === 'handsome_devil' ? 9 : 8;
-        Neo.drawTaperedBeamPath(beamPath, {
+        const options = {
           color,
           glow: color,
           maxWidth: width,
@@ -359,8 +360,18 @@
           coreWidth: Math.max(1.4, width * 0.22),
           coreShadowBlur: lowBeamFx ? 0 : 4,
           lowFx: lowBeamFx,
-        });
+        };
+        const groupKey = `${color}|${width}|${options.minWidthRatio}|${options.taperPower}|${options.shadowBlur}|${options.coreColor}`;
+        let group = beamGroups.get(groupKey);
+        if (!group) {
+          group = { paths: [], options };
+          beamGroups.set(groupKey, group);
+        }
+        group.paths.push(beamPath);
       }
+    });
+    beamGroups.forEach(group => {
+      Neo.drawTaperedBeamPaths(group.paths, group.options);
     });
   }
 
@@ -1287,33 +1298,35 @@
       const outerPulse = dragonOrbStacks > 0 ? 1 + Math.sin(Number(Neo.frameId || 0) * 0.42) * 0.12 : 1;
       const glassesWidth = 5 * beamWidthMultiplier;
       const dragonOuterW = glassesWidth + Math.min(18, dragonOrbStacks * 3.5) * outerPulse;
+      const beamPaths = [];
       Neo.ctx.save();
       Neo.ctx.globalAlpha = alpha;
       for (let beamIndex = 0; beamIndex < 2; beamIndex += 1) {
         const offset = beamIndex === 0 ? -0.2 : 0.2;
         const beamAngle = baseAngle + offset;
         const beamPath = Neo.buildRicochetBeamPath(Neo.player.x, Neo.player.y, beamAngle, 430, Neo.LAZER_GLASSES_BOUNCES);
-        if (dragonOrbStacks > 0) {
-          Neo.drawTaperedBeamPath(beamPath, {
-            color: '#b77dff',
-            glow: '#b77dff',
-            maxWidth: dragonOuterW,
-            shadowBlur: 22,
-            alpha: Math.min(0.58, 0.25 + dragonOrbStacks * 0.08),
-          });
-        }
-        Neo.drawTaperedBeamPath(beamPath, {
-          color: '#cda8ff',
-          glow: '#e0c8ff',
-          maxWidth: glassesWidth,
-          shadowBlur: 16,
-        });
+        beamPaths.push(beamPath);
         // Tip burst
         if (Neo.rng() < 0.35) {
           const end = Neo.getBeamPathEnd(beamPath);
           Neo.spawnParticle({ x: end.x + (Neo.rng() - 0.5) * 5, y: end.y + (Neo.rng() - 0.5) * 5, life: 0.1 + Neo.rng() * 0.08, vx: (Neo.rng() - 0.5) * 35, vy: (Neo.rng() - 0.5) * 35, c: '#cda8ff' });
         }
       }
+      if (dragonOrbStacks > 0) {
+        Neo.drawTaperedBeamPaths(beamPaths, {
+          color: '#b77dff',
+          glow: '#b77dff',
+          maxWidth: dragonOuterW,
+          shadowBlur: 22,
+          alpha: Math.min(0.58, 0.25 + dragonOrbStacks * 0.08),
+        });
+      }
+      Neo.drawTaperedBeamPaths(beamPaths, {
+        color: '#cda8ff',
+        glow: '#e0c8ff',
+        maxWidth: glassesWidth,
+        shadowBlur: 16,
+      });
       Neo.ctx.restore();
       Neo.ctx.shadowBlur = 0;
       Neo.ctx.globalAlpha = 1;
@@ -1372,28 +1385,33 @@
       ? maxW + Math.min(22, dragonOrbStacks * 4.5) * outerPulse
       : 0;
 
-    for (let pathIndex = 0; pathIndex < beamPaths.length; pathIndex += 1) {
-      const path = beamPaths[pathIndex];
-      if (!path || !path.length) continue;
-      if (dragonOrbStacks > 0) {
-        Neo.drawTaperedBeamPath(path, {
-          color: loveBeamActive ? '#ffb4ea' : turtleWaveActive ? '#a8fbff' : '#b77dff',
-          glow: '#b77dff',
-          maxWidth: dragonOuterW,
-          shadowBlur: Neo.laserMode === 'god_sweep' || turtleWaveActive ? 34 : 24,
-          alpha: Math.min(0.58, 0.25 + dragonOrbStacks * 0.08),
-        });
-      }
-      Neo.drawTaperedBeamPath(path, {
-        color: beamColor,
-        glow: beamGlow,
-        maxWidth: maxW,
-        shadowBlur: beamShadow,
+    // A multi-beam fan (Thorn's Infinite Blood Beam) is drawn in one batched fill
+    // pass and drops per-beam shadow glow: paying shadowBlur 4-8x a frame on a
+    // held beam tanks the framerate, and the fan reads fine flat.
+    const multiBeam = beamPaths.length > 1;
+    if (dragonOrbStacks > 0) {
+      Neo.drawTaperedBeamPaths(beamPaths, {
+        color: loveBeamActive ? '#ffb4ea' : turtleWaveActive ? '#a8fbff' : '#b77dff',
+        glow: '#b77dff',
+        maxWidth: dragonOuterW,
+        shadowBlur: Neo.laserMode === 'god_sweep' || turtleWaveActive ? 34 : 24,
+        alpha: Math.min(0.58, 0.25 + dragonOrbStacks * 0.08),
+        lowFx: multiBeam,
       });
     }
+    Neo.drawTaperedBeamPaths(beamPaths, {
+      color: beamColor,
+      glow: beamGlow,
+      maxWidth: maxW,
+      shadowBlur: beamShadow,
+      lowFx: multiBeam,
+    });
 
-    // Beam particles: small dots that drift perpendicular and fade toward tip
-    if (Neo.rng() < 0.55) {
+    // Beam particles: small dots that drift perpendicular and fade toward tip.
+    // Divide the spawn chance by beam count so a 4-beam fan doesn't emit 4x the
+    // particles (which would feed straight back into the perf problem).
+    const beamFxScale = 1 / beamPaths.length;
+    if (Neo.rng() < 0.55 * beamFxScale) {
       const sample = Neo.sampleBeamPath(beamPath, Neo.rng());
       if (sample) {
         const taper = 1 - sample.t * sample.t;
@@ -1412,7 +1430,7 @@
       }
     }
     // Tip burst particles at beam end
-    if (Neo.rng() < 0.4) {
+    if (Neo.rng() < 0.4 * beamFxScale) {
       const end = Neo.getBeamPathEnd(beamPath);
       const tipPx = end.x + (Neo.rng() - 0.5) * 6;
       const tipPy = end.y + (Neo.rng() - 0.5) * 6;

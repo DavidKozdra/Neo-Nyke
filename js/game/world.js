@@ -753,6 +753,18 @@
     });
   }
 
+  function forEachDestructibleNearRect(left, top, width, height, visitor, options = {}) {
+    const padding = Math.max(0, Number(options.padding || 0));
+    const index = options.index
+      || (Neo.destructibleSpatialIndexFrame === Neo.frameId ? Neo.destructibleSpatialIndex : null)
+      || buildDestructibleSpatialIndex();
+    const bounds = getEnemyCellBounds(left - padding, top - padding, left + width + padding, top + height + padding);
+    queryEnemyIndexCells(index, bounds, prop => {
+      if (!prop || prop.broken || prop.hidden) return;
+      visitor(prop);
+    });
+  }
+
   function blastRadius(x, y, radius, damage, color, sourceEnemy = null, knockback = 200) {
     spawnAoeShockwave(x, y, radius, color, damage >= 28 ? 'heavy' : 'normal');
     if (sourceEnemy && Neo.player && Neo.dist(x, y, Neo.player.x, Neo.player.y) <= radius + Neo.player.r) {
@@ -2106,6 +2118,7 @@
     prop.hp -= numericDamage;
     if (prop.hp > 0) return;
     prop.broken = true;
+    Neo.invalidateBeamReflectGeometry?.();
     prop.breakAge = 0;
     prop.breakAngle = getDestructibleImpactAngle(prop, hit);
     if (prop.kind === 'barrel') spawnBarrelExplosionFx(prop, hit);
@@ -3133,6 +3146,7 @@
   Neo.forEachEnemyNearCircle = forEachEnemyNearCircle;
   Neo.forEachEnemyNearRect = forEachEnemyNearRect;
   Neo.forEachDestructibleNearCircle = forEachDestructibleNearCircle;
+  Neo.forEachDestructibleNearRect = forEachDestructibleNearRect;
   Neo.findNearestEnemy = findNearestEnemy;
   Neo.updateProjectiles = updateProjectiles;
   Neo.updateWorldProps = updateWorldProps;
