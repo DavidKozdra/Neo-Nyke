@@ -650,12 +650,12 @@
     // Scale off the cumulative number of floors the player has entered this run
     // (floorsEntered), not the raw `floor` — `floor` resets to 1 every loop, which
     // would make enemies weak again after each loop. floorsEntered keeps climbing
-    // and ignores skipped floors. Split it back into a within-loop floor index and
-    // a loop number so the existing per-floor / per-loop multipliers still apply.
+    // and ignores skipped floors. The floor component must stay cumulative across
+    // loop boundaries; loop multipliers remain as additional late-run pressure.
     const progressionDepth = getProgressionDepth();
     const loopNumber = Math.max(1, Math.floor((progressionDepth - 1) / Neo.MAX_FLOOR) + 1);
-    const floorInLoop = ((progressionDepth - 1) % Neo.MAX_FLOOR) + 1;
-    const floorMultiplier = 1 + (floorInLoop - 1) * Neo.ENEMY_SCALING.floor;
+    const floorsCleared = progressionDepth - 1;
+    const floorMultiplier = 1 + floorsCleared * Neo.ENEMY_SCALING.floor;
     const loopMultiplier = 1 + (loopNumber - 1) * Neo.ENEMY_SCALING.loop;
     const timerMultiplier = 1 + gameMinutes * Neo.ENEMY_SCALING.minute;
     const difficultyMultiplier = isBossType(type) ? difficulty.bossStatMultiplier : difficulty.statMultiplier;
@@ -676,7 +676,7 @@
       ? 1 + (loopNumber - 1) * (Neo.ENEMY_SCALING.bossLoopDamage ?? 0)
       : 1;
     const hpScale = floorMultiplier * loopMultiplier * timerMultiplier * difficultyMultiplier * endlessHpMultiplier * bossLoopHpMultiplier;
-    const damageFloorMultiplier = 1 + (floorInLoop - 1) * (Neo.ENEMY_SCALING.damageFloor ?? Neo.ENEMY_SCALING.floor);
+    const damageFloorMultiplier = 1 + floorsCleared * (Neo.ENEMY_SCALING.damageFloor ?? Neo.ENEMY_SCALING.floor);
     const damageLoopMultiplier = 1 + (loopNumber - 1) * (Neo.ENEMY_SCALING.damageLoop ?? Neo.ENEMY_SCALING.loop);
     const damageTimerMultiplier = 1 + gameMinutes * (Neo.ENEMY_SCALING.damageMinute ?? Neo.ENEMY_SCALING.minute);
     const damageSoftCap = isBossType(type)
@@ -687,7 +687,7 @@
       endlessWaveIndex > 0 ? Math.max(damageSoftCap, Neo.ENEMY_SCALING.endlessWaveDamageSoftCap) : damageSoftCap,
       isBossType(type) ? 0.38 : 0.34
     ) * bossLoopDamageMultiplier;
-    const speedFloorMultiplier = 1 + (floorInLoop - 1) * (Neo.ENEMY_SCALING.speedFloor ?? 0.035);
+    const speedFloorMultiplier = 1 + floorsCleared * (Neo.ENEMY_SCALING.speedFloor ?? 0.035);
     const speedLoopMultiplier = 1 + (loopNumber - 1) * (Neo.ENEMY_SCALING.speedLoop ?? 0.07);
     const speedTimerMultiplier = 1 + gameMinutes * (Neo.ENEMY_SCALING.speedMinute ?? 0.018);
     const speedScale = softCapEnemyScale(
