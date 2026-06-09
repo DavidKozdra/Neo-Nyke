@@ -698,7 +698,11 @@ export function createUIController(view) {
       if (show !== 'menu') { setAltModesPanelOpen(false); setCompetitivePanelOpen(false); setSandboxPanelOpen(false); }
       if (show !== 'menu') tutorialMenuOfferVisible = false;
       setVisible(view.endlessHud, inPlay && Neo.gameMode === 'endless', 'flex');
-      setVisible(view.practicePanel, inPlay && Neo.gameMode === 'practice' && show !== 'dying', 'block');
+      setVisible(
+        view.practicePanel,
+        inPlay && Neo.gameMode === 'practice' && Neo.practiceVariant !== 'challenges' && show !== 'dying',
+        'block',
+      );
       const isBossRush = Neo.gameMode === 'boss_rush';
       if (view.timerFloorSlot) view.timerFloorSlot.style.display = isBossRush ? 'none' : '';
       if (view.timerBossSlot) view.timerBossSlot.style.display = isBossRush ? '' : 'none';
@@ -1847,6 +1851,10 @@ export function createUIController(view) {
         view.altModePracticeBtn?.addEventListener('click', () => {
           setAltModesPanelOpen(false);
           handlers.onOpenAltModeCharSelect('practice');
+        });
+        view.altModeChallengePracticeBtn?.addEventListener('click', () => {
+          setAltModesPanelOpen(false);
+          handlers.onOpenAltModeCharSelect('challenge_practice');
         });
         view.altModeBossRushBtn?.addEventListener('click', () => {
           setAltModesPanelOpen(false);

@@ -2247,6 +2247,12 @@ export function resumeGame() {
     // floor count to match the practice floor directly.
     Neo.floorsEntered = Neo.floor;
     resetRngStreams();
+    if (Neo.practiceVariant === 'challenges') {
+      buildChallengePracticeFloor();
+      syncPracticeMaxHpControls();
+      if (!Neo.loopStarted) { Neo.loopStarted = true; requestAnimationFrame(Neo.loop); }
+      return;
+    }
     Neo.rooms = [];
     const room = Neo.createRoomRecord({ x: 4, y: 4 }, { type: 'combat', doors: { n: false, s: false, e: false, w: false }, cleared: true });
     Neo.decorateRoomData(room);
@@ -2256,6 +2262,93 @@ export function resumeGame() {
     Neo.player.y = Neo.START_Y;
     syncPracticeMaxHpControls();
     if (!Neo.loopStarted) { Neo.loopStarted = true; requestAnimationFrame(Neo.loop); }
+  }
+
+  const CHALLENGE_PRACTICE_LAYOUT = [
+    { type: 'mirror', gx: 4, gy: 1, x: 235, y: 260 },
+    { type: 'stillness', gx: 7, gy: 2, x: 450, y: 260 },
+    { type: 'bomb', gx: 7, gy: 6, x: 665, y: 260 },
+    { type: 'survival', gx: 4, gy: 7, x: 235, y: 440 },
+    { type: 'runes', gx: 1, gy: 6, x: 450, y: 440 },
+    { type: 'storm', gx: 1, gy: 2, x: 665, y: 440 },
+  ];
+
+  function resetChallengePracticeRoom(room) {
+    if (!room?.practiceChallengeRoom) return false;
+    room.cleared = false;
+    room.challengeStarted = false;
+    room.challengeRewardSpawned = false;
+    room.challengeFailed = false;
+    room.challengeTimer = 0;
+    room.challengeTick = 0;
+    room.challengeData = {};
+    room.enemies = [];
+    room.deadBodies = [];
+    room.projectiles = [];
+    room.chests = [];
+    room.pickups = [];
+    room.hazards = [];
+    return true;
+  }
+
+  function ensureChallengePracticeReturnPortal(room = Neo.currentRoom) {
+    if (Neo.gameMode !== 'practice' || Neo.practiceVariant !== 'challenges' || !room?.practiceChallengeRoom || !room.cleared) return false;
+    const pickups = room === Neo.currentRoom ? Neo.pickups : room.pickups;
+    if (!Array.isArray(pickups) || pickups.some(pickup => pickup?.type === 'challengePracticePortal' && pickup.returnToHub)) return false;
+    pickups.push({
+      x: Neo.ROOM_W / 2,
+      y: Neo.ROOM_H - Neo.WALL - 34,
+      type: 'challengePracticePortal',
+      targetGx: 4,
+      targetGy: 4,
+      destinationLabel: 'START',
+      returnToHub: true,
+    });
+    if (room === Neo.currentRoom) {
+      Neo.spawnParticle({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H - Neo.WALL - 58, life: 0.9, text: 'RETURN PORTAL', c: '#8dffcf' });
+    }
+    return true;
+  }
+
+  function buildChallengePracticeFloor() {
+    Neo.rooms = [];
+    const hub = Neo.createRoomRecord(
+      { x: 4, y: 4 },
+      { type: 'start', doors: { n: false, s: false, e: false, w: false }, cleared: true, explored: true, visited: true, practiceChallengeHub: true },
+    );
+    Neo.decorateRoomData(hub);
+    hub.pickups = CHALLENGE_PRACTICE_LAYOUT.map(entry => ({
+      x: entry.x,
+      y: entry.y,
+      type: 'challengePracticePortal',
+      targetGx: entry.gx,
+      targetGy: entry.gy,
+      destinationLabel: Neo.getChallengeTrialLabel(entry.type),
+      challengeType: entry.type,
+    }));
+    Neo.rooms.push(hub);
+
+    CHALLENGE_PRACTICE_LAYOUT.forEach(entry => {
+      const room = Neo.createRoomRecord(
+        { x: entry.gx, y: entry.gy },
+        { type: 'challenge', doors: { n: false, s: false, e: false, w: false }, practiceChallengeRoom: true },
+      );
+      Neo.decorateRoomData(room);
+      room.challengeType = entry.type;
+      room.layoutArchetype = 'open';
+      room.layoutChambers = [];
+      room.structures = [];
+      room.destructibles = [];
+      room.hazards = [];
+      room.decorations = [];
+      Neo.rooms.push(room);
+    });
+
+    Neo.currentRoom = null;
+    Neo.enterRoom(hub);
+    Neo.player.x = Neo.START_X;
+    Neo.player.y = Neo.START_Y;
+    Neo.spawnParticle({ x: Neo.START_X, y: Neo.START_Y - 46, life: 1.4, text: 'CHALLENGE TESTING', c: '#d7f6ff' });
   }
 
   const BOSS_RUSH_ORDER = ['queen_cult', 'bulk_golem', 'antony_blemmye', 'handsome_devil', 'artificer_knave', 'god'];
@@ -2928,6 +3021,9 @@ export function resumeGame() {
   Neo.startEndlessRoom = startEndlessRoom;
   Neo.startEndless = startEndless;
   Neo.startPractice = startPractice;
+  Neo.resetChallengePracticeRoom = resetChallengePracticeRoom;
+  Neo.ensureChallengePracticeReturnPortal = ensureChallengePracticeReturnPortal;
+  Neo.buildChallengePracticeFloor = buildChallengePracticeFloor;
   Neo.startBossRush = startBossRush;
   Neo.spawnBossRushBoss = spawnBossRushBoss;
   Neo.findBossRushSpawnPoint = findBossRushSpawnPoint;

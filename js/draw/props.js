@@ -972,6 +972,28 @@
           Neo.ctx.textAlign = 'center';
           Neo.ctx.fillText(pal.label, 0, 3);
         }
+      } else if (pickup.type === 'challengePracticePortal') {
+        const color = pickup.returnToHub ? '#8dffcf' : '#d7b4ff';
+        const spin = Date.now() / 420;
+        Neo.ctx.strokeStyle = color;
+        Neo.ctx.shadowColor = color;
+        Neo.ctx.shadowBlur = 20;
+        Neo.ctx.lineWidth = 3;
+        Neo.ctx.beginPath();
+        Neo.ctx.arc(0, 0, 20, 0, Math.PI * 2);
+        Neo.ctx.stroke();
+        Neo.ctx.lineWidth = 2;
+        Neo.ctx.beginPath();
+        for (let segment = 0; segment < 6; segment += 1) {
+          const start = spin + segment * Math.PI / 3;
+          Neo.ctx.arc(0, 0, 14, start, start + 0.42);
+        }
+        Neo.ctx.stroke();
+        Neo.ctx.shadowBlur = 0;
+        Neo.ctx.fillStyle = color;
+        Neo.ctx.font = 'bold 10px system-ui';
+        Neo.ctx.textAlign = 'center';
+        Neo.ctx.fillText(pickup.destinationLabel || 'PORTAL', 0, 34);
       } else if (pickup.type === 'fightGod') {
         Neo.ctx.strokeStyle = '#fff';
         Neo.ctx.shadowColor = '#fff';

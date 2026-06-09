@@ -1496,6 +1496,7 @@ export const ui = {
     altModesClose: document.getElementById('altModesClose'),
     altModeEndlessBtn: document.getElementById('altModeEndlessBtn'),
     altModePracticeBtn: document.getElementById('altModePracticeBtn'),
+    altModeChallengePracticeBtn: document.getElementById('altModeChallengePracticeBtn'),
     altModeBossRushBtn: document.getElementById('altModeBossRushBtn'),
     altModeCoopBtn: document.getElementById('altModeCoopBtn'),
     altModePvpBtn: document.getElementById('altModePvpBtn'),

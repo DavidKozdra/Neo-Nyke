@@ -195,6 +195,7 @@ export function bindInput() {
           localStorage.setItem(Neo.REPLAY_TUTORIAL_KEY, '1');
         } catch {}
         Neo.gameMode = 'normal';
+        Neo.practiceVariant = 'standard';
         Neo.charSelectPhase = null;
         Neo.setGameState('charselect');
         Neo.updateCharacterSelectionUI();
@@ -208,7 +209,13 @@ export function bindInput() {
       onTutorialNext() {
         Neo.navigateTutorialStep(1);
       },
-      onOpenCharacterSelect() { Neo.gameMode = 'normal'; Neo.charSelectPhase = null; Neo.setGameState('charselect'); Neo.updateCharacterSelectionUI(); },
+      onOpenCharacterSelect() {
+        Neo.gameMode = 'normal';
+        Neo.practiceVariant = 'standard';
+        Neo.charSelectPhase = null;
+        Neo.setGameState('charselect');
+        Neo.updateCharacterSelectionUI();
+      },
       onCloseCharacterSelect() {
         const phases = ['p1','p2','p3','p4'].slice(0, Neo.mpPlayerCount);
         const cur = phases.indexOf(Neo.charSelectPhase);
@@ -221,9 +228,11 @@ export function bindInput() {
         Neo.setGameState('menu');
       },
       onOpenAltModeCharSelect(mode) {
-        Neo.gameMode = mode;
-        if (mode === 'coop' || mode === 'pvp') {
-          Neo.openMpLobby(mode);
+        const challengePractice = mode === 'challenge_practice';
+        Neo.gameMode = challengePractice ? 'practice' : mode;
+        Neo.practiceVariant = challengePractice ? 'challenges' : 'standard';
+        if (Neo.gameMode === 'coop' || Neo.gameMode === 'pvp') {
+          Neo.openMpLobby(Neo.gameMode);
         } else {
           Neo.charSelectPhase = null;
           Neo.setGameState('charselect');

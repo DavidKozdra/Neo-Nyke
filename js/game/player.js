@@ -304,14 +304,10 @@ export function isMoveAllowedForCharacter(moveKey, characterKey = Neo.player?.ch
   // not chase or attack a hidden player.
 export function isPlayerHidden(playerData = Neo.player) {
     if (!playerData) return false;
-    // El Barto's Cape conceals the player for only the first HALF of its active
-    // duration; once past the midpoint enemies can see and target the player again
-    // (the cape effect — graffiti, HUD timer — keeps running the full duration).
+    // El Barto's Cape conceals the player for its full active duration, matching the
+    // visual effect (graffiti, HUD timer).
     const capeEffect = playerData.equipmentEffects?.el_bartos_cape;
-    if (capeEffect && Number(capeEffect.time || 0) > 0) {
-      const total = Number(capeEffect.total || 0);
-      if (total <= 0 || Number(capeEffect.time || 0) > total / 2) return true;
-    }
+    if (capeEffect && Number(capeEffect.time || 0) > 0) return true;
     if (Number(playerData.princessFlightTime || 0) > 0) return true;
     if (Number(playerData.cowardsWayTime || 0) > 0) return true;
     if (Number(playerData.warpHideTime || 0) > 0) return true;

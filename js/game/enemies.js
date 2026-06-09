@@ -1785,6 +1785,7 @@
     Neo.currentRoom.challengeTick = 0;
     spawnChallengeReward(text);
     Neo.currentRoom.challengeData = {};
+    Neo.ensureChallengePracticeReturnPortal?.(Neo.currentRoom);
     Neo.updateObjective();
     Neo.scheduleRunSave();
   }
@@ -1798,6 +1799,7 @@
     Neo.currentRoom.challengeTick = 0;
     Neo.currentRoom.challengeData = {};
     Neo.pickups = Neo.pickups.filter(pickup => !['challengeBomb', 'challengeRune', 'challengeStarter', 'challengeItemChoice'].includes(pickup?.type));
+    Neo.ensureChallengePracticeReturnPortal?.(Neo.currentRoom);
     Neo.spawnParticle({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 52, life: 1.05, text, c: '#ff8b98' });
     Neo.updateObjective();
     Neo.scheduleRunSave();

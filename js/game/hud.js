@@ -867,7 +867,7 @@
     zap_to_extreme: { cooldown: 42, duration: 10, label: 'EXTREME ZAP', color: '#8dd4ff' },
     panic_button: { cooldown: 52, duration: 0, label: 'PANIC', color: '#f4f6fb' },
     mid_sweepy_box: { cooldown: 36, duration: 6, label: 'SWEEPY', color: '#ff6e8b' },
-    el_bartos_cape: { cooldown: 25, duration: 10, label: 'EL BARTO', color: '#ffb37a' },
+    el_bartos_cape: { cooldown: 25, duration: 3.2, label: 'EL BARTO', color: '#ffb37a' },
     sparkle_charm: { cooldown: 40, duration: 0, label: 'SPARKLE', color: '#ffe8a3' },
     churu_stick: { cooldown: 40, duration: 0, label: 'CHURU', color: '#ffb6d5' },
     iron_helm: { cooldown: 60, duration: 0, label: 'DIAMOND SHIELD', color: '#c8fbff' },
@@ -965,7 +965,8 @@
         skizzard_tail: 1.5,
         zap_to_extreme: 2,
         mid_sweepy_box: 1.5,
-        el_bartos_cape: 5,
+        // El Barto's Cape gains +40% of its base duration per extra stack.
+        el_bartos_cape: def.duration * 0.4,
         gold_vac: 30,
       }[itemKey] || 0;
       const totalTime = def.duration + extraStacks * durationBonus;

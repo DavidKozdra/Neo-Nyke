@@ -2419,6 +2419,8 @@
 
       const pickupTriggerRadius = (pickup.type === 'jesterPortal' || pickup.type === 'adapterPortal')
         ? Neo.JESTER_PORTAL_TRIGGER_RADIUS
+        : pickup.type === 'challengePracticePortal'
+          ? 34
         : pickup.type === 'ladder'
           ? Neo.LADDER_TRIGGER_RADIUS
           : 26;
@@ -2531,6 +2533,30 @@
         if (useAdapterPortal(pickup)) return;
         removePickupAt(index);
         continue;
+      }
+
+      if (pickup.type === 'challengePracticePortal') {
+        if (Neo.gameMode !== 'practice' || Neo.practiceVariant !== 'challenges') {
+          removePickupAt(index);
+          continue;
+        }
+        const targetRoom = Neo.rooms.find(room => room.gx === pickup.targetGx && room.gy === pickup.targetGy);
+        if (!targetRoom || targetRoom === Neo.currentRoom) {
+          removePickupAt(index);
+          continue;
+        }
+        if (targetRoom.practiceChallengeRoom) Neo.resetChallengePracticeRoom?.(targetRoom);
+        Neo.enterRoom(targetRoom);
+        Neo.player.x = Neo.START_X;
+        Neo.player.y = Neo.START_Y;
+        Neo.spawnParticle({
+          x: Neo.player.x,
+          y: Neo.player.y - 36,
+          life: 0.8,
+          text: targetRoom.practiceChallengeHub ? 'CHALLENGE HUB' : Neo.getChallengeTrialLabel(targetRoom.challengeType),
+          c: '#8dffcf',
+        });
+        return;
       }
 
       if (pickup.type === 'ladder') {

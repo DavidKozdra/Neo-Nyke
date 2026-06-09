@@ -147,17 +147,30 @@
 
   function drawJesterPortalPrompt() {
     if (Neo.gameState !== 'play') return;
-    const portal = Neo.pickups.find(pickup => (pickup?.type === 'jesterPortal' || pickup?.type === 'adapterPortal') && pickup.active);
+    const portal = Neo.pickups
+      .filter(pickup => (
+        pickup?.type === 'challengePracticePortal'
+        || ((pickup?.type === 'jesterPortal' || pickup?.type === 'adapterPortal') && pickup.active)
+      ))
+      .sort((a, b) => (
+        Neo.dist(Neo.player.x, Neo.player.y, a.x, a.y)
+        - Neo.dist(Neo.player.x, Neo.player.y, b.x, b.y)
+      ))[0];
     if (!portal) return;
     if (Neo.dist(Neo.player.x, Neo.player.y, portal.x, portal.y) > 74) return;
     const cx = portal.x;
     const cy = portal.y - 38;
     const adapter = portal.type === 'adapterPortal';
-    const text = adapter
-      ? 'Touch to warp to ladder (-50% coins)'
-      : `Touch to skip ${Math.max(1, Number(portal.skipFloors || 1))} floors`;
-    const stroke = adapter ? 'rgba(184,140,255,0.62)' : 'rgba(255,155,228,0.62)';
-    const fill = adapter ? '#d6c9ff' : '#ffc9ef';
+    const challengePractice = portal.type === 'challengePracticePortal';
+    const text = challengePractice
+      ? `Touch to warp to ${portal.destinationLabel || 'challenge'}`
+      : adapter
+        ? 'Touch to warp to ladder (-50% coins)'
+        : `Touch to skip ${Math.max(1, Number(portal.skipFloors || 1))} floors`;
+    const stroke = challengePractice
+      ? 'rgba(141,255,207,0.62)'
+      : adapter ? 'rgba(184,140,255,0.62)' : 'rgba(255,155,228,0.62)';
+    const fill = challengePractice ? '#baffdf' : adapter ? '#d6c9ff' : '#ffc9ef';
     Neo.ctx.save();
     Neo.ctx.font = 'bold 14px system-ui';
     Neo.ctx.textAlign = 'center';

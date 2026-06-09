@@ -100,6 +100,7 @@ window.Neo = {
   // --- difficulty ---
   selectedDifficulty: 'easy',
   selectedChallenges: [],
+  practiceVariant: 'standard',
   customDifficultySettings: {
     waveBonus: 0,
     eliteFloor: 8,
