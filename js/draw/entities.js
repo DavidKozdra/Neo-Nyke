@@ -1322,37 +1322,75 @@
 
     if (!Neo.laserActive) return;
     const angle = Neo.laserAngle;
+    const equippedLaser = Neo.getEquippedMove('laser');
     const turtleWaveActive = Neo.laserMode === 'turtle_wave';
     const loveBeamActive = Neo.loveBeamCasting;
-    const beamRange = Neo.getPlayerBeamRange(Neo.laserMode, Neo.getEquippedMove('laser'));
-    const beamPath = Neo.buildRicochetBeamPath(Neo.player.x, Neo.player.y, angle, beamRange, Neo.getPlayerBeamBounceCount(Neo.laserMode));
-    if (!beamPath.length) return;
-    const beamColor = turtleWaveActive ? '#74f5ff' : loveBeamActive ? '#ff9ed6' : Neo.laserMode === 'god_sweep' ? '#ffffff' : '#ff00aa';
-    const beamGlow = turtleWaveActive ? '#9bf7ff' : loveBeamActive ? '#ffd1ea' : Neo.laserMode === 'god_sweep' ? '#e8f0ff' : '#f0f';
-    const maxW = (Neo.laserMode === 'god_sweep' ? 16 : turtleWaveActive ? 18 : loveBeamActive ? 10 : 8)
+    const wizardBeamActive = equippedLaser === 'wizard_lazer';
+    const mooggyBeamActive = equippedLaser === 'mooggy_blood_beam';
+    const thornBeamsActive = Neo.laserMode === 'thorn_blood_beams';
+    const beamRange = Neo.getPlayerBeamRange(Neo.laserMode, equippedLaser);
+    const bounces = Neo.getPlayerBeamBounceCount(Neo.laserMode);
+    // Mirror the combat tick's path set so what's drawn matches what hits:
+    // Thorn's Infinite Blood Beam fans four beams; everything else is one.
+    const fanAngles = thornBeamsActive
+      ? [angle - 0.32, angle - 0.11, angle + 0.11, angle + 0.32]
+      : [angle];
+    const beamPaths = (Array.isArray(Neo.activeBeamPaths) && Neo.activeBeamPaths.length)
+      ? Neo.activeBeamPaths
+      : fanAngles.map(a => Neo.buildRicochetBeamPath(Neo.player.x, Neo.player.y, a, beamRange, bounces));
+    const beamPath = beamPaths[0];
+    if (!beamPath || !beamPath.length) return;
+    const beamColor = turtleWaveActive ? '#74f5ff'
+      : loveBeamActive ? '#ff9ed6'
+      : Neo.laserMode === 'god_sweep' ? '#ffffff'
+      : wizardBeamActive ? '#a64bff'
+      : mooggyBeamActive ? '#ff2f57'
+      : thornBeamsActive ? '#ff3b5c'
+      : '#ff00aa';
+    const beamGlow = turtleWaveActive ? '#9bf7ff'
+      : loveBeamActive ? '#ffd1ea'
+      : Neo.laserMode === 'god_sweep' ? '#e8f0ff'
+      : wizardBeamActive ? '#c79bff'
+      : (mooggyBeamActive || thornBeamsActive) ? '#ff8aa0'
+      : '#f0f';
+    const maxW = (Neo.laserMode === 'god_sweep' ? 16
+      : turtleWaveActive ? 18
+      : loveBeamActive ? 10
+      : wizardBeamActive ? 22
+      : mooggyBeamActive ? 11
+      : thornBeamsActive ? 6
+      : 8)
       * beamWidthMultiplier;
+    const beamShadow = Neo.laserMode === 'god_sweep' ? 26
+      : turtleWaveActive ? 30
+      : loveBeamActive ? 22
+      : wizardBeamActive ? 30
+      : 18;
     const dragonOrbStacks = Math.max(0, Number(Neo.getItemCount?.('dragon_orb') || 0));
     const outerPulse = dragonOrbStacks > 0 ? 1 + Math.sin(Number(Neo.frameId || 0) * 0.42) * 0.12 : 1;
     const dragonOuterW = dragonOrbStacks > 0
       ? maxW + Math.min(22, dragonOrbStacks * 4.5) * outerPulse
       : 0;
 
-    if (dragonOrbStacks > 0) {
-      Neo.drawTaperedBeamPath(beamPath, {
-        color: loveBeamActive ? '#ffb4ea' : turtleWaveActive ? '#a8fbff' : '#b77dff',
-        glow: '#b77dff',
-        maxWidth: dragonOuterW,
-        shadowBlur: Neo.laserMode === 'god_sweep' || turtleWaveActive ? 34 : 24,
-        alpha: Math.min(0.58, 0.25 + dragonOrbStacks * 0.08),
+    for (let pathIndex = 0; pathIndex < beamPaths.length; pathIndex += 1) {
+      const path = beamPaths[pathIndex];
+      if (!path || !path.length) continue;
+      if (dragonOrbStacks > 0) {
+        Neo.drawTaperedBeamPath(path, {
+          color: loveBeamActive ? '#ffb4ea' : turtleWaveActive ? '#a8fbff' : '#b77dff',
+          glow: '#b77dff',
+          maxWidth: dragonOuterW,
+          shadowBlur: Neo.laserMode === 'god_sweep' || turtleWaveActive ? 34 : 24,
+          alpha: Math.min(0.58, 0.25 + dragonOrbStacks * 0.08),
+        });
+      }
+      Neo.drawTaperedBeamPath(path, {
+        color: beamColor,
+        glow: beamGlow,
+        maxWidth: maxW,
+        shadowBlur: beamShadow,
       });
     }
-
-    Neo.drawTaperedBeamPath(beamPath, {
-      color: beamColor,
-      glow: beamGlow,
-      maxWidth: maxW,
-      shadowBlur: Neo.laserMode === 'god_sweep' ? 26 : turtleWaveActive ? 30 : loveBeamActive ? 22 : 18,
-    });
 
     // Beam particles: small dots that drift perpendicular and fade toward tip
     if (Neo.rng() < 0.55) {

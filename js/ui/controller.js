@@ -2117,6 +2117,28 @@ export function createUIController(view) {
             const moveKey = String(defaultMoves[slot] || '');
             const moveDef = Neo.MOVE_DEFS[moveKey] || {};
             const moveLabel = moveDef.name || moveKey || 'Unknown';
+            // If this character has alternative abilities for this slot, render the
+            // options as a selectable row so the player can swap their kit here.
+            const altOptions = Neo.KIT_ALTERNATIVES?.[selected]?.[slot];
+            if (Array.isArray(altOptions) && altOptions.length > 1) {
+              const chosen = Neo.getKitChoice(selected, slot) || altOptions[0];
+              const optionPips = altOptions.map(optKey => {
+                const optDef = Neo.MOVE_DEFS[optKey] || {};
+                const optLabel = optDef.name || optKey;
+                const isSel = optKey === chosen;
+                const safeDesc = Neo.escapeHtml(optDef.desc || '');
+                return `<button type="button" class="hero-detail-kit-option${isSel ? ' hero-detail-kit-option--sel' : ''}"
+                  data-kit-slot="${Neo.escapeHtml(slot)}" data-kit-move="${Neo.escapeHtml(optKey)}"
+                  title="${safeDesc}" aria-pressed="${isSel}">
+                  <canvas class="hero-detail-skill-icon" data-hero-move="${Neo.escapeHtml(optKey)}" width="24" height="24" aria-hidden="true"></canvas>
+                  <span class="hero-detail-skill-text">${Neo.escapeHtml(optLabel)}</span>
+                </button>`;
+              }).join('');
+              return `<div class="hero-detail-skill-pip hero-detail-skill-pip--choice">
+                <span class="hero-detail-skill-slot-label">${Neo.escapeHtml(slotLabel)}</span>
+                <div class="hero-detail-kit-options">${optionPips}</div>
+              </div>`;
+            }
             return `<span class="hero-detail-skill-pip">
               <canvas class="hero-detail-skill-icon" data-hero-move="${Neo.escapeHtml(moveKey)}" width="24" height="24" aria-hidden="true"></canvas>
               <span class="hero-detail-skill-text">${Neo.escapeHtml(slotLabel)}: ${Neo.escapeHtml(moveLabel)}</span>
@@ -2160,6 +2182,13 @@ export function createUIController(view) {
           Neo.drawItemIconCanvases?.(detail, 'data-hero-item');
           detail.querySelectorAll('[data-inv-ui-icon]').forEach(el => {
             Neo.drawInventoryUiIcon?.(el, el.dataset.invUiIcon);
+          });
+          // Alt-kit selection: clicking an option saves the choice and re-renders.
+          detail.querySelectorAll('[data-kit-move]').forEach(btn => {
+            btn.addEventListener('click', () => {
+              Neo.setKitChoice?.(selected, btn.dataset.kitSlot, btn.dataset.kitMove);
+              Neo.updateCharacterSelectionUI?.();
+            });
           });
         }
       },

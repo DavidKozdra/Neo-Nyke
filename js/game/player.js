@@ -141,6 +141,9 @@ export function migratePlayerData(source) {
     playerData.lavaWalkTime = Number(playerData.lavaWalkTime || 0);
     playerData.lavaTrailTick = Number(playerData.lavaTrailTick || 0);
     playerData.princessFlightTime = Number(playerData.princessFlightTime || 0);
+    playerData.statusResistTime = Number(playerData.statusResistTime || 0);
+    playerData.potionRegenTime = Number(playerData.potionRegenTime || 0);
+    playerData.potionRegenAccum = Number(playerData.potionRegenAccum || 0);
     playerData.overhealBarrier = Math.max(0, Number(playerData.overhealBarrier || 0));
     playerData.overhealBarrierMax = playerData.overhealBarrier > 0
       ? Math.max(playerData.overhealBarrier, Number(playerData.overhealBarrierMax) || 0)
@@ -273,7 +276,30 @@ export function getDefaultWeaponForCharacter(characterKey) {
     return 'thorns_bleed_blade';
   }
 
-export function getDefaultMovesForCharacter(characterKey) {
+// Per-character, per-slot kit options selectable on the pick-character screen.
+// The FIRST entry in each list is the character's default for that slot; the
+// rest are alternatives the player can swap in before a run. Slots not listed
+// here have no alternatives (only the base default applies).
+export const KIT_ALTERNATIVES = {
+  thorn_knight: {
+    laser: ['blood_beam', 'thorn_blood_beams'],
+    dash: ['dash', 'knight_slash_dash'],
+  },
+  metao: {
+    laser: ['power_disks', 'wizard_lazer'],
+    smash: ['chaos_burst', 'potion_bath'],
+  },
+  gelleh: {
+    smash: ['healing_zone', 'holy_turrets', 'excalibur_strike'],
+  },
+  mooggy: {
+    laser: ['nail_shot', 'mooggy_blood_beam'],
+    smash: ['random_pounce', 'mooggy_hairball'],
+  },
+};
+
+// The base (first-option) default kit per character, before any alt-kit choices.
+function getBaseMovesForCharacter(characterKey) {
     // The melee slot is the bare-hands fallback only: it is the attack you get
     // when no weapon is equipped, so every character defaults to the generic
     // `slash`. Signature melee attacks (smite, fire_balls, narwal_fight,
@@ -291,6 +317,42 @@ export function getDefaultMovesForCharacter(characterKey) {
       return { melee: 'slash', laser: 'nail_shot', smash: 'random_pounce', dash: 'mooggy_zoomies' };
     }
     return { melee: 'slash', laser: 'blood_beam', smash: 'crimson_smash', dash: 'dash' };
+  }
+
+// The player's saved alt-kit selection for a character/slot, validated against
+// KIT_ALTERNATIVES. Falls back to the slot's default when unset or invalid.
+export function getKitChoice(characterKey, slot) {
+    const options = KIT_ALTERNATIVES[characterKey]?.[slot];
+    if (!Array.isArray(options) || options.length === 0) return null;
+    const saved = Neo.metaProgress?.characterKitChoices?.[characterKey]?.[slot];
+    return options.includes(saved) ? saved : options[0];
+  }
+
+export function setKitChoice(characterKey, slot, moveKey) {
+    const options = KIT_ALTERNATIVES[characterKey]?.[slot];
+    if (!Array.isArray(options) || !options.includes(moveKey)) return;
+    if (!Neo.metaProgress) return;
+    if (!Neo.metaProgress.characterKitChoices || typeof Neo.metaProgress.characterKitChoices !== 'object') {
+      Neo.metaProgress.characterKitChoices = {};
+    }
+    if (!Neo.metaProgress.characterKitChoices[characterKey] || typeof Neo.metaProgress.characterKitChoices[characterKey] !== 'object') {
+      Neo.metaProgress.characterKitChoices[characterKey] = {};
+    }
+    Neo.metaProgress.characterKitChoices[characterKey][slot] = moveKey;
+    Neo.persistMetaSoon?.();
+  }
+
+export function getDefaultMovesForCharacter(characterKey) {
+    const moves = getBaseMovesForCharacter(characterKey);
+    // Overlay any alt-kit options the player picked on the character-select screen.
+    const altSlots = KIT_ALTERNATIVES[characterKey];
+    if (altSlots) {
+      Object.keys(altSlots).forEach(slot => {
+        const choice = getKitChoice(characterKey, slot);
+        if (choice) moves[slot] = choice;
+      });
+    }
+    return moves;
   }
 
 export function isMoveAllowedForCharacter(moveKey, characterKey = Neo.player?.character || Neo.chosenCharacter) {
@@ -1709,6 +1771,9 @@ export function refreshFloorChargeStates() {
   Neo.getDefaultWeaponForCharacter = getDefaultWeaponForCharacter;
   Neo.getDefaultMovesForCharacter = getDefaultMovesForCharacter;
   Neo.isMoveAllowedForCharacter = isMoveAllowedForCharacter;
+  Neo.KIT_ALTERNATIVES = KIT_ALTERNATIVES;
+  Neo.getKitChoice = getKitChoice;
+  Neo.setKitChoice = setKitChoice;
   Neo.isPlayerHidden = isPlayerHidden;
   Neo.getItemCount = getItemCount;
   Neo.getItemTagCounts = getItemTagCounts;

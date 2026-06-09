@@ -1115,8 +1115,8 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
     if (room.type === 'challenge') {
       if (!room.cleared && !room.challengeStarted) {
         Neo.spawnChallengeStarter(room);
-      } else if (!room.cleared && room.challengeStarted && (room.challengeType || 'mirror') === 'stillness' && (room.challengeData?.phase || '') === 'choose') {
-        if (!Neo.pickups.some(pickup => pickup?.type === 'challengeItemChoice')) Neo.spawnStillnessItemChoices(room);
+      } else if (!room.cleared && room.challengeStarted && ['circuit', 'stillness'].includes(room.challengeType || 'mirror')) {
+        if (!Neo.pickups.some(pickup => pickup?.type === 'challengeSwitch')) Neo.spawnChallengeCircuitSwitches(room);
       } else if (!room.cleared && room.challengeStarted && (room.challengeType || 'mirror') === 'bomb') {
         if (!Neo.pickups.some(pickup => pickup?.type === 'challengeBomb')) Neo.spawnChallengeBombs(room);
       } else if (!room.cleared && room.challengeStarted && !Neo.enemies.some(enemy => enemy.type === 'mirror_knight')) {

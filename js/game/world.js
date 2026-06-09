@@ -506,6 +506,23 @@
 
   function updatePlayerStatuses(dt) {
     if (!Neo.player) return;
+    // Mateo Potion Bath: status resistance window + heal-over-time regen.
+    if (Number(Neo.player.statusResistTime || 0) > 0) {
+      Neo.player.statusResistTime = Math.max(0, Number(Neo.player.statusResistTime) - dt);
+      if (Neo.nextRandom('fx') < 0.18) {
+        Neo.spawnParticle({ x: Neo.player.x + Neo.rand(-10, 10), y: Neo.player.y + Neo.rand(-10, 10), life: 0.3, c: '#9af7d8' });
+      }
+    }
+    if (Number(Neo.player.potionRegenTime || 0) > 0) {
+      Neo.player.potionRegenTime = Math.max(0, Number(Neo.player.potionRegenTime) - dt);
+      // Regen ~6% max HP per second over the window, applied each 0.5s.
+      Neo.player.potionRegenAccum = Number(Neo.player.potionRegenAccum || 0) + dt;
+      while (Neo.player.potionRegenAccum >= 0.5) {
+        Neo.player.potionRegenAccum -= 0.5;
+        const gained = Neo.applyPlayerHealing(Math.max(1, Math.round(Neo.player.maxHp * 0.03)));
+        if (gained > 0) Neo.spawnHealPopup(Neo.player.x + Neo.rand(-6, 6), Neo.player.y - 20, gained, { color: '#9af7d8' });
+      }
+    }
     Neo.player.critCharmBuffTime = Math.max(0, Number(Neo.player.critCharmBuffTime || 0) - dt);
     Neo.player.keenEyeBuffTime = Math.max(0, Number(Neo.player.keenEyeBuffTime || 0) - dt);
     Neo.player.chronoSpringBuffTime = Math.max(0, Number(Neo.player.chronoSpringBuffTime || 0) - dt);
@@ -1881,6 +1898,29 @@
             });
           }
         }
+      } else if (hazard.kind === 'holy_turret') {
+        // Gelleh's Holy Turrets: periodically lock onto the nearest enemy in
+        // range and drop a holy AOE burst on it.
+        hazard.tick -= dt;
+        if (hazard.tick <= 0) {
+          hazard.tick = hazard.interval || 0.6;
+          let target = null;
+          let bestSq = (hazard.range || 360) ** 2;
+          forEachEnemyNearCircle(hazard.x, hazard.y, hazard.range || 360, enemy => {
+            if (!enemy || enemy.dead) return;
+            const dSq = (enemy.x - hazard.x) ** 2 + (enemy.y - hazard.y) ** 2;
+            if (dSq < bestSq) { bestSq = dSq; target = enemy; }
+          });
+          if (target) {
+            const burstR = hazard.burstRadius || 56;
+            Neo.spawnParticle({
+              life: 0.2, c: '#fff1b0',
+              line: { x1: hazard.x, y1: hazard.y, x2: target.x, y2: target.y, w: 3.2, jag: 5, seg: 5, phase: Neo.rng() * Math.PI * 2 },
+            });
+            Neo.spawnParticle({ x: target.x, y: target.y, life: 0.4, ring: burstR, c: '#ffe6a3' });
+            Neo.blastRadius(target.x, target.y, burstR, hazard.damage || 26, '#ffe6a3');
+          }
+        }
       }
     });
     // Drop expired hazards in place (write-index compaction) so the common case
@@ -2396,6 +2436,9 @@
           pickup.y = Neo.clamp(pickup.y, minY, maxY);
           pickup.vy *= -1;
         }
+      } else if (pickup.type === 'challengeSwitch') {
+        const switchDistance = Neo.dist(playerX, playerY, pickup.x, pickup.y);
+        if (switchDistance > 44) pickup.armed = true;
       }
       // A/B chest dwell areas fill a meter while the player stands inside, and
       // only grant once full. Run this before the generic instant-pickup gate so
@@ -2421,6 +2464,8 @@
         ? Neo.JESTER_PORTAL_TRIGGER_RADIUS
         : pickup.type === 'challengePracticePortal'
           ? 34
+        : pickup.type === 'challengeSwitch'
+          ? 32
         : pickup.type === 'ladder'
           ? Neo.LADDER_TRIGGER_RADIUS
           : 26;
@@ -2428,6 +2473,7 @@
       const triggerDy = pickup.y - playerY;
       if ((pickup.type !== 'rewardChoice' || !pickup.dwellMode)
         && triggerDx * triggerDx + triggerDy * triggerDy >= pickupTriggerRadius * pickupTriggerRadius) continue;
+      if (pickup.type === 'challengeSwitch' && pickup.armed === false) continue;
 
       if (pickup.type === 'coin') {
         addCoins(Math.round((pickup.value || 1) * coinPickupMultiplier));
@@ -2669,12 +2715,11 @@
         return;
       }
 
-      if (pickup.type === 'challengeItemChoice') {
-        if (Neo.chooseStillnessChallengeReward?.(pickup)) {
-          Neo.syncCurrentRoomState();
-          Neo.updateObjective();
-          Neo.scheduleRunSave();
-        }
+      if (pickup.type === 'challengeSwitch') {
+        Neo.pressChallengeCircuitSwitch?.(pickup);
+        Neo.syncCurrentRoomState();
+        Neo.updateObjective();
+        Neo.scheduleRunSave();
         return;
       }
 

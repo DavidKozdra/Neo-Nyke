@@ -60,8 +60,15 @@ export const MOVE_DEFS = {
     lightning_columns: { key: 'lightning_columns', slot: 'laser', name: 'Lightning Columns', desc: 'Summon two lightning turrets.' },
     god_sweep: { key: 'god_sweep', slot: 'laser', name: 'God Sweep', desc: 'Spin a massive divine beam around yourself.' },
     nail_shot: { key: 'nail_shot', slot: 'laser', name: 'Nail Shot', desc: 'Fires a spread of bouncing nails in all directions. 3 charges.', exclusiveCharacter: 'mooggy', maxStacks: 3 },
+    mooggy_blood_beam: { key: 'mooggy_blood_beam', slot: 'laser', name: 'Blood Beam', desc: 'A crimson assassin beam that drenches enemies in heavy poison and chills them solid (freeze).', exclusiveCharacter: 'mooggy' },
+    thorn_blood_beams: { key: 'thorn_blood_beams', slot: 'laser', name: 'Infinite Blood Beam', desc: 'Four bleeding beams that orbit you, all aimed by the mouse. Channels while held.', exclusiveCharacter: 'thorn_knight' },
+    wizard_lazer: { key: 'wizard_lazer', slot: 'laser', name: 'Wizard Lazer', desc: 'A thick, heavy purple beam with massive recoil and heavy damage.', exclusiveCharacter: 'metao' },
 
     crimson_smash: { key: 'crimson_smash', slot: 'smash', name: 'Crimson Smash', desc: 'Heavy area smash.' },
+    mooggy_hairball: { key: 'mooggy_hairball', slot: 'smash', name: 'Hairball Blast', desc: 'Hack up a venomous hairball that bursts for high poison and freezes everything caught in it.', exclusiveCharacter: 'mooggy' },
+    potion_bath: { key: 'potion_bath', slot: 'smash', name: 'Potion Bath', desc: 'Cleanse all statuses and resist them for 20s, heal 60% and regen for 5s, vanish for 5s, and erupt in explosions around you.', exclusiveCharacter: 'metao' },
+    excalibur_strike: { key: 'excalibur_strike', slot: 'smash', name: 'Summon Excalibur', desc: 'Giant divine swords rain from the sky for huge AOE damage. 10s cooldown.', exclusiveCharacter: 'gelleh' },
+    holy_turrets: { key: 'holy_turrets', slot: 'smash', name: 'Holy Turrets', desc: 'Summon divine turrets that fire holy AOE bursts at nearby foes.', exclusiveCharacter: 'gelleh' },
     kicky_kick: { key: 'kicky_kick', slot: 'smash', name: 'Kicky Kick', desc: 'A heavy kick that blasts enemies away.', exclusiveCharacter: 'princess' },
     chaos_burst: { key: 'chaos_burst', slot: 'smash', name: 'Chaos Burst', desc: 'Multiple chaos detonations.' },
     healing_zone: { key: 'healing_zone', slot: 'smash', name: 'Healing Zone', desc: 'Healing and damage zone.' },
@@ -111,6 +118,14 @@ export const MOVE_DEFS = {
       exclusiveCharacter: 'mooggy',
       maxStacks: 2,
     },
+    knight_slash_dash: {
+      key: 'knight_slash_dash',
+      slot: 'dash',
+      name: "Knight's Slash Dash",
+      desc: 'Dash through enemies and strike everything left in your wake with a high bleed rate.',
+      exclusiveCharacter: 'thorn_knight',
+      maxStacks: 2,
+    },
   };
 
 export const SHOP_MOVE_POOL = [
@@ -122,6 +137,10 @@ export const SHOP_MOVE_POOL = [
     'god_sweep', 'nail_shot',
     'crimson_smash', 'kicky_kick', 'chaos_burst', 'healing_zone', 'fire_circle', 'floor_lava', 'random_pounce',
     'dash', 'nimrod_stomp', 'warp', 'zip_lightning', 'flying_unhitable', 'cowards_way', 'mooggy_zoomies',
+    // NOTE: the alternative kit moves (mooggy_blood_beam, thorn_blood_beams,
+    // wizard_lazer, mooggy_hairball, potion_bath, excalibur_strike, holy_turrets,
+    // knight_slash_dash) are intentionally NOT sold here — they are chosen on the
+    // pick-character screen via the alt-kit picker, not bought in the shop.
   ];
 
 export const WEAPON_DEFS = {
@@ -1737,6 +1756,14 @@ export const MOVE_BASE_STATS = {
     nail_shot:        { damage: 18,  cooldown: 2.80, range: 400 },
     random_pounce:   { damage: 52,  cooldown: 5.00, range: 160 },
     mooggy_zoomies:   { cooldown: 20.00, duration: 12.0 },
+    mooggy_blood_beam:{ damage: 12,  cooldown: 3.20, duration: 1.3 },
+    thorn_blood_beams:{ damage: 8,   cooldown: 3.60, duration: 1.4 },
+    wizard_lazer:     { damage: 30,  cooldown: 4.20, duration: 1.2 },
+    mooggy_hairball:  { damage: 34,  cooldown: 4.80, range: 132 },
+    potion_bath:      { cooldown: 14.00, duration: 5.0, range: 150 },
+    excalibur_strike: { damage: 78,  cooldown: 10.00, range: 150 },
+    holy_turrets:     { damage: 26,  cooldown: 6.50, duration: 6.0, range: 360 },
+    knight_slash_dash:{ damage: 42,  cooldown: 2.40, range: 240 },
   };
 
   // saveStore is created in save-store.js after createSaveStore is defined

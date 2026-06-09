@@ -472,6 +472,27 @@
           Neo.ctx.lineTo(Math.cos(a - 0.1) * hazard.r * 0.72, Math.sin(a - 0.1) * hazard.r * 0.72);
           Neo.ctx.stroke();
         }
+      } else if (hazard.kind === 'holy_turret') {
+        const t = Date.now() * 0.005 + hazard.x * 0.01;
+        const bob = Math.sin(t * 2) * 2;
+        // Glowing divine base.
+        Neo.ctx.fillStyle = 'rgba(255,238,170,0.16)';
+        Neo.ctx.beginPath();
+        Neo.ctx.arc(0, 0, hazard.r, 0, Math.PI * 2);
+        Neo.ctx.fill();
+        Neo.ctx.shadowColor = '#ffe6a3';
+        Neo.ctx.shadowBlur = 16;
+        Neo.ctx.fillStyle = '#fff1b0';
+        Neo.ctx.beginPath();
+        Neo.ctx.arc(0, bob, hazard.r * 0.42, 0, Math.PI * 2);
+        Neo.ctx.fill();
+        // Halo ring.
+        Neo.ctx.strokeStyle = 'rgba(255,225,140,0.9)';
+        Neo.ctx.lineWidth = 2;
+        Neo.ctx.beginPath();
+        Neo.ctx.ellipse(0, bob - hazard.r * 0.5, hazard.r * 0.5, hazard.r * 0.2, 0, 0, Math.PI * 2);
+        Neo.ctx.stroke();
+        Neo.ctx.shadowBlur = 0;
       } else if (hazard.kind === 'chaos_burst') {
         const t = Date.now() * 0.005 + hazard.x * 0.01;
         const pulse = 1 + Math.sin(t * 2.4) * 0.05;
@@ -1166,6 +1187,86 @@
         Neo.ctx.font = 'bold 10px system-ui';
         Neo.ctx.textAlign = 'center';
         Neo.ctx.fillText(Neo.getChallengeTrialLabel(trial), 0, 34);
+      } else if (pickup.type === 'challengeSwitch') {
+        const color = pickup.color || '#d7f6ff';
+        const armed = pickup.armed !== false;
+        const pressed = !armed;
+        const pulse = 0.5 + Math.sin(Date.now() / 180 + Number(pickup.switchIndex || 0)) * 0.5;
+        Neo.ctx.save();
+        Neo.ctx.translate(0, -bob);
+
+        // Floor plate and mounting bolts.
+        Neo.ctx.fillStyle = '#111923';
+        Neo.ctx.strokeStyle = '#536273';
+        Neo.ctx.lineWidth = 3;
+        Neo.ctx.beginPath();
+        Neo.ctx.roundRect(-35, -14, 70, 34, 8);
+        Neo.ctx.fill();
+        Neo.ctx.stroke();
+        Neo.ctx.fillStyle = '#8190a0';
+        [[-27, -7], [27, -7], [-27, 13], [27, 13]].forEach(([boltX, boltY]) => {
+          Neo.ctx.beginPath();
+          Neo.ctx.arc(boltX, boltY, 2.5, 0, Math.PI * 2);
+          Neo.ctx.fill();
+        });
+
+        // Cable socket points toward the room's control panel.
+        const socketDirection = pickup.x < Neo.ROOM_W / 2 ? 1 : -1;
+        Neo.ctx.fillStyle = '#05090d';
+        Neo.ctx.strokeStyle = '#768698';
+        Neo.ctx.lineWidth = 2;
+        Neo.ctx.fillRect(socketDirection * 30 - (socketDirection < 0 ? 8 : 0), -3, 8, 12);
+        Neo.ctx.strokeRect(socketDirection * 30 - (socketDirection < 0 ? 8 : 0), -3, 8, 12);
+
+        // Recessed actuator collar.
+        Neo.ctx.fillStyle = '#060b11';
+        Neo.ctx.strokeStyle = '#2d3a48';
+        Neo.ctx.lineWidth = 4;
+        Neo.ctx.beginPath();
+        Neo.ctx.ellipse(0, 3, 25, 14, 0, 0, Math.PI * 2);
+        Neo.ctx.fill();
+        Neo.ctx.stroke();
+
+        // Illuminated switch cap depresses when triggered.
+        Neo.ctx.save();
+        Neo.ctx.translate(0, pressed ? 5 : 0);
+        const capGradient = Neo.ctx.createRadialGradient(-5, -3, 1, 0, 2, 21);
+        capGradient.addColorStop(0, '#ffffff');
+        capGradient.addColorStop(0.18, color);
+        capGradient.addColorStop(1, 'rgba(7,14,22,0.95)');
+        Neo.ctx.fillStyle = capGradient;
+        Neo.ctx.strokeStyle = color;
+        Neo.ctx.shadowColor = color;
+        Neo.ctx.shadowBlur = armed ? 12 + pulse * 10 : 5;
+        Neo.ctx.lineWidth = 2.5;
+        Neo.ctx.beginPath();
+        Neo.ctx.ellipse(0, -1, 17, 9, 0, 0, Math.PI * 2);
+        Neo.ctx.fill();
+        Neo.ctx.stroke();
+        Neo.ctx.shadowBlur = 0;
+        Neo.ctx.fillStyle = '#07111d';
+        Neo.ctx.font = 'bold 12px system-ui';
+        Neo.ctx.textAlign = 'center';
+        Neo.ctx.fillText(pickup.label || String(Number(pickup.switchIndex || 0) + 1), 0, 3);
+        Neo.ctx.restore();
+
+        // Small status LED and warning stripes sell the industrial console.
+        Neo.ctx.fillStyle = armed ? color : '#26313c';
+        Neo.ctx.shadowColor = color;
+        Neo.ctx.shadowBlur = armed ? 7 : 0;
+        Neo.ctx.beginPath();
+        Neo.ctx.arc(-25, 3, 3, 0, Math.PI * 2);
+        Neo.ctx.fill();
+        Neo.ctx.shadowBlur = 0;
+        Neo.ctx.strokeStyle = 'rgba(255,205,80,0.5)';
+        Neo.ctx.lineWidth = 2;
+        [-12, -4, 4, 12].forEach(stripeX => {
+          Neo.ctx.beginPath();
+          Neo.ctx.moveTo(stripeX, 15);
+          Neo.ctx.lineTo(stripeX + 5, 20);
+          Neo.ctx.stroke();
+        });
+        Neo.ctx.restore();
       } else if (pickup.type === 'challengeBomb') {
         const bColor = pickup.safe ? '#8dd4ff' : '#ff7a66';
         const bGlow  = pickup.safe ? '#5ab8ff' : '#ff4422';
@@ -1516,6 +1617,65 @@
     ctx.globalAlpha = 1;
   }
 
+  // Excalibur Strike: giant golden swords plunging from the sky, then a brief
+  // glowing afterglow at each impact point.
+  function drawSkySwords() {
+    const swords = Neo.skySwords;
+    if (!Array.isArray(swords) || swords.length === 0) return;
+    const ctx = Neo.ctx;
+    const lowFx = window.NeoSettings?.isPerformanceMode?.() !== false && (Neo.particles?.length || 0) > 80;
+    // Draw a golden blade centered at local origin, tip along +x (rotate first).
+    const drawBlade = (len, w) => {
+      ctx.fillStyle = '#fff1c2';
+      ctx.strokeStyle = '#ffd86a';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(len, 0);                  // tip
+      ctx.lineTo(-len * 0.4, -w * 0.5);
+      ctx.lineTo(-len * 0.6, 0);
+      ctx.lineTo(-len * 0.4, w * 0.5);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      // Crossguard + hilt.
+      ctx.fillStyle = '#ffd86a';
+      ctx.fillRect(-len * 0.4, -w * 1.1, w * 0.4, w * 2.2);
+      ctx.fillRect(-len * 0.6, -w * 0.22, len * 0.22, w * 0.44);
+    };
+    swords.forEach(sword => {
+      if (sword.delay > 0) return;
+      ctx.save();
+      if (sword.phase === 'falling') {
+        // Descending blade: drop in from above, tip pointing down.
+        const ratio = Neo.clamp(sword.fall / 0.34, 0, 1);
+        ctx.translate(sword.x, sword.y - ratio * 220);
+        ctx.rotate(Math.PI / 2); // tip down
+        if (!lowFx) { ctx.shadowColor = '#ffd980'; ctx.shadowBlur = 18; }
+        drawBlade(70, 16);
+      } else if (sword.phase === 'flying') {
+        // Hovering/seeking blade oriented along its travel angle.
+        ctx.translate(sword.x, sword.y);
+        ctx.rotate(sword.angle || 0);
+        if (!lowFx) { ctx.shadowColor = '#ffd980'; ctx.shadowBlur = 14; }
+        drawBlade(46, 12);
+      } else {
+        // Fade: brief bright ring where the blade dissipated.
+        const alpha = Neo.clamp((sword.fadeT || 0) / 0.3, 0, 1);
+        ctx.translate(sword.x, sword.y);
+        ctx.globalAlpha = alpha * 0.7;
+        if (!lowFx) { ctx.shadowColor = '#ffe6a3'; ctx.shadowBlur = 20; }
+        ctx.strokeStyle = '#fff1c2';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(0, 0, 30 * (1 - alpha) + 8, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.restore();
+    });
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1;
+  }
+
   function drawDeadBodies() {
     Neo.deadBodies.forEach(body => {
       if (!body) return;
@@ -1634,6 +1794,230 @@
   function drawChallengeObelisk() {
     const room = Neo.currentRoom;
     if (!room || room.type !== 'challenge' || room.cleared || !room.challengeStarted) return;
+    if (['circuit', 'stillness'].includes(room.challengeType || 'mirror')) {
+      const sequence = Array.isArray(room.challengeData?.sequence) ? room.challengeData.sequence : [];
+      const progress = Math.max(0, Number(room.challengeData?.progress || 0));
+      const colors = ['#ff667d', '#68a7ff', '#ffd45d', '#70e09a'];
+      const wrongFlash = Number(room.challengeData?.wrongFlash || 0);
+      const switches = Neo.pickups.filter(pickup => pickup?.type === 'challengeSwitch');
+      const now = Date.now();
+      const panelX = Neo.ROOM_W / 2;
+      const panelY = 112;
+      const panelW = Math.max(310, sequence.length * 39 + 92);
+      const panelH = 118;
+      const terminalY = panelY + panelH / 2 - 24;
+      const terminalSpacing = 62;
+      const terminalStartX = panelX - terminalSpacing * 1.5;
+      const terminalPoints = colors.map((color, index) => ({
+        color,
+        x: terminalStartX + index * terminalSpacing,
+        y: terminalY,
+      }));
+
+      Neo.ctx.save();
+
+      // Heavy floor conduits connect each switch directly to its color terminal.
+      switches.forEach((challengeSwitch, switchIndex) => {
+        const terminal = terminalPoints[challengeSwitch.switchIndex] || terminalPoints[switchIndex];
+        if (!terminal) return;
+        const powered = sequence[progress] === challengeSwitch.switchIndex;
+        const socketDirection = challengeSwitch.x < panelX ? 1 : -1;
+        const startX = challengeSwitch.x + socketDirection * 34;
+        const startY = challengeSwitch.y + 3;
+        const control1X = startX;
+        const control1Y = startY - (startY > Neo.ROOM_H / 2 ? 115 : 48);
+        const control2X = terminal.x;
+        const control2Y = terminal.y + 62 + switchIndex * 5;
+        const drawConduitPath = () => {
+          Neo.ctx.beginPath();
+          Neo.ctx.moveTo(startX, startY);
+          Neo.ctx.bezierCurveTo(control1X, control1Y, control2X, control2Y, terminal.x, terminal.y);
+        };
+        const getConduitPoint = travel => {
+          const oneMinus = 1 - travel;
+          return {
+            x: oneMinus ** 3 * startX
+              + 3 * oneMinus ** 2 * travel * control1X
+              + 3 * oneMinus * travel ** 2 * control2X
+              + travel ** 3 * terminal.x,
+            y: oneMinus ** 3 * startY
+              + 3 * oneMinus ** 2 * travel * control1Y
+              + 3 * oneMinus * travel ** 2 * control2Y
+              + travel ** 3 * terminal.y,
+          };
+        };
+
+        Neo.ctx.lineCap = 'round';
+        Neo.ctx.lineJoin = 'round';
+        Neo.ctx.strokeStyle = 'rgba(3,7,11,0.92)';
+        Neo.ctx.lineWidth = 12;
+        drawConduitPath();
+        Neo.ctx.stroke();
+        Neo.ctx.strokeStyle = powered ? terminal.color : 'rgba(86,105,121,0.72)';
+        Neo.ctx.shadowColor = terminal.color;
+        Neo.ctx.shadowBlur = powered ? 13 : 0;
+        Neo.ctx.lineWidth = powered ? 4 : 3;
+        drawConduitPath();
+        Neo.ctx.stroke();
+        Neo.ctx.shadowBlur = 0;
+
+        // Animated current packet moves along the conduit to the active terminal.
+        if (powered) {
+          const travel = ((now / 850) + switchIndex * 0.19) % 1;
+          const pulsePoint = getConduitPoint(travel);
+          Neo.ctx.fillStyle = '#ffffff';
+          Neo.ctx.shadowColor = terminal.color;
+          Neo.ctx.shadowBlur = 16;
+          Neo.ctx.beginPath();
+          Neo.ctx.arc(pulsePoint.x, pulsePoint.y, 4, 0, Math.PI * 2);
+          Neo.ctx.fill();
+          Neo.ctx.shadowBlur = 0;
+        }
+
+        // Conduit clamps follow the curve instead of floating between endpoints.
+        [0.28, 0.58].forEach(clampT => {
+          const clampPoint = getConduitPoint(clampT);
+          Neo.ctx.fillStyle = '#1a2530';
+          Neo.ctx.strokeStyle = '#768696';
+          Neo.ctx.lineWidth = 1.5;
+          Neo.ctx.beginPath();
+          Neo.ctx.roundRect(clampPoint.x - 7, clampPoint.y - 4, 14, 8, 2);
+          Neo.ctx.fill();
+          Neo.ctx.stroke();
+        });
+      });
+
+      // Bolted control chassis.
+      Neo.ctx.fillStyle = 'rgba(2,7,12,0.72)';
+      Neo.ctx.beginPath();
+      Neo.ctx.roundRect(panelX - panelW / 2 + 10, panelY - panelH / 2 + 10, panelW, panelH, 15);
+      Neo.ctx.fill();
+      const chassisGradient = Neo.ctx.createLinearGradient(0, panelY - panelH / 2, 0, panelY + panelH / 2);
+      chassisGradient.addColorStop(0, wrongFlash > 0 ? '#54212b' : '#303d4a');
+      chassisGradient.addColorStop(0.18, wrongFlash > 0 ? '#29141a' : '#17232e');
+      chassisGradient.addColorStop(1, '#080e15');
+      Neo.ctx.fillStyle = chassisGradient;
+      Neo.ctx.strokeStyle = wrongFlash > 0 ? '#ff667d' : '#6e8092';
+      Neo.ctx.lineWidth = 4;
+      Neo.ctx.beginPath();
+      Neo.ctx.roundRect(panelX - panelW / 2, panelY - panelH / 2, panelW, panelH, 14);
+      Neo.ctx.fill();
+      Neo.ctx.stroke();
+
+      // Inner face plate, rivets, vents, and caution bars.
+      Neo.ctx.fillStyle = 'rgba(4,9,14,0.86)';
+      Neo.ctx.strokeStyle = '#283744';
+      Neo.ctx.lineWidth = 2;
+      Neo.ctx.beginPath();
+      Neo.ctx.roundRect(panelX - panelW / 2 + 12, panelY - panelH / 2 + 12, panelW - 24, panelH - 24, 9);
+      Neo.ctx.fill();
+      Neo.ctx.stroke();
+      Neo.ctx.fillStyle = '#98a5b1';
+      [
+        [panelX - panelW / 2 + 12, panelY - panelH / 2 + 12],
+        [panelX + panelW / 2 - 12, panelY - panelH / 2 + 12],
+        [panelX - panelW / 2 + 12, panelY + panelH / 2 - 12],
+        [panelX + panelW / 2 - 12, panelY + panelH / 2 - 12],
+      ].forEach(([rivetX, rivetY]) => {
+        Neo.ctx.beginPath();
+        Neo.ctx.arc(rivetX, rivetY, 3, 0, Math.PI * 2);
+        Neo.ctx.fill();
+      });
+      Neo.ctx.strokeStyle = 'rgba(135,154,172,0.45)';
+      Neo.ctx.lineWidth = 2;
+      for (let vent = 0; vent < 4; vent += 1) {
+        Neo.ctx.beginPath();
+        Neo.ctx.moveTo(panelX - panelW / 2 + 25, panelY - 22 + vent * 8);
+        Neo.ctx.lineTo(panelX - panelW / 2 + 51, panelY - 22 + vent * 8);
+        Neo.ctx.stroke();
+        Neo.ctx.beginPath();
+        Neo.ctx.moveTo(panelX + panelW / 2 - 51, panelY - 22 + vent * 8);
+        Neo.ctx.lineTo(panelX + panelW / 2 - 25, panelY - 22 + vent * 8);
+        Neo.ctx.stroke();
+      }
+
+      Neo.ctx.fillStyle = wrongFlash > 0 ? '#ff667d' : '#a9bfd1';
+      Neo.ctx.font = 'bold 10px monospace';
+      Neo.ctx.textAlign = 'center';
+      Neo.ctx.fillText(wrongFlash > 0 ? 'SEQUENCE ERROR // RESET' : 'CIRCUIT AUTHORIZATION ARRAY', panelX, panelY - 37);
+
+      // Terminal bank receives the four physical switch conduits.
+      terminalPoints.forEach((terminal, index) => {
+        const powered = sequence[progress] === index;
+        Neo.ctx.fillStyle = '#05090d';
+        Neo.ctx.strokeStyle = '#65778a';
+        Neo.ctx.lineWidth = 2;
+        Neo.ctx.beginPath();
+        Neo.ctx.roundRect(terminal.x - 17, terminal.y - 16, 34, 32, 5);
+        Neo.ctx.fill();
+        Neo.ctx.stroke();
+        Neo.ctx.fillStyle = terminal.color;
+        Neo.ctx.shadowColor = terminal.color;
+        Neo.ctx.shadowBlur = powered ? 18 : 6;
+        Neo.ctx.globalAlpha = powered ? 1 : 0.45;
+        Neo.ctx.beginPath();
+        Neo.ctx.arc(terminal.x, terminal.y - 5, 7, 0, Math.PI * 2);
+        Neo.ctx.fill();
+        Neo.ctx.globalAlpha = 1;
+        Neo.ctx.shadowBlur = 0;
+        Neo.ctx.fillStyle = '#b8c6d2';
+        Neo.ctx.font = 'bold 8px monospace';
+        Neo.ctx.fillText(`IN-${index + 1}`, terminal.x, terminal.y + 12);
+      });
+
+      // Ordered lamp rail. Thin traces show which terminal feeds each lamp.
+      const lampSpacing = 39;
+      const lampRadius = 12;
+      const lampY = panelY - 5;
+      const lampStartX = panelX - Math.max(0, sequence.length - 1) * lampSpacing / 2;
+      sequence.forEach((switchIndex, index) => {
+        const color = colors[switchIndex] || '#d7f6ff';
+        const terminal = terminalPoints[switchIndex];
+        const lampX = lampStartX + index * lampSpacing;
+        const completed = index < progress;
+        const active = index === progress;
+
+        Neo.ctx.strokeStyle = completed || active ? color : 'rgba(72,91,108,0.48)';
+        Neo.ctx.shadowColor = color;
+        Neo.ctx.shadowBlur = active ? 7 : 0;
+        Neo.ctx.lineWidth = active ? 2.5 : 1.5;
+        Neo.ctx.beginPath();
+        Neo.ctx.moveTo(terminal.x, terminal.y - 16);
+        Neo.ctx.lineTo(terminal.x, panelY + 20);
+        Neo.ctx.lineTo(lampX, panelY + 20);
+        Neo.ctx.lineTo(lampX, lampY + lampRadius);
+        Neo.ctx.stroke();
+        Neo.ctx.shadowBlur = 0;
+
+        Neo.ctx.fillStyle = '#03070b';
+        Neo.ctx.strokeStyle = completed || active ? color : '#536273';
+        Neo.ctx.lineWidth = 3;
+        Neo.ctx.beginPath();
+        Neo.ctx.arc(lampX, lampY, lampRadius + 4, 0, Math.PI * 2);
+        Neo.ctx.fill();
+        Neo.ctx.stroke();
+
+        const lampGradient = Neo.ctx.createRadialGradient(lampX - 3, lampY - 4, 1, lampX, lampY, lampRadius);
+        lampGradient.addColorStop(0, completed ? '#ffffff' : color);
+        lampGradient.addColorStop(0.35, color);
+        lampGradient.addColorStop(1, completed ? 'rgba(28,42,52,0.95)' : 'rgba(3,8,13,0.98)');
+        Neo.ctx.fillStyle = lampGradient;
+        Neo.ctx.shadowColor = color;
+        Neo.ctx.shadowBlur = active ? 18 + Math.sin(now / 120) * 5 : completed ? 5 : 0;
+        Neo.ctx.globalAlpha = completed ? 0.45 : 1;
+        Neo.ctx.beginPath();
+        Neo.ctx.arc(lampX, lampY, lampRadius, 0, Math.PI * 2);
+        Neo.ctx.fill();
+        Neo.ctx.globalAlpha = 1;
+        Neo.ctx.shadowBlur = 0;
+        Neo.ctx.fillStyle = completed ? '#91a0ad' : '#dce8f1';
+        Neo.ctx.font = 'bold 10px monospace';
+        Neo.ctx.fillText(String(switchIndex + 1), lampX, lampY + 4);
+      });
+
+      Neo.ctx.restore();
+      return;
+    }
     const obelisk = room.challengeData?.obelisk;
     if (!obelisk) return;
 
@@ -1820,5 +2204,6 @@
 
   Neo.drawProjectiles = drawProjectiles;
   Neo.drawJusticeBlades = drawJusticeBlades;
+  Neo.drawSkySwords = drawSkySwords;
   Neo.drawHealingZoneChargeBar = drawHealingZoneChargeBar;
   Neo.drawDeadBodies = drawDeadBodies;

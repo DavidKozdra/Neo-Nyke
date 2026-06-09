@@ -518,6 +518,8 @@ export function loop(timestamp) {
     if (Neo.gameState !== 'play') return;
     Neo.updateJusticeBlades?.(dt);
     if (Neo.gameState !== 'play') return;
+    Neo.updateSkySwords?.(dt);
+    if (Neo.gameState !== 'play') return;
     Neo.updateHealingZoneCharge?.(dt);
     if (Neo.gameState !== 'play') return;
     sectionPerfStart = Neo.perfStart();

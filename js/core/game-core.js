@@ -370,7 +370,7 @@ export const PERF_OVERLAY_INTERVAL = 250;
 
 export const BOSS_TYPES = new Set(['god', 'queen_cult', 'bulk_golem', 'artificer_knave', 'bowman_bane', 'antony_blemmye', 'handsome_devil']);
 export const CHALLENGE_ROOM_TYPES = new Set(['challenge']);
-export const CHALLENGE_TRIAL_TYPES = ['mirror', 'stillness', 'bomb', 'survival', 'runes', 'storm'];
+export const CHALLENGE_TRIAL_TYPES = ['mirror', 'circuit', 'bomb', 'survival', 'runes', 'storm'];
 export const KozSeededRngApi = window.KozEngine?.World?.seededRng || {};
 export const KozSaveApi = window.KozEngine?.SaveLoad?.saveApi || {};
 export const KozStorageDrivers = window.KozEngine?.SaveLoad?.storageDrivers || {};

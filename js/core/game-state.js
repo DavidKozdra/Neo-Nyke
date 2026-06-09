@@ -32,6 +32,7 @@ export function resumeGame() {
       selectedDifficulty: 'easy',
       selectedChallenges: [],
       selectedCharacter: 'thorn_knight',
+      characterKitChoices: {},
       godsKilled: 0,
       mooggyDefeats: 0,
       loopCrystals: 0,
@@ -629,6 +630,7 @@ export function resumeGame() {
           selectedCharacter: migrateCharacterKey(String(savedMeta.selectedCharacter || createDefaultMeta().selectedCharacter)),
           unlockedLegacy: normalizeLegacySelection(savedMeta.unlockedLegacy),
           seenTips: (savedMeta.seenTips && typeof savedMeta.seenTips === 'object') ? { ...savedMeta.seenTips } : {},
+          characterKitChoices: (savedMeta.characterKitChoices && typeof savedMeta.characterKitChoices === 'object') ? { ...savedMeta.characterKitChoices } : {},
         };
       }
       Neo.runHistory = normalizeRunHistory(savedRunHistory || savedMeta?.runHistory);
@@ -2224,7 +2226,9 @@ export function resumeGame() {
   function startPractice() {
     setGameState('play');
     Neo.baseSeedStr = createRandomSeed();
-    Neo.selectedDifficulty = 'easy';
+    Neo.selectedDifficulty = Neo.practiceVariant === 'challenges'
+      ? normalizeDifficulty(Neo.selectedDifficulty)
+      : 'easy';
     Neo.selectedChallenges = [];
     Neo.runLoopIndex = 0;
     Neo.runRevivesUsed = 0;
@@ -2266,7 +2270,7 @@ export function resumeGame() {
 
   const CHALLENGE_PRACTICE_LAYOUT = [
     { type: 'mirror', gx: 4, gy: 1, x: 235, y: 260 },
-    { type: 'stillness', gx: 7, gy: 2, x: 450, y: 260 },
+    { type: 'circuit', gx: 7, gy: 2, x: 450, y: 260 },
     { type: 'bomb', gx: 7, gy: 6, x: 665, y: 260 },
     { type: 'survival', gx: 4, gy: 7, x: 235, y: 440 },
     { type: 'runes', gx: 1, gy: 6, x: 450, y: 440 },
@@ -2675,6 +2679,8 @@ export function resumeGame() {
     clearBossRushNextSpawn();
     Neo.projectiles = [];
     Neo.justiceBlades = [];
+    Neo.skySwords = [];
+    Neo.activeBeamPaths = null;
     Neo.healingZoneCharging = false;
     Neo.healingZoneChargeTime = 0;
     Neo.smashHeld = false;

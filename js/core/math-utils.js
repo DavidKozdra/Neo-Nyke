@@ -168,12 +168,16 @@ export function beamHitsCircle(x1, y1, x2, y2, cx, cy, radius) {
 export function getPlayerBeamRange(mode = Neo.laserMode, moveKey = Neo.getEquippedMove('laser')) {
   if (mode === 'god_sweep') return 560;
   if (mode === 'turtle_wave') return 620;
+  if (mode === 'thorn_blood_beams') return 520;
   if (moveKey === 'love_beam') return 500;
+  if (moveKey === 'wizard_lazer') return 560;
   return Neo.ATTACKS.laser.range;
 }
 
 export function getPlayerBeamBounceCount(mode = Neo.laserMode) {
-  return mode === 'beam' ? Neo.PLAYER_BEAM_BOUNCES : Neo.HEAVY_BEAM_BOUNCES;
+  // Thorn's fan of beams ricochet like the standard beam so each bends with
+  // the room rather than punching straight through.
+  return (mode === 'beam' || mode === 'thorn_blood_beams') ? Neo.PLAYER_BEAM_BOUNCES : Neo.HEAVY_BEAM_BOUNCES;
 }
 
 export function getEnemyBeamBounceCount(enemy) {

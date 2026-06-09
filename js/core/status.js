@@ -83,6 +83,9 @@ export function getColdStacksFromDuration(duration) {
 export function applyStatus(entity, key, stacks, duration, source = null) {
   if (!entity || !Neo.STATUS_KEYS.includes(key)) return;
   if (entity[`${key}Immune`]) return;
+  // Mateo's Potion Bath grants the player temporary resistance to all incoming
+  // statuses.
+  if (entity === Neo.player && Number(Neo.player.statusResistTime || 0) > 0) return;
   const state = getStatusState(entity, key);
   const addedStacks = Math.max(0, Number(stacks || 0));
   const durationSeverity = entity === Neo.player

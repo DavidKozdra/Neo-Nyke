@@ -679,6 +679,16 @@
       castNailShot();
       return;
     }
+    if (move === 'thorn_blood_beams') {
+      if (!Neo.spendSkillCharge('laser', rechargeTime, { deferTimer: true })) return;
+      Neo.laserActive = true;
+      Neo.laserMode = 'thorn_blood_beams';
+      Neo.laserTime = Neo.getLaserCastDuration(move);
+      Neo.laserTick = 0;
+      Neo.turtleWaveHpTimer = 0;
+      Neo.laserAngle = Math.atan2(Neo.mouse.worldY - Neo.player.y, Neo.mouse.worldX - Neo.player.x);
+      return;
+    }
     if (!Neo.spendSkillCharge('laser', rechargeTime, { deferTimer: true })) return;
     Neo.laserActive = true;
     Neo.laserMode = 'beam';
@@ -694,6 +704,7 @@
     Neo.laserMode = 'beam';
     Neo.loveBeamCasting = false;
     Neo.turtleWaveHpTimer = 0;
+    Neo.activeBeamPaths = null;
     Neo.queueHeldSkillRecharge('laser', Neo.getLaserCooldownDuration(getEquippedMove('laser'), Neo.getAttackSpeedValue()));
   }
 
@@ -743,7 +754,10 @@
       Neo.laserAngle += step;
     }
     const angle = Neo.laserAngle;
-    const recoilAccel = 45 * weight;
+    // Wizard Lazer is a heavy beam: big extra recoil kick on top of the normal
+    // weight-based push so the thick purple beam shoves the caster back hard.
+    const wizardLazerActive = move === 'wizard_lazer';
+    const recoilAccel = (45 * weight) + (wizardLazerActive ? 220 : 0);
     if (recoilAccel > 0) {
       Neo.player.vx -= Math.cos(angle) * recoilAccel * dt;
       Neo.player.vy -= Math.sin(angle) * recoilAccel * dt;
@@ -751,9 +765,14 @@
     if (Neo.laserTick <= 0) {
       if (Neo.laserMode === 'god_sweep') Neo.laserAngle += Neo.laserSweepSpeed * 0.05;
       Neo.laserTick = Neo.laserMode === 'god_sweep' ? 0.05 : Neo.laserMode === 'turtle_wave' ? 0.08 : loveBeamActive ? 0.06 : Neo.ATTACKS.laser.tick;
+      const mooggyBeamActive = move === 'mooggy_blood_beam';
+      const wizardBeamActive = wizardLazerActive;
+      const thornBeamsActive = Neo.laserMode === 'thorn_blood_beams';
       const range = Neo.getPlayerBeamRange(Neo.laserMode, move);
-      const beamPath = Neo.buildRicochetBeamPath(Neo.player.x, Neo.player.y, angle, range, Neo.getPlayerBeamBounceCount(Neo.laserMode));
-      const radiusPadding = (Neo.laserMode === 'turtle_wave' ? 14 : 6)
+      // Wizard Lazer is visually and mechanically thick; Mooggy's blood beam is a
+      // touch wider than a standard beam too.
+      const widthBonus = wizardBeamActive ? 16 : mooggyBeamActive ? 6 : 0;
+      const radiusPadding = ((Neo.laserMode === 'turtle_wave' ? 14 : 6) + widthBonus)
         * Number(itemStats.beamWidthMultiplier || 1);
       const baseBeamDamage = Neo.laserMode === 'god_sweep'
         ? 12
@@ -761,40 +780,77 @@
           ? 34
           : loveBeamActive
             ? 18
-            : Neo.godTimer > 0
-              ? 16
-              : Neo.ATTACKS.laser.damage;
+            : wizardBeamActive
+              ? 30
+              : mooggyBeamActive
+                ? 12
+                : thornBeamsActive
+                  ? 8
+                  : Neo.godTimer > 0
+                    ? 16
+                    : Neo.ATTACKS.laser.damage;
       const anvilBeamBonus = Neo.getAnvilMoveBonus(move, 'damage');
       const beamDamage = (baseBeamDamage + anvilBeamBonus) * (itemStats.beamDamageMultiplier || 1);
       const anvilCritBonus = Neo.getAnvilMoveBonus(move, 'critChance');
-      const beamKnockback = Neo.laserMode === 'god_sweep' ? 120 : Neo.laserMode === 'turtle_wave' ? 155 : loveBeamActive ? 52 : 60;
-      const beamColor = loveBeamActive ? '#ff9ed6' : '#f0f';
+      const beamKnockback = Neo.laserMode === 'god_sweep' ? 120
+        : Neo.laserMode === 'turtle_wave' ? 155
+        : loveBeamActive ? 52
+        : wizardBeamActive ? 150
+        : 60;
+      const beamColor = loveBeamActive ? '#ff9ed6'
+        : wizardBeamActive ? '#a64bff'
+        : mooggyBeamActive ? '#ff2f57'
+        : thornBeamsActive ? '#ff3b5c'
+        : '#f0f';
+      const beamChainColor = loveBeamActive ? '#ffb8e0'
+        : wizardBeamActive ? '#c79bff'
+        : (mooggyBeamActive || thornBeamsActive) ? '#ff8aa0'
+        : '#d890ff';
       const hitOptions = anvilCritBonus > 0 ? { critBonus: anvilCritBonus, beamFx: true } : { beamFx: true };
       const bloodBeamActive = move === 'blood_beam';
       let loveBeamHits = 0;
-      for (let index = Neo.enemies.length - 1; index >= 0; index -= 1) {
-        const enemy = Neo.enemies[index];
-        if (!enemy) continue;
-        const hitSegment = Neo.beamPathHitsCircle(beamPath, enemy.x, enemy.y, enemy.r + radiusPadding);
-        if (!hitSegment) continue;
-        hitEnemy(enemy, beamDamage, hitSegment.angle, beamKnockback, beamColor, hitOptions);
-        chainBeamHit(enemy, beamDamage, hitSegment.angle, loveBeamActive ? '#ffb8e0' : '#d890ff');
-        if (loveBeamActive) loveBeamHits += 1;
-        if (bloodBeamActive && Neo.rng() < 0.05) applyBleed(enemy, 1, 3.2);
-        if (bloodBeamActive && Neo.rng() < 0.08) applyDarkDrain(enemy, 1, 3.4);
-      }
-      Neo.hitPvpPlayer2WithBeamPath?.(
-        beamPath,
-        radiusPadding,
-        beamDamage,
-        beamKnockback,
-        'pvp_p1_beam',
-      );
-      Neo.destructibles.forEach(prop => {
-        if (!prop.broken && !prop.hidden && Neo.beamPathHitsDestructible(beamPath, prop, 4)) {
-          Neo.damageDestructible(prop, 1);
+      // Build the set of beam paths to apply this tick. Thorn's Infinite Blood
+      // Beam fires four bleeding beams fanned around the aim direction; everything
+      // else is a single beam down the aim line.
+      const beamAngles = thornBeamsActive
+        ? [angle - 0.32, angle - 0.11, angle + 0.11, angle + 0.32]
+        : [angle];
+      const beamPaths = beamAngles.map(a =>
+        Neo.buildRicochetBeamPath(Neo.player.x, Neo.player.y, a, range, Neo.getPlayerBeamBounceCount(Neo.laserMode)));
+      Neo.activeBeamPaths = beamPaths; // exposed for the renderer (multi-beam draw)
+      const beamPath = beamPaths[0];
+      const hitThisTick = new Set();
+      for (let pathIndex = 0; pathIndex < beamPaths.length; pathIndex += 1) {
+        const path = beamPaths[pathIndex];
+        for (let index = Neo.enemies.length - 1; index >= 0; index -= 1) {
+          const enemy = Neo.enemies[index];
+          if (!enemy) continue;
+          const hitSegment = Neo.beamPathHitsCircle(path, enemy.x, enemy.y, enemy.r + radiusPadding);
+          if (!hitSegment) continue;
+          // A single enemy straddling two of Thorn's beams shouldn't take the full
+          // hit from each beam in the same tick.
+          if (hitThisTick.has(enemy)) continue;
+          hitThisTick.add(enemy);
+          hitEnemy(enemy, beamDamage, hitSegment.angle, beamKnockback, beamColor, hitOptions);
+          chainBeamHit(enemy, beamDamage, hitSegment.angle, beamChainColor);
+          if (loveBeamActive) loveBeamHits += 1;
+          if (bloodBeamActive && Neo.rng() < 0.05) applyBleed(enemy, 1, 3.2);
+          if (bloodBeamActive && Neo.rng() < 0.08) applyDarkDrain(enemy, 1, 3.4);
+          // Thorn's beams bleed hard — that's their whole identity.
+          if (thornBeamsActive && Neo.rng() < 0.35) applyBleed(enemy, 1, 3.6);
+          // Mooggy's assassin beam drenches in poison and freezes solid.
+          if (mooggyBeamActive) {
+            if (Neo.rng() < 0.5) applyPoison(enemy, 2, 5);
+            if (Neo.rng() < 0.18) freezeEnemy(enemy);
+          }
         }
-      });
+        Neo.hitPvpPlayer2WithBeamPath?.(path, radiusPadding, beamDamage, beamKnockback, 'pvp_p1_beam');
+        Neo.destructibles.forEach(prop => {
+          if (!prop.broken && !prop.hidden && Neo.beamPathHitsDestructible(path, prop, 4)) {
+            Neo.damageDestructible(prop, 1);
+          }
+        });
+      }
       if (loveBeamHits > 0) {
         const heal = Neo.scalePlayerHealing(Math.min(8, loveBeamHits * 1.25));
         const gained = Neo.applyPlayerHealing(heal);
@@ -895,6 +951,22 @@
       castRandomPounce();
       return;
     }
+    if (move === 'mooggy_hairball') {
+      castMooggyHairball();
+      return;
+    }
+    if (move === 'potion_bath') {
+      castPotionBath();
+      return;
+    }
+    if (move === 'excalibur_strike') {
+      castExcaliburStrike();
+      return;
+    }
+    if (move === 'holy_turrets') {
+      castHolyTurrets();
+      return;
+    }
     const anvilSmashRange = Neo.getAnvilMoveBonus(move, 'range');
     const smashColor = move === 'crimson_smash'
       ? '#ff3048'
@@ -985,7 +1057,115 @@
       castMooggyZoomies();
       return;
     }
+    if (move === 'knight_slash_dash') {
+      castKnightSlashDash(moveX, moveY);
+      return;
+    }
     castDashBurst(moveX, moveY);
+  }
+
+  // Bleeding slash left in the wake of a Knight's Slash Dash hop: slashes every
+  // enemy near the line travelled and applies heavy bleed, with a red streak.
+  function strikeSlashLine(x1, y1, x2, y2, lineDamage, lineRadius) {
+    const length = Math.hypot(x2 - x1, y2 - y1);
+    if (length < 4) return;
+    const midX = (x1 + x2) * 0.5;
+    const midY = (y1 + y2) * 0.5;
+    const reach = lineRadius + length * 0.5;
+    Neo.forEachEnemyNearCircle?.(midX, midY, reach + 80, enemy => {
+      if (!enemy || enemy.dead) return;
+      if (Neo.distToSegment(enemy.x, enemy.y, x1, y1, x2, y2) > lineRadius + enemy.r) return;
+      const angle = Math.atan2(enemy.y - y1, enemy.x - x1);
+      hitEnemy(enemy, lineDamage, angle, 170, '#ff3b5c');
+      applyBleed(enemy, 3, 5);
+    });
+    if (typeof Neo.forEachDestructibleNearCircle === 'function') {
+      Neo.forEachDestructibleNearCircle(midX, midY, reach + COMBAT_SPATIAL_PADDING, prop => {
+        if (prop.broken || prop.hidden) return;
+        if (Neo.distToSegment(prop.x, prop.y, x1, y1, x2, y2) > lineRadius + (prop.r || 12)) return;
+        Neo.damageDestructible(prop, 2);
+      });
+    }
+    Neo.spawnParticle({
+      x: x1, y: y1, life: 0.28, c: '#ff3b5c',
+      line: { x1, y1, x2, y2, w: 5, jag: 10, seg: Math.max(6, Math.round(length / 26)), phase: Neo.rng() * Math.PI * 2 },
+    });
+  }
+
+  // Thorn's Knight's Slash Dash: a mobility move that hops between nearby
+  // enemies (like Zip Lightning), striking everything in each hop's wake with a
+  // heavy bleed rate.
+  function castKnightSlashDash(moveX, moveY) {
+    const itemStats = Neo.getItemStats();
+    const visited = new Set();
+    const hops = 3;
+    const baseDamage = Math.round((Neo.godTimer > 0 ? 56 : 42) * (itemStats.damageMultiplier || 1));
+    const lineRadius = 46 * (itemStats.aoeRadiusMultiplier || 1);
+    const lineDamage = Math.max(1, Math.round(baseDamage * 0.7));
+    let sourceX = Neo.player.x;
+    let sourceY = Neo.player.y;
+    let performedHop = false;
+    for (let hop = 0; hop < hops; hop += 1) {
+      const searchX = hop === 0 ? Neo.mouse.worldX : sourceX;
+      const searchY = hop === 0 ? Neo.mouse.worldY : sourceY;
+      const target = Neo.findNearestEnemy(searchX, searchY, hop === 0 ? 300 : 260, visited)
+        || Neo.findNearestEnemy(sourceX, sourceY, 260, visited);
+      if (!target) break;
+      visited.add(target);
+      const toward = Math.atan2(target.y - sourceY, target.x - sourceX);
+      // Land just PAST the target so the dash strikes "whatever was behind".
+      const landDist = target.r + Neo.player.r + 6;
+      const landing = findSafePointNearTarget(
+        target.x + Math.cos(toward) * landDist,
+        target.y + Math.sin(toward) * landDist,
+        Neo.player.r,
+        90,
+        14
+      ) || findSafePointNearTarget(
+        target.x - Math.cos(toward) * landDist,
+        target.y - Math.sin(toward) * landDist,
+        Neo.player.r,
+        90,
+        14
+      );
+      const fromX = sourceX;
+      const fromY = sourceY;
+      if (landing) teleportPlayerTo(landing.x, landing.y, '#ff3b5c');
+      sourceX = Neo.player.x;
+      sourceY = Neo.player.y;
+      performedHop = true;
+      // Bleeding slash streaks along the corridor the dash just travelled.
+      strikeSlashLine(fromX, fromY, Neo.player.x, Neo.player.y, lineDamage, lineRadius);
+      // Direct heavy strike on the hop target.
+      const hitAngle = Math.atan2(target.y - Neo.player.y, target.x - Neo.player.x);
+      hitEnemy(target, baseDamage, hitAngle, 185, '#ff3b5c');
+      applyBleed(target, 4, 5);
+      Neo.player.swing = Neo.ATTACKS.melee.active;
+      Neo.player.swingA = hitAngle;
+      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.22, ring: 16 + hop * 4, c: '#ff8aa0' });
+    }
+
+    if (!performedHop) {
+      // No enemy to chain to — dash toward the aim/move direction and still
+      // leave a bleeding slash trail along the path.
+      const angle = Math.hypot(moveX, moveY) > 0.15
+        ? Math.atan2(moveY, moveX)
+        : Math.atan2(Neo.mouse.worldY - Neo.player.y, Neo.mouse.worldX - Neo.player.x);
+      const fromX = Neo.player.x;
+      const fromY = Neo.player.y;
+      const fallback = findSafePointNearTarget(Neo.player.x + Math.cos(angle) * 210, Neo.player.y + Math.sin(angle) * 210, Neo.player.r, 120, 16);
+      if (fallback) {
+        teleportPlayerTo(fallback.x, fallback.y, '#ff3b5c');
+        Neo.player.swing = Neo.ATTACKS.melee.active;
+        Neo.player.swingA = angle;
+        strikeSlashLine(fromX, fromY, Neo.player.x, Neo.player.y, lineDamage, lineRadius);
+      }
+    }
+
+    Neo.shake = Math.max(Neo.shake, 7);
+    Neo.shakeT = Math.max(Neo.shakeT, 0.13);
+    Neo.player.inv = Math.max(Neo.player.inv, 0.26);
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.24, ring: 70 * (itemStats.aoeRadiusMultiplier || 1), c: '#ff8aa0' });
   }
 
   // chargeFactor (0..1) scales up the swipe when released from a hold: a full
@@ -1787,6 +1967,216 @@
     Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 12, life: 0.7, text: 'LAVA WALK', c: '#ff9f40' });
   }
 
+  // Mooggy Hairball Blast: a venomous AOE that bursts for heavy poison and
+  // freezes everything caught in it.
+  function castMooggyHairball() {
+    const itemStats = Neo.getItemStats();
+    const aoeRadiusMultiplier = itemStats.aoeRadiusMultiplier || 1;
+    const aoeDamageMultiplier = itemStats.aoeDamageMultiplier || 1;
+    const radius = 132 * aoeRadiusMultiplier;
+    const damage = Math.round(34 * aoeDamageMultiplier);
+    Neo.addTrauma?.(0.6, Math.PI / 2, 18);
+    Neo.addHitstop?.(0.05);
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.45, ring: radius - 24, c: '#85df63' });
+    Neo.spawnAoeShockwave(Neo.player.x, Neo.player.y, radius, '#85df63', 'heavy');
+    Neo.blastRadius(Neo.player.x, Neo.player.y, radius, damage, '#85df63');
+    applyStatusInRadius(Neo.player.x, Neo.player.y, radius, 'poison', 3, 6);
+    forEachEnemyNearPlayer(radius, enemy => {
+      if (!enemy) return;
+      if (!isWithinRadiusSq(Neo.player.x, Neo.player.y, enemy, radius)) return;
+      freezeEnemy(enemy, 0.8);
+    });
+    // Cough up a few drifting hairball gobs for flavour.
+    for (let index = 0; index < 10; index += 1) {
+      const angle = Neo.rng() * Math.PI * 2;
+      const speed = Neo.rand(60, 220, 'fx');
+      Neo.spawnParticle({
+        x: Neo.player.x, y: Neo.player.y,
+        vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
+        life: 0.4 + Neo.rng() * 0.3, c: '#9be36f', size: 2.6,
+      });
+    }
+  }
+
+  // Mateo Potion Bath: full cleanse + 20s status resistance, heal 60% with a
+  // short regen, vanish for 5s, and erupt in explosions around the caster.
+  function castPotionBath() {
+    const itemStats = Neo.getItemStats();
+    const aoeRadiusMultiplier = itemStats.aoeRadiusMultiplier || 1;
+    const aoeDamageMultiplier = itemStats.aoeDamageMultiplier || 1;
+    // Cleanse every damaging/cold status off the player.
+    Neo.STATUS_KEYS.forEach(key => Neo.clearStatus(Neo.player, key));
+    // Resist new statuses for 20s and become hidden + invulnerable for 5s.
+    Neo.player.statusResistTime = Math.max(Number(Neo.player.statusResistTime || 0), 20);
+    Neo.player.warpHideTime = Math.max(Number(Neo.player.warpHideTime || 0), 5);
+    Neo.player.inv = Math.max(Number(Neo.player.inv || 0), 5);
+    // Heal 60% of max HP now, then regen over the next 5 seconds.
+    const burst = Neo.applyPlayerHealing(Math.round(Neo.player.maxHp * 0.6));
+    if (burst > 0) Neo.spawnHealPopup(Neo.player.x, Neo.player.y - 22, burst, { color: '#9af7d8' });
+    Neo.player.potionRegenTime = 5;
+    Neo.player.potionRegenAccum = 0;
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 30, life: 0.8, text: 'POTION BATH', c: '#9af7d8' });
+    Neo.addTrauma?.(0.7, Math.PI / 2, 20);
+    // Explosions around you.
+    const burstRadius = 56 * aoeRadiusMultiplier;
+    for (let index = 0; index < 7; index += 1) {
+      const angle = (index / 7) * Math.PI * 2 + Neo.rng() * 0.4;
+      const dist = Neo.rand(40, 150, 'fx');
+      const px = Neo.player.x + Math.cos(angle) * dist;
+      const py = Neo.player.y + Math.sin(angle) * dist;
+      Neo.spawnParticle({ x: px, y: py, life: 0.5, ring: 22 * aoeRadiusMultiplier, c: '#b6f0ff' });
+      Neo.blastRadius(px, py, burstRadius, Math.round(30 * aoeDamageMultiplier), '#b6f0ff');
+    }
+  }
+
+  const EXCALIBUR_FALL_TIME = 0.34;   // descent before impact
+  const EXCALIBUR_FLY_TIME = 2.6;     // how long swords hover/seek after landing
+
+  // Gelleh Summon Excalibur: a barrage of giant divine swords that plunge from
+  // the ceiling all across the room, slam for AOE, then lift back up and fly
+  // around the area seeking enemies before dissipating.
+  function castExcaliburStrike() {
+    const itemStats = Neo.getItemStats();
+    const aoeRadiusMultiplier = itemStats.aoeRadiusMultiplier || 1;
+    const aoeDamageMultiplier = itemStats.aoeDamageMultiplier || 1;
+    if (!Array.isArray(Neo.skySwords)) Neo.skySwords = [];
+    const count = 8;
+    const edgePad = Neo.WALL + 24;
+    const slamDamage = Math.round((Neo.godTimer > 0 ? 96 : 78) * aoeDamageMultiplier);
+    const flyDamage = Math.round((Neo.godTimer > 0 ? 30 : 24) * aoeDamageMultiplier);
+    for (let index = 0; index < count; index += 1) {
+      // First sword targets the cursor; the rest scatter across the whole room.
+      const tx = index === 0
+        ? Neo.clamp(Neo.mouse.worldX, edgePad, Neo.ROOM_W - edgePad)
+        : Neo.rand(edgePad, Neo.ROOM_W - edgePad, 'fx');
+      const ty = index === 0
+        ? Neo.clamp(Neo.mouse.worldY, edgePad, Neo.ROOM_H - edgePad)
+        : Neo.rand(edgePad, Neo.ROOM_H - edgePad, 'fx');
+      Neo.skySwords.push({
+        x: tx, y: ty,
+        phase: 'falling',
+        delay: index * 0.08,          // stagger the rain
+        fall: EXCALIBUR_FALL_TIME,
+        radius: 92 * aoeRadiusMultiplier,
+        damage: slamDamage,
+        // Flying phase state:
+        flyTime: EXCALIBUR_FLY_TIME + Neo.rand(0, 0.6, 'fx'),
+        angle: Neo.rng() * Math.PI * 2,
+        spin: (Neo.rng() < 0.5 ? -1 : 1) * (4 + Neo.rng() * 3),
+        flyDamage,
+        flyRadius: 30 * aoeRadiusMultiplier,
+        hitCooldowns: new Map(),
+        target: null,
+      });
+    }
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.5, ring: 36, c: '#ffd980' });
+    Neo.addTrauma?.(0.4, Math.PI / 2, 12);
+  }
+
+  // Per-frame update for the Excalibur blades: fall → slam → fly/seek → fade.
+  function updateSkySwords(dt) {
+    const swords = Neo.skySwords;
+    if (!Array.isArray(swords) || swords.length === 0) return;
+    let write = 0;
+    for (let read = 0; read < swords.length; read += 1) {
+      const sword = swords[read];
+      if (sword.delay > 0) {
+        sword.delay -= dt;
+        swords[write++] = sword;
+        continue;
+      }
+      if (sword.phase === 'falling') {
+        sword.fall -= dt;
+        if (Neo.nextRandom('fx') < 0.7) {
+          const ratio = Neo.clamp(sword.fall / EXCALIBUR_FALL_TIME, 0, 1);
+          Neo.spawnParticle({ x: sword.x, y: sword.y, life: 0.18, ring: 16 + ratio * 60, c: '#ffe6a3' });
+        }
+        if (sword.fall <= 0) {
+          // Impact slam.
+          sword.phase = 'flying';
+          Neo.addTrauma?.(0.5, Math.PI / 2, 14);
+          Neo.addHitstop?.(0.04);
+          Neo.spawnAoeShockwave(sword.x, sword.y, sword.radius, '#ffd980', 'heavy');
+          Neo.blastRadius(sword.x, sword.y, sword.radius, sword.damage, '#ffd980');
+          Neo.spawnParticle({ x: sword.x, y: sword.y, life: 0.5, ring: sword.radius, c: '#fff1c2' });
+        }
+        swords[write++] = sword;
+        continue;
+      }
+      if (sword.phase === 'flying') {
+        sword.flyTime -= dt;
+        if (sword.flyTime <= 0) { sword.phase = 'fade'; sword.fadeT = 0.3; swords[write++] = sword; continue; }
+        // Seek the nearest enemy; drift if none.
+        if (!sword.target || sword.target.dead) {
+          sword.target = Neo.findNearestEnemy?.(sword.x, sword.y, 520) || null;
+        }
+        if (sword.target && !sword.target.dead) {
+          const toAngle = Math.atan2(sword.target.y - sword.y, sword.target.x - sword.x);
+          sword.angle = Neo.turnAngleToward ? Neo.turnAngleToward(sword.angle, toAngle, 7 * dt) : toAngle;
+        } else {
+          sword.angle += sword.spin * dt; // no target: spin/orbit in place
+        }
+        const speed = 360;
+        sword.x = Neo.clamp(sword.x + Math.cos(sword.angle) * speed * dt, Neo.WALL + 8, Neo.ROOM_W - Neo.WALL - 8);
+        sword.y = Neo.clamp(sword.y + Math.sin(sword.angle) * speed * dt, Neo.WALL + 8, Neo.ROOM_H - Neo.WALL - 8);
+        // Decay per-enemy re-hit gate.
+        if (sword.hitCooldowns.size) {
+          sword.hitCooldowns.forEach((v, k) => {
+            const n = v - dt;
+            if (n <= 0) sword.hitCooldowns.delete(k); else sword.hitCooldowns.set(k, n);
+          });
+        }
+        // Slash enemies the flying blade overlaps.
+        Neo.forEachEnemyNearCircle?.(sword.x, sword.y, sword.flyRadius + 80, enemy => {
+          if (!enemy || enemy.dead) return;
+          if (Neo.dist(sword.x, sword.y, enemy.x, enemy.y) > sword.flyRadius + enemy.r) return;
+          if (sword.hitCooldowns.has(enemy)) return;
+          sword.hitCooldowns.set(enemy, 0.3);
+          const a = Math.atan2(enemy.y - sword.y, enemy.x - sword.x);
+          hitEnemy(enemy, sword.flyDamage, a, 150, '#ffd980');
+        });
+        if (Neo.nextRandom('fx') < 0.4) {
+          Neo.spawnParticle({ x: sword.x, y: sword.y, life: 0.16, c: '#ffe6a3', spark: true, size: 2 });
+        }
+        swords[write++] = sword;
+        continue;
+      }
+      // Fade phase: brief afterglow then drop.
+      sword.fadeT -= dt;
+      if (sword.fadeT > 0) swords[write++] = sword;
+    }
+    swords.length = write;
+  }
+
+  // Gelleh Holy Turrets: summon a ring of divine turrets that auto-fire holy
+  // AOE bursts at nearby enemies for a few seconds.
+  function castHolyTurrets() {
+    const itemStats = Neo.getItemStats();
+    const aoeRadiusMultiplier = itemStats.aoeRadiusMultiplier || 1;
+    const aoeDamageMultiplier = itemStats.aoeDamageMultiplier || 1;
+    const count = 3;
+    const baseAngle = Math.atan2(Neo.mouse.worldY - Neo.player.y, Neo.mouse.worldX - Neo.player.x);
+    const edgePad = Neo.WALL + 16;
+    for (let index = 0; index < count; index += 1) {
+      const angle = baseAngle + (index - (count - 1) / 2) * 0.7;
+      const tx = Neo.clamp(Neo.player.x + Math.cos(angle) * 74, edgePad, Neo.ROOM_W - edgePad);
+      const ty = Neo.clamp(Neo.player.y + Math.sin(angle) * 74, edgePad, Neo.ROOM_H - edgePad);
+      Neo.hazards.push({
+        kind: 'holy_turret',
+        x: tx,
+        y: ty,
+        r: 26,
+        ttl: 6,
+        tick: 0,
+        interval: 0.6,
+        range: 360,
+        burstRadius: 56 * aoeRadiusMultiplier,
+        damage: Math.round(26 * aoeDamageMultiplier),
+      });
+      Neo.spawnParticle({ x: tx, y: ty, life: 0.5, ring: 22, c: '#fff1b0' });
+    }
+  }
+
   function castLightningColumns() {
     const aoeRadiusMultiplier = Neo.getItemStats().aoeRadiusMultiplier || 1;
     const angle = Math.atan2(Neo.mouse.worldY - Neo.player.y, Neo.mouse.worldX - Neo.player.x);
@@ -2126,6 +2516,17 @@
     const adjustedDuration = Number(duration || 0) * (entity === Neo.player ? 1 : Number(Neo.getItemStats?.()?.statusDurationMultiplier || 1));
     Neo.applyStatus(entity, 'dark_drain', stacks, adjustedDuration, source);
     triggerStatusReactions(entity, 'dark_drain');
+  }
+
+  // Shared "freeze" effect: a brief hard stun plus a cold (slow) stack and the
+  // FROZEN popup. Mirrors the Weapon Fatigue freeze so frozen reads the same
+  // everywhere.
+  function freezeEnemy(enemy, stunDuration = 0.6) {
+    if (!enemy) return;
+    enemy.stun = Math.max(Number(enemy.stun || 0), stunDuration);
+    Neo.applyStatus(enemy, 'slow', 1, 4);
+    Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 18, life: 0.5, text: 'FROZEN', c: '#9fe8ff' });
+    Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.3, ring: enemy.r + 12, c: '#9fe8ff' });
   }
 
   function applyStatusInRadius(x, y, radius, statusKey, stacks, duration, sourceEnemy = null) {
@@ -3173,6 +3574,7 @@
   Neo.spawnChaosBlast = spawnChaosBlast;
   Neo.castBladeOfJustice = castBladeOfJustice;
   Neo.updateJusticeBlades = updateJusticeBlades;
+  Neo.updateSkySwords = updateSkySwords;
   Neo.castSmiteChain = castSmiteChain;
   Neo.findNearestSmiteTarget = findNearestSmiteTarget;
   Neo.castHealingZone = castHealingZone;

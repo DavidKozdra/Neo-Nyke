@@ -179,23 +179,24 @@
           setObjective('Trial cleared. Claim the reward or move on.');
         } else if (!Neo.currentRoom.challengeStarted) {
           if (type === 'mirror') setObjective('Touch the sword to face your mirror.');
-          else if (type === 'stillness') setObjective('Begin the prize trial: choose one reward to clear it.');
+          else if (type === 'circuit' || type === 'stillness') setObjective('Begin the circuit trial.');
           else if (type === 'bomb') setObjective('Begin the bomb trial before detonation.');
-          else if (type === 'survival') setObjective('Begin the survival trial: protect the central obelisk.');
+          else if (type === 'survival') setObjective('Begin the protect trial: defend the central ward rune.');
           else if (type === 'runes') setObjective('Begin the rune hunt.');
           else if (type === 'storm') setObjective('Begin the storm trial.');
         } else {
           if (type === 'mirror') setObjective('Defeat your mirror champion.');
-          else if (type === 'stillness') {
-            const phase = Neo.currentRoom.challengeData?.phase || 'choose';
+          else if (type === 'circuit' || type === 'stillness') {
+            const sequenceLength = Math.max(1, Number(Neo.currentRoom.challengeData?.sequence?.length || 1));
+            const progress = Math.max(0, Number(Neo.currentRoom.challengeData?.progress || 0));
             const timer = Math.ceil(Neo.currentRoom.challengeTimer || 0);
-            setObjective(phase === 'channel' ? `Hold the center until the prize stabilizes (${timer}s).` : 'Pick one prize, then hold the center to secure it.');
+            setObjective(`Repeat the light order: ${progress}/${sequenceLength} (${timer}s).`);
           }
           else if (type === 'bomb') setObjective(`Disarm the blue bomb before detonation (${Math.ceil(Neo.currentRoom.challengeTimer || 0)}s).`);
           else if (type === 'survival') {
             const obelisk = Neo.currentRoom.challengeData?.obelisk;
             const hpPct = obelisk ? Math.ceil(Neo.clamp((obelisk.hp || 0) / Math.max(1, obelisk.maxHp || 1), 0, 1) * 100) : 100;
-            setObjective(`Keep enemies off the obelisk (${hpPct}%) — survive ${Math.ceil(Neo.currentRoom.challengeTimer || 0)}s.`);
+            setObjective(`Keep enemies off the ward rune (${hpPct}%) — protect it for ${Math.ceil(Neo.currentRoom.challengeTimer || 0)}s.`);
           }
           else if (type === 'runes') setObjective(`Collect the remaining runes: ${Math.max(0, Number(Neo.currentRoom.challengeData?.runesLeft || 0))}.`);
           else if (type === 'storm') setObjective(`Live through the storm for ${Math.ceil(Neo.currentRoom.challengeTimer || 0)}s.`);
@@ -497,7 +498,7 @@
         && !Neo.currentRoom.cleared
         ? (Neo.currentRoom.challengeType || 'mirror')
         : null;
-      const timedChallengeActive = timedChallengeType === 'runes';
+      const timedChallengeActive = ['runes', 'circuit', 'stillness'].includes(timedChallengeType);
       Neo.ui.challengeStatus.classList.toggle('hidden', !timedChallengeActive);
       Neo.ui.challengeStatus.setAttribute('aria-hidden', timedChallengeActive ? 'false' : 'true');
       if (timedChallengeActive) {
@@ -505,7 +506,7 @@
         const timer = Math.max(0, Number(Neo.currentRoom.challengeTimer || 0));
         const ratio = Math.max(0, Math.min(1, timer / maxTimer));
         if (Neo.ui.challengeStatusLabel) {
-          Neo.ui.challengeStatusLabel.textContent = `RUNES ${Math.ceil(timer)}S`;
+          Neo.ui.challengeStatusLabel.textContent = `${timedChallengeType === 'runes' ? 'RUNES' : 'CIRCUIT'} ${Math.ceil(timer)}S`;
         }
         Neo.ui.challengeStatusFill.style.width = `${ratio * 100}%`;
       }
@@ -621,6 +622,9 @@
     Neo.player.dashTime = 0;
     Neo.projectiles = [];
     Neo.hazards = [];
+    Neo.skySwords = [];
+    Neo.justiceBlades = [];
+    Neo.activeBeamPaths = null;
     Neo.lastDamageSource = '';
     Neo.lastDamageSourceKey = '';
     Neo.setGameState('play');

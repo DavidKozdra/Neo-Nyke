@@ -10,7 +10,7 @@ describe('challenge testing practice variant', () => {
     const layoutMatch = gameStateSource.match(/const CHALLENGE_PRACTICE_LAYOUT = \[([\s\S]*?)\n  \];/);
 
     expect(layoutMatch).not.toBeNull();
-    ['mirror', 'stillness', 'bomb', 'survival', 'runes', 'storm'].forEach(type => {
+    ['mirror', 'circuit', 'bomb', 'survival', 'runes', 'storm'].forEach(type => {
       expect(layoutMatch[1]).toContain(`type: '${type}'`);
     });
   });

@@ -4073,6 +4073,59 @@ p.sub {
   white-space: nowrap;
 }
 
+/* A slot with selectable alternative abilities (alt-kit picker). */
+.hero-detail-skill-pip--choice {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 5px;
+  white-space: normal;
+}
+
+.hero-detail-skill-slot-label {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .12em;
+  color: var(--menu-text-soft);
+  text-transform: uppercase;
+}
+
+.hero-detail-kit-options {
+  display: flex;
+  gap: 5px;
+}
+
+.hero-detail-kit-option {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 7px;
+  font: inherit;
+  font-size: 11px;
+  color: var(--menu-text);
+  background: rgba(255,255,255,.03);
+  border: 1px solid rgba(255,255,255,.10);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: border-color .12s, background .12s;
+}
+
+.hero-detail-kit-option:hover {
+  background: rgba(255,255,255,.08);
+  border-color: rgba(255,255,255,.22);
+}
+
+.hero-detail-kit-option--sel {
+  background: rgba(120,190,255,.16);
+  border-color: rgba(140,200,255,.65);
+  box-shadow: 0 0 0 1px rgba(140,200,255,.35) inset;
+}
+
+.hero-detail-kit-option .hero-detail-skill-text {
+  flex: 1 1 auto;
+}
+
 .hero-detail-item-pip {
   position: relative;
   min-width: 0;

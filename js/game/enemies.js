@@ -265,9 +265,9 @@
 
   function getChallengeTrialLabel(type) {
     if (type === 'mirror') return 'MIRROR';
-    if (type === 'stillness') return 'PRIZE';
+    if (type === 'circuit' || type === 'stillness') return 'CIRCUIT';
     if (type === 'bomb') return 'BOMB';
-    if (type === 'survival') return 'SURVIVE';
+    if (type === 'survival') return 'PROTECT';
     if (type === 'runes') return 'RUNES';
     if (type === 'storm') return 'STORM';
     return 'TRIAL';
@@ -279,7 +279,7 @@
     runes: { min: 0.5, max: 0.6 },
     storm: { min: 0.45, max: 0.55 },
     mirror: { min: 0.5, max: 0.6 },
-    stillness: { min: 0.4, max: 0.55 },
+    circuit: { min: 0.45, max: 0.6 },
   };
 
   function getChallengeTrialTuning(type) {
@@ -315,13 +315,23 @@
         burstCount: floor >= 7 ? 4 : floor >= 4 ? 3 : 2,
       };
     }
-    if (type === 'stillness') {
+    if (type === 'circuit' || type === 'stillness') {
+      const difficulty = Neo.getDifficultyDef();
+      const pressure = Neo.clamp((Number(difficulty?.statMultiplier || 1) - 1) / 0.52, 0, 1);
       return {
-        timer: Neo.scaleChallengeTimer(7),
-        tick: 0.95,
+        timer: Neo.scaleChallengeTimer(18),
+        sequenceLength: 4 + Math.round(pressure * 2),
+        wrongPressPenalty: 2,
       };
     }
     return {};
+  }
+
+  function getChallengeObeliskMaxHp(floorValue = Neo.floor, difficultyKey = Neo.selectedDifficulty) {
+    const floor = Math.max(1, Number(floorValue || 1));
+    const difficulty = Neo.getDifficultyDef(difficultyKey);
+    const difficultyMultiplier = Math.max(1, Number(difficulty?.statMultiplier || 1));
+    return Math.max(40, Math.round((90 + floor * 17.5) / difficultyMultiplier));
   }
 
   function buildWavePlan(count, roomType = 'combat') {
@@ -1588,63 +1598,95 @@
     }
   }
 
-  function spawnStillnessItemChoices(room) {
-    if (!room || room.type !== 'challenge') return;
-    let choices = Array.isArray(room.challengeData?.choices)
-      ? room.challengeData.choices.filter(Boolean).slice(0, 3)
-      : [];
-    if (choices.length < 3) {
-      const random = Neo.createRoomRandom(room, 'challenge:stillness-item-choices');
-      let guard = 0;
-      while (choices.length < 3 && guard < 24) {
-        guard += 1;
-        const key = Neo.rollItemDrop({ elite: true, random });
-        if (key && !choices.includes(key)) choices.push(key);
+  const CHALLENGE_CIRCUIT_SWITCHES = [
+    { x: 230, y: 245, color: '#ff667d', label: '1' },
+    { x: 670, y: 245, color: '#68a7ff', label: '2' },
+    { x: 230, y: 475, color: '#ffd45d', label: '3' },
+    { x: 670, y: 475, color: '#70e09a', label: '4' },
+  ];
+
+  function createChallengeCircuitSequence(length, random) {
+    const sequence = [];
+    const count = Math.max(3, Math.floor(Number(length || 4)));
+    for (let index = 0; index < count; index += 1) {
+      let switchIndex = Math.floor(random() * CHALLENGE_CIRCUIT_SWITCHES.length);
+      if (switchIndex === sequence[index - 1]) {
+        switchIndex = (switchIndex + 1) % CHALLENGE_CIRCUIT_SWITCHES.length;
       }
-      while (choices.length < 3) {
-        const key = Neo.ITEM_KEYS.find(itemKey => itemKey && !choices.includes(itemKey));
-        if (!key) break;
-        choices.push(key);
-      }
+      sequence.push(switchIndex);
     }
+    return sequence;
+  }
+
+  function ensureChallengeCircuitData(room) {
+    if (!room || room.type !== 'challenge') return false;
+    const tuning = getChallengeTrialTuning('circuit');
+    const existingSequence = Array.isArray(room.challengeData?.sequence)
+      ? room.challengeData.sequence.filter(index => Number.isInteger(index) && index >= 0 && index < CHALLENGE_CIRCUIT_SWITCHES.length)
+      : [];
+    const sequence = existingSequence.length >= 3
+      ? existingSequence
+      : createChallengeCircuitSequence(
+        tuning.sequenceLength,
+        Neo.createRoomRandom(room, 'challenge:circuit-sequence'),
+      );
+    const resetTimer = existingSequence.length < 3;
+    room.challengeType = 'circuit';
+    room.challengeTimer = resetTimer
+      ? Number(tuning.timer || Neo.scaleChallengeTimer(18))
+      : Math.max(0, Number(room.challengeTimer || tuning.timer || 0));
     room.challengeData = {
       ...(room.challengeData || {}),
-      phase: 'choose',
-      choices,
+      phase: 'solve',
+      sequence,
+      progress: resetTimer ? 0 : Neo.clamp(Number(room.challengeData?.progress || 0), 0, sequence.length),
+      maxTimer: resetTimer
+        ? room.challengeTimer
+        : Math.max(room.challengeTimer, Number(room.challengeData?.maxTimer || room.challengeTimer)),
+      wrongPressPenalty: Number(tuning.wrongPressPenalty || 2),
+      targetClearRate: CHALLENGE_CLEAR_RATE_TARGETS.circuit,
     };
-    const y = Neo.ROOM_H / 2;
-    const offsets = [-76, 0, 76];
-    choices.forEach((key, index) => {
+    return true;
+  }
+
+  function spawnChallengeCircuitSwitches(room) {
+    if (!room || room.type !== 'challenge') return;
+    ensureChallengeCircuitData(room);
+    Neo.pickups = Neo.pickups.filter(pickup => !['challengeItemChoice', 'challengeSwitch'].includes(pickup?.type));
+    CHALLENGE_CIRCUIT_SWITCHES.forEach((switchDef, switchIndex) => {
       Neo.pickups.push({
-        x: Neo.ROOM_W / 2 + offsets[index],
-        y,
-        type: 'challengeItemChoice',
-        key,
+        ...switchDef,
+        type: 'challengeSwitch',
+        switchIndex,
+        armed: true,
       });
     });
   }
 
-  function chooseStillnessChallengeReward(pickup) {
+  function pressChallengeCircuitSwitch(pickup) {
     const room = Neo.currentRoom;
-    if (!room || room.type !== 'challenge' || (room.challengeType || 'mirror') !== 'stillness') return false;
-    if (!room.challengeStarted || room.challengeData?.phase !== 'choose') return false;
-    const key = pickup?.key;
-    if (!key) return false;
-    room.challengeData = {
-      ...(room.challengeData || {}),
-      phase: 'channel',
-      rewardKey: key,
-      targetClearRate: CHALLENGE_CLEAR_RATE_TARGETS.stillness,
-    };
-    const tuning = getChallengeTrialTuning('stillness');
-    room.challengeTimer = Number(tuning.timer || 0);
-    room.challengeTick = Number(tuning.tick || 0.95);
-    room.challengeData.maxTimer = room.challengeTimer;
-    room.challengeData.channelRadius = 88;
-    Neo.pickups = Neo.pickups.filter(item => item?.type !== 'challengeItemChoice');
-    const itemName = Neo.itemRegistry.get(key)?.name || Neo.titleCase?.(key) || key;
-    Neo.spawnParticle({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 48, life: 1.1, text: 'HOLD THE CIRCLE', c: '#d7f6ff' });
-    sayAtPosition(Neo.ROOM_W / 2, Neo.ROOM_H / 2, `Hold center to secure ${itemName}.`, { speaker: 'TRIAL', tone: 'warning' });
+    if (!room || room.type !== 'challenge' || !['circuit', 'stillness'].includes(room.challengeType || 'mirror')) return false;
+    if (!room.challengeStarted || room.cleared || pickup?.type !== 'challengeSwitch') return false;
+    const sequence = Array.isArray(room.challengeData?.sequence) ? room.challengeData.sequence : [];
+    const progress = Math.max(0, Number(room.challengeData?.progress || 0));
+    if (sequence.length === 0 || !Number.isInteger(pickup.switchIndex)) return false;
+
+    pickup.armed = false;
+    if (pickup.switchIndex === sequence[progress]) {
+      room.challengeData.progress = progress + 1;
+      room.challengeData.flash = 0.28;
+      Neo.spawnParticle({ x: pickup.x, y: pickup.y - 26, life: 0.45, text: `${progress + 1}/${sequence.length}`, c: pickup.color });
+      if (room.challengeData.progress >= sequence.length) {
+        completeChallengeTrial('CIRCUIT SOLVED');
+      }
+      return true;
+    }
+
+    const penalty = Math.max(0, Number(room.challengeData?.wrongPressPenalty || 2));
+    room.challengeData.progress = 0;
+    room.challengeData.wrongFlash = 0.5;
+    room.challengeTimer = Math.max(0, Number(room.challengeTimer || 0) - penalty);
+    Neo.spawnParticle({ x: pickup.x, y: pickup.y - 26, life: 0.65, text: `WRONG -${penalty}S`, c: '#ff667d' });
     return true;
   }
 
@@ -1652,7 +1694,7 @@
     const pool = Neo.floor >= 6
       ? ['hunter', 'laser', 'charger', 'knave']
       : ['hunter', 'laser', 'charger'];
-    // In the Survive trial the adds prioritise the obelisk over the player, so
+    // In the Protect trial the adds prioritise the ward rune over the player, so
     // tag each spawn here when that trial is active.
     const seeksObelisk = Neo.currentRoom?.type === 'challenge'
       && Neo.currentRoom?.challengeType === 'survival'
@@ -1678,9 +1720,9 @@
     const type = room.challengeType || 'mirror';
     if (type === 'mirror') {
       spawnMirrorChampion();
-    } else if (type === 'stillness') {
-      spawnStillnessItemChoices(room);
-      sayAtPosition(Neo.ROOM_W / 2, Neo.ROOM_H / 2, 'Choose one prize to clear the trial.', { speaker: 'TRIAL', tone: 'warning' });
+    } else if (type === 'circuit' || type === 'stillness') {
+      spawnChallengeCircuitSwitches(room);
+      sayAtPosition(Neo.ROOM_W / 2, 130, 'Touch the switches in the light order.', { speaker: 'TRIAL', tone: 'warning' });
     } else if (type === 'bomb') {
       const tuning = getChallengeTrialTuning('bomb');
       room.challengeTimer = Number(tuning.timer || 0);
@@ -1711,7 +1753,7 @@
       room.challengeData.tickStart = Number(tuning.tickStart || 2);
       room.challengeData.tickEnd = Number(tuning.tickEnd || 1.35);
       room.challengeData.targetClearRate = CHALLENGE_CLEAR_RATE_TARGETS.survival;
-      const obeliskHp = Math.round(180 + Neo.floor * 35);
+      const obeliskHp = getChallengeObeliskMaxHp();
       room.challengeData.obelisk = {
         x: Neo.ROOM_W / 2,
         y: Neo.ROOM_H / 2,
@@ -1722,7 +1764,7 @@
         guardRange: 96,
       };
       spawnTrialEnemyWave(Math.max(3, Number(room.challengeData.spawnCount || 1)));
-      sayAtPosition(Neo.ROOM_W / 2, Neo.ROOM_H / 2, 'Protect the central obelisk and survive.', { speaker: 'TRIAL', tone: 'warning' });
+      sayAtPosition(Neo.ROOM_W / 2, Neo.ROOM_H / 2, 'Protect the central ward rune.', { speaker: 'TRIAL', tone: 'warning' });
     } else if (type === 'runes') {
       const tuning = getChallengeTrialTuning('runes');
       spawnChallengeRunes(room);
@@ -1763,7 +1805,7 @@
     const challengeData = Neo.currentRoom.challengeData || {};
     const scrollReward = Neo.floor > 3 && scrollRandom() < 0.2 ? Neo.rollScrollOfControl?.(scrollRandom) : '';
     const rewardKey = challengeData.rewardKey || scrollReward || Neo.rollItemDrop({ elite: true, random: rewardRandom });
-    Neo.pickups = Neo.pickups.filter(pickup => !['challengeBomb', 'challengeRune', 'challengeStarter', 'challengeItemChoice'].includes(pickup?.type));
+    Neo.pickups = Neo.pickups.filter(pickup => !['challengeBomb', 'challengeRune', 'challengeStarter', 'challengeItemChoice', 'challengeSwitch'].includes(pickup?.type));
     Neo.pickups.push({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 16, type: 'item', key: rewardKey });
     Neo.pickups.push({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 + 36, type: 'potion' });
     Neo.dropCoins(Neo.ROOM_W / 2, Neo.ROOM_H / 2 + 4, 75 + Neo.floor * 15);
@@ -1798,7 +1840,7 @@
     Neo.currentRoom.challengeTimer = 0;
     Neo.currentRoom.challengeTick = 0;
     Neo.currentRoom.challengeData = {};
-    Neo.pickups = Neo.pickups.filter(pickup => !['challengeBomb', 'challengeRune', 'challengeStarter', 'challengeItemChoice'].includes(pickup?.type));
+    Neo.pickups = Neo.pickups.filter(pickup => !['challengeBomb', 'challengeRune', 'challengeStarter', 'challengeItemChoice', 'challengeSwitch'].includes(pickup?.type));
     Neo.ensureChallengePracticeReturnPortal?.(Neo.currentRoom);
     Neo.spawnParticle({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 52, life: 1.05, text, c: '#ff8b98' });
     Neo.updateObjective();
@@ -4126,42 +4168,14 @@
     if (!Neo.currentRoom || Neo.currentRoom.type !== 'challenge' || Neo.currentRoom.cleared || !Neo.currentRoom.challengeStarted) return;
     const type = Neo.currentRoom.challengeType || 'mirror';
 
-    if (type === 'stillness') {
-      const phase = Neo.currentRoom.challengeData?.phase || 'choose';
-      if (phase === 'channel') {
-        const radius = Math.max(42, Number(Neo.currentRoom.challengeData?.channelRadius || 88));
-        const dx = Neo.player.x - Neo.ROOM_W / 2;
-        const dy = Neo.player.y - Neo.ROOM_H / 2;
-        if (Math.hypot(dx, dy) > radius) {
-          failChallengeTrial('STILLNESS BROKEN');
-          return;
-        }
-        Neo.currentRoom.challengeTimer = Math.max(0, (Neo.currentRoom.challengeTimer || 0) - dt);
-        Neo.currentRoom.challengeTick = Math.max(0, (Neo.currentRoom.challengeTick || 0) - dt);
-        if (Neo.currentRoom.challengeTick <= 0) {
-          Neo.currentRoom.challengeTick = 0.95;
-          for (let index = 0; index < 2; index += 1) {
-            const angle = Neo.nextRandom('world') * Math.PI * 2;
-            const radiusOut = 92 + Neo.nextRandom('world') * 84;
-            const px = Neo.ROOM_W / 2 + Math.cos(angle) * radiusOut;
-            const py = Neo.ROOM_H / 2 + Math.sin(angle) * radiusOut;
-            Neo.hazards.push({
-              kind: 'lightning_column',
-              x: px,
-              y: py,
-              r: 44,
-              ttl: 1.2,
-              tick: 0,
-              interval: 0.42,
-              damage: 15 + Math.floor(Neo.floor * 0.7),
-              enemy: true,
-              source: 'stillness',
-            });
-            Neo.spawnParticle({ x: px, y: py, life: 0.3, ring: 16, c: '#8dd4ff' });
-          }
-        }
-        if (Neo.currentRoom.challengeTimer <= 0) completeChallengeTrial('PRIZE SECURED');
+    if (type === 'circuit' || type === 'stillness') {
+      if (!Neo.currentRoom.challengeData || !Array.isArray(Neo.currentRoom.challengeData.sequence)) {
+        ensureChallengeCircuitData(Neo.currentRoom);
       }
+      Neo.currentRoom.challengeTimer = Math.max(0, Number(Neo.currentRoom.challengeTimer || 0) - dt);
+      Neo.currentRoom.challengeData.flash = Math.max(0, Number(Neo.currentRoom.challengeData?.flash || 0) - dt);
+      Neo.currentRoom.challengeData.wrongFlash = Math.max(0, Number(Neo.currentRoom.challengeData?.wrongFlash || 0) - dt);
+      if (Neo.currentRoom.challengeTimer <= 0) failChallengeTrial('CIRCUIT TIMED OUT');
       return;
     }
 
@@ -4202,7 +4216,7 @@
         spawnTrialEnemyWave(Math.max(1, Number(Neo.currentRoom.challengeData?.spawnCount || 1)));
       }
 
-      // Enemies that crowd the obelisk drain its hp. The player must clear adds to keep it standing.
+      // Enemies that crowd the ward rune drain its hp. The player must clear adds to keep it standing.
       const obelisk = Neo.currentRoom.challengeData?.obelisk;
       if (obelisk) {
         obelisk.hitFlash = Math.max(0, (obelisk.hitFlash || 0) - dt);
@@ -4229,7 +4243,7 @@
           Neo.spawnParticle({ x: obelisk.x, y: obelisk.y, life: 0.6, ring: 40, c: '#ff5566' });
           Neo.shake = Math.max(Neo.shake || 0, 14);
           Neo.shakeT = Math.max(Neo.shakeT || 0, 0.3);
-          failChallengeTrial('OBELISK DESTROYED');
+          failChallengeTrial('RUNE DESTROYED');
           return;
         }
       }
@@ -4662,8 +4676,10 @@
   Neo.spawnChallengeBombs = spawnChallengeBombs;
   Neo.spawnBombFailAoe = spawnBombFailAoe;
   Neo.spawnChallengeRunes = spawnChallengeRunes;
-  Neo.spawnStillnessItemChoices = spawnStillnessItemChoices;
-  Neo.chooseStillnessChallengeReward = chooseStillnessChallengeReward;
+  Neo.createChallengeCircuitSequence = createChallengeCircuitSequence;
+  Neo.spawnChallengeCircuitSwitches = spawnChallengeCircuitSwitches;
+  Neo.pressChallengeCircuitSwitch = pressChallengeCircuitSwitch;
+  Neo.getChallengeObeliskMaxHp = getChallengeObeliskMaxHp;
   Neo.spawnTrialEnemyWave = spawnTrialEnemyWave;
   Neo.beginChallengeTrial = beginChallengeTrial;
   Neo.rollChallengeWeapon = rollChallengeWeapon;
