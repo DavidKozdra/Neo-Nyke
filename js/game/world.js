@@ -495,6 +495,7 @@
       } else {
         damagePlayer(damage, 0, 0, key, { ignoreInv: true, noInvFrames: true });
       }
+      if (typeof config.onTick === 'function') config.onTick(damage, state);
       if (Neo.nextRandom('fx') < 0.3) {
         Neo.spawnParticle({ x: Neo.player.x + Neo.rand(-8, 8), y: Neo.player.y + Neo.rand(-8, 8), life: 0.25, c: config.color });
       }
@@ -527,6 +528,23 @@
       // % max HP, same system as poison/the enemy-side drain tick.
       damage: stacks => Neo.player.maxHp * (0.003 + stacks * 0.002),
       color: Neo.STATUS_STYLES.dark_drain.color,
+      // Siphon the drained HP back to the enemy that applied it — the same way
+      // the player's drain heals off an enemy's dark_drain DoT. Heal scales with
+      // the damage drained this tick (capped so deep-floor max-HP scaling can't
+      // make a single drain stack fully top a boss off).
+      onTick: (damage, state) => {
+        const owner = state.owner;
+        if (!owner || owner.dead) return;
+        const maxHp = Number(owner.max || owner.maxHp || owner.hp || 0);
+        if (maxHp <= 0 || owner.hp >= maxHp) return;
+        const heal = Math.max(1, Math.min(Math.round(damage), Math.round(maxHp * 0.02)));
+        const before = Number(owner.hp || 0);
+        owner.hp = Math.min(maxHp, before + heal);
+        const gained = Math.round(owner.hp - before);
+        if (gained > 0) {
+          Neo.spawnHealPopup?.(owner.x + Neo.rand(-6, 6), owner.y - owner.r - 10, gained, { color: '#c98dff', size: 11 });
+        }
+      },
     });
     // Cold (slow) deals no damage-over-time; it just slows + makes brittle.
     // Player cold stores 15s of duration per stack, so visible stacks drop one
@@ -1108,10 +1126,15 @@
 
   function applyProjectileStatusEffectsToPlayer(projectile) {
     if (!Array.isArray(projectile?.statusEffects)) return;
+    const sourceKey = getProjectileDamageSource(projectile);
+    // Carry the firing enemy so dark_drain can siphon HP back to it over the DoT.
+    const source = projectile?.owner && !projectile.owner.dead
+      ? { sourceKey, owner: projectile.owner }
+      : sourceKey;
     projectile.statusEffects.forEach(effect => {
       if (!effect?.key) return;
       if (Neo.nextRandom('encounter') <= Number(effect.chance ?? 1)) {
-        Neo.applyStatus(Neo.player, effect.key, Number(effect.stacks || 1), Number(effect.duration || 3), getProjectileDamageSource(projectile));
+        Neo.applyStatus(Neo.player, effect.key, Number(effect.stacks || 1), Number(effect.duration || 3), source);
       }
     });
   }
@@ -2553,7 +2576,9 @@
         }
         pickup.bought = true;
         if (pickup.offerKind === 'relic') {
-          Neo.collectItem(pickup.rewardKey || Neo.rollItemDrop({ elite: true, random: Neo.createEntityRandom(pickup, 'secret-vendor:fallback') }));
+          const rewardKey = pickup.rewardKey || Neo.rollItemDrop({ elite: true, random: Neo.createEntityRandom(pickup, 'secret-vendor:fallback') });
+          Neo.collectItem(rewardKey);
+          if (Neo.player && rewardKey) Neo.player.lastSecretVendorRewardKey = rewardKey;
         } else if (pickup.offerKind === 'vitality') {
           Neo.player.maxHp += 20;
           Neo.applyPlayerHealing?.(Neo.scalePlayerHealing(60, 20));

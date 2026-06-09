@@ -51,6 +51,9 @@ export function migratePlayerData(source) {
     playerData.extraBatteryPendingCount = Math.max(0, Math.floor(Number(playerData.extraBatteryPendingCount || 0)));
     playerData.wizardPawPendingCount = Math.max(0, Math.floor(Number(playerData.wizardPawPendingCount || 0)));
     playerData.scrollUseSerial = Math.max(0, Math.floor(Number(playerData.scrollUseSerial || 0)));
+    playerData.lastSecretVendorRewardKey = Neo.ITEM_DEFS?.[playerData.lastSecretVendorRewardKey]
+      ? String(playerData.lastSecretVendorRewardKey)
+      : '';
     // Scrolls picked up/bought open their selection popup on acquisition. Any that
     // couldn't open immediately (shop/cinematic) wait here until presentable.
     playerData.scrollPendingQueue = Array.isArray(playerData.scrollPendingQueue)

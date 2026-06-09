@@ -3,6 +3,16 @@
   const LADDER_BOSS_HEALTH_SCALING_START_FLOOR = 5;
   const LADDER_BOSS_HEALTH_PER_FLOOR = 0.12;
 
+export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '', maxRerolls = 6) {
+    if (typeof rollReward !== 'function') return '';
+    const previous = String(previousRewardKey || '');
+    let rewardKey = rollReward();
+    for (let attempt = 0; rewardKey === previous && attempt < maxRerolls; attempt += 1) {
+      rewardKey = rollReward();
+    }
+    return rewardKey;
+  }
+
   function applyLadderBossFloorHealthModifier(boss) {
     if (!boss || Neo.floor <= LADDER_BOSS_HEALTH_SCALING_START_FLOOR) return;
     const floorNumberModifier = 1 + (Neo.floor - LADDER_BOSS_HEALTH_SCALING_START_FLOOR) * LADDER_BOSS_HEALTH_PER_FLOOR;
@@ -831,9 +841,17 @@
     // can spell out the trade (pay X, receive Y) instead of a vague one-word label.
     if (kind === 'relic') {
       const vendorRandom = Neo.createRoomRandom(room, `secret-vendor:relic:${index}`);
+      const previousRewardKey = String(Neo.player?.lastSecretVendorRewardKey || '');
+      // A seeded run can legitimately hit the same weighted result on adjacent
+      // floors. Reroll only the last purchased secret-vendor relic so this rare,
+      // expensive offer does not feel fixed while preserving deterministic runs.
+      const rewardKey = rollDistinctSecretVendorReward(
+        () => Neo.rollItemDrop({ elite: true, random: vendorRandom }),
+        previousRewardKey,
+      );
       return {
         x, y, type: 'secretVendor', offerKind: 'relic', cost: 1, label: 'Relic',
-        rewardKey: Neo.rollItemDrop({ elite: true, random: vendorRandom }),
+        rewardKey,
         getLabel: 'Elite Item',
       };
     }

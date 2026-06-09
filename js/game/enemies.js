@@ -3112,7 +3112,9 @@
       enemy.attackAnimT = 0.28;
       Neo.damagePlayer(biteDamage, angle, 240, enemy.type);
       if (Neo.nextRandom('encounter') < 0.35) {
-        Neo.applyDarkDrain?.(Neo.player, 2, 4.2);
+        // Owner reference lets the dark_drain DoT siphon HP back to Antony over
+        // its duration (mirrors how the player's drain heals off the DoT).
+        Neo.applyDarkDrain?.(Neo.player, 2, 4.2, { sourceKey: enemy.type, owner: enemy });
         const heal = Math.round(biteDamage * 0.35);
         enemy.hp = Math.min(enemy.max, enemy.hp + heal);
         Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 12, life: 0.55, text: `+${heal}`, c: '#b48cff' });

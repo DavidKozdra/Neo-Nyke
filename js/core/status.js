@@ -57,6 +57,7 @@ export function clearStatus(entity, key) {
   state.tick = 0;
   state.sourceKey = '';
   state.sourceLabel = '';
+  state.owner = null;
 }
 
 // Player cold (slow) uses duration as a stack-time budget: each stack is 15s.
@@ -80,6 +81,11 @@ export function applyStatus(entity, key, stacks, duration, source = null) {
     if (rawKey) {
       state.sourceKey = rawKey;
       state.sourceLabel = String(source.sourceLabel ?? Neo.getDamageSourceLabel?.(rawKey) ?? rawKey);
+    }
+    // Dark Drain siphons HP back to the enemy that inflicted it (mirrors the
+    // player's drain). Remember the owning enemy so the per-tick DoT can heal it.
+    if (key === 'dark_drain' && typeof source === 'object' && source.owner) {
+      state.owner = source.owner;
     }
   }
   if (key === 'slow' && entity === Neo.player) {

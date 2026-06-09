@@ -560,6 +560,7 @@ export function resumeGame() {
       extraBatteryPendingCount: 0,
       wizardPawPendingCount: 0,
       scrollUseSerial: 0,
+      lastSecretVendorRewardKey: '',
       scrollBranchingTargets: {},
       scrollReplaceMap: {},
       scrollPoolWeights: [],
