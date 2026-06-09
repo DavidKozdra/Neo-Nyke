@@ -3,6 +3,24 @@
 // Seconds of holding the melee button to reach a full-power Mooggy Swipe.
 const MOOGGY_SWIPE_CHARGE_MAX = 0.8;
 
+export function updateEnemyLostSightState(enemy, playerHidden, dt = 0) {
+  if (!enemy) return false;
+
+  const lostSight = !!playerHidden;
+  if (!lostSight) {
+    enemy.playerLostSight = false;
+    enemy.playerLostSightAge = 0;
+    return false;
+  }
+
+  if (!enemy.playerLostSight) enemy.playerLostSightAge = 0;
+  enemy.playerLostSight = true;
+  enemy.playerLostSightAge =
+    Math.max(0, Number(enemy.playerLostSightAge) || 0) +
+    Math.max(0, Number(dt) || 0);
+  return true;
+}
+
 export function loop(timestamp) {
     const framePerfStart = Neo.perfBeginFrame(timestamp);
     const dt = Math.min(0.033, (timestamp - Neo.lastTime) / 1000 || 0.016);
@@ -458,7 +476,8 @@ export function loop(timestamp) {
       if (enemy.dead) continue;
       enemy.attackAnimT = Math.max(0, Number(enemy.attackAnimT || 0) - dt);
 
-      if (playerHidden) {
+      const enemyLostSight = updateEnemyLostSightState(enemy, playerHidden, dt);
+      if (enemyLostSight) {
         // Player is invisible/untouchable (cape, flying, coward's way, warp): enemies
         // lose their target. Skip all AI/attack logic and let them wander to random
         // points so they roam the room instead of standing frozen in place.
@@ -472,6 +491,7 @@ export function loop(timestamp) {
       }
 
       if (enemy.dead) continue;
+      Neo.applyObeliskSeekerSteering?.(enemy, dt);
       Neo.enemyTryBreakBlockingObstacle(enemy, dt);
       Neo.moveCircle(enemy, dt);
     }

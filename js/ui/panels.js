@@ -1721,7 +1721,7 @@ export function getShopWeaponOffers() {
       description,
       chips: [
         { label: 'Merchant', tone: 'item' },
-        item?.rarity ? { label: item.rarity, tone: 'rarity' } : null,
+        item?.rarity ? { label: Neo.getRarityDisplayName?.(item.rarity) || item.rarity, tone: 'rarity' } : null,
         { label: '2-for-1', tone: 'item' },
       ].filter(Boolean),
       footerExtra,
@@ -1954,8 +1954,8 @@ export function renderShopPanel() {
           const descriptorChips = buildDescriptorChips(offer.key, description, { kind: 'item' });
           const baseChips = [
             item?.tool ? { label: 'Tool', tone: 'tool' } : { label: 'Relic', tone: 'rarity' },
-            item?.rarity ? { label: item.rarity, tone: 'rarity' } : null,
-            item?.category ? { label: item.category, tone: 'item' } : null,
+            item?.rarity ? { label: Neo.getRarityDisplayName?.(item.rarity) || item.rarity, tone: 'rarity' } : null,
+            item?.category ? { label: Neo.getRarityDisplayName?.(item.category) || item.category, tone: 'item' } : null,
             ...descriptorChips,
           ].filter(Boolean);
           const chips = [

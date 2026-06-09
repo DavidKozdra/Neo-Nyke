@@ -39,7 +39,10 @@ export function getActiveStatusCount(entity) {
 export function getSlowMultiplier(entity) {
   const stacks = Math.max(0, Number(getStatusStacks(entity, 'slow') || 0));
   if (stacks <= 0) return 1;
-  return Math.max(0.45, 1 - stacks * 0.1);
+  const severity = entity === Neo.player
+    ? Number(Neo.getItemStats?.()?.negativeStatusMultiplier || 1)
+    : 1;
+  return Math.max(0.35, 1 - stacks * 0.1 * severity);
 }
 
 // Cold/brittle: each slow (cold) stack strips a quarter of the target's defense,
@@ -47,7 +50,15 @@ export function getSlowMultiplier(entity) {
 export function getBrittleDefenseMultiplier(entity) {
   const stacks = Math.max(0, Number(getStatusStacks(entity, 'slow') || 0));
   if (stacks <= 0) return 1;
-  return Math.max(0, 1 - stacks * 0.25);
+  const severity = entity === Neo.player
+    ? Number(Neo.getItemStats?.()?.negativeStatusMultiplier || 1)
+    : 1;
+  return Math.max(0, 1 - stacks * 0.25 * severity);
+}
+
+export function getPlayerNegativeStatusProcChance(chance) {
+  const severity = Number(Neo.getItemStats?.()?.negativeStatusMultiplier || 1);
+  return Neo.clamp(Number(chance || 0) * severity, 0, 1);
 }
 
 export function clearStatus(entity, key) {
@@ -74,6 +85,10 @@ export function applyStatus(entity, key, stacks, duration, source = null) {
   if (entity[`${key}Immune`]) return;
   const state = getStatusState(entity, key);
   const addedStacks = Math.max(0, Number(stacks || 0));
+  const durationSeverity = entity === Neo.player
+    ? Number(Neo.getItemStats?.()?.negativeStatusMultiplier || 1)
+    : 1;
+  const adjustedDuration = Math.max(0, Number(duration || 0)) * durationSeverity;
   // Remember who inflicted a damaging status on the player so the death screen
   // can attribute a DoT kill (bleed/poison/fire) to the enemy, not the tick.
   if (entity === Neo.player && source && addedStacks > 0) {
@@ -92,11 +107,14 @@ export function applyStatus(entity, key, stacks, duration, source = null) {
     const existingBudget = Number(state.duration || 0) > 0
       ? Number(state.duration || 0)
       : Math.max(0, Number(state.stacks || 0)) * COLD_SECONDS_PER_STACK;
-    state.duration = Math.min(6 * COLD_SECONDS_PER_STACK, existingBudget + addedStacks * COLD_SECONDS_PER_STACK);
+    state.duration = Math.min(
+      6 * COLD_SECONDS_PER_STACK * durationSeverity,
+      existingBudget + addedStacks * COLD_SECONDS_PER_STACK * durationSeverity,
+    );
     state.stacks = getColdStacksFromDuration(state.duration);
   } else {
     state.stacks = Math.min(6, Math.max(state.stacks, 0) + addedStacks);
-    state.duration = Math.max(state.duration, Number(duration || 0));
+    state.duration = Math.max(state.duration, adjustedDuration);
   }
   if (entity !== Neo.player) window.achievementEvents?.emit('status:applied', { key, entityId: entity.id });
 }
@@ -124,6 +142,7 @@ Neo.getStatusStacks = getStatusStacks;
 Neo.getActiveStatusCount = getActiveStatusCount;
 Neo.getSlowMultiplier = getSlowMultiplier;
 Neo.getBrittleDefenseMultiplier = getBrittleDefenseMultiplier;
+Neo.getPlayerNegativeStatusProcChance = getPlayerNegativeStatusProcChance;
 Neo.clearStatus = clearStatus;
 Neo.applyStatus = applyStatus;
 Neo.COLD_SECONDS_PER_STACK = COLD_SECONDS_PER_STACK;

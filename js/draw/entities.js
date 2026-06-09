@@ -508,6 +508,48 @@
     Neo.ctx.restore();
   }
 
+  function drawEnemyLostSightMark(enemy, drawY) {
+    if (!enemy?.playerLostSight) return;
+
+    const access = window.NeoSettings?.getAccess?.() || {};
+    const age = Math.max(0, Number(enemy.playerLostSightAge) || 0);
+    const pop = access.reduceMotion ? 1 : Neo.clamp(age / 0.14, 0, 1);
+    const bob = access.reduceMotion
+      ? 0
+      : Math.sin(age * 5 + Number(enemy.x || 0) * 0.025) * 2;
+    const markY = drawY - enemy.r - (enemy.type === 'rival' ? 63 : 55) + bob;
+
+    Neo.ctx.save();
+    Neo.ctx.translate(enemy.x, markY);
+    Neo.ctx.scale(pop, pop);
+    Neo.ctx.shadowColor = 'rgba(120, 220, 255, 0.7)';
+    Neo.ctx.shadowBlur = 7;
+
+    Neo.ctx.fillStyle = 'rgba(8, 16, 28, 0.94)';
+    Neo.ctx.strokeStyle = '#dff7ff';
+    Neo.ctx.lineWidth = 2;
+    Neo.ctx.beginPath();
+    Neo.ctx.roundRect(-12, -14, 24, 25, 7);
+    Neo.ctx.fill();
+    Neo.ctx.stroke();
+
+    Neo.ctx.beginPath();
+    Neo.ctx.moveTo(-3, 11);
+    Neo.ctx.lineTo(2, 17);
+    Neo.ctx.lineTo(5, 10);
+    Neo.ctx.closePath();
+    Neo.ctx.fill();
+    Neo.ctx.stroke();
+
+    Neo.ctx.shadowBlur = 0;
+    Neo.ctx.fillStyle = '#67d8ff';
+    Neo.ctx.font = 'bold 18px "Press Start 2P", monospace';
+    Neo.ctx.textAlign = 'center';
+    Neo.ctx.textBaseline = 'middle';
+    Neo.ctx.fillText('?', 0, -1);
+    Neo.ctx.restore();
+  }
+
   function drawPixelStar(x, y, size = 6) {
     const scale = Math.max(1, size / 6);
     const pixels = [[2,0],[3,0],[2,1],[3,1],[0,2],[1,2],[2,2],[3,2],[4,2],[5,2],[2,3],[3,3],[1,4],[4,4],[0,5],[5,5]];
@@ -758,6 +800,7 @@
       if (bleedStacks > 0) drawBleedOverlay(enemy, bleedStacks);
       drawStunStars(enemy, drawY);
       drawEnemyStatusIconRow(enemy, drawY);
+      drawEnemyLostSightMark(enemy, drawY);
       if (enemy.elite) {
         Neo.ctx.save();
         Neo.ctx.translate(enemy.x, drawY - enemy.r - 10);
@@ -1015,7 +1058,8 @@
       Neo.ctx.fillRect(-19, -Neo.player.r - 26, 38 * barrierPct, 3);
       Neo.ctx.restore();
     }
-    const playerSize = Math.max(34, Neo.player.r * 2.5);
+    const playerSpriteScale = Number(Neo.getItemStats?.()?.playerSpriteScale || 1);
+    const playerSize = Math.max(34, Neo.player.r * 2.5) * playerSpriteScale;
     drawActorSprite(Neo.player, getPlayerSpriteKey(), Neo.player.x, Neo.player.y, playerSize, {
       alpha: capeActive ? 0.34 : (!_reduceFlash && (Neo.player.inv > 0 || Number(Neo.player.stun || 0) > 0)) ? 0.68 : 1,
       flipX: facing < 0,
@@ -1230,6 +1274,7 @@
 
   function drawPlayerLaser() {
     if (!Neo.player) return;
+    const beamWidthMultiplier = Number(Neo.getItemStats?.()?.beamWidthMultiplier || 1);
 
     // Draw Laser Glasses weapon beams (two beams, ±0.2 spread)
     if (!Neo.laserActive && Neo.getEquippedWeapon() === 'lazer_glasses' && Neo.player.weaponBeamTime > 0) {
@@ -1237,7 +1282,8 @@
       const alpha = Math.min(1, Neo.player.weaponBeamTime / 0.3);
       const dragonOrbStacks = Math.max(0, Number(Neo.getItemCount?.('dragon_orb') || 0));
       const outerPulse = dragonOrbStacks > 0 ? 1 + Math.sin(Number(Neo.frameId || 0) * 0.42) * 0.12 : 1;
-      const dragonOuterW = 5 + Math.min(18, dragonOrbStacks * 3.5) * outerPulse;
+      const glassesWidth = 5 * beamWidthMultiplier;
+      const dragonOuterW = glassesWidth + Math.min(18, dragonOrbStacks * 3.5) * outerPulse;
       Neo.ctx.save();
       Neo.ctx.globalAlpha = alpha;
       for (let beamIndex = 0; beamIndex < 2; beamIndex += 1) {
@@ -1256,7 +1302,7 @@
         Neo.drawTaperedBeamPath(beamPath, {
           color: '#cda8ff',
           glow: '#e0c8ff',
-          maxWidth: 5,
+          maxWidth: glassesWidth,
           shadowBlur: 16,
         });
         // Tip burst
@@ -1280,7 +1326,8 @@
     if (!beamPath.length) return;
     const beamColor = turtleWaveActive ? '#74f5ff' : loveBeamActive ? '#ff9ed6' : Neo.laserMode === 'god_sweep' ? '#ffffff' : '#ff00aa';
     const beamGlow = turtleWaveActive ? '#9bf7ff' : loveBeamActive ? '#ffd1ea' : Neo.laserMode === 'god_sweep' ? '#e8f0ff' : '#f0f';
-    const maxW = Neo.laserMode === 'god_sweep' ? 16 : turtleWaveActive ? 18 : loveBeamActive ? 10 : 8;
+    const maxW = (Neo.laserMode === 'god_sweep' ? 16 : turtleWaveActive ? 18 : loveBeamActive ? 10 : 8)
+      * beamWidthMultiplier;
     const dragonOrbStacks = Math.max(0, Number(Neo.getItemCount?.('dragon_orb') || 0));
     const outerPulse = dragonOrbStacks > 0 ? 1 + Math.sin(Number(Neo.frameId || 0) * 0.42) * 0.12 : 1;
     const dragonOuterW = dragonOrbStacks > 0
@@ -1356,6 +1403,7 @@
   Neo.drawStatusIconBadge = drawStatusIconBadge;
   Neo.drawEnemyStatusIconRow = drawEnemyStatusIconRow;
   Neo.drawStunStars = drawStunStars;
+  Neo.drawEnemyLostSightMark = drawEnemyLostSightMark;
   Neo.drawStatusBadge = drawStatusBadge;
   Neo.drawSpawnPortal = drawSpawnPortal;
   Neo.drawEnemies = drawEnemies;

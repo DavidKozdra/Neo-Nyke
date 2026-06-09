@@ -533,7 +533,8 @@
       for (let index = 0; index < Neo.enemies.length; index += 1) {
         const enemy = Neo.enemies[index];
         if (!enemy) continue;
-        hitSegment = Neo.beamPathHitsCircle(beamPath, enemy.x, enemy.y, enemy.r + 4);
+        const beamPadding = 4 * Number(itemStats.beamWidthMultiplier || 1);
+        hitSegment = Neo.beamPathHitsCircle(beamPath, enemy.x, enemy.y, enemy.r + beamPadding);
         if (hitSegment) {
           target = enemy;
           break;
@@ -752,7 +753,8 @@
       Neo.laserTick = Neo.laserMode === 'god_sweep' ? 0.05 : Neo.laserMode === 'turtle_wave' ? 0.08 : loveBeamActive ? 0.06 : Neo.ATTACKS.laser.tick;
       const range = Neo.getPlayerBeamRange(Neo.laserMode, move);
       const beamPath = Neo.buildRicochetBeamPath(Neo.player.x, Neo.player.y, angle, range, Neo.getPlayerBeamBounceCount(Neo.laserMode));
-      const radiusPadding = Neo.laserMode === 'turtle_wave' ? 14 : 6;
+      const radiusPadding = (Neo.laserMode === 'turtle_wave' ? 14 : 6)
+        * Number(itemStats.beamWidthMultiplier || 1);
       const baseBeamDamage = Neo.laserMode === 'god_sweep'
         ? 12
         : Neo.laserMode === 'turtle_wave'
@@ -1882,7 +1884,8 @@
       const knockbackOverThreshold = (appliedKnockback - knockbackThreshold) / knockbackThreshold;
       stunDuration = Math.max(stunDuration, Neo.HEAVY_KNOCKBACK_STUN + Neo.clamp(knockbackOverThreshold, 0, 1) * 0.18);
     }
-    Neo.player.stun = Math.max(Number(Neo.player.stun || 0), stunDuration * durationMultiplier);
+    const statusSeverity = Number(stats.negativeStatusMultiplier || 1);
+    Neo.player.stun = Math.max(Number(Neo.player.stun || 0), stunDuration * durationMultiplier * statusSeverity);
     Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - Neo.player.r - 18, life: 0.55, text: 'STUN', c: '#ffe66d' });
     Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.36, ring: Neo.player.r + 18, c: '#ffe66d' });
     return true;
@@ -2469,8 +2472,8 @@
     });
   }
 
-  function onEnemyDie(enemy) {
-    if (enemy.type === 'god' && !enemy.rebirthUsed) {
+  function onEnemyDie(enemy, options = {}) {
+    if (enemy.type === 'god' && !enemy.rebirthUsed && !options.forceDeath) {
       enemy.rebirthUsed = true;
       enemy.hp = Math.max(1, Math.round(enemy.max * 0.9));
       enemy.dmg = Math.round(enemy.dmg * 3);
@@ -2482,7 +2485,7 @@
     }
     // The Cult Queen cheats death once: instead of dying she channels a final
     // desperation AOE (see updateCultQueenBoss), then detonates and dies for real.
-    if (enemy.type === 'queen_cult' && !enemy.queenFinisherDone && !enemy.queenFinisherActive) {
+    if (enemy.type === 'queen_cult' && !enemy.queenFinisherDone && !enemy.queenFinisherActive && !options.forceDeath) {
       enemy.queenFinisherActive = true;
       enemy.queenFinisherTimer = Neo.QUEEN_FINISHER_WINDUP;
       enemy.hp = 1;
@@ -2622,6 +2625,22 @@
       Neo.pickups.push({ x: enemy.x, y: enemy.y, type: 'potion' });
     }
 
+    if (!isTutorialDummy && Neo.isBossType(enemy.type)) {
+      const crystalStacks = Math.max(0, Neo.getItemCount('rich_mans_blues'));
+      if (crystalStacks > 0) {
+        Neo.metaProgress.loopCrystals = Number(Neo.metaProgress.loopCrystals || 0) + crystalStacks;
+        Neo.runCrystalsEarned = Number(Neo.runCrystalsEarned || 0) + crystalStacks;
+        Neo.spawnParticle({
+          x: enemy.x,
+          y: enemy.y - enemy.r - 28,
+          life: 0.9,
+          text: `+${crystalStacks} LOOP CRYSTAL${crystalStacks === 1 ? '' : 'S'}`,
+          c: '#58b7ff',
+        });
+        Neo.persistMetaSoon();
+      }
+    }
+
     if (enemy.type === 'mooggy') {
       const defeats = Math.max(0, Number(Neo.metaProgress.mooggyDefeats || 0)) + 1;
       Neo.metaProgress.mooggyDefeats = defeats;
@@ -2646,6 +2665,17 @@
         Neo.bossRushActive = false;
         Neo.onBossRushBossDefeated();
         return;
+      }
+      if (Neo.currentRoom?.type === 'god') {
+        const survivingBosses = Neo.enemies.filter(other => other && Neo.isBossType(other.type));
+        survivingBosses.forEach(other => {
+          other.hp = 0;
+          other.rebirthUsed = true;
+          other.queenFinisherDone = true;
+          other.queenFinisherActive = false;
+          other.splitReady = false;
+          onEnemyDie(other, { forceDeath: true, suppressRoomClear: true });
+        });
       }
       Neo.currentRoom.cleared = true;
       // After defeating god: offer the choice — cash in (win) or loop; Endless Descent adds a third option
@@ -2739,7 +2769,7 @@
     }
     if (enemy.type === 'rival') return;
 
-    if (!Neo.enemies.some(e => e.type !== 'rival') && !Neo.currentRoom.cleared) {
+    if (!options.suppressRoomClear && !Neo.enemies.some(e => e.type !== 'rival') && !Neo.currentRoom.cleared) {
       if (Neo.currentRoom.type === 'challenge') {
         Neo.updateObjective();
         return;
@@ -2949,12 +2979,51 @@
     Neo.player.level += 1;
     window.achievementEvents?.emit('player:leveled', { level: Neo.player.level });
     Neo.player.xpToNext = Math.round(Neo.player.xpToNext * 1.22);
-    Neo.player.maxHp += 15;
-    Neo.player.hp = Math.min(Neo.player.maxHp, Neo.player.hp + 15);
-    Neo.player.attackPower += 3;
-    Neo.player.attackSpeed += 0.01;
+    const gains = Neo.getArtificerLevelGains(Neo.getItemCount('artificer_charger'));
+    Neo.player.maxHp += gains.maxHp;
+    Neo.player.hp = Math.min(Neo.player.maxHp, Neo.player.hp + gains.maxHp);
+    Neo.player.attackPower += gains.attackPower;
+    Neo.player.attackSpeed += gains.attackSpeed;
     Neo.markInventoryPanelDirty();
     Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.9, text: `LV ${Neo.player.level}`, c: '#7dff9e' });
+  }
+
+  function applyArtificerChargerPickup(previousCount, collectCount) {
+    if (!Neo.player || previousCount + collectCount <= 0) return;
+    if (previousCount + collectCount >= 2) {
+      Neo.lastDamageSource = 'Artificer Charger';
+      Neo.lastDamageSourceKey = 'artificer_charger';
+      Neo.player.hp = 0;
+      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 30, life: 1, text: 'OVERCHARGED', c: '#fff3ae' });
+      setTimeout(() => Neo.die(), 0);
+      return;
+    }
+    if (previousCount > 0) return;
+
+    const levelsGained = Math.max(1, Math.floor(Number(Neo.player.level) || 1));
+    const gains = Neo.getArtificerLevelGains(1);
+    for (let index = 0; index < levelsGained; index += 1) {
+      Neo.player.xpToNext = Math.round(Neo.player.xpToNext * 1.22);
+    }
+    Neo.player.level += levelsGained;
+    Neo.player.maxHp += gains.maxHp * levelsGained;
+    Neo.player.hp = Math.min(Neo.player.maxHp, Neo.player.hp + gains.maxHp * levelsGained);
+    Neo.player.attackPower += gains.attackPower * levelsGained;
+    Neo.player.attackSpeed += gains.attackSpeed * levelsGained;
+    window.achievementEvents?.emit('player:leveled', { level: Neo.player.level });
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 34, life: 1.2, text: `LEVEL DOUBLED: ${Neo.player.level}`, c: '#69c8ff' });
+  }
+
+  function grantRichMansBluesPickupCrystals(collectCount) {
+    if (!Neo.player || collectCount <= 0) return;
+    const gained = Neo.getRichMansBluesCrystalReward(
+      Neo.floorsEntered ?? Neo.floor,
+      collectCount,
+    );
+    Neo.metaProgress.loopCrystals = Number(Neo.metaProgress.loopCrystals || 0) + gained;
+    Neo.runCrystalsEarned = Number(Neo.runCrystalsEarned || 0) + gained;
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 34, life: 1.1, text: `+${gained} LOOP CRYSTALS`, c: '#58b7ff' });
+    Neo.persistMetaSoon();
   }
 
   function readyRobotArmOnFirstPickup(itemKey, previousCount) {
@@ -2977,6 +3046,8 @@
     const previousCount = Neo.getItemCount(itemKey);
     Neo.player.items[itemKey] = previousCount + collectCount;
     readyRobotArmOnFirstPickup(itemKey, previousCount);
+    if (itemKey === 'artificer_charger') applyArtificerChargerPickup(previousCount, collectCount);
+    if (itemKey === 'rich_mans_blues') grantRichMansBluesPickupCrystals(collectCount);
     if (Neo.isFirstRunTutorialActive()) Neo.tutorialState.gotRelic = true;
     Neo.addToEquipmentSlots?.(itemKey);
     Neo.markInventoryPanelDirty();
@@ -2992,7 +3063,9 @@
       Neo.floorSkipPending += 3 * collectCount;
       const bonusItemCounts = {};
       for (let index = 0; index < 10 * collectCount; index += 1) {
-        const rewardPool = Neo.ITEM_KEYS.filter(key => key !== 'jesters_dice');
+        const rewardPool = Neo.ITEM_KEYS.filter(key => (
+          key !== 'jesters_dice' && Neo.ITEM_DEFS[key]?.rarity !== 'blue'
+        ));
         const key = rewardPool[Neo.irand(0, rewardPool.length - 1, 'loot')];
         const previousBonusCount = Neo.getItemCount(key);
         Neo.player.items[key] = previousBonusCount + 1;

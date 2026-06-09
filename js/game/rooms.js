@@ -1389,6 +1389,7 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
     }
     for (const key of Neo.ITEM_KEYS || []) {
       if (choices.length >= targetCount) break;
+      if (Neo.ITEM_DEFS?.[key]?.rarity === 'blue') continue;
       if (key && !seen.has(key)) {
         seen.add(key);
         choices.push(key);
@@ -1406,6 +1407,7 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
 
   function getItemRarityRank(key) {
     const rarity = String(Neo.itemRegistry?.get?.(key)?.rarity || Neo.ITEM_DEFS?.[key]?.rarity || 'knight').toLowerCase();
+    if (rarity === 'blue') return 4;
     if (rarity === 'god' || rarity === 'red') return 3;
     if (rarity === 'wizard' || rarity === 'purple') return 2;
     return 1;
@@ -1430,8 +1432,9 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
     const shuffledCostPool = Neo.shuffleWithRandom(costPool, tradeRandom);
     const costKeys = shuffledCostPool.slice(0, 2);
     const targetRank = getTradeTargetRarityRank(costKeys);
-    const targetPool = (Neo.ITEM_KEYS || []).filter(key => getItemRarityRank(key) === targetRank && !costKeys.includes(key));
-    const shuffledTargetPool = Neo.shuffleWithRandom(targetPool.length ? targetPool : Neo.ITEM_KEYS, tradeRandom);
+    const normalItemPool = (Neo.ITEM_KEYS || []).filter(key => getItemRarityRank(key) < 4);
+    const targetPool = normalItemPool.filter(key => getItemRarityRank(key) === targetRank && !costKeys.includes(key));
+    const shuffledTargetPool = Neo.shuffleWithRandom(targetPool.length ? targetPool : normalItemPool, tradeRandom);
     room.shopTradeOffer = {
       type: 'trade',
       key: shuffledTargetPool[0] || '',
@@ -1509,7 +1512,11 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
     const keepHpRatio = options.keepHpRatio !== false;
     const oldMax = Math.max(1, Number(rival.max || rival.baseHp || 1));
     const oldHp = Neo.clamp(Number(rival.hp || oldMax), 1, oldMax);
-    const level = Math.max(1, Number(rival.level || 1));
+    // Clamp to the level cap so stat growth can never run past what the cap implies,
+    // even if a stale save carries a higher stored level.
+    const levelCap = Math.max(1, Number(Neo.RIVAL_LEVEL_CAP || 9));
+    const level = Neo.clamp(Math.round(Number(rival.level || 1)), 1, levelCap);
+    rival.level = level;
     const hpScale = 1 + (level - 1) * 0.14;
     const dmgScale = 1 + (level - 1) * 0.11;
     const speedScale = 1 + Math.min(0.24, (level - 1) * 0.02);
@@ -1594,13 +1601,18 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
 
   function awardRivalXp(rival, amount, reason = '') {
     if (!rival || rival.dead) return;
+    const levelCap = Math.max(1, Number(Neo.RIVAL_LEVEL_CAP || 9));
+    // At the cap there's nothing left to gain; stop the XP loop snowballing.
+    if (Number(rival.level || 1) >= levelCap) { rival.xp = 0; return; }
     let xpGain = Math.max(0, Number(amount) || 0);
     if (xpGain <= 0) return;
-    const threatBonus = 1 + Math.min(0.6, Math.max(0, Number(rival.memory?.threat || 0)) * 0.08);
+    // Clamp the threat multiplier tighter (was up to 1.6x) so fighting a rival
+    // without killing it doesn't spiral its growth out of control.
+    const threatBonus = 1 + Math.min(0.25, Math.max(0, Number(rival.memory?.threat || 0)) * 0.04);
     xpGain *= threatBonus;
     rival.xp += xpGain;
     let leveled = false;
-    while (rival.xp >= rival.xpToNext) {
+    while (rival.xp >= rival.xpToNext && rival.level < levelCap) {
       rival.xp -= rival.xpToNext;
       rival.level += 1;
       rival.xpToNext = Math.round(rival.xpToNext * 1.18 + 3);
@@ -1611,6 +1623,7 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
         Neo.spawnParticle({ x: 48, y: 60 + rival.level * 2, life: 1.6, text: `${rival.name}: LV ${rival.level}`, c: rival.color, size: 10 });
       }
     }
+    if (rival.level >= levelCap) rival.xp = 0; // drop any leftover XP once capped
     if (leveled && reason !== 'silent') {
       Neo.scheduleRunSave();
     }
@@ -1702,8 +1715,13 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
         const charKey = shuffled[i];
         const def = Neo.RIVAL_DEFS[charKey];
         const spawnRoom = nonStartRooms[i % nonStartRooms.length];
-        const reputationBonus = Math.max(0, Math.floor(Number(Neo.player?.rivalReputation || 0) / 2));
-        const startingLevel = Math.max(1, 1 + reputationBonus);
+        // Reputation nudges fresh rivals up a little, but cap the bonus so a
+        // veteran player who's slain many rivals doesn't spawn near-max-level ones.
+        const reputationBonus = Math.min(
+          Number(Neo.RIVAL_REPUTATION_LEVEL_CAP || 4),
+          Math.max(0, Math.floor(Number(Neo.player?.rivalReputation || 0) / 2)),
+        );
+        const startingLevel = Neo.clamp(1 + reputationBonus, 1, Number(Neo.RIVAL_LEVEL_CAP || 9));
         const baseMoveInterval = Neo.RIVAL_MOVE_INTERVAL_BASE + Neo.nextRandom('world') * 4;
         Neo.rivals.push({
           rivalId: `${charKey}-${Neo.floor}-${Math.floor(Neo.nextRandom('world') * 1000000)}`,

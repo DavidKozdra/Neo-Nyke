@@ -6,6 +6,37 @@ const RENAMED_MOVE_KEYS = {
   fangs_of_death: 'random_pounce',
 };
 
+export function countOwnedToolStacks(items = null, itemDefs = null) {
+  const inventory = items || {};
+  const definitions = itemDefs || {};
+  return Object.keys(definitions).reduce((total, key) => {
+    if (!definitions[key]?.tool) return total;
+    return total + Math.max(0, Math.floor(Number(inventory[key]) || 0));
+  }, 0);
+}
+
+export function getArtificerLevelGains(stacks = 0) {
+  const active = Math.max(0, Number(stacks) || 0) > 0;
+  return {
+    maxHp: active ? 16 : 15,
+    attackPower: active ? 4 : 3,
+    attackSpeed: active ? 0.02 : 0.01,
+  };
+}
+
+export function getCloakDamageReductionBonus(stacks = 0, ownedToolStacks = 0) {
+  const cloakStacks = Math.max(0, Number(stacks) || 0);
+  const toolStacks = Math.max(0, Number(ownedToolStacks) || 0);
+  if (cloakStacks <= 0) return 0;
+  return cloakStacks * 0.5 + toolStacks * 0.01;
+}
+
+export function getRichMansBluesCrystalReward(floor = 1, stacks = 1) {
+  const floorCount = Math.max(1, Math.floor(Number(floor) || 1));
+  const itemStacks = Math.max(0, Math.floor(Number(stacks) || 0));
+  return (25 + floorCount * 2) * itemStacks;
+}
+
 export function migrateLegacyVoucherInventory(items) {
     if (!items || typeof items !== 'object') return items;
     const legacyCount = Math.max(0, Number(items.voucher || 0));
@@ -381,6 +412,8 @@ export function getItemStats() {
     const shieldOfAegis = getItemCount('shield_of_aegis');
     const pendantOfKronos = getItemCount('pendant_of_kronos');
     const richMansLuck = getItemCount('rich_mans_luck');
+    const artificerCharger = getItemCount('artificer_charger');
+    const nakedKingCloak = getItemCount('cloak_of_naked_king');
     const weaponFatigue = getItemCount('weapon_fatigue');
     const genericHealthItem = getItemCount('generic_health_item');
     const snakeKnife = getItemCount('snake_knife');
@@ -391,6 +424,7 @@ export function getItemStats() {
     const mooggyZoomies = getItemCount('mooggy_zoomies');
     const homingMissile = getItemCount('homing_missile');
     const procyPickle = getItemCount('procy_pickle');
+    const ownedToolStacks = countOwnedToolStacks(Neo.player?.items, Neo.ITEM_DEFS);
     // Count distinct tool relics the player owns (items flagged `tool: true`),
     // so Procy Pickle's poison-on-tool-use chance scales with how tool-heavy the
     // build is. Procy Pickle itself isn't a tool, so it never counts toward this.
@@ -435,7 +469,16 @@ export function getItemStats() {
     let critChance = critCharmBonus + keenEyeBonus + pendantOfKronos * godItemStacks * 0.01 + princesGlassesCrit;
     if (oracleLens) critChance *= 2;
     critChance = Neo.clamp(critChance, 0.01, 0.95);
-    const damageReduction = Neo.clamp(bandaid * 0.005 + shieldOfAegis * 0.2 + princesGlassesDefense, 0, 0.85);
+    const standardDamageReduction = Neo.clamp(
+      bandaid * 0.005 + shieldOfAegis * 0.2 + princesGlassesDefense,
+      0,
+      0.85,
+    );
+    const damageReduction = Neo.clamp(
+      standardDamageReduction + getCloakDamageReductionBonus(nakedKingCloak, ownedToolStacks),
+      0,
+      1,
+    );
     const xpProgress = Neo.clamp((Neo.player?.xpToNext || 0) > 0 ? (Neo.player?.xp || 0) / Neo.player.xpToNext : 0, 0, 1);
     const characterDef = Neo.getCharacterDef?.() || {};
     Neo.itemStatsCacheValue = {
@@ -481,8 +524,12 @@ export function getItemStats() {
       xpGainMultiplier: 1 + scholarSeal * 0.15,
       levelEdgeDamageMultiplier: 1 + scholarCap * xpProgress * 0.45,
       knockbackMultiplier: 1 + pushMan * 0.18,
-      aoeRadiusMultiplier: (1 + explosiveJelly * 0.2) * Number(characterDef.aoeRadiusMultiplier || 1),
+      aoeRadiusMultiplier: (1 + explosiveJelly * 0.2)
+        * Number(characterDef.aoeRadiusMultiplier || 1)
+        * (artificerCharger > 0 ? 1.267 : 1),
       aoeDamageMultiplier: Number(characterDef.aoeDamageMultiplier || 1),
+      playerSpriteScale: artificerCharger > 0 ? 1.267 : 1,
+      beamWidthMultiplier: artificerCharger > 0 ? 1.05 : 1,
       beamDamageMultiplier: 1 + dragonOrb * 0.35,
       beamChainTargets: dragonOrb > 0 ? Math.min(2, dragonOrb) : 0,
       beamChainDamageMultiplier: dragonOrb > 0 ? 0.6 + (dragonOrb - 1) * 0.15 : 0,
@@ -498,6 +545,8 @@ export function getItemStats() {
       itemDropChanceBonus: Math.min(0.3, richMansLuck * 0.05),
       shopExtraItemOffers: Math.min(3, richMansLuck),
       damageReduction,
+      negativeStatusMultiplier: 1 + nakedKingCloak * 0.2,
+      ownedToolStacks,
       stunResistance: anchorCharm,
       hasIronLung: getItemCount('iron_lung') > 0,
       hasPrincesGlasses: princesGlasses > 0,
@@ -779,7 +828,12 @@ export function confirmWizardPawSelection() {
     const excluded = new Set(exclude);
     const owned = Neo.player?.items || {};
     return (Neo.ITEM_KEYS || [])
-      .filter(key => Neo.ITEM_DEFS?.[key] && !excluded.has(key) && !SCROLL_KEYS.has(key))
+      .filter(key => (
+        Neo.ITEM_DEFS?.[key]
+        && Neo.ITEM_DEFS[key].rarity !== 'blue'
+        && !excluded.has(key)
+        && !SCROLL_KEYS.has(key)
+      ))
       .filter(key => !ownedOnly || Number(owned[key] || 0) > 0)
       .filter(key => !rarity || String(Neo.ITEM_DEFS[key]?.rarity || '').toLowerCase() === rarity)
       .map(key => {
@@ -802,6 +856,7 @@ export function confirmWizardPawSelection() {
     (Neo.ITEM_KEYS || []).forEach(key => {
       if (SCROLL_KEYS.has(key)) return;
       const item = Neo.ITEM_DEFS?.[key];
+      if (item?.rarity === 'blue') return;
       const list = Array.isArray(item?.tags) ? item.tags : [];
       list.forEach(tag => {
         const clean = String(tag || '').trim();
@@ -973,7 +1028,7 @@ export function confirmWizardPawSelection() {
     let choicesMarkup = '';
     if (choices.length && choices.every(choice => choice.type === 'item')) {
       const rarityOrder = ['knight', 'wizard', 'god'];
-      const rarityLabels = { knight: 'Knight', wizard: 'Wizard', god: 'God' };
+      const rarityLabels = { knight: 'Knight', wizard: 'Wizard', god: 'God', blue: 'Artificer' };
       const groupedChoices = new Map();
       choices.forEach(choice => {
         const rarity = String(choice.rarity || 'knight').toLowerCase();
@@ -1457,7 +1512,11 @@ export function confirmWizardPawSelection() {
     const shouldExpire = Neo.floor >= Number(state.expiresFloor || 0);
     if (random() < 0.5) {
       const selected = Array.isArray(state.items) ? state.items.filter(key => Neo.ITEM_DEFS?.[key]) : [];
-      const randomPool = (Neo.ITEM_KEYS || []).filter(key => Neo.ITEM_DEFS?.[key] && !SCROLL_KEYS.has(key));
+      const randomPool = (Neo.ITEM_KEYS || []).filter(key => (
+        Neo.ITEM_DEFS?.[key]
+        && Neo.ITEM_DEFS[key].rarity !== 'blue'
+        && !SCROLL_KEYS.has(key)
+      ));
       const offerPool = [
         ...selected.slice(0, 2),
         randomPool[Math.floor(random() * randomPool.length)],
@@ -1635,6 +1694,10 @@ export function refreshFloorChargeStates() {
 
   // Expose on Neo
   Neo.migratePlayerData = migratePlayerData;
+  Neo.countOwnedToolStacks = countOwnedToolStacks;
+  Neo.getArtificerLevelGains = getArtificerLevelGains;
+  Neo.getCloakDamageReductionBonus = getCloakDamageReductionBonus;
+  Neo.getRichMansBluesCrystalReward = getRichMansBluesCrystalReward;
   Neo.getCharacterDef = getCharacterDef;
   Neo.getUiCharacterKey = getUiCharacterKey;
   Neo.syncCharacterUiTheme = syncCharacterUiTheme;

@@ -467,6 +467,9 @@ export function resumeGame() {
       pendant_of_kronos: 0,
       robot_arm: 0,
       rich_mans_luck: 0,
+      rich_mans_blues: 0,
+      artificer_charger: 0,
+      cloak_of_naked_king: 0,
       veggys_pendant: 0,
       procy_pickle: 0,
       princes_glasses: 0,
@@ -1185,7 +1188,7 @@ export function resumeGame() {
     if (anvilBase !== null) return (anvilBase / attackSpeed) * characterMult;
     if (moveKey === 'turtle_wave') return (3 / attackSpeed) * characterMult;
     if (moveKey === 'blade_justice') return (3.8 / attackSpeed) * characterMult;
-    if (moveKey === 'lightning_columns') return (4.8 / attackSpeed) * characterMult;
+    if (moveKey === 'lightning_columns') return (5.1 / attackSpeed) * characterMult;
     if (moveKey === 'god_sweep') return (7.2 / attackSpeed) * characterMult;
     if (moveKey === 'nail_shot') return 2.8 / attackSpeed;
     return ((Neo.godTimer > 0 ? 2.8 : Neo.ATTACKS.laser.baseCooldown) / attackSpeed) * characterMult;
@@ -1545,6 +1548,7 @@ export function resumeGame() {
       const rarity = String(Neo.itemRegistry.get(key)?.rarity || Neo.ITEM_DEFS[key]?.rarity || 'knight').toLowerCase();
       if (rarity === 'god' || rarity === 'red') counts.red += count;
       else if (rarity === 'wizard' || rarity === 'purple') counts.purple += count;
+      else if (rarity === 'blue') return;
       else counts.white += count;
     });
     return counts;

@@ -292,11 +292,13 @@
       };
     }
     if (type === 'survival') {
+      // Survive trial throws ~3x the adds of other trials and they swarm the
+      // obelisk, so the player has to actively peel rather than kite.
       return {
         timer: Neo.scaleChallengeTimer(24),
         tickStart: 2.2,
         tickEnd: 1.35,
-        spawnCount: floor >= 6 ? 2 : 1,
+        spawnCount: floor >= 6 ? 6 : 3,
       };
     }
     if (type === 'runes') {
@@ -1346,7 +1348,7 @@
       if (base !== null) return (Math.max(base * 0.5, base + getMirrorAnvilBonus(inventory, 'move', moveKey, 'cooldown')) / attackSpeed) * characterMult;
       if (slot === 'laser') {
         if (moveKey === 'turtle_wave') return (3 / attackSpeed) * characterMult;
-        if (moveKey === 'blade_justice') return (3.8 / attackSpeed) * characterMult;
+        if (moveKey === 'blade_justice') return (5.1 / attackSpeed) * characterMult;
         if (moveKey === 'lightning_columns') return (4.8 / attackSpeed) * characterMult;
         if (moveKey === 'god_sweep') return (7.2 / attackSpeed) * characterMult;
         return (Neo.ATTACKS.laser.baseCooldown / attackSpeed) * characterMult;
@@ -1389,8 +1391,15 @@
     const beamDamage = Math.round(getMoveDamage(laserMove) * Number(itemStats.beamDamageMultiplier || 1));
     const smashDamage = Math.round(getMoveDamage(smashMove) * Number(itemStats.aoeDamageMultiplier || 1));
     const moveSpeed = Math.round(228 * (itemStats.moveSpeedMultiplier || 1));
+    // The champion is a boss-tier copy of the player: give it a chunky HP
+    // multiple of the player's own pool so it survives a leveled loadout long
+    // enough to actually cycle through its kit. Floor it well above raw maxHp
+    // so glass-cannon (low-HP/high-damage) builds still meet a real fight.
+    const playerLevel = Math.max(1, Number(inventory.level || 1));
+    const hpMultiplier = 2.2 + Math.min(1.6, (playerLevel - 1) * 0.06);
+    const championHp = Math.round(Math.max(Number(inventory.maxHp || 120) * hpMultiplier, 360 + playerLevel * 26));
     return {
-      hp: Math.max(90, Math.round(inventory.maxHp)),
+      hp: championHp,
       dmg: Math.max(18, meleeDamage),
       beamDamage: Math.max(10, beamDamage),
       smashDamage: Math.max(20, smashDamage),
@@ -1637,13 +1646,19 @@
     const pool = Neo.floor >= 6
       ? ['hunter', 'laser', 'charger', 'knave']
       : ['hunter', 'laser', 'charger'];
+    // In the Survive trial the adds prioritise the obelisk over the player, so
+    // tag each spawn here when that trial is active.
+    const seeksObelisk = Neo.currentRoom?.type === 'challenge'
+      && Neo.currentRoom?.challengeType === 'survival'
+      && !!Neo.currentRoom?.challengeData?.obelisk;
     for (let index = 0; index < count; index += 1) {
       const angle = Neo.nextRandom('encounter') * Math.PI * 2;
       const radius = 170 + Neo.nextRandom('encounter') * 90;
       const safeSpawn = findSafeEnemySpawnPoint(Neo.ROOM_W / 2 + Math.cos(angle) * radius, Neo.ROOM_H / 2 + Math.sin(angle) * radius, 15);
       if (!safeSpawn) continue;
       const type = pool[Neo.irand(0, pool.length - 1, 'encounter')];
-      spawnEnemy(type, safeSpawn.x, safeSpawn.y, false);
+      const enemy = spawnEnemy(type, safeSpawn.x, safeSpawn.y, false);
+      if (enemy && seeksObelisk) enemy.obeliskSeeker = true;
     }
   }
 
@@ -1690,7 +1705,7 @@
       room.challengeData.tickStart = Number(tuning.tickStart || 2);
       room.challengeData.tickEnd = Number(tuning.tickEnd || 1.35);
       room.challengeData.targetClearRate = CHALLENGE_CLEAR_RATE_TARGETS.survival;
-      const obeliskHp = Math.round(120 + Neo.floor * 30);
+      const obeliskHp = Math.round(180 + Neo.floor * 35);
       room.challengeData.obelisk = {
         x: Neo.ROOM_W / 2,
         y: Neo.ROOM_H / 2,
@@ -1700,7 +1715,7 @@
         hitFlash: 0,
         guardRange: 96,
       };
-      spawnTrialEnemyWave(2);
+      spawnTrialEnemyWave(Math.max(3, Number(room.challengeData.spawnCount || 1)));
       sayAtPosition(Neo.ROOM_W / 2, Neo.ROOM_H / 2, 'Protect the central obelisk and survive.', { speaker: 'TRIAL', tone: 'warning' });
     } else if (type === 'runes') {
       const tuning = getChallengeTrialTuning('runes');
@@ -3592,9 +3607,12 @@
     const effects = options.statusEffects || getMirrorStatusEffects(enemy, options);
     effects.forEach(effect => {
       if (!effect?.key) return;
-      if (Neo.nextRandom('encounter') <= Number(effect.chance ?? 1)) {
+      const procChance = Neo.getPlayerNegativeStatusProcChance?.(effect.chance ?? 1)
+        ?? Number(effect.chance ?? 1);
+      if (Neo.nextRandom('encounter') <= procChance) {
         if (effect.key === 'stun') {
-          Neo.player.stun = Math.max(Number(Neo.player.stun || 0), Number(effect.duration || 0.55));
+          const severity = Number(Neo.getItemStats?.()?.negativeStatusMultiplier || 1);
+          Neo.player.stun = Math.max(Number(Neo.player.stun || 0), Number(effect.duration || 0.55) * severity);
         } else {
           Neo.applyStatus(Neo.player, effect.key, Number(effect.stacks || 1), Number(effect.duration || 3), enemy?.type || 'mirror_knight');
         }
@@ -4000,27 +4018,39 @@
     const mirrorWeapon = enemy.mirrorWeapon || '';
     const rangedMirrorWeapon = ['hunters_bow', 'metao_fire_staff', 'magenta_degale', 'magenta_p90', 'gelleh_lightning_spear', 'void_piercer', 'lazer_glasses', 'princess_wand'].includes(mirrorWeapon);
     const mirrorWeaponRange = Number(enemy.mirrorWeaponStats?.range || 0);
-    if (mirrorWeapon && enemy.attackCd <= 0 && (rangedMirrorWeapon ? distance < 520 : distance < mirrorWeaponRange + Neo.player.r + 14)) {
+
+    if (enemy.attackCd > 0) return;
+
+    // Skills (smash/laser/dash) take priority over basic weapon/melee swings so
+    // the champion actually deploys the player's full kit instead of just poking.
+    // Each skill gates on its own cooldown plus a distance window; the basic
+    // attack is the fallback when nothing else is ready.
+    const dashMove = getMirrorMove(enemy, 'dash');
+    if (enemy.mirrorSmashCd <= 0 && distance < 178) {
+      startMirrorSmash(enemy, angleToPlayer);
+      return;
+    }
+    if (enemy.mirrorLaserCd <= 0 && (distance > 96 || laserMove === 'blade_justice')) {
+      startMirrorLaser(enemy, angleToPlayer, distance);
+      return;
+    }
+    if (enemy.mirrorDashCd <= 0 && (distance > 170 || dashMove === 'warp')) {
+      startMirrorDash(enemy, angleToPlayer, distance);
+      return;
+    }
+
+    // Basic attack fallback: ranged weapons poke from afar, melee weapons/moves
+    // require closing in.
+    if (mirrorWeapon && (rangedMirrorWeapon ? distance < 520 : distance < mirrorWeaponRange + Neo.player.r + 14)) {
+      startMirrorMelee(enemy, angleToPlayer);
+      return;
+    }
+    if (distance < Neo.ATTACKS.melee.range + Neo.player.r + 6) {
       startMirrorMelee(enemy, angleToPlayer);
       return;
     }
 
-    if (distance < Neo.ATTACKS.melee.range + Neo.player.r + 6 && enemy.attackCd <= 0) {
-      startMirrorMelee(enemy, angleToPlayer);
-      return;
-    }
-
-    if (enemy.attackCd <= 0) {
-      if (enemy.mirrorSmashCd <= 0 && distance < 178) {
-        startMirrorSmash(enemy, angleToPlayer);
-      } else if (enemy.mirrorLaserCd <= 0 && (distance > 96 || laserMove === 'blade_justice')) {
-        startMirrorLaser(enemy, angleToPlayer, distance);
-      } else if (enemy.mirrorDashCd <= 0 && (distance > 170 || getMirrorMove(enemy, 'dash') === 'warp')) {
-        startMirrorDash(enemy, angleToPlayer, distance);
-      } else {
-        enemy.attackCd = 0.18;
-      }
-    }
+    enemy.attackCd = 0.18;
   }
 
   function updateMooggyEnemy(enemy, dt) {
@@ -4177,7 +4207,10 @@
           }
         }
         if (attackers > 0) {
-          const drain = attackers * (6 + Neo.floor * 0.8) * dt;
+          // Adds now actively rush the obelisk and stack on it, so the raw
+          // per-attacker drain is lowered and the stack count is softened with a
+          // sqrt curve — a swarm still bleeds it fast, but not instantly.
+          const drain = Math.sqrt(attackers) * (5 + Neo.floor * 0.6) * dt;
           obelisk.hp = Math.max(0, obelisk.hp - drain);
           obelisk.hitFlash = 0.18;
           if (Neo.nextRandom('world') < dt * attackers * 2) {
@@ -4436,6 +4469,27 @@
     }
   }
 
+  // Survive-trial adds tagged `obeliskSeeker` ignore the player and converge on
+  // the central obelisk. Called from the enemy update loop AFTER the type AI has
+  // set velocity toward the player, so this pull overrides it and wins out.
+  function applyObeliskSeekerSteering(enemy, dt) {
+    if (!enemy || !enemy.obeliskSeeker || enemy.dead) return;
+    if (enemy.stun > 0 || enemy.airborne) return;
+    const obelisk = Neo.currentRoom?.challengeData?.obelisk;
+    if (!obelisk) return;
+    const dx = obelisk.x - enemy.x;
+    const dy = obelisk.y - enemy.y;
+    const dist = Math.hypot(dx, dy) || 1;
+    const holdRange = (obelisk.guardRange || 96) - 8;
+    if (dist > holdRange) {
+      steerEnemy(enemy, dx / dist, dy / dist, enemy.speed || 90, 5.2, dt);
+    } else {
+      // Loiter on the obelisk and keep draining instead of orbiting past it.
+      enemy.vx *= 0.82;
+      enemy.vy *= 0.82;
+    }
+  }
+
   function steerEnemy(enemy, dirX, dirY, maxSpeed, accel, dt) {
     const slowMultiplier = Neo.getSlowMultiplier?.(enemy) || 1;
     const adjustedSpeed = maxSpeed * slowMultiplier;
@@ -4585,6 +4639,7 @@
   Neo.updateMirrorChampion = updateMirrorChampion;
   Neo.updateMooggyEnemy = updateMooggyEnemy;
 	  Neo.updateChallengeRoomState = updateChallengeRoomState;
+	  Neo.applyObeliskSeekerSteering = applyObeliskSeekerSteering;
 	  Neo.triggerGodPhase = triggerGodPhase;
 	  Neo.updateGod = updateGod;
   Neo.steerEnemy = steerEnemy;

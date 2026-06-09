@@ -273,7 +273,9 @@ export const RIVAL_DEFS = {
 export const RIVAL_MOVE_INTERVAL_BASE = 8.5;
 export const RIVAL_SPAWN_CHANCE = 0.15; // ~15% spawn chance - very rare encounters
 export const RIVAL_GROWTH_TICK_SECONDS = 14;
-export const RIVAL_XP_PER_GROWTH_TICK = 12;
+export const RIVAL_XP_PER_GROWTH_TICK = 6; // halved: passive growth was snowballing rivals out of reach
+export const RIVAL_LEVEL_CAP = 9; // hard ceiling so rivals stay beatable no matter how long a run drags on
+export const RIVAL_REPUTATION_LEVEL_CAP = 4; // most starting-level bonus reputation can grant
 export const RIVAL_WEAPON_SWAP_BASE = 3.6;
 export const MONSTER_ROAM_INTERVAL_SECONDS = 60;
 export const MONSTER_ROAM_MOVE_CHANCE = 0.28;
@@ -848,6 +850,39 @@ export const ITEM_DEFS = {
       category: 'god',
       tags: ['god', 'loot', 'shop'],
     },
+    rich_mans_blues: {
+      key: 'rich_mans_blues',
+      name: "Rich Man's Blues",
+      shortName: 'Loop Crystals',
+      description: "King's lament: I could lose every penny. Gain 25 Loop Crystals plus 2 per floor counted this run when collected. Each stack grants +1 Loop Crystal after every boss kill.",
+      rarity: 'blue',
+      color: '#4da8ff',
+      accent: '#b9e3ff',
+      category: 'artificer',
+      tags: ['artificer', 'loot', 'loop'],
+    },
+    artificer_charger: {
+      key: 'artificer_charger',
+      name: 'Artificer Charger',
+      shortName: 'Holy Light',
+      description: 'A great tool of the cult; in holy hands it can send light. Doubles your current level, improves every future level gain, and makes your sprite and AOEs 26.7% larger. Lasers are 5% wider. A second stack kills you.',
+      rarity: 'blue',
+      color: '#69c8ff',
+      accent: '#fff3ae',
+      category: 'artificer',
+      tags: ['artificer', 'level', 'aoe', 'beam'],
+    },
+    cloak_of_naked_king: {
+      key: 'cloak_of_naked_king',
+      name: 'Cloak of the Naked King',
+      shortName: 'Cursed Guard',
+      description: '(He has lost it.) Negative status effects are 20% worse per stack, including damage, duration, effectiveness, and proc chance. Gain 50% damage reduction per stack, plus 1% per owned tool stack, equipped or not.',
+      rarity: 'blue',
+      color: '#3289d6',
+      accent: '#d9f2ff',
+      category: 'artificer',
+      tags: ['artificer', 'defense', 'status', 'tools'],
+    },
     veggys_pendant: {
       key: 'veggys_pendant',
       name: "Veggy's Pendant",
@@ -1062,8 +1097,24 @@ export const RARITY_NAME_COLORS = {
     purple: '#b77dff',
     god: '#ffd23f',   // GOD tier (gold/yellow)
     red: '#ffd23f',   // legacy alias of god
+    blue: '#58b7ff',
     princess: '#ff9de8',
   };
+export const RARITY_DISPLAY_NAMES = {
+    knight: 'Knight',
+    white: 'Knight',
+    wizard: 'Wizard',
+    purple: 'Wizard',
+    god: 'God',
+    red: 'God',
+    blue: 'Artificer',
+    artificer: 'Artificer',
+    princess: 'Princess',
+  };
+export function getRarityDisplayName(rarity) {
+  const key = String(rarity || '').toLowerCase();
+  return RARITY_DISPLAY_NAMES[key] || key;
+}
 export const SHOP_RARITY_PRICE_MULTIPLIERS = {
     knight: 1,
     white: 1,
@@ -1071,6 +1122,7 @@ export const SHOP_RARITY_PRICE_MULTIPLIERS = {
     purple: 2.15,
     god: 4.75,
     red: 4.75,
+    blue: 4.75,
   };
 export const ITEM_KEYS = Object.keys(ITEM_DEFS);
 // Legacy alias retained for call sites that reference SCROLL_OF_CONTROL_KEYS; the
@@ -1184,6 +1236,7 @@ export const ELITE_INVENTORY_POOL = [
     'el_bartos_cape',
   ];
 export const WHITE_ITEM_POOL = ITEM_KEYS.filter(key => ITEM_DEFS[key]?.rarity === 'knight' && !ITEM_DEFS[key]?.voucher);
+export const BLUE_ITEM_POOL = ITEM_KEYS.filter(key => ITEM_DEFS[key]?.rarity === 'blue');
 export const ELITE_TYPE_DEFS = {
     burning: { label: 'Burning', color: '#ff9a3c' },
     bleeding: { label: 'Bleeding', color: '#ff4256' },
@@ -1693,6 +1746,8 @@ export const MOVE_BASE_STATS = {
 
   // Expose constants on Neo (needed by other files)
   Neo.RARITY_NAME_COLORS = RARITY_NAME_COLORS;
+  Neo.RARITY_DISPLAY_NAMES = RARITY_DISPLAY_NAMES;
+  Neo.getRarityDisplayName = getRarityDisplayName;
   Neo.SHOP_RARITY_PRICE_MULTIPLIERS = SHOP_RARITY_PRICE_MULTIPLIERS;
   Neo.MOVE_DEFS = MOVE_DEFS;
   Neo.SHOP_MOVE_POOL = SHOP_MOVE_POOL;
@@ -1704,6 +1759,8 @@ export const MOVE_BASE_STATS = {
   Neo.RIVAL_SPAWN_CHANCE = RIVAL_SPAWN_CHANCE;
   Neo.RIVAL_GROWTH_TICK_SECONDS = RIVAL_GROWTH_TICK_SECONDS;
   Neo.RIVAL_XP_PER_GROWTH_TICK = RIVAL_XP_PER_GROWTH_TICK;
+  Neo.RIVAL_LEVEL_CAP = RIVAL_LEVEL_CAP;
+  Neo.RIVAL_REPUTATION_LEVEL_CAP = RIVAL_REPUTATION_LEVEL_CAP;
   Neo.RIVAL_WEAPON_SWAP_BASE = RIVAL_WEAPON_SWAP_BASE;
   Neo.MONSTER_ROAM_INTERVAL_SECONDS = MONSTER_ROAM_INTERVAL_SECONDS;
   Neo.MONSTER_ROAM_MOVE_CHANCE = MONSTER_ROAM_MOVE_CHANCE;
@@ -1725,6 +1782,7 @@ export const MOVE_BASE_STATS = {
   Neo.ELITE_ITEM_DROP_TABLE = ELITE_ITEM_DROP_TABLE;
   Neo.ELITE_INVENTORY_POOL = ELITE_INVENTORY_POOL;
   Neo.WHITE_ITEM_POOL = WHITE_ITEM_POOL;
+  Neo.BLUE_ITEM_POOL = BLUE_ITEM_POOL;
   Neo.ELITE_TYPE_DEFS = ELITE_TYPE_DEFS;
   // Neo.itemRegistry is set in game-state.js
   Neo.JESTER_PORTAL_ACTIVATE_DELAY = JESTER_PORTAL_ACTIVATE_DELAY;

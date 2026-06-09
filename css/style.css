@@ -4195,6 +4195,13 @@ p.sub {
   box-shadow: 0 0 24px rgba(220,170,30,.4), 0 6px 20px rgba(0,0,0,.4);
 }
 
+.char-card[data-rarity="blue"] { border-color: rgba(88,183,255,.5); }
+.char-card[data-rarity="blue"]:hover,
+.char-card[data-rarity="blue"].sel {
+  border-color: #58b7ff;
+  box-shadow: 0 0 24px rgba(88,183,255,.4), 0 6px 20px rgba(0,0,0,.4);
+}
+
 .char-card.locked {
   opacity: .74;
   filter: grayscale(.65);
@@ -4270,6 +4277,7 @@ p.sub {
 .princess-tag { background: rgba(245,126,189,.2); color: #ffd1ea; border: 1px solid rgba(255,156,207,.5); }
 .wizard-tag { background: rgba(168,87,255,.18); color: #c090ff; border: 1px solid rgba(168,87,255,.4); }
 .god-tag    { background: rgba(220,170,30,.18);  color: #e8c040; border: 1px solid rgba(220,170,30,.45); }
+.blue-tag   { background: rgba(88,183,255,.18); color: #8dd4ff; border: 1px solid rgba(88,183,255,.45); }
 
 .char-stat-row {
   display: grid;
@@ -5542,6 +5550,7 @@ button.alt.danger {
 .dead-item-card--knight .dead-item-name { color: #d8cdb4; }
 .dead-item-card--wizard .dead-item-name { color: #c49eff; }
 .dead-item-card--god    .dead-item-name { color: #ffcf80; }
+.dead-item-card--blue   .dead-item-name { color: #58b7ff; }
 
 .dead-actions {
   display: grid;
@@ -8620,6 +8629,7 @@ border-bottom: black solid 2px;
 .sandbox-token--item.sandbox-token--purple .sandbox-token__label { color: #cdb8ff; }
 .sandbox-token--item.sandbox-token--god .sandbox-token__label,
 .sandbox-token--item.sandbox-token--red .sandbox-token__label { color: #ffd23f; }
+.sandbox-token--item.sandbox-token--blue .sandbox-token__label { color: #58b7ff; }
 
 .sandbox-flags {
   margin-top: 10px;
@@ -9946,6 +9956,7 @@ border-bottom: black solid 2px;
 .info-card__tag--knight  { background: rgba(200,210,230,0.1); color: #c8d2e8; border: 1px solid rgba(200,210,230,0.2); }
 .info-card__tag--wizard  { background: rgba(180,120,255,0.12); color: #c48fff; border: 1px solid rgba(180,120,255,0.3); }
 .info-card__tag--god     { background: rgba(255,210,63,0.12); color: #ffd23f; border: 1px solid rgba(255,210,63,0.32); }
+.info-card__tag--blue    { background: rgba(88,183,255,0.12); color: #58b7ff; border: 1px solid rgba(88,183,255,0.32); }
 .info-card__tag--princess { background: rgba(255,140,200,0.12); color: #ff9ccc; border: 1px solid rgba(255,140,200,0.3); }
 .info-card__tag--melee   { background: rgba(255,130,60,0.12); color: #ffa870; border: 1px solid rgba(255,130,60,0.25); }
 .info-card__tag--laser   { background: rgba(80,180,255,0.12); color: #70c8ff; border: 1px solid rgba(80,180,255,0.25); }

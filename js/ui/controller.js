@@ -832,7 +832,7 @@ export function createUIController(view) {
       syncInfoSearchControl(tab);
 
       if (tab === 'items') {
-        const rarityOrder = ['knight', 'wizard', 'god'];
+        const rarityOrder = ['knight', 'wizard', 'god', 'blue'];
         const sorted = Object.values(Neo.ITEM_DEFS).sort((a, b) => {
           const ri = rarityOrder.indexOf(a.rarity ?? a.category) - rarityOrder.indexOf(b.rarity ?? b.category);
           return ri !== 0 ? ri : (a.name || '').localeCompare(b.name || '');
@@ -845,11 +845,12 @@ export function createUIController(view) {
         ]));
         view.rhInfoContent.innerHTML = sorted.length ? `<div class="info-grid">${sorted.map(item => {
           const rarity = item.rarity || item.category || 'knight';
+          const rarityLabel = Neo.getRarityDisplayName?.(rarity) || rarity;
           return `<div class="info-card">
             <div class="info-card__header">
               <canvas class="info-card__icon" data-info-item="${item.key}" width="32" height="32"></canvas>
               <span class="info-card__name">${item.name}</span>
-              <span class="info-card__tag info-card__tag--${rarity}">${rarity}</span>
+              <span class="info-card__tag info-card__tag--${rarity}">${rarityLabel}</span>
             </div>
             <div class="info-card__desc">${item.description || ''}</div>
           </div>`;
@@ -2490,7 +2491,7 @@ export function createUIController(view) {
               const slice = items.slice(itemPage * PAGE_SIZE, itemPage * PAGE_SIZE + PAGE_SIZE);
               slice.forEach(item => {
                 const itemDef = Neo.itemRegistry?.get(item.key) || Neo.ITEM_DEFS[item.key] || {};
-                const rc = { knight: 'knight', white: 'knight', wizard: 'wizard', purple: 'wizard', god: 'god', red: 'god' }[item.rarity] || 'knight';
+                const rc = { knight: 'knight', white: 'knight', wizard: 'wizard', purple: 'wizard', god: 'god', red: 'god', blue: 'blue' }[item.rarity] || 'knight';
                 const card = document.createElement('div');
                 card.className = `dead-item-card dead-item-card--${rc}`;
                 card.tabIndex = 0;
@@ -2573,7 +2574,7 @@ export function createUIController(view) {
               const slice = items.slice(itemPage * PAGE_SIZE, itemPage * PAGE_SIZE + PAGE_SIZE);
               slice.forEach(item => {
                 const itemDef = Neo.ITEM_DEFS[item.key] || {};
-                const rc = { knight: 'knight', white: 'knight', wizard: 'wizard', purple: 'wizard', god: 'god', red: 'god' }[item.rarity] || 'knight';
+                const rc = { knight: 'knight', white: 'knight', wizard: 'wizard', purple: 'wizard', god: 'god', red: 'god', blue: 'blue' }[item.rarity] || 'knight';
                 const card = document.createElement('div');
                 card.className = `dead-item-card dead-item-card--${rc}`;
                 const cnv = document.createElement('canvas');

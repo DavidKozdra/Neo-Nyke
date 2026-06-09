@@ -478,7 +478,8 @@
       state.tick = config.interval;
       const resistance = key === 'bleed' ? Number(Neo.getItemStats?.()?.bleedResistance || 0) : 0;
       const damageMultiplier = Math.max(0.2, 1 - resistance);
-      const damage = Math.max(0.25, config.damage(state.stacks) * damageMultiplier);
+      const statusSeverity = Number(Neo.getItemStats?.()?.negativeStatusMultiplier || 1);
+      const damage = Math.max(0.25, config.damage(state.stacks) * damageMultiplier * statusSeverity);
       // Attribute the kill to whoever inflicted the status (e.g. "Mooggy"),
       // falling back to the status name when the source is unknown.
       const inflictorKey = String(state.sourceKey || '').trim();
@@ -1133,7 +1134,9 @@
       : sourceKey;
     projectile.statusEffects.forEach(effect => {
       if (!effect?.key) return;
-      if (Neo.nextRandom('encounter') <= Number(effect.chance ?? 1)) {
+      const procChance = Neo.getPlayerNegativeStatusProcChance?.(effect.chance ?? 1)
+        ?? Number(effect.chance ?? 1);
+      if (Neo.nextRandom('encounter') <= procChance) {
         Neo.applyStatus(Neo.player, effect.key, Number(effect.stacks || 1), Number(effect.duration || 3), source);
       }
     });
@@ -2953,6 +2956,32 @@
     syncCamerasAfterTransition();
   }
 
+  function spawnLoopBlueRewardChoices() {
+    const pool = Array.isArray(Neo.BLUE_ITEM_POOL) ? Neo.BLUE_ITEM_POOL.filter(Boolean) : [];
+    if (!Neo.currentRoom || pool.length === 0) return;
+
+    const random = Neo.createScopedRandom(`loop:${Neo.runLoopIndex}:blue-choice`);
+    const choices = Neo.shuffleWithRandom(pool, random).slice(0, 3);
+    const groupId = `loop-blue:${Neo.runLoopIndex}`;
+    const cx = Neo.ROOM_W / 2;
+    const cy = Neo.ROOM_H / 2 + 78;
+    const spacing = 104;
+    choices.forEach((key, index) => {
+      Neo.pickups.push({
+        x: cx + (index - (choices.length - 1) / 2) * spacing,
+        y: cy,
+        type: 'rewardChoice',
+        key,
+        groupId,
+        picksRemaining: 1,
+        label: '1/3',
+      });
+    });
+    Neo.currentRoom.loopBlueRewardChoices = choices;
+    Neo.currentRoom.loopBlueRewardGroupId = groupId;
+    Neo.spawnParticle({ x: cx, y: cy - 46, life: 1.4, text: 'CHOOSE 1 ARTIFICER RELIC', c: '#58b7ff' });
+  }
+
   function returnToFloorOne() {
     Neo.floor = 1;
     Neo.gameElapsedTime = 0;
@@ -2982,6 +3011,7 @@
     Neo.player.x = Neo.START_X;
     Neo.player.y = Neo.START_Y;
     Neo.generateFloor();
+    spawnLoopBlueRewardChoices();
     Neo.scheduleRunSave();
   }
 
@@ -3038,5 +3068,6 @@
   Neo.snapCameraToEntity = snapCameraToEntity;
   Neo.syncCamerasAfterTransition = syncCamerasAfterTransition;
   Neo.doTransition = doTransition;
+  Neo.spawnLoopBlueRewardChoices = spawnLoopBlueRewardChoices;
   Neo.returnToFloorOne = returnToFloorOne;
   Neo.addCoins = addCoins;
