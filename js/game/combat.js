@@ -2486,7 +2486,9 @@
       enemy.queenFinisherActive = true;
       enemy.queenFinisherTimer = Neo.QUEEN_FINISHER_WINDUP;
       enemy.hp = 1;
-      enemy.inv = Math.max(Number(enemy.inv || 0), Neo.QUEEN_FINISHER_WINDUP + 0.2);
+      // updateCultQueenBoss takes over from here: it clears `inv`, applies the
+      // +400 finisher resistance, and clamps her hp to >=1 each tick so the
+      // player can chip but not interrupt the windup.
       Neo.sayOverEntity?.(enemy, 'Then burn with me!', { holdTime: 1.6 });
       Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 12, life: 0.6, text: 'CHARGING', c: '#ff6ad5' });
       return;
@@ -2912,7 +2914,10 @@
     const sandbox = Neo.getActiveSandboxSettings();
     if (sandbox) {
       const baseEntries = options.elite
-        ? Neo.ITEM_DROP_WEIGHTS.map(([key, weight]) => [key, weight + (key !== 'neo_knife' ? 4 : 0)])
+        ? Neo.ITEM_DROP_WEIGHTS.map(([key, weight]) => [
+            key,
+            weight + (key !== 'neo_knife' && (!key.startsWith('voucher_') || key === 'voucher_white') ? 4 : 0),
+          ])
         : Neo.ITEM_DROP_WEIGHTS;
       const filteredEntries = baseEntries.filter(([key]) => sandbox.allowedItems.includes(key));
       if (filteredEntries.length > 0) {
@@ -2921,7 +2926,10 @@
       }
     }
     const entries = options.elite
-      ? Neo.ITEM_DROP_WEIGHTS.map(([key, weight]) => [key, weight + (key !== 'neo_knife' ? 4 : 0)])
+      ? Neo.ITEM_DROP_WEIGHTS.map(([key, weight]) => [
+          key,
+          weight + (key !== 'neo_knife' && (!key.startsWith('voucher_') || key === 'voucher_white') ? 4 : 0),
+        ])
       : Neo.ITEM_DROP_WEIGHTS;
     const rolled = Neo.rollFromWeightTable(Neo.buildWeightTable(adjustEntriesForScrollControl(entries)), options.stream || 'loot', options.random);
     return applyScrollReplacement(rolled);
@@ -2972,7 +2980,7 @@
     if (Neo.isFirstRunTutorialActive()) Neo.tutorialState.gotRelic = true;
     Neo.addToEquipmentSlots?.(itemKey);
     Neo.markInventoryPanelDirty();
-    if (itemKey === Neo.VOUCHER_KEY) Neo.refreshShopVoucherBanner?.();
+    if ((Neo.VOUCHER_KEYS || []).includes(itemKey)) Neo.refreshShopVoucherBanner?.();
     Neo.pushItemNotification(itemKey, collectCount);
     if (duplicatePickup) {
       Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 42, life: 0.85, text: 'ITEM DOUBLED', c: '#d8c0ff' });

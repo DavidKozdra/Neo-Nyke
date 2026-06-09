@@ -388,7 +388,7 @@
     <div id="shopVoucherBanner" class="shop-voucher-banner hidden" aria-hidden="true">
       <div class="shop-voucher-banner__info">
         <span class="shop-voucher-banner__title">Voucher available</span>
-        <span class="shop-voucher-banner__sub" id="shopVoucherBannerSub">Redeem for a relic of your chosen colour.</span>
+        <span class="shop-voucher-banner__sub" id="shopVoucherBannerSub">Exchange White, Purple, or Yellow vouchers for a relic in the matching class.</span>
       </div>
       <button id="shopVoucherRedeem" class="nav-btn shop-voucher-banner__btn" type="button">REDEEM VOUCHER</button>
     </div>
@@ -502,13 +502,28 @@
   </div>
 
   <div id="voucherModal" class="modal-backdrop hidden" aria-hidden="true">
-    <div class="modal-box voucher-box">
-      <h2 class="screen-title wizard-paw-title">REDEEM VOUCHER</h2>
-      <p class="wizard-paw-copy">Choose a colour. You will receive a random relic of that rarity.</p>
-      <div id="voucherMeta" class="scroll-control-meta"></div>
-      <div id="voucherChoices" class="voucher-choices"></div>
+    <div class="modal-box scroll-control-box voucher-box">
+      <div class="scroll-control-head">
+        <div class="scroll-control-head__row">
+          <span class="scroll-control-glyph voucher-glyph" aria-hidden="true">V</span>
+          <div class="scroll-control-head__text">
+            <h2 class="screen-title scroll-control-title" id="voucherTitle">VOUCHER EXCHANGE</h2>
+            <p class="scroll-control-copy" id="voucherCopy">Choose any relic in the voucher's class.</p>
+          </div>
+        </div>
+        <div id="voucherTypes" class="voucher-types" role="group" aria-label="Owned voucher classes"></div>
+        <div class="scroll-control-tools">
+          <label class="scroll-control-search-wrap">
+            <span class="scroll-control-search-icon" aria-hidden="true">⌕</span>
+            <input id="voucherSearch" class="scroll-control-search" type="search" placeholder="Search relics, effects, tags…" aria-label="Search voucher relic choices" autocomplete="off" spellcheck="false">
+          </label>
+          <span id="voucherMeta" class="scroll-control-meta" aria-live="polite"></span>
+        </div>
+      </div>
+      <div id="voucherChoices" class="scroll-control-choices voucher-choices" role="listbox" aria-label="Voucher relic choices"></div>
       <div class="scroll-control-actions">
-        <button id="voucherCancel" class="nav-btn">CANCEL</button>
+        <button id="voucherCancel" class="nav-btn scroll-control-btn scroll-control-btn--ghost" type="button">CANCEL</button>
+        <button id="voucherConfirm" class="nav-btn scroll-control-btn scroll-control-btn--primary" type="button" disabled>SELECT A RELIC</button>
       </div>
     </div>
   </div>

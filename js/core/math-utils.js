@@ -133,10 +133,10 @@ export function getClosedDoorBlockerRects(room = Neo.currentRoom) {
   const doorX = (Neo.ROOM_W - Neo.DOOR) / 2;
   const doorY = (Neo.ROOM_H - Neo.DOOR) / 2;
   const blockers = [];
-  if (roomLocked || !hasExit('n')) blockers.push({ x: doorX, y: 0, w: Neo.DOOR, h: Neo.WALL + 10, door: 'n' });
-  if (roomLocked || !hasExit('s')) blockers.push({ x: doorX, y: Neo.ROOM_H - Neo.WALL - 10, w: Neo.DOOR, h: Neo.WALL + 10, door: 's' });
-  if (roomLocked || !hasExit('w')) blockers.push({ x: 0, y: doorY, w: Neo.WALL + 10, h: Neo.DOOR, door: 'w' });
-  if (roomLocked || !hasExit('e')) blockers.push({ x: Neo.ROOM_W - Neo.WALL - 10, y: doorY, w: Neo.WALL + 10, h: Neo.DOOR, door: 'e' });
+  if (roomLocked || !hasExit('n')) blockers.push({ x: doorX, y: 0, w: Neo.DOOR, h: Neo.WALL, door: 'n' });
+  if (roomLocked || !hasExit('s')) blockers.push({ x: doorX, y: Neo.ROOM_H - Neo.WALL, w: Neo.DOOR, h: Neo.WALL, door: 's' });
+  if (roomLocked || !hasExit('w')) blockers.push({ x: 0, y: doorY, w: Neo.WALL, h: Neo.DOOR, door: 'w' });
+  if (roomLocked || !hasExit('e')) blockers.push({ x: Neo.ROOM_W - Neo.WALL, y: doorY, w: Neo.WALL, h: Neo.DOOR, door: 'e' });
   return blockers;
 }
 

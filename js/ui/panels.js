@@ -334,7 +334,10 @@ export function bindInput() {
     Neo.ui.scrollControlCancel?.addEventListener('click', () => Neo.cancelScrollControlSelection?.());
     Neo.ui.scrollControlSearch?.addEventListener('input', event => Neo.updateScrollControlSearch?.(event.target?.value || ''));
     Neo.ui.shopVoucherRedeem?.addEventListener('click', () => Neo.openVoucherRedeem?.());
+    Neo.ui.voucherTypes?.addEventListener('click', event => Neo.handleVoucherChoiceClick?.(event));
     Neo.ui.voucherChoices?.addEventListener('click', event => Neo.handleVoucherChoiceClick?.(event));
+    Neo.ui.voucherSearch?.addEventListener('input', event => Neo.updateVoucherSearch?.(event.target?.value || ''));
+    Neo.ui.voucherConfirm?.addEventListener('click', () => Neo.confirmVoucherRedeem?.());
     Neo.ui.voucherCancel?.addEventListener('click', () => Neo.cancelVoucherRedeem?.());
 
     window.addEventListener('beforeunload', () => {
@@ -1375,6 +1378,7 @@ export function setVoucherModalOpen(open, options = {}) {
       clearPanelCloseEffect(effectTarget);
       Neo.ui.voucherModal.classList.remove('hidden');
       Neo.ui.voucherModal.setAttribute('aria-hidden', 'false');
+      Neo.ui.voucherSearch?.focus?.();
       return;
     }
     if (animateClose && isPanelOpen(Neo.ui.voucherModal)) playPanelCloseEffect(effectTarget);

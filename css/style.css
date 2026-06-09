@@ -6921,36 +6921,91 @@ border-bottom: black solid 2px;
   flex: 0 0 auto;
 }
 
-.voucher-choices {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 12px;
+.voucher-glyph {
+  color: #071018;
+  font-size: 18px;
+  font-weight: 900;
+  background: linear-gradient(135deg, #f4f6fb 0 32%, #b77dff 32% 66%, #ffd23f 66%);
 }
 
-.voucher-choice {
+.voucher-types {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.voucher-type {
+  display: inline-flex;
   align-items: center;
-  text-align: center;
-  border-color: color-mix(in srgb, var(--voucher-color, #d8e9ff) 62%, rgba(255,255,255,0.16));
+  gap: 7px;
+  min-height: 36px;
+  padding: 7px 11px;
+  border: 1px solid color-mix(in srgb, var(--voucher-color) 48%, var(--menu-border));
+  border-radius: 7px;
+  background: rgba(12, 16, 22, .68);
+  color: var(--menu-text);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: border-color .14s ease, box-shadow .14s ease, transform .12s ease;
 }
 
-.voucher-choice:hover:not(.is-disabled) {
-  box-shadow: 0 0 0 2px var(--voucher-color, #d8e9ff), 0 0 24px color-mix(in srgb, var(--voucher-color, #d8e9ff) 36%, transparent);
+.voucher-type:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: var(--voucher-color);
 }
 
-.voucher-choice.is-disabled {
-  opacity: 0.45;
+.voucher-type.is-selected {
+  color: #071018;
+  border-color: transparent;
+  background: var(--voucher-color);
+  box-shadow: 0 0 20px color-mix(in srgb, var(--voucher-color) 35%, transparent);
+}
+
+.voucher-type:disabled {
+  opacity: .34;
   cursor: not-allowed;
 }
 
-.voucher-choice__swatch {
-  width: 42px;
-  height: 42px;
-  border-radius: 10px;
-  border: 2px solid rgba(255,255,255,0.35);
-  margin: 6px auto;
-  box-shadow: 0 0 16px color-mix(in srgb, var(--voucher-color, #d8e9ff) 60%, transparent);
+.voucher-type__swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  border: 1px solid rgba(255,255,255,.45);
+  background: var(--voucher-color);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--voucher-color) 55%, transparent);
+}
+
+.voucher-type.is-selected .voucher-type__swatch {
+  border-color: rgba(7,16,24,.4);
+  box-shadow: none;
+}
+
+.voucher-type b {
+  min-width: 20px;
+  padding: 2px 5px;
+  border-radius: 8px;
+  background: rgba(0,0,0,.28);
+  color: inherit;
+  line-height: 1;
+  text-align: center;
+}
+
+@media (max-width: 560px) {
+  .voucher-types {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .voucher-type {
+    justify-content: center;
+    min-width: 0;
+    padding-inline: 6px;
+  }
 }
 
 /* --- Tab bar (mirrors the shop/inventory .panel-tabs pill bar) --- */

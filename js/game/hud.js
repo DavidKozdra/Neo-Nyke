@@ -1327,15 +1327,17 @@
       getState: () => getEquipmentState('gold_vac'),
       getStatusText: () => getEquipmentStatusText('gold_vac'),
     },
-    voucher: {
-      key: 'voucher',
-      shortName: 'VOUCH',
-      // Vouchers can only be redeemed at a shop counter.
-      activate: () => Neo.openVoucherRedeem?.(),
-      getState: () => (Neo.getItemCount('voucher') > 0 && Neo.currentRoom?.type === 'shop') ? 'ready' : 'blocked',
-      getStatusText: () => String(Neo.getItemCount('voucher') || 0),
-    },
   };
+  (Neo.VOUCHER_TYPES || []).forEach(voucher => {
+    ACTIVATABLE_ITEMS[voucher.key] = {
+      key: voucher.key,
+      shortName: `${voucher.label.toUpperCase()} V`,
+      // Each voucher opens directly to its own relic class.
+      activate: () => Neo.openVoucherRedeem?.(voucher.key),
+      getState: () => (Neo.getItemCount(voucher.key) > 0 && Neo.currentRoom?.type === 'shop') ? 'ready' : 'blocked',
+      getStatusText: () => String(Neo.getItemCount(voucher.key) || 0),
+    };
+  });
   // Live getter so remapped tool-slot keys are honored everywhere without rewiring.
   Object.defineProperty(Neo, 'EQUIPMENT_SLOT_KEYS', { get: getEquipmentSlotKeys, configurable: true });
   Neo.getEquipmentSlotKeys = getEquipmentSlotKeys;

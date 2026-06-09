@@ -927,17 +927,44 @@ export const ITEM_DEFS = {
       category: 'god',
       tags: ['tools', 'stealth', 'god'],
     },
-    voucher: {
-      key: 'voucher',
-      name: 'Voucher',
-      shortName: 'Voucher',
-      description: 'Tool. Redeem at a shop to claim a random relic of the colour you choose: white, purple, or red.',
+    voucher_white: {
+      key: 'voucher_white',
+      name: 'White Voucher',
+      shortName: 'White Voucher',
+      description: 'Tool. Redeem at a shop to choose any Knight-class relic.',
       rarity: 'knight',
-      color: '#ffe27a',
-      accent: '#fff6cf',
+      color: '#f4f6fb',
+      accent: '#9bd9ff',
       category: 'knight',
       tool: true,
-      tags: ['tools', 'voucher', 'choice'],
+      voucher: true,
+      tags: ['tools', 'voucher', 'choice', 'knight'],
+    },
+    voucher_purple: {
+      key: 'voucher_purple',
+      name: 'Purple Voucher',
+      shortName: 'Purple Voucher',
+      description: 'Tool. Redeem at a shop to choose any Wizard-class relic.',
+      rarity: 'wizard',
+      color: '#b77dff',
+      accent: '#f4d4ff',
+      category: 'wizard',
+      tool: true,
+      voucher: true,
+      tags: ['tools', 'voucher', 'choice', 'wizard'],
+    },
+    voucher_yellow: {
+      key: 'voucher_yellow',
+      name: 'Yellow Voucher',
+      shortName: 'Yellow Voucher',
+      description: 'Tool. Redeem at a shop to choose any God-class relic.',
+      rarity: 'god',
+      color: '#ffd23f',
+      accent: '#fff6cf',
+      category: 'god',
+      tool: true,
+      voucher: true,
+      tags: ['tools', 'voucher', 'choice', 'god'],
     },
   };
 // Scrolls are their own system, kept out of ITEM_DEFS / the relic pools. They are
@@ -1049,13 +1076,16 @@ export const ITEM_KEYS = Object.keys(ITEM_DEFS);
 // Legacy alias retained for call sites that reference SCROLL_OF_CONTROL_KEYS; the
 // canonical list is SCROLL_KEYS (derived from SCROLL_DEFS).
 export const SCROLL_OF_CONTROL_KEYS = SCROLL_KEYS;
-export const VOUCHER_KEY = 'voucher';
-// Colour the player can redeem a voucher for, mapped to the relic rarity granted.
-export const VOUCHER_COLORS = [
-  { id: 'white', label: 'White', rarity: 'knight', color: RARITY_NAME_COLORS.knight },
-  { id: 'purple', label: 'Purple', rarity: 'wizard', color: RARITY_NAME_COLORS.wizard },
-  { id: 'red', label: 'Red', rarity: 'god', color: RARITY_NAME_COLORS.god },
+export const LEGACY_VOUCHER_KEY = 'voucher';
+export const VOUCHER_TYPES = [
+  { id: 'white', key: 'voucher_white', label: 'White', classLabel: 'Knight', rarity: 'knight', color: '#f4f6fb' },
+  { id: 'purple', key: 'voucher_purple', label: 'Purple', classLabel: 'Wizard', rarity: 'wizard', color: '#b77dff' },
+  { id: 'yellow', key: 'voucher_yellow', label: 'Yellow', classLabel: 'God', rarity: 'god', color: '#ffd23f' },
 ];
+export const VOUCHER_KEYS = VOUCHER_TYPES.map(voucher => voucher.key);
+// Compatibility aliases for older call sites and save migrations.
+export const VOUCHER_KEY = VOUCHER_KEYS[0];
+export const VOUCHER_COLORS = VOUCHER_TYPES;
 export const SANDBOX_ENEMY_TYPES = [
     'hunter', 'charger', 'laser', 'knave', 'sniper', 'machine_gunner',
     'golem', 'cult_mage', 'cult_follower', 'summoner', 'shield_unit', 'healer', 'boss_spawner',
@@ -1112,11 +1142,16 @@ export const ITEM_DROP_WEIGHTS = [
     ['extra_battery', 10],
     ['mooggy_zoomies', 14],
     ['el_bartos_cape', 6],
-    ['voucher', 8],
+    ['voucher_white', 5],
+    ['voucher_purple', 2],
+    ['voucher_yellow', 1],
   ];
 export const ITEM_DROP_TABLE = Neo.buildWeightTable(ITEM_DROP_WEIGHTS);
 export const ELITE_ITEM_DROP_TABLE = Neo.buildWeightTable(
-    ITEM_DROP_WEIGHTS.map(([key, weight]) => [key, weight + (key !== 'neo_knife' ? 4 : 0)])
+    ITEM_DROP_WEIGHTS.map(([key, weight]) => [
+      key,
+      weight + (key !== 'neo_knife' && (!key.startsWith('voucher_') || key === 'voucher_white') ? 4 : 0),
+    ])
   );
 export const ELITE_INVENTORY_POOL = [
     'neo_knife',
@@ -1148,7 +1183,7 @@ export const ELITE_INVENTORY_POOL = [
     'extra_battery',
     'el_bartos_cape',
   ];
-export const WHITE_ITEM_POOL = ITEM_KEYS.filter(key => ITEM_DEFS[key]?.rarity === 'knight');
+export const WHITE_ITEM_POOL = ITEM_KEYS.filter(key => ITEM_DEFS[key]?.rarity === 'knight' && !ITEM_DEFS[key]?.voucher);
 export const ELITE_TYPE_DEFS = {
     burning: { label: 'Burning', color: '#ff9a3c' },
     bleeding: { label: 'Bleeding', color: '#ff4256' },
@@ -1272,9 +1307,14 @@ export const ui = {
     scrollControlCancel: document.getElementById('scrollControlCancel'),
     scrollControlConfirm: document.getElementById('scrollControlConfirm'),
     voucherModal: document.getElementById('voucherModal'),
+    voucherTitle: document.getElementById('voucherTitle'),
+    voucherCopy: document.getElementById('voucherCopy'),
+    voucherTypes: document.getElementById('voucherTypes'),
+    voucherSearch: document.getElementById('voucherSearch'),
     voucherMeta: document.getElementById('voucherMeta'),
     voucherChoices: document.getElementById('voucherChoices'),
     voucherCancel: document.getElementById('voucherCancel'),
+    voucherConfirm: document.getElementById('voucherConfirm'),
     invItemsList: document.getElementById('invItemsList'),
     invToolsList: document.getElementById('invToolsList'),
     invWeaponsList: document.getElementById('invWeaponsList'),
@@ -1675,7 +1715,10 @@ export const MOVE_BASE_STATS = {
   Neo.SCROLL_DEFS = SCROLL_DEFS;
   Neo.SCROLL_KEYS = SCROLL_KEYS;
   Neo.SCROLL_OF_CONTROL_KEYS = SCROLL_OF_CONTROL_KEYS;
+  Neo.LEGACY_VOUCHER_KEY = LEGACY_VOUCHER_KEY;
   Neo.VOUCHER_KEY = VOUCHER_KEY;
+  Neo.VOUCHER_KEYS = VOUCHER_KEYS;
+  Neo.VOUCHER_TYPES = VOUCHER_TYPES;
   Neo.VOUCHER_COLORS = VOUCHER_COLORS;
   Neo.ITEM_DROP_WEIGHTS = ITEM_DROP_WEIGHTS;
   Neo.ITEM_DROP_TABLE = ITEM_DROP_TABLE;

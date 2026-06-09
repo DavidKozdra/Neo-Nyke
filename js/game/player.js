@@ -6,6 +6,16 @@ const RENAMED_MOVE_KEYS = {
   fangs_of_death: 'random_pounce',
 };
 
+export function migrateLegacyVoucherInventory(items) {
+    if (!items || typeof items !== 'object') return items;
+    const legacyCount = Math.max(0, Number(items.voucher || 0));
+    if (legacyCount > 0) {
+      items.voucher_yellow = Number(items.voucher_yellow || 0) + legacyCount;
+    }
+    delete items.voucher;
+    return items;
+  }
+
 export function migratePlayerData(source) {
     const playerData = source || Neo.createDefaultPlayer();
     playerData.character = playerData.character || 'thorn_knight';
@@ -22,6 +32,9 @@ export function migratePlayerData(source) {
       playerData.items.scholar_cap = Number(playerData.items.scholar_cap || 0) + Number(playerData.items.scholors_cap || 0);
       delete playerData.items.scholors_cap;
     }
+    // The former generic voucher could claim any rarity, so preserve its full
+    // value by migrating each saved copy to the highest-class Yellow voucher.
+    migrateLegacyVoucherInventory(playerData.items);
     Neo.ITEM_KEYS.forEach(key => {
       playerData.items[key] = Number(playerData.items[key] || 0);
     });
@@ -336,7 +349,11 @@ export function triggerChronoSpringBuff() {
 
 export function getItemStats() {
     if (Neo.itemStatsCacheFrame === Neo.frameId && Neo.itemStatsCacheValue) return Neo.itemStatsCacheValue;
-    if (!Neo.godItemKeysCache) Neo.godItemKeysCache = Neo.ITEM_KEYS.filter(key => Neo.isGodTier?.(Neo.ITEM_DEFS[key]?.rarity));
+    if (!Neo.godItemKeysCache) {
+      Neo.godItemKeysCache = Neo.ITEM_KEYS.filter(key => (
+        Neo.isGodTier?.(Neo.ITEM_DEFS[key]?.rarity) && !Neo.ITEM_DEFS[key]?.voucher
+      ));
+    }
 
     const neoKnife = getItemCount('neo_knife');
   const toothOfThorn = getItemCount('tooth_of_thorn');
@@ -1173,14 +1190,33 @@ export function confirmWizardPawSelection() {
 
   // ── Voucher redemption ────────────────────────────────────────────────────
 
-  function getVoucherCount() {
-    return Math.max(0, Math.floor(Number(Neo.player?.items?.[Neo.VOUCHER_KEY] || 0)));
+  function getVoucherType(identifier = '') {
+    const value = String(identifier || '');
+    return (Neo.VOUCHER_TYPES || []).find(voucher => voucher.key === value || voucher.id === value) || null;
   }
 
-  // Keys that can never be granted as a voucher reward (the voucher itself and
-  // the scroll-of-control utility relics, which require manual targeting).
+  function getVoucherCount(voucherKey = '') {
+    if (voucherKey) {
+      const voucher = getVoucherType(voucherKey);
+      return voucher ? Math.max(0, Math.floor(Number(Neo.player?.items?.[voucher.key] || 0))) : 0;
+    }
+    return (Neo.VOUCHER_TYPES || []).reduce((total, voucher) => (
+      total + Math.max(0, Math.floor(Number(Neo.player?.items?.[voucher.key] || 0)))
+    ), 0);
+  }
+
+  function getOwnedVoucherTypes() {
+    return (Neo.VOUCHER_TYPES || []).filter(voucher => getVoucherCount(voucher.key) > 0);
+  }
+
+  // Vouchers cannot redeem into another voucher. Scrolls live outside ITEM_KEYS,
+  // but remain excluded defensively because they require their own targeting UI.
   function getVoucherExcludedKeys() {
-    return new Set([Neo.VOUCHER_KEY, ...(Neo.SCROLL_OF_CONTROL_KEYS || [])]);
+    return new Set([
+      Neo.LEGACY_VOUCHER_KEY || 'voucher',
+      ...(Neo.VOUCHER_KEYS || []),
+      ...(Neo.SCROLL_OF_CONTROL_KEYS || []),
+    ]);
   }
 
   function getVoucherRarityPool(rarity) {
@@ -1194,34 +1230,104 @@ export function confirmWizardPawSelection() {
     });
   }
 
-  function grantRandomItemOfRarity(rarity, random) {
-    const pool = getVoucherRarityPool(rarity);
-    if (!pool.length) return '';
-    const roll = typeof random === 'function' ? random() : Neo.rng();
-    const key = pool[Math.floor(roll * pool.length)] || pool[0];
-    Neo.collectItem(key);
-    return key;
+  function ensureVoucherRefs() {
+    if (!Neo.ui) return false;
+    const ids = [
+      'voucherModal', 'voucherTitle', 'voucherCopy', 'voucherTypes',
+      'voucherSearch', 'voucherMeta', 'voucherChoices', 'voucherCancel',
+      'voucherConfirm',
+    ];
+    ids.forEach(id => { if (!Neo.ui[id]) Neo.ui[id] = document.getElementById(id); });
+    return !!Neo.ui.voucherChoices;
   }
 
   function renderVoucherModal() {
-    if (!Neo.ui.voucherChoices) return;
-    const count = getVoucherCount();
-    if (Neo.ui.voucherMeta) {
-      Neo.ui.voucherMeta.textContent = count === 1 ? '1 voucher held' : `${count} vouchers held`;
+    const state = Neo.voucherRedeemState;
+    if (!state || !ensureVoucherRefs()) return;
+    let voucher = getVoucherType(state.voucherKey);
+    if (!voucher || getVoucherCount(voucher.key) <= 0) {
+      voucher = getOwnedVoucherTypes()[0] || null;
+      if (!voucher) {
+        cancelVoucherRedeem();
+        return;
+      }
+      state.voucherKey = voucher.key;
+      state.selectedItemKey = '';
     }
-    const colors = Neo.VOUCHER_COLORS || [];
-    Neo.ui.voucherChoices.innerHTML = colors.map(color => {
-      const poolSize = getVoucherRarityPool(color.rarity).length;
-      const disabled = poolSize <= 0;
-      return `<button class="wizard-paw-choice voucher-choice${disabled ? ' is-disabled' : ''}" type="button" data-voucher-color="${Neo.escapeHtml(color.id)}"${disabled ? ' disabled' : ''} style="--voucher-color:${Neo.escapeHtml(color.color)}">
-        <span class="wizard-paw-choice__eyebrow">${Neo.escapeHtml(color.label)}</span>
-        <span class="voucher-choice__swatch" style="background:${Neo.escapeHtml(color.color)}"></span>
-        <p>${disabled ? 'No relics available.' : `Random ${Neo.escapeHtml(color.label.toLowerCase())} relic.`}</p>
+
+    const pool = getVoucherRarityPool(voucher.rarity)
+      .map(key => {
+        const item = Neo.itemRegistry?.get?.(key) || Neo.ITEM_DEFS?.[key];
+        const tags = Array.isArray(item?.tags) ? item.tags : Array.from(item?.tags || []);
+        return {
+          key,
+          name: item?.name || Neo.titleCase?.(key) || key,
+          description: item?.description || '',
+          rarity: item?.rarity || item?.category || voucher.rarity,
+          search: `${item?.name || key} ${item?.description || ''} ${tags.join(' ')}`.toLowerCase(),
+        };
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
+    const query = String(state.query || '').trim().toLowerCase();
+    const choices = query ? pool.filter(item => item.search.includes(query)) : pool;
+    if (!choices.some(item => item.key === state.selectedItemKey)) state.selectedItemKey = '';
+
+    if (Neo.ui.voucherTitle) Neo.ui.voucherTitle.textContent = `${voucher.label.toUpperCase()} VOUCHER EXCHANGE`;
+    if (Neo.ui.voucherCopy) {
+      Neo.ui.voucherCopy.textContent = `Choose any ${voucher.classLabel} relic. One ${voucher.label.toLowerCase()} voucher will be consumed.`;
+    }
+    if (Neo.ui.voucherSearch) Neo.ui.voucherSearch.value = state.query || '';
+    if (Neo.ui.voucherTypes) {
+      Neo.ui.voucherTypes.innerHTML = (Neo.VOUCHER_TYPES || []).map(entry => {
+        const count = getVoucherCount(entry.key);
+        const selected = entry.key === voucher.key;
+        return `<button class="voucher-type${selected ? ' is-selected' : ''}" type="button" data-voucher-type="${Neo.escapeHtml(entry.key)}" aria-pressed="${selected}"${count <= 0 ? ' disabled' : ''} style="--voucher-color:${Neo.escapeHtml(entry.color)}">
+          <span class="voucher-type__swatch" aria-hidden="true"></span>
+          <span>${Neo.escapeHtml(entry.label)}</span>
+          <b>${count}</b>
+        </button>`;
+      }).join('');
+    }
+    if (Neo.ui.voucherMeta) {
+      Neo.ui.voucherMeta.textContent = `${choices.length} / ${pool.length} relics · ${getVoucherCount(voucher.key)} voucher${getVoucherCount(voucher.key) === 1 ? '' : 's'}`;
+      Neo.ui.voucherMeta.dataset.tone = state.selectedItemKey ? 'ready' : 'pending';
+    }
+
+    const ownedItems = Neo.player?.items || {};
+    const color = Neo.getRarityNameColor?.(voucher.rarity) || voucher.color;
+    const cards = choices.map(item => {
+      const selected = item.key === state.selectedItemKey;
+      const owned = Math.max(0, Math.floor(Number(ownedItems[item.key] || 0)));
+      return `<button class="scroll-control-choice${selected ? ' is-selected' : ''}" type="button" role="option" aria-selected="${selected}" aria-label="${Neo.escapeHtml(item.name + (item.description ? `. ${item.description}` : ''))}" title="${Neo.escapeHtml(item.description || item.name)}" data-voucher-item="${Neo.escapeHtml(item.key)}" style="--scroll-choice-color:${Neo.escapeHtml(color)}">
+        ${selected ? '<span class="scroll-control-choice__order scroll-control-choice__order--check">✓</span>' : ''}
+        <span class="scroll-control-choice__iconwrap">
+          <canvas class="scroll-control-choice__icon" data-item-icon="${Neo.escapeHtml(item.key)}" width="48" height="48"></canvas>
+          ${owned > 0 ? `<span class="scroll-control-choice__owned">×${owned}</span>` : ''}
+        </span>
+        <span class="scroll-control-choice__body">
+          <span class="scroll-control-choice__eyebrow">${Neo.escapeHtml(voucher.classLabel)} relic</span>
+          <span class="scroll-control-choice__name">${Neo.escapeHtml(item.name)}</span>
+        </span>
       </button>`;
     }).join('');
+    Neo.ui.voucherChoices.classList.add('is-item-grid');
+    Neo.ui.voucherChoices.innerHTML = cards
+      ? `<section class="scroll-control-group" role="group" aria-label="${Neo.escapeHtml(voucher.classLabel)} relics">
+          <div class="scroll-control-group__head">
+            <span class="scroll-control-group__title">${Neo.escapeHtml(voucher.classLabel)} relics</span>
+            <span class="scroll-control-group__count">${choices.length}</span>
+          </div>
+          <div class="scroll-control-group__grid">${cards}</div>
+        </section>`
+      : '<div class="scroll-control-empty"><span class="scroll-control-empty__glyph">⌕</span><h4>No matches</h4><p>Clear the search to see every relic in this class.</p></div>';
+    Neo.drawItemIconCanvases?.(Neo.ui.voucherChoices, 'data-item-icon');
+    if (Neo.ui.voucherConfirm) {
+      Neo.ui.voucherConfirm.disabled = !state.selectedItemKey;
+      Neo.ui.voucherConfirm.textContent = state.selectedItemKey ? 'EXCHANGE VOUCHER' : 'SELECT A RELIC';
+    }
   }
 
-  function openVoucherRedeem() {
+  function openVoucherRedeem(voucherKey = '') {
     if (!Neo.player) return false;
     if (Neo.currentRoom?.type !== 'shop') return false;
     if (Neo.isChallengeActive?.('no_items')) {
@@ -1229,7 +1335,17 @@ export function confirmWizardPawSelection() {
       return false;
     }
     if (getVoucherCount() <= 0) return false;
+    const requestedVoucher = getVoucherType(voucherKey);
+    const selectedVoucher = requestedVoucher && getVoucherCount(requestedVoucher.key) > 0
+      ? requestedVoucher
+      : getOwnedVoucherTypes()[0];
+    if (!selectedVoucher) return false;
     Neo.voucherRedeemOpen = true;
+    Neo.voucherRedeemState = {
+      voucherKey: selectedVoucher.key,
+      query: '',
+      selectedItemKey: '',
+    };
     Neo.setVoucherModalOpen?.(true);
     renderVoucherModal();
     return true;
@@ -1237,39 +1353,65 @@ export function confirmWizardPawSelection() {
 
   function cancelVoucherRedeem() {
     Neo.voucherRedeemOpen = false;
+    Neo.voucherRedeemState = null;
     Neo.setVoucherModalOpen?.(false);
   }
 
   function handleVoucherChoiceClick(event) {
-    const target = event.target instanceof Element ? event.target.closest('[data-voucher-color]') : null;
-    const colorId = target?.dataset?.voucherColor || '';
-    if (!colorId || target?.disabled) return;
-    redeemVoucherColor(colorId);
+    const target = event.target instanceof Element
+      ? event.target.closest('[data-voucher-type], [data-voucher-item]')
+      : null;
+    if (!target || target.disabled || !Neo.voucherRedeemState) return;
+    const voucherKey = target.dataset?.voucherType || '';
+    if (voucherKey) {
+      const voucher = getVoucherType(voucherKey);
+      if (!voucher || getVoucherCount(voucher.key) <= 0) return;
+      Neo.voucherRedeemState.voucherKey = voucher.key;
+      Neo.voucherRedeemState.query = '';
+      Neo.voucherRedeemState.selectedItemKey = '';
+      renderVoucherModal();
+      Neo.ui.voucherSearch?.focus?.();
+      return;
+    }
+    const itemKey = target.dataset?.voucherItem || '';
+    if (!itemKey) return;
+    Neo.voucherRedeemState.selectedItemKey = itemKey;
+    renderVoucherModal();
   }
 
-  function redeemVoucherColor(colorId) {
+  function updateVoucherSearch(value) {
+    if (!Neo.voucherRedeemState) return;
+    Neo.voucherRedeemState.query = String(value || '');
+    renderVoucherModal();
+  }
+
+  function confirmVoucherRedeem() {
     if (!Neo.player) return false;
     if (Neo.isChallengeActive?.('no_items')) return false;
-    if (getVoucherCount() <= 0) return false;
-    const color = (Neo.VOUCHER_COLORS || []).find(entry => entry.id === colorId);
-    if (!color) return false;
-    if (getVoucherRarityPool(color.rarity).length <= 0) return false;
-    // Consume one voucher.
-    Neo.player.items[Neo.VOUCHER_KEY] = Math.max(0, getVoucherCount() - 1);
-    if (Neo.player.items[Neo.VOUCHER_KEY] <= 0) delete Neo.player.items[Neo.VOUCHER_KEY];
+    const state = Neo.voucherRedeemState;
+    const voucher = getVoucherType(state?.voucherKey);
+    const itemKey = String(state?.selectedItemKey || '');
+    if (!voucher || getVoucherCount(voucher.key) <= 0) return false;
+    if (!itemKey || !getVoucherRarityPool(voucher.rarity).includes(itemKey)) return false;
+
+    Neo.player.items[voucher.key] = Math.max(0, getVoucherCount(voucher.key) - 1);
+    if (Neo.player.items[voucher.key] <= 0) delete Neo.player.items[voucher.key];
     Neo.syncEquipmentSlotsFromInventory?.();
-    Neo.player.voucherUseSerial = Math.max(0, Math.floor(Number(Neo.player.voucherUseSerial || 0))) + 1;
-    const random = Neo.createScopedRandom?.(`voucher:${color.id}:use:${Neo.player.voucherUseSerial}:floor:${Neo.floor}`) || Neo.rng;
-    const grantedKey = grantRandomItemOfRarity(color.rarity, random);
-    if (grantedKey) {
-      const grantedName = Neo.itemRegistry?.get?.(grantedKey)?.name || Neo.ITEM_DEFS?.[grantedKey]?.name || grantedKey;
-      Neo.spawnParticle?.({ x: Neo.player.x, y: Neo.player.y - 24, life: 0.9, text: `VOUCHER: ${grantedName}`, c: color.color });
-      Neo.playSfx?.('item_collect');
-      window.achievementEvents?.emit?.('shop:bought');
+    const grantedName = Neo.itemRegistry?.get?.(itemKey)?.name || Neo.ITEM_DEFS?.[itemKey]?.name || itemKey;
+    Neo.collectItem(itemKey);
+    Neo.spawnParticle?.({ x: Neo.player.x, y: Neo.player.y - 24, life: 0.9, text: `VOUCHER: ${grantedName}`, c: voucher.color });
+    Neo.playSfx?.('item_collect');
+    window.achievementEvents?.emit?.('shop:bought');
+
+    if (getVoucherCount() > 0) {
+      const nextVoucher = getVoucherCount(voucher.key) > 0 ? voucher : getOwnedVoucherTypes()[0];
+      state.voucherKey = nextVoucher.key;
+      state.query = '';
+      state.selectedItemKey = '';
+      renderVoucherModal();
+    } else {
+      cancelVoucherRedeem();
     }
-    // Keep the modal open if more vouchers remain, otherwise close it.
-    if (getVoucherCount() > 0) renderVoucherModal();
-    else cancelVoucherRedeem();
     Neo.markShopPanelDirty?.();
     Neo.markInventoryPanelDirty?.();
     Neo.renderShopPanel?.();
@@ -1291,9 +1433,10 @@ export function confirmWizardPawSelection() {
     banner.setAttribute('aria-hidden', show ? 'false' : 'true');
     if (show && Neo.ui.shopVoucherBannerSub) {
       const count = getVoucherCount();
-      Neo.ui.shopVoucherBannerSub.textContent = count > 1
-        ? `${count} vouchers ready — redeem for a relic of your chosen colour.`
-        : 'Redeem for a relic of your chosen colour.';
+      const summary = getOwnedVoucherTypes()
+        .map(voucher => `${getVoucherCount(voucher.key)} ${voucher.label}`)
+        .join(', ');
+      Neo.ui.shopVoucherBannerSub.textContent = `${count} voucher${count === 1 ? '' : 's'} ready (${summary}) — choose any relic in the matching class.`;
     }
   }
 
@@ -1538,11 +1681,12 @@ export function refreshFloorChargeStates() {
   Neo.confirmScrollControlSelection = confirmScrollControlSelection;
   Neo.cancelScrollControlSelection = cancelScrollControlSelection;
   Neo.getVoucherCount = getVoucherCount;
-  Neo.grantRandomItemOfRarity = grantRandomItemOfRarity;
+  Neo.getVoucherRarityPool = getVoucherRarityPool;
   Neo.openVoucherRedeem = openVoucherRedeem;
   Neo.cancelVoucherRedeem = cancelVoucherRedeem;
   Neo.handleVoucherChoiceClick = handleVoucherChoiceClick;
-  Neo.redeemVoucherColor = redeemVoucherColor;
+  Neo.updateVoucherSearch = updateVoucherSearch;
+  Neo.confirmVoucherRedeem = confirmVoucherRedeem;
   Neo.renderVoucherModal = renderVoucherModal;
   Neo.refreshShopVoucherBanner = refreshShopVoucherBanner;
   Neo.applyScrollAbundanceForFloor = applyScrollAbundanceForFloor;

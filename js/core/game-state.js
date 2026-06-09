@@ -476,6 +476,9 @@ export function resumeGame() {
       el_bartos_cape: 0,
       sparkle_charm: 0,
       churu_stick: 0,
+      voucher_white: 0,
+      voucher_purple: 0,
+      voucher_yellow: 0,
     };
     const character = Neo.CHARACTER_DEFS[Neo.chosenCharacter] || Neo.CHARACTER_DEFS.thorn_knight;
     const starterItems = getCharacterStartingItems(character.key);
@@ -662,6 +665,7 @@ export function resumeGame() {
       if (value === 'thorn') return 'neo_knife';
       if (value === 'hemo') return 'orb_of_blood';
       if (value === 'leech') return 'hemes_scarf';
+      if (value === 'voucher') return 'voucher_yellow';
       return value;
     });
     const items = Neo.ITEM_KEYS.filter(name => migrated.includes(name));

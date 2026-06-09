@@ -717,15 +717,15 @@
     });
   }
 
-  function blastRadius(x, y, radius, damage, color, sourceEnemy = null) {
+  function blastRadius(x, y, radius, damage, color, sourceEnemy = null, knockback = 200) {
     spawnAoeShockwave(x, y, radius, color, damage >= 28 ? 'heavy' : 'normal');
     if (sourceEnemy && Neo.player && Neo.dist(x, y, Neo.player.x, Neo.player.y) <= radius + Neo.player.r) {
-      damagePlayer(damage, Math.atan2(Neo.player.y - y, Neo.player.x - x), 200, sourceEnemy.type || 'enemy_aoe');
+      damagePlayer(damage, Math.atan2(Neo.player.y - y, Neo.player.x - x), knockback, sourceEnemy.type || 'enemy_aoe');
     }
-    if (!sourceEnemy) hitPvpPlayer2InRadius(x, y, radius, damage, 200, 'pvp_p1_aoe');
+    if (!sourceEnemy) hitPvpPlayer2InRadius(x, y, radius, damage, knockback, 'pvp_p1_aoe');
     forEachEnemyNearCircle(x, y, radius, enemy => {
       if (Neo.dist(x, y, enemy.x, enemy.y) > radius + enemy.r) return;
-      Neo.hitEnemy(enemy, damage, Math.atan2(enemy.y - y, enemy.x - x), 180, color);
+      Neo.hitEnemy(enemy, damage, Math.atan2(enemy.y - y, enemy.x - x), knockback * 0.9, color);
     }, { excludeEnemy: sourceEnemy });
     forEachDestructibleNearCircle(x, y, radius + 80, prop => {
       if (!prop.broken && !prop.hidden && Neo.dist(x, y, prop.x, prop.y) <= radius + prop.r) {

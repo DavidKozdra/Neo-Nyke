@@ -1259,7 +1259,7 @@
     const items = inventory?.items || {};
     const count = key => Number(items[key] || 0);
     const godItemStacks = Neo.ITEM_KEYS
-      .filter(key => Neo.isGodTier?.(Neo.ITEM_DEFS[key]?.rarity))
+      .filter(key => Neo.isGodTier?.(Neo.ITEM_DEFS[key]?.rarity) && !Neo.ITEM_DEFS[key]?.voucher)
       .reduce((total, key) => total + count(key), 0);
     const xpProgress = Neo.clamp((inventory?.xpToNext || 0) > 0 ? Number(inventory.xp || 0) / Number(inventory.xpToNext || 1) : 0, 0, 1);
     const characterDef = Neo.CHARACTER_DEFS?.[inventory?.character] || {};
@@ -2361,7 +2361,13 @@
   // Telegraph + detonation radius for the Queen's dying desperation blast.
   // Exposed on Neo so onEnemyDie (combat.js) can trigger the same windup.
   const QUEEN_FINISHER_WINDUP = 1.6;
-  const QUEEN_FINISHER_RADIUS = 260;
+  // Small, punchy detonation: tight blast radius but big knockback to fling the
+  // player away. +400 damage resistance while she charges so she can still be
+  // hit (and chunked) but mostly tanks through the windup instead of being fully
+  // immune.
+  const QUEEN_FINISHER_RADIUS = 130;
+  const QUEEN_FINISHER_KNOCKBACK = 720;
+  const QUEEN_FINISHER_RESISTANCE = 400;
   Neo.QUEEN_FINISHER_WINDUP = QUEEN_FINISHER_WINDUP;
   Neo.QUEEN_FINISHER_RADIUS = QUEEN_FINISHER_RADIUS;
 
@@ -2383,8 +2389,11 @@
       Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 12, life: 0.6, text: 'CHARGING', c: '#ff6ad5' });
     }
     if (enemy.queenFinisherActive && !enemy.queenFinisherDone) {
-      // Hold her in place and immune while the blast charges.
-      enemy.inv = Math.max(Number(enemy.inv || 0), 0.2);
+      // Hold her in place while the blast charges. She is no longer fully
+      // immune — instead she gains +400 damage resistance so the player can
+      // still chip her, but she reliably tanks the windup to her detonation.
+      enemy.inv = 0;
+      enemy.defenseMultiplier = Math.max(Number(enemy.defenseMultiplier || 1), QUEEN_FINISHER_RESISTANCE);
       enemy.hp = Math.max(1, enemy.hp);
       enemy.vx = 0;
       enemy.vy = 0;
@@ -2397,9 +2406,10 @@
         enemy.queenFinisherDone = true;
         const blastDamage = Math.round(enemy.dmg * 2.5);
         Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.7, ring: QUEEN_FINISHER_RADIUS, c: '#ff6ad5' });
-        Neo.blastRadius(enemy.x, enemy.y, QUEEN_FINISHER_RADIUS, blastDamage, '#ff6ad5', enemy);
+        // Small AOE, lots of knockback to fling the player clear.
+        Neo.blastRadius(enemy.x, enemy.y, QUEEN_FINISHER_RADIUS, blastDamage, '#ff6ad5', enemy, QUEEN_FINISHER_KNOCKBACK);
         // Take herself out with the blast.
-        enemy.inv = 0;
+        enemy.defenseMultiplier = 1;
         enemy.hp = 0;
         Neo.onEnemyDie(enemy);
       }
