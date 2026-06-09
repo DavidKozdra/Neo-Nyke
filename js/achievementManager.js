@@ -5,6 +5,7 @@ const achievementEvents = (() => {
       (listeners[event] = listeners[event] || []).push(fn);
     },
     emit(event, payload) {
+      if (window.Neo?.gameMode === 'practice') return;
       (listeners[event] || []).forEach(fn => fn(payload));
     },
   };

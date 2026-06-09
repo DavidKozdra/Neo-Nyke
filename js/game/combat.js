@@ -2625,7 +2625,7 @@
       Neo.pickups.push({ x: enemy.x, y: enemy.y, type: 'potion' });
     }
 
-    if (!isTutorialDummy && Neo.isBossType(enemy.type)) {
+    if (!isTutorialDummy && Neo.gameMode !== 'practice' && Neo.isBossType(enemy.type)) {
       const crystalStacks = Math.max(0, Neo.getItemCount('rich_mans_blues'));
       if (crystalStacks > 0) {
         Neo.metaProgress.loopCrystals = Number(Neo.metaProgress.loopCrystals || 0) + crystalStacks;
@@ -2990,7 +2990,7 @@
 
   function applyArtificerChargerPickup(previousCount, collectCount) {
     if (!Neo.player || previousCount + collectCount <= 0) return;
-    if (previousCount + collectCount >= 2) {
+    if (previousCount > 0) {
       Neo.lastDamageSource = 'Artificer Charger';
       Neo.lastDamageSourceKey = 'artificer_charger';
       Neo.player.hp = 0;
@@ -2998,7 +2998,6 @@
       setTimeout(() => Neo.die(), 0);
       return;
     }
-    if (previousCount > 0) return;
 
     const levelsGained = Math.max(1, Math.floor(Number(Neo.player.level) || 1));
     const gains = Neo.getArtificerLevelGains(1);
@@ -3015,7 +3014,7 @@
   }
 
   function grantRichMansBluesPickupCrystals(collectCount) {
-    if (!Neo.player || collectCount <= 0) return;
+    if (!Neo.player || collectCount <= 0 || Neo.gameMode === 'practice') return;
     const gained = Neo.getRichMansBluesCrystalReward(
       Neo.floorsEntered ?? Neo.floor,
       collectCount,

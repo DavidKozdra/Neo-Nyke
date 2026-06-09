@@ -10,7 +10,7 @@ export function countOwnedToolStacks(items = null, itemDefs = null) {
   const inventory = items || {};
   const definitions = itemDefs || {};
   return Object.keys(definitions).reduce((total, key) => {
-    if (!definitions[key]?.tool) return total;
+    if (!definitions[key]?.tool || definitions[key]?.voucher) return total;
     return total + Math.max(0, Math.floor(Number(inventory[key]) || 0));
   }, 0);
 }
@@ -304,7 +304,14 @@ export function isMoveAllowedForCharacter(moveKey, characterKey = Neo.player?.ch
   // not chase or attack a hidden player.
 export function isPlayerHidden(playerData = Neo.player) {
     if (!playerData) return false;
-    if (Number(playerData.equipmentEffects?.el_bartos_cape?.time || 0) > 0) return true;
+    // El Barto's Cape conceals the player for only the first HALF of its active
+    // duration; once past the midpoint enemies can see and target the player again
+    // (the cape effect — graffiti, HUD timer — keeps running the full duration).
+    const capeEffect = playerData.equipmentEffects?.el_bartos_cape;
+    if (capeEffect && Number(capeEffect.time || 0) > 0) {
+      const total = Number(capeEffect.total || 0);
+      if (total <= 0 || Number(capeEffect.time || 0) > total / 2) return true;
+    }
     if (Number(playerData.princessFlightTime || 0) > 0) return true;
     if (Number(playerData.cowardsWayTime || 0) > 0) return true;
     if (Number(playerData.warpHideTime || 0) > 0) return true;
@@ -430,7 +437,9 @@ export function getItemStats() {
     // build is. Procy Pickle itself isn't a tool, so it never counts toward this.
     const ownedToolCount = procyPickle > 0
       ? Neo.ITEM_KEYS.reduce((total, key) => (
-          getItemCount(key) > 0 && Neo.ITEM_DEFS[key]?.tool ? total + 1 : total
+          getItemCount(key) > 0 && Neo.ITEM_DEFS[key]?.tool && !Neo.ITEM_DEFS[key]?.voucher
+            ? total + 1
+            : total
         ), 0)
       : 0;
     const oracleLens = getItemCount('oracles_lens') > 0;

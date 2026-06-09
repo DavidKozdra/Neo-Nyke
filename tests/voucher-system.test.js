@@ -36,7 +36,11 @@ describe('voucher classes', () => {
       expect.objectContaining({ key: 'voucher_yellow', label: 'Yellow', rarity: 'god' }),
     ]);
     expect(data.VOUCHER_KEYS).toEqual(['voucher_white', 'voucher_purple', 'voucher_yellow']);
-    data.VOUCHER_KEYS.forEach(key => expect(data.ITEM_DEFS[key]?.voucher).toBe(true));
+    data.VOUCHER_KEYS.forEach(key => {
+      expect(data.ITEM_DEFS[key]?.voucher).toBe(true);
+      expect(data.ITEM_DEFS[key]?.tool).not.toBe(true);
+      expect(data.ITEM_DEFS[key]?.tags).not.toContain('tools');
+    });
   });
 
   test('keeps total base voucher drop weight equal to the former generic voucher', () => {
@@ -80,5 +84,13 @@ describe('voucher picker markup', () => {
     expect(html).toContain('id="voucherChoices"');
     expect(html).toContain('id="voucherConfirm"');
     expect(html).not.toContain('You will receive a random relic of that rarity.');
+  });
+});
+
+describe('voucher tool classification', () => {
+  const hudSource = fs.readFileSync(path.join(__dirname, '../js/game/hud.js'), 'utf8');
+
+  test('does not register vouchers as activatable equipment tools', () => {
+    expect(hudSource).not.toContain('ACTIVATABLE_ITEMS[voucher.key]');
   });
 });

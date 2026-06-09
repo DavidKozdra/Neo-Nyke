@@ -1012,7 +1012,10 @@
     const facing = getFacingDirection(Neo.player, aimAngle);
     const shadowColor = Neo.godTimer > 0 ? 'rgba(255,248,210,0.65)' : 'rgba(0,0,0,0.25)';
     const _reduceFlash = window.NeoSettings?.getAccess()?.reduceFlash;
-    const capeActive = Number(Neo.player?.equipmentEffects?.el_bartos_cape?.time || 0) > 0;
+    // The cape only renders the player near-invisible while actually concealed (first
+    // half of its duration); after the midpoint they fade back into view.
+    const capeActive = Number(Neo.player?.equipmentEffects?.el_bartos_cape?.time || 0) > 0
+      && (Neo.isPlayerHidden?.(Neo.player) ?? true);
     let playerRingIndex = 0;
     for (let s = 0; s < Neo.STATUS_KEYS.length; s += 1) {
       const key = Neo.STATUS_KEYS[s];

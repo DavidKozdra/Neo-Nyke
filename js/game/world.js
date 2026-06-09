@@ -2299,6 +2299,10 @@
     return true;
   }
 
+  function getChallengeRuneMaxSpeed(playerMoveSpeed = 228) {
+    return Math.max(0, Number(playerMoveSpeed) || 0) * 1.8;
+  }
+
   function updatePickups(dt = 0.016) {
     const itemStats = Neo.getItemStats?.() || {};
     const autoVacuumRange = Math.max(0, Number(itemStats.pickupVacuumRange || 0));
@@ -2360,8 +2364,30 @@
           pickup.vx = Math.cos(angle) * speed;
           pickup.vy = Math.sin(angle) * speed;
         }
-        pickup.x += pickup.vx * dt;
-        pickup.y += pickup.vy * dt;
+        let runeMoveX = pickup.vx;
+        let runeMoveY = pickup.vy;
+        // Runes flee from the player so collecting them feels like a puzzle/chase
+        // rather than a passive vacuum. Their total drift plus flee speed is capped
+        // at 1.8x base player movement, leaving the standard dash fast enough to catch them.
+        const fleeRadius = 150;
+        const fdx = pickup.x - playerX;
+        const fdy = pickup.y - playerY;
+        const fleeDistSq = fdx * fdx + fdy * fdy;
+        if (fleeDistSq < fleeRadius * fleeRadius && fleeDistSq > 0.000001) {
+          const fleeDist = Math.sqrt(fleeDistSq);
+          const fleeSpeed = 250 + (1 - fleeDist / fleeRadius) * 260;
+          runeMoveX += (fdx / fleeDist) * fleeSpeed;
+          runeMoveY += (fdy / fleeDist) * fleeSpeed;
+        }
+        const runeMoveSpeed = Math.hypot(runeMoveX, runeMoveY);
+        const runeMaxSpeed = getChallengeRuneMaxSpeed();
+        if (runeMoveSpeed > runeMaxSpeed) {
+          const speedScale = runeMaxSpeed / runeMoveSpeed;
+          runeMoveX *= speedScale;
+          runeMoveY *= speedScale;
+        }
+        pickup.x += runeMoveX * dt;
+        pickup.y += runeMoveY * dt;
         if (pickup.x <= minX || pickup.x >= maxX) {
           pickup.x = Neo.clamp(pickup.x, minX, maxX);
           pickup.vx *= -1;
@@ -2369,18 +2395,6 @@
         if (pickup.y <= minY || pickup.y >= maxY) {
           pickup.y = Neo.clamp(pickup.y, minY, maxY);
           pickup.vy *= -1;
-        }
-        // Runes flee from the player so collecting them feels like a puzzle/chase
-        // rather than a passive vacuum. Closer = stronger shove away.
-        const fleeRadius = 150;
-        const fdx = pickup.x - playerX;
-        const fdy = pickup.y - playerY;
-        const fleeDistSq = fdx * fdx + fdy * fdy;
-        if (fleeDistSq < fleeRadius * fleeRadius && fleeDistSq > 0.000001) {
-          const fleeDist = Math.sqrt(fleeDistSq);
-          const fleeForce = (250 + (1 - fleeDist / fleeRadius) * 260) * dt;
-          pickup.x = Neo.clamp(pickup.x + (fdx / fleeDist) * fleeForce, minX, maxX);
-          pickup.y = Neo.clamp(pickup.y + (fdy / fleeDist) * fleeForce, minY, maxY);
         }
       }
       // A/B chest dwell areas fill a meter while the player stands inside, and
@@ -2993,14 +3007,16 @@
     Neo.syncSeedState();
     const crystalBonus = Math.max(0, Math.round(Neo.getActiveChallengeCrystalBonusMultiplier()));
     const titheBonus = Neo.hasLegacy('crystal_tithe') && Neo.HARD_DIFFICULTIES.has(Neo.selectedDifficulty) ? 1 : 0;
-    const crystalsThisLoop = 1 + crystalBonus + titheBonus;
-    Neo.metaProgress.loopCrystals = Number(Neo.metaProgress.loopCrystals || 0) + crystalsThisLoop;
-    Neo.runCrystalsEarned = Number(Neo.runCrystalsEarned || 0) + crystalsThisLoop;
-    if (crystalBonus > 0) {
-      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 42, life: 1.1, text: `+${crystalBonus} CHALLENGE LC`, c: '#8dd4ff' });
-    }
-    if (titheBonus > 0) {
-      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 56, life: 1.1, text: `+1 TITHE LC`, c: '#c9a8f0' });
+    if (Neo.gameMode !== 'practice') {
+      const crystalsThisLoop = 1 + crystalBonus + titheBonus;
+      Neo.metaProgress.loopCrystals = Number(Neo.metaProgress.loopCrystals || 0) + crystalsThisLoop;
+      Neo.runCrystalsEarned = Number(Neo.runCrystalsEarned || 0) + crystalsThisLoop;
+      if (crystalBonus > 0) {
+        Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 42, life: 1.1, text: `+${crystalBonus} CHALLENGE LC`, c: '#8dd4ff' });
+      }
+      if (titheBonus > 0) {
+        Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 56, life: 1.1, text: `+1 TITHE LC`, c: '#c9a8f0' });
+      }
     }
     if (Neo.hasLegacy('bank_interest')) {
       Neo.metaProgress.coins = Number(Neo.metaProgress.coins || 0) + 50;
@@ -3056,6 +3072,7 @@
   Neo.canSpawnJesterPortal = canSpawnJesterPortal;
   Neo.spawnJesterPortalPickup = spawnJesterPortalPickup;
   Neo.useJesterPortal = useJesterPortal;
+  Neo.getChallengeRuneMaxSpeed = getChallengeRuneMaxSpeed;
   Neo.updatePickups = updatePickups;
   Neo.updateDeadBodies = updateDeadBodies;
   Neo.spawnProjectile = spawnProjectile;

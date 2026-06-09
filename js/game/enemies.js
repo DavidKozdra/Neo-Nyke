@@ -303,7 +303,7 @@
     }
     if (type === 'runes') {
       return {
-        timer: Neo.scaleChallengeTimer(22),
+        timer: Neo.scaleChallengeTimer(20),
         tick: Math.max(1.6, 2.9 - floor * 0.08),
         spawnCount: floor >= 7 ? 2 : 1,
       };
@@ -737,7 +737,13 @@
 
   function spawnEnemy(type, x, y, elite = false) {
     const sandbox = Neo.getActiveSandboxSettings();
-    if (sandbox && !sandbox.allowedEnemies.includes(type)) {
+    // The sandbox allowedEnemies list governs the *wave* enemy pool only. Bosses
+    // (and the mooggy assassin) are spawned by dedicated story/secret logic —
+    // e.g. spawnBowmanBane in a revisited secret room — and must keep their real
+    // type. Rewriting them to allowedEnemies[0] used to spawn a 15px "little guy"
+    // with the boss's death hooks intact, which still cleared the room and farmed
+    // the secret-boss reward chest.
+    if (sandbox && !sandbox.allowedEnemies.includes(type) && !isBossType(type) && type !== 'mooggy') {
       type = sandbox.allowedEnemies[0] || 'hunter';
     }
     const eliteAllowed = !!elite && canSpawnEliteEnemies();
@@ -4442,11 +4448,69 @@
     }
   }
 
+  // Enemy types that fight at range. When blinded (player hidden) these fire scattered
+  // suppressing shots in random directions; everything else falls back to blind melee
+  // swings. Bosses/special-AI types are excluded — they keep their own behaviours.
+  const BLIND_RANGED_TYPES = new Set([
+    'cult_mage', 'sniper', 'machine_gunner', 'summoner', 'healer', 'cult_follower',
+  ]);
+
+  // Suppressing fire / flailing defense while an enemy can't see the player. The shot
+  // or swing goes toward a random point in the room, so it only connects if the player
+  // happens to be in the way — enough to make hiding feel risky, not a free pass.
+  function blindDefendEnemy(enemy, dt) {
+    if (Neo.BOSS_TYPES.has(enemy.type)) return; // bosses run their own scripted AI
+    if (enemy.stun > 0 || enemy.airborne) return;
+    enemy.attackCd = Math.max(0, Number(enemy.attackCd || 0) - dt);
+
+    // Resolve an in-progress blind melee swing (may catch a player who wandered close).
+    if (enemy.swingTime > 0) {
+      enemy.swingTime -= dt;
+      enemy.vx *= 0.7;
+      enemy.vy *= 0.7;
+      if (enemy.swingTime <= 0 && Neo.dist(enemy.x, enemy.y, Neo.player.x, Neo.player.y) < enemy.r + Neo.player.r + 20) {
+        const angle = Math.atan2(Neo.player.y - enemy.y, Neo.player.x - enemy.x);
+        Neo.damagePlayer(enemy.dmg, angle, 180, enemy.type);
+      }
+      return;
+    }
+    if (enemy.attackCd > 0) return;
+
+    const angle = Neo.rand(0, Math.PI * 2);
+    if (BLIND_RANGED_TYPES.has(enemy.type)) {
+      const tuning = Neo.getEnemyDifficultyTuning();
+      const speed = 260;
+      Neo.spawnProjectile({
+        x: enemy.x + Math.cos(angle) * (enemy.r + 4),
+        y: enemy.y + Math.sin(angle) * (enemy.r + 4),
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        r: 4,
+        life: 1.3,
+        enemy: true,
+        kind: 'enemy_shot',
+        source: `${enemy.type}_blind_shot`,
+        damage: enemy.dmg,
+      });
+      Neo.spawnParticle({ x: enemy.x + Math.cos(angle) * 10, y: enemy.y + Math.sin(angle) * 10, life: 0.14, c: '#ffce8a' });
+      enemy.attackCd = Neo.rand(1.6, 2.6) * (tuning?.rangedCadence || 1);
+    } else {
+      // Melee flail: lunge a touch in the swing direction so it can clip a close player.
+      enemy.swingTime = 0.18;
+      steerEnemy(enemy, Math.cos(angle), Math.sin(angle), (enemy.speed || 60) * 0.6, 3.0, dt);
+      enemy.attackCd = Neo.rand(1.4, 2.4);
+    }
+  }
+
   // When the player is hidden (cape/flying/warp), enemies have no target. Instead of
   // freezing in place, they pick random points in the room and amble toward them so the
   // room still feels alive. Targets are re-rolled on arrival or after a short timer.
+  // They also keep up a blind defense — scattered shots or flailing swings.
   function wanderEnemy(enemy, dt) {
     if (enemy.beamTime > 0) { enemy.beamTime = 0; if (enemy.state === 'elite_laser') enemy.state = 'idle'; }
+    blindDefendEnemy(enemy, dt);
+    // A mid-swing flail handles its own micro-movement; don't fight it with wander steer.
+    if (enemy.swingTime > 0) return;
     enemy.wanderT = Math.max(0, (enemy.wanderT || 0) - dt);
     const margin = (enemy.r || 8) + Neo.WALL + 4;
     const reached = enemy.wanderTx != null

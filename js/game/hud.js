@@ -591,6 +591,7 @@
   }
 
   function getReviveCost() {
+    if (Neo.gameMode === 'practice') return 0;
     return Neo.runRevivesUsed > 0 ? 3 : 1;
   }
 
@@ -623,7 +624,8 @@
     Neo.lastDamageSource = '';
     Neo.lastDamageSourceKey = '';
     Neo.setGameState('play');
-    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 28, life: 1, text: `REVIVED -${cost} LC`, c: '#8dd4ff' });
+    const reviveText = cost > 0 ? `REVIVED -${cost} LC` : 'REVIVED';
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 28, life: 1, text: reviveText, c: '#8dd4ff' });
     persistMetaSoon();
     scheduleRunSave();
     updateHud();
@@ -966,7 +968,8 @@
         el_bartos_cape: 5,
         gold_vac: 30,
       }[itemKey] || 0;
-      player.equipmentEffects[itemKey] = { time: def.duration + extraStacks * durationBonus, tick: 0, stacks };
+      const totalTime = def.duration + extraStacks * durationBonus;
+      player.equipmentEffects[itemKey] = { time: totalTime, total: totalTime, tick: 0, stacks };
     }
     if (itemKey === 'panic_button') activatePanicButton();
     if (itemKey === 'sparkle_charm') activateSparkleCharm();
@@ -1202,7 +1205,9 @@
         dropSweepyMine(effect.stacks);
         effect.tick = 0.42;
       } else if (key === 'el_bartos_cape') {
-        player.inv = Math.max(Number(player.inv || 0), 0.12);
+        // Only keep the player invulnerable while actually concealed (first half of
+        // the cape's duration). After that the cape is just cosmetic/graffiti.
+        if (Neo.isPlayerHidden?.(player)) player.inv = Math.max(Number(player.inv || 0), 0.12);
       }
       if (key === 'gold_vac') Neo.itemStatsCacheFrame = -1;
       if (effect.time <= 0) {
@@ -1328,16 +1333,6 @@
       getStatusText: () => getEquipmentStatusText('gold_vac'),
     },
   };
-  (Neo.VOUCHER_TYPES || []).forEach(voucher => {
-    ACTIVATABLE_ITEMS[voucher.key] = {
-      key: voucher.key,
-      shortName: `${voucher.label.toUpperCase()} V`,
-      // Each voucher opens directly to its own relic class.
-      activate: () => Neo.openVoucherRedeem?.(voucher.key),
-      getState: () => (Neo.getItemCount(voucher.key) > 0 && Neo.currentRoom?.type === 'shop') ? 'ready' : 'blocked',
-      getStatusText: () => String(Neo.getItemCount(voucher.key) || 0),
-    };
-  });
   // Live getter so remapped tool-slot keys are honored everywhere without rewiring.
   Object.defineProperty(Neo, 'EQUIPMENT_SLOT_KEYS', { get: getEquipmentSlotKeys, configurable: true });
   Neo.getEquipmentSlotKeys = getEquipmentSlotKeys;

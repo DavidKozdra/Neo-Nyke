@@ -131,8 +131,13 @@ describe('loop-exclusive Blue relics', () => {
       attackSpeed: 0.02,
     });
     expect(countOwnedToolStacks(
-      { equipped_tool: 1, unequipped_tool: 2, relic: 9 },
-      { equipped_tool: { tool: true }, unequipped_tool: { tool: true }, relic: {} },
+      { equipped_tool: 1, unequipped_tool: 2, voucher: 8, relic: 9 },
+      {
+        equipped_tool: { tool: true },
+        unequipped_tool: { tool: true },
+        voucher: { tool: true, voucher: true },
+        relic: {},
+      },
     )).toBe(3);
     expect(getCloakDamageReductionBonus(1, 3)).toBeCloseTo(0.53);
     expect(getCloakDamageReductionBonus(2, 3)).toBeCloseTo(1.03);
@@ -161,13 +166,14 @@ describe('loop-exclusive Blue relics', () => {
     expect(source).toContain("onEnemyDie(other, { forceDeath: true, suppressRoomClear: true });");
   });
 
-  test('wires Artificer size scaling and lethal second-stack behavior', () => {
+  test('wires Artificer size scaling and only kills on pickups after the first', () => {
     const playerSource = fs.readFileSync(playerPath, 'utf8');
     const combatSource = fs.readFileSync(combatPath, 'utf8');
 
     expect(playerSource).toContain('(artificerCharger > 0 ? 1.267 : 1)');
     expect(playerSource).toContain('beamWidthMultiplier: artificerCharger > 0 ? 1.05 : 1');
-    expect(combatSource).toContain('if (previousCount + collectCount >= 2)');
+    expect(combatSource).toContain('if (previousCount > 0)');
+    expect(combatSource).not.toContain('if (previousCount + collectCount >= 2)');
     expect(combatSource).toContain("Neo.lastDamageSourceKey = 'artificer_charger'");
   });
 

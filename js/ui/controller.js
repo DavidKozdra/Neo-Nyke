@@ -2435,7 +2435,9 @@ export function createUIController(view) {
         if (reviveButton) {
           const cost = Neo.getReviveCost();
           const crystals = Number(Neo.metaProgress.loopCrystals || 0);
-          reviveButton.innerHTML = `REVIVE ${cost} <canvas class="dead-action-lc-icon" width="20" height="20"></canvas>`;
+          reviveButton.innerHTML = cost > 0
+            ? `REVIVE ${cost} <canvas class="dead-action-lc-icon" width="20" height="20"></canvas>`
+            : 'REVIVE FREE';
           const reviveIcon = reviveButton.querySelector('.dead-action-lc-icon');
           if (reviveIcon && typeof Neo.drawPixelIcon === 'function') {
             Neo.drawPixelIcon(reviveIcon, '#83f3ff', [
@@ -2449,7 +2451,11 @@ export function createUIController(view) {
             ]);
           }
           reviveButton.disabled = crystals < cost;
-          reviveButton.title = crystals < cost ? `Need ${cost} Loop Crystal${cost === 1 ? '' : 's'}` : `Spend ${cost} Loop Crystal${cost === 1 ? '' : 's'} to revive`;
+          reviveButton.title = cost === 0
+            ? 'Free revive'
+            : crystals < cost
+              ? `Need ${cost} Loop Crystal${cost === 1 ? '' : 's'}`
+              : `Spend ${cost} Loop Crystal${cost === 1 ? '' : 's'} to revive`;
         }
 
         // ── Records row ────────────────────────────────────────────────────
