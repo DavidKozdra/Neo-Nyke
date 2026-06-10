@@ -2,6 +2,10 @@
   const COMBAT_SPATIAL_PADDING = 180;
   const DEFAULT_DAMAGE_OPTIONS = {};
   const NO_BLEED_BONUS_DAMAGE_OPTIONS = { applyBleedBonus: false };
+  const MOVING_GUN_PENALTIES = {
+    magenta_degale: { maxSpread: 0.18, recoilBonus: 1.4 },
+    magenta_p90: { maxSpread: 0.14, recoilBonus: 1 },
+  };
 
   function distanceSq(ax, ay, bx, by) {
     const dx = ax - bx;
@@ -327,13 +331,27 @@
     Neo.playSfx?.('fire');
   }
 
+  function getMovingGunPenalty(weaponKey) {
+    const tuning = MOVING_GUN_PENALTIES[weaponKey];
+    if (!tuning || !Neo.player) return { spread: 0, recoilMultiplier: 1 };
+    const speed = Math.hypot(Number(Neo.player.vx || 0), Number(Neo.player.vy || 0));
+    const movementRatio = Neo.clamp((speed - 24) / (228 - 24), 0, 1);
+    return {
+      spread: tuning.maxSpread * movementRatio,
+      recoilMultiplier: 1 + tuning.recoilBonus * movementRatio,
+    };
+  }
+
   function fireConfiguredWeaponProjectile(weaponKey, angle, damage, knockback, overrides = {}) {
-    const config = Neo.buildWeaponProjectileConfig?.(weaponKey, { angle, damage, knockback, ...overrides });
+    const movementPenalty = getMovingGunPenalty(weaponKey);
+    const shotAngle = angle + Neo.rand(movementPenalty.spread, -movementPenalty.spread, 'encounter');
+    const config = Neo.buildWeaponProjectileConfig?.(weaponKey, { angle: shotAngle, damage, knockback, ...overrides });
     if (!config) return false;
     spawnWeaponProjectile(config);
     if (config.recoil > 0) {
-      Neo.player.vx -= Math.cos(config.angle) * config.recoil;
-      Neo.player.vy -= Math.sin(config.angle) * config.recoil;
+      const recoil = config.recoil * movementPenalty.recoilMultiplier;
+      Neo.player.vx -= Math.cos(config.angle) * recoil;
+      Neo.player.vy -= Math.sin(config.angle) * recoil;
     }
     if (config.muzzleRing > 0) {
       Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.18, ring: config.muzzleRing, c: config.color });

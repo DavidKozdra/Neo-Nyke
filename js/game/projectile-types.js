@@ -53,7 +53,7 @@ const WEAPON_PROJECTILE_ATTACKS = {
   magenta_p90: {
     projectileType: 'burst_round',
     burstCount: 5,
-    burstDelay: 0.04,
+    burstDelay: 0.08,
     spread: 0.05,
   },
   void_piercer: { projectileType: 'void_lance' },
