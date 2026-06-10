@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'neonyke-v28';
+const CACHE_VERSION = 'neonyke-v29';
 const CACHE_META = 'neonyke-cache-meta';
 const CACHE_META_KEY = '/__neonyke_cache_meta__';
 const CACHE_REFRESH_INTERVAL_MS = 5 * 60 * 60 * 1000;
@@ -19,6 +19,8 @@ const PRECACHE = [
   '/assets/sounds/Player Death.wav',
   '/Koz_Engine_Lib/Core/koz-engine.global.js',
   '/assets/sprites/combatants.js',
+  '/assets/sprites/chars/Mateo.png',
+  '/assets/sprites/chars/princess.png',
   '/assets/sprites/environment.js',
   '/assets/sprites/icons.js',
   '/js/achievements.js',
@@ -48,6 +50,7 @@ const PRECACHE = [
   '/js/draw/lighting.js',
   '/js/draw/props.js',
   '/js/draw/atlas.js',
+  '/js/draw/character-sheets.js',
   '/js/draw/entities.js',
   '/js/draw/hud.js',
   '/js/core/canvas-recovery.js',

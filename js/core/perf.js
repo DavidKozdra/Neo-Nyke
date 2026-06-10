@@ -176,6 +176,7 @@ export async function boot() {
     perfEnd('Neo.ui.hud', hudPerfStart);
   });
   if (!Neo.metaProgress) Neo.metaProgress = Neo.createDefaultMeta();
+  await Neo.preloadCharacterSheets?.();
   Neo.SPRITE_ATLAS = Neo.buildSpriteAtlas();
   Neo.ENV_TILE_ATLAS = Neo.buildEnvironmentTileAtlas();
   Neo.bindCanvasRecovery?.();

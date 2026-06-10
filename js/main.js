@@ -25,6 +25,7 @@ import './draw/environment.js';
 import './draw/lighting.js';
 import './draw/props.js';
 import './draw/atlas.js';
+import './draw/character-sheets.js';
 import './draw/entities.js';
 import './draw/hud.js';
 import './core/canvas-recovery.js';

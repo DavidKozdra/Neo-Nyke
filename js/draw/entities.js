@@ -3,23 +3,56 @@
     const entries = [];
     Object.keys(Neo.SPRITE_DEFS).forEach(key => {
       const def = Neo.SPRITE_DEFS[key];
-      entries.push({ key, def, pixels: def.pixels });
+      if (Neo.CHARACTER_SPRITE_SHEETS?.[key]) return;
+      entries.push({
+        key,
+        def,
+        pixels: def.pixels,
+        width: Neo.SPRITE_SOURCE_SIZE,
+        height: Neo.SPRITE_SOURCE_SIZE,
+      });
       Object.entries(def.frames || {}).forEach(([frameKey, pixels]) => {
-        entries.push({ key: `${key}:${frameKey}`, def, pixels });
+        entries.push({
+          key: `${key}:${frameKey}`,
+          def,
+          pixels,
+          width: Neo.SPRITE_SOURCE_SIZE,
+          height: Neo.SPRITE_SOURCE_SIZE,
+        });
       });
     });
+    Object.entries(Neo.CHARACTER_SPRITE_SHEETS || {}).forEach(([key, sheet]) => {
+      for (let index = 0; index < sheet.frameCount; index += 1) {
+        entries.push({
+          key: index === 0 ? key : `${key}:walk${index - 1}`,
+          image: sheet.image,
+          sourceX: index * sheet.frameWidth,
+          sourceY: 0,
+          width: sheet.frameWidth,
+          height: sheet.frameHeight,
+          renderScale: sheet.renderScale,
+        });
+      }
+    });
     const GUTTER = 1;
-    const STRIDE = Neo.SPRITE_SOURCE_SIZE + GUTTER;
     const canvasEl = document.createElement('canvas');
-    canvasEl.width = STRIDE * entries.length;
-    canvasEl.height = Neo.SPRITE_SOURCE_SIZE;
+    canvasEl.width = entries.reduce((width, entry) => width + entry.width + GUTTER, 0);
+    canvasEl.height = entries.reduce((height, entry) => Math.max(height, entry.height), Neo.SPRITE_SOURCE_SIZE);
     const atlasCtx = canvasEl.getContext('2d');
     atlasCtx.imageSmoothingEnabled = false;
     const frames = {};
-    entries.forEach((entry, index) => {
-      const { key, def, pixels } = entry;
-      const ox = index * STRIDE;
-      frames[key] = { x: ox, y: 0, w: Neo.SPRITE_SOURCE_SIZE, h: Neo.SPRITE_SOURCE_SIZE };
+    let atlasX = 0;
+    entries.forEach(entry => {
+      const {
+        key, def, pixels, image, sourceX = 0, sourceY = 0, width, height, renderScale = 1,
+      } = entry;
+      const ox = atlasX;
+      frames[key] = { x: ox, y: 0, w: width, h: height, renderScale };
+      if (image) {
+        atlasCtx.drawImage(image, sourceX, sourceY, width, height, ox, 0, width, height);
+        atlasX += width + GUTTER;
+        return;
+      }
       for (let y = 0; y < pixels.length; y += 1) {
         const row = pixels[y];
         for (let x = 0; x < row.length; x += 1) {
@@ -46,6 +79,7 @@
           atlasCtx.fillRect(ox + x, y, 1, 1);
         }
       });
+      atlasX += width + GUTTER;
     });
     return { canvas: canvasEl, frames };
   }
@@ -84,7 +118,7 @@
   function getActorSpriteFrameKey(spriteKey, actor, options = {}) {
     const access = window.NeoSettings?.getAccess?.() || {};
     const def = Neo.SPRITE_DEFS[spriteKey];
-    const animations = def?.animations || {};
+    const animations = Neo.CHARACTER_SPRITE_SHEETS?.[spriteKey]?.animations || def?.animations || {};
     if (!def || access.reduceMotion) return spriteKey;
 
     const atlasFrames = Neo.SPRITE_ATLAS?.frames || {};
@@ -251,6 +285,7 @@
       shadowScaleX = 1,
       shadowScaleY = 1,
     } = options;
+    const renderSize = size * Number(frame.renderScale || 1);
     Neo.ctx.save();
     Neo.ctx.translate(x, y);
     Neo.ctx.globalAlpha = alpha;
@@ -273,16 +308,16 @@
       frame.y,
       frame.w,
       frame.h,
-      -size / 2,
-      -size / 2,
-      size,
-      size,
+      -renderSize / 2,
+      -renderSize / 2,
+      renderSize,
+      renderSize,
     );
     if (tint) {
       Neo.ctx.globalCompositeOperation = 'source-atop';
       Neo.ctx.fillStyle = tint;
       Neo.ctx.globalAlpha = 0.22;
-      Neo.ctx.fillRect(-size / 2, -size / 2, size, size);
+      Neo.ctx.fillRect(-renderSize / 2, -renderSize / 2, renderSize, renderSize);
     }
     Neo.ctx.restore();
   }
@@ -927,6 +962,10 @@
   function drawActorSprite(actor, spriteKey, x, y, size, options = {}) {
     const animation = options.animation || {};
     const anim = getActorSpriteAnimation(actor, size, animation);
+    if (Neo.CHARACTER_SPRITE_SHEETS?.[spriteKey]) {
+      anim.scaleX = 1;
+      anim.scaleY = 1;
+    }
     const frameKey = getActorSpriteFrameKey(spriteKey, actor, animation);
     drawSpriteFrame(frameKey, x, y, size, {
       ...options,
