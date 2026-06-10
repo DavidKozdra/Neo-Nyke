@@ -523,6 +523,23 @@
         if (gained > 0) Neo.spawnHealPopup(Neo.player.x + Neo.rand(-6, 6), Neo.player.y - 20, gained, { color: '#9af7d8' });
       }
     }
+    // Overheal shield decay: once a shield has been up for 5s, it bleeds away
+    // at 1 point per 50ms (20/s) until it expires.
+    if (Number(Neo.player.overhealBarrier || 0) > 0) {
+      Neo.player.overhealBarrierAge = Number(Neo.player.overhealBarrierAge || 0) + dt;
+      if (Neo.player.overhealBarrierAge > 5) {
+        const drained = (dt / 0.05); // 1 point per 50ms
+        Neo.player.overhealBarrier = Math.max(0, Number(Neo.player.overhealBarrier) - drained);
+        if (Neo.player.overhealBarrier <= 0) {
+          Neo.player.overhealBarrier = 0;
+          Neo.player.overhealBarrierMax = 0;
+          Neo.player.overhealBarrierColor = '';
+          Neo.player.overhealBarrierAge = 0;
+        }
+      }
+    } else {
+      Neo.player.overhealBarrierAge = 0;
+    }
     Neo.player.critCharmBuffTime = Math.max(0, Number(Neo.player.critCharmBuffTime || 0) - dt);
     Neo.player.keenEyeBuffTime = Math.max(0, Number(Neo.player.keenEyeBuffTime || 0) - dt);
     Neo.player.chronoSpringBuffTime = Math.max(0, Number(Neo.player.chronoSpringBuffTime || 0) - dt);

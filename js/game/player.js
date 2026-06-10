@@ -664,6 +664,7 @@ export function applyPlayerHealing(amount, options = {}) {
         Neo.player.overhealBarrier = Math.min(barrierCap, Number(Neo.player.overhealBarrier || 0) + addedBarrier);
         Neo.player.overhealBarrierMax = Math.max(Number(Neo.player.overhealBarrierMax || 0), barrierCap);
         Neo.player.overhealBarrierColor = Neo.player.overhealBarrierColor || '#9cefff';
+        Neo.player.overhealBarrierAge = 0;
         if (options.showBarrier !== false && Neo.spawnHealPopup) {
           Neo.spawnHealPopup(Neo.player.x + Neo.rand(-8, 8), Neo.player.y - 36, addedBarrier, { color: '#9cefff', size: 12 });
         }

@@ -684,6 +684,17 @@
   }
 
   function win() {
+    // Reaching the victory screen is itself an accomplishment: award a loop
+    // crystal for the win (plus the same challenge/tithe bonuses a completed
+    // loop grants) so a clean clear is never worth zero crystals. Practice runs
+    // stay unrewarded, matching loop-completion in world.js.
+    if (Neo.gameMode !== 'practice') {
+      const crystalBonus = Math.max(0, Math.round(Neo.getActiveChallengeCrystalBonusMultiplier()));
+      const titheBonus = Neo.hasLegacy('crystal_tithe') && Neo.HARD_DIFFICULTIES.has(Neo.selectedDifficulty) ? 1 : 0;
+      const victoryCrystals = 1 + crystalBonus + titheBonus;
+      Neo.metaProgress.loopCrystals = Number(Neo.metaProgress.loopCrystals || 0) + victoryCrystals;
+      Neo.runCrystalsEarned = Number(Neo.runCrystalsEarned || 0) + victoryCrystals;
+    }
     const entry = finalizeRun('win');
     window.achievementEvents?.emit('run:won', { elapsedSeconds: Neo.gameElapsedTime, playerHp: Math.round(Neo.player?.hp || 0) });
     Neo.setGameState('win');
@@ -1110,6 +1121,7 @@
     Neo.player.overhealBarrier = shield;
     Neo.player.overhealBarrierMax = shield;
     Neo.player.overhealBarrierColor = '#c8fbff';
+    Neo.player.overhealBarrierAge = 0;
     Neo.spawnHealPopup?.(Neo.player.x, Neo.player.y - 34, shield, { color: '#c8fbff', size: 16 });
     Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.75, ring: Math.min(150, 58 + Math.sqrt(shield) * 3), c: '#c8fbff' });
     Neo.playSfx?.('item_collect');

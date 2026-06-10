@@ -110,6 +110,25 @@ export function loop(timestamp) {
     if (typeof handler === 'function') handler(enemy, dt);
   }
 
+  // Enemy shield decay: mirrors the player overheal shield. Once a barrier has
+  // been up for 5s it bleeds away at 1 point per 50ms (20/s). The age resets
+  // whenever the barrier grows (a fresh shield or a top-up from a shield_unit).
+  function decayEnemyBarrier(enemy, dt) {
+    if (!enemy) return;
+    const barrier = Number(enemy.barrier || 0);
+    if (barrier <= 0) {
+      enemy.barrierAge = 0;
+      enemy.barrierSeen = 0;
+      return;
+    }
+    if (barrier > Number(enemy.barrierSeen || 0)) enemy.barrierAge = 0;
+    enemy.barrierAge = Number(enemy.barrierAge || 0) + dt;
+    if (enemy.barrierAge > 5) {
+      enemy.barrier = Math.max(0, barrier - dt / 0.05); // 1 point per 50ms
+    }
+    enemy.barrierSeen = enemy.barrier;
+  }
+
   function update(dt) {
     let sectionPerfStart = Neo.perfStart();
     const itemStats = Neo.getItemStats();
@@ -491,6 +510,7 @@ export function loop(timestamp) {
       }
 
       if (enemy.dead) continue;
+      decayEnemyBarrier(enemy, dt);
       Neo.applyObeliskSeekerSteering?.(enemy, dt);
       Neo.enemyTryBreakBlockingObstacle(enemy, dt);
       Neo.moveCircle(enemy, dt);
