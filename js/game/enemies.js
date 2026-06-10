@@ -665,7 +665,10 @@
     const progressionDepth = getProgressionDepth();
     const loopNumber = Math.max(1, Math.floor((progressionDepth - 1) / Neo.MAX_FLOOR) + 1);
     const floorsCleared = progressionDepth - 1;
-    const floorMultiplier = 1 + floorsCleared * Neo.ENEMY_SCALING.floor;
+    // Harder difficulties steepen the per-floor HP slope (not just the flat
+    // statMultiplier below), so enemies gain more HP each floor as difficulty rises.
+    const hpFloorRate = Neo.ENEMY_SCALING.floor + (difficulty.hpFloorScaleBonus ?? 0);
+    const floorMultiplier = 1 + floorsCleared * hpFloorRate;
     const loopMultiplier = 1 + (loopNumber - 1) * Neo.ENEMY_SCALING.loop;
     const timerMultiplier = 1 + gameMinutes * Neo.ENEMY_SCALING.minute;
     const difficultyMultiplier = isBossType(type) ? difficulty.bossStatMultiplier : difficulty.statMultiplier;

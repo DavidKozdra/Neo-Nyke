@@ -848,11 +848,18 @@
         forEachEnemyNearBeamPath(path, radiusPadding, enemy => {
           const hitSegment = Neo.beamPathHitsCircle(path, enemy.x, enemy.y, enemy.r + radiusPadding);
           if (!hitSegment) return;
+          // Tooth of Thorn drains per beam that lands: with four converging beams
+          // this fan should lifesteal harder when aimed onto a single target. The
+          // damage/status dedup below still keeps each enemy to one hit per tick,
+          // so we roll drain here (before the dedup) — but only for the multi-beam
+          // fan, since single-beam moves already roll it inside hitEnemy.
+          if (thornBeamsActive) rollToothOfThornDrain(enemy);
           // A single enemy straddling two of Thorn's beams shouldn't take the full
           // hit from each beam in the same tick.
           if (hitThisTick.has(enemy)) return;
           hitThisTick.add(enemy);
-          hitEnemy(enemy, beamDamage, hitSegment.angle, beamKnockback, beamColor, hitOptions);
+          hitEnemy(enemy, beamDamage, hitSegment.angle, beamKnockback, beamColor,
+            thornBeamsActive ? { ...hitOptions, skipDrainRoll: true } : hitOptions);
           chainBeamHit(enemy, beamDamage, hitSegment.angle, beamChainColor);
           if (loveBeamActive) loveBeamHits += 1;
           if (bloodBeamActive && Neo.rng() < 0.05) applyBleed(enemy, 1, 3.2);
@@ -2274,6 +2281,21 @@
     return true;
   }
 
+  // Tooth of Thorn lifesteal: a small chance per hit to heal 1 when below max HP.
+  // Lives on its own so multi-beam moves (Thorn's Infinite Blood Beam) can roll it
+  // once per beam that lands, instead of once per tick after the damage dedup.
+  function rollToothOfThornDrain(enemy, cachedStats) {
+    const stats = cachedStats || Neo.getItemStats();
+    if (!(stats.drainChance > 0)) return;
+    if (!Neo.player || Neo.player.hp >= Neo.player.maxHp) return;
+    if (Neo.nextRandom('encounter') >= stats.drainChance) return;
+    const heal = Neo.scalePlayerHealing(1, 1);
+    const gained = Neo.applyPlayerHealing(heal);
+    if (gained > 0) {
+      Neo.spawnHealPopup(Neo.player.x + Neo.rand(-6, 6), Neo.player.y - 22, gained, { color: '#ff8fb4', size: 13 });
+    }
+  }
+
   function hitEnemy(enemy, damage, angle, knockback, color, options = {}) {
     if ((enemy?.inv || 0) > 0) return;
     const stats = Neo.getItemStats();
@@ -2330,13 +2352,9 @@
       crit: isCrit,
       enemy,
     });
-    if (stats.drainChance > 0 && Neo.player && Neo.player.hp < Neo.player.maxHp && Neo.nextRandom('encounter') < stats.drainChance) {
-      const heal = Neo.scalePlayerHealing(1, 1);
-      const gained = Neo.applyPlayerHealing(heal);
-      if (gained > 0) {
-        Neo.spawnHealPopup(Neo.player.x + Neo.rand(-6, 6), Neo.player.y - 22, gained, { color: '#ff8fb4', size: 13 });
-      }
-    }
+    // Multi-beam callers (Thorn's fan) roll drain per beam themselves; skip the
+    // shared roll so the beam that also lands the dedup'd hit isn't counted twice.
+    if (!options.skipDrainRoll) rollToothOfThornDrain(enemy, stats);
     if (stats.confuseRayStunChance > 0 && Neo.nextRandom('encounter') < stats.confuseRayStunChance) {
       enemy.stun = Math.max(Number(enemy.stun || 0), 0.55);
       Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 18, life: 0.5, text: 'STUN', c: '#ffe66d' });

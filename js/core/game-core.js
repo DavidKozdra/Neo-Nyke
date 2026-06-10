@@ -616,6 +616,9 @@ export const DIFFICULTY_DEFS = {
     roomWeightBonus: 0.05,
     statMultiplier: 1.1,
     bossStatMultiplier: 1.12,
+    // Extra per-floor HP slope added on top of ENEMY_SCALING.floor, so each floor
+    // cleared makes enemies tankier the harder the difficulty (see scaleEnemyStats).
+    hpFloorScaleBonus: 0.03,
     speedMultiplier: 1.03,
     enemyReactionMultiplier: 1.06,
     rangedCadenceMultiplier: 0.95,
@@ -635,6 +638,7 @@ export const DIFFICULTY_DEFS = {
     roomWeightBonus: 0.1,
     statMultiplier: 1.22,
     bossStatMultiplier: 1.26,
+    hpFloorScaleBonus: 0.06,
     speedMultiplier: 1.06,
     enemyReactionMultiplier: 1.12,
     rangedCadenceMultiplier: 0.9,
@@ -654,6 +658,7 @@ export const DIFFICULTY_DEFS = {
     roomWeightBonus: 0.16,
     statMultiplier: 1.36,
     bossStatMultiplier: 1.42,
+    hpFloorScaleBonus: 0.09,
     speedMultiplier: 1.1,
     enemyReactionMultiplier: 1.2,
     rangedCadenceMultiplier: 0.82,
@@ -673,6 +678,7 @@ export const DIFFICULTY_DEFS = {
     roomWeightBonus: 0.22,
     statMultiplier: 1.52,
     bossStatMultiplier: 1.62,
+    hpFloorScaleBonus: 0.12,
     speedMultiplier: 1.14,
     enemyReactionMultiplier: 1.28,
     rangedCadenceMultiplier: 0.74,
