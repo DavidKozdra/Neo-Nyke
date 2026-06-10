@@ -256,7 +256,8 @@
       const pickups = room === currentRoom ? Neo.pickups : room.pickups;
       return Array.isArray(pickups) && pickups.some(pickup => pickup?.type === 'ladder');
     };
-    const showsExit = (room) => !!room && hasSpawnedLadder(room);
+    const revealLadderEarly = !Neo.hideLadderOnMinimap;
+    const showsExit = (room) => !!room && ((revealLadderEarly && room.type === 'ladder') || hasSpawnedLadder(room));
     const keyFontSize = Math.max(7, Math.round(size * 0.52));
     const keyFont = `bold ${keyFontSize}px system-ui`;
     const keyIconSize = Math.max(5, Math.round(size * 0.34));
@@ -303,7 +304,7 @@
       const potionCount = currentPickups.filter(pickup => pickup?.type === 'potion').length;
       const coinCount = currentPickups.filter(pickup => pickup?.type === 'coin').length;
       const itemCount = currentPickups.filter(pickup => pickup?.type === 'item').length;
-      const exitVisible = showsExit(currentRoom);
+      const exitVisible = Array.isArray(Neo.rooms) && Neo.rooms.some(room => !room.secret && showsExit(room));
       const chestCount = Array.isArray(Neo.chests) ? Neo.chests.filter(chest => chest && !chest.open).length : 0;
       const legendEntries = [{ key: 'you', label: 'YOU', color: '#fff7c2', mode: 'you' }];
       const addLegendEntry = (key, label, color, mode = 'dot') => {

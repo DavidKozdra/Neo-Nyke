@@ -178,6 +178,7 @@ window.Neo = {
   minimapLayoutState: null,
   minimapLegendCache: null,
   minimapLegendDirty: true,
+  hideLadderOnMinimap: false,
   itemStatsCacheFrame: -1,
   itemStatsCacheValue: null,
   godItemKeysCache: null,

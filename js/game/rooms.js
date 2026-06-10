@@ -89,6 +89,11 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
       farRoom.type = 'ladder';
     }
 
+    // 10% of floors keep the ladder room hidden on the minimap until it's
+    // actually entered, so you sometimes have to explore to find the exit.
+    // Rolled once per floor (stable) so the minimap star doesn't flicker.
+    Neo.hideLadderOnMinimap = farRoom.type === 'ladder' && Neo.rand(1, 0, 'world') < 0.1;
+
     const pool = Neo.rooms.filter(room => room !== startRoom && room !== farRoom);
     Neo.shuffle(pool, 'world');
     // Floor grammar (opt-in via Neo.useFloorGrammar): bias rewards toward dead-end

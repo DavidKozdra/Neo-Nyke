@@ -816,6 +816,46 @@
         ...enemyAnim,
       });
       Neo.ctx.restore();
+      // Knave Blade swipe: a sweeping slash arc, mirroring the player's melee
+      // streak, while a bladed enemy is mid-swing.
+      if (enemy.swingTime > 0 && enemy.state === 'blade' && Number.isFinite(enemy.swingA)) {
+        const swingTotal = 0.26;
+        const swingArc = 1.15;
+        const swingRange = enemy.r + Neo.player.r + 56;
+        const swingProgress = Neo.clamp(1 - enemy.swingTime / swingTotal, 0, 1);
+        const sweepStart = enemy.swingA + swingArc;
+        const sweepEnd = enemy.swingA - swingArc;
+        const currentTip = sweepStart + (sweepEnd - sweepStart) * swingProgress;
+        const trailStart = currentTip + swingArc * 0.55;
+        const fadeAlpha = 0.85 * (enemy.swingTime / swingTotal);
+        const slashColor = '#ff8e6c';
+        Neo.ctx.save();
+        Neo.ctx.translate(enemy.x, drawY);
+        Neo.ctx.globalAlpha = fadeAlpha * 0.35;
+        Neo.ctx.strokeStyle = slashColor;
+        Neo.ctx.lineWidth = 11;
+        Neo.ctx.shadowColor = slashColor;
+        Neo.ctx.shadowBlur = 16;
+        Neo.ctx.beginPath();
+        Neo.ctx.arc(0, 0, swingRange, trailStart, currentTip, true);
+        Neo.ctx.stroke();
+        Neo.ctx.globalAlpha = fadeAlpha;
+        Neo.ctx.lineWidth = 3.5;
+        Neo.ctx.shadowBlur = 8;
+        Neo.ctx.beginPath();
+        Neo.ctx.arc(0, 0, swingRange, trailStart, currentTip, true);
+        Neo.ctx.stroke();
+        Neo.ctx.globalAlpha = fadeAlpha * 0.9;
+        Neo.ctx.strokeStyle = '#fff2e6';
+        Neo.ctx.lineWidth = 1.5;
+        Neo.ctx.shadowBlur = 4;
+        Neo.ctx.beginPath();
+        Neo.ctx.arc(0, 0, swingRange, currentTip + 0.12, currentTip, true);
+        Neo.ctx.stroke();
+        Neo.ctx.shadowBlur = 0;
+        Neo.ctx.globalAlpha = 1;
+        Neo.ctx.restore();
+      }
       if (bleedStacks > 0) drawBleedOverlay(enemy, bleedStacks);
       drawStunStars(enemy, drawY);
       drawEnemyStatusIconRow(enemy, drawY);

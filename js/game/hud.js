@@ -818,6 +818,7 @@
       handsomeDevilCutscenePlayed: Neo.handsomeDevilCutscenePlayed,
       antonyBlemmyeCutscenePlayed: Neo.antonyBlemmyeCutscenePlayed,
       secretRoomVisitedFloors: Array.isArray(Neo.secretRoomVisitedFloors) ? [...Neo.secretRoomVisitedFloors] : [],
+      hideLadderOnMinimap: !!Neo.hideLadderOnMinimap,
       camera: Neo.camera,
     };
   }

@@ -835,6 +835,8 @@
       base.speed = 58;
       base.dmg = 18;
       base.attackCd = 1.8;
+      base.novaCd = 3;
+      base.novaTimer = 0;
     } else if (type === 'knave') {
       base.r = 16;
       base.hp = 68;
@@ -907,12 +909,16 @@
       base.r = 24;
       base.hp = 300;
       base.max = 300;
-      base.speed = 42;
+      // A dedicated runner: fast enough to keep its distance while it counts
+      // down the boss summon, but still catchable with commitment.
+      base.speed = 96;
       base.dmg = 8;
       base.attackCd = 1.8;
       base.bleedImmune = true;
       base.bossSpawnTimer = 30;
       base.bossSpawnWarnAt = 30;
+      base.shoveCd = 3;
+      base.shoveTimer = 0;
     } else if (type === 'queen_cult') {
       base.r = 38;
       base.hp = 912;
@@ -1864,6 +1870,30 @@
       steerEnemy(enemy, dx / distance * direction, dy / distance * direction, enemy.speed, 2.5, dt);
     }
 
+    // Close-range AOE nova: when the player crowds the mage it stops being a
+    // helpless kiter and detonates a knockback burst to make space. Charges a
+    // brief telegraph, then blasts. Only the standard cult_mage uses this —
+    // bosses borrowing this function (the Queen) keep their own kit.
+    if (enemy.type === 'cult_mage') {
+      enemy.novaTimer = Math.max(0, Number(enemy.novaTimer || 0) - dt);
+      enemy.novaCd = Math.max(0, Number(enemy.novaCd || 0) - dt);
+      if (enemy.novaTimer > 0) {
+        enemy.vx *= 0.84;
+        enemy.vy *= 0.84;
+        const charge = 1 - enemy.novaTimer / 0.5;
+        Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.14, ring: 120 * charge, c: '#c77bff' });
+        if (enemy.novaTimer <= 0) {
+          Neo.blastRadius(enemy.x, enemy.y, 120, Math.round(enemy.dmg * 1.1), '#c77bff', enemy, 300);
+        }
+        return;
+      }
+      if (enemy.novaCd <= 0 && enemy.windup <= 0 && enemy.beamTime <= 0 && distance < 150) {
+        enemy.novaTimer = 0.5 / tuning.reaction;
+        enemy.novaCd = 4.4 * tuning.rangedCadence;
+        return;
+      }
+    }
+
     if (enemy.windup > 0) {
       enemy.windup -= dt;
       enemy.vx *= 0.88;
@@ -1907,16 +1937,26 @@
       return;
     }
 
+    // Reach of the Knave Blade: the swing connects from a full sword's length
+    // away so he no longer has to crowd the player to land a hit.
+    const KNAVE_BLADE_REACH = enemy.r + Neo.player.r + 56;
+    const KNAVE_BLADE_ARC = 1.15;
+
     if (enemy.windup > 0) {
       enemy.windup -= dt;
       enemy.vx *= 0.76;
       enemy.vy *= 0.76;
+      // Track the player through the wind-up so the blade lands where they are.
+      if (enemy.state !== 'charge') enemy.swingA = Math.atan2(dy, dx);
       if (enemy.windup <= 0) {
         if (enemy.state === 'charge') {
           enemy.dashTime = 0.3;
           enemy.dashHit = false;
         } else {
-          enemy.swingTime = 0.2;
+          // Telegraph + launch the Knave Blade arc (read by the renderer).
+          enemy.swingTime = 0.26;
+          enemy.bladeHit = false;
+          Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.22, ring: KNAVE_BLADE_REACH, c: '#ff8e6c' });
         }
       }
       return;
@@ -1937,9 +1977,15 @@
       enemy.swingTime -= dt;
       enemy.vx *= 0.7;
       enemy.vy *= 0.7;
-      if (enemy.swingTime <= 0 && Neo.dist(enemy.x, enemy.y, Neo.player.x, Neo.player.y) < enemy.r + Neo.player.r + 24) {
-        const angle = Math.atan2(dy, dx);
-        Neo.damagePlayer(enemy.dmg + 3, angle, 210, enemy.type);
+      // Connect once when the arc reaches its apex: a wide forward swipe that
+      // hits anything inside the blade's reach and arc, not just on contact.
+      if (!enemy.bladeHit && enemy.swingTime <= 0.12) {
+        const toPlayer = Math.atan2(dy, dx);
+        const angleDiff = Math.abs(Math.atan2(Math.sin(toPlayer - enemy.swingA), Math.cos(toPlayer - enemy.swingA)));
+        if (distance < KNAVE_BLADE_REACH && angleDiff < KNAVE_BLADE_ARC) {
+          enemy.bladeHit = true;
+          Neo.damagePlayer(enemy.dmg + 5, toPlayer, 240, enemy.type);
+        }
       }
       return;
     }
@@ -1947,15 +1993,17 @@
     steerEnemy(enemy, dx / distance, dy / distance, enemy.speed, 4.8, dt);
 
     if (enemy.attackCd <= 0) {
-      if (distance > 150) {
+      if (distance > 190) {
         enemy.state = 'charge';
         enemy.windup = 0.46;
         enemy.dashAngle = Math.atan2(dy, dx);
         enemy.attackCd = 1.9;
       } else {
-        enemy.state = 'stab';
-        enemy.windup = 0.2;
-        enemy.attackCd = 0.9;
+        // Knave Blade: a telegraphed sword swing with real reach.
+        enemy.state = 'blade';
+        enemy.swingA = Math.atan2(dy, dx);
+        enemy.windup = 0.28;
+        enemy.attackCd = 1.05;
       }
     }
   }
@@ -2349,18 +2397,45 @@
     const dy = Neo.player.y - enemy.y;
     const distance = Math.hypot(dx, dy) || 1;
 
+    // Big telegraphed knockback shockwave: the spawner's only direct defence.
+    // Charges briefly, then detonates a wide burst that flings the player far
+    // away so it can keep running and finish its summon.
+    if (enemy.shoveTimer > 0) {
+      enemy.shoveTimer -= dt;
+      enemy.vx *= 0.8;
+      enemy.vy *= 0.8;
+      const charge = 1 - enemy.shoveTimer / 0.7;
+      Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.14, ring: 200 * charge, c: '#ff9b5e' });
+      if (enemy.shoveTimer <= 0) {
+        Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.7, ring: 200, c: '#ff9b5e' });
+        Neo.blastRadius(enemy.x, enemy.y, 200, Math.round(enemy.dmg * 1.4), '#ff9b5e', enemy, 760);
+        Neo.addTrauma(0.5, Math.atan2(Neo.player.y - enemy.y, Neo.player.x - enemy.x), 8);
+      }
+      return;
+    }
+
     if (enemy.stun > 0) {
       enemy.vx *= 0.92;
       enemy.vy *= 0.92;
     } else {
-      const desired = 300;
-      const direction = distance < desired - 26 ? -1 : distance > desired + 18 ? 1 : 0;
-      if (enemy.attackCd > 0.45 && trySteerEnemyToCover(enemy, dt, desired, 2.5)) {
-        // Spawners should avoid open lanes while waiting on their beam.
+      // Always flee from the player rather than holding a set range — the
+      // spawner is a runner whose job is to survive until the boss arrives.
+      const fleeX = -dx / distance;
+      const fleeY = -dy / distance;
+      if (enemy.attackCd > 0.45 && distance > 280 && trySteerEnemyToCover(enemy, dt, 420, 2.6)) {
+        // Break line of sight behind cover when it already has breathing room;
+        // when the player is close it commits to a straight sprint away.
       } else {
-        steerEnemy(enemy, dx / distance * direction, dy / distance * direction, enemy.speed, 2.4, dt);
+        steerEnemy(enemy, fleeX, fleeY, enemy.speed, 2.6, dt);
+      }
+      // Trigger the shove when cornered: the player is close and a hit is ready.
+      if (enemy.shoveCd <= 0 && distance < 170) {
+        enemy.shoveTimer = 0.7 / tuning.reaction;
+        enemy.shoveCd = 5 * tuning.rangedCadence;
+        return;
       }
     }
+    enemy.shoveCd = Math.max(0, Number(enemy.shoveCd || 0) - dt);
 
     enemy.bossSpawnTimer = Math.max(0, enemy.bossSpawnTimer - dt);
     const wholeSeconds = Math.ceil(enemy.bossSpawnTimer);

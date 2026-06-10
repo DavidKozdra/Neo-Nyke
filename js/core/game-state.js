@@ -2867,6 +2867,7 @@ export function resumeGame() {
     Neo.handsomeDevilCutscenePlayed = !!snapshot.handsomeDevilCutscenePlayed;
     Neo.antonyBlemmyeCutscenePlayed = !!snapshot.antonyBlemmyeCutscenePlayed;
     Neo.secretRoomVisitedFloors = Array.isArray(snapshot.secretRoomVisitedFloors) ? [...snapshot.secretRoomVisitedFloors] : [];
+    Neo.hideLadderOnMinimap = !!snapshot.hideLadderOnMinimap;
     Neo.restoreRivals(snapshot.rivals);
     Neo.wizardPawSelection = null;
     Neo.scrollControlSelection = null;
