@@ -121,10 +121,10 @@ export const MOVE_DEFS = {
     knight_slash_dash: {
       key: 'knight_slash_dash',
       slot: 'dash',
-      name: "Knight's Slash Dash",
+      name: "Blade Filled Dash",
       desc: 'Dash through enemies and strike everything left in your wake with a high bleed rate.',
       exclusiveCharacter: 'thorn_knight',
-      maxStacks: 2,
+      maxStacks: 1,
     },
   };
 

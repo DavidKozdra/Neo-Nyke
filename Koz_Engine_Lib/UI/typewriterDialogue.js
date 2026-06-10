@@ -61,6 +61,13 @@
     }
 
     start(lines, options = {}) {
+      // Don't clobber a dialogue that's already on screen. A second start() while
+      // one is active would silently overwrite it, so callers that gate a
+      // one-time cutscene behind a "played" flag would burn the flag without the
+      // player ever seeing the lines. Refuse instead so the caller can retry.
+      if (this.active && !options.force) {
+        return false;
+      }
       const list = Array.isArray(lines) ? lines : [lines];
       this.lines = list.map((entry) => this._normalizeLine(entry)).filter((entry) => entry.text);
       if (!this.lines.length) {

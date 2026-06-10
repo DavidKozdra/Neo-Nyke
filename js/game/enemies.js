@@ -331,7 +331,7 @@
     const floor = Math.max(1, Number(floorValue || 1));
     const difficulty = Neo.getDifficultyDef(difficultyKey);
     const difficultyMultiplier = Math.max(1, Number(difficulty?.statMultiplier || 1));
-    return Math.max(40, Math.round((90 + floor * 17.5) / difficultyMultiplier));
+    return Math.max(20, Math.round((90 + floor * 17.5) / difficultyMultiplier / 2));
   }
 
   function buildWavePlan(count, roomType = 'combat') {
@@ -1062,25 +1062,37 @@
     Neo.player.vy = 0;
   }
 
-  function tryPlayKnaveKnightCutscene(enemy, enemyType) {
-    if (!enemy || enemyType !== 'artificer_knave' || !Neo.player) return false;
-    if (Neo.player.character !== 'thorn_knight') return false;
-    if (Neo.knaveKnightCutscenePlayed) return false;
-
-    Neo.knaveKnightCutscenePlayed = true;
+  // Shared boss-intro launcher. Tries to start the dialogue FIRST; only if it
+  // actually begins do we run the freeze/positioning setup and invoke onPlayed
+  // (which is where the caller flips its one-time "played" flag). This prevents a
+  // specific cutscene from being marked played — and thus skipped forever, with
+  // only the generic line showing next time — when the dialogue can't open
+  // because another one is already on screen.
+  function startBossCutscene(enemy, lines, onPlayed) {
+    if (Neo.uiController.isDialogueOpen && Neo.uiController.isDialogueOpen()) return false;
+    const started = Neo.uiController.playDialogue(lines, { returnState: 'play' });
+    if (!started) return false;
     Neo.clearGameplayInput();
     Neo.setShopPanelOpen(false);
     Neo.setInventoryPanelOpen(false);
     positionPlayerNearEntity(enemy);
     enemy.attackCd = Math.max(Number(enemy.attackCd || 0), 1.4);
     enemy.stun = Math.max(Number(enemy.stun || 0), 0.25);
+    if (onPlayed) onPlayed();
     Neo.scheduleRunSave();
+    return true;
+  }
 
-    return Neo.uiController.playDialogue([
+  function tryPlayKnaveKnightCutscene(enemy, enemyType) {
+    if (!enemy || enemyType !== 'artificer_knave' || !Neo.player) return false;
+    if (Neo.player.character !== 'thorn_knight') return false;
+    if (Neo.knaveKnightCutscenePlayed) return false;
+
+    return startBossCutscene(enemy, [
       { speaker: 'KNAVE', text: 'You think you can out fight me you couldnt out argue me! your logic is false' },
       { speaker: 'THORN', text: 'The kingdom of God has come for you ...' },
       { speaker: 'KNAVE', text: 'Violence it is' },
-    ], { returnState: 'play' });
+    ], () => { Neo.knaveKnightCutscenePlayed = true; });
   }
 
   function tryPlayQueenMetaoCutscene(enemy, enemyType) {
@@ -1088,37 +1100,20 @@
     if (Neo.player.character !== 'metao') return false;
     if (Neo.queenMetaoCutscenePlayed) return false;
 
-    Neo.queenMetaoCutscenePlayed = true;
-    Neo.clearGameplayInput();
-    Neo.setShopPanelOpen(false);
-    Neo.setInventoryPanelOpen(false);
-    positionPlayerNearEntity(enemy);
-    enemy.attackCd = Math.max(Number(enemy.attackCd || 0), 1.4);
-    enemy.stun = Math.max(Number(enemy.stun || 0), 0.25);
-    Neo.scheduleRunSave();
-
-    return Neo.uiController.playDialogue([
+    return startBossCutscene(enemy, [
       { speaker: 'QUEEN', text: 'once my champion planning to kill me again are you apostate' },
       { speaker: 'METAO', text: '...' },
       { speaker: 'QUEEN', text: 'Your life will be mine !' },
-    ], { returnState: 'play' });
+    ], () => { Neo.queenMetaoCutscenePlayed = true; });
   }
 
   function tryPlayBulkGolemThornCutscene(enemy, enemyType) {
     if (!enemy || enemyType !== 'bulk_golem' || !Neo.player) return false;
     if (Neo.player.character !== 'thorn_knight' || enemy.thornIntroPlayed) return false;
 
-    enemy.thornIntroPlayed = true;
-    Neo.clearGameplayInput();
-    Neo.setShopPanelOpen(false);
-    Neo.setInventoryPanelOpen(false);
-    positionPlayerNearEntity(enemy);
-    enemy.attackCd = Math.max(Number(enemy.attackCd || 0), 1.4);
-    enemy.stun = Math.max(Number(enemy.stun || 0), 0.25);
-
-    return Neo.uiController.playDialogue([
+    return startBossCutscene(enemy, [
       { speaker: 'BULK GOLEM', text: Neo.BOSS_OPENING_DIALOGUE.bulk_golem },
-    ], { returnState: 'play' });
+    ], () => { enemy.thornIntroPlayed = true; });
   }
 
   function tryPlayHandsomeDevilCharacterCutscene(enemy, enemyType) {
@@ -1145,34 +1140,16 @@
     const dialogue = dialogueByCharacter[character];
     if (!dialogue) return false;
 
-    Neo.handsomeDevilCutscenePlayed = true;
-    Neo.clearGameplayInput();
-    Neo.setShopPanelOpen(false);
-    Neo.setInventoryPanelOpen(false);
-    positionPlayerNearEntity(enemy);
-    enemy.attackCd = Math.max(Number(enemy.attackCd || 0), 1.4);
-    enemy.stun = Math.max(Number(enemy.stun || 0), 0.25);
-    Neo.scheduleRunSave();
-
-    return Neo.uiController.playDialogue(dialogue, { returnState: 'play' });
+    return startBossCutscene(enemy, dialogue, () => { Neo.handsomeDevilCutscenePlayed = true; });
   }
 
   function tryPlayAntonyBlemmyeCutscene(enemy, enemyType) {
     if (!enemy || enemyType !== 'antony_blemmye' || !Neo.player) return false;
     if (Neo.antonyBlemmyeCutscenePlayed) return false;
 
-    Neo.antonyBlemmyeCutscenePlayed = true;
-    Neo.clearGameplayInput();
-    Neo.setShopPanelOpen(false);
-    Neo.setInventoryPanelOpen(false);
-    positionPlayerNearEntity(enemy);
-    enemy.attackCd = Math.max(Number(enemy.attackCd || 0), 1.4);
-    enemy.stun = Math.max(Number(enemy.stun || 0), 0.25);
-    Neo.scheduleRunSave();
-
-    return Neo.uiController.playDialogue([
+    return startBossCutscene(enemy, [
       { speaker: 'ANTONY BLEMMYE', text: 'gorba Gorba' },
-    ], { returnState: 'play' });
+    ], () => { Neo.antonyBlemmyeCutscenePlayed = true; });
   }
 
   function tryPlayGenericBossOpening(enemy, enemyType) {
@@ -1180,17 +1157,9 @@
     const text = Neo.BOSS_OPENING_DIALOGUE[enemyType];
     if (!text) return false;
 
-    enemy.genericIntroPlayed = true;
-    Neo.clearGameplayInput();
-    Neo.setShopPanelOpen(false);
-    Neo.setInventoryPanelOpen(false);
-    positionPlayerNearEntity(enemy);
-    enemy.attackCd = Math.max(Number(enemy.attackCd || 0), 1.4);
-    enemy.stun = Math.max(Number(enemy.stun || 0), 0.25);
-
-    return Neo.uiController.playDialogue([
+    return startBossCutscene(enemy, [
       { speaker: Neo.getBossLabel(enemyType), text },
-    ], { returnState: 'play' });
+    ], () => { enemy.genericIntroPlayed = true; });
   }
 
   function tryPlayBossIntroCutscene(enemy, enemyType) {
@@ -2430,8 +2399,8 @@
   // player away. +400 damage resistance while she charges so she can still be
   // hit (and chunked) but mostly tanks through the windup instead of being fully
   // immune.
-  const QUEEN_FINISHER_RADIUS = 130;
-  const QUEEN_FINISHER_KNOCKBACK = 720;
+  const QUEEN_FINISHER_RADIUS = 190;
+  const QUEEN_FINISHER_KNOCKBACK = 820;
   const QUEEN_FINISHER_RESISTANCE = 400;
   Neo.QUEEN_FINISHER_WINDUP = QUEEN_FINISHER_WINDUP;
   Neo.QUEEN_FINISHER_RADIUS = QUEEN_FINISHER_RADIUS;
@@ -2467,12 +2436,22 @@
       // Growing telegraph ring so the player can read the danger zone.
       const charge = 1 - enemy.queenFinisherTimer / QUEEN_FINISHER_WINDUP;
       Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.16, ring: QUEEN_FINISHER_RADIUS * charge, c: '#ff6ad5' });
+      // Her body convulses harder as the blast nears (read at draw time), and the
+      // screen builds a low rumble that crescendos into the detonation.
+      enemy.queenFinisherShake = 3 + charge * charge * 11;
+      // Hold a low rumble that builds with the charge; trauma decays each frame so
+      // we top it up rather than letting it stack to full instantly.
+      Neo.addTrauma((0.12 + charge * charge * 0.45) * dt * 4);
       if (enemy.queenFinisherTimer <= 0) {
         enemy.queenFinisherDone = true;
-        const blastDamage = Math.round(enemy.dmg * 2.5);
+        enemy.queenFinisherShake = 0;
+        const blastDamage = Math.round(enemy.dmg * 2.8);
         Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.7, ring: QUEEN_FINISHER_RADIUS, c: '#ff6ad5' });
-        // Small AOE, lots of knockback to fling the player clear.
+        // Bigger AOE, lots of knockback to fling the player clear, and a heavy
+        // screen slam so the detonation lands hard.
         Neo.blastRadius(enemy.x, enemy.y, QUEEN_FINISHER_RADIUS, blastDamage, '#ff6ad5', enemy, QUEEN_FINISHER_KNOCKBACK);
+        Neo.addTrauma(0.95, Math.atan2(Neo.player.y - enemy.y, Neo.player.x - enemy.x), 12);
+        Neo.addHitstop(0.08);
         // Take herself out with the blast.
         enemy.defenseMultiplier = 1;
         enemy.hp = 0;

@@ -796,8 +796,16 @@
       };
       const enemyAnim = getActorSpriteAnimation(enemy, drawSize, enemyAnimation);
       const enemyFrameKey = getActorSpriteFrameKey(spriteKey, enemy, enemyAnimation);
+      // The Queen physically convulses while charging her death blast — jitter
+      // her sprite by a magnitude that grows with the charge (set in enemies.js).
+      let shakeOffsetX = 0;
+      let shakeOffsetY = 0;
+      if (enemy.queenFinisherShake > 0) {
+        shakeOffsetX = (Neo.nextRandom('fx') - 0.5) * enemy.queenFinisherShake * 2;
+        shakeOffsetY = (Neo.nextRandom('fx') - 0.5) * enemy.queenFinisherShake * 2;
+      }
       Neo.ctx.save();
-      Neo.ctx.translate(enemy.x, drawY);
+      Neo.ctx.translate(enemy.x + shakeOffsetX, drawY + shakeOffsetY);
       Neo.ctx.scale(scale, scale);
       drawSpriteFrame(enemyFrameKey, 0, 0, drawSize, {
         alpha: enemy.stun > 0 ? 0.68 : 1,
