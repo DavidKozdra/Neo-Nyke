@@ -73,6 +73,10 @@ export function resumeGame() {
       // '' = use the character default; otherwise the move must exist and match the slot.
       moveLoadout[slot] = (key && Neo.MOVE_DEFS[key]?.slot === slot) ? key : '';
     }
+    const weaponSource = source.weaponLoadout && typeof source.weaponLoadout === 'object' ? source.weaponLoadout : {};
+    const weaponKey = String(weaponSource.weapon || '');
+    // '' = use the character default; otherwise the weapon must exist.
+    const weaponLoadout = { weapon: Neo.WEAPON_DEFS?.[weaponKey] ? weaponKey : '' };
     return {
       enemyStatMultiplier: Math.max(0.2, Math.min(4, Number(source.enemyStatMultiplier ?? Neo.SANDBOX_DEFAULT_SETTINGS.enemyStatMultiplier) || 1)),
       enemySpeedMultiplier: Math.max(0.2, Math.min(3, Number(source.enemySpeedMultiplier ?? Neo.SANDBOX_DEFAULT_SETTINGS.enemySpeedMultiplier) || 1)),
@@ -83,6 +87,7 @@ export function resumeGame() {
       godMode: !!source.godMode,
       unlockEverything: !!source.unlockEverything,
       moveLoadout,
+      weaponLoadout,
       allowedEnemies: allowedEnemies.length ? allowedEnemies : Neo.SANDBOX_ENEMY_TYPES.slice(0, 1),
       allowedItems: allowedItems.length ? allowedItems : Neo.ITEM_KEYS.slice(),
       startingItems,
@@ -132,6 +137,15 @@ export function resumeGame() {
       }
     }
 
+    // Override the starting weapon (empty string keeps the character default).
+    const weaponLoadout = settings.weaponLoadout && typeof settings.weaponLoadout === 'object' ? settings.weaponLoadout : {};
+    const weaponKey = String(weaponLoadout.weapon || '');
+    if (weaponKey && Neo.WEAPON_DEFS[weaponKey]) {
+      playerData.ownedWeapons = playerData.ownedWeapons || {};
+      playerData.ownedWeapons[weaponKey] = true;
+      playerData.equippedWeapon = weaponKey;
+    }
+
     // Unlock everything: own all weapons and all moves so they can be swapped in-run.
     if (settings.unlockEverything) {
       playerData.ownedWeapons = playerData.ownedWeapons || {};
@@ -174,7 +188,7 @@ export function resumeGame() {
     if (characterKey === 'thorn_knight') {
       items.neo_knife = 1;
       items.tooth_of_thorn = 2;
-      items.tough_skin = 1;
+      items.tough_bandaid = 1;
     }
     if (characterKey === 'mooggy') {
       items.hemes_scarf = 1;
@@ -421,7 +435,7 @@ export function resumeGame() {
     const items = {
       neo_knife: 0,
       tooth_of_thorn: 0,
-      tough_skin: 0,
+      tough_bandaid: 0,
       orb_of_blood: 0,
       hemes_scarf: 0,
       insurance: 0,
@@ -435,7 +449,6 @@ export function resumeGame() {
       chrono_spring: 0,
       scholar_seal: 0,
       scholar_cap: 0,
-      bandaid: 0,
       push_man: 0,
       titan_heart: 0,
       weapon_fatigue: 0,
@@ -445,7 +458,6 @@ export function resumeGame() {
       overclocked_watch: 0,
       charged_adapter: 0,
       pew_pew_box: 0,
-      turbo_boots: 0,
       skizzard_tail: 0,
       zap_to_extreme: 0,
       panic_button: 0,

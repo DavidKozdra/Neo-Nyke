@@ -1562,6 +1562,28 @@ export function createUIController(view) {
           });
         }
 
+        // Weapon-loadout options are static; build the single button group once.
+        // Any weapon in WEAPON_DEFS is selectable (sandbox tool), with Default
+        // meaning "use the character's default weapon".
+        function buildSandboxWeaponLoadoutOptions() {
+          if (!view.sandboxWeaponLoadout) return;
+          const group = view.sandboxWeaponLoadout.querySelector('[data-sbox-weapon-options]');
+          if (!group) return;
+          group.innerHTML = `<button class="sandbox-move-option sandbox-move-option--default" data-sbox-weapon-option="" type="button" aria-pressed="false">Default</button>`
+            + Neo.WEAPON_KEYS.map(key => {
+              const weapon = Neo.WEAPON_DEFS[key];
+              const name = weapon?.name || key;
+              return `<button class="sandbox-move-option" data-sbox-weapon-option="${Neo.escapeHtml(key)}" type="button" aria-pressed="false" title="${Neo.escapeHtml(weapon?.description || name)}">`
+                + `<canvas class="sandbox-move-option__icon" data-sbox-weapon-option-icon="${Neo.escapeHtml(key)}" width="22" height="22" aria-hidden="true"></canvas>`
+                + `<span class="sandbox-move-option__label">${Neo.escapeHtml(name)}</span>`
+                + `</button>`;
+            }).join('');
+          group.querySelectorAll('[data-sbox-weapon-option-icon]').forEach(canvas => {
+            const weapon = Neo.WEAPON_DEFS[canvas.dataset.sboxWeaponOptionIcon];
+            if (weapon) Neo.drawWeaponToastIcon(canvas, weapon);
+          });
+        }
+
         function syncSandboxPanelFields() {
           document.querySelectorAll('#sandboxGrid .sandbox-row').forEach(row => {
             const param = row.dataset.sboxParam;
@@ -1586,12 +1608,24 @@ export function createUIController(view) {
               button.setAttribute('aria-pressed', active ? 'true' : 'false');
             });
           });
+          view.sandboxWeaponLoadout?.querySelectorAll('[data-sbox-weapon-slot]').forEach(slotNode => {
+            const selectedKey = Neo.sandboxSettings.weaponLoadout?.weapon || '';
+            const selectedWeapon = Neo.WEAPON_DEFS[selectedKey];
+            const selectedLabel = slotNode.querySelector('[data-sbox-weapon-slot-selected]');
+            if (selectedLabel) selectedLabel.textContent = selectedWeapon?.name || 'Default';
+            slotNode.querySelectorAll('[data-sbox-weapon-option]').forEach(button => {
+              const active = button.dataset.sboxWeaponOption === selectedKey;
+              button.classList.toggle('is-active', active);
+              button.setAttribute('aria-pressed', active ? 'true' : 'false');
+            });
+          });
           if (view.sandboxEnemySearch) view.sandboxEnemySearch.value = sandboxSearch.enemies;
           if (view.sandboxItemSearch) view.sandboxItemSearch.value = sandboxSearch.items;
           if (view.sandboxStartItemSearch) view.sandboxStartItemSearch.value = sandboxSearch.startItems;
           renderSandboxTokenLists();
         }
         buildSandboxMoveLoadoutOptions();
+        buildSandboxWeaponLoadoutOptions();
         syncSandboxPanelFieldsHook = syncSandboxPanelFields;
 
         document.querySelectorAll('#sandboxGrid .sandbox-row').forEach(row => {
@@ -1634,6 +1668,18 @@ export function createUIController(view) {
             Neo.sandboxSettings.moveLoadout = { melee: '', laser: '', smash: '', dash: '' };
           }
           Neo.sandboxSettings.moveLoadout[slot] = button.dataset.sboxMoveOption || '';
+          Neo.sandboxSettings = Neo.normalizeSandboxSettings(Neo.sandboxSettings);
+          syncSandboxPanelFields();
+          Neo.persistMetaSoon();
+        });
+
+        view.sandboxWeaponLoadout?.addEventListener('click', event => {
+          const button = event.target instanceof Element ? event.target.closest('[data-sbox-weapon-option]') : null;
+          if (!button) return;
+          if (!Neo.sandboxSettings.weaponLoadout || typeof Neo.sandboxSettings.weaponLoadout !== 'object') {
+            Neo.sandboxSettings.weaponLoadout = { weapon: '' };
+          }
+          Neo.sandboxSettings.weaponLoadout.weapon = button.dataset.sboxWeaponOption || '';
           Neo.sandboxSettings = Neo.normalizeSandboxSettings(Neo.sandboxSettings);
           syncSandboxPanelFields();
           Neo.persistMetaSoon();

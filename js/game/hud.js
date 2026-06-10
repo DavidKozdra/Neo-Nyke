@@ -878,7 +878,6 @@
 
   const EQUIPMENT_ACTIVE_DEFS = {
     pew_pew_box: { cooldown: 34, duration: 8, label: 'PEW PEW', color: '#ffe06f' },
-    turbo_boots: { cooldown: 46, duration: 20, label: 'TURBO', color: '#79ffbf' },
     skizzard_tail: { cooldown: 38, duration: 5, label: 'SKIZZARD REGEN', color: '#8fffd2' },
     zap_to_extreme: { cooldown: 42, duration: 10, label: 'EXTREME ZAP', color: '#8dd4ff' },
     panic_button: { cooldown: 52, duration: 0, label: 'PANIC', color: '#f4f6fb' },
@@ -977,7 +976,6 @@
       const extraStacks = stacks - 1;
       const durationBonus = {
         pew_pew_box: 1.5,
-        turbo_boots: 3,
         skizzard_tail: 1.5,
         zap_to_extreme: 2,
         mid_sweepy_box: 1.5,
@@ -1279,13 +1277,6 @@
       activate: () => startTimedEquipment('pew_pew_box'),
       getState: () => getEquipmentState('pew_pew_box'),
       getStatusText: () => getEquipmentStatusText('pew_pew_box'),
-    },
-    turbo_boots: {
-      key: 'turbo_boots',
-      shortName: 'FAST',
-      activate: () => startTimedEquipment('turbo_boots'),
-      getState: () => getEquipmentState('turbo_boots'),
-      getStatusText: () => getEquipmentStatusText('turbo_boots'),
     },
     skizzard_tail: {
       key: 'skizzard_tail',

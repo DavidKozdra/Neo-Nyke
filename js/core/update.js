@@ -435,6 +435,10 @@ export function loop(timestamp) {
           pulse: 2.5,
           wobble: 0.35,
           phase: Neo.rng() * Math.PI * 2,
+          // Floor Is Lava trail puddles deal direct DPS to enemies (authored
+          // lava-room hazards leave this unset and stay fire-only).
+          dps: 14 * (itemStats.aoeDamageMultiplier || 1),
+          source: 'floor_lava',
         });
         Neo.player.lavaTrailTick = 0.22;
       }

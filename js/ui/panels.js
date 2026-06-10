@@ -1531,8 +1531,6 @@ export function getShopWeaponOffers() {
       if (projectileConfig.pierceCount > 0) chips.push({ label: 'Pierce', tone: 'projectile' });
     } else if (weaponKey === 'lazer_glasses') {
       chips.push({ label: 'Beam', tone: 'magic' });
-    } else if (weaponKey === 'aegis_shield_weapon') {
-      chips.push({ label: 'Defense', tone: 'defense' });
     } else {
       chips.push({ label: 'Melee', tone: 'melee' });
     }
@@ -2295,7 +2293,7 @@ export function renderInventoryPanel() {
               </div>
             </div>`;
           })
-          .join('') || '<div class="inv-card"><span class="inv-card__eyebrow">Empty</span><h4>No tools yet</h4><p>Tools are activatable relics like Pew Pew Box or Turbo Boots. Their position here sets which hotkey (F, G, H…) fires them.</p></div>';
+          .join('') || '<div class="inv-card"><span class="inv-card__eyebrow">Empty</span><h4>No tools yet</h4><p>Tools are activatable relics like Pew Pew Box or Zap to the Extreme. Their position here sets which hotkey (F, G, H…) fires them.</p></div>';
         Neo.drawItemIconCanvases?.(Neo.ui.invToolsList, 'data-item-icon');
       }
     } else if (Neo.activeInvTab === 'weapons') {

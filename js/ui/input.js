@@ -190,14 +190,14 @@ export const WEAPON_DEFS = {
       key: 'magenta_degale',
       name: "Magenta's Degale",
       rarity: 'wizard',
-      description: 'Super heavy shot with massive knockback and recoil.',
+      description: 'Super heavy shot with massive knockback and recoil. 3 charges.',
       color: '#ff8ccc',
     },
     magenta_p90: {
       key: 'magenta_p90',
       name: "Magenta's P90",
       rarity: 'wizard',
-      description: 'Rapid burst fire with controlled recoil.',
+      description: 'Rapid burst fire with controlled recoil. 5 charges.',
       color: '#ff9dd7',
     },
     gelleh_lightning_spear: {
@@ -227,13 +227,6 @@ export const WEAPON_DEFS = {
       rarity: 'god',
       description: 'Pierces barriers with high damage and 20% crit.',
       color: '#ffd2c0',
-    },
-    aegis_shield_weapon: {
-      key: 'aegis_shield_weapon',
-      name: 'Aegis Shield',
-      rarity: 'god',
-      description: 'Blocks all incoming damage for 2 seconds.',
-      color: '#c8f6ff',
     },
     princess_wand: {
       key: 'princess_wand',
@@ -299,7 +292,7 @@ export const RIVAL_WEAPON_SWAP_BASE = 3.6;
 export const MONSTER_ROAM_INTERVAL_SECONDS = 60;
 export const MONSTER_ROAM_MOVE_CHANCE = 0.28;
 export const PURPLE_WEAPON_POOL = ['lazer_glasses', 'metao_fire_staff', 'magenta_degale', 'magenta_p90'];
-export const RED_WEAPON_POOL = ['gelleh_lightning_spear', 'excalibur', 'golden_fleece', 'void_piercer', 'aegis_shield_weapon'];
+export const RED_WEAPON_POOL = ['gelleh_lightning_spear', 'excalibur', 'golden_fleece', 'void_piercer'];
 
 export const RIVAL_WEAPON_LOADOUTS = {
     princess: [
@@ -340,24 +333,24 @@ export const ITEM_DEFS = {
     tooth_of_thorn: {
       key: 'tooth_of_thorn',
       name: 'Tooth of Thorn',
-      shortName: 'Drain +2.8%',
-      description: '2.8% chance per stack to drain. Successful procs steal 1 HP on hit.',
+      shortName: 'Drain Ramp',
+      description: 'Drain chance 2.8% per stack, plus an extra 2% × stacks per stack — it ramps up fast the more you invest. Successful procs steal 1 HP on hit.',
       rarity: 'knight',
       color: '#ffd7e2',
       accent: '#ff6e8b',
       category: 'knight',
       tags: ['drain', 'heal', 'hit'],
     },
-    tough_skin: {
-      key: 'tough_skin',
-      name: 'Tough Skin',
-      shortName: 'Bleed Resist',
-      description: 'Bleed damage taken -25% per stack (capped -80%), and bleeds on you wear off 20% faster per stack.',
+    tough_bandaid: {
+      key: 'tough_bandaid',
+      name: 'Tough Bandaid',
+      shortName: 'Patch + Resist',
+      description: 'Per stack: defense +0.5%, bleed chance +2%, and bleed damage taken -10% (capped -80%). Bleeds on you also wear off 20% faster per stack.',
       rarity: 'knight',
       color: '#f0e2cf',
       accent: '#a87555',
       category: 'knight',
-      tags: ['bleed', 'defense'],
+      tags: ['defense', 'bleed'],
     },
     orb_of_blood: {
       key: 'orb_of_blood',
@@ -495,16 +488,6 @@ export const ITEM_DEFS = {
       category: 'wizard',
       tags: ['xp', 'damage', 'wizard'],
     },
-    bandaid: {
-      key: 'bandaid',
-      name: 'Bandaid',
-      shortName: 'Patch Up',
-      description: 'Defense +0.5%, bleed damage taken -4%, and bleed chance +2% per stack.',
-      rarity: 'knight',
-      color: '#fff5f7',
-      category: 'knight',
-      tags: ['defense', 'bleed'],
-    },
     push_man: {
       key: 'push_man',
       name: 'Push Man',
@@ -539,7 +522,7 @@ export const ITEM_DEFS = {
       key: 'generic_health_item',
       name: 'Generic Health',
       shortName: 'Heal 5%',
-      description: 'On kill, restore 5% of your current HP per stack, capped by max HP.',
+      description: 'On kill, restore 5% of your current HP per stack, capped by max HP. Overhealing has a 10% chance to grant another stack.',
       rarity: 'knight',
       color: '#d9ffe5',
       category: 'knight',
@@ -549,7 +532,7 @@ export const ITEM_DEFS = {
       key: 'snake_knife',
       name: 'Snake Knife',
       shortName: 'Poison +2%',
-      description: 'Hits have a 2% chance per stack to poison enemies (melee or ranged).',
+      description: 'Hits have a 2% chance per stack to poison enemies (melee or ranged). Poison has a natural 1% chance to spread to a nearby foe each tick.',
       rarity: 'knight',
       color: '#d7ffbf',
       category: 'knight',
@@ -597,18 +580,6 @@ export const ITEM_DEFS = {
       accent: '#ff8f3d',
       category: 'wizard',
       tags: ['tools', 'projectile', 'missile', 'wizard'],
-    },
-    turbo_boots: {
-      key: 'turbo_boots',
-      tool: true,
-      name: 'Turbo Boots',
-      shortName: 'Speed Burst',
-      description: 'Tool. Move much faster for 20 seconds. Each extra stack adds +3s and more speed.',
-      rarity: 'wizard',
-      color: '#79ffbf',
-      accent: '#45b7ff',
-      category: 'wizard',
-      tags: ['tools', 'speed', 'mobility', 'wizard'],
     },
     skizzard_tail: {
       key: 'skizzard_tail',
@@ -706,7 +677,7 @@ export const ITEM_DEFS = {
       key: 'overstimulate',
       name: 'Overstimulate',
       shortName: 'Status Stun',
-      description: 'Hits have a 20% chance per stack to stun enemies with 2 or more statuses.',
+      description: 'Hits have a 20% chance per stack to stun enemies with 2 or more statuses, and the stun lasts twice as long.',
       rarity: 'wizard',
       color: '#ffcf80',
       category: 'wizard',
@@ -737,7 +708,7 @@ export const ITEM_DEFS = {
       key: 'drink_master',
       name: 'Drink Master',
       shortName: 'Heal +20%',
-      description: 'Potions and other healing sources are 20% more effective per stack.',
+      description: 'Potions and other healing sources are 20% more effective per stack. Overhealing has a 10% chance to grant another stack.',
       rarity: 'wizard',
       color: '#6dff9b',
       accent: '#f4f6fb',
@@ -832,7 +803,7 @@ export const ITEM_DEFS = {
       key: 'shield_of_aegis',
       name: 'Shield of Aegis',
       shortName: 'DEF +20%',
-      description: 'Defense +20% per stack, capped with other defense at 85%.',
+      description: 'Defense +20% per stack (capped with other defense at 85%). On every floor, heal 2% max HP and gain a 50-point shield per stack.',
       rarity: 'god',
       color: '#ffe7a8',
       category: 'god',
@@ -841,8 +812,8 @@ export const ITEM_DEFS = {
     pendant_of_kronos: {
       key: 'pendant_of_kronos',
       name: 'Pendant of Kronos',
-      shortName: 'Crit +1%/God',
-      description: 'Raises crit chance by 1% for each god item you have.',
+      shortName: 'Crit+Dmg/God',
+      description: 'For each god (yellow) item you have: +1% crit chance and +1% damage. Also +2% damage to bosses.',
       rarity: 'god',
       color: '#d8c6ff',
       category: 'god',
@@ -1162,7 +1133,7 @@ export const SANDBOX_ENEMY_TYPES = [
 export const ITEM_DROP_WEIGHTS = [
     ['neo_knife', 60],
   ['tooth_of_thorn', 24],
-    ['tough_skin', 20],
+    ['tough_bandaid', 22],
     ['orb_of_blood', 28],
     ['hemes_scarf', 12],
     ['insurance', 18],
@@ -1176,12 +1147,10 @@ export const ITEM_DROP_WEIGHTS = [
     ['chrono_spring', 20],
     ['scholar_seal', 18],
     ['scholar_cap', 12],
-    ['bandaid', 22],
     ['push_man', 18],
     ['titan_heart', 18],
     ['charged_adapter', 18],
     ['pew_pew_box', 18],
-    ['turbo_boots', 12],
     ['skizzard_tail', 12],
     ['zap_to_extreme', 10],
     ['panic_button', 10],
@@ -1224,7 +1193,7 @@ export const ELITE_ITEM_DROP_TABLE = Neo.buildWeightTable(
 export const ELITE_INVENTORY_POOL = [
     'neo_knife',
   'tooth_of_thorn',
-    'tough_skin',
+    'tough_bandaid',
     'gold_vac',
     'double_dose',
     'copycat_charm',
@@ -1244,7 +1213,6 @@ export const ELITE_INVENTORY_POOL = [
     'iron_lung',
     'iron_helm',
     'oracles_lens',
-    'bandaid',
     'shield_of_aegis',
     'pendant_of_kronos',
     'rich_mans_luck',
@@ -1550,6 +1518,7 @@ export const ui = {
     sandboxGodMode: document.getElementById('sandboxGodMode'),
     sandboxUnlockEverything: document.getElementById('sandboxUnlockEverything'),
     sandboxMoveLoadout: document.getElementById('sandboxMoveLoadout'),
+    sandboxWeaponLoadout: document.getElementById('sandboxWeaponLoadout'),
     endlessHud: document.getElementById('endlessHud'),
     endlessWaveNum: document.getElementById('endlessWaveNum'),
     bossRushHud: document.getElementById('bossRushHud'),
@@ -1656,6 +1625,8 @@ export const SANDBOX_DEFAULT_SETTINGS = {
     unlockEverything: false,
     // '' for a slot means "use the character default" for that move slot.
     moveLoadout: { melee: '', laser: '', smash: '', dash: '' },
+    // '' means "use the character default" for the starting weapon.
+    weaponLoadout: { weapon: '' },
   };
   // sandboxSettings initial value (metaProgress/tutorialState set later in game-state.js)
   Neo.sandboxSettings = { ...SANDBOX_DEFAULT_SETTINGS };
@@ -1717,13 +1688,12 @@ export const WEAPON_BASE_STATS = {
     claw_gauntlets:           { damage: 26,   cooldown: 0.38, range: 85,  knockback: 90  },
     lazer_glasses:            { damage: 18,   cooldown: 3.60,             knockback: 80  },
     metao_fire_staff:         { damage: 22,   cooldown: 0.75, range: 200, knockback: 100 },
-    magenta_degale:           { damage: 80,   cooldown: 1.50,             knockback: 480 },
-    magenta_p90:              { damage: 18,   cooldown: 1.80,             knockback: 140 },
+    magenta_degale:           { damage: 128,  cooldown: 1.50,             knockback: 480 },
+    magenta_p90:              { damage: 28,   cooldown: 1.80,             knockback: 140 },
     gelleh_lightning_spear:{ damage: 45,   cooldown: 2.00,             knockback: 200 },
     excalibur:                { damage: 202,  cooldown: 2.00, range: 120, knockback: 600 },
     golden_fleece:            { damage: 20,   cooldown: 0.50, range: 80,  knockback: 80  },
     void_piercer:             { damage: 55,   cooldown: 0.80,             knockback: 160 },
-    aegis_shield_weapon:      { cooldown: 8.00 },
     princess_wand:            { damage: 30,   cooldown: 0.77, range: 120, knockback: 160 },
   };
 

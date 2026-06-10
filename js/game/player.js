@@ -63,6 +63,16 @@ export function migratePlayerData(source) {
       playerData.items.scholar_cap = Number(playerData.items.scholar_cap || 0) + Number(playerData.items.scholors_cap || 0);
       delete playerData.items.scholors_cap;
     }
+    // Bandaid and Tough Skin were merged into Tough Bandaid; fold any saved copies
+    // of either old relic into the combined item so existing runs keep their stacks.
+    if (playerData.items && typeof playerData.items === 'object') {
+      const legacyToughBandaid = Number(playerData.items.bandaid || 0) + Number(playerData.items.tough_skin || 0);
+      if (legacyToughBandaid > 0) {
+        playerData.items.tough_bandaid = Number(playerData.items.tough_bandaid || 0) + legacyToughBandaid;
+      }
+      delete playerData.items.bandaid;
+      delete playerData.items.tough_skin;
+    }
     // The former generic voucher could claim any rarity, so preserve its full
     // value by migrating each saved copy to the highest-class Yellow voucher.
     migrateLegacyVoucherInventory(playerData.items);
@@ -456,7 +466,7 @@ export function getItemStats() {
 
     const neoKnife = getItemCount('neo_knife');
   const toothOfThorn = getItemCount('tooth_of_thorn');
-    const toughSkin = getItemCount('tough_skin');
+    const toughBandaid = getItemCount('tough_bandaid');
     const orbOfBlood = getItemCount('orb_of_blood');
     const hemesScarf = getItemCount('hemes_scarf');
     const doubleDose = getItemCount('double_dose');
@@ -466,7 +476,6 @@ export function getItemStats() {
     const robotArm = getItemCount('robot_arm');
     const scholarSeal = getItemCount('scholar_seal');
     const scholarCap = getItemCount('scholar_cap');
-    const bandaid = getItemCount('bandaid');
     const pushMan = getItemCount('push_man');
     const explosiveJelly = getItemCount('explosive_jelly');
     const dragonOrb = getItemCount('dragon_orb');
@@ -517,12 +526,9 @@ export function getItemStats() {
       : equippedWeaponKey === 'void_piercer'
         ? 0.20
         : 0;
-    const baseBleedChance = neoKnife * 0.05 + bandaid * 0.02;
+    const baseBleedChance = neoKnife * 0.05 + toughBandaid * 0.02;
     const tagCounts = getItemTagCounts();
     const healingTagStacks = Number(tagCounts.heal || 0) + Number(tagCounts.healing || 0);
-    const activeTurboStacks = Number(Neo.player?.equipmentEffects?.turbo_boots?.time || 0) > 0
-      ? Math.max(1, Math.floor(Number(Neo.player?.equipmentEffects?.turbo_boots?.stacks || getItemCount('turbo_boots') || 1)))
-      : 0;
     const activeGoldVacStacks = Number(Neo.player?.equipmentEffects?.gold_vac?.time || 0) > 0
       ? Math.max(1, Math.floor(Number(Neo.player?.equipmentEffects?.gold_vac?.stacks || getItemCount('gold_vac') || 1)))
       : 0;
@@ -536,8 +542,12 @@ export function getItemStats() {
     let critChance = critCharmBonus + keenEyeBonus + pendantOfKronos * godItemStacks * 0.01 + princesGlassesCrit;
     if (oracleLens) critChance *= 2;
     critChance = Neo.clamp(critChance, 0.01, 0.95);
+    // Pendant of Kronos: +1% base damage per god/yellow item owned (every stack
+    // counts every god item), plus an extra +2% damage to bosses per stack.
+    const kronosDamageMultiplier = 1 + pendantOfKronos * godItemStacks * 0.01;
+    const kronosBossDamageMultiplier = 1 + pendantOfKronos * 0.02;
     const standardDamageReduction = Neo.clamp(
-      bandaid * 0.005 + shieldOfAegis * 0.2 + princesGlassesDefense,
+      toughBandaid * 0.005 + shieldOfAegis * 0.2 + princesGlassesDefense,
       0,
       0.85,
     );
@@ -554,11 +564,16 @@ export function getItemStats() {
       displayedBleedChance: baseBleedChance + weaponBleedBonus,
       weaponCritChance: weaponCritBonus,
       displayedCritChance: critChance + weaponCritBonus,
-      drainChance: toothOfThorn * 0.028,
-      bleedResistance: Neo.clamp(toughSkin * 0.25 + bandaid * 0.04, 0, 0.8),
-      // Tough Skin also makes bleed wear off faster: each stack speeds the bleed
+      // Tooth of Thorn ramps: 2.8% per stack plus an extra 2% × stacks per stack,
+      // so investment compounds (mirrors Enemy Magnet's homing ramp).
+      drainChance: toothOfThorn * 0.028 + toothOfThorn * toothOfThorn * 0.02,
+      bleedResistance: Neo.clamp(toughBandaid * 0.1, 0, 0.8),
+      // Always-on base fire-damage reduction: the player takes ~50% less fire
+      // DoT. Applied in the player fire tick (tickPlayerStatus 'fire').
+      fireResistance: 0.5,
+      // Tough Bandaid also makes bleed wear off faster: each stack speeds the bleed
       // timer decay by 20% (so bleeds tick fewer times), capped at 3x faster.
-      bleedDurationDecayMultiplier: Neo.clamp(1 + toughSkin * 0.2, 1, 3),
+      bleedDurationDecayMultiplier: Neo.clamp(1 + toughBandaid * 0.2, 1, 3),
       weaponFatigueChance: weaponFatigue * 0.05,
       weaponFatigueFreezeChance: weaponFatigue * 0.02,
       genericHealthItemHealRatio: genericHealthItem * 0.05,
@@ -584,9 +599,11 @@ export function getItemStats() {
       itemDuplicateChance: Neo.clamp(copycatCharm * 0.3, 0, 1),
       critChance,
       critMultiplier: 1.6 + (oracleLens ? critChance * 2.2 : critChance * 0.6) + keenEyeCritDamageBonus,
+      kronosDamageMultiplier,
+      kronosBossDamageMultiplier,
       attackSpeedMultiplier: 1 + attackServo * 0.12 + chronoSpringBonus,
       hasRobotArm: robotArm > 0,
-      moveSpeedMultiplier: (1 + turtleShell * 0.05) * (activeTurboStacks > 0 ? 1.55 + (activeTurboStacks - 1) * 0.15 : 1),
+      moveSpeedMultiplier: 1 + turtleShell * 0.05,
       laserWeightMultiplier: Math.max(0, 1 - turtleShell * 0.01),
       xpGainMultiplier: 1 + scholarSeal * 0.15,
       levelEdgeDamageMultiplier: 1 + scholarCap * xpProgress * 0.45,
@@ -655,6 +672,16 @@ export function applyPlayerHealing(amount, options = {}) {
       }
     }
     const overflow = Math.max(0, healAmount - gained);
+    // Generic Health / Drink Master: while owned, overhealing has a 10% chance to
+    // grant another stack of that item (snowballs more healing the more you waste).
+    if (overflow > 0) {
+      if (Neo.getItemCount?.('generic_health_item') > 0 && Neo.rng?.() < 0.10) {
+        Neo.collectItem?.('generic_health_item');
+      }
+      if (Neo.getItemCount?.('drink_master') > 0 && Neo.rng?.() < 0.10) {
+        Neo.collectItem?.('drink_master');
+      }
+    }
     const stats = Neo.getItemStats?.() || {};
     const barrierRatio = Number(stats.overhealBarrierRatio || 0);
     const barrierCap = maxHp * Number(stats.overhealBarrierCapRatio || 0);
@@ -1758,6 +1785,25 @@ export function refreshFloorChargeStates() {
     Neo.player.critCharmBuffTime = 0;
     Neo.player.keenEyeBuffTime = 0;
     Neo.player.chronoSpringBuffTime = 0;
+    applyShieldOfAegisFloorBonus();
+  }
+
+  // Shield of Aegis: on every floor entry, heal 2% of max HP and grant a 50-point
+  // shield (overheal barrier) per stack. The barrier uses the standard mechanic, so
+  // it begins bleeding away a few seconds after the floor starts.
+  function applyShieldOfAegisFloorBonus() {
+    const stacks = getItemCount('shield_of_aegis');
+    if (stacks <= 0) return;
+    const maxHp = Math.max(1, Number(Neo.player.maxHp || 1));
+    const heal = maxHp * 0.02 * stacks;
+    if (heal > 0) Neo.applyPlayerHealing?.(heal);
+    const shield = 50 * stacks;
+    Neo.player.overhealBarrier = Number(Neo.player.overhealBarrier || 0) + shield;
+    Neo.player.overhealBarrierMax = Math.max(Number(Neo.player.overhealBarrierMax || 0), Neo.player.overhealBarrier);
+    Neo.player.overhealBarrierColor = '#ffe7a8';
+    Neo.player.overhealBarrierAge = 0;
+    Neo.spawnHealPopup?.(Neo.player.x, Neo.player.y - 34, shield, { color: '#ffe7a8', size: 16 });
+    Neo.spawnParticle?.({ x: Neo.player.x, y: Neo.player.y, life: 0.7, ring: Math.min(150, 58 + Math.sqrt(shield) * 3), c: '#ffe7a8' });
   }
 
   // Expose on Neo

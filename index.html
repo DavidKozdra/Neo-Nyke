@@ -990,6 +990,19 @@
           </div>
         </div>
         <div class="sandbox-card">
+          <h4>Weapon Loadout</h4>
+          <p class="sandbox-card__hint">Pick the weapon you start equipped with, or leave on Default to use the character's weapon.</p>
+          <div class="sandbox-move-slots" id="sandboxWeaponLoadout">
+            <div class="sandbox-move-slot" data-sbox-weapon-slot="weapon">
+              <div class="sandbox-move-slot__head">
+                <span class="sandbox-move-slot__label">Weapon</span>
+                <span class="sandbox-move-slot__selected" data-sbox-weapon-slot-selected="weapon">Default</span>
+              </div>
+              <div class="sandbox-move-options" data-sbox-weapon-options="weapon" role="group" aria-label="Starting weapon"></div>
+            </div>
+          </div>
+        </div>
+        <div class="sandbox-card">
           <h4>Starting Inventory</h4>
           <div class="sandbox-search-row">
             <input id="sandboxStartItemSearch" class="sandbox-search" type="search" placeholder="Search starting items..." aria-label="Search starting inventory items" autocomplete="off" spellcheck="false">

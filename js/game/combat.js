@@ -106,9 +106,15 @@
     const defenseMultiplier = Math.max(1, Number(enemy?.defenseMultiplier || 1));
     const eliteMultiplier = getEliteDamageMultiplier(enemy);
     const characterMultiplier = Neo.getCharacterDef().damageMultiplier || 1;
+    // Pendant of Kronos: flat +1%/god-item damage everywhere, plus +2%/stack
+    // against bosses (boss types, miniBosses, and the god enemy).
+    const isBoss = Neo.isBossType?.(enemy?.type) || enemy?.type === 'god' || !!enemy?.miniBoss;
+    const kronosMultiplier = (stats.kronosDamageMultiplier || 1)
+      * (isBoss ? (stats.kronosBossDamageMultiplier || 1) : 1);
     const powered = (damage + (Neo.player?.attackPower || 0))
       * characterMultiplier
       * (stats.levelEdgeDamageMultiplier || 1)
+      * kronosMultiplier
       * (Neo.isChallengeActive('glass_cannon') ? 1.25 : 1);
     if (applyBleedBonus && Neo.getStatusStacks(enemy, 'bleed') > 0 && stats.bleedDamageMultiplier > 1) {
       return Math.max(1, Math.round((powered * stats.bleedDamageMultiplier * eliteMultiplier) / defenseMultiplier));
@@ -215,7 +221,6 @@
     else if (weaponKey === 'excalibur') base = 2;
     else if (weaponKey === 'golden_fleece') base = 0.5;
     else if (weaponKey === 'void_piercer') base = 0.8;
-    else if (weaponKey === 'aegis_shield_weapon') base = 8;
     else if (weaponKey === 'princess_wand') base = 0.77;
     else base = 0.5;
     const bonus = Neo.getAnvilWeaponBonus(weaponKey, 'cooldown');
@@ -225,6 +230,8 @@
   const CHARGED_WEAPON_MAX_CHARGES = {
     princess_wand: 3,
     metao_fire_staff: 2,
+    magenta_degale: 3,
+    magenta_p90: 5,
   };
 
   function isChargedWeaponKey(weaponKey) {
@@ -437,7 +444,7 @@
           weaponKey,
         });
       }
-      Neo.player.weaponCooldown = wCd(weaponKey) / attackSpeed;
+      if (!isChargedWeaponKey(weaponKey)) Neo.player.weaponCooldown = wCd(weaponKey) / attackSpeed;
       return true;
     }
     if (weaponKey === 'gelleh_lightning_spear') {
@@ -455,13 +462,6 @@
     if (weaponKey === 'golden_fleece') {
       fireWeaponSweep(wDmg(weaponKey), wRng(weaponKey), Neo.ATTACKS.melee.arc, wKnk(weaponKey), '#ffe8a0');
       Neo.player.weaponCooldown = wCd(weaponKey) / attackSpeed;
-      return true;
-    }
-    if (weaponKey === 'aegis_shield_weapon') {
-      Neo.player.blockActive = true;
-      Neo.player.blockTimer = 2;
-      Neo.player.weaponCooldown = wCd(weaponKey) / attackSpeed;
-      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.5, ring: 26, c: '#9ae9ff' });
       return true;
     }
     if (Neo.isProjectileWeaponKey?.(weaponKey)) {
@@ -1990,7 +1990,7 @@
   }
 
   function castFloorLava() {
-    Neo.player.lavaWalkTime = 5.8;
+    Neo.player.lavaWalkTime = 7.5;
     Neo.player.lavaTrailTick = 0;
     Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 12, life: 0.7, text: 'LAVA WALK', c: '#ff9f40' });
   }
@@ -2377,7 +2377,7 @@
       Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.3, ring: enemy.r + 12, c: '#9fe8ff' });
     }
     if (stats.overstimulateStunChance > 0 && (Neo.getActiveStatusCount?.(enemy) || 0) >= 2 && Neo.nextRandom('encounter') < stats.overstimulateStunChance) {
-      enemy.stun = Math.max(Number(enemy.stun || 0), 0.7);
+      enemy.stun = Math.max(Number(enemy.stun || 0), 1.4);
       Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 18, life: 0.5, text: 'STIMULATED', c: '#ffd27d' });
       Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.28, ring: enemy.r + 12, c: '#ffd27d' });
     }
@@ -2684,9 +2684,44 @@
         onEnemyDie(enemy);
         return true;
       }
+      if (typeof config.onTick === 'function') config.onTick(enemy, state, stats);
     }
     if (state.duration <= 0) Neo.clearStatus(enemy, key);
     return false;
+  }
+
+  // Snake Knife's poison is naturally infectious: each tick has a 1% chance to
+  // jump one stack to the nearest healthy foe, so a poison build slowly seeds a
+  // whole pack without needing Procy Pickle. Guarded so it doesn't chain-react
+  // across the room in a single frame.
+  let snakeKnifePoisonSpreading = false;
+  function spreadSnakeKnifePoison(enemy, state) {
+    if (snakeKnifePoisonSpreading) return;
+    if (!enemy || enemy.dead) return;
+    if (Neo.nextRandom('encounter') >= 0.01) return;
+    const radius = 150 * Number(Neo.getItemStats?.()?.aoeRadiusMultiplier || 1);
+    let target = null;
+    let bestDistSq = Infinity;
+    const visitEnemy = other => {
+      if (!other || other === enemy || other.dead) return;
+      if (Neo.getStatusStacks(other, 'poison') > 0) return;
+      const dx = other.x - enemy.x;
+      const dy = other.y - enemy.y;
+      const distSq = dx * dx + dy * dy;
+      if (distSq > radius * radius || distSq >= bestDistSq) return;
+      bestDistSq = distSq;
+      target = other;
+    };
+    if (typeof Neo.forEachEnemyNearCircle === 'function') {
+      Neo.forEachEnemyNearCircle(enemy.x, enemy.y, radius + 80, visitEnemy, { excludeEnemy: enemy });
+    } else {
+      Neo.enemies.forEach(visitEnemy);
+    }
+    if (!target) return;
+    snakeKnifePoisonSpreading = true;
+    const duration = Math.max(1.6, Number(state?.duration || 0) * 0.6);
+    applyPoison(target, 1, duration);
+    snakeKnifePoisonSpreading = false;
   }
 
   function updateEnemyStatuses(enemy, dt) {
@@ -2714,6 +2749,7 @@
       damage: stacks => Math.max(1, enemy.max * (0.008 * stacks)),
       color: Neo.STATUS_STYLES.poison.textColor,
       particleColor: Neo.STATUS_STYLES.poison.color,
+      onTick: spreadSnakeKnifePoison,
       stats,
     })) return bleedStacks;
     if (enemy.dead) return bleedStacks;

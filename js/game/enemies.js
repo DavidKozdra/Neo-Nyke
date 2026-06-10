@@ -561,7 +561,7 @@
     const speedMult = 1 + stacks('attack_servo') * 0.08 + stacks('turtle_shell') * 0.04;
     const attackCdMult = Math.max(0.52, 1 - stacks('charged_adapter') * 0.1);
     const stunResistStacks = stacks('anchor_charm');
-    const bleedResistance = Neo.clamp(stacks('tough_skin') * 0.25, 0, 0.8);
+    const bleedResistance = Neo.clamp(stacks('tough_bandaid') * 0.1, 0, 0.8);
 
     enemy.hp = Math.round(enemy.hp * hpMult);
     enemy.max = enemy.hp;
@@ -1269,8 +1269,8 @@
     if (count('oracles_lens') > 0) critChance *= 2;
     critChance = Neo.clamp(critChance, 0.01, 0.95);
     return {
-      bleedChance: count('neo_knife') * 0.05 + count('bandaid') * 0.02,
-      bleedResistance: Neo.clamp(count('tough_skin') * 0.25 + count('bandaid') * 0.04, 0, 0.8),
+      bleedChance: count('neo_knife') * 0.05 + count('tough_bandaid') * 0.02,
+      bleedResistance: Neo.clamp(count('tough_bandaid') * 0.1, 0, 0.8),
       scarfBleedsOnHit: count('hemes_scarf'),
       snakeKnifePoisonChance: count('snake_knife') * 0.02,
       weaponFatigueChance: count('weapon_fatigue') * 0.05,
@@ -3830,12 +3830,6 @@
         enemy.windup = 0.22;
         enemy.beamAngle = angleToPlayer;
         enemy.beamDamage = Math.max(enemy.beamDamage || 0, Math.round(damage * 0.55));
-        return true;
-      }
-      if (weaponKey === 'aegis_shield_weapon') {
-        enemy.barrier = Math.max(enemy.barrier || 0, Math.round(enemy.max * 0.12));
-        enemy.inv = Math.max(enemy.inv || 0, 0.32);
-        Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.44, ring: 34, c: '#9ae9ff' });
         return true;
       }
       mirrorHitArc(enemy, angleToPlayer, range + 10, weaponKey === 'excalibur' ? Math.PI : Neo.ATTACKS.melee.arc + 0.18, damage, knockback, `mirror_${weaponKey}`, {

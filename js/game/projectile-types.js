@@ -13,7 +13,7 @@ const PROJECTILE_TYPE_DEFS = {
   heavy_slug: {
     kind: 'magenta_degale',
     color: '#ff8bd2',
-    speed: 920,
+    speed: 1240,
     r: 7,
     life: 0.9,
     recoil: 280,
@@ -21,7 +21,7 @@ const PROJECTILE_TYPE_DEFS = {
   burst_round: {
     kind: 'magenta_p90',
     color: '#ff9dd7',
-    speed: 900,
+    speed: 1200,
     r: 4,
     life: 0.8,
     recoil: 55,

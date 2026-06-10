@@ -550,7 +550,7 @@
     });
     tickPlayerStatus('fire', dt, {
       interval: 0.45,
-      damage: stacks => 1 + stacks * 1.6,
+      damage: stacks => (1 + stacks * 1.6) * Math.max(0.2, 1 - (Neo.getItemStats?.()?.fireResistance || 0)),
       color: Neo.STATUS_STYLES.fire.color,
     });
     tickPlayerStatus('poison', dt, {
@@ -1727,7 +1727,10 @@
             ? Neo.circleRect(enemy.x, enemy.y, enemy.r - 4, hazard.left, hazard.top, hazard.w, hazard.h)
             : Neo.dist(enemy.x, enemy.y, hazard.x, hazard.y) <= hazard.r + enemy.r - 6;
           if (!inside) return;
-          if (hazard.statusTick <= 0) Neo.applyFire(enemy, 1, 2.8);
+          // Floor Is Lava trail puddles carry a dps field and burn enemies for
+          // direct damage; authored lava rooms leave dps unset (fire only).
+          if (hazard.dps) Neo.hitEnemy(enemy, hazard.dps * dt, 0, 0, '#ff7a32');
+          if (hazard.statusTick <= 0) Neo.applyFire(enemy, 1, 2.8, hazard.source);
         };
         if (hazard.shape === 'rect') {
           forEachEnemyNearRect(hazard.left, hazard.top, hazard.w, hazard.h, applyLavaToEnemy, { padding: 80 });
