@@ -10,7 +10,7 @@
   };
   const DEFAULT_TOUCH_BINDINGS = { touchA:'slash', touchB:'laser', touchY:'smash', touchX:'ascend', touchDash:'dash' };
   const DEFAULT_VOLUME   = { master:20, sfx:80, music:20 };
-  const DEFAULT_ACCESS   = { reduceFlash:false, reduceMotion:false, reduceParticles:false, highContrast:false, screenShake:true, shopCanAfford:'#4caf50', shopCantAfford:'#e05555', hudScale:1 };
+  const DEFAULT_ACCESS   = { reduceFlash:false, reduceMotion:false, reduceParticles:false, highContrast:false, screenShake:true, shopCanAfford:'#4caf50', shopCantAfford:'#e05555', hudScale:1, fontScale:1 };
   const DEFAULT_GAMEPLAY = { pauseInventory:true, pauseOnBlur:true, bloodMultiplier:1, bloodOnHit:true, performanceMode:true, objectivePanel:true, cutsceneAutoAdvance:false };
   const BLOOD_MULTIPLIER_MIN = 1;
   const BLOOD_MULTIPLIER_MAX = 10;
@@ -28,6 +28,15 @@
     const n = Number(value);
     if (!Number.isFinite(n)) return DEFAULT_ACCESS.hudScale;
     return Math.max(HUD_SCALE_MIN, Math.min(HUD_SCALE_MAX, Math.round(n / HUD_SCALE_STEP) * HUD_SCALE_STEP));
+  }
+
+  const FONT_SCALE_MIN = 0.8;
+  const FONT_SCALE_MAX = 1.6;
+  const FONT_SCALE_STEP = 0.05;
+  function normalizeFontScale(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return DEFAULT_ACCESS.fontScale;
+    return Math.max(FONT_SCALE_MIN, Math.min(FONT_SCALE_MAX, Math.round(n / FONT_SCALE_STEP) * FONT_SCALE_STEP));
   }
 
   // ── Per-element HUD layout ────────────────────────────────────────────────────
@@ -301,6 +310,7 @@
     root.style.setProperty('--shop-can-afford',  access.shopCanAfford  || DEFAULT_ACCESS.shopCanAfford);
     root.style.setProperty('--shop-cant-afford', access.shopCantAfford || DEFAULT_ACCESS.shopCantAfford);
     root.style.setProperty('--hud-scale', String(normalizeHudScale(access.hudScale)));
+    root.style.setProperty('--font-scale', String(normalizeFontScale(access.fontScale)));
   }
 
   // Push each HUD element's per-widget scale + visibility to the DOM. A null
@@ -646,6 +656,20 @@
       // Rows/preview on "Auto" inherit this value, so refresh their readouts.
       HUD_ELEMENTS.forEach(el => refreshHudElementRow(el.key));
       refreshHudPreviewBoxes();
+    });
+  }
+
+  const fontScaleSlider = document.getElementById('accFontScale');
+  const fontScaleVal    = document.getElementById('accFontScaleVal');
+  if (fontScaleSlider && fontScaleVal) {
+    const fmt = v => `${Math.round(normalizeFontScale(v) * 100)}%`;
+    fontScaleSlider.value = normalizeFontScale(access.fontScale);
+    fontScaleVal.textContent = fmt(access.fontScale);
+    fontScaleSlider.addEventListener('input', () => {
+      access.fontScale = normalizeFontScale(fontScaleSlider.value);
+      fontScaleVal.textContent = fmt(access.fontScale);
+      save();
+      applyAccess();
     });
   }
 

@@ -371,7 +371,7 @@ function pushAchievementToast(achievement) {
   icon.textContent = String(achievement?.icon || '🏆');
   icon.style.display = 'grid';
   icon.style.placeItems = 'center';
-  icon.style.fontSize = '18px';
+  icon.style.fontSize = 'calc(18px * var(--font-scale, 1))';
   icon.style.lineHeight = '1';
   icon.style.background = 'rgba(8, 14, 22, 0.88)';
 

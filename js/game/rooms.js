@@ -118,8 +118,18 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
     Neo.player.x = Neo.START_X;
     Neo.player.y = Neo.START_Y;
     spawnRivals();
+    const bloodThornCount = seedBloodThornTraps();
     Neo.gameEvents.emit('floor:enter', { floor: Neo.floor });
     enterRoom(startRoom);
+    if (bloodThornCount > 0) {
+      Neo.spawnParticle({
+        x: Neo.ROOM_W / 2,
+        y: Neo.ROOM_H / 2 - 80,
+        life: 2.6,
+        text: `MOOGGY SEEDED ${bloodThornCount} BLOOD THORNS HERE`,
+        c: '#ff3348',
+      });
+    }
     if (Array.isArray(Neo.pendingRivalDescends) && Neo.pendingRivalDescends.length > 0) {
       Neo.pendingRivalDescends.forEach((rival, i) => {
         Neo.spawnParticle({
@@ -1133,6 +1143,28 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
       Neo.setAnvilPanelOpen(false);
     }
 
+    // Moggy's Coat: a kill made while hidden primes the coat (see onEnemyDie);
+    // the next combat then opens with a 2-second Dark Drain on every enemy.
+    if (Neo.player?.moggysCoatPrimed && !room.cleared && Neo.enemies.length > 0) {
+      const coatStacks = Math.max(0, Neo.getItemCount?.('moggys_coat') || 0);
+      if (coatStacks > 0) {
+        Neo.player.moggysCoatPrimed = false;
+        let drained = 0;
+        Neo.enemies.forEach(enemy => {
+          if (!enemy || enemy.dead || enemy.tutorialDummy) return;
+          if (enemy.type === 'rival' && enemy.rivalData?.friend) return;
+          Neo.applyDarkDrain?.(enemy, coatStacks, 2);
+          drained += 1;
+        });
+        if (drained > 0) {
+          Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - Neo.player.r - 20, life: 0.9, text: "MOGGY'S COAT", c: '#5a78d6' });
+        }
+      } else {
+        // Coat was lost since priming (sold, removed): drop the charge.
+        Neo.player.moggysCoatPrimed = false;
+      }
+    }
+
     if (room.type === 'treasure' && !room.cleared && Neo.chests.length === 0) {
       const treasureRandom = Neo.createRoomRandom(room, 'treasure:chests');
       const chestCount = 1 + Math.floor(treasureRandom() * 2);
@@ -1453,6 +1485,65 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
 
   // ── Rival Adventurer System ──────────────────────────────────────────────
 
+  // Every rival carries one extra life: the first kill only drives them off to
+  // a later floor; only the second kill is final.
+  const RIVAL_STARTING_LIVES = 2;
+
+  function rollRandomRivalItemKey(godTier = false) {
+    const keys = Object.keys(Neo.ITEM_DEFS || {}).filter(key => {
+      const def = Neo.ITEM_DEFS[key];
+      if (!def || def.voucher || key.startsWith('voucher_')) return false;
+      return godTier ? !!Neo.isGodTier?.(def.rarity) : !Neo.isGodTier?.(def.rarity);
+    });
+    if (keys.length === 0) return '';
+    return keys[Math.floor(Neo.nextRandom('loot') * keys.length)];
+  }
+
+  // Adds random items to a rival's pack. God-tier gear also feeds the stat
+  // bonus in applyRivalLevelStats, so re-derive stats after granting.
+  function grantRivalItems(rival, count, options = {}) {
+    if (!rival || rival.dead && !options.allowDead) return 0;
+    const total = Math.max(0, Math.round(Number(count) || 0));
+    if (total <= 0) return 0;
+    if (!Array.isArray(rival.loot)) rival.loot = [];
+    let granted = 0;
+    for (let index = 0; index < total; index += 1) {
+      const key = rollRandomRivalItemKey(!!options.godTier);
+      if (!key) break;
+      rival.loot.push({ type: 'item', key });
+      granted += 1;
+    }
+    if (granted > 0) applyRivalLevelStats(rival, { keepHpRatio: true });
+    return granted;
+  }
+
+  function countRivalGodItems(rival) {
+    if (!Array.isArray(rival?.loot)) return 0;
+    return rival.loot.filter(item => item?.type === 'item' && Neo.isGodTier?.(Neo.ITEM_DEFS?.[item.key]?.rarity)).length;
+  }
+
+  // Healing a rival wins them over permanently: friends cannot be hurt at all
+  // and stop fighting/hunting the player.
+  function befriendRival(rival, liveEnemy = null) {
+    if (!rival || rival.friend) return false;
+    rival.friend = true;
+    rival.vendetta = false;
+    rival.relationship = Math.max(10, Number(rival.relationship || 0) + 10);
+    rival.aggroTimer = 0;
+    rival.hp = rival.max;
+    rival.hpSnapshot = rival.max;
+    if (rival.memory) rival.memory.threat = 0;
+    if (liveEnemy) {
+      liveEnemy.hp = liveEnemy.max;
+      // Clear active DoTs so a mid-fight bleed can't kill the new friend.
+      liveEnemy.statuses = Neo.createStatusMap();
+      Neo.spawnParticle({ x: liveEnemy.x, y: liveEnemy.y - 30, life: 2.0, text: `${rival.name.toUpperCase()} IS YOUR FRIEND!`, c: '#8dffbd' });
+      Neo.sayAtPosition(liveEnemy.x, liveEnemy.y, 'You... helped me? Then we fight no more.', { speaker: rival.name, tone: 'boss', holdTime: 2.0, offsetY: liveEnemy.r + 36 });
+    }
+    Neo.scheduleRunSave();
+    return true;
+  }
+
   function createDefaultRivalMemory() {
     return {
       playerSightings: 0,
@@ -1522,8 +1613,11 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
     const levelCap = Math.max(1, Number(Neo.RIVAL_LEVEL_CAP || 9));
     const level = Neo.clamp(Math.round(Number(rival.level || 1)), 1, levelCap);
     rival.level = level;
-    const hpScale = 1 + (level - 1) * 0.14;
-    const dmgScale = 1 + (level - 1) * 0.11;
+    // God-tier gear in the rival's pack makes them hit harder and live longer
+    // (the "five God items and sent for you" vendetta loadout).
+    const godGear = countRivalGodItems(rival);
+    const hpScale = (1 + (level - 1) * 0.14) * (1 + godGear * 0.06);
+    const dmgScale = (1 + (level - 1) * 0.11) * (1 + godGear * 0.08);
     const speedScale = 1 + Math.min(0.24, (level - 1) * 0.02);
     const attackCdScale = 1 - Math.min(0.28, (level - 1) * 0.018);
     const moveScale = 1 - Math.min(0.38, (level - 1) * 0.022);
@@ -1593,6 +1687,11 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
           .map(item => ({ type: item.type, key: item.key, value: item.value }))
         : [],
       memory: normalizeRivalMemory(source.memory),
+      lives: Neo.clamp(Math.round(Number(source.lives ?? RIVAL_STARTING_LIVES)), 0, RIVAL_STARTING_LIVES),
+      relationship: Number(source.relationship || 0),
+      friend: !!source.friend,
+      vendetta: !!source.vendetta,
+      godGearGranted: !!source.godGearGranted,
       dead: !!source.dead,
     };
     if (!migrated.weapons.length) {
@@ -1666,11 +1765,36 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
 
     if (!Neo.rooms || Neo.rooms.length === 0) { Neo.rivals = []; Neo.pendingRivalDescends = []; return; }
 
+    // Mooggy seeds the floor below with blood thorn traps: 20 when she descends
+    // alive (her kill sets 15 in onEnemyDie). Friends don't trap their friends.
+    if (carried.some(r => r.characterKey === 'mooggy' && !r.friend)) {
+      Neo.pendingMooggyTraps = Math.max(Number(Neo.pendingMooggyTraps || 0), 20);
+    }
+
     const nonStartRooms = Neo.rooms.filter(r => r.type !== 'start' && r.type !== 'boss' && r.type !== 'god');
     const floorScale = 1 + (Neo.floor - 1) * 0.12;
 
     Neo.rivals = [];
     Neo.pendingRivalDescends = [];
+
+    // Rivals that lost a life on an earlier floor come back once their return
+    // floor is reached. A grudge (negative relationship) arms them with five
+    // god items and a permanent vendetta hunt.
+    const returnQueue = Array.isArray(Neo.pendingRivalReturns) ? Neo.pendingRivalReturns : [];
+    const dueReturns = returnQueue.filter(entry => Number(entry?.returnFloor || 0) <= Neo.floor);
+    Neo.pendingRivalReturns = returnQueue.filter(entry => !dueReturns.includes(entry));
+    for (const entry of dueReturns) {
+      const revived = migrateRivalState({ ...entry.rival, dead: false });
+      if (!revived || (Neo.slainRivalKeys || []).includes(revived.characterKey)) continue;
+      if (Number(revived.relationship || 0) < 0 && !revived.godGearGranted) {
+        revived.godGearGranted = true;
+        revived.vendetta = true;
+        grantRivalItems(revived, 5, { godTier: true });
+      }
+      revived.hp = revived.max;
+      revived.hpSnapshot = revived.max;
+      carried.push(revived);
+    }
 
     // Reintegrate rivals that were alive when descending
     for (const old of carried) {
@@ -1678,6 +1802,14 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
         ? nonStartRooms[Math.floor(Neo.nextRandom('world') * nonStartRooms.length)]
         : Neo.rooms[0];
       if (!room) continue;
+
+      // A grudge held across a descent triggers the vendetta loadout here too,
+      // not just on extra-life returns: five god items, sent for the player.
+      if (!old.friend && Number(old.relationship || 0) < 0 && !old.godGearGranted) {
+        old.godGearGranted = true;
+        old.vendetta = true;
+        grantRivalItems(old, 5, { godTier: true });
+      }
 
       const def = Neo.RIVAL_DEFS[old.characterKey];
       if (def) {
@@ -1707,7 +1839,13 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
     const rollPassed = Neo.nextRandom('world') <= Neo.RIVAL_SPAWN_CHANCE;
 
     if (rollPassed && nonStartRooms.length > 0) {
-      let unchosen = Object.keys(Neo.CHARACTER_DEFS).filter(k => k !== Neo.chosenCharacter && Neo.RIVAL_DEFS[k] && !carriedKeys.has(k));
+      let unchosen = Object.keys(Neo.CHARACTER_DEFS).filter(k => k !== Neo.chosenCharacter
+        && Neo.RIVAL_DEFS[k]
+        && !carriedKeys.has(k)
+        // Fully-slain rivals (all lives taken) never come back this run, and
+        // rivals waiting on a return floor shouldn't spawn a duplicate.
+        && !(Neo.slainRivalKeys || []).includes(k)
+        && !(Neo.pendingRivalReturns || []).some(entry => entry?.rival?.characterKey === k));
       if (Neo.chosenCharacter === 'thorn_knight' && unchosen.includes('princess') && unchosen.length > 1) {
         // Thorn runs: rival princess is intentionally very rare.
         if (Neo.nextRandom('world') > 0.05) {
@@ -1768,11 +1906,49 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
           lastKnownPlayerGy: spawnRoom.gy,
           hpSnapshot: Math.round(def.hp * floorScale),
           memory: createDefaultRivalMemory(),
+          lives: RIVAL_STARTING_LIVES,
+          relationship: 0,
+          friend: false,
+          vendetta: false,
+          godGearGranted: false,
           dead: false,
         });
         applyRivalLevelStats(Neo.rivals[Neo.rivals.length - 1], { syncLiveEnemy: false, keepHpRatio: false });
       }
     }
+  }
+
+  // Distributes Mooggy's queued blood thorn traps across the freshly generated
+  // floor as persistent dungeon-owned thorn mines (no ttl — they wait until
+  // tripped, and they arm against the player). Returns how many were placed so
+  // generateFloor can announce them after enterRoom.
+  function seedBloodThornTraps() {
+    const count = Math.max(0, Math.round(Number(Neo.pendingMooggyTraps || 0)));
+    Neo.pendingMooggyTraps = 0;
+    if (count <= 0) return 0;
+    const pool = Neo.rooms.filter(room => room.type !== 'start' && room.type !== 'god');
+    if (pool.length === 0) return 0;
+    for (let index = 0; index < count; index += 1) {
+      const room = pool[Math.floor(Neo.nextRandom('world') * pool.length)];
+      if (!Array.isArray(room.hazards)) room.hazards = [];
+      room.hazards.push({
+        kind: 'thorn_mine',
+        owner: 'dungeon',
+        source: 'blood_thorn',
+        x: Neo.WALL + 50 + Neo.nextRandom('world') * (Neo.ROOM_W - Neo.WALL * 2 - 100),
+        y: Neo.WALL + 50 + Neo.nextRandom('world') * (Neo.ROOM_H - Neo.WALL * 2 - 100),
+        r: 18,
+        armTime: 0.18,
+        triggerRadius: 34,
+        blastRadius: 66,
+        damage: 16 + Neo.floor * 2,
+        bleedStacks: 2,
+        bleedDuration: 5,
+        statusTick: 0,
+        triggered: false,
+      });
+    }
+    return count;
   }
 
   function getRoomByCoords(gx, gy) {
@@ -1941,6 +2117,7 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
   }
 
   function stealFromRoom(rival, room) {
+    if (rival?.friend) return; // friends don't rob you
     if (!room || !Array.isArray(room.pickups) || room.pickups.length === 0) return;
     const stealable = room.pickups.filter(p => p.type === 'item' || p.type === 'coin' || p.type === 'potion');
     if (stealable.length === 0) return;
@@ -2032,6 +2209,9 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
             rival.memory.playerHitsTaken += 1;
             rival.memory.threat += 0.34;
           }
+          // Every hit erodes the relationship a little (kills cost a flat -5),
+          // so even an unkilled rival can be antagonized into a grudge.
+          rival.relationship = Number(rival.relationship || 0) - 0.25;
           rival.aggroTimer = Math.max(rival.aggroTimer, 12 + Math.min(8, Number(rival.memory?.threat || 0)));
           rival.lastKnownPlayerGx = Neo.currentRoom.gx;
           rival.lastKnownPlayerGy = Neo.currentRoom.gy;
@@ -2050,7 +2230,24 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
         const wasInCurrentRoom = fromRoom === Neo.currentRoom;
         let goalRoom = null;
 
-        if (rival.aggroTimer > 0) {
+        if (rival.friend) {
+          // Friends never hunt; they just wander the floor.
+          rival.aggroTimer = 0;
+          const objectiveRoom = getRoomByCoords(rival.objectiveGx, rival.objectiveGy);
+          if (!objectiveRoom || objectiveRoom === fromRoom || rival.route.length === 0) {
+            goalRoom = chooseRivalObjectiveRoom(rival, fromRoom);
+            rival.objectiveKind = 'patrol';
+            rival.objectiveGx = goalRoom.gx;
+            rival.objectiveGy = goalRoom.gy;
+            rival.route = buildRivalRoute(fromRoom, goalRoom);
+          }
+        } else if (rival.vendetta) {
+          // Vendetta rivals are "sent for you": they beeline to the player's
+          // room every single move, forever.
+          rival.objectiveKind = 'hunt';
+          goalRoom = Neo.currentRoom;
+          rival.aggroTimer = Math.max(rival.aggroTimer, 6);
+        } else if (rival.aggroTimer > 0) {
           rival.objectiveKind = 'hunt';
           goalRoom = getRoomByCoords(rival.lastKnownPlayerGx, rival.lastKnownPlayerGy) || Neo.currentRoom;
         } else {
@@ -2090,9 +2287,9 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
           if (rival.memory) {
             rival.memory.playerSightings += 1;
             rival.memory.lastSeenTime = Number(Neo.gameElapsedTime || 0);
-            rival.memory.threat += 0.6;
+            if (!rival.friend) rival.memory.threat += 0.6;
           }
-          rival.aggroTimer = Math.max(rival.aggroTimer, 8 + Math.min(7, Number(rival.memory?.threat || 0)));
+          if (!rival.friend) rival.aggroTimer = Math.max(rival.aggroTimer, 8 + Math.min(7, Number(rival.memory?.threat || 0)));
           rival.lastKnownPlayerGx = Neo.currentRoom.gx;
           rival.lastKnownPlayerGy = Neo.currentRoom.gy;
           awardRivalXp(rival, 7, 'sighting');
@@ -2117,6 +2314,21 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
   function updateRivalEnemy(enemy, dt) {
     const rival = enemy.rivalData;
     if (!rival) return;
+    if (rival.friend) {
+      // Befriended rivals never attack; they loosely shadow the player.
+      const fdx = Neo.player.x - enemy.x;
+      const fdy = Neo.player.y - enemy.y;
+      const fdist = Math.hypot(fdx, fdy) || 1;
+      if (fdist > 170) {
+        Neo.steerEnemy(enemy, fdx / fdist, fdy / fdist, enemy.speed * 0.8, 3.4, dt);
+      } else if (fdist < 70) {
+        Neo.steerEnemy(enemy, -(fdx / fdist), -(fdy / fdist), enemy.speed * 0.5, 3.0, dt);
+      } else {
+        enemy.vx *= 0.9;
+        enemy.vy *= 0.9;
+      }
+      return;
+    }
     const weapons = Array.isArray(rival.weapons) && rival.weapons.length
       ? rival.weapons
       : (Neo.RIVAL_WEAPON_LOADOUTS[rival.characterKey] || []);
@@ -2283,6 +2495,9 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
   Neo.ensureShopTradeOffer = ensureShopTradeOffer;
   Neo.rollScrollOfControl = rollScrollOfControl;
   Neo.ensureShopScrollOffer = ensureShopScrollOffer;
+  Neo.grantRivalItems = grantRivalItems;
+  Neo.befriendRival = befriendRival;
+  Neo.seedBloodThornTraps = seedBloodThornTraps;
   Neo.createDefaultRivalMemory = createDefaultRivalMemory;
   Neo.normalizeRivalMemory = normalizeRivalMemory;
   Neo.tryPlayPrincessKnightCutscene = tryPlayPrincessKnightCutscene;

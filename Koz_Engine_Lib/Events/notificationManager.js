@@ -203,7 +203,7 @@
         .style("margin", "6px 0")
         .style("border-radius", "8px")
         .style("box-shadow", "0 0 12px rgba(0,0,0,0.3)")
-        .style("font-size", "16px")
+        .style("font-size", "calc(16px * var(--font-scale, 1))")
         .style("min-width", "200px")
         .style("text-align", "center")
         .style("pointer-events", action ? "auto" : "none")
@@ -220,7 +220,7 @@
           .style("border-radius", "6px")
           .style("background", "#e7c66a")
           .style("color", "#1a1a1a")
-          .style("font-size", "13px")
+          .style("font-size", "calc(13px * var(--font-scale, 1))")
           .style("font-weight", "bold")
           .style("cursor", "pointer")
           .style("pointer-events", "auto");

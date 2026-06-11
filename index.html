@@ -282,6 +282,7 @@
   <!-- Player Stats -->
   <div id="playerStats" class="player-stats hidden" aria-label="Player status"></div>
 
+
   <!-- Legacy stat nodes kept for compatibility with older scripts/tests. -->
   <div id="legacyPlayerStats" class="hidden" aria-hidden="true">
     <i id="playerHpFill"></i>
@@ -426,6 +427,7 @@
       <button class="inv-tab panel-tab" data-inv-tab="tools" role="tab"><canvas class="tab-icon tab-icon--canvas" width="22" height="22" data-inv-ui-icon="tab-relics" aria-hidden="true"></canvas>Tools</button>
       <button class="inv-tab panel-tab" data-inv-tab="weapons" role="tab"><canvas class="tab-icon tab-icon--canvas" width="22" height="22" data-inv-ui-icon="tab-weapons" aria-hidden="true"></canvas>Weapons</button>
       <button class="inv-tab panel-tab" data-inv-tab="equipped" role="tab"><canvas class="tab-icon tab-icon--canvas" width="22" height="22" data-inv-ui-icon="tab-moves" aria-hidden="true"></canvas>Moves</button>
+      <button class="inv-tab panel-tab" data-inv-tab="rivals" role="tab"><canvas class="tab-icon tab-icon--canvas" width="22" height="22" data-inv-ui-icon="tab-stats" aria-hidden="true"></canvas>Rivals</button>
     </div>
     <div class="inv-ux-hints" aria-hidden="true">
     </div>
@@ -441,6 +443,9 @@
     </div>
     <div class="inv-tab-panel hidden" id="invTabWeapons">
       <div id="invWeaponsList" class="inv-moves"></div>
+    </div>
+    <div class="inv-tab-panel hidden" id="invTabRivals">
+      <div id="invRivalsList" class="inv-rivals"></div>
     </div>
     <div class="inv-tab-panel hidden" id="invTabEquipped">
       <div class="inv-slots">
@@ -1639,6 +1644,16 @@
           <span class="access-desc">Uses high-visibility colours for the health bar and HUD background.</span>
         </div>
         <label class="toggle"><input type="checkbox" id="accHighContrast"><span class="toggle-track"><span class="toggle-thumb"></span></span></label>
+      </div>
+      <div class="access-row">
+        <div class="access-text">
+          <span class="access-label">Font size</span>
+          <span class="access-desc">Scales all text — HUD, menus, panels, and these settings. 100% is default; go larger for readability.</span>
+        </div>
+        <div class="access-slider-wrap">
+          <input type="range" id="accFontScale" min="0.8" max="1.6" step="0.05" value="1" class="access-slider">
+          <span id="accFontScaleVal" class="access-slider-val">100%</span>
+        </div>
       </div>
       <div class="access-row">
         <div class="access-text">

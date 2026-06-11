@@ -222,7 +222,8 @@
     else if (weaponKey === 'magenta_degale') base = 1.5;
     else if (weaponKey === 'magenta_p90') base = 1.8;
     else if (weaponKey === 'gelleh_lightning_spear') base = 0.75;
-    else if (weaponKey === 'excalibur') base = 2;
+    else if (weaponKey === 'excalibur') base = 1.554;
+    else if (weaponKey === 'katana_excalibur_777x') base = 0.777;
     else if (weaponKey === 'golden_fleece') base = 0.5;
     else if (weaponKey === 'void_piercer') base = 0.8;
     else if (weaponKey === 'princess_wand') base = 0.77;
@@ -236,6 +237,7 @@
     metao_fire_staff: 2,
     magenta_degale: 3,
     magenta_p90: 5,
+    katana_excalibur_777x: 2,
   };
 
   function isChargedWeaponKey(weaponKey) {
@@ -477,6 +479,27 @@
       Neo.player.weaponCooldown = wCd(weaponKey) / attackSpeed;
       return true;
     }
+    if (weaponKey === 'katana_excalibur_777x') {
+      // Forward 777% slash, then twin triangle-cone waves erupt right and left
+      // a few frames later so each charge reads as one blinding three-cut combo.
+      const katanaDamage = Math.max(1, Math.round(getPlayerBaseDamage() * 7.77 + Neo.getAnvilWeaponBonus(weaponKey, 'damage')));
+      const katanaRange = wRng(weaponKey);
+      const katanaKnockback = wKnk(weaponKey);
+      fireWeaponSweep(katanaDamage, katanaRange, 0.6, katanaKnockback, '#ffd06b', { rawDamage: true });
+      [Math.PI / 2, -Math.PI / 2].forEach((sideOffset, sideIndex) => {
+        Neo.clawSwipeQueue.push({
+          delay: 0.05 + sideIndex * 0.05,
+          damage: katanaDamage,
+          range: katanaRange,
+          push: katanaKnockback,
+          arc: 0.6,
+          color: '#ff8a5c',
+          options: { rawDamage: true, angleOffset: sideOffset },
+        });
+      });
+      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.45, ring: 48, c: '#ffb35c' });
+      return true;
+    }
     if (weaponKey === 'golden_fleece') {
       fireWeaponSweep(wDmg(weaponKey), wRng(weaponKey), Neo.ATTACKS.melee.arc, wKnk(weaponKey), '#ffe8a0');
       Neo.player.weaponCooldown = wCd(weaponKey) / attackSpeed;
@@ -644,7 +667,7 @@
       const queued = Neo.clawSwipeQueue[index];
       queued.delay -= dt;
       if (queued.delay > 0) continue;
-      fireWeaponSweep(queued.damage, queued.range, Math.PI * 0.7, queued.push, '#ff7a9a', queued.options);
+      fireWeaponSweep(queued.damage, queued.range, queued.arc ?? Math.PI * 0.7, queued.push, queued.color || '#ff7a9a', queued.options);
       Neo.clawSwipeQueue.splice(index, 1);
     }
   }
@@ -917,6 +940,20 @@
       return;
     }
     if (Neo.player.hp >= Neo.player.maxHp) {
+      // At full HP a potion can be shared instead: healing a wounded rival
+      // standing nearby befriends them for the rest of the run.
+      const rivalEnemy = Neo.enemies.find(e => e.type === 'rival'
+        && e.rivalData
+        && !e.rivalData.friend
+        && e.hp < e.max
+        && Neo.dist(e.x, e.y, Neo.player.x, Neo.player.y) < 140);
+      if (rivalEnemy) {
+        Neo.player.storedPotions = stored - 1;
+        Neo.spawnHealPopup?.(rivalEnemy.x, rivalEnemy.y - 22, Math.max(1, rivalEnemy.max - rivalEnemy.hp), { color: '#8dffbd' });
+        Neo.befriendRival?.(rivalEnemy.rivalData, rivalEnemy);
+        Neo.updateHud();
+        return;
+      }
       Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.55, text: 'FULL HP', c: '#a0ffa0' });
       return;
     }
@@ -2322,6 +2359,11 @@
 
   function hitEnemy(enemy, damage, angle, knockback, color, options = {}) {
     if ((enemy?.inv || 0) > 0) return;
+    // Befriended rivals (healed by the player) cannot be hurt at all.
+    if (enemy?.type === 'rival' && enemy.rivalData?.friend) {
+      Neo.spawnParticle({ x: enemy.x, y: enemy.y - 22, life: 0.45, text: 'FRIEND', c: '#8dffbd' });
+      return;
+    }
     const stats = Neo.getItemStats();
     const sandbox = Neo.getActiveSandboxSettings();
     const critChance = Neo.clamp((stats.critChance || 0) + Number(options.critBonus || 0), 0, 0.98);
@@ -3062,6 +3104,13 @@
     }
     if (Neo.player) Neo.player.kills = Math.max(0, Number(Neo.player.kills || 0)) + 1;
     window.achievementEvents?.emit('enemy:killed');
+    // Moggy's Coat: a kill made while hidden primes the coat. The next combat
+    // opens with Dark Drain on every enemy (see enterRoom's combat-start hook).
+    if (!isTutorialDummy && Neo.player && !Neo.player.moggysCoatPrimed
+        && (Neo.getItemCount?.('moggys_coat') || 0) > 0 && Neo.isPlayerHidden?.()) {
+      Neo.player.moggysCoatPrimed = true;
+      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - Neo.player.r - 20, life: 0.8, text: 'COAT PRIMED', c: '#5a78d6' });
+    }
     if (Neo.player?.keenEyeReady) {
       Neo.triggerKeenEyeBuff();
       Neo.consumeCharge('keen_eye');
@@ -3282,24 +3331,62 @@
       const rival = enemy.rivalData;
       if (rival) {
         rival.dead = true;
+        rival.lives = Math.max(0, Number(rival.lives ?? 2) - 1);
+        // Killing them sours the relationship; a grudge (negative) means they
+        // come back armed with five god items and a vendetta (see spawnRivals).
+        rival.relationship = Number(rival.relationship || 0) - 5;
         if (Neo.player) Neo.player.rivalReputation = Math.max(0, Number(Neo.player.rivalReputation || 0)) + 1;
         window.achievementEvents?.emit('rival:killed');
-        const stolenLoot = Array.isArray(rival.loot) ? rival.loot : [];
-        stolenLoot.forEach(item => {
-          const x = enemy.x + Neo.rand(-22, 22, 'loot');
-          const y = enemy.y + Neo.rand(-14, 14, 'loot');
-          if (item.type === 'item' && item.key) {
-            Neo.pickups.push({ x, y, type: 'item', key: item.key });
-          } else if (item.type === 'potion') {
-            Neo.pickups.push({ x, y, type: 'potion' });
-          } else if (item.type === 'coin') {
-            Neo.pickups.push({ x, y, type: 'coin', value: Math.max(1, Math.round(Number(item.value) || 1)) });
-          }
+        // Every rival death arms the survivors: each living rival (including
+        // ones waiting on a return floor) pockets 10 random items.
+        (Neo.rivals || []).forEach(other => {
+          if (other !== rival && !other.dead) Neo.grantRivalItems?.(other, 10);
         });
-        if (Neo.nextRandom('loot') < 0.05) {
-          Neo.pickups.push({ x: enemy.x, y: enemy.y + 10, type: 'item', key: 'veggys_pendant' });
+        (Neo.pendingRivalReturns || []).forEach(entry => {
+          if (entry?.rival) Neo.grantRivalItems?.(entry.rival, 10, { allowDead: true });
+        });
+        // Mooggy's death curse: 15 blood thorn traps seeded on the next floor
+        // (20 if she instead survives the descent — see spawnRivals).
+        if (rival.characterKey === 'mooggy') {
+          Neo.pendingMooggyTraps = Math.max(Number(Neo.pendingMooggyTraps || 0), 15);
         }
-        const rivalBase = 18 + Neo.floor * 4 + stolenLoot.length * 8;
+        const stolenLoot = Array.isArray(rival.loot) ? rival.loot : [];
+        const finalDeath = rival.lives <= 0;
+        if (finalDeath) {
+          // All lives taken: they drop everything plus a guaranteed random
+          // blue item, and never come after the player again this run.
+          stolenLoot.forEach(item => {
+            const x = enemy.x + Neo.rand(-22, 22, 'loot');
+            const y = enemy.y + Neo.rand(-14, 14, 'loot');
+            if (item.type === 'item' && item.key) {
+              Neo.pickups.push({ x, y, type: 'item', key: item.key });
+            } else if (item.type === 'potion') {
+              Neo.pickups.push({ x, y, type: 'potion' });
+            } else if (item.type === 'coin') {
+              Neo.pickups.push({ x, y, type: 'coin', value: Math.max(1, Math.round(Number(item.value) || 1)) });
+            }
+          });
+          const blueKeys = Object.keys(Neo.ITEM_DEFS || {}).filter(key => String(Neo.ITEM_DEFS[key]?.rarity || '').toLowerCase() === 'blue');
+          if (blueKeys.length > 0) {
+            Neo.pickups.push({ x: enemy.x, y: enemy.y - 8, type: 'item', key: blueKeys[Math.floor(Neo.nextRandom('loot') * blueKeys.length)] });
+          }
+          if (Neo.nextRandom('loot') < 0.05) {
+            Neo.pickups.push({ x: enemy.x, y: enemy.y + 10, type: 'item', key: 'veggys_pendant' });
+          }
+          if (!Array.isArray(Neo.slainRivalKeys)) Neo.slainRivalKeys = [];
+          if (!Neo.slainRivalKeys.includes(rival.characterKey)) Neo.slainRivalKeys.push(rival.characterKey);
+          Neo.spawnParticle({ x: enemy.x, y: enemy.y - 44, life: 2.2, text: 'SLAIN FOR GOOD', c: '#9fd0ff' });
+        } else {
+          // Extra life spent: they escape with their pack and return on a
+          // later floor (with god gear if the relationship went negative).
+          Neo.pendingRivalReturns = Array.isArray(Neo.pendingRivalReturns) ? Neo.pendingRivalReturns : [];
+          Neo.pendingRivalReturns.push({
+            returnFloor: Neo.floor + 1,
+            rival: { ...rival, dead: false, hp: rival.max, hpSnapshot: rival.max },
+          });
+          Neo.spawnParticle({ x: enemy.x, y: enemy.y - 44, life: 2.2, text: `${rival.name.toUpperCase()} WILL RETURN...`, c: rival.color });
+        }
+        const rivalBase = 18 + Neo.floor * 4 + (finalDeath ? stolenLoot.length * 8 : 0);
         const bonus = Neo.hasLegacy('rival_bounty') ? Math.round(rivalBase * 1.5) : rivalBase;
         dropCoins(enemy.x, enemy.y, bonus);
         Neo.spawnParticle({ x: enemy.x, y: enemy.y - 26, life: 2.0, text: `${rival.name.toUpperCase()} DEFEATED!`, c: rival.color });

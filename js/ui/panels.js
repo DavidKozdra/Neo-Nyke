@@ -1092,7 +1092,7 @@ export function renderAnvilItemList(itemType) {
     }
 
     if (keys.length === 0) {
-      listEl.innerHTML = `<p style="color:#91a8be;font-size:13px;padding:8px">No ${itemType}s owned.</p>`;
+      listEl.innerHTML = `<p style="color:#91a8be;font-size:calc(13px * var(--font-scale, 1));padding:8px">No ${itemType}s owned.</p>`;
       return;
     }
 
@@ -1882,7 +1882,9 @@ export function getShopWeaponOffers() {
           ? 'invTabTools'
           : tabKey === 'weapons'
             ? 'invTabWeapons'
-            : 'invTabEquipped';
+            : tabKey === 'rivals'
+              ? 'invTabRivals'
+              : 'invTabEquipped';
     return document.getElementById(id);
   }
 
@@ -1919,6 +1921,13 @@ export function getShopWeaponOffers() {
     }
     if (tabKey === 'weapons') {
       return `weapons|eq:${playerRef.equippedWeapon || ''}|owned:${getTruthyKeys(playerRef.ownedWeapons)}`;
+    }
+    if (tabKey === 'rivals') {
+      const live = (Neo.rivals || []).map(rival => rival && !rival.dead
+        ? `${rival.rivalId}:${rival.level}:${rival.lives}:${Math.round(rival.hp)}:${(rival.relationship || 0).toFixed(1)}:${rival.friend ? 1 : 0}:${rival.vendetta ? 1 : 0}:${Number(rival.aggroTimer || 0) > 0 ? 1 : 0}:${Array.isArray(rival.loot) ? rival.loot.length : 0}`
+        : '').join(',');
+      const pending = (Neo.pendingRivalReturns || []).map(entry => `${entry?.rival?.rivalId || ''}@${entry?.returnFloor || 0}:${Array.isArray(entry?.rival?.loot) ? entry.rival.loot.length : 0}`).join(',');
+      return `rivals|${live}|ret:${pending}|slain:${(Neo.slainRivalKeys || []).join(',')}`;
     }
     const ownedMoves = getTruthyKeys(playerRef.ownedMoves);
     const equipped = (Neo.MOVE_SLOTS || []).map(slot => `${slot}:${playerRef.equippedMoves?.[slot] || ''}`).join(',');
@@ -2152,7 +2161,7 @@ export function renderInventoryPanel() {
     Neo.ui.invTabs.forEach(tab => {
       tab.classList.toggle('active', tab.dataset.invTab === Neo.activeInvTab);
     });
-    const tabPanels = { stats: 'invTabStats', items: 'invTabItems', tools: 'invTabTools', weapons: 'invTabWeapons', equipped: 'invTabEquipped' };
+    const tabPanels = { stats: 'invTabStats', items: 'invTabItems', tools: 'invTabTools', weapons: 'invTabWeapons', equipped: 'invTabEquipped', rivals: 'invTabRivals' };
     Object.entries(tabPanels).forEach(([key, id]) => {
       const el = document.getElementById(id);
       if (el) el.classList.toggle('hidden', key !== Neo.activeInvTab);
@@ -2328,6 +2337,68 @@ export function renderInventoryPanel() {
         Neo.ui.invWeaponsList.querySelectorAll('[data-weapon-icon]').forEach(canvas => {
           Neo.drawWeaponToastIcon(canvas, Neo.WEAPON_DEFS[canvas.dataset.weaponIcon]);
         });
+      }
+    } else if (Neo.activeInvTab === 'rivals') {
+      const container = document.getElementById('invRivalsList');
+      if (container) {
+        const relationLabel = rival => rival.friend ? 'FRIEND'
+          : rival.vendetta ? 'VENDETTA'
+          : Number(rival.relationship || 0) < 0 ? 'GRUDGE'
+          : 'NEUTRAL';
+        const relationClass = rival => rival.friend ? 'inv-rival__status--friend'
+          : (rival.vendetta || Number(rival.relationship || 0) < 0) ? 'inv-rival__status--hostile'
+          : '';
+        const heartRow = rival => {
+          const lives = Math.max(0, Number(rival.lives ?? 2));
+          return '♥'.repeat(lives) + '♡'.repeat(Math.max(0, 2 - lives));
+        };
+        const liveCards = (Neo.rivals || []).filter(rival => rival && !rival.dead).map(rival => {
+          const activity = rival.friend ? 'Travelling with you'
+            : rival.vendetta ? 'Hunting you with god gear'
+            : Number(rival.aggroTimer || 0) > 0 ? 'Hunting you'
+            : 'Roaming the floor';
+          return `<div class="inv-card inv-rival" style="--rival-color:${rival.color}">
+            <div class="inv-card__title-row">
+              <span class="inv-card__eyebrow" style="color:${rival.color}">${rival.name}</span>
+              <span class="inv-rival__status ${relationClass(rival)}">${relationLabel(rival)}</span>
+            </div>
+            <div class="inv-rival__rows">
+              <span>LV ${rival.level || 1} — ${Math.max(0, Math.round(rival.hp))}/${Math.round(rival.max)} HP</span>
+              <span>LIVES <b class="inv-rival__hearts">${heartRow(rival)}</b></span>
+              <span>PACK ×${Array.isArray(rival.loot) ? rival.loot.length : 0} ITEMS</span>
+              <span>RELATIONSHIP ${Number(rival.relationship || 0).toFixed(1)}</span>
+            </div>
+            <p>${activity}.</p>
+          </div>`;
+        });
+        const returnCards = (Neo.pendingRivalReturns || []).filter(entry => entry?.rival).map(entry => {
+          const rival = entry.rival;
+          return `<div class="inv-card inv-rival inv-rival--returning" style="--rival-color:${rival.color || '#c9aaff'}">
+            <div class="inv-card__title-row">
+              <span class="inv-card__eyebrow" style="color:${rival.color || '#c9aaff'}">${rival.name || 'Rival'}</span>
+              <span class="inv-rival__status inv-rival__status--return">RETURNS FLOOR ${entry.returnFloor}</span>
+            </div>
+            <div class="inv-rival__rows">
+              <span>LV ${rival.level || 1}</span>
+              <span>LIVES <b class="inv-rival__hearts">${heartRow(rival)}</b></span>
+              <span>PACK ×${Array.isArray(rival.loot) ? rival.loot.length : 0} ITEMS</span>
+              <span>RELATIONSHIP ${Number(rival.relationship || 0).toFixed(1)}</span>
+            </div>
+            <p>${Number(rival.relationship || 0) < 0 ? 'Holds a grudge — will return armed for revenge.' : 'Licking their wounds on a floor below.'}</p>
+          </div>`;
+        });
+        const slainCards = (Neo.slainRivalKeys || []).map(key => {
+          const def = Neo.RIVAL_DEFS?.[key];
+          return `<div class="inv-card inv-rival inv-rival--slain">
+            <div class="inv-card__title-row">
+              <span class="inv-card__eyebrow">${def?.name || key}</span>
+              <span class="inv-rival__status">SLAIN</span>
+            </div>
+            <p>All lives taken. They will not come after you again.</p>
+          </div>`;
+        });
+        container.innerHTML = [...liveCards, ...returnCards, ...slainCards].join('')
+          || '<div class="inv-card"><span class="inv-card__eyebrow">All clear</span><h4>No rivals detected</h4><p>Rival adventurers occasionally enter the dungeon to compete for loot. Their movements show up here.</p></div>';
       }
     } else if (Neo.activeInvTab === 'equipped') {
       const equippedMoveKeys = new Set(Object.values(_invP.equippedMoves || {}).filter(Boolean));

@@ -15,7 +15,7 @@
     btn.textContent = "✕";
     Object.assign(btn.style, {
       position: "absolute", top: "10px", right: "12px", background: "none", color: "#fff",
-      border: "none", fontSize: "20px", cursor: "pointer", lineHeight: "1",
+      border: "none", fontSize: "calc(20px * var(--font-scale, 1))", cursor: "pointer", lineHeight: "1",
     });
     btn.onclick = onClick;
     return btn;
@@ -26,7 +26,7 @@
     btn.textContent = "← Back to City";
     Object.assign(btn.style, {
       background: "#333", color: "#fff", border: "1px solid #555", padding: "10px 20px",
-      borderRadius: "6px", cursor: "pointer", fontSize: "13px",
+      borderRadius: "6px", cursor: "pointer", fontSize: "calc(13px * var(--font-scale, 1))",
       marginTop: options.marginTop || "8px",
       width: options.width || "100%",
     });

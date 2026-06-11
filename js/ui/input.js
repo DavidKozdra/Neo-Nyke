@@ -214,6 +214,13 @@ export const WEAPON_DEFS = {
       description: "A divine strike for 777% of your base damage.",
       color: '#ffd980',
     },
+    katana_excalibur_777x: {
+      key: 'katana_excalibur_777x',
+      name: 'Katana Excalibur 777X',
+      rarity: 'god',
+      description: 'Blinding-fast 777% slashes that erupt in twin triangle waves left and right. 2 charges.',
+      color: '#ffb35c',
+    },
     golden_fleece: {
       key: 'golden_fleece',
       name: 'Golden Fleece',
@@ -292,7 +299,7 @@ export const RIVAL_WEAPON_SWAP_BASE = 3.6;
 export const MONSTER_ROAM_INTERVAL_SECONDS = 60;
 export const MONSTER_ROAM_MOVE_CHANCE = 0.28;
 export const PURPLE_WEAPON_POOL = ['lazer_glasses', 'metao_fire_staff', 'magenta_degale', 'magenta_p90'];
-export const RED_WEAPON_POOL = ['gelleh_lightning_spear', 'excalibur', 'golden_fleece', 'void_piercer'];
+export const RED_WEAPON_POOL = ['gelleh_lightning_spear', 'excalibur', 'katana_excalibur_777x', 'golden_fleece', 'void_piercer'];
 
 export const RIVAL_WEAPON_LOADOUTS = {
     princess: [
@@ -883,6 +890,17 @@ export const ITEM_DEFS = {
       accent: '#d9f2ff',
       category: 'artificer',
       tags: ['artificer', 'defense', 'status', 'tools'],
+    },
+    moggys_coat: {
+      key: 'moggys_coat',
+      name: "Moggy's Coat",
+      shortName: 'Ambush Drain',
+      description: "Shed by the assassin himself. Killing an enemy while hidden primes the coat: the next combat opens with Dark Drain on every enemy for its first 2 seconds. Each stack adds +1 drain stack.",
+      rarity: 'blue',
+      color: '#5a78d6',
+      accent: '#ff5a5a',
+      category: 'artificer',
+      tags: ['artificer', 'drain', 'stealth', 'status'],
     },
     veggys_pendant: {
       key: 'veggys_pendant',
@@ -1703,6 +1721,7 @@ export const WEAPON_BASE_STATS = {
     magenta_p90:              { damage: 22,   cooldown: 1.80,             knockback: 140 },
     gelleh_lightning_spear:{ damage: 45,   cooldown: 2.00,             knockback: 200 },
     excalibur:                { damage: 202,  cooldown: 2.00, range: 120, knockback: 600 },
+    katana_excalibur_777x:    { damage: 202,  cooldown: 0.777, range: 130, knockback: 380 },
     golden_fleece:            { damage: 20,   cooldown: 0.50, range: 80,  knockback: 80  },
     void_piercer:             { damage: 55,   cooldown: 0.80,             knockback: 160 },
     princess_wand:            { damage: 30,   cooldown: 0.77, range: 120, knockback: 160 },

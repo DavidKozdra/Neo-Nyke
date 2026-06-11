@@ -646,6 +646,26 @@
       return;
     }
     if (Neo.player) Neo.player.hp = 0;
+    // A rival that lands the killing blow loots the body: takes up to 3 of the
+    // player's items and pockets 3 more random ones to use in the rematch
+    // (rival damage passes rival.name as the damage source).
+    const killerRival = (Neo.rivals || []).find(r => !r.dead && r.name
+      && (r.name === Neo.lastDamageSourceKey || r.name === Neo.lastDamageSource));
+    if (killerRival && Neo.player) {
+      if (!Array.isArray(killerRival.loot)) killerRival.loot = [];
+      const ownedKeys = Object.keys(Neo.player.items || {}).filter(key => Number(Neo.player.items[key]) > 0);
+      for (let taken = 0; taken < 3 && ownedKeys.length > 0; taken += 1) {
+        const pick = ownedKeys[Math.floor(Neo.nextRandom('loot') * ownedKeys.length)];
+        Neo.player.items[pick] = Number(Neo.player.items[pick]) - 1;
+        if (Neo.player.items[pick] <= 0) {
+          delete Neo.player.items[pick];
+          ownedKeys.splice(ownedKeys.indexOf(pick), 1);
+        }
+        killerRival.loot.push({ type: 'item', key: pick });
+      }
+      Neo.grantRivalItems?.(killerRival, 3);
+      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 44, life: 2.0, text: `${killerRival.name.toUpperCase()} LOOTS YOUR BODY`, c: killerRival.color });
+    }
     updateHud();
     const entry = finalizeRun('dead', { killedBy: Neo.lastDamageSource, killerKey: Neo.lastDamageSourceKey });
     Neo.lastDeathEntryId = entry.id;
@@ -810,6 +830,9 @@
       structures: Neo.structures,
       decorations: Neo.decorations,
       rivals: Neo.rivals,
+      pendingRivalReturns: Neo.pendingRivalReturns,
+      slainRivalKeys: Neo.slainRivalKeys,
+      pendingMooggyTraps: Neo.pendingMooggyTraps,
       cooldowns: Neo.cooldowns,
       laserActive: Neo.laserActive,
       laserTime: Neo.laserTime,

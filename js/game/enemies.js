@@ -2833,7 +2833,7 @@
     if (enemy.phase === 2) {
       enemy.speed = 120;
       if (enemy.attackCd <= 0) {
-        spawnPhaseSwords(8, 14, 'artificer_knave_projectile');
+        spawnPhaseSwords(8, Math.round(enemy.dmg * 0.7), 'artificer_knave_projectile');
         enemy.attackCd = 2.35 * tuning.rangedCadence;
       }
       steerEnemy(enemy, dx / distance, dy / distance, enemy.speed, 4.4, dt);

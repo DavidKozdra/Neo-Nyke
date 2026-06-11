@@ -484,6 +484,7 @@ export function resumeGame() {
       rich_mans_blues: 0,
       artificer_charger: 0,
       cloak_of_naked_king: 0,
+      moggys_coat: 0,
       veggys_pendant: 0,
       procy_pickle: 0,
       princes_glasses: 0,
@@ -1153,7 +1154,8 @@ export function resumeGame() {
   function getShopWeaponCost(rarity = 'knight', weaponIndex = 0, floorValue = Neo.floor, difficultyKey = Neo.selectedDifficulty, weaponKey = '') {
     if (rarity === 'god' || rarity === 'red') {
       let baseCost = (180 + floorValue * 14 + weaponIndex * 10) * 3;
-      if (String(weaponKey || '').toLowerCase() === 'excalibur') baseCost = Math.round(baseCost * 1.25);
+      const costKey = String(weaponKey || '').toLowerCase();
+      if (costKey === 'excalibur' || costKey === 'katana_excalibur_777x') baseCost = Math.round(baseCost * 1.25);
       return scaleShopPrice(baseCost, difficultyKey);
     }
     if (rarity === 'wizard' || rarity === 'purple') return scaleShopPrice(88 + floorValue * 9 + weaponIndex * 8, difficultyKey);
@@ -1466,6 +1468,7 @@ export function resumeGame() {
     if (value === 'no_hit') return 'Never Get Hit';
     if (value === 'lava') return 'Lava';
     if (value === 'thorn_mine') return 'Thorn Trap';
+    if (value === 'blood_thorn') return "Mooggy's Blood Thorn";
     if (value === 'challenge_bomb') return 'Trial Bomb';
     if (value === 'storm') return 'Storm Trial';
     if (value === 'enemy_projectile') return 'Enemy Projectile';
@@ -2737,6 +2740,9 @@ export function resumeGame() {
     Neo.weaponBurstQueue = [];
     Neo.clawSwipeQueue = [];
     Neo.rivals = [];
+    Neo.pendingRivalReturns = [];
+    Neo.slainRivalKeys = [];
+    Neo.pendingMooggyTraps = 0;
     Neo.monsterRoamTimer = 0;
     Neo.mooggyAssassinSpawnedThisRun = false;
     Neo.mooggyAssassinSpawnedThisFloor = false;
@@ -2882,6 +2888,9 @@ export function resumeGame() {
     Neo.secretRoomVisitedFloors = Array.isArray(snapshot.secretRoomVisitedFloors) ? [...snapshot.secretRoomVisitedFloors] : [];
     Neo.hideLadderOnMinimap = !!snapshot.hideLadderOnMinimap;
     Neo.restoreRivals(snapshot.rivals);
+    Neo.pendingRivalReturns = Array.isArray(snapshot.pendingRivalReturns) ? snapshot.pendingRivalReturns : [];
+    Neo.slainRivalKeys = Array.isArray(snapshot.slainRivalKeys) ? [...snapshot.slainRivalKeys] : [];
+    Neo.pendingMooggyTraps = Number(snapshot.pendingMooggyTraps || 0);
     Neo.wizardPawSelection = null;
     Neo.scrollControlSelection = null;
     Neo.panelItemDeferredToastRoom = null;
