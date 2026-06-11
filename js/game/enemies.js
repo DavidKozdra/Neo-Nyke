@@ -327,6 +327,30 @@
     return {};
   }
 
+  function getStormChallengeStrikePoint(index) {
+    const player = Neo.player || { x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2, vx: 0, vy: 0 };
+    const margin = 110;
+    const leadSeconds = 0.42;
+    const targetX = Neo.clamp(
+      Number(player.x || 0) + Number(player.vx || 0) * leadSeconds,
+      margin,
+      Neo.ROOM_W - margin
+    );
+    const targetY = Neo.clamp(
+      Number(player.y || 0) + Number(player.vy || 0) * leadSeconds,
+      margin,
+      Neo.ROOM_H - margin
+    );
+    if (index === 0) return { x: targetX, y: targetY };
+
+    const angle = Neo.nextRandom('world') * Math.PI * 2;
+    const distance = 90 + Neo.nextRandom('world') * 170;
+    return {
+      x: Neo.clamp(targetX + Math.cos(angle) * distance, margin, Neo.ROOM_W - margin),
+      y: Neo.clamp(targetY + Math.sin(angle) * distance, margin, Neo.ROOM_H - margin),
+    };
+  }
+
   function getChallengeObeliskMaxHp(floorValue = Neo.floor, difficultyKey = Neo.selectedDifficulty) {
     const floor = Math.max(1, Number(floorValue || 1));
     const difficulty = Neo.getDifficultyDef(difficultyKey);
@@ -4334,21 +4358,21 @@
         Neo.currentRoom.challengeTick = Math.max(0.64, Number(getChallengeTrialTuning('storm').tick || 0.85));
         const burstCount = Math.max(2, Number(Neo.currentRoom.challengeData?.burstCount || 3));
         for (let index = 0; index < burstCount; index += 1) {
-          const px = 110 + Neo.nextRandom('world') * (Neo.ROOM_W - 220);
-          const py = 110 + Neo.nextRandom('world') * (Neo.ROOM_H - 220);
+          const strike = getStormChallengeStrikePoint(index);
           Neo.hazards.push({
             kind: 'lightning_column',
-            x: px,
-            y: py,
+            x: strike.x,
+            y: strike.y,
             r: 52,
-            ttl: 1.6,
+            ttl: 1.9,
+            warn: 0.48,
             tick: 0,
             interval: 0.42,
             damage: 18 + Neo.floor,
             enemy: true,
             source: 'storm',
           });
-          Neo.spawnParticle({ x: px, y: py, life: 0.35, ring: 18, c: '#8dd4ff' });
+          Neo.spawnParticle({ x: strike.x, y: strike.y, life: 0.35, ring: 18, c: '#8dd4ff' });
         }
       }
       if (Neo.currentRoom.challengeTimer <= 0) completeChallengeTrial('STORM ENDED');

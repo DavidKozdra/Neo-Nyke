@@ -172,6 +172,10 @@ export const BOMB_HAZARD_SCALING = {
   floor: 0.07,
   minute: 0.04,
 };
+export const SHOP_PRICE_SCALING = {
+  floor: 0.03,
+  minute: 0.02,
+};
 export const BLEED_RESIST_SCALING = {
   floorInLoop: 0.16,
   // Raised so infinitely-stacking DoT builds fall off deeper into a run instead
@@ -1025,6 +1029,7 @@ Neo.ENV_TILE_SIZE = ENV_TILE_SIZE;
 Neo.LIGHTING_CONFIG = LIGHTING_CONFIG;
 Neo.ENEMY_SCALING = ENEMY_SCALING;
 Neo.BOMB_HAZARD_SCALING = BOMB_HAZARD_SCALING;
+Neo.SHOP_PRICE_SCALING = SHOP_PRICE_SCALING;
 Neo.BLEED_RESIST_SCALING = BLEED_RESIST_SCALING;
 Neo.DIRECTIONS = DIRECTIONS;
 Neo.DIRECTION_VECTORS = DIRECTION_VECTORS;

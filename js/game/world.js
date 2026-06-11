@@ -1889,35 +1889,38 @@
           }
         }
       } else if (hazard.kind === 'lightning_column') {
-        hazard.tick -= dt;
-        if (hazard.tick <= 0) {
-          hazard.tick = hazard.interval || 0.45;
-          if (hazard.enemy) {
-            if (Neo.dist(Neo.player.x, Neo.player.y, hazard.x, hazard.y) <= hazard.r + Neo.player.r) {
-              const angle = Math.atan2(Neo.player.y - hazard.y, Neo.player.x - hazard.x);
-              damagePlayer(hazard.damage || 16, angle, 90, hazard.source || 'lightning_column');
+        hazard.warn = Math.max(0, Number(hazard.warn || 0) - dt);
+        if (hazard.warn <= 0) {
+          hazard.tick -= dt;
+          if (hazard.tick <= 0) {
+            hazard.tick = hazard.interval || 0.45;
+            if (hazard.enemy) {
+              if (Neo.dist(Neo.player.x, Neo.player.y, hazard.x, hazard.y) <= hazard.r + Neo.player.r) {
+                const angle = Math.atan2(Neo.player.y - hazard.y, Neo.player.x - hazard.x);
+                damagePlayer(hazard.damage || 16, angle, 90, hazard.source || 'lightning_column');
+              }
+            } else {
+              forEachEnemyNearCircle(hazard.x, hazard.y, hazard.r + 80, enemy => {
+                if (Neo.dist(enemy.x, enemy.y, hazard.x, hazard.y) > hazard.r + enemy.r) return;
+                const angle = Math.atan2(enemy.y - hazard.y, enemy.x - hazard.x);
+                Neo.hitEnemy(enemy, hazard.damage || 16, angle, 90, '#8dd4ff', { lightning: true });
+              });
             }
-          } else {
-            forEachEnemyNearCircle(hazard.x, hazard.y, hazard.r + 80, enemy => {
-              if (Neo.dist(enemy.x, enemy.y, hazard.x, hazard.y) > hazard.r + enemy.r) return;
-              const angle = Math.atan2(enemy.y - hazard.y, enemy.x - hazard.x);
-              Neo.hitEnemy(enemy, hazard.damage || 16, angle, 90, '#8dd4ff', { lightning: true });
+            Neo.spawnParticle({
+              life: 0.25,
+              bolt: {
+                x1: hazard.x,
+                y1: hazard.y - hazard.r,
+                x2: hazard.x,
+                y2: hazard.y + hazard.r,
+                c: '#9fd3ff',
+                w: 4.4,
+                jag: 10,
+                seg: 6,
+                phase: Neo.rng() * Math.PI * 2,
+              },
             });
           }
-          Neo.spawnParticle({
-            life: 0.25,
-            bolt: {
-              x1: hazard.x,
-              y1: hazard.y - hazard.r,
-              x2: hazard.x,
-              y2: hazard.y + hazard.r,
-              c: '#9fd3ff',
-              w: 4.4,
-              jag: 10,
-              seg: 6,
-              phase: Neo.rng() * Math.PI * 2,
-            },
-          });
         }
       } else if (hazard.kind === 'lightning_strike_line') {
         // "Justice of Sonichu": a laser-like lightning bolt spanning the whole

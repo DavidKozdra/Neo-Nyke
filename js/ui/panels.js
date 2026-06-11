@@ -1451,7 +1451,7 @@ export function getShopWeaponOffers() {
         type: 'weapon',
         key: weaponKey,
         bought: false,
-        cost: Neo.getShopWeaponCost(Neo.WEAPON_DEFS[weaponKey]?.rarity || 'knight', index, Neo.floor, Neo.selectedDifficulty, weaponKey),
+        cost: Neo.getShopWeaponCost(Neo.WEAPON_DEFS[weaponKey]?.rarity || 'knight', index, Neo.getShopProgressionDepth?.() ?? Neo.floor, Neo.selectedDifficulty, weaponKey),
       }));
       const projectilePool = Neo.getProjectileWeaponKeys?.(filtered) || [];
       if (offers.length > 0 && projectilePool.length > 0 && !offers.some(offer => Neo.isProjectileWeaponKey?.(offer.key))) {
@@ -1460,7 +1460,7 @@ export function getShopWeaponOffers() {
           type: 'weapon',
           key: projectileKey,
           bought: false,
-          cost: Neo.getShopWeaponCost(Neo.WEAPON_DEFS[projectileKey]?.rarity || 'knight', offers.length - 1, Neo.floor, Neo.selectedDifficulty, projectileKey),
+          cost: Neo.getShopWeaponCost(Neo.WEAPON_DEFS[projectileKey]?.rarity || 'knight', offers.length - 1, Neo.getShopProgressionDepth?.() ?? Neo.floor, Neo.selectedDifficulty, projectileKey),
         };
       }
       Neo.currentRoom.shopWeaponOffers = offers;

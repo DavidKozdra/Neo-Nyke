@@ -1130,6 +1130,24 @@ export function resumeGame() {
     return Number(getDifficultyDef(difficultyKey)?.shopPriceMultiplier || 1) * challengeMultiplier;
   }
 
+  function getShopProgressionDepth() {
+    return Math.max(
+      1,
+      Number(Neo.getProgressionDepth?.() ?? Neo.floorsEntered ?? Neo.floor ?? 1),
+    );
+  }
+
+  function getShopProgressionPriceMultiplier(
+    progressionDepth = getShopProgressionDepth(),
+    elapsedSeconds = Neo.gameElapsedTime,
+  ) {
+    const depth = Math.max(1, Number(progressionDepth || 1));
+    const minutes = Math.max(0, Number(elapsedSeconds || 0) / 60);
+    const floorRate = Math.max(0, Number(Neo.SHOP_PRICE_SCALING?.floor ?? 0.03));
+    const minuteRate = Math.max(0, Number(Neo.SHOP_PRICE_SCALING?.minute ?? 0.02));
+    return 1 + (depth - 1) * floorRate + minutes * minuteRate;
+  }
+
   // Scholar Seal discount: the closer you are to leveling up, the cheaper shops
   // get. At 90% of the way to a level, prices are 9% cheaper (xpProgress × 10%).
   // Requires owning at least one Scholar Seal; magnitude does not scale per stack.
@@ -1140,50 +1158,60 @@ export function resumeGame() {
     return xpProgress * 0.10;
   }
 
-  function scaleShopPrice(baseCost, difficultyKey = Neo.selectedDifficulty) {
+  function scaleShopPrice(
+    baseCost,
+    difficultyKey = Neo.selectedDifficulty,
+    progressionDepth = getShopProgressionDepth(),
+  ) {
     const scholarDiscount = 1 - getScholarSealShopDiscount();
-    return Math.max(1, Math.round(baseCost * getShopPriceMultiplier(difficultyKey) * scholarDiscount));
+    const progressionMultiplier = getShopProgressionPriceMultiplier(progressionDepth);
+    return Math.max(1, Math.round(
+      baseCost
+      * getShopPriceMultiplier(difficultyKey)
+      * progressionMultiplier
+      * scholarDiscount
+    ));
   }
 
   function getShopRarityPriceMultiplier(rarity = 'knight') {
     return Neo.SHOP_RARITY_PRICE_MULTIPLIERS[String(rarity || 'knight').toLowerCase()] || 1;
   }
 
-  function getShopPotionCost(floorValue = Neo.floor, difficultyKey = Neo.selectedDifficulty) {
-    return scaleShopPrice(18 + floorValue * 2, difficultyKey);
+  function getShopPotionCost(floorValue = getShopProgressionDepth(), difficultyKey = Neo.selectedDifficulty) {
+    return scaleShopPrice(18 + floorValue * 2, difficultyKey, floorValue);
   }
 
-  function getShopItemCost(itemIndex = 0, floorValue = Neo.floor, difficultyKey = Neo.selectedDifficulty, rarity = 'knight') {
+  function getShopItemCost(itemIndex = 0, floorValue = getShopProgressionDepth(), difficultyKey = Neo.selectedDifficulty, rarity = 'knight') {
     const baseCost = 32 + floorValue * 4 + itemIndex * 6;
-    return scaleShopPrice(baseCost * getShopRarityPriceMultiplier(rarity), difficultyKey);
+    return scaleShopPrice(baseCost * getShopRarityPriceMultiplier(rarity), difficultyKey, floorValue);
   }
 
-  function getShopMoveCost(moveIndex = 0, floorValue = Neo.floor, difficultyKey = Neo.selectedDifficulty) {
-    return scaleShopPrice(34 + floorValue * 6 + moveIndex * 4, difficultyKey);
+  function getShopMoveCost(moveIndex = 0, floorValue = getShopProgressionDepth(), difficultyKey = Neo.selectedDifficulty) {
+    return scaleShopPrice(34 + floorValue * 6 + moveIndex * 4, difficultyKey, floorValue);
   }
 
-  function getShopWeaponCost(rarity = 'knight', weaponIndex = 0, floorValue = Neo.floor, difficultyKey = Neo.selectedDifficulty, weaponKey = '') {
+  function getShopWeaponCost(rarity = 'knight', weaponIndex = 0, floorValue = getShopProgressionDepth(), difficultyKey = Neo.selectedDifficulty, weaponKey = '') {
     if (rarity === 'god' || rarity === 'red') {
       let baseCost = (180 + floorValue * 14 + weaponIndex * 10) * 3;
       const costKey = String(weaponKey || '').toLowerCase();
       if (costKey === 'excalibur' || costKey === 'katana_excalibur_777x') baseCost = Math.round(baseCost * 1.25);
-      return scaleShopPrice(baseCost, difficultyKey);
+      return scaleShopPrice(baseCost, difficultyKey, floorValue);
     }
-    if (rarity === 'wizard' || rarity === 'purple') return scaleShopPrice(88 + floorValue * 9 + weaponIndex * 8, difficultyKey);
-    return scaleShopPrice(52 + floorValue * 5 + weaponIndex * 6, difficultyKey);
+    if (rarity === 'wizard' || rarity === 'purple') return scaleShopPrice(88 + floorValue * 9 + weaponIndex * 8, difficultyKey, floorValue);
+    return scaleShopPrice(52 + floorValue * 5 + weaponIndex * 6, difficultyKey, floorValue);
   }
 
-  function getShopGodSweepCost(floorValue = Neo.floor, difficultyKey = Neo.selectedDifficulty) {
-    return scaleShopPrice(140 + floorValue * 12, difficultyKey);
+  function getShopGodSweepCost(floorValue = getShopProgressionDepth(), difficultyKey = Neo.selectedDifficulty) {
+    return scaleShopPrice(140 + floorValue * 12, difficultyKey, floorValue);
   }
 
-  function getShopHealCost(kind, floorValue = Neo.floor, difficultyKey = Neo.selectedDifficulty) {
-    if (kind === 'major') return scaleShopPrice(34 + floorValue * 4, difficultyKey);
-    return scaleShopPrice(16 + floorValue * 2, difficultyKey);
+  function getShopHealCost(kind, floorValue = getShopProgressionDepth(), difficultyKey = Neo.selectedDifficulty) {
+    if (kind === 'major') return scaleShopPrice(34 + floorValue * 4, difficultyKey, floorValue);
+    return scaleShopPrice(16 + floorValue * 2, difficultyKey, floorValue);
   }
 
-  function getSecretXpOfferCost(floorValue = Neo.floor, difficultyKey = Neo.selectedDifficulty) {
-    return scaleShopPrice(30 + floorValue * 8, difficultyKey);
+  function getSecretXpOfferCost(floorValue = getShopProgressionDepth(), difficultyKey = Neo.selectedDifficulty) {
+    return scaleShopPrice(30 + floorValue * 8, difficultyKey, floorValue);
   }
 
   function getSecretXpOfferAmount(floorValue = Neo.floor) {
@@ -1359,7 +1387,7 @@ export function resumeGame() {
     };
   }
 
-  function refreshRoomShopCosts(room, difficultyKey = Neo.selectedDifficulty, floorValue = Neo.floor) {
+  function refreshRoomShopCosts(room, difficultyKey = Neo.selectedDifficulty, floorValue = getShopProgressionDepth()) {
     if (!room || room.type !== 'shop') return;
     room.shopOffers = Array.isArray(room.shopOffers) ? room.shopOffers : [];
     let itemIndex = 0;
@@ -2803,6 +2831,7 @@ export function resumeGame() {
     Neo.floorsEntered = Number.isFinite(Number(snapshot.floorsEntered))
       ? Math.max(1, Number(snapshot.floorsEntered))
       : Math.max(1, Neo.runLoopIndex * Neo.MAX_FLOOR + Number(snapshot.floor || 1));
+    Neo.gameElapsedTime = Math.max(0, Number(snapshot.gameElapsedTime || 0));
     Neo.selectedDifficulty = normalizeDifficulty(snapshot.difficulty);
     Neo.selectedChallenges = normalizeChallengeSelection(snapshot.challenges);
     Neo.metaProgress.bestFloor = Math.max(Neo.metaProgress.bestFloor, Neo.floor);
@@ -2849,7 +2878,11 @@ export function resumeGame() {
       Neo.currentRoom.shopWeaponOffers = Array.isArray(Neo.currentRoom.shopWeaponOffers) ? Neo.currentRoom.shopWeaponOffers : [];
       Neo.currentRoom.structures = Array.isArray(Neo.currentRoom.structures) ? Neo.currentRoom.structures : Neo.structures;
       Neo.currentRoom.decorations = Array.isArray(Neo.currentRoom.decorations) ? Neo.currentRoom.decorations : Neo.decorations;
-      refreshRoomShopCosts(Neo.currentRoom, Neo.selectedDifficulty, Neo.floor);
+      refreshRoomShopCosts(
+        Neo.currentRoom,
+        Neo.selectedDifficulty,
+        Math.max(1, Number(snapshot.floorsEntered) || Number(snapshot.floor) || 1),
+      );
       Neo.enemies = Neo.currentRoom.enemies;
       Neo.deadBodies = Neo.currentRoom.deadBodies;
       Neo.projectiles = Neo.currentRoom.projectiles;
@@ -2873,7 +2906,6 @@ export function resumeGame() {
     Neo.endlessWave = Math.max(0, Number(snapshot.endlessWave || 0));
     Neo.endlessWaveActive = !!snapshot.endlessWaveActive;
     Neo.endlessRespawnTimer = Math.max(0, Number(snapshot.endlessRespawnTimer || 0));
-    Neo.gameElapsedTime = snapshot.gameElapsedTime || 0;
     Neo.camera = snapshot.camera || { x: 0, y: 0 };
     Neo.shake = 0;
     Neo.shakeT = 0;
@@ -2999,6 +3031,8 @@ export function resumeGame() {
   Neo.getPlayerHealingMultiplier = getPlayerHealingMultiplier;
   Neo.scalePlayerHealing = scalePlayerHealing;
   Neo.getShopPriceMultiplier = getShopPriceMultiplier;
+  Neo.getShopProgressionDepth = getShopProgressionDepth;
+  Neo.getShopProgressionPriceMultiplier = getShopProgressionPriceMultiplier;
   Neo.scaleShopPrice = scaleShopPrice;
   Neo.getShopRarityPriceMultiplier = getShopRarityPriceMultiplier;
   Neo.getShopPotionCost = getShopPotionCost;

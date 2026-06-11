@@ -1389,7 +1389,7 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
       room.shopOffers.push({
         type: 'item',
         key,
-        cost: Neo.getShopItemCost(itemIndex, Neo.floor, Neo.selectedDifficulty, rarity),
+        cost: Neo.getShopItemCost(itemIndex, Neo.getShopProgressionDepth?.() ?? Neo.floor, Neo.selectedDifficulty, rarity),
         x: slot.x,
         y: slot.y,
         bought: false,
@@ -1425,7 +1425,7 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
     room.shopOffers.push({
       type: 'item',
       key,
-      cost: Neo.getShopItemCost(itemIndex, Neo.floor, Neo.selectedDifficulty, 'knight'),
+      cost: Neo.getShopItemCost(itemIndex, Neo.getShopProgressionDepth?.() ?? Neo.floor, Neo.selectedDifficulty, 'knight'),
       x: Neo.ROOM_W / 2 + 260,
       y: Neo.ROOM_H / 2 + 56,
       bought: false,
