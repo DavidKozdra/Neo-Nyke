@@ -427,6 +427,17 @@ export const ITEM_DEFS = {
       category: 'knight',
       tags: ['crit'],
     },
+    copper_penny: {
+      key: 'copper_penny',
+      name: 'Copper Penny',
+      shortName: 'Volt %',
+      description: 'Electric attacks deal +20% damage per stack and build Static on enemies — a charge that stacks, deals damage over time, and arcs to nearby foes.',
+      rarity: 'knight',
+      color: '#e08a4a',
+      accent: '#ffd27d',
+      category: 'knight',
+      tags: ['damage', 'status', 'lightning'],
+    },
     attack_servo: {
       key: 'attack_servo',
       name: 'Attack Servo',

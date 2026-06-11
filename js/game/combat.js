@@ -1006,6 +1006,9 @@
       return;
     }
     if (move === 'excalibur_strike') {
+
+      
+
       castExcaliburStrike();
       return;
     }
@@ -2113,6 +2116,9 @@
         spin: (Neo.rng() < 0.5 ? -1 : 1) * (5 + Neo.rng() * 3),
       });
     }
+
+
+
     Neo.spawnParticle({ x: cx, y: cy, life: 0.5, ring: 36, c: '#ffd980' });
     Neo.addTrauma?.(0.4, Math.PI / 2, 12);
   }
@@ -2320,6 +2326,11 @@
     const sandbox = Neo.getActiveSandboxSettings();
     const critChance = Neo.clamp((stats.critChance || 0) + Number(options.critBonus || 0), 0, 0.98);
     let dealt = options.rawDamage ? scaleRawDamageAgainstEnemy(enemy, damage) : scaleDamageAgainstEnemy(enemy, damage, options, stats);
+    // Copper Penny: every electric/lightning hit deals +20% damage per stack and
+    // builds a stacking Static charge on the target. Static is a DoT that arcs to
+    // nearby foes (see updateEnemyStatuses), so electric builds chain through packs.
+    const copperPennyStacks = options.lightning ? (Neo.getItemCount?.('copper_penny') || 0) : 0;
+    if (copperPennyStacks > 0) dealt = Math.max(1, Math.round(dealt * (1 + copperPennyStacks * 0.2)));
     if (sandbox) dealt = Math.max(1, Math.round(dealt * sandbox.playerDamageMultiplier));
     // Sparkle Charm marks enemies so every hit against them is a guaranteed crit.
     const sparkled = Number(enemy.critSparkle || 0) > 0;
@@ -2402,6 +2413,12 @@
     if (options.lightning && Neo.getStatusStacks?.(enemy, 'slow') > 0 && Neo.nextRandom('encounter') < 0.35) {
       enemy.stun = Math.max(Number(enemy.stun || 0), 0.62);
       Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 18, life: 0.48, text: 'SHOCK', c: '#9adfff' });
+    }
+    // Copper Penny: lightning hits build a Static charge on the target. One stack
+    // per hit (it stacks well), refreshing the duration. The DoT and the arc to
+    // nearby foes are handled in updateEnemyStatuses.
+    if (copperPennyStacks > 0 && !options.noStatic) {
+      applyStatic(enemy, 1, 4);
     }
     window.achievementEvents?.emit('damage:dealt', { amount: dealt });
     if (options.bleedChance > 0 && Neo.nextRandom('encounter') < options.bleedChance) {
@@ -2545,6 +2562,15 @@
     const adjustedDuration = Number(duration || 0) * (entity === Neo.player ? 1 : Number(Neo.getItemStats?.()?.statusDurationMultiplier || 1));
     Neo.applyStatus(entity, 'dark_drain', stacks, adjustedDuration, source);
     triggerStatusReactions(entity, 'dark_drain');
+  }
+
+  // Static (Copper Penny): a stacking electric DoT that arcs to nearby foes. Only
+  // applied to enemies — it's a player-built status, never inflicted on the player.
+  function applyStatic(entity, stacks, duration, source = null) {
+    if (!entity || entity === Neo.player) return;
+    const adjustedDuration = Number(duration || 0) * Number(Neo.getItemStats?.()?.statusDurationMultiplier || 1);
+    Neo.applyStatus(entity, 'static', stacks, adjustedDuration, source);
+    triggerStatusReactions(entity, 'static');
   }
 
   // Shared "freeze" effect: a brief hard stun plus a cold (slow) stack and the
@@ -2742,6 +2768,47 @@
     snakeKnifePoisonSpreading = false;
   }
 
+  // Static arcs aggressively — chaining through packs is the whole point of an
+  // electric build. Each tick it jumps a stack to the nearest foe that isn't yet
+  // as charged as this one, scaled up by stack count so a heavily-shocked enemy
+  // seeds the room fast. Guarded against re-entrancy like the poison spread.
+  let staticSpreading = false;
+  function spreadStatic(enemy, state) {
+    if (staticSpreading) return;
+    if (!enemy || enemy.dead) return;
+    const stacks = Math.max(1, Number(state?.stacks || 1));
+    // Base 25% per tick, +10% per stack, capped — reliable but not instant.
+    if (Neo.nextRandom('encounter') >= Math.min(0.85, 0.25 + stacks * 0.1)) return;
+    const radius = 170 * Number(Neo.getItemStats?.()?.aoeRadiusMultiplier || 1);
+    let target = null;
+    let bestDistSq = Infinity;
+    const visitEnemy = other => {
+      if (!other || other === enemy || other.dead) return;
+      // Arc toward foes less charged than the source so it spreads outward
+      // instead of ping-ponging between two already-shocked enemies.
+      if (Neo.getStatusStacks(other, 'static') >= stacks) return;
+      const dx = other.x - enemy.x;
+      const dy = other.y - enemy.y;
+      const distSq = dx * dx + dy * dy;
+      if (distSq > radius * radius || distSq >= bestDistSq) return;
+      bestDistSq = distSq;
+      target = other;
+    };
+    if (typeof Neo.forEachEnemyNearCircle === 'function') {
+      Neo.forEachEnemyNearCircle(enemy.x, enemy.y, radius + 80, visitEnemy, { excludeEnemy: enemy });
+    } else {
+      Neo.enemies.forEach(visitEnemy);
+    }
+    if (!target) return;
+    staticSpreading = true;
+    const duration = Math.max(2, Number(state?.duration || 0) * 0.7);
+    applyStatic(target, 1, duration);
+    // Visual arc between the two enemies.
+    Neo.spawnParticle({ x: (enemy.x + target.x) / 2, y: (enemy.y + target.y) / 2, life: 0.18, c: Neo.STATUS_STYLES.static.color });
+    Neo.spawnParticle({ x: target.x, y: target.y, life: 0.2, ring: target.r + 8, c: Neo.STATUS_STYLES.static.color });
+    staticSpreading = false;
+  }
+
   function updateEnemyStatuses(enemy, dt) {
     if (enemy.bleedFlash > 0) enemy.bleedFlash = Math.max(0, enemy.bleedFlash - dt);
     const stats = Neo.getItemStats?.() || {};
@@ -2781,6 +2848,17 @@
       healScale: 0.35,
       stats,
     });
+    if (enemy.dead) return bleedStacks;
+    if (tickEnemyStatus(enemy, 'static', dt, {
+      interval: 0.5,
+      // % max HP per stack, in line with poison/dark_drain so it stays relevant
+      // against tanky foes. The arc to neighbours rides on onTick.
+      damage: stacks => Math.max(1, enemy.max * (0.007 * stacks)),
+      color: Neo.STATUS_STYLES.static.textColor,
+      particleColor: Neo.STATUS_STYLES.static.color,
+      onTick: spreadStatic,
+      stats,
+    })) return bleedStacks;
     const slowState = Neo.getStatusState(enemy, 'slow');
     if (slowState.stacks > 0) {
       slowState.duration -= dt;

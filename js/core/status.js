@@ -7,6 +7,7 @@ export function createStatusMap() {
     poison: { stacks: 0, duration: 0, tick: 0 },
     dark_drain: { stacks: 0, duration: 0, tick: 0 },
     slow: { stacks: 0, duration: 0, tick: 0 },
+    static: { stacks: 0, duration: 0, tick: 0 },
   };
 }
 

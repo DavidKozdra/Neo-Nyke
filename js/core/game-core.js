@@ -191,13 +191,14 @@ export const OPPOSITE_DIRECTION = {
   e: 'w',
   w: 'e',
 };
-export const STATUS_KEYS = ['bleed', 'fire', 'poison', 'dark_drain', 'slow'];
+export const STATUS_KEYS = ['bleed', 'fire', 'poison', 'dark_drain', 'slow', 'static'];
 export const STATUS_STYLES = {
   bleed: { color: '#ff4f6d', textColor: '#ff5f5f' },
   fire: { color: '#ff9a3c', textColor: '#ff9a3c' },
   poison: { color: '#85df63', textColor: '#85df63' },
   dark_drain: { color: '#b48cff', textColor: '#b48cff' },
   slow: { color: '#79d9ff', textColor: '#79d9ff' },
+  static: { color: '#9adfff', textColor: '#bdefff' },
 };
 export const STATUS_ICON_DEFS = {
   bleed: {
@@ -247,6 +248,14 @@ export const STATUS_ICON_DEFS = {
     bg: 'rgba(58,42,0,0.86)',
     pixels: [[3,0],[4,0],[3,1],[4,1],[2,2],[5,2],[0,3],[1,3],[3,3],[4,3],[6,3],[7,3],[2,4],[5,4],[3,5],[4,5],[2,6],[5,6]],
     accentPixels: [[3,2],[4,2],[3,4],[4,4]],
+  },
+  static: {
+    label: 'Static',
+    color: '#9adfff',
+    accent: '#eaf9ff',
+    bg: 'rgba(4,30,48,0.86)',
+    pixels: [[5,0],[4,1],[3,2],[2,3],[4,3],[5,3],[1,4],[2,4],[3,4],[4,5],[3,6],[2,7]],
+    accentPixels: [[3,3],[2,4],[4,4]],
   },
 };
 export const ROOM_ART_THEMES = {

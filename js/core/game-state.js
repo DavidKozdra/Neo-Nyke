@@ -443,6 +443,7 @@ export function resumeGame() {
       double_dose: 0,
       copycat_charm: 0,
       crit_charm: 0,
+      copper_penny: 0,
       attack_servo: 0,
       enemy_magnet: 0,
       keen_eye: 0,
