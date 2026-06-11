@@ -5,6 +5,8 @@
 (function creditsPage() {
   const panel  = document.getElementById('creditsPanel');
   const parade = document.getElementById('creditsParade');
+  const titleLetters = document.getElementById('creditsMenuLetters');
+  const titleSubtitle = document.getElementById('creditsMenuSubtitle');
   if (!panel) return;
 
   const Neo = window.Neo || {};
@@ -404,6 +406,7 @@
   function onVisChange() {
     const open = !panel.classList.contains('hidden');
     if (open) {
+      window.NeoAnimateMenuTitle?.(titleLetters, titleSubtitle);
       ensureAvatars();
       start();
     } else {

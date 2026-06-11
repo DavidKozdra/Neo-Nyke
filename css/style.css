@@ -9799,37 +9799,15 @@ border-bottom: black solid 2px;
   text-align: center;
 }
 
-/* Title mark — animated icy-blue gradient + sweeping shine */
 .credits__hero { display: flex; flex-direction: column; align-items: center; gap: 14px; }
-.credits__mark {
-  position: relative;
-  font-family: var(--font-title, inherit);
-  font-size: calc(clamp(40px, 8vw, 80px) * var(--font-scale, 1));
-  letter-spacing: .12em;
-  text-transform: uppercase;
-  /* taller gradient that we slide vertically for a living sheen */
-  background: linear-gradient(180deg,
-    #eaf6ff 0%, #ffffff 14%, #bfe3ff 34%, #6cc3ff 60%, #2f8fe6 84%, #bfe3ff 100%);
-  background-size: 100% 280%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  color: transparent;
-  filter: drop-shadow(0 4px 0 rgba(0,0,0,.85));
+.credits__title {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 100%;
 }
-/* diagonal light streak that sweeps across the letters (clipped to glyphs) */
-.credits__mark::before {
-  content: none;
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: linear-gradient(105deg,
-    transparent 40%, rgba(255,255,255,.9) 50%, transparent 60%);
-  background-size: 240% 100%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  color: transparent;
+.credits__title .menu-letters {
+  margin-bottom: 4px;
 }
 .credits__studio {
   font-size: calc(clamp(13px, 1.6vw, 17px) * var(--font-scale, 1));
