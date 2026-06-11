@@ -959,19 +959,32 @@
     return kindSource[projectile?.kind] || 'enemy_projectile';
   }
 
-  function spawnProjectile(props) {
-    let difficulty = Neo.selectedDifficulty;
-    
-    let DifficultyMod = difficulty == "easy" ? 0.8 : difficulty == "hard" ? 1.2 : 1;
+  function getProjectileSpeedMultiplier(props, enemyProjectile, itemStats) {
+    const difficultyKey = Neo.selectedDifficulty;
+    const legacyDifficultyMultiplier = difficultyKey === 'easy' ? 0.8 : difficultyKey === 'hard' ? 1.2 : 1;
+    const itemMultiplier = Math.max(0.1, Number(itemStats.projectileSpeedMultiplier || 1));
+    if (!enemyProjectile) return itemMultiplier * legacyDifficultyMultiplier;
 
-    if (props.speed) {
-      props.speed = (props.speed || 0) * DifficultyMod;
-    }
+    const bossProjectile = props.bossProjectile === true || Neo.isBossType?.(props.owner?.type);
+    if (!bossProjectile) return legacyDifficultyMultiplier;
+
+    const difficulty = Neo.getDifficultyDef?.() || {};
+    const difficultyMultiplier = Math.max(
+      0.1,
+      Number(difficulty.bossProjectileSpeedMultiplier ?? difficulty.speedMultiplier ?? 1),
+    );
+    const gameMinutes = Math.max(0, Number(Neo.gameElapsedTime || 0) / 60);
+    const timeRate = Math.max(0, Number(Neo.ENEMY_SCALING?.speedMinute ?? 0.018));
+    return difficultyMultiplier * (1 + gameMinutes * timeRate);
+  }
+
+  function spawnProjectile(props) {
     const p = _acquireProjectile();
     const enemyProjectile = !!(props.enemy ?? false);
     const itemStats = enemyProjectile ? {} : (Neo.getItemStats?.() || {});
-    const projectileSpeedMultiplier = Math.max(0.1, Number(itemStats.projectileSpeedMultiplier || 1)) * DifficultyMod;
-    const projectileHomingStrength = Math.max(0, Number(itemStats.projectileHomingStrength || 0)) * DifficultyMod;
+    const projectileSpeedMultiplier = getProjectileSpeedMultiplier(props, enemyProjectile, itemStats);
+    const legacyDifficultyMultiplier = Neo.selectedDifficulty === 'easy' ? 0.8 : Neo.selectedDifficulty === 'hard' ? 1.2 : 1;
+    const projectileHomingStrength = Math.max(0, Number(itemStats.projectileHomingStrength || 0)) * legacyDifficultyMultiplier;
     const homingScalar = 1 + projectileHomingStrength;
     const hasExplicitHoming = Object.prototype.hasOwnProperty.call(props, 'homing');
     const hasExplicitHomingTarget = Object.prototype.hasOwnProperty.call(props, 'homingTarget');

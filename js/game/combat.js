@@ -85,22 +85,23 @@
     return picked;
   }
 
-  // Current loop number (1-based) derived from cumulative floor depth, matching
-  // the enemy stat scaling in enemies.js. Loop 1 = first time through the floors.
+  // Current loop number (1-based). runLoopIndex counts completed loops, so this
+  // remains accurate even when floor skips make cumulative floor depth lag.
   function getCurrentLoopNumber() {
+    if (Number.isFinite(Number(Neo.runLoopIndex))) {
+      return Math.max(1, Math.floor(Number(Neo.runLoopIndex)) + 1);
+    }
     const depth = Neo.getProgressionDepth ? Neo.getProgressionDepth() : Math.max(1, Number(Neo.floor) || 1);
     return Math.max(1, Math.floor((depth - 1) / Neo.MAX_FLOOR) + 1);
   }
 
-  // Damage taken multiplier for an enemy. Two stacking effects:
-  //  - Elites take 5% less damage from all sources.
-  //  - Every enemy takes more chip off as loops climb: starts at 10% reduction
-  //    on loop 2, +10% per loop, capped at 30% (reached loop 4), so raw player
-  //    damage matters more deep in a run instead of one-shotting everything.
-  // Applied on top of defenseMultiplier so it stacks with depth scaling.
-  function getEliteDamageMultiplier(enemy) {
+  // Damage taken multiplier for an enemy. Elites always take 5% less damage.
+  // Difficulties above Hard can also add damage reduction per completed loop;
+  // the rate lives on the difficulty definition so Custom remains unaffected.
+  function getEnemyDamageTakenMultiplier(enemy) {
     const eliteFactor = enemy?.elite ? 0.95 : 1;
-    const loopReduction = Math.min(0.30, (getCurrentLoopNumber() - 1) * 0.10);
+    const reductionPerLoop = Math.max(0, Number(Neo.getDifficultyDef?.()?.enemyLoopDamageReduction || 0));
+    const loopReduction = Math.min(0.95, (getCurrentLoopNumber() - 1) * reductionPerLoop);
     return eliteFactor * (1 - loopReduction);
   }
 
@@ -108,7 +109,7 @@
     const stats = cachedStats || options.stats || Neo.getItemStats();
     const applyBleedBonus = options.applyBleedBonus !== false;
     const defenseMultiplier = Math.max(1, Number(enemy?.defenseMultiplier || 1));
-    const eliteMultiplier = getEliteDamageMultiplier(enemy);
+    const damageTakenMultiplier = getEnemyDamageTakenMultiplier(enemy);
     const characterMultiplier = Neo.getCharacterDef().damageMultiplier || 1;
     // Pendant of Kronos: flat +1%/god-item damage everywhere, plus +2%/stack
     // against bosses (boss types, miniBosses, and the god enemy).
@@ -121,15 +122,15 @@
       * kronosMultiplier
       * (Neo.isChallengeActive('glass_cannon') ? 1.25 : 1);
     if (applyBleedBonus && Neo.getStatusStacks(enemy, 'bleed') > 0 && stats.bleedDamageMultiplier > 1) {
-      return Math.max(1, Math.round((powered * stats.bleedDamageMultiplier * eliteMultiplier) / defenseMultiplier));
+      return Math.max(1, Math.round((powered * stats.bleedDamageMultiplier * damageTakenMultiplier) / defenseMultiplier));
     }
-    return Math.max(1, Math.round((powered * eliteMultiplier) / defenseMultiplier));
+    return Math.max(1, Math.round((powered * damageTakenMultiplier) / defenseMultiplier));
   }
 
   function scaleRawDamageAgainstEnemy(enemy, damage) {
     const defenseMultiplier = Math.max(1, Number(enemy?.defenseMultiplier || 1));
-    const eliteMultiplier = getEliteDamageMultiplier(enemy);
-    return Math.max(1, Math.round((Number(damage || 0) * eliteMultiplier) / defenseMultiplier));
+    const damageTakenMultiplier = getEnemyDamageTakenMultiplier(enemy);
+    return Math.max(1, Math.round((Number(damage || 0) * damageTakenMultiplier) / defenseMultiplier));
   }
 
   function getBloodMultiplier() {
