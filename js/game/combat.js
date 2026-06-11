@@ -3525,24 +3525,23 @@
   function rollItemDrop(options = {}) {
     const adjustEntriesForScrollControl = (entries) => {
       if (!Neo.player) return entries;
-      const storedWeightTags = Array.isArray(Neo.player.scrollPoolWeights) ? Neo.player.scrollPoolWeights : [];
-      const activeWeightTags = storedWeightTags
-        .filter(buff => buff && Number(buff.expiresFloor || 0) >= Neo.floor && buff.tag);
-      if (activeWeightTags.length !== storedWeightTags.length) {
-        Neo.player.scrollPoolWeights = activeWeightTags;
+      const storedWeightItems = Array.isArray(Neo.player.scrollPoolWeights) ? Neo.player.scrollPoolWeights : [];
+      const activeWeightItems = storedWeightItems
+        .filter(buff => buff && Number(buff.expiresFloor || 0) >= Neo.floor && Neo.ITEM_DEFS?.[buff.itemKey]);
+      if (activeWeightItems.length !== storedWeightItems.length) {
+        Neo.player.scrollPoolWeights = activeWeightItems;
         Neo.scheduleRunSave?.();
       }
       const egoActive = Number(Neo.player.scrollEgoFloor || 0) === Neo.floor;
-      if (!activeWeightTags.length && !egoActive) return entries;
+      if (!activeWeightItems.length && !egoActive) return entries;
       const owned = Neo.player.items || {};
       return entries.map(([key, weight]) => {
         const item = Neo.ITEM_DEFS?.[key];
         let nextWeight = Number(weight || 0);
         if (egoActive && Number(owned[key] || 0) > 0) nextWeight *= 1.1;
-        if (activeWeightTags.length) {
-          const tags = Array.isArray(item?.tags) ? item.tags : [];
-          activeWeightTags.forEach(buff => {
-            if (!tags.includes(buff.tag)) return;
+        if (activeWeightItems.length) {
+          activeWeightItems.forEach(buff => {
+            if (buff.itemKey !== key) return;
             const rarity = String(item?.rarity || 'knight').toLowerCase();
             const boost = rarity === 'god' || rarity === 'red'
               ? 1.2

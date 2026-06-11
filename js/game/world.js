@@ -782,6 +782,20 @@
     });
   }
 
+  function getBombHazardDamage(baseDamage) {
+    const base = Math.max(0, Number(baseDamage || 0));
+    if (base <= 0) return 0;
+    const progressionDepth = Math.max(
+      1,
+      Number(Neo.getProgressionDepth?.() ?? Neo.floorsEntered ?? Neo.floor ?? 1),
+    );
+    const minutes = Math.max(0, Number(Neo.gameElapsedTime || 0) / 60);
+    const floorRate = Math.max(0, Number(Neo.BOMB_HAZARD_SCALING?.floor ?? 0.07));
+    const minuteRate = Math.max(0, Number(Neo.BOMB_HAZARD_SCALING?.minute ?? 0.04));
+    const multiplier = 1 + (progressionDepth - 1) * floorRate + minutes * minuteRate;
+    return Math.max(1, Math.round(base * multiplier));
+  }
+
   function blastRadius(x, y, radius, damage, color, sourceEnemy = null, knockback = 200) {
     spawnAoeShockwave(x, y, radius, color, damage >= 28 ? 'heavy' : 'normal');
     if (sourceEnemy && Neo.player && Neo.dist(x, y, Neo.player.x, Neo.player.y) <= radius + Neo.player.r) {
@@ -1647,10 +1661,13 @@
           if (target || playerTrips) {
             hazard.triggered = true;
             const blast = Number(hazard.blastRadius || 62);
+            const damage = dungeonOwned
+              ? getBombHazardDamage(hazard.baseDamage ?? hazard.damage ?? 18)
+              : Number(hazard.damage || 18);
             forEachEnemyNearCircle(hazard.x, hazard.y, blast + 80, enemy => {
               if (Neo.dist(enemy.x, enemy.y, hazard.x, hazard.y) > blast + enemy.r) return;
               const angle = Math.atan2(enemy.y - hazard.y, enemy.x - hazard.x);
-              Neo.hitEnemy(enemy, hazard.damage || 18, angle, 170, '#ff6e8b', {
+              Neo.hitEnemy(enemy, damage, angle, 170, '#ff6e8b', {
                 bleedChance: 1,
                 bleedStacks: hazard.bleedStacks || 1,
                 bleedDuration: hazard.bleedDuration || 4.5,
@@ -1658,7 +1675,7 @@
             });
             if (dungeonOwned && Neo.dist(Neo.player.x, Neo.player.y, hazard.x, hazard.y) <= blast + Neo.player.r) {
               const angle = Math.atan2(Neo.player.y - hazard.y, Neo.player.x - hazard.x);
-              damagePlayer(hazard.damage || 18, angle, 170, hazard.source || 'thorn_mine');
+              damagePlayer(damage, angle, 170, hazard.source || 'thorn_mine');
               Neo.applyStatus?.(Neo.player, 'bleed', hazard.bleedStacks || 1, hazard.bleedDuration || 4.5);
             }
             Neo.spawnParticle({ x: hazard.x, y: hazard.y, life: 0.35, ring: blast, c: '#ff6e8b' });
@@ -1677,11 +1694,12 @@
           hazard.sparkTick = 0.12;
         }
         if (hazard.fuse <= 0) {
+          const damage = getBombHazardDamage(hazard.baseDamage ?? hazard.damage ?? 250);
           if (Neo.dist(Neo.player.x, Neo.player.y, hazard.x, hazard.y) <= (hazard.blastRadius || 150) + Neo.player.r) {
             const angle = Math.atan2(Neo.player.y - hazard.y, Neo.player.x - hazard.x);
-            damagePlayer(hazard.damage || 250, angle, 240, 'bomb_aoe');
+            damagePlayer(damage, angle, 240, 'bomb_aoe');
           }
-          blastRadius(hazard.x, hazard.y, hazard.blastRadius || 150, hazard.damage || 250, '#ff7a66');
+          blastRadius(hazard.x, hazard.y, hazard.blastRadius || 150, damage, '#ff7a66');
           hazard.ttl = 0;
         }
       }
@@ -1725,11 +1743,12 @@
             hazard.sparkTick = 0.07;
           }
           if (hazard.fuse <= 0) {
+            const damage = getBombHazardDamage(hazard.baseDamage ?? hazard.damage ?? 18);
             if (Neo.dist(Neo.player.x, Neo.player.y, hazard.x, hazard.y) <= hazard.blastRadius + Neo.player.r) {
               const angle = Math.atan2(Neo.player.y - hazard.y, Neo.player.x - hazard.x);
-              damagePlayer(hazard.damage || 18, angle, 220, 'explosive_trap');
+              damagePlayer(damage, angle, 220, 'explosive_trap');
             }
-            blastRadius(hazard.x, hazard.y, hazard.blastRadius || 88, hazard.damage || 18, '#ff9a4d');
+            blastRadius(hazard.x, hazard.y, hazard.blastRadius || 88, damage, '#ff9a4d');
             hazard.ttl = 0;
           }
         }
@@ -2773,7 +2792,7 @@
         if (pickup.safe) {
           Neo.completeChallengeTrial('BOMB DISARMED');
         } else {
-          blastRadius(pickup.x, pickup.y, 76, 28 + Neo.floor * 2, '#ff7a66');
+          blastRadius(pickup.x, pickup.y, 76, getBombHazardDamage(28), '#ff7a66');
           Neo.spawnParticle({ x: pickup.x, y: pickup.y - 20, life: 0.75, text: 'WRONG', c: '#ff7a7a' });
           Neo.spawnBombFailAoe(pickup.x, pickup.y);
           Neo.failChallengeTrial('WRONG BOMB');
@@ -3180,6 +3199,7 @@
   Neo.forEachDestructibleNearCircle = forEachDestructibleNearCircle;
   Neo.forEachDestructibleNearRect = forEachDestructibleNearRect;
   Neo.findNearestEnemy = findNearestEnemy;
+  Neo.getBombHazardDamage = getBombHazardDamage;
   Neo.updateProjectiles = updateProjectiles;
   Neo.updateWorldProps = updateWorldProps;
   Neo.damageDestructible = damageDestructible;

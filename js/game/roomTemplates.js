@@ -621,7 +621,7 @@
       if (out.armTime == null) out.armTime = 0.18;
       if (out.triggerRadius == null) out.triggerRadius = 34;
       if (out.blastRadius == null) out.blastRadius = 62;
-      if (out.damage == null) out.damage = 18;
+      if (out.baseDamage == null) out.baseDamage = out.damage ?? 18;
       if (out.bleedStacks == null) out.bleedStacks = 1;
       if (out.bleedDuration == null) out.bleedDuration = 4.5;
       if (out.statusTick == null) out.statusTick = 0;
@@ -631,7 +631,7 @@
       if (out.r == null) out.r = 16;
       if (out.triggerRadius == null) out.triggerRadius = 34;
       if (out.blastRadius == null) out.blastRadius = 88;
-      if (out.damage == null) out.damage = 20;
+      if (out.baseDamage == null) out.baseDamage = out.damage ?? 20;
       if (out.fuse == null) out.fuse = 0;
       if (out.fuseDuration == null) out.fuseDuration = 0.78;
       if (out.triggered == null) out.triggered = false;

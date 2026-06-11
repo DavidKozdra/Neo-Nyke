@@ -168,6 +168,10 @@ export const ENEMY_SCALING = {
   endlessWaveDamageSoftCap: 2.6,
   endlessWaveSpeedSoftCap: 1.5,
 };
+export const BOMB_HAZARD_SCALING = {
+  floor: 0.07,
+  minute: 0.04,
+};
 export const BLEED_RESIST_SCALING = {
   floorInLoop: 0.16,
   // Raised so infinitely-stacking DoT builds fall off deeper into a run instead
@@ -1020,6 +1024,7 @@ Neo.AOE_SHOCKWAVE_LIFE = AOE_SHOCKWAVE_LIFE;
 Neo.ENV_TILE_SIZE = ENV_TILE_SIZE;
 Neo.LIGHTING_CONFIG = LIGHTING_CONFIG;
 Neo.ENEMY_SCALING = ENEMY_SCALING;
+Neo.BOMB_HAZARD_SCALING = BOMB_HAZARD_SCALING;
 Neo.BLEED_RESIST_SCALING = BLEED_RESIST_SCALING;
 Neo.DIRECTIONS = DIRECTIONS;
 Neo.DIRECTION_VECTORS = DIRECTION_VECTORS;

@@ -1543,7 +1543,8 @@
   }
 
   // A failed bomb defusal leaves a telegraphed blast that detonates after a
-  // short fuse, punishing the player for 250 per floor if they stay in range.
+  // short fuse. Runtime hazard scaling adds cumulative-floor and elapsed-time
+  // pressure when it actually explodes.
   const BOMB_FAIL_AOE_FUSE = 3;
   const BOMB_FAIL_AOE_RADIUS = 150;
   function spawnBombFailAoe(x = Neo.ROOM_W / 2, y = Neo.ROOM_H / 2) {
@@ -1555,7 +1556,7 @@
       blastRadius: BOMB_FAIL_AOE_RADIUS,
       fuse: BOMB_FAIL_AOE_FUSE,
       fuseDuration: BOMB_FAIL_AOE_FUSE,
-      damage: 250 * Math.max(1, Neo.floor),
+      baseDamage: 250,
       sparkTick: 0,
     });
     Neo.spawnParticle({ x, y: y - 20, life: 0.6, text: 'DETONATING', c: '#ff7a66', size: 12 });

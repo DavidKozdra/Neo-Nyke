@@ -129,8 +129,8 @@ export function migratePlayerData(source) {
     playerData.scrollReplaceMap = normalizedReplaceMap;
     playerData.scrollPoolWeights = Array.isArray(playerData.scrollPoolWeights)
       ? playerData.scrollPoolWeights
-        .filter(buff => buff && buff.tag && Number(buff.expiresFloor || 0) > 0)
-        .map(buff => ({ tag: String(buff.tag), expiresFloor: Math.max(1, Math.floor(Number(buff.expiresFloor || 1))) }))
+        .filter(buff => buff && Neo.ITEM_DEFS?.[buff.itemKey] && Number(buff.expiresFloor || 0) > 0)
+        .map(buff => ({ itemKey: String(buff.itemKey), expiresFloor: Math.max(1, Math.floor(Number(buff.expiresFloor || 1))) }))
       : [];
     if (playerData.scrollAbundance && typeof playerData.scrollAbundance === 'object') {
       playerData.scrollAbundance.items = Array.isArray(playerData.scrollAbundance.items) ? playerData.scrollAbundance.items.filter(key => Neo.ITEM_DEFS[key]).slice(0, 2) : [];
@@ -943,30 +943,20 @@ export function confirmWizardPawSelection() {
       });
   }
 
-  function getScrollTagChoices() {
-    const tags = new Map();
-    (Neo.ITEM_KEYS || []).forEach(key => {
-      if (SCROLL_KEYS.has(key)) return;
-      const item = Neo.ITEM_DEFS?.[key];
-      if (item?.rarity === 'blue') return;
-      const list = Array.isArray(item?.tags) ? item.tags : [];
-      list.forEach(tag => {
-        const clean = String(tag || '').trim();
-        if (!clean || clean === 'god' || clean === 'wizard') return;
-        tags.set(clean, (tags.get(clean) || 0) + 1);
-      });
-    });
-    return [...tags.entries()]
-      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-      .map(([tag, count]) => ({
-        key: tag,
-        type: 'tag',
-        name: tag.replace(/_/g, ' '),
-        description: `${count} relics use this tag.`,
-        rarity: 'knight',
-        color: '#c8e2ff',
-        search: `${tag} ${count}`.toLowerCase(),
-      }));
+  function createScrollPoolWeightChoiceKeys(random = Neo.rng) {
+    const choices = getScrollChoiceItems();
+    const rng = typeof random === 'function' ? random : Math.random;
+    for (let index = choices.length - 1; index > 0; index -= 1) {
+      const swapIndex = Math.floor(rng() * (index + 1));
+      [choices[index], choices[swapIndex]] = [choices[swapIndex], choices[index]];
+    }
+    return choices.slice(0, 4).map(choice => choice.key);
+  }
+
+  function getScrollPoolWeightChoices() {
+    const choiceKeys = Neo.scrollControlSelection?.choiceKeys || [];
+    const choicesByKey = new Map(getScrollChoiceItems().map(choice => [choice.key, choice]));
+    return choiceKeys.map(key => choicesByKey.get(key)).filter(Boolean);
   }
 
   function getScrollChoiceRarity(key) {
@@ -1025,10 +1015,10 @@ export function confirmWizardPawSelection() {
     if (scrollKey === 'scroll_pool_weight') {
       return {
         title: 'SCROLL OF POOL WEIGHT',
-        copy: 'Choose one tag. Future rewards favor that tag for the next 3 floors.',
+        copy: 'Choose 1 of these 4 relics. Future rewards favor that relic for the next 3 floors.',
         minPicks: 1,
         maxPicks: 1,
-        choices: getScrollTagChoices(),
+        choices: getScrollPoolWeightChoices(),
       };
     }
     if (scrollKey === 'scroll_ego') {
@@ -1192,6 +1182,13 @@ export function confirmWizardPawSelection() {
       return false;
     }
     Neo.scrollControlSelection = { scrollKey, phase: 'main', picks: [], fromKeys: [], query: '' };
+    if (scrollKey === 'scroll_pool_weight') {
+      const nextUseSerial = Math.max(0, Math.floor(Number(Neo.player.scrollUseSerial || 0))) + 1;
+      const random = Neo.createScopedRandom?.(
+        `scroll:${scrollKey}:offers:${nextUseSerial}:floor:${Neo.floor}`,
+      ) || Neo.rng;
+      Neo.scrollControlSelection.choiceKeys = createScrollPoolWeightChoiceKeys(random);
+    }
     Neo.setScrollControlModalOpen?.(true);
     renderScrollControlPanel();
     return true;
@@ -1302,7 +1299,7 @@ export function confirmWizardPawSelection() {
       Neo.player.scrollAbundance = { items: state.picks.slice(0, 2), nextCheckFloor: Neo.floor + 2, expiresFloor: Neo.floor + 8 };
     } else if (state.scrollKey === 'scroll_pool_weight') {
       const buffs = Array.isArray(Neo.player.scrollPoolWeights) ? Neo.player.scrollPoolWeights : [];
-      buffs.push({ tag: state.picks[0], expiresFloor: Neo.floor + 3 });
+      buffs.push({ itemKey: state.picks[0], expiresFloor: Neo.floor + 3 });
       Neo.player.scrollPoolWeights = buffs.slice(-4);
     } else if (state.scrollKey === 'scroll_ego') {
       Neo.player.scrollEgoFloor = Neo.floor;
@@ -1855,6 +1852,7 @@ export function refreshFloorChargeStates() {
   Neo.confirmWizardPawSelection = confirmWizardPawSelection;
   Neo.isScrollControlItem = isScrollControlItem;
   Neo.enqueueScrollSelection = enqueueScrollSelection;
+  Neo.createScrollPoolWeightChoiceKeys = createScrollPoolWeightChoiceKeys;
   Neo.renderScrollControlPanel = renderScrollControlPanel;
   Neo.updateScrollControlSearch = updateScrollControlSearch;
   Neo.handleScrollControlChoiceClick = handleScrollControlChoiceClick;
