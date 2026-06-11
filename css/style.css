@@ -10042,6 +10042,17 @@ border-bottom: black solid 2px;
   margin-bottom: 8px;
 }
 .info-char-card__stats { display: flex; flex-direction: column; gap: 4px; }
+.info-char-card__lock {
+  margin-top: 10px;
+  padding: 5px 8px;
+  border: 1px solid rgba(255, 112, 126, 0.34);
+  border-radius: 5px;
+  background: rgba(150, 24, 40, 0.16);
+  color: #ff9aa8;
+  font-size: calc(11px * var(--font-scale, 1));
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
 .info-char-stat { display: flex; align-items: center; gap: 8px; }
 .info-char-stat__label { font-size: calc(11px * var(--font-scale, 1)); font-weight: 700; letter-spacing: 0.08em; color: var(--menu-text-soft); width: 40px; flex-shrink: 0; }
 .info-char-stat__bar { flex: 1; height: 5px; background: rgba(255,255,255,0.08); border-radius: 3px; overflow: hidden; }
@@ -10242,6 +10253,7 @@ border-bottom: black solid 2px;
 .info-char-card__name { font-size: calc(23px * var(--font-scale, 1)) !important; }
 .info-char-card__lore { font-size: calc(18px * var(--font-scale, 1)) !important; line-height: 1.55 !important; }
 .info-char-stat__label { font-size: calc(15px * var(--font-scale, 1)) !important; width: 56px !important; }
+.info-char-card__lock { font-size: calc(15px * var(--font-scale, 1)) !important; }
 
 /* Enemies grid + detail */
 .info-enemy-grid { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)) !important; }

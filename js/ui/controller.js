@@ -797,6 +797,19 @@ export function createUIController(view) {
       return Neo.getCharacterStartingItems?.(characterKey) || {};
     }
 
+    function getCharacterInfoLockNote(characterKey) {
+      const unlocked = new Set(Neo.metaProgress?.unlockedCharacters || ['princess', 'thorn_knight', 'metao']);
+      if (unlocked.has(characterKey)) return '';
+      if (characterKey === 'gelleh') {
+        return '<div class="info-char-card__lock">LOCKED: Defeat GOD</div>';
+      }
+      if (characterKey === 'mooggy') {
+        const defeats = Math.max(0, Math.min(3, Number(Neo.metaProgress?.mooggyDefeats || 0)));
+        return `<div class="info-char-card__lock">LOCKED: Defeat Mooggy ${defeats}/3</div>`;
+      }
+      return '<div class="info-char-card__lock">LOCKED</div>';
+    }
+
     function normalizeInfoSearch(value) {
       return String(value || '').trim().toLowerCase();
     }
@@ -1010,6 +1023,7 @@ export function createUIController(view) {
       } else if (tab === 'characters') {
         view.rhInfoContent.innerHTML = `<div class="info-char-grid">${Object.values(Neo.CHARACTER_DEFS).map(c => {
           const display = Neo.HERO_DISPLAY[c.key] || {};
+          const lockNote = getCharacterInfoLockNote(c.key);
           const statBars = (display.stats || []).map(s =>
             `<div class="info-char-stat">
               <span class="info-char-stat__label">${s.label}</span>
