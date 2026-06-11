@@ -1968,22 +1968,37 @@
       } else if (hazard.kind === 'holy_turret') {
         // Gelleh's Holy Turrets: periodically lock onto the nearest enemy in
         // range and drop a holy AOE burst on it.
+        hazard.recoil = Math.max(0, Number(hazard.recoil || 0) - dt);
+        let target = null;
+        let bestSq = (hazard.range || 360) ** 2;
+        forEachEnemyNearCircle(hazard.x, hazard.y, hazard.range || 360, enemy => {
+          if (!enemy || enemy.dead) return;
+          const dSq = (enemy.x - hazard.x) ** 2 + (enemy.y - hazard.y) ** 2;
+          if (dSq < bestSq) { bestSq = dSq; target = enemy; }
+        });
+        if (target) {
+          const desiredAngle = Math.atan2(target.y - hazard.y, target.x - hazard.x);
+          const currentAngle = Number(hazard.aimAngle || 0);
+          const angleDelta = Math.atan2(
+            Math.sin(desiredAngle - currentAngle),
+            Math.cos(desiredAngle - currentAngle),
+          );
+          hazard.aimAngle = currentAngle + Neo.clamp(angleDelta, -dt * 9, dt * 9);
+        }
         hazard.tick -= dt;
         if (hazard.tick <= 0) {
           hazard.tick = hazard.interval || 0.6;
-          let target = null;
-          let bestSq = (hazard.range || 360) ** 2;
-          forEachEnemyNearCircle(hazard.x, hazard.y, hazard.range || 360, enemy => {
-            if (!enemy || enemy.dead) return;
-            const dSq = (enemy.x - hazard.x) ** 2 + (enemy.y - hazard.y) ** 2;
-            if (dSq < bestSq) { bestSq = dSq; target = enemy; }
-          });
           if (target) {
             const burstR = hazard.burstRadius || 56;
+            const aimAngle = Number(hazard.aimAngle || 0);
+            const muzzleX = hazard.x + Math.cos(aimAngle) * 31;
+            const muzzleY = hazard.y + Math.sin(aimAngle) * 31;
+            hazard.recoil = 0.14;
             Neo.spawnParticle({
               life: 0.2, c: '#fff1b0',
-              line: { x1: hazard.x, y1: hazard.y, x2: target.x, y2: target.y, w: 3.2, jag: 5, seg: 5, phase: Neo.rng() * Math.PI * 2 },
+              line: { x1: muzzleX, y1: muzzleY, x2: target.x, y2: target.y, w: 3.2, jag: 5, seg: 5, phase: Neo.rng() * Math.PI * 2 },
             });
+            Neo.spawnParticle({ x: muzzleX, y: muzzleY, life: 0.16, ring: 7, c: '#fff7c8' });
             Neo.spawnParticle({ x: target.x, y: target.y, life: 0.4, ring: burstR, c: '#ffe6a3' });
             Neo.blastRadius(target.x, target.y, burstR, hazard.damage || 26, '#ffe6a3');
           }

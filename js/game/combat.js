@@ -2234,6 +2234,8 @@
         range: 360,
         burstRadius: 56 * aoeRadiusMultiplier,
         damage: Math.round(26 * aoeDamageMultiplier),
+        aimAngle: angle,
+        recoil: 0,
       });
       Neo.spawnParticle({ x: tx, y: ty, life: 0.5, ring: 22, c: '#fff1b0' });
     }

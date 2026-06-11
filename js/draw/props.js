@@ -473,26 +473,104 @@
           Neo.ctx.stroke();
         }
       } else if (hazard.kind === 'holy_turret') {
-        const t = Date.now() * 0.005 + hazard.x * 0.01;
-        const bob = Math.sin(t * 2) * 2;
-        // Glowing divine base.
-        Neo.ctx.fillStyle = 'rgba(255,238,170,0.16)';
+        const aimAngle = Number(hazard.aimAngle || 0);
+        const recoilRatio = Neo.clamp(Number(hazard.recoil || 0) / 0.14, 0, 1);
+        const barrelKick = recoilRatio * 5;
+
+        // Ground shadow and range glow anchor the emplacement to the floor.
+        Neo.ctx.fillStyle = 'rgba(8,10,18,0.55)';
         Neo.ctx.beginPath();
-        Neo.ctx.arc(0, 0, hazard.r, 0, Math.PI * 2);
+        Neo.ctx.ellipse(0, 8, hazard.r * 0.92, hazard.r * 0.52, 0, 0, Math.PI * 2);
         Neo.ctx.fill();
-        Neo.ctx.shadowColor = '#ffe6a3';
-        Neo.ctx.shadowBlur = 16;
-        Neo.ctx.fillStyle = '#fff1b0';
+        Neo.ctx.fillStyle = 'rgba(255,225,120,0.09)';
         Neo.ctx.beginPath();
-        Neo.ctx.arc(0, bob, hazard.r * 0.42, 0, Math.PI * 2);
+        Neo.ctx.arc(0, 0, hazard.r * 1.08, 0, Math.PI * 2);
         Neo.ctx.fill();
-        // Halo ring.
-        Neo.ctx.strokeStyle = 'rgba(255,225,140,0.9)';
+
+        // Four stabilizer feet and a heavy octagonal gun platform.
+        Neo.ctx.fillStyle = '#5a4826';
+        Neo.ctx.strokeStyle = '#e2bd62';
         Neo.ctx.lineWidth = 2;
+        for (let foot = 0; foot < 4; foot += 1) {
+          const footAngle = Math.PI / 4 + foot * Math.PI / 2;
+          Neo.ctx.save();
+          Neo.ctx.rotate(footAngle);
+          Neo.ctx.beginPath();
+          Neo.ctx.roundRect(9, -5, 18, 10, 3);
+          Neo.ctx.fill();
+          Neo.ctx.stroke();
+          Neo.ctx.restore();
+        }
+        Neo.ctx.shadowColor = '#ffe08a';
+        Neo.ctx.shadowBlur = 10;
+        Neo.ctx.fillStyle = '#202839';
+        Neo.ctx.strokeStyle = '#f0cb6d';
+        Neo.ctx.lineWidth = 3;
         Neo.ctx.beginPath();
-        Neo.ctx.ellipse(0, bob - hazard.r * 0.5, hazard.r * 0.5, hazard.r * 0.2, 0, 0, Math.PI * 2);
+        for (let point = 0; point < 8; point += 1) {
+          const a = Math.PI / 8 + point * Math.PI / 4;
+          const px = Math.cos(a) * hazard.r * 0.72;
+          const py = Math.sin(a) * hazard.r * 0.72;
+          if (point === 0) Neo.ctx.moveTo(px, py);
+          else Neo.ctx.lineTo(px, py);
+        }
+        Neo.ctx.closePath();
+        Neo.ctx.fill();
         Neo.ctx.stroke();
         Neo.ctx.shadowBlur = 0;
+
+        // Rotating cannon assembly.
+        Neo.ctx.save();
+        Neo.ctx.rotate(aimAngle);
+        Neo.ctx.fillStyle = '#101724';
+        Neo.ctx.strokeStyle = '#f6d67c';
+        Neo.ctx.lineWidth = 2;
+        Neo.ctx.beginPath();
+        Neo.ctx.roundRect(3 - barrelKick, -7, 31, 14, 4);
+        Neo.ctx.fill();
+        Neo.ctx.stroke();
+        Neo.ctx.fillStyle = '#fff0a8';
+        Neo.ctx.fillRect(9 - barrelKick, -2, 23, 4);
+        Neo.ctx.fillStyle = '#3a465d';
+        Neo.ctx.strokeStyle = '#fff1b0';
+        Neo.ctx.beginPath();
+        Neo.ctx.roundRect(28 - barrelKick, -9, 8, 18, 2);
+        Neo.ctx.fill();
+        Neo.ctx.stroke();
+
+        // Armored rotating housing.
+        Neo.ctx.fillStyle = '#354159';
+        Neo.ctx.strokeStyle = '#ffd977';
+        Neo.ctx.lineWidth = 2.5;
+        Neo.ctx.beginPath();
+        Neo.ctx.arc(0, 0, 13, 0, Math.PI * 2);
+        Neo.ctx.fill();
+        Neo.ctx.stroke();
+        Neo.ctx.fillStyle = '#151d2b';
+        Neo.ctx.beginPath();
+        Neo.ctx.arc(0, 0, 8, 0, Math.PI * 2);
+        Neo.ctx.fill();
+
+        // Holy cross insignia remains readable while the turret rotates.
+        Neo.ctx.fillStyle = '#fff6c9';
+        Neo.ctx.fillRect(-5, -2, 10, 4);
+        Neo.ctx.fillRect(-2, -5, 4, 10);
+
+        if (recoilRatio > 0.25) {
+          const flash = 7 + recoilRatio * 7;
+          Neo.ctx.fillStyle = `rgba(255,244,174,${0.35 + recoilRatio * 0.65})`;
+          Neo.ctx.shadowColor = '#fff1a8';
+          Neo.ctx.shadowBlur = 14;
+          Neo.ctx.beginPath();
+          Neo.ctx.moveTo(36 - barrelKick, 0);
+          Neo.ctx.lineTo(36 - barrelKick + flash, -5);
+          Neo.ctx.lineTo(40 - barrelKick + flash, 0);
+          Neo.ctx.lineTo(36 - barrelKick + flash, 5);
+          Neo.ctx.closePath();
+          Neo.ctx.fill();
+          Neo.ctx.shadowBlur = 0;
+        }
+        Neo.ctx.restore();
       } else if (hazard.kind === 'chaos_burst') {
         const t = Date.now() * 0.005 + hazard.x * 0.01;
         const pulse = 1 + Math.sin(t * 2.4) * 0.05;
