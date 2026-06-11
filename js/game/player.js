@@ -672,16 +672,6 @@ export function applyPlayerHealing(amount, options = {}) {
       }
     }
     const overflow = Math.max(0, healAmount - gained);
-    // Generic Health / Drink Master: while owned, overhealing has a 10% chance to
-    // grant another stack of that item (snowballs more healing the more you waste).
-    if (overflow > 0) {
-      if (Neo.getItemCount?.('generic_health_item') > 0 && Neo.rng?.() < 0.10) {
-        Neo.collectItem?.('generic_health_item');
-      }
-      if (Neo.getItemCount?.('drink_master') > 0 && Neo.rng?.() < 0.10) {
-        Neo.collectItem?.('drink_master');
-      }
-    }
     const stats = Neo.getItemStats?.() || {};
     const barrierRatio = Number(stats.overhealBarrierRatio || 0);
     const barrierCap = maxHp * Number(stats.overhealBarrierCapRatio || 0);

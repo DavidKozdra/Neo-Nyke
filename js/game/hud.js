@@ -723,18 +723,24 @@
 
   async function clearRunSave() {
     if (window.__neoDataResetting) return;
+    clearTimeout(Neo.savePendingTimer);
+    Neo.savePendingTimer = 0;
     Neo.activeRun = null;
     Neo.lastDamageSource = '';
     Neo.lastDamageSourceKey = '';
+    const clearPromise = Promise.all([
+      Neo.saveStore.delete('run'),
+      Neo.saveStore.put('meta', Neo.metaProgress),
+      Neo.saveStore.put('runHistory', Neo.runHistory),
+    ]);
+    Neo.runSaveClearPromise = clearPromise;
     try {
-      await Promise.all([
-        Neo.saveStore.delete('run'),
-        Neo.saveStore.put('meta', Neo.metaProgress),
-        Neo.saveStore.put('runHistory', Neo.runHistory),
-      ]);
+      await clearPromise;
       Neo.refreshMenuState();
     } catch (error) {
       console.error('Failed to clear run save', error);
+    } finally {
+      if (Neo.runSaveClearPromise === clearPromise) Neo.runSaveClearPromise = null;
     }
   }
 
@@ -779,6 +785,14 @@
 
   async function saveRunNow() {
     if (window.__neoDataResetting) return;
+    const pendingClear = Neo.runSaveClearPromise;
+    if (pendingClear) {
+      try {
+        await pendingClear;
+      } catch {
+        // clearRunSave reports the storage error; still allow a newer run save.
+      }
+    }
     if (Neo.gameState !== 'play' || !Neo.player || !Neo.currentRoom) return;
     Neo.activeRun = serializeRun();
     Neo.metaProgress.bestFloor = Math.max(Neo.metaProgress.bestFloor, Neo.floor);

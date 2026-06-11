@@ -86,6 +86,7 @@ window.Neo = {
   playerDeathAnim: null,
   windowBlurred: false,
   lowHealthHitFlashUntil: 0,
+  runSaveClearPromise: null,
 
   // --- laser ---
   laserActive: false,

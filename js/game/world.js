@@ -3102,7 +3102,6 @@
 
   function returnToFloorOne() {
     Neo.floor = 1;
-    Neo.gameElapsedTime = 0;
     Neo.refreshFloorChargeStates();
     Neo.runLoopIndex += 1;
     Neo.mooggyAssassinSpawnedThisRun = false;
