@@ -49,13 +49,14 @@ describe('loop-exclusive Blue relics', () => {
   const combatPath = path.join(__dirname, '../js/game/combat.js');
   const statusPath = path.join(__dirname, '../js/core/status.js');
 
-  test('defines exactly the requested three-item Blue choice pool', () => {
+  test('defines the four-item Blue choice pool', () => {
     expect(inputData.BLUE_ITEM_POOL).toEqual(expect.arrayContaining([
       'artificer_charger',
       'rich_mans_blues',
       'cloak_of_naked_king',
+      'moggys_coat',
     ]));
-    expect(inputData.BLUE_ITEM_POOL).toHaveLength(3);
+    expect(inputData.BLUE_ITEM_POOL).toHaveLength(4);
     inputData.BLUE_ITEM_POOL.forEach(key => {
       expect(inputData.ITEM_DEFS[key]?.rarity).toBe('blue');
       expect(inputData.ITEM_DROP_WEIGHTS.some(([dropKey]) => dropKey === key)).toBe(false);
@@ -92,7 +93,7 @@ describe('loop-exclusive Blue relics', () => {
     });
   });
 
-  test('spawns one choice group containing all three Blue relics each loop', () => {
+  test('spawns one choice group of three Blue relics drawn from the pool each loop', () => {
     const Neo = {
       BLUE_ITEM_POOL: inputData.BLUE_ITEM_POOL,
       currentRoom: {},
@@ -114,7 +115,7 @@ describe('loop-exclusive Blue relics', () => {
       && pickup.picksRemaining === 1
       && pickup.groupId === 'loop-blue:2'
     ))).toBe(true);
-    expect(Neo.pickups.map(pickup => pickup.key)).toEqual(inputData.BLUE_ITEM_POOL);
+    expect(Neo.pickups.map(pickup => pickup.key)).toEqual(inputData.BLUE_ITEM_POOL.slice(0, 3));
     expect(Neo.spawnParticle).toHaveBeenCalledWith(expect.objectContaining({
       text: 'CHOOSE 1 ARTIFICER RELIC',
     }));
