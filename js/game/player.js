@@ -72,6 +72,14 @@ export function migratePlayerData(source) {
       }
       delete playerData.items.bandaid;
       delete playerData.items.tough_skin;
+
+      // Double Dose was merged into Potion Master. Preserve both items' saved
+      // stacks because each Potion Master stack now grants both effects.
+      const legacyDoubleDose = Math.max(0, Number(playerData.items.double_dose || 0));
+      if (legacyDoubleDose > 0) {
+        playerData.items.drink_master = Number(playerData.items.drink_master || 0) + legacyDoubleDose;
+      }
+      delete playerData.items.double_dose;
     }
     // The former generic voucher could claim any rarity, so preserve its full
     // value by migrating each saved copy to the highest-class Yellow voucher.
@@ -469,7 +477,6 @@ export function getItemStats() {
     const toughBandaid = getItemCount('tough_bandaid');
     const orbOfBlood = getItemCount('orb_of_blood');
     const hemesScarf = getItemCount('hemes_scarf');
-    const doubleDose = getItemCount('double_dose');
     const copycatCharm = getItemCount('copycat_charm');
     const attackServo = getItemCount('attack_servo');
   const enemyMagnet = getItemCount('enemy_magnet');
@@ -595,7 +602,7 @@ export function getItemStats() {
       scarfBleedsOnHit: hemesScarf,
       pickupVacuumRange: activeGoldVacStacks > 0 ? 9999 : 0,
       coinPickupMultiplier: activeGoldVacStacks > 0 ? 2 + (activeGoldVacStacks - 1) * 0.5 : 1,
-      potionDoubleChance: Neo.clamp(doubleDose * 0.5, 0, 1),
+      potionDoubleChance: Neo.clamp(drinkMaster * 0.5, 0, 1),
       itemDuplicateChance: Neo.clamp(copycatCharm * 0.3, 0, 1),
       critChance,
       critMultiplier: 1.6 + (oracleLens ? critChance * 2.2 : critChance * 0.6) + keenEyeCritDamageBonus,

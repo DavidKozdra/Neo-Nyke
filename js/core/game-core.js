@@ -678,7 +678,7 @@ export const DIFFICULTY_DEFS = {
   god: {
     key: 'god',
     name: 'God',
-    description: 'Unlocks after 10 loops. Brutal challenge mode. Enemy stats are double Impossible.',
+    description: 'Unlocks after 10 loops. Scarce relics, elite floor openings, and heavily boosted rivals.',
     unlockLoops: 10,
     waveBonus: 4,
     eliteFloor: 5,
@@ -695,6 +695,11 @@ export const DIFFICULTY_DEFS = {
     supportPowerMultiplier: 1.3,
     shopPriceMultiplier: 1.42,
     ccResistScale: 0.6,
+    itemDropChanceMultiplier: 0.5,
+    shopItemOffers: 1,
+    startRoomEliteCount: 2,
+    rivalItemsPerFloor: 5,
+    rivalLevelBonusPerFloor: 2,
   },
   custom: {
     key: 'custom',

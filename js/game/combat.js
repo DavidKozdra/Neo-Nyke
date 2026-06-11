@@ -3209,10 +3209,11 @@
       window.achievementEvents?.emit('charge:kill');
     }
 
-    const itemDropChanceBonus = Number(Neo.getItemStats?.()?.itemDropChanceBonus || 0);
-    if (!isTutorialDummy && enemy.elite && enemyLootRandom() < Neo.clamp(0.18 + itemDropChanceBonus, 0, 0.65)) {
+    const eliteItemDropChance = Neo.getRandomItemDropChance(0.18, 0.65);
+    const normalItemDropChance = Neo.getRandomItemDropChance(0, 0.35);
+    if (!isTutorialDummy && enemy.elite && enemyLootRandom() < eliteItemDropChance) {
       Neo.pickups.push({ x: enemy.x, y: enemy.y, type: 'item', key: rollItemDrop({ elite: true, random: enemyLootRandom }) });
-    } else if (!isTutorialDummy && !enemy.elite && itemDropChanceBonus > 0 && enemyLootRandom() < Neo.clamp(itemDropChanceBonus, 0, 0.35)) {
+    } else if (!isTutorialDummy && !enemy.elite && normalItemDropChance > 0 && enemyLootRandom() < normalItemDropChance) {
       Neo.pickups.push({ x: enemy.x, y: enemy.y, type: 'item', key: rollItemDrop({ random: enemyLootRandom }) });
     } else if (!isTutorialDummy && enemyLootRandom() < 0.1) {
       Neo.pickups.push({ x: enemy.x, y: enemy.y, type: 'potion' });

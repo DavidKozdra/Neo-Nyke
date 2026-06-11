@@ -407,7 +407,7 @@
     Neo.spawnParticle({ x: miniBoss.x, y: miniBoss.y - 26, life: 0.7, text: 'MINI BOSS', c: '#ffb347' });
   }
 
-  function spawnWave(count, roomType = 'combat') {
+  function spawnWave(count, roomType = 'combat', options = {}) {
     // Optional template-authored encounter (see roomTemplates.js spawnHint). When
     // absent, every branch below collapses to the original behaviour and draws the
     // exact same 'encounter' RNG sequence, so non-hinted rooms are unchanged.
@@ -425,8 +425,10 @@
       const eliteChance = Neo.getDifficultyDef().eliteChance
         + (Neo.isChallengeActive('elite_hunt') ? 0.18 : 0)
         + getEliteLoopBonus();
-      const baseElite = canSpawnEliteEnemies() && Neo.nextRandom('encounter') < Math.min(0.85, eliteChance);
-      const eliteRoll = (hint && hint.elite) ? canSpawnEliteEnemies() : baseElite;
+      const baseElite = options.forceElite
+        ? true
+        : canSpawnEliteEnemies() && Neo.nextRandom('encounter') < Math.min(0.85, eliteChance);
+      const eliteRoll = options.forceElite ? true : (hint && hint.elite) ? canSpawnEliteEnemies() : baseElite;
       const angle = Neo.nextRandom('encounter') * Math.PI * 2;
       const radius = 140 + Neo.nextRandom('encounter') * 170;
       // Preferred point: inside a designated chamber when the template asks for it,
@@ -445,14 +447,14 @@
       // Deep-loop danger: a regular wave enemy can spawn as a random boss instead
       // (loop 5+, see rollWaveBossUpgrade). A boss-upgraded spawn is never also an
       // elite — boss stat code handles its scaling on its own.
-      const bossUpgrade = rollWaveBossUpgrade(type);
+      const bossUpgrade = options.forceElite ? null : rollWaveBossUpgrade(type);
       if (bossUpgrade) {
         spawnEnemy(bossUpgrade, safeSpawn.x, safeSpawn.y, false);
       } else {
-        spawnEnemy(type, safeSpawn.x, safeSpawn.y, eliteRoll);
+        spawnEnemy(type, safeSpawn.x, safeSpawn.y, eliteRoll, { forceElite: !!options.forceElite });
       }
     }
-    spawnMiniBoss(roomType);
+    if (!options.suppressMiniBoss) spawnMiniBoss(roomType);
   }
 
   // Builds a wave plan from a template-authored type pool, cycling through the
@@ -748,7 +750,7 @@
     };
   }
 
-  function spawnEnemy(type, x, y, elite = false) {
+  function spawnEnemy(type, x, y, elite = false, options = {}) {
     const sandbox = Neo.getActiveSandboxSettings();
     // The sandbox allowedEnemies list governs the *wave* enemy pool only. Bosses
     // (and the mooggy assassin) are spawned by dedicated story/secret logic —
@@ -759,7 +761,7 @@
     if (sandbox && !sandbox.allowedEnemies.includes(type) && !isBossType(type) && type !== 'mooggy') {
       type = sandbox.allowedEnemies[0] || 'hunter';
     }
-    const eliteAllowed = !!elite && canSpawnEliteEnemies();
+    const eliteAllowed = !!elite && (options.forceElite || canSpawnEliteEnemies());
     const base = {
       type,
       x,

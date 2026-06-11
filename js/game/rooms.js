@@ -114,6 +114,7 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
     if (anvilCandidate && Neo.nextRandom('world') < 0.55) anvilCandidate.type = 'anvil';
     assignSecretRoom(roomMap);
     Neo.rooms.forEach(decorateRoomData);
+    configureStartRoomDifficultyEncounter(startRoom);
 
     Neo.player.x = Neo.START_X;
     Neo.player.y = Neo.START_Y;
@@ -145,6 +146,14 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
     Neo.updateObjective();
     Neo.updateHud();
     Neo.applyScrollAbundanceForFloor?.();
+  }
+
+  function configureStartRoomDifficultyEncounter(startRoom) {
+    if (!startRoom) return 0;
+    const eliteCount = Math.max(0, Math.floor(Number(Neo.getDifficultyDef()?.startRoomEliteCount || 0)));
+    startRoom.startRoomEliteCount = eliteCount;
+    if (eliteCount > 0) startRoom.cleared = false;
+    return eliteCount;
   }
 
   // Stable-partitions an already-shuffled reward pool so dead-end rooms (graph
@@ -254,7 +263,7 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
       room.shopOffers = [
         { type: 'potion', cost: Neo.getShopPotionCost(), x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 + 88, bought: false },
       ];
-      ensureShopHasMinimumItemOffers(room, 3);
+      ensureShopHasMinimumItemOffers(room);
       room.shopMoveOffers = [];
       room.shopWeaponOffers = [];
       room.cleared = true;
@@ -1109,6 +1118,10 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
     Neo.player.x = safeSpawn.x;
     Neo.player.y = safeSpawn.y;
 
+    if (room.type === 'start' && !room.cleared && Neo.enemies.length === 0 && Number(room.startRoomEliteCount || 0) > 0) {
+      Neo.spawnWave(Number(room.startRoomEliteCount), 'combat', { forceElite: true, suppressMiniBoss: true });
+      Neo.spawnParticle({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 64, life: 1.2, text: 'ELITE AMBUSH', c: '#ffb347' });
+    }
     if (room.type === 'combat' && !room.cleared && Neo.enemies.length === 0) {
       if (Neo.gameMode === 'endless') {
         Neo.endlessWaveActive = true;
@@ -1122,7 +1135,7 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
       trySpawnMooggyAssassin(room);
     }
     if (room.type === 'shop') {
-      ensureShopHasMinimumItemOffers(room, 3);
+      ensureShopHasMinimumItemOffers(room);
       room.shopWeaponOffers = Array.isArray(room.shopWeaponOffers) ? room.shopWeaponOffers : [];
       Neo.refreshRoomShopCosts(room);
       Neo.shopOffers = room.shopOffers || [];
@@ -1173,7 +1186,7 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
       const chestInsetY = Neo.WALL + 76;
       const minChestSpacing = 132;
       for (let index = 0; index < chestCount; index += 1) {
-        const itemChance = Neo.clamp(0.9 + Number(Neo.getItemStats?.()?.itemDropChanceBonus || 0), 0, 0.98);
+        const itemChance = Neo.getRandomItemDropChance(0.9, 0.98);
         const isAbChest = Neo.floor > 4 && treasureRandom() < 0.2;
         const rewardsItem = isAbChest || treasureRandom() < itemChance;
         let chestPos = null;
@@ -1332,12 +1345,15 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
     Neo.requestPanelItemSelection?.();
   }
 
-  function ensureShopHasMinimumItemOffers(room, minItemOffers = 3) {
+  function ensureShopHasMinimumItemOffers(room, minItemOffers = null) {
     if (!room || room.type !== 'shop') return;
     room.shopOffers = Array.isArray(room.shopOffers) ? room.shopOffers : [];
     const itemOffers = room.shopOffers.filter(offer => offer?.type === 'item');
+    const baseItemOffers = minItemOffers == null
+      ? Math.max(0, Math.floor(Number(Neo.getDifficultyDef()?.shopItemOffers ?? 3)))
+      : Math.max(0, Math.floor(Number(minItemOffers || 0)));
     const extraOffers = Math.max(0, Math.floor(Number(Neo.getItemStats?.()?.shopExtraItemOffers || 0)));
-    const targetItemOffers = minItemOffers + extraOffers;
+    const targetItemOffers = baseItemOffers + extraOffers;
     if (itemOffers.length >= targetItemOffers) {
       ensureShopScrollOffer(room);
       ensureShopTradeOffer(room);
@@ -1394,11 +1410,18 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
     if (!room || room.type !== 'shop' || Neo.floor <= 3) return null;
     room.shopOffers = Array.isArray(room.shopOffers) ? room.shopOffers : [];
     if (room.shopOffers.some(offer => offer?.type === 'item' && (Neo.SCROLL_OF_CONTROL_KEYS || []).includes(offer.key))) return null;
+    const itemOfferCount = room.shopOffers.filter(offer => offer?.type === 'item').length;
+    const configuredBaseOffers = Neo.getDifficultyDef()?.shopItemOffers;
+    if (configuredBaseOffers != null) {
+      const baseOfferLimit = Math.max(0, Math.floor(Number(configuredBaseOffers)));
+      const extraOfferLimit = Math.max(0, Math.floor(Number(Neo.getItemStats?.()?.shopExtraItemOffers || 0)));
+      if (itemOfferCount >= baseOfferLimit + extraOfferLimit) return null;
+    }
     const shopRandom = Neo.createRoomRandom(room, 'shop:scroll-offer');
     if (shopRandom() >= 0.2) return null;
     const key = rollScrollOfControl(shopRandom);
     if (!key) return null;
-    const itemIndex = room.shopOffers.filter(offer => offer?.type === 'item').length;
+    const itemIndex = itemOfferCount;
     room.shopOffers.push({
       type: 'item',
       key,
@@ -1513,8 +1536,30 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
       rival.loot.push({ type: 'item', key });
       granted += 1;
     }
-    if (granted > 0) applyRivalLevelStats(rival, { keepHpRatio: true });
+    if (granted > 0) {
+      applyRivalLevelStats(rival, {
+        keepHpRatio: true,
+        syncLiveEnemy: options.syncLiveEnemy !== false,
+      });
+    }
     return granted;
+  }
+
+  function applyRivalDifficultyFloorBonuses() {
+    const difficulty = Neo.getDifficultyDef();
+    const itemCount = Math.max(0, Math.round(Number(difficulty?.rivalItemsPerFloor || 0)));
+    const levelBonus = Math.max(0, Math.round(Number(difficulty?.rivalLevelBonusPerFloor || 0)));
+    if (itemCount <= 0 && levelBonus <= 0) return;
+    const levelCap = Math.max(1, Number(Neo.RIVAL_LEVEL_CAP || 9));
+    Neo.rivals.forEach(rival => {
+      if (!rival || rival.dead) return;
+      if (levelBonus > 0) {
+        rival.level = Neo.clamp(Math.round(Number(rival.level || 1)) + levelBonus, 1, levelCap);
+        if (rival.level >= levelCap) rival.xp = 0;
+        applyRivalLevelStats(rival, { syncLiveEnemy: false, keepHpRatio: true });
+      }
+      if (itemCount > 0) grantRivalItems(rival, itemCount, { syncLiveEnemy: false });
+    });
   }
 
   function countRivalGodItems(rival) {
@@ -1916,6 +1961,7 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
         applyRivalLevelStats(Neo.rivals[Neo.rivals.length - 1], { syncLiveEnemy: false, keepHpRatio: false });
       }
     }
+    applyRivalDifficultyFloorBonuses();
   }
 
   // Distributes Mooggy's queued blood thorn traps across the freshly generated
@@ -2459,6 +2505,7 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
 
   // Expose on Neo
   Neo.generateFloor = generateFloor;
+  Neo.configureStartRoomDifficultyEncounter = configureStartRoomDifficultyEncounter;
   Neo.decorateRoomData = decorateRoomData;
   Neo.decorateRoomStructures = decorateRoomStructures;
   Neo.decorateGardenRoomData = decorateGardenRoomData;
@@ -2496,6 +2543,7 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
   Neo.rollScrollOfControl = rollScrollOfControl;
   Neo.ensureShopScrollOffer = ensureShopScrollOffer;
   Neo.grantRivalItems = grantRivalItems;
+  Neo.applyRivalDifficultyFloorBonuses = applyRivalDifficultyFloorBonuses;
   Neo.befriendRival = befriendRival;
   Neo.seedBloodThornTraps = seedBloodThornTraps;
   Neo.createDefaultRivalMemory = createDefaultRivalMemory;

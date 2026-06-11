@@ -71,8 +71,10 @@ describe('healing relics', () => {
     expect(itemDefs.generic_health_item.description).toBe(
       'On kill, restore 5% of your current HP per stack, capped by max HP.',
     );
+    expect(itemDefs.double_dose).toBeUndefined();
+    expect(itemDefs.drink_master.name).toBe('Potion Master');
     expect(itemDefs.drink_master.description).toBe(
-      'Potions and other healing sources are 20% more effective per stack.',
+      'Potions and other healing sources are 20% more effective per stack. Potions also have a 50% chance per stack to apply twice, capped at 100%.',
     );
   });
 });

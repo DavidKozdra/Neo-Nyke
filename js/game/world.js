@@ -2145,7 +2145,7 @@
     else spawnDestructibleBreakFx(prop, hit);
     if (prop.kind === 'pot') {
       const potRandom = Neo.createEntityRandom(prop, 'pot:reward');
-      const itemChance = Neo.clamp(0.12 + Number(Neo.getItemStats?.()?.itemDropChanceBonus || 0), 0, 0.5);
+      const itemChance = Neo.getRandomItemDropChance(0.12, 0.5);
       if (potRandom() < itemChance) Neo.pickups.push({ x: prop.x, y: prop.y, type: 'item', key: Neo.rollItemDrop({ random: potRandom }) });
       else Neo.dropCoins(prop.x, prop.y, 6 + Neo.floor);
     }

@@ -47,21 +47,26 @@ export function resumeGame() {
 
   function normalizeSandboxSettings(input) {
     const source = input && typeof input === 'object' ? input : {};
+    const sourceAllowedItems = Array.isArray(source.allowedItems)
+      ? source.allowedItems.map(key => key === 'double_dose' ? 'drink_master' : key)
+      : null;
     const allowedEnemies = Array.isArray(source.allowedEnemies)
       ? Neo.SANDBOX_ENEMY_TYPES.filter(type => source.allowedEnemies.includes(type))
       : Neo.SANDBOX_ENEMY_TYPES.slice();
-    const allowedItems = Array.isArray(source.allowedItems)
-      ? Neo.ITEM_KEYS.filter(key => source.allowedItems.includes(key))
+    const allowedItems = sourceAllowedItems
+      ? Neo.ITEM_KEYS.filter(key => sourceAllowedItems.includes(key))
       : Neo.ITEM_KEYS.slice();
     const legacyPerItem = Math.max(1, Math.min(99, Math.round(Number(source.startingItemCount) || 1)));
     const startingItems = {};
     if (Array.isArray(source.startingItems)) {
-      for (const key of source.startingItems) {
+      for (const savedKey of source.startingItems) {
+        const key = savedKey === 'double_dose' ? 'drink_master' : savedKey;
         if (Neo.ITEM_KEYS.includes(key)) startingItems[key] = legacyPerItem;
       }
     } else if (source.startingItems && typeof source.startingItems === 'object') {
       for (const key of Neo.ITEM_KEYS) {
-        const n = Math.round(Number(source.startingItems[key]) || 0);
+        const legacyCount = key === 'drink_master' ? Number(source.startingItems.double_dose || 0) : 0;
+        const n = Math.round((Number(source.startingItems[key]) || 0) + legacyCount);
         if (n > 0) startingItems[key] = Math.min(99, n);
       }
     }
@@ -440,7 +445,6 @@ export function resumeGame() {
       hemes_scarf: 0,
       insurance: 0,
       gold_vac: 0,
-      double_dose: 0,
       copycat_charm: 0,
       crit_charm: 0,
       copper_penny: 0,
@@ -686,6 +690,7 @@ export function resumeGame() {
       if (value === 'hemo') return 'orb_of_blood';
       if (value === 'leech') return 'hemes_scarf';
       if (value === 'voucher') return 'voucher_yellow';
+      if (value === 'double_dose') return 'drink_master';
       return value;
     });
     const items = Neo.ITEM_KEYS.filter(name => migrated.includes(name));
@@ -1080,6 +1085,12 @@ export function resumeGame() {
       coinRewardMultiplier: Number(config.coinRewardMultiplier || 1),
       xpRewardMultiplier: Number(config.xpRewardMultiplier || 1),
     };
+  }
+
+  function getRandomItemDropChance(baseChance, maxChance = 1) {
+    const difficultyMultiplier = Math.max(0, Number(Neo.getDifficultyDef()?.itemDropChanceMultiplier ?? 1));
+    const itemBonus = Math.max(0, Number(Neo.getItemStats?.()?.itemDropChanceBonus || 0));
+    return Neo.clamp((Math.max(0, Number(baseChance || 0)) + itemBonus) * difficultyMultiplier, 0, maxChance);
   }
 
   function scaleChallengeTimer(baseSeconds) {
@@ -2981,6 +2992,7 @@ export function resumeGame() {
   Neo.getDifficultyDef = getDifficultyDef;
   Neo.getDifficultyRuntimeConfig = getDifficultyRuntimeConfig;
   Neo.getRunDifficultyScalars = getRunDifficultyScalars;
+  Neo.getRandomItemDropChance = getRandomItemDropChance;
   Neo.scaleChallengeTimer = scaleChallengeTimer;
   Neo.scalePotionHealing = scalePotionHealing;
   Neo.getPotionHealAmount = getPotionHealAmount;
