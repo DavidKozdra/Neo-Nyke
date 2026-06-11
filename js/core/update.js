@@ -21,6 +21,10 @@ export function updateEnemyLostSightState(enemy, playerHidden, dt = 0) {
   return true;
 }
 
+export function isEnemyBlindedByHiddenPlayer(enemy, playerHidden) {
+  return !!playerHidden && enemy?.type !== 'god';
+}
+
 export function loop(timestamp) {
     const framePerfStart = Neo.perfBeginFrame(timestamp);
     const dt = Math.min(0.033, (timestamp - Neo.lastTime) / 1000 || 0.016);
@@ -499,7 +503,11 @@ export function loop(timestamp) {
       if (enemy.dead) continue;
       enemy.attackAnimT = Math.max(0, Number(enemy.attackAnimT || 0) - dt);
 
-      const enemyLostSight = updateEnemyLostSightState(enemy, playerHidden, dt);
+      const enemyLostSight = updateEnemyLostSightState(
+        enemy,
+        isEnemyBlindedByHiddenPlayer(enemy, playerHidden),
+        dt,
+      );
       if (enemyLostSight) {
         // Player is invisible/untouchable (cape, flying, coward's way, warp): enemies
         // lose their target. Skip all AI/attack logic and let them wander to random

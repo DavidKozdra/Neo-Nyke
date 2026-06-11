@@ -28,6 +28,10 @@ describe('enemy lost-sight indicator', () => {
     updatePath,
     'updateEnemyLostSightState',
   );
+  const isEnemyBlindedByHiddenPlayer = loadExportedFunction(
+    updatePath,
+    'isEnemyBlindedByHiddenPlayer',
+  );
 
   test('tracks how long an enemy has lost sight of the player', () => {
     const enemy = {};
@@ -46,6 +50,12 @@ describe('enemy lost-sight indicator', () => {
     expect(updateEnemyLostSightState(enemy, false, 0.1)).toBe(false);
     expect(enemy.playerLostSight).toBe(false);
     expect(enemy.playerLostSightAge).toBe(0);
+  });
+
+  test('God retains sight while the player is hidden', () => {
+    expect(isEnemyBlindedByHiddenPlayer({ type: 'god' }, true)).toBe(false);
+    expect(isEnemyBlindedByHiddenPlayer({ type: 'hunter' }, true)).toBe(true);
+    expect(isEnemyBlindedByHiddenPlayer({ type: 'god' }, false)).toBe(false);
   });
 
   test('enemy rendering includes the lost-sight question mark', () => {
