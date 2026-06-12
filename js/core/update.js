@@ -151,6 +151,7 @@ export function loop(timestamp) {
       Neo.endlessRespawnTimer = Math.max(0, Neo.endlessRespawnTimer - dt);
       if (Neo.endlessRespawnTimer === 0) Neo.spawnNextEndlessWave?.();
     }
+    Neo.updateTreasureHuntCollapse?.(dt);
 
     const _b = window.NeoSettings?.getBindings();
     const _right = _b ? _b.right : 'd';
@@ -598,7 +599,7 @@ export function loop(timestamp) {
   function tryChargedLadderWarp() {
     if (Neo.getItemCount('charged_adapter') <= 0) return;
     if (!Neo.player.escapeReady) {
-      const needed = Neo.getChargeRequirement(10);
+      const needed = Neo.getChargeRequirement(20);
       const progress = Math.max(0, Number(Neo.player.escapeChargeKills || 0));
       Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.75, text: `ADAPTER CHARGING ${progress}/${needed}`, c: '#b88cff' });
       return;

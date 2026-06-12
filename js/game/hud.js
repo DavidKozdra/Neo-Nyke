@@ -22,6 +22,33 @@
     if (Neo.isFirstRunTutorialActive()) return Neo.getTutorialObjectiveEntries();
     if (!Neo.currentRoom) return [];
     const entries = [];
+    if (Neo.gameMode === 'treasure_hunt') {
+      const startRoom = Neo.rooms.find(room => room.type === 'start');
+      if (Neo.treasureHuntPhase === 'seek') {
+        entries.push({
+          text: Neo.currentRoom.type === 'boss' ? 'Defeat the vault guardian' : 'Find the boss vault',
+          state: Neo.currentRoom.type === 'boss' ? 'warn' : 'todo',
+        });
+        entries.push({
+          text: 'Claim the vault key',
+          state: Neo.currentRoom.cleared && Neo.currentRoom.type === 'boss' ? 'warn' : 'todo',
+        });
+      } else {
+        entries.push({
+          text: Neo.currentRoom === startRoom ? 'Returned to the entrance' : 'Fight back to the entrance',
+          state: Neo.currentRoom === startRoom ? 'done' : 'warn',
+        });
+        if (Neo.currentRoom === startRoom) {
+          const exitChest = Neo.chests.find(chest => chest?.treasureHuntExitChest && !chest.open);
+          entries.push({
+            text: exitChest ? 'Open the key chest' : `Use the ladder${Neo.floor >= Neo.MAX_FLOOR ? ' to escape' : ' to descend'}`,
+            state: 'warn',
+          });
+        }
+      }
+      pushPanelItemObjectives(entries);
+      return entries.slice(0, 5);
+    }
     if (Neo.floor < Neo.MAX_FLOOR || Neo.floor > Neo.MAX_FLOOR) {
       const thornBaneEscape = Neo.currentRoom.secretKind === 'bowman_bane'
         && Neo.player?.character === 'thorn_knight'
@@ -69,7 +96,7 @@
         const slotIdx = Neo.player?.equipmentSlots?.indexOf?.('charged_adapter') ?? -1;
         const slotLetter = slotIdx >= 0 ? Neo.EQUIPMENT_SLOT_KEYS?.[slotIdx] || 'F' : 'F';
         const warpHint = Neo.formatControlLabel(slotLetter.toLowerCase(), slotLetter.toLowerCase());
-        const needed = Neo.getChargeRequirement(10);
+        const needed = Neo.getChargeRequirement(20);
         const progress = Math.max(0, Number(Neo.player?.escapeChargeKills || 0));
         if (Neo.player?.escapeReady) {
           entries.push({ text: `Charged Adapter ready: press ${warpHint} to warp to ladder (cost 50% coins)`, state: 'warn' });
@@ -127,6 +154,21 @@
       Neo.uiController.setObjective(text);
       Neo.uiController.setObjectiveList(Neo.getRoomLabel(Neo.currentRoom.type), getObjectiveEntries(text));
     };
+    if (Neo.gameMode === 'treasure_hunt') {
+      const startRoom = Neo.rooms.find(room => room.type === 'start');
+      if (Neo.treasureHuntPhase === 'seek') {
+        setObjective(Neo.currentRoom.type === 'boss'
+          ? (Neo.currentRoom.cleared ? 'Take the vault key.' : 'Defeat the vault guardian.')
+          : 'Find the boss vault.');
+      } else if (Neo.currentRoom !== startRoom) {
+        setObjective('Escape back to the dungeon entrance!');
+      } else if (Neo.chests.some(chest => chest?.treasureHuntExitChest && !chest.open)) {
+        setObjective('Use the key to open the escape chest.');
+      } else {
+        setObjective(Neo.floor >= Neo.MAX_FLOOR ? 'Take the ladder and escape.' : 'Take the ladder to the next floor.');
+      }
+      return;
+    }
     if (Neo.gameMode === 'endless') {
       const displayWave = Neo.endlessWave + (Neo.endlessWaveActive ? 1 : 0);
       if (!Neo.endlessWaveActive) {
@@ -224,6 +266,26 @@
       return;
     }
     setObjective('Fight GOD or loop with your gear.');
+  }
+
+  function updateTreasureHuntCollapseHud() {
+    const hud = Neo.ui.treasureCollapseHud;
+    if (!hud) return;
+    const active = Neo.gameMode === 'treasure_hunt'
+      && Neo.treasureHuntPhase === 'escape'
+      && (Neo.gameState === 'play' || Neo.gameState === 'pause' || Neo.gameState === 'dialogue');
+    hud.classList.toggle('hidden', !active);
+    hud.setAttribute('aria-hidden', active ? 'false' : 'true');
+    if (!active) return;
+    const remaining = Math.max(0, Number(Neo.treasureHuntCollapseTimer || 0));
+    const maximum = Math.max(1, Number(Neo.treasureHuntCollapseMax || remaining || 1));
+    const seconds = Math.ceil(remaining);
+    const timeText = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+    if (Neo.ui.treasureCollapseTime) Neo.ui.treasureCollapseTime.textContent = timeText;
+    if (Neo.ui.treasureCollapseFill) {
+      Neo.ui.treasureCollapseFill.style.transform = `scaleX(${Neo.clamp(remaining / maximum, 0, 1)})`;
+    }
+    hud.classList.toggle('is-critical', remaining <= 20);
   }
 
   function getPlayerSlotScoreText(slot) {
@@ -439,6 +501,7 @@
         dash: { current: dashSkill.current, max: dashSkill.max, active: Neo.player.dashTime > 0 || Neo.player.cowardsWayTime > 0 || Neo.player.princessFlightTime > 0, charges: dashSkill.charges, maxCharges: dashSkill.maxCharges, timers: dashSkill.timers },
       },
     });
+    updateTreasureHuntCollapseHud();
     Neo.ui.skillNames.dash.textContent = dashMove?.name || character.skills.dash;
     Neo.ui.skillNames.melee.textContent = weaponDef?.name || meleeMove?.name || character.skills.melee;
     Neo.ui.skillNames.laser.textContent = laserMove?.name || character.skills.laser;
@@ -812,6 +875,12 @@
   function serializeRun() {
     return {
       mode: Neo.normalizeGameMode(Neo.gameMode),
+      treasureHuntPhase: Neo.treasureHuntPhase,
+      treasureHuntHasKey: !!Neo.treasureHuntHasKey,
+      treasureHuntCollapseTimer: Neo.treasureHuntCollapseTimer,
+      treasureHuntCollapseMax: Neo.treasureHuntCollapseMax,
+      treasureHuntRockTick: Neo.treasureHuntRockTick,
+      treasureHuntBlastTick: Neo.treasureHuntBlastTick,
       baseSeedStr: Neo.baseSeedStr,
       seedStr: Neo.seedStr,
       runLoopIndex: Neo.runLoopIndex,
@@ -1287,7 +1356,7 @@
       },
       getStatusText: () => {
         if (!Neo.player?.escapeReady) {
-          const needed = Neo.getChargeRequirement(10);
+          const needed = Neo.getChargeRequirement(20);
           const progress = Math.max(0, Number(Neo.player?.escapeChargeKills || 0));
           return `${progress}/${needed}`;
         }
@@ -1684,6 +1753,7 @@
   Neo.getHpFillColor = getHpFillColor;
   Neo.renderPlayerStatsPanel = renderPlayerStatsPanel;
   Neo.updateHud = updateHud;
+  Neo.updateTreasureHuntCollapseHud = updateTreasureHuntCollapseHud;
   Neo.finalizeRun = finalizeRun;
   Neo.getReviveCost = getReviveCost;
   Neo.canReviveFromDeath = canReviveFromDeath;

@@ -1697,7 +1697,7 @@
           const damage = getBombHazardDamage(hazard.baseDamage ?? hazard.damage ?? 250);
           if (Neo.dist(Neo.player.x, Neo.player.y, hazard.x, hazard.y) <= (hazard.blastRadius || 150) + Neo.player.r) {
             const angle = Math.atan2(Neo.player.y - hazard.y, Neo.player.x - hazard.x);
-            damagePlayer(damage, angle, 240, 'bomb_aoe');
+            damagePlayer(damage, angle, 240, hazard.source || 'bomb_aoe');
           }
           blastRadius(hazard.x, hazard.y, hazard.blastRadius || 150, damage, '#ff7a66');
           hazard.ttl = 0;
@@ -2350,6 +2350,10 @@
         Neo.pickups.push({ x: chest.x, y: chest.y - 20, type: 'potion' });
       }
       Neo.currentRoom.cleared = Neo.chests.every(item => item.open);
+      if (chest.treasureHuntExitChest && !Neo.pickups.some(pickup => pickup.type === 'ladder')) {
+        Neo.pickups.push({ x: chest.x, y: chest.y + 76, type: 'ladder' });
+        Neo.spawnParticle({ x: chest.x, y: chest.y + 42, life: 1.2, text: 'LADDER REVEALED', c: '#7dff9e' });
+      }
       Neo.updateObjective();
       Neo.scheduleRunSave();
     });
@@ -2621,6 +2625,11 @@
         }
       }
 
+      if (pickup.type === 'treasureKey') {
+        Neo.playSfx?.('item_collect');
+        Neo.beginTreasureHuntEscape?.();
+      }
+
       if (pickup.type === 'rewardChoice') {
         const groupId = String(pickup.groupId || '');
         const key = pickup.key;
@@ -2696,6 +2705,10 @@
         }
         if (Neo.ladderUseKeyLatch) continue;
         Neo.ladderUseKeyLatch = true;
+        if (Neo.gameMode === 'treasure_hunt' && Neo.floor >= Neo.MAX_FLOOR) {
+          Neo.win();
+          return;
+        }
         if (Neo.isFirstRunTutorialActive()) Neo.tutorialState.usedLadder = true;
         Neo.floor = Math.min(Neo.MAX_FLOOR, Neo.floor + 1);
         Neo.refreshFloorChargeStates();
@@ -3041,7 +3054,12 @@
       && !!Neo.currentRoom.bossStarted && !Neo.currentRoom.cleared && !Neo.currentRoom.baneEscapeRevealed;
     return !!Neo.currentRoom
       && !Neo.currentRoom.cleared
-      && (Neo.currentRoom.type === 'boss' || Neo.currentRoom.type === 'god' || Neo.currentRoom.type === 'ladder' || challengeActive || baneActive);
+      && (Neo.currentRoom.type === 'boss'
+        || Neo.currentRoom.type === 'god'
+        || Neo.currentRoom.type === 'ladder'
+        || Neo.currentRoom.treasureHuntEscapeActive
+        || challengeActive
+        || baneActive);
   }
 
   function updateTransitions(dt) {

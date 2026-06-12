@@ -815,7 +815,7 @@ export function resumeGame() {
 
   function normalizeGameMode(input) {
     const mode = String(input || 'normal').toLowerCase();
-    if (mode === 'endless' || mode === 'practice' || mode === 'boss_rush' || mode === 'sandbox' || mode === 'coop' || mode === 'pvp' || mode === 'competitive') return mode;
+    if (mode === 'endless' || mode === 'practice' || mode === 'boss_rush' || mode === 'treasure_hunt' || mode === 'sandbox' || mode === 'coop' || mode === 'pvp' || mode === 'competitive') return mode;
     return 'normal';
   }
 
@@ -825,6 +825,7 @@ export function resumeGame() {
     if (mode === 'endless') return 'Endless';
     if (mode === 'practice') return 'Practice';
     if (mode === 'boss_rush') return 'Boss Rush';
+    if (mode === 'treasure_hunt') return 'Treasure Hunt';
     if (mode === 'sandbox') return 'Sandbox';
     if (mode === 'competitive') return 'Competitive';
     return 'Normal';
@@ -1509,6 +1510,8 @@ export function resumeGame() {
     if (value === 'thorn_mine') return 'Thorn Trap';
     if (value === 'blood_thorn') return "Mooggy's Blood Thorn";
     if (value === 'challenge_bomb') return 'Trial Bomb';
+    if (value === 'collapse_rock') return 'Falling Rock';
+    if (value === 'dungeon_collapse') return 'Dungeon Collapse';
     if (value === 'storm') return 'Storm Trial';
     if (value === 'enemy_projectile') return 'Enemy Projectile';
     if (value.endsWith('_projectile')) {
@@ -2734,6 +2737,12 @@ export function resumeGame() {
     Neo.endlessRespawnTimer = 0;
     Neo.bossRushStage = 0;
     Neo.bossRushActive = false;
+    Neo.treasureHuntPhase = 'seek';
+    Neo.treasureHuntHasKey = false;
+    Neo.treasureHuntCollapseTimer = 0;
+    Neo.treasureHuntCollapseMax = 0;
+    Neo.treasureHuntRockTick = 0;
+    Neo.treasureHuntBlastTick = 0;
     clearBossRushNextSpawn();
     Neo.projectiles = [];
     Neo.justiceBlades = [];
@@ -2816,6 +2825,12 @@ export function resumeGame() {
 
   function restoreRun(snapshot) {
     Neo.gameMode = normalizeGameMode(snapshot.mode || Neo.gameMode);
+    Neo.treasureHuntPhase = String(snapshot.treasureHuntPhase || 'seek');
+    Neo.treasureHuntHasKey = !!snapshot.treasureHuntHasKey;
+    Neo.treasureHuntCollapseTimer = Math.max(0, Number(snapshot.treasureHuntCollapseTimer || 0));
+    Neo.treasureHuntCollapseMax = Math.max(0, Number(snapshot.treasureHuntCollapseMax || 0));
+    Neo.treasureHuntRockTick = Math.max(0, Number(snapshot.treasureHuntRockTick || 0));
+    Neo.treasureHuntBlastTick = Math.max(0, Number(snapshot.treasureHuntBlastTick || 0));
     Neo.baseSeedStr = snapshot.baseSeedStr || snapshot.seedStr || createRandomSeed();
     Neo.lastDamageSource = '';
     Neo.lastDamageSourceKey = '';
@@ -2825,6 +2840,12 @@ export function resumeGame() {
     Neo.lastDeathEntryId = '';
     syncSeedState();
     Neo.floor = snapshot.floor;
+    if (Neo.gameMode === 'treasure_hunt' && Neo.treasureHuntPhase === 'escape' && Neo.treasureHuntCollapseMax <= 0) {
+      Neo.treasureHuntCollapseMax = Math.max(70, 103 - Number(Neo.floor || 1) * 3);
+      Neo.treasureHuntCollapseTimer = Neo.treasureHuntCollapseMax;
+      Neo.treasureHuntRockTick = 0.45;
+      Neo.treasureHuntBlastTick = 1.6;
+    }
     // Resume restores rooms from the snapshot (no generateFloor call), so assign
     // the cumulative floor count directly. Old saves predate the field — estimate
     // from loop+floor so scaling doesn't reset on resumed looped runs.

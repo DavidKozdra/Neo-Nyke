@@ -170,9 +170,15 @@ button, input, select, textarea {
 }
 
 #c {
+  position: absolute;
+  top: 50%;
+  left: 50%;
   display: block;
   width: max(100dvw, calc(100dvh * 1.5));
   height: max(100dvh, calc(100dvw / 1.5));
+  max-width: none;
+  max-height: none;
+  transform: translate(-50%, -50%);
   background: #02030a;
   image-rendering: pixelated;
 }
@@ -604,6 +610,63 @@ button, input, select, textarea {
   letter-spacing: .12em;
   font-size: calc(11px * var(--font-scale, 1));
   font-weight: 700;
+}
+
+.treasure-collapse-hud {
+  min-width: 260px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 5px 14px;
+  padding: 9px 14px 10px;
+  color: #ffd6a0;
+  background: linear-gradient(180deg, rgba(54, 18, 10, .96), rgba(24, 8, 8, .97));
+  border: 2px solid #ff7a3d;
+  border-radius: 8px;
+  box-shadow: 0 0 20px rgba(255, 76, 35, .38), inset 0 0 14px rgba(255, 120, 55, .12);
+  font-size: calc(12px * var(--font-scale, 1));
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.treasure-collapse-hud.hidden { display: none; }
+
+.treasure-collapse-hud.is-critical {
+  color: #fff;
+  border-color: #ff3131;
+  animation: treasure-collapse-pulse .48s steps(2, end) infinite;
+}
+
+.treasure-collapse-hud__label { font-weight: 800; }
+
+#treasureCollapseTime {
+  min-width: 48px;
+  color: #fff0c4;
+  font-size: calc(20px * var(--font-scale, 1));
+  text-align: right;
+}
+
+.treasure-collapse-hud__bar {
+  grid-column: 1 / -1;
+  height: 7px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, .62);
+  border: 1px solid rgba(255, 214, 160, .38);
+  border-radius: 4px;
+}
+
+.treasure-collapse-hud__bar i {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, #ff3131, #ff8a3d, #ffd35a);
+  box-shadow: 0 0 10px #ff693d;
+  transform-origin: left center;
+}
+
+@keyframes treasure-collapse-pulse {
+  0%, 100% { box-shadow: 0 0 16px rgba(255, 49, 49, .42); }
+  50% { box-shadow: 0 0 30px rgba(255, 49, 49, .9); }
 }
 
 .challenge-progress {
@@ -3637,10 +3700,13 @@ button, input, select, textarea {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: safe center;
   background: var(--menu-bg-deep);
   text-align: center;
   padding: 20px;
+  box-sizing: border-box;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 /* Background canvas for both full-viewport overlays */
@@ -3676,7 +3742,9 @@ button, input, select, textarea {
   --menu-panel-width: 504px;
   --menu-footer-reserve: 124px;
   justify-content: flex-start;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 
 #start .menu-stage {
@@ -3688,7 +3756,8 @@ button, input, select, textarea {
   justify-content: center;
   gap: clamp(18px, 3vh, 34px);
   width: min(100%, var(--menu-stage-width));
-  height: 100%;
+  height: auto;
+  min-height: 100%;
   margin: 0 auto;
   padding: clamp(28px, 7vh, 84px) 20px var(--menu-footer-reserve);
   box-sizing: border-box;
@@ -3706,6 +3775,7 @@ button, input, select, textarea {
   position: relative;
   inset: auto;
   z-index: auto;
+  flex-shrink: 0;
   justify-content: center;
   width: min(100%, 960px);
   padding: clamp(14px, 2.2vh, 22px) clamp(14px, 2.5vw, 32px) clamp(12px, 2vh, 20px);
@@ -3726,6 +3796,7 @@ button, input, select, textarea {
   top: auto;
   left: auto;
   transform: none;
+  flex-shrink: 0;
   width: min(100%, var(--menu-panel-width));
   min-width: min(320px, 100%);
   max-width: 100%;
@@ -3740,6 +3811,106 @@ button, input, select, textarea {
     0 22px 70px rgba(0, 0, 0, .62),
     inset 0 1px 0 rgba(255, 255, 255, .07),
     0 0 28px var(--menu-glow);
+}
+
+@media (min-width: 921px) and (max-height: 850px) {
+  #start.overlay {
+    --menu-footer-reserve: 92px;
+  }
+
+  #start .menu-stage {
+    gap: clamp(10px, 1.8vh, 16px);
+    padding: clamp(14px, 2.5vh, 24px) 20px var(--menu-footer-reserve);
+  }
+
+  #start .menu-cinema {
+    padding: 10px 20px 9px;
+  }
+
+  #start .menu-letter {
+    font-size: calc(clamp(34px, 5.4vh, 48px) * var(--font-scale, 1));
+  }
+
+  #start .menu-subtitle-flash {
+    font-size: calc(clamp(13px, 2.2vh, 18px) * var(--font-scale, 1));
+    letter-spacing: .42em;
+    text-indent: .42em;
+  }
+
+  #start .menu-content {
+    padding: 20px 28px 22px;
+  }
+
+  #start .special-day-banner {
+    margin-bottom: 10px;
+    padding: 7px 14px;
+  }
+
+  #start .main-nav {
+    gap: 8px;
+    margin: 8px 0 4px;
+  }
+
+  #start .nav-btn {
+    width: 240px;
+    min-height: 46px;
+    padding: 9px 20px;
+    font-size: calc(20px * var(--font-scale, 1));
+  }
+
+  #start .nav-btn--minor {
+    width: 190px;
+    min-height: 38px;
+    padding: 7px 18px;
+    font-size: calc(17px * var(--font-scale, 1));
+  }
+
+  #start .menu-footer {
+    padding-top: 8px;
+    padding-bottom: 10px;
+  }
+}
+
+@media (min-width: 921px) and (max-height: 650px) {
+  #start.overlay {
+    --menu-panel-width: 560px;
+    --menu-footer-reserve: 48px;
+  }
+
+  #start .menu-stage {
+    padding-top: 10px;
+  }
+
+  #start .menu-letter {
+    font-size: calc(clamp(30px, 6vh, 38px) * var(--font-scale, 1));
+  }
+
+  #start .menu-subtitle-flash {
+    font-size: calc(12px * var(--font-scale, 1));
+  }
+
+  #start .menu-content {
+    padding: 14px 20px 16px;
+  }
+
+  #start .main-nav {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+    gap: 7px;
+  }
+
+  #start .nav-btn,
+  #start .nav-btn--minor {
+    width: 100%;
+    min-height: 38px;
+    padding: 6px 12px;
+    font-size: calc(15px * var(--font-scale, 1));
+  }
+
+  #start .meta-row {
+    display: none;
+  }
 }
 
 .hidden {
@@ -5087,6 +5258,9 @@ button.alt.danger {
   z-index: 90;
   opacity: 1;
   visibility: visible;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
   transition: opacity .2s ease, visibility 0s linear 0s;
 }
 
@@ -6425,12 +6599,17 @@ border-bottom: black solid 2px;
 /* Settings modal: match the inventory/shop panel language and render larger. */
 #settingsModal .modal-box {
   width: min(720px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
   border: 2px solid var(--menu-border);
   border-top-color: var(--menu-border-strong);
   border-radius: 14px;
   padding: 30px 40px 36px;
   box-shadow: 0 24px 60px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.06);
   backdrop-filter: blur(14px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  box-sizing: border-box;
 }
 
 .modal-close {

@@ -1920,6 +1920,10 @@ export function createUIController(view) {
           setAltModesPanelOpen(false);
           handlers.onOpenAltModeCharSelect('boss_rush');
         });
+        view.altModeTreasureHuntBtn?.addEventListener('click', () => {
+          setAltModesPanelOpen(false);
+          handlers.onOpenAltModeCharSelect('treasure_hunt');
+        });
         view.altModeCoopBtn?.addEventListener('click', () => {
           setAltModesPanelOpen(false);
           handlers.onOpenAltModeCharSelect('coop');

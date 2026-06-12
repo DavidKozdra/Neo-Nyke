@@ -205,6 +205,11 @@
       <span id="challengeStatusLabel">CHALLENGE</span>
       <div class="challenge-progress"><i id="challengeStatusFill"></i></div>
     </div>
+    <div id="treasureCollapseHud" class="treasure-collapse-hud hidden" aria-hidden="true">
+      <span class="treasure-collapse-hud__label">DUNGEON COLLAPSE</span>
+      <b id="treasureCollapseTime">1:30</b>
+      <div class="treasure-collapse-hud__bar"><i id="treasureCollapseFill"></i></div>
+    </div>
   </div>
   <div id="equipmentSlots" class="equipment-slots hidden" aria-hidden="true" aria-label="Tool slots">
     <button class="equip-slot is-empty" type="button" data-equip-slot="0" data-equip-key="F" aria-hidden="true" tabindex="-1">
@@ -859,6 +864,14 @@
             <p class="altmode-card__desc">Face all four bosses back to back. Collect loot between each fight. Defeat God to win.</p>
           </div>
           <button id="altModeBossRushBtn" class="nav-btn altmode-card__btn">PLAY</button>
+        </div>
+        <div class="altmode-card" id="altModeTreasureHuntCard">
+          <div class="altmode-card__icon">&#128273;</div>
+          <div class="altmode-card__text">
+            <h3 class="altmode-card__name">TREASURE HUNT</h3>
+            <p class="altmode-card__desc">Kill the vault boss, take its key, then fight back through new monsters and explosive traps. Return to the entrance to reveal a ladder or key chest.</p>
+          </div>
+          <button id="altModeTreasureHuntBtn" class="nav-btn altmode-card__btn">PLAY</button>
         </div>
       </div>
       <!-- MULTIPLAYER -->

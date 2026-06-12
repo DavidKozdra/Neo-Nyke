@@ -3188,3 +3188,133 @@
     font-size: calc(11px * var(--font-scale, 1));
   }
 }
+
+/* Canonical phone roster rules. Keep this final so older responsive passes
+   cannot reintroduce min-content overflow or hide the back control. */
+@media (max-width: 700px) {
+  #charSelect.overlay {
+    overflow: hidden;
+  }
+
+  #charSelect .charselect-layout {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    height: 100dvh;
+    max-height: 100dvh;
+    padding:
+      calc(10px + env(safe-area-inset-top, 0px))
+      10px
+      calc(16px + env(safe-area-inset-bottom, 0px));
+    box-sizing: border-box;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  #charSelect .charselect-header {
+    min-height: 38px;
+    padding-left: 78px;
+  }
+
+  #charSelect #charBackBtn {
+    position: fixed;
+    top: calc(10px + env(safe-area-inset-top, 0px));
+    left: 10px;
+    bottom: auto;
+    z-index: 5;
+    margin: 0;
+    transform: none;
+  }
+
+  #charSelect #charBackBtn:hover {
+    transform: translateY(-1px);
+  }
+
+  #charSelect .charselect-main,
+  #charSelect .charselect-roster,
+  #charSelect .charselect-sidebar,
+  #charSelect .hero-detail-panel,
+  #charSelect .hero-detail-head,
+  #charSelect .hero-detail-stats,
+  #charSelect .hero-detail-skills,
+  #charSelect .hero-detail-inventory,
+  #charSelect .difficulty-select,
+  #charSelect .seedrow {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  #charSelect .char-carousel-track {
+    width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  #charSelect .hero-detail-panel {
+    overflow: hidden;
+  }
+
+  #charSelect .hero-detail-inventory {
+    overflow: hidden;
+  }
+
+  #charSelect .hero-detail-item-pip {
+    max-width: 100%;
+  }
+
+  #charSelect .hero-detail-item-pip::before,
+  #charSelect .hero-detail-item-pip::after {
+    display: none;
+  }
+
+  #charSelect .difficulty-select {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+    overflow: visible;
+  }
+
+  #charSelect .difficulty-btn {
+    width: 100%;
+    min-width: 0;
+  }
+
+  #charSelect .difficulty-btn:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-height: 500px) and (orientation: landscape) and (max-width: 900px) {
+  #charSelect .charselect-header {
+    min-height: 32px;
+    padding-left: 76px;
+  }
+
+  #charSelect #charBackBtn {
+    top: calc(8px + env(safe-area-inset-top, 0px));
+  }
+
+  #charSelect .char-carousel-track {
+    width: 100%;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  #charSelect .difficulty-select {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    overflow: visible;
+  }
+
+  #charSelect .difficulty-btn {
+    width: 100%;
+    min-width: 0;
+  }
+
+  #charSelect .difficulty-btn:last-child:nth-child(odd) {
+    grid-column: auto;
+  }
+}

@@ -915,6 +915,30 @@
           Neo.ctx.arc(0, 0, 12, 0, Math.PI * 2);
           Neo.ctx.fill();
         }
+      } else if (pickup.type === 'treasureKey') {
+        const pulse = 1 + Math.sin(t * 2.1) * 0.08;
+        Neo.ctx.save();
+        Neo.ctx.scale(pulse, pulse);
+        Neo.ctx.strokeStyle = '#ffd966';
+        Neo.ctx.fillStyle = '#ffd966';
+        Neo.ctx.shadowColor = '#ffd966';
+        Neo.ctx.shadowBlur = 20;
+        Neo.ctx.lineWidth = 4;
+        Neo.ctx.beginPath();
+        Neo.ctx.arc(-6, -4, 7, 0, Math.PI * 2);
+        Neo.ctx.stroke();
+        Neo.ctx.beginPath();
+        Neo.ctx.moveTo(0, 1);
+        Neo.ctx.lineTo(15, 16);
+        Neo.ctx.lineTo(20, 11);
+        Neo.ctx.moveTo(10, 11);
+        Neo.ctx.lineTo(15, 6);
+        Neo.ctx.stroke();
+        Neo.ctx.restore();
+        Neo.ctx.shadowBlur = 0;
+        Neo.ctx.font = 'bold 9px system-ui';
+        Neo.ctx.textAlign = 'center';
+        Neo.ctx.fillText('VAULT KEY', 0, 34);
       } else if (pickup.type === 'challengeItemChoice' || pickup.type === 'rewardChoice') {
         const item = Neo.itemRegistry.get(pickup.key);
         const color = item?.color || '#d7f6ff';
@@ -1419,6 +1443,10 @@
   function getProjectileVisual(projectile) {
     const kind = projectile.kind || 'shot';
     if (projectile.enemy) {
+      if (kind === 'rock') {
+        const floor = Neo.getRoomArtTheme?.()?.backdrop || projectile.color || '#8a5a3c';
+        return { color: floor, core: floor, trail: floor, shape: 'rock', length: 16 };
+      }
       if (kind === 'sword' || kind === 'god_sword') return { color: '#f6f1ff', core: '#ffffff', trail: '#d8c7ff', shape: 'blade', length: 28 };
       if (kind === 'sniper_round') return { color: '#ff5d72', core: '#ffe1e6', trail: '#ff314d', shape: 'dart', length: 34 };
       if (kind === 'machine_round') return { color: '#ffb35a', core: '#fff1ba', trail: '#ff6738', shape: 'tracer', length: 22 };

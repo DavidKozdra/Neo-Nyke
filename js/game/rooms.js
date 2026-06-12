@@ -79,7 +79,16 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
     startRoom.visited = true;
 
     const farRoom = findFarthestRoom(startRoom, roomMap);
-    if (Neo.floor === Neo.MAX_FLOOR) {
+    if (Neo.gameMode === 'treasure_hunt') {
+      farRoom.type = 'boss';
+      Neo.treasureHuntPhase = 'seek';
+      Neo.treasureHuntHasKey = false;
+      Neo.treasureHuntCollapseTimer = 0;
+      Neo.treasureHuntCollapseMax = 0;
+      Neo.treasureHuntRockTick = 0;
+      Neo.treasureHuntBlastTick = 0;
+      startRoom.treasureHuntExitKind = Neo.nextRandom('world') < 0.5 ? 'ladder' : 'chest';
+    } else if (Neo.floor === Neo.MAX_FLOOR) {
       farRoom.type = 'god';
     } else if (Neo.floor > Neo.MAX_FLOOR) {
       farRoom.type = Neo.floor % 3 === 0 ? 'boss' : 'ladder';
@@ -92,7 +101,9 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
     // 10% of floors keep the ladder room hidden on the minimap until it's
     // actually entered, so you sometimes have to explore to find the exit.
     // Rolled once per floor (stable) so the minimap star doesn't flicker.
-    Neo.hideLadderOnMinimap = farRoom.type === 'ladder' && Neo.rand(1, 0, 'world') < 0.1;
+    Neo.hideLadderOnMinimap = Neo.gameMode !== 'treasure_hunt'
+      && farRoom.type === 'ladder'
+      && Neo.rand(1, 0, 'world') < 0.1;
 
     const pool = Neo.rooms.filter(room => room !== startRoom && room !== farRoom);
     Neo.shuffle(pool, 'world');
@@ -970,6 +981,178 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
     Neo.currentRoom.decorations = Neo.decorations;
   }
 
+  function addTreasureHuntEscapeTraps(room, count) {
+    if (!room || !Array.isArray(room.hazards)) return 0;
+    let placed = 0;
+    for (let index = 0; index < count; index += 1) {
+      const trap = createExplosiveTrapHazard(room, room.hazards.length + index);
+      if (!trap) continue;
+      trap.source = 'treasure_hunt_trap';
+      room.hazards.push(trap);
+      placed += 1;
+    }
+    return placed;
+  }
+
+  function beginTreasureHuntEscape() {
+    if (Neo.gameMode !== 'treasure_hunt' || Neo.treasureHuntPhase !== 'seek') return false;
+    Neo.treasureHuntPhase = 'escape';
+    Neo.treasureHuntHasKey = true;
+    Neo.treasureHuntCollapseMax = Math.max(70, 103 - Neo.floor * 3);
+    Neo.treasureHuntCollapseTimer = Neo.treasureHuntCollapseMax;
+    Neo.treasureHuntRockTick = 0.45;
+    Neo.treasureHuntBlastTick = 1.6;
+    const startRoom = Neo.rooms.find(room => room.type === 'start');
+    const trapCount = 2 + Math.min(3, Math.floor((Neo.floor - 1) / 3));
+
+    Neo.rooms.forEach(room => {
+      if (!room || room === startRoom) return;
+      addTreasureHuntEscapeTraps(room, trapCount);
+      if (room === Neo.currentRoom || room.type === 'boss' || room.type === 'god' || room.secret) return;
+      room.treasureHuntOriginalType = room.treasureHuntOriginalType || room.type;
+      room.type = 'combat';
+      room.cleared = false;
+      room.treasureHuntEscapePending = true;
+      room.treasureHuntEscapeActive = false;
+    });
+
+    if (Neo.currentRoom) Neo.hazards = Neo.currentRoom.hazards || Neo.hazards;
+    Neo.dropCoins?.(Neo.player.x, Neo.player.y, 75 + Neo.floor * 10);
+    Neo.spawnParticle({
+      x: Neo.player.x,
+      y: Neo.player.y - 42,
+      life: 1.8,
+      text: 'VAULT KEY TAKEN - ESCAPE!',
+      c: '#ffd966',
+    });
+    Neo.updateObjective();
+    Neo.updateTreasureHuntCollapseHud?.();
+    Neo.scheduleRunSave();
+    return true;
+  }
+
+  function spawnTreasureHuntCollapseRock(intensity) {
+    if (!Neo.player || !Neo.currentRoom) return;
+    const margin = Neo.WALL + 34;
+    const edge = Math.floor(Neo.nextRandom('encounter') * 4);
+    let x = Neo.player.x;
+    let y = Neo.player.y;
+    if (edge === 0) { x = margin; y = Neo.rand(Neo.ROOM_H - margin, margin, 'encounter'); }
+    if (edge === 1) { x = Neo.ROOM_W - margin; y = Neo.rand(Neo.ROOM_H - margin, margin, 'encounter'); }
+    if (edge === 2) { x = Neo.rand(Neo.ROOM_W - margin, margin, 'encounter'); y = margin; }
+    if (edge === 3) { x = Neo.rand(Neo.ROOM_W - margin, margin, 'encounter'); y = Neo.ROOM_H - margin; }
+    const safeSpawn = Neo.findSafeEnemySpawnPoint?.(x, y, 14) || { x, y };
+    const targetX = Neo.player.x + Number(Neo.player.vx || 0) * 0.22 + Neo.rand(34, -34, 'encounter');
+    const targetY = Neo.player.y + Number(Neo.player.vy || 0) * 0.22 + Neo.rand(34, -34, 'encounter');
+    const angle = Math.atan2(targetY - safeSpawn.y, targetX - safeSpawn.x);
+    const speed = 330 + intensity * 190 + Neo.rand(70, 0, 'encounter');
+    Neo.spawnProjectile({
+      x: safeSpawn.x,
+      y: safeSpawn.y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      r: 11 + intensity * 3,
+      life: 2.8,
+      enemy: true,
+      kind: 'rock',
+      damage: Math.round(13 + Neo.floor * 1.4 + intensity * 9),
+      knockback: 240,
+      color: '#9c7656',
+      source: 'collapse_rock',
+    });
+  }
+
+  function spawnTreasureHuntCollapseBlast(intensity) {
+    if (!Neo.player || !Neo.currentRoom) return;
+    const angle = Neo.nextRandom('encounter') * Math.PI * 2;
+    const distance = 45 + Neo.nextRandom('encounter') * (150 - intensity * 35);
+    const x = Neo.clamp(Neo.player.x + Math.cos(angle) * distance, Neo.WALL + 48, Neo.ROOM_W - Neo.WALL - 48);
+    const y = Neo.clamp(Neo.player.y + Math.sin(angle) * distance, Neo.WALL + 48, Neo.ROOM_H - Neo.WALL - 48);
+    Neo.hazards.push({
+      kind: 'bomb_aoe',
+      source: 'dungeon_collapse',
+      x,
+      y,
+      r: 20,
+      blastRadius: 82 + intensity * 34,
+      baseDamage: Math.round(15 + Neo.floor * 1.5 + intensity * 10),
+      fuse: Math.max(0.7, 1.25 - intensity * 0.35),
+      fuseDuration: Math.max(0.7, 1.25 - intensity * 0.35),
+      sparkTick: 0,
+      ttl: 2,
+    });
+  }
+
+  function updateTreasureHuntCollapse(dt) {
+    if (Neo.gameMode !== 'treasure_hunt' || Neo.treasureHuntPhase !== 'escape' || !Neo.player) {
+      Neo.updateTreasureHuntCollapseHud?.();
+      return;
+    }
+    const step = Math.max(0, Number(dt || 0));
+    Neo.treasureHuntCollapseTimer = Math.max(0, Number(Neo.treasureHuntCollapseTimer || 0) - step);
+    const maximum = Math.max(1, Number(Neo.treasureHuntCollapseMax || 1));
+    const intensity = Neo.clamp(1 - Neo.treasureHuntCollapseTimer / maximum, 0, 1);
+    Neo.treasureHuntRockTick = Number(Neo.treasureHuntRockTick || 0) - step;
+    Neo.treasureHuntBlastTick = Number(Neo.treasureHuntBlastTick || 0) - step;
+
+    if (Neo.treasureHuntRockTick <= 0) {
+      const rockCount = intensity > 0.72 ? 3 : intensity > 0.34 ? 2 : 1;
+      for (let index = 0; index < rockCount; index += 1) spawnTreasureHuntCollapseRock(intensity);
+      Neo.treasureHuntRockTick = Math.max(0.42, 1.35 - intensity * 0.82);
+      Neo.addTrauma?.(0.08 + intensity * 0.08);
+    }
+    if (Neo.treasureHuntBlastTick <= 0) {
+      const blastCount = intensity > 0.78 ? 2 : 1;
+      for (let index = 0; index < blastCount; index += 1) spawnTreasureHuntCollapseBlast(intensity);
+      Neo.treasureHuntBlastTick = Math.max(0.65, 2.15 - intensity * 1.25);
+      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 48, life: 0.45, text: 'COLLAPSE!', c: '#ff794d' });
+    }
+
+    Neo.updateTreasureHuntCollapseHud?.();
+    if (Neo.treasureHuntCollapseTimer > 0) return;
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 34, life: 1.4, text: 'BURIED ALIVE', c: '#ff3131' });
+    Neo.addTrauma?.(1);
+    Neo.damagePlayer?.(
+      Math.max(9999, Number(Neo.player.maxHp || 1) * 10),
+      0,
+      0,
+      'dungeon_collapse',
+      { ignoreInv: true, ignoreBlock: true, noInvFrames: true, sourceKey: 'dungeon_collapse' },
+    );
+    // A paid revive gets one last emergency sprint instead of returning to an
+    // already-expired timer and dying again immediately.
+    Neo.treasureHuntCollapseTimer = 15;
+    Neo.treasureHuntRockTick = 0.35;
+    Neo.treasureHuntBlastTick = 0.8;
+  }
+
+  function prepareTreasureHuntStartExit(room) {
+    if (Neo.gameMode !== 'treasure_hunt' || Neo.treasureHuntPhase !== 'escape' || !Neo.treasureHuntHasKey) return;
+    if (!room || room.type !== 'start' || room.treasureHuntExitSpawned) return;
+    room.treasureHuntExitSpawned = true;
+    Neo.treasureHuntPhase = 'returned';
+    Neo.treasureHuntCollapseTimer = 0;
+    Neo.updateTreasureHuntCollapseHud?.();
+    if (room.treasureHuntExitKind === 'chest') {
+      room.chests.push({
+        x: Neo.ROOM_W / 2,
+        y: Neo.ROOM_H / 2,
+        open: false,
+        rewardType: 'item',
+        rewardKey: Neo.rollItemDrop({ random: Neo.createRoomRandom(room, 'treasure-hunt:exit-chest') }),
+        treasureHuntExitChest: true,
+      });
+      Neo.chests = room.chests;
+      Neo.spawnParticle({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 54, life: 1.4, text: 'THE KEY REVEALS A CHEST', c: '#ffd966' });
+    } else {
+      room.pickups.push({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2, type: 'ladder' });
+      Neo.pickups = room.pickups;
+      Neo.spawnParticle({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 48, life: 1.4, text: 'ESCAPE LADDER OPEN', c: '#7dff9e' });
+    }
+    Neo.updateObjective();
+    Neo.scheduleRunSave();
+  }
+
   function findSafeSpawnPoint() {
     const searchRadius = 120;
     const testRadius = 18;
@@ -1123,7 +1306,12 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
       Neo.spawnParticle({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 64, life: 1.2, text: 'ELITE AMBUSH', c: '#ffb347' });
     }
     if (room.type === 'combat' && !room.cleared && Neo.enemies.length === 0) {
-      if (Neo.gameMode === 'endless') {
+      if (Neo.gameMode === 'treasure_hunt' && room.treasureHuntEscapePending) {
+        room.treasureHuntEscapePending = false;
+        room.treasureHuntEscapeActive = true;
+        Neo.spawnWave(Neo.getWaveCount(4 + Math.min(3, Math.floor(Neo.floor / 3))), 'combat');
+        Neo.spawnParticle({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 52, life: 1.1, text: 'ESCAPE AMBUSH', c: '#ff8a5c' });
+      } else if (Neo.gameMode === 'endless') {
         Neo.endlessWaveActive = true;
         Neo.updateEndlessWaveHud?.();
         const firstWaveSize = 4 + Neo.floor;
@@ -1288,6 +1476,8 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
         Neo.pickups.push({ x: ladderX, y: ladderY, type: 'ladder' });
       }
     }
+
+    prepareTreasureHuntStartExit(room);
 
     // Inject rivals that are already present in this room
     injectRivalsToCurrentRoom();
@@ -2530,6 +2720,9 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
   Neo.assignSecretRoom = assignSecretRoom;
   Neo.findFarthestRoom = findFarthestRoom;
   Neo.syncCurrentRoomState = syncCurrentRoomState;
+  Neo.beginTreasureHuntEscape = beginTreasureHuntEscape;
+  Neo.updateTreasureHuntCollapse = updateTreasureHuntCollapse;
+  Neo.prepareTreasureHuntStartExit = prepareTreasureHuntStartExit;
   Neo.findSafeSpawnPoint = findSafeSpawnPoint;
   Neo.isLockedFightRoom = isLockedFightRoom;
   Neo.clearPlayerTransientDefense = clearPlayerTransientDefense;

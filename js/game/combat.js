@@ -3410,10 +3410,30 @@
         return;
       }
       Neo.currentRoom.cleared = true;
-      if (Neo.currentRoom.type === 'boss' && Neo.gameMode !== 'endless' && Neo.gameMode !== 'boss_rush') {
+      if (Neo.currentRoom.type === 'boss' && Neo.gameMode === 'treasure_hunt') {
+        Neo.pickups.push({ x: enemy.x, y: enemy.y, type: 'treasureKey' });
+        Neo.spawnParticle({ x: enemy.x, y: enemy.y - 42, life: 1.3, text: 'VAULT KEY DROPPED', c: '#ffd966' });
+      } else if (Neo.currentRoom.type === 'boss' && Neo.gameMode !== 'endless' && Neo.gameMode !== 'boss_rush') {
         spawnBossRewardChoices(enemy);
       }
-      if ((Neo.currentRoom.type === 'ladder' || Neo.currentRoom.type === 'boss') && Neo.gameMode !== 'endless' && Neo.gameMode !== 'boss_rush') {
+      if (Neo.gameMode === 'treasure_hunt' && Neo.currentRoom.treasureHuntEscapeActive) {
+        Neo.currentRoom.treasureHuntEscapeActive = false;
+        if (!Neo.currentRoom.treasureHuntRewardSpawned) {
+          Neo.currentRoom.treasureHuntRewardSpawned = true;
+          const rewardRandom = Neo.createRoomRandom(Neo.currentRoom, 'treasure-hunt:escape-reward');
+          dropCoins(enemy.x, enemy.y, 18 + Neo.floor * 4);
+          if (rewardRandom() < 0.38) {
+            Neo.pickups.push({ x: enemy.x + 28, y: enemy.y, type: 'item', key: rollItemDrop({ random: rewardRandom }) });
+          } else if (rewardRandom() < 0.65) {
+            Neo.pickups.push({ x: enemy.x + 28, y: enemy.y, type: 'potion' });
+          }
+          Neo.spawnParticle({ x: enemy.x, y: enemy.y - 34, life: 0.9, text: 'ESCAPE LOOT', c: '#ffd966' });
+        }
+      }
+      if ((Neo.currentRoom.type === 'ladder' || Neo.currentRoom.type === 'boss')
+        && Neo.gameMode !== 'endless'
+        && Neo.gameMode !== 'boss_rush'
+        && Neo.gameMode !== 'treasure_hunt') {
         Neo.pickups.push({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2, type: 'ladder' });
       }
       if (Neo.gameMode === 'endless' && Neo.endlessWaveActive) {
@@ -3500,7 +3520,8 @@
   }
 
   function dropCoins(x, y, amount) {
-    const scaledAmount = Math.max(1, Math.round(Number(amount || 0) * Neo.getRunDifficultyScalars().coinRewardMultiplier));
+    const modeMultiplier = Neo.gameMode === 'treasure_hunt' ? 3 : 1;
+    const scaledAmount = Math.max(1, Math.round(Number(amount || 0) * Neo.getRunDifficultyScalars().coinRewardMultiplier * modeMultiplier));
     let remaining = scaledAmount;
     while (remaining > 0) {
       const roll = Neo.nextRandom ? Neo.nextRandom('loot') : Neo.rng();
@@ -3666,6 +3687,10 @@
     Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 30, life: 0.8, text: 'ARM READY', c: '#a9e6ff' });
   }
 
+  function canDuplicateItemPickup(itemKey) {
+    return itemKey !== 'artificer_charger';
+  }
+
   function collectItem(itemKey) {
     if (Neo.isChallengeActive('no_items')) {
       Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 28, life: 0.85, text: 'NO ITEMS', c: '#ff8a98' });
@@ -3674,7 +3699,7 @@
     const item = Neo.itemRegistry.get(itemKey);
     if (!item) return;
     const duplicateChance = Neo.clamp(Number(Neo.getItemStats?.()?.itemDuplicateChance || 0), 0, 1);
-    const duplicatePickup = duplicateChance > 0 && Neo.rng() < duplicateChance;
+    const duplicatePickup = canDuplicateItemPickup(itemKey) && duplicateChance > 0 && Neo.rng() < duplicateChance;
     const collectCount = duplicatePickup ? 2 : 1;
     const previousCount = Neo.getItemCount(itemKey);
     Neo.player.items[itemKey] = previousCount + collectCount;

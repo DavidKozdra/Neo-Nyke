@@ -1744,7 +1744,7 @@ export function consumeCharge(chargeType) {
 
     if (getItemCount('charged_adapter') > 0 && !Neo.player.escapeReady) {
       Neo.player.escapeChargeKills += chargeSteps;
-      if (Neo.player.escapeChargeKills >= getChargeRequirement(10)) {
+      if (Neo.player.escapeChargeKills >= getChargeRequirement(20)) {
         Neo.player.escapeReady = true;
         Neo.player.escapeChargeKills = 0;
         const slotIdx = Neo.player?.equipmentSlots?.indexOf?.('charged_adapter') ?? -1;

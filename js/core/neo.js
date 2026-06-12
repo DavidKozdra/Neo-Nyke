@@ -57,6 +57,12 @@ window.Neo = {
   // --- flow ---
   gameState: 'menu',
   gameMode: 'normal',
+  treasureHuntPhase: 'seek',
+  treasureHuntHasKey: false,
+  treasureHuntCollapseTimer: 0,
+  treasureHuntCollapseMax: 0,
+  treasureHuntRockTick: 0,
+  treasureHuntBlastTick: 0,
   floor: 1,
   // Cumulative count of floors the player has actually entered this run, across
   // loops. Unlike `floor` (1..MAX_FLOOR, resets each loop) this only ever climbs,

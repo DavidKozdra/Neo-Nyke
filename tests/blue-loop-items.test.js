@@ -167,15 +167,54 @@ describe('loop-exclusive Blue relics', () => {
     expect(source).toContain("onEnemyDie(other, { forceDeath: true, suppressRoomClear: true });");
   });
 
-  test('wires Artificer size scaling and only kills on pickups after the first', () => {
+  test('wires Artificer size scaling and prevents its first pickup from duplicating', () => {
     const playerSource = fs.readFileSync(playerPath, 'utf8');
-    const combatSource = fs.readFileSync(combatPath, 'utf8');
+    const canDuplicateItemPickup = extractFunction(combatPath, 'canDuplicateItemPickup');
 
     expect(playerSource).toContain('(artificerCharger > 0 ? 1.267 : 1)');
     expect(playerSource).toContain('beamWidthMultiplier: artificerCharger > 0 ? 1.05 : 1');
-    expect(combatSource).toContain('if (previousCount > 0)');
-    expect(combatSource).not.toContain('if (previousCount + collectCount >= 2)');
-    expect(combatSource).toContain("Neo.lastDamageSourceKey = 'artificer_charger'");
+    expect(canDuplicateItemPickup('artificer_charger')).toBe(false);
+    expect(canDuplicateItemPickup('neo_knife')).toBe(true);
+  });
+
+  test('Artificer Charger grants its benefit first and kills on the second pickup', () => {
+    jest.useFakeTimers();
+    const previousWindow = global.window;
+    global.window = { achievementEvents: { emit: jest.fn() } };
+    const Neo = {
+      player: {
+        level: 3,
+        xpToNext: 100,
+        maxHp: 100,
+        hp: 75,
+        attackPower: 10,
+        attackSpeed: 1,
+      },
+      getArtificerLevelGains: () => ({ maxHp: 16, attackPower: 4, attackSpeed: 0.02 }),
+      spawnParticle: jest.fn(),
+      die: jest.fn(),
+    };
+    const applyArtificerChargerPickup = extractFunction(
+      combatPath,
+      'applyArtificerChargerPickup',
+      { Neo },
+    );
+
+    applyArtificerChargerPickup(0, 1);
+
+    expect(Neo.player.level).toBe(6);
+    expect(Neo.player.hp).toBeGreaterThan(0);
+    expect(Neo.die).not.toHaveBeenCalled();
+
+    applyArtificerChargerPickup(1, 1);
+    jest.runOnlyPendingTimers();
+
+    expect(Neo.player.hp).toBe(0);
+    expect(Neo.lastDamageSourceKey).toBe('artificer_charger');
+    expect(Neo.die).toHaveBeenCalledTimes(1);
+
+    global.window = previousWindow;
+    jest.useRealTimers();
   });
 
   test('makes negative status proc chance 20% worse per cloak stack', () => {
