@@ -6,6 +6,7 @@
   const TITLE_LOOP_PATH = 'assets/sounds/music/Neo Nyke - Title Loop.wav';
   const GAME_TRACK_PATHS = [
     'assets/sounds/music/Neo Nyke - main theme.mp3',
+    'assets/sounds/music/Neo Nyke - Gameplay (Loop).wav',
   ];
 
   const MENU_STATES = new Set(['menu', 'charselect', 'start']);
@@ -127,7 +128,10 @@
   }
 
   async function playScheduledTitleSequence() {
-    if (titleSequenceActive || titleSequencePending || titleWebAudioFailed) return false;
+    if (titleWebAudioFailed) return false;
+    // Already sounding (or about to): report success so the caller does not
+    // start the HTML-audio fallback layered on top of the Web Audio sequence.
+    if (titleSequenceActive || titleSequencePending) return true;
     const context = getTitleAudioContext();
     const buffersPromise = loadTitleBuffers();
     if (!context || !buffersPromise) return false;
@@ -290,6 +294,7 @@
   // menu/game music on the next tick.
   const JUKEBOX_TRACKS = [
     { id: 'main_theme', title: 'Main Theme', path: 'assets/sounds/music/Neo Nyke - main theme.mp3' },
+    { id: 'gameplay_loop', title: 'Gameplay', path: 'assets/sounds/music/Neo Nyke - Gameplay (Loop).wav' },
     { id: 'title_intro', title: 'Title Intro', path: 'assets/sounds/music/Neo Nyke - Title Intro.wav' },
     { id: 'title_loop', title: 'Title Loop', path: 'assets/sounds/music/Neo Nyke - Title Loop.wav' },
   ];
