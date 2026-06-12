@@ -2703,7 +2703,7 @@
   }
 
   function spawnBleedSpray(enemy, stacks = 1, intensity = 1) {
-    if (!enemy) return;
+    if (!enemy || enemy.type === 'golem' || enemy.type === 'bulk_golem') return;
     const bloodMult = getBloodMultiplier();
     const count = Neo.clamp(Math.ceil(Number(stacks || 1) * Number(intensity || 1) * bloodMult) + 1, 2, Math.ceil(9 * bloodMult));
     const radius = Math.max(8, Number(enemy.r || 12));
@@ -3066,7 +3066,13 @@
       airDrag: boss ? 1.2 : 1.9,
       face: Neo.getFacingDirection(enemy, enemy.beamAngle || enemy.dashAngle || direction),
       size: Math.max(30, enemy.r * 2.4),
-      bloodColor: enemy.type === 'god' ? '#f2ecff' : enemy.elite ? '#c04a14' : '#8d0018',
+      bloodColor: enemy.type === 'golem' || enemy.type === 'bulk_golem'
+        ? ''
+        : enemy.type === 'god'
+          ? '#f2ecff'
+          : enemy.elite
+            ? '#c04a14'
+            : '#8d0018',
     });
   }
 
@@ -3217,7 +3223,13 @@
         life: Neo.rand(0.34, 0.16, 'fx'),
         vx: Math.cos(angle) * Neo.rand(42, 12, 'fx'),
         vy: Math.sin(angle) * Neo.rand(42, 12, 'fx'),
-        c: enemy.elite ? '#b97333' : enemy.type === 'god' ? '#f2ecff' : '#7b1a22',
+        c: enemy.type === 'golem' || enemy.type === 'bulk_golem'
+          ? (enemy.type === 'bulk_golem' ? '#8a735d' : '#777b80')
+          : enemy.elite
+            ? '#b97333'
+            : enemy.type === 'god'
+              ? '#f2ecff'
+              : '#7b1a22',
       });
     }
 
