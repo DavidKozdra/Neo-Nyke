@@ -241,13 +241,22 @@
     katana_excalibur_777x: 2,
   };
 
-  function isChargedWeaponKey(weaponKey) {
-    return Number(CHARGED_WEAPON_MAX_CHARGES[weaponKey] || 0) > 1;
+  // Max charges = static base, raised by Extra Battery picks on the weapon
+  // (stored as an absolute count in player.weaponChargeOverrides, mirroring
+  // moveStackOverrides). A battery can turn a 1-charge weapon into a charged one.
+  function getWeaponMaxCharges(weaponKey, playerState = Neo.player) {
+    const base = Math.max(1, Number(CHARGED_WEAPON_MAX_CHARGES[weaponKey] || 1));
+    const override = Math.max(0, Math.floor(Number(playerState?.weaponChargeOverrides?.[weaponKey] || 0)));
+    return Math.max(base, override);
+  }
+
+  function isChargedWeaponKey(weaponKey, playerState = Neo.player) {
+    return getWeaponMaxCharges(weaponKey, playerState) > 1;
   }
 
   function ensureWeaponChargeState(weaponKey, playerState = Neo.player) {
-    if (!playerState || !isChargedWeaponKey(weaponKey)) return null;
-    const maxCharges = CHARGED_WEAPON_MAX_CHARGES[weaponKey];
+    if (!playerState || !isChargedWeaponKey(weaponKey, playerState)) return null;
+    const maxCharges = getWeaponMaxCharges(weaponKey, playerState);
     const timers = Array.isArray(playerState.weaponChargeTimers)
       ? playerState.weaponChargeTimers.map(value => Number(value)).filter(value => value > 0)
       : [];
@@ -307,8 +316,8 @@
     return {
       current: state?.timers?.length ? Math.min(...state.timers) : 0,
       max,
-      charges: state?.charges ?? CHARGED_WEAPON_MAX_CHARGES[weaponKey],
-      maxCharges: state?.maxCharges ?? CHARGED_WEAPON_MAX_CHARGES[weaponKey],
+      charges: state?.charges ?? getWeaponMaxCharges(weaponKey),
+      maxCharges: state?.maxCharges ?? getWeaponMaxCharges(weaponKey),
       timers: state?.timers?.slice?.() || [],
     };
   }
@@ -3646,6 +3655,15 @@
   function applyArtificerChargerPickup(previousCount, collectCount) {
     if (!Neo.player || previousCount + collectCount <= 0) return;
     if (previousCount > 0) {
+      // A duplicate charger burns 1 Loop Crystal to contain the overcharge.
+      // Only a player with an empty crystal balance dies from it.
+      const crystals = Math.max(0, Math.floor(Number(Neo.metaProgress?.loopCrystals || 0)));
+      if (crystals > 0) {
+        Neo.metaProgress.loopCrystals = crystals - 1;
+        Neo.persistMetaSoon();
+        Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 30, life: 1.2, text: 'OVERCHARGE CONTAINED: -1 LOOP CRYSTAL', c: '#58b7ff' });
+        return;
+      }
       Neo.lastDamageSource = 'Artificer Charger';
       Neo.lastDamageSourceKey = 'artificer_charger';
       Neo.player.hp = 0;
@@ -3796,6 +3814,7 @@
   Neo.getEquippedWeapon = getEquippedWeapon;
   Neo.getWeaponBaseCooldown = getWeaponBaseCooldown;
   Neo.isChargedWeaponKey = isChargedWeaponKey;
+  Neo.getWeaponMaxCharges = getWeaponMaxCharges;
   Neo.ensureWeaponChargeState = ensureWeaponChargeState;
   Neo.getWeaponCooldownInfo = getWeaponCooldownInfo;
   Neo.spawnWeaponProjectile = spawnWeaponProjectile;

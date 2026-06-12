@@ -54,7 +54,7 @@ export function loop(timestamp) {
 
     const updatePerfStart = Neo.perfStart();
     if (frozen) { /* sim paused this frame; feel systems already ticked above */ }
-    else if (Neo.gameState === 'play' && !Neo.isWizardPawOpen()) update(simDt);
+    else if (Neo.gameState === 'play' && !Neo.isWizardPawOpen() && !Neo.isExtraBatteryOpen?.()) update(simDt);
     else if (Neo.player && (Neo.gameState === 'dialogue' || Neo.gameState === 'pause')) {
       Neo.tickPlayerTransientDefenseTimers(dt);
       Neo.stepActiveTransitionFade(dt);

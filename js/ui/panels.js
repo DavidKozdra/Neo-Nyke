@@ -40,6 +40,10 @@ export function bindInput() {
         if (event.key === 'Escape') event.preventDefault();
         return;
       }
+      if (isExtraBatteryOpen()) {
+        if (event.key === 'Escape') { event.preventDefault(); Neo.dismissExtraBatteryModal?.(); }
+        return;
+      }
       if (isVoucherModalOpen()) {
         if (event.key === 'Escape') { event.preventDefault(); Neo.cancelVoucherRedeem?.(); }
         return;
@@ -338,6 +342,8 @@ export function bindInput() {
     });
     Neo.ui.wizardPawChoices?.addEventListener('click', Neo.handleWizardPawChoiceClick);
     Neo.ui.wizardPawConfirm?.addEventListener('click', Neo.confirmWizardPawSelection);
+    Neo.ui.extraBatteryChoices?.addEventListener('click', event => Neo.handleExtraBatteryChoiceClick?.(event));
+    Neo.ui.extraBatteryLater?.addEventListener('click', () => Neo.dismissExtraBatteryModal?.());
     Neo.ui.scrollControlChoices?.addEventListener('click', event => Neo.handleScrollControlChoiceClick?.(event));
     Neo.ui.scrollControlConfirm?.addEventListener('click', () => Neo.confirmScrollControlSelection?.());
     Neo.ui.scrollControlCancel?.addEventListener('click', () => Neo.cancelScrollControlSelection?.());
@@ -444,14 +450,7 @@ export function bindPanelInput() {
       const card = event.target instanceof Element ? event.target.closest('[data-open-ui-item]') : null;
       if (!card) return;
       const itemKey = card.dataset.openUiItem || '';
-      const item = Neo.itemRegistry?.get?.(itemKey);
       if (Neo.getPendingUiItemCount?.(itemKey, Neo.player) <= 0) return;
-      if (item?.opensUi === 'extraBattery') {
-        Neo.activeInvTab = 'equipped';
-        markInventoryPanelDirty();
-        renderInventoryPanel();
-        return;
-      }
       setInventoryPanelOpen(false, { suppressPanelItemSelection: true });
       Neo.requestPanelItemSelection?.({ itemKey });
     });
@@ -1338,6 +1337,28 @@ export function isScrollControlOpen() {
     return !!Neo.scrollControlSelection && isPanelOpen(Neo.ui.scrollControlModal);
   }
 
+export function isExtraBatteryOpen() {
+    return isPanelOpen(Neo.ui.extraBatteryModal);
+  }
+
+export function setExtraBatteryModalOpen(open, options = {}) {
+    if (!Neo.ui.extraBatteryModal) return;
+    const animateClose = options.animateClose !== false;
+    const effectTarget = Neo.ui.extraBatteryModal.querySelector('.modal-box') || Neo.ui.extraBatteryModal;
+    if (effectTarget instanceof HTMLElement) effectTarget.dataset.panelFxKey = 'extra-battery-modal';
+    if (open) {
+      clearPanelCloseEffect(effectTarget);
+      Neo.ui.extraBatteryModal.classList.remove('hidden');
+      Neo.ui.extraBatteryModal.setAttribute('aria-hidden', 'false');
+      Neo.drawItemIconCanvases?.(Neo.ui.extraBatteryModal, 'data-item-icon');
+      return;
+    }
+    if (animateClose && isPanelOpen(Neo.ui.extraBatteryModal)) playPanelCloseEffect(effectTarget);
+    else clearPanelCloseEffect(effectTarget);
+    Neo.ui.extraBatteryModal.classList.add('hidden');
+    Neo.ui.extraBatteryModal.setAttribute('aria-hidden', 'true');
+  }
+
 export function setWizardPawModalOpen(open, options = {}) {
     if (!Neo.ui.wizardPawModal) return;
   const animateClose = options.animateClose !== false;
@@ -1397,7 +1418,7 @@ export function setVoucherModalOpen(open, options = {}) {
   }
 
 export function isOverlayBlockingInput() {
-    return isPanelOpen(Neo.ui.shopPanel) || isPanelOpen(Neo.ui.invPanel) || isPanelOpen(Neo.ui.anvilPanel) || isWizardPawOpen() || isScrollControlOpen() || isVoucherModalOpen();
+    return isPanelOpen(Neo.ui.shopPanel) || isPanelOpen(Neo.ui.invPanel) || isPanelOpen(Neo.ui.anvilPanel) || isWizardPawOpen() || isExtraBatteryOpen() || isScrollControlOpen() || isVoucherModalOpen();
   }
 
 export function isGodSweepUnlocked() {
@@ -2428,7 +2449,12 @@ export function renderInventoryPanel() {
           const isEquipped = equippedMoveKeys.has(key);
           const isBatterySelectable = extraBatteryPendingCount > 0;
           const isMatch = !isBatterySelectable && !isEquipped && Neo.activeInventorySlot && Neo.activeInventorySlot === def.slot;
-          const currentMaxStacks = Neo.getMoveMaxStacks(key, _invP.character, _invP);
+          // The melee `slash` chip stands in for the equipped weapon: batteries
+          // land on the weapon-charge pool, so show that count for it.
+          const meleeWeapon = key === 'slash' ? Neo.WEAPON_DEFS?.[_invP.equippedWeapon] : null;
+          const currentMaxStacks = meleeWeapon
+            ? (Neo.getWeaponMaxCharges?.(meleeWeapon.key, _invP) || 1)
+            : Neo.getMoveMaxStacks(key, _invP.character, _invP);
           const slotLabel = Neo.SLOT_LABELS[def.slot] || def.slot;
           const hintText = isBatterySelectable
             ? `Charges ${currentMaxStacks} → ${currentMaxStacks + 1}`
@@ -2696,6 +2722,8 @@ export function handleShopBuyClick(event) {
   Neo.setAnvilPanelOpen = setAnvilPanelOpen;
   Neo.toggleAnvilPanel = toggleAnvilPanel;
   Neo.isWizardPawOpen = isWizardPawOpen;
+  Neo.isExtraBatteryOpen = isExtraBatteryOpen;
+  Neo.setExtraBatteryModalOpen = setExtraBatteryModalOpen;
   Neo.isScrollControlOpen = isScrollControlOpen;
   Neo.isVoucherModalOpen = isVoucherModalOpen;
   Neo.setVoucherModalOpen = setVoucherModalOpen;

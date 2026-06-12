@@ -893,6 +893,50 @@
         const item = Neo.itemRegistry.get(pickup.key);
         const color = item?.color || '#fff';
         const iconDef = window.NeoNykeIconDefs?.items?.[pickup.key];
+
+        // Duplicate-charger danger area: walk-over no longer collects it (see
+        // the world.js pickup gate), so show the hold-to-agree meter and the
+        // Loop Crystal cost before the player commits.
+        const overchargeRisk = pickup.key === 'artificer_charger'
+          && (Neo.getItemCount?.('artificer_charger') || 0) > 0;
+        const overchargeDwellTarget = Neo.AB_CHEST_DWELL_SECONDS || 2.2;
+        const overchargeProgress = Neo.clamp(Number(pickup.overchargeDwell || 0) / overchargeDwellTarget, 0, 1);
+        const overchargeHasCrystals = Math.floor(Number(Neo.metaProgress?.loopCrystals || 0)) > 0;
+        if (overchargeRisk) {
+          const areaR = Neo.AB_CHEST_DWELL_RADIUS || 44;
+          const ringColor = overchargeHasCrystals ? '#58b7ff' : '#ff5d6e';
+          Neo.ctx.save();
+          Neo.ctx.translate(0, -bob);
+          Neo.ctx.globalAlpha = 0.16 + overchargeProgress * 0.24;
+          Neo.ctx.fillStyle = ringColor;
+          Neo.ctx.beginPath();
+          Neo.ctx.ellipse(0, 6, areaR, areaR * 0.5, 0, 0, Math.PI * 2);
+          Neo.ctx.fill();
+          Neo.ctx.globalAlpha = 0.7;
+          Neo.ctx.setLineDash([6, 5]);
+          Neo.ctx.lineWidth = 2;
+          Neo.ctx.strokeStyle = ringColor;
+          Neo.ctx.beginPath();
+          Neo.ctx.ellipse(0, 6, areaR, areaR * 0.5, 0, 0, Math.PI * 2);
+          Neo.ctx.stroke();
+          Neo.ctx.setLineDash([]);
+          if (overchargeProgress > 0) {
+            Neo.ctx.globalAlpha = 1;
+            Neo.ctx.lineWidth = 4;
+            Neo.ctx.lineCap = 'round';
+            Neo.ctx.strokeStyle = overchargeProgress >= 1 ? '#ffffff' : ringColor;
+            Neo.ctx.shadowColor = ringColor;
+            Neo.ctx.shadowBlur = 12;
+            Neo.ctx.beginPath();
+            Neo.ctx.arc(0, 0, 25, -Math.PI / 2, -Math.PI / 2 + overchargeProgress * Math.PI * 2);
+            Neo.ctx.stroke();
+            Neo.ctx.shadowBlur = 0;
+            Neo.ctx.lineCap = 'butt';
+          }
+          Neo.ctx.restore();
+          Neo.ctx.globalAlpha = 1;
+        }
+
         Neo.ctx.shadowColor = color;
         const godTier = Neo.isGodTier?.(item?.rarity);
         Neo.ctx.shadowBlur = godTier ? 20 : 14;
@@ -914,6 +958,21 @@
           Neo.ctx.beginPath();
           Neo.ctx.arc(0, 0, 12, 0, Math.PI * 2);
           Neo.ctx.fill();
+        }
+        if (overchargeRisk) {
+          Neo.ctx.shadowBlur = 0;
+          Neo.ctx.font = 'bold 8px system-ui';
+          Neo.ctx.textAlign = 'center';
+          Neo.ctx.fillStyle = overchargeHasCrystals ? '#bfe6ff' : '#ff8a98';
+          Neo.ctx.fillText(overchargeHasCrystals ? 'OVERCHARGE: COSTS 1 LOOP CRYSTAL' : 'NO LOOP CRYSTALS: LETHAL', 0, 33);
+          Neo.ctx.fillStyle = overchargeProgress > 0 ? '#d7f6ff' : '#9fb4c4';
+          Neo.ctx.fillText(
+            overchargeProgress > 0
+              ? `HOLD… ${Math.ceil(overchargeDwellTarget - overchargeProgress * overchargeDwellTarget)}s`
+              : 'STAND HERE TO PICK UP',
+            0,
+            44,
+          );
         }
       } else if (pickup.type === 'treasureKey') {
         const pulse = 1 + Math.sin(t * 2.1) * 0.08;

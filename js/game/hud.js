@@ -754,6 +754,9 @@
       entry,
     };
     Neo.setGameState('dying');
+    // Silence the game track the instant the killing hit lands so the death
+    // sound and the killer's quote play over silence, not over music.
+    Neo.pauseGameMusic?.();
     Neo.playSfx?.('player_death');
     clearRunSave();
   }

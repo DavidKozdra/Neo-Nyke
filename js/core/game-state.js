@@ -574,6 +574,7 @@ export function resumeGame() {
       equippedMoves,
       ownedMoves,
       moveStackOverrides: {},
+      weaponChargeOverrides: {},
       lavaWalkTime: 0,
       lavaTrailTick: 0,
       princessFlightTime: 0,
@@ -2803,6 +2804,7 @@ export function resumeGame() {
     Neo.scrollControlSelection = null;
     Neo.panelItemDeferredToastRoom = null;
     Neo.setWizardPawModalOpen(false);
+    Neo.setExtraBatteryModalOpen?.(false, { animateClose: false });
     Neo.setScrollControlModalOpen?.(false, { animateClose: false });
     Neo.setShopPanelOpen(false);
     Neo.setInventoryPanelOpen(false);
@@ -2959,6 +2961,7 @@ export function resumeGame() {
     Neo.scrollControlSelection = null;
     Neo.panelItemDeferredToastRoom = null;
     Neo.setWizardPawModalOpen(false);
+    Neo.setExtraBatteryModalOpen?.(false, { animateClose: false });
     Neo.setScrollControlModalOpen?.(false, { animateClose: false });
     Neo.setShopPanelOpen(false);
     Neo.setInventoryPanelOpen(false);

@@ -2547,6 +2547,24 @@
         // Meter is full → fall through to the grant block below.
       }
 
+      // A duplicate Artificer Charger is dangerous (costs a Loop Crystal, lethal
+      // at 0), so it is never collected by walk-over: the player must hold the
+      // spot like an A/B chest to agree to the pickup. First copy stays instant.
+      const chargerOverchargeRisk = pickup.type === 'item'
+        && pickup.key === 'artificer_charger'
+        && Neo.getItemCount('artificer_charger') > 0;
+      if (chargerOverchargeRisk) {
+        const dwellRadius = Neo.AB_CHEST_DWELL_RADIUS || 44;
+        const dwellTarget = Neo.AB_CHEST_DWELL_SECONDS || 2.2;
+        const ddx = pickup.x - playerX;
+        const ddy = pickup.y - playerY;
+        const inside = ddx * ddx + ddy * ddy < dwellRadius * dwellRadius;
+        pickup.overchargeDwell = inside
+          ? Math.min(dwellTarget, Number(pickup.overchargeDwell || 0) + dt)
+          : Math.max(0, Number(pickup.overchargeDwell || 0) - dt * 1.5);
+        if (pickup.overchargeDwell < dwellTarget) continue;
+      }
+
       const pickupTriggerRadius = (pickup.type === 'jesterPortal' || pickup.type === 'adapterPortal')
         ? Neo.JESTER_PORTAL_TRIGGER_RADIUS
         : pickup.type === 'challengePracticePortal'
@@ -2559,6 +2577,7 @@
       const triggerDx = pickup.x - playerX;
       const triggerDy = pickup.y - playerY;
       if ((pickup.type !== 'rewardChoice' || !pickup.dwellMode)
+        && !chargerOverchargeRisk
         && triggerDx * triggerDx + triggerDy * triggerDy >= pickupTriggerRadius * pickupTriggerRadius) continue;
       if (pickup.type === 'challengeSwitch' && pickup.armed === false) continue;
 

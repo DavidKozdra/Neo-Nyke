@@ -209,6 +209,9 @@ export function migratePlayerData(source) {
     playerData.weaponChargeTimers = Array.isArray(playerData.weaponChargeTimers)
       ? playerData.weaponChargeTimers.map(value => Number(value)).filter(value => value > 0)
       : [];
+    if (!playerData.weaponChargeOverrides || typeof playerData.weaponChargeOverrides !== 'object') {
+      playerData.weaponChargeOverrides = {};
+    }
     playerData.blockActive = !!playerData.blockActive;
     playerData.blockTimer = Number(playerData.blockTimer || 0);
     playerData.fleeceTick = Number(playerData.fleeceTick || 0);
@@ -809,18 +812,12 @@ export function requestPanelItemSelection(options = {}) {
       beginScrollControlSelection(scrollKey);
       return true;
     }
-    // The battery prompt re-uses the inventory panel. When the player just
-    // dismissed the inventory we must NOT auto-reopen it (that would trap them);
-    // they re-open it themselves via the HUD alert chip. Callers that close the
-    // inventory pass { suppressBatteryOpen: true } for exactly this reason.
+    // Closing another panel must not instantly surface the battery modal (that
+    // would undo the close the player just asked for); those callers pass
+    // { suppressBatteryOpen: true } and the choice stays owed on the HUD chip.
     if (options.suppressBatteryOpen) return false;
     if (batteryPending > 0 && (!preferredUi || preferredUi === 'extraBattery')) {
-      Neo.activeInvPlayer = 1;
-      Neo.activeInvTab = 'equipped';
-      Neo.activeInventorySlot = '';
-      Neo.markInventoryPanelDirty?.();
-      Neo.setInventoryPanelOpen?.(true);
-      Neo.renderInventoryPanel?.();
+      beginExtraBatteryModal();
       return true;
     }
     return false;
@@ -1634,15 +1631,136 @@ export function openExtraBatterySelection(playerData = Neo.player) {
     playerData.extraBatteryPendingCount = Math.max(0, Math.floor(Number(playerData.extraBatteryPendingCount || 0))) + 1;
     Neo.scheduleRunSave?.();
     // Co-op AI / non-active players just bank the charge; only the active player
-    // gets the inventory prompt, routed through the dispatcher so it respects
+    // gets the battery modal, routed through the dispatcher so it respects
     // the safe-to-open checks and paw priority.
     if (playerData !== Neo.player) return;
     Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 46, life: 0.9, text: 'SELECT A MOVE', c: '#cfd7ff' });
     if (!requestPanelItemSelection()) notifyPanelItemDeferred('extra_battery');
   }
 
+function getExtraBatteryChoiceMoves(playerData = Neo.player) {
+    const equipped = new Set(Object.values(playerData?.equippedMoves || {}).filter(Boolean));
+    return Object.keys(playerData?.ownedMoves || {})
+      .filter(key => (
+        playerData.ownedMoves[key]
+        && Neo.MOVE_DEFS[key]
+        && Neo.isMoveAllowedForCharacter(key, playerData.character)
+      ))
+      .sort((a, b) => (
+        Number(equipped.has(b)) - Number(equipped.has(a))
+        || Neo.MOVE_DEFS[a].slot.localeCompare(Neo.MOVE_DEFS[b].slot)
+      ));
+  }
+
+// Build and show the dedicated battery modal for the active player. Like the
+// paw modal it is a blocking overlay that stops time (see update.js), so the
+// dispatcher only calls this when it is safe to do so.
+export function beginExtraBatteryModal() {
+    if (!Neo.player || Math.floor(Number(Neo.player.extraBatteryPendingCount || 0)) <= 0) return;
+    Neo.setExtraBatteryModalOpen?.(true);
+    renderExtraBatteryPanel();
+  }
+
+export function renderExtraBatteryPanel() {
+    if (!Neo.ui?.extraBatteryChoices || !Neo.player) return;
+    const pending = Math.max(0, Math.floor(Number(Neo.player.extraBatteryPendingCount || 0)));
+    if (Neo.ui.extraBatteryPending) {
+      Neo.ui.extraBatteryPending.textContent = pending === 1 ? '1 PICK LEFT' : `${pending} PICKS LEFT`;
+    }
+    if (Neo.ui.extraBatteryCopy) {
+      Neo.ui.extraBatteryCopy.textContent = pending > 1
+        ? 'Time is stopped. Pick a move for each battery, one at a time — every pick adds +1 max charge.'
+        : 'Time is stopped. Pick a move to give it +1 max charge — one more use before its cooldown.';
+    }
+    const equipped = new Set(Object.values(Neo.player.equippedMoves || {}).filter(Boolean));
+    Neo.ui.extraBatteryChoices.innerHTML = getExtraBatteryChoiceMoves()
+      .map(key => {
+        const def = Neo.MOVE_DEFS[key];
+        const slotLabel = Neo.SLOT_LABELS?.[def.slot] || def.slot;
+        const isEquipped = equipped.has(key);
+        // `slash` is the bare-hands melee fallback: with a weapon equipped the
+        // M1 attack IS the weapon, so present the weapon's identity and its
+        // weapon-charge count (the grant lands there too, see
+        // grantExtraBatteryToMove). data-move stays `slash`.
+        const weapon = key === 'slash' ? Neo.WEAPON_DEFS?.[Neo.player.equippedWeapon] : null;
+        const currentMaxStacks = weapon
+          ? (Neo.getWeaponMaxCharges?.(weapon.key, Neo.player) || 1)
+          : Neo.getMoveMaxStacks(key, Neo.player.character, Neo.player);
+        const iconHtml = weapon
+          ? `<canvas class="extra-battery-choice__icon" data-weapon-icon="${weapon.key}" width="30" height="30"></canvas>`
+          : `<canvas class="extra-battery-choice__icon" data-move-icon="${key}" width="30" height="30"></canvas>`;
+        return `<button class="extra-battery-choice${isEquipped ? ' is-equipped' : ''}" type="button" data-move="${key}">
+          <span class="extra-battery-choice__eyebrow">${isEquipped ? `Equipped — ${slotLabel}` : slotLabel}</span>
+          ${iconHtml}
+          <h4>${weapon?.name || def.name}</h4>
+          <p>${weapon ? (weapon.description || def.desc) : def.desc}</p>
+          <span class="extra-battery-choice__charges">Charges ${currentMaxStacks} → ${currentMaxStacks + 1}</span>
+        </button>`;
+      })
+      .join('')
+      || '<div class="extra-battery-empty">No moves owned yet — the charge stays banked until you buy a move from the shop.</div>';
+    Neo.ui.extraBatteryChoices.querySelectorAll('[data-move-icon]').forEach(canvas => {
+      Neo.drawMoveToastIcon?.(canvas, Neo.MOVE_DEFS[canvas.dataset.moveIcon]);
+    });
+    Neo.ui.extraBatteryChoices.querySelectorAll('[data-weapon-icon]').forEach(canvas => {
+      Neo.drawWeaponToastIcon?.(canvas, Neo.WEAPON_DEFS?.[canvas.dataset.weaponIcon]);
+    });
+  }
+
+export function handleExtraBatteryChoiceClick(event) {
+    const target = event.target instanceof Element ? event.target.closest('[data-move]') : null;
+    const moveKey = target?.dataset?.move || '';
+    if (!moveKey || !Neo.MOVE_DEFS[moveKey]) return;
+    if (Math.floor(Number(Neo.player?.extraBatteryPendingCount || 0)) <= 0) {
+      Neo.setExtraBatteryModalOpen?.(false);
+      return;
+    }
+    const nextMaxStacks = grantExtraBatteryToMove(moveKey);
+    if (nextMaxStacks <= 0) return;
+    const grantedName = (moveKey === 'slash' && Neo.WEAPON_DEFS?.[Neo.player.equippedWeapon]?.name)
+      || Neo.MOVE_DEFS[moveKey].name;
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 46, life: 0.8, text: `${grantedName.toUpperCase()} +1 CHARGE`, c: '#cfd7ff' });
+    if (Math.floor(Number(Neo.player?.extraBatteryPendingCount || 0)) > 0) {
+      renderExtraBatteryPanel();
+      return;
+    }
+    Neo.setExtraBatteryModalOpen?.(false);
+    // Chain into any other owed selection now that the modal is closed.
+    requestPanelItemSelection();
+  }
+
+// "Decide later": the charge stays owed (HUD alert chip / next safe dispatch),
+// with the same short grace window the inventory close uses so the dispatcher
+// doesn't instantly reopen the modal.
+export function dismissExtraBatteryModal() {
+    Neo.setExtraBatteryModalOpen?.(false);
+    Neo.suppressPanelItemSelectionUntil = Date.now() + 250;
+  }
+
 export function grantExtraBatteryToMove(moveKey, playerData = Neo.player) {
     if (!playerData || !Neo.MOVE_DEFS[moveKey]) return 0;
+    // M1 with a weapon equipped: weapon attacks run on the weapon-charge
+    // system, not move stacks, so the battery must land there — a `slash`
+    // stack override would never show up on the weapon's HUD card.
+    const weaponKey = moveKey === 'slash' && Neo.WEAPON_DEFS?.[playerData.equippedWeapon]
+      ? playerData.equippedWeapon
+      : '';
+    if (weaponKey) {
+      if (!playerData.weaponChargeOverrides || typeof playerData.weaponChargeOverrides !== 'object') {
+        playerData.weaponChargeOverrides = {};
+      }
+      const nextMaxCharges = (Neo.getWeaponMaxCharges?.(weaponKey, playerData) || 1) + 1;
+      playerData.weaponChargeOverrides[weaponKey] = nextMaxCharges;
+      playerData.extraBatteryPendingCount = Math.max(0, Math.floor(Number(playerData.extraBatteryPendingCount || 0)) - 1);
+      if (playerData === Neo.player) {
+        // ensureWeaponChargeState sees the raised max on its next tick/HUD
+        // read and refills the pool, so the paid-for charge shows immediately.
+        Neo.markInventoryPanelDirty?.();
+        Neo.updateHud?.();
+        Neo.scheduleRunSave?.();
+      }
+      return nextMaxCharges;
+    }
     const overrides = ensureMoveStackOverrides(playerData);
     if (!overrides) return 0;
     const nextMaxStacks = Neo.getMoveMaxStacks(moveKey, playerData.character, playerData) + 1;
@@ -1650,7 +1768,12 @@ export function grantExtraBatteryToMove(moveKey, playerData = Neo.player) {
     playerData.extraBatteryPendingCount = Math.max(0, Math.floor(Number(playerData.extraBatteryPendingCount || 0)) - 1);
     if (playerData === Neo.player) {
       const slot = Neo.MOVE_DEFS[moveKey]?.slot || '';
-      if (slot && playerData.equippedMoves?.[slot] === moveKey) {
+      // Resolve the slot's active move with the same fallback chain
+      // createCooldownEntry uses, so an empty slot (running on its default
+      // move) still refreshes the live cooldown entry.
+      const slotEntryMoveKey = playerData.equippedMoves?.[slot]
+        || (slot === 'dash' ? 'dash' : slot === 'melee' ? 'slash' : slot === 'laser' ? 'blood_beam' : 'crimson_smash');
+      if (slot && slotEntryMoveKey === moveKey) {
         const entry = Neo.createCooldownEntry(slot, playerData, Neo.cooldowns[slot]);
         // The extra battery just raised maxCharges by 1. createCooldownEntry
         // preserves the existing charges/timers, so when the move was mid-
@@ -1869,6 +1992,10 @@ export function refreshFloorChargeStates() {
   Neo.refreshShopVoucherBanner = refreshShopVoucherBanner;
   Neo.applyScrollAbundanceForFloor = applyScrollAbundanceForFloor;
   Neo.openExtraBatterySelection = openExtraBatterySelection;
+  Neo.beginExtraBatteryModal = beginExtraBatteryModal;
+  Neo.renderExtraBatteryPanel = renderExtraBatteryPanel;
+  Neo.handleExtraBatteryChoiceClick = handleExtraBatteryChoiceClick;
+  Neo.dismissExtraBatteryModal = dismissExtraBatteryModal;
   Neo.grantExtraBatteryToMove = grantExtraBatteryToMove;
   Neo.consumeCharge = consumeCharge;
   Neo.refreshFloorChargeStates = refreshFloorChargeStates;

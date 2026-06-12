@@ -125,7 +125,7 @@
 <div id="bootLoading" class="boot-loading" role="status" aria-live="polite">
   <div class="boot-loading__box">
     <img class="boot-loading__mark" src="assets/icons/icon-128x128.png" width="64" height="64" alt="" aria-hidden="true">
-    <span class="version">Beta 1.0</span>
+    <span class="version">Beta 1.1</span>
     <h1 class="boot-loading__title">NEO - NYKE</h1>
     <div class="boot-loading__bar" aria-hidden="true"><i></i></div>
     <p class="boot-loading__hint">Loading dungeon</p>
@@ -485,6 +485,17 @@
     </div>
   </div>
 
+  <div id="extraBatteryModal" class="modal-backdrop hidden" aria-hidden="true">
+    <div class="modal-box extra-battery-box">
+      <canvas class="wizard-paw-stamp" data-item-icon="extra_battery" width="40" height="40" aria-hidden="true"></canvas>
+      <h2 class="screen-title extra-battery-title">EXTRA BATTERY</h2>
+      <div class="extra-battery-pending-wrap"><span id="extraBatteryPending" class="extra-battery-pending" aria-live="polite"></span></div>
+      <p class="extra-battery-copy" id="extraBatteryCopy">Pick a move to give it +1 max charge.</p>
+      <div id="extraBatteryChoices" class="extra-battery-choices"></div>
+      <button id="extraBatteryLater" class="nav-btn extra-battery-later" type="button">DECIDE LATER</button>
+    </div>
+  </div>
+
   <div id="scrollControlModal" class="modal-backdrop hidden" aria-hidden="true">
     <div class="modal-box scroll-control-box">
       <div class="scroll-control-head">
@@ -733,7 +744,7 @@
       </div>
       <div class="menu-footer__summary">
         <span id="runSummary" class="run-summary-line"></span>
-        <span class="menu-footer__version">version Beta 1.0</span>
+        <span class="menu-footer__version">version Beta 1.1</span>
       </div>
     </div><!-- /.menu-footer -->
   </div><!-- /.menu-stage -->
@@ -1391,7 +1402,7 @@
       <button class="stab" data-tab="volume"   role="tab"><span class="tab-icon">♪</span>Volume</button>
       <button class="stab" data-tab="theme"    role="tab"><span class="tab-icon">◈</span>Theme</button>
       <button class="stab" data-tab="access"   role="tab"><span class="tab-icon">◎</span>Accessibility</button>
-      <button class="stab" data-tab="data"     role="tab"><span class="tab-icon">◆</span>Data</button>
+      <button class="stab" data-tab="data"     role="tab"><span class="tab-icon">▤</span>Data</button>
     </div>
 
     <!-- Controls tab -->
@@ -1399,40 +1410,48 @@
 
       <!-- Desktop keyboard bindings (hidden on touch-only devices) -->
       <div class="controls-desktop-section">
-        <p class="stab-hint">Click an action then press any key to remap.</p>
-        <table class="bind-table">
-          <tbody>
-            <tr><td class="bind-label">Move Up</td>   <td><button class="bind-btn" data-action="up">W</button></td></tr>
-            <tr><td class="bind-label">Move Down</td> <td><button class="bind-btn" data-action="down">S</button></td></tr>
-            <tr><td class="bind-label">Move Left</td> <td><button class="bind-btn" data-action="left">A</button></td></tr>
-            <tr><td class="bind-label">Move Right</td><td><button class="bind-btn" data-action="right">D</button></td></tr>
-            <tr><td class="bind-label">Mobility Skill</td>      <td><button class="bind-btn" data-action="dash">SHIFT</button></td></tr>
-            <tr><td class="bind-label">Inventory</td> <td><button class="bind-btn" data-action="inventory">I</button></td></tr>
-            <tr><td class="bind-label">Slash</td>     <td><button class="bind-btn" data-action="slash">LMB</button></td></tr>
-            <tr><td class="bind-label">Laser beam</td><td><button class="bind-btn" data-action="laser">RMB</button></td></tr>
-            <tr><td class="bind-label">Smash</td>     <td><button class="bind-btn" data-action="smash">R</button></td></tr>
-            <tr><td class="bind-label">Activate All Tools</td><td><button class="bind-btn" data-action="activateAll">SPACE</button></td></tr>
-          </tbody>
-        </table>
-        <p class="stab-hint">Tool slots — keys for each equipped tool, in order.</p>
-        <table class="bind-table">
-          <tbody>
-            <tr><td class="bind-label">Tool Slot 1</td><td><button class="bind-btn" data-action="tool1">F</button></td></tr>
-            <tr><td class="bind-label">Tool Slot 2</td><td><button class="bind-btn" data-action="tool2">G</button></td></tr>
-            <tr><td class="bind-label">Tool Slot 3</td><td><button class="bind-btn" data-action="tool3">H</button></td></tr>
-            <tr><td class="bind-label">Tool Slot 4</td><td><button class="bind-btn" data-action="tool4">J</button></td></tr>
-            <tr><td class="bind-label">Tool Slot 5</td><td><button class="bind-btn" data-action="tool5">K</button></td></tr>
-            <tr><td class="bind-label">Tool Slot 6</td><td><button class="bind-btn" data-action="tool6">L</button></td></tr>
-            <tr><td class="bind-label">Tool Slot 7</td><td><button class="bind-btn" data-action="tool7">U</button></td></tr>
-            <tr><td class="bind-label">Tool Slot 8</td><td><button class="bind-btn" data-action="tool8">I</button></td></tr>
-          </tbody>
-        </table>
+        <p class="stab-hint">Click an action, then press any key to remap it.</p>
+        <div class="bind-grid">
+          <section class="settings-group">
+            <h3 class="settings-group__title">Movement &amp; Combat</h3>
+            <table class="bind-table">
+              <tbody>
+                <tr><td class="bind-label">Move Up</td>   <td><button class="bind-btn" data-action="up">W</button></td></tr>
+                <tr><td class="bind-label">Move Down</td> <td><button class="bind-btn" data-action="down">S</button></td></tr>
+                <tr><td class="bind-label">Move Left</td> <td><button class="bind-btn" data-action="left">A</button></td></tr>
+                <tr><td class="bind-label">Move Right</td><td><button class="bind-btn" data-action="right">D</button></td></tr>
+                <tr><td class="bind-label">Mobility Skill</td>      <td><button class="bind-btn" data-action="dash">SHIFT</button></td></tr>
+                <tr><td class="bind-label">Inventory</td> <td><button class="bind-btn" data-action="inventory">I</button></td></tr>
+                <tr><td class="bind-label">Slash</td>     <td><button class="bind-btn" data-action="slash">LMB</button></td></tr>
+                <tr><td class="bind-label">Laser beam</td><td><button class="bind-btn" data-action="laser">RMB</button></td></tr>
+                <tr><td class="bind-label">Smash</td>     <td><button class="bind-btn" data-action="smash">R</button></td></tr>
+                <tr><td class="bind-label">Activate All Tools</td><td><button class="bind-btn" data-action="activateAll">SPACE</button></td></tr>
+              </tbody>
+            </table>
+          </section>
+          <section class="settings-group">
+            <h3 class="settings-group__title">Tool Slots</h3>
+            <table class="bind-table">
+              <tbody>
+                <tr><td class="bind-label">Tool Slot 1</td><td><button class="bind-btn" data-action="tool1">F</button></td></tr>
+                <tr><td class="bind-label">Tool Slot 2</td><td><button class="bind-btn" data-action="tool2">G</button></td></tr>
+                <tr><td class="bind-label">Tool Slot 3</td><td><button class="bind-btn" data-action="tool3">H</button></td></tr>
+                <tr><td class="bind-label">Tool Slot 4</td><td><button class="bind-btn" data-action="tool4">J</button></td></tr>
+                <tr><td class="bind-label">Tool Slot 5</td><td><button class="bind-btn" data-action="tool5">K</button></td></tr>
+                <tr><td class="bind-label">Tool Slot 6</td><td><button class="bind-btn" data-action="tool6">L</button></td></tr>
+                <tr><td class="bind-label">Tool Slot 7</td><td><button class="bind-btn" data-action="tool7">U</button></td></tr>
+                <tr><td class="bind-label">Tool Slot 8</td><td><button class="bind-btn" data-action="tool8">I</button></td></tr>
+              </tbody>
+            </table>
+          </section>
+        </div>
         <button class="settings-reset" id="resetBindings">Reset to defaults</button>
       </div>
 
       <!-- Mobile touch bindings (hidden on desktop) -->
       <div class="mobile-bindings controls-mobile-section">
         <p class="stab-hint mobile-bindings__hint">Assign actions to each touch button.</p>
+        <section class="settings-group">
         <table class="bind-table">
           <tbody>
             <tr>
@@ -1497,12 +1516,15 @@
             </tr>
           </tbody>
         </table>
+        </section>
         <button class="settings-reset" id="resetTouchBindings">Reset mobile defaults</button>
       </div>
     </div>
 
     <!-- Gameplay tab -->
     <div class="stab-panel hidden" id="stab-gameplay">
+      <section class="settings-group">
+      <h3 class="settings-group__title">Pausing</h3>
       <div class="access-row">
         <div class="access-text">
           <span class="access-label">Pause in inventory</span>
@@ -1517,6 +1539,9 @@
         </div>
         <label class="toggle"><input type="checkbox" id="gameplayPauseOnBlur" checked><span class="toggle-track"><span class="toggle-thumb"></span></span></label>
       </div>
+      </section>
+      <section class="settings-group">
+      <h3 class="settings-group__title">Blood &amp; Effects</h3>
       <div class="access-row">
         <div class="access-text">
           <span class="access-label">Blood amount</span>
@@ -1541,6 +1566,9 @@
         </div>
         <label class="toggle"><input type="checkbox" id="gameplayPerformanceMode" checked><span class="toggle-track"><span class="toggle-thumb"></span></span></label>
       </div>
+      </section>
+      <section class="settings-group">
+      <h3 class="settings-group__title">Interface</h3>
       <div class="access-row">
         <div class="access-text">
           <span class="access-label">Objective panel</span>
@@ -1555,10 +1583,13 @@
         </div>
         <label class="toggle"><input type="checkbox" id="gameplayCutsceneAutoAdvance"><span class="toggle-track"><span class="toggle-thumb"></span></span></label>
       </div>
+      </section>
     </div>
 
     <!-- Volume tab -->
     <div class="stab-panel hidden" id="stab-volume">
+      <section class="settings-group">
+      <h3 class="settings-group__title">Mixer</h3>
       <div class="vol-row">
         <label class="vol-label" for="volMaster">Master</label>
         <input class="vol-slider" id="volMaster" type="range" min="0" max="100" value="80">
@@ -1574,26 +1605,30 @@
         <input class="vol-slider" id="volMusic" type="range" min="0" max="100" value="60">
         <span class="vol-val" id="volMusicVal">60</span>
       </div>
+      </section>
     </div>
 
     <!-- Theme tab -->
     <div class="stab-panel hidden" id="stab-theme">
-      <p class="stab-hint">Pick a preset or build your own. Changes apply instantly.</p>
+      <section class="settings-group">
+      <h3 class="settings-group__title">Presets</h3>
       <div class="theme-presets" id="themePresets"></div>
-      <div class="theme-divider"></div>
-      <div class="theme-custom-head">
-        <span class="theme-custom-label">CUSTOM THEME</span>
-        <div class="theme-name-row">
-          <input id="themeNameInput" class="theme-name-input" type="text" maxlength="32" placeholder="Theme name…">
-          <button id="themeSaveBtn" class="theme-action-btn">Save</button>
-          <button id="themeDeleteBtn" class="theme-action-btn theme-action-btn--danger">Delete</button>
-        </div>
+      </section>
+      <section class="settings-group">
+      <h3 class="settings-group__title">Custom Theme</h3>
+      <div class="theme-name-row">
+        <input id="themeNameInput" class="theme-name-input" type="text" maxlength="32" placeholder="Theme name…">
+        <button id="themeSaveBtn" class="theme-action-btn">Save</button>
+        <button id="themeDeleteBtn" class="theme-action-btn theme-action-btn--danger">Delete</button>
       </div>
       <div class="theme-vars" id="themeVars"></div>
+      </section>
     </div>
 
     <!-- Data tab -->
     <div class="stab-panel hidden" id="stab-data">
+      <section class="settings-group">
+      <h3 class="settings-group__title">Profile</h3>
       <div class="access-row">
         <div class="access-text">
           <span class="access-label">Display name</span>
@@ -1608,6 +1643,9 @@
         </div>
         <input id="birthdayInput" class="settings-text-input" type="date" autocomplete="off">
       </div>
+      </section>
+      <section class="settings-group">
+      <h3 class="settings-group__title">Save Data</h3>
       <div class="access-row">
         <div class="access-text">
           <span class="access-label">Export save</span>
@@ -1630,10 +1668,13 @@
         </div>
         <button class="settings-reset settings-reset--danger" id="dataDelete">Delete</button>
       </div>
+      </section>
     </div>
 
     <!-- Accessibility tab -->
     <div class="stab-panel hidden" id="stab-access">
+      <section class="settings-group">
+      <h3 class="settings-group__title">Comfort</h3>
       <div class="access-row">
         <div class="access-text">
           <span class="access-label">Reduce flashing</span>
@@ -1657,6 +1698,16 @@
       </div>
       <div class="access-row">
         <div class="access-text">
+          <span class="access-label">Screen shake</span>
+          <span class="access-desc">Camera shakes on hits and explosions. Disable if this causes discomfort.</span>
+        </div>
+        <label class="toggle"><input type="checkbox" id="accScreenShake" checked><span class="toggle-track"><span class="toggle-thumb"></span></span></label>
+      </div>
+      </section>
+      <section class="settings-group">
+      <h3 class="settings-group__title">Readability</h3>
+      <div class="access-row">
+        <div class="access-text">
           <span class="access-label">High contrast HUD</span>
           <span class="access-desc">Uses high-visibility colours for the health bar and HUD background.</span>
         </div>
@@ -1665,7 +1716,7 @@
       <div class="access-row">
         <div class="access-text">
           <span class="access-label">Font size</span>
-          <span class="access-desc">Scales all text — HUD, menus, panels, and these settings. 100% is default; go larger for readability.</span>
+          <span class="access-desc">Scales all text — HUD, menus, panels, and these settings.</span>
         </div>
         <div class="access-slider-wrap">
           <input type="range" id="accFontScale" min="0.8" max="1.6" step="0.05" value="1" class="access-slider">
@@ -1675,28 +1726,43 @@
       <div class="access-row">
         <div class="access-text">
           <span class="access-label">HUD scale</span>
-          <span class="access-desc">Resizes the in-game HUD. 100% is default; go larger for readability or smaller to reduce screen coverage.</span>
+          <span class="access-desc">Resizes the whole in-game HUD at once.</span>
         </div>
         <div class="access-slider-wrap">
           <input type="range" id="accHudScale" min="0.5" max="2.0" step="0.1" value="1" class="access-slider">
           <span id="accHudScaleVal" class="access-slider-val">100%</span>
         </div>
       </div>
+      </section>
+      <section class="settings-group">
+      <h3 class="settings-group__title">HUD Layout</h3>
       <div class="access-row access-row--column">
         <div class="access-text">
-          <span class="access-label">HUD layout — per element</span>
-          <span class="access-desc">Resize or hide each HUD widget on its own. Each size starts at "Auto" (follows the HUD scale above). Open the preview to see where everything sits.</span>
+          <span class="access-desc">Resize or hide each HUD widget on its own. "Auto" follows the HUD scale above. Open the preview to see where everything sits.</span>
         </div>
         <button type="button" class="settings-reset" id="hudLayoutPreviewBtn">Preview layout</button>
         <div id="hudElementRows" class="hud-element-rows"></div>
       </div>
+      </section>
+      <section class="settings-group">
+      <h3 class="settings-group__title">Shop Colours</h3>
       <div class="access-row">
         <div class="access-text">
-          <span class="access-label">Screen shake</span>
-          <span class="access-desc">Camera shakes on hits and explosions. Disable if this causes discomfort.</span>
+          <span class="access-label">Can afford</span>
+          <span class="access-desc">Price tag and buy button colour when you have enough coins.</span>
         </div>
-        <label class="toggle"><input type="checkbox" id="accScreenShake" checked><span class="toggle-track"><span class="toggle-thumb"></span></span></label>
+        <input type="color" id="accShopCanAfford" class="acc-color-input" value="#4caf50">
       </div>
+      <div class="access-row">
+        <div class="access-text">
+          <span class="access-label">Can't afford</span>
+          <span class="access-desc">Price tag and buy button colour when you don't have enough coins.</span>
+        </div>
+        <input type="color" id="accShopCantAfford" class="acc-color-input" value="#e05555">
+      </div>
+      </section>
+      <section class="settings-group">
+      <h3 class="settings-group__title">Tutorial</h3>
       <div class="access-row">
         <div class="access-text">
           <span class="access-label">Replay tutorial on next run</span>
@@ -1704,20 +1770,7 @@
         </div>
         <label class="toggle"><input type="checkbox" id="accReplayTutorial"><span class="toggle-track"><span class="toggle-thumb"></span></span></label>
       </div>
-      <div class="access-row">
-        <div class="access-text">
-          <span class="access-label">Shop — can afford colour</span>
-          <span class="access-desc">Price tag and buy button colour when you have enough coins.</span>
-        </div>
-        <input type="color" id="accShopCanAfford" class="acc-color-input" value="#4caf50">
-      </div>
-      <div class="access-row">
-        <div class="access-text">
-          <span class="access-label">Shop — can't afford colour</span>
-          <span class="access-desc">Price tag and buy button colour when you don't have enough coins.</span>
-        </div>
-        <input type="color" id="accShopCantAfford" class="acc-color-input" value="#e05555">
-      </div>
+      </section>
     </div>
   </div>
 </div>

@@ -12,7 +12,7 @@ export function createUIController(view) {
         typeSpeed: 0.028,
         autoAdvanceDelay: 1.35,
         autoAdvanceEnabled: () => window.NeoSettings?.shouldAutoAdvanceCutscenes?.() === true,
-        onWordRevealed: () => Neo.playSfx?.('dialogue'),
+        onCharRevealed: () => Neo.playSfx?.('dialogue'),
         onOpen: () => Neo.clearGameplayInput(),
         onClose: () => Neo.clearGameplayInput(),
       })

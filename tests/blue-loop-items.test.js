@@ -177,7 +177,7 @@ describe('loop-exclusive Blue relics', () => {
     expect(canDuplicateItemPickup('neo_knife')).toBe(true);
   });
 
-  test('Artificer Charger grants its benefit first and kills on the second pickup', () => {
+  test('Artificer Charger grants its benefit first and kills on the second pickup only without Loop Crystals', () => {
     jest.useFakeTimers();
     const previousWindow = global.window;
     global.window = { achievementEvents: { emit: jest.fn() } };
@@ -190,8 +190,10 @@ describe('loop-exclusive Blue relics', () => {
         attackPower: 10,
         attackSpeed: 1,
       },
+      metaProgress: { loopCrystals: 2 },
       getArtificerLevelGains: () => ({ maxHp: 16, attackPower: 4, attackSpeed: 0.02 }),
       spawnParticle: jest.fn(),
+      persistMetaSoon: jest.fn(),
       die: jest.fn(),
     };
     const applyArtificerChargerPickup = extractFunction(
@@ -204,9 +206,21 @@ describe('loop-exclusive Blue relics', () => {
 
     expect(Neo.player.level).toBe(6);
     expect(Neo.player.hp).toBeGreaterThan(0);
+    expect(Neo.metaProgress.loopCrystals).toBe(2);
     expect(Neo.die).not.toHaveBeenCalled();
 
+    // With crystals banked, a duplicate pickup spends one and the player lives.
     applyArtificerChargerPickup(1, 1);
+    jest.runOnlyPendingTimers();
+
+    expect(Neo.metaProgress.loopCrystals).toBe(1);
+    expect(Neo.persistMetaSoon).toHaveBeenCalled();
+    expect(Neo.player.hp).toBeGreaterThan(0);
+    expect(Neo.die).not.toHaveBeenCalled();
+
+    // With an empty balance, the duplicate pickup is lethal as before.
+    Neo.metaProgress.loopCrystals = 0;
+    applyArtificerChargerPickup(2, 1);
     jest.runOnlyPendingTimers();
 
     expect(Neo.player.hp).toBe(0);
