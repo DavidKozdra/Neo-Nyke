@@ -1602,15 +1602,19 @@ button, input, select, textarea {
 
 /* Inherits frame from .panel-shell; overrides only what differs. */
 .game-panel {
+  width: min(920px, calc(100vw - 32px));
   max-height: min(84vh, 860px);
+  box-sizing: border-box;
   border: 2px solid var(--menu-border);
   border-top-color: var(--menu-border-strong);
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 #invPanel.game-panel {
   opacity: 1;
   visibility: visible;
-  transform: translate(-50%, -50%) scale(1.5);
+  transform: translate(-50%, -50%);
   transform-origin: center;
   will-change: transform, opacity;
   scrollbar-width: thin;
@@ -1624,12 +1628,12 @@ button, input, select, textarea {
   transform: translate(-50%, -50%) scale(1);
 }
 
-/* Match the inventory panel: shop inventory and forge (anvil) panels render
-   at 1.5x scale. .hidden still uses display:none, so no open/close transform
-   override is needed here. */
+/* Gameplay panels use their authored dimensions directly. Scaling a fixed
+   panel also scales it beyond its viewport constraints and pushes controls
+   off-screen on laptops and phones. */
 #shopPanel.game-panel,
 #anvilPanel.game-panel {
-  transform: translate(-50%, -50%) scale(1.5);
+  transform: translate(-50%, -50%);
   transform-origin: center;
 }
 
