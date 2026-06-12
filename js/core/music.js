@@ -13,6 +13,17 @@
 
   let titleIntro = null;
   let titleLoop = null;
+  let titleAudioContext = null;
+  let titleGainNode = null;
+  let titleBuffersPromise = null;
+  let titleIntroSource = null;
+  let titleLoopSource = null;
+  let titleSequenceActive = false;
+  let titleSequencePending = false;
+  let titleSequenceStartedAt = 0;
+  let titleSequenceOffset = 0;
+  let titleSequenceGeneration = 0;
+  let titleWebAudioFailed = false;
   let gameTrack = null;
   let gameTrackPath = null;
   let unlockedByGesture = false;
@@ -44,7 +55,7 @@
     return audio;
   }
 
-  function ensureTitleTracks() {
+  function ensureFallbackTitleTracks() {
     if (!titleLoop) {
       titleLoop = makeAudio(TITLE_LOOP_PATH, { loop: true });
     }
@@ -58,6 +69,123 @@
         if (titleLoop.volume <= 0) return;
         void titleLoop.play().catch(() => {});
       });
+    }
+  }
+
+  function getTitleAudioContext() {
+    if (titleWebAudioFailed) return null;
+    const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextCtor) return null;
+    try {
+      titleAudioContext = Neo.mooggyAudioContext || titleAudioContext || new AudioContextCtor();
+      Neo.mooggyAudioContext = titleAudioContext;
+      if (!titleGainNode) {
+        titleGainNode = titleAudioContext.createGain();
+        titleGainNode.gain.value = getMusicGain();
+        titleGainNode.connect(titleAudioContext.destination);
+      }
+      return titleAudioContext;
+    } catch {
+      titleWebAudioFailed = true;
+      return null;
+    }
+  }
+
+  function loadTitleBuffers() {
+    const context = getTitleAudioContext();
+    if (!context) return null;
+    if (titleBuffersPromise) return titleBuffersPromise;
+    const load = (path) => fetch(encodeURI(path))
+      .then((response) => {
+        if (!response.ok) throw new Error(`music fetch failed: ${path}`);
+        return response.arrayBuffer();
+      })
+      .then((data) => context.decodeAudioData(data));
+    titleBuffersPromise = Promise.all([
+      load(TITLE_INTRO_PATH),
+      load(TITLE_LOOP_PATH),
+    ]).catch((error) => {
+      titleBuffersPromise = null;
+      titleWebAudioFailed = true;
+      throw error;
+    });
+    return titleBuffersPromise;
+  }
+
+  function stopTitleSources({ reset = false } = {}) {
+    titleSequenceGeneration += 1;
+    titleSequencePending = false;
+    if (titleSequenceActive && titleAudioContext) {
+      titleSequenceOffset = Math.max(0, titleAudioContext.currentTime - titleSequenceStartedAt);
+    }
+    try { titleIntroSource?.stop(); } catch {}
+    try { titleLoopSource?.stop(); } catch {}
+    titleIntroSource = null;
+    titleLoopSource = null;
+    titleSequenceActive = false;
+    if (reset) titleSequenceOffset = 0;
+  }
+
+  async function playScheduledTitleSequence() {
+    if (titleSequenceActive || titleSequencePending || titleWebAudioFailed) return false;
+    const context = getTitleAudioContext();
+    const buffersPromise = loadTitleBuffers();
+    if (!context || !buffersPromise) return false;
+
+    titleSequencePending = true;
+    const generation = ++titleSequenceGeneration;
+    try {
+      await context.resume();
+      const [introBuffer, loopBuffer] = await buffersPromise;
+      if (
+        generation !== titleSequenceGeneration
+        || activeContext !== 'menu'
+        || !unlockedByGesture
+        || getMusicGain() <= 0
+      ) {
+        titleSequencePending = false;
+        return true;
+      }
+
+      const when = context.currentTime + 0.04;
+      const sequenceOffset = Math.max(0, titleSequenceOffset);
+      const introDuration = introBuffer.duration;
+      const loopDuration = loopBuffer.duration;
+      titleSequenceStartedAt = when - sequenceOffset;
+
+      if (sequenceOffset < introDuration) {
+        titleIntroSource = context.createBufferSource();
+        titleIntroSource.buffer = introBuffer;
+        titleIntroSource.connect(titleGainNode);
+        titleIntroSource.start(when, sequenceOffset);
+
+        titleLoopSource = context.createBufferSource();
+        titleLoopSource.buffer = loopBuffer;
+        titleLoopSource.loop = true;
+        titleLoopSource.connect(titleGainNode);
+        // Both sources share one hardware audio clock, so this boundary is
+        // sample-accurate and does not depend on an `ended` event callback.
+        titleLoopSource.start(when + introDuration - sequenceOffset);
+      } else {
+        const loopOffset = loopDuration > 0
+          ? (sequenceOffset - introDuration) % loopDuration
+          : 0;
+        titleLoopSource = context.createBufferSource();
+        titleLoopSource.buffer = loopBuffer;
+        titleLoopSource.loop = true;
+        titleLoopSource.connect(titleGainNode);
+        titleLoopSource.start(when, loopOffset);
+      }
+
+      titleSequenceActive = true;
+      titleSequencePending = false;
+      titleHandedOff = sequenceOffset >= introDuration;
+      return true;
+    } catch {
+      titleSequencePending = false;
+      titleWebAudioFailed = true;
+      stopTitleSources();
+      return false;
     }
   }
 
@@ -84,14 +212,23 @@
 
   function applyVolume() {
     const gain = getMusicGain();
+    if (titleGainNode && titleAudioContext) {
+      titleGainNode.gain.setValueAtTime(gain, titleAudioContext.currentTime);
+    }
     if (titleIntro) titleIntro.volume = gain;
     if (titleLoop) titleLoop.volume = gain;
     if (gameTrack) gameTrack.volume = gain;
   }
 
-  function pauseMenuMusic() {
+  function pauseMenuMusic({ reset = false } = {}) {
+    stopTitleSources({ reset });
     try { titleIntro?.pause(); } catch {}
     try { titleLoop?.pause(); } catch {}
+    if (reset) {
+      if (titleIntro) titleIntro.currentTime = 0;
+      if (titleLoop) titleLoop.currentTime = 0;
+      titleHandedOff = false;
+    }
   }
 
   function pauseGameMusic() {
@@ -104,12 +241,23 @@
   }
 
   function playMenuMusic() {
-    ensureTitleTracks();
     applyVolume();
     if (getMusicGain() <= 0) {
       pauseMenuMusic();
       return;
     }
+    if (!titleWebAudioFailed) {
+      void playScheduledTitleSequence().then((scheduled) => {
+        if (!scheduled && activeContext === 'menu') playFallbackTitleMusic();
+      });
+      return;
+    }
+    playFallbackTitleMusic();
+  }
+
+  function playFallbackTitleMusic() {
+    ensureFallbackTitleTracks();
+    applyVolume();
     // Once the intro has handed off, only ever drive the looping theme. This
     // prevents a sync tick during the handoff window from restarting the intro
     // on top of the loop (the doubled/layered audio bug).
@@ -227,12 +375,8 @@
     if (context !== activeContext) {
       // Context changed: stop whatever the previous context was playing.
       if (activeContext === 'menu') {
-        pauseMenuMusic();
-        // Rewind the intro so returning to the menu starts it from the top
-        // rather than mid-track, and re-arm the intro→loop handoff.
-        if (titleIntro) titleIntro.currentTime = 0;
-        if (titleLoop) titleLoop.currentTime = 0;
-        titleHandedOff = false;
+        // Returning to the menu starts the title sequence from the top.
+        pauseMenuMusic({ reset: true });
       }
       if (activeContext === 'game') pauseGameMusic();
       activeContext = context;
@@ -274,6 +418,13 @@
 
   // Keep music in sync with state transitions without requiring explicit hooks.
   window.setInterval(syncMusicState, 400);
+
+  // Start fetching and decoding early so the complete intro and loop are ready
+  // before the first user gesture unlocks playback.
+  const titlePreload = loadTitleBuffers();
+  if (titlePreload) void titlePreload.catch(() => {
+    ensureFallbackTitleTracks();
+  });
 
   Neo.playTitleMusic = () => {
     unlockedByGesture = true;
