@@ -939,7 +939,7 @@ export const CHARACTER_DEFS = {
 
 export const HERO_DISPLAY = {
   princess: {
-    lore: 'Best first pick. High damage, high HP.',
+    lore: 'A girls girl,  High damage, high HP high confidence shes right about a fight she started.',
     stats: [
       { label: 'HP',    pct: 90, color: '#f47ebd' },
       { label: 'DMG',   pct: 80, color: '#ff9ccf' },
@@ -948,7 +948,7 @@ export const HERO_DISPLAY = {
     ],
   },
   thorn_knight: {
-    lore: 'Close-range fighter. Bleed stacks get stronger.',
+    lore: 'Sheding his old ways and ready to shed enemy skin. Bleed stacks get stronger.',
     stats: [
       { label: 'HP',    pct: 66, color: '#c06060' },
       { label: 'DMG',   pct: 66, color: '#c08040' },
@@ -957,7 +957,7 @@ export const HERO_DISPLAY = {
     ],
   },
   metao: {
-    lore: 'Long-range magic. Slower shots, bigger hits.',
+    lore: 'Magi Rabi and full on magic super spy bigger hits.',
     stats: [
       { label: 'HP',    pct: 66, color: '#c06060' },
       { label: 'DMG',   pct: 48, color: '#c08040' },
@@ -975,7 +975,7 @@ export const HERO_DISPLAY = {
     ],
   },
   mooggy: {
-    lore: 'Fast ranged assassin. Unlock by beating Mooggy.',
+    lore: 'Fast loud monster willing to fight for you as long as you keep supply of churu high. Unlock by beating Mooggy.',
     stats: [
       { label: 'HP',    pct: 70, color: '#f4f4ef' },
       { label: 'DMG',   pct: 78, color: '#ff5c6f' },
