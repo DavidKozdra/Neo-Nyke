@@ -1882,8 +1882,8 @@
         }
         hazard.tick -= dt;
         if (hazard.tick <= 0) {
-          hazard.tick = hazard.interval || 0.16;
-          const blasts = 1 + (Neo.nextRandom('fx') < 0.45 ? 1 : 0);
+          hazard.tick = hazard.interval || 0.22;
+          const blasts = 1 + (Neo.nextRandom('fx') < 0.25 ? 1 : 0);
           for (let b = 0; b < blasts; b += 1) {
             Neo.spawnChaosBlast(hazard.x, hazard.y, hazard.aoeRadiusMultiplier || 1, hazard.aoeDamageMultiplier || 1, !!hazard.isMetao);
           }
@@ -2705,6 +2705,7 @@
         }
         if (Neo.ladderUseKeyLatch) continue;
         Neo.ladderUseKeyLatch = true;
+        Neo.playSfx?.('ladder');
         if (Neo.gameMode === 'treasure_hunt' && Neo.floor >= Neo.MAX_FLOOR) {
           Neo.win();
           return;
@@ -3100,6 +3101,7 @@
   function startTransition(direction) {
     Neo.fading = 1;
     Neo.nextDoor = direction;
+    Neo.playSfx?.('room_transition');
   }
 
   function snapCameraToEntity(cam, entity, vpW, vpH) {

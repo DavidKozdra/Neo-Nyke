@@ -16,6 +16,9 @@
       // When provided, auto-advance only happens if this returns truthy.
       // Otherwise dialogue waits for an explicit advance() (click/key).
       this.autoAdvanceEnabled = typeof opts.autoAdvanceEnabled === "function" ? opts.autoAdvanceEnabled : null;
+      // Fired when typing reveals the first character of a new word (at most
+      // once per update tick), and once when advance() fast-forwards a line.
+      this.onWordRevealed = typeof opts.onWordRevealed === "function" ? opts.onWordRevealed : null;
       this.onOpen = typeof opts.onOpen === "function" ? opts.onOpen : null;
       this.onClose = typeof opts.onClose === "function" ? opts.onClose : null;
       this.changeListeners = [];
@@ -112,13 +115,17 @@
       const step = Math.max(0, Number(dt) || 0);
       if (this.charIndex < this.current.text.length) {
         this.charTimer += step;
+        let revealedNewWord = false;
         while (this.charIndex < this.current.text.length && this.charTimer >= this.typeSpeed) {
           this.charTimer -= this.typeSpeed;
           this.charIndex += 1;
           this.visibleText = this.current.text.slice(0, this.charIndex);
           const char = this.current.text[this.charIndex - 1];
+          const prevChar = this.charIndex > 1 ? this.current.text[this.charIndex - 2] : " ";
+          if (/\S/.test(char) && /\s/.test(prevChar)) revealedNewWord = true;
           if (/[.,!?]/.test(char)) this.charTimer -= this.punctuationPause;
         }
+        if (revealedNewWord && this.onWordRevealed) this.onWordRevealed();
         this._emitChange();
         return;
       }
@@ -137,6 +144,7 @@
         this.visibleText = this.current.text;
         this.charTimer = 0;
         this.holdTimer = 0;
+        if (this.onWordRevealed) this.onWordRevealed();
         this._emitChange();
         return true;
       }

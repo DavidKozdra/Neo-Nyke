@@ -1733,7 +1733,7 @@ export const MOVE_BASE_STATS = {
     god_sweep:        { damage: 40,  cooldown: 7.20, range: 320 },
     crimson_smash:    { damage: 55,  cooldown: 3.80, range: 140 },
     kicky_kick:       { damage: 92,  cooldown: 4.20, range: 138 },
-    chaos_burst:      { damage: 38,  cooldown: 5.40, range: 100 },
+    chaos_burst:      { damage: 30,  cooldown: 5.40, range: 100 },
     healing_zone:     { damage: 12,  cooldown: 5.00, duration: 3.0, range: 130 },
     fire_circle:      { damage: 18,  cooldown: 4.50, duration: 3.5, range: 100 },
     floor_lava:       { damage: 12,  cooldown: 5.00, duration: 4.0, range: 160 },

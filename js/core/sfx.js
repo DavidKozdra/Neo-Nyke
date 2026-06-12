@@ -35,6 +35,17 @@
         'assets/sounds/sfx_Sword Swing 2.wav',
       ],
     },
+    {
+      id: 'dialogue',
+      volume: 0.6,
+      paths: [
+        'assets/sounds/sfx_Dialogue 1.wav',
+        'assets/sounds/sfx_Dialogue 2.wav',
+        'assets/sounds/sfx_Dialogue 3.wav',
+      ],
+    },
+    { id: 'room_transition', path: 'assets/sounds/sfx_room transition.wav', volume: 0.6 },
+    { id: 'ladder', path: 'assets/sounds/sfx_ladder.wav', volume: 0.7 },
   ];
 
   // Local source of truth for playback: id -> { paths[], volume }. We keep this

@@ -1722,7 +1722,7 @@
     const aoeDamageMultiplier = itemStats.aoeDamageMultiplier || 1;
     const isMetao = Neo.player?.character === 'metao';
     // Fire an immediate volley so the cast feels punchy...
-    for (let index = 0; index < 6; index += 1) {
+    for (let index = 0; index < 4; index += 1) {
       spawnChaosBlast(Neo.player.x, Neo.player.y, aoeRadiusMultiplier, aoeDamageMultiplier, isMetao);
     }
     // ...then drop a lingering chaos field that keeps erupting random AOEs
@@ -1732,9 +1732,9 @@
       x: Neo.player.x,
       y: Neo.player.y,
       r: 180 * aoeRadiusMultiplier,
-      ttl: 2.25,
+      ttl: 1.8,
       tick: 0,
-      interval: 0.16,
+      interval: 0.22,
       followPlayer: true,
       aoeRadiusMultiplier,
       aoeDamageMultiplier,
@@ -1749,7 +1749,7 @@
     const px = ox + Math.cos(angle) * Neo.rand(180, 30);
     const py = oy + Math.sin(angle) * Neo.rand(180, 30);
     Neo.spawnParticle({ x: px, y: py, life: 0.45, ring: 18 * aoeRadiusMultiplier, c: '#a857ff' });
-    Neo.blastRadius(px, py, 52 * aoeRadiusMultiplier, Math.round(24 * aoeDamageMultiplier), '#a857ff');
+    Neo.blastRadius(px, py, 52 * aoeRadiusMultiplier, Math.round(18 * aoeDamageMultiplier), '#a857ff');
     applyStatusInRadius(px, py, 52 * aoeRadiusMultiplier, 'poison', 1, 4.8);
     if (isMetao) applyStatusInRadius(px, py, 52 * aoeRadiusMultiplier, 'fire', 1, 3.5);
   }
