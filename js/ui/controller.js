@@ -13,8 +13,14 @@ export function createUIController(view) {
         autoAdvanceDelay: 1.35,
         autoAdvanceEnabled: () => window.NeoSettings?.shouldAutoAdvanceCutscenes?.() === true,
         onCharRevealed: () => Neo.playSfx?.('dialogue'),
-        onOpen: () => Neo.clearGameplayInput(),
-        onClose: () => Neo.clearGameplayInput(),
+        onOpen: () => {
+          Neo.clearGameplayInput();
+          Neo.beginDialogueMusic?.();
+        },
+        onClose: () => {
+          Neo.clearGameplayInput();
+          Neo.endDialogueMusic?.();
+        },
       })
       : null;
     const worldSpeechRuntime = typeof WorldSpeechBubbleCtor === 'function'

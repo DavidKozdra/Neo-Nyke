@@ -1,13 +1,11 @@
 // music.js — menu and in-game music playback for the main game runtime.
 // Menu plays a one-shot title intro that hands off into a looping title theme.
-// In-game states play one of several gameplay tracks, picked at random.
+// In-game states play the dedicated gameplay loop.
 (function initMusic() {
+  const mixerApi = window.KozEngine?.Audio?.mixerSystem || null;
   const TITLE_INTRO_PATH = 'assets/sounds/music/Neo Nyke - Title Intro.wav';
   const TITLE_LOOP_PATH = 'assets/sounds/music/Neo Nyke - Title Loop.wav';
-  const GAME_TRACK_PATHS = [
-    'assets/sounds/music/Neo Nyke - main theme.mp3',
-    'assets/sounds/music/Neo Nyke - Gameplay (Loop).wav',
-  ];
+  const GAMEPLAY_TRACK_PATH = 'assets/sounds/music/Neo Nyke - Gameplay (Loop).wav';
 
   const MENU_STATES = new Set(['menu', 'charselect', 'start']);
   const GAME_STATES = new Set(['play', 'dialogue', 'boss_rush', 'endless']);
@@ -34,6 +32,9 @@
   let titleHandedOff = false;
   // Which musical context is currently meant to be sounding: 'menu', 'game', or null.
   let activeContext = null;
+  let musicMood = mixerApi?.resolveMood?.('normal') || { name: 'normal', rate: 1, gain: 1 };
+  const ducking = mixerApi?.createDuckingController?.({ attackMs: 80, releaseMs: 600 }) || null;
+  let mixTick = null;
 
   function clamp01(value) {
     const n = Number(value);
@@ -41,11 +42,37 @@
     return Math.max(0, Math.min(1, n));
   }
 
-  function getMusicGain() {
+  function getBaseMusicGain() {
     const volume = window.NeoSettings?.getVolume?.() || {};
     const master = clamp01(Number(volume.master ?? 20) / 100);
     const music = clamp01(Number(volume.music ?? 20) / 100);
     return master * music;
+  }
+
+  function mixNow() {
+    return typeof performance !== 'undefined' && typeof performance.now === 'function'
+      ? performance.now()
+      : Date.now();
+  }
+
+  function getMusicGain() {
+    const moodGain = activeContext === 'game' ? Number(musicMood.gain ?? 1) : 1;
+    const duckGain = ducking?.update?.(mixNow()) ?? 1;
+    return getBaseMusicGain() * Math.max(0, moodGain) * clamp01(duckGain);
+  }
+
+  function stopMixTick() {
+    if (mixTick == null) return;
+    window.clearInterval?.(mixTick);
+    mixTick = null;
+  }
+
+  function ensureMixTick() {
+    if (!ducking || mixTick != null) return;
+    mixTick = window.setInterval(() => {
+      applyVolume();
+      if (ducking.isIdle(mixNow())) stopMixTick();
+    }, 25);
   }
 
   function makeAudio(path, { loop }) {
@@ -193,17 +220,11 @@
     }
   }
 
-  function pickGameTrackPath() {
-    if (GAME_TRACK_PATHS.length === 0) return null;
-    const index = Math.floor(Math.random() * GAME_TRACK_PATHS.length);
-    return GAME_TRACK_PATHS[index];
-  }
-
   function ensureGameTrack() {
     if (gameTrack && gameTrackPath) return gameTrack;
-    gameTrackPath = pickGameTrackPath();
-    if (!gameTrackPath) return null;
+    gameTrackPath = GAMEPLAY_TRACK_PATH;
     gameTrack = makeAudio(gameTrackPath, { loop: true });
+    applyGameMood();
     return gameTrack;
   }
 
@@ -222,6 +243,40 @@
     if (titleIntro) titleIntro.volume = gain;
     if (titleLoop) titleLoop.volume = gain;
     if (gameTrack) gameTrack.volume = gain;
+    if (jukeboxAudio) jukeboxAudio.volume = gain;
+  }
+
+  function applyGameMood() {
+    if (!gameTrack) return;
+    gameTrack.playbackRate = Math.max(0.5, Math.min(2, Number(musicMood.rate ?? 1)));
+  }
+
+  function holdMusicMix(token, gain) {
+    if (!ducking) return;
+    ducking.hold(token, gain, mixNow());
+    ensureMixTick();
+    applyVolume();
+  }
+
+  function duckMusicFor(token, gain, holdMs) {
+    if (!ducking) return;
+    ducking.duckFor(token, gain, holdMs, mixNow());
+    ensureMixTick();
+    applyVolume();
+  }
+
+  function releaseMusicMix(token) {
+    if (!ducking) return;
+    ducking.release(token);
+    ensureMixTick();
+    applyVolume();
+  }
+
+  function setMusicMood(name) {
+    musicMood = mixerApi?.resolveMood?.(name) || { name: 'normal', rate: 1, gain: 1 };
+    applyGameMood();
+    applyVolume();
+    return musicMood.name;
   }
 
   function pauseMenuMusic({ reset = false } = {}) {
@@ -371,7 +426,6 @@
     // While the jukebox owns playback, leave its selection alone.
     if (jukeboxActive) {
       applyVolume();
-      if (jukeboxAudio) jukeboxAudio.volume = getMusicGain();
       return;
     }
     const context = currentContext();
@@ -438,6 +492,17 @@
   Neo.pauseTitleMusic = pauseMenuMusic;
   Neo.syncTitleMusic = syncMusicState;
   Neo.pauseGameMusic = pauseGameMusic;
+  Neo.musicMix = {
+    hold: holdMusicMix,
+    duckFor: duckMusicFor,
+    release: releaseMusicMix,
+    setMood: setMusicMood,
+    getMood: () => musicMood.name,
+  };
+  Neo.beginDialogueMusic = () => {
+    if (currentContext() === 'game') holdMusicMix('dialogue', 0);
+  };
+  Neo.endDialogueMusic = () => releaseMusicMix('dialogue');
   Neo.jukebox = {
     play: jukeboxPlay,
     pause: jukeboxPause,

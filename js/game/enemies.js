@@ -1208,15 +1208,22 @@
 
   function sayOverEntity(entity, text, options = {}) {
     if (!entity || !text) return null;
-    return Neo.uiController.sayAtWorldAnchor({
+    const tone = options.tone || 'boss';
+    const bubbleId = Neo.uiController.sayAtWorldAnchor({
       anchor: () => Neo.enemies.includes(entity) ? { x: entity.x, y: entity.y } : null,
       speaker: options.speaker || Neo.getBossLabel(entity.type),
       text,
       offsetY: options.offsetY ?? (entity.r ? entity.r + 26 : 56),
-      tone: options.tone || 'boss',
+      tone,
       typeSpeed: options.typeSpeed,
       holdTime: options.holdTime,
     });
+    if (bubbleId && tone === 'boss' && Neo.gameState === 'play') {
+      const typeSeconds = String(text).length * Math.max(0.01, Number(options.typeSpeed) || 0.024);
+      const holdSeconds = Math.max(0.4, Number(options.holdTime) || 1.55);
+      Neo.musicMix?.duckFor?.(`boss-dialogue:${bubbleId}`, 0, (typeSeconds + holdSeconds) * 1000);
+    }
+    return bubbleId;
   }
 
   function sayAtPosition(x, y, text, options = {}) {

@@ -318,6 +318,10 @@
       path: "Koz_Engine_Lib/Audio/soundRegistry.js",
       register: ["Audio", "soundRegistry"],
     },
+    {
+      path: "Koz_Engine_Lib/Audio/mixerSystem.js",
+      register: ["Audio", "mixerSystem"],
+    },
   ];
 
   for (const def of moduleDefs) {
