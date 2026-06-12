@@ -3070,6 +3070,16 @@
     });
   }
 
+  function dropFinalRivalRelic(enemy) {
+    const blueKeys = Object.keys(Neo.ITEM_DEFS || {}).filter(
+      key => String(Neo.ITEM_DEFS[key]?.rarity || '').toLowerCase() === 'blue',
+    );
+    if (blueKeys.length === 0) return '';
+    const key = blueKeys[Math.floor(Neo.nextRandom('loot') * blueKeys.length)];
+    Neo.pickups.push({ x: enemy.x, y: enemy.y - 8, type: 'item', key });
+    return key;
+  }
+
   function onEnemyDie(enemy, options = {}) {
     if (enemy.type === 'god' && !enemy.rebirthUsed && !options.forceDeath) {
       enemy.rebirthUsed = true;
@@ -3223,9 +3233,9 @@
 
     const eliteItemDropChance = Neo.getRandomItemDropChance(0.18, 0.65);
     const normalItemDropChance = Neo.getRandomItemDropChance(0, 0.35);
-    if (!isTutorialDummy && enemy.elite && enemyLootRandom() < eliteItemDropChance) {
+    if (!isTutorialDummy && enemy.type !== 'rival' && enemy.elite && enemyLootRandom() < eliteItemDropChance) {
       Neo.pickups.push({ x: enemy.x, y: enemy.y, type: 'item', key: rollItemDrop({ elite: true, random: enemyLootRandom }) });
-    } else if (!isTutorialDummy && !enemy.elite && normalItemDropChance > 0 && enemyLootRandom() < normalItemDropChance) {
+    } else if (!isTutorialDummy && enemy.type !== 'rival' && !enemy.elite && normalItemDropChance > 0 && enemyLootRandom() < normalItemDropChance) {
       Neo.pickups.push({ x: enemy.x, y: enemy.y, type: 'item', key: rollItemDrop({ random: enemyLootRandom }) });
     } else if (!isTutorialDummy && enemyLootRandom() < 0.1) {
       Neo.pickups.push({ x: enemy.x, y: enemy.y, type: 'potion' });
@@ -3366,26 +3376,9 @@
         const stolenLoot = Array.isArray(rival.loot) ? rival.loot : [];
         const finalDeath = rival.lives <= 0;
         if (finalDeath) {
-          // All lives taken: they drop everything plus a guaranteed random
-          // blue item, and never come after the player again this run.
-          stolenLoot.forEach(item => {
-            const x = enemy.x + Neo.rand(-22, 22, 'loot');
-            const y = enemy.y + Neo.rand(-14, 14, 'loot');
-            if (item.type === 'item' && item.key) {
-              Neo.pickups.push({ x, y, type: 'item', key: item.key });
-            } else if (item.type === 'potion') {
-              Neo.pickups.push({ x, y, type: 'potion' });
-            } else if (item.type === 'coin') {
-              Neo.pickups.push({ x, y, type: 'coin', value: Math.max(1, Math.round(Number(item.value) || 1)) });
-            }
-          });
-          const blueKeys = Object.keys(Neo.ITEM_DEFS || {}).filter(key => String(Neo.ITEM_DEFS[key]?.rarity || '').toLowerCase() === 'blue');
-          if (blueKeys.length > 0) {
-            Neo.pickups.push({ x: enemy.x, y: enemy.y - 8, type: 'item', key: blueKeys[Math.floor(Neo.nextRandom('loot') * blueKeys.length)] });
-          }
-          if (Neo.nextRandom('loot') < 0.05) {
-            Neo.pickups.push({ x: enemy.x, y: enemy.y + 10, type: 'item', key: 'veggys_pendant' });
-          }
+          // The large item windfall belongs to the surviving rivals. A final
+          // kill gives the player one relic instead of spilling the full pack.
+          dropFinalRivalRelic(enemy);
           if (!Array.isArray(Neo.slainRivalKeys)) Neo.slainRivalKeys = [];
           if (!Neo.slainRivalKeys.includes(rival.characterKey)) Neo.slainRivalKeys.push(rival.characterKey);
           Neo.spawnParticle({ x: enemy.x, y: enemy.y - 44, life: 2.2, text: 'SLAIN FOR GOOD', c: '#9fd0ff' });
@@ -3881,6 +3874,7 @@
   Neo.aimEnemyBeam = aimEnemyBeam;
   Neo.tickEnemyBeam = tickEnemyBeam;
   Neo.spawnEnemyCorpse = spawnEnemyCorpse;
+  Neo.dropFinalRivalRelic = dropFinalRivalRelic;
   Neo.onEnemyDie = onEnemyDie;
   Neo.onEndlessWaveCleared = onEndlessWaveCleared;
   Neo.spawnNextEndlessWave = spawnNextEndlessWave;

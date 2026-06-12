@@ -109,6 +109,7 @@ export function loop(timestamp) {
   };
 
   function updateEnemyByType(enemy, dt) {
+    if (Neo.updateEnemyProjectileEvade?.(enemy, dt)) return;
     const methodName = ENEMY_UPDATE_METHOD_BY_TYPE[String(enemy?.type || '').toLowerCase()] || 'updateHunterEnemy';
     const handler = Neo[methodName];
     if (typeof handler === 'function') handler(enemy, dt);

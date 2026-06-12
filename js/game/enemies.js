@@ -790,6 +790,7 @@
       type,
       x,
       y,
+      level: Math.max(getProgressionDepth(), Number(Neo.player?.level) || 1),
       vx: 0,
       vy: 0,
       r: 15,
@@ -977,12 +978,13 @@
       base.hp = 2400;
       base.max = 2400;
       base.speed = 80;
-      base.dmg = 22;
+      base.dmg = 36;
       base.attackCd = 1.4;
       base.phase = 1;
       base.bleedImmune = true;
       base.columnCd = 0;
       base.burstCd = 0;
+      base.bowmanWarpCd = 2.8;
     } else if (type === 'antony_blemmye') {
       base.r = 42;
       base.hp = 1250;
@@ -1861,6 +1863,263 @@
 
   function isBossType(type) {
     return Neo.BOSS_TYPES.has(type);
+  }
+
+  function getEnemyProgressionLevel(enemy) {
+    return Math.max(
+      1,
+      Number(enemy?.level) || 0,
+      Number(enemy?.rivalData?.level) || 0,
+      Number(Neo.player?.level) || 0,
+      Number(Neo.getProgressionDepth?.()) || 0,
+      Number(Neo.floorsEntered) || 0,
+      Number(Neo.floor) || 0,
+    );
+  }
+
+  function getEnemyEvadeDifficultyLevel() {
+    const difficulty = Neo.getDifficultyDef?.() || {};
+    const key = String(difficulty.key || Neo.selectedDifficulty || 'easy');
+    const fixedRanks = { easy: 0, medium: 1, hard: 2, impossible: 3, god: 4 };
+    if (Object.prototype.hasOwnProperty.call(fixedRanks, key)) return fixedRanks[key];
+    const statMultiplier = Math.max(1, Number(difficulty.statMultiplier || 1));
+    if (statMultiplier >= 1.7) return 4;
+    if (statMultiplier >= 1.3) return 3;
+    if (statMultiplier >= 1.16) return 2;
+    if (statMultiplier >= 1.05) return 1;
+    return 0;
+  }
+
+  function getEnemyProjectileEvadeChance(enemy) {
+    if (!enemy || enemy.type === 'rival' && enemy.rivalData?.friend) return 0;
+    const level = getEnemyProgressionLevel(enemy);
+    const difficultyBonus = [0, 0.06, 0.14, 0.23, 0.33][getEnemyEvadeDifficultyLevel()] || 0;
+    const roleBonus = isBossType(enemy.type)
+      ? 0.2
+      : enemy.type === 'rival'
+        ? 0.14
+        : enemy.elite
+          ? 0.08
+          : 0;
+    return Neo.clamp(0.02 + (level - 1) * 0.018 + difficultyBonus + roleBonus, 0.02, 0.9);
+  }
+
+  function getEnemyIncomingThreat(enemy, padding = 30) {
+    if (!enemy) return null;
+    if (Neo.laserActive && Array.isArray(Neo.activeBeamPaths)) {
+      for (const path of Neo.activeBeamPaths) {
+        if (!Array.isArray(path)) continue;
+        const segment = Neo.beamPathHitsCircle(path, enemy.x, enemy.y, enemy.r + padding);
+        if (segment) return { segment, source: 'player_beam', timeToImpact: 0 };
+      }
+    }
+
+    let best = null;
+    const projectiles = Array.isArray(Neo.projectiles) ? Neo.projectiles : [];
+    for (const projectile of projectiles) {
+      if (!projectile || projectile.enemy || projectile.life <= 0) continue;
+      const vx = Number(projectile.vx || 0);
+      const vy = Number(projectile.vy || 0);
+      const speedSq = vx * vx + vy * vy;
+      if (speedSq < 1600) continue;
+      const dx = enemy.x - projectile.x;
+      const dy = enemy.y - projectile.y;
+      const toward = dx * vx + dy * vy;
+      if (toward <= 0) continue;
+      const horizon = Math.min(0.7, Math.max(0.12, Number(projectile.life || 0)));
+      const timeToImpact = Neo.clamp(toward / speedSq, 0, horizon);
+      if (timeToImpact <= 0 || timeToImpact >= horizon) continue;
+      const projectedX = projectile.x + vx * timeToImpact;
+      const projectedY = projectile.y + vy * timeToImpact;
+      const dangerRadius = enemy.r + Number(projectile.r || 0) + padding;
+      if (Neo.dist(projectedX, projectedY, enemy.x, enemy.y) > dangerRadius) continue;
+      if (!best || timeToImpact < best.timeToImpact) {
+        best = {
+          segment: {
+            x1: projectile.x,
+            y1: projectile.y,
+            x2: projectile.x + vx * horizon,
+            y2: projectile.y + vy * horizon,
+          },
+          source: projectile,
+          timeToImpact,
+        };
+      }
+    }
+    return best;
+  }
+
+  function isPointThreatenedByPlayerBeam(x, y, radius = 24) {
+    if (!Neo.laserActive || !Array.isArray(Neo.activeBeamPaths)) return false;
+    return Neo.activeBeamPaths.some(path =>
+      Array.isArray(path) && Neo.beamPathHitsCircle(path, x, y, radius));
+  }
+
+  function findEnemyEvadeDashAngle(enemy, threatSegment, dashDistance = 190) {
+    if (!enemy || !threatSegment) return null;
+    const beamAngle = Math.atan2(
+      threatSegment.y2 - threatSegment.y1,
+      threatSegment.x2 - threatSegment.x1,
+    );
+    const awayFromPlayer = Math.atan2(enemy.y - Neo.player.y, enemy.x - Neo.player.x);
+    const candidates = [
+      beamAngle + Math.PI / 2,
+      beamAngle - Math.PI / 2,
+      awayFromPlayer,
+      beamAngle + Math.PI / 2 + 0.42,
+      beamAngle + Math.PI / 2 - 0.42,
+      beamAngle - Math.PI / 2 + 0.42,
+      beamAngle - Math.PI / 2 - 0.42,
+    ];
+    let best = null;
+    candidates.forEach(angle => {
+      const targetX = Neo.clamp(
+        enemy.x + Math.cos(angle) * dashDistance,
+        Neo.WALL + enemy.r,
+        Neo.ROOM_W - Neo.WALL - enemy.r,
+      );
+      const targetY = Neo.clamp(
+        enemy.y + Math.sin(angle) * dashDistance,
+        Neo.WALL + enemy.r,
+        Neo.ROOM_H - Neo.WALL - enemy.r,
+      );
+      if (Neo.isBlocked(targetX, targetY, enemy.r)) return;
+      if (Neo.beamHitsCircle?.(
+        threatSegment.x1,
+        threatSegment.y1,
+        threatSegment.x2,
+        threatSegment.y2,
+        targetX,
+        targetY,
+        enemy.r + 12,
+      )) return;
+      if (isPointThreatenedByPlayerBeam(targetX, targetY, enemy.r + 12)) return;
+      const travel = Neo.dist(enemy.x, enemy.y, targetX, targetY);
+      const playerDistance = Neo.dist(Neo.player.x, Neo.player.y, targetX, targetY);
+      const score = travel + playerDistance * 0.18;
+      if (!best || score > best.score) best = { angle, score };
+    });
+    return best?.angle ?? null;
+  }
+
+  function findBowmanWarpDestination(enemy) {
+    if (!enemy || !Neo.player) return null;
+    const baseAngle = Math.atan2(enemy.y - Neo.player.y, enemy.x - Neo.player.x);
+    const idealRange = enemy.phase >= 2 ? 300 : 270;
+    let best = null;
+    for (let index = 0; index < 12; index += 1) {
+      const angle = baseAngle + Math.PI + (index / 12) * Math.PI * 2;
+      const range = idealRange + (index % 3 - 1) * 46;
+      const preferredX = Neo.clamp(
+        Neo.player.x + Math.cos(angle) * range,
+        Neo.WALL + enemy.r,
+        Neo.ROOM_W - Neo.WALL - enemy.r,
+      );
+      const preferredY = Neo.clamp(
+        Neo.player.y + Math.sin(angle) * range,
+        Neo.WALL + enemy.r,
+        Neo.ROOM_H - Neo.WALL - enemy.r,
+      );
+      const landing = findSafeEnemySpawnPoint(preferredX, preferredY, enemy.r);
+      if (!landing || isPointThreatenedByPlayerBeam(landing.x, landing.y, enemy.r + 18)) continue;
+      const playerDistance = Neo.dist(Neo.player.x, Neo.player.y, landing.x, landing.y);
+      const travel = Neo.dist(enemy.x, enemy.y, landing.x, landing.y);
+      if (travel < 120) continue;
+      const score = travel - Math.abs(playerDistance - idealRange) * 1.4;
+      if (!best || score > best.score) best = { ...landing, score };
+    }
+    return best;
+  }
+
+  function warpBowmanBane(enemy) {
+    const landing = findBowmanWarpDestination(enemy);
+    if (!landing) return false;
+    const fromX = enemy.x;
+    const fromY = enemy.y;
+    enemy.x = landing.x;
+    enemy.y = landing.y;
+    enemy.vx = 0;
+    enemy.vy = 0;
+    enemy.windup = 0;
+    enemy.beamTime = 0;
+    enemy.beamTick = 0;
+    enemy.inv = Math.max(Number(enemy.inv || 0), 0.2);
+    enemy.projectileEvadeCd = 2.4;
+    enemy.bowmanWarpCd = enemy.phase >= 2 ? 3.2 : 4.4;
+    Neo.spawnParticle({ x: fromX, y: fromY, life: 0.28, ring: 48, c: '#c9aaff' });
+    Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.34, ring: 62, c: '#8dd4ff' });
+    Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 12, life: 0.5, text: 'WARP', c: '#c9aaff' });
+    return true;
+  }
+
+  function updateEnemyProjectileEvade(enemy, dt) {
+    const evadeChance = getEnemyProjectileEvadeChance(enemy);
+    if (evadeChance <= 0) return false;
+    enemy.projectileEvadeCd = Math.max(0, Number(enemy.projectileEvadeCd || 0) - dt);
+
+    if (enemy.projectileEvadeTime > 0) {
+      enemy.projectileEvadeTime = Math.max(0, enemy.projectileEvadeTime - dt);
+      const dashSpeed = enemy.type === 'bulk_golem'
+        ? 610
+        : isBossType(enemy.type)
+          ? 720
+          : enemy.type === 'rival'
+            ? 660
+            : 580;
+      enemy.vx = Math.cos(enemy.projectileEvadeAngle) * dashSpeed;
+      enemy.vy = Math.sin(enemy.projectileEvadeAngle) * dashSpeed;
+      if (Neo.nextRandom('fx') < dt * 24) {
+        Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.16, c: '#9fe8ff', size: 3 });
+      }
+      if (enemy.projectileEvadeTime <= 0) {
+        enemy.vx *= 0.45;
+        enemy.vy *= 0.45;
+      }
+      return true;
+    }
+
+    if (enemy.projectileEvadeCd > 0
+      || enemy.stun > 0
+      || enemy.airborne
+      || enemy.queenFinisherActive
+      || enemy.spawnT > 0) {
+      return false;
+    }
+
+    const threat = getEnemyIncomingThreat(enemy);
+    if (!threat) {
+      enemy.lastProjectileEvadeThreat = null;
+      return false;
+    }
+    if (enemy.lastProjectileEvadeThreat === threat.source) return false;
+    enemy.lastProjectileEvadeThreat = threat.source;
+    enemy.projectileEvadeCd = 0.18;
+    if (Neo.nextRandom('encounter') >= evadeChance) return false;
+    if (enemy.type === 'bowman_bane') return warpBowmanBane(enemy);
+
+    const evadeAngle = findEnemyEvadeDashAngle(
+      enemy,
+      threat.segment,
+      enemy.type === 'bulk_golem' ? 150 : 205,
+    );
+    if (evadeAngle == null) return false;
+    enemy.windup = 0;
+    enemy.beamTime = 0;
+    enemy.beamTick = 0;
+    enemy.dashTime = 0;
+    enemy.state = 'idle';
+    enemy.projectileEvadeAngle = evadeAngle;
+    enemy.projectileEvadeTime = enemy.type === 'bulk_golem' ? 0.22 : 0.27;
+    enemy.projectileEvadeCd = enemy.type === 'god'
+      ? 1.8
+      : enemy.type === 'rival'
+        ? 2.2
+        : isBossType(enemy.type)
+          ? 2.6
+          : 3.2;
+    enemy.inv = Math.max(Number(enemy.inv || 0), 0.1);
+    Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.24, ring: enemy.r + 18, c: '#9fe8ff' });
+    return true;
   }
 
 
@@ -2959,6 +3218,7 @@
       }
     }
 
+    enemy.bowmanWarpCd = Math.max(0, Number(enemy.bowmanWarpCd || 0) - dt);
     enemy.columnCd = Math.max(0, Number(enemy.columnCd || 0) - dt);
     if (enemy.columnCd <= 0 && enemy.stun <= 0) {
       enemy.columnCd = enemy.phase >= 2 ? 2.8 * tuning.rangedCadence : 4.2 * tuning.rangedCadence;
@@ -2979,7 +3239,7 @@
           ttl: enemy.phase >= 2 ? 3.4 : 2.6,
           tick: 0.15,
           interval: 0.38,
-          damage: Math.round(enemy.dmg * 0.7),
+          damage: Math.round(enemy.dmg * 0.95),
         });
         Neo.spawnParticle({ x: cx, y: cy, life: 0.45, ring: 22, c: '#8dd4ff' });
       }
@@ -3009,10 +3269,16 @@
         tick: 0.1 * Math.max(0.72, tuning.rangedCadence),
         range: 480,
         knockback: 170,
-        damage: enemy.dmg,
+        damage: Math.round(enemy.dmg * 1.25),
         speedDamp: 0.82,
         turnRate: enemy.phase >= 2 ? 2.8 * tuning.reaction : 2.2 * tuning.reaction,
       });
+      return;
+    }
+
+    if (enemy.bowmanWarpCd <= 0
+      && (distance < 170 || distance > 390 || enemy.phase >= 2)
+      && warpBowmanBane(enemy)) {
       return;
     }
 
@@ -3061,7 +3327,7 @@
         interval: 0.12,
         // ~0.55s active strike window after the telegraph.
         ttl: warn + 0.55,
-        damage: Math.round(enemy.dmg * 0.85),
+        damage: Math.round(enemy.dmg * 1.15),
       });
     }
     Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.5, ring: 60, c: '#bfe4ff' });
@@ -4777,6 +5043,12 @@
   Neo.completeChallengeTrial = completeChallengeTrial;
   Neo.failChallengeTrial = failChallengeTrial;
   Neo.isBossType = isBossType;
+  Neo.getEnemyProgressionLevel = getEnemyProgressionLevel;
+  Neo.getEnemyEvadeDifficultyLevel = getEnemyEvadeDifficultyLevel;
+  Neo.getEnemyProjectileEvadeChance = getEnemyProjectileEvadeChance;
+  Neo.getEnemyIncomingThreat = getEnemyIncomingThreat;
+  Neo.findEnemyEvadeDashAngle = findEnemyEvadeDashAngle;
+  Neo.updateEnemyProjectileEvade = updateEnemyProjectileEvade;
   Neo.spawnBowmanBane = spawnBowmanBane;
   Neo.updateBowmanBane = updateBowmanBane;
   Neo.updateAntonyBlemmyeBoss = updateAntonyBlemmyeBoss;
