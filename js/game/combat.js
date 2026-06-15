@@ -1434,6 +1434,7 @@
     Neo.player.inv = Math.max(Neo.player.inv, 0.18);
     Neo.shake = Math.max(Neo.shake, 3);
     Neo.shakeT = Math.max(Neo.shakeT, 0.08);
+    Neo.playSfx?.('dash');
     Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.28, ring: 18, c: '#fff06a' });
   }
 
@@ -2515,6 +2516,13 @@
     // Rivals are meant to be tougher than a normal enemy: a flat 20% damage
     // reduction on top of their stats. Friends are already exempted above.
     if (enemy?.type === 'rival') dealt = Math.max(1, Math.round(dealt * (1 - Neo.RIVAL_DAMAGE_REDUCTION)));
+    // The final boss shrugs off a flat 5% of every incoming hit on top of its stats.
+    if (enemy?.type === 'god') dealt = Math.max(1, Math.round(dealt * 0.95));
+    // Shield units can't channel a new shield while actively taking fire: any
+    // incoming hit — even one fully absorbed by an existing barrier — opens a
+    // recharge lockout window that holds their support cooldown reset until it
+    // elapses.
+    enemy._shieldHitLockout = 1.1;
     if (!options.ignoreBarrier && (enemy.barrier || 0) > 0) {
       const absorbed = Math.min(enemy.barrier, dealt);
       enemy.barrier -= absorbed;
@@ -3694,6 +3702,13 @@
   }
 
   function rollItemDrop(options = {}) {
+    const normalizeRarity = (rarity) => {
+      const value = String(rarity || 'knight').toLowerCase();
+      if (value === 'white') return 'knight';
+      if (value === 'purple') return 'wizard';
+      if (value === 'yellow' || value === 'red') return 'god';
+      return value;
+    };
     const adjustEntriesForScrollControl = (entries) => {
       if (!Neo.player) return entries;
       const storedWeightItems = Array.isArray(Neo.player.scrollPoolWeights) ? Neo.player.scrollPoolWeights : [];
@@ -3744,27 +3759,42 @@
       }
       return key;
     };
+    const allowedRarities = Array.isArray(options.rarities) && options.rarities.length
+      ? new Set(options.rarities.map(normalizeRarity))
+      : null;
+    const excludedKeys = new Set(Array.isArray(options.excludeKeys) ? options.excludeKeys : []);
+    const rarityWeights = options.elite
+      ? Neo.ELITE_ITEM_RARITY_DROP_WEIGHTS
+      : Neo.ITEM_RARITY_DROP_WEIGHTS;
     const sandbox = Neo.getActiveSandboxSettings();
-    if (sandbox) {
-      const baseEntries = options.elite
-        ? Neo.ITEM_DROP_WEIGHTS.map(([key, weight]) => [
-            key,
-            weight + (key !== 'neo_knife' && (!key.startsWith('voucher_') || key === 'voucher_white') ? 4 : 0),
-          ])
-        : Neo.ITEM_DROP_WEIGHTS;
-      const filteredEntries = baseEntries.filter(([key]) => sandbox.allowedItems.includes(key));
-      if (filteredEntries.length > 0) {
-        const rolled = Neo.rollFromWeightTable(Neo.buildWeightTable(adjustEntriesForScrollControl(filteredEntries)), options.stream || 'loot', options.random);
-        return applyScrollReplacement(rolled);
-      }
-    }
-    const entries = options.elite
-      ? Neo.ITEM_DROP_WEIGHTS.map(([key, weight]) => [
-          key,
-          weight + (key !== 'neo_knife' && (!key.startsWith('voucher_') || key === 'voucher_white') ? 4 : 0),
-        ])
-      : Neo.ITEM_DROP_WEIGHTS;
-    const rolled = Neo.rollFromWeightTable(Neo.buildWeightTable(adjustEntriesForScrollControl(entries)), options.stream || 'loot', options.random);
+    const entries = adjustEntriesForScrollControl(Neo.ITEM_DROP_WEIGHTS.filter(([key, weight]) => {
+      if (Math.max(0, Number(weight) || 0) <= 0 || excludedKeys.has(key)) return false;
+      if (sandbox && !sandbox.allowedItems.includes(key)) return false;
+      const rarity = normalizeRarity(Neo.ITEM_DEFS?.[key]?.rarity);
+      return !allowedRarities || allowedRarities.has(rarity);
+    }));
+    if (!entries.length) return '';
+
+    const entriesByRarity = new Map();
+    entries.forEach((entry) => {
+      const rarity = normalizeRarity(Neo.ITEM_DEFS?.[entry[0]]?.rarity);
+      if (!entriesByRarity.has(rarity)) entriesByRarity.set(rarity, []);
+      entriesByRarity.get(rarity).push(entry);
+    });
+    const availableRarityEntries = Object.entries(rarityWeights || {})
+      .map(([rarity, weight]) => [normalizeRarity(rarity), weight])
+      .filter(([rarity, weight]) => entriesByRarity.has(rarity) && Number(weight) > 0);
+    const rolledRarity = Neo.rollFromWeightTable(
+      Neo.buildWeightTable(availableRarityEntries),
+      options.stream || 'loot',
+      options.random
+    );
+    const rarityEntries = entriesByRarity.get(rolledRarity) || entries;
+    const rolled = Neo.rollFromWeightTable(
+      Neo.buildWeightTable(rarityEntries),
+      options.stream || 'loot',
+      options.random
+    );
     return applyScrollReplacement(rolled);
   }
 
@@ -3878,10 +3908,8 @@
       Neo.floorSkipPending += 3 * collectCount;
       const bonusItemCounts = {};
       for (let index = 0; index < 10 * collectCount; index += 1) {
-        const rewardPool = Neo.ITEM_KEYS.filter(key => (
-          key !== 'jesters_dice' && Neo.ITEM_DEFS[key]?.rarity !== 'blue'
-        ));
-        const key = rewardPool[Neo.irand(0, rewardPool.length - 1, 'loot')];
+        const key = Neo.rollItemDrop({ excludeKeys: ['jesters_dice'] });
+        if (!key) continue;
         const previousBonusCount = Neo.getItemCount(key);
         Neo.player.items[key] = previousBonusCount + 1;
         readyRobotArmOnFirstPickup(key, previousBonusCount);

@@ -28,16 +28,16 @@ describe('God difficulty progression rules', () => {
       coreSource.indexOf('  custom: {'),
     );
 
-    expect(godBlock).toContain('itemDropChanceMultiplier: 0.5');
+    expect(godBlock).toContain('itemDropChanceMultiplier: 0.3');
     expect(godBlock).toContain('shopItemOffers: 1');
     expect(godBlock).toContain('startRoomEliteCount: 2');
     expect(godBlock).toContain('rivalItemsPerFloor: 5');
     expect(godBlock).toContain('rivalLevelBonusPerFloor: 2');
   });
 
-  test('halves random relic chances while retaining item bonuses', () => {
+  test('reduces random relic chances to 30% while retaining item bonuses', () => {
     const Neo = {
-      getDifficultyDef: () => ({ itemDropChanceMultiplier: 0.5 }),
+      getDifficultyDef: () => ({ itemDropChanceMultiplier: 0.3 }),
       getItemStats: () => ({ itemDropChanceBonus: 0.08 }),
       clamp: (value, min, max) => Math.max(min, Math.min(max, value)),
     };
@@ -46,8 +46,8 @@ describe('God difficulty progression rules', () => {
       `${extractFunction(gameStateSource, 'getRandomItemDropChance')}; return getRandomItemDropChance;`,
     )(Neo);
 
-    expect(getRandomItemDropChance(0.12, 0.5)).toBeCloseTo(0.1);
-    expect(getRandomItemDropChance(0.9, 0.98)).toBeCloseTo(0.49);
+    expect(getRandomItemDropChance(0.12, 0.5)).toBeCloseTo(0.06);
+    expect(getRandomItemDropChance(0.9, 0.98)).toBeCloseTo(0.294);
   });
 
   test('creates one base relic offer in God shops', () => {

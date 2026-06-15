@@ -21,11 +21,12 @@ describe('enemy loop scaling', () => {
   const source = fs.readFileSync(enemiesPath, 'utf8');
   const declarations = [
     extractFunction(source, 'softCapEnemyScale'),
+    extractFunction(source, 'getEnemyLevelStatMultipliers'),
     extractFunction(source, 'getProgressionDepth'),
     extractFunction(source, 'scaleEnemyStats'),
   ].join('\n');
 
-  function scaleAtDepth(floorsEntered) {
+  function scaleAtDepth(floorsEntered, level = floorsEntered) {
     const Neo = {
       floor: ((floorsEntered - 1) % 10) + 1,
       floorsEntered,
@@ -67,7 +68,7 @@ describe('enemy loop scaling', () => {
       `${declarations}; return scaleEnemyStats;`,
     )(Neo, () => false);
 
-    return scaleEnemyStats({ hp: 100, max: 100, dmg: 10, speed: 100 }, 'hunter');
+    return scaleEnemyStats({ hp: 100, max: 100, dmg: 10, speed: 100, attackCd: 1, level }, 'hunter');
   }
 
   test('keeps every scaled stat increasing when a run crosses into a new loop', () => {
@@ -82,8 +83,27 @@ describe('enemy loop scaling', () => {
   test('uses cumulative floors visited for the floor component', () => {
     const firstFloorAfterLoop = scaleAtDepth(11);
 
-    expect(firstFloorAfterLoop.hp).toBe(317);
-    expect(firstFloorAfterLoop.dmg).toBe(23);
-    expect(firstFloorAfterLoop.speed).toBeCloseTo(142.06, 1);
+    expect(firstFloorAfterLoop.hp).toBe(946);
+    expect(firstFloorAfterLoop.dmg).toBe(50);
+    expect(firstFloorAfterLoop.speed).toBeCloseTo(164.76, 1);
+  });
+
+  test('starts the near-exponential level bonus only after level five', () => {
+    const levelFive = scaleAtDepth(1, 5);
+    const levelSix = scaleAtDepth(1, 6);
+    const levelTen = scaleAtDepth(1, 10);
+    const levelFifteen = scaleAtDepth(1, 15);
+
+    expect(levelFive).toMatchObject({ hp: 100, dmg: 10, speed: 100, enemyLevelAttackSpeedMultiplier: 1 });
+    expect(levelSix).toMatchObject({ hp: 120, dmg: 11 });
+    expect(levelSix.speed).toBeCloseTo(102.5);
+    expect(levelSix.enemyLevelAttackSpeedMultiplier).toBeCloseTo(1.07);
+    expect(levelTen.hp).toBe(249);
+    expect(levelTen.dmg).toBe(19);
+    expect(levelTen.enemyLevelAttackSpeedMultiplier).toBeCloseTo(Math.pow(1.07, 5));
+    expect(levelFifteen.hp).toBe(619);
+    expect(levelFifteen.dmg).toBe(37);
+    expect(levelFifteen.speed).toBeCloseTo(128.01, 1);
+    expect(levelFifteen.enemyLevelAttackSpeedMultiplier).toBeCloseTo(Math.pow(1.07, 10));
   });
 });

@@ -66,6 +66,18 @@
     },
     { id: 'room_transition', path: 'assets/sounds/sfx_room transition.wav', volume: 0.6, priority: priority.NORMAL },
     { id: 'ladder', path: 'assets/sounds/sfx_ladder.wav', volume: 0.7, priority: priority.HIGH, mixDb: 3 },
+    {
+      id: 'secret_reveal',
+      volume: 0.7,
+      priority: priority.HIGH,
+      mixDb: 3,
+      paths: [
+        'assets/sounds/sfx_secret reveal.mp3',
+        'assets/sounds/sfx_secret reveal 3.mp3',
+        'assets/sounds/sfx_secret reveal 4.mp3',
+      ],
+    },
+    { id: 'dash', path: 'assets/sounds/sfx_dash 1.mp3', volume: 0.3, priority: priority.HIGH, mixDb: 3, lowCutHz: 90 },
   ];
 
   const soundDefs = new Map();

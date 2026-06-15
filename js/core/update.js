@@ -500,7 +500,10 @@ export function loop(timestamp) {
     for (let index = Neo.enemies.length - 1; index >= 0; index -= 1) {
       const enemy = Neo.enemies[index];
       if (!enemy) continue;
-      enemy.attackCd = Math.max(0, enemy.attackCd - dt);
+      Neo.updateMinorEnemyPackPressure?.(enemy);
+      const minorPackCooldownRate = Math.max(1, Number(enemy.minorPackCooldownRate || 1));
+      const enemyLevelAttackSpeed = Math.max(1, Number(enemy.enemyLevelAttackSpeedMultiplier || 1));
+      enemy.attackCd = Math.max(0, enemy.attackCd - dt * minorPackCooldownRate * enemyLevelAttackSpeed);
       enemy.stun = Math.max(0, enemy.stun - dt);
       enemy.inv = Math.max(0, enemy.inv - dt);
       if (enemy.critSparkle > 0) enemy.critSparkle = Math.max(0, enemy.critSparkle - dt);

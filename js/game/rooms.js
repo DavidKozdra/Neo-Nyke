@@ -1746,13 +1746,11 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
   const RIVAL_STARTING_LIVES = 2;
 
   function rollRandomRivalItemKey(godTier = false) {
-    const keys = Object.keys(Neo.ITEM_DEFS || {}).filter(key => {
-      const def = Neo.ITEM_DEFS[key];
-      if (!def || def.voucher || key.startsWith('voucher_')) return false;
-      return godTier ? !!Neo.isGodTier?.(def.rarity) : !Neo.isGodTier?.(def.rarity);
+    return Neo.rollItemDrop({
+      rarities: godTier ? ['god'] : ['knight', 'wizard'],
+      excludeKeys: Neo.VOUCHER_KEYS || [],
+      random: () => Neo.nextRandom('loot'),
     });
-    if (keys.length === 0) return '';
-    return keys[Math.floor(Neo.nextRandom('loot') * keys.length)];
   }
 
   // Adds random items to a rival's pack. God-tier gear also feeds the stat

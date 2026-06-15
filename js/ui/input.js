@@ -578,7 +578,7 @@ export const ITEM_DEFS = {
       key: 'generic_health_item',
       name: 'Generic Health',
       shortName: 'Heal 5%',
-      description: 'On kill, restore 5% of your current HP per stack, capped by max HP.',
+      description: 'On kill, restore 5% of your current HP per stack, capped by max HP. With another healing item, overhealing has a chance to grant a shield.',
       rarity: 'knight',
       color: '#d9ffe5',
       category: 'knight',
@@ -1249,13 +1249,37 @@ export const ITEM_DROP_WEIGHTS = [
     ['voucher_purple', 2],
     ['voucher_yellow', 1],
   ];
-export const ITEM_DROP_TABLE = Neo.buildWeightTable(ITEM_DROP_WEIGHTS);
+export const ITEM_RARITY_DROP_WEIGHTS = {
+  knight: 80,
+  wizard: 15,
+  god: 5,
+};
+export const ELITE_ITEM_RARITY_DROP_WEIGHTS = {
+  knight: 65,
+  wizard: 25,
+  god: 10,
+};
+
+function buildTierNormalizedDropWeights(entries, rarityWeights) {
+  const tierTotals = {};
+  entries.forEach(([key, weight]) => {
+    const rarity = ITEM_DEFS[key]?.rarity || 'knight';
+    tierTotals[rarity] = (tierTotals[rarity] || 0) + Math.max(0, Number(weight) || 0);
+  });
+  return entries.map(([key, weight]) => {
+    const rarity = ITEM_DEFS[key]?.rarity || 'knight';
+    const tierTotal = tierTotals[rarity] || 0;
+    const tierWeight = Math.max(0, Number(rarityWeights[rarity]) || 0);
+    return [key, tierTotal > 0 ? tierWeight * Math.max(0, Number(weight) || 0) / tierTotal : 0];
+  });
+}
+
+export const ITEM_DROP_TABLE = Neo.buildWeightTable(
+  buildTierNormalizedDropWeights(ITEM_DROP_WEIGHTS, ITEM_RARITY_DROP_WEIGHTS)
+);
 export const ELITE_ITEM_DROP_TABLE = Neo.buildWeightTable(
-    ITEM_DROP_WEIGHTS.map(([key, weight]) => [
-      key,
-      weight + (key !== 'neo_knife' && (!key.startsWith('voucher_') || key === 'voucher_white') ? 4 : 0),
-    ])
-  );
+  buildTierNormalizedDropWeights(ITEM_DROP_WEIGHTS, ELITE_ITEM_RARITY_DROP_WEIGHTS)
+);
 export const ELITE_INVENTORY_POOL = [
     'neo_knife',
   'tooth_of_thorn',
@@ -1862,6 +1886,8 @@ export const MOVE_BASE_STATS = {
   Neo.VOUCHER_TYPES = VOUCHER_TYPES;
   Neo.VOUCHER_COLORS = VOUCHER_COLORS;
   Neo.ITEM_DROP_WEIGHTS = ITEM_DROP_WEIGHTS;
+  Neo.ITEM_RARITY_DROP_WEIGHTS = ITEM_RARITY_DROP_WEIGHTS;
+  Neo.ELITE_ITEM_RARITY_DROP_WEIGHTS = ELITE_ITEM_RARITY_DROP_WEIGHTS;
   Neo.ITEM_DROP_TABLE = ITEM_DROP_TABLE;
   Neo.ELITE_ITEM_DROP_TABLE = ELITE_ITEM_DROP_TABLE;
   Neo.ELITE_INVENTORY_POOL = ELITE_INVENTORY_POOL;

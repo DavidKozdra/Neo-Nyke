@@ -539,6 +539,15 @@ export function getItemStats() {
     const baseBleedChance = neoKnife * 0.05 + toughBandaid * 0.02;
     const tagCounts = getItemTagCounts();
     const healingTagStacks = Number(tagCounts.heal || 0) + Number(tagCounts.healing || 0);
+    // Overheal barrier is now item-dependent: you must own Generic Health AND at
+    // least one OTHER heal/healing-tagged item. Once both are present it triggers
+    // on a random chance per overheal, scaling with total heal stacks.
+    const genericHealthStacks = getItemCount('generic_health_item');
+    const otherHealStacks = Math.max(0, healingTagStacks - genericHealthStacks);
+    const overhealUnlocked = genericHealthStacks > 0 && otherHealStacks > 0;
+    const overhealBarrierChance = overhealUnlocked
+      ? Neo.clamp(0.15 * healingTagStacks, 0, 0.75)
+      : 0;
     const activeGoldVacStacks = Number(Neo.player?.equipmentEffects?.gold_vac?.time || 0) > 0
       ? Math.max(1, Math.floor(Number(Neo.player?.equipmentEffects?.gold_vac?.stacks || getItemCount('gold_vac') || 1)))
       : 0;
@@ -641,8 +650,9 @@ export function getItemStats() {
       projectileHomingStrength: enemyMagnet * 0.15 + enemyMagnet * enemyMagnet * 0.02,
       projectileSpeedMultiplier: 1 + mooggyZoomies * 0.2,
       healingMultiplier: 1 + drinkMaster * 0.2,
-      overhealBarrierRatio: healingTagStacks >= 3 ? 0.35 : 0,
-      overhealBarrierCapRatio: healingTagStacks >= 6 ? 0.28 : healingTagStacks >= 3 ? 0.16 : 0,
+      overhealBarrierChance,
+      overhealBarrierRatio: overhealUnlocked ? 0.35 : 0,
+      overhealBarrierCapRatio: overhealUnlocked ? (healingTagStacks >= 6 ? 0.28 : 0.16) : 0,
       itemDropChanceBonus: Math.min(0.3, richMansLuck * 0.05),
       shopExtraItemOffers: Math.min(3, richMansLuck),
       damageReduction,
@@ -693,7 +703,8 @@ export function applyPlayerHealing(amount, options = {}) {
     const stats = Neo.getItemStats?.() || {};
     const barrierRatio = Number(stats.overhealBarrierRatio || 0);
     const barrierCap = maxHp * Number(stats.overhealBarrierCapRatio || 0);
-    if (overflow > 0 && barrierRatio > 0 && barrierCap > 0) {
+    const barrierChance = Number(stats.overhealBarrierChance || 0);
+    if (overflow > 0 && barrierRatio > 0 && barrierCap > 0 && Math.random() < barrierChance) {
       const addedBarrier = Math.min(barrierCap - Number(Neo.player.overhealBarrier || 0), overflow * barrierRatio);
       if (addedBarrier > 0) {
         Neo.player.overhealBarrier = Math.min(barrierCap, Number(Neo.player.overhealBarrier || 0) + addedBarrier);
@@ -1606,15 +1617,10 @@ export function confirmWizardPawSelection() {
     const shouldExpire = Neo.floor >= Number(state.expiresFloor || 0);
     if (random() < 0.5) {
       const selected = Array.isArray(state.items) ? state.items.filter(key => Neo.ITEM_DEFS?.[key]) : [];
-      const randomPool = (Neo.ITEM_KEYS || []).filter(key => (
-        Neo.ITEM_DEFS?.[key]
-        && Neo.ITEM_DEFS[key].rarity !== 'blue'
-        && !SCROLL_KEYS.has(key)
-      ));
       const offerPool = [
         ...selected.slice(0, 2),
-        randomPool[Math.floor(random() * randomPool.length)],
-        randomPool[Math.floor(random() * randomPool.length)],
+        Neo.rollItemDrop({ random }),
+        Neo.rollItemDrop({ random }),
       ].filter(Boolean);
       const key = offerPool[Math.floor(random() * offerPool.length)];
       if (key) {

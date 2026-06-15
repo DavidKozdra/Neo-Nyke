@@ -1,6 +1,48 @@
 // enemies.js — standalone IIFE. Enemy spawning, AI, boss logic.
 
   const BREAKABLE_OBSTACLE_KINDS = new Set(['cover_wall', 'wall', 'secret_wall']);
+  const MINOR_PACK_ENEMY_TYPES = new Set(['hunter', 'charger', 'laser', 'cult_follower']);
+  const MINOR_PACK_RADIUS = 260;
+  const MINOR_PACK_MAX_ALLIES = 3;
+
+  function updateMinorEnemyPackPressure(enemy) {
+    const eligible = enemy
+      && MINOR_PACK_ENEMY_TYPES.has(enemy.type)
+      && !enemy.elite
+      && !enemy.miniBoss
+      && !enemy.dead;
+    if (!eligible) {
+      if (enemy) {
+        enemy.minorPackStacks = 0;
+        enemy.minorPackSpeedMultiplier = 1;
+        enemy.minorPackCooldownRate = 1;
+        enemy.minorPackDamageMultiplier = 1;
+      }
+      return 0;
+    }
+
+    let nearbyAllies = 0;
+    for (const ally of Neo.enemies || []) {
+      if (ally === enemy
+        || !ally
+        || ally.dead
+        || ally.elite
+        || ally.miniBoss
+        || Number(ally.spawnT || 0) > 0
+        || !MINOR_PACK_ENEMY_TYPES.has(ally.type)) {
+        continue;
+      }
+      if (Neo.dist(enemy.x, enemy.y, ally.x, ally.y) <= MINOR_PACK_RADIUS) nearbyAllies += 1;
+      if (nearbyAllies >= MINOR_PACK_MAX_ALLIES) break;
+    }
+
+    const stacks = Math.min(MINOR_PACK_MAX_ALLIES, nearbyAllies);
+    enemy.minorPackStacks = stacks;
+    enemy.minorPackSpeedMultiplier = 1 + stacks * 0.04;
+    enemy.minorPackCooldownRate = 1 + stacks * 0.06;
+    enemy.minorPackDamageMultiplier = 1 + stacks * 0.03;
+    return stacks;
+  }
 
   function findSafeEnemySpawnPoint(preferredX, preferredY, radius = 18) {
     const isSpawnUsable = (x, y) => !Neo.isBlocked(x, y, radius) && hasNavigableSpawnSpace(x, y, radius, Neo.player);
@@ -698,6 +740,17 @@
     return numericCap + Math.sqrt(numericValue - numericCap) * curve;
   }
 
+  function getEnemyLevelStatMultipliers(level) {
+    const levelsAboveFive = Math.max(0, Math.floor(Number(level || 1)) - 5);
+    if (levelsAboveFive <= 0) return { hp: 1, damage: 1, speed: 1, attackSpeed: 1 };
+    return {
+      hp: Math.pow(1.2, levelsAboveFive),
+      damage: Math.pow(1.14, levelsAboveFive),
+      speed: Math.min(1.35, Math.pow(1.025, levelsAboveFive)),
+      attackSpeed: Math.min(2.25, Math.pow(1.07, levelsAboveFive)),
+    };
+  }
+
   // Cumulative floor depth that drives enemy scaling: the number of floors the
   // player has actually entered this run (across loops, excluding skipped floors).
   // Falls back to `floor` for safety if the counter is ever unset.
@@ -744,6 +797,8 @@
     // and ignores skipped floors. The floor component must stay cumulative across
     // loop boundaries; loop multipliers remain as additional late-run pressure.
     const progressionDepth = getProgressionDepth();
+    const enemyLevel = Math.max(1, Number(baseStats?.level || progressionDepth));
+    const levelMultipliers = getEnemyLevelStatMultipliers(enemyLevel);
     const loopNumber = Math.max(1, Math.floor((progressionDepth - 1) / Neo.MAX_FLOOR) + 1);
     const floorsCleared = progressionDepth - 1;
     // Harder difficulties steepen the per-floor HP slope (not just the flat
@@ -789,10 +844,11 @@
       endlessWaveIndex > 0 ? Math.max(Neo.ENEMY_SCALING.speedSoftCap ?? 1.38, Neo.ENEMY_SCALING.endlessWaveSpeedSoftCap) : (Neo.ENEMY_SCALING.speedSoftCap ?? 1.38),
       0.16
     );
-    result.hp = Math.round(result.hp * hpScale);
+    result.hp = Math.round(result.hp * hpScale * levelMultipliers.hp);
     result.max = result.hp;
-    result.dmg = Math.round(result.dmg * damageScale);
-    result.speed *= speedScale;
+    result.dmg = Math.round(result.dmg * damageScale * levelMultipliers.damage);
+    result.speed *= speedScale * levelMultipliers.speed;
+    result.enemyLevelAttackSpeedMultiplier = levelMultipliers.attackSpeed;
     if (sandbox) {
       result.hp = Math.max(1, Math.round(result.hp * sandbox.enemyStatMultiplier));
       result.max = result.hp;
@@ -2726,8 +2782,14 @@
     const direction = distance < desired - 18 ? -1 : distance > desired + 24 ? 1 : 0;
     steerEnemy(enemy, dx / distance * direction, dy / distance * direction, enemy.speed, 2.6, dt);
 
+    // Taking damage opens a lockout window (set in hitEnemy): while it's active
+    // the unit can't reapply shields and its cooldown is held reset, so it can't
+    // re-shield itself the instant it's hit.
+    enemy._shieldHitLockout = Math.max(0, (enemy._shieldHitLockout || 0) - dt);
     enemy.supportCd = Math.max(0, enemy.supportCd - dt);
-    if (enemy.supportCd <= 0) {
+    if (enemy._shieldHitLockout > 0) {
+      enemy.supportCd = Math.max(enemy.supportCd, 0.5);
+    } else if (enemy.supportCd <= 0) {
       enemy.supportCd = 2.9 * Math.max(0.76, tuning.rangedCadence);
       Neo.enemies.forEach(other => {
         if (!other || other === enemy) return;
@@ -3143,6 +3205,11 @@
         kind: 'sword',
         source,
         damage,
+        // Converging blades home in so the ring closes on the player.
+        homing: true,
+        homingTurnRate: 1.6,
+        homingSpeed: 280,
+        homingAccel: 2.2,
       });
     }
   }
@@ -3165,6 +3232,12 @@
         kind: 'god_sword',
         source: 'god_projectile',
         damage,
+        // The holy blades curve toward the player so the ring can't just be
+        // sidestepped — gentle turn rate keeps them dodgeable with movement.
+        homing: true,
+        homingTurnRate: 1.7,
+        homingSpeed: 300,
+        homingAccel: 2.4,
       });
     }
   }
@@ -4893,7 +4966,7 @@
       enemy.windup -= dt;
       enemy.vx *= 0.74;
       enemy.vy *= 0.74;
-      if (enemy.state === 'godLaser') Neo.aimEnemyBeam(enemy, dt, (0.68 + (tuning.reaction - 1) * 3.6) * reactionMult);
+      if (enemy.state === 'godLaser') Neo.aimEnemyBeam(enemy, dt, (1.05 + (tuning.reaction - 1) * 3.6) * reactionMult);
       Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.18, c: '#ffffff' });
       if (enemy.windup <= 0) {
         if (enemy.state === 'godLaser') {
@@ -4936,7 +5009,7 @@
         knockback: isSweep ? (phaseFour ? 260 : 210) : (phaseFour ? 180 : 150),
         damage: isSweep ? enemy.dmg + (phaseFive ? 38 : phaseTwo ? 28 : 18) : Math.round((enemy.dmg + (phaseFour ? 18 : phaseTwo ? 12 : 6)) * 0.25),
         speedDamp: 0.86,
-        turnRate: isSweep ? 0 : (0.34 + (tuning.reaction - 1) * 2.8) * reactionMult,
+        turnRate: isSweep ? 0 : (0.58 + (tuning.reaction - 1) * 2.8) * reactionMult,
         onTick: isSweep
           ? activeEnemy => {
             activeEnemy.beamAngle += activeEnemy.sweepSpeed * 0.045;
@@ -4997,7 +5070,7 @@
       } else if (roll > (phaseFive ? 0.16 : phaseTwo ? 0.26 : 0.42)) {
         enemy.state = 'godLaser';
         enemy.windup = 0.82 / (tuning.reaction * reactionMult);
-        enemy.beamAngle = Math.atan2(dy, dx) + Neo.rollEnemyBeamBias(enemy, phaseFour ? 0.24 : phaseTwo ? 0.2 : 0.17);
+        enemy.beamAngle = Math.atan2(dy, dx) + Neo.rollEnemyBeamBias(enemy, phaseFour ? 0.16 : phaseTwo ? 0.13 : 0.11);
       } else if (roll > (phaseFour ? 0.04 : phaseTwo ? 0.08 : 0.18)) {
         enemy.state = 'godSwordRing';
         enemy.windup = 0.6 / (tuning.reaction * reactionMult);
@@ -5006,7 +5079,7 @@
         enemy.windup = 0.44 / (tuning.reaction * reactionMult);
         enemy.dashAngle = Math.atan2(dy, dx);
       }
-      enemy.attackCd = 2.15 * tuning.rangedCadence * cadenceMult;
+      enemy.attackCd = 1.7 * tuning.rangedCadence * cadenceMult;
     }
   }
 
@@ -5119,7 +5192,8 @@
 
   function steerEnemy(enemy, dirX, dirY, maxSpeed, accel, dt) {
     const slowMultiplier = Neo.getSlowMultiplier?.(enemy) || 1;
-    const adjustedSpeed = maxSpeed * slowMultiplier;
+    const packSpeedMultiplier = Math.max(1, Number(enemy?.minorPackSpeedMultiplier || 1));
+    const adjustedSpeed = maxSpeed * slowMultiplier * packSpeedMultiplier;
     enemy.vx += (dirX * adjustedSpeed - enemy.vx) * accel * dt;
     enemy.vy += (dirY * adjustedSpeed - enemy.vy) * accel * dt;
   }
@@ -5187,6 +5261,7 @@
   Neo.hasNavigableSpawnSpace = hasNavigableSpawnSpace;
   Neo.findBlockingBreakableDestructible = findBlockingBreakableDestructible;
   Neo.enemyTryBreakBlockingObstacle = enemyTryBreakBlockingObstacle;
+  Neo.updateMinorEnemyPackPressure = updateMinorEnemyPackPressure;
   Neo.getMiniBossSpawnChance = getMiniBossSpawnChance;
   Neo.getWaveCount = getWaveCount;
   Neo.rollEnemyType = rollEnemyType;
@@ -5206,6 +5281,7 @@
   Neo.rollEliteTypes = rollEliteTypes;
   Neo.applyEliteInventory = applyEliteInventory;
   Neo.applyEliteTypes = applyEliteTypes;
+  Neo.getEnemyLevelStatMultipliers = getEnemyLevelStatMultipliers;
   Neo.scaleEnemyStats = scaleEnemyStats;
   Neo.spawnEnemy = spawnEnemy;
   Neo.spawnGodBoss = spawnGodBoss;

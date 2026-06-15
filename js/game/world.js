@@ -358,7 +358,8 @@
     // base amount but still passes through damage reduction, barriers and the
     // one-shot guard below, so it can't bypass the per-hit cap.
     const eliteAttacker = options.attacker;
-    let critAmount = numericAmount;
+    const minorPackDamageMultiplier = Math.max(1, Number(eliteAttacker?.minorPackDamageMultiplier || 1));
+    let critAmount = numericAmount * minorPackDamageMultiplier;
     if (eliteAttacker?.elite && Number(eliteAttacker.eliteCrit || 0) > 0 && Neo.nextRandom('encounter') < eliteAttacker.eliteCrit) {
       critAmount = numericAmount * 1.4;
       if (showPopup) Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 24, life: 0.42, text: 'CRIT', c: '#ff9f1c' });
@@ -2275,6 +2276,7 @@
     prop.secretRevealed = true;
     const dir = prop.secretDir;
     if (dir) Neo.setSecretPassageOpen(Neo.currentRoom, dir, true);
+    Neo.playSfx?.('secret_reveal');
     Neo.spawnParticle({ x: prop.x, y: prop.y - 18, life: 0.9, text: 'SECRET', c: '#8dd4ff' });
   }
 

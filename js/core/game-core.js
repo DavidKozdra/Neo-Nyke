@@ -671,6 +671,8 @@ export const DIFFICULTY_DEFS = {
     shopPriceMultiplier: 1.16,
     ccResistScale: 0.30,
     enemyBleedDamageMultiplier: 0.8,
+    itemDropChanceMultiplier: 0.65,
+    shopItemOffers: 2,
   },
   impossible: {
     key: 'impossible',
@@ -694,6 +696,8 @@ export const DIFFICULTY_DEFS = {
     ccResistScale: 0.45,
     enemyLoopDamageReduction: 0.05,
     enemyBleedDamageMultiplier: 0.65,
+    itemDropChanceMultiplier: 0.45,
+    shopItemOffers: 2,
   },
   god: {
     key: 'god',
@@ -718,7 +722,7 @@ export const DIFFICULTY_DEFS = {
     ccResistScale: 0.6,
     enemyLoopDamageReduction: 0.05,
     enemyBleedDamageMultiplier: 0.5,
-    itemDropChanceMultiplier: 0.5,
+    itemDropChanceMultiplier: 0.3,
     shopItemOffers: 1,
     startRoomEliteCount: 2,
     rivalItemsPerFloor: 5,
