@@ -867,7 +867,7 @@
     if (damage > 0 && Neo.player && Neo.dist(x, y, Neo.player.x, Neo.player.y) <= radius + Neo.player.r) {
       damagePlayer(damage, Math.atan2(Neo.player.y - y, Neo.player.x - x), Number(blast.knockback || 220), projectile.source || 'enemy_aoe');
       if (blast.statusKey) {
-        Neo.applyStatus?.(Neo.player, blast.statusKey, Number(blast.statusStacks || 1), Number(blast.statusDuration || 3));
+        Neo.applyStatus?.(Neo.player, blast.statusKey, Number(blast.statusStacks || 1), Number(blast.statusDuration || 3), projectile.source || 'enemy_aoe');
       }
     }
     forEachDestructibleNearCircle(x, y, radius + 80, prop => {
@@ -1727,7 +1727,7 @@
             if (dungeonOwned && Neo.dist(Neo.player.x, Neo.player.y, hazard.x, hazard.y) <= blast + Neo.player.r) {
               const angle = Math.atan2(Neo.player.y - hazard.y, Neo.player.x - hazard.x);
               damagePlayer(damage, angle, 170, hazard.source || 'thorn_mine');
-              Neo.applyStatus?.(Neo.player, 'bleed', hazard.bleedStacks || 1, hazard.bleedDuration || 4.5);
+              Neo.applyStatus?.(Neo.player, 'bleed', hazard.bleedStacks || 1, hazard.bleedDuration || 4.5, hazard.source || 'thorn_mine');
             }
             Neo.spawnParticle({ x: hazard.x, y: hazard.y, life: 0.35, ring: blast, c: '#ff6e8b' });
             hazard.ttl = 0;
@@ -1834,8 +1834,8 @@
               const statusKey = String(hazard.statusKey || 'bleed');
               const stacks = Math.max(1, Number(hazard.statusStacks || 1));
               const duration = Math.max(0.2, Number(hazard.statusDuration || (statusKey === 'fire' ? 2.8 : 3.4)));
-              if (statusKey === 'fire') Neo.applyFire?.(Neo.player, stacks, duration);
-              else Neo.applyStatus?.(Neo.player, statusKey, stacks, duration);
+              if (statusKey === 'fire') Neo.applyFire?.(Neo.player, stacks, duration, hazard.source || 'red_spikes');
+              else Neo.applyStatus?.(Neo.player, statusKey, stacks, duration, hazard.source || 'red_spikes');
             }
           } else {
             forEachEnemyNearCircle(hazard.x, hazard.y, hazard.r + 80, enemy => {

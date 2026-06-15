@@ -3874,7 +3874,7 @@
         turnRate: 1.8 * tuning.reaction,
         damageSource: 'handsome_devil',
         onHit: () => {
-          Neo.applyFire?.(Neo.player, 1, 2.8);
+          Neo.applyFire?.(Neo.player, 1, 2.8, enemy.type);
         },
         onEnd: activeEnemy => {
           activeEnemy.attackCd = 1.1 * tuning.rangedCadence;
@@ -3921,7 +3921,7 @@
     if (distance < enemy.r + Neo.player.r + 12 && enemy.attackCd <= 0) {
       const angle = Math.atan2(dy, dx);
       Neo.damagePlayer(enemy.dmg, angle, 210, enemy.type, { attacker: enemy });
-      Neo.applyFire?.(Neo.player, 1, 2.8);
+      Neo.applyFire?.(Neo.player, 1, 2.8, enemy.type);
       enemy.attackAnimT = 0.24;
       enemy.attackCd = 0.95 * tuning.rangedCadence;
     }
@@ -4644,7 +4644,7 @@
         turnRate: 8.8,
         damageSource: 'mooggy',
         onHit: () => {
-          Neo.applyBleed?.(Neo.player, Number(enemy.mooggyBleedStacks || 1), 3.2);
+          Neo.applyBleed?.(Neo.player, Number(enemy.mooggyBleedStacks || 1), 3.2, enemy.type);
         },
         onEnd: activeEnemy => {
           activeEnemy.attackCd = Number(activeEnemy.mooggyLaserCooldown || 0.2);
@@ -4675,7 +4675,7 @@
       const angle = Math.atan2(dy, dx);
       enemy.attackAnimT = 0.24;
       Neo.damagePlayer(enemy.dmg, angle, 190, 'mooggy', { attacker: enemy });
-      Neo.applyBleed?.(Neo.player, Number(enemy.mooggyBleedStacks || 1), 3.2);
+      Neo.applyBleed?.(Neo.player, Number(enemy.mooggyBleedStacks || 1), 3.2, enemy.type);
       enemy.attackCd = 0.36;
       return;
     }

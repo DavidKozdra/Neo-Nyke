@@ -854,7 +854,7 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
     const disguiseRoll = room
       ? Neo.createRoomRandom(room, `secret-wall:disguise:${direction}`)()
       : Neo.nextRandom('world');
-    const disguised = disguiseRoll < 0.2;
+    const disguised = disguiseRoll < 0.7;
     return {
       kind: 'secret_wall',
       x: position.x,
