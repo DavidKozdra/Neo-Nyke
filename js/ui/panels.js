@@ -1150,7 +1150,9 @@ export function renderAnvilStatPanel() {
       // The + must also reflect affordability, or it looks clickable but the
       // click handler silently rejects it (no feedback = "anvil is broken").
       const payGold = Neo.anvilPayCurrency === 'gold';
-      const stepCost = payGold ? (goldPerStep ?? 0) : (xpPerStep ?? 0);
+      // Use the shared cost chokepoint so the per-step label, the affordability
+      // gate, and the actual spend all agree (gold is charged at goldPerStep*2).
+      const stepCost = getAnvilStepCost(schema[statKey]);
       const wallet = payGold ? (Neo.player?.coins ?? 0) : (Neo.player?.xp ?? 0);
       const spent = payGold ? getAnvilTotalCost().gold : getAnvilTotalCost().xp;
       const canAfford = spent + stepCost <= wallet;
