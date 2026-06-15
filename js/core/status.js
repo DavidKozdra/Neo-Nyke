@@ -72,6 +72,13 @@ export function clearStatus(entity, key) {
   state.owner = null;
 }
 
+export function getStatusResistance(entity, key) {
+  if (!entity || typeof entity !== 'object') return 0;
+  const general = Number(entity.statusResistance || 0);
+  const keyed = Number(entity.statusResistances?.[key] || 0);
+  return Math.max(0, Math.min(0.95, Math.max(general, keyed)));
+}
+
 // Player cold (slow) uses duration as a stack-time budget: each stack is 15s.
 // The update loop recomputes visible stacks from the remaining budget so one
 // stack falls off every 15s instead of all stacks sticking until the end.
@@ -88,11 +95,12 @@ export function applyStatus(entity, key, stacks, duration, source = null) {
   // statuses.
   if (entity === Neo.player && Number(Neo.player.statusResistTime || 0) > 0) return;
   const state = getStatusState(entity, key);
-  const addedStacks = Math.max(0, Number(stacks || 0));
+  const resistanceMultiplier = 1 - getStatusResistance(entity, key);
+  const addedStacks = Math.max(0, Number(stacks || 0)) * resistanceMultiplier;
   const durationSeverity = entity === Neo.player
     ? Number(Neo.getItemStats?.()?.negativeStatusMultiplier || 1)
     : 1;
-  const adjustedDuration = Math.max(0, Number(duration || 0)) * durationSeverity;
+  const adjustedDuration = Math.max(0, Number(duration || 0)) * durationSeverity * resistanceMultiplier;
   // Remember who inflicted a damaging status on the player so the death screen
   // can attribute a DoT kill (bleed/poison/fire) to the enemy, not the tick.
   if (entity === Neo.player && source && addedStacks > 0) {
@@ -148,6 +156,7 @@ Neo.getSlowMultiplier = getSlowMultiplier;
 Neo.getBrittleDefenseMultiplier = getBrittleDefenseMultiplier;
 Neo.getPlayerNegativeStatusProcChance = getPlayerNegativeStatusProcChance;
 Neo.clearStatus = clearStatus;
+Neo.getStatusResistance = getStatusResistance;
 Neo.applyStatus = applyStatus;
 Neo.COLD_SECONDS_PER_STACK = COLD_SECONDS_PER_STACK;
 Neo.getColdStacksFromDuration = getColdStacksFromDuration;

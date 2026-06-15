@@ -1489,13 +1489,26 @@ export function resumeGame() {
     return titleCase(type);
   }
 
+  const ELITE_COUNT_WORDS = { 2: 'twice', 3: 'thrice' };
+
   function getEliteEnemyLabel(enemy) {
     const baseLabel = getEnemyLabel(enemy?.type || '');
     if (!enemy?.elite || !Array.isArray(enemy.eliteTypes) || enemy.eliteTypes.length === 0) return baseLabel;
-    const prefix = enemy.eliteTypes
-      .map(type => Neo.ELITE_TYPE_DEFS[type]?.label || titleCase(type))
-      .join('_');
-    return `${prefix}_${baseLabel}`;
+    const parts = [];
+
+    // Body rolls (Knight/Knave) are an internal stat roll and are NOT shown in the
+    // name tag — only the power words appear.
+
+    // Power words in first-seen order, with a count suffix for duplicates.
+    const powers = Array.isArray(enemy.elitePowers) ? enemy.elitePowers : [];
+    const counts = new Map();
+    powers.forEach(power => counts.set(power, (counts.get(power) || 0) + 1));
+    for (const [power, count] of counts) {
+      const word = Neo.ELITE_TYPE_DEFS[power]?.label || titleCase(power);
+      parts.push(count === 1 ? word : `${word} ${ELITE_COUNT_WORDS[count] || `x${count}`}`);
+    }
+
+    return `${parts.join(' ')} Elite ${baseLabel}`.replace(/\s+/g, ' ').trim();
   }
 
   function getRoomLabel(type) {

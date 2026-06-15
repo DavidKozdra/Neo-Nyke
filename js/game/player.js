@@ -551,7 +551,17 @@ export function getItemStats() {
     const princesGlassesDefense = princesGlasses > 0 ? 0.10 + (princesGlasses - 1) * 0.02 : 0;
     let critChance = critCharmBonus + keenEyeBonus + pendantOfKronos * godItemStacks * 0.01 + princesGlassesCrit;
     if (oracleLens) critChance *= 2;
-    critChance = Neo.clamp(critChance, 0.01, 0.95);
+    // Crit roll-back: let chance climb past the old 0.95 cap, then convert every
+    // crossing of 100% into +50% crit damage and a roll-back to 75% (see
+    // applyCritRollback). The base multiplier is built first, then the roll-back
+    // scales it; the rolled-back chance is clamped to [0.01, 1].
+    critChance = Math.max(0.01, critChance);
+    // Build the base crit multiplier from the (pre-rollback) chance, then run the
+    // roll-back to fold any chance over 100% into extra crit damage.
+    const baseCritMultiplier = 1.6 + (oracleLens ? critChance * 2.2 : critChance * 0.6) + keenEyeCritDamageBonus;
+    const critRollback = Neo.applyCritRollback(critChance, baseCritMultiplier);
+    critChance = Neo.clamp(critRollback.critChance, 0.01, 1);
+    const critMultiplier = critRollback.critMultiplier;
     // Pendant of Kronos: +1% base damage per god/yellow item owned (every stack
     // counts every god item), plus an extra +2% damage to bosses per stack.
     const kronosDamageMultiplier = 1 + pendantOfKronos * godItemStacks * 0.01;
@@ -605,7 +615,7 @@ export function getItemStats() {
       potionDoubleChance: Neo.clamp(drinkMaster * 0.5, 0, 1),
       itemDuplicateChance: Neo.clamp(copycatCharm * 0.3, 0, 1),
       critChance,
-      critMultiplier: 1.6 + (oracleLens ? critChance * 2.2 : critChance * 0.6) + keenEyeCritDamageBonus,
+      critMultiplier,
       kronosDamageMultiplier,
       kronosBossDamageMultiplier,
       attackSpeedMultiplier: 1 + attackServo * 0.12 + chronoSpringBonus,

@@ -192,7 +192,10 @@
     const baseBleed = 1.8 + Math.max(1, Number(stacks || 1)) * 2.2;
     const preResist = scaleDamageAgainstEnemy(enemy, baseBleed, NO_BLEED_BONUS_DAMAGE_OPTIONS, cachedStats);
     const itemResistance = Neo.clamp(Number(enemy?.bleedResistance || 0), 0, 0.8);
-    const reduced = (preResist / getEnemyBleedResistance(enemy)) * Math.max(0.2, 1 - itemResistance);
+    const difficultyMultiplier = Math.max(0, Number(Neo.getDifficultyDef?.()?.enemyBleedDamageMultiplier ?? 1));
+    const reduced = (preResist / getEnemyBleedResistance(enemy))
+      * Math.max(0.2, 1 - itemResistance)
+      * difficultyMultiplier;
     return Math.max(1, Math.round(reduced));
   }
 
@@ -984,14 +987,14 @@
     Neo.updateHud();
   }
 
-  const HEALING_ZONE_MAX_CHARGE = 5; // seconds of hold for a full-power zone
+  const HEALING_ZONE_MAX_CHARGE = 5; // charge units required for a full-power zone
 
   function trySmash() {
     cancelCowardsWayOnAttack();
     const itemStats = Neo.getItemStats();
     const attackSpeed = Neo.getAttackSpeedValue();
-    // Healing Zone is hold-to-charge: holding the smash key winds it up (up to
-    // 5s) for a bigger, stronger zone, released in updateHealingZoneCharge().
+    // Healing Zone is hold-to-charge: attack speed controls how quickly it reaches
+    // five charge units for a bigger, stronger zone.
     if (getEquippedMove('smash') === 'healing_zone') {
       if (Neo.healingZoneCharging) return; // already winding up
       if (!Neo.spendSkillCharge('smash', Neo.getSmashCooldownDuration(attackSpeed), { deferTimer: true })) return;
@@ -2082,8 +2085,8 @@
     }
   }
 
-  // Drives the Healing Zone charge: grows while the smash input is held (capped
-  // at 5s), then releases a zone scaled by how long it was held.
+  // Drives the Healing Zone charge: effective attack speed scales charge gain,
+  // then releasing creates a zone based on the accumulated charge ratio.
   function updateHealingZoneCharge(dt) {
     if (!Neo.healingZoneCharging) return;
     if (!Neo.player || Neo.gameState !== 'play') {
@@ -2092,9 +2095,10 @@
       Neo.queueHeldSkillRecharge?.('smash', Neo.getSmashCooldownDuration(Neo.getAttackSpeedValue()));
       return;
     }
+    const chargeSpeed = Math.max(0.2, Number(Neo.getAttackSpeedValue?.() || 1));
     Neo.healingZoneChargeTime = Math.min(
       HEALING_ZONE_MAX_CHARGE,
-      Number(Neo.healingZoneChargeTime || 0) + dt
+      Number(Neo.healingZoneChargeTime || 0) + dt * chargeSpeed
     );
     const atMax = Neo.healingZoneChargeTime >= HEALING_ZONE_MAX_CHARGE;
     // Charge tier sparkle so the player can read the wind-up.
@@ -2363,9 +2367,52 @@
     let level = scale * progress;
     if (isBoss) level += 0.6;
     else if (isElite) level += 0.3;
+    // Knave body rolls make an elite "unfazed": harder to knock back and, since
+    // the stun threshold/duration also read this level, harder to stun/confuse.
+    if (enemy?.eliteUnfazed > 0) level += enemy.eliteUnfazed * 0.1;
     return Math.max(0, level);
   }
   Neo.getEnemyCcLevel = getEnemyCcLevel;
+
+  // Enemy crit aggression: enemies that don't author their own crit get a global,
+  // time-based ramp so a run never stays "safe" forever. Every 5 elapsed minutes
+  // adds +5% crit chance, +5% crit damage and +5% raw damage. Crit chance is run
+  // through the shared roll-back (applyCritRollback): at 100% it converts to ×1.5
+  // crit damage and rolls back to 75%, so late runs keep getting scarier crits.
+  // The base enemy crit damage starts at 1.5×.
+  function getEnemyTimeAggression() {
+    const minutes = Math.max(0, Number(Neo.gameElapsedTime || 0) / 60);
+    const steps = Math.floor(minutes / 5); // one bump per full 5 minutes
+    const rawCritChance = steps * 0.05;
+    const baseCritMultiplier = 1.5 + steps * 0.05;
+    const rolled = Neo.applyCritRollback(rawCritChance, baseCritMultiplier);
+    return {
+      steps,
+      critChance: Neo.clamp(rolled.critChance, 0, 1),
+      critMultiplier: rolled.critMultiplier,
+      damageMultiplier: 1 + steps * 0.05,
+    };
+  }
+  Neo.getEnemyTimeAggression = getEnemyTimeAggression;
+
+  // An enemy is "dangerous" (shown with a red-bordered name tag) when a single
+  // hit can wipe the player from full HP — either its base attack already meets
+  // the player's max HP, or it has a heavy crit chance (>=60%) whose crit damage
+  // reaches max HP. Crit chance/multiplier come from the per-enemy authored crit
+  // (eliteCrit, ×1.4 in damagePlayer); the time-based aggression ramp is global
+  // and not enemy-specific, so it is intentionally excluded here.
+  const DANGEROUS_CRIT_CHANCE = 0.6;
+  const ELITE_CRIT_MULTIPLIER = 1.4;
+  function isEnemyDangerous(enemy) {
+    if (!enemy) return false;
+    const maxHp = Math.max(1, Number(Neo.player?.maxHp || 0));
+    const baseDmg = Number(enemy.dmg || 0);
+    if (baseDmg >= maxHp) return true;
+    const critChance = Number(enemy.eliteCrit || 0);
+    if (critChance >= DANGEROUS_CRIT_CHANCE && baseDmg * ELITE_CRIT_MULTIPLIER >= maxHp) return true;
+    return false;
+  }
+  Neo.isEnemyDangerous = isEnemyDangerous;
 
   function applyEnemyImpactStun(enemy, dealt, appliedKnockback) {
     const maxHealth = Number(enemy?.max) || 0;
@@ -2443,7 +2490,12 @@
     }
     const stats = Neo.getItemStats();
     const sandbox = Neo.getActiveSandboxSettings();
-    const critChance = Neo.clamp((stats.critChance || 0) + Number(options.critBonus || 0), 0, 0.98);
+    // Hit-time crit bonuses (weapons, anvil moves) can push chance past 100%, so
+    // run the roll-back here too: overflow becomes extra crit damage on top of the
+    // already rolled-back multiplier from getItemStats.
+    const critRollback = Neo.applyCritRollback((stats.critChance || 0) + Number(options.critBonus || 0), stats.critMultiplier || 1.6);
+    const critChance = Neo.clamp(critRollback.critChance, 0, 1);
+    const critMultiplier = critRollback.critMultiplier;
     let dealt = options.rawDamage ? scaleRawDamageAgainstEnemy(enemy, damage) : scaleDamageAgainstEnemy(enemy, damage, options, stats);
     // Copper Penny: every electric/lightning hit deals +20% damage per stack and
     // builds a stacking Static charge on the target. Static is a DoT that arcs to
@@ -2459,7 +2511,10 @@
     // be moved and to cross the heavy-knockback stun threshold. No cap.
     const knockbackResistFactor = 1 / (1 + getEnemyCcLevel(enemy));
     const appliedKnockback = knockback * (stats.knockbackMultiplier || 1) * knockbackResistFactor;
-    if (isCrit) dealt = Math.round(dealt * stats.critMultiplier);
+    if (isCrit) dealt = Math.round(dealt * critMultiplier);
+    // Rivals are meant to be tougher than a normal enemy: a flat 20% damage
+    // reduction on top of their stats. Friends are already exempted above.
+    if (enemy?.type === 'rival') dealt = Math.max(1, Math.round(dealt * (1 - Neo.RIVAL_DAMAGE_REDUCTION)));
     if (!options.ignoreBarrier && (enemy.barrier || 0) > 0) {
       const absorbed = Math.min(enemy.barrier, dealt);
       enemy.barrier -= absorbed;
@@ -2675,6 +2730,19 @@
     const adjustedDuration = Number(duration || 0) * statusBoost * characterBoost;
     Neo.applyStatus(entity, 'poison', stacks, adjustedDuration, source);
     triggerStatusReactions(entity, 'poison');
+  }
+
+  // Elite "power" procs: when an elite (Enflamed/Gross/Breezy) lands any damage
+  // on the player, roll each aggregated proc chance and apply the matching
+  // status. Called from damagePlayer/tickEnemyBeam/projectile collision so it
+  // covers melee, beams and projectiles uniformly. Cold is the player's 'slow'
+  // status (the same brittle stack that scales their damage taken).
+  function applyEliteProcsToPlayer(enemy) {
+    const procs = enemy?.eliteProcs;
+    if (!procs || !Neo.player) return;
+    if (procs.fire > 0 && Neo.nextRandom('encounter') < procs.fire) applyFire(Neo.player, 1, 2.8, enemy.type);
+    if (procs.poison > 0 && Neo.nextRandom('encounter') < procs.poison) applyPoison(Neo.player, 1, 4.2, enemy.type);
+    if (procs.cold > 0 && Neo.nextRandom('encounter') < procs.cold) Neo.applyStatus(Neo.player, 'slow', 1, 4, enemy.type);
   }
 
   function applyDarkDrain(entity, stacks, duration, source = null) {
@@ -3044,7 +3112,7 @@
       const hitSegment = Neo.beamPathHitsCircle(beamPath, Neo.player.x, Neo.player.y, Neo.player.r + 5);
       if (hitSegment) {
         const source = getEnemyBeamDamageSource(enemy, damageSource);
-        Neo.damagePlayer(damage, hitSegment.angle, knockback, source.label, { sourceKey: source.key });
+        Neo.damagePlayer(damage, hitSegment.angle, knockback, source.label, { sourceKey: source.key, attacker: enemy });
         if (typeof onHit === 'function') onHit(enemy);
       }
     }
@@ -3939,6 +4007,7 @@
   Neo.applyBleed = applyBleed;
   Neo.applyFire = applyFire;
   Neo.applyPoison = applyPoison;
+  Neo.applyEliteProcsToPlayer = applyEliteProcsToPlayer;
   Neo.applyDarkDrain = applyDarkDrain;
   Neo.applyStatusInRadius = applyStatusInRadius;
   Neo.procyPickleSpread = procyPickleSpread;

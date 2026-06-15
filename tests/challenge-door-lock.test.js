@@ -26,6 +26,7 @@ describe('challenge door lock lifecycle', () => {
   const enemiesSource = fs.readFileSync(path.join(__dirname, '../js/game/enemies.js'), 'utf8');
   const worldSource = fs.readFileSync(path.join(__dirname, '../js/game/world.js'), 'utf8');
   const gameStateSource = fs.readFileSync(path.join(__dirname, '../js/core/game-state.js'), 'utf8');
+  const environmentSource = fs.readFileSync(path.join(__dirname, '../js/draw/environment.js'), 'utf8');
   const Neo = { CHALLENGE_ROOM_TYPES: new Set(['challenge']) };
 
   const deriveChallengeLifecycleState = extractFunction(
@@ -66,19 +67,30 @@ describe('challenge door lock lifecycle', () => {
 
     registerChallengeLifecycleLockEvents(eventBus);
 
+    room.challengeStarted = true;
     handlers['challenge:started']({ room });
     expect(room.challengeLifecycleState).toBe('active');
     expect(isChallengeRoomLocked(room)).toBe(true);
 
+    room.cleared = true;
+    room.challengeFailed = false;
     handlers['challenge:completed']({ room });
     expect(room.challengeLifecycleState).toBe('completed');
     expect(isChallengeRoomLocked(room)).toBe(false);
 
+    room.cleared = false;
+    room.challengeFailed = false;
+    room.challengeStarted = true;
     handlers['challenge:started']({ room });
+    room.cleared = true;
+    room.challengeFailed = true;
     handlers['challenge:failed']({ room });
     expect(room.challengeLifecycleState).toBe('failed');
     expect(isChallengeRoomLocked(room)).toBe(false);
 
+    room.cleared = false;
+    room.challengeFailed = false;
+    room.challengeStarted = false;
     handlers['challenge:reset']({ room });
     expect(room.challengeLifecycleState).toBe('ready');
     expect(isChallengeRoomLocked(room)).toBe(false);
@@ -94,6 +106,60 @@ describe('challenge door lock lifecycle', () => {
 
     expect(deriveChallengeLifecycleState(room)).toBe('active');
     expect(isChallengeRoomLocked(room)).toBe(true);
+  });
+
+  test('self-corrects stale challenge lifecycle state from room flags', () => {
+    const room = {
+      type: 'challenge',
+      challengeStarted: true,
+      cleared: false,
+      challengeFailed: false,
+      challengeLifecycleState: 'ready',
+    };
+
+    expect(isChallengeRoomLocked(room)).toBe(true);
+    expect(room.challengeLifecycleState).toBe('active');
+
+    room.cleared = true;
+    expect(isChallengeRoomLocked(room)).toBe(false);
+    expect(room.challengeLifecycleState).toBe('completed');
+  });
+
+  test('invalidates the room background cache when challenge doors lock or unlock', () => {
+    const room = {
+      gx: 2,
+      gy: 3,
+      type: 'challenge',
+      secretKind: '',
+      doors: { n: true, s: false, e: true, w: false },
+      challengeStarted: false,
+      cleared: false,
+    };
+    const cacheNeo = {
+      currentRoom: room,
+      DIRECTIONS: ['n', 's', 'e', 'w'],
+      floor: 4,
+      enemies: [],
+      hasVisibleRoomExit: (activeRoom, dir) => Boolean(activeRoom?.doors?.[dir]),
+      isRoomLocked: () => room.challengeStarted && !room.cleared,
+    };
+    const getEnvironmentBackgroundCacheKey = extractFunction(
+      environmentSource,
+      'getEnvironmentBackgroundCacheKey',
+      {
+        Neo: cacheNeo,
+        getStaticRoomLavaHazards: () => [],
+      },
+    );
+
+    const readyKey = getEnvironmentBackgroundCacheKey();
+    room.challengeStarted = true;
+    const activeKey = getEnvironmentBackgroundCacheKey();
+    room.cleared = true;
+    const completedKey = getEnvironmentBackgroundCacheKey();
+
+    expect(activeKey).not.toBe(readyKey);
+    expect(completedKey).toBe(readyKey);
   });
 
   test('routes all challenge outcomes and door checks through lifecycle events', () => {

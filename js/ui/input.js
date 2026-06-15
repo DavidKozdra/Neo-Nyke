@@ -71,7 +71,7 @@ export const MOVE_DEFS = {
     holy_turrets: { key: 'holy_turrets', slot: 'smash', name: 'Holy Turrets', desc: 'Summon divine turrets that fire holy AOE bursts at nearby foes.', exclusiveCharacter: 'gelleh' },
     kicky_kick: { key: 'kicky_kick', slot: 'smash', name: 'Kicky Kick', desc: 'A devastating kick with a 10% chance to launch enemies into the next room.', exclusiveCharacter: 'princess' },
     chaos_burst: { key: 'chaos_burst', slot: 'smash', name: 'Chaos Burst', desc: 'Multiple chaos detonations.' },
-    healing_zone: { key: 'healing_zone', slot: 'smash', name: 'Healing Zone', desc: 'Healing and damage zone.' },
+    healing_zone: { key: 'healing_zone', slot: 'smash', name: 'Healing Zone', desc: 'Hold to charge a healing and damage zone. Charge speed scales with attack speed.' },
     fire_circle: { key: 'fire_circle', slot: 'smash', name: 'Fire Circle', desc: 'Burning aura around you.' },
     floor_lava: { key: 'floor_lava', slot: 'smash', name: 'Floor Is Lava', desc: 'Lava immunity and lava trail.' },
     random_pounce: { key: 'random_pounce', slot: 'smash', name: 'Random Pounce', desc: 'Massive AOE explosion and homing fangs that seek enemies, dealing heavy damage with high crit chance and bleed.', exclusiveCharacter: 'mooggy' },
@@ -251,10 +251,12 @@ export const RIVAL_DEFS = {
     princess: {
       name: 'Rival Princess',
       color: '#e87fff',
-      hp: 220, dmg: 26, speed: 102, r: 16, attackCd: 0.75,
+      // Toned down from 220/26: the player princess is strong, but as a rival she
+      // was the toughest melee bruiser. Now on the lighter end of the roster.
+      hp: 160, dmg: 18, speed: 102, r: 16, attackCd: 0.75,
       enterLine: 'This dungeon belongs to me.',
       deathLine: 'Unbelievable...',
-      attackStyle: 'melee',
+      attackStyle: 'ranged',
     },
     thorn_knight: {
       name: 'Rival Thorn',
@@ -296,33 +298,80 @@ export const RIVAL_XP_PER_GROWTH_TICK = 6; // halved: passive growth was snowbal
 export const RIVAL_LEVEL_CAP = 9; // hard ceiling so rivals stay beatable no matter how long a run drags on
 export const RIVAL_REPUTATION_LEVEL_CAP = 4; // most starting-level bonus reputation can grant
 export const RIVAL_WEAPON_SWAP_BASE = 3.6;
+export const RIVAL_DAMAGE_REDUCTION = 0.2; // rivals are tougher than normal enemies: a flat 20% reduction on incoming hits
+export const RIVAL_VENDETTA_THREAT = 5; // a rival whose accumulated threat crosses this escalates to a sustained hunt on its own
+export const RIVAL_DEFAULT_KIT_CHANCE = 0.8; // ~80% of rivals spawn with their default kit; the rest swap in an alt move
 export const MONSTER_ROAM_INTERVAL_SECONDS = 60;
 export const MONSTER_ROAM_MOVE_CHANCE = 0.28;
 export const PURPLE_WEAPON_POOL = ['lazer_glasses', 'metao_fire_staff', 'magenta_degale', 'magenta_p90'];
 export const RED_WEAPON_POOL = ['gelleh_lightning_spear', 'excalibur', 'katana_excalibur_777x', 'golden_fleece', 'void_piercer'];
 
+// Each rival's default loadout mirrors that character's PLAYER kit: their
+// default weapon plus their signature laser/smash/dash moves, mapped onto the
+// rival AI's four weapon classes (melee / ranged / burst / dash). The `key` is
+// the player move/weapon name so it reads faithfully in projectiles + the
+// rivals tab. Alternatives below mirror each character's KIT_ALTERNATIVES and
+// are swapped in by buildRivalLoadout (~20% of spawns).
 export const RIVAL_WEAPON_LOADOUTS = {
+    // wand (ranged), love_beam (ranged heal beam), kicky_kick (smash → heavy
+    // melee that can launch you into the next room), flying_unhitable (dash).
     princess: [
-      { key: 'thorns_bleed_blade', class: 'melee', range: 42, preferredRange: 120, damageMult: 1.08, cooldownMult: 0.92, knockback: 300 },
-      { key: 'magenta_degale', class: 'ranged', range: 360, preferredRange: 220, damageMult: 0.88, cooldownMult: 1.1, projectileCount: 2, spread: 0.14, projectileSpeed: 340 },
+      { key: 'princess_wand', class: 'ranged', range: 380, preferredRange: 230, damageMult: 0.9, cooldownMult: 1.05, projectileCount: 1, spread: 0.05, projectileSpeed: 380 },
+      { key: 'love_beam', class: 'melee_heal', range: 50, preferredRange: 120, damageMult: 1.0, cooldownMult: 1.0, knockback: 280 },
+      { key: 'kicky_kick', class: 'melee', range: 60, preferredRange: 110, damageMult: 1.4, cooldownMult: 1.5, knockback: 620, roomLaunchChance: 0.1 },
     ],
+    // thorns blade (melee), blood_beam (ranged), crimson_smash (melee AoE),
+    // dash (dash).
     thorn_knight: [
-      { key: 'extending_staff', class: 'melee', range: 56, preferredRange: 130, damageMult: 1.0, cooldownMult: 0.84, knockback: 320 },
-      { key: 'hunters_bow', class: 'ranged', range: 430, preferredRange: 270, damageMult: 0.86, cooldownMult: 1.05, projectileCount: 1, spread: 0.04, projectileSpeed: 420 },
-      { key: 'thorns_bleed_blade', class: 'dash', range: 240, preferredRange: 165, damageMult: 1.15, cooldownMult: 1.2, knockback: 360 },
+      { key: 'thorns_bleed_blade', class: 'melee', range: 56, preferredRange: 120, damageMult: 1.0, cooldownMult: 0.84, knockback: 320 },
+      { key: 'blood_beam', class: 'ranged', range: 430, preferredRange: 270, damageMult: 0.86, cooldownMult: 1.05, projectileCount: 1, spread: 0.04, projectileSpeed: 420 },
+      { key: 'crimson_smash', class: 'dash', range: 240, preferredRange: 165, damageMult: 1.15, cooldownMult: 1.2, knockback: 360 },
     ],
+    // fire staff (ranged), power_disks (burst), chaos_burst (smash → burst),
+    // warp (dash).
     metao: [
-      { key: 'magenta_p90', class: 'burst', range: 390, preferredRange: 250, damageMult: 0.72, cooldownMult: 1.0, projectileCount: 4, spread: 0.16, projectileSpeed: 360 },
-      { key: 'lazer_glasses', class: 'ranged', range: 470, preferredRange: 300, damageMult: 0.92, cooldownMult: 1.14, projectileCount: 1, spread: 0.02, projectileSpeed: 460 },
+      { key: 'metao_fire_staff', class: 'ranged', range: 470, preferredRange: 300, damageMult: 0.92, cooldownMult: 1.14, projectileCount: 1, spread: 0.02, projectileSpeed: 460 },
+      { key: 'power_disks', class: 'burst', range: 390, preferredRange: 250, damageMult: 0.72, cooldownMult: 1.0, projectileCount: 4, spread: 0.16, projectileSpeed: 360 },
+      { key: 'chaos_burst', class: 'burst', range: 340, preferredRange: 220, damageMult: 0.85, cooldownMult: 1.12, projectileCount: 3, spread: 0.18, projectileSpeed: 380 },
     ],
+    // lightning spear (ranged), blade_justice (melee), healing_zone
+    // (melee_heal), zip_lightning (dash).
     gelleh: [
       { key: 'gelleh_lightning_spear', class: 'ranged', range: 420, preferredRange: 260, damageMult: 0.94, cooldownMult: 1.0, projectileCount: 2, spread: 0.08, projectileSpeed: 390 },
-      { key: 'excalibur', class: 'melee_heal', range: 50, preferredRange: 130, damageMult: 1.12, cooldownMult: 0.95, knockback: 320 },
-      { key: 'void_piercer', class: 'burst', range: 340, preferredRange: 220, damageMult: 0.95, cooldownMult: 1.12, projectileCount: 3, spread: 0.1, projectileSpeed: 380 },
+      { key: 'blade_justice', class: 'melee_heal', range: 50, preferredRange: 130, damageMult: 1.12, cooldownMult: 0.95, knockback: 320 },
+      { key: 'zip_lightning', class: 'dash', range: 245, preferredRange: 160, damageMult: 1.08, cooldownMult: 1.1, knockback: 300 },
+    ],
+    // claw gauntlets (melee), nail_shot (ranged spread), random_pounce (dash),
+    // mooggy_zoomies flavor via fast cooldown.
+    mooggy: [
+      { key: 'claw_gauntlets', class: 'melee', range: 48, preferredRange: 110, damageMult: 1.05, cooldownMult: 0.7, knockback: 260 },
+      { key: 'nail_shot', class: 'ranged', range: 460, preferredRange: 230, damageMult: 0.85, cooldownMult: 0.9, projectileCount: 3, spread: 0.22, projectileSpeed: 420 },
+      { key: 'random_pounce', class: 'dash', range: 245, preferredRange: 150, damageMult: 1.1, cooldownMult: 1.0, knockback: 320 },
+    ],
+  };
+
+// Per-character swap-in weapons, mirroring each player's KIT_ALTERNATIVES alt
+// moves. buildRivalLoadout swaps one of these in for ~20% of rival spawns so
+// rivals aren't always the cookie-cutter default kit.
+export const RIVAL_LOADOUT_ALTERNATIVES = {
+    thorn_knight: [
+      // thorn_blood_beams (alt laser) + knight_slash_dash (alt dash)
+      { key: 'thorn_blood_beams', class: 'ranged', range: 450, preferredRange: 250, damageMult: 0.8, cooldownMult: 0.92, projectileCount: 2, spread: 0.1, projectileSpeed: 430 },
+      { key: 'knight_slash_dash', class: 'dash', range: 260, preferredRange: 170, damageMult: 1.2, cooldownMult: 1.05, knockback: 340 },
+    ],
+    metao: [
+      // wizard_lazer (alt laser) + potion_bath (alt smash → heal flavor)
+      { key: 'wizard_lazer', class: 'ranged', range: 500, preferredRange: 320, damageMult: 1.1, cooldownMult: 1.3, projectileCount: 1, spread: 0.0, projectileSpeed: 520 },
+      { key: 'potion_bath', class: 'melee_heal', range: 54, preferredRange: 120, damageMult: 0.95, cooldownMult: 1.1, knockback: 300 },
+    ],
+    gelleh: [
+      // holy_turrets + excalibur_strike (alt smashes)
+      { key: 'excalibur_strike', class: 'burst', range: 360, preferredRange: 230, damageMult: 1.0, cooldownMult: 1.2, projectileCount: 3, spread: 0.12, projectileSpeed: 380 },
     ],
     mooggy: [
-      { key: 'lazer_glasses', class: 'ranged', range: 500, preferredRange: 230, damageMult: 0.98, cooldownMult: 0.28, projectileCount: 1, spread: 0.01, projectileSpeed: 520 },
-      { key: 'thorns_bleed_blade', class: 'dash', range: 245, preferredRange: 150, damageMult: 1.08, cooldownMult: 0.8, knockback: 320 },
+      // mooggy_blood_beam (alt laser) + mooggy_hairball (alt smash → burst)
+      { key: 'mooggy_blood_beam', class: 'ranged', range: 480, preferredRange: 250, damageMult: 0.95, cooldownMult: 1.1, projectileCount: 1, spread: 0.02, projectileSpeed: 480 },
+      { key: 'mooggy_hairball', class: 'burst', range: 330, preferredRange: 200, damageMult: 0.9, cooldownMult: 1.1, projectileCount: 4, spread: 0.2, projectileSpeed: 360 },
     ],
   };
 
@@ -1238,10 +1287,20 @@ export const ELITE_INVENTORY_POOL = [
 export const WHITE_ITEM_POOL = ITEM_KEYS.filter(key => ITEM_DEFS[key]?.rarity === 'knight' && !ITEM_DEFS[key]?.voucher);
 export const BLUE_ITEM_POOL = ITEM_KEYS.filter(key => ITEM_DEFS[key]?.rarity === 'blue');
 export const ELITE_TYPE_DEFS = {
-    burning: { label: 'Burning', color: '#ff9a3c' },
-    bleeding: { label: 'Bleeding', color: '#ff4256' },
+    // Body rolls
+    knight: { label: 'Knight', color: '#dfe7ff' },
+    knave: { label: 'Knave', color: '#9aa6c4' },
+    // Power rolls
+    lazered: { label: 'Lazered', color: '#78d7ff' },
+    enflamed: { label: 'Enflamed', color: '#ff7a3c' },
+    breezy: { label: 'Breezy', color: '#7fd9ff' },
+    gross: { label: 'Gross', color: '#9bd84f' },
+    nothing: { label: 'Nothing', color: '#c9cdd6' },
     giant: { label: 'Giant', color: '#ffd27d' },
     blessed: { label: 'Blessed', color: '#f2f6ff' },
+    // Legacy affixes kept for back-compat with in-flight elites
+    burning: { label: 'Burning', color: '#ff9a3c' },
+    bleeding: { label: 'Bleeding', color: '#ff4256' },
     lasered: { label: 'Lazered', color: '#78d7ff' },
   };
   // itemRegistry is created in game-state.js after createItemRegistry is defined
@@ -1783,11 +1842,15 @@ export const MOVE_BASE_STATS = {
   Neo.RIVAL_LEVEL_CAP = RIVAL_LEVEL_CAP;
   Neo.RIVAL_REPUTATION_LEVEL_CAP = RIVAL_REPUTATION_LEVEL_CAP;
   Neo.RIVAL_WEAPON_SWAP_BASE = RIVAL_WEAPON_SWAP_BASE;
+  Neo.RIVAL_DAMAGE_REDUCTION = RIVAL_DAMAGE_REDUCTION;
+  Neo.RIVAL_VENDETTA_THREAT = RIVAL_VENDETTA_THREAT;
   Neo.MONSTER_ROAM_INTERVAL_SECONDS = MONSTER_ROAM_INTERVAL_SECONDS;
   Neo.MONSTER_ROAM_MOVE_CHANCE = MONSTER_ROAM_MOVE_CHANCE;
   Neo.PURPLE_WEAPON_POOL = PURPLE_WEAPON_POOL;
   Neo.RED_WEAPON_POOL = RED_WEAPON_POOL;
   Neo.RIVAL_WEAPON_LOADOUTS = RIVAL_WEAPON_LOADOUTS;
+  Neo.RIVAL_LOADOUT_ALTERNATIVES = RIVAL_LOADOUT_ALTERNATIVES;
+  Neo.RIVAL_DEFAULT_KIT_CHANCE = RIVAL_DEFAULT_KIT_CHANCE;
   Neo.ITEM_DEFS = ITEM_DEFS;
   Neo.ITEM_KEYS = ITEM_KEYS;
   Neo.SCROLL_DEFS = SCROLL_DEFS;

@@ -91,6 +91,23 @@ export function clamp(value, min, max) {
   return value < min ? min : value > max ? max : value;
 }
 
+// Crit roll-back: once crit chance reaches 100% it can't climb higher, so the
+// overflow is converted into crit power instead. Each time chance crosses 100%
+// we multiply the crit damage by 1.5 and roll the chance back to 75%, repeating
+// while it's still ≥100% (so big single jumps can roll over more than once).
+// Shared by both the player and enemies so they ramp the same way.
+export function applyCritRollback(critChance, critMultiplier) {
+  let chance = Number(critChance) || 0;
+  let multiplier = Number(critMultiplier) || 1;
+  let guard = 0;
+  while (chance >= 1 && guard < 20) {
+    multiplier *= 1.5;
+    chance -= 0.25; // 100% → 75%
+    guard += 1;
+  }
+  return { critChance: chance, critMultiplier: multiplier };
+}
+
 export function dist(ax, ay, bx, by) {
   return Math.hypot(ax - bx, ay - by);
 }
@@ -756,6 +773,7 @@ Neo.shuffle = shuffle;
 Neo.shuffleWithRandom = shuffleWithRandom;
 Neo.unorderedRemoveAt = unorderedRemoveAt;
 Neo.clamp = clamp;
+Neo.applyCritRollback = applyCritRollback;
 Neo.dist = dist;
 Neo.distToSegment = distToSegment;
 Neo.circleRect = circleRect;

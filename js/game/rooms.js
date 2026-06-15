@@ -1199,9 +1199,9 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
 
   function isChallengeRoomLocked(room) {
     if (!room || !Neo.CHALLENGE_ROOM_TYPES.has(room.type)) return false;
-    const state = room.challengeLifecycleState;
-    if (['ready', 'active', 'completed', 'failed'].includes(state)) return state === 'active';
-    return deriveChallengeLifecycleState(room) === 'active';
+    const state = deriveChallengeLifecycleState(room);
+    if (room.challengeLifecycleState !== state) room.challengeLifecycleState = state;
+    return state === 'active';
   }
 
   function registerChallengeLifecycleLockEvents(eventBus = Neo.gameEvents) {
@@ -1973,7 +1973,7 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
       dead: !!source.dead,
     };
     if (!migrated.weapons.length) {
-      migrated.weapons = (Neo.RIVAL_WEAPON_LOADOUTS[migrated.characterKey] || []).map(weapon => ({ ...weapon }));
+      migrated.weapons = buildRivalLoadout(migrated.characterKey);
     }
     applyRivalLevelStats(migrated, { syncLiveEnemy: false, keepHpRatio: false });
     migrated.hp = Neo.clamp(Number(source.hp || migrated.hp), 1, migrated.max);
@@ -2035,6 +2035,24 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
       enemy.speed = matching.speed;
       enemy.attackCd = Math.max(Number(enemy.attackCd || 0), matching.attackCd * 0.5);
     });
+  }
+
+  // Builds a fresh rival weapon loadout. ~80% of the time it's the character's
+  // default kit (mirroring their player kit); otherwise one weapon slot is
+  // swapped for one of that character's alternatives, so rivals aren't always
+  // identical. Returned weapons are deep-copied so per-enemy state stays local.
+  function buildRivalLoadout(charKey) {
+    const base = (Neo.RIVAL_WEAPON_LOADOUTS[charKey] || []).map(weapon => ({ ...weapon }));
+    const alternatives = Neo.RIVAL_LOADOUT_ALTERNATIVES[charKey] || [];
+    const defaultChance = Number(Neo.RIVAL_DEFAULT_KIT_CHANCE ?? 0.8);
+    if (alternatives.length === 0 || base.length === 0 || Neo.nextRandom('world') < defaultChance) {
+      return base;
+    }
+    // Swap one random base slot for one random alternative.
+    const alt = { ...alternatives[Math.floor(Neo.nextRandom('world') * alternatives.length)] };
+    const slot = Math.floor(Neo.nextRandom('world') * base.length);
+    base[slot] = alt;
+    return base;
   }
 
   function spawnRivals() {
@@ -2171,7 +2189,7 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
           xp: 0,
           xpToNext: 22 + Neo.floor * 4,
           growthTick: 0,
-          weapons: (Neo.RIVAL_WEAPON_LOADOUTS[charKey] || []).map(weapon => ({ ...weapon })),
+          weapons: buildRivalLoadout(charKey),
           loot: [],
           homeGx: spawnRoom.gx,
           homeGy: spawnRoom.gy,
@@ -2499,6 +2517,19 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
       }
       if (rival.memory) {
         rival.memory.threat = Math.max(0, rival.memory.threat - dt * 0.03);
+        // Escalation by attrition: a rival you keep fighting/antagonizing builds
+        // threat (hits taken/dealt, sightings) and, once it crosses the bar,
+        // commits to a sustained vendetta hunt on its own — no kill or grudge
+        // required. Friends never escalate.
+        if (!rival.friend && !rival.vendetta
+          && Number(rival.memory.threat || 0) >= Number(Neo.RIVAL_VENDETTA_THREAT || 5)) {
+          rival.vendetta = true;
+          rival.aggroTimer = Math.max(rival.aggroTimer, 10);
+          const liveEnemy = Neo.enemies.find(e => e.type === 'rival' && e.rivalData === rival);
+          const px = liveEnemy ? liveEnemy.x : Neo.player.x;
+          const py = liveEnemy ? liveEnemy.y - 30 : Neo.player.y - 30;
+          Neo.spawnParticle({ x: px, y: py, life: 2.0, text: `${rival.name.toUpperCase()} IS HUNTING YOU`, c: rival.color });
+        }
       }
       rival.aggroTimer = Math.max(0, rival.aggroTimer - dt);
       rival.moveTimer -= dt;
@@ -2590,6 +2621,28 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
     }
   }
 
+  // The rival princess's kicky kick mirrors the player ability: a heavy kick
+  // that, on a roll, launches the target into the next room. Here the target is
+  // the player, so we shove them through the door in the kick's direction.
+  function tryRivalKickPlayerToNextRoom(rival, angle, chance) {
+    if (!(Neo.nextRandom('encounter') < Number(chance || 0))) return;
+    if (Neo.fading) return; // a transition is already mid-flight
+    if (['boss', 'god', 'ladder', 'challenge'].includes(Neo.currentRoom?.type)) return;
+    const x = Math.cos(angle);
+    const y = Math.sin(angle);
+    const direction = Math.abs(x) >= Math.abs(y) ? (x >= 0 ? 'e' : 'w') : (y >= 0 ? 's' : 'n');
+    const nextRoom = getConnectedRoom(Neo.currentRoom, direction);
+    if (!nextRoom) return;
+    Neo.spawnParticle({
+      x: Neo.player.x + Math.cos(angle) * 54,
+      y: Neo.player.y + Math.sin(angle) * 54 - 18,
+      life: 0.85,
+      text: `${rival.name.toUpperCase()} KICKED YOU AWAY!`,
+      c: rival.color,
+    });
+    Neo.startTransition?.(direction);
+  }
+
   function updateRivalEnemy(enemy, dt) {
     const rival = enemy.rivalData;
     if (!rival) return;
@@ -2621,15 +2674,28 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
       enemy.rivalStrafeFlipCd = 1.1 + Neo.nextRandom('encounter') * 1.8;
       if (Neo.nextRandom('encounter') < 0.35) enemy.rivalStrafeDir *= -1;
     }
-    if (enemy.rivalWeaponSwapCd <= 0 && weapons.length > 1) {
-      enemy.rivalWeaponIndex = (enemy.rivalWeaponIndex + 1) % weapons.length;
-      enemy.rivalWeaponSwapCd = Neo.RIVAL_WEAPON_SWAP_BASE + Neo.nextRandom('encounter') * 1.6;
-    }
-    const weapon = weapons[enemy.rivalWeaponIndex] || weapons[0];
-
     const dx = Neo.player.x - enemy.x;
     const dy = Neo.player.y - enemy.y;
     const distance = Math.hypot(dx, dy) || 1;
+
+    // Rivals use their whole kit instead of blindly round-robining: when a swap
+    // window opens, pick the weapon whose preferred range best fits the current
+    // distance (with a little jitter so they still mix it up), so a ranged tool
+    // gets used at range and a melee/dash tool up close. They also re-evaluate
+    // sooner after an attack, keeping pressure on with their full loadout.
+    if (enemy.rivalWeaponSwapCd <= 0 && weapons.length > 1) {
+      let bestIndex = enemy.rivalWeaponIndex;
+      let bestScore = Infinity;
+      for (let i = 0; i < weapons.length; i++) {
+        const w = weapons[i];
+        const pref = Number(w.preferredRange || (w.class === 'ranged' || w.class === 'burst' ? 220 : 120));
+        const score = Math.abs(distance - pref) + Neo.nextRandom('encounter') * 70;
+        if (score < bestScore) { bestScore = score; bestIndex = i; }
+      }
+      enemy.rivalWeaponIndex = bestIndex;
+      enemy.rivalWeaponSwapCd = Neo.RIVAL_WEAPON_SWAP_BASE + Neo.nextRandom('encounter') * 1.6;
+    }
+    const weapon = weapons[enemy.rivalWeaponIndex] || weapons[0];
 
     if (enemy.dashTime > 0) {
       enemy.dashTime -= dt;
@@ -2694,7 +2760,12 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
           rival.memory.threat += 0.2;
         }
         enemy.attackCd = rival.attackCd * Number(weapon.cooldownMult || 1) + Neo.nextRandom('encounter') * 0.4;
+        enemy.rivalWeaponSwapCd = Math.min(enemy.rivalWeaponSwapCd, 0.6);
         enemy.swingTime = 0.22;
+        // Kicky kick: chance to launch the player into the next room.
+        if (Number(weapon.roomLaunchChance || 0) > 0) {
+          tryRivalKickPlayerToNextRoom(rival, angle, weapon.roomLaunchChance);
+        }
         // Heal on hit for gelleh-style
         if (attackStyle === 'melee_heal' && Neo.nextRandom('encounter') < 0.25) {
           const heal = Math.round(enemy.max * 0.06);
@@ -2709,6 +2780,7 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
         enemy.dashTime = 0.24;
         enemy.dashHit = false;
         enemy.attackCd = rival.attackCd * Number(weapon.cooldownMult || 1) + 0.35;
+        enemy.rivalWeaponSwapCd = Math.min(enemy.rivalWeaponSwapCd, 0.6);
       }
     } else if (attackStyle === 'ranged' || attackStyle === 'burst') {
       if (distance < Number(weapon.range || 320)) {
@@ -2737,6 +2809,7 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
           });
         }
         enemy.attackCd = rival.attackCd * Number(weapon.cooldownMult || 1) + Neo.nextRandom('encounter') * 0.5;
+        enemy.rivalWeaponSwapCd = Math.min(enemy.rivalWeaponSwapCd, 0.6);
       }
     }
   }

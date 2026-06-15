@@ -565,16 +565,24 @@
     return inventory;
   }
 
-  function rollEliteTypes() {
-    const pool = ['burning', 'bleeding', 'giant', 'blessed', 'lasered'];
-    const shuffled = Neo.shuffle(pool, 'encounter');
-    let count = Neo.nextRandom('encounter') < 0.18 ? 3 : Neo.nextRandom('encounter') < 0.58 ? 2 : 1;
-    // Deeper loops stack more affixes onto elites: +1 to the rolled affix count
-    // per completed loop, so late-loop elites can wear the full set of modifiers
-    // at once. Clamped to the pool size.
-    const loopNumber = Math.max(1, Math.floor((getProgressionDepth() - 1) / Neo.MAX_FLOOR) + 1);
-    count = Math.min(pool.length, count + (loopNumber - 1));
-    return shuffled.slice(0, count);
+  const ELITE_POWER_POOL = ['lazered', 'enflamed', 'breezy', 'gross', 'nothing', 'giant', 'blessed'];
+
+  // Roll the elite's trait tokens. An elite gets one BODY roll per level (each
+  // either 'knight' or 'knave'), then `level % 3` POWER rolls drawn with
+  // replacement from ELITE_POWER_POOL (duplicates allowed; 'nothing' is a valid
+  // no-op roll). The returned token list drives both mechanics (applyEliteTypes)
+  // and the display name (getEliteEnemyLabel).
+  function rollEliteTypes(enemy) {
+    const level = Math.max(1, Number(enemy?.level) || getEnemyProgressionLevel(enemy));
+    const tokens = [];
+    for (let index = 0; index < level; index += 1) {
+      tokens.push(Neo.nextRandom('encounter') < 0.5 ? 'knight' : 'knave');
+    }
+    const powerCount = level % 3;
+    for (let index = 0; index < powerCount; index += 1) {
+      tokens.push(ELITE_POWER_POOL[Neo.irand(0, ELITE_POWER_POOL.length - 1, 'encounter')]);
+    }
+    return tokens;
   }
 
   function applyEliteInventory(enemy, inventoryOverride = null) {
@@ -601,38 +609,85 @@
 
   function applyEliteTypes(enemy) {
     if (!enemy?.elite) return;
-    enemy.eliteTypes = Array.isArray(enemy.eliteTypes) && enemy.eliteTypes.length ? enemy.eliteTypes : rollEliteTypes();
+    enemy.eliteTypes = Array.isArray(enemy.eliteTypes) && enemy.eliteTypes.length ? enemy.eliteTypes : rollEliteTypes(enemy);
+    const tokens = enemy.eliteTypes;
+    const countToken = name => tokens.filter(token => token === name).length;
 
-    if (enemy.eliteTypes.includes('blessed')) {
+    if (tokens.includes('blessed')) {
       applyEliteInventory(enemy, rollBlessedEliteInventory());
     } else {
       applyEliteInventory(enemy);
     }
 
+    // Base elite durability (unchanged): double HP and a defense floor.
     enemy.max = Math.round(enemy.max * 2);
     enemy.hp = enemy.max;
     enemy.defenseMultiplier = Math.max(2, Number(enemy.defenseMultiplier || 1));
     enemy.eliteDurabilityV2 = true;
 
-    if (enemy.eliteTypes.includes('giant')) {
-      enemy.max = Math.round(enemy.max * 5);
+    // --- BODY ROLLS: Knight / Knave ---
+    const knight = countToken('knight');
+    const knave = countToken('knave');
+    enemy.eliteBody = { knight, knave };
+
+    // Knight: x1.2 to all stats per roll, multiplicative. HP/damage compound
+    // without limit; the realized speed factor is clamped so elites never
+    // outrun the player's projectiles (Neo.ELITE_KNIGHT_SPEED_CAP).
+    const knightMult = Math.pow(1.2, knight);
+    enemy.eliteKnightMult = knightMult;
+    enemy.max = Math.round(enemy.max * knightMult);
+    enemy.hp = enemy.max;
+    enemy.dmg = Math.round(enemy.dmg * knightMult);
+    const speedCap = Number(Neo.ELITE_KNIGHT_SPEED_CAP) || Infinity;
+    enemy.speed *= Math.min(speedCap, knightMult);
+
+    // Knave: "unfazed" scalar (harder to knock back / stun / bait), plus +1%
+    // resistance to one random status per roll written into the shared
+    // statusResistances map that getStatusResistance already reads.
+    enemy.eliteUnfazed = knave;
+    if (knave > 0) {
+      enemy.statusResistances = enemy.statusResistances || {};
+      for (let index = 0; index < knave; index += 1) {
+        const key = Neo.STATUS_KEYS[Neo.irand(0, Neo.STATUS_KEYS.length - 1, 'encounter')];
+        enemy.statusResistances[key] = Neo.clamp(Number(enemy.statusResistances[key] || 0) + 0.01, 0, 0.95);
+      }
+    }
+
+    // --- POWER ROLLS ---
+    const enflamed = countToken('enflamed');
+    const breezy = countToken('breezy');
+    const gross = countToken('gross');
+    enemy.elitePowers = tokens.filter(token => ELITE_POWER_POOL.includes(token));
+    enemy.eliteProcs = {
+      fire: Neo.clamp(enflamed * 0.15, 0, 0.95),
+      cold: Neo.clamp(breezy * 0.15, 0, 0.95),
+      poison: Neo.clamp(gross * 0.15, 0, 0.95),
+    };
+
+    // Breezy also reduces cold effectiveness AGAINST this elite (cold = slow).
+    if (breezy > 0) {
+      enemy.statusResistances = enemy.statusResistances || {};
+      enemy.statusResistances.slow = Neo.clamp(Number(enemy.statusResistances.slow || 0) + breezy * 0.30, 0, 0.95);
+    }
+
+    // Lazered reuses the existing elite laser-mode machine in updateEliteEnemyTraits.
+    if (tokens.includes('lazered')) {
+      enemy.eliteLaserCd = Neo.rand(1.9, 0.8, 'encounter');
+      enemy.eliteLaserModeIndex = 0;
+    }
+
+    // Giant: +50% max HP and a larger body.
+    if (tokens.includes('giant')) {
+      enemy.max = Math.round(enemy.max * 1.5);
       enemy.hp = enemy.max;
-      enemy.r = Math.round(enemy.r * 1.65);
+      enemy.r = Math.round(enemy.r * 1.6);
       enemy.speed *= 0.84;
       enemy.dmg = Math.round(enemy.dmg * 1.18);
     }
 
-    if (enemy.eliteTypes.includes('burning')) {
-      enemy.fireImmune = true;
-      enemy.burningTick = Neo.rand(0.9, 0.25, 'encounter');
-    }
-    if (enemy.eliteTypes.includes('bleeding')) {
-      enemy.bleedImmune = true;
-      enemy.bleedingTick = Neo.rand(1.1, 0.35, 'encounter');
-    }
-    if (enemy.eliteTypes.includes('lasered')) {
-      enemy.eliteLaserCd = Neo.rand(1.9, 0.8, 'encounter');
-      enemy.eliteLaserModeIndex = 0;
+    // Blessed: high crit chance on attacks against the player (see damagePlayer).
+    if (tokens.includes('blessed')) {
+      enemy.eliteCrit = 0.25;
     }
   }
 
@@ -747,6 +802,17 @@
     return result;
   }
 
+  function getGodRunPressure(elapsedSeconds = Neo.gameElapsedTime) {
+    const minutes = Math.max(0, Number(elapsedSeconds || 0) / 60);
+    return {
+      minutes,
+      damageMultiplier: Math.min(1.9, 1.18 + minutes * 0.045),
+      cadenceMultiplier: Math.max(0.48, 0.9 - minutes * 0.035),
+      partitionLaserCount: minutes >= 8 ? 5 : 4,
+      partitionRotationSpeed: Math.min(1.05, 0.52 + minutes * 0.035),
+    };
+  }
+
   function getMooggyAssassinStats() {
     const player = Neo.player || {};
     const itemStats = Neo.getItemStats?.() || {};
@@ -855,6 +921,22 @@
       base.phase5Triggered = false;
       base.novaCd = 2.4;
       base.judgementCd = 4.2;
+      base.stunResistance = 5;
+      base.maxStunDuration = 0.18;
+      base.statusResistance = 0.45;
+      base.statusResistances = {
+        bleed: 0.72,
+        fire: 0.5,
+        poison: 0.68,
+        dark_drain: 0.75,
+        slow: 0.7,
+        static: 0.6,
+      };
+      base.bleedResistance = 0.55;
+      base.partitionAngles = [];
+      base.partitionAngle = 0;
+      base.partitionRotationDir = 1;
+      base.partitionRotationSpeed = 0;
     } else if (type === 'cult_mage') {
       base.r = 17;
       base.hp = 84;
@@ -1052,9 +1134,10 @@
     }
 
     if (type === 'god') {
+      const runPressure = getGodRunPressure();
       base.hp = Math.round(base.hp * 5);
       base.max = base.hp;
-      base.dmg = Math.round(base.dmg * 2.2);
+      base.dmg = Math.round(base.dmg * 2.2 * runPressure.damageMultiplier);
       base.speed *= 1.06;
     }
 
@@ -1309,7 +1392,14 @@
     critChance += keenEyeActive ? count('keen_eye') * 0.2 : 0;
     critChance += count('pendant_of_kronos') * godItemStacks * 0.01;
     if (count('oracles_lens') > 0) critChance *= 2;
-    critChance = Neo.clamp(critChance, 0.01, 0.95);
+    critChance = Math.max(0.01, critChance);
+    // Mirror the player's crit roll-back: chance over 100% converts to ×1.5 crit
+    // damage and rolls back to 75% (see applyCritRollback).
+    const baseMirrorCritMultiplier = 1.6 + (count('oracles_lens') > 0 ? critChance * 2.2 : critChance * 0.6)
+      + (keenEyeActive ? count('keen_eye') * 0.025 : 0);
+    const mirrorCritRollback = Neo.applyCritRollback(critChance, baseMirrorCritMultiplier);
+    critChance = Neo.clamp(mirrorCritRollback.critChance, 0.01, 1);
+    const mirrorCritMultiplier = mirrorCritRollback.critMultiplier;
     return {
       bleedChance: count('neo_knife') * 0.05 + count('tough_bandaid') * 0.02,
       bleedResistance: Neo.clamp(count('tough_bandaid') * 0.1, 0, 0.8),
@@ -1321,8 +1411,7 @@
       overstimulateStunChance: count('overstimulate') * 0.2,
       homingMissileChance: count('homing_missile') * 0.15,
       critChance,
-      critMultiplier: 1.6 + (count('oracles_lens') > 0 ? critChance * 2.2 : critChance * 0.6)
-        + (keenEyeActive ? count('keen_eye') * 0.025 : 0),
+      critMultiplier: mirrorCritMultiplier,
       attackSpeedMultiplier: robotArm > 0 && inventory?.robotArmReady
         ? 8 * (1 + attackServo * 0.12 + chronoSpringBonus)
         : 1 + attackServo * 0.12 + chronoSpringBonus,
@@ -1929,7 +2018,9 @@
         : enemy.elite
           ? 0.08
           : 0;
-    return Neo.clamp(0.02 + (level - 1) * 0.018 + difficultyBonus + roleBonus, 0.02, 0.9);
+    // Knave body rolls make an elite harder to perceive/bait: +2% dodge per roll.
+    const unfazedBonus = (Number(enemy.eliteUnfazed) || 0) * 0.02;
+    return Neo.clamp(0.02 + (level - 1) * 0.018 + difficultyBonus + roleBonus + unfazedBonus, 0.02, 0.9);
   }
 
   function getEnemyIncomingThreat(enemy, padding = 30) {
@@ -2164,7 +2255,7 @@
     if (distance < enemy.r + Neo.player.r + 10 && enemy.attackCd <= 0) {
       const angle = Math.atan2(dy, dx);
       enemy.attackAnimT = 0.24;
-      Neo.damagePlayer(enemy.dmg, angle, 160, enemy.type);
+      Neo.damagePlayer(enemy.dmg, angle, 160, enemy.type, { attacker: enemy });
       enemy.attackCd = 1.05;
     }
   }
@@ -2289,7 +2380,7 @@
       enemy.vy = Math.sin(enemy.dashAngle) * 450;
       if (!enemy.dashHit && Neo.dist(enemy.x, enemy.y, Neo.player.x, Neo.player.y) < enemy.r + Neo.player.r + 7) {
         enemy.dashHit = true;
-        Neo.damagePlayer(enemy.dmg + 6, enemy.dashAngle, 260, enemy.type);
+        Neo.damagePlayer(enemy.dmg + 6, enemy.dashAngle, 260, enemy.type, { attacker: enemy });
       }
       return;
     }
@@ -2305,7 +2396,7 @@
         const angleDiff = Math.abs(Math.atan2(Math.sin(toPlayer - enemy.swingA), Math.cos(toPlayer - enemy.swingA)));
         if (distance < KNAVE_BLADE_REACH && angleDiff < KNAVE_BLADE_ARC) {
           enemy.bladeHit = true;
-          Neo.damagePlayer(enemy.dmg + 5, toPlayer, 240, enemy.type);
+          Neo.damagePlayer(enemy.dmg + 5, toPlayer, 240, enemy.type, { attacker: enemy });
         }
       }
       return;
@@ -2357,6 +2448,7 @@
           r: 5,
           life: 1.6,
           enemy: true,
+          owner: enemy,
           kind: 'sniper_round',
           source: 'sniper_projectile',
           damage: enemy.dmg + 5,
@@ -2370,7 +2462,7 @@
       enemy.vx *= 0.75;
       enemy.vy *= 0.75;
       if (enemy.swingTime <= 0 && distance < enemy.r + Neo.player.r + 20) {
-        Neo.damagePlayer(enemy.dmg + 2, Math.atan2(dy, dx), 170, enemy.type);
+        Neo.damagePlayer(enemy.dmg + 2, Math.atan2(dy, dx), 170, enemy.type, { attacker: enemy });
       }
       return;
     }
@@ -2462,6 +2554,7 @@
           r: 4,
           life: 1.45,
           enemy: true,
+          owner: enemy,
           kind: 'machine_round',
           source: 'machine_gunner_projectile',
           damage: enemy.dmg + 2,
@@ -2495,7 +2588,7 @@
       enemy.vx *= 0.78;
       enemy.vy *= 0.78;
       if (enemy.swingTime <= 0 && distance < enemy.r + Neo.player.r + 18) {
-        Neo.damagePlayer(enemy.dmg + 3, Math.atan2(dy, dx), 180, enemy.type);
+        Neo.damagePlayer(enemy.dmg + 3, Math.atan2(dy, dx), 180, enemy.type, { attacker: enemy });
       }
     }
   }
@@ -2525,6 +2618,7 @@
           r: 9,
           life: 2.2,
           enemy: true,
+          owner: enemy,
           kind: 'golem_spit',
           source: 'golem_projectile',
           damage: enemy.dmg + 4,
@@ -2552,7 +2646,7 @@
       enemy.vy = Math.sin(enemy.dashAngle) * 390;
       if (!enemy.dashHit && Neo.dist(enemy.x, enemy.y, Neo.player.x, Neo.player.y) < enemy.r + Neo.player.r + 10) {
         enemy.dashHit = true;
-        Neo.damagePlayer(enemy.dmg + 6, enemy.dashAngle, 280, enemy.type);
+        Neo.damagePlayer(enemy.dmg + 6, enemy.dashAngle, 280, enemy.type, { attacker: enemy });
       }
       return;
     }
@@ -2646,7 +2740,7 @@
     }
 
     if (enemy.attackCd <= 0 && distance < enemy.r + Neo.player.r + 22) {
-      Neo.damagePlayer(enemy.dmg, Math.atan2(dy, dx), 170, enemy.type);
+      Neo.damagePlayer(enemy.dmg, Math.atan2(dy, dx), 170, enemy.type, { attacker: enemy });
       enemy.attackCd = 1.05 * tuning.rangedCadence;
     }
   }
@@ -2894,7 +2988,7 @@
     updateCultMageEnemy(enemy, dt);
     if (enemy.attackCd <= 0 && distance < enemy.r + Neo.player.r + 18) {
       enemy.attackAnimT = 0.24;
-      Neo.damagePlayer(enemy.dmg + 4, Math.atan2(dy, dx), 250, enemy.type);
+      Neo.damagePlayer(enemy.dmg + 4, Math.atan2(dy, dx), 250, enemy.type, { attacker: enemy });
       enemy.attackCd = 0.95 * tuning.rangedCadence;
     }
   }
@@ -3066,12 +3160,52 @@
         r: 8,
         life: 1.5,
         enemy: true,
+        owner: enemy,
         bossProjectile: true,
         kind: 'god_sword',
         source: 'god_projectile',
         damage,
       });
     }
+  }
+
+  function setGodPartitionAngles(enemy, count) {
+    const beamCount = Math.max(4, Math.min(5, Math.round(Number(count || 4))));
+    enemy.partitionAngles = Array.from(
+      { length: beamCount },
+      (_, index) => enemy.partitionAngle + (Math.PI * 2 * index) / beamCount,
+    );
+  }
+
+  function tickGodPartitionLasers(enemy, dt, runPressure, phaseLevel, tuning, cadenceMult) {
+    enemy.beamTime -= dt;
+    enemy.beamTick -= dt;
+    enemy.vx *= 0.78;
+    enemy.vy *= 0.78;
+    enemy.partitionAngle += enemy.partitionRotationDir * enemy.partitionRotationSpeed * dt;
+    setGodPartitionAngles(enemy, enemy.partitionAngles?.length || runPressure.partitionLaserCount);
+
+    if (enemy.beamTick <= 0) {
+      enemy.beamTick = 0.1 * Math.max(0.68, tuning.rangedCadence * cadenceMult);
+      const range = Math.hypot(Neo.ROOM_W, Neo.ROOM_H) * 1.15;
+      let hitSegment = null;
+      for (let index = 0; index < enemy.partitionAngles.length; index += 1) {
+        const beamPath = Neo.buildRicochetBeamPath(enemy.x, enemy.y, enemy.partitionAngles[index], range, 0);
+        hitSegment = Neo.beamPathHitsCircle(beamPath, Neo.player.x, Neo.player.y, Neo.player.r + 7);
+        if (hitSegment) break;
+      }
+      if (hitSegment) {
+        const damage = Math.round(enemy.dmg * (phaseLevel >= 5 ? 0.42 : phaseLevel >= 4 ? 0.36 : 0.3));
+        Neo.damagePlayer(damage, hitSegment.angle, phaseLevel >= 4 ? 230 : 190, 'God Beam', { sourceKey: 'god' });
+      }
+    }
+
+    if (enemy.beamTime <= 0) {
+      enemy.partitionAngles = [];
+      enemy.attackCd = 1.15 * tuning.rangedCadence * cadenceMult;
+      return true;
+    }
+    return false;
   }
 
   function triggerGodPhase(enemy, phase, title, color = '#fff4b8') {
@@ -3081,6 +3215,7 @@
     enemy.beamTick = 0;
     enemy.dashTime = 0;
     enemy.swingTime = 0;
+    enemy.partitionAngles = [];
     enemy.attackCd = Math.min(enemy.attackCd || 99, 0.7);
 
     const phaseInv = 1 + Neo.nextRandom('encounter') * 2; // 1-3s invulnerability on phase shift
@@ -3167,7 +3302,7 @@
       if (enemy.swingTime > 0) {
         enemy.swingTime -= dt;
         if (enemy.swingTime <= 0 && distance < enemy.r + Neo.player.r + 24) {
-          Neo.damagePlayer(enemy.dmg + 3, Math.atan2(dy, dx), 210, enemy.type);
+          Neo.damagePlayer(enemy.dmg + 3, Math.atan2(dy, dx), 210, enemy.type, { attacker: enemy });
         }
       }
       return;
@@ -3187,7 +3322,7 @@
       if (enemy.windup <= 0) {
         const angle = Math.atan2(dy, dx);
         if (distance < enemy.r + Neo.player.r + 54) {
-          Neo.damagePlayer(enemy.dmg + 16, angle, 340, enemy.type);
+          Neo.damagePlayer(enemy.dmg + 16, angle, 340, enemy.type, { attacker: enemy });
         }
         Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.6, ring: 86, c: '#ffd27d' });
       }
@@ -3473,7 +3608,7 @@
     Neo.shakeT = Math.max(Neo.shakeT, 0.12);
   }
 
-  // Charged "cold death ball": a slow, heavy frost orb fired after a windup.
+  // Charged "cold death ball": a fast, heavy frost orb fired after a windup.
   function spawnAntonyDeathBall(enemy) {
     const angle = Number.isFinite(enemy.antonyDeathBallAngle)
       ? enemy.antonyDeathBallAngle
@@ -3481,11 +3616,12 @@
     Neo.spawnProjectile({
       x: enemy.x + Math.cos(angle) * (enemy.r + 14),
       y: enemy.y + Math.sin(angle) * (enemy.r + 14),
-      vx: Math.cos(angle) * 175,
-      vy: Math.sin(angle) * 175,
+      vx: Math.cos(angle) * 525,
+      vy: Math.sin(angle) * 525,
       r: 38,
       life: 3.4,
       enemy: true,
+      owner: enemy,
       bossProjectile: true,
       kind: 'cold_death',
       source: 'antony_death_ball',
@@ -3501,7 +3637,7 @@
       enemyBlast: { radius: 120, damage: Math.round(enemy.dmg * 0.65), color: '#9fe8ff', statusKey: 'slow', statusStacks: 1, statusDuration: 3 },
       homing: true,
       homingTurnRate: 0.65,
-      homingSpeed: 190,
+      homingSpeed: 570,
       homingAccel: 1.1,
     });
     Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.45, ring: 46, c: '#9fe8ff' });
@@ -3784,7 +3920,7 @@
 
     if (distance < enemy.r + Neo.player.r + 12 && enemy.attackCd <= 0) {
       const angle = Math.atan2(dy, dx);
-      Neo.damagePlayer(enemy.dmg, angle, 210, enemy.type);
+      Neo.damagePlayer(enemy.dmg, angle, 210, enemy.type, { attacker: enemy });
       Neo.applyFire?.(Neo.player, 1, 2.8);
       enemy.attackAnimT = 0.24;
       enemy.attackCd = 0.95 * tuning.rangedCadence;
@@ -3864,7 +4000,7 @@
       }
     }
 
-    if (!enemy.eliteTypes.includes('lasered')) return false;
+    if (!enemy.eliteTypes.includes('lasered') && !enemy.eliteTypes.includes('lazered')) return false;
     if (enemy.beamTime > 0 && enemy.state === 'elite_laser') {
       Neo.tickEnemyBeam(enemy, dt, {
         tick: enemy.eliteLaserMode === 'god_sweep' ? 0.055 : enemy.eliteLaserMode === 'turtle_wave' ? 0.08 : 0.1,
@@ -3903,6 +4039,7 @@
           r: 7,
           life: 1.15,
           enemy: true,
+          owner: enemy,
           kind: 'power_disk',
           source: `${enemy.type || 'laser'}_projectile`,
           damage: Math.round(enemy.dmg * 0.72),
@@ -3915,7 +4052,7 @@
     }
 
     if (mode === 'blade_justice') {
-      if (distanceToPlayer < 150) Neo.damagePlayer(enemy.dmg + 10, angle, 240, 'elite_blade_justice');
+      if (distanceToPlayer < 150) Neo.damagePlayer(enemy.dmg + 10, angle, 240, 'elite_blade_justice', { attacker: enemy });
       Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.34, ring: 112, c: '#ffffff' });
       enemy.eliteLaserCd = 1.2;
       return false;
@@ -3972,7 +4109,7 @@
       enemy.vy = Math.sin(enemy.dashAngle) * 430;
       if (!enemy.dashHit && Neo.dist(enemy.x, enemy.y, Neo.player.x, Neo.player.y) < enemy.r + Neo.player.r + 6) {
         enemy.dashHit = true;
-        Neo.damagePlayer(enemy.dmg + 4, enemy.dashAngle, 240, enemy.type);
+        Neo.damagePlayer(enemy.dmg + 4, enemy.dashAngle, 240, enemy.type, { attacker: enemy });
       }
       return;
     }
@@ -4015,9 +4152,10 @@
     let amount = Number(damage || 0);
     if (options.beam) amount *= Number(stats.beamDamageMultiplier || 1);
     if (options.aoe) amount *= Number(stats.aoeDamageMultiplier || 1);
-    const critChance = Neo.clamp(Number(stats.critChance || 0) + Number(options.critBonus || 0), 0, 0.98);
+    const critRollback = Neo.applyCritRollback(Number(stats.critChance || 0) + Number(options.critBonus || 0), Number(stats.critMultiplier || 1.6));
+    const critChance = Neo.clamp(critRollback.critChance, 0, 1);
     const crit = critChance > 0 && Neo.nextRandom('encounter') < critChance;
-    if (crit) amount *= Number(stats.critMultiplier || 1.6);
+    if (crit) amount *= critRollback.critMultiplier;
     return { amount: Math.max(1, Math.round(amount)), crit };
   }
 
@@ -4065,6 +4203,9 @@
     Neo.damagePlayer(rolled.amount, angle, Number(knockback || 0) * knockbackMultiplier, source, {
       ...options,
       sourceKey: enemy?.type || 'mirror_knight',
+      // The mirror knight rolls its own (player-mirrored) crit above, so it opts
+      // out of the global time-based enemy crit aggression to avoid double-critting.
+      noEnemyAggression: true,
     });
     applyMirrorStatusEffects(enemy, options);
     if (rolled.crit) {
@@ -4415,7 +4556,7 @@
       enemy.vy = Math.sin(enemy.dashAngle) * dashSpeed;
       if (!enemy.dashHit && Neo.dist(enemy.x, enemy.y, Neo.player.x, Neo.player.y) < enemy.r + Neo.player.r + 6) {
         enemy.dashHit = true;
-        Neo.damagePlayer(enemy.dmg + (dashMove === 'zip_lightning' ? 18 : 8), enemy.dashAngle, dashMove === 'zip_lightning' ? 300 : 240, enemy.type);
+        Neo.damagePlayer(enemy.dmg + (dashMove === 'zip_lightning' ? 18 : 8), enemy.dashAngle, dashMove === 'zip_lightning' ? 300 : 240, enemy.type, { attacker: enemy });
       }
       if (enemy.dashTime <= 0) {
         enemy.attackCd = 0.45;
@@ -4533,7 +4674,7 @@
     if (distance < enemy.r + Neo.player.r + 12 && enemy.attackCd <= 0) {
       const angle = Math.atan2(dy, dx);
       enemy.attackAnimT = 0.24;
-      Neo.damagePlayer(enemy.dmg, angle, 190, 'mooggy');
+      Neo.damagePlayer(enemy.dmg, angle, 190, 'mooggy', { attacker: enemy });
       Neo.applyBleed?.(Neo.player, Number(enemy.mooggyBleedStacks || 1), 3.2);
       enemy.attackCd = 0.36;
       return;
@@ -4682,6 +4823,7 @@
 
   function updateGod(enemy, dt) {
     const tuning = Neo.getEnemyDifficultyTuning();
+    const runPressure = getGodRunPressure();
     const dx = Neo.player.x - enemy.x;
     const dy = Neo.player.y - enemy.y;
     const distance = Math.hypot(dx, dy) || 1;
@@ -4691,7 +4833,7 @@
       enemy.phase3Triggered = true;
       enemy.dmg = Math.round(enemy.dmg * 1.2);
       enemy.speed *= 1.08;
-      enemy.novaCd = 1.9;
+      enemy.novaCd = 1.9 * runPressure.cadenceMultiplier;
       triggerGodPhase(enemy, 3, 'COUNCIL OF BOSSES', '#ffd27d');
       spawnGodCouncil(enemy);
       playGodDialogue(3);
@@ -4700,8 +4842,8 @@
       enemy.phase4Triggered = true;
       enemy.dmg = Math.round(enemy.dmg * 1.16);
       enemy.speed *= 1.06;
-      enemy.novaCd = 1.25;
-      enemy.judgementCd = 2.7;
+      enemy.novaCd = 1.25 * runPressure.cadenceMultiplier;
+      enemy.judgementCd = 2.7 * runPressure.cadenceMultiplier;
       triggerGodPhase(enemy, 4, 'HOLY ONSLAUGHT', '#ff9f6e');
       spawnGodSwordRing(enemy, 24, Math.round(enemy.dmg * 1.05));
       playGodDialogue(4);
@@ -4710,8 +4852,8 @@
       enemy.phase5Triggered = true;
       enemy.dmg = Math.round(enemy.dmg * 1.22);
       enemy.speed *= 1.08;
-      enemy.novaCd = 0.78;
-      enemy.judgementCd = 1.45;
+      enemy.novaCd = 0.78 * runPressure.cadenceMultiplier;
+      enemy.judgementCd = 1.45 * runPressure.cadenceMultiplier;
       triggerGodPhase(enemy, 5, 'LAST JUDGEMENT', '#ff5a5a');
       spawnGodSwordRing(enemy, 32, Math.round(enemy.dmg * 1.15));
       playGodDialogue(5);
@@ -4722,9 +4864,11 @@
     const phaseTwo = phaseLevel >= 2;
     const phaseFour = phaseLevel >= 4;
     const phaseFive = phaseLevel >= 5;
-    const cadenceMult = phaseFive ? 0.42 : phaseFour ? 0.52 : phaseLevel >= 3 ? 0.6 : phaseTwo ? 0.68 : 1;
+    const phaseCadenceMult = phaseFive ? 0.42 : phaseFour ? 0.52 : phaseLevel >= 3 ? 0.6 : phaseTwo ? 0.68 : 1;
+    const cadenceMult = phaseCadenceMult * runPressure.cadenceMultiplier;
     const reactionMult = phaseFive ? 1.45 : phaseFour ? 1.34 : phaseLevel >= 3 ? 1.28 : phaseTwo ? 1.22 : 1;
     const desired = phaseFive ? 138 : phaseFour ? 146 : phaseTwo ? 156 : 190;
+    enemy.stun = Math.min(Number(enemy.stun || 0), Number(enemy.maxStunDuration || 0.18));
 
     if (phaseFour) {
       enemy.novaCd = Math.max(0, (enemy.novaCd || 0) - dt);
@@ -4732,7 +4876,7 @@
         const swordCount = phaseFive ? 20 : 14;
         const swordDamage = Math.round(enemy.dmg * (phaseFive ? 1.08 : 0.92));
         spawnGodSwordRing(enemy, swordCount, swordDamage);
-        enemy.novaCd = phaseFive ? 0.78 : 1.25;
+        enemy.novaCd = (phaseFive ? 0.78 : 1.25) * runPressure.cadenceMultiplier;
       }
     }
 
@@ -4741,7 +4885,7 @@
       if (enemy.judgementCd <= 0) {
         spawnPhaseSwords(16, Math.round(enemy.dmg * 0.82));
         Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.42, ring: 118, c: '#ff7a7a' });
-        enemy.judgementCd = 1.45;
+        enemy.judgementCd = 1.45 * runPressure.cadenceMultiplier;
       }
     }
 
@@ -4761,6 +4905,11 @@
           enemy.beamTick = 0;
           enemy.sweepSpeed = 3.9 * reactionMult * (enemy.sweepDir || 1);
         }
+        if (enemy.state === 'godPartition') {
+          enemy.beamTime = phaseFive ? 3.4 : phaseFour ? 3.1 : 2.7;
+          enemy.beamTick = 0;
+          enemy.partitionRotationSpeed = runPressure.partitionRotationSpeed * (phaseFive ? 1.35 : phaseFour ? 1.2 : 1);
+        }
         if (enemy.state === 'godCharge') {
           enemy.dashTime = phaseFour ? 0.76 : phaseTwo ? 0.62 : 0.48;
           enemy.dashHit = false;
@@ -4776,6 +4925,10 @@
     }
 
     if (enemy.beamTime > 0) {
+      if (enemy.state === 'godPartition') {
+        tickGodPartitionLasers(enemy, dt, runPressure, phaseLevel, tuning, cadenceMult);
+        return;
+      }
       const isSweep = enemy.state === 'godSweep';
       Neo.tickEnemyBeam(enemy, dt, {
         tick: (isSweep ? 0.045 : 0.08) * Math.max(0.64, tuning.rangedCadence * cadenceMult),
@@ -4803,7 +4956,7 @@
       enemy.vy = Math.sin(enemy.dashAngle) * dashSpeed;
       if (!enemy.dashHit && Neo.dist(enemy.x, enemy.y, Neo.player.x, Neo.player.y) < enemy.r + Neo.player.r + 10) {
         enemy.dashHit = true;
-        Neo.damagePlayer(enemy.dmg + (phaseFive ? 34 : phaseTwo ? 24 : 12), enemy.dashAngle, phaseFour ? 410 : phaseTwo ? 360 : 300, enemy.type);
+        Neo.damagePlayer(enemy.dmg + (phaseFive ? 34 : phaseTwo ? 24 : 12), enemy.dashAngle, phaseFour ? 410 : phaseTwo ? 360 : 300, enemy.type, { attacker: enemy });
       }
       if (enemy.dashTime <= 0) enemy.attackCd = 1.1 * tuning.rangedCadence * cadenceMult;
       return;
@@ -4820,14 +4973,23 @@
 
     if (distance < enemy.r + Neo.player.r + 12 && enemy.attackCd <= 0) {
       const angle = Math.atan2(dy, dx);
-      Neo.damagePlayer(enemy.dmg + (phaseFive ? 26 : phaseTwo ? 18 : 10), angle, phaseFour ? 370 : phaseTwo ? 320 : 260, enemy.type);
+      Neo.damagePlayer(enemy.dmg + (phaseFive ? 26 : phaseTwo ? 18 : 10), angle, phaseFour ? 370 : phaseTwo ? 320 : 260, enemy.type, { attacker: enemy });
       enemy.attackCd = 0.8 * tuning.rangedCadence * cadenceMult;
       return;
     }
 
     if (enemy.attackCd <= 0) {
       const roll = Neo.nextRandom('encounter');
-      if ((phaseTwo && distance > 250 && roll > (phaseFour ? 0.46 : 0.52)) || (!phaseTwo && distance > 300 && roll > 0.68)) {
+      const partitionChance = phaseFive ? 0.32 : phaseFour ? 0.27 : phaseLevel >= 3 ? 0.23 : phaseTwo ? 0.19 : runPressure.minutes >= 6 ? 0.14 : 0;
+      if (roll < partitionChance) {
+        enemy.state = 'godPartition';
+        enemy.windup = 1.05 / (tuning.reaction * reactionMult);
+        enemy.partitionAngle = Math.atan2(dy, dx);
+        enemy.partitionRotationDir = Neo.nextRandom('encounter') < 0.5 ? -1 : 1;
+        const laserCount = phaseFour ? 5 : runPressure.partitionLaserCount;
+        setGodPartitionAngles(enemy, laserCount);
+        Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 18, life: 0.9, text: `${laserCount} FOLD JUDGEMENT`, c: '#fff1a8' });
+      } else if ((phaseTwo && distance > 250 && roll > (phaseFour ? 0.46 : 0.52)) || (!phaseTwo && distance > 300 && roll > 0.68)) {
         enemy.state = 'godSweep';
         enemy.windup = 1.15 / (tuning.reaction * reactionMult);
         enemy.beamAngle = Math.atan2(dy, dx) + Neo.rollEnemyBeamBias(enemy, 0.1);
@@ -4870,7 +5032,7 @@
       enemy.vy *= 0.7;
       if (enemy.swingTime <= 0 && Neo.dist(enemy.x, enemy.y, Neo.player.x, Neo.player.y) < enemy.r + Neo.player.r + 20) {
         const angle = Math.atan2(Neo.player.y - enemy.y, Neo.player.x - enemy.x);
-        Neo.damagePlayer(enemy.dmg, angle, 180, enemy.type);
+        Neo.damagePlayer(enemy.dmg, angle, 180, enemy.type, { attacker: enemy });
       }
       return;
     }
@@ -4888,6 +5050,7 @@
         r: 4,
         life: 1.3,
         enemy: true,
+        owner: enemy,
         kind: 'enemy_shot',
         source: `${enemy.type}_blind_shot`,
         damage: enemy.dmg,
@@ -5114,6 +5277,7 @@
 	  Neo.applyObeliskSeekerSteering = applyObeliskSeekerSteering;
 	  Neo.triggerGodPhase = triggerGodPhase;
 	  Neo.updateGod = updateGod;
+	  Neo.getGodRunPressure = getGodRunPressure;
   Neo.steerEnemy = steerEnemy;
   Neo.wanderEnemy = wanderEnemy;
   Neo.moveCircle = moveCircle;

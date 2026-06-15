@@ -363,7 +363,10 @@
 
   function drawEnemyTelegraphs() {
     const performanceMode = window.NeoSettings?.isPerformanceMode?.() !== false;
-    const activeBeamCount = Neo.enemies.reduce((count, enemy) => count + (enemy?.beamTime > 0 ? 1 : 0), 0);
+    const activeBeamCount = Neo.enemies.reduce((count, enemy) => {
+      if (!(enemy?.beamTime > 0)) return count;
+      return count + (Array.isArray(enemy.partitionAngles) && enemy.partitionAngles.length ? enemy.partitionAngles.length : 1);
+    }, 0);
     const lowBeamFx = performanceMode && (activeBeamCount > 3 || (Neo.particles?.length || 0) > 64);
     const beamGroups = new Map();
     Neo.enemies.forEach(enemy => {
@@ -378,11 +381,24 @@
         Neo.ctx.stroke();
         Neo.ctx.restore();
       }
-      if (enemy.beamTime > 0) {
+      const partitionPreview = enemy.type === 'god'
+        && enemy.state === 'godPartition'
+        && enemy.windup > 0
+        && Array.isArray(enemy.partitionAngles)
+        && enemy.partitionAngles.length > 0;
+      if (enemy.beamTime > 0 || partitionPreview) {
         const range = enemy.type === 'god' ? (enemy.beamRange || 620) : enemy.type === 'mooggy' ? 520 : enemy.type === 'handsome_devil' ? (enemy.beamRange || 560) : enemy.type === 'bowman_bane' ? 480 : 430;
-        const beamPath = Neo.buildRicochetBeamPath(enemy.x, enemy.y, enemy.beamAngle, range, Neo.getEnemyBeamBounceCount(enemy));
-        const color = enemy.type === 'god' ? '#ffffff' : enemy.type === 'mooggy' ? '#ff3348' : enemy.type === 'handsome_devil' ? '#ff3348' : enemy.type === 'bowman_bane' ? '#8dd4ff' : '#aa66ff';
-        const width = enemy.type === 'god' && enemy.state === 'godSweep' ? 18 : enemy.type === 'god' ? 10 : enemy.type === 'mooggy' ? 6 : enemy.type === 'handsome_devil' ? 9 : 8;
+        const isPartition = enemy.type === 'god' && enemy.state === 'godPartition';
+        const angles = isPartition ? enemy.partitionAngles : [enemy.beamAngle];
+        const beamPaths = angles.map(angle => Neo.buildRicochetBeamPath(
+          enemy.x,
+          enemy.y,
+          angle,
+          isPartition ? Math.hypot(Neo.ROOM_W, Neo.ROOM_H) * 1.15 : range,
+          isPartition ? 0 : Neo.getEnemyBeamBounceCount(enemy),
+        ));
+        const color = isPartition ? '#fff1a8' : enemy.type === 'god' ? '#ffffff' : enemy.type === 'mooggy' ? '#ff3348' : enemy.type === 'handsome_devil' ? '#ff3348' : enemy.type === 'bowman_bane' ? '#8dd4ff' : '#aa66ff';
+        const width = isPartition ? 14 : enemy.type === 'god' && enemy.state === 'godSweep' ? 18 : enemy.type === 'god' ? 10 : enemy.type === 'mooggy' ? 6 : enemy.type === 'handsome_devil' ? 9 : 8;
         const options = {
           color,
           glow: color,
@@ -395,14 +411,15 @@
           coreWidth: Math.max(1.4, width * 0.22),
           coreShadowBlur: lowBeamFx ? 0 : 4,
           lowFx: lowBeamFx,
+          alpha: partitionPreview ? 0.28 : 0.92,
         };
-        const groupKey = `${color}|${width}|${options.minWidthRatio}|${options.taperPower}|${options.shadowBlur}|${options.coreColor}`;
+        const groupKey = `${color}|${width}|${options.minWidthRatio}|${options.taperPower}|${options.shadowBlur}|${options.coreColor}|${options.alpha}`;
         let group = beamGroups.get(groupKey);
         if (!group) {
           group = { paths: [], options };
           beamGroups.set(groupKey, group);
         }
-        group.paths.push(beamPath);
+        group.paths.push(...beamPaths);
       }
     });
     beamGroups.forEach(group => {
@@ -922,11 +939,24 @@
       const _levelStr = `Lv.${Neo.floorsEntered ?? Neo.floor}`;
       Neo.ctx.font = '9px system-ui';
       Neo.ctx.textAlign = 'center';
+      const _nameText = `${_enemyLabel}  ${_levelStr}`;
+      const _nameY = -enemy.r - 19;
+      // Red-bordered tag warns that a single hit can drop the player from full HP.
+      if (Neo.isEnemyDangerous?.(enemy)) {
+        const _tagW = Neo.ctx.measureText(_nameText).width + 8;
+        const _tagH = 12;
+        Neo.ctx.shadowBlur = 0;
+        Neo.ctx.fillStyle = 'rgba(40, 0, 0, 0.55)';
+        Neo.ctx.fillRect(-_tagW / 2, _nameY - _tagH + 3, _tagW, _tagH);
+        Neo.ctx.strokeStyle = '#ff3b3b';
+        Neo.ctx.lineWidth = 1;
+        Neo.ctx.strokeRect(-_tagW / 2, _nameY - _tagH + 3, _tagW, _tagH);
+      }
       Neo.ctx.shadowColor = '#000';
       Neo.ctx.shadowBlur = 4;
       Neo.ctx.fillStyle = enemy.elite ? '#f6cf6a' : Neo.isBossType(enemy.type) ? '#f2e8d7'
         : (enemy.type === 'rival' && enemy.rivalData) ? enemy.rivalData.color : '#b8cfe0';
-      Neo.ctx.fillText(`${_enemyLabel}  ${_levelStr}`, 0, -enemy.r - 19);
+      Neo.ctx.fillText(_nameText, 0, _nameY);
 
       // HP bar
       Neo.ctx.fillStyle = '#000a';

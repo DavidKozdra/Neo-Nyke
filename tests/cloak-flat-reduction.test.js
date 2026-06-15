@@ -13,7 +13,7 @@ describe('Cloak of the Naked King flat damage reduction', () => {
   });
 
   test('subtracts flat reduction after percentage mitigation', () => {
-    const percentageIndex = worldSource.indexOf("let finalAmount = numericAmount * (Neo.isChallengeActive('glass_cannon')");
+    const percentageIndex = worldSource.indexOf("let finalAmount = critAmount * (Neo.isChallengeActive('glass_cannon')");
     const flatIndex = worldSource.indexOf('finalAmount - Math.max(0, Number(itemStats.flatDamageReduction || 0))');
 
     expect(percentageIndex).toBeGreaterThan(-1);

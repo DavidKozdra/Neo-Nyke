@@ -168,6 +168,11 @@ export const ENEMY_SCALING = {
   endlessWaveDamageSoftCap: 2.6,
   endlessWaveSpeedSoftCap: 1.5,
 };
+// Elite "Knight" body rolls multiply all stats by 1.2 each, multiplicatively.
+// HP and damage are allowed to compound without limit, but the realized speed
+// multiplier is clamped here so deep-loop elites never outrun the player's
+// projectiles or become impossible to kite.
+export const ELITE_KNIGHT_SPEED_CAP = 1.6;
 export const BOMB_HAZARD_SCALING = {
   floor: 0.07,
   minute: 0.04,
@@ -648,7 +653,7 @@ export const DIFFICULTY_DEFS = {
   hard: {
     key: 'hard',
     name: 'Hard',
-    description: 'More enemies, more pressure, stronger scaling.',
+    description: 'More enemies, more pressure, stronger scaling. Bleed damage against enemies is 20% less effective.',
     unlockLoops: 0,
     waveBonus: 2,
     eliteFloor: 7,
@@ -665,11 +670,12 @@ export const DIFFICULTY_DEFS = {
     supportPowerMultiplier: 1.14,
     shopPriceMultiplier: 1.16,
     ccResistScale: 0.30,
+    enemyBleedDamageMultiplier: 0.8,
   },
   impossible: {
     key: 'impossible',
     name: 'Impossible',
-    description: 'Unlocks after 5 loops. Heavy elite and miniboss pressure.',
+    description: 'Unlocks after 5 loops. Heavy elite and miniboss pressure. Bleed damage against enemies is 35% less effective.',
     unlockLoops: 5,
     waveBonus: 3,
     eliteFloor: 6,
@@ -687,11 +693,12 @@ export const DIFFICULTY_DEFS = {
     shopPriceMultiplier: 1.28,
     ccResistScale: 0.45,
     enemyLoopDamageReduction: 0.05,
+    enemyBleedDamageMultiplier: 0.65,
   },
   god: {
     key: 'god',
     name: 'God',
-    description: 'Unlocks after 10 loops. Scarce relics, elite floor openings, and heavily boosted rivals.',
+    description: 'Unlocks after 10 loops. Scarce relics, elite floor openings, heavily boosted rivals, and 50% less effective enemy bleed damage.',
     unlockLoops: 10,
     waveBonus: 4,
     eliteFloor: 5,
@@ -710,6 +717,7 @@ export const DIFFICULTY_DEFS = {
     shopPriceMultiplier: 1.42,
     ccResistScale: 0.6,
     enemyLoopDamageReduction: 0.05,
+    enemyBleedDamageMultiplier: 0.5,
     itemDropChanceMultiplier: 0.5,
     shopItemOffers: 1,
     startRoomEliteCount: 2,
@@ -1028,6 +1036,7 @@ Neo.AOE_SHOCKWAVE_LIFE = AOE_SHOCKWAVE_LIFE;
 Neo.ENV_TILE_SIZE = ENV_TILE_SIZE;
 Neo.LIGHTING_CONFIG = LIGHTING_CONFIG;
 Neo.ENEMY_SCALING = ENEMY_SCALING;
+Neo.ELITE_KNIGHT_SPEED_CAP = ELITE_KNIGHT_SPEED_CAP;
 Neo.BOMB_HAZARD_SCALING = BOMB_HAZARD_SCALING;
 Neo.SHOP_PRICE_SCALING = SHOP_PRICE_SCALING;
 Neo.BLEED_RESIST_SCALING = BLEED_RESIST_SCALING;

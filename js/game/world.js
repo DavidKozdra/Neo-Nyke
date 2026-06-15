@@ -1,4 +1,11 @@
 // world.js — standalone IIFE. Player movement, projectiles, world object updates.
+  // Damage sources that are environmental hazards / non-enemy, so they're exempt
+  // from the time-based enemy crit aggression in damagePlayer().
+  const ENEMY_AGGRESSION_EXEMPT_SOURCES = new Set([
+    'lava', 'thorn_mine', 'bomb_aoe', 'explosive_trap', 'red_spikes',
+    'lightning_column', 'justice_of_sonichu', 'pvp_p2', 'pvp_p2_beam',
+  ]);
+
   function getPvpMoveCooldown(playerState, slot, fallback) {
     const moveKey = playerState?.equippedMoves?.[slot] || fallback;
     const fallbackCooldown = slot === 'laser' ? 1.8 : 2.4;
@@ -347,7 +354,36 @@
     // damage reduction so they take more damage per stack.
     const brittleDefenseMult = Neo.getBrittleDefenseMultiplier?.(Neo.player) ?? 1;
     const effectiveDamageReduction = (itemStats.damageReduction || 0) * brittleDefenseMult;
-    let finalAmount = numericAmount * (Neo.isChallengeActive('glass_cannon') ? 1.35 : 1) * (1 - effectiveDamageReduction);
+    // Blessed elites land a high-chance crit on the player. The crit scales the
+    // base amount but still passes through damage reduction, barriers and the
+    // one-shot guard below, so it can't bypass the per-hit cap.
+    const eliteAttacker = options.attacker;
+    let critAmount = numericAmount;
+    if (eliteAttacker?.elite && Number(eliteAttacker.eliteCrit || 0) > 0 && Neo.nextRandom('encounter') < eliteAttacker.eliteCrit) {
+      critAmount = numericAmount * 1.4;
+      if (showPopup) Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 24, life: 0.42, text: 'CRIT', c: '#ff9f1c' });
+    }
+    // Enemy crit aggression (time-based ramp). Applies to enemy attacks that don't
+    // author their own crit — hazards and self-crit paths (rival/mirror knight, the
+    // elite crit above) opt out. Every 5 min adds +5% damage and +5% crit chance;
+    // a rolled crit multiplies by the time-scaled crit multiplier (see
+    // getEnemyTimeAggression / applyCritRollback for the 100%→×1.5→75% roll-back).
+    const aggressionSource = String(options.sourceKey || source || '').toLowerCase();
+    const isHazardSource = ENEMY_AGGRESSION_EXEMPT_SOURCES.has(aggressionSource);
+    const skipAggression = options.noEnemyAggression
+      || isHazardSource
+      || (eliteAttacker?.elite && Number(eliteAttacker.eliteCrit || 0) > 0); // elite already rolled its own crit
+    if (!skipAggression && critAmount > 0) {
+      const aggression = Neo.getEnemyTimeAggression?.();
+      if (aggression && aggression.steps > 0) {
+        critAmount *= aggression.damageMultiplier;
+        if (aggression.critChance > 0 && Neo.nextRandom('encounter') < aggression.critChance) {
+          critAmount *= aggression.critMultiplier;
+          if (showPopup) Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 24, life: 0.42, text: 'CRIT', c: '#ff5d5d' });
+        }
+      }
+    }
+    let finalAmount = critAmount * (Neo.isChallengeActive('glass_cannon') ? 1.35 : 1) * (1 - effectiveDamageReduction);
     if (sandbox) finalAmount *= sandbox.enemyDamageMultiplier;
     finalAmount = Math.max(0, finalAmount - Math.max(0, Number(itemStats.flatDamageReduction || 0)));
     if (ironLungApplies) {
@@ -402,6 +438,10 @@
 
     Neo.player.hp -= finalAmount;
     window.achievementEvents?.emit('damage:taken', { amount: finalAmount });
+
+    // Elite on-hit procs (Enflamed/Gross/Breezy) ride every damage source the
+    // elite deals through this choke point.
+    if (eliteAttacker?.elite) Neo.applyEliteProcsToPlayer?.(eliteAttacker);
 
     if (Neo.getItemCount('insurance') > 0 && Neo.player.insuranceReady && hpBeforeHit > halfHpThreshold && Neo.player.hp <= halfHpThreshold) {
       Neo.player.hp = Math.max(Neo.player.hp, halfHpThreshold);
@@ -1614,6 +1654,7 @@
         damagePlayer(projectile.damage || 10, Math.atan2(projectile.vy, projectile.vx), projectile.knockback || 120, projectileSource, {
           sourceKey: projectileSource,
           sourceLabel: projectile.sourceLabel || '',
+          attacker: projectile.owner,
         });
         applyProjectileStatusEffectsToPlayer(projectile);
         applyProjectileDrainToOwner(projectile);

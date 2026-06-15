@@ -696,11 +696,12 @@
       ? `${Neo.currentRoom.gx},${Neo.currentRoom.gy},${Neo.currentRoom.type || 'room'},${Neo.currentRoom.secretKind || ''}`
       : 'none';
     const doorsKey = Neo.DIRECTIONS.map(dir => Neo.hasVisibleRoomExit(Neo.currentRoom, dir) ? '1' : '0').join('');
+    const lockKey = Neo.isRoomLocked?.() ? 'locked' : 'open';
     const combatKey = Neo.enemies.length > 0 ? 'combat' : 'calm';
     const lavaKey = getStaticRoomLavaHazards()
       .map(hazard => `${hazard.left},${hazard.top},${hazard.w},${hazard.h}`)
       .join(';');
-    return `${Neo.floor}|${roomKey}|${doorsKey}|${combatKey}|${lavaKey}`;
+    return `${Neo.floor}|${roomKey}|${doorsKey}|${lockKey}|${combatKey}|${lavaKey}`;
   }
 
   function buildEnvironmentBackground(theme) {
