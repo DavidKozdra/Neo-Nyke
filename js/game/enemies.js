@@ -1732,6 +1732,7 @@
     room.challengeFailed = false;
     Neo.pickups = Neo.pickups.filter(pickup => pickup?.type !== 'challengeStarter');
     const type = room.challengeType || 'mirror';
+    Neo.gameEvents.emit('challenge:started', { room, challengeType: type });
     if (type === 'mirror') {
       spawnMirrorChampion();
     } else if (type === 'circuit' || type === 'stillness') {
@@ -1839,6 +1840,11 @@
     Neo.currentRoom.challengeFailed = false;
     Neo.currentRoom.challengeTimer = 0;
     Neo.currentRoom.challengeTick = 0;
+    Neo.gameEvents.emit('challenge:completed', {
+      room: Neo.currentRoom,
+      challengeType: Neo.currentRoom.challengeType || 'mirror',
+      text,
+    });
     spawnChallengeReward(text);
     Neo.currentRoom.challengeData = {};
     Neo.ensureChallengePracticeReturnPortal?.(Neo.currentRoom);
@@ -1853,6 +1859,11 @@
     Neo.currentRoom.challengeRewardSpawned = true;
     Neo.currentRoom.challengeTimer = 0;
     Neo.currentRoom.challengeTick = 0;
+    Neo.gameEvents.emit('challenge:failed', {
+      room: Neo.currentRoom,
+      challengeType: Neo.currentRoom.challengeType || 'mirror',
+      text,
+    });
     Neo.currentRoom.challengeData = {};
     Neo.pickups = Neo.pickups.filter(pickup => !['challengeBomb', 'challengeRune', 'challengeStarter', 'challengeItemChoice', 'challengeSwitch'].includes(pickup?.type));
     Neo.ensureChallengePracticeReturnPortal?.(Neo.currentRoom);

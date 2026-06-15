@@ -3069,21 +3069,21 @@
   }
 
   function isRoomLocked() {
-    const challengeActive = !!Neo.currentRoom && Neo.CHALLENGE_ROOM_TYPES.has(Neo.currentRoom.type) && !!Neo.currentRoom.challengeStarted && !Neo.currentRoom.cleared;
+    const challengeActive = Neo.isChallengeRoomLocked?.(Neo.currentRoom) || false;
     const baneActive = !!Neo.currentRoom && Neo.currentRoom.secret && Neo.currentRoom.secretKind === 'bowman_bane'
       && !!Neo.currentRoom.bossStarted && !Neo.currentRoom.cleared && !Neo.currentRoom.baneEscapeRevealed;
-    return !!Neo.currentRoom
-      && !Neo.currentRoom.cleared
+    if (!Neo.currentRoom) return false;
+    if (challengeActive) return true;
+    return !Neo.currentRoom.cleared
       && (Neo.currentRoom.type === 'boss'
         || Neo.currentRoom.type === 'god'
         || Neo.currentRoom.type === 'ladder'
         || Neo.currentRoom.treasureHuntEscapeActive
-        || challengeActive
         || baneActive);
   }
 
   function updateTransitions(dt) {
-    const challengeActive = !!Neo.currentRoom && Neo.CHALLENGE_ROOM_TYPES.has(Neo.currentRoom.type) && !!Neo.currentRoom.challengeStarted && !Neo.currentRoom.cleared;
+    const challengeActive = Neo.isChallengeRoomLocked?.(Neo.currentRoom) || false;
     const canLeaveFight = Neo.enemies.length > 0
       && Neo.currentRoom
       && Neo.currentRoom.type !== 'boss'

@@ -22,6 +22,7 @@ function extractFunction(source, functionName, dependencies = {}) {
 
 describe('golem blood visuals', () => {
   const combatSource = fs.readFileSync(path.join(__dirname, '../js/game/combat.js'), 'utf8');
+  const propsSource = fs.readFileSync(path.join(__dirname, '../js/draw/props.js'), 'utf8');
 
   test('does not spawn blood spray for either golem type', () => {
     let particleCount = 0;
@@ -46,8 +47,19 @@ describe('golem blood visuals', () => {
     expect(particleCount).toBeGreaterThan(0);
   });
 
-  test('uses debris colors and no corpse blood color for golems', () => {
+  test('uses debris colors and marks golem corpses as unable to leave blood pools', () => {
     expect(combatSource).toContain("enemy.type === 'bulk_golem' ? '#8a735d' : '#777b80'");
+    expect(combatSource).toContain("leavesBloodPool: enemy.type !== 'golem' && enemy.type !== 'bulk_golem'");
     expect(combatSource).toContain("bloodColor: enemy.type === 'golem' || enemy.type === 'bulk_golem'");
+  });
+
+  test('rejects blood pools for current and legacy golem corpses', () => {
+    const corpseLeavesBloodPool = extractFunction(propsSource, 'corpseLeavesBloodPool');
+
+    expect(corpseLeavesBloodPool({ type: 'golem' })).toBe(false);
+    expect(corpseLeavesBloodPool({ type: 'bulk_golem' })).toBe(false);
+    expect(corpseLeavesBloodPool({ type: 'hunter', leavesBloodPool: false })).toBe(false);
+    expect(corpseLeavesBloodPool({ type: 'hunter', bloodColor: '' })).toBe(false);
+    expect(corpseLeavesBloodPool({ type: 'hunter', bloodColor: '#8d0018' })).toBe(true);
   });
 });

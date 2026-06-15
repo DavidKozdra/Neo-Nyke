@@ -215,37 +215,50 @@
     const scaleX = canvasRect.width > 0 ? canvasRect.width / Neo.canvas.width : 1;
     const scaleY = canvasRect.height > 0 ? canvasRect.height / Neo.canvas.height : 1;
     const compact = window.innerWidth <= 920;
+    const accessHudScale = Number(window.NeoSettings?.getAccess?.()?.hudScale);
+    const hudScale = Number.isFinite(accessHudScale) ? Neo.clamp(accessHudScale, 0.5, 2) : 1;
+    const baseSize = hasGlasses ? 28 : 14;
+    const baseGap = hasGlasses ? 3 : 2;
+    const baseMapWidth = gridSize * baseSize + (gridSize - 1) * baseGap;
+    const baseMapHeight = (maxGy + 1) * baseSize + maxGy * baseGap;
+    const targetViewportWidth = hasGlasses
+      ? (compact ? Math.min(224, canvasRect.width * 0.45) : Math.min(280, canvasRect.width * 0.35))
+      : (compact ? Math.min(112, canvasRect.width * 0.25) : Math.min(146, canvasRect.width * 0.2));
+    const targetViewportHeight = hasGlasses
+      ? (compact ? Math.min(224, canvasRect.height * 0.45) : Math.min(280, canvasRect.height * 0.4))
+      : (compact ? Math.min(112, canvasRect.height * 0.25) : Math.min(146, canvasRect.height * 0.23));
+    const baseViewportWidth = baseMapWidth * scaleX;
+    const baseViewportHeight = baseMapHeight * scaleY;
+    const responsiveScale = Neo.clamp(
+      Math.min(1, targetViewportWidth / Math.max(1, baseViewportWidth), targetViewportHeight / Math.max(1, baseViewportHeight)),
+      hasGlasses ? 0.5 : 0.62,
+      1,
+    );
 
-    let size, gap, minimapScale;
-    if (hasGlasses) {
-      const baseSize = 28;
-      const baseGap = 3;
-      const baseMapWidth = gridSize * baseSize + (gridSize - 1) * baseGap;
-      const baseMapHeight = (maxGy + 1) * baseSize + maxGy * baseGap;
-      const targetViewportWidth = compact ? Math.min(224, canvasRect.width * 0.45) : Math.min(280, canvasRect.width * 0.35);
-      const targetViewportHeight = compact ? Math.min(224, canvasRect.height * 0.45) : Math.min(280, canvasRect.height * 0.4);
-      const baseViewportWidth = baseMapWidth * scaleX;
-      const baseViewportHeight = baseMapHeight * scaleY;
-      minimapScale = Neo.clamp(Math.min(1, targetViewportWidth / Math.max(1, baseViewportWidth), targetViewportHeight / Math.max(1, baseViewportHeight)), 0.5, 1);
-      size = Math.max(14, Math.round(baseSize * minimapScale));
-      gap = Math.max(2, Math.round(baseGap * minimapScale));
-    } else {
-      const baseSize = 14;
-      const baseGap = 2;
-      const baseMapWidth = gridSize * baseSize + (gridSize - 1) * baseGap;
-      const baseMapHeight = (maxGy + 1) * baseSize + maxGy * baseGap;
-      const targetViewportWidth = compact ? Math.min(112, canvasRect.width * 0.25) : Math.min(146, canvasRect.width * 0.2);
-      const targetViewportHeight = compact ? Math.min(112, canvasRect.height * 0.25) : Math.min(146, canvasRect.height * 0.23);
-      const baseViewportWidth = baseMapWidth * scaleX;
-      const baseViewportHeight = baseMapHeight * scaleY;
-      minimapScale = Neo.clamp(Math.min(1, targetViewportWidth / Math.max(1, baseViewportWidth), targetViewportHeight / Math.max(1, baseViewportHeight)), 0.62, 1);
-      size = Math.max(8, Math.round(baseSize * minimapScale));
-      gap = Math.max(1, Math.round(baseGap * minimapScale));
-    }
+    // The canvas uses a cover-style layout and is often cropped. Anchor the
+    // minimap to the visible viewport, not the off-screen canvas buffer edge.
+    const visibleCanvasLeft = Neo.clamp(-canvasRect.left / scaleX, 0, Neo.canvas.width);
+    const visibleCanvasTop = Neo.clamp(-canvasRect.top / scaleY, 0, Neo.canvas.height);
+    const visibleCanvasRight = Neo.clamp((window.innerWidth - canvasRect.left) / scaleX, 0, Neo.canvas.width);
+    const visibleCanvasBottom = Neo.clamp((window.innerHeight - canvasRect.top) / scaleY, 0, Neo.canvas.height);
+    const topInset = (compact ? 96 : 72) / scaleY;
+    const edgeInsetX = (compact ? 8 : 16) / scaleX;
+    const edgeInsetY = 8 / scaleY;
+    const maxVisibleScale = Math.min(
+      (visibleCanvasRight - visibleCanvasLeft - edgeInsetX * 2) / Math.max(1, baseMapWidth),
+      (visibleCanvasBottom - visibleCanvasTop - topInset - edgeInsetY) / Math.max(1, baseMapHeight),
+    );
+    const minimapScale = Neo.clamp(
+      Math.min(responsiveScale * hudScale, maxVisibleScale),
+      0.25,
+      2,
+    );
+    const size = Math.max(hasGlasses ? 7 : 4, Math.round(baseSize * minimapScale));
+    const gap = Math.max(1, Math.round(baseGap * minimapScale));
     const mapWidth = gridSize * size + (gridSize - 1) * gap;
     const mapHeight = (maxGy + 1) * size + maxGy * gap;
-    const originX = Neo.canvas.width - mapWidth - 2;
-    const originY = Math.round(-10 * minimapScale);
+    const originX = Math.round(visibleCanvasRight - mapWidth - edgeInsetX);
+    const originY = Math.round(visibleCanvasTop + topInset);
     const markerFont = `${Math.max(7, Math.round(size * 0.62))}px system-ui`;
     const currentRoom = Neo.currentRoom;
     const currentCellCx = currentRoom && !currentRoom.secret

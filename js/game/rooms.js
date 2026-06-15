@@ -281,6 +281,7 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
     } else if (room.type === 'challenge') {
       room.cleared = false;
       room.challengeStarted = false;
+      room.challengeLifecycleState = 'ready';
       room.challengeRewardSpawned = false;
       room.challengeFailed = false;
       room.challengeType = Neo.rollChallengeTrialType();
@@ -738,6 +739,7 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
       cleared: false,
       bossStarted: false,
       challengeStarted: false,
+      challengeLifecycleState: 'ready',
       challengeRewardSpawned: false,
       challengeFailed: false,
       ...overrides,
@@ -1176,8 +1178,48 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
     return { x: Neo.START_X, y: Neo.START_Y };
   }
 
+  function deriveChallengeLifecycleState(room) {
+    if (!room || !Neo.CHALLENGE_ROOM_TYPES.has(room.type)) return 'inactive';
+    if (room.challengeFailed) return 'failed';
+    if (room.cleared) return 'completed';
+    if (room.challengeStarted) return 'active';
+    return 'ready';
+  }
+
+  function setChallengeLifecycleState(room, state) {
+    if (!room || !Neo.CHALLENGE_ROOM_TYPES.has(room.type)) return false;
+    if (!['ready', 'active', 'completed', 'failed'].includes(state)) return false;
+    room.challengeLifecycleState = state;
+    return true;
+  }
+
+  function normalizeChallengeLifecycleState(room) {
+    return setChallengeLifecycleState(room, deriveChallengeLifecycleState(room));
+  }
+
+  function isChallengeRoomLocked(room) {
+    if (!room || !Neo.CHALLENGE_ROOM_TYPES.has(room.type)) return false;
+    const state = room.challengeLifecycleState;
+    if (['ready', 'active', 'completed', 'failed'].includes(state)) return state === 'active';
+    return deriveChallengeLifecycleState(room) === 'active';
+  }
+
+  function registerChallengeLifecycleLockEvents(eventBus = Neo.gameEvents) {
+    eventBus.on('challenge:started', ({ room }) => setChallengeLifecycleState(room, 'active'));
+    eventBus.on('challenge:completed', ({ room }) => setChallengeLifecycleState(room, 'completed'));
+    eventBus.on('challenge:failed', ({ room }) => setChallengeLifecycleState(room, 'failed'));
+    eventBus.on('challenge:reset', ({ room }) => setChallengeLifecycleState(room, 'ready'));
+  }
+
+  registerChallengeLifecycleLockEvents();
+
   function isLockedFightRoom(room) {
-    return !!room && (room.type === 'boss' || room.type === 'god' || room.type === 'ladder' || Neo.CHALLENGE_ROOM_TYPES.has(room.type));
+    return !!room && (
+      room.type === 'boss'
+      || room.type === 'god'
+      || room.type === 'ladder'
+      || isChallengeRoomLocked(room)
+    );
   }
 
   function clearPlayerTransientDefense() {
@@ -1273,6 +1315,7 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
     Neo.setShopPanelOpen(false);
     Neo.setInventoryPanelOpen(false);
     Neo.currentRoom = room;
+    normalizeChallengeLifecycleState(room);
     Neo.minimapLegendDirty = true;
     room.explored = true;
     room.visited = true;
@@ -2724,6 +2767,10 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
   Neo.updateTreasureHuntCollapse = updateTreasureHuntCollapse;
   Neo.prepareTreasureHuntStartExit = prepareTreasureHuntStartExit;
   Neo.findSafeSpawnPoint = findSafeSpawnPoint;
+  Neo.deriveChallengeLifecycleState = deriveChallengeLifecycleState;
+  Neo.setChallengeLifecycleState = setChallengeLifecycleState;
+  Neo.normalizeChallengeLifecycleState = normalizeChallengeLifecycleState;
+  Neo.isChallengeRoomLocked = isChallengeRoomLocked;
   Neo.isLockedFightRoom = isLockedFightRoom;
   Neo.clearPlayerTransientDefense = clearPlayerTransientDefense;
   Neo.tickPlayerTransientDefenseTimers = tickPlayerTransientDefenseTimers;

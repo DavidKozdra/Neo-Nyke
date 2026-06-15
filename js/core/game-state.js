@@ -2354,6 +2354,7 @@ export function resumeGame() {
     room.chests = [];
     room.pickups = [];
     room.hazards = [];
+    Neo.gameEvents.emit('challenge:reset', { room, challengeType: room.challengeType || 'mirror' });
     return true;
   }
 

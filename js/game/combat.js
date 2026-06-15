@@ -6,6 +6,9 @@
     magenta_degale: { maxSpread: 0.18, recoilBonus: 1.4 },
     magenta_p90: { maxSpread: 0.14, recoilBonus: 1 },
   };
+  const KICKY_KICK_KNOCKBACK = 1440;
+  const KICKY_KICK_BLAST_KNOCKBACK = 400;
+  const KICKY_KICK_ROOM_MOVE_CHANCE = 0.1;
 
   function distanceSq(ax, ay, bx, by) {
     const dx = ax - bx;
@@ -1642,20 +1645,77 @@
     Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.32, ring: 22, c: '#ff8ed0' });
   }
 
+  function getKickyKickRoomDirection(angle) {
+    const x = Math.cos(angle);
+    const y = Math.sin(angle);
+    if (Math.abs(x) >= Math.abs(y)) return x >= 0 ? 'e' : 'w';
+    return y >= 0 ? 's' : 'n';
+  }
+
+  function isKickyKickRoomMoveEligible(enemy) {
+    if (!enemy || enemy.dead || Number(enemy.hp || 0) <= 0) return false;
+    if (['boss', 'god', 'ladder', 'challenge'].includes(Neo.currentRoom?.type)) return false;
+    if (enemy.type === 'rival' || enemy.type === 'mirror_knight' || enemy.type === 'boss_spawner') return false;
+    return !(Neo.isBossType?.(enemy.type) || enemy.type === 'god' || enemy.miniBoss);
+  }
+
+  function tryMoveKickyKickEnemyToNextRoom(enemy, angle) {
+    if (!isKickyKickRoomMoveEligible(enemy) || !Neo.currentRoom) return false;
+    const direction = getKickyKickRoomDirection(angle);
+    const nextRoom = Neo.getConnectedRoom?.(Neo.currentRoom, direction);
+    if (!nextRoom || Neo.nextRandom('encounter') >= KICKY_KICK_ROOM_MOVE_CHANCE) return false;
+    const enemyIndex = Neo.enemies.indexOf(enemy);
+    if (enemyIndex < 0) return false;
+
+    const entryDirection = Neo.OPPOSITE_DIRECTION?.[direction] || 'n';
+    const entryPoint = Neo.getDoorEntryPoint?.(entryDirection, enemy.r);
+    if (entryPoint) {
+      enemy.x = entryPoint.x;
+      enemy.y = entryPoint.y;
+    }
+    Neo.enemies.splice(enemyIndex, 1);
+    if (!Array.isArray(nextRoom.enemies)) nextRoom.enemies = [];
+    nextRoom.enemies.push(enemy);
+    Neo.spawnParticle({
+      x: Neo.player.x + Math.cos(angle) * 54,
+      y: Neo.player.y + Math.sin(angle) * 54 - 18,
+      life: 0.75,
+      text: 'NEXT ROOM!',
+      c: '#ff9bd2',
+    });
+
+    if (!Neo.currentRoom.cleared && !Neo.enemies.some(other => other && !other.dead && other.type !== 'rival')) {
+      Neo.currentRoom.cleared = true;
+      Neo.updateObjective?.();
+      Neo.scheduleRunSave?.();
+    }
+    return true;
+  }
+
   function castKickyKick() {
     const itemStats = Neo.getItemStats();
     const angle = Math.atan2(Neo.mouse.worldY - Neo.player.y, Neo.mouse.worldX - Neo.player.x);
     const radius = 138 * (itemStats.aoeRadiusMultiplier || 1);
-    const kickDamage = 92;
-    const kickKnockback = 720;
-    Neo.blastRadius(Neo.player.x, Neo.player.y, radius, kickDamage, '#ff7fc2');
+    const kickDamage = 184 + Neo.getAnvilMoveBonus('kicky_kick', 'damage');
+    const roomMoveCandidates = [];
+    Neo.blastRadius(
+      Neo.player.x,
+      Neo.player.y,
+      radius,
+      kickDamage,
+      '#ff7fc2',
+      null,
+      KICKY_KICK_BLAST_KNOCKBACK,
+    );
     forEachEnemyNearPlayer(radius, enemy => {
       if (!enemy) return;
       if (!isWithinRadiusSq(Neo.player.x, Neo.player.y, enemy, radius)) return;
       const enemyAngle = Math.atan2(enemy.y - Neo.player.y, enemy.x - Neo.player.x);
-      enemy.vx += Math.cos(enemyAngle) * kickKnockback;
-      enemy.vy += Math.sin(enemyAngle) * kickKnockback;
+      enemy.vx += Math.cos(enemyAngle) * KICKY_KICK_KNOCKBACK;
+      enemy.vy += Math.sin(enemyAngle) * KICKY_KICK_KNOCKBACK;
+      roomMoveCandidates.push({ enemy, angle: enemyAngle });
     });
+    roomMoveCandidates.forEach(candidate => tryMoveKickyKickEnemyToNextRoom(candidate.enemy, candidate.angle));
     Neo.player.vx -= Math.cos(angle) * 260;
     Neo.player.vy -= Math.sin(angle) * 260;
     // Kick the camera back along the recoil direction (away from the strike).
@@ -3066,6 +3126,7 @@
       airDrag: boss ? 1.2 : 1.9,
       face: Neo.getFacingDirection(enemy, enemy.beamAngle || enemy.dashAngle || direction),
       size: Math.max(30, enemy.r * 2.4),
+      leavesBloodPool: enemy.type !== 'golem' && enemy.type !== 'bulk_golem',
       bloodColor: enemy.type === 'golem' || enemy.type === 'bulk_golem'
         ? ''
         : enemy.type === 'god'

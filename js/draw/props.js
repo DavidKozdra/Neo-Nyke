@@ -1841,6 +1841,14 @@
     ctx.globalAlpha = 1;
   }
 
+  function corpseLeavesBloodPool(body) {
+    return !!body
+      && body.leavesBloodPool !== false
+      && body.bloodColor !== ''
+      && body.type !== 'golem'
+      && body.type !== 'bulk_golem';
+  }
+
   function drawDeadBodies() {
     Neo.deadBodies.forEach(body => {
       if (!body) return;
@@ -1891,36 +1899,38 @@
       const poolAngle = rotation * 0.25;
       const poolY = size * 0.26;
 
-      // Main pool ellipse
-      Neo.ctx.fillStyle = poolColor;
-      Neo.ctx.beginPath();
-      Neo.ctx.ellipse(0, poolY, baseRx, baseRy, poolAngle, 0, Math.PI * 2);
-      Neo.ctx.fill();
-
-      // Irregular splat blobs radiating from the pool center
-      const blobCount = 5 + Math.floor(rng(0) * 3);
-      for (let i = 0; i < blobCount; i++) {
-        const angle = rng(i * 3 + 1) * Math.PI * 2;
-        const dist = baseRx * (0.25 + rng(i * 3 + 2) * 0.55);
-        const br = baseRy * (0.6 + rng(i * 3 + 3) * 1.1);
-        const bx = Math.cos(angle) * dist;
-        const by = poolY + Math.sin(angle) * dist * 0.38;
-        Neo.ctx.fillStyle = i % 2 === 0 ? poolColor : poolColor2;
+      if (corpseLeavesBloodPool(body)) {
+        // Main pool ellipse
+        Neo.ctx.fillStyle = poolColor;
         Neo.ctx.beginPath();
-        Neo.ctx.ellipse(bx, by, br * (0.7 + rng(i * 3 + 4) * 0.6), br * (0.4 + rng(i * 3 + 5) * 0.4), angle, 0, Math.PI * 2);
+        Neo.ctx.ellipse(0, poolY, baseRx, baseRy, poolAngle, 0, Math.PI * 2);
         Neo.ctx.fill();
-      }
 
-      // Small drip dots
-      const dropCount = 3 + Math.floor(rng(20) * 4);
-      for (let i = 0; i < dropCount; i++) {
-        const angle = rng(i * 7 + 30) * Math.PI * 2;
-        const dist = baseRx * (0.55 + rng(i * 7 + 31) * 0.7);
-        const dr = baseRy * (0.18 + rng(i * 7 + 32) * 0.28);
-        Neo.ctx.fillStyle = poolColor2;
-        Neo.ctx.beginPath();
-        Neo.ctx.arc(Math.cos(angle) * dist, poolY + Math.sin(angle) * dist * 0.35, dr, 0, Math.PI * 2);
-        Neo.ctx.fill();
+        // Irregular splat blobs radiating from the pool center
+        const blobCount = 5 + Math.floor(rng(0) * 3);
+        for (let i = 0; i < blobCount; i++) {
+          const angle = rng(i * 3 + 1) * Math.PI * 2;
+          const dist = baseRx * (0.25 + rng(i * 3 + 2) * 0.55);
+          const br = baseRy * (0.6 + rng(i * 3 + 3) * 1.1);
+          const bx = Math.cos(angle) * dist;
+          const by = poolY + Math.sin(angle) * dist * 0.38;
+          Neo.ctx.fillStyle = i % 2 === 0 ? poolColor : poolColor2;
+          Neo.ctx.beginPath();
+          Neo.ctx.ellipse(bx, by, br * (0.7 + rng(i * 3 + 4) * 0.6), br * (0.4 + rng(i * 3 + 5) * 0.4), angle, 0, Math.PI * 2);
+          Neo.ctx.fill();
+        }
+
+        // Small drip dots
+        const dropCount = 3 + Math.floor(rng(20) * 4);
+        for (let i = 0; i < dropCount; i++) {
+          const angle = rng(i * 7 + 30) * Math.PI * 2;
+          const dist = baseRx * (0.55 + rng(i * 7 + 31) * 0.7);
+          const dr = baseRy * (0.18 + rng(i * 7 + 32) * 0.28);
+          Neo.ctx.fillStyle = poolColor2;
+          Neo.ctx.beginPath();
+          Neo.ctx.arc(Math.cos(angle) * dist, poolY + Math.sin(angle) * dist * 0.35, dr, 0, Math.PI * 2);
+          Neo.ctx.fill();
+        }
       }
 
       // Shadow under corpse
