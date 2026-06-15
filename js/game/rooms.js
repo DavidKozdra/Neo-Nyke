@@ -2638,7 +2638,10 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
       if (!enemy.dashHit && distance < enemy.r + Neo.player.r + 8) {
         enemy.dashHit = true;
         const dashDamage = Math.round(enemy.dmg * Number(weapon.damageMult || 1));
-        Neo.damagePlayer(dashDamage, enemy.dashAngle, Number(weapon.knockback || 340), rival.name);
+        Neo.damagePlayer(dashDamage, enemy.dashAngle, Number(weapon.knockback || 340), rival.characterKey, {
+          sourceKey: rival.characterKey,
+          sourceLabel: rival.name,
+        });
       }
       if (enemy.dashTime <= 0) {
         enemy.attackCd = Math.max(0.32, rival.attackCd * Number(weapon.cooldownMult || 1));
@@ -2682,7 +2685,10 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
       if (distance < enemy.r + Neo.player.r + Number(weapon.range || 12)) {
         const angle = Math.atan2(dy, dx);
         const meleeDamage = Math.round(enemy.dmg * Number(weapon.damageMult || 1));
-        Neo.damagePlayer(meleeDamage, angle, Number(weapon.knockback || 280), rival.name);
+        Neo.damagePlayer(meleeDamage, angle, Number(weapon.knockback || 280), rival.characterKey, {
+          sourceKey: rival.characterKey,
+          sourceLabel: rival.name,
+        });
         if (rival.memory) {
           rival.memory.playerHitsDealt += 1;
           rival.memory.threat += 0.2;
@@ -2726,7 +2732,8 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
             knockback: 160, pierceCount: 0, hitOptions: null,
             enemy: true,
             fromRival: true,
-            source: rival.name || 'rival_projectile',
+            source: rival.characterKey || 'rival_projectile',
+            sourceLabel: rival.name || 'Rival',
           });
         }
         enemy.attackCd = rival.attackCd * Number(weapon.cooldownMult || 1) + Neo.nextRandom('encounter') * 0.5;

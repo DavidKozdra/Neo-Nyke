@@ -576,8 +576,8 @@
     }
 
     if (Neo.ui.interactPrompt) {
-      const shopHint = Neo.getControlHint('e', 'e');
-      const touchHint = (window.matchMedia?.('(pointer: coarse)').matches || navigator.maxTouchPoints > 0)
+      const shopHint = Neo.getControlHint('interact', 'e');
+      const touchHint = window.NeoSettings?.isTouchControlsEnabled?.()
         ? ` / X BUTTON`
         : '';
       const isShop = Neo.currentRoom?.type === 'shop' && !Neo.isPanelOpen(Neo.ui.shopPanel);

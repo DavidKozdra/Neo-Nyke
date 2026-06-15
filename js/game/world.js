@@ -329,7 +329,7 @@
       return;
     }
     if (Neo.isChallengeActive('no_hit')) {
-      Neo.lastDamageSource = Neo.getDamageSourceLabel(source || 'no_hit');
+      Neo.lastDamageSource = options.sourceLabel ? String(options.sourceLabel) : Neo.getDamageSourceLabel(source || 'no_hit');
       Neo.lastDamageSourceKey = String(options.sourceKey || source || 'no_hit');
       Neo.player.hp = 0;
       Neo.player.inv = 0;
@@ -349,6 +349,7 @@
     const effectiveDamageReduction = (itemStats.damageReduction || 0) * brittleDefenseMult;
     let finalAmount = numericAmount * (Neo.isChallengeActive('glass_cannon') ? 1.35 : 1) * (1 - effectiveDamageReduction);
     if (sandbox) finalAmount *= sandbox.enemyDamageMultiplier;
+    finalAmount = Math.max(0, finalAmount - Math.max(0, Number(itemStats.flatDamageReduction || 0)));
     if (ironLungApplies) {
       finalAmount = Math.min(finalAmount, Neo.player.maxHp * 0.2);
     }
@@ -940,7 +941,7 @@
       homing: false, homingTarget: null, homingSpeed: 0, homingAccel: 0, homingTurnRate: 0, homingRadius: 0,
       homingPath: null, homingPathTimer: 0,
       homingTargetRef: null, homingTargetTimer: 0,
-      fromRival: false, source: null, statusEffects: null,
+      fromRival: false, source: null, sourceLabel: null, statusEffects: null,
     });
   }
 
@@ -955,7 +956,7 @@
       homing: false, homingTarget: null, homingSpeed: 0, homingAccel: 0, homingTurnRate: 0, homingRadius: 0,
       homingPath: null, homingPathTimer: 0,
       homingTargetRef: null, homingTargetTimer: 0,
-      fromRival: false, source: null, statusEffects: null, bouncesRemaining: 0,
+      fromRival: false, source: null, sourceLabel: null, statusEffects: null, bouncesRemaining: 0,
     };
   }
 
@@ -1056,6 +1057,7 @@
     p.homingTargetTimer = 0;
     p.fromRival = props.fromRival ?? false;
     p.source = props.source ?? null;
+    p.sourceLabel = props.sourceLabel ?? null;
     p.subSpawn = props.subSpawn ? { ...props.subSpawn } : null;
     p.statusEffects = props.statusEffects ?? null;
     p.enemyBlast = props.enemyBlast ?? null;
@@ -1202,8 +1204,12 @@
     if (!Array.isArray(projectile?.statusEffects)) return;
     const sourceKey = getProjectileDamageSource(projectile);
     // Carry the firing enemy so dark_drain can siphon HP back to it over the DoT.
-    const source = projectile?.owner && !projectile.owner.dead
-      ? { sourceKey, owner: projectile.owner }
+    const source = (projectile?.owner && !projectile.owner.dead) || projectile?.sourceLabel
+      ? {
+          sourceKey,
+          sourceLabel: projectile.sourceLabel || Neo.getDamageSourceLabel(sourceKey),
+          owner: projectile?.owner && !projectile.owner.dead ? projectile.owner : null,
+        }
       : sourceKey;
     projectile.statusEffects.forEach(effect => {
       if (!effect?.key) return;
@@ -1604,7 +1610,11 @@
         const dx = projectile.x - Neo.player.x;
         const dy = projectile.y - Neo.player.y;
         if (dx * dx + dy * dy > hitRadius * hitRadius) continue;
-        damagePlayer(projectile.damage || 10, Math.atan2(projectile.vy, projectile.vx), projectile.knockback || 120, getProjectileDamageSource(projectile));
+        const projectileSource = getProjectileDamageSource(projectile);
+        damagePlayer(projectile.damage || 10, Math.atan2(projectile.vy, projectile.vx), projectile.knockback || 120, projectileSource, {
+          sourceKey: projectileSource,
+          sourceLabel: projectile.sourceLabel || '',
+        });
         applyProjectileStatusEffectsToPlayer(projectile);
         applyProjectileDrainToOwner(projectile);
         detonateEnemyProjectileBlast(projectile, projectile.x, projectile.y);
@@ -2717,7 +2727,8 @@
       }
 
       if (pickup.type === 'ladder') {
-        const wantsToAscend = !!Neo.keys[' '];
+        const ascendKey = window.NeoSettings?.getBindings?.()?.ascend || ' ';
+        const wantsToAscend = !!Neo.keys[ascendKey];
         if (!wantsToAscend) {
           Neo.ladderUseKeyLatch = false;
           continue;

@@ -1407,8 +1407,26 @@
 
     <!-- Controls tab -->
     <div class="stab-panel" id="stab-controls">
+      <section class="settings-group controls-profile-group">
+        <h3 class="settings-group__title">Control Profile</h3>
+        <p class="stab-hint controls-profile-hint">Choose which control options and on-screen layout to use on this device.</p>
+        <div class="control-profile-switch" role="group" aria-label="Control profile">
+          <button class="control-profile-btn" id="controlProfileDesktop" type="button" data-control-profile="desktop">Desktop</button>
+          <button class="control-profile-btn" id="controlProfileMobile" type="button" data-control-profile="mobile">Mobile</button>
+        </div>
+        <div class="access-row controls-overlay-row">
+          <div class="access-text">
+            <span class="access-label">On-screen controls</span>
+            <span class="access-desc">Show the touch joystick and action buttons during gameplay, including in Desktop profile.</span>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="touchControlsEnabled">
+            <span class="toggle-track"><span class="toggle-thumb"></span></span>
+          </label>
+        </div>
+      </section>
 
-      <!-- Desktop keyboard bindings (hidden on touch-only devices) -->
+      <!-- Desktop keyboard bindings -->
       <div class="controls-desktop-section">
         <p class="stab-hint">Click an action, then press any key to remap it.</p>
         <div class="bind-grid">
@@ -1422,6 +1440,8 @@
                 <tr><td class="bind-label">Move Right</td><td><button class="bind-btn" data-action="right">D</button></td></tr>
                 <tr><td class="bind-label">Mobility Skill</td>      <td><button class="bind-btn" data-action="dash">SHIFT</button></td></tr>
                 <tr><td class="bind-label">Inventory</td> <td><button class="bind-btn" data-action="inventory">I</button></td></tr>
+                <tr><td class="bind-label">Interact</td>  <td><button class="bind-btn" data-action="interact">E</button></td></tr>
+                <tr><td class="bind-label">Climb / Exit</td><td><button class="bind-btn" data-action="ascend">SPACE</button></td></tr>
                 <tr><td class="bind-label">Slash</td>     <td><button class="bind-btn" data-action="slash">LMB</button></td></tr>
                 <tr><td class="bind-label">Laser beam</td><td><button class="bind-btn" data-action="laser">RMB</button></td></tr>
                 <tr><td class="bind-label">Smash</td>     <td><button class="bind-btn" data-action="smash">R</button></td></tr>
@@ -1448,7 +1468,7 @@
         <button class="settings-reset" id="resetBindings">Reset to defaults</button>
       </div>
 
-      <!-- Mobile touch bindings (hidden on desktop) -->
+      <!-- Mobile touch bindings -->
       <div class="mobile-bindings controls-mobile-section">
         <p class="stab-hint mobile-bindings__hint">Assign actions to each touch button.</p>
         <section class="settings-group">
@@ -1519,6 +1539,26 @@
         </section>
         <button class="settings-reset" id="resetTouchBindings">Reset mobile defaults</button>
       </div>
+
+      <section class="settings-group gamepad-bindings">
+        <h3 class="settings-group__title">Gamepad / Handheld</h3>
+        <p class="stab-hint gamepad-bindings__hint">Standard Xbox-style layout. Sticks and D-pad always control movement and aim.</p>
+        <div class="gamepad-bind-grid">
+          <label class="gamepad-bind-row"><span>A</span><select class="gamepad-bind-select" data-gamepad-button="0"></select></label>
+          <label class="gamepad-bind-row"><span>B</span><select class="gamepad-bind-select" data-gamepad-button="1"></select></label>
+          <label class="gamepad-bind-row"><span>X</span><select class="gamepad-bind-select" data-gamepad-button="2"></select></label>
+          <label class="gamepad-bind-row"><span>Y</span><select class="gamepad-bind-select" data-gamepad-button="3"></select></label>
+          <label class="gamepad-bind-row"><span>LB</span><select class="gamepad-bind-select" data-gamepad-button="4"></select></label>
+          <label class="gamepad-bind-row"><span>RB</span><select class="gamepad-bind-select" data-gamepad-button="5"></select></label>
+          <label class="gamepad-bind-row"><span>LT</span><select class="gamepad-bind-select" data-gamepad-button="6"></select></label>
+          <label class="gamepad-bind-row"><span>RT</span><select class="gamepad-bind-select" data-gamepad-button="7"></select></label>
+          <label class="gamepad-bind-row"><span>View</span><select class="gamepad-bind-select" data-gamepad-button="8"></select></label>
+          <label class="gamepad-bind-row"><span>Menu</span><select class="gamepad-bind-select" data-gamepad-button="9"></select></label>
+          <label class="gamepad-bind-row"><span>Left Stick</span><select class="gamepad-bind-select" data-gamepad-button="10"></select></label>
+          <label class="gamepad-bind-row"><span>Right Stick</span><select class="gamepad-bind-select" data-gamepad-button="11"></select></label>
+        </div>
+        <button class="settings-reset" id="resetGamepadBindings">Reset gamepad defaults</button>
+      </section>
     </div>
 
     <!-- Gameplay tab -->

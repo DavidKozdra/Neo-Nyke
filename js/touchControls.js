@@ -74,57 +74,80 @@
     joyZoneRect = null;
   }
 
-  joyZone.addEventListener('touchstart', e => {
-    e.preventDefault();
+  function startJoystick(clientX, clientY, pointerId) {
     if (!isGameplayTouchAllowed()) return;
-    const t = e.changedTouches[0];
-    joyTouch = t.identifier;
+    joyTouch = pointerId;
     const rect = refreshJoyZoneRect();
-    joyOriginX = t.clientX - rect.left;
-    joyOriginY = t.clientY - rect.top;
+    joyOriginX = clientX - rect.left;
+    joyOriginY = clientY - rect.top;
     joyBase.style.left = joyOriginX + 'px';
     joyBase.style.top  = joyOriginY + 'px';
     joyBase.classList.add('joy-active');
     setNTActive();
+  }
+
+  function updateJoystick(clientX, clientY) {
+    const rect = joyZoneRect || refreshJoyZoneRect();
+    let dx = (clientX - rect.left) - joyOriginX;
+    let dy = (clientY - rect.top)  - joyOriginY;
+    const dist = Math.hypot(dx, dy);
+    if (dist > JOY_RADIUS) {
+      dx = dx / dist * JOY_RADIUS;
+      dy = dy / dist * JOY_RADIUS;
+    }
+    const nx = dx / JOY_RADIUS;
+    const ny = dy / JOY_RADIUS;
+    NT.moveX = nx;
+    NT.moveY = ny;
+    if (dist > 8) {
+      NT.lastAimX = nx;
+      NT.lastAimY = ny;
+    }
+    joyKnob.style.transform = `translate(${dx}px, ${dy}px)`;
+  }
+
+  function resetJoystick() {
+    joyTouch = null;
+    NT.moveX = 0;
+    NT.moveY = 0;
+    joyKnob.style.transform = '';
+    joyBase.classList.remove('joy-active');
+    invalidateJoyZoneRect();
+  }
+
+  joyZone.addEventListener('touchstart', e => {
+    e.preventDefault();
+    const t = e.changedTouches[0];
+    startJoystick(t.clientX, t.clientY, t.identifier);
   }, { passive: false });
 
   joyZone.addEventListener('touchmove', e => {
     e.preventDefault();
-    const rect = joyZoneRect || refreshJoyZoneRect();
     for (const t of e.changedTouches) {
       if (t.identifier !== joyTouch) continue;
-      let dx = (t.clientX - rect.left) - joyOriginX;
-      let dy = (t.clientY - rect.top)  - joyOriginY;
-      const dist = Math.hypot(dx, dy);
-      if (dist > JOY_RADIUS) {
-        dx = dx / dist * JOY_RADIUS;
-        dy = dy / dist * JOY_RADIUS;
-      }
-      const nx = dx / JOY_RADIUS;
-      const ny = dy / JOY_RADIUS;
-      NT.moveX = nx;
-      NT.moveY = ny;
-      if (dist > 8) {
-        NT.lastAimX = nx;
-        NT.lastAimY = ny;
-      }
-      joyKnob.style.transform = `translate(${dx}px, ${dy}px)`;
+      updateJoystick(t.clientX, t.clientY);
     }
   }, { passive: false });
 
   function joyRelease(e) {
     for (const t of e.changedTouches) {
       if (t.identifier !== joyTouch) continue;
-      joyTouch = null;
-      NT.moveX = 0;
-      NT.moveY = 0;
-      joyKnob.style.transform = '';
-      joyBase.classList.remove('joy-active');
-      invalidateJoyZoneRect();
+      resetJoystick();
     }
   }
   joyZone.addEventListener('touchend',    joyRelease, { passive: false });
   joyZone.addEventListener('touchcancel', joyRelease, { passive: false });
+  joyZone.addEventListener('mousedown', e => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    startJoystick(e.clientX, e.clientY, 'mouse');
+  });
+  window.addEventListener('mousemove', e => {
+    if (joyTouch === 'mouse') updateJoystick(e.clientX, e.clientY);
+  });
+  window.addEventListener('mouseup', e => {
+    if (e.button === 0 && joyTouch === 'mouse') resetJoystick();
+  });
   window.addEventListener('resize', invalidateJoyZoneRect, { passive: true });
   window.addEventListener('orientationchange', invalidateJoyZoneRect, { passive: true });
   window.addEventListener('scroll', invalidateJoyZoneRect, { passive: true });
@@ -167,11 +190,13 @@
   }
 
   refreshButtonLabels();
-  window.addEventListener('neo:settings-changed', refreshButtonLabels);
+  window.addEventListener('neo:settings-changed', () => {
+    refreshButtonLabels();
+    syncOverlayMode();
+  });
 
   function bindBtn(el, bindingKey, fallbackAction) {
-    el.addEventListener('touchstart', e => {
-      e.preventDefault();
+    function press() {
       if (!isGameplayTouchAllowed()) return;
       const action = getTouchAction(bindingKey, fallbackAction);
       el.dataset.touchAction = action;
@@ -183,16 +208,30 @@
       NT[action] = true;
       el.classList.add('pressed');
       setNTActive();
-    }, { passive: false });
-    const release = e => {
-      e.preventDefault();
+    }
+    function release() {
       const action = normalizeTouchAction(el.dataset.touchAction, fallbackAction);
       NT[action] = false;
       if (action === 'ascend') releaseAscendKey();
       el.classList.remove('pressed');
+    }
+    el.addEventListener('touchstart', e => {
+      e.preventDefault();
+      press();
+    }, { passive: false });
+    const releaseTouch = e => {
+      e.preventDefault();
+      release();
     };
-    el.addEventListener('touchend',    release, { passive: false });
-    el.addEventListener('touchcancel', release, { passive: false });
+    el.addEventListener('mousedown', e => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      press();
+    });
+    el.addEventListener('mouseup', release);
+    el.addEventListener('mouseleave', release);
+    el.addEventListener('touchend',    releaseTouch, { passive: false });
+    el.addEventListener('touchcancel', releaseTouch, { passive: false });
   }
 
   // ── Hamburger menu ─────────────────────────────────────────────────────────
@@ -216,6 +255,13 @@
       fn();
       window.setTimeout(syncOverlayMode, 0);
     }, { passive: false });
+    b.addEventListener('click', e => {
+      if (!isGameplayTouchAllowed()) return;
+      e.preventDefault();
+      closeHamMenu();
+      fn();
+      window.setTimeout(syncOverlayMode, 0);
+    });
     return b;
   }
 
@@ -246,6 +292,15 @@
     hamMenu.classList.toggle('open', hamOpen);
     setNTActive();
   }, { passive: false });
+  hamburger.addEventListener('click', e => {
+    if (!isGameplayTouchAllowed()) return;
+    e.preventDefault();
+    const hasAdapter = window.Neo?.getItemCount?.('charged_adapter') > 0;
+    warpHamBtn.classList.toggle('hidden', !hasAdapter);
+    hamOpen = !hamOpen;
+    hamMenu.classList.toggle('open', hamOpen);
+    setNTActive();
+  });
 
   // close on tap outside
   overlay.addEventListener('touchstart', e => {
@@ -271,7 +326,7 @@
     }
   }
 
-  // Also show on first touch anywhere (keyboard users never see it)
+  // Re-sync on touch in case settings or gameplay state changed between frames.
   window.addEventListener('touchstart', () => {
     syncOverlayMode();
     setNTActive();
@@ -292,11 +347,16 @@
   }
 
   function isGameplayTouchAllowed() {
-    return window.Neo?.gameState === 'play' && hasCoarsePointer() && !hasOpenBlockingPanel();
+    return window.Neo?.gameState === 'play' && touchControlsEnabled() && !hasOpenBlockingPanel();
   }
 
-  function hasCoarsePointer() {
-    return !!(window.matchMedia?.('(pointer: coarse)').matches || navigator.maxTouchPoints > 0);
+  function touchControlsEnabled() {
+    if (window.NeoSettings?.isTouchControlsEnabled) return window.NeoSettings.isTouchControlsEnabled();
+    try {
+      const saved = JSON.parse(localStorage.getItem('neonyke:settings') || 'null');
+      if (saved?.touchControlsEnabled === false) return false;
+    } catch {}
+    return true;
   }
 
   function isPanelOpen(panel) {
@@ -329,7 +389,8 @@
   }
 
   function releaseAscendKey() {
-    if (window.Neo?.keys) window.Neo.keys[' '] = false;
+    const key = window.NeoSettings?.getBindings?.()?.ascend || ' ';
+    if (window.Neo?.keys) window.Neo.keys[key] = false;
     if (window.Neo) window.Neo.ladderUseKeyLatch = false;
   }
 
@@ -342,7 +403,7 @@
       overlay.classList.remove('visible');
       return;
     }
-    if (hasCoarsePointer()) setNTActive();
+    setNTActive();
   }
 
   function mkEl(tag, cls) {

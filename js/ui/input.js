@@ -873,7 +873,7 @@ export const ITEM_DEFS = {
       key: 'cloak_of_naked_king',
       name: 'Cloak of the Naked King',
       shortName: 'Cursed Guard',
-      description: '(He has lost it.) Negative status effects are 20% worse per stack, including damage, duration, effectiveness, and proc chance. Gain 50% damage reduction per stack, plus 1% per owned tool stack, equipped or not.',
+      description: '(He has lost it.) Negative status effects are 20% worse per stack, including damage, duration, effectiveness, and proc chance. Reduce incoming damage by 100 points per stack, plus 1 point per owned tool stack, equipped or not.',
       rarity: 'blue',
       color: '#3289d6',
       accent: '#d9f2ff',

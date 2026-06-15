@@ -1264,6 +1264,7 @@
     const ownedWeapons = clonePlainObject(player.ownedWeapons);
     if (player.equippedWeapon) ownedWeapons[player.equippedWeapon] = true;
     return {
+      playerState: clonePlainObject(player),
       character,
       level: Number(player.level || 1),
       xp: Number(player.xp || 0),
@@ -1283,6 +1284,12 @@
       equippedMoves,
       equippedWeapon: player.equippedWeapon || '',
       anvilUpgrades: clonePlainObject(player.anvilUpgrades || { weapon: {}, move: {} }),
+      statuses: clonePlainObject(player.statuses),
+      inv: Math.max(0, Number(player.inv || 0)),
+      overhealBarrier: Math.max(0, Number(player.overhealBarrier || 0)),
+      overhealBarrierMax: Math.max(0, Number(player.overhealBarrierMax || 0)),
+      moveStackOverrides: clonePlainObject(player.moveStackOverrides),
+      weaponChargeOverrides: clonePlainObject(player.weaponChargeOverrides),
     };
   }
 
@@ -1355,15 +1362,14 @@
 
   function getMirrorChampionStats() {
     const inventory = createMirrorInventorySnapshot();
-    const itemStats = getMirrorInventoryItemStats(inventory);
-    const attackSpeed = getMirrorAttackSpeed(inventory, itemStats);
-    const baseDamage = getMirrorBaseDamage(inventory);
+    const itemStats = clonePlainObject(Neo.getItemStats?.() || getMirrorInventoryItemStats(inventory));
+    const attackSpeed = Math.max(0.2, Number(Neo.getAttackSpeedValue?.() || getMirrorAttackSpeed(inventory, itemStats)));
+    const baseDamage = Math.max(1, Number(Neo.getPlayerBaseDamage?.() || getMirrorBaseDamage(inventory)));
     const equippedMoves = { ...inventory.equippedMoves };
     const meleeMove = equippedMoves.melee || 'slash';
     const laserMove = equippedMoves.laser || 'blood_beam';
     const smashMove = equippedMoves.smash || 'crimson_smash';
     const dashMove = equippedMoves.dash || 'dash';
-    const mirrorCooldownMultiplier = 0.82;
     const weaponKey = inventory.equippedWeapon || '';
     const getMoveDamage = moveKey => Math.max(1, Math.round(
       ((Neo.MOVE_BASE_STATS[moveKey]?.damage ?? baseDamage)
@@ -1412,28 +1418,33 @@
       )),
       range: Math.max(40, Math.round((Neo.WEAPON_BASE_STATS[weaponKey]?.range ?? Neo.ATTACKS.melee.range) + getMirrorAnvilBonus(inventory, 'weapon', weaponKey, 'range'))),
       knockback: Math.max(0, Math.round((Neo.WEAPON_BASE_STATS[weaponKey]?.knockback ?? Neo.ATTACKS.melee.push) + getMirrorAnvilBonus(inventory, 'weapon', weaponKey, 'knockback'))),
-      cooldown: Math.max(0.12, getMirrorWeaponCooldown(inventory, weaponKey) * mirrorCooldownMultiplier),
+      cooldown: Math.max(0.12, Number(Neo.getWeaponBaseCooldown?.(weaponKey) || getMirrorWeaponCooldown(inventory, weaponKey)) / attackSpeed),
     } : null;
     const meleeDamage = weaponStats
       ? weaponStats.damage
       : getMoveDamage(meleeMove);
     const beamDamage = Math.round(getMoveDamage(laserMove) * Number(itemStats.beamDamageMultiplier || 1));
     const smashDamage = Math.round(getMoveDamage(smashMove) * Number(itemStats.aoeDamageMultiplier || 1));
-    const moveSpeed = Math.round(228 * (itemStats.moveSpeedMultiplier || 1));
-    // The champion is a boss-tier copy of the player: give it a chunky HP
-    // multiple of the player's own pool so it survives a leveled loadout long
-    // enough to actually cycle through its kit. Floor it well above raw maxHp
-    // so glass-cannon (low-HP/high-damage) builds still meet a real fight.
-    const playerLevel = Math.max(1, Number(inventory.level || 1));
-    const hpMultiplier = 2.2 + Math.min(1.6, (playerLevel - 1) * 0.06);
-    const championHp = Math.round(Math.max(Number(inventory.maxHp || 120) * hpMultiplier, 360 + playerLevel * 26));
+    const flightBoost = Number(inventory.playerState?.princessFlightTime || 0) > 0 ? 2 : 1;
+    const zoomiesBoost = Number(inventory.playerState?.mooggyZoomiesTime || 0) > 0 ? 5 : 1;
+    const godBoost = Neo.godTimer > 0 ? 1.25 : 1;
+    const laserWeight = Math.max(0, Number(itemStats.laserWeightMultiplier ?? 1));
+    const laserSlow = Neo.laserActive ? 1 - 0.6 * laserWeight : 1;
+    const moveSpeed = 228 * flightBoost * zoomiesBoost * godBoost * Number(itemStats.moveSpeedMultiplier || 1) * laserSlow;
+    const maxHp = Math.max(1, Number(inventory.maxHp || 120));
+    const hp = Neo.clamp(Number(inventory.hp || maxHp), 1, maxHp);
+    const currentCooldowns = {};
+    ['melee', 'laser', 'smash', 'dash'].forEach(slot => {
+      currentCooldowns[slot] = Math.max(0, Number(Neo.getSkillCooldownInfo?.(slot, attackSpeed)?.current || 0));
+    });
     return {
-      hp: championHp,
-      dmg: Math.max(18, meleeDamage),
-      beamDamage: Math.max(10, beamDamage),
-      smashDamage: Math.max(20, smashDamage),
-      speed: Math.max(108, moveSpeed),
-      attackCd: Math.max(0.22, 0.56 / attackSpeed),
+      hp,
+      maxHp,
+      dmg: Math.max(1, meleeDamage),
+      beamDamage: Math.max(1, beamDamage),
+      smashDamage: Math.max(1, smashDamage),
+      speed: Math.max(0, moveSpeed),
+      attackCd: Math.max(0, Number(inventory.playerState?.weaponCooldown || currentCooldowns.melee || 0)),
       attackSpeed,
       inventory,
       itemStats,
@@ -1442,11 +1453,12 @@
       weaponStats,
       moveStats,
       mirrorCooldowns: {
-        melee: weaponStats ? weaponStats.cooldown : Math.max(0.18, getMoveCooldown(meleeMove, 'melee') * mirrorCooldownMultiplier),
-        laser: Math.max(0.75, getMoveCooldown(laserMove, 'laser') * mirrorCooldownMultiplier),
-        smash: Math.max(1.1, getMoveCooldown(smashMove, 'smash') * mirrorCooldownMultiplier),
-        dash: Math.max(0.55, getMoveCooldown(dashMove, 'dash') * mirrorCooldownMultiplier),
+        melee: weaponStats ? weaponStats.cooldown : Math.max(0.12, Number(Neo.getSlotCooldownDuration?.('melee', meleeMove, attackSpeed) || getMoveCooldown(meleeMove, 'melee'))),
+        laser: Math.max(0.12, Number(Neo.getSlotCooldownDuration?.('laser', laserMove, attackSpeed) || getMoveCooldown(laserMove, 'laser'))),
+        smash: Math.max(0.12, Number(Neo.getSlotCooldownDuration?.('smash', smashMove, attackSpeed) || getMoveCooldown(smashMove, 'smash'))),
+        dash: Math.max(0.12, Number(Neo.getSlotCooldownDuration?.('dash', dashMove, attackSpeed) || getMoveCooldown(dashMove, 'dash'))),
       },
+      currentCooldowns,
       spriteKey: inventory.character,
     };
   }
@@ -1463,16 +1475,16 @@
       vy: 0,
       r: 16,
       hp: stats.hp,
-      max: stats.hp,
+      max: stats.maxHp,
       speed: stats.speed,
       dmg: stats.dmg,
       beamDamage: stats.beamDamage,
       smashDamage: stats.smashDamage,
       elite: false,
       stun: 0,
-      inv: 0,
+      inv: stats.inventory.inv,
       attackCd: stats.attackCd,
-      statuses: Neo.createStatusMap(),
+      statuses: { ...Neo.createStatusMap(), ...stats.inventory.statuses },
       windup: 0,
       beamTime: 0,
       beamTick: 0,
@@ -1483,7 +1495,7 @@
       swingTime: 0,
       summonCd: 0,
       supportCd: 0,
-      barrier: 0,
+      barrier: stats.inventory.overhealBarrier,
       bossSpawnTimer: 0,
       bossSpawnWarnAt: 0,
       aoeTime: 0,
@@ -1498,6 +1510,8 @@
       state: 'idle',
       spriteKey: stats.spriteKey,
       mirrorInventory: stats.inventory,
+      mirrorPlayerState: stats.inventory.playerState,
+      mirrorExactCopy: true,
       mirrorItems: stats.inventory.items,
       mirrorOwnedMoves: stats.inventory.ownedMoves,
       mirrorOwnedWeapons: stats.inventory.ownedWeapons,
@@ -1508,9 +1522,12 @@
       mirrorWeaponStats: stats.weaponStats,
       mirrorMoveStats: stats.moveStats,
       mirrorCooldowns: stats.mirrorCooldowns,
-      mirrorLaserCd: Math.max(0.55, stats.mirrorCooldowns.laser * 0.45),
-      mirrorSmashCd: Math.max(0.8, stats.mirrorCooldowns.smash * 0.55),
-      mirrorDashCd: Math.max(0.45, stats.mirrorCooldowns.dash * 0.4),
+      mirrorLaserCd: stats.currentCooldowns.laser,
+      mirrorSmashCd: stats.currentCooldowns.smash,
+      mirrorDashCd: stats.currentCooldowns.dash,
+      defenseMultiplier: 1 / Math.max(0.01, 1 - Neo.clamp(Number(stats.itemStats.damageReduction || 0), 0, 0.99)),
+      flatDamageReduction: Math.max(0, Number(stats.itemStats.flatDamageReduction || 0)),
+      stunResistance: Math.max(0, Number(stats.itemStats.stunResistance || 0)),
     };
     Neo.enemies.push(mirror);
     Neo.spawnParticle({ x: mirror.x, y: mirror.y - 28, life: 1, text: 'MIRROR CHAMPION', c: '#d7f6ff' });

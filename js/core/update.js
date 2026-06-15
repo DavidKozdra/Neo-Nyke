@@ -209,7 +209,8 @@ export function loop(timestamp) {
       Neo.smashHeld = !!_nt.smash;
       if (_nt.smash) { if (!_nt.smashLatch) { _nt.smashLatch = true; Neo.trySmash(); } }
       else { _nt.smashLatch = false; }
-      if (_nt.ascend) Neo.keys[' '] = true; else Neo.keys[' '] = false;
+      const _ascendKey = _b ? _b.ascend : ' ';
+      if (_nt.ascend) Neo.keys[_ascendKey] = true; else Neo.keys[_ascendKey] = false;
       if (_nt.dash) Neo.keys[_b ? _b.dash : 'shift'] = true;
       else Neo.keys[_b ? _b.dash : 'shift'] = false;
     }
@@ -241,10 +242,20 @@ export function loop(timestamp) {
       else { _gp0.smashLatch = false; }
       if (_gp0.dash) Neo.keys[_b ? _b.dash : 'shift'] = true;
       else if (!Neo.keys[_b ? _b.dash : 'shift']) Neo.keys[_b ? _b.dash : 'shift'] = false;
-      if (_gp0.start) {
+      const _gpConsume = action => window.NeoGamepad?.consumeAction?.(0, action);
+      const _gpAscendKey = _b ? _b.ascend : ' ';
+      Neo.keys[_gpAscendKey] = !!_gp0.ascend;
+      if (_gpConsume('interact')) window._neoGame?.triggerInteract?.();
+      if (_gpConsume('inventory')) Neo.toggleInventoryPanel?.();
+      if (_gpConsume('activateAll')) Neo.activateAllEquipmentSlots?.();
+      for (let _slotIndex = 1; _slotIndex <= 8; _slotIndex += 1) {
+        if (!_gpConsume(`tool${_slotIndex}`)) continue;
+        const _slotKey = window.NeoSettings?.getEquipmentSlotKeys?.()[_slotIndex - 1];
+        if (_slotKey) Neo.activateEquipmentSlotKey?.(_slotKey);
+      }
+      if (_gpConsume('pause')) {
         if (Neo.gameState === 'play') Neo.pauseGame();
         else if (Neo.gameState === 'pause') Neo.resumeGame();
-        _gp0.start = false;
       }
     }
     let moveX = (Neo.keys[_right] || Neo.keys.arrowright ? 1 : 0) - (Neo.keys[_left] || Neo.keys.arrowleft ? 1 : 0);

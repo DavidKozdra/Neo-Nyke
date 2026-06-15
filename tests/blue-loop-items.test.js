@@ -123,7 +123,7 @@ describe('loop-exclusive Blue relics', () => {
 
   test('uses the requested Artificer and cloak scaling formulas', () => {
     const getArtificerLevelGains = extractFunction(playerPath, 'getArtificerLevelGains');
-    const getCloakDamageReductionBonus = extractFunction(playerPath, 'getCloakDamageReductionBonus');
+    const getCloakFlatDamageReduction = extractFunction(playerPath, 'getCloakFlatDamageReduction');
     const countOwnedToolStacks = extractFunction(playerPath, 'countOwnedToolStacks');
 
     expect(getArtificerLevelGains(1)).toEqual({
@@ -140,8 +140,8 @@ describe('loop-exclusive Blue relics', () => {
         relic: {},
       },
     )).toBe(3);
-    expect(getCloakDamageReductionBonus(1, 3)).toBeCloseTo(0.53);
-    expect(getCloakDamageReductionBonus(2, 3)).toBeCloseTo(1.03);
+    expect(getCloakFlatDamageReduction(1, 3)).toBe(103);
+    expect(getCloakFlatDamageReduction(2, 3)).toBe(203);
   });
 
   test("calculates Rich Man's Blues pickup crystals from floor and stacks", () => {

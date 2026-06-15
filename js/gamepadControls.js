@@ -7,12 +7,7 @@
  * Standard mapping (Xbox / PS / generic):
  *   Left stick      → move
  *   Right stick     → aim (overrides auto-aim when pushed)
- *   A / Cross       → melee (slash)
- *   X / Square      → laser
- *   Y / Triangle    → smash
- *   B / Circle      → dash
- *   RB / R1         → dash (alternate)
- *   Start           → pause
+ *   Buttons         → configurable in Settings → Controls
  *   D-Pad           → move (alternate)
  */
 (function () {
@@ -30,6 +25,8 @@
       dash: false, ascend: false,
       start: false,
       active: false,
+      queuedActions: {},
+      buttonStates: [],
       // P2 keys mirrored for updatePlayer2
       p2MeleeHeld: false,
       p2DashHeld: false,
@@ -37,14 +34,42 @@
   }
 
   window.NeoGamepad = [makeSlot(), makeSlot(), makeSlot(), makeSlot()];
+  window.NeoGamepad.consumeAction = function consumeAction(slotIndex, action) {
+    const slot = window.NeoGamepad[slotIndex];
+    if (!slot?.queuedActions?.[action]) return false;
+    delete slot.queuedActions[action];
+    if (action === 'pause') slot.start = false;
+    return true;
+  };
 
   function apply(dead, v) { return Math.abs(v) < dead ? 0 : v; }
 
-  function readGamepad(gp, slot) {
+  function handleImmediateAction(slotIndex, action) {
+    if (slotIndex !== 0) return false;
+    const game = window._neoGame;
+    const state = window.Neo?.gameState;
+    const inventoryPanel = window.Neo?.ui?.invPanel;
+    const inventoryOpen = !!inventoryPanel && !inventoryPanel.classList.contains('hidden');
+    if (action === 'inventory' && (state === 'play' || inventoryOpen)) {
+      game?.toggleInventoryPanel?.();
+      return true;
+    }
+    if (action === 'pause') {
+      if (inventoryOpen) game?.toggleInventoryPanel?.();
+      else if (state === 'play') game?.pauseGame?.();
+      else if (state === 'pause') game?.resumeGame?.();
+      return true;
+    }
+    return false;
+  }
+
+  function readGamepad(gp, slot, slotIndex) {
     if (!gp || !gp.connected) {
       slot.active = false;
       slot.moveX = slot.moveY = 0;
-      slot.slash = slot.laser = slot.smash = slot.dash = false;
+      slot.slash = slot.laser = slot.smash = slot.dash = slot.ascend = false;
+      slot.buttonStates = [];
+      slot.queuedActions = {};
       return;
     }
     const b = gp.buttons;
@@ -74,11 +99,24 @@
       slot.lastAimY = slot.moveY;
     }
 
-    slot.slash  = b[0]?.pressed ?? false;  // A / Cross
-    slot.laser  = b[2]?.pressed ?? false;  // X / Square
-    slot.smash  = b[3]?.pressed ?? false;  // Y / Triangle
-    slot.dash   = (b[1]?.pressed || b[5]?.pressed) ?? false;  // B / Circle or RB/R1
-    slot.start  = b[9]?.pressed ?? false;  // Start / Options
+    const defaults = {
+      0:'slash', 1:'dash', 2:'laser', 3:'smash',
+      4:'inventory', 5:'dash', 6:'activateAll', 7:'interact',
+      8:'inventory', 9:'pause', 10:'ascend', 11:'interact',
+    };
+    const configured = window.NeoSettings?.getGamepadBindings?.() || defaults;
+    slot.slash = slot.laser = slot.smash = slot.dash = slot.ascend = false;
+    slot.start = false;
+    for (let index = 0; index <= 11; index += 1) {
+      const pressed = !!b[index]?.pressed;
+      const action = String(configured[index] || defaults[index] || 'none');
+      if (['slash', 'laser', 'smash', 'dash', 'ascend'].includes(action) && pressed) slot[action] = true;
+      if (pressed && !slot.buttonStates[index] && action !== 'none' && !handleImmediateAction(slotIndex, action)) {
+        slot.queuedActions[action] = true;
+      }
+      slot.buttonStates[index] = pressed;
+    }
+    slot.start = !!slot.queuedActions.pause;
 
     // P2 aliases (used by updatePlayer2)
     slot.p2MeleeHeld = slot.slash;
@@ -89,10 +127,10 @@
 
   function pollGamepads() {
     const pads = navigator.getGamepads ? navigator.getGamepads() : [];
-    readGamepad(pads[0], window.NeoGamepad[0]);
-    readGamepad(pads[1], window.NeoGamepad[1]);
-    readGamepad(pads[2], window.NeoGamepad[2]);
-    readGamepad(pads[3], window.NeoGamepad[3]);
+    readGamepad(pads[0], window.NeoGamepad[0], 0);
+    readGamepad(pads[1], window.NeoGamepad[1], 1);
+    readGamepad(pads[2], window.NeoGamepad[2], 2);
+    readGamepad(pads[3], window.NeoGamepad[3], 3);
     requestAnimationFrame(pollGamepads);
   }
 

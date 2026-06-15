@@ -36,6 +36,7 @@ export function bindInput() {
       Neo.keys[key] = true;
       const b = window.NeoSettings?.getBindings();
       const inventoryKey = b ? b.inventory : 'i';
+      const interactKey = b ? b.interact : 'e';
       if (isWizardPawOpen()) {
         if (event.key === 'Escape') event.preventDefault();
         return;
@@ -62,7 +63,7 @@ export function bindInput() {
         Neo.skipFirstRunTutorial();
         return;
       }
-      if (key === 'e' && Neo.gameState === 'play') {
+      if (key === interactKey && Neo.gameState === 'play') {
         const inShopRoom = Neo.currentRoom?.type === 'shop';
         if (inShopRoom && !Neo.shopKeyLatch) {
           toggleShopPanel();
@@ -104,8 +105,8 @@ export function bindInput() {
       const b = window.NeoSettings?.getBindings();
       const inventoryKey = b ? b.inventory : 'i';
       if ((b && key === b.smash) || (!b && key === 'r')) Neo.smashHeld = false;
-      if (key === 'e') { Neo.shopKeyLatch = false; Neo.anvilKeyLatch = false; }
-      if (key === ' ') Neo.ladderUseKeyLatch = false;
+      if (key === String(b?.interact || 'e').toLowerCase()) { Neo.shopKeyLatch = false; Neo.anvilKeyLatch = false; }
+      if (key === String(b?.ascend || ' ').toLowerCase()) Neo.ladderUseKeyLatch = false;
       if (key === String(b?.activateAll ?? ' ').toLowerCase()) Neo.activateAllKeyLatch = false;
       if (key === inventoryKey) Neo.invKeyLatch = false;
       const upper = key.toUpperCase();
@@ -2252,6 +2253,7 @@ export function renderInventoryPanel() {
       const atkSpeed = Neo.getAttackSpeedValue();
       const atkSpeedColor = atkSpeed >= 2 ? '#6dde88' : atkSpeed >= 1.2 ? '#e8f4ff' : '#8ca8c0';
       const dmgReduction = Math.round(stats.damageReduction * 100);
+      const flatDmgReduction = Math.round(Number(stats.flatDamageReduction || 0));
       const bleedResistance = Math.round((stats.bleedResistance || 0) * 100);
       const displayedBleedChance = Number(stats.displayedBleedChance ?? stats.bleedChance ?? 0);
       const barrier = Math.round(Number(_invP.overhealBarrier || 0));
@@ -2263,6 +2265,7 @@ export function renderInventoryPanel() {
         `<div class="inv-stat-row"><canvas class="inv-stat-row__icon" data-inv-ui-icon="speed" width="36" height="36" aria-hidden="true"></canvas><div class="inv-stat-row__body"><span class="inv-stat-row__label">Attack Speed</span><span class="inv-stat-row__value" style="color:${atkSpeedColor}">${atkSpeed.toFixed(2)}x</span></div></div>`,
         `<div class="inv-stat-row"><canvas class="inv-stat-row__icon" data-inv-ui-icon="crit" width="36" height="36" aria-hidden="true"></canvas><div class="inv-stat-row__body"><span class="inv-stat-row__label">Crit Chance</span><span class="inv-stat-row__value" style="color:${critColor}">${critPct}%</span></div></div>`,
         dmgReduction > 0 ? `<div class="inv-stat-row"><canvas class="inv-stat-row__icon" data-inv-ui-icon="defense" width="36" height="36" aria-hidden="true"></canvas><div class="inv-stat-row__body"><span class="inv-stat-row__label">Damage Reduction</span><span class="inv-stat-row__value" style="color:#6dde88">${dmgReduction}%</span></div></div>` : '',
+        flatDmgReduction > 0 ? `<div class="inv-stat-row"><canvas class="inv-stat-row__icon" data-inv-ui-icon="defense" width="36" height="36" aria-hidden="true"></canvas><div class="inv-stat-row__body"><span class="inv-stat-row__label">Flat Damage Reduction</span><span class="inv-stat-row__value" style="color:#6dde88">${flatDmgReduction}</span></div></div>` : '',
         bleedResistance > 0 ? `<div class="inv-stat-row"><canvas class="inv-stat-row__icon" data-inv-ui-icon="bleed" width="36" height="36" aria-hidden="true"></canvas><div class="inv-stat-row__body"><span class="inv-stat-row__label">Bleed Resistance</span><span class="inv-stat-row__value" style="color:#f0a080">${bleedResistance}%</span></div></div>` : '',
         displayedBleedChance > 0 ? `<div class="inv-stat-row"><canvas class="inv-stat-row__icon" data-inv-ui-icon="bleed" width="36" height="36" aria-hidden="true"></canvas><div class="inv-stat-row__body"><span class="inv-stat-row__label">Bleed Chance</span><span class="inv-stat-row__value" style="color:#e05c5c">${Math.round(displayedBleedChance * 100)}%</span></div></div>` : '',
         activeBuildTags ? `<div class="inv-stat-row"><canvas class="inv-stat-row__icon" data-inv-ui-icon="item" width="36" height="36" aria-hidden="true"></canvas><div class="inv-stat-row__body"><span class="inv-stat-row__label">Build Tags</span><span class="inv-stat-row__value">${activeBuildTags}</span></div></div>` : '',

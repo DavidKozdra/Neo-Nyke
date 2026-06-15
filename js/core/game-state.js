@@ -303,13 +303,14 @@ export function resumeGame() {
   }
 
   function hasTouchControls() {
+    if (window.NeoSettings?.isTouchControlsEnabled) return window.NeoSettings.isTouchControlsEnabled();
     const coarsePointer = typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches;
     const maxTouchPoints = typeof navigator !== 'undefined' ? Number(navigator.maxTouchPoints || 0) : 0;
     return !!(coarsePointer || maxTouchPoints > 0);
   }
 
   function getAscendControlHint() {
-    if (!hasTouchControls()) return formatControlLabel('space', 'space');
+    if (!hasTouchControls()) return getControlHint('ascend', 'space');
     const defaults = { touchA: 'slash', touchB: 'laser', touchY: 'smash', touchX: 'ascend', touchDash: 'dash' };
     const labels = { touchA: 'A BUTTON', touchB: 'B BUTTON', touchY: 'Y BUTTON', touchX: 'X BUTTON', touchDash: 'DASH BUTTON' };
     const bindings = { ...defaults, ...(window.NeoSettings?.getTouchBindings?.() || {}) };
@@ -1560,6 +1561,9 @@ export function resumeGame() {
     const byRivalName = Neo.enemies.find(enemy => enemy?.type === 'rival' && String(enemy?.rivalData?.name || '').trim().toLowerCase() === key);
     if (byRivalName) return byRivalName;
 
+    const byRivalCharacter = Neo.enemies.find(enemy => enemy?.type === 'rival' && String(enemy?.rivalData?.characterKey || enemy?.rivalKey || '').trim().toLowerCase() === key);
+    if (byRivalCharacter) return byRivalCharacter;
+
     const byLabel = Neo.enemies.find(enemy => String(getDamageSourceLabel(enemy?.type || '') || '').trim().toLowerCase() === label);
     if (byLabel) return byLabel;
     return null;
@@ -1805,6 +1809,10 @@ export function resumeGame() {
     if (Neo.SPRITE_DEFS[key]) return key;
     if (killerSpriteMap[key]) return killerSpriteMap[key];
     const normalized = String(key).trim().toLowerCase();
+    const rivalCharacterKey = normalized.replace(/^rival[\s_-]+/, '').replace(/\s+/g, '_');
+    if (Neo.RIVAL_DEFS?.[rivalCharacterKey] && Neo.SPRITE_DEFS[rivalCharacterKey]) return rivalCharacterKey;
+    const legacyRival = Object.entries(Neo.RIVAL_DEFS || {}).find(([, def]) => String(def?.name || '').trim().toLowerCase() === normalized);
+    if (legacyRival && Neo.SPRITE_DEFS[legacyRival[0]]) return legacyRival[0];
     if (normalized.startsWith('mirror_') || normalized.startsWith('mirror ')) return 'thorn_knight';
     return 'hunter';
   }

@@ -2499,7 +2499,7 @@ export function createUIController(view) {
           if (hazardIcon && typeof Neo.drawHazardKillerIcon === 'function') {
             Neo.drawHazardKillerIcon(view.deadKillerCanvas, hazardIcon);
           } else {
-            Neo.drawSpriteToCanvas(view.deadKillerCanvas, Neo.resolveKillerSprite(entry.killerKey || ''), 120);
+            Neo.drawSpriteToCanvas(view.deadKillerCanvas, Neo.resolveKillerSprite(killerLookup), 120);
           }
         }
         if (view.deadKillerName) view.deadKillerName.textContent = entry.killedBy || 'Unknown';

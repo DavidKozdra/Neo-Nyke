@@ -102,6 +102,7 @@
   // Difficulties above Hard can also add damage reduction per completed loop;
   // the rate lives on the difficulty definition so Custom remains unaffected.
   function getEnemyDamageTakenMultiplier(enemy) {
+    if (enemy?.mirrorExactCopy) return 1;
     const eliteFactor = enemy?.elite ? 0.95 : 1;
     const reductionPerLoop = Math.max(0, Number(Neo.getDifficultyDef?.()?.enemyLoopDamageReduction || 0));
     const loopReduction = Math.min(0.95, (getCurrentLoopNumber() - 1) * reductionPerLoop);
@@ -124,16 +125,18 @@
       * (stats.levelEdgeDamageMultiplier || 1)
       * kronosMultiplier
       * (Neo.isChallengeActive('glass_cannon') ? 1.25 : 1);
+    const flatReduction = Math.max(0, Number(enemy?.flatDamageReduction || 0));
     if (applyBleedBonus && Neo.getStatusStacks(enemy, 'bleed') > 0 && stats.bleedDamageMultiplier > 1) {
-      return Math.max(1, Math.round((powered * stats.bleedDamageMultiplier * damageTakenMultiplier) / defenseMultiplier));
+      return Math.max(0, Math.round((powered * stats.bleedDamageMultiplier * damageTakenMultiplier) / defenseMultiplier - flatReduction));
     }
-    return Math.max(1, Math.round((powered * damageTakenMultiplier) / defenseMultiplier));
+    return Math.max(0, Math.round((powered * damageTakenMultiplier) / defenseMultiplier - flatReduction));
   }
 
   function scaleRawDamageAgainstEnemy(enemy, damage) {
     const defenseMultiplier = Math.max(1, Number(enemy?.defenseMultiplier || 1));
     const damageTakenMultiplier = getEnemyDamageTakenMultiplier(enemy);
-    return Math.max(1, Math.round((Number(damage || 0) * damageTakenMultiplier) / defenseMultiplier));
+    const flatReduction = Math.max(0, Number(enemy?.flatDamageReduction || 0));
+    return Math.max(0, Math.round((Number(damage || 0) * damageTakenMultiplier) / defenseMultiplier - flatReduction));
   }
 
   function getBloodMultiplier() {
@@ -168,6 +171,7 @@
   }
 
   function getEnemyBleedResistance(enemy) {
+    if (enemy?.mirrorExactCopy) return 1;
     // Use cumulative floors entered (across loops) so bleed resistance keeps pace
     // with enemy HP/damage scaling instead of resetting every loop. See
     // getProgressionDepth() / scaleEnemyStats() in enemies.js.
@@ -2347,6 +2351,7 @@
   // hard (ccResistScale 0.30) reaches ~1.0 after roughly one full loop, which halves
   // applied knockback via the 1/(1+level) factor in hitEnemy().
   function getEnemyCcLevel(enemy) {
+    if (enemy?.mirrorExactCopy) return 0;
     const diff = Neo.getDifficultyDef?.() || {};
     const scale = Number(diff.ccResistScale ?? 0);
     const isBoss = Neo.isBossType?.(enemy?.type) || enemy?.type === 'god';

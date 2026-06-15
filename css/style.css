@@ -156,6 +156,48 @@ button, input, select, textarea {
 .controls-desktop-section,
 .controls-mobile-section { display: block; }
 
+.controls-profile-hint,
+.gamepad-bindings__hint {
+  margin-bottom: 10px;
+}
+
+.control-profile-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  max-width: 360px;
+  margin: 0 auto;
+  padding: 4px;
+  border: 1px solid var(--menu-border);
+  border-radius: 10px;
+  background: rgba(8, 12, 20, .34);
+}
+
+.control-profile-btn {
+  padding: 9px 14px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--menu-text-soft);
+  font-size: calc(14px * var(--font-scale, 1));
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.control-profile-btn.is-active {
+  border-color: var(--menu-border-strong);
+  background: var(--menu-surface-strong);
+  color: var(--menu-accent-strong);
+  box-shadow: inset 0 0 12px var(--menu-glow);
+}
+
+.controls-overlay-row {
+  margin-top: 10px;
+  padding-bottom: 0;
+}
+
 #wrap {
   position: relative;
   width: 100dvw;
@@ -7655,6 +7697,45 @@ border-bottom: black solid 2px;
   border-color: var(--menu-border-strong);
   color: #fff;
   outline: none;
+}
+
+.gamepad-bindings {
+  margin-top: 12px;
+}
+
+.gamepad-bind-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 12px;
+}
+
+.gamepad-bind-row {
+  display: grid;
+  grid-template-columns: minmax(76px, auto) minmax(120px, 1fr);
+  align-items: center;
+  gap: 8px;
+  color: var(--menu-text);
+  font-size: calc(14px * var(--font-scale, 1));
+}
+
+.gamepad-bind-select {
+  width: 100%;
+  min-width: 0;
+  padding: 7px 9px;
+  border: 1px solid var(--menu-border);
+  border-radius: 7px;
+  background: var(--menu-surface);
+  color: var(--menu-accent-strong);
+  font-size: calc(14px * var(--font-scale, 1));
+}
+
+.gamepad-bind-select:focus {
+  border-color: var(--menu-border-strong);
+  outline: none;
+}
+
+@media (max-width: 640px) {
+  .gamepad-bind-grid { grid-template-columns: 1fr; }
 }
 
 /* --- Theme tab --- */

@@ -4,11 +4,23 @@
 
   const DEFAULT_EQUIPMENT_SLOT_KEYS = ['f', 'g', 'h', 'j', 'k', 'l', 'u', 'i'];
   const DEFAULT_BINDINGS = {
-    up:'w', down:'s', left:'a', right:'d', dash:'shift', inventory:'i', smash:'r', slash:'lmb', laser:'rmb',
+    up:'w', down:'s', left:'a', right:'d', dash:'shift', inventory:'i', interact:'e', ascend:' ', smash:'r', slash:'lmb', laser:'rmb',
     activateAll:' ',
     tool1:'f', tool2:'g', tool3:'h', tool4:'j', tool5:'k', tool6:'l', tool7:'u', tool8:'i',
   };
   const DEFAULT_TOUCH_BINDINGS = { touchA:'slash', touchB:'laser', touchY:'smash', touchX:'ascend', touchDash:'dash' };
+  const DEFAULT_GAMEPAD_BINDINGS = {
+    0:'slash', 1:'dash', 2:'laser', 3:'smash',
+    4:'inventory', 5:'dash', 6:'activateAll', 7:'interact',
+    8:'inventory', 9:'pause', 10:'ascend', 11:'interact',
+  };
+  const GAMEPAD_ACTIONS = [
+    ['none', 'None'], ['slash', 'Slash'], ['laser', 'Laser'], ['smash', 'Smash'], ['dash', 'Dash'],
+    ['ascend', 'Climb / Exit'], ['interact', 'Interact'], ['inventory', 'Inventory'],
+    ['activateAll', 'Activate All Tools'], ['pause', 'Pause'],
+    ['tool1', 'Tool Slot 1'], ['tool2', 'Tool Slot 2'], ['tool3', 'Tool Slot 3'], ['tool4', 'Tool Slot 4'],
+    ['tool5', 'Tool Slot 5'], ['tool6', 'Tool Slot 6'], ['tool7', 'Tool Slot 7'], ['tool8', 'Tool Slot 8'],
+  ];
   const DEFAULT_VOLUME   = { master:20, sfx:80, music:20 };
   const DEFAULT_ACCESS   = { reduceFlash:false, reduceMotion:false, reduceParticles:false, highContrast:false, screenShake:true, shopCanAfford:'#4caf50', shopCantAfford:'#e05555', hudScale:1, fontScale:1 };
   const DEFAULT_GAMEPLAY = { pauseInventory:true, pauseOnBlur:true, bloodMultiplier:1, bloodOnHit:true, performanceMode:true, objectivePanel:true, cutsceneAutoAdvance:false };
@@ -271,6 +283,9 @@
 
   let bindings = { ...DEFAULT_BINDINGS };
   let touchBindings = { ...DEFAULT_TOUCH_BINDINGS };
+  let gamepadBindings = { ...DEFAULT_GAMEPAD_BINDINGS };
+  let controlMode = null;
+  let touchControlsEnabled = null;
   let volume   = { ...DEFAULT_VOLUME };
   let access   = { ...DEFAULT_ACCESS };
   let gameplay = { ...DEFAULT_GAMEPLAY };
@@ -282,6 +297,9 @@
       if (!s) return;
       if (s.bindings)     bindings     = { ...DEFAULT_BINDINGS, ...s.bindings };
       if (s.touchBindings) touchBindings = { ...DEFAULT_TOUCH_BINDINGS, ...s.touchBindings };
+      if (s.gamepadBindings) gamepadBindings = { ...DEFAULT_GAMEPAD_BINDINGS, ...s.gamepadBindings };
+      if (s.controlMode === 'desktop' || s.controlMode === 'mobile') controlMode = s.controlMode;
+      if (s.touchControlsEnabled !== undefined) touchControlsEnabled = s.touchControlsEnabled !== false;
       if (s.volume)       volume       = { ...DEFAULT_VOLUME,   ...s.volume };
       if (s.access)       access       = { ...DEFAULT_ACCESS,   ...s.access };
       if (s.gameplay)     gameplay     = { ...DEFAULT_GAMEPLAY, ...s.gameplay };
@@ -298,7 +316,10 @@
   }
 
   function save() {
-    localStorage.setItem(STORE_KEY, JSON.stringify({ bindings, touchBindings, volume, access, gameplay, hudElements, activeTheme, savedThemes, customThemeVars }));
+    localStorage.setItem(STORE_KEY, JSON.stringify({
+      bindings, touchBindings, gamepadBindings, controlMode, touchControlsEnabled,
+      volume, access, gameplay, hudElements, activeTheme, savedThemes, customThemeVars,
+    }));
     window.dispatchEvent(new CustomEvent('neo:settings-changed'));
   }
 
@@ -336,14 +357,21 @@
   }
 
   function applyControlsSectionVisibility() {
-    const isTouch = isTouchDevice();
+    const mode = controlMode || (isTouchDevice() ? 'mobile' : 'desktop');
     const desktopSec = document.querySelector('.controls-desktop-section');
     const mobileSec  = document.querySelector('.controls-mobile-section');
-    if (desktopSec) desktopSec.style.display = isTouch ? 'none' : '';
-    if (mobileSec)  mobileSec.style.display  = isTouch ? '' : 'none';
+    if (desktopSec) desktopSec.style.display = mode === 'desktop' ? '' : 'none';
+    if (mobileSec)  mobileSec.style.display  = mode === 'mobile' ? '' : 'none';
+    document.querySelectorAll('.control-profile-btn').forEach(btn => {
+      const active = btn.dataset.controlProfile === mode;
+      btn.classList.toggle('is-active', active);
+      btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
   }
 
   load();
+  if (!controlMode) controlMode = isTouchDevice() ? 'mobile' : 'desktop';
+  if (touchControlsEnabled === null) touchControlsEnabled = controlMode === 'mobile';
   applyAccess();
   applyHudElements();
   applyControlsSectionVisibility();
@@ -366,6 +394,9 @@
   window.NeoSettings = {
     getBindings: () => bindings,
     getTouchBindings: () => touchBindings,
+    getGamepadBindings: () => ({ ...gamepadBindings }),
+    getControlMode: () => controlMode,
+    isTouchControlsEnabled: () => touchControlsEnabled,
     getEquipmentSlotKeys,
     getActivateAllKey: () => String(bindings.activateAll || ' '),
     // Display label for a bound action (e.g. 'smash' -> 'R'), honoring rebinds.
@@ -498,6 +529,49 @@
   }
 
   refreshTouchBindControls();
+
+  const touchControlsEnabledEl = document.getElementById('touchControlsEnabled');
+  if (touchControlsEnabledEl) {
+    touchControlsEnabledEl.checked = touchControlsEnabled;
+    touchControlsEnabledEl.addEventListener('change', () => {
+      touchControlsEnabled = touchControlsEnabledEl.checked;
+      save();
+    });
+  }
+
+  modal.querySelectorAll('.control-profile-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const next = btn.dataset.controlProfile;
+      if (next !== 'desktop' && next !== 'mobile') return;
+      controlMode = next;
+      applyControlsSectionVisibility();
+      save();
+    });
+  });
+
+  function refreshGamepadBindControls() {
+    modal.querySelectorAll('.gamepad-bind-select').forEach(select => {
+      if (!select.options.length) {
+        GAMEPAD_ACTIONS.forEach(([value, text]) => select.add(new Option(text, value)));
+      }
+      select.value = gamepadBindings[select.dataset.gamepadButton] || 'none';
+    });
+  }
+
+  refreshGamepadBindControls();
+
+  modal.querySelectorAll('.gamepad-bind-select').forEach(select => {
+    select.addEventListener('change', () => {
+      gamepadBindings[select.dataset.gamepadButton] = String(select.value || 'none');
+      save();
+    });
+  });
+
+  document.getElementById('resetGamepadBindings')?.addEventListener('click', () => {
+    gamepadBindings = { ...DEFAULT_GAMEPAD_BINDINGS };
+    refreshGamepadBindControls();
+    save();
+  });
 
   modal.querySelectorAll('.mobile-bind-select').forEach(select => {
     select.addEventListener('change', () => {

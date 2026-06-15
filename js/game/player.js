@@ -24,11 +24,11 @@ export function getArtificerLevelGains(stacks = 0) {
   };
 }
 
-export function getCloakDamageReductionBonus(stacks = 0, ownedToolStacks = 0) {
+export function getCloakFlatDamageReduction(stacks = 0, ownedToolStacks = 0) {
   const cloakStacks = Math.max(0, Number(stacks) || 0);
   const toolStacks = Math.max(0, Number(ownedToolStacks) || 0);
   if (cloakStacks <= 0) return 0;
-  return cloakStacks * 0.5 + toolStacks * 0.01;
+  return cloakStacks * 100 + toolStacks;
 }
 
 export function getRichMansBluesCrystalReward(floor = 1, stacks = 1) {
@@ -561,11 +561,8 @@ export function getItemStats() {
       0,
       0.85,
     );
-    const damageReduction = Neo.clamp(
-      standardDamageReduction + getCloakDamageReductionBonus(nakedKingCloak, ownedToolStacks),
-      0,
-      1,
-    );
+    const damageReduction = standardDamageReduction;
+    const flatDamageReduction = getCloakFlatDamageReduction(nakedKingCloak, ownedToolStacks);
     const xpProgress = Neo.clamp((Neo.player?.xpToNext || 0) > 0 ? (Neo.player?.xp || 0) / Neo.player.xpToNext : 0, 0, 1);
     const characterDef = Neo.getCharacterDef?.() || {};
     Neo.itemStatsCacheValue = {
@@ -639,6 +636,7 @@ export function getItemStats() {
       itemDropChanceBonus: Math.min(0.3, richMansLuck * 0.05),
       shopExtraItemOffers: Math.min(3, richMansLuck),
       damageReduction,
+      flatDamageReduction,
       negativeStatusMultiplier: 1 + nakedKingCloak * 0.2,
       ownedToolStacks,
       stunResistance: anchorCharm,
@@ -1927,7 +1925,7 @@ export function refreshFloorChargeStates() {
   Neo.migratePlayerData = migratePlayerData;
   Neo.countOwnedToolStacks = countOwnedToolStacks;
   Neo.getArtificerLevelGains = getArtificerLevelGains;
-  Neo.getCloakDamageReductionBonus = getCloakDamageReductionBonus;
+  Neo.getCloakFlatDamageReduction = getCloakFlatDamageReduction;
   Neo.getRichMansBluesCrystalReward = getRichMansBluesCrystalReward;
   Neo.getCharacterDef = getCharacterDef;
   Neo.getUiCharacterKey = getUiCharacterKey;
