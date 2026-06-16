@@ -59,7 +59,7 @@
         state: Neo.currentRoom.type === 'ladder' ? 'done' : 'todo',
       });
       if (Neo.currentRoom.type === 'ladder') {
-        const ladderHint = Neo.formatControlLabel('space', 'space');
+        const ladderHint = Neo.getLadderControlHint ? Neo.getLadderControlHint() : Neo.getControlHint('interact', 'e');
         entries.push({
           text: Neo.currentRoom.cleared ? `Ladder room cleared - press ${ladderHint} at ladder to continue` : 'Clear the ladder room',
           state: Neo.currentRoom.cleared ? 'done' : 'warn',
@@ -582,6 +582,7 @@
         : '';
       const isShop = Neo.currentRoom?.type === 'shop' && !Neo.isPanelOpen(Neo.ui.shopPanel);
       const isAnvil = Neo.currentRoom?.type === 'anvil' && !Neo.isPanelOpen(Neo.ui.anvilPanel);
+      const isLadder = !isShop && !isAnvil && !!Neo.isAtLadder?.();
       if (isShop) {
         Neo.ui.interactPrompt.textContent = `[${shopHint}]${touchHint}  Open Shop`;
         Neo.ui.interactPrompt.classList.remove('hidden', 'interact-prompt--forge');
@@ -589,6 +590,9 @@
         Neo.ui.interactPrompt.textContent = `[${shopHint}]${touchHint}  Open Forge`;
         Neo.ui.interactPrompt.classList.remove('hidden');
         Neo.ui.interactPrompt.classList.add('interact-prompt--forge');
+      } else if (isLadder) {
+        Neo.ui.interactPrompt.textContent = `[${shopHint}]${touchHint}  Use Ladder`;
+        Neo.ui.interactPrompt.classList.remove('hidden', 'interact-prompt--forge');
       } else {
         Neo.ui.interactPrompt.classList.add('hidden');
       }

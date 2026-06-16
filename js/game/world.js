@@ -2483,6 +2483,37 @@
     return Math.max(0, Number(playerMoveSpeed) || 0) * 1.8;
   }
 
+  // True when the player is standing on/near a usable ladder. Mirrors the
+  // proximity check drawLadderPrompt uses so the interact prompt and the actual
+  // descend agree. The ladder is only usable once the room is cleared.
+  function isAtLadder() {
+    if (Neo.gameState !== 'play' || !Neo.currentRoom?.cleared) return false;
+    const ladder = Neo.pickups?.find(pickup => pickup?.type === 'ladder');
+    if (!ladder) return false;
+    return Neo.dist(Neo.player.x, Neo.player.y, ladder.x, ladder.y) <= Neo.LADDER_TRIGGER_RADIUS;
+  }
+
+  // Descend to the next floor (or win in treasure-hunt at MAX_FLOOR). Routed
+  // through the shared interact action (E / gamepad / mobile button) rather than
+  // self-triggering from the pickup loop, so all input methods share one path.
+  function useLadder() {
+    Neo.playSfx?.('ladder');
+    if (Neo.gameMode === 'treasure_hunt' && Neo.floor >= Neo.MAX_FLOOR) {
+      Neo.win();
+      return;
+    }
+    if (Neo.isFirstRunTutorialActive()) Neo.tutorialState.usedLadder = true;
+    Neo.floor = Math.min(Neo.MAX_FLOOR, Neo.floor + 1);
+    Neo.refreshFloorChargeStates();
+    Neo.metaProgress.bestFloor = Math.max(Neo.metaProgress.bestFloor, Neo.floor);
+    Neo.persistMetaSoon();
+    Neo.showFloorTransition = true;
+    Neo.floorTransitionTime = 0;
+    Neo._carriedRivals = Neo.rivals.filter(r => !r.dead && r.hp > 0);
+    Neo.generateFloor();
+    Neo.scheduleRunSave();
+  }
+
   function updatePickups(dt = 0.016) {
     const itemStats = Neo.getItemStats?.() || {};
     const autoVacuumRange = Math.max(0, Number(itemStats.pickupVacuumRange || 0));
@@ -2770,30 +2801,9 @@
       }
 
       if (pickup.type === 'ladder') {
-        const ascendKey = window.NeoSettings?.getBindings?.()?.ascend || ' ';
-        const wantsToAscend = !!Neo.keys[ascendKey];
-        if (!wantsToAscend) {
-          Neo.ladderUseKeyLatch = false;
-          continue;
-        }
-        if (Neo.ladderUseKeyLatch) continue;
-        Neo.ladderUseKeyLatch = true;
-        Neo.playSfx?.('ladder');
-        if (Neo.gameMode === 'treasure_hunt' && Neo.floor >= Neo.MAX_FLOOR) {
-          Neo.win();
-          return;
-        }
-        if (Neo.isFirstRunTutorialActive()) Neo.tutorialState.usedLadder = true;
-        Neo.floor = Math.min(Neo.MAX_FLOOR, Neo.floor + 1);
-        Neo.refreshFloorChargeStates();
-        Neo.metaProgress.bestFloor = Math.max(Neo.metaProgress.bestFloor, Neo.floor);
-        Neo.persistMetaSoon();
-        Neo.showFloorTransition = true;
-        Neo.floorTransitionTime = 0;
-        Neo._carriedRivals = Neo.rivals.filter(r => !r.dead && r.hp > 0);
-        Neo.generateFloor();
-        Neo.scheduleRunSave();
-        return;
+        // The ladder is activated by the shared interact action (E / gamepad /
+        // mobile button) via Neo.useLadder, not by walking onto it.
+        continue;
       }
 
       if (pickup.type === 'secretWarp') {
@@ -3321,6 +3331,8 @@
   Neo.spawnJesterPortalPickup = spawnJesterPortalPickup;
   Neo.useJesterPortal = useJesterPortal;
   Neo.getChallengeRuneMaxSpeed = getChallengeRuneMaxSpeed;
+  Neo.isAtLadder = isAtLadder;
+  Neo.useLadder = useLadder;
   Neo.updatePickups = updatePickups;
   Neo.updateDeadBodies = updateDeadBodies;
   Neo.spawnProjectile = spawnProjectile;

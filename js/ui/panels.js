@@ -74,6 +74,10 @@ export function bindInput() {
           toggleAnvilPanel();
           Neo.anvilKeyLatch = true;
         }
+        if (Neo.isAtLadder?.() && !Neo.ladderUseKeyLatch) {
+          Neo.ladderUseKeyLatch = true;
+          Neo.useLadder?.();
+        }
       }
       if (key === inventoryKey && (Neo.gameState === 'play' || isPanelOpen(Neo.ui.invPanel)) && !Neo.invKeyLatch) {
         toggleInventoryPanel();
@@ -105,8 +109,7 @@ export function bindInput() {
       const b = window.NeoSettings?.getBindings();
       const inventoryKey = b ? b.inventory : 'i';
       if ((b && key === b.smash) || (!b && key === 'r')) Neo.smashHeld = false;
-      if (key === String(b?.interact || 'e').toLowerCase()) { Neo.shopKeyLatch = false; Neo.anvilKeyLatch = false; }
-      if (key === String(b?.ascend || ' ').toLowerCase()) Neo.ladderUseKeyLatch = false;
+      if (key === String(b?.interact || 'e').toLowerCase()) { Neo.shopKeyLatch = false; Neo.anvilKeyLatch = false; Neo.ladderUseKeyLatch = false; }
       if (key === String(b?.activateAll ?? ' ').toLowerCase()) Neo.activateAllKeyLatch = false;
       if (key === inventoryKey) Neo.invKeyLatch = false;
       const upper = key.toUpperCase();

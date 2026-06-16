@@ -1343,6 +1343,7 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
     const safeSpawn = findSafeSpawnPoint();
     Neo.player.x = safeSpawn.x;
     Neo.player.y = safeSpawn.y;
+    Neo.reconcileCooldownsOnRoomEnter();
 
     if (room.type === 'start' && !room.cleared && Neo.enemies.length === 0 && Number(room.startRoomEliteCount || 0) > 0) {
       Neo.spawnWave(Number(room.startRoomEliteCount), 'combat', { forceElite: true, suppressMiniBoss: true });

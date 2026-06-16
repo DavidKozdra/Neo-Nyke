@@ -1559,14 +1559,17 @@
     const baseDamage = Neo.godTimer > 0 ? 34 : 26;
     const lineRadius = 46 * (itemStats.aoeRadiusMultiplier || 1);
     const lineDamage = Math.max(1, Math.round(baseDamage * 0.6));
+    // At level 7+ Zip Lightning reaches 150% as far toward enemies (and on the
+    // no-enemy fallback dash).
+    const RANGE_MULT = Number(Neo.player?.level || 1) >= 7 ? 1.5 : 1;
     let sourceX = Neo.player.x;
     let sourceY = Neo.player.y;
     let performedHop = false;
     for (let hop = 0; hop < hops; hop += 1) {
       const searchX = hop === 0 ? Neo.mouse.worldX : sourceX;
       const searchY = hop === 0 ? Neo.mouse.worldY : sourceY;
-      const target = Neo.findNearestEnemy(searchX, searchY, hop === 0 ? 280 : 260, visited)
-        || Neo.findNearestEnemy(sourceX, sourceY, 260, visited);
+      const target = Neo.findNearestEnemy(searchX, searchY, (hop === 0 ? 280 : 260) * RANGE_MULT, visited)
+        || Neo.findNearestEnemy(sourceX, sourceY, 260 * RANGE_MULT, visited);
       if (!target) break;
       visited.add(target);
       const toward = Math.atan2(target.y - sourceY, target.x - sourceX);
@@ -1618,7 +1621,8 @@
         : Math.atan2(Neo.mouse.worldY - Neo.player.y, Neo.mouse.worldX - Neo.player.x);
       const fromX = Neo.player.x;
       const fromY = Neo.player.y;
-      const fallback = findSafePointNearTarget(Neo.player.x + Math.cos(angle) * 190, Neo.player.y + Math.sin(angle) * 190, Neo.player.r, 120, 16);
+      const fallbackDist = 190 * RANGE_MULT;
+      const fallback = findSafePointNearTarget(Neo.player.x + Math.cos(angle) * fallbackDist, Neo.player.y + Math.sin(angle) * fallbackDist, Neo.player.r, 120, 16);
       if (fallback) {
         teleportPlayerTo(fallback.x, fallback.y, '#95deff');
         // No enemy to chain to — still leave a lightning trail along the dash.
@@ -3817,8 +3821,18 @@
     Neo.player.hp = Math.min(Neo.player.maxHp, Neo.player.hp + gains.maxHp);
     Neo.player.attackPower += gains.attackPower;
     Neo.player.attackSpeed += gains.attackSpeed;
+    reconcileGellehZipCharge();
     Neo.markInventoryPanelDirty();
     Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.9, text: `LV ${Neo.player.level}`, c: '#7dff9e' });
+  }
+
+  // Gelleh's Zip Lightning gains a charge at level 5. getMoveMaxStacks reports
+  // the higher max and tickCooldowns grows the live dash entry to match — this
+  // just surfaces the feedback particle the instant she crosses the threshold.
+  function reconcileGellehZipCharge() {
+    if (Neo.player?.character !== 'gelleh' || Neo.player.level !== 5) return;
+    if (Neo.getEquippedMove('dash') !== 'zip_lightning') return;
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 46, life: 0.9, text: 'ZIP LIGHTNING +1 CHARGE', c: '#cfd7ff' });
   }
 
   function applyArtificerChargerPickup(previousCount, collectCount) {

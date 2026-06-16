@@ -370,7 +370,8 @@
     const roomType = window.Neo?.currentRoom?.type;
     const canShop = roomType === 'shop' && !isPanelOpen(window.Neo?.ui?.shopPanel);
     const canAnvil = roomType === 'anvil' && !isPanelOpen(window.Neo?.ui?.anvilPanel);
-    if (!canShop && !canAnvil) return false;
+    const canLadder = !!window.Neo?.isAtLadder?.();
+    if (!canShop && !canAnvil && !canLadder) return false;
     window._neoGame?.triggerInteract?.();
     window.setTimeout(syncOverlayMode, 0);
     return true;

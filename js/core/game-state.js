@@ -318,6 +318,14 @@ export function resumeGame() {
     return labels[entry?.[0]] || 'X BUTTON';
   }
 
+  // Hint label for the ladder, which is driven by the interact action. On touch
+  // the ladder can still be triggered by the X (ascend) button, so show that
+  // button label there; on keyboard/gamepad show the interact key (default E).
+  function getLadderControlHint() {
+    if (hasTouchControls()) return getAscendControlHint();
+    return getControlHint('interact', 'e');
+  }
+
   function getMovementControlHint() {
     const up = getControlHint('up', 'w');
     const left = getControlHint('left', 'a');
@@ -378,7 +386,7 @@ export function resumeGame() {
     const smashHint = getControlHint('smash', 'r');
     const inventoryHint = getControlHint('inventory', 'i');
     const shopHint = formatControlLabel('e', 'e');
-    const ladderHint = getAscendControlHint();
+    const ladderHint = getLadderControlHint();
     if (Neo.tutorialState.step === 'move') return `Tutorial: Move with ${moveHint}.`;
     if (Neo.tutorialState.step === 'fight') return `Tutorial: Defeat the training dummy using ${slashHint}, ${laserHint}, or ${smashHint}.`;
     if (Neo.tutorialState.step === 'relic') return 'Tutorial: Pick up your first relic drop.';
@@ -395,7 +403,7 @@ export function resumeGame() {
     const laserHint = getControlHint('laser', 'rmb');
     const inventoryHint = getControlHint('inventory', 'i');
     const shopHint = formatControlLabel('e', 'e');
-    const ladderHint = getAscendControlHint();
+    const ladderHint = getLadderControlHint();
     return [
       { text: `Move (${moveHint})`, state: Neo.tutorialState.moved ? 'done' : 'todo' },
       { text: `Defeat training dummy (${slashHint}/${laserHint})`, state: Neo.tutorialState.gotKill ? 'done' : 'todo' },
@@ -1279,7 +1287,11 @@ export function resumeGame() {
     const baseStacks = Math.max(1, Number(moveDef.maxStacks || 1));
     const characterStacks = Math.max(1, Number(moveDef.stackOverrides?.[characterKey] || baseStacks));
     const playerOverrideStacks = Math.max(0, Number(playerState?.moveStackOverrides?.[moveKey] || 0));
-    return Math.max(characterStacks, playerOverrideStacks || 0);
+    // Gelleh's mastery: at level 5+ her Zip Lightning gains an extra charge.
+    const gellehZipBonus = (characterKey === 'gelleh'
+      && moveKey === 'zip_lightning'
+      && Number(playerState?.level || 1) >= 5) ? 1 : 0;
+    return Math.max(characterStacks, playerOverrideStacks || 0) + gellehZipBonus;
   }
 
   function getSlotCooldownDuration(slot, moveKey, attackSpeed = Neo.getAttackSpeedValue()) {
@@ -1350,6 +1362,29 @@ export function resumeGame() {
     return true;
   }
 
+  // Called on every room transfer. Cooldown bookkeeping can desync across a
+  // room change (a charge spent with a deferred/held timer that never resolved,
+  // a stuck empty slot with no timer running). Reconcile each slot so the player
+  // never lands in a new room with a dead, un-rechargeable skill: any slot
+  // sitting at 0 charges with no active timer gets a fresh timer (its current
+  // cooldown + 500ms) so it will recover; everything else is topped up to full.
+  function reconcileCooldownsOnRoomEnter() {
+    const attackSpeed = Neo.getAttackSpeedValue();
+    Neo.MOVE_SLOTS.forEach(slot => {
+      const state = Neo.cooldowns[slot] || createCooldownEntry(slot);
+      const hasActiveTimer = state.timers.length > 0 || state.holding > 0;
+      if (state.charges <= 0 && !hasActiveTimer) {
+        const moveKey = Neo.getEquippedMove(slot);
+        const cooldown = getSlotCooldownDuration(slot, moveKey, attackSpeed);
+        state.timers.push(cooldown + 0.5);
+      } else if (!hasActiveTimer) {
+        state.charges = state.maxCharges;
+      }
+      Neo.cooldowns[slot] = state;
+    });
+    Neo.updateHud();
+  }
+
   function queueHeldSkillRecharge(slot, rechargeTime) {
     const state = Neo.cooldowns[slot] || createCooldownEntry(slot);
     if (state.holding > 0) state.holding -= 1;
@@ -1361,6 +1396,17 @@ export function resumeGame() {
   function tickCooldowns(dt) {
     Neo.MOVE_SLOTS.forEach(slot => {
       const state = Neo.cooldowns[slot] || createCooldownEntry(slot);
+      // Capacity can grow mid-run (Gelleh's level-5 Zip Lightning charge, or
+      // any level-jump path the levelUp hook skips). The stored maxCharges was
+      // frozen when the entry was built, so reconcile it here and credit the
+      // new headroom as a ready charge — same accounting an Extra Battery uses.
+      const trueMax = getMoveMaxStacks(Neo.getEquippedMove(slot), Neo.player?.character || Neo.chosenCharacter, Neo.player);
+      if (trueMax > state.maxCharges) {
+        const gained = trueMax - state.maxCharges;
+        state.maxCharges = trueMax;
+        state.charges = Math.min(trueMax, state.charges + gained);
+        Neo.cooldowns[slot] = state;
+      }
       if (!state.timers.length) return;
       const nextTimers = [];
       let restoredCharges = 0;
@@ -2940,6 +2986,7 @@ export function resumeGame() {
       Neo.decorations = Neo.currentRoom.decorations;
     }
     Neo.cooldowns = createCooldownState(Neo.player, snapshot.cooldowns || {});
+    reconcileCooldownsOnRoomEnter();
     Neo.laserActive = !!snapshot.laserActive;
     Neo.laserTime = snapshot.laserTime || 0;
     Neo.laserTick = snapshot.laserTick || 0;
@@ -3014,6 +3061,7 @@ export function resumeGame() {
   Neo.formatControlLabel = formatControlLabel;
   Neo.getControlHint = getControlHint;
   Neo.getAscendControlHint = getAscendControlHint;
+  Neo.getLadderControlHint = getLadderControlHint;
   Neo.getMovementControlHint = getMovementControlHint;
   Neo.ensureTutorialDummyEnemy = ensureTutorialDummyEnemy;
   Neo.getTutorialStepOrder = getTutorialStepOrder;
@@ -3101,6 +3149,7 @@ export function resumeGame() {
   Neo.createCooldownState = createCooldownState;
   Neo.spendSkillCharge = spendSkillCharge;
   Neo.queueHeldSkillRecharge = queueHeldSkillRecharge;
+  Neo.reconcileCooldownsOnRoomEnter = reconcileCooldownsOnRoomEnter;
   Neo.tickCooldowns = tickCooldowns;
   Neo.getSkillCooldownInfo = getSkillCooldownInfo;
   Neo.refreshRoomShopCosts = refreshRoomShopCosts;

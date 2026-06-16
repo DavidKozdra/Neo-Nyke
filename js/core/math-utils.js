@@ -751,6 +751,11 @@ function triggerInteract() {
     Neo.anvilKeyLatch = true;
     setTimeout(() => { Neo.anvilKeyLatch = false; }, 200);
   }
+  if (Neo.isAtLadder?.() && !Neo.ladderUseKeyLatch) {
+    Neo.ladderUseKeyLatch = true;
+    Neo.useLadder?.();
+    setTimeout(() => { Neo.ladderUseKeyLatch = false; }, 200);
+  }
 }
 
 // Touch-accessible APIs for mobile hamburger menu

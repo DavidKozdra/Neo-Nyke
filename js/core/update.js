@@ -246,6 +246,9 @@ export function loop(timestamp) {
       const _gpAscendKey = _b ? _b.ascend : ' ';
       Neo.keys[_gpAscendKey] = !!_gp0.ascend;
       if (_gpConsume('interact')) window._neoGame?.triggerInteract?.();
+      // The ascend button still uses the ladder (its other "climb/exit" uses are
+      // contextual); route it through the same interact path when at a ladder.
+      if (_gpConsume('ascend') && Neo.isAtLadder?.()) window._neoGame?.triggerInteract?.();
       if (_gpConsume('inventory')) Neo.toggleInventoryPanel?.();
       if (_gpConsume('activateAll')) Neo.activateAllEquipmentSlots?.();
       for (let _slotIndex = 1; _slotIndex <= 8; _slotIndex += 1) {
