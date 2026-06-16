@@ -78,6 +78,17 @@
       ],
     },
     { id: 'dash', path: 'assets/sounds/sfx_dash 1.mp3', volume: 0.3, priority: priority.HIGH, mixDb: 3, lowCutHz: 90 },
+    {
+      id: 'victory',
+      volume: 0.7,
+      priority: priority.CRITICAL,
+      mixDb: 3,
+      paths: [
+        'assets/sounds/sfx_victory 1.mp3',
+        'assets/sounds/sfx_victory 2.mp3',
+        'assets/sounds/sfx_victory 3.mp3',
+      ],
+    },
   ];
 
   const soundDefs = new Map();

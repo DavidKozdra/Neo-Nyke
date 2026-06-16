@@ -3630,6 +3630,7 @@
         && Neo.gameMode !== 'boss_rush'
         && Neo.gameMode !== 'treasure_hunt') {
         Neo.pickups.push({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2, type: 'ladder' });
+        if (Neo.currentRoom.type === 'boss') Neo.playSfx?.('victory');
       }
       if (Neo.gameMode === 'endless' && Neo.endlessWaveActive) {
         Neo.endlessWaveActive = false;

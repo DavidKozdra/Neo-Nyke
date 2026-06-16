@@ -2786,6 +2786,7 @@ export function createUIController(view) {
           renderItemPage();
         }
         void this.setRunSummaryPanel('win');
+        Neo.playSfx?.('victory');
         // Celebrate the victory itself with a confetti burst from the top corners.
         if (typeof Neo.spawnConfetti === 'function') {
           Neo.spawnConfetti({ x: window.innerWidth * 0.25, y: window.innerHeight * 0.18, count: 90 });

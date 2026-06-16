@@ -2497,11 +2497,12 @@
   // through the shared interact action (E / gamepad / mobile button) rather than
   // self-triggering from the pickup loop, so all input methods share one path.
   function useLadder() {
-    Neo.playSfx?.('ladder');
     if (Neo.gameMode === 'treasure_hunt' && Neo.floor >= Neo.MAX_FLOOR) {
       Neo.win();
       return;
     }
+    // The new-floor stinger now plays from the floor:enter event (so it also
+    // covers the run's first floor); generateFloor() below emits that event.
     if (Neo.isFirstRunTutorialActive()) Neo.tutorialState.usedLadder = true;
     Neo.floor = Math.min(Neo.MAX_FLOOR, Neo.floor + 1);
     Neo.refreshFloorChargeStates();

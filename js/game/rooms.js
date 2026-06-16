@@ -1279,6 +1279,8 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
 
   Neo.gameEvents.on('floor:enter', ({ floor: newFloor }) => {
     // floor-level resets go here; room:enter will fire immediately after for the start room
+    // New-floor stinger: covers the run's first floor and every descent alike.
+    Neo.playSfx?.('ladder');
   });
 
   function isBossFightActive() {
