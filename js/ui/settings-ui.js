@@ -870,8 +870,10 @@
       box.style.top = '0px';
       box.style.left = '50%';
     } else if (key === 'objectives') {
+      // Mirror the live HUD: objectives sit to the LEFT of the top-right minimap
+      // (see .objective-tracker right: 206px in style.css).
       box.style.top = `${154 * ratio.y}px`;
-      box.style.right = `${2 * ratio.x}px`;
+      box.style.right = `${206 * ratio.x}px`;
     } else if (key === 'stats') {
       box.style.bottom = `${10 * ratio.y}px`;
       box.style.left = `${10 * ratio.x}px`;
@@ -1133,9 +1135,14 @@
     const overlay = document.getElementById('hudPreviewOverlay');
     if (!overlay) return;
     populateHudPreviewContent();
-    refreshHudPreviewBoxes();
+    // Reveal first so the frame has real layout — refreshHudPreviewBoxes() measures
+    // getBoundingClientRect() to derive the preview scale/offset ratios, which read
+    // as zero while the overlay is still display:none. Re-render after a frame so
+    // the boxes sync to the correct scale on open instead of waiting for a resize.
     overlay.classList.remove('hidden');
     overlay.setAttribute('aria-hidden', 'false');
+    refreshHudPreviewBoxes();
+    requestAnimationFrame(refreshHudPreviewBoxes);
   });
   const hudPreviewClose = () => {
     const overlay = document.getElementById('hudPreviewOverlay');
@@ -1249,17 +1256,41 @@
   }
 
   // Drag a widget directly in the preview to set the same X/Y offsets exposed by
-  // the sliders. Drag the corner grip to set scale. Click-without-drag still
-  // toggles visibility.
+  // the sliders. Drag the corner grip to set scale. Visibility is toggled only via
+  // the dedicated eye button (added below), never by clicking the box body.
   let hudPreviewDrag = null;
   let hudPreviewResize = null;
-  let suppressHudPreviewClickKey = null;
   document.querySelectorAll('.hud-preview-box').forEach(box => {
     if (!box.querySelector('.hud-preview-resize')) {
       const resize = document.createElement('span');
       resize.className = 'hud-preview-resize';
       resize.setAttribute('aria-hidden', 'true');
       box.appendChild(resize);
+    }
+
+    // Dedicated visibility toggle: an eye button (with a red strike when hidden).
+    // Only this button toggles the element on/off, so dragging or tapping the box
+    // body can't accidentally turn a HUD widget off.
+    if (!box.querySelector('.hud-preview-eye')) {
+      const eye = document.createElement('button');
+      eye.type = 'button';
+      eye.className = 'hud-preview-eye';
+      eye.innerHTML = '<span class="hud-preview-eye__icon" aria-hidden="true"></span>';
+      box.appendChild(eye);
+      const toggleVisibility = e => {
+        e.preventDefault();
+        e.stopPropagation();
+        const key = box.dataset.preview;
+        if (!hudElements[key]) return;
+        hudElements[key].visible = hudElements[key].visible === false;
+        applyHudElements();
+        refreshHudElementRow(key);
+        refreshHudPreviewBoxes();
+        save();
+      };
+      // Stop pointer events from starting a drag/resize on the box underneath.
+      eye.addEventListener('pointerdown', e => e.stopPropagation());
+      eye.addEventListener('click', toggleVisibility);
     }
 
     const resizeHandle = box.querySelector('.hud-preview-resize');
@@ -1331,12 +1362,6 @@
 
     const endDrag = e => {
       if (hudPreviewResize && hudPreviewResize.pointerId === e.pointerId && hudPreviewResize.key === box.dataset.preview) {
-        if (hudPreviewResize.moved) {
-          suppressHudPreviewClickKey = hudPreviewResize.key;
-          setTimeout(() => {
-            if (suppressHudPreviewClickKey === box.dataset.preview) suppressHudPreviewClickKey = null;
-          }, 350);
-        }
         box.releasePointerCapture?.(e.pointerId);
         box.classList.remove('hud-preview-box--resizing');
         hudPreviewResize = null;
@@ -1344,12 +1369,6 @@
         return;
       }
       if (!hudPreviewDrag || hudPreviewDrag.pointerId !== e.pointerId || hudPreviewDrag.key !== box.dataset.preview) return;
-      if (hudPreviewDrag.moved) {
-        suppressHudPreviewClickKey = hudPreviewDrag.key;
-        setTimeout(() => {
-          if (suppressHudPreviewClickKey === box.dataset.preview) suppressHudPreviewClickKey = null;
-        }, 350);
-      }
       box.releasePointerCapture?.(e.pointerId);
       box.classList.remove('hud-preview-box--dragging');
       hudPreviewDrag = null;
@@ -1358,20 +1377,6 @@
     box.addEventListener('pointerup', endDrag);
     box.addEventListener('pointercancel', endDrag);
 
-    box.addEventListener('click', e => {
-      const key = box.dataset.preview;
-      if (suppressHudPreviewClickKey === key) {
-        suppressHudPreviewClickKey = null;
-        e.preventDefault();
-        return;
-      }
-      if (!hudElements[key]) return;
-      hudElements[key].visible = hudElements[key].visible === false;
-      applyHudElements();
-      refreshHudElementRow(key);
-      refreshHudPreviewBoxes();
-      save();
-    });
   });
 
   const replayTutorialEl = document.getElementById('accReplayTutorial');

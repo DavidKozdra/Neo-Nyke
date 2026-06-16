@@ -11212,6 +11212,77 @@ border-bottom: black solid 2px;
   border-color: var(--menu-text-soft);
   background: rgba(120,120,140,.08);
 }
+
+/* Dedicated visibility toggle — an eye button. Only this control toggles a HUD
+   element on/off, so dragging or tapping the box body can't switch it off by
+   accident. When the element is hidden the eye gets a red strike through it. */
+.hud-preview-eye {
+  position: absolute;
+  top: -9px;
+  right: -9px;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 2px solid var(--menu-accent-strong);
+  border-radius: 50%;
+  background: var(--menu-bg-deep);
+  box-shadow: 0 0 0 2px rgba(0,0,0,.55), 0 0 10px rgba(91,141,217,.3);
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: none;
+  z-index: 2;
+  opacity: .85;
+  transition: opacity .12s linear, border-color .12s linear;
+}
+.hud-preview-eye:hover { opacity: 1; border-color: #fff; }
+/* The minimap/objectives/equipment boxes anchor their resize grip on the left,
+   so move their eye to the opposite (right-inner) corner to avoid the body. */
+.hud-preview-box--objectives .hud-preview-eye,
+.hud-preview-box--equipment .hud-preview-eye,
+.hud-preview-box--minimap .hud-preview-eye {
+  right: auto;
+  left: -9px;
+}
+/* Eye glyph: almond outline + pupil. */
+.hud-preview-eye__icon {
+  position: relative;
+  width: 14px;
+  height: 9px;
+  border: 1.5px solid var(--menu-text);
+  border-radius: 50% / 60%;
+}
+.hud-preview-eye__icon::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--menu-text);
+  transform: translate(-50%, -50%);
+}
+/* Hidden state: dim the eye and slash a red line across it. */
+.hud-preview-box--hidden .hud-preview-eye {
+  border-color: #e0556a;
+}
+.hud-preview-box--hidden .hud-preview-eye__icon {
+  border-color: var(--menu-text-soft);
+}
+.hud-preview-box--hidden .hud-preview-eye__icon::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: -3px;
+  right: -3px;
+  height: 2px;
+  background: #ff4d62;
+  box-shadow: 0 0 4px rgba(255,77,98,.8);
+  transform: translateY(-50%) rotate(-32deg);
+}
 /* Mock boxes render a real HUD widget instead of a flat label: drop the pill
    chrome and let the embedded widget supply its own look. */
 .hud-preview-box--mock {
