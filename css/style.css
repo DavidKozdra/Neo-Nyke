@@ -6687,6 +6687,7 @@ border-bottom: black solid 2px;
 #settingsModal .stab-panel {
   flex: 1;
   min-height: 0;
+  min-width: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
@@ -7498,13 +7499,26 @@ border-bottom: black solid 2px;
 /* --- Tab bar (mirrors the shop/inventory .panel-tabs pill bar) --- */
 /* Segmented control: quiet ghost tabs inside one pill — only the active tab
    gets a surface, so the bar reads as one piece instead of six buttons. */
-.stab-bar {
+/* Settings body: side navigation column on the left, active panel on the right. */
+.settings-body {
+  flex: 1;
+  min-height: 0;
   display: flex;
-  flex-wrap: wrap;
-  gap: 2px;
-  justify-content: center;
-  margin-bottom: 16px;
-  padding: 4px;
+  align-items: stretch;
+  gap: 16px;
+}
+
+.stab-bar {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 168px;
+  align-self: flex-start;
+  max-height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 6px;
   border-radius: 12px;
   background: var(--menu-bg-soft);
   border: 1px solid var(--menu-border);
@@ -7512,11 +7526,12 @@ border-bottom: black solid 2px;
 }
 
 .stab {
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  gap: 6px;
+  justify-content: flex-start;
+  gap: 8px;
+  width: 100%;
   border: 1px solid transparent;
   background: transparent;
   color: var(--menu-text-soft);
@@ -7525,7 +7540,8 @@ border-bottom: black solid 2px;
   font-weight: 700;
   letter-spacing: .1em;
   text-transform: uppercase;
-  padding: 9px 12px;
+  text-align: left;
+  padding: 11px 13px;
   cursor: pointer;
   transition: border-color .14s ease, background .14s ease, color .14s ease;
   white-space: nowrap;

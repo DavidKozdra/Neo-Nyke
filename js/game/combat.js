@@ -3835,7 +3835,10 @@
 
   function grantXp(amount) {
     const stats = Neo.getItemStats();
-    const gained = Math.max(1, Math.round(amount * Neo.getRunDifficultyScalars().xpRewardMultiplier * (stats.xpGainMultiplier || 1)));
+    // Small time bonus: +5% XP for every 5 minutes survived this run, so longer
+    // runs stay worth grinding even though base kill XP is flat.
+    const timeScale = 1 + Math.floor(Math.max(0, Number(Neo.gameElapsedTime || 0)) / 300) * 0.05;
+    const gained = Math.max(1, Math.round(amount * Neo.getRunDifficultyScalars().xpRewardMultiplier * (stats.xpGainMultiplier || 1) * timeScale));
     Neo.player.xp += gained;
     while (Neo.player.xp >= Neo.player.xpToNext) {
       Neo.player.xp -= Neo.player.xpToNext;

@@ -911,13 +911,25 @@
     font-size: calc(12px * var(--font-scale, 1));
   }
 
+  /* Narrow screens: collapse the side navigation back to a horizontal,
+     scrolling tab bar so the panel keeps full width. */
+  .settings-body {
+    flex-direction: column;
+    gap: 12px;
+  }
+
   .stab-bar {
+    flex-direction: row;
     flex-wrap: nowrap;
     justify-content: flex-start;
     gap: 2px;
-    margin: 0 -4px 12px;
-    padding: 0 4px;
+    width: auto;
+    align-self: stretch;
+    max-height: none;
+    margin: 0 -4px;
+    padding: 4px;
     overflow-x: auto;
+    overflow-y: hidden;
     scrollbar-width: none;
   }
 
@@ -927,6 +939,9 @@
 
   .stab {
     flex: 0 0 auto;
+    width: auto;
+    justify-content: center;
+    text-align: center;
     padding: 8px 9px 9px;
     font-size: calc(12px * var(--font-scale, 1));
     letter-spacing: .07em;
