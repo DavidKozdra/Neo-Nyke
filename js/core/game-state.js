@@ -3,6 +3,8 @@
 export function pauseGame() {
     document.body.classList.add('game-paused');
     setGameState('pause');
+    // Don't leave a controller motor buzzing while the sim is frozen.
+    Neo.stopRumble?.();
   }
 
 export function resumeGame() {

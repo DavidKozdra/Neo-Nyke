@@ -216,7 +216,13 @@
     const scaleY = canvasRect.height > 0 ? canvasRect.height / Neo.canvas.height : 1;
     const compact = window.innerWidth <= 920;
     const accessHudScale = Number(window.NeoSettings?.getAccess?.()?.hudScale);
-    const hudScale = Number.isFinite(accessHudScale) ? Neo.clamp(accessHudScale, 0.5, 2) : 1;
+    const globalHudScale = Number.isFinite(accessHudScale) ? Neo.clamp(accessHudScale, 0.5, 2) : 1;
+    // The minimap participates in the per-widget HUD Layout editor: a null/absent
+    // scale inherits the global HUD scale, otherwise it uses its own. Visibility
+    // is handled by the caller (skips drawMinimap entirely when hidden).
+    const minimapEntry = window.NeoSettings?.getHudElements?.()?.minimap;
+    const ownScale = Number(minimapEntry?.scale);
+    const hudScale = Number.isFinite(ownScale) ? Neo.clamp(ownScale, 0.5, 2) : globalHudScale;
     const baseSize = hasGlasses ? 28 : 14;
     const baseGap = hasGlasses ? 3 : 2;
     const baseMapWidth = gridSize * baseSize + (gridSize - 1) * baseGap;

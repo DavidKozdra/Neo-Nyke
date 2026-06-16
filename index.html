@@ -1401,6 +1401,7 @@
       <button class="stab" data-tab="gameplay" role="tab"><span class="tab-icon">◆</span>Gameplay</button>
       <button class="stab" data-tab="volume"   role="tab"><span class="tab-icon">♪</span>Volume</button>
       <button class="stab" data-tab="theme"    role="tab"><span class="tab-icon">◈</span>Theme</button>
+      <button class="stab" data-tab="hud"      role="tab"><span class="tab-icon">▣</span>HUD</button>
       <button class="stab" data-tab="access"   role="tab"><span class="tab-icon">◎</span>Accessibility</button>
       <button class="stab" data-tab="data"     role="tab"><span class="tab-icon">▤</span>Data</button>
     </div>
@@ -1713,6 +1714,36 @@
     </div>
 
     <!-- Accessibility tab -->
+    <!-- HUD tab -->
+    <div class="stab-panel hidden" id="stab-hud">
+      <section class="settings-group">
+      <h3 class="settings-group__title">HUD Size</h3>
+      <div class="access-row">
+        <div class="access-text">
+          <span class="access-label">HUD scale</span>
+          <span class="access-desc">Resizes the whole in-game HUD at once. The minimap follows this too unless you give it its own scale below.</span>
+        </div>
+        <div class="access-slider-wrap">
+          <input type="range" id="accHudScale" min="0.5" max="2.0" step="0.1" value="1" class="access-slider">
+          <span id="accHudScaleVal" class="access-slider-val">100%</span>
+        </div>
+      </div>
+      </section>
+      <section class="settings-group">
+      <h3 class="settings-group__title">HUD Layout</h3>
+      <div class="access-row access-row--column">
+        <div class="access-text">
+          <span class="access-desc">Resize, move, or hide each HUD widget on its own. "Auto" follows the HUD scale above; the X/Y sliders nudge a widget across the screen. The minimap can be scaled and hidden but stays anchored top-right. Open the preview to see where everything sits.</span>
+        </div>
+        <div class="hud-layout-actions">
+          <button type="button" class="settings-reset" id="hudLayoutPreviewBtn">Preview layout</button>
+          <button type="button" class="settings-reset" id="hudLayoutResetBtn">Reset layout</button>
+        </div>
+        <div id="hudElementRows" class="hud-element-rows"></div>
+      </div>
+      </section>
+    </div>
+
     <div class="stab-panel hidden" id="stab-access">
       <section class="settings-group">
       <h3 class="settings-group__title">Comfort</h3>
@@ -1744,6 +1775,13 @@
         </div>
         <label class="toggle"><input type="checkbox" id="accScreenShake" checked><span class="toggle-track"><span class="toggle-thumb"></span></span></label>
       </div>
+      <div class="access-row">
+        <div class="access-text">
+          <span class="access-label">Controller rumble</span>
+          <span class="access-desc">Vibrate the controller on hits and explosions. Chrome/Edge only; no effect without a supported gamepad.</span>
+        </div>
+        <label class="toggle"><input type="checkbox" id="accRumble" checked><span class="toggle-track"><span class="toggle-thumb"></span></span></label>
+      </div>
       </section>
       <section class="settings-group">
       <h3 class="settings-group__title">Readability</h3>
@@ -1763,29 +1801,6 @@
           <input type="range" id="accFontScale" min="0.8" max="1.6" step="0.05" value="1" class="access-slider">
           <span id="accFontScaleVal" class="access-slider-val">100%</span>
         </div>
-      </div>
-      <div class="access-row">
-        <div class="access-text">
-          <span class="access-label">HUD scale</span>
-          <span class="access-desc">Resizes the whole in-game HUD at once.</span>
-        </div>
-        <div class="access-slider-wrap">
-          <input type="range" id="accHudScale" min="0.5" max="2.0" step="0.1" value="1" class="access-slider">
-          <span id="accHudScaleVal" class="access-slider-val">100%</span>
-        </div>
-      </div>
-      </section>
-      <section class="settings-group">
-      <h3 class="settings-group__title">HUD Layout</h3>
-      <div class="access-row access-row--column">
-        <div class="access-text">
-          <span class="access-desc">Resize, move, or hide each HUD widget on its own. "Auto" follows the HUD scale above; the X/Y sliders nudge a widget across the screen. Open the preview to see where everything sits.</span>
-        </div>
-        <div class="hud-layout-actions">
-          <button type="button" class="settings-reset" id="hudLayoutPreviewBtn">Preview layout</button>
-          <button type="button" class="settings-reset" id="hudLayoutResetBtn">Reset layout</button>
-        </div>
-        <div id="hudElementRows" class="hud-element-rows"></div>
       </div>
       </section>
       <section class="settings-group">
@@ -1894,6 +1909,7 @@
         <div class="skill-card"><div class="skill-meta"><span class="skill-key">R</span><span class="skill-name">Smash</span></div><b class="skill-time">READY</b></div>
       </div>
     </div>
+    <div class="hud-preview-box hud-preview-box--minimap" data-preview="minimap">MAP</div>
     <div class="hud-preview-box hud-preview-box--mock hud-preview-box--equipment" data-preview="equipment">
       <div class="equipment-slots hud-preview-widget" data-preview-equipment>
         <span class="equip-slot is-empty"><span class="equip-slot__key">F</span></span>

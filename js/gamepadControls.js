@@ -77,6 +77,77 @@
       .map(slot => ({ index: slot.index, id: slot.id, mapping: slot.mapping }));
   };
 
+  // --- Haptics / rumble ------------------------------------------------------
+  // Chrome/Edge expose gamepad.vibrationActuator.playEffect('dual-rumble', …);
+  // Firefox/Safari don't, so we feature-detect per call and degrade silently.
+  // We don't store the Gamepad object on the slot (it goes stale between polls),
+  // so rumble() re-reads the live pad from navigator.getGamepads() each call.
+  //
+  // A continuous trauma source (e.g. the bomb charge-up) calls addTrauma every
+  // frame; firing a fresh playEffect 60×/sec stutters the motor and floods the
+  // browser. We coalesce by ignoring new effects whose intensity doesn't beat
+  // the one already playing on that pad, until it's nearly elapsed.
+  const RUMBLE_MIN_MS = 40;
+  const RUMBLE_MAX_MS = 1000;
+  const rumbleActive = []; // per pad index: { until, strong } of the playing effect
+
+  function rumbleEnabled() {
+    // Respect the same accessibility toggle family as screen shake; default on.
+    const access = window.NeoSettings?.getAccess?.();
+    return !access || access.rumble !== false;
+  }
+
+  function livePad(index) {
+    const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+    return pads[index] || null;
+  }
+
+  // Neo.rumble(strong, weak, ms[, padIndex]) — strong/weak are 0..1 motor
+  // intensities (low-freq / high-freq), ms is duration. Returns true if an
+  // effect was dispatched. padIndex defaults to player 1's pad (slot 0).
+  function rumble(strong = 0.5, weak = strong, ms = 120, padIndex = 0) {
+    if (!rumbleEnabled()) return false;
+    const s = Math.max(0, Math.min(1, Number(strong) || 0));
+    const w = Math.max(0, Math.min(1, Number(weak) || 0));
+    if (s <= 0 && w <= 0) return false;
+    const duration = Math.max(RUMBLE_MIN_MS, Math.min(RUMBLE_MAX_MS, Number(ms) || 0));
+    const pad = livePad(padIndex);
+    const actuator = pad?.vibrationActuator;
+    if (!actuator?.playEffect) return false;
+
+    const now = nowMs();
+    const playing = rumbleActive[padIndex];
+    // Let an in-flight, stronger pulse finish rather than restarting the motor,
+    // unless it's basically over (last ~30ms) so back-to-back hits still land.
+    if (playing && now < playing.until - 30 && playing.strong >= s) return false;
+
+    try {
+      actuator.playEffect('dual-rumble', {
+        startDelay: 0,
+        duration,
+        strongMagnitude: s,
+        weakMagnitude: w,
+      });
+      rumbleActive[padIndex] = { until: now + duration, strong: s };
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function stopRumble(padIndex = null) {
+    const indices = padIndex === null ? [0, 1, 2, 3] : [padIndex];
+    indices.forEach(i => {
+      try { livePad(i)?.vibrationActuator?.reset?.(); } catch {}
+      rumbleActive[i] = null;
+    });
+  }
+
+  // gamepadControls.js loads before neo.js, so we only attach to NeoGamepad here;
+  // update.js mirrors these onto Neo.rumble / Neo.stopRumble once Neo exists.
+  window.NeoGamepad.rumble = rumble;
+  window.NeoGamepad.stopRumble = stopRumble;
+
   function applyAxis(v) {
     const n = Number(v || 0);
     return Math.abs(n) < DEAD_ZONE ? 0 : n;

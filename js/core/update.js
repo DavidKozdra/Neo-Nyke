@@ -672,6 +672,10 @@ const FEEL = {
   maxHitstop: 0.12,    // clamp so chained hits can't lock the sim
 };
 
+// Tracks the previous frame's legacy shake (as a 0..1 trauma) so tickGameFeel can
+// rumble once on the rising edge of a Neo.shake-based impact. See tickGameFeel.
+let _prevLegacyTrauma = 0;
+
 // Add screen trauma (0..1, accumulates). Offset rendered ∝ trauma² so light hits
 // barely shake and heavy hits slam. Optional `angle` points AWAY from the impact
 // source so the camera kicks back from the blow.
@@ -680,6 +684,20 @@ function addTrauma(amount, angle = null, kick = 0) {
   if (angle !== null && kick > 0) {
     Neo.shakeKickX += Math.cos(angle) * kick;
     Neo.shakeKickY += Math.sin(angle) * kick;
+  }
+  // Mirror the impact onto controller haptics. Trauma is already the game's
+  // canonical "how hard did that hit" value, so every existing call site —
+  // melee, explosions, boss slams — gets rumble for free. A directional kick
+  // marks a punchy discrete hit, so bias those stronger/longer than ambient
+  // shake (e.g. the bomb charge-up, which calls addTrauma every frame and is
+  // coalesced inside NeoGamepad.rumble so it doesn't restart the motor 60×/s).
+  const t = Neo.clamp(Number(amount) || 0, 0, 1);
+  if (t > 0.02) {
+    const punchy = kick > 0;
+    const strong = Math.min(1, t * (punchy ? 1.1 : 0.8));
+    const weak = Math.min(1, t * (punchy ? 0.85 : 0.55));
+    const ms = punchy ? 90 + t * 160 : 60 + t * 90;
+    window.NeoGamepad?.rumble?.(strong, weak, ms);
   }
 }
 
@@ -699,10 +717,19 @@ function tickGameFeel(dt) {
   // Legacy compatibility: older call sites still set Neo.shake/shakeT directly.
   // Fold any such linear shake into trauma-equivalent so both models coexist.
   if (Neo.shakeT > 0) {
-    Neo.shakeT = Math.max(0, Neo.shakeT - dt);
+    // Rising edge of a legacy shake = a fresh discrete impact (death, smash,
+    // boss slam) that bypassed addTrauma. Rumble once on that edge so these get
+    // haptics too, without firing every frame as the shake decays.
     const legacyTrauma = Neo.clamp((Neo.shake || 0) / FEEL.maxShake, 0, 1);
+    if (legacyTrauma > (_prevLegacyTrauma + 0.05)) {
+      window.NeoGamepad?.rumble?.(Math.min(1, legacyTrauma * 1.1), Math.min(1, legacyTrauma * 0.85), 90 + legacyTrauma * 160);
+    }
+    _prevLegacyTrauma = legacyTrauma;
+    Neo.shakeT = Math.max(0, Neo.shakeT - dt);
     if (legacyTrauma > Neo.trauma) Neo.trauma = legacyTrauma;
     Neo.shake = (Neo.shake || 0) * 0.88;
+  } else {
+    _prevLegacyTrauma = 0;
   }
   // Derive the render-facing shake magnitude from the trauma curve (offset ∝ t²).
   const t = Neo.trauma;
@@ -724,3 +751,8 @@ Neo.tryChargedLadderWarp = tryChargedLadderWarp;
 Neo.addTrauma = addTrauma;
 Neo.addHitstop = addHitstop;
 Neo.tickGameFeel = tickGameFeel;
+// Convenience aliases; the implementation lives in gamepadControls.js, which
+// loads before neo.js (so it can't attach to Neo itself). Guarded so a missing
+// gamepad layer is a no-op rather than a crash.
+Neo.rumble = (...args) => window.NeoGamepad?.rumble?.(...args);
+Neo.stopRumble = (...args) => window.NeoGamepad?.stopRumble?.(...args);

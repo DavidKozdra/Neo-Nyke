@@ -11212,6 +11212,15 @@ border-bottom: black solid 2px;
 .hud-preview-box--stats      { bottom: 4%; left: 3%; }
 .hud-preview-box--actions    { bottom: 4%; left: 50%; transform: translateX(-50%); }
 .hud-preview-box--equipment  { top: 50%; right: 1%; transform: translateY(-50%); }
+/* Minimap is canvas-drawn top-right; the preview shows a labeled schematic that
+   scales/hides with its settings row but stays corner-anchored (no X/Y nudge). */
+.hud-preview-box--minimap {
+  top: 2%; right: 1%;
+  width: 18%; aspect-ratio: 1 / 1;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; letter-spacing: .08em;
+  transform-origin: top right;
+}
 .hud-preview-close {
   border: 1px solid var(--menu-border-strong);
   background: var(--menu-surface-strong);

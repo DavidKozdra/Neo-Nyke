@@ -72,6 +72,53 @@ describe('enemy loop scaling', () => {
     return scaleEnemyStats({ hp: 100, max: 100, dmg: 10, speed: 100, attackCd: 1, level }, 'hunter');
   }
 
+  function scaleBossAtDepth(floorsEntered, level = floorsEntered, difficulty = {}) {
+    const Neo = {
+      floor: ((floorsEntered - 1) % 10) + 1,
+      floorsEntered,
+      MAX_FLOOR: 10,
+      gameElapsedTime: 0,
+      gameMode: 'normal',
+      endlessWave: 0,
+      ENEMY_SCALING: {
+        floor: 0.14,
+        loop: 0.32,
+        minute: 0.12,
+        damageFloor: 0.095,
+        damageLoop: 0.2,
+        damageMinute: 0.055,
+        speedFloor: 0.035,
+        speedLoop: 0.07,
+        speedMinute: 0.018,
+        damageSoftCap: 2.15,
+        bossDamageSoftCap: 2.45,
+        speedSoftCap: 1.38,
+        bossLoopHp: 0.2,
+        bossLoopDamage: 0.05,
+        endlessWaveHp: 0.12,
+        endlessWaveDamage: 0.06,
+        endlessWaveSpeed: 0.012,
+        endlessWaveDamageSoftCap: 2.6,
+        endlessWaveSpeedSoftCap: 1.5,
+      },
+      getActiveSandboxSettings: () => null,
+      getDifficultyDef: () => ({
+        statMultiplier: 1.1,
+        bossStatMultiplier: 1.12,
+        hpFloorScaleBonus: 0.03,
+        speedMultiplier: 1.03,
+        ...difficulty,
+      }),
+    };
+    const scaleEnemyStats = new Function(
+      'Neo',
+      'isBossType',
+      `${declarations}; return scaleEnemyStats;`,
+    )(Neo, type => type === 'artificer_knave');
+
+    return scaleEnemyStats({ hp: 1880, max: 1880, dmg: 20, speed: 124, attackCd: 1, level }, 'artificer_knave');
+  }
+
   test('keeps every scaled stat increasing when a run crosses into a new loop', () => {
     const floorTen = scaleAtDepth(10);
     const firstFloorAfterLoop = scaleAtDepth(11);
@@ -106,5 +153,13 @@ describe('enemy loop scaling', () => {
     expect(levelFifteen.dmg).toBe(35);
     expect(levelFifteen.speed).toBeCloseTo(121.61, 1);
     expect(levelFifteen.enemyLevelAttackSpeedMultiplier).toBeCloseTo(Math.pow(1.07, 10));
+  });
+
+  test('does not apply exponential enemy-level HP scaling to bosses', () => {
+    const mediumHighLevelBoss = scaleBossAtDepth(2, 15);
+
+    expect(mediumHighLevelBoss.hp).toBe(2340);
+    expect(mediumHighLevelBoss.hp).toBeLessThan(3000);
+    expect(mediumHighLevelBoss.enemyLevelAttackSpeedMultiplier).toBe(1);
   });
 });

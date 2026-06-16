@@ -30,7 +30,9 @@
     }
 
     sectionPerfStart = Neo.perfStart();
-    if (isPlayLike && !isDying) {
+    // The minimap can be hidden via the HUD Layout editor (HUD settings tab).
+    const minimapHidden = window.NeoSettings?.getHudElements?.()?.minimap?.visible === false;
+    if (isPlayLike && !isDying && !minimapHidden) {
       const minimapLayout = Neo.drawMinimap();
       Neo.uiController.setObjectiveLayout(minimapLayout?.viewportBounds || null);
     } else {

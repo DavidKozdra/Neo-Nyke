@@ -22,7 +22,7 @@
     ['tool5', 'Tool Slot 5'], ['tool6', 'Tool Slot 6'], ['tool7', 'Tool Slot 7'], ['tool8', 'Tool Slot 8'],
   ];
   const DEFAULT_VOLUME   = { master:20, sfx:80, music:20 };
-  const DEFAULT_ACCESS   = { reduceFlash:false, reduceMotion:false, reduceParticles:false, highContrast:false, screenShake:true, shopCanAfford:'#4caf50', shopCantAfford:'#e05555', hudScale:1, fontScale:1 };
+  const DEFAULT_ACCESS   = { reduceFlash:false, reduceMotion:false, reduceParticles:false, highContrast:false, screenShake:true, rumble:true, shopCanAfford:'#4caf50', shopCantAfford:'#e05555', hudScale:1, fontScale:1 };
   const DEFAULT_GAMEPLAY = { pauseInventory:true, pauseOnBlur:true, bloodMultiplier:1, bloodOnHit:true, performanceMode:true, objectivePanel:true, cutsceneAutoAdvance:false };
   const BLOOD_MULTIPLIER_MIN = 1;
   const BLOOD_MULTIPLIER_MAX = 10;
@@ -63,6 +63,11 @@
     { key: 'stats',      label: 'Player Stats',     cssVar: '--hud-scale-stats',      xVar: '--hud-x-stats',      yVar: '--hud-y-stats',      hideClass: 'hud-hide-stats' },
     { key: 'actions',    label: 'Action Bar',       cssVar: '--hud-scale-actions',    xVar: '--hud-x-actions',    yVar: '--hud-y-actions',    hideClass: 'hud-hide-actions' },
     { key: 'equipment',  label: 'Tool Slots',       cssVar: '--hud-scale-equipment',  xVar: '--hud-x-equipment',  yVar: '--hud-y-equipment',  hideClass: 'hud-hide-equipment' },
+    // The minimap is drawn on the canvas, not a DOM widget, so it has no CSS vars
+    // and no positional nudge (it auto-anchors top-right). drawMinimap() reads its
+    // scale/visibility from getHudElements() directly. noOffset hides the X/Y
+    // sliders for its row; canvas:true skips the CSS-var apply path.
+    { key: 'minimap',    label: 'Minimap',          cssVar: null, xVar: null, yVar: null, hideClass: null, noOffset: true, canvas: true },
   ];
 
   // Per-element nudge range, in screen pixels, applied before the widget's scale.
@@ -355,6 +360,9 @@
     const root = document.documentElement;
     HUD_ELEMENTS.forEach(el => {
       const entry = hudElements[el.key] || {};
+      // Canvas-drawn widgets (minimap) have no CSS vars — drawMinimap() reads
+      // their scale/visibility from getHudElements() each frame instead.
+      if (el.canvas) return;
       if (entry.scale === null || entry.scale === undefined) {
         root.style.removeProperty(el.cssVar);
       } else {
@@ -740,10 +748,17 @@
     el.addEventListener('input', () => { volume[key] = Number(el.value); val.textContent = el.value; save(); });
   });
 
-  [['accReduceFlash','reduceFlash'],['accReduceMotion','reduceMotion'],['accReduceParticles','reduceParticles'],['accHighContrast','highContrast'],['accScreenShake','screenShake']].forEach(([id, key]) => {
+  [['accReduceFlash','reduceFlash'],['accReduceMotion','reduceMotion'],['accReduceParticles','reduceParticles'],['accHighContrast','highContrast'],['accScreenShake','screenShake'],['accRumble','rumble']].forEach(([id, key]) => {
     const el = document.getElementById(id);
-    el.checked = access[key];
-    el.addEventListener('change', () => { access[key] = el.checked; save(); applyAccess(); });
+    if (!el) return;
+    el.checked = access[key] !== false;
+    el.addEventListener('change', () => {
+      access[key] = el.checked;
+      // Turning rumble off mid-game should silence any motor immediately.
+      if (key === 'rumble' && !el.checked) window.Neo?.stopRumble?.();
+      save();
+      applyAccess();
+    });
   });
 
   [['accShopCanAfford','shopCanAfford'],['accShopCantAfford','shopCantAfford']].forEach(([id, key]) => {
@@ -816,6 +831,11 @@
       const entry = hudElements[el.key] || {};
       const hidden = entry.visible === false;
       box.classList.toggle('hud-preview-box--hidden', hidden);
+      // Offset-less widgets (minimap) are corner-anchored and just scale in place.
+      if (el.noOffset) {
+        box.style.transform = `scale(${effectiveHudScale(el.key)})`;
+        return;
+      }
       // Compose the per-element scale + offset onto whatever centering transform
       // the anchor already applies, so the box moves/grows like the real widget.
       const base = box.classList.contains('hud-preview-box--center') || box.classList.contains('hud-preview-box--actions')
@@ -845,10 +865,12 @@
       ? HUD_SCALE_MIN
       : normalizeHudScale(entry.scale);
     refs.val.textContent = formatHudElementScale(entry);
-    refs.xSlider.value = normalizeHudOffset(entry.x);
-    refs.xVal.textContent = formatHudOffset(entry.x);
-    refs.ySlider.value = normalizeHudOffset(entry.y);
-    refs.yVal.textContent = formatHudOffset(entry.y);
+    if (refs.xSlider) {
+      refs.xSlider.value = normalizeHudOffset(entry.x);
+      refs.xVal.textContent = formatHudOffset(entry.x);
+      refs.ySlider.value = normalizeHudOffset(entry.y);
+      refs.yVal.textContent = formatHudOffset(entry.y);
+    }
     refs.vis.setAttribute('aria-pressed', hidden ? 'false' : 'true');
     refs.vis.textContent = hidden ? 'Hidden' : 'Shown';
   }
@@ -900,15 +922,18 @@
         offsetRow.appendChild(wrap);
         return { sl, rv };
       };
-      const xOff = makeOffset('X');
-      const yOff = makeOffset('Y');
+      // The minimap auto-anchors top-right, so it has no X/Y nudge sliders.
+      const xOff = el.noOffset ? null : makeOffset('X');
+      const yOff = el.noOffset ? null : makeOffset('Y');
 
-      row.append(name, scaleCap, slider, val, vis, offsetRow);
+      const rowChildren = [name, scaleCap, slider, val, vis];
+      if (!el.noOffset) rowChildren.push(offsetRow);
+      row.append(...rowChildren);
       host.appendChild(row);
       hudRowEls[el.key] = {
         row, slider, val, vis,
-        xSlider: xOff.sl, xVal: xOff.rv,
-        ySlider: yOff.sl, yVal: yOff.rv,
+        xSlider: xOff?.sl || null, xVal: xOff?.rv || null,
+        ySlider: yOff?.sl || null, yVal: yOff?.rv || null,
       };
 
       slider.addEventListener('input', () => {
@@ -926,8 +951,8 @@
         refreshHudPreviewBoxes();
         save();
       };
-      xOff.sl.addEventListener('input', onOffset('x', xOff.sl));
-      yOff.sl.addEventListener('input', onOffset('y', yOff.sl));
+      xOff?.sl.addEventListener('input', onOffset('x', xOff.sl));
+      yOff?.sl.addEventListener('input', onOffset('y', yOff.sl));
       vis.addEventListener('click', () => {
         hudElements[el.key].visible = hudElements[el.key].visible === false;
         applyHudElements();
