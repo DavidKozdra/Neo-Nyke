@@ -613,6 +613,7 @@
   modal.querySelectorAll('.gamepad-bind-select').forEach(select => {
     select.addEventListener('change', () => {
       gamepadBindings[select.dataset.gamepadButton] = String(select.value || 'none');
+      refreshGamepadMapperActions();
       save();
     });
   });
@@ -620,6 +621,7 @@
   document.getElementById('resetGamepadBindings')?.addEventListener('click', () => {
     gamepadBindings = { ...DEFAULT_GAMEPAD_BINDINGS };
     refreshGamepadBindControls();
+    refreshGamepadMapperActions();
     save();
   });
 
@@ -1146,6 +1148,80 @@
     if (e.target.id === 'hudPreviewOverlay') hudPreviewClose();
   });
   window.addEventListener('resize', refreshHudPreviewBoxes);
+
+  // ── Controller mapper / detector overlay ──────────────────────────────────
+  // Live diagram that confirms the pad is detected and lights up each physical
+  // button as it's pressed, with its current bound action shown beneath. Reads
+  // straight from window.NeoGamepad (slot 0 — the first connected pad) while the
+  // overlay is open. The overlay counts as a blocking panel, so gamepadControls
+  // is already in UI-navigation mode and won't fire game actions while we test.
+  const gamepadActionLabel = value => {
+    const found = GAMEPAD_ACTIONS.find(([v]) => v === String(value));
+    return found ? found[1] : '—';
+  };
+
+  function refreshGamepadMapperActions() {
+    document.querySelectorAll('[data-gp-act]').forEach(el => {
+      const action = gamepadBindings[el.dataset.gpAct] || DEFAULT_GAMEPAD_BINDINGS[el.dataset.gpAct] || 'none';
+      el.textContent = action === 'none' ? '' : gamepadActionLabel(action);
+    });
+  }
+
+  let gamepadMapperRaf = null;
+  function pollGamepadMapper() {
+    const overlay = document.getElementById('gamepadMapperOverlay');
+    if (!overlay || overlay.classList.contains('hidden')) { gamepadMapperRaf = null; return; }
+
+    const pads = window.NeoGamepad || [];
+    const slot = Array.prototype.find.call(pads, s => s?.connected) || null;
+    const status = document.getElementById('gamepadMapperStatus');
+    if (status) {
+      if (slot) {
+        const standard = slot.mapping === 'standard';
+        status.textContent = `Detected: ${slot.id || 'Gamepad'} (${standard ? 'standard mapping' : 'non-standard — using compatibility layout'})`;
+        status.classList.add('is-connected');
+      } else {
+        status.textContent = 'No controller detected. Connect one and press any button.';
+        status.classList.remove('is-connected');
+      }
+    }
+
+    // Light pressed buttons (buttonStates is indexed by standard slot).
+    overlay.querySelectorAll('[data-gp-button]').forEach(el => {
+      const pressed = !!slot?.buttonStates?.[Number(el.dataset.gpButton)];
+      el.classList.toggle('lit', pressed);
+    });
+
+    // Nudge the stick hats so the sticks visibly respond.
+    const setHat = (sel, x, y) => {
+      const hat = overlay.querySelector(`${sel} .gp-stick__hat`);
+      if (hat) hat.style.transform = `translate(${(x || 0) * 18}px, ${(y || 0) * 18}px)`;
+    };
+    setHat('.gp-stick--l', slot?.moveX, slot?.moveY);
+    setHat('.gp-stick--r', slot?.aimX, slot?.aimY);
+
+    gamepadMapperRaf = requestAnimationFrame(pollGamepadMapper);
+  }
+
+  document.getElementById('gamepadMapperBtn')?.addEventListener('click', () => {
+    const overlay = document.getElementById('gamepadMapperOverlay');
+    if (!overlay) return;
+    refreshGamepadMapperActions();
+    overlay.classList.remove('hidden');
+    overlay.setAttribute('aria-hidden', 'false');
+    if (!gamepadMapperRaf) gamepadMapperRaf = requestAnimationFrame(pollGamepadMapper);
+  });
+  const gamepadMapperClose = () => {
+    const overlay = document.getElementById('gamepadMapperOverlay');
+    if (!overlay) return;
+    overlay.classList.add('hidden');
+    overlay.setAttribute('aria-hidden', 'true');
+    if (gamepadMapperRaf) { cancelAnimationFrame(gamepadMapperRaf); gamepadMapperRaf = null; }
+  };
+  document.getElementById('gamepadMapperClose')?.addEventListener('click', gamepadMapperClose);
+  document.getElementById('gamepadMapperOverlay')?.addEventListener('click', e => {
+    if (e.target.id === 'gamepadMapperOverlay') gamepadMapperClose();
+  });
 
   function setHudElementOffset(key, x, y) {
     if (!hudElements[key]) return;

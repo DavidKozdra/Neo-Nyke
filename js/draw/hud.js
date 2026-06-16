@@ -256,12 +256,16 @@
       (visibleCanvasRight - visibleCanvasLeft - edgeInsetX * 2) / Math.max(1, baseMapWidth),
       (visibleCanvasBottom - visibleCanvasTop - topInset - edgeInsetY) / Math.max(1, baseMapHeight),
     );
+    // Keep the map at its intended size: floor the scale at the per-mode minimum
+    // (matching responsiveScale's floor) so the viewport cap can't shrink it to a
+    // dot, but never demand more than the visible viewport actually allows.
+    const minScale = Math.min(hasGlasses ? 0.5 : 0.62, Math.max(0.25, maxVisibleScale));
     const minimapScale = Neo.clamp(
       Math.min(responsiveScale * hudScale, maxVisibleScale),
-      0.25,
+      minScale,
       2,
     );
-    const size = Math.max(hasGlasses ? 7 : 4, Math.round(baseSize * minimapScale));
+    const size = Math.max(hasGlasses ? 7 : 8, Math.round(baseSize * minimapScale));
     const gap = Math.max(1, Math.round(baseGap * minimapScale));
     const mapWidth = gridSize * size + (gridSize - 1) * gap;
     const mapHeight = (maxGy + 1) * size + maxGy * gap;

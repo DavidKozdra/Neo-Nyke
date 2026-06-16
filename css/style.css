@@ -843,7 +843,7 @@ button, input, select, textarea {
   width: min(720px, calc(100vw - 32px));
   min-height: 72px;
   /* Sit in the lower band, clear of the action bar (bottom: 18px) and the top HUD. */
-  margin-bottom: 96px;
+  margin-bottom: 148px;
   padding: 14px 18px 12px;
   background: linear-gradient(180deg, rgba(8, 13, 21, .985), rgba(5, 8, 15, .99));
   border: 1px solid rgba(109, 222, 255, .55);
@@ -1008,7 +1008,9 @@ button, input, select, textarea {
 .objective-tracker {
   position: fixed;
   top: 154px;
-  right: 2px;
+  /* Sit to the LEFT of the top-right minimap (≈146px map + 16px inset) so the two
+     HUD widgets don't overlap. The map keeps the right edge; objectives clear it. */
+  right: 206px;
   z-index: 19;
   width: 284px;
   max-height: calc(100dvh - 158px);
@@ -1159,8 +1161,9 @@ button, input, select, textarea {
 @media (max-width: 720px) {
   .objective-tracker {
     top: 118px;
-    right: 2px;
-    width: min(284px, calc(100vw - 16px));
+    /* Compact minimap is ≈112px + 8px inset wide; clear it on the right. */
+    right: 124px;
+    width: min(284px, calc(100vw - 138px));
   }
 }
 
@@ -11246,7 +11249,8 @@ border-bottom: black solid 2px;
    these into scaled viewport pixels when the preview opens. */
 .hud-preview-box--coins      { top: 4%;  left: 3%; transform-origin: top left; }
 .hud-preview-box--center     { top: 2%;  left: 50%; transform: translateX(-50%); transform-origin: top center; }
-.hud-preview-box--objectives { top: 22%; right: 1%; transform-origin: top right; }
+/* Objectives sit to the LEFT of the top-right minimap (≈18% wide + margin), mirroring the live HUD. */
+.hud-preview-box--objectives { top: 22%; right: 22%; transform-origin: top right; }
 .hud-preview-box--stats      { bottom: 4%; left: 3%; transform-origin: bottom left; }
 .hud-preview-box--actions    { bottom: 4%; left: 50%; transform: translateX(-50%); transform-origin: bottom center; }
 .hud-preview-box--equipment  { top: 50%; right: 1%; transform: translateY(-50%); transform-origin: center right; }
@@ -11271,6 +11275,162 @@ border-bottom: black solid 2px;
   cursor: pointer;
 }
 .hud-preview-close:hover { border-color: var(--menu-accent); }
+
+
+/* ── Controller mapper overlay ──────────────────────────────────────────────
+   Live diagram that mirrors the HUD preview overlay (reuses .hud-preview-overlay
+   for the backdrop). Buttons get .lit added by settings-ui.js while held. */
+.gamepad-mapper-status {
+  max-width: min(92vw, 640px);
+  text-align: center;
+  font-size: calc(14px * var(--font-scale, 1));
+  letter-spacing: .04em;
+  color: var(--menu-text-dim, #9fb0c8);
+  padding: 8px 16px;
+  border: 1px solid var(--menu-border-strong);
+  border-radius: 8px;
+  background: var(--menu-surface-strong);
+}
+.gamepad-mapper-status.is-connected { color: #6fe08a; border-color: #2f6e44; }
+.gamepad-mapper-frame {
+  position: relative;
+  width: min(92vw, 720px);
+  border: 2px solid var(--menu-border-strong);
+  border-radius: 12px;
+  padding: 28px 24px;
+  background:
+    repeating-linear-gradient(45deg, rgba(255,255,255,.015) 0 12px, transparent 12px 24px),
+    linear-gradient(160deg, rgba(20,26,38,.95), rgba(10,13,20,.95));
+  box-shadow: 0 18px 48px rgba(0,0,0,.55);
+}
+.gamepad-mapper-diagram {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  grid-template-rows: auto auto auto;
+  align-items: center;
+  justify-items: center;
+  gap: 18px 12px;
+}
+.gp-btn {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 54px;
+  padding: 8px 10px;
+  border: 2px solid var(--menu-border-strong);
+  border-radius: 10px;
+  background: rgba(30,38,54,.85);
+  color: var(--menu-text);
+  font-size: calc(13px * var(--font-scale, 1));
+  text-align: center;
+  transition: background .06s linear, border-color .06s linear, box-shadow .06s linear;
+}
+.gp-btn__cap { font-weight: 700; letter-spacing: .05em; }
+.gp-btn__act {
+  margin-top: 2px;
+  font-size: calc(10px * var(--font-scale, 1));
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--menu-text-dim, #9fb0c8);
+  white-space: nowrap;
+}
+/* Lit state — applied while the physical button reads as pressed. */
+.gp-btn.lit, .gp-dpad__btn.lit {
+  background: var(--menu-accent, #4fc3ff);
+  border-color: var(--menu-accent, #4fc3ff);
+  color: #06121c;
+  box-shadow: 0 0 16px 2px color-mix(in srgb, var(--menu-accent, #4fc3ff) 60%, transparent);
+}
+.gp-btn.lit .gp-btn__act, .gp-btn.lit .gp-btn__cap { color: #06121c; }
+
+/* Layout placement on the 3-col grid */
+.gp-shoulder--l { grid-column: 1; grid-row: 1; justify-self: start; }
+.gp-shoulder--r { grid-column: 3; grid-row: 1; justify-self: end; }
+.gp-trigger--l  { grid-column: 1; grid-row: 1; justify-self: start; align-self: start; margin-left: 70px; }
+.gp-trigger--r  { grid-column: 3; grid-row: 1; justify-self: end; align-self: start; margin-right: 70px; }
+.gp-center { grid-row: 1; min-width: 48px; }
+.gp-center--view { grid-column: 2; justify-self: end; transform: translateX(-6px); }
+.gp-center--menu { grid-column: 2; justify-self: start; transform: translateX(6px); }
+
+.gp-stick--l { grid-column: 1; grid-row: 2; }
+.gp-dpad     { grid-column: 2; grid-row: 3; }
+.gp-face     { grid-column: 3; grid-row: 2; }
+.gp-stick--r { grid-column: 2; grid-row: 2; }
+
+.gp-stick {
+  position: relative;
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  border: 2px dashed var(--menu-border-strong);
+  background: rgba(18,24,36,.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.gp-stick__hat {
+  position: absolute;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(80,98,130,.9);
+  border: 2px solid var(--menu-border-strong);
+  transition: transform .03s linear;
+  pointer-events: none;
+}
+.gp-stick__click {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: 50%;
+}
+.gp-stick__click .gp-btn__act { position: absolute; bottom: -16px; }
+
+.gp-face {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  gap: 6px;
+  width: 168px;
+  height: 168px;
+}
+.gp-face--y { grid-column: 2; grid-row: 1; }
+.gp-face--x { grid-column: 1; grid-row: 2; }
+.gp-face--b { grid-column: 3; grid-row: 2; }
+.gp-face--a { grid-column: 2; grid-row: 3; }
+.gp-face .gp-btn { min-width: 0; border-radius: 50%; aspect-ratio: 1; }
+
+.gp-dpad {
+  position: relative;
+  width: 110px;
+  height: 110px;
+}
+.gp-dpad__btn {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 2px solid var(--menu-border-strong);
+  background: rgba(30,38,54,.85);
+  color: var(--menu-text);
+  font-size: 12px;
+  transition: background .06s linear, border-color .06s linear, box-shadow .06s linear;
+}
+.gp-dpad--up    { top: 0;    left: 50%; transform: translateX(-50%); }
+.gp-dpad--down  { bottom: 0; left: 50%; transform: translateX(-50%); }
+.gp-dpad--left  { left: 0;   top: 50%;  transform: translateY(-50%); }
+.gp-dpad--right { right: 0;  top: 50%;  transform: translateY(-50%); }
+
+.gamepad-mapper-hint { max-width: min(92vw, 640px); text-align: center; }
 
 
 /* Inventory → Rivals tab: per-rival intel cards (lives, pack, relationship). */

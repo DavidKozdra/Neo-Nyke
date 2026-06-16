@@ -1545,6 +1545,7 @@
         <h3 class="settings-group__title">Gamepad / Handheld</h3>
         <p class="stab-hint gamepad-bindings__hint">Standard Xbox-style layout. Sticks and D-pad always control movement and aim.</p>
         <p class="gamepad-status" id="gamepadStatus" aria-live="polite">No gamepad detected. Press any button after connecting one.</p>
+        <button type="button" class="settings-reset" id="gamepadMapperBtn">Test / map controller</button>
         <div class="gamepad-bind-grid">
           <label class="gamepad-bind-row"><span>A</span><select class="gamepad-bind-select" data-gamepad-button="0"></select></label>
           <label class="gamepad-bind-row"><span>B</span><select class="gamepad-bind-select" data-gamepad-button="1"></select></label>
@@ -1920,6 +1921,49 @@
     </div>
   </div>
   <button type="button" class="hud-preview-close" id="hudPreviewClose">Done</button>
+</div>
+
+<!-- Controller mapper / detector. Mirrors the HUD preview overlay: a live diagram
+     that lights up physical buttons as you press them so you can confirm the pad
+     is detected and see which action each button is bound to. JS in settings-ui.js
+     polls window.NeoGamepad while the overlay is open. -->
+<div id="gamepadMapperOverlay" class="hud-preview-overlay gamepad-mapper-overlay hidden" aria-hidden="true" role="dialog" aria-label="Controller test and mapping">
+  <div class="gamepad-mapper-status" id="gamepadMapperStatus" aria-live="polite">No controller detected. Connect one and press any button.</div>
+  <div class="gamepad-mapper-frame">
+    <div class="gamepad-mapper-diagram">
+      <!-- Shoulders -->
+      <div class="gp-btn gp-shoulder gp-shoulder--l" data-gp-button="4"><span class="gp-btn__cap">LB</span><span class="gp-btn__act" data-gp-act="4"></span></div>
+      <div class="gp-btn gp-shoulder gp-shoulder--r" data-gp-button="5"><span class="gp-btn__cap">RB</span><span class="gp-btn__act" data-gp-act="5"></span></div>
+      <div class="gp-btn gp-trigger gp-trigger--l" data-gp-button="6"><span class="gp-btn__cap">LT</span><span class="gp-btn__act" data-gp-act="6"></span></div>
+      <div class="gp-btn gp-trigger gp-trigger--r" data-gp-button="7"><span class="gp-btn__cap">RT</span><span class="gp-btn__act" data-gp-act="7"></span></div>
+
+      <!-- Left stick + d-pad cluster -->
+      <div class="gp-stick gp-stick--l" data-gp-stick="left"><span class="gp-stick__hat"></span><span class="gp-btn gp-stick__click" data-gp-button="10"><span class="gp-btn__act" data-gp-act="10"></span></span></div>
+      <div class="gp-dpad">
+        <span class="gp-dpad__btn gp-dpad--up" data-gp-button="12">▲</span>
+        <span class="gp-dpad__btn gp-dpad--down" data-gp-button="13">▼</span>
+        <span class="gp-dpad__btn gp-dpad--left" data-gp-button="14">◀</span>
+        <span class="gp-dpad__btn gp-dpad--right" data-gp-button="15">▶</span>
+      </div>
+
+      <!-- Center buttons -->
+      <div class="gp-btn gp-center gp-center--view" data-gp-button="8"><span class="gp-btn__cap">View</span><span class="gp-btn__act" data-gp-act="8"></span></div>
+      <div class="gp-btn gp-center gp-center--menu" data-gp-button="9"><span class="gp-btn__cap">Menu</span><span class="gp-btn__act" data-gp-act="9"></span></div>
+
+      <!-- Right stick -->
+      <div class="gp-stick gp-stick--r" data-gp-stick="right"><span class="gp-stick__hat"></span><span class="gp-btn gp-stick__click" data-gp-button="11"><span class="gp-btn__act" data-gp-act="11"></span></span></div>
+
+      <!-- Face buttons (Xbox layout) -->
+      <div class="gp-face">
+        <div class="gp-btn gp-face--y" data-gp-button="3"><span class="gp-btn__cap">Y</span><span class="gp-btn__act" data-gp-act="3"></span></div>
+        <div class="gp-btn gp-face--x" data-gp-button="2"><span class="gp-btn__cap">X</span><span class="gp-btn__act" data-gp-act="2"></span></div>
+        <div class="gp-btn gp-face--b" data-gp-button="1"><span class="gp-btn__cap">B</span><span class="gp-btn__act" data-gp-act="1"></span></div>
+        <div class="gp-btn gp-face--a" data-gp-button="0"><span class="gp-btn__cap">A</span><span class="gp-btn__act" data-gp-act="0"></span></div>
+      </div>
+    </div>
+  </div>
+  <p class="stab-hint gamepad-mapper-hint">Press each button to confirm it lights up. The label under each shows the action it triggers — change bindings in the list below.</p>
+  <button type="button" class="hud-preview-close" id="gamepadMapperClose">Done</button>
 </div>
 
 <script src="js/achievements.js" defer></script>
