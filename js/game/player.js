@@ -24,6 +24,88 @@ export function getArtificerLevelGains(stacks = 0) {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Level milestone registry
+// ---------------------------------------------------------------------------
+// Charges and move/combat stats grow on an every-7-levels cadence. A milestone
+// is keyed by level and can carry any of:
+//   moveCharge: a MOVE_SLOTS slot ('dash' | 'laser' | ...) — the move currently
+//               equipped in that slot gains +1 max charge while this level is
+//               reached. Charge bonuses are cumulative across milestones.
+//   stat:       a one-time bump applied on the level-up that crosses it, ON TOP
+//               of the normal per-level gains (maxHp / attackPower / attackSpeed).
+//   moveSpeed:  additive bonus to the move-speed multiplier, cumulative.
+//   label:      feedback shown when the milestone is crossed.
+// Not every milestone grants a charge — charges land on 7 and 21, while 14 and
+// 28 are stat/speed spikes, so each milestone feels distinct yet impactful.
+//
+// DEFAULT_LEVEL_MILESTONES applies to every character. CHARACTER_LEVEL_MILESTONES
+// overrides per character (a per-level entry there fully replaces the default
+// entry for that level), letting signature moves get the charge instead of the
+// generic equipped mobility move.
+const DEFAULT_LEVEL_MILESTONES = {
+  7:  { moveCharge: 'dash',  stat: { maxHp: 10, attackPower: 2 },                   label: '+1 MOBILITY CHARGE' },
+  14: { stat: { maxHp: 20, attackPower: 3, attackSpeed: 0.03 }, moveSpeed: 0.03,    label: 'STAT SURGE' },
+  21: { moveCharge: 'laser', stat: { maxHp: 14, attackPower: 3 },                   label: '+1 LASER CHARGE' },
+  28: { stat: { maxHp: 30, attackPower: 5, attackSpeed: 0.04 }, moveSpeed: 0.04,    label: 'MAJOR STAT SURGE' },
+};
+
+const CHARACTER_LEVEL_MILESTONES = {
+  // Preserves the original Gelleh mastery: Zip Lightning gains a charge — now on
+  // the unified 7-level cadence instead of the old hardcoded level-5 check.
+  gelleh: {
+    7: { moveCharge: { slot: 'dash', moveKey: 'zip_lightning' }, stat: { maxHp: 10, attackPower: 2 }, label: 'ZIP LIGHTNING +1 CHARGE' },
+  },
+};
+
+export const LEVEL_MILESTONE_LEVELS = Object.keys(DEFAULT_LEVEL_MILESTONES)
+  .map(Number)
+  .sort((a, b) => a - b);
+
+// Resolve the milestone entry for a given level/character (override beats
+// default). Returns null when the level is not a milestone boundary.
+export function getLevelMilestone(level, characterKey) {
+  const lvl = Math.floor(Number(level) || 0);
+  const override = CHARACTER_LEVEL_MILESTONES[characterKey]?.[lvl];
+  if (override) return override;
+  return DEFAULT_LEVEL_MILESTONES[lvl] || null;
+}
+
+// A milestone's moveCharge may be a bare slot name (the equipped move in that
+// slot gets the charge) or { slot, moveKey } (only that specific move does).
+function milestoneChargesMove(milestone, slot, moveKey) {
+  const target = milestone?.moveCharge;
+  if (!target) return false;
+  if (typeof target === 'string') return target === slot;
+  if (target.slot && target.slot !== slot) return false;
+  if (target.moveKey && target.moveKey !== moveKey) return false;
+  return true;
+}
+
+// Cumulative bonus charges a given equipped move has earned from every milestone
+// at or below the player's current level. Replaces the old inline Gelleh check.
+export function getMilestoneChargeBonus(slot, moveKey, characterKey, level) {
+  const lvl = Math.floor(Number(level) || 1);
+  let bonus = 0;
+  for (const milestoneLevel of LEVEL_MILESTONE_LEVELS) {
+    if (lvl < milestoneLevel) break;
+    const milestone = getLevelMilestone(milestoneLevel, characterKey);
+    if (milestoneChargesMove(milestone, slot, moveKey)) bonus += 1;
+  }
+  return bonus;
+}
+
+// Cumulative move-speed bonus from milestones at or below the current level.
+export function getLevelMoveSpeedBonus(characterKey, level) {
+  const lvl = Math.floor(Number(level) || 1);
+  let bonus = 0;
+  for (const milestoneLevel of LEVEL_MILESTONE_LEVELS) {
+    if (lvl < milestoneLevel) break;
+    bonus += Number(getLevelMilestone(milestoneLevel, characterKey)?.moveSpeed || 0);
+  }
+  return bonus;
+}
+
 export function getCloakFlatDamageReduction(stacks = 0, ownedToolStacks = 0) {
   const cloakStacks = Math.max(0, Number(stacks) || 0);
   const toolStacks = Math.max(0, Number(ownedToolStacks) || 0);
@@ -100,6 +182,7 @@ export function migratePlayerData(source) {
     playerData.extraBatteryPendingCount = Math.max(0, Math.floor(Number(playerData.extraBatteryPendingCount || 0)));
     playerData.wizardPawPendingCount = Math.max(0, Math.floor(Number(playerData.wizardPawPendingCount || 0)));
     playerData.scrollUseSerial = Math.max(0, Math.floor(Number(playerData.scrollUseSerial || 0)));
+    playerData.forgeVoucherCharges = Math.max(0, Math.floor(Number(playerData.forgeVoucherCharges || 0)));
     playerData.lastSecretVendorRewardKey = Neo.ITEM_DEFS?.[playerData.lastSecretVendorRewardKey]
       ? String(playerData.lastSecretVendorRewardKey)
       : '';
@@ -629,7 +712,8 @@ export function getItemStats() {
       kronosBossDamageMultiplier,
       attackSpeedMultiplier: 1 + attackServo * 0.12 + chronoSpringBonus,
       hasRobotArm: robotArm > 0,
-      moveSpeedMultiplier: 1 + turtleShell * 0.05,
+      moveSpeedMultiplier: 1 + turtleShell * 0.05
+        + getLevelMoveSpeedBonus(Neo.player?.character || Neo.chosenCharacter, Neo.player?.level || 1),
       laserWeightMultiplier: Math.max(0, 1 - turtleShell * 0.01),
       xpGainMultiplier: 1 + scholarSeal * 0.15,
       levelEdgeDamageMultiplier: 1 + scholarCap * xpProgress * 0.45,
@@ -1941,6 +2025,10 @@ export function refreshFloorChargeStates() {
   Neo.migratePlayerData = migratePlayerData;
   Neo.countOwnedToolStacks = countOwnedToolStacks;
   Neo.getArtificerLevelGains = getArtificerLevelGains;
+  Neo.getLevelMilestone = getLevelMilestone;
+  Neo.getMilestoneChargeBonus = getMilestoneChargeBonus;
+  Neo.getLevelMoveSpeedBonus = getLevelMoveSpeedBonus;
+  Neo.LEVEL_MILESTONE_LEVELS = LEVEL_MILESTONE_LEVELS;
   Neo.getCloakFlatDamageReduction = getCloakFlatDamageReduction;
   Neo.getRichMansBluesCrystalReward = getRichMansBluesCrystalReward;
   Neo.getCharacterDef = getCharacterDef;

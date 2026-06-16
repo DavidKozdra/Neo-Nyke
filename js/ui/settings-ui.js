@@ -589,7 +589,7 @@
       return;
     }
     status.textContent = pads
-      .map(pad => `P${Number(pad.index ?? 0) + 1}: ${pad.id || 'Gamepad'}${pad.mapping === 'standard' ? ' (standard mapping)' : ''}`)
+      .map(pad => `P${Number(pad.index ?? 0) + 1}: ${pad.id || 'Gamepad'} (${pad.mapping === 'standard' ? 'standard mapping' : 'non-standard mapping — using compatibility layout'})`)
       .join('  ·  ');
   }
 

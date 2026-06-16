@@ -739,6 +739,16 @@
         boss._barTrail = Math.max(hpPct, boss._barTrail - dt * 0.55);
         const trailPct = boss._barTrail;
 
+        // Track the boss's peak barrier so the shield overlay fills relative to
+        // its own high-water mark (barrier has no stored max; shield units can
+        // refresh it to varying sizes, so we learn the cap from the values seen).
+        const barrier = Math.max(0, Number(boss.barrier || 0));
+        if (barrier > (boss._barrierPeak || 0)) boss._barrierPeak = barrier;
+        // Forget the peak once the shield is fully gone so a fresh, smaller shield
+        // later doesn't read as a sliver against a stale, larger cap.
+        if (barrier <= 0) boss._barrierPeak = 0;
+        const barrierPct = Neo.clamp(barrier / Math.max(1, boss._barrierPeak || 1), 0, 1);
+
         const fillW = Math.max(0, width * hpPct);
         const trailW = Math.max(0, width * trailPct);
 
@@ -809,6 +819,76 @@
         ctx.roundRect(startX + 0.5, y + 0.5, width - 1, height - 1, radius);
         ctx.stroke();
 
+        // Numeric HP readout centered on the bar: makes current and max explicit.
+        const curHp = Math.max(0, Math.ceil(Number(boss.hp || 0)));
+        const maxHp = Math.max(1, Math.ceil(Number(boss.max || boss.maxHp || 1)));
+        const hpText = `${curHp} / ${maxHp}`;
+        const hpFontSize = Math.max(7, Math.min(height - 2, Math.round(height * 0.78)));
+        ctx.font = `${hpFontSize}px ${CANVAS_PIXEL_FONT}`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        if (ctx.letterSpacing !== undefined) ctx.letterSpacing = '0px';
+        ctx.shadowColor = 'rgba(0,0,0,0.95)';
+        ctx.shadowBlur = 3;
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+        ctx.strokeText(hpText, labelX, y + height / 2 + 0.5);
+        ctx.fillStyle = '#fff';
+        ctx.fillText(hpText, labelX, y + height / 2 + 0.5);
+        ctx.shadowBlur = 0;
+
+        // Shield overlay: a slim cyan bar riding the top edge of the health bar,
+        // shown only while the boss actually has a barrier up.
+        if (barrier > 0) {
+          const shieldColor = '#7ed6ff';
+          const shieldH = Math.max(3, Math.round(height * 0.42));
+          const shieldY = y - shieldH + 1; // overlaps the top edge for a "layered" read
+          const shieldW = Math.max(0, width * barrierPct);
+          const shieldR = Math.min(shieldH / 2, radius);
+
+          // Dark plate so the overlay separates from whatever is behind it.
+          ctx.fillStyle = 'rgba(4,16,24,0.7)';
+          ctx.beginPath();
+          ctx.roundRect(startX, shieldY, width, shieldH, shieldR);
+          ctx.fill();
+
+          if (shieldW > 0) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.roundRect(startX, shieldY, width, shieldH, shieldR);
+            ctx.clip();
+            if (!lowFx) {
+              ctx.shadowColor = shieldColor;
+              ctx.shadowBlur = 8;
+            }
+            ctx.fillStyle = shieldColor;
+            ctx.fillRect(startX, shieldY, shieldW, shieldH);
+            ctx.shadowBlur = 0;
+            // Top highlight strip for the same glossy feel as the HP fill.
+            ctx.fillStyle = 'rgba(255,255,255,0.45)';
+            ctx.fillRect(startX, shieldY + 0.5, shieldW, Math.max(1, shieldH * 0.3));
+            ctx.restore();
+          }
+
+          ctx.strokeStyle = 'rgba(126,214,255,0.55)';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.roundRect(startX + 0.5, shieldY + 0.5, width - 1, shieldH - 1, shieldR);
+          ctx.stroke();
+
+          // Numeric shield readout (current barrier) tucked at the bar's right end.
+          const shieldText = String(Math.ceil(barrier));
+          const shieldFont = Math.max(6, Math.min(shieldH - 1, Math.round(shieldH * 0.85)));
+          ctx.font = `${shieldFont}px ${CANVAS_PIXEL_FONT}`;
+          ctx.textAlign = 'right';
+          ctx.textBaseline = 'middle';
+          ctx.shadowColor = 'rgba(0,0,0,0.95)';
+          ctx.shadowBlur = 2;
+          ctx.fillStyle = '#dff6ff';
+          ctx.fillText(shieldText, startX + width - 3, shieldY + shieldH / 2 + 0.5);
+          ctx.shadowBlur = 0;
+        }
+
         // Label above the bar, letter-spaced and shadowed for legibility.
         ctx.font = `${labelFontSize}px ${CANVAS_PIXEL_FONT}`;
         ctx.textAlign = 'center';
@@ -817,7 +897,9 @@
         ctx.shadowColor = 'rgba(0,0,0,0.85)';
         ctx.shadowBlur = 4;
         ctx.fillStyle = '#fff';
-        ctx.fillText(label, labelX, y - 5);
+        // Lift the label clear of the shield overlay when one is showing.
+        const labelY = barrier > 0 ? y - Math.max(3, Math.round(height * 0.42)) - 5 : y - 5;
+        ctx.fillText(label, labelX, labelY);
         ctx.shadowBlur = 0;
         if (ctx.letterSpacing !== undefined) ctx.letterSpacing = '0px';
 

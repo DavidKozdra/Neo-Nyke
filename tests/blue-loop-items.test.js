@@ -196,10 +196,14 @@ describe('loop-exclusive Blue relics', () => {
       persistMetaSoon: jest.fn(),
       die: jest.fn(),
     };
+    // applyArtificerChargerPickup applies each crossed level milestone via the
+    // sibling applyLevelMilestone helper; stub it since we only assert the
+    // base per-level gains here.
+    const applyLevelMilestone = jest.fn();
     const applyArtificerChargerPickup = extractFunction(
       combatPath,
       'applyArtificerChargerPickup',
-      { Neo },
+      { Neo, applyLevelMilestone },
     );
 
     applyArtificerChargerPickup(0, 1);

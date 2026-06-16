@@ -608,7 +608,7 @@ export const DIFFICULTY_DEFS = {
   easy: {
     key: 'easy',
     name: 'Easy',
-    description: 'Easy uses the current balance.',
+    description: 'Easy uses a lighter enemy curve and extra relic drops.',
     unlockLoops: 0,
     waveBonus: 0,
     eliteFloor: 8,
@@ -617,6 +617,7 @@ export const DIFFICULTY_DEFS = {
     roomWeightBonus: 0,
     statMultiplier: 1,
     bossStatMultiplier: 1,
+    itemDropChanceMultiplier: 1.15,
     speedMultiplier: 1,
     bossProjectileSpeedMultiplier: 0.8,
     enemyReactionMultiplier: 1,
@@ -630,15 +631,16 @@ export const DIFFICULTY_DEFS = {
   medium: {
     key: 'medium',
     name: 'Medium',
-    description: 'Slightly denser rooms with tougher enemy rolls.',
+    description: 'Slightly tougher enemy rolls with extra relic drops.',
     unlockLoops: 0,
-    waveBonus: 1,
+    waveBonus: 0,
     eliteFloor: 8,
     eliteChance: 0.16,
     miniBossChanceMultiplier: 1.18,
     roomWeightBonus: 0.05,
     statMultiplier: 1.1,
     bossStatMultiplier: 1.12,
+    itemDropChanceMultiplier: 1.1,
     // Extra per-floor HP slope added on top of ENEMY_SCALING.floor, so each floor
     // cleared makes enemies tankier the harder the difficulty (see scaleEnemyStats).
     hpFloorScaleBonus: 0.03,
@@ -653,9 +655,9 @@ export const DIFFICULTY_DEFS = {
   hard: {
     key: 'hard',
     name: 'Hard',
-    description: 'More enemies, more pressure, stronger scaling. Bleed damage against enemies is 20% less effective.',
+    description: 'More pressure and stronger scaling. Bleed damage against enemies is 20% less effective.',
     unlockLoops: 0,
-    waveBonus: 2,
+    waveBonus: 1,
     eliteFloor: 7,
     eliteChance: 0.2,
     miniBossChanceMultiplier: 1.35,
@@ -671,7 +673,7 @@ export const DIFFICULTY_DEFS = {
     shopPriceMultiplier: 1.16,
     ccResistScale: 0.30,
     enemyBleedDamageMultiplier: 0.8,
-    itemDropChanceMultiplier: 0.65,
+    itemDropChanceMultiplier: 0.8,
     shopItemOffers: 2,
   },
   impossible: {

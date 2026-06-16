@@ -9,6 +9,7 @@
   const KICKY_KICK_KNOCKBACK = 1440;
   const KICKY_KICK_BLAST_KNOCKBACK = 400;
   const KICKY_KICK_ROOM_MOVE_CHANCE = 0.1;
+  const FORGE_VOUCHER_BOSS_DROP_CHANCE = 0.65;
 
   function distanceSq(ax, ay, bx, by) {
     const dx = ax - bx;
@@ -1753,6 +1754,12 @@
 
   function spawnPlayerDiskBurst() {
     const isMetao = Neo.player?.character === 'metao';
+    const diskHitOptions = isMetao
+      ? { drainChanceBonus: 0.05, fireChance: 0.4, fireStacks: 1, fireDuration: 3 }
+      : { drainChanceBonus: 0.05 };
+    const shardHitOptions = isMetao
+      ? { drainChanceBonus: 0.05, fireChance: 0.25, fireStacks: 1, fireDuration: 2 }
+      : { drainChanceBonus: 0.05 };
     for (let index = 0; index < 8; index += 1) {
       const angle = index * (Math.PI * 2 / 8);
       Neo.spawnProjectile({
@@ -1765,7 +1772,7 @@
         enemy: false,
         kind: 'disk',
         damage: 20,
-        hitOptions: isMetao ? { fireChance: 0.4, fireStacks: 1, fireDuration: 3 } : {},
+        hitOptions: diskHitOptions,
         // Disks periodically shed faster sub-projectiles perpendicular to travel.
         subSpawn: {
           kind: 'disk_shard',
@@ -1776,7 +1783,7 @@
           life: 0.7,
           damage: 8,
           count: 2,
-          hitOptions: isMetao ? { fireChance: 0.25, fireStacks: 1, fireDuration: 2 } : {},
+          hitOptions: shardHitOptions,
         },
       });
     }
@@ -2474,11 +2481,12 @@
   // Tooth of Thorn lifesteal: a small chance per hit to heal 1 when below max HP.
   // Lives on its own so multi-beam moves (Thorn's Infinite Blood Beam) can roll it
   // once per beam that lands, instead of once per tick after the damage dedup.
-  function rollToothOfThornDrain(enemy, cachedStats) {
+  function rollToothOfThornDrain(enemy, cachedStats, bonusChance = 0) {
     const stats = cachedStats || Neo.getItemStats();
-    if (!(stats.drainChance > 0)) return;
+    const drainChance = Math.max(0, Number(stats.drainChance || 0) + Number(bonusChance || 0));
+    if (!(drainChance > 0)) return;
     if (!Neo.player || Neo.player.hp >= Neo.player.maxHp) return;
-    if (Neo.nextRandom('encounter') >= stats.drainChance) return;
+    if (Neo.nextRandom('encounter') >= drainChance) return;
     const heal = Neo.scalePlayerHealing(1, 1);
     const gained = Neo.applyPlayerHealing(heal);
     if (gained > 0) {
@@ -2569,7 +2577,7 @@
     });
     // Multi-beam callers (Thorn's fan) roll drain per beam themselves; skip the
     // shared roll so the beam that also lands the dedup'd hit isn't counted twice.
-    if (!options.skipDrainRoll) rollToothOfThornDrain(enemy, stats);
+    if (!options.skipDrainRoll) rollToothOfThornDrain(enemy, stats, Number(options.drainChanceBonus || 0));
     if (stats.confuseRayStunChance > 0 && Neo.nextRandom('encounter') < stats.confuseRayStunChance) {
       enemy.stun = Math.max(Number(enemy.stun || 0), 0.55);
       Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 18, life: 0.5, text: 'STUN', c: '#ffe66d' });
@@ -3415,6 +3423,19 @@
       }
     }
 
+    if (!isTutorialDummy
+      && !options.forceDeath
+      && Neo.gameMode !== 'practice'
+      && !Neo.isChallengeActive?.('no_items')
+      && Neo.isBossType(enemy.type)
+      && enemyLootRandom() < FORGE_VOUCHER_BOSS_DROP_CHANCE) {
+      const key = Neo.FORGE_VOUCHER_KEY || 'forge_voucher';
+      if (Neo.ITEM_DEFS?.[key]) {
+        Neo.pickups.push({ x: enemy.x - 28, y: enemy.y, type: 'item', key });
+        Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 18, life: 0.9, text: 'FORGE VOUCHER', c: '#ffcf76' });
+      }
+    }
+
     if (enemy.type === 'mooggy') {
       const defeats = Math.max(0, Number(Neo.metaProgress.mooggyDefeats || 0)) + 1;
       Neo.metaProgress.mooggyDefeats = defeats;
@@ -3821,18 +3842,28 @@
     Neo.player.hp = Math.min(Neo.player.maxHp, Neo.player.hp + gains.maxHp);
     Neo.player.attackPower += gains.attackPower;
     Neo.player.attackSpeed += gains.attackSpeed;
-    reconcileGellehZipCharge();
+    applyLevelMilestone(Neo.player.level);
     Neo.markInventoryPanelDirty();
     Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.9, text: `LV ${Neo.player.level}`, c: '#7dff9e' });
   }
 
-  // Gelleh's Zip Lightning gains a charge at level 5. getMoveMaxStacks reports
-  // the higher max and tickCooldowns grows the live dash entry to match — this
-  // just surfaces the feedback particle the instant she crosses the threshold.
-  function reconcileGellehZipCharge() {
-    if (Neo.player?.character !== 'gelleh' || Neo.player.level !== 5) return;
-    if (Neo.getEquippedMove('dash') !== 'zip_lightning') return;
-    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 46, life: 0.9, text: 'ZIP LIGHTNING +1 CHARGE', c: '#cfd7ff' });
+  // Apply a level milestone's one-time stat bump (on top of the normal per-level
+  // gains) and surface feedback. Move-charge milestones are read live by
+  // getMoveMaxStacks/tickCooldowns — this just announces them. moveSpeed feeds
+  // getItemStats().moveSpeedMultiplier, so no field write is needed here either.
+  function applyLevelMilestone(level) {
+    const milestone = Neo.getLevelMilestone(level, Neo.player?.character || Neo.chosenCharacter);
+    if (!milestone) return;
+    const stat = milestone.stat || {};
+    if (stat.maxHp) {
+      Neo.player.maxHp += stat.maxHp;
+      Neo.player.hp = Math.min(Neo.player.maxHp, Neo.player.hp + stat.maxHp);
+    }
+    if (stat.attackPower) Neo.player.attackPower += stat.attackPower;
+    if (stat.attackSpeed) Neo.player.attackSpeed += stat.attackSpeed;
+    if (milestone.label) {
+      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 46, life: 1, text: milestone.label, c: '#cfd7ff' });
+    }
   }
 
   function applyArtificerChargerPickup(previousCount, collectCount) {
@@ -3855,7 +3886,8 @@
       return;
     }
 
-    const levelsGained = Math.max(1, Math.floor(Number(Neo.player.level) || 1));
+    const startLevel = Math.max(1, Math.floor(Number(Neo.player.level) || 1));
+    const levelsGained = startLevel;
     const gains = Neo.getArtificerLevelGains(1);
     for (let index = 0; index < levelsGained; index += 1) {
       Neo.player.xpToNext = Math.round(Neo.player.xpToNext * 1.22);
@@ -3865,6 +3897,11 @@
     Neo.player.hp = Math.min(Neo.player.maxHp, Neo.player.hp + gains.maxHp * levelsGained);
     Neo.player.attackPower += gains.attackPower * levelsGained;
     Neo.player.attackSpeed += gains.attackSpeed * levelsGained;
+    // Doubling the level can vault past milestone boundaries — apply each one
+    // crossed so charge/stat/speed gains aren't silently skipped.
+    for (let lvl = startLevel + 1; lvl <= Neo.player.level; lvl += 1) {
+      applyLevelMilestone(lvl);
+    }
     window.achievementEvents?.emit('player:leveled', { level: Neo.player.level });
     Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 34, life: 1.2, text: `LEVEL DOUBLED: ${Neo.player.level}`, c: '#69c8ff' });
   }

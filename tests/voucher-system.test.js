@@ -8,7 +8,7 @@ function loadVoucherData() {
     .replace(/\bexport\s+/g, '');
   return new Function(
     'Neo',
-    `${dataSource}; return { ITEM_DEFS, ITEM_KEYS, ITEM_DROP_WEIGHTS, VOUCHER_TYPES, VOUCHER_KEYS, WHITE_ITEM_POOL };`,
+    `${dataSource}; return { ITEM_DEFS, ITEM_KEYS, ITEM_DROP_WEIGHTS, VOUCHER_TYPES, VOUCHER_KEYS, WHITE_ITEM_POOL, FORGE_VOUCHER_KEY, FORGE_VOUCHER_UPGRADE_STEPS };`,
   )({
     buildWeightTable(entries) {
       return entries;
@@ -60,6 +60,17 @@ describe('voucher classes', () => {
       expect(pool.some(key => data.VOUCHER_KEYS.includes(key))).toBe(false);
     });
     expect(data.WHITE_ITEM_POOL.some(key => data.VOUCHER_KEYS.includes(key))).toBe(false);
+  });
+
+  test('defines Forge Voucher as a non-shop voucher worth five forge upgrades', () => {
+    expect(data.FORGE_VOUCHER_KEY).toBe('forge_voucher');
+    expect(data.FORGE_VOUCHER_UPGRADE_STEPS).toBe(5);
+    expect(data.VOUCHER_KEYS).not.toContain('forge_voucher');
+    expect(data.ITEM_DEFS.forge_voucher).toEqual(expect.objectContaining({
+      voucher: true,
+      rarity: 'knight',
+    }));
+    expect(data.ITEM_DEFS.forge_voucher.tags).toEqual(expect.arrayContaining(['voucher', 'forge', 'upgrade']));
   });
 });
 

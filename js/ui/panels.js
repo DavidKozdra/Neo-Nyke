@@ -1039,19 +1039,45 @@ export function toggleAnvilPanel() {
       : (statDef.xpPerStep ?? 0);
   }
 
+  function getForgeVoucherStepValue() {
+    return Math.max(1, Math.floor(Number(Neo.FORGE_VOUCHER_UPGRADE_STEPS || 5)));
+  }
+
+  function getForgeVoucherFreeSteps() {
+    if (!Neo.player) return 0;
+    const voucherKey = Neo.FORGE_VOUCHER_KEY || 'forge_voucher';
+    const voucherStacks = Math.max(0, Math.floor(Number(Neo.player.items?.[voucherKey] || 0)));
+    const looseCharges = Math.max(0, Math.floor(Number(Neo.player.forgeVoucherCharges || 0)));
+    return looseCharges + voucherStacks * getForgeVoucherStepValue();
+  }
+
+  function getAnvilStagedStepCount() {
+    return Object.values(Neo.anvilStagedUpgrades || {}).reduce((total, count) => (
+      total + Math.max(0, Math.floor(Number(count) || 0))
+    ), 0);
+  }
+
   // Total cost of all staged upgrades, charged entirely in the selected
   // currency (XP or gold). The other currency is always 0.
   function getAnvilTotalCost() {
     let total = 0;
+    let freeStepsRemaining = getForgeVoucherFreeSteps();
+    let voucherStepsUsed = 0;
+    let stagedSteps = 0;
     for (const [key, count] of Object.entries(Neo.anvilStagedUpgrades)) {
       if (count === 0) continue;
       const [itemType, , statKey] = key.split(':');
       const schema = itemType === 'weapon' ? Neo.WEAPON_UPGRADEABLE_STATS : Neo.MOVE_UPGRADEABLE_STATS;
-      total += Math.abs(count) * getAnvilStepCost(schema[statKey]);
+      const stepCount = Math.max(0, Math.floor(Number(count) || 0));
+      stagedSteps += stepCount;
+      const freeSteps = Math.min(stepCount, freeStepsRemaining);
+      freeStepsRemaining -= freeSteps;
+      voucherStepsUsed += freeSteps;
+      total += Math.max(0, stepCount - freeSteps) * getAnvilStepCost(schema[statKey]);
     }
     return Neo.anvilPayCurrency === 'gold'
-      ? { xp: 0, gold: total }
-      : { xp: total, gold: 0 };
+      ? { xp: 0, gold: total, voucherSteps: voucherStepsUsed, stagedSteps }
+      : { xp: total, gold: 0, voucherSteps: voucherStepsUsed, stagedSteps };
   }
 
 export function renderAnvilPanel() {
@@ -1157,8 +1183,10 @@ export function renderAnvilStatPanel() {
       // gate, and the actual spend all agree (gold is charged at goldPerStep*2).
       const stepCost = getAnvilStepCost(schema[statKey]);
       const wallet = payGold ? (Neo.player?.coins ?? 0) : (Neo.player?.xp ?? 0);
-      const spent = payGold ? getAnvilTotalCost().gold : getAnvilTotalCost().xp;
-      const canAfford = spent + stepCost <= wallet;
+      const cost = getAnvilTotalCost();
+      const spent = payGold ? cost.gold : cost.xp;
+      const canUseVoucher = getAnvilStagedStepCount() < getForgeVoucherFreeSteps();
+      const canAfford = canUseVoucher || spent + stepCost <= wallet;
       const canIncrease = withinCap && canAfford;
       const canDecrease = stagedCount > 0;
 
@@ -1208,25 +1236,33 @@ export function renderAnvilStatPanel() {
     const total = payGold ? cost.gold : cost.xp;
     const wallet = payGold ? coins : xp;
     const affordable = wallet >= total;
+    const stagedSteps = cost.stagedSteps || 0;
+    const voucherSteps = cost.voucherSteps || 0;
 
     // Reflect the active currency in the toggle buttons.
     Neo.ui.anvilPayXp?.classList.toggle('is-active', !payGold);
     Neo.ui.anvilPayGold?.classList.toggle('is-active', payGold);
 
     if (Neo.ui.anvilCostSummary) {
-      if (total === 0) {
+      if (stagedSteps === 0) {
         Neo.ui.anvilCostSummary.textContent = 'Select stats above and press + to stage upgrades.';
         Neo.ui.anvilCostSummary.style.color = '';
+      } else if (total === 0 && voucherSteps > 0) {
+        Neo.ui.anvilCostSummary.textContent = `Total: ${voucherSteps} Forge Voucher upgrade${voucherSteps === 1 ? '' : 's'}`;
+        Neo.ui.anvilCostSummary.style.color = '#ffcf76';
       } else {
         const label = payGold
           ? `<span style="color:${affordable ? '#ffd15a' : '#ff7c88'}">&#9670; ${total} gold (${coins})</span>`
           : `<span style="color:${affordable ? '#7eff9e' : '#ff7c88'}">${total} XP (${xp})</span>`;
-        Neo.ui.anvilCostSummary.innerHTML = `Total: ${label}`;
+        const voucherLabel = voucherSteps > 0
+          ? ` + <span style="color:#ffcf76">${voucherSteps} voucher</span>`
+          : '';
+        Neo.ui.anvilCostSummary.innerHTML = `Total: ${label}${voucherLabel}`;
         Neo.ui.anvilCostSummary.style.color = affordable ? '#7eff9e' : '#ff7c88';
       }
     }
     if (Neo.ui.anvilConfirm) {
-      Neo.ui.anvilConfirm.disabled = total === 0 || !affordable;
+      Neo.ui.anvilConfirm.disabled = stagedSteps === 0 || !affordable;
     }
   }
 
@@ -1281,7 +1317,8 @@ export function renderAnvilStatPanel() {
       const nextCost = getAnvilTotalCost();
       const spent = payGold ? nextCost.gold : nextCost.xp;
       const wallet = payGold ? (Neo.player?.coins ?? 0) : (Neo.player?.xp ?? 0);
-      if (spent + getAnvilStepCost(statDef) > wallet) {
+      const canUseVoucher = getAnvilStagedStepCount() < getForgeVoucherFreeSteps();
+      if (!canUseVoucher && spent + getAnvilStepCost(statDef) > wallet) {
         anvilRejectToast(payGold ? 'NEED MORE GOLD' : 'NEED MORE XP');
         return;
       }
@@ -1296,11 +1333,12 @@ export function renderAnvilStatPanel() {
 
 export function confirmAnvilUpgrades() {
     const cost = getAnvilTotalCost();
-    if (!Neo.player || (cost.xp === 0 && cost.gold === 0)) return;
+    if (!Neo.player || (cost.stagedSteps || 0) <= 0) return;
     if (Neo.player.xp < cost.xp || (Neo.player.coins ?? 0) < cost.gold) return;
 
     Neo.player.xp -= cost.xp;
     Neo.player.coins = (Neo.player.coins ?? 0) - cost.gold;
+    consumeForgeVoucherSteps(cost.voucherSteps || 0);
 
     if (!Neo.player.anvilUpgrades) Neo.player.anvilUpgrades = { weapon: {}, move: {} };
 
@@ -1319,6 +1357,31 @@ export function confirmAnvilUpgrades() {
     Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 26, life: 1.0, text: 'UPGRADED!', c: '#ffb840' });
     renderAnvilPanel();
     Neo.updateHud();
+  }
+
+  function consumeForgeVoucherSteps(steps) {
+    let remaining = Math.max(0, Math.floor(Number(steps) || 0));
+    if (!Neo.player || remaining <= 0) return 0;
+    const voucherKey = Neo.FORGE_VOUCHER_KEY || 'forge_voucher';
+    const stepValue = getForgeVoucherStepValue();
+    let looseCharges = Math.max(0, Math.floor(Number(Neo.player.forgeVoucherCharges || 0)));
+    const looseUsed = Math.min(looseCharges, remaining);
+    looseCharges -= looseUsed;
+    remaining -= looseUsed;
+
+    if (remaining > 0) {
+      let vouchers = Math.max(0, Math.floor(Number(Neo.player.items?.[voucherKey] || 0)));
+      const vouchersUsed = Math.min(vouchers, Math.ceil(remaining / stepValue));
+      vouchers -= vouchersUsed;
+      const openedCharges = vouchersUsed * stepValue;
+      const openedUsed = Math.min(openedCharges, remaining);
+      remaining -= openedUsed;
+      looseCharges += Math.max(0, openedCharges - openedUsed);
+      if (Neo.player.items) Neo.player.items[voucherKey] = vouchers;
+    }
+
+    Neo.player.forgeVoucherCharges = looseCharges;
+    return Math.max(0, Math.floor(Number(steps) || 0)) - remaining;
   }
 
 // Returns the anvil bonus for a given weapon stat (additive delta)

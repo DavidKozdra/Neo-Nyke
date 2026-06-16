@@ -4,6 +4,7 @@
   const MINOR_PACK_ENEMY_TYPES = new Set(['hunter', 'charger', 'laser', 'cult_follower']);
   const MINOR_PACK_RADIUS = 260;
   const MINOR_PACK_MAX_ALLIES = 3;
+  const ENEMY_UNIVERSAL_STAT_MULTIPLIER = 0.95;
 
   function updateMinorEnemyPackPressure(enemy) {
     const eligible = enemy
@@ -844,10 +845,10 @@
       endlessWaveIndex > 0 ? Math.max(Neo.ENEMY_SCALING.speedSoftCap ?? 1.38, Neo.ENEMY_SCALING.endlessWaveSpeedSoftCap) : (Neo.ENEMY_SCALING.speedSoftCap ?? 1.38),
       0.16
     );
-    result.hp = Math.round(result.hp * hpScale * levelMultipliers.hp);
+    result.hp = Math.max(1, Math.round(result.hp * hpScale * levelMultipliers.hp * ENEMY_UNIVERSAL_STAT_MULTIPLIER));
     result.max = result.hp;
-    result.dmg = Math.round(result.dmg * damageScale * levelMultipliers.damage);
-    result.speed *= speedScale * levelMultipliers.speed;
+    result.dmg = Math.max(1, Math.round(result.dmg * damageScale * levelMultipliers.damage * ENEMY_UNIVERSAL_STAT_MULTIPLIER));
+    result.speed *= speedScale * levelMultipliers.speed * ENEMY_UNIVERSAL_STAT_MULTIPLIER;
     result.enemyLevelAttackSpeedMultiplier = levelMultipliers.attackSpeed;
     if (sandbox) {
       result.hp = Math.max(1, Math.round(result.hp * sandbox.enemyStatMultiplier));

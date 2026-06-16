@@ -50,6 +50,9 @@
       nav: { x: 0, y: 0, nextAt: 0 },
       buttonStates: [],
       buttonValues: [],
+      // Locked-in right-stick axis pair for non-standard pads (null = standard
+      // or not yet resolved). See resolveRightStickAxes.
+      rstickAxes: null,
       // P2 keys mirrored for updatePlayer2
       p2MeleeHeld: false,
       p2DashHeld: false,
@@ -90,6 +93,70 @@
 
   function isButtonPressed(button) {
     return !!button?.pressed || Number(button?.value || 0) > BUTTON_THRESHOLD;
+  }
+
+  // --- Non-standard mapping support -----------------------------------------
+  // The Web Gamepad "standard" layout puts the right stick on axes 2 & 3 and
+  // the face/shoulder/dpad buttons in fixed slots. Firefox (notably on macOS)
+  // and many 8bitDo / DirectInput pads report `mapping: ""` with a different
+  // axis/button order, so blindly reading standard indices makes the pad
+  // "connect" but do nothing. When the mapping isn't standard we resolve the
+  // right-stick axes heuristically and route the raw HID button order back
+  // onto the standard button indices the rest of the code expects.
+
+  // Common non-standard right-stick axis pairs, ordered by how often they show
+  // up across browsers/pads. Firefox + 8bitDo typically lands on [2,3] or [2,5].
+  const NONSTD_RSTICK_AXIS_CANDIDATES = [[2, 3], [3, 4], [2, 5], [5, 2], [4, 3]];
+
+  // Maps the raw button order most DirectInput / 8bitDo pads expose under a
+  // non-standard mapping onto the standard button indices used everywhere else.
+  // Index = standard slot, value = raw button index (null when absent).
+  const NONSTD_BUTTON_TO_STANDARD = [
+    0, 1, 2, 3,   // A, B, X, Y (face)
+    4, 5,         // L1, R1
+    6, 7,         // L2, R2
+    8, 9,         // select/back, start
+    10, 11,       // L3, R3
+    12, 13, 14, 15, // dpad up/down/left/right (often present on standard pads)
+    16,           // home/guide
+  ];
+
+  function isStandardMapping(gp) {
+    return (gp?.mapping || '') === 'standard';
+  }
+
+  // Resolve the right-stick axes for a non-standard pad. We prefer the first
+  // candidate pair whose axes actually exist; once a pad shows movement on a
+  // pair we lock it in for the session so a brief flick doesn't reassign it.
+  function resolveRightStickAxes(slot, ax) {
+    if (slot.rstickAxes) return slot.rstickAxes;
+    for (const pair of NONSTD_RSTICK_AXIS_CANDIDATES) {
+      const [a, b] = pair;
+      if (ax.length > a && ax.length > b) {
+        if (Math.hypot(Number(ax[a] || 0), Number(ax[b] || 0)) > DEAD_ZONE) {
+          slot.rstickAxes = pair;
+          return pair;
+        }
+      }
+    }
+    // Nothing pushed yet — fall back to the first existing candidate so aim
+    // reads zero rather than colliding with the left stick (axes 0/1).
+    for (const pair of NONSTD_RSTICK_AXIS_CANDIDATES) {
+      if (ax.length > pair[0] && ax.length > pair[1]) return pair;
+    }
+    return [2, 3];
+  }
+
+  // Returns a button accessor `(standardIndex) => buttonLike` that translates
+  // standard slots to raw HID slots for non-standard pads, and is the identity
+  // for standard pads.
+  function makeButtonReader(gp) {
+    const b = gp.buttons || [];
+    if (isStandardMapping(gp)) return index => b[index];
+    return index => {
+      const raw = NONSTD_BUTTON_TO_STANDARD[index];
+      return raw == null ? undefined : b[raw];
+    };
   }
 
   function buttonValue(button) {
@@ -269,6 +336,7 @@
       slot.buttonStates = [];
       slot.buttonValues = [];
       slot.queuedActions = {};
+      slot.rstickAxes = null;
       if (wasConnected) emitGamepadChange();
       return;
     }
@@ -278,16 +346,19 @@
     slot.mapping = gp.mapping || '';
     slot.connected = true;
     if (!wasConnected) emitGamepadChange();
-    const b = gp.buttons;
-    const ax = gp.axes;
+    const ax = gp.axes || [];
+    const standard = isStandardMapping(gp);
+    // Standard pads index buttons directly; non-standard pads go through the
+    // raw→standard translation so the rest of readGamepad stays layout-agnostic.
+    const readButton = makeButtonReader(gp);
 
-    // Left stick
+    // Left stick (axes 0/1 in every layout we've seen)
     let [lx, ly] = applyRadialDeadZone(ax[0] ?? 0, ax[1] ?? 0);
     // D-pad (axes 6/7 on some browsers, buttons 12-15 on others)
-    const dpLeft  = isButtonPressed(b[14]) || (ax[6] < -0.5);
-    const dpRight = isButtonPressed(b[15]) || (ax[6] >  0.5);
-    const dpUp    = isButtonPressed(b[12]) || (ax[7] < -0.5);
-    const dpDown  = isButtonPressed(b[13]) || (ax[7] >  0.5);
+    const dpLeft  = isButtonPressed(readButton(14)) || (ax[6] < -0.5);
+    const dpRight = isButtonPressed(readButton(15)) || (ax[6] >  0.5);
+    const dpUp    = isButtonPressed(readButton(12)) || (ax[7] < -0.5);
+    const dpDown  = isButtonPressed(readButton(13)) || (ax[7] >  0.5);
 
     const dpadX = dpRight ? 1 : dpLeft ? -1 : 0;
     const dpadY = dpDown ? 1 : dpUp ? -1 : 0;
@@ -297,8 +368,10 @@
     slot.moveX = lx;
     slot.moveY = ly;
 
-    // Right stick for aim
-    const [rx, ry] = applyRadialDeadZone(ax[2] ?? 0, ax[3] ?? 0);
+    // Right stick for aim — axes 2/3 on standard pads, resolved heuristically
+    // for non-standard ones (Firefox/8bitDo often shift it to 2/5 or 3/4).
+    const [rax, ray] = standard ? [2, 3] : resolveRightStickAxes(slot, ax);
+    const [rx, ry] = applyRadialDeadZone(ax[rax] ?? 0, ax[ray] ?? 0);
     slot.hasAim = Math.hypot(rx, ry) > DEAD_ZONE;
     if (slot.hasAim) {
       slot.aimX = rx; slot.aimY = ry;
@@ -314,8 +387,9 @@
     slot.start = false;
     const pressedNow = {};
     for (let index = 0; index <= 11; index += 1) {
-      const pressed = isButtonPressed(b[index]);
-      const value = buttonValue(b[index]);
+      const button = readButton(index);
+      const pressed = isButtonPressed(button);
+      const value = buttonValue(button);
       pressedNow[index] = pressed && !slot.buttonStates[index];
       const action = String(configured[index] || DEFAULT_GAMEPAD_BINDINGS[index] || 'none');
       if (['slash', 'laser', 'smash', 'dash', 'ascend'].includes(action) && pressed) slot[action] = true;

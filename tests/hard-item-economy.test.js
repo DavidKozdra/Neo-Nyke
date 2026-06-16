@@ -27,8 +27,8 @@ describe('hard difficulty item economy', () => {
     );
   }
 
-  test('reduces random relic frequency and shop stock from Hard upward', () => {
-    expect(getDifficultyBlock('hard', 'impossible')).toContain('itemDropChanceMultiplier: 0.65');
+  test('tunes random relic frequency and shop stock from Hard upward', () => {
+    expect(getDifficultyBlock('hard', 'impossible')).toContain('itemDropChanceMultiplier: 0.8');
     expect(getDifficultyBlock('hard', 'impossible')).toContain('shopItemOffers: 2');
     expect(getDifficultyBlock('impossible', 'god')).toContain('itemDropChanceMultiplier: 0.45');
     expect(getDifficultyBlock('impossible', 'god')).toContain('shopItemOffers: 2');
@@ -37,7 +37,7 @@ describe('hard difficulty item economy', () => {
   });
 
   test.each([
-    [0.65, 0.12, 0.078],
+    [0.8, 0.12, 0.096],
     [0.45, 0.18, 0.081],
     [0.3, 0.9, 0.27],
   ])('applies multiplier %p to random source chance %p', (multiplier, baseChance, expected) => {

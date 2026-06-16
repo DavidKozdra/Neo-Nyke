@@ -168,6 +168,15 @@ export function resumeGame() {
         playerData.maxHp += 15;
         playerData.attackPower += 3;
         playerData.attackSpeed += 0.01;
+        // Fold in any milestone stat bump for the level just crossed, so a
+        // starting-level run matches one that leveled there naturally. Charge
+        // and move-speed milestones are read live from the level, no write needed.
+        const stat = Neo.getLevelMilestone?.(playerData.level, playerData.character)?.stat;
+        if (stat) {
+          playerData.maxHp += Number(stat.maxHp || 0);
+          playerData.attackPower += Number(stat.attackPower || 0);
+          playerData.attackSpeed += Number(stat.attackSpeed || 0);
+        }
       }
       playerData.hp = playerData.maxHp;
     }
@@ -510,6 +519,7 @@ export function resumeGame() {
       voucher_white: 0,
       voucher_purple: 0,
       voucher_yellow: 0,
+      forge_voucher: 0,
     };
     const character = Neo.CHARACTER_DEFS[Neo.chosenCharacter] || Neo.CHARACTER_DEFS.thorn_knight;
     const starterItems = getCharacterStartingItems(character.key);
@@ -600,6 +610,7 @@ export function resumeGame() {
       equipmentSlots: (character.key === 'metao') ? ['mateos_bag'] : [],
       equipmentCooldowns: {},
       equipmentEffects: {},
+      forgeVoucherCharges: 0,
     };
   }
 
@@ -1287,11 +1298,15 @@ export function resumeGame() {
     const baseStacks = Math.max(1, Number(moveDef.maxStacks || 1));
     const characterStacks = Math.max(1, Number(moveDef.stackOverrides?.[characterKey] || baseStacks));
     const playerOverrideStacks = Math.max(0, Number(playerState?.moveStackOverrides?.[moveKey] || 0));
-    // Gelleh's mastery: at level 5+ her Zip Lightning gains an extra charge.
-    const gellehZipBonus = (characterKey === 'gelleh'
-      && moveKey === 'zip_lightning'
-      && Number(playerState?.level || 1) >= 5) ? 1 : 0;
-    return Math.max(characterStacks, playerOverrideStacks || 0) + gellehZipBonus;
+    // Level milestones grant extra charges to the equipped move in a slot (e.g.
+    // Gelleh's Zip Lightning, the generic mobility/laser charge on the cadence).
+    const milestoneBonus = Neo.getMilestoneChargeBonus(
+      moveDef.slot,
+      moveKey,
+      characterKey,
+      Number(playerState?.level || 1),
+    );
+    return Math.max(characterStacks, playerOverrideStacks || 0) + milestoneBonus;
   }
 
   function getSlotCooldownDuration(slot, moveKey, attackSpeed = Neo.getAttackSpeedValue()) {

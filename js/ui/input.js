@@ -390,7 +390,7 @@ export const ITEM_DEFS = {
       key: 'tooth_of_thorn',
       name: 'Tooth of Thorn',
       shortName: 'Drain Ramp',
-      description: 'Drain chance 2.8% per stack, plus an extra 2% × stacks per stack — it ramps up fast the more you invest. Successful procs steal 1 HP on hit.',
+      description: 'All characters: drain chance 2.8% per stack, plus an extra 2% x stacks per stack. Successful procs steal 1 HP on any hit.',
       rarity: 'knight',
       color: '#ffd7e2',
       accent: '#ff6e8b',
@@ -1055,6 +1055,18 @@ export const ITEM_DEFS = {
       voucher: true,
       tags: ['voucher', 'choice', 'god'],
     },
+    forge_voucher: {
+      key: 'forge_voucher',
+      name: 'Forge Voucher',
+      shortName: 'Forge x5',
+      description: 'Redeem at the Forge for 5 free weapon or move upgrade steps before XP or gold is spent.',
+      rarity: 'knight',
+      color: '#ffb840',
+      accent: '#fff1a8',
+      category: 'knight',
+      voucher: true,
+      tags: ['voucher', 'forge', 'upgrade', 'utility'],
+    },
   };
 // Scrolls are their own system, kept out of ITEM_DEFS / the relic pools. They are
 // registered into the item registry (see createItemRegistry) so runtime lookups —
@@ -1183,6 +1195,8 @@ export const ITEM_KEYS = Object.keys(ITEM_DEFS);
 // canonical list is SCROLL_KEYS (derived from SCROLL_DEFS).
 export const SCROLL_OF_CONTROL_KEYS = SCROLL_KEYS;
 export const LEGACY_VOUCHER_KEY = 'voucher';
+export const FORGE_VOUCHER_KEY = 'forge_voucher';
+export const FORGE_VOUCHER_UPGRADE_STEPS = 5;
 export const VOUCHER_TYPES = [
   { id: 'white', key: 'voucher_white', label: 'White', classLabel: 'Knight', rarity: 'knight', color: '#f4f6fb' },
   { id: 'purple', key: 'voucher_purple', label: 'Purple', classLabel: 'Wizard', rarity: 'wizard', color: '#b77dff' },
@@ -1881,6 +1895,8 @@ export const MOVE_BASE_STATS = {
   Neo.SCROLL_KEYS = SCROLL_KEYS;
   Neo.SCROLL_OF_CONTROL_KEYS = SCROLL_OF_CONTROL_KEYS;
   Neo.LEGACY_VOUCHER_KEY = LEGACY_VOUCHER_KEY;
+  Neo.FORGE_VOUCHER_KEY = FORGE_VOUCHER_KEY;
+  Neo.FORGE_VOUCHER_UPGRADE_STEPS = FORGE_VOUCHER_UPGRADE_STEPS;
   Neo.VOUCHER_KEY = VOUCHER_KEY;
   Neo.VOUCHER_KEYS = VOUCHER_KEYS;
   Neo.VOUCHER_TYPES = VOUCHER_TYPES;
