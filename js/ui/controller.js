@@ -2498,6 +2498,62 @@ export function createUIController(view) {
         else if (state === 'error') el.textContent = status.message || 'Could not submit competitive run. Server connection is required for leaderboard credit.';
         else el.textContent = '';
       },
+      // Shared run-end progress block: the "UNLOCKED THIS RUN" list plus the
+      // lifetime hero/achievement tallies. `prefix` is 'dead' or 'win'.
+      async setRunSummaryPanel(prefix) {
+        const wrap = view[`${prefix}UnlocksWrap`];
+        const list = view[`${prefix}Unlocks`];
+        const heroEl = view[`${prefix}HeroProgress`];
+        const achEl = view[`${prefix}AchProgress`];
+
+        // ── Unlocked-this-run list ──────────────────────────────────────────
+        const unlocks = Array.isArray(Neo.runUnlocks) ? Neo.runUnlocks : [];
+        if (list && wrap) {
+          if (unlocks.length === 0) {
+            wrap.classList.add('hidden');
+            list.innerHTML = '';
+          } else {
+            wrap.classList.remove('hidden');
+            list.innerHTML = unlocks.map(u => {
+              const isChar = u.type === 'character';
+              return `<div class="run-unlock-chip run-unlock-chip--${Neo.escapeHtml(u.type)}" style="--unlock-color:${Neo.escapeHtml(u.color || '#ffd27d')}">
+                ${isChar
+                  ? `<canvas class="run-unlock-portrait" width="40" height="40" data-unlock-sprite="${Neo.escapeHtml(u.key)}"></canvas>`
+                  : `<span class="run-unlock-glyph">${Neo.escapeHtml(u.icon || '★')}</span>`}
+                <span class="run-unlock-meta">
+                  <span class="run-unlock-kicker">${Neo.escapeHtml(u.kicker || 'UNLOCKED')}</span>
+                  <span class="run-unlock-name">${Neo.escapeHtml(u.name || u.key)}</span>
+                </span>
+              </div>`;
+            }).join('');
+            // Paint the hero portraits onto their canvases.
+            list.querySelectorAll('[data-unlock-sprite]').forEach(cnv => {
+              const key = cnv.getAttribute('data-unlock-sprite');
+              if (typeof Neo.drawSpriteToCanvas === 'function' && Neo.resolveKillerSprite) {
+                Neo.drawSpriteToCanvas(cnv, Neo.resolveKillerSprite(key), cnv.width);
+              }
+            });
+          }
+        }
+
+        // ── Lifetime tallies ────────────────────────────────────────────────
+        const totalHeroes = Object.keys(Neo.CHARACTER_DEFS || {}).length || 5;
+        const unlockedHeroes = new Set(Neo.metaProgress?.unlockedCharacters || []).size;
+        if (heroEl) heroEl.textContent = `${unlockedHeroes}/${totalHeroes}`;
+
+        const totalAch = (window.ACHIEVEMENTS || []).length;
+        if (achEl) {
+          achEl.textContent = `…/${totalAch}`;
+          try {
+            const records = (await window.achievementManager?.exportAll?.()) || [];
+            const achievementIds = new Set((window.ACHIEVEMENTS || []).map(a => a.id));
+            const unlockedAch = records.filter(r => r && achievementIds.has(r.id)).length;
+            achEl.textContent = `${unlockedAch}/${totalAch}`;
+          } catch {
+            achEl.textContent = `—/${totalAch}`;
+          }
+        }
+      },
       setDeadScreen(entry) {
         const fmt = (n) => String(n ?? '—');
         const fmtTime = (s) => {
@@ -2656,6 +2712,7 @@ export function createUIController(view) {
           }
           renderItemPage();
         }
+        void this.setRunSummaryPanel('dead');
       },
       setWinInfo(text) { if (view.winInfo) view.winInfo.textContent = text; },
       setWinScreen(entry) {
@@ -2727,6 +2784,12 @@ export function createUIController(view) {
           if (view.winItemsPrev) view.winItemsPrev.onclick = () => { itemPage = Math.max(0, itemPage - 1); renderItemPage(); };
           if (view.winItemsNext) view.winItemsNext.onclick = () => { itemPage = Math.min(totalPages - 1, itemPage + 1); renderItemPage(); };
           renderItemPage();
+        }
+        void this.setRunSummaryPanel('win');
+        // Celebrate the victory itself with a confetti burst from the top corners.
+        if (typeof Neo.spawnConfetti === 'function') {
+          Neo.spawnConfetti({ x: window.innerWidth * 0.25, y: window.innerHeight * 0.18, count: 90 });
+          Neo.spawnConfetti({ x: window.innerWidth * 0.75, y: window.innerHeight * 0.18, count: 90 });
         }
       },
     };

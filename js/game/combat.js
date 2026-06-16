@@ -2180,6 +2180,10 @@
     const itemStats = Neo.getItemStats();
     const aoeRadiusMultiplier = itemStats.aoeRadiusMultiplier || 1;
     const aoeDamageMultiplier = itemStats.aoeDamageMultiplier || 1;
+    // Count distinct active statuses BEFORE cleansing — the dirtier you are,
+    // the bigger the sparkle eruption when the bath washes it all off.
+    const stackCount = Neo.getActiveStatusCount?.(Neo.player) || 0;
+    const sparkleBoost = 1 + stackCount * 0.35;
     // Cleanse every damaging/cold status off the player.
     Neo.STATUS_KEYS.forEach(key => Neo.clearStatus(Neo.player, key));
     // Resist new statuses for 20s and become hidden + invulnerable for 5s.
@@ -2193,15 +2197,17 @@
     Neo.player.potionRegenAccum = 0;
     Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 30, life: 0.8, text: 'POTION BATH', c: '#9af7d8' });
     Neo.addTrauma?.(0.7, Math.PI / 2, 20);
-    // Explosions around you.
-    const burstRadius = 56 * aoeRadiusMultiplier;
-    for (let index = 0; index < 7; index += 1) {
-      const angle = (index / 7) * Math.PI * 2 + Neo.rng() * 0.4;
+    // Explosions around you — scaled by how many statuses got washed off, so a
+    // heavily-stacked player erupts in more, hotter sparkle blasts.
+    const burstRadius = 56 * aoeRadiusMultiplier * (1 + stackCount * 0.12);
+    const burstCount = 7 + Math.round(stackCount * 1.5);
+    for (let index = 0; index < burstCount; index += 1) {
+      const angle = (index / burstCount) * Math.PI * 2 + Neo.rng() * 0.4;
       const dist = Neo.rand(40, 150, 'fx');
       const px = Neo.player.x + Math.cos(angle) * dist;
       const py = Neo.player.y + Math.sin(angle) * dist;
-      Neo.spawnParticle({ x: px, y: py, life: 0.5, ring: 22 * aoeRadiusMultiplier, c: '#b6f0ff' });
-      Neo.blastRadius(px, py, burstRadius, Math.round(30 * aoeDamageMultiplier), '#b6f0ff');
+      Neo.spawnParticle({ x: px, y: py, life: 0.5, ring: 22 * aoeRadiusMultiplier * sparkleBoost, c: '#b6f0ff' });
+      Neo.blastRadius(px, py, burstRadius, Math.round(30 * aoeDamageMultiplier * sparkleBoost), '#b6f0ff');
     }
   }
 
@@ -3444,6 +3450,7 @@
       if (defeats >= 3 && !Neo.metaProgress.unlockedCharacters.includes('mooggy')) {
         Neo.metaProgress.unlockedCharacters.push('mooggy');
         Neo.spawnParticle({ x: enemy.x, y: enemy.y - 34, life: 2.2, text: 'MOOGGY UNLOCKED!', c: '#ff3348' });
+        Neo.recordCharacterUnlock?.('mooggy');
       } else {
         Neo.spawnParticle({ x: enemy.x, y: enemy.y - 28, life: 1.5, text: `MOOGGY ${defeats}/3`, c: '#ff3348' });
       }
@@ -3454,7 +3461,10 @@
     if (enemy.type === 'god') {
       Neo.metaProgress.godsKilled = Number(Neo.metaProgress.godsKilled || 0) + 1;
       window.achievementEvents?.emit('god:killed');
-      if (!Neo.metaProgress.unlockedCharacters.includes('gelleh')) Neo.metaProgress.unlockedCharacters.push('gelleh');
+      if (!Neo.metaProgress.unlockedCharacters.includes('gelleh')) {
+        Neo.metaProgress.unlockedCharacters.push('gelleh');
+        Neo.recordCharacterUnlock?.('gelleh');
+      }
       if (Neo.gameMode === 'boss_rush') {
         Neo.currentRoom.cleared = true;
         Neo.bossRushActive = false;

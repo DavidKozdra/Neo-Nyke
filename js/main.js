@@ -9,6 +9,7 @@ import './core/music.js';
 import './ui/input.js';
 import './core/status.js';
 import './ui/notifications.js';
+import './ui/unlock-banner.js';
 import './ui/panels.js';
 import './core/game-state.js';
 import './game/roomTemplates.js';

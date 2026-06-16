@@ -517,6 +517,27 @@ button, input, select, textarea {
   color: #ffd700;
 }
 
+/* Loop counter — appears in the center HUD only from loop 2 onward. Styled as a
+   small glowing badge so the "I'm looping" milestone reads as a flex, not noise. */
+.timer-loop-slot {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: rgba(192, 140, 255, .14);
+  border: 1px solid rgba(192, 140, 255, .5);
+  color: #d9b8ff;
+  font-size: calc(15px * var(--font-scale, 1));
+  letter-spacing: .14em;
+  box-shadow: 0 0 10px rgba(192, 140, 255, .35), inset 0 0 6px rgba(192, 140, 255, .15);
+}
+
+.timer-loop-slot #loopNumberDisplay {
+  color: #f0e3ff;
+  font-weight: 800;
+}
+
 .difficulty-display {
   color: #9fd3ff;
   font-size: calc(13px * var(--font-scale, 1));
@@ -11535,3 +11556,229 @@ border-bottom: black solid 2px;
 .inv-rival__status--return { color: #c9aaff; }
 .inv-rival--returning { opacity: .85; }
 .inv-rival--slain { opacity: .6; }
+
+/* ── Unlock celebration: confetti canvas + big center banner ─────────────────
+   Driven by js/ui/unlock-banner.js. The canvas is a full-screen, click-through
+   overlay the JS draws particles onto; the banner is a queued center card that
+   slides in, holds ~3s, then slides out (.is-leaving). --unlock-color is set
+   per-unlock by the JS to tint the card to the unlock's rarity/type color. */
+#confettiCanvas {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  /* Above the win/death overlays (z-index 90) and the item cinematic (8500) so
+     bursts show on the end screens and over an unlock-during-cinematic moment. */
+  z-index: 8550;
+}
+
+.unlock-banner {
+  position: fixed;
+  top: 18%;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 8600;
+  pointer-events: none;
+  --unlock-color: #ffd27d;
+  animation: unlock-banner-in .42s cubic-bezier(.18,.9,.32,1.3) both;
+}
+
+.unlock-banner.hidden { display: none; }
+
+.unlock-banner.is-leaving {
+  animation: unlock-banner-out .36s ease-in both;
+}
+
+.unlock-banner-card {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 18px 28px;
+  min-width: 320px;
+  max-width: min(86vw, 560px);
+  border-radius: 16px;
+  background:
+    radial-gradient(120% 160% at 0% 0%, color-mix(in srgb, var(--unlock-color) 22%, transparent), transparent 60%),
+    linear-gradient(180deg, rgba(20,26,38,.97), rgba(10,13,20,.98));
+  border: 2px solid var(--unlock-color);
+  box-shadow:
+    0 14px 48px rgba(0,0,0,.55),
+    0 0 36px color-mix(in srgb, var(--unlock-color) 45%, transparent),
+    inset 0 1px 0 rgba(255,255,255,.08);
+}
+
+.unlock-banner-icon {
+  flex: 0 0 auto;
+  width: 64px;
+  height: 64px;
+  filter: drop-shadow(0 0 10px color-mix(in srgb, var(--unlock-color) 60%, transparent));
+}
+
+.unlock-banner-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.unlock-banner-kicker {
+  font-size: calc(12px * var(--font-scale, 1));
+  font-weight: 800;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+  color: var(--unlock-color);
+  text-shadow: 0 0 12px color-mix(in srgb, var(--unlock-color) 55%, transparent);
+}
+
+.unlock-banner-name {
+  font-size: calc(26px * var(--font-scale, 1));
+  font-weight: 900;
+  line-height: 1.1;
+  color: #f4f8ff;
+  text-shadow: 0 2px 10px rgba(0,0,0,.6);
+}
+
+.unlock-banner-desc {
+  font-size: calc(13px * var(--font-scale, 1));
+  color: #a9c0de;
+  line-height: 1.35;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+@keyframes unlock-banner-in {
+  0%   { opacity: 0; transform: translateX(-50%) translateY(-26px) scale(.86); }
+  100% { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+}
+
+@keyframes unlock-banner-out {
+  0%   { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateX(-50%) translateY(-22px) scale(.92); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .unlock-banner,
+  .unlock-banner.is-leaving { animation-duration: .01ms; }
+}
+
+/* ── Win/death "unlocked this run" + lifetime progress ──────────────────────
+   Rendered by setRunSummaryPanel() in js/ui/controller.js into the #dead and
+   #win overlays. The unlocks wrap is hidden when nothing unlocked this run. */
+.run-unlocks-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 7px;
+  width: 100%;
+}
+
+.run-unlocks-wrap.hidden { display: none; }
+
+.run-unlocks-title {
+  font-size: calc(11px * var(--font-scale, 1));
+  font-weight: 800;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--menu-text-muted, #8aa0b8);
+}
+
+.run-unlocks-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+}
+
+.run-unlock-chip {
+  --unlock-color: #ffd27d;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 11px 6px 7px;
+  border-radius: 8px;
+  background:
+    radial-gradient(140% 180% at 0% 0%, color-mix(in srgb, var(--unlock-color) 20%, transparent), transparent 62%),
+    rgba(255,255,255,.03);
+  border: 1px solid color-mix(in srgb, var(--unlock-color) 55%, transparent);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--unlock-color) 22%, transparent);
+}
+
+.run-unlock-portrait {
+  width: 40px;
+  height: 40px;
+  image-rendering: pixelated;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+.run-unlock-glyph {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  font-size: calc(20px * var(--font-scale, 1));
+  line-height: 1;
+  color: var(--unlock-color);
+  background: rgba(8,14,22,.85);
+  border-radius: 6px;
+  flex-shrink: 0;
+  text-shadow: 0 0 10px color-mix(in srgb, var(--unlock-color) 60%, transparent);
+}
+
+.run-unlock-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  text-align: left;
+}
+
+.run-unlock-kicker {
+  font-size: calc(9px * var(--font-scale, 1));
+  font-weight: 800;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--unlock-color);
+}
+
+.run-unlock-name {
+  font-size: calc(13px * var(--font-scale, 1));
+  font-weight: 800;
+  color: #eef5ff;
+  white-space: nowrap;
+}
+
+.run-progress-wrap {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+
+.run-progress-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  flex: 1;
+  background: rgba(255,255,255,.03);
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 5px;
+  padding: 6px 10px;
+}
+
+.run-progress-label {
+  font-size: calc(9px * var(--font-scale, 1));
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--menu-text-muted, #8aa0b8);
+}
+
+.run-progress-val {
+  font-size: calc(15px * var(--font-scale, 1));
+  font-weight: 900;
+  color: #eef5ff;
+}

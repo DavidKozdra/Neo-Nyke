@@ -3263,10 +3263,16 @@
     Neo.syncSeedState();
     const crystalBonus = Math.max(0, Math.round(Neo.getActiveChallengeCrystalBonusMultiplier()));
     const titheBonus = Neo.hasLegacy('crystal_tithe') && Neo.HARD_DIFFICULTIES.has(Neo.selectedDifficulty) ? 1 : 0;
+    const difficultiesBefore = Neo.getUnlockedDifficultySet ? new Set(Neo.getUnlockedDifficultySet()) : null;
     if (Neo.gameMode !== 'practice') {
       const crystalsThisLoop = 1 + crystalBonus + titheBonus;
       Neo.metaProgress.loopCrystals = Number(Neo.metaProgress.loopCrystals || 0) + crystalsThisLoop;
       Neo.runCrystalsEarned = Number(Neo.runCrystalsEarned || 0) + crystalsThisLoop;
+      if (difficultiesBefore && Neo.getUnlockedDifficultySet) {
+        for (const key of Neo.getUnlockedDifficultySet()) {
+          if (key !== 'custom' && !difficultiesBefore.has(key)) Neo.recordDifficultyUnlock?.(key);
+        }
+      }
       if (crystalBonus > 0) {
         Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 42, life: 1.1, text: `+${crystalBonus} CHALLENGE LC`, c: '#8dd4ff' });
       }

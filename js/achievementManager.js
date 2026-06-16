@@ -154,6 +154,7 @@ const achievementManager = (() => {
       const def = ACHIEVEMENTS.find(a => a.id === id);
       if (def) {
         pushAchievementToast(def);
+        window.Neo?.recordAchievementUnlock?.(def);
         window.dispatchEvent(new CustomEvent('achievement:unlocked', { detail: { id } }));
       }
     } finally {

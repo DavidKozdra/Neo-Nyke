@@ -528,6 +528,18 @@
     Neo.updateEquipmentSlots();
     if (Neo.ui.timerDisplay) Neo.ui.timerDisplay.textContent = timeStr;
     if (Neo.ui.floorDisplay) Neo.ui.floorDisplay.textContent = Neo.floor;
+    // Loop counter: runLoopIndex counts *completed* loops, so the current loop is
+    // index+1. Only surface it once the player is past the first loop — showing
+    // "LOOP 1" on every normal run would just be noise.
+    if (Neo.ui.timerLoopSlot) {
+      const loopNumber = Math.max(1, Math.floor(Number(Neo.runLoopIndex) || 0) + 1);
+      if (loopNumber > 1) {
+        if (Neo.ui.loopNumberDisplay) Neo.ui.loopNumberDisplay.textContent = loopNumber;
+        Neo.ui.timerLoopSlot.style.display = '';
+      } else {
+        Neo.ui.timerLoopSlot.style.display = 'none';
+      }
+    }
     Neo.updateBossRushHud?.();
     if (Neo.ui.difficultyLabel) Neo.ui.difficultyLabel.textContent = Neo.getDifficultyDef(Neo.selectedDifficulty).name.toUpperCase();
     const isCompetitive = Neo.gameMode === 'competitive';
@@ -778,12 +790,21 @@
     // crystal for the win (plus the same challenge/tithe bonuses a completed
     // loop grants) so a clean clear is never worth zero crystals. Practice runs
     // stay unrewarded, matching loop-completion in world.js.
+    // Snapshot which difficulties were unlocked before the win's crystals land,
+    // so we can banner any that the new total just made available.
+    const difficultiesBefore = Neo.getUnlockedDifficultySet ? new Set(Neo.getUnlockedDifficultySet()) : null;
     if (Neo.gameMode !== 'practice') {
       const crystalBonus = Math.max(0, Math.round(Neo.getActiveChallengeCrystalBonusMultiplier()));
       const titheBonus = Neo.hasLegacy('crystal_tithe') && Neo.HARD_DIFFICULTIES.has(Neo.selectedDifficulty) ? 1 : 0;
       const victoryCrystals = 1 + crystalBonus + titheBonus;
       Neo.metaProgress.loopCrystals = Number(Neo.metaProgress.loopCrystals || 0) + victoryCrystals;
       Neo.runCrystalsEarned = Number(Neo.runCrystalsEarned || 0) + victoryCrystals;
+    }
+    if (difficultiesBefore && Neo.getUnlockedDifficultySet) {
+      for (const key of Neo.getUnlockedDifficultySet()) {
+        // 'custom' is always available — never a fresh progression unlock.
+        if (key !== 'custom' && !difficultiesBefore.has(key)) Neo.recordDifficultyUnlock?.(key);
+      }
     }
     const entry = finalizeRun('win');
     window.achievementEvents?.emit('run:won', { elapsedSeconds: Neo.gameElapsedTime, playerHp: Math.round(Neo.player?.hp || 0) });

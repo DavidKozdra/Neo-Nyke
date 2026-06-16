@@ -930,6 +930,10 @@ export const CHARACTER_DEFS = {
     damageMultiplier: 0.5,
     aoeRadiusMultiplier: 1.2,
     aoeDamageMultiplier: 1.35,
+    // +20% on the default laser cooldown (4.2s → 5.04s) to offset the wizard's
+    // wide AoE laser. Applied via the per-character laserCooldownMultiplier the
+    // cooldown resolvers already honor (game-state.js, enemies.js).
+    laserCooldownMultiplier: 1.2,
     skills: { melee: 'Fire Balls', laser: 'Power Disks', smash: 'Chaos Burst', dash: 'Warp' },
   },
   gelleh: {

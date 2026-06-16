@@ -2176,6 +2176,7 @@ export function resumeGame() {
       Neo.floor = 1;
       Neo.gameElapsedTime = 0;
       window.achievementManager?.resetRunCounters();
+      Neo.resetRunUnlocks?.();
       invalidateRunStatCaches();
       Neo.player = createDefaultPlayer();
       if (!isMultiplayerMode()) resetMultiplayerState();
@@ -2234,6 +2235,7 @@ export function resumeGame() {
     Neo.floor = 1;
     Neo.gameElapsedTime = 0;
     window.achievementManager?.resetRunCounters();
+    Neo.resetRunUnlocks?.();
     invalidateRunStatCaches();
     Neo.player = createDefaultPlayer();
     Neo.player2 = Neo.mpPlayerCount >= 2 ? spawnMpPlayer(Neo.chosenCharacter2, 36, 0) : null;
@@ -2265,6 +2267,7 @@ export function resumeGame() {
     Neo.floor = 1;
     Neo.gameElapsedTime = 0;
     window.achievementManager?.resetRunCounters();
+    Neo.resetRunUnlocks?.();
     invalidateRunStatCaches();
     Neo.player = createDefaultPlayer();
     Neo.player.maxHp = 300; Neo.player.hp = 300;
@@ -2314,6 +2317,7 @@ export function resumeGame() {
     Neo.floor = 1;
     Neo.gameElapsedTime = 0;
     window.achievementManager?.resetRunCounters();
+    Neo.resetRunUnlocks?.();
     invalidateRunStatCaches();
     Neo.player = createDefaultPlayer();
     resetMultiplayerState();
@@ -2349,6 +2353,7 @@ export function resumeGame() {
     Neo.floor = 1;
     Neo.gameElapsedTime = 0;
     window.achievementManager?.resetRunCounters();
+    Neo.resetRunUnlocks?.();
     Neo.endlessWave = 0;
     Neo.endlessWaveActive = false;
     Neo.endlessRespawnTimer = 0;
@@ -2384,6 +2389,7 @@ export function resumeGame() {
     Neo.floor = 5;
     Neo.gameElapsedTime = 0;
     window.achievementManager?.resetRunCounters();
+    Neo.resetRunUnlocks?.();
     resetTutorialState(false);
     resetMultiplayerState();
     invalidateRunStatCaches();
@@ -2518,6 +2524,7 @@ export function resumeGame() {
     Neo.floor = 5;
     Neo.gameElapsedTime = 0;
     window.achievementManager?.resetRunCounters();
+    Neo.resetRunUnlocks?.();
     Neo.bossRushStage = 0;
     Neo.bossRushActive = false;
     clearBossRushNextSpawn();

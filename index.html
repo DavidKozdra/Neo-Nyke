@@ -191,6 +191,7 @@
       <span id="timerDisplay">0:00</span>
       <span class="separator">•</span>
       <span id="timerFloorSlot">FL <b id="floorDisplay">1</b>/10</span>
+      <span id="timerLoopSlot" class="timer-loop-slot" style="display:none">LOOP <b id="loopNumberDisplay">1</b></span>
       <span id="timerBossSlot" style="display:none">BOSS <b id="bossRushStageNum2">1</b>/6 <span id="bossRushNextTimer" class="boss-rush-next hidden"></span></span>
       <span class="separator">•</span>
       <span id="difficultyDisplay" class="difficulty-display"><canvas id="difficultyHudIcon" width="20" height="20" class="difficulty-hud-icon"></canvas><span id="difficultyLabel">EASY</span></span>
@@ -590,6 +591,14 @@
           <div class="dead-records-row" id="deadRecords"></div>
         </div>
         <div id="deadCompetitiveStatus" class="competitive-submit-status hidden"></div>
+        <div class="run-unlocks-wrap hidden" id="deadUnlocksWrap">
+          <span class="run-unlocks-title">UNLOCKED THIS RUN</span>
+          <div class="run-unlocks-list" id="deadUnlocks"></div>
+        </div>
+        <div class="run-progress-wrap" id="deadProgress">
+          <div class="run-progress-stat"><span class="run-progress-label">HEROES</span><b class="run-progress-val" id="deadHeroProgress">—</b></div>
+          <div class="run-progress-stat"><span class="run-progress-label">ACHIEVEMENTS</span><b class="run-progress-val" id="deadAchProgress">—</b></div>
+        </div>
         <div class="dead-items-wrap">
           <div class="dead-items-header">
             <span class="dead-items-label">RELICS HELD</span>
@@ -637,6 +646,14 @@
           <div class="dead-stat"><span class="dead-stat-label">TIME</span><b class="dead-stat-val" id="winTime">—</b></div>
           <div class="dead-stat"><span class="dead-stat-label">COINS</span><b class="dead-stat-val dead-stat-val--icon"><canvas id="winCoinIcon" width="28" height="28" class="dead-stat-icon"></canvas><span id="winCoins">—</span></b></div>
           <div class="dead-stat"><span class="dead-stat-label">DIFFICULTY</span><b class="dead-stat-val" id="winDifficulty">—</b></div>
+        </div>
+        <div class="run-unlocks-wrap hidden" id="winUnlocksWrap">
+          <span class="run-unlocks-title">UNLOCKED THIS RUN</span>
+          <div class="run-unlocks-list" id="winUnlocks"></div>
+        </div>
+        <div class="run-progress-wrap" id="winProgress">
+          <div class="run-progress-stat"><span class="run-progress-label">HEROES</span><b class="run-progress-val" id="winHeroProgress">—</b></div>
+          <div class="run-progress-stat"><span class="run-progress-label">ACHIEVEMENTS</span><b class="run-progress-val" id="winAchProgress">—</b></div>
         </div>
         <div class="dead-items-wrap">
           <div class="dead-items-header">
