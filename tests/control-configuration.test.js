@@ -72,4 +72,96 @@ describe('control configuration', () => {
     expect(toggleInventoryPanel).toHaveBeenCalledTimes(1);
     expect(window.NeoGamepad.consumeAction(0, 'inventory')).toBe(false);
   });
+
+  test('gamepad analog buttons count as presses', () => {
+    let nextFrame = null;
+    const buttons = Array.from({ length: 16 }, () => ({ pressed: false, value: 0 }));
+    buttons[7].value = 0.85;
+    const window = {
+      Neo: { gameState: 'play', ui: {} },
+      NeoSettings: {
+        getGamepadBindings: () => ({
+          0: 'slash', 1: 'dash', 2: 'laser', 3: 'smash', 4: 'inventory',
+          5: 'dash', 6: 'activateAll', 7: 'interact', 8: 'inventory',
+          9: 'pause', 10: 'ascend', 11: 'interact',
+        }),
+      },
+      _neoGame: {},
+      addEventListener: jest.fn(),
+      dispatchEvent: jest.fn(),
+    };
+    const context = {
+      window,
+      navigator: {
+        getGamepads: () => [{ connected: true, id: 'Analog pad', buttons, axes: [0, 0, 0, 0, 0, 0, 0, 0] }],
+      },
+      requestAnimationFrame: callback => { nextFrame = callback; },
+      console,
+    };
+
+    vm.runInNewContext(gamepad, context);
+    nextFrame();
+
+    expect(window.NeoGamepad.consumeAction(0, 'interact')).toBe(true);
+    expect(window.NeoGamepad[0].buttonValues[7]).toBe(0.85);
+  });
+
+  test('gamepad menu navigation does not leave gameplay actions queued', () => {
+    let nextFrame = null;
+    const buttons = Array.from({ length: 16 }, () => ({ pressed: false, value: 0 }));
+    buttons[0].pressed = true;
+    const focusTarget = {
+      disabled: false,
+      getAttribute: () => null,
+      closest: () => null,
+      getClientRects: () => [{ width: 10, height: 10 }],
+      getBoundingClientRect: () => ({ left: 0, top: 0, width: 10, height: 10 }),
+      focus: jest.fn(),
+      click: jest.fn(),
+      matches: () => false,
+    };
+    const modal = {
+      disabled: false,
+      getAttribute: () => null,
+      closest: () => null,
+      getClientRects: () => [{ width: 100, height: 100 }],
+      querySelectorAll: () => [focusTarget],
+      querySelector: () => null,
+    };
+    const body = { querySelectorAll: () => [focusTarget] };
+    const document = {
+      body,
+      activeElement: body,
+      querySelector: () => modal,
+      querySelectorAll: () => [modal],
+    };
+    const window = {
+      Neo: { gameState: 'menu', ui: {} },
+      NeoSettings: {
+        getGamepadBindings: () => ({
+          0: 'slash', 1: 'dash', 2: 'laser', 3: 'smash', 4: 'inventory',
+          5: 'dash', 6: 'activateAll', 7: 'interact', 8: 'inventory',
+          9: 'pause', 10: 'ascend', 11: 'interact',
+        }),
+      },
+      _neoGame: {},
+      addEventListener: jest.fn(),
+      dispatchEvent: jest.fn(),
+    };
+    const context = {
+      window,
+      document,
+      navigator: {
+        getGamepads: () => [{ connected: true, id: 'Menu pad', buttons, axes: [0, 0, 0, 0, 0, 0, 0, 0] }],
+      },
+      requestAnimationFrame: callback => { nextFrame = callback; },
+      console,
+    };
+
+    vm.runInNewContext(gamepad, context);
+    nextFrame();
+
+    expect(window.NeoGamepad.consumeAction(0, 'slash')).toBe(false);
+    expect(focusTarget.focus).toHaveBeenCalled();
+  });
 });

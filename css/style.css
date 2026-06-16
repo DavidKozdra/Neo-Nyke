@@ -302,7 +302,7 @@ button, input, select, textarea {
   z-index: 20;
   color: #ffd700;
   pointer-events: none;
-  transform: scale(var(--hud-scale-coins, var(--hud-scale, 1)));
+  transform: translate(var(--hud-x-coins, 0px), var(--hud-y-coins, 0px)) scale(var(--hud-scale-coins, var(--hud-scale, 1)));
   transform-origin: top left;
 }
 
@@ -472,7 +472,7 @@ button, input, select, textarea {
   position: fixed;
   top: 0;
   left: 50%;
-  transform: translateX(-50%) scale(var(--hud-scale-center, var(--hud-scale, 1)));
+  transform: translate(calc(-50% + var(--hud-x-center, 0px)), var(--hud-y-center, 0px)) scale(var(--hud-scale-center, var(--hud-scale, 1)));
   transform-origin: top center;
   z-index: 15;
   pointer-events: none;
@@ -1020,7 +1020,7 @@ button, input, select, textarea {
   color: #d8e9ff;
   pointer-events: none;
   overflow-y: auto;
-  transform: scale(var(--hud-scale-objectives, var(--hud-scale, 1)));
+  transform: translate(var(--hud-x-objectives, 0px), var(--hud-y-objectives, 0px)) scale(var(--hud-scale-objectives, var(--hud-scale, 1)));
   transform-origin: top right;
 }
 
@@ -1254,7 +1254,7 @@ button, input, select, textarea {
   z-index: 20;
   pointer-events: none;
   max-width: min(620px, calc(100vw - 32px));
-  transform: scale(calc(2 * var(--hud-scale-stats, var(--hud-scale, 1))));
+  transform: translate(var(--hud-x-stats, 0px), var(--hud-y-stats, 0px)) scale(calc(2 * var(--hud-scale-stats, var(--hud-scale, 1))));
   transform-origin: bottom left;
 }
 
@@ -3430,7 +3430,7 @@ button, input, select, textarea {
   position: absolute;
   left: 50%;
   bottom: 18px;
-  transform: translateX(-50%) scale(calc(1.5 * var(--hud-scale-actions, var(--hud-scale, 1))));
+  transform: translate(calc(-50% + var(--hud-x-actions, 0px)), var(--hud-y-actions, 0px)) scale(calc(1.5 * var(--hud-scale-actions, var(--hud-scale, 1))));
   transform-origin: bottom center;
   display: flex;
   gap: 14px;
@@ -3456,7 +3456,7 @@ button, input, select, textarea {
   top: 50%;
   left: 100vw;
   right: auto;
-  transform: translate(-100%, -50%) scale(var(--hud-scale-equipment, var(--hud-scale, 1)));
+  transform: translate(calc(-100% + var(--hud-x-equipment, 0px)), calc(-50% + var(--hud-y-equipment, 0px))) scale(var(--hud-scale-equipment, var(--hud-scale, 1)));
   transform-origin: center right;
   z-index: 22;
   pointer-events: auto;
@@ -7703,6 +7703,16 @@ border-bottom: black solid 2px;
   margin-top: 12px;
 }
 
+.gamepad-status {
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--menu-border);
+  border-radius: 8px;
+  background: rgba(8, 12, 20, .28);
+  color: var(--menu-text-muted);
+  font-size: calc(13px * var(--font-scale, 1));
+}
+
 .gamepad-bind-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -11008,6 +11018,11 @@ border-bottom: black solid 2px;
   align-items: stretch;
   gap: 10px;
 }
+.hud-layout-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
 .hud-element-rows {
   display: flex;
   flex-direction: column;
@@ -11015,7 +11030,7 @@ border-bottom: black solid 2px;
 }
 .hud-element-row {
   display: grid;
-  grid-template-columns: 110px 1fr auto auto;
+  grid-template-columns: 110px auto 1fr auto auto;
   align-items: center;
   gap: 10px;
   padding: 7px 10px;
@@ -11029,6 +11044,12 @@ border-bottom: black solid 2px;
   font-weight: 700;
   letter-spacing: .04em;
   text-transform: uppercase;
+}
+.hud-element-row__cap {
+  font-size: calc(11px * var(--font-scale, 1));
+  font-weight: 700;
+  color: var(--menu-text-muted);
+  letter-spacing: .05em;
 }
 .hud-element-row__slider { width: 100%; }
 .hud-element-row__val {
@@ -11052,6 +11073,37 @@ border-bottom: black solid 2px;
 .hud-element-row__vis[aria-pressed="false"] {
   color: var(--menu-danger);
   border-color: var(--menu-danger);
+}
+/* Second line of each row: the X/Y position nudge sliders span the full width
+   under the scale row. */
+.hud-element-row__offsets {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 2px;
+  padding-top: 7px;
+  border-top: 1px dashed var(--menu-border);
+}
+.hud-element-offset {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 8px;
+}
+.hud-element-offset__axis {
+  font-size: calc(11px * var(--font-scale, 1));
+  font-weight: 700;
+  color: var(--menu-text-muted);
+  letter-spacing: .05em;
+}
+.hud-element-offset__slider { width: 100%; }
+.hud-element-offset__val {
+  min-width: 38px;
+  text-align: right;
+  font-size: calc(11px * var(--font-scale, 1));
+  color: var(--menu-text-muted);
+  font-variant-numeric: tabular-nums;
 }
 
 /* ── HUD layout preview overlay (schematic boxes) ─────────────────────────── */

@@ -57,17 +57,27 @@
   // old saves and the "everything" knob still work. `cssVar` feeds a transform in
   // style.css; `hideClass` toggles a body class that hides just that widget.
   const HUD_ELEMENTS = [
-    { key: 'coins',      label: 'Coins & Loop',     cssVar: '--hud-scale-coins',      hideClass: 'hud-hide-coins' },
-    { key: 'center',     label: 'Timer / Floor',    cssVar: '--hud-scale-center',     hideClass: 'hud-hide-center' },
-    { key: 'objectives', label: 'Objective Panel',  cssVar: '--hud-scale-objectives', hideClass: 'hud-hide-objectives' },
-    { key: 'stats',      label: 'Player Stats',     cssVar: '--hud-scale-stats',      hideClass: 'hud-hide-stats' },
-    { key: 'actions',    label: 'Action Bar',       cssVar: '--hud-scale-actions',    hideClass: 'hud-hide-actions' },
-    { key: 'equipment',  label: 'Tool Slots',       cssVar: '--hud-scale-equipment',  hideClass: 'hud-hide-equipment' },
+    { key: 'coins',      label: 'Coins & Loop',     cssVar: '--hud-scale-coins',      xVar: '--hud-x-coins',      yVar: '--hud-y-coins',      hideClass: 'hud-hide-coins' },
+    { key: 'center',     label: 'Timer / Floor',    cssVar: '--hud-scale-center',     xVar: '--hud-x-center',     yVar: '--hud-y-center',     hideClass: 'hud-hide-center' },
+    { key: 'objectives', label: 'Objective Panel',  cssVar: '--hud-scale-objectives', xVar: '--hud-x-objectives', yVar: '--hud-y-objectives', hideClass: 'hud-hide-objectives' },
+    { key: 'stats',      label: 'Player Stats',     cssVar: '--hud-scale-stats',      xVar: '--hud-x-stats',      yVar: '--hud-y-stats',      hideClass: 'hud-hide-stats' },
+    { key: 'actions',    label: 'Action Bar',       cssVar: '--hud-scale-actions',    xVar: '--hud-x-actions',    yVar: '--hud-y-actions',    hideClass: 'hud-hide-actions' },
+    { key: 'equipment',  label: 'Tool Slots',       cssVar: '--hud-scale-equipment',  xVar: '--hud-x-equipment',  yVar: '--hud-y-equipment',  hideClass: 'hud-hide-equipment' },
   ];
+
+  // Per-element nudge range, in screen pixels, applied before the widget's scale.
+  const HUD_OFFSET_MIN = -200;
+  const HUD_OFFSET_MAX = 200;
+  const HUD_OFFSET_STEP = 2;
+  function normalizeHudOffset(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return 0;
+    return Math.max(HUD_OFFSET_MIN, Math.min(HUD_OFFSET_MAX, Math.round(n / HUD_OFFSET_STEP) * HUD_OFFSET_STEP));
+  }
 
   function defaultHudElements() {
     const out = {};
-    HUD_ELEMENTS.forEach(el => { out[el.key] = { scale: null, visible: true }; });
+    HUD_ELEMENTS.forEach(el => { out[el.key] = { scale: null, visible: true, x: 0, y: 0 }; });
     return out;
   }
 
@@ -76,7 +86,12 @@
     const scale = entry?.scale === null || entry?.scale === undefined
       ? null
       : normalizeHudScale(entry.scale);
-    return { scale, visible: entry?.visible !== false };
+    return {
+      scale,
+      visible: entry?.visible !== false,
+      x: normalizeHudOffset(entry?.x),
+      y: normalizeHudOffset(entry?.y),
+    };
   }
 
   function normalizeHudElements(raw) {
@@ -345,6 +360,10 @@
       } else {
         root.style.setProperty(el.cssVar, String(normalizeHudScale(entry.scale)));
       }
+      const x = normalizeHudOffset(entry.x);
+      const y = normalizeHudOffset(entry.y);
+      if (x) root.style.setProperty(el.xVar, `${x}px`); else root.style.removeProperty(el.xVar);
+      if (y) root.style.setProperty(el.yVar, `${y}px`); else root.style.removeProperty(el.yVar);
       root.classList.toggle(el.hideClass, entry.visible === false);
     });
   }
@@ -450,6 +469,7 @@
 
   function openSettings() {
     stopListening();
+    refreshGamepadStatus();
     if (settingsUi && typeof settingsUi.showScreen === 'function') {
       settingsUi.showScreen('settingsModal');
     }
@@ -559,6 +579,23 @@
   }
 
   refreshGamepadBindControls();
+
+  function refreshGamepadStatus() {
+    const status = document.getElementById('gamepadStatus');
+    if (!status) return;
+    const pads = window.NeoGamepad?.getConnectedPads?.() || [];
+    if (!pads.length) {
+      status.textContent = 'No gamepad detected. Press any button after connecting one.';
+      return;
+    }
+    status.textContent = pads
+      .map(pad => `P${Number(pad.index ?? 0) + 1}: ${pad.id || 'Gamepad'}${pad.mapping === 'standard' ? ' (standard mapping)' : ''}`)
+      .join('  ·  ');
+  }
+
+  refreshGamepadStatus();
+  window.addEventListener('neo:gamepad-changed', refreshGamepadStatus);
+  window.setInterval(refreshGamepadStatus, 1000);
 
   modal.querySelectorAll('.gamepad-bind-select').forEach(select => {
     select.addEventListener('change', () => {
@@ -766,21 +803,36 @@
   }
 
   function refreshHudPreviewBoxes() {
+    // The preview frame stands in for the whole screen, so a real-pixel nudge is
+    // shown shrunk by the frame-to-screen width ratio (best-effort; falls back to
+    // a flat fraction before the overlay has laid out).
+    const frame = document.getElementById('hudPreviewFrame');
+    const ratio = frame && frame.clientWidth
+      ? frame.clientWidth / Math.max(1, window.innerWidth)
+      : 0.5;
     HUD_ELEMENTS.forEach(el => {
       const box = document.querySelector(`.hud-preview-box[data-preview="${el.key}"]`);
       if (!box) return;
       const entry = hudElements[el.key] || {};
       const hidden = entry.visible === false;
       box.classList.toggle('hud-preview-box--hidden', hidden);
-      // Compose the per-element scale onto whatever centering transform the anchor
-      // already applies, so the box grows/shrinks like the real widget.
+      // Compose the per-element scale + offset onto whatever centering transform
+      // the anchor already applies, so the box moves/grows like the real widget.
       const base = box.classList.contains('hud-preview-box--center') || box.classList.contains('hud-preview-box--actions')
         ? 'translateX(-50%) '
         : box.classList.contains('hud-preview-box--equipment')
           ? 'translateY(-50%) '
           : '';
-      box.style.transform = `${base}scale(${effectiveHudScale(el.key)})`;
+      const ox = normalizeHudOffset(entry.x) * ratio;
+      const oy = normalizeHudOffset(entry.y) * ratio;
+      const nudge = (ox || oy) ? `translate(${ox}px, ${oy}px) ` : '';
+      box.style.transform = `${base}${nudge}scale(${effectiveHudScale(el.key)})`;
     });
+  }
+
+  function formatHudOffset(value) {
+    const n = normalizeHudOffset(value);
+    return n === 0 ? '0' : `${n > 0 ? '+' : ''}${n}`;
   }
 
   function refreshHudElementRow(key) {
@@ -793,6 +845,10 @@
       ? HUD_SCALE_MIN
       : normalizeHudScale(entry.scale);
     refs.val.textContent = formatHudElementScale(entry);
+    refs.xSlider.value = normalizeHudOffset(entry.x);
+    refs.xVal.textContent = formatHudOffset(entry.x);
+    refs.ySlider.value = normalizeHudOffset(entry.y);
+    refs.yVal.textContent = formatHudOffset(entry.y);
     refs.vis.setAttribute('aria-pressed', hidden ? 'false' : 'true');
     refs.vis.textContent = hidden ? 'Hidden' : 'Shown';
   }
@@ -806,6 +862,9 @@
       const name = document.createElement('span');
       name.className = 'hud-element-row__name';
       name.textContent = el.label;
+      const scaleCap = document.createElement('span');
+      scaleCap.className = 'hud-element-row__cap';
+      scaleCap.textContent = 'Scale';
       // Slider min is one step below HUD_SCALE_MIN so the leftmost notch means
       // "Auto" (inherit global scale) rather than a fixed 50%.
       const slider = document.createElement('input');
@@ -819,9 +878,38 @@
       const vis = document.createElement('button');
       vis.type = 'button';
       vis.className = 'hud-element-row__vis';
-      row.append(name, slider, val, vis);
+
+      // Second line: X/Y position nudge sliders (pixels, applied before scale).
+      const offsetRow = document.createElement('div');
+      offsetRow.className = 'hud-element-row__offsets';
+      const makeOffset = (axisLabel) => {
+        const wrap = document.createElement('label');
+        wrap.className = 'hud-element-offset';
+        const cap = document.createElement('span');
+        cap.className = 'hud-element-offset__axis';
+        cap.textContent = axisLabel;
+        const sl = document.createElement('input');
+        sl.type = 'range';
+        sl.className = 'hud-element-offset__slider';
+        sl.min = String(HUD_OFFSET_MIN);
+        sl.max = String(HUD_OFFSET_MAX);
+        sl.step = String(HUD_OFFSET_STEP);
+        const rv = document.createElement('span');
+        rv.className = 'hud-element-offset__val';
+        wrap.append(cap, sl, rv);
+        offsetRow.appendChild(wrap);
+        return { sl, rv };
+      };
+      const xOff = makeOffset('X');
+      const yOff = makeOffset('Y');
+
+      row.append(name, scaleCap, slider, val, vis, offsetRow);
       host.appendChild(row);
-      hudRowEls[el.key] = { row, slider, val, vis };
+      hudRowEls[el.key] = {
+        row, slider, val, vis,
+        xSlider: xOff.sl, xVal: xOff.rv,
+        ySlider: yOff.sl, yVal: yOff.rv,
+      };
 
       slider.addEventListener('input', () => {
         const raw = Number(slider.value);
@@ -831,6 +919,15 @@
         refreshHudPreviewBoxes();
         save();
       });
+      const onOffset = (axis, sliderEl) => () => {
+        hudElements[el.key][axis] = normalizeHudOffset(sliderEl.value);
+        applyHudElements();
+        refreshHudElementRow(el.key);
+        refreshHudPreviewBoxes();
+        save();
+      };
+      xOff.sl.addEventListener('input', onOffset('x', xOff.sl));
+      yOff.sl.addEventListener('input', onOffset('y', yOff.sl));
       vis.addEventListener('click', () => {
         hudElements[el.key].visible = hudElements[el.key].visible === false;
         applyHudElements();
@@ -910,6 +1007,14 @@
       });
     }
   }
+
+  document.getElementById('hudLayoutResetBtn')?.addEventListener('click', () => {
+    hudElements = defaultHudElements();
+    applyHudElements();
+    HUD_ELEMENTS.forEach(el => refreshHudElementRow(el.key));
+    refreshHudPreviewBoxes();
+    save();
+  });
 
   document.getElementById('hudLayoutPreviewBtn')?.addEventListener('click', () => {
     const overlay = document.getElementById('hudPreviewOverlay');

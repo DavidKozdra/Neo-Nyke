@@ -1543,6 +1543,7 @@
       <section class="settings-group gamepad-bindings">
         <h3 class="settings-group__title">Gamepad / Handheld</h3>
         <p class="stab-hint gamepad-bindings__hint">Standard Xbox-style layout. Sticks and D-pad always control movement and aim.</p>
+        <p class="gamepad-status" id="gamepadStatus" aria-live="polite">No gamepad detected. Press any button after connecting one.</p>
         <div class="gamepad-bind-grid">
           <label class="gamepad-bind-row"><span>A</span><select class="gamepad-bind-select" data-gamepad-button="0"></select></label>
           <label class="gamepad-bind-row"><span>B</span><select class="gamepad-bind-select" data-gamepad-button="1"></select></label>
@@ -1778,9 +1779,12 @@
       <h3 class="settings-group__title">HUD Layout</h3>
       <div class="access-row access-row--column">
         <div class="access-text">
-          <span class="access-desc">Resize or hide each HUD widget on its own. "Auto" follows the HUD scale above. Open the preview to see where everything sits.</span>
+          <span class="access-desc">Resize, move, or hide each HUD widget on its own. "Auto" follows the HUD scale above; the X/Y sliders nudge a widget across the screen. Open the preview to see where everything sits.</span>
         </div>
-        <button type="button" class="settings-reset" id="hudLayoutPreviewBtn">Preview layout</button>
+        <div class="hud-layout-actions">
+          <button type="button" class="settings-reset" id="hudLayoutPreviewBtn">Preview layout</button>
+          <button type="button" class="settings-reset" id="hudLayoutResetBtn">Reset layout</button>
+        </div>
         <div id="hudElementRows" class="hud-element-rows"></div>
       </div>
       </section>
