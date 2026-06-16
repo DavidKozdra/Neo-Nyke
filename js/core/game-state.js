@@ -105,6 +105,18 @@ export function resumeGame() {
     return Neo.gameMode === 'sandbox';
   }
 
+  // Coerces a saved/partial rival-curse blob into the canonical shape, so old
+  // saves (without the field) and corrupt values land on safe defaults.
+  function normalizeRivalCurses(input) {
+    const src = input && typeof input === 'object' ? input : {};
+    return {
+      obscureMap: !!src.obscureMap,
+      lowerCombat: !!src.lowerCombat,
+      reducePotions: !!src.reducePotions,
+      gellehTurrets: Math.max(0, Math.round(Number(src.gellehTurrets || 0))),
+    };
+  }
+
   function getActiveSandboxSettings() {
     return isSandboxRunActive() ? Neo.sandboxSettings : null;
   }
@@ -2884,6 +2896,8 @@ export function resumeGame() {
     Neo.pendingRivalReturns = [];
     Neo.slainRivalKeys = [];
     Neo.pendingMooggyTraps = 0;
+    Neo.pendingRivalCurses = normalizeRivalCurses(null);
+    Neo.floorRivalCurses = normalizeRivalCurses(null);
     Neo.monsterRoamTimer = 0;
     Neo.mooggyAssassinSpawnedThisRun = false;
     Neo.mooggyAssassinSpawnedThisFloor = false;
@@ -3050,6 +3064,8 @@ export function resumeGame() {
     Neo.pendingRivalReturns = Array.isArray(snapshot.pendingRivalReturns) ? snapshot.pendingRivalReturns : [];
     Neo.slainRivalKeys = Array.isArray(snapshot.slainRivalKeys) ? [...snapshot.slainRivalKeys] : [];
     Neo.pendingMooggyTraps = Number(snapshot.pendingMooggyTraps || 0);
+    Neo.pendingRivalCurses = normalizeRivalCurses(snapshot.pendingRivalCurses);
+    Neo.floorRivalCurses = normalizeRivalCurses(snapshot.floorRivalCurses);
     Neo.wizardPawSelection = null;
     Neo.scrollControlSelection = null;
     Neo.panelItemDeferredToastRoom = null;

@@ -161,6 +161,11 @@ window.Neo = {
   pendingRivalReturns: [],
   slainRivalKeys: [],
   pendingMooggyTraps: 0,
+  // Rival retaliation curses. queueRivalCurse (on kill / alive descent) writes
+  // into pendingRivalCurses; on floor enter applyRivalCurses promotes pending →
+  // floorRivalCurses (the curses active for the current floor) and clears pending.
+  pendingRivalCurses: { obscureMap: false, lowerCombat: false, reducePotions: false, gellehTurrets: 0 },
+  floorRivalCurses: { obscureMap: false, lowerCombat: false, reducePotions: false, gellehTurrets: 0 },
   monsterRoamTimer: 0,
   mooggyAssassinSpawnedThisRun: false,
   mooggyAssassinSpawnedThisFloor: false,

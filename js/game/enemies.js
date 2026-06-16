@@ -1203,8 +1203,33 @@
 
     if (base.elite) applyEliteTypes(base);
 
+    // collect: build and return the enemy without adding it to the live
+    // Neo.enemies list, so the caller can place it into a specific room's
+    // enemies array (used to seed Gelleh's turrets across a fresh floor).
+    if (options.collect) return base;
+
     Neo.enemies.push(base);
     return base;
+  }
+
+  // Builds one of Gelleh's retaliation turrets: a stationary (speed 0) stayback
+  // sniper that holds its post and fires on the player, has real HP, and is
+  // flagged so its death drops a potion 50% of the time (see onEnemyDie). Built
+  // detached (collect) so the caller can drop it into a chosen room's enemies.
+  function makeGellehTurret(room, floorScale = 1) {
+    const x = Neo.WALL + 70 + Neo.nextRandom('world') * (Neo.ROOM_W - Neo.WALL * 2 - 140);
+    const y = Neo.WALL + 70 + Neo.nextRandom('world') * (Neo.ROOM_H - Neo.WALL * 2 - 140);
+    const turret = spawnEnemy('sniper', x, y, false, { collect: true });
+    if (!turret) return null;
+    turret.sniperBehavior = 'stayback';
+    turret.speed = 0;
+    turret.hp = Math.round(70 * floorScale);
+    turret.max = turret.hp;
+    turret.dmg = Math.round(11 * floorScale);
+    turret.color = '#a8aaff';
+    turret.rivalTurret = true;          // 50% potion on death (onEnemyDie)
+    turret.gellehTurret = true;         // flavor / future hooks
+    return turret;
   }
 
   function spawnGodBoss() {
@@ -5288,6 +5313,7 @@
   Neo.getEnemyLevelStatMultipliers = getEnemyLevelStatMultipliers;
   Neo.scaleEnemyStats = scaleEnemyStats;
   Neo.spawnEnemy = spawnEnemy;
+  Neo.makeGellehTurret = makeGellehTurret;
   Neo.spawnGodBoss = spawnGodBoss;
   Neo.playGodDialogue = playGodDialogue;
   Neo.tryPlayKnaveKnightCutscene = tryPlayKnaveKnightCutscene;

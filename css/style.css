@@ -11571,6 +11571,12 @@ border-bottom: black solid 2px;
 .inv-rival__status--hostile { color: #ff6b6b; }
 .inv-rival__status--return { color: #c9aaff; }
 .inv-rival--returning { opacity: .85; }
+.inv-rival__signature {
+  margin: 4px 0 0;
+  font-size: calc(11px * var(--font-scale, 1));
+  color: #ff9aa8;
+  font-style: italic;
+}
 .inv-rival--slain { opacity: .6; }
 
 /* ── Unlock celebration: confetti canvas + big center banner ─────────────────

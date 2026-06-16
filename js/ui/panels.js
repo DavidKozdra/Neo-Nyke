@@ -2444,6 +2444,17 @@ export function renderInventoryPanel() {
           const lives = Math.max(0, Number(rival.lives ?? 2));
           return '♥'.repeat(lives) + '♡'.repeat(Math.max(0, 2 - lives));
         };
+        // Each rival curses the next floor when killed or when it descends alive.
+        const RIVAL_SIGNATURES = {
+          princess: 'Curse: 40% chance to cloud your whole map next floor.',
+          thorn_knight: 'Curse: halves your crit rate & bleed chance next floor.',
+          metao: 'Curse: cuts potion drops by 60% next floor.',
+          gelleh: 'Curse: plants hostile holy turrets across the next floor.',
+          mooggy: 'Curse: seeds the next floor with blood thorn traps.',
+        };
+        const signatureLine = rival => rival && !rival.friend && RIVAL_SIGNATURES[rival.characterKey]
+          ? `<p class="inv-rival__signature">${RIVAL_SIGNATURES[rival.characterKey]}</p>`
+          : '';
         const liveCards = (Neo.rivals || []).filter(rival => rival && !rival.dead).map(rival => {
           const activity = rival.friend ? 'Travelling with you'
             : rival.vendetta ? 'Hunting you with god gear'
@@ -2461,6 +2472,7 @@ export function renderInventoryPanel() {
               <span>RELATIONSHIP ${Number(rival.relationship || 0).toFixed(1)}</span>
             </div>
             <p>${activity}.</p>
+            ${signatureLine(rival)}
           </div>`;
         });
         const returnCards = (Neo.pendingRivalReturns || []).filter(entry => entry?.rival).map(entry => {
@@ -2477,6 +2489,7 @@ export function renderInventoryPanel() {
               <span>RELATIONSHIP ${Number(rival.relationship || 0).toFixed(1)}</span>
             </div>
             <p>${Number(rival.relationship || 0) < 0 ? 'Holds a grudge — will return armed for revenge.' : 'Licking their wounds on a floor below.'}</p>
+            ${signatureLine(rival)}
           </div>`;
         });
         const slainCards = (Neo.slainRivalKeys || []).map(key => {

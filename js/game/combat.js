@@ -3405,11 +3405,16 @@
 
     const eliteItemDropChance = Neo.getRandomItemDropChance(0.18, 0.65);
     const normalItemDropChance = Neo.getRandomItemDropChance(0, 0.35);
-    if (!isTutorialDummy && enemy.type !== 'rival' && enemy.elite && enemyLootRandom() < eliteItemDropChance) {
+    // Metao's floor curse (reducePotions): chokes the potion supply by 60%.
+    const potionDropChance = 0.1 * (Neo.floorRivalCurses?.reducePotions ? 0.4 : 1);
+    if (enemy.rivalTurret) {
+      // Gelleh's turrets drop a potion 50% of the time and nothing else.
+      if (enemyLootRandom() < 0.5) Neo.pickups.push({ x: enemy.x, y: enemy.y, type: 'potion' });
+    } else if (!isTutorialDummy && enemy.type !== 'rival' && enemy.elite && enemyLootRandom() < eliteItemDropChance) {
       Neo.pickups.push({ x: enemy.x, y: enemy.y, type: 'item', key: rollItemDrop({ elite: true, random: enemyLootRandom }) });
     } else if (!isTutorialDummy && enemy.type !== 'rival' && !enemy.elite && normalItemDropChance > 0 && enemyLootRandom() < normalItemDropChance) {
       Neo.pickups.push({ x: enemy.x, y: enemy.y, type: 'item', key: rollItemDrop({ random: enemyLootRandom }) });
-    } else if (!isTutorialDummy && enemyLootRandom() < 0.1) {
+    } else if (!isTutorialDummy && enemyLootRandom() < potionDropChance) {
       Neo.pickups.push({ x: enemy.x, y: enemy.y, type: 'potion' });
     }
 
@@ -3557,11 +3562,10 @@
         (Neo.pendingRivalReturns || []).forEach(entry => {
           if (entry?.rival) Neo.grantRivalItems?.(entry.rival, 10, { allowDead: true });
         });
-        // Mooggy's death curse: 15 blood thorn traps seeded on the next floor
-        // (20 if she instead survives the descent — see spawnRivals).
-        if (rival.characterKey === 'mooggy') {
-          Neo.pendingMooggyTraps = Math.max(Number(Neo.pendingMooggyTraps || 0), 15);
-        }
+        // Every rival's death arms its signature floor curse on the next floor
+        // (e.g. Mooggy's blood thorns, Princess's clouded map). An alive descent
+        // arms a slightly stronger version in spawnRivals.
+        Neo.queueRivalCurse?.(rival.characterKey, { descended: false });
         const stolenLoot = Array.isArray(rival.loot) ? rival.loot : [];
         const finalDeath = rival.lives <= 0;
         if (finalDeath) {

@@ -273,6 +273,11 @@
     const originY = Math.round(visibleCanvasTop + topInset + minimapOffsetY / scaleY);
     const markerFont = `${Math.max(7, Math.round(size * 0.62))}px system-ui`;
     const currentRoom = Neo.currentRoom;
+    // Princess's floor curse (obscureMap): every room other than the one you're
+    // standing in reads as un-explored on the minimap, hiding its layout, exits,
+    // pickup dots, and trap skulls for the whole floor.
+    const mapObscured = !!Neo.floorRivalCurses?.obscureMap;
+    const isRevealed = (room) => !!room?.explored && !(mapObscured && room !== currentRoom);
     const currentCellCx = currentRoom && !currentRoom.secret
       ? originX + currentRoom.gx * (size + gap) + size / 2
       : originX + mapWidth / 2;
@@ -396,11 +401,14 @@
       if (room.secret) return;
       const x = originX + room.gx * (size + gap);
       const y = originY + room.gy * (size + gap);
-      const roomShowsExit = showsExit(room);
-      if (roomShowsExit && !room.explored) {
+      const roomExplored = isRevealed(room);
+      // While obscured, only the current room reveals an exit star; the rest read
+      // as undiscovered.
+      const roomShowsExit = showsExit(room) && (!mapObscured || room === currentRoom);
+      if (roomShowsExit && !roomExplored) {
         Neo.ctx.globalAlpha = 0.55;
         Neo.ctx.fillStyle = '#fff04a';
-      } else if (!room.explored) {
+      } else if (!roomExplored) {
         Neo.ctx.globalAlpha = 0.25;
         Neo.ctx.fillStyle = '#001018';
       } else if (roomShowsExit) {
@@ -435,48 +443,54 @@
         Neo.ctx.fillStyle = '#0a3344';
       }
       Neo.ctx.fillRect(x, y, size, size);
+      // While obscured, suppress the room-type glyphs for every room but the
+      // current one so the floor's layout stays hidden.
+      const showRoomGlyph = !mapObscured || room === currentRoom;
       if (roomShowsExit) {
-        Neo.ctx.globalAlpha = room.explored ? 1 : 0.7;
+        Neo.ctx.globalAlpha = roomExplored ? 1 : 0.7;
         Neo.ctx.fillStyle = '#fff700';
         Neo.ctx.font = `bold ${markerFont}`;
         Neo.ctx.textAlign = 'center';
         Neo.ctx.textBaseline = 'middle';
         Neo.ctx.fillText('★', x + size / 2, y + size / 2);
-      } else if (room.type === 'challenge') {
-        Neo.ctx.globalAlpha = room.explored ? 1 : 0.72;
+      } else if (room.type === 'challenge' && showRoomGlyph) {
+        Neo.ctx.globalAlpha = roomExplored ? 1 : 0.72;
         Neo.ctx.fillStyle = '#071116';
         Neo.ctx.font = `bold ${markerFont}`;
         Neo.ctx.textAlign = 'center';
         Neo.ctx.textBaseline = 'middle';
         Neo.ctx.fillText('T', x + size / 2, y + size / 2);
-      } else if (room.type === 'shop') {
-        Neo.ctx.globalAlpha = room.explored ? 1 : 0.72;
+      } else if (room.type === 'shop' && showRoomGlyph) {
+        Neo.ctx.globalAlpha = roomExplored ? 1 : 0.72;
         Neo.ctx.fillStyle = '#071116';
         Neo.ctx.font = `bold ${markerFont}`;
         Neo.ctx.textAlign = 'center';
         Neo.ctx.textBaseline = 'middle';
         Neo.ctx.fillText('$', x + size / 2, y + size / 2);
-      } else if (room.type === 'anvil') {
-        Neo.ctx.globalAlpha = room.explored ? 1 : 0.72;
+      } else if (room.type === 'anvil' && showRoomGlyph) {
+        Neo.ctx.globalAlpha = roomExplored ? 1 : 0.72;
         Neo.ctx.fillStyle = '#1a0800';
         Neo.ctx.font = `bold ${markerFont}`;
         Neo.ctx.textAlign = 'center';
         Neo.ctx.textBaseline = 'middle';
         Neo.ctx.fillText('⚒', x + size / 2, y + size / 2);
       }
-      if (room.visited) {
+      if (room.visited && roomExplored) {
         Neo.ctx.strokeStyle = 'rgba(0,255,255,0.5)';
         Neo.ctx.lineWidth = 1;
         Neo.ctx.strokeRect(x + 0.5, y + 0.5, size - 1, size - 1);
       }
       if (room.secret) return;
+      // While obscured, the connecting-door stubs are hidden for unrevealed rooms
+      // so the floor's shape can't be read off the map.
+      if (!roomExplored && mapObscured) return;
       Neo.ctx.fillStyle = 'rgba(0,255,255,0.75)';
       if (room.doors.n) Neo.ctx.fillRect(x + size / 2 - 1, y - 2, 2, 2);
       if (room.doors.s) Neo.ctx.fillRect(x + size / 2 - 1, y + size, 2, 2);
       if (room.doors.w) Neo.ctx.fillRect(x - 2, y + size / 2 - 1, 2, 2);
       if (room.doors.e) Neo.ctx.fillRect(x + size, y + size / 2 - 1, 2, 2);
     });
-    if (Neo.hasLegacy('elite_tracker')) {
+    if (Neo.hasLegacy('elite_tracker') && !mapObscured) {
       Neo.rooms.forEach(room => {
         if (room.secret || room === Neo.currentRoom) return;
         const hasElite = Array.isArray(room.enemies) && room.enemies.some(e => e?.elite);
@@ -495,7 +509,7 @@
 
       // Trap skull markers on explored rooms
       Neo.rooms.forEach(room => {
-        if (room.secret || !room.explored) return;
+        if (room.secret || !isRevealed(room)) return;
         const hasExplosiveTrap = Array.isArray(room.hazards) && room.hazards.some(h => h?.kind === 'explosive_trap');
         if (!hasExplosiveTrap) return;
         const rx = originX + room.gx * (size + gap);
@@ -510,7 +524,7 @@
 
       // Pickup dots: green=potion, yellow=coin, red=item — on explored non-current rooms
       Neo.rooms.forEach(room => {
-        if (room.secret || !room.explored || room === Neo.currentRoom) return;
+        if (room.secret || !isRevealed(room) || room === Neo.currentRoom) return;
         const pickups = Array.isArray(room.pickups) ? room.pickups : [];
         const hasPotion = pickups.some(p => p?.type === 'potion');
         const hasCoin = pickups.some(p => p?.type === 'coin');

@@ -641,7 +641,10 @@ export function getItemStats() {
     // Prince's Glasses: first stack grants a flat bonus, each extra stack a smaller one.
     const princesGlassesCrit = princesGlasses > 0 ? 0.05 + (princesGlasses - 1) * 0.02 : 0;
     const princesGlassesDefense = princesGlasses > 0 ? 0.10 + (princesGlasses - 1) * 0.02 : 0;
-    let critChance = critCharmBonus + keenEyeBonus + pendantOfKronos * godItemStacks * 0.01 + princesGlassesCrit;
+    // Thorn's floor curse (lowerCombat): a flat 50% cut to crit rate and bleed
+    // chance for the whole floor. Applied to the raw chances before clamps/rollback.
+    const rivalCombatCurse = Neo.floorRivalCurses?.lowerCombat ? 0.5 : 1;
+    let critChance = (critCharmBonus + keenEyeBonus + pendantOfKronos * godItemStacks * 0.01 + princesGlassesCrit) * rivalCombatCurse;
     if (oracleLens) critChance *= 2;
     // Crit roll-back: let chance climb past the old 0.95 cap, then convert every
     // crossing of 100% into +50% crit damage and a roll-back to 75% (see
@@ -668,11 +671,11 @@ export function getItemStats() {
     const xpProgress = Neo.clamp((Neo.player?.xpToNext || 0) > 0 ? (Neo.player?.xp || 0) / Neo.player.xpToNext : 0, 0, 1);
     const characterDef = Neo.getCharacterDef?.() || {};
     Neo.itemStatsCacheValue = {
-      bleedChance: baseBleedChance,
-      weaponBleedChance: weaponBleedBonus,
-      displayedBleedChance: baseBleedChance + weaponBleedBonus,
-      weaponCritChance: weaponCritBonus,
-      displayedCritChance: critChance + weaponCritBonus,
+      bleedChance: baseBleedChance * rivalCombatCurse,
+      weaponBleedChance: weaponBleedBonus * rivalCombatCurse,
+      displayedBleedChance: (baseBleedChance + weaponBleedBonus) * rivalCombatCurse,
+      weaponCritChance: weaponCritBonus * rivalCombatCurse,
+      displayedCritChance: (critChance + weaponCritBonus * rivalCombatCurse),
       // Tooth of Thorn ramps: 2.8% per stack plus an extra 2% × stacks per stack,
       // so investment compounds (mirrors Enemy Magnet's homing ramp).
       drainChance: toothOfThorn * 0.028 + toothOfThorn * toothOfThorn * 0.02,

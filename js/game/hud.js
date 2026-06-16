@@ -944,6 +944,8 @@
       pendingRivalReturns: Neo.pendingRivalReturns,
       slainRivalKeys: Neo.slainRivalKeys,
       pendingMooggyTraps: Neo.pendingMooggyTraps,
+      pendingRivalCurses: Neo.pendingRivalCurses,
+      floorRivalCurses: Neo.floorRivalCurses,
       cooldowns: Neo.cooldowns,
       laserActive: Neo.laserActive,
       laserTime: Neo.laserTime,

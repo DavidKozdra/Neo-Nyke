@@ -130,18 +130,10 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
     Neo.player.x = Neo.START_X;
     Neo.player.y = Neo.START_Y;
     spawnRivals();
-    const bloodThornCount = seedBloodThornTraps();
+    const curses = applyRivalCurses();
     Neo.gameEvents.emit('floor:enter', { floor: Neo.floor });
     enterRoom(startRoom);
-    if (bloodThornCount > 0) {
-      Neo.spawnParticle({
-        x: Neo.ROOM_W / 2,
-        y: Neo.ROOM_H / 2 - 80,
-        life: 2.6,
-        text: `MOOGGY SEEDED ${bloodThornCount} BLOOD THORNS HERE`,
-        c: '#ff3348',
-      });
-    }
+    announceRivalCurses(curses);
     if (Array.isArray(Neo.pendingRivalDescends) && Neo.pendingRivalDescends.length > 0) {
       Neo.pendingRivalDescends.forEach((rival, i) => {
         Neo.spawnParticle({
@@ -1349,7 +1341,11 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
       Neo.spawnWave(Number(room.startRoomEliteCount), 'combat', { forceElite: true, suppressMiniBoss: true });
       Neo.spawnParticle({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 64, life: 1.2, text: 'ELITE AMBUSH', c: '#ffb347' });
     }
-    if (room.type === 'combat' && !room.cleared && Neo.enemies.length === 0) {
+    // Gelleh's seeded turrets pre-populate room.enemies, so the combat wave must
+    // key off whether any *non-turret* enemy is present rather than a bare count —
+    // otherwise a turret alone would suppress the room's encounter.
+    const hasLiveWaveEnemies = Neo.enemies.some(e => e && !e.gellehTurret);
+    if (room.type === 'combat' && !room.cleared && !hasLiveWaveEnemies) {
       if (Neo.gameMode === 'treasure_hunt' && room.treasureHuntEscapePending) {
         room.treasureHuntEscapePending = false;
         room.treasureHuntEscapeActive = true;
@@ -2054,17 +2050,50 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
     return base;
   }
 
+  // Every rival retaliates with a signature floor-wide curse, armed either when
+  // it's killed or when it descends alive (matching Mooggy's blood thorns). The
+  // curse lands on the NEXT floor; queueRivalCurse just sets the pending flags,
+  // which seedRivalCurses() (called on floor enter) consumes. `descended` is true
+  // for an alive descent (slightly stronger), false for a death-revenge.
+  function queueRivalCurse(characterKey, { descended = false } = {}) {
+    if (!characterKey) return;
+    const curses = Neo.pendingRivalCurses || (Neo.pendingRivalCurses = {});
+    switch (characterKey) {
+      case 'princess':
+        // 40% chance to black out all map detail for the floor (rolled once now).
+        if (!curses.obscureMap && Neo.nextRandom('world') < 0.4) curses.obscureMap = true;
+        break;
+      case 'thorn_knight':
+        // Lower crit rate and bleed chance for the floor.
+        curses.lowerCombat = true;
+        break;
+      case 'metao':
+        // Reduce potion drop rate by 60% for the floor.
+        curses.reducePotions = true;
+        break;
+      case 'gelleh':
+        // Seed hostile holy turrets (have HP, 50% potion on kill): more if alive.
+        curses.gellehTurrets = Math.max(Number(curses.gellehTurrets || 0), descended ? 4 : 3);
+        break;
+      case 'mooggy':
+        Neo.pendingMooggyTraps = Math.max(Number(Neo.pendingMooggyTraps || 0), descended ? 20 : 15);
+        break;
+      default:
+        break;
+    }
+  }
+
   function spawnRivals() {
     const carried = Array.isArray(Neo._carriedRivals) ? Neo._carriedRivals : [];
     Neo._carriedRivals = null;
 
     if (!Neo.rooms || Neo.rooms.length === 0) { Neo.rivals = []; Neo.pendingRivalDescends = []; return; }
 
-    // Mooggy seeds the floor below with blood thorn traps: 20 when she descends
-    // alive (her kill sets 15 in onEnemyDie). Friends don't trap their friends.
-    if (carried.some(r => r.characterKey === 'mooggy' && !r.friend)) {
-      Neo.pendingMooggyTraps = Math.max(Number(Neo.pendingMooggyTraps || 0), 20);
-    }
+    // Every rival that descends alive (and isn't a friend) arms its floor curse
+    // on the floor below, mirroring how a kill arms it in onEnemyDie.
+    carried.forEach(r => {
+      if (r && !r.friend) queueRivalCurse(r.characterKey, { descended: true });
+    });
 
     const nonStartRooms = Neo.rooms.filter(r => r.type !== 'start' && r.type !== 'boss' && r.type !== 'god');
     const floorScale = 1 + (Neo.floor - 1) * 0.12;
@@ -2214,17 +2243,32 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
     applyRivalDifficultyFloorBonuses();
   }
 
-  // Distributes Mooggy's queued blood thorn traps across the freshly generated
-  // floor as persistent dungeon-owned thorn mines (no ttl — they wait until
-  // tripped, and they arm against the player). Returns how many were placed so
-  // generateFloor can announce them after enterRoom.
-  function seedBloodThornTraps() {
-    const count = Math.max(0, Math.round(Number(Neo.pendingMooggyTraps || 0)));
-    Neo.pendingMooggyTraps = 0;
-    if (count <= 0) return 0;
+  // Promotes the pending rival curses onto the freshly generated floor: copies
+  // the passive flags (obscured map, lowered crit/bleed, reduced potions) into
+  // Neo.floorRivalCurses where the rest of the game reads them, and physically
+  // seeds Mooggy's blood thorns and Gelleh's hostile turrets across the rooms.
+  // Returns a summary so generateFloor can announce what landed after enterRoom.
+  function applyRivalCurses() {
+    const pending = Neo.pendingRivalCurses || {};
+    Neo.floorRivalCurses = {
+      obscureMap: !!pending.obscureMap,
+      lowerCombat: !!pending.lowerCombat,
+      reducePotions: !!pending.reducePotions,
+      gellehTurrets: Math.max(0, Math.round(Number(pending.gellehTurrets || 0))),
+    };
+    // Reset pending now that it's been promoted; new kills/descents on this floor
+    // build up the next floor's curse set.
+    Neo.pendingRivalCurses = { obscureMap: false, lowerCombat: false, reducePotions: false, gellehTurrets: 0 };
+
+    const summary = { bloodThorns: 0, turrets: 0, ...Neo.floorRivalCurses };
     const pool = Neo.rooms.filter(room => room.type !== 'start' && room.type !== 'god');
-    if (pool.length === 0) return 0;
-    for (let index = 0; index < count; index += 1) {
+    if (pool.length === 0) return summary;
+
+    // Mooggy's blood thorns: persistent dungeon-owned thorn mines (no ttl — they
+    // wait until tripped, armed against the player).
+    const thornCount = Math.max(0, Math.round(Number(Neo.pendingMooggyTraps || 0)));
+    Neo.pendingMooggyTraps = 0;
+    for (let index = 0; index < thornCount; index += 1) {
       const room = pool[Math.floor(Neo.nextRandom('world') * pool.length)];
       if (!Array.isArray(room.hazards)) room.hazards = [];
       room.hazards.push({
@@ -2244,7 +2288,47 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
         triggered: false,
       });
     }
-    return count;
+    summary.bloodThorns = thornCount;
+
+    // Gelleh's hostile turrets: stationary ranged enemies (speed 0 + stayback
+    // sniper AI so they hold position and fire) that have HP and, on death, drop
+    // a potion 50% of the time. Combat rooms only, one per room at most.
+    const turretCount = Math.max(0, Math.round(Number(Neo.floorRivalCurses.gellehTurrets || 0)));
+    if (turretCount > 0) {
+      const turretRooms = pool.filter(room => room.type === 'combat');
+      const shuffled = [...turretRooms].sort(() => Neo.nextRandom('world') - 0.5);
+      const floorScale = 1 + (Neo.floor - 1) * 0.12;
+      for (let index = 0; index < turretCount && index < shuffled.length; index += 1) {
+        const room = shuffled[index];
+        const turret = Neo.makeGellehTurret?.(room, floorScale);
+        if (!turret) continue;
+        if (!Array.isArray(room.enemies)) room.enemies = [];
+        room.enemies.push(turret);
+        summary.turrets += 1;
+      }
+    }
+    return summary;
+  }
+
+  // Announces whichever rival curses landed on the floor the player just entered,
+  // stacking one banner per curse just below the room center.
+  function announceRivalCurses(summary) {
+    if (!summary) return;
+    const lines = [];
+    if (summary.bloodThorns > 0) lines.push({ text: `MOOGGY SEEDED ${summary.bloodThorns} BLOOD THORNS HERE`, c: '#ff3348' });
+    if (summary.turrets > 0) lines.push({ text: `GELLEH PLANTED ${summary.turrets} HOLY TURRETS`, c: '#a8aaff' });
+    if (summary.obscureMap) lines.push({ text: 'PRINCESS CLOUDED YOUR MAP', c: '#e87fff' });
+    if (summary.lowerCombat) lines.push({ text: 'THORN DULLED YOUR CRIT & BLEED', c: '#ff6e8b' });
+    if (summary.reducePotions) lines.push({ text: 'METAO CHOKED THE POTION SUPPLY', c: '#ff9940' });
+    lines.forEach((line, index) => {
+      Neo.spawnParticle({
+        x: Neo.ROOM_W / 2,
+        y: Neo.ROOM_H / 2 - 80 + index * 26,
+        life: 2.6,
+        text: line.text,
+        c: line.c,
+      });
+    });
   }
 
   function getRoomByCoords(gx, gy) {
@@ -2864,7 +2948,8 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
   Neo.grantRivalItems = grantRivalItems;
   Neo.applyRivalDifficultyFloorBonuses = applyRivalDifficultyFloorBonuses;
   Neo.befriendRival = befriendRival;
-  Neo.seedBloodThornTraps = seedBloodThornTraps;
+  Neo.applyRivalCurses = applyRivalCurses;
+  Neo.queueRivalCurse = queueRivalCurse;
   Neo.createDefaultRivalMemory = createDefaultRivalMemory;
   Neo.normalizeRivalMemory = normalizeRivalMemory;
   Neo.tryPlayPrincessKnightCutscene = tryPlayPrincessKnightCutscene;
