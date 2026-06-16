@@ -223,6 +223,8 @@
     const minimapEntry = window.NeoSettings?.getHudElements?.()?.minimap;
     const ownScale = Number(minimapEntry?.scale);
     const hudScale = Number.isFinite(ownScale) ? Neo.clamp(ownScale, 0.5, 2) : globalHudScale;
+    const minimapOffsetX = Number.isFinite(Number(minimapEntry?.x)) ? Number(minimapEntry.x) : 0;
+    const minimapOffsetY = Number.isFinite(Number(minimapEntry?.y)) ? Number(minimapEntry.y) : 0;
     const baseSize = hasGlasses ? 28 : 14;
     const baseGap = hasGlasses ? 3 : 2;
     const baseMapWidth = gridSize * baseSize + (gridSize - 1) * baseGap;
@@ -263,8 +265,8 @@
     const gap = Math.max(1, Math.round(baseGap * minimapScale));
     const mapWidth = gridSize * size + (gridSize - 1) * gap;
     const mapHeight = (maxGy + 1) * size + maxGy * gap;
-    const originX = Math.round(visibleCanvasRight - mapWidth - edgeInsetX);
-    const originY = Math.round(visibleCanvasTop + topInset);
+    const originX = Math.round(visibleCanvasRight - mapWidth - edgeInsetX + minimapOffsetX / scaleX);
+    const originY = Math.round(visibleCanvasTop + topInset + minimapOffsetY / scaleY);
     const markerFont = `${Math.max(7, Math.round(size * 0.62))}px system-ui`;
     const currentRoom = Neo.currentRoom;
     const currentCellCx = currentRoom && !currentRoom.secret
@@ -661,6 +663,8 @@
       width: mapWidth,
       height: minimapFrameHeight,
       scale: minimapScale,
+      offsetX: minimapOffsetX,
+      offsetY: minimapOffsetY,
       viewportBounds,
     };
     return Neo.minimapLayoutState;

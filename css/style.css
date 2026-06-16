@@ -11074,7 +11074,7 @@ border-bottom: black solid 2px;
   color: var(--menu-danger);
   border-color: var(--menu-danger);
 }
-/* Second line of each row: the X/Y position nudge sliders span the full width
+/* Second line of each row: the X/Y position sliders span the full width
    under the scale row. */
 .hud-element-row__offsets {
   grid-column: 1 / -1;
@@ -11122,8 +11122,8 @@ border-bottom: black solid 2px;
 .hud-preview-overlay.hidden { display: none; }
 .hud-preview-frame {
   position: relative;
-  width: min(82vw, calc((100vh - 140px) * 16 / 9));
-  aspect-ratio: 16 / 9;
+  width: min(92vw, 960px);
+  height: min(70dvh, 640px);
   border: 2px solid var(--menu-border-strong);
   border-radius: 10px;
   background:
@@ -11160,6 +11160,47 @@ border-bottom: black solid 2px;
   box-shadow: 0 0 0 1px rgba(0,0,0,.3), 0 4px 12px rgba(0,0,0,.35);
   transform-origin: center;
   white-space: nowrap;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+.hud-preview-box--dragging {
+  cursor: grabbing;
+  z-index: 2;
+}
+.hud-preview-box--resizing {
+  cursor: nwse-resize;
+  z-index: 3;
+}
+.hud-preview-resize {
+  position: absolute;
+  right: -7px;
+  bottom: -7px;
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--menu-accent-strong);
+  border-radius: 4px;
+  background:
+    linear-gradient(135deg, transparent 0 42%, rgba(255,255,255,.5) 42% 52%, transparent 52%),
+    var(--menu-bg-deep);
+  box-shadow: 0 0 0 2px rgba(0,0,0,.55), 0 0 12px rgba(91,141,217,.35);
+  cursor: nwse-resize;
+  pointer-events: auto;
+  touch-action: none;
+}
+.hud-preview-resize:hover {
+  border-color: #fff;
+}
+.hud-preview-box--objectives .hud-preview-resize,
+.hud-preview-box--equipment .hud-preview-resize,
+.hud-preview-box--minimap .hud-preview-resize {
+  right: auto;
+  left: -7px;
+}
+.hud-preview-box--stats .hud-preview-resize,
+.hud-preview-box--actions .hud-preview-resize {
+  top: -7px;
+  bottom: auto;
 }
 .hud-preview-box--hidden {
   opacity: .28;
@@ -11179,8 +11220,8 @@ border-bottom: black solid 2px;
 }
 .hud-preview-box--mock.hud-preview-box--hidden { opacity: .28; }
 /* The live HUD widgets are position:fixed/absolute + .hidden; inside the preview
-   they must flow normally and stay visible. The watermark/scale stays readable
-   by shrinking the heavier widgets a touch. */
+   they must flow normally and stay visible. settings-ui.js scales each preview
+   box by the same viewport ratio used for its coordinates. */
 .hud-preview-widget,
 .hud-preview-widget.coin-display,
 .hud-preview-widget.center-display,
@@ -11201,19 +11242,16 @@ border-bottom: black solid 2px;
 .hud-preview-widget.equipment-slots { flex-direction: column; gap: 4px; }
 .hud-preview-actions { display: flex; gap: 6px; }
 .hud-preview-actions .skill-card { pointer-events: none; }
-/* Keep the schematic compact regardless of the live HUD's full-size widgets. */
-.hud-preview-frame .hud-preview-widget { font-size: calc(11px * var(--font-scale, 1)); }
-.hud-preview-frame .hud-preview-widget .objective-list li { font-size: calc(11px * var(--font-scale, 1)); }
-.hud-preview-frame .hud-preview-widget .skill-card { transform: scale(.72); transform-origin: top center; }
-/* Anchors mirror the real CSS placement of each widget. */
-.hud-preview-box--coins      { top: 4%;  left: 3%; }
-.hud-preview-box--center     { top: 2%;  left: 50%; transform: translateX(-50%); }
-.hud-preview-box--objectives { top: 22%; right: 1%; }
-.hud-preview-box--stats      { bottom: 4%; left: 3%; }
-.hud-preview-box--actions    { bottom: 4%; left: 50%; transform: translateX(-50%); }
-.hud-preview-box--equipment  { top: 50%; right: 1%; transform: translateY(-50%); }
-/* Minimap is canvas-drawn top-right; the preview shows a labeled schematic that
-   scales/hides with its settings row but stays corner-anchored (no X/Y nudge). */
+/* Anchors mirror the real CSS placement of each widget. settings-ui.js rewrites
+   these into scaled viewport pixels when the preview opens. */
+.hud-preview-box--coins      { top: 4%;  left: 3%; transform-origin: top left; }
+.hud-preview-box--center     { top: 2%;  left: 50%; transform: translateX(-50%); transform-origin: top center; }
+.hud-preview-box--objectives { top: 22%; right: 1%; transform-origin: top right; }
+.hud-preview-box--stats      { bottom: 4%; left: 3%; transform-origin: bottom left; }
+.hud-preview-box--actions    { bottom: 4%; left: 50%; transform: translateX(-50%); transform-origin: bottom center; }
+.hud-preview-box--equipment  { top: 50%; right: 1%; transform: translateY(-50%); transform-origin: center right; }
+/* Minimap is canvas-drawn; the preview shows a labeled schematic that uses the
+   same saved visibility, scale, and X/Y offsets as drawMinimap(). */
 .hud-preview-box--minimap {
   top: 2%; right: 1%;
   width: 18%; aspect-ratio: 1 / 1;

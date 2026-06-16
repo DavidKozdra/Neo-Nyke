@@ -294,6 +294,18 @@ export function createUIController(view) {
 
     function setObjectiveLayout(layout) {
       if (!view.objectiveTracker) return;
+      if (window.NeoSettings?.getHudElements?.()?.objectives) {
+        if (objectiveLayoutCache !== null) {
+          view.objectiveTracker.style.removeProperty('top');
+          view.objectiveTracker.style.removeProperty('right');
+          view.objectiveTracker.style.removeProperty('width');
+          view.objectiveTracker.style.removeProperty('max-height');
+          view.objectiveTracker.style.removeProperty('overflow-y');
+          objectiveLayoutCache = null;
+        }
+        syncObjectiveTrackerCompactState();
+        return;
+      }
       if (!layout) {
         if (objectiveLayoutCache !== null) {
           view.objectiveTracker.style.removeProperty('top');

@@ -63,22 +63,27 @@
     { key: 'stats',      label: 'Player Stats',     cssVar: '--hud-scale-stats',      xVar: '--hud-x-stats',      yVar: '--hud-y-stats',      hideClass: 'hud-hide-stats' },
     { key: 'actions',    label: 'Action Bar',       cssVar: '--hud-scale-actions',    xVar: '--hud-x-actions',    yVar: '--hud-y-actions',    hideClass: 'hud-hide-actions' },
     { key: 'equipment',  label: 'Tool Slots',       cssVar: '--hud-scale-equipment',  xVar: '--hud-x-equipment',  yVar: '--hud-y-equipment',  hideClass: 'hud-hide-equipment' },
-    // The minimap is drawn on the canvas, not a DOM widget, so it has no CSS vars
-    // and no positional nudge (it auto-anchors top-right). drawMinimap() reads its
-    // scale/visibility from getHudElements() directly. noOffset hides the X/Y
-    // sliders for its row; canvas:true skips the CSS-var apply path.
-    { key: 'minimap',    label: 'Minimap',          cssVar: null, xVar: null, yVar: null, hideClass: null, noOffset: true, canvas: true },
+    // The minimap is drawn on the canvas, not a DOM widget, so it has no CSS vars.
+    // drawMinimap() reads its scale/visibility/offsets from getHudElements().
+    { key: 'minimap',    label: 'Minimap',          cssVar: null, xVar: null, yVar: null, hideClass: null, canvas: true },
   ];
 
-  // Per-element nudge range, in screen pixels, applied before the widget's scale.
-  const HUD_OFFSET_MIN = -200;
-  const HUD_OFFSET_MAX = 200;
+  // Per-element movement range, in screen pixels. Large enough to place any
+  // anchor anywhere on current desktop/mobile screens; drag remains the primary
+  // precise control while sliders provide numeric adjustment.
+  const HUD_OFFSET_MIN = -4096;
+  const HUD_OFFSET_MAX = 4096;
   const HUD_OFFSET_STEP = 2;
   function normalizeHudOffset(value) {
     const n = Number(value);
     if (!Number.isFinite(n)) return 0;
     return Math.max(HUD_OFFSET_MIN, Math.min(HUD_OFFSET_MAX, Math.round(n / HUD_OFFSET_STEP) * HUD_OFFSET_STEP));
   }
+
+  const HUD_PREVIEW_SCALE_FACTORS = {
+    stats: 2,
+    actions: 1.5,
+  };
 
   function defaultHudElements() {
     const out = {};
@@ -812,41 +817,123 @@
       : normalizeHudScale(entry.scale);
   }
 
+  function effectiveHudPreviewScale(key, viewportScale = 1) {
+    return effectiveHudScale(key) * (HUD_PREVIEW_SCALE_FACTORS[key] || 1) * viewportScale;
+  }
+
   function formatHudElementScale(entry) {
     if (!entry || entry.scale === null || entry.scale === undefined) return 'Auto';
     return `${Math.round(normalizeHudScale(entry.scale) * 100)}%`;
   }
 
-  function refreshHudPreviewBoxes() {
-    // The preview frame stands in for the whole screen, so a real-pixel nudge is
-    // shown shrunk by the frame-to-screen width ratio (best-effort; falls back to
-    // a flat fraction before the overlay has laid out).
+  function getHudPreviewRatios(frame = document.getElementById('hudPreviewFrame')) {
+    const rect = frame?.getBoundingClientRect?.();
+    const width = rect?.width || frame?.clientWidth || 0;
+    const height = rect?.height || frame?.clientHeight || 0;
+    return {
+      x: width ? width / Math.max(1, window.innerWidth) : 0.5,
+      y: height ? height / Math.max(1, window.innerHeight) : 0.5,
+    };
+  }
+
+  function syncHudPreviewFrameSize() {
     const frame = document.getElementById('hudPreviewFrame');
-    const ratio = frame && frame.clientWidth
-      ? frame.clientWidth / Math.max(1, window.innerWidth)
-      : 0.5;
+    if (!frame) return;
+    const gap = window.innerWidth <= 720 ? 96 : 140;
+    const viewportW = Math.max(1, window.innerWidth);
+    const viewportH = Math.max(1, window.innerHeight);
+    const availableW = Math.max(260, viewportW * 0.92);
+    const availableH = Math.max(180, viewportH - gap);
+    const previewScale = Math.min(1, availableW / viewportW, availableH / viewportH);
+    const width = viewportW * previewScale;
+    const height = viewportH * previewScale;
+    frame.style.width = `${width}px`;
+    frame.style.height = `${height}px`;
+  }
+
+  function setHudPreviewAnchor(box, key, ratio) {
+    box.dataset.previewSizedFromBounds = 'false';
+    box.style.top = '';
+    box.style.right = '';
+    box.style.bottom = '';
+    box.style.left = '';
+    if (key !== 'minimap') {
+      box.style.width = '';
+      box.style.height = '';
+    }
+    if (key === 'coins') {
+      box.style.top = `${16 * ratio.y}px`;
+      box.style.left = `${16 * ratio.x}px`;
+    } else if (key === 'center') {
+      box.style.top = '0px';
+      box.style.left = '50%';
+    } else if (key === 'objectives') {
+      box.style.top = `${154 * ratio.y}px`;
+      box.style.right = `${2 * ratio.x}px`;
+    } else if (key === 'stats') {
+      box.style.bottom = `${10 * ratio.y}px`;
+      box.style.left = `${10 * ratio.x}px`;
+    } else if (key === 'actions') {
+      box.style.bottom = `${18 * ratio.y}px`;
+      box.style.left = '50%';
+    } else if (key === 'equipment') {
+      box.style.top = '50%';
+      box.style.right = '0px';
+    } else if (key === 'minimap') {
+      const bounds = window.Neo?.minimapLayoutState?.viewportBounds || null;
+      const layoutOffsetX = Number(window.Neo?.minimapLayoutState?.offsetX);
+      const layoutOffsetY = Number(window.Neo?.minimapLayoutState?.offsetY);
+      const entry = hudElements.minimap || {};
+      const offsetX = Number.isFinite(layoutOffsetX) ? normalizeHudOffset(layoutOffsetX) : normalizeHudOffset(entry.x);
+      const offsetY = Number.isFinite(layoutOffsetY) ? normalizeHudOffset(layoutOffsetY) : normalizeHudOffset(entry.y);
+      if (bounds
+        && Number.isFinite(bounds.top)
+        && Number.isFinite(bounds.right)
+        && Number.isFinite(bounds.bottom)
+        && Number.isFinite(bounds.left)) {
+        box.style.top = `${(bounds.top - offsetY) * ratio.y}px`;
+        box.style.right = `${(window.innerWidth - (bounds.right - offsetX)) * ratio.x}px`;
+        box.style.width = `${Math.max(24, (bounds.right - bounds.left) * ratio.x)}px`;
+        box.style.height = `${Math.max(24, (bounds.bottom - bounds.top) * ratio.y)}px`;
+        box.dataset.previewSizedFromBounds = 'true';
+      } else {
+        box.style.top = `${(window.innerWidth <= 920 ? 96 : 72) * ratio.y}px`;
+        box.style.right = `${(window.innerWidth <= 920 ? 8 : 16) * ratio.x}px`;
+        box.style.width = '';
+        box.style.height = '';
+      }
+    }
+  }
+
+  function refreshHudPreviewBoxes() {
+    // The preview frame stands in for the whole screen. Convert real HUD pixel
+    // nudges into frame-local pixels per axis so dragging matches the sliders.
+    syncHudPreviewFrameSize();
+    const frame = document.getElementById('hudPreviewFrame');
+    const ratio = getHudPreviewRatios(frame);
+    const viewportScale = Math.min(ratio.x || 1, ratio.y || 1);
     HUD_ELEMENTS.forEach(el => {
       const box = document.querySelector(`.hud-preview-box[data-preview="${el.key}"]`);
       if (!box) return;
+      setHudPreviewAnchor(box, el.key, ratio);
       const entry = hudElements[el.key] || {};
       const hidden = entry.visible === false;
       box.classList.toggle('hud-preview-box--hidden', hidden);
-      // Offset-less widgets (minimap) are corner-anchored and just scale in place.
-      if (el.noOffset) {
-        box.style.transform = `scale(${effectiveHudScale(el.key)})`;
-        return;
-      }
       // Compose the per-element scale + offset onto whatever centering transform
       // the anchor already applies, so the box moves/grows like the real widget.
+      // Stats and actions include their fixed live HUD multipliers here too.
       const base = box.classList.contains('hud-preview-box--center') || box.classList.contains('hud-preview-box--actions')
         ? 'translateX(-50%) '
         : box.classList.contains('hud-preview-box--equipment')
           ? 'translateY(-50%) '
           : '';
-      const ox = normalizeHudOffset(entry.x) * ratio;
-      const oy = normalizeHudOffset(entry.y) * ratio;
+      const ox = normalizeHudOffset(entry.x) * ratio.x;
+      const oy = normalizeHudOffset(entry.y) * ratio.y;
       const nudge = (ox || oy) ? `translate(${ox}px, ${oy}px) ` : '';
-      box.style.transform = `${base}${nudge}scale(${effectiveHudScale(el.key)})`;
+      const scale = box.dataset.previewSizedFromBounds === 'true'
+        ? 1
+        : effectiveHudPreviewScale(el.key, viewportScale);
+      box.style.transform = `${base}${nudge}scale(${scale})`;
     });
   }
 
@@ -901,7 +988,7 @@
       vis.type = 'button';
       vis.className = 'hud-element-row__vis';
 
-      // Second line: X/Y position nudge sliders (pixels, applied before scale).
+      // Second line: X/Y position sliders (screen pixels, applied before scale).
       const offsetRow = document.createElement('div');
       offsetRow.className = 'hud-element-row__offsets';
       const makeOffset = (axisLabel) => {
@@ -922,12 +1009,11 @@
         offsetRow.appendChild(wrap);
         return { sl, rv };
       };
-      // The minimap auto-anchors top-right, so it has no X/Y nudge sliders.
-      const xOff = el.noOffset ? null : makeOffset('X');
-      const yOff = el.noOffset ? null : makeOffset('Y');
+      const xOff = makeOffset('X');
+      const yOff = makeOffset('Y');
 
       const rowChildren = [name, scaleCap, slider, val, vis];
-      if (!el.noOffset) rowChildren.push(offsetRow);
+      rowChildren.push(offsetRow);
       row.append(...rowChildren);
       host.appendChild(row);
       hudRowEls[el.key] = {
@@ -1059,10 +1145,150 @@
   document.getElementById('hudPreviewOverlay')?.addEventListener('click', e => {
     if (e.target.id === 'hudPreviewOverlay') hudPreviewClose();
   });
-  // Toggle a widget directly from the preview by clicking its box.
+  window.addEventListener('resize', refreshHudPreviewBoxes);
+
+  function setHudElementOffset(key, x, y) {
+    if (!hudElements[key]) return;
+    hudElements[key].x = normalizeHudOffset(x);
+    hudElements[key].y = normalizeHudOffset(y);
+    applyHudElements();
+    refreshHudElementRow(key);
+    refreshHudPreviewBoxes();
+    save();
+  }
+
+  function setHudElementScale(key, scale) {
+    if (!hudElements[key]) return;
+    hudElements[key].scale = normalizeHudScale(scale);
+    applyHudElements();
+    refreshHudElementRow(key);
+    refreshHudPreviewBoxes();
+    save();
+  }
+
+  function getHudPreviewResizeDirection(key) {
+    if (key === 'objectives' || key === 'equipment' || key === 'minimap') return { x: -1, y: 1 };
+    if (key === 'stats' || key === 'actions') return { x: 1, y: -1 };
+    return { x: 1, y: 1 };
+  }
+
+  // Drag a widget directly in the preview to set the same X/Y offsets exposed by
+  // the sliders. Drag the corner grip to set scale. Click-without-drag still
+  // toggles visibility.
+  let hudPreviewDrag = null;
+  let hudPreviewResize = null;
+  let suppressHudPreviewClickKey = null;
   document.querySelectorAll('.hud-preview-box').forEach(box => {
-    box.addEventListener('click', () => {
+    if (!box.querySelector('.hud-preview-resize')) {
+      const resize = document.createElement('span');
+      resize.className = 'hud-preview-resize';
+      resize.setAttribute('aria-hidden', 'true');
+      box.appendChild(resize);
+    }
+
+    const resizeHandle = box.querySelector('.hud-preview-resize');
+    resizeHandle?.addEventListener('pointerdown', e => {
       const key = box.dataset.preview;
+      if (!hudElements[key]) return;
+      if (e.button !== undefined && e.button !== 0) return;
+      const rect = box.getBoundingClientRect();
+      box.setPointerCapture?.(e.pointerId);
+      box.classList.add('hud-preview-box--resizing');
+      hudPreviewResize = {
+        key,
+        pointerId: e.pointerId,
+        startClientX: e.clientX,
+        startClientY: e.clientY,
+        startScale: effectiveHudScale(key),
+        direction: getHudPreviewResizeDirection(key),
+        startDiagonal: Math.max(32, Math.hypot(rect.width, rect.height)),
+        moved: false,
+      };
+      e.preventDefault();
+      e.stopPropagation();
+    });
+
+    box.addEventListener('pointerdown', e => {
+      if (e.target?.classList?.contains('hud-preview-resize')) return;
+      const key = box.dataset.preview;
+      const def = HUD_ELEMENTS.find(el => el.key === key);
+      if (!hudElements[key] || !def) return;
+      if (e.button !== undefined && e.button !== 0) return;
+      const entry = hudElements[key] || {};
+      box.setPointerCapture?.(e.pointerId);
+      box.classList.add('hud-preview-box--dragging');
+      hudPreviewDrag = {
+        key,
+        pointerId: e.pointerId,
+        startClientX: e.clientX,
+        startClientY: e.clientY,
+        startX: normalizeHudOffset(entry.x),
+        startY: normalizeHudOffset(entry.y),
+        moved: false,
+      };
+      e.preventDefault();
+    });
+
+    box.addEventListener('pointermove', e => {
+      if (hudPreviewResize && hudPreviewResize.pointerId === e.pointerId && hudPreviewResize.key === box.dataset.preview) {
+        const dx = e.clientX - hudPreviewResize.startClientX;
+        const dy = e.clientY - hudPreviewResize.startClientY;
+        if (Math.abs(dx) > 3 || Math.abs(dy) > 3) hudPreviewResize.moved = true;
+        const dir = hudPreviewResize.direction || { x: 1, y: 1 };
+        const drag = (dx * dir.x + dy * dir.y) / Math.SQRT2;
+        const nextScale = hudPreviewResize.startScale + (drag / hudPreviewResize.startDiagonal) * hudPreviewResize.startScale;
+        setHudElementScale(hudPreviewResize.key, nextScale);
+        e.preventDefault();
+        return;
+      }
+      if (!hudPreviewDrag || hudPreviewDrag.pointerId !== e.pointerId || hudPreviewDrag.key !== box.dataset.preview) return;
+      const frame = document.getElementById('hudPreviewFrame');
+      const ratio = getHudPreviewRatios(frame);
+      const dx = ratio.x ? (e.clientX - hudPreviewDrag.startClientX) / ratio.x : 0;
+      const dy = ratio.y ? (e.clientY - hudPreviewDrag.startClientY) / ratio.y : 0;
+      if (Math.abs(e.clientX - hudPreviewDrag.startClientX) > 3 || Math.abs(e.clientY - hudPreviewDrag.startClientY) > 3) {
+        hudPreviewDrag.moved = true;
+      }
+      setHudElementOffset(hudPreviewDrag.key, hudPreviewDrag.startX + dx, hudPreviewDrag.startY + dy);
+      e.preventDefault();
+    });
+
+    const endDrag = e => {
+      if (hudPreviewResize && hudPreviewResize.pointerId === e.pointerId && hudPreviewResize.key === box.dataset.preview) {
+        if (hudPreviewResize.moved) {
+          suppressHudPreviewClickKey = hudPreviewResize.key;
+          setTimeout(() => {
+            if (suppressHudPreviewClickKey === box.dataset.preview) suppressHudPreviewClickKey = null;
+          }, 350);
+        }
+        box.releasePointerCapture?.(e.pointerId);
+        box.classList.remove('hud-preview-box--resizing');
+        hudPreviewResize = null;
+        e.preventDefault();
+        return;
+      }
+      if (!hudPreviewDrag || hudPreviewDrag.pointerId !== e.pointerId || hudPreviewDrag.key !== box.dataset.preview) return;
+      if (hudPreviewDrag.moved) {
+        suppressHudPreviewClickKey = hudPreviewDrag.key;
+        setTimeout(() => {
+          if (suppressHudPreviewClickKey === box.dataset.preview) suppressHudPreviewClickKey = null;
+        }, 350);
+      }
+      box.releasePointerCapture?.(e.pointerId);
+      box.classList.remove('hud-preview-box--dragging');
+      hudPreviewDrag = null;
+      e.preventDefault();
+    };
+    box.addEventListener('pointerup', endDrag);
+    box.addEventListener('pointercancel', endDrag);
+
+    box.addEventListener('click', e => {
+      const key = box.dataset.preview;
+      if (suppressHudPreviewClickKey === key) {
+        suppressHudPreviewClickKey = null;
+        e.preventDefault();
+        return;
+      }
       if (!hudElements[key]) return;
       hudElements[key].visible = hudElements[key].visible === false;
       applyHudElements();
