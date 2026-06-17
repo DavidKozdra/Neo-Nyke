@@ -361,6 +361,8 @@
   function emitJukeboxState() {
     const snapshot = getJukeboxState();
     for (const listener of [...jukeboxListeners]) {
+      // Isolate listeners: one throwing subscriber must not stop the others
+      // (or leave the jukebox UI half-updated). Intentionally swallowed.
       try { listener(snapshot); } catch (_) {}
     }
   }

@@ -73,7 +73,10 @@ export function createSaveStore() {
     async put(key, value) {
       const api = createFallbackApi(key);
       if (api) { api.save(value); return; }
-      localStorage.setItem(localPrefix + key, JSON.stringify(value));
+      // A full or unavailable store (QuotaExceededError / private mode
+      // SecurityError) must not crash a save — drop this write; the next
+      // autosave retries. This is already the last-resort fallback path.
+      try { localStorage.setItem(localPrefix + key, JSON.stringify(value)); } catch { /* save skipped */ }
     },
     async delete(key) {
       const api = createFallbackApi(key);
