@@ -38,13 +38,15 @@ describe('God boss buffs', () => {
   });
 
   test('gives God broad status resistance and strong stun resistance', () => {
+    // Per-type stats now live in the ENEMY_STATS registry instead of an inline
+    // `if (type === 'god')` branch. Inspect the god row of that table.
     const godBlock = enemySource.slice(
-      enemySource.indexOf("} else if (type === 'god') {"),
-      enemySource.indexOf("} else if (type === 'cult_mage') {"),
+      enemySource.indexOf('god: {'),
+      enemySource.indexOf('cult_mage:'),
     );
 
-    expect(godBlock).toContain('base.stunResistance = 5');
-    expect(godBlock).toContain('base.statusResistance = 0.45');
+    expect(godBlock).toContain('stunResistance: 5');
+    expect(godBlock).toContain('statusResistance: 0.45');
     expect(godBlock).toContain('dark_drain: 0.75');
     expect(godBlock).toContain('slow: 0.7');
     expect(godBlock).toContain('static: 0.6');

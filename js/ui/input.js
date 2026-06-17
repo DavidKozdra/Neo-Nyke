@@ -143,6 +143,9 @@ export const SHOP_MOVE_POOL = [
     // pick-character screen via the alt-kit picker, not bought in the shop.
   ];
 
+// baseCooldown: seconds between attacks (string 'melee' resolves to the melee base
+//   cooldown at read time — see getWeaponBaseCooldown in combat.js). Omitted ⇒ 0.5.
+// maxCharges: static charge cap; >1 makes the weapon fire off charges. Omitted ⇒ 1.
 export const WEAPON_DEFS = {
     extending_staff: {
       key: 'extending_staff',
@@ -150,6 +153,7 @@ export const WEAPON_DEFS = {
       rarity: 'knight',
       description: 'Long sweeping strike with massive knockback.',
       color: '#ff3333',
+      baseCooldown: 0.77,
     },
     hunters_bow: {
       key: 'hunters_bow',
@@ -157,6 +161,7 @@ export const WEAPON_DEFS = {
       rarity: 'knight',
       description: 'Fast, accurate ranged shot with +10% crit chance.',
       color: '#e8f7ff',
+      baseCooldown: 0.4,
     },
     thorns_bleed_blade: {
       key: 'thorns_bleed_blade',
@@ -164,6 +169,7 @@ export const WEAPON_DEFS = {
       rarity: 'knight',
       description: 'Close slash with heavy bleed application.',
       color: '#ffe9ef',
+      baseCooldown: 'melee',
     },
     claw_gauntlets: {
       key: 'claw_gauntlets',
@@ -171,6 +177,7 @@ export const WEAPON_DEFS = {
       rarity: 'knight',
       description: 'Rapid wide claw swipe. High bleed chance on every hit.',
       color: '#ff7a9a',
+      baseCooldown: 0.38,
     },
     lazer_glasses: {
       key: 'lazer_glasses',
@@ -178,6 +185,7 @@ export const WEAPON_DEFS = {
       rarity: 'wizard',
       description: 'Twin beams track your mouse and can ignite enemies.',
       color: '#cd9bff',
+      baseCooldown: 3.6,
     },
     metao_fire_staff: {
       key: 'metao_fire_staff',
@@ -185,6 +193,8 @@ export const WEAPON_DEFS = {
       rarity: 'wizard',
       description: 'Fan cast of burning fire bolts. 2 charges.',
       color: '#ffb874',
+      baseCooldown: 1.75,
+      maxCharges: 2,
     },
     magenta_degale: {
       key: 'magenta_degale',
@@ -192,6 +202,8 @@ export const WEAPON_DEFS = {
       rarity: 'wizard',
       description: 'Super heavy shot with massive knockback and recoil. 3 charges.',
       color: '#ff8ccc',
+      baseCooldown: 1.5,
+      maxCharges: 3,
     },
     magenta_p90: {
       key: 'magenta_p90',
@@ -199,6 +211,8 @@ export const WEAPON_DEFS = {
       rarity: 'wizard',
       description: 'Rapid burst fire with controlled recoil. 5 charges.',
       color: '#ff9dd7',
+      baseCooldown: 1.8,
+      maxCharges: 5,
     },
     gelleh_lightning_spear: {
       key: 'gelleh_lightning_spear',
@@ -206,6 +220,7 @@ export const WEAPON_DEFS = {
       rarity: 'god',
       description: 'Piercing lightning spear that chains on impact.',
       color: '#9bd9ff',
+      baseCooldown: 0.75,
     },
     excalibur: {
       key: 'excalibur',
@@ -213,6 +228,7 @@ export const WEAPON_DEFS = {
       rarity: 'god',
       description: "A divine strike for 777% of your base damage.",
       color: '#ffd980',
+      baseCooldown: 1.554,
     },
     katana_excalibur_777x: {
       key: 'katana_excalibur_777x',
@@ -220,6 +236,8 @@ export const WEAPON_DEFS = {
       rarity: 'god',
       description: 'Blinding-fast 777% slashes that erupt in twin triangle waves left and right. 2 charges.',
       color: '#ffb35c',
+      baseCooldown: 0.777,
+      maxCharges: 2,
     },
     golden_fleece: {
       key: 'golden_fleece',
@@ -227,6 +245,7 @@ export const WEAPON_DEFS = {
       rarity: 'god',
       description: 'Heals 6% max HP every 2 seconds while equipped.',
       color: '#ffe59c',
+      baseCooldown: 0.5,
     },
     void_piercer: {
       key: 'void_piercer',
@@ -234,6 +253,7 @@ export const WEAPON_DEFS = {
       rarity: 'god',
       description: 'Pierces barriers with high damage and 20% crit.',
       color: '#ffd2c0',
+      baseCooldown: 0.8,
     },
     princess_wand: {
       key: 'princess_wand',
@@ -241,6 +261,8 @@ export const WEAPON_DEFS = {
       rarity: 'princess',
       description: 'A graceful piercing magic shot made for Princess. 3 charges.',
       color: '#ff9de8',
+      baseCooldown: 0.77,
+      maxCharges: 3,
     },
   };
 export const WEAPON_KEYS = Object.keys(WEAPON_DEFS);

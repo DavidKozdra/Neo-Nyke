@@ -900,6 +900,65 @@
     };
   }
 
+  // Per-type spawn stats. Each value is either a flat object of overrides applied
+  // verbatim onto the base enemy, or a factory `(base) => overrides` for the few
+  // types whose stats depend on run state (floor) or a roll. Adding an enemy type
+  // is now a single row here instead of another branch in spawnEnemy. The trailing
+  // generic elite-scaling fallback (for types with no row) lives in spawnEnemy.
+  const ENEMY_STATS = {
+    mooggy: () => getMooggyAssassinStats(),
+    god: {
+      r: 34, hp: 920, max: 920, speed: 108, dmg: 18, attackCd: 1.4,
+      beamRange: 620, sweepDir: 1, sweepSpeed: 0, phase: 1,
+      rebirthUsed: false, phase3Triggered: false, phase4Triggered: false, phase5Triggered: false,
+      novaCd: 2.4, judgementCd: 4.2, stunResistance: 5, maxStunDuration: 0.18,
+      statusResistance: 0.45,
+      statusResistances: { bleed: 0.72, fire: 0.5, poison: 0.68, dark_drain: 0.75, slow: 0.7, static: 0.6 },
+      bleedResistance: 0.55,
+      partitionAngles: [], partitionAngle: 0, partitionRotationDir: 1, partitionRotationSpeed: 0,
+    },
+    cult_mage: { r: 17, hp: 84, max: 84, speed: 58, dmg: 18, attackCd: 1.8, novaCd: 3, novaTimer: 0 },
+    knave: { r: 16, hp: 68, max: 68, speed: 118, dmg: 14, attackCd: 1.3 },
+    sniper: () => {
+      // Roll a personality: aggressive snipers close in and shoot, staybacks
+      // hold their distance (classic sniper), and meleers prefer the rifle butt.
+      const behaviorRoll = Neo.nextRandom('encounter');
+      return {
+        r: 15, hp: 58, max: 58, speed: 104, dmg: 12, attackCd: 1.55,
+        sniperBehavior: behaviorRoll < 1 / 3 ? 'aggressive' : behaviorRoll < 2 / 3 ? 'stayback' : 'melee',
+      };
+    },
+    machine_gunner: { r: 17, hp: 96, max: 96, speed: 112, dmg: 8, attackCd: 1.15, burstShots: 0, burstDelay: 0, burstAngle: 0 },
+    golem: { r: 20, hp: 132, max: 132, speed: 70, dmg: 18, attackCd: 1.9, bleedImmune: true },
+    cult_follower: { r: 12, hp: 34, max: 34, speed: 138, dmg: 8, attackCd: 0.85 },
+    summoner: { r: 18, hp: 120, max: 120, speed: 66, dmg: 12, attackCd: 1.5, summonCd: 4.4 },
+    shield_unit: { r: 22, hp: 210, max: 210, speed: 52, dmg: 10, attackCd: 1.4, bleedImmune: true, supportCd: 2.8 },
+    healer: () => {
+      const hp = Neo.floor >= 4 ? 260 : 150;
+      return { r: 19, hp, max: hp, speed: 64, dmg: 10, attackCd: 1.2, supportCd: Neo.floor >= 4 ? 2.2 : 3 };
+    },
+    boss_spawner: {
+      // A dedicated runner: fast enough to keep its distance while it counts
+      // down the boss summon, but still catchable with commitment.
+      r: 24, hp: 300, max: 300, speed: 96, dmg: 8, attackCd: 1.8, bleedImmune: true,
+      bossSpawnTimer: 30, bossSpawnWarnAt: 30, shoveCd: 3, shoveTimer: 0,
+    },
+    queen_cult: { r: 38, hp: 912, max: 912, speed: 96, dmg: 20, attackCd: 1.2, summonCd: 2.4 },
+    bulk_golem: { r: 58, hp: 1280, max: 1280, speed: 88, dmg: 31, attackCd: 1.6, bleedImmune: true, splitReady: true, aoeTime: 3, jumpCd: 1.2 },
+    artificer_knave: { r: 30, hp: 1880, max: 1880, speed: 124, dmg: 20, attackCd: 1.2, phase: 1 },
+    bowman_bane: { r: 36, hp: 2400, max: 2400, speed: 80, dmg: 36, attackCd: 1.4, phase: 1, bleedImmune: true, columnCd: 0, burstCd: 0, bowmanWarpCd: 2.8 },
+    antony_blemmye: { r: 42, hp: 1250, max: 1250, speed: 78, dmg: 24, attackCd: 1.35, phase: 1, bleedImmune: true, hammerCd: 1.55, biteCd: 1.15, slashCd: 2.05, deathBallCd: 5.4 },
+    handsome_devil: { r: 34, hp: 1700, max: 1700, speed: 104, dmg: 23, attackCd: 1.1, phase: 1, fireImmune: true, spikeCd: 0.9, lavaGridCd: 2.4, devilLaserCd: 1.6, beamRange: 560 },
+  };
+
+  // Resolve a type's stat overrides: invoke the factory or return the flat object.
+  // null means "no dedicated row" — spawnEnemy applies generic elite scaling instead.
+  function resolveEnemyStats(type, base) {
+    const entry = ENEMY_STATS[type];
+    if (!entry) return null;
+    return typeof entry === 'function' ? entry(base) : entry;
+  }
+
   function spawnEnemy(type, x, y, elite = false, options = {}) {
     const sandbox = Neo.getActiveSandboxSettings();
     // The sandbox allowedEnemies list governs the *wave* enemy pool only. Bosses
@@ -962,204 +1021,15 @@
     if (Neo.currentRoom) Neo.currentRoom.enemySpawnSerial = Math.max(0, Number(Neo.currentRoom.enemySpawnSerial || 0)) + 1;
     base.lootSeed = `${Neo.getFloorSeed()}|${roomPart}|enemy:${type}:${Math.round(x)},${Math.round(y)}:${Neo.currentRoom?.enemySpawnSerial || 0}|loot`;
 
-    if (type === 'mooggy') {
-      Object.assign(base, getMooggyAssassinStats());
-    } else if (type === 'god') {
-      base.r = 34;
-      base.hp = 920;
-      base.max = 920;
-      base.speed = 108;
-      base.dmg = 18;
-      base.attackCd = 1.4;
-      base.beamRange = 620;
-      base.sweepDir = 1;
-      base.sweepSpeed = 0;
-      base.phase = 1;
-      base.rebirthUsed = false;
-      base.phase3Triggered = false;
-      base.phase4Triggered = false;
-      base.phase5Triggered = false;
-      base.novaCd = 2.4;
-      base.judgementCd = 4.2;
-      base.stunResistance = 5;
-      base.maxStunDuration = 0.18;
-      base.statusResistance = 0.45;
-      base.statusResistances = {
-        bleed: 0.72,
-        fire: 0.5,
-        poison: 0.68,
-        dark_drain: 0.75,
-        slow: 0.7,
-        static: 0.6,
-      };
-      base.bleedResistance = 0.55;
-      base.partitionAngles = [];
-      base.partitionAngle = 0;
-      base.partitionRotationDir = 1;
-      base.partitionRotationSpeed = 0;
-    } else if (type === 'cult_mage') {
-      base.r = 17;
-      base.hp = 84;
-      base.max = 84;
-      base.speed = 58;
-      base.dmg = 18;
-      base.attackCd = 1.8;
-      base.novaCd = 3;
-      base.novaTimer = 0;
-    } else if (type === 'knave') {
-      base.r = 16;
-      base.hp = 68;
-      base.max = 68;
-      base.speed = 118;
-      base.dmg = 14;
-      base.attackCd = 1.3;
-    } else if (type === 'sniper') {
-      base.r = 15;
-      base.hp = 58;
-      base.max = 58;
-      base.speed = 104;
-      base.dmg = 12;
-      base.attackCd = 1.55;
-      // Roll a personality: aggressive snipers close in and shoot, staybacks
-      // hold their distance (classic sniper), and meleers prefer the rifle butt.
-      const behaviorRoll = Neo.nextRandom('encounter');
-      base.sniperBehavior = behaviorRoll < 1 / 3 ? 'aggressive' : behaviorRoll < 2 / 3 ? 'stayback' : 'melee';
-    } else if (type === 'machine_gunner') {
-      base.r = 17;
-      base.hp = 96;
-      base.max = 96;
-      base.speed = 112;
-      base.dmg = 8;
-      base.attackCd = 1.15;
-      base.burstShots = 0;
-      base.burstDelay = 0;
-      base.burstAngle = 0;
-    } else if (type === 'golem') {
-      base.r = 20;
-      base.hp = 132;
-      base.max = 132;
-      base.speed = 70;
-      base.dmg = 18;
-      base.attackCd = 1.9;
-      base.bleedImmune = true;
-    } else if (type === 'cult_follower') {
-      base.r = 12;
-      base.hp = 34;
-      base.max = 34;
-      base.speed = 138;
-      base.dmg = 8;
-      base.attackCd = 0.85;
-    } else if (type === 'summoner') {
-      base.r = 18;
-      base.hp = 120;
-      base.max = 120;
-      base.speed = 66;
-      base.dmg = 12;
-      base.attackCd = 1.5;
-      base.summonCd = 4.4;
-    } else if (type === 'shield_unit') {
-      base.r = 22;
-      base.hp = 210;
-      base.max = 210;
-      base.speed = 52;
-      base.dmg = 10;
-      base.attackCd = 1.4;
-      base.bleedImmune = true;
-      base.supportCd = 2.8;
-    } else if (type === 'healer') {
-      base.r = 19;
-      base.hp = Neo.floor >= 4 ? 260 : 150;
+    const stats = resolveEnemyStats(type, base);
+    if (stats) {
+      Object.assign(base, stats);
+    } else if (eliteAllowed) {
+      // No dedicated stat row: generic elite scaling on the default base.
+      base.hp = Math.round(base.hp * 1.35);
       base.max = base.hp;
-      base.speed = 64;
-      base.dmg = 10;
-      base.attackCd = 1.2;
-      base.supportCd = Neo.floor >= 4 ? 2.2 : 3;
-    } else if (type === 'boss_spawner') {
-      base.r = 24;
-      base.hp = 300;
-      base.max = 300;
-      // A dedicated runner: fast enough to keep its distance while it counts
-      // down the boss summon, but still catchable with commitment.
-      base.speed = 96;
-      base.dmg = 8;
-      base.attackCd = 1.8;
-      base.bleedImmune = true;
-      base.bossSpawnTimer = 30;
-      base.bossSpawnWarnAt = 30;
-      base.shoveCd = 3;
-      base.shoveTimer = 0;
-    } else if (type === 'queen_cult') {
-      base.r = 38;
-      base.hp = 912;
-      base.max = 912;
-      base.speed = 96;
-      base.dmg = 20;
-      base.attackCd = 1.2;
-      base.summonCd = 2.4;
-    } else if (type === 'bulk_golem') {
-      base.r = 58;
-      base.hp = 1280;
-      base.max = 1280;
-      base.speed = 88;
-      base.dmg = 31;
-      base.attackCd = 1.6;
-      base.bleedImmune = true;
-      base.splitReady = true;
-      base.aoeTime = 3;
-      base.jumpCd = 1.2;
-    } else if (type === 'artificer_knave') {
-      base.r = 30;
-      base.hp = 1880;
-      base.max = 1880;
-      base.speed = 124;
-      base.dmg = 20;
-      base.attackCd = 1.2;
-      base.phase = 1;
-    } else if (type === 'bowman_bane') {
-      base.r = 36;
-      base.hp = 2400;
-      base.max = 2400;
-      base.speed = 80;
-      base.dmg = 36;
-      base.attackCd = 1.4;
-      base.phase = 1;
-      base.bleedImmune = true;
-      base.columnCd = 0;
-      base.burstCd = 0;
-      base.bowmanWarpCd = 2.8;
-    } else if (type === 'antony_blemmye') {
-      base.r = 42;
-      base.hp = 1250;
-      base.max = 1250;
-      base.speed = 78;
-      base.dmg = 24;
-      base.attackCd = 1.35;
-      base.phase = 1;
-      base.bleedImmune = true;
-      base.hammerCd = 1.55;
-      base.biteCd = 1.15;
-      base.slashCd = 2.05;
-      base.deathBallCd = 5.4;
-    } else if (type === 'handsome_devil') {
-      base.r = 34;
-      base.hp = 1700;
-      base.max = 1700;
-      base.speed = 104;
-      base.dmg = 23;
-      base.attackCd = 1.1;
-      base.phase = 1;
-      base.fireImmune = true;
-      base.spikeCd = 0.9;
-      base.lavaGridCd = 2.4;
-      base.devilLaserCd = 1.6;
-      base.beamRange = 560;
-    } else {
-      if (eliteAllowed) {
-        base.hp = Math.round(base.hp * 1.35);
-        base.max = base.hp;
-        base.speed *= 1.08;
-        base.r = 17;
-      }
+      base.speed *= 1.08;
+      base.r = 17;
     }
 
     const scaled = type === 'mooggy' ? { ...base } : scaleEnemyStats(base, type);

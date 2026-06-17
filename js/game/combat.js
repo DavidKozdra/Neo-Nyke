@@ -223,40 +223,25 @@
     return { label: `${enemyLabel} Beam`, key: String(enemy?.type || 'enemy_beam') };
   }
 
+  // Weapon cooldown/charge data lives on the canonical Neo.WEAPON_DEFS registry
+  // (defined in ui/input.js alongside name/color/rarity), so a weapon is one row
+  // there. baseCooldown is seconds, or the sentinel 'melee' to track the melee base
+  // cooldown at read time. Unlisted ⇒ DEFAULT_WEAPON_COOLDOWN. maxCharges defaults
+  // to 1 (see getWeaponMaxCharges).
+  const DEFAULT_WEAPON_COOLDOWN = 0.5;
+
   function getWeaponBaseCooldown(weaponKey) {
-    let base;
-    if (weaponKey === 'extending_staff') base = 0.77;
-    else if (weaponKey === 'hunters_bow') base = 0.4;
-    else if (weaponKey === 'thorns_bleed_blade') base = Neo.ATTACKS.melee.baseCooldown;
-    else if (weaponKey === 'claw_gauntlets') base = 0.38;
-    else if (weaponKey === 'lazer_glasses') base = 3.6;
-    else if (weaponKey === 'metao_fire_staff') base = 1.75;
-    else if (weaponKey === 'magenta_degale') base = 1.5;
-    else if (weaponKey === 'magenta_p90') base = 1.8;
-    else if (weaponKey === 'gelleh_lightning_spear') base = 0.75;
-    else if (weaponKey === 'excalibur') base = 1.554;
-    else if (weaponKey === 'katana_excalibur_777x') base = 0.777;
-    else if (weaponKey === 'golden_fleece') base = 0.5;
-    else if (weaponKey === 'void_piercer') base = 0.8;
-    else if (weaponKey === 'princess_wand') base = 0.77;
-    else base = 0.5;
+    const raw = Neo.WEAPON_DEFS[weaponKey]?.baseCooldown;
+    const base = raw === 'melee' ? Neo.ATTACKS.melee.baseCooldown : (raw ?? DEFAULT_WEAPON_COOLDOWN);
     const bonus = Neo.getAnvilWeaponBonus(weaponKey, 'cooldown');
     return Math.max(base * 0.5, base + bonus);
   }
-
-  const CHARGED_WEAPON_MAX_CHARGES = {
-    princess_wand: 3,
-    metao_fire_staff: 2,
-    magenta_degale: 3,
-    magenta_p90: 5,
-    katana_excalibur_777x: 2,
-  };
 
   // Max charges = static base, raised by Extra Battery picks on the weapon
   // (stored as an absolute count in player.weaponChargeOverrides, mirroring
   // moveStackOverrides). A battery can turn a 1-charge weapon into a charged one.
   function getWeaponMaxCharges(weaponKey, playerState = Neo.player) {
-    const base = Math.max(1, Number(CHARGED_WEAPON_MAX_CHARGES[weaponKey] || 1));
+    const base = Math.max(1, Number(Neo.WEAPON_DEFS[weaponKey]?.maxCharges || 1));
     const override = Math.max(0, Math.floor(Number(playerState?.weaponChargeOverrides?.[weaponKey] || 0)));
     return Math.max(base, override);
   }
@@ -3947,6 +3932,90 @@
     return itemKey !== 'artificer_charger';
   }
 
+  // Per-item pickup side effects, keyed by item key. Each handler runs after the
+  // generic collection (inventory bump, equipment slots, notifications) with a
+  // context { collectCount, previousCount }. Items with no special behavior have
+  // no row. ITEM_PICKUP_PREDICATES handles the cases that match a predicate rather
+  // than an exact key (e.g. any scroll-control item). Adding pickup behavior for a
+  // new item is one row here instead of another branch inside collectItem.
+  function applyTitanHeartPickup(collectCount) {
+    for (let index = 0; index < collectCount; index += 1) {
+      Neo.player.maxHp = Math.max(120, Math.round(Neo.player.maxHp * 1.08));
+      Neo.player.hp = Math.min(Neo.player.maxHp, Math.round(Neo.player.hp * 1.08));
+    }
+  }
+
+  function applyJestersDicePickup(collectCount) {
+    Neo.floorSkipPending += 3 * collectCount;
+    const bonusItemCounts = {};
+    for (let index = 0; index < 10 * collectCount; index += 1) {
+      const key = Neo.rollItemDrop({ excludeKeys: ['jesters_dice'] });
+      if (!key) continue;
+      const previousBonusCount = Neo.getItemCount(key);
+      Neo.player.items[key] = previousBonusCount + 1;
+      readyRobotArmOnFirstPickup(key, previousBonusCount);
+      bonusItemCounts[key] = (bonusItemCounts[key] || 0) + 1;
+      if (key === 'titan_heart') {
+        Neo.player.maxHp = Math.max(120, Math.round(Neo.player.maxHp * 1.08));
+        Neo.player.hp = Math.min(Neo.player.maxHp, Math.round(Neo.player.hp * 1.08));
+      }
+      if (key === 'wizards_paw') {
+        Neo.openWizardPawSelection();
+      }
+      if (key === 'extra_battery') {
+        Neo.openExtraBatterySelection();
+      }
+    }
+    Object.entries(bonusItemCounts).forEach(([key, amount]) => {
+      Neo.pushItemNotification(key, Number(amount), '(Jester bonus)');
+    });
+  }
+
+  // EARLY-phase handlers run before notifications fire (they grant crystals or
+  // prime charge state that later UI reads). LATE-phase handlers run after, and
+  // the late ones are mutually exclusive per item — exactly matching the original
+  // if/else-if ordering. titan_heart is intentionally LATE and independent.
+  const EARLY_ITEM_PICKUP_HANDLERS = {
+    artificer_charger: ({ previousCount, collectCount }) => applyArtificerChargerPickup(previousCount, collectCount),
+    rich_mans_blues: ({ collectCount }) => grantRichMansBluesPickupCrystals(collectCount),
+  };
+
+  const LATE_ITEM_PICKUP_HANDLERS = {
+    jesters_dice: ({ collectCount }) => applyJestersDicePickup(collectCount),
+    wizards_paw: ({ collectCount }) => {
+      for (let index = 0; index < collectCount; index += 1) Neo.openWizardPawSelection();
+    },
+    extra_battery: ({ collectCount }) => {
+      for (let index = 0; index < collectCount; index += 1) Neo.openExtraBatterySelection();
+    },
+    titan_heart: ({ collectCount }) => applyTitanHeartPickup(collectCount),
+  };
+
+  // Predicate-matched LATE handlers: run when match(itemKey) is true and the item
+  // has no exact-key late handler. Used for families of items (e.g. scrolls).
+  const LATE_ITEM_PICKUP_PREDICATES = [
+    {
+      // Scrolls resolve their selection popup on acquisition (pickup/buy/reward),
+      // not as an activatable tool. Queue one prompt per copy collected.
+      match: (itemKey) => Neo.isScrollControlItem?.(itemKey),
+      run: (itemKey, { collectCount }) => Neo.enqueueScrollSelection?.(itemKey, collectCount),
+    },
+  ];
+
+  function runEarlyItemPickupHandlers(itemKey, ctx) {
+    EARLY_ITEM_PICKUP_HANDLERS[itemKey]?.(ctx);
+  }
+
+  function runLateItemPickupHandlers(itemKey, ctx) {
+    const handler = LATE_ITEM_PICKUP_HANDLERS[itemKey];
+    if (handler) {
+      handler(ctx);
+      return;
+    }
+    const predicate = LATE_ITEM_PICKUP_PREDICATES.find(entry => entry.match(itemKey));
+    if (predicate) predicate.run(itemKey, ctx);
+  }
+
   function collectItem(itemKey) {
     if (Neo.isChallengeActive('no_items')) {
       Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 28, life: 0.85, text: 'NO ITEMS', c: '#ff8a98' });
@@ -3960,8 +4029,8 @@
     const previousCount = Neo.getItemCount(itemKey);
     Neo.player.items[itemKey] = previousCount + collectCount;
     readyRobotArmOnFirstPickup(itemKey, previousCount);
-    if (itemKey === 'artificer_charger') applyArtificerChargerPickup(previousCount, collectCount);
-    if (itemKey === 'rich_mans_blues') grantRichMansBluesPickupCrystals(collectCount);
+    // Early pickup effects that must run before notifications (crystals/charge state).
+    runEarlyItemPickupHandlers(itemKey, { previousCount, collectCount });
     if (Neo.isFirstRunTutorialActive()) Neo.tutorialState.gotRelic = true;
     Neo.addToEquipmentSlots?.(itemKey);
     Neo.markInventoryPanelDirty();
@@ -3973,46 +4042,7 @@
     const totalItems = Object.values(Neo.player.items).reduce((s, v) => s + Number(v || 0), 0);
     window.achievementEvents?.emit('item:collected', { totalItems });
 
-    if (itemKey === 'jesters_dice') {
-      Neo.floorSkipPending += 3 * collectCount;
-      const bonusItemCounts = {};
-      for (let index = 0; index < 10 * collectCount; index += 1) {
-        const key = Neo.rollItemDrop({ excludeKeys: ['jesters_dice'] });
-        if (!key) continue;
-        const previousBonusCount = Neo.getItemCount(key);
-        Neo.player.items[key] = previousBonusCount + 1;
-        readyRobotArmOnFirstPickup(key, previousBonusCount);
-        bonusItemCounts[key] = (bonusItemCounts[key] || 0) + 1;
-        if (key === 'titan_heart') {
-          Neo.player.maxHp = Math.max(120, Math.round(Neo.player.maxHp * 1.08));
-          Neo.player.hp = Math.min(Neo.player.maxHp, Math.round(Neo.player.hp * 1.08));
-        }
-        if (key === 'wizards_paw') {
-          Neo.openWizardPawSelection();
-        }
-        if (key === 'extra_battery') {
-          Neo.openExtraBatterySelection();
-        }
-      }
-      Object.entries(bonusItemCounts).forEach(([key, amount]) => {
-        Neo.pushItemNotification(key, Number(amount), '(Jester bonus)');
-      });
-    } else if (itemKey === 'wizards_paw') {
-      for (let index = 0; index < collectCount; index += 1) Neo.openWizardPawSelection();
-    } else if (itemKey === 'extra_battery') {
-      for (let index = 0; index < collectCount; index += 1) Neo.openExtraBatterySelection();
-    } else if (Neo.isScrollControlItem?.(itemKey)) {
-      // Scrolls resolve their selection popup on acquisition (pickup/buy/reward),
-      // not as an activatable tool. Queue one prompt per copy collected.
-      Neo.enqueueScrollSelection?.(itemKey, collectCount);
-    }
-
-    if (itemKey === 'titan_heart') {
-      for (let index = 0; index < collectCount; index += 1) {
-        Neo.player.maxHp = Math.max(120, Math.round(Neo.player.maxHp * 1.08));
-        Neo.player.hp = Math.min(Neo.player.maxHp, Math.round(Neo.player.hp * 1.08));
-      }
-    }
+    runLateItemPickupHandlers(itemKey, { previousCount, collectCount });
 
     if (!Neo.metaProgress.unlockedItems.includes(itemKey)) {
       Neo.metaProgress.unlockedItems.push(itemKey);

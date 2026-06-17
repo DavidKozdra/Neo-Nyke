@@ -155,8 +155,10 @@ describe('loop-exclusive Blue relics', () => {
     const source = fs.readFileSync(combatPath, 'utf8');
 
     expect(source).toContain("Neo.getItemCount('rich_mans_blues')");
-    expect(source).toContain("if (itemKey === 'rich_mans_blues') grantRichMansBluesPickupCrystals(collectCount)");
-    expect(source).not.toContain("if (itemKey === 'rich_mans_luck') grantRichMansBluesPickupCrystals");
+    // Pickup routing now lives in the ITEM_PICKUP_HANDLERS registry: only
+    // rich_mans_blues maps to the crystal reward, never rich_mans_luck.
+    expect(source).toContain('rich_mans_blues: ({ collectCount }) => grantRichMansBluesPickupCrystals(collectCount)');
+    expect(source).not.toContain('rich_mans_luck: ({ collectCount }) => grantRichMansBluesPickupCrystals');
   });
 
   test('final God death force-kills surviving bosses without room-clear rewards', () => {

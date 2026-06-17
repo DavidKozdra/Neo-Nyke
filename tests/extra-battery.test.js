@@ -92,17 +92,17 @@ describe('Extra Battery wiring', () => {
 
   test('getWeaponMaxCharges honors battery overrides and can make a 1-charge weapon charged', () => {
     const player = { weaponChargeOverrides: { extending_staff: 2 } };
-    const getWeaponMaxCharges = extractFunction(combatPath, 'getWeaponMaxCharges', {
-      Neo: { player },
-      CHARGED_WEAPON_MAX_CHARGES: { magenta_p90: 5 },
-    });
+    // Charge caps now live on the canonical Neo.WEAPON_DEFS registry (maxCharges
+    // field) rather than a separate CHARGED_WEAPON_MAX_CHARGES map.
+    const Neo = { player, WEAPON_DEFS: { magenta_p90: { maxCharges: 5 } } };
+    const getWeaponMaxCharges = extractFunction(combatPath, 'getWeaponMaxCharges', { Neo });
 
     expect(getWeaponMaxCharges('extending_staff', player)).toBe(2);
     expect(getWeaponMaxCharges('magenta_p90', player)).toBe(5);
     expect(getWeaponMaxCharges('extending_staff', {})).toBe(1);
 
     const isChargedWeaponKey = extractFunction(combatPath, 'isChargedWeaponKey', {
-      Neo: { player },
+      Neo,
       getWeaponMaxCharges,
     });
     expect(isChargedWeaponKey('extending_staff', player)).toBe(true);
@@ -118,8 +118,7 @@ describe('Extra Battery wiring', () => {
       weaponChargeOverrides: { magenta_p90: 6 },
     };
     const deps = {
-      Neo: { player },
-      CHARGED_WEAPON_MAX_CHARGES: { magenta_p90: 5 },
+      Neo: { player, WEAPON_DEFS: { magenta_p90: { maxCharges: 5 } } },
     };
     const getWeaponMaxCharges = extractFunction(combatPath, 'getWeaponMaxCharges', deps);
     const isChargedWeaponKey = extractFunction(combatPath, 'isChargedWeaponKey', { ...deps, getWeaponMaxCharges });

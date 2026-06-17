@@ -137,12 +137,14 @@ describe('enemy projectile evasion', () => {
   });
 
   test("gives Bowman's Bane warp movement and much higher attack damage", () => {
+    // Per-type stats now live in the ENEMY_STATS registry rather than an inline
+    // `if (type === 'bowman_bane')` branch. Inspect that table row.
     const bowmanBlock = enemiesSource.slice(
-      enemiesSource.indexOf("} else if (type === 'bowman_bane')"),
-      enemiesSource.indexOf("} else if (type === 'antony_blemmye')"),
+      enemiesSource.indexOf('bowman_bane: {'),
+      enemiesSource.indexOf('antony_blemmye:'),
     );
 
-    expect(bowmanBlock).toContain('base.dmg = 36');
+    expect(bowmanBlock).toContain('dmg: 36');
     expect(enemiesSource).toContain("if (enemy.type === 'bowman_bane') return warpBowmanBane(enemy)");
     expect(enemiesSource).toContain('damage: Math.round(enemy.dmg * 1.25)');
     expect(enemiesSource).toContain('damage: Math.round(enemy.dmg * 1.15)');
