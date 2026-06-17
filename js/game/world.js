@@ -570,10 +570,7 @@
         const drained = (dt / 0.05); // 1 point per 50ms
         Neo.player.overhealBarrier = Math.max(0, Number(Neo.player.overhealBarrier) - drained);
         if (Neo.player.overhealBarrier <= 0) {
-          Neo.player.overhealBarrier = 0;
-          Neo.player.overhealBarrierMax = 0;
-          Neo.player.overhealBarrierColor = '';
-          Neo.player.overhealBarrierAge = 0;
+          Neo.setOverhealBarrier(0, 0, '');
         }
       }
     } else {

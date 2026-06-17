@@ -1251,10 +1251,7 @@
   function activateIronHelm() {
     if (!Neo.player) return;
     const shield = Math.round(Math.max(1, Number(Neo.player.maxHp || 1)) * 0.5);
-    Neo.player.overhealBarrier = shield;
-    Neo.player.overhealBarrierMax = shield;
-    Neo.player.overhealBarrierColor = '#c8fbff';
-    Neo.player.overhealBarrierAge = 0;
+    Neo.setOverhealBarrier(shield, shield, '#c8fbff');
     Neo.spawnHealPopup?.(Neo.player.x, Neo.player.y - 34, shield, { color: '#c8fbff', size: 16 });
     Neo.ringBurst(Neo.player.x, Neo.player.y, Neo.shieldRingRadius(shield), '#c8fbff', 0.75);
     Neo.playSfx?.('item_collect');

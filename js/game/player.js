@@ -591,6 +591,7 @@ export function getItemStats() {
     const mooggyZoomies = getItemCount('mooggy_zoomies');
     const homingMissile = getItemCount('homing_missile');
     const procyPickle = getItemCount('procy_pickle');
+    const ironLung = getItemCount('iron_lung');
     const ownedToolStacks = countOwnedToolStacks(Neo.player?.items, Neo.ITEM_DEFS);
     // Count distinct tool relics the player owns (items flagged `tool: true`),
     // so Procy Pickle's poison-on-tool-use chance scales with how tool-heavy the
@@ -625,7 +626,7 @@ export function getItemStats() {
     // Overheal barrier is now item-dependent: you must own Generic Health AND at
     // least one OTHER heal/healing-tagged item. Once both are present it triggers
     // on a random chance per overheal, scaling with total heal stacks.
-    const genericHealthStacks = getItemCount('generic_health_item');
+    const genericHealthStacks = genericHealthItem; // same count as line above; read once
     const otherHealStacks = Math.max(0, healingTagStacks - genericHealthStacks);
     const overhealUnlocked = genericHealthStacks > 0 && otherHealStacks > 0;
     const overhealBarrierChance = overhealUnlocked
@@ -747,7 +748,7 @@ export function getItemStats() {
       negativeStatusMultiplier: 1 + nakedKingCloak * 0.2,
       ownedToolStacks,
       stunResistance: anchorCharm,
-      hasIronLung: getItemCount('iron_lung') > 0,
+      hasIronLung: ironLung > 0,
       hasPrincesGlasses: princesGlasses > 0,
       tagCounts,
       bleedCritChance: tagCounts.bleed >= 8 ? 0.18 : tagCounts.bleed >= 3 ? 0.08 : 0,
@@ -766,6 +767,19 @@ export function getAttackSpeedValue() {
     const robotArmMultiplier = stats.hasRobotArm && Neo.player?.robotArmReady ? 8 : 1;
     return Math.max(0.2, (Neo.player?.attackSpeed || 1) * (stats.attackSpeedMultiplier || 1) * robotArmMultiplier);
   }
+
+// Write the player's overheal-barrier state in one place. Storage stays flat (four
+// sibling props on Neo.player, preserved by the save schema and read directly by
+// the render/HUD layers); this collapses the repeated 4-line "set current/max/color
+// and reset age" blocks at every barrier-grant site. Always resets age to 0, since
+// every grant restarts the decay clock.
+export function setOverhealBarrier(current, max, color) {
+    if (!Neo.player) return;
+    Neo.player.overhealBarrier = current;
+    Neo.player.overhealBarrierMax = max;
+    Neo.player.overhealBarrierColor = color;
+    Neo.player.overhealBarrierAge = 0;
+}
 
 export function applyPlayerHealing(amount, options = {}) {
     if (!Neo.player) return 0;
@@ -794,10 +808,11 @@ export function applyPlayerHealing(amount, options = {}) {
     if (overflow > 0 && barrierRatio > 0 && barrierCap > 0 && Math.random() < barrierChance) {
       const addedBarrier = Math.min(barrierCap - Number(Neo.player.overhealBarrier || 0), overflow * barrierRatio);
       if (addedBarrier > 0) {
-        Neo.player.overhealBarrier = Math.min(barrierCap, Number(Neo.player.overhealBarrier || 0) + addedBarrier);
-        Neo.player.overhealBarrierMax = Math.max(Number(Neo.player.overhealBarrierMax || 0), barrierCap);
-        Neo.player.overhealBarrierColor = Neo.player.overhealBarrierColor || '#9cefff';
-        Neo.player.overhealBarrierAge = 0;
+        setOverhealBarrier(
+          Math.min(barrierCap, Number(Neo.player.overhealBarrier || 0) + addedBarrier),
+          Math.max(Number(Neo.player.overhealBarrierMax || 0), barrierCap),
+          Neo.player.overhealBarrierColor || '#9cefff',
+        );
         if (options.showBarrier !== false && Neo.spawnHealPopup) {
           Neo.spawnHealPopup(Neo.player.x + Neo.rand(-8, 8), Neo.player.y - 36, addedBarrier, { color: '#9cefff', size: 12 });
         }
@@ -2016,10 +2031,12 @@ export function refreshFloorChargeStates() {
     const heal = maxHp * 0.02 * stacks;
     if (heal > 0) Neo.applyPlayerHealing?.(heal);
     const shield = 50 * stacks;
-    Neo.player.overhealBarrier = Number(Neo.player.overhealBarrier || 0) + shield;
-    Neo.player.overhealBarrierMax = Math.max(Number(Neo.player.overhealBarrierMax || 0), Neo.player.overhealBarrier);
-    Neo.player.overhealBarrierColor = '#ffe7a8';
-    Neo.player.overhealBarrierAge = 0;
+    const nextBarrier = Number(Neo.player.overhealBarrier || 0) + shield;
+    setOverhealBarrier(
+      nextBarrier,
+      Math.max(Number(Neo.player.overhealBarrierMax || 0), nextBarrier),
+      '#ffe7a8',
+    );
     Neo.spawnHealPopup?.(Neo.player.x, Neo.player.y - 34, shield, { color: '#ffe7a8', size: 16 });
     Neo.spawnParticle?.({ x: Neo.player.x, y: Neo.player.y, life: 0.7, ring: Neo.shieldRingRadius(shield), c: '#ffe7a8' });
   }
@@ -2069,6 +2086,7 @@ export function refreshFloorChargeStates() {
   Neo.getItemStats = getItemStats;
   Neo.getAttackSpeedValue = getAttackSpeedValue;
   Neo.applyPlayerHealing = applyPlayerHealing;
+  Neo.setOverhealBarrier = setOverhealBarrier;
   Neo.getWizardPawStatCards = getWizardPawStatCards;
   Neo.openWizardPawSelection = openWizardPawSelection;
   Neo.getPendingUiItemCount = getPendingUiItemCount;
