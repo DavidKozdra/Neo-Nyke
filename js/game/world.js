@@ -205,8 +205,7 @@
   function damagePlayerN(pn, n, amount, angle, knockback) {
     if (!pn || pn.inv > 0) return;
     pn.hp -= amount;
-    pn.vx += Math.cos(angle) * knockback;
-    pn.vy += Math.sin(angle) * knockback;
+    Neo.applyImpulse(pn, angle, knockback);
     pn.inv = 0.75;
     spawnDamagePopup(pn.x, pn.y - 18, amount, { color: '#a8d8ff', size: 16 });
     if (pn.hp <= 0) {
@@ -266,8 +265,7 @@
     if (!Neo.player2 || Neo.p2DeadInCoop) return;
     if (Neo.player2.inv > 0) return;
     Neo.player2.hp -= amount;
-    Neo.player2.vx += Math.cos(angle) * knockback;
-    Neo.player2.vy += Math.sin(angle) * knockback;
+    Neo.applyImpulse(Neo.player2, angle, knockback);
     Neo.player2.inv = 0.75;
     spawnDamagePopup(Neo.player2.x, Neo.player2.y - 18, amount, { color: '#4ca8ff', size: 16 });
     if (Neo.player2.hp <= 0) {
@@ -466,8 +464,7 @@
 
     if (applyHitstop) {
       Neo.player.inv = 0.75;
-      Neo.player.vx += Math.cos(angle) * knockback;
-      Neo.player.vy += Math.sin(angle) * knockback;
+      Neo.applyImpulse(Neo.player, angle, knockback);
       Neo.applyPlayerImpactStun(finalAmount, knockback);
       const hitRatio = Neo.clamp(finalAmount / Math.max(1, Neo.player.maxHp), 0, 1);
       Neo.addHitstop?.(0.025 + hitRatio * 0.055);

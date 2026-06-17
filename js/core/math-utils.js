@@ -91,6 +91,22 @@ export function clamp(value, min, max) {
   return value < min ? min : value > max ? max : value;
 }
 
+// Radius of the expanding ring particle shown when a shield/barrier is granted,
+// scaling with the shield amount and capped. Shared so every shield source draws
+// the same burst.
+export function shieldRingRadius(shield) {
+  return Math.min(150, 58 + Math.sqrt(Math.max(0, Number(shield) || 0)) * 3);
+}
+
+// Add a directional impulse to an entity's velocity: vx/vy gain a vector of the
+// given magnitude pointing along `angle` (radians). Centralizes the knockback
+// idiom that was hand-written as cos/sin pairs at every hit site.
+export function applyImpulse(entity, angle, magnitude) {
+  if (!entity || !Number.isFinite(angle) || !Number.isFinite(magnitude)) return;
+  entity.vx += Math.cos(angle) * magnitude;
+  entity.vy += Math.sin(angle) * magnitude;
+}
+
 // Crit roll-back: once crit chance reaches 100% it can't climb higher, so the
 // overflow is converted into crit power instead. Each time chance crosses 100%
 // we multiply the crit damage by 1.5 and roll the chance back to 75%, repeating
@@ -778,6 +794,8 @@ Neo.shuffle = shuffle;
 Neo.shuffleWithRandom = shuffleWithRandom;
 Neo.unorderedRemoveAt = unorderedRemoveAt;
 Neo.clamp = clamp;
+Neo.applyImpulse = applyImpulse;
+Neo.shieldRingRadius = shieldRingRadius;
 Neo.applyCritRollback = applyCritRollback;
 Neo.dist = dist;
 Neo.distToSegment = distToSegment;

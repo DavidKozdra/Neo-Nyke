@@ -66,6 +66,21 @@
     return null;
   }
 
+  // Margin keeping summoned minions clear of the room edge, and the spawn-clearance
+  // radius used when validating their landing spot.
+  const SUMMON_SPAWN_MARGIN = 90;
+  const SUMMON_SPAWN_RADIUS = 15;
+
+  // Clamp a desired summon position inside the safe interior, then resolve it to a
+  // usable spawn point. Shared by the minion-summoning enemies.
+  function findSafeSummonSpawnPoint(px, py) {
+    return findSafeEnemySpawnPoint(
+      Neo.clamp(px, SUMMON_SPAWN_MARGIN, Neo.ROOM_W - SUMMON_SPAWN_MARGIN),
+      Neo.clamp(py, SUMMON_SPAWN_MARGIN, Neo.ROOM_H - SUMMON_SPAWN_MARGIN),
+      SUMMON_SPAWN_RADIUS,
+    );
+  }
+
   function compactEnemyList() {
     if (!Array.isArray(Neo.enemies) || Neo.enemies.length === 0) return;
     const frame = Number(Neo.frameId || 0);
@@ -2648,7 +2663,7 @@
         const angle = Neo.nextRandom('encounter') * Math.PI * 2;
         const px = enemy.x + Math.cos(angle) * (40 + index * 18);
         const py = enemy.y + Math.sin(angle) * (40 + index * 18);
-        const safeSpawn = findSafeEnemySpawnPoint(Neo.clamp(px, 90, Neo.ROOM_W - 90), Neo.clamp(py, 90, Neo.ROOM_H - 90), 15);
+        const safeSpawn = findSafeSummonSpawnPoint(px, py);
         if (safeSpawn) spawnEnemy('cult_follower', safeSpawn.x, safeSpawn.y, false);
       }
       Neo.spawnParticle({ x: enemy.x, y: enemy.y - 18, life: 0.7, text: 'SUMMON', c: '#d59bff' });
@@ -2938,7 +2953,7 @@
         const angle = (Math.PI * 2 * index) / 3 + Neo.rng() * 0.8;
         const px = enemy.x + Math.cos(angle) * 54;
         const py = enemy.y + Math.sin(angle) * 54;
-        const safeSpawn = findSafeEnemySpawnPoint(Neo.clamp(px, 90, Neo.ROOM_W - 90), Neo.clamp(py, 90, Neo.ROOM_H - 90), 15);
+        const safeSpawn = findSafeSummonSpawnPoint(px, py);
         if (!safeSpawn) continue;
         const summonType = Neo.nextRandom('encounter') < golemChance ? 'golem' : 'cult_follower';
         const summonElite = Neo.nextRandom('encounter') < eliteChance;

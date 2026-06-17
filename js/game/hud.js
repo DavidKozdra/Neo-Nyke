@@ -1204,8 +1204,7 @@
     Neo.forEachEnemyNearCircle?.(Neo.player.x, Neo.player.y, radius, enemy => {
       const angle = Math.atan2(enemy.y - Neo.player.y, enemy.x - Neo.player.x);
       const force = 440 + (stacks - 1) * 55;
-      enemy.vx += Math.cos(angle) * force;
-      enemy.vy += Math.sin(angle) * force;
+      Neo.applyImpulse(enemy, angle, force);
       enemy.stun = Math.max(Number(enemy.stun || 0), 0.28 + (stacks - 1) * 0.05);
       Neo.hitEnemy?.(enemy, 8 + (stacks - 1) * 4, angle, 340, '#f4f6fb');
     });
@@ -1257,7 +1256,7 @@
     Neo.player.overhealBarrierColor = '#c8fbff';
     Neo.player.overhealBarrierAge = 0;
     Neo.spawnHealPopup?.(Neo.player.x, Neo.player.y - 34, shield, { color: '#c8fbff', size: 16 });
-    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.75, ring: Math.min(150, 58 + Math.sqrt(shield) * 3), c: '#c8fbff' });
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.75, ring: Neo.shieldRingRadius(shield), c: '#c8fbff' });
     Neo.playSfx?.('item_collect');
   }
 

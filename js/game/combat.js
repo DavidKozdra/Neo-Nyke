@@ -778,24 +778,25 @@
     Neo.queueHeldSkillRecharge('laser', Neo.getLaserCooldownDuration(getEquippedMove('laser'), Neo.getAttackSpeedValue()));
   }
 
+  function endTurtleWave() {
+    // Turtle Wave ends when its HP drain exhausts the player's HP buffer (either
+    // the drain can't be paid, or it drops HP to the 1-HP floor).
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.55, text: 'WAVE ENDED', c: '#ff8b98' });
+    return true;
+  }
+
   function tickTurtleWaveHpDrain(dt) {
     if (Neo.laserMode !== 'turtle_wave') return false;
     Neo.turtleWaveHpTimer += dt;
     while (Neo.turtleWaveHpTimer >= 1) {
       Neo.turtleWaveHpTimer -= 1;
       const drain = Math.min(Neo.TURTLE_WAVE_HP_PER_SECOND, Math.max(0, Neo.player.hp - 1));
-      if (drain <= 0) {
-        Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.55, text: 'WAVE ENDED', c: '#ff8b98' });
-        return true;
-      }
+      if (drain <= 0) return endTurtleWave();
       Neo.player.hp = Math.max(1, Neo.player.hp - drain);
       if (!Neo.isBossFightActive()) Neo.player.roomDamageTaken = (Neo.player.roomDamageTaken || 0) + drain;
       Neo.spawnDamagePopup(Neo.player.x, Neo.player.y - 18, drain, { color: '#74f5ff', size: 14 });
       Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 30, life: 0.42, text: `-${drain} HP`, c: '#74f5ff' });
-      if (Neo.player.hp <= 1) {
-        Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.55, text: 'WAVE ENDED', c: '#ff8b98' });
-        return true;
-      }
+      if (Neo.player.hp <= 1) return endTurtleWave();
     }
     return false;
   }
@@ -1709,8 +1710,7 @@
       if (!enemy) return;
       if (!isWithinRadiusSq(Neo.player.x, Neo.player.y, enemy, radius)) return;
       const enemyAngle = Math.atan2(enemy.y - Neo.player.y, enemy.x - Neo.player.x);
-      enemy.vx += Math.cos(enemyAngle) * KICKY_KICK_KNOCKBACK;
-      enemy.vy += Math.sin(enemyAngle) * KICKY_KICK_KNOCKBACK;
+      Neo.applyImpulse(enemy, enemyAngle, KICKY_KICK_KNOCKBACK);
       roomMoveCandidates.push({ enemy, angle: enemyAngle });
     });
     roomMoveCandidates.forEach(candidate => tryMoveKickyKickEnemyToNextRoom(candidate.enemy, candidate.angle));
@@ -2532,15 +2532,13 @@
       dealt -= absorbed;
       Neo.spawnParticle({ x: enemy.x, y: enemy.y - 20, life: 0.4, text: `BLOCK ${absorbed}`, c: '#7ed6ff' });
       if (dealt <= 0) {
-        enemy.vx += Math.cos(angle) * appliedKnockback * 0.35;
-        enemy.vy += Math.sin(angle) * appliedKnockback * 0.35;
+        Neo.applyImpulse(enemy, angle, appliedKnockback * 0.35);
         applyEnemyImpactStun(enemy, 0, appliedKnockback * 0.35);
         return;
       }
     }
     enemy.hp -= dealt;
-    enemy.vx += Math.cos(angle) * appliedKnockback;
-    enemy.vy += Math.sin(angle) * appliedKnockback;
+    Neo.applyImpulse(enemy, angle, appliedKnockback);
     if (Number.isFinite(angle)) {
       enemy._lastHitAngle = angle;
       enemy._lastHitAt = performance.now();
@@ -4142,7 +4140,8 @@
   Neo.migrateEnemyState = migrateEnemyState;
   Neo.tickEnemyStatus = tickEnemyStatus;
   Neo.updateEnemyStatuses = updateEnemyStatuses;
-  Neo.normalizeAngle = normalizeAngle;
+  // normalizeAngle is intentionally not exported on Neo: it's only used internally
+  // by turnAngleToward in this file.
   Neo.turnAngleToward = turnAngleToward;
   Neo.rollEnemyBeamBias = rollEnemyBeamBias;
   Neo.aimEnemyBeam = aimEnemyBeam;

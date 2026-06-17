@@ -2021,7 +2021,7 @@ export function refreshFloorChargeStates() {
     Neo.player.overhealBarrierColor = '#ffe7a8';
     Neo.player.overhealBarrierAge = 0;
     Neo.spawnHealPopup?.(Neo.player.x, Neo.player.y - 34, shield, { color: '#ffe7a8', size: 16 });
-    Neo.spawnParticle?.({ x: Neo.player.x, y: Neo.player.y, life: 0.7, ring: Math.min(150, 58 + Math.sqrt(shield) * 3), c: '#ffe7a8' });
+    Neo.spawnParticle?.({ x: Neo.player.x, y: Neo.player.y, life: 0.7, ring: Neo.shieldRingRadius(shield), c: '#ffe7a8' });
   }
 
   // Expose on Neo
