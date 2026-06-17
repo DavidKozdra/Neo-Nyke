@@ -77,7 +77,7 @@
         'assets/sounds/sfx_secret reveal 4.mp3',
       ],
     },
-    { id: 'dash', path: 'assets/sounds/sfx_dash 1.mp3', volume: 0.3, priority: priority.HIGH, mixDb: 3, lowCutHz: 90 },
+    { id: 'dash', path: 'assets/sounds/sfx_dash 1.mp3', volume: 0.1, priority: priority.LOW, mixDb: 3, lowCutHz: 70 },
     {
       id: 'victory',
       volume: 0.7,
