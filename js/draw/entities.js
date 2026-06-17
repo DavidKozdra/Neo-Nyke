@@ -1136,7 +1136,7 @@
 
   function drawPlayer() {
     if (!Neo.player) return;
-    const aimAngle = Math.atan2(Neo.mouse.worldY - Neo.player.y, Neo.mouse.worldX - Neo.player.x);
+    const aimAngle = Neo.angleToMouse();
     const facing = getFacingDirection(Neo.player, aimAngle);
     const shadowColor = Neo.godTimer > 0 ? 'rgba(255,248,210,0.65)' : 'rgba(0,0,0,0.25)';
     const _reduceFlash = window.NeoSettings?.getAccess()?.reduceFlash;
@@ -1409,7 +1409,7 @@
 
     // Draw Laser Glasses weapon beams (two beams, ±0.2 spread)
     if (!Neo.laserActive && Neo.getEquippedWeapon() === 'lazer_glasses' && Neo.player.weaponBeamTime > 0) {
-      const baseAngle = Math.atan2(Neo.mouse.worldY - Neo.player.y, Neo.mouse.worldX - Neo.player.x);
+      const baseAngle = Neo.angleToMouse();
       const alpha = Math.min(1, Neo.player.weaponBeamTime / 0.3);
       const dragonOrbStacks = Math.max(0, Number(Neo.getItemCount?.('dragon_orb') || 0));
       const outerPulse = dragonOrbStacks > 0 ? 1 + Math.sin(Number(Neo.frameId || 0) * 0.42) * 0.12 : 1;

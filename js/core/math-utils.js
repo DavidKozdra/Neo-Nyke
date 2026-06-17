@@ -98,6 +98,18 @@ export function shieldRingRadius(shield) {
   return Math.min(150, 58 + Math.sqrt(Math.max(0, Number(shield) || 0)) * 3);
 }
 
+// Angle (radians) of the vector pointing from `from` toward `to`. Replaces the
+// hand-written Math.atan2(to.y - from.y, to.x - from.x) idiom at every aim site.
+export function angleBetween(from, to) {
+  return Math.atan2(to.y - from.y, to.x - from.x);
+}
+
+// Angle from the player toward the current mouse world position — the most common
+// aim direction in the game.
+export function angleToMouse() {
+  return Math.atan2(Neo.mouse.worldY - Neo.player.y, Neo.mouse.worldX - Neo.player.x);
+}
+
 // Add a directional impulse to an entity's velocity: vx/vy gain a vector of the
 // given magnitude pointing along `angle` (radians). Centralizes the knockback
 // idiom that was hand-written as cos/sin pairs at every hit site.
@@ -794,6 +806,8 @@ Neo.shuffle = shuffle;
 Neo.shuffleWithRandom = shuffleWithRandom;
 Neo.unorderedRemoveAt = unorderedRemoveAt;
 Neo.clamp = clamp;
+Neo.angleBetween = angleBetween;
+Neo.angleToMouse = angleToMouse;
 Neo.applyImpulse = applyImpulse;
 Neo.shieldRingRadius = shieldRingRadius;
 Neo.applyCritRollback = applyCritRollback;

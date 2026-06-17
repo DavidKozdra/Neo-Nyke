@@ -2599,7 +2599,7 @@ export function resumeGame() {
         // 1. Flash effect
         for (let i = 0; i < 8; i++) {
           setTimeout(() => {
-            Neo.spawnParticle({ x: boss.x, y: boss.y, life: 0.18, ring: 32 + i * 4, c: i % 2 === 0 ? '#ffd27d' : '#fffbe0' });
+            Neo.ringBurst(boss.x, boss.y, 32 + i * 4, i % 2 === 0 ? '#ffd27d' : '#fffbe0', 0.18);
           }, i * 40);
         }
         // 2. Scale up and down (squash/stretch)

@@ -49,6 +49,27 @@ describe('applyImpulse', () => {
   });
 });
 
+describe('angleBetween', () => {
+  // angleBetween needs no Neo, so load it bare.
+  const angleBetween = loadMathFunction('angleBetween');
+
+  test('returns the angle from `from` pointing toward `to`', () => {
+    expect(angleBetween({ x: 0, y: 0 }, { x: 10, y: 0 })).toBeCloseTo(0); // east
+    expect(angleBetween({ x: 0, y: 0 }, { x: 0, y: 10 })).toBeCloseTo(Math.PI / 2); // south (+y)
+    expect(angleBetween({ x: 0, y: 0 }, { x: -10, y: 0 })).toBeCloseTo(Math.PI); // west
+    expect(angleBetween({ x: 5, y: 5 }, { x: 5, y: 5 })).toBe(0); // coincident
+  });
+
+  test('is the inverse direction when arguments swap', () => {
+    const a = { x: 3, y: 7 };
+    const b = { x: -2, y: 1 };
+    const fwd = angleBetween(a, b);
+    const back = angleBetween(b, a);
+    // forward and back differ by ±π
+    expect(Math.abs(Math.abs(fwd - back) - Math.PI)).toBeCloseTo(0);
+  });
+});
+
 describe('shieldRingRadius', () => {
   const shieldRingRadius = loadMathFunction('shieldRingRadius');
 

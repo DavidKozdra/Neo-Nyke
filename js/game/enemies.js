@@ -2050,7 +2050,7 @@
       threatSegment.y2 - threatSegment.y1,
       threatSegment.x2 - threatSegment.x1,
     );
-    const awayFromPlayer = Math.atan2(enemy.y - Neo.player.y, enemy.x - Neo.player.x);
+    const awayFromPlayer = Neo.angleBetween(Neo.player, enemy);
     const candidates = [
       beamAngle + Math.PI / 2,
       beamAngle - Math.PI / 2,
@@ -2093,7 +2093,7 @@
 
   function findBowmanWarpDestination(enemy) {
     if (!enemy || !Neo.player) return null;
-    const baseAngle = Math.atan2(enemy.y - Neo.player.y, enemy.x - Neo.player.x);
+    const baseAngle = Neo.angleBetween(Neo.player, enemy);
     const idealRange = enemy.phase >= 2 ? 300 : 270;
     let best = null;
     for (let index = 0; index < 12; index += 1) {
@@ -2135,8 +2135,8 @@
     enemy.inv = Math.max(Number(enemy.inv || 0), 0.2);
     enemy.projectileEvadeCd = 2.4;
     enemy.bowmanWarpCd = enemy.phase >= 2 ? 3.2 : 4.4;
-    Neo.spawnParticle({ x: fromX, y: fromY, life: 0.28, ring: 48, c: '#c9aaff' });
-    Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.34, ring: 62, c: '#8dd4ff' });
+    Neo.ringBurst(fromX, fromY, 48, '#c9aaff', 0.28);
+    Neo.ringBurst(enemy.x, enemy.y, 62, '#8dd4ff', 0.34);
     Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 12, life: 0.5, text: 'WARP', c: '#c9aaff' });
     return true;
   }
@@ -2207,7 +2207,7 @@
           ? 2.6
           : 3.2;
     enemy.inv = Math.max(Number(enemy.inv || 0), 0.1);
-    Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.24, ring: enemy.r + 18, c: '#9fe8ff' });
+    Neo.ringBurst(enemy.x, enemy.y, enemy.r + 18, '#9fe8ff', 0.24);
     return true;
   }
 
@@ -2263,7 +2263,7 @@
         enemy.vx *= 0.84;
         enemy.vy *= 0.84;
         const charge = 1 - enemy.novaTimer / 0.5;
-        Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.14, ring: 120 * charge, c: '#c77bff' });
+        Neo.ringBurst(enemy.x, enemy.y, 120 * charge, '#c77bff', 0.14);
         if (enemy.novaTimer <= 0) {
           Neo.blastRadius(enemy.x, enemy.y, 120, Math.round(enemy.dmg * 1.1), '#c77bff', enemy, 300);
         }
@@ -2338,7 +2338,7 @@
           // Telegraph + launch the Knave Blade arc (read by the renderer).
           enemy.swingTime = 0.26;
           enemy.bladeHit = false;
-          Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.22, ring: KNAVE_BLADE_REACH, c: '#ff8e6c' });
+          Neo.ringBurst(enemy.x, enemy.y, KNAVE_BLADE_REACH, '#ff8e6c', 0.22);
         }
       }
       return;
@@ -2511,7 +2511,7 @@
       if (enemy.burstDelay <= 0) {
         enemy.burstDelay = 0.085 * Math.max(0.72, tuning.rangedCadence);
         enemy.burstShots -= 1;
-        const baseAngle = Math.atan2(Neo.player.y - enemy.y, Neo.player.x - enemy.x);
+        const baseAngle = Neo.angleBetween(enemy, Neo.player);
         enemy.burstAngle = Neo.turnAngleToward(enemy.burstAngle || baseAngle, baseAngle, 0.22 * tuning.reaction);
         const spread = ((Neo.nextRandom('encounter') - 0.5) * 0.18) / Math.max(0.92, tuning.reaction);
         const fireAngle = enemy.burstAngle + spread;
@@ -2579,7 +2579,7 @@
       enemy.vx *= 0.7;
       enemy.vy *= 0.7;
       if (enemy.spitWindup <= 0) {
-        const angle = Math.atan2(Neo.player.y - enemy.y, Neo.player.x - enemy.x);
+        const angle = Neo.angleBetween(enemy, Neo.player);
         Neo.spawnProjectile({
           x: enemy.x + Math.cos(angle) * (enemy.r + 6),
           y: enemy.y + Math.sin(angle) * (enemy.r + 6),
@@ -2711,7 +2711,7 @@
         other.barrier = Math.max(other.barrier || 0, Math.round(other.max * 0.22 * tuning.supportPower));
       });
       enemy.barrier = Math.max(enemy.barrier || 0, Math.round(enemy.max * 0.14 * tuning.supportPower));
-      Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.55, ring: 82, c: '#7ed6ff' });
+      Neo.ringBurst(enemy.x, enemy.y, 82, '#7ed6ff', 0.55);
       Neo.spawnParticle({ x: enemy.x, y: enemy.y - 18, life: 0.65, text: 'SHIELD', c: '#7ed6ff' });
     }
 
@@ -2766,14 +2766,14 @@
         }
       });
       if (healedAny) {
-        Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.55, ring: 76, c: '#79f7bf' });
+        Neo.ringBurst(enemy.x, enemy.y, 76, '#79f7bf', 0.55);
         Neo.spawnParticle({ x: enemy.x, y: enemy.y - 18, life: 0.65, text: 'HEAL', c: '#79f7bf' });
       }
     }
 
     if (enemy.attackCd <= 0 && !nearestWounded && distance < 350) {
       enemy.windup = 0.54 / tuning.reaction;
-      enemy.beamAngle = Math.atan2(Neo.player.y - enemy.y, Neo.player.x - enemy.x) + Neo.rollEnemyBeamBias(enemy, 0.16);
+      enemy.beamAngle = Neo.angleBetween(enemy, Neo.player) + Neo.rollEnemyBeamBias(enemy, 0.16);
       enemy.attackCd = 2.8 * tuning.rangedCadence;
     }
 
@@ -2796,11 +2796,11 @@
       enemy.vx *= 0.8;
       enemy.vy *= 0.8;
       const charge = 1 - enemy.shoveTimer / 0.7;
-      Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.14, ring: 200 * charge, c: '#ff9b5e' });
+      Neo.ringBurst(enemy.x, enemy.y, 200 * charge, '#ff9b5e', 0.14);
       if (enemy.shoveTimer <= 0) {
-        Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.7, ring: 200, c: '#ff9b5e' });
+        Neo.ringBurst(enemy.x, enemy.y, 200, '#ff9b5e', 0.7);
         Neo.blastRadius(enemy.x, enemy.y, 200, Math.round(enemy.dmg * 1.4), '#ff9b5e', enemy, 760);
-        Neo.addTrauma(0.5, Math.atan2(Neo.player.y - enemy.y, Neo.player.x - enemy.x), 8);
+        Neo.addTrauma(0.5, Neo.angleBetween(enemy, Neo.player), 8);
       }
       return;
     }
@@ -2840,7 +2840,7 @@
       const safeSpawn = findSafeEnemySpawnPoint(enemy.x, enemy.y, 18);
       const bossSpawnerIdx = Neo.enemies.indexOf(enemy);
       if (bossSpawnerIdx >= 0) Neo.enemies.splice(bossSpawnerIdx, 1);
-      Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.8, ring: 120, c: '#ff9b5e' });
+      Neo.ringBurst(enemy.x, enemy.y, 120, '#ff9b5e', 0.8);
       if (safeSpawn) {
         const spawnedBoss = spawnEnemy(bossType, safeSpawn.x, safeSpawn.y, false);
         spawnedBoss.hp = Math.round(spawnedBoss.hp * 0.72);
@@ -2904,7 +2904,7 @@
       enemy.queenFinisherTimer = Math.max(0, Number(enemy.queenFinisherTimer || 0) - dt);
       // Growing telegraph ring so the player can read the danger zone.
       const charge = 1 - enemy.queenFinisherTimer / QUEEN_FINISHER_WINDUP;
-      Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.16, ring: QUEEN_FINISHER_RADIUS * charge, c: '#ff6ad5' });
+      Neo.ringBurst(enemy.x, enemy.y, QUEEN_FINISHER_RADIUS * charge, '#ff6ad5', 0.16);
       // Her body convulses harder as the blast nears (read at draw time), and the
       // screen builds a low rumble that crescendos into the detonation.
       enemy.queenFinisherShake = 3 + charge * charge * 11;
@@ -2915,11 +2915,11 @@
         enemy.queenFinisherDone = true;
         enemy.queenFinisherShake = 0;
         const blastDamage = Math.round(enemy.dmg * 2.8);
-        Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.7, ring: QUEEN_FINISHER_RADIUS, c: '#ff6ad5' });
+        Neo.ringBurst(enemy.x, enemy.y, QUEEN_FINISHER_RADIUS, '#ff6ad5', 0.7);
         // Bigger AOE, lots of knockback to fling the player clear, and a heavy
         // screen slam so the detonation lands hard.
         Neo.blastRadius(enemy.x, enemy.y, QUEEN_FINISHER_RADIUS, blastDamage, '#ff6ad5', enemy, QUEEN_FINISHER_KNOCKBACK);
-        Neo.addTrauma(0.95, Math.atan2(Neo.player.y - enemy.y, Neo.player.x - enemy.x), 12);
+        Neo.addTrauma(0.95, Neo.angleBetween(enemy, Neo.player), 12);
         Neo.addHitstop(0.08);
         // Take herself out with the blast.
         enemy.defenseMultiplier = 1;
@@ -2979,7 +2979,7 @@
     const floorSpeed = 1 + Math.max(0, Neo.floor - 5) * 0.08;
     const travelSpeed = 165 * floorSpeed;
     const damage = Math.round(enemy.dmg * 0.78);
-    const baseAngle = Math.atan2(Neo.player.y - enemy.y, Neo.player.x - enemy.x);
+    const baseAngle = Neo.angleBetween(enemy, Neo.player);
     for (let index = 0; index < count; index += 1) {
       // Fan the volley out symmetrically around the aim direction.
       const spread = count === 1 ? 0 : ((index - (count - 1) / 2) / Math.max(1, count - 1)) * 0.44;
@@ -3029,7 +3029,7 @@
       enemy.airborne = true;
       if (progress > 0.62 && !enemy.bulkJumpWarned) {
         enemy.bulkJumpWarned = true;
-        Neo.spawnParticle({ x: enemy.bulkJumpTargetX, y: enemy.bulkJumpTargetY, life: 0.32, ring: 76, c: '#ff8844' });
+        Neo.ringBurst(enemy.bulkJumpTargetX, enemy.bulkJumpTargetY, 76, '#ff8844', 0.32);
       }
       if (enemy.bulkJumpTime <= 0) {
         enemy.x = Number(enemy.bulkJumpTargetX || enemy.x);
@@ -3039,11 +3039,11 @@
         enemy.bulkJumpWarned = false;
         enemy.jumpCd = 2.4;
         const impactRadius = 150;
-        Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.55, ring: impactRadius, c: '#ff8844' });
+        Neo.ringBurst(enemy.x, enemy.y, impactRadius, '#ff8844', 0.55);
         Neo.shake = Math.max(Neo.shake, 10);
         Neo.shakeT = Math.max(Neo.shakeT, 0.18);
         if (Neo.dist(enemy.x, enemy.y, Neo.player.x, Neo.player.y) < impactRadius + Neo.player.r) {
-          Neo.damagePlayer(Math.round(enemy.dmg * 0.85), Math.atan2(Neo.player.y - enemy.y, Neo.player.x - enemy.x), 330, enemy.type);
+          Neo.damagePlayer(Math.round(enemy.dmg * 0.85), Neo.angleBetween(enemy, Neo.player), 330, enemy.type);
         }
       }
       return;
@@ -3060,7 +3060,7 @@
       }
       const aoeRadius = 173;
       const aoeDamage = Math.round(enemy.dmg * 0.864);
-      Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.5, ring: aoeRadius, c: '#ff8844' });
+      Neo.ringBurst(enemy.x, enemy.y, aoeRadius, '#ff8844', 0.5);
       Neo.blastRadius(enemy.x, enemy.y, aoeRadius, aoeDamage, '#ff8844', enemy);
       Neo.shake = 12;
       Neo.shakeT = 0.2;
@@ -3091,7 +3091,7 @@
         enemy.windup = 0;
         enemy.dashTime = 0;
         enemy.jumpCd = 99;
-        Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.35, ring: 64, c: '#ffb067' });
+        Neo.ringBurst(enemy.x, enemy.y, 64, '#ffb067', 0.35);
         return;
       }
       enemy.jumpCd = 0.8;
@@ -3106,7 +3106,7 @@
       const sy = Neo.player.y + Math.sin(angle) * radius;
       const travel = Math.atan2(Neo.player.y - sy, Neo.player.x - sx);
       // Telegraph each blade's origin so the convergence reads before it fires.
-      Neo.spawnParticle({ x: sx, y: sy, life: 0.4, ring: 18, c: '#d8c7ff' });
+      Neo.ringBurst(sx, sy, 18, '#d8c7ff', 0.4);
       Neo.spawnProjectile({
         x: sx,
         y: sy,
@@ -3220,19 +3220,19 @@
       const targetY = Neo.clamp(enemy.y + ny * jumpDistance, Neo.WALL + enemy.r, Neo.ROOM_H - Neo.WALL - enemy.r);
       const landing = findSafeEnemySpawnPoint(targetX, targetY, Math.max(18, enemy.r || 18));
       if (landing) {
-        Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.28, ring: 44, c: '#ffffff' });
+        Neo.ringBurst(enemy.x, enemy.y, 44, '#ffffff', 0.28);
         enemy.x = landing.x;
         enemy.y = landing.y;
         enemy.vx = 0;
         enemy.vy = 0;
-        Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.34, ring: 58, c: '#ffffff' });
+        Neo.ringBurst(enemy.x, enemy.y, 58, '#ffffff', 0.34);
       }
     }
 
     enemy.state = `godPhase${phase}`;
     Neo.shake = Math.max(Neo.shake, 18 + phase * 2);
     Neo.shakeT = Math.max(Neo.shakeT, 0.34);
-    Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 1, ring: 150 + phase * 14, c: color });
+    Neo.ringBurst(enemy.x, enemy.y, 150 + phase * 14, color, 1);
     Neo.spawnParticle({ x: enemy.x, y: enemy.y - 34, life: 1.2, text: `PHASE ${phase}`, c: color });
     Neo.spawnParticle({ x: enemy.x, y: enemy.y - 14, life: 1, text: title, c: '#ffffff' });
   }
@@ -3311,7 +3311,7 @@
         if (distance < enemy.r + Neo.player.r + 54) {
           Neo.damagePlayer(enemy.dmg + 16, angle, 340, enemy.type, { attacker: enemy });
         }
-        Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.6, ring: 86, c: '#ffd27d' });
+        Neo.ringBurst(enemy.x, enemy.y, 86, '#ffd27d', 0.6);
       }
     }
   }
@@ -3391,7 +3391,7 @@
           interval: 0.38,
           damage: Math.round(enemy.dmg * 0.95),
         });
-        Neo.spawnParticle({ x: cx, y: cy, life: 0.45, ring: 22, c: '#8dd4ff' });
+        Neo.ringBurst(cx, cy, 22, '#8dd4ff', 0.45);
       }
     }
 
@@ -3480,7 +3480,7 @@
         damage: Math.round(enemy.dmg * 1.15),
       });
     }
-    Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.5, ring: 60, c: '#bfe4ff' });
+    Neo.ringBurst(enemy.x, enemy.y, 60, '#bfe4ff', 0.5);
     Neo.shake = Math.max(Neo.shake, 9);
     Neo.shakeT = Math.max(Neo.shakeT, 0.18);
   }
@@ -3491,7 +3491,7 @@
   function spawnAntonyHammerSwing(enemy) {
     const angle = Number.isFinite(enemy.antonyHammerAngle)
       ? enemy.antonyHammerAngle
-      : Math.atan2(Neo.player.y - enemy.y, Neo.player.x - enemy.x);
+      : Neo.angleBetween(enemy, Neo.player);
     enemy.antonyShockwave = {
       angle,
       damage: Math.round(enemy.dmg * 0.7),
@@ -3504,7 +3504,7 @@
       bandWidth: 56,
       hit: false,
     };
-    Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.34, ring: 70, c: '#ffcf8a' });
+    Neo.ringBurst(enemy.x, enemy.y, 70, '#ffcf8a', 0.34);
     Neo.shake = Math.max(Neo.shake, 13);
     Neo.shakeT = Math.max(Neo.shakeT, 0.22);
   }
@@ -3559,7 +3559,7 @@
   // Close-range sweeping slash: a wide melee arc in front of the boss, distinct
   // from the short bite. Hits anything inside a forward cone within reach.
   function spawnAntonySlash(enemy) {
-    const angle = Math.atan2(Neo.player.y - enemy.y, Neo.player.x - enemy.x);
+    const angle = Neo.angleBetween(enemy, Neo.player);
     const reach = enemy.r + Neo.player.r + 66;
     const halfArc = 0.82;
     const damage = Math.round(enemy.dmg * 0.92);
@@ -3599,7 +3599,7 @@
   function spawnAntonyDeathBall(enemy) {
     const angle = Number.isFinite(enemy.antonyDeathBallAngle)
       ? enemy.antonyDeathBallAngle
-      : Math.atan2(Neo.player.y - enemy.y, Neo.player.x - enemy.x);
+      : Neo.angleBetween(enemy, Neo.player);
     Neo.spawnProjectile({
       x: enemy.x + Math.cos(angle) * (enemy.r + 14),
       y: enemy.y + Math.sin(angle) * (enemy.r + 14),
@@ -3627,7 +3627,7 @@
       homingSpeed: 570,
       homingAccel: 1.1,
     });
-    Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.45, ring: 46, c: '#9fe8ff' });
+    Neo.ringBurst(enemy.x, enemy.y, 46, '#9fe8ff', 0.45);
     Neo.shake = Math.max(Neo.shake, 9);
     Neo.shakeT = Math.max(Neo.shakeT, 0.16);
   }
@@ -3744,7 +3744,7 @@
 
   function spawnDevilRedSpikes(enemy, count = 5) {
     if (!Neo.player) return;
-    const baseAngle = Math.atan2(Neo.player.y - enemy.y, Neo.player.x - enemy.x);
+    const baseAngle = Neo.angleBetween(enemy, Neo.player);
     const predictedX = Neo.player.x + Number(Neo.player.vx || 0) * 0.42;
     const predictedY = Neo.player.y + Number(Neo.player.vy || 0) * 0.42;
     for (let index = 0; index < count; index += 1) {
@@ -3831,7 +3831,7 @@
       enemy.attackCd = Math.min(enemy.attackCd, 0.65);
       enemy.devilLaserCd = 0.6;
       sayOverEntity(enemy, 'Look into my eyes.', { holdTime: 1.7 });
-      Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.8, ring: 124, c: '#ff3348' });
+      Neo.ringBurst(enemy.x, enemy.y, 124, '#ff3348', 0.8);
     }
 
     enemy.spikeCd = Math.max(0, Number(enemy.spikeCd || 0) - dt);
@@ -4013,7 +4013,7 @@
     const modes = ['blood_beam', 'turtle_wave', 'power_disks', 'blade_justice', 'lightning_columns', 'god_sweep'];
     const mode = modes[Number(enemy.eliteLaserModeIndex || 0) % modes.length];
     enemy.eliteLaserModeIndex = Number(enemy.eliteLaserModeIndex || 0) + 1;
-    const angle = Math.atan2(Neo.player.y - enemy.y, Neo.player.x - enemy.x);
+    const angle = Neo.angleBetween(enemy, Neo.player);
 
     if (mode === 'power_disks') {
       for (let index = 0; index < 5; index += 1) {
@@ -4040,7 +4040,7 @@
 
     if (mode === 'blade_justice') {
       if (distanceToPlayer < 150) Neo.damagePlayer(enemy.dmg + 10, angle, 240, 'elite_blade_justice', { attacker: enemy });
-      Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.34, ring: 112, c: '#ffffff' });
+      Neo.ringBurst(enemy.x, enemy.y, 112, '#ffffff', 0.34);
       enemy.eliteLaserCd = 1.2;
       return false;
     }
@@ -4050,7 +4050,7 @@
         const px = Neo.clamp(Neo.player.x + Neo.rand(-70, 70, 'encounter'), Neo.WALL + 60, Neo.ROOM_W - Neo.WALL - 60);
         const py = Neo.clamp(Neo.player.y + Neo.rand(-70, 70, 'encounter'), Neo.WALL + 60, Neo.ROOM_H - Neo.WALL - 60);
         Neo.hazards.push({ kind: 'lightning_column', x: px, y: py, r: 46, ttl: 1.25, tick: 0, interval: 0.36, damage: Math.round(enemy.dmg * 0.78), enemy: true, source: enemy.type || 'lightning_column' });
-        Neo.spawnParticle({ x: px, y: py, life: 0.28, ring: 18, c: '#8dd4ff' });
+        Neo.ringBurst(px, py, 18, '#8dd4ff', 0.28);
       }
       enemy.eliteLaserCd = 1.6;
       return false;
@@ -4211,16 +4211,16 @@
   function mirrorHitArc(enemy, angle, range, arc, damage, knockback, source = 'mirror_knight', options = {}) {
     const d = Neo.dist(enemy.x, enemy.y, Neo.player.x, Neo.player.y);
     if (d > range + Neo.player.r) return false;
-    const targetAngle = Math.atan2(Neo.player.y - enemy.y, Neo.player.x - enemy.x);
+    const targetAngle = Neo.angleBetween(enemy, Neo.player);
     const diff = Math.abs(Math.atan2(Math.sin(targetAngle - angle), Math.cos(targetAngle - angle)));
     if (diff > arc) return false;
     return mirrorDamagePlayer(enemy, damage, angle, knockback, source, options);
   }
 
   function mirrorBlastPlayer(enemy, radius, damage, knockback, color, source = 'mirror_knight', options = {}) {
-    Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.42, ring: radius, c: color });
+    Neo.ringBurst(enemy.x, enemy.y, radius, color, 0.42);
     if (Neo.dist(enemy.x, enemy.y, Neo.player.x, Neo.player.y) > radius + Neo.player.r) return false;
-    const angle = Math.atan2(Neo.player.y - enemy.y, Neo.player.x - enemy.x);
+    const angle = Neo.angleBetween(enemy, Neo.player);
     return mirrorDamagePlayer(enemy, damage, angle, knockback, source, options);
   }
 
@@ -4314,7 +4314,7 @@
     if (move === 'smite') {
       const didHit = mirrorHitArc(enemy, angleToPlayer, Neo.ATTACKS.melee.range + 18, Neo.ATTACKS.melee.arc + 0.18, damage, Neo.ATTACKS.melee.push);
       if (didHit) mirrorDamagePlayer(enemy, Math.max(8, Math.round(damage * 0.45)), angleToPlayer, 70, 'mirror_smite');
-      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.24, ring: 18, c: '#eaf2ff' });
+      Neo.ringBurst(Neo.player.x, Neo.player.y, 18, '#eaf2ff', 0.24);
       return true;
     }
     mirrorHitArc(enemy, angleToPlayer, Neo.ATTACKS.melee.range + 10, Neo.ATTACKS.melee.arc + 0.12, damage, Neo.ATTACKS.melee.push);
@@ -4324,7 +4324,7 @@
   function startMirrorLaser(enemy, angleToPlayer, distance) {
     const move = getMirrorMove(enemy, 'laser');
     const predicted = getPredictedPlayerPoint(0.32);
-    const aimedAngle = Math.atan2(predicted.y - enemy.y, predicted.x - enemy.x);
+    const aimedAngle = Neo.angleBetween(enemy, predicted);
     enemy.attackCd = 0.42;
     enemy.mirrorLaserCd = getMirrorSkillCooldown(enemy, 'laser');
     if (move === 'power_disks') {
@@ -4336,7 +4336,7 @@
     }
     if (move === 'blade_justice') {
       mirrorHitArc(enemy, aimedAngle, 124, 1.35, getMirrorMoveDamage(enemy, move, 34), 280, 'mirror_blade');
-      Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.44, ring: 36, c: '#fff6a3' });
+      Neo.ringBurst(enemy.x, enemy.y, 36, '#fff6a3', 0.44);
       return true;
     }
     if (move === 'lightning_columns') {
@@ -4355,7 +4355,7 @@
           interval: 0.42,
           damage: getMirrorMoveDamage(enemy, move, 18),
         });
-        Neo.spawnParticle({ x: predicted.x + ox, y: predicted.y + oy, life: 0.45, ring: 24, c: '#8dd4ff' });
+        Neo.ringBurst(predicted.x + ox, predicted.y + oy, 24, '#8dd4ff', 0.45);
       });
       return true;
     }
@@ -4401,7 +4401,7 @@
         const a = angleToPlayer + (index - 1.5) * 0.38;
         const px = Neo.player.x + Math.cos(a) * Neo.rand(46, -46, 'encounter');
         const py = Neo.player.y + Math.sin(a) * Neo.rand(46, -46, 'encounter');
-        Neo.spawnParticle({ x: px, y: py, life: 0.38, ring: 36, c: '#c971ff' });
+        Neo.ringBurst(px, py, 36, '#c971ff', 0.38);
         if (Neo.dist(Neo.player.x, Neo.player.y, px, py) <= 58 + Neo.player.r) {
           mirrorDamagePlayer(enemy, Math.max(16, Math.round(damage * 0.62)), Math.atan2(Neo.player.y - py, Neo.player.x - px), 120, 'mirror_chaos', { aoe: true });
         }
@@ -4440,7 +4440,7 @@
         enemy.x = safePoint.x;
         enemy.y = safePoint.y;
         enemy.inv = Math.max(enemy.inv || 0, 0.22);
-        Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.3, ring: 22, c: '#b99cff' });
+        Neo.ringBurst(enemy.x, enemy.y, 22, '#b99cff', 0.3);
       }
       return true;
     }
@@ -4752,7 +4752,7 @@
           }
         }
         if (obelisk.hp <= 0) {
-          Neo.spawnParticle({ x: obelisk.x, y: obelisk.y, life: 0.6, ring: 40, c: '#ff5566' });
+          Neo.ringBurst(obelisk.x, obelisk.y, 40, '#ff5566', 0.6);
           Neo.shake = Math.max(Neo.shake || 0, 14);
           Neo.shakeT = Math.max(Neo.shakeT || 0, 0.3);
           failChallengeTrial('RUNE DESTROYED');
@@ -4801,7 +4801,7 @@
             enemy: true,
             source: 'storm',
           });
-          Neo.spawnParticle({ x: strike.x, y: strike.y, life: 0.35, ring: 18, c: '#8dd4ff' });
+          Neo.ringBurst(strike.x, strike.y, 18, '#8dd4ff', 0.35);
         }
       }
       if (Neo.currentRoom.challengeTimer <= 0) completeChallengeTrial('STORM ENDED');
@@ -4871,7 +4871,7 @@
       enemy.judgementCd = Math.max(0, (enemy.judgementCd || 0) - dt);
       if (enemy.judgementCd <= 0) {
         spawnPhaseSwords(16, Math.round(enemy.dmg * 0.82));
-        Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.42, ring: 118, c: '#ff7a7a' });
+        Neo.ringBurst(Neo.player.x, Neo.player.y, 118, '#ff7a7a', 0.42);
         enemy.judgementCd = 1.45 * runPressure.cadenceMultiplier;
       }
     }
@@ -5018,7 +5018,7 @@
       enemy.vx *= 0.7;
       enemy.vy *= 0.7;
       if (enemy.swingTime <= 0 && Neo.dist(enemy.x, enemy.y, Neo.player.x, Neo.player.y) < enemy.r + Neo.player.r + 20) {
-        const angle = Math.atan2(Neo.player.y - enemy.y, Neo.player.x - enemy.x);
+        const angle = Neo.angleBetween(enemy, Neo.player);
         Neo.damagePlayer(enemy.dmg, angle, 180, enemy.type, { attacker: enemy });
       }
       return;

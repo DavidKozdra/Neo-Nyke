@@ -748,7 +748,7 @@
     updateHud();
     const entry = finalizeRun('dead', { killedBy: Neo.lastDamageSource, killerKey: Neo.lastDamageSourceKey });
     Neo.lastDeathEntryId = entry.id;
-    const aimAngle = Neo.player ? Math.atan2(Neo.mouse.worldY - Neo.player.y, Neo.mouse.worldX - Neo.player.x) : 0;
+    const aimAngle = Neo.player ? Neo.angleToMouse() : 0;
     // Carry the killing blow's residual velocity into the corpse so it gets a
     // little knockback slide instead of dropping straight down.
     const pvx = Number(Neo.player?.vx || 0);
@@ -1089,7 +1089,7 @@
       Neo.enemies?.forEach(visitEnemy);
     }
     if (hit) {
-      Neo.spawnParticle({ x: player.x, y: player.y, life: 0.36, ring: radius * 0.5, c: '#9be25a' });
+      Neo.ringBurst(player.x, player.y, radius * 0.5, '#9be25a', 0.36);
       Neo.spawnParticle({ x: player.x, y: player.y - 30, life: 0.5, text: 'PICKLE', c: '#cdf58f' });
     }
   }
@@ -1138,7 +1138,7 @@
     if (!Neo.player || !Neo.spawnProjectile) return;
     const missileCount = Math.min(4, getEquipmentStackCount('pew_pew_box'), Math.max(1, Math.floor(Number(stacks || 1))));
     for (let index = 0; index < missileCount; index += 1) {
-      const targetAngle = Math.atan2(Neo.mouse.worldY - Neo.player.y, Neo.mouse.worldX - Neo.player.x);
+      const targetAngle = Neo.angleToMouse();
       const angle = Number.isFinite(targetAngle) ? targetAngle + Neo.rand(-0.45, 0.45, 'fx') : Neo.rand(0, Math.PI * 2, 'fx');
       const power = 1 + (missileCount - 1) * 0.12;
       Neo.spawnProjectile({
@@ -1177,9 +1177,9 @@
     });
     enemies.sort((a, b) => a.distSq - b.distSq);
     enemies.slice(0, targetCount).forEach(({ enemy }) => {
-      const angle = Math.atan2(enemy.y - Neo.player.y, enemy.x - Neo.player.x);
+      const angle = Neo.angleBetween(Neo.player, enemy);
       Neo.hitEnemy?.(enemy, damage, angle, 70, '#8dd4ff');
-      Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.2, ring: 14, c: '#bde8ff' });
+      Neo.ringBurst(enemy.x, enemy.y, 14, '#bde8ff', 0.2);
     });
     const angle = Neo.rand(0, Math.PI * 2, 'fx');
     Neo.hazards.push({
@@ -1202,13 +1202,13 @@
     Neo.STATUS_KEYS?.forEach(key => Neo.clearStatus?.(Neo.player, key));
     Neo.player.inv = Math.max(Number(Neo.player.inv || 0), invTime);
     Neo.forEachEnemyNearCircle?.(Neo.player.x, Neo.player.y, radius, enemy => {
-      const angle = Math.atan2(enemy.y - Neo.player.y, enemy.x - Neo.player.x);
+      const angle = Neo.angleBetween(Neo.player, enemy);
       const force = 440 + (stacks - 1) * 55;
       Neo.applyImpulse(enemy, angle, force);
       enemy.stun = Math.max(Number(enemy.stun || 0), 0.28 + (stacks - 1) * 0.05);
       Neo.hitEnemy?.(enemy, 8 + (stacks - 1) * 4, angle, 340, '#f4f6fb');
     });
-    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.65, ring: Math.min(128, 72 + (stacks - 1) * 12), c: '#f4f6fb' });
+    Neo.ringBurst(Neo.player.x, Neo.player.y, Math.min(128, 72 + (stacks - 1) * 12), '#f4f6fb', 0.65);
   }
 
   // Mark the nearest 5 enemies with a "crit sparkle": while marked, every hit
@@ -1229,7 +1229,7 @@
     const marked = candidates.slice(0, targetCount);
     marked.forEach(({ enemy }) => {
       enemy.critSparkle = Math.max(Number(enemy.critSparkle || 0), SPARKLE_DURATION + (stacks - 1));
-      Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.5, ring: enemy.r + 10, c: '#ffe8a3' });
+      Neo.ringBurst(enemy.x, enemy.y, enemy.r + 10, '#ffe8a3', 0.5);
       Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 14, life: 0.6, text: 'SPARKLED', c: '#ffe8a3' });
     });
     if (marked.length > 0) {
@@ -1244,7 +1244,7 @@
     const heal = Neo.scalePlayerHealing?.(Neo.player.maxHp * 0.3, 1) ?? Math.max(1, Neo.player.maxHp * 0.3);
     const gained = Neo.applyPlayerHealing?.(heal) ?? 0;
     Neo.spawnHealPopup?.(Neo.player.x, Neo.player.y - 24, gained, { color: '#ffb6d5', size: 16 });
-    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.6, ring: 60, c: '#ffb6d5' });
+    Neo.ringBurst(Neo.player.x, Neo.player.y, 60, '#ffb6d5', 0.6);
     Neo.playSfx?.('heal_player');
   }
 
@@ -1256,7 +1256,7 @@
     Neo.player.overhealBarrierColor = '#c8fbff';
     Neo.player.overhealBarrierAge = 0;
     Neo.spawnHealPopup?.(Neo.player.x, Neo.player.y - 34, shield, { color: '#c8fbff', size: 16 });
-    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.75, ring: Neo.shieldRingRadius(shield), c: '#c8fbff' });
+    Neo.ringBurst(Neo.player.x, Neo.player.y, Neo.shieldRingRadius(shield), '#c8fbff', 0.75);
     Neo.playSfx?.('item_collect');
   }
 

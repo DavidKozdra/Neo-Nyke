@@ -198,7 +198,7 @@
     for (const enemy of Neo.enemies) {
       if (enemy.dead) continue;
       if (Math.hypot(pn.x - enemy.x, pn.y - enemy.y) < pn.r + enemy.r + 2 && pn.inv <= 0)
-        damagePlayerN(pn, n, enemy.dmg || 10, Math.atan2(pn.y - enemy.y, pn.x - enemy.x), 220);
+        damagePlayerN(pn, n, enemy.dmg || 10, Neo.angleBetween(enemy, pn), 220);
     }
   }
 
@@ -1272,7 +1272,7 @@
     const gained = Math.round(owner.hp - before);
     if (gained > 0) {
       Neo.spawnHealPopup?.(owner.x + Neo.rand(-6, 6), owner.y - owner.r - 10, gained, { color: '#c98dff', size: 12 });
-      Neo.spawnParticle({ x: owner.x, y: owner.y, life: 0.4, ring: owner.r + 8, c: '#c98dff' });
+      Neo.ringBurst(owner.x, owner.y, owner.r + 8, '#c98dff', 0.4);
     }
   }
 
@@ -1542,7 +1542,7 @@
         const target = getProjectileHomingTarget(projectile, dt);
         if (target) {
           const aimPoint = getProjectileHomingAimPoint(projectile, target, dt) || target;
-          targetAngle = Math.atan2(aimPoint.y - projectile.y, aimPoint.x - projectile.x);
+          targetAngle = Neo.angleBetween(projectile, aimPoint);
         }
         const nextAngle = Neo.turnAngleToward(currentAngle, targetAngle, Number(projectile.homingTurnRate || 2) * dt);
         const nextSpeed = speed + (Number(projectile.homingSpeed || speed) - speed) * Number(projectile.homingAccel || 2.5) * dt;
@@ -1715,7 +1715,7 @@
               : Number(hazard.damage || 18);
             forEachEnemyNearCircle(hazard.x, hazard.y, blast + 80, enemy => {
               if (Neo.dist(enemy.x, enemy.y, hazard.x, hazard.y) > blast + enemy.r) return;
-              const angle = Math.atan2(enemy.y - hazard.y, enemy.x - hazard.x);
+              const angle = Neo.angleBetween(hazard, enemy);
               Neo.hitEnemy(enemy, damage, angle, 170, '#ff6e8b', {
                 bleedChance: 1,
                 bleedStacks: hazard.bleedStacks || 1,
@@ -1723,11 +1723,11 @@
               });
             });
             if (dungeonOwned && Neo.dist(Neo.player.x, Neo.player.y, hazard.x, hazard.y) <= blast + Neo.player.r) {
-              const angle = Math.atan2(Neo.player.y - hazard.y, Neo.player.x - hazard.x);
+              const angle = Neo.angleBetween(hazard, Neo.player);
               damagePlayer(damage, angle, 170, hazard.source || 'thorn_mine');
               Neo.applyStatus?.(Neo.player, 'bleed', hazard.bleedStacks || 1, hazard.bleedDuration || 4.5, hazard.source || 'thorn_mine');
             }
-            Neo.spawnParticle({ x: hazard.x, y: hazard.y, life: 0.35, ring: blast, c: '#ff6e8b' });
+            Neo.ringBurst(hazard.x, hazard.y, blast, '#ff6e8b', 0.35);
             hazard.ttl = 0;
           }
         }
@@ -1739,13 +1739,13 @@
         const charge = Neo.clamp(1 - hazard.fuse / (hazard.fuseDuration || 3), 0, 1);
         hazard.sparkTick = Number(hazard.sparkTick || 0) - dt;
         if (hazard.sparkTick <= 0) {
-          Neo.spawnParticle({ x: hazard.x, y: hazard.y, life: 0.2, ring: (hazard.blastRadius || 150) * charge, c: '#ff7a66' });
+          Neo.ringBurst(hazard.x, hazard.y, (hazard.blastRadius || 150) * charge, '#ff7a66', 0.2);
           hazard.sparkTick = 0.12;
         }
         if (hazard.fuse <= 0) {
           const damage = getBombHazardDamage(hazard.baseDamage ?? hazard.damage ?? 250);
           if (Neo.dist(Neo.player.x, Neo.player.y, hazard.x, hazard.y) <= (hazard.blastRadius || 150) + Neo.player.r) {
-            const angle = Math.atan2(Neo.player.y - hazard.y, Neo.player.x - hazard.x);
+            const angle = Neo.angleBetween(hazard, Neo.player);
             damagePlayer(damage, angle, 240, hazard.source || 'bomb_aoe');
           }
           blastRadius(hazard.x, hazard.y, hazard.blastRadius || 150, damage, '#ff7a66');
@@ -1794,7 +1794,7 @@
           if (hazard.fuse <= 0) {
             const damage = getBombHazardDamage(hazard.baseDamage ?? hazard.damage ?? 18);
             if (Neo.dist(Neo.player.x, Neo.player.y, hazard.x, hazard.y) <= hazard.blastRadius + Neo.player.r) {
-              const angle = Math.atan2(Neo.player.y - hazard.y, Neo.player.x - hazard.x);
+              const angle = Neo.angleBetween(hazard, Neo.player);
               damagePlayer(damage, angle, 220, 'explosive_trap');
             }
             blastRadius(hazard.x, hazard.y, hazard.blastRadius || 88, damage, '#ff9a4d');
@@ -1824,10 +1824,10 @@
         hazard.armTime = Math.max(0, Number(hazard.armTime || 0) - dt);
         if (hazard.armTime <= 0 && !hazard.hit) {
           hazard.hit = true;
-          Neo.spawnParticle({ x: hazard.x, y: hazard.y, life: 0.28, ring: hazard.r + 10, c: '#ff3348' });
+          Neo.ringBurst(hazard.x, hazard.y, hazard.r + 10, '#ff3348', 0.28);
           if (hazard.enemy) {
             if (Neo.dist(Neo.player.x, Neo.player.y, hazard.x, hazard.y) <= hazard.r + Neo.player.r) {
-              const angle = Math.atan2(Neo.player.y - hazard.y, Neo.player.x - hazard.x);
+              const angle = Neo.angleBetween(hazard, Neo.player);
               damagePlayer(hazard.damage || 18, angle, 130, hazard.source || 'red_spikes');
               const statusKey = String(hazard.statusKey || 'bleed');
               const stacks = Math.max(1, Number(hazard.statusStacks || 1));
@@ -1838,7 +1838,7 @@
           } else {
             forEachEnemyNearCircle(hazard.x, hazard.y, hazard.r + 80, enemy => {
               if (Neo.dist(enemy.x, enemy.y, hazard.x, hazard.y) > hazard.r + enemy.r) return;
-              const angle = Math.atan2(enemy.y - hazard.y, enemy.x - hazard.x);
+              const angle = Neo.angleBetween(hazard, enemy);
               Neo.hitEnemy(enemy, hazard.damage || 18, angle, 130, '#ff3348');
             });
           }
@@ -1903,7 +1903,7 @@
           hazard.tick = Number(hazard.interval || 0.65);
           forEachEnemyNearCircle(hazard.x, hazard.y, hazard.r + 80, enemy => {
             if (Neo.dist(enemy.x, enemy.y, hazard.x, hazard.y) > hazard.r + enemy.r) return;
-            const angle = Math.atan2(enemy.y - hazard.y, enemy.x - hazard.x);
+            const angle = Neo.angleBetween(hazard, enemy);
             Neo.hitEnemy(enemy, hazard.damage || 18, angle, 55, '#ff5b78', { rawDamage: true, noCharmBuff: true });
             Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 10, life: 0.3, text: 'TAGGED', c: '#ffe0b8', size: 9 });
           });
@@ -1945,13 +1945,13 @@
             hazard.tick = hazard.interval || 0.45;
             if (hazard.enemy) {
               if (Neo.dist(Neo.player.x, Neo.player.y, hazard.x, hazard.y) <= hazard.r + Neo.player.r) {
-                const angle = Math.atan2(Neo.player.y - hazard.y, Neo.player.x - hazard.x);
+                const angle = Neo.angleBetween(hazard, Neo.player);
                 damagePlayer(hazard.damage || 16, angle, 90, hazard.source || 'lightning_column');
               }
             } else {
               forEachEnemyNearCircle(hazard.x, hazard.y, hazard.r + 80, enemy => {
                 if (Neo.dist(enemy.x, enemy.y, hazard.x, hazard.y) > hazard.r + enemy.r) return;
-                const angle = Math.atan2(enemy.y - hazard.y, enemy.x - hazard.x);
+                const angle = Neo.angleBetween(hazard, enemy);
                 Neo.hitEnemy(enemy, hazard.damage || 16, angle, 90, '#8dd4ff', { lightning: true });
               });
             }
@@ -2026,7 +2026,7 @@
           if (dSq < bestSq) { bestSq = dSq; target = enemy; }
         });
         if (target) {
-          const desiredAngle = Math.atan2(target.y - hazard.y, target.x - hazard.x);
+          const desiredAngle = Neo.angleBetween(hazard, target);
           const currentAngle = Number(hazard.aimAngle || 0);
           const angleDelta = Math.atan2(
             Math.sin(desiredAngle - currentAngle),
@@ -2047,8 +2047,8 @@
               life: 0.2, c: '#fff1b0',
               line: { x1: muzzleX, y1: muzzleY, x2: target.x, y2: target.y, w: 3.2, jag: 5, seg: 5, phase: Neo.rng() * Math.PI * 2 },
             });
-            Neo.spawnParticle({ x: muzzleX, y: muzzleY, life: 0.16, ring: 7, c: '#fff7c8' });
-            Neo.spawnParticle({ x: target.x, y: target.y, life: 0.4, ring: burstR, c: '#ffe6a3' });
+            Neo.ringBurst(muzzleX, muzzleY, 7, '#fff7c8', 0.16);
+            Neo.ringBurst(target.x, target.y, burstR, '#ffe6a3', 0.4);
             Neo.blastRadius(target.x, target.y, burstR, hazard.damage || 26, '#ffe6a3');
           }
         }
@@ -2084,7 +2084,7 @@
       return Math.atan2(prop.y - hit.impactY, prop.x - hit.impactX);
     }
     if (Neo.player && Number.isFinite(Neo.player.x) && Number.isFinite(Neo.player.y)) {
-      return Math.atan2(prop.y - Neo.player.y, prop.x - Neo.player.x);
+      return Neo.angleBetween(Neo.player, prop);
     }
     return Neo.rand(Math.PI * 2, 0, 'fx');
   }
@@ -2142,7 +2142,7 @@
     const radius = Math.max(14, Number(prop.r || Math.hypot(prop.w || 0, prop.h || 0) / 2 || 24));
     const count = prop.kind === 'pot' ? 10 : prop.kind === 'barrel' ? 8 : prop.reinforced ? 22 : wallLike ? 18 : 12;
     if (wallLike) {
-      Neo.spawnParticle({ x: prop.x, y: prop.y, life: 0.32, ring: Math.min(58, radius + 18), c: material.dust });
+      Neo.ringBurst(prop.x, prop.y, Math.min(58, radius + 18), material.dust, 0.32);
     }
     for (let index = 0; index < count; index += 1) {
       const scatter = angle + Neo.rand(1.35, -1.35, 'fx');
@@ -2171,9 +2171,9 @@
     Neo.shake = Math.max(Number(Neo.shake || 0), 12);
     Neo.shakeT = Math.max(Number(Neo.shakeT || 0), 0.18);
 
-    Neo.spawnParticle({ x: prop.x, y: prop.y, life: 0.24, ring: 22, c: '#fff2a8' });
-    Neo.spawnParticle({ x: prop.x, y: prop.y, life: 0.34, ring: 58, c: '#ff9a3d' });
-    Neo.spawnParticle({ x: prop.x, y: prop.y, life: 0.44, ring: radius * 0.72, c: '#ff4a28' });
+    Neo.ringBurst(prop.x, prop.y, 22, '#fff2a8', 0.24);
+    Neo.ringBurst(prop.x, prop.y, 58, '#ff9a3d', 0.34);
+    Neo.ringBurst(prop.x, prop.y, radius * 0.72, '#ff4a28', 0.44);
 
     for (let index = 0; index < 18; index += 1) {
       const a = (index / 18) * Math.PI * 2 + Neo.rand(0.18, -0.18, 'fx');
@@ -2433,7 +2433,7 @@
       active: false,
     });
     Neo.floorSkipPending = 0;
-    Neo.spawnParticle({ x: spawnPoint.x, y: spawnPoint.y, life: 0.5, ring: 28, c: '#ff8bd8' });
+    Neo.ringBurst(spawnPoint.x, spawnPoint.y, 28, '#ff8bd8', 0.5);
     Neo.spawnParticle({ x: spawnPoint.x, y: spawnPoint.y - 20, life: 0.8, text: 'CHAOS GATE', c: '#ffc2f0' });
     return true;
   }
@@ -3046,6 +3046,12 @@
     };
   }
 
+  // Expanding ring burst at a point — the most common particle shape (a hit/AoE
+  // pop). Wraps spawnParticle so call sites read as intent, not a props literal.
+  function ringBurst(x, y, ring, c, life = 0.5) {
+    spawnParticle({ x, y, life, ring, c });
+  }
+
   function spawnParticle(props) {
     const p = _acquireParticle();
     p.x = props.x;
@@ -3341,6 +3347,7 @@
   Neo.updateDeadBodies = updateDeadBodies;
   Neo.spawnProjectile = spawnProjectile;
   Neo.spawnParticle = spawnParticle;
+  Neo.ringBurst = ringBurst;
   Neo.updateParticles = updateParticles;
   Neo.isRoomLocked = isRoomLocked;
   Neo.updateTransitions = updateTransitions;

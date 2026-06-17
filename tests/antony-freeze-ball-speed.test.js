@@ -25,6 +25,7 @@ describe("Antony's freeze ball speed", () => {
       player: { x: 100, y: 0 },
       spawnProjectile: projectile => spawned.push(projectile),
       spawnParticle: jest.fn(),
+      ringBurst: jest.fn(),
       shake: 0,
       shakeT: 0,
     };

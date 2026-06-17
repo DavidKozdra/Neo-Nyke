@@ -369,7 +369,7 @@ export function loop(timestamp) {
       const _pvpDy = Neo.player2.y - Neo.player.y;
       const _pvpDist = Math.hypot(_pvpDx, _pvpDy);
       if (_pvpDist < Neo.ATTACKS.melee.range + Neo.player2.r + 4 && Neo.player2.inv <= 0) {
-        const _pvpAimAngle = Math.atan2(Neo.mouse.worldY - Neo.player.y, Neo.mouse.worldX - Neo.player.x);
+        const _pvpAimAngle = Neo.angleToMouse();
         const _pvpHitAngle = Math.atan2(_pvpDy, _pvpDx);
         const _pvpDiff = Math.abs(((_pvpHitAngle - _pvpAimAngle) + Math.PI * 3) % (Math.PI * 2) - Math.PI);
         if (_pvpDiff <= Neo.ATTACKS.melee.arc) {
@@ -658,7 +658,7 @@ export function loop(timestamp) {
       activateAt: Neo.JESTER_PORTAL_ACTIVATE_DELAY,
       active: false,
     });
-    Neo.spawnParticle({ x: spawnPoint.x, y: spawnPoint.y, life: 0.5, ring: 28, c: '#b88cff' });
+    Neo.ringBurst(spawnPoint.x, spawnPoint.y, 28, '#b88cff', 0.5);
     Neo.spawnParticle({ x: spawnPoint.x, y: spawnPoint.y - 20, life: 0.8, text: 'LADDER PORTAL', c: '#d6c4ff' });
     Neo.scheduleRunSave();
   }

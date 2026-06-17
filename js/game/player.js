@@ -811,7 +811,7 @@ export function applyPlayerHealing(amount, options = {}) {
         const pulseDamage = Math.max(2, Math.min(18, (gained + overflow) * 0.45));
         Neo.forEachEnemyNearCircle?.(Neo.player.x, Neo.player.y, radius + 80, enemy => {
           if (Neo.dist(Neo.player.x, Neo.player.y, enemy.x, enemy.y) > radius + enemy.r) return;
-          Neo.hitEnemy?.(enemy, pulseDamage, Math.atan2(enemy.y - Neo.player.y, enemy.x - Neo.player.x), 55, '#dfffea', { rawDamage: true, noCharmBuff: true });
+          Neo.hitEnemy?.(enemy, pulseDamage, Neo.angleBetween(Neo.player, enemy), 55, '#dfffea', { rawDamage: true, noCharmBuff: true });
         });
         Neo.spawnParticle?.({ x: Neo.player.x, y: Neo.player.y, life: 0.25, ring: radius, c: '#dfffea' });
       }
