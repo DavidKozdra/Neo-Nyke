@@ -183,7 +183,7 @@ function presentNextBanner() {
   el.setAttribute('aria-hidden', 'false');
   // Confetti tuned to the banner color plus the palette.
   spawnConfetti({ colors: [color, ...CONFETTI_COLORS], y: window.innerHeight * 0.22 });
-  Neo.playSfx?.('secret_reveal');
+  Neo.playSfx?.(unlock.type === 'achievement' ? 'achievement' : 'secret_reveal');
   setTimeout(() => {
     el.classList.add('is-leaving');
     setTimeout(() => {

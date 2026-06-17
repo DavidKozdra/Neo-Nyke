@@ -89,6 +89,17 @@
         'assets/sounds/sfx_victory 3.mp3',
       ],
     },
+    {
+      id: 'achievement',
+      volume: 0.7,
+      priority: priority.HIGH,
+      mixDb: 3,
+      paths: [
+        'assets/sounds/sfx_achievement 1.mp3',
+        'assets/sounds/sfx_achievement 2.mp3',
+        'assets/sounds/sfx_achievement 3.mp3',
+      ],
+    },
   ];
 
   const soundDefs = new Map();
