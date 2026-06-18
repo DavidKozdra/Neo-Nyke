@@ -11,17 +11,29 @@ export function createStatusMap() {
   };
 }
 
+// Fully normalize a status map's shape + numeric fields. Only worth running once
+// per map (fresh entity, or a map rehydrated from a save where fields may be
+// strings); after that the map is mutated exclusively through numeric writes, so
+// re-coercing every key on every read is pure waste.
+function normalizeStatusMap(statuses) {
+  Neo.STATUS_KEYS.forEach(key => {
+    const state = statuses[key];
+    if (!state || typeof state !== 'object') statuses[key] = { stacks: 0, duration: 0, tick: 0 };
+    statuses[key].stacks = Number(statuses[key].stacks || 0);
+    statuses[key].duration = Number(statuses[key].duration || 0);
+    statuses[key].tick = Number(statuses[key].tick || 0);
+  });
+  // Non-enumerable so it never leaks into save serialization or key iteration.
+  Object.defineProperty(statuses, '_normalized', { value: true, writable: true, configurable: true });
+  return statuses;
+}
+
 export function ensureStatuses(entity) {
   if (!entity || typeof entity !== 'object') return createStatusMap();
-  if (!entity.statuses || typeof entity.statuses !== 'object') entity.statuses = createStatusMap();
-  Neo.STATUS_KEYS.forEach(key => {
-    const state = entity.statuses[key];
-    if (!state || typeof state !== 'object') entity.statuses[key] = { stacks: 0, duration: 0, tick: 0 };
-    entity.statuses[key].stacks = Number(entity.statuses[key].stacks || 0);
-    entity.statuses[key].duration = Number(entity.statuses[key].duration || 0);
-    entity.statuses[key].tick = Number(entity.statuses[key].tick || 0);
-  });
-  return entity.statuses;
+  const existing = entity.statuses;
+  if (existing && typeof existing === 'object' && existing._normalized) return existing;
+  if (!existing || typeof existing !== 'object') entity.statuses = createStatusMap();
+  return normalizeStatusMap(entity.statuses);
 }
 
 export function getStatusState(entity, key) {

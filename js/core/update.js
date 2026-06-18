@@ -500,6 +500,11 @@ export function loop(timestamp) {
     sectionPerfStart = Neo.perfStart();
     let totalBleed = 0;
     const playerHidden = Neo.isPlayerHidden?.(Neo.player) || false;
+    // Build the enemy spatial index up front so per-enemy neighbour queries this
+    // frame (e.g. minor-pack pressure) hit the cache instead of each rebuilding a
+    // fresh index. Enemy movement within the loop makes it marginally stale, which
+    // is fine for soft proximity checks. updateProjectiles refreshes it later.
+    Neo.ensureEnemySpatialIndex?.();
     for (let index = Neo.enemies.length - 1; index >= 0; index -= 1) {
       const enemy = Neo.enemies[index];
       if (!enemy) continue;

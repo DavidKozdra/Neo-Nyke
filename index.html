@@ -1328,6 +1328,19 @@
                 <small class="char-card-hint" data-base="Locked: beat Mooggy">Locked: beat Mooggy</small>
               </button>
 
+              <!-- Dynamic custom character cards are inserted here. -->
+              <button class="char-card char-card--plus char-card--add-custom" data-add-custom-character="true" data-rarity="custom">
+                <div class="char-card-art-wrap char-card-art-wrap--plus">
+                  <span class="char-card-plus-mark" aria-hidden="true">+</span>
+                  <canvas class="char-card-art" data-char-add-sprite width="96" height="96" aria-hidden="true"></canvas>
+                </div>
+                <div class="char-card-header">
+                  <span class="char-card-name">ADD</span>
+                  <span class="char-card-tag custom-tag">CUSTOM</span>
+                </div>
+                <small class="char-card-hint" data-base="New custom">New custom</small>
+              </button>
+
             </div>
           </div>
           <button class="carousel-arrow carousel-arrow--next" id="carouselNext" aria-label="Next hero">&#8594;</button>
@@ -1362,6 +1375,83 @@
 
       <button id="charBackBtn" class="back-btn">&#8592; BACK</button>
 </div>
+
+<section id="customCharacterPanel" class="sandbox-panel hidden custom-character-panel" aria-hidden="true">
+  <div class="sandbox-panel__backdrop" id="customCharacterBackdrop"></div>
+  <div class="sandbox-panel__dialog">
+    <div class="sandbox-panel__head">
+      <div>
+        <span class="sandbox-panel__kicker">ROSTER PLUS</span>
+        <h3 class="sandbox-panel__title">CUSTOM CHARACTER</h3>
+      </div>
+      <button id="customCharacterClose" class="panel-close" aria-label="Close custom character builder">X</button>
+    </div>
+    <p class="sandbox-panel__desc">Name this saved custom character, choose any starting weapon and move set, and pick up to two starter relics.</p>
+    <div class="sandbox-grid custom-character-grid">
+      <div class="sandbox-card custom-character-card">
+        <h4>Name</h4>
+        <input id="customCharacterName" class="sandbox-search custom-character-name-input" type="text" maxlength="24" placeholder="Custom character name" autocomplete="off" spellcheck="false" aria-label="Custom character name">
+      </div>
+      <div class="sandbox-card">
+        <h4>Move Set</h4>
+        <p class="sandbox-card__hint">Pick one move per slot. Every defined move is available.</p>
+        <div class="sandbox-move-slots" id="customCharacterMoveLoadout">
+          <div class="sandbox-move-slot" data-custom-move-slot="melee">
+            <div class="sandbox-move-slot__head">
+              <span class="sandbox-move-slot__label">Melee</span>
+              <span class="sandbox-move-slot__selected" data-custom-move-slot-selected="melee">Slash</span>
+            </div>
+            <div class="sandbox-move-options" data-custom-move-options="melee" role="group" aria-label="Custom melee move"></div>
+          </div>
+          <div class="sandbox-move-slot" data-custom-move-slot="laser">
+            <div class="sandbox-move-slot__head">
+              <span class="sandbox-move-slot__label">Laser</span>
+              <span class="sandbox-move-slot__selected" data-custom-move-slot-selected="laser">Blood Beam</span>
+            </div>
+            <div class="sandbox-move-options" data-custom-move-options="laser" role="group" aria-label="Custom laser move"></div>
+          </div>
+          <div class="sandbox-move-slot" data-custom-move-slot="smash">
+            <div class="sandbox-move-slot__head">
+              <span class="sandbox-move-slot__label">Smash</span>
+              <span class="sandbox-move-slot__selected" data-custom-move-slot-selected="smash">Crimson Smash</span>
+            </div>
+            <div class="sandbox-move-options" data-custom-move-options="smash" role="group" aria-label="Custom smash move"></div>
+          </div>
+          <div class="sandbox-move-slot" data-custom-move-slot="dash">
+            <div class="sandbox-move-slot__head">
+              <span class="sandbox-move-slot__label">Dash</span>
+              <span class="sandbox-move-slot__selected" data-custom-move-slot-selected="dash">Dash</span>
+            </div>
+            <div class="sandbox-move-options" data-custom-move-options="dash" role="group" aria-label="Custom mobility move"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sandbox-card">
+        <h4>Weapon</h4>
+        <p class="sandbox-card__hint">Pick the weapon this custom character starts with.</p>
+        <div class="sandbox-move-slots" id="customCharacterWeaponLoadout">
+          <div class="sandbox-move-slot" data-custom-weapon-slot="weapon">
+            <div class="sandbox-move-slot__head">
+              <span class="sandbox-move-slot__label">Weapon</span>
+              <span class="sandbox-move-slot__selected" data-custom-weapon-slot-selected="weapon">Thorn's Bleed Blade</span>
+            </div>
+            <div class="sandbox-move-options" data-custom-weapon-options="weapon" role="group" aria-label="Custom starting weapon"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sandbox-card">
+        <h4>Starter Relics</h4>
+        <p class="sandbox-card__hint">Choose up to two relics for this saved custom character.</p>
+        <div id="customCharacterRelicList" class="sandbox-token-grid sandbox-token-grid--items custom-character-relic-list"></div>
+      </div>
+    </div>
+    <div class="sandbox-panel__actions">
+      <button id="customCharacterReset" class="sandbox-mini-btn" type="button">Reset</button>
+      <button id="customCharacterRemove" class="sandbox-mini-btn custom-character-remove-btn" type="button">Remove</button>
+      <button id="customCharacterSaveClose" class="nav-btn nav-btn--minor" type="button">Save & Close</button>
+    </div>
+  </div>
+</section>
 
 <!-- Challenge Shop floating panel -->
 <section id="challengePanel" class="floating-panel hidden" aria-hidden="true">

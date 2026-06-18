@@ -953,6 +953,14 @@ export const CHARACTER_DEFS = {
     skills: { melee: 'Mooggy Swipe', laser: 'Nail Shot', smash: 'Random Pounce', dash: 'Zoomies' },
     unlock: 'mooggy3',
   },
+  custom_character: {
+    key: 'custom_character',
+    name: 'Custom',
+    rarity: 'custom',
+    damageMultiplier: 1,
+    hpMultiplier: 1,
+    skills: { melee: 'Custom Weapon', laser: 'Custom Laser', smash: 'Custom Smash', dash: 'Custom Mobility' },
+  },
 };
 
 export const HERO_DISPLAY = {
@@ -999,6 +1007,15 @@ export const HERO_DISPLAY = {
       { label: 'DMG',   pct: 78, color: '#ff5c6f' },
       { label: 'SPD',   pct: 92, color: '#d31f35' },
       { label: 'RANGE', pct: 88, color: '#ff9baa' },
+    ],
+  },
+  custom_character: {
+    lore: 'A saved custom build that can mix any weapon and move set.',
+    stats: [
+      { label: 'HP',    pct: 66, color: '#83f3ff' },
+      { label: 'DMG',   pct: 66, color: '#ffd23f' },
+      { label: 'SPD',   pct: 66, color: '#ff8ccc' },
+      { label: 'RANGE', pct: 66, color: '#90ffba' },
     ],
   },
 };

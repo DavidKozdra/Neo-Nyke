@@ -124,11 +124,15 @@ export function bindInput() {
         if (Neo.charSelectPhase === 'p4') return Neo.chosenCharacter4;
         return Neo.chosenCharacter;
       },
-      onCharacterSelect(characterKey, button) {
+      onCharacterSelect(characterKey, button, options = {}) {
         if (Neo.charSelectPhase === 'p2') { Neo.chosenCharacter2 = characterKey; }
         else if (Neo.charSelectPhase === 'p3') { Neo.chosenCharacter3 = characterKey; }
         else if (Neo.charSelectPhase === 'p4') { Neo.chosenCharacter4 = characterKey; }
         else { Neo.chosenCharacter = characterKey; Neo.metaProgress.selectedCharacter = Neo.chosenCharacter; Neo.persistMetaSoon(); }
+        if (Neo.isCustomCharacterKey?.(characterKey) && !Neo.charSelectPhase && options.openCustomBuilder !== false) {
+          Neo.editingCustomCharacterKey = characterKey;
+          Neo.uiController.setCustomCharacterPanelOpen?.(true);
+        }
         Neo.updateCharacterSelectionUI();
       },
       onDifficultySelect(difficultyKey, button) {
@@ -195,6 +199,9 @@ export function bindInput() {
       onCloseSandboxConfig() {
         Neo.uiController.setSandboxPanelOpen(false);
       },
+      onCloseCustomCharacterBuilder() {
+        Neo.uiController.setCustomCharacterPanelOpen?.(false);
+      },
       onSkipTutorial() {
         Neo.skipFirstRunTutorial();
       },
@@ -257,6 +264,12 @@ export function bindInput() {
         Neo.updateCharacterSelectionUI();
       },
       onStartNew() {
+        if (!Neo.charSelectPhase && Neo.isCustomCharacterKey?.(Neo.chosenCharacter) && !Neo.getCustomCharacterSettings?.(Neo.chosenCharacter).active) {
+          Neo.editingCustomCharacterKey = Neo.chosenCharacter;
+          Neo.uiController.setCustomCharacterPanelOpen?.(true);
+          Neo.updateCharacterSelectionUI();
+          return;
+        }
         const phases = ['p1','p2','p3','p4'].slice(0, Neo.mpPlayerCount);
         const cur = phases.indexOf(Neo.charSelectPhase);
         if (cur >= 0 && cur < phases.length - 1) {

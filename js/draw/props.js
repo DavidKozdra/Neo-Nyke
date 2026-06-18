@@ -1499,6 +1499,34 @@
     });
   }
 
+  // Static projectile visuals keyed by kind. These depend only on `kind`, so we
+  // return the shared frozen object instead of allocating a fresh literal for
+  // every projectile every frame (dozens of throwaway objects → GC churn). The
+  // few kinds whose look is data-dependent (rock floor-tint, color fallbacks) are
+  // handled separately below and still allocate.
+  const ENEMY_PROJECTILE_VISUALS = {
+    sword: { color: '#f6f1ff', core: '#ffffff', trail: '#d8c7ff', shape: 'blade', length: 28 },
+    god_sword: { color: '#f6f1ff', core: '#ffffff', trail: '#d8c7ff', shape: 'blade', length: 28 },
+    sniper_round: { color: '#ff5d72', core: '#ffe1e6', trail: '#ff314d', shape: 'dart', length: 34 },
+    machine_round: { color: '#ffb35a', core: '#fff1ba', trail: '#ff6738', shape: 'tracer', length: 22 },
+    cult_missile: { color: '#b455ff', core: '#f2ddff', trail: '#7d39ff', shape: 'orb', length: 120 },
+    cold_death: { color: '#9fe8ff', core: '#eafbff', trail: '#3fb4ff', shape: 'orb', length: 140 },
+    golem_spit: { color: '#9bb05a', core: '#e6f0b8', trail: '#5f7a2e', shape: 'orb', length: 70 },
+  };
+  const PLAYER_PROJECTILE_VISUALS = {
+    blade_justice: { color: '#fff6a3', core: '#ffffff', trail: '#ffd86a', shape: 'blade', length: 40 },
+    fireball: { color: '#ff7b32', core: '#fff1a6', trail: '#ff2f17', shape: 'fireball', length: 30 },
+    disk: { color: '#b66cff', core: '#f0d8ff', trail: '#7d4dff', shape: 'disk', length: 20 },
+    power_disk: { color: '#d890ff', core: '#f0d8ff', trail: '#f7ccff', shape: 'disk', length: 20 },
+    disk_shard: { color: '#c98bff', core: '#f0d8ff', trail: '#8a55ff', shape: 'disk', length: 12 },
+    magenta_p90: { color: '#ff9dd7', core: '#fff0fb', trail: '#ff4aa8', shape: 'tracer', length: 26 },
+    magenta_degale: { color: '#ff8bd2', core: '#fff0fb', trail: '#ff3eb7', shape: 'slug', length: 34 },
+    hunters_bow: { color: '#dff8ff', core: '#ffffff', trail: '#7edcff', shape: 'arrow', length: 32 },
+    void_piercer: { color: '#ffd2c0', core: '#fff8ee', trail: '#ff826a', shape: 'dart', length: 30 },
+  };
+  Object.values(ENEMY_PROJECTILE_VISUALS).forEach(Object.freeze);
+  Object.values(PLAYER_PROJECTILE_VISUALS).forEach(Object.freeze);
+
   function getProjectileVisual(projectile) {
     const kind = projectile.kind || 'shot';
     if (projectile.enemy) {
@@ -1506,27 +1534,17 @@
         const floor = Neo.getRoomArtTheme?.()?.backdrop || projectile.color || '#8a5a3c';
         return { color: floor, core: floor, trail: floor, shape: 'rock', length: 16 };
       }
-      if (kind === 'sword' || kind === 'god_sword') return { color: '#f6f1ff', core: '#ffffff', trail: '#d8c7ff', shape: 'blade', length: 28 };
-      if (kind === 'sniper_round') return { color: '#ff5d72', core: '#ffe1e6', trail: '#ff314d', shape: 'dart', length: 34 };
-      if (kind === 'machine_round') return { color: '#ffb35a', core: '#fff1ba', trail: '#ff6738', shape: 'tracer', length: 22 };
-      if (kind === 'cult_missile') return { color: '#b455ff', core: '#f2ddff', trail: '#7d39ff', shape: 'orb', length: 120 };
-      if (kind === 'cold_death') return { color: '#9fe8ff', core: '#eafbff', trail: '#3fb4ff', shape: 'orb', length: 140 };
-      if (kind === 'golem_spit') return { color: '#9bb05a', core: '#e6f0b8', trail: '#5f7a2e', shape: 'orb', length: 70 };
+      const preset = ENEMY_PROJECTILE_VISUALS[kind];
+      if (preset) return preset;
       return { color: projectile.color || '#ff6688', core: '#ffe4eb', trail: projectile.color || '#ff6688', shape: 'dart', length: 24 };
     }
-    if (kind === 'blade_justice') return { color: '#fff6a3', core: '#ffffff', trail: '#ffd86a', shape: 'blade', length: 40 };
-    if (kind === 'fireball') return { color: '#ff7b32', core: '#fff1a6', trail: '#ff2f17', shape: 'fireball', length: 30 };
     if (kind === 'rock') {
       // Tint the debris to match the current floor so it reads as torn-up ground.
       const floor = Neo.getRoomArtTheme?.()?.backdrop || '#8a5a3c';
       return { color: floor, core: floor, trail: floor, shape: 'rock', length: 16 };
     }
-    if (kind === 'disk' || kind === 'power_disk') return { color: kind === 'power_disk' ? '#d890ff' : '#b66cff', core: '#f0d8ff', trail: kind === 'power_disk' ? '#f7ccff' : '#7d4dff', shape: 'disk', length: 20 };
-    if (kind === 'disk_shard') return { color: '#c98bff', core: '#f0d8ff', trail: '#8a55ff', shape: 'disk', length: 12 };
-    if (kind === 'magenta_p90') return { color: '#ff9dd7', core: '#fff0fb', trail: '#ff4aa8', shape: 'tracer', length: 26 };
-    if (kind === 'magenta_degale') return { color: '#ff8bd2', core: '#fff0fb', trail: '#ff3eb7', shape: 'slug', length: 34 };
-    if (kind === 'hunters_bow') return { color: '#dff8ff', core: '#ffffff', trail: '#7edcff', shape: 'arrow', length: 32 };
-    if (kind === 'void_piercer') return { color: '#ffd2c0', core: '#fff8ee', trail: '#ff826a', shape: 'dart', length: 30 };
+    const preset = PLAYER_PROJECTILE_VISUALS[kind];
+    if (preset) return preset;
     return { color: projectile.color || '#ffd7aa', core: '#ffffff', trail: projectile.color || '#ffd7aa', shape: 'orb', length: 20 };
   }
 

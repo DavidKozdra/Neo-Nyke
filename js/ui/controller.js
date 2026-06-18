@@ -33,6 +33,9 @@ export function createUIController(view) {
     let challengePanelOpen = false;
     let runHistoryOpen = false;
     let syncSandboxPanelFieldsHook = null;
+    let syncCustomCharacterPanelFieldsHook = null;
+    let selectedCarouselKey = '';
+    let programmaticCarouselScrollUntil = 0;
     let runHistoryPage = 0;
     let runHistoryEntries = [];
     let runHistoryModeFilter = 'all';
@@ -68,6 +71,105 @@ export function createUIController(view) {
     const runHistoryPageSize = 8;
 
     const LC = `<span class="lc-icon">◆</span>`;
+    const getCharacterOrder = () => ['princess', 'thorn_knight', 'metao', 'gelleh', 'mooggy', ...(Neo.getCustomCharacterKeys?.() || [])];
+
+    function getCharacterButton(characterKey) {
+      return view.charButtons.find(button => button.dataset.char === characterKey) || null;
+    }
+
+    function refreshCharacterButtons() {
+      view.charButtons = [...document.querySelectorAll('#choose .char-card[data-char]')];
+      return view.charButtons;
+    }
+
+    function renderCustomRosterCards() {
+      const track = document.getElementById('choose');
+      const addButton = track?.querySelector('[data-add-custom-character]');
+      if (!track || !addButton) return;
+      track.querySelectorAll('[data-generated-custom-character]').forEach(node => node.remove());
+      const customs = Neo.normalizeCustomCharactersSettings?.(Neo.metaProgress?.customCharacters) || [];
+      customs.forEach(custom => {
+        const key = `custom_character_${custom.id}`;
+        const button = document.createElement('button');
+        button.className = 'char-card char-card--plus';
+        button.dataset.char = key;
+        button.dataset.rarity = 'custom';
+        button.dataset.generatedCustomCharacter = 'true';
+        button.innerHTML = `
+          <div class="char-card-art-wrap char-card-art-wrap--plus">
+            <span class="char-card-plus-mark" aria-hidden="true">+</span>
+            <canvas class="char-card-art" data-char-sprite="${Neo.escapeHtml(key)}" width="96" height="96" aria-hidden="true"></canvas>
+          </div>
+          <div class="char-card-header">
+            <span class="char-card-name" data-custom-character-card-name>${Neo.escapeHtml(custom.name || 'Custom')}</span>
+            <span class="char-card-tag custom-tag">CUSTOM</span>
+          </div>
+          <small class="char-card-hint" data-base="Edit custom">Edit custom</small>
+        `;
+        track.insertBefore(button, addButton);
+      });
+      refreshCharacterButtons();
+    }
+
+    function writeCustomCharacterSettings(characterKey, patch) {
+      if (!Neo.metaProgress || !Neo.isCustomCharacterKey?.(characterKey)) return null;
+      const id = characterKey.slice('custom_character_'.length);
+      const list = Neo.normalizeCustomCharactersSettings?.(Neo.metaProgress.customCharacters) || [];
+      const index = list.findIndex(entry => entry.id === id);
+      const base = index >= 0 ? list[index] : Neo.normalizeCustomCharacterSettings?.({ id, active: true }, id);
+      const nextPatch = typeof patch === 'function' ? patch(base) : patch;
+      const next = Neo.normalizeCustomCharacterSettings?.({ ...base, ...nextPatch, id, active: true }, id) || { ...base, ...nextPatch, id, active: true };
+      if (index >= 0) list[index] = next;
+      else list.push(next);
+      Neo.metaProgress.customCharacters = list;
+      return next;
+    }
+
+    function isCarouselButtonSelectable(button) {
+      return !!button && !button.disabled && !button.classList.contains('locked');
+    }
+
+    function scrollCharacterCardIntoView(characterKey, behavior = 'smooth') {
+      const button = getCharacterButton(characterKey);
+      if (!button) return;
+      programmaticCarouselScrollUntil = Date.now() + 520;
+      button.scrollIntoView({ behavior, block: 'nearest', inline: 'center' });
+    }
+
+    function updateCarouselArrowState(selected = selectedCarouselKey || Neo.chosenCharacter) {
+      const carouselPrev = document.getElementById('carouselPrev');
+      const carouselNext = document.getElementById('carouselNext');
+      const order = getCharacterOrder();
+      const currentPos = Math.max(0, order.indexOf(selected));
+      const hasPrev = order.slice(0, currentPos).some(key => isCarouselButtonSelectable(getCharacterButton(key)));
+      const hasNext = order.slice(currentPos + 1).some(key => isCarouselButtonSelectable(getCharacterButton(key)));
+      if (carouselPrev) carouselPrev.disabled = !hasPrev;
+      if (carouselNext) carouselNext.disabled = !hasNext;
+    }
+
+    function selectNearestCarouselCard(handlers) {
+      const viewport = document.querySelector('.char-carousel-viewport');
+      if (!viewport || Date.now() < programmaticCarouselScrollUntil) return;
+      const viewportRect = viewport.getBoundingClientRect();
+      const centerX = viewportRect.left + viewportRect.width / 2;
+      let nearest = null;
+      let nearestDistance = Infinity;
+      for (const button of view.charButtons) {
+        if (!isCarouselButtonSelectable(button)) continue;
+        const rect = button.getBoundingClientRect();
+        const distance = Math.abs((rect.left + rect.width / 2) - centerX);
+        if (distance < nearestDistance) {
+          nearest = button;
+          nearestDistance = distance;
+        }
+      }
+      const key = nearest?.dataset?.char || '';
+      if (key && key !== selectedCarouselKey) {
+        handlers.onCharacterSelect(key, nearest, { openCustomBuilder: false });
+      } else {
+        updateCarouselArrowState(key || selectedCarouselKey);
+      }
+    }
 
     function ensureRunHistoryPanelCanOverlayGame() {
       if (!view.runHistoryPanel || view.runHistoryPanel.parentElement === document.body) return;
@@ -715,6 +817,7 @@ export function createUIController(view) {
       if (show !== 'charselect') { setChallengePanelOpen(false); setLegacyPanelOpen(false); }
       if (show !== 'menu' && show !== 'pause') setRunHistoryOpen(false);
       if (show !== 'menu') { setAltModesPanelOpen(false); setCompetitivePanelOpen(false); setSandboxPanelOpen(false); }
+      if (show !== 'charselect') setCustomCharacterPanelOpen(false);
       if (show !== 'menu') tutorialMenuOfferVisible = false;
       setVisible(view.endlessHud, inPlay && Neo.gameMode === 'endless', 'flex');
       setVisible(
@@ -1040,7 +1143,8 @@ export function createUIController(view) {
         if (filteredEnemies.length) showEnemyDetail(filteredEnemies[0].key);
 
       } else if (tab === 'characters') {
-        view.rhInfoContent.innerHTML = `<div class="info-char-grid">${Object.values(Neo.CHARACTER_DEFS).map(c => {
+        const infoCharacters = Object.values(Neo.CHARACTER_DEFS).filter(c => c.key !== 'custom_character');
+        view.rhInfoContent.innerHTML = `<div class="info-char-grid">${infoCharacters.map(c => {
           const display = Neo.HERO_DISPLAY[c.key] || {};
           const lockNote = getCharacterInfoLockNote(c.key);
           const statBars = (display.stats || []).map(s =>
@@ -1296,6 +1400,20 @@ export function createUIController(view) {
       document.getElementById('altModeSandboxCard')?.classList.toggle('altmode-card--configuring', open);
     }
 
+    function setCustomCharacterPanelOpen(open) {
+      if (open) syncCustomCharacterPanelFieldsHook?.();
+      view.customCharacterPanel?.classList.toggle('hidden', !open);
+      view.customCharacterPanel?.classList.toggle('sandbox-panel--open', open);
+      view.customCharacterPanel?.setAttribute('aria-hidden', open ? 'false' : 'true');
+    }
+
+    function getEditingCustomCharacterKey() {
+      const key = String(Neo.editingCustomCharacterKey || Neo.chosenCharacter || '');
+      if (Neo.isCustomCharacterKey?.(key)) return key;
+      const first = Neo.getCustomCharacterKeys?.()[0];
+      return first || Neo.createCustomCharacter?.() || '';
+    }
+
     function renderRunHistoryDetail() {
       const visibleEntries = getVisibleRunHistoryEntries();
       const selected = visibleEntries.find(entry => entry.id === selectedRunHistoryId) || visibleEntries[0] || null;
@@ -1427,36 +1545,53 @@ export function createUIController(view) {
       bindMenuActions(handlers) {
         if (menuBound) return;
         ensureRunHistoryPanelCanOverlayGame();
-        view.charButtons.forEach(button => {
-          button.addEventListener('click', () => {
-            handlers.onCharacterSelect(button.dataset.char || '', button);
-          });
+        renderCustomRosterCards();
+        const rosterTrack = document.getElementById('choose');
+        rosterTrack?.addEventListener('click', event => {
+          const addButton = event.target instanceof Element ? event.target.closest('[data-add-custom-character]') : null;
+          if (addButton) {
+            const newKey = Neo.createCustomCharacter?.();
+            if (!newKey) return;
+            Neo.editingCustomCharacterKey = newKey;
+            renderCustomRosterCards();
+            const button = getCharacterButton(newKey);
+            handlers.onCharacterSelect(newKey, button, { openCustomBuilder: true });
+            scrollCharacterCardIntoView(newKey);
+            return;
+          }
+          const button = event.target instanceof Element ? event.target.closest('#choose .char-card[data-char]') : null;
+          if (!button) return;
+          handlers.onCharacterSelect(button.dataset.char || '', button);
         });
 
         // Carousel prev/next arrows
         const carouselPrev = document.getElementById('carouselPrev');
         const carouselNext = document.getElementById('carouselNext');
-        const charOrder = ['princess', 'thorn_knight', 'metao', 'gelleh', 'mooggy'];
         function carouselStep(delta) {
-          const currentIndex = charOrder.indexOf(handlers._getChosenCharacter ? handlers._getChosenCharacter() : 'princess');
-          const nextIndex = currentIndex + delta;
-          if (nextIndex >= 0 && nextIndex < charOrder.length) {
+          const charOrder = getCharacterOrder();
+          const currentKey = handlers._getChosenCharacter ? handlers._getChosenCharacter() : selectedCarouselKey || 'princess';
+          const currentIndex = Math.max(0, charOrder.indexOf(currentKey));
+          for (let nextIndex = currentIndex + delta; nextIndex >= 0 && nextIndex < charOrder.length; nextIndex += delta) {
             const nextKey = charOrder[nextIndex];
-            const btn = view.charButtons.find(b => b.dataset.char === nextKey);
-            if (btn) handlers.onCharacterSelect(nextKey, btn);
+            const btn = getCharacterButton(nextKey);
+            if (isCarouselButtonSelectable(btn)) {
+              handlers.onCharacterSelect(nextKey, btn, { openCustomBuilder: false });
+              scrollCharacterCardIntoView(nextKey);
+              return;
+            }
           }
+          updateCarouselArrowState(currentKey);
         }
         carouselPrev?.addEventListener('click', () => carouselStep(-1));
         carouselNext?.addEventListener('click', () => carouselStep(1));
 
-        // Touch swipe on carousel viewport
         const viewport = document.querySelector('.char-carousel-viewport');
         if (viewport) {
-          let touchStartX = 0;
-          viewport.addEventListener('touchstart', e => { touchStartX = e.touches[0].clientX; }, { passive: true });
-          viewport.addEventListener('touchend', e => {
-            const dx = e.changedTouches[0].clientX - touchStartX;
-            if (Math.abs(dx) > 40) carouselStep(dx < 0 ? 1 : -1);
+          let scrollSettleTimer = 0;
+          viewport.addEventListener('scroll', () => {
+            updateCarouselArrowState();
+            window.clearTimeout(scrollSettleTimer);
+            scrollSettleTimer = window.setTimeout(() => selectNearestCarouselCard(handlers), 120);
           }, { passive: true });
         }
 
@@ -1617,6 +1752,90 @@ export function createUIController(view) {
           });
         }
 
+        function buildCustomCharacterMoveOptions() {
+          if (!view.customCharacterMoveLoadout) return;
+          view.customCharacterMoveLoadout.querySelectorAll('[data-custom-move-options]').forEach(group => {
+            const slot = group.dataset.customMoveOptions;
+            const moves = Object.keys(Neo.MOVE_DEFS).filter(key => Neo.MOVE_DEFS[key].slot === slot);
+            group.innerHTML = moves.map(key => {
+              const move = Neo.MOVE_DEFS[key];
+              const name = move.name || key;
+              return `<button class="sandbox-move-option" data-custom-move-option="${Neo.escapeHtml(key)}" data-custom-move-option-slot="${Neo.escapeHtml(slot)}" type="button" aria-pressed="false" title="${Neo.escapeHtml(move.desc || name)}">`
+                + `<canvas class="sandbox-move-option__icon" data-custom-move-option-icon="${Neo.escapeHtml(key)}" width="22" height="22" aria-hidden="true"></canvas>`
+                + `<span class="sandbox-move-option__label">${Neo.escapeHtml(name)}</span>`
+                + `</button>`;
+            }).join('');
+            group.querySelectorAll('[data-custom-move-option-icon]').forEach(canvas => {
+              const move = Neo.MOVE_DEFS[canvas.dataset.customMoveOptionIcon];
+              if (move) Neo.drawMoveToastIcon(canvas, move);
+            });
+          });
+        }
+
+        function buildCustomCharacterWeaponOptions() {
+          if (!view.customCharacterWeaponLoadout) return;
+          const group = view.customCharacterWeaponLoadout.querySelector('[data-custom-weapon-options]');
+          if (!group) return;
+          group.innerHTML = Neo.WEAPON_KEYS.map(key => {
+            const weapon = Neo.WEAPON_DEFS[key];
+            const name = weapon?.name || key;
+            return `<button class="sandbox-move-option" data-custom-weapon-option="${Neo.escapeHtml(key)}" type="button" aria-pressed="false" title="${Neo.escapeHtml(weapon?.description || name)}">`
+              + `<canvas class="sandbox-move-option__icon" data-custom-weapon-option-icon="${Neo.escapeHtml(key)}" width="22" height="22" aria-hidden="true"></canvas>`
+              + `<span class="sandbox-move-option__label">${Neo.escapeHtml(name)}</span>`
+              + `</button>`;
+          }).join('');
+          group.querySelectorAll('[data-custom-weapon-option-icon]').forEach(canvas => {
+            const weapon = Neo.WEAPON_DEFS[canvas.dataset.customWeaponOptionIcon];
+            if (weapon) Neo.drawWeaponToastIcon(canvas, weapon);
+          });
+        }
+
+        function syncCustomCharacterPanelFields() {
+          if (!Neo.metaProgress) return;
+          const customKey = getEditingCustomCharacterKey();
+          const custom = Neo.getCustomCharacterSettings?.(customKey) || {};
+          if (view.customCharacterName) view.customCharacterName.value = custom.name || 'Plus';
+          view.customCharacterMoveLoadout?.querySelectorAll('[data-custom-move-slot]').forEach(slotNode => {
+            const slot = slotNode.dataset.customMoveSlot;
+            const selectedKey = custom.moveLoadout?.[slot] || '';
+            const selectedMove = Neo.MOVE_DEFS[selectedKey];
+            const selectedLabel = slotNode.querySelector('[data-custom-move-slot-selected]');
+            if (selectedLabel) selectedLabel.textContent = selectedMove?.name || 'Unknown';
+            slotNode.querySelectorAll('[data-custom-move-option]').forEach(button => {
+              const active = button.dataset.customMoveOption === selectedKey;
+              button.classList.toggle('is-active', active);
+              button.setAttribute('aria-pressed', active ? 'true' : 'false');
+            });
+          });
+          view.customCharacterWeaponLoadout?.querySelectorAll('[data-custom-weapon-slot]').forEach(slotNode => {
+            const selectedKey = custom.weaponLoadout?.weapon || '';
+            const selectedWeapon = Neo.WEAPON_DEFS[selectedKey];
+            const selectedLabel = slotNode.querySelector('[data-custom-weapon-slot-selected]');
+            if (selectedLabel) selectedLabel.textContent = selectedWeapon?.name || 'Unknown';
+            slotNode.querySelectorAll('[data-custom-weapon-option]').forEach(button => {
+              const active = button.dataset.customWeaponOption === selectedKey;
+              button.classList.toggle('is-active', active);
+              button.setAttribute('aria-pressed', active ? 'true' : 'false');
+            });
+          });
+          if (view.customCharacterRelicList) {
+            const selectedRelics = new Set(custom.starterRelics || []);
+            view.customCharacterRelicList.innerHTML = Neo.ITEM_KEYS.map(key => {
+              const item = Neo.itemRegistry?.get?.(key) || Neo.ITEM_DEFS[key];
+              const label = item?.name || key.replace(/_/g, ' ');
+              const rarity = String(item?.rarity || 'knight');
+              const active = selectedRelics.has(key);
+              const safeKey = Neo.escapeHtml(key);
+              const tooltipText = item?.description || 'No item description available.';
+              return `<button class="sandbox-token sandbox-token--item sandbox-token--${Neo.escapeHtml(rarity)}${active ? ' is-active' : ''}" data-custom-relic="${safeKey}" type="button" aria-pressed="${active ? 'true' : 'false'}" title="${Neo.escapeHtml(tooltipText)}">`
+                + `<canvas class="sandbox-token__icon sandbox-token__icon--item" data-custom-relic-icon="${safeKey}" width="26" height="26" aria-hidden="true"></canvas>`
+                + `<span class="sandbox-token__label">${Neo.escapeHtml(label)}</span>`
+                + `</button>`;
+            }).join('');
+            Neo.drawItemIconCanvases?.(view.customCharacterRelicList, 'data-custom-relic-icon');
+          }
+        }
+
         function syncSandboxPanelFields() {
           document.querySelectorAll('#sandboxGrid .sandbox-row').forEach(row => {
             const param = row.dataset.sboxParam;
@@ -1659,7 +1878,10 @@ export function createUIController(view) {
         }
         buildSandboxMoveLoadoutOptions();
         buildSandboxWeaponLoadoutOptions();
+        buildCustomCharacterMoveOptions();
+        buildCustomCharacterWeaponOptions();
         syncSandboxPanelFieldsHook = syncSandboxPanelFields;
+        syncCustomCharacterPanelFieldsHook = syncCustomCharacterPanelFields;
 
         document.querySelectorAll('#sandboxGrid .sandbox-row').forEach(row => {
           const param = row.dataset.sboxParam;
@@ -1716,6 +1938,66 @@ export function createUIController(view) {
           Neo.sandboxSettings = Neo.normalizeSandboxSettings(Neo.sandboxSettings);
           syncSandboxPanelFields();
           Neo.persistMetaSoon();
+        });
+
+        view.customCharacterName?.addEventListener('change', () => {
+          if (!Neo.metaProgress) return;
+          const customKey = getEditingCustomCharacterKey();
+          writeCustomCharacterSettings(customKey, custom => ({
+            ...custom,
+            name: String(view.customCharacterName?.value || '').trim().slice(0, 24) || 'Plus',
+          }));
+          Neo.persistMetaSoon();
+          renderCustomRosterCards();
+          syncCustomCharacterPanelFields();
+          Neo.updateCharacterSelectionUI?.();
+        });
+
+        view.customCharacterMoveLoadout?.addEventListener('click', event => {
+          const button = event.target instanceof Element ? event.target.closest('[data-custom-move-option]') : null;
+          if (!button || !Neo.metaProgress) return;
+          const slot = button.dataset.customMoveOptionSlot;
+          const customKey = getEditingCustomCharacterKey();
+          writeCustomCharacterSettings(customKey, custom => ({
+            ...custom,
+            moveLoadout: {
+              ...(custom.moveLoadout || {}),
+              [slot]: button.dataset.customMoveOption || '',
+            },
+          }));
+          Neo.persistMetaSoon();
+          syncCustomCharacterPanelFields();
+          Neo.updateCharacterSelectionUI?.();
+        });
+
+        view.customCharacterWeaponLoadout?.addEventListener('click', event => {
+          const button = event.target instanceof Element ? event.target.closest('[data-custom-weapon-option]') : null;
+          if (!button || !Neo.metaProgress) return;
+          const customKey = getEditingCustomCharacterKey();
+          writeCustomCharacterSettings(customKey, custom => ({
+            ...custom,
+            weaponLoadout: { weapon: button.dataset.customWeaponOption || '' },
+          }));
+          Neo.persistMetaSoon();
+          syncCustomCharacterPanelFields();
+          Neo.updateCharacterSelectionUI?.();
+        });
+
+        view.customCharacterRelicList?.addEventListener('click', event => {
+          const button = event.target instanceof Element ? event.target.closest('[data-custom-relic]') : null;
+          if (!button || !Neo.metaProgress) return;
+          const customKey = getEditingCustomCharacterKey();
+          const relicKey = button.dataset.customRelic || '';
+          if (!Neo.ITEM_KEYS.includes(relicKey)) return;
+          const custom = Neo.getCustomCharacterSettings?.(customKey) || {};
+          const current = Array.isArray(custom.starterRelics) ? custom.starterRelics.slice() : [];
+          const next = current.includes(relicKey)
+            ? current.filter(key => key !== relicKey)
+            : [...current, relicKey].slice(-2);
+          writeCustomCharacterSettings(customKey, { ...custom, starterRelics: next });
+          Neo.persistMetaSoon();
+          syncCustomCharacterPanelFields();
+          Neo.updateCharacterSelectionUI?.();
         });
 
         view.sandboxEnemySearch?.addEventListener('input', () => {
@@ -1821,7 +2103,44 @@ export function createUIController(view) {
         view.sandboxSaveClose?.addEventListener('click', handlers.onCloseSandboxConfig);
         view.sandboxClose?.addEventListener('click', handlers.onCloseSandboxConfig);
         view.sandboxPanelBackdrop?.addEventListener('click', handlers.onCloseSandboxConfig);
+        view.customCharacterReset?.addEventListener('click', () => {
+          if (!Neo.metaProgress) return;
+          const customKey = getEditingCustomCharacterKey();
+          const id = customKey.slice('custom_character_'.length);
+          writeCustomCharacterSettings(customKey, { ...(Neo.normalizeCustomCharacterSettings?.({ id, active: true }, id) || {}), id, active: true });
+          syncCustomCharacterPanelFields();
+          Neo.persistMetaSoon();
+          renderCustomRosterCards();
+          Neo.updateCharacterSelectionUI?.();
+        });
+        view.customCharacterRemove?.addEventListener('click', () => {
+          if (!Neo.metaProgress) return;
+          const customKey = getEditingCustomCharacterKey();
+          Neo.removeCustomCharacter?.(customKey);
+          Neo.editingCustomCharacterKey = '';
+          renderCustomRosterCards();
+          Neo.persistMetaSoon();
+          Neo.updateCharacterSelectionUI?.();
+          handlers.onCloseCustomCharacterBuilder();
+        });
+        view.customCharacterSaveClose?.addEventListener('click', () => {
+          if (Neo.metaProgress) {
+            const customKey = getEditingCustomCharacterKey();
+            const custom = Neo.getCustomCharacterSettings?.(customKey) || {};
+            writeCustomCharacterSettings(customKey, {
+              ...custom,
+              name: String(view.customCharacterName?.value || custom.name || '').trim().slice(0, 24) || custom.name || 'Plus',
+            });
+            Neo.persistMetaSoon();
+            renderCustomRosterCards();
+            Neo.updateCharacterSelectionUI?.();
+          }
+          handlers.onCloseCustomCharacterBuilder();
+        });
+        view.customCharacterClose?.addEventListener('click', handlers.onCloseCustomCharacterBuilder);
+        view.customCharacterBackdrop?.addEventListener('click', handlers.onCloseCustomCharacterBuilder);
         syncSandboxPanelFields();
+        syncCustomCharacterPanelFields();
 
         view.challengeButtons.forEach(button => {
           button.addEventListener('click', () => {
@@ -2077,6 +2396,7 @@ export function createUIController(view) {
       setLegacyPanelOpen,
       setRunHistoryOpen,
       setSandboxPanelOpen,
+      setCustomCharacterPanelOpen,
       setAchievementsPanelOpen,
       setMenuMeta(coins, bestFloor, loopCrystals, saveState) {
         view.bankCoins.textContent = coins;
@@ -2121,7 +2441,9 @@ export function createUIController(view) {
         renderRunHistoryPage();
       },
       updateCharacterSelection(unlocked, selected) {
-        const CHAR_ORDER = ['princess', 'thorn_knight', 'metao', 'gelleh', 'mooggy'];
+        renderCustomRosterCards();
+        const previousCarouselKey = selectedCarouselKey;
+        selectedCarouselKey = selected || previousCarouselKey;
         const ROLE_LABELS = {
           princess: 'Starter',
           thorn_knight: 'Bleed melee',
@@ -2130,6 +2452,9 @@ export function createUIController(view) {
           mooggy: 'Fast assassin',
         };
         const unlockText = (itemKey) => {
+          if (Neo.isCustomCharacterKey?.(itemKey)) {
+            return Neo.getCustomCharacterSettings?.(itemKey).active ? 'Edit custom' : 'Empty slot';
+          }
           if (unlocked.has(itemKey)) return ROLE_LABELS[itemKey] || 'Ready';
           if (itemKey === 'gelleh') return 'Unlock: beat GOD';
           if (itemKey === 'mooggy') {
@@ -2143,38 +2468,53 @@ export function createUIController(view) {
           const itemKey = button.dataset.char;
           const hint = button.querySelector('small');
           const spriteCanvas = button.querySelector('[data-char-sprite]');
+          if (Neo.isCustomCharacterKey?.(itemKey)) {
+            const custom = Neo.getCustomCharacterSettings?.(itemKey) || {};
+            const fallbackName = 'Custom';
+            const customName = custom.active ? (custom.name || fallbackName) : fallbackName;
+            button.classList.toggle('char-card--empty-custom', !custom.active);
+            button.querySelector('[data-custom-character-card-name]')?.replaceChildren(document.createTextNode(customName.toUpperCase()));
+          } else {
+            button.classList.remove('char-card--empty-custom');
+          }
           button.classList.toggle('locked', !unlocked.has(itemKey));
           button.classList.toggle('sel', selected === itemKey);
           button.disabled = !unlocked.has(itemKey);
           if (hint) hint.textContent = unlockText(itemKey);
           if (spriteCanvas) {
-            Neo.drawSpriteToCanvas(spriteCanvas, itemKey, 76, {
+            Neo.drawSpriteToCanvas(spriteCanvas, Neo.getCharacterSpriteKey?.(itemKey) || itemKey, 76, {
               alpha: unlocked.has(itemKey) ? 1 : 0.42,
+              tint: Neo.isCustomCharacterKey?.(itemKey) ? '#83f3ff' : null,
             });
           }
           button.querySelectorAll('[data-inv-ui-icon]').forEach(canvas => {
             Neo.drawInventoryUiIcon?.(canvas, canvas.dataset.invUiIcon);
           });
         });
+        document.querySelectorAll('[data-char-add-sprite]').forEach(canvas => {
+          Neo.drawSpriteToCanvas(canvas, 'thorn_knight', 76, { tint: '#83f3ff', alpha: 0.72 });
+        });
 
-        // The roster is now a fixed grid; clear old carousel offsets from prior builds.
+        // The roster is a native scrolling carousel; clear old transform offsets
+        // from prior builds and keep the selected card centered.
         const track = document.getElementById('choose');
         if (track) track.style.transform = '';
 
-        // ── Arrow disabled state ─────────────────────────────
-        const carouselPrev = document.getElementById('carouselPrev');
-        const carouselNext = document.getElementById('carouselNext');
-        const currentPos = CHAR_ORDER.indexOf(selected);
-        if (carouselPrev) carouselPrev.disabled = currentPos <= 0;
-        if (carouselNext) carouselNext.disabled = currentPos >= CHAR_ORDER.length - 1;
+        updateCarouselArrowState(selected);
+        if (selected && selected !== previousCarouselKey) {
+          window.requestAnimationFrame(() => scrollCharacterCardIntoView(selected, previousCarouselKey ? 'smooth' : 'auto'));
+        }
 
         // ── Go button: disable if selected character is locked ─
         const goBtn = document.getElementById('go');
-        if (goBtn) goBtn.disabled = !unlocked.has(selected);
+        if (goBtn) {
+          const inactiveCustom = Neo.isCustomCharacterKey?.(selected) && !Neo.getCustomCharacterSettings?.(selected).active;
+          goBtn.disabled = !unlocked.has(selected) || inactiveCustom;
+        }
 
         // ── Hero detail panel ────────────────────────────────
         const detail = document.getElementById('heroDetail');
-        const disp = Neo.HERO_DISPLAY[selected];
+        const disp = Neo.HERO_DISPLAY[selected] || (Neo.isCustomCharacterKey?.(selected) ? Neo.HERO_DISPLAY.custom_character : null);
         if (detail && disp) {
           const STAT_ICON_KEYS = { HP: 'hp', ATK: 'attack', DMG: 'attack', SPD: 'speed', RANGE: 'range', RNG: 'range', CTRL: 'crit' };
           const statsHtml = disp.stats.map(s =>
@@ -2228,6 +2568,10 @@ export function createUIController(view) {
             </span>`;
           }).join('');
           const startingItems = getCharacterStartingItems(selected);
+          if (Neo.isCustomCharacterKey?.(selected) && Neo.getCustomCharacterSettings?.(selected).active) {
+            const customRelics = Neo.getCustomCharacterSettings?.(selected).starterRelics || [];
+            customRelics.forEach(key => { startingItems[key] = (Number(startingItems[key]) || 0) + 1; });
+          }
           const inventoryKeys = Object.keys(startingItems).filter(key => Number(startingItems[key] || 0) > 0);
           const inventoryHtml = inventoryKeys.length
             ? inventoryKeys.map(key => {
@@ -2245,15 +2589,25 @@ export function createUIController(view) {
               </span>`;
             }).join('')
             : '<span class="hero-detail-item-empty">No starter items</span>';
-          const charDef = Neo.CHARACTER_DEFS[selected] || {};
+          const charDef = Neo.isCustomCharacterKey?.(selected)
+            ? { ...(Neo.CHARACTER_DEFS.custom_character || {}), key: selected, name: Neo.getCustomCharacterSettings?.(selected).name || 'Custom' }
+            : (Neo.CHARACTER_DEFS[selected] || {});
+          const customIsActive = Neo.isCustomCharacterKey?.(selected) && Neo.getCustomCharacterSettings?.(selected).active;
+          const lore = Neo.isCustomCharacterKey?.(selected)
+            ? (customIsActive
+              ? `Saved Plus character. Edit the name, weapon, move set, and starter relics from the roster card.`
+              : `Empty Plus slot. Click the card, save a build, then enter the dungeon.`)
+            : disp.lore;
           detail.innerHTML =
             `<div class="hero-detail-portrait"><canvas id="heroDetailSprite" width="128" height="128" aria-hidden="true"></canvas></div>` +
             `<div class="hero-detail-head"><span class="hero-detail-name">${Neo.escapeHtml(charDef.name || selected)}</span></div>` +
-            `<p class="hero-detail-lore">${disp.lore}</p>` +
+            `<p class="hero-detail-lore">${Neo.escapeHtml(lore)}</p>` +
             `<div class="hero-detail-stats"><div class="hero-detail-section-label">Stats</div>${statsHtml}</div>` +
             `<div class="hero-detail-skills"><div class="hero-detail-section-label">Kit</div>${skillsHtml}</div>` +
             `<div class="hero-detail-inventory"><span class="hero-detail-inventory-label">Starting Inventory</span>${inventoryHtml}</div>`;
-          Neo.drawSpriteToCanvas(document.getElementById('heroDetailSprite'), selected, 104);
+          Neo.drawSpriteToCanvas(document.getElementById('heroDetailSprite'), Neo.getCharacterSpriteKey?.(selected) || selected, 104, {
+            tint: Neo.isCustomCharacterKey?.(selected) ? '#83f3ff' : null,
+          });
           detail.querySelectorAll('[data-hero-move]').forEach(el => {
             const move = Neo.MOVE_DEFS[el.dataset.heroMove];
             if (move) Neo.drawMoveToastIcon(el, move);
@@ -2537,7 +2891,7 @@ export function createUIController(view) {
         }
 
         // ── Lifetime tallies ────────────────────────────────────────────────
-        const totalHeroes = Object.keys(Neo.CHARACTER_DEFS || {}).length || 5;
+        const totalHeroes = Object.keys(Neo.CHARACTER_DEFS || {}).filter(key => key !== 'custom_character').length || 5;
         const unlockedHeroes = new Set(Neo.metaProgress?.unlockedCharacters || []).size;
         if (heroEl) heroEl.textContent = `${unlockedHeroes}/${totalHeroes}`;
 

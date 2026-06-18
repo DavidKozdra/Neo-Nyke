@@ -3378,7 +3378,14 @@
 
   #charSelect .char-carousel-track {
     width: 100%;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    display: flex;
+    grid-template-columns: none;
+    min-width: max-content;
+  }
+
+  #charSelect .char-card {
+    flex: 0 0 138px;
+    min-width: 138px;
   }
 
   #charSelect .hero-detail-panel {
@@ -3443,5 +3450,38 @@
 
   #charSelect .difficulty-btn:last-child:nth-child(odd) {
     grid-column: auto;
+  }
+}
+
+/* Final roster carousel override for the expanded Plus roster. */
+@media (max-width: 900px) {
+  #charSelect .char-carousel-wrap {
+    display: grid !important;
+    grid-template-columns: 30px minmax(0, 1fr) 30px !important;
+  }
+
+  #charSelect .char-carousel-viewport {
+    overflow-x: auto !important;
+    overflow-y: visible !important;
+    scroll-snap-type: x mandatory;
+  }
+
+  #charSelect .char-carousel-track {
+    display: flex !important;
+    grid-template-columns: none !important;
+    width: auto !important;
+    min-width: max-content !important;
+    transform: none !important;
+  }
+
+  #charSelect .carousel-arrow {
+    display: grid !important;
+  }
+
+  #charSelect .char-card {
+    display: flex !important;
+    flex: 0 0 138px !important;
+    min-width: 138px !important;
+    scroll-snap-align: start;
   }
 }

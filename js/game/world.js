@@ -798,10 +798,11 @@
       || (Neo.destructibleSpatialIndexFrame === Neo.frameId ? Neo.destructibleSpatialIndex : null)
       || buildDestructibleSpatialIndex();
     const bounds = getEnemyCellBounds(x - searchRadius, y - searchRadius, x + searchRadius, y + searchRadius);
-    const seen = new Set();
+    // queryEnemyIndexCells already dedupes across cells via its own `seen` set, so
+    // a second Set here is redundant allocation on a per-projectile, per-frame hot
+    // path. Drop it and let the shared dedup handle uniqueness.
     queryEnemyIndexCells(index, bounds, prop => {
-      if (!prop || prop.broken || prop.hidden || seen.has(prop)) return;
-      seen.add(prop);
+      if (!prop || prop.broken || prop.hidden) return;
       visitor(prop);
     });
   }
@@ -3322,6 +3323,7 @@
   Neo.recordProjectileTrail = recordProjectileTrail;
   Neo.spawnProjectileImpact = spawnProjectileImpact;
   Neo.buildEnemySpatialIndex = buildEnemySpatialIndex;
+  Neo.ensureEnemySpatialIndex = ensureEnemySpatialIndex;
   Neo.forEachEnemyNearCircle = forEachEnemyNearCircle;
   Neo.forEachEnemyNearRect = forEachEnemyNearRect;
   Neo.forEachDestructibleNearCircle = forEachDestructibleNearCircle;

@@ -35,6 +35,7 @@ export function resumeGame() {
       selectedChallenges: [],
       selectedCharacter: 'thorn_knight',
       characterKitChoices: {},
+      customCharacters: normalizeCustomCharactersSettings(),
       godsKilled: 0,
       mooggyDefeats: 0,
       loopCrystals: 0,
@@ -45,6 +46,118 @@ export function resumeGame() {
       seenTips: {},
       sandboxSettings: { ...Neo.SANDBOX_DEFAULT_SETTINGS },
     };
+  }
+
+  const CUSTOM_CHARACTER_PREFIX = 'custom_character_';
+  const CUSTOM_CHARACTER_DEFAULT = {
+    name: 'Custom',
+    active: true,
+    moveLoadout: { melee: 'slash', laser: 'blood_beam', smash: 'crimson_smash', dash: 'dash' },
+    weaponLoadout: { weapon: 'thorns_bleed_blade' },
+    starterRelics: [],
+  };
+
+  function isCustomCharacterKey(key) {
+    return String(key || '').startsWith(CUSTOM_CHARACTER_PREFIX);
+  }
+
+  function getCustomCharacterId(characterKey) {
+    return isCustomCharacterKey(characterKey) ? String(characterKey).slice(CUSTOM_CHARACTER_PREFIX.length) : '';
+  }
+
+  function makeCustomCharacterKey(id) {
+    return `${CUSTOM_CHARACTER_PREFIX}${String(id || '').replace(/[^a-zA-Z0-9_-]/g, '')}`;
+  }
+
+  function normalizeCustomCharacterSettings(input, id = '') {
+    const hasSource = !!(input && typeof input === 'object');
+    const source = hasSource ? input : {};
+    const safeId = String(source.id || id || Date.now().toString(36)).replace(/[^a-zA-Z0-9_-]/g, '') || Date.now().toString(36);
+    const rawName = String(source.name || CUSTOM_CHARACTER_DEFAULT.name).trim();
+    const name = rawName.slice(0, 24) || CUSTOM_CHARACTER_DEFAULT.name;
+    const sourceMoves = source.moveLoadout && typeof source.moveLoadout === 'object' ? source.moveLoadout : {};
+    const moveLoadout = {};
+    for (const slot of ['melee', 'laser', 'smash', 'dash']) {
+      const fallback = CUSTOM_CHARACTER_DEFAULT.moveLoadout[slot];
+      const key = String(sourceMoves[slot] || fallback);
+      moveLoadout[slot] = Neo.MOVE_DEFS?.[key]?.slot === slot ? key : fallback;
+    }
+    const sourceWeapons = source.weaponLoadout && typeof source.weaponLoadout === 'object' ? source.weaponLoadout : {};
+    const weaponKey = String(sourceWeapons.weapon || CUSTOM_CHARACTER_DEFAULT.weaponLoadout.weapon);
+    const starterRelics = Array.isArray(source.starterRelics)
+      ? source.starterRelics.filter(key => Neo.ITEM_KEYS?.includes?.(key)).slice(0, 2)
+      : [];
+    return {
+      id: safeId,
+      name,
+      active: source.active === undefined ? !!hasSource : !!source.active,
+      moveLoadout,
+      weaponLoadout: {
+        weapon: Neo.WEAPON_DEFS?.[weaponKey] ? weaponKey : CUSTOM_CHARACTER_DEFAULT.weaponLoadout.weapon,
+      },
+      starterRelics,
+    };
+  }
+
+  function normalizeCustomCharactersSettings(input) {
+    const source = input && typeof input === 'object' ? input : null;
+    const entries = [];
+    if (Array.isArray(source)) {
+      source.forEach((entry, index) => {
+        const normalized = normalizeCustomCharacterSettings(entry, entry?.id || `saved_${index + 1}`);
+        if (normalized.active) entries.push(normalized);
+      });
+    } else if (source && typeof source === 'object') {
+      Object.entries(source).forEach(([key, entry]) => {
+        const id = getCustomCharacterId(key) || key;
+        const normalized = normalizeCustomCharacterSettings(entry, id);
+        if (normalized.active) entries.push(normalized);
+      });
+    }
+    const seen = new Set();
+    return entries.filter(entry => {
+      if (!entry.id || seen.has(entry.id)) return false;
+      seen.add(entry.id);
+      return true;
+    });
+  }
+
+  function getCustomCharacterSettings(characterKey = Neo.chosenCharacter) {
+    const id = getCustomCharacterId(characterKey);
+    const normalizedList = normalizeCustomCharactersSettings(Neo.metaProgress?.customCharacters);
+    if (Neo.metaProgress) Neo.metaProgress.customCharacters = normalizedList;
+    return normalizedList.find(entry => entry.id === id) || normalizeCustomCharacterSettings({ id, active: false }, id || 'draft');
+  }
+
+  function getCustomCharacterKeys() {
+    return normalizeCustomCharactersSettings(Neo.metaProgress?.customCharacters).map(entry => makeCustomCharacterKey(entry.id));
+  }
+
+  function createCustomCharacter() {
+    if (!Neo.metaProgress) return '';
+    const id = `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+    const custom = normalizeCustomCharacterSettings({ id, name: 'Custom', active: true }, id);
+    const list = normalizeCustomCharactersSettings(Neo.metaProgress.customCharacters);
+    list.push(custom);
+    Neo.metaProgress.customCharacters = list;
+    Neo.persistMetaSoon?.();
+    return makeCustomCharacterKey(id);
+  }
+
+  function removeCustomCharacter(characterKey) {
+    if (!Neo.metaProgress || !isCustomCharacterKey(characterKey)) return;
+    const id = getCustomCharacterId(characterKey);
+    Neo.metaProgress.customCharacters = normalizeCustomCharactersSettings(Neo.metaProgress.customCharacters)
+      .filter(entry => entry.id !== id);
+    if (Neo.chosenCharacter === characterKey) {
+      Neo.chosenCharacter = 'thorn_knight';
+      Neo.metaProgress.selectedCharacter = Neo.chosenCharacter;
+    }
+    Neo.persistMetaSoon?.();
+  }
+
+  function getCharacterSpriteKey(characterKey) {
+    return isCustomCharacterKey(characterKey) ? 'thorn_knight' : characterKey;
   }
 
   function normalizeSandboxSettings(input) {
@@ -535,8 +648,20 @@ export function resumeGame() {
       voucher_yellow: 0,
       forge_voucher: 0,
     };
-    const character = Neo.CHARACTER_DEFS[Neo.chosenCharacter] || Neo.CHARACTER_DEFS.thorn_knight;
+    const character = isCustomCharacterKey(Neo.chosenCharacter)
+      ? { ...(Neo.CHARACTER_DEFS.custom_character || Neo.CHARACTER_DEFS.thorn_knight), key: Neo.chosenCharacter, name: getCustomCharacterSettings(Neo.chosenCharacter).name || 'Custom' }
+      : (Neo.CHARACTER_DEFS[Neo.chosenCharacter] || Neo.CHARACTER_DEFS.thorn_knight);
     const starterItems = getCharacterStartingItems(character.key);
+    if (isCustomCharacterKey(character.key)) {
+      const custom = getCustomCharacterSettings(character.key);
+      if (custom.active) {
+        for (const key of custom.starterRelics || []) {
+          if (Object.prototype.hasOwnProperty.call(items, key)) {
+            starterItems[key] = (Number(starterItems[key]) || 0) + 1;
+          }
+        }
+      }
+    }
     Object.entries(starterItems).forEach(([key, count]) => {
       if (Object.prototype.hasOwnProperty.call(items, key)) {
         items[key] = Math.max(0, Math.round(Number(count) || 0));
@@ -684,6 +809,7 @@ export function resumeGame() {
           unlockedLegacy: normalizeLegacySelection(savedMeta.unlockedLegacy),
           seenTips: (savedMeta.seenTips && typeof savedMeta.seenTips === 'object') ? { ...savedMeta.seenTips } : {},
           characterKitChoices: (savedMeta.characterKitChoices && typeof savedMeta.characterKitChoices === 'object') ? { ...savedMeta.characterKitChoices } : {},
+          customCharacters: normalizeCustomCharactersSettings(savedMeta.customCharacters || (savedMeta.customCharacter ? [savedMeta.customCharacter] : null)),
         };
       }
       Neo.runHistory = normalizeRunHistory(savedRunHistory || savedMeta?.runHistory);
@@ -700,6 +826,7 @@ export function resumeGame() {
         const unlocked = new Set(Neo.metaProgress.unlockedCharacters || ['princess', 'thorn_knight', 'metao']);
         if (Neo.metaProgress.godsKilled > 0) unlocked.add('gelleh');
         if (Number(Neo.metaProgress.mooggyDefeats || 0) >= 3) unlocked.add('mooggy');
+        getCustomCharacterKeys().forEach(key => unlocked.add(key));
         const preferredCharacter = String(Neo.metaProgress.selectedCharacter || Neo.chosenCharacter);
         Neo.chosenCharacter = unlocked.has(preferredCharacter) ? preferredCharacter : [...unlocked][0] || 'thorn_knight';
         Neo.metaProgress.selectedCharacter = Neo.chosenCharacter;
@@ -2100,6 +2227,7 @@ export function resumeGame() {
     const ownedChallenges = getOwnedChallengeSet();
     if (Neo.metaProgress.godsKilled > 0) unlocked.add('gelleh');
     if (Number(Neo.metaProgress.mooggyDefeats || 0) >= 3) unlocked.add('mooggy');
+    getCustomCharacterKeys().forEach(key => unlocked.add(key));
     const preferredCharacter = String(Neo.metaProgress.selectedCharacter || Neo.chosenCharacter);
     if (!Neo.charSelectPhase || Neo.charSelectPhase === 'p1') {
       if (unlocked.has(preferredCharacter)) {
@@ -2117,7 +2245,7 @@ export function resumeGame() {
       Neo.metaProgress.selectedChallenges = normalizeChallengeSelection(Neo.selectedChallenges);
     }
     const ownedLegacy = new Set(Neo.metaProgress.unlockedLegacy || []);
-    const competitiveUnlocked = isCompetitive ? new Set([...unlocked].filter(k => k !== 'princess')) : unlocked;
+    const competitiveUnlocked = isCompetitive ? new Set([...unlocked].filter(k => k !== 'princess' && !isCustomCharacterKey(k))) : unlocked;
     if (isCompetitive && competitiveUnlocked.size > 0 && !competitiveUnlocked.has(Neo.chosenCharacter)) {
       Neo.chosenCharacter = [...competitiveUnlocked][0];
       Neo.metaProgress.selectedCharacter = Neo.chosenCharacter;
@@ -3091,6 +3219,14 @@ export function resumeGame() {
   Neo.markPlayerSeenNow = markPlayerSeenNow;
   Neo.showFirstTip = showFirstTip;
   Neo.normalizeSandboxSettings = normalizeSandboxSettings;
+  Neo.normalizeCustomCharacterSettings = normalizeCustomCharacterSettings;
+  Neo.normalizeCustomCharactersSettings = normalizeCustomCharactersSettings;
+  Neo.getCustomCharacterSettings = getCustomCharacterSettings;
+  Neo.getCustomCharacterKeys = getCustomCharacterKeys;
+  Neo.createCustomCharacter = createCustomCharacter;
+  Neo.removeCustomCharacter = removeCustomCharacter;
+  Neo.getCharacterSpriteKey = getCharacterSpriteKey;
+  Neo.isCustomCharacterKey = isCustomCharacterKey;
   Neo.isSandboxRunActive = isSandboxRunActive;
   Neo.getActiveSandboxSettings = getActiveSandboxSettings;
   Neo.applySandboxPlayerSetup = applySandboxPlayerSetup;

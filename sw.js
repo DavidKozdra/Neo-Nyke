@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'neonyke-v32';
+const CACHE_VERSION = 'neonyke-v33';
 const CACHE_META = 'neonyke-cache-meta';
 const CACHE_META_KEY = '/__neonyke_cache_meta__';
 const CACHE_REFRESH_INTERVAL_MS = 5 * 60 * 60 * 1000;
@@ -6,10 +6,13 @@ const CACHE_REFRESH_INTERVAL_MS = 5 * 60 * 60 * 1000;
 const PRECACHE = [
   '/',
   '/index.html',
+  '/manifest.json',
+  '/js/main.js',
   '/css/style.css',
   '/css/theme-princess.css',
   '/css/mobile.css',
   '/css/touch-controls.css',
+  '/css/panel-borders.css',
   '/assets/fonts/VT323-Regular.woff2',
   '/assets/fonts/VT323-LatinExt.woff2',
   '/assets/fonts/PressStart2P-Latin.woff2',
@@ -32,11 +35,14 @@ const PRECACHE = [
   '/js/core/game-core.js',
   '/js/core/math-utils.js',
   '/js/core/sfx.js',
+  '/js/core/music.js',
   '/js/ui/input.js',
   '/js/core/status.js',
   '/js/ui/notifications.js',
+  '/js/ui/unlock-banner.js',
   '/js/ui/panels.js',
   '/js/core/game-state.js',
+  '/js/game/roomTemplates.js',
   '/js/game/rooms.js',
   '/js/game/enemies.js',
   '/js/game/player.js',

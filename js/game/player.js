@@ -338,7 +338,12 @@ export function migratePlayerData(source) {
   }
 
 export function getCharacterDef() {
-    return Neo.CHARACTER_DEFS[Neo.player?.character || Neo.chosenCharacter] || Neo.CHARACTER_DEFS.thorn_knight;
+    const key = Neo.player?.character || Neo.chosenCharacter;
+    if (Neo.isCustomCharacterKey?.(key)) {
+      const custom = Neo.getCustomCharacterSettings?.(key);
+      return { ...(Neo.CHARACTER_DEFS.custom_character || Neo.CHARACTER_DEFS.thorn_knight), key, name: custom?.name || 'Custom' };
+    }
+    return Neo.CHARACTER_DEFS[key] || Neo.CHARACTER_DEFS.thorn_knight;
   }
 
 export function getUiCharacterKey() {
@@ -373,6 +378,9 @@ export function syncCharacterUiTheme() {
   }
 
 export function getDefaultWeaponForCharacter(characterKey) {
+    if (Neo.isCustomCharacterKey?.(characterKey)) {
+      return Neo.getCustomCharacterSettings?.(characterKey).weaponLoadout?.weapon || 'thorns_bleed_blade';
+    }
     if (characterKey === 'princess') return 'princess_wand';
     if (characterKey === 'metao') return 'metao_fire_staff';
     if (characterKey === 'gelleh') return 'gelleh_lightning_spear';
@@ -404,6 +412,15 @@ export const KIT_ALTERNATIVES = {
 
 // The base (first-option) default kit per character, before any alt-kit choices.
 function getBaseMovesForCharacter(characterKey) {
+    if (Neo.isCustomCharacterKey?.(characterKey)) {
+      const customMoves = Neo.getCustomCharacterSettings?.(characterKey).moveLoadout || {};
+      return {
+        melee: customMoves.melee || 'slash',
+        laser: customMoves.laser || 'blood_beam',
+        smash: customMoves.smash || 'crimson_smash',
+        dash: customMoves.dash || 'dash',
+      };
+    }
     // The melee slot is the bare-hands fallback only: it is the attack you get
     // when no weapon is equipped, so every character defaults to the generic
     // `slash`. Signature melee attacks (smite, fire_balls, narwal_fight,
@@ -462,6 +479,7 @@ export function getDefaultMovesForCharacter(characterKey) {
 export function isMoveAllowedForCharacter(moveKey, characterKey = Neo.player?.character || Neo.chosenCharacter) {
     const def = Neo.MOVE_DEFS[moveKey];
     if (!def) return false;
+    if (Neo.isCustomCharacterKey?.(characterKey)) return true;
     return !def.exclusiveCharacter || def.exclusiveCharacter === characterKey;
   }
 

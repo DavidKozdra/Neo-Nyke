@@ -23,18 +23,33 @@
     }
 
     let nearbyAllies = 0;
-    for (const ally of Neo.enemies || []) {
-      if (ally === enemy
+    // Query the shared enemy spatial index (radius is small relative to the room,
+    // so this visits only nearby cells instead of every enemy — O(N·k) total over
+    // the loop instead of O(N²)). When no index is available for this frame the
+    // helper falls back to a fresh build; that's the same cost the old nested loop
+    // paid, so we never regress.
+    const visitAlly = ally => {
+      if (nearbyAllies >= MINOR_PACK_MAX_ALLIES
+        || ally === enemy
         || !ally
         || ally.dead
         || ally.elite
         || ally.miniBoss
         || Number(ally.spawnT || 0) > 0
         || !MINOR_PACK_ENEMY_TYPES.has(ally.type)) {
-        continue;
+        return;
       }
+      // forEachEnemyNearCircle bounds the search by cell, so re-check the exact
+      // circle radius (cells are square and slightly larger than the radius).
       if (Neo.dist(enemy.x, enemy.y, ally.x, ally.y) <= MINOR_PACK_RADIUS) nearbyAllies += 1;
-      if (nearbyAllies >= MINOR_PACK_MAX_ALLIES) break;
+    };
+    if (typeof Neo.forEachEnemyNearCircle === 'function') {
+      Neo.forEachEnemyNearCircle(enemy.x, enemy.y, MINOR_PACK_RADIUS, visitAlly, { excludeEnemy: enemy });
+    } else {
+      for (const ally of Neo.enemies || []) {
+        if (nearbyAllies >= MINOR_PACK_MAX_ALLIES) break;
+        visitAlly(ally);
+      }
     }
 
     const stacks = Math.min(MINOR_PACK_MAX_ALLIES, nearbyAllies);
@@ -104,7 +119,15 @@
     }
   }
 
+  let _coverObstacleCache = null;
+  let _coverObstacleFrame = -1;
   function getCoverObstacles() {
+    // Cover geometry only changes when a wall breaks, which already happens via
+    // gameplay events — not within a single frame. Rebuilding the rect list once
+    // per frame (instead of once per ranged enemy per LOS check) cuts the
+    // allocation + map/forEach work by ~10x with a roomful of shooters.
+    const frame = Number(Neo.frameId || 0);
+    if (_coverObstacleFrame === frame && _coverObstacleCache) return _coverObstacleCache;
     const obstacleRects = Neo.structures.map(structure => ({
       x: structure.x - structure.w / 2,
       y: structure.y - structure.h / 2,
@@ -116,6 +139,8 @@
       if (prop.kind !== 'wall' && prop.kind !== 'secret_wall' && prop.kind !== 'cover_wall') return;
       obstacleRects.push(Neo.getDestructibleRect(prop));
     });
+    _coverObstacleCache = obstacleRects;
+    _coverObstacleFrame = frame;
     return obstacleRects;
   }
 
