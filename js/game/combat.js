@@ -10,6 +10,7 @@
   const KICKY_KICK_BLAST_KNOCKBACK = 400;
   const KICKY_KICK_ROOM_MOVE_CHANCE = 0.1;
   const FORGE_VOUCHER_BOSS_DROP_CHANCE = 0.65;
+  const GOD_ITEM_BOSS_DROP_CHANCE = 0.12;
 
   function distanceSq(ax, ay, bx, by) {
     const dx = ax - bx;
@@ -3437,6 +3438,21 @@
       if (Neo.ITEM_DEFS?.[key]) {
         Neo.pickups.push({ x: enemy.x - 28, y: enemy.y, type: 'item', key });
         Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 18, life: 0.9, text: 'FORGE VOUCHER', c: '#ffcf76' });
+      }
+
+      // Alongside the voucher, a boss has a 12% chance to also drop a god item.
+      if (enemyLootRandom() < GOD_ITEM_BOSS_DROP_CHANCE) {
+        if (!Neo.godItemKeysCache) {
+          Neo.godItemKeysCache = Neo.ITEM_KEYS.filter(k => (
+            Neo.isGodTier?.(Neo.ITEM_DEFS[k]?.rarity) && !Neo.ITEM_DEFS[k]?.voucher
+          ));
+        }
+        const godKeys = Neo.godItemKeysCache;
+        if (godKeys.length) {
+          const godKey = godKeys[Math.floor(enemyLootRandom() * godKeys.length)];
+          Neo.pickups.push({ x: enemy.x + 28, y: enemy.y, type: 'item', key: godKey });
+          Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 36, life: 1.1, text: 'GOD ITEM!', c: '#ffd24a' });
+        }
       }
     }
 

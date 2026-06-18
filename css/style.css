@@ -8287,6 +8287,27 @@ border-bottom: black solid 2px;
   margin-left: 4px;
 }
 
+.anvil-voucher-display {
+  align-self: center;
+  padding: 10px 14px;
+  background: rgba(255, 207, 118, 0.1);
+  border: 1px solid #ffcf76;
+  border-radius: 12px;
+  font-size: calc(14px * var(--font-scale, 1));
+  color: #ffcf76;
+  white-space: nowrap;
+}
+
+.anvil-voucher-display[hidden] {
+  display: none;
+}
+
+.anvil-voucher-display b {
+  font-size: calc(18px * var(--font-scale, 1));
+  color: #ffe08a;
+  margin: 0 4px;
+}
+
 .anvil-tabs {
   border-bottom-color: var(--menu-border);
 }
@@ -8379,6 +8400,29 @@ border-bottom: black solid 2px;
   image-rendering: pixelated;
 }
 
+.anvil-stat-title__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.anvil-stat-dps {
+  font-size: calc(12px * var(--font-scale, 1));
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: none;
+  color: #9fb2c6;
+}
+
+.anvil-stat-dps__cur {
+  color: #f4f7fb;
+}
+
+.anvil-stat-dps__new {
+  color: #7eff9e;
+}
+
 .anvil-stat-row {
   display: flex;
   align-items: center;
@@ -8414,8 +8458,17 @@ border-bottom: black solid 2px;
 .anvil-stat-staged {
   font-size: calc(13px * var(--font-scale, 1));
   color: #7eff9e;
-  min-width: 64px;
+  min-width: 96px;
   text-align: right;
+}
+
+.anvil-stat-staged.is-loss {
+  color: #ff9a7c;
+}
+
+.anvil-stat-delta {
+  font-size: calc(11px * var(--font-scale, 1));
+  opacity: 0.85;
 }
 
 .anvil-stat-cost {

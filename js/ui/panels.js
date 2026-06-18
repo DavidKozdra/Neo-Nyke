@@ -416,8 +416,9 @@ export function bindPanelInput() {
     const setAnvilPayCurrency = (currency) => {
       if (Neo.anvilPayCurrency === currency) return;
       Neo.anvilPayCurrency = currency;
-      // Affordability differs between currencies, so drop any staged steps.
-      Neo.anvilStagedUpgrades = {};
+      // Staged steps are currency-agnostic counts, so keep them — only the cost
+      // readout changes. If the batch is now unaffordable the footer shows it in
+      // red and confirm stays disabled (confirm also hard-guards funds).
       renderAnvilPanel();
     };
     Neo.ui.anvilPayXp?.addEventListener('click', () => setAnvilPayCurrency('xp'));
@@ -1109,6 +1110,20 @@ export function renderAnvilPanel() {
       ]);
     }
 
+    // Forge Voucher budget chip — surfaced up front (not only after staging) so
+    // the player sees free upgrades are available before committing. Counts down
+    // as steps are staged.
+    if (Neo.ui.anvilVoucherChip) {
+      const freeRemaining = Math.max(0, getForgeVoucherFreeSteps() - getAnvilStagedStepCount());
+      if (getForgeVoucherFreeSteps() > 0) {
+        Neo.ui.anvilVoucherChip.hidden = false;
+        if (Neo.ui.anvilVoucherFree) Neo.ui.anvilVoucherFree.textContent = freeRemaining;
+        if (Neo.ui.anvilVoucherPlural) Neo.ui.anvilVoucherPlural.textContent = freeRemaining === 1 ? '' : 's';
+      } else {
+        Neo.ui.anvilVoucherChip.hidden = true;
+      }
+    }
+
     // Tab visibility
     const isWeapons = Neo.activeAnvilTab === 'weapons';
     Neo.ui.anvilWeaponsTab?.classList.toggle('hidden', !isWeapons);
@@ -1163,6 +1178,16 @@ export function renderAnvilItemList(itemType) {
     });
   }
 
+  // DPS = damage / cooldown. Only meaningful when the item has both stats.
+  // Returns null for utility items (dash, warp, etc.) so we hide the readout.
+  function getAnvilDps(itemKey, itemType, staged) {
+    const getter = staged ? getAnvilStagedValue : getAnvilCurrentValue;
+    const dmg = getter(itemKey, 'damage', itemType);
+    const cd = getter(itemKey, 'cooldown', itemType);
+    if (!(dmg > 0) || !(cd > 0)) return null;
+    return dmg / cd;
+  }
+
 export function renderAnvilStatPanel() {
     if (!Neo.anvilSelectedItem) {
       if (Neo.ui.anvilWeaponStats) Neo.ui.anvilWeaponStats.classList.add('hidden');
@@ -1203,8 +1228,18 @@ export function renderAnvilStatPanel() {
       const canIncrease = withinCap && canAfford;
       const canDecrease = stagedCount > 0;
 
+      // Show not just the new value but the magnitude of the change, so the
+      // player can judge impact at a glance. Cooldown decreases are a gain, so
+      // a lower number reads as a positive (green) delta.
+      const lowerIsBetter = step < 0;
+      const rawDelta = staged - cur;
+      const isGain = lowerIsBetter ? rawDelta < 0 : rawDelta > 0;
+      const pct = cur !== 0 ? Math.round(Math.abs(rawDelta / cur) * 100) : 0;
+      const deltaText = statKey === 'critChance'
+        ? `${rawDelta > 0 ? '+' : ''}${Math.round(rawDelta * 100)}%`
+        : `${pct > 0 ? `${isGain ? '+' : '−'}${pct}%` : format(staged)}`;
       const stagedDisplay = staged !== cur
-        ? `<span class="anvil-stat-staged">&rarr; ${format(staged)}</span>`
+        ? `<span class="anvil-stat-staged${isGain ? '' : ' is-loss'}">&rarr; ${format(staged)} <span class="anvil-stat-delta">(${deltaText})</span></span>`
         : '';
       const costDisplay = stepCost > 0
         ? `<span class="anvil-stat-cost">${payGold ? `&#9670;${stepCost}` : `${stepCost} XP`}/step</span>`
@@ -1231,9 +1266,25 @@ export function renderAnvilStatPanel() {
       </div>`;
     });
 
+    // Live DPS readout — the single number that captures the combined impact of
+    // damage + cooldown upgrades. Hidden for utility items that lack both.
+    const curDps = getAnvilDps(itemKey, itemType, false);
+    const stagedDps = getAnvilDps(itemKey, itemType, true);
+    let dpsDisplay = '';
+    if (curDps != null) {
+      const changed = stagedDps != null && Math.abs(stagedDps - curDps) > 0.01;
+      const dpsPct = changed && curDps !== 0 ? Math.round(((stagedDps - curDps) / curDps) * 100) : 0;
+      dpsDisplay = `<div class="anvil-stat-dps">DPS <span class="anvil-stat-dps__cur">${Math.round(curDps)}</span>${
+        changed ? ` &rarr; <span class="anvil-stat-dps__new">${Math.round(stagedDps)}</span> <span class="anvil-stat-delta">(${dpsPct >= 0 ? '+' : ''}${dpsPct}%)</span>` : ''
+      }</div>`;
+    }
+
     statEl.innerHTML = `<div class="anvil-stat-title">
       <canvas class="anvil-stat-title__icon" data-anvil-item-icon="${Neo.escapeHtml(itemKey)}" data-anvil-item-icon-type="${itemType}" width="48" height="48" aria-hidden="true"></canvas>
-      <span style="color:${Neo.getRarityNameColor(def?.rarity || def?.category)}">${Neo.escapeHtml(def?.name || itemKey)}</span>
+      <div class="anvil-stat-title__text">
+        <span style="color:${Neo.getRarityNameColor(def?.rarity || def?.category)}">${Neo.escapeHtml(def?.name || itemKey)}</span>
+        ${dpsDisplay}
+      </div>
     </div>${rows.join('')}`;
     hydrateAnvilItemIcons(statEl);
     statEl.querySelectorAll('[data-inv-ui-icon]').forEach(canvas => {
