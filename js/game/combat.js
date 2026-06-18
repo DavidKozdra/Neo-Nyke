@@ -693,12 +693,20 @@
     const attackSpeed = Neo.getAttackSpeedValue();
     const move = getEquippedMove('laser');
     const rechargeTime = Neo.getLaserCooldownDuration(move, attackSpeed);
+    // Spend the laser charge and, on a successful fire, play the laser blast
+    // one-shot. Gating on the spend result means held/sustained beams only
+    // trigger the sound once at cast time, not every damage tick.
+    const spendLaserCharge = (opts) => {
+      if (!Neo.spendSkillCharge('laser', rechargeTime, opts)) return false;
+      Neo.playSfx?.('lazer_blast');
+      return true;
+    };
     if (move === 'turtle_wave') {
       if (Neo.player.hp <= 1) {
         Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.52, text: 'NEED HP', c: '#ff8b98' });
         return;
       }
-      if (!Neo.spendSkillCharge('laser', rechargeTime, { deferTimer: true })) return;
+      if (!spendLaserCharge({ deferTimer: true })) return;
       Neo.laserActive = true;
       Neo.laserMode = 'turtle_wave';
       Neo.laserTime = Neo.getLaserCastDuration(move);
@@ -708,17 +716,17 @@
       return;
     }
     if (move === 'power_disks') {
-      if (!Neo.spendSkillCharge('laser', rechargeTime)) return;
+      if (!spendLaserCharge()) return;
       spawnPlayerDiskBurst();
       return;
     }
     if (move === 'blade_justice') {
-      if (!Neo.spendSkillCharge('laser', rechargeTime)) return;
+      if (!spendLaserCharge()) return;
       castBladeOfJustice();
       return;
     }
     if (move === 'love_beam') {
-      if (!Neo.spendSkillCharge('laser', rechargeTime, { deferTimer: true })) return;
+      if (!spendLaserCharge({ deferTimer: true })) return;
       Neo.laserActive = true;
       Neo.laserMode = 'beam';
       Neo.loveBeamCasting = true;
@@ -729,12 +737,12 @@
       return;
     }
     if (move === 'lightning_columns') {
-      if (!Neo.spendSkillCharge('laser', rechargeTime)) return;
+      if (!spendLaserCharge()) return;
       castLightningColumns();
       return;
     }
     if (move === 'god_sweep') {
-      if (!Neo.spendSkillCharge('laser', rechargeTime, { deferTimer: true })) return;
+      if (!spendLaserCharge({ deferTimer: true })) return;
       Neo.laserActive = true;
       Neo.laserMode = 'god_sweep';
       Neo.laserTime = Neo.getLaserCastDuration(move);
@@ -745,12 +753,12 @@
       return;
     }
     if (move === 'nail_shot') {
-      if (!Neo.spendSkillCharge('laser', rechargeTime)) return;
+      if (!spendLaserCharge()) return;
       castNailShot();
       return;
     }
     if (move === 'thorn_blood_beams') {
-      if (!Neo.spendSkillCharge('laser', rechargeTime, { deferTimer: true })) return;
+      if (!spendLaserCharge({ deferTimer: true })) return;
       Neo.laserActive = true;
       Neo.laserMode = 'thorn_blood_beams';
       Neo.laserTime = Neo.getLaserCastDuration(move);
@@ -759,7 +767,7 @@
       Neo.laserAngle = Neo.angleToMouse();
       return;
     }
-    if (!Neo.spendSkillCharge('laser', rechargeTime, { deferTimer: true })) return;
+    if (!spendLaserCharge({ deferTimer: true })) return;
     Neo.laserActive = true;
     Neo.laserMode = 'beam';
     Neo.laserTime = Neo.getLaserCastDuration(move);
@@ -2556,6 +2564,8 @@
         spawnBleedSpray(enemy, 1, isCrit ? 1.2 : 0.72);
       }
       Neo.playSfx?.('enemy_hit');
+      // 57% chance for a random enemy hurt grunt on top of the hit thunk.
+      if (Neo.nextRandom('encounter') < 0.57) Neo.playSfx?.('enemy_hurt');
     }
     // Game feel: directional trauma scaled to impact (vs target max HP).
     // Chip damage gets nothing; crits and big slams get a kick away from the blow.

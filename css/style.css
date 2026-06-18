@@ -11632,6 +11632,29 @@ border-bottom: black solid 2px;
 .inv-rivals .inv-rival {
   border-left: 3px solid var(--rival-color, var(--menu-border-strong));
 }
+.inv-rival--has-portrait {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+.inv-rival__portrait {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 8px;
+  background: rgba(8, 14, 26, 0.55);
+  border: 1px solid var(--rival-color, var(--menu-border-strong));
+  flex: none;
+}
+.inv-rival__portrait canvas {
+  width: 48px;
+  height: 48px;
+  image-rendering: pixelated;
+}
+.inv-rival__body { min-width: 0; }
 .inv-rival__rows {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

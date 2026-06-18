@@ -78,6 +78,26 @@
       ],
     },
     { id: 'dash', path: 'assets/sounds/sfx_dash 1.mp3', volume: 0.1, priority: priority.LOW, mixDb: 3, lowCutHz: 70 },
+    { id: 'bomb_explosion', path: 'assets/sounds/sfx_bomb explosion.wav', volume: 0.7, priority: priority.CRITICAL, mixDb: 3, duckMusicGain: 0.8, lowCutHz: 35 },
+    { id: 'lazer_blast', path: 'assets/sounds/sfx_lazer_blast.mp3', volume: 0.5, priority: priority.HIGH, mixDb: 3, lowCutHz: 90 },
+    {
+      // Enemy hurt grunts — a random variant plays when an enemy takes damage.
+      id: 'enemy_hurt',
+      volume: 0.6,
+      priority: priority.HIGH,
+      mixDb: 3,
+      paths: [
+        'assets/sounds/sfx_enemy hit_ uuearh_long.wav',
+        'assets/sounds/sfx_enemy hit_ uuearh.wav',
+        'assets/sounds/sfx_enemy hit_aahh_boss.wav',
+        'assets/sounds/sfx_enemy hit_arrgh.wav',
+        'assets/sounds/sfx_enemy hit_ooah_deep.wav',
+        'assets/sounds/sfx_enemy hit_uiiiiee_short.wav',
+        'assets/sounds/sfx_enemy hit_uuaa_deep.wav',
+        'assets/sounds/sfx_enemy hit_uuua_deep.wav',
+        'assets/sounds/sfx_enemy hit_wueea.wav',
+      ],
+    },
     {
       id: 'victory',
       volume: 0.7,

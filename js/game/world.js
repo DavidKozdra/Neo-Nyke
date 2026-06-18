@@ -1747,6 +1747,7 @@
             damagePlayer(damage, angle, 240, hazard.source || 'bomb_aoe');
           }
           blastRadius(hazard.x, hazard.y, hazard.blastRadius || 150, damage, '#ff7a66');
+          Neo.playSfx?.('bomb_explosion');
           hazard.ttl = 0;
         }
       }
@@ -1796,6 +1797,7 @@
               damagePlayer(damage, angle, 220, 'explosive_trap');
             }
             blastRadius(hazard.x, hazard.y, hazard.blastRadius || 88, damage, '#ff9a4d');
+            Neo.playSfx?.('bomb_explosion');
             hazard.ttl = 0;
           }
         }

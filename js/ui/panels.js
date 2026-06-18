@@ -2473,50 +2473,67 @@ export function renderInventoryPanel() {
             : rival.vendetta ? 'Hunting you with god gear'
             : Number(rival.aggroTimer || 0) > 0 ? 'Hunting you'
             : 'Roaming the floor';
-          return `<div class="inv-card inv-rival" style="--rival-color:${rival.color}">
-            <div class="inv-card__title-row">
-              <span class="inv-card__eyebrow" style="color:${rival.color}">${rival.name}</span>
-              <span class="inv-rival__status ${relationClass(rival)}">${relationLabel(rival)}</span>
+          return `<div class="inv-card inv-rival inv-rival--has-portrait" style="--rival-color:${rival.color}">
+            <span class="inv-rival__portrait"><canvas data-rival-sprite="${Neo.escapeHtml(rival.characterKey || '')}" width="64" height="64" aria-hidden="true"></canvas></span>
+            <div class="inv-rival__body">
+              <div class="inv-card__title-row">
+                <span class="inv-card__eyebrow" style="color:${rival.color}">${rival.name}</span>
+                <span class="inv-rival__status ${relationClass(rival)}">${relationLabel(rival)}</span>
+              </div>
+              <div class="inv-rival__rows">
+                <span>LV ${rival.level || 1} — ${Math.max(0, Math.round(rival.hp))}/${Math.round(rival.max)} HP</span>
+                <span>LIVES <b class="inv-rival__hearts">${heartRow(rival)}</b></span>
+                <span>PACK ×${Array.isArray(rival.loot) ? rival.loot.length : 0} ITEMS</span>
+                <span>RELATIONSHIP ${Number(rival.relationship || 0).toFixed(1)}</span>
+              </div>
+              <p>${activity}.</p>
+              ${signatureLine(rival)}
             </div>
-            <div class="inv-rival__rows">
-              <span>LV ${rival.level || 1} — ${Math.max(0, Math.round(rival.hp))}/${Math.round(rival.max)} HP</span>
-              <span>LIVES <b class="inv-rival__hearts">${heartRow(rival)}</b></span>
-              <span>PACK ×${Array.isArray(rival.loot) ? rival.loot.length : 0} ITEMS</span>
-              <span>RELATIONSHIP ${Number(rival.relationship || 0).toFixed(1)}</span>
-            </div>
-            <p>${activity}.</p>
-            ${signatureLine(rival)}
           </div>`;
         });
         const returnCards = (Neo.pendingRivalReturns || []).filter(entry => entry?.rival).map(entry => {
           const rival = entry.rival;
-          return `<div class="inv-card inv-rival inv-rival--returning" style="--rival-color:${rival.color || '#c9aaff'}">
-            <div class="inv-card__title-row">
-              <span class="inv-card__eyebrow" style="color:${rival.color || '#c9aaff'}">${rival.name || 'Rival'}</span>
-              <span class="inv-rival__status inv-rival__status--return">RETURNS FLOOR ${entry.returnFloor}</span>
+          return `<div class="inv-card inv-rival inv-rival--returning inv-rival--has-portrait" style="--rival-color:${rival.color || '#c9aaff'}">
+            <span class="inv-rival__portrait"><canvas data-rival-sprite="${Neo.escapeHtml(rival.characterKey || '')}" width="64" height="64" aria-hidden="true"></canvas></span>
+            <div class="inv-rival__body">
+              <div class="inv-card__title-row">
+                <span class="inv-card__eyebrow" style="color:${rival.color || '#c9aaff'}">${rival.name || 'Rival'}</span>
+                <span class="inv-rival__status inv-rival__status--return">RETURNS FLOOR ${entry.returnFloor}</span>
+              </div>
+              <div class="inv-rival__rows">
+                <span>LV ${rival.level || 1}</span>
+                <span>LIVES <b class="inv-rival__hearts">${heartRow(rival)}</b></span>
+                <span>PACK ×${Array.isArray(rival.loot) ? rival.loot.length : 0} ITEMS</span>
+                <span>RELATIONSHIP ${Number(rival.relationship || 0).toFixed(1)}</span>
+              </div>
+              <p>${Number(rival.relationship || 0) < 0 ? 'Holds a grudge — will return armed for revenge.' : 'Licking their wounds on a floor below.'}</p>
+              ${signatureLine(rival)}
             </div>
-            <div class="inv-rival__rows">
-              <span>LV ${rival.level || 1}</span>
-              <span>LIVES <b class="inv-rival__hearts">${heartRow(rival)}</b></span>
-              <span>PACK ×${Array.isArray(rival.loot) ? rival.loot.length : 0} ITEMS</span>
-              <span>RELATIONSHIP ${Number(rival.relationship || 0).toFixed(1)}</span>
-            </div>
-            <p>${Number(rival.relationship || 0) < 0 ? 'Holds a grudge — will return armed for revenge.' : 'Licking their wounds on a floor below.'}</p>
-            ${signatureLine(rival)}
           </div>`;
         });
         const slainCards = (Neo.slainRivalKeys || []).map(key => {
           const def = Neo.RIVAL_DEFS?.[key];
-          return `<div class="inv-card inv-rival inv-rival--slain">
-            <div class="inv-card__title-row">
-              <span class="inv-card__eyebrow">${def?.name || key}</span>
-              <span class="inv-rival__status">SLAIN</span>
+          return `<div class="inv-card inv-rival inv-rival--slain inv-rival--has-portrait">
+            <span class="inv-rival__portrait"><canvas data-rival-sprite="${Neo.escapeHtml(key || '')}" width="64" height="64" aria-hidden="true"></canvas></span>
+            <div class="inv-rival__body">
+              <div class="inv-card__title-row">
+                <span class="inv-card__eyebrow">${def?.name || key}</span>
+                <span class="inv-rival__status">SLAIN</span>
+              </div>
+              <p>All lives taken. They will not come after you again.</p>
             </div>
-            <p>All lives taken. They will not come after you again.</p>
           </div>`;
         });
         container.innerHTML = [...liveCards, ...returnCards, ...slainCards].join('')
           || '<div class="inv-card"><span class="inv-card__eyebrow">All clear</span><h4>No rivals detected</h4><p>Rival adventurers occasionally enter the dungeon to compete for loot. Their movements show up here.</p></div>';
+        // Draw each rival's character sprite into its portrait, matching the roster.
+        container.querySelectorAll('[data-rival-sprite]').forEach(canvas => {
+          const key = canvas.dataset.rivalSprite;
+          if (!key) return;
+          Neo.drawSpriteToCanvas(canvas, Neo.getCharacterSpriteKey?.(key) || key, 56, {
+            alpha: canvas.closest('.inv-rival--slain') ? 0.55 : 1,
+          });
+        });
       }
     } else if (Neo.activeInvTab === 'equipped') {
       const equippedMoveKeys = new Set(Object.values(_invP.equippedMoves || {}).filter(Boolean));
