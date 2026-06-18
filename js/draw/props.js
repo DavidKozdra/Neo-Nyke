@@ -714,11 +714,9 @@
         Neo.drawCoverWall(prop);
       } else if (prop.kind === 'secret_wall') {
         if (prop.disguised) {
-          // Disguised secret walls masquerade as ordinary wall until walked into.
-          Neo.drawEnvironmentTile('wall_block', -26, -26, 52, 52);
-          Neo.ctx.strokeStyle = theme.wallEdge;
-          Neo.ctx.lineWidth = 1.5;
-          Neo.ctx.strokeRect(-25, -25, 50, 50);
+          // Disguised secret walls are invisible until walked into — the spot
+          // reads as ordinary floor with nothing out of the ordinary, so draw
+          // nothing here. (Crate-style secret walls below still show.)
         } else {
           Neo.drawCoverWall(prop);
         }

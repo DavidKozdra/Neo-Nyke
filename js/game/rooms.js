@@ -840,9 +840,10 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
       w: { x: 48, y: Neo.ROOM_H / 2 },
     }[direction];
     if (!position) return null;
-    // Most secret walls read as a crate (drawCoverWall) the player breaks open.
-    // ~20% are "disguised": they look like ordinary wall and aren't solid — the
-    // passage just opens when the player walks into the spot (see updateWorldProps).
+    // ~70% of secret walls are "disguised": invisible and not solid, so the
+    // spot reads as ordinary floor — the passage just opens when the player
+    // walks into it (see updateWorldProps). The other ~30% read as a crate
+    // (drawCoverWall) the player breaks open.
     const disguiseRoll = room
       ? Neo.createRoomRandom(room, `secret-wall:disguise:${direction}`)()
       : Neo.nextRandom('world');
