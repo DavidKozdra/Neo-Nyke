@@ -807,7 +807,7 @@
       }
     }
     const entry = finalizeRun('win');
-    window.achievementEvents?.emit('run:won', { elapsedSeconds: Neo.gameElapsedTime, playerHp: Math.round(Neo.player?.hp || 0) });
+    window.achievementEvents?.emit('run:won', { elapsedSeconds: Neo.gameElapsedTime, playerHp: Math.round(Neo.player?.hp || 0), gameMode: Neo.gameMode });
     Neo.setGameState('win');
     Neo.uiController.setWinScreen(entry);
   }

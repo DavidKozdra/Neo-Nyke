@@ -1011,7 +1011,11 @@
       type = sandbox.allowedEnemies[0] || 'hunter';
     }
     const eliteAllowed = !!elite && (options.forceElite || canSpawnEliteEnemies());
+    // Stable per-enemy identity, used by status tracking / achievements to tell
+    // "4 statuses on one enemy" apart from "1 status on 4 enemies".
+    Neo.enemyIdSeq = Math.max(0, Number(Neo.enemyIdSeq || 0)) + 1;
     const base = {
+      id: Neo.enemyIdSeq,
       type,
       x,
       y,
@@ -1551,7 +1555,9 @@
     const safeSpawn = findSafeEnemySpawnPoint(Neo.ROOM_W / 2, Neo.ROOM_H / 2 - 150, 18);
     if (!safeSpawn) return null;
     const stats = getMirrorChampionStats();
+    Neo.enemyIdSeq = Math.max(0, Number(Neo.enemyIdSeq || 0)) + 1;
     const mirror = {
+      id: Neo.enemyIdSeq,
       type: 'mirror_knight',
       x: safeSpawn.x,
       y: safeSpawn.y,

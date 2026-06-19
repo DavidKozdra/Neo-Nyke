@@ -2526,7 +2526,9 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
     if (!Neo.currentRoom) return;
     if (Neo.enemies.some(e => e.type === 'rival' && e.rivalData === rival)) return;
     const sp = Neo.findSafeEnemySpawnPoint(Neo.ROOM_W / 2, Neo.ROOM_H / 2, rival.r) || { x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 };
+    Neo.enemyIdSeq = Math.max(0, Number(Neo.enemyIdSeq || 0)) + 1;
     const entry = {
+      id: Neo.enemyIdSeq,
       type: 'rival',
       rivalData: rival,
       rivalKey: rival.characterKey,

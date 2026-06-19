@@ -273,8 +273,11 @@ const achievementManager = (() => {
     if (count >= 100) await unlock('rival_rumble');
   });
 
-  achievementEvents.on('run:won', async ({ elapsedSeconds, playerHp }) => {
-    if (elapsedSeconds <= 300) await unlock('gotta_meet_god');
+  achievementEvents.on('run:won', async ({ elapsedSeconds, playerHp, gameMode }) => {
+    // "Beat the game in under 5 minutes" means the full campaign clear, not the
+    // short Boss Rush mode (which is trivially sub-5-minute). treasure_hunt and
+    // competitive still require reaching floor 10, so they stay eligible.
+    if (gameMode !== 'boss_rush' && elapsedSeconds <= 300) await unlock('gotta_meet_god');
     if (runDamageTaken === 0) await unlock('unkillable');
     if (playerHp <= 1) await unlock('glass_cannon');
   });
