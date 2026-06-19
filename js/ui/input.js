@@ -412,7 +412,7 @@ export const ITEM_DEFS = {
       key: 'tooth_of_thorn',
       name: 'Tooth of Thorn',
       shortName: 'Drain Ramp',
-      description: 'All characters: drain chance 2.8% per stack, plus an extra 2% x stacks per stack. Successful procs steal 1 HP on any hit.',
+      description: 'All characters: drain chance 2.8% per stack (5% on melee), plus an extra 2% x stacks per stack. Successful procs steal 1 HP on any hit. Higher-level foes resist drain: +15% per 5 levels from level 5.',
       rarity: 'knight',
       color: '#ffd7e2',
       accent: '#ff6e8b',
@@ -488,11 +488,11 @@ export const ITEM_DEFS = {
       key: 'crit_charm',
       name: 'Crit Charm',
       shortName: 'Hit Crit',
-      description: 'Hits grant +4% crit chance per stack for 2.2s.',
+      description: 'Every few kills, surge +4% crit chance per stack for 4s. (3/5/7 kills on easy/normal/hard).',
       rarity: 'knight',
       color: '#ffffff',
       category: 'knight',
-      tags: ['crit'],
+      tags: ['crit', 'charge'],
     },
     copper_penny: {
       key: 'copper_penny',
@@ -1212,6 +1212,11 @@ export const SHOP_RARITY_PRICE_MULTIPLIERS = {
     red: 4.75,
     blue: 4.75,
   };
+// A shop has a 50% chance to feature a guaranteed god-tier item. It is a
+// deliberate splurge: priced at the normal god multiplier (4.75x) plus this
+// premium on top, so it is a meaningful gold sink rather than a cheap god roll.
+export const SHOP_FEATURED_GOD_PRICE_PREMIUM = 1.6;
+export const SHOP_FEATURED_GOD_CHANCE = 0.5;
 export const ITEM_KEYS = Object.keys(ITEM_DEFS);
 // Legacy alias retained for call sites that reference SCROLL_OF_CONTROL_KEYS; the
 // canonical list is SCROLL_KEYS (derived from SCROLL_DEFS).
@@ -1873,7 +1878,7 @@ export const MOVE_BASE_STATS = {
     narwal_fight:     { damage: 36,  cooldown: 0.55, range: 126 },
     blood_beam:       { damage: 14,  cooldown: 3.00, duration: 1.2, critChance: 0 },
     love_beam:        { damage: 16,  cooldown: 3.40, duration: 1.7, critChance: 0 },
-    turtle_wave:      { damage: 55,  cooldown: 3.00, duration: 1.35 },
+    turtle_wave:      { damage: 55,  cooldown: 6.00, duration: 1.35 },
     power_disks:      { damage: 22,  cooldown: 1.90, range: 240 },
     blade_justice:    { damage: 60,  cooldown: 3.80, range: 80  },
     lightning_columns:{ damage: 30,  cooldown: 4.80, range: 180 },
@@ -1912,6 +1917,8 @@ export const MOVE_BASE_STATS = {
   Neo.RARITY_DISPLAY_NAMES = RARITY_DISPLAY_NAMES;
   Neo.getRarityDisplayName = getRarityDisplayName;
   Neo.SHOP_RARITY_PRICE_MULTIPLIERS = SHOP_RARITY_PRICE_MULTIPLIERS;
+  Neo.SHOP_FEATURED_GOD_PRICE_PREMIUM = SHOP_FEATURED_GOD_PRICE_PREMIUM;
+  Neo.SHOP_FEATURED_GOD_CHANCE = SHOP_FEATURED_GOD_CHANCE;
   Neo.MOVE_DEFS = MOVE_DEFS;
   Neo.SHOP_MOVE_POOL = SHOP_MOVE_POOL;
   Neo.WEAPON_DEFS = WEAPON_DEFS;

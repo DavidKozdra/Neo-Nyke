@@ -1588,6 +1588,7 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
     const extraOffers = Math.max(0, Math.floor(Number(Neo.getItemStats?.()?.shopExtraItemOffers || 0)));
     const targetItemOffers = baseItemOffers + extraOffers;
     if (itemOffers.length >= targetItemOffers) {
+      ensureFeaturedGodOffer(room);
       ensureShopScrollOffer(room);
       ensureShopTradeOffer(room);
       return;
@@ -1629,8 +1630,47 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
       });
       created += 1;
     }
+    ensureFeaturedGodOffer(room);
     ensureShopScrollOffer(room);
     ensureShopTradeOffer(room);
+  }
+
+  // 50% of shops feature a guaranteed god-tier (yellow) item. It replaces one
+  // standard item slot (so it never inflates the offer count) and carries a
+  // premium price on top of the god rarity multiplier, making it a deliberate,
+  // balanced splurge rather than a cheap god roll.
+  function ensureFeaturedGodOffer(room) {
+    if (!room || room.type !== 'shop') return;
+    room.shopOffers = Array.isArray(room.shopOffers) ? room.shopOffers : [];
+    const itemOffers = room.shopOffers.filter(offer => offer?.type === 'item' && !offer.scrollOffer);
+    if (!itemOffers.length) return;
+    const isGod = (offer) => {
+      const rarity = Neo.itemRegistry?.get?.(offer.key)?.rarity || Neo.ITEM_DEFS?.[offer.key]?.rarity;
+      return Neo.isGodTier?.(rarity);
+    };
+    // A god item already rolled in naturally — nothing to guarantee.
+    if (itemOffers.some(isGod)) return;
+    const featureRandom = Neo.createRoomRandom(room, 'shop:featured-god');
+    if (featureRandom() >= (Neo.SHOP_FEATURED_GOD_CHANCE ?? 0.5)) return;
+
+    const occupiedKeys = new Set(room.shopOffers.filter(o => o?.type === 'item').map(o => o.key));
+    let godKey = '';
+    for (let attempts = 0; attempts < 12; attempts += 1) {
+      const candidate = Neo.rollItemDrop({ rarities: ['god'], random: featureRandom });
+      if (candidate && !occupiedKeys.has(candidate)) { godKey = candidate; break; }
+    }
+    if (!godKey) godKey = Neo.rollItemDrop({ rarities: ['god'], random: featureRandom });
+    if (!godKey) return;
+
+    // Convert the last standard (non-scroll) item slot into the featured god item.
+    const target = [...room.shopOffers].reverse().find(offer => offer?.type === 'item' && !offer.scrollOffer && !offer.bought);
+    if (!target) return;
+    const rarity = Neo.itemRegistry?.get?.(godKey)?.rarity || Neo.ITEM_DEFS?.[godKey]?.rarity || 'god';
+    const floorValue = Neo.getShopProgressionDepth?.() ?? Neo.floor;
+    const baseCost = Neo.getShopItemCost(0, floorValue, Neo.selectedDifficulty, rarity);
+    target.key = godKey;
+    target.cost = Math.round(baseCost * (Neo.SHOP_FEATURED_GOD_PRICE_PREMIUM ?? 1.6));
+    target.featuredGod = true;
   }
 
   function rollScrollOfControl(random = Neo.rng) {

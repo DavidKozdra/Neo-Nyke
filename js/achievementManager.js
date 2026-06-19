@@ -274,10 +274,13 @@ const achievementManager = (() => {
   });
 
   achievementEvents.on('run:won', async ({ elapsedSeconds, playerHp, gameMode }) => {
-    // "Beat the game in under 5 minutes" means the full campaign clear, not the
-    // short Boss Rush mode (which is trivially sub-5-minute). treasure_hunt and
-    // competitive still require reaching floor 10, so they stay eligible.
-    if (gameMode !== 'boss_rush' && elapsedSeconds <= 300) await unlock('gotta_meet_god');
+    // "Beat the game in under 5 minutes" means a genuine campaign speedrun, so
+    // gate it to the full-clear campaign modes via an allowlist. Blocklisting
+    // boss_rush alone let endless slip through (no floor-10 finish, dies-only),
+    // and treasure_hunt's seek/escape detour makes its sub-5-min clear more an
+    // artifact of the mode than a real speedrun.
+    const SPEEDRUN_MODES = new Set(['normal', 'competitive']);
+    if (SPEEDRUN_MODES.has(gameMode) && elapsedSeconds <= 300) await unlock('gotta_meet_god');
     if (runDamageTaken === 0) await unlock('unkillable');
     if (playerHp <= 1) await unlock('glass_cannon');
   });

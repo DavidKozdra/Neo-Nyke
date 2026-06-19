@@ -711,6 +711,7 @@ export function resumeGame() {
       chronoSpringReady: false,
       chronoSpringBuffTime: 0,
       critCharmBuffTime: 0,
+      critCharmChargeKills: 0,
       escapeChargeKills: 0,
       escapeReady: true,
       robotArmChargeKills: 0,

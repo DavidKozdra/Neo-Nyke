@@ -50,11 +50,44 @@ const DEFAULT_LEVEL_MILESTONES = {
   28: { stat: { maxHp: 30, attackPower: 5, attackSpeed: 0.04 }, moveSpeed: 0.04,    label: 'MAJOR STAT SURGE' },
 };
 
+// Per-character milestone identity. Only the *charge* milestones (7 = signature
+// mobility/burst, 21 = signature laser) are redirected at each character's iconic
+// move so the banner reads as "their" perk; the stat surges at 14/28 stay the
+// generic defaults so the power backbone is identical for everyone.
+//
+// Level-7 charges target the move that defines each hero's fantasy (the dash slot
+// for evasion/speed heroes; gelleh keeps Zip Lightning). Level-21 charges use the
+// { slot, moveKey } form so the laser charge only lands when that signature laser
+// is actually equipped — a character running an alt-kit laser doesn't get it.
 const CHARACTER_LEVEL_MILESTONES = {
+  // Princess: the "untouchable" evasion fantasy — Flying (Unhittable) gains a
+  // charge, then her Petal/Love Beam at 21.
+  princess: {
+    7:  { moveCharge: { slot: 'dash', moveKey: 'flying_unhitable' }, stat: { maxHp: 10, attackPower: 2 }, label: 'FLYING +1 CHARGE' },
+    21: { moveCharge: { slot: 'laser', moveKey: 'love_beam' },       stat: { maxHp: 14, attackPower: 3 }, label: 'PETAL BEAM +1 CHARGE' },
+  },
+  // Thorn Knight's mobility (dash slot) gains an explicit +1 charge at level 7;
+  // his bleed laser (Blood Beam) gains a charge at 21.
+  thorn_knight: {
+    7:  { moveCharge: 'dash',                                       stat: { maxHp: 10, attackPower: 2 }, label: 'DASH +1 CHARGE' },
+    21: { moveCharge: { slot: 'laser', moveKey: 'blood_beam' },     stat: { maxHp: 14, attackPower: 3 }, label: 'BLOOD BEAM +1 CHARGE' },
+  },
+  // Metao the wizard: Warp blink at 7, his wide-AoE Power Disks laser at 21.
+  metao: {
+    7:  { moveCharge: { slot: 'dash', moveKey: 'warp' },            stat: { maxHp: 10, attackPower: 2 }, label: 'WARP +1 CHARGE' },
+    21: { moveCharge: { slot: 'laser', moveKey: 'power_disks' },    stat: { maxHp: 14, attackPower: 3 }, label: 'POWER DISKS +1 CHARGE' },
+  },
   // Preserves the original Gelleh mastery: Zip Lightning gains a charge — now on
-  // the unified 7-level cadence instead of the old hardcoded level-5 check.
+  // the unified 7-level cadence instead of the old hardcoded level-5 check. His
+  // Blade Justice laser gains a charge at 21.
   gelleh: {
-    7: { moveCharge: { slot: 'dash', moveKey: 'zip_lightning' }, stat: { maxHp: 10, attackPower: 2 }, label: 'ZIP LIGHTNING +1 CHARGE' },
+    7:  { moveCharge: { slot: 'dash', moveKey: 'zip_lightning' },   stat: { maxHp: 10, attackPower: 2 }, label: 'ZIP LIGHTNING +1 CHARGE' },
+    21: { moveCharge: { slot: 'laser', moveKey: 'blade_justice' },  stat: { maxHp: 14, attackPower: 3 }, label: 'BLADE JUSTICE +1 CHARGE' },
+  },
+  // Mooggy the speedster: Zoomies dash at 7, Nail Shot laser at 21.
+  mooggy: {
+    7:  { moveCharge: { slot: 'dash', moveKey: 'mooggy_zoomies' },  stat: { maxHp: 10, attackPower: 2 }, label: 'ZOOMIES +1 CHARGE' },
+    21: { moveCharge: { slot: 'laser', moveKey: 'nail_shot' },      stat: { maxHp: 14, attackPower: 3 }, label: 'NAIL SHOT +1 CHARGE' },
   },
 };
 
@@ -329,6 +362,7 @@ export function migratePlayerData(source) {
     playerData.chronoSpringReady = !!playerData.chronoSpringReady;
     playerData.chronoSpringBuffTime = Number(playerData.chronoSpringBuffTime || 0);
     playerData.critCharmBuffTime = Number(playerData.critCharmBuffTime || 0);
+    playerData.critCharmChargeKills = Number(playerData.critCharmChargeKills || 0);
     playerData.escapeChargeKills = Number(playerData.escapeChargeKills || 0);
     playerData.escapeReady = playerData.escapeReady !== false;
     playerData.robotArmChargeKills = Number(playerData.robotArmChargeKills || 0);
@@ -552,9 +586,22 @@ export function getChronoSpringAttackSpeedBonus() {
     return getItemCount('chrono_spring') * 0.16;
   }
 
-export function grantCritCharmBuff() {
+// Crit Charm is a charge item: kills build it up, and on reaching the
+// difficulty-scaled threshold it fires a timed crit burst. Easy 3 / medium 5 /
+// hard-tier (hard, impossible, god) 7. Custom falls back to the medium value.
+export const CRIT_CHARM_BURST_TIME = 4;
+export function getCritCharmKillRequirement() {
+    const base = Neo.selectedDifficulty === 'easy'
+      ? 3
+      : Neo.HARD_DIFFICULTIES?.has(Neo.selectedDifficulty)
+        ? 7
+        : 5;
+    return getChargeRequirement(base);
+  }
+
+export function grantCritCharmBurst() {
     if (!Neo.player || getItemCount('crit_charm') <= 0) return;
-    Neo.player.critCharmBuffTime = Math.max(Number(Neo.player.critCharmBuffTime || 0), 2.2);
+    Neo.player.critCharmBuffTime = Math.max(Number(Neo.player.critCharmBuffTime || 0), CRIT_CHARM_BURST_TIME);
   }
 
 export function triggerKeenEyeBuff() {
@@ -697,8 +744,11 @@ export function getItemStats() {
       weaponCritChance: weaponCritBonus * rivalCombatCurse,
       displayedCritChance: (critChance + weaponCritBonus * rivalCombatCurse),
       // Tooth of Thorn ramps: 2.8% per stack plus an extra 2% × stacks per stack,
-      // so investment compounds (mirrors Enemy Magnet's homing ramp).
+      // so investment compounds (mirrors Enemy Magnet's homing ramp). Melee hits
+      // get a higher linear term (5% per stack) since they land far less often than
+      // a held beam — see meleeDrainChance, picked by hitEnemy when options.melee.
       drainChance: toothOfThorn * 0.028 + toothOfThorn * toothOfThorn * 0.02,
+      meleeDrainChance: toothOfThorn * 0.05 + toothOfThorn * toothOfThorn * 0.02,
       bleedResistance: Neo.clamp(toughBandaid * 0.1, 0, 0.8),
       // Always-on base fire-damage reduction: the player takes ~50% less fire
       // DoT. Applied in the player fire tick (tickPlayerStatus 'fire').
@@ -845,7 +895,7 @@ export function applyPlayerHealing(amount, options = {}) {
         const pulseDamage = Math.max(2, Math.min(18, (gained + overflow) * 0.45));
         Neo.forEachEnemyNearCircle?.(Neo.player.x, Neo.player.y, radius + 80, enemy => {
           if (Neo.dist(Neo.player.x, Neo.player.y, enemy.x, enemy.y) > radius + enemy.r) return;
-          Neo.hitEnemy?.(enemy, pulseDamage, Neo.angleBetween(Neo.player, enemy), 55, '#dfffea', { rawDamage: true, noCharmBuff: true });
+          Neo.hitEnemy?.(enemy, pulseDamage, Neo.angleBetween(Neo.player, enemy), 55, '#dfffea', { rawDamage: true });
         });
         Neo.spawnParticle?.({ x: Neo.player.x, y: Neo.player.y, life: 0.25, ring: radius, c: '#dfffea' });
       }
@@ -1991,6 +2041,15 @@ export function consumeCharge(chargeType) {
       }
     }
 
+    if (getItemCount('crit_charm') > 0) {
+      Neo.player.critCharmChargeKills += chargeSteps;
+      if (Neo.player.critCharmChargeKills >= getCritCharmKillRequirement()) {
+        Neo.player.critCharmChargeKills = 0;
+        grantCritCharmBurst();
+        Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 28, life: 0.7, text: 'CRIT SURGE', c: '#ffd15a' });
+      }
+    }
+
     if (getItemCount('chrono_spring') > 0 && !Neo.player.chronoSpringReady) {
       Neo.player.chronoSpringChargeKills += chargeSteps;
       if (Neo.player.chronoSpringChargeKills >= getChargeRequirement(7)) {
@@ -2087,7 +2146,8 @@ export function refreshFloorChargeStates() {
   Neo.getChargeRequirement = getChargeRequirement;
   Neo.getKeenEyeCritBonus = getKeenEyeCritBonus;
   Neo.getChronoSpringAttackSpeedBonus = getChronoSpringAttackSpeedBonus;
-  Neo.grantCritCharmBuff = grantCritCharmBuff;
+  Neo.grantCritCharmBurst = grantCritCharmBurst;
+  Neo.getCritCharmKillRequirement = getCritCharmKillRequirement;
   Neo.triggerKeenEyeBuff = triggerKeenEyeBuff;
   Neo.triggerChronoSpringBuff = triggerChronoSpringBuff;
   // Ricocete bounce roll: 1 guaranteed bounce if any stack is owned, then a 50%

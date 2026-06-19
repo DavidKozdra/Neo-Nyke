@@ -568,7 +568,7 @@
       const targetAngle = Neo.angleBetween(Neo.player, enemy);
       const difference = angleDifferenceAbs(targetAngle, angle);
       if (difference > Neo.ATTACKS.melee.arc) return;
-      hitEnemy(enemy, damage, angle, meleeKnockback, '#0ff');
+      hitEnemy(enemy, damage, angle, meleeKnockback, '#0ff', { melee: true });
       if (slashBleedChance > 0 && Neo.rng() < slashBleedChance) applyBleed(enemy, 1, 5);
       if (itemStats.bleedChance > 0 && Neo.rng() < itemStats.bleedChance) applyBleed(enemy, 1, 5);
     });
@@ -1093,7 +1093,7 @@
         damage += Neo.ATTACKS.smash.bonus;
         Neo.spawnParticle({ x: enemy.x, y: enemy.y - 16, life: 0.6, text: 'POP', c: '#a0f' });
       }
-      hitEnemy(enemy, damage, angle, 320, smashColor);
+      hitEnemy(enemy, damage, angle, 320, smashColor, { melee: true });
     });
     forEachDestructibleNearPlayer(smashRadius, prop => {
       if (!prop.broken && !prop.hidden && isWithinRadiusSq(Neo.player.x, Neo.player.y, prop, smashRadius)) {
@@ -2481,9 +2481,19 @@
   // Tooth of Thorn lifesteal: a small chance per hit to heal 1 when below max HP.
   // Lives on its own so multi-beam moves (Thorn's Infinite Blood Beam) can roll it
   // once per beam that lands, instead of once per tick after the damage dedup.
-  function rollToothOfThornDrain(enemy, cachedStats, bonusChance = 0) {
+  function rollToothOfThornDrain(enemy, cachedStats, bonusChance = 0, isMelee = false) {
     const stats = cachedStats || Neo.getItemStats();
-    const drainChance = Math.max(0, Number(stats.drainChance || 0) + Number(bonusChance || 0));
+    // Melee swings land far less often than a held beam, so they roll a higher
+    // per-hit chance (meleeDrainChance) to keep the lifesteal worthwhile.
+    const baseChance = isMelee ? Number(stats.meleeDrainChance || 0) : Number(stats.drainChance || 0);
+    let drainChance = Math.max(0, baseChance + Number(bonusChance || 0));
+    if (!(drainChance > 0)) return;
+    // Higher-level enemies resist lifesteal: starting at level 5, every full 5
+    // levels grants +15% drain resistance (lvl 5 → 15%, lvl 10 → 30%, …),
+    // capped so the steal never becomes impossible.
+    const enemyLevel = Math.max(1, Number(Neo.getEnemyProgressionLevel?.(enemy)) || 0);
+    const drainResistance = Math.min(0.9, Math.floor(enemyLevel / 5) * 0.15);
+    drainChance *= (1 - drainResistance);
     if (!(drainChance > 0)) return;
     if (!Neo.player || Neo.player.hp >= Neo.player.maxHp) return;
     if (Neo.nextRandom('encounter') >= drainChance) return;
@@ -2553,7 +2563,6 @@
       enemy._lastHitAt = performance.now();
     }
     applyEnemyImpactStun(enemy, dealt, appliedKnockback);
-    if (!options.noCharmBuff) Neo.grantCritCharmBuff();
     // Continuous beams call hitEnemy on the same target several times a second.
     // Damage/knockback/popups still apply every tick, but throttle the cosmetic
     // hit fleck + blood spray per enemy so a held laser can't flood particles.
@@ -2577,7 +2586,7 @@
     });
     // Multi-beam callers (Thorn's fan) roll drain per beam themselves; skip the
     // shared roll so the beam that also lands the dedup'd hit isn't counted twice.
-    if (!options.skipDrainRoll) rollToothOfThornDrain(enemy, stats, Number(options.drainChanceBonus || 0));
+    if (!options.skipDrainRoll) rollToothOfThornDrain(enemy, stats, Number(options.drainChanceBonus || 0), options.melee === true);
     if (stats.confuseRayStunChance > 0 && Neo.nextRandom('encounter') < stats.confuseRayStunChance) {
       enemy.stun = Math.max(Number(enemy.stun || 0), 0.55);
       Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 18, life: 0.5, text: 'STUN', c: '#ffe66d' });
@@ -2630,7 +2639,6 @@
           Neo.angleBetween(enemy, chained),
           Math.max(60, knockback * 0.5),
           '#9ad9ff',
-          { noCharmBuff: true }
         );
       }
     }

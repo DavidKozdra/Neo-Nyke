@@ -65,14 +65,16 @@ describe('God difficulty progression rules', () => {
       ITEM_DEFS: {},
       getShopItemCost: () => 10,
     };
+    const ensureFeaturedGodOffer = jest.fn();
     const ensureShopScrollOffer = jest.fn();
     const ensureShopTradeOffer = jest.fn();
     const ensureShopHasMinimumItemOffers = new Function(
       'Neo',
+      'ensureFeaturedGodOffer',
       'ensureShopScrollOffer',
       'ensureShopTradeOffer',
       `${extractFunction(roomsSource, 'ensureShopHasMinimumItemOffers')}; return ensureShopHasMinimumItemOffers;`,
-    )(Neo, ensureShopScrollOffer, ensureShopTradeOffer);
+    )(Neo, ensureFeaturedGodOffer, ensureShopScrollOffer, ensureShopTradeOffer);
 
     ensureShopHasMinimumItemOffers(room);
 

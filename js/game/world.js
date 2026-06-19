@@ -1904,7 +1904,7 @@
           forEachEnemyNearCircle(hazard.x, hazard.y, hazard.r + 80, enemy => {
             if (Neo.dist(enemy.x, enemy.y, hazard.x, hazard.y) > hazard.r + enemy.r) return;
             const angle = Neo.angleBetween(hazard, enemy);
-            Neo.hitEnemy(enemy, hazard.damage || 18, angle, 55, '#ff5b78', { rawDamage: true, noCharmBuff: true });
+            Neo.hitEnemy(enemy, hazard.damage || 18, angle, 55, '#ff5b78', { rawDamage: true });
             Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 10, life: 0.3, text: 'TAGGED', c: '#ffe0b8', size: 9 });
           });
         }

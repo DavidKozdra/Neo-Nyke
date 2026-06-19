@@ -58,6 +58,40 @@ describe('level milestone registry', () => {
     expect(M.getMilestoneChargeBonus('dash', 'warp', 'gelleh', 7)).toBe(0);
   });
 
+  test('each character pins its level-7 charge to its signature mobility move', () => {
+    const sigDash = {
+      princess: 'flying_unhitable',
+      metao: 'warp',
+      gelleh: 'zip_lightning',
+      mooggy: 'mooggy_zoomies',
+      thorn_knight: 'dash',
+    };
+    for (const [character, moveKey] of Object.entries(sigDash)) {
+      expect(M.getMilestoneChargeBonus('dash', moveKey, character, 7)).toBe(1);
+      // A non-signature dash move earns nothing from the override (thorn's bare
+      // 'dash' slot charge applies to whatever dash it has, so skip that case).
+      if (character !== 'thorn_knight') {
+        expect(M.getMilestoneChargeBonus('dash', 'some_other_dash', character, 7)).toBe(0);
+      }
+    }
+  });
+
+  test('each character pins its level-21 charge to its signature laser', () => {
+    const sigLaser = {
+      princess: 'love_beam',
+      thorn_knight: 'blood_beam',
+      metao: 'power_disks',
+      gelleh: 'blade_justice',
+      mooggy: 'nail_shot',
+    };
+    for (const [character, moveKey] of Object.entries(sigLaser)) {
+      expect(M.getMilestoneChargeBonus('laser', moveKey, character, 20)).toBe(0);
+      expect(M.getMilestoneChargeBonus('laser', moveKey, character, 21)).toBe(1);
+      // An alt-kit laser does not inherit the signature charge.
+      expect(M.getMilestoneChargeBonus('laser', 'some_alt_laser', character, 21)).toBe(0);
+    }
+  });
+
   test('move-speed bonus accumulates across the stat-spike milestones', () => {
     expect(M.getLevelMoveSpeedBonus('thorn_knight', 13)).toBe(0);
     expect(M.getLevelMoveSpeedBonus('thorn_knight', 14)).toBeCloseTo(0.03);
