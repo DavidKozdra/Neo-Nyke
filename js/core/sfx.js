@@ -34,9 +34,9 @@
       volume: 0.7,
       priority: priority.NORMAL,
       paths: [
-        'assets/sounds/sfx_Buy:Sell 1.wav',
-        'assets/sounds/sfx_Buy:Sell 2.wav',
-        'assets/sounds/sfx_Buy:Sell 3.wav',
+        'assets/sounds/sfx_Buy-Sell 1.wav',
+        'assets/sounds/sfx_Buy-Sell 2.wav',
+        'assets/sounds/sfx_Buy-Sell 3.wav',
       ],
     },
     { id: 'enemy_hit', path: 'assets/sounds/sfx_Enemy Hit.wav', volume: 0.6, priority: priority.LOW, mixDb: -6 },
