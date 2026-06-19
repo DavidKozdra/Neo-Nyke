@@ -25,7 +25,10 @@ describe('Forge Voucher', () => {
     return new Function(
       'Neo',
       [
+        'const FORGE_COST_GROWTH = 0.05;',
         extractFunction(panelsSource, 'getAnvilStepCost'),
+        extractFunction(panelsSource, 'getForgeUpgradesApplied'),
+        extractFunction(panelsSource, 'getAnvilStepCostAtIndex'),
         extractFunction(panelsSource, 'getForgeVoucherStepValue'),
         extractFunction(panelsSource, 'getForgeVoucherFreeSteps'),
         extractFunction(panelsSource, 'getAnvilStagedStepCount'),
@@ -61,7 +64,9 @@ describe('Forge Voucher', () => {
 
     expect(cost.voucherSteps).toBe(7);
     expect(cost.stagedSteps).toBe(8);
-    expect(cost.xp).toBe(4);
+    // 7 staged steps are covered by the voucher; the one paid step is the 8th
+    // step on the run-wide curve: ceil(4 * 1.05^7) = 6.
+    expect(cost.xp).toBe(6);
     expect(cost.gold).toBe(0);
   });
 

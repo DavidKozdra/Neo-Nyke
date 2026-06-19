@@ -750,6 +750,7 @@ export function resumeGame() {
       equipmentCooldowns: {},
       equipmentEffects: {},
       forgeVoucherCharges: 0,
+      forgeUpgradesApplied: 0,
     };
   }
 

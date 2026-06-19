@@ -1043,7 +1043,8 @@ export function toggleAnvilPanel() {
     return cur + staged * schema[statKey].step;
   }
 
-  // Per-step cost for a stat in the currently selected pay currency.
+  // Base per-step cost for a stat in the currently selected pay currency,
+  // before the per-run escalation multiplier is applied.
   function getAnvilStepCost(statDef) {
     if (!statDef) return 0;
     // Gold upgrades cost double the listed goldPerStep; XP cost is unchanged. This
@@ -1051,6 +1052,19 @@ export function toggleAnvilPanel() {
     return Neo.anvilPayCurrency === 'gold'
       ? (statDef.goldPerStep ?? 0) * 2
       : (statDef.xpPerStep ?? 0);
+  }
+
+  // Forge prices scale 5% per upgrade already bought this run (compounding,
+  // counted across every stat/item). The Nth forge upgrade of the run costs
+  // baseStepCost * 1.05^N. `index` is the run-wide upgrade index (0-based).
+  const FORGE_COST_GROWTH = 0.05;
+  function getForgeUpgradesApplied() {
+    return Math.max(0, Math.floor(Number(Neo.player?.forgeUpgradesApplied || 0)));
+  }
+  function getAnvilStepCostAtIndex(statDef, index) {
+    const base = getAnvilStepCost(statDef);
+    if (base <= 0) return 0;
+    return Math.ceil(base * Math.pow(1 + FORGE_COST_GROWTH, Math.max(0, index)));
   }
 
   function getForgeVoucherStepValue() {
@@ -1078,16 +1092,25 @@ export function toggleAnvilPanel() {
     let freeStepsRemaining = getForgeVoucherFreeSteps();
     let voucherStepsUsed = 0;
     let stagedSteps = 0;
+    // Run-wide escalation index: each step (free or paid) advances the price
+    // curve, so the multiplier matches the order upgrades will be applied in.
+    let costIndex = getForgeUpgradesApplied();
     for (const [key, count] of Object.entries(Neo.anvilStagedUpgrades)) {
       if (count === 0) continue;
       const [itemType, , statKey] = key.split(':');
       const schema = itemType === 'weapon' ? Neo.WEAPON_UPGRADEABLE_STATS : Neo.MOVE_UPGRADEABLE_STATS;
+      const statDef = schema[statKey];
       const stepCount = Math.max(0, Math.floor(Number(count) || 0));
       stagedSteps += stepCount;
-      const freeSteps = Math.min(stepCount, freeStepsRemaining);
-      freeStepsRemaining -= freeSteps;
-      voucherStepsUsed += freeSteps;
-      total += Math.max(0, stepCount - freeSteps) * getAnvilStepCost(schema[statKey]);
+      for (let i = 0; i < stepCount; i++) {
+        if (freeStepsRemaining > 0) {
+          freeStepsRemaining -= 1;
+          voucherStepsUsed += 1;
+        } else {
+          total += getAnvilStepCostAtIndex(statDef, costIndex);
+        }
+        costIndex += 1;
+      }
     }
     return Neo.anvilPayCurrency === 'gold'
       ? { xp: 0, gold: total, voucherSteps: voucherStepsUsed, stagedSteps }
@@ -1219,7 +1242,10 @@ export function renderAnvilStatPanel() {
       const payGold = Neo.anvilPayCurrency === 'gold';
       // Use the shared cost chokepoint so the per-step label, the affordability
       // gate, and the actual spend all agree (gold is charged at goldPerStep*2).
-      const stepCost = getAnvilStepCost(schema[statKey]);
+      // The next step's price sits at the run-wide escalation index = upgrades
+      // already applied + all steps already staged this visit.
+      const nextStepIndex = getForgeUpgradesApplied() + getAnvilStagedStepCount();
+      const stepCost = getAnvilStepCostAtIndex(schema[statKey], nextStepIndex);
       const wallet = payGold ? (Neo.player?.coins ?? 0) : (Neo.player?.xp ?? 0);
       const cost = getAnvilTotalCost();
       const spent = payGold ? cost.gold : cost.xp;
@@ -1414,6 +1440,10 @@ export function confirmAnvilUpgrades() {
       Neo.player.anvilUpgrades[itemType][itemKey][statKey] =
         (Neo.player.anvilUpgrades[itemType][itemKey][statKey] ?? 0) + count;
     }
+
+    // Advance the run-wide escalation counter so each future step is priced 5%
+    // higher than the last (free voucher steps still count as upgrades applied).
+    Neo.player.forgeUpgradesApplied = getForgeUpgradesApplied() + (cost.stagedSteps || 0);
 
     Neo.anvilStagedUpgrades = {};
     markInventoryPanelDirty();

@@ -183,6 +183,7 @@ export function migratePlayerData(source) {
     playerData.wizardPawPendingCount = Math.max(0, Math.floor(Number(playerData.wizardPawPendingCount || 0)));
     playerData.scrollUseSerial = Math.max(0, Math.floor(Number(playerData.scrollUseSerial || 0)));
     playerData.forgeVoucherCharges = Math.max(0, Math.floor(Number(playerData.forgeVoucherCharges || 0)));
+    playerData.forgeUpgradesApplied = Math.max(0, Math.floor(Number(playerData.forgeUpgradesApplied || 0)));
     playerData.lastSecretVendorRewardKey = Neo.ITEM_DEFS?.[playerData.lastSecretVendorRewardKey]
       ? String(playerData.lastSecretVendorRewardKey)
       : '';

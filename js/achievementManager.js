@@ -309,7 +309,7 @@ const achievementManager = (() => {
 
   achievementEvents.on('shop:bought', async () => {
     runShopBuys += 1;
-    if (runShopBuys >= 5) await unlock('shopping_spree');
+    if (runShopBuys >= 50) await unlock('shopping_spree');
   });
 
   achievementEvents.on('loop:completed', async ({ loopIndex }) => {
