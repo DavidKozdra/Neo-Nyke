@@ -982,6 +982,7 @@ export function setAnvilPanelOpen(open, options = {}) {
   const animateClose = options.animateClose !== false;
     if (open) {
       Neo.showFirstTip?.('forge');
+      if (Neo.isFirstRunTutorialActive()) Neo.tutorialState.openedForge = true;
       clearPanelCloseEffect(Neo.ui.anvilPanel);
       Neo.ui.anvilPanel.classList.remove('hidden');
       Neo.ui.anvilPanel.setAttribute('aria-hidden', 'false');

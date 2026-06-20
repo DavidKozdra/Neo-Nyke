@@ -309,18 +309,31 @@ export function resumeGame() {
     }
   }
 
+  // Fixed seed for the first-run / replay tutorial so the layout, the forced
+  // relic, and the ladder room are reproducible for every new player.
+  const TUTORIAL_SEED = 'NEONYKE-TUTORIAL-01';
+  // Beginner-friendly relic force-spawned for the tutorial relic step. Gold Vac
+  // is common-tier, owned by no character at start, and its effect (auto-collect
+  // pickups, double coins) is immediately visible — a good first "what relics do".
+  const TUTORIAL_RELIC_KEY = 'gold_vac';
+
   function createDefaultTutorialState() {
     return {
       active: false,
       step: 'move',
       manualStepLockUntil: 0,
       dummySpawned: false,
+      relicSpawned: false,
       moved: false,
+      movedFor: 0,
+      dashed: false,
       gotKill: false,
       gotRelic: false,
+      openedForge: false,
       openedInventory: false,
       openedShop: false,
       usedLadder: false,
+      lastCelebratedStep: 'move',
     };
   }
 
@@ -510,8 +523,25 @@ export function resumeGame() {
     Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 30, life: 1.1, text: 'DUMMY SPAWNED', c: '#9ce9ff' });
   }
 
+  // Guarantee a relic for the tutorial relic step so the lesson never depends on
+  // a random drop. Mirrors ensureTutorialDummyEnemy: same safe-spawn fallback,
+  // pushed once, tagged so we don't double-spawn.
+  function ensureTutorialRelicPickup() {
+    if (!isFirstRunTutorialActive() || Neo.tutorialState.gotRelic) return;
+    if (Neo.tutorialState.step !== 'relic') return;
+    if (!Neo.currentRoom || ['boss', 'god', 'shop', 'anvil', 'challenge'].includes(Neo.currentRoom.type)) return;
+    if (Neo.tutorialState.relicSpawned || Neo.pickups.some(p => p?.tutorialRelic)) return;
+    const spot = Neo.findSafeEnemySpawnPoint(Neo.player.x + 90, Neo.player.y, 14)
+      || Neo.findSafeEnemySpawnPoint(Neo.player.x - 90, Neo.player.y, 14)
+      || Neo.findSafeEnemySpawnPoint(Neo.player.x, Neo.player.y - 80, 14)
+      || { x: Neo.clamp(Neo.player.x + 70, Neo.WALL + 22, Neo.ROOM_W - Neo.WALL - 22), y: Neo.clamp(Neo.player.y - 36, Neo.WALL + 22, Neo.ROOM_H - Neo.WALL - 22) };
+    Neo.pickups.push({ x: spot.x, y: spot.y, type: 'item', key: TUTORIAL_RELIC_KEY, tutorialRelic: true });
+    Neo.tutorialState.relicSpawned = true;
+    Neo.spawnParticle({ x: spot.x, y: spot.y - 22, life: 1.4, text: 'RELIC', c: '#ffd27d' });
+  }
+
   function getTutorialStepOrder() {
-    return ['move', 'fight', 'relic', 'panel', 'ladder'];
+    return ['move', 'dash', 'fight', 'relic', 'forge', 'panel', 'ladder'];
   }
 
   function navigateTutorialStep(direction = 1) {
@@ -522,6 +552,7 @@ export function resumeGame() {
     Neo.tutorialState.step = order[nextIndex];
     Neo.tutorialState.manualStepLockUntil = Number(Neo.gameElapsedTime || 0) + 0.65;
     if (Neo.tutorialState.step === 'fight') ensureTutorialDummyEnemy();
+    if (Neo.tutorialState.step === 'relic') ensureTutorialRelicPickup();
     Neo.updateObjective();
   }
 
@@ -531,15 +562,19 @@ export function resumeGame() {
     const slashHint = getControlHint('slash', 'lmb');
     const laserHint = getControlHint('laser', 'rmb');
     const smashHint = getControlHint('smash', 'r');
+    const dashHint = getControlHint('dash', 'shift');
     const inventoryHint = getControlHint('inventory', 'i');
-    const shopHint = formatControlLabel('e', 'e');
+    const forgeHint = getControlHint('interact', 'e');
     const ladderHint = getLadderControlHint();
-    if (Neo.tutorialState.step === 'move') return `Tutorial: Move with ${moveHint}.`;
-    if (Neo.tutorialState.step === 'fight') return `Tutorial: Defeat the training dummy using ${slashHint}, ${laserHint}, or ${smashHint}.`;
-    if (Neo.tutorialState.step === 'relic') return 'Tutorial: Pick up your first relic drop.';
-    if (Neo.tutorialState.step === 'panel') return `Tutorial: Press ${inventoryHint} to open Inventory. In shop rooms, press ${shopHint} to open the shop.`;
-    if (Neo.currentRoom?.type === 'ladder' && Neo.currentRoom?.cleared) return `Tutorial: Stand on the ladder and press ${ladderHint} to go to the next floor.`;
-    if (Neo.currentRoom?.type === 'ladder') return 'Tutorial: Clear this ladder room, then use the ladder.';
+    const step = Neo.tutorialState.step;
+    if (step === 'move') return `Tutorial: Move with ${moveHint}. Rooms lock until cleared, so positioning is how you survive.`;
+    if (step === 'dash') return `Tutorial: Dash with ${dashHint} — a quick burst that briefly makes you invulnerable. It's your main way to dodge attacks.`;
+    if (step === 'fight') return `Tutorial: Defeat the training dummy. ${slashHint} is a fast melee, ${laserHint} fires at range, ${smashHint} is a heavier hit — different tools for different enemies.`;
+    if (step === 'relic') return 'Tutorial: Grab the relic. Relics are permanent upgrades for the whole run — your choices stack and define your build.';
+    if (step === 'forge') return `Tutorial: Find a Forge room and press ${forgeHint} to open it. Spend XP or gold there to permanently upgrade your weapons and moves for this run. (No Forge nearby? Head for the ladder.)`;
+    if (step === 'panel') return `Tutorial: Press ${inventoryHint} to open your Inventory — check your relics, weapons, and equipped moves any time.`;
+    if (Neo.currentRoom?.type === 'ladder' && Neo.currentRoom?.cleared) return `Tutorial: Stand on the ladder and press ${ladderHint} to descend to the next floor — enemies get tougher, but so do your rewards.`;
+    if (Neo.currentRoom?.type === 'ladder') return 'Tutorial: Clear this ladder room, then use the ladder to descend.';
     return 'Tutorial: Find the ladder room and continue to the next floor.';
   }
 
@@ -548,15 +583,19 @@ export function resumeGame() {
     const moveHint = getMovementControlHint();
     const slashHint = getControlHint('slash', 'lmb');
     const laserHint = getControlHint('laser', 'rmb');
+    const dashHint = getControlHint('dash', 'shift');
     const inventoryHint = getControlHint('inventory', 'i');
-    const shopHint = formatControlLabel('e', 'e');
+    const forgeHint = getControlHint('interact', 'e');
     const ladderHint = getLadderControlHint();
+    const state = Neo.tutorialState;
     return [
-      { text: `Move (${moveHint})`, state: Neo.tutorialState.moved ? 'done' : 'todo' },
-      { text: `Defeat training dummy (${slashHint}/${laserHint})`, state: Neo.tutorialState.gotKill ? 'done' : 'todo' },
-      { text: 'Pick up one relic', state: Neo.tutorialState.gotRelic ? 'done' : 'todo' },
-      { text: `Open Inventory (${inventoryHint}) or Shop (${shopHint} in shop room)`, state: (Neo.tutorialState.openedInventory || Neo.tutorialState.openedShop) ? 'done' : 'todo' },
-      { text: `Use ladder: stand on it and press ${ladderHint}`, state: Neo.tutorialState.usedLadder ? 'done' : 'todo' },
+      { text: `Move (${moveHint})`, state: state.moved ? 'done' : 'todo' },
+      { text: `Dash to dodge (${dashHint})`, state: state.dashed ? 'done' : 'todo' },
+      { text: `Defeat training dummy (${slashHint}/${laserHint})`, state: state.gotKill ? 'done' : 'todo' },
+      { text: 'Pick up one relic (permanent run upgrade)', state: state.gotRelic ? 'done' : 'todo' },
+      { text: `Open the Forge (${forgeHint} in a Forge room)`, state: state.openedForge ? 'done' : 'todo' },
+      { text: `Open Inventory (${inventoryHint})`, state: (state.openedInventory || state.openedShop) ? 'done' : 'todo' },
+      { text: `Use ladder: stand on it and press ${ladderHint}`, state: state.usedLadder ? 'done' : 'todo' },
     ];
   }
 
@@ -571,23 +610,58 @@ export function resumeGame() {
     Neo.updateObjective();
   }
 
-  function updateFirstRunTutorialProgress() {
+  // Require movement to be sustained for this long before the move step counts,
+  // so a single frame of stick-drift / nudge doesn't flip the banner instantly.
+  const TUTORIAL_MOVE_DEBOUNCE = 0.35;
+
+  function updateFirstRunTutorialProgress(dt = 0) {
     if (!isFirstRunTutorialActive()) return;
+    const state = Neo.tutorialState;
+    const stepBefore = state.step;
     ensureTutorialDummyEnemy();
-    if (Number(Neo.tutorialState.manualStepLockUntil || 0) > Number(Neo.gameElapsedTime || 0)) return;
-    if (!Neo.tutorialState.moved && Math.hypot(Neo.player?.vx || 0, Neo.player?.vy || 0) > 24) Neo.tutorialState.moved = true;
-    if (!Neo.tutorialState.gotKill && Number(Neo.player?.kills || 0) > 0) Neo.tutorialState.gotKill = true;
-    if (Neo.tutorialState.step === 'move' && Neo.tutorialState.moved) Neo.tutorialState.step = 'fight';
-    if (Neo.tutorialState.step === 'fight' && Neo.tutorialState.gotKill) Neo.tutorialState.step = 'relic';
-    if (Neo.tutorialState.step === 'relic' && Neo.tutorialState.gotRelic) Neo.tutorialState.step = 'panel';
-    if (Neo.tutorialState.step === 'panel' && (Neo.tutorialState.openedInventory || Neo.tutorialState.openedShop)) Neo.tutorialState.step = 'ladder';
-    if (!Neo.tutorialState.usedLadder && Neo.floor > 1) Neo.tutorialState.usedLadder = true;
-    if (Neo.tutorialState.usedLadder) {
-      Neo.tutorialState.active = false;
+    ensureTutorialRelicPickup();
+    if (Number(state.manualStepLockUntil || 0) > Number(Neo.gameElapsedTime || 0)) return;
+
+    // Debounced movement detection: accumulate time spent above the speed
+    // threshold; only mark "moved" once it's been sustained briefly.
+    if (!state.moved) {
+      if (Math.hypot(Neo.player?.vx || 0, Neo.player?.vy || 0) > 24) {
+        state.movedFor = Number(state.movedFor || 0) + Number(dt || 0);
+        if (state.movedFor >= TUTORIAL_MOVE_DEBOUNCE) state.moved = true;
+      } else {
+        state.movedFor = 0;
+      }
+    }
+    if (!state.gotKill && Number(Neo.player?.kills || 0) > 0) state.gotKill = true;
+
+    // A player who reaches the (cleared) ladder room without finding a Forge
+    // should not be stuck on the forge step — auto-clear it so the flow continues.
+    const atLadderRoom = Neo.currentRoom?.type === 'ladder';
+    if (state.step === 'forge' && !state.openedForge && atLadderRoom) state.openedForge = true;
+
+    if (state.step === 'move' && state.moved) state.step = 'dash';
+    if (state.step === 'dash' && state.dashed) state.step = 'fight';
+    if (state.step === 'fight' && state.gotKill) state.step = 'relic';
+    if (state.step === 'relic' && state.gotRelic) state.step = 'forge';
+    if (state.step === 'forge' && state.openedForge) state.step = 'panel';
+    if (state.step === 'panel' && (state.openedInventory || state.openedShop)) state.step = 'ladder';
+    if (!state.usedLadder && Neo.floor > 1) state.usedLadder = true;
+
+    // Celebrate each step advance with the achievement sting (boss-kill 'victory'
+    // is reserved for the finale below) plus the existing particle text.
+    if (state.step !== stepBefore && state.step !== state.lastCelebratedStep) {
+      state.lastCelebratedStep = state.step;
+      Neo.playSfx?.('achievement');
+      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 30, life: 0.9, text: 'STEP COMPLETE', c: '#8dffcf' });
+    }
+
+    if (state.usedLadder) {
+      state.active = false;
       if (!Neo.metaProgress.tutorialCompleted) {
         Neo.metaProgress.tutorialCompleted = true;
         Neo.persistMetaSoon();
       }
+      Neo.playSfx?.('victory');
       Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 26, life: 1, text: 'TUTORIAL COMPLETE', c: '#8dffcf' });
     }
   }
@@ -1520,7 +1594,13 @@ export function resumeGame() {
     return getDashCooldownDuration(moveKey, attackSpeed);
   }
 
-  function createCooldownEntry(slot, playerState = Neo.player, source = null) {
+  function createCooldownEntry(slot, playerState = Neo.player, source = null, options = {}) {
+    // A live in-memory hold (set by spendSkillCharge's deferTimer path) is still
+    // backed by an active charging flag and will release normally, so rebuilds
+    // from the live entry (e.g. Extra Battery) keep it. A hold read back from a
+    // saved-run snapshot has no charging flag to resume it, so it must be turned
+    // into a real recharge timer instead — see the sourceIsObject branch below.
+    const fromSnapshot = !!options.fromSnapshot;
     const moveKey = playerState?.equippedMoves?.[slot] || (slot === 'dash' ? 'dash' : slot === 'melee' ? 'slash' : slot === 'laser' ? 'blood_beam' : 'crimson_smash');
     const maxCharges = getMoveMaxStacks(moveKey, playerState?.character || Neo.chosenCharacter, playerState);
     const sourceIsObject = !!source && typeof source === 'object' && !Array.isArray(source);
@@ -1547,10 +1627,21 @@ export function resumeGame() {
       }
     } else if (sourceIsObject) {
       charges = Math.max(0, Math.min(maxCharges, Math.floor(Number(source.charges ?? maxCharges))));
-      holding = Math.min(sourceHolding, Math.max(0, maxCharges - charges));
+      const heldCharges = Math.min(sourceHolding, Math.max(0, maxCharges - charges));
+      // Restoring from a saved run: the hold-to-charge flag isn't persisted, so a
+      // saved hold can never resume or release. Left as `holding`, it would strand
+      // the pip at 0 charges with no timer — a cooldown shows but the move is
+      // permanently locked. Convert it into a real recharge timer so the charge
+      // comes back. Live rebuilds keep the hold (its charging session is intact).
+      holding = fromSnapshot ? 0 : heldCharges;
       timers = sourceTimers.slice(0, Math.max(0, maxCharges - charges - holding));
       if (timers.length === 0 && Number(source.recharge || 0) > 0 && charges < maxCharges) {
         timers.push(Number(source.recharge));
+      }
+      if (fromSnapshot) {
+        for (let i = 0; i < heldCharges && timers.length < Math.max(0, maxCharges - charges); i += 1) {
+          timers.push(getSlotCooldownDuration(slot, moveKey, Neo.getAttackSpeedValue()));
+        }
       }
       if (wasFull) {
         charges = maxCharges;
@@ -1562,10 +1653,10 @@ export function resumeGame() {
     return { charges, maxCharges, timers, holding };
   }
 
-  function createCooldownState(playerState = Neo.player, source = null) {
+  function createCooldownState(playerState = Neo.player, source = null, options = {}) {
     const state = {};
     Neo.MOVE_SLOTS.forEach(slot => {
-      state[slot] = createCooldownEntry(slot, playerState, source?.[slot]);
+      state[slot] = createCooldownEntry(slot, playerState, source?.[slot], options);
     });
     return state;
   }
@@ -1589,9 +1680,18 @@ export function resumeGame() {
   // cooldown + 500ms) so it will recover; everything else is topped up to full.
   function reconcileCooldownsOnRoomEnter() {
     const attackSpeed = Neo.getAttackSpeedValue();
+    // A `holding` charge only counts as "in flight" while its hold-to-charge
+    // session is actually live; otherwise it's an orphaned hold (e.g. a charge
+    // spent right before leaving 'play' without release) that would never recover.
+    const chargingLive = !!(Neo.healingZoneCharging || Neo.deathBallCharging);
     Neo.MOVE_SLOTS.forEach(slot => {
       const state = Neo.cooldowns[slot] || createCooldownEntry(slot);
-      const hasActiveTimer = state.timers.length > 0 || state.holding > 0;
+      const liveHold = slot === 'smash' && chargingLive && state.holding > 0;
+      if (!liveHold && state.holding > 0) {
+        // Drop the phantom hold and let the slot be topped up / recharged below.
+        state.holding = 0;
+      }
+      const hasActiveTimer = state.timers.length > 0 || (slot === 'smash' && liveHold);
       if (state.charges <= 0 && !hasActiveTimer) {
         const moveKey = Neo.getEquippedMove(slot);
         const cooldown = getSlotCooldownDuration(slot, moveKey, attackSpeed);
@@ -2375,7 +2475,12 @@ export function resumeGame() {
       restoreRun(Neo.activeRun);
       resetTutorialState(shouldRunTutorial);
     } else {
-      Neo.baseSeedStr = Neo.ui.seed.value.trim() || createRandomSeed();
+      // The tutorial runs on a fixed seed so its layout, forced relic, and
+      // ladder room are identical for every new player; any typed seed is
+      // ignored only while the tutorial is active.
+      Neo.baseSeedStr = shouldRunTutorial
+        ? TUTORIAL_SEED
+        : (Neo.ui.seed.value.trim() || createRandomSeed());
       Neo.selectedDifficulty = normalizeDifficulty(Neo.selectedDifficulty);
       Neo.selectedChallenges = normalizeChallengeSelection(Neo.metaProgress.selectedChallenges);
       Neo.runLoopIndex = 0;
@@ -3224,7 +3329,7 @@ export function resumeGame() {
       Neo.structures = Neo.currentRoom.structures;
       Neo.decorations = Neo.currentRoom.decorations;
     }
-    Neo.cooldowns = createCooldownState(Neo.player, snapshot.cooldowns || {});
+    Neo.cooldowns = createCooldownState(Neo.player, snapshot.cooldowns || {}, { fromSnapshot: true });
     reconcileCooldownsOnRoomEnter();
     Neo.laserActive = !!snapshot.laserActive;
     Neo.laserTime = snapshot.laserTime || 0;
@@ -3286,6 +3391,7 @@ export function resumeGame() {
   // Expose on Neo
   Neo.pauseGame = pauseGame;
   Neo.resumeGame = resumeGame;
+  Neo.TUTORIAL_SEED = TUTORIAL_SEED;
   Neo.createDefaultMeta = createDefaultMeta;
   Neo.shouldOfferTutorialButton = shouldOfferTutorialButton;
   Neo.markTutorialButtonOfferedNow = markTutorialButtonOfferedNow;

@@ -1625,6 +1625,7 @@ export const ui = {
     rhInfoContent: document.getElementById('rhInfoContent'),
     rhInfoTabs: [...document.querySelectorAll('#rhInfoPanel .rh-info-tab')],
     rhInfoSearch: document.getElementById('rhInfoSearch'),
+    rhInfoResultStatus: document.getElementById('rhInfoResultStatus'),
     infoTutorialBtn: document.getElementById('infoTutorialBtn'),
     rhBankCoins: document.getElementById('rhBankCoins'),
     rhLoopCount: document.getElementById('rhLoopCount'),

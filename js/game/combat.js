@@ -1653,6 +1653,7 @@
     Neo.shakeT = Math.max(Neo.shakeT, 0.08);
     Neo.playSfx?.('dash');
     Neo.ringBurst(Neo.player.x, Neo.player.y, 18, '#fff06a', 0.28);
+    if (Neo.isFirstRunTutorialActive()) Neo.tutorialState.dashed = true;
   }
 
   function cancelCowardsWayOnAttack() {

@@ -766,19 +766,19 @@
       </div>
     </div><!-- /.menu-footer -->
   </div><!-- /.menu-stage -->
-  <section id="runHistoryPanel" class="panel-shell rh-panel hidden" aria-hidden="true">
+  <section id="runHistoryPanel" class="panel-shell rh-panel hidden" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="runHistoryPanelTitle">
     <div class="rh-head">
       <div class="rh-head-left">
         <span class="rh-title" id="runHistoryPanelTitle">INFO</span>
-        <div class="rh-view-tabs" role="tablist">
-          <button class="rh-view-tab" data-view="runs" type="button">Runs</button>
-          <button class="rh-view-tab" data-view="achievements" type="button">Achievements</button>
-          <button class="rh-view-tab" data-view="profile" type="button">Profile</button>
-          <button class="rh-view-tab active" data-view="info" type="button">Info</button>
-          <button class="rh-view-tab" data-view="blog" type="button">Blog</button>
+        <div class="rh-view-tabs" role="tablist" aria-label="Info panel sections">
+          <button id="rhViewRunsTab" class="rh-view-tab" data-view="runs" type="button" role="tab" aria-selected="false">Runs</button>
+          <button id="rhViewAchievementsTab" class="rh-view-tab" data-view="achievements" type="button" role="tab" aria-selected="false">Achievements</button>
+          <button id="rhViewProfileTab" class="rh-view-tab" data-view="profile" type="button" role="tab" aria-selected="false">Profile</button>
+          <button id="rhViewInfoTab" class="rh-view-tab active" data-view="info" type="button" role="tab" aria-selected="true">Info</button>
+          <button id="rhViewBlogTab" class="rh-view-tab" data-view="blog" type="button" role="tab" aria-selected="false">Blog</button>
         </div>
       </div>
-      <button id="runHistoryClose" class="panel-close" aria-label="Close">X</button>
+      <button id="runHistoryClose" class="panel-close" aria-label="Close info panel">X</button>
     </div>
     <div id="runHistoryEmpty" class="rh-empty hidden">No completed runs yet.</div>
     <div class="rh-body">
@@ -815,23 +815,29 @@
       <div class="rh-profile-row"><span class="rh-profile-label">Best Floor</span><b id="rhBestFloor">1</b></div>
       <div class="rh-profile-row"><span class="rh-profile-label">Save</span><b id="rhSaveState">—</b></div>
     </div>
-    <div id="rhInfoPanel" class="rh-info hidden">
-      <div class="rh-info-head">
-        <div class="rh-info-head__top">
-          <div class="rh-info-tabs" role="tablist">
-            <button class="rh-info-tab active" data-info-tab="items" type="button">Items</button>
-            <button class="rh-info-tab" data-info-tab="scrolls" type="button">Scrolls</button>
-            <button class="rh-info-tab" data-info-tab="weapons" type="button">Weapons</button>
-            <button class="rh-info-tab" data-info-tab="moves" type="button">Moves</button>
-            <button class="rh-info-tab" data-info-tab="enemies" type="button">Enemies</button>
-            <button class="rh-info-tab" data-info-tab="characters" type="button">Characters</button>
-            <button class="rh-info-tab" data-info-tab="meta" type="button">Meta</button>
-          </div>
-          <button id="infoTutorialBtn" class="rh-info-tutorial-btn" type="button">&#9654; Tutorial</button>
+    <div id="rhInfoPanel" class="rh-info hidden" role="tabpanel" aria-labelledby="rhViewInfoTab">
+      <aside class="rh-info-rail" aria-label="Info library navigation">
+        <div class="rh-info-rail__label">Library</div>
+        <div class="rh-info-tabs" role="tablist" aria-label="Info library categories">
+          <button id="rhInfoItemsTab" class="rh-info-tab active" data-info-tab="items" type="button" role="tab" aria-selected="true" aria-controls="rhInfoContent">Items</button>
+          <button id="rhInfoScrollsTab" class="rh-info-tab" data-info-tab="scrolls" type="button" role="tab" aria-selected="false" aria-controls="rhInfoContent">Scrolls</button>
+          <button id="rhInfoWeaponsTab" class="rh-info-tab" data-info-tab="weapons" type="button" role="tab" aria-selected="false" aria-controls="rhInfoContent">Weapons</button>
+          <button id="rhInfoMovesTab" class="rh-info-tab" data-info-tab="moves" type="button" role="tab" aria-selected="false" aria-controls="rhInfoContent">Moves</button>
+          <button id="rhInfoEnemiesTab" class="rh-info-tab" data-info-tab="enemies" type="button" role="tab" aria-selected="false" aria-controls="rhInfoContent">Enemies</button>
+          <button id="rhInfoCharactersTab" class="rh-info-tab" data-info-tab="characters" type="button" role="tab" aria-selected="false" aria-controls="rhInfoContent">Characters</button>
+          <button id="rhInfoMetaTab" class="rh-info-tab" data-info-tab="meta" type="button" role="tab" aria-selected="false" aria-controls="rhInfoContent">Meta</button>
         </div>
-        <input id="rhInfoSearch" class="rh-info-search" type="search" placeholder="Search items..." aria-label="Search info entries" autocomplete="off" spellcheck="false">
+        <button id="infoTutorialBtn" class="rh-info-tutorial-btn" type="button">&#9654; Tutorial</button>
+      </aside>
+      <div class="rh-info-main">
+        <div class="rh-info-head">
+          <div class="rh-info-tools">
+            <input id="rhInfoSearch" class="rh-info-search" type="search" placeholder="Search items..." aria-label="Search info entries" aria-controls="rhInfoContent" aria-describedby="rhInfoResultStatus" autocomplete="off" spellcheck="false">
+            <div id="rhInfoResultStatus" class="rh-info-result-status sr-only" aria-live="polite">Items loaded.</div>
+          </div>
+        </div>
+        <div id="rhInfoContent" class="rh-info-content" role="tabpanel" tabindex="0" aria-labelledby="rhInfoItemsTab"></div>
       </div>
-      <div id="rhInfoContent" class="rh-info-content"></div>
     </div>
     <div id="rhBlogPanel" class="rh-blog hidden" aria-live="polite">
       <div id="rhBlogList" class="rh-blog-list"></div>

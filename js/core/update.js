@@ -331,7 +331,7 @@ export function loop(timestamp) {
     }
 
     Neo.moveCircle(Neo.player, dt);
-    Neo.updateFirstRunTutorialProgress();
+    Neo.updateFirstRunTutorialProgress(dt);
 
     if (Neo.player.cowardsWayTime > 0) {
       Neo.player.cowardsWayTime = Math.max(0, Neo.player.cowardsWayTime - dt);

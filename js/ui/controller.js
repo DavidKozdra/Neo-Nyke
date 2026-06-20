@@ -849,6 +849,40 @@ export function createUIController(view) {
     let activeInfoTab = 'items';
     const infoSearchQueries = { items: '', scrolls: '', weapons: '', moves: '', enemies: '' };
     const searchableInfoTabs = new Set(['items', 'scrolls', 'weapons', 'moves', 'enemies']);
+    const infoTabResultLabels = {
+      items: 'item',
+      scrolls: 'scroll',
+      weapons: 'weapon',
+      moves: 'move',
+      enemies: 'enemy',
+      characters: 'character',
+      meta: 'meta',
+    };
+
+    function infoEsc(value) {
+      return Neo.escapeHtml ? Neo.escapeHtml(value) : String(value ?? '').replace(/[&<>"']/g, ch => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;',
+      }[ch]));
+    }
+
+    function setInfoResultStatus(tab, count) {
+      if (!view.rhInfoResultStatus) return;
+      const label = infoTabResultLabels[tab] || 'info';
+      const query = infoSearchQueries[tab] || '';
+      const suffix = query ? ` matching "${query}"` : '';
+      view.rhInfoResultStatus.textContent = `${count} ${label} ${count === 1 ? 'entry' : 'entries'}${suffix}.`;
+    }
+
+    function getInfoResultSummary(tab, count) {
+      const label = infoTabResultLabels[tab] || 'info';
+      const query = infoSearchQueries[tab] || '';
+      const suffix = query ? ` for "${infoEsc(query)}"` : '';
+      return `<div class="info-result-summary">${count} ${infoEsc(label)} ${count === 1 ? 'entry' : 'entries'}${suffix}</div>`;
+    }
 
     function setRunHistoryOpen(open) {
       ensureRunHistoryPanelCanOverlayGame();
@@ -877,7 +911,12 @@ export function createUIController(view) {
       view.rhBlogPanel?.classList.toggle('hidden', !showBlog);
       const titles = { achievements: 'ACHIEVEMENTS', profile: 'PROFILE', runs: 'RUN HISTORY', info: 'INFO', blog: 'BLOG' };
       if (view.runHistoryPanelTitle) view.runHistoryPanelTitle.textContent = titles[view_] ?? 'INFO';
-      view.runHistoryViewTabs?.forEach(t => t.classList.toggle('active', t.dataset.view === view_));
+      view.runHistoryViewTabs?.forEach(t => {
+        const active = t.dataset.view === view_;
+        t.classList.toggle('active', active);
+        t.setAttribute('aria-selected', active ? 'true' : 'false');
+        t.tabIndex = active ? 0 : -1;
+      });
       if (showAch) populateAchievementsPanel();
       else if (showProfile) {
         if (view.rhBankCoins)  view.rhBankCoins.textContent  = Neo.metaProgress.coins ?? 0;
@@ -946,7 +985,8 @@ export function createUIController(view) {
 
     function renderInfoEmpty(label) {
       const query = infoSearchQueries[activeInfoTab] || '';
-      return `<div class="info-empty">No ${label} match "${Neo.escapeHtml(query)}".</div>`;
+      const suffix = query ? ` match "${infoEsc(query)}"` : ' are available';
+      return `<div class="info-empty" role="status">No ${infoEsc(label)}${suffix}.</div>`;
     }
 
     function syncInfoSearchControl(tab) {
@@ -964,10 +1004,38 @@ export function createUIController(view) {
       view.rhInfoSearch.value = infoSearchQueries[tab] || '';
     }
 
+    function handleTablistKeydown(event, tabs, activate) {
+      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+      const enabledTabs = tabs.filter(tab => !tab.disabled);
+      const currentIndex = enabledTabs.indexOf(event.currentTarget);
+      if (currentIndex < 0) return;
+      event.preventDefault();
+      const last = enabledTabs.length - 1;
+      const nextIndex = event.key === 'Home'
+        ? 0
+        : event.key === 'End'
+          ? last
+          : event.key === 'ArrowLeft'
+            ? (currentIndex - 1 + enabledTabs.length) % enabledTabs.length
+            : (currentIndex + 1) % enabledTabs.length;
+      const nextTab = enabledTabs[nextIndex];
+      nextTab?.focus({ preventScroll: true });
+      if (nextTab) activate(nextTab);
+    }
+
     function populateInfoPanel(tab) {
       activeInfoTab = tab;
       if (!view.rhInfoContent) return;
-      view.rhInfoTabs?.forEach(t => t.classList.toggle('active', t.dataset.infoTab === tab));
+      const activeInfoTabButton = view.rhInfoTabs?.find(t => t.dataset.infoTab === tab) || null;
+      view.rhInfoTabs?.forEach(t => {
+        const active = t.dataset.infoTab === tab;
+        t.classList.toggle('active', active);
+        t.setAttribute('aria-selected', active ? 'true' : 'false');
+        t.tabIndex = active ? 0 : -1;
+      });
+      if (activeInfoTabButton?.id) {
+        view.rhInfoContent.setAttribute('aria-labelledby', activeInfoTabButton.id);
+      }
       syncInfoSearchControl(tab);
 
       if (tab === 'items') {
@@ -982,16 +1050,17 @@ export function createUIController(view) {
           item_.category,
           item_.description,
         ]));
-        view.rhInfoContent.innerHTML = sorted.length ? `<div class="info-grid">${sorted.map(item => {
+        setInfoResultStatus(tab, sorted.length);
+        view.rhInfoContent.innerHTML = sorted.length ? `${getInfoResultSummary(tab, sorted.length)}<div class="info-grid" role="list">${sorted.map(item => {
           const rarity = item.rarity || item.category || 'knight';
           const rarityLabel = Neo.getRarityDisplayName?.(rarity) || rarity;
-          return `<div class="info-card">
+          return `<div class="info-card" role="listitem">
             <div class="info-card__header">
-              <canvas class="info-card__icon" data-info-item="${item.key}" width="32" height="32"></canvas>
-              <span class="info-card__name">${item.name}</span>
-              <span class="info-card__tag info-card__tag--${rarity}">${rarityLabel}</span>
+              <canvas class="info-card__icon" data-info-item="${infoEsc(item.key)}" width="32" height="32" aria-hidden="true"></canvas>
+              <span class="info-card__name">${infoEsc(item.name)}</span>
+              <span class="info-card__tag info-card__tag--${infoEsc(rarity)}">${infoEsc(rarityLabel)}</span>
             </div>
-            <div class="info-card__desc">${item.description || ''}</div>
+            <div class="info-card__desc">${infoEsc(item.description || '')}</div>
           </div>`;
         }).join('')}</div>` : renderInfoEmpty('items');
         Neo.drawItemIconCanvases?.(view.rhInfoContent, 'data-info-item');
@@ -1002,14 +1071,15 @@ export function createUIController(view) {
         const scrolls = Object.values(Neo.SCROLL_DEFS || {})
           .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
           .filter(scroll => infoSearchMatches(scroll, s => [s.name, s.key, s.description]));
-        view.rhInfoContent.innerHTML = scrolls.length ? `<div class="info-grid">${scrolls.map(scroll => {
-          return `<div class="info-card">
+        setInfoResultStatus(tab, scrolls.length);
+        view.rhInfoContent.innerHTML = scrolls.length ? `${getInfoResultSummary(tab, scrolls.length)}<div class="info-grid" role="list">${scrolls.map(scroll => {
+          return `<div class="info-card" role="listitem">
             <div class="info-card__header">
-              <canvas class="info-card__icon" data-info-item="${scroll.key}" width="32" height="32"></canvas>
-              <span class="info-card__name">${scroll.name}</span>
+              <canvas class="info-card__icon" data-info-item="${infoEsc(scroll.key)}" width="32" height="32" aria-hidden="true"></canvas>
+              <span class="info-card__name">${infoEsc(scroll.name)}</span>
               <span class="info-card__tag info-card__tag--knight">scroll</span>
             </div>
-            <div class="info-card__desc">${scroll.description || ''}</div>
+            <div class="info-card__desc">${infoEsc(scroll.description || '')}</div>
           </div>`;
         }).join('')}</div>` : renderInfoEmpty('scrolls');
         Neo.drawItemIconCanvases?.(view.rhInfoContent, 'data-info-item');
@@ -1025,14 +1095,16 @@ export function createUIController(view) {
           weapon.rarity,
           weapon.description,
         ]));
-        view.rhInfoContent.innerHTML = sorted.length ? `<div class="info-grid">${sorted.map(w => {
-          return `<div class="info-card">
+        setInfoResultStatus(tab, sorted.length);
+        view.rhInfoContent.innerHTML = sorted.length ? `${getInfoResultSummary(tab, sorted.length)}<div class="info-grid" role="list">${sorted.map(w => {
+          const rarity = w.rarity || 'knight';
+          return `<div class="info-card" role="listitem">
             <div class="info-card__header">
-              <canvas class="info-card__icon" data-info-weapon="${w.key}" width="32" height="32"></canvas>
-              <span class="info-card__name">${w.name}</span>
-              <span class="info-card__tag info-card__tag--${w.rarity}">${w.rarity}</span>
+              <canvas class="info-card__icon" data-info-weapon="${infoEsc(w.key)}" width="32" height="32" aria-hidden="true"></canvas>
+              <span class="info-card__name">${infoEsc(w.name)}</span>
+              <span class="info-card__tag info-card__tag--${infoEsc(rarity)}">${infoEsc(rarity)}</span>
             </div>
-            <div class="info-card__desc">${w.description || ''}</div>
+            <div class="info-card__desc">${infoEsc(w.description || '')}</div>
           </div>`;
         }).join('')}</div>` : renderInfoEmpty('weapons');
         view.rhInfoContent.querySelectorAll('[data-info-weapon]').forEach(el => {
@@ -1053,19 +1125,20 @@ export function createUIController(view) {
           move.exclusiveCharacter,
           move.desc,
         ]));
-        view.rhInfoContent.innerHTML = sorted.length ? `<div class="info-grid">${sorted.map(m => {
+        setInfoResultStatus(tab, sorted.length);
+        view.rhInfoContent.innerHTML = sorted.length ? `${getInfoResultSummary(tab, sorted.length)}<div class="info-grid" role="list">${sorted.map(m => {
           const slotLabel = Neo.SLOT_LABELS[m.slot] || m.slot;
           const exclusiveNames = Array.isArray(m.exclusiveCharacter) ? m.exclusiveCharacter : (m.exclusiveCharacter ? [m.exclusiveCharacter] : []);
           const exclusive = exclusiveNames.length
-            ? `<br><em style="color:rgba(200,200,255,0.5)">${exclusiveNames.map(c => Neo.titleCase(c.replace(/_/g, ' '))).join(' / ')} only</em>`
+            ? `<br><em class="info-card__note">${exclusiveNames.map(c => infoEsc(Neo.titleCase(c.replace(/_/g, ' ')))).join(' / ')} only</em>`
             : '';
-          return `<div class="info-card">
+          return `<div class="info-card" role="listitem">
             <div class="info-card__header">
-              <canvas class="info-card__icon" data-info-move="${m.key}" width="32" height="32"></canvas>
-              <span class="info-card__name">${m.name}</span>
-              <span class="info-card__tag info-card__tag--${m.slot}">${slotLabel}</span>
+              <canvas class="info-card__icon" data-info-move="${infoEsc(m.key)}" width="32" height="32" aria-hidden="true"></canvas>
+              <span class="info-card__name">${infoEsc(m.name)}</span>
+              <span class="info-card__tag info-card__tag--${infoEsc(m.slot)}">${infoEsc(slotLabel)}</span>
             </div>
-            <div class="info-card__desc">${m.desc || ''}${exclusive}</div>
+            <div class="info-card__desc">${infoEsc(m.desc || '')}${exclusive}</div>
           </div>`;
         }).join('')}</div>` : renderInfoEmpty('moves');
         view.rhInfoContent.querySelectorAll('[data-info-move]').forEach(el => {
@@ -1074,7 +1147,7 @@ export function createUIController(view) {
         });
 
       } else if (tab === 'enemies') {
-        const attackStyleLabel = { melee: 'Melee', dash: 'Dash', ranged: 'Ranged', burst: 'Burst', summon: 'Summoner', support: 'Support', mirror: 'Mirror', assassin: 'Assassin', beam: 'Beam' };
+        const attackStyleLabel = { melee: 'Melee', dash: 'Dash', ranged: 'Ranged', burst: 'Burst', summon: 'Summoner', support: 'Support', mirror: 'Mirror', assassin: 'Assassin', beam: 'Beam', hazard: 'Hazard' };
         const filteredEnemies = ENEMY_INFO.filter(e => infoSearchMatches(e, enemy => [
           enemy.label,
           enemy.key,
@@ -1087,18 +1160,20 @@ export function createUIController(view) {
           enemy.speed,
           enemy.desc,
         ]));
+        setInfoResultStatus(tab, filteredEnemies.length);
         view.rhInfoContent.innerHTML = `
+          ${getInfoResultSummary(tab, filteredEnemies.length)}
           <div class="info-enemy-layout">
-            <div class="info-enemy-grid">${filteredEnemies.length ? filteredEnemies.map(e => {
+            <div class="info-enemy-grid" role="list">${filteredEnemies.length ? filteredEnemies.map(e => {
               const tagClass = e.boss ? 'info-enemy-card__tag--boss' : 'info-enemy-card__tag--normal';
-              return `<div class="info-enemy-card" data-enemy-select="${e.key}" tabindex="0">
-                <canvas class="info-enemy-card__sprite" data-info-enemy="${e.key}" width="52" height="52"></canvas>
-                <div class="info-enemy-card__name">${e.label}</div>
+              return `<div class="info-enemy-card-wrap" role="listitem"><button class="info-enemy-card" data-enemy-select="${infoEsc(e.key)}" type="button" aria-pressed="false" aria-controls="infoEnemyDetail">
+                <canvas class="info-enemy-card__sprite" data-info-enemy="${infoEsc(e.key)}" width="52" height="52" aria-hidden="true"></canvas>
+                <span class="info-enemy-card__name">${infoEsc(e.label)}</span>
                 <span class="info-enemy-card__tag ${tagClass}">${e.boss ? 'Boss' : 'Enemy'}</span>
-              </div>`;
+              </button></div>`;
             }).join('') : renderInfoEmpty('enemies')}</div>
-            <div class="info-enemy-detail hidden" id="infoEnemyDetail">
-              <canvas class="info-enemy-detail__sprite" id="infoEnemySprite" width="80" height="80"></canvas>
+            <div class="info-enemy-detail hidden" id="infoEnemyDetail" role="region" aria-live="polite" aria-hidden="true" aria-labelledby="infoEnemyName">
+              <canvas class="info-enemy-detail__sprite" id="infoEnemySprite" width="80" height="80" aria-hidden="true"></canvas>
               <div class="info-enemy-detail__name" id="infoEnemyName"></div>
               <div class="info-enemy-detail__tag-row" id="infoEnemyTagRow"></div>
               <div class="info-enemy-detail__stats" id="infoEnemyStats"></div>
@@ -1115,6 +1190,7 @@ export function createUIController(view) {
           const sprite = document.getElementById('infoEnemySprite');
           if (!detail || !sprite) return;
           detail.classList.remove('hidden');
+          detail.setAttribute('aria-hidden', 'false');
           Neo.drawSpriteToCanvas(sprite, key, 76);
           document.getElementById('infoEnemyName').textContent = e.label;
           const isBoss = e.boss;
@@ -1122,9 +1198,9 @@ export function createUIController(view) {
           const styleLbl = attackStyleLabel[e.attackStyle] || e.attackStyle;
           document.getElementById('infoEnemyTagRow').innerHTML =
             `<span class="info-enemy-card__tag ${tagCls}">${isBoss ? 'Boss' : 'Enemy'}</span>` +
-            `<span class="info-enemy-detail__style-tag">${styleLbl}</span>`;
+            `<span class="info-enemy-detail__style-tag">${infoEsc(styleLbl)}</span>`;
           const immHtml = e.immunities.length
-            ? e.immunities.map(im => `<span class="info-enemy-detail__imm">${im}</span>`).join('')
+            ? e.immunities.map(im => `<span class="info-enemy-detail__imm">${infoEsc(im)}</span>`).join('')
             : '<span class="info-enemy-detail__imm info-enemy-detail__imm--none">None</span>';
           const hpRow    = e.hp    ? `<div class="ied-stat"><span class="ied-stat__label">HP</span><span class="ied-stat__value">${e.hp}</span></div>` : '';
           const dmgRow   = e.dmg   ? `<div class="ied-stat"><span class="ied-stat__label">DMG</span><span class="ied-stat__value">${e.dmg}</span></div>` : '';
@@ -1134,31 +1210,39 @@ export function createUIController(view) {
             `<div class="ied-imm-row"><span class="ied-imm-label">Immune:</span>${immHtml}</div>`;
           document.getElementById('infoEnemyDesc').textContent = e.desc || '';
           view.rhInfoContent.querySelectorAll('[data-enemy-select]').forEach(card => {
-            card.classList.toggle('info-enemy-card--selected', card.dataset.enemySelect === key);
+            const selected = card.dataset.enemySelect === key;
+            card.classList.toggle('info-enemy-card--selected', selected);
+            card.setAttribute('aria-pressed', selected ? 'true' : 'false');
           });
         };
         view.rhInfoContent.querySelectorAll('[data-enemy-select]').forEach(card => {
           card.addEventListener('click', () => showEnemyDetail(card.dataset.enemySelect));
-          card.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' ') showEnemyDetail(card.dataset.enemySelect); });
         });
         if (filteredEnemies.length) showEnemyDetail(filteredEnemies[0].key);
 
       } else if (tab === 'characters') {
         const infoCharacters = Object.values(Neo.CHARACTER_DEFS).filter(c => c.key !== 'custom_character');
-        view.rhInfoContent.innerHTML = `<div class="info-char-grid">${infoCharacters.map(c => {
+        setInfoResultStatus(tab, infoCharacters.length);
+        view.rhInfoContent.innerHTML = `${getInfoResultSummary(tab, infoCharacters.length)}<div class="info-char-grid" role="list">${infoCharacters.map(c => {
           const display = Neo.HERO_DISPLAY[c.key] || {};
           const lockNote = getCharacterInfoLockNote(c.key);
-          const statBars = (display.stats || []).map(s =>
+          const statBars = (display.stats || []).map(s => {
+            const pct = Math.max(0, Math.min(100, Number(s.pct) || 0));
+            const label = String(s.label || '');
+            return (
             `<div class="info-char-stat">
-              <span class="info-char-stat__label">${s.label}</span>
-              <div class="info-char-stat__bar"><div class="info-char-stat__fill" style="width:${s.pct}%;background:${s.color}"></div></div>
+              <span class="info-char-stat__label">${infoEsc(label)}</span>
+              <div class="info-char-stat__bar" role="meter" aria-label="${infoEsc(label)} ${pct} percent" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}">
+                <div class="info-char-stat__fill" style="width:${pct}%;background:${infoEsc(s.color || '#f0c040')}"></div>
+              </div>
             </div>`
-          ).join('');
-          return `<div class="info-char-card">
-            <canvas class="info-char-card__sprite" data-info-char="${c.key}" width="64" height="64"></canvas>
+            );
+          }).join('');
+          return `<div class="info-char-card" role="listitem">
+            <canvas class="info-char-card__sprite" data-info-char="${infoEsc(c.key)}" width="64" height="64" aria-hidden="true"></canvas>
             <div class="info-char-card__body">
-              <div class="info-char-card__name">${c.name.toUpperCase()}</div>
-              <div class="info-char-card__lore">${display.lore || ''}</div>
+              <div class="info-char-card__name">${infoEsc(String(c.name || '').toUpperCase())}</div>
+              <div class="info-char-card__lore">${infoEsc(display.lore || '')}</div>
               <div class="info-char-card__stats">${statBars}</div>
               ${lockNote}
             </div>
@@ -1168,7 +1252,8 @@ export function createUIController(view) {
           Neo.drawSpriteToCanvas(el, el.dataset.infoChar, 60);
         });
       } else if (tab === 'meta') {
-        view.rhInfoContent.innerHTML = renderMetaProgressionInfo();
+        setInfoResultStatus(tab, 2);
+        view.rhInfoContent.innerHTML = `${getInfoResultSummary(tab, 2)}${renderMetaProgressionInfo()}`;
       }
     }
 
@@ -2161,9 +2246,15 @@ export function createUIController(view) {
         view.runHistoryClose?.addEventListener('click', () => setRunHistoryOpen(false));
         view.runHistoryViewTabs?.forEach(tab => {
           tab.addEventListener('click', () => setRunHistoryView(tab.dataset.view || 'info'));
+          tab.addEventListener('keydown', event => handleTablistKeydown(event, view.runHistoryViewTabs, nextTab => {
+            setRunHistoryView(nextTab.dataset.view || 'info');
+          }));
         });
         view.rhInfoTabs?.forEach(tab => {
           tab.addEventListener('click', () => populateInfoPanel(tab.dataset.infoTab || 'items'));
+          tab.addEventListener('keydown', event => handleTablistKeydown(event, view.rhInfoTabs, nextTab => {
+            populateInfoPanel(nextTab.dataset.infoTab || 'items');
+          }));
         });
         view.rhInfoSearch?.addEventListener('input', () => {
           if (!searchableInfoTabs.has(activeInfoTab)) return;

@@ -1054,6 +1054,43 @@
     min-width: 0;
   }
 
+  .rh-info {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .rh-info-rail {
+    flex-shrink: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    overflow: visible;
+  }
+
+  .rh-info-rail__label {
+    display: none;
+  }
+
+  .rh-info-tabs {
+    flex-direction: row;
+    overflow-x: auto;
+    overflow-y: hidden;
+    flex-wrap: nowrap;
+    scrollbar-width: none;
+  }
+
+  .rh-info-tab {
+    width: auto;
+    flex: 0 0 auto;
+    text-align: center;
+  }
+
+  .rh-info-tutorial-btn {
+    margin-top: 8px;
+    width: 100%;
+  }
+
   .floating-panel__head {
     padding: 12px;
   }
@@ -3483,5 +3520,12 @@
     flex: 0 0 138px !important;
     min-width: 138px !important;
     scroll-snap-align: start;
+  }
+}
+
+@media (max-width: 760px) {
+  .rh-panel {
+    height: calc(100dvh - 12px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+    max-height: calc(100dvh - 12px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
   }
 }
