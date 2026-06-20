@@ -1122,6 +1122,7 @@
       const totalTime = def.duration + extraStacks * durationBonus;
       player.equipmentEffects[itemKey] = { time: totalTime, total: totalTime, tick: 0, stacks };
     }
+    if (itemKey === 'zap_to_extreme') Neo.playSfx?.('lightning_charge');
     if (itemKey === 'panic_button') activatePanicButton();
     if (itemKey === 'sparkle_charm') activateSparkleCharm();
     if (itemKey === 'churu_stick') activateChuruStick();

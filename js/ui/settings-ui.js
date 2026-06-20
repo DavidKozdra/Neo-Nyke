@@ -21,7 +21,7 @@
     ['tool1', 'Tool Slot 1'], ['tool2', 'Tool Slot 2'], ['tool3', 'Tool Slot 3'], ['tool4', 'Tool Slot 4'],
     ['tool5', 'Tool Slot 5'], ['tool6', 'Tool Slot 6'], ['tool7', 'Tool Slot 7'], ['tool8', 'Tool Slot 8'],
   ];
-  const DEFAULT_VOLUME   = { master:20, sfx:80, music:20 };
+  const DEFAULT_VOLUME   = { master:20, sfx:80, music:20, soundLevels:{} };
   const DEFAULT_ACCESS   = { reduceFlash:false, reduceMotion:false, reduceParticles:false, highContrast:false, screenShake:true, rumble:true, shopCanAfford:'#4caf50', shopCantAfford:'#e05555', hudScale:1, fontScale:1 };
   const DEFAULT_GAMEPLAY = { pauseInventory:true, pauseOnBlur:true, bloodMultiplier:1, bloodOnHit:true, performanceMode:true, objectivePanel:true, cutsceneAutoAdvance:false };
   const BLOOD_MULTIPLIER_MIN = 1;
@@ -483,6 +483,10 @@
   function openSettings() {
     stopListening();
     refreshGamepadStatus();
+    // sfx.js may register its catalog after this module's first synchronous pass
+    // (module vs. classic-defer load order), so populate lazily if still empty.
+    const soundHost = document.getElementById('soundLevels');
+    if (soundHost && !soundHost.children.length) buildSoundLevels();
     if (settingsUi && typeof settingsUi.showScreen === 'function') {
       settingsUi.showScreen('settingsModal');
     }
@@ -752,8 +756,100 @@
     const el = document.getElementById(id), val = document.getElementById(valId);
     el.value = volume[key];
     val.textContent = volume[key];
-    el.addEventListener('input', () => { volume[key] = Number(el.value); val.textContent = el.value; save(); });
+    el.addEventListener('input', () => {
+      volume[key] = Number(el.value);
+      val.textContent = el.value;
+      save();
+      // The SFX slider is the baseline for any sound the player hasn't overridden,
+      // so its un-set rows need to re-read their displayed default.
+      if (key === 'sfx') refreshSoundLevelDefaults();
+    });
   });
+
+  buildSoundLevels();
+
+  function escapeAttr(s) {
+    return String(s).replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+  }
+
+  // Build one volume slider per registered sound, grouped into collapsible
+  // categories. A row is "overridden" when the player has set an explicit level;
+  // otherwise it tracks the SFX slider and shows that as its placeholder value.
+  function buildSoundLevels() {
+    const host = document.getElementById('soundLevels');
+    if (!host) return;
+    const catalog = window.Neo?.getSoundCatalog?.();
+    // Leave the host empty (not an error message) when the catalog isn't ready
+    // yet, so openSettings() retries the build once sfx.js has registered.
+    if (!catalog || !catalog.sounds?.length) { host.innerHTML = ''; return; }
+    if (!volume.soundLevels) volume.soundLevels = {};
+
+    const byCategory = new Map();
+    catalog.sounds.forEach((s) => {
+      if (!byCategory.has(s.category)) byCategory.set(s.category, []);
+      byCategory.get(s.category).push(s);
+    });
+    const order = catalog.categoryOrder.filter((c) => byCategory.has(c));
+
+    host.innerHTML = order.map((cat) => {
+      const rows = byCategory.get(cat).map((s) => `
+        <div class="sound-row" data-sound="${escapeAttr(s.id)}" data-default="${s.defaultLevel}">
+          <label class="vol-label" for="snd_${escapeAttr(s.id)}">${escapeAttr(s.label)}</label>
+          <input class="vol-slider" id="snd_${escapeAttr(s.id)}" type="range" min="0" max="100" step="1">
+          <span class="vol-val"></span>
+        </div>`).join('');
+      // First category open by default, rest collapsed.
+      const open = cat === order[0] ? ' open' : '';
+      return `<details class="sound-cat"${open}><summary>${escapeAttr(cat)}</summary>${rows}</details>`;
+    }).join('');
+
+    host.querySelectorAll('.sound-row').forEach((row) => {
+      const id = row.dataset.sound;
+      const slider = row.querySelector('input');
+      const val = row.querySelector('.vol-val');
+      const override = volume.soundLevels[id];
+      const isSet = override != null;
+      slider.value = isSet ? override : effectiveDefaultLevel(row);
+      val.textContent = slider.value;
+      row.classList.toggle('is-overridden', isSet);
+      slider.addEventListener('input', () => {
+        volume.soundLevels[id] = Number(slider.value);
+        val.textContent = slider.value;
+        row.classList.add('is-overridden');
+        save();
+      });
+    });
+  }
+
+  // The level an un-overridden sound actually plays at: its authored baseline
+  // (data-default, 0-100) scaled by the SFX slider. Mirrors getSoundGain in sfx.js.
+  function effectiveDefaultLevel(row) {
+    const baseline = Number(row.dataset.default);
+    const sfx = Number(volume.sfx) || 0;
+    return Math.round((Number.isFinite(baseline) ? baseline : 100) / 100 * sfx);
+  }
+
+  // After the SFX baseline changes, pull un-overridden rows up/down to match.
+  function refreshSoundLevelDefaults() {
+    const host = document.getElementById('soundLevels');
+    if (!host) return;
+    host.querySelectorAll('.sound-row').forEach((row) => {
+      if (row.classList.contains('is-overridden')) return;
+      const slider = row.querySelector('input');
+      const val = row.querySelector('.vol-val');
+      slider.value = effectiveDefaultLevel(row);
+      val.textContent = slider.value;
+    });
+  }
+
+  const soundLevelsReset = document.getElementById('soundLevelsReset');
+  if (soundLevelsReset) {
+    soundLevelsReset.addEventListener('click', () => {
+      volume.soundLevels = {};
+      save();
+      buildSoundLevels();
+    });
+  }
 
   [['accReduceFlash','reduceFlash'],['accReduceMotion','reduceMotion'],['accReduceParticles','reduceParticles'],['accHighContrast','highContrast'],['accScreenShake','screenShake'],['accRumble','rumble']].forEach(([id, key]) => {
     const el = document.getElementById(id);

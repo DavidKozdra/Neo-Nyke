@@ -1551,6 +1551,7 @@
   }
 
   function castZipLightning(moveX, moveY) {
+    Neo.playSfx?.('lightning_charge');
     const itemStats = Neo.getItemStats();
     const visited = new Set();
     const hops = 3;

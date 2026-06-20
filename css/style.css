@@ -8025,6 +8025,70 @@ border-bottom: black solid 2px;
   flex-shrink: 0;
 }
 
+/* --- Per-sound mixer --- */
+.settings-group__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.settings-link-btn {
+  background: none;
+  border: none;
+  color: var(--menu-accent-strong);
+  font-size: calc(13px * var(--font-scale, 1));
+  font-weight: 700;
+  letter-spacing: .04em;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 6px;
+}
+.settings-link-btn:hover { color: #ffffff; text-decoration: underline; }
+
+.settings-hint {
+  font-size: calc(13px * var(--font-scale, 1));
+  color: var(--menu-text-soft);
+  margin: 2px 0 10px;
+}
+
+.sound-cat { margin: 0 0 6px; }
+.sound-cat > summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 4px;
+  font-size: calc(13px * var(--font-scale, 1));
+  font-weight: 800;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--menu-text);
+}
+.sound-cat > summary::-webkit-details-marker { display: none; }
+.sound-cat > summary::before {
+  content: '\25B8'; /* ▸ */
+  color: var(--menu-accent);
+  transition: transform .12s;
+}
+.sound-cat[open] > summary::before { transform: rotate(90deg); }
+.sound-cat > summary:hover { color: var(--menu-accent-strong); }
+
+.sound-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 4px 9px 22px;
+}
+.sound-row + .sound-row { border-top: 1px solid rgba(128, 146, 170, .12); }
+.sound-row .vol-label {
+  width: auto;
+  flex: 0 0 130px;
+  font-size: calc(14px * var(--font-scale, 1));
+}
+.sound-row.is-overridden .vol-label { color: var(--menu-accent-strong); font-weight: 700; }
+
 /* --- Accessibility toggles --- */
 .access-row {
   display: flex;

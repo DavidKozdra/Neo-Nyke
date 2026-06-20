@@ -142,6 +142,46 @@
     { id: 'hud_confirm', path: 'assets/sounds/sfx_hud_confirm 6.wav', volume: 0.6, priority: priority.HIGH, mixDb: 0 },
   ];
 
+  // Display metadata for the per-sound volume mixer (Settings → Volume). Each
+  // entry maps a sound id to a human label and a category bucket. Anything not
+  // listed here falls back to a prettified id under the "Other" category, so the
+  // mixer stays complete even if a new sound is added without metadata.
+  const SOUND_META = {
+    // Combat
+    fire:            { label: 'Weapon Fire',         category: 'Combat' },
+    fire_burn:       { label: 'Fireballs / Burn',    category: 'Combat' },
+    sword_swing:     { label: 'Sword Swing',         category: 'Combat' },
+    lazer_blast:     { label: 'Laser Blast',         category: 'Combat' },
+    lightning_charge:{ label: 'Lightning',           category: 'Combat' },
+    bomb_explosion:  { label: 'Bomb Explosion',      category: 'Combat' },
+    dash:            { label: 'Dash',                category: 'Combat' },
+    enemy_hit:       { label: 'Enemy Hit',           category: 'Combat' },
+    enemy_hurt:      { label: 'Enemy Hurt',          category: 'Combat' },
+    player_death:    { label: 'Player Death',        category: 'Combat' },
+    // Pickups & economy
+    item_collect:    { label: 'Item Collect',        category: 'Pickups' },
+    coin:            { label: 'Coin',                category: 'Pickups' },
+    heal_player:     { label: 'Heal',                category: 'Pickups' },
+    buy_sell:        { label: 'Buy / Sell',          category: 'Pickups' },
+    secret_reveal:   { label: 'Secret Reveal',       category: 'Pickups' },
+    // World
+    room_transition: { label: 'Room Transition',     category: 'World' },
+    ladder:          { label: 'Ladder',              category: 'World' },
+    // UI
+    menu_click:      { label: 'Menu Click',          category: 'UI' },
+    hud_confirm:     { label: 'Confirm',             category: 'UI' },
+    forge_upgrade:   { label: 'Forge Upgrade',       category: 'UI' },
+    dialogue:        { label: 'Dialogue',            category: 'UI' },
+    // Stingers
+    victory:         { label: 'Victory',             category: 'Stingers' },
+    achievement:     { label: 'Achievement',         category: 'Stingers' },
+  };
+  const CATEGORY_ORDER = ['Combat', 'Pickups', 'World', 'UI', 'Stingers', 'Other'];
+
+  function prettifyId(id) {
+    return String(id || '').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+
   const soundDefs = new Map();
   SOUNDS.forEach((sound) => {
     const registered = registry?.register(sound.id, sound);
@@ -153,6 +193,29 @@
     soundDefs.set(sound.id, { ...sound, paths });
   });
 
+  // Catalog consumed by the settings UI to build one volume slider per sound,
+  // grouped by category and ordered consistently.
+  function getSoundCatalog() {
+    const entries = SOUNDS.map((sound) => {
+      const meta = SOUND_META[sound.id] || {};
+      return {
+        id: sound.id,
+        label: meta.label || prettifyId(sound.id),
+        category: meta.category || 'Other',
+        // Baseline 0-100 level shown when the player hasn't overridden this sound.
+        defaultLevel: Math.round(Math.max(0, Math.min(1, Number(sound.volume ?? 1))) * 100),
+      };
+    });
+    entries.sort((a, b) => {
+      const ca = CATEGORY_ORDER.indexOf(a.category);
+      const cb = CATEGORY_ORDER.indexOf(b.category);
+      if (ca !== cb) return (ca < 0 ? 99 : ca) - (cb < 0 ? 99 : cb);
+      return a.label.localeCompare(b.label);
+    });
+    return { categoryOrder: CATEGORY_ORDER.slice(), sounds: entries };
+  }
+  Neo.getSoundCatalog = getSoundCatalog;
+
   function getContext() {
     const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
     if (!AudioContextCtor) return null;
@@ -162,11 +225,32 @@
     return ctx;
   }
 
-  function getSfxGain() {
+  function clamp01(n, fallback) {
+    const value = Number(n);
+    if (!Number.isFinite(value)) return fallback;
+    return Math.max(0, Math.min(1, value / 100));
+  }
+
+  function getMasterGain() {
     const volume = window.NeoSettings?.getVolume?.() || {};
-    const master = Math.max(0, Math.min(1, Number(volume.master ?? 20) / 100));
-    const sfx = Math.max(0, Math.min(1, Number(volume.sfx ?? 80) / 100));
-    return master * sfx;
+    return clamp01(volume.master, 0.2);
+  }
+
+  // Per-sound absolute level. If the player has set this sound's slider, that
+  // value (0-100) is its level directly. Otherwise the sound's authored baseline
+  // (def.volume) is used, attenuated by the shared SFX slider so SFX still acts
+  // as a default for un-touched sounds. Master scales everything on top.
+  function getSoundGain(id, baselineVolume = 1) {
+    const volume = window.NeoSettings?.getVolume?.() || {};
+    const overrides = volume.soundLevels || {};
+    let level;
+    if (id != null && overrides[id] != null) {
+      level = clamp01(overrides[id], baselineVolume);
+    } else {
+      const sfxBaseline = clamp01(volume.sfx, 0.8);
+      level = Math.max(0, Math.min(1, Number(baselineVolume) || 0)) * sfxBaseline;
+    }
+    return getMasterGain() * level;
   }
 
   function getOutputNode(ctx) {
@@ -208,7 +292,7 @@
     try {
       const def = soundDefs.get(id);
       if (!def || !def.paths.length) return;
-      const gainLevel = getSfxGain();
+      const gainLevel = getSoundGain(id, def.volume ?? 1);
       if (gainLevel <= 0) return;
       const ctx = getContext();
       if (!ctx) return;
@@ -231,7 +315,9 @@
           source.buffer = buffer;
           const gain = ctx.createGain();
           const mixGain = mixerApi?.dbToGain?.(def.mixDb ?? 0) ?? Math.pow(10, Number(def.mixDb || 0) / 20);
-          gain.gain.value = Math.max(0, Number(def.volume ?? 1) * mixGain * getSfxGain());
+          // getSoundGain already folds in the sound's baseline volume (or the
+          // player's per-sound override), Master, and the SFX default.
+          gain.gain.value = Math.max(0, mixGain * getSoundGain(id, def.volume ?? 1));
           const lowCut = mixerApi?.createLowCutNode?.(
             ctx,
             def.lowCutHz ?? mixerApi.DEFAULT_LOW_CUT_HZ
