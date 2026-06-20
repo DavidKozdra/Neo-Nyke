@@ -88,8 +88,8 @@ const CHARACTER_LEVEL_MILESTONES = {
   mooggy: {
     7:  { moveCharge: { slot: 'dash', moveKey: 'mooggy_zoomies' },  stat: { maxHp: 10, attackPower: 2 }, label: 'ZOOMIES +1 CHARGE' },
     21: { moveCharge: { slot: 'laser', moveKey: 'nail_shot' },      stat: { maxHp: 14, attackPower: 3 }, label: 'NAIL SHOT +1 CHARGE' },
-  },
-};
+                                                                                                                                                          },
+                                                                                                                                                        };
 
 export const LEVEL_MILESTONE_LEVELS = Object.keys(DEFAULT_LEVEL_MILESTONES)
   .map(Number)

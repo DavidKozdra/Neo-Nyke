@@ -1913,6 +1913,9 @@ button, input, select, textarea {
   font-size: calc(10px * var(--font-scale, 1));
   font-weight: 800;
   letter-spacing: .14em;
+  /* letter-spacing adds a trailing track after the last glyph, shoving the text
+     left inside the pill; nudge it back by one track so it reads centered. */
+  text-indent: .14em;
   text-transform: uppercase;
 }
 
@@ -2401,6 +2404,8 @@ button, input, select, textarea {
   font-size: calc(10px * var(--font-scale, 1));
   font-weight: 800;
   letter-spacing: .1em;
+  /* offset the trailing letter-spacing track so "TOOL" reads centered in the pill */
+  text-indent: .1em;
   text-transform: uppercase;
   color: #1b140a;
   background: linear-gradient(180deg, #ffd87a, #ffb13d);
@@ -2858,6 +2863,8 @@ button, input, select, textarea {
   font-size: calc(11px * var(--font-scale, 1));
   font-weight: 800;
   letter-spacing: .08em;
+  /* offset the trailing letter-spacing track so "x1" sits centered in the pill */
+  text-indent: .08em;
   text-transform: uppercase;
 }
 
