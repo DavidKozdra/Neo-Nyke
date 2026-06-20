@@ -826,6 +826,13 @@ export function resumeGame() {
           characterKitChoices: migrateCharacterKitChoices(savedMeta.characterKitChoices),
           customCharacters: normalizeCustomCharactersSettings(savedMeta.customCharacters || (savedMeta.customCharacter ? [savedMeta.customCharacter] : null)),
         };
+        // Guardrail: loading must never lose an earned unlock. If a key was in the save
+        // but isn't after normalization, a normalizer/migration dropped it (e.g. a key
+        // was renamed without a migration line, or new always-unlocked content shadowed
+        // a derived unlock). Warn loudly here so it's caught in dev, not by a player.
+        warnIfUnlocksDropped('unlockedItems', savedMeta.unlockedItems || savedMeta.unlockedRelics, Neo.metaProgress.unlockedItems);
+        warnIfUnlocksDropped('unlockedCharacters', savedMeta.unlockedCharacters, Neo.metaProgress.unlockedCharacters);
+        warnIfUnlocksDropped('unlockedLegacy', savedMeta.unlockedLegacy, Neo.metaProgress.unlockedLegacy);
       }
       Neo.runHistory = normalizeRunHistory(savedRunHistory || savedMeta?.runHistory);
       syncMetaRecordsFromRunHistory();
@@ -842,6 +849,12 @@ export function resumeGame() {
         if (Neo.metaProgress.godsKilled > 0) unlocked.add('gelleh');
         if (Number(Neo.metaProgress.mooggyDefeats || 0) >= 3) unlocked.add('mooggy');
         getCustomCharacterKeys().forEach(key => unlocked.add(key));
+        // Persist the derived unlocks back into the saved list. Gelleh/Mooggy were only
+        // ever re-derived from the godsKilled/mooggyDefeats counters at load and never
+        // written back, so adding new always-unlocked starters (turtle_boy, sarge) made
+        // the earned unlocks look lost whenever those counters didn't survive. Once an
+        // earned character is recorded here it stays unlocked regardless of the counters.
+        Neo.metaProgress.unlockedCharacters = normalizeUnlockedCharacters([...unlocked]);
         const preferredCharacter = String(Neo.metaProgress.selectedCharacter || Neo.chosenCharacter);
         Neo.chosenCharacter = unlocked.has(preferredCharacter) ? preferredCharacter : [...unlocked][0] || 'thorn_knight';
         Neo.metaProgress.selectedCharacter = Neo.chosenCharacter;
@@ -870,7 +883,12 @@ export function resumeGame() {
       if (value === 'double_dose') return 'drink_master';
       return value;
     });
-    const items = Neo.ITEM_KEYS.filter(name => migrated.includes(name));
+    // Keep every earned key, including ones not in the current ITEM_KEYS. Filtering to
+    // only known keys would silently erase an unlock from every save the moment an item
+    // key is renamed (the migration map above only covers keys we remembered to add).
+    // Unknown keys are harmless to carry and are simply ignored where items are looked
+    // up, so preserving them protects progress across future content/renames.
+    const items = [...new Set(migrated.filter(name => typeof name === 'string' && name))];
     return items.length ? items : fallback;
   }
 
@@ -892,6 +910,17 @@ export function resumeGame() {
       delete choices.sarge.smash;
     }
     return choices;
+  }
+
+  // Dev guardrail: flags earned keys that existed in the save but vanished after
+  // normalization. Character keys are remapped through migrateCharacterKey first so a
+  // legitimate legacy-key rename (granialla -> gelleh) isn't reported as a loss.
+  function warnIfUnlocksDropped(field, savedList, loadedList) {
+    if (!Array.isArray(savedList)) return;
+    const remap = field === 'unlockedCharacters' ? migrateCharacterKey : (key => key);
+    const after = new Set(loadedList || []);
+    const lost = [...new Set(savedList.map(remap))].filter(key => key && !after.has(key));
+    if (lost.length) console.error(`[save] ${field}: dropped earned key(s) on load:`, lost);
   }
 
   function normalizeUnlockedCharacters(input) {
@@ -1025,7 +1054,11 @@ export function resumeGame() {
 
   function normalizeLegacySelection(input) {
     if (!Array.isArray(input)) return [];
-    return [...new Set(input.filter(key => Neo.LEGACY_UPGRADES[key]))];
+    // Keep every purchased key, including ones not in the current LEGACY_UPGRADES, so
+    // renaming a legacy upgrade doesn't silently refund/erase it from existing saves.
+    // Consumers gate on membership (hasLegacy/ownedLegacy) and the meta panel renders
+    // from LEGACY_ORDER, so an unknown carried key is inert rather than shown broken.
+    return [...new Set(input.filter(key => typeof key === 'string' && key))];
   }
 
   function hasLegacy(key) {
