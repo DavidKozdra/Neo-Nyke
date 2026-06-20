@@ -1173,7 +1173,11 @@
         <span class="credits-extra-btn__hint">Replay every scene</span>
       </button>
       <button id="creditsJukeboxBtn" class="credits-extra-btn" type="button">
-        <span class="credits-extra-btn__icon" aria-hidden="true">&#9835;</span>
+        <span class="credits-extra-btn__icon credits-extra-btn__icon--jukebox" aria-hidden="true">
+          <span></span>
+          <span></span>
+          <span></span>
+        </span>
         <span class="credits-extra-btn__label">JUKEBOX</span>
         <span class="credits-extra-btn__hint">Play the soundtrack</span>
       </button>
@@ -1204,14 +1208,28 @@
     <div class="credits-modal__panel">
       <div class="credits-modal__head">
         <h3 id="jukeboxOverlayTitle" class="credits-modal__title">JUKEBOX</h3>
-        <button id="jukeboxClose" class="credits-modal__close" type="button" aria-label="Close jukebox">&#10005;</button>
+        <button id="jukeboxClose" class="credits-modal__close" type="button" aria-label="Close jukebox">
+          <span class="credits-modal__close-mark" aria-hidden="true"></span>
+        </button>
       </div>
       <div class="jukebox">
         <div id="jukeboxNowPlaying" class="jukebox__now">Select a track</div>
+        <div id="jukeboxVisualizer" class="jukebox__visualizer" aria-hidden="true">
+          <span></span><span></span><span></span><span></span><span></span>
+          <span></span><span></span><span></span><span></span><span></span>
+          <span></span><span></span><span></span><span></span><span></span>
+          <span></span><span></span><span></span><span></span><span></span>
+        </div>
         <div class="jukebox__controls">
-          <button id="jukeboxPrev" class="jukebox__btn" type="button" aria-label="Previous track">&#9198;</button>
-          <button id="jukeboxToggle" class="jukebox__btn jukebox__btn--play" type="button" aria-label="Play or pause">&#9654;</button>
-          <button id="jukeboxNext" class="jukebox__btn" type="button" aria-label="Next track">&#9197;</button>
+          <button id="jukeboxPrev" class="jukebox__btn" type="button" aria-label="Previous track">
+            <span class="jukebox__icon jukebox__icon--prev" aria-hidden="true"></span>
+          </button>
+          <button id="jukeboxToggle" class="jukebox__btn jukebox__btn--play" type="button" aria-label="Play">
+            <span class="jukebox__icon jukebox__icon--play" aria-hidden="true"></span>
+          </button>
+          <button id="jukeboxNext" class="jukebox__btn" type="button" aria-label="Next track">
+            <span class="jukebox__icon jukebox__icon--next" aria-hidden="true"></span>
+          </button>
         </div>
         <div id="jukeboxList" class="jukebox__list" role="list"></div>
       </div>

@@ -438,7 +438,7 @@
     const floor = Math.max(1, Number(floorValue || 1));
     const difficulty = Neo.getDifficultyDef(difficultyKey);
     const difficultyMultiplier = Math.max(1, Number(difficulty?.statMultiplier || 1));
-    return Math.max(20, Math.round((90 + floor * 17.5) / difficultyMultiplier / 2));
+    return Math.max(28, Math.round((90 + floor * 17.5) / difficultyMultiplier / 2 * 1.4));
   }
 
   function buildWavePlan(count, roomType = 'combat') {

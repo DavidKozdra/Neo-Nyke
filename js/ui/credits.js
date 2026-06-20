@@ -310,20 +310,55 @@
   const jukeboxToggleBtn = document.getElementById('jukeboxToggle');
   const jukeboxPrevBtn = document.getElementById('jukeboxPrev');
   const jukeboxNextBtn = document.getElementById('jukeboxNext');
+  const jukeboxVisualizer = document.getElementById('jukeboxVisualizer');
+  const jukeboxVisualizerBars = jukeboxVisualizer ? [...jukeboxVisualizer.querySelectorAll('span')] : [];
   let jukeboxBuilt = false;
   let jukeboxUnsub = null;
+  let jukeboxVisualizerFrame = null;
+
+  function setJukeboxVisualizerLevels(levels) {
+    jukeboxVisualizerBars.forEach((bar, index) => {
+      const level = Array.isArray(levels) ? Number(levels[index] || 0) : 0;
+      const clamped = Math.max(0, Math.min(1, level));
+      bar.style.setProperty('--bar-height', `${Math.round(7 + (clamped * 50))}px`);
+      bar.style.setProperty('--bar-glow', `${Math.round(4 + (clamped * 16))}px`);
+    });
+  }
+
+  function startJukeboxVisualizer() {
+    if (jukeboxVisualizerFrame || !jukeboxVisualizer || !jukeboxVisualizerBars.length) return;
+    const tick = () => {
+      const state = Neo.jukebox?.getState?.();
+      const playing = !!state?.playing;
+      const levels = playing ? Neo.jukebox?.getLevels?.(jukeboxVisualizerBars.length) : null;
+      jukeboxVisualizer.classList.toggle('is-active', playing);
+      setJukeboxVisualizerLevels(levels);
+      jukeboxVisualizerFrame = window.requestAnimationFrame(tick);
+    };
+    tick();
+  }
+
+  function stopJukeboxVisualizer() {
+    if (jukeboxVisualizerFrame) {
+      window.cancelAnimationFrame(jukeboxVisualizerFrame);
+      jukeboxVisualizerFrame = null;
+    }
+    jukeboxVisualizer?.classList.remove('is-active');
+    setJukeboxVisualizerLevels(null);
+  }
 
   function renderJukebox(state) {
     if (!state) return;
     const playing = state.playing;
     if (jukeboxToggleBtn) {
-      jukeboxToggleBtn.innerHTML = playing ? '&#10074;&#10074;' : '&#9654;';
+      jukeboxToggleBtn.classList.toggle('is-playing', playing);
       jukeboxToggleBtn.setAttribute('aria-label', playing ? 'Pause' : 'Play');
     }
+    jukeboxVisualizer?.classList.toggle('is-active', playing);
     const current = (state.tracks || []).find((t) => t.id === state.trackId);
     if (jukeboxNow) {
       jukeboxNow.textContent = current
-        ? `${playing ? '♫ ' : ''}${current.title}`
+        ? current.title
         : 'Select a track';
     }
     if (jukeboxList) {
@@ -376,6 +411,10 @@
     if (!overlay) return;
     overlay.classList.toggle('hidden', !open);
     overlay.setAttribute('aria-hidden', open ? 'false' : 'true');
+    if (overlay === jukeboxOverlay) {
+      if (open) startJukeboxVisualizer();
+      else stopJukeboxVisualizer();
+    }
   }
 
   function openGallery() {

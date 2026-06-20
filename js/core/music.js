@@ -366,6 +366,9 @@
   let jukeboxAudio = null;
   let jukeboxIntroAudio = null;
   let jukeboxTrackId = null;
+  let jukeboxAnalyser = null;
+  let jukeboxFrequencyData = null;
+  const jukeboxMediaSources = new WeakMap();
   const jukeboxListeners = new Set();
 
   function emitJukeboxState() {
@@ -392,6 +395,65 @@
     jukeboxIntroAudio = null;
     jukeboxAudio = null;
     jukeboxTrackId = null;
+  }
+
+  function getJukeboxContext() {
+    const context = getTitleAudioContext();
+    if (context && context.state === 'suspended') {
+      void context.resume?.().catch?.(() => {});
+    }
+    return context;
+  }
+
+  function activeJukeboxAudio() {
+    if (jukeboxIntroAudio && !jukeboxIntroAudio.paused) return jukeboxIntroAudio;
+    if (jukeboxAudio && !jukeboxAudio.paused) return jukeboxAudio;
+    return null;
+  }
+
+  function connectJukeboxAnalyser(audio) {
+    if (!audio) return null;
+    const context = getJukeboxContext();
+    if (!context) return null;
+    try {
+      if (!jukeboxAnalyser) {
+        jukeboxAnalyser = context.createAnalyser();
+        jukeboxAnalyser.fftSize = 64;
+        jukeboxAnalyser.smoothingTimeConstant = 0.76;
+        jukeboxAnalyser.connect(context.destination);
+        jukeboxFrequencyData = new Uint8Array(jukeboxAnalyser.frequencyBinCount);
+      }
+      let source = jukeboxMediaSources.get(audio);
+      if (!source) {
+        source = context.createMediaElementSource(audio);
+        source.connect(jukeboxAnalyser);
+        jukeboxMediaSources.set(audio, source);
+      }
+      return jukeboxAnalyser;
+    } catch {
+      return null;
+    }
+  }
+
+  function getJukeboxLevels(count = 20) {
+    const size = Math.max(1, Math.min(32, Math.floor(Number(count) || 20)));
+    const levels = new Array(size).fill(0);
+    const audio = activeJukeboxAudio();
+    if (!audio) return levels;
+    const analyser = connectJukeboxAnalyser(audio);
+    if (!analyser || !jukeboxFrequencyData) return levels;
+    analyser.getByteFrequencyData(jukeboxFrequencyData);
+    const usableBins = Math.max(1, Math.floor(jukeboxFrequencyData.length * 0.72));
+    for (let i = 0; i < size; i += 1) {
+      const start = Math.floor((i / size) * usableBins);
+      const end = Math.max(start + 1, Math.floor(((i + 1) / size) * usableBins));
+      let peak = 0;
+      for (let bin = start; bin < end; bin += 1) {
+        peak = Math.max(peak, jukeboxFrequencyData[bin] || 0);
+      }
+      levels[i] = clamp01(Math.pow(peak / 255, 0.72));
+    }
+    return levels;
   }
 
   function jukeboxPlay(trackId) {
@@ -421,6 +483,7 @@
     // (or there is no intro), drive the loop; otherwise (re)start the intro.
     const resume = (!jukeboxIntroAudio || jukeboxAudio.currentTime > 0) ? jukeboxAudio : jukeboxIntroAudio;
     resume.volume = getMusicGain();
+    connectJukeboxAnalyser(resume);
     void resume.play().catch(() => {});
     emitJukeboxState();
   }
@@ -542,6 +605,7 @@
     next: () => jukeboxStep(1),
     prev: () => jukeboxStep(-1),
     release: jukeboxRelease,
+    getLevels: getJukeboxLevels,
     getState: getJukeboxState,
     onChange: (fn) => { if (typeof fn === 'function') jukeboxListeners.add(fn); return () => jukeboxListeners.delete(fn); },
   };

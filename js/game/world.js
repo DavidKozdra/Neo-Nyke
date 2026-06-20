@@ -1874,6 +1874,7 @@
             hazard.triggered = true;
             hazard.fuse = hazard.fuseDuration || 0.75;
             hazard.sparkTick = 0;
+            Neo.playSfx?.('bomb_explosion');
             Neo.spawnParticle({ x: hazard.x, y: hazard.y - 20, life: 0.5, text: 'CLICK', c: '#ffcc66', size: 12 });
           }
         } else {
@@ -1899,7 +1900,6 @@
               damagePlayer(damage, angle, 220, 'explosive_trap');
             }
             blastRadius(hazard.x, hazard.y, hazard.blastRadius || 88, damage, '#ff9a4d');
-            Neo.playSfx?.('bomb_explosion');
             hazard.ttl = 0;
           }
         }
