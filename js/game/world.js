@@ -1052,6 +1052,10 @@
     p.maxLife = p.life;
     p.damage = props.damage ?? 0;
     p.kind = props.kind ?? null;
+    // Pendant of Rock: rock-kind player projectiles deal +2% damage per stack.
+    if (!enemyProjectile && p.kind === 'rock' && itemStats.rockDamageMultiplier > 1) {
+      p.damage *= itemStats.rockDamageMultiplier;
+    }
     p.color = props.color ?? null;
     p.enemy = enemyProjectile;
     p.animSeed = Number.isFinite(props.animSeed) ? Number(props.animSeed) : Math.random() * Math.PI * 2;
@@ -1465,6 +1469,8 @@
   function getProjectileHomingTarget(projectile, dt) {
     if (!projectile?.homing) return null;
     if (projectile.enemy && Neo.player) return Neo.player;
+    // A returning boomerang (Sarge's Hammer phase 2) homes back to the player.
+    if (projectile.boomerang && projectile.boomerangPhase === 'back') return Neo.player || null;
     if (projectile.homingTarget !== 'enemy') return null;
     projectile.homingTargetTimer = Math.max(0, Number(projectile.homingTargetTimer || 0) - dt);
     if (isValidHomingEnemyTarget(projectile.homingTargetRef) && projectile.homingTargetTimer > 0) {
@@ -1526,6 +1532,53 @@
     }
   }
 
+  // Flip a Sarge's Hammer boomerang from its outward seek into the return-to-player
+  // homing phase. Re-aims toward the player and refreshes life so it can make it back.
+  function startBoomerangReturn(projectile) {
+    if (!projectile) return;
+    projectile.boomerangPhase = 'back';
+    projectile.homing = true;
+    projectile.homingTarget = 'player';
+    projectile.life = 4;
+    if (Neo.player) {
+      const angle = Math.atan2(Neo.player.y - projectile.y, Neo.player.x - projectile.x);
+      const speed = Math.hypot(Number(projectile.vx || 0), Number(projectile.vy || 0)) || 700;
+      projectile.vx = Math.cos(angle) * speed;
+      projectile.vy = Math.sin(angle) * speed;
+    }
+    spawnProjectileImpact(projectile, projectile.x, projectile.y);
+  }
+
+  // Sarge's Hammer "bigger payoff": when the returning hammer reaches the player it
+  // heals a chunk and yanks nearby pickups (coins/items/potions) into the player.
+  function resolveBoomerangCatch(projectile) {
+    if (!projectile || projectile.boomerangCaught) return;
+    projectile.boomerangCaught = true;
+    if (!Neo.player) return;
+    const healAmount = Math.max(2, Math.round(Neo.player.maxHp * 0.04));
+    const heal = Neo.applyPlayerHealing?.(
+      Neo.scalePlayerHealing ? Neo.scalePlayerHealing(healAmount, 1) : healAmount,
+      { showBarrier: false }
+    ) ?? 0;
+    if (heal > 0) Neo.spawnHealPopup?.(Neo.player.x + Neo.rand(-6, 6), Neo.player.y - 24, heal, { color: '#9bb8ff', size: 13 });
+    // Pull every pickup in range straight to the player.
+    const pullRadius = 280;
+    const pullSq = pullRadius * pullRadius;
+    if (Array.isArray(Neo.pickups)) {
+      Neo.pickups.forEach(pickup => {
+        if (!pickup || typeof pickup.x !== 'number') return;
+        const dx = Neo.player.x - pickup.x;
+        const dy = Neo.player.y - pickup.y;
+        if (dx * dx + dy * dy > pullSq) return;
+        pickup.vx = (pickup.vx || 0) + dx * 4;
+        pickup.vy = (pickup.vy || 0) + dy * 4;
+        pickup.magnetized = true;
+      });
+    }
+    Neo.ringBurst?.(Neo.player.x, Neo.player.y, 52, '#9bb8ff', 0.5);
+    Neo.playSfx?.('item_collect');
+  }
+
   function updateProjectiles(dt) {
     rebuildEnemySpatialIndex();
     ensureDestructibleSpatialIndex();
@@ -1572,6 +1625,15 @@
         continue;
       }
       if (projectile.life <= 0) {
+        // A boomerang that times out mid-flight turns around to find the player
+        // instead of vanishing; if it times out on the way back, it still pays out.
+        if (projectile.boomerang && projectile.boomerangPhase === 'out') {
+          startBoomerangReturn(projectile);
+          continue;
+        }
+        if (projectile.boomerang && projectile.boomerangPhase === 'back') {
+          resolveBoomerangCatch(projectile);
+        }
         detonateEnemyProjectileBlast(projectile, projectile.x, projectile.y);
         spawnProjectileImpact(projectile, projectile.x, projectile.y, { blocked: true });
         removeProjectileAt(index);
@@ -1604,6 +1666,8 @@
         let target = null;
         forEachEnemyNearCircle(projectile.x, projectile.y, projectile.r + 80, enemy => {
           if (target) return;
+          // A boomerang shouldn't re-hit a foe it already struck on this trip.
+          if (projectile.boomerangHitSet && projectile.boomerangHitSet.has(enemy)) return;
           const hitRadius = projectile.r + enemy.r;
           const dx = projectile.x - enemy.x;
           const dy = projectile.y - enemy.y;
@@ -1632,7 +1696,22 @@
             Neo.applyStatusInRadius(projectile.x, projectile.y, projectile.splash || 44, 'fire', 1, projectile.fireDuration || 3, null);
           }
           spawnProjectileImpact(projectile, projectile.x, projectile.y);
-          if (projectile.pierceCount > 0) {
+          if (projectile.boomerang) {
+            // Track the foe so it isn't struck twice, then either keep piercing on
+            // the way out or flip to the return-to-player phase.
+            if (!projectile.boomerangHitSet) projectile.boomerangHitSet = new Set();
+            projectile.boomerangHitSet.add(target);
+            if (projectile.boomerangPhase === 'out' && projectile.pierceCount > 0) {
+              projectile.pierceCount -= 1;
+              projectile.x += projectile.vx * 0.03;
+              projectile.y += projectile.vy * 0.03;
+            } else if (projectile.boomerangPhase === 'out') {
+              startBoomerangReturn(projectile);
+            } else {
+              projectile.x += projectile.vx * 0.03;
+              projectile.y += projectile.vy * 0.03;
+            }
+          } else if (projectile.pierceCount > 0) {
             projectile.pierceCount -= 1;
             projectile.x += projectile.vx * 0.03;
             projectile.y += projectile.vy * 0.03;
@@ -1640,6 +1719,19 @@
             removeProjectileAt(index);
           }
           continue;
+        }
+        // No enemy hit this frame: a returning boomerang despawns (with payoff)
+        // once it reaches the player.
+        if (projectile.boomerang && projectile.boomerangPhase === 'back' && Neo.player) {
+          const catchR = projectile.r + Neo.player.r + 6;
+          const ddx = projectile.x - Neo.player.x;
+          const ddy = projectile.y - Neo.player.y;
+          if (ddx * ddx + ddy * ddy <= catchR * catchR) {
+            resolveBoomerangCatch(projectile);
+            spawnProjectileImpact(projectile, projectile.x, projectile.y);
+            removeProjectileAt(index);
+            continue;
+          }
         }
       } else {
         const hitRadius = projectile.r + Neo.player.r;
@@ -1669,6 +1761,16 @@
         if (!prop) return;
         if (prop.hitFlash > 0) prop.hitFlash = Math.max(0, Number(prop.hitFlash || 0) - dt);
         if (prop.hitShake > 0) prop.hitShake = Math.max(0, Number(prop.hitShake || 0) - dt);
+        // Temporary barriers (Wall of Toph) crumble on their own when ttl runs out.
+        if (prop.ttl !== undefined && !prop.broken) {
+          prop.ttl -= dt;
+          if (prop.ttl <= 0) {
+            prop.broken = true;
+            prop.breakAge = 0;
+            prop.breakAngle = getDestructibleImpactAngle(prop, {});
+            spawnDestructibleBreakFx(prop, {});
+          }
+        }
         if (prop.broken) prop.breakAge = Number(prop.breakAge || 0) + dt;
         // Disguised secret walls look like ordinary wall and let the player walk
         // into them; stepping onto the spot opens the passage and breaks the wall.
@@ -2925,6 +3027,14 @@
 
       if (pickup.type === 'descend') {
         Neo.floor += 1;
+        // Turtle Boy's signature: a free laser tier every 3 floors descended
+        // (floors 3, 6, 9, ...). Each step permanently buffs his Turtle Wave.
+        if (Neo.player?.character === 'turtle_boy' && Neo.floor % 3 === 0) {
+          Neo.player.turtleLaserSteps = Number(Neo.player.turtleLaserSteps || 0) + 1;
+          Neo.spawnParticle?.({ x: Neo.player.x, y: Neo.player.y - 28, life: 1.1, text: 'LASER +', c: '#7fe0ff' });
+          Neo.ringBurst?.(Neo.player.x, Neo.player.y, 40, '#7fe0ff', 0.5);
+          Neo.playSfx?.('powerup');
+        }
         window.achievementEvents?.emit('floor:reached', { floor: Neo.floor });
         Neo.refreshFloorChargeStates();
         Neo.metaProgress.bestFloor = Math.max(Neo.metaProgress.bestFloor, Neo.floor);

@@ -29,7 +29,7 @@ export function resumeGame() {
       bestCoins: 0,
       bestEndlessWave: 0,
       unlockedItems: [],
-      unlockedCharacters: ['princess', 'thorn_knight', 'metao'],
+      unlockedCharacters: ['princess', 'thorn_knight', 'metao', 'turtle_boy', 'sarge'],
       unlockedChallenges: [],
       selectedDifficulty: 'easy',
       selectedChallenges: [],
@@ -339,6 +339,17 @@ export function resumeGame() {
     if (characterKey === 'princess') items.princes_glasses = 1;
     if (characterKey === 'metao') items.mateos_bag = 1;
     if (characterKey === 'gelleh') items.zap_to_extreme = 1;
+    if (characterKey === 'turtle_boy') {
+      // Turtle Boy starts with shell defense and copper penny; his red stick and
+      // turtle-wave laser come from his default weapon/move kit, not the inventory.
+      items.turtle_shell = 1;
+      items.copper_penny = 1;
+    }
+    if (characterKey === 'sarge') {
+      // Sarge's Hammer god item is his default weapon; copper penny rounds out his
+      // starting kit so his electric hammer hits land a little harder out of the gate.
+      items.copper_penny = 1;
+    }
     return items;
   }
 
@@ -691,6 +702,8 @@ export function resumeGame() {
       cowardsWayTime: 0,
       warpHideTime: 0,
       mooggyZoomiesTime: 0,
+      deathBallBuffTime: 0,
+      deathBallBuffPower: 0,
       mooggySwipeCharge: 0,
       coins: 0,
       level: 1,
@@ -810,7 +823,7 @@ export function resumeGame() {
           selectedCharacter: migrateCharacterKey(String(savedMeta.selectedCharacter || createDefaultMeta().selectedCharacter)),
           unlockedLegacy: normalizeLegacySelection(savedMeta.unlockedLegacy),
           seenTips: (savedMeta.seenTips && typeof savedMeta.seenTips === 'object') ? { ...savedMeta.seenTips } : {},
-          characterKitChoices: (savedMeta.characterKitChoices && typeof savedMeta.characterKitChoices === 'object') ? { ...savedMeta.characterKitChoices } : {},
+          characterKitChoices: migrateCharacterKitChoices(savedMeta.characterKitChoices),
           customCharacters: normalizeCustomCharactersSettings(savedMeta.customCharacters || (savedMeta.customCharacter ? [savedMeta.customCharacter] : null)),
         };
       }
@@ -868,8 +881,23 @@ export function resumeGame() {
     return LEGACY_CHARACTER_KEYS[key] || key;
   }
 
+  // Carries saved alt-kit picks across loads, dropping any stale choice that is no
+  // longer a valid alternate. Sarge no longer has Death Ball at all (his smash is
+  // Hammer Smash, the shockwave); an existing save may still carry the old
+  // sarge.smash = 'death_ball' pick, so strip it here.
+  function migrateCharacterKitChoices(input) {
+    const choices = (input && typeof input === 'object') ? { ...input } : {};
+    if (choices.sarge && 'smash' in choices.sarge) {
+      choices.sarge = { ...choices.sarge };
+      delete choices.sarge.smash;
+    }
+    return choices;
+  }
+
   function normalizeUnlockedCharacters(input) {
-    const fallback = ['princess', 'thorn_knight', 'metao'];
+    // Turtle Boy and Sarge are knight-tier starters: always unlocked, including for
+    // existing saves (they get merged in on load via this fallback set).
+    const fallback = ['princess', 'thorn_knight', 'metao', 'turtle_boy', 'sarge'];
     if (!Array.isArray(input)) return fallback;
     const remapped = input.map(migrateCharacterKey);
     const chars = Object.keys(Neo.CHARACTER_DEFS).filter(name => remapped.includes(name));
@@ -2271,6 +2299,13 @@ export function resumeGame() {
       Neo.smashHeld = false;
       queueHeldSkillRecharge('smash', getSmashCooldownDuration(Neo.getAttackSpeedValue()));
     }
+    if (nextState !== 'play' && Neo.deathBallCharging) {
+      Neo.deathBallCharging = false;
+      Neo.deathBallChargeTime = 0;
+      Neo.deathBallPowerUp = false;
+      Neo.smashHeld = false;
+      queueHeldSkillRecharge('smash', getSmashCooldownDuration(Neo.getAttackSpeedValue()));
+    }
     if (Neo.gameStateManager) Neo.gameStateManager.setState(nextState);
     else {
       Neo.gameState = nextState;
@@ -2985,6 +3020,9 @@ export function resumeGame() {
     Neo.activeBeamPaths = null;
     Neo.healingZoneCharging = false;
     Neo.healingZoneChargeTime = 0;
+    Neo.deathBallCharging = false;
+    Neo.deathBallChargeTime = 0;
+    Neo.deathBallPowerUp = false;
     Neo.smashHeld = false;
     Neo.chests = [];
     Neo.pickups = [];

@@ -42,6 +42,7 @@ export function drawWorldViewport(cam, vpX, vpW, vpH, vpY, pLabel, slot = null) 
     Neo.drawJusticeBlades?.();
     Neo.drawSkySwords?.();
     if (!isDying) Neo.drawHealingZoneChargeBar?.();
+    if (!isDying) Neo.drawDeathBallChargeBar?.();
     if (isDying && Neo.playerDeathAnim) Neo.drawPlayerCorpseAnim(Neo.playerDeathAnim);
     Neo.drawParticles();
     if (!isDying) Neo.drawLadderPrompt();

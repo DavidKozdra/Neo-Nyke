@@ -388,6 +388,25 @@ window.NeoNykeIconDefs = {
         [1,7],[2,7],[5,7],[6,7],
       ],
     },
+    pendant_of_rock: {
+      color: '#b89272',
+      accent: '#e6c9a3',
+      pixels: [
+        // chain across the top
+        [1,0],[3,0],[5,0],
+        [2,1],[4,1],[6,1],
+        // chunky rock pendant hanging below
+        [2,3],[3,3],[4,3],[5,3],
+        [1,4],[2,4],[3,4],[4,4],[5,4],[6,4],
+        [1,5],[2,5],[3,5],[4,5],[5,5],[6,5],
+        [2,6],[3,6],[4,6],[5,6],
+        [3,7],[4,7],
+      ],
+      accentPixels: [
+        [2,4],[3,3],
+        [3,5],[4,4],
+      ],
+    },
     iron_helm: {
       color: '#c8fbff',
       accent: '#f5feff',
@@ -1346,6 +1365,25 @@ window.NeoNykeIconDefs = {
         [6,6],[7,6],
       ],
     },
+    hammer_throw: {
+      color: '#7da3ff',
+      accent: '#cfe0ff',
+      pixels: [
+        // hammer head top-right with curved motion arc trailing left
+        [4,0],[5,0],[6,0],
+        [4,1],[5,1],[6,1],
+        [4,2],[5,2],
+        [3,3],[4,3],
+        [2,4],[3,4],
+        // motion arc
+        [0,2],[1,1],
+        [0,5],[1,6],[2,6],
+      ],
+      accentPixels: [
+        [4,0],[5,0],
+        [4,1],[5,1],
+      ],
+    },
     blade_justice: {
       color: '#ffe9a0',
       pixels: [
@@ -1417,7 +1455,44 @@ window.NeoNykeIconDefs = {
       ],
     },
 
+    laser_shockwave: {
+      color: '#b89272',
+      accent: '#e6c9a3',
+      pixels: [
+        // a vertical column of rock spikes
+        [3,0],[4,0],
+        [2,1],[3,1],[4,1],[5,1],
+        [3,2],[4,2],
+        [2,3],[3,3],[4,3],[5,3],
+        [3,4],[4,4],
+        [2,5],[3,5],[4,5],[5,5],
+        [3,6],[4,6],
+        [2,7],[3,7],[4,7],[5,7],
+      ],
+      accentPixels: [
+        [3,1],[4,3],[3,5],
+      ],
+    },
+
     // --- Smash slot ---
+    wall_of_toph: {
+      color: '#b89272',
+      accent: '#e6c9a3',
+      pixels: [
+        // a stacked-stone wall
+        [0,2],[1,2],[2,2],[3,2],[4,2],[5,2],[6,2],[7,2],
+        [0,3],[1,3],[2,3],[3,3],[4,3],[5,3],[6,3],[7,3],
+        [0,4],[1,4],[2,4],[3,4],[4,4],[5,4],[6,4],[7,4],
+        [0,5],[1,5],[2,5],[3,5],[4,5],[5,5],[6,5],[7,5],
+      ],
+      accentPixels: [
+        // mortar lines between the blocks
+        [2,2],[5,2],
+        [3,3],[6,3],
+        [1,4],[4,4],
+        [2,5],[5,5],
+      ],
+    },
     crimson_smash: {
       color: '#ff4444',
       pixels: [
@@ -1429,6 +1504,59 @@ window.NeoNykeIconDefs = {
         [1,5],[2,5],[5,5],[6,5],
         [2,6],[5,6],
         [3,7],[4,7],
+      ],
+    },
+    hammer_smash: {
+      color: '#7da3ff',
+      accent: '#cfe0ff',
+      pixels: [
+        // big hammer head up top, shaft down the middle, shock lines at the base
+        [2,0],[3,0],[4,0],[5,0],
+        [1,1],[2,1],[3,1],[4,1],[5,1],[6,1],
+        [1,2],[2,2],[3,2],[4,2],[5,2],[6,2],
+        [3,3],[4,3],
+        [3,4],[4,4],
+        [3,5],[4,5],
+        [0,6],[1,6],[2,6],[5,6],[6,6],[7,6],
+        [0,7],[7,7],
+      ],
+      accentPixels: [
+        [2,1],[3,1],
+        [2,2],[3,2],
+      ],
+    },
+    death_ball: {
+      color: '#3c82ff',
+      accent: '#cfe6ff',
+      pixels: [
+        // a filled blue sphere with a bright highlight (accent) top-left
+        [2,1],[3,1],[4,1],[5,1],
+        [1,2],[2,2],[3,2],[4,2],[5,2],[6,2],
+        [1,3],[2,3],[3,3],[4,3],[5,3],[6,3],
+        [1,4],[2,4],[3,4],[4,4],[5,4],[6,4],
+        [1,5],[2,5],[3,5],[4,5],[5,5],[6,5],
+        [2,6],[3,6],[4,6],[5,6],
+      ],
+      accentPixels: [
+        [2,1],[3,1],
+        [2,2],
+      ],
+    },
+    turtle_powerup: {
+      color: '#36d98a',
+      accent: '#d4ffe9',
+      pixels: [
+        // a green turtle shell with an upward "power-up" chevron above it
+        [3,0],[4,0],
+        [2,1],[3,1],[4,1],[5,1],
+        [2,3],[3,3],[4,3],[5,3],
+        [1,4],[2,4],[3,4],[4,4],[5,4],[6,4],
+        [1,5],[2,5],[3,5],[4,5],[5,5],[6,5],
+        [2,6],[3,6],[4,6],[5,6],
+      ],
+      accentPixels: [
+        [3,0],[4,0],
+        [3,4],[4,5],
       ],
     },
     chaos_burst: {
@@ -1907,6 +2035,25 @@ window.NeoNykeIconDefs = {
         [3,5],
         [2,6],
         [1,7],
+      ],
+    },
+    sarges_hammer: {
+      color: '#7da3ff',
+      accent: '#cfe0ff',
+      pixels: [
+        // chunky hammer head (top), handle running down to bottom-right
+        [1,0],[2,0],[3,0],[4,0],[5,0],
+        [0,1],[1,1],[2,1],[3,1],[4,1],[5,1],[6,1],
+        [0,2],[1,2],[2,2],[3,2],[4,2],[5,2],[6,2],
+        [1,3],[2,3],[3,3],[4,3],[5,3],
+        [3,4],[4,4],
+        [4,5],
+        [4,6],[5,6],
+        [5,7],
+      ],
+      accentPixels: [
+        [1,1],[2,1],
+        [1,2],[2,2],
       ],
     },
   },

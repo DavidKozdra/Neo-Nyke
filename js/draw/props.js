@@ -1521,6 +1521,8 @@
     magenta_degale: { color: '#ff8bd2', core: '#fff0fb', trail: '#ff3eb7', shape: 'slug', length: 34 },
     hunters_bow: { color: '#dff8ff', core: '#ffffff', trail: '#7edcff', shape: 'arrow', length: 32 },
     void_piercer: { color: '#ffd2c0', core: '#fff8ee', trail: '#ff826a', shape: 'dart', length: 30 },
+    sarges_hammer: { color: '#7da3ff', core: '#e7efff', trail: '#9bb8ff', shape: 'rock', length: 22 },
+    death_ball: { color: '#3c82ff', core: '#cfe6ff', trail: '#5aa0ff', shape: 'energy_orb', length: 26 },
   };
   Object.values(ENEMY_PROJECTILE_VISUALS).forEach(Object.freeze);
   Object.values(PLAYER_PROJECTILE_VISUALS).forEach(Object.freeze);
@@ -1725,6 +1727,37 @@
       Neo.ctx.lineJoin = 'round';
       buildPath();
       Neo.ctx.stroke();
+    } else if (visual.shape === 'energy_orb') {
+      // Death Ball: a pulsing blue energy sphere with a bright core and a rotating
+      // orbit ring. Big-radius friendly — everything scales off projectile.r.
+      const t = Date.now() * 0.006;
+      const pulse = 1 + Math.sin(t * 2 + projectile.x * 0.01) * 0.06;
+      // Outer glow halo.
+      const halo = Neo.ctx.createRadialGradient(0, 0, r * 0.2, 0, 0, r * 1.25 * pulse);
+      halo.addColorStop(0, visual.core);
+      halo.addColorStop(0.45, visual.color);
+      halo.addColorStop(1, 'rgba(40,90,220,0)');
+      Neo.ctx.shadowBlur = 22;
+      Neo.ctx.fillStyle = halo;
+      Neo.ctx.beginPath();
+      Neo.ctx.arc(0, 0, r * 1.25 * pulse, 0, Math.PI * 2);
+      Neo.ctx.fill();
+      // Rotating orbit ring.
+      Neo.ctx.shadowBlur = 12;
+      Neo.ctx.rotate(t);
+      Neo.ctx.strokeStyle = visual.core;
+      Neo.ctx.lineWidth = Math.max(1.5, r * 0.1);
+      Neo.ctx.globalAlpha = 0.8;
+      Neo.ctx.beginPath();
+      Neo.ctx.ellipse(0, 0, r * 1.05, r * 0.42, 0, 0, Math.PI * 2);
+      Neo.ctx.stroke();
+      // Bright core.
+      Neo.ctx.globalAlpha = 1;
+      Neo.ctx.shadowBlur = 16;
+      Neo.ctx.fillStyle = visual.core;
+      Neo.ctx.beginPath();
+      Neo.ctx.arc(0, 0, r * 0.5, 0, Math.PI * 2);
+      Neo.ctx.fill();
     } else {
       Neo.ctx.beginPath();
       Neo.ctx.arc(0, 0, r, 0, Math.PI * 2);
@@ -2393,8 +2426,54 @@
     ctx.restore();
   }
 
+  // Wind-up bar + growing orb preview above the player while charging a Death Ball.
+  function drawDeathBallChargeBar() {
+    if (!Neo.deathBallCharging || !Neo.player) return;
+    const max = Neo.DEATH_BALL_MAX_CHARGE || 5;
+    const ratio = Neo.clamp((Number(Neo.deathBallChargeTime || 0)) / max, 0, 1);
+    const ctx = Neo.ctx;
+    // Growing translucent blue orb that previews the ball's size.
+    const previewR = 10 + ratio * 40;
+    ctx.save();
+    ctx.globalAlpha = 0.28 + ratio * 0.22;
+    const grad = ctx.createRadialGradient(Neo.player.x, Neo.player.y, previewR * 0.2, Neo.player.x, Neo.player.y, previewR);
+    grad.addColorStop(0, '#cfe6ff');
+    grad.addColorStop(1, 'rgba(60,130,255,0.05)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(Neo.player.x, Neo.player.y, previewR, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    // Bar.
+    const w = 46;
+    const h = 6;
+    const x = Neo.player.x - w / 2;
+    const y = Neo.player.y - (Neo.player.r || 14) - 22;
+    ctx.save();
+    ctx.globalAlpha = 0.92;
+    ctx.fillStyle = 'rgba(8,18,40,0.78)';
+    ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
+    ctx.fillStyle = ratio >= 1 ? '#ffffff' : '#5aa0ff';
+    ctx.shadowColor = '#5aa0ff';
+    ctx.shadowBlur = ratio >= 1 ? 12 : 6;
+    ctx.fillRect(x, y, w * ratio, h);
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = 'rgba(160,200,255,0.85)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x - 1, y - 1, w + 2, h + 2);
+    if (ratio >= 1) {
+      ctx.fillStyle = '#eaf2ff';
+      ctx.font = '700 9px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('MAX', Neo.player.x, y - 4);
+    }
+    ctx.restore();
+  }
+
   Neo.drawProjectiles = drawProjectiles;
   Neo.drawJusticeBlades = drawJusticeBlades;
   Neo.drawSkySwords = drawSkySwords;
   Neo.drawHealingZoneChargeBar = drawHealingZoneChargeBar;
+  Neo.drawDeathBallChargeBar = drawDeathBallChargeBar;
   Neo.drawDeadBodies = drawDeadBodies;

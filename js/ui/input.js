@@ -56,21 +56,27 @@ export const MOVE_DEFS = {
     love_beam: { key: 'love_beam', slot: 'laser', name: 'Love Beam', desc: 'A radiant beam that damages enemies and heals you on hit.', exclusiveCharacter: 'princess' },
     turtle_wave: { key: 'turtle_wave', slot: 'laser', name: 'Turtle Wave', desc: 'Giant beam. Drains 2 HP each active second.' },
     power_disks: { key: 'power_disks', slot: 'laser', name: 'Power Disks', desc: 'Burst of spinning disks.' },
+    hammer_throw: { key: 'hammer_throw', slot: 'laser', name: 'Hammer Throw', desc: 'Hurl a heavy spinning hammer that flies out, then arcs back to you — striking foes both ways.', exclusiveCharacter: 'sarge' },
     blade_justice: { key: 'blade_justice', slot: 'laser', name: 'Blade Justice', desc: 'Divine short-range blade strike.' },
     lightning_columns: { key: 'lightning_columns', slot: 'laser', name: 'Lightning Columns', desc: 'Summon two lightning turrets.' },
     god_sweep: { key: 'god_sweep', slot: 'laser', name: 'God Sweep', desc: 'Spin a massive divine beam around yourself.' },
+    laser_shockwave: { key: 'laser_shockwave', slot: 'laser', name: 'Laser Shockwave', desc: 'Fires a shockwave that erupts rock spikes in a vertical line across the room.' },
     nail_shot: { key: 'nail_shot', slot: 'laser', name: 'Nail Shot', desc: 'Fires a spread of bouncing nails in all directions. 3 charges.', exclusiveCharacter: 'mooggy', maxStacks: 3 },
     mooggy_blood_beam: { key: 'mooggy_blood_beam', slot: 'laser', name: 'Blood Beam', desc: 'A crimson assassin beam that drenches enemies in heavy poison and chills them solid (freeze).', exclusiveCharacter: 'mooggy' },
     thorn_blood_beams: { key: 'thorn_blood_beams', slot: 'laser', name: 'Infinite Blood Beam', desc: 'Four bleeding beams that orbit you, all aimed by the mouse. Channels while held.', exclusiveCharacter: 'thorn_knight' },
     wizard_lazer: { key: 'wizard_lazer', slot: 'laser', name: 'Wizard Lazer', desc: 'A thick, heavy purple beam with massive recoil and heavy damage.', exclusiveCharacter: 'metao' },
 
     crimson_smash: { key: 'crimson_smash', slot: 'smash', name: 'Crimson Smash', desc: 'Heavy area smash.' },
+    hammer_smash: { key: 'hammer_smash', slot: 'smash', name: 'Hammer Smash', desc: 'Slam the war hammer down: a heavy shockwave that stuns and flings a ring of debris outward.', exclusiveCharacter: 'sarge' },
+    death_ball: { key: 'death_ball', slot: 'smash', name: 'Death Ball', desc: 'Hold to charge, then release a big blue energy ball toward the cursor. The longer you hold, the larger it grows and the more damage it deals.', exclusiveCharacter: 'turtle_boy' },
+    turtle_powerup: { key: 'turtle_powerup', slot: 'smash', name: 'Turtle Power-Up', desc: 'Hold to charge a shell surge: on release, burst a small AOE at your feet, gain a barrier worth 25% of your current HP, and a temporary attack-speed & move-speed boost that grows the longer you charge.', exclusiveCharacter: 'turtle_boy' },
     mooggy_hairball: { key: 'mooggy_hairball', slot: 'smash', name: 'Hairball Blast', desc: 'Hack up a venomous hairball that bursts for high poison and freezes everything caught in it.', exclusiveCharacter: 'mooggy' },
     potion_bath: { key: 'potion_bath', slot: 'smash', name: 'Potion Bath', desc: 'Cleanse all statuses and resist them for 20s, heal 60% and regen for 5s, vanish for 5s, and erupt in explosions around you.', exclusiveCharacter: 'metao' },
     excalibur_strike: { key: 'excalibur_strike', slot: 'smash', name: 'Summon Excalibur', desc: 'Giant divine swords rain from the sky for huge AOE damage. 10s cooldown.', exclusiveCharacter: 'gelleh' },
     holy_turrets: { key: 'holy_turrets', slot: 'smash', name: 'Holy Turrets', desc: 'Summon divine turrets that fire holy AOE bursts at nearby foes.', exclusiveCharacter: 'gelleh' },
     kicky_kick: { key: 'kicky_kick', slot: 'smash', name: 'Kicky Kick', desc: 'A devastating kick with a 10% chance to launch enemies into the next room.', exclusiveCharacter: 'princess' },
     chaos_burst: { key: 'chaos_burst', slot: 'smash', name: 'Chaos Burst', desc: 'Multiple chaos detonations.' },
+    wall_of_toph: { key: 'wall_of_toph', slot: 'smash', name: 'Wall of Toph', desc: 'Slam the ground: rock shards erupt all around you and a ring of temporary rock barriers rises to soak hits and break enemy lines of fire.' },
     healing_zone: { key: 'healing_zone', slot: 'smash', name: 'Healing Zone', desc: 'Hold to charge a healing and damage zone. Charge speed scales with attack speed.' },
     fire_circle: { key: 'fire_circle', slot: 'smash', name: 'Fire Circle', desc: 'Burning aura around you.' },
     floor_lava: { key: 'floor_lava', slot: 'smash', name: 'Floor Is Lava', desc: 'Lava immunity and lava trail.' },
@@ -134,8 +140,8 @@ export const SHOP_MOVE_POOL = [
     // The old melee moves (fire_balls, smite, narwal_fight, mooggy_swipe) are
     // now duplicated by each character's weapon, so they're no longer buyable.
     'blood_beam', 'love_beam', 'turtle_wave', 'power_disks', 'blade_justice', 'lightning_columns',
-    'god_sweep', 'nail_shot',
-    'crimson_smash', 'kicky_kick', 'chaos_burst', 'healing_zone', 'fire_circle', 'floor_lava', 'random_pounce',
+    'god_sweep', 'nail_shot', 'laser_shockwave',
+    'crimson_smash', 'wall_of_toph', 'kicky_kick', 'chaos_burst', 'healing_zone', 'fire_circle', 'floor_lava', 'random_pounce',
     'dash', 'nimrod_stomp', 'warp', 'zip_lightning', 'flying_unhitable', 'cowards_way', 'mooggy_zoomies',
     // NOTE: the alternative kit moves (mooggy_blood_beam, thorn_blood_beams,
     // wizard_lazer, mooggy_hairball, potion_bath, excalibur_strike, holy_turrets,
@@ -263,6 +269,15 @@ export const WEAPON_DEFS = {
       color: '#ff9de8',
       baseCooldown: 0.77,
       maxCharges: 3,
+    },
+    sarges_hammer: {
+      key: 'sarges_hammer',
+      name: "Sarge's Hammer",
+      rarity: 'god',
+      description: 'A heavy war hammer with a wide crushing swing. While held, 2 kills within 1 second launch a homing hammer that strikes a foe and returns to you, healing and pulling pickups on the way back.',
+      color: '#7da3ff',
+      accent: '#cfe0ff',
+      baseCooldown: 0.7,
     },
   };
 export const WEAPON_KEYS = Object.keys(WEAPON_DEFS);
@@ -822,6 +837,17 @@ export const ITEM_DEFS = {
       color: '#c6d4e8',
       category: 'god',
       tags: ['defense', 'god'],
+    },
+    pendant_of_rock: {
+      key: 'pendant_of_rock',
+      name: 'Pendant of Rock',
+      shortName: 'Rock Pact',
+      description: 'Per stack: take 1% less damage and deal 2% more rock damage (Crimson Smash debris, Wall of Toph, Laser Shockwave and other rock attacks).',
+      rarity: 'god',
+      color: '#b89272',
+      accent: '#e6c9a3',
+      category: 'god',
+      tags: ['defense', 'damage', 'rock', 'god'],
     },
     iron_helm: {
       key: 'iron_helm',
@@ -1868,6 +1894,7 @@ export const WEAPON_BASE_STATS = {
     golden_fleece:            { damage: 20,   cooldown: 0.50, range: 80,  knockback: 80  },
     void_piercer:             { damage: 55,   cooldown: 0.80,             knockback: 160 },
     princess_wand:            { damage: 30,   cooldown: 0.77, range: 120, knockback: 160 },
+    sarges_hammer:            { damage: 64,   cooldown: 0.70, range: 120, knockback: 520 },
   };
 
 // Base stat values per move
@@ -1907,6 +1934,12 @@ export const MOVE_BASE_STATS = {
     excalibur_strike: { damage: 78,  cooldown: 10.00, range: 150 },
     holy_turrets:     { damage: 26,  cooldown: 6.50, duration: 6.0, range: 360 },
     knight_slash_dash:{ damage: 42,  cooldown: 2.40, range: 240 },
+    hammer_throw:     { damage: 46,  cooldown: 2.20, range: 320 },
+    hammer_smash:     { damage: 58,  cooldown: 4.00, range: 150 },
+    death_ball:       { damage: 40,  cooldown: 5.00, range: 360 },
+    turtle_powerup:   { damage: 36,  cooldown: 6.00, range: 110 },
+    laser_shockwave:  { damage: 22,  cooldown: 2.60, range: 400 },
+    wall_of_toph:     { damage: 46,  cooldown: 4.20, range: 150 },
   };
 
   // saveStore is created in save-store.js after createSaveStore is defined

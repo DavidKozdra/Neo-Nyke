@@ -319,9 +319,10 @@ export function loop(timestamp) {
     } else {
       const flightBoost = Neo.player.princessFlightTime > 0 ? 2 : 1;
       const zoomiesBoost = Neo.player.mooggyZoomiesTime > 0 ? 5 : 1;
+      const powerUpBoost = Neo.player.deathBallBuffTime > 0 ? 1 + Number(Neo.player.deathBallBuffPower || 0) : 1;
       const laserWeight = Math.max(0, Number(itemStats.laserWeightMultiplier ?? 1));
       const laserSlow = Neo.laserActive ? 1 - 0.6 * laserWeight : 1;
-      const targetSpeed = 228 * flightBoost * zoomiesBoost * (Neo.godTimer > 0 ? 1.25 : 1) * itemStats.moveSpeedMultiplier * laserSlow;
+      const targetSpeed = 228 * flightBoost * zoomiesBoost * powerUpBoost * (Neo.godTimer > 0 ? 1.25 : 1) * itemStats.moveSpeedMultiplier * laserSlow;
       Neo.player.vx = Neo.applyResponsiveVelocity(Neo.player.vx, moveX * targetSpeed, dt);
       Neo.player.vy = Neo.applyResponsiveVelocity(Neo.player.vy, moveY * targetSpeed, dt);
       if (Neo.player.princessFlightTime > 0 && (moveX || moveY) && Neo.nextRandom('fx') < 0.35) {
@@ -343,6 +344,12 @@ export function loop(timestamp) {
       Neo.player.mooggyZoomiesTime = Math.max(0, Neo.player.mooggyZoomiesTime - dt);
       if (Neo.nextRandom('fx') < 0.45) {
         Neo.spawnParticle({ x: Neo.player.x + Neo.rand(18, -18, 'fx'), y: Neo.player.y + Neo.rand(18, -18, 'fx'), life: 0.16, c: '#a0ffcc' });
+      }
+    }
+    if (Neo.player.deathBallBuffTime > 0) {
+      Neo.player.deathBallBuffTime = Math.max(0, Neo.player.deathBallBuffTime - dt);
+      if (Neo.nextRandom('fx') < 0.4) {
+        Neo.spawnParticle({ x: Neo.player.x + Neo.rand(18, -18, 'fx'), y: Neo.player.y + Neo.rand(18, -18, 'fx'), life: 0.16, c: '#7dffb0' });
       }
     }
 
@@ -577,6 +584,8 @@ export function loop(timestamp) {
     Neo.updateSkySwords?.(dt);
     if (Neo.gameState !== 'play') return;
     Neo.updateHealingZoneCharge?.(dt);
+    if (Neo.gameState !== 'play') return;
+    Neo.updateDeathBallCharge?.(dt);
     if (Neo.gameState !== 'play') return;
     sectionPerfStart = Neo.perfStart();
     Neo.updateWorldProps(dt);

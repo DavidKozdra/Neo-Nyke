@@ -2248,7 +2248,7 @@ export function renderShopPanel() {
           const descriptorChips = buildDescriptorChips(offer.key, def?.desc || '', { slot: def?.slot, kind: 'move' });
           const moveChips = [
             { label: slotLabel, tone: 'move' },
-            def?.exclusiveCharacter ? { label: def.exclusiveCharacter, tone: 'exclusive' } : null,
+            def?.exclusiveCharacter ? { label: Array.isArray(def.exclusiveCharacter) ? def.exclusiveCharacter.join(' / ') : def.exclusiveCharacter, tone: 'exclusive' } : null,
             ...descriptorChips,
           ].filter(Boolean);
           const chips = [

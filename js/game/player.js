@@ -272,6 +272,8 @@ export function migratePlayerData(source) {
     playerData.cowardsWayTime = Number(playerData.cowardsWayTime || 0);
     playerData.warpHideTime = Number(playerData.warpHideTime || 0);
     playerData.mooggyZoomiesTime = Number(playerData.mooggyZoomiesTime || 0);
+    playerData.deathBallBuffTime = Number(playerData.deathBallBuffTime || 0);
+    playerData.deathBallBuffPower = Number(playerData.deathBallBuffPower || 0);
     playerData.mooggySwipeCharge = Number(playerData.mooggySwipeCharge || 0);
     playerData.lavaWalkTime = Number(playerData.lavaWalkTime || 0);
     playerData.lavaTrailTick = Number(playerData.lavaTrailTick || 0);
@@ -420,6 +422,8 @@ export function getDefaultWeaponForCharacter(characterKey) {
     if (characterKey === 'metao') return 'metao_fire_staff';
     if (characterKey === 'gelleh') return 'gelleh_lightning_spear';
     if (characterKey === 'mooggy') return 'claw_gauntlets';
+    if (characterKey === 'turtle_boy') return 'extending_staff';
+    if (characterKey === 'sarge') return 'sarges_hammer';
     return 'thorns_bleed_blade';
   }
 
@@ -442,6 +446,9 @@ export const KIT_ALTERNATIVES = {
   mooggy: {
     laser: ['nail_shot', 'mooggy_blood_beam'],
     smash: ['random_pounce', 'mooggy_hairball'],
+  },
+  turtle_boy: {
+    smash: ['death_ball', 'turtle_powerup'],
   },
 };
 
@@ -471,6 +478,17 @@ function getBaseMovesForCharacter(characterKey) {
     }
     if (characterKey === 'mooggy') {
       return { melee: 'slash', laser: 'nail_shot', smash: 'random_pounce', dash: 'mooggy_zoomies' };
+    }
+    if (characterKey === 'turtle_boy') {
+      // Death Ball (charge-up blue energy ball) is Turtle Boy's signature smash.
+      // Death Ball: Power-Up is offered as an alt-kit smash (see KIT_ALTERNATIVES).
+      return { melee: 'slash', laser: 'turtle_wave', smash: 'death_ball', dash: 'dash' };
+    }
+    if (characterKey === 'sarge') {
+      // Sarge's bespoke kit: Hammer Throw (a returning thrown hammer) on the laser
+      // slot, Hammer Smash (a heavy ground shockwave) on smash, leap-slam on dash.
+      // Death Ball is offered as an alt-kit smash (see KIT_ALTERNATIVES).
+      return { melee: 'slash', laser: 'hammer_throw', smash: 'hammer_smash', dash: 'nimrod_stomp' };
     }
     return { melee: 'slash', laser: 'blood_beam', smash: 'crimson_smash', dash: 'dash' };
   }
@@ -515,7 +533,11 @@ export function isMoveAllowedForCharacter(moveKey, characterKey = Neo.player?.ch
     const def = Neo.MOVE_DEFS[moveKey];
     if (!def) return false;
     if (Neo.isCustomCharacterKey?.(characterKey)) return true;
-    return !def.exclusiveCharacter || def.exclusiveCharacter === characterKey;
+    if (!def.exclusiveCharacter) return true;
+    // exclusiveCharacter may be a single key or a list of keys that share the move.
+    return Array.isArray(def.exclusiveCharacter)
+      ? def.exclusiveCharacter.includes(characterKey)
+      : def.exclusiveCharacter === characterKey;
   }
 
   // True while the player is concealed from enemy AI: invisible (El Barto's Cape),
@@ -658,6 +680,7 @@ export function getItemStats() {
     const homingMissile = getItemCount('homing_missile');
     const procyPickle = getItemCount('procy_pickle');
     const ironLung = getItemCount('iron_lung');
+    const pendantOfRock = getItemCount('pendant_of_rock');
     const ownedToolStacks = countOwnedToolStacks(Neo.player?.items, Neo.ITEM_DEFS);
     // Count distinct tool relics the player owns (items flagged `tool: true`),
     // so Procy Pickle's poison-on-tool-use chance scales with how tool-heavy the
@@ -729,7 +752,7 @@ export function getItemStats() {
     const kronosDamageMultiplier = 1 + pendantOfKronos * godItemStacks * 0.01;
     const kronosBossDamageMultiplier = 1 + pendantOfKronos * 0.02;
     const standardDamageReduction = Neo.clamp(
-      toughBandaid * 0.005 + shieldOfAegis * 0.2 + princesGlassesDefense,
+      toughBandaid * 0.005 + shieldOfAegis * 0.2 + princesGlassesDefense + pendantOfRock * 0.01,
       0,
       0.85,
     );
@@ -783,6 +806,9 @@ export function getItemStats() {
       critMultiplier,
       kronosDamageMultiplier,
       kronosBossDamageMultiplier,
+      // Pendant of Rock: +2% damage per stack to any rock-kind projectile. Applied
+      // in spawnProjectile when props.kind === 'rock' (see world.js).
+      rockDamageMultiplier: 1 + pendantOfRock * 0.02,
       attackSpeedMultiplier: 1 + attackServo * 0.12 + chronoSpringBonus,
       hasRobotArm: robotArm > 0,
       moveSpeedMultiplier: 1 + turtleShell * 0.05
@@ -834,7 +860,9 @@ export function getItemStats() {
 export function getAttackSpeedValue() {
     const stats = getItemStats();
     const robotArmMultiplier = stats.hasRobotArm && Neo.player?.robotArmReady ? 8 : 1;
-    return Math.max(0.2, (Neo.player?.attackSpeed || 1) * (stats.attackSpeedMultiplier || 1) * robotArmMultiplier);
+    // Death Ball: Power-Up grants a timed attack-speed surge (Turtle Boy's alt smash).
+    const deathBallBuff = (Neo.player?.deathBallBuffTime > 0) ? 1 + Number(Neo.player.deathBallBuffPower || 0) : 1;
+    return Math.max(0.2, (Neo.player?.attackSpeed || 1) * (stats.attackSpeedMultiplier || 1) * robotArmMultiplier * deathBallBuff);
   }
 
 // Write the player's overheal-barrier state in one place. Storage stays flat (four

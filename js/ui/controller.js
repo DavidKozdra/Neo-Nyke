@@ -71,7 +71,7 @@ export function createUIController(view) {
     const runHistoryPageSize = 8;
 
     const LC = `<span class="lc-icon">◆</span>`;
-    const getCharacterOrder = () => ['princess', 'thorn_knight', 'metao', 'gelleh', 'mooggy', ...(Neo.getCustomCharacterKeys?.() || [])];
+    const getCharacterOrder = () => ['princess', 'thorn_knight', 'metao', 'gelleh', 'mooggy', 'turtle_boy', 'sarge', ...(Neo.getCustomCharacterKeys?.() || [])];
 
     function getCharacterButton(characterKey) {
       return view.charButtons.find(button => button.dataset.char === characterKey) || null;
@@ -1055,8 +1055,9 @@ export function createUIController(view) {
         ]));
         view.rhInfoContent.innerHTML = sorted.length ? `<div class="info-grid">${sorted.map(m => {
           const slotLabel = Neo.SLOT_LABELS[m.slot] || m.slot;
-          const exclusive = m.exclusiveCharacter
-            ? `<br><em style="color:rgba(200,200,255,0.5)">${Neo.titleCase(m.exclusiveCharacter.replace(/_/g, ' '))} only</em>`
+          const exclusiveNames = Array.isArray(m.exclusiveCharacter) ? m.exclusiveCharacter : (m.exclusiveCharacter ? [m.exclusiveCharacter] : []);
+          const exclusive = exclusiveNames.length
+            ? `<br><em style="color:rgba(200,200,255,0.5)">${exclusiveNames.map(c => Neo.titleCase(c.replace(/_/g, ' '))).join(' / ')} only</em>`
             : '';
           return `<div class="info-card">
             <div class="info-card__header">

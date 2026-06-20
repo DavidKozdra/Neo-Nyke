@@ -74,6 +74,40 @@ window.NeoNykeSpriteDefs = {
       '.d....d...',
     ],
   },
+  // Turtle Boy: green turtle shell on the back, tan skin, red extending staff in
+  // hand. b = shell green, c = skin, d = red staff.
+  turtle_boy: {
+    palette: { a: '#0e1f14', b: '#3fae5a', c: '#e7c28c', d: '#ff3b3b' },
+    pixels: [
+      '..ccc....d',
+      '.ccccc...d',
+      '.cbbbc...d',
+      'cbbbbbc..d',
+      'cbabbabc.d',
+      'cbbbbbbcd.',
+      '.bbbbbb...',
+      '..c..c....',
+      '.cc..cc...',
+      '.c....c...',
+    ],
+  },
+  // Sarge: older blue-coated soldier, grey helmet, hammer at his side.
+  // b = blue coat, c = skin, d = grey helmet/hammer.
+  sarge: {
+    palette: { a: '#0c1424', b: '#3b63b0', c: '#d8a878', d: '#9aa6bc' },
+    pixels: [
+      '..dddd...d',
+      '.dddddd..d',
+      '..cccc..dd',
+      '..cacac...',
+      '.bbcccbb..',
+      'bbbbbbbbb.',
+      '.bbbbbb...',
+      '..b..b....',
+      '.bb..bb...',
+      '.b....b...',
+    ],
+  },
   hunter: {
     // Hooded ranger: pointed hood, shadowed face, leather greens with a slung
     // bow curving down the right side (d = bowstave/quiver accent).

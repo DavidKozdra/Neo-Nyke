@@ -512,6 +512,13 @@
       Neo.player.weaponCooldown = wCd(weaponKey) / attackSpeed;
       return true;
     }
+    if (weaponKey === 'sarges_hammer') {
+      // Heavy hammer: a wide crushing arc with big knockback and a shock ring.
+      fireWeaponSweep(wDmg(weaponKey), wRng(weaponKey), Math.PI * 0.9, wKnk(weaponKey), '#7da3ff');
+      Neo.ringBurst(Neo.player.x, Neo.player.y, 44, '#9bb8ff', 0.4);
+      Neo.player.weaponCooldown = wCd(weaponKey) / attackSpeed;
+      return true;
+    }
     if (Neo.isProjectileWeaponKey?.(weaponKey)) {
       fireConfiguredWeaponProjectile(weaponKey, angle, wDmg(weaponKey), wKnk(weaponKey));
       if (!isChargedWeaponKey(weaponKey)) Neo.player.weaponCooldown = wCd(weaponKey) / attackSpeed;
@@ -683,7 +690,7 @@
   // beam. They must NOT auto-repeat every frame while the button is held — with
   // a multi-charge pool that would drain every charge in a few frames. Beam
   // moves are absent here because Neo.laserActive already blocks their re-entry.
-  const INSTANT_LASER_MOVES = new Set(['power_disks', 'blade_justice', 'lightning_columns', 'nail_shot']);
+  const INSTANT_LASER_MOVES = new Set(['power_disks', 'blade_justice', 'lightning_columns', 'nail_shot', 'laser_shockwave']);
   function isInstantLaserMove(move) {
     return INSTANT_LASER_MOVES.has(move || getEquippedMove('laser'));
   }
@@ -722,6 +729,11 @@
       spawnPlayerDiskBurst();
       return;
     }
+    if (move === 'hammer_throw') {
+      if (!spendLaserCharge()) return;
+      castHammerThrow(move);
+      return;
+    }
     if (move === 'blade_justice') {
       if (!spendLaserCharge()) return;
       castBladeOfJustice();
@@ -758,6 +770,11 @@
     if (move === 'nail_shot') {
       if (!spendLaserCharge()) return;
       castNailShot();
+      return;
+    }
+    if (move === 'laser_shockwave') {
+      if (!spendLaserCharge()) return;
+      castLaserShockwave();
       return;
     }
     if (move === 'thorn_blood_beams') {
@@ -872,7 +889,12 @@
                     ? 16
                     : Neo.ATTACKS.laser.damage;
       const anvilBeamBonus = Neo.getAnvilMoveBonus(move, 'damage');
-      const beamDamage = (baseBeamDamage + anvilBeamBonus) * (itemStats.beamDamageMultiplier || 1);
+      // Turtle Boy earns a free laser tier every 3 floors (see grantTurtleLaserStep):
+      // each step adds +15% beam damage, stacking for the whole run.
+      const turtleLaserMult = Neo.player?.character === 'turtle_boy'
+        ? 1 + Math.max(0, Number(Neo.player.turtleLaserSteps || 0)) * 0.15
+        : 1;
+      const beamDamage = (baseBeamDamage + anvilBeamBonus) * (itemStats.beamDamageMultiplier || 1) * turtleLaserMult;
       const anvilCritBonus = Neo.getAnvilMoveBonus(move, 'critChance');
       const beamKnockback = Neo.laserMode === 'god_sweep' ? 120
         : Neo.laserMode === 'turtle_wave' ? 155
@@ -986,6 +1008,7 @@
   }
 
   const HEALING_ZONE_MAX_CHARGE = 5; // charge units required for a full-power zone
+  const DEATH_BALL_MAX_CHARGE = 5;   // charge units required for a full-size Death Ball
 
   function trySmash() {
     cancelCowardsWayOnAttack();
@@ -999,6 +1022,20 @@
       Neo.healingZoneCharging = true;
       Neo.healingZoneChargeTime = 0;
       Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 16, life: 0.5, text: 'CHARGING', c: '#47ff7d' });
+      return;
+    }
+    // Both of Turtle Boy's smash options are hold-to-charge like Healing Zone.
+    // Death Ball hurls a charge-sized blue energy ball at the cursor on release.
+    // Turtle Power-Up throws no ball — instead it bursts a small AOE at the
+    // player's feet and grants a charge-scaled attack/move-speed surge.
+    const smashMoveKey = getEquippedMove('smash');
+    if (smashMoveKey === 'death_ball' || smashMoveKey === 'turtle_powerup') {
+      if (Neo.deathBallCharging) return; // already winding up
+      if (!Neo.spendSkillCharge('smash', Neo.getSmashCooldownDuration(attackSpeed), { deferTimer: true })) return;
+      Neo.deathBallCharging = true;
+      Neo.deathBallChargeTime = 0;
+      Neo.deathBallPowerUp = smashMoveKey === 'turtle_powerup';
+      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 16, life: 0.5, text: 'CHARGING', c: Neo.deathBallPowerUp ? '#7dffb0' : '#5aa0ff' });
       return;
     }
     if (!Neo.spendSkillCharge('smash', Neo.getSmashCooldownDuration(attackSpeed))) return;
@@ -1034,6 +1071,10 @@
     const move = getEquippedMove('smash');
     if (move === 'kicky_kick') {
       castKickyKick();
+      return;
+    }
+    if (move === 'wall_of_toph') {
+      castWallOfToph();
       return;
     }
     if (move === 'chaos_burst') {
@@ -1076,7 +1117,9 @@
       ? '#ff3048'
       : move === 'chaos_burst'
         ? '#a857ff'
-        : '#ff66cc';
+        : move === 'hammer_smash'
+          ? '#7da3ff'
+          : '#ff66cc';
     const smashRadius = (Neo.ATTACKS.smash.radius + anvilSmashRange) * (itemStats.aoeRadiusMultiplier || 1);
     // Heavy ground slam: trauma-based shake (matches melee feel) plus a big
     // downward camera lurch and a brief hitstop so the impact reads.
@@ -1096,6 +1139,10 @@
         Neo.spawnParticle({ x: enemy.x, y: enemy.y - 16, life: 0.6, text: 'POP', c: '#a0f' });
       }
       hitEnemy(enemy, damage, angle, 320, smashColor, { melee: true });
+      // Hammer Smash crushes: a brief hard stun on everything caught in the slam.
+      if (move === 'hammer_smash' && !enemy.dead) {
+        enemy.stun = Math.max(Number(enemy.stun || 0), 0.7);
+      }
     });
     forEachDestructibleNearPlayer(smashRadius, prop => {
       if (!prop.broken && !prop.hidden && isWithinRadiusSq(Neo.player.x, Neo.player.y, prop, smashRadius)) {
@@ -1127,6 +1174,36 @@
           pierceCount: 1,
           hitOptions: { bleedChance: 0.2, bleedStacks: 1, bleedDuration: 4 },
         });
+      }
+    }
+    // Hammer Smash flings two opposing volleys of heavy debris straight up and
+    // down — a vertical line of rock erupting along the screen's Y axis. Tinted
+    // to the hammer with big knockback, no bleed.
+    if (move === 'hammer_smash') {
+      const rockPerSide = 5;
+      const rockDamage = Math.round(baseSmashDamage * 0.4);
+      // -PI/2 fires straight up, +PI/2 straight down.
+      for (const dir of [-1, 1]) {
+        const angle = dir * (Math.PI / 2);
+        for (let index = 0; index < rockPerSide; index += 1) {
+          const speed = 500 + Neo.nextRandom('fx') * 120;
+          // Stagger each rock back along the volley so they read as a line.
+          const offset = smashRadius * 0.4 + index * 18;
+          Neo.spawnProjectile({
+            x: Neo.player.x,
+            y: Neo.player.y + Math.sin(angle) * offset,
+            vx: 0,
+            vy: Math.sin(angle) * speed,
+            r: 7,
+            life: 0.6,
+            enemy: false,
+            kind: 'rock',
+            damage: rockDamage,
+            knockback: 260,
+            color: '#9bb8ff',
+            pierceCount: 1,
+          });
+        }
       }
     }
   }
@@ -1356,6 +1433,130 @@
       });
     }
     Neo.ringBurst(Neo.player.x, Neo.player.y, 22, '#c0d8ff', 0.3);
+  }
+
+  // Wall of Toph (smash slot): a ground slam that erupts a ring of rock shards and
+  // raises a ring of temporary rock barriers around the player. The barriers are
+  // ordinary destructibles, so they block movement and line of fire for both sides
+  // and crumble after their ttl runs out (see the destructible update in world.js).
+  function castWallOfToph() {
+    const itemStats = Neo.getItemStats();
+    const move = getEquippedMove('smash');
+    const anvilDmg = Neo.getAnvilMoveBonus(move, 'damage');
+    const anvilRng = Neo.getAnvilMoveBonus(move, 'range');
+    const aoeRadius = (150 + anvilRng) * (itemStats.aoeRadiusMultiplier || 1);
+    const aoeDmgMult = itemStats.aoeDamageMultiplier || 1;
+    const slamDamage = Math.round((Neo.godTimer > 0 ? 70 : 46) * aoeDmgMult) + anvilDmg;
+    const rockColor = Neo.getRoomArtTheme?.()?.backdrop || '#8a5a3c';
+
+    // Heavy ground slam: trauma + downward lurch + hitstop, matching Crimson Smash.
+    Neo.addTrauma?.(0.8, Math.PI / 2, 26);
+    Neo.addHitstop?.(0.06);
+    Neo.spawnAoeShockwave(Neo.player.x, Neo.player.y, aoeRadius, rockColor, 'heavy');
+    Neo.ringBurst(Neo.player.x, Neo.player.y, aoeRadius - 24, rockColor, 0.45);
+    Neo.blastRadius(Neo.player.x, Neo.player.y, aoeRadius, slamDamage, rockColor);
+    Neo.playSfx?.('bomb_explosion');
+
+    // Ring of rock shards hurled outward, mirroring Crimson Smash debris.
+    const rockCount = 12;
+    const rockDamage = Math.round(slamDamage * 0.45);
+    for (let index = 0; index < rockCount; index += 1) {
+      const angle = (index / rockCount) * Math.PI * 2;
+      const speed = 440 + Neo.nextRandom('fx') * 120;
+      Neo.spawnProjectile({
+        x: Neo.player.x + Math.cos(angle) * (aoeRadius * 0.35),
+        y: Neo.player.y + Math.sin(angle) * (aoeRadius * 0.35),
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        r: 7,
+        life: 0.6,
+        enemy: false,
+        kind: 'rock',
+        damage: rockDamage,
+        knockback: 200,
+        color: rockColor,
+        pierceCount: 1,
+        hitOptions: { bleedChance: 0.2, bleedStacks: 1, bleedDuration: 4 },
+      });
+    }
+
+    // Raise a ring of temporary rock barriers. Each is a normal destructible so it
+    // blocks pathing and shots; the ttl makes the wall crumble on its own.
+    if (Array.isArray(Neo.destructibles)) {
+      const barrierCount = 8;
+      const barrierRadius = aoeRadius * 0.82;
+      const halfW = 26;
+      const halfH = 26;
+      for (let index = 0; index < barrierCount; index += 1) {
+        const angle = (index / barrierCount) * Math.PI * 2;
+        const bx = Neo.clamp(
+          Neo.player.x + Math.cos(angle) * barrierRadius,
+          Neo.WALL + halfW + 2,
+          Neo.ROOM_W - Neo.WALL - halfW - 2,
+        );
+        const by = Neo.clamp(
+          Neo.player.y + Math.sin(angle) * barrierRadius,
+          Neo.WALL + halfH + 2,
+          Neo.ROOM_H - Neo.WALL - halfH - 2,
+        );
+        // Don't drop a barrier on top of the player.
+        if (Neo.dist(bx, by, Neo.player.x, Neo.player.y) < Neo.player.r + halfW) continue;
+        Neo.destructibles.push({
+          kind: 'cover_wall',
+          x: bx,
+          y: by,
+          w: halfW * 2,
+          h: halfH * 2,
+          r: Math.hypot(halfW, halfH),
+          hp: 8,
+          maxHp: 8,
+          reinforced: false,
+          broken: false,
+          ttl: 8,
+        });
+        Neo.spawnParticle({ x: bx, y: by, life: 0.35, ring: halfW, c: rockColor });
+      }
+    }
+  }
+
+  // Laser Shockwave (laser slot): erupts rock spikes in a vertical line across the
+  // full height of the room at the player's x, dealing rock damage to anything caught
+  // in the column. The shards are rock-kind projectiles so Pendant of Rock buffs them.
+  function castLaserShockwave() {
+    const itemStats = Neo.getItemStats();
+    const move = getEquippedMove('laser');
+    const anvilDmg = Neo.getAnvilMoveBonus(move, 'damage');
+    const damage = 22 + anvilDmg;
+    const rockColor = Neo.getRoomArtTheme?.()?.backdrop || '#8a5a3c';
+    const columnX = Neo.player.x;
+    const topY = Neo.WALL + 12;
+    const bottomY = Neo.ROOM_H - Neo.WALL - 12;
+    const step = 46;
+
+    Neo.addTrauma?.(0.4);
+    Neo.spawnAoeShockwave(columnX, Neo.player.y, 60, rockColor, 'light');
+
+    for (let y = topY; y <= bottomY; y += step) {
+      Neo.spawnParticle({ x: columnX, y, life: 0.5, ring: 22, c: rockColor });
+      // Each spike is a short-lived, near-stationary rock projectile so it hits any
+      // enemy standing in the vertical line and inherits the rock-damage bonus.
+      Neo.spawnProjectile({
+        x: columnX,
+        y,
+        vx: 0,
+        vy: 0,
+        r: 18,
+        life: 0.45,
+        enemy: false,
+        kind: 'rock',
+        damage,
+        knockback: 220,
+        color: rockColor,
+        pierceCount: 99,
+        hitOptions: { bleedChance: 0.15, bleedStacks: 1, bleedDuration: 4 },
+      });
+    }
+    Neo.ringBurst(columnX, Neo.player.y, 30, rockColor, 0.35);
   }
 
   function castRandomPounce() {
@@ -1786,6 +1987,47 @@
     }
   }
 
+  // Sarge's Hammer Throw (laser slot): hurl a spinning hammer toward the cursor.
+  // It uses the same boomerang flight as the double-kill hammer — flies out, hits,
+  // then arcs back to Sarge — but is a manually aimed skill, not a passive proc.
+  function castHammerThrow(move) {
+    if (!Neo.player) return;
+    const itemStats = Neo.getItemStats();
+    const base = Neo.MOVE_BASE_STATS?.[move]?.damage ?? 46;
+    const anvilBonus = Neo.getAnvilMoveBonus?.(move, 'damage') || 0;
+    const damage = Math.max(1, Math.round((base + anvilBonus) * (itemStats.damageMultiplier || 1)));
+    const angle = Neo.angleToMouse();
+    Neo.spawnProjectile({
+      x: Neo.player.x,
+      y: Neo.player.y,
+      vx: Math.cos(angle) * 680,
+      vy: Math.sin(angle) * 680,
+      r: 11,
+      life: 0.55,
+      enemy: false,
+      kind: 'sarges_hammer',
+      damage,
+      knockback: 300,
+      color: '#7da3ff',
+      // Outbound arm flies straight; on first enemy hit OR when life runs out it
+      // arcs home to the player (boomerang handling lives in world.js).
+      pierceCount: 1,
+      boomerang: true,
+      boomerangPhase: 'out',
+      homing: true,
+      homingTarget: 'enemy',
+      homingRadius: 700,
+      homingSpeed: 760,
+      homingAccel: 2.4,
+      homingTurnRate: 2.6,
+    });
+    Neo.ringBurst?.(Neo.player.x, Neo.player.y, 26, '#9bb8ff', 0.4);
+    Neo.playSfx?.('sword_swing');
+    // A little recoil for weight.
+    Neo.player.vx -= Math.cos(angle) * 90;
+    Neo.player.vy -= Math.sin(angle) * 90;
+  }
+
   function spawnFireballs() {
     const itemStats = Neo.getItemStats();
     const aoeRadiusMultiplier = itemStats.aoeRadiusMultiplier || 1;
@@ -2126,6 +2368,117 @@
       Neo.healingZoneCharging = false;
       Neo.healingZoneChargeTime = 0;
     }
+  }
+
+  // Death Ball (Sarge's R): a big blue energy ball hurled toward the cursor. Charge
+  // ratio (0..1) scales both its radius and damage — a tap makes a small fast ball,
+  // a full charge makes a huge slow crusher. It's a slow piercing projectile that
+  // grinds through enemies and shatters props in its path.
+  function castDeathBall(chargeRatio = 0) {
+    const itemStats = Neo.getItemStats();
+    const aoeRadiusMultiplier = itemStats.aoeRadiusMultiplier || 1;
+    const charge = Neo.clamp(Number(chargeRatio) || 0, 0, 1);
+    const radius = (16 + charge * 34) * aoeRadiusMultiplier; // 16px (tap) -> 50px (full)
+    const base = Neo.MOVE_BASE_STATS?.death_ball?.damage ?? 40;
+    const anvilBonus = Neo.getAnvilMoveBonus?.('death_ball', 'damage') || 0;
+    // Tap ~0.6x base, full charge ~2.6x base.
+    const damage = Math.max(1, Math.round((base + anvilBonus) * (0.6 + charge * 2.0) * (itemStats.damageMultiplier || 1)));
+    const angle = Neo.angleToMouse();
+    // Bigger balls roll slower (heavier), smaller ones zip out faster.
+    const speed = 520 - charge * 200;
+    Neo.spawnProjectile({
+      x: Neo.player.x + Math.cos(angle) * (Neo.player.r + radius * 0.4),
+      y: Neo.player.y + Math.sin(angle) * (Neo.player.r + radius * 0.4),
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      r: radius,
+      life: 1.6 + charge * 0.8,
+      enemy: false,
+      kind: 'death_ball',
+      damage,
+      knockback: 220 + charge * 260,
+      color: '#5aa0ff',
+      // Pierces a lot so a charged ball plows through a whole pack.
+      pierceCount: 4 + Math.round(charge * 8),
+    });
+    Neo.ringBurst(Neo.player.x, Neo.player.y, radius * 0.8, '#5aa0ff', 0.6);
+    if (charge > 0.05) {
+      Neo.shake = Math.max(Neo.shake, 4 + charge * 7);
+      Neo.shakeT = Math.max(Neo.shakeT, 0.14);
+    }
+    Neo.playSfx?.('lazer_blast');
+    // Recoil scales with the ball's heft.
+    Neo.player.vx -= Math.cos(angle) * (60 + charge * 120);
+    Neo.player.vy -= Math.sin(angle) * (60 + charge * 120);
+  }
+
+  // Drives the Death Ball charge (mirrors updateHealingZoneCharge): attack speed
+  // scales charge gain, release spawns a ball sized to the accumulated charge.
+  function updateDeathBallCharge(dt) {
+    if (!Neo.deathBallCharging) return;
+    if (!Neo.player || Neo.gameState !== 'play') {
+      Neo.deathBallCharging = false;
+      Neo.queueHeldSkillRecharge?.('smash', Neo.getSmashCooldownDuration(Neo.getAttackSpeedValue()));
+      return;
+    }
+    const chargeSpeed = Math.max(0.2, Number(Neo.getAttackSpeedValue?.() || 1));
+    Neo.deathBallChargeTime = Math.min(
+      DEATH_BALL_MAX_CHARGE,
+      Number(Neo.deathBallChargeTime || 0) + dt * chargeSpeed
+    );
+    const atMax = Neo.deathBallChargeTime >= DEATH_BALL_MAX_CHARGE;
+    // A growing blue orb sketched above the player so the charge reads.
+    if (Neo.nextRandom('fx') < 0.6) {
+      const ratio = Neo.deathBallChargeTime / DEATH_BALL_MAX_CHARGE;
+      const ring = 14 + ratio * 52;
+      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.22, ring, c: '#5aa0ff' });
+    }
+    if (!Neo.smashHeld || atMax) {
+      const ratio = Neo.deathBallChargeTime / DEATH_BALL_MAX_CHARGE;
+      // Turtle Power-Up throws no ball — it's a pure self-buff burst. Death Ball
+      // hurls the charged energy ball as usual.
+      if (Neo.deathBallPowerUp) applyTurtlePowerUp(ratio);
+      else castDeathBall(ratio);
+      Neo.queueHeldSkillRecharge?.('smash', Neo.getSmashCooldownDuration(Neo.getAttackSpeedValue()));
+      Neo.deathBallCharging = false;
+      Neo.deathBallChargeTime = 0;
+      Neo.deathBallPowerUp = false;
+    }
+  }
+
+  // Turtle Power-Up release (Turtle Boy's alt smash): erupt a small AOE shockwave at
+  // the player's feet, grant a barrier worth 25% of current HP, and a timed surge to
+  // attack and move speed. The speed surge's strength and duration scale with the
+  // charge ratio, so a full-charge release is a big rampage and a tap is a brief
+  // nudge. No projectile is thrown.
+  const DEATH_BALL_BUFF_MAX_DURATION = 6;   // seconds at full charge
+  const DEATH_BALL_BUFF_MAX_POWER = 0.6;    // +60% attack & move speed at full charge
+  function applyTurtlePowerUp(chargeRatio = 0) {
+    const charge = Neo.clamp(Number(chargeRatio) || 0, 0, 1);
+    const itemStats = Neo.getItemStats();
+    const aoeRadiusMultiplier = itemStats.aoeRadiusMultiplier || 1;
+    const aoeDamageMultiplier = itemStats.aoeDamageMultiplier || 1;
+    // Small AOE burst at the player's feet (smaller than crimson/hammer smashes).
+    const aoeRadius = (60 + charge * 40) * aoeRadiusMultiplier;
+    const aoeDamage = Math.max(1, Math.round((18 + charge * 26) * aoeDamageMultiplier));
+    Neo.spawnAoeShockwave(Neo.player.x, Neo.player.y, aoeRadius, '#7dffb0', 'light');
+    Neo.ringBurst(Neo.player.x, Neo.player.y, aoeRadius * 0.7, '#7dffb0', 0.5);
+    Neo.blastRadius(Neo.player.x, Neo.player.y, aoeRadius, aoeDamage, '#7dffb0');
+    // Shell barrier: 25% of current HP as an overheal barrier, stacking onto any
+    // existing barrier.
+    const barrierGain = Math.round(Number(Neo.player.hp || 0) * 0.25);
+    if (barrierGain > 0) {
+      const current = Number(Neo.player.overhealBarrier || 0) + barrierGain;
+      Neo.setOverhealBarrier?.(current, Math.max(Number(Neo.player.overhealBarrierMax || 0), current), '#7dffb0');
+      Neo.spawnHealPopup?.(Neo.player.x, Neo.player.y - 44, barrierGain, { color: '#7dffb0', size: 12 });
+    }
+    // Timed attack/move-speed surge — longer charge = stronger and longer.
+    const duration = 1.5 + charge * (DEATH_BALL_BUFF_MAX_DURATION - 1.5);
+    const power = DEATH_BALL_BUFF_MAX_POWER * (0.4 + charge * 0.6);
+    Neo.player.deathBallBuffTime = duration;
+    Neo.player.deathBallBuffPower = power;
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 28, life: 0.7, text: 'POWER UP!', c: '#7dffb0' });
+    Neo.playSfx?.('lazer_blast');
   }
 
   function castFireCircle() {
@@ -3253,6 +3606,42 @@
     return key;
   }
 
+  // Sarge's Hammer double-kill reward. Spawns a homing hammer aimed at the kill
+  // spot. Phase 1 ('out') seeks the nearest enemy; on its first enemy hit the
+  // projectile flips to phase 2 ('back') and homes to the player (handled in
+  // world.js updateProjectiles), healing and pulling pickups when it arrives.
+  function launchSargesHammer(originX, originY) {
+    if (!Neo.player) return;
+    const damage = Math.max(1, Math.round(getPlayerBaseDamage() * 1.4));
+    const angle = Math.atan2((originY ?? Neo.player.y) - Neo.player.y, (originX ?? Neo.player.x) - Neo.player.x);
+    Neo.spawnProjectile({
+      x: Neo.player.x,
+      y: Neo.player.y,
+      vx: Math.cos(angle) * 620,
+      vy: Math.sin(angle) * 620,
+      r: 11,
+      life: 6,
+      enemy: false,
+      kind: 'sarges_hammer',
+      damage,
+      knockback: 320,
+      color: '#7da3ff',
+      homing: true,
+      homingTarget: 'enemy',
+      homingRadius: 1100,
+      homingSpeed: 900,
+      homingAccel: 3.2,
+      homingTurnRate: 4.2,
+      // Pierce so a thrown hammer can clip a couple of foes before it returns.
+      pierceCount: 1,
+      boomerang: true,
+      boomerangPhase: 'out',
+    });
+    Neo.ringBurst?.(Neo.player.x, Neo.player.y, 30, '#9bb8ff', 0.45);
+    Neo.spawnParticle?.({ x: Neo.player.x, y: Neo.player.y - 30, life: 0.7, text: 'DOUBLE!', c: '#9bb8ff' });
+    Neo.playSfx?.('sword_swing');
+  }
+
   function onEnemyDie(enemy, options = {}) {
     if (enemy.type === 'god' && !enemy.rebirthUsed && !options.forceDeath) {
       enemy.rebirthUsed = true;
@@ -3299,6 +3688,21 @@
     }
     if (Neo.player) Neo.player.kills = Math.max(0, Number(Neo.player.kills || 0)) + 1;
     window.achievementEvents?.emit('enemy:killed');
+    // Sarge's Hammer: 2 kills within 1 second launch a homing hammer that strikes a
+    // foe, then returns to Sarge — healing and pulling pickups on the way back. A
+    // short re-arm window keeps big AoE clears from spamming a swarm of hammers.
+    if (!isTutorialDummy && Neo.player && Neo.player.equippedWeapon === 'sarges_hammer') {
+      const now = performance.now() / 1000;
+      const lastKillAt = Number(Neo.player.sargesHammerLastKillAt || 0);
+      const rearmUntil = Number(Neo.player.sargesHammerRearmAt || 0);
+      if (lastKillAt > 0 && now - lastKillAt <= 1 && now >= rearmUntil) {
+        launchSargesHammer(enemy.x, enemy.y);
+        Neo.player.sargesHammerRearmAt = now + 0.5;
+        Neo.player.sargesHammerLastKillAt = 0; // consume the pair
+      } else {
+        Neo.player.sargesHammerLastKillAt = now;
+      }
+    }
     // Moggy's Coat: a kill made while hidden primes the coat. The next combat
     // opens with Dark Drain on every enemy (see enterRoom's combat-start hook).
     if (!isTutorialDummy && Neo.player && !Neo.player.moggysCoatPrimed
@@ -4160,6 +4564,9 @@
   Neo.castHealingZone = castHealingZone;
   Neo.updateHealingZoneCharge = updateHealingZoneCharge;
   Neo.HEALING_ZONE_MAX_CHARGE = HEALING_ZONE_MAX_CHARGE;
+  Neo.castDeathBall = castDeathBall;
+  Neo.updateDeathBallCharge = updateDeathBallCharge;
+  Neo.DEATH_BALL_MAX_CHARGE = DEATH_BALL_MAX_CHARGE;
   Neo.castFireCircle = castFireCircle;
   Neo.castFloorLava = castFloorLava;
   Neo.castLightningColumns = castLightningColumns;

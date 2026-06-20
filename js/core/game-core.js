@@ -953,6 +953,26 @@ export const CHARACTER_DEFS = {
     skills: { melee: 'Mooggy Swipe', laser: 'Nail Shot', smash: 'Random Pounce', dash: 'Zoomies' },
     unlock: 'mooggy3',
   },
+  turtle_boy: {
+    key: 'turtle_boy',
+    name: 'Turtle Boy',
+    rarity: 'knight',
+    damageMultiplier: 1,
+    hpMultiplier: 1.2,
+    // Turtle Boy trades raw output for survivability: a thick shell, a draining
+    // wave laser, and a free laser tier every 3 floors (see grantTurtleLaserStep).
+    skills: { melee: 'Extending Staff', laser: 'Turtle Wave', smash: 'Death Ball', dash: 'Riptide Roll' },
+  },
+  sarge: {
+    key: 'sarge',
+    name: 'Sarge',
+    rarity: 'knight',
+    damageMultiplier: 1.1,
+    hpMultiplier: 1.1,
+    // Old-guard heavy: hammer smash up close, hammer throw at range. His god
+    // item (Sarge's Hammer) rewards rapid double-kills with a homing hammer.
+    skills: { melee: 'Hammer Smash', laser: 'Hammer Throw', smash: 'Ground Pound', dash: 'Combat Roll' },
+  },
   custom_character: {
     key: 'custom_character',
     name: 'Custom',
@@ -1007,6 +1027,24 @@ export const HERO_DISPLAY = {
       { label: 'DMG',   pct: 78, color: '#ff5c6f' },
       { label: 'SPD',   pct: 92, color: '#d31f35' },
       { label: 'RANGE', pct: 88, color: '#ff9baa' },
+    ],
+  },
+  turtle_boy: {
+    lore: 'A water-blooded brawler with a turtle shell on his back and a long red extending staff. Tanky and patient — his wave laser grows stronger every few floors.',
+    stats: [
+      { label: 'HP',    pct: 92, color: '#5fd6a0' },
+      { label: 'DMG',   pct: 58, color: '#3fb6c0' },
+      { label: 'SPD',   pct: 54, color: '#7fe0ff' },
+      { label: 'RANGE', pct: 78, color: '#aef3d0' },
+    ],
+  },
+  sarge: {
+    lore: 'A blue-coated old soldier who never left the war. Smashes with his hammer up close and hurls it at range. Double-kills feed his homing hammer.',
+    stats: [
+      { label: 'HP',    pct: 72, color: '#6fa8ff' },
+      { label: 'DMG',   pct: 84, color: '#9bbcff' },
+      { label: 'SPD',   pct: 50, color: '#5f7fd6' },
+      { label: 'RANGE', pct: 58, color: '#c0d4ff' },
     ],
   },
   custom_character: {
