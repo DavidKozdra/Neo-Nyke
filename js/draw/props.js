@@ -2390,40 +2390,83 @@
   Neo.getProjectileVisual = getProjectileVisual;
   Neo.drawProjectileTrail = drawProjectileTrail;
   Neo.drawProjectileShape = drawProjectileShape;
+
+  function drawChargeRewardMeter({
+    ratio,
+    x,
+    y,
+    width,
+    rowHeight,
+    gap,
+    trackColor,
+    fillColor,
+    outlineColor,
+    textColor,
+    shadowColor,
+  }) {
+    const ctx = Neo.ctx;
+    const clamped = Neo.clamp(Number(ratio) || 0, 0, 1);
+    const tiers = 3;
+    const height = rowHeight * tiers + gap * (tiers - 1);
+    ctx.save();
+    ctx.globalAlpha = 0.94;
+    ctx.fillStyle = trackColor;
+    ctx.fillRect(x - 3, y - 3, width + 6, height + 6);
+    ctx.shadowColor = shadowColor;
+    ctx.shadowBlur = clamped >= 1 ? 16 : 8;
+    for (let index = 0; index < tiers; index += 1) {
+      const tierStart = index / tiers;
+      const tierRatio = Neo.clamp((clamped - tierStart) * tiers, 0, 1);
+      const rowY = y + index * (rowHeight + gap);
+      ctx.fillStyle = 'rgba(255,255,255,0.12)';
+      ctx.fillRect(x, rowY, width, rowHeight);
+      if (tierRatio > 0) {
+        ctx.fillStyle = clamped >= 1 ? '#ffffff' : fillColor;
+        ctx.fillRect(x, rowY, width * tierRatio, rowHeight);
+      }
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = index / tiers < clamped ? outlineColor : 'rgba(255,255,255,0.28)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x - 0.5, rowY - 0.5, width + 1, rowHeight + 1);
+      ctx.shadowBlur = clamped >= 1 ? 16 : 8;
+    }
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = outlineColor;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x - 3, y - 3, width + 6, height + 6);
+    if (clamped >= 1) {
+      ctx.fillStyle = textColor;
+      ctx.font = '700 11px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('MAX', x + width / 2, y - 7);
+    }
+    ctx.restore();
+  }
+
   // Wind-up bar above the player while charging a Healing Zone.
   function drawHealingZoneChargeBar() {
     if (!Neo.healingZoneCharging || !Neo.player) return;
     const max = Neo.HEALING_ZONE_MAX_CHARGE || 5;
     const ratio = Neo.clamp((Number(Neo.healingZoneChargeTime || 0)) / max, 0, 1);
-    const ctx = Neo.ctx;
-    const w = 46;
-    const h = 6;
+    const w = 138;
+    const rowH = 5;
+    const gap = 3;
     const x = Neo.player.x - w / 2;
-    const y = Neo.player.y - (Neo.player.r || 14) - 20;
-    ctx.save();
-    ctx.globalAlpha = 0.92;
-    // Track
-    ctx.fillStyle = 'rgba(5,30,12,0.78)';
-    ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
-    // Fill — brightens to white as it tops out.
-    ctx.fillStyle = ratio >= 1 ? '#ffffff' : '#3bff77';
-    ctx.shadowColor = '#3bff77';
-    ctx.shadowBlur = ratio >= 1 ? 12 : 6;
-    ctx.fillRect(x, y, w * ratio, h);
-    ctx.shadowBlur = 0;
-    // Outline
-    ctx.globalAlpha = 1;
-    ctx.strokeStyle = 'rgba(150,255,180,0.85)';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(x - 1, y - 1, w + 2, h + 2);
-    // "MAX" flash when fully charged.
-    if (ratio >= 1) {
-      ctx.fillStyle = '#eafff0';
-      ctx.font = '700 9px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('MAX', Neo.player.x, y - 4);
-    }
-    ctx.restore();
+    const y = Neo.player.y - (Neo.player.r || 14) - 42;
+    drawChargeRewardMeter({
+      ratio,
+      x,
+      y,
+      width: w,
+      rowHeight: rowH,
+      gap,
+      trackColor: 'rgba(5,30,12,0.82)',
+      fillColor: '#3bff77',
+      outlineColor: 'rgba(150,255,180,0.9)',
+      textColor: '#eafff0',
+      shadowColor: '#3bff77',
+    });
   }
 
   // Wind-up bar + growing orb preview above the player while charging a Death Ball.
@@ -2431,44 +2474,43 @@
     if (!Neo.deathBallCharging || !Neo.player) return;
     const max = Neo.DEATH_BALL_MAX_CHARGE || 5;
     const ratio = Neo.clamp((Number(Neo.deathBallChargeTime || 0)) / max, 0, 1);
+    const powerUp = !!Neo.deathBallPowerUp;
+    const fillColor = powerUp ? '#7dffb0' : '#5aa0ff';
+    const trackColor = powerUp ? 'rgba(7,32,18,0.82)' : 'rgba(8,18,40,0.82)';
+    const outlineColor = powerUp ? 'rgba(160,255,196,0.9)' : 'rgba(160,200,255,0.9)';
+    const textColor = powerUp ? '#eafff0' : '#eaf2ff';
     const ctx = Neo.ctx;
     // Growing translucent blue orb that previews the ball's size.
     const previewR = 10 + ratio * 40;
     ctx.save();
     ctx.globalAlpha = 0.28 + ratio * 0.22;
     const grad = ctx.createRadialGradient(Neo.player.x, Neo.player.y, previewR * 0.2, Neo.player.x, Neo.player.y, previewR);
-    grad.addColorStop(0, '#cfe6ff');
-    grad.addColorStop(1, 'rgba(60,130,255,0.05)');
+    grad.addColorStop(0, powerUp ? '#dcffe9' : '#cfe6ff');
+    grad.addColorStop(1, powerUp ? 'rgba(80,255,150,0.05)' : 'rgba(60,130,255,0.05)');
     ctx.fillStyle = grad;
     ctx.beginPath();
     ctx.arc(Neo.player.x, Neo.player.y, previewR, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
     // Bar.
-    const w = 46;
-    const h = 6;
+    const w = 138;
+    const rowH = 5;
+    const gap = 3;
     const x = Neo.player.x - w / 2;
-    const y = Neo.player.y - (Neo.player.r || 14) - 22;
-    ctx.save();
-    ctx.globalAlpha = 0.92;
-    ctx.fillStyle = 'rgba(8,18,40,0.78)';
-    ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
-    ctx.fillStyle = ratio >= 1 ? '#ffffff' : '#5aa0ff';
-    ctx.shadowColor = '#5aa0ff';
-    ctx.shadowBlur = ratio >= 1 ? 12 : 6;
-    ctx.fillRect(x, y, w * ratio, h);
-    ctx.shadowBlur = 0;
-    ctx.globalAlpha = 1;
-    ctx.strokeStyle = 'rgba(160,200,255,0.85)';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(x - 1, y - 1, w + 2, h + 2);
-    if (ratio >= 1) {
-      ctx.fillStyle = '#eaf2ff';
-      ctx.font = '700 9px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('MAX', Neo.player.x, y - 4);
-    }
-    ctx.restore();
+    const y = Neo.player.y - (Neo.player.r || 14) - 44;
+    drawChargeRewardMeter({
+      ratio,
+      x,
+      y,
+      width: w,
+      rowHeight: rowH,
+      gap,
+      trackColor,
+      fillColor,
+      outlineColor,
+      textColor,
+      shadowColor: fillColor,
+    });
   }
 
   Neo.drawProjectiles = drawProjectiles;

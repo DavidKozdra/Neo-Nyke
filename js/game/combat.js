@@ -1009,13 +1009,15 @@
 
   const HEALING_ZONE_MAX_CHARGE = 5; // charge units required for a full-power zone
   const DEATH_BALL_MAX_CHARGE = 5;   // charge units required for a full-size Death Ball
+  const HEALING_ZONE_CHARGE_SPEED_MULTIPLIER = 4;
+  const TURTLE_POWERUP_CHARGE_SPEED_MULTIPLIER = 4;
 
   function trySmash() {
     cancelCowardsWayOnAttack();
     const itemStats = Neo.getItemStats();
     const attackSpeed = Neo.getAttackSpeedValue();
     // Healing Zone is hold-to-charge: attack speed controls how quickly it reaches
-    // five charge units for a bigger, stronger zone.
+    // full charge for a bigger, stronger zone.
     if (getEquippedMove('smash') === 'healing_zone') {
       if (Neo.healingZoneCharging) return; // already winding up
       if (!Neo.spendSkillCharge('smash', Neo.getSmashCooldownDuration(attackSpeed), { deferTimer: true })) return;
@@ -1456,7 +1458,7 @@
     Neo.spawnAoeShockwave(Neo.player.x, Neo.player.y, aoeRadius, rockColor, 'heavy');
     Neo.ringBurst(Neo.player.x, Neo.player.y, aoeRadius - 24, rockColor, 0.45);
     Neo.blastRadius(Neo.player.x, Neo.player.y, aoeRadius, slamDamage, rockColor);
-    Neo.playSfx?.('bomb_explosion');
+    Neo.playSfx?.('aoe');
 
     // Ring of rock shards hurled outward, mirroring Crimson Smash debris.
     const rockCount = 12;
@@ -2331,7 +2333,7 @@
 
   function castHealingZone(chargeRatio = 0) {
     const aoeRadiusMultiplier = Neo.getItemStats().aoeRadiusMultiplier || 1;
-    // A full 5s charge roughly doubles the radius and ttl and boosts heal/damage.
+    // A full charge roughly doubles the radius and ttl and boosts heal/damage.
     const charge = Neo.clamp(Number(chargeRatio) || 0, 0, 1);
     const radius = 62 * aoeRadiusMultiplier * (1 + charge);
     const ttl = 6 * (1 + charge);
@@ -2364,7 +2366,7 @@
       Neo.queueHeldSkillRecharge?.('smash', Neo.getSmashCooldownDuration(Neo.getAttackSpeedValue()));
       return;
     }
-    const chargeSpeed = Math.max(0.2, Number(Neo.getAttackSpeedValue?.() || 1));
+    const chargeSpeed = Math.max(0.2, Number(Neo.getAttackSpeedValue?.() || 1)) * HEALING_ZONE_CHARGE_SPEED_MULTIPLIER;
     Neo.healingZoneChargeTime = Math.min(
       HEALING_ZONE_MAX_CHARGE,
       Number(Neo.healingZoneChargeTime || 0) + dt * chargeSpeed
@@ -2437,7 +2439,8 @@
       Neo.queueHeldSkillRecharge?.('smash', Neo.getSmashCooldownDuration(Neo.getAttackSpeedValue()));
       return;
     }
-    const chargeSpeed = Math.max(0.2, Number(Neo.getAttackSpeedValue?.() || 1));
+    const chargeSpeed = Math.max(0.2, Number(Neo.getAttackSpeedValue?.() || 1))
+      * (Neo.deathBallPowerUp ? TURTLE_POWERUP_CHARGE_SPEED_MULTIPLIER : 1);
     Neo.deathBallChargeTime = Math.min(
       DEATH_BALL_MAX_CHARGE,
       Number(Neo.deathBallChargeTime || 0) + dt * chargeSpeed
@@ -4580,9 +4583,11 @@
   Neo.castHealingZone = castHealingZone;
   Neo.updateHealingZoneCharge = updateHealingZoneCharge;
   Neo.HEALING_ZONE_MAX_CHARGE = HEALING_ZONE_MAX_CHARGE;
+  Neo.HEALING_ZONE_CHARGE_SPEED_MULTIPLIER = HEALING_ZONE_CHARGE_SPEED_MULTIPLIER;
   Neo.castDeathBall = castDeathBall;
   Neo.updateDeathBallCharge = updateDeathBallCharge;
   Neo.DEATH_BALL_MAX_CHARGE = DEATH_BALL_MAX_CHARGE;
+  Neo.TURTLE_POWERUP_CHARGE_SPEED_MULTIPLIER = TURTLE_POWERUP_CHARGE_SPEED_MULTIPLIER;
   Neo.castFireCircle = castFireCircle;
   Neo.castFloorLava = castFloorLava;
   Neo.castLightningColumns = castLightningColumns;
