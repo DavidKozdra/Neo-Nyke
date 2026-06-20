@@ -10390,6 +10390,24 @@ border-bottom: black solid 2px;
   border-color: rgba(var(--accent), .7);
   font-weight: 700;
 }
+.jukebox__track {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.jukebox__track-tag {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: calc(11px * var(--font-scale, 1));
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: #ffe9b0;
+  background: rgba(255, 196, 84, .14);
+  border: 1px solid rgba(255, 196, 84, .5);
+}
 
 @media (max-width: 720px) {
   .credits-gallery { grid-template-columns: 1fr; }

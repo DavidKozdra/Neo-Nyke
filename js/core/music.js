@@ -244,6 +244,7 @@
     if (titleLoop) titleLoop.volume = gain;
     if (gameTrack) gameTrack.volume = gain;
     if (jukeboxAudio) jukeboxAudio.volume = gain;
+    if (jukeboxIntroAudio) jukeboxIntroAudio.volume = gain;
   }
 
   function applyGameMood() {
@@ -347,14 +348,23 @@
   // playback we suspend the automatic title-music sync so the loop above does
   // not fight the player's selection. Releasing the override restores normal
   // menu/game music on the next tick.
+  // A track with an `intro` plays that one-shot first and hands off into the
+  // looping `path` body, so the player hears the title song whole rather than
+  // split into separate Intro/Loop entries. Tracks without an `intro` simply
+  // loop their `path`.
   const JUKEBOX_TRACKS = [
-    { id: 'main_theme', title: 'Main Theme', path: 'assets/sounds/music/Neo Nyke - main theme.mp3' },
-    { id: 'gameplay_loop', title: 'Gameplay', path: 'assets/sounds/music/Neo Nyke - Gameplay (Loop).wav' },
-    { id: 'title_intro', title: 'Title Intro', path: 'assets/sounds/music/Neo Nyke - Title Intro.wav' },
-    { id: 'title_loop', title: 'Title Loop', path: 'assets/sounds/music/Neo Nyke - Title Loop.wav' },
+    {
+      id: 'neo_nyke_title',
+      title: 'Neo Nyke Title',
+      intro: 'assets/sounds/music/Neo Nyke - Title Intro.wav',
+      path: 'assets/sounds/music/Neo Nyke - Title Loop.wav',
+    },
+    { id: 'sword_and_synth', title: 'Sword and Synth', path: 'assets/sounds/music/Neo Nyke - Gameplay (Loop).wav' },
+    { id: 'neo_nyke_title_alt', title: 'Neo Nyke Title (Alternative Version)', bonus: true, path: 'assets/sounds/music/Neo Nyke - main theme.mp3' },
   ];
   let jukeboxActive = false;
   let jukeboxAudio = null;
+  let jukeboxIntroAudio = null;
   let jukeboxTrackId = null;
   const jukeboxListeners = new Set();
 
@@ -371,14 +381,15 @@
     return {
       active: jukeboxActive,
       trackId: jukeboxTrackId,
-      playing: !!(jukeboxAudio && !jukeboxAudio.paused),
-      tracks: JUKEBOX_TRACKS.map((t) => ({ id: t.id, title: t.title })),
+      playing: !!((jukeboxAudio && !jukeboxAudio.paused) || (jukeboxIntroAudio && !jukeboxIntroAudio.paused)),
+      tracks: JUKEBOX_TRACKS.map((t) => ({ id: t.id, title: t.title, bonus: !!t.bonus })),
     };
   }
 
   function stopJukeboxAudio() {
-    if (!jukeboxAudio) return;
-    try { jukeboxAudio.pause(); } catch {}
+    if (jukeboxIntroAudio) { try { jukeboxIntroAudio.pause(); } catch {} }
+    if (jukeboxAudio) { try { jukeboxAudio.pause(); } catch {} }
+    jukeboxIntroAudio = null;
     jukeboxAudio = null;
     jukeboxTrackId = null;
   }
@@ -392,22 +403,41 @@
     pauseAll();
     if (jukeboxTrackId !== track.id) {
       stopJukeboxAudio();
-      jukeboxAudio = makeAudio(track.path, { loop: true });
       jukeboxTrackId = track.id;
+      // The looping body. For an intro+loop track this waits until the one-shot
+      // intro has finished, so the title song is auditioned as a whole.
+      jukeboxAudio = makeAudio(track.path, { loop: true });
+      if (track.intro) {
+        jukeboxIntroAudio = makeAudio(track.intro, { loop: false });
+        jukeboxIntroAudio.addEventListener('ended', () => {
+          // Guard against handing off after the player switched tracks.
+          if (!jukeboxActive || jukeboxTrackId !== track.id || !jukeboxAudio) return;
+          jukeboxAudio.volume = getMusicGain();
+          void jukeboxAudio.play().catch(() => {});
+        });
+      }
     }
-    jukeboxAudio.volume = getMusicGain();
-    void jukeboxAudio.play().catch(() => {});
+    // Resume whichever part is mid-play: if the loop body has already started
+    // (or there is no intro), drive the loop; otherwise (re)start the intro.
+    const resume = (!jukeboxIntroAudio || jukeboxAudio.currentTime > 0) ? jukeboxAudio : jukeboxIntroAudio;
+    resume.volume = getMusicGain();
+    void resume.play().catch(() => {});
     emitJukeboxState();
   }
 
   function jukeboxPause() {
+    if (jukeboxIntroAudio) { try { jukeboxIntroAudio.pause(); } catch {} }
     if (jukeboxAudio) { try { jukeboxAudio.pause(); } catch {} }
     emitJukeboxState();
   }
 
+  function jukeboxIsPlaying() {
+    return !!((jukeboxAudio && !jukeboxAudio.paused) || (jukeboxIntroAudio && !jukeboxIntroAudio.paused));
+  }
+
   function jukeboxToggle() {
-    if (jukeboxAudio && !jukeboxAudio.paused) { jukeboxPause(); return; }
-    if (jukeboxAudio && jukeboxTrackId) { jukeboxPlay(jukeboxTrackId); return; }
+    if (jukeboxIsPlaying()) { jukeboxPause(); return; }
+    if (jukeboxTrackId) { jukeboxPlay(jukeboxTrackId); return; }
     jukeboxPlay(JUKEBOX_TRACKS[0].id);
   }
 

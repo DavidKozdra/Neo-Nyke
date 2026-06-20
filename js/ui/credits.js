@@ -343,7 +343,17 @@
       btn.className = 'jukebox__track';
       btn.dataset.trackId = track.id;
       btn.setAttribute('role', 'listitem');
-      btn.textContent = track.title;
+      const label = document.createElement('span');
+      label.className = 'jukebox__track-title';
+      label.textContent = track.title;
+      btn.appendChild(label);
+      if (track.bonus) {
+        btn.classList.add('jukebox__track--bonus');
+        const tag = document.createElement('span');
+        tag.className = 'jukebox__track-tag';
+        tag.textContent = 'Bonus';
+        btn.appendChild(tag);
+      }
       btn.addEventListener('click', () => Neo.jukebox.play(track.id));
       jukeboxList.appendChild(btn);
     });
