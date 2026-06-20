@@ -80,6 +80,8 @@
     { id: 'dash', path: 'assets/sounds/sfx_dash 1.mp3', volume: 0.1, priority: priority.LOW, mixDb: 3, lowCutHz: 70 },
     { id: 'bomb_explosion', path: 'assets/sounds/sfx_bomb explosion.wav', volume: 0.7, priority: priority.CRITICAL, mixDb: 3, duckMusicGain: 0.8, lowCutHz: 35 },
     { id: 'lazer_blast', path: 'assets/sounds/sfx_lazer_blast.mp3', volume: 0.5, priority: priority.HIGH, mixDb: 3, lowCutHz: 90 },
+    // Ground-slam / area-of-effect shockwave bursts (smash, crimson/hammer/chaos).
+    { id: 'aoe', path: 'assets/sounds/sfx_AOE 4.wav', volume: 0.7, priority: priority.CRITICAL, mixDb: 3, duckMusicGain: 0.8, lowCutHz: 40 },
     {
       // Enemy hurt grunts — a random variant plays when an enemy takes damage.
       id: 'enemy_hurt',
@@ -152,6 +154,7 @@
     fire_burn:       { label: 'Fireballs / Burn',    category: 'Combat' },
     sword_swing:     { label: 'Sword Swing',         category: 'Combat' },
     lazer_blast:     { label: 'Laser Blast',         category: 'Combat' },
+    aoe:             { label: 'AOE Slam',            category: 'Combat' },
     lightning_charge:{ label: 'Lightning',           category: 'Combat' },
     bomb_explosion:  { label: 'Bomb Explosion',      category: 'Combat' },
     dash:            { label: 'Dash',                category: 'Combat' },

@@ -1127,6 +1127,7 @@
     Neo.addHitstop?.(0.06);
     Neo.ringBurst(Neo.player.x, Neo.player.y, smashRadius - 30, smashColor, 0.4);
     Neo.spawnAoeShockwave(Neo.player.x, Neo.player.y, smashRadius, smashColor, 'heavy');
+    Neo.playSfx?.('aoe');
     Neo.hitPvpPlayer2InRadius?.(Neo.player.x, Neo.player.y, smashRadius, Neo.ATTACKS.smash.damage + Neo.getAnvilMoveBonus(move, 'damage'), 320, 'pvp_p1_smash');
     const baseSmashDamage = (Neo.godTimer > 0 ? 82 : Neo.ATTACKS.smash.damage) + Neo.getAnvilMoveBonus(move, 'damage');
     forEachEnemyNearPlayer(smashRadius, enemy => {
@@ -1487,20 +1488,35 @@
       const barrierRadius = aoeRadius * 0.82;
       const halfW = 26;
       const halfH = 26;
+      // Keep a barrier clear of solid walls (room border, structures, and authored
+      // wall-kind destructibles like the wood cover_walls) so rocks never spawn hugging
+      // or wedged into a wall. Pots/barrels and the other rocks in the ring don't count.
+      const clearRadius = Math.hypot(halfW, halfH) + 12;
+      const wallRects = [
+        ...Neo.walls.map(w => ({ x: w.x, y: w.y, w: w.w, h: w.h })),
+        ...Neo.structures.map(s => ({ x: s.x - s.w / 2, y: s.y - s.h / 2, w: s.w, h: s.h })),
+        ...Neo.destructibles
+          .filter(p => !p.broken && (p.kind === 'wall' || p.kind === 'cover_wall' || p.kind === 'secret_wall'))
+          .map(Neo.getDestructibleRect),
+      ];
+      const hitsWall = (x, y) => wallRects.some(rect =>
+        Neo.circleRect(x, y, clearRadius, rect.x, rect.y, rect.w, rect.h));
       for (let index = 0; index < barrierCount; index += 1) {
         const angle = (index / barrierCount) * Math.PI * 2;
-        const bx = Neo.clamp(
-          Neo.player.x + Math.cos(angle) * barrierRadius,
-          Neo.WALL + halfW + 2,
-          Neo.ROOM_W - Neo.WALL - halfW - 2,
-        );
-        const by = Neo.clamp(
-          Neo.player.y + Math.sin(angle) * barrierRadius,
-          Neo.WALL + halfH + 2,
-          Neo.ROOM_H - Neo.WALL - halfH - 2,
-        );
-        // Don't drop a barrier on top of the player.
-        if (Neo.dist(bx, by, Neo.player.x, Neo.player.y) < Neo.player.r + halfW) continue;
+        const dirX = Math.cos(angle);
+        const dirY = Math.sin(angle);
+        // Walk the spot inward from the ring toward the player until it clears the
+        // walls; if the whole spoke is wall, skip this slot.
+        let bx = null;
+        let by = null;
+        for (let radius = barrierRadius; radius >= barrierRadius * 0.45; radius -= 12) {
+          const cx = Neo.player.x + dirX * radius;
+          const cy = Neo.player.y + dirY * radius;
+          // Don't drop a barrier on top of the player.
+          if (Neo.dist(cx, cy, Neo.player.x, Neo.player.y) < Neo.player.r + halfW) break;
+          if (!hitsWall(cx, cy)) { bx = cx; by = cy; break; }
+        }
+        if (bx === null) continue;
         Neo.destructibles.push({
           kind: 'cover_wall',
           x: bx,
