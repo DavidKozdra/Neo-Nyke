@@ -699,7 +699,8 @@
     // trigger the sound once at cast time, not every damage tick.
     const spendLaserCharge = (opts) => {
       if (!Neo.spendSkillCharge('laser', rechargeTime, opts)) return false;
-      Neo.playSfx?.('lazer_blast');
+      // Lightning Columns plays its own electric one-shot at the call site.
+      if (move !== 'lightning_columns') Neo.playSfx?.('lazer_blast');
       return true;
     };
     if (move === 'turtle_wave') {
@@ -739,6 +740,7 @@
     }
     if (move === 'lightning_columns') {
       if (!spendLaserCharge()) return;
+      Neo.playSfx?.('lightning_charge');
       castLightningColumns();
       return;
     }
@@ -1792,6 +1794,7 @@
       const angle = base + index * 0.18;
       Neo.spawnProjectile({ x: Neo.player.x, y: Neo.player.y, vx: Math.cos(angle) * 560, vy: Math.sin(angle) * 560, r: 8, life: 1.6, enemy: false, kind: 'fireball', damage: 22, splash: 48 * aoeRadiusMultiplier, splashDamage: Math.round(14 * aoeDamageMultiplier), blockedSplashDamage: Math.round(16 * aoeDamageMultiplier), fireStacks: 2, fireDuration: 3.4 });
     }
+    Neo.playSfx?.('fire_burn');
     // Recoil kick for the whole volley, along the aim direction (once, not per-fireball).
     const recoil = 150;
     Neo.player.vx -= Math.cos(base) * recoil;
@@ -1967,6 +1970,7 @@
 
   function castSmiteChain() {
     const angle = Neo.angleToMouse();
+    Neo.playSfx?.('lightning_charge');
     // Spear is a jab, not a swipe: a tight forward thrust rather than a wide arc.
     Neo.player.swing = Neo.ATTACKS.melee.active;
     Neo.player.swingA = angle;

@@ -3424,6 +3424,7 @@
         });
         Neo.ringBurst(cx, cy, 22, '#8dd4ff', 0.45);
       }
+      Neo.playSfx?.('lightning_charge');
     }
 
     if (enemy.stun > 0) {

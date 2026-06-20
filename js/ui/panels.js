@@ -1448,6 +1448,7 @@ export function confirmAnvilUpgrades() {
     Neo.anvilStagedUpgrades = {};
     markInventoryPanelDirty();
     Neo.scheduleRunSave();
+    Neo.playSfx?.('forge_upgrade');
     Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 26, life: 1.0, text: 'UPGRADED!', c: '#ffb840' });
     renderAnvilPanel();
     Neo.updateHud();

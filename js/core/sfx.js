@@ -120,6 +120,26 @@
         'assets/sounds/sfx_achievement 3.mp3',
       ],
     },
+    // Player fire/burn move (fireballs, Metao's fire staff) — distinct from the
+    // generic projectile 'fire' one-shot above.
+    { id: 'fire_burn', path: 'assets/sounds/sf_new_fire.wav', volume: 0.6, priority: priority.HIGH, mixDb: 3, lowCutHz: 60 },
+    // Lightning casts: Lightning Columns, Spear of Lightning (smite), and any
+    // other electric strike. One-shot crack at cast time.
+    { id: 'lightning_charge', path: 'assets/sounds/sf_Lightning Charge.wav', volume: 0.6, priority: priority.HIGH, mixDb: 3, lowCutHz: 70 },
+    // Forge anvil upgrade confirmation.
+    { id: 'forge_upgrade', path: 'assets/sounds/sfx_Forge Upgrade.wav', volume: 0.7, priority: priority.HIGH, mixDb: 3 },
+    // UI: generic menu/button click and the primary confirm (GO / ENTER DUNGEON).
+    {
+      id: 'menu_click',
+      volume: 0.5,
+      priority: priority.NORMAL,
+      mixDb: -3,
+      paths: [
+        'assets/sounds/sf_menu_click 1.wav',
+        'assets/sounds/sf_menu_click 2.wav',
+      ],
+    },
+    { id: 'hud_confirm', path: 'assets/sounds/sfx_hud_confirm 6.wav', volume: 0.6, priority: priority.HIGH, mixDb: 0 },
   ];
 
   const soundDefs = new Map();
@@ -250,4 +270,51 @@
   }
 
   Neo.playSfx = playSfx;
+
+  // Global UI click feedback. A single capture-phase listener covers every
+  // button rather than wiring each call site. The vast majority of buttons get
+  // the light menu_click; only the handful of buttons that *commit* a choice
+  // get the weightier hud_confirm. Confirm is opt-IN via an explicit id/class
+  // allowlist — heuristics like `type === 'submit'` over-match because a
+  // <button> with no type attribute defaults to submit, which is most of them.
+  // Buttons that already play their own dedicated sound opt out via
+  // data-no-click-sfx.
+  const CONFIRM_IDS = new Set([
+    'go',                  // ENTER DUNGEON / COMPETE / CONFIRM hero
+    'scrollControlConfirm',
+    'voucherConfirm',
+  ]);
+  // Classes that mark a genuine commit-the-action button. The carousel arrows
+  // reuse `scroll-control-btn--primary` for styling, so we do NOT match a bare
+  // --primary suffix; we list the specific primary buttons that really confirm.
+  const CONFIRM_CLASSES = new Set([
+    'dead-action--primary',   // RETRY CURRENT SEED
+    'dead-action--revive',    // REVIVE
+    'win-action--primary',    // LOOP TO FLOOR 1
+  ]);
+  const CONFIRM_CLASS_SUFFIXES = ['--confirm'];
+  function classifyClickSound(el) {
+    if (!el) return null;
+    if (el.dataset?.noClickSfx != null) return null;
+    if (el.disabled || el.getAttribute?.('aria-disabled') === 'true') return null;
+    const cls = el.classList;
+    // The anvil confirm button plays the forge_upgrade sound itself.
+    if (cls?.contains('anvil-btn--confirm')) return null;
+    const isConfirm = CONFIRM_IDS.has(el.id)
+      || [...(cls || [])].some(
+        (name) => CONFIRM_CLASSES.has(name) || CONFIRM_CLASS_SUFFIXES.some((s) => name.endsWith(s))
+      );
+    return isConfirm ? 'hud_confirm' : 'menu_click';
+  }
+
+  if (typeof document !== 'undefined') {
+    document.addEventListener('click', (event) => {
+      const target = event.target instanceof Element
+        ? event.target.closest('button, [role="button"]')
+        : null;
+      if (!target) return;
+      const id = classifyClickSound(target);
+      if (id) playSfx(id);
+    }, true);
+  }
 })();
