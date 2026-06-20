@@ -2336,7 +2336,7 @@
     // A full charge roughly doubles the radius and ttl and boosts heal/damage.
     const charge = Neo.clamp(Number(chargeRatio) || 0, 0, 1);
     const radius = 62 * aoeRadiusMultiplier * (1 + charge);
-    const ttl = 6 * (1 + charge);
+    const ttl = 4.8 * (1 + charge);
     Neo.hazards.push({
       kind: 'healing_zone',
       x: Neo.player.x,
