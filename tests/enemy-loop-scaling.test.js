@@ -37,6 +37,7 @@ describe('enemy loop scaling', () => {
       endlessWave: 0,
       ENEMY_SCALING: {
         floor: 0.14,
+        levelHpBonus: 0.45,
         loop: 0.32,
         minute: 0.12,
         damageFloor: 0.095,
@@ -131,25 +132,28 @@ describe('enemy loop scaling', () => {
   test('uses cumulative floors visited for the floor component', () => {
     const firstFloorAfterLoop = scaleAtDepth(11);
 
-    expect(firstFloorAfterLoop.hp).toBe(899);
+    expect(firstFloorAfterLoop.hp).toBe(1114);
     expect(firstFloorAfterLoop.dmg).toBe(48);
     expect(firstFloorAfterLoop.speed).toBeCloseTo(156.52, 1);
   });
 
-  test('starts the near-exponential level bonus only after level five', () => {
+  test('starts the level bonus only after level five (HP linear, damage still scales)', () => {
     const levelFive = scaleAtDepth(1, 5);
     const levelSix = scaleAtDepth(1, 6);
     const levelTen = scaleAtDepth(1, 10);
     const levelFifteen = scaleAtDepth(1, 15);
 
+    // HP is only a LINEAR +45%/level bonus now (was exponential 1.2^n), so
+    // a high-level player no longer faces multi-thousand-HP trash. Damage/speed/
+    // attack-speed keep their original level curves.
     expect(levelFive).toMatchObject({ hp: 95, dmg: 10, speed: 95, enemyLevelAttackSpeedMultiplier: 1 });
-    expect(levelSix).toMatchObject({ hp: 114, dmg: 11 });
+    expect(levelSix).toMatchObject({ hp: 138, dmg: 11 });
     expect(levelSix.speed).toBeCloseTo(97.375);
     expect(levelSix.enemyLevelAttackSpeedMultiplier).toBeCloseTo(1.07);
-    expect(levelTen.hp).toBe(236);
+    expect(levelTen.hp).toBe(309);
     expect(levelTen.dmg).toBe(18);
     expect(levelTen.enemyLevelAttackSpeedMultiplier).toBeCloseTo(Math.pow(1.07, 5));
-    expect(levelFifteen.hp).toBe(588);
+    expect(levelFifteen.hp).toBe(523);
     expect(levelFifteen.dmg).toBe(35);
     expect(levelFifteen.speed).toBeCloseTo(121.61, 1);
     expect(levelFifteen.enemyLevelAttackSpeedMultiplier).toBeCloseTo(Math.pow(1.07, 10));

@@ -789,7 +789,12 @@
     const levelsAboveFive = Math.max(0, Math.floor(Number(level || 1)) - 5);
     if (levelsAboveFive <= 0) return { hp: 1, damage: 1, speed: 1, attackSpeed: 1 };
     return {
-      hp: Math.pow(1.2, levelsAboveFive),
+      // HP gets only a small LINEAR bonus per level (levelHpBonus/level above 5),
+      // not the exponential 1.2^n it used to — that ran away once player level
+      // climbed (enemy level is max(floorDepth, playerLevel)), so a level-36
+      // player on Easy was facing ~25k-HP trash. Keep it a gentle bonus, not a
+      // wall. Tune via ENEMY_SCALING.levelHpBonus in game-core.js.
+      hp: 1 + levelsAboveFive * (Neo.ENEMY_SCALING.levelHpBonus ?? 0.15),
       damage: Math.pow(1.14, levelsAboveFive),
       speed: Math.min(1.35, Math.pow(1.025, levelsAboveFive)),
       attackSpeed: Math.min(2.25, Math.pow(1.07, levelsAboveFive)),
@@ -1680,8 +1685,8 @@
   function spawnChallengeBombs(room) {
     if (!room || room.type !== 'challenge') return;
     if (Neo.pickups.some(pickup => pickup?.type === 'challengeBomb')) return;
-    // 3 safe + 2 unsafe bombs scattered at random spots; grabbing any safe one
-    // disarms the trial, so the extra safe bombs just improve the odds.
+    // 3 safe (blue) + 2 unsafe (red) bombs scattered at random spots. The trial
+    // only clears once every blue bomb is defused; grabbing any red one fails it.
     const total = CHALLENGE_BOMB_SAFE_COUNT + CHALLENGE_BOMB_UNSAFE_COUNT;
     const safeFlags = Array.from({ length: total }, (_, index) => index < CHALLENGE_BOMB_SAFE_COUNT);
     // Fisher-Yates shuffle so which spawns are safe is randomized each trial.
@@ -1888,7 +1893,7 @@
         if (!safeSpawn) continue;
         spawnEnemy('sniper', safeSpawn.x, safeSpawn.y, false);
       }
-      sayAtPosition(Neo.ROOM_W / 2, Neo.ROOM_H / 2, 'Disarm the blue bomb. Red bombs explode.', { speaker: 'TRIAL', tone: 'warning' });
+      sayAtPosition(Neo.ROOM_W / 2, Neo.ROOM_H / 2, 'Disarm all blue bombs. Red bombs explode.', { speaker: 'TRIAL', tone: 'warning' });
     } else if (type === 'survival') {
       const tuning = getChallengeTrialTuning('survival');
       room.challengeTimer = Number(tuning.timer || Neo.scaleChallengeTimer(20));

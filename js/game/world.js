@@ -3042,7 +3042,16 @@
 
       if (pickup.type === 'challengeBomb') {
         if (pickup.safe) {
-          Neo.completeChallengeTrial('BOMB DISARMED');
+          // Defuse this blue bomb, then check whether any blue bombs remain.
+          // The trial only clears once every blue bomb has been defused.
+          removePickupAt(index);
+          const safeLeft = Neo.pickups.filter(p => p?.type === 'challengeBomb' && p.safe).length;
+          if (safeLeft <= 0) {
+            Neo.completeChallengeTrial('BOMBS DISARMED');
+          } else {
+            Neo.spawnParticle({ x: pickup.x, y: pickup.y - 20, life: 0.7, text: `DEFUSED — ${safeLeft} LEFT`, c: '#8dd4ff' });
+            Neo.updateObjective();
+          }
         } else {
           blastRadius(pickup.x, pickup.y, 76, getBombHazardDamage(28), '#ff7a66');
           Neo.spawnParticle({ x: pickup.x, y: pickup.y - 20, life: 0.75, text: 'WRONG', c: '#ff7a7a' });

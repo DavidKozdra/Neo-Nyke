@@ -234,7 +234,10 @@
             const timer = Math.ceil(Neo.currentRoom.challengeTimer || 0);
             setObjective(`Repeat the light order: ${progress}/${sequenceLength} (${timer}s).`);
           }
-          else if (type === 'bomb') setObjective(`Disarm the blue bomb before detonation (${Math.ceil(Neo.currentRoom.challengeTimer || 0)}s).`);
+          else if (type === 'bomb') {
+            const blueLeft = (Neo.pickups || []).filter(p => p?.type === 'challengeBomb' && p.safe).length;
+            setObjective(`Disarm all blue bombs (${blueLeft} left) before detonation (${Math.ceil(Neo.currentRoom.challengeTimer || 0)}s).`);
+          }
           else if (type === 'survival') {
             const obelisk = Neo.currentRoom.challengeData?.obelisk;
             const hpPct = obelisk ? Math.ceil(Neo.clamp((obelisk.hp || 0) / Math.max(1, obelisk.maxHp || 1), 0, 1) * 100) : 100;

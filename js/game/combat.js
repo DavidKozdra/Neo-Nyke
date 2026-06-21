@@ -4360,19 +4360,13 @@
     if (!Neo.player || previousCount + collectCount <= 0) return;
     if (previousCount > 0) {
       // A duplicate charger burns 1 Loop Crystal to contain the overcharge.
-      // Only a player with an empty crystal balance dies from it.
+      // With no crystals to spend, the duplicate simply does nothing.
       const crystals = Math.max(0, Math.floor(Number(Neo.metaProgress?.loopCrystals || 0)));
       if (crystals > 0) {
         Neo.metaProgress.loopCrystals = crystals - 1;
         Neo.persistMetaSoon();
         Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 30, life: 1.2, text: 'OVERCHARGE CONTAINED: -1 LOOP CRYSTAL', c: '#58b7ff' });
-        return;
       }
-      Neo.lastDamageSource = 'Artificer Charger';
-      Neo.lastDamageSourceKey = 'artificer_charger';
-      Neo.player.hp = 0;
-      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 30, life: 1, text: 'OVERCHARGED', c: '#fff3ae' });
-      setTimeout(() => Neo.die(), 0);
       return;
     }
 

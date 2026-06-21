@@ -143,7 +143,7 @@ export function getCloakFlatDamageReduction(stacks = 0, ownedToolStacks = 0) {
   const cloakStacks = Math.max(0, Number(stacks) || 0);
   const toolStacks = Math.max(0, Number(ownedToolStacks) || 0);
   if (cloakStacks <= 0) return 0;
-  return cloakStacks * 100 + toolStacks;
+  return cloakStacks * 10 + toolStacks;
 }
 
 export function getRichMansBluesCrystalReward(floor = 1, stacks = 1) {

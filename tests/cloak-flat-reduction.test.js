@@ -20,8 +20,8 @@ describe('Cloak of the Naked King flat damage reduction', () => {
     expect(flatIndex).toBeGreaterThan(percentageIndex);
   });
 
-  test('describes 100 flat points per cloak stack', () => {
-    expect(inputSource).toContain('Reduce incoming damage by 100 points per stack');
+  test('describes 10 flat points per cloak stack', () => {
+    expect(inputSource).toContain('Reduce incoming damage by 10 points per stack');
     expect(inputSource).toContain('plus 1 point per owned tool stack');
   });
 });

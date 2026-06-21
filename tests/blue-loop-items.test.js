@@ -140,8 +140,8 @@ describe('loop-exclusive Blue relics', () => {
         relic: {},
       },
     )).toBe(3);
-    expect(getCloakFlatDamageReduction(1, 3)).toBe(103);
-    expect(getCloakFlatDamageReduction(2, 3)).toBe(203);
+    expect(getCloakFlatDamageReduction(1, 3)).toBe(13);
+    expect(getCloakFlatDamageReduction(2, 3)).toBe(23);
   });
 
   test("calculates Rich Man's Blues pickup crystals from floor and stacks", () => {
@@ -179,7 +179,7 @@ describe('loop-exclusive Blue relics', () => {
     expect(canDuplicateItemPickup('neo_knife')).toBe(true);
   });
 
-  test('Artificer Charger grants its benefit first and kills on the second pickup only without Loop Crystals', () => {
+  test('Artificer Charger grants its benefit first and a crystalless duplicate pickup does nothing', () => {
     jest.useFakeTimers();
     const previousWindow = global.window;
     global.window = { achievementEvents: { emit: jest.fn() } };
@@ -224,14 +224,16 @@ describe('loop-exclusive Blue relics', () => {
     expect(Neo.player.hp).toBeGreaterThan(0);
     expect(Neo.die).not.toHaveBeenCalled();
 
-    // With an empty balance, the duplicate pickup is lethal as before.
+    // With an empty balance, the duplicate pickup is a no-op: no crystal spent,
+    // the player is left unharmed, and death is never triggered.
     Neo.metaProgress.loopCrystals = 0;
+    const hpBefore = Neo.player.hp;
     applyArtificerChargerPickup(2, 1);
     jest.runOnlyPendingTimers();
 
-    expect(Neo.player.hp).toBe(0);
-    expect(Neo.lastDamageSourceKey).toBe('artificer_charger');
-    expect(Neo.die).toHaveBeenCalledTimes(1);
+    expect(Neo.player.hp).toBe(hpBefore);
+    expect(Neo.metaProgress.loopCrystals).toBe(0);
+    expect(Neo.die).not.toHaveBeenCalled();
 
     global.window = previousWindow;
     jest.useRealTimers();
