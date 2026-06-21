@@ -105,7 +105,7 @@ window.Neo = {
   turtleWaveHpTimer: 0,
 
   // --- difficulty ---
-  selectedDifficulty: 'easy',
+  selectedDifficulty: 'medium',
   selectedChallenges: [],
   practiceVariant: 'standard',
   customDifficultySettings: {

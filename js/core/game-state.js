@@ -31,7 +31,7 @@ export function resumeGame() {
       unlockedItems: [],
       unlockedCharacters: ['princess', 'thorn_knight', 'metao', 'turtle_boy', 'sarge'],
       unlockedChallenges: [],
-      selectedDifficulty: 'easy',
+      selectedDifficulty: 'medium',
       selectedChallenges: [],
       selectedCharacter: 'thorn_knight',
       characterKitChoices: {},
@@ -1009,7 +1009,7 @@ export function resumeGame() {
 
   function normalizeDifficulty(input) {
     if (input === 'custom') return 'custom';
-    return Neo.DIFFICULTY_DEFS[input] ? input : 'easy';
+    return Neo.DIFFICULTY_DEFS[input] ? input : 'medium';
   }
 
   function normalizeChallengeSelection(input) {
@@ -2401,8 +2401,8 @@ export function resumeGame() {
       }
     }
     if (!isCompetitive) {
-      if (!unlockedDifficulties.has(Neo.selectedDifficulty)) Neo.selectedDifficulty = 'easy';
-      if (Neo.selectedDifficulty === 'custom') Neo.selectedDifficulty = 'easy';
+      if (!unlockedDifficulties.has(Neo.selectedDifficulty)) Neo.selectedDifficulty = 'medium';
+      if (Neo.selectedDifficulty === 'custom') Neo.selectedDifficulty = 'medium';
       Neo.metaProgress.selectedDifficulty = Neo.selectedDifficulty;
       Neo.selectedChallenges = normalizeChallengeSelection(Neo.selectedChallenges).filter(key => unlockedChallenges.has(key) && ownedChallenges.has(key));
       Neo.metaProgress.selectedChallenges = normalizeChallengeSelection(Neo.selectedChallenges);
