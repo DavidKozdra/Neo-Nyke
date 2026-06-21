@@ -2777,14 +2777,18 @@
   function getEnemyTimeAggression() {
     const minutes = Math.max(0, Number(Neo.gameElapsedTime || 0) / 60);
     const steps = Math.floor(minutes / 5); // one bump per full 5 minutes
-    const rawCritChance = steps * 0.05;
-    const baseCritMultiplier = 1.5 + steps * 0.05;
+    // Overclocked Watch shaves a flat fraction off how much each step buffs the
+    // enemies (the +5% crit chance/damage/raw-damage bumps), capped in getItemStats.
+    const aggressionCut = Neo.clamp(Number(Neo.getItemStats?.()?.overclockedWatchAggressionCut || 0), 0, 0.9);
+    const perStep = 0.05 * (1 - aggressionCut);
+    const rawCritChance = steps * perStep;
+    const baseCritMultiplier = 1.5 + steps * perStep;
     const rolled = Neo.applyCritRollback(rawCritChance, baseCritMultiplier);
     return {
       steps,
       critChance: Neo.clamp(rolled.critChance, 0, 1),
       critMultiplier: rolled.critMultiplier,
-      damageMultiplier: 1 + steps * 0.05,
+      damageMultiplier: 1 + steps * perStep,
     };
   }
   Neo.getEnemyTimeAggression = getEnemyTimeAggression;
@@ -2983,6 +2987,14 @@
       enemy.stun = Math.max(Number(enemy.stun || 0), 0.55);
       Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 18, life: 0.5, text: 'STUN', c: '#ffe66d' });
       Neo.ringBurst(enemy.x, enemy.y, enemy.r + 12, '#ffe66d', 0.28);
+    }
+    // Confuse Ray can also make the enemy think the player turned invisible: it
+    // enters the shared lost-sight state (? mark + wander, no attacks) for a beat.
+    // Skip the god/boss types that ignore the hidden-player blind entirely.
+    if (stats.confuseRayBlindChance > 0 && enemy.type !== 'god' && Neo.nextRandom('encounter') < stats.confuseRayBlindChance) {
+      enemy.confusedBlindUntil = Math.max(Number(enemy.confusedBlindUntil || 0), Number(Neo.gameElapsedTime || 0) + 1.6);
+      Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 18, life: 0.5, text: '?!', c: '#67d8ff' });
+      Neo.ringBurst(enemy.x, enemy.y, enemy.r + 12, '#67d8ff', 0.28);
     }
     // Snake Knife poisons on ANY hit (melee or ranged), so it lives on the shared
     // hit path rather than inside individual melee moves.

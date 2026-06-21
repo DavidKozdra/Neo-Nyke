@@ -1409,9 +1409,9 @@
     const robotArm = count('robot_arm');
     const chronoSpringBonus = Number(inventory?.chronoSpringBuffTime || 0) > 0 ? count('chrono_spring') * 0.16 : 0;
     const keenEyeActive = Number(inventory?.keenEyeBuffTime || 0) > 0;
-    let critChance = Number(inventory?.critCharmBuffTime || 0) > 0 ? count('crit_charm') * 0.04 : 0;
+    let critChance = count('crit_charm') * 0.025 + (Number(inventory?.critCharmBuffTime || 0) > 0 ? count('crit_charm') * 0.04 : 0);
     critChance += keenEyeActive ? count('keen_eye') * 0.2 : 0;
-    critChance += count('pendant_of_kronos') * godItemStacks * 0.01;
+    critChance += count('pendant_of_kronos') * godItemStacks * 0.05;
     if (count('oracles_lens') > 0) critChance *= 2;
     critChance = Math.max(0.01, critChance);
     // Mirror the player's crit roll-back: chance over 100% converts to ×1.5 crit
@@ -1428,7 +1428,8 @@
       snakeKnifePoisonChance: count('snake_knife') * 0.02,
       weaponFatigueChance: count('weapon_fatigue') * 0.05,
       weaponFatigueFreezeChance: count('weapon_fatigue') * 0.02,
-      confuseRayStunChance: Neo.clamp(count('confuse_ray') * 0.05, 0, 0.45),
+      confuseRayStunChance: Neo.clamp(count('confuse_ray') * 0.15, 0, 0.75),
+      confuseRayBlindChance: count('confuse_ray') > 0 ? 0.05 : 0,
       overstimulateStunChance: count('overstimulate') * 0.2,
       homingMissileChance: count('homing_missile') * 0.15,
       critChance,

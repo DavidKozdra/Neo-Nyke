@@ -464,8 +464,11 @@
 
     if (applyHitstop) {
       Neo.player.inv = 0.75;
-      Neo.applyImpulse(Neo.player, angle, knockback);
-      Neo.applyPlayerImpactStun(finalAmount, knockback);
+      // Anchor Charm roots the player: reduce incoming knockback. The reduced value
+      // also feeds the impact-stun check, so less shove = harder to heavy-knockback stun.
+      const resistedKnockback = knockback * (1 - Number(itemStats.anchorKnockbackResist || 0));
+      Neo.applyImpulse(Neo.player, angle, resistedKnockback);
+      Neo.applyPlayerImpactStun(finalAmount, resistedKnockback);
       const hitRatio = Neo.clamp(finalAmount / Math.max(1, Neo.player.maxHp), 0, 1);
       Neo.addHitstop?.(0.025 + hitRatio * 0.055);
       Neo.shake = 8;

@@ -57,8 +57,9 @@ describe('Enemy time-based crit aggression', () => {
   test('aggression ramps every 5 minutes by 5% per axis', () => {
     const fn = extractFunction(combatSource, 'getEnemyTimeAggression');
     expect(fn).toContain('minutes / 5');
-    expect(fn).toContain('steps * 0.05');
-    expect(fn).toContain('1.5 + steps * 0.05'); // base crit damage 1.5×, +5%/step
+    expect(fn).toContain('0.05 * (1 - aggressionCut)'); // base +5%/step, trimmed by Overclocked Watch
+    expect(fn).toContain('steps * perStep');
+    expect(fn).toContain('1.5 + steps * perStep'); // base crit damage 1.5×, +5%/step
     expect(fn).toContain('applyCritRollback');
   });
 });

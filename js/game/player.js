@@ -702,7 +702,10 @@ export function getItemStats() {
         ), 0)
       : 0;
     const oracleLens = getItemCount('oracles_lens') > 0;
-    const critCharmBonus = Number(Neo.player?.critCharmBuffTime || 0) > 0 ? getItemCount('crit_charm') * 0.04 : 0;
+    // Crit Charm: a flat +2.5% per stack that's always on, plus the +4% per stack
+    // burst that only applies while the kill-surge buff is live.
+    const critCharmFlatBonus = getItemCount('crit_charm') * 0.025;
+    const critCharmBonus = critCharmFlatBonus + (Number(Neo.player?.critCharmBuffTime || 0) > 0 ? getItemCount('crit_charm') * 0.04 : 0);
     const keenEyeActive = Number(Neo.player?.keenEyeBuffTime || 0) > 0;
     const keenEyeBonus = keenEyeActive ? getKeenEyeCritBonus() : 0;
     const keenEyeCritDamageBonus = keenEyeActive ? getKeenEyeCritDamageBonus() : 0;
@@ -743,7 +746,7 @@ export function getItemStats() {
     // Thorn's floor curse (lowerCombat): a flat 50% cut to crit rate and bleed
     // chance for the whole floor. Applied to the raw chances before clamps/rollback.
     const rivalCombatCurse = Neo.floorRivalCurses?.lowerCombat ? 0.5 : 1;
-    let critChance = (critCharmBonus + keenEyeBonus + pendantOfKronos * godItemStacks * 0.01 + princesGlassesCrit) * rivalCombatCurse;
+    let critChance = (critCharmBonus + keenEyeBonus + pendantOfKronos * godItemStacks * 0.05 + princesGlassesCrit) * rivalCombatCurse;
     if (oracleLens) critChance *= 2;
     // Crit roll-back: let chance climb past the old 0.95 cap, then convert every
     // crossing of 100% into +50% crit damage and a roll-back to 75% (see
@@ -756,10 +759,10 @@ export function getItemStats() {
     const critRollback = Neo.applyCritRollback(critChance, baseCritMultiplier);
     critChance = Neo.clamp(critRollback.critChance, 0.01, 1);
     const critMultiplier = critRollback.critMultiplier;
-    // Pendant of Kronos: +1% base damage per god/yellow item owned (every stack
-    // counts every god item), plus an extra +2% damage to bosses per stack.
-    const kronosDamageMultiplier = 1 + pendantOfKronos * godItemStacks * 0.01;
-    const kronosBossDamageMultiplier = 1 + pendantOfKronos * 0.02;
+    // Pendant of Kronos: +2.5% base damage per god/yellow item owned (every stack
+    // counts every god item), plus an extra +5% damage to bosses per stack.
+    const kronosDamageMultiplier = 1 + pendantOfKronos * godItemStacks * 0.025;
+    const kronosBossDamageMultiplier = 1 + pendantOfKronos * 0.05;
     const standardDamageReduction = Neo.clamp(
       toughBandaid * 0.005 + shieldOfAegis * 0.2 + princesGlassesDefense + pendantOfRock * 0.01,
       0,
@@ -792,8 +795,12 @@ export function getItemStats() {
       weaponFatigueFreezeChance: weaponFatigue * 0.02,
       genericHealthItemHealRatio: genericHealthItem * 0.05,
       snakeKnifePoisonChance: snakeKnife * 0.02,
-      confuseRayStunChance: Neo.clamp(confuseRay * 0.05, 0, 0.45),
-      overclockedWatchChance: overclockedWatch * 0.02,
+      confuseRayStunChance: Neo.clamp(confuseRay * 0.15, 0, 0.75),
+      // Flat 5% per hit (not per stack) to make the enemy think the player vanished.
+      confuseRayBlindChance: confuseRay > 0 ? 0.05 : 0,
+      overclockedWatchChance: overclockedWatch * 0.2,
+      // Each stack also trims the enemies' time-based aggression buff by 2% (capped 30%).
+      overclockedWatchAggressionCut: Neo.clamp(overclockedWatch * 0.02, 0, 0.3),
       overstimulateStunChance: overstimulate * 0.2,
       graveZoneChance: graveZone * 0.2,
       homingMissileChance: homingMissile * 0.15,
@@ -855,6 +862,10 @@ export function getItemStats() {
       negativeStatusMultiplier: 1 + nakedKingCloak * 0.2,
       ownedToolStacks,
       stunResistance: anchorCharm,
+      // Anchor Charm also roots you down: incoming knockback is reduced (-12% per
+      // stack, floored at 35% taken). Less shove also means it's harder for a hit to
+      // reach the heavy-knockback impact-stun threshold.
+      anchorKnockbackResist: Neo.clamp(anchorCharm * 0.12, 0, 0.65),
       hasIronLung: ironLung > 0,
       hasPrincesGlasses: princesGlasses > 0,
       tagCounts,

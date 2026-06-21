@@ -9895,7 +9895,9 @@ border-bottom: black solid 2px;
   gap: 12px;
 }
 .rh-info-search {
-  width: min(560px, 100%);
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
   min-height: 38px;
   padding: 8px 12px;
   border-radius: 5px;
@@ -9912,6 +9914,35 @@ border-bottom: black solid 2px;
 .rh-info-search:focus {
   border-color: rgba(240,192,64,0.5);
   box-shadow: 0 0 0 2px rgba(240,192,64,0.11);
+}
+.rh-info-sort {
+  flex: 0 0 auto;
+  display: inline-flex;
+}
+.rh-info-sort.hidden { display: none; }
+.rh-info-sort__select {
+  min-height: 38px;
+  padding: 8px 28px 8px 12px;
+  border-radius: 5px;
+  border: 1px solid rgba(128,146,170,0.28);
+  background: rgba(5,8,16,0.54)
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M0 0l5 6 5-6z' fill='%23bfcce1'/></svg>")
+    no-repeat right 10px center;
+  color: var(--menu-text);
+  font: inherit;
+  font-size: calc(13px * var(--font-scale, 1));
+  cursor: pointer;
+  outline: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+}
+.rh-info-sort__select:focus {
+  border-color: rgba(240,192,64,0.5);
+  box-shadow: 0 0 0 2px rgba(240,192,64,0.11);
+}
+.rh-info-sort__select option {
+  color: #1a1f29;
 }
 .rh-info-result-status {
   flex-shrink: 0;
@@ -10935,6 +10966,7 @@ border-bottom: black solid 2px;
 .info-card__tag--god     { background: rgba(255,210,63,0.12); color: #ffd23f; border: 1px solid rgba(255,210,63,0.32); }
 .info-card__tag--blue    { background: rgba(88,183,255,0.12); color: #58b7ff; border: 1px solid rgba(88,183,255,0.32); }
 .info-card__tag--princess { background: rgba(255,140,200,0.12); color: #ff9ccc; border: 1px solid rgba(255,140,200,0.3); }
+.info-card__tag--green    { background: rgba(62,240,122,0.12); color: #3ef07a; border: 1px solid rgba(62,240,122,0.32); }
 .info-card__tag--melee   { background: rgba(255,130,60,0.12); color: #ffa870; border: 1px solid rgba(255,130,60,0.25); }
 .info-card__tag--laser   { background: rgba(80,180,255,0.12); color: #70c8ff; border: 1px solid rgba(80,180,255,0.25); }
 .info-card__tag--smash   { background: rgba(220,80,80,0.12); color: #ff9090; border: 1px solid rgba(220,80,80,0.25); }

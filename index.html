@@ -837,6 +837,13 @@
         <div class="rh-info-head">
           <div class="rh-info-tools">
             <input id="rhInfoSearch" class="rh-info-search" type="search" placeholder="Search items..." aria-label="Search info entries" aria-controls="rhInfoContent" aria-describedby="rhInfoResultStatus" autocomplete="off" spellcheck="false">
+            <label class="rh-info-sort">
+              <span class="sr-only">Sort entries</span>
+              <select id="rhInfoSort" class="rh-info-sort__select" aria-label="Sort entries" aria-controls="rhInfoContent">
+                <option value="rarity">Sort: Rarity</option>
+                <option value="name">Sort: A–Z</option>
+              </select>
+            </label>
             <div id="rhInfoResultStatus" class="rh-info-result-status sr-only" aria-live="polite">Items loaded.</div>
           </div>
         </div>

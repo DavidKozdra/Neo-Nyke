@@ -22,7 +22,12 @@ export function updateEnemyLostSightState(enemy, playerHidden, dt = 0) {
 }
 
 export function isEnemyBlindedByHiddenPlayer(enemy, playerHidden) {
-  return !!playerHidden && enemy?.type !== 'god';
+  if (enemy?.type === 'god') return false;
+  if (playerHidden) return true;
+  // Confuse Ray can make a single enemy *think* the player vanished: while its
+  // confusion timer is live it reuses the whole lost-sight path (? mark, wander,
+  // no attacks) even though the player is in plain sight.
+  return Number(enemy?.confusedBlindUntil || 0) > Number(Neo.gameElapsedTime || 0);
 }
 
 export function loop(timestamp) {

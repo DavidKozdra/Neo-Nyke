@@ -849,6 +849,16 @@ export function createUIController(view) {
     let activeInfoTab = 'items';
     const infoSearchQueries = { items: '', scrolls: '', weapons: '', moves: '', enemies: '' };
     const searchableInfoTabs = new Set(['items', 'scrolls', 'weapons', 'moves', 'enemies']);
+    // Tabs whose entries carry a rarity, so the Rarity/A–Z sort toggle is meaningful.
+    const sortableInfoTabs = new Set(['items', 'weapons', 'moves']);
+    // Per-tab sort mode: 'rarity' (default, groups by tier/slot) or 'name' (A–Z).
+    const infoSortModes = { items: 'rarity', weapons: 'rarity', moves: 'rarity' };
+    const compareByName = (a, b) => (a.name || '').localeCompare(b.name || '');
+    // Returns the comparator for a tab: the supplied grouped comparator in 'rarity'
+    // mode, or a pure A–Z compare in 'name' mode.
+    function infoSortComparator(tab, groupedCompare) {
+      return infoSortModes[tab] === 'name' ? compareByName : groupedCompare;
+    }
     const infoTabResultLabels = {
       items: 'item',
       scrolls: 'scroll',
@@ -989,7 +999,21 @@ export function createUIController(view) {
       return `<div class="info-empty" role="status">No ${infoEsc(label)}${suffix}.</div>`;
     }
 
+    function syncInfoSortControl(tab) {
+      if (!view.rhInfoSort) return;
+      const sortable = sortableInfoTabs.has(tab);
+      view.rhInfoSort.classList.toggle('hidden', !sortable);
+      view.rhInfoSort.disabled = !sortable;
+      if (!sortable) return;
+      // Moves group by slot rather than rarity, so label that option honestly.
+      const groupedLabel = tab === 'moves' ? 'Sort: Slot' : 'Sort: Rarity';
+      const rarityOption = view.rhInfoSort.querySelector('option[value="rarity"]');
+      if (rarityOption) rarityOption.textContent = groupedLabel;
+      view.rhInfoSort.value = infoSortModes[tab] || 'rarity';
+    }
+
     function syncInfoSearchControl(tab) {
+      syncInfoSortControl(tab);
       if (!view.rhInfoSearch) return;
       const searchable = searchableInfoTabs.has(tab);
       view.rhInfoSearch.classList.toggle('hidden', !searchable);
@@ -1039,11 +1063,17 @@ export function createUIController(view) {
       syncInfoSearchControl(tab);
 
       if (tab === 'items') {
-        const rarityOrder = ['knight', 'wizard', 'god', 'blue'];
-        const sorted = Object.values(Neo.ITEM_DEFS).sort((a, b) => {
-          const ri = rarityOrder.indexOf(a.rarity ?? a.category) - rarityOrder.indexOf(b.rarity ?? b.category);
-          return ri !== 0 ? ri : (a.name || '').localeCompare(b.name || '');
-        }).filter(item => infoSearchMatches(item, item_ => [
+        // 'green' (post-loop "lying" tier) sorts last. Unknown rarities fall back to
+        // the end too, so a missing rarity never floats to the top via indexOf(-1).
+        const rarityOrder = ['knight', 'wizard', 'god', 'blue', 'green'];
+        const rarityRank = item => {
+          const idx = rarityOrder.indexOf(item.rarity ?? item.category);
+          return idx === -1 ? rarityOrder.length : idx;
+        };
+        const sorted = Object.values(Neo.ITEM_DEFS).sort(infoSortComparator('items', (a, b) => {
+          const ri = rarityRank(a) - rarityRank(b);
+          return ri !== 0 ? ri : compareByName(a, b);
+        })).filter(item => infoSearchMatches(item, item_ => [
           item_.name,
           item_.key,
           item_.rarity,
@@ -1086,10 +1116,14 @@ export function createUIController(view) {
 
       } else if (tab === 'weapons') {
         const rarityOrder = ['knight', 'wizard', 'god'];
-        const sorted = Object.values(Neo.WEAPON_DEFS).sort((a, b) => {
-          const ri = rarityOrder.indexOf(a.rarity) - rarityOrder.indexOf(b.rarity);
-          return ri !== 0 ? ri : (a.name || '').localeCompare(b.name || '');
-        }).filter(w => infoSearchMatches(w, weapon => [
+        const weaponRank = w => {
+          const idx = rarityOrder.indexOf(w.rarity);
+          return idx === -1 ? rarityOrder.length : idx;
+        };
+        const sorted = Object.values(Neo.WEAPON_DEFS).sort(infoSortComparator('weapons', (a, b) => {
+          const ri = weaponRank(a) - weaponRank(b);
+          return ri !== 0 ? ri : compareByName(a, b);
+        })).filter(w => infoSearchMatches(w, weapon => [
           weapon.name,
           weapon.key,
           weapon.rarity,
@@ -1114,10 +1148,10 @@ export function createUIController(view) {
 
       } else if (tab === 'moves') {
         const slotOrder = ['melee', 'laser', 'smash', 'dash'];
-        const sorted = Object.values(Neo.MOVE_DEFS).sort((a, b) => {
+        const sorted = Object.values(Neo.MOVE_DEFS).sort(infoSortComparator('moves', (a, b) => {
           const si = slotOrder.indexOf(a.slot) - slotOrder.indexOf(b.slot);
-          return si !== 0 ? si : (a.name || '').localeCompare(b.name || '');
-        }).filter(m => infoSearchMatches(m, move => [
+          return si !== 0 ? si : compareByName(a, b);
+        })).filter(m => infoSearchMatches(m, move => [
           move.name,
           move.key,
           move.slot,
@@ -2259,6 +2293,11 @@ export function createUIController(view) {
         view.rhInfoSearch?.addEventListener('input', () => {
           if (!searchableInfoTabs.has(activeInfoTab)) return;
           infoSearchQueries[activeInfoTab] = view.rhInfoSearch.value || '';
+          populateInfoPanel(activeInfoTab);
+        });
+        view.rhInfoSort?.addEventListener('change', () => {
+          if (!sortableInfoTabs.has(activeInfoTab)) return;
+          infoSortModes[activeInfoTab] = view.rhInfoSort.value === 'name' ? 'name' : 'rarity';
           populateInfoPanel(activeInfoTab);
         });
         view.infoTutorialBtn?.addEventListener('click', () => {
