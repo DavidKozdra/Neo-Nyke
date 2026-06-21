@@ -551,10 +551,9 @@ export function isMoveAllowedForCharacter(moveKey, characterKey = Neo.player?.ch
   // not chase or attack a hidden player.
 export function isPlayerHidden(playerData = Neo.player) {
     if (!playerData) return false;
-    // El Barto's Cape conceals the player for its full active duration, matching the
-    // visual effect (graffiti, HUD timer).
+    // El Barto's Cape conceals the player for the first half of its active window.
     const capeEffect = playerData.equipmentEffects?.el_bartos_cape;
-    if (capeEffect && Number(capeEffect.time || 0) > 0) return true;
+    if (capeEffect && Number(capeEffect.time || 0) > Math.max(0, Number(capeEffect.total || 0)) * 0.5) return true;
     if (Number(playerData.princessFlightTime || 0) > 0) return true;
     if (Number(playerData.cowardsWayTime || 0) > 0) return true;
     if (Number(playerData.warpHideTime || 0) > 0) return true;
@@ -820,7 +819,7 @@ export function getItemStats() {
       pickupVacuumRange: activeGoldVacStacks > 0 ? 9999 : 0,
       coinPickupMultiplier: activeGoldVacStacks > 0 ? 2 + (activeGoldVacStacks - 1) * 0.5 : 1,
       potionDoubleChance: Neo.clamp(drinkMaster * 0.5, 0, 1),
-      itemDuplicateChance: Neo.clamp(copycatCharm * 0.3, 0, 1),
+      itemDuplicateChance: Neo.clamp(copycatCharm * 0.3, 0, 0.75),
       critChance,
       critMultiplier,
       kronosDamageMultiplier,
@@ -834,6 +833,7 @@ export function getItemStats() {
       attackSpeedMultiplier: 1 + attackServo * 0.12 + chronoSpringBonus,
       hasRobotArm: robotArm > 0,
       moveSpeedMultiplier: 1 + turtleShell * 0.05
+        + (Number(Neo.player?.equipmentEffects?.el_bartos_cape?.time || 0) > 0 ? 0.2 : 0)
         + getLevelMoveSpeedBonus(Neo.player?.character || Neo.chosenCharacter, Neo.player?.level || 1),
       laserWeightMultiplier: Math.max(0, 1 - turtleShell * 0.01),
       xpGainMultiplier: 1 + scholarSeal * 0.15,

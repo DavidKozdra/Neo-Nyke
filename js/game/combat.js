@@ -2936,6 +2936,7 @@
     const critRollback = Neo.applyCritRollback((stats.critChance || 0) + Number(options.critBonus || 0), stats.critMultiplier || 1.6);
     const critChance = Neo.clamp(critRollback.critChance, 0, 1);
     const critMultiplier = critRollback.critMultiplier;
+    const elBartoAmbush = !!Neo.player?.elBartoAmbushReady && Number(Neo.player?.equipmentEffects?.el_bartos_cape?.time || 0) > 0;
     let dealt = options.rawDamage ? scaleRawDamageAgainstEnemy(enemy, damage) : scaleDamageAgainstEnemy(enemy, damage, options, stats);
     // Copper Penny: every electric/lightning hit deals +20% damage per stack and
     // builds a stacking Static charge on the target. Static is a DoT that arcs to
@@ -2951,7 +2952,7 @@
     if (sandbox) dealt = Math.max(1, Math.round(dealt * sandbox.playerDamageMultiplier));
     // Sparkle Charm marks enemies so every hit against them is a guaranteed crit.
     const sparkled = Number(enemy.critSparkle || 0) > 0;
-    const isCrit = sparkled || (critChance > 0 && Neo.nextRandom('encounter') < critChance);
+    const isCrit = elBartoAmbush || sparkled || (critChance > 0 && Neo.nextRandom('encounter') < critChance);
     // Higher-level enemies (deeper/later runs, scaled by difficulty) resist
     // knockback: the impulse is divided by 1+ccLevel, so they need a bigger hit to
     // be moved and to cross the heavy-knockback stun threshold. No cap.
@@ -3010,6 +3011,12 @@
     // Multi-beam callers (Thorn's fan) roll drain per beam themselves; skip the
     // shared roll so the beam that also lands the dedup'd hit isn't counted twice.
     if (!options.skipDrainRoll) rollToothOfThornDrain(enemy, stats, Number(options.drainChanceBonus || 0), options.melee === true);
+    if (elBartoAmbush) {
+      Neo.player.elBartoAmbushReady = false;
+      applyBleed(enemy, 1, 4.5);
+      applyPoison(enemy, 1, 4.5);
+      Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 22, life: 0.6, text: 'AMBUSH', c: '#ffb37a' });
+    }
     if (stats.confuseRayStunChance > 0) {
       const rolled = rollProcEffect(stats.confuseRayStunChance);
       if (Neo.nextRandom('encounter') < rolled.chance) {

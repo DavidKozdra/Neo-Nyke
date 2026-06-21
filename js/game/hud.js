@@ -1021,7 +1021,7 @@
     zap_to_extreme: { cooldown: 42, duration: 10, label: 'EXTREME ZAP', color: '#8dd4ff' },
     panic_button: { cooldown: 52, duration: 0, label: 'PANIC', color: '#f4f6fb' },
     mid_sweepy_box: { cooldown: 36, duration: 6, label: 'SWEEPY', color: '#ff6e8b' },
-    el_bartos_cape: { cooldown: 25, duration: 3.2, label: 'EL BARTO', color: '#ffb37a' },
+    el_bartos_cape: { cooldown: 25, duration: 10, label: 'EL BARTO', color: '#ffb37a' },
     sparkle_charm: { cooldown: 40, duration: 0, label: 'SPARKLE', color: '#ffe8a3' },
     churu_stick: { cooldown: 40, duration: 0, label: 'CHURU', color: '#ffb6d5' },
     iron_helm: { cooldown: 60, duration: 0, label: 'DIAMOND SHIELD', color: '#c8fbff' },
@@ -1118,8 +1118,7 @@
         skizzard_tail: 1.5,
         zap_to_extreme: 2,
         mid_sweepy_box: 1.5,
-        // El Barto's Cape gains +40% of its base duration per extra stack.
-        el_bartos_cape: def.duration * 0.4,
+        el_bartos_cape: 5,
         gold_vac: 30,
       }[itemKey] || 0;
       const totalTime = def.duration + extraStacks * durationBonus;
@@ -1264,7 +1263,8 @@
   function activateElBartosCape(stacks = 1) {
     if (!Neo.player) return;
     stacks = Math.max(1, Math.floor(Number(stacks || 1)));
-    if (Neo.nextRandom('encounter') >= Math.min(1, stacks * 0.1)) return;
+    Neo.player.elBartoAmbushReady = true;
+    if (stacks < 3 && Neo.nextRandom('encounter') >= Math.min(1, stacks * 0.1)) return;
     const radius = 44 + (stacks - 1) * 4;
     Neo.hazards.push({
       kind: 'el_barto_graffiti',
@@ -1360,6 +1360,7 @@
         // Only keep the player invulnerable while actually concealed (first half of
         // the cape's duration). After that the cape is just cosmetic/graffiti.
         if (Neo.isPlayerHidden?.(player)) player.inv = Math.max(Number(player.inv || 0), 0.12);
+        if (effect.time <= 0) player.elBartoAmbushReady = false;
       }
       if (key === 'gold_vac') Neo.itemStatsCacheFrame = -1;
       if (effect.time <= 0) {
