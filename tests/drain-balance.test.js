@@ -37,10 +37,31 @@ describe('drain balance', () => {
       `${extractFunction(combatSource, 'rollToothOfThornDrain')}; return rollToothOfThornDrain;`,
     )(Neo);
 
-    rollToothOfThornDrain({ type: 'hunter' });
+    // Proc steals a flat 1 HP plus 1% of the enemy's max HP (200 -> +2 -> 3 total).
+    rollToothOfThornDrain({ type: 'hunter', max: 200 });
 
-    expect(Neo.applyPlayerHealing).toHaveBeenCalledWith(1);
-    expect(Neo.player.hp).toBe(6);
+    expect(Neo.applyPlayerHealing).toHaveBeenCalledWith(3);
+    expect(Neo.player.hp).toBe(8);
+    // The proc also arms the lingering per-second drain heal.
+    expect(Neo.player.thornDrainTime).toBeGreaterThan(0);
+    expect(Neo.player.thornDrainRate).toBeGreaterThan(0);
+  });
+
+  test('drain bonuses do nothing without Tooth of Thorn base chance', () => {
+    const Neo = {
+      player: { character: 'mooggy', hp: 5, maxHp: 10, x: 100, y: 100 },
+      getItemStats: () => ({ drainChance: 0, meleeDrainChance: 0 }),
+      nextRandom: () => 0,
+      applyPlayerHealing: jest.fn(),
+    };
+    const rollToothOfThornDrain = new Function(
+      'Neo',
+      `${extractFunction(combatSource, 'rollToothOfThornDrain')}; return rollToothOfThornDrain;`,
+    )(Neo);
+
+    rollToothOfThornDrain({ type: 'hunter' }, null, 0.05);
+
+    expect(Neo.applyPlayerHealing).not.toHaveBeenCalled();
   });
 
   test('Power Disks and shards add a 5% drain chance while preserving Metao fire', () => {
@@ -59,5 +80,33 @@ describe('drain balance', () => {
     expect(spawned).toHaveLength(8);
     expect(spawned[0].hitOptions).toMatchObject({ drainChanceBonus: 0.05, fireChance: 0.4 });
     expect(spawned[0].subSpawn.hitOptions).toMatchObject({ drainChanceBonus: 0.05, fireChance: 0.25 });
+  });
+
+  test('Nail Shot carries Tooth of Thorn drain bonus on every nail', () => {
+    const spawned = [];
+    const Neo = {
+      player: { character: 'mooggy', x: 20, y: 30, equippedMoves: { laser: 'nail_shot' } },
+      MOVE_DEFS: { nail_shot: { slot: 'laser' } },
+      getDefaultMovesForCharacter: () => ({ laser: 'nail_shot' }),
+      getItemStats: () => ({ projectileSpeedMultiplier: 1, projectileBounces: 0 }),
+      getAnvilMoveBonus: () => 0,
+      rollRicoceteBounces: () => 0,
+      rng: () => 0,
+      spawnProjectile: projectile => spawned.push(projectile),
+      ringBurst: jest.fn(),
+    };
+    const getEquippedMoveDecl = extractFunction(combatSource, 'getEquippedMove');
+    const castNailShot = new Function(
+      'Neo',
+      `${getEquippedMoveDecl}\n${extractFunction(combatSource, 'castNailShot')}; return castNailShot;`,
+    )(Neo);
+
+    castNailShot();
+
+    expect(spawned).toHaveLength(12);
+    spawned.forEach(projectile => {
+      expect(projectile.kind).toBe('nail');
+      expect(projectile.hitOptions).toMatchObject({ bleedChance: 0.08, drainChanceBonus: 0.05 });
+    });
   });
 });

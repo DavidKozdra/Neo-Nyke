@@ -702,8 +702,12 @@
       applyEliteInventory(enemy);
     }
 
-    // Base elite durability (unchanged): double HP and a defense floor.
-    enemy.max = Math.round(enemy.max * 2);
+    // Base elite durability: tougher than a normal enemy, without turning every
+    // elite into a prolonged damage sponge before trait rolls are applied.
+    // Difficulties can soften the HP wall via eliteHpMultiplier (easy = 0.6),
+    // which scales the boost above 1x without dropping elites below normal HP.
+    const eliteHpMult = Number(Neo.getDifficultyDef()?.eliteHpMultiplier ?? 1);
+    enemy.max = Math.round(enemy.max * (1 + 0.75 * eliteHpMult));
     enemy.hp = enemy.max;
     enemy.defenseMultiplier = Math.max(2, Number(enemy.defenseMultiplier || 1));
     enemy.eliteDurabilityV2 = true;
@@ -713,10 +717,10 @@
     const knave = countToken('knave');
     enemy.eliteBody = { knight, knave };
 
-    // Knight: x1.2 to all stats per roll, multiplicative. HP/damage compound
+    // Knight: x1.15 to all stats per roll, multiplicative. HP/damage compound
     // without limit; the realized speed factor is clamped so elites never
     // outrun the player's projectiles (Neo.ELITE_KNIGHT_SPEED_CAP).
-    const knightMult = Math.pow(1.2, knight);
+    const knightMult = Math.pow(1.15, knight);
     enemy.eliteKnightMult = knightMult;
     enemy.max = Math.round(enemy.max * knightMult);
     enemy.hp = enemy.max;
@@ -742,15 +746,15 @@
     const gross = countToken('gross');
     enemy.elitePowers = tokens.filter(token => ELITE_POWER_POOL.includes(token));
     enemy.eliteProcs = {
-      fire: Neo.clamp(enflamed * 0.15, 0, 0.95),
-      cold: Neo.clamp(breezy * 0.15, 0, 0.95),
-      poison: Neo.clamp(gross * 0.15, 0, 0.95),
+      fire: Neo.clamp(enflamed * 0.12, 0, 0.95),
+      cold: Neo.clamp(breezy * 0.12, 0, 0.95),
+      poison: Neo.clamp(gross * 0.12, 0, 0.95),
     };
 
     // Breezy also reduces cold effectiveness AGAINST this elite (cold = slow).
     if (breezy > 0) {
       enemy.statusResistances = enemy.statusResistances || {};
-      enemy.statusResistances.slow = Neo.clamp(Number(enemy.statusResistances.slow || 0) + breezy * 0.30, 0, 0.95);
+      enemy.statusResistances.slow = Neo.clamp(Number(enemy.statusResistances.slow || 0) + breezy * 0.22, 0, 0.95);
     }
 
     // Lazered reuses the existing elite laser-mode machine in updateEliteEnemyTraits.
@@ -759,18 +763,18 @@
       enemy.eliteLaserModeIndex = 0;
     }
 
-    // Giant: +50% max HP and a larger body.
+    // Giant: +35% max HP and a larger body.
     if (tokens.includes('giant')) {
-      enemy.max = Math.round(enemy.max * 1.5);
+      enemy.max = Math.round(enemy.max * 1.35);
       enemy.hp = enemy.max;
-      enemy.r = Math.round(enemy.r * 1.6);
+      enemy.r = Math.round(enemy.r * 1.45);
       enemy.speed *= 0.84;
-      enemy.dmg = Math.round(enemy.dmg * 1.18);
+      enemy.dmg = Math.round(enemy.dmg * 1.1);
     }
 
-    // Blessed: high crit chance on attacks against the player (see damagePlayer).
+    // Blessed: crit chance on attacks against the player (see damagePlayer).
     if (tokens.includes('blessed')) {
-      enemy.eliteCrit = 0.25;
+      enemy.eliteCrit = 0.18;
     }
   }
 
@@ -849,8 +853,19 @@
     // statMultiplier below), so enemies gain more HP each floor as difficulty rises.
     const hpFloorRate = Neo.ENEMY_SCALING.floor + (difficulty.hpFloorScaleBonus ?? 0);
     const floorMultiplier = 1 + floorsCleared * hpFloorRate;
-    const loopMultiplier = 1 + (loopNumber - 1) * Neo.ENEMY_SCALING.loop;
-    const timerMultiplier = 1 + gameMinutes * Neo.ENEMY_SCALING.minute;
+    // Normal-enemy HP loop scaling uses a concave (diminishing-returns) curve
+    // instead of a flat per-loop slope: the first loop adds a gentler bump and
+    // each subsequent loop contributes progressively less, so deep loops don't
+    // balloon HP the way the old linear `loop * (loopNumber - 1)` ramp did.
+    // Bosses keep their dedicated linear bossLoopHp boost on top of this.
+    const loopMultiplier = 1
+      + Neo.ENEMY_SCALING.loop * Math.pow(Math.max(0, loopNumber - 1), Neo.ENEMY_SCALING.loopHpCurve ?? 1);
+    // Time intentionally does NOT scale HP anymore — floors traversed already
+    // owns the HP curve, and elapsed time tracks floors so closely that a
+    // per-minute HP term just double-counted it. The clock now expresses itself
+    // through damage / crit / status-resistance instead (see damageTimeMultiplier
+    // below and getEnemyCcLevel). This keeps "easy stays easy" honest: a slow,
+    // careful Easy run no longer silently inflates enemy HP toward a wall.
     const difficultyMultiplier = isBoss ? difficulty.bossStatMultiplier : difficulty.statMultiplier;
     // Endless mode: enemies "level up" with each wave. The wave the current
     // enemies belong to is endlessWave + 1 (endlessWave counts cleared waves).
@@ -868,10 +883,17 @@
     const bossLoopDamageMultiplier = isBoss
       ? 1 + (loopNumber - 1) * (Neo.ENEMY_SCALING.bossLoopDamage ?? 0)
       : 1;
-    const hpScale = floorMultiplier * loopMultiplier * timerMultiplier * difficultyMultiplier * endlessHpMultiplier * bossLoopHpMultiplier;
+    const hpScale = floorMultiplier * loopMultiplier * difficultyMultiplier * endlessHpMultiplier * bossLoopHpMultiplier;
     const damageFloorMultiplier = 1 + floorsCleared * (Neo.ENEMY_SCALING.damageFloor ?? Neo.ENEMY_SCALING.floor);
     const damageLoopMultiplier = 1 + (loopNumber - 1) * (Neo.ENEMY_SCALING.damageLoop ?? Neo.ENEMY_SCALING.loop);
-    const damageTimerMultiplier = 1 + gameMinutes * (Neo.ENEMY_SCALING.damageMinute ?? Neo.ENEMY_SCALING.minute);
+    // Time -> damage is the clock's main lever now, with a steeper slope than
+    // before. It's soft-capped on its OWN before combining with floor/loop/diff
+    // so a slow player's enemies plateau in damage instead of climbing forever.
+    const damageTimerMultiplier = softCapEnemyScale(
+      1 + gameMinutes * (Neo.ENEMY_SCALING.damageMinute ?? 0.085),
+      Neo.ENEMY_SCALING.damageTimeSoftCap ?? 1.9,
+      0.3
+    );
     const damageSoftCap = isBoss
       ? (Neo.ENEMY_SCALING.bossDamageSoftCap ?? 2.45)
       : (Neo.ENEMY_SCALING.damageSoftCap ?? 2.15);
@@ -2000,18 +2022,21 @@
     const key = String(difficulty.key || Neo.selectedDifficulty || 'easy');
     const fixedRanks = { easy: 0, medium: 1, hard: 2, impossible: 3, god: 4 };
     if (Object.prototype.hasOwnProperty.call(fixedRanks, key)) return fixedRanks[key];
+    // Fallback only for `custom`. Thresholds track the post-redesign flat HP
+    // multipliers (easy 1.0 → god 1.5), not the old brute 2.72 god value.
     const statMultiplier = Math.max(1, Number(difficulty.statMultiplier || 1));
-    if (statMultiplier >= 1.7) return 4;
-    if (statMultiplier >= 1.3) return 3;
-    if (statMultiplier >= 1.16) return 2;
-    if (statMultiplier >= 1.05) return 1;
+    if (statMultiplier >= 1.45) return 4;
+    if (statMultiplier >= 1.28) return 3;
+    if (statMultiplier >= 1.14) return 2;
+    if (statMultiplier >= 1.04) return 1;
     return 0;
   }
 
   function getEnemyProjectileEvadeChance(enemy) {
     if (!enemy || enemy.type === 'rival' && enemy.rivalData?.friend) return 0;
+    const difficultyRank = getEnemyEvadeDifficultyLevel();
     const level = getEnemyProgressionLevel(enemy);
-    const difficultyBonus = [0, 0.06, 0.14, 0.23, 0.33][getEnemyEvadeDifficultyLevel()] || 0;
+    const difficultyBonus = [0, 0.06, 0.14, 0.23, 0.33][difficultyRank] || 0;
     const roleBonus = isBossType(enemy.type)
       ? 0.2
       : enemy.type === 'rival'
@@ -2019,6 +2044,10 @@
         : enemy.elite
           ? 0.08
           : 0;
+    // On Easy (rank 0), plain enemies should not dodge the player's shots at all —
+    // it reads as "my hits don't connect" and undercuts the forgiving fantasy.
+    // Bosses/rivals/elites still juke via roleBonus; everyone else gets a clean 0.
+    if (difficultyRank <= 0 && roleBonus <= 0) return 0;
     // Knave body rolls make an elite harder to perceive/bait: +2% dodge per roll.
     const unfazedBonus = (Number(enemy.eliteUnfazed) || 0) * 0.02;
     return Neo.clamp(0.02 + (level - 1) * 0.018 + difficultyBonus + roleBonus + unfazedBonus, 0.02, 0.9);

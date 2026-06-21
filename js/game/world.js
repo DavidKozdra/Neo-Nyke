@@ -562,6 +562,19 @@
         if (gained > 0) Neo.spawnHealPopup(Neo.player.x + Neo.rand(-6, 6), Neo.player.y - 20, gained, { color: '#9af7d8' });
       }
     }
+    // Tooth of Thorn drain bleed-out: while active, trickle thornDrainRate HP/s
+    // (set by the last proc), applied every 0.5s. Rate decays alongside the timer.
+    if (Number(Neo.player.thornDrainTime || 0) > 0 && Number(Neo.player.thornDrainRate || 0) > 0) {
+      Neo.player.thornDrainTime = Math.max(0, Number(Neo.player.thornDrainTime) - dt);
+      Neo.player.thornDrainAccum = Number(Neo.player.thornDrainAccum || 0) + dt;
+      while (Neo.player.thornDrainAccum >= 0.5) {
+        Neo.player.thornDrainAccum -= 0.5;
+        const heal = Neo.scalePlayerHealing(Math.max(1, Neo.player.thornDrainRate * 0.5), 1);
+        const gained = Neo.applyPlayerHealing(heal);
+        if (gained > 0) Neo.spawnHealPopup(Neo.player.x + Neo.rand(-6, 6), Neo.player.y - 20, gained, { color: '#ff8fb4', size: 12 });
+      }
+      if (Neo.player.thornDrainTime <= 0) Neo.player.thornDrainRate = 0;
+    }
     // Overheal shield decay: once a shield has been up for 5s, it bleeds away
     // at 1 point per 50ms (20/s) until it expires.
     if (Number(Neo.player.overhealBarrier || 0) > 0) {

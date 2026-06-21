@@ -139,13 +139,34 @@ export const LIGHTING_CONFIG = {
   innerToOuterCap: 0.72,
   minOuter: 8,
 };
+// Each difficulty axis owns a DIFFERENT stat dimension instead of every axis
+// multiplying into HP (which is what made HP explode). The split:
+//   - Floors traversed  -> HP        (the master HP curve; `floor` slope below)
+//   - Loop              -> HP + dmg  (moderate late-run bump, diminishing)
+//   - Time elapsed      -> DAMAGE + crit + status/CC resistance (NOT HP)
+//   - Difficulty (flat) -> small HP shaping + projectile speed + spawn/elite rate
+// Time deliberately no longer feeds HP: time and floors-traversed are almost
+// perfectly correlated, so a `minute` HP term just double-counted the floor
+// curve. Time now expresses itself as harder-hitting, harder-to-CC enemies.
 export const ENEMY_SCALING = {
   floor: 0.14,
-  loop: 0.32,
-  minute: 0.12,
+  // Per-loop normal-enemy HP growth. `loop` is the marginal bump for the FIRST
+  // loop (loopNumber 2); `loopHpCurve` < 1 makes each later loop add less than
+  // the last (diminishing returns). With loop 0.26 / curve 0.78 the multiplier
+  // is ~1.26 at loop 2, ~1.77 at loop 5, ~2.3 at loop 9 — versus the old flat
+  // 0.32 slope that hit 1.32 / 2.28 / 3.56 and never stopped climbing.
+  loop: 0.26,
+  loopHpCurve: 0.78,
   damageFloor: 0.095,
   damageLoop: 0.2,
-  damageMinute: 0.055,
+  // Time -> damage is now the PRIMARY job of the clock (it no longer touches HP),
+  // so the per-minute damage slope is stronger than before (was 0.055). It runs
+  // through the damage soft cap below, so long runs get scarier without enemies
+  // ever reaching one-shot territory. `damageTimeSoftCap` caps the time term on
+  // its own before it combines with floor/loop/difficulty, so a slow careful
+  // player plateaus instead of being punished by the clock forever.
+  damageMinute: 0.085,
+  damageTimeSoftCap: 1.9,
   speedFloor: 0.035,
   speedLoop: 0.07,
   speedMinute: 0.018,
@@ -168,11 +189,11 @@ export const ENEMY_SCALING = {
   endlessWaveDamageSoftCap: 2.6,
   endlessWaveSpeedSoftCap: 1.5,
 };
-// Elite "Knight" body rolls multiply all stats by 1.2 each, multiplicatively.
+// Elite "Knight" body rolls multiply all stats by 1.15 each, multiplicatively.
 // HP and damage are allowed to compound without limit, but the realized speed
 // multiplier is clamped here so deep-loop elites never outrun the player's
 // projectiles or become impossible to kite.
-export const ELITE_KNIGHT_SPEED_CAP = 1.6;
+export const ELITE_KNIGHT_SPEED_CAP = 1.45;
 export const BOMB_HAZARD_SCALING = {
   floor: 0.07,
   minute: 0.04,
@@ -190,6 +211,22 @@ export const BLEED_RESIST_SCALING = {
   miniBoss: 0.4,
   boss: 1.1,
   rival: 0.75,
+};
+// Generic (non-bleed) status resistance ramp for fire / poison / slow / static /
+// dark_drain. Bleed has its own dedicated system (BLEED_RESIST_SCALING, applied
+// as a damage divisor), so it is EXCLUDED here to avoid double-nerfing it.
+// This fills the gap where those other statuses had no difficulty/depth scaling
+// at all — a poison/freeze/shock build used to trivialize God as easily as Easy.
+// The realized resistance is `difficulty.statusResistScale * (1 + timeRamp)`,
+// applied ONLY to enemies and combined as a floor (Math.max) with any authored
+// per-enemy resistance, so it never lowers a hand-tuned immunity. Easy's scale is
+// 0, so statuses always land at full strength there. Time owns "resistances" in
+// the axis model, hence the time ramp; depth deliberately stays out of it (floors
+// already own HP). `timeCap` soft-caps the ramp so a slow player plateaus.
+export const STATUS_RESIST_SCALING = {
+  minute: 0.05,      // per elapsed minute, before the cap
+  timeCap: 0.6,      // max time ramp fraction (i.e. up to +60% over the base scale)
+  max: 0.85,         // hard clamp on realized generic resistance
 };
 export const DIRECTIONS = ['n', 's', 'e', 'w'];
 export const DIRECTION_VECTORS = {
@@ -617,6 +654,15 @@ export const DIFFICULTY_DEFS = {
     roomWeightBonus: 0,
     statMultiplier: 1,
     bossStatMultiplier: 1,
+    // Easy's HP curve is the gentlest: a NEGATIVE hpFloorScaleBonus drops the
+    // per-floor HP slope below the 0.14 base down to ~0.095/floor (~60% of Hard's
+    // 0.16). Combined with the flat 1.0 multiplier this keeps even the loop-1 boss
+    // very beatable, and only bites if you grind deep into loops — never an early
+    // wall. This is the lever that makes "hard to die, even on the boss" true.
+    hpFloorScaleBonus: -0.045,
+    // Easy elites keep their traits but are far less of a max-HP wall: the base
+    // elite durability boost in applyEliteTraits is scaled down by this.
+    eliteHpMultiplier: 0.6,
     itemDropChanceMultiplier: 1.15,
     speedMultiplier: 1,
     bossProjectileSpeedMultiplier: 0.8,
@@ -625,8 +671,12 @@ export const DIFFICULTY_DEFS = {
     supportPowerMultiplier: 1,
     shopPriceMultiplier: 1,
     // How fast enemies build knockback/stun resistance with run depth + time.
-    // 0 = none; higher = steeper. See getEnemyCcLevel() in combat.js.
+    // 0 = none; higher = steeper. See getEnemyCcLevel() in combat.js. Kept tiny
+    // on Easy so the player's stuns/knockback keep working all run long.
     ccResistScale: 0.04,
+    // Generic (non-bleed) status resistance scale — see STATUS_RESIST_SCALING.
+    // 0 on Easy: fire/poison/slow/shock builds always land at full strength.
+    statusResistScale: 0,
   },
   medium: {
     key: 'medium',
@@ -638,12 +688,14 @@ export const DIFFICULTY_DEFS = {
     eliteChance: 0.16,
     miniBossChanceMultiplier: 1.18,
     roomWeightBonus: 0.05,
-    statMultiplier: 1.1,
-    bossStatMultiplier: 1.12,
+    statMultiplier: 1.06,
+    bossStatMultiplier: 1.08,
     itemDropChanceMultiplier: 1.1,
-    // Extra per-floor HP slope added on top of ENEMY_SCALING.floor, so each floor
-    // cleared makes enemies tankier the harder the difficulty (see scaleEnemyStats).
-    hpFloorScaleBonus: 0.03,
+    // Per-floor HP slope offset on top of ENEMY_SCALING.floor (0.14). Medium lands
+    // at ~0.12/floor — a touch gentler than the 0.14 base, clearly above Easy and
+    // below Hard. The flat statMultiplier stays small now that the per-floor SLOPE
+    // (not a flat wall) is what separates the difficulties.
+    hpFloorScaleBonus: -0.02,
     speedMultiplier: 1.03,
     bossProjectileSpeedMultiplier: 1,
     enemyReactionMultiplier: 1.06,
@@ -651,6 +703,7 @@ export const DIFFICULTY_DEFS = {
     supportPowerMultiplier: 1.08,
     shopPriceMultiplier: 1.08,
     ccResistScale: 0.12,
+    statusResistScale: 0.06,
   },
   hard: {
     key: 'hard',
@@ -662,9 +715,12 @@ export const DIFFICULTY_DEFS = {
     eliteChance: 0.2,
     miniBossChanceMultiplier: 1.35,
     roomWeightBonus: 0.1,
-    statMultiplier: 1.22,
-    bossStatMultiplier: 1.26,
-    hpFloorScaleBonus: 0.06,
+    statMultiplier: 1.12,
+    bossStatMultiplier: 1.16,
+    // Hard is the reference STEEP HP slope: ~0.16/floor (vs Easy's 0.095). Most of
+    // Hard's extra threat lives here in the slope and in its denser elites/
+    // minibosses + faster boss projectiles — not in a flat HP wall.
+    hpFloorScaleBonus: 0.02,
     speedMultiplier: 1.06,
     bossProjectileSpeedMultiplier: 1.2,
     enemyReactionMultiplier: 1.12,
@@ -672,6 +728,7 @@ export const DIFFICULTY_DEFS = {
     supportPowerMultiplier: 1.14,
     shopPriceMultiplier: 1.16,
     ccResistScale: 0.30,
+    statusResistScale: 0.16,
     enemyBleedDamageMultiplier: 0.8,
     itemDropChanceMultiplier: 0.8,
     shopItemOffers: 2,
@@ -686,9 +743,11 @@ export const DIFFICULTY_DEFS = {
     eliteChance: 0.26,
     miniBossChanceMultiplier: 1.6,
     roomWeightBonus: 0.16,
-    statMultiplier: 1.36,
-    bossStatMultiplier: 1.42,
-    hpFloorScaleBonus: 0.09,
+    statMultiplier: 1.22,
+    bossStatMultiplier: 1.28,
+    // ~0.19/floor — steeper than Hard, plus the heavier elite/miniboss pressure
+    // this tier already carries.
+    hpFloorScaleBonus: 0.05,
     speedMultiplier: 1.1,
     bossProjectileSpeedMultiplier: 1.3,
     enemyReactionMultiplier: 1.2,
@@ -696,6 +755,7 @@ export const DIFFICULTY_DEFS = {
     supportPowerMultiplier: 1.22,
     shopPriceMultiplier: 1.28,
     ccResistScale: 0.45,
+    statusResistScale: 0.28,
     enemyLoopDamageReduction: 0.05,
     enemyBleedDamageMultiplier: 0.65,
     itemDropChanceMultiplier: 0.45,
@@ -711,10 +771,14 @@ export const DIFFICULTY_DEFS = {
     eliteChance: 0.32,
     miniBossChanceMultiplier: 1.9,
     roomWeightBonus: 0.22,
-    // Double Impossible's enemy stat multipliers (1.36 / 1.42).
-    statMultiplier: 2.72,
-    bossStatMultiplier: 2.84,
-    hpFloorScaleBonus: 0.12,
+    // God no longer relies on a flat HP wall (was a brute-force 2.72 / 2.84,
+    // "double Impossible"). Its lethality now comes from the STEEPEST HP slope
+    // (~0.22/floor), the densest elites/rivals, fastest projectiles and harshest
+    // CC resistance — a flat ~1.5 / 1.6 just keeps base rolls threatening without
+    // turning every enemy into an instant bullet sponge on floor 1.
+    statMultiplier: 1.5,
+    bossStatMultiplier: 1.6,
+    hpFloorScaleBonus: 0.08,
     speedMultiplier: 1.14,
     bossProjectileSpeedMultiplier: 1.4,
     enemyReactionMultiplier: 1.28,
@@ -722,6 +786,7 @@ export const DIFFICULTY_DEFS = {
     supportPowerMultiplier: 1.3,
     shopPriceMultiplier: 1.42,
     ccResistScale: 0.6,
+    statusResistScale: 0.4,
     enemyLoopDamageReduction: 0.05,
     enemyBleedDamageMultiplier: 0.5,
     itemDropChanceMultiplier: 0.3,
@@ -748,6 +813,7 @@ export const DIFFICULTY_DEFS = {
     supportPowerMultiplier: 1,
     shopPriceMultiplier: 1,
     ccResistScale: 0,
+    statusResistScale: 0,
   },
 };
 export const CHALLENGE_DEFS = {
@@ -1105,6 +1171,7 @@ Neo.ELITE_KNIGHT_SPEED_CAP = ELITE_KNIGHT_SPEED_CAP;
 Neo.BOMB_HAZARD_SCALING = BOMB_HAZARD_SCALING;
 Neo.SHOP_PRICE_SCALING = SHOP_PRICE_SCALING;
 Neo.BLEED_RESIST_SCALING = BLEED_RESIST_SCALING;
+Neo.STATUS_RESIST_SCALING = STATUS_RESIST_SCALING;
 Neo.DIRECTIONS = DIRECTIONS;
 Neo.DIRECTION_VECTORS = DIRECTION_VECTORS;
 Neo.OPPOSITE_DIRECTION = OPPOSITE_DIRECTION;

@@ -427,7 +427,7 @@ export const ITEM_DEFS = {
       key: 'tooth_of_thorn',
       name: 'Tooth of Thorn',
       shortName: 'Drain Ramp',
-      description: 'All characters: drain chance 2.8% per stack (5% on melee), plus an extra 2% x stacks per stack. Successful procs steal 1 HP on any hit. Higher-level foes resist drain: +15% per 5 levels from level 5.',
+      description: 'All characters: drain chance 4.5% per stack (8% on melee), plus an extra 2.5% x stacks per stack. Successful procs steal 1 HP +1% of the foe\'s max HP, then keep healing a little each second for 2.5s. Higher-level foes resist drain: +15% per 5 levels from level 5.',
       rarity: 'knight',
       color: '#ffd7e2',
       accent: '#ff6e8b',

@@ -26,8 +26,9 @@ function baseNeo(overrides = {}) {
   return {
     clamp: (value, min, max) => Math.max(min, Math.min(max, value)),
     rand: (a, b) => a,
-    ELITE_KNIGHT_SPEED_CAP: 1.6,
+    ELITE_KNIGHT_SPEED_CAP: 1.45,
     STATUS_KEYS,
+    getDifficultyDef: () => ({}),
     ...overrides,
   };
 }
@@ -74,7 +75,7 @@ describe('elite body rolls (Knight / Knave)', () => {
     expect(powers).toHaveLength(4 % 3); // 1
   });
 
-  test('all-Knight scales hp and damage by 1.2^knight', () => {
+  test('all-Knight scales hp and damage by 1.15^knight', () => {
     const Neo = baseNeo();
     const { applyEliteTypes } = buildElite(Neo, { nextRandomSeq: [0] }); // all knight, level%3=0 -> no powers at level 5? 5%3=2
     // level 5 -> 5 body + 2 powers; force powers to 'nothing' (index 4)
@@ -83,18 +84,29 @@ describe('elite body rolls (Knight / Knave)', () => {
     elite.applyEliteTypes(enemy);
     expect(enemy.eliteBody.knight).toBe(5);
     expect(enemy.eliteBody.knave).toBe(0);
-    expect(enemy.eliteKnightMult).toBeCloseTo(Math.pow(1.2, 5), 5);
-    // base elite doubles HP, then knight mult on top
-    expect(enemy.max).toBe(Math.round(100 * 2 * Math.pow(1.2, 5)));
-    expect(enemy.dmg).toBe(Math.round(10 * Math.pow(1.2, 5)));
+    expect(enemy.eliteKnightMult).toBeCloseTo(Math.pow(1.15, 5), 5);
+    // base elite adds 75% HP, then knight mult on top
+    expect(enemy.max).toBe(Math.round(100 * 1.75 * Math.pow(1.15, 5)));
+    expect(enemy.dmg).toBe(Math.round(10 * Math.pow(1.15, 5)));
+  });
+
+  test('eliteHpMultiplier softens the base durability boost (easy mode)', () => {
+    // Easy mode scales only the +75% bonus by 0.6 -> 1 + 0.75*0.6 = 1.45x base HP.
+    const Neo = baseNeo({ getDifficultyDef: () => ({ eliteHpMultiplier: 0.6 }) });
+    const elite = buildElite(Neo, { nextRandomSeq: [0], irandSeq: [4] });
+    const enemy = { elite: true, level: 5, hp: 100, max: 100, dmg: 10, speed: 100, r: 16 };
+    elite.applyEliteTypes(enemy);
+    expect(enemy.max).toBe(Math.round(100 * 1.45 * Math.pow(1.15, 5)));
+    // Damage is unaffected by the HP multiplier.
+    expect(enemy.dmg).toBe(Math.round(10 * Math.pow(1.15, 5)));
   });
 
   test('speed multiplier is clamped to ELITE_KNIGHT_SPEED_CAP', () => {
     const elite = buildElite(baseNeo(), { nextRandomSeq: [0], irandSeq: [4] });
     const enemy = { elite: true, level: 12, hp: 100, max: 100, dmg: 10, speed: 100, r: 16 };
     elite.applyEliteTypes(enemy);
-    // 1.2^12 ~ 8.9, but speed should be clamped at 1.6x
-    expect(enemy.speed).toBeCloseTo(100 * 1.6, 5);
+    // 1.15^12 ~ 5.35, but speed should be clamped at 1.45x
+    expect(enemy.speed).toBeCloseTo(100 * 1.45, 5);
   });
 
   test('all-Knave grants unfazed count and accumulates +1% status resist', () => {
@@ -116,7 +128,7 @@ describe('elite power rolls', () => {
     const enemy = { elite: true, level: 2, hp: 100, max: 100, dmg: 10, speed: 100, r: 16 };
     elite.applyEliteTypes(enemy);
     expect(enemy.elitePowers.filter(p => p === 'enflamed')).toHaveLength(2);
-    expect(enemy.eliteProcs.fire).toBeCloseTo(0.30, 5);
+    expect(enemy.eliteProcs.fire).toBeCloseTo(0.24, 5);
   });
 
   test('giant adds 50% HP and a larger radius; blessed sets crit', () => {
@@ -125,16 +137,16 @@ describe('elite power rolls', () => {
     const enemy = { elite: true, level: 2, hp: 100, max: 100, dmg: 10, speed: 100, r: 20 };
     elite.applyEliteTypes(enemy);
     expect(enemy.elitePowers).toEqual(expect.arrayContaining(['giant', 'blessed']));
-    expect(enemy.eliteCrit).toBe(0.25);
-    expect(enemy.r).toBe(Math.round(20 * 1.6));
+    expect(enemy.eliteCrit).toBe(0.18);
+    expect(enemy.r).toBe(Math.round(20 * 1.45));
   });
 
   test('breezy reduces cold (slow) effectiveness against the elite', () => {
     const elite = buildElite(baseNeo(), { nextRandomSeq: [0], irandSeq: [2] }); // breezy index 2
     const enemy = { elite: true, level: 2, hp: 100, max: 100, dmg: 10, speed: 100, r: 16 };
     elite.applyEliteTypes(enemy);
-    expect(enemy.eliteProcs.cold).toBeCloseTo(0.30, 5);
-    expect(enemy.statusResistances.slow).toBeCloseTo(0.60, 5); // 2 breezy * 0.30
+    expect(enemy.eliteProcs.cold).toBeCloseTo(0.24, 5);
+    expect(enemy.statusResistances.slow).toBeCloseTo(0.44, 5); // 2 breezy * 0.22
   });
 });
 

@@ -123,13 +123,20 @@ describe('enemy projectile evasion', () => {
       { Neo, isBossType, getEnemyProgressionLevel, getEnemyEvadeDifficultyLevel },
     );
 
-    const earlyEasy = getEnemyProjectileEvadeChance({ type: 'hunter', level: 1 });
-    const lateEasy = getEnemyProjectileEvadeChance({ type: 'hunter', level: 20 });
-    expect(lateEasy).toBeGreaterThan(earlyEasy);
+    // On Easy (difficulty rank 0), plain enemies never dodge — regardless of level
+    // — so the forgiving fantasy holds (the player's shots always connect).
+    expect(getEnemyProjectileEvadeChance({ type: 'hunter', level: 1 })).toBe(0);
+    expect(getEnemyProjectileEvadeChance({ type: 'hunter', level: 20 })).toBe(0);
+
+    // Level scaling still applies once dodge is active (Medium+).
+    Neo.selectedDifficulty = 'medium';
+    const earlyMedium = getEnemyProjectileEvadeChance({ type: 'hunter', level: 1 });
+    const lateMedium = getEnemyProjectileEvadeChance({ type: 'hunter', level: 20 });
+    expect(lateMedium).toBeGreaterThan(earlyMedium);
 
     Neo.selectedDifficulty = 'hard';
     const hardChance = getEnemyProjectileEvadeChance({ type: 'hunter', level: 20 });
-    expect(hardChance).toBeGreaterThan(lateEasy);
+    expect(hardChance).toBeGreaterThan(lateMedium);
     expect(getEnemyProjectileEvadeChance({ type: 'god', level: 20 })).toBeGreaterThan(hardChance);
     expect(getEnemyProjectileEvadeChance({ type: 'rival', level: 20, rivalData: { friend: false, level: 20 } })).toBeGreaterThan(hardChance);
     expect(getEnemyProjectileEvadeChance({ type: 'rival', rivalData: { friend: true } })).toBe(0);

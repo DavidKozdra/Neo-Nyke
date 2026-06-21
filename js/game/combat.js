@@ -203,7 +203,9 @@
 
   function getPlayerBaseDamage() {
     const characterMultiplier = Neo.getCharacterDef().damageMultiplier || 1;
-    return Math.max(1, (Neo.ATTACKS.melee.damage + (Neo.player?.attackPower || 0)) * characterMultiplier);
+    // Poison saps the player's strength: each stack shaves ~1% off outgoing damage.
+    const poisonMultiplier = Neo.getPoisonDamageMultiplier?.(Neo.player) ?? 1;
+    return Math.max(1, (Neo.ATTACKS.melee.damage + (Neo.player?.attackPower || 0)) * characterMultiplier * poisonMultiplier);
   }
 
   function getEquippedMove(slot) {
@@ -1217,6 +1219,7 @@
     const attackSpeed = Neo.getAttackSpeedValue();
     const rechargeTime = Neo.getDashCooldownDuration(move, attackSpeed);
     if (!Neo.spendSkillCharge('dash', rechargeTime)) return;
+    if (Neo.isFirstRunTutorialActive()) Neo.tutorialState.dashed = true;
     if (move === 'flying_unhitable') {
       castFlyingUntouchable();
       return;
@@ -1432,7 +1435,7 @@
         knockback: 80,
         color: '#c0d8ff',
         bouncesRemaining: 3 + Neo.rollRicoceteBounces(itemStats.projectileBounces),
-        hitOptions: { bleedChance: 0.08 },
+        hitOptions: { bleedChance: 0.08, drainChanceBonus: 0.05 },
       });
     }
     Neo.ringBurst(Neo.player.x, Neo.player.y, 22, '#c0d8ff', 0.3);
@@ -1653,7 +1656,6 @@
     Neo.shakeT = Math.max(Neo.shakeT, 0.08);
     Neo.playSfx?.('dash');
     Neo.ringBurst(Neo.player.x, Neo.player.y, 18, '#fff06a', 0.28);
-    if (Neo.isFirstRunTutorialActive()) Neo.tutorialState.dashed = true;
   }
 
   function cancelCowardsWayOnAttack() {
@@ -2864,6 +2866,7 @@
     // Melee swings land far less often than a held beam, so they roll a higher
     // per-hit chance (meleeDrainChance) to keep the lifesteal worthwhile.
     const baseChance = isMelee ? Number(stats.meleeDrainChance || 0) : Number(stats.drainChance || 0);
+    if (!(baseChance > 0)) return;
     let drainChance = Math.max(0, baseChance + Number(bonusChance || 0));
     if (!(drainChance > 0)) return;
     // Higher-level enemies resist lifesteal: starting at level 5, every full 5
@@ -2875,11 +2878,20 @@
     if (!(drainChance > 0)) return;
     if (!Neo.player || Neo.player.hp >= Neo.player.maxHp) return;
     if (Neo.nextRandom('encounter') >= drainChance) return;
-    const heal = Neo.scalePlayerHealing(1, 1);
+    // Instant steal: the flat 1 HP plus 1% of the drained enemy's max HP, so the
+    // bite scales against tankier foes instead of being a flat trickle.
+    const enemyMax = Math.max(1, Number(enemy?.max || enemy?.hp || 1));
+    const bite = 1 + enemyMax * 0.01;
+    const heal = Neo.scalePlayerHealing(bite, 1);
     const gained = Neo.applyPlayerHealing(heal);
     if (gained > 0) {
       Neo.spawnHealPopup(Neo.player.x + Neo.rand(-6, 6), Neo.player.y - 22, gained, { color: '#ff8fb4', size: 13 });
     }
+    // …then a lingering bleed-out: heal a little of the same bite each second for
+    // a couple of seconds. Procs refresh the window and stack the per-second rate
+    // up to a cap so chaining drains keeps the trickle topped up.
+    Neo.player.thornDrainTime = 2.5;
+    Neo.player.thornDrainRate = Math.min(enemyMax * 0.04, Number(Neo.player.thornDrainRate || 0) + bite * 0.5);
   }
 
   function hitEnemy(enemy, damage, angle, knockback, color, options = {}) {

@@ -53,10 +53,16 @@ describe('God boss buffs', () => {
   });
 
   test('status resistance reduces both incoming stacks and duration', () => {
+    // getStatusResistance now folds in a difficulty/time-scaled enemy floor via
+    // the module-level getEnemyGenericStatusResistance helper, so extract+inject
+    // both. A stub Neo with statusResistScale 0 keeps the ramp at 0, isolating the
+    // authored-resistance behavior these assertions check.
+    const helper = extractFunction(statusSource, 'getEnemyGenericStatusResistance');
     const declaration = extractFunction(statusSource, 'getStatusResistance');
     const getStatusResistance = new Function(
-      `${declaration}; return getStatusResistance;`,
-    )();
+      'Neo',
+      `${helper}; ${declaration}; return getStatusResistance;`,
+    )({ player: {}, gameElapsedTime: 0, getDifficultyDef: () => ({ statusResistScale: 0 }) });
 
     expect(getStatusResistance({ statusResistance: 0.45, statusResistances: { slow: 0.7 } }, 'slow')).toBe(0.7);
     expect(getStatusResistance({ statusResistance: 0.45, statusResistances: { fire: 0.2 } }, 'fire')).toBe(0.45);

@@ -350,7 +350,7 @@
       <div class="panel-title-wrap">
         <span class="panel-kicker">Forge</span>
         <h3>ANVIL</h3>
-        <p class="panel-subtitle">Spend XP and gold to upgrade your weapons and moves. Changes apply on confirm.</p>
+        <p class="panel-subtitle">Pick a weapon or move, press + on the stat rows, choose XP or gold, then confirm to apply the upgrades.</p>
       </div>
       <div class="anvil-resources">
         <div class="anvil-xp-display">XP <b id="anvilXp">0</b></div>
@@ -419,6 +419,7 @@
       <div class="panel-title-wrap">
         <span class="panel-kicker">Loadout</span>
         <h3>INVENTORY</h3>
+        <p class="panel-subtitle">Use tabs to inspect your build. Equip weapons and moves from their tabs; tools can be reordered for the hotbar.</p>
       </div>
       <button id="invClose" class="panel-close" aria-label="Close inventory">X</button>
     </div>
@@ -436,7 +437,10 @@
       <button class="inv-tab panel-tab" data-inv-tab="equipped" role="tab"><canvas class="tab-icon tab-icon--canvas" width="22" height="22" data-inv-ui-icon="tab-moves" aria-hidden="true"></canvas>Moves</button>
       <button class="inv-tab panel-tab" data-inv-tab="rivals" role="tab"><canvas class="tab-icon tab-icon--canvas" width="22" height="22" data-inv-ui-icon="tab-stats" aria-hidden="true"></canvas>Rivals</button>
     </div>
-    <div class="inv-ux-hints" aria-hidden="true">
+    <div class="inv-ux-hints">
+      <span class="inv-ux-hint">Weapons: click Equip to swap</span>
+      <span class="inv-ux-hint">Moves: drag or use Equip</span>
+      <span class="inv-ux-hint">Tools: drag or arrows reorder</span>
     </div>
     <div class="inv-tab-panel" id="invTabStats">
       <div id="invStats" class="inv-stats"></div>

@@ -58,6 +58,19 @@ export function getSlowMultiplier(entity) {
   return Math.max(0.35, 1 - stacks * 0.1 * severity);
 }
 
+// Poison weakens the victim's strikes: each stack shaves ~1% off outgoing
+// damage (player-side, scaled by negativeStatusMultiplier severity). Mirrors the
+// slow/brittle debuff multipliers. Floored so a full 6-stack stays a soft ~6%
+// rather than gutting damage.
+export function getPoisonDamageMultiplier(entity) {
+  const stacks = Math.max(0, Number(getStatusStacks(entity, 'poison') || 0));
+  if (stacks <= 0) return 1;
+  const severity = entity === Neo.player
+    ? Number(Neo.getItemStats?.()?.negativeStatusMultiplier || 1)
+    : 1;
+  return Math.max(0.85, 1 - stacks * 0.01 * severity);
+}
+
 // Cold/brittle: each slow (cold) stack strips a quarter of the target's defense,
 // so it takes more damage. 4+ stacks remove all defense (multiplier 0).
 export function getBrittleDefenseMultiplier(entity) {
@@ -84,11 +97,30 @@ export function clearStatus(entity, key) {
   state.owner = null;
 }
 
+// Difficulty/time-scaled resistance floor for the non-bleed statuses
+// (fire/poison/slow/static/dark_drain). Enemies only; bleed is excluded because
+// it has its own dedicated damage-divisor system. Returns 0 on Easy/custom
+// (statusResistScale 0), on the player, or for bleed. See STATUS_RESIST_SCALING
+// and the difficulty defs' statusResistScale in game-core.js.
+function getEnemyGenericStatusResistance(entity, key) {
+  if (key === 'bleed') return 0;
+  if (!entity || entity === Neo.player) return 0;
+  const scale = Number(Neo.getDifficultyDef?.()?.statusResistScale || 0);
+  if (scale <= 0) return 0;
+  const cfg = Neo.STATUS_RESIST_SCALING || {};
+  const minutes = Math.max(0, Number(Neo.gameElapsedTime || 0) / 60);
+  // Time owns "resistances": the base difficulty scale ramps up over the run,
+  // capped so a slow player plateaus instead of facing ever-climbing immunity.
+  const timeRamp = Math.min(Number(cfg.timeCap ?? 0.6), minutes * Number(cfg.minute ?? 0.05));
+  return Math.max(0, Math.min(Number(cfg.max ?? 0.85), scale * (1 + timeRamp)));
+}
+
 export function getStatusResistance(entity, key) {
   if (!entity || typeof entity !== 'object') return 0;
   const general = Number(entity.statusResistance || 0);
   const keyed = Number(entity.statusResistances?.[key] || 0);
-  return Math.max(0, Math.min(0.95, Math.max(general, keyed)));
+  const ramped = getEnemyGenericStatusResistance(entity, key);
+  return Math.max(0, Math.min(0.95, Math.max(general, keyed, ramped)));
 }
 
 // Player cold (slow) uses duration as a stack-time budget: each stack is 15s.
@@ -165,6 +197,7 @@ Neo.getStatusState = getStatusState;
 Neo.getStatusStacks = getStatusStacks;
 Neo.getActiveStatusCount = getActiveStatusCount;
 Neo.getSlowMultiplier = getSlowMultiplier;
+Neo.getPoisonDamageMultiplier = getPoisonDamageMultiplier;
 Neo.getBrittleDefenseMultiplier = getBrittleDefenseMultiplier;
 Neo.getPlayerNegativeStatusProcChance = getPlayerNegativeStatusProcChance;
 Neo.clearStatus = clearStatus;

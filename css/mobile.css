@@ -2020,14 +2020,13 @@
   }
 
   .tutorial-overlay {
-    padding: 8px 8px calc(8px + env(safe-area-inset-bottom, 0px));
+    padding: 8px 8px calc(32px + env(safe-area-inset-bottom, 0px) + (150px * var(--hud-scale-actions, var(--hud-scale, 1))) + max(0px, calc(-1 * var(--hud-y-actions, 0px))));
   }
 
   .tutorial-box {
     width: calc(100vw - 16px);
     min-height: 0;
-    /* Keep clear of the on-screen controls / action bar at the bottom. */
-    margin-bottom: calc(188px + env(safe-area-inset-bottom, 0px));
+    margin-bottom: 0;
     padding: 10px 12px;
     border-radius: 8px;
   }
@@ -2558,7 +2557,7 @@
   .tutorial-box {
     /* Keep the prompt in the center lane between the side touch controls. */
     width: min(520px, max(300px, calc(100vw - 360px)));
-    margin-bottom: calc(78px + env(safe-area-inset-bottom, 0px));
+    margin-bottom: 0;
   }
 
   .dialogue-box {
