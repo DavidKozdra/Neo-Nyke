@@ -12128,6 +12128,38 @@ border-bottom: black solid 2px;
 }
 .inv-rival--slain { opacity: .6; }
 
+/* Paul Cunt's House Keys (GREEN item): per-floor "strike a rival" UI in the
+   inventory Rivals tab. */
+.inv-rival__keys-notice {
+  border: 1px solid rgba(62, 240, 122, 0.5);
+  background: rgba(62, 240, 122, 0.08);
+}
+.inv-rival__keys-notice p {
+  margin: 4px 0 0;
+  font-size: calc(11px * var(--font-scale, 1));
+  color: #bdf7d0;
+}
+.inv-rival__strike {
+  margin-top: 8px;
+  padding: 5px 12px;
+  border: 1px solid rgba(62, 240, 122, 0.7);
+  border-radius: 6px;
+  background: rgba(62, 240, 122, 0.14);
+  color: #d6ffe4;
+  font: inherit;
+  font-size: calc(11px * var(--font-scale, 1));
+  cursor: pointer;
+  transition: background 0.12s ease, transform 0.08s ease;
+}
+.inv-rival__strike:hover:not(:disabled) {
+  background: rgba(62, 240, 122, 0.28);
+}
+.inv-rival__strike:active:not(:disabled) { transform: translateY(1px); }
+.inv-rival__strike:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
 /* ── Unlock celebration: confetti canvas + big center banner ─────────────────
    Driven by js/ui/unlock-banner.js. The canvas is a full-screen, click-through
    overlay the JS draws particles onto; the banner is a queued center card that

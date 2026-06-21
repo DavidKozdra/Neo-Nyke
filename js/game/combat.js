@@ -205,7 +205,9 @@
     const characterMultiplier = Neo.getCharacterDef().damageMultiplier || 1;
     // Poison saps the player's strength: each stack shaves ~1% off outgoing damage.
     const poisonMultiplier = Neo.getPoisonDamageMultiplier?.(Neo.player) ?? 1;
-    return Math.max(1, (Neo.ATTACKS.melee.damage + (Neo.player?.attackPower || 0)) * characterMultiplier * poisonMultiplier);
+    // Foley's charm (GREEN) adds a flat +1 per stack to the raw hit before mults.
+    const flatHitBonus = Math.max(0, Number(Neo.getItemStats?.()?.flatHitDamageBonus || 0));
+    return Math.max(1, (Neo.ATTACKS.melee.damage + (Neo.player?.attackPower || 0) + flatHitBonus) * characterMultiplier * poisonMultiplier);
   }
 
   function getEquippedMove(slot) {
@@ -4405,6 +4407,68 @@
     return itemKey !== 'artificer_charger';
   }
 
+  // Paul Cunt's House Keys (GREEN, lies in its tooltip): really lets the player
+  // reach out and strike a rival once per floor from the inventory Rivals tab.
+  // Returns true when a strike landed (so the UI can refresh + report).
+  function canUseHouseKeysStrike() {
+    if ((Neo.getItemCount?.('paul_cunts_house_keys') || 0) <= 0) return false;
+    return Number(Neo.player?.houseKeysStrikeFloor ?? -1) !== Number(Neo.floor);
+  }
+
+  function useHouseKeysStrike(rivalId) {
+    if (!canUseHouseKeysStrike()) return false;
+    const stacks = Neo.getItemCount?.('paul_cunts_house_keys') || 0;
+    const rival = (Neo.rivals || []).find(r => r && !r.dead && !r.friend && String(r.rivalId) === String(rivalId));
+    if (!rival) return false;
+    // 35% of the rival's max HP per stack — a remote chip, not a guaranteed kill.
+    const damage = Math.max(1, Math.round(Number(rival.max || rival.hp || 1) * 0.35 * stacks));
+    if (Neo.player) Neo.player.houseKeysStrikeFloor = Number(Neo.floor);
+    Neo.playSfx?.('coin');
+    // If the rival is physically present in the room, route through the normal
+    // damage pipeline so death/lives/curses all resolve exactly as a melee kill.
+    const liveEnemy = (Neo.enemies || []).find(e => e?.type === 'rival' && e.rivalData === rival && !e.dead);
+    if (liveEnemy) {
+      hitEnemy(liveEnemy, damage, Neo.rng() * Math.PI * 2, 6, '#3ef07a', { source: 'house_keys' });
+      Neo.spawnParticle?.({ x: liveEnemy.x, y: liveEnemy.y - 40, life: 1.4, text: 'STRUCK FROM AFAR', c: '#3ef07a' });
+      Neo.markInventoryPanelDirty?.();
+      return true;
+    }
+    // Off-screen rival: chip its persistent HP record. If it would drop, the rival
+    // flees wounded — spend a life and queue a return (or slay on the last life)
+    // without the in-room death FX, mirroring the lives bookkeeping in hitEnemy.
+    rival.hp = Math.max(0, Number(rival.hp || rival.max || 1) - damage);
+    rival.hpSnapshot = rival.hp;
+    rival.relationship = Number(rival.relationship || 0) - 1; // long-distance grudge
+    if (rival.hp <= 0) {
+      rival.lives = Math.max(0, Number(rival.lives ?? 2) - 1);
+      Neo.queueRivalCurse?.(rival.characterKey, { descended: false });
+      if (rival.lives <= 0) {
+        rival.dead = true;
+        if (!Array.isArray(Neo.slainRivalKeys)) Neo.slainRivalKeys = [];
+        if (!Neo.slainRivalKeys.includes(rival.characterKey)) Neo.slainRivalKeys.push(rival.characterKey);
+        Neo.rivals = (Neo.rivals || []).filter(r => r !== rival);
+      } else {
+        rival.dead = true;
+        Neo.pendingRivalReturns = Array.isArray(Neo.pendingRivalReturns) ? Neo.pendingRivalReturns : [];
+        Neo.pendingRivalReturns.push({
+          returnFloor: Number(Neo.floor) + 1,
+          rival: { ...rival, dead: false, hp: rival.max, hpSnapshot: rival.max },
+        });
+        Neo.rivals = (Neo.rivals || []).filter(r => r !== rival);
+      }
+    }
+    Neo.spawnParticle?.({
+      x: Neo.player?.x ?? Neo.ROOM_W / 2,
+      y: (Neo.player?.y ?? Neo.ROOM_H / 2) - 30,
+      life: 1.4,
+      text: rival.hp <= 0 ? `${rival.name.toUpperCase()} ROUTED` : `${rival.name.toUpperCase()} STRUCK`,
+      c: '#3ef07a',
+    });
+    Neo.scheduleRunSave?.();
+    Neo.markInventoryPanelDirty?.();
+    return true;
+  }
+
   // Per-item pickup side effects, keyed by item key. Each handler runs after the
   // generic collection (inventory bump, equipment slots, notifications) with a
   // context { collectCount, previousCount }. Items with no special behavior have
@@ -4416,6 +4480,15 @@
       Neo.player.maxHp = Math.max(120, Math.round(Neo.player.maxHp * 1.08));
       Neo.player.hp = Math.min(Neo.player.maxHp, Math.round(Neo.player.hp * 1.08));
     }
+  }
+
+  // Foley's Irish NewYork Charm (GREEN, lies in its tooltip): really just +15 max
+  // HP per stack (granted + healed on pickup, like titan_heart) and +1 on-hit
+  // damage per stack (applied in getPlayerBaseDamage's flat on-hit bonus).
+  function applyFoleyCharmPickup(collectCount) {
+    const gain = 15 * Math.max(1, Number(collectCount) || 1);
+    Neo.player.maxHp = Math.max(1, Math.round(Number(Neo.player.maxHp || 0) + gain));
+    Neo.player.hp = Math.min(Neo.player.maxHp, Math.round(Number(Neo.player.hp || 0) + gain));
   }
 
   function applyJestersDicePickup(collectCount) {
@@ -4462,6 +4535,7 @@
       for (let index = 0; index < collectCount; index += 1) Neo.openExtraBatterySelection();
     },
     titan_heart: ({ collectCount }) => applyTitanHeartPickup(collectCount),
+    foleys_irish_newyork_charm: ({ collectCount }) => applyFoleyCharmPickup(collectCount),
   };
 
   // Predicate-matched LATE handlers: run when match(itemKey) is true and the item
@@ -4636,4 +4710,6 @@
   Neo.grantXp = grantXp;
   Neo.levelUp = levelUp;
   Neo.collectItem = collectItem;
+  Neo.canUseHouseKeysStrike = canUseHouseKeysStrike;
+  Neo.useHouseKeysStrike = useHouseKeysStrike;
   Neo.updateItemUI = updateItemUI;

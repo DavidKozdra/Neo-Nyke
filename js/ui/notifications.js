@@ -47,7 +47,7 @@ export function drawItemToastIcon(canvas, item) {
     ctx2d.shadowBlur = 0;
     return;
   }
-  const symbolByRarity = { god: '✦', red: '✦', purple: '◆', wizard: '✹', knight: '⚔', white: '●' };
+  const symbolByRarity = { god: '✦', red: '✦', purple: '◆', wizard: '✹', knight: '⚔', white: '●', green: '☘' };
   const symbol = symbolByRarity[item?.rarity] || '●';
   const cx = canvas.width / 2;
   const cy = canvas.height / 2;

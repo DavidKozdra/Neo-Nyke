@@ -264,6 +264,8 @@ export function migratePlayerData(source) {
     playerData.attackSpeed = Number(playerData.attackSpeed || 1);
     playerData.roomDamageTaken = Number(playerData.roomDamageTaken || 0);
     playerData.rivalReputation = Number(playerData.rivalReputation || 0);
+    // Floor on which Paul Cunt's House Keys was last used (once per floor). -1 = unused.
+    playerData.houseKeysStrikeFloor = Number.isFinite(Number(playerData.houseKeysStrikeFloor)) ? Number(playerData.houseKeysStrikeFloor) : -1;
     playerData.veggysRoomCounter = Number(playerData.veggysRoomCounter || 0);
     playerData.stun = Math.max(0, Number(playerData.stun || 0));
     playerData.dashTime = Number(playerData.dashTime || 0);
@@ -685,6 +687,9 @@ export function getItemStats() {
     const procyPickle = getItemCount('procy_pickle');
     const ironLung = getItemCount('iron_lung');
     const pendantOfRock = getItemCount('pendant_of_rock');
+    // Foley's Irish NewYork Charm (GREEN): really +1 flat on-hit damage per stack
+    // (the +15 max HP per stack is granted on pickup in combat.js).
+    const foleyCharm = getItemCount('foleys_irish_newyork_charm');
     const ownedToolStacks = countOwnedToolStacks(Neo.player?.items, Neo.ITEM_DEFS);
     // Count distinct tool relics the player owns (items flagged `tool: true`),
     // so Procy Pickle's poison-on-tool-use chance scales with how tool-heavy the
@@ -813,6 +818,9 @@ export function getItemStats() {
       // Pendant of Rock: +2% damage per stack to any rock-kind projectile. Applied
       // in spawnProjectile when props.kind === 'rock' (see world.js).
       rockDamageMultiplier: 1 + pendantOfRock * 0.02,
+      // Foley's charm: flat damage added to the player's base hit (applied in
+      // getPlayerBaseDamage before character/poison multipliers).
+      flatHitDamageBonus: foleyCharm,
       attackSpeedMultiplier: 1 + attackServo * 0.12 + chronoSpringBonus,
       hasRobotArm: robotArm > 0,
       moveSpeedMultiplier: 1 + turtleShell * 0.05

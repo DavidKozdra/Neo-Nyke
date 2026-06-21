@@ -1231,6 +1231,59 @@ window.NeoNykeIconDefs = {
         [2,5],[5,5],
       ],
     },
+
+    // --- GREEN tier (post-loop "lying" items) ---
+    // Naked King's Last Penny: a coin (gold accent) topped with a tiny green crown.
+    naked_kings_last_penny: {
+      color: '#3ef07a',
+      accent: '#ffe07a',
+      pixels: [
+        [2,0],[4,0],[6,0],
+        [2,1],[3,1],[4,1],[5,1],[6,1],
+        [3,3],[4,3],[5,3],
+        [2,4],[3,4],[4,4],[5,4],[6,4],
+        [2,5],[3,5],[4,5],[5,5],[6,5],
+        [3,6],[4,6],[5,6],
+      ],
+      accentPixels: [
+        [3,3],[4,3],[5,3],
+        [3,4],[4,4],[5,4],
+        [4,5],
+      ],
+    },
+    // Foley's Irish NewYork Charm: a four-leaf clover.
+    foleys_irish_newyork_charm: {
+      color: '#3ef07a',
+      accent: '#7fffb0',
+      pixels: [
+        [2,1],[3,1],
+        [1,2],[2,2],[3,2],[4,2],
+        [2,3],[5,3],[6,3],
+        [1,4],[2,4],[3,4],[4,4],[5,4],[6,4],
+        [2,5],[3,5],[4,5],[5,5],
+        [3,6],
+        [3,7],
+      ],
+      accentPixels: [
+        [2,2],[3,2],
+        [3,4],[4,4],
+      ],
+    },
+    // Paul Cunt's House Keys: a key with a green bow and gold teeth.
+    paul_cunts_house_keys: {
+      color: '#3ef07a',
+      accent: '#9bd84f',
+      pixels: [
+        [1,1],[2,1],[3,1],
+        [1,2],[3,2],
+        [1,3],[2,3],[3,3],
+        [3,4],[4,4],[5,4],[6,4],[7,4],
+        [5,5],[7,5],
+      ],
+      accentPixels: [
+        [5,5],[7,5],
+      ],
+    },
   },
 
   pickups: {

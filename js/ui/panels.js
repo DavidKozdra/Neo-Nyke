@@ -2113,7 +2113,8 @@ export function getShopWeaponOffers() {
         ? `${rival.rivalId}:${rival.level}:${rival.lives}:${Math.round(rival.hp)}:${(rival.relationship || 0).toFixed(1)}:${rival.friend ? 1 : 0}:${rival.vendetta ? 1 : 0}:${Number(rival.aggroTimer || 0) > 0 ? 1 : 0}:${Array.isArray(rival.loot) ? rival.loot.length : 0}`
         : '').join(',');
       const pending = (Neo.pendingRivalReturns || []).map(entry => `${entry?.rival?.rivalId || ''}@${entry?.returnFloor || 0}:${Array.isArray(entry?.rival?.loot) ? entry.rival.loot.length : 0}`).join(',');
-      return `rivals|${live}|ret:${pending}|slain:${(Neo.slainRivalKeys || []).join(',')}`;
+      const keys = `${Neo.getItemCount?.('paul_cunts_house_keys') || 0}:${Neo.canUseHouseKeysStrike?.() ? 1 : 0}`;
+      return `rivals|${live}|ret:${pending}|slain:${(Neo.slainRivalKeys || []).join(',')}|keys:${keys}`;
     }
     const ownedMoves = getTruthyKeys(playerRef.ownedMoves);
     const equipped = (Neo.MOVE_SLOTS || []).map(slot => `${slot}:${playerRef.equippedMoves?.[slot] || ''}`).join(',');
@@ -2551,6 +2552,20 @@ export function renderInventoryPanel() {
         const signatureLine = rival => rival && !rival.friend && RIVAL_SIGNATURES[rival.characterKey]
           ? `<p class="inv-rival__signature">${RIVAL_SIGNATURES[rival.characterKey]}</p>`
           : '';
+        // Paul Cunt's House Keys (GREEN): once per floor, strike a rival from here.
+        const hasHouseKeys = (Neo.getItemCount?.('paul_cunts_house_keys') || 0) > 0;
+        const houseKeysReady = !!Neo.canUseHouseKeysStrike?.();
+        const houseKeysNotice = hasHouseKeys
+          ? `<div class="inv-card inv-rival__keys-notice">
+              <span class="inv-card__eyebrow" style="color:#3ef07a">Paul Cunt's House Keys</span>
+              <p>${houseKeysReady
+                ? 'Once this floor, you may strike a rival from afar. Pick a target below.'
+                : 'Already used this floor. The keys cool off before the next floor.'}</p>
+            </div>`
+          : '';
+        const strikeButton = rival => hasHouseKeys && !rival.friend
+          ? `<button type="button" class="inv-rival__strike" data-house-keys-strike="${Neo.escapeHtml(String(rival.rivalId || ''))}"${houseKeysReady ? '' : ' disabled'}>Strike from afar</button>`
+          : '';
         const liveCards = (Neo.rivals || []).filter(rival => rival && !rival.dead).map(rival => {
           const activity = rival.friend ? 'Travelling with you'
             : rival.vendetta ? 'Hunting you with god gear'
@@ -2571,6 +2586,7 @@ export function renderInventoryPanel() {
               </div>
               <p>${activity}.</p>
               ${signatureLine(rival)}
+              ${strikeButton(rival)}
             </div>
           </div>`;
         });
@@ -2607,7 +2623,7 @@ export function renderInventoryPanel() {
             </div>
           </div>`;
         });
-        container.innerHTML = [...liveCards, ...returnCards, ...slainCards].join('')
+        container.innerHTML = (houseKeysNotice + [...liveCards, ...returnCards, ...slainCards].join(''))
           || '<div class="inv-card"><span class="inv-card__eyebrow">All clear</span><h4>No rivals detected</h4><p>Rival adventurers occasionally enter the dungeon to compete for loot. Their movements show up here.</p></div>';
         // Draw each rival's character sprite into its portrait, matching the roster.
         container.querySelectorAll('[data-rival-sprite]').forEach(canvas => {
@@ -2615,6 +2631,15 @@ export function renderInventoryPanel() {
           if (!key) return;
           Neo.drawSpriteToCanvas(canvas, Neo.getCharacterSpriteKey?.(key) || key, 56, {
             alpha: canvas.closest('.inv-rival--slain') ? 0.55 : 1,
+          });
+        });
+        // Wire the House Keys "strike from afar" buttons (one per rival card).
+        container.querySelectorAll('[data-house-keys-strike]').forEach(button => {
+          button.addEventListener('click', () => {
+            if (Neo.useHouseKeysStrike?.(button.dataset.houseKeysStrike)) {
+              Neo.markInventoryPanelDirty?.();
+              Neo.renderInventoryPanel?.();
+            }
           });
         });
       }

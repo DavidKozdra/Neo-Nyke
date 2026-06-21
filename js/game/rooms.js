@@ -1312,8 +1312,20 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
     Neo.currentRoom = room;
     normalizeChallengeLifecycleState(room);
     Neo.minimapLegendDirty = true;
+    const firstReveal = !room.visited;
     room.explored = true;
     room.visited = true;
+    // Naked King's Last Penny (GREEN, lies in its tooltip): really pays out gold the
+    // first time you reveal a room — +7 for the first stack, +20% per extra stack.
+    if (firstReveal) {
+      const pennyStacks = Neo.getItemCount?.('naked_kings_last_penny') || 0;
+      if (pennyStacks > 0) {
+        const reward = Math.round(7 * (1 + (pennyStacks - 1) * 0.2));
+        Neo.addCoins?.(reward);
+        Neo.playSfx?.('coin');
+        Neo.spawnParticle?.({ x: Neo.player?.x ?? Neo.ROOM_W / 2, y: (Neo.player?.y ?? Neo.ROOM_H / 2) - 30, life: 0.9, text: `+${reward}`, c: '#ffe07a' });
+      }
+    }
     Neo.enemies = room.enemies || [];
     Neo.deadBodies = room.deadBodies || [];
     room.deadBodies = Neo.deadBodies;
@@ -1722,7 +1734,8 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
     }
     for (const key of Neo.ITEM_KEYS || []) {
       if (choices.length >= targetCount) break;
-      if (Neo.ITEM_DEFS?.[key]?.rarity === 'blue') continue;
+      const poolRarity = Neo.ITEM_DEFS?.[key]?.rarity;
+      if (poolRarity === 'blue' || poolRarity === 'green') continue; // greens are loop drop-only
       if (key && !seen.has(key)) {
         seen.add(key);
         choices.push(key);
@@ -1740,6 +1753,7 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
 
   function getItemRarityRank(key) {
     const rarity = String(Neo.itemRegistry?.get?.(key)?.rarity || Neo.ITEM_DEFS?.[key]?.rarity || 'knight').toLowerCase();
+    if (rarity === 'green') return 5; // post-loop drop-only tier, ranks above all
     if (rarity === 'blue') return 4;
     if (rarity === 'god' || rarity === 'red') return 3;
     if (rarity === 'wizard' || rarity === 'purple') return 2;

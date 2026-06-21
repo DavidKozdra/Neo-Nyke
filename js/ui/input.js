@@ -1115,6 +1115,48 @@ export const ITEM_DEFS = {
       voucher: true,
       tags: ['voucher', 'forge', 'upgrade', 'utility'],
     },
+    // --- GREEN tier: post-loop drop-only items whose descriptions LIE. ---
+    // The shown `description` is the fib; the true effect is applied in code (see
+    // realNote + getItemStats / pickup hooks). Do not "fix" the descriptions to
+    // match the effects — the mismatch is the point.
+    naked_kings_last_penny: {
+      key: 'naked_kings_last_penny',
+      name: "Naked King's Last Penny",
+      shortName: 'Last Penny',
+      description: 'Gives you one extra coin per stack whenever you pick up gold. Every penny counts when the crown is all you have left.',
+      // realNote: +7 gold the first time you reveal a room (+20% per extra stack),
+      // and every coin pickup re-plays the gold-gain sound and grants +1 coin per stack.
+      rarity: 'green',
+      color: '#3ef07a',
+      accent: '#ffe07a',
+      category: 'green',
+      tags: ['coin', 'loot', 'lie'],
+    },
+    foleys_irish_newyork_charm: {
+      key: 'foleys_irish_newyork_charm',
+      name: "Foley's Irish NewYork Charm",
+      shortName: 'Foley Charm',
+      description: 'A bit on the nose and runny. Makes you hit something when you attack by 0.2%. Makes you rich — we are all gonna be rich. If he has two yachts, we will have ten.',
+      // realNote: just gives +15 max HP and +1 on-hit damage per stack. Doesn't do much.
+      rarity: 'green',
+      color: '#3ef07a',
+      accent: '#7fffb0',
+      category: 'green',
+      tags: ['health', 'damage', 'hit', 'lie'],
+    },
+    paul_cunts_house_keys: {
+      key: 'paul_cunts_house_keys',
+      name: "Paul Cunt's House Keys",
+      shortName: 'House Keys',
+      description: 'Go get him! Address in the URL metadata!! Makes you better and stronger than everyone, and so good with money. ;)',
+      // realNote: once per floor you may "strike a rival" from the inventory Rivals
+      // tab — remotely damaging that rival (or killing a random enemy near them).
+      rarity: 'green',
+      color: '#3ef07a',
+      accent: '#9bd84f',
+      category: 'green',
+      tags: ['rival', 'utility', 'lie'],
+    },
   };
 // Scrolls are their own system, kept out of ITEM_DEFS / the relic pools. They are
 // registered into the item registry (see createItemRegistry) so runtime lookups —
@@ -1213,6 +1255,7 @@ export const RARITY_NAME_COLORS = {
     red: '#ffd23f',   // legacy alias of god
     blue: '#58b7ff',
     princess: '#ff9de8',
+    green: '#3ef07a', // GREEN tier — post-loop "lying" items
   };
 export const RARITY_DISPLAY_NAMES = {
     knight: 'Knight',
@@ -1224,6 +1267,7 @@ export const RARITY_DISPLAY_NAMES = {
     blue: 'Artificer',
     artificer: 'Artificer',
     princess: 'Princess',
+    green: 'Green',
   };
 export function getRarityDisplayName(rarity) {
   const key = String(rarity || '').toLowerCase();
@@ -1237,6 +1281,7 @@ export const SHOP_RARITY_PRICE_MULTIPLIERS = {
     god: 4.75,
     red: 4.75,
     blue: 4.75,
+    green: 3.0, // greens never reach the shop (drop-only), but priced as a sink in case forge/voucher math reads this
   };
 // A shop has a 50% chance to feature a guaranteed god-tier item. It is a
 // deliberate splurge: priced at the normal god multiplier (4.75x) plus this
@@ -1377,6 +1422,9 @@ export const ELITE_INVENTORY_POOL = [
   ];
 export const WHITE_ITEM_POOL = ITEM_KEYS.filter(key => ITEM_DEFS[key]?.rarity === 'knight' && !ITEM_DEFS[key]?.voucher);
 export const BLUE_ITEM_POOL = ITEM_KEYS.filter(key => ITEM_DEFS[key]?.rarity === 'blue');
+// Green tier — drop-only items that only appear from barrels/broken wood once the
+// player has looped at least once. Never in shops, reward picks, or normal drops.
+export const GREEN_ITEM_POOL = ITEM_KEYS.filter(key => ITEM_DEFS[key]?.rarity === 'green');
 export const ELITE_TYPE_DEFS = {
     // Body rolls
     knight: { label: 'Knight', color: '#dfe7ff' },
@@ -1995,6 +2043,7 @@ export const MOVE_BASE_STATS = {
   Neo.ELITE_INVENTORY_POOL = ELITE_INVENTORY_POOL;
   Neo.WHITE_ITEM_POOL = WHITE_ITEM_POOL;
   Neo.BLUE_ITEM_POOL = BLUE_ITEM_POOL;
+  Neo.GREEN_ITEM_POOL = GREEN_ITEM_POOL;
   Neo.ELITE_TYPE_DEFS = ELITE_TYPE_DEFS;
   // Neo.itemRegistry is set in game-state.js
   Neo.JESTER_PORTAL_ACTIVATE_DELAY = JESTER_PORTAL_ACTIVATE_DELAY;

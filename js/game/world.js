@@ -2336,6 +2336,20 @@
     }
   }
 
+  // GREEN_DROP_CHANCE: flat per-break odds of a green item once the player has
+  // looped at least once. Only barrels/pots ("barrels and broken wood") roll.
+  const GREEN_DROP_CHANCE = 0.10;
+  function maybeDropGreenItem(prop) {
+    if (prop.kind !== 'barrel' && prop.kind !== 'pot') return;
+    if ((Number(Neo.runLoopIndex) || 0) < 1) return; // only after the first loop
+    const pool = Neo.GREEN_ITEM_POOL || [];
+    if (!pool.length) return;
+    const greenRandom = Neo.createEntityRandom(prop, 'green:drop');
+    if (greenRandom() >= GREEN_DROP_CHANCE) return;
+    const key = pool[Math.floor(greenRandom() * pool.length)] || pool[0];
+    Neo.pickups.push({ x: prop.x, y: prop.y, type: 'item', key });
+  }
+
   function damageDestructible(prop, damage, hit = {}) {
     if (prop.broken) return;
     const numericDamage = Math.max(0, Number(damage || 0));
@@ -2357,6 +2371,10 @@
     prop.breakAngle = getDestructibleImpactAngle(prop, hit);
     if (prop.kind === 'barrel') spawnBarrelExplosionFx(prop, hit);
     else spawnDestructibleBreakFx(prop, hit);
+    // Green (post-loop "lying") items: once the player has completed at least one
+    // loop, every barrel/pot ("broken wood") break has a flat 10% chance to drop a
+    // random green item. These never appear in shops or normal drops.
+    maybeDropGreenItem(prop);
     if (prop.kind === 'pot') {
       const potRandom = Neo.createEntityRandom(prop, 'pot:reward');
       const itemChance = Neo.getRandomItemDropChance(0.12, 0.5);
@@ -2779,7 +2797,10 @@
       if (pickup.type === 'challengeSwitch' && pickup.armed === false) continue;
 
       if (pickup.type === 'coin') {
-        addCoins(Math.round((pickup.value || 1) * coinPickupMultiplier));
+        // Naked King's Last Penny (GREEN): really adds +1 coin per stack to each
+        // coin pickup (and the gold-gain sound rings out again for every coin).
+        const pennyStacks = Neo.getItemCount?.('naked_kings_last_penny') || 0;
+        addCoins(Math.round((pickup.value || 1) * coinPickupMultiplier) + pennyStacks);
         Neo.playSfx?.('coin');
       }
 
