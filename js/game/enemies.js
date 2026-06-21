@@ -1449,8 +1449,9 @@
       aoeDamageMultiplier: Number(characterDef.aoeDamageMultiplier || 1),
       beamDamageMultiplier: 1 + count('dragon_orb') * 0.35,
       projectileBounces: count('ricocete'),
-      projectileHomingStrength: count('enemy_magnet') * 0.15 + count('enemy_magnet') ** 2 * 0.02,
-      projectileSpeedMultiplier: 1 + count('mooggy_zoomies') * 0.2,
+      projectileHomingStrength: count('enemy_magnet') * 0.15 + count('enemy_magnet') ** 2 * 0.02 + count('mooggy_zoomies') * 0.02,
+      projectileSpeedMultiplier: 1 + count('mooggy_zoomies') * 0.12,
+      projectileLifeMultiplier: 1 + count('mooggy_zoomies') * 0.10,
       healingMultiplier: 1 + count('drink_master') * 0.2,
       itemDropChanceBonus: Math.min(0.3, count('rich_mans_luck') * 0.05),
       shopExtraItemOffers: Math.min(3, count('rich_mans_luck')),
@@ -4238,14 +4239,19 @@
     const effects = options.statusEffects || getMirrorStatusEffects(enemy, options);
     effects.forEach(effect => {
       if (!effect?.key) return;
-      const procChance = Neo.getPlayerNegativeStatusProcChance?.(effect.chance ?? 1)
+      const rawChance = Neo.getPlayerNegativeStatusProcChance?.(effect.chance ?? 1)
         ?? Number(effect.chance ?? 1);
+      const rolled = Neo.applyProcRollback?.(rawChance, 1) || { procChance: rawChance, effectMultiplier: 1 };
+      const procChance = Neo.clamp(Number(rolled.procChance || 0), 0, 0.999);
+      const effectMultiplier = Math.max(1, Number(rolled.effectMultiplier || 1));
       if (Neo.nextRandom('encounter') <= procChance) {
         if (effect.key === 'stun') {
           const severity = Number(Neo.getItemStats?.()?.negativeStatusMultiplier || 1);
-          Neo.player.stun = Math.max(Number(Neo.player.stun || 0), Number(effect.duration || 0.55) * severity);
+          Neo.player.stun = Math.max(Number(Neo.player.stun || 0), Number(effect.duration || 0.55) * severity * effectMultiplier);
         } else {
-          Neo.applyStatus(Neo.player, effect.key, Number(effect.stacks || 1), Number(effect.duration || 3), enemy?.type || 'mirror_knight');
+          Neo.applyStatus(Neo.player, effect.key, Number(effect.stacks || 1), Number(effect.duration || 3) * effectMultiplier, enemy?.type || 'mirror_knight');
+          const state = Neo.getStatusState?.(Neo.player, effect.key);
+          if (state && effectMultiplier > 1) state.damageMultiplier = Math.max(Number(state.damageMultiplier || 1), effectMultiplier);
         }
       }
     });

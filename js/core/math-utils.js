@@ -136,6 +136,21 @@ export function applyCritRollback(critChance, critMultiplier) {
   return { critChance: chance, critMultiplier: multiplier };
 }
 
+// Generic proc roll-back for status/effect chances. Once a chance reaches 100%,
+// it rolls back to 80% and converts that crossing into +50% effect power.
+// A 130% status chance becomes 110%, rolls again to 90%, and gains 2.25x power.
+export function applyProcRollback(procChance, effectMultiplier = 1) {
+  let chance = Number(procChance) || 0;
+  let multiplier = Number(effectMultiplier) || 1;
+  let guard = 0;
+  while (chance >= 1 && guard < 20) {
+    multiplier *= 1.5;
+    chance -= 0.2; // 100% -> 80%
+    guard += 1;
+  }
+  return { procChance: chance, effectMultiplier: multiplier };
+}
+
 export function dist(ax, ay, bx, by) {
   return Math.hypot(ax - bx, ay - by);
 }
@@ -811,6 +826,7 @@ Neo.angleToMouse = angleToMouse;
 Neo.applyImpulse = applyImpulse;
 Neo.shieldRingRadius = shieldRingRadius;
 Neo.applyCritRollback = applyCritRollback;
+Neo.applyProcRollback = applyProcRollback;
 Neo.dist = dist;
 Neo.distToSegment = distToSegment;
 Neo.circleRect = circleRect;

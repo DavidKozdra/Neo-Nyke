@@ -480,6 +480,14 @@
     if (window.NeoSettings?.shouldBloodOnHit?.() !== false && options.bloodOnHit !== false) {
       Neo.spawnBleedSpray?.(Neo.player, 1, 0.72);
     }
+    if (
+      finalAmount > 0
+      && Neo.player.hp > 0
+      && Neo.player.hp < Neo.player.maxHp * 0.10
+      && Number(Neo.player.storedPotions || 0) > 0
+    ) {
+      Neo.tryUsePotion?.();
+    }
     if (Neo.player.hp <= 0) {
       if (Neo.gameMode === 'practice') {
         Neo.player.hp = Neo.player.maxHp;
@@ -521,7 +529,8 @@
       const resistance = key === 'bleed' ? Number(Neo.getItemStats?.()?.bleedResistance || 0) : 0;
       const damageMultiplier = Math.max(0.2, 1 - resistance);
       const statusSeverity = Number(Neo.getItemStats?.()?.negativeStatusMultiplier || 1);
-      const damage = Math.max(0.25, config.damage(state.stacks) * damageMultiplier * statusSeverity);
+      const statusDamageMultiplier = Math.max(1, Number(state.damageMultiplier || 1));
+      const damage = Math.max(0.25, config.damage(state.stacks) * damageMultiplier * statusSeverity * statusDamageMultiplier);
       // Attribute the kill to whoever inflicted the status (e.g. "Mooggy"),
       // falling back to the status name when the source is unknown.
       const inflictorKey = String(state.sourceKey || '').trim();
@@ -1065,6 +1074,7 @@
     p.vy = Number(props.vy || 0) * projectileSpeedMultiplier;
     p.r = props.r ?? 5;
     p.life = props.life ?? 1.2;
+    if (!enemyProjectile) p.life *= Math.max(0.1, Number(itemStats.projectileLifeMultiplier || 1));
     p.maxLife = p.life;
     p.damage = props.damage ?? 0;
     p.kind = props.kind ?? null;
@@ -1269,10 +1279,15 @@
       : sourceKey;
     projectile.statusEffects.forEach(effect => {
       if (!effect?.key) return;
-      const procChance = Neo.getPlayerNegativeStatusProcChance?.(effect.chance ?? 1)
+      const rawChance = Neo.getPlayerNegativeStatusProcChance?.(effect.chance ?? 1)
         ?? Number(effect.chance ?? 1);
+      const rolled = Neo.applyProcRollback?.(rawChance, 1) || { procChance: rawChance, effectMultiplier: 1 };
+      const procChance = Neo.clamp(Number(rolled.procChance || 0), 0, 0.999);
+      const effectMultiplier = Math.max(1, Number(rolled.effectMultiplier || 1));
       if (Neo.nextRandom('encounter') <= procChance) {
-        Neo.applyStatus(Neo.player, effect.key, Number(effect.stacks || 1), Number(effect.duration || 3), source);
+        Neo.applyStatus(Neo.player, effect.key, Number(effect.stacks || 1), Number(effect.duration || 3) * effectMultiplier, source);
+        const state = Neo.getStatusState?.(Neo.player, effect.key);
+        if (state && effectMultiplier > 1) state.damageMultiplier = Math.max(Number(state.damageMultiplier || 1), effectMultiplier);
       }
     });
   }
@@ -2032,6 +2047,11 @@
           const dy = enemy.y - hazard.y;
           const dist = Math.hypot(dx, dy);
           if (dist > hazard.r + enemy.r || dist <= 0.001) return;
+          enemy.graveZoneVulnerableUntil = Math.max(Number(enemy.graveZoneVulnerableUntil || 0), Number(Neo.gameElapsedTime || 0) + 0.2);
+          enemy.graveZoneDamageTakenMultiplier = Math.max(
+            Number(enemy.graveZoneDamageTakenMultiplier || 1),
+            Number(hazard.damageTakenMultiplier || 1),
+          );
           const push = Number(hazard.pushPower || 280) * Math.max(0.12, 1 - dist / (hazard.r + enemy.r));
           enemy.vx += (dx / dist) * push * dt;
           enemy.vy += (dy / dist) * push * dt;

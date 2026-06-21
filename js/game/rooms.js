@@ -1271,10 +1271,17 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
         const gain = pendantCount * 0.10;
         const oldMax = Neo.player.maxHp;
         Neo.player.maxHp = Math.round(Neo.player.maxHp * (1 + gain));
-        Neo.player.hp = Math.min(Neo.player.maxHp, Neo.player.hp + (Neo.player.maxHp - oldMax));
+        Neo.player.hp = Math.min(Neo.player.maxHp, Neo.player.hp + (Neo.player.maxHp - oldMax) * 0.5);
         Neo.markInventoryPanelDirty?.();
         Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 28, life: 1.2, text: `MAX HP +${Math.round(gain * 100)}%`, c: '#a0e87a' });
       }
+    }
+    const bagCap = Neo.getPotionCarryCap?.() || 0;
+    if (bagCap > 0 && room?.type === 'shop' && Number(Neo.player?.storedPotions || 0) <= 0 && Neo.player.mateosBagRefillFloor !== Neo.floor) {
+      Neo.player.storedPotions = 1;
+      Neo.player.mateosBagRefillFloor = Neo.floor;
+      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.7, text: `POTION STORED (${Neo.player.storedPotions}/${bagCap})`, c: '#a0e8ff' });
+      Neo.updateHud?.();
     }
   });
 

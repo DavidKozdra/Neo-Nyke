@@ -391,12 +391,8 @@
       const difference = angleDifferenceAbs(targetAngle, angle);
       if (difference > arc) return;
       hitEnemy(enemy, damage, angle, push, color, options);
-      if (options.bleedChance > 0 && Neo.nextRandom('encounter') < options.bleedChance) {
-        applyBleed(enemy, Number(options.bleedStacks || 1), Number(options.bleedDuration || 4));
-      }
-      if (options.itemBleedChance > 0 && Neo.nextRandom('encounter') < options.itemBleedChance) {
-        applyBleed(enemy, 1, 5);
-      }
+      rollAndApplyStatus(enemy, 'bleed', options.bleedChance, Number(options.bleedStacks || 1), Number(options.bleedDuration || 4), applyBleed);
+      rollAndApplyStatus(enemy, 'bleed', options.itemBleedChance, 1, 5, applyBleed);
     });
 
     forEachDestructibleNearPlayer(adjustedRange + 32, prop => {
@@ -580,8 +576,8 @@
       const difference = angleDifferenceAbs(targetAngle, angle);
       if (difference > Neo.ATTACKS.melee.arc) return;
       hitEnemy(enemy, damage, angle, meleeKnockback, '#0ff', { melee: true });
-      if (slashBleedChance > 0 && Neo.rng() < slashBleedChance) applyBleed(enemy, 1, 5);
-      if (itemStats.bleedChance > 0 && Neo.rng() < itemStats.bleedChance) applyBleed(enemy, 1, 5);
+      rollAndApplyStatus(enemy, 'bleed', slashBleedChance, 1, 5, applyBleed);
+      rollAndApplyStatus(enemy, 'bleed', itemStats.bleedChance, 1, 5, applyBleed);
     });
     forEachDestructibleNearPlayer(meleeRange + 32, prop => {
       if (prop.broken || prop.hidden) return;
@@ -1004,7 +1000,7 @@
     Neo.player.storedPotions = stored - 1;
     const itemStats = Neo.getItemStats?.() || {};
     const doubled = Neo.clamp(Number(itemStats.potionDoubleChance || 0), 0, 1) > 0 && Neo.rng() < Neo.clamp(Number(itemStats.potionDoubleChance || 0), 0, 1);
-    const heal = Neo.getPotionHealAmount() * (doubled ? 2 : 1);
+    const heal = Neo.getPotionHealAmount() * Math.max(1, Number(itemStats.storedPotionHealingMultiplier || 1)) * (doubled ? 2 : 1);
     const gained = Neo.applyPlayerHealing(heal);
     if (gained > 0) Neo.spawnHealPopup(Neo.player.x + Neo.rand(-10, 10), Neo.player.y - 20, gained);
     if (doubled) Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 34, life: 0.7, text: 'DOUBLE POTION', c: '#9af7d8' });
@@ -1382,7 +1378,7 @@
       const diff = angleDifferenceAbs(targetAngle, angle);
       if (diff > arc) return;
       hitEnemy(enemy, damage, angle, knockback, '#ff6090');
-      if (Neo.rng() < bleedChance) applyBleed(enemy, charge >= 0.99 ? 2 : 1, 5);
+      rollAndApplyStatus(enemy, 'bleed', bleedChance, charge >= 0.99 ? 2 : 1, 5, applyBleed);
     });
     forEachDestructibleNearPlayer(range + 8, prop => {
       if (prop.broken || prop.hidden) return;
@@ -2900,6 +2896,31 @@
     Neo.player.thornDrainRate = Math.min(enemyMax * 0.04, Number(Neo.player.thornDrainRate || 0) + bite * 0.5);
   }
 
+  function rollProcEffect(chance, baseMultiplier = 1) {
+    const rolled = Neo.applyProcRollback?.(chance, baseMultiplier) || { procChance: Number(chance || 0), effectMultiplier: Number(baseMultiplier || 1) };
+    return {
+      chance: Neo.clamp(Number(rolled.procChance || 0), 0, 0.999),
+      multiplier: Math.max(1, Number(rolled.effectMultiplier || 1)),
+    };
+  }
+
+  function applyStatusPower(entity, key, multiplier) {
+    if (!(multiplier > 1)) return;
+    const state = Neo.getStatusState?.(entity, key);
+    if (!state || Number(state.stacks || 0) <= 0) return;
+    state.damageMultiplier = Math.max(Number(state.damageMultiplier || 1), multiplier);
+  }
+
+  function rollAndApplyStatus(enemy, key, chance, stacks, duration, applyFn, options = {}) {
+    if (!(chance > 0)) return false;
+    const rolled = rollProcEffect(chance, options.baseMultiplier || 1);
+    if (Neo.nextRandom('encounter') >= rolled.chance) return false;
+    const scaledDuration = Number(duration || 0) * (options.durationScales === false ? 1 : rolled.multiplier);
+    applyFn(enemy, stacks, scaledDuration);
+    applyStatusPower(enemy, key, rolled.multiplier);
+    return true;
+  }
+
   function hitEnemy(enemy, damage, angle, knockback, color, options = {}) {
     if ((enemy?.inv || 0) > 0) return;
     // Befriended rivals (healed by the player) cannot be hurt at all.
@@ -2921,6 +2942,12 @@
     // nearby foes (see updateEnemyStatuses), so electric builds chain through packs.
     const copperPennyStacks = options.lightning ? (Neo.getItemCount?.('copper_penny') || 0) : 0;
     if (copperPennyStacks > 0) dealt = Math.max(1, Math.round(dealt * (1 + copperPennyStacks * 0.2)));
+    if (Number(enemy.graveZoneVulnerableUntil || 0) > Number(Neo.gameElapsedTime || 0)) {
+      dealt = Math.max(1, Math.round(dealt * Math.max(1, Number(enemy.graveZoneDamageTakenMultiplier || 1))));
+    }
+    if (Number(stats.coldDamageTakenMultiplier || 1) > 1 && Neo.getStatusStacks?.(enemy, 'slow') > 0) {
+      dealt = Math.max(1, Math.round(dealt * Number(stats.coldDamageTakenMultiplier || 1)));
+    }
     if (sandbox) dealt = Math.max(1, Math.round(dealt * sandbox.playerDamageMultiplier));
     // Sparkle Charm marks enemies so every hit against them is a guaranteed crit.
     const sparkled = Number(enemy.critSparkle || 0) > 0;
@@ -2983,10 +3010,13 @@
     // Multi-beam callers (Thorn's fan) roll drain per beam themselves; skip the
     // shared roll so the beam that also lands the dedup'd hit isn't counted twice.
     if (!options.skipDrainRoll) rollToothOfThornDrain(enemy, stats, Number(options.drainChanceBonus || 0), options.melee === true);
-    if (stats.confuseRayStunChance > 0 && Neo.nextRandom('encounter') < stats.confuseRayStunChance) {
-      enemy.stun = Math.max(Number(enemy.stun || 0), 0.55);
-      Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 18, life: 0.5, text: 'STUN', c: '#ffe66d' });
-      Neo.ringBurst(enemy.x, enemy.y, enemy.r + 12, '#ffe66d', 0.28);
+    if (stats.confuseRayStunChance > 0) {
+      const rolled = rollProcEffect(stats.confuseRayStunChance);
+      if (Neo.nextRandom('encounter') < rolled.chance) {
+        enemy.stun = Math.max(Number(enemy.stun || 0), 0.55 * rolled.multiplier);
+        Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 18, life: 0.5, text: 'STUN', c: '#ffe66d' });
+        Neo.ringBurst(enemy.x, enemy.y, enemy.r + 12, '#ffe66d', 0.28);
+      }
     }
     // Confuse Ray can also make the enemy think the player turned invisible: it
     // enters the shared lost-sight state (? mark + wander, no attacks) for a beat.
@@ -2998,24 +3028,26 @@
     }
     // Snake Knife poisons on ANY hit (melee or ranged), so it lives on the shared
     // hit path rather than inside individual melee moves.
-    if (stats.snakeKnifePoisonChance > 0 && Neo.nextRandom('encounter') < stats.snakeKnifePoisonChance) {
-      applyPoison(enemy, 1, 4);
-    }
+    rollAndApplyStatus(enemy, 'poison', stats.snakeKnifePoisonChance, 1, 4, applyPoison);
     // Weapon Fatigue chills on ANY hit too: a slow stack, plus a smaller chance to
     // briefly freeze (hard stun) the target solid.
-    if (stats.weaponFatigueChance > 0 && Neo.nextRandom('encounter') < stats.weaponFatigueChance) {
-      Neo.applyStatus(enemy, 'slow', 1, 4);
+    rollAndApplyStatus(enemy, 'slow', stats.weaponFatigueChance, 1, 4, (target, stacks, duration) => Neo.applyStatus(target, 'slow', stacks, duration));
+    if (stats.weaponFatigueFreezeChance > 0) {
+      const rolled = rollProcEffect(stats.weaponFatigueFreezeChance);
+      if (Neo.nextRandom('encounter') < rolled.chance) {
+        enemy.stun = Math.max(Number(enemy.stun || 0), 0.6 * rolled.multiplier);
+        Neo.applyStatus(enemy, 'slow', 1, 4 * rolled.multiplier);
+        Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 18, life: 0.5, text: 'FROZEN', c: '#9fe8ff' });
+        Neo.ringBurst(enemy.x, enemy.y, enemy.r + 12, '#9fe8ff', 0.3);
+      }
     }
-    if (stats.weaponFatigueFreezeChance > 0 && Neo.nextRandom('encounter') < stats.weaponFatigueFreezeChance) {
-      enemy.stun = Math.max(Number(enemy.stun || 0), 0.6);
-      Neo.applyStatus(enemy, 'slow', 1, 4);
-      Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 18, life: 0.5, text: 'FROZEN', c: '#9fe8ff' });
-      Neo.ringBurst(enemy.x, enemy.y, enemy.r + 12, '#9fe8ff', 0.3);
-    }
-    if (stats.overstimulateStunChance > 0 && (Neo.getActiveStatusCount?.(enemy) || 0) >= 2 && Neo.nextRandom('encounter') < stats.overstimulateStunChance) {
-      enemy.stun = Math.max(Number(enemy.stun || 0), 1.4);
-      Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 18, life: 0.5, text: 'STIMULATED', c: '#ffd27d' });
-      Neo.ringBurst(enemy.x, enemy.y, enemy.r + 12, '#ffd27d', 0.28);
+    if (stats.overstimulateStunChance > 0 && (Neo.getActiveStatusCount?.(enemy) || 0) >= 2) {
+      const rolled = rollProcEffect(stats.overstimulateStunChance);
+      if (Neo.nextRandom('encounter') < rolled.chance) {
+        enemy.stun = Math.max(Number(enemy.stun || 0), 1.4 * rolled.multiplier);
+        Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 18, life: 0.5, text: 'STIMULATED', c: '#ffd27d' });
+        Neo.ringBurst(enemy.x, enemy.y, enemy.r + 12, '#ffd27d', 0.28);
+      }
     }
     if (options.lightning && Neo.getStatusStacks?.(enemy, 'slow') > 0 && Neo.nextRandom('encounter') < 0.35) {
       enemy.stun = Math.max(Number(enemy.stun || 0), 0.62);
@@ -3028,12 +3060,8 @@
       applyStatic(enemy, 1, 4);
     }
     window.achievementEvents?.emit('damage:dealt', { amount: dealt });
-    if (options.bleedChance > 0 && Neo.nextRandom('encounter') < options.bleedChance) {
-      applyBleed(enemy, Number(options.bleedStacks || 1), Number(options.bleedDuration || 4));
-    }
-    if (options.fireChance > 0 && Neo.nextRandom('encounter') < options.fireChance) {
-      applyFire(enemy, Number(options.fireStacks || 1), Number(options.fireDuration || 2.8));
-    }
+    rollAndApplyStatus(enemy, 'bleed', options.bleedChance, Number(options.bleedStacks || 1), Number(options.bleedDuration || 4), applyBleed);
+    rollAndApplyStatus(enemy, 'fire', options.fireChance, Number(options.fireStacks || 1), Number(options.fireDuration || 2.8), applyFire);
     if (options.chainLightningRadius > 0) {
       const chained = Neo.findNearestEnemy(enemy.x, enemy.y, options.chainLightningRadius, new Set([enemy]));
       if (chained) {
@@ -3172,9 +3200,20 @@
   function applyEliteProcsToPlayer(enemy) {
     const procs = enemy?.eliteProcs;
     if (!procs || !Neo.player) return;
-    if (procs.fire > 0 && Neo.nextRandom('encounter') < procs.fire) applyFire(Neo.player, 1, 2.8, enemy.type);
-    if (procs.poison > 0 && Neo.nextRandom('encounter') < procs.poison) applyPoison(Neo.player, 1, 4.2, enemy.type);
-    if (procs.cold > 0 && Neo.nextRandom('encounter') < procs.cold) Neo.applyStatus(Neo.player, 'slow', 1, 4, enemy.type);
+    const applyPlayerStatusProc = (key, chance, stacks, duration, applyFn) => {
+      if (!(chance > 0)) return;
+      const rawChance = Neo.getPlayerNegativeStatusProcChance?.(chance) ?? Number(chance || 0);
+      const rolled = Neo.applyProcRollback?.(rawChance, 1) || { procChance: rawChance, effectMultiplier: 1 };
+      const procChance = Neo.clamp(Number(rolled.procChance || 0), 0, 0.999);
+      const effectMultiplier = Math.max(1, Number(rolled.effectMultiplier || 1));
+      if (Neo.nextRandom('encounter') >= procChance) return;
+      applyFn(Neo.player, stacks, duration * effectMultiplier, enemy.type);
+      const state = Neo.getStatusState?.(Neo.player, key);
+      if (state && effectMultiplier > 1) state.damageMultiplier = Math.max(Number(state.damageMultiplier || 1), effectMultiplier);
+    };
+    applyPlayerStatusProc('fire', procs.fire, 1, 2.8, applyFire);
+    applyPlayerStatusProc('poison', procs.poison, 1, 4.2, applyPoison);
+    applyPlayerStatusProc('slow', procs.cold, 1, 4, (target, stacks, duration, source) => Neo.applyStatus(target, 'slow', stacks, duration, source));
   }
 
   function applyDarkDrain(entity, stacks, duration, source = null) {
@@ -3327,7 +3366,8 @@
     if (state.tick <= 0) {
       state.tick = config.interval;
       const stats = config.stats || Neo.getItemStats?.() || {};
-      let damage = scaleRawDamageAgainstEnemy(enemy, Math.max(1, Math.round(config.damage(state.stacks, stats))));
+      const statusDamageMultiplier = Math.max(1, Number(state.damageMultiplier || 1));
+      let damage = scaleRawDamageAgainstEnemy(enemy, Math.max(1, Math.round(config.damage(state.stacks, stats) * statusDamageMultiplier)));
       if (Neo.isChallengeActive?.('cursed_blood')) damage = Math.max(1, Math.round(damage * 1.35));
       const bleedCrit = key === 'bleed' && Number(stats.bleedCritChance || 0) > 0 && Neo.nextRandom('encounter') < Number(stats.bleedCritChance || 0);
       if (bleedCrit) damage = Math.max(1, Math.round(damage * Number(stats.critMultiplier || 1.6)));
@@ -3774,8 +3814,9 @@
         x: graveX,
         y: graveY,
         r: graveRadius,
-        ttl: 2,
+        ttl: 2.5,
         pushPower: 340 * moveSpeed,
+        damageTakenMultiplier: itemStats.graveZoneDamageTakenMultiplier || 1,
         moveSpeed,
         source: 'grave_zone',
       });
@@ -4488,6 +4529,14 @@
     }
   }
 
+  function applyVeggysPendantPickup(collectCount) {
+    for (let index = 0; index < collectCount; index += 1) {
+      const oldMax = Number(Neo.player.maxHp || 0);
+      Neo.player.maxHp = Math.max(1, Math.round(oldMax * 1.04));
+      Neo.player.hp = Math.min(Neo.player.maxHp, Math.round(Number(Neo.player.hp || 0) + (Neo.player.maxHp - oldMax)));
+    }
+  }
+
   // Foley's Irish NewYork Charm (GREEN, lies in its tooltip): really just +15 max
   // HP per stack (granted + healed on pickup, like titan_heart) and +1 on-hit
   // damage per stack (applied in getPlayerBaseDamage's flat on-hit bonus).
@@ -4541,6 +4590,7 @@
       for (let index = 0; index < collectCount; index += 1) Neo.openExtraBatterySelection();
     },
     titan_heart: ({ collectCount }) => applyTitanHeartPickup(collectCount),
+    veggys_pendant: ({ collectCount }) => applyVeggysPendantPickup(collectCount),
     foleys_irish_newyork_charm: ({ collectCount }) => applyFoleyCharmPickup(collectCount),
   };
 

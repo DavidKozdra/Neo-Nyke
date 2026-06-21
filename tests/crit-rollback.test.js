@@ -19,6 +19,8 @@ describe('Crit roll-back system', () => {
   const mathSource = fs.readFileSync(path.join(__dirname, '../js/core/math-utils.js'), 'utf8');
   // eslint-disable-next-line no-eval
   const applyCritRollback = eval(`(${extractFunction(mathSource, 'applyCritRollback')})`);
+  // eslint-disable-next-line no-eval
+  const applyProcRollback = eval(`(${extractFunction(mathSource, 'applyProcRollback')})`);
 
   test('leaves sub-100% chance and multiplier untouched', () => {
     const { critChance, critMultiplier } = applyCritRollback(0.6, 1.6);
@@ -43,6 +45,18 @@ describe('Crit roll-back system', () => {
     const { critChance, critMultiplier } = applyCritRollback(1000, 1.6);
     expect(Number.isFinite(critChance)).toBe(true);
     expect(Number.isFinite(critMultiplier)).toBe(true);
+  });
+
+  test('status proc rollback uses 100% -> 80% and increases effect power', () => {
+    const { procChance, effectMultiplier } = applyProcRollback(1.0, 1);
+    expect(procChance).toBeCloseTo(0.8, 5);
+    expect(effectMultiplier).toBeCloseTo(1.5, 5);
+  });
+
+  test('status proc rollback can roll over multiple times', () => {
+    const { procChance, effectMultiplier } = applyProcRollback(1.3, 2);
+    expect(procChance).toBeCloseTo(0.9, 5);
+    expect(effectMultiplier).toBeCloseTo(2 * 1.5 * 1.5, 5);
   });
 });
 

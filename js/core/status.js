@@ -84,7 +84,7 @@ export function getBrittleDefenseMultiplier(entity) {
 
 export function getPlayerNegativeStatusProcChance(chance) {
   const severity = Number(Neo.getItemStats?.()?.negativeStatusMultiplier || 1);
-  return Neo.clamp(Number(chance || 0) * severity, 0, 1);
+  return Math.max(0, Number(chance || 0) * severity);
 }
 
 export function clearStatus(entity, key) {

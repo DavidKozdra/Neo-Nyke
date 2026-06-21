@@ -251,6 +251,6 @@ describe('loop-exclusive Blue relics', () => {
     );
 
     expect(getProcChance(0.5)).toBeCloseTo(0.6);
-    expect(getProcChance(1)).toBe(1);
+    expect(getProcChance(1)).toBeCloseTo(1.2);
   });
 });

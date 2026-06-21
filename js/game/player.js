@@ -795,14 +795,17 @@ export function getItemStats() {
       weaponFatigueFreezeChance: weaponFatigue * 0.02,
       genericHealthItemHealRatio: genericHealthItem * 0.05,
       snakeKnifePoisonChance: snakeKnife * 0.02,
-      confuseRayStunChance: Neo.clamp(confuseRay * 0.15, 0, 0.75),
+      confuseRayStunChance: confuseRay * 0.15,
       // Flat 5% per hit (not per stack) to make the enemy think the player vanished.
       confuseRayBlindChance: confuseRay > 0 ? 0.05 : 0,
       overclockedWatchChance: overclockedWatch * 0.2,
       // Each stack also trims the enemies' time-based aggression buff by 2% (capped 30%).
       overclockedWatchAggressionCut: Neo.clamp(overclockedWatch * 0.02, 0, 0.3),
       overstimulateStunChance: overstimulate * 0.2,
-      graveZoneChance: graveZone * 0.2,
+      graveZoneStacks: graveZone,
+      graveZoneChance: graveZone >= 4 ? 0.8 : graveZone * 0.25,
+      graveZoneDamageTakenMultiplier: 1 + graveZone * 0.08,
+      coldDamageTakenMultiplier: graveZone >= 4 ? 1.5 : 1,
       homingMissileChance: homingMissile * 0.15,
       // Procy Pickle: chance to spread an enemy's statuses to nearby foes when you
       // crit or a status-applying item procs (+5% per stack, capped 60%), and the
@@ -849,9 +852,11 @@ export function getItemStats() {
       projectilePierceBonus: tagCounts.projectile >= 9 ? 2 : tagCounts.projectile >= 4 ? 1 : 0,
       // 15% per stack, plus a quadratic bonus of 2% × stacks per stack
       // (so n stacks = 0.15n + 0.02n²): homing ramps up the more you invest.
-      projectileHomingStrength: enemyMagnet * 0.15 + enemyMagnet * enemyMagnet * 0.02,
-      projectileSpeedMultiplier: 1 + mooggyZoomies * 0.2,
+      projectileHomingStrength: enemyMagnet * 0.15 + enemyMagnet * enemyMagnet * 0.02 + mooggyZoomies * 0.02,
+      projectileSpeedMultiplier: 1 + mooggyZoomies * 0.12,
+      projectileLifeMultiplier: 1 + mooggyZoomies * 0.10,
       healingMultiplier: 1 + drinkMaster * 0.2,
+      storedPotionHealingMultiplier: 1 + getItemCount('mateos_bag') * 0.10,
       overhealBarrierChance,
       overhealBarrierRatio: overhealUnlocked ? 0.35 : 0,
       overhealBarrierCapRatio: overhealUnlocked ? (healingTagStacks >= 6 ? 0.28 : 0.16) : 0,
