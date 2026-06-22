@@ -4,23 +4,33 @@ export function bindInput() {
       if (button === 0) Neo.mouse.down = false;
       if (button === 2) Neo.mouse.right = false;
     };
-    const clearMouseButtons = () => {
-      Neo.mouse.down = false;
-      Neo.mouse.right = false;
-      Neo.mouse.downQueued = false;
-      Neo.mouse.rightQueued = false;
-      Neo._meleeWasHeld = false;
-      Neo._laserWasHeld = false;
-    };
+    const clearMouseButtons = () => clearGameplayInput();
     const syncMouseButtons = event => {
       if (!event || typeof event.buttons !== 'number') return;
       if ((event.buttons & 1) === 0) Neo.mouse.down = false;
       if ((event.buttons & 2) === 0) Neo.mouse.right = false;
     };
+    const shouldSuppressNativeGameplayMouseMenu = () => (
+      Neo.gameState === 'play'
+      || !!Neo.mouse.down
+      || !!Neo.mouse.right
+      || !!Neo.mouse.downQueued
+      || !!Neo.mouse.rightQueued
+    );
+    const preventNativeGameplayMouseMenu = event => {
+      if (shouldSuppressNativeGameplayMouseMenu()) event.preventDefault();
+    };
     Neo.canvas.addEventListener('contextmenu', event => event.preventDefault());
     Neo.canvas.addEventListener('auxclick', event => {
       if (event.button === 1 || event.button === 2) event.preventDefault();
     });
+    document.addEventListener('contextmenu', preventNativeGameplayMouseMenu, true);
+    document.addEventListener('auxclick', event => {
+      if ((event.button === 1 || event.button === 2) && shouldSuppressNativeGameplayMouseMenu()) event.preventDefault();
+    }, true);
+    document.addEventListener('mousedown', event => {
+      if (event.button === 2 && shouldSuppressNativeGameplayMouseMenu()) event.preventDefault();
+    }, true);
     Neo.canvas.addEventListener('mousemove', event => {
       syncMouseButtons(event);
       const rect = Neo.canvas.getBoundingClientRect();
@@ -423,6 +433,9 @@ export function clearGameplayInput() {
     Neo.mouse.right = false;
     Neo.mouse.downQueued = false;
     Neo.mouse.rightQueued = false;
+    Neo.smashHeld = false;
+    Neo._meleeWasHeld = false;
+    Neo._laserWasHeld = false;
   }
 
 export function bindPanelInput() {

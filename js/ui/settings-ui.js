@@ -86,6 +86,8 @@
   const HUD_PREVIEW_SCALE_FACTORS = {
     stats: 2,
     actions: 1.5,
+    // Boss bar renders at 2× base in drawBossHealthBars() (BOSS_BAR_BASE_SCALE).
+    bossbar: 2,
   };
 
   function defaultHudElements() {
@@ -969,8 +971,8 @@
       box.style.top = '0px';
       box.style.left = '50%';
     } else if (key === 'bossbar') {
-      // Mirror the live HUD: top-center, just below the Timer/Floor row (startY 50).
-      box.style.top = `${50 * ratio.y}px`;
+      // Mirror the live HUD: top-center, lowered below the Timer/Floor pill (startY ≈96).
+      box.style.top = `${96 * ratio.y}px`;
       box.style.left = '50%';
     } else if (key === 'objectives') {
       // Mirror the live HUD: objectives sit to the LEFT of the top-right minimap

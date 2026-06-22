@@ -741,26 +741,48 @@
     const barOffsetX = Number.isFinite(Number(barEntry?.x)) ? Number(barEntry.x) : 0;
     const barOffsetY = Number.isFinite(Number(barEntry?.y)) ? Number(barEntry.y) : 0;
 
+    // The canvas uses a cover-style layout and is often cropped, so the buffer is
+    // wider/taller than what's on screen. Anchor to the VISIBLE viewport (same math
+    // as drawMinimap) — anchoring to the raw buffer center floats the bar up into
+    // the cropped-off top and centers it in buffer space (reads too high + small).
+    const canvasRect = Neo.canvas.getBoundingClientRect();
+    const scaleX = canvasRect.width > 0 ? canvasRect.width / Neo.canvas.width : 1;
+    const scaleY = canvasRect.height > 0 ? canvasRect.height / Neo.canvas.height : 1;
+    const visibleLeft = Neo.clamp(-canvasRect.left / scaleX, 0, Neo.canvas.width);
+    const visibleTop = Neo.clamp(-canvasRect.top / scaleY, 0, Neo.canvas.height);
+    const visibleRight = Neo.clamp((window.innerWidth - canvasRect.left) / scaleX, 0, Neo.canvas.width);
+    const visibleWidth = Math.max(1, visibleRight - visibleLeft);
+
+    // The boss bar reads as a major "this is a fight" element, so its default size
+    // is doubled relative to the base. The HUD Layout scale slider multiplies on top
+    // of this (Auto/100% = 2×, 200% = 4×); the width cap still prevents overflow.
+    const BOSS_BAR_BASE_SCALE = 2;
+    const scale = hudScale * BOSS_BAR_BASE_SCALE;
+
     const count = bosses.length;
     const crowd = Math.min(count - 1, 5);
-    // Cap the scaled width to the canvas so a large bar / wide scale can never
-    // overflow past the edges; the edge inset keeps a small margin on each side.
-    const edgeInset = Neo.canvas.width <= 700 ? 12 : 24;
+    // Cap the scaled width to the visible viewport so a large bar / wide scale can
+    // never overflow past the on-screen edges; edgeInset keeps a small margin.
+    const edgeInset = visibleWidth <= 700 ? 12 : 24;
     const baseWidth = Math.max(210, Math.round(440 - crowd * 44));
-    const maxWidth = Math.max(120, Neo.canvas.width - edgeInset * 2);
-    const width = Math.min(maxWidth, Math.round(baseWidth * hudScale));
-    const height = Math.max(9, Math.round((16 - crowd * 1.2) * hudScale));
-    const gap = height + Math.max(12, Math.round((18 - crowd * 1.3) * hudScale));
-    const labelFontSize = Math.max(8, Math.round((12 - crowd * 0.65) * hudScale));
+    const maxWidth = Math.max(120, visibleWidth - edgeInset * 2);
+    const width = Math.min(maxWidth, Math.round(baseWidth * scale));
+    const height = Math.max(9, Math.round((16 - crowd * 1.2) * scale));
+    const gap = height + Math.max(12, Math.round((18 - crowd * 1.3) * scale));
+    const labelFontSize = Math.max(8, Math.round((12 - crowd * 0.65) * scale));
     const radius = height / 2;
-    // Top-center anchor (genre convention; clears the top-left coins widget),
-    // nudged by the player's HUD Layout offset. Stacks downward for multi-boss.
+    // Top-center anchor within the visible viewport (genre convention; clears the
+    // top-left coins widget), nudged by the player's HUD Layout offset. The Y inset
+    // sits below the top-center Timer/Floor pill (a ~44px DOM overlay pinned to the
+    // top edge) with extra clearance for the now-larger bar; screen px → buffer px.
+    // Stacks downward for multi-boss.
+    const topInset = 96 / scaleY;
     const startX = Math.round(Neo.clamp(
-      (Neo.canvas.width - width) / 2 + barOffsetX,
-      edgeInset,
-      Neo.canvas.width - width - edgeInset,
+      visibleLeft + (visibleWidth - width) / 2 + barOffsetX / scaleX,
+      visibleLeft + edgeInset,
+      visibleRight - width - edgeInset,
     ));
-    const startY = Math.round(50 + barOffsetY);
+    const startY = Math.round(visibleTop + topInset + barOffsetY / scaleY);
     const labelX = startX + width / 2;
 
     const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());

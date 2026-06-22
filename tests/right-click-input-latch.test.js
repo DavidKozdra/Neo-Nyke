@@ -7,6 +7,7 @@ describe('right-click input latch safety', () => {
 
   test('clears mouse-held state when browser button state or focus is lost', () => {
     expect(panelsSource).toContain("if ((event.buttons & 2) === 0) Neo.mouse.right = false");
+    expect(panelsSource).toContain('const clearMouseButtons = () => clearGameplayInput()');
     expect(panelsSource).toContain('Neo._laserWasHeld = false');
     expect(panelsSource).toContain("window.addEventListener('mousemove', syncMouseButtons");
     expect(panelsSource).toContain("window.addEventListener('pointercancel', clearMouseButtons)");
@@ -18,6 +19,10 @@ describe('right-click input latch safety', () => {
     expect(panelsSource).toContain("Neo.canvas.addEventListener('contextmenu', event => event.preventDefault())");
     expect(panelsSource).toContain("Neo.canvas.addEventListener('auxclick'");
     expect(panelsSource).toContain("if (event.button === 0 || event.button === 2) event.preventDefault()");
+    expect(panelsSource).toContain("document.addEventListener('contextmenu', preventNativeGameplayMouseMenu, true)");
+    expect(panelsSource).toContain("document.addEventListener('auxclick'");
+    expect(panelsSource).toContain("if ((event.button === 1 || event.button === 2) && shouldSuppressNativeGameplayMouseMenu()) event.preventDefault()");
+    expect(panelsSource).toContain("if (event.button === 2 && shouldSuppressNativeGameplayMouseMenu()) event.preventDefault()");
   });
 
   test('ends sustained beam recoil when the laser input is released', () => {
