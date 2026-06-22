@@ -427,7 +427,7 @@ export const ITEM_DEFS = {
       key: 'tooth_of_thorn',
       name: 'Tooth of Thorn',
       shortName: 'Drain Ramp',
-      description: 'All characters: drain chance 4.5% per stack (8% on melee), plus an extra 2.5% x stacks per stack. Successful procs steal 1 HP +1% of the foe\'s max HP, then keep healing a little each second for 2.5s. Higher-level foes resist drain: +15% per 5 levels from level 5.',
+      description: 'Hits have a chance to drain life: steal a chunk of HP, then keep healing for a few seconds. Each stack drains harder. Tough, high-level foes resist it.',
       rarity: 'knight',
       color: '#ffd7e2',
       accent: '#ff6e8b',
@@ -1273,6 +1273,24 @@ export function getRarityDisplayName(rarity) {
   const key = String(rarity || '').toLowerCase();
   return RARITY_DISPLAY_NAMES[key] || key;
 }
+// Single-glyph icon per rarity tier — used on the HUD rarity-count badges and
+// the item toast fallback icon so a tier always reads the same symbol.
+export const RARITY_GLYPHS = {
+    knight: '⚔',  // ⚔ crossed swords
+    white: '⚔',
+    wizard: '✳',  // ✳ sparkle
+    purple: '✳',
+    blue: '⚒',    // ⚒ hammer & pick (Artificer)
+    artificer: '⚒',
+    green: '☘',   // ☘ shamrock (Knave)
+    god: '✦',     // ✦ star (God)
+    red: '✦',
+    princess: '♥',// ♥ heart
+  };
+export function getRarityGlyph(rarity) {
+  const key = String(rarity || '').toLowerCase();
+  return RARITY_GLYPHS[key] || '';
+}
 export const SHOP_RARITY_PRICE_MULTIPLIERS = {
     knight: 1,
     white: 1,
@@ -1999,6 +2017,8 @@ export const MOVE_BASE_STATS = {
   Neo.RARITY_NAME_COLORS = RARITY_NAME_COLORS;
   Neo.RARITY_DISPLAY_NAMES = RARITY_DISPLAY_NAMES;
   Neo.getRarityDisplayName = getRarityDisplayName;
+  Neo.RARITY_GLYPHS = RARITY_GLYPHS;
+  Neo.getRarityGlyph = getRarityGlyph;
   Neo.SHOP_RARITY_PRICE_MULTIPLIERS = SHOP_RARITY_PRICE_MULTIPLIERS;
   Neo.SHOP_FEATURED_GOD_PRICE_PREMIUM = SHOP_FEATURED_GOD_PRICE_PREMIUM;
   Neo.SHOP_FEATURED_GOD_CHANCE = SHOP_FEATURED_GOD_CHANCE;

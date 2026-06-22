@@ -550,12 +550,7 @@
     if (isCompetitive && Neo.ui.competitiveSeedValue) Neo.ui.competitiveSeedValue.textContent = Neo.baseSeedStr || '';
     if (Neo.ui.itemRarityCounts) {
       const rarityCounts = Neo.getItemRarityCounts(Neo.player);
-      const white = Neo.ui.itemRarityCounts.querySelector('.rarity-count--white');
-      const purple = Neo.ui.itemRarityCounts.querySelector('.rarity-count--purple');
-      const red = Neo.ui.itemRarityCounts.querySelector('.rarity-count--red');
-      if (white) white.textContent = String(rarityCounts.white);
-      if (purple) purple.textContent = String(rarityCounts.purple);
-      if (red) red.textContent = String(rarityCounts.red);
+      Neo.applyRarityCountBadges?.(Neo.ui.itemRarityCounts, rarityCounts);
     }
     if (Neo.ui.panelItemAlert) {
       const pendingItems = Neo.getPendingUiItems?.() || [];

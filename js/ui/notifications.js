@@ -47,8 +47,7 @@ export function drawItemToastIcon(canvas, item) {
     ctx2d.shadowBlur = 0;
     return;
   }
-  const symbolByRarity = { god: '✦', red: '✦', purple: '◆', wizard: '✹', knight: '⚔', white: '●', green: '☘' };
-  const symbol = symbolByRarity[item?.rarity] || '●';
+  const symbol = Neo.getRarityGlyph?.(item?.rarity) || '●';
   const cx = canvas.width / 2;
   const cy = canvas.height / 2;
   const r = canvas.width * 0.38;

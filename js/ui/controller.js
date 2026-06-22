@@ -59,9 +59,7 @@ export function createUIController(view) {
       character: null,
       hpWidth: null,
       hpText: null,
-      itemRarityWhite: null,
-      itemRarityPurple: null,
-      itemRarityRed: null,
+      itemRaritySig: null,
       cdM: null,
       cdL: null,
       cdS: null,
@@ -2916,23 +2914,13 @@ export function createUIController(view) {
           else if (view.difficultyDisplay) setTextIfChanged(view.difficultyDisplay, difficultyName);
         }
         if (view.itemRarityCounts && payload.itemRarityCounts) {
-          const white = view.itemRarityCounts.querySelector('.rarity-count--white');
-          const purple = view.itemRarityCounts.querySelector('.rarity-count--purple');
-          const red = view.itemRarityCounts.querySelector('.rarity-count--red');
-          const whiteValue = String(payload.itemRarityCounts.white || 0);
-          const purpleValue = String(payload.itemRarityCounts.purple || 0);
-          const redValue = String(payload.itemRarityCounts.red || 0);
-          if (hudRenderCache.itemRarityWhite !== whiteValue) {
-            hudRenderCache.itemRarityWhite = whiteValue;
-            setTextIfChanged(white, whiteValue);
-          }
-          if (hudRenderCache.itemRarityPurple !== purpleValue) {
-            hudRenderCache.itemRarityPurple = purpleValue;
-            setTextIfChanged(purple, purpleValue);
-          }
-          if (hudRenderCache.itemRarityRed !== redValue) {
-            hudRenderCache.itemRarityRed = redValue;
-            setTextIfChanged(red, redValue);
+          const c = payload.itemRarityCounts;
+          // Single signature gate over all five tiers — cheaper than per-badge
+          // diffing and keeps the conditional blue/green reveal in one place.
+          const raritySig = `${c.white || 0}|${c.purple || 0}|${c.red || 0}|${c.blue || 0}|${c.green || 0}`;
+          if (hudRenderCache.itemRaritySig !== raritySig) {
+            hudRenderCache.itemRaritySig = raritySig;
+            Neo.applyRarityCountBadges?.(view.itemRarityCounts, c);
           }
         }
         if (hudRenderCache.character !== payload.character) {

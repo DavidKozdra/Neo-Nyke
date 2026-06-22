@@ -1,4 +1,24 @@
 // panels.js — Input binding and UI panel rendering.
+function isEditableMouseTarget(event) {
+    const target = event?.target;
+    if (!target || typeof target.closest !== 'function') return false;
+    return !!target.closest('input[type="text"], input[type="search"], input[type="url"], input[type="email"], input[type="number"], textarea, [contenteditable="true"]');
+}
+
+function shouldSuppressNativeSecondaryClick(event) {
+    return !isEditableMouseTarget(event);
+}
+
+function preventNativeContextMenu(event) {
+    if (shouldSuppressNativeSecondaryClick(event)) event.preventDefault();
+}
+
+if (!window.__neoNativeContextMenuBlocked) {
+    window.__neoNativeContextMenuBlocked = true;
+    document.addEventListener('contextmenu', preventNativeContextMenu, true);
+    window.addEventListener('contextmenu', preventNativeContextMenu, true);
+}
+
 export function bindInput() {
     const releaseMouseButton = button => {
       if (button === 0) Neo.mouse.down = false;
@@ -10,26 +30,15 @@ export function bindInput() {
       if ((event.buttons & 1) === 0) Neo.mouse.down = false;
       if ((event.buttons & 2) === 0) Neo.mouse.right = false;
     };
-    const shouldSuppressNativeGameplayMouseMenu = () => (
-      Neo.gameState === 'play'
-      || !!Neo.mouse.down
-      || !!Neo.mouse.right
-      || !!Neo.mouse.downQueued
-      || !!Neo.mouse.rightQueued
-    );
-    const preventNativeGameplayMouseMenu = event => {
-      if (shouldSuppressNativeGameplayMouseMenu()) event.preventDefault();
-    };
     Neo.canvas.addEventListener('contextmenu', event => event.preventDefault());
     Neo.canvas.addEventListener('auxclick', event => {
       if (event.button === 1 || event.button === 2) event.preventDefault();
     });
-    document.addEventListener('contextmenu', preventNativeGameplayMouseMenu, true);
     document.addEventListener('auxclick', event => {
-      if ((event.button === 1 || event.button === 2) && shouldSuppressNativeGameplayMouseMenu()) event.preventDefault();
+      if ((event.button === 1 || event.button === 2) && shouldSuppressNativeSecondaryClick(event)) event.preventDefault();
     }, true);
     document.addEventListener('mousedown', event => {
-      if (event.button === 2 && shouldSuppressNativeGameplayMouseMenu()) event.preventDefault();
+      if (event.button === 2 && shouldSuppressNativeSecondaryClick(event)) event.preventDefault();
     }, true);
     Neo.canvas.addEventListener('mousemove', event => {
       syncMouseButtons(event);

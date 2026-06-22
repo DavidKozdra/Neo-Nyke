@@ -197,9 +197,11 @@
       <span id="difficultyDisplay" class="difficulty-display"><canvas id="difficultyHudIcon" width="20" height="20" class="difficulty-hud-icon"></canvas><span id="difficultyLabel">MEDIUM</span></span>
       <span id="competitiveSeedDisplay" class="difficulty-display" style="display:none;color:#ffe566;">&#9733; SEED <b id="competitiveSeedValue"></b></span>
       <span id="itemRarityCounts" class="item-rarity-counts" aria-label="Relic counts by rarity">
-        <span class="rarity-count rarity-count--white" title="Knight relics">0</span>
-        <span class="rarity-count rarity-count--purple" title="Wizard relics">0</span>
-        <span class="rarity-count rarity-count--red" title="GOD relics">0</span>
+        <span class="rarity-count rarity-count--white" title="Knight relics — common"><span class="rarity-count__glyph" aria-hidden="true">⚔</span><span class="rarity-count__num">0</span></span>
+        <span class="rarity-count rarity-count--purple" title="Wizard relics — uncommon"><span class="rarity-count__glyph" aria-hidden="true">✳</span><span class="rarity-count__num">0</span></span>
+        <span class="rarity-count rarity-count--blue" title="Artificer relics — crafted" style="display:none"><span class="rarity-count__glyph" aria-hidden="true">⚒</span><span class="rarity-count__num">0</span></span>
+        <span class="rarity-count rarity-count--green" title="Knave relics — lying" style="display:none"><span class="rarity-count__glyph" aria-hidden="true">☘</span><span class="rarity-count__num">0</span></span>
+        <span class="rarity-count rarity-count--red" title="GOD relics — legendary"><span class="rarity-count__glyph" aria-hidden="true">✦</span><span class="rarity-count__num">0</span></span>
       </span>
     </div>
     <div id="challengeStatus" class="challenge-status hidden" aria-hidden="true">
@@ -2058,9 +2060,11 @@
           <span class="separator">•</span>
           <span class="difficulty-display"><span data-preview-field="difficulty">MEDIUM</span></span>
           <span class="item-rarity-counts">
-            <span class="rarity-count rarity-count--white" title="Knight relics" data-preview-field="rarityWhite">0</span>
-            <span class="rarity-count rarity-count--purple" title="Wizard relics" data-preview-field="rarityPurple">0</span>
-            <span class="rarity-count rarity-count--red" title="GOD relics" data-preview-field="rarityRed">0</span>
+            <span class="rarity-count rarity-count--white" title="Knight relics — common"><span class="rarity-count__glyph" aria-hidden="true">⚔</span><span class="rarity-count__num" data-preview-field="rarityWhite">0</span></span>
+            <span class="rarity-count rarity-count--purple" title="Wizard relics — uncommon"><span class="rarity-count__glyph" aria-hidden="true">✳</span><span class="rarity-count__num" data-preview-field="rarityPurple">0</span></span>
+            <span class="rarity-count rarity-count--blue" title="Artificer relics — crafted" style="display:none"><span class="rarity-count__glyph" aria-hidden="true">⚒</span><span class="rarity-count__num" data-preview-field="rarityBlue">0</span></span>
+            <span class="rarity-count rarity-count--green" title="Knave relics — lying" style="display:none"><span class="rarity-count__glyph" aria-hidden="true">☘</span><span class="rarity-count__num" data-preview-field="rarityGreen">0</span></span>
+            <span class="rarity-count rarity-count--red" title="GOD relics — legendary"><span class="rarity-count__glyph" aria-hidden="true">✦</span><span class="rarity-count__num" data-preview-field="rarityRed">0</span></span>
           </span>
         </div>
       </div>

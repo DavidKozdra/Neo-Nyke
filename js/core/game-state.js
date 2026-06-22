@@ -1987,17 +1987,39 @@ export function resumeGame() {
   }
 
   function getItemRarityCounts(playerState = Neo.player) {
-    const counts = { white: 0, purple: 0, red: 0 };
+    const counts = { white: 0, purple: 0, red: 0, blue: 0, green: 0 };
     Neo.ITEM_KEYS.forEach(key => {
       const count = Math.max(0, Number(playerState?.items?.[key] || 0));
       if (count <= 0) return;
       const rarity = String(Neo.itemRegistry.get(key)?.rarity || Neo.ITEM_DEFS[key]?.rarity || 'knight').toLowerCase();
       if (rarity === 'god' || rarity === 'red') counts.red += count;
       else if (rarity === 'wizard' || rarity === 'purple') counts.purple += count;
-      else if (rarity === 'blue') return;
+      else if (rarity === 'blue' || rarity === 'artificer') counts.blue += count;
+      else if (rarity === 'green') counts.green += count;
       else counts.white += count;
     });
     return counts;
+  }
+
+  // Fill a `.item-rarity-counts` container's badges from a counts object.
+  // White / purple / red always show (the core tiers). Blue and green are the
+  // rarer Artificer / Knave tiers, so their badges only appear once the player
+  // actually owns at least one of that rarity.
+  function applyRarityCountBadges(container, counts) {
+    if (!container || !counts) return;
+    const ALWAYS = ['white', 'purple', 'red'];
+    ['white', 'purple', 'red', 'blue', 'green'].forEach(rarity => {
+      const badge = container.querySelector(`.rarity-count--${rarity}`);
+      if (!badge) return;
+      const value = Math.max(0, Number(counts[rarity] || 0));
+      // Write into the count span so the leading glyph icon is preserved; fall
+      // back to the badge text for any markup without a __num child.
+      const numEl = badge.querySelector('.rarity-count__num') || badge;
+      numEl.textContent = String(value);
+      if (!ALWAYS.includes(rarity)) {
+        badge.style.display = value > 0 ? '' : 'none';
+      }
+    });
   }
 
   function captureRunMoveSnapshot(playerState = Neo.player) {
@@ -3525,6 +3547,7 @@ export function resumeGame() {
   Neo.speakKillerDeathQuote = speakKillerDeathQuote;
   Neo.captureRunItemSnapshot = captureRunItemSnapshot;
   Neo.getItemRarityCounts = getItemRarityCounts;
+  Neo.applyRarityCountBadges = applyRarityCountBadges;
   Neo.captureRunMoveSnapshot = captureRunMoveSnapshot;
   Neo.buildRunHistoryEntry = buildRunHistoryEntry;
   Neo.pushRunHistoryEntry = pushRunHistoryEntry;

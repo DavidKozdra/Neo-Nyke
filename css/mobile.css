@@ -1772,11 +1772,14 @@
   .item-rarity-counts { gap: 3px; }
 
   .rarity-count {
-    width: 16px;
-    height: 16px;
+    min-width: 15px;
+    height: 15px;
+    padding: 0 3px;
+    gap: 2px;
     border-width: 1px;
     font-size: calc(8px * var(--font-scale, 1));
   }
+  .rarity-count__glyph { font-size: calc(7px * var(--font-scale, 1)); }
 
   .challenge-status {
     min-width: 168px;
@@ -2204,7 +2207,9 @@
   .difficulty-hud-icon { width: 10px; height: 10px; }
   #competitiveSeedDisplay { display: none !important; }
   .item-rarity-counts { gap: 2px; }
-  .rarity-count { width: 14px; height: 14px; font-size: calc(7px * var(--font-scale, 1)); }
+  .rarity-count { min-width: 13px; height: 13px; padding: 0 2px; font-size: calc(7px * var(--font-scale, 1)); }
+  /* Tightest layout: drop the glyph; color + count still read the tier. */
+  .rarity-count__glyph { display: none; }
 
   #playerStats {
     top: calc(58px + env(safe-area-inset-top, 0px));

@@ -576,12 +576,14 @@ button, input, select, textarea {
 }
 
 .rarity-count {
-  width: 24px;
-  height: 24px;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 6px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 50%;
+  gap: 3px;
+  border-radius: 5px;
   font-size: calc(12px * var(--font-scale, 1));
   font-weight: 900;
   letter-spacing: 0;
@@ -590,19 +592,46 @@ button, input, select, textarea {
   color: #f5f1e8;
 }
 
+.rarity-count__glyph {
+  font-size: calc(11px * var(--font-scale, 1));
+  line-height: 1;
+  opacity: .92;
+}
+
+.rarity-count__num {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Each rarity badge: tinted fill + matching border, drawn from the canonical
+   RARITY_NAME_COLORS in input.js so the HUD reads like the item names. */
 .rarity-count--white {
   border-color: #f4f6fb;
   color: #f4f6fb;
+  background: rgba(244,246,251,.12);
 }
 
 .rarity-count--purple {
   border-color: #b77dff;
   color: #d8c2ff;
+  background: rgba(183,125,255,.16);
+}
+
+.rarity-count--blue {
+  border-color: #58b7ff;
+  color: #aeddff;
+  background: rgba(88,183,255,.16);
+}
+
+.rarity-count--green {
+  border-color: #3ef07a;
+  color: #a6f7c2;
+  background: rgba(62,240,122,.16);
 }
 
 .rarity-count--red {
   border-color: #ffd23f;
   color: #ffe08a;
+  background: rgba(255,210,63,.16);
 }
 
 /* Pending panel-item action (Wizard's Paw / Extra Battery) — a red, clickable

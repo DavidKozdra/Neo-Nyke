@@ -89,6 +89,9 @@
     // Boss bar renders at 2× base in drawBossHealthBars() (BOSS_BAR_BASE_SCALE).
     bossbar: 2,
   };
+  const HUD_OVERLAP_GAP = 10;
+  const HUD_OVERLAP_SOLVE_MAX_PASSES = 6;
+  const HUD_OVERLAP_SCALE_MAX_ATTEMPTS = 30;
 
   function defaultHudElements() {
     const out = {};
@@ -457,6 +460,7 @@
     getVolume: () => volume,
     getHudElements: () => hudElements,
     getHudElementDefs: () => HUD_ELEMENTS.map(el => ({ key: el.key, label: el.label })),
+    correctHudLayout: () => scheduleHudOverlapCorrection({ saveAfter: true }),
   };
 
   const modal = document.getElementById('settingsModal');
@@ -1048,6 +1052,193 @@
     });
   }
 
+  let hudOverlapCorrectionRaf = null;
+
+  function getHudPreviewBoxRect(box, frameRect, ratio) {
+    const rect = box?.getBoundingClientRect?.();
+    if (!rect || rect.width <= 0 || rect.height <= 0) return null;
+    return {
+      left: ratio.x ? (rect.left - frameRect.left) / ratio.x : 0,
+      top: ratio.y ? (rect.top - frameRect.top) / ratio.y : 0,
+      right: ratio.x ? (rect.right - frameRect.left) / ratio.x : 0,
+      bottom: ratio.y ? (rect.bottom - frameRect.top) / ratio.y : 0,
+      width: ratio.x ? rect.width / ratio.x : 0,
+      height: ratio.y ? rect.height / ratio.y : 0,
+    };
+  }
+
+  function rectsOverlap(a, b, gap = HUD_OVERLAP_GAP) {
+    return a.left < b.right + gap
+      && a.right + gap > b.left
+      && a.top < b.bottom + gap
+      && a.bottom + gap > b.top;
+  }
+
+  function moveHudElementBy(key, dx, dy) {
+    if (!hudElements[key]) return false;
+    const prevX = normalizeHudOffset(hudElements[key].x);
+    const prevY = normalizeHudOffset(hudElements[key].y);
+    const nextX = normalizeHudOffset(prevX + dx);
+    const nextY = normalizeHudOffset(prevY + dy);
+    if (nextX === prevX && nextY === prevY) return false;
+    hudElements[key].x = nextX;
+    hudElements[key].y = nextY;
+    return true;
+  }
+
+  function reduceHudElementScale(key) {
+    if (!hudElements[key]) return false;
+    const prev = effectiveHudScale(key);
+    const next = normalizeHudScale(Math.max(HUD_SCALE_MIN, prev - HUD_SCALE_STEP));
+    if (next >= prev) return false;
+    hudElements[key].scale = next;
+    return true;
+  }
+
+  function nudgeRect(rect, dx, dy, viewportW, viewportH) {
+    rect.left += dx;
+    rect.right += dx;
+    rect.top += dy;
+    rect.bottom += dy;
+    if (rect.left < HUD_OVERLAP_GAP) {
+      const fix = HUD_OVERLAP_GAP - rect.left;
+      rect.left += fix;
+      rect.right += fix;
+    }
+    if (rect.right > viewportW - HUD_OVERLAP_GAP) {
+      const fix = viewportW - HUD_OVERLAP_GAP - rect.right;
+      rect.left += fix;
+      rect.right += fix;
+    }
+    if (rect.top < HUD_OVERLAP_GAP) {
+      const fix = HUD_OVERLAP_GAP - rect.top;
+      rect.top += fix;
+      rect.bottom += fix;
+    }
+    if (rect.bottom > viewportH - HUD_OVERLAP_GAP) {
+      const fix = viewportH - HUD_OVERLAP_GAP - rect.bottom;
+      rect.top += fix;
+      rect.bottom += fix;
+    }
+  }
+
+  function chooseHudOverlapNudge(moving, fixed, viewportW, viewportH) {
+    const candidates = [
+      { dx: fixed.right + HUD_OVERLAP_GAP - moving.left, dy: 0 },
+      { dx: fixed.left - HUD_OVERLAP_GAP - moving.right, dy: 0 },
+      { dx: 0, dy: fixed.bottom + HUD_OVERLAP_GAP - moving.top },
+      { dx: 0, dy: fixed.top - HUD_OVERLAP_GAP - moving.bottom },
+    ].filter(c => Number.isFinite(c.dx) && Number.isFinite(c.dy));
+    let best = null;
+    candidates.forEach(candidate => {
+      const test = { ...moving };
+      nudgeRect(test, candidate.dx, candidate.dy, viewportW, viewportH);
+      const dx = test.left - moving.left;
+      const dy = test.top - moving.top;
+      const stillOverlaps = rectsOverlap(test, fixed);
+      const score = (stillOverlaps ? 1000000 : 0) + Math.abs(dx) + Math.abs(dy);
+      if (!best || score < best.score) best = { dx, dy, score };
+    });
+    return best || { dx: 0, dy: 0 };
+  }
+
+  function correctHudPreviewOverlaps({ saveAfter = false } = {}) {
+    const frame = document.getElementById('hudPreviewFrame');
+    if (!frame) return false;
+    const viewportW = Math.max(1, window.innerWidth);
+    const viewportH = Math.max(1, window.innerHeight);
+    const measure = () => {
+      refreshHudPreviewBoxes();
+      const frameRect = frame.getBoundingClientRect?.();
+      if (!frameRect?.width || !frameRect?.height) return [];
+      const ratio = getHudPreviewRatios(frame);
+      return HUD_ELEMENTS
+        .map((el, idx) => {
+          const entry = hudElements[el.key] || {};
+          if (entry.visible === false) return null;
+          const box = document.querySelector(`.hud-preview-box[data-preview="${el.key}"]`);
+          const rect = getHudPreviewBoxRect(box, frameRect, ratio);
+          return rect ? { key: el.key, idx, rect } : null;
+        })
+        .filter(Boolean);
+    };
+    const findOverlaps = measured => {
+      const overlaps = [];
+      for (let i = 0; i < measured.length; i += 1) {
+        for (let j = i + 1; j < measured.length; j += 1) {
+          if (rectsOverlap(measured[i].rect, measured[j].rect)) {
+            overlaps.push([measured[i], measured[j]]);
+          }
+        }
+      }
+      return overlaps;
+    };
+
+    let changed = false;
+    for (let attempt = 0; attempt <= HUD_OVERLAP_SCALE_MAX_ATTEMPTS; attempt += 1) {
+      const measured = measure();
+      if (!measured.length) break;
+      for (let pass = 0; pass < HUD_OVERLAP_SOLVE_MAX_PASSES; pass += 1) {
+        let movedThisPass = false;
+        for (let i = 0; i < measured.length; i += 1) {
+          for (let j = i + 1; j < measured.length; j += 1) {
+            const fixed = measured[i];
+            const moving = measured[j];
+            if (!rectsOverlap(fixed.rect, moving.rect)) continue;
+            const nudge = chooseHudOverlapNudge(moving.rect, fixed.rect, viewportW, viewportH);
+            if (!nudge.dx && !nudge.dy) continue;
+            nudgeRect(moving.rect, nudge.dx, nudge.dy, viewportW, viewportH);
+            if (moveHudElementBy(moving.key, nudge.dx, nudge.dy)) {
+              movedThisPass = true;
+              changed = true;
+            }
+          }
+        }
+        if (!movedThisPass) break;
+      }
+      const remaining = findOverlaps(measure());
+      if (!remaining.length) break;
+      const shrinkTarget = remaining
+        .flat()
+        .sort((a, b) => (b.rect.width * b.rect.height) - (a.rect.width * a.rect.height))[0];
+      if (!shrinkTarget || !reduceHudElementScale(shrinkTarget.key)) break;
+      changed = true;
+    }
+
+    if (changed) {
+      applyHudElements();
+      HUD_ELEMENTS.forEach(el => refreshHudElementRow(el.key));
+      refreshHudPreviewBoxes();
+      if (saveAfter) save();
+    }
+    return changed;
+  }
+
+  function scheduleHudOverlapCorrection(options = {}) {
+    if (hudOverlapCorrectionRaf) return;
+    const overlay = document.getElementById('hudPreviewOverlay');
+    if (!overlay) return;
+    const wasHidden = overlay.classList.contains('hidden');
+    const wasAriaHidden = overlay.getAttribute('aria-hidden');
+    if (wasHidden) {
+      overlay.classList.remove('hidden');
+      overlay.setAttribute('aria-hidden', 'true');
+      overlay.style.visibility = 'hidden';
+      overlay.style.pointerEvents = 'none';
+    }
+    hudOverlapCorrectionRaf = requestAnimationFrame(() => {
+      hudOverlapCorrectionRaf = null;
+      populateHudPreviewContent();
+      correctHudPreviewOverlaps(options);
+      if (wasHidden) {
+        overlay.classList.add('hidden');
+        overlay.setAttribute('aria-hidden', wasAriaHidden || 'true');
+        overlay.style.visibility = '';
+        overlay.style.pointerEvents = '';
+      }
+    });
+  }
+
   function formatHudOffset(value) {
     const n = normalizeHudOffset(value);
     return n === 0 ? '0' : `${n > 0 ? '+' : ''}${n}`;
@@ -1186,10 +1377,20 @@
     setField('timer', runPlayer ? (Neo.ui?.timerDisplay?.textContent || '0:00') : '0:00');
     const diffKey = run?.difficulty || meta.selectedDifficulty || Neo.selectedDifficulty;
     setField('difficulty', String(Neo.getDifficultyDef?.(diffKey)?.name || diffKey || 'EASY').toUpperCase());
-    const rarity = Neo.getItemRarityCounts?.(runPlayer || { items: {} }) || { white: 0, purple: 0, red: 0 };
+    const rarity = Neo.getItemRarityCounts?.(runPlayer || { items: {} }) || { white: 0, purple: 0, red: 0, blue: 0, green: 0 };
     setField('rarityWhite', rarity.white);
     setField('rarityPurple', rarity.purple);
     setField('rarityRed', rarity.red);
+    // Blue (Artificer) / green (Knave) badges only appear once owned — mirror the
+    // live HUD's conditional reveal in the preview too. Toggle the badge wrapper,
+    // not the inner count span that holds the data-preview-field marker.
+    [['rarityBlue', rarity.blue], ['rarityGreen', rarity.green]].forEach(([field, value]) => {
+      const el = frame.querySelector(`[data-preview-field="${field}"]`);
+      if (!el) return;
+      el.textContent = String(value || 0);
+      const badge = el.closest('.rarity-count') || el;
+      badge.style.display = Number(value || 0) > 0 ? '' : 'none';
+    });
 
     // Objective panel room label.
     const roomLabel = run && Neo.currentRoom ? Neo.getRoomLabel?.(Neo.currentRoom.type) : 'ROOM';
@@ -1249,7 +1450,7 @@
     overlay.classList.remove('hidden');
     overlay.setAttribute('aria-hidden', 'false');
     refreshHudPreviewBoxes();
-    requestAnimationFrame(refreshHudPreviewBoxes);
+    requestAnimationFrame(() => correctHudPreviewOverlaps({ saveAfter: true }));
   });
   const hudPreviewClose = () => {
     const overlay = document.getElementById('hudPreviewOverlay');
@@ -1261,7 +1462,12 @@
   document.getElementById('hudPreviewOverlay')?.addEventListener('click', e => {
     if (e.target.id === 'hudPreviewOverlay') hudPreviewClose();
   });
-  window.addEventListener('resize', refreshHudPreviewBoxes);
+  window.addEventListener('resize', () => {
+    refreshHudPreviewBoxes();
+    scheduleHudOverlapCorrection({ saveAfter: true });
+  });
+  window.addEventListener('orientationchange', () => scheduleHudOverlapCorrection({ saveAfter: true }));
+  scheduleHudOverlapCorrection({ saveAfter: true });
 
   // ── Controller mapper / detector overlay ──────────────────────────────────
   // Live diagram that confirms the pad is detected and lights up each physical
