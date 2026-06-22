@@ -450,6 +450,7 @@ export function loop(timestamp) {
       // whole charge pool in a few frames. Beam moves keep their held behavior.
       const laserPressEdge = laserHeld && !Neo._laserWasHeld;
       const fireLaser = laserHeld && (laserPressEdge || !Neo.isInstantLaserMove?.());
+      if (!laserHeld && Neo.laserActive && !Neo.isInstantLaserMove?.()) Neo.endActiveLaser?.();
       if (!overlayOpen && fireLaser) Neo.tryLaser();
       Neo._laserWasHeld = laserHeld;
     }

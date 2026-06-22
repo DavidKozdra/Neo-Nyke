@@ -50,7 +50,8 @@
     if (!isDying) drawLowHealthEdgeGlow();
     if (isDying && Neo.playerDeathAnim) Neo.drawDeathOverlay(Neo.playerDeathAnim);
     if (!isDying && Neo.godTimer > 0) Neo.drawGodModeBar();
-    if (!isDying) Neo.drawBossHealthBars();
+    const bossBarHidden = window.NeoSettings?.getHudElements?.()?.bossbar?.visible === false;
+    if (!isDying && !bossBarHidden) Neo.drawBossHealthBars();
     Neo.drawFloorTransition();
     Neo.perfEnd('draw.overlays', sectionPerfStart);
   }

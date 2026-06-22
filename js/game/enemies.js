@@ -2324,9 +2324,10 @@
     // brief telegraph, then blasts. Only the standard cult_mage uses this —
     // bosses borrowing this function (the Queen) keep their own kit.
     if (enemy.type === 'cult_mage') {
+      const wasChargingNova = Number(enemy.novaTimer || 0) > 0;
       enemy.novaTimer = Math.max(0, Number(enemy.novaTimer || 0) - dt);
       enemy.novaCd = Math.max(0, Number(enemy.novaCd || 0) - dt);
-      if (enemy.novaTimer > 0) {
+      if (wasChargingNova) {
         enemy.vx *= 0.84;
         enemy.vy *= 0.84;
         const charge = 1 - enemy.novaTimer / 0.5;

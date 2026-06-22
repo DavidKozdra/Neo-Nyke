@@ -66,6 +66,9 @@
     // The minimap is drawn on the canvas, not a DOM widget, so it has no CSS vars.
     // drawMinimap() reads its scale/visibility/offsets from getHudElements().
     { key: 'minimap',    label: 'Minimap',          cssVar: null, xVar: null, yVar: null, hideClass: null, canvas: true },
+    // The boss health bar is also canvas-drawn. drawBossHealthBars() reads its
+    // scale/visibility/offsets from getHudElements().
+    { key: 'bossbar',    label: 'Boss Health Bar',  cssVar: null, xVar: null, yVar: null, hideClass: null, canvas: true },
   ];
 
   // Per-element movement range, in screen pixels. Large enough to place any
@@ -965,6 +968,10 @@
     } else if (key === 'center') {
       box.style.top = '0px';
       box.style.left = '50%';
+    } else if (key === 'bossbar') {
+      // Mirror the live HUD: top-center, just below the Timer/Floor row (startY 50).
+      box.style.top = `${50 * ratio.y}px`;
+      box.style.left = '50%';
     } else if (key === 'objectives') {
       // Mirror the live HUD: objectives sit to the LEFT of the top-right minimap
       // (see .objective-tracker right: 206px in style.css).
@@ -1022,7 +1029,9 @@
       // Compose the per-element scale + offset onto whatever centering transform
       // the anchor already applies, so the box moves/grows like the real widget.
       // Stats and actions include their fixed live HUD multipliers here too.
-      const base = box.classList.contains('hud-preview-box--center') || box.classList.contains('hud-preview-box--actions')
+      const base = box.classList.contains('hud-preview-box--center')
+        || box.classList.contains('hud-preview-box--actions')
+        || box.classList.contains('hud-preview-box--bossbar')
         ? 'translateX(-50%) '
         : box.classList.contains('hud-preview-box--equipment')
           ? 'translateY(-50%) '

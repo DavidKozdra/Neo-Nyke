@@ -730,15 +730,37 @@
     const perfMode = window.NeoSettings?.isPerformanceMode?.() !== false;
     const lowFx = perfMode && Neo.particles.length > 48;
 
+    // The boss bar participates in the per-widget HUD Layout editor: a null/absent
+    // scale inherits the global HUD scale, otherwise it uses its own. Visibility is
+    // handled by the caller (skips drawBossHealthBars entirely when hidden).
+    const accessHudScale = Number(window.NeoSettings?.getAccess?.()?.hudScale);
+    const globalHudScale = Number.isFinite(accessHudScale) ? Neo.clamp(accessHudScale, 0.5, 2) : 1;
+    const barEntry = window.NeoSettings?.getHudElements?.()?.bossbar;
+    const ownScale = Number(barEntry?.scale);
+    const hudScale = Number.isFinite(ownScale) ? Neo.clamp(ownScale, 0.5, 2) : globalHudScale;
+    const barOffsetX = Number.isFinite(Number(barEntry?.x)) ? Number(barEntry.x) : 0;
+    const barOffsetY = Number.isFinite(Number(barEntry?.y)) ? Number(barEntry.y) : 0;
+
     const count = bosses.length;
     const crowd = Math.min(count - 1, 5);
-    const width = Math.max(210, Math.round(440 - crowd * 44));
-    const height = Math.max(9, Math.round(16 - crowd * 1.2));
-    const gap = height + Math.max(12, Math.round(18 - crowd * 1.3));
-    const labelFontSize = Math.max(8, Math.round(12 - crowd * 0.65));
+    // Cap the scaled width to the canvas so a large bar / wide scale can never
+    // overflow past the edges; the edge inset keeps a small margin on each side.
+    const edgeInset = Neo.canvas.width <= 700 ? 12 : 24;
+    const baseWidth = Math.max(210, Math.round(440 - crowd * 44));
+    const maxWidth = Math.max(120, Neo.canvas.width - edgeInset * 2);
+    const width = Math.min(maxWidth, Math.round(baseWidth * hudScale));
+    const height = Math.max(9, Math.round((16 - crowd * 1.2) * hudScale));
+    const gap = height + Math.max(12, Math.round((18 - crowd * 1.3) * hudScale));
+    const labelFontSize = Math.max(8, Math.round((12 - crowd * 0.65) * hudScale));
     const radius = height / 2;
-    const startX = Math.round(Neo.canvas.width <= 700 ? 12 : 24);
-    const startY = 50;
+    // Top-center anchor (genre convention; clears the top-left coins widget),
+    // nudged by the player's HUD Layout offset. Stacks downward for multi-boss.
+    const startX = Math.round(Neo.clamp(
+      (Neo.canvas.width - width) / 2 + barOffsetX,
+      edgeInset,
+      Neo.canvas.width - width - edgeInset,
+    ));
+    const startY = Math.round(50 + barOffsetY);
     const labelX = startX + width / 2;
 
     const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());

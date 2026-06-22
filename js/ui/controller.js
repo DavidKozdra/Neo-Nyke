@@ -132,8 +132,18 @@ export function createUIController(view) {
     function scrollCharacterCardIntoView(characterKey, behavior = 'smooth') {
       const button = getCharacterButton(characterKey);
       if (!button) return;
+      const viewport = document.querySelector('.char-carousel-viewport');
       programmaticCarouselScrollUntil = Date.now() + 520;
-      button.scrollIntoView({ behavior, block: 'nearest', inline: 'center' });
+      if (!viewport) {
+        button.scrollIntoView({ behavior, block: 'nearest', inline: 'center' });
+        return;
+      }
+      const viewportRect = viewport.getBoundingClientRect();
+      const buttonRect = button.getBoundingClientRect();
+      const left = viewport.scrollLeft
+        + (buttonRect.left - viewportRect.left)
+        - ((viewportRect.width - buttonRect.width) / 2);
+      viewport.scrollTo({ left: Math.max(0, left), behavior });
     }
 
     function updateCarouselArrowState(selected = selectedCarouselKey || Neo.chosenCharacter) {

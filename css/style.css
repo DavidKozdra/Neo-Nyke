@@ -11929,6 +11929,17 @@ border-bottom: black solid 2px;
   font-weight: 700; letter-spacing: .08em;
   transform-origin: top right;
 }
+/* Boss bar is canvas-drawn; the preview shows a labeled schematic bar that uses
+   the same saved visibility, scale, and X/Y offsets as drawBossHealthBars(). */
+.hud-preview-box--bossbar {
+  top: 6%; left: 50%;
+  width: 44%; height: 5%; min-height: 14px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 999px;
+  font-weight: 700; font-size: 10px; letter-spacing: .12em;
+  transform: translateX(-50%);
+  transform-origin: top center;
+}
 .hud-preview-close {
   border: 1px solid var(--menu-border-strong);
   background: var(--menu-surface-strong);
