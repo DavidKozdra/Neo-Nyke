@@ -2842,7 +2842,10 @@ export function createUIController(view) {
       },
       setObjective(text) { view.objective.textContent = text; },
       setTutorialBanner(text, visible) {
-        const open = !!visible && !!text && Neo.gameState === 'play';
+        // Stay open while the inventory pause holds during the tutorial, so the
+        // banner doesn't blink out the moment a panel pauses the game.
+        const playableForBanner = Neo.gameState === 'play' || Neo.isFirstRunTutorialEngaged?.();
+        const open = !!visible && !!text && playableForBanner;
         if (view.tutorialOverlay && tutorialBannerCache.open !== open) {
           view.tutorialOverlay.classList.toggle('hidden', !open);
           view.tutorialOverlay.setAttribute('aria-hidden', open ? 'false' : 'true');
@@ -2878,7 +2881,10 @@ export function createUIController(view) {
       setObjectiveList(roomLabel, entries = []) {
         if (!view.objectiveTracker || !view.objectiveList) return;
         const panelEnabled = window.NeoSettings?.showObjectivePanel?.() !== false;
-        const visible = panelEnabled && Neo.gameState === 'play' && entries.length > 0;
+        // Stay visible while the inventory pauses the game during the first-run
+        // tutorial, so the "Open Inventory" step can be seen ticking off live.
+        const playableForObjectives = Neo.gameState === 'play' || Neo.isFirstRunTutorialEngaged?.();
+        const visible = panelEnabled && playableForObjectives && entries.length > 0;
         objectiveTrackerVisible = visible;
         objectiveEntriesCache = Array.isArray(entries) ? entries.slice() : [];
         view.objectiveTracker.classList.toggle('hidden', !visible);

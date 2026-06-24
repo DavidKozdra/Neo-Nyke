@@ -19,7 +19,7 @@
   Neo.formatHpText = formatHpText;
 
   function getObjectiveEntries(lineObjective = '') {
-    if (Neo.isFirstRunTutorialActive()) return Neo.getTutorialObjectiveEntries();
+    if (Neo.isFirstRunTutorialEngaged()) return Neo.getTutorialObjectiveEntries();
     if (!Neo.currentRoom) return [];
     const entries = [];
     if (Neo.gameMode === 'treasure_hunt') {
@@ -141,7 +141,7 @@
       Neo.uiController.setTutorialBanner('', false);
       return;
     }
-    if (Neo.isFirstRunTutorialActive()) {
+    if (Neo.isFirstRunTutorialEngaged()) {
       const tutorialText = Neo.getTutorialStepMessage();
       Neo.uiController.setTutorialBanner(tutorialText, true);
       Neo.uiController.setObjective(tutorialText);

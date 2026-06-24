@@ -1072,8 +1072,9 @@ button, input, select, textarea {
   position: fixed;
   top: 154px;
   /* Sit to the LEFT of the top-right minimap (≈146px map + 16px inset) so the two
-     HUD widgets don't overlap. The map keeps the right edge; objectives clear it. */
-  right: 206px;
+     HUD widgets don't overlap. The map keeps the right edge; objectives clear it
+     with generous clearance so the two boxes never touch. */
+  right: 400px;
   z-index: 19;
   width: 284px;
   max-height: calc(100dvh - 158px);
@@ -1223,7 +1224,7 @@ button, input, select, textarea {
 
 @media (max-width: 720px) {
   .objective-tracker {
-    top: 118px;
+    top: 94px;
     /* Compact minimap is ≈112px + 8px inset wide; clear it on the right. */
     right: 124px;
     width: min(284px, calc(100vw - 138px));
@@ -11951,7 +11952,7 @@ border-bottom: black solid 2px;
 .hud-preview-box--coins      { top: 4%;  left: 3%; transform-origin: top left; }
 .hud-preview-box--center     { top: 2%;  left: 50%; transform: translateX(-50%); transform-origin: top center; }
 /* Objectives sit to the LEFT of the top-right minimap (≈18% wide + margin), mirroring the live HUD. */
-.hud-preview-box--objectives { top: 22%; right: 22%; transform-origin: top right; }
+.hud-preview-box--objectives { top: 18%; right: 25%; transform-origin: top right; }
 .hud-preview-box--stats      { bottom: 4%; left: 3%; transform-origin: bottom left; }
 .hud-preview-box--actions    { bottom: 4%; left: 50%; transform: translateX(-50%); transform-origin: bottom center; }
 .hud-preview-box--equipment  { top: 50%; right: 1%; transform: translateY(-50%); transform-origin: center right; }

@@ -720,7 +720,7 @@ export function getItemStats() {
       : equippedWeaponKey === 'void_piercer'
         ? 0.20
         : 0;
-    const baseBleedChance = neoKnife * 0.05 + toughBandaid * 0.02;
+    const baseBleedChance = neoKnife * 0.10 + toughBandaid * 0.02;
     const tagCounts = getItemTagCounts();
     const healingTagStacks = Number(tagCounts.heal || 0) + Number(tagCounts.healing || 0);
     // Overheal barrier is now item-dependent: you must own Generic Health AND at
@@ -793,7 +793,7 @@ export function getItemStats() {
       weaponFatigueChance: weaponFatigue * 0.05,
       weaponFatigueFreezeChance: weaponFatigue * 0.02,
       genericHealthItemHealRatio: genericHealthItem * 0.05,
-      snakeKnifePoisonChance: snakeKnife * 0.02,
+      snakeKnifePoisonChance: snakeKnife * 0.10,
       confuseRayStunChance: confuseRay * 0.15,
       // Flat 5% per hit (not per stack) to make the enemy think the player vanished.
       confuseRayBlindChance: confuseRay > 0 ? 0.05 : 0,
@@ -830,7 +830,7 @@ export function getItemStats() {
       // Foley's charm: flat damage added to the player's base hit (applied in
       // getPlayerBaseDamage before character/poison multipliers).
       flatHitDamageBonus: foleyCharm,
-      attackSpeedMultiplier: 1 + attackServo * 0.12 + chronoSpringBonus,
+      attackSpeedMultiplier: 1 + attackServo * 0.08 + chronoSpringBonus,
       hasRobotArm: robotArm > 0,
       moveSpeedMultiplier: 1 + turtleShell * 0.05
         + (Number(Neo.player?.equipmentEffects?.el_bartos_cape?.time || 0) > 0 ? 0.2 : 0)

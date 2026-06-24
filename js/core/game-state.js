@@ -370,8 +370,23 @@ export function resumeGame() {
     Neo.tutorialState.active = !!active;
   }
 
+  // Strict gate for the game-loop side of the tutorial (spawning the dummy/relic,
+  // advancing steps, detecting movement). These must only run while the world is
+  // simulating, i.e. gameState === 'play'.
   function isFirstRunTutorialActive() {
     return !!Neo.tutorialState?.active && Neo.gameMode === 'normal' && Neo.gameState === 'play';
+  }
+
+  // Display/eligibility gate for the tutorial. True whenever the tutorial is
+  // conceptually running, INCLUDING while a panel (e.g. the inventory) has paused
+  // the game. Use this for the banner, the objective checklist, and the
+  // panel-open flag setters that fire after pauseGame() — otherwise opening the
+  // inventory would freeze the tutorial and hide its UI mid-step.
+  function isFirstRunTutorialEngaged() {
+    if (!Neo.tutorialState?.active || Neo.gameMode !== 'normal') return false;
+    if (Neo.gameState === 'play') return true;
+    // Tolerate the pause that the inventory panel applies to the world.
+    return Neo.gameState === 'pause' && !!Neo.inventoryPauseActive;
   }
 
   function consumeReplayTutorialRequest() {
@@ -556,7 +571,7 @@ export function resumeGame() {
   }
 
   function getTutorialStepMessage() {
-    if (!isFirstRunTutorialActive()) return '';
+    if (!isFirstRunTutorialEngaged()) return '';
     const moveHint = getMovementControlHint();
     const slashHint = getControlHint('slash', 'lmb');
     const laserHint = getControlHint('laser', 'rmb');
@@ -578,7 +593,7 @@ export function resumeGame() {
   }
 
   function getTutorialObjectiveEntries() {
-    if (!isFirstRunTutorialActive()) return [];
+    if (!isFirstRunTutorialEngaged()) return [];
     const moveHint = getMovementControlHint();
     const slashHint = getControlHint('slash', 'lmb');
     const laserHint = getControlHint('laser', 'rmb');
@@ -3433,6 +3448,7 @@ export function resumeGame() {
   Neo.createDefaultTutorialState = createDefaultTutorialState;
   Neo.resetTutorialState = resetTutorialState;
   Neo.isFirstRunTutorialActive = isFirstRunTutorialActive;
+  Neo.isFirstRunTutorialEngaged = isFirstRunTutorialEngaged;
   Neo.consumeReplayTutorialRequest = consumeReplayTutorialRequest;
   Neo.formatControlLabel = formatControlLabel;
   Neo.getControlHint = getControlHint;

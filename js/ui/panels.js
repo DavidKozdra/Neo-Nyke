@@ -1020,7 +1020,13 @@ export function toggleInventoryPanel() {
     const next = !isPanelOpen(Neo.ui.invPanel);
     if (next) setShopPanelOpen(false, { animateClose: false });
     setInventoryPanelOpen(next);
-    if (next && Neo.isFirstRunTutorialActive()) Neo.tutorialState.openedInventory = true;
+    // setInventoryPanelOpen pauses the game, so the engaged (pause-tolerant)
+    // predicate is what's true here, and the per-frame HUD hook won't refresh
+    // the objective tracker while paused — refresh it explicitly on toggle.
+    if (Neo.isFirstRunTutorialEngaged()) {
+      if (next) Neo.tutorialState.openedInventory = true;
+      Neo.updateObjective?.();
+    }
   }
 
   // ---- Anvil panel ----
@@ -1030,7 +1036,12 @@ export function setAnvilPanelOpen(open, options = {}) {
   const animateClose = options.animateClose !== false;
     if (open) {
       Neo.showFirstTip?.('forge');
-      if (Neo.isFirstRunTutorialActive()) Neo.tutorialState.openedForge = true;
+      // Engaged (pause-tolerant) so the forge step still ticks if the forge ever
+      // opens while the game is paused.
+      if (Neo.isFirstRunTutorialEngaged()) {
+        Neo.tutorialState.openedForge = true;
+        Neo.updateObjective?.();
+      }
       clearPanelCloseEffect(Neo.ui.anvilPanel);
       Neo.ui.anvilPanel.classList.remove('hidden');
       Neo.ui.anvilPanel.setAttribute('aria-hidden', 'false');

@@ -1427,10 +1427,10 @@
     critChance = Neo.clamp(mirrorCritRollback.critChance, 0.01, 1);
     const mirrorCritMultiplier = mirrorCritRollback.critMultiplier;
     return {
-      bleedChance: count('neo_knife') * 0.05 + count('tough_bandaid') * 0.02,
+      bleedChance: count('neo_knife') * 0.10 + count('tough_bandaid') * 0.02,
       bleedResistance: Neo.clamp(count('tough_bandaid') * 0.1, 0, 0.8),
       scarfBleedsOnHit: count('hemes_scarf'),
-      snakeKnifePoisonChance: count('snake_knife') * 0.02,
+      snakeKnifePoisonChance: count('snake_knife') * 0.10,
       weaponFatigueChance: count('weapon_fatigue') * 0.05,
       weaponFatigueFreezeChance: count('weapon_fatigue') * 0.02,
       confuseRayStunChance: Neo.clamp(count('confuse_ray') * 0.15, 0, 0.75),
@@ -1440,8 +1440,8 @@
       critChance,
       critMultiplier: mirrorCritMultiplier,
       attackSpeedMultiplier: robotArm > 0 && inventory?.robotArmReady
-        ? 8 * (1 + attackServo * 0.12 + chronoSpringBonus)
-        : 1 + attackServo * 0.12 + chronoSpringBonus,
+        ? 8 * (1 + attackServo * 0.08 + chronoSpringBonus)
+        : 1 + attackServo * 0.08 + chronoSpringBonus,
       moveSpeedMultiplier: 1 + count('turtle_shell') * 0.05,
       levelEdgeDamageMultiplier: 1 + count('scholar_cap') * xpProgress * 0.45,
       knockbackMultiplier: 1 + count('push_man') * 0.18,
