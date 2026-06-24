@@ -119,6 +119,7 @@
   <link rel="stylesheet" href="css/mobile.css">
   <link rel="stylesheet" href="css/touch-controls.css">
   <link rel="stylesheet" href="css/panel-borders.css">
+  <link rel="stylesheet" href="css/tutorial.css">
 </head>
 <body>
 
@@ -272,18 +273,33 @@
     </div>
   </div>
   <div id="tutorialOverlay" class="tutorial-overlay hidden" aria-hidden="true">
-    <div class="tutorial-box">
-      <div id="tutorialSpeaker" class="tutorial-speaker">TUTORIAL</div>
+    <svg class="tutorial-spotlight" aria-hidden="true">
+      <defs>
+        <mask id="tutorialSpotlightMask">
+          <rect x="0" y="0" width="100%" height="100%" fill="white"></rect>
+          <rect id="tutorialSpotlightHole" x="0" y="0" width="1" height="1" rx="12" fill="black"></rect>
+        </mask>
+      </defs>
+      <rect x="0" y="0" width="100%" height="100%" fill="rgba(0, 5, 12, .68)" mask="url(#tutorialSpotlightMask)"></rect>
+    </svg>
+    <div id="tutorialTargetRing" class="tutorial-target-ring hidden" aria-hidden="true"></div>
+    <article id="tutorialCard" class="tutorial-card" role="status" aria-live="polite">
+      <div class="tutorial-card__top">
+        <div id="tutorialSpeaker" class="tutorial-speaker">TUTORIAL</div>
+        <div id="tutorialProgress" class="tutorial-progress">1 / 1</div>
+      </div>
+      <h2 id="tutorialTitle" class="tutorial-title">Learn by doing</h2>
       <div id="tutorialText" class="tutorial-text"></div>
+      <div id="tutorialGate" class="tutorial-gate"></div>
       <div class="tutorial-actions">
         <div class="tutorial-nav">
-          <button id="tutorialPrevBtn" class="tutorial-nav-btn" type="button">Previous</button>
-          <button id="tutorialNextBtn" class="tutorial-nav-btn" type="button">Next</button>
+          <button id="tutorialPrevBtn" class="tutorial-nav-btn" type="button">Back</button>
+          <button id="tutorialNextBtn" class="tutorial-nav-btn" type="button">Continue</button>
         </div>
-        <span id="tutorialHint" class="tutorial-hint">Press K to skip tutorial</span>
-        <button id="tutorialSkipBtn" class="tutorial-skip-btn" type="button">Skip Tutorial</button>
+        <span id="tutorialHint" class="tutorial-hint"></span>
+        <button id="tutorialSkipBtn" class="tutorial-skip-btn" type="button">Skip</button>
       </div>
-    </div>
+    </article>
   </div>
   <div id="entityDialogueLayer" class="entity-dialogue-layer hidden" aria-hidden="true"></div>
 

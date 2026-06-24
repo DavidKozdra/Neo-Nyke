@@ -2499,6 +2499,7 @@
       if (chest.open) return;
       if (Neo.dist(chest.x, chest.y, Neo.player.x, Neo.player.y) >= 36) return;
       chest.open = true;
+      Neo.tutorialController?.signal?.('chest-open', { chest, room: Neo.currentRoom });
       Neo.minimapLegendDirty = true;
       Neo.dropCoins(chest.x, chest.y, 12 + Neo.floor * 2);
       if ((chest.rewardType || 'item') === 'item') {
@@ -2636,7 +2637,7 @@
     }
     // The new-floor stinger now plays from the floor:enter event (so it also
     // covers the run's first floor); generateFloor() below emits that event.
-    if (Neo.isFirstRunTutorialActive()) Neo.tutorialState.usedLadder = true;
+    Neo.tutorialController?.signal?.('ladder-use');
     Neo.floor = Math.min(Neo.MAX_FLOOR, Neo.floor + 1);
     Neo.refreshFloorChargeStates();
     Neo.metaProgress.bestFloor = Math.max(Neo.metaProgress.bestFloor, Neo.floor);
@@ -2844,6 +2845,9 @@
       }
 
       if (pickup.type === 'item') {
+        if (pickup.tutorialRelic) {
+          Neo.tutorialController?.signal?.('relic-collected', { tutorialRelic: true, key: pickup.key });
+        }
         Neo.collectItem(pickup.key);
         Neo.playSfx?.('item_collect');
         if (Neo.floorSkipPending > 0) {
@@ -3053,10 +3057,15 @@
             Neo.updateObjective();
           }
         } else {
-          blastRadius(pickup.x, pickup.y, 76, getBombHazardDamage(28), '#ff7a66');
-          Neo.spawnParticle({ x: pickup.x, y: pickup.y - 20, life: 0.75, text: 'WRONG', c: '#ff7a7a' });
-          Neo.spawnBombFailAoe(pickup.x, pickup.y);
-          Neo.failChallengeTrial('WRONG BOMB');
+          const tutorialBomb = Neo.isTutorialRun?.() && Neo.currentRoom?.tutorialLesson === 'challenge';
+          blastRadius(pickup.x, pickup.y, 76, tutorialBomb ? 1 : getBombHazardDamage(28), '#ff7a66');
+          Neo.spawnParticle({ x: pickup.x, y: pickup.y - 20, life: 0.75, text: tutorialBomb ? 'RED = DANGER' : 'WRONG', c: '#ff7a7a' });
+          if (tutorialBomb) {
+            removePickupAt(index);
+          } else {
+            Neo.spawnBombFailAoe(pickup.x, pickup.y);
+            Neo.failChallengeTrial('WRONG BOMB');
+          }
         }
         Neo.scheduleRunSave();
         return;

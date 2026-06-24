@@ -646,6 +646,7 @@ export function createUIController(view) {
       if (normalized.includes('metao') || normalized.includes('mateo')) return 'metao';
       if (normalized.includes('gelleh') || normalized.includes('granialla')) return 'gelleh';
       if (normalized.includes('mooggy')) return 'mooggy';
+      if (normalized.includes('sarge')) return 'sarge';
       if (normalized.includes('queen')) return 'queen_cult';
       if (normalized.includes('bulk') && normalized.includes('golem')) return 'bulk_golem';
       if (normalized.includes('artificer')) return 'artificer_knave';
@@ -1352,6 +1353,7 @@ export function createUIController(view) {
       god_slayer: { type: 'enemy', key: 'god' },
       extinction: { type: 'enemy', key: 'hunter' },
       double_bane: { type: 'enemy', key: 'bowman_bane' },
+      trial_master: { type: 'pixel', color: '#d7f6ff', pixels: [[1,1],[2,1],[3,1],[4,1],[5,1],[1,2],[3,2],[5,2],[1,3],[2,3],[3,3],[4,3],[5,3],[2,4],[3,4],[4,4],[3,5]] },
     };
 
     function drawAchievementIcon(canvas, achievementId) {
@@ -2359,9 +2361,6 @@ export function createUIController(view) {
         view.continueBtn?.addEventListener('click', handlers.onContinue);
         view.deleteRunBtn?.addEventListener('click', handlers.onDeleteRun);
         view.dialogueOverlay?.addEventListener('click', handlers.onAdvanceDialogue);
-        view.tutorialPrevBtn?.addEventListener('click', handlers.onTutorialPrev);
-        view.tutorialNextBtn?.addEventListener('click', handlers.onTutorialNext);
-        view.tutorialSkipBtn?.addEventListener('click', handlers.onSkipTutorial);
         view.tutorialMenuBtn?.addEventListener('click', handlers.onPlayTutorial);
         view.firstTipBtn?.addEventListener('click', handlers.onDismissFirstTip);
         // New main-menu nav
@@ -2542,9 +2541,7 @@ export function createUIController(view) {
         view.bestFloor.textContent = bestFloor;
         if (view.loopCount) view.loopCount.textContent = loopCrystals;
         view.saveState.textContent = saveState;
-        // Keep the CTA stable for the current menu view, but only offer it once
-        // per 30-day window across visits.
-        const canOfferTutorial = activeState === 'menu' && (tutorialMenuOfferVisible || !!Neo.shouldOfferTutorialButton?.());
+        const canOfferTutorial = activeState === 'menu';
         if (activeState === 'menu' && canOfferTutorial && !tutorialMenuOfferVisible) {
           tutorialMenuOfferVisible = true;
           Neo.markTutorialButtonOfferedNow?.();
@@ -2842,6 +2839,7 @@ export function createUIController(view) {
       },
       setObjective(text) { view.objective.textContent = text; },
       setTutorialBanner(text, visible) {
+        if (Neo.tutorialController) return;
         // Stay open while the inventory pause holds during the tutorial, so the
         // banner doesn't blink out the moment a panel pauses the game.
         const playableForBanner = Neo.gameState === 'play' || Neo.isFirstRunTutorialEngaged?.();

@@ -533,12 +533,14 @@
     const useRobotArmCharge = !!options.useRobotArmCharge && itemStats.hasRobotArm && Neo.player?.robotArmReady;
     if (getEquippedWeapon()) {
       const attacked = tryWeaponAttack();
+      if (attacked) Neo.tutorialController?.signal?.('attack', { action: 'melee' });
       if (attacked && useRobotArmCharge) Neo.consumeCharge('robot_arm');
       return;
     }
     const move = getEquippedMove('melee');
     const attackSpeed = Neo.getAttackSpeedValue();
     if (!Neo.spendSkillCharge('melee', Neo.getMeleeCooldownDuration(move, attackSpeed))) return;
+    Neo.tutorialController?.signal?.('attack', { action: 'melee' });
     if (useRobotArmCharge) Neo.consumeCharge('robot_arm');
     if (move === 'fire_balls') {
       spawnFireballs();
@@ -706,6 +708,7 @@
     // trigger the sound once at cast time, not every damage tick.
     const spendLaserCharge = (opts) => {
       if (!Neo.spendSkillCharge('laser', rechargeTime, opts)) return false;
+      Neo.tutorialController?.signal?.('attack', { action: 'laser' });
       // Lightning Columns plays its own electric one-shot at the call site.
       if (move !== 'lightning_columns') Neo.playSfx?.('lazer_blast');
       return true;
@@ -1021,6 +1024,7 @@
     if (getEquippedMove('smash') === 'healing_zone') {
       if (Neo.healingZoneCharging) return; // already winding up
       if (!Neo.spendSkillCharge('smash', Neo.getSmashCooldownDuration(attackSpeed), { deferTimer: true })) return;
+      Neo.tutorialController?.signal?.('attack', { action: 'smash' });
       Neo.healingZoneCharging = true;
       Neo.healingZoneChargeTime = 0;
       Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 16, life: 0.5, text: 'CHARGING', c: '#47ff7d' });
@@ -1034,6 +1038,7 @@
     if (smashMoveKey === 'death_ball' || smashMoveKey === 'turtle_powerup') {
       if (Neo.deathBallCharging) return; // already winding up
       if (!Neo.spendSkillCharge('smash', Neo.getSmashCooldownDuration(attackSpeed), { deferTimer: true })) return;
+      Neo.tutorialController?.signal?.('attack', { action: 'smash' });
       Neo.deathBallCharging = true;
       Neo.deathBallChargeTime = 0;
       Neo.deathBallPowerUp = smashMoveKey === 'turtle_powerup';
@@ -1041,6 +1046,7 @@
       return;
     }
     if (!Neo.spendSkillCharge('smash', Neo.getSmashCooldownDuration(attackSpeed))) return;
+    Neo.tutorialController?.signal?.('attack', { action: 'smash' });
     if (itemStats.homingMissileChance > 0 && Neo.nextRandom('encounter') < itemStats.homingMissileChance) {
       const base = Neo.angleToMouse();
       for (let index = 0; index < 2; index += 1) {
@@ -1217,7 +1223,7 @@
     const attackSpeed = Neo.getAttackSpeedValue();
     const rechargeTime = Neo.getDashCooldownDuration(move, attackSpeed);
     if (!Neo.spendSkillCharge('dash', rechargeTime)) return;
-    if (Neo.isFirstRunTutorialActive()) Neo.tutorialState.dashed = true;
+    Neo.tutorialController?.signal?.('dash');
     if (move === 'flying_unhitable') {
       castFlyingUntouchable();
       return;
@@ -3771,6 +3777,7 @@
     if (index >= 0) Neo.enemies.splice(index, 1);
     Neo.minimapLegendDirty = true;
     const isTutorialDummy = !!enemy.tutorialDummy;
+    if (isTutorialDummy) Neo.tutorialController?.signal?.('enemy-killed', { tutorialDummy: true });
     spawnEnemyCorpse(enemy);
     const itemStats = Neo.getItemStats();
     const deathBleedStacks = Neo.getStatusStacks(enemy, 'bleed');

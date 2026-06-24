@@ -143,7 +143,7 @@
     }
     if (Neo.isFirstRunTutorialEngaged()) {
       const tutorialText = Neo.getTutorialStepMessage();
-      Neo.uiController.setTutorialBanner(tutorialText, true);
+      Neo.uiController.setTutorialBanner('', false);
       Neo.uiController.setObjective(tutorialText);
       Neo.uiController.setObjectiveList('Tutorial', Neo.getTutorialObjectiveEntries());
       return;
@@ -964,6 +964,9 @@
       antonyBlemmyeCutscenePlayed: Neo.antonyBlemmyeCutscenePlayed,
       secretRoomVisitedFloors: Array.isArray(Neo.secretRoomVisitedFloors) ? [...Neo.secretRoomVisitedFloors] : [],
       hideLadderOnMinimap: !!Neo.hideLadderOnMinimap,
+      tutorialState: Neo.tutorialState && typeof Neo.tutorialState === 'object'
+        ? JSON.parse(JSON.stringify(Neo.tutorialState))
+        : null,
       camera: Neo.camera,
     };
   }

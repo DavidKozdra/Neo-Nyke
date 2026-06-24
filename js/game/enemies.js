@@ -1671,9 +1671,10 @@
     if (!room || room.type !== 'challenge') return;
     const existing = Neo.pickups.find(pickup => pickup?.type === 'challengeStarter');
     if (existing) return;
+    const tutorialChallenge = Neo.isTutorialRun?.() && room.tutorialLesson === 'challenge';
     Neo.pickups.push({
       x: Neo.ROOM_W / 2,
-      y: Neo.ROOM_H / 2,
+      y: Neo.ROOM_H / 2 + (tutorialChallenge ? 110 : 0),
       type: 'challengeStarter',
       trial: room.challengeType || 'mirror',
     });
@@ -1688,8 +1689,11 @@
     if (Neo.pickups.some(pickup => pickup?.type === 'challengeBomb')) return;
     // 3 safe (blue) + 2 unsafe (red) bombs scattered at random spots. The trial
     // only clears once every blue bomb is defused; grabbing any red one fails it.
-    const total = CHALLENGE_BOMB_SAFE_COUNT + CHALLENGE_BOMB_UNSAFE_COUNT;
-    const safeFlags = Array.from({ length: total }, (_, index) => index < CHALLENGE_BOMB_SAFE_COUNT);
+    const tutorialBombs = Neo.isTutorialRun?.() && room.tutorialLesson === 'challenge';
+    const safeCount = tutorialBombs ? 2 : CHALLENGE_BOMB_SAFE_COUNT;
+    const unsafeCount = tutorialBombs ? 1 : CHALLENGE_BOMB_UNSAFE_COUNT;
+    const total = safeCount + unsafeCount;
+    const safeFlags = Array.from({ length: total }, (_, index) => index < safeCount);
     // Fisher-Yates shuffle so which spawns are safe is randomized each trial.
     for (let i = safeFlags.length - 1; i > 0; i -= 1) {
       const j = Neo.irand(0, i, 'loot');
@@ -1703,8 +1707,8 @@
       Neo.pickups.push({
         x,
         y,
-        vx: Math.cos(heading) * CHALLENGE_BOMB_DRIFT_SPEED,
-        vy: Math.sin(heading) * CHALLENGE_BOMB_DRIFT_SPEED,
+        vx: Math.cos(heading) * (tutorialBombs ? 0 : CHALLENGE_BOMB_DRIFT_SPEED),
+        vy: Math.sin(heading) * (tutorialBombs ? 0 : CHALLENGE_BOMB_DRIFT_SPEED),
         type: 'challengeBomb',
         safe,
       });
@@ -1876,14 +1880,15 @@
       sayAtPosition(Neo.ROOM_W / 2, 130, 'Touch the switches in the light order.', { speaker: 'TRIAL', tone: 'warning' });
     } else if (type === 'bomb') {
       const tuning = getChallengeTrialTuning('bomb');
-      room.challengeTimer = Number(tuning.timer || 0);
+      const tutorialBombs = Neo.isTutorialRun?.() && room.tutorialLesson === 'challenge';
+      room.challengeTimer = tutorialBombs ? 90 : Number(tuning.timer || 0);
       room.challengeTick = Number(tuning.tick || 1.8);
       room.challengeData.maxTimer = room.challengeTimer;
       room.challengeData.spawnCount = Number(tuning.spawnCount || 1);
       room.challengeData.targetClearRate = CHALLENGE_CLEAR_RATE_TARGETS.bomb;
       spawnChallengeBombs(room);
       // Five snipers ring the bomb floor; each rolls its own behaviour on spawn.
-      for (let index = 0; index < 5; index += 1) {
+      for (let index = 0; index < (tutorialBombs ? 0 : 5); index += 1) {
         const angle = (Math.PI * 2 * index) / 5 + Neo.nextRandom('encounter') * 0.4;
         const radius = 200 + Neo.nextRandom('encounter') * 70;
         const safeSpawn = findSafeEnemySpawnPoint(
@@ -1976,10 +1981,16 @@
     Neo.currentRoom.challengeFailed = false;
     Neo.currentRoom.challengeTimer = 0;
     Neo.currentRoom.challengeTick = 0;
+    const completedType = Neo.currentRoom.challengeType || 'mirror';
     Neo.gameEvents.emit('challenge:completed', {
       room: Neo.currentRoom,
-      challengeType: Neo.currentRoom.challengeType || 'mirror',
+      challengeType: completedType,
       text,
+    });
+    // 'stillness' is a legacy alias for the circuit trial — normalize so the
+    // Trial Master achievement counts it as the same type.
+    window.achievementEvents?.emit('challenge:beaten', {
+      challengeType: completedType === 'stillness' ? 'circuit' : completedType,
     });
     spawnChallengeReward(text);
     Neo.currentRoom.challengeData = {};

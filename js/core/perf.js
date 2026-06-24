@@ -161,6 +161,7 @@ function installPerfDebugApi() {
 
 export async function boot() {
   Neo.uiController = Neo.createUIController(Neo.ui);
+  Neo.tutorialController = Neo.createTutorialController?.();
   Neo.saveStore = Neo.createSaveStore();
   window._neoSaveStore = Neo.saveStore;
   Neo.itemRegistry = Neo.createItemRegistry();
@@ -184,6 +185,7 @@ export async function boot() {
   Neo.bindPanelInput();
   Neo.drawActionIcons();
   await Neo.loadPersistedState();
+  Neo.tutorialController?.syncFromState?.();
   Neo.drawDifficultyIcons();
   Neo.updateCharacterSelectionUI();
   Neo.refreshMenuState();

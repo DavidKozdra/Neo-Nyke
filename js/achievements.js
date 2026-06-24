@@ -15,6 +15,7 @@ const ACHIEVEMENTS = [
   { id: 'god_slayer',     name: 'God Slayer',        desc: 'Slay 10 gods',                          icon: '✟' },
   { id: 'extinction',     name: 'Extinction',       desc: 'Kill 1,000 enemies total',              icon: '☠' },
   { id: 'double_bane',    name: 'Twice the Grave',  desc: "Find and kill Bowman's Bane twice in one run", icon: '🏹' },
+  { id: 'trial_master',   name: 'Trial Master',     desc: 'Beat every trial challenge in one run', icon: '🛡' },
 ];
 
 const ACHIEVEMENT_PROGRESS = {
@@ -31,6 +32,7 @@ const ACHIEVEMENT_PROGRESS = {
   god_slayer:     { key: 'gods_killed', target: 10, label: 'Gods slain' },
   extinction:     { key: 'enemies_killed', target: 1000, label: 'Enemies slain' },
   double_bane:    { key: 'runBowmanKills', target: 2, label: "Banes slain this run" },
+  trial_master:   { key: 'runTrialTypesBeaten', target: 6, label: 'Trial types beaten this run' },
 };
 
 window.ACHIEVEMENTS = ACHIEVEMENTS;

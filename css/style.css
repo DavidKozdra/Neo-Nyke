@@ -2010,15 +2010,27 @@ button, input, select, textarea {
   white-space: nowrap;
 }
 
-.shop-card__price::before {
-  content: "C";
-  display: inline-grid;
-  place-items: center;
+.shop-card__coin {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: color-mix(in srgb, var(--shop-can-afford, #4caf50) 18%, transparent);
-  color: var(--shop-can-afford, #4caf50);
+  /* Tint follows the price text color so it goes red when unaffordable. */
+  background: color-mix(in srgb, currentColor 18%, transparent);
+  image-rendering: pixelated;
+  flex: 0 0 auto;
+}
+
+/* Reusable gold coin icon (forge cost rows, totals, anywhere a gold amount is
+   shown inline). The pixel art is drawn onto the canvas by drawGoldCoinIcons. */
+.gold-coin-icon {
+  image-rendering: pixelated;
+}
+
+.gold-coin-icon--inline {
+  width: 14px;
+  height: 14px;
+  vertical-align: -2px;
+  margin-right: 1px;
 }
 
 .shop-card__copy {

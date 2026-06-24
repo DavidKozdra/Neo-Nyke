@@ -41,6 +41,7 @@ export function resumeGame() {
       loopCrystals: 0,
       unlockedLegacy: [],
       tutorialCompleted: false,
+      tutorialVersion: 0,
       lastSeenAt: 0,
       tutorialButtonLastOfferedAt: 0,
       seenTips: {},
@@ -318,21 +319,23 @@ export function resumeGame() {
   const TUTORIAL_RELIC_KEY = 'gold_vac';
 
   function createDefaultTutorialState() {
-    return {
+    return Neo.tutorialController?.normalizeState?.(null, false) || {
+      version: Number(Neo.TUTORIAL_VERSION || 2),
       active: false,
-      step: 'move',
-      manualStepLockUntil: 0,
+      step: 'welcome',
+      completed: {},
+      movedFor: 0,
       dummySpawned: false,
       relicSpawned: false,
-      moved: false,
-      movedFor: 0,
-      dashed: false,
-      gotKill: false,
-      gotRelic: false,
-      openedForge: false,
-      openedInventory: false,
-      usedLadder: false,
-      lastCelebratedStep: 'move',
+      resourcesGranted: false,
+      trainingRoomKey: '',
+      treasureRoomKey: '',
+      shopRoomKey: '',
+      forgeRoomKey: '',
+      challengeRoomKey: '',
+      ladderRoomKey: '',
+      seenScenes: {},
+      lastCelebratedStep: '',
     };
   }
 
@@ -368,6 +371,23 @@ export function resumeGame() {
   function resetTutorialState(active = false) {
     Neo.tutorialState = createDefaultTutorialState();
     Neo.tutorialState.active = !!active;
+  }
+
+  function isTutorialRun() {
+    return !!Neo.tutorialState?.active
+      && Neo.gameMode === 'normal'
+      && Number(Neo.floor || 1) === 1;
+  }
+
+  function grantTutorialResources() {
+    if (!isTutorialRun() || !Neo.player || Neo.tutorialState.resourcesGranted) return;
+    Neo.player.coins = Math.max(Number(Neo.player.coins || 0), 60);
+    if (!Neo.player.items || typeof Neo.player.items !== 'object') Neo.player.items = {};
+    Neo.player.items[Neo.FORGE_VOUCHER_KEY || 'forge_voucher'] = Math.max(
+      1,
+      Number(Neo.player.items[Neo.FORGE_VOUCHER_KEY || 'forge_voucher'] || 0),
+    );
+    Neo.tutorialState.resourcesGranted = true;
   }
 
   // Strict gate for the game-loop side of the tutorial (spawning the dummy/relic,
@@ -509,10 +529,11 @@ export function resumeGame() {
   }
 
   function ensureTutorialDummyEnemy() {
-    if (!isFirstRunTutorialActive() || Neo.tutorialState.gotKill) return;
-    if (Neo.tutorialState.step !== 'fight') return;
+    if (!isFirstRunTutorialActive() || Neo.tutorialState.completed?.fight) return;
+    if (!['melee', 'laser', 'smash', 'fight'].includes(Neo.tutorialState.step)) return;
     if (!Neo.currentRoom || ['boss', 'god', 'shop', 'anvil', 'challenge'].includes(Neo.currentRoom.type)) return;
-    if (Neo.tutorialState.dummySpawned || Neo.enemies.some(enemy => enemy?.tutorialDummy)) return;
+    if (Neo.enemies.some(enemy => enemy?.tutorialDummy)) return;
+    if (Neo.tutorialState.dummySpawned) Neo.tutorialState.dummySpawned = false;
     // Force a fair tutorial duel by clearing the normal room wave for this step.
     if (Neo.enemies.length > 0) {
       Neo.enemies = Neo.enemies.filter(enemy => enemy?.type === 'rival');
@@ -525,11 +546,11 @@ export function resumeGame() {
       || { x: Neo.clamp(Neo.player.x + 80, Neo.WALL + 22, Neo.ROOM_W - Neo.WALL - 22), y: Neo.clamp(Neo.player.y - 40, Neo.WALL + 22, Neo.ROOM_H - Neo.WALL - 22) };
     const dummy = Neo.spawnEnemy('hunter', safeSpawn.x, safeSpawn.y, false);
     dummy.tutorialDummy = true;
-    dummy.hp = 16;
-    dummy.max = 16;
-    dummy.speed = 42;
-    dummy.dmg = 1;
-    dummy.attackCd = 2.8;
+    dummy.hp = 90;
+    dummy.max = 90;
+    dummy.speed = 0;
+    dummy.dmg = 0;
+    dummy.attackCd = 99;
     dummy.spawnT = 0.18;
     dummy.barrier = 0;
     Neo.tutorialState.dummySpawned = true;
@@ -541,10 +562,11 @@ export function resumeGame() {
   // a random drop. Mirrors ensureTutorialDummyEnemy: same safe-spawn fallback,
   // pushed once, tagged so we don't double-spawn.
   function ensureTutorialRelicPickup() {
-    if (!isFirstRunTutorialActive() || Neo.tutorialState.gotRelic) return;
+    if (!isFirstRunTutorialActive() || Neo.tutorialState.completed?.relic) return;
     if (Neo.tutorialState.step !== 'relic') return;
     if (!Neo.currentRoom || ['boss', 'god', 'shop', 'anvil', 'challenge'].includes(Neo.currentRoom.type)) return;
-    if (Neo.tutorialState.relicSpawned || Neo.pickups.some(p => p?.tutorialRelic)) return;
+    if (Neo.pickups.some(p => p?.tutorialRelic)) return;
+    if (Neo.tutorialState.relicSpawned) Neo.tutorialState.relicSpawned = false;
     const spot = Neo.findSafeEnemySpawnPoint(Neo.player.x + 90, Neo.player.y, 14)
       || Neo.findSafeEnemySpawnPoint(Neo.player.x - 90, Neo.player.y, 14)
       || Neo.findSafeEnemySpawnPoint(Neo.player.x, Neo.player.y - 80, 14)
@@ -555,23 +577,18 @@ export function resumeGame() {
   }
 
   function getTutorialStepOrder() {
-    return ['move', 'dash', 'fight', 'relic', 'forge', 'panel', 'ladder'];
+    return Neo.tutorialController?.steps?.map(step => step.id)
+      || ['welcome', 'move', 'hud', 'objectives', 'minimap', 'dash', 'melee', 'laser', 'smash', 'fight', 'relic', 'inventory_open', 'inventory_relics', 'inventory_moves', 'route_shop', 'shop_open', 'shop_buy', 'route_forge', 'forge_open', 'forge_stage', 'forge_confirm', 'route_ladder', 'ladder_use'];
   }
 
   function navigateTutorialStep(direction = 1) {
-    if (!isFirstRunTutorialActive()) return;
-    const order = getTutorialStepOrder();
-    const current = order.indexOf(Neo.tutorialState.step);
-    const nextIndex = Neo.clamp((current >= 0 ? current : 0) + direction, 0, order.length - 1);
-    Neo.tutorialState.step = order[nextIndex];
-    Neo.tutorialState.manualStepLockUntil = Number(Neo.gameElapsedTime || 0) + 0.65;
-    if (Neo.tutorialState.step === 'fight') ensureTutorialDummyEnemy();
-    if (Neo.tutorialState.step === 'relic') ensureTutorialRelicPickup();
-    Neo.updateObjective();
+    if (!isFirstRunTutorialEngaged()) return;
+    if (direction < 0) Neo.tutorialController?.back?.();
   }
 
   function getTutorialStepMessage() {
     if (!isFirstRunTutorialEngaged()) return '';
+    if (Neo.tutorialController?.getCurrentMessage) return Neo.tutorialController.getCurrentMessage();
     const moveHint = getMovementControlHint();
     const slashHint = getControlHint('slash', 'lmb');
     const laserHint = getControlHint('laser', 'rmb');
@@ -594,6 +611,7 @@ export function resumeGame() {
 
   function getTutorialObjectiveEntries() {
     if (!isFirstRunTutorialEngaged()) return [];
+    if (Neo.tutorialController?.getCurrentObjectiveEntries) return Neo.tutorialController.getCurrentObjectiveEntries();
     const moveHint = getMovementControlHint();
     const slashHint = getControlHint('slash', 'lmb');
     const laserHint = getControlHint('laser', 'rmb');
@@ -614,14 +632,8 @@ export function resumeGame() {
   }
 
   function skipFirstRunTutorial() {
-    if (!isFirstRunTutorialActive()) return;
-    Neo.tutorialState.active = false;
-    Neo.tutorialState.usedLadder = true;
-    Neo.metaProgress.tutorialCompleted = true;
-    Neo.persistMetaSoon();
-    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 26, life: 0.9, text: 'TUTORIAL SKIPPED', c: '#9cdcff' });
-    Neo.uiController.setTutorialBanner('', false);
-    Neo.updateObjective();
+    if (!isFirstRunTutorialEngaged()) return;
+    Neo.tutorialController?.skip?.();
   }
 
   // Require movement to be sustained for this long before the move step counts,
@@ -631,52 +643,18 @@ export function resumeGame() {
   function updateFirstRunTutorialProgress(dt = 0) {
     if (!isFirstRunTutorialActive()) return;
     const state = Neo.tutorialState;
-    const stepBefore = state.step;
     ensureTutorialDummyEnemy();
     ensureTutorialRelicPickup();
-    if (Number(state.manualStepLockUntil || 0) > Number(Neo.gameElapsedTime || 0)) return;
 
     // Debounced movement detection: accumulate time spent above the speed
     // threshold; only mark "moved" once it's been sustained briefly.
-    if (!state.moved) {
+    if (!state.completed?.move) {
       if (Math.hypot(Neo.player?.vx || 0, Neo.player?.vy || 0) > 24) {
         state.movedFor = Number(state.movedFor || 0) + Number(dt || 0);
-        if (state.movedFor >= TUTORIAL_MOVE_DEBOUNCE) state.moved = true;
+        if (state.movedFor >= TUTORIAL_MOVE_DEBOUNCE) Neo.tutorialController?.signal?.('move');
       } else {
         state.movedFor = 0;
       }
-    }
-    if (!state.gotKill && Number(Neo.player?.kills || 0) > 0) state.gotKill = true;
-
-    // A player who reaches the (cleared) ladder room without finding a Forge
-    // should not be stuck on the forge step — auto-clear it so the flow continues.
-    const atLadderRoom = Neo.currentRoom?.type === 'ladder';
-    if (state.step === 'forge' && !state.openedForge && atLadderRoom) state.openedForge = true;
-
-    if (state.step === 'move' && state.moved) state.step = 'dash';
-    if (state.step === 'dash' && state.dashed) state.step = 'fight';
-    if (state.step === 'fight' && state.gotKill) state.step = 'relic';
-    if (state.step === 'relic' && state.gotRelic) state.step = 'forge';
-    if (state.step === 'forge' && state.openedForge) state.step = 'panel';
-    if (state.step === 'panel' && state.openedInventory) state.step = 'ladder';
-    if (!state.usedLadder && Neo.floor > 1) state.usedLadder = true;
-
-    // Celebrate each step advance with the achievement sting (boss-kill 'victory'
-    // is reserved for the finale below) plus the existing particle text.
-    if (state.step !== stepBefore && state.step !== state.lastCelebratedStep) {
-      state.lastCelebratedStep = state.step;
-      Neo.playSfx?.('achievement');
-      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 30, life: 0.9, text: 'STEP COMPLETE', c: '#8dffcf' });
-    }
-
-    if (state.usedLadder) {
-      state.active = false;
-      if (!Neo.metaProgress.tutorialCompleted) {
-        Neo.metaProgress.tutorialCompleted = true;
-        Neo.persistMetaSoon();
-      }
-      Neo.playSfx?.('victory');
-      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 26, life: 1, text: 'TUTORIAL COMPLETE', c: '#8dffcf' });
     }
   }
 
@@ -1776,6 +1754,11 @@ export function resumeGame() {
     room.shopOffers.forEach(offer => {
       if (!offer) return;
       if (offer.type === 'item') {
+        if (offer.tutorialOffer) {
+          offer.cost = 5;
+          itemIndex += 1;
+          return;
+        }
         const rarity = Neo.itemRegistry.get(offer.key)?.rarity || Neo.ITEM_DEFS[offer.key]?.rarity || 'knight';
         offer.cost = getShopItemCost(itemIndex, floorValue, difficultyKey, rarity);
         itemIndex += 1;
@@ -2509,7 +2492,7 @@ export function resumeGame() {
 
     if (resume && Neo.activeRun) {
       restoreRun(Neo.activeRun);
-      resetTutorialState(shouldRunTutorial);
+      if (!Neo.activeRun.tutorialState) resetTutorialState(shouldRunTutorial);
     } else {
       // The tutorial runs on a fixed seed so its layout, forced relic, and
       // ladder room are identical for every new player; any typed seed is
@@ -2518,7 +2501,9 @@ export function resumeGame() {
         ? TUTORIAL_SEED
         : (Neo.ui.seed.value.trim() || createRandomSeed());
       Neo.selectedDifficulty = normalizeDifficulty(Neo.selectedDifficulty);
-      Neo.selectedChallenges = normalizeChallengeSelection(Neo.metaProgress.selectedChallenges);
+      Neo.selectedChallenges = shouldRunTutorial
+        ? []
+        : normalizeChallengeSelection(Neo.metaProgress.selectedChallenges);
       Neo.runLoopIndex = 0;
       Neo.runRevivesUsed = 0;
       Neo.runCrystalsEarned = 0;
@@ -2530,6 +2515,8 @@ export function resumeGame() {
       Neo.resetRunUnlocks?.();
       invalidateRunStatCaches();
       Neo.player = createDefaultPlayer();
+      resetTutorialState(shouldRunTutorial);
+      grantTutorialResources();
       if (!isMultiplayerMode()) resetMultiplayerState();
       if (Neo.gameMode === 'sandbox') {
         Neo.player.coins = Number(Neo.sandboxSettings.startingCoins || 0);
@@ -2551,7 +2538,7 @@ export function resumeGame() {
       Neo.lastDamageSourceKey = '';
       resetScene();
       Neo.generateFloor();
-      resetTutorialState(shouldRunTutorial);
+      if (shouldRunTutorial) Neo.tutorialController?.start?.();
       Neo.persistMetaSoon();
       Neo.scheduleRunSave();
     }
@@ -3303,6 +3290,8 @@ export function resumeGame() {
       ? Math.max(1, Number(snapshot.floorsEntered))
       : Math.max(1, Neo.runLoopIndex * Neo.MAX_FLOOR + Number(snapshot.floor || 1));
     Neo.gameElapsedTime = Math.max(0, Number(snapshot.gameElapsedTime || 0));
+    Neo.tutorialState = Neo.tutorialController?.normalizeState?.(snapshot.tutorialState, false)
+      || (snapshot.tutorialState && typeof snapshot.tutorialState === 'object' ? { ...snapshot.tutorialState } : createDefaultTutorialState());
     Neo.selectedDifficulty = normalizeDifficulty(snapshot.difficulty);
     Neo.selectedChallenges = normalizeChallengeSelection(snapshot.challenges);
     Neo.metaProgress.bestFloor = Math.max(Neo.metaProgress.bestFloor, Neo.floor);
@@ -3311,6 +3300,7 @@ export function resumeGame() {
     Neo.currentRoom = Neo.rooms.find(room => room.gx === snapshot.currentRoom?.gx && room.gy === snapshot.currentRoom?.gy) || Neo.rooms[0] || null;
     invalidateRunStatCaches();
     Neo.player = Neo.migratePlayerData(snapshot.player);
+    grantTutorialResources();
     if (isMultiplayerMode()) {
       Neo.player2 = snapshot.player2 ? Neo.migratePlayerData(snapshot.player2) : null;
       Neo.player3 = snapshot.player3 ? Neo.migratePlayerData(snapshot.player3) : null;
@@ -3383,6 +3373,7 @@ export function resumeGame() {
     Neo.shakeT = 0;
     Neo.fade = 0;
     Neo.fading = 0;
+    Neo.tutorialController?.syncFromState?.();
     Neo.nextDoor = null;
     Neo.floorSkipPending = 0;
     Neo.teleportKeyLatch = false;
@@ -3447,6 +3438,8 @@ export function resumeGame() {
   Neo.applySandboxPlayerSetup = applySandboxPlayerSetup;
   Neo.createDefaultTutorialState = createDefaultTutorialState;
   Neo.resetTutorialState = resetTutorialState;
+  Neo.isTutorialRun = isTutorialRun;
+  Neo.grantTutorialResources = grantTutorialResources;
   Neo.isFirstRunTutorialActive = isFirstRunTutorialActive;
   Neo.isFirstRunTutorialEngaged = isFirstRunTutorialEngaged;
   Neo.consumeReplayTutorialRequest = consumeReplayTutorialRequest;
