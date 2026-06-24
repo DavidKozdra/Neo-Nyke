@@ -9,17 +9,39 @@ describe('Sarge tutorial v2', () => {
   const html = read('index.html');
   const main = read('js/main.js');
   const controller = read('js/ui/tutorial-controller.js');
+  const tutorialCss = read('css/tutorial.css');
   const scenes = read('js/tutorial/scenes.js');
   const rooms = read('js/game/rooms.js');
   const enemies = read('js/game/enemies.js');
   const world = read('js/game/world.js');
+  const uiController = read('js/ui/controller.js');
+  const gamepadControls = read('js/gamepadControls.js');
   const serviceWorker = read('sw.js');
 
   test('loads a dedicated tutorial controller and stylesheet', () => {
     expect(html).toContain('css/tutorial.css');
     expect(html).toContain('id="tutorialSpotlightHole"');
     expect(html).toContain('id="tutorialCard"');
+    expect(html).toContain('id="tutorialCommandValue"');
     expect(main).toContain("import './ui/tutorial-controller.js'");
+  });
+
+  test('shows live keyboard, touch, and controller commands prominently', () => {
+    expect(controller).toContain('getBindingLabel?.(action)');
+    expect(controller).toContain('DEFAULT_TOUCH_BINDINGS');
+    expect(controller).toContain('DEFAULT_GAMEPAD_BINDINGS');
+    expect(controller).toContain("overlay.dataset.inputMode = getInputMode()");
+    expect(controller).toContain("command: () => getActionLabel('dash', 'SHIFT')");
+    expect(controller).toContain("ring.classList.toggle('tutorial-target-ring--offscreen', offscreen)");
+    expect(controller).toContain("commandLabel.textContent = nextCommand ? (step.commandLabel || 'PRESS') : ''");
+    expect(controller).toContain('if (gate) gate.hidden = true');
+    expect(tutorialCss).toContain('.tutorial-command__value');
+    expect(tutorialCss).toContain('.tutorial-command[hidden]');
+    expect(tutorialCss).toContain('.tutorial-target-ring--offscreen::before');
+    expect(tutorialCss).toContain('font-size: calc(27px * var(--font-scale, 1))');
+    expect(tutorialCss).toContain('.tutorial-cutscene-active .dialogue-text');
+    expect(uiController).toContain("touchInput ? 'TAP' : gamepadInput ? 'A BUTTON' : 'ENTER'");
+    expect(gamepadControls).toContain('window.Neo?.uiController?.isDialogueOpen?.()');
   });
 
   test('keeps Sarge dialogue in an editable tutorial directory', () => {
@@ -37,6 +59,23 @@ describe('Sarge tutorial v2', () => {
     }
     expect(rooms).toContain("challengeRoom.challengeType = 'bomb'");
     expect(rooms).toContain("room.tutorialLesson = '");
+  });
+
+  test('recovers cleanly when rooms or actions happen out of order', () => {
+    expect(controller).toContain("roomKey: 'trainingRoomKey'");
+    expect(controller).toContain('routeStep: true');
+    expect(controller).toContain("completeWhen: ['treasure_open']");
+    expect(controller).toContain('if (step.routeStep) return isInStepRoom(step, state) || areCompletionMilestonesDone(step, state)');
+    expect(controller).toContain("title: `${returning ? 'Return to' : 'Go to'} ${destinationName}`");
+    expect(controller).toContain("target: targetWorld(() => getNextDoorPoint(destinationKey)");
+    expect(controller).toContain("if (type === 'dash') setCompleted('dash')");
+    expect(controller).not.toContain("current === 'route_training'");
+    expect(controller).not.toContain("current === 'dash'");
+  });
+
+  test('does not play future room cutscenes before their lesson is current', () => {
+    expect(controller).toContain("roomKey(room) !== state[step.roomKey]");
+    expect(controller).toContain("room.tutorialLesson !== 'start'");
   });
 
   test('uses a safe real bomb trial for the challenge lesson', () => {

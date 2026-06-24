@@ -693,7 +693,10 @@ export function createUIController(view) {
         }
       }
       if (view.dialogueHint) {
-        const hint = snapshot.isFullyTyped ? 'ENTER TO CONTINUE' : 'ENTER TO SKIP';
+        const touchInput = window.NeoTouch?.active || window.NeoSettings?.isTouchControlsEnabled?.();
+        const gamepadInput = !touchInput && window.NeoGamepad?.[0]?.active;
+        const inputLabel = touchInput ? 'TAP' : gamepadInput ? 'A BUTTON' : 'ENTER';
+        const hint = `${inputLabel} TO ${snapshot.isFullyTyped ? 'CONTINUE' : 'SKIP'}`;
         if (dialogueRenderCache.hint !== hint) {
           view.dialogueHint.textContent = hint;
           dialogueRenderCache.hint = hint;

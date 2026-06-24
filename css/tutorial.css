@@ -54,6 +54,55 @@
     inset 0 0 18px rgba(255, 220, 80, .24);
 }
 
+.tutorial-target-ring--offscreen {
+  display: grid;
+  place-items: center;
+  color: #08111b;
+  background: linear-gradient(120deg, #ffe66f, #fff4b0);
+  border-width: 4px;
+  border-radius: 12px;
+  box-shadow: 0 0 0 3px rgba(3, 9, 16, .96), 0 0 30px rgba(255, 230, 111, .95);
+}
+
+.tutorial-target-ring--offscreen::before {
+  content: "TARGET";
+  font-size: calc(18px * var(--font-scale, 1));
+  font-weight: 1000;
+  letter-spacing: .08em;
+}
+
+.tutorial-target-ring--offscreen::after {
+  top: 50%;
+  left: 50%;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  border-width: 5px 5px 0 0;
+  border-color: #fff7bd;
+  filter: drop-shadow(0 0 4px #000);
+  animation: tutorial-offscreen-arrow .7s ease-in-out infinite;
+}
+
+.tutorial-target-ring--offscreen[data-direction="right"]::after {
+  left: calc(100% + 18px);
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+
+.tutorial-target-ring--offscreen[data-direction="left"]::after {
+  left: -18px;
+  transform: translate(-50%, -50%) rotate(225deg);
+}
+
+.tutorial-target-ring--offscreen[data-direction="up"]::after {
+  top: -18px;
+  transform: translate(-50%, -50%) rotate(-45deg);
+}
+
+.tutorial-target-ring--offscreen[data-direction="down"]::after {
+  top: calc(100% + 18px);
+  transform: translate(-50%, -50%) rotate(135deg);
+}
+
 .tutorial-card {
   position: fixed;
   z-index: 3;
@@ -99,15 +148,51 @@
 .tutorial-title {
   margin: 8px 0 5px;
   color: #fff;
-  font-size: calc(28px * var(--font-scale, 1));
+  font-size: calc(32px * var(--font-scale, 1));
   line-height: 1.05;
 }
 
 .tutorial-text {
   color: #edf8ff;
-  font-size: calc(21px * var(--font-scale, 1));
-  line-height: 1.34;
+  font-size: calc(24px * var(--font-scale, 1));
+  line-height: 1.38;
   text-wrap: pretty;
+}
+
+.tutorial-command {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 12px 14px;
+  color: #07111b;
+  background: linear-gradient(100deg, #ffe66f, #9cf3ff);
+  border: 3px solid #fff7bd;
+  border-radius: 10px;
+  box-shadow: 0 0 0 2px rgba(3, 10, 18, .9), 0 0 22px rgba(255, 230, 111, .55);
+  animation: tutorial-command-pulse 1.2s ease-in-out infinite;
+}
+
+.tutorial-command[hidden],
+.tutorial-command.hidden {
+  display: none !important;
+}
+
+.tutorial-command__label {
+  flex: 0 0 auto;
+  font-size: calc(14px * var(--font-scale, 1));
+  font-weight: 900;
+  letter-spacing: .12em;
+}
+
+.tutorial-command__value {
+  min-width: 0;
+  font-size: calc(27px * var(--font-scale, 1));
+  font-weight: 1000;
+  line-height: 1;
+  letter-spacing: .045em;
+  overflow-wrap: anywhere;
+  text-transform: uppercase;
 }
 
 .tutorial-gate {
@@ -116,7 +201,7 @@
   color: #fff0a8;
   background: rgba(255, 216, 77, .09);
   border-left: 3px solid #ffe66f;
-  font-size: calc(17px * var(--font-scale, 1));
+  font-size: calc(19px * var(--font-scale, 1));
 }
 
 .tutorial-actions {
@@ -217,28 +302,76 @@ html.princess-ui .tutorial-target-ring {
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
+@keyframes tutorial-command-pulse {
+  0%, 100% { transform: scale(1); filter: brightness(1); }
+  50% { transform: scale(1.018); filter: brightness(1.08); }
+}
+
+@keyframes tutorial-offscreen-arrow {
+  0%, 100% { opacity: .72; }
+  50% { opacity: 1; }
+}
+
+.tutorial-cutscene-active .dialogue-box {
+  width: min(980px, calc(100vw - 32px));
+  padding: 22px 26px 20px;
+  border: 2px solid #ffe081;
+  box-shadow: 0 20px 58px rgba(0, 0, 0, .68), 0 0 30px rgba(255, 205, 100, .2);
+}
+
+.tutorial-cutscene-active .dialogue-speaker {
+  color: #ffe081;
+  font-size: calc(18px * var(--font-scale, 1));
+}
+
+.tutorial-cutscene-active .dialogue-text {
+  min-height: 92px;
+  font-size: calc(30px * var(--font-scale, 1));
+  line-height: 1.42;
+}
+
+.tutorial-cutscene-active .dialogue-hint {
+  color: #fff0a8;
+  font-size: calc(16px * var(--font-scale, 1));
+  opacity: 1;
+}
+
 @media (max-width: 720px) {
   .tutorial-card {
     width: calc(100vw - 16px) !important;
-    max-height: min(34dvh, 286px);
-    padding: 11px 12px 10px;
+    max-height: min(42dvh, 360px);
+    padding: 12px 13px 11px;
     border-radius: 10px;
   }
 
   .tutorial-title {
     margin-top: 5px;
-    font-size: calc(22px * var(--font-scale, 1));
+    font-size: calc(26px * var(--font-scale, 1));
   }
 
   .tutorial-text {
-    font-size: calc(17px * var(--font-scale, 1));
-    line-height: 1.24;
+    font-size: calc(21px * var(--font-scale, 1));
+    line-height: 1.3;
+  }
+
+  .tutorial-command {
+    gap: 8px;
+    margin-top: 9px;
+    padding: 9px 10px;
+  }
+
+  .tutorial-command__label {
+    font-size: calc(12px * var(--font-scale, 1));
+  }
+
+  .tutorial-command__value {
+    font-size: calc(23px * var(--font-scale, 1));
   }
 
   .tutorial-gate {
     margin-top: 6px;
     padding: 5px 7px;
-    font-size: calc(15px * var(--font-scale, 1));
+    font-size: calc(17px * var(--font-scale, 1));
   }
 
   .tutorial-actions {
@@ -258,6 +391,25 @@ html.princess-ui .tutorial-target-ring {
     padding: 5px 8px;
     font-size: calc(14px * var(--font-scale, 1));
   }
+
+  .tutorial-cutscene-active .dialogue-box {
+    width: calc(100vw - 16px);
+    padding: 13px 14px 12px;
+  }
+
+  .tutorial-cutscene-active .dialogue-speaker {
+    font-size: calc(13px * var(--font-scale, 1));
+  }
+
+  .tutorial-cutscene-active .dialogue-text {
+    min-height: 58px;
+    font-size: calc(22px * var(--font-scale, 1));
+    line-height: 1.34;
+  }
+
+  .tutorial-cutscene-active .dialogue-hint {
+    font-size: calc(12px * var(--font-scale, 1));
+  }
 }
 
 @media (max-height: 520px) and (orientation: landscape) {
@@ -270,7 +422,8 @@ html.princess-ui .tutorial-target-ring {
 @media (prefers-reduced-motion: reduce) {
   .tutorial-target-ring,
   .tutorial-target-ring::after,
-  .tutorial-card--enter {
+  .tutorial-card--enter,
+  .tutorial-command {
     animation: none !important;
   }
 }

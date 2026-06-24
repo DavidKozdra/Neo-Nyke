@@ -9,6 +9,18 @@ const BUTTON_NAMES = {
   4: 'LB', 5: 'RB', 6: 'LT', 7: 'RT',
   8: 'VIEW', 9: 'MENU', 10: 'L3', 11: 'R3',
 };
+const DEFAULT_TOUCH_BINDINGS = {
+  touchA: 'slash',
+  touchB: 'laser',
+  touchY: 'smash',
+  touchX: 'ascend',
+  touchDash: 'dash',
+};
+const DEFAULT_GAMEPAD_BINDINGS = {
+  0: 'slash', 1: 'dash', 2: 'laser', 3: 'smash',
+  4: 'inventory', 5: 'dash', 6: 'activateAll', 7: 'interact',
+  8: 'inventory', 9: 'pause', 10: 'ascend', 11: 'interact',
+};
 
 export function findRoomPath(rooms, start, target) {
   if (!start || !target) return [];
@@ -57,25 +69,35 @@ function getInputMode() {
 function getActionLabel(action, fallback) {
   const mode = getInputMode();
   if (mode === 'touch') {
-    const bindings = window.NeoSettings?.getTouchBindings?.() || {};
-    const labels = { touchA: 'A', touchB: 'B', touchX: 'X', touchY: 'Y', touchDash: 'DASH' };
+    const bindings = { ...DEFAULT_TOUCH_BINDINGS, ...(window.NeoSettings?.getTouchBindings?.() || {}) };
+    const labels = { touchA: 'A BUTTON', touchB: 'B BUTTON', touchX: 'X BUTTON', touchY: 'Y BUTTON', touchDash: 'DASH BUTTON' };
     const match = Object.entries(bindings).find(([, value]) => value === action);
     if (match) return labels[match[0]] || fallback;
     if (action === 'inventory') return 'MENU → INVENTORY';
-    if (action === 'interact') return 'CLIMB / PROMPT';
+    if (action === 'interact') return 'TAP THE PROMPT';
   }
   if (mode === 'gamepad') {
-    const bindings = window.NeoSettings?.getGamepadBindings?.() || {};
+    const bindings = { ...DEFAULT_GAMEPAD_BINDINGS, ...(window.NeoSettings?.getGamepadBindings?.() || {}) };
     const match = Object.entries(bindings).find(([, value]) => value === action);
     if (match) return BUTTON_NAMES[Number(match[0])] || fallback;
   }
-  return Neo.getControlHint?.(action, fallback) || String(fallback || '').toUpperCase();
+  return window.NeoSettings?.getBindingLabel?.(action)
+    || Neo.getControlHint?.(action, fallback)
+    || String(fallback || '').toUpperCase();
 }
 
 function getMovementLabel() {
   if (getInputMode() === 'touch') return 'LEFT JOYSTICK';
   if (getInputMode() === 'gamepad') return 'LEFT STICK';
   return Neo.getMovementControlHint?.() || 'W/A/S/D';
+}
+
+function getLadderLabel() {
+  if (getInputMode() !== 'touch') return getActionLabel('interact', 'E');
+  const bindings = { ...DEFAULT_TOUCH_BINDINGS, ...(window.NeoSettings?.getTouchBindings?.() || {}) };
+  const labels = { touchA: 'A BUTTON', touchB: 'B BUTTON', touchX: 'X BUTTON', touchY: 'Y BUTTON', touchDash: 'DASH BUTTON' };
+  const match = Object.entries(bindings).find(([, value]) => value === 'ascend');
+  return match ? `${labels[match[0]]} / TAP LADDER` : 'TAP LADDER';
 }
 
 function targetDom(selector, padding = 10) {
@@ -90,6 +112,15 @@ function targetMinimap() {
   return { kind: 'minimap', padding: 8 };
 }
 
+const TUTORIAL_ROOM_NAMES = {
+  trainingRoomKey: 'Training Room',
+  treasureRoomKey: 'Treasure Room',
+  shopRoomKey: 'Shop',
+  forgeRoomKey: 'Forge',
+  challengeRoomKey: 'Bomb Trial',
+  ladderRoomKey: 'Exit',
+};
+
 function createSteps() {
   return [
     {
@@ -103,7 +134,8 @@ function createSteps() {
       id: 'move',
       chapter: 'MOVEMENT',
       title: 'Move your hero',
-      text: () => `Hold ${getMovementLabel()} and move for a moment.`,
+      text: () => 'Move your hero for a moment.',
+      command: getMovementLabel,
       target: targetWorld(() => Neo.player, { padding: 28 }),
       complete: state => !!state.completed?.move,
     },
@@ -136,39 +168,51 @@ function createSteps() {
       chapter: 'COMBAT ROOM',
       title: 'Enter the training room',
       text: () => 'Follow the pulsing doorway. Sarge will explain the room when you enter.',
+      command: () => 'GO THROUGH THE TARGET DOOR',
+      commandLabel: 'GOAL',
       target: targetWorld(() => getNextDoorPoint(Neo.tutorialState?.trainingRoomKey), { padding: 28, route: true }),
-      complete: state => !!state.completed?.route_training,
+      roomKey: 'trainingRoomKey',
+      routeStep: true,
+      completeWhen: ['dash', 'melee', 'laser', 'smash', 'fight', 'relic'],
     },
     {
       id: 'dash',
       chapter: 'COMBAT',
       title: 'Dash through danger',
-      text: () => `Press ${getActionLabel('dash', 'SHIFT')}. Dashing gives a short burst of invulnerability.`,
+      text: () => 'Dashing gives a short burst of invulnerability.',
+      command: () => getActionLabel('dash', 'SHIFT'),
       target: targetDom('[data-skill="dash"]', 8),
+      roomKey: 'trainingRoomKey',
       complete: state => !!state.completed?.dash,
     },
     {
       id: 'melee',
       chapter: 'COMBAT',
       title: 'Use your close attack',
-      text: () => `Aim at the training dummy and press ${getActionLabel('slash', 'LMB')}.`,
+      text: () => 'Aim at the training dummy and use your close attack.',
+      command: () => getActionLabel('slash', 'LMB'),
       target: targetWorld(() => Neo.enemies?.find(enemy => enemy?.tutorialDummy), { padding: 24 }),
+      roomKey: 'trainingRoomKey',
       complete: state => !!state.completed?.melee,
     },
     {
       id: 'laser',
       chapter: 'COMBAT',
       title: 'Use your ranged attack',
-      text: () => `Aim at the dummy and press ${getActionLabel('laser', 'RMB')}.`,
+      text: () => 'Aim at the dummy and use your ranged attack.',
+      command: () => getActionLabel('laser', 'RMB'),
       target: targetDom('[data-skill="laser"]', 8),
+      roomKey: 'trainingRoomKey',
       complete: state => !!state.completed?.laser,
     },
     {
       id: 'smash',
       chapter: 'COMBAT',
       title: 'Use your heavy move',
-      text: () => `Press ${getActionLabel('smash', 'R')}. Heavy moves hit hard or control space.`,
+      text: () => 'Heavy moves hit hard or control space.',
+      command: () => getActionLabel('smash', 'R'),
       target: targetDom('[data-skill="smash"]', 8),
+      roomKey: 'trainingRoomKey',
       complete: state => !!state.completed?.smash,
     },
     {
@@ -176,7 +220,10 @@ function createSteps() {
       chapter: 'COMBAT',
       title: 'Defeat the dummy',
       text: () => 'Combine your attacks and finish the training dummy. Watch the action cards for cooldowns.',
+      command: () => 'DEFEAT THE DUMMY',
+      commandLabel: 'GOAL',
       target: targetWorld(() => Neo.enemies?.find(enemy => enemy?.tutorialDummy), { padding: 24 }),
+      roomKey: 'trainingRoomKey',
       complete: state => !!state.completed?.fight,
     },
     {
@@ -184,14 +231,18 @@ function createSteps() {
       chapter: 'BUILD',
       title: 'Pick up the relic',
       text: () => 'Walk over the glowing relic. Relics stay active for the rest of this run and shape your build.',
+      command: () => 'WALK OVER THE RELIC',
+      commandLabel: 'GOAL',
       target: targetWorld(() => Neo.pickups?.find(pickup => pickup?.tutorialRelic), { padding: 22 }),
+      roomKey: 'trainingRoomKey',
       complete: state => !!state.completed?.relic,
     },
     {
       id: 'inventory_open',
       chapter: 'INVENTORY',
       title: 'Open Inventory',
-      text: () => `Press ${getActionLabel('inventory', 'I')} to inspect your build.`,
+      text: () => 'Open Inventory to inspect your build.',
+      command: () => getActionLabel('inventory', 'I'),
       target: targetDom('.touch-hamburger', 8),
       complete: state => !!state.completed?.inventory_open,
     },
@@ -200,6 +251,8 @@ function createSteps() {
       chapter: 'INVENTORY',
       title: 'Open the Relics tab',
       text: () => 'Select Relics to see every passive upgrade and its exact effect.',
+      command: () => 'SELECT RELICS',
+      commandLabel: 'GOAL',
       target: targetDom('#invPanel [data-inv-tab="items"]', 8),
       complete: state => !!state.completed?.inventory_relics,
     },
@@ -208,6 +261,8 @@ function createSteps() {
       chapter: 'INVENTORY',
       title: 'Open the Moves tab',
       text: () => 'Select Moves. This panel shows what each action slot currently uses and where moves can be equipped.',
+      command: () => 'SELECT MOVES',
+      commandLabel: 'GOAL',
       target: targetDom('#invPanel [data-inv-tab="equipped"]', 8),
       complete: state => !!state.completed?.inventory_moves,
     },
@@ -216,15 +271,22 @@ function createSteps() {
       chapter: 'TREASURE ROOM',
       title: 'Go to the Treasure room',
       text: () => 'Follow the highlighted doorway to the chest room.',
+      command: () => 'GO THROUGH THE TARGET DOOR',
+      commandLabel: 'GOAL',
       target: targetWorld(() => getNextDoorPoint(Neo.tutorialState?.treasureRoomKey), { padding: 28, route: true }),
-      complete: state => !!state.completed?.route_treasure,
+      roomKey: 'treasureRoomKey',
+      routeStep: true,
+      completeWhen: ['treasure_open'],
     },
     {
       id: 'treasure_open',
       chapter: 'TREASURE ROOM',
       title: 'Open the chest',
       text: () => 'Walk into the chest and collect what comes out.',
+      command: () => 'WALK INTO THE CHEST',
+      commandLabel: 'GOAL',
       target: targetWorld(() => Neo.chests?.find(chest => !chest?.open), { padding: 24 }),
+      roomKey: 'treasureRoomKey',
       complete: state => !!state.completed?.treasure_open,
     },
     {
@@ -232,15 +294,21 @@ function createSteps() {
       chapter: 'SHOP',
       title: 'Go to the Shop',
       text: () => 'Close Inventory and follow the pulsing doorway. The minimap labels the destination SHOP.',
+      command: () => 'GO THROUGH THE TARGET DOOR',
+      commandLabel: 'GOAL',
       target: targetWorld(() => getNextDoorPoint(Neo.tutorialState?.shopRoomKey), { padding: 28, route: true }),
-      complete: state => !!state.completed?.route_shop,
+      roomKey: 'shopRoomKey',
+      routeStep: true,
+      completeWhen: ['shop_buy'],
     },
     {
       id: 'shop_open',
       chapter: 'SHOP',
       title: 'Open the Shop',
-      text: () => `Press ${getActionLabel('interact', 'E')} or tap the prompt.`,
+      text: () => 'Use the interaction prompt to open the Shop.',
+      command: () => getActionLabel('interact', 'E'),
       target: targetDom('#interactPrompt', 10),
+      roomKey: 'shopRoomKey',
       complete: state => !!state.completed?.shop_open,
     },
     {
@@ -248,7 +316,10 @@ function createSteps() {
       chapter: 'SHOP',
       title: 'Buy the highlighted relic',
       text: () => 'Prices use run coins. Buy the TRAINING PICK to add another real relic to this run.',
+      command: () => 'BUY TRAINING PICK',
+      commandLabel: 'GOAL',
       target: targetDom('.shop-buy[data-tutorial-offer="true"]', 10),
+      roomKey: 'shopRoomKey',
       complete: state => !!state.completed?.shop_buy,
     },
     {
@@ -256,15 +327,21 @@ function createSteps() {
       chapter: 'FORGE',
       title: 'Go to the Forge',
       text: () => 'Close the Shop and follow the highlighted doorway to FORGE.',
+      command: () => 'GO THROUGH THE TARGET DOOR',
+      commandLabel: 'GOAL',
       target: targetWorld(() => getNextDoorPoint(Neo.tutorialState?.forgeRoomKey), { padding: 28, route: true }),
-      complete: state => !!state.completed?.route_forge,
+      roomKey: 'forgeRoomKey',
+      routeStep: true,
+      completeWhen: ['forge_confirm'],
     },
     {
       id: 'forge_open',
       chapter: 'FORGE',
       title: 'Open the Forge',
-      text: () => `Press ${getActionLabel('interact', 'E')} or tap the prompt.`,
+      text: () => 'Use the interaction prompt to open the Forge.',
+      command: () => getActionLabel('interact', 'E'),
       target: targetDom('#interactPrompt', 10),
+      roomKey: 'forgeRoomKey',
       complete: state => !!state.completed?.forge_open,
     },
     {
@@ -272,7 +349,9 @@ function createSteps() {
       chapter: 'FORGE',
       title: 'Stage an upgrade',
       text: () => 'Press + on any available stat. The tutorial Forge Voucher makes this step free.',
+      command: () => 'PRESS +',
       target: targetDom('#anvilPanel .anvil-stat-btn[data-dir="1"]:not([disabled])', 10),
+      roomKey: 'forgeRoomKey',
       complete: state => !!state.completed?.forge_stage,
     },
     {
@@ -280,7 +359,10 @@ function createSteps() {
       chapter: 'FORGE',
       title: 'Confirm the upgrade',
       text: () => 'Confirm Upgrades to permanently apply the staged increase for this run.',
+      command: () => 'CONFIRM UPGRADES',
+      commandLabel: 'GOAL',
       target: targetDom('#anvilConfirm:not([disabled])', 10),
+      roomKey: 'forgeRoomKey',
       complete: state => !!state.completed?.forge_confirm,
     },
     {
@@ -288,15 +370,22 @@ function createSteps() {
       chapter: 'CHALLENGE ROOM',
       title: 'Go to the Bomb trial',
       text: () => 'Follow the highlighted doorway to the Challenge room.',
+      command: () => 'GO THROUGH THE TARGET DOOR',
+      commandLabel: 'GOAL',
       target: targetWorld(() => getNextDoorPoint(Neo.tutorialState?.challengeRoomKey), { padding: 28, route: true }),
-      complete: state => !!state.completed?.route_challenge,
+      roomKey: 'challengeRoomKey',
+      routeStep: true,
+      completeWhen: ['challenge_bombs'],
     },
     {
       id: 'challenge_start',
       chapter: 'CHALLENGE ROOM',
       title: 'Start the trial',
       text: () => 'Touch the central trial marker to begin.',
+      command: () => 'TOUCH TRIAL MARKER',
+      commandLabel: 'GOAL',
       target: targetWorld(() => Neo.pickups?.find(pickup => pickup?.type === 'challengeStarter'), { padding: 24 }),
+      roomKey: 'challengeRoomKey',
       complete: state => !!state.completed?.challenge_start,
     },
     {
@@ -304,7 +393,10 @@ function createSteps() {
       chapter: 'CHALLENGE ROOM',
       title: 'Defuse every blue bomb',
       text: () => 'Touch blue bombs only. Avoid every red bomb.',
+      command: () => 'TOUCH BLUE BOMBS ONLY',
+      commandLabel: 'GOAL',
       target: targetWorld(() => Neo.pickups?.find(pickup => pickup?.type === 'challengeBomb' && pickup.safe), { padding: 24 }),
+      roomKey: 'challengeRoomKey',
       complete: state => !!state.completed?.challenge_bombs,
     },
     {
@@ -312,15 +404,21 @@ function createSteps() {
       chapter: 'EXIT',
       title: 'Go to the Exit',
       text: () => 'Close the Forge and follow the highlighted doorway to EXIT.',
+      command: () => 'GO THROUGH THE TARGET DOOR',
+      commandLabel: 'GOAL',
       target: targetWorld(() => getNextDoorPoint(Neo.tutorialState?.ladderRoomKey), { padding: 28, route: true }),
-      complete: state => !!state.completed?.route_ladder,
+      roomKey: 'ladderRoomKey',
+      routeStep: true,
+      completeWhen: ['ladder_use'],
     },
     {
       id: 'ladder_use',
       chapter: 'EXIT',
       title: 'Use the ladder',
-      text: () => `Stand on the ladder and press ${getActionLabel('interact', 'E')}. Floor 2 continues as a normal run.`,
+      text: () => 'Stand on the ladder to continue to Floor 2 and the normal run.',
+      command: getLadderLabel,
       target: targetWorld(() => Neo.pickups?.find(pickup => pickup?.type === 'ladder'), { padding: 28 }),
+      roomKey: 'ladderRoomKey',
       complete: state => !!state.completed?.ladder_use,
     },
   ];
@@ -381,14 +479,14 @@ function createTutorialState(active = false) {
     movedFor: 0,
     dummySpawned: false,
     relicSpawned: false,
-      resourcesGranted: false,
-      trainingRoomKey: '',
-      treasureRoomKey: '',
-      shopRoomKey: '',
-      forgeRoomKey: '',
-      challengeRoomKey: '',
-      ladderRoomKey: '',
-      seenScenes: {},
+    resourcesGranted: false,
+    trainingRoomKey: '',
+    treasureRoomKey: '',
+    shopRoomKey: '',
+    forgeRoomKey: '',
+    challengeRoomKey: '',
+    ladderRoomKey: '',
+    seenScenes: {},
     lastCelebratedStep: '',
   };
 }
@@ -403,6 +501,9 @@ export function createTutorialController() {
   const speaker = document.getElementById('tutorialSpeaker');
   const title = document.getElementById('tutorialTitle');
   const text = document.getElementById('tutorialText');
+  const command = document.getElementById('tutorialCommand');
+  const commandLabel = document.getElementById('tutorialCommandLabel');
+  const commandValue = document.getElementById('tutorialCommandValue');
   const progress = document.getElementById('tutorialProgress');
   const gate = document.getElementById('tutorialGate');
   const hint = document.getElementById('tutorialHint');
@@ -418,6 +519,38 @@ export function createTutorialController() {
   const getState = () => Neo.tutorialState;
   const getIndex = () => Math.max(0, steps.findIndex(step => step.id === getState()?.step));
   const getStep = () => steps[getIndex()] || steps[0];
+  const getCurrentRoomKey = () => roomKey(Neo.currentRoom);
+
+  function isInStepRoom(step, state = getState()) {
+    if (!step?.roomKey) return true;
+    const requiredRoomKey = String(state?.[step.roomKey] || '');
+    return !!requiredRoomKey && getCurrentRoomKey() === requiredRoomKey;
+  }
+
+  function areCompletionMilestonesDone(step, state = getState()) {
+    return Array.isArray(step?.completeWhen)
+      && step.completeWhen.length > 0
+      && step.completeWhen.every(id => !!state?.completed?.[id]);
+  }
+
+  function getPresentedStep(step = getStep()) {
+    const state = getState();
+    if (!step?.roomKey || isInStepRoom(step, state)) return step;
+    const destinationKey = state?.[step.roomKey];
+    const destinationName = TUTORIAL_ROOM_NAMES[step.roomKey] || 'lesson room';
+    const returning = !step.routeStep || !!roomFromKey(destinationKey)?.visited;
+    return {
+      ...step,
+      chapter: 'NAVIGATION',
+      title: `${returning ? 'Return to' : 'Go to'} ${destinationName}`,
+      text: () => returning
+        ? `This lesson is not finished. Follow the target doors back to the ${destinationName}.`
+        : `Follow the target doors to the ${destinationName}.`,
+      command: () => 'GO THROUGH THE TARGET DOOR',
+      commandLabel: 'GOAL',
+      target: targetWorld(() => getNextDoorPoint(destinationKey), { padding: 28, route: true }),
+    };
+  }
 
   function normalizeState(state, active = false) {
     const base = createTutorialState(active);
@@ -448,6 +581,7 @@ export function createTutorialController() {
     const state = getState();
     if (!state || !step) return false;
     if (step.manual) return !!state.completed?.[step.id];
+    if (step.routeStep) return isInStepRoom(step, state) || areCompletionMilestonesDone(step, state);
     return typeof step.complete === 'function' ? !!step.complete(state) : !!state.completed?.[step.id];
   }
 
@@ -481,33 +615,25 @@ export function createTutorialController() {
   function signal(type, payload = {}) {
     const state = getState();
     if (!state?.active) return false;
-    const current = state.step;
-    if (type === 'move' && current === 'move') setCompleted('move');
-    if (type === 'attack' && payload.action === current && ['melee', 'laser', 'smash'].includes(current)) setCompleted(current);
-    if (type === 'dash' && current === 'dash') setCompleted('dash');
-    if (type === 'enemy-killed' && payload.tutorialDummy && current === 'fight') setCompleted('fight');
-    if (type === 'relic-collected' && payload.tutorialRelic && current === 'relic') setCompleted('relic');
-    if (type === 'panel-open' && payload.panel === 'inventory' && current === 'inventory_open') setCompleted('inventory_open');
-    if (type === 'inventory-tab' && payload.tab === 'items' && current === 'inventory_relics') setCompleted('inventory_relics');
-    if (type === 'inventory-tab' && payload.tab === 'equipped' && current === 'inventory_moves') setCompleted('inventory_moves');
-    if (type === 'room-enter') {
-      const key = roomKey(payload.room);
-      if (current === 'route_training' && key && key === state.trainingRoomKey) setCompleted('route_training');
-      if (current === 'route_treasure' && key && key === state.treasureRoomKey) setCompleted('route_treasure');
-      if (current === 'route_shop' && key && key === state.shopRoomKey) setCompleted('route_shop');
-      if (current === 'route_forge' && key && key === state.forgeRoomKey) setCompleted('route_forge');
-      if (current === 'route_challenge' && key && key === state.challengeRoomKey) setCompleted('route_challenge');
-      if (current === 'route_ladder' && key && key === state.ladderRoomKey) setCompleted('route_ladder');
-    }
-    if (type === 'chest-open' && current === 'treasure_open') setCompleted('treasure_open');
-    if (type === 'panel-open' && payload.panel === 'shop' && current === 'shop_open') setCompleted('shop_open');
-    if (type === 'shop-purchase' && payload.tutorialOffer && current === 'shop_buy') setCompleted('shop_buy');
-    if (type === 'panel-open' && payload.panel === 'forge' && current === 'forge_open') setCompleted('forge_open');
-    if (type === 'forge-stage' && current === 'forge_stage') setCompleted('forge_stage');
-    if (type === 'forge-confirm' && current === 'forge_confirm') setCompleted('forge_confirm');
-    if (type === 'challenge-started' && current === 'challenge_start') setCompleted('challenge_start');
-    if (type === 'challenge-completed' && payload.challengeType === 'bomb' && current === 'challenge_bombs') setCompleted('challenge_bombs');
-    if (type === 'ladder-use' && current === 'ladder_use') {
+    const currentRoomKey = getCurrentRoomKey();
+    if (type === 'move') setCompleted('move');
+    if (type === 'attack' && ['melee', 'laser', 'smash'].includes(payload.action)) setCompleted(payload.action);
+    if (type === 'dash') setCompleted('dash');
+    if (type === 'enemy-killed' && payload.tutorialDummy) setCompleted('fight');
+    if (type === 'relic-collected' && payload.tutorialRelic) setCompleted('relic');
+    if (type === 'panel-open' && payload.panel === 'inventory') setCompleted('inventory_open');
+    if (type === 'inventory-tab' && payload.tab === 'items') setCompleted('inventory_relics');
+    if (type === 'inventory-tab' && payload.tab === 'equipped') setCompleted('inventory_moves');
+    if (type === 'chest-open' && currentRoomKey === state.treasureRoomKey) setCompleted('treasure_open');
+    if (type === 'panel-open' && payload.panel === 'shop' && currentRoomKey === state.shopRoomKey) setCompleted('shop_open');
+    if (type === 'shop-purchase' && payload.tutorialOffer) setCompleted('shop_buy');
+    if (type === 'panel-open' && payload.panel === 'forge' && currentRoomKey === state.forgeRoomKey) setCompleted('forge_open');
+    if (type === 'forge-stage' && currentRoomKey === state.forgeRoomKey) setCompleted('forge_stage');
+    if (type === 'forge-confirm' && currentRoomKey === state.forgeRoomKey) setCompleted('forge_confirm');
+    if (type === 'challenge-started' && payload.challengeType === 'bomb') setCompleted('challenge_start');
+    if (type === 'challenge-completed' && payload.challengeType === 'bomb') setCompleted('challenge_bombs');
+    if (type === 'room-enter') advanceCompletedSteps();
+    if (type === 'ladder-use') {
       setCompleted('ladder_use');
       complete();
     }
@@ -516,7 +642,7 @@ export function createTutorialController() {
   }
 
   function manualNext() {
-    const step = getStep();
+    const step = getPresentedStep();
     if (!step?.manual) return;
     setCompleted(step.id);
     render(true);
@@ -621,24 +747,51 @@ export function createTutorialController() {
     const viewportW = window.innerWidth;
     const viewportH = window.innerHeight;
     const hasTarget = !!targetRect;
+    const edgeMargin = 28;
+    const targetCenterX = hasTarget ? targetRect.left + targetRect.width / 2 : viewportW / 2;
+    const targetCenterY = hasTarget ? targetRect.top + targetRect.height / 2 : viewportH / 2;
+    const offscreen = hasTarget && (
+      targetRect.right < edgeMargin
+      || targetRect.left > viewportW - edgeMargin
+      || targetRect.bottom < edgeMargin
+      || targetRect.top > viewportH - edgeMargin
+    );
+    let offscreenDirection = '';
+    if (offscreen) {
+      const dx = targetCenterX - viewportW / 2;
+      const dy = targetCenterY - viewportH / 2;
+      offscreenDirection = Math.abs(dx) >= Math.abs(dy)
+        ? (dx < 0 ? 'left' : 'right')
+        : (dy < 0 ? 'up' : 'down');
+    }
     if (hole) {
-      hole.setAttribute('x', String(hasTarget ? targetRect.left : viewportW / 2 - 1));
-      hole.setAttribute('y', String(hasTarget ? targetRect.top : viewportH / 2 - 1));
-      hole.setAttribute('width', String(hasTarget ? targetRect.width : 2));
-      hole.setAttribute('height', String(hasTarget ? targetRect.height : 2));
-      hole.setAttribute('rx', String(hasTarget ? Math.min(18, targetRect.height / 3) : 1));
+      hole.setAttribute('x', String(hasTarget && !offscreen ? targetRect.left : viewportW / 2 - 1));
+      hole.setAttribute('y', String(hasTarget && !offscreen ? targetRect.top : viewportH / 2 - 1));
+      hole.setAttribute('width', String(hasTarget && !offscreen ? targetRect.width : 2));
+      hole.setAttribute('height', String(hasTarget && !offscreen ? targetRect.height : 2));
+      hole.setAttribute('rx', String(hasTarget && !offscreen ? Math.min(18, targetRect.height / 3) : 1));
     }
     if (ring) {
       ring.classList.toggle('hidden', !hasTarget);
       ring.classList.toggle('tutorial-target-ring--route', !!targetRect?.route);
+      ring.classList.toggle('tutorial-target-ring--offscreen', offscreen);
+      ring.dataset.direction = offscreenDirection;
       if (hasTarget) {
-        ring.style.left = `${targetRect.left}px`;
-        ring.style.top = `${targetRect.top}px`;
-        ring.style.width = `${targetRect.width}px`;
-        ring.style.height = `${targetRect.height}px`;
+        const width = offscreen ? 86 : targetRect.width;
+        const height = offscreen ? 62 : targetRect.height;
+        const left = offscreen
+          ? Math.max(edgeMargin, Math.min(viewportW - width - edgeMargin, targetCenterX - width / 2))
+          : targetRect.left;
+        const top = offscreen
+          ? Math.max(edgeMargin, Math.min(viewportH - height - edgeMargin, targetCenterY - height / 2))
+          : targetRect.top;
+        ring.style.left = `${left}px`;
+        ring.style.top = `${top}px`;
+        ring.style.width = `${width}px`;
+        ring.style.height = `${height}px`;
       }
     }
-    placeCard(targetRect);
+    placeCard(offscreen ? null : targetRect);
   }
 
   function render(force = false) {
@@ -647,16 +800,24 @@ export function createTutorialController() {
       hide();
       return;
     }
-    const step = getStep();
+    const step = getPresentedStep();
     overlay?.classList.remove('hidden');
     overlay?.setAttribute('aria-hidden', 'false');
     if (overlay) overlay.style.display = 'block';
     document.body.classList.add('tutorial-active');
+    if (overlay) overlay.dataset.inputMode = getInputMode();
     if (speaker) speaker.textContent = step.chapter || 'TUTORIAL';
     if (title) title.textContent = step.title || 'Tutorial';
     if (text) text.textContent = step.text?.() || '';
+    const nextCommand = String(step.command?.() || '').trim();
+    if (command) {
+      command.hidden = !nextCommand;
+      command.classList.toggle('hidden', !nextCommand);
+    }
+    if (commandLabel) commandLabel.textContent = nextCommand ? (step.commandLabel || 'PRESS') : '';
+    if (commandValue) commandValue.textContent = nextCommand;
     if (progress) progress.textContent = `${getIndex() + 1} / ${steps.length}`;
-    if (gate) gate.textContent = step.manual ? 'Review this, then continue.' : 'Complete the highlighted action.';
+    if (gate) gate.hidden = true;
     if (hint) hint.textContent = step.manual ? 'CONTINUE WHEN READY' : 'THE TUTORIAL ADVANCES AUTOMATICALLY';
     if (previous) previous.disabled = getIndex() <= 0;
     if (next) {
@@ -688,10 +849,11 @@ export function createTutorialController() {
       return;
     }
     if (Neo.gameState === 'play') {
-      if (state.step === 'melee' || state.step === 'laser' || state.step === 'smash' || state.step === 'fight') {
+      const step = getStep();
+      if (isInStepRoom(step, state) && (state.step === 'melee' || state.step === 'laser' || state.step === 'smash' || state.step === 'fight')) {
         Neo.ensureTutorialDummyEnemy?.();
       }
-      if (state.step === 'relic') Neo.ensureTutorialRelicPickup?.();
+      if (isInStepRoom(step, state) && state.step === 'relic') Neo.ensureTutorialRelicPickup?.();
     }
     advanceCompletedSteps();
     const gamepadConfirm = !!window.NeoGamepad?.[0]?.buttonStates?.[0];
@@ -730,12 +892,15 @@ export function createTutorialController() {
   function playRoomScene(room) {
     const state = getState();
     if (!state?.active || !room?.tutorialLesson) return false;
+    const step = getStep();
+    if (room.tutorialLesson !== 'start' && (!step?.roomKey || roomKey(room) !== state[step.roomKey])) return false;
     const sceneId = TUTORIAL_LESSON_SCENE[room.tutorialLesson];
     const scene = TUTORIAL_SCENES[sceneId];
     if (!scene || state.seenScenes?.[sceneId] || Neo.uiController?.isDialogueOpen?.()) return false;
     const started = Neo.uiController?.playDialogue?.(scene.lines, {
       returnState: 'play',
       onComplete: () => {
+        document.body.classList.remove('tutorial-cutscene-active');
         if (!state.seenScenes || typeof state.seenScenes !== 'object') state.seenScenes = {};
         state.seenScenes[sceneId] = true;
         Neo.scheduleRunSave?.();
@@ -743,6 +908,7 @@ export function createTutorialController() {
       },
     });
     if (started) {
+      document.body.classList.add('tutorial-cutscene-active');
       Neo.clearGameplayInput?.();
       Neo.setShopPanelOpen?.(false, { animateClose: false });
       Neo.setInventoryPanelOpen?.(false, { animateClose: false });
@@ -764,12 +930,12 @@ export function createTutorialController() {
   }
 
   function getCurrentMessage() {
-    const step = getStep();
+    const step = getPresentedStep();
     return step?.text?.() || '';
   }
 
   function getCurrentObjectiveEntries() {
-    const step = getStep();
+    const step = getPresentedStep();
     if (!getState()?.active || !step) return [];
     return [{ text: step.title || 'Tutorial', state: isStepComplete(step) ? 'done' : 'warn' }];
   }
