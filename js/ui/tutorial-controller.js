@@ -100,6 +100,45 @@ function getLadderLabel() {
   return match ? `${labels[match[0]]} / TAP LADDER` : 'TAP LADDER';
 }
 
+// A route step asks the player to walk to a doorway, but a gameplay panel
+// (Inventory/Shop/Forge) opened by the previous lesson may still be covering the
+// screen. Detect it so the instruction can tell the player to close it first and
+// point the highlight at that panel's close button.
+const OPEN_GAME_PANELS = [
+  { uiKey: 'invPanel', name: 'Inventory', closeSelector: '#invClose' },
+  { uiKey: 'shopPanel', name: 'Shop', closeSelector: '#shopClose' },
+  { uiKey: 'anvilPanel', name: 'Forge', closeSelector: '#anvilClose' },
+];
+
+function getOpenGamePanelInfo() {
+  return OPEN_GAME_PANELS.find(panel => Neo.isPanelOpen?.(Neo.ui?.[panel.uiKey])) || null;
+}
+
+function getOpenGamePanel() {
+  return getOpenGamePanelInfo()?.name || '';
+}
+
+// "Inventory" reads as a proper noun ("Close Inventory"); "Shop"/"Forge" take
+// an article ("Close the Shop").
+function closePanelPhrase(panel) {
+  return panel === 'Inventory' ? 'Close Inventory' : `Close the ${panel}`;
+}
+
+// Shared text/command for any "walk to the door" step. When a panel is still
+// open it asks the player to close it first so the highlighted doorway is
+// actually reachable and visible.
+function routeText(destinationLine) {
+  const open = getOpenGamePanel();
+  return open
+    ? `${closePanelPhrase(open)}, then ${destinationLine}`
+    : destinationLine.charAt(0).toUpperCase() + destinationLine.slice(1);
+}
+
+function routeCommand() {
+  const open = getOpenGamePanel();
+  return open ? `CLOSE THE ${open.toUpperCase()}` : 'GO THROUGH THE TARGET DOOR';
+}
+
 function targetDom(selector, padding = 10) {
   return { kind: 'dom', selector, padding };
 }
@@ -110,6 +149,12 @@ function targetWorld(getter, options = {}) {
 
 function targetMinimap() {
   return { kind: 'minimap', padding: 8 };
+}
+
+// Route highlight: point at the open panel's close button while a panel is open,
+// otherwise fall back to the doorway the player needs to walk through.
+function targetRoute(doorGetter) {
+  return { kind: 'route', doorGetter, padding: 28 };
 }
 
 const TUTORIAL_ROOM_NAMES = {
@@ -167,10 +212,10 @@ function createSteps() {
       id: 'route_training',
       chapter: 'COMBAT ROOM',
       title: 'Enter the training room',
-      text: () => 'Follow the pulsing doorway. Sarge will explain the room when you enter.',
-      command: () => 'GO THROUGH THE TARGET DOOR',
+      text: () => routeText('follow the pulsing doorway. Sarge will explain the room when you enter.'),
+      command: routeCommand,
       commandLabel: 'GOAL',
-      target: targetWorld(() => getNextDoorPoint(Neo.tutorialState?.trainingRoomKey), { padding: 28, route: true }),
+      target: targetRoute(() => getNextDoorPoint(Neo.tutorialState?.trainingRoomKey)),
       roomKey: 'trainingRoomKey',
       routeStep: true,
       completeWhen: ['dash', 'melee', 'laser', 'smash', 'fight', 'relic'],
@@ -270,10 +315,10 @@ function createSteps() {
       id: 'route_treasure',
       chapter: 'TREASURE ROOM',
       title: 'Go to the Treasure room',
-      text: () => 'Follow the highlighted doorway to the chest room.',
-      command: () => 'GO THROUGH THE TARGET DOOR',
+      text: () => routeText('follow the highlighted doorway to the chest room.'),
+      command: routeCommand,
       commandLabel: 'GOAL',
-      target: targetWorld(() => getNextDoorPoint(Neo.tutorialState?.treasureRoomKey), { padding: 28, route: true }),
+      target: targetRoute(() => getNextDoorPoint(Neo.tutorialState?.treasureRoomKey)),
       roomKey: 'treasureRoomKey',
       routeStep: true,
       completeWhen: ['treasure_open'],
@@ -293,10 +338,10 @@ function createSteps() {
       id: 'route_shop',
       chapter: 'SHOP',
       title: 'Go to the Shop',
-      text: () => 'Close Inventory and follow the pulsing doorway. The minimap labels the destination SHOP.',
-      command: () => 'GO THROUGH THE TARGET DOOR',
+      text: () => routeText('follow the pulsing doorway. The minimap labels the destination SHOP.'),
+      command: routeCommand,
       commandLabel: 'GOAL',
-      target: targetWorld(() => getNextDoorPoint(Neo.tutorialState?.shopRoomKey), { padding: 28, route: true }),
+      target: targetRoute(() => getNextDoorPoint(Neo.tutorialState?.shopRoomKey)),
       roomKey: 'shopRoomKey',
       routeStep: true,
       completeWhen: ['shop_buy'],
@@ -326,10 +371,10 @@ function createSteps() {
       id: 'route_forge',
       chapter: 'FORGE',
       title: 'Go to the Forge',
-      text: () => 'Close the Shop and follow the highlighted doorway to FORGE.',
-      command: () => 'GO THROUGH THE TARGET DOOR',
+      text: () => routeText('follow the highlighted doorway to FORGE.'),
+      command: routeCommand,
       commandLabel: 'GOAL',
-      target: targetWorld(() => getNextDoorPoint(Neo.tutorialState?.forgeRoomKey), { padding: 28, route: true }),
+      target: targetRoute(() => getNextDoorPoint(Neo.tutorialState?.forgeRoomKey)),
       roomKey: 'forgeRoomKey',
       routeStep: true,
       completeWhen: ['forge_confirm'],
@@ -369,10 +414,10 @@ function createSteps() {
       id: 'route_challenge',
       chapter: 'CHALLENGE ROOM',
       title: 'Go to the Bomb trial',
-      text: () => 'Follow the highlighted doorway to the Challenge room.',
-      command: () => 'GO THROUGH THE TARGET DOOR',
+      text: () => routeText('follow the highlighted doorway to the Challenge room.'),
+      command: routeCommand,
       commandLabel: 'GOAL',
-      target: targetWorld(() => getNextDoorPoint(Neo.tutorialState?.challengeRoomKey), { padding: 28, route: true }),
+      target: targetRoute(() => getNextDoorPoint(Neo.tutorialState?.challengeRoomKey)),
       roomKey: 'challengeRoomKey',
       routeStep: true,
       completeWhen: ['challenge_bombs'],
@@ -403,10 +448,10 @@ function createSteps() {
       id: 'route_ladder',
       chapter: 'EXIT',
       title: 'Go to the Exit',
-      text: () => 'Close the Forge and follow the highlighted doorway to EXIT.',
-      command: () => 'GO THROUGH THE TARGET DOOR',
+      text: () => routeText('follow the highlighted doorway to EXIT.'),
+      command: routeCommand,
       commandLabel: 'GOAL',
-      target: targetWorld(() => getNextDoorPoint(Neo.tutorialState?.ladderRoomKey), { padding: 28, route: true }),
+      target: targetRoute(() => getNextDoorPoint(Neo.tutorialState?.ladderRoomKey)),
       roomKey: 'ladderRoomKey',
       routeStep: true,
       completeWhen: ['ladder_use'],
@@ -544,11 +589,11 @@ export function createTutorialController() {
       chapter: 'NAVIGATION',
       title: `${returning ? 'Return to' : 'Go to'} ${destinationName}`,
       text: () => returning
-        ? `This lesson is not finished. Follow the target doors back to the ${destinationName}.`
-        : `Follow the target doors to the ${destinationName}.`,
-      command: () => 'GO THROUGH THE TARGET DOOR',
+        ? routeText(`this lesson is not finished. Follow the target doors back to the ${destinationName}.`)
+        : routeText(`follow the target doors to the ${destinationName}.`),
+      command: routeCommand,
       commandLabel: 'GOAL',
-      target: targetWorld(() => getNextDoorPoint(destinationKey), { padding: 28, route: true }),
+      target: targetRoute(() => getNextDoorPoint(destinationKey)),
     };
   }
 
@@ -699,6 +744,20 @@ export function createTutorialController() {
       const rect = Neo.minimapLayoutState?.viewportBounds;
       const resolved = normalizeRect(rect, spec.padding);
       return resolved ? { ...resolved, route: false } : null;
+    }
+    if (spec.kind === 'route') {
+      // While a panel covers the screen, highlight its close button so the
+      // player can clear it before the doorway highlight makes sense.
+      const open = getOpenGamePanelInfo();
+      if (open) {
+        const button = document.querySelector(open.closeSelector);
+        if (button && !button.closest('.hidden,[aria-hidden="true"]')) {
+          const rect = button.getBoundingClientRect();
+          if (rect.width && rect.height) return { ...normalizeRect(rect, 8), route: true };
+        }
+      }
+      const resolved = resolveWorldRect(spec.doorGetter?.(), spec.padding);
+      return resolved ? { ...resolved, route: true } : null;
     }
     return null;
   }

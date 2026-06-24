@@ -1,7 +1,10 @@
 .tutorial-overlay {
   position: fixed;
   inset: 0;
-  z-index: 120;
+  /* Must sit above every gameplay panel (Inventory/Shop/Forge ~22) and their
+     escape-hatch tooltips (equip 200, reward 240) so the target ring and
+     spotlight are never covered when a panel is still open on a route step. */
+  z-index: 300;
   display: block;
   padding: 0;
   pointer-events: none;

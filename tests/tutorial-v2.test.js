@@ -67,10 +67,24 @@ describe('Sarge tutorial v2', () => {
     expect(controller).toContain("completeWhen: ['treasure_open']");
     expect(controller).toContain('if (step.routeStep) return isInStepRoom(step, state) || areCompletionMilestonesDone(step, state)');
     expect(controller).toContain("title: `${returning ? 'Return to' : 'Go to'} ${destinationName}`");
-    expect(controller).toContain("target: targetWorld(() => getNextDoorPoint(destinationKey)");
+    expect(controller).toContain("target: targetRoute(() => getNextDoorPoint(destinationKey)");
     expect(controller).toContain("if (type === 'dash') setCompleted('dash')");
     expect(controller).not.toContain("current === 'route_training'");
     expect(controller).not.toContain("current === 'dash'");
+  });
+
+  test('route steps ask the player to close an open panel and highlight its close button', () => {
+    // Open Inventory/Shop/Forge panels must be detected by their close-button selectors.
+    expect(controller).toContain("closeSelector: '#invClose'");
+    expect(controller).toContain("closeSelector: '#shopClose'");
+    expect(controller).toContain("closeSelector: '#anvilClose'");
+    // Route text/command switch to a close prompt while a panel is open.
+    expect(controller).toContain('Close Inventory');
+    expect(controller).toContain('CLOSE THE ${open.toUpperCase()}');
+    expect(controller).toContain('GO THROUGH THE TARGET DOOR');
+    // The route highlight points at the open panel's close button before the door.
+    expect(controller).toContain("if (spec.kind === 'route')");
+    expect(controller).toContain('const open = getOpenGamePanelInfo()');
   });
 
   test('does not play future room cutscenes before their lesson is current', () => {
