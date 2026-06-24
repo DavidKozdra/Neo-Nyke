@@ -63,6 +63,9 @@
     { key: 'stats',      label: 'Player Stats',     cssVar: '--hud-scale-stats',      xVar: '--hud-x-stats',      yVar: '--hud-y-stats',      hideClass: 'hud-hide-stats' },
     { key: 'actions',    label: 'Action Bar',       cssVar: '--hud-scale-actions',    xVar: '--hud-x-actions',    yVar: '--hud-y-actions',    hideClass: 'hud-hide-actions' },
     { key: 'equipment',  label: 'Tool Slots',       cssVar: '--hud-scale-equipment',  xVar: '--hud-x-equipment',  yVar: '--hud-y-equipment',  hideClass: 'hud-hide-equipment' },
+    // The new-item pickup toast stack (#itemNotifyStack). DOM widget with its own
+    // scale/offset/visibility, independent of the coin display it sits beneath.
+    { key: 'itemnotify', label: 'Item Pickups',     cssVar: '--hud-scale-itemnotify', xVar: '--hud-x-itemnotify', yVar: '--hud-y-itemnotify', hideClass: 'hud-hide-itemnotify' },
     // The minimap is drawn on the canvas, not a DOM widget, so it has no CSS vars.
     // drawMinimap() reads its scale/visibility/offsets from getHudElements().
     { key: 'minimap',    label: 'Minimap',          cssVar: null, xVar: null, yVar: null, hideClass: null, canvas: true },

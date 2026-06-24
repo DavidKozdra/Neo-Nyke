@@ -331,7 +331,6 @@ export function resumeGame() {
       gotRelic: false,
       openedForge: false,
       openedInventory: false,
-      openedShop: false,
       usedLadder: false,
       lastCelebratedStep: 'move',
     };
@@ -594,7 +593,7 @@ export function resumeGame() {
       { text: `Defeat training dummy (${slashHint}/${laserHint})`, state: state.gotKill ? 'done' : 'todo' },
       { text: 'Pick up one relic (permanent run upgrade)', state: state.gotRelic ? 'done' : 'todo' },
       { text: `Open the Forge (${forgeHint} in a Forge room)`, state: state.openedForge ? 'done' : 'todo' },
-      { text: `Open Inventory (${inventoryHint})`, state: (state.openedInventory || state.openedShop) ? 'done' : 'todo' },
+      { text: `Open Inventory (${inventoryHint})`, state: state.openedInventory ? 'done' : 'todo' },
       { text: `Use ladder: stand on it and press ${ladderHint}`, state: state.usedLadder ? 'done' : 'todo' },
     ];
   }
@@ -644,7 +643,7 @@ export function resumeGame() {
     if (state.step === 'fight' && state.gotKill) state.step = 'relic';
     if (state.step === 'relic' && state.gotRelic) state.step = 'forge';
     if (state.step === 'forge' && state.openedForge) state.step = 'panel';
-    if (state.step === 'panel' && (state.openedInventory || state.openedShop)) state.step = 'ladder';
+    if (state.step === 'panel' && state.openedInventory) state.step = 'ladder';
     if (!state.usedLadder && Neo.floor > 1) state.usedLadder = true;
 
     // Celebrate each step advance with the achievement sting (boss-kill 'victory'

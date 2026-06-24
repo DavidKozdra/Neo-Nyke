@@ -275,7 +275,8 @@ button, input, select, textarea {
 .hud-hide-objectives .objective-tracker,
 .hud-hide-stats      #playerStats,
 .hud-hide-actions    #actionBar,
-.hud-hide-equipment  .equipment-slots {
+.hud-hide-equipment  .equipment-slots,
+.hud-hide-itemnotify #itemNotifyStack {
   display: none !important;
 }
 
@@ -334,9 +335,14 @@ button, input, select, textarea {
   --coin-hud-bottom: 90px;
   --notify-gap: 12px;
   position: fixed;
-  top: calc(var(--coin-hud-bottom) * var(--hud-scale-coins, var(--hud-scale, 1)) + var(--notify-gap));
+  /* Vertical anchor still tracks the coin display's height so the stack never
+     overlaps the gold HUD, but scale/visibility/offset are now its own widget
+     ("Item Pickups" in settings → HUD Layout) rather than borrowing the coins'. */
+  top: calc(var(--coin-hud-bottom) * var(--hud-scale-coins, var(--hud-scale, 1)) + var(--notify-gap) + var(--hud-y-coins, 0px));
   left: 16px;
-  transform: translate(var(--hud-x-coins, 0px), var(--hud-y-coins, 0px));
+  transform: translate(var(--hud-x-itemnotify, 0px), var(--hud-y-itemnotify, 0px))
+             scale(var(--hud-scale-itemnotify, var(--hud-scale, 1)));
+  transform-origin: top left;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -345,11 +351,11 @@ button, input, select, textarea {
 }
 
 .item-toast {
-  width: min(360px, calc(100vw - 32px));
+  width: min(420px, calc(100vw - 32px));
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
+  gap: 12px;
+  padding: 12px 14px;
   border-radius: 8px;
   border: 2px solid var(--menu-border);
   border-top-color: var(--menu-border-strong);
@@ -366,8 +372,8 @@ button, input, select, textarea {
 }
 
 .item-toast-icon {
-  width: 30px !important;
-  height: 30px !important;
+  width: 38px !important;
+  height: 38px !important;
   border-radius: 6px;
   flex-shrink: 0;
   border: 1px solid rgba(255,255,255,.3);

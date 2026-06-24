@@ -1014,7 +1014,6 @@ export function toggleShopPanel() {
     const next = !isPanelOpen(Neo.ui.shopPanel);
     if (next) setInventoryPanelOpen(false, { animateClose: false });
     setShopPanelOpen(next);
-    if (next && Neo.isFirstRunTutorialActive()) Neo.tutorialState.openedShop = true;
   }
 
 export function toggleInventoryPanel() {

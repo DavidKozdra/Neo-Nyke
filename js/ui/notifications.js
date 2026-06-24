@@ -1,5 +1,9 @@
 // notifications.js — item toast notifications and icon drawing.
 
+// How long a pickup toast (item/move/weapon) stays before it animates out.
+const TOAST_HOLD_MS = 4000;
+const TOAST_LEAVE_MS = 220;
+
 export function ensureItemNotifyStack() {
   let stack = document.getElementById('itemNotifyStack');
   if (stack) return stack;
@@ -124,8 +128,8 @@ export function pushItemNotification(itemKey, amount = 1, note = '') {
   while (stack.children.length > 4) stack.removeChild(stack.lastElementChild);
   setTimeout(() => {
     toast.classList.add('is-leaving');
-    setTimeout(() => toast.remove(), 220);
-  }, 2600);
+    setTimeout(() => toast.remove(), TOAST_LEAVE_MS);
+  }, TOAST_HOLD_MS);
 }
 
 export const ITEM_CINEMATIC_FLAVOR = {
@@ -467,8 +471,8 @@ export function pushMoveNotification(moveKey, amount = 1) {
   while (stack.children.length > 4) stack.removeChild(stack.lastElementChild);
   setTimeout(() => {
     toast.classList.add('is-leaving');
-    setTimeout(() => toast.remove(), 220);
-  }, 2600);
+    setTimeout(() => toast.remove(), TOAST_LEAVE_MS);
+  }, TOAST_HOLD_MS);
 }
 
 export function pushWeaponNotification(weaponKey) {
@@ -508,8 +512,8 @@ export function pushWeaponNotification(weaponKey) {
   while (stack.children.length > 4) stack.removeChild(stack.lastElementChild);
   setTimeout(() => {
     toast.classList.add('is-leaving');
-    setTimeout(() => toast.remove(), 220);
-  }, 2600);
+    setTimeout(() => toast.remove(), TOAST_LEAVE_MS);
+  }, TOAST_HOLD_MS);
 }
 
 Neo.ensureItemNotifyStack = ensureItemNotifyStack;
