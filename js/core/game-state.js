@@ -334,6 +334,7 @@ export function resumeGame() {
       forgeRoomKey: '',
       challengeRoomKey: '',
       ladderRoomKey: '',
+      secretRoomKey: '',
       seenScenes: {},
       lastCelebratedStep: '',
     };
@@ -387,7 +388,40 @@ export function resumeGame() {
       1,
       Number(Neo.player.items[Neo.FORGE_VOUCHER_KEY || 'forge_voucher'] || 0),
     );
+    grantTutorialTeachingMoves();
     Neo.tutorialState.resourcesGranted = true;
+  }
+
+  // Prep the player's laser slot so two later lessons can be fully interactive:
+  //  - Status lesson: equip a status-applying laser (prefer blood_beam, which
+  //    bleeds) so firing the ranged attack on the dummy reliably applies a
+  //    status. Falls back to the equipped default if no status laser is legal.
+  //  - Moves lesson: also own a *different* spare laser move so there is
+  //    something distinct to swap to. Idempotent via the equipped/owned checks.
+  function grantTutorialTeachingMoves() {
+    const player = Neo.player;
+    if (!player || !Neo.MOVE_DEFS) return;
+    if (!player.ownedMoves || typeof player.ownedMoves !== 'object') player.ownedMoves = {};
+    if (!player.equippedMoves || typeof player.equippedMoves !== 'object') player.equippedMoves = {};
+    const allowed = key => Neo.MOVE_DEFS[key]
+      && Neo.MOVE_DEFS[key].slot === 'laser'
+      && Neo.isMoveAllowedForCharacter?.(key, player.character);
+
+    // Equip a status laser if one is legal for this character.
+    const statusLaser = ['blood_beam'].find(allowed);
+    if (statusLaser) {
+      player.ownedMoves[statusLaser] = true;
+      if (Neo.equipMove) Neo.equipMove('laser', statusLaser);
+      else player.equippedMoves.laser = statusLaser;
+    }
+
+    // Own a different spare laser to swap to in the Moves lesson.
+    const equipped = new Set(Object.values(player.equippedMoves).filter(Boolean));
+    const ownsSpare = Object.keys(player.ownedMoves).some(key => allowed(key) && !equipped.has(key));
+    if (!ownsSpare) {
+      const spare = Object.keys(Neo.MOVE_DEFS).find(key => allowed(key) && !equipped.has(key));
+      if (spare) player.ownedMoves[spare] = true;
+    }
   }
 
   // Strict gate for the game-loop side of the tutorial (spawning the dummy/relic,
@@ -578,7 +612,7 @@ export function resumeGame() {
 
   function getTutorialStepOrder() {
     return Neo.tutorialController?.steps?.map(step => step.id)
-      || ['welcome', 'move', 'hud', 'objectives', 'minimap', 'dash', 'melee', 'laser', 'smash', 'fight', 'relic', 'inventory_open', 'inventory_relics', 'inventory_moves', 'route_shop', 'shop_open', 'shop_buy', 'route_forge', 'forge_open', 'forge_stage', 'forge_confirm', 'route_ladder', 'ladder_use'];
+      || ['welcome', 'move', 'hud', 'objectives', 'minimap', 'secret_reveal_do', 'route_training', 'dash', 'melee', 'laser', 'smash', 'status_lesson', 'crit_lesson', 'fight', 'relic', 'inventory_open', 'inventory_relics', 'inventory_moves', 'inventory_weapons', 'moves_equip_explain', 'moves_equip_do', 'route_treasure', 'treasure_open', 'dwell_do', 'route_shop', 'shop_open', 'shop_buy', 'route_forge', 'forge_open', 'forge_stage', 'forge_confirm', 'route_challenge', 'challenge_start', 'challenge_bombs', 'route_ladder', 'ladder_use'];
   }
 
   function navigateTutorialStep(direction = 1) {
@@ -2485,7 +2519,13 @@ export function resumeGame() {
     if (Neo.gameMode === 'pvp') { startPvp(); return; }
     if (Neo.gameMode === 'competitive') { void startCompetitive(); return; }
     const forceTutorialReplay = !resume && consumeReplayTutorialRequest();
-    const shouldRunTutorial = Neo.gameMode === 'normal' && (!Neo.metaProgress.tutorialCompleted || forceTutorialReplay);
+    // Players who finished an older tutorial version are shown the rebuilt one
+    // once. complete()/skip() stamp tutorialVersion up to current, so this only
+    // fires a single time per upgrade and never interrupts again afterward.
+    const outdatedTutorial = !resume
+      && Number(Neo.metaProgress.tutorialVersion || 0) < Number(Neo.TUTORIAL_VERSION || 0);
+    const shouldRunTutorial = Neo.gameMode === 'normal'
+      && (!Neo.metaProgress.tutorialCompleted || forceTutorialReplay || outdatedTutorial);
     // Stamp "last played" so the green tutorial button only re-offers after a long absence.
     if (Neo.metaProgress) { Neo.metaProgress.lastSeenAt = Date.now(); Neo.persistMetaSoon(); }
     setGameState('play');

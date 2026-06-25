@@ -2411,6 +2411,8 @@
     if (dir) Neo.setSecretPassageOpen(Neo.currentRoom, dir, true);
     Neo.playSfx?.('secret_reveal');
     Neo.spawnParticle({ x: prop.x, y: prop.y - 18, life: 0.9, text: 'SECRET', c: '#8dd4ff' });
+    // Tutorial secret-room lesson: advances when the player reveals the wall.
+    Neo.tutorialController?.signal?.('secret-revealed', { dir });
   }
 
   // Damage number whose size/color/punch ramp with how hard the hit landed,
@@ -2883,6 +2885,8 @@
         }
         Neo.collectItem(key);
         Neo.playSfx?.('item_collect');
+        // Tutorial dwell lesson: advances once the player hold-claims a reward.
+        Neo.tutorialController?.signal?.('dwell-collected', { key });
         const remainingBeforePick = Math.max(1, Math.floor(Number(pickup.picksRemaining || 1)));
         const remainingAfterPick = remainingBeforePick - 1;
         Neo.pickups = Neo.pickups.filter(item => {

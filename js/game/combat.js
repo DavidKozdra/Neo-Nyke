@@ -3014,6 +3014,9 @@
       crit: isCrit,
       enemy,
     });
+    // Tutorial crit lesson: advances on the first player crit. signal() is a
+    // no-op when the tutorial isn't active, so this is free in real runs.
+    if (isCrit) Neo.tutorialController?.signal?.('crit-dealt');
     // Multi-beam callers (Thorn's fan) roll drain per beam themselves; skip the
     // shared roll so the beam that also lands the dedup'd hit isn't counted twice.
     if (!options.skipDrainRoll) rollToothOfThornDrain(enemy, stats, Number(options.drainChanceBonus || 0), options.melee === true);

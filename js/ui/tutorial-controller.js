@@ -2,7 +2,7 @@
 
 import { TUTORIAL_LESSON_SCENE, TUTORIAL_SCENES } from '../tutorial/scenes.js';
 
-export const TUTORIAL_VERSION = 2;
+export const TUTORIAL_VERSION = 3;
 
 const BUTTON_NAMES = {
   0: 'A', 1: 'B', 2: 'X', 3: 'Y',
@@ -164,6 +164,7 @@ const TUTORIAL_ROOM_NAMES = {
   forgeRoomKey: 'Forge',
   challengeRoomKey: 'Bomb Trial',
   ladderRoomKey: 'Exit',
+  secretRoomKey: 'Start Room',
 };
 
 function createSteps() {
@@ -261,6 +262,32 @@ function createSteps() {
       complete: state => !!state.completed?.smash,
     },
     {
+      id: 'status_lesson',
+      chapter: 'COMBAT',
+      title: 'Stack a status effect',
+      text: () => 'Your ranged beam bleeds the dummy — damage that keeps ticking after you stop. Fire, poison, slow and more stack the same way. Land one on the dummy.',
+      command: () => 'APPLY A STATUS',
+      commandLabel: 'GOAL',
+      target: targetWorld(() => Neo.enemies?.find(enemy => enemy?.tutorialDummy), { padding: 24 }),
+      roomKey: 'trainingRoomKey',
+      // Auto-clears on the first status the player applies; the fight is the
+      // fallback so it can never stall the dummy room.
+      complete: state => !!state.completed?.status_lesson || !!state.completed?.fight,
+    },
+    {
+      id: 'crit_lesson',
+      chapter: 'COMBAT',
+      title: 'Land a critical hit',
+      text: () => 'About 1 in 20 hits crits for extra damage — a big yellow number. Keep wailing on the dummy until you see one.',
+      command: () => 'LAND A CRIT',
+      commandLabel: 'GOAL',
+      target: targetWorld(() => Neo.enemies?.find(enemy => enemy?.tutorialDummy), { padding: 24 }),
+      roomKey: 'trainingRoomKey',
+      // Auto-clears on the first crit; the fight step itself is the fallback so
+      // a cold RNG streak that kills the dummy first can never stall the lesson.
+      complete: state => !!state.completed?.crit_lesson || !!state.completed?.fight,
+    },
+    {
       id: 'fight',
       chapter: 'COMBAT',
       title: 'Defeat the dummy',
@@ -281,6 +308,19 @@ function createSteps() {
       target: targetWorld(() => Neo.pickups?.find(pickup => pickup?.tutorialRelic), { padding: 22 }),
       roomKey: 'trainingRoomKey',
       complete: state => !!state.completed?.relic,
+    },
+    {
+      id: 'secret_reveal_do',
+      chapter: 'NAVIGATION',
+      title: 'Find the secret room',
+      text: () => 'Not every wall is real. Bump the highlighted wall to reveal a hidden passage — secret rooms hide vendors and warps.',
+      command: () => 'BUMP THE HIGHLIGHTED WALL',
+      commandLabel: 'GOAL',
+      target: targetWorld(() => Neo.destructibles?.find(prop => prop?.kind === 'secret_wall' && !prop.secretRevealed), { padding: 24 }),
+      roomKey: 'secretRoomKey',
+      // Skip cleanly if no secret room could be placed (all lesson rooms boxed
+      // in) so the missing anchor can never soft-lock the tutorial.
+      complete: state => !!state.completed?.secret_reveal_do || !state.secretRoomKey,
     },
     {
       id: 'inventory_open',
@@ -312,6 +352,36 @@ function createSteps() {
       complete: state => !!state.completed?.inventory_moves,
     },
     {
+      id: 'inventory_weapons',
+      chapter: 'INVENTORY',
+      title: 'Match your weapon to your style',
+      text: () => 'Open the Weapons tab. Any weapon works on any character, but one matching your class’s style deals about 25% more damage. Swapping changes your damage, never your other stats.',
+      command: () => 'SELECT WEAPONS',
+      commandLabel: 'GOAL',
+      target: targetDom('#invPanel [data-inv-tab="weapons"]', 8),
+      complete: state => !!state.completed?.inventory_weapons,
+    },
+    {
+      id: 'moves_equip_explain',
+      chapter: 'INVENTORY',
+      title: 'Own a move vs equip a move',
+      text: () => 'Owning a move means you can swap to it. Equipping puts it in an action slot so it fires from the action bar. Back on the Moves tab, you have a spare move ready to equip.',
+      command: () => 'SELECT MOVES',
+      commandLabel: 'GOAL',
+      manual: true,
+      target: targetDom('#invPanel [data-inv-tab="equipped"]', 8),
+    },
+    {
+      id: 'moves_equip_do',
+      chapter: 'INVENTORY',
+      title: 'Swap a move',
+      text: () => 'Equip the spare move into its slot. Changing a move swaps what you can do — it never lowers your stats.',
+      command: () => 'EQUIP A MOVE',
+      commandLabel: 'GOAL',
+      target: targetDom('#invPanel [data-inv-tab="equipped"]', 8),
+      complete: state => !!state.completed?.moves_equip_do,
+    },
+    {
       id: 'route_treasure',
       chapter: 'TREASURE ROOM',
       title: 'Go to the Treasure room',
@@ -321,18 +391,29 @@ function createSteps() {
       target: targetRoute(() => getNextDoorPoint(Neo.tutorialState?.treasureRoomKey)),
       roomKey: 'treasureRoomKey',
       routeStep: true,
-      completeWhen: ['treasure_open'],
+      completeWhen: ['dwell_do'],
     },
     {
       id: 'treasure_open',
       chapter: 'TREASURE ROOM',
       title: 'Open the chest',
-      text: () => 'Walk into the chest and collect what comes out.',
+      text: () => 'Walk into the chest. This one offers a choice between two rewards.',
       command: () => 'WALK INTO THE CHEST',
       commandLabel: 'GOAL',
       target: targetWorld(() => Neo.chests?.find(chest => !chest?.open), { padding: 24 }),
       roomKey: 'treasureRoomKey',
       complete: state => !!state.completed?.treasure_open,
+    },
+    {
+      id: 'dwell_do',
+      chapter: 'TREASURE ROOM',
+      title: 'Hold to claim a reward',
+      text: () => 'Two reward zones opened. Stand in the one you want until its meter fills to claim it. Dangerous pickups use the same hold-to-agree.',
+      command: () => 'HOLD IN A REWARD ZONE',
+      commandLabel: 'GOAL',
+      target: targetWorld(() => Neo.pickups?.find(pickup => pickup?.type === 'rewardChoice' && pickup.dwellMode), { padding: 28 }),
+      roomKey: 'treasureRoomKey',
+      complete: state => !!state.completed?.dwell_do,
     },
     {
       id: 'route_shop',
@@ -531,6 +612,7 @@ function createTutorialState(active = false) {
     forgeRoomKey: '',
     challengeRoomKey: '',
     ladderRoomKey: '',
+    secretRoomKey: '',
     seenScenes: {},
     lastCelebratedStep: '',
   };
@@ -550,6 +632,7 @@ export function createTutorialController() {
   const commandLabel = document.getElementById('tutorialCommandLabel');
   const commandValue = document.getElementById('tutorialCommandValue');
   const progress = document.getElementById('tutorialProgress');
+  const progressBar = document.getElementById('tutorialProgressBar');
   const gate = document.getElementById('tutorialGate');
   const hint = document.getElementById('tutorialHint');
   const previous = document.getElementById('tutorialPrevBtn');
@@ -557,6 +640,7 @@ export function createTutorialController() {
   const skip = document.getElementById('tutorialSkipBtn');
   let lastLayoutAt = 0;
   let lastStepId = '';
+  let lastChapter = '';
   let gamepadConfirmHeld = false;
 
   if (overlay && overlay.parentElement !== document.body) document.body.appendChild(overlay);
@@ -630,18 +714,50 @@ export function createTutorialController() {
     return typeof step.complete === 'function' ? !!step.complete(state) : !!state.completed?.[step.id];
   }
 
+  // Flash the card + ring and burst a world particle when a lesson is cleared.
+  // Deduped via state.lastCelebratedStep so the 50ms render throttle can't
+  // double-fire it. Reduced-motion users still get the sfx; CSS disables the
+  // animations.
+  function celebrateStep(step) {
+    if (!step) return;
+    const state = getState();
+    if (state) state.lastCelebratedStep = step.id;
+    if (card) {
+      card.classList.remove('tutorial-card--celebrate');
+      void card.offsetWidth;
+      card.classList.add('tutorial-card--celebrate');
+    }
+    if (ring) {
+      ring.classList.remove('tutorial-target-ring--clear');
+      void ring.offsetWidth;
+      ring.classList.add('tutorial-target-ring--clear');
+    }
+    const entity = step.target?.kind === 'world' ? step.target.getter?.() : null;
+    if (entity && Number.isFinite(entity.x) && Number.isFinite(entity.y)) {
+      Neo.spawnParticle?.({ x: entity.x, y: entity.y - 22, life: 0.7, text: 'NICE!', c: '#7CFFA0' });
+    }
+  }
+
   function advanceCompletedSteps() {
     const state = getState();
     if (!state?.active) return;
     let index = getIndex();
     let changed = false;
+    const cleared = [];
     while (index < steps.length - 1 && isStepComplete(steps[index])) {
+      cleared.push(steps[index]);
       index += 1;
       state.step = steps[index].id;
       changed = true;
     }
     if (changed) {
-      Neo.playSfx?.('achievement');
+      const justCleared = cleared[cleared.length - 1];
+      if (justCleared && state.lastCelebratedStep !== justCleared.id) {
+        Neo.playSfx?.('powerup');
+        celebrateStep(justCleared);
+      } else {
+        Neo.playSfx?.('achievement');
+      }
       Neo.scheduleRunSave?.();
       Neo.updateObjective?.();
     }
@@ -664,12 +780,18 @@ export function createTutorialController() {
     if (type === 'move') setCompleted('move');
     if (type === 'attack' && ['melee', 'laser', 'smash'].includes(payload.action)) setCompleted(payload.action);
     if (type === 'dash') setCompleted('dash');
+    if (type === 'crit-dealt') setCompleted('crit_lesson');
+    if (type === 'status-applied') setCompleted('status_lesson');
     if (type === 'enemy-killed' && payload.tutorialDummy) setCompleted('fight');
     if (type === 'relic-collected' && payload.tutorialRelic) setCompleted('relic');
     if (type === 'panel-open' && payload.panel === 'inventory') setCompleted('inventory_open');
     if (type === 'inventory-tab' && payload.tab === 'items') setCompleted('inventory_relics');
     if (type === 'inventory-tab' && payload.tab === 'equipped') setCompleted('inventory_moves');
+    if (type === 'inventory-tab' && payload.tab === 'weapons') setCompleted('inventory_weapons');
+    if (type === 'move-equipped') setCompleted('moves_equip_do');
     if (type === 'chest-open' && currentRoomKey === state.treasureRoomKey) setCompleted('treasure_open');
+    if (type === 'dwell-collected' && currentRoomKey === state.treasureRoomKey) setCompleted('dwell_do');
+    if (type === 'secret-revealed') setCompleted('secret_reveal_do');
     if (type === 'panel-open' && payload.panel === 'shop' && currentRoomKey === state.shopRoomKey) setCompleted('shop_open');
     if (type === 'shop-purchase' && payload.tutorialOffer) setCompleted('shop_buy');
     if (type === 'panel-open' && payload.panel === 'forge' && currentRoomKey === state.forgeRoomKey) setCompleted('forge_open');
@@ -723,6 +845,19 @@ export function createTutorialController() {
     Neo.persistMetaSoon?.();
     Neo.playSfx?.('victory');
     hide();
+    playSummaryScene();
+  }
+
+  // The graduation beat — only fires on genuine ladder completion (complete()),
+  // never on skipTutorial(). It runs after the tutorial state is already
+  // deactivated, so playDialogue drives it as a normal cutscene.
+  function playSummaryScene() {
+    const scene = TUTORIAL_SCENES.summary;
+    if (!scene || Neo.uiController?.isDialogueOpen?.()) return;
+    if (Neo.player) {
+      Neo.spawnParticle?.({ x: Neo.player.x, y: Neo.player.y - 24, life: 1.1, text: 'TUTORIAL COMPLETE!', c: '#ffe66f' });
+    }
+    Neo.uiController?.playDialogue?.(scene.lines, { returnState: 'play' });
   }
 
   function resolveTarget(step) {
@@ -865,7 +1000,19 @@ export function createTutorialController() {
     if (overlay) overlay.style.display = 'block';
     document.body.classList.add('tutorial-active');
     if (overlay) overlay.dataset.inputMode = getInputMode();
-    if (speaker) speaker.textContent = step.chapter || 'TUTORIAL';
+    const chapter = step.chapter || 'TUTORIAL';
+    if (speaker) {
+      speaker.textContent = chapter;
+      // A new chapter gets a one-beat "announce" flash + stinger so the long
+      // run of lessons reads as distinct acts rather than a flat checklist.
+      if (chapter !== lastChapter) {
+        speaker.classList.remove('tutorial-speaker--announce');
+        void speaker.offsetWidth;
+        speaker.classList.add('tutorial-speaker--announce');
+        if (lastChapter) Neo.playSfx?.('powerup');
+        lastChapter = chapter;
+      }
+    }
     if (title) title.textContent = step.title || 'Tutorial';
     if (text) text.textContent = step.text?.() || '';
     const nextCommand = String(step.command?.() || '').trim();
@@ -876,8 +1023,9 @@ export function createTutorialController() {
     if (commandLabel) commandLabel.textContent = nextCommand ? (step.commandLabel || 'PRESS') : '';
     if (commandValue) commandValue.textContent = nextCommand;
     if (progress) progress.textContent = `${getIndex() + 1} / ${steps.length}`;
+    if (progressBar) progressBar.style.width = `${((getIndex() + 1) / steps.length) * 100}%`;
     if (gate) gate.hidden = true;
-    if (hint) hint.textContent = step.manual ? 'CONTINUE WHEN READY' : 'THE TUTORIAL ADVANCES AUTOMATICALLY';
+    if (hint) hint.textContent = step.manual ? 'GOT IT? HIT CONTINUE' : 'DO THE ACTION — IT ADVANCES ON ITS OWN';
     if (previous) previous.disabled = getIndex() <= 0;
     if (next) {
       next.hidden = !step.manual;
@@ -952,7 +1100,10 @@ export function createTutorialController() {
     const state = getState();
     if (!state?.active || !room?.tutorialLesson) return false;
     const step = getStep();
-    if (room.tutorialLesson !== 'start' && (!step?.roomKey || roomKey(room) !== state[step.roomKey])) return false;
+    // The secret vendor room is never a step's target room, so it gets a pass:
+    // its scene is a payoff the moment the player walks into the revealed room.
+    if (room.tutorialLesson !== 'start' && room.tutorialLesson !== 'secret'
+      && (!step?.roomKey || roomKey(room) !== state[step.roomKey])) return false;
     const sceneId = TUTORIAL_LESSON_SCENE[room.tutorialLesson];
     const scene = TUTORIAL_SCENES[sceneId];
     if (!scene || state.seenScenes?.[sceneId] || Neo.uiController?.isDialogueOpen?.()) return false;

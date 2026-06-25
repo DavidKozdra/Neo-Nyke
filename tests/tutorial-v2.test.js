@@ -45,8 +45,8 @@ describe('Sarge tutorial v2', () => {
   });
 
   test('keeps Sarge dialogue in an editable tutorial directory', () => {
-    expect(scenes).toContain("I'm Sarge. Welcome to the tutorial.");
-    for (const lesson of ['training', 'treasure', 'shop', 'forge', 'challenge', 'ladder']) {
+    expect(scenes).toContain("Name's Sarge.");
+    for (const lesson of ['start', 'training', 'treasure', 'shop', 'forge', 'challenge', 'secret', 'ladder', 'summary']) {
       expect(scenes).toContain(`lesson: '${lesson}'`);
     }
     expect(controller).toContain("from '../tutorial/scenes.js'");
@@ -64,7 +64,7 @@ describe('Sarge tutorial v2', () => {
   test('recovers cleanly when rooms or actions happen out of order', () => {
     expect(controller).toContain("roomKey: 'trainingRoomKey'");
     expect(controller).toContain('routeStep: true');
-    expect(controller).toContain("completeWhen: ['treasure_open']");
+    expect(controller).toContain("completeWhen: ['dwell_do']");
     expect(controller).toContain('if (step.routeStep) return isInStepRoom(step, state) || areCompletionMilestonesDone(step, state)');
     expect(controller).toContain("title: `${returning ? 'Return to' : 'Go to'} ${destinationName}`");
     expect(controller).toContain("target: targetRoute(() => getNextDoorPoint(destinationKey)");

@@ -2891,6 +2891,7 @@ export function equipMove(slot, moveKey) {
     renderInventoryPanel();
     Neo.updateHud();
     Neo.scheduleRunSave();
+    Neo.tutorialController?.signal?.('move-equipped', { slot, moveKey });
   }
 
 export function equipWeapon(weaponKey) {
