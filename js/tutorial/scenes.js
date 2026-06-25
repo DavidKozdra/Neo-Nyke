@@ -43,7 +43,7 @@ export const TUTORIAL_SCENES = {
   forge: {
     lesson: 'forge',
     lines: [
-      { speaker: 'SARGE', text: 'Forge. This is where you upgrade weapons and moves for the rest of the run.' },
+      { speaker: 'SARGE', text: 'Forge. This is where you upgrade weapons and moves for the rest of the run. Get Cracked Fast' },
       { speaker: 'SARGE', text: 'Pick an item, press plus on a stat, choose XP or gold, then confirm. Staged changes do nothing until you confirm. Nothing.' },
       { speaker: 'SARGE', text: 'I slipped you a Forge Voucher, so the first upgrade is on me. Use it.' },
     ],
@@ -60,9 +60,9 @@ export const TUTORIAL_SCENES = {
   secret: {
     lesson: 'secret',
     lines: [
-      { speaker: 'SARGE', text: "Knew it. A secret room — this one's a vendor." },
+      { speaker: 'SARGE', text: "Knew it. A secret room — this one's a vendor but you dont have a shop master yet." },
       { speaker: 'SARGE', text: 'Out in the dungeon these hide rare relics or warps. Always test a wall that looks too plain.' },
-      { speaker: 'SARGE', text: 'Grab what you want, then get back on mission.' },
+      { speaker: 'SARGE', text: 'Grab what you want, then get back on mission careful.' },
     ],
   },
   ladder: {
@@ -78,7 +78,7 @@ export const TUTORIAL_SCENES = {
     lines: [
       { speaker: 'SARGE', text: "That's a graduation, recruit. You move, you fight, you crit, you stack status. You shop, forge, and crack chests." },
       { speaker: 'SARGE', text: 'Your build, your coins, your forged upgrades, your relics — all of it rides with you to Floor Two.' },
-      { speaker: 'SARGE', text: 'Now get down there and make the dungeon regret it. Dismissed!' },
+      { speaker: 'SARGE', text: 'Now get down there and make the dungeon of LAB regret it. Dismissed!' },
     ],
   },
 };

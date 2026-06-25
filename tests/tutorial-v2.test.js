@@ -16,6 +16,8 @@ describe('Sarge tutorial v2', () => {
   const world = read('js/game/world.js');
   const uiController = read('js/ui/controller.js');
   const gamepadControls = read('js/gamepadControls.js');
+  const gameState = read('js/core/game-state.js');
+  const panels = read('js/ui/panels.js');
   const serviceWorker = read('sw.js');
 
   test('loads a dedicated tutorial controller and stylesheet', () => {
@@ -104,5 +106,32 @@ describe('Sarge tutorial v2', () => {
     expect(serviceWorker).toContain("'/css/tutorial.css'");
     expect(serviceWorker).toContain("'/js/ui/tutorial-controller.js'");
     expect(serviceWorker).toContain("'/js/tutorial/scenes.js'");
+  });
+
+  test('gates the Sarge tutorial replay behind unlocking the rest of the roster', () => {
+    // The prereq set is every non-custom character except Sarge himself.
+    expect(gameState).toContain("const SARGE_TUTORIAL_PREREQS = ['princess', 'thorn_knight', 'metao', 'gelleh', 'mooggy', 'turtle_boy']");
+    expect(gameState).toContain('function isSargeTutorialBlocked()');
+    expect(gameState).toContain('return isReplayTutorialRequested() && !hasAllSargeTutorialPrereqs()');
+    expect(gameState).toContain('Neo.isSargeTutorialBlocked = isSargeTutorialBlocked');
+    // The prereq check honors the derived gelleh/mooggy unlocks too.
+    expect(gameState).toContain("if (Number(Neo.metaProgress?.godsKilled || 0) > 0) unlocked.add('gelleh')");
+    expect(gameState).toContain("if (Number(Neo.metaProgress?.mooggyDefeats || 0) >= 3) unlocked.add('mooggy')");
+    // Run start drops the replay rather than running the tutorial as Sarge.
+    expect(gameState).toContain("if (!resume && Neo.chosenCharacter === 'sarge' && isSargeTutorialBlocked())");
+    // Charselect nudges a blocked Sarge selection onto a starter.
+    expect(gameState).toContain("if (Neo.chosenCharacter === 'sarge' && isSargeTutorialBlocked())");
+    // The character-select UI disables Sarge's card and the Go button.
+    expect(uiController).toContain('const sargeTutorialBlocked = !!Neo.isSargeTutorialBlocked?.()');
+    expect(uiController).toContain("unlocked.has(itemKey) && !(itemKey === 'sarge' && sargeTutorialBlocked)");
+    expect(uiController).toContain("if (itemKey === 'sarge' && sargeTutorialBlocked) return 'Unlock the full roster first'");
+    expect(uiController).toContain('goBtn.disabled = !isSelectable(selected) || inactiveCustom');
+    // Programmatic (carousel/keyboard) selection of a gated Sarge is rejected.
+    expect(panels).toContain("if (characterKey === 'sarge' && Neo.isSargeTutorialBlocked?.())");
+  });
+
+  test('keeps ordinary New Game runs out of tutorial mode', () => {
+    expect(gameState).toContain("const shouldRunTutorial = Neo.gameMode === 'normal'\n      && forceTutorialReplay;");
+    expect(gameState).not.toContain('!Neo.metaProgress.tutorialCompleted || forceTutorialReplay || outdatedTutorial');
   });
 });

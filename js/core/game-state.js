@@ -452,6 +452,32 @@ export function resumeGame() {
     return requested;
   }
 
+  function isReplayTutorialRequested() {
+    try {
+      return localStorage.getItem(Neo.REPLAY_TUTORIAL_KEY) === '1';
+    } catch {}
+    return false;
+  }
+
+  // Every non-custom character except Sarge himself. Sarge is the "old guard"
+  // reward, so the tutorial can only be replayed as Sarge once the player has
+  // unlocked the rest of the roster.
+  const SARGE_TUTORIAL_PREREQS = ['princess', 'thorn_knight', 'metao', 'gelleh', 'mooggy', 'turtle_boy'];
+
+  function hasAllSargeTutorialPrereqs() {
+    const unlocked = new Set(Neo.metaProgress?.unlockedCharacters || []);
+    if (Number(Neo.metaProgress?.godsKilled || 0) > 0) unlocked.add('gelleh');
+    if (Number(Neo.metaProgress?.mooggyDefeats || 0) >= 3) unlocked.add('mooggy');
+    return SARGE_TUTORIAL_PREREQS.every(key => unlocked.has(key));
+  }
+
+  // The tutorial may not be played as Sarge until the rest of the roster is
+  // unlocked. This only gates the *tutorial* — Sarge stays freely playable in
+  // normal runs.
+  function isSargeTutorialBlocked() {
+    return isReplayTutorialRequested() && !hasAllSargeTutorialPrereqs();
+  }
+
   // Offer the green main-menu tutorial button on the first menu visit, then at
   // most once every 30 days after that.
   const TUTORIAL_REOFFER_MS = 30 * 24 * 60 * 60 * 1000;
@@ -2436,7 +2462,7 @@ export function resumeGame() {
       if (competBtn) competBtn.disabled = false;
     }
 
-    const activeChar = Neo.charSelectPhase && PHASE_CHAR[Neo.charSelectPhase] ? PHASE_CHAR[Neo.charSelectPhase]() : Neo.chosenCharacter;
+    let activeChar = Neo.charSelectPhase && PHASE_CHAR[Neo.charSelectPhase] ? PHASE_CHAR[Neo.charSelectPhase]() : Neo.chosenCharacter;
     const unlocked = new Set(Neo.metaProgress.unlockedCharacters || ['princess', 'thorn_knight', 'metao']);
     const unlockedDifficulties = getUnlockedDifficultySet();
     const unlockedChallenges = getUnlockedChallengeSet();
@@ -2459,6 +2485,18 @@ export function resumeGame() {
       Neo.metaProgress.selectedDifficulty = Neo.selectedDifficulty;
       Neo.selectedChallenges = normalizeChallengeSelection(Neo.selectedChallenges).filter(key => unlockedChallenges.has(key) && ownedChallenges.has(key));
       Neo.metaProgress.selectedChallenges = normalizeChallengeSelection(Neo.selectedChallenges);
+    }
+    // A pending tutorial replay can't run as Sarge until the rest of the roster
+    // is unlocked. Nudge the selection off Sarge so the player isn't staring at
+    // a disabled Go button with no obvious reason.
+    if (Neo.chosenCharacter === 'sarge' && isSargeTutorialBlocked()) {
+      const fallback = ['thorn_knight', 'princess', 'metao'].find(key => unlocked.has(key))
+        || [...unlocked].find(key => key !== 'sarge' && !isCustomCharacterKey(key));
+      if (fallback) {
+        Neo.chosenCharacter = fallback;
+        Neo.metaProgress.selectedCharacter = fallback;
+        activeChar = fallback;
+      }
     }
     const ownedLegacy = new Set(Neo.metaProgress.unlockedLegacy || []);
     const competitiveUnlocked = isCompetitive ? new Set([...unlocked].filter(k => k !== 'princess' && !isCustomCharacterKey(k))) : unlocked;
@@ -2518,14 +2556,19 @@ export function resumeGame() {
     if (Neo.gameMode === 'coop') { startCoop(); return; }
     if (Neo.gameMode === 'pvp') { startPvp(); return; }
     if (Neo.gameMode === 'competitive') { void startCompetitive(); return; }
+    // Safety net for the Sarge tutorial gate: if a replay was requested while
+    // Sarge is selected but the rest of the roster isn't unlocked yet, drop the
+    // replay rather than running the tutorial as Sarge. The charselect UI gates
+    // this before we get here, so this only catches stale/programmatic requests.
+    if (!resume && Neo.chosenCharacter === 'sarge' && isSargeTutorialBlocked()) {
+      consumeReplayTutorialRequest();
+    }
     const forceTutorialReplay = !resume && consumeReplayTutorialRequest();
-    // Players who finished an older tutorial version are shown the rebuilt one
-    // once. complete()/skip() stamp tutorialVersion up to current, so this only
-    // fires a single time per upgrade and never interrupts again afterward.
-    const outdatedTutorial = !resume
-      && Number(Neo.metaProgress.tutorialVersion || 0) < Number(Neo.TUTORIAL_VERSION || 0);
+    // Tutorial mode is opt-in from the dedicated Tutorial action/settings.
+    // A normal New Game must stay a normal run even when the tutorial has never
+    // been completed or its content version changed.
     const shouldRunTutorial = Neo.gameMode === 'normal'
-      && (!Neo.metaProgress.tutorialCompleted || forceTutorialReplay || outdatedTutorial);
+      && forceTutorialReplay;
     // Stamp "last played" so the green tutorial button only re-offers after a long absence.
     if (Neo.metaProgress) { Neo.metaProgress.lastSeenAt = Date.now(); Neo.persistMetaSoon(); }
     setGameState('play');
@@ -3483,6 +3526,9 @@ export function resumeGame() {
   Neo.isFirstRunTutorialActive = isFirstRunTutorialActive;
   Neo.isFirstRunTutorialEngaged = isFirstRunTutorialEngaged;
   Neo.consumeReplayTutorialRequest = consumeReplayTutorialRequest;
+  Neo.isReplayTutorialRequested = isReplayTutorialRequested;
+  Neo.hasAllSargeTutorialPrereqs = hasAllSargeTutorialPrereqs;
+  Neo.isSargeTutorialBlocked = isSargeTutorialBlocked;
   Neo.formatControlLabel = formatControlLabel;
   Neo.getControlHint = getControlHint;
   Neo.getAscendControlHint = getAscendControlHint;

@@ -4352,6 +4352,48 @@ p.sub {
   grid-column: 2;
 }
 
+/* Hover/focus readout for the Kit grid: describes the move under the cursor
+   and keeps the last-hovered move's text until another is hovered. */
+.hero-detail-skill-readout {
+  grid-column: 2;
+  min-height: calc(34px * var(--font-scale, 1));
+  margin-top: -2px;
+  padding: 7px 9px;
+  border-radius: 4px;
+  background: rgba(140,200,255,.07);
+  border: 1px solid rgba(140,200,255,.18);
+}
+
+.hero-detail-skill-readout-name {
+  display: block;
+  font-size: calc(11px * var(--font-scale, 1));
+  font-weight: 800;
+  letter-spacing: .04em;
+  color: var(--menu-text);
+}
+
+.hero-detail-skill-readout-name:empty {
+  display: none;
+}
+
+.hero-detail-skill-readout-desc {
+  display: block;
+  font-size: calc(11px * var(--font-scale, 1));
+  line-height: 1.4;
+  color: var(--menu-text-soft);
+}
+
+.hero-detail-skill-pip {
+  cursor: default;
+}
+
+.hero-detail-skill-pip:hover,
+.hero-detail-skill-pip:focus-visible {
+  background: rgba(255,255,255,.08);
+  border-color: rgba(255,255,255,.22);
+  outline: none;
+}
+
 .hero-detail-inventory {
   grid-column: 2;
   display: flex;
