@@ -370,7 +370,10 @@
       slot.nav.nextAt = 0;
     }
 
-    if (pressedNow[0]) clickFocused();
+    if (pressedNow[0]) {
+      if (window.Neo?.uiController?.isDialogueOpen?.()) window.Neo.uiController.advanceDialogue();
+      else clickFocused();
+    }
     if (pressedNow[1]) backOrCancel();
     if (pressedNow[9]) {
       if (window.Neo?.gameState === 'pause') window._neoGame?.resumeGame?.();

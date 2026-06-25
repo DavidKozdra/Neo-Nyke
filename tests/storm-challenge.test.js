@@ -46,4 +46,20 @@ describe('storm challenge hazards', () => {
     expect(worldSource).toContain('hazard.warn = Math.max(0, Number(hazard.warn || 0) - dt)');
     expect(worldSource).toContain('if (hazard.warn <= 0) {');
   });
+
+  test('uses the dedicated storm loop and lightning impact sound', () => {
+    const sfxSource = fs.readFileSync(path.join(__dirname, '../js/core/sfx.js'), 'utf8');
+    const roomsSource = fs.readFileSync(path.join(__dirname, '../js/game/rooms.js'), 'utf8');
+    const hudSource = fs.readFileSync(path.join(__dirname, '../js/game/hud.js'), 'utf8');
+    expect(sfxSource).toContain("id: 'lightning_storm_loop', path: 'assets/sounds/sf_Lightning Charge_looped.wav'");
+    expect(sfxSource).toContain("id: 'lightning_charge', path: 'assets/sounds/sf_Lightning Charge.wav'");
+    expect(sfxSource).toContain('source.loop = true');
+    expect(enemiesSource).toContain("Neo.playSfxLoop?.('lightning_storm_loop')");
+    expect(enemiesSource).toContain("Neo.stopSfxLoop?.('lightning_storm_loop')");
+    expect(roomsSource).toContain("Neo.playSfxLoop?.('lightning_storm_loop')");
+    expect(roomsSource).toContain("Neo.stopSfxLoop?.('lightning_storm_loop')");
+    expect(hudSource).toContain("Neo.stopSfxLoop?.('lightning_storm_loop')");
+    expect(worldSource).toContain("if (hazard.source === 'storm'");
+    expect(worldSource).toContain("Neo.playSfx?.('lightning_charge')");
+  });
 });

@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'neonyke-v35';
+const CACHE_VERSION = 'neonyke-v36';
 const CACHE_META = 'neonyke-cache-meta';
 const CACHE_META_KEY = '/__neonyke_cache_meta__';
 const CACHE_REFRESH_INTERVAL_MS = 5 * 60 * 60 * 1000;
@@ -13,6 +13,7 @@ const PRECACHE = [
   '/css/mobile.css',
   '/css/touch-controls.css',
   '/css/panel-borders.css',
+  '/css/tutorial.css',
   '/assets/fonts/VT323-Regular.woff2',
   '/assets/fonts/VT323-LatinExt.woff2',
   '/assets/fonts/PressStart2P-Latin.woff2',
@@ -41,6 +42,8 @@ const PRECACHE = [
   '/js/ui/notifications.js',
   '/js/ui/unlock-banner.js',
   '/js/ui/panels.js',
+  '/js/ui/tutorial-controller.js',
+  '/js/tutorial/scenes.js',
   '/js/core/game-state.js',
   '/js/game/roomTemplates.js',
   '/js/game/rooms.js',

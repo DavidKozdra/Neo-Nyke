@@ -275,7 +275,8 @@ button, input, select, textarea {
 .hud-hide-objectives .objective-tracker,
 .hud-hide-stats      #playerStats,
 .hud-hide-actions    #actionBar,
-.hud-hide-equipment  .equipment-slots {
+.hud-hide-equipment  .equipment-slots,
+.hud-hide-itemnotify #itemNotifyStack {
   display: none !important;
 }
 
@@ -334,9 +335,14 @@ button, input, select, textarea {
   --coin-hud-bottom: 90px;
   --notify-gap: 12px;
   position: fixed;
-  top: calc(var(--coin-hud-bottom) * var(--hud-scale-coins, var(--hud-scale, 1)) + var(--notify-gap));
+  /* Vertical anchor still tracks the coin display's height so the stack never
+     overlaps the gold HUD, but scale/visibility/offset are now its own widget
+     ("Item Pickups" in settings → HUD Layout) rather than borrowing the coins'. */
+  top: calc(var(--coin-hud-bottom) * var(--hud-scale-coins, var(--hud-scale, 1)) + var(--notify-gap) + var(--hud-y-coins, 0px));
   left: 16px;
-  transform: translate(var(--hud-x-coins, 0px), var(--hud-y-coins, 0px));
+  transform: translate(var(--hud-x-itemnotify, 0px), var(--hud-y-itemnotify, 0px))
+             scale(var(--hud-scale-itemnotify, 2));
+  transform-origin: top left;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -345,11 +351,11 @@ button, input, select, textarea {
 }
 
 .item-toast {
-  width: min(360px, calc(100vw - 32px));
+  width: min(520px, calc(100vw - 32px));
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
+  gap: 12px;
+  padding: 12px 14px;
   border-radius: 8px;
   border: 2px solid var(--menu-border);
   border-top-color: var(--menu-border-strong);
@@ -366,8 +372,8 @@ button, input, select, textarea {
 }
 
 .item-toast-icon {
-  width: 30px !important;
-  height: 30px !important;
+  width: 38px !important;
+  height: 38px !important;
   border-radius: 6px;
   flex-shrink: 0;
   border: 1px solid rgba(255,255,255,.3);
@@ -885,6 +891,9 @@ button, input, select, textarea {
   }
 }
 
+/* Legacy tutorial-box layout. The live overlay structure and stacking are
+   defined in css/tutorial.css (loaded last); keep this z-index in sync with it
+   so the target ring stays above gameplay panels regardless of load order. */
 .tutorial-overlay {
   position: fixed;
   inset: 0;
@@ -892,7 +901,7 @@ button, input, select, textarea {
   align-items: flex-end;
   justify-content: center;
   padding: 16px 24px calc(34px + (132px * var(--hud-scale-actions, var(--hud-scale, 1))) + max(0px, calc(-1 * var(--hud-y-actions, 0px))));
-  z-index: 44;
+  z-index: 300;
   pointer-events: none;
   box-sizing: border-box;
 }
@@ -1066,8 +1075,9 @@ button, input, select, textarea {
   position: fixed;
   top: 154px;
   /* Sit to the LEFT of the top-right minimap (≈146px map + 16px inset) so the two
-     HUD widgets don't overlap. The map keeps the right edge; objectives clear it. */
-  right: 206px;
+     HUD widgets don't overlap. The map keeps the right edge; objectives clear it
+     with generous clearance so the two boxes never touch. */
+  right: 400px;
   z-index: 19;
   width: 284px;
   max-height: calc(100dvh - 158px);
@@ -1217,7 +1227,7 @@ button, input, select, textarea {
 
 @media (max-width: 720px) {
   .objective-tracker {
-    top: 118px;
+    top: 94px;
     /* Compact minimap is ≈112px + 8px inset wide; clear it on the right. */
     right: 124px;
     width: min(284px, calc(100vw - 138px));
@@ -2003,15 +2013,27 @@ button, input, select, textarea {
   white-space: nowrap;
 }
 
-.shop-card__price::before {
-  content: "C";
-  display: inline-grid;
-  place-items: center;
+.shop-card__coin {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: color-mix(in srgb, var(--shop-can-afford, #4caf50) 18%, transparent);
-  color: var(--shop-can-afford, #4caf50);
+  /* Tint follows the price text color so it goes red when unaffordable. */
+  background: color-mix(in srgb, currentColor 18%, transparent);
+  image-rendering: pixelated;
+  flex: 0 0 auto;
+}
+
+/* Reusable gold coin icon (forge cost rows, totals, anywhere a gold amount is
+   shown inline). The pixel art is drawn onto the canvas by drawGoldCoinIcons. */
+.gold-coin-icon {
+  image-rendering: pixelated;
+}
+
+.gold-coin-icon--inline {
+  width: 14px;
+  height: 14px;
+  vertical-align: -2px;
+  margin-right: 1px;
 }
 
 .shop-card__copy {
@@ -4328,6 +4350,48 @@ p.sub {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 6px;
   grid-column: 2;
+}
+
+/* Hover/focus readout for the Kit grid: describes the move under the cursor
+   and keeps the last-hovered move's text until another is hovered. */
+.hero-detail-skill-readout {
+  grid-column: 2;
+  min-height: calc(34px * var(--font-scale, 1));
+  margin-top: -2px;
+  padding: 7px 9px;
+  border-radius: 4px;
+  background: rgba(140,200,255,.07);
+  border: 1px solid rgba(140,200,255,.18);
+}
+
+.hero-detail-skill-readout-name {
+  display: block;
+  font-size: calc(11px * var(--font-scale, 1));
+  font-weight: 800;
+  letter-spacing: .04em;
+  color: var(--menu-text);
+}
+
+.hero-detail-skill-readout-name:empty {
+  display: none;
+}
+
+.hero-detail-skill-readout-desc {
+  display: block;
+  font-size: calc(11px * var(--font-scale, 1));
+  line-height: 1.4;
+  color: var(--menu-text-soft);
+}
+
+.hero-detail-skill-pip {
+  cursor: default;
+}
+
+.hero-detail-skill-pip:hover,
+.hero-detail-skill-pip:focus-visible {
+  background: rgba(255,255,255,.08);
+  border-color: rgba(255,255,255,.22);
+  outline: none;
 }
 
 .hero-detail-inventory {
@@ -11943,9 +12007,10 @@ border-bottom: black solid 2px;
 /* Anchors mirror the real CSS placement of each widget. settings-ui.js rewrites
    these into scaled viewport pixels when the preview opens. */
 .hud-preview-box--coins      { top: 4%;  left: 3%; transform-origin: top left; }
+.hud-preview-box--itemnotify { top: 14%; left: 3%; transform-origin: top left; }
 .hud-preview-box--center     { top: 2%;  left: 50%; transform: translateX(-50%); transform-origin: top center; }
 /* Objectives sit to the LEFT of the top-right minimap (≈18% wide + margin), mirroring the live HUD. */
-.hud-preview-box--objectives { top: 22%; right: 22%; transform-origin: top right; }
+.hud-preview-box--objectives { top: 18%; right: 25%; transform-origin: top right; }
 .hud-preview-box--stats      { bottom: 4%; left: 3%; transform-origin: bottom left; }
 .hud-preview-box--actions    { bottom: 4%; left: 50%; transform: translateX(-50%); transform-origin: bottom center; }
 .hud-preview-box--equipment  { top: 50%; right: 1%; transform: translateY(-50%); transform-origin: center right; }

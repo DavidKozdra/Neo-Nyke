@@ -1,0 +1,483 @@
+.tutorial-overlay {
+  position: fixed;
+  inset: 0;
+  /* Must sit above every gameplay panel (Inventory/Shop/Forge ~22) and their
+     escape-hatch tooltips (equip 200, reward 240) so the target ring and
+     spotlight are never covered when a panel is still open on a route step. */
+  z-index: 300;
+  display: block;
+  padding: 0;
+  pointer-events: none;
+}
+
+.tutorial-overlay.hidden {
+  display: none !important;
+}
+
+.tutorial-spotlight {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.tutorial-target-ring {
+  position: fixed;
+  z-index: 2;
+  box-sizing: border-box;
+  border: 3px solid #8be8ff;
+  border-radius: 16px;
+  box-shadow:
+    0 0 0 2px rgba(5, 12, 20, .92),
+    0 0 18px rgba(88, 220, 255, .95),
+    inset 0 0 18px rgba(88, 220, 255, .28);
+  animation: tutorial-target-pulse 1.05s ease-in-out infinite;
+}
+
+.tutorial-target-ring::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -18px;
+  width: 14px;
+  height: 14px;
+  border-top: 4px solid #fff3a8;
+  border-left: 4px solid #fff3a8;
+  transform: translateX(-50%) rotate(45deg);
+  filter: drop-shadow(0 0 6px #ffe66f);
+  animation: tutorial-arrow-bob .72s ease-in-out infinite;
+}
+
+.tutorial-target-ring--route {
+  border-color: #ffe66f;
+  box-shadow:
+    0 0 0 2px rgba(5, 12, 20, .92),
+    0 0 24px rgba(255, 220, 80, .95),
+    inset 0 0 18px rgba(255, 220, 80, .24);
+}
+
+.tutorial-target-ring--offscreen {
+  display: grid;
+  place-items: center;
+  color: #08111b;
+  background: linear-gradient(120deg, #ffe66f, #fff4b0);
+  border-width: 4px;
+  border-radius: 12px;
+  box-shadow: 0 0 0 3px rgba(3, 9, 16, .96), 0 0 30px rgba(255, 230, 111, .95);
+}
+
+.tutorial-target-ring--offscreen::before {
+  content: "TARGET";
+  font-size: calc(18px * var(--font-scale, 1));
+  font-weight: 1000;
+  letter-spacing: .08em;
+}
+
+.tutorial-target-ring--offscreen::after {
+  top: 50%;
+  left: 50%;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  border-width: 5px 5px 0 0;
+  border-color: #fff7bd;
+  filter: drop-shadow(0 0 4px #000);
+  animation: tutorial-offscreen-arrow .7s ease-in-out infinite;
+}
+
+.tutorial-target-ring--offscreen[data-direction="right"]::after {
+  left: calc(100% + 18px);
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+
+.tutorial-target-ring--offscreen[data-direction="left"]::after {
+  left: -18px;
+  transform: translate(-50%, -50%) rotate(225deg);
+}
+
+.tutorial-target-ring--offscreen[data-direction="up"]::after {
+  top: -18px;
+  transform: translate(-50%, -50%) rotate(-45deg);
+}
+
+.tutorial-target-ring--offscreen[data-direction="down"]::after {
+  top: calc(100% + 18px);
+  transform: translate(-50%, -50%) rotate(135deg);
+}
+
+.tutorial-card {
+  position: fixed;
+  z-index: 3;
+  width: min(430px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  overflow: auto;
+  box-sizing: border-box;
+  padding: 16px 18px 14px;
+  color: #f4fbff;
+  background:
+    linear-gradient(145deg, rgba(20, 35, 52, .98), rgba(5, 10, 18, .99));
+  border: 2px solid rgba(120, 222, 255, .78);
+  border-radius: 14px;
+  box-shadow:
+    0 18px 50px rgba(0, 0, 0, .68),
+    inset 0 0 22px rgba(80, 200, 255, .08);
+  pointer-events: auto;
+}
+
+.tutorial-card--enter {
+  animation: tutorial-card-enter .24s ease-out both;
+}
+
+.tutorial-card--celebrate {
+  animation: tutorial-card-celebrate .42s ease-out both;
+}
+
+/* Ring snaps green and blooms when a lesson is cleared. */
+.tutorial-target-ring--clear {
+  animation: tutorial-ring-clear .5s ease-out both !important;
+}
+
+.tutorial-card__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.tutorial-speaker,
+.tutorial-progress {
+  color: #9ce9ff;
+  font-size: calc(15px * var(--font-scale, 1));
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+
+.tutorial-progress {
+  color: #ffe58e;
+}
+
+.tutorial-progress-track {
+  margin-top: 8px;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(120, 200, 255, .14);
+  overflow: hidden;
+}
+
+.tutorial-progress-bar {
+  width: 0;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #6fe9ff, #ffe66f);
+  box-shadow: 0 0 10px rgba(124, 230, 255, .55);
+  transition: width .35s ease-out;
+}
+
+.tutorial-speaker--announce {
+  animation: tutorial-chapter-announce .5s ease-out both;
+}
+
+.tutorial-title {
+  margin: 8px 0 5px;
+  color: #fff;
+  font-size: calc(32px * var(--font-scale, 1));
+  line-height: 1.05;
+}
+
+.tutorial-text {
+  color: #edf8ff;
+  font-size: calc(24px * var(--font-scale, 1));
+  line-height: 1.38;
+  text-wrap: pretty;
+}
+
+.tutorial-command {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 12px 14px;
+  color: #07111b;
+  background: linear-gradient(100deg, #ffe66f, #9cf3ff);
+  border: 3px solid #fff7bd;
+  border-radius: 10px;
+  box-shadow: 0 0 0 2px rgba(3, 10, 18, .9), 0 0 22px rgba(255, 230, 111, .55);
+  animation: tutorial-command-pulse 1.2s ease-in-out infinite;
+}
+
+.tutorial-command[hidden],
+.tutorial-command.hidden {
+  display: none !important;
+}
+
+.tutorial-command__label {
+  flex: 0 0 auto;
+  font-size: calc(14px * var(--font-scale, 1));
+  font-weight: 900;
+  letter-spacing: .12em;
+}
+
+.tutorial-command__value {
+  min-width: 0;
+  font-size: calc(27px * var(--font-scale, 1));
+  font-weight: 1000;
+  line-height: 1;
+  letter-spacing: .045em;
+  overflow-wrap: anywhere;
+  text-transform: uppercase;
+}
+
+.tutorial-gate {
+  margin-top: 10px;
+  padding: 8px 10px;
+  color: #fff0a8;
+  background: rgba(255, 216, 77, .09);
+  border-left: 3px solid #ffe66f;
+  font-size: calc(19px * var(--font-scale, 1));
+}
+
+.tutorial-actions {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tutorial-nav {
+  display: flex;
+  gap: 8px;
+}
+
+.tutorial-nav-btn,
+.tutorial-skip-btn {
+  min-height: 38px;
+  border: 1px solid rgba(126, 207, 245, .6);
+  border-radius: 8px;
+  padding: 7px 12px;
+  color: #e9f8ff;
+  background: rgba(23, 48, 70, .94);
+  font-size: calc(16px * var(--font-scale, 1));
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.tutorial-nav-btn:hover,
+.tutorial-nav-btn:focus-visible,
+.tutorial-skip-btn:hover,
+.tutorial-skip-btn:focus-visible {
+  border-color: #bceeff;
+  background: rgba(39, 75, 104, .98);
+  outline: none;
+}
+
+.tutorial-nav-btn:disabled {
+  opacity: .38;
+  cursor: default;
+}
+
+.tutorial-hint {
+  flex: 1;
+  color: rgba(210, 239, 252, .72);
+  font-size: calc(13px * var(--font-scale, 1));
+  letter-spacing: .08em;
+  text-align: center;
+}
+
+.tutorial-skip-btn {
+  border-color: rgba(255, 145, 160, .42);
+  color: #ffd3da;
+  background: rgba(72, 25, 35, .66);
+}
+
+.tutorial-active #objectiveTracker {
+  max-height: 104px;
+}
+
+.tutorial-active #objectiveList li:not(:first-child) {
+  display: none;
+}
+
+html.princess-ui .tutorial-card {
+  border-color: rgba(255, 160, 215, .82);
+  background: linear-gradient(145deg, rgba(65, 20, 55, .98), rgba(20, 7, 23, .99));
+}
+
+html.princess-ui .tutorial-target-ring {
+  border-color: #ff9acf;
+  box-shadow: 0 0 0 2px rgba(25, 5, 20, .92), 0 0 22px rgba(255, 130, 205, .95);
+}
+
+.acc-high-contrast .tutorial-card {
+  color: #fff;
+  background: #000;
+  border-color: #fff;
+}
+
+.acc-high-contrast .tutorial-target-ring {
+  border-color: #ff0;
+  box-shadow: 0 0 0 3px #000, 0 0 0 6px #fff;
+}
+
+@keyframes tutorial-target-pulse {
+  0%, 100% { transform: scale(1); opacity: .86; }
+  50% { transform: scale(1.035); opacity: 1; }
+}
+
+@keyframes tutorial-arrow-bob {
+  0%, 100% { margin-top: 0; }
+  50% { margin-top: -7px; }
+}
+
+@keyframes tutorial-card-enter {
+  from { opacity: 0; transform: translateY(8px) scale(.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes tutorial-command-pulse {
+  0%, 100% { transform: scale(1); filter: brightness(1); }
+  50% { transform: scale(1.018); filter: brightness(1.08); }
+}
+
+@keyframes tutorial-offscreen-arrow {
+  0%, 100% { opacity: .72; }
+  50% { opacity: 1; }
+}
+
+@keyframes tutorial-card-celebrate {
+  0% { transform: scale(1); border-color: rgba(120, 222, 255, .78); }
+  35% { transform: scale(1.035); border-color: #7CFFA0; box-shadow: 0 18px 50px rgba(0, 0, 0, .68), 0 0 34px rgba(124, 255, 160, .6), inset 0 0 26px rgba(124, 255, 160, .2); }
+  70% { transform: scale(1.005); border-color: #ffe66f; }
+  100% { transform: scale(1); border-color: rgba(120, 222, 255, .78); }
+}
+
+@keyframes tutorial-ring-clear {
+  0% { transform: scale(1); border-color: #7CFFA0; box-shadow: 0 0 0 2px rgba(5, 12, 20, .92), 0 0 22px rgba(124, 255, 160, .95), inset 0 0 18px rgba(124, 255, 160, .35); opacity: 1; }
+  100% { transform: scale(1.4); border-color: #7CFFA0; box-shadow: 0 0 0 2px rgba(5, 12, 20, 0), 0 0 40px rgba(124, 255, 160, 0); opacity: 0; }
+}
+
+@keyframes tutorial-chapter-announce {
+  0% { transform: translateX(-6px); opacity: 0; letter-spacing: .28em; color: #ffe66f; }
+  60% { color: #ffe66f; }
+  100% { transform: translateX(0); opacity: 1; letter-spacing: .14em; }
+}
+
+.tutorial-cutscene-active .dialogue-box {
+  width: min(980px, calc(100vw - 32px));
+  padding: 22px 26px 20px;
+  border: 2px solid #ffe081;
+  box-shadow: 0 20px 58px rgba(0, 0, 0, .68), 0 0 30px rgba(255, 205, 100, .2);
+}
+
+.tutorial-cutscene-active .dialogue-speaker {
+  color: #ffe081;
+  font-size: calc(18px * var(--font-scale, 1));
+}
+
+.tutorial-cutscene-active .dialogue-text {
+  min-height: 92px;
+  font-size: calc(30px * var(--font-scale, 1));
+  line-height: 1.42;
+}
+
+.tutorial-cutscene-active .dialogue-hint {
+  color: #fff0a8;
+  font-size: calc(16px * var(--font-scale, 1));
+  opacity: 1;
+}
+
+@media (max-width: 720px) {
+  .tutorial-card {
+    width: calc(100vw - 16px) !important;
+    max-height: min(42dvh, 360px);
+    padding: 12px 13px 11px;
+    border-radius: 10px;
+  }
+
+  .tutorial-title {
+    margin-top: 5px;
+    font-size: calc(26px * var(--font-scale, 1));
+  }
+
+  .tutorial-text {
+    font-size: calc(21px * var(--font-scale, 1));
+    line-height: 1.3;
+  }
+
+  .tutorial-command {
+    gap: 8px;
+    margin-top: 9px;
+    padding: 9px 10px;
+  }
+
+  .tutorial-command__label {
+    font-size: calc(12px * var(--font-scale, 1));
+  }
+
+  .tutorial-command__value {
+    font-size: calc(23px * var(--font-scale, 1));
+  }
+
+  .tutorial-gate {
+    margin-top: 6px;
+    padding: 5px 7px;
+    font-size: calc(17px * var(--font-scale, 1));
+  }
+
+  .tutorial-actions {
+    margin-top: 7px;
+    flex-wrap: wrap;
+  }
+
+  .tutorial-hint {
+    order: 3;
+    flex-basis: 100%;
+    font-size: calc(11px * var(--font-scale, 1));
+  }
+
+  .tutorial-nav-btn,
+  .tutorial-skip-btn {
+    min-height: 32px;
+    padding: 5px 8px;
+    font-size: calc(14px * var(--font-scale, 1));
+  }
+
+  .tutorial-cutscene-active .dialogue-box {
+    width: calc(100vw - 16px);
+    padding: 13px 14px 12px;
+  }
+
+  .tutorial-cutscene-active .dialogue-speaker {
+    font-size: calc(13px * var(--font-scale, 1));
+  }
+
+  .tutorial-cutscene-active .dialogue-text {
+    min-height: 58px;
+    font-size: calc(22px * var(--font-scale, 1));
+    line-height: 1.34;
+  }
+
+  .tutorial-cutscene-active .dialogue-hint {
+    font-size: calc(12px * var(--font-scale, 1));
+  }
+}
+
+@media (max-height: 520px) and (orientation: landscape) {
+  .tutorial-card {
+    width: min(390px, 46vw) !important;
+    max-height: calc(100dvh - 16px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tutorial-target-ring,
+  .tutorial-target-ring::after,
+  .tutorial-card--enter,
+  .tutorial-card--celebrate,
+  .tutorial-target-ring--clear,
+  .tutorial-speaker--announce,
+  .tutorial-command {
+    animation: none !important;
+  }
+}

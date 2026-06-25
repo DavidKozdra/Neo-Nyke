@@ -646,6 +646,7 @@ export function createUIController(view) {
       if (normalized.includes('metao') || normalized.includes('mateo')) return 'metao';
       if (normalized.includes('gelleh') || normalized.includes('granialla')) return 'gelleh';
       if (normalized.includes('mooggy')) return 'mooggy';
+      if (normalized.includes('sarge')) return 'sarge';
       if (normalized.includes('queen')) return 'queen_cult';
       if (normalized.includes('bulk') && normalized.includes('golem')) return 'bulk_golem';
       if (normalized.includes('artificer')) return 'artificer_knave';
@@ -692,7 +693,10 @@ export function createUIController(view) {
         }
       }
       if (view.dialogueHint) {
-        const hint = snapshot.isFullyTyped ? 'ENTER TO CONTINUE' : 'ENTER TO SKIP';
+        const touchInput = window.NeoTouch?.active || window.NeoSettings?.isTouchControlsEnabled?.();
+        const gamepadInput = !touchInput && window.NeoGamepad?.[0]?.active;
+        const inputLabel = touchInput ? 'TAP' : gamepadInput ? 'A BUTTON' : 'ENTER';
+        const hint = `${inputLabel} TO ${snapshot.isFullyTyped ? 'CONTINUE' : 'SKIP'}`;
         if (dialogueRenderCache.hint !== hint) {
           view.dialogueHint.textContent = hint;
           dialogueRenderCache.hint = hint;
@@ -1352,6 +1356,7 @@ export function createUIController(view) {
       god_slayer: { type: 'enemy', key: 'god' },
       extinction: { type: 'enemy', key: 'hunter' },
       double_bane: { type: 'enemy', key: 'bowman_bane' },
+      trial_master: { type: 'pixel', color: '#d7f6ff', pixels: [[1,1],[2,1],[3,1],[4,1],[5,1],[1,2],[3,2],[5,2],[1,3],[2,3],[3,3],[4,3],[5,3],[2,4],[3,4],[4,4],[3,5]] },
     };
 
     function drawAchievementIcon(canvas, achievementId) {
@@ -2359,9 +2364,6 @@ export function createUIController(view) {
         view.continueBtn?.addEventListener('click', handlers.onContinue);
         view.deleteRunBtn?.addEventListener('click', handlers.onDeleteRun);
         view.dialogueOverlay?.addEventListener('click', handlers.onAdvanceDialogue);
-        view.tutorialPrevBtn?.addEventListener('click', handlers.onTutorialPrev);
-        view.tutorialNextBtn?.addEventListener('click', handlers.onTutorialNext);
-        view.tutorialSkipBtn?.addEventListener('click', handlers.onSkipTutorial);
         view.tutorialMenuBtn?.addEventListener('click', handlers.onPlayTutorial);
         view.firstTipBtn?.addEventListener('click', handlers.onDismissFirstTip);
         // New main-menu nav
@@ -2542,9 +2544,7 @@ export function createUIController(view) {
         view.bestFloor.textContent = bestFloor;
         if (view.loopCount) view.loopCount.textContent = loopCrystals;
         view.saveState.textContent = saveState;
-        // Keep the CTA stable for the current menu view, but only offer it once
-        // per 30-day window across visits.
-        const canOfferTutorial = activeState === 'menu' && (tutorialMenuOfferVisible || !!Neo.shouldOfferTutorialButton?.());
+        const canOfferTutorial = activeState === 'menu';
         if (activeState === 'menu' && canOfferTutorial && !tutorialMenuOfferVisible) {
           tutorialMenuOfferVisible = true;
           Neo.markTutorialButtonOfferedNow?.();
@@ -2590,10 +2590,18 @@ export function createUIController(view) {
           gelleh: 'Divine hybrid',
           mooggy: 'Fast assassin',
         };
+        // The tutorial can only be replayed as Sarge once the rest of the
+        // roster is unlocked. When a tutorial replay is pending and that prereq
+        // isn't met, Sarge's card behaves as locked here (he stays playable in
+        // normal runs — this only affects the tutorial flow).
+        const sargeTutorialBlocked = !!Neo.isSargeTutorialBlocked?.();
+        const isSelectable = (itemKey) =>
+          unlocked.has(itemKey) && !(itemKey === 'sarge' && sargeTutorialBlocked);
         const unlockText = (itemKey) => {
           if (Neo.isCustomCharacterKey?.(itemKey)) {
             return Neo.getCustomCharacterSettings?.(itemKey).active ? 'Edit custom' : 'Empty slot';
           }
+          if (itemKey === 'sarge' && sargeTutorialBlocked) return 'Unlock the full roster first';
           if (unlocked.has(itemKey)) return ROLE_LABELS[itemKey] || 'Ready';
           if (itemKey === 'gelleh') return 'Unlock: beat GOD';
           if (itemKey === 'mooggy') {
@@ -2616,13 +2624,13 @@ export function createUIController(view) {
           } else {
             button.classList.remove('char-card--empty-custom');
           }
-          button.classList.toggle('locked', !unlocked.has(itemKey));
+          button.classList.toggle('locked', !isSelectable(itemKey));
           button.classList.toggle('sel', selected === itemKey);
-          button.disabled = !unlocked.has(itemKey);
+          button.disabled = !isSelectable(itemKey);
           if (hint) hint.textContent = unlockText(itemKey);
           if (spriteCanvas) {
             Neo.drawSpriteToCanvas(spriteCanvas, Neo.getCharacterSpriteKey?.(itemKey) || itemKey, 76, {
-              alpha: unlocked.has(itemKey) ? 1 : 0.42,
+              alpha: isSelectable(itemKey) ? 1 : 0.42,
               tint: Neo.isCustomCharacterKey?.(itemKey) ? '#83f3ff' : null,
             });
           }
@@ -2648,7 +2656,7 @@ export function createUIController(view) {
         const goBtn = document.getElementById('go');
         if (goBtn) {
           const inactiveCustom = Neo.isCustomCharacterKey?.(selected) && !Neo.getCustomCharacterSettings?.(selected).active;
-          goBtn.disabled = !unlocked.has(selected) || inactiveCustom;
+          goBtn.disabled = !isSelectable(selected) || inactiveCustom;
         }
 
         // ── Hero detail panel ────────────────────────────────
@@ -2671,9 +2679,12 @@ export function createUIController(view) {
             if (slot === 'melee' && defaultWeapon) {
               const weaponDef = Neo.WEAPON_DEFS[defaultWeapon] || {};
               const weaponLabel = weaponDef.name || defaultWeapon || 'Unknown';
-              return `<span class="hero-detail-skill-pip">
+              const weaponDesc = weaponDef.description || '';
+              const safeWeaponDesc = Neo.escapeHtml(weaponDesc);
+              const safeWeaponName = Neo.escapeHtml(weaponLabel);
+              return `<span class="hero-detail-skill-pip" tabindex="0" title="${safeWeaponDesc}" aria-label="${Neo.escapeHtml(`${slotLabel}: ${weaponLabel}. ${weaponDesc}`)}" data-skill-name="${safeWeaponName}" data-skill-desc="${safeWeaponDesc}">
               <canvas class="hero-detail-skill-icon" data-hero-weapon="${Neo.escapeHtml(defaultWeapon)}" width="24" height="24" aria-hidden="true"></canvas>
-              <span class="hero-detail-skill-text">${Neo.escapeHtml(slotLabel)}: ${Neo.escapeHtml(weaponLabel)}</span>
+              <span class="hero-detail-skill-text">${Neo.escapeHtml(slotLabel)}: ${safeWeaponName}</span>
             </span>`;
             }
             const moveKey = String(defaultMoves[slot] || '');
@@ -2689,8 +2700,10 @@ export function createUIController(view) {
                 const optLabel = optDef.name || optKey;
                 const isSel = optKey === chosen;
                 const safeDesc = Neo.escapeHtml(optDef.desc || '');
+                const safeOptName = Neo.escapeHtml(optLabel);
                 return `<button type="button" class="hero-detail-kit-option${isSel ? ' hero-detail-kit-option--sel' : ''}"
                   data-kit-slot="${Neo.escapeHtml(slot)}" data-kit-move="${Neo.escapeHtml(optKey)}"
+                  data-skill-name="${safeOptName}" data-skill-desc="${safeDesc}"
                   title="${safeDesc}" aria-pressed="${isSel}">
                   <canvas class="hero-detail-skill-icon" data-hero-move="${Neo.escapeHtml(optKey)}" width="24" height="24" aria-hidden="true"></canvas>
                   <span class="hero-detail-skill-text">${Neo.escapeHtml(optLabel)}</span>
@@ -2701,9 +2714,12 @@ export function createUIController(view) {
                 <div class="hero-detail-kit-options">${optionPips}</div>
               </div>`;
             }
-            return `<span class="hero-detail-skill-pip">
+            const moveDesc = moveDef.desc || '';
+            const safeMoveDesc = Neo.escapeHtml(moveDesc);
+            const safeMoveName = Neo.escapeHtml(moveLabel);
+            return `<span class="hero-detail-skill-pip" tabindex="0" title="${safeMoveDesc}" aria-label="${Neo.escapeHtml(`${slotLabel}: ${moveLabel}. ${moveDesc}`)}" data-skill-name="${safeMoveName}" data-skill-desc="${safeMoveDesc}">
               <canvas class="hero-detail-skill-icon" data-hero-move="${Neo.escapeHtml(moveKey)}" width="24" height="24" aria-hidden="true"></canvas>
-              <span class="hero-detail-skill-text">${Neo.escapeHtml(slotLabel)}: ${Neo.escapeHtml(moveLabel)}</span>
+              <span class="hero-detail-skill-text">${Neo.escapeHtml(slotLabel)}: ${safeMoveName}</span>
             </span>`;
           }).join('');
           const startingItems = getCharacterStartingItems(selected);
@@ -2743,6 +2759,7 @@ export function createUIController(view) {
             `<p class="hero-detail-lore">${Neo.escapeHtml(lore)}</p>` +
             `<div class="hero-detail-stats"><div class="hero-detail-section-label">Stats</div>${statsHtml}</div>` +
             `<div class="hero-detail-skills"><div class="hero-detail-section-label">Kit</div>${skillsHtml}</div>` +
+            `<div class="hero-detail-skill-readout" data-skill-readout aria-live="polite"><span class="hero-detail-skill-readout-name" data-skill-readout-name></span><span class="hero-detail-skill-readout-desc" data-skill-readout-desc>Hover a move to see what it does.</span></div>` +
             `<div class="hero-detail-inventory"><span class="hero-detail-inventory-label">Starting Inventory</span>${inventoryHtml}</div>`;
           Neo.drawSpriteToCanvas(document.getElementById('heroDetailSprite'), Neo.getCharacterSpriteKey?.(selected) || selected, 104, {
             tint: Neo.isCustomCharacterKey?.(selected) ? '#83f3ff' : null,
@@ -2766,6 +2783,33 @@ export function createUIController(view) {
               Neo.updateCharacterSelectionUI?.();
             });
           });
+          // Kit move descriptions: hovering (or focusing) a move feeds its
+          // description into the readout below the grid. The last-hovered move
+          // stays shown — we never clear back to a placeholder on mouseout — so
+          // players can read the full text after moving the cursor away.
+          const readout = detail.querySelector('[data-skill-readout]');
+          const readoutName = readout?.querySelector('[data-skill-readout-name]');
+          const readoutDesc = readout?.querySelector('[data-skill-readout-desc]');
+          if (readout && readoutName && readoutDesc) {
+            const showSkill = (el) => {
+              const name = el?.dataset.skillName || '';
+              const desc = el?.dataset.skillDesc || '';
+              if (!name && !desc) return;
+              readoutName.textContent = name;
+              readoutDesc.textContent = desc || 'No description available.';
+            };
+            const pips = detail.querySelectorAll('[data-skill-desc]');
+            pips.forEach(el => {
+              el.addEventListener('mouseenter', () => showSkill(el));
+              el.addEventListener('focus', () => showSkill(el));
+            });
+            // Seed the readout with the selected/chosen move so the panel never
+            // opens empty and re-renders (e.g. after an alt-kit swap) keep a
+            // meaningful default.
+            const seed = detail.querySelector('.hero-detail-kit-option--sel[data-skill-desc]')
+              || pips[0];
+            if (seed) showSkill(seed);
+          }
         }
       },
       updateDifficultySelection(unlocked, selected, loopCrystals) {
@@ -2842,7 +2886,11 @@ export function createUIController(view) {
       },
       setObjective(text) { view.objective.textContent = text; },
       setTutorialBanner(text, visible) {
-        const open = !!visible && !!text && Neo.gameState === 'play';
+        if (Neo.tutorialController) return;
+        // Stay open while the inventory pause holds during the tutorial, so the
+        // banner doesn't blink out the moment a panel pauses the game.
+        const playableForBanner = Neo.gameState === 'play' || Neo.isFirstRunTutorialEngaged?.();
+        const open = !!visible && !!text && playableForBanner;
         if (view.tutorialOverlay && tutorialBannerCache.open !== open) {
           view.tutorialOverlay.classList.toggle('hidden', !open);
           view.tutorialOverlay.setAttribute('aria-hidden', open ? 'false' : 'true');
@@ -2878,7 +2926,10 @@ export function createUIController(view) {
       setObjectiveList(roomLabel, entries = []) {
         if (!view.objectiveTracker || !view.objectiveList) return;
         const panelEnabled = window.NeoSettings?.showObjectivePanel?.() !== false;
-        const visible = panelEnabled && Neo.gameState === 'play' && entries.length > 0;
+        // Stay visible while the inventory pauses the game during the first-run
+        // tutorial, so the "Open Inventory" step can be seen ticking off live.
+        const playableForObjectives = Neo.gameState === 'play' || Neo.isFirstRunTutorialEngaged?.();
+        const visible = panelEnabled && playableForObjectives && entries.length > 0;
         objectiveTrackerVisible = visible;
         objectiveEntriesCache = Array.isArray(entries) ? entries.slice() : [];
         view.objectiveTracker.classList.toggle('hidden', !visible);

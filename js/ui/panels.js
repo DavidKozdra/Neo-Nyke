@@ -171,6 +171,12 @@ export function bindInput() {
         return Neo.chosenCharacter;
       },
       onCharacterSelect(characterKey, button, options = {}) {
+        // The tutorial can't be replayed as Sarge until the rest of the roster
+        // is unlocked; ignore selection attempts (carousel/keyboard) while gated.
+        if (characterKey === 'sarge' && Neo.isSargeTutorialBlocked?.()) {
+          Neo.spawnParticle?.({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 30, life: 1.1, text: 'Unlock the full roster to play the tutorial as Sarge', c: '#ff6f7f' });
+          return;
+        }
         if (Neo.charSelectPhase === 'p2') { Neo.chosenCharacter2 = characterKey; }
         else if (Neo.charSelectPhase === 'p3') { Neo.chosenCharacter3 = characterKey; }
         else if (Neo.charSelectPhase === 'p4') { Neo.chosenCharacter4 = characterKey; }
@@ -496,6 +502,7 @@ export function bindPanelInput() {
         Neo.activeInvTab = tab.dataset.invTab || 'stats';
         renderInventoryPanel();
         drawInventoryTabIcons();
+        Neo.tutorialController?.signal?.('inventory-tab', { tab: Neo.activeInvTab });
       });
     });
     drawInventoryTabIcons();
@@ -939,6 +946,7 @@ export function setShopPanelOpen(open, options = {}) {
       Neo.ui.shopPanel.setAttribute('aria-hidden', 'false');
       markShopPanelDirty();
       renderShopPanel();
+      Neo.tutorialController?.signal?.('panel-open', { panel: 'shop' });
       return;
     }
     if (animateClose && isPanelOpen(Neo.ui.shopPanel)) playPanelCloseEffect(Neo.ui.shopPanel);
@@ -991,6 +999,7 @@ export function setInventoryPanelOpen(open, options = {}) {
       if (isCoop) updateInvPlayerTabVisibility();
       markInventoryPanelDirty();
       renderInventoryPanel();
+      Neo.tutorialController?.signal?.('panel-open', { panel: 'inventory' });
     }
   }
 
@@ -1014,14 +1023,19 @@ export function toggleShopPanel() {
     const next = !isPanelOpen(Neo.ui.shopPanel);
     if (next) setInventoryPanelOpen(false, { animateClose: false });
     setShopPanelOpen(next);
-    if (next && Neo.isFirstRunTutorialActive()) Neo.tutorialState.openedShop = true;
   }
 
 export function toggleInventoryPanel() {
     const next = !isPanelOpen(Neo.ui.invPanel);
     if (next) setShopPanelOpen(false, { animateClose: false });
     setInventoryPanelOpen(next);
-    if (next && Neo.isFirstRunTutorialActive()) Neo.tutorialState.openedInventory = true;
+    // setInventoryPanelOpen pauses the game, so the engaged (pause-tolerant)
+    // predicate is what's true here, and the per-frame HUD hook won't refresh
+    // the objective tracker while paused — refresh it explicitly on toggle.
+    if (Neo.isFirstRunTutorialEngaged()) {
+      if (next) Neo.tutorialState.openedInventory = true;
+      Neo.updateObjective?.();
+    }
   }
 
   // ---- Anvil panel ----
@@ -1030,8 +1044,13 @@ export function setAnvilPanelOpen(open, options = {}) {
     if (!Neo.ui.anvilPanel) return;
   const animateClose = options.animateClose !== false;
     if (open) {
-      Neo.showFirstTip?.('forge');
-      if (Neo.isFirstRunTutorialActive()) Neo.tutorialState.openedForge = true;
+      if (!Neo.isFirstRunTutorialEngaged?.()) Neo.showFirstTip?.('forge');
+      // Engaged (pause-tolerant) so the forge step still ticks if the forge ever
+      // opens while the game is paused.
+      if (Neo.isFirstRunTutorialEngaged()) {
+        Neo.tutorialState.openedForge = true;
+        Neo.updateObjective?.();
+      }
       clearPanelCloseEffect(Neo.ui.anvilPanel);
       Neo.ui.anvilPanel.classList.remove('hidden');
       Neo.ui.anvilPanel.setAttribute('aria-hidden', 'false');
@@ -1039,6 +1058,7 @@ export function setAnvilPanelOpen(open, options = {}) {
       const equipped = Neo.player?.equippedWeapon;
       Neo.anvilSelectedItem = equipped ? `weapon:${equipped}` : null;
       renderAnvilPanel();
+      Neo.tutorialController?.signal?.('panel-open', { panel: 'forge' });
       return;
     }
     if (animateClose && isPanelOpen(Neo.ui.anvilPanel)) playPanelCloseEffect(Neo.ui.anvilPanel);
@@ -1090,7 +1110,27 @@ export function toggleAnvilPanel() {
     const cur = getAnvilCurrentValue(itemKey, statKey, itemType);
     const staged = Neo.anvilStagedUpgrades[`${itemType}:${itemKey}:${statKey}`] ?? 0;
     const schema = itemType === 'weapon' ? Neo.WEAPON_UPGRADEABLE_STATS : Neo.MOVE_UPGRADEABLE_STATS;
-    return cur + staged * schema[statKey].step;
+    const value = cur + staged * schema[statKey].step;
+    // Cooldown can't go below half its base — clamp the preview the same way
+    // getAnvilCurrentValue does, so the staged → value never shows an impossible
+    // number and staging past the floor is recognized as a no-op (see the cap
+    // check in handleAnvilStatClick).
+    if (statKey === 'cooldown') {
+      const base = itemType === 'weapon' ? Neo.WEAPON_BASE_STATS[itemKey] : Neo.MOVE_BASE_STATS[itemKey];
+      return Math.max(Number(base?.[statKey] || 0) * 0.5, value);
+    }
+    return value;
+  }
+
+  // The effective per-item cooldown floor (base × 0.5). For all other stats the
+  // cap is just the schema min/max. Used so the + cap check matches the value
+  // clamping above instead of the looser global statDef.min.
+  function getAnvilStatFloor(itemKey, statKey, itemType, statDef) {
+    if (statKey === 'cooldown') {
+      const base = itemType === 'weapon' ? Neo.WEAPON_BASE_STATS[itemKey] : Neo.MOVE_BASE_STATS[itemKey];
+      return Math.max(Number(statDef.min || 0), Number(base?.[statKey] || 0) * 0.5);
+    }
+    return statDef.min;
   }
 
   // Base per-step cost for a stat in the currently selected pay currency,
@@ -1317,8 +1357,11 @@ export function renderAnvilStatPanel() {
       const stagedDisplay = staged !== cur
         ? `<span class="anvil-stat-staged${isGain ? '' : ' is-loss'}">&rarr; ${format(staged)} <span class="anvil-stat-delta">(${deltaText})</span></span>`
         : '';
+      // "next +" rather than "/step": forge prices escalate 5% run-wide per
+      // step, so this is the price of the *next* click, not a flat per-step rate.
+      // Labeling it /step made each later click look like a surprise price hike.
       const costDisplay = stepCost > 0
-        ? `<span class="anvil-stat-cost">${payGold ? `&#9670;${stepCost}` : `${stepCost} XP`}/step</span>`
+        ? `<span class="anvil-stat-cost">next + ${payGold ? `<canvas class="gold-coin-icon gold-coin-icon--inline" data-gold-coin width="32" height="32" aria-hidden="true"></canvas>${stepCost}` : `${stepCost} XP`}</span>`
         : '';
 
       const statIcon = statKey === 'damage' || statKey === 'knockback'
@@ -1366,6 +1409,7 @@ export function renderAnvilStatPanel() {
     statEl.querySelectorAll('[data-inv-ui-icon]').forEach(canvas => {
       Neo.drawInventoryUiIcon?.(canvas, canvas.dataset.invUiIcon);
     });
+    drawGoldCoinIcons(statEl);
   }
 
   function renderAnvilFooter() {
@@ -1392,13 +1436,14 @@ export function renderAnvilStatPanel() {
         Neo.ui.anvilCostSummary.style.color = '#ffcf76';
       } else {
         const label = payGold
-          ? `<span style="color:${affordable ? '#ffd15a' : '#ff7c88'}">&#9670; ${total} gold (${coins})</span>`
+          ? `<span style="color:${affordable ? '#ffd15a' : '#ff7c88'}"><canvas class="gold-coin-icon gold-coin-icon--inline" data-gold-coin width="32" height="32" aria-hidden="true"></canvas> ${total} (${coins})</span>`
           : `<span style="color:${affordable ? '#7eff9e' : '#ff7c88'}">${total} XP (${xp})</span>`;
         const voucherLabel = voucherSteps > 0
           ? ` + <span style="color:#ffcf76">${voucherSteps} voucher</span>`
           : '';
         Neo.ui.anvilCostSummary.innerHTML = `Total: ${label}${voucherLabel}`;
         Neo.ui.anvilCostSummary.style.color = affordable ? '#7eff9e' : '#ff7c88';
+        drawGoldCoinIcons(Neo.ui.anvilCostSummary);
       }
     }
     if (Neo.ui.anvilConfirm) {
@@ -1445,24 +1490,33 @@ export function renderAnvilStatPanel() {
     const currentStaged = Neo.anvilStagedUpgrades[stageKey] ?? 0;
 
     if (dir === 1) {
-      // Check cap
+      // Check cap against the per-item floor (base × 0.5 for cooldown), not the
+      // looser global statDef.min — otherwise we'd let the player stage (and pay
+      // for) cooldown steps that clamp to nothing on apply.
       const newVal = getAnvilStagedValue(itemKey, statKey, itemType) + statDef.step;
-      const capped = statDef.step > 0 ? newVal > statDef.max : newVal < statDef.min;
+      const floor = getAnvilStatFloor(itemKey, statKey, itemType, statDef);
+      const capped = statDef.step > 0 ? newVal > statDef.max : newVal < floor;
       if (capped) {
         anvilRejectToast('MAXED OUT');
         return;
       }
-      // Check if we could afford one more step in the selected currency.
+      // Check if we could afford one more step in the selected currency. Price
+      // the next step at the run-wide escalation index (already-applied +
+      // staged), so the gate matches getAnvilTotalCost() rather than the
+      // un-escalated base cost.
       const payGold = Neo.anvilPayCurrency === 'gold';
       const nextCost = getAnvilTotalCost();
       const spent = payGold ? nextCost.gold : nextCost.xp;
       const wallet = payGold ? (Neo.player?.coins ?? 0) : (Neo.player?.xp ?? 0);
       const canUseVoucher = getAnvilStagedStepCount() < getForgeVoucherFreeSteps();
-      if (!canUseVoucher && spent + getAnvilStepCost(statDef) > wallet) {
+      const nextStepIndex = getForgeUpgradesApplied() + getAnvilStagedStepCount();
+      const nextStepCost = getAnvilStepCostAtIndex(statDef, nextStepIndex);
+      if (!canUseVoucher && spent + nextStepCost > wallet) {
         anvilRejectToast(payGold ? 'NEED MORE GOLD' : 'NEED MORE XP');
         return;
       }
       Neo.anvilStagedUpgrades[stageKey] = currentStaged + 1;
+      Neo.tutorialController?.signal?.('forge-stage', { itemType, itemKey, statKey });
     } else {
       // Remove a staged step (can't undo already-committed upgrades)
       if (currentStaged <= 0) return;
@@ -1494,6 +1548,7 @@ export function confirmAnvilUpgrades() {
     // Advance the run-wide escalation counter so each future step is priced 5%
     // higher than the last (free voucher steps still count as upgrades applied).
     Neo.player.forgeUpgradesApplied = getForgeUpgradesApplied() + (cost.stagedSteps || 0);
+    Neo.tutorialController?.signal?.('forge-confirm', { stagedSteps: cost.stagedSteps || 0 });
 
     Neo.anvilStagedUpgrades = {};
     markInventoryPanelDirty();
@@ -2009,6 +2064,13 @@ export function getShopWeaponOffers() {
     const statusLabel = state.statusLabel || '';
     const chipHtml = renderShopChips(chips.length ? chips : [rarityLabel]);
     const statsHtml = renderShopStats(stats);
+    // Gold-priced cards (items/weapons/moves/heals) pass a numeric cost; show the
+    // real coin icon used everywhere else in the HUD. The trade card passes a text
+    // cost (item names) and gets no coin.
+    const isGoldCost = typeof cost === 'number' && Number.isFinite(cost);
+    const priceInner = isGoldCost
+      ? `<canvas class="shop-card__coin gold-coin-icon" data-gold-coin width="32" height="32" aria-hidden="true"></canvas>${escapeShopText(String(cost))}`
+      : escapeShopText(cost);
     return `<div class="shop-card shop-card--${safeKind} shop-card--status-${escapeShopText(status)}${state.showUnaffordable ? ' shop-card--unaffordable' : ''}${state.canAfford && !state.disabled ? ' shop-card--affordable' : ''}${recommended ? ' shop-card--recommended' : ''}${state.bought ? ' shop-card--just-bought' : ''}"${styleAttr}>
       <div class="shop-card__top">
         <span class="shop-card__icon-frame">
@@ -2018,7 +2080,7 @@ export function getShopWeaponOffers() {
           <span class="shop-card__eyebrow">${escapeShopText(rarityLabel)}</span>
           <h4${titleStyle}>${escapeShopText(title)}</h4>
         </div>
-        <span class="shop-card__price">${escapeShopText(cost)}</span>
+        <span class="shop-card__price">${priceInner}</span>
       </div>
 
       <div class="shop-card__copy">
@@ -2039,6 +2101,26 @@ export function getShopWeaponOffers() {
       drawIcon(canvas, resolveDef(key));
     });
   }
+
+  // Gold coin pixel art shared by the HUD coin display, the forge, and shop
+  // price chips. Any UI that shows a gold amount should reuse this rather than a
+  // "C"/diamond glyph. Mark a <canvas data-gold-coin> in the markup, then call
+  // drawGoldCoinIcons(container) after inserting it.
+  const GOLD_COIN_PIXELS = [
+    [2, 1], [3, 1], [4, 1],
+    [1, 2], [2, 2], [3, 2], [4, 2], [5, 2],
+    [1, 3], [2, 3], [3, 3], [4, 3], [5, 3],
+    [1, 4], [2, 4], [3, 4], [4, 4], [5, 4],
+    [2, 5], [3, 5], [4, 5],
+  ];
+  function drawGoldCoinIcons(container) {
+    if (!container || typeof Neo.drawPixelIcon !== 'function') return;
+    container.querySelectorAll('[data-gold-coin]').forEach(canvas => {
+      Neo.drawPixelIcon(canvas, '#ffd15a', GOLD_COIN_PIXELS);
+    });
+  }
+  Neo.GOLD_COIN_PIXELS = GOLD_COIN_PIXELS;
+  Neo.drawGoldCoinIcons = drawGoldCoinIcons;
 
   function ensurePanelRenderCache() {
     if (!Neo._uiPanelRenderCache || typeof Neo._uiPanelRenderCache !== 'object') {
@@ -2231,6 +2313,7 @@ export function renderShopPanel() {
             index,
             state,
             buttonText,
+            buttonExtraAttrs: offer.tutorialOffer ? 'data-tutorial-offer="true"' : '',
             soldStateText: 'OWNED',
           });
         })
@@ -2380,6 +2463,7 @@ export function renderShopPanel() {
       });
       panelRenderCache.shop.tabSigs.heals = activeShopSig;
     }
+    drawGoldCoinIcons(activeShopTabContainer);
     Neo.shopPanelDirty = false;
   }
 
@@ -2813,6 +2897,7 @@ export function equipMove(slot, moveKey) {
     renderInventoryPanel();
     Neo.updateHud();
     Neo.scheduleRunSave();
+    Neo.tutorialController?.signal?.('move-equipped', { slot, moveKey });
   }
 
 export function equipWeapon(weaponKey) {
@@ -2892,6 +2977,11 @@ export function handleShopBuyClick(event) {
       if (!spendCoins(offer.cost)) return;
       offer.bought = true;
       Neo.collectItem(offer.key);
+      Neo.tutorialController?.signal?.('shop-purchase', {
+        kind: 'item',
+        key: offer.key,
+        tutorialOffer: !!offer.tutorialOffer,
+      });
       playShopPurchaseFeedback(button, offer.cost);
       window.achievementEvents?.emit('shop:bought');
     } else if (kind === 'trade') {

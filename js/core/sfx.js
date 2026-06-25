@@ -128,6 +128,8 @@
     // Lightning casts: Lightning Columns, Spear of Lightning (smite), and any
     // other electric strike. One-shot crack at cast time.
     { id: 'lightning_charge', path: 'assets/sounds/sf_Lightning Charge.wav', volume: 0.6, priority: priority.HIGH, mixDb: 3, lowCutHz: 70 },
+    // Continuous electrical bed used while the Storm challenge is active.
+    { id: 'lightning_storm_loop', path: 'assets/sounds/sf_Lightning Charge_looped.wav', volume: 0.42, priority: priority.NORMAL, mixDb: -1, lowCutHz: 70 },
     // Forge anvil upgrade confirmation.
     { id: 'forge_upgrade', path: 'assets/sounds/sfx_Forge Upgrade.wav', volume: 0.7, priority: priority.HIGH, mixDb: 3 },
     // UI: generic menu/button click and the primary confirm (GO / ENTER DUNGEON).
@@ -156,6 +158,7 @@
     lazer_blast:     { label: 'Laser Blast',         category: 'Combat' },
     aoe:             { label: 'AOE Slam',            category: 'Combat' },
     lightning_charge:{ label: 'Lightning',           category: 'Combat' },
+    lightning_storm_loop: { label: 'Storm Challenge', category: 'Combat' },
     bomb_explosion:  { label: 'Bomb Explosion',      category: 'Combat' },
     dash:            { label: 'Dash',                category: 'Combat' },
     enemy_hit:       { label: 'Enemy Hit',           category: 'Combat' },
@@ -358,7 +361,67 @@
     } catch {}
   }
 
+  const activeLoops = new Map();
+
+  function stopSfxLoop(id) {
+    const key = String(id || '');
+    const active = activeLoops.get(key);
+    if (!active) return false;
+    active.cancelled = true;
+    try { active.source?.stop?.(); } catch {}
+    activeLoops.delete(key);
+    return true;
+  }
+
+  function playSfxLoop(id) {
+    try {
+      const key = String(id || '');
+      if (!key || activeLoops.has(key)) return;
+      const def = soundDefs.get(key);
+      if (!def || !def.paths.length) return;
+      const gainLevel = getSoundGain(key, def.volume ?? 1);
+      if (gainLevel <= 0) return;
+      const ctx = getContext();
+      if (!ctx) return;
+      const path = def.paths[0];
+      if (!path) return;
+      const active = { cancelled: false, source: null };
+      activeLoops.set(key, active);
+      loadBuffer(ctx, path)
+        .then((buffer) => {
+          if (active.cancelled || activeLoops.get(key) !== active) return;
+          const source = ctx.createBufferSource();
+          source.buffer = buffer;
+          source.loop = true;
+          const gain = ctx.createGain();
+          const mixGain = mixerApi?.dbToGain?.(def.mixDb ?? 0) ?? Math.pow(10, Number(def.mixDb || 0) / 20);
+          gain.gain.value = Math.max(0, mixGain * getSoundGain(key, def.volume ?? 1));
+          const lowCut = mixerApi?.createLowCutNode?.(
+            ctx,
+            def.lowCutHz ?? mixerApi.DEFAULT_LOW_CUT_HZ
+          ) || null;
+          if (lowCut) {
+            source.connect(lowCut);
+            lowCut.connect(gain);
+          } else {
+            source.connect(gain);
+          }
+          gain.connect(getOutputNode(ctx));
+          active.source = source;
+          source.onended = () => {
+            if (activeLoops.get(key) === active) activeLoops.delete(key);
+          };
+          source.start(0);
+        })
+        .catch(() => {
+          if (activeLoops.get(key) === active) activeLoops.delete(key);
+        });
+    } catch {}
+  }
+
   Neo.playSfx = playSfx;
+  Neo.playSfxLoop = playSfxLoop;
+  Neo.stopSfxLoop = stopSfxLoop;
 
   // Global UI click feedback. A single capture-phase listener covers every
   // button rather than wiring each call site. The vast majority of buttons get

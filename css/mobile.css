@@ -1981,6 +1981,8 @@
     top: calc(148px + env(safe-area-inset-top, 0px));
     left: calc(8px + env(safe-area-inset-left, 0px));
     gap: 4px;
+    transform: translate(var(--hud-x-itemnotify, 0px), var(--hud-y-itemnotify, 0px))
+               scale(var(--hud-scale-itemnotify, 1.25));
   }
 
   .item-toast {
@@ -2774,8 +2776,9 @@
   #charSelect .hero-detail-panel {
     display: grid;
     grid-template-columns: 1fr;
+    align-content: start;
     gap: 5px;
-    min-height: 0;
+    min-height: 222px;
     padding: 8px 10px;
     border-width: 1px;
     border-radius: 8px;
@@ -2792,6 +2795,19 @@
 
   #charSelect .hero-detail-inventory {
     grid-column: 1;
+  }
+
+  #charSelect .hero-detail-head {
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+  }
+
+  #charSelect .hero-detail-name {
+    min-width: 0;
+    max-width: 100%;
+    line-height: 1.1;
+    overflow-wrap: anywhere;
   }
 
   #charSelect .hero-detail-lore {

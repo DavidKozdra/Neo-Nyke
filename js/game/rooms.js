@@ -123,13 +123,15 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
     if (challengeCandidate && Neo.floor >= 2 && Neo.floor < Neo.MAX_FLOOR && Neo.nextRandom('world') < 0.42) challengeCandidate.type = 'challenge';
     const anvilCandidate = pool.find(room => room.type === 'combat');
     if (anvilCandidate && Neo.nextRandom('world') < 0.55) anvilCandidate.type = 'anvil';
+    if (Neo.isTutorialRun?.()) configureTutorialFloor(startRoom, farRoom);
     assignSecretRoom(roomMap);
     Neo.rooms.forEach(decorateRoomData);
+    if (Neo.isTutorialRun?.()) finalizeTutorialFloor(startRoom, farRoom);
     configureStartRoomDifficultyEncounter(startRoom);
 
     Neo.player.x = Neo.START_X;
     Neo.player.y = Neo.START_Y;
-    spawnRivals();
+    if (!Neo.isTutorialRun?.()) spawnRivals();
     const curses = applyRivalCurses();
     Neo.gameEvents.emit('floor:enter', { floor: Neo.floor });
     enterRoom(startRoom);
@@ -149,6 +151,166 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
     Neo.updateObjective();
     Neo.updateHud();
     Neo.applyScrollAbundanceForFloor?.();
+  }
+
+  function getRoomDistances(startRoom) {
+    const distances = new Map([[startRoom, 0]]);
+    const queue = [startRoom];
+    while (queue.length) {
+      const room = queue.shift();
+      const distance = distances.get(room);
+      const neighbors = [
+        room.doors?.n ? findRoomAt(room.gx, room.gy - 1) : null,
+        room.doors?.s ? findRoomAt(room.gx, room.gy + 1) : null,
+        room.doors?.e ? findRoomAt(room.gx + 1, room.gy) : null,
+        room.doors?.w ? findRoomAt(room.gx - 1, room.gy) : null,
+      ];
+      neighbors.forEach(next => {
+        if (!next || next.secret || distances.has(next)) return;
+        distances.set(next, distance + 1);
+        queue.push(next);
+      });
+    }
+    return distances;
+  }
+
+  function configureTutorialFloor(startRoom, ladderRoom) {
+    if (!startRoom || !ladderRoom || !Neo.tutorialState) return;
+    const fromStart = getRoomDistances(startRoom);
+    const candidates = Neo.rooms
+      .filter(room => room && !room.secret && room !== startRoom && room !== ladderRoom)
+      .sort((a, b) => {
+        const distanceDelta = (fromStart.get(a) ?? 99) - (fromStart.get(b) ?? 99);
+        if (distanceDelta) return distanceDelta;
+        if (a.gy !== b.gy) return a.gy - b.gy;
+        return a.gx - b.gx;
+      });
+    const selected = [];
+    let cursor = startRoom;
+    while (selected.length < 5) {
+      const distances = getRoomDistances(cursor);
+      const next = candidates
+        .filter(room => !selected.includes(room))
+        .sort((a, b) => (distances.get(a) ?? 99) - (distances.get(b) ?? 99))[0];
+      if (!next) break;
+      selected.push(next);
+      cursor = next;
+    }
+    const [trainingRoom, treasureRoom, shopRoom, forgeRoom, challengeRoom] = selected;
+    if (!trainingRoom || !treasureRoom || !shopRoom || !forgeRoom || !challengeRoom) return;
+
+    Neo.rooms.forEach(room => {
+      if (!room || room.secret) return;
+      if (![startRoom, trainingRoom, treasureRoom, shopRoom, forgeRoom, challengeRoom, ladderRoom].includes(room)) {
+        room.type = 'combat';
+      }
+      room.cleared = true;
+      room.startRoomEliteCount = 0;
+      room.tutorialLesson = '';
+    });
+    startRoom.tutorialLesson = 'start';
+    trainingRoom.type = 'combat';
+    trainingRoom.tutorialLesson = 'training';
+    treasureRoom.type = 'treasure';
+    treasureRoom.tutorialLesson = 'treasure';
+    shopRoom.type = 'shop';
+    shopRoom.tutorialLesson = 'shop';
+    forgeRoom.type = 'anvil';
+    forgeRoom.tutorialLesson = 'forge';
+    challengeRoom.type = 'challenge';
+    challengeRoom.tutorialLesson = 'challenge';
+    challengeRoom.challengeType = 'bomb';
+    challengeRoom.challengeStarted = false;
+    challengeRoom.challengeLifecycleState = 'ready';
+    challengeRoom.challengeRewardSpawned = false;
+    challengeRoom.challengeFailed = false;
+    challengeRoom.cleared = false;
+    ladderRoom.type = 'ladder';
+    ladderRoom.tutorialLesson = 'ladder';
+    Neo.hideLadderOnMinimap = false;
+    // Anchor the secret room to a lesson room that actually has an open side.
+    // The start room is central and usually fully surrounded, so prefer the
+    // training room (where the player lingers) and fall back through the rest.
+    configureTutorialSecretRoom([trainingRoom, treasureRoom, shopRoom, forgeRoom, challengeRoom, startRoom]);
+    Neo.tutorialState.trainingRoomKey = `${trainingRoom.gx},${trainingRoom.gy}`;
+    Neo.tutorialState.treasureRoomKey = `${treasureRoom.gx},${treasureRoom.gy}`;
+    Neo.tutorialState.shopRoomKey = `${shopRoom.gx},${shopRoom.gy}`;
+    Neo.tutorialState.forgeRoomKey = `${forgeRoom.gx},${forgeRoom.gy}`;
+    Neo.tutorialState.challengeRoomKey = `${challengeRoom.gx},${challengeRoom.gy}`;
+    Neo.tutorialState.ladderRoomKey = `${ladderRoom.gx},${ladderRoom.gy}`;
+  }
+
+  // Deterministically attach a secret vendor room to a tutorial lesson room so
+  // the secret-room lesson always has a visible, targetable wall to bump. Tries
+  // the candidate rooms in order and uses the first with an open in-bounds
+  // neighbour. Runs before assignSecretRoom/decorateRoomData, so the wall is
+  // spawned by the normal secretPassages path; the passage carries
+  // tutorialVisible so the wall is never disguised (invisible). Stores the
+  // chosen anchor room key for the tutorial step.
+  function configureTutorialSecretRoom(candidates) {
+    if (!Neo.tutorialState) return;
+    for (const anchor of candidates) {
+      if (!anchor) continue;
+      const dir = (Neo.DIRECTIONS || []).find(direction => {
+        const vector = Neo.DIRECTION_VECTORS[direction];
+        const nx = anchor.gx + vector.dx;
+        const ny = anchor.gy + vector.dy;
+        if (nx < 0 || nx > 8 || ny < 0 || ny > 8) return false;
+        if (findRoomAt(nx, ny)) return false;
+        return !anchor.doors?.[direction] && !anchor.secretPassages?.[direction];
+      });
+      if (!dir) continue;
+      const vector = Neo.DIRECTION_VECTORS[dir];
+      const nx = anchor.gx + vector.dx;
+      const ny = anchor.gy + vector.dy;
+      const secretRoom = createRoomRecord({ x: nx, y: ny }, {
+        type: 'secret',
+        secret: true,
+        cleared: true,
+        secretKind: 'vendor',
+        tutorialLesson: 'secret',
+      });
+      anchor.secretPassages[dir] = { targetGx: nx, targetGy: ny, open: false, tutorialVisible: true };
+      secretRoom.secretPassages[Neo.OPPOSITE_DIRECTION[dir]] = { targetGx: anchor.gx, targetGy: anchor.gy, open: false };
+      Neo.rooms.push(secretRoom);
+      Neo.tutorialState.secretRoomKey = `${anchor.gx},${anchor.gy}`;
+      return;
+    }
+  }
+
+  function finalizeTutorialFloor(startRoom, ladderRoom) {
+    Neo.rooms.forEach(room => {
+      if (!room || room.secret) return;
+      room.cleared = true;
+      room.enemies = [];
+      room.hazards = [];
+      room.chests = [];
+      if (room.tutorialLesson === 'treasure') room.cleared = false;
+      if (room.tutorialLesson === 'challenge') {
+        room.cleared = false;
+        room.challengeType = 'bomb';
+        room.challengeStarted = false;
+        room.challengeData = {};
+      }
+      if (room.type === 'shop') {
+        room.shopOffers = (room.shopOffers || []).filter(offer => !offer?.tutorialOffer);
+        room.shopOffers.unshift({
+          type: 'item',
+          key: 'attack_servo',
+          cost: 5,
+          bought: false,
+          tutorialOffer: true,
+        });
+      }
+    });
+    if (startRoom) {
+      startRoom.cleared = true;
+      startRoom.enemies = [];
+    }
+    if (ladderRoom) {
+      ladderRoom.cleared = true;
+      ladderRoom.ladderBossPlan = { spawn: false, type: '' };
+    }
   }
 
   function configureStartRoomDifficultyEncounter(startRoom) {
@@ -258,7 +420,7 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
     Object.entries(room.secretPassages || {}).forEach(([dir, passage]) => {
       if (passage?.baneEscape) return;
       const targetRoom = findRoomAt(passage.targetGx, passage.targetGy);
-      const wall = createSecretWall(dir, targetRoom, room);
+      const wall = createSecretWall(dir, targetRoom, room, passage);
       if (wall) room.destructibles.push(wall);
     });
 
@@ -831,7 +993,7 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
     return true;
   }
 
-  function createSecretWall(direction, targetRoom, room = null) {
+  function createSecretWall(direction, targetRoom, room = null, passage = null) {
     if (!targetRoom) return null;
     const position = {
       n: { x: Neo.ROOM_W / 2, y: 48 },
@@ -843,11 +1005,12 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
     // ~70% of secret walls are "disguised": invisible and not solid, so the
     // spot reads as ordinary floor — the passage just opens when the player
     // walks into it (see updateWorldProps). The other ~30% read as a crate
-    // (drawCoverWall) the player breaks open.
+    // (drawCoverWall) the player breaks open. The tutorial forces a visible,
+    // breakable crate so its spotlight has something real to point at.
     const disguiseRoll = room
       ? Neo.createRoomRandom(room, `secret-wall:disguise:${direction}`)()
       : Neo.nextRandom('world');
-    const disguised = disguiseRoll < 0.7;
+    const disguised = passage?.tutorialVisible ? false : disguiseRoll < 0.7;
     return {
       kind: 'secret_wall',
       x: position.x,
@@ -1313,6 +1476,9 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
   }
 
   function enterRoom(room) {
+    // Safety cleanup for room-scoped ambience if a run/load/teleport leaves the
+    // Storm challenge without going through its normal completion path.
+    Neo.stopSfxLoop?.('lightning_storm_loop');
     syncCurrentRoomState();
     Neo.setShopPanelOpen(false);
     Neo.setInventoryPanelOpen(false);
@@ -1393,6 +1559,8 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
     if (room.type === 'challenge') {
       if (!room.cleared && !room.challengeStarted) {
         Neo.spawnChallengeStarter(room);
+      } else if (!room.cleared && room.challengeStarted && (room.challengeType || 'mirror') === 'storm') {
+        Neo.playSfxLoop?.('lightning_storm_loop');
       } else if (!room.cleared && room.challengeStarted && ['circuit', 'stillness'].includes(room.challengeType || 'mirror')) {
         if (!Neo.pickups.some(pickup => pickup?.type === 'challengeSwitch')) Neo.spawnChallengeCircuitSwitches(room);
       } else if (!room.cleared && room.challengeStarted && (room.challengeType || 'mirror') === 'bomb') {
@@ -1430,14 +1598,17 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
 
     if (room.type === 'treasure' && !room.cleared && Neo.chests.length === 0) {
       const treasureRandom = Neo.createRoomRandom(room, 'treasure:chests');
-      const chestCount = 1 + Math.floor(treasureRandom() * 2);
+      const isTutorialTreasure = Neo.isTutorialRun?.() && room.tutorialLesson === 'treasure';
+      const chestCount = isTutorialTreasure ? 1 : 1 + Math.floor(treasureRandom() * 2);
       const placedChestPositions = [];
       const chestInsetX = Neo.WALL + 88;
       const chestInsetY = Neo.WALL + 76;
       const minChestSpacing = 132;
+      // The tutorial teaches the A/B "hold to claim" dwell, so force the single
+      // tutorial chest to be an A/B item chest regardless of floor/RNG.
       for (let index = 0; index < chestCount; index += 1) {
         const itemChance = Neo.getRandomItemDropChance(0.9, 0.98);
-        const isAbChest = Neo.floor > 4 && treasureRandom() < 0.2;
+        const isAbChest = isTutorialTreasure || (Neo.floor > 4 && treasureRandom() < 0.2);
         const rewardsItem = isAbChest || treasureRandom() < itemChance;
         let chestPos = null;
         for (let attempt = 0; attempt < 12; attempt += 1) {

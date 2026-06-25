@@ -1,0 +1,137 @@
+const fs = require('node:fs');
+const path = require('node:path');
+
+function read(relativePath) {
+  return fs.readFileSync(path.join(__dirname, '..', relativePath), 'utf8');
+}
+
+describe('Sarge tutorial v2', () => {
+  const html = read('index.html');
+  const main = read('js/main.js');
+  const controller = read('js/ui/tutorial-controller.js');
+  const tutorialCss = read('css/tutorial.css');
+  const scenes = read('js/tutorial/scenes.js');
+  const rooms = read('js/game/rooms.js');
+  const enemies = read('js/game/enemies.js');
+  const world = read('js/game/world.js');
+  const uiController = read('js/ui/controller.js');
+  const gamepadControls = read('js/gamepadControls.js');
+  const gameState = read('js/core/game-state.js');
+  const panels = read('js/ui/panels.js');
+  const serviceWorker = read('sw.js');
+
+  test('loads a dedicated tutorial controller and stylesheet', () => {
+    expect(html).toContain('css/tutorial.css');
+    expect(html).toContain('id="tutorialSpotlightHole"');
+    expect(html).toContain('id="tutorialCard"');
+    expect(html).toContain('id="tutorialCommandValue"');
+    expect(main).toContain("import './ui/tutorial-controller.js'");
+  });
+
+  test('shows live keyboard, touch, and controller commands prominently', () => {
+    expect(controller).toContain('getBindingLabel?.(action)');
+    expect(controller).toContain('DEFAULT_TOUCH_BINDINGS');
+    expect(controller).toContain('DEFAULT_GAMEPAD_BINDINGS');
+    expect(controller).toContain("overlay.dataset.inputMode = getInputMode()");
+    expect(controller).toContain("command: () => getActionLabel('dash', 'SHIFT')");
+    expect(controller).toContain("ring.classList.toggle('tutorial-target-ring--offscreen', offscreen)");
+    expect(controller).toContain("commandLabel.textContent = nextCommand ? (step.commandLabel || 'PRESS') : ''");
+    expect(controller).toContain('if (gate) gate.hidden = true');
+    expect(tutorialCss).toContain('.tutorial-command__value');
+    expect(tutorialCss).toContain('.tutorial-command[hidden]');
+    expect(tutorialCss).toContain('.tutorial-target-ring--offscreen::before');
+    expect(tutorialCss).toContain('font-size: calc(27px * var(--font-scale, 1))');
+    expect(tutorialCss).toContain('.tutorial-cutscene-active .dialogue-text');
+    expect(uiController).toContain("touchInput ? 'TAP' : gamepadInput ? 'A BUTTON' : 'ENTER'");
+    expect(gamepadControls).toContain('window.Neo?.uiController?.isDialogueOpen?.()');
+  });
+
+  test('keeps Sarge dialogue in an editable tutorial directory', () => {
+    expect(scenes).toContain("Name's Sarge.");
+    for (const lesson of ['start', 'training', 'treasure', 'shop', 'forge', 'challenge', 'secret', 'ladder', 'summary']) {
+      expect(scenes).toContain(`lesson: '${lesson}'`);
+    }
+    expect(controller).toContain("from '../tutorial/scenes.js'");
+    expect(controller).toContain("Neo.uiController?.playDialogue?.(scene.lines");
+  });
+
+  test('builds distinct deterministic lesson rooms', () => {
+    for (const key of ['trainingRoomKey', 'treasureRoomKey', 'shopRoomKey', 'forgeRoomKey', 'challengeRoomKey', 'ladderRoomKey']) {
+      expect(rooms).toContain(`Neo.tutorialState.${key}`);
+    }
+    expect(rooms).toContain("challengeRoom.challengeType = 'bomb'");
+    expect(rooms).toContain("room.tutorialLesson = '");
+  });
+
+  test('recovers cleanly when rooms or actions happen out of order', () => {
+    expect(controller).toContain("roomKey: 'trainingRoomKey'");
+    expect(controller).toContain('routeStep: true');
+    expect(controller).toContain("completeWhen: ['dwell_do']");
+    expect(controller).toContain('if (step.routeStep) return isInStepRoom(step, state) || areCompletionMilestonesDone(step, state)');
+    expect(controller).toContain("title: `${returning ? 'Return to' : 'Go to'} ${destinationName}`");
+    expect(controller).toContain("target: targetRoute(() => getNextDoorPoint(destinationKey)");
+    expect(controller).toContain("if (type === 'dash') setCompleted('dash')");
+    expect(controller).not.toContain("current === 'route_training'");
+    expect(controller).not.toContain("current === 'dash'");
+  });
+
+  test('route steps ask the player to close an open panel and highlight its close button', () => {
+    // Open Inventory/Shop/Forge panels must be detected by their close-button selectors.
+    expect(controller).toContain("closeSelector: '#invClose'");
+    expect(controller).toContain("closeSelector: '#shopClose'");
+    expect(controller).toContain("closeSelector: '#anvilClose'");
+    // Route text/command switch to a close prompt while a panel is open.
+    expect(controller).toContain('Close Inventory');
+    expect(controller).toContain('CLOSE THE ${open.toUpperCase()}');
+    expect(controller).toContain('GO THROUGH THE TARGET DOOR');
+    // The route highlight points at the open panel's close button before the door.
+    expect(controller).toContain("if (spec.kind === 'route')");
+    expect(controller).toContain('const open = getOpenGamePanelInfo()');
+  });
+
+  test('does not play future room cutscenes before their lesson is current', () => {
+    expect(controller).toContain("roomKey(room) !== state[step.roomKey]");
+    expect(controller).toContain("room.tutorialLesson !== 'start'");
+  });
+
+  test('uses a safe real bomb trial for the challenge lesson', () => {
+    expect(enemies).toContain("room.tutorialLesson === 'challenge'");
+    expect(enemies).toContain('const safeCount = tutorialBombs ? 2');
+    expect(enemies).toContain("for (let index = 0; index < (tutorialBombs ? 0 : 5)");
+    expect(world).toContain("tutorialBomb ? 'RED = DANGER' : 'WRONG'");
+    expect(world).toContain('if (tutorialBomb) {');
+  });
+
+  test('precaches all new tutorial assets', () => {
+    expect(serviceWorker).toContain("'/css/tutorial.css'");
+    expect(serviceWorker).toContain("'/js/ui/tutorial-controller.js'");
+    expect(serviceWorker).toContain("'/js/tutorial/scenes.js'");
+  });
+
+  test('gates the Sarge tutorial replay behind unlocking the rest of the roster', () => {
+    // The prereq set is every non-custom character except Sarge himself.
+    expect(gameState).toContain("const SARGE_TUTORIAL_PREREQS = ['princess', 'thorn_knight', 'metao', 'gelleh', 'mooggy', 'turtle_boy']");
+    expect(gameState).toContain('function isSargeTutorialBlocked()');
+    expect(gameState).toContain('return isReplayTutorialRequested() && !hasAllSargeTutorialPrereqs()');
+    expect(gameState).toContain('Neo.isSargeTutorialBlocked = isSargeTutorialBlocked');
+    // The prereq check honors the derived gelleh/mooggy unlocks too.
+    expect(gameState).toContain("if (Number(Neo.metaProgress?.godsKilled || 0) > 0) unlocked.add('gelleh')");
+    expect(gameState).toContain("if (Number(Neo.metaProgress?.mooggyDefeats || 0) >= 3) unlocked.add('mooggy')");
+    // Run start drops the replay rather than running the tutorial as Sarge.
+    expect(gameState).toContain("if (!resume && Neo.chosenCharacter === 'sarge' && isSargeTutorialBlocked())");
+    // Charselect nudges a blocked Sarge selection onto a starter.
+    expect(gameState).toContain("if (Neo.chosenCharacter === 'sarge' && isSargeTutorialBlocked())");
+    // The character-select UI disables Sarge's card and the Go button.
+    expect(uiController).toContain('const sargeTutorialBlocked = !!Neo.isSargeTutorialBlocked?.()');
+    expect(uiController).toContain("unlocked.has(itemKey) && !(itemKey === 'sarge' && sargeTutorialBlocked)");
+    expect(uiController).toContain("if (itemKey === 'sarge' && sargeTutorialBlocked) return 'Unlock the full roster first'");
+    expect(uiController).toContain('goBtn.disabled = !isSelectable(selected) || inactiveCustom');
+    // Programmatic (carousel/keyboard) selection of a gated Sarge is rejected.
+    expect(panels).toContain("if (characterKey === 'sarge' && Neo.isSargeTutorialBlocked?.())");
+  });
+
+  test('keeps ordinary New Game runs out of tutorial mode', () => {
+    expect(gameState).toContain("const shouldRunTutorial = Neo.gameMode === 'normal'\n      && forceTutorialReplay;");
+    expect(gameState).not.toContain('!Neo.metaProgress.tutorialCompleted || forceTutorialReplay || outdatedTutorial');
+  });
+});

@@ -391,9 +391,8 @@ html.princess-ui .shop-card__price {
   color: #ffd6ea;
 }
 
-html.princess-ui .shop-card__price::before {
+html.princess-ui .shop-card__coin {
   background: rgba(255, 180, 220, .16);
-  color: #ffe3f2;
 }
 
 html.princess-ui .shop-card__chip,

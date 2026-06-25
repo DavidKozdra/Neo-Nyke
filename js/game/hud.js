@@ -19,7 +19,7 @@
   Neo.formatHpText = formatHpText;
 
   function getObjectiveEntries(lineObjective = '') {
-    if (Neo.isFirstRunTutorialActive()) return Neo.getTutorialObjectiveEntries();
+    if (Neo.isFirstRunTutorialEngaged()) return Neo.getTutorialObjectiveEntries();
     if (!Neo.currentRoom) return [];
     const entries = [];
     if (Neo.gameMode === 'treasure_hunt') {
@@ -141,9 +141,9 @@
       Neo.uiController.setTutorialBanner('', false);
       return;
     }
-    if (Neo.isFirstRunTutorialActive()) {
+    if (Neo.isFirstRunTutorialEngaged()) {
       const tutorialText = Neo.getTutorialStepMessage();
-      Neo.uiController.setTutorialBanner(tutorialText, true);
+      Neo.uiController.setTutorialBanner('', false);
       Neo.uiController.setObjective(tutorialText);
       Neo.uiController.setObjectiveList('Tutorial', Neo.getTutorialObjectiveEntries());
       return;
@@ -722,6 +722,7 @@
       Neo.spawnParticle({ x: Neo.player?.x ?? 0, y: (Neo.player?.y ?? 0) - 30, life: 1.2, text: 'P1 DOWN', c: '#ff6b6b' });
       return;
     }
+    Neo.stopSfxLoop?.('lightning_storm_loop');
     if (Neo.player) Neo.player.hp = 0;
     // A rival that lands the killing blow loots the body: takes up to 3 of the
     // player's items and pockets 3 more random ones to use in the rematch
@@ -964,6 +965,9 @@
       antonyBlemmyeCutscenePlayed: Neo.antonyBlemmyeCutscenePlayed,
       secretRoomVisitedFloors: Array.isArray(Neo.secretRoomVisitedFloors) ? [...Neo.secretRoomVisitedFloors] : [],
       hideLadderOnMinimap: !!Neo.hideLadderOnMinimap,
+      tutorialState: Neo.tutorialState && typeof Neo.tutorialState === 'object'
+        ? JSON.parse(JSON.stringify(Neo.tutorialState))
+        : null,
       camera: Neo.camera,
     };
   }

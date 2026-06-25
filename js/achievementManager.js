@@ -39,6 +39,7 @@ const achievementManager = (() => {
   let maxEndlessWave = 0;
   let metaCoins = 0;
   let runBowmanKills = 0;
+  let runTrialTypesBeaten = new Set();
 
   function openDB() {
     return new Promise((resolve, reject) => {
@@ -227,6 +228,7 @@ const achievementManager = (() => {
     maxLoopIndex = 0;
     maxEndlessWave = 0;
     runBowmanKills = 0;
+    runTrialTypesBeaten = new Set();
   }
 
   async function getProgressSnapshot() {
@@ -249,6 +251,7 @@ const achievementManager = (() => {
       maxEndlessWave,
       metaCoins,
       runBowmanKills,
+      runTrialTypesBeaten: runTrialTypesBeaten.size,
     };
   }
 
@@ -341,6 +344,15 @@ const achievementManager = (() => {
   achievementEvents.on('bowman:killed', async () => {
     runBowmanKills += 1;
     if (runBowmanKills >= 2) await unlock('double_bane');
+  });
+
+  achievementEvents.on('challenge:beaten', async ({ challengeType }) => {
+    if (!challengeType) return;
+    runTrialTypesBeaten.add(challengeType);
+    // Beat one of every distinct trial type in a single run. Derive the target
+    // from the canonical list so adding a trial type keeps this honest.
+    const requiredTypes = window.Neo?.CHALLENGE_TRIAL_TYPES?.length || 6;
+    if (runTrialTypesBeaten.size >= requiredTypes) await unlock('trial_master');
   });
 
   if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {

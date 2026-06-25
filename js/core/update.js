@@ -80,6 +80,7 @@ export function loop(timestamp) {
     Neo.perfEnd('update', updatePerfStart);
     const uiPerfStart = Neo.perfStart();
     Neo.uiController.tick(dt);
+    Neo.tutorialController?.tick?.(dt);
     Neo.perfEnd('Neo.ui', uiPerfStart);
     const drawPerfStart = Neo.perfStart();
     if (Neo.gameState !== 'pause') Neo.draw();
