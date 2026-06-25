@@ -341,7 +341,7 @@ button, input, select, textarea {
   top: calc(var(--coin-hud-bottom) * var(--hud-scale-coins, var(--hud-scale, 1)) + var(--notify-gap) + var(--hud-y-coins, 0px));
   left: 16px;
   transform: translate(var(--hud-x-itemnotify, 0px), var(--hud-y-itemnotify, 0px))
-             scale(var(--hud-scale-itemnotify, var(--hud-scale, 1)));
+             scale(var(--hud-scale-itemnotify, 2));
   transform-origin: top left;
   display: flex;
   flex-direction: column;
@@ -351,7 +351,7 @@ button, input, select, textarea {
 }
 
 .item-toast {
-  width: min(420px, calc(100vw - 32px));
+  width: min(520px, calc(100vw - 32px));
   display: flex;
   align-items: center;
   gap: 12px;
@@ -12007,6 +12007,7 @@ border-bottom: black solid 2px;
 /* Anchors mirror the real CSS placement of each widget. settings-ui.js rewrites
    these into scaled viewport pixels when the preview opens. */
 .hud-preview-box--coins      { top: 4%;  left: 3%; transform-origin: top left; }
+.hud-preview-box--itemnotify { top: 14%; left: 3%; transform-origin: top left; }
 .hud-preview-box--center     { top: 2%;  left: 50%; transform: translateX(-50%); transform-origin: top center; }
 /* Objectives sit to the LEFT of the top-right minimap (≈18% wide + margin), mirroring the live HUD. */
 .hud-preview-box--objectives { top: 18%; right: 25%; transform-origin: top right; }

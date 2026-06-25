@@ -475,6 +475,21 @@
         Neo.ctx.textBaseline = 'middle';
         Neo.ctx.fillText('⚒', x + size / 2, y + size / 2);
       }
+      // Forge/shop blink: draw a soft, slowly-blinking highlight ring around
+      // revealed forge and shop rooms so they catch the eye on the minimap.
+      // Skipped for the current room (it has its own stronger pulse below) and
+      // while the map is obscured for non-current rooms.
+      if ((room.type === 'anvil' || room.type === 'shop') && room !== currentRoom
+          && roomExplored && showRoomGlyph) {
+        const blink = 0.35 + 0.65 * (0.5 + 0.5 * Math.sin(Number(Neo.gameElapsedTime || 0) * 3.0));
+        const ringColor = room.type === 'anvil' ? '#ffd27a' : '#bfe4ff';
+        const ringW = Math.max(1, Math.round(size * 0.12));
+        Neo.ctx.globalAlpha = blink;
+        Neo.ctx.strokeStyle = ringColor;
+        Neo.ctx.lineWidth = ringW;
+        Neo.ctx.strokeRect(x - 1.5, y - 1.5, size + 3, size + 3);
+        Neo.ctx.globalAlpha = 1;
+      }
       if (room.visited && roomExplored) {
         Neo.ctx.strokeStyle = 'rgba(0,255,255,0.5)';
         Neo.ctx.lineWidth = 1;

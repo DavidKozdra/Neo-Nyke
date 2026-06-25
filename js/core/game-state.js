@@ -2726,6 +2726,9 @@ export function resumeGame() {
       }
     }
     Neo._competitiveSeed = null;
+    // Competitive setup must never inherit tutorial state from a previous run.
+    // Clear it before entering play or generating the server-seeded floor.
+    resetTutorialState(false);
     setGameState('play');
     Neo.baseSeedStr = serverSeed;
     Neo.selectedDifficulty = 'hard';
@@ -2746,7 +2749,6 @@ export function resumeGame() {
     Neo.lastDamageSourceKey = '';
     resetScene();
     Neo.generateFloor();
-    resetTutorialState(false);
     Neo.persistMetaSoon();
     Neo.scheduleRunSave();
     if (!Neo.loopStarted) { Neo.loopStarted = true; requestAnimationFrame(Neo.loop); }

@@ -2064,6 +2064,9 @@
             if (hazard.enemy) {
               if (Neo.dist(Neo.player.x, Neo.player.y, hazard.x, hazard.y) <= hazard.r + Neo.player.r) {
                 const angle = Neo.angleBetween(hazard, Neo.player);
+                if (hazard.source === 'storm' && Number(Neo.player.inv || 0) <= 0 && !Neo.player.blockActive) {
+                  Neo.playSfx?.('lightning_charge');
+                }
                 damagePlayer(hazard.damage || 16, angle, 90, hazard.source || 'lightning_column');
               }
             } else {

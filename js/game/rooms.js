@@ -1476,6 +1476,9 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
   }
 
   function enterRoom(room) {
+    // Safety cleanup for room-scoped ambience if a run/load/teleport leaves the
+    // Storm challenge without going through its normal completion path.
+    Neo.stopSfxLoop?.('lightning_storm_loop');
     syncCurrentRoomState();
     Neo.setShopPanelOpen(false);
     Neo.setInventoryPanelOpen(false);
@@ -1556,6 +1559,8 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
     if (room.type === 'challenge') {
       if (!room.cleared && !room.challengeStarted) {
         Neo.spawnChallengeStarter(room);
+      } else if (!room.cleared && room.challengeStarted && (room.challengeType || 'mirror') === 'storm') {
+        Neo.playSfxLoop?.('lightning_storm_loop');
       } else if (!room.cleared && room.challengeStarted && ['circuit', 'stillness'].includes(room.challengeType || 'mirror')) {
         if (!Neo.pickups.some(pickup => pickup?.type === 'challengeSwitch')) Neo.spawnChallengeCircuitSwitches(room);
       } else if (!room.cleared && room.challengeStarted && (room.challengeType || 'mirror') === 'bomb') {

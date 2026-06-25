@@ -1981,6 +1981,8 @@
     top: calc(148px + env(safe-area-inset-top, 0px));
     left: calc(8px + env(safe-area-inset-left, 0px));
     gap: 4px;
+    transform: translate(var(--hud-x-itemnotify, 0px), var(--hud-y-itemnotify, 0px))
+               scale(var(--hud-scale-itemnotify, 1.25));
   }
 
   .item-toast {

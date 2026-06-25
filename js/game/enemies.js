@@ -1937,6 +1937,7 @@
       room.challengeData.maxTimer = room.challengeTimer;
       room.challengeData.burstCount = Number(tuning.burstCount || 3);
       room.challengeData.targetClearRate = CHALLENGE_CLEAR_RATE_TARGETS.storm;
+      Neo.playSfxLoop?.('lightning_storm_loop');
       sayAtPosition(Neo.ROOM_W / 2, Neo.ROOM_H / 2, 'Do not stop moving.', { speaker: 'TRIAL', tone: 'warning' });
     }
     Neo.spawnParticle({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 46, life: 0.95, text: getChallengeTrialLabel(type), c: '#d7f6ff' });
@@ -1977,6 +1978,7 @@
 
   function completeChallengeTrial(text = 'TRIAL CLEARED') {
     if (!Neo.currentRoom || Neo.currentRoom.type !== 'challenge') return;
+    if ((Neo.currentRoom.challengeType || 'mirror') === 'storm') Neo.stopSfxLoop?.('lightning_storm_loop');
     Neo.currentRoom.cleared = true;
     Neo.currentRoom.challengeFailed = false;
     Neo.currentRoom.challengeTimer = 0;
@@ -2001,6 +2003,7 @@
 
   function failChallengeTrial(text = 'TRIAL FAILED') {
     if (!Neo.currentRoom || Neo.currentRoom.type !== 'challenge') return;
+    if ((Neo.currentRoom.challengeType || 'mirror') === 'storm') Neo.stopSfxLoop?.('lightning_storm_loop');
     Neo.currentRoom.cleared = true;
     Neo.currentRoom.challengeFailed = true;
     Neo.currentRoom.challengeRewardSpawned = true;

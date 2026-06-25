@@ -65,7 +65,7 @@
     { key: 'equipment',  label: 'Tool Slots',       cssVar: '--hud-scale-equipment',  xVar: '--hud-x-equipment',  yVar: '--hud-y-equipment',  hideClass: 'hud-hide-equipment' },
     // The new-item pickup toast stack (#itemNotifyStack). DOM widget with its own
     // scale/offset/visibility, independent of the coin display it sits beneath.
-    { key: 'itemnotify', label: 'Item Pickups',     cssVar: '--hud-scale-itemnotify', xVar: '--hud-x-itemnotify', yVar: '--hud-y-itemnotify', hideClass: 'hud-hide-itemnotify' },
+    { key: 'itemnotify', label: 'Item Pickups',     cssVar: '--hud-scale-itemnotify', xVar: '--hud-x-itemnotify', yVar: '--hud-y-itemnotify', hideClass: 'hud-hide-itemnotify', defaultScale: 2, touchDefaultScale: 1.25 },
     // The minimap is drawn on the canvas, not a DOM widget, so it has no CSS vars.
     // drawMinimap() reads its scale/visibility/offsets from getHudElements().
     { key: 'minimap',    label: 'Minimap',          cssVar: null, xVar: null, yVar: null, hideClass: null, canvas: true },
@@ -922,8 +922,12 @@
 
   function effectiveHudScale(key) {
     const entry = hudElements[key] || {};
+    const def = HUD_ELEMENTS.find(el => el.key === key);
+    const defaultScale = isTouchDevice()
+      ? (def?.touchDefaultScale ?? def?.defaultScale)
+      : def?.defaultScale;
     return entry.scale === null || entry.scale === undefined
-      ? normalizeHudScale(access.hudScale)
+      ? normalizeHudScale(defaultScale ?? access.hudScale)
       : normalizeHudScale(entry.scale);
   }
 
@@ -973,6 +977,9 @@
     }
     if (key === 'coins') {
       box.style.top = `${16 * ratio.y}px`;
+      box.style.left = `${16 * ratio.x}px`;
+    } else if (key === 'itemnotify') {
+      box.style.top = `${118 * ratio.y}px`;
       box.style.left = `${16 * ratio.x}px`;
     } else if (key === 'center') {
       box.style.top = '0px';
@@ -1256,7 +1263,9 @@
     refs.slider.value = entry.scale === null || entry.scale === undefined
       ? HUD_SCALE_MIN
       : normalizeHudScale(entry.scale);
-    refs.val.textContent = formatHudElementScale(entry);
+    refs.val.textContent = entry.scale === null || entry.scale === undefined
+      ? `Auto (${Math.round(effectiveHudScale(key) * 100)}%)`
+      : formatHudElementScale(entry);
     if (refs.xSlider) {
       refs.xSlider.value = normalizeHudOffset(entry.x);
       refs.xVal.textContent = formatHudOffset(entry.x);
@@ -1417,6 +1426,16 @@
       const loopIcon = frame.querySelector('[data-preview-loop-icon]');
       if (coinIcon) Neo.drawPixelIcon(coinIcon, '#ffd15a', coinPx);
       if (loopIcon) Neo.drawPixelIcon(loopIcon, '#83f3ff', loopPx);
+    }
+    const itemNotifyIcon = frame.querySelector('[data-preview-item-notify-icon]');
+    if (itemNotifyIcon && typeof Neo.drawItemToastIcon === 'function') {
+      const previewItem = Neo.ITEM_DEFS?.neo_knife || {
+        key: 'neo_knife',
+        name: 'Neo-Knife',
+        rarity: 'knight',
+        color: '#f4f6fb',
+      };
+      Neo.drawItemToastIcon(itemNotifyIcon, previewItem);
     }
 
     // Tool slots — show the live run's equipped tools when present, else placeholders.
