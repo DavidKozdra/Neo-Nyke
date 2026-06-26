@@ -5200,10 +5200,33 @@
     enemy.vy += (dirY * adjustedSpeed - enemy.vy) * accel * dt;
   }
 
+  // Player-only: when the player is lined up with an open doorway, let them walk
+  // out through the wall band to the room edge (the "back" of the doorway) so the
+  // room transition only fires once they've actually stepped into the tunnel,
+  // rather than the instant they brush the inner wall. Returns clamp bounds.
+  function getRoomMoveBounds(entity) {
+    let minX = Neo.WALL + entity.r;
+    let maxX = Neo.ROOM_W - Neo.WALL - entity.r;
+    let minY = Neo.WALL + entity.r;
+    let maxY = Neo.ROOM_H - Neo.WALL - entity.r;
+    if (entity !== Neo.player || !Neo.currentRoom) return { minX, maxX, minY, maxY };
+    const hasExit = dir => typeof Neo.hasRoomExit === 'function'
+      ? Neo.hasRoomExit(Neo.currentRoom, dir)
+      : !!Neo.currentRoom?.doors?.[dir];
+    const alignedV = Math.abs(entity.x - Neo.ROOM_W / 2) < Neo.DOOR / 2 - entity.r;
+    const alignedH = Math.abs(entity.y - Neo.ROOM_H / 2) < Neo.DOOR / 2 - entity.r;
+    if (alignedV && hasExit('n')) minY = entity.r;
+    if (alignedV && hasExit('s')) maxY = Neo.ROOM_H - entity.r;
+    if (alignedH && hasExit('w')) minX = entity.r;
+    if (alignedH && hasExit('e')) maxX = Neo.ROOM_W - entity.r;
+    return { minX, maxX, minY, maxY };
+  }
+
   function moveCircle(entity, dt) {
     if (entity.airborne) {
-      entity.x = Neo.clamp(entity.x, Neo.WALL + entity.r, Neo.ROOM_W - Neo.WALL - entity.r);
-      entity.y = Neo.clamp(entity.y, Neo.WALL + entity.r, Neo.ROOM_H - Neo.WALL - entity.r);
+      const b = getRoomMoveBounds(entity);
+      entity.x = Neo.clamp(entity.x, b.minX, b.maxX);
+      entity.y = Neo.clamp(entity.y, b.minY, b.maxY);
       return;
     }
     const slowMultiplier = Neo.getSlowMultiplier?.(entity) || 1;
@@ -5232,8 +5255,9 @@
     else entity.vx *= -0.4;
     if (!Neo.isBlocked(entity.x, nextY, entity.r)) entity.y = nextY;
     else entity.vy *= -0.4;
-    entity.x = Neo.clamp(entity.x, Neo.WALL + entity.r, Neo.ROOM_W - Neo.WALL - entity.r);
-    entity.y = Neo.clamp(entity.y, Neo.WALL + entity.r, Neo.ROOM_H - Neo.WALL - entity.r);
+    const bounds = getRoomMoveBounds(entity);
+    entity.x = Neo.clamp(entity.x, bounds.minX, bounds.maxX);
+    entity.y = Neo.clamp(entity.y, bounds.minY, bounds.maxY);
   }
 
   // Spiral outward from a stuck position to find the closest unblocked spot so a

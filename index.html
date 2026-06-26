@@ -770,12 +770,12 @@
       </div>
 
       <div class="main-nav">
-        <button id="tutorialMenuBtn" class="nav-btn nav-btn--tutorial hidden">🎓 TUTORIAL</button>
+        <button id="tutorialMenuBtn" class="nav-btn nav-btn--tutorial hidden"><span class="nav-btn__icon" aria-hidden="true">▶</span>TUTORIAL</button>
         <button id="continueBtn" class="nav-btn hidden">CONTINUE</button>
-        <button id="mainCompetitiveBtn" class="nav-btn" style="background:rgba(180,140,0,0.18);border-color:rgba(255,210,0,0.5);color:#ffe566;">COMPETITIVE</button>
+        <button id="mainCompetitiveBtn" class="nav-btn nav-btn--competitive">COMPETITIVE</button>
         <button id="newRunBtn"   class="nav-btn">NEW RUN</button>
         <button id="altModesBtn"   class="nav-btn nav-btn--minor">ALT MODES</button>
-        <button id="runHistoryBtn" class="nav-btn nav-btn--minor">INFO</button>
+        <button id="runHistoryBtn" class="nav-btn nav-btn--minor">ARCHIVE</button>
         <button id="settingsBtn" class="nav-btn nav-btn--minor">SETTINGS</button>
         <button id="creditsBtn" class="nav-btn nav-btn--minor">CREDITS</button>
       </div>
@@ -796,16 +796,16 @@
   <section id="runHistoryPanel" class="panel-shell rh-panel hidden" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="runHistoryPanelTitle">
     <div class="rh-head">
       <div class="rh-head-left">
-        <span class="rh-title" id="runHistoryPanelTitle">INFO</span>
-        <div class="rh-view-tabs" role="tablist" aria-label="Info panel sections">
+        <span class="rh-title" id="runHistoryPanelTitle">ARCHIVE</span>
+        <div class="rh-view-tabs" role="tablist" aria-label="Archive sections">
           <button id="rhViewRunsTab" class="rh-view-tab" data-view="runs" type="button" role="tab" aria-selected="false">Runs</button>
           <button id="rhViewAchievementsTab" class="rh-view-tab" data-view="achievements" type="button" role="tab" aria-selected="false">Achievements</button>
           <button id="rhViewProfileTab" class="rh-view-tab" data-view="profile" type="button" role="tab" aria-selected="false">Profile</button>
-          <button id="rhViewInfoTab" class="rh-view-tab active" data-view="info" type="button" role="tab" aria-selected="true">Info</button>
+          <button id="rhViewInfoTab" class="rh-view-tab active" data-view="info" type="button" role="tab" aria-selected="true">Codex</button>
           <button id="rhViewBlogTab" class="rh-view-tab" data-view="blog" type="button" role="tab" aria-selected="false">Blog</button>
         </div>
       </div>
-      <button id="runHistoryClose" class="panel-close" aria-label="Close info panel">X</button>
+      <button id="runHistoryClose" class="panel-close" aria-label="Close archive">X</button>
     </div>
     <div id="runHistoryEmpty" class="rh-empty hidden">No completed runs yet.</div>
     <div class="rh-body">
@@ -891,7 +891,7 @@
           <p class="altmode-card__desc">Everyone plays the same weekly seed on Hard difficulty with no modifiers. Only winning runs are accepted.</p>
           <div id="competitiveServerStatus" class="competitive-server-status competitive-server-status--checking">Checking server...</div>
         </div>
-        <button id="altModeCompetitiveBtn" class="nav-btn altmode-card__btn" style="background:rgba(180,140,0,0.18);border-color:rgba(255,210,0,0.5);">COMPETE</button>
+        <button id="altModeCompetitiveBtn" class="nav-btn nav-btn--competitive altmode-card__btn">COMPETE</button>
       </div>
       <button id="competitiveServerRetryBtn" class="nav-btn nav-btn--minor competitive-server-retry hidden" type="button">RETRY CONNECTION</button>
       <div id="seedErrorBanner" class="seed-error-banner hidden">&#9888; Cannot connect to the competitive server. Check your connection — you will not be able to start a competitive run until it is reachable.</div>
@@ -907,7 +907,7 @@
   <!-- Alt Modes panel (slides in over main menu) -->
   <section id="altModesPanel" class="panel-shell altmodes-panel hidden" aria-hidden="true">
     <div class="altmodes-head">
-      <span class="altmodes-title">ALTERNATIVE MODES</span>
+      <span class="altmodes-title">ALT MODES</span>
       <button id="altModesClose" class="panel-close" aria-label="Close alt modes">X</button>
     </div>
     <div class="altmodes-tabs" role="tablist">
@@ -935,7 +935,7 @@
           <button id="altModeBossRushBtn" class="nav-btn altmode-card__btn">PLAY</button>
         </div>
         <div class="altmode-card" id="altModeTreasureHuntCard">
-          <div class="altmode-card__icon">&#128273;</div>
+          <div class="altmode-card__icon" aria-hidden="true">&#9919;</div>
           <div class="altmode-card__text">
             <h3 class="altmode-card__name">TREASURE HUNT</h3>
             <p class="altmode-card__desc">Kill the vault boss, take its key, then fight back through new monsters and explosive traps. Return to the entrance to reveal a ladder or key chest.</p>
@@ -959,7 +959,7 @@
             <h3 class="altmode-card__name">PVP</h3>
             <p class="altmode-card__desc">Two players fight each other in an arena. First to land 3 kills wins. P2 uses IJKL plus U/O/P/;.</p>
           </div>
-          <button id="altModePvpBtn" class="nav-btn altmode-card__btn" style="background:rgba(200,50,50,0.18);border-color:rgba(255,80,80,0.4);">FIGHT</button>
+          <button id="altModePvpBtn" class="nav-btn nav-btn--danger altmode-card__btn">FIGHT</button>
         </div>
       </div>
       <!-- TESTING -->
@@ -1596,7 +1596,7 @@
 <!-- Settings modal -->
 <div id="settingsModal" class="modal-backdrop hidden">
   <div class="modal-box">
-    <button class="modal-close" id="settingsClose">&#10005;</button>
+    <button class="modal-close" id="settingsClose" aria-label="Close settings">×</button>
     <div class="settings-head">
       <h2 class="screen-title">SETTINGS</h2>
     </div>
@@ -1606,9 +1606,9 @@
 
     <!-- Tab bar (side navigation) -->
     <div class="stab-bar" role="tablist">
-      <button class="stab active" data-tab="controls" role="tab"><span class="tab-icon">⌨</span>Controls</button>
+      <button class="stab active" data-tab="controls" role="tab"><span class="tab-icon">⌨&#xfe0e;</span>Controls</button>
       <button class="stab" data-tab="gameplay" role="tab"><span class="tab-icon">◆</span>Gameplay</button>
-      <button class="stab" data-tab="volume"   role="tab"><span class="tab-icon">♪</span>Volume</button>
+      <button class="stab" data-tab="volume"   role="tab"><span class="tab-icon">♪&#xfe0e;</span>Volume</button>
       <button class="stab" data-tab="theme"    role="tab"><span class="tab-icon">◈</span>Theme</button>
       <button class="stab" data-tab="hud"      role="tab"><span class="tab-icon">▣</span>HUD</button>
       <button class="stab" data-tab="access"   role="tab"><span class="tab-icon">◎</span>Accessibility</button>

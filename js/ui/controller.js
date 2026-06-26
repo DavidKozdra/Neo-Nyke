@@ -912,7 +912,7 @@ export function createUIController(view) {
       view.runHistoryPanel?.classList.toggle('hidden', !runHistoryOpen);
       view.runHistoryPanel?.setAttribute('aria-hidden', runHistoryOpen ? 'false' : 'true');
       if (view.runHistoryBtn) {
-        view.runHistoryBtn.textContent = runHistoryOpen ? 'HIDE INFO' : 'INFO';
+        view.runHistoryBtn.textContent = runHistoryOpen ? 'HIDE ARCHIVE' : 'ARCHIVE';
         view.runHistoryBtn.setAttribute('aria-expanded', runHistoryOpen ? 'true' : 'false');
       }
       if (open) setRunHistoryView('info');
@@ -931,8 +931,8 @@ export function createUIController(view) {
       view.rhProfilePanel?.classList.toggle('hidden', !showProfile);
       view.rhInfoPanel?.classList.toggle('hidden', !showInfo);
       view.rhBlogPanel?.classList.toggle('hidden', !showBlog);
-      const titles = { achievements: 'ACHIEVEMENTS', profile: 'PROFILE', runs: 'RUN HISTORY', info: 'INFO', blog: 'BLOG' };
-      if (view.runHistoryPanelTitle) view.runHistoryPanelTitle.textContent = titles[view_] ?? 'INFO';
+      const titles = { achievements: 'ACHIEVEMENTS', profile: 'PROFILE', runs: 'RUN HISTORY', info: 'ARCHIVE', blog: 'BLOG' };
+      if (view.runHistoryPanelTitle) view.runHistoryPanelTitle.textContent = titles[view_] ?? 'ARCHIVE';
       view.runHistoryViewTabs?.forEach(t => {
         const active = t.dataset.view === view_;
         t.classList.toggle('active', active);
@@ -1401,8 +1401,8 @@ export function createUIController(view) {
 
     function setCreditsPanelOpen(open) {
       const panel = view.creditsPanel;
-      // Full-screen page swap: hide the main menu while credits is up.
-      view.start?.classList.toggle('hidden', open);
+      // Credits is a full-viewport overlay, consistent with the other
+      // secondary menu destinations. The main menu remains underneath.
       panel?.classList.toggle('hidden', !open);
       panel?.setAttribute('aria-hidden', open ? 'false' : 'true');
       view.creditsBtn?.setAttribute('aria-expanded', open ? 'true' : 'false');

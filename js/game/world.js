@@ -3332,11 +3332,16 @@
       && !challengeActive;
     const roomLocked = isRoomLocked();
     if (!Neo.fading && !roomLocked && (Neo.enemies.length === 0 || canLeaveFight)) {
+      // Require walking to the back of the doorway (out to the room edge) before
+      // the room changes, rather than triggering as soon as the player nicks the
+      // inner wall face. moveCircle lets the player slide into the open doorway
+      // tunnel; the transition fires once their center reaches its outer slice.
+      const exitDepth = Neo.player.r + 6;
       const door =
-        Neo.player.y < Neo.WALL + 24 && Neo.hasRoomExit(Neo.currentRoom, 'n') && Math.abs(Neo.player.x - Neo.ROOM_W / 2) < Neo.DOOR / 2 ? 'n' :
-        Neo.player.y > Neo.ROOM_H - Neo.WALL - 24 && Neo.hasRoomExit(Neo.currentRoom, 's') && Math.abs(Neo.player.x - Neo.ROOM_W / 2) < Neo.DOOR / 2 ? 's' :
-        Neo.player.x < Neo.WALL + 24 && Neo.hasRoomExit(Neo.currentRoom, 'w') && Math.abs(Neo.player.y - Neo.ROOM_H / 2) < Neo.DOOR / 2 ? 'w' :
-        Neo.player.x > Neo.ROOM_W - Neo.WALL - 24 && Neo.hasRoomExit(Neo.currentRoom, 'e') && Math.abs(Neo.player.y - Neo.ROOM_H / 2) < Neo.DOOR / 2 ? 'e' :
+        Neo.player.y < exitDepth && Neo.hasRoomExit(Neo.currentRoom, 'n') && Math.abs(Neo.player.x - Neo.ROOM_W / 2) < Neo.DOOR / 2 ? 'n' :
+        Neo.player.y > Neo.ROOM_H - exitDepth && Neo.hasRoomExit(Neo.currentRoom, 's') && Math.abs(Neo.player.x - Neo.ROOM_W / 2) < Neo.DOOR / 2 ? 's' :
+        Neo.player.x < exitDepth && Neo.hasRoomExit(Neo.currentRoom, 'w') && Math.abs(Neo.player.y - Neo.ROOM_H / 2) < Neo.DOOR / 2 ? 'w' :
+        Neo.player.x > Neo.ROOM_W - exitDepth && Neo.hasRoomExit(Neo.currentRoom, 'e') && Math.abs(Neo.player.y - Neo.ROOM_H / 2) < Neo.DOOR / 2 ? 'e' :
         null;
       if (door) startTransition(door);
     }
