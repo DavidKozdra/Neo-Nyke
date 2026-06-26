@@ -148,7 +148,7 @@
       clickCount++;
       
       if (clickCount >= 5) {
-        developer_mode = true;
+        globalThis.developer_mode = true;
         console.log("Enabling developer mode.");
         creditsStudio.removeEventListener('click', onCreditsStudioClick); // Remove event listener after reaching count
       }

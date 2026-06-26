@@ -68,6 +68,13 @@ export function createUIController(view) {
     };
     const runHistoryPageSize = 8;
 
+    // React to developer mode changes so UI updates live.
+    function updateDeveloperModeUI(flag) {
+      view.sprEditorBtn?.classList.toggle('hidden', !flag);
+    }
+    window.addEventListener('developer-mode-changed', (e) => updateDeveloperModeUI(!!e.detail));
+    updateDeveloperModeUI(!!globalThis.developer_mode);
+
     const LC = `<span class="lc-icon">◆</span>`;
     const getCharacterOrder = () => ['princess', 'thorn_knight', 'metao', 'gelleh', 'mooggy', 'turtle_boy', 'sarge', ...(Neo.getCustomCharacterKeys?.() || [])];
 
@@ -2365,6 +2372,7 @@ export function createUIController(view) {
         view.deleteRunBtn?.addEventListener('click', handlers.onDeleteRun);
         view.dialogueOverlay?.addEventListener('click', handlers.onAdvanceDialogue);
         view.tutorialMenuBtn?.addEventListener('click', handlers.onPlayTutorial);
+        view.sprEditorBtn?.addEventListener('click', handlers.onOpenSprEditor);
         view.firstTipBtn?.addEventListener('click', handlers.onDismissFirstTip);
         // New main-menu nav
         view.mainCompetitiveBtn?.addEventListener('click', () => {
@@ -2550,6 +2558,7 @@ export function createUIController(view) {
           Neo.markTutorialButtonOfferedNow?.();
         }
         view.tutorialMenuBtn?.classList.toggle('hidden', !canOfferTutorial);
+        view.sprEditorBtn?.classList.toggle('hidden', !globalThis.developer_mode);
       },
       showFirstTip(tip) {
         if (!view.firstTipOverlay || !tip) return;
