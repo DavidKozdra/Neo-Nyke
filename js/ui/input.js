@@ -327,6 +327,18 @@ export const RIVAL_DEFS = {
       deathLine: 'Hiss...',
       attackStyle: 'ranged',
     },
+    // Endgame rival: only spawns once the player has completed 3 loops (see the
+    // minLoopIndex gate in spawnRivals). Tanky and slow, mirroring his playable
+    // kit — a thick shell, a draining wave beam, and a heavy melee staff.
+    turtle_boy: {
+      name: 'Rival Turtle Boy',
+      color: '#5fd6a0',
+      hp: 260, dmg: 22, speed: 78, r: 17, attackCd: 1.05,
+      enterLine: 'You\'re a long way from home.',
+      deathLine: 'Back... in my shell...',
+      attackStyle: 'ranged',
+      minLoopIndex: 3,
+    },
   };
 export const RIVAL_MOVE_INTERVAL_BASE = 8.5;
 export const RIVAL_SPAWN_CHANCE = 0.15; // ~15% spawn chance - very rare encounters
@@ -384,6 +396,13 @@ export const RIVAL_WEAPON_LOADOUTS = {
       { key: 'claw_gauntlets', class: 'melee', range: 48, preferredRange: 110, damageMult: 1.05, cooldownMult: 0.7, knockback: 260 },
       { key: 'nail_shot', class: 'ranged', range: 460, preferredRange: 230, damageMult: 0.85, cooldownMult: 0.9, projectileCount: 3, spread: 0.22, projectileSpeed: 420 },
       { key: 'random_pounce', class: 'dash', range: 245, preferredRange: 150, damageMult: 1.1, cooldownMult: 1.0, knockback: 320 },
+    ],
+    // extending_staff (heavy melee), turtle_wave (long beam → ranged), death_ball
+    // (charged burst → ranged), riptide_roll (dash). Slow but high-impact.
+    turtle_boy: [
+      { key: 'extending_staff', class: 'melee', range: 130, preferredRange: 120, damageMult: 1.15, cooldownMult: 1.1, knockback: 500 },
+      { key: 'turtle_wave', class: 'ranged', range: 480, preferredRange: 280, damageMult: 0.9, cooldownMult: 1.25, projectileCount: 1, spread: 0.0, projectileSpeed: 420 },
+      { key: 'riptide_roll', class: 'dash', range: 240, preferredRange: 160, damageMult: 1.1, cooldownMult: 1.15, knockback: 360 },
     ],
   };
 

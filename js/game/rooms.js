@@ -2430,9 +2430,13 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
     const rollPassed = Neo.nextRandom('world') <= Neo.RIVAL_SPAWN_CHANCE;
 
     if (rollPassed && nonStartRooms.length > 0) {
+      const completedLoops = Math.max(0, Number(Neo.runLoopIndex) || 0);
       let unchosen = Object.keys(Neo.CHARACTER_DEFS).filter(k => k !== Neo.chosenCharacter
         && Neo.RIVAL_DEFS[k]
         && !carriedKeys.has(k)
+        // Endgame rivals (e.g. Turtle Boy) only unlock after enough completed
+        // loops. minLoopIndex is the number of loops that must be finished first.
+        && completedLoops >= Math.max(0, Number(Neo.RIVAL_DEFS[k].minLoopIndex) || 0)
         // Fully-slain rivals (all lives taken) never come back this run, and
         // rivals waiting on a return floor shouldn't spawn a duplicate.
         && !(Neo.slainRivalKeys || []).includes(k)

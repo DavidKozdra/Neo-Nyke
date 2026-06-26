@@ -601,6 +601,10 @@ function createTutorialState(active = false) {
     version: TUTORIAL_VERSION,
     active: !!active,
     step: 'welcome',
+    // Index of an earlier step the player chose to re-read with Back. Null when
+    // following the live tutorial. Review is purely cosmetic — the live `step`
+    // keeps advancing underneath — so it never persists across reloads.
+    reviewIndex: null,
     completed: {},
     movedFor: 0,
     dummySpawned: false,
@@ -625,6 +629,7 @@ export function createTutorialController() {
   const card = document.getElementById('tutorialCard');
   const hole = document.getElementById('tutorialSpotlightHole');
   const ring = document.getElementById('tutorialTargetRing');
+  const minimapRing = document.getElementById('tutorialMinimapRing');
   const speaker = document.getElementById('tutorialSpeaker');
   const title = document.getElementById('tutorialTitle');
   const text = document.getElementById('tutorialText');
@@ -650,6 +655,13 @@ export function createTutorialController() {
   const getStep = () => steps[getIndex()] || steps[0];
   const getCurrentRoomKey = () => roomKey(Neo.currentRoom);
 
+  // When the player hits Back we park on an earlier step to re-read it without
+  // rewinding real progress. `reviewIndex` is the step being shown; null means
+  // we're on the live step.
+  const isReviewing = () => Number.isInteger(getState()?.reviewIndex);
+  const getDisplayIndex = () => (isReviewing() ? getState().reviewIndex : getIndex());
+  const getDisplayStep = () => steps[getDisplayIndex()] || steps[0];
+
   function isInStepRoom(step, state = getState()) {
     if (!step?.roomKey) return true;
     const requiredRoomKey = String(state?.[step.roomKey] || '');
@@ -662,7 +674,7 @@ export function createTutorialController() {
       && step.completeWhen.every(id => !!state?.completed?.[id]);
   }
 
-  function getPresentedStep(step = getStep()) {
+  function getPresentedStep(step = getDisplayStep()) {
     const state = getState();
     if (!step?.roomKey || isInStepRoom(step, state)) return step;
     const destinationKey = state?.[step.roomKey];
@@ -689,6 +701,7 @@ export function createTutorialController() {
       ...state,
       version: TUTORIAL_VERSION,
       active: state.active === undefined ? !!active : !!state.active,
+      reviewIndex: null,
       completed: state.completed && typeof state.completed === 'object' ? { ...state.completed } : {},
       seenScenes: state.seenScenes && typeof state.seenScenes === 'object' ? { ...state.seenScenes } : {},
     };
@@ -741,6 +754,10 @@ export function createTutorialController() {
   function advanceCompletedSteps() {
     const state = getState();
     if (!state?.active) return;
+    // While the player is re-reading an earlier step, freeze the live cursor so
+    // the card doesn't jump out from under them. Completions still register on
+    // state.completed; we catch up the moment they leave review.
+    if (isReviewing()) return;
     let index = getIndex();
     let changed = false;
     const cleared = [];
@@ -808,19 +825,37 @@ export function createTutorialController() {
     return true;
   }
 
+  // Leave review and snap back to the live step, catching up any completions
+  // earned (or auto-advances missed) while the card was parked.
+  function exitReview() {
+    const state = getState();
+    if (!state || !isReviewing()) return false;
+    state.reviewIndex = null;
+    advanceCompletedSteps();
+    render(true);
+    Neo.updateObjective?.();
+    return true;
+  }
+
+  // The Continue button does double duty: while reviewing it returns to the
+  // live step; on a manual lesson it marks the lesson read and moves on.
   function manualNext() {
+    if (exitReview()) return;
     const step = getPresentedStep();
     if (!step?.manual) return;
     setCompleted(step.id);
     render(true);
   }
 
+  // Back steps the display cursor toward the first step so the player can
+  // re-read anything they've passed. It never rewinds real progress: the live
+  // `step` is untouched, only `reviewIndex` moves.
   function back() {
     const state = getState();
     if (!state?.active) return;
-    const index = getIndex();
-    if (index <= 0) return;
-    state.step = steps[index - 1].id;
+    const fromIndex = getDisplayIndex();
+    if (fromIndex <= 0) return;
+    state.reviewIndex = fromIndex - 1;
     render(true);
     Neo.updateObjective?.();
   }
@@ -882,17 +917,19 @@ export function createTutorialController() {
     }
     if (spec.kind === 'route') {
       // While a panel covers the screen, highlight its close button so the
-      // player can clear it before the doorway highlight makes sense.
+      // player can clear it before the doorway highlight makes sense. This case
+      // keeps the dimming spotlight (routeDoor=false) so the one button stands
+      // out against the open panel; only the actual world doorway drops the tint.
       const open = getOpenGamePanelInfo();
       if (open) {
         const button = document.querySelector(open.closeSelector);
         if (button && !button.closest('.hidden,[aria-hidden="true"]')) {
           const rect = button.getBoundingClientRect();
-          if (rect.width && rect.height) return { ...normalizeRect(rect, 8), route: true };
+          if (rect.width && rect.height) return { ...normalizeRect(rect, 8), route: true, routeDoor: false };
         }
       }
       const resolved = resolveWorldRect(spec.doorGetter?.(), spec.padding);
-      return resolved ? { ...resolved, route: true } : null;
+      return resolved ? { ...resolved, route: true, routeDoor: true } : null;
     }
     return null;
   }
@@ -936,11 +973,37 @@ export function createTutorialController() {
     card.style.top = `${scored[0].top}px`;
   }
 
+  // The minimap highlight that rides alongside a route step, so the player
+  // learns to read the minimap while a doorway arrow points the way. Returns
+  // false (and hides the ring) when the minimap isn't on screen.
+  function layoutMinimapRing(show) {
+    if (!minimapRing) return false;
+    const rect = show ? normalizeRect(Neo.minimapLayoutState?.viewportBounds, 8) : null;
+    if (!rect) {
+      minimapRing.classList.add('hidden');
+      return false;
+    }
+    minimapRing.classList.remove('hidden');
+    minimapRing.style.left = `${rect.left}px`;
+    minimapRing.style.top = `${rect.top}px`;
+    minimapRing.style.width = `${rect.width}px`;
+    minimapRing.style.height = `${rect.height}px`;
+    return true;
+  }
+
   function layoutTarget(step) {
     const targetRect = resolveTarget(step);
     const viewportW = window.innerWidth;
     const viewportH = window.innerHeight;
     const hasTarget = !!targetRect;
+    // On "go to the door" steps we point an arrow at the doorway and light up
+    // the minimap instead of tinting the whole screen, which read as harsh when
+    // the player just needs a direction. The dim spotlight stays for in-place UI
+    // lessons (and for the panel close-button highlight, where routeDoor is
+    // false) so the highlighted control still stands out.
+    const routeMode = !!targetRect?.routeDoor;
+    overlay?.classList.toggle('tutorial-route', routeMode);
+    layoutMinimapRing(routeMode);
     const edgeMargin = 28;
     const targetCenterX = hasTarget ? targetRect.left + targetRect.width / 2 : viewportW / 2;
     const targetCenterY = hasTarget ? targetRect.top + targetRect.height / 2 : viewportH / 2;
@@ -1022,15 +1085,22 @@ export function createTutorialController() {
     }
     if (commandLabel) commandLabel.textContent = nextCommand ? (step.commandLabel || 'PRESS') : '';
     if (commandValue) commandValue.textContent = nextCommand;
-    if (progress) progress.textContent = `${getIndex() + 1} / ${steps.length}`;
-    if (progressBar) progressBar.style.width = `${((getIndex() + 1) / steps.length) * 100}%`;
+    const reviewing = isReviewing();
+    const displayIndex = getDisplayIndex();
+    if (progress) progress.textContent = `${displayIndex + 1} / ${steps.length}`;
+    if (progressBar) progressBar.style.width = `${((displayIndex + 1) / steps.length) * 100}%`;
     if (gate) gate.hidden = true;
-    if (hint) hint.textContent = step.manual ? 'GOT IT? HIT CONTINUE' : 'DO THE ACTION — IT ADVANCES ON ITS OWN';
-    if (previous) previous.disabled = getIndex() <= 0;
+    if (hint) {
+      hint.textContent = reviewing ? 'REVIEWING — HIT RESUME TO RETURN'
+        : (step.manual ? 'GOT IT? HIT CONTINUE' : 'DO THE ACTION — IT ADVANCES ON ITS OWN');
+    }
+    if (previous) previous.disabled = displayIndex <= 0;
+    // While reviewing, the forward button always shows so the player can jump
+    // straight back to the live step; otherwise it only appears on manual cards.
     if (next) {
-      next.hidden = !step.manual;
-      next.disabled = !step.manual;
-      next.textContent = 'Continue';
+      next.hidden = !reviewing && !step.manual;
+      next.disabled = !reviewing && !step.manual;
+      next.textContent = reviewing ? 'Resume' : 'Continue';
     }
     if (force || lastStepId !== step.id) {
       lastStepId = step.id;
@@ -1046,6 +1116,8 @@ export function createTutorialController() {
     overlay?.setAttribute('aria-hidden', 'true');
     if (overlay) overlay.style.display = 'none';
     ring?.classList.add('hidden');
+    minimapRing?.classList.add('hidden');
+    overlay?.classList.remove('tutorial-route');
     document.body.classList.remove('tutorial-active');
   }
 
@@ -1064,7 +1136,7 @@ export function createTutorialController() {
     }
     advanceCompletedSteps();
     const gamepadConfirm = !!window.NeoGamepad?.[0]?.buttonStates?.[0];
-    if (gamepadConfirm && !gamepadConfirmHeld && getStep()?.manual) manualNext();
+    if (gamepadConfirm && !gamepadConfirmHeld && (isReviewing() || getStep()?.manual)) manualNext();
     gamepadConfirmHeld = gamepadConfirm;
     const now = performance.now();
     if (now - lastLayoutAt >= 50) {
@@ -1080,7 +1152,7 @@ export function createTutorialController() {
     window.addEventListener('resize', () => render(true), { passive: true });
     window.addEventListener('neo:settings-changed', () => render(true));
     window.addEventListener('keydown', event => {
-      if (event.key !== 'Enter' || !getState()?.active || !getStep()?.manual) return;
+      if (event.key !== 'Enter' || !getState()?.active || !(isReviewing() || getStep()?.manual)) return;
       event.preventDefault();
       manualNext();
     });
@@ -1139,13 +1211,16 @@ export function createTutorialController() {
     else hide();
   }
 
+  // The in-world objective tracker and step message always reflect the live
+  // step, never a step being re-read in review mode — the card alone shows the
+  // reviewed lesson, so the HUD objective shouldn't desync to a past "done".
   function getCurrentMessage() {
-    const step = getPresentedStep();
+    const step = getPresentedStep(getStep());
     return step?.text?.() || '';
   }
 
   function getCurrentObjectiveEntries() {
-    const step = getPresentedStep();
+    const step = getPresentedStep(getStep());
     if (!getState()?.active || !step) return [];
     return [{ text: step.title || 'Tutorial', state: isStepComplete(step) ? 'done' : 'warn' }];
   }
