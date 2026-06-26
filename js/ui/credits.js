@@ -132,8 +132,30 @@
     cancelAnimationFrame(raf);
     lastTs = performance.now();
     raf = requestAnimationFrame(step);
+    handleCreditsStudioClick(); // Added clicker here to allow us to enable developer mode
   }
   function stop() { cancelAnimationFrame(raf); raf = 0; }
+
+  // ── Developer mode enabler ───────────────────────────────────────────────
+  function handleCreditsStudioClick() {
+    const creditsStudio = document.getElementById('creditsStudio');
+    
+    if (!creditsStudio) return; // Ensure the element exists before proceeding
+  
+    let clickCount = 0;
+
+    function onCreditsStudioClick() {
+      clickCount++;
+      
+      if (clickCount >= 5) {
+        developer_mode = true;
+        console.log("Enabling developer mode.");
+        creditsStudio.removeEventListener('click', onCreditsStudioClick); // Remove event listener after reaching count
+      }
+    }
+
+    creditsStudio.addEventListener('click', onCreditsStudioClick);
+  }
 
   // ── Cutscene gallery ────────────────────────────────────────────────────
   const sceneList = document.getElementById('creditsSceneList');

@@ -2,6 +2,8 @@
 // Each import runs the module's top-level code, wiring functions and constants
 // onto the Neo global.
 
+let developerMode = false;
+
 import './core/game-core.js';
 import './core/math-utils.js';
 import './core/sfx.js';
