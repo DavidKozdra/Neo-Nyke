@@ -1144,6 +1144,7 @@ export function createUIController(view) {
         setInfoResultStatus(tab, sorted.length);
         view.rhInfoContent.innerHTML = sorted.length ? `${getInfoResultSummary(tab, sorted.length)}<div class="info-grid" role="list">${sorted.map(w => {
           const rarity = w.rarity || 'knight';
+          const wDmg = Neo.getDisplayDamage?.(w.key, 'weapon');
           return `<div class="info-card" role="listitem">
             <div class="info-card__header">
               <canvas class="info-card__icon" data-info-weapon="${infoEsc(w.key)}" width="32" height="32" aria-hidden="true"></canvas>
@@ -1151,6 +1152,7 @@ export function createUIController(view) {
               <span class="info-card__tag info-card__tag--${infoEsc(rarity)}">${infoEsc(rarity)}</span>
             </div>
             <div class="info-card__desc">${infoEsc(w.description || '')}</div>
+            ${wDmg ? `<div class="info-card__stat">${infoEsc(wDmg.label)}</div>` : ''}
           </div>`;
         }).join('')}</div>` : renderInfoEmpty('weapons');
         view.rhInfoContent.querySelectorAll('[data-info-weapon]').forEach(el => {
@@ -1178,6 +1180,7 @@ export function createUIController(view) {
           const exclusive = exclusiveNames.length
             ? `<br><em class="info-card__note">${exclusiveNames.map(c => infoEsc(Neo.titleCase(c.replace(/_/g, ' ')))).join(' / ')} only</em>`
             : '';
+          const mDmg = Neo.getDisplayDamage?.(m.key, 'move');
           return `<div class="info-card" role="listitem">
             <div class="info-card__header">
               <canvas class="info-card__icon" data-info-move="${infoEsc(m.key)}" width="32" height="32" aria-hidden="true"></canvas>
@@ -1185,6 +1188,7 @@ export function createUIController(view) {
               <span class="info-card__tag info-card__tag--${infoEsc(m.slot)}">${infoEsc(slotLabel)}</span>
             </div>
             <div class="info-card__desc">${infoEsc(m.desc || '')}${exclusive}</div>
+            ${mDmg ? `<div class="info-card__stat">${infoEsc(mDmg.label)}</div>` : ''}
           </div>`;
         }).join('')}</div>` : renderInfoEmpty('moves');
         view.rhInfoContent.querySelectorAll('[data-info-move]').forEach(el => {
