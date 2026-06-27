@@ -1765,6 +1765,21 @@
     }
   }
 
+  // A flying rock (Sarge debris, rival barriers, collapse rocks, thrown rocks)
+  // counts as something heavy enough to set off a floor trap. Used by
+  // explosive_trap and dungeon thorn_mine arming so traps don't ignore rocks
+  // skipping across the trigger radius.
+  function rockProjectileInRadius(x, y, radius) {
+    const projectiles = Neo.projectiles;
+    if (!Array.isArray(projectiles)) return false;
+    for (let i = 0; i < projectiles.length; i += 1) {
+      const p = projectiles[i];
+      if (!p || p.kind !== 'rock') continue;
+      if (Neo.dist(p.x, p.y, x, y) <= radius + (p.r || 0)) return true;
+    }
+    return false;
+  }
+
   function updateWorldProps(dt) {
     ensureEnemySpatialIndex();
     if (Array.isArray(Neo.destructibles)) {
@@ -1818,7 +1833,9 @@
           });
           const playerTrips = dungeonOwned
             && Neo.dist(Neo.player.x, Neo.player.y, hazard.x, hazard.y) <= triggerR + Neo.player.r;
-          if (target || playerTrips) {
+          // A rock skipping over the mine sets it off just like an enemy would.
+          const rockTrips = dungeonOwned && rockProjectileInRadius(hazard.x, hazard.y, triggerR);
+          if (target || playerTrips || rockTrips) {
             hazard.triggered = true;
             const blast = Number(hazard.blastRadius || 62);
             const damage = dungeonOwned
@@ -1881,7 +1898,9 @@
             if (enemyNear) return;
             enemyNear = Neo.dist(enemy.x, enemy.y, hazard.x, hazard.y) <= hazard.triggerRadius + enemy.r;
           });
-          if (playerNear || enemyNear) {
+          // A rock rolling over the plate sets it off too.
+          const rockNear = rockProjectileInRadius(hazard.x, hazard.y, hazard.triggerRadius);
+          if (playerNear || enemyNear || rockNear) {
             hazard.triggered = true;
             hazard.fuse = hazard.fuseDuration || 0.75;
             hazard.sparkTick = 0;
