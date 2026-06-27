@@ -66,6 +66,27 @@ function getInputMode() {
   return 'keyboard';
 }
 
+// Helpers for the guided "find the HUD editor" path (Pause → Settings → HUD →
+// Preview). Read live DOM/state so the steps can poll for completion.
+function isSettingsModalOpen() {
+  const modal = document.getElementById('settingsModal');
+  return !!modal && !modal.classList.contains('hidden');
+}
+
+function isHudSettingsTabActive() {
+  if (!isSettingsModalOpen()) return false;
+  // The HUD panel (#stab-hud) is un-hidden when its tab is active.
+  const panel = document.getElementById('stab-hud');
+  return !!panel && !panel.classList.contains('hidden');
+}
+
+// Close settings (if open) and return to play. Mirrors the pause-menu Resume so
+// the tutorial leaves the player back in the game after the HUD detour.
+function closeSettingsAndResume() {
+  if (isSettingsModalOpen()) document.getElementById('settingsClose')?.click();
+  if (Neo.gameState === 'pause' && !Neo.inventoryPauseActive) Neo.resumeGame?.();
+}
+
 function getActionLabel(action, fallback) {
   const mode = getInputMode();
   if (mode === 'touch') {
@@ -192,6 +213,77 @@ function createSteps() {
       text: () => 'Your HP and XP are shown here. HP reaching zero ends the run. XP pays for Forge upgrades and raises your level.',
       target: targetDom('#playerStats', 8),
       manual: true,
+    },
+    // Walk the player along the real path to the HUD layout editor —
+    // Pause → Settings → HUD tab → Preview layout — so they can find it again
+    // themselves later. Each step highlights the actual control and completes
+    // when the player reaches the next screen. These steps stay engaged while
+    // the game is paused (liveDuringPause) since the pause menu / settings put
+    // the game into the 'pause' state where the tutorial overlay normally hides.
+    {
+      id: 'hud_pause',
+      chapter: 'HUD',
+      title: 'Open the pause menu',
+      text: () => 'You can rearrange your HUD whenever you like. Let’s find the editor together — start by opening the pause menu.',
+      command: () => getInputMode() === 'touch' ? 'MENU → PAUSE' : getActionLabel('pause', 'ESC'),
+      commandLabel: getInputMode() === 'touch' ? 'TAP' : 'PRESS',
+      liveDuringPause: true,
+      complete: () => Neo.gameState === 'pause' && !Neo.inventoryPauseActive,
+    },
+    {
+      id: 'hud_settings',
+      chapter: 'HUD',
+      title: 'Open Settings',
+      text: () => 'Choose Settings to reach every option, including the HUD layout.',
+      command: () => 'SETTINGS',
+      commandLabel: 'TAP',
+      liveDuringPause: true,
+      target: targetDom('#pauseSettings', 8),
+      complete: () => isSettingsModalOpen(),
+    },
+    {
+      id: 'hud_settings_tab',
+      chapter: 'HUD',
+      title: 'Open the HUD tab',
+      text: () => 'Settings is split into tabs. Open the HUD tab to find layout and sizing.',
+      command: () => 'HUD TAB',
+      commandLabel: 'TAP',
+      liveDuringPause: true,
+      target: targetDom('#settingsModal .stab[data-tab="hud"]', 8),
+      complete: () => isHudSettingsTabActive(),
+    },
+    {
+      id: 'hud_preview_open',
+      chapter: 'HUD',
+      title: 'Open the layout editor',
+      text: () => 'Under HUD Layout, choose “Preview layout” to open the editor — the same one you can come back to anytime.',
+      command: () => 'PREVIEW LAYOUT',
+      commandLabel: 'TAP',
+      liveDuringPause: true,
+      target: targetDom('#hudLayoutPreviewBtn', 8),
+      complete: () => window.NeoSettings?.isHudLayoutEditorOpen?.() === true,
+    },
+    {
+      id: 'hud_layout',
+      chapter: 'HUD',
+      title: 'Make the HUD yours',
+      text: () => 'This is the editor. Drag any panel to move it, grab a corner to resize, or tap the eye to hide it. Remember: Pause → Settings → HUD → Preview layout gets you back here anytime. Hit Done when you’re finished.',
+      command: () => 'WHEN READY → DONE',
+      commandLabel: 'FINISH',
+      manual: true,
+      liveDuringPause: true,
+      // The body class lifts the tutorial card above the editor (z 9000) so its
+      // instructions and Continue button stay readable over the editor. The
+      // player finishes explicitly via the editor's "Done" or the card's
+      // Continue button (handled by manualNext) — dragging is optional.
+      onEnter: () => document.body.classList.add('tutorial-hud-editing'),
+      onExit: () => {
+        document.body.classList.remove('tutorial-hud-editing');
+        // Close the editor + settings and return to play so the next lesson
+        // resumes cleanly, however the player advanced.
+        window.NeoSettings?.closeHudLayoutEditor?.();
+        closeSettingsAndResume();
+      },
     },
     {
       id: 'objectives',
@@ -646,7 +738,21 @@ export function createTutorialController() {
   let lastLayoutAt = 0;
   let lastStepId = '';
   let lastChapter = '';
+  let lastLiveStepId = '';
   let gamepadConfirmHeld = false;
+
+  // Fire a step's onEnter/onExit side-effects when the *live* step changes
+  // (ignores Back/Forward review navigation, which only moves the display
+  // cursor). Lets a step open/close a panel — e.g. the HUD layout editor.
+  function runLiveStepLifecycle() {
+    const liveStep = getStep();
+    const liveId = liveStep?.id || '';
+    if (liveId === lastLiveStepId) return;
+    const prev = steps.find(step => step.id === lastLiveStepId);
+    lastLiveStepId = liveId;
+    try { prev?.onExit?.(); } catch (e) { /* never let a side-effect break the tutorial */ }
+    try { liveStep?.onEnter?.(); } catch (e) { /* same */ }
+  }
 
   if (overlay && overlay.parentElement !== document.body) document.body.appendChild(overlay);
 
@@ -801,6 +907,7 @@ export function createTutorialController() {
     if (type === 'status-applied') setCompleted('status_lesson');
     if (type === 'enemy-killed' && payload.tutorialDummy) setCompleted('fight');
     if (type === 'relic-collected' && payload.tutorialRelic) setCompleted('relic');
+    if (type === 'hud-layout-edit') setCompleted('hud_layout');
     if (type === 'panel-open' && payload.panel === 'inventory') setCompleted('inventory_open');
     if (type === 'inventory-tab' && payload.tab === 'items') setCompleted('inventory_relics');
     if (type === 'inventory-tab' && payload.tab === 'equipped') setCompleted('inventory_moves');
@@ -945,11 +1052,28 @@ export function createTutorialController() {
       const targetCenterY = targetRect ? targetRect.top + targetRect.height / 2 : viewportH / 2;
       const placeTop = !targetRect || targetCenterY > viewportH / 2;
       const touchControlsVisible = window.NeoSettings?.isTouchControlsEnabled?.() === true;
-      const safeBottom = touchControlsVisible ? 190 : margin;
-      card.style.left = `${margin}px`;
-      card.style.top = placeTop ? `${margin}px` : 'auto';
-      card.style.bottom = placeTop ? 'auto' : `${safeBottom}px`;
-      card.style.width = `${Math.max(280, viewportW - margin * 2)}px`;
+      // Don't force full width — honour the CSS cap so the card stays a
+      // readable size and leaves the right edge free for the hamburger.
+      card.style.width = '';
+      const cardW = card.getBoundingClientRect().width;
+      if (placeTop) {
+        // Top-anchored: keep clear of the top-right hamburger (~38px + insets,
+        // ~54px total). Left-align unless that would collide, then shift left.
+        const hamburgerSafe = touchControlsVisible ? 54 : 0;
+        const maxLeft = viewportW - cardW - margin - hamburgerSafe;
+        card.style.left = `${Math.max(margin, maxLeft)}px`;
+        card.style.top = `${margin}px`;
+        card.style.bottom = 'auto';
+      } else {
+        // Bottom-anchored: clear the joystick (left, up to 45vw / 220px) and the
+        // button cluster (right, ~170px) so the controls are never covered.
+        const controlsHeight = touchControlsVisible
+          ? Math.min(220, viewportW * 0.45) + margin
+          : margin;
+        card.style.left = `${margin}px`;
+        card.style.top = 'auto';
+        card.style.bottom = `${controlsHeight}px`;
+      }
       return;
     }
     card.style.bottom = 'auto';
@@ -1051,12 +1175,23 @@ export function createTutorialController() {
     placeCard(offscreen ? null : targetRect);
   }
 
+  // The tutorial overlay normally only shows during 'play' (via
+  // isFirstRunTutorialEngaged). Steps flagged liveDuringPause keep it visible
+  // through the pause menu / settings — needed for the guided HUD-editor path.
+  function isEngaged() {
+    const state = getState();
+    if (!state?.active || Neo.gameMode !== 'normal') return false;
+    if (Neo.isFirstRunTutorialEngaged?.()) return true;
+    return Neo.gameState === 'pause' && !!getStep()?.liveDuringPause;
+  }
+
   function render(force = false) {
     const state = getState();
-    if (!state?.active || !Neo.isFirstRunTutorialEngaged?.()) {
+    if (!state?.active || !isEngaged()) {
       hide();
       return;
     }
+    runLiveStepLifecycle();
     const step = getPresentedStep();
     overlay?.classList.remove('hidden');
     overlay?.setAttribute('aria-hidden', 'false');
@@ -1112,6 +1247,14 @@ export function createTutorialController() {
   }
 
   function hide() {
+    // Tear down the live step (closes any panel it opened, e.g. the HUD layout
+    // editor) so skipping/completing the tutorial never strands an open overlay.
+    // Guarded so the per-tick hide() while inactive only runs onExit once.
+    if (lastLiveStepId) {
+      const prev = steps.find(step => step.id === lastLiveStepId);
+      lastLiveStepId = '';
+      try { prev?.onExit?.(); } catch (e) { /* never let a side-effect break teardown */ }
+    }
     overlay?.classList.add('hidden');
     overlay?.setAttribute('aria-hidden', 'true');
     if (overlay) overlay.style.display = 'none';
@@ -1238,6 +1381,9 @@ export function createTutorialController() {
     normalizeState,
     getCurrentMessage,
     getCurrentObjectiveEntries,
+    // Live step id (ignores Back/Forward review). Lets a panel a step opened —
+    // e.g. the HUD layout editor — tell whether its tutorial step is active.
+    getLiveStepId: () => (getState()?.active ? getStep()?.id || '' : ''),
   };
 }
 

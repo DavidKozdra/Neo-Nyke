@@ -638,7 +638,7 @@ export function resumeGame() {
 
   function getTutorialStepOrder() {
     return Neo.tutorialController?.steps?.map(step => step.id)
-      || ['welcome', 'move', 'hud', 'objectives', 'minimap', 'secret_reveal_do', 'route_training', 'dash', 'melee', 'laser', 'smash', 'status_lesson', 'crit_lesson', 'fight', 'relic', 'inventory_open', 'inventory_relics', 'inventory_moves', 'inventory_weapons', 'moves_equip_explain', 'moves_equip_do', 'route_treasure', 'treasure_open', 'dwell_do', 'route_shop', 'shop_open', 'shop_buy', 'route_forge', 'forge_open', 'forge_stage', 'forge_confirm', 'route_challenge', 'challenge_start', 'challenge_bombs', 'route_ladder', 'ladder_use'];
+      || ['welcome', 'move', 'hud', 'hud_pause', 'hud_settings', 'hud_settings_tab', 'hud_preview_open', 'hud_layout', 'objectives', 'minimap', 'secret_reveal_do', 'route_training', 'dash', 'melee', 'laser', 'smash', 'status_lesson', 'crit_lesson', 'fight', 'relic', 'inventory_open', 'inventory_relics', 'inventory_moves', 'inventory_weapons', 'moves_equip_explain', 'moves_equip_do', 'route_treasure', 'treasure_open', 'dwell_do', 'route_shop', 'shop_open', 'shop_buy', 'route_forge', 'forge_open', 'forge_stage', 'forge_confirm', 'route_challenge', 'challenge_start', 'challenge_bombs', 'route_ladder', 'ladder_use'];
   }
 
   function navigateTutorialStep(direction = 1) {

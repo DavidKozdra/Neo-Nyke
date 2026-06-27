@@ -1461,7 +1461,7 @@
     save();
   });
 
-  document.getElementById('hudLayoutPreviewBtn')?.addEventListener('click', () => {
+  function openHudLayoutEditor() {
     const overlay = document.getElementById('hudPreviewOverlay');
     if (!overlay) return;
     populateHudPreviewContent();
@@ -1473,13 +1473,24 @@
     overlay.setAttribute('aria-hidden', 'false');
     refreshHudPreviewBoxes();
     requestAnimationFrame(() => correctHudPreviewOverlaps({ saveAfter: true }));
-  });
+  }
+  document.getElementById('hudLayoutPreviewBtn')?.addEventListener('click', openHudLayoutEditor);
   const hudPreviewClose = () => {
     const overlay = document.getElementById('hudPreviewOverlay');
     if (!overlay) return;
     overlay.classList.add('hidden');
     overlay.setAttribute('aria-hidden', 'true');
+    // If the tutorial opened this editor as its HUD step, closing ("Done")
+    // counts as finishing the step and advances the tutorial.
+    if (window.Neo?.tutorialController?.getLiveStepId?.() === 'hud_layout') {
+      window.Neo.tutorialController.signal('hud-layout-edit', { via: 'done' });
+    }
   };
+  // Let the tutorial drive the HUD layout editor as a guided step.
+  window.NeoSettings.openHudLayoutEditor = openHudLayoutEditor;
+  window.NeoSettings.closeHudLayoutEditor = hudPreviewClose;
+  window.NeoSettings.isHudLayoutEditorOpen = () =>
+    !document.getElementById('hudPreviewOverlay')?.classList.contains('hidden');
   document.getElementById('hudPreviewClose')?.addEventListener('click', hudPreviewClose);
   document.getElementById('hudPreviewOverlay')?.addEventListener('click', e => {
     if (e.target.id === 'hudPreviewOverlay') hudPreviewClose();
