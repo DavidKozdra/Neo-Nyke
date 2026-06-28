@@ -3,6 +3,9 @@
 // How long a pickup toast (item/move/weapon) stays before it animates out.
 const TOAST_HOLD_MS = 4000;
 const TOAST_LEAVE_MS = 220;
+// "Ready" cues fire mid-combat (a relic finished charging), so they dismiss
+// faster than pickup toasts to avoid lingering during a fight.
+const READY_TOAST_HOLD_MS = 1800;
 
 export function ensureItemNotifyStack() {
   let stack = document.getElementById('itemNotifyStack');
@@ -130,6 +133,47 @@ export function pushItemNotification(itemKey, amount = 1, note = '') {
     toast.classList.add('is-leaving');
     setTimeout(() => toast.remove(), TOAST_LEAVE_MS);
   }, TOAST_HOLD_MS);
+}
+
+// Toast shown when a charge relic finishes charging (e.g. Keen Eye "Ready",
+// Crit Charm "Surge"). Reuses the pickup toast styling but swaps the "+N" amount
+// for a status badge and dismisses quicker. `note` overrides the description
+// (used for the Charged Adapter's "Press X" hint).
+export function pushReadyNotification(itemKey, { label = 'Ready', note = '' } = {}) {
+  const item = resolveItemIconDef(itemKey);
+  if (!item) return;
+  const stack = ensureItemNotifyStack();
+  const toast = document.createElement('div');
+  toast.className = 'item-toast';
+  toast.style.borderColor = item.color || '#9ec6ff';
+  const icon = document.createElement('canvas');
+  icon.className = 'item-toast-icon';
+  icon.width = 40;
+  icon.height = 40;
+  drawItemToastIcon(icon, item);
+  const body = document.createElement('div');
+  body.className = 'item-toast-body';
+  const title = document.createElement('div');
+  title.className = 'item-toast-title';
+  const name = document.createElement('span');
+  name.textContent = item.name;
+  name.style.color = getRarityNameColor(item.rarity || item.category);
+  const badge = document.createElement('span');
+  badge.className = 'item-toast-amount';
+  badge.textContent = label;
+  const desc = document.createElement('div');
+  desc.className = 'item-toast-desc';
+  desc.style.color = '#ffffff';
+  desc.textContent = note || item.description;
+  title.append(name, badge);
+  body.append(title, desc);
+  toast.append(icon, body);
+  stack.prepend(toast);
+  while (stack.children.length > 4) stack.removeChild(stack.lastElementChild);
+  setTimeout(() => {
+    toast.classList.add('is-leaving');
+    setTimeout(() => toast.remove(), TOAST_LEAVE_MS);
+  }, READY_TOAST_HOLD_MS);
 }
 
 export const ITEM_CINEMATIC_FLAVOR = {
@@ -524,6 +568,7 @@ Neo.resolveItemIconDef = resolveItemIconDef;
 Neo.drawItemIconByKey = drawItemIconByKey;
 Neo.drawItemIconCanvases = drawItemIconCanvases;
 Neo.pushItemNotification = pushItemNotification;
+Neo.pushReadyNotification = pushReadyNotification;
 Neo.showItemCinematic = showItemCinematic;
 Neo.drawMoveToastIcon = drawMoveToastIcon;
 Neo.drawWeaponToastIcon = drawWeaponToastIcon;

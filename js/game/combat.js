@@ -291,23 +291,21 @@
 
     if (kind === 'weapon') {
       const wb = Neo.WEAPON_BASE_STATS?.[key];
-      if (!wb || !wb.damage) {
-        // Excalibur / Katana are % of base damage rather than a flat table value.
-        if (key === 'excalibur' || key === 'katana_excalibur_777x') {
-          const dmg = getPlayerBaseDamage() * 7.77 + Neo.getAnvilWeaponBonus(key, 'damage');
-          baseLow = baseHigh = dmg;
-        } else if (key === 'lazer_glasses') {
-          baseLow = baseHigh = 9 * (stats.beamDamageMultiplier || 1);
-          tick = true;
-        } else {
-          return null;
-        }
-      } else {
-        const raw = wb.damage + (Neo.getAnvilWeaponBonus?.(key, 'damage') || 0);
-        baseLow = baseHigh = raw;
+      // Excalibur / Katana deal a % of the player's base damage, not the flat
+      // table value; Lazer Glasses is a beam whose real per-tick damage (9) is
+      // lower than its table entry. Handle both before the generic table branch.
+      if (key === 'excalibur' || key === 'katana_excalibur_777x') {
+        baseLow = baseHigh = getPlayerBaseDamage() * 7.77 + (Neo.getAnvilWeaponBonus?.(key, 'damage') || 0);
+      } else if (key === 'lazer_glasses') {
+        baseLow = baseHigh = 9 * (stats.beamDamageMultiplier || 1);
+        tick = true;
+      } else if (wb && wb.damage) {
+        baseLow = baseHigh = wb.damage + (Neo.getAnvilWeaponBonus?.(key, 'damage') || 0);
         if (key === 'claw_gauntlets') hits = 2;
         if (key === 'magenta_p90') hits = 5;
         if (key === 'metao_fire_staff') hits = 3;
+      } else {
+        return null;
       }
     } else {
       const shape = DISPLAY_DAMAGE[key];
@@ -4590,7 +4588,7 @@
     if (itemKey !== 'robot_arm' || previousCount > 0 || !Neo.player) return;
     Neo.player.robotArmReady = true;
     Neo.player.robotArmChargeKills = 0;
-    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 30, life: 0.8, text: 'ARM READY', c: '#a9e6ff' });
+    Neo.pushReadyNotification('robot_arm');
   }
 
   function canDuplicateItemPickup(itemKey) {
@@ -4781,10 +4779,7 @@
     Neo.addToEquipmentSlots?.(itemKey);
     Neo.markInventoryPanelDirty();
     if ((Neo.VOUCHER_KEYS || []).includes(itemKey)) Neo.refreshShopVoucherBanner?.();
-    Neo.pushItemNotification(itemKey, collectCount);
-    if (duplicatePickup) {
-      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 42, life: 0.85, text: 'ITEM DOUBLED', c: '#d8c0ff' });
-    }
+    Neo.pushItemNotification(itemKey, collectCount, duplicatePickup ? 'Copied!' : '');
     const totalItems = Object.values(Neo.player.items).reduce((s, v) => s + Number(v || 0), 0);
     window.achievementEvents?.emit('item:collected', { totalItems });
 
