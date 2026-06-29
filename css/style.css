@@ -12603,3 +12603,7 @@ button.alt.danger {
   font-weight: 900;
   color: #eef5ff;
 }
+
+.credits-image {
+  border-radius: 50%;
+}

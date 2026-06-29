@@ -418,18 +418,42 @@
     });
   }
 
+  // A real, player-chosen theme override. 'dark' is identical to the base CSS
+  // :root, so it reads as "no override" and lets a character supply its own
+  // default theme (the princess character supplies the princess theme).
+  function hasExplicitTheme() {
+    return !!activeTheme && activeTheme !== 'dark' &&
+      (activeTheme === '_custom' || !!PRESET_THEMES[activeTheme] || !!savedThemes[activeTheme]);
+  }
+
+  // Resolve the menu-color vars that should currently be in effect:
+  //   1. an explicit settings override always wins;
+  //   2. otherwise the princess character supplies the princess theme;
+  //   3. otherwise the base CSS :root (dark) look.
+  // Called on boot and whenever the active character / settings change so the
+  // princess theme tracks the chosen character without overwriting the saved
+  // setting. See syncCharacterUiTheme() in player.js for the matching body class.
+  function applyEffectiveTheme(uiCharacterKey) {
+    if (hasExplicitTheme()) {
+      if (activeTheme === '_custom') applyThemeVars(customThemeVars);
+      else applyThemeVars((PRESET_THEMES[activeTheme] || savedThemes[activeTheme]).vars);
+    } else if (uiCharacterKey === 'princess') {
+      applyThemeVars(PRESET_THEMES.princess.vars);
+    } else {
+      applyThemeVars(PRESET_THEMES.dark.vars);
+    }
+  }
+
   load();
   if (!controlMode) controlMode = isTouchDevice() ? 'mobile' : 'desktop';
   if (touchControlsEnabled === null) touchControlsEnabled = controlMode === 'mobile';
   applyAccess();
   applyHudElements();
   applyControlsSectionVisibility();
-  // Apply saved theme on boot (before any UI is queried)
-  if (activeTheme && (PRESET_THEMES[activeTheme] || savedThemes[activeTheme])) {
-    applyThemeVars((PRESET_THEMES[activeTheme] || savedThemes[activeTheme]).vars);
-  } else if (activeTheme === '_custom') {
-    applyThemeVars(customThemeVars);
-  }
+  // Apply the effective theme on boot (before any UI is queried). The active
+  // character isn't known yet here, so this resolves to the explicit override
+  // or the base look; syncCharacterUiTheme() re-runs it once a character loads.
+  applyEffectiveTheme(window.Neo?.getUiCharacterKey?.());
 
   // Equipment tool slot keys, in slot order, honoring custom bindings.
   // Falls back to the default letter for any slot left unbound.
@@ -470,6 +494,13 @@
     getHudElements: () => hudElements,
     getHudElementDefs: () => HUD_ELEMENTS.map(el => ({ key: el.key, label: el.label })),
     correctHudLayout: () => scheduleHudOverlapCorrection({ saveAfter: true }),
+    // True when the player has explicitly picked a theme (anything but the base
+    // dark look), in which case it overrides any character-default theme.
+    hasExplicitTheme,
+    // Apply the menu-color vars that should be in effect for the given UI
+    // character, honoring an explicit override first. Called by
+    // syncCharacterUiTheme() in player.js on character / settings changes.
+    applyEffectiveTheme,
   };
 
   const modal = document.getElementById('settingsModal');
@@ -1755,8 +1786,10 @@
   document.getElementById('themeDeleteBtn').addEventListener('click', () => {
     if (!savedThemes[activeTheme]) return;
     delete savedThemes[activeTheme];
-    activeTheme = 'princess';
-    applyTheme('princess');
+    // Clear the override and fall back to the effective theme: the princess
+    // character's theme, or the base look for everyone else.
+    activeTheme = '';
+    applyEffectiveTheme(window.Neo?.getUiCharacterKey?.());
     save();
     refreshThemeUI();
   });

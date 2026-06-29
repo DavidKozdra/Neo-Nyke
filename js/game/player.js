@@ -408,14 +408,26 @@ function getSettingsActiveTheme() {
   }
 
 export function syncCharacterUiTheme() {
+    const uiCharacterKey = getUiCharacterKey();
     const activeTheme = getSettingsActiveTheme();
     // 'dark' is identical to the base CSS :root, so it reads as "no real
     // override" — that lets the princess character supply the princess UI as
     // its default even for players who have an old 'dark' value persisted.
-    const hasExplicitTheme = !!activeTheme && activeTheme !== '_custom' && activeTheme !== 'dark';
+    const hasExplicitTheme = window.NeoSettings?.hasExplicitTheme
+      ? window.NeoSettings.hasExplicitTheme()
+      : (!!activeTheme && activeTheme !== '_custom' && activeTheme !== 'dark');
+    // The princess skin is active when the player explicitly picks the princess
+    // theme, or when no explicit theme is set and the princess character is in
+    // play (the character supplies its theme as a default).
     const princessFromSettings = activeTheme === 'princess';
-    const princessFromCharacter = !hasExplicitTheme && getUiCharacterKey() === 'princess';
+    const princessFromCharacter = !hasExplicitTheme && uiCharacterKey === 'princess';
     document.documentElement.classList.toggle('princess-ui', princessFromSettings || princessFromCharacter);
+
+    // Keep the menu-color vars in step with the skin: pushing the princess
+    // preset's --menu-* values when the princess UI is active (the skin's CSS
+    // reads them), and restoring the settings/base theme otherwise. settings-ui
+    // owns the preset data, so it resolves which vars to apply.
+    window.NeoSettings?.applyEffectiveTheme?.(uiCharacterKey);
 
     if (!settingsThemeSyncBound) {
       settingsThemeSyncBound = true;
