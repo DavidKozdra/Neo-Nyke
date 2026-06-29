@@ -223,7 +223,13 @@
     },
   };
 
-  let activeTheme = 'dark';
+  // Empty by default (not 'dark') so the princess character can supply the
+  // princess UI theme as its default. The base CSS :root already renders the
+  // dark look, and the 'dark' preset is identical to it, so an empty active
+  // theme is visually unchanged for non-princess characters. Once the player
+  // explicitly picks any preset (including dark) it counts as an override and
+  // wins over the character default. See syncCharacterUiTheme() in player.js.
+  let activeTheme = '';
   let customThemeVars = { ...PRESET_THEMES.dark.vars };
   let savedThemes = {};
 

@@ -11946,6 +11946,9 @@ button.alt.danger {
   cursor: nwse-resize;
   pointer-events: auto;
   touch-action: none;
+  /* Sit above the box body and (importantly) the eye button, so the grip is
+     always grabbable even when both anchor to the same corner (stats/actions). */
+  z-index: 3;
 }
 .hud-preview-resize:hover {
   border-color: #fff;
@@ -11999,6 +12002,14 @@ button.alt.danger {
 .hud-preview-box--objectives .hud-preview-eye,
 .hud-preview-box--equipment .hud-preview-eye,
 .hud-preview-box--minimap .hud-preview-eye {
+  right: auto;
+  left: -9px;
+}
+/* The stats/actions boxes are bottom-anchored, so their resize grip is moved to
+   the TOP-right corner — exactly where the eye normally sits. Move the eye to the
+   top-left so it no longer covers (and hides) the resize grip. */
+.hud-preview-box--stats .hud-preview-eye,
+.hud-preview-box--actions .hud-preview-eye {
   right: auto;
   left: -9px;
 }
