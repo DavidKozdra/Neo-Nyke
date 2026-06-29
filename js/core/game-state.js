@@ -325,6 +325,7 @@ export function resumeGame() {
       step: 'welcome',
       completed: {},
       movedFor: 0,
+      statusWatchedFor: 0,
       dummySpawned: false,
       relicSpawned: false,
       resourcesGranted: false,
@@ -652,6 +653,39 @@ export function resumeGame() {
     Neo.spawnParticle({ x: spot.x, y: spot.y - 22, life: 1.4, text: 'RELIC', c: '#ffd27d' });
   }
 
+  // How long the freely-given demo bleed must tick (with the player on the
+  // status_lesson step) before the lesson auto-clears, so they actually watch a
+  // couple of red numbers fall off rather than the card flashing past.
+  const TUTORIAL_STATUS_WATCH_TIME = 2.6;
+
+  // Keep a bleed visibly ticking on the training dummy during the status lesson
+  // so the "damage that keeps ticking" beat is demonstrated for EVERY character,
+  // not just the blood-beam roster, and never gated on an RNG proc. The demo
+  // bleed is tagged tutorialDemo so applyStatus skips the status-applied signal
+  // (it would otherwise insta-complete the step); we complete it ourselves on a
+  // short dwell via the status-lesson-watched signal.
+  function ensureTutorialDummyStatus(dt = 0) {
+    const state = Neo.tutorialState;
+    if (!isFirstRunTutorialActive() || state.completed?.status_lesson || state.completed?.fight) return;
+    if (state.step !== 'status_lesson') return;
+    const dummy = Neo.enemies?.find(enemy => enemy?.tutorialDummy && !enemy.dead);
+    if (!dummy) return;
+    dummy.bleedImmune = false;
+    // Refresh a light bleed whenever it runs low so it stays visible for the
+    // whole dwell. Keep the dummy topped up so a high-damage character's bleed
+    // scaling can't bleed it out mid-lesson and trip the kill -> fight path
+    // before the player has read the beat.
+    if (Neo.getStatusStacks(dummy, 'bleed') < 2) {
+      Neo.applyStatus?.(dummy, 'bleed', 2, 6, { tutorialDemo: true });
+      dummy.bleedFlash = 0.34;
+    }
+    if (dummy.hp < dummy.max * 0.5) dummy.hp = dummy.max;
+    state.statusWatchedFor = Number(state.statusWatchedFor || 0) + Number(dt || 0);
+    if (state.statusWatchedFor >= TUTORIAL_STATUS_WATCH_TIME) {
+      Neo.tutorialController?.signal?.('status-lesson-watched');
+    }
+  }
+
   function getTutorialStepOrder() {
     return Neo.tutorialController?.steps?.map(step => step.id)
       || ['welcome', 'move', 'hud', 'hud_pause', 'hud_settings', 'hud_settings_tab', 'hud_preview_open', 'hud_layout', 'objectives', 'minimap', 'secret_reveal_do', 'route_training', 'dash', 'melee', 'laser', 'smash', 'tools_fire', 'status_lesson', 'crit_lesson', 'fight', 'relic', 'inventory_open', 'inventory_relics', 'inventory_moves', 'inventory_weapons', 'moves_equip_explain', 'moves_equip_do', 'route_treasure', 'treasure_open', 'dwell_do', 'route_shop', 'shop_open', 'shop_buy', 'route_forge', 'forge_open', 'forge_stage', 'forge_confirm', 'route_challenge', 'challenge_start', 'challenge_bombs', 'route_ladder', 'ladder_use'];
@@ -721,6 +755,7 @@ export function resumeGame() {
     const state = Neo.tutorialState;
     ensureTutorialDummyEnemy();
     ensureTutorialRelicPickup();
+    ensureTutorialDummyStatus(dt);
 
     // Debounced movement detection: accumulate time spent above the speed
     // threshold; only mark "moved" once it's been sustained briefly.

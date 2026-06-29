@@ -1,16 +1,6 @@
 // panels.js — Input binding and UI panel rendering.
-function isEditableMouseTarget(event) {
-    const target = event?.target;
-    if (!target || typeof target.closest !== 'function') return false;
-    return !!target.closest('input[type="text"], input[type="search"], input[type="url"], input[type="email"], input[type="number"], textarea, [contenteditable="true"]');
-}
-
-function shouldSuppressNativeSecondaryClick(event) {
-    return !isEditableMouseTarget(event);
-}
-
 function preventNativeContextMenu(event) {
-    if (shouldSuppressNativeSecondaryClick(event)) event.preventDefault();
+    event.preventDefault();
 }
 
 if (!window.__neoNativeContextMenuBlocked) {
@@ -35,10 +25,10 @@ export function bindInput() {
       if (event.button === 1 || event.button === 2) event.preventDefault();
     });
     document.addEventListener('auxclick', event => {
-      if ((event.button === 1 || event.button === 2) && shouldSuppressNativeSecondaryClick(event)) event.preventDefault();
+      if (event.button === 1 || event.button === 2) event.preventDefault();
     }, true);
     document.addEventListener('mousedown', event => {
-      if (event.button === 2 && shouldSuppressNativeSecondaryClick(event)) event.preventDefault();
+      if (event.button === 2) event.preventDefault();
     }, true);
     Neo.canvas.addEventListener('mousemove', event => {
       syncMouseButtons(event);
@@ -56,6 +46,9 @@ export function bindInput() {
       if (event.button === 2) { Neo.mouse.right = true; Neo.mouse.rightQueued = true; }
     });
     window.addEventListener('mouseup', event => {
+      releaseMouseButton(event.button);
+    });
+    window.addEventListener('pointerup', event => {
       releaseMouseButton(event.button);
     });
     window.addEventListener('mousemove', syncMouseButtons, { passive: true });

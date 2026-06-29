@@ -4,12 +4,14 @@ const path = require('node:path');
 describe('right-click input latch safety', () => {
   const panelsSource = fs.readFileSync(path.join(__dirname, '../js/ui/panels.js'), 'utf8');
   const updateSource = fs.readFileSync(path.join(__dirname, '../js/core/update.js'), 'utf8');
+  const htmlSource = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8');
 
   test('clears mouse-held state when browser button state or focus is lost', () => {
     expect(panelsSource).toContain("if ((event.buttons & 2) === 0) Neo.mouse.right = false");
     expect(panelsSource).toContain('const clearMouseButtons = () => clearGameplayInput()');
     expect(panelsSource).toContain('Neo._laserWasHeld = false');
     expect(panelsSource).toContain("window.addEventListener('mousemove', syncMouseButtons");
+    expect(panelsSource).toContain("window.addEventListener('pointerup'");
     expect(panelsSource).toContain("window.addEventListener('pointercancel', clearMouseButtons)");
     expect(panelsSource).toContain("window.addEventListener('blur', clearMouseButtons)");
     expect(panelsSource).toContain("document.addEventListener('visibilitychange'");
@@ -22,11 +24,29 @@ describe('right-click input latch safety', () => {
     expect(panelsSource).toContain("document.addEventListener('contextmenu', preventNativeContextMenu, true)");
     expect(panelsSource).toContain("window.addEventListener('contextmenu', preventNativeContextMenu, true)");
     expect(panelsSource).toContain("document.addEventListener('auxclick'");
-    expect(panelsSource).toContain("target.closest('input[type=\"text\"], input[type=\"search\"], input[type=\"url\"], input[type=\"email\"], input[type=\"number\"], textarea, [contenteditable=\"true\"]')");
-    expect(panelsSource).toContain("function shouldSuppressNativeSecondaryClick(event)");
-    expect(panelsSource).toContain("if ((event.button === 1 || event.button === 2) && shouldSuppressNativeSecondaryClick(event)) event.preventDefault()");
-    expect(panelsSource).toContain("if (event.button === 2 && shouldSuppressNativeSecondaryClick(event)) event.preventDefault()");
+    expect(panelsSource).toContain('function preventNativeContextMenu(event)');
+    expect(panelsSource).toContain('event.preventDefault()');
+    expect(panelsSource).not.toContain('isEditableMouseTarget');
+    expect(panelsSource).not.toContain('shouldSuppressNativeSecondaryClick');
+    expect(panelsSource).toContain("if (event.button === 1 || event.button === 2) event.preventDefault()");
+    expect(panelsSource).toContain("if (event.button === 2) event.preventDefault()");
     expect(panelsSource).toContain("if (event.button === 2) { Neo.mouse.right = true; Neo.mouse.rightQueued = true; }");
+  });
+
+  test('installs global secondary-click suppression before game modules load', () => {
+    const guardIndex = htmlSource.indexOf("window.addEventListener('contextmenu', preventNativeContextMenu, capture)");
+    const moduleIndex = htmlSource.indexOf('<script type="module" src="js/main.js"></script>');
+
+    expect(guardIndex).toBeGreaterThan(-1);
+    expect(moduleIndex).toBeGreaterThan(guardIndex);
+    expect(htmlSource).toContain('<html lang="en" oncontextmenu="return false">');
+    expect(htmlSource).toContain("document.addEventListener('contextmenu', preventNativeContextMenu, capture)");
+    expect(htmlSource).toContain("window.addEventListener('mousedown', preventNativeSecondaryClick, capture)");
+    expect(htmlSource).toContain("window.addEventListener('auxclick', preventNativeSecondaryClick, capture)");
+    expect(htmlSource).toContain("window.addEventListener('selectstart', preventNativeContextMenu, capture)");
+    expect(htmlSource).toContain('document.oncontextmenu = preventNativeContextMenu');
+    expect(htmlSource).toContain('-webkit-touch-callout: none !important');
+    expect(htmlSource).toContain('user-select: none !important');
   });
 
   test('ends sustained beam recoil when the laser input is released', () => {

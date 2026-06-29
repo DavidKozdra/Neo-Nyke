@@ -175,7 +175,10 @@ export function applyStatus(entity, key, stacks, duration, source = null) {
   if (entity !== Neo.player) window.achievementEvents?.emit('status:applied', { key, entityId: entity.id });
   // Tutorial status lesson: advances on the first status the player lands on the
   // dummy. signal() no-ops outside the tutorial, so this is free in real runs.
-  if (entity !== Neo.player && addedStacks > 0) Neo.tutorialController?.signal?.('status-applied', { key });
+  // The tutorial's own pre-applied demo bleed (source.tutorialDemo) is excluded
+  // so it can keep the dummy visibly bleeding without insta-completing the step.
+  const isTutorialDemo = typeof source === 'object' && source?.tutorialDemo;
+  if (entity !== Neo.player && addedStacks > 0 && !isTutorialDemo) Neo.tutorialController?.signal?.('status-applied', { key });
 }
 
 export const walls = (() => {

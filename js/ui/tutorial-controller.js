@@ -376,14 +376,17 @@ function createSteps() {
     {
       id: 'status_lesson',
       chapter: 'COMBAT',
-      title: 'Stack a status effect',
-      text: () => 'Your ranged beam bleeds the dummy — damage that keeps ticking after you stop. Fire, poison, slow and more stack the same way. Land one on the dummy.',
-      command: () => 'APPLY A STATUS',
-      commandLabel: 'GOAL',
+      title: 'Read a status effect',
+      text: () => 'The dummy is bleeding — damage that keeps ticking on its own, even after you stop hitting it. Fire, poison, slow and more stack the same way. Watch the red numbers tick down.',
+      command: () => 'WATCH THE DUMMY BLEED',
+      commandLabel: 'LESSON',
       target: targetWorld(() => Neo.enemies?.find(enemy => enemy?.tutorialDummy), { padding: 24 }),
       roomKey: 'trainingRoomKey',
-      // Auto-clears on the first status the player applies; the fight is the
-      // fallback so it can never stall the dummy room.
+      // The tutorial keeps a bleed freely ticking on the dummy for this step
+      // (ensureTutorialDummyStatus), so the lesson is demonstrated for every
+      // character — not just the blood-beam roster, and never gated on an RNG
+      // proc. Clears on a short dwell (so the player actually watches it tick),
+      // on a status the player lands themselves, or the fight as a hard fallback.
       complete: state => !!state.completed?.status_lesson || !!state.completed?.fight,
     },
     {
@@ -719,6 +722,7 @@ function createTutorialState(active = false) {
     reviewIndex: null,
     completed: {},
     movedFor: 0,
+    statusWatchedFor: 0,
     dummySpawned: false,
     relicSpawned: false,
     resourcesGranted: false,
@@ -924,7 +928,10 @@ export function createTutorialController() {
     if (type === 'attack' && ['melee', 'laser', 'smash'].includes(payload.action)) setCompleted(payload.action);
     if (type === 'dash') setCompleted('dash');
     if (type === 'crit-dealt') setCompleted('crit_lesson');
-    if (type === 'status-applied') setCompleted('status_lesson');
+    // status-applied: the player landed a status themselves (kept as a fast path
+    // for the blood-beam roster). status-lesson-watched: the freely-given demo
+    // bleed has ticked long enough for the player to read it (every character).
+    if (type === 'status-applied' || type === 'status-lesson-watched') setCompleted('status_lesson');
     if (type === 'tool-fired' || type === 'tools-fired-all') setCompleted('tools_fire');
     if (type === 'enemy-killed' && payload.tutorialDummy) setCompleted('fight');
     if (type === 'relic-collected' && payload.tutorialRelic) setCompleted('relic');

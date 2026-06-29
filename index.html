@@ -1,9 +1,36 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" oncontextmenu="return false">
 <head>
   <meta charset="UTF-8">
   <title>NEO NYKE — Browser Dungeon Crawler</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+  <script>
+    // Install before the game modules load so secondary clicks can never open
+    // the browser menu and steal keyboard/mouse input from gameplay.
+    (() => {
+      const preventNativeContextMenu = event => {
+        event.preventDefault();
+        event.returnValue = false;
+        return false;
+      };
+      const preventNativeSecondaryClick = event => {
+        if (event.button !== 1 && event.button !== 2) return;
+        event.preventDefault();
+        event.returnValue = false;
+      };
+
+      const capture = { capture: true, passive: false };
+      window.addEventListener('contextmenu', preventNativeContextMenu, capture);
+      document.addEventListener('contextmenu', preventNativeContextMenu, capture);
+      document.documentElement.addEventListener('contextmenu', preventNativeContextMenu, capture);
+      window.addEventListener('mousedown', preventNativeSecondaryClick, capture);
+      window.addEventListener('auxclick', preventNativeSecondaryClick, capture);
+      window.addEventListener('selectstart', preventNativeContextMenu, capture);
+      window.oncontextmenu = preventNativeContextMenu;
+      document.oncontextmenu = preventNativeContextMenu;
+      window.__neoNativeContextMenuBlocked = true;
+    })();
+  </script>
 
   <!-- SEO -->
   <meta name="description" content="NEO NYKE is a free browser-based roguelite dungeon crawler. Fight through procedurally generated floors, unlock characters, and compete on the weekly leaderboard.">
@@ -41,6 +68,11 @@
   <meta name="apple-mobile-web-app-title" content="NEO NYKE">
   <meta name="mobile-web-app-capable" content="yes">
   <style>
+    html, body, body * {
+      -webkit-touch-callout: none !important;
+      -webkit-user-select: none !important;
+      user-select: none !important;
+    }
     html, body { margin: 0; background: #05050b; }
     .boot-loading {
       position: fixed;

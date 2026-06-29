@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'neonyke-v36';
+const CACHE_VERSION = 'neonyke-v38';
 const CACHE_META = 'neonyke-cache-meta';
 const CACHE_META_KEY = '/__neonyke_cache_meta__';
 const CACHE_REFRESH_INTERVAL_MS = 5 * 60 * 60 * 1000;
@@ -97,7 +97,10 @@ async function getAppCacheName({ rotateIfStale = false } = {}) {
   const now = Date.now();
   const meta = await readCacheMeta();
   const createdAt = Number(meta?.createdAt || 0);
-  const hasFreshCache = meta?.cacheName && (!rotateIfStale || now - createdAt < CACHE_REFRESH_INTERVAL_MS);
+  const hasCurrentVersion = meta?.version === CACHE_VERSION;
+  const hasFreshCache = hasCurrentVersion
+    && meta?.cacheName
+    && (!rotateIfStale || now - createdAt < CACHE_REFRESH_INTERVAL_MS);
   if (hasFreshCache) return meta.cacheName;
   const cacheName = makeCacheName(now);
   await writeCacheMeta({ cacheName, createdAt: now, version: CACHE_VERSION });
