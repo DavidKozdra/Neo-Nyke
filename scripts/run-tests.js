@@ -1,6 +1,7 @@
 const { spawnSync } = require('node:child_process');
 
 const DEFAULT_API_BASE = 'http://localhost:8787/api';
+const REQUEST_TIMEOUT_MS = 2000;
 
 
 
@@ -46,7 +47,10 @@ async function fetchJson(url) {
   if (typeof fetch !== 'function') {
     throw new Error('fetch is not available in this Node runtime');
   }
-  const response = await fetch(url, { headers: { Accept: 'application/json' } });
+  const response = await fetch(url, {
+    headers: { Accept: 'application/json' },
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  });
   if (!response.ok) {
     throw new Error(`HTTP ${response.status} from ${url}`);
   }
@@ -78,7 +82,8 @@ async function loadServerStats(apiBase) {
 }
 
 function runJest() {
-  const result = spawnSync('npm', ['exec', 'jest'], { stdio: 'inherit' });
+  const jestPath = require.resolve('jest/bin/jest');
+  const result = spawnSync(process.execPath, [jestPath], { stdio: 'inherit' });
   if (result.error) {
     throw result.error;
   }
