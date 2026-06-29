@@ -135,45 +135,86 @@ export function pushItemNotification(itemKey, amount = 1, note = '') {
   }, TOAST_HOLD_MS);
 }
 
-// Toast shown when a charge relic finishes charging (e.g. Keen Eye "Ready",
-// Crit Charm "Surge"). Reuses the pickup toast styling but swaps the "+N" amount
-// for a status badge and dismisses quicker. `note` overrides the description
-// (used for the Charged Adapter's "Press X" hint).
-export function pushReadyNotification(itemKey, { label = 'Ready', note = '' } = {}) {
-  const item = resolveItemIconDef(itemKey);
-  if (!item) return;
-  const stack = ensureItemNotifyStack();
+// Status toasts (relic "Ready" cues, "Copied!" bonuses) are transient status
+// updates — deliberately NOT the same widget as new-item pickups. They live in
+// their own bottom-center stack with a compact pill style so the player never
+// mistakes "Keen Eye Ready" for picking up a brand-new item.
+export function ensureStatusToastStack() {
+  let stack = document.getElementById('statusToastStack');
+  if (stack) return stack;
+  stack = document.createElement('div');
+  stack.id = 'statusToastStack';
+  (document.getElementById('wrap') || document.body).appendChild(stack);
+  return stack;
+}
+
+// Low-level builder. `text` is the main message; `label` is an optional uppercase
+// tag (e.g. "Ready", "Surge"); `accent`/`iconCanvas` are optional. `holdMs`
+// controls how long it lingers before animating out.
+export function pushStatusToast({ text, label = '', accent = '#9ec6ff', iconCanvas = null, holdMs = READY_TOAST_HOLD_MS } = {}) {
+  if (!text && !label) return;
+  const stack = ensureStatusToastStack();
   const toast = document.createElement('div');
-  toast.className = 'item-toast';
-  toast.style.borderColor = item.color || '#9ec6ff';
-  const icon = document.createElement('canvas');
-  icon.className = 'item-toast-icon';
-  icon.width = 40;
-  icon.height = 40;
-  drawItemToastIcon(icon, item);
-  const body = document.createElement('div');
-  body.className = 'item-toast-body';
-  const title = document.createElement('div');
-  title.className = 'item-toast-title';
-  const name = document.createElement('span');
-  name.textContent = item.name;
-  name.style.color = getRarityNameColor(item.rarity || item.category);
-  const badge = document.createElement('span');
-  badge.className = 'item-toast-amount';
-  badge.textContent = label;
-  const desc = document.createElement('div');
-  desc.className = 'item-toast-desc';
-  desc.style.color = '#ffffff';
-  desc.textContent = note || item.description;
-  title.append(name, badge);
-  body.append(title, desc);
-  toast.append(icon, body);
+  toast.className = 'status-toast';
+  toast.style.setProperty('--status-toast-accent', accent);
+  if (iconCanvas) {
+    iconCanvas.classList.add('status-toast-icon');
+    toast.append(iconCanvas);
+  }
+  if (label) {
+    const labelEl = document.createElement('span');
+    labelEl.className = 'status-toast-label';
+    labelEl.textContent = label;
+    toast.append(labelEl);
+  }
+  if (text) {
+    const textEl = document.createElement('span');
+    textEl.className = 'status-toast-text';
+    textEl.textContent = text;
+    toast.append(textEl);
+  }
   stack.prepend(toast);
   while (stack.children.length > 4) stack.removeChild(stack.lastElementChild);
   setTimeout(() => {
     toast.classList.add('is-leaving');
     setTimeout(() => toast.remove(), TOAST_LEAVE_MS);
-  }, READY_TOAST_HOLD_MS);
+  }, holdMs);
+}
+
+// Shown when a charge relic finishes charging (e.g. Keen Eye "Ready", Crit Charm
+// "Surge"). `note` overrides the default text (used for the Charged Adapter's
+// "Press X" hint).
+export function pushReadyNotification(itemKey, { label = 'Ready', note = '' } = {}) {
+  const item = resolveItemIconDef(itemKey);
+  if (!item) return;
+  const icon = document.createElement('canvas');
+  icon.width = 40;
+  icon.height = 40;
+  drawItemToastIcon(icon, item);
+  pushStatusToast({
+    label,
+    text: note || item.name,
+    accent: item.color || '#9ec6ff',
+    iconCanvas: icon,
+  });
+}
+
+// Shown alongside a normal item-pickup card when a duplicate-chance roll grants a
+// bonus copy. Kept separate from the pickup card so the bonus never reads as the
+// item's own description.
+export function pushCopiedNotification(itemKey) {
+  const item = resolveItemIconDef(itemKey);
+  if (!item) return;
+  const icon = document.createElement('canvas');
+  icon.width = 40;
+  icon.height = 40;
+  drawItemToastIcon(icon, item);
+  pushStatusToast({
+    label: 'Copied',
+    text: `Bonus ${item.name}`,
+    accent: item.color || '#ffd27d',
+    iconCanvas: icon,
+  });
 }
 
 export const ITEM_CINEMATIC_FLAVOR = {
@@ -568,7 +609,10 @@ Neo.resolveItemIconDef = resolveItemIconDef;
 Neo.drawItemIconByKey = drawItemIconByKey;
 Neo.drawItemIconCanvases = drawItemIconCanvases;
 Neo.pushItemNotification = pushItemNotification;
+Neo.ensureStatusToastStack = ensureStatusToastStack;
+Neo.pushStatusToast = pushStatusToast;
 Neo.pushReadyNotification = pushReadyNotification;
+Neo.pushCopiedNotification = pushCopiedNotification;
 Neo.showItemCinematic = showItemCinematic;
 Neo.drawMoveToastIcon = drawMoveToastIcon;
 Neo.drawWeaponToastIcon = drawWeaponToastIcon;

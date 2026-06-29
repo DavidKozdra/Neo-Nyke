@@ -389,6 +389,7 @@ export function resumeGame() {
       Number(Neo.player.items[Neo.FORGE_VOUCHER_KEY || 'forge_voucher'] || 0),
     );
     grantTutorialTeachingMoves();
+    grantTutorialTeachingTool();
     Neo.tutorialState.resourcesGranted = true;
   }
 
@@ -422,6 +423,21 @@ export function resumeGame() {
       const spare = Object.keys(Neo.MOVE_DEFS).find(key => allowed(key) && !equipped.has(key));
       if (spare) player.ownedMoves[spare] = true;
     }
+  }
+
+  // Make sure the tools lesson always has something to fire. A few characters
+  // already start with a tool (Metao's bag, Gelleh's zap) — any owned tool will
+  // do — so only grant the teaching tool when the player owns none. Pew Pew Box
+  // is a plain timed tool: pressing Space (or tapping its slot) visibly launches
+  // homing missiles, which reads clearly as "tools fire on demand".
+  function grantTutorialTeachingTool() {
+    const player = Neo.player;
+    if (!player || !Neo.isActivatableItem) return;
+    if (!player.items || typeof player.items !== 'object') player.items = {};
+    const ownsTool = Object.keys(player.items).some(key => player.items[key] > 0 && Neo.isActivatableItem(key));
+    if (!ownsTool) player.items.pew_pew_box = 1;
+    // Slot whatever tool is owned so the equipment bar shows it for the lesson.
+    Neo.syncEquipmentSlotsFromInventory?.();
   }
 
   // Strict gate for the game-loop side of the tutorial (spawning the dummy/relic,
@@ -638,7 +654,7 @@ export function resumeGame() {
 
   function getTutorialStepOrder() {
     return Neo.tutorialController?.steps?.map(step => step.id)
-      || ['welcome', 'move', 'hud', 'hud_pause', 'hud_settings', 'hud_settings_tab', 'hud_preview_open', 'hud_layout', 'objectives', 'minimap', 'secret_reveal_do', 'route_training', 'dash', 'melee', 'laser', 'smash', 'status_lesson', 'crit_lesson', 'fight', 'relic', 'inventory_open', 'inventory_relics', 'inventory_moves', 'inventory_weapons', 'moves_equip_explain', 'moves_equip_do', 'route_treasure', 'treasure_open', 'dwell_do', 'route_shop', 'shop_open', 'shop_buy', 'route_forge', 'forge_open', 'forge_stage', 'forge_confirm', 'route_challenge', 'challenge_start', 'challenge_bombs', 'route_ladder', 'ladder_use'];
+      || ['welcome', 'move', 'hud', 'hud_pause', 'hud_settings', 'hud_settings_tab', 'hud_preview_open', 'hud_layout', 'objectives', 'minimap', 'secret_reveal_do', 'route_training', 'dash', 'melee', 'laser', 'smash', 'tools_fire', 'status_lesson', 'crit_lesson', 'fight', 'relic', 'inventory_open', 'inventory_relics', 'inventory_moves', 'inventory_weapons', 'moves_equip_explain', 'moves_equip_do', 'route_treasure', 'treasure_open', 'dwell_do', 'route_shop', 'shop_open', 'shop_buy', 'route_forge', 'forge_open', 'forge_stage', 'forge_confirm', 'route_challenge', 'challenge_start', 'challenge_bombs', 'route_ladder', 'ladder_use'];
   }
 
   function navigateTutorialStep(direction = 1) {

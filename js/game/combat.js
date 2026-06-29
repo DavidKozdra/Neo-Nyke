@@ -4779,7 +4779,11 @@
     Neo.addToEquipmentSlots?.(itemKey);
     Neo.markInventoryPanelDirty();
     if ((Neo.VOUCHER_KEYS || []).includes(itemKey)) Neo.refreshShopVoucherBanner?.();
-    Neo.pushItemNotification(itemKey, collectCount, duplicatePickup ? 'Copied!' : '');
+    Neo.pushItemNotification(itemKey, collectCount);
+    // The bonus copy from a duplicate roll gets its own compact status toast,
+    // so the pickup card above stays a clean "new item" card rather than
+    // conflating "Copied!" into the item's description.
+    if (duplicatePickup) Neo.pushCopiedNotification(itemKey);
     const totalItems = Object.values(Neo.player.items).reduce((s, v) => s + Number(v || 0), 0);
     window.achievementEvents?.emit('item:collected', { totalItems });
 

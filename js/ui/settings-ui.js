@@ -66,6 +66,10 @@
     // The new-item pickup toast stack (#itemNotifyStack). DOM widget with its own
     // scale/offset/visibility, independent of the coin display it sits beneath.
     { key: 'itemnotify', label: 'Item Pickups',     cssVar: '--hud-scale-itemnotify', xVar: '--hud-x-itemnotify', yVar: '--hud-y-itemnotify', hideClass: 'hud-hide-itemnotify', defaultScale: 2, touchDefaultScale: 1.25 },
+    // The status-toast stack (#statusToastStack) — relic "Ready" cues and "Copied"
+    // bonuses. Bottom-center DOM widget, separate from item pickups so it reads as
+    // a status update, not a new-item card. Default 1.2 (20% above its base size).
+    { key: 'statustoast', label: 'Status Cues',     cssVar: '--hud-scale-statustoast', xVar: '--hud-x-statustoast', yVar: '--hud-y-statustoast', hideClass: 'hud-hide-statustoast', defaultScale: 1.2, touchDefaultScale: 1.2 },
     // The minimap is drawn on the canvas, not a DOM widget, so it has no CSS vars.
     // drawMinimap() reads its scale/visibility/offsets from getHudElements().
     { key: 'minimap',    label: 'Minimap',          cssVar: null, xVar: null, yVar: null, hideClass: null, canvas: true },
@@ -1036,6 +1040,11 @@
     } else if (key === 'actions') {
       box.style.bottom = `${18 * ratio.y}px`;
       box.style.left = '50%';
+    } else if (key === 'statustoast') {
+      // Mirror the live HUD: bottom-center, above the action bar (#statusToastStack
+      // sits at bottom:120px in style.css).
+      box.style.bottom = `${120 * ratio.y}px`;
+      box.style.left = '50%';
     } else if (key === 'equipment') {
       box.style.top = '50%';
       box.style.right = '0px';
@@ -1085,6 +1094,7 @@
       const base = box.classList.contains('hud-preview-box--center')
         || box.classList.contains('hud-preview-box--actions')
         || box.classList.contains('hud-preview-box--bossbar')
+        || box.classList.contains('hud-preview-box--statustoast')
         ? 'translateX(-50%) '
         : box.classList.contains('hud-preview-box--equipment')
           ? 'translateY(-50%) '
@@ -1473,6 +1483,18 @@
         color: '#f4f6fb',
       };
       Neo.drawItemToastIcon(itemNotifyIcon, previewItem);
+    }
+
+    // Status-cue preview icon — use the keen_eye relic so it reads as a "Ready" cue.
+    const statusToastIcon = frame.querySelector('[data-preview-status-toast-icon]');
+    if (statusToastIcon && typeof Neo.drawItemToastIcon === 'function') {
+      const previewRelic = Neo.ITEM_DEFS?.keen_eye || {
+        key: 'keen_eye',
+        name: 'Keen Eye',
+        rarity: 'wizard',
+        color: '#9ec6ff',
+      };
+      Neo.drawItemToastIcon(statusToastIcon, previewRelic);
     }
 
     // Tool slots — show the live run's equipped tools when present, else placeholders.

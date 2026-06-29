@@ -280,6 +280,10 @@ button, input, select, textarea {
   display: none !important;
 }
 
+.hud-hide-statustoast #statusToastStack {
+  display: none !important;
+}
+
 /* Coin Display Top Left */
 .coin-display {
   position: fixed;
@@ -410,6 +414,68 @@ button, input, select, textarea {
   font-size: calc(11px * var(--font-scale, 1));
   line-height: 1.25;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Status toasts ("Keen Eye Ready", "Copied!") are transient cues, NOT new-item
+   pickups. They live in their own bottom-center stack with a compact pill look
+   so they never read as a fresh item-pickup card (top-left). */
+#statusToastStack {
+  position: fixed;
+  left: 50%;
+  bottom: calc(120px + var(--hud-y-statustoast, 0px));
+  transform: translateX(calc(-50% + var(--hud-x-statustoast, 0px))) scale(var(--hud-scale-statustoast, 1.2));
+  transform-origin: bottom center;
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: center;
+  gap: 6px;
+  z-index: 27;
+  pointer-events: none;
+}
+
+.status-toast {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(360px, calc(100vw - 32px));
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.22);
+  border-left: 3px solid var(--status-toast-accent, #9ec6ff);
+  background: rgba(12, 18, 28, .82);
+  backdrop-filter: blur(2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,.45);
+  font-size: calc(11px * var(--font-scale, 1));
+  font-weight: 700;
+  letter-spacing: .04em;
+  white-space: nowrap;
+  transform: translateY(0);
+  opacity: 1;
+  transition: opacity .2s ease, transform .2s ease;
+}
+
+.status-toast.is-leaving {
+  opacity: 0;
+  transform: translateY(6px);
+}
+
+.status-toast-icon {
+  width: 20px !important;
+  height: 20px !important;
+  border-radius: 4px;
+  flex-shrink: 0;
+  image-rendering: pixelated;
+}
+
+.status-toast-label {
+  color: var(--status-toast-accent, #9ec6ff);
+  text-transform: uppercase;
+}
+
+.status-toast-text {
+  color: #e8f0ff;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -12092,6 +12158,7 @@ button.alt.danger {
 .hud-preview-box--objectives { top: 18%; right: 25%; transform-origin: top right; }
 .hud-preview-box--stats      { bottom: 4%; left: 3%; transform-origin: bottom left; }
 .hud-preview-box--actions    { bottom: 4%; left: 50%; transform: translateX(-50%); transform-origin: bottom center; }
+.hud-preview-box--statustoast { bottom: 17%; left: 50%; transform: translateX(-50%); transform-origin: bottom center; }
 .hud-preview-box--equipment  { top: 50%; right: 1%; transform: translateY(-50%); transform-origin: center right; }
 /* Minimap is canvas-drawn; the preview shows a labeled schematic that uses the
    same saved visibility, scale, and X/Y offsets as drawMinimap(). */

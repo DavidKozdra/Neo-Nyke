@@ -2,7 +2,7 @@
 
 import { TUTORIAL_LESSON_SCENE, TUTORIAL_SCENES } from '../tutorial/scenes.js';
 
-export const TUTORIAL_VERSION = 3;
+export const TUTORIAL_VERSION = 4;
 
 const BUTTON_NAMES = {
   0: 'A', 1: 'B', 2: 'X', 3: 'Y',
@@ -111,6 +111,13 @@ function getMovementLabel() {
   if (getInputMode() === 'touch') return 'LEFT JOYSTICK';
   if (getInputMode() === 'gamepad') return 'LEFT STICK';
   return Neo.getMovementControlHint?.() || 'W/A/S/D';
+}
+
+// Touch has no fire-all key — players tap a tool slot to activate it — so point
+// them at the slots there. Keyboard/gamepad get the real "fire all" binding.
+function getActivateAllLabel() {
+  if (getInputMode() === 'touch') return 'TAP A TOOL SLOT';
+  return getActionLabel('activateAll', 'SPACE');
 }
 
 function getLadderLabel() {
@@ -352,6 +359,19 @@ function createSteps() {
       target: targetDom('[data-skill="smash"]', 8),
       roomKey: 'trainingRoomKey',
       complete: state => !!state.completed?.smash,
+    },
+    {
+      id: 'tools_fire',
+      chapter: 'COMBAT',
+      title: 'Fire your tools',
+      text: () => `Tools are activatable gear that sit in the tool bar below your moves. Each has its own key, and ${getActionLabel('activateAll', 'SPACE')} fires every equipped tool at once. Activate them on the dummy.`,
+      command: () => getActivateAllLabel(),
+      target: targetDom('#equipmentSlots', 8),
+      roomKey: 'trainingRoomKey',
+      // Clears whether they hit Space (fire all) or tap/press a single slot, so
+      // touch players with no Space key can still complete it. Fight is the
+      // fallback so a tool that downs the dummy first can never stall the step.
+      complete: state => !!state.completed?.tools_fire || !!state.completed?.fight,
     },
     {
       id: 'status_lesson',
@@ -905,6 +925,7 @@ export function createTutorialController() {
     if (type === 'dash') setCompleted('dash');
     if (type === 'crit-dealt') setCompleted('crit_lesson');
     if (type === 'status-applied') setCompleted('status_lesson');
+    if (type === 'tool-fired' || type === 'tools-fired-all') setCompleted('tools_fire');
     if (type === 'enemy-killed' && payload.tutorialDummy) setCompleted('fight');
     if (type === 'relic-collected' && payload.tutorialRelic) setCompleted('relic');
     if (type === 'hud-layout-edit') setCompleted('hud_layout');
