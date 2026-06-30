@@ -601,8 +601,12 @@
       const isShop = Neo.currentRoom?.type === 'shop' && !Neo.isPanelOpen(Neo.ui.shopPanel);
       const isAnvil = Neo.currentRoom?.type === 'anvil' && !Neo.isPanelOpen(Neo.ui.anvilPanel);
       const isSpecial = Neo.isSpecialRoom?.() && !Neo.isPanelOpen(document.getElementById('specialRoomPanel'));
-      const isLadder = !isShop && !isAnvil && !isSpecial && !!Neo.isAtLadder?.();
-      if (isShop) {
+      const bountyAction = Neo.getBountyTargetInteractLabel?.() || '';
+      const isLadder = !bountyAction && !isShop && !isAnvil && !isSpecial && !!Neo.isAtLadder?.();
+      if (bountyAction) {
+        Neo.ui.interactPrompt.textContent = `[${shopHint}]${touchHint}  ${bountyAction}`;
+        Neo.ui.interactPrompt.classList.remove('hidden', 'interact-prompt--forge');
+      } else if (isShop) {
         Neo.ui.interactPrompt.textContent = `[${shopHint}]${touchHint}  Open Shop`;
         Neo.ui.interactPrompt.classList.remove('hidden', 'interact-prompt--forge');
       } else if (isAnvil) {

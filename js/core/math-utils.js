@@ -780,6 +780,11 @@ export function getBeamEnd(x, y, angle, range) {
 
 function triggerInteract() {
   if (Neo.gameState !== 'play') return;
+  if (Neo.tryBountyTargetInteract?.()) {
+    Neo.specialRoomKeyLatch = true;
+    setTimeout(() => { Neo.specialRoomKeyLatch = false; }, 200);
+    return;
+  }
   const inSpecialRoom = Neo.isSpecialRoom?.();
   const inShopRoom = Neo.currentRoom?.type === 'shop';
   const inAnvilRoom = Neo.currentRoom?.type === 'anvil';

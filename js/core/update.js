@@ -542,6 +542,13 @@ export function loop(timestamp) {
       if (enemy.dead) continue;
       enemy.attackAnimT = Math.max(0, Number(enemy.attackAnimT || 0) - dt);
 
+      const bountyTargetControlled = Neo.updateBountyTarget?.(enemy, dt) || false;
+      if (enemy.dead) continue;
+      if (bountyTargetControlled) {
+        Neo.moveCircle(enemy, dt);
+        continue;
+      }
+
       const enemyLostSight = updateEnemyLostSightState(
         enemy,
         isEnemyBlindedByHiddenPlayer(enemy, playerHidden),

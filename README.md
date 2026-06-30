@@ -33,7 +33,7 @@ Controls are fully remappable in Settings.
 - **Anvil** — spend XP to upgrade weapons and moves
 - **Challenge** — optional modifiers (No Hit, No Items, etc.)
 - **God Altar** — sacrifice health, relics, or safety for run power
-- **Bounty Board** — accept a pictured elite target that joins the next combat for a reward
+- **Bounty Board / Hunts** — track named elite targets through Execution, Capture, or Theft contracts; escaped quarry returns stronger and drops trophies
 - **Reliquary** — fuse, distill, or duplicate owned relics
 - **Sanctuary** — restore health, supplies, charges, or cleanse curses
 - **Oracle** — reveal or rewrite part of the current floor

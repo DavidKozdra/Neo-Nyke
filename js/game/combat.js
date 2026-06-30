@@ -117,6 +117,8 @@
     const defenseMultiplier = Math.max(1, Number(enemy?.defenseMultiplier || 1));
     const damageTakenMultiplier = getEnemyDamageTakenMultiplier(enemy);
     const characterMultiplier = Neo.getCharacterDef().damageMultiplier || 1;
+    const bountyWeaknessActive = !!enemy?.bountyWeakness && Neo.getStatusStacks?.(enemy, enemy.bountyWeakness) > 0;
+    const bountyWeaknessMultiplier = bountyWeaknessActive ? 1.35 : 1;
     // Pendant of Kronos: flat +1%/god-item damage everywhere, plus +2%/stack
     // against bosses (boss types, miniBosses, and the god enemy).
     const isBoss = Neo.isBossType?.(enemy?.type) || enemy?.type === 'god' || !!enemy?.miniBoss;
@@ -126,6 +128,7 @@
       * characterMultiplier
       * (stats.levelEdgeDamageMultiplier || 1)
       * kronosMultiplier
+      * bountyWeaknessMultiplier
       * (Neo.isChallengeActive('glass_cannon') ? 1.25 : 1);
     const flatReduction = Math.max(0, Number(enemy?.flatDamageReduction || 0));
     if (applyBleedBonus && Neo.getStatusStacks(enemy, 'bleed') > 0 && stats.bleedDamageMultiplier > 1) {
@@ -2035,6 +2038,10 @@
     Neo.enemies.splice(enemyIndex, 1);
     if (!Array.isArray(nextRoom.enemies)) nextRoom.enemies = [];
     nextRoom.enemies.push(enemy);
+    if (enemy.bountyTargetId && Neo.player?.activeBounty?.targetId === enemy.bountyTargetId) {
+      Neo.player.activeBounty.targetRoomKey = `${nextRoom.gx},${nextRoom.gy}`;
+      Neo.minimapLegendDirty = true;
+    }
     Neo.spawnParticle({
       x: Neo.player.x + Math.cos(angle) * 54,
       y: Neo.player.y + Math.sin(angle) * 54 - 18,
@@ -3892,6 +3899,7 @@
       Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 12, life: 0.6, text: 'CHARGING', c: '#ff6ad5' });
       return;
     }
+    if (!options.forceDeath && Neo.handleBountyTargetLethal?.(enemy)) return;
     if (enemy.dead) return;
     enemy.dead = true;
 

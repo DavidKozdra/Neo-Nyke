@@ -80,6 +80,58 @@ const result = await page.evaluate(() => {
   if (target) Neo.notifyBountyEnemyKilled(target);
   const completed = !Neo.player.activeBounty && String(Neo.player.lastBountyStatus || '').startsWith('COMPLETE:');
 
+  const startContractFight = (kind, enemyType, contractType, targetId) => {
+    Neo.player.activeBounty = {
+      kind, enemyType, contractType, targetId, targetName: `Test ${enemyType}`, epithet: 'the Marked', weakness: 'bleed',
+      targetSpawned: false, targetRoomKey: '', acceptedDepth: 2, returnDepth: 0, escapes: 0, rewardMultiplier: 1, rivalPressure: 0,
+    };
+    Neo.floorsEntered = 2;
+    const room = Neo.createRoomRecord({ x: 2, y: 0 }, { type: 'combat', cleared: false, explored: true, visited: true });
+    Object.assign(room, { enemies: [], deadBodies: [], projectiles: [], chests: [], pickups: [], destructibles: [], hazards: [], structures: [], decorations: [] });
+    Neo.rooms = [room];
+    Neo.currentRoom = room;
+    Neo.enemies = room.enemies;
+    Neo.deadBodies = room.deadBodies;
+    Neo.projectiles = room.projectiles;
+    Neo.chests = room.chests;
+    Neo.pickups = room.pickups;
+    Neo.destructibles = room.destructibles;
+    Neo.hazards = room.hazards;
+    Neo.structures = room.structures;
+    Neo.decorations = room.decorations;
+    Neo.updateSpecialRoomProgress();
+    return Neo.enemies.find(enemy => enemy.bountyTargetId === targetId);
+  };
+
+  const captureTarget = startContractFight('elite_charger', 'charger', 'capture', 'bounty:capture');
+  if (captureTarget) {
+    captureTarget.hp = 0;
+    Neo.handleBountyTargetLethal(captureTarget);
+    Neo.player.x = captureTarget.x;
+    Neo.player.y = captureTarget.y;
+  }
+  const captured = !!captureTarget?.bountyCaptureReady && Neo.tryBountyTargetInteract() && !Neo.player.activeBounty;
+
+  const theftTarget = startContractFight('elite_sniper', 'sniper', 'theft', 'bounty:theft');
+  if (theftTarget) {
+    theftTarget.hp = theftTarget.max * 0.4;
+    Neo.updateBountyTarget(theftTarget, 0.01);
+    Neo.player.x = theftTarget.x;
+    Neo.player.y = theftTarget.y;
+  }
+  const stolen = !!theftTarget?.bountyTheftReady && Neo.tryBountyTargetInteract() && !Neo.player.activeBounty;
+
+  const escapeTarget = startContractFight('elite_hunter', 'hunter', 'execution', 'bounty:escape');
+  if (escapeTarget) {
+    escapeTarget.hp = escapeTarget.max * 0.1;
+    Neo.updateBountyTarget(escapeTarget, 6);
+  }
+  const escapedAndEscalated = !!Neo.player.activeBounty
+    && Neo.player.activeBounty.escapes === 1
+    && Neo.player.activeBounty.returnDepth === 3
+    && Neo.player.activeBounty.rewardMultiplier === 1.5
+    && !Neo.enemies.some(enemy => enemy.bountyTargetId === 'bounty:escape');
+
   Neo.player.activeBounty = {
     kind: 'elite_sniper', enemyType: 'sniper', targetId: 'bounty:failure', targetSpawned: false, targetRoomKey: '', acceptedDepth: 2,
   };
@@ -102,7 +154,7 @@ const result = await page.evaluate(() => {
     Neo.generateFloor();
     generated.push(Neo.rooms.find(room => Neo.SPECIAL_ROOM_TYPES.has(room.type))?.type || '');
   }
-  return { rendered, generated, bountyFlow: { acceptedWithoutSpawn, spawnedElite, completed, failedWithToast } };
+  return { rendered, generated, bountyFlow: { acceptedWithoutSpawn, spawnedElite, completed, captured, stolen, escapedAndEscalated, failedWithToast } };
 });
 
 await browser.close();

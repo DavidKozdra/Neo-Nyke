@@ -7,6 +7,7 @@ const roomsSource = fs.readFileSync(path.join(root, 'js/game/rooms.js'), 'utf8')
 const worldSource = fs.readFileSync(path.join(root, 'js/game/world.js'), 'utf8');
 const combatSource = fs.readFileSync(path.join(root, 'js/game/combat.js'), 'utf8');
 const hudSource = fs.readFileSync(path.join(root, 'js/draw/hud.js'), 'utf8');
+const entitySource = fs.readFileSync(path.join(root, 'js/draw/entities.js'), 'utf8');
 const htmlSource = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 
 describe('special service rooms', () => {
@@ -70,6 +71,43 @@ describe('special service rooms', () => {
     expect(specialSource).toContain("label: 'Bounty Failed'");
     expect(specialSource).toContain('createBountyToastIcon(def.enemyType, accent)');
     expect(specialSource).toContain('Neo.pushStatusToast?.({');
+  });
+
+  test('hunts have seeded identities, weaknesses, and distinct resolution contracts', () => {
+    expect(specialSource).toContain('BOUNTY_NAMES');
+    expect(specialSource).toContain('BOUNTY_EPITHETS');
+    expect(specialSource).toContain('BOUNTY_WEAKNESSES');
+    expect(specialSource).toContain("contractType: 'execution'");
+    expect(specialSource).toContain("contractType: 'capture'");
+    expect(specialSource).toContain("contractType: 'theft'");
+    expect(combatSource).toContain('bountyWeaknessMultiplier');
+  });
+
+  test('low-health targets escape, escalate, and return on the next floor', () => {
+    expect(specialSource).toContain('function escapeBountyTarget(enemy)');
+    expect(specialSource).toContain('bounty.returnDepth = depth + 1');
+    expect(specialSource).toContain('bounty.rewardMultiplier = 1 + bounty.escapes * 0.5');
+    expect(specialSource).toContain("label: 'Target Escaped'");
+  });
+
+  test('capture and theft resolve through proximity interaction rather than target death', () => {
+    expect(specialSource).toContain('export function handleBountyTargetLethal(enemy)');
+    expect(specialSource).toContain('export function tryBountyTargetInteract()');
+    expect(specialSource).toContain("completeBounty(bounty, 'TARGET CAPTURED')");
+    expect(specialSource).toContain("completeBounty(bounty, 'RELIC STOLEN')");
+  });
+
+  test('active targets receive a health bar, world name, and minimap hunt marker', () => {
+    expect(hudSource).toContain('enemy?.bountyTarget');
+    expect(hudSource).toContain("addLegendEntry('bounty-target', 'HUNT'");
+    expect(hudSource).toContain("Neo.ctx.strokeStyle = '#ff9d66'");
+    expect(entitySource).toContain("enemy.bountyName || 'Marked Target'");
+  });
+
+  test('completed hunts award trophies that unlock a Reliquary recipe', () => {
+    expect(specialSource).toContain('Neo.player.bountyTrophies');
+    expect(specialSource).toContain("'Temper Hunt Trophy'");
+    expect(specialSource).toContain("'1 TROPHY'");
   });
 
   test('every service receives a minimap definition and glyph path', () => {

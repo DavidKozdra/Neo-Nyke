@@ -108,22 +108,24 @@ export function bindInput() {
         return;
       }
       if (key === interactKey && Neo.gameState === 'play') {
+        const bountyTargetHandled = Neo.tryBountyTargetInteract?.() || false;
+        if (bountyTargetHandled) Neo.specialRoomKeyLatch = true;
         const inSpecialRoom = Neo.isSpecialRoom?.();
-        if (inSpecialRoom && !Neo.specialRoomKeyLatch) {
+        if (!bountyTargetHandled && inSpecialRoom && !Neo.specialRoomKeyLatch) {
           Neo.toggleSpecialRoomPanel?.();
           Neo.specialRoomKeyLatch = true;
         }
         const inShopRoom = Neo.currentRoom?.type === 'shop';
-        if (inShopRoom && !Neo.shopKeyLatch) {
+        if (!bountyTargetHandled && inShopRoom && !Neo.shopKeyLatch) {
           toggleShopPanel();
           Neo.shopKeyLatch = true;
         }
         const inAnvilRoom = Neo.currentRoom?.type === 'anvil';
-        if (inAnvilRoom && !Neo.anvilKeyLatch) {
+        if (!bountyTargetHandled && inAnvilRoom && !Neo.anvilKeyLatch) {
           toggleAnvilPanel();
           Neo.anvilKeyLatch = true;
         }
-        if (Neo.isAtLadder?.() && !Neo.ladderUseKeyLatch) {
+        if (!bountyTargetHandled && Neo.isAtLadder?.() && !Neo.ladderUseKeyLatch) {
           Neo.ladderUseKeyLatch = true;
           Neo.useLadder?.();
         }

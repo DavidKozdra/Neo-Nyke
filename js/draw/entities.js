@@ -926,6 +926,27 @@
         Neo.ctx.fill();
         Neo.ctx.restore();
       }
+      if (enemy.bountyTarget) {
+        const markY = drawY - enemy.r - 30;
+        const pulse = 1 + Math.sin(Number(Neo.gameElapsedTime || 0) * 6) * 0.12;
+        Neo.ctx.save();
+        Neo.ctx.translate(enemy.x, markY);
+        Neo.ctx.scale(pulse, pulse);
+        Neo.ctx.strokeStyle = '#ff9d66';
+        Neo.ctx.shadowColor = '#ff9d66';
+        Neo.ctx.shadowBlur = 10;
+        Neo.ctx.lineWidth = 2;
+        Neo.ctx.beginPath();
+        Neo.ctx.arc(0, 0, 9, 0, Math.PI * 2);
+        Neo.ctx.stroke();
+        Neo.ctx.beginPath();
+        Neo.ctx.moveTo(-13, 0); Neo.ctx.lineTo(-6, 0);
+        Neo.ctx.moveTo(13, 0); Neo.ctx.lineTo(6, 0);
+        Neo.ctx.moveTo(0, -13); Neo.ctx.lineTo(0, -6);
+        Neo.ctx.moveTo(0, 13); Neo.ctx.lineTo(0, 6);
+        Neo.ctx.stroke();
+        Neo.ctx.restore();
+      }
       Neo.ctx.save();
       Neo.ctx.translate(enemy.x, drawY);
       const hpPct = Neo.clamp(enemy.hp / enemy.max, 0, 1);
@@ -933,6 +954,8 @@
       // Name tag + level
       const _enemyLabel = (enemy.type === 'rival' && enemy.rivalData)
         ? enemy.rivalData.name
+        : enemy.bountyTarget
+          ? `${enemy.bountyName || 'Marked Target'} ${enemy.bountyEpithet || ''}`
         : Neo.getEliteEnemyLabel(enemy);
       // Enemy level = total floors entered this run (climbs across loops), not the
       // per-loop `floor` which resets each loop. Matches enemy scaling.
@@ -954,7 +977,7 @@
       }
       Neo.ctx.shadowColor = '#000';
       Neo.ctx.shadowBlur = 4;
-      Neo.ctx.fillStyle = enemy.elite ? '#f6cf6a' : Neo.isBossType(enemy.type) ? '#f2e8d7'
+      Neo.ctx.fillStyle = enemy.bountyTarget ? '#ffb070' : enemy.elite ? '#f6cf6a' : Neo.isBossType(enemy.type) ? '#f2e8d7'
         : (enemy.type === 'rival' && enemy.rivalData) ? enemy.rivalData.color : '#b8cfe0';
       Neo.ctx.fillText(_nameText, 0, _nameY);
 

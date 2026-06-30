@@ -265,6 +265,7 @@ export function migratePlayerData(source) {
     playerData.roomDamageTaken = Number(playerData.roomDamageTaken || 0);
     playerData.rivalReputation = Number(playerData.rivalReputation || 0);
     playerData.rescuedPrisoners = Math.max(0, Math.floor(Number(playerData.rescuedPrisoners || 0)));
+    playerData.bountyTrophies = Math.max(0, Math.floor(Number(playerData.bountyTrophies || 0)));
     if (playerData.activeBounty && typeof playerData.activeBounty === 'object') {
       const bounty = playerData.activeBounty;
       const bountyEnemyTypes = {
@@ -279,8 +280,17 @@ export function migratePlayerData(source) {
         bounty.acceptedDepth = Math.max(1, Math.floor(Number(bounty.acceptedDepth || 1)));
         bounty.enemyType = bountyEnemyTypes[bounty.kind];
         bounty.targetId = String(bounty.targetId || `bounty:saved:${bounty.acceptedDepth}:${bounty.kind}`);
+        bounty.targetName = String(bounty.targetName || Neo.getEnemyLabel?.(bounty.enemyType) || bounty.enemyType);
+        bounty.epithet = String(bounty.epithet || 'the Marked');
+        bounty.weakness = ['bleed', 'fire', 'poison', 'slow', 'static'].includes(bounty.weakness) ? bounty.weakness : 'bleed';
+        bounty.contractType = bounty.kind === 'elite_charger' ? 'capture' : bounty.kind === 'elite_sniper' ? 'theft' : 'execution';
         bounty.targetSpawned = !!bounty.targetSpawned;
         bounty.targetRoomKey = String(bounty.targetRoomKey || '');
+        bounty.returnDepth = Math.max(0, Math.floor(Number(bounty.returnDepth || 0)));
+        bounty.escapes = Math.max(0, Math.floor(Number(bounty.escapes || 0)));
+        bounty.rewardMultiplier = Math.max(1, Number(bounty.rewardMultiplier || 1));
+        bounty.rivalPressure = Math.max(0, Number(bounty.rivalPressure || 0));
+        bounty.rivalPressureStage = Math.max(0, Math.floor(Number(bounty.rivalPressureStage || 0)));
       }
     } else {
       delete playerData.activeBounty;

@@ -344,6 +344,7 @@
         if (!legendEntries.some(entry => entry.key === key)) legendEntries.push({ key, label, color, mode });
       };
       if (exitVisible) addLegendEntry('exit', 'EXIT', '#fff04a', 'star');
+      if (Neo.player?.activeBounty?.targetSpawned) addLegendEntry('bounty-target', 'HUNT', '#ff9d66', 'dot');
       if (currentRoom && roomTypeLegend[currentRoom.type]) addLegendEntry(...roomTypeLegend[currentRoom.type]);
       if (eliteCount > 0) addLegendEntry('elite', `${eliteCount} ELITE`, '#ff8800', 'dot');
       if (normalEnemyCount > 0) addLegendEntry('enemy', `${normalEnemyCount} FOE`, '#ff3333', 'dot');
@@ -529,6 +530,27 @@
         Neo.ctx.fillStyle = '#ff4444';
         Neo.ctx.fillRect(rx + size - 4, ry, 4, 4);
       });
+    }
+
+    const activeBounty = Neo.player?.activeBounty;
+    if (activeBounty?.targetSpawned && activeBounty.targetRoomKey) {
+      const targetRoom = Neo.rooms.find(room => `${room.gx},${room.gy}` === activeBounty.targetRoomKey);
+      if (targetRoom && !targetRoom.secret) {
+        const rx = originX + targetRoom.gx * (size + gap) + size / 2;
+        const ry = originY + targetRoom.gy * (size + gap) + size / 2;
+        const pulse = 0.65 + Math.sin(Number(Neo.gameElapsedTime || 0) * 5) * 0.25;
+        Neo.ctx.globalAlpha = pulse;
+        Neo.ctx.strokeStyle = '#ff9d66';
+        Neo.ctx.lineWidth = Math.max(1.5, size * 0.13);
+        Neo.ctx.beginPath();
+        Neo.ctx.arc(rx, ry, Math.max(4, size * 0.42), 0, Math.PI * 2);
+        Neo.ctx.stroke();
+        Neo.ctx.fillStyle = '#ff9d66';
+        Neo.ctx.beginPath();
+        Neo.ctx.arc(rx, ry, Math.max(1.5, size * 0.12), 0, Math.PI * 2);
+        Neo.ctx.fill();
+        Neo.ctx.globalAlpha = 1;
+      }
     }
 
     if (hasGlasses) {
@@ -752,7 +774,7 @@
   }
 
   function drawBossHealthBars() {
-    const bosses = Neo.enemies.filter(enemy => Neo.isBossType(enemy.type));
+    const bosses = Neo.enemies.filter(enemy => Neo.isBossType(enemy.type) || enemy?.bountyTarget);
     if (!bosses.length) return;
 
     const perfMode = window.NeoSettings?.isPerformanceMode?.() !== false;
@@ -826,8 +848,12 @@
           0,
           1
         );
-        const label = getBossLabel(boss.type);
-        const color = getBossColor(boss.type);
+        const escapeText = Number(boss.bountyEscapeTimer || 0) > 0 ? ` • ESCAPE ${Math.ceil(boss.bountyEscapeTimer)}s` : '';
+        const weaknessText = boss.bountyWeakness ? ` • WEAK: ${String(boss.bountyWeakness).toUpperCase()}` : '';
+        const label = boss.bountyTarget
+          ? `${boss.bountyName || getBossLabel(boss.type)} ${boss.bountyEpithet || ''}${weaknessText}${escapeText}`
+          : getBossLabel(boss.type);
+        const color = boss.bountyTarget ? '#ff9d66' : getBossColor(boss.type);
 
         // Lagging "damage trail": a lighter ghost that drains toward real HP so
         // each hit reads as a satisfying chunk rather than an instant snap.
