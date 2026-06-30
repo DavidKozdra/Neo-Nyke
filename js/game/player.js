@@ -264,6 +264,27 @@ export function migratePlayerData(source) {
     playerData.attackSpeed = Number(playerData.attackSpeed || 1);
     playerData.roomDamageTaken = Number(playerData.roomDamageTaken || 0);
     playerData.rivalReputation = Number(playerData.rivalReputation || 0);
+    playerData.rescuedPrisoners = Math.max(0, Math.floor(Number(playerData.rescuedPrisoners || 0)));
+    if (playerData.activeBounty && typeof playerData.activeBounty === 'object') {
+      const bounty = playerData.activeBounty;
+      const bountyEnemyTypes = {
+        elite_hunter: 'hunter',
+        elite_charger: 'charger',
+        elite_sniper: 'sniper',
+      };
+      const validBountyKinds = new Set(Object.keys(bountyEnemyTypes));
+      if (!validBountyKinds.has(bounty.kind)) {
+        delete playerData.activeBounty;
+      } else {
+        bounty.acceptedDepth = Math.max(1, Math.floor(Number(bounty.acceptedDepth || 1)));
+        bounty.enemyType = bountyEnemyTypes[bounty.kind];
+        bounty.targetId = String(bounty.targetId || `bounty:saved:${bounty.acceptedDepth}:${bounty.kind}`);
+        bounty.targetSpawned = !!bounty.targetSpawned;
+        bounty.targetRoomKey = String(bounty.targetRoomKey || '');
+      }
+    } else {
+      delete playerData.activeBounty;
+    }
     // Floor on which Paul Cunt's House Keys was last used (once per floor). -1 = unused.
     playerData.houseKeysStrikeFloor = Number.isFinite(Number(playerData.houseKeysStrikeFloor)) ? Number(playerData.houseKeysStrikeFloor) : -1;
     playerData.veggysRoomCounter = Number(playerData.veggysRoomCounter || 0);

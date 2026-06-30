@@ -38,7 +38,7 @@ export const PROJECTILE_TRAIL_LENGTH = 6;
 export const AOE_SHOCKWAVE_LIFE = 0.36;
 export const ENV_TILE_SIZE = 48;
 export const LIGHTING_CONFIG = {
-  clearRoomTypes: new Set(['start', 'shop', 'anvil', 'secret']),
+  clearRoomTypes: new Set(['start', 'shop', 'anvil', 'secret', 'shrine', 'bounty', 'reliquary', 'sanctuary', 'oracle', 'portal', 'prison', 'wishing_well']),
   darkness: {
     combat: 0.1,
     challenge: 0.16,

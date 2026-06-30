@@ -1,0 +1,767 @@
+// specialRooms.js — run-shaping service rooms beyond Shop, Forge, and Trials.
+
+export const SPECIAL_ROOM_DEFS = Object.freeze({
+  shrine: {
+    name: 'God Altar',
+    shortName: 'Shrine',
+    glyph: 'S',
+    color: '#d8a4ff',
+    subtitle: 'Power always asks for something in return.',
+  },
+  bounty: {
+    name: 'Bounty Board',
+    shortName: 'Bounty',
+    glyph: 'B',
+    color: '#ff9d66',
+    subtitle: 'Take one contract. Finish it before leaving this floor.',
+  },
+  reliquary: {
+    name: 'Reliquary',
+    shortName: 'Reliquary',
+    glyph: 'R',
+    color: '#c98cff',
+    subtitle: 'Fuse, distill, or echo the relics already shaping your build.',
+  },
+  sanctuary: {
+    name: 'Sanctuary',
+    shortName: 'Sanctuary',
+    glyph: '+',
+    color: '#83f0b0',
+    subtitle: 'One moment of safety. Choose what gets restored.',
+  },
+  oracle: {
+    name: 'Oracle',
+    shortName: 'Oracle',
+    glyph: 'O',
+    color: '#79dfff',
+    subtitle: 'Trade the unknown for one piece of control over this floor.',
+  },
+  portal: {
+    name: 'Portal Chamber',
+    shortName: 'Portal',
+    glyph: 'P',
+    color: '#8e9dff',
+    subtitle: 'Leave the route behind and decide where the run goes next.',
+  },
+  prison: {
+    name: 'Prison',
+    shortName: 'Prison',
+    glyph: 'K',
+    color: '#efc982',
+    subtitle: 'Only one cell can be opened before the locks collapse.',
+  },
+  wishing_well: {
+    name: 'Wishing Well',
+    shortName: 'Well',
+    glyph: 'W',
+    color: '#ffd86b',
+    subtitle: 'Pay the well. The well decides what answers.',
+  },
+});
+
+export const SPECIAL_ROOM_ORDER = Object.freeze(Object.keys(SPECIAL_ROOM_DEFS));
+export const SPECIAL_ROOM_TYPES = new Set(SPECIAL_ROOM_ORDER);
+
+// Reuse the established Inventory/Shop pixel-icon vocabulary so service cards
+// read like the rest of the game UI instead of falling back to text-only tiles.
+const SPECIAL_CHOICE_ICON_KEYS = Object.freeze({
+  'shrine:blood': 'bleed',
+  'shrine:relic': 'item',
+  'shrine:covenant': 'role-god',
+  'bounty:elite_hunter': 'attack',
+  'bounty:elite_charger': 'speed',
+  'bounty:elite_sniper': 'range',
+  'reliquary:fuse': 'tab-relics',
+  'reliquary:distill': 'role-wizard',
+  'reliquary:echo': 'item',
+  'sanctuary:mend': 'hp',
+  'sanctuary:rearm': 'speed',
+  'sanctuary:cleanse': 'defense',
+  'oracle:map': 'range',
+  'oracle:secret': 'role-assassin',
+  'oracle:transmute': 'role-wizard',
+  'portal:threshold': 'range',
+  'portal:vault': 'tab-relics',
+  'portal:descend': 'speed',
+  'prison:scout': 'role-assassin',
+  'prison:medic': 'hp',
+  'prison:veteran': 'role-knight',
+  'wishing_well:small': 'item',
+  'wishing_well:deep': 'role-god',
+  'wishing_well:blood': 'bleed',
+});
+
+export function getScheduledSpecialRoomType(floor = 1, loopIndex = 0) {
+  const depth = Math.max(0, Math.floor(Number(floor || 1)) - 1 + Math.max(0, Math.floor(Number(loopIndex || 0))) * 3);
+  return SPECIAL_ROOM_ORDER[depth % SPECIAL_ROOM_ORDER.length];
+}
+
+function isSpecialRoom(room = Neo.currentRoom) {
+  return !!room && SPECIAL_ROOM_TYPES.has(room.type);
+}
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
+function roomKey(room) {
+  return room ? `${room.gx},${room.gy}` : '';
+}
+
+function itemName(key) {
+  return Neo.itemRegistry?.get?.(key)?.name || Neo.ITEM_DEFS?.[key]?.name || Neo.titleCase?.(key) || key;
+}
+
+function isMutableRelic(key) {
+  const item = Neo.itemRegistry?.get?.(key) || Neo.ITEM_DEFS?.[key];
+  return !!item && !item.voucher && !Neo.isScrollControlItem?.(key);
+}
+
+function ownedRelics() {
+  return Object.entries(Neo.player?.items || {})
+    .filter(([key, count]) => Number(count || 0) > 0 && isMutableRelic(key))
+    .map(([key, count]) => ({ key, count: Math.floor(Number(count || 0)), name: itemName(key) }))
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+}
+
+function removeRelic(key, amount = 1) {
+  if (!Neo.player?.items || Number(Neo.player.items[key] || 0) < amount) return false;
+  Neo.player.items[key] = Math.max(0, Number(Neo.player.items[key] || 0) - amount);
+  if (Neo.player.items[key] <= 0) delete Neo.player.items[key];
+  Neo.syncEquipmentSlotsFromInventory?.();
+  Neo.markInventoryPanelDirty?.();
+  return true;
+}
+
+function spendCoins(cost) {
+  const amount = Math.max(0, Math.round(Number(cost || 0)));
+  if (!Neo.player || Number(Neo.player.coins || 0) < amount) return false;
+  Neo.player.coins -= amount;
+  if (Neo.metaProgress) Neo.metaProgress.coins = Math.max(0, Number(Neo.metaProgress.coins || 0) - amount);
+  Neo.persistMetaSoon?.();
+  return true;
+}
+
+function grantForgeVouchers(amount = 1) {
+  const count = Math.max(1, Math.floor(Number(amount || 1)));
+  const key = Neo.FORGE_VOUCHER_KEY || 'forge_voucher';
+  Neo.player.items[key] = Math.max(0, Number(Neo.player.items[key] || 0)) + count;
+  Neo.markInventoryPanelDirty?.();
+  Neo.pushItemNotification?.(key, count);
+}
+
+function getRoomRewardKey(room, rewardId, { elite = false } = {}) {
+  room.serviceRewards = room.serviceRewards && typeof room.serviceRewards === 'object' ? room.serviceRewards : {};
+  if (Neo.ITEM_DEFS?.[room.serviceRewards[rewardId]]) return room.serviceRewards[rewardId];
+  const random = Neo.createRoomRandom?.(room, `special:${rewardId}`) || Neo.rng;
+  const key = Neo.rollItemDrop?.({ elite, random });
+  if (key) room.serviceRewards[rewardId] = key;
+  return key || '';
+}
+
+function grantRelic(room, rewardId, { elite = false } = {}) {
+  const key = getRoomRewardKey(room, rewardId, { elite });
+  if (!key) return '';
+  Neo.collectItem?.(key);
+  return key;
+}
+
+function servicePickup(room) {
+  return {
+    x: Neo.ROOM_W / 2,
+    y: Neo.ROOM_H / 2,
+    type: 'specialService',
+    serviceType: room.type,
+  };
+}
+
+export function assignSpecialServiceRoom(pool = []) {
+  if (!Array.isArray(pool) || Neo.isTutorialRun?.() || Neo.gameMode === 'treasure_hunt') return null;
+  const candidate = pool.find(room => room?.type === 'combat');
+  if (!candidate) return null;
+  candidate.type = getScheduledSpecialRoomType(Neo.floor, Neo.runLoopIndex);
+  return candidate;
+}
+
+export function prepareSpecialRoom(room) {
+  if (!isSpecialRoom(room)) return false;
+  room.cleared = true;
+  room.serviceUsed = !!room.serviceUsed;
+  room.pickups = Array.isArray(room.pickups) ? room.pickups : [];
+  room.pickups = room.pickups.filter(pickup => pickup?.type !== 'specialService');
+  if (!room.serviceUsed) room.pickups.push(servicePickup(room));
+  return true;
+}
+
+function consumeService(room, result) {
+  room.serviceUsed = true;
+  room.serviceResult = String(result || 'The room falls silent.');
+  room.pickups = (room.pickups || []).filter(pickup => pickup?.type !== 'specialService');
+  if (room === Neo.currentRoom) Neo.pickups = Neo.pickups.filter(pickup => pickup?.type !== 'specialService');
+  Neo.playSfx?.('buy_sell');
+  Neo.spawnParticle?.({
+    x: Neo.player?.x || Neo.ROOM_W / 2,
+    y: (Neo.player?.y || Neo.ROOM_H / 2) - 28,
+    life: 1,
+    text: room.serviceResult.toUpperCase(),
+    c: SPECIAL_ROOM_DEFS[room.type]?.color || '#d7f6ff',
+  });
+  Neo.markInventoryPanelDirty?.();
+  Neo.updateHud?.();
+  Neo.updateObjective?.();
+  Neo.syncCurrentRoomState?.();
+  Neo.scheduleRunSave?.();
+}
+
+function makeChoice(id, title, description, cost, apply, enabled = true, disabledReason = '') {
+  return { id, title, description, cost, apply, enabled, disabledReason };
+}
+
+function shrineChoices(room) {
+  const relics = ownedRelics();
+  const sacrifice = relics[relics.length - 1];
+  const noItems = Neo.isChallengeActive?.('no_items');
+  const hpCost = Math.max(12, Math.round(Number(Neo.player?.maxHp || 120) * 0.12));
+  const attackGain = 3 + Math.ceil(Number(Neo.floor || 1) / 2);
+  return [
+    makeChoice('blood', 'Blood Offering', `Lose ${hpCost} maximum HP. Gain +${attackGain} permanent attack power for this run.`, `${hpCost} MAX HP`, () => {
+      if (Neo.player.maxHp - hpCost < 30) return false;
+      Neo.player.maxHp -= hpCost;
+      Neo.player.hp = Math.min(Neo.player.hp, Neo.player.maxHp);
+      Neo.player.attackPower += attackGain;
+      consumeService(room, `Blood accepted: +${attackGain} attack`);
+      return true;
+    }, Number(Neo.player?.maxHp || 0) - hpCost >= 30, 'Maximum HP is already too low.'),
+    makeChoice('relic', sacrifice ? `Sacrifice ${sacrifice.name}` : 'Relic Sacrifice', 'Destroy one owned relic and receive a seeded elite relic.', '1 RELIC', () => {
+      if (!sacrifice || !removeRelic(sacrifice.key, 1)) return false;
+      const reward = grantRelic(room, 'shrine-sacrifice', { elite: true });
+      consumeService(room, reward ? `${itemName(reward)} bestowed` : 'The offering was accepted');
+      return true;
+    }, !!sacrifice && !noItems, noItems ? 'Disabled by No Items.' : 'No relic available.'),
+    makeChoice('covenant', 'Dark Covenant', 'Cloud the minimap for this floor and the next, then receive an elite relic plus a Forge Voucher.', 'CURSE', () => {
+      Neo.floorRivalCurses = Neo.floorRivalCurses || {};
+      Neo.floorRivalCurses.obscureMap = true;
+      Neo.pendingRivalCurses = Neo.pendingRivalCurses || {};
+      Neo.pendingRivalCurses.obscureMap = true;
+      const reward = grantRelic(room, 'shrine-covenant', { elite: true });
+      grantForgeVouchers(1);
+      consumeService(room, reward ? `Covenant sealed: ${itemName(reward)}` : 'Covenant sealed');
+      return true;
+    }, !noItems, 'Disabled by No Items.'),
+  ];
+}
+
+const BOUNTY_DEFS = {
+  elite_hunter: {
+    title: 'Elite Hunter',
+    enemyType: 'hunter',
+    reward: '90 coins',
+    description: 'Adds a marked Elite Hunter to your next combat room. Kill it before leaving this floor.',
+  },
+  elite_charger: {
+    title: 'Elite Charger',
+    enemyType: 'charger',
+    reward: 'Forge Voucher + XP',
+    description: 'Adds a marked Elite Charger to your next combat room. Kill it before leaving this floor.',
+  },
+  elite_sniper: {
+    title: 'Elite Sniper',
+    enemyType: 'sniper',
+    reward: 'Elite relic',
+    description: 'Adds a marked Elite Sniper to your next combat room. Kill it before leaving this floor.',
+  },
+};
+
+function createBountyToastIcon(enemyType, accent = '#ffb070') {
+  const icon = document.createElement('canvas');
+  icon.width = 44;
+  icon.height = 44;
+  if (typeof Neo.drawSpriteToCanvas === 'function') {
+    Neo.drawSpriteToCanvas(icon, enemyType || 'hunter', 40, { tint: accent });
+  } else {
+    Neo.drawInventoryUiIcon?.(icon, 'attack');
+  }
+  return icon;
+}
+
+function pushBountyToast(bounty, { label = 'Bounty', text = '', accent = '#ffb070', holdMs = 3000 } = {}) {
+  const def = BOUNTY_DEFS[bounty?.kind] || {};
+  Neo.pushStatusToast?.({
+    label,
+    text: text || def.title || 'Contract updated',
+    accent,
+    iconCanvas: createBountyToastIcon(def.enemyType, accent),
+    holdMs,
+  });
+}
+
+function acceptBounty(room, kind) {
+  const def = BOUNTY_DEFS[kind];
+  if (!def || Neo.player.activeBounty) return false;
+  Neo.player.activeBounty = {
+    kind,
+    acceptedDepth: Math.max(1, Number(Neo.floorsEntered || Neo.floor || 1)),
+    enemyType: def.enemyType,
+    targetId: `bounty:${Math.max(1, Number(Neo.floorsEntered || Neo.floor || 1))}:${roomKey(room)}:${kind}`,
+    targetSpawned: false,
+    targetRoomKey: '',
+  };
+  consumeService(room, `${def.title} accepted`);
+  pushBountyToast(Neo.player.activeBounty, {
+    label: 'Bounty Accepted',
+    text: `${def.title} will enter your next combat room`,
+  });
+  return true;
+}
+
+function bountyChoices(room) {
+  const active = Neo.player?.activeBounty;
+  return Object.entries(BOUNTY_DEFS).map(([kind, def]) => {
+    const choice = makeChoice(
+      kind,
+      def.title,
+      `${def.description} Reward: ${def.reward}.`,
+      active ? 'ACTIVE CONTRACT' : 'ELITE TARGET',
+      () => acceptBounty(room, kind),
+      !active,
+      active ? 'Finish the active bounty first.' : '',
+    );
+    choice.enemyType = def.enemyType;
+    return choice;
+  });
+}
+
+function reliquaryChoices(room) {
+  const relics = ownedRelics();
+  const duplicate = relics.find(entry => entry.count >= 2);
+  const distill = relics[relics.length - 1];
+  const echo = relics[0];
+  const echoCost = 70 + Number(Neo.floor || 1) * 8;
+  const noItems = Neo.isChallengeActive?.('no_items');
+  return [
+    makeChoice('fuse', duplicate ? `Ascend ${duplicate.name}` : 'Ascend a Duplicate', 'Consume two stacks of one relic and forge them into one elite relic.', '2 STACKS', () => {
+      if (!duplicate || !removeRelic(duplicate.key, 2)) return false;
+      const reward = grantRelic(room, 'reliquary-fuse', { elite: true });
+      consumeService(room, reward ? `${itemName(reward)} ascended` : 'Relic ascended');
+      return true;
+    }, !!duplicate && !noItems, noItems ? 'Disabled by No Items.' : 'No relic has two stacks.'),
+    makeChoice('distill', distill ? `Distill ${distill.name}` : 'Distill a Relic', 'Destroy one relic and convert its essence into 75% of your next level.', '1 RELIC', () => {
+      if (!distill || !removeRelic(distill.key, 1)) return false;
+      const xp = Math.max(10, Math.round(Number(Neo.player.xpToNext || 20) * 0.75));
+      Neo.grantXp?.(xp);
+      consumeService(room, `${distill.name} distilled into XP`);
+      return true;
+    }, !!distill, 'No relic available.'),
+    makeChoice('echo', echo ? `Echo ${echo.name}` : 'Echo a Relic', `Pay ${echoCost} coins to create another stack of your most-developed relic.`, `${echoCost} COINS`, () => {
+      if (!echo || !spendCoins(echoCost)) return false;
+      Neo.collectItem?.(echo.key);
+      consumeService(room, `${echo.name} echoed`);
+      return true;
+    }, !!echo && Number(Neo.player?.coins || 0) >= echoCost && !noItems, noItems ? 'Disabled by No Items.' : !echo ? 'No relic available.' : 'Not enough coins.'),
+  ];
+}
+
+function sanctuaryChoices(room) {
+  const hasCurse = !!Neo.floorRivalCurses && Object.values(Neo.floorRivalCurses).some(value => value === true || Number(value || 0) > 0);
+  const potionCap = Math.max(0, Number(Neo.getPotionCarryCap?.() || 0));
+  return [
+    makeChoice('mend', 'Mend Wounds', 'Restore all health.', 'ONE REST', () => {
+      Neo.player.hp = Neo.player.maxHp;
+      consumeService(room, 'Health fully restored');
+      return true;
+    }, Number(Neo.player?.hp || 0) < Number(Neo.player?.maxHp || 0), 'Health is already full.'),
+    makeChoice('rearm', 'Rearm', `Restore every move charge${potionCap > 0 ? ' and fill stored potions' : ''}.`, 'ONE REST', () => {
+      Neo.cooldowns = Neo.createCooldownState?.(Neo.player) || Neo.cooldowns;
+      if (potionCap > 0) Neo.player.storedPotions = potionCap;
+      consumeService(room, 'Moves and supplies restored');
+      return true;
+    }),
+    makeChoice('cleanse', 'Cleanse Curses', 'Remove every active rival curse from this floor.', 'ONE REST', () => {
+      Neo.floorRivalCurses = { obscureMap: false, lowerCombat: false, reducePotions: false, gellehTurrets: 0 };
+      consumeService(room, 'Floor curses cleansed');
+      return true;
+    }, hasCurse, 'No active floor curse.'),
+  ];
+}
+
+function findSecretPassage() {
+  for (const source of Neo.rooms || []) {
+    for (const [direction, passage] of Object.entries(source.secretPassages || {})) {
+      const target = Neo.findRoomAt?.(passage.targetGx, passage.targetGy);
+      if (target?.secret && !passage.open) return { source, direction, target };
+    }
+  }
+  return null;
+}
+
+function oracleChoices(room) {
+  const hiddenRooms = (Neo.rooms || []).filter(candidate => !candidate.secret && !candidate.explored);
+  const secret = findSecretPassage();
+  const transmute = (Neo.rooms || []).find(candidate => candidate.type === 'combat' && !candidate.visited);
+  return [
+    makeChoice('map', 'Complete Map', 'Reveal every normal room and service on the minimap.', 'ONE VISION', () => {
+      Neo.rooms.forEach(candidate => { if (!candidate.secret) candidate.explored = true; });
+      Neo.minimapLegendDirty = true;
+      consumeService(room, 'The floor is revealed');
+      return true;
+    }, hiddenRooms.length > 0, 'The floor is already revealed.'),
+    makeChoice('secret', 'Whispered Door', 'Reveal and open the floor’s hidden passage.', 'ONE VISION', () => {
+      const passage = findSecretPassage();
+      if (!passage) return false;
+      Neo.setSecretPassageOpen?.(passage.source, passage.direction, true);
+      passage.target.explored = true;
+      consumeService(room, 'A secret passage opens');
+      return true;
+    }, !!secret, 'No sealed secret passage remains.'),
+    makeChoice('transmute', 'Rewrite Fate', 'Turn one unvisited combat room into a Treasure room.', 'ONE VISION', () => {
+      const target = (Neo.rooms || []).find(candidate => candidate.type === 'combat' && !candidate.visited);
+      if (!target) return false;
+      target.type = 'treasure';
+      Neo.decorateRoomData?.(target);
+      target.explored = true;
+      Neo.minimapLegendDirty = true;
+      consumeService(room, 'Combat rewritten as treasure');
+      return true;
+    }, !!transmute, 'No unvisited combat room remains.'),
+  ];
+}
+
+function moveThroughPortal(room, target, result) {
+  if (!target) return false;
+  consumeService(room, result);
+  setSpecialRoomPanelOpen(false);
+  Neo.enterRoom?.(target);
+  return true;
+}
+
+function portalChoices(room) {
+  const ladder = (Neo.rooms || []).find(candidate => candidate.type === 'ladder' || candidate.type === 'boss' || candidate.type === 'god');
+  const treasure = (Neo.rooms || []).find(candidate => candidate !== room && candidate.type === 'treasure' && !candidate.visited);
+  const service = (Neo.rooms || []).find(candidate => candidate !== room && isSpecialRoom(candidate) && !candidate.visited);
+  const thresholdCost = Math.max(10, Math.round(Number(Neo.player?.coins || 0) * 0.25));
+  const canDescend = Number(Neo.floor || 1) < Number(Neo.MAX_FLOOR || 10);
+  return [
+    makeChoice('threshold', 'Exit Threshold', 'Teleport directly to this floor’s exit room.', `${thresholdCost} COINS`, () => {
+      if (!ladder || !spendCoins(thresholdCost)) return false;
+      return moveThroughPortal(room, ladder, 'Portal opened to the exit');
+    }, !!ladder && Number(Neo.player?.coins || 0) >= thresholdCost, ladder ? 'Not enough coins.' : 'No exit is available.'),
+    makeChoice('vault', treasure ? 'Treasure Gate' : service ? `Gate to ${SPECIAL_ROOM_DEFS[service.type].shortName}` : 'Treasure Gate', treasure ? 'Teleport to an unvisited Treasure room.' : 'Teleport to another unvisited service room.', 'NO COST', () => moveThroughPortal(room, treasure || service, 'Portal route changed'), !!(treasure || service), 'No eligible destination remains.'),
+    makeChoice('descend', 'Blind Descent', 'Abandon the rest of this floor and descend immediately.', 'REMAINING ROOMS', () => {
+      if (!canDescend) return false;
+      consumeService(room, 'The floor is left behind');
+      setSpecialRoomPanelOpen(false);
+      Neo.floor = Math.min(Neo.MAX_FLOOR, Number(Neo.floor || 1) + 1);
+      Neo.refreshFloorChargeStates?.();
+      Neo.metaProgress.bestFloor = Math.max(Number(Neo.metaProgress.bestFloor || 1), Neo.floor);
+      Neo.showFloorTransition = true;
+      Neo.floorTransitionTime = 0;
+      Neo._carriedRivals = (Neo.rivals || []).filter(rival => !rival.dead && rival.hp > 0);
+      Neo.generateFloor?.();
+      return true;
+    }, canDescend, 'There is nowhere deeper to skip to.'),
+  ];
+}
+
+function prisonChoices(room) {
+  return [
+    makeChoice('scout', 'Free the Scout', 'Reveal the exit and every service room on this floor.', 'ONE KEY', () => {
+      Neo.rooms.forEach(candidate => {
+        if (candidate.type === 'ladder' || candidate.type === 'boss' || candidate.type === 'god' || isSpecialRoom(candidate) || ['shop', 'anvil'].includes(candidate.type)) candidate.explored = true;
+      });
+      Neo.player.rescuedPrisoners = Math.max(0, Number(Neo.player.rescuedPrisoners || 0)) + 1;
+      consumeService(room, 'Scout rescued: routes marked');
+      return true;
+    }),
+    makeChoice('medic', 'Free the Medic', 'Gain +15 maximum HP and restore all health.', 'ONE KEY', () => {
+      Neo.player.maxHp += 15;
+      Neo.player.hp = Neo.player.maxHp;
+      Neo.player.rescuedPrisoners = Math.max(0, Number(Neo.player.rescuedPrisoners || 0)) + 1;
+      consumeService(room, 'Medic rescued: +15 max HP');
+      return true;
+    }),
+    makeChoice('veteran', 'Free the Veteran', 'Gain permanent attack power and combat XP for this run.', 'ONE KEY', () => {
+      const attack = 3 + Math.ceil(Number(Neo.floor || 1) / 3);
+      Neo.player.attackPower += attack;
+      Neo.grantXp?.(20 + Number(Neo.floor || 1) * 5);
+      Neo.player.rescuedPrisoners = Math.max(0, Number(Neo.player.rescuedPrisoners || 0)) + 1;
+      consumeService(room, `Veteran rescued: +${attack} attack`);
+      return true;
+    }),
+  ];
+}
+
+function getWellOutcome(room, wishId, outcomes) {
+  room.wellOutcomes = room.wellOutcomes && typeof room.wellOutcomes === 'object' ? room.wellOutcomes : {};
+  if (!Number.isInteger(room.wellOutcomes[wishId])) {
+    const random = Neo.createRoomRandom?.(room, `well:${wishId}`) || Neo.rng;
+    room.wellOutcomes[wishId] = Math.floor(random() * outcomes.length);
+  }
+  return outcomes[room.wellOutcomes[wishId] % outcomes.length];
+}
+
+function wellChoices(room) {
+  const smallCost = 25;
+  const deepCost = 75;
+  const hpCost = Math.max(10, Math.round(Number(Neo.player?.maxHp || 120) * 0.1));
+  const noItems = Neo.isChallengeActive?.('no_items');
+  return [
+    makeChoice('small', 'Cast a Coin', 'A modest wish: healing, XP, money, or a relic. The answer is hidden.', `${smallCost} COINS`, () => {
+      if (!spendCoins(smallCost)) return false;
+      const outcome = getWellOutcome(room, 'small', ['heal', 'xp', 'coins', 'relic']);
+      let result = 'The well stays quiet';
+      if (outcome === 'heal') { Neo.player.hp = Neo.player.maxHp; result = 'The well restores your health'; }
+      else if (outcome === 'xp') { Neo.grantXp?.(45 + Neo.floor * 4); result = 'The well grants XP'; }
+      else if (outcome === 'coins') { Neo.addCoins?.(60); result = 'The well returns 60 coins'; }
+      else if (!noItems) { const key = grantRelic(room, 'well-small'); result = key ? `The well grants ${itemName(key)}` : result; }
+      else { Neo.grantXp?.(60); result = 'The well grants XP'; }
+      consumeService(room, result);
+      return true;
+    }, Number(Neo.player?.coins || 0) >= smallCost, 'Not enough coins.'),
+    makeChoice('deep', 'Golden Wish', 'A larger gamble: an elite relic, vitality, Forge Vouchers, or nothing.', `${deepCost} COINS`, () => {
+      if (!spendCoins(deepCost)) return false;
+      const outcome = getWellOutcome(room, 'deep', ['relic', 'vitality', 'vouchers', 'dry']);
+      let result = 'The well is dry';
+      if (outcome === 'relic' && !noItems) { const key = grantRelic(room, 'well-deep', { elite: true }); result = key ? `The well grants ${itemName(key)}` : result; }
+      else if (outcome === 'vitality') { Neo.player.maxHp += 20; Neo.player.hp += 20; result = 'The well grants +20 max HP'; }
+      else if (outcome === 'vouchers') { grantForgeVouchers(2); result = 'The well grants 2 Forge Vouchers'; }
+      else if (outcome === 'relic') { Neo.grantXp?.(90); result = 'The well grants XP'; }
+      consumeService(room, result);
+      return true;
+    }, Number(Neo.player?.coins || 0) >= deepCost, 'Not enough coins.'),
+    makeChoice('blood', 'Blood Wish', `Lose ${hpCost} maximum HP for a guaranteed elite relic.`, `${hpCost} MAX HP`, () => {
+      if (Neo.player.maxHp - hpCost < 30) return false;
+      Neo.player.maxHp -= hpCost;
+      Neo.player.hp = Math.min(Neo.player.hp, Neo.player.maxHp);
+      const key = grantRelic(room, 'well-blood', { elite: true });
+      consumeService(room, key ? `Blood answered with ${itemName(key)}` : 'Blood wish answered');
+      return true;
+    }, Number(Neo.player?.maxHp || 0) - hpCost >= 30 && !noItems, noItems ? 'Disabled by No Items.' : 'Maximum HP is already too low.'),
+  ];
+}
+
+function getChoices(room) {
+  if (!room || room.serviceUsed) return [];
+  if (room.type === 'shrine') return shrineChoices(room);
+  if (room.type === 'bounty') return bountyChoices(room);
+  if (room.type === 'reliquary') return reliquaryChoices(room);
+  if (room.type === 'sanctuary') return sanctuaryChoices(room);
+  if (room.type === 'oracle') return oracleChoices(room);
+  if (room.type === 'portal') return portalChoices(room);
+  if (room.type === 'prison') return prisonChoices(room);
+  if (room.type === 'wishing_well') return wellChoices(room);
+  return [];
+}
+
+function renderSpecialRoomPanel() {
+  const panel = document.getElementById('specialRoomPanel');
+  const title = document.getElementById('specialRoomTitle');
+  const kicker = document.getElementById('specialRoomKicker');
+  const subtitle = document.getElementById('specialRoomSubtitle');
+  const resources = document.getElementById('specialRoomResources');
+  const list = document.getElementById('specialRoomChoices');
+  const room = Neo.currentRoom;
+  if (!panel || !title || !list || !isSpecialRoom(room)) return;
+  const def = SPECIAL_ROOM_DEFS[room.type];
+  panel.style.setProperty('--special-room-accent', def.color);
+  kicker.textContent = def.shortName;
+  title.textContent = def.name.toUpperCase();
+  subtitle.textContent = def.subtitle;
+  resources.innerHTML = `<span>HP <b>${Math.ceil(Neo.player.hp)}/${Math.ceil(Neo.player.maxHp)}</b></span><span>COINS <b>${Math.floor(Neo.player.coins)}</b></span><span>XP <b>${Math.floor(Neo.player.xp)}/${Math.floor(Neo.player.xpToNext)}</b></span>`;
+  if (room.serviceUsed) {
+    list.innerHTML = `<div class="special-room-result"><span>CHOICE SEALED</span><strong>${escapeHtml(room.serviceResult || 'This room has already been used.')}</strong></div>`;
+    return;
+  }
+  const choices = getChoices(room);
+  list.innerHTML = choices.map(choice => {
+    const disabled = !choice.enabled;
+    const reason = disabled && choice.disabledReason ? `<small>${escapeHtml(choice.disabledReason)}</small>` : '';
+    const iconKey = SPECIAL_CHOICE_ICON_KEYS[`${room.type}:${choice.id}`] || 'item';
+    const iconCanvas = choice.enemyType
+      ? `<canvas class="shop-card__icon special-room-card__icon special-room-card__icon--enemy" data-special-enemy-icon="${escapeHtml(choice.enemyType)}" width="56" height="56" aria-hidden="true"></canvas>`
+      : `<canvas class="shop-card__icon special-room-card__icon" data-inv-ui-icon="${escapeHtml(iconKey)}" width="48" height="48" aria-hidden="true"></canvas>`;
+    return `<article class="special-room-card${choice.enemyType ? ' special-room-card--bounty-target' : ''}${disabled ? ' is-disabled' : ''}" style="--card-accent:${escapeHtml(def.color)}">
+      <div class="special-room-card__top">
+        <span class="shop-card__icon-frame special-room-card__icon-frame">
+          ${iconCanvas}
+        </span>
+        <div class="special-room-card__heading">
+          <span class="special-room-card__eyebrow">${choice.enemyType ? 'Elite Target' : escapeHtml(def.shortName)}</span>
+          <h4>${escapeHtml(choice.title)}</h4>
+        </div>
+        <span class="special-room-card__cost">${escapeHtml(choice.cost)}</span>
+      </div>
+      <p>${escapeHtml(choice.description)}</p>
+      ${reason}
+      <button class="shop-buy special-room-choose" type="button" data-special-choice="${escapeHtml(choice.id)}" ${disabled ? 'disabled' : ''}>CHOOSE</button>
+    </article>`;
+  }).join('') || '<div class="special-room-result"><strong>No choice is currently available.</strong></div>';
+  list.querySelectorAll('[data-inv-ui-icon]').forEach(canvas => {
+    Neo.drawInventoryUiIcon?.(canvas, canvas.dataset.invUiIcon);
+  });
+  list.querySelectorAll('[data-special-enemy-icon]').forEach(canvas => {
+    Neo.drawSpriteToCanvas?.(canvas, canvas.dataset.specialEnemyIcon, 52);
+  });
+}
+
+export function setSpecialRoomPanelOpen(open) {
+  const panel = document.getElementById('specialRoomPanel');
+  if (!panel) return;
+  const shouldOpen = !!open && isSpecialRoom();
+  panel.classList.toggle('hidden', !shouldOpen);
+  panel.setAttribute('aria-hidden', shouldOpen ? 'false' : 'true');
+  if (shouldOpen) {
+    Neo.setShopPanelOpen?.(false, { animateClose: false });
+    Neo.setAnvilPanelOpen?.(false, { animateClose: false });
+    Neo.setInventoryPanelOpen?.(false, { animateClose: false, suppressPanelItemSelection: true });
+    renderSpecialRoomPanel();
+  } else {
+    Neo.requestPanelItemSelection?.({ suppressBatteryOpen: true });
+  }
+}
+
+export function toggleSpecialRoomPanel() {
+  if (!isSpecialRoom()) return;
+  const panel = document.getElementById('specialRoomPanel');
+  setSpecialRoomPanelOpen(panel?.classList.contains('hidden'));
+}
+
+function handleChoiceClick(event) {
+  const button = event.target instanceof Element ? event.target.closest('[data-special-choice]') : null;
+  if (!button || !isSpecialRoom() || Neo.currentRoom.serviceUsed) return;
+  const choice = getChoices(Neo.currentRoom).find(entry => entry.id === button.dataset.specialChoice);
+  if (!choice?.enabled) return;
+  const applied = choice.apply();
+  if (applied && isSpecialRoom() && !document.getElementById('specialRoomPanel')?.classList.contains('hidden')) renderSpecialRoomPanel();
+}
+
+function completeBounty(bounty, result) {
+  const kind = bounty.kind;
+  const room = Neo.currentRoom || (Neo.rooms || [])[0];
+  if (kind === 'elite_hunter') Neo.addCoins?.(90);
+  else if (kind === 'elite_charger') {
+    grantForgeVouchers(1);
+    Neo.grantXp?.(35 + Number(Neo.floor || 1) * 5);
+  } else if (kind === 'elite_sniper') {
+    if (!Neo.isChallengeActive?.('no_items')) grantRelic(room, `bounty:${bounty.acceptedDepth}`, { elite: true });
+    else Neo.addCoins?.(140);
+  }
+  const def = BOUNTY_DEFS[kind] || {};
+  pushBountyToast(bounty, {
+    label: 'Bounty Complete',
+    text: `${def.title || 'Elite'} defeated — ${def.reward || 'reward claimed'}`,
+    accent: '#78ef9c',
+    holdMs: 4000,
+  });
+  Neo.player.lastBountyStatus = `COMPLETE: ${def.title || 'Bounty'}`;
+  Neo.player.activeBounty = null;
+  Neo.spawnParticle?.({ x: Neo.player.x, y: Neo.player.y - 42, life: 1.4, text: result || 'BOUNTY COMPLETE', c: '#ffb070' });
+  Neo.playSfx?.('item_collect');
+  Neo.scheduleRunSave?.();
+  Neo.updateObjective?.();
+}
+
+function failBounty(bounty, reason = 'Target escaped when you left the floor') {
+  const def = BOUNTY_DEFS[bounty?.kind] || {};
+  pushBountyToast(bounty, {
+    label: 'Bounty Failed',
+    text: `${def.title || 'Elite target'}: ${reason}`,
+    accent: '#ff7185',
+    holdMs: 4200,
+  });
+  Neo.player.lastBountyStatus = `FAILED: ${def.title || 'Bounty'}`;
+  Neo.player.activeBounty = null;
+  Neo.spawnParticle?.({ x: Neo.player.x, y: Neo.player.y - 34, life: 1, text: 'BOUNTY FAILED', c: '#ff7185' });
+  Neo.scheduleRunSave?.();
+  Neo.updateObjective?.();
+}
+
+function spawnAcceptedBountyTarget(bounty, room) {
+  if (!bounty || bounty.targetSpawned || !room || room.type !== 'combat' || room.cleared) return false;
+  const def = BOUNTY_DEFS[bounty.kind];
+  if (!def) return false;
+  const existing = (Neo.enemies || []).find(enemy => enemy?.bountyTargetId === bounty.targetId && !enemy.dead);
+  if (existing) {
+    bounty.targetSpawned = true;
+    bounty.targetRoomKey = roomKey(room);
+    return true;
+  }
+  const random = Neo.createRoomRandom?.(room, `bounty-target:${bounty.targetId}`) || Neo.rng;
+  const angle = random() * Math.PI * 2;
+  const radius = 180 + random() * 90;
+  const preferredX = Neo.clamp(Neo.ROOM_W / 2 + Math.cos(angle) * radius, 90, Neo.ROOM_W - 90);
+  const preferredY = Neo.clamp(Neo.ROOM_H / 2 + Math.sin(angle) * radius, 90, Neo.ROOM_H - 90);
+  const safeSpawn = Neo.findSafeEnemySpawnPoint?.(preferredX, preferredY, 18)
+    || Neo.findSafeEnemySpawnPoint?.(Neo.ROOM_W / 2, Neo.ROOM_H / 2 - 90, 18);
+  if (!safeSpawn) return false;
+  const enemy = Neo.spawnEnemy?.(def.enemyType, safeSpawn.x, safeSpawn.y, true, { forceElite: true });
+  if (!enemy) return false;
+  enemy.bountyTarget = true;
+  enemy.bountyTargetId = bounty.targetId;
+  enemy.bountyContractKind = bounty.kind;
+  bounty.targetSpawned = true;
+  bounty.targetRoomKey = roomKey(room);
+  room.bountyTargetId = bounty.targetId;
+  Neo.spawnParticle?.({ x: enemy.x, y: enemy.y - enemy.r - 34, life: 1.5, text: 'BOUNTY TARGET', c: '#ffb070' });
+  pushBountyToast(bounty, {
+    label: 'Target Entered',
+    text: `${def.title} joined this combat`,
+    accent: '#ffb070',
+  });
+  Neo.scheduleRunSave?.();
+  Neo.updateObjective?.();
+  return true;
+}
+
+export function notifyBountyEnemyKilled(enemy) {
+  const bounty = Neo.player?.activeBounty;
+  if (!bounty || !enemy?.bountyTargetId || enemy.bountyTargetId !== bounty.targetId) return false;
+  completeBounty(bounty, 'ELITE BOUNTY COMPLETE');
+  return true;
+}
+
+export function updateSpecialRoomProgress() {
+  const bounty = Neo.player?.activeBounty;
+  if (!bounty || !BOUNTY_DEFS[bounty.kind]) return;
+  const depth = Math.max(1, Number(Neo.floorsEntered || Neo.floor || 1));
+  if (depth > Number(bounty.acceptedDepth || depth)) {
+    failBounty(bounty);
+    return;
+  }
+  const current = Neo.currentRoom;
+  if (!current || current.type !== 'combat') return;
+  spawnAcceptedBountyTarget(bounty, current);
+}
+
+export function getActiveBountyObjective() {
+  const bounty = Neo.player?.activeBounty;
+  const def = BOUNTY_DEFS[bounty?.kind];
+  if (!bounty || !def) return '';
+  return bounty.targetSpawned
+    ? `Bounty: defeat the marked ${def.title}`
+    : `Bounty: ${def.title} enters the next combat`;
+}
+
+function bindSpecialRoomUi() {
+  document.getElementById('specialRoomClose')?.addEventListener('click', () => setSpecialRoomPanelOpen(false));
+  document.getElementById('specialRoomChoices')?.addEventListener('click', handleChoiceClick);
+}
+
+bindSpecialRoomUi();
+
+Neo.SPECIAL_ROOM_DEFS = SPECIAL_ROOM_DEFS;
+Neo.SPECIAL_ROOM_ORDER = SPECIAL_ROOM_ORDER;
+Neo.SPECIAL_ROOM_TYPES = SPECIAL_ROOM_TYPES;
+Neo.isSpecialRoom = isSpecialRoom;
+Neo.assignSpecialServiceRoom = assignSpecialServiceRoom;
+Neo.prepareSpecialRoom = prepareSpecialRoom;
+Neo.renderSpecialRoomPanel = renderSpecialRoomPanel;
+Neo.setSpecialRoomPanelOpen = setSpecialRoomPanelOpen;
+Neo.toggleSpecialRoomPanel = toggleSpecialRoomPanel;
+Neo.updateSpecialRoomProgress = updateSpecialRoomProgress;
+Neo.notifyBountyEnemyKilled = notifyBountyEnemyKilled;
+Neo.getActiveBountyObjective = getActiveBountyObjective;

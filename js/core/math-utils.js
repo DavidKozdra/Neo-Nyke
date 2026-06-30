@@ -780,8 +780,14 @@ export function getBeamEnd(x, y, angle, range) {
 
 function triggerInteract() {
   if (Neo.gameState !== 'play') return;
+  const inSpecialRoom = Neo.isSpecialRoom?.();
   const inShopRoom = Neo.currentRoom?.type === 'shop';
   const inAnvilRoom = Neo.currentRoom?.type === 'anvil';
+  if (inSpecialRoom && !Neo.specialRoomKeyLatch) {
+    Neo.toggleSpecialRoomPanel?.();
+    Neo.specialRoomKeyLatch = true;
+    setTimeout(() => { Neo.specialRoomKeyLatch = false; }, 200);
+  }
   if (inShopRoom && !Neo.shopKeyLatch) {
     if (Neo.toggleShopPanel) Neo.toggleShopPanel();
     else if (Neo.ui?.shopPanel) Neo.ui.shopPanel.classList.toggle('hidden');

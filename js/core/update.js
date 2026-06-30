@@ -271,6 +271,7 @@ export function loop(timestamp) {
     let moveY = (Neo.keys[_down]  || Neo.keys.arrowdown  ? 1 : 0) - (Neo.keys[_up]   || Neo.keys.arrowup   ? 1 : 0);
     if (Neo.currentRoom?.type !== 'shop' && Neo.isPanelOpen(Neo.ui.shopPanel)) Neo.setShopPanelOpen(false);
     if (Neo.currentRoom?.type !== 'anvil' && Neo.isPanelOpen(Neo.ui.anvilPanel)) Neo.setAnvilPanelOpen(false);
+    if (!Neo.isSpecialRoom?.() && Neo.isPanelOpen(document.getElementById('specialRoomPanel'))) Neo.setSpecialRoomPanelOpen?.(false);
     const overlayOpen = Neo.isOverlayBlockingInput();
     if (overlayOpen) {
       moveX = 0;
@@ -610,6 +611,7 @@ export function loop(timestamp) {
     Neo.updatePickups(dt);
     Neo.perfEnd('update.pickups', sectionPerfStart);
     if (Neo.gameState !== 'play') return;
+    Neo.updateSpecialRoomProgress?.();
     sectionPerfStart = Neo.perfStart();
     Neo.updateGardenGrowth();
     Neo.perfEnd('update.garden', sectionPerfStart);

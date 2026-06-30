@@ -1987,6 +1987,7 @@ export function resumeGame() {
   function getRoomLabel(type) {
     if (!type) return 'Unknown';
     if (type === 'god') return 'God Chamber';
+    if (Neo.SPECIAL_ROOM_DEFS?.[type]) return Neo.SPECIAL_ROOM_DEFS[type].name;
     return titleCase(type);
   }
 
@@ -3352,6 +3353,7 @@ export function resumeGame() {
     Neo.shopKeyLatch = false;
     Neo.invKeyLatch = false;
     Neo.anvilKeyLatch = false;
+    Neo.specialRoomKeyLatch = false;
     Neo.ladderUseKeyLatch = false;
     Neo.activeShopTab = 'items';
     Neo.draggingMoveKey = '';
@@ -3377,6 +3379,7 @@ export function resumeGame() {
     Neo.setWizardPawModalOpen(false);
     Neo.setExtraBatteryModalOpen?.(false, { animateClose: false });
     Neo.setScrollControlModalOpen?.(false, { animateClose: false });
+    Neo.setSpecialRoomPanelOpen?.(false);
     Neo.setShopPanelOpen(false);
     Neo.setInventoryPanelOpen(false);
     Neo.mouse.down = false;

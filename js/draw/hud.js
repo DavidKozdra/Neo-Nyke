@@ -309,6 +309,9 @@
       start: ['start', 'START', '#00ff88', 'square'],
       secret: ['secret', 'SECRET', '#b58cff', 'square'],
     };
+    Object.entries(Neo.SPECIAL_ROOM_DEFS || {}).forEach(([type, def]) => {
+      roomTypeLegend[type] = [`special-${type}`, String(def.shortName || def.name || type).toUpperCase(), def.color || '#d7f6ff', 'square'];
+    });
 
     const legendLayoutSignature = [
       currentRoom?.gx ?? '-', currentRoom?.gy ?? '-', currentRoom?.type || '',
@@ -420,6 +423,9 @@
       } else if (room.type === 'god') {
         Neo.ctx.globalAlpha = 0.95;
         Neo.ctx.fillStyle = '#ffffff';
+      } else if (Neo.SPECIAL_ROOM_DEFS?.[room.type]) {
+        Neo.ctx.globalAlpha = 0.95;
+        Neo.ctx.fillStyle = Neo.SPECIAL_ROOM_DEFS[room.type].color;
       } else if (room.type === 'challenge') {
         Neo.ctx.globalAlpha = 0.95;
         Neo.ctx.fillStyle = '#d7f6ff';
@@ -474,6 +480,13 @@
         Neo.ctx.textAlign = 'center';
         Neo.ctx.textBaseline = 'middle';
         Neo.ctx.fillText('⚒', x + size / 2, y + size / 2);
+      } else if (Neo.SPECIAL_ROOM_DEFS?.[room.type] && showRoomGlyph) {
+        Neo.ctx.globalAlpha = roomExplored ? 1 : 0.72;
+        Neo.ctx.fillStyle = '#071116';
+        Neo.ctx.font = `bold ${markerFont}`;
+        Neo.ctx.textAlign = 'center';
+        Neo.ctx.textBaseline = 'middle';
+        Neo.ctx.fillText(Neo.SPECIAL_ROOM_DEFS[room.type].glyph, x + size / 2, y + size / 2);
       }
       // Forge/shop blink: draw a soft, slowly-blinking highlight ring around
       // revealed forge and shop rooms so they catch the eye on the minimap.

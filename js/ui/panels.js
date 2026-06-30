@@ -88,6 +88,11 @@ export function bindInput() {
         if (event.key === 'Escape') { event.preventDefault(); Neo.cancelVoucherRedeem?.(); }
         return;
       }
+      if (event.key === 'Escape' && Neo.isPanelOpen?.(document.getElementById('specialRoomPanel'))) {
+        event.preventDefault();
+        Neo.setSpecialRoomPanelOpen?.(false);
+        return;
+      }
       if (event.key === 'Escape' && isPanelOpen(Neo.ui.invPanel)) {
         event.preventDefault();
         setInventoryPanelOpen(false);
@@ -103,6 +108,11 @@ export function bindInput() {
         return;
       }
       if (key === interactKey && Neo.gameState === 'play') {
+        const inSpecialRoom = Neo.isSpecialRoom?.();
+        if (inSpecialRoom && !Neo.specialRoomKeyLatch) {
+          Neo.toggleSpecialRoomPanel?.();
+          Neo.specialRoomKeyLatch = true;
+        }
         const inShopRoom = Neo.currentRoom?.type === 'shop';
         if (inShopRoom && !Neo.shopKeyLatch) {
           toggleShopPanel();
@@ -148,7 +158,7 @@ export function bindInput() {
       const b = window.NeoSettings?.getBindings();
       const inventoryKey = b ? b.inventory : 'i';
       if ((b && key === b.smash) || (!b && key === 'r')) Neo.smashHeld = false;
-      if (key === String(b?.interact || 'e').toLowerCase()) { Neo.shopKeyLatch = false; Neo.anvilKeyLatch = false; Neo.ladderUseKeyLatch = false; }
+      if (key === String(b?.interact || 'e').toLowerCase()) { Neo.shopKeyLatch = false; Neo.anvilKeyLatch = false; Neo.specialRoomKeyLatch = false; Neo.ladderUseKeyLatch = false; }
       if (key === String(b?.activateAll ?? ' ').toLowerCase()) Neo.activateAllKeyLatch = false;
       if (key === inventoryKey) Neo.invKeyLatch = false;
       const upper = key.toUpperCase();
@@ -1680,7 +1690,7 @@ export function setVoucherModalOpen(open, options = {}) {
   }
 
 export function isOverlayBlockingInput() {
-    return isPanelOpen(Neo.ui.shopPanel) || isPanelOpen(Neo.ui.invPanel) || isPanelOpen(Neo.ui.anvilPanel) || isWizardPawOpen() || isExtraBatteryOpen() || isScrollControlOpen() || isVoucherModalOpen();
+    return isPanelOpen(Neo.ui.shopPanel) || isPanelOpen(Neo.ui.invPanel) || isPanelOpen(Neo.ui.anvilPanel) || isPanelOpen(document.getElementById('specialRoomPanel')) || isWizardPawOpen() || isExtraBatteryOpen() || isScrollControlOpen() || isVoucherModalOpen();
   }
 
 export function isGodSweepUnlocked() {

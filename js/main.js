@@ -17,6 +17,7 @@ import './game/roomTemplates.js';
 import './game/rooms.js';
 import './game/enemies.js';
 import './game/player.js';
+import './game/specialRooms.js';
 import './game/projectile-types.js';
 import './game/combat.js';
 import './core/update.js';

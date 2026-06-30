@@ -117,6 +117,10 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
     for (let index = 0; index < treasureCount; index += 1) {
       if (pool[index]) pool[index].type = 'treasure';
     }
+    // Reserve one rotating run-shaping service before the probabilistic Shop,
+    // Trial, and Forge rolls consume the remaining combat-room candidates.
+    // Floors 1-8 therefore expose every service once in a standard first loop.
+    Neo.assignSpecialServiceRoom?.(pool);
     const shopCandidate = pool.find(room => room.type === 'combat');
     if (shopCandidate && Neo.nextRandom('world') < 0.7) shopCandidate.type = 'shop';
     const challengeCandidate = pool.find(room => room.type === 'combat');
@@ -361,6 +365,7 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
     room.decorations = [];
     room.gardenFruitNodes = [];
     if (room.type === 'start') return;
+    const specialServiceRoom = !!Neo.SPECIAL_ROOM_TYPES?.has?.(room.type);
 
     if (room.type === 'secret') {
       const visitedFloors = Array.isArray(Neo.secretRoomVisitedFloors) ? Neo.secretRoomVisitedFloors : [];
@@ -405,17 +410,19 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
     }
 
     // Boss and god rooms need an open arena — structures block projectiles and beams
-    if (room.type !== 'god' && room.type !== 'boss') {
+    if (room.type !== 'god' && room.type !== 'boss' && !specialServiceRoom) {
       decorateRoomStructures(room);
     }
 
     // Procedural prop/hazard population (rules live in roomTemplates.js). The
     // hazard factories below are injected so the rules can stay data-only. RNG
     // consumption order is preserved, so seeded output is unchanged.
-    Neo.populateRoomProps(room, {
-      createCornerMoatLavaHazards,
-      createExplosiveTrapHazard,
-    });
+    if (!specialServiceRoom) {
+      Neo.populateRoomProps(room, {
+        createCornerMoatLavaHazards,
+        createExplosiveTrapHazard,
+      });
+    }
 
     Object.entries(room.secretPassages || {}).forEach(([dir, passage]) => {
       if (passage?.baneEscape) return;
@@ -444,6 +451,8 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
       room.challengeData = {};
     } else if (room.type === 'anvil') {
       room.cleared = true;
+    } else if (specialServiceRoom) {
+      Neo.prepareSpecialRoom?.(room);
     }
 
     decorateGardenRoomData(room);
@@ -1480,9 +1489,11 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
     // Storm challenge without going through its normal completion path.
     Neo.stopSfxLoop?.('lightning_storm_loop');
     syncCurrentRoomState();
+    Neo.setSpecialRoomPanelOpen?.(false);
     Neo.setShopPanelOpen(false);
     Neo.setInventoryPanelOpen(false);
     Neo.currentRoom = room;
+    Neo.prepareSpecialRoom?.(room);
     normalizeChallengeLifecycleState(room);
     Neo.minimapLegendDirty = true;
     const firstReveal = !room.visited;

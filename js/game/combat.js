@@ -3914,6 +3914,7 @@
       Neo.ringBurst(enemy.x, enemy.y, splashRadius, '#ff4f6d', 0.36);
     }
     if (Neo.player) Neo.player.kills = Math.max(0, Number(Neo.player.kills || 0)) + 1;
+    Neo.notifyBountyEnemyKilled?.(enemy);
     window.achievementEvents?.emit('enemy:killed');
     // Sarge's Hammer: 2 kills within 1 second launch a homing hammer that strikes a
     // foe, then returns to Sarge — healing and pulling pickups on the way back. A

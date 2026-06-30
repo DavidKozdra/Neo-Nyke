@@ -196,6 +196,10 @@
     if (!room) return Neo.ROOM_ART_THEMES.dungeon;
     if (room.type === 'shop') return Neo.ROOM_ART_THEMES.shop;
     if (room.type === 'anvil') return Neo.ROOM_ART_THEMES.anvil;
+    if (room.type === 'reliquary') return Neo.ROOM_ART_THEMES.anvil;
+    if (room.type === 'portal') return Neo.ROOM_ART_THEMES.secret;
+    if (room.type === 'wishing_well') return Neo.ROOM_ART_THEMES.treasure;
+    if (room.type === 'shrine' || room.type === 'sanctuary' || room.type === 'oracle') return Neo.ROOM_ART_THEMES.god;
     if (room.type === 'god') return Neo.ROOM_ART_THEMES.god;
     if (room.type === 'boss' || Neo.BOSS_TYPES.has(room.type)) return Neo.ROOM_ART_THEMES.boss;
     if (room.type === 'secret') return Neo.ROOM_ART_THEMES.secret;

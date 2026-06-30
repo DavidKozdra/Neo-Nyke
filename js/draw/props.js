@@ -1313,6 +1313,32 @@
         Neo.ctx.lineTo(14, 10);
         Neo.ctx.closePath();
         Neo.ctx.fill();
+      } else if (pickup.type === 'specialService') {
+        const def = Neo.SPECIAL_ROOM_DEFS?.[pickup.serviceType] || { glyph: '?', name: 'Service', color: '#d7f6ff' };
+        const pulse = 0.5 + Math.sin(Date.now() / 240) * 0.5;
+        Neo.ctx.shadowColor = def.color;
+        Neo.ctx.shadowBlur = 18 + pulse * 8;
+        Neo.ctx.strokeStyle = def.color;
+        Neo.ctx.fillStyle = 'rgba(7, 12, 18, .9)';
+        Neo.ctx.lineWidth = 3;
+        Neo.ctx.beginPath();
+        Neo.ctx.arc(0, 0, 25, 0, Math.PI * 2);
+        Neo.ctx.fill();
+        Neo.ctx.stroke();
+        Neo.ctx.globalAlpha = 0.3 + pulse * 0.35;
+        Neo.ctx.beginPath();
+        Neo.ctx.arc(0, 0, 34 + pulse * 4, 0, Math.PI * 2);
+        Neo.ctx.stroke();
+        Neo.ctx.globalAlpha = 1;
+        Neo.ctx.shadowBlur = 8;
+        Neo.ctx.fillStyle = def.color;
+        Neo.ctx.font = 'bold 22px system-ui';
+        Neo.ctx.textAlign = 'center';
+        Neo.ctx.textBaseline = 'middle';
+        Neo.ctx.fillText(def.glyph, 0, 1);
+        Neo.ctx.shadowBlur = 0;
+        Neo.ctx.font = 'bold 10px system-ui';
+        Neo.ctx.fillText(def.name.toUpperCase(), 0, 45);
       } else if (pickup.type === 'challengeStarter') {
         const trial = pickup.trial || 'mirror';
         const color = trial === 'bomb' ? '#ff8a6a' : trial === 'storm' ? '#8dd4ff' : trial === 'survival' ? '#ffcf7d' : '#d7f6ff';

@@ -32,6 +32,14 @@ Controls are fully remappable in Settings.
 - **Treasure** — chests with item drops
 - **Anvil** — spend XP to upgrade weapons and moves
 - **Challenge** — optional modifiers (No Hit, No Items, etc.)
+- **God Altar** — sacrifice health, relics, or safety for run power
+- **Bounty Board** — accept a pictured elite target that joins the next combat for a reward
+- **Reliquary** — fuse, distill, or duplicate owned relics
+- **Sanctuary** — restore health, supplies, charges, or cleanse curses
+- **Oracle** — reveal or rewrite part of the current floor
+- **Portal Chamber** — teleport, reroute, or abandon the current floor
+- **Prison** — rescue one specialist for an immediate run bonus
+- **Wishing Well** — gamble coins or maximum health on a hidden outcome
 - **Ladder** — exit to the next floor
 - **Secret** — hidden rooms
 - **Boss / God** — final floor encounters

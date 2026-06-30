@@ -86,6 +86,9 @@
       }
       if (Neo.currentRoom.type === 'shop') entries.push({ text: 'Buy upgrades or move on', state: 'warn' });
       if (Neo.currentRoom.type === 'anvil') entries.push({ text: 'Forge upgrades or move on', state: 'warn' });
+      if (Neo.isSpecialRoom?.()) entries.push({ text: Neo.currentRoom.serviceUsed ? 'Choice sealed - move on' : 'Choose one room service', state: Neo.currentRoom.serviceUsed ? 'done' : 'warn' });
+      const bountyObjective = Neo.getActiveBountyObjective?.();
+      if (bountyObjective) entries.push({ text: bountyObjective, state: 'warn' });
       if (thornBaneEscape) {
         entries.push({
           text: Neo.currentRoom.baneEscapeRevealed ? 'Escape through the hidden door' : 'Listen to Bowman Bane',
@@ -211,6 +214,11 @@
       }
       if (Neo.currentRoom.type === 'anvil') {
         setObjective('Forge upgrades or move on.');
+        return;
+      }
+      if (Neo.isSpecialRoom?.()) {
+        const def = Neo.SPECIAL_ROOM_DEFS?.[Neo.currentRoom.type];
+        setObjective(Neo.currentRoom.serviceUsed ? `${def?.name || 'Service'} used. Move on.` : `Choose one ${def?.name || 'room'} option.`);
         return;
       }
       if (Neo.currentRoom.type === 'challenge') {
@@ -592,7 +600,8 @@
         : '';
       const isShop = Neo.currentRoom?.type === 'shop' && !Neo.isPanelOpen(Neo.ui.shopPanel);
       const isAnvil = Neo.currentRoom?.type === 'anvil' && !Neo.isPanelOpen(Neo.ui.anvilPanel);
-      const isLadder = !isShop && !isAnvil && !!Neo.isAtLadder?.();
+      const isSpecial = Neo.isSpecialRoom?.() && !Neo.isPanelOpen(document.getElementById('specialRoomPanel'));
+      const isLadder = !isShop && !isAnvil && !isSpecial && !!Neo.isAtLadder?.();
       if (isShop) {
         Neo.ui.interactPrompt.textContent = `[${shopHint}]${touchHint}  Open Shop`;
         Neo.ui.interactPrompt.classList.remove('hidden', 'interact-prompt--forge');
@@ -600,6 +609,10 @@
         Neo.ui.interactPrompt.textContent = `[${shopHint}]${touchHint}  Open Forge`;
         Neo.ui.interactPrompt.classList.remove('hidden');
         Neo.ui.interactPrompt.classList.add('interact-prompt--forge');
+      } else if (isSpecial) {
+        const serviceName = Neo.SPECIAL_ROOM_DEFS?.[Neo.currentRoom.type]?.name || 'Service';
+        Neo.ui.interactPrompt.textContent = `[${shopHint}]${touchHint}  Open ${serviceName}`;
+        Neo.ui.interactPrompt.classList.remove('hidden', 'interact-prompt--forge');
       } else if (isLadder) {
         Neo.ui.interactPrompt.textContent = `[${shopHint}]${touchHint}  Use Ladder`;
         Neo.ui.interactPrompt.classList.remove('hidden', 'interact-prompt--forge');
