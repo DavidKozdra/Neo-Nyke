@@ -22,6 +22,13 @@
   pointer-events: none;
 }
 
+/* Route ("go to the door") steps point an arrow at the doorway and light up the
+   minimap instead of dimming the screen — the full-screen tint read as harsh
+   when the player only needs a direction. */
+.tutorial-overlay.tutorial-route .tutorial-spotlight {
+  display: none;
+}
+
 .tutorial-target-ring {
   position: fixed;
   z-index: 2;
@@ -104,6 +111,36 @@
 .tutorial-target-ring--offscreen[data-direction="down"]::after {
   top: calc(100% + 18px);
   transform: translate(-50%, -50%) rotate(135deg);
+}
+
+/* Minimap highlight shown alongside a route step so the player connects the
+   on-screen doorway arrow with the map. Yellow to match the route ring. */
+.tutorial-minimap-ring {
+  position: fixed;
+  z-index: 2;
+  box-sizing: border-box;
+  border: 3px solid #ffe66f;
+  border-radius: 12px;
+  box-shadow:
+    0 0 0 2px rgba(5, 12, 20, .92),
+    0 0 22px rgba(255, 220, 80, .9),
+    inset 0 0 14px rgba(255, 220, 80, .2);
+  pointer-events: none;
+  animation: tutorial-target-pulse 1.05s ease-in-out infinite;
+}
+
+.tutorial-minimap-ring.hidden {
+  display: none !important;
+}
+
+html.princess-ui .tutorial-minimap-ring {
+  border-color: #ff9acf;
+  box-shadow: 0 0 0 2px rgba(25, 5, 20, .92), 0 0 22px rgba(255, 130, 205, .9);
+}
+
+.acc-high-contrast .tutorial-minimap-ring {
+  border-color: #ff0;
+  box-shadow: 0 0 0 3px #000, 0 0 0 6px #fff;
 }
 
 .tutorial-card {
@@ -291,6 +328,18 @@
   background: rgba(72, 25, 35, .66);
 }
 
+/* During the HUD-layout tutorial step the layout editor (z 9000) is open. Lift
+   the tutorial overlay above it so the step's instructions and Continue button
+   stay readable and clickable over the editor. The dim spotlight is suppressed
+   so the editor underneath reads clearly. */
+.tutorial-hud-editing .tutorial-overlay {
+  z-index: 9001;
+}
+
+.tutorial-hud-editing .tutorial-spotlight {
+  display: none;
+}
+
 .tutorial-active #objectiveTracker {
   max-height: 104px;
 }
@@ -389,8 +438,12 @@ html.princess-ui .tutorial-target-ring {
 
 @media (max-width: 720px) {
   .tutorial-card {
-    width: calc(100vw - 16px) !important;
-    max-height: min(42dvh, 360px);
+    /* Cap both axes so the HUD never swallows the screen on phones. The width
+       leaves room on the right for the hamburger when the card is top-anchored;
+       JS still positions it but this is the hard ceiling. */
+    width: min(360px, calc(100vw - 16px)) !important;
+    max-width: min(360px, calc(100vw - 16px));
+    max-height: min(40dvh, 300px);
     padding: 12px 13px 11px;
     border-radius: 10px;
   }
@@ -465,14 +518,17 @@ html.princess-ui .tutorial-target-ring {
 
 @media (max-height: 520px) and (orientation: landscape) {
   .tutorial-card {
-    width: min(390px, 46vw) !important;
-    max-height: calc(100dvh - 16px);
+    width: min(360px, 46vw) !important;
+    max-width: min(360px, 46vw);
+    /* Leave the bottom strip free for the joystick / button cluster. */
+    max-height: min(78dvh, 300px);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .tutorial-target-ring,
   .tutorial-target-ring::after,
+  .tutorial-minimap-ring,
   .tutorial-card--enter,
   .tutorial-card--celebrate,
   .tutorial-target-ring--clear,

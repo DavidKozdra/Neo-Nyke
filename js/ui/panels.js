@@ -1830,12 +1830,27 @@ export function getShopWeaponOffers() {
     return chips;
   }
 
+  // Format the live damage readout into the shop chip's "value" text (the chip
+  // already prefixes the "DMG" label). Falls back to the static base when the
+  // calculator has nothing (utility items).
+  function shopDamageValue(key, kind, base) {
+    const dmg = Neo.getDisplayDamage?.(key, kind);
+    if (dmg) {
+      let v = dmg.min === dmg.max ? `${dmg.min}` : `${dmg.min}–${dmg.max}`;
+      if (dmg.tick) v += '/tick';
+      if (dmg.hits > 1) v += ` ×${dmg.hits}`;
+      return v;
+    }
+    return base ? formatShopStatValue(base) : null;
+  }
+
   function buildWeaponShopStats(weaponKey) {
     const base = Neo.WEAPON_BASE_STATS?.[weaponKey] || {};
     const projectileConfig = Neo.buildWeaponProjectileConfig?.(weaponKey);
     const range = Number(base.range ?? (projectileConfig ? projectileConfig.speed * projectileConfig.life : 0));
+    const dmgValue = shopDamageValue(weaponKey, 'weapon', base.damage);
     return [
-      base.damage ? { label: 'DMG', value: formatShopStatValue(base.damage) } : null,
+      dmgValue ? { label: 'DMG', value: dmgValue } : null,
       base.cooldown ? { label: 'CD', value: Number(base.cooldown).toFixed(2) + 's' } : null,
       range ? { label: 'RNG', value: formatShopStatValue(range) } : null,
     ];
@@ -1843,8 +1858,9 @@ export function getShopWeaponOffers() {
 
   function buildMoveShopStats(moveKey) {
     const base = Neo.MOVE_BASE_STATS?.[moveKey] || {};
+    const dmgValue = shopDamageValue(moveKey, 'move', base.damage);
     return [
-      base.damage ? { label: 'DMG', value: formatShopStatValue(base.damage) } : null,
+      dmgValue ? { label: 'DMG', value: dmgValue } : null,
       base.cooldown ? { label: 'CD', value: Number(base.cooldown).toFixed(2) + 's' } : null,
       base.duration
         ? { label: 'DUR', value: formatShopStatValue(base.duration, 's') }
@@ -2645,11 +2661,12 @@ export function renderInventoryPanel() {
           .map(key => {
             const def = Neo.WEAPON_DEFS[key];
             const equipped = _invP.equippedWeapon === key;
+            const dmg = Neo.getDisplayDamage?.(key, 'weapon');
             return `<button class="inv-move-chip${equipped ? ' is-equipped-weapon' : ''}" data-weapon="${key}" type="button" aria-pressed="${equipped ? 'true' : 'false'}">
               <canvas class="inv-chip__icon" data-weapon-icon="${key}" width="30" height="30"></canvas>
               <div class="inv-move-chip__meta">
                 <b style="color:${Neo.getRarityNameColor(def?.rarity)}">${def?.name || key}</b>
-                <span class="inv-move-chip__slot">${def?.rarity || 'weapon'}</span>
+                <span class="inv-move-chip__slot">${def?.rarity || 'weapon'}${dmg ? ` · ${Neo.escapeHtml(dmg.label)}` : ''}</span>
               </div>
               <p>${def?.description || 'No weapon description available.'}</p>
               <div class="inv-chip-footer">
@@ -2814,6 +2831,9 @@ export function renderInventoryPanel() {
             ? (Neo.getWeaponMaxCharges?.(meleeWeapon.key, _invP) || 1)
             : Neo.getMoveMaxStacks(key, _invP.character, _invP);
           const slotLabel = Neo.SLOT_LABELS[def.slot] || def.slot;
+          const moveDmg = key === 'slash' && meleeWeapon
+            ? Neo.getDisplayDamage?.(meleeWeapon.key, 'weapon')
+            : Neo.getDisplayDamage?.(key, 'move');
           const hintText = isBatterySelectable
             ? `Charges ${currentMaxStacks} → ${currentMaxStacks + 1}`
             : (isEquipped ? `${slotLabel} slot` : (isMatch ? 'Selected slot' : `Fits ${slotLabel}`));
@@ -2824,7 +2844,7 @@ export function renderInventoryPanel() {
             <canvas class="inv-chip__icon" data-move-icon="${key}" width="30" height="30"></canvas>
             <div class="inv-move-chip__meta">
               <b>${def.name}</b>
-              <span class="inv-move-chip__slot">${slotLabel}</span>
+              <span class="inv-move-chip__slot">${slotLabel}${moveDmg ? ` · ${Neo.escapeHtml(moveDmg.label)}` : ''}</span>
             </div>
             <p>${def.desc}</p>
             <div class="inv-chip-footer">

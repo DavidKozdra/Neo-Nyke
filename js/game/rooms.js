@@ -1781,19 +1781,12 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
       ensureFeaturedGodOffer(room);
       ensureShopScrollOffer(room);
       ensureShopTradeOffer(room);
+      layoutShopItemOffers(room);
       return;
     }
 
     const shopRandom = Neo.createRoomRandom(room, 'shop:item-offers');
     const occupiedKeys = new Set(itemOffers.map(offer => offer.key));
-    const itemSlots = [
-      { x: Neo.ROOM_W / 2 - 240, y: Neo.ROOM_H / 2 - 16 },
-      { x: Neo.ROOM_W / 2 - 80, y: Neo.ROOM_H / 2 - 16 },
-      { x: Neo.ROOM_W / 2 + 80, y: Neo.ROOM_H / 2 - 16 },
-      { x: Neo.ROOM_W / 2 + 240, y: Neo.ROOM_H / 2 - 16 },
-      { x: Neo.ROOM_W / 2 - 160, y: Neo.ROOM_H / 2 + 48 },
-      { x: Neo.ROOM_W / 2 + 160, y: Neo.ROOM_H / 2 + 48 },
-    ];
     let created = 0;
 
     while (itemOffers.length + created < targetItemOffers) {
@@ -1808,14 +1801,13 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
       if (!key) key = Neo.rollItemDrop({ random: shopRandom });
       occupiedKeys.add(key);
       const itemIndex = itemOffers.length + created;
-      const slot = itemSlots[itemIndex] || { x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 16 };
       const rarity = Neo.itemRegistry.get(key)?.rarity || Neo.ITEM_DEFS[key]?.rarity || 'knight';
       room.shopOffers.push({
         type: 'item',
         key,
         cost: Neo.getShopItemCost(itemIndex, Neo.getShopProgressionDepth?.() ?? Neo.floor, Neo.selectedDifficulty, rarity),
-        x: slot.x,
-        y: slot.y,
+        x: Neo.ROOM_W / 2,
+        y: Neo.ROOM_H / 2 - 16,
         bought: false,
       });
       created += 1;
@@ -1823,6 +1815,44 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
     ensureFeaturedGodOffer(room);
     ensureShopScrollOffer(room);
     ensureShopTradeOffer(room);
+    // Position every floor display once the full offer set is known, so the grid
+    // is sized for the real count (base + rich-man's-luck extras + scroll).
+    layoutShopItemOffers(room);
+  }
+
+  // Assigns each shop item display a centered, in-bounds floor position on a grid
+  // sized for the actual number of displays. A fixed 6-slot table used to stack
+  // overflow offers at center / jam the scroll into a corner once the count grew
+  // past it; laying everything out together keeps all displays on screen.
+  function layoutShopItemOffers(room) {
+    if (!room || room.type !== 'shop') return;
+    const displays = (room.shopOffers || []).filter(offer => offer?.type === 'item');
+    displays.forEach((offer, index) => {
+      const slot = getShopItemSlot(index, displays.length);
+      offer.x = slot.x;
+      offer.y = slot.y;
+    });
+  }
+
+  // Computes a centered, in-bounds floor position for shop item display `index`
+  // (0-based) out of `total` displays. Displays flow left-to-right in rows of up
+  // to SHOP_GRID_COLS, and rows are centered both horizontally and vertically so
+  // the whole spread stays within the camera view regardless of count.
+  function getShopItemSlot(index, total) {
+    const SHOP_GRID_COLS = 4;
+    const COL_SPACING = 150;
+    const ROW_SPACING = 76;
+    const count = Math.max(1, Math.floor(Number(total) || 1));
+    const idx = Math.max(0, Math.min(Math.floor(Number(index) || 0), count - 1));
+    const cols = Math.min(SHOP_GRID_COLS, count);
+    const rows = Math.ceil(count / cols);
+    const row = Math.floor(idx / cols);
+    // Last row may be short; center the items it actually holds.
+    const itemsInRow = Math.min(cols, count - row * cols);
+    const colInRow = idx - row * cols;
+    const x = Neo.ROOM_W / 2 + (colInRow - (itemsInRow - 1) / 2) * COL_SPACING;
+    const y = Neo.ROOM_H / 2 - 16 + (row - (rows - 1) / 2) * ROW_SPACING;
+    return { x, y };
   }
 
   // 50% of shops feature a guaranteed god-tier (yellow) item. It replaces one
@@ -1885,12 +1915,14 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
     const key = rollScrollOfControl(shopRandom);
     if (!key) return null;
     const itemIndex = itemOfferCount;
+    // Position is a placeholder; layoutShopItemOffers re-slots every display once
+    // the full offer set (including this scroll) is known.
     room.shopOffers.push({
       type: 'item',
       key,
       cost: Neo.getShopItemCost(itemIndex, Neo.getShopProgressionDepth?.() ?? Neo.floor, Neo.selectedDifficulty, 'knight'),
-      x: Neo.ROOM_W / 2 + 260,
-      y: Neo.ROOM_H / 2 + 56,
+      x: Neo.ROOM_W / 2,
+      y: Neo.ROOM_H / 2 - 16,
       bought: false,
       scrollOffer: true,
     });
@@ -2398,9 +2430,13 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
     const rollPassed = Neo.nextRandom('world') <= Neo.RIVAL_SPAWN_CHANCE;
 
     if (rollPassed && nonStartRooms.length > 0) {
+      const completedLoops = Math.max(0, Number(Neo.runLoopIndex) || 0);
       let unchosen = Object.keys(Neo.CHARACTER_DEFS).filter(k => k !== Neo.chosenCharacter
         && Neo.RIVAL_DEFS[k]
         && !carriedKeys.has(k)
+        // Endgame rivals (e.g. Turtle Boy) only unlock after enough completed
+        // loops. minLoopIndex is the number of loops that must be finished first.
+        && completedLoops >= Math.max(0, Number(Neo.RIVAL_DEFS[k].minLoopIndex) || 0)
         // Fully-slain rivals (all lives taken) never come back this run, and
         // rivals waiting on a return floor shouldn't spawn a duplicate.
         && !(Neo.slainRivalKeys || []).includes(k)

@@ -216,6 +216,127 @@
     return Neo.getDefaultMovesForCharacter(Neo.player?.character || Neo.chosenCharacter)[slot] || (slot === 'dash' ? 'dash' : slot === 'melee' ? 'slash' : slot === 'laser' ? 'blood_beam' : 'crimson_smash');
   }
 
+  // --- Live damage readout (for tooltips / inventory / shop) ----------------
+  // Reproduces the player-side scaling that scaleDamageAgainstEnemy() applies,
+  // but with NO enemy (no defense, flat reduction, bleed bonus, or boss kronos).
+  // This is the "what one hit does right now with my build" number. Keep this in
+  // lockstep with the `powered = ...` line in scaleDamageAgainstEnemy().
+  function scalePlayerDamageForDisplay(base, stats) {
+    const s = stats || Neo.getItemStats();
+    const characterMultiplier = Neo.getCharacterDef().damageMultiplier || 1;
+    const powered = (Number(base) + (Neo.player?.attackPower || 0))
+      * characterMultiplier
+      * (s.levelEdgeDamageMultiplier || 1)
+      * (s.kronosDamageMultiplier || 1)
+      * (Neo.isChallengeActive?.('glass_cannon') ? 1.25 : 1);
+    return Math.max(1, Math.round(powered));
+  }
+
+  // Per-key damage shapes. `base` is the REAL pre-hit damage the cast passes to
+  // hitEnemy() in combat.js (a hardcoded literal for most moves — NOT the
+  // *_BASE_STATS table, which diverges for several moves). `mult` names an item
+  // multiplier from getItemStats() applied before the shared pipeline. `charge`
+  // is [minFactor, maxFactor] for hold-to-charge moves. `tick`/`hits` annotate
+  // beams and multi-hit bursts for labelling.
+  const DISPLAY_DAMAGE = {
+    // melee moves
+    slash:            { base: 24 },
+    fire_balls:       { base: 22, hits: 3 },
+    smite:            { base: 20 },
+    narwal_fight:     { base: 40 },
+    mooggy_swipe:     { base: 44, charge: [1, 2.5] },
+    // laser moves
+    blood_beam:       { base: 10, mult: 'beamDamageMultiplier', tick: true },
+    love_beam:        { base: 18, mult: 'beamDamageMultiplier', tick: true },
+    turtle_wave:      { base: 34, mult: 'beamDamageMultiplier', tick: true },
+    power_disks:      { base: 20, hits: 8 },
+    blade_justice:    { base: 22, mult: 'beamDamageMultiplier' },
+    lightning_columns:{ base: 18 },
+    god_sweep:        { base: 12, mult: 'beamDamageMultiplier', tick: true },
+    nail_shot:        { base: 18, hits: 12 },
+    wizard_lazer:     { base: 30, mult: 'beamDamageMultiplier', tick: true },
+    mooggy_blood_beam:{ base: 12, mult: 'beamDamageMultiplier', tick: true },
+    thorn_blood_beams:{ base: 8,  mult: 'beamDamageMultiplier', tick: true, hits: 4 },
+    laser_shockwave:  { base: 22 },
+    // smash moves
+    crimson_smash:    { base: 46, mult: 'aoeDamageMultiplier' },
+    hammer_smash:     { base: 46, mult: 'aoeDamageMultiplier' },
+    chaos_burst:      { base: 18, mult: 'aoeDamageMultiplier' },
+    fire_circle:      { base: 18, mult: 'aoeDamageMultiplier', tick: true },
+    kicky_kick:       { base: 184 },
+    wall_of_toph:     { base: 46, mult: 'aoeDamageMultiplier' },
+    random_pounce:    { base: 52, mult: 'aoeDamageMultiplier' },
+    mooggy_hairball:  { base: 34, mult: 'aoeDamageMultiplier' },
+    excalibur_strike: { base: 46, mult: 'aoeDamageMultiplier', hits: 5 },
+    holy_turrets:     { base: 26, mult: 'aoeDamageMultiplier' },
+    death_ball:       { base: 40, charge: [0.6, 2.6] },
+    turtle_powerup:   { base: 18, charge: [1, 44 / 18] },
+    // dash moves that hit
+    zip_lightning:    { base: 26 },
+    nimrod_stomp:     { base: 46, mult: 'aoeDamageMultiplier' },
+    knight_slash_dash:{ base: 42 },
+  };
+
+  // Returns { min, max, tick, hits, label } for a weapon/move, or null if the
+  // item deals no measurable single-hit damage (pure utility/mobility).
+  function getDisplayDamage(key, kind) {
+    if (!key) return null;
+    // The codex is reachable from the main menu with no active run, where
+    // getItemStats() has no player to read. Fall back to neutral multipliers so
+    // those screens show the build-independent base instead of throwing.
+    let stats;
+    try { stats = Neo.getItemStats(); } catch (_e) { stats = {}; }
+    if (!stats) stats = {};
+    let baseLow, baseHigh, tick = false, hits = 0;
+
+    if (kind === 'weapon') {
+      const wb = Neo.WEAPON_BASE_STATS?.[key];
+      // Excalibur / Katana deal a % of the player's base damage, not the flat
+      // table value; Lazer Glasses is a beam whose real per-tick damage (9) is
+      // lower than its table entry. Handle both before the generic table branch.
+      if (key === 'excalibur' || key === 'katana_excalibur_777x') {
+        baseLow = baseHigh = getPlayerBaseDamage() * 7.77 + (Neo.getAnvilWeaponBonus?.(key, 'damage') || 0);
+      } else if (key === 'lazer_glasses') {
+        baseLow = baseHigh = 9 * (stats.beamDamageMultiplier || 1);
+        tick = true;
+      } else if (wb && wb.damage) {
+        baseLow = baseHigh = wb.damage + (Neo.getAnvilWeaponBonus?.(key, 'damage') || 0);
+        if (key === 'claw_gauntlets') hits = 2;
+        if (key === 'magenta_p90') hits = 5;
+        if (key === 'metao_fire_staff') hits = 3;
+      } else {
+        return null;
+      }
+    } else {
+      const shape = DISPLAY_DAMAGE[key];
+      if (!shape) return null; // utility/mobility moves: no damage line
+      const anvil = Neo.getAnvilMoveBonus?.(key, 'damage') || 0;
+      let lo = shape.base + anvil;
+      let hi = shape.base + anvil;
+      if (shape.mult) {
+        const m = Number(stats[shape.mult] || 1);
+        lo *= m; hi *= m;
+      }
+      if (shape.charge) { lo *= shape.charge[0]; hi *= shape.charge[1]; }
+      baseLow = lo; baseHigh = hi;
+      tick = !!shape.tick;
+      hits = shape.hits || 0;
+    }
+
+    const min = scalePlayerDamageForDisplay(baseLow, stats);
+    const max = scalePlayerDamageForDisplay(baseHigh, stats);
+    return { min, max, tick, hits, label: formatDisplayDamage({ min, max, tick, hits }) };
+  }
+
+  // "DMG 73" | "DMG 24–104" | "DMG 18/tick" | "DMG 22 ×8"
+  function formatDisplayDamage(d) {
+    if (!d) return '';
+    let n = d.min === d.max ? `${d.min}` : `${d.min}–${d.max}`;
+    if (d.tick) n += '/tick';
+    if (d.hits > 1) n += ` ×${d.hits}`;
+    return `DMG ${n}`;
+  }
+
   function getEquippedWeapon() {
     const key = Neo.player?.equippedWeapon || '';
     return Neo.WEAPON_DEFS[key] ? key : '';
@@ -1864,6 +1985,7 @@
 
   function castNarwalFight() {
     const angle = Neo.angleToMouse();
+    Neo.playSfx?.('sword_swing');
     fireWeaponSweep(40, 136, 1.45, 280, '#ff8ed0');
     spawnWeaponProjectile({
       x: Neo.player.x + Math.cos(angle) * 22,
@@ -1952,6 +2074,7 @@
       roomMoveCandidates.push({ enemy, angle: enemyAngle });
     });
     roomMoveCandidates.forEach(candidate => tryMoveKickyKickEnemyToNextRoom(candidate.enemy, candidate.angle));
+    Neo.playSfx?.('aoe');
     Neo.player.vx -= Math.cos(angle) * 260;
     Neo.player.vy -= Math.sin(angle) * 260;
     // Kick the camera back along the recoil direction (away from the strike).
@@ -1960,6 +2083,7 @@
   }
 
   function castFlyingUntouchable() {
+    Neo.playSfx?.('dash');
     Neo.player.princessFlightTime = 15;
     Neo.player.inv = Math.max(Neo.player.inv, 15);
     Neo.player.vx = 0;
@@ -4464,7 +4588,7 @@
     if (itemKey !== 'robot_arm' || previousCount > 0 || !Neo.player) return;
     Neo.player.robotArmReady = true;
     Neo.player.robotArmChargeKills = 0;
-    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 30, life: 0.8, text: 'ARM READY', c: '#a9e6ff' });
+    Neo.pushReadyNotification('robot_arm');
   }
 
   function canDuplicateItemPickup(itemKey) {
@@ -4656,9 +4780,10 @@
     Neo.markInventoryPanelDirty();
     if ((Neo.VOUCHER_KEYS || []).includes(itemKey)) Neo.refreshShopVoucherBanner?.();
     Neo.pushItemNotification(itemKey, collectCount);
-    if (duplicatePickup) {
-      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 42, life: 0.85, text: 'ITEM DOUBLED', c: '#d8c0ff' });
-    }
+    // The bonus copy from a duplicate roll gets its own compact status toast,
+    // so the pickup card above stays a clean "new item" card rather than
+    // conflating "Copied!" into the item's description.
+    if (duplicatePickup) Neo.pushCopiedNotification(itemKey);
     const totalItems = Object.values(Neo.player.items).reduce((s, v) => s + Number(v || 0), 0);
     window.achievementEvents?.emit('item:collected', { totalItems });
 
@@ -4696,6 +4821,8 @@
   Neo.getEnemyBleedResistance = getEnemyBleedResistance;
   Neo.scaleBleedDamageAgainstEnemy = scaleBleedDamageAgainstEnemy;
   Neo.getPlayerBaseDamage = getPlayerBaseDamage;
+  Neo.getDisplayDamage = getDisplayDamage;
+  Neo.formatDisplayDamage = formatDisplayDamage;
   Neo.getEquippedMove = getEquippedMove;
   Neo.getEquippedWeapon = getEquippedWeapon;
   Neo.getWeaponBaseCooldown = getWeaponBaseCooldown;

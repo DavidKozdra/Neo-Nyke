@@ -408,11 +408,26 @@ function getSettingsActiveTheme() {
   }
 
 export function syncCharacterUiTheme() {
+    const uiCharacterKey = getUiCharacterKey();
     const activeTheme = getSettingsActiveTheme();
-    const hasExplicitTheme = !!activeTheme && activeTheme !== '_custom';
+    // 'dark' is identical to the base CSS :root, so it reads as "no real
+    // override" — that lets the princess character supply the princess UI as
+    // its default even for players who have an old 'dark' value persisted.
+    const hasExplicitTheme = window.NeoSettings?.hasExplicitTheme
+      ? window.NeoSettings.hasExplicitTheme()
+      : (!!activeTheme && activeTheme !== '_custom' && activeTheme !== 'dark');
+    // The princess skin is active when the player explicitly picks the princess
+    // theme, or when no explicit theme is set and the princess character is in
+    // play (the character supplies its theme as a default).
     const princessFromSettings = activeTheme === 'princess';
-    const princessFromCharacter = !hasExplicitTheme && getUiCharacterKey() === 'princess';
+    const princessFromCharacter = !hasExplicitTheme && uiCharacterKey === 'princess';
     document.documentElement.classList.toggle('princess-ui', princessFromSettings || princessFromCharacter);
+
+    // Keep the menu-color vars in step with the skin: pushing the princess
+    // preset's --menu-* values when the princess UI is active (the skin's CSS
+    // reads them), and restoring the settings/base theme otherwise. settings-ui
+    // owns the preset data, so it resolves which vars to apply.
+    window.NeoSettings?.applyEffectiveTheme?.(uiCharacterKey);
 
     if (!settingsThemeSyncBound) {
       settingsThemeSyncBound = true;
@@ -2084,7 +2099,7 @@ export function consumeCharge(chargeType) {
         Neo.player.insuranceReady = true;
         Neo.player.insuranceChargeKills = 0;
         Neo.player.insuranceActive = false;
-        Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.7, text: 'INSURANCE READY', c: '#e8ecff' });
+        Neo.pushReadyNotification('insurance');
       }
     }
 
@@ -2093,7 +2108,7 @@ export function consumeCharge(chargeType) {
       if (Neo.player.keenEyeChargeKills >= getChargeRequirement(10)) {
         Neo.player.keenEyeReady = true;
         Neo.player.keenEyeChargeKills = 0;
-        Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.7, text: 'KEEN READY', c: '#f2fbff' });
+        Neo.pushReadyNotification('keen_eye');
       }
     }
 
@@ -2102,7 +2117,7 @@ export function consumeCharge(chargeType) {
       if (Neo.player.critCharmChargeKills >= getCritCharmKillRequirement()) {
         Neo.player.critCharmChargeKills = 0;
         grantCritCharmBurst();
-        Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 28, life: 0.7, text: 'CRIT SURGE', c: '#ffd15a' });
+        Neo.pushReadyNotification('crit_charm', { label: 'Surge' });
       }
     }
 
@@ -2111,7 +2126,7 @@ export function consumeCharge(chargeType) {
       if (Neo.player.chronoSpringChargeKills >= getChargeRequirement(7)) {
         Neo.player.chronoSpringReady = true;
         Neo.player.chronoSpringChargeKills = 0;
-        Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 36, life: 0.7, text: 'SPRING READY', c: '#d9f7ff' });
+        Neo.pushReadyNotification('chrono_spring');
       }
     }
 
@@ -2123,7 +2138,7 @@ export function consumeCharge(chargeType) {
         const slotIdx = Neo.player?.equipmentSlots?.indexOf?.('charged_adapter') ?? -1;
         const slotLetter = slotIdx >= 0 ? (Neo.EQUIPMENT_SLOT_KEYS?.[slotIdx] || 'F') : 'F';
         const warpHint = Neo.formatControlLabel(slotLetter.toLowerCase(), slotLetter.toLowerCase());
-        Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 36, life: 0.9, text: `ADAPTER READY - PRESS ${warpHint}`, c: '#b88cff' });
+        Neo.pushReadyNotification('charged_adapter', { note: `Press ${warpHint} to warp` });
       }
     }
 
@@ -2132,7 +2147,7 @@ export function consumeCharge(chargeType) {
       if (Neo.player.robotArmChargeKills >= getChargeRequirement(8)) {
         Neo.player.robotArmReady = true;
         Neo.player.robotArmChargeKills = 0;
-        Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 30, life: 0.8, text: 'ARM READY', c: '#a9e6ff' });
+        Neo.pushReadyNotification('robot_arm');
       }
     }
 
@@ -2141,7 +2156,7 @@ export function consumeCharge(chargeType) {
       if (Neo.player.scarfChargeKills >= getChargeRequirement(6)) {
         Neo.player.scarfHealReady = true;
         Neo.player.scarfChargeKills = 0;
-        Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.7, text: 'SCARF READY', c: '#0f8' });
+        Neo.pushReadyNotification('hemes_scarf');
       }
     }
   });

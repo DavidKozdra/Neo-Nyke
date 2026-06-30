@@ -1554,6 +1554,7 @@
     const def = ACTIVATABLE_ITEMS[itemKey];
     if (!def?.activate) return false;
     def.activate();
+    Neo.tutorialController?.signal?.('tool-fired', { itemKey });
     return true;
   }
   Neo.activateEquipmentSlotKey = activateEquipmentSlotKey;
@@ -1567,6 +1568,7 @@
       const def = itemKey ? ACTIVATABLE_ITEMS[itemKey] : null;
       if (def?.activate) { def.activate(); activated = true; }
     });
+    if (activated) Neo.tutorialController?.signal?.('tools-fired-all');
     return activated;
   }
   Neo.activateAllEquipmentSlots = activateAllEquipmentSlots;

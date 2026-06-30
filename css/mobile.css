@@ -3545,7 +3545,118 @@
 
 @media (max-width: 760px) {
   .rh-panel {
+    box-sizing: border-box;
+    width: calc(100vw - 12px);
     height: calc(100dvh - 12px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
     max-height: calc(100dvh - 12px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  }
+
+  .rh-head,
+  .rh-head-left {
+    min-width: 0;
+  }
+
+  .rh-head-left {
+    flex: 1 1 auto;
+  }
+
+  #runHistoryClose {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 3;
+    flex: 0 0 auto;
+  }
+}
+
+@media (max-width: 700px) {
+  #charSelect .hero-detail-skill-readout {
+    grid-column: 1;
+    min-width: 0;
+    margin-top: 0;
+    overflow: hidden;
+  }
+
+  #charSelect .hero-detail-skill-readout-name,
+  #charSelect .hero-detail-skill-readout-desc {
+    overflow-wrap: anywhere;
+  }
+
+  #charSelect .hero-detail-kit-options {
+    min-width: 0;
+  }
+
+  #charSelect .hero-detail-kit-option {
+    padding: 4px;
+  }
+}
+
+@media (max-width: 600px) {
+  .rh-panel {
+    left: 6px;
+    right: 6px;
+    transform: none;
+    padding-top: 10px;
+  }
+
+  .rh-head {
+    padding-right: 46px;
+  }
+
+  .rh-view-tabs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
+    overflow: visible;
+  }
+
+  .rh-view-tab {
+    min-width: 0;
+    padding: 7px 5px !important;
+    font-size: calc(12px * var(--font-scale, 1)) !important;
+  }
+
+  .rh-info-tabs {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    width: 100%;
+    overflow: visible;
+  }
+
+  .rh-info-tab {
+    min-width: 0;
+    padding: 7px 4px !important;
+    font-size: calc(12px * var(--font-scale, 1)) !important;
+  }
+
+  #settingsModal .modal-box {
+    width: calc(100vw - 16px);
+    height: calc(100dvh - 16px);
+    min-width: 0;
+    padding: 24px 12px 12px;
+  }
+
+  #settingsModal .stab-bar {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    width: 100%;
+    margin: 0;
+    overflow: visible;
+  }
+
+  #settingsModal .stab {
+    min-width: 0;
+    padding: 7px 3px;
+    font-size: calc(9px * var(--font-scale, 1));
+    letter-spacing: .03em;
+  }
+
+  #settingsModal .stab .tab-icon {
+    display: none;
+  }
+
+  .altmode-card__btn {
+    max-width: 100%;
+    transform: none !important;
   }
 }

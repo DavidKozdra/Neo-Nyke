@@ -1765,6 +1765,21 @@
     }
   }
 
+  // A flying rock (Sarge debris, rival barriers, collapse rocks, thrown rocks)
+  // counts as something heavy enough to set off a floor trap. Used by
+  // explosive_trap and dungeon thorn_mine arming so traps don't ignore rocks
+  // skipping across the trigger radius.
+  function rockProjectileInRadius(x, y, radius) {
+    const projectiles = Neo.projectiles;
+    if (!Array.isArray(projectiles)) return false;
+    for (let i = 0; i < projectiles.length; i += 1) {
+      const p = projectiles[i];
+      if (!p || p.kind !== 'rock') continue;
+      if (Neo.dist(p.x, p.y, x, y) <= radius + (p.r || 0)) return true;
+    }
+    return false;
+  }
+
   function updateWorldProps(dt) {
     ensureEnemySpatialIndex();
     if (Array.isArray(Neo.destructibles)) {
@@ -1818,7 +1833,9 @@
           });
           const playerTrips = dungeonOwned
             && Neo.dist(Neo.player.x, Neo.player.y, hazard.x, hazard.y) <= triggerR + Neo.player.r;
-          if (target || playerTrips) {
+          // A rock skipping over the mine sets it off just like an enemy would.
+          const rockTrips = dungeonOwned && rockProjectileInRadius(hazard.x, hazard.y, triggerR);
+          if (target || playerTrips || rockTrips) {
             hazard.triggered = true;
             const blast = Number(hazard.blastRadius || 62);
             const damage = dungeonOwned
@@ -1881,7 +1898,9 @@
             if (enemyNear) return;
             enemyNear = Neo.dist(enemy.x, enemy.y, hazard.x, hazard.y) <= hazard.triggerRadius + enemy.r;
           });
-          if (playerNear || enemyNear) {
+          // A rock rolling over the plate sets it off too.
+          const rockNear = rockProjectileInRadius(hazard.x, hazard.y, hazard.triggerRadius);
+          if (playerNear || enemyNear || rockNear) {
             hazard.triggered = true;
             hazard.fuse = hazard.fuseDuration || 0.75;
             hazard.sparkTick = 0;
@@ -3332,11 +3351,16 @@
       && !challengeActive;
     const roomLocked = isRoomLocked();
     if (!Neo.fading && !roomLocked && (Neo.enemies.length === 0 || canLeaveFight)) {
+      // Require walking to the back of the doorway (out to the room edge) before
+      // the room changes, rather than triggering as soon as the player nicks the
+      // inner wall face. moveCircle lets the player slide into the open doorway
+      // tunnel; the transition fires once their center reaches its outer slice.
+      const exitDepth = Neo.player.r + 6;
       const door =
-        Neo.player.y < Neo.WALL + 24 && Neo.hasRoomExit(Neo.currentRoom, 'n') && Math.abs(Neo.player.x - Neo.ROOM_W / 2) < Neo.DOOR / 2 ? 'n' :
-        Neo.player.y > Neo.ROOM_H - Neo.WALL - 24 && Neo.hasRoomExit(Neo.currentRoom, 's') && Math.abs(Neo.player.x - Neo.ROOM_W / 2) < Neo.DOOR / 2 ? 's' :
-        Neo.player.x < Neo.WALL + 24 && Neo.hasRoomExit(Neo.currentRoom, 'w') && Math.abs(Neo.player.y - Neo.ROOM_H / 2) < Neo.DOOR / 2 ? 'w' :
-        Neo.player.x > Neo.ROOM_W - Neo.WALL - 24 && Neo.hasRoomExit(Neo.currentRoom, 'e') && Math.abs(Neo.player.y - Neo.ROOM_H / 2) < Neo.DOOR / 2 ? 'e' :
+        Neo.player.y < exitDepth && Neo.hasRoomExit(Neo.currentRoom, 'n') && Math.abs(Neo.player.x - Neo.ROOM_W / 2) < Neo.DOOR / 2 ? 'n' :
+        Neo.player.y > Neo.ROOM_H - exitDepth && Neo.hasRoomExit(Neo.currentRoom, 's') && Math.abs(Neo.player.x - Neo.ROOM_W / 2) < Neo.DOOR / 2 ? 's' :
+        Neo.player.x < exitDepth && Neo.hasRoomExit(Neo.currentRoom, 'w') && Math.abs(Neo.player.y - Neo.ROOM_H / 2) < Neo.DOOR / 2 ? 'w' :
+        Neo.player.x > Neo.ROOM_W - exitDepth && Neo.hasRoomExit(Neo.currentRoom, 'e') && Math.abs(Neo.player.y - Neo.ROOM_H / 2) < Neo.DOOR / 2 ? 'e' :
         null;
       if (door) startTransition(door);
     }

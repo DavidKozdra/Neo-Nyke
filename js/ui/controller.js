@@ -919,7 +919,7 @@ export function createUIController(view) {
       view.runHistoryPanel?.classList.toggle('hidden', !runHistoryOpen);
       view.runHistoryPanel?.setAttribute('aria-hidden', runHistoryOpen ? 'false' : 'true');
       if (view.runHistoryBtn) {
-        view.runHistoryBtn.textContent = runHistoryOpen ? 'HIDE INFO' : 'INFO';
+        view.runHistoryBtn.textContent = runHistoryOpen ? 'HIDE ARCHIVE' : 'ARCHIVE';
         view.runHistoryBtn.setAttribute('aria-expanded', runHistoryOpen ? 'true' : 'false');
       }
       if (open) setRunHistoryView('info');
@@ -938,8 +938,8 @@ export function createUIController(view) {
       view.rhProfilePanel?.classList.toggle('hidden', !showProfile);
       view.rhInfoPanel?.classList.toggle('hidden', !showInfo);
       view.rhBlogPanel?.classList.toggle('hidden', !showBlog);
-      const titles = { achievements: 'ACHIEVEMENTS', profile: 'PROFILE', runs: 'RUN HISTORY', info: 'INFO', blog: 'BLOG' };
-      if (view.runHistoryPanelTitle) view.runHistoryPanelTitle.textContent = titles[view_] ?? 'INFO';
+      const titles = { achievements: 'ACHIEVEMENTS', profile: 'PROFILE', runs: 'RUN HISTORY', info: 'ARCHIVE', blog: 'BLOG' };
+      if (view.runHistoryPanelTitle) view.runHistoryPanelTitle.textContent = titles[view_] ?? 'ARCHIVE';
       view.runHistoryViewTabs?.forEach(t => {
         const active = t.dataset.view === view_;
         t.classList.toggle('active', active);
@@ -1151,6 +1151,7 @@ export function createUIController(view) {
         setInfoResultStatus(tab, sorted.length);
         view.rhInfoContent.innerHTML = sorted.length ? `${getInfoResultSummary(tab, sorted.length)}<div class="info-grid" role="list">${sorted.map(w => {
           const rarity = w.rarity || 'knight';
+          const wDmg = Neo.getDisplayDamage?.(w.key, 'weapon');
           return `<div class="info-card" role="listitem">
             <div class="info-card__header">
               <canvas class="info-card__icon" data-info-weapon="${infoEsc(w.key)}" width="32" height="32" aria-hidden="true"></canvas>
@@ -1158,6 +1159,7 @@ export function createUIController(view) {
               <span class="info-card__tag info-card__tag--${infoEsc(rarity)}">${infoEsc(rarity)}</span>
             </div>
             <div class="info-card__desc">${infoEsc(w.description || '')}</div>
+            ${wDmg ? `<div class="info-card__stat">${infoEsc(wDmg.label)}</div>` : ''}
           </div>`;
         }).join('')}</div>` : renderInfoEmpty('weapons');
         view.rhInfoContent.querySelectorAll('[data-info-weapon]').forEach(el => {
@@ -1185,6 +1187,7 @@ export function createUIController(view) {
           const exclusive = exclusiveNames.length
             ? `<br><em class="info-card__note">${exclusiveNames.map(c => infoEsc(Neo.titleCase(c.replace(/_/g, ' ')))).join(' / ')} only</em>`
             : '';
+          const mDmg = Neo.getDisplayDamage?.(m.key, 'move');
           return `<div class="info-card" role="listitem">
             <div class="info-card__header">
               <canvas class="info-card__icon" data-info-move="${infoEsc(m.key)}" width="32" height="32" aria-hidden="true"></canvas>
@@ -1192,6 +1195,7 @@ export function createUIController(view) {
               <span class="info-card__tag info-card__tag--${infoEsc(m.slot)}">${infoEsc(slotLabel)}</span>
             </div>
             <div class="info-card__desc">${infoEsc(m.desc || '')}${exclusive}</div>
+            ${mDmg ? `<div class="info-card__stat">${infoEsc(mDmg.label)}</div>` : ''}
           </div>`;
         }).join('')}</div>` : renderInfoEmpty('moves');
         view.rhInfoContent.querySelectorAll('[data-info-move]').forEach(el => {
@@ -1408,8 +1412,8 @@ export function createUIController(view) {
 
     function setCreditsPanelOpen(open) {
       const panel = view.creditsPanel;
-      // Full-screen page swap: hide the main menu while credits is up.
-      view.start?.classList.toggle('hidden', open);
+      // Credits is a full-viewport overlay, consistent with the other
+      // secondary menu destinations. The main menu remains underneath.
       panel?.classList.toggle('hidden', !open);
       panel?.setAttribute('aria-hidden', open ? 'false' : 'true');
       view.creditsBtn?.setAttribute('aria-expanded', open ? 'true' : 'false');

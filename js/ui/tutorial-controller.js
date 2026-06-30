@@ -2,7 +2,7 @@
 
 import { TUTORIAL_LESSON_SCENE, TUTORIAL_SCENES } from '../tutorial/scenes.js';
 
-export const TUTORIAL_VERSION = 3;
+export const TUTORIAL_VERSION = 4;
 
 const BUTTON_NAMES = {
   0: 'A', 1: 'B', 2: 'X', 3: 'Y',
@@ -66,6 +66,27 @@ function getInputMode() {
   return 'keyboard';
 }
 
+// Helpers for the guided "find the HUD editor" path (Pause → Settings → HUD →
+// Preview). Read live DOM/state so the steps can poll for completion.
+function isSettingsModalOpen() {
+  const modal = document.getElementById('settingsModal');
+  return !!modal && !modal.classList.contains('hidden');
+}
+
+function isHudSettingsTabActive() {
+  if (!isSettingsModalOpen()) return false;
+  // The HUD panel (#stab-hud) is un-hidden when its tab is active.
+  const panel = document.getElementById('stab-hud');
+  return !!panel && !panel.classList.contains('hidden');
+}
+
+// Close settings (if open) and return to play. Mirrors the pause-menu Resume so
+// the tutorial leaves the player back in the game after the HUD detour.
+function closeSettingsAndResume() {
+  if (isSettingsModalOpen()) document.getElementById('settingsClose')?.click();
+  if (Neo.gameState === 'pause' && !Neo.inventoryPauseActive) Neo.resumeGame?.();
+}
+
 function getActionLabel(action, fallback) {
   const mode = getInputMode();
   if (mode === 'touch') {
@@ -90,6 +111,13 @@ function getMovementLabel() {
   if (getInputMode() === 'touch') return 'LEFT JOYSTICK';
   if (getInputMode() === 'gamepad') return 'LEFT STICK';
   return Neo.getMovementControlHint?.() || 'W/A/S/D';
+}
+
+// Touch has no fire-all key — players tap a tool slot to activate it — so point
+// them at the slots there. Keyboard/gamepad get the real "fire all" binding.
+function getActivateAllLabel() {
+  if (getInputMode() === 'touch') return 'TAP A TOOL SLOT';
+  return getActionLabel('activateAll', 'SPACE');
 }
 
 function getLadderLabel() {
@@ -193,6 +221,77 @@ function createSteps() {
       target: targetDom('#playerStats', 8),
       manual: true,
     },
+    // Walk the player along the real path to the HUD layout editor —
+    // Pause → Settings → HUD tab → Preview layout — so they can find it again
+    // themselves later. Each step highlights the actual control and completes
+    // when the player reaches the next screen. These steps stay engaged while
+    // the game is paused (liveDuringPause) since the pause menu / settings put
+    // the game into the 'pause' state where the tutorial overlay normally hides.
+    {
+      id: 'hud_pause',
+      chapter: 'HUD',
+      title: 'Open the pause menu',
+      text: () => 'You can rearrange your HUD whenever you like. Let’s find the editor together — start by opening the pause menu.',
+      command: () => getInputMode() === 'touch' ? 'MENU → PAUSE' : getActionLabel('pause', 'ESC'),
+      commandLabel: getInputMode() === 'touch' ? 'TAP' : 'PRESS',
+      liveDuringPause: true,
+      complete: () => Neo.gameState === 'pause' && !Neo.inventoryPauseActive,
+    },
+    {
+      id: 'hud_settings',
+      chapter: 'HUD',
+      title: 'Open Settings',
+      text: () => 'Choose Settings to reach every option, including the HUD layout.',
+      command: () => 'SETTINGS',
+      commandLabel: 'TAP',
+      liveDuringPause: true,
+      target: targetDom('#pauseSettings', 8),
+      complete: () => isSettingsModalOpen(),
+    },
+    {
+      id: 'hud_settings_tab',
+      chapter: 'HUD',
+      title: 'Open the HUD tab',
+      text: () => 'Settings is split into tabs. Open the HUD tab to find layout and sizing.',
+      command: () => 'HUD TAB',
+      commandLabel: 'TAP',
+      liveDuringPause: true,
+      target: targetDom('#settingsModal .stab[data-tab="hud"]', 8),
+      complete: () => isHudSettingsTabActive(),
+    },
+    {
+      id: 'hud_preview_open',
+      chapter: 'HUD',
+      title: 'Open the layout editor',
+      text: () => 'Under HUD Layout, choose “Preview layout” to open the editor — the same one you can come back to anytime.',
+      command: () => 'PREVIEW LAYOUT',
+      commandLabel: 'TAP',
+      liveDuringPause: true,
+      target: targetDom('#hudLayoutPreviewBtn', 8),
+      complete: () => window.NeoSettings?.isHudLayoutEditorOpen?.() === true,
+    },
+    {
+      id: 'hud_layout',
+      chapter: 'HUD',
+      title: 'Make the HUD yours',
+      text: () => 'This is the editor. Drag any panel to move it, grab a corner to resize, or tap the eye to hide it. Remember: Pause → Settings → HUD → Preview layout gets you back here anytime. Hit Done when you’re finished.',
+      command: () => 'WHEN READY → DONE',
+      commandLabel: 'FINISH',
+      manual: true,
+      liveDuringPause: true,
+      // The body class lifts the tutorial card above the editor (z 9000) so its
+      // instructions and Continue button stay readable over the editor. The
+      // player finishes explicitly via the editor's "Done" or the card's
+      // Continue button (handled by manualNext) — dragging is optional.
+      onEnter: () => document.body.classList.add('tutorial-hud-editing'),
+      onExit: () => {
+        document.body.classList.remove('tutorial-hud-editing');
+        // Close the editor + settings and return to play so the next lesson
+        // resumes cleanly, however the player advanced.
+        window.NeoSettings?.closeHudLayoutEditor?.();
+        closeSettingsAndResume();
+      },
+    },
     {
       id: 'objectives',
       chapter: 'HUD',
@@ -260,6 +359,19 @@ function createSteps() {
       target: targetDom('[data-skill="smash"]', 8),
       roomKey: 'trainingRoomKey',
       complete: state => !!state.completed?.smash,
+    },
+    {
+      id: 'tools_fire',
+      chapter: 'COMBAT',
+      title: 'Fire your tools',
+      text: () => `Tools are activatable gear that sit in the tool bar below your moves. Each has its own key, and ${getActionLabel('activateAll', 'SPACE')} fires every equipped tool at once. Activate them on the dummy.`,
+      command: () => getActivateAllLabel(),
+      target: targetDom('#equipmentSlots', 8),
+      roomKey: 'trainingRoomKey',
+      // Clears whether they hit Space (fire all) or tap/press a single slot, so
+      // touch players with no Space key can still complete it. Fight is the
+      // fallback so a tool that downs the dummy first can never stall the step.
+      complete: state => !!state.completed?.tools_fire || !!state.completed?.fight,
     },
     {
       id: 'status_lesson',
@@ -601,6 +713,10 @@ function createTutorialState(active = false) {
     version: TUTORIAL_VERSION,
     active: !!active,
     step: 'welcome',
+    // Index of an earlier step the player chose to re-read with Back. Null when
+    // following the live tutorial. Review is purely cosmetic — the live `step`
+    // keeps advancing underneath — so it never persists across reloads.
+    reviewIndex: null,
     completed: {},
     movedFor: 0,
     dummySpawned: false,
@@ -625,6 +741,7 @@ export function createTutorialController() {
   const card = document.getElementById('tutorialCard');
   const hole = document.getElementById('tutorialSpotlightHole');
   const ring = document.getElementById('tutorialTargetRing');
+  const minimapRing = document.getElementById('tutorialMinimapRing');
   const speaker = document.getElementById('tutorialSpeaker');
   const title = document.getElementById('tutorialTitle');
   const text = document.getElementById('tutorialText');
@@ -641,7 +758,21 @@ export function createTutorialController() {
   let lastLayoutAt = 0;
   let lastStepId = '';
   let lastChapter = '';
+  let lastLiveStepId = '';
   let gamepadConfirmHeld = false;
+
+  // Fire a step's onEnter/onExit side-effects when the *live* step changes
+  // (ignores Back/Forward review navigation, which only moves the display
+  // cursor). Lets a step open/close a panel — e.g. the HUD layout editor.
+  function runLiveStepLifecycle() {
+    const liveStep = getStep();
+    const liveId = liveStep?.id || '';
+    if (liveId === lastLiveStepId) return;
+    const prev = steps.find(step => step.id === lastLiveStepId);
+    lastLiveStepId = liveId;
+    try { prev?.onExit?.(); } catch (e) { /* never let a side-effect break the tutorial */ }
+    try { liveStep?.onEnter?.(); } catch (e) { /* same */ }
+  }
 
   if (overlay && overlay.parentElement !== document.body) document.body.appendChild(overlay);
 
@@ -649,6 +780,13 @@ export function createTutorialController() {
   const getIndex = () => Math.max(0, steps.findIndex(step => step.id === getState()?.step));
   const getStep = () => steps[getIndex()] || steps[0];
   const getCurrentRoomKey = () => roomKey(Neo.currentRoom);
+
+  // When the player hits Back we park on an earlier step to re-read it without
+  // rewinding real progress. `reviewIndex` is the step being shown; null means
+  // we're on the live step.
+  const isReviewing = () => Number.isInteger(getState()?.reviewIndex);
+  const getDisplayIndex = () => (isReviewing() ? getState().reviewIndex : getIndex());
+  const getDisplayStep = () => steps[getDisplayIndex()] || steps[0];
 
   function isInStepRoom(step, state = getState()) {
     if (!step?.roomKey) return true;
@@ -662,7 +800,7 @@ export function createTutorialController() {
       && step.completeWhen.every(id => !!state?.completed?.[id]);
   }
 
-  function getPresentedStep(step = getStep()) {
+  function getPresentedStep(step = getDisplayStep()) {
     const state = getState();
     if (!step?.roomKey || isInStepRoom(step, state)) return step;
     const destinationKey = state?.[step.roomKey];
@@ -689,6 +827,7 @@ export function createTutorialController() {
       ...state,
       version: TUTORIAL_VERSION,
       active: state.active === undefined ? !!active : !!state.active,
+      reviewIndex: null,
       completed: state.completed && typeof state.completed === 'object' ? { ...state.completed } : {},
       seenScenes: state.seenScenes && typeof state.seenScenes === 'object' ? { ...state.seenScenes } : {},
     };
@@ -741,6 +880,10 @@ export function createTutorialController() {
   function advanceCompletedSteps() {
     const state = getState();
     if (!state?.active) return;
+    // While the player is re-reading an earlier step, freeze the live cursor so
+    // the card doesn't jump out from under them. Completions still register on
+    // state.completed; we catch up the moment they leave review.
+    if (isReviewing()) return;
     let index = getIndex();
     let changed = false;
     const cleared = [];
@@ -782,8 +925,10 @@ export function createTutorialController() {
     if (type === 'dash') setCompleted('dash');
     if (type === 'crit-dealt') setCompleted('crit_lesson');
     if (type === 'status-applied') setCompleted('status_lesson');
+    if (type === 'tool-fired' || type === 'tools-fired-all') setCompleted('tools_fire');
     if (type === 'enemy-killed' && payload.tutorialDummy) setCompleted('fight');
     if (type === 'relic-collected' && payload.tutorialRelic) setCompleted('relic');
+    if (type === 'hud-layout-edit') setCompleted('hud_layout');
     if (type === 'panel-open' && payload.panel === 'inventory') setCompleted('inventory_open');
     if (type === 'inventory-tab' && payload.tab === 'items') setCompleted('inventory_relics');
     if (type === 'inventory-tab' && payload.tab === 'equipped') setCompleted('inventory_moves');
@@ -808,19 +953,37 @@ export function createTutorialController() {
     return true;
   }
 
+  // Leave review and snap back to the live step, catching up any completions
+  // earned (or auto-advances missed) while the card was parked.
+  function exitReview() {
+    const state = getState();
+    if (!state || !isReviewing()) return false;
+    state.reviewIndex = null;
+    advanceCompletedSteps();
+    render(true);
+    Neo.updateObjective?.();
+    return true;
+  }
+
+  // The Continue button does double duty: while reviewing it returns to the
+  // live step; on a manual lesson it marks the lesson read and moves on.
   function manualNext() {
+    if (exitReview()) return;
     const step = getPresentedStep();
     if (!step?.manual) return;
     setCompleted(step.id);
     render(true);
   }
 
+  // Back steps the display cursor toward the first step so the player can
+  // re-read anything they've passed. It never rewinds real progress: the live
+  // `step` is untouched, only `reviewIndex` moves.
   function back() {
     const state = getState();
     if (!state?.active) return;
-    const index = getIndex();
-    if (index <= 0) return;
-    state.step = steps[index - 1].id;
+    const fromIndex = getDisplayIndex();
+    if (fromIndex <= 0) return;
+    state.reviewIndex = fromIndex - 1;
     render(true);
     Neo.updateObjective?.();
   }
@@ -882,17 +1045,19 @@ export function createTutorialController() {
     }
     if (spec.kind === 'route') {
       // While a panel covers the screen, highlight its close button so the
-      // player can clear it before the doorway highlight makes sense.
+      // player can clear it before the doorway highlight makes sense. This case
+      // keeps the dimming spotlight (routeDoor=false) so the one button stands
+      // out against the open panel; only the actual world doorway drops the tint.
       const open = getOpenGamePanelInfo();
       if (open) {
         const button = document.querySelector(open.closeSelector);
         if (button && !button.closest('.hidden,[aria-hidden="true"]')) {
           const rect = button.getBoundingClientRect();
-          if (rect.width && rect.height) return { ...normalizeRect(rect, 8), route: true };
+          if (rect.width && rect.height) return { ...normalizeRect(rect, 8), route: true, routeDoor: false };
         }
       }
       const resolved = resolveWorldRect(spec.doorGetter?.(), spec.padding);
-      return resolved ? { ...resolved, route: true } : null;
+      return resolved ? { ...resolved, route: true, routeDoor: true } : null;
     }
     return null;
   }
@@ -908,11 +1073,28 @@ export function createTutorialController() {
       const targetCenterY = targetRect ? targetRect.top + targetRect.height / 2 : viewportH / 2;
       const placeTop = !targetRect || targetCenterY > viewportH / 2;
       const touchControlsVisible = window.NeoSettings?.isTouchControlsEnabled?.() === true;
-      const safeBottom = touchControlsVisible ? 190 : margin;
-      card.style.left = `${margin}px`;
-      card.style.top = placeTop ? `${margin}px` : 'auto';
-      card.style.bottom = placeTop ? 'auto' : `${safeBottom}px`;
-      card.style.width = `${Math.max(280, viewportW - margin * 2)}px`;
+      // Don't force full width — honour the CSS cap so the card stays a
+      // readable size and leaves the right edge free for the hamburger.
+      card.style.width = '';
+      const cardW = card.getBoundingClientRect().width;
+      if (placeTop) {
+        // Top-anchored: keep clear of the top-right hamburger (~38px + insets,
+        // ~54px total). Left-align unless that would collide, then shift left.
+        const hamburgerSafe = touchControlsVisible ? 54 : 0;
+        const maxLeft = viewportW - cardW - margin - hamburgerSafe;
+        card.style.left = `${Math.max(margin, maxLeft)}px`;
+        card.style.top = `${margin}px`;
+        card.style.bottom = 'auto';
+      } else {
+        // Bottom-anchored: clear the joystick (left, up to 45vw / 220px) and the
+        // button cluster (right, ~170px) so the controls are never covered.
+        const controlsHeight = touchControlsVisible
+          ? Math.min(220, viewportW * 0.45) + margin
+          : margin;
+        card.style.left = `${margin}px`;
+        card.style.top = 'auto';
+        card.style.bottom = `${controlsHeight}px`;
+      }
       return;
     }
     card.style.bottom = 'auto';
@@ -936,11 +1118,37 @@ export function createTutorialController() {
     card.style.top = `${scored[0].top}px`;
   }
 
+  // The minimap highlight that rides alongside a route step, so the player
+  // learns to read the minimap while a doorway arrow points the way. Returns
+  // false (and hides the ring) when the minimap isn't on screen.
+  function layoutMinimapRing(show) {
+    if (!minimapRing) return false;
+    const rect = show ? normalizeRect(Neo.minimapLayoutState?.viewportBounds, 8) : null;
+    if (!rect) {
+      minimapRing.classList.add('hidden');
+      return false;
+    }
+    minimapRing.classList.remove('hidden');
+    minimapRing.style.left = `${rect.left}px`;
+    minimapRing.style.top = `${rect.top}px`;
+    minimapRing.style.width = `${rect.width}px`;
+    minimapRing.style.height = `${rect.height}px`;
+    return true;
+  }
+
   function layoutTarget(step) {
     const targetRect = resolveTarget(step);
     const viewportW = window.innerWidth;
     const viewportH = window.innerHeight;
     const hasTarget = !!targetRect;
+    // On "go to the door" steps we point an arrow at the doorway and light up
+    // the minimap instead of tinting the whole screen, which read as harsh when
+    // the player just needs a direction. The dim spotlight stays for in-place UI
+    // lessons (and for the panel close-button highlight, where routeDoor is
+    // false) so the highlighted control still stands out.
+    const routeMode = !!targetRect?.routeDoor;
+    overlay?.classList.toggle('tutorial-route', routeMode);
+    layoutMinimapRing(routeMode);
     const edgeMargin = 28;
     const targetCenterX = hasTarget ? targetRect.left + targetRect.width / 2 : viewportW / 2;
     const targetCenterY = hasTarget ? targetRect.top + targetRect.height / 2 : viewportH / 2;
@@ -988,12 +1196,23 @@ export function createTutorialController() {
     placeCard(offscreen ? null : targetRect);
   }
 
+  // The tutorial overlay normally only shows during 'play' (via
+  // isFirstRunTutorialEngaged). Steps flagged liveDuringPause keep it visible
+  // through the pause menu / settings — needed for the guided HUD-editor path.
+  function isEngaged() {
+    const state = getState();
+    if (!state?.active || Neo.gameMode !== 'normal') return false;
+    if (Neo.isFirstRunTutorialEngaged?.()) return true;
+    return Neo.gameState === 'pause' && !!getStep()?.liveDuringPause;
+  }
+
   function render(force = false) {
     const state = getState();
-    if (!state?.active || !Neo.isFirstRunTutorialEngaged?.()) {
+    if (!state?.active || !isEngaged()) {
       hide();
       return;
     }
+    runLiveStepLifecycle();
     const step = getPresentedStep();
     overlay?.classList.remove('hidden');
     overlay?.setAttribute('aria-hidden', 'false');
@@ -1022,15 +1241,22 @@ export function createTutorialController() {
     }
     if (commandLabel) commandLabel.textContent = nextCommand ? (step.commandLabel || 'PRESS') : '';
     if (commandValue) commandValue.textContent = nextCommand;
-    if (progress) progress.textContent = `${getIndex() + 1} / ${steps.length}`;
-    if (progressBar) progressBar.style.width = `${((getIndex() + 1) / steps.length) * 100}%`;
+    const reviewing = isReviewing();
+    const displayIndex = getDisplayIndex();
+    if (progress) progress.textContent = `${displayIndex + 1} / ${steps.length}`;
+    if (progressBar) progressBar.style.width = `${((displayIndex + 1) / steps.length) * 100}%`;
     if (gate) gate.hidden = true;
-    if (hint) hint.textContent = step.manual ? 'GOT IT? HIT CONTINUE' : 'DO THE ACTION — IT ADVANCES ON ITS OWN';
-    if (previous) previous.disabled = getIndex() <= 0;
+    if (hint) {
+      hint.textContent = reviewing ? 'REVIEWING — HIT RESUME TO RETURN'
+        : (step.manual ? 'GOT IT? HIT CONTINUE' : 'DO THE ACTION — IT ADVANCES ON ITS OWN');
+    }
+    if (previous) previous.disabled = displayIndex <= 0;
+    // While reviewing, the forward button always shows so the player can jump
+    // straight back to the live step; otherwise it only appears on manual cards.
     if (next) {
-      next.hidden = !step.manual;
-      next.disabled = !step.manual;
-      next.textContent = 'Continue';
+      next.hidden = !reviewing && !step.manual;
+      next.disabled = !reviewing && !step.manual;
+      next.textContent = reviewing ? 'Resume' : 'Continue';
     }
     if (force || lastStepId !== step.id) {
       lastStepId = step.id;
@@ -1042,10 +1268,20 @@ export function createTutorialController() {
   }
 
   function hide() {
+    // Tear down the live step (closes any panel it opened, e.g. the HUD layout
+    // editor) so skipping/completing the tutorial never strands an open overlay.
+    // Guarded so the per-tick hide() while inactive only runs onExit once.
+    if (lastLiveStepId) {
+      const prev = steps.find(step => step.id === lastLiveStepId);
+      lastLiveStepId = '';
+      try { prev?.onExit?.(); } catch (e) { /* never let a side-effect break teardown */ }
+    }
     overlay?.classList.add('hidden');
     overlay?.setAttribute('aria-hidden', 'true');
     if (overlay) overlay.style.display = 'none';
     ring?.classList.add('hidden');
+    minimapRing?.classList.add('hidden');
+    overlay?.classList.remove('tutorial-route');
     document.body.classList.remove('tutorial-active');
   }
 
@@ -1064,7 +1300,7 @@ export function createTutorialController() {
     }
     advanceCompletedSteps();
     const gamepadConfirm = !!window.NeoGamepad?.[0]?.buttonStates?.[0];
-    if (gamepadConfirm && !gamepadConfirmHeld && getStep()?.manual) manualNext();
+    if (gamepadConfirm && !gamepadConfirmHeld && (isReviewing() || getStep()?.manual)) manualNext();
     gamepadConfirmHeld = gamepadConfirm;
     const now = performance.now();
     if (now - lastLayoutAt >= 50) {
@@ -1080,7 +1316,7 @@ export function createTutorialController() {
     window.addEventListener('resize', () => render(true), { passive: true });
     window.addEventListener('neo:settings-changed', () => render(true));
     window.addEventListener('keydown', event => {
-      if (event.key !== 'Enter' || !getState()?.active || !getStep()?.manual) return;
+      if (event.key !== 'Enter' || !getState()?.active || !(isReviewing() || getStep()?.manual)) return;
       event.preventDefault();
       manualNext();
     });
@@ -1139,13 +1375,16 @@ export function createTutorialController() {
     else hide();
   }
 
+  // The in-world objective tracker and step message always reflect the live
+  // step, never a step being re-read in review mode — the card alone shows the
+  // reviewed lesson, so the HUD objective shouldn't desync to a past "done".
   function getCurrentMessage() {
-    const step = getPresentedStep();
+    const step = getPresentedStep(getStep());
     return step?.text?.() || '';
   }
 
   function getCurrentObjectiveEntries() {
-    const step = getPresentedStep();
+    const step = getPresentedStep(getStep());
     if (!getState()?.active || !step) return [];
     return [{ text: step.title || 'Tutorial', state: isStepComplete(step) ? 'done' : 'warn' }];
   }
@@ -1163,6 +1402,9 @@ export function createTutorialController() {
     normalizeState,
     getCurrentMessage,
     getCurrentObjectiveEntries,
+    // Live step id (ignores Back/Forward review). Lets a panel a step opened —
+    // e.g. the HUD layout editor — tell whether its tutorial step is active.
+    getLiveStepId: () => (getState()?.active ? getStep()?.id || '' : ''),
   };
 }
 

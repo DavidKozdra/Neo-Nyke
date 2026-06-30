@@ -66,6 +66,10 @@
     // The new-item pickup toast stack (#itemNotifyStack). DOM widget with its own
     // scale/offset/visibility, independent of the coin display it sits beneath.
     { key: 'itemnotify', label: 'Item Pickups',     cssVar: '--hud-scale-itemnotify', xVar: '--hud-x-itemnotify', yVar: '--hud-y-itemnotify', hideClass: 'hud-hide-itemnotify', defaultScale: 2, touchDefaultScale: 1.25 },
+    // The status-toast stack (#statusToastStack) — relic "Ready" cues and "Copied"
+    // bonuses. Bottom-center DOM widget, separate from item pickups so it reads as
+    // a status update, not a new-item card. Default 1.2 (20% above its base size).
+    { key: 'statustoast', label: 'Status Cues',     cssVar: '--hud-scale-statustoast', xVar: '--hud-x-statustoast', yVar: '--hud-y-statustoast', hideClass: 'hud-hide-statustoast', defaultScale: 1.2, touchDefaultScale: 1.2 },
     // The minimap is drawn on the canvas, not a DOM widget, so it has no CSS vars.
     // drawMinimap() reads its scale/visibility/offsets from getHudElements().
     { key: 'minimap',    label: 'Minimap',          cssVar: null, xVar: null, yVar: null, hideClass: null, canvas: true },
@@ -223,7 +227,13 @@
     },
   };
 
-  let activeTheme = 'dark';
+  // Empty by default (not 'dark') so the princess character can supply the
+  // princess UI theme as its default. The base CSS :root already renders the
+  // dark look, and the 'dark' preset is identical to it, so an empty active
+  // theme is visually unchanged for non-princess characters. Once the player
+  // explicitly picks any preset (including dark) it counts as an override and
+  // wins over the character default. See syncCharacterUiTheme() in player.js.
+  let activeTheme = '';
   let customThemeVars = { ...PRESET_THEMES.dark.vars };
   let savedThemes = {};
 
@@ -412,18 +422,42 @@
     });
   }
 
+  // A real, player-chosen theme override. 'dark' is identical to the base CSS
+  // :root, so it reads as "no override" and lets a character supply its own
+  // default theme (the princess character supplies the princess theme).
+  function hasExplicitTheme() {
+    return !!activeTheme && activeTheme !== 'dark' &&
+      (activeTheme === '_custom' || !!PRESET_THEMES[activeTheme] || !!savedThemes[activeTheme]);
+  }
+
+  // Resolve the menu-color vars that should currently be in effect:
+  //   1. an explicit settings override always wins;
+  //   2. otherwise the princess character supplies the princess theme;
+  //   3. otherwise the base CSS :root (dark) look.
+  // Called on boot and whenever the active character / settings change so the
+  // princess theme tracks the chosen character without overwriting the saved
+  // setting. See syncCharacterUiTheme() in player.js for the matching body class.
+  function applyEffectiveTheme(uiCharacterKey) {
+    if (hasExplicitTheme()) {
+      if (activeTheme === '_custom') applyThemeVars(customThemeVars);
+      else applyThemeVars((PRESET_THEMES[activeTheme] || savedThemes[activeTheme]).vars);
+    } else if (uiCharacterKey === 'princess') {
+      applyThemeVars(PRESET_THEMES.princess.vars);
+    } else {
+      applyThemeVars(PRESET_THEMES.dark.vars);
+    }
+  }
+
   load();
   if (!controlMode) controlMode = isTouchDevice() ? 'mobile' : 'desktop';
   if (touchControlsEnabled === null) touchControlsEnabled = controlMode === 'mobile';
   applyAccess();
   applyHudElements();
   applyControlsSectionVisibility();
-  // Apply saved theme on boot (before any UI is queried)
-  if (activeTheme && (PRESET_THEMES[activeTheme] || savedThemes[activeTheme])) {
-    applyThemeVars((PRESET_THEMES[activeTheme] || savedThemes[activeTheme]).vars);
-  } else if (activeTheme === '_custom') {
-    applyThemeVars(customThemeVars);
-  }
+  // Apply the effective theme on boot (before any UI is queried). The active
+  // character isn't known yet here, so this resolves to the explicit override
+  // or the base look; syncCharacterUiTheme() re-runs it once a character loads.
+  applyEffectiveTheme(window.Neo?.getUiCharacterKey?.());
 
   // Equipment tool slot keys, in slot order, honoring custom bindings.
   // Falls back to the default letter for any slot left unbound.
@@ -464,6 +498,13 @@
     getHudElements: () => hudElements,
     getHudElementDefs: () => HUD_ELEMENTS.map(el => ({ key: el.key, label: el.label })),
     correctHudLayout: () => scheduleHudOverlapCorrection({ saveAfter: true }),
+    // True when the player has explicitly picked a theme (anything but the base
+    // dark look), in which case it overrides any character-default theme.
+    hasExplicitTheme,
+    // Apply the menu-color vars that should be in effect for the given UI
+    // character, honoring an explicit override first. Called by
+    // syncCharacterUiTheme() in player.js on character / settings changes.
+    applyEffectiveTheme,
   };
 
   const modal = document.getElementById('settingsModal');
@@ -999,6 +1040,11 @@
     } else if (key === 'actions') {
       box.style.bottom = `${18 * ratio.y}px`;
       box.style.left = '50%';
+    } else if (key === 'statustoast') {
+      // Mirror the live HUD: bottom-center, above the action bar (#statusToastStack
+      // sits at bottom:120px in style.css).
+      box.style.bottom = `${120 * ratio.y}px`;
+      box.style.left = '50%';
     } else if (key === 'equipment') {
       box.style.top = '50%';
       box.style.right = '0px';
@@ -1048,6 +1094,7 @@
       const base = box.classList.contains('hud-preview-box--center')
         || box.classList.contains('hud-preview-box--actions')
         || box.classList.contains('hud-preview-box--bossbar')
+        || box.classList.contains('hud-preview-box--statustoast')
         ? 'translateX(-50%) '
         : box.classList.contains('hud-preview-box--equipment')
           ? 'translateY(-50%) '
@@ -1438,6 +1485,18 @@
       Neo.drawItemToastIcon(itemNotifyIcon, previewItem);
     }
 
+    // Status-cue preview icon — use the keen_eye relic so it reads as a "Ready" cue.
+    const statusToastIcon = frame.querySelector('[data-preview-status-toast-icon]');
+    if (statusToastIcon && typeof Neo.drawItemToastIcon === 'function') {
+      const previewRelic = Neo.ITEM_DEFS?.keen_eye || {
+        key: 'keen_eye',
+        name: 'Keen Eye',
+        rarity: 'wizard',
+        color: '#9ec6ff',
+      };
+      Neo.drawItemToastIcon(statusToastIcon, previewRelic);
+    }
+
     // Tool slots — show the live run's equipped tools when present, else placeholders.
     const equipHost = frame.querySelector('[data-preview-equipment]');
     if (equipHost) {
@@ -1461,7 +1520,7 @@
     save();
   });
 
-  document.getElementById('hudLayoutPreviewBtn')?.addEventListener('click', () => {
+  function openHudLayoutEditor() {
     const overlay = document.getElementById('hudPreviewOverlay');
     if (!overlay) return;
     populateHudPreviewContent();
@@ -1473,13 +1532,24 @@
     overlay.setAttribute('aria-hidden', 'false');
     refreshHudPreviewBoxes();
     requestAnimationFrame(() => correctHudPreviewOverlaps({ saveAfter: true }));
-  });
+  }
+  document.getElementById('hudLayoutPreviewBtn')?.addEventListener('click', openHudLayoutEditor);
   const hudPreviewClose = () => {
     const overlay = document.getElementById('hudPreviewOverlay');
     if (!overlay) return;
     overlay.classList.add('hidden');
     overlay.setAttribute('aria-hidden', 'true');
+    // If the tutorial opened this editor as its HUD step, closing ("Done")
+    // counts as finishing the step and advances the tutorial.
+    if (window.Neo?.tutorialController?.getLiveStepId?.() === 'hud_layout') {
+      window.Neo.tutorialController.signal('hud-layout-edit', { via: 'done' });
+    }
   };
+  // Let the tutorial drive the HUD layout editor as a guided step.
+  window.NeoSettings.openHudLayoutEditor = openHudLayoutEditor;
+  window.NeoSettings.closeHudLayoutEditor = hudPreviewClose;
+  window.NeoSettings.isHudLayoutEditorOpen = () =>
+    !document.getElementById('hudPreviewOverlay')?.classList.contains('hidden');
   document.getElementById('hudPreviewClose')?.addEventListener('click', hudPreviewClose);
   document.getElementById('hudPreviewOverlay')?.addEventListener('click', e => {
     if (e.target.id === 'hudPreviewOverlay') hudPreviewClose();
@@ -1738,8 +1808,10 @@
   document.getElementById('themeDeleteBtn').addEventListener('click', () => {
     if (!savedThemes[activeTheme]) return;
     delete savedThemes[activeTheme];
-    activeTheme = 'princess';
-    applyTheme('princess');
+    // Clear the override and fall back to the effective theme: the princess
+    // character's theme, or the base look for everyone else.
+    activeTheme = '';
+    applyEffectiveTheme(window.Neo?.getUiCharacterKey?.());
     save();
     refreshThemeUI();
   });
