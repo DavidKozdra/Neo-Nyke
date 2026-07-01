@@ -1692,6 +1692,7 @@ export const ui = {
     continueRow: document.getElementById('continueRow'),
     continueBtn: document.getElementById('continueBtn'),
     tutorialMenuBtn: document.getElementById('tutorialMenuBtn'),
+    sprEditorBtn: document.getElementById('sprEditorBtn'),
     mainCompetitiveBtn: document.getElementById('mainCompetitiveBtn'),
     competitivePanel: document.getElementById('competitivePanel'),
     competitiveClose: document.getElementById('competitiveClose'),

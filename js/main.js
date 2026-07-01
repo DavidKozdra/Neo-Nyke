@@ -2,6 +2,23 @@
 // Each import runs the module's top-level code, wiring functions and constants
 // onto the Neo global.
 
+(function () {
+	let __dev = false;
+	Object.defineProperty(globalThis, 'developer_mode', {
+		get() { return __dev; },
+		set(value) {
+			const v = !!value;
+			if (v === __dev) return;
+			__dev = v;
+			try {
+				window.dispatchEvent(new CustomEvent('developer-mode-changed', { detail: __dev }));
+			} catch (e) { /* ignore */ }
+		},
+		configurable: true,
+		enumerable: true,
+	});
+})();
+
 import './core/game-core.js';
 import './core/math-utils.js';
 import './core/sfx.js';
