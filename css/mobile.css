@@ -907,10 +907,6 @@
     font-size: calc(18px * var(--font-scale, 1));
   }
 
-  .settings-subtitle {
-    font-size: calc(12px * var(--font-scale, 1));
-  }
-
   /* Narrow screens: collapse the side navigation back to a horizontal,
      scrolling tab bar so the panel keeps full width. */
   .settings-body {
@@ -2028,14 +2024,6 @@
     padding: 8px 8px calc(32px + env(safe-area-inset-bottom, 0px) + (150px * var(--hud-scale-actions, var(--hud-scale, 1))) + max(0px, calc(-1 * var(--hud-y-actions, 0px))));
   }
 
-  .tutorial-box {
-    width: calc(100vw - 16px);
-    min-height: 0;
-    margin-bottom: 0;
-    padding: 10px 12px;
-    border-radius: 8px;
-  }
-
   .tutorial-text {
     font-size: calc(18px * var(--font-scale, 1));
     line-height: 1.35;
@@ -2561,12 +2549,6 @@
     top: calc(92px + env(safe-area-inset-top, 0px));
   }
 
-  .tutorial-box {
-    /* Keep the prompt in the center lane between the side touch controls. */
-    width: min(520px, max(300px, calc(100vw - 360px)));
-    margin-bottom: 0;
-  }
-
   .dialogue-box {
     max-height: calc(100dvh - 20px);
     overflow-y: auto;
@@ -2848,8 +2830,7 @@
     height: 4px;
   }
 
-  #charSelect .hero-detail-skill-pip,
-  #charSelect .skill-pip {
+  #charSelect .hero-detail-skill-pip {
     padding: 3px 6px;
     font-size: calc(10px * var(--font-scale, 1));
     line-height: 1.2;

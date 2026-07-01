@@ -834,11 +834,6 @@ html.princess-ui .dialogue-speaker { color: #ff9acf; }
 html.princess-ui .dialogue-text    { color: #ffd6ea; }
 html.princess-ui .dialogue-hint    { color: rgba(255, 180, 220, .6); }
 
-html.princess-ui .tutorial-box {
-  background: linear-gradient(180deg, rgba(44, 8, 28, .97), rgba(18, 4, 14, .99));
-  border-color: rgba(255, 154, 207, .38);
-}
-
 html.princess-ui .tutorial-speaker  { color: #ff9acf; }
 html.princess-ui .tutorial-text     { color: #ffd6ea; }
 html.princess-ui .tutorial-hint     { color: rgba(255, 180, 220, .6); }
