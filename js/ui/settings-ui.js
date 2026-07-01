@@ -72,7 +72,7 @@
     { key: 'statustoast', label: 'Status Cues',     cssVar: '--hud-scale-statustoast', xVar: '--hud-x-statustoast', yVar: '--hud-y-statustoast', hideClass: 'hud-hide-statustoast', defaultScale: 1.2, touchDefaultScale: 1.2 },
     // The minimap is drawn on the canvas, not a DOM widget, so it has no CSS vars.
     // drawMinimap() reads its scale/visibility/offsets from getHudElements().
-    { key: 'minimap',    label: 'Minimap',          cssVar: null, xVar: null, yVar: null, hideClass: null, canvas: true },
+    { key: 'minimap',    label: 'Minimap',          cssVar: null, xVar: null, yVar: null, hideClass: null, canvas: true, defaultScale: 1.5 },
     // The boss health bar is also canvas-drawn. drawBossHealthBars() reads its
     // scale/visibility/offsets from getHudElements().
     { key: 'bossbar',    label: 'Boss Health Bar',  cssVar: null, xVar: null, yVar: null, hideClass: null, canvas: true },
@@ -1049,9 +1049,10 @@
       box.style.top = '50%';
       box.style.right = '0px';
     } else if (key === 'minimap') {
-      const bounds = window.Neo?.minimapLayoutState?.viewportBounds || null;
-      const layoutOffsetX = Number(window.Neo?.minimapLayoutState?.offsetX);
-      const layoutOffsetY = Number(window.Neo?.minimapLayoutState?.offsetY);
+      const layoutState = window.Neo?.minimapLayoutState;
+      const bounds = layoutState?.viewportBounds || null;
+      const layoutOffsetX = Number(layoutState?.offsetX);
+      const layoutOffsetY = Number(layoutState?.offsetY);
       const entry = hudElements.minimap || {};
       const offsetX = Number.isFinite(layoutOffsetX) ? normalizeHudOffset(layoutOffsetX) : normalizeHudOffset(entry.x);
       const offsetY = Number.isFinite(layoutOffsetY) ? normalizeHudOffset(layoutOffsetY) : normalizeHudOffset(entry.y);
@@ -1060,10 +1061,17 @@
         && Number.isFinite(bounds.right)
         && Number.isFinite(bounds.bottom)
         && Number.isFinite(bounds.left)) {
+        // The captured bounds already include the scale used by the live canvas.
+        // Apply only the delta from that captured scale so resizing remains live
+        // while the paused HUD preview is open, without double-scaling the box.
+        const capturedHudScale = Number(layoutState?.hudScale);
+        const scaleRatio = Number.isFinite(capturedHudScale) && capturedHudScale > 0
+          ? effectiveHudScale('minimap') / capturedHudScale
+          : 1;
         box.style.top = `${(bounds.top - offsetY) * ratio.y}px`;
         box.style.right = `${(window.innerWidth - (bounds.right - offsetX)) * ratio.x}px`;
-        box.style.width = `${Math.max(24, (bounds.right - bounds.left) * ratio.x)}px`;
-        box.style.height = `${Math.max(24, (bounds.bottom - bounds.top) * ratio.y)}px`;
+        box.style.width = `${Math.max(24, (bounds.right - bounds.left) * ratio.x * scaleRatio)}px`;
+        box.style.height = `${Math.max(24, (bounds.bottom - bounds.top) * ratio.y * scaleRatio)}px`;
         box.dataset.previewSizedFromBounds = 'true';
       } else {
         box.style.top = `${(window.innerWidth <= 920 ? 96 : 72) * ratio.y}px`;

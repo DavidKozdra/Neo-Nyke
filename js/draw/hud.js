@@ -208,27 +208,39 @@
 
   function drawMinimap() {
     const hasGlasses = Neo.getItemStats?.()?.hasPrincesGlasses;
-    const gridSize = 9;
     const visibleRooms = Neo.rooms.filter(r => !r.secret);
+    // Size the map to the rooms that actually exist, not the full 9x9 generator
+    // grid. Floors grow outward from the center cell and rarely fill every
+    // column/row, so fitting the frame to the occupied bounding box keeps the
+    // map compact and the room cluster visually centered instead of drifting
+    // toward one corner with empty padding on the other side.
+    const minGx = visibleRooms.reduce((m, r) => Math.min(m, r.gx), Infinity);
+    const maxGx = visibleRooms.reduce((m, r) => Math.max(m, r.gx), 0);
+    const minGy = visibleRooms.reduce((m, r) => Math.min(m, r.gy), Infinity);
     const maxGy = visibleRooms.reduce((m, r) => Math.max(m, r.gy), 0);
+    const gridCols = Math.max(1, (Number.isFinite(minGx) ? maxGx - minGx : 0) + 1);
+    const gridRows = Math.max(1, (Number.isFinite(minGy) ? maxGy - minGy : 0) + 1);
+    // Column/row of the top-left occupied cell; folded into the origin so every
+    // `room.gx/room.gy` position still lands correctly against the trimmed frame.
+    const gridOriginGx = Number.isFinite(minGx) ? minGx : 0;
+    const gridOriginGy = Number.isFinite(minGy) ? minGy : 0;
     const canvasRect = Neo.canvas.getBoundingClientRect();
     const scaleX = canvasRect.width > 0 ? canvasRect.width / Neo.canvas.width : 1;
     const scaleY = canvasRect.height > 0 ? canvasRect.height / Neo.canvas.height : 1;
     const compact = window.innerWidth <= 920;
-    const accessHudScale = Number(window.NeoSettings?.getAccess?.()?.hudScale);
-    const globalHudScale = Number.isFinite(accessHudScale) ? Neo.clamp(accessHudScale, 0.5, 2) : 1;
-    // The minimap participates in the per-widget HUD Layout editor: a null/absent
-    // scale inherits the global HUD scale, otherwise it uses its own. Visibility
+    // The minimap participates in the per-widget HUD Layout editor. Visibility
     // is handled by the caller (skips drawMinimap entirely when hidden).
     const minimapEntry = window.NeoSettings?.getHudElements?.()?.minimap;
-    const ownScale = Number(minimapEntry?.scale);
-    const hudScale = Number.isFinite(ownScale) ? Neo.clamp(ownScale, 0.5, 2) : globalHudScale;
+    const ownScale = minimapEntry?.scale == null ? NaN : Number(minimapEntry.scale);
+    // Auto defaults to 150%, matching the HUD editor's Minimap definition. An
+    // explicit per-widget scale still provides the full 50–200% resize range.
+    const hudScale = Number.isFinite(ownScale) ? Neo.clamp(ownScale, 0.5, 2) : 1.5;
     const minimapOffsetX = Number.isFinite(Number(minimapEntry?.x)) ? Number(minimapEntry.x) : 0;
     const minimapOffsetY = Number.isFinite(Number(minimapEntry?.y)) ? Number(minimapEntry.y) : 0;
     const baseSize = hasGlasses ? 34 : 17;
     const baseGap = hasGlasses ? 3 : 2;
-    const baseMapWidth = gridSize * baseSize + (gridSize - 1) * baseGap;
-    const baseMapHeight = (maxGy + 1) * baseSize + maxGy * baseGap;
+    const baseMapWidth = gridCols * baseSize + (gridCols - 1) * baseGap;
+    const baseMapHeight = gridRows * baseSize + (gridRows - 1) * baseGap;
     const targetViewportWidth = hasGlasses
       ? (compact ? Math.min(224, canvasRect.width * 0.45) : Math.min(280, canvasRect.width * 0.35))
       : (compact ? Math.min(112, canvasRect.width * 0.25) : Math.min(146, canvasRect.width * 0.2));
@@ -267,10 +279,15 @@
     );
     const size = Math.max(hasGlasses ? 7 : 8, Math.round(baseSize * minimapScale));
     const gap = Math.max(1, Math.round(baseGap * minimapScale));
-    const mapWidth = gridSize * size + (gridSize - 1) * gap;
-    const mapHeight = (maxGy + 1) * size + maxGy * gap;
+    const mapWidth = gridCols * size + (gridCols - 1) * gap;
+    const mapHeight = gridRows * size + (gridRows - 1) * gap;
     const originX = Math.round(visibleCanvasRight - mapWidth - edgeInsetX + minimapOffsetX / scaleX);
     const originY = Math.round(visibleCanvasTop + topInset + minimapOffsetY / scaleY);
+    // Cell origin subtracts the occupied-cell offset so room positions computed as
+    // `cellOrigin + room.gx * (size + gap)` land inside the trimmed frame whose
+    // top-left is originX/originY.
+    const cellOriginX = originX - gridOriginGx * (size + gap);
+    const cellOriginY = originY - gridOriginGy * (size + gap);
     const markerFont = `${Math.max(7, Math.round(size * 0.62))}px system-ui`;
     const currentRoom = Neo.currentRoom;
     // Princess's floor curse (obscureMap): every room other than the one you're
@@ -279,7 +296,7 @@
     const mapObscured = !!Neo.floorRivalCurses?.obscureMap;
     const isRevealed = (room) => !!room?.explored && !(mapObscured && room !== currentRoom);
     const currentCellCx = currentRoom && !currentRoom.secret
-      ? originX + currentRoom.gx * (size + gap) + size / 2
+      ? cellOriginX + currentRoom.gx * (size + gap) + size / 2
       : originX + mapWidth / 2;
     const hasSpawnedLadder = (room) => {
       if (!room) return false;
@@ -424,8 +441,8 @@
     };
     Neo.rooms.forEach(room => {
       if (room.secret) return;
-      const x = originX + room.gx * (size + gap);
-      const y = originY + room.gy * (size + gap);
+      const x = cellOriginX + room.gx * (size + gap);
+      const y = cellOriginY + room.gy * (size + gap);
       const roomExplored = isRevealed(room);
       // While obscured, only the current room reveals an exit star; the rest read
       // as undiscovered.
@@ -526,8 +543,8 @@
         if (room.secret || room === Neo.currentRoom) return;
         const hasElite = Array.isArray(room.enemies) && room.enemies.some(e => e?.elite);
         if (!hasElite) return;
-        const rx = originX + room.gx * (size + gap);
-        const ry = originY + room.gy * (size + gap);
+        const rx = cellOriginX + room.gx * (size + gap);
+        const ry = cellOriginY + room.gy * (size + gap);
         Neo.ctx.globalAlpha = 0.9;
         Neo.ctx.fillStyle = '#ff4444';
         Neo.ctx.fillRect(rx + size - 4, ry, 4, 4);
@@ -538,8 +555,8 @@
     if (activeBounty?.targetSpawned && activeBounty.targetRoomKey) {
       const targetRoom = Neo.rooms.find(room => `${room.gx},${room.gy}` === activeBounty.targetRoomKey);
       if (targetRoom && !targetRoom.secret) {
-        const rx = originX + targetRoom.gx * (size + gap) + size / 2;
-        const ry = originY + targetRoom.gy * (size + gap) + size / 2;
+        const rx = cellOriginX + targetRoom.gx * (size + gap) + size / 2;
+        const ry = cellOriginY + targetRoom.gy * (size + gap) + size / 2;
         const pulse = 0.65 + Math.sin(Number(Neo.gameElapsedTime || 0) * 5) * 0.25;
         Neo.ctx.globalAlpha = pulse;
         Neo.ctx.strokeStyle = '#ff9d66';
@@ -564,8 +581,8 @@
         if (room.secret || !isRevealed(room)) return;
         const hasExplosiveTrap = Array.isArray(room.hazards) && room.hazards.some(h => h?.kind === 'explosive_trap');
         if (!hasExplosiveTrap) return;
-        const rx = originX + room.gx * (size + gap);
-        const ry = originY + room.gy * (size + gap);
+        const rx = cellOriginX + room.gx * (size + gap);
+        const ry = cellOriginY + room.gy * (size + gap);
         Neo.ctx.globalAlpha = 0.88;
         Neo.ctx.fillStyle = '#ff2222';
         Neo.ctx.font = skullFont;
@@ -582,8 +599,8 @@
         const hasCoin = pickups.some(p => p?.type === 'coin');
         const hasItem = pickups.some(p => p?.type === 'item');
         if (!hasPotion && !hasCoin && !hasItem) return;
-        const rx = originX + room.gx * (size + gap);
-        const ry = originY + room.gy * (size + gap);
+        const rx = cellOriginX + room.gx * (size + gap);
+        const ry = cellOriginY + room.gy * (size + gap);
         let slotX = rx + 1;
         const dotY = ry + size - dotR - 1;
         const drawDot = (color) => {
@@ -604,8 +621,8 @@
         if (room.secret || room === Neo.currentRoom) return;
         const roomEnemies = Array.isArray(room.enemies) ? room.enemies.filter(e => e && e.hp > 0) : [];
         if (roomEnemies.length === 0) return;
-        const rx = originX + room.gx * (size + gap);
-        const ry = originY + room.gy * (size + gap);
+        const rx = cellOriginX + room.gx * (size + gap);
+        const ry = cellOriginY + room.gy * (size + gap);
         const count = Math.min(roomEnemies.length, 5);
         const spacing = (size - 2) / count;
         for (let i = 0; i < count; i++) {
@@ -624,8 +641,8 @@
     // frame footer so it does not cover rooms, pickups, enemies, or doors.
     const youRoom = currentRoom;
     if (youRoom && !youRoom.secret) {
-      const yx = originX + youRoom.gx * (size + gap);
-      const yy = originY + youRoom.gy * (size + gap);
+      const yx = cellOriginX + youRoom.gx * (size + gap);
+      const yy = cellOriginY + youRoom.gy * (size + gap);
       const t = Number(Neo.gameElapsedTime || 0);
       const pulse = 0.5 + 0.5 * Math.sin(t * 5.0);
       const grow = Math.round(2 + pulse * Math.max(2, size * 0.24));
@@ -733,6 +750,7 @@
       width: mapWidth,
       height: minimapFrameHeight,
       scale: minimapScale,
+      hudScale,
       offsetX: minimapOffsetX,
       offsetY: minimapOffsetY,
       viewportBounds,
