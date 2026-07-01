@@ -10,9 +10,9 @@ const CHARACTER_SHEET_DEFS = {
   },
   princess: {
     src: 'assets/sprites/chars/princess.png',
-    frameWidth: 48,
-    frameHeight: 48,
-    frameCount: 8,
+    frameWidth: 24,
+    frameHeight: 24,
+    frameCount: 6,
     renderScale: 1.5,
   },
 };

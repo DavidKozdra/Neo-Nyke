@@ -106,8 +106,16 @@
   }
 
   function getActorAnimSeed(actor, fallbackKey = '') {
+    // A fixed per-actor phase offset so identical actors desync. Prefer a stable
+    // source (an assigned animSeed, or a caller-supplied key like 'player') and
+    // only fall back to a position hash when nothing stable exists — a position
+    // hash changes every frame a moving actor takes, which would scramble the
+    // walk-cycle phase instead of holding it steady.
     if (Number.isFinite(actor?.animSeed)) return actor.animSeed;
-    const source = `${actor?.type || actor?.character || fallbackKey}:${Math.round(actor?.x || 0)}:${Math.round(actor?.y || 0)}`;
+    const stable = actor?.type || actor?.character || fallbackKey;
+    const source = stable
+      ? String(stable)
+      : `${Math.round(actor?.x || 0)}:${Math.round(actor?.y || 0)}`;
     let hash = 0;
     for (let index = 0; index < source.length; index += 1) {
       hash = ((hash << 5) - hash + source.charCodeAt(index)) | 0;
@@ -136,16 +144,23 @@
 
     const walkFrames = animations.walk || [];
     const speed = Math.hypot(Number(actor?.vx || 0), Number(actor?.vy || 0));
-    const seed = getActorAnimSeed(actor, spriteKey);
+    // Stable phase offset: prefer the caller's seedKey (e.g. 'player') so a moving
+    // actor keeps a fixed offset rather than re-hashing its position each frame.
+    const seed = getActorAnimSeed(actor, options.seedKey || spriteKey);
+    // Drive the cycle off the pause-aware gameplay clock, not wall-clock Date.now(),
+    // so the animation freezes on pause and stays in sync with the rest of the game.
+    const clock = Number(Neo.gameElapsedTime || 0);
+    // Non-negative modulo — Math.floor(...) % n keeps the dividend's sign in JS, so
+    // guard against a negative index (which would read undefined and hitch).
+    const wrap = (value, length) => ((Math.floor(value) % length) + length) % length;
     if (walkFrames.length && speed > 10) {
       const stepRate = Number(options.stepRate || 10);
-      const index = Math.floor(Date.now() / 1000 * stepRate + seed) % walkFrames.length;
-      return resolve(walkFrames[index]);
+      return resolve(walkFrames[wrap(clock * stepRate + seed, walkFrames.length)]);
     }
 
     const blinkFrames = animations.blink || [];
     const idleFrames = animations.idle || [];
-    const now = Date.now() / 1000 + seed * 0.37;
+    const now = clock + seed * 0.37;
     const blinkCycle = Number(options.blinkCycle || 4.2);
     const blinkWindow = 0.11 + (seed % 0.05);
     if (blinkFrames.length && (now % blinkCycle) < blinkWindow) {
@@ -153,7 +168,7 @@
     }
     if (idleFrames.length) {
       const idleRate = Number(options.idleRate || 1.15);
-      const index = Math.floor(now * idleRate) % idleFrames.length;
+      const index = wrap(now * idleRate, idleFrames.length);
       return resolve(idleFrames[index]);
     }
 
