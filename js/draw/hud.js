@@ -225,7 +225,7 @@
     const hudScale = Number.isFinite(ownScale) ? Neo.clamp(ownScale, 0.5, 2) : globalHudScale;
     const minimapOffsetX = Number.isFinite(Number(minimapEntry?.x)) ? Number(minimapEntry.x) : 0;
     const minimapOffsetY = Number.isFinite(Number(minimapEntry?.y)) ? Number(minimapEntry.y) : 0;
-    const baseSize = hasGlasses ? 28 : 14;
+    const baseSize = hasGlasses ? 34 : 17;
     const baseGap = hasGlasses ? 3 : 2;
     const baseMapWidth = gridSize * baseSize + (gridSize - 1) * baseGap;
     const baseMapHeight = (maxGy + 1) * baseSize + maxGy * baseGap;
@@ -401,6 +401,27 @@
     Neo.ctx.lineTo(originX + mapWidth - 2, originY + mapHeight + 0.5);
     Neo.ctx.stroke();
     Neo.ctx.globalAlpha = 1;
+    // Room-type glyphs are drawn as white lettering wrapped in a dark outline so
+    // they stay legible on any tile color — the tiles range from pale blue to
+    // bright orange, where a same-color glow or plain white would wash out.
+    const drawRoomGlyph = (glyph, x, y, roomExplored) => {
+      const cx = x + size / 2;
+      const cy = y + size / 2;
+      Neo.ctx.save();
+      Neo.ctx.globalAlpha = roomExplored ? 1 : 0.72;
+      Neo.ctx.font = `bold ${markerFont}`;
+      Neo.ctx.textAlign = 'center';
+      Neo.ctx.textBaseline = 'middle';
+      // Dark halo: a stroked outline scaled to the glyph so contrast holds up
+      // against light and dark tiles alike.
+      Neo.ctx.lineJoin = 'round';
+      Neo.ctx.strokeStyle = 'rgba(4,10,14,0.92)';
+      Neo.ctx.lineWidth = Math.max(2, size * 0.22);
+      Neo.ctx.strokeText(glyph, cx, cy);
+      Neo.ctx.fillStyle = '#ffffff';
+      Neo.ctx.fillText(glyph, cx, cy);
+      Neo.ctx.restore();
+    };
     Neo.rooms.forEach(room => {
       if (room.secret) return;
       const x = originX + room.gx * (size + gap);
@@ -450,6 +471,7 @@
         Neo.ctx.fillStyle = '#0a3344';
       }
       Neo.ctx.fillRect(x, y, size, size);
+      
       // While obscured, suppress the room-type glyphs for every room but the
       // current one so the floor's layout stays hidden.
       const showRoomGlyph = !mapObscured || room === currentRoom;
@@ -461,33 +483,13 @@
         Neo.ctx.textBaseline = 'middle';
         Neo.ctx.fillText('★', x + size / 2, y + size / 2);
       } else if (room.type === 'challenge' && showRoomGlyph) {
-        Neo.ctx.globalAlpha = roomExplored ? 1 : 0.72;
-        Neo.ctx.fillStyle = '#071116';
-        Neo.ctx.font = `bold ${markerFont}`;
-        Neo.ctx.textAlign = 'center';
-        Neo.ctx.textBaseline = 'middle';
-        Neo.ctx.fillText('T', x + size / 2, y + size / 2);
+        drawRoomGlyph('T', x, y, roomExplored);
       } else if (room.type === 'shop' && showRoomGlyph) {
-        Neo.ctx.globalAlpha = roomExplored ? 1 : 0.72;
-        Neo.ctx.fillStyle = '#071116';
-        Neo.ctx.font = `bold ${markerFont}`;
-        Neo.ctx.textAlign = 'center';
-        Neo.ctx.textBaseline = 'middle';
-        Neo.ctx.fillText('$', x + size / 2, y + size / 2);
+        drawRoomGlyph('$', x, y, roomExplored);
       } else if (room.type === 'anvil' && showRoomGlyph) {
-        Neo.ctx.globalAlpha = roomExplored ? 1 : 0.72;
-        Neo.ctx.fillStyle = '#1a0800';
-        Neo.ctx.font = `bold ${markerFont}`;
-        Neo.ctx.textAlign = 'center';
-        Neo.ctx.textBaseline = 'middle';
-        Neo.ctx.fillText('⚒', x + size / 2, y + size / 2);
+        drawRoomGlyph('⚒', x, y, roomExplored);
       } else if (Neo.SPECIAL_ROOM_DEFS?.[room.type] && showRoomGlyph) {
-        Neo.ctx.globalAlpha = roomExplored ? 1 : 0.72;
-        Neo.ctx.fillStyle = '#071116';
-        Neo.ctx.font = `bold ${markerFont}`;
-        Neo.ctx.textAlign = 'center';
-        Neo.ctx.textBaseline = 'middle';
-        Neo.ctx.fillText(Neo.SPECIAL_ROOM_DEFS[room.type].glyph, x + size / 2, y + size / 2);
+        drawRoomGlyph(Neo.SPECIAL_ROOM_DEFS[room.type].glyph, x, y, roomExplored);
       }
       // Forge/shop blink: draw a soft, slowly-blinking highlight ring around
       // revealed forge and shop rooms so they catch the eye on the minimap.

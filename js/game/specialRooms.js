@@ -22,13 +22,6 @@ export const SPECIAL_ROOM_DEFS = Object.freeze({
     color: '#c98cff',
     subtitle: 'Fuse, distill, or echo the relics already shaping your build.',
   },
-  sanctuary: {
-    name: 'Sanctuary',
-    shortName: 'Sanctuary',
-    glyph: '+',
-    color: '#83f0b0',
-    subtitle: 'One moment of safety. Choose what gets restored.',
-  },
   oracle: {
     name: 'Oracle',
     shortName: 'Oracle',
@@ -74,9 +67,6 @@ const SPECIAL_CHOICE_ICON_KEYS = Object.freeze({
   'reliquary:fuse': 'tab-relics',
   'reliquary:distill': 'role-wizard',
   'reliquary:echo': 'item',
-  'sanctuary:mend': 'hp',
-  'sanctuary:rearm': 'speed',
-  'sanctuary:cleanse': 'defense',
   'oracle:map': 'range',
   'oracle:secret': 'role-assassin',
   'oracle:transmute': 'role-wizard',
@@ -425,29 +415,6 @@ function reliquaryChoices(room) {
   ];
 }
 
-function sanctuaryChoices(room) {
-  const hasCurse = !!Neo.floorRivalCurses && Object.values(Neo.floorRivalCurses).some(value => value === true || Number(value || 0) > 0);
-  const potionCap = Math.max(0, Number(Neo.getPotionCarryCap?.() || 0));
-  return [
-    makeChoice('mend', 'Mend Wounds', 'Restore all health.', 'ONE REST', () => {
-      Neo.player.hp = Neo.player.maxHp;
-      consumeService(room, 'Health fully restored');
-      return true;
-    }, Number(Neo.player?.hp || 0) < Number(Neo.player?.maxHp || 0), 'Health is already full.'),
-    makeChoice('rearm', 'Rearm', `Restore every move charge${potionCap > 0 ? ' and fill stored potions' : ''}.`, 'ONE REST', () => {
-      Neo.cooldowns = Neo.createCooldownState?.(Neo.player) || Neo.cooldowns;
-      if (potionCap > 0) Neo.player.storedPotions = potionCap;
-      consumeService(room, 'Moves and supplies restored');
-      return true;
-    }),
-    makeChoice('cleanse', 'Cleanse Curses', 'Remove every active rival curse from this floor.', 'ONE REST', () => {
-      Neo.floorRivalCurses = { obscureMap: false, lowerCombat: false, reducePotions: false, gellehTurrets: 0 };
-      consumeService(room, 'Floor curses cleansed');
-      return true;
-    }, hasCurse, 'No active floor curse.'),
-  ];
-}
-
 function findSecretPassage() {
   for (const source of Neo.rooms || []) {
     for (const [direction, passage] of Object.entries(source.secretPassages || {})) {
@@ -622,7 +589,6 @@ function getChoices(room) {
   if (room.type === 'shrine') return shrineChoices(room);
   if (room.type === 'bounty') return bountyChoices(room);
   if (room.type === 'reliquary') return reliquaryChoices(room);
-  if (room.type === 'sanctuary') return sanctuaryChoices(room);
   if (room.type === 'oracle') return oracleChoices(room);
   if (room.type === 'portal') return portalChoices(room);
   if (room.type === 'prison') return prisonChoices(room);

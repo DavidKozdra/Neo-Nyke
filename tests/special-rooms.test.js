@@ -11,7 +11,7 @@ const entitySource = fs.readFileSync(path.join(root, 'js/draw/entities.js'), 'ut
 const htmlSource = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 
 describe('special service rooms', () => {
-  const roomTypes = ['shrine', 'bounty', 'reliquary', 'sanctuary', 'oracle', 'portal', 'prison', 'wishing_well'];
+  const roomTypes = ['shrine', 'bounty', 'reliquary', 'oracle', 'portal', 'prison', 'wishing_well'];
 
   test.each(roomTypes)('%s has a complete room definition', roomType => {
     expect(specialSource).toContain(`${roomType}: {`);
