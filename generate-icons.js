@@ -62,42 +62,39 @@ function drawIcon(ctx, s) {
   ctx.fillStyle = bg;
   ctx.fill();
 
-  // inner glow ring
-  ctx.lineWidth = Math.max(1, 1.5 * u);
+  // inner glow ring — thin and close to the edge so it frames without crowding.
+  ctx.lineWidth = Math.max(1, 1.25 * u);
   ctx.strokeStyle = 'rgba(80,120,200,0.30)'; // --menu-glow
-  roundRect(ctx, 4.5 * u, 4.5 * u, 55 * u, 55 * u, r - 3 * u);
+  roundRect(ctx, 3.5 * u, 3.5 * u, 57 * u, 57 * u, r - 2 * u);
   ctx.stroke();
 
-  // "NN" fit to ~72% of the badge width
+  // "NN" fit to ~84% of the badge width so it reads clearly even at 16px.
   const text = 'NN';
   let fontPx = 30 * u;
   ctx.font = fontPx + 'px "' + FONT_FAMILY + '"';
   const w = ctx.measureText(text).width || 1;
-  const maxW = 46 * u;
+  const maxW = 54 * u;
   fontPx = fontPx * (maxW / w);
   ctx.font = fontPx + 'px "' + FONT_FAMILY + '"';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
   const cx = 32 * u;
-  const cy = 33.5 * u;
-  const target = 44 * u;
+  const cy = 33 * u;
+  const target = 50 * u;
 
   const grad = ctx.createLinearGradient(0, cy - target / 2, 0, cy + target / 2);
   TITLE_GRAD.forEach(([o, c]) => grad.addColorStop(o, c));
 
   // hard drop shadow (CSS: 0 3px 0 rgba(0,0,0,.9))
   ctx.fillStyle = 'rgba(0,0,0,0.9)';
-  ctx.fillText(text, cx, cy + Math.max(1, 3 * u));
+  ctx.fillText(text, cx, cy + Math.max(1, 2.5 * u));
 
-  // layered blue glow (CSS: two blue drop-shadows)
+  // soft blue glow — kept modest so the bigger glyphs don't bloom into each other
   ctx.save();
-  ctx.shadowColor = 'rgba(80,120,200,0.75)';
-  ctx.shadowBlur = 10 * u;
+  ctx.shadowColor = 'rgba(90,130,210,0.55)';
+  ctx.shadowBlur = 7 * u;
   ctx.fillStyle = grad;
-  ctx.fillText(text, cx, cy);
-  ctx.shadowColor = 'rgba(168,200,255,0.55)';
-  ctx.shadowBlur = 22 * u;
   ctx.fillText(text, cx, cy);
   ctx.restore();
 
@@ -135,30 +132,31 @@ function renderTitle(width, height) {
 
   const cx = width / 2;
   const cy = height / 2;
-  const capH = fontPx; // approx glyph box for the gradient span
+  const capH = fontPx * 0.7; // Press Start 2P glyphs fill ~0.7em; align the gradient to that
 
   const grad = ctx.createLinearGradient(0, cy - capH / 2, 0, cy + capH / 2);
   TITLE_GRAD.forEach(([o, c]) => grad.addColorStop(o, c));
 
-  const dropY = Math.max(2, Math.round(fontPx * 0.06));
-  const glow = Math.round(fontPx * 0.22);
+  const dropY = Math.max(2, Math.round(fontPx * 0.05));
+  // Keep the glow proportionally small — the CSS title's blur is ~8-24px against
+  // a ~64px glyph, so scale to a similar ratio. A single soft halo reads far
+  // cleaner at this resolution than stacked large-radius passes (which pool into
+  // solid blobs).
+  const glow = Math.round(fontPx * 0.09);
 
-  // hard drop shadow
+  // hard drop shadow (CSS: 0 3px 0 rgba(0,0,0,.9))
   ctx.fillStyle = 'rgba(0,0,0,0.9)';
   ctx.fillText(text, cx, cy + dropY);
 
-  // layered glow
+  // single soft blue halo
   ctx.save();
-  ctx.shadowColor = 'rgba(80,120,200,0.75)';
+  ctx.shadowColor = 'rgba(120,160,235,0.55)';
   ctx.shadowBlur = glow;
   ctx.fillStyle = grad;
   ctx.fillText(text, cx, cy);
-  ctx.shadowColor = 'rgba(168,200,255,0.55)';
-  ctx.shadowBlur = glow * 2;
-  ctx.fillText(text, cx, cy);
   ctx.restore();
 
-  // crisp pass
+  // crisp pass on top for edge definition
   ctx.fillStyle = grad;
   ctx.fillText(text, cx, cy);
 
