@@ -501,7 +501,7 @@ button, input, select, textarea {
 }
 
 .menu-footer__version {
-  font-size: calc(10px * var(--font-scale, 1));
+  font-size: calc(15px * var(--font-scale, 1));
   color: var(--menu-text-soft);
   letter-spacing: .08em;
   text-transform: uppercase;
@@ -512,7 +512,7 @@ button, input, select, textarea {
   flex-wrap: wrap;
   justify-content: center;
   gap: 8px;
-  font-size: calc(10px * var(--font-scale, 1));
+  font-size: calc(20px * var(--font-scale, 1));
   color: #70b8d8;
 }
 
