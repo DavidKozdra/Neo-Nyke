@@ -150,10 +150,13 @@ export const LIGHTING_CONFIG = {
 // curve. Time now expresses itself as harder-hitting, harder-to-CC enemies.
 export const ENEMY_SCALING = {
   floor: 0.14,
-  // Per-level enemy HP bonus above level 5 (enemy level = max(floorDepth,
-  // playerLevel)). LINEAR — was an exponential 1.2^n that ballooned to 100k+ HP
-  // once player level climbed past ~30. 0.45 = +45%/level: at level 36 that's
-  // 1+0.45*31 ≈ 14.95x, a chunky bonus that still never runs away. Bosses ignore it.
+  // Enemy HP bonus per "credit", where a credit is earned every 3 levels above
+  // level 5 (enemy level = max(floorDepth, playerLevel)). Was applied once PER
+  // LEVEL, which — because level tracks the player, not just depth — ballooned
+  // floor-1 elites into 100k+ sponges after Knight/Giant stacks multiplied it.
+  // 0.45 = +45%/credit: at level 40 that's floor(35/3)=11 credits -> 1+0.45*11
+  // ≈ 6.0x, a chunky bonus that never runs away. Bosses ignore it. Cadence (the
+  // /3) lives in getEnemyLevelStatMultipliers; this is just the per-credit slope.
   levelHpBonus: 0.45,
   // Per-loop normal-enemy HP growth. `loop` is the marginal bump for the FIRST
   // loop (loopNumber 2); `loopHpCurve` < 1 makes each later loop add less than

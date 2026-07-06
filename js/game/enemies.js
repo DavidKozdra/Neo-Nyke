@@ -788,13 +788,19 @@
   function getEnemyLevelStatMultipliers(level) {
     const levelsAboveFive = Math.max(0, Math.floor(Number(level || 1)) - 5);
     if (levelsAboveFive <= 0) return { hp: 1, damage: 1, speed: 1, attackSpeed: 1 };
+    // HP earns one "credit" every 3 levels, not one per level. Enemy level is
+    // max(floorDepth, playerLevel), so a high-level player hitting a fresh loop's
+    // floor 1 used to inherit their FULL level as a per-level HP bonus — a Lv40
+    // player faced ~16.75x level HP before elite Knight/Giant/inventory stacks
+    // multiplied it into 100k+ sponges. Throttling to a credit per 3 levels keeps
+    // the bonus meaningful (Lv40 -> ~6.1x) without letting level alone run away;
+    // depth/loop still own the rest of the curve. Only HP is throttled — damage,
+    // speed, and attack speed keep their own separately-tuned per-level curves.
+    const hpCredits = Math.floor(levelsAboveFive / 3);
     return {
-      // HP gets only a small LINEAR bonus per level (levelHpBonus/level above 5),
-      // not the exponential 1.2^n it used to — that ran away once player level
-      // climbed (enemy level is max(floorDepth, playerLevel)), so a level-36
-      // player on Easy was facing ~25k-HP trash. Keep it a gentle bonus, not a
-      // wall. Tune via ENEMY_SCALING.levelHpBonus in game-core.js.
-      hp: 1 + levelsAboveFive * (Neo.ENEMY_SCALING.levelHpBonus ?? 0.15),
+      // Small LINEAR bonus per HP credit (levelHpBonus per credit above level 5).
+      // Tune slope via ENEMY_SCALING.levelHpBonus, cadence via the /3 above.
+      hp: 1 + hpCredits * (Neo.ENEMY_SCALING.levelHpBonus ?? 0.15),
       damage: Math.pow(1.14, levelsAboveFive),
       speed: Math.min(1.35, Math.pow(1.025, levelsAboveFive)),
       attackSpeed: Math.min(2.25, Math.pow(1.07, levelsAboveFive)),

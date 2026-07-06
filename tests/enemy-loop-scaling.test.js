@@ -132,7 +132,11 @@ describe('enemy loop scaling', () => {
   test('uses cumulative floors visited for the floor component', () => {
     const firstFloorAfterLoop = scaleAtDepth(11);
 
-    expect(firstFloorAfterLoop.hp).toBe(1114);
+    // Depth 11 -> floor((11-5)/3) = 2 HP credits (+90%). Lower than the old
+    // +45%/level number (1114) now that HP earns a credit only every 3 levels;
+    // the point of this test is that the FLOOR component stays cumulative across
+    // the loop boundary, which the growing hp/dmg/speed below still demonstrate.
+    expect(firstFloorAfterLoop.hp).toBe(572);
     expect(firstFloorAfterLoop.dmg).toBe(48);
     expect(firstFloorAfterLoop.speed).toBeCloseTo(156.52, 1);
   });
@@ -143,17 +147,22 @@ describe('enemy loop scaling', () => {
     const levelTen = scaleAtDepth(1, 10);
     const levelFifteen = scaleAtDepth(1, 15);
 
-    // HP is only a LINEAR +45%/level bonus now (was exponential 1.2^n), so
-    // a high-level player no longer faces multi-thousand-HP trash. Damage/speed/
-    // attack-speed keep their original level curves.
+    // HP earns one +45% credit every 3 levels above 5 now (was +45%/level, and
+    // before that exponential 1.2^n), so a high-level player hitting a fresh
+    // loop's floor 1 no longer faces multi-thousand-HP trash. Damage/speed/
+    // attack-speed keep their original per-level curves — only HP is throttled.
     expect(levelFive).toMatchObject({ hp: 95, dmg: 10, speed: 95, enemyLevelAttackSpeedMultiplier: 1 });
-    expect(levelSix).toMatchObject({ hp: 138, dmg: 11 });
+    // Level 6 is still within the first HP credit's 3-level window: HP matches
+    // level 5, while damage/speed/attack-speed already tick up per level.
+    expect(levelSix).toMatchObject({ hp: 95, dmg: 11 });
     expect(levelSix.speed).toBeCloseTo(97.375);
     expect(levelSix.enemyLevelAttackSpeedMultiplier).toBeCloseTo(1.07);
-    expect(levelTen.hp).toBe(309);
+    // Level 10 = floor((10-5)/3) = 1 HP credit -> +45% (was 309 at +45%/level).
+    expect(levelTen.hp).toBe(138);
     expect(levelTen.dmg).toBe(18);
     expect(levelTen.enemyLevelAttackSpeedMultiplier).toBeCloseTo(Math.pow(1.07, 5));
-    expect(levelFifteen.hp).toBe(523);
+    // Level 15 = floor((15-5)/3) = 3 HP credits -> +135% (was 523).
+    expect(levelFifteen.hp).toBe(223);
     expect(levelFifteen.dmg).toBe(35);
     expect(levelFifteen.speed).toBeCloseTo(121.61, 1);
     expect(levelFifteen.enemyLevelAttackSpeedMultiplier).toBeCloseTo(Math.pow(1.07, 10));
