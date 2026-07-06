@@ -650,15 +650,23 @@
 
   const ELITE_POWER_POOL = ['lazered', 'enflamed', 'breezy', 'gross', 'nothing', 'giant', 'blessed'];
 
-  // Roll the elite's trait tokens. An elite gets one BODY roll per level (each
-  // either 'knight' or 'knave'), then `level % 3` POWER rolls drawn with
+  // Roll the elite's trait tokens. An elite gets one BODY roll every 3 levels
+  // (each either 'knight' or 'knave'), then `level % 3` POWER rolls drawn with
   // replacement from ELITE_POWER_POOL (duplicates allowed; 'nothing' is a valid
   // no-op roll). The returned token list drives both mechanics (applyEliteTypes)
   // and the display name (getEliteEnemyLabel).
+  //
+  // Body count is throttled to level/3 because each knight compounds HP by 1.15x
+  // multiplicatively: at one roll PER LEVEL the ~half that land knight gave
+  // E[1.15^(level/2)] = 1.075^level HP — a Lv40 grunt averaged ~10k HP from
+  // bodies alone (unlucky rolls far more), which is what produced 100k+ elites.
+  // One roll per 3 levels keeps bodies as real, scaling pressure without letting
+  // the knight product run away; power rolls are unchanged.
   function rollEliteTypes(enemy) {
     const level = Math.max(1, Number(enemy?.level) || getEnemyProgressionLevel(enemy));
     const tokens = [];
-    for (let index = 0; index < level; index += 1) {
+    const bodyRolls = Math.floor(level / 3);
+    for (let index = 0; index < bodyRolls; index += 1) {
       tokens.push(Neo.nextRandom('encounter') < 0.5 ? 'knight' : 'knave');
     }
     const powerCount = level % 3;

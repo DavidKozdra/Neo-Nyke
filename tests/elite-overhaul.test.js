@@ -64,23 +64,23 @@ function buildElite(Neo, { irandSeq = [], nextRandomSeq = [] } = {}) {
 }
 
 describe('elite body rolls (Knight / Knave)', () => {
-  test('rolls one body token per level plus level % 3 powers', () => {
+  test('rolls one body token per 3 levels plus level % 3 powers', () => {
     const Neo = baseNeo();
     // nextRandom < 0.5 => knight; force all knight. irand for power picks -> index 4 (nothing)
     const { rollEliteTypes } = buildElite(Neo, { nextRandomSeq: [0], irandSeq: [4] });
-    const tokens = rollEliteTypes({ level: 4 });
+    const tokens = rollEliteTypes({ level: 10 });
     const body = tokens.filter(t => t === 'knight' || t === 'knave');
     const powers = tokens.filter(t => ELITE_POWER_POOL.includes(t));
-    expect(body).toHaveLength(4);
-    expect(powers).toHaveLength(4 % 3); // 1
+    expect(body).toHaveLength(Math.floor(10 / 3)); // 3
+    expect(powers).toHaveLength(10 % 3); // 1
   });
 
   test('all-Knight scales hp and damage by 1.15^knight', () => {
     const Neo = baseNeo();
-    const { applyEliteTypes } = buildElite(Neo, { nextRandomSeq: [0] }); // all knight, level%3=0 -> no powers at level 5? 5%3=2
-    // level 5 -> 5 body + 2 powers; force powers to 'nothing' (index 4)
+    const { applyEliteTypes } = buildElite(Neo, { nextRandomSeq: [0] });
+    // level 15 -> floor(15/3)=5 body rolls + 15%3=0 powers; force any power to 'nothing' (index 4)
     const elite = buildElite(baseNeo(), { nextRandomSeq: [0], irandSeq: [4] });
-    const enemy = { elite: true, level: 5, hp: 100, max: 100, dmg: 10, speed: 100, r: 16 };
+    const enemy = { elite: true, level: 15, hp: 100, max: 100, dmg: 10, speed: 100, r: 16 };
     elite.applyEliteTypes(enemy);
     expect(enemy.eliteBody.knight).toBe(5);
     expect(enemy.eliteBody.knave).toBe(0);
@@ -94,7 +94,8 @@ describe('elite body rolls (Knight / Knave)', () => {
     // Easy mode scales only the +75% bonus by 0.6 -> 1 + 0.75*0.6 = 1.45x base HP.
     const Neo = baseNeo({ getDifficultyDef: () => ({ eliteHpMultiplier: 0.6 }) });
     const elite = buildElite(Neo, { nextRandomSeq: [0], irandSeq: [4] });
-    const enemy = { elite: true, level: 5, hp: 100, max: 100, dmg: 10, speed: 100, r: 16 };
+    // level 15 -> floor(15/3)=5 knight body rolls
+    const enemy = { elite: true, level: 15, hp: 100, max: 100, dmg: 10, speed: 100, r: 16 };
     elite.applyEliteTypes(enemy);
     expect(enemy.max).toBe(Math.round(100 * 1.45 * Math.pow(1.15, 5)));
     // Damage is unaffected by the HP multiplier.
@@ -111,8 +112,9 @@ describe('elite body rolls (Knight / Knave)', () => {
 
   test('all-Knave grants unfazed count and accumulates +1% status resist', () => {
     // nextRandom >= 0.5 => knave; force all knave. irand for status keys + power picks.
+    // level 15 -> floor(15/3)=5 knave body rolls.
     const elite = buildElite(baseNeo(), { nextRandomSeq: [0.9], irandSeq: [0] });
-    const enemy = { elite: true, level: 5, hp: 100, max: 100, dmg: 10, speed: 100, r: 16 };
+    const enemy = { elite: true, level: 15, hp: 100, max: 100, dmg: 10, speed: 100, r: 16 };
     elite.applyEliteTypes(enemy);
     expect(enemy.eliteBody.knave).toBe(5);
     expect(enemy.eliteUnfazed).toBe(5);
