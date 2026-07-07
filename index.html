@@ -1538,6 +1538,37 @@
   </div>
 </section>
 
+<!-- Developer Sprite Editor panel -->
+<section id="spriteEditorPanel" class="sandbox-panel hidden sprite-editor-panel" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="spriteEditorTitle">
+  <div class="sandbox-panel__backdrop" id="spriteEditorBackdrop"></div>
+  <div class="sandbox-panel__dialog sprite-editor-dialog">
+    <div class="sandbox-panel__head">
+      <div>
+        <span class="sandbox-panel__kicker">DEVELOPER MODE</span>
+        <h3 class="sandbox-panel__title" id="spriteEditorTitle">SPRITE EDITOR</h3>
+      </div>
+      <button id="spriteEditorClose" class="panel-close" aria-label="Close sprite editor">X</button>
+    </div>
+    <p class="sandbox-panel__desc">Every sprite the game currently uses, in one place. Pick one to repaint it or drop in a replacement — saving downloads a file you drag back into its original path.</p>
+    <div class="sprite-editor-body">
+      <div class="sprite-editor-sidebar">
+        <div class="sprite-editor-tabs" id="spriteEditorTabs" role="tablist"></div>
+        <input type="text" id="spriteEditorSearch" class="sprite-editor-search" placeholder="Search sprites…">
+        <div class="sprite-editor-palette-row">
+          <button type="button" class="sandbox-mini-btn" id="spriteEditorLoadPalette">Load Palette…</button>
+          <input type="file" id="spriteEditorPaletteInput" accept=".json,.gpl,.txt,.hex" style="display:none">
+          <span class="sprite-editor-note" id="spriteEditorPaletteStatus"></span>
+        </div>
+        <div class="sprite-editor-palette-strip" id="spriteEditorPaletteStrip"></div>
+        <div class="sprite-editor-grid" id="spriteEditorGrid"></div>
+      </div>
+      <div class="sprite-editor-detail" id="spriteEditorDetail">
+        <div class="sprite-editor-empty">Select a sprite from the list to edit it.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
 <!-- Challenge Shop floating panel -->
 <section id="challengePanel" class="floating-panel hidden" aria-hidden="true">
   <div class="floating-panel__head">
