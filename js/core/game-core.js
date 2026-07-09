@@ -576,14 +576,42 @@ export const CUTSCENE_GALLERY = [
     ],
   },
   {
-    id: 'god_phases',
-    title: 'The Wrath of GOD',
-    subtitle: 'Every phase of the final duel',
+    id: 'god_phase_1',
+    title: 'GOD: Phase 1',
+    subtitle: 'Opening of the final duel',
     lines: [
       { speaker: 'GOD', text: GOD_PHASE_DIALOGUE[1] },
+    ],
+  },
+  {
+    id: 'god_phase_2',
+    title: 'GOD: Phase 2',
+    subtitle: 'Divine Rebirth',
+    lines: [
       { speaker: 'GOD', text: GOD_PHASE_DIALOGUE[2] },
+    ],
+  },
+  {
+    id: 'god_phase_3',
+    title: 'GOD: Phase 3',
+    subtitle: 'Council of Bosses',
+    lines: [
       { speaker: 'GOD', text: GOD_PHASE_DIALOGUE[3] },
+    ],
+  },
+  {
+    id: 'god_phase_4',
+    title: 'GOD: Phase 4',
+    subtitle: 'Holy Onslaught',
+    lines: [
       { speaker: 'GOD', text: GOD_PHASE_DIALOGUE[4] },
+    ],
+  },
+  {
+    id: 'god_phase_5',
+    title: 'GOD: Phase 5',
+    subtitle: 'Last Judgement',
+    lines: [
       { speaker: 'GOD', text: GOD_PHASE_DIALOGUE[5] },
     ],
   },
