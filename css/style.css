@@ -4118,17 +4118,17 @@ button, input, select, textarea {
   }
 
   #start .nav-btn {
-    width: 240px;
-    min-height: 46px;
-    padding: 9px 20px;
-    font-size: calc(20px * var(--font-scale, 1));
+    width: 290px;
+    min-height: 55px;
+    padding: 11px 24px;
+    font-size: calc(24px * var(--font-scale, 1));
   }
 
   #start .nav-btn--minor {
-    width: 190px;
-    min-height: 38px;
-    padding: 7px 18px;
-    font-size: calc(17px * var(--font-scale, 1));
+    width: 230px;
+    min-height: 45px;
+    padding: 8px 21px;
+    font-size: calc(20px * var(--font-scale, 1));
   }
 
   #start .menu-footer {
@@ -6217,12 +6217,12 @@ button.alt.danger {
 }
 
 .nav-btn {
-  width: 260px;
-  padding: 16px 28px;
+  width: 330px;
+  padding: 20px 34px;
   background: var(--menu-surface);
   border-radius: 8px;
   color: var(--menu-text);
-  font-size: calc(24px * var(--font-scale, 1));
+  font-size: calc(30px * var(--font-scale, 1));
   font-weight: 800;
   letter-spacing: .14em;
   cursor: pointer;
@@ -6284,9 +6284,9 @@ button.alt.danger {
 }
 
 .nav-btn--minor {
-  font-size: calc(20px * var(--font-scale, 1));
-  padding: 11px 24px;
-  width: 200px;
+  font-size: calc(25px * var(--font-scale, 1));
+  padding: 14px 28px;
+  width: 250px;
   color: var(--menu-text-muted);
 }
 
