@@ -12,11 +12,7 @@ const CHARACTER_SHEET_DEFS = {
     src: 'assets/sprites/chars/princess.png',
     frameWidth: 24,
     frameHeight: 24,
-<<<<<<< HEAD
-    frameCount: 6,
-=======
     frameCount: 7,
->>>>>>> origin/sprite-rework
     renderScale: 1.5,
     idleFrames: [1, 2],
     walkFrames: [3, 4, 5, 6],
