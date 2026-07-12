@@ -7,6 +7,9 @@ const CHARACTER_SHEET_DEFS = {
     frameHeight: 24,
     frameCount: 7,
     renderScale: 1.5,
+    idleFrames: [1, 2],
+    walkFrames: [3, 4, 5, 6],
+    armFrame: 0,
   },
   princess: {
     src: 'assets/sprites/chars/princess.png',
@@ -16,6 +19,7 @@ const CHARACTER_SHEET_DEFS = {
     renderScale: 1.5,
     idleFrames: [1, 2],
     walkFrames: [3, 4, 5, 6],
+    armFrame: 0,
   },
 };
 
