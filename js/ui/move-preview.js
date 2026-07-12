@@ -1,109 +1,38 @@
-// move-preview.js — standalone IIFE. Animated move demo for the character-select
-// hero detail panel: the selected hero performs the hovered move on a training
-// dummy inside a small looping canvas (Neo.MovePreview.show / .stop).
+// move-preview.js — standalone IIFE. Live in-game move demo for the character
+// select hero detail panel (Neo.MovePreview.show / .stop).
 //
-// Draws only into its own canvas — never uses the entities.js helpers that
-// target Neo.ctx. Sprites are blitted straight from Neo.SPRITE_ATLAS like the
-// credits parade does; the dummy's plain/flash poses are pre-rendered with
-// Neo.drawSpriteToCanvas (the one helper that accepts an arbitrary canvas).
+// This is NOT a mock-up: each frame it runs the real game — a player built by
+// Neo.createDefaultPlayer() with the hovered move equipped, a real spawnEnemy()
+// training dummy, the real cast dispatch (tryMelee/tryLaser/trySmash/tryDash),
+// the real combat update systems, and the real world draw functions — rendered
+// into the preview canvas by pointing Neo.ctx at it.
+//
+// Safety model: everything happens synchronously inside one animation frame.
+// Before ticking, every top-level Neo global is snapshotted and the mutable
+// state the sim touches (player, enemies, particles, projectiles, cooldowns,
+// rng streams, mouse, laser state, ...) is replaced with sim-owned objects.
+// After drawing, every global is restored and any key the sim added is deleted,
+// so the menu/game never observes the demo state.
 (function () {
   const LOGICAL_W = 210;
   const LOGICAL_H = 118;
-  const CYCLE = 1.9;          // seconds per demo loop
-  const K = 0.55;             // world px -> preview px
-  const HERO_X = 52;
-  const GROUND_Y = 84;
-  const HERO_SIZE = 34;
-  const DUMMY_SIZE = 30;
-  const DUMMY_SPRITE = 'cult_follower';
-  // Timeline phases (fractions of CYCLE): windup -> strike -> recover.
-  const STRIKE_START = 0.25;
-  const STRIKE_END = 0.6;
-
-  const SLOT_DEFAULTS = {
-    melee: { anim: 'arc', color: '#ff9a6b', range: 72, arc: 1.04, push: 20 },
-    laser: { anim: 'beam', color: '#78d7ff', range: 430, width: 6, push: 8 },
-    smash: { anim: 'ring', color: '#c08cff', radius: 148, push: 24 },
-    dash: { anim: 'dash', color: '#79f7bf', dist: 170, push: 14, hits: true },
-  };
-
-  // Per-move tweaks over the slot base. Unknown moves fall through to the slot
-  // defaults, so every move renders a sensible demo without an entry here.
-  const MOVE_VARIANTS = {
-    // laser
-    blood_beam: { color: '#ff5d6c' },
-    mooggy_blood_beam: { color: '#ff3348' },
-    thorn_blood_beams: { color: '#ff5d6c', projectiles: 4 },
-    love_beam: { color: '#ff9de8' },
-    turtle_wave: { color: '#59e0b8', width: 16 },
-    wizard_lazer: { color: '#b46bff', width: 12 },
-    god_sweep: { color: '#fff1a8', width: 10 },
-    power_disks: { color: '#9adfff', projectiles: 3 },
-    nail_shot: { color: '#d8c9a8', projectiles: 5 },
-    hammer_throw: { color: '#7da3ff', projectiles: 1 },
-    blade_justice: { color: '#fff1a8', width: 8 },
-    lightning_columns: { color: '#9bd9ff', projectiles: 2 },
-    laser_shockwave: { color: '#c9a06a', width: 9 },
-    // smash
-    crimson_smash: { color: '#ff4d5e' },
-    hammer_smash: { color: '#7da3ff' },
-    mooggy_hairball: { color: '#8be07a' },
-    chaos_burst: { color: '#ff90ff', rings: 3 },
-    wall_of_toph: { color: '#c9a06a' },
-    healing_zone: { color: '#8affc0' },
-    fire_circle: { color: '#ff9040' },
-    floor_lava: { color: '#ff6a2a' },
-    excalibur_strike: { color: '#ffd980' },
-    holy_turrets: { color: '#ffe59c' },
-    kicky_kick: { color: '#ff9de8', radius: 90 },
-    random_pounce: { color: '#8be07a', rings: 2 },
-    potion_bath: { color: '#9fe8ff' },
-    death_ball: { color: '#6db9ff' },
-    turtle_powerup: { color: '#59e0b8' },
-    // dash
-    warp: { color: '#c8a6ff', teleport: true, hits: false },
-    mooggy_zoomies: { color: '#79f7bf', hits: false, ghosts: 5 },
-    flying_unhitable: { color: '#ff9de8', hits: false },
-    cowards_way: { color: '#cfd8e6', hits: false },
-    nimrod_stomp: { color: '#ffb874' },
-    zip_lightning: { color: '#9bd9ff', ghosts: 4 },
-    knight_slash_dash: { color: '#ff6e8b', ghosts: 4 },
-  };
-
-  // The melee slot is weapon-driven; tweak by weapon key. Fallback color comes
-  // from WEAPON_DEFS[weaponKey].color when no entry exists.
-  const WEAPON_VARIANTS = {
-    extending_staff: { range: 130, arc: 1.45 },
-    hunters_bow: { anim: 'beam', width: 2, projectiles: 1 },
-    lazer_glasses: { anim: 'beam', width: 5, projectiles: 2 },
-    metao_fire_staff: { anim: 'beam', width: 4, projectiles: 3 },
-    magenta_degale: { anim: 'beam', width: 7, projectiles: 1 },
-    magenta_p90: { anim: 'beam', width: 3, projectiles: 5 },
-    princess_wand: { anim: 'beam', width: 4, projectiles: 3 },
-    gelleh_lightning_spear: { anim: 'beam', width: 4, projectiles: 1 },
-    claw_gauntlets: { arc: 1.3 },
-    sarges_hammer: { arc: 1.3, range: 92 },
-    katana_excalibur_777x: { arc: 1.4, range: 86 },
-  };
+  const CYCLE = 2.4;        // seconds per demo loop (cast -> resolve -> reset)
+  const CAST_AT = 0.35;     // cast the move this far into the cycle
+  const HOLD_FOR = 0.85;    // hold duration for charge moves (death ball etc.)
+  const VIEW_SCALE = 0.7;   // world px -> preview px
+  const SIM_STEP = 1 / 60;  // fixed sim step for the reduced-motion pre-roll
 
   let canvas = null;
   let ctx = null;
   let raf = 0;
   let lastTs = 0;
-  let phaseTime = 0;
-  let params = null;
-  let heroKey = '';
-  let dummyX = 0;
-  let heroReach = 0;
   let lastArgs = null;
-  let dummyPlain = null;
-  let dummyFlash = null;
   let observer = null;
 
+  // Persistent sim world (survives across frames, swapped in per frame).
+  let sim = null;
+
   const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
-  const easeOut = t => 1 - (1 - t) * (1 - t);
-  // Progress of the strike window: 0 before it, 1 at/after its end.
-  const strikeT = ph => clamp((ph - STRIKE_START) / (STRIKE_END - STRIKE_START), 0, 1);
 
   function charSelectHidden() {
     const el = document.getElementById('charSelect');
@@ -114,452 +43,325 @@
     return !!window.NeoSettings?.getAccess?.()?.reduceMotion;
   }
 
-  function resolveParams({ slot, moveKey, weaponKey }) {
-    const base = SLOT_DEFAULTS[slot] || SLOT_DEFAULTS.melee;
-    const variant = (slot === 'melee' ? WEAPON_VARIANTS[weaponKey] : MOVE_VARIANTS[moveKey]) || null;
-    const p = { ...base, ...variant };
-    if (slot === 'melee' && !variant?.color) {
-      p.color = Neo.WEAPON_DEFS?.[weaponKey]?.color || p.color;
+  // Deterministic local RNG so the demo never advances the game's rng streams.
+  function makeRng(seed) {
+    let a = seed | 0;
+    return () => {
+      a = a + 0x6D2B79F5 | 0;
+      let t = Math.imul(a ^ a >>> 15, 1 | a);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+
+  function makeSimRngStreams() {
+    const mk = (seed) => {
+      const next = makeRng(seed);
+      return { next, getState: () => 0, setState: () => {} };
+    };
+    return { world: mk(101), loot: mk(202), encounter: mk(303), fx: mk(404) };
+  }
+
+  // ── Sim world construction (runs inside the swap, so the real factories
+  //    read the sim globals) ────────────────────────────────────────────────
+
+  function anchor() {
+    // Demo arena spot: safely inside the room so drawFloor shows real floor
+    // and beams/rings resolve against real bounds.
+    return { x: Math.round(Neo.ROOM_W * 0.42), y: Math.round(Neo.ROOM_H * 0.5) };
+  }
+
+  function dummyDistance(args) {
+    const slot = args.slot;
+    if (slot === 'melee') {
+      const staff = args.weaponKey === 'extending_staff';
+      return (Neo.ATTACKS?.melee?.range || 72) + (staff ? 52 : -6);
     }
-    return p;
+    if (slot === 'smash') return Math.round((Neo.ATTACKS?.smash?.radius || 148) * 0.72);
+    if (slot === 'dash') return 120;
+    return 170; // laser: dummy sits inside the beam path
   }
 
-  function computeLayout() {
-    heroReach = 0;
-    if (params.anim === 'arc') {
-      heroReach = clamp(params.range * K, 34, 120);
-      dummyX = HERO_X + heroReach - 4;
-    } else if (params.anim === 'beam') {
-      dummyX = HERO_X + 118;
-    } else if (params.anim === 'ring') {
-      heroReach = clamp(params.radius * K, 45, 120);
-      dummyX = HERO_X + heroReach * 0.8;
-    } else { // dash
-      heroReach = clamp(params.dist * K, 55, 118);
-      dummyX = HERO_X + heroReach * 0.6;
+  function buildActors(args) {
+    const a = anchor();
+    // Real player entity for the selected character (uses Neo.chosenCharacter,
+    // already swapped to the demo hero).
+    const player = Neo.createDefaultPlayer();
+    player.x = a.x;
+    player.y = a.y;
+    // Equip exactly what the hovered pip shows.
+    if (args.moveKey && player.equippedMoves) player.equippedMoves[args.slot] = args.moveKey;
+    if (args.slot === 'melee') player.equippedWeapon = args.weaponKey || player.equippedWeapon;
+    sim.player = player;
+    Neo.player = player; // rebind: casts/draws read Neo.player, not sim.player
+
+    // Real enemy as the training dummy — spawned by the game's own factory so
+    // every field statuses/hitEnemy/drawEnemies expect is present.
+    sim.enemies.length = 0;
+    const dummy = Neo.spawnEnemy?.('hunter', a.x + dummyDistance(args), a.y, false, {});
+    if (dummy) {
+      dummy.hp = dummy.max = 999999; // never dies: no loot/kill/unlock paths
+      dummy.stun = 9999;             // stays put even if any AI tick runs
+      dummy.attackCd = 9999;
     }
+    sim.dummy = dummy || null;
+    sim.casted = false;
+    sim.released = false;
   }
 
-  function prerenderDummy() {
-    if (dummyPlain || !Neo.SPRITE_ATLAS?.canvas || !Neo.drawSpriteToCanvas) return;
-    dummyPlain = document.createElement('canvas');
-    dummyPlain.width = DUMMY_SIZE;
-    dummyPlain.height = DUMMY_SIZE;
-    Neo.drawSpriteToCanvas(dummyPlain, DUMMY_SPRITE, DUMMY_SIZE);
-    dummyFlash = document.createElement('canvas');
-    dummyFlash.width = DUMMY_SIZE;
-    dummyFlash.height = DUMMY_SIZE;
-    Neo.drawSpriteToCanvas(dummyFlash, DUMMY_SPRITE, DUMMY_SIZE, { tint: '#ffffff' });
-    // Punch the tint up: drawSpriteToCanvas only tints at 0.2 alpha.
-    const fc = dummyFlash.getContext('2d');
-    fc.globalCompositeOperation = 'source-atop';
-    fc.globalAlpha = 0.55;
-    fc.fillStyle = '#ffffff';
-    fc.fillRect(0, 0, DUMMY_SIZE, DUMMY_SIZE);
-  }
-
-  // Blit a sprite from the atlas centered at (x, y), same frame lookup as
-  // drawSpriteFrame but into the preview's own context.
-  function blitSprite(key, x, y, size, opts = {}) {
-    const atlas = Neo.SPRITE_ATLAS;
-    if (!atlas?.frames || !atlas.canvas) return;
-    const frame = atlas.frames[key] || atlas.frames[String(key || '').split(':')[0]] || atlas.frames.hunter;
-    if (!frame) return;
-    const renderSize = size * Number(frame.renderScale || 1);
-    ctx.save();
-    ctx.translate(x, y);
-    if (opts.flipX) ctx.scale(-1, 1);
-    ctx.scale(opts.scaleX || 1, opts.scaleY || 1);
-    ctx.globalAlpha = opts.alpha ?? 1;
-    if (opts.shadowColor) {
-      ctx.shadowColor = opts.shadowColor;
-      ctx.shadowBlur = opts.shadowBlur || 10;
-    }
-    ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(atlas.canvas, frame.x, frame.y, frame.w, frame.h,
-      -renderSize / 2, -renderSize / 2, renderSize, renderSize);
-    ctx.restore();
-  }
-
-  function drawShadow(x, y, w) {
-    ctx.save();
-    ctx.fillStyle = 'rgba(0,0,0,0.28)';
-    ctx.beginPath();
-    ctx.ellipse(x, y, w, w * 0.34, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-  }
-
-  function drawBackdrop() {
-    ctx.fillStyle = '#0a0f18';
-    ctx.fillRect(0, 0, LOGICAL_W, LOGICAL_H);
-    // Horizon band + faint floor lines: enough to read "arena" without pulling
-    // in environment.js (which draws to Neo.ctx).
-    const floorY = GROUND_Y + 10;
-    ctx.fillStyle = 'rgba(90,140,200,0.06)';
-    ctx.fillRect(0, floorY, LOGICAL_W, LOGICAL_H - floorY);
-    ctx.strokeStyle = 'rgba(132,195,255,0.12)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(0, floorY + 0.5);
-    ctx.lineTo(LOGICAL_W, floorY + 0.5);
-    ctx.stroke();
-    ctx.strokeStyle = 'rgba(132,195,255,0.05)';
-    for (let x = 18; x < LOGICAL_W; x += 44) {
-      ctx.beginPath();
-      ctx.moveTo(x + 0.5, floorY);
-      ctx.lineTo(x + 0.5, LOGICAL_H);
-      ctx.stroke();
-    }
-  }
-
-  // ── Per-anim hero pose (pure functions of phase) ─────────────────────────
-  // pose: { dx, dy, scaleY, alpha, impactPh } — impactPh is when the dummy
-  // takes the hit, so its reaction can be a pure function of phase too.
-
-  function arcPose(ph) {
-    const st = strikeT(ph);
-    const windup = ph < STRIKE_START ? ph / STRIKE_START : 0;
-    const dx = windup > 0 ? -windup * 3 : st < 1 ? Math.sin(st * Math.PI) * 5 : 0;
-    return { dx, impactPh: STRIKE_START + (STRIKE_END - STRIKE_START) * 0.5 };
-  }
-
-  function beamPose(ph) {
-    const st = strikeT(ph);
-    const dx = st > 0 && st < 1 ? -Math.sin(st * Math.PI) * 2 : 0; // recoil
-    return { dx, impactPh: STRIKE_START + 0.06 };
-  }
-
-  function ringPose(ph) {
-    const st = strikeT(ph);
-    const windup = ph < STRIKE_START ? ph / STRIKE_START : 1;
-    const dy = ph < STRIKE_START ? -Math.sin(windup * Math.PI) * 14 : 0;
-    const scaleY = st > 0 && st < 0.25 ? 1 - Math.sin((st / 0.25) * Math.PI) * 0.22 : 1;
-    // Impact when the expanding ring's radius passes the dummy's distance.
-    const impactGrow = (dummyX - HERO_X) / Math.max(1, heroReach);
-    const impactPh = STRIKE_START + (STRIKE_END - STRIKE_START) * clamp(impactGrow / 1.3, 0.05, 0.95);
-    return { dy, scaleY, impactPh };
-  }
-
-  function dashTravel(ph) {
-    const st = strikeT(ph);
-    if (st > 0 && st < 1) return easeOut(st);
-    if (st >= 1) return Math.max(0, 1 - ((ph - STRIKE_END) / (1 - STRIKE_END)) * 1.4);
-    return 0;
-  }
-
-  function dashPose(ph) {
-    const st = strikeT(ph);
-    const dx = heroReach * dashTravel(ph);
-    const alpha = params.teleport
-      ? (st > 0 && st < 0.5 ? 1 - st * 2 : st >= 0.5 && st < 1 ? (st - 0.5) * 2 : 1)
-      : 1;
-    // Impact as the hero passes the dummy.
-    const passT = clamp((dummyX - HERO_X) / Math.max(1, heroReach), 0.1, 0.95);
-    const impactPh = params.hits === false ? Infinity : STRIKE_START + (STRIKE_END - STRIKE_START) * passT;
-    return { dx, alpha, impactPh };
-  }
-
-  function computePose(ph) {
-    const base = { dx: 0, dy: 0, scaleY: 1, alpha: 1, impactPh: 0.45 };
-    if (params.anim === 'arc') return { ...base, ...arcPose(ph) };
-    if (params.anim === 'beam') return { ...base, ...beamPose(ph) };
-    if (params.anim === 'ring') return { ...base, ...ringPose(ph) };
-    return { ...base, ...dashPose(ph) };
-  }
-
-  // ── Per-anim effect drawing ──────────────────────────────────────────────
-
-  function drawArcFx(ph, heroX, heroY) {
-    const st = strikeT(ph);
-    if (st <= 0 || st >= 1) return;
-    // Sweep top-to-bottom past the dummy, same layered strokes as the in-game
-    // swing overlay (entities.js drawPlayer).
-    const sweepStart = params.arc;
-    const sweepEnd = -params.arc;
-    const currentTip = sweepStart + (sweepEnd - sweepStart) * st;
-    const trailStart = currentTip + params.arc * 0.55;
-    const fade = 0.9 * (1 - st * 0.5);
-    ctx.save();
-    ctx.translate(heroX, heroY);
-    ctx.globalAlpha = fade * 0.35;
-    ctx.strokeStyle = params.color;
-    ctx.lineWidth = 10;
-    ctx.shadowColor = params.color;
-    ctx.shadowBlur = 14;
-    ctx.beginPath();
-    ctx.arc(0, 0, heroReach, trailStart, currentTip, true);
-    ctx.stroke();
-    ctx.globalAlpha = fade;
-    ctx.lineWidth = 3;
-    ctx.shadowBlur = 8;
-    ctx.beginPath();
-    ctx.arc(0, 0, heroReach, trailStart, currentTip, true);
-    ctx.stroke();
-    ctx.globalAlpha = fade * 0.9;
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 1.5;
-    ctx.shadowBlur = 4;
-    ctx.beginPath();
-    ctx.arc(0, 0, heroReach, currentTip + 0.12, currentTip, true);
-    ctx.stroke();
-    ctx.restore();
-  }
-
-  function drawBeamFx(ph, heroX, heroY) {
-    const st = strikeT(ph);
-    const muzzleX = heroX + HERO_SIZE * 0.4;
-    if (ph < STRIKE_START) {
-      // Charge glow at the muzzle.
-      const c = ph / STRIKE_START;
-      ctx.save();
-      ctx.globalAlpha = 0.5 * c;
-      ctx.fillStyle = params.color;
-      ctx.shadowColor = params.color;
-      ctx.shadowBlur = 12;
-      ctx.beginPath();
-      ctx.arc(muzzleX, heroY, 2 + c * 4, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-      return;
-    }
-    if (st >= 1) return;
-    ctx.save();
-    const n = params.projectiles || 0;
-    if (n >= 1) {
-      // Traveling shots instead of a solid beam.
-      for (let i = 0; i < n; i++) {
-        const shotT = clamp(st * 1.4 - i * 0.12, 0, 1);
-        if (shotT <= 0 || shotT >= 1) continue;
-        const sx = muzzleX + (LOGICAL_W - muzzleX + 20) * shotT;
-        const sy = heroY + (n > 1 ? (i - (n - 1) / 2) * 5 : 0);
-        ctx.globalAlpha = 0.9;
-        ctx.strokeStyle = params.color;
-        ctx.lineWidth = Math.max(2, params.width * 0.6);
-        ctx.shadowColor = params.color;
-        ctx.shadowBlur = 8;
-        ctx.beginPath();
-        ctx.moveTo(sx - 10, sy);
-        ctx.lineTo(sx, sy);
-        ctx.stroke();
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(sx - 5, sy);
-        ctx.lineTo(sx, sy);
-        ctx.stroke();
-      }
-    } else {
-      // Solid layered beam with a subtle width pulse.
-      const fade = st > 0.8 ? (1 - st) / 0.2 : 1;
-      const pulse = 1 + Math.sin(st * Math.PI * 6) * 0.15;
-      ctx.globalAlpha = 0.25 * fade;
-      ctx.strokeStyle = params.color;
-      ctx.lineWidth = params.width * 2.4 * pulse;
-      ctx.shadowColor = params.color;
-      ctx.shadowBlur = 14;
-      ctx.beginPath();
-      ctx.moveTo(muzzleX, heroY);
-      ctx.lineTo(LOGICAL_W + 4, heroY);
-      ctx.stroke();
-      ctx.globalAlpha = 0.85 * fade;
-      ctx.lineWidth = params.width * pulse;
-      ctx.shadowBlur = 8;
-      ctx.beginPath();
-      ctx.moveTo(muzzleX, heroY);
-      ctx.lineTo(LOGICAL_W + 4, heroY);
-      ctx.stroke();
-      ctx.globalAlpha = fade;
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = Math.max(1, params.width * 0.25);
-      ctx.shadowBlur = 4;
-      ctx.beginPath();
-      ctx.moveTo(muzzleX, heroY);
-      ctx.lineTo(LOGICAL_W + 4, heroY);
-      ctx.stroke();
-    }
-    ctx.restore();
-  }
-
-  function hashAngles(key, count) {
-    let h = 0;
-    const s = String(key || 'x');
-    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
-    const angles = [];
-    for (let i = 0; i < count; i++) {
-      h = (h * 1103515245 + 12345) >>> 0;
-      angles.push((h / 4294967295) * Math.PI * 2);
-    }
-    return angles;
-  }
-
-  function drawRingFx(ph, moveKey) {
-    const st = strikeT(ph);
-    if (st <= 0) return;
-    const grow = easeOut(Math.min(1, st * 1.3));
-    const fade = Math.max(0, 1 - st * 1.1);
-    if (fade <= 0) return;
-    const r = heroReach * grow;
-    ctx.save();
-    ctx.translate(HERO_X, GROUND_Y);
-    // Filled low-alpha disc + expanding stroke, squashed into a ground ellipse.
-    ctx.globalAlpha = 0.12 * fade;
-    ctx.fillStyle = params.color;
-    ctx.beginPath();
-    ctx.ellipse(0, 0, r, r * 0.45, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.globalAlpha = 0.85 * fade;
-    ctx.strokeStyle = params.color;
-    ctx.lineWidth = 3;
-    ctx.shadowColor = params.color;
-    ctx.shadowBlur = 10;
-    ctx.beginPath();
-    ctx.ellipse(0, 0, r, r * 0.45, 0, 0, Math.PI * 2);
-    ctx.stroke();
-    // Extra rings for multi-burst moves.
-    for (let i = 1; i < (params.rings || 1); i++) {
-      const rr = r * (1 - i * 0.3);
-      if (rr <= 4) continue;
-      ctx.globalAlpha = 0.5 * fade;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.ellipse(0, 0, rr, rr * 0.45, 0, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-    // Radial cracks, angles seeded from the move key.
-    ctx.globalAlpha = 0.6 * fade;
-    ctx.lineWidth = 1.5;
-    ctx.shadowBlur = 0;
-    hashAngles(moveKey, 6).forEach(a => {
-      const len = heroReach * (0.5 + grow * 0.5);
-      ctx.beginPath();
-      ctx.moveTo(Math.cos(a) * len * 0.35, Math.sin(a) * len * 0.35 * 0.45);
-      ctx.lineTo(Math.cos(a) * len, Math.sin(a) * len * 0.45);
-      ctx.stroke();
+  function resetSimWorld(args) {
+    sim.particles.length = 0;
+    sim.projectiles.length = 0;
+    sim.justiceBlades.length = 0;
+    sim.skySwords.length = 0;
+    sim.laser = {
+      laserActive: false, laserMode: 'beam', laserTime: 0, laserTick: 0,
+      laserAngle: 0, laserSweepSpeed: 0, turtleWaveHpTimer: 0,
+      loveBeamCasting: false, activeBeamPaths: null,
+    };
+    sim.charge = {
+      healingZoneCharging: false, healingZoneChargeTime: 0,
+      deathBallCharging: false, deathBallChargeTime: 0, deathBallPowerUp: false,
+    };
+    sim.smashHeld = false;
+    sim.cooldowns = {};
+    ['melee', 'laser', 'smash', 'dash'].forEach(slot => {
+      sim.cooldowns[slot] = { charges: 99, timers: [], holding: 0 };
     });
-    ctx.restore();
+    // Rebind the freshly built objects onto the (already-swapped) globals —
+    // this runs both from show() and on every cycle reset mid-tick.
+    Neo.cooldowns = sim.cooldowns;
+    Neo.smashHeld = false;
+    Object.assign(Neo, sim.laser, sim.charge);
+    buildActors(args);
   }
 
-  function drawDashFx(ph, heroDx, heroY) {
-    const st = strikeT(ph);
-    if (st <= 0 || st >= 1) return;
-    if (params.teleport) {
-      // Silhouette left behind at the origin.
-      blitSprite(heroKey, HERO_X, heroY, HERO_SIZE, {
-        alpha: 0.3 * (1 - st),
-        shadowColor: params.color,
-        shadowBlur: 12,
-      });
-      return;
-    }
-    // Afterimages + speed lines behind the hero.
-    const ghosts = params.ghosts || 3;
-    for (let i = 1; i <= ghosts; i++) {
-      const gx = HERO_X + heroDx * (1 - i / (ghosts + 1));
-      blitSprite(heroKey, gx, heroY, HERO_SIZE, {
-        alpha: 0.28 * (1 - i / (ghosts + 1)),
-        shadowColor: params.color,
-        shadowBlur: 8,
-      });
-    }
-    ctx.save();
-    ctx.globalAlpha = 0.5;
-    ctx.strokeStyle = params.color;
-    ctx.lineWidth = 1.5;
-    for (let i = 0; i < 2; i++) {
-      const ly = heroY - 6 + i * 12;
-      ctx.beginPath();
-      ctx.moveTo(HERO_X + heroDx - 26, ly);
-      ctx.lineTo(HERO_X + heroDx - 8, ly);
-      ctx.stroke();
-    }
-    ctx.restore();
+  function createSim(args) {
+    sim = {
+      args: { ...args },
+      time: 0,
+      player: null,
+      dummy: null,
+      enemies: [],
+      particles: [],
+      projectiles: [],
+      justiceBlades: [],
+      skySwords: [],
+      cooldowns: {},
+      mouse: { x: 0, y: 0, worldX: 0, worldY: 0, down: false, right: false, downQueued: false, rightQueued: false },
+      rngStreams: makeSimRngStreams(),
+      bgCache: { key: null, canvas: null }, // sim-owned floor cache, persists across frames
+      enemyIdSeq: 0,
+      laser: null,
+      charge: null,
+      smashHeld: false,
+      casted: false,
+      released: false,
+    };
   }
 
-  // ── Dummy ────────────────────────────────────────────────────────────────
-  // Hit reaction as a pure function of phase — no persistent physics, so the
-  // loop reset is free.
+  // ── The per-frame global swap ────────────────────────────────────────────
 
-  function hitState(ph, impactPh) {
-    if (params.hits === false || ph <= impactPh) return { flash: 0, kb: 0 };
-    const since = ph - impactPh;
-    const flash = Math.max(0, 1 - since / 0.22);
-    const kbOut = easeOut(Math.min(1, since / 0.12));
-    const settle = Math.max(0.05, 0.95 - impactPh - 0.2);
-    const kbBack = since > 0.2 ? Math.max(0, 1 - (since - 0.2) / settle) : 1;
-    return { flash, kb: kbOut * kbBack };
+  const NOOP = () => {};
+
+  function installSimGlobals() {
+    Neo.gameState = 'play';
+    Neo.gameMode = 'standard'; // keep spawnEnemy off the sandbox rewrite path
+    Neo.chosenCharacter = sim.args.heroKey;
+    Neo.player = sim.player;
+    Neo.enemies = sim.enemies;
+    Neo.particles = sim.particles;
+    Neo.projectiles = sim.projectiles;
+    Neo.justiceBlades = sim.justiceBlades;
+    Neo.skySwords = sim.skySwords;
+    Neo.cooldowns = sim.cooldowns;
+    Neo.mouse = sim.mouse;
+    Neo.rngStreams = sim.rngStreams;
+    Neo.rng = () => sim.rngStreams.encounter.next();
+    Neo.enemyIdSeq = sim.enemyIdSeq;
+    Neo.walls = [];
+    Neo.environmentBackgroundCache = sim.bgCache;
+    Neo.shake = 0; Neo.shakeT = 0; Neo.shakeKickX = 0; Neo.shakeKickY = 0;
+    Neo.godTimer = 0;
+    Neo.smashHeld = sim.smashHeld;
+    if (sim.laser) Object.assign(Neo, sim.laser);
+    if (sim.charge) Object.assign(Neo, sim.charge);
+    // Side-effect firewalls: no audio, HUD writes, tutorial signals, or unlock
+    // toasts from the demo.
+    Neo.playSfx = NOOP;
+    Neo.playSound = NOOP;
+    Neo.updateHud = NOOP;
+    Neo.tutorialController = null;
+    Neo.addNotification = NOOP;
+    Neo.showMoveToast = NOOP;
   }
 
-  function drawDummy(ph, impactPh, t) {
-    const { flash, kb } = hitState(ph, impactPh);
-    const x = dummyX + kb * params.push;
-    const bob = Math.sin(t * 2.2 + 1.7) * 1.2;
-    const y = GROUND_Y - DUMMY_SIZE / 2 + bob;
-    drawShadow(x, GROUND_Y + 8, DUMMY_SIZE * 0.34);
-    const img = flash > 0.25 && dummyFlash ? dummyFlash : dummyPlain;
-    if (img) {
-      ctx.save();
-      ctx.translate(x, y);
-      // Lean away while knocked back.
-      ctx.rotate(kb * 0.22);
+  function captureSimGlobals() {
+    // Pull the scalar state the tick mutated back into the sim before restore.
+    sim.enemyIdSeq = Neo.enemyIdSeq;
+    sim.smashHeld = Neo.smashHeld;
+    if (sim.laser) Object.keys(sim.laser).forEach(k => { sim.laser[k] = Neo[k]; });
+    if (sim.charge) Object.keys(sim.charge).forEach(k => { sim.charge[k] = Neo[k]; });
+  }
+
+  // Runs fn with the sim world swapped into the Neo globals; guarantees the
+  // real state is restored even if a cast/draw throws.
+  function withSimWorld(fn) {
+    const snap = {};
+    for (const key in Neo) snap[key] = Neo[key];
+    try {
+      installSimGlobals();
+      fn();
+      captureSimGlobals();
+    } finally {
+      for (const key in Neo) {
+        if (!(key in snap)) delete Neo[key];
+      }
+      Object.assign(Neo, snap);
+    }
+  }
+
+  // ── Scripted "input" + real update tick ──────────────────────────────────
+
+  function castHoveredMove() {
+    const slot = sim.args.slot;
+    if (slot === 'melee') {
+      sim.player.weaponCooldown = 0;
+      Neo.tryMelee?.({});
+    } else if (slot === 'laser') {
+      Neo.tryLaser?.();
+    } else if (slot === 'smash') {
+      Neo.smashHeld = true; // charge moves release when this drops (real path)
+      Neo.trySmash?.();
+    } else if (slot === 'dash') {
+      const dx = (sim.dummy?.x ?? sim.player.x + 100) - sim.player.x;
+      const dy = (sim.dummy?.y ?? sim.player.y) - sim.player.y;
+      const len = Math.hypot(dx, dy) || 1;
+      Neo.tryDash?.(dx / len, dy / len);
+    }
+  }
+
+  function simTick(dt) {
+    const cyclePos = sim.time % CYCLE;
+    if (cyclePos < dt && sim.time > dt) resetSimWorld(sim.args); // new cycle
+
+    // Aim at the dummy.
+    if (sim.dummy) {
+      sim.mouse.worldX = sim.dummy.x;
+      sim.mouse.worldY = sim.dummy.y;
+    }
+
+    if (!sim.casted && cyclePos >= CAST_AT) {
+      sim.casted = true;
+      castHoveredMove();
+    }
+    if (!sim.released && cyclePos >= CAST_AT + HOLD_FOR) {
+      sim.released = true;
+      Neo.smashHeld = false; // releases death ball / healing zone via real code
+    }
+
+    const p = Neo.player;
+    if (p) {
+      // The bits of the main update loop the demo needs: swing decay, weapon
+      // cooldown, dash motion. (The full update() drives rooms/waves/rivals
+      // and is far more than a demo should run.)
+      p.swing = Math.max(0, (p.swing || 0) - dt);
+      p.weaponCooldown = Math.max(0, (p.weaponCooldown || 0) - dt);
+      if (p.dashTime > 0) {
+        p.dashTime = Math.max(0, p.dashTime - dt);
+        p.x += (p.dashX || 0) * dt;
+        p.y += (p.dashY || 0) * dt;
+      }
+      if (Number.isFinite(p.vx) || Number.isFinite(p.vy)) {
+        p.x += (p.vx || 0) * dt;
+        p.y += (p.vy || 0) * dt;
+        p.vx = (p.vx || 0) * Math.pow(0.001, dt);
+        p.vy = (p.vy || 0) * Math.pow(0.001, dt);
+      }
+    }
+
+    // Real combat/effect systems.
+    try { Neo.updateWeaponSystems?.(dt); } catch (e) { /* demo-only guard */ }
+    try { Neo.updatePlayerLaser?.(dt); } catch (e) { /* demo-only guard */ }
+    try { Neo.updateHealingZoneCharge?.(dt); } catch (e) { /* demo-only guard */ }
+    try { Neo.updateDeathBallCharge?.(dt); } catch (e) { /* demo-only guard */ }
+    try { Neo.updateProjectiles?.(dt); } catch (e) { /* demo-only guard */ }
+    try { Neo.updateJusticeBlades?.(dt); } catch (e) { /* demo-only guard */ }
+    try { Neo.updateSkySwords?.(dt); } catch (e) { /* demo-only guard */ }
+    try { Neo.updateParticles?.(dt); } catch (e) { /* demo-only guard */ }
+
+    // Dummy physics: knockback impulses from real hits, integrated simply.
+    sim.enemies.forEach(enemy => {
+      enemy.x += (enemy.vx || 0) * dt;
+      enemy.y += (enemy.vy || 0) * dt;
+      enemy.vx = (enemy.vx || 0) * Math.pow(0.002, dt);
+      enemy.vy = (enemy.vy || 0) * Math.pow(0.002, dt);
+      enemy.inv = Math.max(0, (enemy.inv || 0) - dt);
+      enemy.stun = 9999;
+      try { Neo.updateEnemyStatuses?.(enemy, dt); } catch (e) { /* demo-only guard */ }
+    });
+
+    sim.time += dt;
+  }
+
+  // ── Real-renderer draw into the preview canvas ───────────────────────────
+
+  function simDraw() {
+    const realCtx = Neo.ctx;
+    Neo.ctx = ctx;
+    try {
+      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      const a = anchor();
+      // View rect centered on the action (player slightly left of center).
+      const viewW = LOGICAL_W / VIEW_SCALE;
+      const viewH = LOGICAL_H / VIEW_SCALE;
+      const viewX = clamp(a.x - viewW * 0.32, 0, Neo.ROOM_W - viewW);
+      const viewY = clamp(a.y - viewH * 0.5, 0, Neo.ROOM_H - viewH);
+
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#0a0f18';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      const s = dpr * VIEW_SCALE;
+      ctx.setTransform(s, 0, 0, s, -viewX * s, -viewY * s);
       ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(img, -DUMMY_SIZE / 2, -DUMMY_SIZE / 2);
-      ctx.restore();
-    }
-    if (flash > 0) {
-      ctx.save();
-      ctx.globalAlpha = flash * 0.7;
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 2;
-      const burst = 6 + (1 - flash) * 10;
-      for (let i = 0; i < 4; i++) {
-        const a = -0.6 + i * 0.45;
-        ctx.beginPath();
-        ctx.moveTo(x + Math.cos(a) * burst, y + Math.sin(a) * burst);
-        ctx.lineTo(x + Math.cos(a) * (burst + 5), y + Math.sin(a) * (burst + 5));
-        ctx.stroke();
-      }
-      ctx.restore();
+
+      try { Neo.drawFloor?.(); } catch (e) { /* fall back to flat fill */ }
+      Neo.drawProjectiles?.();
+      Neo.drawEnemies?.();
+      Neo.drawPlayer?.();
+      Neo.drawPlayerLaser?.();
+      Neo.drawJusticeBlades?.();
+      Neo.drawSkySwords?.();
+      Neo.drawHealingZoneChargeBar?.();
+      Neo.drawDeathBallChargeBar?.();
+      Neo.drawParticles?.();
+    } finally {
+      Neo.ctx = realCtx;
     }
   }
 
-  // ── Frame ────────────────────────────────────────────────────────────────
-
-  function renderFrame(ph, t) {
-    drawBackdrop();
-    prerenderDummy();
-    if (!Neo.SPRITE_ATLAS?.canvas) return; // sprites pop in once the atlas builds
-
-    const bob = Math.sin(t * 3) * 1.5;
-    const heroBaseY = GROUND_Y - HERO_SIZE / 2 + bob;
-    const pose = computePose(ph);
-    const heroX = HERO_X + pose.dx;
-    const heroY = heroBaseY + pose.dy;
-    const moveKey = lastArgs?.moveKey || lastArgs?.weaponKey || '';
-
-    // Ground effects + afterimages read behind the actors.
-    if (params.anim === 'ring') drawRingFx(ph, moveKey);
-    if (params.anim === 'dash') drawDashFx(ph, pose.dx, heroBaseY);
-
-    drawDummy(ph, pose.impactPh, t);
-
-    drawShadow(heroX, GROUND_Y + 8, HERO_SIZE * 0.34);
-    blitSprite(heroKey, heroX, heroY, HERO_SIZE, {
-      alpha: pose.alpha,
-      scaleY: pose.scaleY,
+  function frame(dt) {
+    withSimWorld(() => {
+      simTick(dt);
+      simDraw();
     });
-
-    // Swing / beam effects read in front of the hero.
-    if (params.anim === 'arc') drawArcFx(ph, heroX, heroY);
-    if (params.anim === 'beam') drawBeamFx(ph, heroX, heroY);
   }
 
   function step(ts) {
-    if (!ctx) return;
+    if (!ctx || !canvas?.isConnected) { pause(); return; }
     const dt = Math.min((ts - lastTs) / 1000, 0.05);
     lastTs = ts;
-    phaseTime += dt;
-    renderFrame((phaseTime % CYCLE) / CYCLE, phaseTime);
+    if (Neo.SPRITE_ATLAS?.canvas) {
+      try {
+        frame(dt);
+      } catch (err) {
+        // A demo must never take the menu down with it.
+        console.warn('MovePreview frame failed:', err);
+        pause();
+        return;
+      }
+    }
     raf = requestAnimationFrame(step);
   }
 
@@ -583,7 +385,7 @@
   }
 
   function show(canvasEl, args) {
-    if (!(canvasEl instanceof HTMLCanvasElement) || !args?.slot) return;
+    if (!(canvasEl instanceof HTMLCanvasElement) || !args?.slot || !args?.heroKey) return;
     ensureObserver();
     pause();
     canvas = canvasEl;
@@ -595,19 +397,32 @@
     canvas.height = LOGICAL_H * dpr;
     ctx = canvas.getContext('2d');
     if (!ctx) return;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.imageSmoothingEnabled = false;
 
-    heroKey = args.heroKey || 'thorn_knight';
-    params = resolveParams(args);
-    computeLayout();
-    phaseTime = 0;
-
-    if (reduceMotion()) {
-      // Single static frame at the impact pose; no loop.
-      renderFrame(0.47, 0.47);
+    createSim(args);
+    // Build the demo actors with the sim globals in place so the real
+    // factories (createDefaultPlayer / spawnEnemy) read sim state.
+    try {
+      withSimWorld(() => resetSimWorld(args));
+    } catch (err) {
+      console.warn('MovePreview setup failed:', err);
+      sim = null;
       return;
     }
+
+    if (reduceMotion()) {
+      // No loop: pre-roll the sim to just after the hit lands and draw once.
+      try {
+        withSimWorld(() => {
+          const until = CAST_AT + 0.35;
+          for (let t = 0; t < until; t += SIM_STEP) simTick(SIM_STEP);
+          simDraw();
+        });
+      } catch (err) {
+        console.warn('MovePreview static frame failed:', err);
+      }
+      return;
+    }
+
     lastTs = performance.now();
     raf = requestAnimationFrame(step);
   }
@@ -617,7 +432,7 @@
     lastArgs = null;
     canvas = null;
     ctx = null;
-    params = null;
+    sim = null;
   }
 
   Neo.MovePreview = { show, stop };

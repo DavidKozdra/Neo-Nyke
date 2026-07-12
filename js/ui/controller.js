@@ -2879,10 +2879,11 @@ export function createUIController(view) {
               if (!name && !desc) return;
               readoutName.textContent = name;
               readoutDesc.textContent = desc || 'No description available.';
-              // Animated demo of the hovered move next to its description.
+              // Live in-game demo of the hovered move next to its description.
+              // Pass the character key: the sim builds a real player from it.
               if (previewCanvas && el.dataset.previewSlot) {
                 Neo.MovePreview?.show(previewCanvas, {
-                  heroKey: Neo.getCharacterSpriteKey?.(selected) || selected,
+                  heroKey: selected,
                   slot: el.dataset.previewSlot,
                   moveKey: el.dataset.previewMove || '',
                   weaponKey: el.dataset.previewWeapon || '',
