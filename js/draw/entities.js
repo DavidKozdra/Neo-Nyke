@@ -22,17 +22,25 @@
       });
     });
     Object.entries(Neo.CHARACTER_SPRITE_SHEETS || {}).forEach(([key, sheet]) => {
-      for (let index = 0; index < sheet.frameCount; index += 1) {
+      const idleFrames = Array.isArray(sheet.idleFrames) && sheet.idleFrames.length ? sheet.idleFrames : [0];
+      const walkFrames = Array.isArray(sheet.walkFrames) && sheet.walkFrames.length
+        ? sheet.walkFrames
+        : Array.from({ length: sheet.frameCount }, (_, i) => i).filter(i => !idleFrames.includes(i));
+      const pushFrame = (sourceIndex, entryKey) => {
         entries.push({
-          key: index === 0 ? key : `${key}:walk${index - 1}`,
+          key: entryKey,
           image: sheet.image,
-          sourceX: index * sheet.frameWidth,
+          sourceX: sourceIndex * sheet.frameWidth,
           sourceY: 0,
           width: sheet.frameWidth,
           height: sheet.frameHeight,
           renderScale: sheet.renderScale,
         });
-      }
+      };
+      pushFrame(idleFrames[0], key);
+      idleFrames.forEach((sourceIndex, position) => pushFrame(sourceIndex, `${key}:idle${position}`));
+      walkFrames.forEach((sourceIndex, position) => pushFrame(sourceIndex, `${key}:walk${position}`));
+      if (Number.isInteger(sheet.armFrame)) pushFrame(sheet.armFrame, `${key}:arm`);
     });
     const GUTTER = 1;
     const canvasEl = document.createElement('canvas');
@@ -123,11 +131,24 @@
     return Math.abs(hash % 628) / 100;
   }
 
+  // A sprite's own configured speed (set from the developer sprite editor)
+  // always wins over whatever a draw call hardcodes for its type — that's the
+  // point of exposing it as a per-sprite setting.
+  function getSpriteAnimSpeedOverride(spriteKey) {
+    const sheet = Neo.CHARACTER_SPRITE_SHEETS?.[spriteKey];
+    const def = Neo.SPRITE_DEFS?.[spriteKey];
+    return {
+      stepRate: sheet?.stepRate ?? def?.stepRate,
+      idleRate: sheet?.idleRate ?? def?.idleRate,
+    };
+  }
+
   function getActorSpriteFrameKey(spriteKey, actor, options = {}) {
     const access = window.NeoSettings?.getAccess?.() || {};
     const def = Neo.SPRITE_DEFS[spriteKey];
     const animations = Neo.CHARACTER_SPRITE_SHEETS?.[spriteKey]?.animations || def?.animations || {};
     if (!def || access.reduceMotion) return spriteKey;
+    const speedOverride = getSpriteAnimSpeedOverride(spriteKey);
 
     const atlasFrames = Neo.SPRITE_ATLAS?.frames || {};
     const resolve = variant => {
@@ -154,8 +175,9 @@
     // guard against a negative index (which would read undefined and hitch).
     const wrap = (value, length) => ((Math.floor(value) % length) + length) % length;
     if (walkFrames.length && speed > 10) {
-      const stepRate = Number(options.stepRate || 10);
-      return resolve(walkFrames[wrap(clock * stepRate + seed, walkFrames.length)]);
+      const stepRate = Number(speedOverride.stepRate ?? options.stepRate ?? 10);
+      const index = Math.floor(Date.now() / 1000 * stepRate + seed) % walkFrames.length;
+      return resolve(walkFrames[index]);
     }
 
     const blinkFrames = animations.blink || [];
@@ -167,15 +189,15 @@
       return resolve(blinkFrames[0]);
     }
     if (idleFrames.length) {
-      const idleRate = Number(options.idleRate || 1.15);
-      const index = wrap(now * idleRate, idleFrames.length);
+      const idleRate = Number(speedOverride.idleRate ?? options.idleRate ?? 1.15);
+      const index = Math.floor(now * idleRate) % idleFrames.length;
       return resolve(idleFrames[index]);
     }
 
     return spriteKey;
   }
 
-  function getActorSpriteAnimation(actor, size, options = {}) {
+  function getActorSpriteAnimation(actor, size, options = {}, spriteKey = '') {
     const access = window.NeoSettings?.getAccess?.() || {};
     const base = {
       spriteOffsetX: 0,
@@ -193,7 +215,7 @@
     const moving = Neo.clamp((speed - 8) / maxSpeed, 0, 1);
     const seed = getActorAnimSeed(actor, options.seedKey);
     const now = Date.now() / 1000;
-    const stepRate = Number(options.stepRate || 10);
+    const stepRate = Number(getSpriteAnimSpeedOverride(spriteKey).stepRate ?? options.stepRate ?? 10);
     const phase = now * stepRate + seed;
     const step = Math.sin(phase);
     const footfall = Math.abs(step);
@@ -278,6 +300,36 @@
       shadowBlur: 16,
       tint: '#c8a6ff',
     });
+  }
+
+  // Aim-direction indicator: a plain rotating line by default, or — when the
+  // character's charset has a dedicated arm/aim frame configured (developer
+  // sprite editor) — that frame rotated to face the aim angle instead.
+  // Assumes the canvas is already translated to the entity's position; only
+  // wraps its own save/restore around the rotate so it doesn't leak into
+  // whatever the caller draws next in that same translated context.
+  function drawAimIndicator(aimAngle, spriteKey, color, size) {
+    const atlas = Neo.SPRITE_ATLAS;
+    const armFrame = atlas?.frames?.[`${spriteKey}:arm`];
+    if (armFrame) {
+      Neo.ctx.save();
+      Neo.ctx.rotate(aimAngle);
+      Neo.ctx.imageSmoothingEnabled = false;
+      const renderSize = size * Number(armFrame.renderScale || 1);
+      Neo.ctx.drawImage(
+        atlas.canvas,
+        armFrame.x, armFrame.y, armFrame.w, armFrame.h,
+        -renderSize / 2, -renderSize / 2, renderSize, renderSize,
+      );
+      Neo.ctx.restore();
+    } else {
+      Neo.ctx.strokeStyle = color;
+      Neo.ctx.lineWidth = 2;
+      Neo.ctx.beginPath();
+      Neo.ctx.moveTo(Math.cos(aimAngle) * 6, Math.sin(aimAngle) * 6);
+      Neo.ctx.lineTo(Math.cos(aimAngle) * 20, Math.sin(aimAngle) * 20);
+      Neo.ctx.stroke();
+    }
   }
 
   function drawSpriteFrame(spriteKey, x, y, size, options = {}) {
@@ -861,7 +913,7 @@
         attackProgress: enemyAttackProgress,
         seedKey: spriteKey,
       };
-      const enemyAnim = getActorSpriteAnimation(enemy, drawSize, enemyAnimation);
+      const enemyAnim = getActorSpriteAnimation(enemy, drawSize, enemyAnimation, spriteKey);
       const enemyFrameKey = getActorSpriteFrameKey(spriteKey, enemy, enemyAnimation);
       // The Queen physically convulses while charging her death blast — jitter
       // her sprite by a magnitude that grows with the charge (set in enemies.js).
@@ -1029,7 +1081,7 @@
 
   function drawActorSprite(actor, spriteKey, x, y, size, options = {}) {
     const animation = options.animation || {};
-    const anim = getActorSpriteAnimation(actor, size, animation);
+    const anim = getActorSpriteAnimation(actor, size, animation, spriteKey);
     if (Neo.CHARACTER_SPRITE_SHEETS?.[spriteKey]) {
       anim.scaleX = 1;
       anim.scaleY = 1;
@@ -1249,12 +1301,7 @@
     drawEnemyStatusIconRow(Neo.player, Neo.player.y);
     Neo.ctx.save();
     Neo.ctx.translate(Neo.player.x, Neo.player.y);
-    Neo.ctx.strokeStyle = '#f5f1e8';
-    Neo.ctx.lineWidth = 2;
-    Neo.ctx.beginPath();
-    Neo.ctx.moveTo(Math.cos(aimAngle) * 6, Math.sin(aimAngle) * 6);
-    Neo.ctx.lineTo(Math.cos(aimAngle) * 20, Math.sin(aimAngle) * 20);
-    Neo.ctx.stroke();
+    drawAimIndicator(aimAngle, getPlayerSpriteKey(), '#f5f1e8', playerSize);
     const equippedWeapon = Neo.getEquippedWeapon();
     const extendingStaffEquipped = equippedWeapon === 'extending_staff';
     if (extendingStaffEquipped) {
@@ -1412,12 +1459,7 @@
     });
     Neo.ctx.save();
     Neo.ctx.translate(pn.x, pn.y);
-    Neo.ctx.strokeStyle = tintColor;
-    Neo.ctx.lineWidth = 2;
-    Neo.ctx.beginPath();
-    Neo.ctx.moveTo(Math.cos(aimAngle) * 6, Math.sin(aimAngle) * 6);
-    Neo.ctx.lineTo(Math.cos(aimAngle) * 20, Math.sin(aimAngle) * 20);
-    Neo.ctx.stroke();
+    drawAimIndicator(aimAngle, spriteKey, tintColor, Math.max(34, pn.r * 2.5));
     Neo.ctx.restore();
     Neo.ctx.save();
     Neo.ctx.fillStyle = tintColor;

@@ -273,7 +273,7 @@ export function bindInput() {
         Neo.updateCharacterSelectionUI();
       },
       onOpenSprEditor() {
-        console.log("TODO: Open the sprite editor.");
+        Neo.openSpriteEditor?.();
       },
       onDismissFirstTip() {
         Neo.uiController?.hideFirstTip?.();

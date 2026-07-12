@@ -49,6 +49,7 @@ import './draw/character-sheets.js';
 import './draw/entities.js';
 import './draw/hud.js';
 import './core/canvas-recovery.js';
+import './ui/sprite-editor.js';
 import './ui/controller.js';
 import './core/save-store.js';
 import './core/perf.js';
