@@ -4503,6 +4503,23 @@ p.sub {
   border-radius: 4px;
   background: rgba(140,200,255,.07);
   border: 1px solid rgba(140,200,255,.18);
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr);
+  grid-template-rows: auto 1fr;
+  gap: 3px 12px;
+  align-items: start;
+}
+
+/* Animated demo of the hovered move (Neo.MovePreview). Fixed-size box so the
+   panel never jumps as the player sweeps across pips. */
+.hero-detail-skill-preview {
+  grid-row: 1 / span 2;
+  width: 140px;
+  height: 78px;
+  border: 1px solid rgba(140,200,255,.22);
+  border-radius: 4px;
+  background: #0a0f18;
+  image-rendering: pixelated;
 }
 
 .hero-detail-skill-readout-name {

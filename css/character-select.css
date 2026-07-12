@@ -429,7 +429,7 @@
 }
 
 #charSelect .hero-detail-skill-readout {
-  min-height: 48px;
+  min-height: 96px;
   margin: 0;
   padding: 9px 11px;
   box-sizing: border-box;
@@ -808,6 +808,17 @@
 
   #charSelect .char-roster-note {
     display: none;
+  }
+
+  #charSelect .hero-detail-skill-readout {
+    min-height: 80px;
+    grid-template-columns: 110px minmax(0, 1fr);
+    gap: 3px 10px;
+  }
+
+  #charSelect .hero-detail-skill-preview {
+    width: 110px;
+    height: 62px;
   }
 
   #charSelect .char-carousel-wrap {

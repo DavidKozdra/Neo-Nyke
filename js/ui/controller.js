@@ -2739,6 +2739,9 @@ export function createUIController(view) {
         // ── Hero detail panel ────────────────────────────────
         const detail = document.getElementById('heroDetail');
         const disp = Neo.HERO_DISPLAY[selected] || (Neo.isCustomCharacterKey?.(selected) ? Neo.HERO_DISPLAY.custom_character : null);
+        // The rebuild below replaces the move-preview canvas, so kill its
+        // animation loop first; the readout seeding restarts it.
+        Neo.MovePreview?.stop();
         if (detail && disp) {
           const STAT_ICON_KEYS = { HP: 'hp', ATK: 'attack', DMG: 'attack', SPD: 'speed', RANGE: 'range', RNG: 'range', CTRL: 'crit' };
           const statsHtml = disp.stats.map(s =>
@@ -2759,7 +2762,7 @@ export function createUIController(view) {
               const weaponDesc = weaponDef.description || '';
               const safeWeaponDesc = Neo.escapeHtml(weaponDesc);
               const safeWeaponName = Neo.escapeHtml(weaponLabel);
-              return `<span class="hero-detail-skill-pip" tabindex="0" title="${safeWeaponDesc}" aria-label="${Neo.escapeHtml(`${slotLabel}: ${weaponLabel}. ${weaponDesc}`)}" data-skill-name="${safeWeaponName}" data-skill-desc="${safeWeaponDesc}">
+              return `<span class="hero-detail-skill-pip" tabindex="0" title="${safeWeaponDesc}" aria-label="${Neo.escapeHtml(`${slotLabel}: ${weaponLabel}. ${weaponDesc}`)}" data-skill-name="${safeWeaponName}" data-skill-desc="${safeWeaponDesc}" data-preview-slot="melee" data-preview-weapon="${Neo.escapeHtml(defaultWeapon)}">
               <canvas class="hero-detail-skill-icon" data-hero-weapon="${Neo.escapeHtml(defaultWeapon)}" width="24" height="24" aria-hidden="true"></canvas>
               <span class="hero-detail-skill-text">${Neo.escapeHtml(slotLabel)}: ${safeWeaponName}</span>
             </span>`;
@@ -2781,6 +2784,7 @@ export function createUIController(view) {
                 return `<button type="button" class="hero-detail-kit-option${isSel ? ' hero-detail-kit-option--sel' : ''}"
                   data-kit-slot="${Neo.escapeHtml(slot)}" data-kit-move="${Neo.escapeHtml(optKey)}"
                   data-skill-name="${safeOptName}" data-skill-desc="${safeDesc}"
+                  data-preview-slot="${Neo.escapeHtml(slot)}" data-preview-move="${Neo.escapeHtml(optKey)}"
                   title="${safeDesc}" aria-pressed="${isSel}">
                   <canvas class="hero-detail-skill-icon" data-hero-move="${Neo.escapeHtml(optKey)}" width="24" height="24" aria-hidden="true"></canvas>
                   <span class="hero-detail-skill-text">${Neo.escapeHtml(optLabel)}</span>
@@ -2794,7 +2798,7 @@ export function createUIController(view) {
             const moveDesc = moveDef.desc || '';
             const safeMoveDesc = Neo.escapeHtml(moveDesc);
             const safeMoveName = Neo.escapeHtml(moveLabel);
-            return `<span class="hero-detail-skill-pip" tabindex="0" title="${safeMoveDesc}" aria-label="${Neo.escapeHtml(`${slotLabel}: ${moveLabel}. ${moveDesc}`)}" data-skill-name="${safeMoveName}" data-skill-desc="${safeMoveDesc}">
+            return `<span class="hero-detail-skill-pip" tabindex="0" title="${safeMoveDesc}" aria-label="${Neo.escapeHtml(`${slotLabel}: ${moveLabel}. ${moveDesc}`)}" data-skill-name="${safeMoveName}" data-skill-desc="${safeMoveDesc}" data-preview-slot="${Neo.escapeHtml(slot)}" data-preview-move="${Neo.escapeHtml(moveKey)}">
               <canvas class="hero-detail-skill-icon" data-hero-move="${Neo.escapeHtml(moveKey)}" width="24" height="24" aria-hidden="true"></canvas>
               <span class="hero-detail-skill-text">${Neo.escapeHtml(slotLabel)}: ${safeMoveName}</span>
             </span>`;
@@ -2836,7 +2840,7 @@ export function createUIController(view) {
             `<p class="hero-detail-lore">${Neo.escapeHtml(lore)}</p>` +
             `<div class="hero-detail-stats"><div class="hero-detail-section-label">Core stats</div>${statsHtml}</div>` +
             `<div class="hero-detail-skills"><div class="hero-detail-section-label">Starting abilities</div>${skillsHtml}</div>` +
-            `<div class="hero-detail-skill-readout" data-skill-readout aria-live="polite"><span class="hero-detail-skill-readout-name" data-skill-readout-name></span><span class="hero-detail-skill-readout-desc" data-skill-readout-desc>Hover a move to see what it does.</span></div>` +
+            `<div class="hero-detail-skill-readout" data-skill-readout aria-live="polite"><canvas class="hero-detail-skill-preview" data-skill-preview aria-hidden="true"></canvas><span class="hero-detail-skill-readout-name" data-skill-readout-name></span><span class="hero-detail-skill-readout-desc" data-skill-readout-desc>Hover a move to see what it does.</span></div>` +
             `<div class="hero-detail-inventory"><span class="hero-detail-inventory-label">Starting Inventory</span>${inventoryHtml}</div>`;
           Neo.drawSpriteToCanvas(document.getElementById('heroDetailSprite'), Neo.getCharacterSpriteKey?.(selected) || selected, 104, {
             tint: Neo.isCustomCharacterKey?.(selected) ? '#83f3ff' : null,
@@ -2868,12 +2872,22 @@ export function createUIController(view) {
           const readoutName = readout?.querySelector('[data-skill-readout-name]');
           const readoutDesc = readout?.querySelector('[data-skill-readout-desc]');
           if (readout && readoutName && readoutDesc) {
+            const previewCanvas = readout.querySelector('[data-skill-preview]');
             const showSkill = (el) => {
               const name = el?.dataset.skillName || '';
               const desc = el?.dataset.skillDesc || '';
               if (!name && !desc) return;
               readoutName.textContent = name;
               readoutDesc.textContent = desc || 'No description available.';
+              // Animated demo of the hovered move next to its description.
+              if (previewCanvas && el.dataset.previewSlot) {
+                Neo.MovePreview?.show(previewCanvas, {
+                  heroKey: Neo.getCharacterSpriteKey?.(selected) || selected,
+                  slot: el.dataset.previewSlot,
+                  moveKey: el.dataset.previewMove || '',
+                  weaponKey: el.dataset.previewWeapon || '',
+                });
+              }
             };
             const pips = detail.querySelectorAll('[data-skill-desc]');
             pips.forEach(el => {
