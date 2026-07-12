@@ -71,7 +71,9 @@ export function createUIController(view) {
 
     // React to developer mode changes so UI updates live.
     function updateDeveloperModeUI(flag) {
-      view.sprEditorBtn?.classList.toggle('hidden', !flag);
+      // The sprite editor is a permanent Credits utility now. Other developer
+      // controls may still use this hook, but its launcher is no longer gated.
+      view.sprEditorBtn?.classList.remove('hidden');
     }
     window.addEventListener('developer-mode-changed', (e) => updateDeveloperModeUI(!!e.detail));
     updateDeveloperModeUI(!!globalThis.developer_mode);
@@ -2625,7 +2627,7 @@ export function createUIController(view) {
           Neo.markTutorialButtonOfferedNow?.();
         }
         view.tutorialMenuBtn?.classList.toggle('hidden', !canOfferTutorial);
-        view.sprEditorBtn?.classList.toggle('hidden', !globalThis.developer_mode);
+        view.sprEditorBtn?.classList.remove('hidden');
       },
       showFirstTip(tip) {
         if (!view.firstTipOverlay || !tip) return;

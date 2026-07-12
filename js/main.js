@@ -41,6 +41,7 @@ import './core/update.js';
 import './game/world.js';
 import './game/hud.js';
 import './draw/viewport.js';
+import './draw/image-assets.js';
 import './draw/environment.js';
 import './draw/lighting.js';
 import './draw/props.js';

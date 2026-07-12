@@ -11,7 +11,7 @@
   // controller.js) — kept in sync by hand since that list isn't exposed globally.
   const PLAYABLE_KEYS = ['princess', 'thorn_knight', 'metao', 'gelleh', 'mooggy', 'turtle_boy', 'sarge'];
 
-  const UNUSED_ASSET_FILES = [
+  const ENVIRONMENT_ASSET_FILES = [
     { src: 'assets/sprites/env/chair_0.png' },
     { src: 'assets/sprites/env/chair_1.png' },
     { src: 'assets/sprites/env/chest_0.png' },
@@ -19,8 +19,8 @@
     { src: 'assets/sprites/env/pillar.png' },
     { src: 'assets/sprites/env/table_0.png' },
     { src: 'assets/sprites/env/table_1.png' },
-    { src: 'assets/sprites/chars/Thorn Knight.png' },
   ];
+  const UNUSED_ASSET_FILES = [];
 
   const ACTOR_GRID_SIZE = 10;
   const ICON_GRID_SIZE = 8;
@@ -270,7 +270,15 @@
       key,
       label: prettyLabel(key),
       def: tileDefs[key],
-    }));
+    })).concat(ENVIRONMENT_ASSET_FILES.map(file => ({
+      id: `envimage:${file.src}`,
+      tab: 'envTiles',
+      kind: 'image-strip',
+      src: file.src,
+      savePath: file.src,
+      label: prettyLabel(basename(file.src).replace(/\.png$/i, '')),
+      autoDetectFrames: true,
+    })));
 
     return { characters, enemies, icons, unused, envTiles };
   }

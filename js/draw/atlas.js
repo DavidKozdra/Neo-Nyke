@@ -10,7 +10,9 @@ export function buildEnvironmentTileAtlas() {
     entries.forEach(([key, def], index) => {
       const ox = index * Neo.ENV_TILE_SOURCE_SIZE;
       frames[key] = { x: ox, y: 0, w: Neo.ENV_TILE_SOURCE_SIZE, h: Neo.ENV_TILE_SOURCE_SIZE };
-      drawEnvironmentTileAsset(atlasCtx, ox, 0, Neo.ENV_TILE_SOURCE_SIZE, def || {});
+      const ground = key === 'floor_stone_a' ? Neo.ENVIRONMENT_IMAGES?.ground_0?.image : null;
+      if (ground) atlasCtx.drawImage(ground, ox, 0, Neo.ENV_TILE_SOURCE_SIZE, Neo.ENV_TILE_SOURCE_SIZE);
+      else drawEnvironmentTileAsset(atlasCtx, ox, 0, Neo.ENV_TILE_SOURCE_SIZE, def || {});
     });
     return { canvas: canvasEl, frames };
   }

@@ -1,12 +1,22 @@
 // character-sheets.js - preload character sprite sheets before atlas creation.
 
 const CHARACTER_SHEET_DEFS = {
+  thorn_knight: {
+    src: 'assets/sprites/chars/Thorn Knight.png',
+    frameWidth: 48,
+    frameHeight: 48,
+    frameCount: 1,
+    renderScale: 1,
+  },
   metao: {
     src: 'assets/sprites/chars/Mateo.png',
     frameWidth: 24,
     frameHeight: 24,
     frameCount: 7,
     renderScale: 1.5,
+    armFrame: 0,
+    idleFrames: [1, 2],
+    walkFrames: [3, 4, 5, 6],
   },
   princess: {
     src: 'assets/sprites/chars/princess.png',

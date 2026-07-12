@@ -758,6 +758,33 @@
 
       Neo.ctx.shadowBlur = 0;
 
+      const chestSheet = Neo.ENVIRONMENT_IMAGES?.chest_0?.image;
+      if (chestSheet) {
+        const frameCount = Math.max(1, Math.floor(chestSheet.naturalWidth / 24));
+        const frame = chest.open
+          ? Math.min(frameCount - 1, 4 + (Math.floor(Date.now() / 180) % Math.max(1, frameCount - 4)))
+          : Math.min(1, Math.floor(Date.now() / 420) % 2);
+        const drawSize = 64;
+        Neo.ctx.drawImage(chestSheet, frame * 24, 0, 24, 24, -drawSize / 2, -drawSize / 2, drawSize, drawSize);
+        if (isAbChest && chest.open) {
+          const stillChoosing = Array.isArray(Neo.pickups)
+            && Neo.pickups.some(pickup => pickup?.type === 'rewardChoice'
+              && pickup.dwellMode
+              && String(pickup.groupId || '') === String(chest.choiceGroupId || ''));
+          if (stillChoosing) {
+            Neo.ctx.textAlign = 'center';
+            Neo.ctx.fillStyle = '#ffe9a8';
+            Neo.ctx.font = 'bold 11px system-ui';
+            Neo.ctx.fillText('CHOOSE ONE', 0, -36);
+            Neo.ctx.fillStyle = '#cfe6f5';
+            Neo.ctx.font = '9px system-ui';
+            Neo.ctx.fillText('stand in a circle to confirm', 0, -25);
+          }
+        }
+        Neo.ctx.restore();
+        return;
+      }
+
       if (chest.open) {
         if (isAbChest) {
           Neo.ctx.fillStyle = '#315c2d';
@@ -995,7 +1022,15 @@
     Neo.ctx.save();
     Neo.ctx.translate(structure.x, structure.y);
     if (structure.kind === 'pillar') {
-      drawGreekColumn(structure.w, structure.h, theme);
+      const pillarImage = Neo.ENVIRONMENT_IMAGES?.pillar?.image;
+      if (pillarImage) {
+        const w = Math.max(24, Number(structure.w || 48));
+        const h = Math.max(24, Number(structure.h || 48)) * 1.35;
+        Neo.ctx.imageSmoothingEnabled = false;
+        Neo.ctx.drawImage(pillarImage, -w / 2, -h / 2, w, h);
+      } else {
+        drawGreekColumn(structure.w, structure.h, theme);
+      }
     } else {
       drawEnvironmentTile('wall_block', -structure.w / 2, -structure.h / 2, structure.w, structure.h);
       Neo.ctx.strokeStyle = theme.wallEdge;
@@ -1332,6 +1367,14 @@
     const ctx = Neo.ctx;
     const w = Math.max(20, Number(prop.w || prop.r * 2 || 64));
     const h = Math.max(20, Number(prop.h || prop.r * 2 || 64));
+    const variant = Math.abs(Math.sin((prop.x || 0) * 0.17 + (prop.y || 0) * 0.13)) < 0.5 ? 'table_0' : 'table_1';
+    const authored = Neo.ENVIRONMENT_IMAGES?.[variant]?.image;
+    if (authored) {
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(authored, -w / 2, -h / 2, w, h);
+      furnitureHitFlash(prop, w, h);
+      return;
+    }
     const hw = w / 2;
     const hh = h / 2;
     const legR = Math.max(3, Math.min(w, h) * 0.1);
@@ -1397,6 +1440,14 @@
     const ctx = Neo.ctx;
     const w = Math.max(16, Number(prop.w || prop.r * 2 || 40));
     const h = Math.max(16, Number(prop.h || prop.r * 2 || 40));
+    const variant = Math.abs(Math.sin((prop.x || 0) * 0.19 + (prop.y || 0) * 0.07)) < 0.5 ? 'chair_0' : 'chair_1';
+    const authored = Neo.ENVIRONMENT_IMAGES?.[variant]?.image;
+    if (authored) {
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(authored, -w / 2, -h / 2, w, h);
+      furnitureHitFlash(prop, w, h);
+      return;
+    }
     const hw = w / 2;
     const hh = h / 2;
     const legR = Math.max(2.5, Math.min(w, h) * 0.1);
