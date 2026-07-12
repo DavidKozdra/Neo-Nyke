@@ -758,10 +758,10 @@
     </div>
     <h2 class="screen-title">PAUSED</h2>
     <div class="main-nav">
-      <button id="pauseResume" class="nav-btn">RESUME</button>
-      <button id="pauseInfo" class="nav-btn nav-btn--minor">INFO</button>
-      <button id="pauseSettings" class="nav-btn nav-btn--minor">SETTINGS</button>
-      <button id="pauseMain" class="nav-btn nav-btn--minor">MAIN MENU</button>
+      <button id="pauseResume" class="nav-btn" data-i18n="pause.resume">RESUME</button>
+      <button id="pauseInfo" class="nav-btn nav-btn--minor" data-i18n="pause.info">INFO</button>
+      <button id="pauseSettings" class="nav-btn nav-btn--minor" data-i18n="menu.settings">SETTINGS</button>
+      <button id="pauseMain" class="nav-btn nav-btn--minor" data-i18n="pause.mainMenu">MAIN MENU</button>
     </div>
   </div>
 
@@ -817,21 +817,21 @@
       </div>
 
       <div class="main-nav">
-        <button id="tutorialMenuBtn" class="nav-btn nav-btn--tutorial hidden"><span class="nav-btn__icon" aria-hidden="true">▶</span>TUTORIAL</button>
-        <button id="continueBtn" class="nav-btn hidden">CONTINUE</button>
-        <button id="mainCompetitiveBtn" class="nav-btn nav-btn--competitive">COMPETITIVE</button>
-        <button id="newRunBtn"   class="nav-btn">NEW RUN</button>
-        <button id="altModesBtn"   class="nav-btn nav-btn--minor">ALT MODES</button>
-        <button id="runHistoryBtn" class="nav-btn nav-btn--minor">ARCHIVE</button>
-        <button id="settingsBtn" class="nav-btn nav-btn--minor">SETTINGS</button>
-        <button id="creditsBtn" class="nav-btn nav-btn--minor">CREDITS</button>
+        <button id="tutorialMenuBtn" class="nav-btn nav-btn--tutorial hidden"><span class="nav-btn__icon" aria-hidden="true">▶</span><span data-i18n="menu.tutorial">TUTORIAL</span></button>
+        <button id="continueBtn" class="nav-btn hidden" data-i18n="menu.continue">CONTINUE</button>
+        <button id="mainCompetitiveBtn" class="nav-btn nav-btn--competitive" data-i18n="menu.competitive">COMPETITIVE</button>
+        <button id="newRunBtn"   class="nav-btn" data-i18n="menu.newRun">NEW RUN</button>
+        <button id="altModesBtn"   class="nav-btn nav-btn--minor" data-i18n="menu.altModes">ALT MODES</button>
+        <button id="runHistoryBtn" class="nav-btn nav-btn--minor" data-i18n="menu.archive">ARCHIVE</button>
+        <button id="settingsBtn" class="nav-btn nav-btn--minor" data-i18n="menu.settings">SETTINGS</button>
+        <button id="creditsBtn" class="nav-btn nav-btn--minor" data-i18n="menu.credits">CREDITS</button>
       </div>
     </div><!-- /.menu-content -->
     <div class="menu-footer">
       <div class="meta-row">
-        <span class="meta-pill"><canvas id="metaCoinIcon" class="meta-icon" width="32" height="32"></canvas> BANK <b id="bankCoins">0</b></span>
-        <button id="metaLoopPill" class="meta-pill meta-pill--button" type="button" aria-label="Open Loop Crystal progression"><canvas id="metaLoopIcon" class="meta-icon" width="32" height="32"></canvas> LOOP CRYSTALS <b id="loopCount">0</b></button>
-        <span class="meta-pill"><span class="meta-pill__icon">↟</span> BEST FLOOR <b id="bestFloor">1</b></span>
+        <span class="meta-pill"><canvas id="metaCoinIcon" class="meta-icon" width="32" height="32"></canvas> <span data-i18n="menu.bank">BANK</span> <b id="bankCoins">0</b></span>
+        <button id="metaLoopPill" class="meta-pill meta-pill--button" type="button" aria-label="Open Loop Crystal progression" data-i18n-aria-label="menu.loopCrystals.open"><canvas id="metaLoopIcon" class="meta-icon" width="32" height="32"></canvas> <span data-i18n="menu.loopCrystals">LOOP CRYSTALS</span> <b id="loopCount">0</b></button>
+        <span class="meta-pill"><span class="meta-pill__icon">↟</span> <span data-i18n="menu.bestFloor">BEST FLOOR</span> <b id="bestFloor">1</b></span>
         <span class="meta-pill meta-pill--save"><span class="meta-pill__icon">◆</span> SAVE <b id="saveState">BOOTING</b></span>
       </div>
       <div class="menu-footer__summary">
@@ -1713,13 +1713,14 @@
 
     <!-- Tab bar (side navigation) -->
     <div class="stab-bar" role="tablist">
-      <button class="stab active" data-tab="controls" role="tab"><span class="tab-icon">⌨&#xfe0e;</span>Controls</button>
-      <button class="stab" data-tab="gameplay" role="tab"><span class="tab-icon">◆</span>Gameplay</button>
-      <button class="stab" data-tab="volume"   role="tab"><span class="tab-icon">♪&#xfe0e;</span>Volume</button>
-      <button class="stab" data-tab="theme"    role="tab"><span class="tab-icon">◈</span>Theme</button>
-      <button class="stab" data-tab="hud"      role="tab"><span class="tab-icon">▣</span>HUD</button>
-      <button class="stab" data-tab="access"   role="tab"><span class="tab-icon">◎</span>Accessibility</button>
-      <button class="stab" data-tab="data"     role="tab"><span class="tab-icon">▤</span>Data</button>
+      <button class="stab active" data-tab="controls" role="tab"><span class="tab-icon">⌨&#xfe0e;</span><span data-i18n="settings.tabs.controls">Controls</span></button>
+      <button class="stab" data-tab="gameplay" role="tab"><span class="tab-icon">◆</span><span data-i18n="settings.tabs.gameplay">Gameplay</span></button>
+      <button class="stab" data-tab="volume"   role="tab"><span class="tab-icon">♪&#xfe0e;</span><span data-i18n="settings.tabs.volume">Volume</span></button>
+      <button class="stab" data-tab="language" role="tab"><span class="tab-icon">Aa</span><span data-i18n="settings.tabs.language">Language</span></button>
+      <button class="stab" data-tab="theme"    role="tab"><span class="tab-icon">◈</span><span data-i18n="settings.tabs.theme">Theme</span></button>
+      <button class="stab" data-tab="hud"      role="tab"><span class="tab-icon">▣</span><span data-i18n="settings.tabs.hud">HUD</span></button>
+      <button class="stab" data-tab="access"   role="tab"><span class="tab-icon">◎</span><span data-i18n="settings.tabs.accessibility">Accessibility</span></button>
+      <button class="stab" data-tab="data"     role="tab"><span class="tab-icon">▤</span><span data-i18n="settings.tabs.data">Data</span></button>
     </div>
 
     <!-- Controls tab -->
@@ -1972,6 +1973,20 @@
         </div>
         <p class="settings-hint">Set the level of each individual sound. Sounds you don't touch follow the SFX slider above.</p>
         <div id="soundLevels"></div>
+      </section>
+    </div>
+
+    <!-- Language tab -->
+    <div class="stab-panel hidden" id="stab-language">
+      <section class="settings-group">
+      <h3 class="settings-group__title" data-i18n="settings.language.title">Language</h3>
+      <div class="access-row">
+        <div class="access-text">
+          <span class="access-label" data-i18n="settings.language.title">Language</span>
+          <span class="access-desc" data-i18n="settings.language.description">Changes translated UI text where translations are available.</span>
+        </div>
+        <select id="languageSelect" class="settings-text-input" aria-label="Language"></select>
+      </div>
       </section>
     </div>
 
@@ -2317,6 +2332,7 @@
 <script src="js/gamepadControls.js" defer></script>
 <script src="js/core/neo.js" defer></script>
 <script type="module" src="js/main.js"></script>
+<script src="js/i18n.js" defer></script>
 <script src="js/ui/settings-ui.js" defer></script>
 <script src="js/ui/menu-background.js" defer></script>
 <script src="js/ui/credits.js" defer></script>

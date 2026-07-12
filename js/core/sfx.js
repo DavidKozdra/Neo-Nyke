@@ -206,8 +206,8 @@
       const meta = SOUND_META[sound.id] || {};
       return {
         id: sound.id,
-        label: meta.label || prettifyId(sound.id),
-        category: meta.category || 'Other',
+        label: window.NeoI18n?.tOptional?.(`sounds.${sound.id}.label`, meta.label || prettifyId(sound.id)) || meta.label || prettifyId(sound.id),
+        category: window.NeoI18n?.tOptional?.(`soundCategories.${meta.category || 'Other'}`, meta.category || 'Other') || meta.category || 'Other',
         // Baseline 0-100 level shown when the player hasn't overridden this sound.
         defaultLevel: Math.round(Math.max(0, Math.min(1, Number(sound.volume ?? 1))) * 100),
       };

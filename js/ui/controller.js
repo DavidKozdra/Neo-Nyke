@@ -1045,6 +1045,8 @@ export function createUIController(view) {
       { key: 'mooggy',          label: 'Mooggy',          boss: false, hp: 0,    dmg: 0,  speed: 0,   attackStyle: 'assassin',immunities: ['bleed'],                             desc: 'White and black assassin cat with a red aura. Mirrors your stats and items, then fires rapid bleed-stacking eye lasers.' },
       { key: 'god',             label: 'GOD',             boss: true,  hp: 920,  dmg: 18, speed: 108, attackStyle: 'beam',    immunities: ['bleed', 'fire', 'poison', 'dark'],   desc: 'Final boss. Multi-phase deity with beam sweeps, nova blasts, and judgement strikes. Immune to all status effects.' },
     ];
+    Neo.ENEMY_INFO = ENEMY_INFO;
+    window.NeoI18n?.localizeNeo?.(Neo);
 
     function getCharacterStartingItems(characterKey) {
       return Neo.getCharacterStartingItems?.(characterKey) || {};

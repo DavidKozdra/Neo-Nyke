@@ -2,6 +2,9 @@
 
 import { TUTORIAL_LESSON_SCENE, TUTORIAL_SCENES } from '../tutorial/scenes.js';
 
+window.NeoTutorialScenes = TUTORIAL_SCENES;
+window.NeoI18n?.localizeTutorialScenes?.(TUTORIAL_SCENES);
+
 export const TUTORIAL_VERSION = 4;
 
 const BUTTON_NAMES = {

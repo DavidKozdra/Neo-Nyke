@@ -358,6 +358,30 @@
     return '<div class="sprite-editor-palette-strip" id="spriteEditorPaletteStrip"></div>';
   }
 
+  function normalizeHexColor(hex) {
+    const value = String(hex || '').trim().toLowerCase();
+    const short = value.match(/^#([0-9a-f]{3})$/i);
+    if (short) return `#${short[1].split('').map(ch => ch + ch).join('')}`;
+    const full = value.match(/^#[0-9a-f]{6}$/i);
+    return full ? value : '';
+  }
+
+  function findOrCreatePaletteKey(palette, hex, preferredKey = '') {
+    const color = normalizeHexColor(hex);
+    if (!palette || !color) return preferredKey || Object.keys(palette || {})[0] || 'a';
+    const existing = Object.keys(palette).find(key => normalizeHexColor(palette[key]) === color);
+    if (existing) return existing;
+    const preferred = String(preferredKey || '').toLowerCase();
+    if (preferred && !palette[preferred]) {
+      palette[preferred] = color;
+      return preferred;
+    }
+    const next = 'abcdefghijklmnopqrstuvwxyz'.split('').find(key => !palette[key]);
+    const key = next || Object.keys(palette).at(-1) || 'a';
+    palette[key] = color;
+    return key;
+  }
+
   // ── Catalog ───────────────────────────────────────────────────────────────
   function buildCatalog() {
     const sheetDefs = Neo.CHARACTER_SHEET_DEFS || {};
@@ -1272,11 +1296,12 @@
     });
 
     editor.applyPaletteColor = hex => {
-      const before = editor.captureSnapshot();
-      def.palette[editor.activeSwatch] = hex;
-      repaintActorCanvas(canvas, def);
-      scheduleAtlasRebuild();
-      pushHistory(editor, before, editor.captureSnapshot());
+      const color = normalizeHexColor(hex);
+      if (!color) return;
+      const existing = Object.keys(def.palette).find(key => normalizeHexColor(def.palette[key]) === color);
+      editor.pendingBrushColor = existing ? '' : color;
+      if (existing) editor.activeSwatch = existing;
+      editor.erasing = false;
       renderActorDetail(container, entry);
     };
 
@@ -1289,6 +1314,10 @@
       const cx = Math.floor((clientX - rect.left) / editor.scale);
       const cy = Math.floor((clientY - rect.top) / editor.scale);
       if (cx < 0 || cy < 0 || cx >= ACTOR_GRID_SIZE || cy >= ACTOR_GRID_SIZE) return;
+      if (!editor.erasing && editor.pendingBrushColor) {
+        editor.activeSwatch = findOrCreatePaletteKey(def.palette, editor.pendingBrushColor, editor.activeSwatch);
+        editor.pendingBrushColor = '';
+      }
       const row = def.pixels[cy];
       const nextChar = editor.erasing ? '.' : editor.activeSwatch;
       if (row[cx] === nextChar) return;
@@ -1420,11 +1449,10 @@
     });
 
     editor.applyPaletteColor = hex => {
-      const before = editor.captureSnapshot();
-      def[editor.activeChannel] = hex;
-      repaintIconCanvas(canvas, def);
-      scheduleAtlasRebuild();
-      pushHistory(editor, before, editor.captureSnapshot());
+      const color = normalizeHexColor(hex);
+      if (!color) return;
+      editor.pendingBrushColor = color;
+      editor.erasing = false;
       renderIconDetail(container, entry);
     };
 
@@ -1440,6 +1468,10 @@
       def.pixels = (def.pixels || []).filter(([x, y]) => !(x === cx && y === cy));
       def.accentPixels = (def.accentPixels || []).filter(([x, y]) => !(x === cx && y === cy));
       if (!editor.erasing) {
+        if (editor.pendingBrushColor) {
+          def[editor.activeChannel] = editor.pendingBrushColor;
+          editor.pendingBrushColor = '';
+        }
         if (editor.activeChannel === 'accent') def.accentPixels = [...(def.accentPixels || []), [cx, cy]];
         else def.pixels = [...def.pixels, [cx, cy]];
       }
@@ -1574,6 +1606,10 @@
     }
     function paintAt(clientX, clientY) {
       const p = pointerToCell(clientX, clientY);
+      if (!editor.erasing && editor.pendingBrushColor) {
+        editor.activeSwatch = findOrCreatePaletteKey(def.palette, editor.pendingBrushColor, editor.activeSwatch);
+        editor.pendingBrushColor = '';
+      }
       const nextChar = editor.erasing ? '.' : editor.activeSwatch;
       const row = def.pixels[p.y] || '................';
       if (row[p.x] === nextChar) return;
@@ -1584,10 +1620,12 @@
       pushHistory(editor, before, editor.captureSnapshot());
     });
     editor.applyPaletteColor = hex => {
-      const before = editor.captureSnapshot();
-      def.palette[editor.activeSwatch] = hex;
-      repaint();
-      pushHistory(editor, before, editor.captureSnapshot());
+      const color = normalizeHexColor(hex);
+      if (!color) return;
+      const existing = Object.keys(def.palette || {}).find(key => normalizeHexColor(def.palette[key]) === color);
+      editor.pendingBrushColor = existing ? '' : color;
+      if (existing) editor.activeSwatch = existing;
+      editor.erasing = false;
       renderEnvTileDetail(container, entry);
     };
     container.querySelector('#seEraser').addEventListener('change', e => {
