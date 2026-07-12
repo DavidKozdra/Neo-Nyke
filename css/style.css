@@ -529,6 +529,25 @@ button, input, select, textarea {
   backdrop-filter: blur(6px);
 }
 
+.meta-pill--button {
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition: border-color .15s, background .15s, color .15s, transform .12s;
+}
+
+.meta-pill--button:hover,
+.meta-pill--button:focus-visible {
+  border-color: rgba(131,243,255,.55);
+  background: rgba(28,70,92,.82);
+  color: #d8fbff;
+}
+
+.meta-pill--button:focus-visible {
+  outline: 2px solid #83f3ff;
+  outline-offset: 3px;
+}
+
 .meta-pill__icon {
   font-size: 1.1em;
   opacity: 0.7;
@@ -5204,6 +5223,58 @@ p.sub {
   padding: 20px;
   overflow-y: auto;
   flex: 1;
+}
+
+.progression-panel-wallet {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  padding: 11px 12px;
+  border: 1px solid rgba(131,243,255,.3);
+  border-radius: 9px;
+  background: rgba(45,153,185,.09);
+}
+
+.progression-panel-wallet strong,
+.progression-panel-wallet small {
+  display: block;
+}
+
+.progression-panel-wallet strong {
+  color: #d8fbff;
+  font-size: calc(14px * var(--font-scale, 1));
+  letter-spacing: .06em;
+}
+
+.progression-panel-wallet small {
+  margin-top: 3px;
+  color: var(--menu-text-soft);
+  font-size: calc(12px * var(--font-scale, 1));
+}
+
+.progression-panel-status {
+  display: block;
+  margin: 0 0 12px;
+  color: var(--menu-accent);
+  font-size: calc(11px * var(--font-scale, 1));
+  font-weight: 900;
+  letter-spacing: .12em;
+  text-align: right;
+}
+
+.loop-crystal-icon {
+  width: 32px;
+  height: 32px;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 0 7px rgba(131,243,255,.5));
+}
+
+.loop-crystal-icon--inline {
+  width: 18px;
+  height: 18px;
+  vertical-align: middle;
 }
 
 
@@ -10298,8 +10369,51 @@ button.alt.danger {
 }
 .meta-info-summary {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
+}
+
+.meta-crystal-overview {
+  display: grid;
+  grid-template-columns: 46px auto minmax(180px, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 13px 14px;
+  border: 1px solid rgba(131,243,255,.3);
+  border-radius: 9px;
+  background: linear-gradient(90deg, rgba(45,153,185,.12), rgba(255,255,255,.025));
+}
+
+.meta-crystal-overview > .loop-crystal-icon {
+  width: 42px;
+  height: 42px;
+}
+
+.meta-crystal-overview__balance b,
+.meta-crystal-overview__balance span {
+  display: block;
+}
+
+.meta-crystal-overview__balance b {
+  color: #d8fbff;
+  font-size: calc(28px * var(--font-scale, 1));
+  line-height: 1;
+}
+
+.meta-crystal-overview__balance span {
+  margin-top: 3px;
+  color: #83f3ff;
+  font-size: calc(11px * var(--font-scale, 1));
+  font-weight: 900;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+}
+
+.meta-crystal-overview p {
+  margin: 0;
+  color: var(--menu-text-soft);
+  font-size: calc(13px * var(--font-scale, 1));
+  line-height: 1.4;
 }
 .meta-info-summary__stat {
   min-height: 64px;
@@ -10323,6 +10437,16 @@ button.alt.danger {
   font-size: calc(22px * var(--font-scale, 1));
   line-height: 1;
 }
+
+.meta-info-summary__stat small {
+  display: block;
+  margin-top: 6px;
+  color: var(--menu-text-soft);
+  font-size: calc(10px * var(--font-scale, 1));
+  font-weight: 750;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
 .meta-info-section {
   display: flex;
   flex-direction: column;
@@ -10341,6 +10465,14 @@ button.alt.danger {
   font-weight: 850;
   letter-spacing: .12em;
   text-transform: uppercase;
+}
+
+.meta-info-section__head h3 small {
+  display: inline;
+  margin-left: 6px;
+  color: var(--menu-text-soft);
+  font-size: .66em;
+  letter-spacing: .06em;
 }
 .meta-info-section__head span {
   color: var(--menu-text-muted);
@@ -10467,6 +10599,11 @@ button.alt.danger {
   font-size: calc(10px * var(--font-scale, 1));
   font-weight: 900;
   letter-spacing: .03em;
+}
+
+.meta-legacy-card__sigil .loop-crystal-icon {
+  width: 26px;
+  height: 26px;
 }
 
 .lc-icon {

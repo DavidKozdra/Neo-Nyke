@@ -2465,6 +2465,7 @@ export function resumeGame() {
     } else {
       if (phaseTag) phaseTag.classList.add('hidden');
       if (titleEl) titleEl.textContent = 'PICK HERO';
+      if (subtitleEl) subtitleEl.textContent = '';
       if (Neo.gameMode === 'competitive') {
         if (subtitleEl) subtitleEl.textContent = 'Weekly run. Hard difficulty is locked.';
         if (goBtn) goBtn.textContent = 'COMPETE';

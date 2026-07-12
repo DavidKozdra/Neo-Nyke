@@ -1,7 +1,6 @@
 /* Pick Hero screen ----------------------------------------------------------
-   Canonical character-select rules. The decision flow is deliberately linear:
-   1) choose from a uniform roster grid, 2) review the selected loadout,
-   3) set the run options and confirm. */
+   Canonical character-select rules: bounded roster pages, hero loadout, and
+   run setup. */
 
 #charSelect.overlay {
   align-items: flex-start;
@@ -48,6 +47,10 @@
   letter-spacing: .025em;
 }
 
+#charSelect .charselect-subtitle:empty {
+  display: none;
+}
+
 #charSelect .charselect-main {
   display: grid;
   grid-template-columns: minmax(380px, .82fr) minmax(440px, 1.18fr) minmax(286px, .66fr);
@@ -92,30 +95,6 @@
   text-transform: uppercase;
 }
 
-#charSelect .char-roster-kicker,
-#charSelect .charselect-setup-kicker,
-#charSelect .hero-detail-kicker {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-#charSelect .charselect-step-number {
-  display: inline-grid;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  flex: 0 0 24px;
-  border: 1px solid rgba(176, 218, 255, .58);
-  border-radius: 50%;
-  background: rgba(91, 171, 255, .15);
-  color: #eaf6ff;
-  font-family: var(--font-pixel, inherit);
-  font-size: calc(11px * var(--font-scale, 1));
-  font-weight: 900;
-  line-height: 1;
-}
-
 #charSelect .char-roster-kicker {
   color: var(--menu-accent);
   font-size: calc(15px * var(--font-scale, 1));
@@ -136,6 +115,41 @@
 
 #charSelect .carousel-arrow {
   display: none;
+}
+
+#charSelect .char-roster-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 34px;
+  margin-top: 8px;
+}
+
+#charSelect .char-roster-pagination[hidden] {
+  display: none !important;
+}
+
+#charSelect .char-roster-pagination .carousel-arrow {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 32px;
+  min-height: 32px;
+  border-radius: 6px;
+}
+
+#charSelect .char-page-status {
+  min-width: 58px;
+  color: var(--menu-text-soft);
+  font-size: calc(11px * var(--font-scale, 1));
+  font-weight: 900;
+  letter-spacing: .12em;
+  text-align: center;
+}
+
+#charSelect .char-card[hidden] {
+  display: none !important;
 }
 
 #charSelect .char-carousel-viewport {
@@ -271,6 +285,10 @@
   color: #b8c5d7;
 }
 
+#charSelect .char-card-hint:empty {
+  display: none;
+}
+
 #charSelect .char-card.locked {
   opacity: .62;
   filter: grayscale(.72);
@@ -294,19 +312,9 @@
   gap: 10px 14px;
 }
 
-#charSelect .hero-detail-kicker {
-  grid-column: 1 / -1;
-  color: var(--menu-accent);
-  font-size: calc(15px * var(--font-scale, 1));
-  font-weight: 900;
-  letter-spacing: .12em;
-  line-height: 1;
-  text-transform: uppercase;
-}
-
 #charSelect .hero-detail-portrait {
   grid-column: 1;
-  grid-row: 2 / span 2;
+  grid-row: 1 / span 2;
   min-height: 128px;
   border-color: rgba(143, 201, 255, .3);
   background:
@@ -321,7 +329,7 @@
 
 #charSelect .hero-detail-head {
   grid-column: 2;
-  grid-row: 2;
+  grid-row: 1;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -350,7 +358,7 @@
 
 #charSelect .hero-detail-lore {
   grid-column: 2;
-  grid-row: 3;
+  grid-row: 2;
   align-self: start;
   margin: 0;
   font-size: calc(15px * var(--font-scale, 1));
@@ -562,16 +570,44 @@
   border-radius: 6px;
 }
 
-#charSelect #seedHelp {
-  color: var(--menu-text-soft);
-  font-size: calc(10px * var(--font-scale, 1));
-  line-height: 1.35;
-}
-
 #charSelect .charselect-extra-options {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 7px;
+}
+
+#charSelect .charselect-crystal-wallet {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  padding: 9px 10px;
+  border: 1px solid rgba(131, 243, 255, .28);
+  border-radius: 7px;
+  background: rgba(45, 153, 185, .08);
+}
+
+#charSelect .charselect-crystal-wallet .loop-crystal-icon {
+  width: 30px;
+  height: 30px;
+}
+
+#charSelect .charselect-crystal-wallet strong,
+#charSelect .charselect-crystal-wallet small {
+  display: block;
+}
+
+#charSelect .charselect-crystal-wallet strong {
+  color: #d8fbff;
+  font-size: calc(12px * var(--font-scale, 1));
+  letter-spacing: .06em;
+}
+
+#charSelect .charselect-crystal-wallet small {
+  margin-top: 3px;
+  color: var(--menu-text-soft);
+  font-size: calc(10px * var(--font-scale, 1));
+  line-height: 1.25;
 }
 
 #charSelect .challenge-toggle {
@@ -580,23 +616,31 @@
   min-height: 42px;
   padding: 8px;
   border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 3px;
   font-size: calc(10px * var(--font-scale, 1));
   line-height: 1.25;
-}
-
-#charSelect .char-selection-summary {
-  margin-top: auto;
-  padding: 11px 10px;
-  border: 1px solid rgba(255, 255, 255, .11);
-  border-radius: 6px;
-  background: rgba(255, 255, 255, .035);
-  color: #dbe9f8;
-  font-size: calc(13px * var(--font-scale, 1));
-  line-height: 1.55;
   text-align: left;
 }
 
+#charSelect .challenge-toggle strong,
+#charSelect .challenge-toggle small {
+  display: block;
+}
+
+#charSelect .challenge-toggle small {
+  color: var(--menu-text-soft);
+  font-size: calc(9px * var(--font-scale, 1));
+  font-weight: 650;
+  letter-spacing: .03em;
+  text-transform: none;
+}
+
 #charSelect #go.charselect-start-btn {
+  margin-top: auto;
   width: 100%;
   min-width: 0;
   min-height: 64px;
@@ -664,10 +708,10 @@
     grid-row: 1 / span 2;
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
-  #charSelect .difficulty-hint { grid-column: 1 / span 2; grid-row: 3; }
+  #charSelect .difficulty-hint { grid-column: 1; grid-row: 3; }
   #charSelect .seedrow--panel { grid-column: 3; grid-row: 1; }
-  #charSelect .charselect-extra-options { grid-column: 3; grid-row: 2; }
-  #charSelect .char-selection-summary { grid-column: 3; grid-row: 3; margin-top: 0; }
+  #charSelect .charselect-crystal-wallet { grid-column: 3; grid-row: 2; }
+  #charSelect .charselect-extra-options { grid-column: 3; grid-row: 3; }
   #charSelect #go.charselect-start-btn { grid-column: 2; grid-row: 3; }
 }
 
@@ -701,9 +745,6 @@
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  #charSelect .char-selection-summary {
-    margin-top: 4px;
-  }
 }
 
 /* Phone: show the complete roster as a uniform two-column grid. The !important
@@ -791,6 +832,10 @@
 
   #charSelect .carousel-arrow {
     display: none !important;
+  }
+
+  #charSelect .char-roster-pagination .carousel-arrow {
+    display: grid !important;
   }
 
   #charSelect .char-card,

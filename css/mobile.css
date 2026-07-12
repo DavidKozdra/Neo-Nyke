@@ -239,6 +239,12 @@
   .challenge-btn { grid-template-columns: 38px minmax(0, 1fr); gap: 9px; }
   .challenge-btn__icon { width: 34px; height: 34px; font-size: calc(11px * var(--font-scale, 1)); }
   .meta-info-summary { grid-template-columns: 1fr; }
+  .meta-crystal-overview {
+    grid-template-columns: 42px minmax(0, 1fr);
+  }
+  .meta-crystal-overview p {
+    grid-column: 1 / -1;
+  }
   .meta-challenge-grid,
   .meta-legacy-grid { grid-template-columns: 1fr; }
 

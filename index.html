@@ -831,7 +831,7 @@
     <div class="menu-footer">
       <div class="meta-row">
         <span class="meta-pill"><canvas id="metaCoinIcon" class="meta-icon" width="32" height="32"></canvas> BANK <b id="bankCoins">0</b></span>
-        <span class="meta-pill"><canvas id="metaLoopIcon" class="meta-icon" width="32" height="32"></canvas> LOOP CRYSTALS <b id="loopCount">0</b></span>
+        <button id="metaLoopPill" class="meta-pill meta-pill--button" type="button" aria-label="Open Loop Crystal progression"><canvas id="metaLoopIcon" class="meta-icon" width="32" height="32"></canvas> LOOP CRYSTALS <b id="loopCount">0</b></button>
         <span class="meta-pill"><span class="meta-pill__icon">↟</span> BEST FLOOR <b id="bestFloor">1</b></span>
         <span class="meta-pill meta-pill--save"><span class="meta-pill__icon">◆</span> SAVE <b id="saveState">BOOTING</b></span>
       </div>
@@ -900,7 +900,7 @@
           <button id="rhInfoMovesTab" class="rh-info-tab" data-info-tab="moves" type="button" role="tab" aria-selected="false" aria-controls="rhInfoContent">Moves</button>
           <button id="rhInfoEnemiesTab" class="rh-info-tab" data-info-tab="enemies" type="button" role="tab" aria-selected="false" aria-controls="rhInfoContent">Enemies</button>
           <button id="rhInfoCharactersTab" class="rh-info-tab" data-info-tab="characters" type="button" role="tab" aria-selected="false" aria-controls="rhInfoContent">Characters</button>
-          <button id="rhInfoMetaTab" class="rh-info-tab" data-info-tab="meta" type="button" role="tab" aria-selected="false" aria-controls="rhInfoContent">Meta</button>
+          <button id="rhInfoMetaTab" class="rh-info-tab" data-info-tab="meta" type="button" role="tab" aria-selected="false" aria-controls="rhInfoContent">Progression</button>
         </div>
         <button id="infoTutorialBtn" class="rh-info-tutorial-btn" type="button">&#9654; Tutorial</button>
       </aside>
@@ -1359,22 +1359,20 @@
     <div class="charselect-header">
       <div class="charselect-titlewrap">
         <div id="charSelectPhaseTag" class="charselect-phase-tag hidden"></div>
-        <h2 class="screen-title" id="charSelectTitle">PICK HERO</h2>
-        <p class="charselect-subtitle" id="charSelectSubtitle">Choose a hero. Their stats and starting kit update instantly.</p>
+        <h2 class="screen-title" id="charSelectTitle">CHOOSE YOUR CHAMPION </h2>
+        <p class="charselect-subtitle" id="charSelectSubtitle"></p>
       </div>
     </div>
 
     <div class="charselect-main">
       <section class="charselect-roster" aria-labelledby="charRosterHeading">
         <div class="char-roster-head">
-          <span class="char-roster-kicker" id="charRosterHeading"><span class="charselect-step-number" aria-hidden="true">1</span> Choose your hero</span>
-          <span class="char-roster-note">Select a card to preview</span>
+          <span class="char-roster-kicker" id="charRosterHeading">Heroes</span>
         </div>
 
         <!-- The arrow buttons remain for compatibility but the roster is
              presented as a complete grid whenever the viewport allows it. -->
         <div class="char-carousel-wrap">
-          <button class="carousel-arrow carousel-arrow--prev" id="carouselPrev" aria-label="Previous hero">&#8592;</button>
           <div class="char-carousel-viewport">
             <div class="char-carousel-track" id="choose" role="group" aria-label="Available heroes">
 
@@ -1477,7 +1475,11 @@
 
             </div>
           </div>
-          <button class="carousel-arrow carousel-arrow--next" id="carouselNext" aria-label="Next hero">&#8594;</button>
+          <nav class="char-roster-pagination" aria-label="Hero roster pages">
+            <button class="carousel-arrow carousel-arrow--prev" id="carouselPrev" type="button" aria-label="Previous hero page">&#8592;</button>
+            <span id="charPageStatus" class="char-page-status" aria-live="polite">1 / 1</span>
+            <button class="carousel-arrow carousel-arrow--next" id="carouselNext" type="button" aria-label="Next hero page">&#8594;</button>
+          </nav>
         </div>
       </section>
 
@@ -1486,8 +1488,7 @@
 
       <aside class="charselect-sidebar" aria-labelledby="runSetupHeading">
         <div class="charselect-setup-head">
-          <span class="charselect-setup-kicker"><span class="charselect-step-number" aria-hidden="true">3</span> Set up your run</span>
-          <strong id="runSetupHeading">READY YOUR DESCENT</strong>
+          <strong id="runSetupHeading">RUN SETUP</strong>
         </div>
         <div class="charselect-control-label">Choose difficulty</div>
         <div id="difficultySelect" class="difficulty-select" role="group" aria-label="Difficulty">
@@ -1500,14 +1501,16 @@
         <p id="difficultyHint" class="difficulty-hint" aria-live="polite">Balanced enemy pressure and generous relic drops.</p>
         <div class="seedrow seedrow--panel">
           <label id="seedLabel">SEED</label>
-          <input id="seed" placeholder="Random seed" aria-describedby="seedHelp">
-          <small id="seedHelp">Leave blank for a new random dungeon.</small>
+          <input id="seed" placeholder="Random seed">
+        </div>
+        <div class="charselect-crystal-wallet" aria-label="Loop Crystal balance">
+          <canvas id="charLoopIcon" class="loop-crystal-icon" width="28" height="28" aria-hidden="true"></canvas>
+          <div><strong><span id="charLoopCount">0</span> LOOP CRYSTALS</strong><small>Earned by completing loops.</small></div>
         </div>
         <div class="charselect-extra-options">
-          <button id="challengeToggle" class="challenge-toggle" type="button" aria-expanded="false">CHALLENGE SHOP</button>
-          <button id="legacyToggle" class="challenge-toggle legacy-toggle" type="button" aria-expanded="false">LEGACY UPGRADES</button>
+          <button id="challengeToggle" class="challenge-toggle" type="button" aria-expanded="false"><strong>CHALLENGE SHOP</strong><small>Run modifiers</small></button>
+          <button id="legacyToggle" class="challenge-toggle legacy-toggle" type="button" aria-expanded="false"><strong>LEGACY UPGRADES</strong><small>Permanent bonuses</small></button>
         </div>
-        <div id="charSelectionSummary" class="char-selection-summary" aria-live="polite">Hero: Thorn Knight <span aria-hidden="true">•</span> Difficulty: Medium</div>
         <button id="go" class="charselect-start-btn">ENTER DUNGEON</button>
       </aside>
     </div>
@@ -1605,7 +1608,11 @@
     <button id="challengeClose" class="panel-close" aria-label="Close challenge shop">X</button>
   </div>
   <div class="floating-panel__body">
-    <small id="challengeHint" class="difficulty-hint" style="margin-bottom:14px;display:block">Buy run types once with loop crystals, then toggle them before entering the dungeon.</small>
+    <div class="progression-panel-wallet">
+      <canvas id="challengeLoopIcon" class="loop-crystal-icon" width="32" height="32" aria-hidden="true"></canvas>
+      <div><strong><span id="challengeLoopCount">0</span> LOOP CRYSTALS</strong><small>Buy once, then toggle for any run.</small></div>
+    </div>
+    <small id="challengeHint" class="progression-panel-status">0 ACTIVE</small>
     <div id="challengeSelect" class="challenge-select" role="group" aria-label="Challenge Modifiers">
       <button class="challenge-btn" data-challenge="no_hit" type="button">Never Get Hit</button>
       <button class="challenge-btn" data-challenge="no_items" type="button">No Items</button>
@@ -1625,7 +1632,11 @@
     <button id="legacyClose" class="panel-close" aria-label="Close legacy upgrades">X</button>
   </div>
   <div class="floating-panel__body">
-    <small id="legacyHint" class="difficulty-hint" style="margin-bottom:14px;display:block">Spend Loop Crystals on permanent upgrades that carry across all future runs.</small>
+    <div class="progression-panel-wallet">
+      <canvas id="legacyLoopIcon" class="loop-crystal-icon" width="32" height="32" aria-hidden="true"></canvas>
+      <div><strong><span id="legacyLoopCount">0</span> LOOP CRYSTALS</strong><small>Permanent upgrades for every future run.</small></div>
+    </div>
+    <small id="legacyHint" class="progression-panel-status">0 / 0 UNLOCKED</small>
     <div id="legacySelect" class="challenge-select legacy-select" role="group" aria-label="Legacy Upgrades">
       <button class="legacy-btn" data-legacy="rival_bounty" type="button">Rival Bounty</button>
       <button class="legacy-btn" data-legacy="elite_tracker" type="button">Elite Tracker</button>

@@ -35,6 +35,7 @@ export function createUIController(view) {
     let syncSandboxPanelFieldsHook = null;
     let syncCustomCharacterPanelFieldsHook = null;
     let selectedCarouselKey = '';
+    let characterPage = 0;
     let programmaticCarouselScrollUntil = 0;
     let runHistoryPage = 0;
     let runHistoryEntries = [];
@@ -75,7 +76,21 @@ export function createUIController(view) {
     window.addEventListener('developer-mode-changed', (e) => updateDeveloperModeUI(!!e.detail));
     updateDeveloperModeUI(!!globalThis.developer_mode);
 
-    const LC = `<span class="lc-icon">◆</span>`;
+    const CHARACTER_PAGE_SIZE = 8;
+    const LOOP_CRYSTAL_PIXELS = [
+      [2, 1], [3, 1], [4, 1], [1, 2], [5, 2], [1, 3], [5, 3],
+      [1, 4], [5, 4], [2, 5], [3, 5], [4, 5], [2, 2], [4, 2],
+      [2, 4], [4, 4], [3, 3],
+    ];
+    const LC = `<canvas class="loop-crystal-icon loop-crystal-icon--inline" width="24" height="24" data-loop-crystal-icon aria-hidden="true"></canvas>`;
+
+    function drawLoopCrystalIcons(root = document) {
+      if (typeof Neo.drawPixelIcon !== 'function') return;
+      const canvases = root instanceof Element && root.matches?.('[data-loop-crystal-icon], .loop-crystal-icon')
+        ? [root]
+        : [...root.querySelectorAll?.('[data-loop-crystal-icon], .loop-crystal-icon') || []];
+      canvases.forEach(canvas => Neo.drawPixelIcon(canvas, '#83f3ff', LOOP_CRYSTAL_PIXELS));
+    }
     const getCharacterOrder = () => ['princess', 'thorn_knight', 'metao', 'gelleh', 'mooggy', 'turtle_boy', 'sarge', ...(Neo.getCustomCharacterKeys?.() || [])];
     const CHARACTER_ROLE_LABELS = Object.freeze({
       princess: 'Power all-rounder',
@@ -129,6 +144,7 @@ export function createUIController(view) {
         track.insertBefore(button, addButton);
       });
       refreshCharacterButtons();
+      updateCarouselArrowState(selectedCarouselKey);
     }
 
     function writeCustomCharacterSettings(characterKey, patch) {
@@ -159,12 +175,40 @@ export function createUIController(view) {
     function updateCarouselArrowState(selected = selectedCarouselKey || Neo.chosenCharacter) {
       const carouselPrev = document.getElementById('carouselPrev');
       const carouselNext = document.getElementById('carouselNext');
-      const order = getCharacterOrder();
-      const currentPos = Math.max(0, order.indexOf(selected));
-      const hasPrev = order.slice(0, currentPos).some(key => isCarouselButtonSelectable(getCharacterButton(key)));
-      const hasNext = order.slice(currentPos + 1).some(key => isCarouselButtonSelectable(getCharacterButton(key)));
-      if (carouselPrev) carouselPrev.disabled = !hasPrev;
-      if (carouselNext) carouselNext.disabled = !hasNext;
+      const status = document.getElementById('charPageStatus');
+      const pagination = document.querySelector('#charSelect .char-roster-pagination');
+      const cards = refreshCharacterButtons();
+      const totalPages = Math.max(1, Math.ceil(cards.length / CHARACTER_PAGE_SIZE));
+      const selectedIndex = cards.findIndex(button => button.dataset.char === selected);
+      if (selectedIndex >= 0) characterPage = Math.floor(selectedIndex / CHARACTER_PAGE_SIZE);
+      characterPage = Math.max(0, Math.min(totalPages - 1, characterPage));
+      cards.forEach((button, index) => {
+        button.hidden = Math.floor(index / CHARACTER_PAGE_SIZE) !== characterPage;
+      });
+      if (carouselPrev) carouselPrev.disabled = characterPage <= 0;
+      if (carouselNext) carouselNext.disabled = characterPage >= totalPages - 1;
+      if (status) status.textContent = `${characterPage + 1} / ${totalPages}`;
+      if (pagination) pagination.hidden = totalPages <= 1;
+    }
+
+    function changeCharacterPage(delta) {
+      const cards = refreshCharacterButtons();
+      const totalPages = Math.max(1, Math.ceil(cards.length / CHARACTER_PAGE_SIZE));
+      characterPage = Math.max(0, Math.min(totalPages - 1, characterPage + delta));
+      cards.forEach((button, index) => {
+        button.hidden = Math.floor(index / CHARACTER_PAGE_SIZE) !== characterPage;
+      });
+      const carouselPrev = document.getElementById('carouselPrev');
+      const carouselNext = document.getElementById('carouselNext');
+      const status = document.getElementById('charPageStatus');
+      const pagination = document.querySelector('#charSelect .char-roster-pagination');
+      if (carouselPrev) carouselPrev.disabled = characterPage <= 0;
+      if (carouselNext) carouselNext.disabled = characterPage >= totalPages - 1;
+      if (status) status.textContent = `${characterPage + 1} / ${totalPages}`;
+      if (pagination) pagination.hidden = totalPages <= 1;
+      const firstFocusable = cards.slice(characterPage * CHARACTER_PAGE_SIZE, (characterPage + 1) * CHARACTER_PAGE_SIZE)
+        .find(isCarouselButtonSelectable);
+      firstFocusable?.focus({ preventScroll: true });
     }
 
     function selectNearestCarouselCard(handlers) {
@@ -330,7 +374,7 @@ export function createUIController(view) {
         const isOwned = ownedLegacy.has(key);
         const status = isOwned ? 'UNLOCKED' : context.loopCrystals >= def.cost ? `BUY ${def.cost} ${LC}` : `NEED ${def.cost} ${LC}`;
         return `<div class="meta-legacy-card${isOwned ? ' meta-legacy-card--owned' : ''}">
-          <span class="meta-legacy-card__sigil lc-icon">◆</span>
+          <span class="meta-legacy-card__sigil">${LC}</span>
           <div>
             <div class="meta-legacy-card__top">
               <b>${Neo.escapeHtml(def.name)}</b>
@@ -341,14 +385,18 @@ export function createUIController(view) {
         </div>`;
       }).join('');
       return `<div class="meta-info-layout">
+        <div class="meta-crystal-overview">
+          ${LC}
+          <div class="meta-crystal-overview__balance"><b>${context.loopCrystals}</b><span>Loop Crystals</span></div>
+          <p>Earned by completing loops. Spend them on run modifiers or permanent upgrades.</p>
+        </div>
         <div class="meta-info-summary">
-          <div class="meta-info-summary__stat"><span>Loop Crystals</span><b>${context.loopCrystals}</b></div>
-          <div class="meta-info-summary__stat"><span>Challenges Owned</span><b>${ownedCount}/${(Neo.CHALLENGE_ORDER || []).length}</b></div>
-          <div class="meta-info-summary__stat"><span>Active Bonus</span><b>+${challengeBonus} ${LC}</b></div>
+          <div class="meta-info-summary__stat"><span>Run Modifiers</span><b>${ownedCount}/${(Neo.CHALLENGE_ORDER || []).length}</b><small>${selectedCount} active · +${challengeBonus}% crystals</small></div>
+          <div class="meta-info-summary__stat"><span>Permanent Upgrades</span><b>${ownedLegacy.size}/${legacyOrder.length}</b><small>Always active</small></div>
         </div>
         <section class="meta-info-section">
           <div class="meta-info-section__head">
-            <h3>Challenge Shop</h3>
+            <h3>Challenge Shop <small>Run modifiers</small></h3>
             <span>${selectedCount} active</span>
           </div>
           <div class="meta-challenge-grid">
@@ -357,7 +405,7 @@ export function createUIController(view) {
         </section>
         <section class="meta-info-section">
           <div class="meta-info-section__head">
-            <h3>Permanent Upgrades</h3>
+            <h3>Legacy Upgrades <small>Permanent bonuses</small></h3>
             <span>${ownedLegacy.size}/${legacyOrder.length} unlocked</span>
           </div>
           <div class="meta-legacy-grid">${legacyCards}</div>
@@ -1316,6 +1364,7 @@ export function createUIController(view) {
       } else if (tab === 'meta') {
         setInfoResultStatus(tab, 2);
         view.rhInfoContent.innerHTML = `${getInfoResultSummary(tab, 2)}${renderMetaProgressionInfo()}`;
+        drawLoopCrystalIcons(view.rhInfoContent);
       }
     }
 
@@ -1713,26 +1762,12 @@ export function createUIController(view) {
           handlers.onCharacterSelect(button.dataset.char || '', button);
         });
 
-        // Carousel prev/next arrows
+        // Page through a bounded set of cards so roster growth never changes
+        // the size of the selection screen.
         const carouselPrev = document.getElementById('carouselPrev');
         const carouselNext = document.getElementById('carouselNext');
-        function carouselStep(delta) {
-          const charOrder = getCharacterOrder();
-          const currentKey = handlers._getChosenCharacter ? handlers._getChosenCharacter() : selectedCarouselKey || 'princess';
-          const currentIndex = Math.max(0, charOrder.indexOf(currentKey));
-          for (let nextIndex = currentIndex + delta; nextIndex >= 0 && nextIndex < charOrder.length; nextIndex += delta) {
-            const nextKey = charOrder[nextIndex];
-            const btn = getCharacterButton(nextKey);
-            if (isCarouselButtonSelectable(btn)) {
-              handlers.onCharacterSelect(nextKey, btn, { openCustomBuilder: false });
-              scrollCharacterCardIntoView(nextKey);
-              return;
-            }
-          }
-          updateCarouselArrowState(currentKey);
-        }
-        carouselPrev?.addEventListener('click', () => carouselStep(-1));
-        carouselNext?.addEventListener('click', () => carouselStep(1));
+        carouselPrev?.addEventListener('click', () => changeCharacterPage(-1));
+        carouselNext?.addEventListener('click', () => changeCharacterPage(1));
 
         // Grid navigation mirrors familiar character-select screens: one arrow
         // press moves one visible cell and immediately previews that hero.
@@ -1740,7 +1775,7 @@ export function createUIController(view) {
           if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
           const current = event.target instanceof Element ? event.target.closest('.char-card[data-char]') : null;
           if (!current) return;
-          const cards = refreshCharacterButtons();
+          const cards = refreshCharacterButtons().filter(button => !button.hidden);
           const currentIndex = cards.indexOf(current);
           if (currentIndex < 0) return;
           const template = getComputedStyle(rosterTrack).gridTemplateColumns;
@@ -2324,6 +2359,11 @@ export function createUIController(view) {
         view.legacyToggle?.addEventListener('click', handlers.onToggleLegacy);
         view.legacyClose?.addEventListener('click', () => setLegacyPanelOpen(false));
         view.runHistoryBtn?.addEventListener('click', handlers.onToggleRunHistory);
+        document.getElementById('metaLoopPill')?.addEventListener('click', () => {
+          activeInfoTab = 'meta';
+          setRunHistoryOpen(true);
+          populateInfoPanel('meta');
+        });
         view.runHistoryClose?.addEventListener('click', () => setRunHistoryOpen(false));
         view.runHistoryViewTabs?.forEach(tab => {
           tab.addEventListener('click', () => setRunHistoryView(tab.dataset.view || 'info'));
@@ -2631,7 +2671,7 @@ export function createUIController(view) {
             return Neo.getCustomCharacterSettings?.(itemKey).active ? 'Edit custom' : 'Empty slot';
           }
           if (itemKey === 'sarge' && sargeTutorialBlocked) return 'Unlock the full roster first';
-          if (unlocked.has(itemKey)) return getCharacterRoleLabel(itemKey);
+          if (unlocked.has(itemKey)) return '';
           if (itemKey === 'gelleh') return 'Unlock: beat GOD';
           if (itemKey === 'mooggy') {
             const mooggyProgress = Math.max(0, Math.min(3, Number(Neo.metaProgress?.mooggyDefeats || 0)));
@@ -2660,7 +2700,7 @@ export function createUIController(view) {
           if (hint) hint.textContent = statusText;
           button.setAttribute('aria-pressed', selected === itemKey ? 'true' : 'false');
           const displayName = button.querySelector('.char-card-name')?.textContent?.trim() || Neo.CHARACTER_DEFS?.[itemKey]?.name || itemKey;
-          button.setAttribute('aria-label', `${displayName}. ${statusText}.${selected === itemKey ? ' Selected.' : ''}`);
+          button.setAttribute('aria-label', `${displayName}. ${statusText || 'Available'}.${selected === itemKey ? ' Selected.' : ''}`);
           if (spriteCanvas) {
             Neo.drawSpriteToCanvas(spriteCanvas, Neo.getCharacterSpriteKey?.(itemKey) || itemKey, 76, {
               alpha: isSelectable(itemKey) ? 1 : 0.42,
@@ -2674,6 +2714,10 @@ export function createUIController(view) {
         document.querySelectorAll('[data-char-add-sprite]').forEach(canvas => {
           Neo.drawSpriteToCanvas(canvas, 'thorn_knight', 76, { tint: '#83f3ff', alpha: 0.72 });
         });
+        const charLoopCount = document.getElementById('charLoopCount');
+        if (charLoopCount) charLoopCount.textContent = Math.max(0, Number(Neo.metaProgress?.loopCrystals || 0));
+        const charWallet = document.querySelector('#charSelect .charselect-crystal-wallet');
+        if (charWallet) drawLoopCrystalIcons(charWallet);
 
         // The roster is a native scrolling carousel; clear old transform offsets
         // from prior builds and keep the selected card centered.
@@ -2787,7 +2831,6 @@ export function createUIController(view) {
               : `Empty Plus slot. Click the card, save a build, then enter the dungeon.`)
             : disp.lore;
           detail.innerHTML =
-            `<div class="hero-detail-kicker"><span class="charselect-step-number" aria-hidden="true">2</span> Review your loadout</div>` +
             `<div class="hero-detail-portrait"><canvas id="heroDetailSprite" width="128" height="128" aria-hidden="true"></canvas></div>` +
             `<div class="hero-detail-head"><span class="hero-detail-name">${Neo.escapeHtml(charDef.name || selected)}</span><span class="hero-detail-archetype">${Neo.escapeHtml(getCharacterRoleLabel(selected))}</span></div>` +
             `<p class="hero-detail-lore">${Neo.escapeHtml(lore)}</p>` +
@@ -2846,15 +2889,6 @@ export function createUIController(view) {
           }
         }
 
-        const summary = document.getElementById('charSelectionSummary');
-        if (summary) {
-          const heroName = Neo.isCustomCharacterKey?.(selected)
-            ? (Neo.getCustomCharacterSettings?.(selected).name || 'Custom')
-            : (Neo.CHARACTER_DEFS?.[selected]?.name || selected || 'Choose a hero');
-          const difficultyName = Neo.getDifficultyDef?.(Neo.selectedDifficulty)?.name || Neo.titleCase?.(Neo.selectedDifficulty) || 'Medium';
-          const challengeCount = Array.isArray(Neo.selectedChallenges) ? Neo.selectedChallenges.length : 0;
-          summary.textContent = `Hero: ${heroName}  •  Difficulty: ${difficultyName}${challengeCount ? `  •  ${challengeCount} challenge${challengeCount === 1 ? '' : 's'}` : ''}`;
-        }
       },
       updateDifficultySelection(unlocked, selected, loopCrystals) {
         const selectedDef = Neo.getDifficultyDef(selected);
@@ -2892,9 +2926,15 @@ export function createUIController(view) {
         if (view.challengeHint) {
           const activeCount = selected.length;
           const bonusCrystals = Math.max(0, Math.round(Neo.getActiveChallengeCrystalBonusMultiplier()));
-          view.challengeHint.innerHTML = `${LC} ${loopCrystals} — Buy run types once, then toggle them. Active: ${activeCount}. Loop bonus: +${bonusCrystals} ${LC}.`;
+          view.challengeHint.textContent = `${activeCount} ACTIVE${bonusCrystals ? ` · +${bonusCrystals}% CRYSTALS` : ''}`;
         }
-        if (activeInfoTab === 'meta' && view.rhInfoContent) view.rhInfoContent.innerHTML = renderMetaProgressionInfo();
+        const challengeLoopCount = document.getElementById('challengeLoopCount');
+        if (challengeLoopCount) challengeLoopCount.textContent = loopCrystals;
+        drawLoopCrystalIcons(document.getElementById('challengePanel') || document);
+        if (activeInfoTab === 'meta' && view.rhInfoContent) {
+          view.rhInfoContent.innerHTML = renderMetaProgressionInfo();
+          drawLoopCrystalIcons(view.rhInfoContent);
+        }
       },
       updateLegacySelection(owned, loopCrystals) {
         view.legacyButtons.forEach(button => {
@@ -2917,9 +2957,15 @@ export function createUIController(view) {
         });
         if (view.legacyHint) {
           const ownedCount = Neo.LEGACY_ORDER.filter(k => owned.has(k)).length;
-          view.legacyHint.innerHTML = `${LC} ${loopCrystals} — Unlocked: ${ownedCount} / ${Neo.LEGACY_ORDER.length}. Upgrades are permanent and apply to all future runs.`;
+          view.legacyHint.textContent = `${ownedCount} / ${Neo.LEGACY_ORDER.length} UNLOCKED`;
         }
-        if (activeInfoTab === 'meta' && view.rhInfoContent) view.rhInfoContent.innerHTML = renderMetaProgressionInfo();
+        const legacyLoopCount = document.getElementById('legacyLoopCount');
+        if (legacyLoopCount) legacyLoopCount.textContent = loopCrystals;
+        drawLoopCrystalIcons(document.getElementById('legacyPanel') || document);
+        if (activeInfoTab === 'meta' && view.rhInfoContent) {
+          view.rhInfoContent.innerHTML = renderMetaProgressionInfo();
+          drawLoopCrystalIcons(view.rhInfoContent);
+        }
       },
       setItemStatus(items) {
         Neo.ITEM_KEYS.forEach(key => {
