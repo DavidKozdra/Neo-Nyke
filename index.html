@@ -1189,9 +1189,9 @@
   <!-- Hero curtain-call parade drifting across -->
   <canvas id="creditsParade" class="credits-page__parade" aria-hidden="true"></canvas>
 
-  <button id="creditsClose" class="back-btn credits-page__back" type="button">
-    <span class="credits-back__arrow" aria-hidden="true">&#8592;</span>
-    <span class="credits-back__label">BACK</span>
+  <button id="creditsClose" class="back-btn credits-page__back" type="button" aria-label="Back to menu">
+    <span class="back-btn__arrow credits-back__arrow" aria-hidden="true">&#8592;</span>
+    <span class="credits-back__label">BACK TO MENU</span>
   </button>
 
   <div class="credits">
@@ -1503,7 +1503,10 @@
     <div id="continueRow" class="hidden"></div>
   </div>
 
-      <button id="charBackBtn" class="back-btn">&#8592; BACK</button>
+      <button id="charBackBtn" class="back-btn" type="button" aria-label="Back to menu">
+        <span class="back-btn__arrow" aria-hidden="true">&#8592;</span>
+        <span id="charBackLabel" class="back-btn__label">BACK TO MENU</span>
+      </button>
 </div>
 
 <section id="customCharacterPanel" class="sandbox-panel hidden custom-character-panel" aria-hidden="true">

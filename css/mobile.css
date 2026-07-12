@@ -737,17 +737,16 @@
 
   .altmodes-head {
     gap: 10px;
-    padding: 12px 12px 9px;
+    min-height: 48px;
+    padding: 9px 52px 8px 12px;
     flex-shrink: 0;
   }
 
   .altmodes-title {
-    min-width: 0;
-    font-size: calc(11px * var(--font-scale, 1));
+    padding: 0 52px;
+    font-size: calc(12px * var(--font-scale, 1));
     letter-spacing: .1em;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    line-height: 1.15;
   }
 
   .altmodes-tabs {
@@ -1173,11 +1172,13 @@
   }
 
   .altmodes-head {
-    padding: 10px 10px 8px;
+    min-height: 44px;
+    padding: 8px 44px 7px 10px;
   }
 
   .altmodes-title {
-    font-size: calc(10px * var(--font-scale, 1));
+    padding: 0 44px;
+    font-size: calc(11px * var(--font-scale, 1));
     letter-spacing: .08em;
   }
 
@@ -1458,7 +1459,13 @@
   }
 
   .altmodes-head {
-    padding: 8px;
+    min-height: 40px;
+    padding: 7px 40px 6px 8px;
+  }
+
+  .altmodes-title {
+    padding: 0 40px;
+    font-size: calc(10px * var(--font-scale, 1));
   }
 
   .altmodes-body {
@@ -2634,9 +2641,10 @@
 
   #charSelect #charBackBtn {
     position: static;
-    padding: 7px 9px;
+    min-height: 48px;
+    padding: 9px 16px 9px 12px;
     border-radius: 7px;
-    font-size: calc(10px * var(--font-scale, 1));
+    font-size: calc(12px * var(--font-scale, 1));
     white-space: nowrap;
   }
 
@@ -3394,6 +3402,10 @@
     transform: none;
   }
 
+  #charSelect #charBackBtn .back-btn__arrow {
+    font-size: 1.3em;
+  }
+
   #charSelect #charBackBtn:hover {
     transform: translateY(-1px);
   }
@@ -3573,6 +3585,17 @@
 }
 
 @media (max-width: 600px) {
+  .credits-page__back {
+    min-height: 48px;
+    gap: 10px;
+    padding: 10px 16px 10px 12px;
+    font-size: calc(13px * var(--font-scale, 1));
+  }
+
+  .credits-page__back .credits-back__arrow {
+    font-size: 1.25em;
+  }
+
   .rh-panel {
     left: 6px;
     right: 6px;

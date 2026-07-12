@@ -2446,9 +2446,16 @@ export function resumeGame() {
     const titleEl = document.getElementById('charSelectTitle');
     const subtitleEl = document.getElementById('charSelectSubtitle');
     const goBtn = document.getElementById('go');
+    const backBtn = document.getElementById('charBackBtn');
+    const backLabelEl = document.getElementById('charBackLabel');
     const phases = ['p1','p2','p3','p4'].slice(0, Neo.mpPlayerCount);
     const phaseIdx = phases.indexOf(Neo.charSelectPhase);
     const isLastPhase = phaseIdx === phases.length - 1;
+    const backTarget = phaseIdx > 0 ? PHASE_LABELS[phases[phaseIdx - 1]] : '';
+    if (backLabelEl) backLabelEl.textContent = phaseIdx > 0 ? `BACK TO ${backTarget}` : 'BACK TO MENU';
+    if (backBtn) backBtn.setAttribute('aria-label', phaseIdx > 0
+      ? `Back to ${backTarget.toLowerCase()} character selection`
+      : 'Back to menu');
     if (Neo.charSelectPhase && PHASE_LABELS[Neo.charSelectPhase]) {
       const label = PHASE_LABELS[Neo.charSelectPhase];
       if (phaseTag) { phaseTag.textContent = label; phaseTag.className = `charselect-phase-tag ${PHASE_COLORS[Neo.charSelectPhase]}`; phaseTag.classList.remove('hidden'); }
