@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'neonyke-v39';
+const CACHE_VERSION = 'neonyke-v40';
 const CACHE_META = 'neonyke-cache-meta';
 const CACHE_META_KEY = '/__neonyke_cache_meta__';
 const CACHE_REFRESH_INTERVAL_MS = 5 * 60 * 60 * 1000;
@@ -14,6 +14,7 @@ const PRECACHE = [
   '/css/touch-controls.css',
   '/css/panel-borders.css',
   '/css/tutorial.css',
+  '/css/character-select.css',
   '/assets/fonts/VT323-Regular.woff2',
   '/assets/fonts/VT323-LatinExt.woff2',
   '/assets/fonts/PressStart2P-Latin.woff2',

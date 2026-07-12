@@ -1,0 +1,903 @@
+/* Pick Hero screen ----------------------------------------------------------
+   Canonical character-select rules. The decision flow is deliberately linear:
+   1) choose from a uniform roster grid, 2) review the selected loadout,
+   3) set the run options and confirm. */
+
+#charSelect.overlay {
+  align-items: flex-start;
+  justify-content: center;
+  overflow: auto;
+}
+
+#charSelect #charBackBtn {
+  z-index: 20;
+}
+
+#charSelect .charselect-layout {
+  position: relative;
+  inset: auto;
+  width: min(1340px, calc(100vw - 56px));
+  max-width: 1340px;
+  min-height: min(780px, calc(100dvh - 72px));
+  margin: 48px auto 24px;
+  padding: 20px;
+  box-sizing: border-box;
+  transform: none;
+}
+
+#charSelect .charselect-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  margin: 0 0 14px;
+}
+
+#charSelect .charselect-titlewrap {
+  align-items: flex-start;
+  gap: 8px;
+  text-align: left;
+}
+
+#charSelect .charselect-subtitle {
+  display: block;
+  max-width: 720px;
+  margin: 0;
+  color: var(--menu-text-soft);
+  font-size: calc(16px * var(--font-scale, 1));
+  line-height: 1.45;
+  letter-spacing: .025em;
+}
+
+#charSelect .charselect-main {
+  display: grid;
+  grid-template-columns: minmax(380px, .82fr) minmax(440px, 1.18fr) minmax(286px, .66fr);
+  gap: 14px;
+  align-items: stretch;
+}
+
+#charSelect .charselect-roster,
+#charSelect .hero-detail-panel,
+#charSelect .charselect-sidebar {
+  min-width: 0;
+  min-height: 650px;
+  padding: 14px;
+  box-sizing: border-box;
+  border: 1px solid var(--menu-border);
+  border-radius: 10px;
+  background:
+    linear-gradient(180deg, rgba(18, 24, 35, .96), rgba(8, 12, 19, .97));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .035), 0 16px 36px rgba(0, 0, 0, .22);
+}
+
+/* Roster grid -------------------------------------------------------------- */
+
+#charSelect .charselect-roster {
+  grid-column: 1;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+#charSelect .char-roster-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 25px;
+}
+
+#charSelect .char-roster-kicker,
+#charSelect .char-roster-note {
+  text-transform: uppercase;
+}
+
+#charSelect .char-roster-kicker,
+#charSelect .charselect-setup-kicker,
+#charSelect .hero-detail-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#charSelect .charselect-step-number {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  border: 1px solid rgba(176, 218, 255, .58);
+  border-radius: 50%;
+  background: rgba(91, 171, 255, .15);
+  color: #eaf6ff;
+  font-family: var(--font-pixel, inherit);
+  font-size: calc(11px * var(--font-scale, 1));
+  font-weight: 900;
+  line-height: 1;
+}
+
+#charSelect .char-roster-kicker {
+  color: var(--menu-accent);
+  font-size: calc(15px * var(--font-scale, 1));
+  font-weight: 900;
+  letter-spacing: .12em;
+}
+
+#charSelect .char-roster-note {
+  color: var(--menu-text-soft);
+  font-size: calc(11px * var(--font-scale, 1));
+  letter-spacing: .08em;
+}
+
+#charSelect .char-carousel-wrap {
+  display: block;
+  min-height: 0;
+}
+
+#charSelect .carousel-arrow {
+  display: none;
+}
+
+#charSelect .char-carousel-viewport {
+  max-height: 590px;
+  padding: 2px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  mask-image: none;
+  -webkit-mask-image: none;
+}
+
+#charSelect .char-carousel-track {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  min-width: 0;
+  transform: none !important;
+}
+
+#charSelect .char-card,
+#charSelect #choose .char-card.sel {
+  min-width: 0;
+  min-height: 110px;
+  width: 100%;
+  padding: 8px;
+  display: grid;
+  grid-template-columns: 66px minmax(0, 1fr);
+  grid-template-rows: auto 1fr;
+  align-items: center;
+  gap: 7px 9px;
+  border-width: 1px;
+  border-radius: 8px;
+  transform: none;
+  opacity: .88;
+  overflow: hidden;
+  scroll-snap-align: none;
+}
+
+#charSelect .char-card:hover:not(:disabled) {
+  transform: translateY(-2px);
+}
+
+#charSelect .char-card.sel:not(.locked) {
+  opacity: 1;
+  border-color: #b9dcff !important;
+  outline: 3px solid rgba(143, 201, 255, .95);
+  outline-offset: -3px;
+  box-shadow: 0 0 0 2px rgba(8, 13, 21, .9), 0 0 24px rgba(91, 171, 255, .35);
+}
+
+#charSelect .char-card:focus-visible {
+  outline: 3px solid #ffffff;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 5px rgba(80, 169, 255, .55);
+}
+
+#charSelect .char-card.sel:not(.locked)::after {
+  content: 'SELECTED';
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  z-index: 3;
+  padding: 3px 5px;
+  border: 1px solid rgba(198, 227, 255, .72);
+  border-radius: 4px;
+  background: rgba(24, 81, 130, .94);
+  color: #fff;
+  font-size: calc(8px * var(--font-scale, 1));
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: .08em;
+}
+
+#charSelect .char-card-art-wrap,
+#charSelect .char-card.sel .char-card-art-wrap {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  min-height: 82px;
+  height: 100%;
+  border-radius: 6px;
+}
+
+#charSelect .char-card-art,
+#charSelect .char-card.sel .char-card-art {
+  width: 56px;
+  height: 56px;
+}
+
+#charSelect .char-card-header {
+  grid-column: 2;
+  grid-row: 1;
+  align-items: flex-start;
+  text-align: left;
+}
+
+#charSelect .char-card-name,
+#charSelect .char-card.sel .char-card-name {
+  min-height: 0;
+  justify-content: flex-start;
+  font-size: calc(13px * var(--font-scale, 1));
+  line-height: 1.18;
+  letter-spacing: .035em;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+#charSelect .char-card-tag {
+  max-width: 100%;
+  padding: 2px 5px 2px 3px;
+  gap: 3px;
+  font-size: calc(8px * var(--font-scale, 1));
+  letter-spacing: .04em;
+}
+
+#charSelect .char-card-tag-icon {
+  width: 13px !important;
+  height: 13px !important;
+  flex-basis: 13px;
+}
+
+#charSelect .char-card-hint {
+  grid-column: 2;
+  grid-row: 2;
+  align-self: start;
+  display: block;
+  min-height: 0;
+  margin: 0;
+  font-size: calc(12px * var(--font-scale, 1));
+  line-height: 1.3;
+  text-align: left;
+  color: #b8c5d7;
+}
+
+#charSelect .char-card.locked {
+  opacity: .62;
+  filter: grayscale(.72);
+}
+
+#charSelect .char-card.locked::after {
+  top: 6px;
+  right: 6px;
+  font-size: calc(8px * var(--font-scale, 1));
+}
+
+/* Selected hero dossier ---------------------------------------------------- */
+
+#charSelect .hero-detail-panel {
+  grid-column: 2;
+  grid-row: 1;
+  display: grid;
+  grid-template-columns: 126px minmax(0, 1fr);
+  grid-auto-rows: min-content;
+  align-content: start;
+  gap: 10px 14px;
+}
+
+#charSelect .hero-detail-kicker {
+  grid-column: 1 / -1;
+  color: var(--menu-accent);
+  font-size: calc(15px * var(--font-scale, 1));
+  font-weight: 900;
+  letter-spacing: .12em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+#charSelect .hero-detail-portrait {
+  grid-column: 1;
+  grid-row: 2 / span 2;
+  min-height: 128px;
+  border-color: rgba(143, 201, 255, .3);
+  background:
+    radial-gradient(circle at 50% 35%, rgba(122, 181, 235, .15), transparent 48%),
+    linear-gradient(180deg, #172131, #090d15);
+}
+
+#charSelect .hero-detail-portrait canvas {
+  width: 110px;
+  height: 110px;
+}
+
+#charSelect .hero-detail-head {
+  grid-column: 2;
+  grid-row: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 7px;
+  min-height: 54px;
+}
+
+#charSelect .hero-detail-name {
+  font-size: calc(26px * var(--font-scale, 1));
+  line-height: 1.1;
+}
+
+#charSelect .hero-detail-archetype {
+  display: inline-flex;
+  padding: 4px 7px;
+  border: 1px solid rgba(143, 201, 255, .35);
+  border-radius: 4px;
+  background: rgba(78, 145, 207, .12);
+  color: #add7ff;
+  font-size: calc(11px * var(--font-scale, 1));
+  font-weight: 900;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+#charSelect .hero-detail-lore {
+  grid-column: 2;
+  grid-row: 3;
+  align-self: start;
+  margin: 0;
+  font-size: calc(15px * var(--font-scale, 1));
+  line-height: 1.5;
+  color: #d5deea;
+}
+
+#charSelect .hero-detail-stats,
+#charSelect .hero-detail-skills,
+#charSelect .hero-detail-skill-readout,
+#charSelect .hero-detail-inventory {
+  grid-column: 1 / -1;
+}
+
+#charSelect .hero-detail-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 3px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, .08);
+}
+
+#charSelect .hero-detail-skills {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 4px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, .08);
+}
+
+#charSelect .hero-detail-section-label {
+  display: block;
+  grid-column: 1 / -1;
+  margin: 0 0 2px;
+  color: var(--menu-accent);
+  font-size: calc(11px * var(--font-scale, 1));
+  letter-spacing: .14em;
+}
+
+#charSelect .char-stat-row {
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 5px;
+}
+
+#charSelect .stat-label {
+  font-size: calc(12px * var(--font-scale, 1));
+}
+
+#charSelect .stat-bar {
+  height: 7px;
+  border: 1px solid rgba(255, 255, 255, .08);
+}
+
+#charSelect .hero-detail-skill-pip {
+  min-height: 50px;
+  padding: 8px 10px;
+  border-color: rgba(255, 255, 255, .12);
+  background: rgba(255, 255, 255, .04);
+  font-size: calc(12px * var(--font-scale, 1));
+}
+
+#charSelect .hero-detail-skill-pip:focus-visible,
+#charSelect .hero-detail-kit-option:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+#charSelect .hero-detail-skill-readout {
+  min-height: 48px;
+  margin: 0;
+  padding: 9px 11px;
+  box-sizing: border-box;
+  background: rgba(81, 157, 226, .09);
+  border-color: rgba(132, 195, 255, .28);
+}
+
+#charSelect .hero-detail-skill-readout-name {
+  margin-bottom: 3px;
+  color: #e8f4ff;
+  font-size: calc(12px * var(--font-scale, 1));
+}
+
+#charSelect .hero-detail-skill-readout-desc {
+  font-size: calc(12px * var(--font-scale, 1));
+  line-height: 1.4;
+}
+
+#charSelect .hero-detail-inventory {
+  margin-top: 3px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, .08);
+}
+
+#charSelect .hero-detail-inventory-label {
+  width: 100%;
+  margin: 0 0 2px;
+  color: var(--menu-accent);
+}
+
+/* Run setup ---------------------------------------------------------------- */
+
+#charSelect .charselect-sidebar {
+  grid-column: 3;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 100%;
+}
+
+#charSelect .charselect-setup-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, .09);
+}
+
+#charSelect .charselect-setup-kicker {
+  color: var(--menu-accent);
+  font-size: calc(12px * var(--font-scale, 1));
+  font-weight: 900;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+
+#charSelect .charselect-setup-head strong {
+  color: var(--menu-text);
+  font-size: calc(17px * var(--font-scale, 1));
+  line-height: 1.25;
+  letter-spacing: .05em;
+}
+
+#charSelect .charselect-control-label {
+  margin-top: 2px;
+  color: #dce9f8;
+  font-size: calc(13px * var(--font-scale, 1));
+  letter-spacing: .08em;
+}
+
+#charSelect .difficulty-select {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 7px;
+}
+
+#charSelect .difficulty-btn {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  justify-content: flex-start;
+  padding: 9px 38px 9px 13px;
+  border-radius: 7px;
+  font-size: calc(14px * var(--font-scale, 1));
+}
+
+#charSelect .difficulty-btn.sel::after {
+  content: '✓';
+  position: absolute;
+  right: 14px;
+  font-family: system-ui, sans-serif;
+  font-size: 18px;
+  font-weight: 900;
+}
+
+#charSelect .difficulty-btn:focus-visible,
+#charSelect .challenge-toggle:focus-visible,
+#charSelect #go:focus-visible,
+#charSelect #seed:focus-visible {
+  outline: 3px solid #fff;
+  outline-offset: 2px;
+}
+
+#charSelect .difficulty-hint {
+  min-height: 58px;
+  margin: 0;
+  padding: 9px 10px;
+  box-sizing: border-box;
+  border-left: 3px solid rgba(143, 201, 255, .75);
+  background: rgba(91, 155, 216, .08);
+  color: #c5d4e6;
+  font-size: calc(12px * var(--font-scale, 1));
+  line-height: 1.45;
+}
+
+#charSelect .seedrow--panel {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+#charSelect #seedLabel {
+  color: var(--menu-accent);
+  font-size: calc(11px * var(--font-scale, 1));
+  font-weight: 900;
+  letter-spacing: .12em;
+}
+
+#charSelect #seed {
+  width: 100%;
+  min-height: 42px;
+  box-sizing: border-box;
+  text-align: left;
+  padding: 9px 11px;
+  border-radius: 6px;
+}
+
+#charSelect #seedHelp {
+  color: var(--menu-text-soft);
+  font-size: calc(10px * var(--font-scale, 1));
+  line-height: 1.35;
+}
+
+#charSelect .charselect-extra-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+}
+
+#charSelect .challenge-toggle {
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  padding: 8px;
+  border-radius: 6px;
+  font-size: calc(10px * var(--font-scale, 1));
+  line-height: 1.25;
+}
+
+#charSelect .char-selection-summary {
+  margin-top: auto;
+  padding: 11px 10px;
+  border: 1px solid rgba(255, 255, 255, .11);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, .035);
+  color: #dbe9f8;
+  font-size: calc(13px * var(--font-scale, 1));
+  line-height: 1.55;
+  text-align: left;
+}
+
+#charSelect #go.charselect-start-btn {
+  width: 100%;
+  min-width: 0;
+  min-height: 64px;
+  padding: 14px 16px;
+  border: 2px solid #e7f3ff;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #f5f9ff, #b9d7f4);
+  color: #101925;
+  font-size: calc(17px * var(--font-scale, 1));
+  font-weight: 950;
+  letter-spacing: .08em;
+  box-shadow: 0 8px 24px rgba(72, 147, 216, .25);
+}
+
+#charSelect #go.charselect-start-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 11px 30px rgba(72, 147, 216, .36);
+}
+
+#charSelect #go.charselect-start-btn:disabled {
+  opacity: .4;
+  filter: grayscale(.7);
+}
+
+/* Slightly narrower desktops keep the setup beside the choice, while the
+   roster moves to three columns so labels remain comfortably readable. */
+@media (max-width: 1180px) {
+  #charSelect .charselect-layout {
+    width: min(1040px, calc(100vw - 32px));
+  }
+
+  #charSelect .charselect-main {
+    grid-template-columns: minmax(320px, .78fr) minmax(420px, 1.22fr);
+  }
+
+  #charSelect .char-carousel-track {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  #charSelect .char-card,
+  #charSelect #choose .char-card.sel {
+    grid-template-columns: 58px minmax(0, 1fr);
+  }
+
+  #charSelect .char-card-art,
+  #charSelect .char-card.sel .char-card-art {
+    width: 54px;
+    height: 54px;
+  }
+
+  #charSelect .charselect-sidebar {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: 180px minmax(0, 1fr) 240px;
+    grid-template-rows: auto auto auto;
+    align-items: start;
+  }
+
+  #charSelect .charselect-setup-head { grid-column: 1; grid-row: 1; }
+  #charSelect .charselect-control-label { grid-column: 1; grid-row: 2; }
+  #charSelect .difficulty-select {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  #charSelect .difficulty-hint { grid-column: 1 / span 2; grid-row: 3; }
+  #charSelect .seedrow--panel { grid-column: 3; grid-row: 1; }
+  #charSelect .charselect-extra-options { grid-column: 3; grid-row: 2; }
+  #charSelect .char-selection-summary { grid-column: 3; grid-row: 3; margin-top: 0; }
+  #charSelect #go.charselect-start-btn { grid-column: 2; grid-row: 3; }
+}
+
+/* Tablet: preserve the same reading order and let setup become the final,
+   full-width step. */
+@media (max-width: 940px) {
+  #charSelect .charselect-layout {
+    width: min(760px, calc(100vw - 24px));
+    margin-top: 64px;
+  }
+
+  #charSelect .charselect-main {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto;
+  }
+
+  #charSelect .charselect-roster,
+  #charSelect .hero-detail-panel,
+  #charSelect .charselect-sidebar {
+    grid-column: 1;
+    grid-row: auto;
+    min-height: 0;
+  }
+
+  #charSelect .charselect-sidebar {
+    min-height: 0;
+    display: flex;
+  }
+
+  #charSelect .char-carousel-track {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  #charSelect .char-selection-summary {
+    margin-top: 4px;
+  }
+}
+
+/* Phone: show the complete roster as a uniform two-column grid. The !important
+   declarations intentionally retire older mobile carousel rules in mobile.css. */
+@media (max-width: 700px) {
+  #charSelect.overlay {
+    align-items: flex-start;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  #charSelect .charselect-layout {
+    width: 100%;
+    max-width: none;
+    height: auto;
+    max-height: none;
+    min-height: 100dvh;
+    margin: 0;
+    padding: calc(72px + env(safe-area-inset-top, 0px)) 10px calc(18px + env(safe-area-inset-bottom, 0px));
+    overflow: visible;
+  }
+
+  #charSelect #charBackBtn {
+    position: fixed;
+    top: calc(10px + env(safe-area-inset-top, 0px));
+    left: 10px;
+    z-index: 20;
+    min-height: 48px;
+  }
+
+  #charSelect .charselect-header {
+    display: block;
+    flex: 0 0 auto;
+    min-height: 0;
+    margin-bottom: 12px;
+    padding-left: 0;
+  }
+
+  #charSelect .screen-title {
+    font-size: calc(30px * var(--font-scale, 1));
+  }
+
+  #charSelect .charselect-subtitle {
+    font-size: calc(14px * var(--font-scale, 1));
+  }
+
+  #charSelect .charselect-main {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  #charSelect .charselect-roster,
+  #charSelect .hero-detail-panel,
+  #charSelect .charselect-sidebar {
+    grid-column: 1;
+    grid-row: auto;
+    min-height: 0;
+    padding: 12px;
+  }
+
+  #charSelect .char-roster-note {
+    display: none;
+  }
+
+  #charSelect .char-carousel-wrap {
+    display: block !important;
+  }
+
+  #charSelect .char-carousel-viewport {
+    max-height: none;
+    padding: 2px;
+    overflow: visible !important;
+    mask-image: none;
+    -webkit-mask-image: none;
+  }
+
+  #charSelect .char-carousel-track {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 7px;
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  #charSelect .carousel-arrow {
+    display: none !important;
+  }
+
+  #charSelect .char-card,
+  #charSelect #choose .char-card.sel {
+    display: flex !important;
+    flex: none !important;
+    min-width: 0 !important;
+    height: 156px;
+    min-height: 156px;
+    padding: 8px 6px;
+    gap: 5px;
+  }
+
+  #charSelect .char-card-art-wrap,
+  #charSelect .char-card.sel .char-card-art-wrap {
+    min-height: 60px;
+    height: auto;
+  }
+
+  #charSelect .char-card-art,
+  #charSelect .char-card.sel .char-card-art {
+    width: 56px;
+    height: 56px;
+  }
+
+  #charSelect .char-card-header {
+    align-items: center;
+    text-align: center;
+  }
+
+  #charSelect .char-card-name,
+  #charSelect .char-card.sel .char-card-name {
+    justify-content: center;
+    font-size: calc(12px * var(--font-scale, 1));
+    text-align: center;
+  }
+
+  #charSelect .char-card-hint {
+    display: block;
+    min-height: 28px;
+    font-size: calc(11px * var(--font-scale, 1));
+    text-align: center;
+  }
+
+  #charSelect .hero-detail-panel {
+    grid-template-columns: 90px minmax(0, 1fr);
+  }
+
+  #charSelect .hero-detail-portrait {
+    display: flex;
+    min-height: 92px;
+  }
+
+  #charSelect .hero-detail-portrait canvas {
+    width: 80px;
+    height: 80px;
+  }
+
+  #charSelect .hero-detail-name {
+    font-size: calc(21px * var(--font-scale, 1));
+  }
+
+  #charSelect .hero-detail-lore {
+    display: block;
+    font-size: calc(14px * var(--font-scale, 1));
+  }
+
+  #charSelect .hero-detail-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  #charSelect .hero-detail-skills {
+    grid-template-columns: 1fr;
+  }
+
+  #charSelect .difficulty-select {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    overflow: visible;
+  }
+
+  #charSelect .difficulty-btn:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+
+  #charSelect .char-selection-summary {
+    text-align: center;
+  }
+}
+
+@media (max-width: 420px) {
+  #charSelect .hero-detail-panel {
+    grid-template-columns: 74px minmax(0, 1fr);
+  }
+
+  #charSelect .hero-detail-portrait {
+    min-height: 76px;
+  }
+
+  #charSelect .hero-detail-portrait canvas {
+    width: 66px;
+    height: 66px;
+  }
+
+  #charSelect .hero-detail-kit-options,
+  #charSelect .charselect-extra-options {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+}

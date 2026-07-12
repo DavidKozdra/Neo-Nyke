@@ -152,6 +152,7 @@
   <link rel="stylesheet" href="css/touch-controls.css">
   <link rel="stylesheet" href="css/panel-borders.css">
   <link rel="stylesheet" href="css/tutorial.css">
+  <link rel="stylesheet" href="css/character-select.css">
 </head>
 <body>
 
@@ -1359,20 +1360,23 @@
       <div class="charselect-titlewrap">
         <div id="charSelectPhaseTag" class="charselect-phase-tag hidden"></div>
         <h2 class="screen-title" id="charSelectTitle">PICK HERO</h2>
+        <p class="charselect-subtitle" id="charSelectSubtitle">Choose a hero. Their stats and starting kit update instantly.</p>
       </div>
     </div>
 
     <div class="charselect-main">
-      <div class="charselect-roster">
+      <section class="charselect-roster" aria-labelledby="charRosterHeading">
         <div class="char-roster-head">
-          <span class="char-roster-kicker">Roster</span>
+          <span class="char-roster-kicker" id="charRosterHeading"><span class="charselect-step-number" aria-hidden="true">1</span> Choose your hero</span>
+          <span class="char-roster-note">Select a card to preview</span>
         </div>
 
-        <!-- Carousel -->
+        <!-- The arrow buttons remain for compatibility but the roster is
+             presented as a complete grid whenever the viewport allows it. -->
         <div class="char-carousel-wrap">
           <button class="carousel-arrow carousel-arrow--prev" id="carouselPrev" aria-label="Previous hero">&#8592;</button>
           <div class="char-carousel-viewport">
-            <div class="char-carousel-track" id="choose">
+            <div class="char-carousel-track" id="choose" role="group" aria-label="Available heroes">
 
               <!-- Princess -->
               <button class="char-card" data-char="princess" data-rarity="princess">
@@ -1475,13 +1479,17 @@
           </div>
           <button class="carousel-arrow carousel-arrow--next" id="carouselNext" aria-label="Next hero">&#8594;</button>
         </div>
+      </section>
 
-        <!-- Hero detail panel (populated by JS) -->
-        <div id="heroDetail" class="hero-detail-panel"></div>
+      <!-- Selected hero dossier (populated by JS). -->
+      <section id="heroDetail" class="hero-detail-panel" aria-live="polite" aria-label="Selected hero details"></section>
 
-      </div>
-      <aside class="charselect-sidebar">
-        <div class="charselect-control-label">DIFFICULTY</div>
+      <aside class="charselect-sidebar" aria-labelledby="runSetupHeading">
+        <div class="charselect-setup-head">
+          <span class="charselect-setup-kicker"><span class="charselect-step-number" aria-hidden="true">3</span> Set up your run</span>
+          <strong id="runSetupHeading">READY YOUR DESCENT</strong>
+        </div>
+        <div class="charselect-control-label">Choose difficulty</div>
         <div id="difficultySelect" class="difficulty-select" role="group" aria-label="Difficulty">
           <button class="difficulty-btn" data-difficulty="easy" type="button"><canvas class="difficulty-btn-icon" width="20" height="20" data-difficulty-icon="easy"></canvas>Easy</button>
           <button class="difficulty-btn sel" data-difficulty="medium" type="button"><canvas class="difficulty-btn-icon" width="20" height="20" data-difficulty-icon="medium"></canvas>Medium</button>
@@ -1489,14 +1497,18 @@
           <button class="difficulty-btn" data-difficulty="impossible" type="button"><canvas class="difficulty-btn-icon" width="20" height="20" data-difficulty-icon="impossible"></canvas>Impossible</button>
           <button class="difficulty-btn" data-difficulty="god" type="button"><canvas class="difficulty-btn-icon" width="20" height="20" data-difficulty-icon="god"></canvas>God</button>
         </div>
-        <small id="difficultyHint" class="difficulty-hint"></small>
+        <p id="difficultyHint" class="difficulty-hint" aria-live="polite">Balanced enemy pressure and generous relic drops.</p>
         <div class="seedrow seedrow--panel">
           <label id="seedLabel">SEED</label>
-          <input id="seed" placeholder="random">
-          <button id="go">ENTER DUNGEON</button>
+          <input id="seed" placeholder="Random seed" aria-describedby="seedHelp">
+          <small id="seedHelp">Leave blank for a new random dungeon.</small>
         </div>
-        <button id="challengeToggle" class="challenge-toggle" type="button" aria-expanded="false">CHALLENGE SHOP</button>
-        <button id="legacyToggle" class="challenge-toggle legacy-toggle" type="button" aria-expanded="false">LEGACY UPGRADES</button>
+        <div class="charselect-extra-options">
+          <button id="challengeToggle" class="challenge-toggle" type="button" aria-expanded="false">CHALLENGE SHOP</button>
+          <button id="legacyToggle" class="challenge-toggle legacy-toggle" type="button" aria-expanded="false">LEGACY UPGRADES</button>
+        </div>
+        <div id="charSelectionSummary" class="char-selection-summary" aria-live="polite">Hero: Thorn Knight <span aria-hidden="true">•</span> Difficulty: Medium</div>
+        <button id="go" class="charselect-start-btn">ENTER DUNGEON</button>
       </aside>
     </div>
     <!-- legacy hidden row kept for JS compatibility -->

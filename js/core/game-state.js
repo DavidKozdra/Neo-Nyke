@@ -2478,13 +2478,20 @@ export function resumeGame() {
     const difficultyHint = document.getElementById('difficultyHint');
     const seedLabel = document.getElementById('seedLabel');
     const seedInput = document.getElementById('seed');
+    const seedRow = seedInput?.closest('.seedrow--panel');
     const challengeToggleEl = document.getElementById('challengeToggle');
     const legacyToggleEl = document.getElementById('legacyToggle');
     if (difficultySelect) difficultySelect.style.pointerEvents = isCompetitive ? 'none' : '';
     if (difficultySelect) difficultySelect.style.opacity = isCompetitive ? '0.35' : '';
-    if (difficultyHint) difficultyHint.textContent = isCompetitive ? 'Locked to Hard in Competitive.' : '';
-    if (seedLabel) seedLabel.style.display = isCompetitive ? 'none' : '';
-    if (seedInput) seedInput.style.display = isCompetitive ? 'none' : '';
+    if (difficultyHint) {
+      const selectedDef = getDifficultyDef(isCompetitive ? 'hard' : Neo.selectedDifficulty);
+      difficultyHint.textContent = isCompetitive
+        ? `Competitive is locked to Hard. ${selectedDef.description}`
+        : selectedDef.description;
+    }
+    if (seedRow) seedRow.style.display = isCompetitive ? 'none' : '';
+    if (!seedRow && seedLabel) seedLabel.style.display = isCompetitive ? 'none' : '';
+    if (!seedRow && seedInput) seedInput.style.display = isCompetitive ? 'none' : '';
     if (challengeToggleEl) challengeToggleEl.style.display = isCompetitive ? 'none' : '';
     if (legacyToggleEl) legacyToggleEl.style.display = isCompetitive ? 'none' : '';
 

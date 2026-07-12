@@ -1087,7 +1087,7 @@ export const CHARACTER_DEFS = {
 
 export const HERO_DISPLAY = {
   princess: {
-    lore: 'A girls girl,  High damage, high HP high confidence shes right about a fight she started.',
+    lore: 'A confident frontline all-rounder with high damage and high health. Forgiving for new players.',
     stats: [
       { label: 'HP',    pct: 90, color: '#f47ebd' },
       { label: 'DMG',   pct: 80, color: '#ff9ccf' },
@@ -1096,7 +1096,7 @@ export const HERO_DISPLAY = {
     ],
   },
   thorn_knight: {
-    lore: 'Sheding his old ways and ready to shed enemy skin. Bleed stacks get stronger.',
+    lore: 'A close-range bruiser who stacks Bleed to make every follow-up hit more dangerous.',
     stats: [
       { label: 'HP',    pct: 66, color: '#c06060' },
       { label: 'DMG',   pct: 66, color: '#c08040' },
@@ -1105,7 +1105,7 @@ export const HERO_DISPLAY = {
     ],
   },
   metao: {
-    lore: 'Magi Rabi and full on magic super spy bigger hits.',
+    lore: 'A long-range caster with lower direct damage and powerful area attacks.',
     stats: [
       { label: 'HP',    pct: 66, color: '#c06060' },
       { label: 'DMG',   pct: 48, color: '#c08040' },
@@ -1114,7 +1114,7 @@ export const HERO_DISPLAY = {
     ],
   },
   gelleh: {
-    lore: 'Balanced divine hero. Unlock by defeating GOD.',
+    lore: 'A balanced divine fighter who mixes lightning, healing, and mobility. Unlock by defeating GOD.',
     stats: [
       { label: 'HP',    pct: 66, color: '#c06060' },
       { label: 'DMG',   pct: 66, color: '#c08040' },
@@ -1123,7 +1123,7 @@ export const HERO_DISPLAY = {
     ],
   },
   mooggy: {
-    lore: 'Fast loud monster willing to fight for you as long as you keep supply of churu high. Unlock by beating Mooggy.',
+    lore: 'A fast, aggressive assassin built around mobility, pounces, and ranged pressure. Unlock by defeating Mooggy three times.',
     stats: [
       { label: 'HP',    pct: 70, color: '#f4f4ef' },
       { label: 'DMG',   pct: 78, color: '#ff5c6f' },

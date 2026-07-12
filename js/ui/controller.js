@@ -77,6 +77,21 @@ export function createUIController(view) {
 
     const LC = `<span class="lc-icon">◆</span>`;
     const getCharacterOrder = () => ['princess', 'thorn_knight', 'metao', 'gelleh', 'mooggy', 'turtle_boy', 'sarge', ...(Neo.getCustomCharacterKeys?.() || [])];
+    const CHARACTER_ROLE_LABELS = Object.freeze({
+      princess: 'Power all-rounder',
+      thorn_knight: 'Bleed bruiser',
+      metao: 'Ranged caster',
+      gelleh: 'Divine hybrid',
+      mooggy: 'Mobile assassin',
+      turtle_boy: 'Tank · scaling',
+      sarge: 'Heavy brawler',
+      custom_character: 'Custom loadout',
+    });
+
+    function getCharacterRoleLabel(characterKey) {
+      if (Neo.isCustomCharacterKey?.(characterKey)) return CHARACTER_ROLE_LABELS.custom_character;
+      return CHARACTER_ROLE_LABELS[characterKey] || 'Dungeon hero';
+    }
 
     function getCharacterButton(characterKey) {
       return view.charButtons.find(button => button.dataset.char === characterKey) || null;
@@ -137,18 +152,8 @@ export function createUIController(view) {
     function scrollCharacterCardIntoView(characterKey, behavior = 'smooth') {
       const button = getCharacterButton(characterKey);
       if (!button) return;
-      const viewport = document.querySelector('.char-carousel-viewport');
       programmaticCarouselScrollUntil = Date.now() + 520;
-      if (!viewport) {
-        button.scrollIntoView({ behavior, block: 'nearest', inline: 'center' });
-        return;
-      }
-      const viewportRect = viewport.getBoundingClientRect();
-      const buttonRect = button.getBoundingClientRect();
-      const left = viewport.scrollLeft
-        + (buttonRect.left - viewportRect.left)
-        - ((viewportRect.width - buttonRect.width) / 2);
-      viewport.scrollTo({ left: Math.max(0, left), behavior });
+      button.scrollIntoView({ behavior, block: 'nearest', inline: 'nearest' });
     }
 
     function updateCarouselArrowState(selected = selectedCarouselKey || Neo.chosenCharacter) {
@@ -1729,15 +1734,33 @@ export function createUIController(view) {
         carouselPrev?.addEventListener('click', () => carouselStep(-1));
         carouselNext?.addEventListener('click', () => carouselStep(1));
 
-        const viewport = document.querySelector('.char-carousel-viewport');
-        if (viewport) {
-          let scrollSettleTimer = 0;
-          viewport.addEventListener('scroll', () => {
-            updateCarouselArrowState();
-            window.clearTimeout(scrollSettleTimer);
-            scrollSettleTimer = window.setTimeout(() => selectNearestCarouselCard(handlers), 120);
-          }, { passive: true });
-        }
+        // Grid navigation mirrors familiar character-select screens: one arrow
+        // press moves one visible cell and immediately previews that hero.
+        rosterTrack?.addEventListener('keydown', event => {
+          if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
+          const current = event.target instanceof Element ? event.target.closest('.char-card[data-char]') : null;
+          if (!current) return;
+          const cards = refreshCharacterButtons();
+          const currentIndex = cards.indexOf(current);
+          if (currentIndex < 0) return;
+          const template = getComputedStyle(rosterTrack).gridTemplateColumns;
+          const columnCount = Math.max(1, String(template || '').split(' ').filter(Boolean).length);
+          const step = event.key === 'ArrowLeft' ? -1
+            : event.key === 'ArrowRight' ? 1
+              : event.key === 'ArrowUp' ? -columnCount
+                : event.key === 'ArrowDown' ? columnCount
+                  : 0;
+          let nextIndex = event.key === 'Home' ? 0 : event.key === 'End' ? cards.length - 1 : currentIndex + step;
+          while (nextIndex >= 0 && nextIndex < cards.length && !isCarouselButtonSelectable(cards[nextIndex])) {
+            nextIndex += event.key === 'Home' ? 1 : event.key === 'End' ? -1 : step;
+          }
+          const next = cards[nextIndex];
+          if (!isCarouselButtonSelectable(next)) return;
+          event.preventDefault();
+          next.focus({ preventScroll: true });
+          handlers.onCharacterSelect(next.dataset.char || '', next, { openCustomBuilder: false });
+          scrollCharacterCardIntoView(next.dataset.char || '');
+        });
 
         view.difficultyButtons.forEach(button => {
           button.addEventListener('click', () => {
@@ -2596,13 +2619,6 @@ export function createUIController(view) {
         renderCustomRosterCards();
         const previousCarouselKey = selectedCarouselKey;
         selectedCarouselKey = selected || previousCarouselKey;
-        const ROLE_LABELS = {
-          princess: 'Starter',
-          thorn_knight: 'Bleed melee',
-          metao: 'Range caster',
-          gelleh: 'Divine hybrid',
-          mooggy: 'Fast assassin',
-        };
         // The tutorial can only be replayed as Sarge once the rest of the
         // roster is unlocked. When a tutorial replay is pending and that prereq
         // isn't met, Sarge's card behaves as locked here (he stays playable in
@@ -2615,7 +2631,7 @@ export function createUIController(view) {
             return Neo.getCustomCharacterSettings?.(itemKey).active ? 'Edit custom' : 'Empty slot';
           }
           if (itemKey === 'sarge' && sargeTutorialBlocked) return 'Unlock the full roster first';
-          if (unlocked.has(itemKey)) return ROLE_LABELS[itemKey] || 'Ready';
+          if (unlocked.has(itemKey)) return getCharacterRoleLabel(itemKey);
           if (itemKey === 'gelleh') return 'Unlock: beat GOD';
           if (itemKey === 'mooggy') {
             const mooggyProgress = Math.max(0, Math.min(3, Number(Neo.metaProgress?.mooggyDefeats || 0)));
@@ -2640,7 +2656,11 @@ export function createUIController(view) {
           button.classList.toggle('locked', !isSelectable(itemKey));
           button.classList.toggle('sel', selected === itemKey);
           button.disabled = !isSelectable(itemKey);
-          if (hint) hint.textContent = unlockText(itemKey);
+          const statusText = unlockText(itemKey);
+          if (hint) hint.textContent = statusText;
+          button.setAttribute('aria-pressed', selected === itemKey ? 'true' : 'false');
+          const displayName = button.querySelector('.char-card-name')?.textContent?.trim() || Neo.CHARACTER_DEFS?.[itemKey]?.name || itemKey;
+          button.setAttribute('aria-label', `${displayName}. ${statusText}.${selected === itemKey ? ' Selected.' : ''}`);
           if (spriteCanvas) {
             Neo.drawSpriteToCanvas(spriteCanvas, Neo.getCharacterSpriteKey?.(itemKey) || itemKey, 76, {
               alpha: isSelectable(itemKey) ? 1 : 0.42,
@@ -2767,11 +2787,12 @@ export function createUIController(view) {
               : `Empty Plus slot. Click the card, save a build, then enter the dungeon.`)
             : disp.lore;
           detail.innerHTML =
+            `<div class="hero-detail-kicker"><span class="charselect-step-number" aria-hidden="true">2</span> Review your loadout</div>` +
             `<div class="hero-detail-portrait"><canvas id="heroDetailSprite" width="128" height="128" aria-hidden="true"></canvas></div>` +
-            `<div class="hero-detail-head"><span class="hero-detail-name">${Neo.escapeHtml(charDef.name || selected)}</span></div>` +
+            `<div class="hero-detail-head"><span class="hero-detail-name">${Neo.escapeHtml(charDef.name || selected)}</span><span class="hero-detail-archetype">${Neo.escapeHtml(getCharacterRoleLabel(selected))}</span></div>` +
             `<p class="hero-detail-lore">${Neo.escapeHtml(lore)}</p>` +
-            `<div class="hero-detail-stats"><div class="hero-detail-section-label">Stats</div>${statsHtml}</div>` +
-            `<div class="hero-detail-skills"><div class="hero-detail-section-label">Kit</div>${skillsHtml}</div>` +
+            `<div class="hero-detail-stats"><div class="hero-detail-section-label">Core stats</div>${statsHtml}</div>` +
+            `<div class="hero-detail-skills"><div class="hero-detail-section-label">Starting abilities</div>${skillsHtml}</div>` +
             `<div class="hero-detail-skill-readout" data-skill-readout aria-live="polite"><span class="hero-detail-skill-readout-name" data-skill-readout-name></span><span class="hero-detail-skill-readout-desc" data-skill-readout-desc>Hover a move to see what it does.</span></div>` +
             `<div class="hero-detail-inventory"><span class="hero-detail-inventory-label">Starting Inventory</span>${inventoryHtml}</div>`;
           Neo.drawSpriteToCanvas(document.getElementById('heroDetailSprite'), Neo.getCharacterSpriteKey?.(selected) || selected, 104, {
@@ -2823,6 +2844,16 @@ export function createUIController(view) {
               || pips[0];
             if (seed) showSkill(seed);
           }
+        }
+
+        const summary = document.getElementById('charSelectionSummary');
+        if (summary) {
+          const heroName = Neo.isCustomCharacterKey?.(selected)
+            ? (Neo.getCustomCharacterSettings?.(selected).name || 'Custom')
+            : (Neo.CHARACTER_DEFS?.[selected]?.name || selected || 'Choose a hero');
+          const difficultyName = Neo.getDifficultyDef?.(Neo.selectedDifficulty)?.name || Neo.titleCase?.(Neo.selectedDifficulty) || 'Medium';
+          const challengeCount = Array.isArray(Neo.selectedChallenges) ? Neo.selectedChallenges.length : 0;
+          summary.textContent = `Hero: ${heroName}  •  Difficulty: ${difficultyName}${challengeCount ? `  •  ${challengeCount} challenge${challengeCount === 1 ? '' : 's'}` : ''}`;
         }
       },
       updateDifficultySelection(unlocked, selected, loopCrystals) {
