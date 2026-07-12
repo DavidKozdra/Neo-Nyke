@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'neonyke-v40';
+const CACHE_VERSION = 'neonyke-v43';
 const CACHE_META = 'neonyke-cache-meta';
 const CACHE_META_KEY = '/__neonyke_cache_meta__';
 const CACHE_REFRESH_INTERVAL_MS = 5 * 60 * 60 * 1000;
@@ -33,6 +33,7 @@ const PRECACHE = [
   '/js/dataAdapter.js',
   '/js/touchControls.js',
   '/js/gamepadControls.js',
+  '/js/i18n.js',
   '/js/core/neo.js',
   '/js/core/game-core.js',
   '/js/core/math-utils.js',
@@ -70,6 +71,19 @@ const PRECACHE = [
   '/js/ui/settings-ui.js',
   '/js/ui/menu-background.js',
   '/js/ui/credits.js',
+  '/assets/i18n/en.json',
+  '/assets/i18n/es.json',
+  '/assets/i18n/fr.json',
+  '/assets/i18n/de.json',
+  '/assets/i18n/ja.json',
+  '/assets/i18n/zh.json',
+  '/assets/i18n/pt.json',
+  '/assets/i18n/hi.json',
+  '/assets/i18n/ar.json',
+  '/assets/i18n/ru.json',
+  '/assets/i18n/ko.json',
+  '/assets/i18n/id.json',
+  '/assets/i18n/tr.json',
 ];
 
 function makeCacheName(now = Date.now()) {

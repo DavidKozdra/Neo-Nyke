@@ -336,6 +336,7 @@
   let access   = { ...DEFAULT_ACCESS };
   let gameplay = { ...DEFAULT_GAMEPLAY };
   let hudElements = defaultHudElements();
+  let language = 'system';
 
   function load() {
     try {
@@ -350,6 +351,7 @@
       if (s.access)       access       = { ...DEFAULT_ACCESS,   ...s.access };
       if (s.gameplay)     gameplay     = { ...DEFAULT_GAMEPLAY, ...s.gameplay };
       if (s.hudElements)  hudElements  = normalizeHudElements(s.hudElements);
+      if (s.language)     language     = window.NeoI18n?.normalizeLanguage?.(s.language) || 'system';
       if (s.access?.bloodMultiplier !== undefined && s.gameplay?.bloodMultiplier === undefined) {
         gameplay.bloodMultiplier = s.access.bloodMultiplier;
       }
@@ -364,9 +366,15 @@
   function save() {
     localStorage.setItem(STORE_KEY, JSON.stringify({
       bindings, touchBindings, gamepadBindings, controlMode, touchControlsEnabled,
-      volume, access, gameplay, hudElements, activeTheme, savedThemes, customThemeVars,
+      volume, access, gameplay, hudElements, language, activeTheme, savedThemes, customThemeVars,
     }));
     window.dispatchEvent(new CustomEvent('neo:settings-changed'));
+  }
+
+  function applyLanguage() {
+    window.NeoI18n?.setLanguage?.(language).catch(error => {
+      console.warn('Could not apply language setting:', error);
+    });
   }
 
   function applyAccess() {
@@ -454,6 +462,7 @@
   applyAccess();
   applyHudElements();
   applyControlsSectionVisibility();
+  applyLanguage();
   // Apply the effective theme on boot (before any UI is queried). The active
   // character isn't known yet here, so this resolves to the explicit override
   // or the base look; syncCharacterUiTheme() re-runs it once a character loads.
@@ -487,6 +496,7 @@
     isPerformanceMode: () => gameplay.performanceMode !== false,
     showObjectivePanel: () => gameplay.objectivePanel !== false,
     shouldAutoAdvanceCutscenes: () => gameplay.cutsceneAutoAdvance === true,
+    getLanguage: () => language,
     setShowObjectivePanel: on => {
       gameplay.objectivePanel = !!on;
       const el = document.getElementById('gameplayObjectivePanel');
@@ -818,6 +828,28 @@
       if (key === 'sfx') refreshSoundLevelDefaults();
     });
   });
+
+  const languageSelect = document.getElementById('languageSelect');
+  function refreshLanguageOptions() {
+    if (!languageSelect || !window.NeoI18n) return;
+    languageSelect.innerHTML = '';
+    window.NeoI18n.supportedLanguages.forEach(lang => {
+      const option = document.createElement('option');
+      option.value = lang.code;
+      option.textContent = window.NeoI18n.t(lang.labelKey);
+      languageSelect.appendChild(option);
+    });
+    languageSelect.value = language;
+  }
+  if (languageSelect && window.NeoI18n) {
+    refreshLanguageOptions();
+    languageSelect.addEventListener('change', () => {
+      language = window.NeoI18n.normalizeLanguage(languageSelect.value);
+      save();
+      applyLanguage();
+    });
+    window.addEventListener('neo:i18n-ready', refreshLanguageOptions);
+  }
 
   buildSoundLevels();
 

@@ -74,7 +74,14 @@ Alternative if Python is installed as `python` instead of `python3`:
 ## Development
 
 Run `npm install` to install dependencies and configure the tracked Git hooks. The
-pre-commit hook runs `npm test` and blocks commits when the test suite fails.
+pre-commit hook runs `npm run i18n:check` and `npm test`, blocking commits when
+translation locale keys drift, non-English locale values still contain English
+fallback text, or the test suite fails. When adding new moves, items, weapons,
+achievements, or other extracted game content, run `npm run i18n:sync` first so
+the locale files receive the new keys, then translate the new values before
+committing. `npm run i18n:fill` can fill newly synced fallback values across the
+supported locale files. Use `npm run i18n:check:structure` only when you need a
+key-parity-only diagnostic.
 
 ## Building and Deploying
 
