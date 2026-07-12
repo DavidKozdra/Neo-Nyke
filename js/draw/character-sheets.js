@@ -31,6 +31,16 @@ const CHARACTER_SHEET_DEFS = {
     walkFrames: [3, 4, 5, 6],
     armFrame: 0,
   },
+  thorn_knight: {
+    src: 'assets/sprites/chars/ThornKnight.png',
+    frameWidth: 24,
+    frameHeight: 24,
+    frameCount: 7,
+    renderScale: 1.5,
+    idleFrames: [1, 2],
+    walkFrames: [3, 4, 5, 6],
+    armFrame: 0,
+  },
 };
 
 // Which raw frame indices play the idle cycle, and which (ordered) indices
