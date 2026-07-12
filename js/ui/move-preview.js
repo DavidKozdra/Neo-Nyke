@@ -103,6 +103,8 @@
       dummy.hp = dummy.max = 999999; // never dies: no loot/kill/unlock paths
       dummy.stun = 9999;             // stays put even if any AI tick runs
       dummy.attackCd = 9999;
+      dummy.spawnT = 0;              // skip the spawn-in portal (ticked by the
+                                     // enemy update loop, which the demo doesn't run)
     }
     sim.dummy = dummy || null;
     sim.casted = false;
