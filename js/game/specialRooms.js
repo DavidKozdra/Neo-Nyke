@@ -653,6 +653,10 @@ export function setSpecialRoomPanelOpen(open) {
   const panel = document.getElementById('specialRoomPanel');
   if (!panel) return;
   const shouldOpen = !!open && isSpecialRoom();
+  if (!shouldOpen) {
+    const active = document.activeElement;
+    if (active && panel.contains(active)) active.blur();
+  }
   panel.classList.toggle('hidden', !shouldOpen);
   panel.setAttribute('aria-hidden', shouldOpen ? 'false' : 'true');
   if (shouldOpen) {
