@@ -825,7 +825,6 @@
         <button id="runHistoryBtn" class="nav-btn nav-btn--minor">ARCHIVE</button>
         <button id="settingsBtn" class="nav-btn nav-btn--minor">SETTINGS</button>
         <button id="creditsBtn" class="nav-btn nav-btn--minor">CREDITS</button>
-        <button id="sprEditorBtn" class="nav-btn nav-btn--minor">SPRITE EDITOR</button>
       </div>
     </div><!-- /.menu-content -->
     <div class="menu-footer">
@@ -1269,6 +1268,11 @@
         <span class="credits-extra-btn__label">JUKEBOX</span>
         <span class="credits-extra-btn__hint">Play the soundtrack</span>
       </button>
+      <button id="sprEditorBtn" class="credits-extra-btn credits-extra-btn--editor hidden" type="button">
+        <span class="credits-extra-btn__icon" aria-hidden="true">&#9638;</span>
+        <span class="credits-extra-btn__label">SPRITE EDITOR</span>
+        <span class="credits-extra-btn__hint">Edit and save game art</span>
+      </button>
     </div>
 
     <p class="credits__thanks" data-text="Thanks for playing.">Thanks for playing.</p>
@@ -1612,7 +1616,7 @@
       </div>
       <button id="spriteEditorClose" class="panel-close" aria-label="Close sprite editor">X</button>
     </div>
-    <p class="sandbox-panel__desc">Every sprite the game currently uses, in one place. Pick one to repaint it or drop in a replacement — saving downloads a file you drag back into its original path.</p>
+    <p class="sandbox-panel__desc">Every sprite the game currently uses, in one place. Run <code>npm run editor</code> to save changes directly into the game; the download buttons remain available as a fallback.</p>
     <div class="sprite-editor-body">
       <div class="sprite-editor-sidebar">
         <div class="sprite-editor-tabs" id="spriteEditorTabs" role="tablist"></div>

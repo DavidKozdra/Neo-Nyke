@@ -9844,6 +9844,24 @@ button.alt.danger {
   width: min(1180px, calc(100vw - 48px));
 }
 
+.sprite-editor-standalone body > :not(#spriteEditorPanel) {
+  visibility: hidden !important;
+}
+
+.sprite-editor-standalone .sprite-editor-panel {
+  visibility: visible !important;
+}
+
+.sprite-editor-standalone .sprite-editor-dialog {
+  width: calc(100vw - 24px);
+  max-height: calc(100dvh - 24px);
+}
+
+.sprite-editor-standalone #spriteEditorClose,
+.sprite-editor-standalone #spriteEditorBackdrop {
+  display: none;
+}
+
 .sprite-editor-body {
   display: grid;
   grid-template-columns: minmax(220px, .8fr) minmax(420px, 1.6fr);
@@ -10192,6 +10210,36 @@ button.alt.danger {
   height: 28px;
   border-radius: 5px;
   border: 1px solid rgba(0,0,0,.35);
+}
+
+.sprite-editor-env-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.sprite-editor-env-fields label {
+  color: #9ab2cb;
+  font-size: calc(11px * var(--font-scale, 1));
+}
+
+.sprite-editor-env-fields textarea {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  resize: vertical;
+  background: rgba(0, 0, 0, .28);
+  border: 1px solid rgba(132, 168, 204, .28);
+  border-radius: 6px;
+  padding: 6px;
+  color: #eaf5ff;
+  font: 11px/1.4 'Courier New', monospace;
+}
+
+.sprite-editor-env-fields textarea.invalid {
+  border-color: #ff657a;
+  outline: 1px solid #ff657a;
 }
 
 @media (max-width: 860px) {
@@ -11145,6 +11193,7 @@ button.alt.danger {
   transition: transform .16s ease, border-color .16s ease, box-shadow .16s ease;
 }
 .credits-extra-btn:nth-child(2) { --accent: 255,210,120; }
+.credits-extra-btn--editor { --accent: 105,220,170; }
 .credits-extra-btn:hover,
 .credits-extra-btn:focus-visible {
   transform: translateY(-3px);

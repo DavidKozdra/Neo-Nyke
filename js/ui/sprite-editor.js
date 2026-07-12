@@ -3,8 +3,8 @@
 // environment prop PNGs) edit real pixels and export a PNG to drop back into
 // assets/sprites/. Procedural sprites (combatant pixel-art, item/move icons)
 // edit the palette/grid data in place — live in this session — and export the
-// owning .js data file. Environment floor/wall tiles are vector-procedural
-// (cracks/chips draw calls in js/draw/atlas.js), so they're listed read-only.
+// owning .js data file. When launched with `npm run editor`, changes can be
+// written directly back to the checkout instead of downloaded manually.
 
 (() => {
   // Keys the roster treats as playable characters (see getCharacterOrder in
@@ -70,6 +70,7 @@
     selectedId: '',
     editor: null, // active editor-state for the selected entry
     customPalette: [], // loaded once per session, shared across every sprite kind
+    directSave: false,
   };
 
   let atlasRebuildTimer = null;
@@ -265,7 +266,7 @@
     const envTiles = Object.keys(tileDefs).map(key => ({
       id: `envtile:${key}`,
       tab: 'envTiles',
-      kind: 'readonly-tile',
+      kind: 'env-tile',
       key,
       label: prettyLabel(key),
       def: tileDefs[key],
@@ -380,7 +381,7 @@
       drawIconThumb(canvas, window.NeoNykeIconDefs[entry.group][entry.key]);
     } else if (entry.kind === 'image-strip') {
       drawImageThumb(canvas, entry);
-    } else if (entry.kind === 'readonly-tile') {
+    } else if (entry.kind === 'env-tile') {
       const ctx = canvas.getContext('2d');
       ctx.fillStyle = entry.def.base || '#333';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -447,6 +448,71 @@
     state.editor = null;
     renderGrid();
     renderDetail();
+  }
+
+  async function detectDirectSave() {
+    try {
+      const response = await fetch('/api/editor/status', { cache: 'no-store' });
+      state.directSave = response.ok && (await response.json()).ok === true;
+    } catch (_error) {
+      state.directSave = false;
+    }
+  }
+
+  async function saveEditorFile(path, content, encoding = 'utf8') {
+    const response = await fetch('/api/editor/file', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path, content, encoding }),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error || `Save failed (${response.status})`);
+    return result;
+  }
+
+  async function canvasPngBase64(canvas) {
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+    if (!blob) throw new Error('Could not encode PNG');
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    let binary = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) {
+      binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    }
+    return btoa(binary);
+  }
+
+  async function saveImageStrip(editor, button) {
+    button.disabled = true;
+    try {
+      await saveEditorFile(editor.entry.savePath, await canvasPngBase64(editor.master), 'base64');
+      button.textContent = 'Saved';
+      imageCache.delete(editor.entry.src);
+    } catch (error) {
+      alert(error.message);
+    } finally {
+      button.disabled = false;
+      setTimeout(() => { if (button.isConnected) button.textContent = 'Save to Game'; }, 1200);
+    }
+  }
+
+  async function saveCharacterToGame(editor, button) {
+    button.disabled = true;
+    try {
+      // Frame roles are committed before serializing so armFrame, animation
+      // membership, dimensions, and speeds always match the PNG being saved.
+      commitFrameConfigLive(editor);
+      const png = await canvasPngBase64(editor.master);
+      const config = await buildDataFile('characterSheets');
+      await saveEditorFile(editor.entry.savePath, png, 'base64');
+      await saveEditorFile(config.info.path, config.text);
+      imageCache.delete(editor.entry.src);
+      button.textContent = 'Sprite + Config Saved';
+    } catch (error) {
+      alert(error.message);
+    } finally {
+      button.disabled = false;
+      setTimeout(() => { if (button.isConnected) button.textContent = 'Save Sprite + Config'; }, 1400);
+    }
   }
 
   // ── Live charset <-> procedural conversion ("is this a loaded file?") ────
@@ -685,8 +751,8 @@
       ${isCharset ? `
       <p class="sprite-editor-note">Pick a frame above, then mark its role — a frame can be in the idle cycle, the walk cycle, both, or neither. At least one frame must stay in the idle cycle.</p>
       <div class="sprite-editor-field-row">
-        <label><input type="checkbox" id="seInIdle" ${editor.idleFrames.includes(editor.currentFrame) ? 'checked' : ''}> In idle cycle</label>
-        <label><input type="checkbox" id="seInWalk" ${editor.walkFrames.includes(editor.currentFrame) ? 'checked' : ''}> In walk cycle</label>
+        <label><input type="checkbox" id="seInIdle" ${editor.idleFrames.includes(editor.currentFrame) ? 'checked' : ''} ${editor.armFrame === editor.currentFrame ? 'disabled' : ''}> In idle cycle</label>
+        <label><input type="checkbox" id="seInWalk" ${editor.walkFrames.includes(editor.currentFrame) ? 'checked' : ''} ${editor.armFrame === editor.currentFrame ? 'disabled' : ''}> In walk cycle</label>
         <label><input type="checkbox" id="seIsArm" ${editor.armFrame === editor.currentFrame ? 'checked' : ''}> Use as aim/arm sprite</label>
       </div>
       <p class="sprite-editor-note">The aim/arm sprite replaces the plain aim-direction line in-game — it's drawn rotated to face wherever the character is aiming, so it should be a single reference pose (e.g. an arm pointing right at angle 0).</p>
@@ -709,6 +775,7 @@
         <button type="button" class="sandbox-mini-btn" id="seReplace">Replace Image…</button>
         <input type="file" accept="image/png,image/*" id="seReplaceInput" style="display:none">
         <button type="button" class="nav-btn nav-btn--minor" id="seDownload">Download PNG</button>
+        ${state.directSave ? `<button type="button" class="nav-btn" id="seSaveDirect">${isCharset ? 'Save Sprite + Config' : 'Save to Game'}</button>` : ''}
         <button type="button" class="sandbox-mini-btn" id="seReset">Reset</button>
         ${isCharset ? `
           <button type="button" class="nav-btn nav-btn--minor" id="seDownloadSheetDefs">Download character-sheets.js</button>
@@ -798,6 +865,14 @@
       });
       container.querySelector('#seIsArm').addEventListener('change', e => {
         editor.armFrame = e.target.checked ? editor.currentFrame : null;
+        if (editor.armFrame != null) {
+          editor.idleFrames = editor.idleFrames.filter(i => i !== editor.armFrame);
+          editor.walkFrames = editor.walkFrames.filter(i => i !== editor.armFrame);
+          if (!editor.idleFrames.length) {
+            const fallback = Array.from({ length: editor.frameCount }, (_, i) => i).find(i => i !== editor.armFrame);
+            if (fallback != null) editor.idleFrames = [fallback];
+          }
+        }
         if (editor.armFrame == null && editor.previewMode === 'arm') editor.previewMode = 'idle';
         commitFrameConfigLive(editor);
         rerenderAll();
@@ -855,6 +930,10 @@
     });
 
     container.querySelector('#seDownload').addEventListener('click', () => downloadImageStrip(editor));
+    container.querySelector('#seSaveDirect')?.addEventListener('click', e => {
+      if (isCharset) saveCharacterToGame(editor, e.currentTarget);
+      else saveImageStrip(editor, e.currentTarget);
+    });
     container.querySelector('#seReset').addEventListener('click', () => {
       state.editor = null;
       renderImageStripDetail(container, entry);
@@ -890,6 +969,7 @@
       </div>
       <div class="sprite-editor-actions">
         <button type="button" class="nav-btn nav-btn--minor" id="seDownload">Download combatants.js</button>
+        ${state.directSave ? '<button type="button" class="nav-btn" id="seSaveDirect">Save to Game</button>' : ''}
         <button type="button" class="sandbox-mini-btn" id="seReset">Reset</button>
         ${isCharacter ? `
           <button type="button" class="sandbox-mini-btn" id="seLoadCharset">Load Custom Charset PNG…</button>
@@ -959,6 +1039,7 @@
 
     container.querySelector('#seEraser').addEventListener('change', e => { editor.erasing = e.target.checked; });
     container.querySelector('#seDownload').addEventListener('click', () => downloadDataFile('combatants'));
+    container.querySelector('#seSaveDirect')?.addEventListener('click', e => saveDataFile('combatants', e.currentTarget));
     container.querySelector('#seReset').addEventListener('click', () => {
       alert('Reset requires reloading the page — session edits to combatants.js are only held in memory, and the original defs aren\'t kept in a snapshot.');
     });
@@ -1014,6 +1095,7 @@
       </div>
       <div class="sprite-editor-actions">
         <button type="button" class="nav-btn nav-btn--minor" id="seDownload">Download icons.js</button>
+        ${state.directSave ? '<button type="button" class="nav-btn" id="seSaveDirect">Save to Game</button>' : ''}
       </div>
     `;
 
@@ -1079,6 +1161,7 @@
 
     container.querySelector('#seEraser').addEventListener('change', e => { editor.erasing = e.target.checked; });
     container.querySelector('#seDownload').addEventListener('click', () => downloadDataFile('icons'));
+    container.querySelector('#seSaveDirect')?.addEventListener('click', e => saveDataFile('icons', e.currentTarget));
   }
 
   function repaintIconCanvas(canvas, def) {
@@ -1099,19 +1182,55 @@
     }
   }
 
-  // ── Detail: read-only environment tile preview ───────────────────────────
+  // ── Detail: procedural environment tile editor ──────────────────────────
   function renderEnvTileDetail(container, entry) {
     const def = entry.def;
+    const colorKeys = Object.keys(def).filter(key => typeof def[key] === 'string' && /^#[0-9a-f]{3,8}$/i.test(def[key]));
     container.innerHTML = `
       <div class="sprite-editor-detail-head">
         <h4 class="sprite-editor-detail-title">${entry.label}</h4>
         <div class="sprite-editor-detail-path">kind: ${def.kind || 'unknown'}</div>
       </div>
-      <div class="sprite-editor-readonly-bars">
-        ${['base', 'shade', 'edge', 'mortar'].filter(k => def[k]).map(k => `<span style="background:${def[k]}" title="${k}"></span>`).join('')}
+      <div class="sprite-editor-canvas-wrap"><canvas class="sprite-editor-canvas" width="256" height="256"></canvas></div>
+      <div class="sprite-editor-swatch-row">
+        ${colorKeys.map(key => `<label class="sprite-editor-swatch"><input type="color" data-env-color="${key}" value="${def[key]}"><span class="sprite-editor-swatch__key">${key}</span></label>`).join('')}
       </div>
-      <p class="sprite-editor-note">This is a procedural tile — its look comes from vector crack/chip draw calls in js/draw/atlas.js, not a pixel grid, so it isn't editable here. Edit the colors and geometry directly in assets/sprites/environment.js.</p>
+      <p class="sprite-editor-note">Colors and procedural geometry update live. Geometry uses arrays of tile-space coordinates (the tile is 16×16).</p>
+      <div class="sprite-editor-env-fields">
+        <label>Cracks <textarea id="seEnvCracks" rows="4">${JSON.stringify(def.cracks || [])}</textarea></label>
+        <label>Chips <textarea id="seEnvChips" rows="4">${JSON.stringify(def.chips || [])}</textarea></label>
+      </div>
+      <div class="sprite-editor-actions">
+        <button type="button" class="nav-btn nav-btn--minor" id="seDownload">Download environment.js</button>
+        ${state.directSave ? '<button type="button" class="nav-btn" id="seSaveDirect">Save to Game</button>' : ''}
+      </div>
     `;
+    const canvas = container.querySelector('canvas');
+    const repaint = () => {
+      const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingEnabled = false;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const tile = document.createElement('canvas');
+      tile.width = 16; tile.height = 16;
+      Neo.drawEnvironmentTileAsset?.(tile.getContext('2d'), 0, 0, 16, def);
+      ctx.drawImage(tile, 0, 0, canvas.width, canvas.height);
+      if (typeof Neo.buildEnvironmentTileAtlas === 'function') Neo.ENV_TILE_ATLAS = Neo.buildEnvironmentTileAtlas();
+      Neo.environmentBackgroundCache = { key: '', canvas: null };
+      renderGrid();
+    };
+    container.querySelectorAll('[data-env-color]').forEach(input => {
+      input.addEventListener('input', () => { def[input.dataset.envColor] = input.value; repaint(); });
+    });
+    [['#seEnvCracks', 'cracks'], ['#seEnvChips', 'chips']].forEach(([selector, key]) => {
+      const input = container.querySelector(selector);
+      input.addEventListener('change', () => {
+        try { def[key] = JSON.parse(input.value); input.classList.remove('invalid'); repaint(); }
+        catch (_error) { input.classList.add('invalid'); }
+      });
+    });
+    container.querySelector('#seDownload').addEventListener('click', () => downloadDataFile('environment'));
+    container.querySelector('#seSaveDirect')?.addEventListener('click', e => saveDataFile('environment', e.currentTarget));
+    repaint();
   }
 
   // ── Save export helpers (data-file categories) ───────────────────────────
@@ -1226,6 +1345,11 @@
     return lines.join('\n');
   }
 
+  function serializeEnvironmentDefs() {
+    const root = window.NeoNykeEnvironmentTileDefs || { sourceSize: 16, tiles: {} };
+    return `window.NeoNykeEnvironmentTileDefs = ${JSON.stringify(root, null, 2)};`;
+  }
+
   const DATA_FILE_INFO = {
     combatants: {
       path: 'assets/sprites/combatants.js',
@@ -1242,30 +1366,54 @@
       marker: 'const CHARACTER_SHEET_DEFS = ',
       serialize: serializeCharacterSheetDefs,
     },
+    environment: {
+      path: 'assets/sprites/environment.js',
+      marker: 'window.NeoNykeEnvironmentTileDefs = ',
+      serialize: serializeEnvironmentDefs,
+    },
   };
+
+  async function buildDataFile(which) {
+    const info = DATA_FILE_INFO[which];
+    const newLiteral = info.serialize();
+    const res = await fetch(`${info.path}?_edit=${Date.now()}`);
+    if (!res.ok) throw new Error(`Couldn't read ${info.path}`);
+    const source = await res.text();
+    const span = findObjectLiteralSpan(source, info.marker);
+    return { info, text: span ? (source.slice(0, span.start) + newLiteral + source.slice(span.end)) : newLiteral };
+  }
+
+  async function saveDataFile(which, button) {
+    button.disabled = true;
+    try {
+      const output = await buildDataFile(which);
+      await saveEditorFile(output.info.path, output.text);
+      button.textContent = 'Saved';
+    } catch (error) {
+      alert(error.message);
+    } finally {
+      button.disabled = false;
+      setTimeout(() => { if (button.isConnected) button.textContent = 'Save to Game'; }, 1200);
+    }
+  }
 
   async function downloadDataFile(which) {
     const info = DATA_FILE_INFO[which];
-    const newLiteral = info.serialize();
-    let text = '';
     try {
-      const res = await fetch(info.path);
-      text = await res.text();
+      const output = await buildDataFile(which);
+      const { info, text: finalText } = output;
+      const blob = new Blob([finalText], { type: 'text/javascript' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = basename(info.path);
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
     } catch (err) {
-      alert(`Couldn't read ${info.path} to export it — make sure the game is running through a local server (npm start), not opened directly as a file.`);
-      return;
+      alert(`Couldn't read ${info.path} to export it — make sure the game is running through a local server.`);
     }
-    const span = findObjectLiteralSpan(text, info.marker);
-    const finalText = span ? (text.slice(0, span.start) + newLiteral + text.slice(span.end)) : newLiteral;
-    const blob = new Blob([finalText], { type: 'text/javascript' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = basename(info.path);
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
   }
 
   // ── Detail dispatch ───────────────────────────────────────────────────────
@@ -1280,14 +1428,15 @@
     if (entry.kind === 'image-strip') renderImageStripDetail(detail, entry);
     else if (entry.kind === 'pixel-grid') renderActorDetail(detail, entry);
     else if (entry.kind === 'icon-grid') renderIconDetail(detail, entry);
-    else if (entry.kind === 'readonly-tile') renderEnvTileDetail(detail, entry);
+    else if (entry.kind === 'env-tile') renderEnvTileDetail(detail, entry);
   }
 
   // ── Open / close ──────────────────────────────────────────────────────────
-  function open() {
+  async function open() {
     const { panel, search } = getEls();
     if (!panel) return;
     state.open = true;
+    await detectDirectSave();
     state.catalog = buildCatalog();
     state.selectedId = '';
     state.editor = null;
@@ -1324,4 +1473,9 @@
   wireStaticEvents();
   Neo.openSpriteEditor = open;
   Neo.closeSpriteEditor = close;
+
+  if (new URLSearchParams(window.location.search).get('sprite-editor') === 'standalone') {
+    document.documentElement.classList.add('sprite-editor-standalone');
+    window.addEventListener('load', () => open(), { once: true });
+  }
 })();

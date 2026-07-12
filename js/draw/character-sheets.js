@@ -31,13 +31,19 @@ function resolveFrameRoles(def, frameCount) {
     ? def.idleFrames.filter(inRange)
     : (inRange(def.idleFrame) ? [def.idleFrame] : []);
   if (!idleFrames.length) idleFrames = [0];
-  const walkFrames = Array.isArray(def.walkFrames) && def.walkFrames.length
-    ? def.walkFrames.filter(i => inRange(i) && !idleFrames.includes(i))
-    : Array.from({ length: frameCount }, (_, i) => i).filter(i => !idleFrames.includes(i));
   // The arm/aim-indicator frame is independent of idle/walk — it's a single
   // reference pose (e.g. an outstretched arm) rotated live to face the
   // player's aim angle, replacing the plain aim-direction line when set.
   const armFrame = inRange(def.armFrame) ? def.armFrame : null;
+  if (armFrame != null) idleFrames = idleFrames.filter(i => i !== armFrame);
+  if (!idleFrames.length) {
+    const fallback = Array.from({ length: frameCount }, (_, i) => i).find(i => i !== armFrame);
+    if (fallback != null) idleFrames = [fallback];
+  }
+  const walkFrames = (Array.isArray(def.walkFrames) && def.walkFrames.length
+    ? def.walkFrames
+    : Array.from({ length: frameCount }, (_, i) => i))
+    .filter(i => inRange(i) && !idleFrames.includes(i) && i !== armFrame);
   return { idleFrames, walkFrames, armFrame };
 }
 
