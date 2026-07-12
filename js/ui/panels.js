@@ -726,6 +726,13 @@ export function isPanelOpen(panel) {
     return !!panel && !panel.classList.contains('hidden');
   }
 
+  // Browsers warn (and assistive tech misbehaves) if aria-hidden is applied to an
+  // element that still contains focus. Blur first so focus moves out before hiding.
+  function blurIfFocusInside(panel) {
+    const active = document.activeElement;
+    if (active && panel?.contains(active)) active.blur();
+  }
+
   const PANEL_CLOSE_EFFECT_DURATION_MS = 340;
   const PANEL_CLOSE_EFFECT_SETTLE_MS = 40;
 
@@ -959,6 +966,7 @@ export function setShopPanelOpen(open, options = {}) {
     }
     if (animateClose && isPanelOpen(Neo.ui.shopPanel)) playPanelCloseEffect(Neo.ui.shopPanel);
     else clearPanelCloseEffect(Neo.ui.shopPanel);
+    blurIfFocusInside(Neo.ui.shopPanel);
     Neo.ui.shopPanel.classList.add('hidden');
     Neo.ui.shopPanel.setAttribute('aria-hidden', 'true');
     // A scroll bought here defers its popup while the shop is open; surface it now.
@@ -984,6 +992,7 @@ export function setInventoryPanelOpen(open, options = {}) {
     if (!open && options.suppressPanelItemSelection) {
       Neo.suppressPanelItemSelectionUntil = Date.now() + 250;
     }
+    if (!open) blurIfFocusInside(Neo.ui.invPanel);
     Neo.ui.invPanel.classList.toggle('hidden', !open);
     Neo.ui.invPanel.setAttribute('aria-hidden', open ? 'false' : 'true');
     if (!open) {
@@ -1071,6 +1080,7 @@ export function setAnvilPanelOpen(open, options = {}) {
     }
     if (animateClose && isPanelOpen(Neo.ui.anvilPanel)) playPanelCloseEffect(Neo.ui.anvilPanel);
     else clearPanelCloseEffect(Neo.ui.anvilPanel);
+    blurIfFocusInside(Neo.ui.anvilPanel);
     Neo.ui.anvilPanel.classList.add('hidden');
     Neo.ui.anvilPanel.setAttribute('aria-hidden', 'true');
     // Surface any selection (scroll/paw/battery) deferred while the anvil was open.
@@ -1632,6 +1642,7 @@ export function setExtraBatteryModalOpen(open, options = {}) {
     }
     if (animateClose && isPanelOpen(Neo.ui.extraBatteryModal)) playPanelCloseEffect(effectTarget);
     else clearPanelCloseEffect(effectTarget);
+    blurIfFocusInside(Neo.ui.extraBatteryModal);
     Neo.ui.extraBatteryModal.classList.add('hidden');
     Neo.ui.extraBatteryModal.setAttribute('aria-hidden', 'true');
   }
@@ -1650,6 +1661,7 @@ export function setWizardPawModalOpen(open, options = {}) {
     }
     if (animateClose && isPanelOpen(Neo.ui.wizardPawModal)) playPanelCloseEffect(effectTarget);
     else clearPanelCloseEffect(effectTarget);
+    blurIfFocusInside(Neo.ui.wizardPawModal);
     Neo.ui.wizardPawModal.classList.add('hidden');
     Neo.ui.wizardPawModal.setAttribute('aria-hidden', 'true');
   }
@@ -1668,6 +1680,7 @@ export function setScrollControlModalOpen(open, options = {}) {
     }
     if (animateClose && isPanelOpen(Neo.ui.scrollControlModal)) playPanelCloseEffect(effectTarget);
     else clearPanelCloseEffect(effectTarget);
+    blurIfFocusInside(Neo.ui.scrollControlModal);
     Neo.ui.scrollControlModal.classList.add('hidden');
     Neo.ui.scrollControlModal.setAttribute('aria-hidden', 'true');
   }
@@ -1690,6 +1703,7 @@ export function setVoucherModalOpen(open, options = {}) {
     }
     if (animateClose && isPanelOpen(Neo.ui.voucherModal)) playPanelCloseEffect(effectTarget);
     else clearPanelCloseEffect(effectTarget);
+    blurIfFocusInside(Neo.ui.voucherModal);
     Neo.ui.voucherModal.classList.add('hidden');
     Neo.ui.voucherModal.setAttribute('aria-hidden', 'true');
   }

@@ -904,8 +904,14 @@ export function createUIController(view) {
       if (view.timerBossSlot) view.timerBossSlot.style.display = isBossRush ? '' : 'none';
     }
 
+    function blurIfFocusInside(panel) {
+      const active = document.activeElement;
+      if (active && panel?.contains(active)) active.blur();
+    }
+
     function setChallengePanelOpen(open) {
       challengePanelOpen = !!open;
+      if (!challengePanelOpen) blurIfFocusInside(view.challengePanel);
       view.challengePanel?.classList.toggle('hidden', !challengePanelOpen);
       view.challengePanel?.setAttribute('aria-hidden', challengePanelOpen ? 'false' : 'true');
       view.challengeToggle?.setAttribute('aria-expanded', challengePanelOpen ? 'true' : 'false');
@@ -914,6 +920,7 @@ export function createUIController(view) {
     let legacyPanelOpen = false;
     function setLegacyPanelOpen(open) {
       legacyPanelOpen = !!open;
+      if (!legacyPanelOpen) blurIfFocusInside(view.legacyPanel);
       view.legacyPanel?.classList.toggle('hidden', !legacyPanelOpen);
       view.legacyPanel?.setAttribute('aria-hidden', legacyPanelOpen ? 'false' : 'true');
       view.legacyToggle?.setAttribute('aria-expanded', legacyPanelOpen ? 'true' : 'false');
@@ -971,6 +978,7 @@ export function createUIController(view) {
     function setRunHistoryOpen(open) {
       ensureRunHistoryPanelCanOverlayGame();
       runHistoryOpen = !!open;
+      if (!runHistoryOpen) blurIfFocusInside(view.runHistoryPanel);
       view.runHistoryPanel?.classList.toggle('hidden', !runHistoryOpen);
       view.runHistoryPanel?.setAttribute('aria-hidden', runHistoryOpen ? 'false' : 'true');
       if (view.runHistoryBtn) {
@@ -1592,6 +1600,7 @@ export function createUIController(view) {
       // Refresh fields from current settings each time the panel opens (settings
       // may have loaded from saved meta after initial wiring).
       if (open) syncSandboxPanelFieldsHook?.();
+      else blurIfFocusInside(view.sandboxPanel);
       view.sandboxPanel?.classList.toggle('hidden', !open);
       view.sandboxPanel?.classList.toggle('sandbox-panel--open', open);
       view.sandboxPanel?.setAttribute('aria-hidden', open ? 'false' : 'true');
@@ -1602,6 +1611,7 @@ export function createUIController(view) {
 
     function setCustomCharacterPanelOpen(open) {
       if (open) syncCustomCharacterPanelFieldsHook?.();
+      else blurIfFocusInside(view.customCharacterPanel);
       view.customCharacterPanel?.classList.toggle('hidden', !open);
       view.customCharacterPanel?.classList.toggle('sandbox-panel--open', open);
       view.customCharacterPanel?.setAttribute('aria-hidden', open ? 'false' : 'true');
