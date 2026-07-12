@@ -1110,6 +1110,29 @@ export function resumeGame() {
     return [...new Set([...fallback, ...chars])];
   }
 
+  // Debug/testing helper: force-unlock one character (or all of them) without
+  // earning them normally. Callable from the console as Neo.forceUnlockCharacter('gelleh')
+  // or Neo.forceUnlockAllCharacters().
+  function forceUnlockCharacter(key) {
+    if (!Neo.metaProgress) return;
+    if (!Neo.CHARACTER_DEFS[key]) {
+      console.warn(`[forceUnlockCharacter] unknown character key: ${key}`);
+      return;
+    }
+    const unlocked = new Set(Neo.metaProgress.unlockedCharacters || []);
+    unlocked.add(key);
+    Neo.metaProgress.unlockedCharacters = normalizeUnlockedCharacters([...unlocked]);
+    Neo.persistMetaSoon();
+    Neo.updateCharacterSelectionUI?.();
+  }
+
+  function forceUnlockAllCharacters() {
+    if (!Neo.metaProgress) return;
+    Neo.metaProgress.unlockedCharacters = normalizeUnlockedCharacters(Object.keys(Neo.CHARACTER_DEFS));
+    Neo.persistMetaSoon();
+    Neo.updateCharacterSelectionUI?.();
+  }
+
   function normalizeDifficulty(input) {
     if (input === 'custom') return 'custom';
     return Neo.DIFFICULTY_DEFS[input] ? input : 'medium';
@@ -3724,6 +3747,8 @@ export function resumeGame() {
   Neo.hydrateRunHistorySprites = hydrateRunHistorySprites;
   Neo.refreshMenuState = refreshMenuState;
   Neo.updateCharacterSelectionUI = updateCharacterSelectionUI;
+  Neo.forceUnlockCharacter = forceUnlockCharacter;
+  Neo.forceUnlockAllCharacters = forceUnlockAllCharacters;
   Neo.setGameState = setGameState;
   Neo.startGame = startGame;
   Neo.spawnMpPlayer = spawnMpPlayer;

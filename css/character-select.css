@@ -306,7 +306,7 @@
   grid-column: 2;
   grid-row: 1;
   display: grid;
-  grid-template-columns: 126px minmax(0, 1fr);
+  grid-template-columns: 126px minmax(0, 1fr) 164px;
   grid-auto-rows: min-content;
   align-content: start;
   gap: 10px 14px;
@@ -366,20 +366,22 @@
   color: #d5deea;
 }
 
-#charSelect .hero-detail-stats,
 #charSelect .hero-detail-skills,
 #charSelect .hero-detail-skill-readout,
 #charSelect .hero-detail-inventory {
   grid-column: 1 / -1;
 }
 
+/* Vertical stat list beside the lore instead of a full-width band. */
 #charSelect .hero-detail-stats {
+  grid-column: 3;
+  grid-row: 1 / span 2;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: 1fr;
+  align-content: start;
   gap: 8px;
-  margin-top: 3px;
-  padding-top: 12px;
-  border-top: 1px solid rgba(255, 255, 255, .08);
+  padding-left: 14px;
+  border-left: 1px solid rgba(255, 255, 255, .08);
 }
 
 #charSelect .hero-detail-skills {
@@ -429,12 +431,20 @@
 }
 
 #charSelect .hero-detail-skill-readout {
-  min-height: 96px;
+  min-height: 138px;
   margin: 0;
   padding: 9px 11px;
   box-sizing: border-box;
+  grid-template-columns: 210px minmax(0, 1fr);
   background: rgba(81, 157, 226, .09);
   border-color: rgba(132, 195, 255, .28);
+}
+
+/* Full-size sim: 210x118 is Neo.MovePreview's logical resolution, so the
+   demo renders 1:1 instead of downscaled into a thumbnail. */
+#charSelect .hero-detail-skill-preview {
+  width: 210px;
+  height: 118px;
 }
 
 #charSelect .hero-detail-skill-readout-name {
@@ -915,7 +925,14 @@
   }
 
   #charSelect .hero-detail-stats {
+    grid-column: 1 / -1;
+    grid-row: auto;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding-left: 0;
+    border-left: none;
+    margin-top: 3px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255, 255, 255, .08);
   }
 
   #charSelect .hero-detail-skills {
