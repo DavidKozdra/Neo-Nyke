@@ -9934,6 +9934,13 @@ button.alt.danger {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
+  max-height: 76px;
+  overflow-y: auto;
+  margin: 8px 0 10px;
+  padding: 6px;
+  border: 1px solid rgba(132, 168, 204, .18);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, .18);
 }
 
 .sprite-editor-palette-strip:empty {

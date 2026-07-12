@@ -20,17 +20,7 @@ export function buildEnvironmentTileAtlas() {
 export function drawEnvironmentTileAsset(g, ox, oy, size, def) {
     g.save();
     if (Array.isArray(def.pixels)) {
-      const sourceSize = Number(def.pixelSize || 16) || 16;
-      const cell = size / sourceSize;
-      def.pixels.forEach((row, y) => {
-        if (typeof row !== 'string') return;
-        for (let x = 0; x < row.length; x += 1) {
-          const color = row[x];
-          if (color === '.' || color === ' ') continue;
-          g.fillStyle = def.palette?.[color] || '#ff00ff';
-          g.fillRect(ox + x * cell, oy + y * cell, Math.ceil(cell), Math.ceil(cell));
-        }
-      });
+      drawEnvironmentPixelSprite(g, ox, oy, size, size, def);
       g.restore();
       return;
     }
@@ -62,6 +52,23 @@ export function drawEnvironmentTileAsset(g, ox, oy, size, def) {
     drawTileCracks(g, ox, oy, def);
     drawTileChips(g, ox, oy, def);
     g.restore();
+  }
+
+export function drawEnvironmentPixelSprite(g, x, y, w, h, def) {
+    if (!def || !Array.isArray(def.pixels)) return false;
+    const sourceSize = Number(def.pixelSize || def.pixels.length || 16) || 16;
+    const cellW = w / sourceSize;
+    const cellH = h / sourceSize;
+    def.pixels.forEach((row, py) => {
+      if (typeof row !== 'string') return;
+      for (let px = 0; px < row.length; px += 1) {
+        const color = row[px];
+        if (color === '.' || color === ' ') continue;
+        g.fillStyle = def.palette?.[color] || '#ff00ff';
+        g.fillRect(x + px * cellW, y + py * cellH, Math.ceil(cellW), Math.ceil(cellH));
+      }
+    });
+    return true;
   }
 
 export function drawFloorTileAsset(g, ox, oy, size, def) {
@@ -237,6 +244,7 @@ export function drawTileChips(g, ox, oy, def) {
   // Expose on Neo
   Neo.buildEnvironmentTileAtlas = buildEnvironmentTileAtlas;
   Neo.drawEnvironmentTileAsset = drawEnvironmentTileAsset;
+  Neo.drawEnvironmentPixelSprite = drawEnvironmentPixelSprite;
   Neo.drawFloorTileAsset = drawFloorTileAsset;
   Neo.drawPlankTileAsset = drawPlankTileAsset;
   Neo.drawWallTileAsset = drawWallTileAsset;

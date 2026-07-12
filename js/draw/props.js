@@ -213,6 +213,7 @@
         Neo.ctx.stroke();
         Neo.ctx.shadowBlur = 0;
       } else if (hazard.kind === 'explosive_trap') {
+        const trapSprite = window.NeoNykeEnvironmentTileDefs?.propSprites?.explosive_trap;
         const now = Date.now();
         const t = now * 0.008 + hazard.x * 0.01;
         const armed = !!hazard.triggered;
@@ -250,6 +251,10 @@
           Neo.ctx.arc(0, 0, trigR, 0, Math.PI * 2);
           Neo.ctx.stroke();
           Neo.ctx.setLineDash([]);
+        }
+
+        if (Neo.drawEnvironmentPixelSprite?.(Neo.ctx, -r, -r, r * 2, r * 2, trapSprite)) {
+          if (!armed) { Neo.ctx.restore(); return; }
         }
 
         // Ground plate keeps the bomb visually anchored as a floor trap.
@@ -701,7 +706,7 @@
       const shakeOffset = shakeRatio > 0 ? Math.sin(shakeRatio * Math.PI * 3) * 3 * shakeRatio : 0;
       Neo.ctx.translate(prop.x + Math.cos(hitAngle) * shakeOffset, prop.y + Math.sin(hitAngle) * shakeOffset);
       if (prop.kind === 'pot') {
-        drawClayVase(prop);
+        Neo.drawEnvironmentTile('pot_clay', -24, -26, 48, 48);
       } else if (prop.kind === 'barrel') {
         Neo.drawEnvironmentTile('barrel_oak', -24, -26, 48, 48);
       } else if (prop.kind === 'wall') {

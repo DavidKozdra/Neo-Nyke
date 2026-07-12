@@ -48,7 +48,6 @@
       loadPaletteBtn: document.getElementById('spriteEditorLoadPalette'),
       paletteInput: document.getElementById('spriteEditorPaletteInput'),
       paletteStatus: document.getElementById('spriteEditorPaletteStatus'),
-      paletteStrip: document.getElementById('spriteEditorPaletteStrip'),
     };
     return els;
   }
@@ -258,8 +257,72 @@
     return colors;
   }
 
+  function parseAsePaletteBuffer(buffer) {
+    const view = new DataView(buffer);
+    const colors = [];
+    if (view.byteLength < 128 || view.getUint16(4, true) !== 0xa5e0) return colors;
+    const frames = view.getUint16(6, true);
+    let offset = 128;
+    for (let frame = 0; frame < frames && offset + 16 <= view.byteLength; frame += 1) {
+      const frameSize = view.getUint32(offset, true);
+      if (frameSize <= 0 || offset + frameSize > view.byteLength) break;
+      const frameEnd = offset + frameSize;
+      if (view.getUint16(offset + 4, true) !== 0xf1fa) break;
+      const oldChunkCount = view.getUint16(offset + 6, true);
+      const newChunkCount = offset + 16 <= frameEnd ? view.getUint32(offset + 12, true) : 0;
+      const chunkCount = newChunkCount || oldChunkCount;
+      let chunkOffset = offset + 16;
+      for (let chunk = 0; chunk < chunkCount && chunkOffset + 6 <= frameEnd; chunk += 1) {
+        const chunkSize = view.getUint32(chunkOffset, true);
+        const chunkType = view.getUint16(chunkOffset + 4, true);
+        const chunkEnd = chunkOffset + chunkSize;
+        if (chunkSize < 6 || chunkEnd > frameEnd) break;
+        if (chunkType === 0x2019 && chunkOffset + 22 <= chunkEnd) {
+          const paletteSize = view.getUint32(chunkOffset + 6, true);
+          const firstIndex = view.getUint32(chunkOffset + 10, true);
+          const lastIndex = view.getUint32(chunkOffset + 14, true);
+          let entryOffset = chunkOffset + 26;
+          const count = Math.min(paletteSize, lastIndex - firstIndex + 1);
+          for (let i = 0; i < count && entryOffset + 6 <= chunkEnd; i += 1) {
+            const flags = view.getUint16(entryOffset, true);
+            const r = view.getUint8(entryOffset + 2);
+            const g = view.getUint8(entryOffset + 3);
+            const b = view.getUint8(entryOffset + 4);
+            const a = view.getUint8(entryOffset + 5);
+            entryOffset += 6;
+            if (flags & 1 && entryOffset + 2 <= chunkEnd) {
+              const nameBytes = view.getUint16(entryOffset, true);
+              entryOffset += 2 + nameBytes;
+            }
+            if (a === 0) continue;
+            colors.push(`#${[r, g, b].map(n => n.toString(16).padStart(2, '0')).join('')}`);
+          }
+        }
+        chunkOffset = chunkEnd;
+      }
+      offset = frameEnd;
+    }
+    return [...new Set(colors)];
+  }
+
+  async function loadDefaultPalette() {
+    if (state.customPalette.length) return;
+    const { paletteStatus } = getEls();
+    try {
+      const res = await fetch('assets/sprites/my-pal.ase', { cache: 'no-store' });
+      if (!res.ok) return;
+      const colors = parseAsePaletteBuffer(await res.arrayBuffer());
+      if (!colors.length) return;
+      state.customPalette = colors;
+      if (paletteStatus) paletteStatus.textContent = `${colors.length} colors from my-pal.ase`;
+      renderPaletteStrip();
+    } catch (_error) {
+      // Optional local palette; ignore when absent or served without binary access.
+    }
+  }
+
   function renderPaletteStrip() {
-    const { paletteStrip } = getEls();
+    const paletteStrip = document.getElementById('spriteEditorPaletteStrip');
     if (!paletteStrip) return;
     paletteStrip.innerHTML = '';
     state.customPalette.forEach(hex => {
@@ -291,12 +354,18 @@
     });
   }
 
+  function paletteStripHtml() {
+    return '<div class="sprite-editor-palette-strip" id="spriteEditorPaletteStrip"></div>';
+  }
+
   // ── Catalog ───────────────────────────────────────────────────────────────
   function buildCatalog() {
     const sheetDefs = Neo.CHARACTER_SHEET_DEFS || {};
     const spriteDefs = Neo.SPRITE_DEFS || window.NeoNykeSpriteDefs || {};
     const iconDefs = window.NeoNykeIconDefs || {};
-    const tileDefs = (window.NeoNykeEnvironmentTileDefs || {}).tiles || {};
+    const environmentDefs = window.NeoNykeEnvironmentTileDefs || {};
+    const tileDefs = environmentDefs.tiles || {};
+    const propSpriteDefs = environmentDefs.propSprites || {};
 
     const characters = [];
     const enemies = [];
@@ -359,7 +428,15 @@
       key,
       label: prettyLabel(key),
       def: tileDefs[key],
-    })).concat(ENVIRONMENT_ASSET_FILES.map(file => ({
+    })).concat(Object.keys(propSpriteDefs).map(key => ({
+      id: `envprop:${key}`,
+      tab: 'envTiles',
+      kind: 'env-tile',
+      key,
+      label: prettyLabel(key),
+      def: propSpriteDefs[key],
+      propSprite: true,
+    }))).concat(ENVIRONMENT_ASSET_FILES.map(file => ({
       id: `envimage:${file.src}`,
       tab: 'envTiles',
       kind: 'image-strip',
@@ -483,7 +560,8 @@
       const tile = document.createElement('canvas');
       tile.width = 16;
       tile.height = 16;
-      Neo.drawEnvironmentTileAsset?.(tile.getContext('2d'), 0, 0, 16, entry.def);
+      if (entry.propSprite) Neo.drawEnvironmentPixelSprite?.(tile.getContext('2d'), 0, 0, 16, 16, entry.def);
+      else Neo.drawEnvironmentTileAsset?.(tile.getContext('2d'), 0, 0, 16, entry.def);
       ctx.imageSmoothingEnabled = false;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(tile, 0, 0, canvas.width, canvas.height);
@@ -882,6 +960,7 @@
         <label>Brush <input type="color" id="seBrushColor" value="${editor.brushColor}"></label>
         <label><input type="checkbox" id="seEraser"> Eraser</label>
       </div>
+      ${paletteStripHtml()}
       <div class="sprite-editor-frame-strip" id="seFrameStrip"></div>
       <div class="sprite-editor-field-row">
         <label>Frame Width <input type="number" id="seFrameWidth" min="1" value="${editor.frameWidth}"></label>
@@ -928,6 +1007,7 @@
     repaintImageStripCanvas(canvas, editor);
     const rerenderAll = () => renderImageStripDetail(container, entry);
     wireHistoryControls(editor, rerenderAll);
+    renderPaletteStrip();
     renderFrameStrip(container.querySelector('#seFrameStrip'), editor, rerenderAll);
 
     let paintTimer = null;
@@ -1137,6 +1217,7 @@
       <p class="sprite-editor-note">Edits apply live this session. This is the base pose the game procedurally derives idle/walk/attack frames from — you don't need to hand-draw each frame. Download combatants.js and replace the file to keep the change.</p>
       ${historyBarHtml()}
       <div class="sprite-editor-canvas-wrap"><canvas class="sprite-editor-canvas"></canvas></div>
+      ${paletteStripHtml()}
       <div class="sprite-editor-toolbar">
         <div class="sprite-editor-swatch-row" id="seSwatches"></div>
         <label><input type="checkbox" id="seEraser"> Eraser</label>
@@ -1154,6 +1235,7 @@
 
     const canvas = container.querySelector('.sprite-editor-canvas');
     wireHistoryControls(editor, () => renderActorDetail(container, entry));
+    renderPaletteStrip();
 
     const swatchRow = container.querySelector('#seSwatches');
     letters.forEach(letter => {
@@ -1290,6 +1372,7 @@
       <p class="sprite-editor-note">Edits apply live this session. Download icons.js and replace the file to keep the change.</p>
       ${historyBarHtml()}
       <div class="sprite-editor-canvas-wrap"><canvas class="sprite-editor-canvas"></canvas></div>
+      ${paletteStripHtml()}
       <div class="sprite-editor-toolbar">
         <div class="sprite-editor-swatch-row" id="seSwatches"></div>
         <label><input type="checkbox" id="seEraser"> Eraser</label>
@@ -1302,6 +1385,7 @@
 
     const canvas = container.querySelector('.sprite-editor-canvas');
     wireHistoryControls(editor, () => renderIconDetail(container, entry));
+    renderPaletteStrip();
     const swatchRow = container.querySelector('#seSwatches');
     ['color', 'accent'].forEach(channel => {
       const wrap = document.createElement('div');
@@ -1424,10 +1508,11 @@
     container.innerHTML = `
       <div class="sprite-editor-detail-head">
         <h4 class="sprite-editor-detail-title">${entry.label}</h4>
-        <div class="sprite-editor-detail-path">kind: ${def.kind || 'unknown'}</div>
+        <div class="sprite-editor-detail-path">${entry.propSprite ? 'prop sprite' : `kind: ${def.kind || 'unknown'}`}</div>
       </div>
       ${historyBarHtml()}
       <div class="sprite-editor-canvas-wrap"><canvas class="sprite-editor-canvas" width="256" height="256"></canvas></div>
+      ${paletteStripHtml()}
       <div class="sprite-editor-toolbar">
         <div class="sprite-editor-swatch-row" id="seSwatches"></div>
         <label><input type="checkbox" id="seEraser" ${editor.erasing ? 'checked' : ''}> Eraser</label>
@@ -1439,6 +1524,7 @@
     `;
     const canvas = container.querySelector('canvas');
     wireHistoryControls(editor, () => renderEnvTileDetail(container, entry));
+    renderPaletteStrip();
     const swatchRow = container.querySelector('#seSwatches');
     letters.forEach(letter => {
       const wrap = document.createElement('div');
@@ -1803,6 +1889,7 @@
     renderGrid();
     renderDetail();
     renderPaletteStrip();
+    loadDefaultPalette();
   }
 
   function close() {

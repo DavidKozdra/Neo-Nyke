@@ -888,10 +888,12 @@
 
   function drawRoomDecor() {
     const theme = getRoomArtTheme();
+    const propSprites = window.NeoNykeEnvironmentTileDefs?.propSprites || {};
     Neo.decorations.forEach(decor => {
       Neo.ctx.save();
       Neo.ctx.translate(decor.x, decor.y);
       if (decor.kind === 'rubble') {
+        if (Neo.drawEnvironmentPixelSprite?.(Neo.ctx, -decor.r, -decor.r, decor.r * 2, decor.r * 2, propSprites.rubble)) { Neo.ctx.restore(); return; }
         Neo.ctx.fillStyle = 'rgba(42,44,38,0.55)';
         Neo.ctx.beginPath();
         Neo.ctx.ellipse(0, 1, decor.r * 1.15, decor.r * 0.62, -0.2, 0, Math.PI * 2);
@@ -906,6 +908,7 @@
       } else if (decor.kind === 'banner') {
         // Banners/flags retired — draw nothing (also stripped at room load).
       } else if (decor.kind === 'crack') {
+        if (Neo.drawEnvironmentPixelSprite?.(Neo.ctx, -decor.r, -decor.r, decor.r * 2, decor.r * 2, propSprites.crack_decal)) { Neo.ctx.restore(); return; }
         Neo.ctx.strokeStyle = theme.crack;
         Neo.ctx.lineWidth = 2.2;
         Neo.ctx.beginPath();
@@ -916,6 +919,7 @@
         Neo.ctx.lineTo(decor.r, -2);
         Neo.ctx.stroke();
       } else if (decor.kind === 'brazier') {
+        if (Neo.drawEnvironmentPixelSprite?.(Neo.ctx, -decor.r, -decor.r, decor.r * 2, decor.r * 2, propSprites.brazier)) { Neo.ctx.restore(); return; }
         Neo.ctx.fillStyle = 'rgba(26,20,14,0.9)';
         Neo.ctx.fillRect(-decor.r * 0.7, -2, decor.r * 1.4, decor.r * 0.8);
         Neo.ctx.fillStyle = 'rgba(90,95,92,0.82)';
@@ -927,6 +931,7 @@
       } else if (decor.kind === 'torch') {
         drawCandle(decor);
       } else if (decor.kind === 'tree') {
+        if (Neo.drawEnvironmentPixelSprite?.(Neo.ctx, -decor.r, -decor.r, decor.r * 2, decor.r * 2, propSprites.tree)) { Neo.ctx.restore(); return; }
         // Shadow
         Neo.ctx.fillStyle = 'rgba(20,30,14,0.35)';
         Neo.ctx.beginPath();
@@ -956,6 +961,7 @@
         Neo.ctx.fill();
         Neo.ctx.shadowBlur = 0;
       } else if (decor.kind === 'fruit_tree') {
+        if (Neo.drawEnvironmentPixelSprite?.(Neo.ctx, -decor.r, -decor.r, decor.r * 2, decor.r * 2, propSprites.fruit_tree)) { Neo.ctx.restore(); return; }
         Neo.ctx.fillStyle = 'rgba(18,30,12,0.34)';
         Neo.ctx.beginPath();
         Neo.ctx.ellipse(0, decor.r * 0.74, decor.r, decor.r * 0.36, 0, 0, Math.PI * 2);
@@ -982,6 +988,7 @@
         Neo.ctx.fill();
         Neo.ctx.shadowBlur = 0;
       } else if (decor.kind === 'moss_patch') {
+        if (Neo.drawEnvironmentPixelSprite?.(Neo.ctx, -decor.r, -decor.r, decor.r * 2, decor.r * 2, propSprites.moss_patch)) { Neo.ctx.restore(); return; }
         Neo.ctx.fillStyle = 'rgba(17,34,18,0.5)';
         Neo.ctx.beginPath();
         Neo.ctx.ellipse(0, 2, decor.r * 1.2, decor.r * 0.56, decor.x * 0.01, 0, Math.PI * 2);
@@ -1068,6 +1075,9 @@
   // by position so neighbouring candles don't pulse in sync.
   function drawCandle(decor) {
     const ctx = Neo.ctx;
+    const sprite = window.NeoNykeEnvironmentTileDefs?.propSprites?.candle;
+    const r = Math.max(12, Number(decor?.r || 12));
+    if (Neo.drawEnvironmentPixelSprite?.(ctx, -r, -r, r * 2, r * 2, sprite)) return;
     const t = Date.now() * 0.006 + (decor.x || 0) * 0.05 + (decor.y || 0) * 0.03;
     const flick = 1 + Math.sin(t) * 0.12 + Math.sin(t * 2.7) * 0.06; // 0.82..1.18
     const sway = Math.sin(t * 1.6) * 0.8;
@@ -1272,6 +1282,11 @@
 
     const w = Math.max(16, Number(prop.w || prop.r * 2 || 48));
     const h = Math.max(16, Number(prop.h || prop.r * 2 || 48));
+    const coverSprite = window.NeoNykeEnvironmentTileDefs?.propSprites?.cover_wall;
+    if (Neo.drawEnvironmentPixelSprite?.(Neo.ctx, -w / 2, -h / 2, w, h, coverSprite)) {
+      if (prop.hitFlash > 0) furnitureHitFlash(prop, w, h);
+      return;
+    }
     const left = -w / 2;
     const top = -h / 2;
     const hpRatio = Neo.clamp(Number(prop.hp || 0) / Math.max(1, Number(prop.maxHp || prop.hp || 1)), 0, 1);
