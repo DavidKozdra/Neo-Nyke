@@ -19,6 +19,21 @@ export function buildEnvironmentTileAtlas() {
 
 export function drawEnvironmentTileAsset(g, ox, oy, size, def) {
     g.save();
+    if (Array.isArray(def.pixels)) {
+      const sourceSize = Number(def.pixelSize || 16) || 16;
+      const cell = size / sourceSize;
+      def.pixels.forEach((row, y) => {
+        if (typeof row !== 'string') return;
+        for (let x = 0; x < row.length; x += 1) {
+          const color = row[x];
+          if (color === '.' || color === ' ') continue;
+          g.fillStyle = def.palette?.[color] || '#ff00ff';
+          g.fillRect(ox + x * cell, oy + y * cell, Math.ceil(cell), Math.ceil(cell));
+        }
+      });
+      g.restore();
+      return;
+    }
     if (!def.transparent) {
       g.fillStyle = def.base || '#343832';
       g.fillRect(ox, oy, size, size);

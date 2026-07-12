@@ -10125,6 +10125,29 @@ button.alt.danger {
   margin: 12px 0;
 }
 
+.sprite-editor-historybar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0 10px;
+}
+
+.sprite-editor-historybar .sprite-editor-note {
+  margin: 0;
+}
+
+.sprite-editor-historybar button:disabled,
+.sprite-editor-actions button:disabled {
+  opacity: .48;
+  cursor: not-allowed;
+}
+
+.sprite-editor-modebar .sandbox-mini-btn.active {
+  border-color: #85c6ff;
+  background: rgba(133, 198, 255, .18);
+  color: #eaf5ff;
+}
+
 .sprite-editor-toolbar label {
   display: inline-flex;
   align-items: center;

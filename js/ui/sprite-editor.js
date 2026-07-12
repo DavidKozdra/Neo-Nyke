@@ -73,6 +73,85 @@
     directSave: false,
   };
 
+  function clonePlain(value) {
+    return value == null ? value : JSON.parse(JSON.stringify(value));
+  }
+
+  function markDirty(editor, dirty = true) {
+    if (!editor) return;
+    editor.dirty = dirty;
+    const status = document.getElementById('seDirtyStatus');
+    if (status) status.textContent = dirty ? 'Unsaved changes' : 'Saved';
+    const saveBtn = document.getElementById('seSaveDirect');
+    if (saveBtn && saveBtn.dataset.historySave === 'true') saveBtn.disabled = !dirty;
+  }
+
+  function ensureHistory(editor) {
+    if (!editor.undoStack) editor.undoStack = [];
+    if (!editor.redoStack) editor.redoStack = [];
+  }
+
+  function snapshotsEqual(a, b) {
+    if (a === b) return true;
+    if (!a || !b) return false;
+    if (a.imageData || b.imageData) {
+      if (!a.imageData || !b.imageData) return false;
+      if (a.width !== b.width || a.height !== b.height) return false;
+      const ad = a.imageData.data;
+      const bd = b.imageData.data;
+      if (ad.length !== bd.length) return false;
+      for (let i = 0; i < ad.length; i += 1) if (ad[i] !== bd[i]) return false;
+      return JSON.stringify(a.config || {}) === JSON.stringify(b.config || {});
+    }
+    return JSON.stringify(a) === JSON.stringify(b);
+  }
+
+  function pushHistory(editor, before, after) {
+    if (!editor || !before || !after || snapshotsEqual(before, after)) return;
+    ensureHistory(editor);
+    editor.undoStack.push({ before, after });
+    if (editor.undoStack.length > 80) editor.undoStack.shift();
+    editor.redoStack = [];
+    markDirty(editor, true);
+    refreshHistoryControls(editor);
+  }
+
+  function refreshHistoryControls(editor = state.editor) {
+    if (!editor) return;
+    ensureHistory(editor);
+    const undo = document.getElementById('seUndo');
+    const redo = document.getElementById('seRedo');
+    if (undo) undo.disabled = editor.undoStack.length === 0;
+    if (redo) redo.disabled = editor.redoStack.length === 0;
+    markDirty(editor, !!editor.dirty);
+  }
+
+  function historyBarHtml() {
+    return `
+      <div class="sprite-editor-historybar">
+        <button type="button" class="sandbox-mini-btn" id="seUndo" title="Undo (Ctrl+Z)">Undo</button>
+        <button type="button" class="sandbox-mini-btn" id="seRedo" title="Redo (Ctrl+Y)">Redo</button>
+        <span class="sprite-editor-note" id="seDirtyStatus">Saved</span>
+      </div>
+    `;
+  }
+
+  function wireHistoryControls(editor, rerender) {
+    ensureHistory(editor);
+    const applyEntry = (snapshot, source, target) => {
+      const entry = source.pop();
+      if (!entry) return;
+      target.push(entry);
+      editor.applySnapshot(snapshot);
+      markDirty(editor, true);
+      refreshHistoryControls(editor);
+      rerender?.();
+    };
+    document.getElementById('seUndo')?.addEventListener('click', () => applyEntry(editor.undoStack.at(-1)?.before, editor.undoStack, editor.redoStack));
+    document.getElementById('seRedo')?.addEventListener('click', () => applyEntry(editor.redoStack.at(-1)?.after, editor.redoStack, editor.undoStack));
+    refreshHistoryControls(editor);
+  }
+
   let atlasRebuildTimer = null;
   function scheduleAtlasRebuild() {
     clearTimeout(atlasRebuildTimer);
@@ -85,17 +164,27 @@
   // each render just swaps `currentDrag`, so re-selecting sprites never piles
   // up extra window listeners bound to long-gone canvases.
   let currentDrag = null;
-  function bindPaintDrag(canvas, onPaint) {
-    currentDrag = { painting: false, onPaint };
+  function bindPaintDrag(canvas, onPaint, onStart, onEnd) {
+    currentDrag = { painting: false, onPaint, onStart, onEnd };
     canvas.addEventListener('pointerdown', e => {
+      canvas.setPointerCapture?.(e.pointerId);
       currentDrag.painting = true;
+      currentDrag.dragMoved = false;
+      currentDrag.before = onStart?.(e.clientX, e.clientY);
       onPaint(e.clientX, e.clientY);
     });
   }
   window.addEventListener('pointermove', e => {
-    if (currentDrag?.painting) currentDrag.onPaint(e.clientX, e.clientY);
+    if (currentDrag?.painting) {
+      currentDrag.dragMoved = true;
+      currentDrag.onPaint(e.clientX, e.clientY);
+    }
   });
-  window.addEventListener('pointerup', () => { if (currentDrag) currentDrag.painting = false; });
+  window.addEventListener('pointerup', () => {
+    if (!currentDrag?.painting) return;
+    currentDrag.painting = false;
+    currentDrag.onEnd?.(currentDrag.before);
+  });
 
   // Live animation preview (image-strip charsets only) — a single interval
   // shared the same way as currentDrag, so switching sprites never leaves an
@@ -391,13 +480,13 @@
       drawImageThumb(canvas, entry);
     } else if (entry.kind === 'env-tile') {
       const ctx = canvas.getContext('2d');
-      ctx.fillStyle = entry.def.base || '#333';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = entry.def.shade || 'rgba(0,0,0,.3)';
-      ctx.fillRect(0, canvas.height * 0.6, canvas.width, canvas.height * 0.4);
-      ctx.strokeStyle = entry.def.edge || '#000';
-      ctx.lineWidth = 3;
-      ctx.strokeRect(1.5, 1.5, canvas.width - 3, canvas.height - 3);
+      const tile = document.createElement('canvas');
+      tile.width = 16;
+      tile.height = 16;
+      Neo.drawEnvironmentTileAsset?.(tile.getContext('2d'), 0, 0, 16, entry.def);
+      ctx.imageSmoothingEnabled = false;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(tile, 0, 0, canvas.width, canvas.height);
     }
 
     wrap.addEventListener('click', () => selectEntry(entry.id));
@@ -495,11 +584,16 @@
       await saveEditorFile(editor.entry.savePath, await canvasPngBase64(editor.master), 'base64');
       button.textContent = 'Saved';
       imageCache.delete(editor.entry.src);
+      markDirty(editor, false);
     } catch (error) {
       alert(error.message);
     } finally {
       button.disabled = false;
-      setTimeout(() => { if (button.isConnected) button.textContent = 'Save to Game'; }, 1200);
+      setTimeout(() => {
+        if (!button.isConnected) return;
+        button.textContent = 'Save to Game';
+        if (button.dataset.historySave === 'true') button.disabled = !editor?.dirty;
+      }, 1200);
     }
   }
 
@@ -515,11 +609,16 @@
       await saveEditorFile(config.info.path, config.text);
       imageCache.delete(editor.entry.src);
       button.textContent = 'Sprite + Config Saved';
+      markDirty(editor, false);
     } catch (error) {
       alert(error.message);
     } finally {
       button.disabled = false;
-      setTimeout(() => { if (button.isConnected) button.textContent = 'Save Sprite + Config'; }, 1400);
+      setTimeout(() => {
+        if (!button.isConnected) return;
+        button.textContent = 'Save Sprite + Config';
+        if (button.dataset.historySave === 'true') button.disabled = !editor?.dirty;
+      }, 1400);
     }
   }
 
@@ -707,6 +806,36 @@
     scheduleAtlasRebuild();
   }
 
+  function captureImageStripSnapshot(editor) {
+    const ctx = editor.master.getContext('2d');
+    return {
+      width: editor.master.width,
+      height: editor.master.height,
+      imageData: ctx.getImageData(0, 0, editor.master.width, editor.master.height),
+      config: {
+        frameWidth: editor.frameWidth,
+        frameHeight: editor.frameHeight,
+        frameCount: editor.frameCount,
+        currentFrame: editor.currentFrame,
+        idleFrames: editor.idleFrames ? [...editor.idleFrames] : null,
+        walkFrames: editor.walkFrames ? [...editor.walkFrames] : null,
+        armFrame: editor.armFrame,
+        stepRate: editor.stepRate,
+        idleRate: editor.idleRate,
+      },
+    };
+  }
+
+  function applyImageStripSnapshot(editor, snapshot) {
+    if (!snapshot) return;
+    editor.master.width = snapshot.width;
+    editor.master.height = snapshot.height;
+    editor.master.getContext('2d').putImageData(snapshot.imageData, 0, 0);
+    Object.assign(editor, clonePlain(snapshot.config));
+    commitCharsetLive(editor);
+    commitFrameConfigLive(editor);
+  }
+
   async function downloadImageStrip(editor) {
     const blob = await new Promise(resolve => editor.master.toBlob(resolve, 'image/png'));
     if (!blob) return;
@@ -739,12 +868,15 @@
 
     const editor = state.editor;
     const isCharset = !!entry.liveCharsetKey;
+    editor.captureSnapshot = () => captureImageStripSnapshot(editor);
+    editor.applySnapshot = snapshot => applyImageStripSnapshot(editor, snapshot);
     container.innerHTML = `
       <div class="sprite-editor-detail-head">
         <h4 class="sprite-editor-detail-title">${entry.label}</h4>
         <div class="sprite-editor-detail-path">save as: ${entry.savePath}</div>
       </div>
       <p class="sprite-editor-note">${isCharset ? 'Edits preview live in this session (the atlas rebuilds automatically). ' : ''}Download saves a PNG — drop it into the path above to make the change permanent.</p>
+      ${historyBarHtml()}
       <div class="sprite-editor-canvas-wrap"><canvas class="sprite-editor-canvas"></canvas></div>
       <div class="sprite-editor-toolbar">
         <label>Brush <input type="color" id="seBrushColor" value="${editor.brushColor}"></label>
@@ -783,7 +915,7 @@
         <button type="button" class="sandbox-mini-btn" id="seReplace">Replace Image…</button>
         <input type="file" accept="image/png,image/*" id="seReplaceInput" style="display:none">
         <button type="button" class="nav-btn nav-btn--minor" id="seDownload">Download PNG</button>
-        ${state.directSave ? `<button type="button" class="nav-btn" id="seSaveDirect">${isCharset ? 'Save Sprite + Config' : 'Save to Game'}</button>` : ''}
+        ${state.directSave ? `<button type="button" class="nav-btn" id="seSaveDirect" data-history-save="true" disabled>${isCharset ? 'Save Sprite + Config' : 'Save to Game'}</button>` : ''}
         <button type="button" class="sandbox-mini-btn" id="seReset">Reset</button>
         ${isCharset ? `
           <button type="button" class="nav-btn nav-btn--minor" id="seDownloadSheetDefs">Download character-sheets.js</button>
@@ -795,6 +927,7 @@
     const canvas = container.querySelector('.sprite-editor-canvas');
     repaintImageStripCanvas(canvas, editor);
     const rerenderAll = () => renderImageStripDetail(container, entry);
+    wireHistoryControls(editor, rerenderAll);
     renderFrameStrip(container.querySelector('#seFrameStrip'), editor, rerenderAll);
 
     let paintTimer = null;
@@ -811,7 +944,9 @@
       clearTimeout(paintTimer);
       paintTimer = setTimeout(() => commitCharsetLive(editor), 250);
     }
-    bindPaintDrag(canvas, paintAt);
+    bindPaintDrag(canvas, paintAt, () => editor.captureSnapshot(), before => {
+      pushHistory(editor, before, editor.captureSnapshot());
+    });
 
     editor.applyPaletteColor = hex => {
       editor.brushColor = hex;
@@ -836,16 +971,21 @@
       rerenderAll();
     }
     container.querySelector('#seFrameWidth').addEventListener('change', e => {
+      const before = editor.captureSnapshot();
       editor.frameWidth = Math.max(1, parseInt(e.target.value, 10) || editor.frameWidth);
       finalizeFrameSize();
+      pushHistory(editor, before, editor.captureSnapshot());
     });
     container.querySelector('#seFrameHeight').addEventListener('change', e => {
+      const before = editor.captureSnapshot();
       editor.frameHeight = Math.max(1, parseInt(e.target.value, 10) || editor.frameHeight);
       finalizeFrameSize();
+      pushHistory(editor, before, editor.captureSnapshot());
     });
 
     if (isCharset) {
       container.querySelector('#seInIdle').addEventListener('change', e => {
+        const before = editor.captureSnapshot();
         if (!e.target.checked && editor.idleFrames.length <= 1 && editor.idleFrames.includes(editor.currentFrame)) {
           e.target.checked = true; // at least one frame must stay in the idle cycle
           return;
@@ -858,9 +998,11 @@
           editor.idleFrames = editor.idleFrames.filter(i => i !== editor.currentFrame);
         }
         commitFrameConfigLive(editor);
+        pushHistory(editor, before, editor.captureSnapshot());
         rerenderAll();
       });
       container.querySelector('#seInWalk').addEventListener('change', e => {
+        const before = editor.captureSnapshot();
         if (e.target.checked) {
           if (!editor.walkFrames.includes(editor.currentFrame)) {
             editor.walkFrames = [...editor.walkFrames, editor.currentFrame].sort((a, b) => a - b);
@@ -869,9 +1011,11 @@
           editor.walkFrames = editor.walkFrames.filter(i => i !== editor.currentFrame);
         }
         commitFrameConfigLive(editor);
+        pushHistory(editor, before, editor.captureSnapshot());
         rerenderAll();
       });
       container.querySelector('#seIsArm').addEventListener('change', e => {
+        const before = editor.captureSnapshot();
         editor.armFrame = e.target.checked ? editor.currentFrame : null;
         if (editor.armFrame != null) {
           editor.idleFrames = editor.idleFrames.filter(i => i !== editor.armFrame);
@@ -883,15 +1027,20 @@
         }
         if (editor.armFrame == null && editor.previewMode === 'arm') editor.previewMode = 'idle';
         commitFrameConfigLive(editor);
+        pushHistory(editor, before, editor.captureSnapshot());
         rerenderAll();
       });
       container.querySelector('#seStepRate').addEventListener('change', e => {
+        const before = editor.captureSnapshot();
         editor.stepRate = e.target.value === '' ? '' : Number(e.target.value);
         commitFrameConfigLive(editor);
+        pushHistory(editor, before, editor.captureSnapshot());
       });
       container.querySelector('#seIdleRate').addEventListener('change', e => {
+        const before = editor.captureSnapshot();
         editor.idleRate = e.target.value === '' ? '' : Number(e.target.value);
         commitFrameConfigLive(editor);
+        pushHistory(editor, before, editor.captureSnapshot());
       });
       container.querySelector('#seDownloadSheetDefs').addEventListener('click', () => downloadDataFile('characterSheets'));
       container.querySelector('#seRevert').addEventListener('click', () => convertToProcedural(entry.liveCharsetKey));
@@ -909,6 +1058,7 @@
     replaceInput.addEventListener('change', () => {
       const file = replaceInput.files?.[0];
       if (!file) return;
+      const before = editor.captureSnapshot();
       const url = URL.createObjectURL(file);
       const img = new Image();
       img.onload = () => {
@@ -932,6 +1082,7 @@
         URL.revokeObjectURL(url);
         commitCharsetLive(editor);
         if (isCharset) commitFrameConfigLive(editor);
+        pushHistory(editor, before, editor.captureSnapshot());
         renderImageStripDetail(container, entry);
       };
       img.src = url;
@@ -963,6 +1114,20 @@
     const editor = state.editor;
     const letters = Object.keys(def.palette);
     const isCharacter = entry.tab === 'characters';
+    editor.captureSnapshot = () => ({
+      pixels: [...def.pixels],
+      palette: { ...def.palette },
+      activeSwatch: editor.activeSwatch,
+      erasing: editor.erasing,
+    });
+    editor.applySnapshot = snapshot => {
+      if (!snapshot) return;
+      def.pixels = [...snapshot.pixels];
+      def.palette = { ...snapshot.palette };
+      editor.activeSwatch = snapshot.activeSwatch || editor.activeSwatch;
+      editor.erasing = !!snapshot.erasing;
+      scheduleAtlasRebuild();
+    };
 
     container.innerHTML = `
       <div class="sprite-editor-detail-head">
@@ -970,6 +1135,7 @@
         <div class="sprite-editor-detail-path">save to: assets/sprites/combatants.js</div>
       </div>
       <p class="sprite-editor-note">Edits apply live this session. This is the base pose the game procedurally derives idle/walk/attack frames from — you don't need to hand-draw each frame. Download combatants.js and replace the file to keep the change.</p>
+      ${historyBarHtml()}
       <div class="sprite-editor-canvas-wrap"><canvas class="sprite-editor-canvas"></canvas></div>
       <div class="sprite-editor-toolbar">
         <div class="sprite-editor-swatch-row" id="seSwatches"></div>
@@ -977,7 +1143,7 @@
       </div>
       <div class="sprite-editor-actions">
         <button type="button" class="nav-btn nav-btn--minor" id="seDownload">Download combatants.js</button>
-        ${state.directSave ? '<button type="button" class="nav-btn" id="seSaveDirect">Save to Game</button>' : ''}
+        ${state.directSave ? '<button type="button" class="nav-btn" id="seSaveDirect" data-history-save="true" disabled>Save to Game</button>' : ''}
         <button type="button" class="sandbox-mini-btn" id="seReset">Reset</button>
         ${isCharacter ? `
           <button type="button" class="sandbox-mini-btn" id="seLoadCharset">Load Custom Charset PNG…</button>
@@ -987,6 +1153,7 @@
     `;
 
     const canvas = container.querySelector('.sprite-editor-canvas');
+    wireHistoryControls(editor, () => renderActorDetail(container, entry));
 
     const swatchRow = container.querySelector('#seSwatches');
     letters.forEach(letter => {
@@ -1008,10 +1175,12 @@
       colorInput.type = 'color';
       colorInput.value = def.palette[letter];
       colorInput.addEventListener('input', e => {
+        const before = editor.captureSnapshot();
         def.palette[letter] = e.target.value;
         btn.style.background = e.target.value;
         repaintActorCanvas(canvas, def);
         scheduleAtlasRebuild();
+        pushHistory(editor, before, editor.captureSnapshot());
       });
       const keyLabel = document.createElement('span');
       keyLabel.className = 'sprite-editor-swatch__key';
@@ -1021,9 +1190,11 @@
     });
 
     editor.applyPaletteColor = hex => {
+      const before = editor.captureSnapshot();
       def.palette[editor.activeSwatch] = hex;
       repaintActorCanvas(canvas, def);
       scheduleAtlasRebuild();
+      pushHistory(editor, before, editor.captureSnapshot());
       renderActorDetail(container, entry);
     };
 
@@ -1043,11 +1214,13 @@
       repaintActorCanvas(canvas, def);
       scheduleAtlasRebuild();
     }
-    bindPaintDrag(canvas, paintAt);
+    bindPaintDrag(canvas, paintAt, () => editor.captureSnapshot(), before => {
+      pushHistory(editor, before, editor.captureSnapshot());
+    });
 
     container.querySelector('#seEraser').addEventListener('change', e => { editor.erasing = e.target.checked; });
     container.querySelector('#seDownload').addEventListener('click', () => downloadDataFile('combatants'));
-    container.querySelector('#seSaveDirect')?.addEventListener('click', e => saveDataFile('combatants', e.currentTarget));
+    container.querySelector('#seSaveDirect')?.addEventListener('click', e => saveDataFile('combatants', e.currentTarget, editor));
     container.querySelector('#seReset').addEventListener('click', () => {
       alert('Reset requires reloading the page — session edits to combatants.js are only held in memory, and the original defs aren\'t kept in a snapshot.');
     });
@@ -1089,6 +1262,25 @@
       state.editor = { kind: 'icon-grid', entry, activeChannel: 'color', scale: 30 };
     }
     const editor = state.editor;
+    editor.captureSnapshot = () => ({
+      color: def.color,
+      accent: def.accent,
+      pixels: clonePlain(def.pixels || []),
+      accentPixels: clonePlain(def.accentPixels || []),
+      activeChannel: editor.activeChannel,
+      erasing: editor.erasing,
+    });
+    editor.applySnapshot = snapshot => {
+      if (!snapshot) return;
+      def.color = snapshot.color;
+      if (snapshot.accent) def.accent = snapshot.accent; else delete def.accent;
+      def.pixels = clonePlain(snapshot.pixels || []);
+      if (snapshot.accentPixels?.length) def.accentPixels = clonePlain(snapshot.accentPixels);
+      else delete def.accentPixels;
+      editor.activeChannel = snapshot.activeChannel || editor.activeChannel;
+      editor.erasing = !!snapshot.erasing;
+      scheduleAtlasRebuild();
+    };
 
     container.innerHTML = `
       <div class="sprite-editor-detail-head">
@@ -1096,6 +1288,7 @@
         <div class="sprite-editor-detail-path">save to: assets/sprites/icons.js</div>
       </div>
       <p class="sprite-editor-note">Edits apply live this session. Download icons.js and replace the file to keep the change.</p>
+      ${historyBarHtml()}
       <div class="sprite-editor-canvas-wrap"><canvas class="sprite-editor-canvas"></canvas></div>
       <div class="sprite-editor-toolbar">
         <div class="sprite-editor-swatch-row" id="seSwatches"></div>
@@ -1103,11 +1296,12 @@
       </div>
       <div class="sprite-editor-actions">
         <button type="button" class="nav-btn nav-btn--minor" id="seDownload">Download icons.js</button>
-        ${state.directSave ? '<button type="button" class="nav-btn" id="seSaveDirect">Save to Game</button>' : ''}
+        ${state.directSave ? '<button type="button" class="nav-btn" id="seSaveDirect" data-history-save="true" disabled>Save to Game</button>' : ''}
       </div>
     `;
 
     const canvas = container.querySelector('.sprite-editor-canvas');
+    wireHistoryControls(editor, () => renderIconDetail(container, entry));
     const swatchRow = container.querySelector('#seSwatches');
     ['color', 'accent'].forEach(channel => {
       const wrap = document.createElement('div');
@@ -1127,10 +1321,12 @@
       colorInput.type = 'color';
       colorInput.value = def[channel] || '#888888';
       colorInput.addEventListener('input', e => {
+        const before = editor.captureSnapshot();
         def[channel] = e.target.value;
         btn.style.background = e.target.value;
         repaintIconCanvas(canvas, def);
         scheduleAtlasRebuild();
+        pushHistory(editor, before, editor.captureSnapshot());
       });
       const keyLabel = document.createElement('span');
       keyLabel.className = 'sprite-editor-swatch__key';
@@ -1140,9 +1336,11 @@
     });
 
     editor.applyPaletteColor = hex => {
+      const before = editor.captureSnapshot();
       def[editor.activeChannel] = hex;
       repaintIconCanvas(canvas, def);
       scheduleAtlasRebuild();
+      pushHistory(editor, before, editor.captureSnapshot());
       renderIconDetail(container, entry);
     };
 
@@ -1165,11 +1363,13 @@
       repaintIconCanvas(canvas, def);
       scheduleAtlasRebuild();
     }
-    bindPaintDrag(canvas, paintAt);
+    bindPaintDrag(canvas, paintAt, () => editor.captureSnapshot(), before => {
+      pushHistory(editor, before, editor.captureSnapshot());
+    });
 
     container.querySelector('#seEraser').addEventListener('change', e => { editor.erasing = e.target.checked; });
     container.querySelector('#seDownload').addEventListener('click', () => downloadDataFile('icons'));
-    container.querySelector('#seSaveDirect')?.addEventListener('click', e => saveDataFile('icons', e.currentTarget));
+    container.querySelector('#seSaveDirect')?.addEventListener('click', e => saveDataFile('icons', e.currentTarget, editor));
   }
 
   function repaintIconCanvas(canvas, def) {
@@ -1190,55 +1390,197 @@
     }
   }
 
-  // ── Detail: procedural environment tile editor ──────────────────────────
+  // ── Detail: raster environment tile editor ──────────────────────────────
   function renderEnvTileDetail(container, entry) {
     const def = entry.def;
-    const colorKeys = Object.keys(def).filter(key => typeof def[key] === 'string' && /^#[0-9a-f]{3,8}$/i.test(def[key]));
+    if (!state.editor || state.editor.entry.id !== entry.id) {
+      ensureEnvTileRaster(def);
+      state.editor = {
+        kind: 'env-tile',
+        entry,
+        activeSwatch: Object.keys(def.palette || {})[0] || 'a',
+        erasing: false,
+        scale: 16,
+      };
+    }
+    const editor = state.editor;
+    ensureEnvTileRaster(def);
+    editor.captureSnapshot = () => ({
+      palette: { ...(def.palette || {}) },
+      pixels: [...(def.pixels || [])],
+      activeSwatch: editor.activeSwatch,
+      erasing: editor.erasing,
+    });
+    editor.applySnapshot = snapshot => {
+      if (!snapshot) return;
+      def.pixelSize = 16;
+      def.palette = { ...snapshot.palette };
+      def.pixels = [...snapshot.pixels];
+      editor.activeSwatch = snapshot.activeSwatch || Object.keys(def.palette || {})[0] || 'a';
+      editor.erasing = !!snapshot.erasing;
+      rebuildEnvironmentPreviewState();
+    };
+    const letters = Object.keys(def.palette || {});
     container.innerHTML = `
       <div class="sprite-editor-detail-head">
         <h4 class="sprite-editor-detail-title">${entry.label}</h4>
         <div class="sprite-editor-detail-path">kind: ${def.kind || 'unknown'}</div>
       </div>
+      ${historyBarHtml()}
       <div class="sprite-editor-canvas-wrap"><canvas class="sprite-editor-canvas" width="256" height="256"></canvas></div>
-      <div class="sprite-editor-swatch-row">
-        ${colorKeys.map(key => `<label class="sprite-editor-swatch"><input type="color" data-env-color="${key}" value="${def[key]}"><span class="sprite-editor-swatch__key">${key}</span></label>`).join('')}
-      </div>
-      <p class="sprite-editor-note">Colors and procedural geometry update live. Geometry uses arrays of tile-space coordinates (the tile is 16×16).</p>
-      <div class="sprite-editor-env-fields">
-        <label>Cracks <textarea id="seEnvCracks" rows="4">${JSON.stringify(def.cracks || [])}</textarea></label>
-        <label>Chips <textarea id="seEnvChips" rows="4">${JSON.stringify(def.chips || [])}</textarea></label>
+      <div class="sprite-editor-toolbar">
+        <div class="sprite-editor-swatch-row" id="seSwatches"></div>
+        <label><input type="checkbox" id="seEraser" ${editor.erasing ? 'checked' : ''}> Eraser</label>
       </div>
       <div class="sprite-editor-actions">
         <button type="button" class="nav-btn nav-btn--minor" id="seDownload">Download environment.js</button>
-        ${state.directSave ? '<button type="button" class="nav-btn" id="seSaveDirect">Save to Game</button>' : ''}
+        ${state.directSave ? '<button type="button" class="nav-btn" id="seSaveDirect" data-history-save="true" disabled>Save to Game</button>' : ''}
       </div>
     `;
     const canvas = container.querySelector('canvas');
+    wireHistoryControls(editor, () => renderEnvTileDetail(container, entry));
+    const swatchRow = container.querySelector('#seSwatches');
+    letters.forEach(letter => {
+      const wrap = document.createElement('div');
+      wrap.className = `sprite-editor-swatch${editor.activeSwatch === letter ? ' active' : ''}`;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'sprite-editor-swatch__select';
+      btn.style.background = def.palette[letter];
+      btn.textContent = letter.toUpperCase();
+      btn.addEventListener('click', () => {
+        editor.activeSwatch = letter;
+        editor.erasing = false;
+        container.querySelector('#seEraser').checked = false;
+        swatchRow.querySelectorAll('.sprite-editor-swatch').forEach(el => el.classList.remove('active'));
+        wrap.classList.add('active');
+      });
+      const colorInput = document.createElement('input');
+      colorInput.type = 'color';
+      colorInput.value = def.palette[letter];
+      colorInput.addEventListener('input', e => {
+        const before = editor.captureSnapshot();
+        def.palette[letter] = e.target.value;
+        btn.style.background = e.target.value;
+        repaint();
+        pushHistory(editor, before, editor.captureSnapshot());
+      });
+      const keyLabel = document.createElement('span');
+      keyLabel.className = 'sprite-editor-swatch__key';
+      keyLabel.textContent = letter;
+      wrap.append(btn, colorInput, keyLabel);
+      swatchRow.appendChild(wrap);
+    });
     const repaint = () => {
       const ctx = canvas.getContext('2d');
       ctx.imageSmoothingEnabled = false;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      const tile = document.createElement('canvas');
-      tile.width = 16; tile.height = 16;
-      Neo.drawEnvironmentTileAsset?.(tile.getContext('2d'), 0, 0, 16, def);
-      ctx.drawImage(tile, 0, 0, canvas.width, canvas.height);
-      if (typeof Neo.buildEnvironmentTileAtlas === 'function') Neo.ENV_TILE_ATLAS = Neo.buildEnvironmentTileAtlas();
-      Neo.environmentBackgroundCache = { key: '', canvas: null };
+      repaintEnvRasterCanvas(canvas, def);
+      rebuildEnvironmentPreviewState();
       renderGrid();
     };
-    container.querySelectorAll('[data-env-color]').forEach(input => {
-      input.addEventListener('input', () => { def[input.dataset.envColor] = input.value; repaint(); });
+    function pointerToCell(clientX, clientY) {
+      const rect = canvas.getBoundingClientRect();
+      return {
+        x: Math.max(0, Math.min(15, Math.round((clientX - rect.left) / rect.width * 16 - 0.5))),
+        y: Math.max(0, Math.min(15, Math.round((clientY - rect.top) / rect.height * 16 - 0.5))),
+      };
+    }
+    function paintAt(clientX, clientY) {
+      const p = pointerToCell(clientX, clientY);
+      const nextChar = editor.erasing ? '.' : editor.activeSwatch;
+      const row = def.pixels[p.y] || '................';
+      if (row[p.x] === nextChar) return;
+      def.pixels[p.y] = row.slice(0, p.x) + nextChar + row.slice(p.x + 1);
+      repaint();
+    }
+    bindPaintDrag(canvas, paintAt, () => editor.captureSnapshot(), before => {
+      pushHistory(editor, before, editor.captureSnapshot());
     });
-    [['#seEnvCracks', 'cracks'], ['#seEnvChips', 'chips']].forEach(([selector, key]) => {
-      const input = container.querySelector(selector);
-      input.addEventListener('change', () => {
-        try { def[key] = JSON.parse(input.value); input.classList.remove('invalid'); repaint(); }
-        catch (_error) { input.classList.add('invalid'); }
-      });
+    editor.applyPaletteColor = hex => {
+      const before = editor.captureSnapshot();
+      def.palette[editor.activeSwatch] = hex;
+      repaint();
+      pushHistory(editor, before, editor.captureSnapshot());
+      renderEnvTileDetail(container, entry);
+    };
+    container.querySelector('#seEraser').addEventListener('change', e => {
+      editor.erasing = e.target.checked;
     });
     container.querySelector('#seDownload').addEventListener('click', () => downloadDataFile('environment'));
-    container.querySelector('#seSaveDirect')?.addEventListener('click', e => saveDataFile('environment', e.currentTarget));
+    container.querySelector('#seSaveDirect')?.addEventListener('click', e => saveDataFile('environment', e.currentTarget, editor));
     repaint();
+  }
+
+  function ensureEnvTileRaster(def) {
+    if (!def.palette) {
+      def.palette = {
+        a: def.base || '#343832',
+        b: def.shade || '#252823',
+        c: def.edge || '#4c5047',
+        d: def.mortar || '#1c1f1d',
+      };
+    }
+    if (!Array.isArray(def.pixels) || def.pixels.length !== 16) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 16;
+      canvas.height = 16;
+      const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingEnabled = false;
+      const oldPixels = def.pixels;
+      delete def.pixels;
+      Neo.drawEnvironmentTileAsset?.(ctx, 0, 0, 16, def);
+      if (oldPixels) def.pixels = oldPixels;
+      const data = ctx.getImageData(0, 0, 16, 16).data;
+      const palette = { ...def.palette };
+      const colorToKey = new Map(Object.entries(palette).map(([key, value]) => [String(value).toLowerCase(), key]));
+      const nextKeys = 'abcdefghijklmnopqrstuvwxyz';
+      const rows = [];
+      for (let y = 0; y < 16; y += 1) {
+        let row = '';
+        for (let x = 0; x < 16; x += 1) {
+          const i = (y * 16 + x) * 4;
+          if (data[i + 3] === 0) { row += '.'; continue; }
+          const hex = `#${[data[i], data[i + 1], data[i + 2]].map(n => n.toString(16).padStart(2, '0')).join('')}`;
+          let key = colorToKey.get(hex.toLowerCase());
+          if (!key) {
+            key = nextKeys.split('').find(candidate => !palette[candidate]) || 'z';
+            palette[key] = hex;
+            colorToKey.set(hex.toLowerCase(), key);
+          }
+          row += key;
+        }
+        rows.push(row);
+      }
+      def.palette = palette;
+      def.pixels = rows;
+    }
+    def.pixelSize = 16;
+  }
+
+  function repaintEnvRasterCanvas(canvas, def) {
+    const ctx = canvas.getContext('2d');
+    const cell = canvas.width / 16;
+    ctx.imageSmoothingEnabled = false;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    (def.pixels || []).forEach((row, y) => {
+      for (let x = 0; x < row.length; x += 1) {
+        const p = row[x];
+        if (p === '.') continue;
+        ctx.fillStyle = def.palette?.[p] || '#ff00ff';
+        ctx.fillRect(x * cell, y * cell, cell, cell);
+      }
+    });
+    ctx.strokeStyle = 'rgba(255,255,255,.12)';
+    for (let i = 1; i < 16; i += 1) {
+      ctx.beginPath(); ctx.moveTo(i * cell, 0); ctx.lineTo(i * cell, canvas.height); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, i * cell); ctx.lineTo(canvas.width, i * cell); ctx.stroke();
+    }
+  }
+
+  function rebuildEnvironmentPreviewState() {
+    if (typeof Neo.buildEnvironmentTileAtlas === 'function') Neo.ENV_TILE_ATLAS = Neo.buildEnvironmentTileAtlas();
+    Neo.environmentBackgroundCache = { key: '', canvas: null };
   }
 
   // ── Save export helpers (data-file categories) ───────────────────────────
@@ -1391,17 +1733,22 @@
     return { info, text: span ? (source.slice(0, span.start) + newLiteral + source.slice(span.end)) : newLiteral };
   }
 
-  async function saveDataFile(which, button) {
+  async function saveDataFile(which, button, editor = state.editor) {
     button.disabled = true;
     try {
       const output = await buildDataFile(which);
       await saveEditorFile(output.info.path, output.text);
       button.textContent = 'Saved';
+      markDirty(editor, false);
     } catch (error) {
       alert(error.message);
     } finally {
       button.disabled = false;
-      setTimeout(() => { if (button.isConnected) button.textContent = 'Save to Game'; }, 1200);
+      setTimeout(() => {
+        if (!button.isConnected) return;
+        button.textContent = 'Save to Game';
+        if (button.dataset.historySave === 'true') button.disabled = !editor?.dirty;
+      }, 1200);
     }
   }
 
@@ -1474,6 +1821,17 @@
     search?.addEventListener('input', e => { state.query = e.target.value || ''; renderGrid(); });
     document.addEventListener('keydown', e => {
       if (e.key === 'Escape' && state.open) close();
+      if (!state.open || !state.editor || !(e.ctrlKey || e.metaKey)) return;
+      const key = e.key.toLowerCase();
+      if (key !== 'z' && key !== 'y') return;
+      const target = e.target;
+      const isTextInput = target?.matches?.('input, textarea, [contenteditable="true"]');
+      if (isTextInput) return;
+      e.preventDefault();
+      const undo = document.getElementById('seUndo');
+      const redo = document.getElementById('seRedo');
+      if (key === 'y' || (key === 'z' && e.shiftKey)) redo?.click();
+      else undo?.click();
     });
     wirePaletteLoader();
   }
