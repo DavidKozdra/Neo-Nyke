@@ -3,48 +3,259 @@ window.NeoNykeEnvironmentTileDefs = {
   "propSprites": {
     "candle": {
       "pixelSize": 16,
-      "palette": { "a": "#6b7077", "b": "#878d95", "c": "#f3ead0", "d": "#b3a079", "e": "#2a2018", "f": "#ff9628", "g": "#ffe078", "h": "#fffff0" },
-      "pixels": ["................", "................", ".......f........", "......fgf.......", "......ghg.......", ".......e........", "......ccc.......", ".....ccdcc......", ".....ccdcc......", ".....ccdcc......", ".....ccdcc......", ".....ccdcc......", "....aaaaaaa.....", "...aabbbbbaa....", "................", "................"]
+      "palette": {
+        "a": "#6b7077",
+        "b": "#878d95",
+        "c": "#f3ead0",
+        "d": "#b3a079",
+        "e": "#2a2018",
+        "f": "#ff9628",
+        "g": "#ffe078",
+        "h": "#fffff0"
+      },
+      "pixels": [
+        "................",
+        "................",
+        ".......f........",
+        "......fgf.......",
+        "......ghg.......",
+        ".......e........",
+        "......ccc.......",
+        ".....ccdcc......",
+        ".....ccdcc......",
+        ".....ccdcc......",
+        ".....ccdcc......",
+        ".....ccdcc......",
+        "....aaaaaaa.....",
+        "...aabbbbbaa....",
+        "................",
+        "................"
+      ]
     },
     "brazier": {
       "pixelSize": 16,
-      "palette": { "a": "#1a140e", "b": "#5a5f5c", "c": "#d28748", "d": "#f5ca78", "e": "#ff5a24" },
-      "pixels": ["................", ".......e........", "......cec.......", "......cdc.......", ".....ccdcc......", "....bbbbbbbb....", "...bbbbbbbbbb...", "...aaaaaaaaaa...", "...aaaaaaaaaa...", "....aaaaaaaa....", ".....aaaaaa.....", "......aaaa......", "................", "................", "................", "................"]
+      "palette": {
+        "a": "#1a140e",
+        "b": "#5a5f5c",
+        "c": "#d28748",
+        "d": "#f5ca78",
+        "e": "#ff5a24",
+        "f": "#efdd91",
+        "g": "#f1641f",
+        "h": "#612721"
+      },
+      "pixels": [
+        ".......gh.......",
+        ".......gh.......",
+        ".......fh.......",
+        "......fff.......",
+        "......fff.......",
+        "....bbbbbbbb....",
+        "...bbbbbbbbbb...",
+        "...aaaaaaaaaa...",
+        "...aaaaaaaaaa...",
+        "....aaaaaaaa....",
+        "................",
+        "................",
+        "................",
+        "................",
+        "................",
+        "................"
+      ]
     },
     "rubble": {
       "pixelSize": 16,
-      "palette": { "a": "#2a2c26", "b": "#5c5b4c", "c": "#77735f", "d": "#1b1d19" },
-      "pixels": ["................", "................", "................", ".....b..........", "...bbcc..b......", "..bddbbbbcc.....", "..bbbbbddbb.....", "...ccbbbbbb.....", "....bbbbcc......", "......dd........", "................", "................", "................", "................", "................", "................"]
+      "palette": {
+        "a": "#2a2c26",
+        "b": "#5c5b4c",
+        "c": "#77735f",
+        "d": "#1b1d19"
+      },
+      "pixels": [
+        "................",
+        "................",
+        "................",
+        ".....b..........",
+        "...bbcc..b......",
+        "..bddbbbbcc.....",
+        "..bbbbbddbb.....",
+        "...ccbbbbbb.....",
+        "....bbbbcc......",
+        "......dd........",
+        "................",
+        "................",
+        "................",
+        "................",
+        "................",
+        "................"
+      ]
     },
     "crack_decal": {
       "pixelSize": 16,
-      "palette": { "a": "#151917" },
-      "pixels": ["................", "................", "................", "..aa............", "....aa..........", ".....aaa........", ".......aa.......", "......aa........", "........aaa.....", "..........aa....", "............aa..", "................", "................", "................", "................", "................"]
+      "palette": {
+        "a": "#151917"
+      },
+      "pixels": [
+        "................",
+        "................",
+        "................",
+        "..aa............",
+        "....aa..........",
+        ".....aaa........",
+        ".......aa.......",
+        "......aa........",
+        "........aaa.....",
+        "..........aa....",
+        "............aa..",
+        "................",
+        "................",
+        "................",
+        "................",
+        "................"
+      ]
     },
     "tree": {
       "pixelSize": 16,
-      "palette": { "a": "#5c3a1e", "b": "#3a7d2c", "c": "#52a83a", "d": "#a0e664", "e": "#14200e" },
-      "pixels": ["................", ".....ccccc......", "....ccccccc.....", "...ccbbbbbcc....", "..ccbbbbbbbcc...", "..cbbbbbbbbbc...", "..cbbbdbbbbbc...", "...cbbbbbbbc....", "....ccbbbcc.....", "......aaa.......", "......aaa.......", "......aaa.......", ".....eeeee......", "....eeeeeee.....", "................", "................"]
+      "palette": {
+        "a": "#5c3a1e",
+        "b": "#3a7d2c",
+        "c": "#52a83a",
+        "d": "#a0e664",
+        "e": "#14200e"
+      },
+      "pixels": [
+        "................",
+        ".....ccccc......",
+        "....ccccccc.....",
+        "...ccbbbbbcc....",
+        "..ccbbbbbbbcc...",
+        "..cbbbbbbbbbc...",
+        "..cbbbdbbbbbc...",
+        "...cbbbbbbbc....",
+        "....ccbbbcc.....",
+        "......aaa.......",
+        "......aaa.......",
+        "......aaa.......",
+        ".....eeeee......",
+        "....eeeeeee.....",
+        "................",
+        "................"
+      ]
     },
     "fruit_tree": {
       "pixelSize": 16,
-      "palette": { "a": "#5f3d1f", "b": "#3f7a2d", "c": "#58a73d", "d": "#ff7385", "e": "#14200e" },
-      "pixels": ["................", "....ccccccc.....", "...ccbbbbbcc....", "..ccbbdbdbcc....", "..cbbbbbbbbbc...", "..cbbbdbbbbbc...", "...cbbbbbbbc....", "....ccbbbcc.....", "......aaa.......", "......aaa.......", "......aaa.......", ".....eeeee......", "....eeeeeee.....", "................", "................", "................"]
+      "palette": {
+        "a": "#5f3d1f",
+        "b": "#3f7a2d",
+        "c": "#58a73d",
+        "d": "#ff7385",
+        "e": "#14200e"
+      },
+      "pixels": [
+        "................",
+        "....ccccccc.....",
+        "...ccbbbbbcc....",
+        "..ccbbdbdbcc....",
+        "..cbbbbbbbbbc...",
+        "..cbbbdbbbbbc...",
+        "...cbbbbbbbc....",
+        "....ccbbbcc.....",
+        "......aaa.......",
+        "......aaa.......",
+        "......aaa.......",
+        ".....eeeee......",
+        "....eeeeeee.....",
+        "................",
+        "................",
+        "................"
+      ]
     },
     "moss_patch": {
       "pixelSize": 16,
-      "palette": { "a": "#112212", "b": "#5c9148", "c": "#95d06d" },
-      "pixels": ["................", "................", "................", "................", ".....bbb........", "...bbbbbbb......", "..aabbbbbbaa....", "..aaabbbbbaa....", "...aaacccaa.....", ".....aaaa.......", "................", "................", "................", "................", "................", "................"]
+      "palette": {
+        "a": "#112212",
+        "b": "#5c9148",
+        "c": "#95d06d"
+      },
+      "pixels": [
+        "................",
+        "................",
+        "................",
+        "................",
+        ".....bbb........",
+        "...bbbbbbb......",
+        "..aabbbbbbaa....",
+        "..aaabbbbbaa....",
+        "...aaacccaa.....",
+        ".....aaaa.......",
+        "................",
+        "................",
+        "................",
+        "................",
+        "................",
+        "................"
+      ]
     },
     "cover_wall": {
       "pixelSize": 16,
-      "palette": { "a": "#7a4825", "b": "#4b2a18", "c": "#b0743d", "d": "#26140a" },
-      "pixels": ["cccccccccccccccc", "caaaaaaaaaaaaabc", "caaaaaaaaaaaaabc", "cdddddddddddddbc", "caaaaaaaaaaaaabc", "caaaaaaaaaaaaabc", "cdddddddddddddbc", "caaaaaaaaaaaaabc", "caaaaaaaaaaaaabc", "cdddddddddddddbc", "caaaaaaaaaaaaabc", "caaaaaaaaaaaaabc", "cbbbbbbbbbbbbbbc", "cbbbbbbbbbbbbbbc", "cbbbbbbbbbbbbbbc", "cccccccccccccccc"]
+      "palette": {
+        "a": "#7a4825",
+        "b": "#4b2a18",
+        "c": "#b0743d",
+        "d": "#26140a",
+        "e": "#0e0c0c",
+        "f": "#b47538",
+        "g": "#452a1b",
+        "h": "#855f39",
+        "i": "#8c5b3e",
+        "j": "#724b2c"
+      },
+      "pixels": [
+        "jjjjjjjjjjjjjjjj",
+        "jjjjjjjjjjjjjjjj",
+        "fffffffffffffffc",
+        ".ffffffffffffff.",
+        "cfffffffffffffff",
+        "cfffffffffffffff",
+        ".ffffffffffffff.",
+        "ffffffffffffffff",
+        "ffffffffffffffff",
+        ".ffffffffffffff.",
+        "cfffffffffffffff",
+        "cfffffffffffffff",
+        ".ffffffffffffff.",
+        "ffffffffffffffff",
+        "jjjjjjjjjjjjjjjj",
+        "jjjjjjjjjjjjjjjj"
+      ]
     },
     "explosive_trap": {
       "pixelSize": 16,
-      "palette": { "a": "#2a2620", "b": "#c8a040", "c": "#121418", "d": "#e0b84c", "e": "#ffffff" },
-      "pixels": ["................", ".......d........", "......dd........", ".....d..........", ".....bbb........", "....bbbbb.......", "...bbcccbb......", "..bbcccccbb.....", "..bbcccccbb.....", "..bbcccccbb.....", "...bbcccbb......", "....bbbbb.......", ".....bbb........", "................", "................", "................"]
+      "palette": {
+        "a": "#2a2620",
+        "b": "#c8a040",
+        "c": "#121418",
+        "d": "#e0b84c",
+        "e": "#ffffff"
+      },
+      "pixels": [
+        "................",
+        ".......d........",
+        "......dd........",
+        ".....d..........",
+        ".....bbb........",
+        "....bbbbb.......",
+        "...bbcccbb......",
+        "..bbcccccbb.....",
+        "..bbcccccbb.....",
+        "..bbcccccbb.....",
+        "...bbcccbb......",
+        "....bbbbb.......",
+        ".....bbb........",
+        "................",
+        "................",
+        "................"
+      ]
     }
   },
   "tiles": {
@@ -259,7 +470,7 @@ window.NeoNykeEnvironmentTileDefs = {
         "w": "#252723",
         "x": "#252722",
         "y": "#1a201e",
-        "z": "#252622"
+        "z": "#323232"
       },
       "pixels": [
         "defdddgedffgdfdd",
@@ -271,8 +482,8 @@ window.NeoNykeEnvironmentTileDefs = {
         "ecmzzzqtzzazzvbz",
         "zzdozoauaqmaabvd",
         "dzautzzaazzzazpe",
-        "eczqazozzzzzzzbf",
-        "dcauatzzaqazzzze",
+        "eczzazozzzzzzzbf",
+        "dcazatzzaqazzzze",
         "zcmumtzmtuuazzzz",
         "dcaamaatmzamubzd",
         "dcbxpvvppzpzvvpz",
@@ -1012,7 +1223,54 @@ window.NeoNykeEnvironmentTileDefs = {
       "base": "#394038",
       "shade": "#222823",
       "edge": "#626858",
-      "mortar": "#171c1a"
+      "mortar": "#171c1a",
+      "palette": {
+        "a": "#394038",
+        "b": "#222823",
+        "c": "#626858",
+        "d": "#171c1a",
+        "e": "#171d1a",
+        "f": "#171d1b",
+        "g": "#161c1a",
+        "h": "#161d1a",
+        "i": "#171c1b",
+        "j": "#636858",
+        "k": "#636859",
+        "l": "#626859",
+        "m": "#626959",
+        "n": "#626958",
+        "o": "#222822",
+        "p": "#161c1b",
+        "q": "#394139",
+        "r": "#384139",
+        "s": "#394138",
+        "t": "#384038",
+        "u": "#394039",
+        "v": "#636958",
+        "w": "#232823",
+        "x": "#384138",
+        "y": "#384039",
+        "z": "#222922"
+      },
+      "pixels": [
+        "................",
+        ".efddgedhiddeeh.",
+        ".djkclclmnncbod.",
+        ".pcaqrasttaabbd.",
+        ".dcaususaauaobd.",
+        ".evuttastttawbg.",
+        ".hjaaatastaabbd.",
+        ".elttauaaxusbbd.",
+        ".gcasasssuuaobe.",
+        ".icaaxastysawzd.",
+        ".dnsayaaaquybwd.",
+        ".dltaaaaaauazwi.",
+        ".dzbwbzbbozwzzi.",
+        ".dbwbbzwbbbbzbf.",
+        ".edgpdeepgdedde.",
+        "................"
+      ],
+      "pixelSize": 16
     },
     "secret_wall_block": {
       "kind": "block",
@@ -1108,7 +1366,7 @@ window.NeoNykeEnvironmentTileDefs = {
         "................",
         "................",
         "................",
-        ".....gggggg.....",
+        "................",
         ".....gggggg.....",
         "......gggg......",
         "......gggg......",
@@ -1118,7 +1376,7 @@ window.NeoNykeEnvironmentTileDefs = {
         "....aaaaaaaa....",
         "....aaaaaaaa....",
         "....aaaaaaaa....",
-        "................",
+        ".....aaaaaa.....",
         "................"
       ],
       "pixelSize": 16
@@ -1153,23 +1411,25 @@ window.NeoNykeEnvironmentTileDefs = {
         "t": "#3d2415",
         "u": "#3c2414",
         "v": "#2a2c2c",
-        "w": "#3d2514"
+        "w": "#3d2514",
+        "x": "#f8c53a",
+        "y": "#855f39"
       },
       "pixels": [
         "................",
         "................",
-        "...iiiiiiiiii...",
-        "...iiiiiiiiii...",
-        "...iiiiiiiiii...",
-        "...dddddddddd...",
-        "...iiiiiiiiii...",
-        "...iiiiiiiiii...",
-        "...ijiiiiiiii...",
-        "...iiiiiiiiii...",
-        "...dddddddddd...",
-        "...iiiiiiiiii...",
-        "...iiiiiiiiii...",
-        "...iiiiiiiiii...",
+        "...yiiiiiiiii...",
+        "...yiiiiiiiii...",
+        "...yiiiiiiiii...",
+        "...xxxxxxxxxx...",
+        "...yyiiiiiiii...",
+        "...yyiiiiiiii...",
+        "...yyiiiiiiii...",
+        "...yyiiiiiiii...",
+        "...xxxxxxxxxx...",
+        "...yyyyyyyyyy...",
+        "...yyyyyyyyyy...",
+        "...yyyyyyyyyy...",
         "................",
         "................"
       ],
@@ -1208,25 +1468,25 @@ window.NeoNykeEnvironmentTileDefs = {
         "w": "#2d0a05",
         "x": "#6a1704",
         "y": "#6b1604",
-        "z": "#6b1704"
+        "z": "#f8c53a"
       },
       "pixels": [
-        "aeaafegagaaehaif",
-        "ffbbfbbffbbffffo",
-        "ffobafffeeeeffff",
-        "fheoeffaaahofffa",
-        "fffffffffffffeah",
-        "fgfqefbbbbbbbfaf",
-        "fbfffffffffeffgf",
-        "ffffffffffffffff",
-        "aaffaaqaffffaeff",
+        "zzzzzzzzzaazzzzz",
+        "zzbbfbbffbbfzfzz",
+        "zfobafffeeeefffz",
+        "zheoeffaaahoffzz",
+        "ffffffzffffffezz",
+        "fgfqzzbbbbbbbfaz",
+        "fbffzffffffeffzz",
+        "fffffzffffffffzf",
+        "aaffazqaffffaeff",
         "aefafqfaeqqaffaa",
-        "fafffffffffffffe",
+        "fafffzzfzzfffffe",
         "aaafgfofgfffffff",
-        "afffafoooooooofo",
+        "azffafoooooooofo",
         "ffffbbbbbbbbbfbf",
-        "fbbbbfffffffffff",
-        "ffffffffffffffff"
+        "zbbbbffffffffffz",
+        "zzzfzzzfzzzfffff"
       ],
       "pixelSize": 16
     }

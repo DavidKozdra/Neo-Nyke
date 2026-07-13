@@ -10216,38 +10216,16 @@ button.alt.danger {
   font-size: calc(11.5px * var(--font-scale, 1));
 }
 
-.sprite-editor-swatch-row {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.sprite-editor-swatch {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 3px;
-}
-
-.sprite-editor-swatch input[type="color"] {
-  width: 30px;
-  height: 26px;
-  border: 1px solid rgba(132, 168, 204, .3);
+.sprite-editor-color-control input[type="color"] {
+  width: 42px;
+  height: 30px;
+  border: 1px solid rgba(132, 168, 204, .38);
   border-radius: 6px;
-  background: none;
-  padding: 0;
+  background: rgba(5, 12, 20, .65);
+  padding: 2px;
   cursor: pointer;
-}
-
-.sprite-editor-swatch.active input[type="color"] {
   outline: 2px solid #85c6ff;
   outline-offset: 1px;
-}
-
-.sprite-editor-swatch__key {
-  font-size: calc(9.5px * var(--font-scale, 1));
-  color: #7d92a8;
-  text-transform: uppercase;
 }
 
 .sprite-editor-frame-nav {
