@@ -90,7 +90,7 @@
   "moves.mooggy_hairball.name": "Haarball-Explosion",
   "moves.mooggy_hairball.desc": "Zerhacken Sie einen giftigen Haarball, der bei starker Vergiftung platzt und alles darin einfriert.",
   "moves.potion_bath.name": "Trankbad",
-  "moves.potion_bath.desc": "Bereinigen Sie alle Status und widerstehen Sie ihnen 20 Sekunden lang, heilen Sie 60 % und regenerieren Sie sich 5 Sekunden lang, verschwinden Sie 5 Sekunden lang und brechen Sie in Explosionen um Sie herum aus.",
+  "moves.potion_bath.desc": "Bereinigen Sie alle Status und widerstehen Sie ihnen 20 Sekunden lang, heilen Sie 20 % und regenerieren Sie sich 5 Sekunden lang, verschwinden Sie 5 Sekunden lang und brechen Sie in Explosionen um Sie herum aus.",
   "moves.excalibur_strike.name": "Beschwöre Excalibur",
   "moves.excalibur_strike.desc": "Riesige göttliche Schwerter regnen vom Himmel und verursachen enormen AOE-Schaden. 10 Sekunden Abklingzeit.",
   "moves.holy_turrets.name": "Heilige Türme",

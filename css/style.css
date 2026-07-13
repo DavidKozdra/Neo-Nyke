@@ -350,7 +350,7 @@ button, input, select, textarea {
   top: calc(var(--coin-hud-bottom) * var(--hud-scale-coins, var(--hud-scale, 1)) + var(--notify-gap) + var(--hud-y-coins, 0px));
   left: 16px;
   transform: translate(var(--hud-x-itemnotify, 0px), var(--hud-y-itemnotify, 0px))
-             scale(var(--hud-scale-itemnotify, 2));
+             scale(var(--hud-scale-itemnotify, 1.8));
   transform-origin: top left;
   display: flex;
   flex-direction: column;

@@ -90,7 +90,7 @@
   "moves.mooggy_hairball.name": "Ledakan Bola Rambut",
   "moves.mooggy_hairball.desc": "Retas bola rambut berbisa yang mengeluarkan racun tinggi dan membekukan semua yang terperangkap di dalamnya.",
   "moves.potion_bath.name": "Mandi Ramuan",
-  "moves.potion_bath.desc": "Bersihkan semua status dan tahan selama 20 detik, sembuhkan 60% dan regen selama 5 detik, lenyap selama 5 detik, dan ledakkan ledakan di sekitar Anda.",
+  "moves.potion_bath.desc": "Bersihkan semua status dan tahan selama 20 detik, sembuhkan 20% dan regen selama 5 detik, lenyap selama 5 detik, dan ledakkan ledakan di sekitar Anda.",
   "moves.excalibur_strike.name": "Panggil Excalibur",
   "moves.excalibur_strike.desc": "Pedang dewa raksasa menghujani langit dengan damage AOE yang sangat besar. waktu tunggu 10 detik.",
   "moves.holy_turrets.name": "Menara Suci",

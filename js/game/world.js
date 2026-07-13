@@ -546,11 +546,11 @@
     }
     if (Number(Neo.player.potionRegenTime || 0) > 0) {
       Neo.player.potionRegenTime = Math.max(0, Number(Neo.player.potionRegenTime) - dt);
-      // Regen ~6% max HP per second over the window, applied each 0.5s.
+      // Regen ~2% max HP per second over the window, applied each 0.5s.
       Neo.player.potionRegenAccum = Number(Neo.player.potionRegenAccum || 0) + dt;
       while (Neo.player.potionRegenAccum >= 0.5) {
         Neo.player.potionRegenAccum -= 0.5;
-        const gained = Neo.applyPlayerHealing(Math.max(1, Math.round(Neo.player.maxHp * 0.03)));
+        const gained = Neo.applyPlayerHealing(Math.max(1, Math.round(Neo.player.maxHp * 0.01)));
         if (gained > 0) Neo.spawnHealPopup(Neo.player.x + Neo.rand(-6, 6), Neo.player.y - 20, gained, { color: '#9af7d8' });
       }
     }

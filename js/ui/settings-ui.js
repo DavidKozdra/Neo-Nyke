@@ -65,14 +65,14 @@
     { key: 'equipment',  label: 'Tool Slots',       cssVar: '--hud-scale-equipment',  xVar: '--hud-x-equipment',  yVar: '--hud-y-equipment',  hideClass: 'hud-hide-equipment' },
     // The new-item pickup toast stack (#itemNotifyStack). DOM widget with its own
     // scale/offset/visibility, independent of the coin display it sits beneath.
-    { key: 'itemnotify', label: 'Item Pickups',     cssVar: '--hud-scale-itemnotify', xVar: '--hud-x-itemnotify', yVar: '--hud-y-itemnotify', hideClass: 'hud-hide-itemnotify', defaultScale: 2, touchDefaultScale: 1.25 },
+    { key: 'itemnotify', label: 'Item Pickups',     cssVar: '--hud-scale-itemnotify', xVar: '--hud-x-itemnotify', yVar: '--hud-y-itemnotify', hideClass: 'hud-hide-itemnotify', defaultScale: 2.5, touchDefaultScale: 1.5 },
     // The status-toast stack (#statusToastStack) — relic "Ready" cues and "Copied"
     // bonuses. Bottom-center DOM widget, separate from item pickups so it reads as
     // a status update, not a new-item card. Default 1.2 (20% above its base size).
     { key: 'statustoast', label: 'Status Cues',     cssVar: '--hud-scale-statustoast', xVar: '--hud-x-statustoast', yVar: '--hud-y-statustoast', hideClass: 'hud-hide-statustoast', defaultScale: 1.2, touchDefaultScale: 1.2 },
     // The minimap is drawn on the canvas, not a DOM widget, so it has no CSS vars.
     // drawMinimap() reads its scale/visibility/offsets from getHudElements().
-    { key: 'minimap',    label: 'Minimap',          cssVar: null, xVar: null, yVar: null, hideClass: null, canvas: true, defaultScale: 1.5 },
+    { key: 'minimap',    label: 'Minimap',          cssVar: null, xVar: null, yVar: null, hideClass: null, canvas: true, defaultScale: 1.25 },
     // The boss health bar is also canvas-drawn. drawBossHealthBars() reads its
     // scale/visibility/offsets from getHudElements().
     { key: 'bossbar',    label: 'Boss Health Bar',  cssVar: null, xVar: null, yVar: null, hideClass: null, canvas: true },
@@ -1106,8 +1106,10 @@
         box.style.height = `${Math.max(24, (bounds.bottom - bounds.top) * ratio.y * scaleRatio)}px`;
         box.dataset.previewSizedFromBounds = 'true';
       } else {
-        box.style.top = `${(window.innerWidth <= 920 ? 96 : 72) * ratio.y}px`;
-        box.style.right = `${(window.innerWidth <= 920 ? 8 : 16) * ratio.x}px`;
+        // Match drawMinimap()'s live top-right anchor when no captured canvas
+        // bounds exist yet, such as opening HUD Layout from menus.
+        box.style.top = `${(window.innerWidth <= 920 ? 8 : 12) * ratio.y}px`;
+        box.style.right = `${(window.innerWidth <= 920 ? 8 : 12) * ratio.x}px`;
         box.style.width = '';
         box.style.height = '';
       }
@@ -1279,9 +1281,15 @@
         let movedThisPass = false;
         for (let i = 0; i < measured.length; i += 1) {
           for (let j = i + 1; j < measured.length; j += 1) {
-            const fixed = measured[i];
-            const moving = measured[j];
+            let fixed = measured[i];
+            let moving = measured[j];
             if (!rectsOverlap(fixed.rect, moving.rect)) continue;
+            // Keep the canvas minimap's top-right default stable. If overlap
+            // correction is needed, move the neighboring HUD widget instead.
+            if (moving.key === 'minimap' && fixed.key !== 'minimap') {
+              fixed = measured[j];
+              moving = measured[i];
+            }
             const nudge = chooseHudOverlapNudge(moving.rect, fixed.rect, viewportW, viewportH);
             if (!nudge.dx && !nudge.dy) continue;
             nudgeRect(moving.rect, nudge.dx, nudge.dy, viewportW, viewportH);
@@ -1596,10 +1604,15 @@
   });
   window.addEventListener('resize', () => {
     refreshHudPreviewBoxes();
-    scheduleHudOverlapCorrection({ saveAfter: true });
+    if (window.NeoSettings.isHudLayoutEditorOpen()) {
+      scheduleHudOverlapCorrection({ saveAfter: true });
+    }
   });
-  window.addEventListener('orientationchange', () => scheduleHudOverlapCorrection({ saveAfter: true }));
-  scheduleHudOverlapCorrection({ saveAfter: true });
+  window.addEventListener('orientationchange', () => {
+    if (window.NeoSettings.isHudLayoutEditorOpen()) {
+      scheduleHudOverlapCorrection({ saveAfter: true });
+    }
+  });
 
   // ── Controller mapper / detector overlay ──────────────────────────────────
   // Live diagram that confirms the pad is detected and lights up each physical

@@ -97,7 +97,7 @@
   "moves.mooggy_hairball.name": "Hairball Blast",
   "moves.mooggy_hairball.desc": "Hack up a venomous hairball that bursts for high poison and freezes everything caught in it.",
   "moves.potion_bath.name": "Potion Bath",
-  "moves.potion_bath.desc": "Cleanse all statuses and resist them for 20s, heal 60% and regen for 5s, vanish for 5s, and erupt in explosions around you.",
+  "moves.potion_bath.desc": "Cleanse all statuses and resist them for 20s, heal 10% and regen 10% over 5s, vanish for 5s, and erupt in explosions around you.",
   "moves.excalibur_strike.name": "Summon Excalibur",
   "moves.excalibur_strike.desc": "Giant divine swords rain from the sky for huge AOE damage. 10s cooldown.",
   "moves.holy_turrets.name": "Holy Turrets",

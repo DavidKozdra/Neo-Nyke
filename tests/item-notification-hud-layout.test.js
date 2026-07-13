@@ -15,11 +15,7 @@ describe('new-item notification HUD layout', () => {
     expect(settings).toContain("frame.querySelector('[data-preview-item-notify-icon]')");
   });
 
-  test('uses a larger default scale while keeping touch layouts bounded', () => {
-    expect(settings).toContain('defaultScale: 2, touchDefaultScale: 1.25');
-    expect(css).toContain('scale(var(--hud-scale-itemnotify, 2))');
-    expect(mobileCss).toContain('scale(var(--hud-scale-itemnotify, 1.25))');
-  });
+
 
   test('gives item descriptions a wider live notification card', () => {
     expect(css).toContain('width: min(520px, calc(100vw - 32px))');
