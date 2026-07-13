@@ -3,33 +3,14 @@
 const CHARACTER_SHEET_DEFS = {
   thorn_knight: {
     src: 'assets/sprites/chars/Thorn Knight.png',
-    frameWidth: 48,
-    frameHeight: 48,
-    frameCount: 1,
-    renderScale: 1,
-  },
-  metao: {
-    src: 'assets/sprites/chars/Mateo.png',
     frameWidth: 24,
     frameHeight: 24,
     frameCount: 7,
     renderScale: 1.5,
-    armFrame: 0,
-    idleFrames: [1, 2],
-    walkFrames: [3, 4, 5, 6],
-    idleFrames: [1, 2],
-    walkFrames: [3, 4, 5, 6],
-    armFrame: 0,
-  },
-  princess: {
-    src: 'assets/sprites/chars/princess.png',
-    frameWidth: 24,
-    frameHeight: 24,
-    frameCount: 7,
-    renderScale: 1.5,
-    idleFrames: [1, 2],
-    walkFrames: [3, 4, 5, 6],
-    armFrame: 0,
+    idleFrames: [2, 3],
+    walkFrames: [4, 5, 6],
+    armFrame: 1,
+    portraitFrame: 0,
   },
   sarge: {
     src: 'assets/sprites/chars/Sarge.png',
@@ -37,19 +18,10 @@ const CHARACTER_SHEET_DEFS = {
     frameHeight: 24,
     frameCount: 7,
     renderScale: 1.5,
-    idleFrames: [1, 2],
-    walkFrames: [3, 4, 5, 6],
-    armFrame: 0,
-  },
-  thorn_knight: {
-    src: 'assets/sprites/chars/ThornKnight.png',
-    frameWidth: 24,
-    frameHeight: 24,
-    frameCount: 7,
-    renderScale: 1.5,
-    idleFrames: [1, 2],
-    walkFrames: [3, 4, 5, 6],
-    armFrame: 0,
+    idleFrames: [2, 3],
+    walkFrames: [4, 5, 6],
+    armFrame: 1,
+    portraitFrame: 0,
   },
   gelleh: {
     src: 'assets/sprites/chars/Gelleh.png',
@@ -57,10 +29,33 @@ const CHARACTER_SHEET_DEFS = {
     frameHeight: 24,
     frameCount: 8,
     renderScale: 1.5,
+    idleFrames: [3, 4],
+    walkFrames: [5, 6, 7],
+    armFrame: 2,
+    portraitFrame: 0,
+    idleRate: 1.5,
+  },
+  princess: {
+    src: 'assets/sprites/chars/Princess.png',
+    frameWidth: 24,
+    frameHeight: 24,
+    frameCount: 8,
+    renderScale: 1.5,
     idleFrames: [2, 3],
     walkFrames: [4, 5, 6, 7],
     armFrame: 1,
-    idleRate: 1.5,
+    portraitFrame: 0,
+  },
+  metao: {
+    src: 'assets/sprites/chars/Metao.png',
+    frameWidth: 24,
+    frameHeight: 24,
+    frameCount: 8,
+    renderScale: 1.5,
+    idleFrames: [2, 3],
+    walkFrames: [4, 5, 6, 7],
+    armFrame: 1,
+    portraitFrame: 0,
   },
 };
 
@@ -89,7 +84,12 @@ function resolveFrameRoles(def, frameCount) {
     ? def.walkFrames
     : Array.from({ length: frameCount }, (_, i) => i))
     .filter(i => inRange(i) && !idleFrames.includes(i) && i !== armFrame);
-  return { idleFrames, walkFrames, armFrame };
+  // The portrait frame is what chat dialogue and the character-select screen
+  // draw as the character's face — independent of idle/walk/arm, so it can be
+  // a dedicated close-up pose. Defaults to the first idle frame (the old,
+  // implicit behavior) when a def doesn't specify one.
+  const portraitFrame = inRange(def.portraitFrame) ? def.portraitFrame : idleFrames[0];
+  return { idleFrames, walkFrames, armFrame, portraitFrame };
 }
 
 function loadCharacterSheet(key, def) {
@@ -103,7 +103,7 @@ function loadCharacterSheet(key, def) {
         resolve(null);
         return;
       }
-      const { idleFrames, walkFrames, armFrame } = resolveFrameRoles(def, frameCount);
+      const { idleFrames, walkFrames, armFrame, portraitFrame } = resolveFrameRoles(def, frameCount);
       resolve({
         ...def,
         image,
@@ -111,6 +111,7 @@ function loadCharacterSheet(key, def) {
         idleFrames,
         walkFrames,
         armFrame,
+        portraitFrame,
         animations: {
           idle: idleFrames.map((_, index) => `idle${index}`),
           walk: walkFrames.map((_, index) => `walk${index}`),

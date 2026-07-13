@@ -716,7 +716,7 @@
       };
       const roles = Neo.resolveCharacterFrameRoles
         ? Neo.resolveCharacterFrameRoles(def, frameCount)
-        : { idleFrames: [0], walkFrames: Array.from({ length: frameCount }, (_, i) => i).filter(i => i !== 0), armFrame: null };
+        : { idleFrames: [0], walkFrames: Array.from({ length: frameCount }, (_, i) => i).filter(i => i !== 0), armFrame: null, portraitFrame: 0 };
       Neo.CHARACTER_SHEET_DEFS = Neo.CHARACTER_SHEET_DEFS || {};
       Neo.CHARACTER_SHEET_DEFS[key] = def;
       Neo.CHARACTER_SPRITE_SHEETS = Neo.CHARACTER_SPRITE_SHEETS || {};
@@ -727,6 +727,7 @@
         idleFrames: roles.idleFrames,
         walkFrames: roles.walkFrames,
         armFrame: roles.armFrame,
+        portraitFrame: roles.portraitFrame,
         animations: {
           idle: roles.idleFrames.map((_, i) => `idle${i}`),
           walk: roles.walkFrames.map((_, i) => `walk${i}`),
@@ -767,6 +768,7 @@
       idleFrames: liveSheet?.idleFrames ? [...liveSheet.idleFrames] : null,
       walkFrames: liveSheet?.walkFrames ? [...liveSheet.walkFrames] : null,
       armFrame: Number.isInteger(liveSheet?.armFrame) ? liveSheet.armFrame : null,
+      portraitFrame: Number.isInteger(liveSheet?.portraitFrame) ? liveSheet.portraitFrame : null,
       stepRate: liveSheet?.stepRate ?? '',
       idleRate: liveSheet?.idleRate ?? '',
     };
@@ -788,6 +790,9 @@
       if (!editor.idleFrames) editor.idleFrames = [0];
       if (!editor.walkFrames) {
         editor.walkFrames = Array.from({ length: editor.frameCount }, (_, i) => i).filter(i => !editor.idleFrames.includes(i));
+      }
+      if (!Number.isInteger(editor.portraitFrame) || editor.portraitFrame >= editor.frameCount) {
+        editor.portraitFrame = editor.idleFrames[0];
       }
     }
     editor.scale = Math.max(4, Math.min(16, Math.round(240 / editor.frameWidth)));
@@ -831,6 +836,7 @@
         if (idlePos !== -1) parts.push(editor.idleFrames.length > 1 ? `I${idlePos + 1}` : 'IDLE');
         if (walkPos !== -1) parts.push(`W${walkPos + 1}`);
         if (editor.armFrame === i) parts.push('ARM');
+        if (editor.portraitFrame === i) parts.push('PORT');
         badge.textContent = parts.join(' ');
         item.appendChild(badge);
       }
@@ -861,6 +867,8 @@
     def.idleFrames = [...editor.idleFrames];
     def.walkFrames = [...editor.walkFrames];
     if (editor.armFrame != null) def.armFrame = editor.armFrame; else delete def.armFrame;
+    if (editor.portraitFrame != null && editor.portraitFrame !== editor.idleFrames[0]) def.portraitFrame = editor.portraitFrame;
+    else delete def.portraitFrame;
     if (editor.stepRate !== '' && editor.stepRate != null) def.stepRate = Number(editor.stepRate);
     else delete def.stepRate;
     if (editor.idleRate !== '' && editor.idleRate != null) def.idleRate = Number(editor.idleRate);
@@ -874,6 +882,7 @@
       sheet.idleFrames = [...editor.idleFrames];
       sheet.walkFrames = [...editor.walkFrames];
       sheet.armFrame = editor.armFrame != null ? editor.armFrame : null;
+      sheet.portraitFrame = editor.portraitFrame != null ? editor.portraitFrame : editor.idleFrames[0];
       sheet.animations = {
         idle: sheet.idleFrames.map((_, i) => `idle${i}`),
         walk: sheet.walkFrames.map((_, i) => `walk${i}`),
@@ -898,6 +907,7 @@
         idleFrames: editor.idleFrames ? [...editor.idleFrames] : null,
         walkFrames: editor.walkFrames ? [...editor.walkFrames] : null,
         armFrame: editor.armFrame,
+        portraitFrame: editor.portraitFrame,
         stepRate: editor.stepRate,
         idleRate: editor.idleRate,
       },
@@ -973,8 +983,10 @@
         <label><input type="checkbox" id="seInIdle" ${editor.idleFrames.includes(editor.currentFrame) ? 'checked' : ''} ${editor.armFrame === editor.currentFrame ? 'disabled' : ''}> In idle cycle</label>
         <label><input type="checkbox" id="seInWalk" ${editor.walkFrames.includes(editor.currentFrame) ? 'checked' : ''} ${editor.armFrame === editor.currentFrame ? 'disabled' : ''}> In walk cycle</label>
         <label><input type="checkbox" id="seIsArm" ${editor.armFrame === editor.currentFrame ? 'checked' : ''}> Use as aim/arm sprite</label>
+        <label><input type="checkbox" id="seIsPortrait" ${editor.portraitFrame === editor.currentFrame ? 'checked' : ''}> Use as chat/roster portrait</label>
       </div>
       <p class="sprite-editor-note">The aim/arm sprite replaces the plain aim-direction line in-game — it's drawn rotated to face wherever the character is aiming, so it should be a single reference pose (e.g. an arm pointing right at angle 0).</p>
+      <p class="sprite-editor-note">The portrait frame is what chat dialogue and the character-select screen show for this character. Defaults to the first idle frame until you pick a different one here.</p>
       <div class="sprite-editor-preview-row">
         <div class="sprite-editor-canvas-wrap sprite-editor-preview-wrap"><canvas class="sprite-editor-preview-canvas" width="96" height="96"></canvas></div>
         <div>
@@ -1045,6 +1057,7 @@
         if (!editor.idleFrames.length) editor.idleFrames = [0];
         editor.walkFrames = editor.walkFrames.filter(i => i < editor.frameCount);
         if (editor.armFrame != null && editor.armFrame >= editor.frameCount) editor.armFrame = null;
+        if (!Number.isInteger(editor.portraitFrame) || editor.portraitFrame >= editor.frameCount) editor.portraitFrame = editor.idleFrames[0];
       }
       editor.scale = Math.max(4, Math.min(16, Math.round(240 / editor.frameWidth)));
       commitFrameConfigLive(editor);
@@ -1110,6 +1123,13 @@
         pushHistory(editor, before, editor.captureSnapshot());
         rerenderAll();
       });
+      container.querySelector('#seIsPortrait').addEventListener('change', e => {
+        const before = editor.captureSnapshot();
+        editor.portraitFrame = e.target.checked ? editor.currentFrame : editor.idleFrames[0];
+        commitFrameConfigLive(editor);
+        pushHistory(editor, before, editor.captureSnapshot());
+        rerenderAll();
+      });
       container.querySelector('#seStepRate').addEventListener('change', e => {
         const before = editor.captureSnapshot();
         editor.stepRate = e.target.value === '' ? '' : Number(e.target.value);
@@ -1158,6 +1178,7 @@
           if (!editor.idleFrames.length) editor.idleFrames = [0];
           editor.walkFrames = editor.walkFrames.filter(i => i < editor.frameCount);
           if (editor.armFrame != null && editor.armFrame >= editor.frameCount) editor.armFrame = null;
+          if (!Number.isInteger(editor.portraitFrame) || editor.portraitFrame >= editor.frameCount) editor.portraitFrame = editor.idleFrames[0];
         }
         URL.revokeObjectURL(url);
         commitCharsetLive(editor);
@@ -1771,6 +1792,8 @@
       }
       const armFrame = sheet.armFrame ?? def.armFrame;
       if (Number.isInteger(armFrame)) lines.push(`    armFrame: ${armFrame},`);
+      const portraitFrame = sheet.portraitFrame ?? def.portraitFrame;
+      if (Number.isInteger(portraitFrame) && portraitFrame !== idleFrames[0]) lines.push(`    portraitFrame: ${portraitFrame},`);
       const stepRate = sheet.stepRate ?? def.stepRate;
       if (stepRate != null) lines.push(`    stepRate: ${stepRate},`);
       const idleRate = sheet.idleRate ?? def.idleRate;

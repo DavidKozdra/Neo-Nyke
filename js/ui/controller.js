@@ -750,7 +750,7 @@ export function createUIController(view) {
       if (view.dialoguePortrait instanceof HTMLCanvasElement) {
         const spriteKey = resolveDialoguePortraitKey(speaker);
         if (dialogueRenderCache.portraitKey !== spriteKey) {
-          Neo.drawSpriteToCanvas(view.dialoguePortrait, spriteKey, view.dialoguePortrait.width);
+          Neo.drawSpriteToCanvas(view.dialoguePortrait, Neo.getPortraitSpriteKey?.(spriteKey) || spriteKey, view.dialoguePortrait.width);
           dialogueRenderCache.portraitKey = spriteKey;
         }
       }
@@ -2704,7 +2704,8 @@ export function createUIController(view) {
           const displayName = button.querySelector('.char-card-name')?.textContent?.trim() || Neo.CHARACTER_DEFS?.[itemKey]?.name || itemKey;
           button.setAttribute('aria-label', `${displayName}. ${statusText || 'Available'}.${selected === itemKey ? ' Selected.' : ''}`);
           if (spriteCanvas) {
-            Neo.drawSpriteToCanvas(spriteCanvas, Neo.getCharacterSpriteKey?.(itemKey) || itemKey, 76, {
+            const cardSpriteKey = Neo.getCharacterSpriteKey?.(itemKey) || itemKey;
+            Neo.drawSpriteToCanvas(spriteCanvas, Neo.getPortraitSpriteKey?.(cardSpriteKey) || cardSpriteKey, 76, {
               alpha: isSelectable(itemKey) ? 1 : 0.42,
               tint: Neo.isCustomCharacterKey?.(itemKey) ? '#83f3ff' : null,
             });
@@ -2844,7 +2845,8 @@ export function createUIController(view) {
             `<div class="hero-detail-skills"><div class="hero-detail-section-label">Starting abilities</div>${skillsHtml}</div>` +
             `<div class="hero-detail-skill-readout" data-skill-readout aria-live="polite"><canvas class="hero-detail-skill-preview" data-skill-preview aria-hidden="true"></canvas><span class="hero-detail-skill-readout-name" data-skill-readout-name></span><span class="hero-detail-skill-readout-desc" data-skill-readout-desc>Hover a move to see what it does.</span></div>` +
             `<div class="hero-detail-inventory"><span class="hero-detail-inventory-label">Starting Inventory</span>${inventoryHtml}</div>`;
-          Neo.drawSpriteToCanvas(document.getElementById('heroDetailSprite'), Neo.getCharacterSpriteKey?.(selected) || selected, 104, {
+          const heroDetailSpriteKey = Neo.getCharacterSpriteKey?.(selected) || selected;
+          Neo.drawSpriteToCanvas(document.getElementById('heroDetailSprite'), Neo.getPortraitSpriteKey?.(heroDetailSpriteKey) || heroDetailSpriteKey, 104, {
             tint: Neo.isCustomCharacterKey?.(selected) ? '#83f3ff' : null,
           });
           detail.querySelectorAll('[data-hero-move]').forEach(el => {
