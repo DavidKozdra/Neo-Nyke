@@ -9854,7 +9854,7 @@ button.alt.danger {
 
 /* ── Sprite Editor (developer mode) ─────────────────────────────────────── */
 .sprite-editor-dialog {
-  width: min(1180px, calc(100vw - 48px));
+  width: min(1320px, calc(100vw - 32px));
 }
 
 .sprite-editor-standalone body > :not(#spriteEditorPanel) {
@@ -9877,7 +9877,7 @@ button.alt.danger {
 
 .sprite-editor-body {
   display: grid;
-  grid-template-columns: minmax(220px, .8fr) minmax(420px, 1.6fr);
+  grid-template-columns: minmax(240px, .72fr) minmax(560px, 1.8fr);
   gap: 14px;
   min-height: 0;
 }
@@ -9926,10 +9926,10 @@ button.alt.danger {
 
 .sprite-editor-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
   gap: 8px;
   overflow-y: auto;
-  max-height: 56vh;
+  max-height: 64vh;
   padding-right: 4px;
 }
 
@@ -10012,7 +10012,7 @@ button.alt.danger {
 }
 
 .sprite-editor-field-row input[type="number"] {
-  width: 62px;
+  width: 70px;
   background: rgba(0, 0, 0, .28);
   border: 1px solid rgba(132, 168, 204, .28);
   border-radius: 6px;
@@ -10048,7 +10048,8 @@ button.alt.danger {
   background: rgba(255, 255, 255, .02);
   border: 1px solid rgba(132, 168, 204, .22);
   border-radius: 8px;
-  padding: 6px 4px;
+  min-height: 86px;
+  padding: 8px 6px;
   cursor: pointer;
   color: #9ab2cb;
 }
@@ -10083,7 +10084,7 @@ button.alt.danger {
 
 .sprite-editor-detail {
   overflow-y: auto;
-  max-height: 56vh;
+  max-height: 64vh;
   padding-left: 2px;
 }
 
@@ -10122,6 +10123,8 @@ button.alt.danger {
 
 .sprite-editor-canvas-wrap {
   display: inline-block;
+  max-width: 100%;
+  overflow: auto;
   border: 1px solid rgba(132, 168, 204, .3);
   border-radius: 8px;
   padding: 8px;
@@ -10131,10 +10134,47 @@ button.alt.danger {
     #0b0f16;
 }
 
+.sprite-editor-canvas-wrap--actor {
+  display: block;
+  width: max-content;
+  min-width: min(100%, 392px);
+}
+
 .sprite-editor-canvas {
   image-rendering: pixelated;
   cursor: crosshair;
   display: block;
+}
+
+.sprite-editor-pixel-tools {
+  align-items: center;
+  padding: 8px;
+  border: 1px solid rgba(132, 168, 204, .18);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, .16);
+}
+
+.sprite-editor-move-pad {
+  display: grid;
+  grid-template-columns: repeat(3, 34px);
+  grid-template-areas:
+    ". up ."
+    "left . right"
+    ". down .";
+  gap: 5px;
+  width: max-content;
+  margin: -2px 0 12px;
+}
+
+.sprite-editor-move-pad [data-move-y="-1"] { grid-area: up; }
+.sprite-editor-move-pad [data-move-x="-1"] { grid-area: left; }
+.sprite-editor-move-pad [data-move-x="1"] { grid-area: right; }
+.sprite-editor-move-pad [data-move-y="1"] { grid-area: down; }
+
+.sprite-editor-move-pad button {
+  width: 34px;
+  height: 30px;
+  padding: 0;
 }
 
 .sprite-editor-toolbar {
@@ -10238,8 +10278,13 @@ button.alt.danger {
 .sprite-editor-actions {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
   margin-top: 14px;
+}
+
+.sprite-editor-action-note {
+  margin: 0;
 }
 
 .sprite-editor-readonly-bars {
