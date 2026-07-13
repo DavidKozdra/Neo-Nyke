@@ -2694,7 +2694,7 @@
     }
   }
 
-  // Mateo Potion Bath: full cleanse + 20s status resistance, heal 60% with a
+  // Mateo Potion Bath: full cleanse + 20s status resistance, heal 20% total with a
   // short regen, vanish for 5s, and erupt in explosions around the caster.
   function castPotionBath() {
     const itemStats = Neo.getItemStats();
@@ -2710,8 +2710,8 @@
     Neo.player.statusResistTime = Math.max(Number(Neo.player.statusResistTime || 0), 20);
     Neo.player.warpHideTime = Math.max(Number(Neo.player.warpHideTime || 0), 5);
     Neo.player.inv = Math.max(Number(Neo.player.inv || 0), 5);
-    // Heal 60% of max HP now, then regen over the next 5 seconds.
-    const burst = Neo.applyPlayerHealing(Math.round(Neo.player.maxHp * 0.6));
+    // Heal 10% of max HP now, then regen another 10% over the next 5 seconds.
+    const burst = Neo.applyPlayerHealing(Math.round(Neo.player.maxHp * 0.1));
     if (burst > 0) Neo.spawnHealPopup(Neo.player.x, Neo.player.y - 22, burst, { color: '#9af7d8' });
     Neo.player.potionRegenTime = 5;
     Neo.player.potionRegenAccum = 0;

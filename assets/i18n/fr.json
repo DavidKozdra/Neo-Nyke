@@ -90,7 +90,7 @@
   "moves.mooggy_hairball.name": "Explosion de boules de poils",
   "moves.mooggy_hairball.desc": "Détruisez une boule de poils venimeuse qui éclate en un poison puissant et gèle tout ce qui s'y trouve.",
   "moves.potion_bath.name": "Bain de potions",
-  "moves.potion_bath.desc": "Nettoyez tous les statuts et résistez-y pendant 20 secondes, soignez 60 % et régénérez-vous pendant 5 secondes, disparaissez pendant 5 secondes et éclatez en explosions autour de vous.",
+  "moves.potion_bath.desc": "Nettoyez tous les statuts et résistez-y pendant 20 secondes, soignez 20 % et régénérez-vous pendant 5 secondes, disparaissez pendant 5 secondes et éclatez en explosions autour de vous.",
   "moves.excalibur_strike.name": "Invoquer Excalibur",
   "moves.excalibur_strike.desc": "Des épées divines géantes pleuvent du ciel pour d'énormes dégâts de zone. Temps de recharge de 10 secondes.",
   "moves.holy_turrets.name": "Tourelles sacrées",

@@ -232,9 +232,9 @@
     // is handled by the caller (skips drawMinimap entirely when hidden).
     const minimapEntry = window.NeoSettings?.getHudElements?.()?.minimap;
     const ownScale = minimapEntry?.scale == null ? NaN : Number(minimapEntry.scale);
-    // Auto defaults to 150%, matching the HUD editor's Minimap definition. An
+    // Auto defaults to 125%, matching the HUD editor's Minimap definition. An
     // explicit per-widget scale still provides the full 50–200% resize range.
-    const hudScale = Number.isFinite(ownScale) ? Neo.clamp(ownScale, 0.5, 2) : 1.5;
+    const hudScale = Number.isFinite(ownScale) ? Neo.clamp(ownScale, 0.5, 2) : 1.25;
     const minimapOffsetX = Number.isFinite(Number(minimapEntry?.x)) ? Number(minimapEntry.x) : 0;
     const minimapOffsetY = Number.isFinite(Number(minimapEntry?.y)) ? Number(minimapEntry.y) : 0;
     const baseSize = hasGlasses ? 34 : 17;

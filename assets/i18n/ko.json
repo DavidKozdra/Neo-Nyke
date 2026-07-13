@@ -90,7 +90,7 @@
   "moves.mooggy_hairball.name": "헤어볼 블라스트",
   "moves.mooggy_hairball.desc": "맹독이 터져 모든 것을 얼려버리는 독이 있는 털뭉치를 해킹하세요.",
   "moves.potion_bath.name": "물약 목욕",
-  "moves.potion_bath.desc": "모든 상태를 정화하고 20초 동안 저항하고, 5초 동안 60%를 치유하고 재생하며, 5초 동안 사라지고 주변에서 폭발이 일어납니다.",
+  "moves.potion_bath.desc": "모든 상태를 정화하고 20초 동안 저항하고, 5초 동안 20%를 치유하고 재생하며, 5초 동안 사라지고 주변에서 폭발이 일어납니다.",
   "moves.excalibur_strike.name": "엑스칼리버 소환",
   "moves.excalibur_strike.desc": "하늘에서 거대한 신검이 쏟아져 엄청난 AOE 데미지를 줍니다. 쿨타임 10초.",
   "moves.holy_turrets.name": "신성한 포탑",

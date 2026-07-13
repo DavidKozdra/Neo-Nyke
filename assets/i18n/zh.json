@@ -90,7 +90,7 @@
   "moves.mooggy_hairball.name": "毛球爆炸",
   "moves.mooggy_hairball.desc": "砍掉一个有毒的毛球，它会因剧毒而爆炸并冻结其中的所有东西。",
   "moves.potion_bath.name": "药水浴",
-  "moves.potion_bath.desc": "净化所有状态并抵抗20秒，治疗60%并恢复5秒，消失5秒，并在你周围爆发爆炸。",
+  "moves.potion_bath.desc": "净化所有状态并抵抗20秒，治疗20%并恢复5秒，消失5秒，并在你周围爆发爆炸。",
   "moves.excalibur_strike.name": "召唤神剑",
   "moves.excalibur_strike.desc": "巨大的神剑从天而降，造成巨大的AOE伤害。 10秒冷却时间。",
   "moves.holy_turrets.name": "神圣炮塔",

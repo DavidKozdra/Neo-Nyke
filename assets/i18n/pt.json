@@ -90,7 +90,7 @@
   "moves.mooggy_hairball.name": "Explosão de bola de cabelo",
   "moves.mooggy_hairball.desc": "Hackeie uma bola de pêlo venenosa que explode com alto teor de veneno e congela tudo o que estiver preso nela.",
   "moves.potion_bath.name": "Banho de Poção",
-  "moves.potion_bath.desc": "Limpe todos os status e resista a eles por 20s, cure 60% e regenere por 5s, desapareça por 5s e irrompa em explosões ao seu redor.",
+  "moves.potion_bath.desc": "Limpe todos os status e resista a eles por 20s, cure 20% e regenere por 5s, desapareça por 5s e irrompa em explosões ao seu redor.",
   "moves.excalibur_strike.name": "Invocar Excalibur",
   "moves.excalibur_strike.desc": "Espadas divinas gigantes chovem do céu causando enormes danos AOE. Tempo de espera de 10s.",
   "moves.holy_turrets.name": "Torretas Sagradas",

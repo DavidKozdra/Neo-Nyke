@@ -90,7 +90,7 @@
   "moves.mooggy_hairball.name": "ヘアボールブラスト",
   "moves.mooggy_hairball.desc": "有毒な毛玉をハックして破裂させて強力な毒を発生させ、その中に閉じ込められたすべてのものを凍らせます。",
   "moves.potion_bath.name": "ポーションバス",
-  "moves.potion_bath.desc": "すべてのステータスを浄化して 20 秒間抵抗し、60% を回復して 5 秒間回復し、5 秒間消滅し、周囲で爆発を起こします。",
+  "moves.potion_bath.desc": "すべてのステータスを浄化して 20 秒間抵抗し、20% を回復して 5 秒間回復し、5 秒間消滅し、周囲で爆発を起こします。",
   "moves.excalibur_strike.name": "エクスカリバーを召喚する",
   "moves.excalibur_strike.desc": "巨大な神剣が空から降ってきて、大きな範囲ダメージを与えます。 10秒のクールダウン。",
   "moves.holy_turrets.name": "ホーリータレット",

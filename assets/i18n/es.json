@@ -90,7 +90,7 @@
   "moves.mooggy_hairball.name": "Explosión de bola de pelo",
   "moves.mooggy_hairball.desc": "Corta una bola de pelo venenosa que explota con un alto contenido de veneno y congela todo lo que queda atrapado en ella.",
   "moves.potion_bath.name": "Baño de poción",
-  "moves.potion_bath.desc": "Limpia todos los estados y resístelos durante 20 s, cúrate un 60 % y regenera durante 5 s, desaparece durante 5 s y estalla en explosiones a tu alrededor.",
+  "moves.potion_bath.desc": "Limpia todos los estados y resístelos durante 20 s, cúrate un 20 % y regenera durante 5 s, desaparece durante 5 s y estalla en explosiones a tu alrededor.",
   "moves.excalibur_strike.name": "Invocar a Excalibur",
   "moves.excalibur_strike.desc": "Espadas divinas gigantes llueven del cielo y causan enormes daños AOE. Tiempo de reutilización de 10 s.",
   "moves.holy_turrets.name": "Torres Sagradas",
