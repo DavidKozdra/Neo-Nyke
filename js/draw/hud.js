@@ -261,8 +261,8 @@
     const visibleCanvasTop = Neo.clamp(-canvasRect.top / scaleY, 0, Neo.canvas.height);
     const visibleCanvasRight = Neo.clamp((window.innerWidth - canvasRect.left) / scaleX, 0, Neo.canvas.width);
     const visibleCanvasBottom = Neo.clamp((window.innerHeight - canvasRect.top) / scaleY, 0, Neo.canvas.height);
-    const topInset = (compact ? 48 : 16) / scaleY;
-    const edgeInsetX = (compact ? 8 : 16) / scaleX;
+    const topInset = (compact ? 8 : 12) / scaleY;
+    const edgeInsetX = (compact ? 8 : 12) / scaleX;
     const edgeInsetY = 8 / scaleY;
     const maxVisibleScale = Math.min(
       (visibleCanvasRight - visibleCanvasLeft - edgeInsetX * 2) / Math.max(1, baseMapWidth),
