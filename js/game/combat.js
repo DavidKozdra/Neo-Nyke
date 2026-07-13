@@ -484,6 +484,7 @@
     const shotAngle = angle + Neo.rand(movementPenalty.spread, -movementPenalty.spread, 'encounter');
     const config = Neo.buildWeaponProjectileConfig?.(weaponKey, { angle: shotAngle, damage, knockback, ...overrides });
     if (!config) return false;
+    triggerArmRecoil(config.angle);
     spawnWeaponProjectile(config);
     if (config.recoil > 0) {
       const recoil = config.recoil * movementPenalty.recoilMultiplier;
@@ -494,6 +495,13 @@
       Neo.ringBurst(Neo.player.x, Neo.player.y, config.muzzleRing, config.color, 0.18);
     }
     return true;
+  }
+
+  function triggerArmRecoil(angle = Neo.angleToMouse(), duration = 0.16) {
+    if (!Neo.player) return;
+    Neo.player.armRecoilUntil = Number(Neo.gameElapsedTime || 0) + duration;
+    Neo.player.armRecoilDuration = duration;
+    Neo.player.armRecoilA = angle;
   }
 
   // Delay before the claw gauntlets' second swipe lands, in seconds. Short
@@ -575,10 +583,12 @@
     if (weaponKey === 'lazer_glasses') {
       Neo.player.weaponBeamTime = 0.65;
       Neo.player.weaponBeamTick = 0;
+      triggerArmRecoil(angle, 0.18);
       Neo.player.weaponCooldown = wCd(weaponKey) / attackSpeed;
       return true;
     }
     if (weaponKey === 'metao_fire_staff') {
+      triggerArmRecoil(angle);
       spawnFireballs();
       if (!isChargedWeaponKey(weaponKey)) Neo.player.weaponCooldown = wCd(weaponKey) / attackSpeed;
       return true;
@@ -599,6 +609,7 @@
       return true;
     }
     if (weaponKey === 'gelleh_lightning_spear') {
+      triggerArmRecoil(angle, 0.18);
       castSmiteChain();
       Neo.player.weaponCooldown = wCd(weaponKey) / attackSpeed;
       return true;

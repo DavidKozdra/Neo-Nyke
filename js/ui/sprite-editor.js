@@ -385,6 +385,31 @@
     return full ? value : '';
   }
 
+  function currentBrushColor(editor, fallback = '#ffffff') {
+    return normalizeHexColor(editor?.brushColor) || normalizeHexColor(fallback) || '#ffffff';
+  }
+
+  function brushColorControlHtml(editor, fallback = '#ffffff') {
+    return `
+      <label class="sprite-editor-color-control">
+        <span>Color</span>
+        <input type="color" id="seBrushColor" value="${currentBrushColor(editor, fallback)}">
+      </label>
+    `;
+  }
+
+  function wireBrushColorControl(container, editor) {
+    const input = container.querySelector('#seBrushColor');
+    if (!input) return;
+    editor.brushColor = input.value;
+    input.addEventListener('input', e => {
+      editor.brushColor = normalizeHexColor(e.target.value) || e.target.value;
+      editor.erasing = false;
+      const eraser = container.querySelector('#seEraser');
+      if (eraser) eraser.checked = false;
+    });
+  }
+
   function findOrCreatePaletteKey(palette, hex, preferredKey = '') {
     const color = normalizeHexColor(hex);
     if (!palette || !color) return preferredKey || Object.keys(palette || {})[0] || 'a';
@@ -1012,7 +1037,7 @@
       ${historyBarHtml()}
       <div class="sprite-editor-canvas-wrap"><canvas class="sprite-editor-canvas"></canvas></div>
       <div class="sprite-editor-toolbar">
-        <label>Brush <input type="color" id="seBrushColor" value="${editor.brushColor}"></label>
+        ${brushColorControlHtml(editor)}
         <label><input type="checkbox" id="seEraser"> Eraser</label>
       </div>
       ${paletteStripHtml()}
@@ -1085,12 +1110,12 @@
     });
 
     editor.applyPaletteColor = hex => {
-      editor.brushColor = hex;
+      editor.brushColor = normalizeHexColor(hex) || hex;
       const input = container.querySelector('#seBrushColor');
-      if (input) input.value = hex;
+      if (input) input.value = currentBrushColor(editor);
     };
 
-    container.querySelector('#seBrushColor').addEventListener('input', e => { editor.brushColor = e.target.value; });
+    wireBrushColorControl(container, editor);
     container.querySelector('#seEraser').addEventListener('change', e => { editor.erasing = e.target.checked; });
 
     function finalizeFrameSize() {
@@ -1309,11 +1334,14 @@
     }
     const editor = state.editor;
     const letters = Object.keys(def.palette);
+    const fallbackBrush = def.palette[editor.activeSwatch] || def.palette[letters[0]] || '#ffffff';
+    editor.brushColor = currentBrushColor(editor, fallbackBrush);
     const isCharacter = entry.tab === 'characters';
     editor.captureSnapshot = () => ({
       pixels: [...def.pixels],
       palette: { ...def.palette },
       activeSwatch: editor.activeSwatch,
+      brushColor: editor.brushColor,
       erasing: editor.erasing,
       selection: editor.selection ? { ...editor.selection } : null,
     });
@@ -1322,6 +1350,7 @@
       def.pixels = [...snapshot.pixels];
       def.palette = { ...snapshot.palette };
       editor.activeSwatch = snapshot.activeSwatch || editor.activeSwatch;
+      editor.brushColor = snapshot.brushColor || def.palette[editor.activeSwatch] || editor.brushColor;
       editor.erasing = !!snapshot.erasing;
       editor.selection = snapshot.selection ? { ...snapshot.selection } : null;
       scheduleAtlasRebuild();
@@ -1351,7 +1380,7 @@
       </div>
       ${paletteStripHtml()}
       <div class="sprite-editor-toolbar">
-        <div class="sprite-editor-swatch-row" id="seSwatches"></div>
+        ${brushColorControlHtml(editor, fallbackBrush)}
         <label><input type="checkbox" id="seEraser"> Eraser</label>
       </div>
       <div class="sprite-editor-actions">
@@ -1369,49 +1398,17 @@
     const canvas = container.querySelector('.sprite-editor-canvas');
     wireHistoryControls(editor, () => renderActorDetail(container, entry));
     renderPaletteStrip();
-
-    const swatchRow = container.querySelector('#seSwatches');
-    letters.forEach(letter => {
-      const wrap = document.createElement('div');
-      wrap.className = `sprite-editor-swatch${editor.activeSwatch === letter ? ' active' : ''}`;
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'sprite-editor-swatch__select';
-      btn.style.background = def.palette[letter];
-      btn.textContent = letter.toUpperCase();
-      btn.addEventListener('click', () => {
-        editor.activeSwatch = letter;
-        editor.erasing = false;
-        container.querySelector('#seEraser').checked = false;
-        swatchRow.querySelectorAll('.sprite-editor-swatch').forEach(el => el.classList.remove('active'));
-        wrap.classList.add('active');
-      });
-      const colorInput = document.createElement('input');
-      colorInput.type = 'color';
-      colorInput.value = def.palette[letter];
-      colorInput.addEventListener('input', e => {
-        const before = editor.captureSnapshot();
-        def.palette[letter] = e.target.value;
-        btn.style.background = e.target.value;
-        repaintActorCanvas(canvas, def, editor);
-        scheduleAtlasRebuild();
-        pushHistory(editor, before, editor.captureSnapshot());
-      });
-      const keyLabel = document.createElement('span');
-      keyLabel.className = 'sprite-editor-swatch__key';
-      keyLabel.textContent = letter;
-      wrap.append(btn, colorInput, keyLabel);
-      swatchRow.appendChild(wrap);
-    });
+    wireBrushColorControl(container, editor);
 
     editor.applyPaletteColor = hex => {
       const color = normalizeHexColor(hex);
       if (!color) return;
-      const existing = Object.keys(def.palette).find(key => normalizeHexColor(def.palette[key]) === color);
-      editor.pendingBrushColor = existing ? '' : color;
-      if (existing) editor.activeSwatch = existing;
+      editor.brushColor = color;
       editor.erasing = false;
-      renderActorDetail(container, entry);
+      const input = container.querySelector('#seBrushColor');
+      if (input) input.value = color;
+      const eraser = container.querySelector('#seEraser');
+      if (eraser) eraser.checked = false;
     };
 
     canvas.width = ACTOR_GRID_SIZE * editor.scale;
@@ -1436,9 +1433,8 @@
       const cx = Math.floor((clientX - rect.left) / editor.scale);
       const cy = Math.floor((clientY - rect.top) / editor.scale);
       if (cx < 0 || cy < 0 || cx >= ACTOR_GRID_SIZE || cy >= ACTOR_GRID_SIZE) return;
-      if (!editor.erasing && editor.pendingBrushColor) {
-        editor.activeSwatch = findOrCreatePaletteKey(def.palette, editor.pendingBrushColor, editor.activeSwatch);
-        editor.pendingBrushColor = '';
+      if (!editor.erasing) {
+        editor.activeSwatch = findOrCreatePaletteKey(def.palette, editor.brushColor, editor.activeSwatch);
       }
       const row = def.pixels[cy];
       const nextChar = editor.erasing ? '.' : editor.activeSwatch;
@@ -1531,15 +1527,16 @@
   function renderIconDetail(container, entry) {
     const def = window.NeoNykeIconDefs[entry.group][entry.key];
     if (!state.editor || state.editor.entry.id !== entry.id) {
-      state.editor = { kind: 'icon-grid', entry, activeChannel: 'color', scale: 30 };
+      state.editor = { kind: 'icon-grid', entry, scale: 30 };
     }
     const editor = state.editor;
+    editor.brushColor = currentBrushColor(editor, def.color || '#ffffff');
     editor.captureSnapshot = () => ({
       color: def.color,
       accent: def.accent,
       pixels: clonePlain(def.pixels || []),
       accentPixels: clonePlain(def.accentPixels || []),
-      activeChannel: editor.activeChannel,
+      brushColor: editor.brushColor,
       erasing: editor.erasing,
     });
     editor.applySnapshot = snapshot => {
@@ -1549,7 +1546,7 @@
       def.pixels = clonePlain(snapshot.pixels || []);
       if (snapshot.accentPixels?.length) def.accentPixels = clonePlain(snapshot.accentPixels);
       else delete def.accentPixels;
-      editor.activeChannel = snapshot.activeChannel || editor.activeChannel;
+      editor.brushColor = snapshot.brushColor || def.color || editor.brushColor;
       editor.erasing = !!snapshot.erasing;
       scheduleAtlasRebuild();
     };
@@ -1564,7 +1561,7 @@
       <div class="sprite-editor-canvas-wrap"><canvas class="sprite-editor-canvas"></canvas></div>
       ${paletteStripHtml()}
       <div class="sprite-editor-toolbar">
-        <div class="sprite-editor-swatch-row" id="seSwatches"></div>
+        ${brushColorControlHtml(editor, def.color || '#ffffff')}
         <label><input type="checkbox" id="seEraser"> Eraser</label>
       </div>
       <div class="sprite-editor-actions">
@@ -1577,45 +1574,17 @@
     const canvas = container.querySelector('.sprite-editor-canvas');
     wireHistoryControls(editor, () => renderIconDetail(container, entry));
     renderPaletteStrip();
-    const swatchRow = container.querySelector('#seSwatches');
-    ['color', 'accent'].forEach(channel => {
-      const wrap = document.createElement('div');
-      wrap.className = `sprite-editor-swatch${editor.activeChannel === channel ? ' active' : ''}`;
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'sprite-editor-swatch__select';
-      btn.style.background = def[channel] || '#888888';
-      btn.textContent = channel === 'color' ? 'C' : 'A';
-      btn.addEventListener('click', () => {
-        editor.activeChannel = channel;
-        container.querySelector('#seEraser').checked = false;
-        swatchRow.querySelectorAll('.sprite-editor-swatch').forEach(el => el.classList.remove('active'));
-        wrap.classList.add('active');
-      });
-      const colorInput = document.createElement('input');
-      colorInput.type = 'color';
-      colorInput.value = def[channel] || '#888888';
-      colorInput.addEventListener('input', e => {
-        const before = editor.captureSnapshot();
-        def[channel] = e.target.value;
-        btn.style.background = e.target.value;
-        repaintIconCanvas(canvas, def);
-        scheduleAtlasRebuild();
-        pushHistory(editor, before, editor.captureSnapshot());
-      });
-      const keyLabel = document.createElement('span');
-      keyLabel.className = 'sprite-editor-swatch__key';
-      keyLabel.textContent = channel;
-      wrap.append(btn, colorInput, keyLabel);
-      swatchRow.appendChild(wrap);
-    });
+    wireBrushColorControl(container, editor);
 
     editor.applyPaletteColor = hex => {
       const color = normalizeHexColor(hex);
       if (!color) return;
-      editor.pendingBrushColor = color;
+      editor.brushColor = color;
       editor.erasing = false;
-      renderIconDetail(container, entry);
+      const input = container.querySelector('#seBrushColor');
+      if (input) input.value = color;
+      const eraser = container.querySelector('#seEraser');
+      if (eraser) eraser.checked = false;
     };
 
     canvas.width = ICON_GRID_SIZE * editor.scale;
@@ -1630,12 +1599,8 @@
       def.pixels = (def.pixels || []).filter(([x, y]) => !(x === cx && y === cy));
       def.accentPixels = (def.accentPixels || []).filter(([x, y]) => !(x === cx && y === cy));
       if (!editor.erasing) {
-        if (editor.pendingBrushColor) {
-          def[editor.activeChannel] = editor.pendingBrushColor;
-          editor.pendingBrushColor = '';
-        }
-        if (editor.activeChannel === 'accent') def.accentPixels = [...(def.accentPixels || []), [cx, cy]];
-        else def.pixels = [...def.pixels, [cx, cy]];
+        def.color = currentBrushColor(editor, def.color || '#ffffff');
+        def.pixels = [...def.pixels, [cx, cy]];
       }
       if (!def.accentPixels?.length) delete def.accentPixels;
       repaintIconCanvas(canvas, def);
@@ -1683,10 +1648,14 @@
     }
     const editor = state.editor;
     ensureEnvTileRaster(def);
+    const letters = Object.keys(def.palette || {});
+    const fallbackBrush = def.palette[editor.activeSwatch] || def.palette[letters[0]] || '#ffffff';
+    editor.brushColor = currentBrushColor(editor, fallbackBrush);
     editor.captureSnapshot = () => ({
       palette: { ...(def.palette || {}) },
       pixels: [...(def.pixels || [])],
       activeSwatch: editor.activeSwatch,
+      brushColor: editor.brushColor,
       erasing: editor.erasing,
     });
     editor.applySnapshot = snapshot => {
@@ -1695,10 +1664,10 @@
       def.palette = { ...snapshot.palette };
       def.pixels = [...snapshot.pixels];
       editor.activeSwatch = snapshot.activeSwatch || Object.keys(def.palette || {})[0] || 'a';
+      editor.brushColor = snapshot.brushColor || def.palette[editor.activeSwatch] || editor.brushColor;
       editor.erasing = !!snapshot.erasing;
       rebuildEnvironmentPreviewState();
     };
-    const letters = Object.keys(def.palette || {});
     container.innerHTML = `
       <div class="sprite-editor-detail-head">
         <h4 class="sprite-editor-detail-title">${entry.label}</h4>
@@ -1708,7 +1677,7 @@
       <div class="sprite-editor-canvas-wrap"><canvas class="sprite-editor-canvas" width="256" height="256"></canvas></div>
       ${paletteStripHtml()}
       <div class="sprite-editor-toolbar">
-        <div class="sprite-editor-swatch-row" id="seSwatches"></div>
+        ${brushColorControlHtml(editor, fallbackBrush)}
         <label><input type="checkbox" id="seEraser" ${editor.erasing ? 'checked' : ''}> Eraser</label>
       </div>
       <div class="sprite-editor-actions">
@@ -1720,38 +1689,7 @@
     const canvas = container.querySelector('canvas');
     wireHistoryControls(editor, () => renderEnvTileDetail(container, entry));
     renderPaletteStrip();
-    const swatchRow = container.querySelector('#seSwatches');
-    letters.forEach(letter => {
-      const wrap = document.createElement('div');
-      wrap.className = `sprite-editor-swatch${editor.activeSwatch === letter ? ' active' : ''}`;
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'sprite-editor-swatch__select';
-      btn.style.background = def.palette[letter];
-      btn.textContent = letter.toUpperCase();
-      btn.addEventListener('click', () => {
-        editor.activeSwatch = letter;
-        editor.erasing = false;
-        container.querySelector('#seEraser').checked = false;
-        swatchRow.querySelectorAll('.sprite-editor-swatch').forEach(el => el.classList.remove('active'));
-        wrap.classList.add('active');
-      });
-      const colorInput = document.createElement('input');
-      colorInput.type = 'color';
-      colorInput.value = def.palette[letter];
-      colorInput.addEventListener('input', e => {
-        const before = editor.captureSnapshot();
-        def.palette[letter] = e.target.value;
-        btn.style.background = e.target.value;
-        repaint();
-        pushHistory(editor, before, editor.captureSnapshot());
-      });
-      const keyLabel = document.createElement('span');
-      keyLabel.className = 'sprite-editor-swatch__key';
-      keyLabel.textContent = letter;
-      wrap.append(btn, colorInput, keyLabel);
-      swatchRow.appendChild(wrap);
-    });
+    wireBrushColorControl(container, editor);
     const repaint = () => {
       const ctx = canvas.getContext('2d');
       ctx.imageSmoothingEnabled = false;
@@ -1769,9 +1707,8 @@
     }
     function paintAt(clientX, clientY) {
       const p = pointerToCell(clientX, clientY);
-      if (!editor.erasing && editor.pendingBrushColor) {
-        editor.activeSwatch = findOrCreatePaletteKey(def.palette, editor.pendingBrushColor, editor.activeSwatch);
-        editor.pendingBrushColor = '';
+      if (!editor.erasing) {
+        editor.activeSwatch = findOrCreatePaletteKey(def.palette, editor.brushColor, editor.activeSwatch);
       }
       const nextChar = editor.erasing ? '.' : editor.activeSwatch;
       const row = def.pixels[p.y] || '................';
@@ -1785,11 +1722,12 @@
     editor.applyPaletteColor = hex => {
       const color = normalizeHexColor(hex);
       if (!color) return;
-      const existing = Object.keys(def.palette || {}).find(key => normalizeHexColor(def.palette[key]) === color);
-      editor.pendingBrushColor = existing ? '' : color;
-      if (existing) editor.activeSwatch = existing;
+      editor.brushColor = color;
       editor.erasing = false;
-      renderEnvTileDetail(container, entry);
+      const input = container.querySelector('#seBrushColor');
+      if (input) input.value = color;
+      const eraser = container.querySelector('#seEraser');
+      if (eraser) eraser.checked = false;
     };
     container.querySelector('#seEraser').addEventListener('change', e => {
       editor.erasing = e.target.checked;
@@ -2119,12 +2057,21 @@
     search?.addEventListener('input', e => { state.query = e.target.value || ''; renderGrid(); });
     document.addEventListener('keydown', e => {
       if (e.key === 'Escape' && state.open) close();
-      if (!state.open || !state.editor || !(e.ctrlKey || e.metaKey)) return;
       const key = e.key.toLowerCase();
-      if (key !== 'z' && key !== 'y') return;
+      if (!state.open || !state.editor) return;
       const target = e.target;
       const isTextInput = target?.matches?.('input, textarea, [contenteditable="true"]');
       if (isTextInput) return;
+      if (key === 'e' && !(e.ctrlKey || e.metaKey || e.altKey)) {
+        const eraser = document.getElementById('seEraser');
+        if (!eraser) return;
+        e.preventDefault();
+        eraser.checked = true;
+        eraser.dispatchEvent(new Event('change', { bubbles: true }));
+        return;
+      }
+      if (!(e.ctrlKey || e.metaKey)) return;
+      if (key !== 'z' && key !== 'y') return;
       e.preventDefault();
       const undo = document.getElementById('seUndo');
       const redo = document.getElementById('seRedo');

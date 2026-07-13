@@ -308,7 +308,30 @@
   // Assumes the canvas is already translated to the entity's position; only
   // wraps its own save/restore around the rotate so it doesn't leak into
   // whatever the caller draws next in that same translated context.
-  function drawAimIndicator(aimAngle, spriteKey, color, size, facing = 1) {
+  function getArmSpriteMotion(spriteKey, options = {}) {
+    const reduceMotion = !!window.NeoSettings?.getAccess?.()?.reduceMotion;
+    if (reduceMotion) return { angleOffset: 0, recoil: 0 };
+    const attackProgress = Neo.clamp(Number(options.attackProgress || 0), 0, 1);
+    const recoil = Neo.clamp(Number(options.recoil || 0), 0, 1);
+    if ((spriteKey === 'thorn_knight' || spriteKey === 'sarge') && attackProgress > 0) {
+      const arc = spriteKey === 'sarge' ? 1.35 : 1.05;
+      const eased = 1 - (1 - attackProgress) ** 2;
+      const direction = spriteKey === 'sarge' ? -1 : 1;
+      return {
+        angleOffset: direction * arc * (1 - eased * 2),
+        recoil: Math.sin(attackProgress * Math.PI) * 0.2,
+      };
+    }
+    if (recoil > 0) {
+      return {
+        angleOffset: 0,
+        recoil,
+      };
+    }
+    return { angleOffset: 0, recoil: 0 };
+  }
+
+  function drawAimIndicator(aimAngle, spriteKey, color, size, facing = 1, options = {}) {
     const atlas = Neo.SPRITE_ATLAS;
     const armFrame = atlas?.frames?.[`${spriteKey}:arm`];
     if (armFrame) {
@@ -325,10 +348,13 @@
       const offsetY = (Number(offset.y) || 0) * scale;
       const baseAngle = Number.isFinite(Number(sheet.armBaseAngle)) ? Number(sheet.armBaseAngle) : 0;
       const sourceAimAngle = facing < 0 ? Math.PI - baseAngle : baseAngle;
+      const motion = getArmSpriteMotion(spriteKey, options);
+      const recoilBack = Number(motion.recoil || 0) * 2 * scale;
 
       Neo.ctx.save();
       Neo.ctx.translate(offsetX, offsetY);
-      Neo.ctx.rotate(aimAngle - sourceAimAngle);
+      Neo.ctx.rotate(aimAngle - sourceAimAngle + Number(motion.angleOffset || 0) * facing);
+      Neo.ctx.translate(-recoilBack, 0);
       if (facing < 0) Neo.ctx.scale(-1, 1);
       Neo.ctx.imageSmoothingEnabled = false;
       Neo.ctx.drawImage(
@@ -1242,7 +1268,11 @@
   function drawPlayer() {
     if (!Neo.player) return;
     const aimAngle = Neo.angleToMouse();
-    const facing = getFacingDirection(Neo.player, aimAngle);
+    const armRecoilDuration = Math.max(0.01, Number(Neo.player.armRecoilDuration || 0.16));
+    const armRecoilRemaining = Math.max(0, Number(Neo.player.armRecoilUntil || 0) - Number(Neo.gameElapsedTime || 0));
+    const facing = armRecoilRemaining > 0
+      ? (Math.cos(aimAngle) < 0 ? -1 : 1)
+      : getFacingDirection(Neo.player, aimAngle);
     const shadowColor = Neo.godTimer > 0 ? 'rgba(255,248,210,0.65)' : 'rgba(0,0,0,0.25)';
     const _reduceFlash = window.NeoSettings?.getAccess()?.reduceFlash;
     // The cape only renders the player near-invisible while actually concealed (first
@@ -1316,7 +1346,10 @@
     drawEnemyStatusIconRow(Neo.player, Neo.player.y);
     Neo.ctx.save();
     Neo.ctx.translate(Neo.player.x, Neo.player.y);
-    drawAimIndicator(aimAngle, getPlayerSpriteKey(), '#f5f1e8', playerSize, facing);
+    drawAimIndicator(aimAngle, getPlayerSpriteKey(), '#f5f1e8', playerSize, facing, {
+      attackProgress: getAttackProgress(Neo.player.swing, Neo.ATTACKS.melee.active),
+      recoil: Neo.clamp(armRecoilRemaining / armRecoilDuration, 0, 1),
+    });
     const equippedWeapon = Neo.getEquippedWeapon();
     const extendingStaffEquipped = equippedWeapon === 'extending_staff';
     if (extendingStaffEquipped) {
@@ -1474,7 +1507,9 @@
     });
     Neo.ctx.save();
     Neo.ctx.translate(pn.x, pn.y);
-    drawAimIndicator(aimAngle, spriteKey, tintColor, Math.max(34, pn.r * 2.5), facing);
+    drawAimIndicator(aimAngle, spriteKey, tintColor, Math.max(34, pn.r * 2.5), facing, {
+      attackProgress: getAttackProgress(pn.swing, Neo.ATTACKS.melee.active),
+    });
     Neo.ctx.restore();
     Neo.ctx.save();
     Neo.ctx.fillStyle = tintColor;
