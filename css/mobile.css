@@ -3362,6 +3362,22 @@
     gap: 8px;
   }
 
+  #shopTrades.shop-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .shop-card--trade .shop-trade {
+    flex-direction: column;
+  }
+
+  .shop-card--trade .shop-trade__arrow {
+    transform: rotate(90deg);
+  }
+
+  .shop-card--trade .shop-trade__tile {
+    min-width: 0;
+  }
+
   .anvil-tab-panel {
     min-height: 0;
     max-height: none;

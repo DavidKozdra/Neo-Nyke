@@ -80,9 +80,31 @@
     def.chips.forEach(c => { if (c && c.length >= 4) g.fillRect(ox + c[0], oy + c[1], c[2], c[3]); });
   }
 
+  function drawPixelTile(g, ox, oy, s, def) {
+    if (!def || !Array.isArray(def.pixels)) return false;
+    const sourceSize = Number(def.pixelSize || def.pixels.length || SRC_SIZE) || SRC_SIZE;
+    const cellW = s / sourceSize;
+    const cellH = s / sourceSize;
+    def.pixels.forEach((row, py) => {
+      if (typeof row !== 'string') return;
+      for (let px = 0; px < row.length; px += 1) {
+        const color = row[px];
+        if (color === '.' || color === ' ') continue;
+        g.fillStyle = def.palette?.[color] || '#ff00ff';
+        g.fillRect(ox + px * cellW, oy + py * cellH, Math.ceil(cellW), Math.ceil(cellH));
+      }
+    });
+    return true;
+  }
+
   function drawTileOnto(g, key, ox, oy, s) {
     const def = TILE_DEFS[key];
     if (!def) { g.fillStyle = '#30342f'; g.fillRect(ox, oy, s, s); return; }
+    if (typeof window.Neo?.drawEnvironmentTileAsset === 'function') {
+      window.Neo.drawEnvironmentTileAsset(g, ox, oy, s, def);
+      return;
+    }
+    if (drawPixelTile(g, ox, oy, s, def)) return;
     g.fillStyle = def.base || '#343832';
     g.fillRect(ox, oy, s, s);
     if (def.kind === 'floor' || def.kind === 'plank') drawFloorAsset(g, ox, oy, s, def);
