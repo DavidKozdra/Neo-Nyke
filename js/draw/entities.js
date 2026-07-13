@@ -41,6 +41,7 @@
       idleFrames.forEach((sourceIndex, position) => pushFrame(sourceIndex, `${key}:idle${position}`));
       walkFrames.forEach((sourceIndex, position) => pushFrame(sourceIndex, `${key}:walk${position}`));
       if (Number.isInteger(sheet.armFrame)) pushFrame(sheet.armFrame, `${key}:arm`);
+      pushFrame(Number.isInteger(sheet.portraitFrame) ? sheet.portraitFrame : idleFrames[0], `${key}:portrait`);
     });
     const GUTTER = 1;
     const canvasEl = document.createElement('canvas');
@@ -106,6 +107,15 @@
   function getPlayerSpriteKey() {
     const key = Neo.getCharacterDef().key;
     return Neo.SPRITE_DEFS[key] ? key : 'thorn_knight';
+  }
+
+  // Resolves a base sprite key to its dedicated portrait atlas frame (the
+  // frame chosen in the sprite editor for chat dialogue / character-select),
+  // falling back to the base key for sprites without a charset (procedural
+  // combatants, enemies) where the base frame already serves as the icon.
+  function getPortraitSpriteKey(spriteKey) {
+    const portraitKey = `${spriteKey}:portrait`;
+    return Neo.SPRITE_ATLAS?.frames?.[portraitKey] ? portraitKey : spriteKey;
   }
 
   function getFacingDirection(actor, fallbackAngle = 0) {
@@ -1709,6 +1719,7 @@
   Neo.buildSpriteAtlas = buildSpriteAtlas;
   Neo.getEnemySpriteKey = getEnemySpriteKey;
   Neo.getPlayerSpriteKey = getPlayerSpriteKey;
+  Neo.getPortraitSpriteKey = getPortraitSpriteKey;
   Neo.getFacingDirection = getFacingDirection;
   Neo.getActorSpriteFrameKey = getActorSpriteFrameKey;
   Neo.getActorSpriteAnimation = getActorSpriteAnimation;
