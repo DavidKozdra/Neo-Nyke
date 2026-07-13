@@ -67,6 +67,15 @@ button, input, select, textarea {
   --menu-glow: rgba(80,120,200,.30);
   --menu-shadow: rgba(4,8,18,.60);
   --menu-danger: #e05555;
+  --hud-panel-bg: linear-gradient(180deg, rgba(12, 17, 25, .88), rgba(5, 8, 13, .78));
+  --hud-panel-bg-strong: linear-gradient(180deg, rgba(17, 23, 33, .94), rgba(7, 10, 16, .88));
+  --hud-panel-border: rgba(159, 180, 210, .22);
+  --hud-panel-border-strong: rgba(215, 226, 242, .48);
+  --hud-text: #edf4ff;
+  --hud-muted: #8f9eb4;
+  --hud-accent: #8cc7ff;
+  --hud-warn: #f1c66a;
+  --hud-shadow: 0 10px 28px rgba(0, 0, 0, .36), inset 0 1px 0 rgba(255, 255, 255, .08);
 }
 
 /* ── Scrollbars ─────────────────────────────────────────────────────────── */
@@ -255,9 +264,9 @@ button, input, select, textarea {
   align-items: center;
   gap: 18px;
   padding: 0 16px;
-  background: linear-gradient(180deg, rgba(22, 27, 36, .92), rgba(12, 15, 22, .55));
-  backdrop-filter: blur(6px);
-  border-bottom: 2px solid rgba(128, 146, 170, .38);
+  background: linear-gradient(180deg, rgba(5, 8, 13, .56), rgba(5, 8, 13, 0));
+  backdrop-filter: none;
+  border-bottom: 1px solid rgba(190, 210, 235, .12);
   font-size: calc(12px * var(--font-scale, 1));
   text-transform: uppercase;
   letter-spacing: .08em;
@@ -288,20 +297,20 @@ button, input, select, textarea {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 5px;
-  padding: 10px 14px;
-  background: linear-gradient(180deg, var(--menu-surface-strong), var(--menu-bg-deep));
-  backdrop-filter: blur(8px);
-  border: 2px solid var(--menu-border);
-  border-top-color: var(--menu-border-strong);
-  border-radius: 8px;
-  box-shadow: 0 4px 16px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.07);
-  font-size: calc(16px * var(--font-scale, 1));
+  gap: 7px;
+  padding: 11px 15px;
+  background: var(--hud-panel-bg);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--hud-panel-border);
+  border-top-color: rgba(255, 255, 255, .2);
+  border-radius: 6px;
+  box-shadow: var(--hud-shadow);
+  font-size: calc(22px * var(--font-scale, 1));
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: .08em;
   z-index: 20;
-  color: #ffd700;
+  color: #f3cd63;
   pointer-events: none;
   transform: translate(var(--hud-x-coins, 0px), var(--hud-y-coins, 0px)) scale(var(--hud-scale-coins, var(--hud-scale, 1)));
   transform-origin: top left;
@@ -310,18 +319,18 @@ button, input, select, textarea {
 .currency-line {
   display: flex;
   align-items: center;
-  gap: 8px;
-  min-width: 68px;
+  gap: 10px;
+  min-width: 114px;
 }
 
 .currency-line--loop {
   color: #83f3ff;
-  font-size: calc(14px * var(--font-scale, 1));
+  font-size: calc(18px * var(--font-scale, 1));
 }
 
 .coin-icon {
-  width: 24px;
-  height: 24px;
+  width: 32px;
+  height: 32px;
   image-rendering: pixelated;
   flex-shrink: 0;
 }
@@ -573,42 +582,42 @@ button, input, select, textarea {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
 }
 
 .timer-floor {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 22px;
-  background: linear-gradient(180deg, var(--menu-surface-strong), var(--menu-bg-deep));
-  backdrop-filter: blur(10px);
-  border: 2px solid var(--menu-border);
-  border-top-color: var(--menu-border-strong);
-  border-radius: 0 0 8px 8px;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, .3), inset 0 1px 0 rgba(255,255,255,.07);
-  font-size: calc(20px * var(--font-scale, 1));
+  gap: 10px;
+  padding: 8px 18px 9px;
+  background: var(--hud-panel-bg-strong);
+  backdrop-filter: blur(14px);
+  border: 1px solid var(--hud-panel-border);
+  border-top: 0;
+  border-radius: 0 0 7px 7px;
+  box-shadow: var(--hud-shadow);
+  font-size: calc(18px * var(--font-scale, 1));
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: .12em;
-  color: var(--menu-text);
+  color: var(--hud-text);
 }
 
 .timer-floor #timerDisplay {
-  font-size: calc(24px * var(--font-scale, 1));
+  font-size: calc(23px * var(--font-scale, 1));
   font-weight: 800;
-  color: #eaf2ff;
+  color: #f6fbff;
   min-width: 60px;
   text-align: center;
 }
 
 .timer-floor .separator {
-  color: rgba(160, 183, 214, .62);
-  opacity: 0.6;
+  color: rgba(185, 201, 224, .46);
+  opacity: 1;
 }
 
 .timer-floor #floorDisplay {
-  color: #ffd700;
+  color: var(--hud-warn);
 }
 
 /* Loop counter — appears in the center HUD only from loop 2 onward. Styled as a
@@ -633,7 +642,7 @@ button, input, select, textarea {
 }
 
 .difficulty-display {
-  color: #9fd3ff;
+  color: #a9c7e9;
   font-size: calc(13px * var(--font-scale, 1));
   min-width: 58px;
   text-align: center;
@@ -670,12 +679,12 @@ button, input, select, textarea {
   align-items: center;
   justify-content: center;
   gap: 3px;
-  border-radius: 5px;
+  border-radius: 4px;
   font-size: calc(12px * var(--font-scale, 1));
   font-weight: 900;
   letter-spacing: 0;
-  background: rgba(255,255,255,.06);
-  border: 2px solid rgba(255,255,255,.5);
+  background: rgba(255,255,255,.055);
+  border: 1px solid rgba(255,255,255,.34);
   color: #f5f1e8;
 }
 
@@ -1149,12 +1158,13 @@ button, input, select, textarea {
   z-index: 19;
   width: 284px;
   max-height: calc(100dvh - 158px);
-  padding: 12px 16px;
-  border: 1px solid rgba(126, 200, 255, .18);
-  border-radius: 8px;
-  background: rgba(8, 13, 21, .68);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, .18), inset 0 0 20px rgba(80, 160, 220, .035);
-  color: #d8e9ff;
+  padding: 11px 13px;
+  border: 1px solid var(--hud-panel-border);
+  border-radius: 7px;
+  background: var(--hud-panel-bg);
+  backdrop-filter: blur(12px);
+  box-shadow: var(--hud-shadow);
+  color: var(--hud-text);
   pointer-events: none;
   overflow-y: auto;
   transform: translate(var(--hud-x-objectives, 0px), var(--hud-y-objectives, 0px)) scale(var(--hud-scale-objectives, var(--hud-scale, 1)));
@@ -1173,11 +1183,11 @@ button, input, select, textarea {
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 8px;
-  padding-bottom: 6px;
-  border-bottom: 1px solid rgba(126, 200, 255, .1);
-  color: #8fd2ff;
-  font-size: calc(16px * var(--font-scale, 1));
+  margin-bottom: 7px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid rgba(185, 205, 230, .12);
+  color: var(--hud-accent);
+  font-size: calc(14px * var(--font-scale, 1));
   font-weight: 900;
   letter-spacing: .12em;
 }
@@ -1191,18 +1201,18 @@ button, input, select, textarea {
 .objective-tracker__head b {
   max-width: 108px;
   overflow: hidden;
-  color: #ffd27d;
+  color: var(--hud-warn);
   text-align: right;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .objective-tracker__toggle {
-  border: 1px solid rgba(143, 210, 255, .42);
-  border-radius: 6px;
-  background: rgba(10, 18, 30, .78);
-  color: #b9e5ff;
-  font-size: calc(16px * var(--font-scale, 1));
+  border: 1px solid rgba(185, 205, 230, .28);
+  border-radius: 5px;
+  background: rgba(9, 14, 22, .74);
+  color: #c9d9ec;
+  font-size: calc(14px * var(--font-scale, 1));
   font-weight: 800;
   letter-spacing: .08em;
   text-transform: uppercase;
@@ -1215,12 +1225,12 @@ button, input, select, textarea {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
-  border: 1px solid rgba(143, 210, 255, .42);
-  border-radius: 6px;
-  background: rgba(10, 18, 30, .78);
-  color: #b9e5ff;
+  width: 21px;
+  height: 21px;
+  border: 1px solid rgba(185, 205, 230, .28);
+  border-radius: 5px;
+  background: rgba(9, 14, 22, .74);
+  color: #c9d9ec;
   font-size: calc(18px * var(--font-scale, 1));
   font-weight: 800;
   line-height: 1;
@@ -1236,8 +1246,8 @@ button, input, select, textarea {
 
 .objective-tracker__summary {
   margin-bottom: 8px;
-  color: #c9ddf3;
-  font-size: calc(18px * var(--font-scale, 1));
+  color: #dce8f5;
+  font-size: calc(16px * var(--font-scale, 1));
   font-weight: 700;
   line-height: 1.2;
   text-shadow: 0 1px 0 rgba(0, 0, 0, .65);
@@ -1256,8 +1266,8 @@ button, input, select, textarea {
   grid-template-columns: 16px 1fr;
   gap: 10px;
   align-items: start;
-  color: #c7d4e6;
-  font-size: calc(18px * var(--font-scale, 1));
+  color: #cbd7e7;
+  font-size: calc(16px * var(--font-scale, 1));
   font-weight: 700;
   line-height: 1.2;
   text-shadow: 0 1px 0 rgba(0, 0, 0, .65);
@@ -1329,11 +1339,11 @@ button, input, select, textarea {
   position: relative;
   width: 180px;
   height: 12px;
-  background: linear-gradient(180deg, #1a0f24, #2c1838);
-  border: 1px solid rgba(140, 120, 170, .45);
+  background: linear-gradient(180deg, rgba(4, 7, 12, .92), rgba(13, 18, 27, .88));
+  border: 1px solid rgba(180, 200, 225, .22);
   border-radius: 999px;
   overflow: hidden;
-  box-shadow: inset 0 1px 3px rgba(0,0,0,.55), 0 1px 2px rgba(0,0,0,.4);
+  box-shadow: inset 0 1px 3px rgba(0,0,0,.68), 0 1px 2px rgba(0,0,0,.35);
 }
 
 /* Vertical glass sheen + top highlight strip, painted above the colored fill. */
@@ -1347,8 +1357,8 @@ button, input, select, textarea {
   pointer-events: none;
   background:
     linear-gradient(180deg,
-      rgba(255,255,255,.42) 0%,
-      rgba(255,255,255,.10) 32%,
+      rgba(255,255,255,.22) 0%,
+      rgba(255,255,255,.07) 32%,
       rgba(255,255,255,0) 55%,
       rgba(0,0,0,.28) 100%);
 }
@@ -1385,7 +1395,7 @@ button, input, select, textarea {
   left: 10px;
   display: grid;
   grid-template-columns: minmax(0, 220px);
-  gap: 6px;
+  gap: 5px;
   font-size: calc(11px * var(--font-scale, 1));
   text-transform: uppercase;
   letter-spacing: .06em;
@@ -1402,14 +1412,14 @@ button, input, select, textarea {
 
 .player-stat-card {
   display: grid;
-  gap: 6px;
-  padding: 9px 10px;
-  background: linear-gradient(180deg, var(--menu-surface-strong), var(--menu-bg-deep));
-  backdrop-filter: blur(8px);
-  border: 1px solid var(--menu-border);
+  gap: 5px;
+  padding: 8px 9px;
+  background: var(--hud-panel-bg);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--hud-panel-border);
   border-top-color: var(--player-color, var(--menu-border-strong));
-  border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.07);
+  border-radius: 6px;
+  box-shadow: var(--hud-shadow);
   min-width: 0;
 }
 
@@ -1452,7 +1462,7 @@ button, input, select, textarea {
 
 .player-stat-name {
   min-width: 0;
-  color: #dfeeff;
+  color: var(--hud-text);
   font-size: calc(9px * var(--font-scale, 1));
   font-weight: 700;
   text-align: right;
@@ -1465,7 +1475,7 @@ button, input, select, textarea {
   display: flex;
   align-items: center;
   gap: 6px;
-  color: #e7f4ff;
+  color: var(--hud-text);
   font-weight: 600;
 }
 
@@ -1473,22 +1483,22 @@ button, input, select, textarea {
   min-width: 22px;
   font-size: calc(10px * var(--font-scale, 1));
   font-weight: 700;
-  color: #bfd0e6;
+  color: var(--hud-muted);
 }
 
 .player-stat-row span:last-child {
   font-size: calc(10px * var(--font-scale, 1));
   min-width: 44px;
   text-align: right;
-  color: #cfe5fb;
+  color: #d8e6f5;
 }
 
 .player-hp-bar {
   position: relative;
   width: 118px;
   height: 12px;
-  background: linear-gradient(180deg, #1a0f24, #2c1838);
-  border: 1px solid rgba(140, 120, 170, .45);
+  background: linear-gradient(180deg, rgba(4, 7, 12, .92), rgba(13, 18, 27, .88));
+  border: 1px solid rgba(180, 200, 225, .22);
   border-radius: 999px;
   overflow: hidden;
   box-shadow: inset 0 1px 3px rgba(0,0,0,.55), 0 1px 2px rgba(0,0,0,.4);
@@ -1502,8 +1512,8 @@ button, input, select, textarea {
   position: relative;
   width: 118px;
   height: 10px;
-  background: linear-gradient(180deg, #061722, #092537);
-  border: 1px solid rgba(126, 214, 255, .54);
+  background: linear-gradient(180deg, rgba(4, 12, 18, .94), rgba(7, 22, 32, .88));
+  border: 1px solid rgba(126, 214, 255, .34);
   border-radius: 999px;
   overflow: hidden;
   box-shadow: inset 0 1px 3px rgba(0,0,0,.58), 0 0 10px rgba(126,214,255,.12);
@@ -1522,10 +1532,10 @@ button, input, select, textarea {
 .player-level-badge {
   font-size: calc(8px * var(--font-scale, 1));
   font-weight: 700;
-  color: var(--menu-accent-strong);
-  background: rgba(20, 26, 36, .85);
-  border: 1px solid var(--menu-border);
-  border-radius: 5px;
+  color: #dfefff;
+  background: rgba(10, 15, 23, .78);
+  border: 1px solid rgba(185, 205, 230, .24);
+  border-radius: 4px;
   padding: 1px 5px;
   white-space: nowrap;
   line-height: 1;
@@ -1536,8 +1546,8 @@ button, input, select, textarea {
   position: relative;
   width: 88px;
   height: 10px;
-  background: linear-gradient(180deg, #241405, #3a230a);
-  border: 1px solid rgba(210, 170, 80, .5);
+  background: linear-gradient(180deg, rgba(24, 14, 4, .92), rgba(38, 24, 8, .88));
+  border: 1px solid rgba(210, 170, 80, .36);
   border-radius: 999px;
   overflow: hidden;
   box-shadow: inset 0 1px 3px rgba(0,0,0,.55), 0 1px 2px rgba(0,0,0,.4);
@@ -3685,7 +3695,7 @@ button, input, select, textarea {
   transform: translate(calc(-50% + var(--hud-x-actions, 0px)), var(--hud-y-actions, 0px)) scale(calc(1.5 * var(--hud-scale-actions, var(--hud-scale, 1))));
   transform-origin: bottom center;
   display: flex;
-  gap: 14px;
+  gap: 10px;
   pointer-events: none;
   z-index: 18;
 }
@@ -3716,12 +3726,12 @@ button, input, select, textarea {
   flex-direction: column;
   flex-wrap: nowrap;
   align-items: center;
-  gap: 9px;
-  padding: 7px 11px;
-  border-radius: 10px;
-  background: linear-gradient(180deg, rgba(14, 11, 22, .82), rgba(6, 5, 12, .88));
-  border: 1px solid rgba(120, 110, 160, .22);
-  box-shadow: 0 6px 16px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.04);
+  gap: 8px;
+  padding: 7px 9px;
+  border-radius: 7px;
+  background: var(--hud-panel-bg);
+  border: 1px solid var(--hud-panel-border);
+  box-shadow: var(--hud-shadow);
   max-height: calc(100vh - 96px);
   overflow-x: hidden;
   overflow-y: auto;
@@ -3737,17 +3747,17 @@ button, input, select, textarea {
   appearance: none;
   position: relative;
   flex: 0 0 auto;
-  width: 66px;
-  height: 66px;
+  width: 62px;
+  height: 62px;
   padding: 6px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 2px;
-  border-radius: 7px;
-  border: 1px solid rgba(150, 130, 200, .35);
-  background: linear-gradient(180deg, rgba(24, 18, 36, .9), rgba(12, 8, 22, .92));
+  border-radius: 6px;
+  border: 1px solid rgba(185, 205, 230, .22);
+  background: linear-gradient(180deg, rgba(13, 18, 27, .92), rgba(6, 9, 15, .94));
   color: #cabaf0;
   font-family: inherit;
   font-size: calc(12px * var(--font-scale, 1));
@@ -3878,26 +3888,27 @@ button, input, select, textarea {
 
 .skill-card {
   position: relative;
-  width: 124px;
-  min-height: 72px;
-  padding: 10px 12px 8px;
+  width: 118px;
+  min-height: 64px;
+  padding: 9px 10px 8px;
   display: grid;
   grid-template-columns: 36px 1fr;
   grid-template-rows: auto auto;
-  column-gap: 10px;
+  column-gap: 9px;
   row-gap: 4px;
-  border: 2px solid var(--menu-border);
-  border-top-color: var(--menu-border-strong);
-  border-radius: 8px;
-  background: linear-gradient(180deg, var(--menu-surface-strong), var(--menu-bg-deep));
-  box-shadow: 0 6px 18px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.07);
+  border: 1px solid var(--hud-panel-border);
+  border-top-color: rgba(255, 255, 255, .2);
+  border-radius: 6px;
+  background: var(--hud-panel-bg);
+  backdrop-filter: blur(10px);
+  box-shadow: var(--hud-shadow);
   overflow: hidden;
 }
 
 .skill-card.ready {
-  border-color: rgba(168, 190, 219, .7);
-  border-top-color: rgba(200, 218, 243, .9);
-  box-shadow: 0 6px 18px rgba(0,0,0,.45), 0 0 14px rgba(156, 179, 212, .22), inset 0 1px 0 rgba(255,255,255,.1);
+  border-color: rgba(140, 199, 255, .48);
+  border-top-color: rgba(235, 246, 255, .58);
+  box-shadow: var(--hud-shadow), 0 0 16px rgba(84, 168, 255, .12);
 }
 
 .skill-icon {
@@ -3907,15 +3918,16 @@ button, input, select, textarea {
   image-rendering: pixelated;
   width: 36px;
   height: 36px;
-  border: 1px solid rgba(255,255,255,.18);
-  background: linear-gradient(180deg, rgba(0,0,0,.38), rgba(255,255,255,.03));
+  border: 1px solid rgba(200, 220, 245, .18);
+  border-radius: 4px;
+  background: linear-gradient(180deg, rgba(0,0,0,.46), rgba(255,255,255,.035));
 }
 
 .skill-fill {
   position: absolute;
   inset: auto 0 0 0;
   height: 0%;
-  background: linear-gradient(180deg, rgba(80,100,130,0), rgba(80,100,130,.58));
+  background: linear-gradient(180deg, rgba(80, 140, 205, 0), rgba(80, 140, 205, .4));
   transition: height .08s linear;
 }
 
@@ -3976,18 +3988,18 @@ button, input, select, textarea {
 
 .skill-key {
   font-size: calc(10px * var(--font-scale, 1));
-  color: #a9bfdc;
+  color: var(--hud-muted);
 }
 
 .skill-name {
   font-size: calc(13px * var(--font-scale, 1));
-  color: #fff;
+  color: var(--hud-text);
   letter-spacing: .04em;
 }
 
 .skill-time {
   font-size: calc(11px * var(--font-scale, 1));
-  color: #aebfd6;
+  color: #b8c7db;
   font-weight: 700;
 }
 

@@ -466,7 +466,10 @@ export function createUIController(view) {
 
     function setObjectiveLayout(layout) {
       if (!view.objectiveTracker) return;
-      if (window.NeoSettings?.getHudElements?.()?.objectives) {
+      const objectiveHudEntry = window.NeoSettings?.getHudElements?.()?.objectives;
+      const hasManualObjectiveOffset = !!objectiveHudEntry
+        && (Number(objectiveHudEntry.x || 0) !== 0 || Number(objectiveHudEntry.y || 0) !== 0);
+      if (hasManualObjectiveOffset) {
         if (objectiveLayoutCache !== null) {
           view.objectiveTracker.style.removeProperty('top');
           view.objectiveTracker.style.removeProperty('right');
@@ -492,8 +495,12 @@ export function createUIController(view) {
 
       const margin = 8;
       const gap = window.innerWidth <= 920 ? 16 : 24;
-      const trackerWidth = Math.round(Neo.clamp(window.innerWidth <= 920 ? 248 : 284, 216, window.innerWidth - margin * 2));
-      let right = Math.round(Neo.clamp(window.innerWidth - layout.left + gap, margin, window.innerWidth - trackerWidth - margin));
+      const trackerScale = Neo.clamp(Number(objectiveHudEntry?.scale || window.NeoSettings?.getAccess?.()?.hudScale || 1), 0.5, 2);
+      const trackerAvailableWidth = Math.max(1, (window.innerWidth - margin * 2) / trackerScale);
+      const trackerMinWidth = Math.min(216, trackerAvailableWidth);
+      const trackerWidth = Math.round(Neo.clamp(window.innerWidth <= 920 ? 248 : 284, trackerMinWidth, trackerAvailableWidth));
+      const maxRight = Math.max(margin, window.innerWidth - trackerWidth * trackerScale - margin);
+      let right = Math.round(Neo.clamp(window.innerWidth - layout.left + gap, margin, maxRight));
       let top = Math.max(margin, Math.round(layout.top));
       let maxHeight = Math.floor(window.innerHeight - top - margin);
 
@@ -501,7 +508,7 @@ export function createUIController(view) {
       // too tight, drop below the map as the fallback.
       if (maxHeight < 184) {
         top = Math.max(margin, Math.round(layout.bottom + gap));
-        right = Math.round(Neo.clamp(window.innerWidth - layout.right, margin, window.innerWidth - trackerWidth - margin));
+        right = Math.round(Neo.clamp(window.innerWidth - layout.right, margin, maxRight));
         maxHeight = Math.floor(window.innerHeight - top - margin);
       }
 
