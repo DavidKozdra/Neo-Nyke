@@ -3,10 +3,16 @@
 const CHARACTER_SHEET_DEFS = {
   thorn_knight: {
     src: 'assets/sprites/chars/Thorn Knight.png',
-    frameWidth: 48,
-    frameHeight: 48,
-    frameCount: 1,
-    renderScale: 1,
+    frameWidth: 24,
+    frameHeight: 24,
+    frameCount: 7,
+    renderScale: 1.5,
+    idleFrames: [1, 2],
+    walkFrames: [3, 4, 5, 6],
+    armFrame: 0,
+    armBaseAngle: -Math.PI / 2,
+    armPivot: { x: 10, y: 17 },
+    armOffset: { x: 1, y: 3 },
   },
   metao: {
     src: 'assets/sprites/chars/Mateo.png',
@@ -36,16 +42,6 @@ const CHARACTER_SHEET_DEFS = {
   },
   sarge: {
     src: 'assets/sprites/chars/Sarge.png',
-    frameWidth: 24,
-    frameHeight: 24,
-    frameCount: 7,
-    renderScale: 1.5,
-    idleFrames: [1, 2],
-    walkFrames: [3, 4, 5, 6],
-    armFrame: 0,
-  },
-  thorn_knight: {
-    src: 'assets/sprites/chars/ThornKnight.png',
     frameWidth: 24,
     frameHeight: 24,
     frameCount: 7,
