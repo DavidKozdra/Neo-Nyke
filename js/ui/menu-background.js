@@ -32,7 +32,22 @@
   const TILE_SRC  = window.NeoNykeEnvironmentTileDefs || {};
   const SRC_SIZE  = TILE_SRC.sourceSize || 16;
   const TILE_DEFS = TILE_SRC.tiles || {};
+  const PROP_DEFS = TILE_SRC.propSprites || {};
   const TILE_PX   = 48;
+  const PROP_IMAGE_PATHS = {
+    chair_0: 'assets/sprites/env/chair_0.png',
+    chair_1: 'assets/sprites/env/chair_1.png',
+    chest_0: 'assets/sprites/env/chest_0.png',
+    pillar: 'assets/sprites/env/pillar.png',
+    table_0: 'assets/sprites/env/table_0.png',
+    table_1: 'assets/sprites/env/table_1.png',
+  };
+  const propImages = {};
+  Object.entries(PROP_IMAGE_PATHS).forEach(([key, src]) => {
+    const image = new Image();
+    image.onload = () => { propImages[key] = image; tileCache = null; };
+    image.src = src;
+  });
 
   function drawFloorAsset(g, ox, oy, s, def) {
     g.fillStyle = def.shade || '#252823';
@@ -141,6 +156,52 @@
     g.drawImage(atlas, fr.x, fr.y, fr.w, fr.h, dx, dy, size, size);
   }
 
+  function drawPropShadow(g, x, y, w, h, alpha = 0.24) {
+    g.save();
+    g.fillStyle = `rgba(0,0,0,${alpha})`;
+    g.beginPath();
+    g.ellipse(x, y + h * 0.34, w * 0.42, h * 0.12, 0, 0, Math.PI * 2);
+    g.fill();
+    g.restore();
+  }
+
+  function drawImageProp(g, imageKey, x, y, size, options = {}) {
+    const image = propImages[imageKey] || window.Neo?.ENVIRONMENT_IMAGES?.[imageKey]?.image;
+    if (!image) return false;
+    const sourceSize = 24;
+    const frame = Math.max(0, Number(options.frame || 0));
+    const naturalWidth = image.naturalWidth || image.width || sourceSize;
+    const frameCount = Math.max(1, Math.floor(naturalWidth / sourceSize));
+    const sx = Math.min(frame, frameCount - 1) * sourceSize;
+    const w = size * Number(options.scaleX || 1);
+    const h = size * Number(options.scaleY || 1);
+    drawPropShadow(g, x, y, w, h, options.shadowAlpha ?? 0.2);
+    g.save();
+    g.imageSmoothingEnabled = false;
+    g.drawImage(image, sx, 0, sourceSize, sourceSize, x - w / 2, y - h / 2, w, h);
+    g.restore();
+    return true;
+  }
+
+  function drawPixelProp(g, propKey, x, y, size) {
+    const def = PROP_DEFS[propKey];
+    if (!def) return false;
+    drawPropShadow(g, x, y, size, size, 0.16);
+    return drawPixelTile(g, x - size / 2, y - size / 2, size, def);
+  }
+
+  function drawMenuProp(g, kind, x, y, size = TILE_PX) {
+    if (kind === 'chest') return drawImageProp(g, 'chest_0', x, y, size, { frame: 0, shadowAlpha: 0.26 });
+    if (kind === 'pillar') return drawImageProp(g, 'pillar', x, y, size * 1.08, { scaleY: 1.35, shadowAlpha: 0.28 }) || blitTile(g, 'pillar_stone', x - size / 2, y - size / 2, size);
+    if (kind === 'table') return drawImageProp(g, seededRand(x, y, 17) < 0.5 ? 'table_0' : 'table_1', x, y, size * 1.35, { scaleY: 0.9, shadowAlpha: 0.24 });
+    if (kind === 'chair') return drawImageProp(g, seededRand(x, y, 19) < 0.5 ? 'chair_0' : 'chair_1', x, y, size * 0.86, { shadowAlpha: 0.18 });
+    if (kind === 'brazier') return drawPixelProp(g, 'brazier', x, y, size * 0.72);
+    if (kind === 'rubble') return drawPixelProp(g, 'rubble', x, y, size * 0.76);
+    if (kind === 'moss_patch') return drawPixelProp(g, 'moss_patch', x, y, size * 0.86);
+    if (kind === 'tree') return drawPixelProp(g, seededRand(x, y, 23) < 0.25 ? 'fruit_tree' : 'tree', x, y, size * 1.16);
+    return false;
+  }
+
   // ── Dungeon layout ───────────────────────────────────────────────────────
   // Grid of rooms, each with a floor and wall tile key.
   const THEMES = [
@@ -214,10 +275,45 @@
         for (let dy = 0; dy < 3; dy++)
           for (let dx = 0; dx < WALL_TILES; dx++)
             blitTile(g, floorKey, rx + (ROOM_COLS - WALL_TILES + dx) * TILE_PX, ry + doorOY + dy * TILE_PX, TILE_PX);
+
+        drawRoomProps(g, gx, gy, theme, rx, ry);
       }
     }
 
     tileCache = c;
+  }
+
+  function drawRoomProps(g, gx, gy, theme, rx, ry) {
+    const roomSeed = seededRand(gx, gy, 31);
+    const toX = tx => rx + tx * TILE_PX + TILE_PX / 2;
+    const toY = ty => ry + ty * TILE_PX + TILE_PX / 2;
+    drawMenuProp(g, 'brazier', rx + WALL_TILES * TILE_PX + 20, ry + WALL_TILES * TILE_PX + 14, TILE_PX);
+    drawMenuProp(g, 'brazier', rx + ROOM_W_PX - WALL_TILES * TILE_PX - 20, ry + WALL_TILES * TILE_PX + 14, TILE_PX);
+
+    if (roomSeed < 0.72) drawMenuProp(g, 'chest', toX(7), toY(5), TILE_PX * 0.9);
+    if (seededRand(gx, gy, 32) < 0.64) {
+      drawMenuProp(g, 'pillar', toX(3), toY(3), TILE_PX);
+      drawMenuProp(g, 'pillar', toX(10), toY(7), TILE_PX);
+    }
+    if (seededRand(gx, gy, 33) < 0.55) {
+      const tableX = toX(5 + Math.floor(seededRand(gx, gy, 34) * 4));
+      const tableY = toY(4 + Math.floor(seededRand(gx, gy, 35) * 2));
+      drawMenuProp(g, 'table', tableX, tableY, TILE_PX);
+      drawMenuProp(g, 'chair', tableX - TILE_PX * 0.85, tableY + TILE_PX * 0.05, TILE_PX);
+      drawMenuProp(g, 'chair', tableX + TILE_PX * 0.85, tableY + TILE_PX * 0.05, TILE_PX);
+    }
+
+    const debrisCount = 3 + Math.floor(seededRand(gx, gy, 36) * 4);
+    for (let i = 0; i < debrisCount; i += 1) {
+      const x = toX(2 + Math.floor(seededRand(gx, gy, 40 + i * 2) * (ROOM_COLS - 4)));
+      const y = toY(2 + Math.floor(seededRand(gx, gy, 41 + i * 2) * (ROOM_ROWS - 4)));
+      const mossy = theme.floor === 'floor_stone_moss' || seededRand(gx, gy, 50 + i) < 0.36;
+      drawMenuProp(g, mossy ? 'moss_patch' : 'rubble', x, y, TILE_PX);
+    }
+
+    if (theme.floor === 'floor_stone_moss' || seededRand(gx, gy, 60) < 0.22) {
+      drawMenuProp(g, 'tree', toX(3), toY(7), TILE_PX);
+    }
   }
 
   // ── Camera pan ───────────────────────────────────────────────────────────
