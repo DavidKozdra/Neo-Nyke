@@ -2347,7 +2347,7 @@ button, input, select, textarea {
 .shop-trade {
   display: flex;
   align-items: stretch;
-  gap: 8px;
+  gap: 12px;
   margin: 4px 0 2px;
 }
 
@@ -2369,7 +2369,7 @@ button, input, select, textarea {
 }
 
 .shop-trade__label {
-  font-size: 1.5em;
+  font-size: calc(11px * var(--font-scale, 1));
   font-weight: 800;
   letter-spacing: .1em;
   text-transform: uppercase;
@@ -2384,13 +2384,13 @@ button, input, select, textarea {
 }
 
 .shop-trade__tile {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  gap: 3px;
+  gap: 8px;
   flex: 1 1 0;
-  min-width: 52px;
-  padding: 6px 4px;
+  min-width: 132px;
+  padding: 6px 8px;
   border-radius: 10px;
   border: 1px solid color-mix(in srgb, var(--shop-card-accent, var(--menu-border)) 45%, var(--menu-border));
   background: rgba(0,0,0,.18);
@@ -2412,10 +2412,10 @@ button, input, select, textarea {
 }
 
 .shop-trade__tile-name {
-  font-size: 1.35em;
+  font-size: calc(12px * var(--font-scale, 1));
   font-weight: 700;
   line-height: 1.15;
-  text-align: center;
+  text-align: left;
   color: var(--menu-text);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2426,7 +2426,7 @@ button, input, select, textarea {
 
 .shop-trade__plus {
   align-self: center;
-  font-size: 1.6em;
+  font-size: calc(18px * var(--font-scale, 1));
   font-weight: 900;
   color: var(--menu-text-soft);
   padding: 0 1px;
@@ -2434,7 +2434,7 @@ button, input, select, textarea {
 
 .shop-trade__arrow {
   align-self: center;
-  font-size: 2.2em;
+  font-size: calc(24px * var(--font-scale, 1));
   font-weight: 900;
   color: var(--shop-card-accent, var(--menu-text));
 }
@@ -2530,11 +2530,19 @@ button, input, select, textarea {
   gap: 12px;
 }
 
+#shopTrades.shop-list {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .shop-card {
   min-height: 132px;
   grid-template-rows: auto auto auto auto 1fr auto;
   gap: 8px;
   isolation: isolate;
+}
+
+.shop-card--trade {
+  min-height: 0;
 }
 
 .shop-card::before {
@@ -2584,6 +2592,11 @@ button, input, select, textarea {
 .shop-card__stats,
 .shop-card__footer {
   margin-left: 8px;
+}
+
+.shop-card--trade .shop-card__copy,
+.shop-card--trade .shop-card__footer {
+  margin-left: 0;
 }
 
 .shop-card__chip {
