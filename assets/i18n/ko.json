@@ -464,5 +464,9 @@
   "enemyInfo.mooggy.label": "무기",
   "enemyInfo.mooggy.desc": "붉은 기운을 지닌 흰색과 검은색의 암살자 고양이. 통계와 아이템을 미러링한 다음 빠르게 출혈을 쌓는 눈 레이저를 발사합니다.",
   "enemyInfo.god.label": "신",
-  "enemyInfo.god.desc": "최종보스. 빔 스윕, 신성 폭발, 심판 공격을 갖춘 다단계 신입니다. 모든 상태 효과에 면역입니다."
+  "enemyInfo.god.desc": "최종보스. 빔 스윕, 신성 폭발, 심판 공격을 갖춘 다단계 신입니다. 모든 상태 효과에 면역입니다.",
+  "moves.lightning_cross.name": "라이트닝 크로스",
+  "moves.lightning_cross.desc": "방 전체를 가로지르는 번개 두 개(가로 하나, 세로 하나)를 불러내, 번개가 가로지르는 모든 것에 피해를 입히고 적중한 적 하나당 최대 HP의 1%를 회복합니다. 2회 충전.",
+  "moves.princess_shield.name": "공주의 방패",
+  "moves.princess_shield.desc": "최대 HP의 40%에 해당하는 핑크 배리어를 올립니다. 재사용 대기시간이 꺼져 있는 동안 HP가 15% 미만으로 떨어지면 자동으로 시전됩니다."
 }

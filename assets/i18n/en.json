@@ -464,5 +464,9 @@
   "enemyInfo.mooggy.label": "Mooggy",
   "enemyInfo.mooggy.desc": "White and black assassin cat with a red aura. Mirrors your stats and items, then fires rapid bleed-stacking eye lasers.",
   "enemyInfo.god.label": "GOD",
-  "enemyInfo.god.desc": "Final boss. Multi-phase deity with beam sweeps, nova blasts, and judgement strikes. Immune to all status effects."
+  "enemyInfo.god.desc": "Final boss. Multi-phase deity with beam sweeps, nova blasts, and judgement strikes. Immune to all status effects.",
+  "moves.lightning_cross.name": "Lightning Cross",
+  "moves.lightning_cross.desc": "Call down two room-spanning lightning bolts through yourself, one horizontal and one vertical, damaging everything they cross and healing you 1% max HP per enemy struck. 2 charges.",
+  "moves.princess_shield.name": "Princess's Shield",
+  "moves.princess_shield.desc": "Raise a pink barrier worth 40% of your max HP. Auto-casts itself the moment your HP drops below 15%, as long as it is off cooldown."
 }

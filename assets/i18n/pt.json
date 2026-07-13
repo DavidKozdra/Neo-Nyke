@@ -464,5 +464,9 @@
   "enemyInfo.mooggy.label": "Mooggy",
   "enemyInfo.mooggy.desc": "Gato assassino branco e preto com aura vermelha. Espelha suas estatísticas e itens e, em seguida, dispara lasers oculares rápidos que acumulam sangramento.",
   "enemyInfo.god.label": "Deus",
-  "enemyInfo.god.desc": "Chefe final. Divindade multifásica com varreduras de feixe, explosões de nova e ataques de julgamento. Imune a todos os efeitos de status."
+  "enemyInfo.god.desc": "Chefe final. Divindade multifásica com varreduras de feixe, explosões de nova e ataques de julgamento. Imune a todos os efeitos de status.",
+  "moves.lightning_cross.name": "Cruz Relâmpago",
+  "moves.lightning_cross.desc": "Invoque dois raios que atravessam a sala através de você, um horizontal e um vertical, danificando tudo que eles cruzam e curando 1% do HP máximo por inimigo atingido. 2 cobranças.",
+  "moves.princess_shield.name": "Escudo da Princesa",
+  "moves.princess_shield.desc": "Levante uma barreira rosa que vale 40% do seu HP máximo. Lança-se automaticamente no momento em que seu HP cai abaixo de 15%, desde que esteja fora do tempo de recarga."
 }

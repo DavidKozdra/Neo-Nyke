@@ -2545,9 +2545,47 @@
     });
   }
 
+  // Wind-up bar + growing ring preview above the player while charging Nimrod Stomp.
+  function drawNimrodStompChargeBar() {
+    if (!Neo.nimrodStompCharging || !Neo.player) return;
+    const max = Neo.NIMROD_STOMP_MAX_CHARGE || 5;
+    const ratio = Neo.clamp((Number(Neo.nimrodStompChargeTime || 0)) / max, 0, 1);
+    const ctx = Neo.ctx;
+    // Growing translucent gold ring that previews the landing slam's AOE radius.
+    const previewR = 108 + ratio * 54;
+    ctx.save();
+    ctx.globalAlpha = 0.22 + ratio * 0.2;
+    ctx.strokeStyle = '#ffe67a';
+    ctx.lineWidth = 2 + ratio * 2;
+    ctx.beginPath();
+    ctx.arc(Neo.player.x, Neo.player.y, previewR, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+    // Bar.
+    const w = 138;
+    const rowH = 5;
+    const gap = 3;
+    const x = Neo.player.x - w / 2;
+    const y = Neo.player.y - (Neo.player.r || 14) - 44;
+    drawChargeRewardMeter({
+      ratio,
+      x,
+      y,
+      width: w,
+      rowHeight: rowH,
+      gap,
+      trackColor: 'rgba(38,28,4,0.82)',
+      fillColor: '#ffe67a',
+      outlineColor: 'rgba(255,224,140,0.9)',
+      textColor: '#fff8e0',
+      shadowColor: '#ffe67a',
+    });
+  }
+
   Neo.drawProjectiles = drawProjectiles;
   Neo.drawJusticeBlades = drawJusticeBlades;
   Neo.drawSkySwords = drawSkySwords;
   Neo.drawHealingZoneChargeBar = drawHealingZoneChargeBar;
   Neo.drawDeathBallChargeBar = drawDeathBallChargeBar;
+  Neo.drawNimrodStompChargeBar = drawNimrodStompChargeBar;
   Neo.drawDeadBodies = drawDeadBodies;

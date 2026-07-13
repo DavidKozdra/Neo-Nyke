@@ -502,6 +502,15 @@
     Neo.player.armRecoilUntil = Number(Neo.gameElapsedTime || 0) + duration;
     Neo.player.armRecoilDuration = duration;
     Neo.player.armRecoilA = angle;
+    Neo.player.armRecoilFacing = Math.cos(angle) < 0 ? -1 : 1;
+  }
+
+  function startPlayerSwing(angle, stabSwing = false) {
+    if (!Neo.player) return;
+    Neo.player.swing = Neo.ATTACKS.melee.active;
+    Neo.player.swingA = angle;
+    Neo.player.swingFacing = Math.cos(angle) < 0 ? -1 : 1;
+    Neo.player.stabSwing = !!stabSwing;
   }
 
   // Delay before the claw gauntlets' second swipe lands, in seconds. Short
@@ -512,9 +521,7 @@
     const angle = Neo.angleToMouse() + Number(options.angleOffset || 0);
     const itemStats = Neo.getItemStats?.() || {};
     const adjustedRange = range + (Neo.player?.character === 'thorn_knight' ? Math.min(34, Number(itemStats.tagCounts?.bleed || 0) * 3) : 0);
-    Neo.player.swing = Neo.ATTACKS.melee.active;
-    Neo.player.swingA = angle;
-    Neo.player.stabSwing = false;
+    startPlayerSwing(angle, false);
     Neo.playSfx?.('sword_swing');
     forEachEnemyNearPlayer(adjustedRange, enemy => {
       if (!enemy) return;
@@ -694,9 +701,7 @@
       return;
     }
     const angle = Neo.angleToMouse();
-    Neo.player.swing = Neo.ATTACKS.melee.active;
-    Neo.player.swingA = angle;
-    Neo.player.stabSwing = false;
+    startPlayerSwing(angle, false);
     Neo.playSfx?.('sword_swing');
 
     const anvilDmgBonus = Neo.getAnvilMoveBonus(move, 'damage');
@@ -827,7 +832,7 @@
   // beam. They must NOT auto-repeat every frame while the button is held — with
   // a multi-charge pool that would drain every charge in a few frames. Beam
   // moves are absent here because Neo.laserActive already blocks their re-entry.
-  const INSTANT_LASER_MOVES = new Set(['power_disks', 'blade_justice', 'lightning_columns', 'nail_shot', 'laser_shockwave']);
+  const INSTANT_LASER_MOVES = new Set(['power_disks', 'blade_justice', 'lightning_columns', 'nail_shot', 'laser_shockwave', 'hammer_throw', 'lightning_cross']);
   function isInstantLaserMove(move) {
     return INSTANT_LASER_MOVES.has(move || getEquippedMove('laser'));
   }
@@ -892,6 +897,11 @@
       if (!spendLaserCharge()) return;
       Neo.playSfx?.('lightning_charge');
       castLightningColumns();
+      return;
+    }
+    if (move === 'lightning_cross') {
+      if (!spendLaserCharge()) return;
+      castLightningCross();
       return;
     }
     if (move === 'god_sweep') {
@@ -1149,6 +1159,8 @@
   const DEATH_BALL_MAX_CHARGE = 5;   // charge units required for a full-size Death Ball
   const HEALING_ZONE_CHARGE_SPEED_MULTIPLIER = 4;
   const TURTLE_POWERUP_CHARGE_SPEED_MULTIPLIER = 4;
+  const NIMROD_STOMP_MAX_CHARGE = 5; // charge units required for a full-power stomp
+  const NIMROD_STOMP_CHARGE_SPEED_MULTIPLIER = 4;
 
   function trySmash() {
     cancelCowardsWayOnAttack();
@@ -1320,24 +1332,25 @@
         });
       }
     }
-    // Hammer Smash flings two opposing volleys of heavy debris straight up and
-    // down — a vertical line of rock erupting along the screen's Y axis. Tinted
-    // to the hammer with big knockback, no bleed.
+    // Hammer Smash flings four opposing volleys of heavy debris straight up,
+    // down, left, and right — a cross of rock erupting along both screen axes.
+    // Tinted to the hammer with big knockback, no bleed.
     if (move === 'hammer_smash') {
-      const rockPerSide = 5;
-      const rockDamage = Math.round(baseSmashDamage * 0.4);
-      // -PI/2 fires straight up, +PI/2 straight down.
-      for (const dir of [-1, 1]) {
-        const angle = dir * (Math.PI / 2);
+      const rockPerSide = 1 + (Neo.player.level % 5);
+      const rockDamage = Math.round(baseSmashDamage * 0.4) +1;
+      // 0/PI/2/PI/3PI-2 fire right, down, left, and up respectively.
+      for (const angle of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) {
+        const dx = Math.cos(angle);
+        const dy = Math.sin(angle);
         for (let index = 0; index < rockPerSide; index += 1) {
-          const speed = 500 + Neo.nextRandom('fx') * 120;
+          const speed = 505 + Neo.nextRandom('fx') * 120;
           // Stagger each rock back along the volley so they read as a line.
           const offset = smashRadius * 0.4 + index * 18;
           Neo.spawnProjectile({
-            x: Neo.player.x,
-            y: Neo.player.y + Math.sin(angle) * offset,
-            vx: 0,
-            vy: Math.sin(angle) * speed,
+            x: Neo.player.x + dx * offset,
+            y: Neo.player.y + dy * offset,
+            vx: dx * speed,
+            vy: dy * speed,
             r: 7,
             life: 0.6,
             enemy: false,
@@ -1357,10 +1370,27 @@
     const move = getEquippedMove('dash');
     const attackSpeed = Neo.getAttackSpeedValue();
     const rechargeTime = Neo.getDashCooldownDuration(move, attackSpeed);
+    // Nimrod Stomp is hold-to-charge like Death Ball/Healing Zone: spend the
+    // charge with a deferred timer and start winding up instead of casting
+    // immediately. updateNimrodStompCharge (ticked from update.js) drives the
+    // charge and releases on key-up or at max charge.
+    if (move === 'nimrod_stomp') {
+      if (Neo.nimrodStompCharging) return; // already winding up
+      if (!Neo.spendSkillCharge('dash', rechargeTime, { deferTimer: true })) return;
+      Neo.tutorialController?.signal?.('dash');
+      Neo.nimrodStompCharging = true;
+      Neo.nimrodStompChargeTime = 0;
+      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 16, life: 0.5, text: 'CHARGING', c: '#ffe67a' });
+      return;
+    }
     if (!Neo.spendSkillCharge('dash', rechargeTime)) return;
     Neo.tutorialController?.signal?.('dash');
     if (move === 'flying_unhitable') {
       castFlyingUntouchable();
+      return;
+    }
+    if (move === 'princess_shield') {
+      castPrincessShield();
       return;
     }
     if (move === 'warp') {
@@ -1373,10 +1403,6 @@
     }
     if (move === 'cowards_way') {
       castCowardsWay();
-      return;
-    }
-    if (move === 'nimrod_stomp') {
-      castNimrodStomp(moveX, moveY);
       return;
     }
     if (move === 'mooggy_zoomies') {
@@ -1466,8 +1492,7 @@
       const hitAngle = Neo.angleBetween(Neo.player, target);
       hitEnemy(target, baseDamage, hitAngle, 185, '#ff3b5c');
       applyBleed(target, 4, 5);
-      Neo.player.swing = Neo.ATTACKS.melee.active;
-      Neo.player.swingA = hitAngle;
+      startPlayerSwing(hitAngle, false);
       Neo.ringBurst(Neo.player.x, Neo.player.y, 16 + hop * 4, '#ff8aa0', 0.22);
     }
 
@@ -1482,8 +1507,7 @@
       const fallback = findSafePointNearTarget(Neo.player.x + Math.cos(angle) * 210, Neo.player.y + Math.sin(angle) * 210, Neo.player.r, 120, 16);
       if (fallback) {
         teleportPlayerTo(fallback.x, fallback.y, '#ff3b5c');
-        Neo.player.swing = Neo.ATTACKS.melee.active;
-        Neo.player.swingA = angle;
+        startPlayerSwing(angle, false);
         strikeSlashLine(fromX, fromY, Neo.player.x, Neo.player.y, lineDamage, lineRadius);
       }
     }
@@ -1501,9 +1525,7 @@
     const itemStats = Neo.getItemStats();
     const move = getEquippedMove('melee');
     const angle = Neo.angleToMouse();
-    Neo.player.swing = Neo.ATTACKS.melee.active;
-    Neo.player.swingA = angle;
-    Neo.player.stabSwing = false;
+    startPlayerSwing(angle, false);
     const anvilDmg = Neo.getAnvilMoveBonus(move, 'damage');
     const anvilRng = Neo.getAnvilMoveBonus(move, 'range');
     // Full charge: +150% damage, +40% reach, wider arc, +80% knockback.
@@ -1852,31 +1874,70 @@
     Neo.ringBurst(Neo.player.x, Neo.player.y, 18, color, 0.35);
   }
 
-  function castNimrodStomp(moveX, moveY) {
+  // Nimrod Stomp's leap reach: a short hop (~3 tiles) at a tap, stretching to a
+  // full room's length at max charge — hold-to-charge like Death Ball/Healing
+  // Zone, so the player can commit to a short precise hop or a room-spanning
+  // leap. The requested distance is clamped to the room bounds below regardless,
+  // so a max-charge leap always lands right at whichever wall it's aimed at.
+  const NIMROD_STOMP_LEAP_RANGE = Neo.ENV_TILE_SIZE * 3;
+  const NIMROD_STOMP_LEAP_RANGE_MAX = Math.max(Neo.ROOM_W, Neo.ROOM_H);
+
+  function castNimrodStomp(moveX, moveY, chargeRatio = 0) {
     const itemStats = Neo.getItemStats();
     const angle = Math.hypot(moveX, moveY) > 0.15
       ? Math.atan2(moveY, moveX)
       : Neo.angleToMouse();
-    const horizontal = Math.abs(Math.cos(angle)) >= Math.abs(Math.sin(angle));
+    const charge = Neo.clamp(Number(chargeRatio) || 0, 0, 1);
     const edgePad = Neo.WALL + Neo.player.r + 4;
-    const targetX = horizontal
-      ? (Math.cos(angle) >= 0 ? Neo.ROOM_W - edgePad : edgePad)
-      : Neo.player.x;
-    const targetY = horizontal
-      ? Neo.clamp(Neo.mouse.worldY, edgePad, Neo.ROOM_H - edgePad)
-      : (Math.sin(angle) >= 0 ? Neo.ROOM_H - edgePad : edgePad);
-    const landingPoint = findSafePointNearTarget(targetX, targetY, Neo.player.r, 260, 24)
-      || findSafePointNearTarget(Neo.player.x + Math.cos(angle) * 240, Neo.player.y + Math.sin(angle) * 240, Neo.player.r, 140, 20);
+    const baseLeapRange = NIMROD_STOMP_LEAP_RANGE + (NIMROD_STOMP_LEAP_RANGE_MAX - NIMROD_STOMP_LEAP_RANGE) * charge;
+    const leapRange = baseLeapRange * (itemStats.aoeRadiusMultiplier || 1);
+    const targetX = Neo.clamp(Neo.player.x + Math.cos(angle) * leapRange, edgePad, Neo.ROOM_W - edgePad);
+    const targetY = Neo.clamp(Neo.player.y + Math.sin(angle) * leapRange, edgePad, Neo.ROOM_H - edgePad);
+    const landingPoint = findSafePointNearTarget(targetX, targetY, Neo.player.r, 140, 20);
     if (!landingPoint) return;
     teleportPlayerTo(landingPoint.x, landingPoint.y, '#fff06a');
-    const aoeRadius = 108 * (itemStats.aoeRadiusMultiplier || 1);
-    const stompDamage = Neo.godTimer > 0 ? 64 : 46;
+    // Tap: 108px/46dmg baseline (unchanged feel). Full charge: ~1.5x radius, ~1.7x damage.
+    const aoeRadius = (108 + charge * 54) * (itemStats.aoeRadiusMultiplier || 1);
+    const stompDamage = Math.round((Neo.godTimer > 0 ? 64 : 46) * (1 + charge * 0.7));
     Neo.blastRadius(Neo.player.x, Neo.player.y, aoeRadius, stompDamage, '#ffe67a');
-    // Landing slam: trauma shake with a downward camera lurch.
-    Neo.addTrauma?.(0.66, Math.PI / 2, 20);
-    Neo.addHitstop?.(0.05);
+    // Landing slam: trauma shake with a downward camera lurch, scaled by charge.
+    Neo.addTrauma?.(0.66 + charge * 0.3, Math.PI / 2, 20 + charge * 10);
+    Neo.addHitstop?.(0.05 + charge * 0.03);
     Neo.player.inv = Math.max(Neo.player.inv, 0.32);
     Neo.ringBurst(Neo.player.x, Neo.player.y, aoeRadius, '#ffe67a', 0.44);
+  }
+
+  // Drives the Nimrod Stomp charge (mirrors updateDeathBallCharge): attack speed
+  // scales charge gain, release leaps in whatever direction is currently held
+  // (Neo.moveInputX/Y, refreshed every frame in update.js) or the mouse if the
+  // player isn't moving, so aim stays live for the whole hold instead of freezing
+  // at the moment the charge started.
+  function updateNimrodStompCharge(dt) {
+    if (!Neo.nimrodStompCharging) return;
+    if (!Neo.player || Neo.gameState !== 'play') {
+      Neo.nimrodStompCharging = false;
+      Neo.queueHeldSkillRecharge?.('dash', Neo.getDashCooldownDuration('nimrod_stomp', Neo.getAttackSpeedValue()));
+      return;
+    }
+    const chargeSpeed = Math.max(0.2, Number(Neo.getAttackSpeedValue?.() || 1)) * NIMROD_STOMP_CHARGE_SPEED_MULTIPLIER;
+    Neo.nimrodStompChargeTime = Math.min(
+      NIMROD_STOMP_MAX_CHARGE,
+      Number(Neo.nimrodStompChargeTime || 0) + dt * chargeSpeed
+    );
+    const atMax = Neo.nimrodStompChargeTime >= NIMROD_STOMP_MAX_CHARGE;
+    // A growing gold ring sketched above the player so the charge reads.
+    if (Neo.nextRandom('fx') < 0.6) {
+      const ratio = Neo.nimrodStompChargeTime / NIMROD_STOMP_MAX_CHARGE;
+      const ring = 14 + ratio * 52;
+      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.22, ring, c: '#ffe67a' });
+    }
+    if (!Neo.dashHeld || atMax) {
+      const ratio = Neo.nimrodStompChargeTime / NIMROD_STOMP_MAX_CHARGE;
+      castNimrodStomp(Number(Neo.moveInputX || 0), Number(Neo.moveInputY || 0), ratio);
+      Neo.queueHeldSkillRecharge?.('dash', Neo.getDashCooldownDuration('nimrod_stomp', Neo.getAttackSpeedValue()));
+      Neo.nimrodStompCharging = false;
+      Neo.nimrodStompChargeTime = 0;
+    }
   }
 
   function castCowardsWay() {
@@ -2107,6 +2168,40 @@
     Neo.player.vx = 0;
     Neo.player.vy = 0;
     Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 18, life: 0.8, text: 'FLY HIGH', c: '#ffd1ea' });
+  }
+
+  // Princess's alt dash: raises a pink overheal barrier worth 40% of max HP
+  // (stacking onto any existing barrier, like Turtle Power-Up's shell).
+  const PRINCESS_SHIELD_BARRIER_RATIO = 0.4;
+  const PRINCESS_SHIELD_COLOR = '#ff5fb0';
+  // Churu Stick's auto-fire threshold, reused here: below 15% HP the shield
+  // raises itself automatically, gated only by the dash slot's own cooldown/charge
+  // (the same resource a manual cast spends) — no separate cooldown tracked.
+  const PRINCESS_SHIELD_AUTO_HP_RATIO = 0.15;
+
+  function castPrincessShield() {
+    Neo.playSfx?.('dash');
+    const barrierGain = Math.round(Number(Neo.player.maxHp || 0) * PRINCESS_SHIELD_BARRIER_RATIO);
+    if (barrierGain > 0) {
+      const current = Number(Neo.player.overhealBarrier || 0) + barrierGain;
+      Neo.setOverhealBarrier?.(current, Math.max(Number(Neo.player.overhealBarrierMax || 0), current), PRINCESS_SHIELD_COLOR);
+      Neo.spawnHealPopup?.(Neo.player.x, Neo.player.y - 44, barrierGain, { color: PRINCESS_SHIELD_COLOR, size: 12 });
+    }
+    Neo.ringBurst(Neo.player.x, Neo.player.y, 40, PRINCESS_SHIELD_COLOR, 0.42);
+    Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 18, life: 0.8, text: 'SHIELD UP', c: PRINCESS_SHIELD_COLOR });
+  }
+
+  // Auto-fires Princess's Shield the moment HP drops below 15%, exactly like
+  // Churu Stick's low-HP auto-heal (see updateEquipmentEffects in hud.js) — a
+  // per-frame poll gated only by the dash slot's normal charge/cooldown, not a
+  // bespoke cooldown field. Ticked from update.js.
+  function updatePrincessShieldAutoTrigger() {
+    if (!Neo.player || Neo.gameState !== 'play') return;
+    if (Neo.player.character !== 'princess') return;
+    if (getEquippedMove('dash') !== 'princess_shield') return;
+    if (Neo.player.dashTime > 0) return;
+    if (Neo.player.hp <= 0 || Neo.player.hp >= Neo.player.maxHp * PRINCESS_SHIELD_AUTO_HP_RATIO) return;
+    tryDash(0, 0);
   }
 
   function applyResponsiveVelocity(current, desired, dt) {
@@ -2382,9 +2477,7 @@
     const angle = Neo.angleToMouse();
     Neo.playSfx?.('lightning_charge');
     // Spear is a jab, not a swipe: a tight forward thrust rather than a wide arc.
-    Neo.player.swing = Neo.ATTACKS.melee.active;
-    Neo.player.swingA = angle;
-    Neo.player.stabSwing = true;
+    startPlayerSwing(angle, true);
 
     // Physical thrust: a narrow forward stab that reaches a little further than a
     // swipe but only hits what is roughly in front of the player.
@@ -2875,6 +2968,39 @@
       });
       Neo.ringBurst(Neo.mouse.worldX + ox, Neo.mouse.worldY + oy, 24, '#8dd4ff', 0.45);
     });
+  }
+
+  // Sarge's alt laser: two room-spanning lightning bolts through the player,
+  // one horizontal and one vertical, forming a cross. Mirrors the "lightning
+  // strike line" hazard Bowman's Bane uses for Justice of Sonichu, but
+  // player-owned (damages enemies) and heals Sarge 1% max HP per enemy hit.
+  function castLightningCross() {
+    Neo.playSfx?.('lightning_charge');
+    const itemStats = Neo.getItemStats();
+    const aoeRadiusMultiplier = itemStats.aoeRadiusMultiplier || 1;
+    const px = Neo.player.x;
+    const py = Neo.player.y;
+    const damage = (Neo.godTimer > 0 ? 40 : 30) * (itemStats.aoeDamageMultiplier || 1);
+    const lines = [
+      { x1: 0, y1: py, x2: Neo.ROOM_W, y2: py },
+      { x1: px, y1: 0, x2: px, y2: Neo.ROOM_H },
+    ];
+    lines.forEach(line => {
+      Neo.hazards.push({
+        kind: 'lightning_strike_line',
+        source: 'lightning_cross',
+        x1: line.x1, y1: line.y1, x2: line.x2, y2: line.y2,
+        r: 26 * aoeRadiusMultiplier,
+        warn: 0.5,
+        warnTick: 0,
+        tick: 0,
+        interval: 0.14,
+        ttl: 0.5 + 0.4,
+        damage,
+        healPct: 0.01,
+      });
+    });
+    Neo.ringBurst(px, py, 40, '#bfe4ff', 0.4);
   }
 
   function castWarp() {
@@ -4877,6 +5003,8 @@
   Neo.castNarwalFight = castNarwalFight;
   Neo.castKickyKick = castKickyKick;
   Neo.castFlyingUntouchable = castFlyingUntouchable;
+  Neo.castPrincessShield = castPrincessShield;
+  Neo.updatePrincessShieldAutoTrigger = updatePrincessShieldAutoTrigger;
   Neo.applyResponsiveVelocity = applyResponsiveVelocity;
   Neo.spawnPlayerDiskBurst = spawnPlayerDiskBurst;
   Neo.spawnFireballs = spawnFireballs;
@@ -4893,6 +5021,8 @@
   Neo.HEALING_ZONE_CHARGE_SPEED_MULTIPLIER = HEALING_ZONE_CHARGE_SPEED_MULTIPLIER;
   Neo.castDeathBall = castDeathBall;
   Neo.updateDeathBallCharge = updateDeathBallCharge;
+  Neo.updateNimrodStompCharge = updateNimrodStompCharge;
+  Neo.NIMROD_STOMP_MAX_CHARGE = NIMROD_STOMP_MAX_CHARGE;
   Neo.DEATH_BALL_MAX_CHARGE = DEATH_BALL_MAX_CHARGE;
   Neo.TURTLE_POWERUP_CHARGE_SPEED_MULTIPLIER = TURTLE_POWERUP_CHARGE_SPEED_MULTIPLIER;
   Neo.castFireCircle = castFireCircle;

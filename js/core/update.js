@@ -150,6 +150,7 @@ export function loop(timestamp) {
     if (Neo.floorTransitionTime > 1.25) Neo.showFloorTransition = false;
     Neo.tickCooldowns(dt);
     Neo.updateEquipmentEffects?.(dt);
+    Neo.updatePrincessShieldAutoTrigger?.();
     if (Neo.godTimer > 0) Neo.godTimer = Math.max(0, Neo.godTimer - dt);
     // Endless mode: tick down the between-waves intermission and spawn the next
     // wave when it elapses. Frame-driven (not setTimeout) so it pauses with the
@@ -219,6 +220,9 @@ export function loop(timestamp) {
       if (_nt.ascend) Neo.keys[_ascendKey] = true; else Neo.keys[_ascendKey] = false;
       if (_nt.dash) Neo.keys[_b ? _b.dash : 'shift'] = true;
       else Neo.keys[_b ? _b.dash : 'shift'] = false;
+      // Touch dash button level-tracks its held state (same as smash above), so
+      // Nimrod Stomp's hold-to-charge can read it directly for release.
+      Neo.dashHeld = !!_nt.dash;
     }
     // Gamepad 0 → P1
     const _gp0 = window.NeoGamepad?.[0];
@@ -248,6 +252,9 @@ export function loop(timestamp) {
       else { _gp0.smashLatch = false; }
       if (_gp0.dash) Neo.keys[_b ? _b.dash : 'shift'] = true;
       else if (!Neo.keys[_b ? _b.dash : 'shift']) Neo.keys[_b ? _b.dash : 'shift'] = false;
+      // Gamepad dash button re-polled each frame, same as smash above — read
+      // directly for Nimrod Stomp's hold-to-charge release.
+      Neo.dashHeld = !!_gp0.dash;
       const _gpConsume = action => window.NeoGamepad?.consumeAction?.(0, action);
       const _gpAscendKey = _b ? _b.ascend : ' ';
       Neo.keys[_gpAscendKey] = !!_gp0.ascend;
@@ -297,6 +304,11 @@ export function loop(timestamp) {
       moveX = 0;
       moveY = 0;
     }
+    // Exposed so Nimrod Stomp's hold-to-charge (ticked later this frame, outside
+    // this function's scope) can aim toward wherever the player is currently
+    // holding, not just the direction at the moment the charge started.
+    Neo.moveInputX = moveX;
+    Neo.moveInputY = moveY;
 
     const dashKey = _b ? _b.dash : 'shift';
     const dashHeld = !!Neo.keys[dashKey];
@@ -365,7 +377,10 @@ export function loop(timestamp) {
     Neo.player.stun = Math.max(0, Number(Neo.player.stun || 0) - dt);
     if (Neo.player.swing > 0) {
       Neo.player.swing = Math.max(0, Neo.player.swing - dt);
-      if (Neo.player.swing === 0) Neo.player.stabSwing = false;
+      if (Neo.player.swing === 0) {
+        Neo.player.stabSwing = false;
+        Neo.player.swingFacing = Math.cos(Number(Neo.player.swingA || 0)) < 0 ? -1 : 1;
+      }
     }
 
     const _vpW = Neo.isSplitScreen() ? Neo.canvas.width / 2 : Neo.canvas.width;
@@ -601,6 +616,7 @@ export function loop(timestamp) {
     Neo.updateHealingZoneCharge?.(dt);
     if (Neo.gameState !== 'play') return;
     Neo.updateDeathBallCharge?.(dt);
+    Neo.updateNimrodStompCharge?.(dt);
     if (Neo.gameState !== 'play') return;
     sectionPerfStart = Neo.perfStart();
     Neo.updateWorldProps(dt);

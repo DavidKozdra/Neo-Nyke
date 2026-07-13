@@ -124,8 +124,10 @@
     sim.charge = {
       healingZoneCharging: false, healingZoneChargeTime: 0,
       deathBallCharging: false, deathBallChargeTime: 0, deathBallPowerUp: false,
+      nimrodStompCharging: false, nimrodStompChargeTime: 0,
     };
     sim.smashHeld = false;
+    sim.dashHeld = false;
     sim.cooldowns = {};
     ['melee', 'laser', 'smash', 'dash'].forEach(slot => {
       sim.cooldowns[slot] = { charges: 99, timers: [], holding: 0 };
@@ -134,6 +136,9 @@
     // this runs both from show() and on every cycle reset mid-tick.
     Neo.cooldowns = sim.cooldowns;
     Neo.smashHeld = false;
+    Neo.dashHeld = false;
+    Neo.moveInputX = 0;
+    Neo.moveInputY = 0;
     Object.assign(Neo, sim.laser, sim.charge);
     buildActors(args);
   }
@@ -157,6 +162,7 @@
       laser: null,
       charge: null,
       smashHeld: false,
+      dashHeld: false,
       casted: false,
       released: false,
     };
@@ -186,6 +192,9 @@
     Neo.shake = 0; Neo.shakeT = 0; Neo.shakeKickX = 0; Neo.shakeKickY = 0;
     Neo.godTimer = 0;
     Neo.smashHeld = sim.smashHeld;
+    Neo.dashHeld = sim.dashHeld;
+    Neo.moveInputX = 0;
+    Neo.moveInputY = 0;
     if (sim.laser) Object.assign(Neo, sim.laser);
     if (sim.charge) Object.assign(Neo, sim.charge);
     // Side-effect firewalls: no audio, HUD writes, tutorial signals, or unlock
@@ -202,6 +211,7 @@
     // Pull the scalar state the tick mutated back into the sim before restore.
     sim.enemyIdSeq = Neo.enemyIdSeq;
     sim.smashHeld = Neo.smashHeld;
+    sim.dashHeld = Neo.dashHeld;
     if (sim.laser) Object.keys(sim.laser).forEach(k => { sim.laser[k] = Neo[k]; });
     if (sim.charge) Object.keys(sim.charge).forEach(k => { sim.charge[k] = Neo[k]; });
   }
@@ -239,6 +249,9 @@
       const dx = (sim.dummy?.x ?? sim.player.x + 100) - sim.player.x;
       const dy = (sim.dummy?.y ?? sim.player.y) - sim.player.y;
       const len = Math.hypot(dx, dy) || 1;
+      Neo.moveInputX = dx / len;
+      Neo.moveInputY = dy / len;
+      Neo.dashHeld = true; // Nimrod Stomp releases when this drops (real path)
       Neo.tryDash?.(dx / len, dy / len);
     }
   }
@@ -260,6 +273,7 @@
     if (!sim.released && cyclePos >= CAST_AT + HOLD_FOR) {
       sim.released = true;
       Neo.smashHeld = false; // releases death ball / healing zone via real code
+      Neo.dashHeld = false; // releases Nimrod Stomp via real code
     }
 
     const p = Neo.player;
@@ -287,6 +301,7 @@
     try { Neo.updatePlayerLaser?.(dt); } catch (e) { /* demo-only guard */ }
     try { Neo.updateHealingZoneCharge?.(dt); } catch (e) { /* demo-only guard */ }
     try { Neo.updateDeathBallCharge?.(dt); } catch (e) { /* demo-only guard */ }
+    try { Neo.updateNimrodStompCharge?.(dt); } catch (e) { /* demo-only guard */ }
     try { Neo.updateProjectiles?.(dt); } catch (e) { /* demo-only guard */ }
     try { Neo.updateJusticeBlades?.(dt); } catch (e) { /* demo-only guard */ }
     try { Neo.updateSkySwords?.(dt); } catch (e) { /* demo-only guard */ }
@@ -337,6 +352,7 @@
       Neo.drawSkySwords?.();
       Neo.drawHealingZoneChargeBar?.();
       Neo.drawDeathBallChargeBar?.();
+      Neo.drawNimrodStompChargeBar?.();
       Neo.drawParticles?.();
     } finally {
       Neo.ctx = realCtx;

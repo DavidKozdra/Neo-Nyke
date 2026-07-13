@@ -502,6 +502,12 @@ export const KIT_ALTERNATIVES = {
   turtle_boy: {
     smash: ['death_ball', 'turtle_powerup'],
   },
+  sarge: {
+    laser: ['hammer_throw', 'lightning_cross'],
+  },
+  princess: {
+    dash: ['flying_unhitable', 'princess_shield'],
+  },
 };
 
 // The base (first-option) default kit per character, before any alt-kit choices.

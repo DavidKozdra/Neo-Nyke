@@ -2112,10 +2112,12 @@
           }
         }
       } else if (hazard.kind === 'lightning_strike_line') {
-        // "Justice of Sonichu": a laser-like lightning bolt spanning the whole
-        // room. First telegraphs along its line for `warn` seconds (faint, no
-        // damage), then strikes — dealing damage to anyone within `r` of the
-        // segment for a brief active window.
+        // "Justice of Sonichu" (enemy) / Lightning Cross (Sarge's alt laser):
+        // a laser-like lightning bolt spanning the whole room. First telegraphs
+        // along its line for `warn` seconds (faint, no damage), then strikes —
+        // dealing damage to anyone within `r` of the segment for a brief active
+        // window. `hazard.enemy` picks who it can hurt: true damages the player,
+        // false/unset (player-cast) damages enemies and heals the player on hit.
         hazard.warn = Math.max(0, Number(hazard.warn || 0) - dt);
         const striking = hazard.warn <= 0;
         if (!striking) {
@@ -2140,10 +2142,19 @@
           hazard.tick = Number(hazard.tick || 0) - dt;
           if (hazard.tick <= 0) {
             hazard.tick = hazard.interval || 0.12;
-            const reach = (hazard.r || 26) + Neo.player.r;
-            if (Neo.distToSegment(Neo.player.x, Neo.player.y, hazard.x1, hazard.y1, hazard.x2, hazard.y2) <= reach) {
-              const angle = Math.atan2(hazard.y2 - hazard.y1, hazard.x2 - hazard.x1) + Math.PI / 2;
-              damagePlayer(hazard.damage || 18, angle, 120, hazard.source || 'justice_of_sonichu');
+            const reach = hazard.r || 26;
+            if (hazard.enemy) {
+              if (Neo.distToSegment(Neo.player.x, Neo.player.y, hazard.x1, hazard.y1, hazard.x2, hazard.y2) <= reach + Neo.player.r) {
+                const angle = Math.atan2(hazard.y2 - hazard.y1, hazard.x2 - hazard.x1) + Math.PI / 2;
+                damagePlayer(hazard.damage || 18, angle, 120, hazard.source || 'justice_of_sonichu');
+              }
+            } else {
+              forEachEnemyNearCircle(hazard.x1, hazard.y1, reach + Math.hypot(hazard.x2 - hazard.x1, hazard.y2 - hazard.y1) + 80, enemy => {
+                if (Neo.distToSegment(enemy.x, enemy.y, hazard.x1, hazard.y1, hazard.x2, hazard.y2) > reach + enemy.r) return;
+                const angle = Math.atan2(enemy.y - hazard.y1, enemy.x - hazard.x1);
+                Neo.hitEnemy(enemy, hazard.damage || 18, angle, 120, '#bfe4ff', { lightning: true });
+                if (hazard.healPct > 0) Neo.applyPlayerHealing?.(Neo.player.maxHp * hazard.healPct);
+              });
             }
             Neo.spawnParticle({
               x: hazard.x1, y: hazard.y1, life: 0.16, c: '#bfe4ff',
