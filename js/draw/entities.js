@@ -308,18 +308,33 @@
   // Assumes the canvas is already translated to the entity's position; only
   // wraps its own save/restore around the rotate so it doesn't leak into
   // whatever the caller draws next in that same translated context.
-  function drawAimIndicator(aimAngle, spriteKey, color, size) {
+  function drawAimIndicator(aimAngle, spriteKey, color, size, facing = 1) {
     const atlas = Neo.SPRITE_ATLAS;
     const armFrame = atlas?.frames?.[`${spriteKey}:arm`];
     if (armFrame) {
-      Neo.ctx.save();
-      Neo.ctx.rotate(aimAngle);
-      Neo.ctx.imageSmoothingEnabled = false;
+      const sheet = Neo.CHARACTER_SPRITE_SHEETS?.[spriteKey] || Neo.CHARACTER_SHEET_DEFS?.[spriteKey] || {};
+      const sourceW = Number(armFrame.w || sheet.frameWidth || 24);
+      const sourceH = Number(armFrame.h || sheet.frameHeight || 24);
       const renderSize = size * Number(armFrame.renderScale || 1);
+      const scale = renderSize / Math.max(1, sourceW);
+      const pivot = sheet.armPivot || {};
+      const offset = sheet.armOffset || {};
+      const pivotX = Number.isFinite(Number(pivot.x)) ? Number(pivot.x) * scale : renderSize / 2;
+      const pivotY = Number.isFinite(Number(pivot.y)) ? Number(pivot.y) * scale : renderSize / 2;
+      const offsetX = (Number(offset.x) || 0) * scale * (facing < 0 ? -1 : 1);
+      const offsetY = (Number(offset.y) || 0) * scale;
+      const baseAngle = Number.isFinite(Number(sheet.armBaseAngle)) ? Number(sheet.armBaseAngle) : 0;
+      const sourceAimAngle = facing < 0 ? Math.PI - baseAngle : baseAngle;
+
+      Neo.ctx.save();
+      Neo.ctx.translate(offsetX, offsetY);
+      Neo.ctx.rotate(aimAngle - sourceAimAngle);
+      if (facing < 0) Neo.ctx.scale(-1, 1);
+      Neo.ctx.imageSmoothingEnabled = false;
       Neo.ctx.drawImage(
         atlas.canvas,
         armFrame.x, armFrame.y, armFrame.w, armFrame.h,
-        -renderSize / 2, -renderSize / 2, renderSize, renderSize,
+        -pivotX, -pivotY, renderSize, renderSize * (sourceH / sourceW),
       );
       Neo.ctx.restore();
     } else {
@@ -1301,7 +1316,7 @@
     drawEnemyStatusIconRow(Neo.player, Neo.player.y);
     Neo.ctx.save();
     Neo.ctx.translate(Neo.player.x, Neo.player.y);
-    drawAimIndicator(aimAngle, getPlayerSpriteKey(), '#f5f1e8', playerSize);
+    drawAimIndicator(aimAngle, getPlayerSpriteKey(), '#f5f1e8', playerSize, facing);
     const equippedWeapon = Neo.getEquippedWeapon();
     const extendingStaffEquipped = equippedWeapon === 'extending_staff';
     if (extendingStaffEquipped) {
@@ -1459,7 +1474,7 @@
     });
     Neo.ctx.save();
     Neo.ctx.translate(pn.x, pn.y);
-    drawAimIndicator(aimAngle, spriteKey, tintColor, Math.max(34, pn.r * 2.5));
+    drawAimIndicator(aimAngle, spriteKey, tintColor, Math.max(34, pn.r * 2.5), facing);
     Neo.ctx.restore();
     Neo.ctx.save();
     Neo.ctx.fillStyle = tintColor;

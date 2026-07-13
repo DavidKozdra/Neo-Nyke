@@ -1552,6 +1552,7 @@
     magenta_degale: { color: '#ff8bd2', core: '#fff0fb', trail: '#ff3eb7', shape: 'slug', length: 34 },
     hunters_bow: { color: '#dff8ff', core: '#ffffff', trail: '#7edcff', shape: 'arrow', length: 32 },
     void_piercer: { color: '#ffd2c0', core: '#fff8ee', trail: '#ff826a', shape: 'dart', length: 30 },
+    princess_wand: { color: '#ff9de8', core: '#fff4ff', trail: '#ff58d2', shape: 'dart', length: 30 },
     sarges_hammer: { color: '#7da3ff', core: '#e7efff', trail: '#9bb8ff', shape: 'rock', length: 22 },
     death_ball: { color: '#3c82ff', core: '#cfe6ff', trail: '#5aa0ff', shape: 'energy_orb', length: 26 },
   };

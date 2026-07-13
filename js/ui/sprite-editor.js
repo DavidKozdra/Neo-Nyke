@@ -207,13 +207,21 @@
         // Spin it through a full rotation so you can see how it tracks aim
         // angle in-game, same transform the engine uses (drawAimIndicator).
         const angle = (now % 3) / 3 * Math.PI * 2;
+        const baseAngle = Number(editor.armBaseAngle || 0);
+        const pivot = editor.armPivot || {};
+        const offset = editor.armOffset || {};
+        const scaleX = dw / Math.max(1, editor.frameWidth);
+        const scaleY = dh / Math.max(1, editor.frameHeight);
+        const pivotX = Number.isFinite(Number(pivot.x)) ? Number(pivot.x) * scaleX : dw / 2;
+        const pivotY = Number.isFinite(Number(pivot.y)) ? Number(pivot.y) * scaleY : dh / 2;
         ctx.save();
         ctx.translate(canvas.width / 2, canvas.height / 2);
-        ctx.rotate(angle);
+        ctx.translate((Number(offset.x) || 0) * scaleX, (Number(offset.y) || 0) * scaleY);
+        ctx.rotate(angle - baseAngle);
         ctx.drawImage(
           editor.master,
           editor.armFrame * editor.frameWidth, 0, editor.frameWidth, editor.frameHeight,
-          -dw / 2, -dh / 2, dw, dh,
+          -pivotX, -pivotY, dw, dh,
         );
         ctx.restore();
         return;
@@ -791,6 +799,9 @@
       idleFrames: liveSheet?.idleFrames ? [...liveSheet.idleFrames] : null,
       walkFrames: liveSheet?.walkFrames ? [...liveSheet.walkFrames] : null,
       armFrame: Number.isInteger(liveSheet?.armFrame) ? liveSheet.armFrame : null,
+      armBaseAngle: liveSheet?.armBaseAngle ?? entry.armBaseAngle ?? 0,
+      armPivot: liveSheet?.armPivot ? { ...liveSheet.armPivot } : (entry.armPivot ? { ...entry.armPivot } : null),
+      armOffset: liveSheet?.armOffset ? { ...liveSheet.armOffset } : (entry.armOffset ? { ...entry.armOffset } : null),
       stepRate: liveSheet?.stepRate ?? '',
       idleRate: liveSheet?.idleRate ?? '',
     };
@@ -885,6 +896,9 @@
     def.idleFrames = [...editor.idleFrames];
     def.walkFrames = [...editor.walkFrames];
     if (editor.armFrame != null) def.armFrame = editor.armFrame; else delete def.armFrame;
+    def.armBaseAngle = Number(editor.armBaseAngle || 0);
+    if (editor.armPivot) def.armPivot = { ...editor.armPivot }; else delete def.armPivot;
+    if (editor.armOffset) def.armOffset = { ...editor.armOffset }; else delete def.armOffset;
     if (editor.stepRate !== '' && editor.stepRate != null) def.stepRate = Number(editor.stepRate);
     else delete def.stepRate;
     if (editor.idleRate !== '' && editor.idleRate != null) def.idleRate = Number(editor.idleRate);
@@ -898,6 +912,9 @@
       sheet.idleFrames = [...editor.idleFrames];
       sheet.walkFrames = [...editor.walkFrames];
       sheet.armFrame = editor.armFrame != null ? editor.armFrame : null;
+      sheet.armBaseAngle = Number(editor.armBaseAngle || 0);
+      sheet.armPivot = editor.armPivot ? { ...editor.armPivot } : undefined;
+      sheet.armOffset = editor.armOffset ? { ...editor.armOffset } : undefined;
       sheet.animations = {
         idle: sheet.idleFrames.map((_, i) => `idle${i}`),
         walk: sheet.walkFrames.map((_, i) => `walk${i}`),
@@ -922,6 +939,9 @@
         idleFrames: editor.idleFrames ? [...editor.idleFrames] : null,
         walkFrames: editor.walkFrames ? [...editor.walkFrames] : null,
         armFrame: editor.armFrame,
+        armBaseAngle: Number(editor.armBaseAngle || 0),
+        armPivot: editor.armPivot ? { ...editor.armPivot } : null,
+        armOffset: editor.armOffset ? { ...editor.armOffset } : null,
         stepRate: editor.stepRate,
         idleRate: editor.idleRate,
       },
@@ -1809,6 +1829,16 @@
       }
       const armFrame = sheet.armFrame ?? def.armFrame;
       if (Number.isInteger(armFrame)) lines.push(`    armFrame: ${armFrame},`);
+      const armBaseAngle = sheet.armBaseAngle ?? def.armBaseAngle;
+      if (armBaseAngle != null) lines.push(`    armBaseAngle: ${Number(armBaseAngle)},`);
+      const armPivot = sheet.armPivot ?? def.armPivot;
+      if (armPivot && Number.isFinite(Number(armPivot.x)) && Number.isFinite(Number(armPivot.y))) {
+        lines.push(`    armPivot: { x: ${Number(armPivot.x)}, y: ${Number(armPivot.y)} },`);
+      }
+      const armOffset = sheet.armOffset ?? def.armOffset;
+      if (armOffset && Number.isFinite(Number(armOffset.x)) && Number.isFinite(Number(armOffset.y))) {
+        lines.push(`    armOffset: { x: ${Number(armOffset.x)}, y: ${Number(armOffset.y)} },`);
+      }
       const stepRate = sheet.stepRate ?? def.stepRate;
       if (stepRate != null) lines.push(`    stepRate: ${stepRate},`);
       const idleRate = sheet.idleRate ?? def.idleRate;
