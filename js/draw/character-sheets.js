@@ -10,9 +10,9 @@ const CHARACTER_SHEET_DEFS = {
     idleFrames: [1, 2],
     walkFrames: [3, 4, 5, 6],
     armFrame: 0,
-    armBaseAngle: 0,
-    armPivot: { x: 10, y: 15 },
-    armOffset: { x: 4, y: 2 },
+    armBaseAngle: -Math.PI / 2,
+    armPivot: { x: 10, y: 17 },
+    armOffset: { x: 1, y: 3 },
   },
   princess: {
     src: 'assets/sprites/chars/princess.png',
