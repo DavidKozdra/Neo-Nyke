@@ -135,6 +135,17 @@
     `;
   }
 
+  function directSaveButtonHtml(label = 'Save to Game') {
+    if (state.directSave) {
+      return `<button type="button" class="nav-btn" id="seSaveDirect" data-history-save="true" disabled>${label}</button>`;
+    }
+    return `<button type="button" class="nav-btn" id="seSaveDirect" disabled title="Run npm run editor to enable direct file writes">${label}</button>`;
+  }
+
+  function directSaveHintHtml() {
+    return state.directSave ? '' : '<span class="sprite-editor-note sprite-editor-action-note">Run npm run editor to enable direct file saves.</span>';
+  }
+
   function wireHistoryControls(editor, rerender) {
     ensureHistory(editor);
     const applyEntry = (snapshot, source, target) => {
@@ -1038,7 +1049,8 @@
         <button type="button" class="sandbox-mini-btn" id="seReplace">Replace Image…</button>
         <input type="file" accept="image/png,image/*" id="seReplaceInput" style="display:none">
         <button type="button" class="nav-btn nav-btn--minor" id="seDownload">Download PNG</button>
-        ${state.directSave ? `<button type="button" class="nav-btn" id="seSaveDirect" data-history-save="true" disabled>${isCharset ? 'Save Sprite + Config' : 'Save to Game'}</button>` : ''}
+        ${directSaveButtonHtml(isCharset ? 'Save Sprite + Config' : 'Save to Game')}
+        ${directSaveHintHtml()}
         <button type="button" class="sandbox-mini-btn" id="seReset">Reset</button>
         ${isCharset ? `
           <button type="button" class="nav-btn nav-btn--minor" id="seDownloadSheetDefs">Download character-sheets.js</button>
@@ -1224,6 +1236,65 @@
   }
 
   // ── Detail: procedural actor pixel-grid editor (combatants.js) ──────────
+  function getActorDrawingBounds(def) {
+    const rows = def?.pixels || [];
+    let minX = ACTOR_GRID_SIZE;
+    let minY = ACTOR_GRID_SIZE;
+    let maxX = -1;
+    let maxY = -1;
+    rows.forEach((row, y) => {
+      for (let x = 0; x < Math.min(row.length, ACTOR_GRID_SIZE); x += 1) {
+        if (row[x] === '.') continue;
+        minX = Math.min(minX, x);
+        minY = Math.min(minY, y);
+        maxX = Math.max(maxX, x);
+        maxY = Math.max(maxY, y);
+      }
+    });
+    return maxX >= minX ? { x1: minX, y1: minY, x2: maxX, y2: maxY } : null;
+  }
+
+  function normalizeActorSelection(selection) {
+    if (!selection) return null;
+    const x1 = Math.max(0, Math.min(ACTOR_GRID_SIZE - 1, Math.min(selection.x1, selection.x2)));
+    const y1 = Math.max(0, Math.min(ACTOR_GRID_SIZE - 1, Math.min(selection.y1, selection.y2)));
+    const x2 = Math.max(0, Math.min(ACTOR_GRID_SIZE - 1, Math.max(selection.x1, selection.x2)));
+    const y2 = Math.max(0, Math.min(ACTOR_GRID_SIZE - 1, Math.max(selection.y1, selection.y2)));
+    return { x1, y1, x2, y2 };
+  }
+
+  function moveActorSelection(def, selection, dx, dy) {
+    const selected = normalizeActorSelection(selection);
+    if (!selected) return null;
+    const clampedDx = Math.max(-selected.x1, Math.min(ACTOR_GRID_SIZE - 1 - selected.x2, Number(dx) || 0));
+    const clampedDy = Math.max(-selected.y1, Math.min(ACTOR_GRID_SIZE - 1 - selected.y2, Number(dy) || 0));
+    if (!clampedDx && !clampedDy) return null;
+    const rows = Array.from({ length: ACTOR_GRID_SIZE }, (_, y) => {
+      const row = String(def.pixels?.[y] || '').padEnd(ACTOR_GRID_SIZE, '.').slice(0, ACTOR_GRID_SIZE);
+      return row.split('');
+    });
+    const cells = [];
+    for (let y = selected.y1; y <= selected.y2; y += 1) {
+      for (let x = selected.x1; x <= selected.x2; x += 1) {
+        const value = rows[y][x];
+        if (value === '.') continue;
+        cells.push({ x, y, value });
+        rows[y][x] = '.';
+      }
+    }
+    if (!cells.length) return null;
+    cells.forEach(cell => {
+      rows[cell.y + clampedDy][cell.x + clampedDx] = cell.value;
+    });
+    def.pixels = rows.map(row => row.join(''));
+    return {
+      x1: selected.x1 + clampedDx,
+      y1: selected.y1 + clampedDy,
+      x2: selected.x2 + clampedDx,
+      y2: selected.y2 + clampedDy,
+    };
+  }
+
   function renderActorDetail(container, entry) {
     const def = Neo.SPRITE_DEFS[entry.key];
     if (!state.editor || state.editor.entry.id !== entry.id) {
@@ -1232,7 +1303,8 @@
         entry,
         activeSwatch: 'a',
         erasing: false,
-        scale: 24,
+        scale: 36,
+        selection: null,
       };
     }
     const editor = state.editor;
@@ -1243,6 +1315,7 @@
       palette: { ...def.palette },
       activeSwatch: editor.activeSwatch,
       erasing: editor.erasing,
+      selection: editor.selection ? { ...editor.selection } : null,
     });
     editor.applySnapshot = snapshot => {
       if (!snapshot) return;
@@ -1250,6 +1323,7 @@
       def.palette = { ...snapshot.palette };
       editor.activeSwatch = snapshot.activeSwatch || editor.activeSwatch;
       editor.erasing = !!snapshot.erasing;
+      editor.selection = snapshot.selection ? { ...snapshot.selection } : null;
       scheduleAtlasRebuild();
     };
 
@@ -1258,9 +1332,23 @@
         <h4 class="sprite-editor-detail-title">${entry.label}</h4>
         <div class="sprite-editor-detail-path">save to: assets/sprites/combatants.js</div>
       </div>
-      <p class="sprite-editor-note">Edits apply live this session. This is the base pose the game procedurally derives idle/walk/attack frames from — you don't need to hand-draw each frame. Download combatants.js and replace the file to keep the change.</p>
+      <p class="sprite-editor-note">Edits apply live this session. This is the base pose the game procedurally derives idle/walk/attack frames from — you don't need to hand-draw each frame.</p>
       ${historyBarHtml()}
-      <div class="sprite-editor-canvas-wrap"><canvas class="sprite-editor-canvas"></canvas></div>
+      <div class="sprite-editor-canvas-wrap sprite-editor-canvas-wrap--actor"><canvas class="sprite-editor-canvas"></canvas></div>
+      <div class="sprite-editor-field-row sprite-editor-pixel-tools">
+        <label>Cell size <input type="number" id="seActorScale" min="18" max="64" step="2" value="${editor.scale}"></label>
+        <button type="button" class="sandbox-mini-btn" id="seSelectDrawing">Select Drawing</button>
+        <button type="button" class="sandbox-mini-btn" id="seClearSelection" ${editor.selection ? '' : 'disabled'}>Clear Selection</button>
+        <label>X <input type="number" id="seMoveX" min="-10" max="10" step="1" value="0"></label>
+        <label>Y <input type="number" id="seMoveY" min="-10" max="10" step="1" value="0"></label>
+        <button type="button" class="sandbox-mini-btn" id="seMoveSelection">Move</button>
+      </div>
+      <div class="sprite-editor-move-pad" aria-label="Move selected drawing">
+        <button type="button" class="sandbox-mini-btn" data-move-x="0" data-move-y="-1" title="Move up">↑</button>
+        <button type="button" class="sandbox-mini-btn" data-move-x="-1" data-move-y="0" title="Move left">←</button>
+        <button type="button" class="sandbox-mini-btn" data-move-x="1" data-move-y="0" title="Move right">→</button>
+        <button type="button" class="sandbox-mini-btn" data-move-x="0" data-move-y="1" title="Move down">↓</button>
+      </div>
       ${paletteStripHtml()}
       <div class="sprite-editor-toolbar">
         <div class="sprite-editor-swatch-row" id="seSwatches"></div>
@@ -1268,7 +1356,8 @@
       </div>
       <div class="sprite-editor-actions">
         <button type="button" class="nav-btn nav-btn--minor" id="seDownload">Download combatants.js</button>
-        ${state.directSave ? '<button type="button" class="nav-btn" id="seSaveDirect" data-history-save="true" disabled>Save to Game</button>' : ''}
+        ${directSaveButtonHtml()}
+        ${directSaveHintHtml()}
         <button type="button" class="sandbox-mini-btn" id="seReset">Reset</button>
         ${isCharacter ? `
           <button type="button" class="sandbox-mini-btn" id="seLoadCharset">Load Custom Charset PNG…</button>
@@ -1304,7 +1393,7 @@
         const before = editor.captureSnapshot();
         def.palette[letter] = e.target.value;
         btn.style.background = e.target.value;
-        repaintActorCanvas(canvas, def);
+        repaintActorCanvas(canvas, def, editor);
         scheduleAtlasRebuild();
         pushHistory(editor, before, editor.captureSnapshot());
       });
@@ -1327,7 +1416,20 @@
 
     canvas.width = ACTOR_GRID_SIZE * editor.scale;
     canvas.height = ACTOR_GRID_SIZE * editor.scale;
-    repaintActorCanvas(canvas, def);
+    repaintActorCanvas(canvas, def, editor);
+
+    function commitActorMove(dx, dy) {
+      const before = editor.captureSnapshot();
+      const selection = editor.selection || getActorDrawingBounds(def);
+      const movedSelection = moveActorSelection(def, selection, dx, dy);
+      if (!movedSelection) return;
+      editor.selection = movedSelection;
+      repaintActorCanvas(canvas, def, editor);
+      scheduleAtlasRebuild();
+      pushHistory(editor, before, editor.captureSnapshot());
+      const clearBtn = container.querySelector('#seClearSelection');
+      if (clearBtn) clearBtn.disabled = false;
+    }
 
     function paintAt(clientX, clientY) {
       const rect = canvas.getBoundingClientRect();
@@ -1342,13 +1444,38 @@
       const nextChar = editor.erasing ? '.' : editor.activeSwatch;
       if (row[cx] === nextChar) return;
       def.pixels[cy] = row.slice(0, cx) + nextChar + row.slice(cx + 1);
-      repaintActorCanvas(canvas, def);
+      repaintActorCanvas(canvas, def, editor);
       scheduleAtlasRebuild();
     }
     bindPaintDrag(canvas, paintAt, () => editor.captureSnapshot(), before => {
       pushHistory(editor, before, editor.captureSnapshot());
     });
 
+    container.querySelector('#seActorScale').addEventListener('change', e => {
+      editor.scale = Math.max(18, Math.min(64, Number(e.target.value) || 36));
+      renderActorDetail(container, entry);
+    });
+    container.querySelector('#seSelectDrawing').addEventListener('click', () => {
+      editor.selection = getActorDrawingBounds(def);
+      repaintActorCanvas(canvas, def, editor);
+      const clearBtn = container.querySelector('#seClearSelection');
+      if (clearBtn) clearBtn.disabled = !editor.selection;
+    });
+    container.querySelector('#seClearSelection').addEventListener('click', e => {
+      editor.selection = null;
+      e.currentTarget.disabled = true;
+      repaintActorCanvas(canvas, def, editor);
+    });
+    container.querySelector('#seMoveSelection').addEventListener('click', () => {
+      const dx = Number(container.querySelector('#seMoveX')?.value || 0);
+      const dy = Number(container.querySelector('#seMoveY')?.value || 0);
+      commitActorMove(dx, dy);
+    });
+    container.querySelectorAll('[data-move-x][data-move-y]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        commitActorMove(Number(btn.dataset.moveX), Number(btn.dataset.moveY));
+      });
+    });
     container.querySelector('#seEraser').addEventListener('change', e => { editor.erasing = e.target.checked; });
     container.querySelector('#seDownload').addEventListener('click', () => downloadDataFile('combatants'));
     container.querySelector('#seSaveDirect')?.addEventListener('click', e => saveDataFile('combatants', e.currentTarget, editor));
@@ -1366,7 +1493,7 @@
     }
   }
 
-  function repaintActorCanvas(canvas, def) {
+  function repaintActorCanvas(canvas, def, editor = state.editor) {
     const ctx = canvas.getContext('2d');
     const cell = canvas.width / ACTOR_GRID_SIZE;
     ctx.imageSmoothingEnabled = false;
@@ -1383,6 +1510,20 @@
     for (let i = 1; i < ACTOR_GRID_SIZE; i += 1) {
       ctx.beginPath(); ctx.moveTo(i * cell, 0); ctx.lineTo(i * cell, canvas.height); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(0, i * cell); ctx.lineTo(canvas.width, i * cell); ctx.stroke();
+    }
+    const selection = normalizeActorSelection(editor?.selection);
+    if (selection) {
+      ctx.save();
+      ctx.strokeStyle = '#ffd766';
+      ctx.lineWidth = Math.max(2, Math.floor(cell * 0.08));
+      ctx.setLineDash([Math.max(4, cell * 0.25), Math.max(3, cell * 0.18)]);
+      ctx.strokeRect(
+        selection.x1 * cell + ctx.lineWidth / 2,
+        selection.y1 * cell + ctx.lineWidth / 2,
+        (selection.x2 - selection.x1 + 1) * cell - ctx.lineWidth,
+        (selection.y2 - selection.y1 + 1) * cell - ctx.lineWidth,
+      );
+      ctx.restore();
     }
   }
 
@@ -1428,7 +1569,8 @@
       </div>
       <div class="sprite-editor-actions">
         <button type="button" class="nav-btn nav-btn--minor" id="seDownload">Download icons.js</button>
-        ${state.directSave ? '<button type="button" class="nav-btn" id="seSaveDirect" data-history-save="true" disabled>Save to Game</button>' : ''}
+        ${directSaveButtonHtml()}
+        ${directSaveHintHtml()}
       </div>
     `;
 
@@ -1571,7 +1713,8 @@
       </div>
       <div class="sprite-editor-actions">
         <button type="button" class="nav-btn nav-btn--minor" id="seDownload">Download environment.js</button>
-        ${state.directSave ? '<button type="button" class="nav-btn" id="seSaveDirect" data-history-save="true" disabled>Save to Game</button>' : ''}
+        ${directSaveButtonHtml()}
+        ${directSaveHintHtml()}
       </div>
     `;
     const canvas = container.querySelector('canvas');
