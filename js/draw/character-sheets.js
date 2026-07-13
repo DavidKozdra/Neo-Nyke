@@ -30,9 +30,9 @@ const CHARACTER_SHEET_DEFS = {
     idleFrames: [1, 2],
     walkFrames: [3, 4, 5, 6],
     armFrame: 0,
-    armBaseAngle: Math.PI / 2,
-    armPivot: { x: 10, y: 18 },
-    armOffset: { x: 2, y: 3 },
+    armBaseAngle: 0,
+    armPivot: { x: 7, y: 15 },
+    armOffset: { x: 2, y: 2 },
   },
   sarge: {
     src: 'assets/sprites/chars/Sarge.png',
