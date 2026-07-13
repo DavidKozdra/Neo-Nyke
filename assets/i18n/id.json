@@ -464,5 +464,9 @@
   "enemyInfo.mooggy.label": "Mooggy",
   "enemyInfo.mooggy.desc": "Kucing pembunuh berwarna putih dan hitam dengan aura merah. Mencerminkan statistik dan item Anda, lalu menembakkan laser mata yang mengeluarkan darah dengan cepat.",
   "enemyInfo.god.label": "Tuhan",
-  "enemyInfo.god.desc": "Bos terakhir. Dewa multi-fase dengan sapuan sinar, ledakan nova, dan serangan penghakiman. Kebal terhadap semua efek status."
+  "enemyInfo.god.desc": "Bos terakhir. Dewa multi-fase dengan sapuan sinar, ledakan nova, dan serangan penghakiman. Kebal terhadap semua efek status.",
+  "moves.lightning_cross.name": "Salib Petir",
+  "moves.lightning_cross.desc": "Panggil dua petir yang melintasi ruangan ke arah Anda, satu horizontal dan satu vertikal, merusak semua yang dilintasinya dan menyembuhkan Anda 1% HP maksimal per musuh yang diserang. 2 biaya.",
+  "moves.princess_shield.name": "Perisai Putri",
+  "moves.princess_shield.desc": "Naikkan penghalang merah muda senilai 40% dari HP maksimal Anda. Ditransmisikan secara otomatis saat HP Anda turun di bawah 15%, selama cooldownnya tidak aktif."
 }

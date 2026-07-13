@@ -464,5 +464,9 @@
   "enemyInfo.mooggy.label": "moggy",
   "enemyInfo.mooggy.desc": "Gato asesino blanco y negro con aura roja. Refleja tus estadísticas y objetos y luego dispara láseres oculares rápidos que acumulan sangrado.",
   "enemyInfo.god.label": "Dios",
-  "enemyInfo.god.desc": "Jefe final. Deidad multifase con barridos de rayos, explosiones de nova y golpes de juicio. Inmune a todos los efectos de estado."
+  "enemyInfo.god.desc": "Jefe final. Deidad multifase con barridos de rayos, explosiones de nova y golpes de juicio. Inmune a todos los efectos de estado.",
+  "moves.lightning_cross.name": "Cruz relámpago",
+  "moves.lightning_cross.desc": "Invoca dos relámpagos que abarcan toda la habitación a través de ti, uno horizontal y otro vertical, dañando todo lo que cruzan y curándote un 1% de HP máximo por cada enemigo golpeado. 2 cargas.",
+  "moves.princess_shield.name": "Escudo de la princesa",
+  "moves.princess_shield.desc": "Levanta una barrera rosa por valor del 40% de tu HP máximo. Se lanza automáticamente en el momento en que tu HP cae por debajo del 15%, siempre y cuando esté fuera del tiempo de reutilización."
 }

@@ -136,6 +136,10 @@ export function bindInput() {
       }
       if (b && key === b.smash && Neo.gameState === 'play') { Neo.smashHeld = true; Neo.trySmash(); }
       else if (!b && key === 'r' && Neo.gameState === 'play') { Neo.smashHeld = true; Neo.trySmash(); }
+      // Nimrod Stomp (hold-to-charge dash) needs a persistent held-flag, mirroring
+      // smash above — the generic Neo.keys[dashKey] map is only used for the
+      // initial press edge-latch in update.js, not a release signal.
+      if ((b ? key === b.dash : key === 'shift') && Neo.gameState === 'play') Neo.dashHeld = true;
       if (Neo.gameState === 'play' && Neo.EQUIPMENT_SLOT_KEYS?.includes(key.toUpperCase())) {
         if (!Neo.equipKeyLatch) Neo.equipKeyLatch = {};
         const letter = key.toUpperCase();
@@ -160,6 +164,7 @@ export function bindInput() {
       const b = window.NeoSettings?.getBindings();
       const inventoryKey = b ? b.inventory : 'i';
       if ((b && key === b.smash) || (!b && key === 'r')) Neo.smashHeld = false;
+      if (b ? key === b.dash : key === 'shift') Neo.dashHeld = false;
       if (key === String(b?.interact || 'e').toLowerCase()) { Neo.shopKeyLatch = false; Neo.anvilKeyLatch = false; Neo.specialRoomKeyLatch = false; Neo.ladderUseKeyLatch = false; }
       if (key === String(b?.activateAll ?? ' ').toLowerCase()) Neo.activateAllKeyLatch = false;
       if (key === inventoryKey) Neo.invKeyLatch = false;
@@ -457,6 +462,7 @@ export function clearGameplayInput() {
     Neo.mouse.downQueued = false;
     Neo.mouse.rightQueued = false;
     Neo.smashHeld = false;
+    Neo.dashHeld = false;
     Neo._meleeWasHeld = false;
     Neo._laserWasHeld = false;
   }

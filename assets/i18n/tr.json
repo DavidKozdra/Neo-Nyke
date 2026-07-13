@@ -464,5 +464,9 @@
   "enemyInfo.mooggy.label": "Mooggy",
   "enemyInfo.mooggy.desc": "Kırmızı auralı beyaz ve siyah suikastçı kedi. İstatistiklerinizi ve öğelerinizi yansıtır, ardından hızlı kanama toplayan göz lazerlerini ateşler.",
   "enemyInfo.god.label": "Tanri",
-  "enemyInfo.god.desc": "Son patron. Işın taramaları, nova patlamaları ve yargı saldırıları ile çok aşamalı tanrı. Tüm durum etkilerine karşı bağışıklıdır."
+  "enemyInfo.god.desc": "Son patron. Işın taramaları, nova patlamaları ve yargı saldırıları ile çok aşamalı tanrı. Tüm durum etkilerine karşı bağışıklıdır.",
+  "moves.lightning_cross.name": "Yıldırım Haçı",
+  "moves.lightning_cross.desc": "Oda boyunca uzanan, biri yatay, diğeri dikey olmak üzere iki yıldırım oku göndererek geçtikleri her şeye hasar verir ve vurulan düşman başına maksimum HP'nizin %1'ini iyileştirir. 2 suçlama.",
+  "moves.princess_shield.name": "Prensesin Kalkanı",
+  "moves.princess_shield.desc": "Maksimum HP'nizin %40'ı değerinde pembe bir bariyer yükseltin. Bekleme süresi dışında olduğu sürece, HP'niz %15'in altına düştüğü anda kendini otomatik olarak atar."
 }

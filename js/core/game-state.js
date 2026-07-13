@@ -872,6 +872,11 @@ export function resumeGame() {
       stun: 0,
       swing: 0,
       swingA: 0,
+      swingFacing: 1,
+      armRecoilA: 0,
+      armRecoilFacing: 1,
+      armRecoilUntil: 0,
+      armRecoilDuration: 0,
       inv: 0,
       dashTime: 0,
       dashX: 0,
@@ -1809,15 +1814,17 @@ export function resumeGame() {
     // A `holding` charge only counts as "in flight" while its hold-to-charge
     // session is actually live; otherwise it's an orphaned hold (e.g. a charge
     // spent right before leaving 'play' without release) that would never recover.
-    const chargingLive = !!(Neo.healingZoneCharging || Neo.deathBallCharging);
+    const smashChargingLive = !!(Neo.healingZoneCharging || Neo.deathBallCharging);
+    const dashChargingLive = !!Neo.nimrodStompCharging;
     Neo.MOVE_SLOTS.forEach(slot => {
       const state = Neo.cooldowns[slot] || createCooldownEntry(slot);
-      const liveHold = slot === 'smash' && chargingLive && state.holding > 0;
+      const liveHold = (slot === 'smash' && smashChargingLive && state.holding > 0)
+        || (slot === 'dash' && dashChargingLive && state.holding > 0);
       if (!liveHold && state.holding > 0) {
         // Drop the phantom hold and let the slot be topped up / recharged below.
         state.holding = 0;
       }
-      const hasActiveTimer = state.timers.length > 0 || (slot === 'smash' && liveHold);
+      const hasActiveTimer = state.timers.length > 0 || liveHold;
       if (state.charges <= 0 && !hasActiveTimer) {
         const moveKey = Neo.getEquippedMove(slot);
         const cooldown = getSlotCooldownDuration(slot, moveKey, attackSpeed);
@@ -2620,6 +2627,14 @@ export function resumeGame() {
       Neo.smashHeld = false;
       queueHeldSkillRecharge('smash', getSmashCooldownDuration(Neo.getAttackSpeedValue()));
     }
+    // Nimrod Stomp's hold-to-charge (dash slot) needs the same stranded-charge
+    // guard as Healing Zone / Death Ball above.
+    if (nextState !== 'play' && Neo.nimrodStompCharging) {
+      Neo.nimrodStompCharging = false;
+      Neo.nimrodStompChargeTime = 0;
+      Neo.dashHeld = false;
+      queueHeldSkillRecharge('dash', getDashCooldownDuration('nimrod_stomp', Neo.getAttackSpeedValue()));
+    }
     if (Neo.gameStateManager) Neo.gameStateManager.setState(nextState);
     else {
       Neo.gameState = nextState;
@@ -3360,6 +3375,9 @@ export function resumeGame() {
     Neo.deathBallChargeTime = 0;
     Neo.deathBallPowerUp = false;
     Neo.smashHeld = false;
+    Neo.nimrodStompCharging = false;
+    Neo.nimrodStompChargeTime = 0;
+    Neo.dashHeld = false;
     Neo.chests = [];
     Neo.pickups = [];
     Neo.destructibles = [];

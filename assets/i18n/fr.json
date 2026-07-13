@@ -19,7 +19,7 @@
   "settings.tabs.volume": "Son",
   "settings.tabs.language": "Langue",
   "settings.tabs.theme": "Thème",
-  "settings.tabs.hud": "HUD",
+  "settings.tabs.hud": "ATH",
   "settings.tabs.accessibility": "Accessibilite",
   "settings.tabs.data": "Donnees",
   "settings.language.title": "Langue",
@@ -464,5 +464,9 @@
   "enemyInfo.mooggy.label": "Moggy",
   "enemyInfo.mooggy.desc": "Chat assassin blanc et noir avec une aura rouge. Reproduit vos statistiques et vos objets, puis déclenche des lasers oculaires à saignement rapide.",
   "enemyInfo.god.label": "Dieu",
-  "enemyInfo.god.desc": "Patron final. Divinité multiphase avec balayages de faisceaux, explosions de nova et frappes de jugement. Immunisé contre tous les effets de statut."
+  "enemyInfo.god.desc": "Patron final. Divinité multiphase avec balayages de faisceaux, explosions de nova et frappes de jugement. Immunisé contre tous les effets de statut.",
+  "moves.lightning_cross.name": "Croix de foudre",
+  "moves.lightning_cross.desc": "Invoquez deux éclairs traversant la pièce à travers vous-même, un horizontal et un vertical, endommageant tout ce qu'ils traversent et vous soignant de 1 % de PV maximum par ennemi touché. 2 accusations.",
+  "moves.princess_shield.name": "Bouclier de princesse",
+  "moves.princess_shield.desc": "Élevez une barrière rose valant 40% de vos HP max. Se lance automatiquement dès que vos HP descendent en dessous de 15 %, tant qu'ils ne sont pas en temps de recharge."
 }
