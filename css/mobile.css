@@ -93,6 +93,73 @@
 }
 
 /* ── Portrait phones ──────────────────────────────────────────────────────── */
+.orientation-prompt {
+  position: fixed;
+  inset: 0;
+  z-index: 100000;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  box-sizing: border-box;
+  background:
+    radial-gradient(circle at 50% 28%, rgba(143, 201, 255, .18), transparent 34%),
+    linear-gradient(180deg, rgba(5, 7, 13, .92), rgba(9, 13, 22, .96));
+  backdrop-filter: blur(3px);
+}
+
+.orientation-prompt.hidden {
+  display: none;
+}
+
+.orientation-prompt__panel {
+  width: min(380px, calc(100vw - 36px));
+  padding: 20px 18px;
+  box-sizing: border-box;
+  border: 1px solid rgba(143, 201, 255, .48);
+  border-radius: 12px;
+  background: rgba(13, 20, 32, .94);
+  color: #eaf4ff;
+  text-align: center;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, .55), 0 0 28px rgba(91, 171, 255, .18);
+}
+
+.orientation-prompt__panel h2 {
+  margin: 0 0 9px;
+  font-size: calc(17px * var(--font-scale, 1));
+  letter-spacing: .08em;
+}
+
+.orientation-prompt__panel p {
+  margin: 0 0 16px;
+  color: #b8c9dc;
+  font-size: calc(13px * var(--font-scale, 1));
+  line-height: 1.45;
+}
+
+.orientation-prompt__actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.orientation-prompt__btn {
+  min-height: 44px;
+  border: 1px solid rgba(143, 201, 255, .34);
+  border-radius: 8px;
+  background: rgba(255,255,255,.05);
+  color: #eaf4ff;
+  font: inherit;
+  font-size: calc(12px * var(--font-scale, 1));
+  font-weight: 900;
+  letter-spacing: .06em;
+}
+
+.orientation-prompt__btn--primary {
+  background: linear-gradient(180deg, #f5f9ff, #b9d7f4);
+  color: #101925;
+  border-color: #e7f3ff;
+}
+
 @media (max-width: 600px) {
 
   /* ── 2. Main menu card — grid row inside #start .menu-stage ──── */
