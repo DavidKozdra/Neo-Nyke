@@ -49,6 +49,14 @@ export function createUIController(view) {
     let objectiveExpanded = true;
     let tutorialMenuOfferVisible = false;
     let objectiveLayoutCache = null;
+    let orientationPromptBound = false;
+    let orientationPromptDismissed = false;
+    try {
+      orientationPromptDismissed = sessionStorage.getItem('neonyke:orientationPromptDismissed') === '1';
+    } catch {
+      orientationPromptDismissed = false;
+    }
+    const orientationPromptStates = new Set(['charselect', 'play', 'dying']);
     const dialogueRenderCache = { active: null, speaker: null, text: null, hint: null, portraitKey: null };
     const entityDialogueNodes = new Map();
     const hudRenderCache = {
@@ -847,8 +855,67 @@ export function createUIController(view) {
       });
     }
 
+    function shouldShowOrientationPrompt(state = activeState) {
+      if (orientationPromptDismissed) return false;
+      if (!orientationPromptStates.has(state || 'menu')) return false;
+      if (typeof window.matchMedia !== 'function') return false;
+      return window.matchMedia('(orientation: portrait) and (max-width: 940px) and (pointer: coarse)').matches;
+    }
+
+    function updateOrientationPrompt(state = activeState) {
+      const prompt = document.getElementById('orientationPrompt');
+      if (!prompt) return;
+      const show = shouldShowOrientationPrompt(state);
+      prompt.classList.toggle('hidden', !show);
+      prompt.setAttribute('aria-hidden', show ? 'false' : 'true');
+    }
+
+    async function tryLockLandscape() {
+      const status = document.getElementById('orientationPromptStatus');
+      if (status) status.textContent = 'Requesting landscape...';
+      try {
+        if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+          await document.documentElement.requestFullscreen();
+        }
+        if (screen.orientation?.lock) {
+          await screen.orientation.lock('landscape');
+          orientationPromptDismissed = true;
+          try { sessionStorage.setItem('neonyke:orientationPromptDismissed', '1'); } catch {}
+          updateOrientationPrompt();
+          return;
+        }
+        throw new Error('orientation lock unavailable');
+      } catch {
+        if (status) status.textContent = 'Your browser will not rotate automatically here. Rotate the device or continue anyway.';
+      }
+    }
+
+    function dismissOrientationPrompt() {
+      orientationPromptDismissed = true;
+      try { sessionStorage.setItem('neonyke:orientationPromptDismissed', '1'); } catch {}
+      updateOrientationPrompt();
+    }
+
+    function bindOrientationPrompt() {
+      if (orientationPromptBound) return;
+      orientationPromptBound = true;
+      const prompt = document.getElementById('orientationPrompt');
+      prompt?.addEventListener('click', event => {
+        const button = event.target instanceof Element ? event.target.closest('[data-orientation-action]') : null;
+        if (!button) return;
+        const action = button.getAttribute('data-orientation-action');
+        if (action === 'lock') void tryLockLandscape();
+        else if (action === 'continue') dismissOrientationPrompt();
+      });
+      window.addEventListener('resize', () => updateOrientationPrompt(), { passive: true });
+      window.addEventListener('orientationchange', () => setTimeout(() => updateOrientationPrompt(), 120), { passive: true });
+      updateOrientationPrompt();
+    }
+
     function fallbackState(state) {
       const show = state || 'menu';
+      if (document.body) document.body.dataset.neoState = show;
+      updateOrientationPrompt(show);
       function setVisible(element, visible, displayValue = '') {
         if (!element) return;
         element.classList.toggle('hidden', !visible);
@@ -909,6 +976,7 @@ export function createUIController(view) {
       const isBossRush = Neo.gameMode === 'boss_rush';
       if (view.timerFloorSlot) view.timerFloorSlot.style.display = isBossRush ? 'none' : '';
       if (view.timerBossSlot) view.timerBossSlot.style.display = isBossRush ? '' : 'none';
+      updateOrientationPrompt(show);
     }
 
     function blurIfFocusInside(panel) {
@@ -1763,6 +1831,7 @@ export function createUIController(view) {
       },
       bindMenuActions(handlers) {
         if (menuBound) return;
+        bindOrientationPrompt();
         ensureRunHistoryPanelCanOverlayGame();
         renderCustomRosterCards();
         const rosterTrack = document.getElementById('choose');
