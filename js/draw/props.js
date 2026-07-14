@@ -1555,6 +1555,7 @@
     princess_wand: { color: '#ff9de8', core: '#fff4ff', trail: '#ff58d2', shape: 'dart', length: 30 },
     sarges_hammer: { color: '#7da3ff', core: '#e7efff', trail: '#9bb8ff', shape: 'rock', length: 22 },
     death_ball: { color: '#3c82ff', core: '#cfe6ff', trail: '#5aa0ff', shape: 'energy_orb', length: 26 },
+    love_bomb: { color: '#ff6fa8', core: '#ffe3f0', trail: '#ff9cc9', shape: 'heart', length: 20 },
   };
   Object.values(ENEMY_PROJECTILE_VISUALS).forEach(Object.freeze);
   Object.values(PLAYER_PROJECTILE_VISUALS).forEach(Object.freeze);
@@ -1759,6 +1760,27 @@
       Neo.ctx.lineJoin = 'round';
       buildPath();
       Neo.ctx.stroke();
+    } else if (visual.shape === 'heart') {
+      // Love Bomb Laser: a pulsing pink heart that stays upright in flight
+      // (counter-rotated against the travel-angle rotate above) with a soft glow
+      // and a bright core, echoing energy_orb's pulse but heart-shaped.
+      Neo.ctx.rotate(-angle);
+      const t = Date.now() * 0.008;
+      const pulse = 1 + Math.sin(t * 2.4 + projectile.x * 0.01) * 0.08;
+      const hr = r * pulse;
+      Neo.ctx.shadowBlur = 18;
+      Neo.ctx.fillStyle = visual.color;
+      Neo.ctx.beginPath();
+      Neo.ctx.moveTo(0, hr * 0.32);
+      Neo.ctx.bezierCurveTo(hr * 1.1, -hr * 0.55, hr * 0.55, -hr * 1.15, 0, -hr * 0.32);
+      Neo.ctx.bezierCurveTo(-hr * 0.55, -hr * 1.15, -hr * 1.1, -hr * 0.55, 0, hr * 0.32);
+      Neo.ctx.closePath();
+      Neo.ctx.fill();
+      Neo.ctx.shadowBlur = 10;
+      Neo.ctx.fillStyle = visual.core;
+      Neo.ctx.beginPath();
+      Neo.ctx.arc(0, -hr * 0.1, hr * 0.28, 0, Math.PI * 2);
+      Neo.ctx.fill();
     } else if (visual.shape === 'energy_orb') {
       // Death Ball: a pulsing blue energy sphere with a bright core and a rotating
       // orbit ring. Big-radius friendly — everything scales off projectile.r.
@@ -2582,10 +2604,58 @@
     });
   }
 
+  // Wind-up bar + growing heart preview above the player while charging Love
+  // Bomb Laser. The heart also nods toward the cursor so the throw direction
+  // reads before release, since (unlike Nimrod Stomp) this move is aimed.
+  function drawLoveBombChargeBar() {
+    if (!Neo.loveBombCharging || !Neo.player) return;
+    const max = Neo.LOVE_BOMB_MAX_CHARGE || 5;
+    const ratio = Neo.clamp((Number(Neo.loveBombChargeTime || 0)) / max, 0, 1);
+    const ctx = Neo.ctx;
+    const angle = Neo.angleToMouse ? Neo.angleToMouse() : 0;
+    const previewR = 8 + ratio * 16;
+    const previewDist = (Neo.player.r || 14) + 18;
+    const hx = Neo.player.x + Math.cos(angle) * previewDist;
+    const hy = Neo.player.y + Math.sin(angle) * previewDist;
+    ctx.save();
+    ctx.translate(hx, hy);
+    ctx.globalAlpha = 0.55 + ratio * 0.35;
+    ctx.shadowColor = '#ff6fa8';
+    ctx.shadowBlur = 14;
+    ctx.fillStyle = '#ff6fa8';
+    ctx.beginPath();
+    ctx.moveTo(0, previewR * 0.32);
+    ctx.bezierCurveTo(previewR * 1.1, -previewR * 0.55, previewR * 0.55, -previewR * 1.15, 0, -previewR * 0.32);
+    ctx.bezierCurveTo(-previewR * 0.55, -previewR * 1.15, -previewR * 1.1, -previewR * 0.55, 0, previewR * 0.32);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+    // Bar.
+    const w = 138;
+    const rowH = 5;
+    const gap = 3;
+    const x = Neo.player.x - w / 2;
+    const y = Neo.player.y - (Neo.player.r || 14) - 44;
+    drawChargeRewardMeter({
+      ratio,
+      x,
+      y,
+      width: w,
+      rowHeight: rowH,
+      gap,
+      trackColor: 'rgba(40,10,26,0.82)',
+      fillColor: '#ff6fa8',
+      outlineColor: 'rgba(255,180,214,0.9)',
+      textColor: '#fff0f6',
+      shadowColor: '#ff6fa8',
+    });
+  }
+
   Neo.drawProjectiles = drawProjectiles;
   Neo.drawJusticeBlades = drawJusticeBlades;
   Neo.drawSkySwords = drawSkySwords;
   Neo.drawHealingZoneChargeBar = drawHealingZoneChargeBar;
   Neo.drawDeathBallChargeBar = drawDeathBallChargeBar;
   Neo.drawNimrodStompChargeBar = drawNimrodStompChargeBar;
+  Neo.drawLoveBombChargeBar = drawLoveBombChargeBar;
   Neo.drawDeadBodies = drawDeadBodies;

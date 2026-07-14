@@ -468,5 +468,7 @@
   "moves.lightning_cross.name": "Blitzkreuz",
   "moves.lightning_cross.desc": "Rufe zwei raumübergreifende Blitze durch dich herab, einen horizontalen und einen vertikalen, die alles beschädigen, was sie durchqueren, und dich um 1 % der maximalen HP pro getroffenem Feind heilen. 2 Ladungen.",
   "moves.princess_shield.name": "Schild der Prinzessin",
-  "moves.princess_shield.desc": "Erhöhe eine rosa Barriere im Wert von 40 % deiner maximalen HP. Wird automatisch gewirkt, sobald Ihre HP unter 15 % sinken, solange die Abklingzeit abgelaufen ist."
+  "moves.princess_shield.desc": "Erhöhe eine rosa Barriere im Wert von 40 % deiner maximalen HP. Wird automatisch gewirkt, sobald Ihre HP unter 15 % sinken, solange die Abklingzeit abgelaufen ist.",
+  "moves.love_bomb_laser.name": "Liebesbombe",
+  "moves.love_bomb_laser.desc": "Halten zum Aufladen, dann eine herzförmige Bombe in Richtung des Cursors abfeuern, die in einer pinken AOE explodiert. Getroffene Gegner haben eine Chance, \"funkeln\" zu lassen (garantierte kritische Treffer für ein paar Sekunden)."
 }

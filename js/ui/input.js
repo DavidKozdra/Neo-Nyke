@@ -54,6 +54,7 @@ export const MOVE_DEFS = {
 
     blood_beam: { key: 'blood_beam', slot: 'laser', name: 'Blood Beam', desc: 'Sustained piercing beam that causes bleed.' },
     love_beam: { key: 'love_beam', slot: 'laser', name: 'Love Beam', desc: 'A radiant beam that damages enemies and heals you on hit.', exclusiveCharacter: 'princess' },
+    love_bomb_laser: { key: 'love_bomb_laser', slot: 'laser', name: 'Love Bomb', desc: 'Hold to charge, then release a heart-shaped bomb toward the cursor that bursts in a pink AOE. Enemies caught in the blast have a chance to be Sparkled (guaranteed crits for a few seconds).', exclusiveCharacter: 'princess' },
     turtle_wave: { key: 'turtle_wave', slot: 'laser', name: 'Turtle Wave', desc: 'Giant beam. Drains 2 HP each active second.' },
     power_disks: { key: 'power_disks', slot: 'laser', name: 'Power Disks', desc: 'Burst of spinning disks.' },
     hammer_throw: { key: 'hammer_throw', slot: 'laser', name: 'Hammer Throw', desc: 'Hurl a heavy spinning hammer that flies out, then arcs back to you — striking foes both ways.', exclusiveCharacter: 'sarge' },
@@ -2000,7 +2001,8 @@ export const MOVE_BASE_STATS = {
     smite:            { damage: 28,  cooldown: 0.55, range: 110 },
     narwal_fight:     { damage: 36,  cooldown: 0.55, range: 126 },
     blood_beam:       { damage: 14,  cooldown: 3.00, duration: 1.2, critChance: 0 },
-    love_beam:        { damage: 16,  cooldown: 3.40, duration: 1.7, critChance: 0 },
+    love_beam:        { damage: 14,  cooldown: 3.40, duration: 1.7, critChance: 0 },
+    love_bomb_laser:  { damage: 34,  cooldown: 3.80, range: 420 },
     turtle_wave:      { damage: 55,  cooldown: 6.00, duration: 1.35 },
     power_disks:      { damage: 22,  cooldown: 1.90, range: 240 },
     blade_justice:    { damage: 60,  cooldown: 3.80, range: 80  },
@@ -2114,3 +2116,4 @@ export const MOVE_BASE_STATS = {
   Neo.isMouseActionHeld = isMouseActionHeld;
   Neo.formatMouseBindingLabel = formatMouseBindingLabel;
   Neo.getSlotKeyLabel = getSlotKeyLabel;
+ 

@@ -250,7 +250,7 @@
     mooggy_swipe:     { base: 44, charge: [1, 2.5] },
     // laser moves
     blood_beam:       { base: 10, mult: 'beamDamageMultiplier', tick: true },
-    love_beam:        { base: 18, mult: 'beamDamageMultiplier', tick: true },
+    love_beam:        { base: 14, mult: 'beamDamageMultiplier', tick: true },
     turtle_wave:      { base: 34, mult: 'beamDamageMultiplier', tick: true },
     power_disks:      { base: 20, hits: 8 },
     blade_justice:    { base: 22, mult: 'beamDamageMultiplier' },
@@ -843,6 +843,18 @@
     const attackSpeed = Neo.getAttackSpeedValue();
     const move = getEquippedMove('laser');
     const rechargeTime = Neo.getLaserCooldownDuration(move, attackSpeed);
+    // Love Bomb Laser is hold-to-charge like Death Ball/Nimrod Stomp: spend the
+    // charge up front (deferred timer), then updateLoveBombCharge grows the
+    // meter each frame and throws the bomb on release.
+    if (move === 'love_bomb_laser') {
+      if (Neo.loveBombCharging) return; // already winding up
+      if (!Neo.spendSkillCharge('laser', rechargeTime, { deferTimer: true })) return;
+      Neo.tutorialController?.signal?.('attack', { action: 'laser' });
+      Neo.loveBombCharging = true;
+      Neo.loveBombChargeTime = 0;
+      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 16, life: 0.5, text: 'CHARGING', c: '#ff6fa8' });
+      return;
+    }
     // Spend the laser charge and, on a successful fire, play the laser blast
     // one-shot. Gating on the spend result means held/sustained beams only
     // trigger the sound once at cast time, not every damage tick.
@@ -1026,7 +1038,7 @@
         : Neo.laserMode === 'turtle_wave'
           ? 34
           : loveBeamActive
-            ? 18
+            ? 14
             : wizardBeamActive
               ? 30
               : mooggyBeamActive
@@ -1109,7 +1121,7 @@
         });
       }
       if (loveBeamHits > 0) {
-        const heal = Neo.scalePlayerHealing(Math.min(8, loveBeamHits * 1.25));
+        const heal = Neo.scalePlayerHealing(Math.min(5, loveBeamHits * 0.8));
         const gained = Neo.applyPlayerHealing(heal);
         if (gained > 0) Neo.spawnHealPopup(Neo.player.x + Neo.rand(-6, 6), Neo.player.y - 22, gained, { color: '#ff9ed6' });
         Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 26, life: 0.22, text: 'LOVE', c: '#ff9ed6' });
@@ -1161,11 +1173,27 @@
   const TURTLE_POWERUP_CHARGE_SPEED_MULTIPLIER = 4;
   const NIMROD_STOMP_MAX_CHARGE = 5; // charge units required for a full-power stomp
   const NIMROD_STOMP_CHARGE_SPEED_MULTIPLIER = 4;
+  const LOVE_BOMB_MAX_CHARGE = 5;    // charge units required for a full-size Love Bomb
   // Hold-to-charge moves (Healing Zone, Death Ball, Turtle Power-Up, Nimrod Stomp)
   // charge faster with attack speed, but only take a fraction of the bonus — full
   // 1:1 scaling would make charging trivial for a heavily-stacked build. At 0.4,
   // 3 Attack Servo stacks (+24% attack speed) nets about +10% charge speed.
   const CHARGE_SPEED_ATTACK_SPEED_DAMPING = 0.4;
+  // Shared charge-up telegraph for every hold-to-charge move: motes spawn on a
+  // ring around the player and drift INWARD, intensifying (denser, brighter
+  // flashColor) as the charge ratio climbs toward 1. Originally Mooggy Swipe's
+  // effect only; now the common visual for all charging attacks.
+  function spawnChargeMotes(ratio, color, flashColor = color) {
+    if (ratio <= 0.15 || Math.random() >= 0.35 + ratio * 0.5) return;
+    const a = Math.random() * Math.PI * 2;
+    const rad = 18 + ratio * 16;
+    Neo.spawnParticle({
+      x: Neo.player.x + Math.cos(a) * rad, y: Neo.player.y + Math.sin(a) * rad,
+      life: 0.2 + ratio * 0.2, vx: -Math.cos(a) * 40, vy: -Math.sin(a) * 40,
+      c: ratio >= 0.99 ? flashColor : color,
+    });
+  }
+
   function getChargeSpeedAttackBonus() {
     const attackSpeed = Math.max(0.2, Number(Neo.getAttackSpeedValue?.() || 1));
     return 1 + (attackSpeed - 1) * CHARGE_SPEED_ATTACK_SPEED_DAMPING;
@@ -1583,6 +1611,74 @@
     return true;
   }
 
+  // Love Bomb Laser (Princess laser alt): hold to charge, release to lob a
+  // heart-shaped bomb toward the cursor. It travels for its computed flight
+  // time (see castLoveBombLaser's `life`) and detonates in a pink AOE burst on
+  // arrival, rather than exploding on first contact with an enemy mid-flight.
+  function castLoveBombLaser(chargeRatio = 0) {
+    const itemStats = Neo.getItemStats();
+    const charge = Neo.clamp(Number(chargeRatio) || 0, 0, 1);
+    const base = Neo.MOVE_BASE_STATS?.love_bomb_laser?.damage ?? 34;
+    const anvilBonus = Neo.getAnvilMoveBonus?.('love_bomb_laser', 'damage') || 0;
+    // Tap ~0.6x base, full charge ~2.2x base.
+    const damage = Math.max(1, Math.round((base + anvilBonus) * (0.6 + charge * 1.6) * (itemStats.damageMultiplier || 1)));
+    const aoeRadius = (48 + charge * 42) * (itemStats.aoeRadiusMultiplier || 1);
+    // Sparkle chance scales with charge: a light tap barely dazzles, a full
+    // charge reliably marks the whole blast for guaranteed crits.
+    const sparkleChance = 0.25 + charge * 0.55;
+    const range = Neo.MOVE_BASE_STATS?.love_bomb_laser?.range ?? 420;
+    const angle = Neo.angleToMouse();
+    const dx = Neo.mouse.worldX - Neo.player.x;
+    const dy = Neo.mouse.worldY - Neo.player.y;
+    const dist = Math.min(range, Math.hypot(dx, dy) || range);
+    const speed = (340 + charge * 120) * (itemStats.projectileSpeedMultiplier || 1);
+    Neo.spawnProjectile({
+      x: Neo.player.x + Math.cos(angle) * (Neo.player.r + 14),
+      y: Neo.player.y + Math.sin(angle) * (Neo.player.r + 14),
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      r: 10 + charge * 6,
+      life: Math.max(0.12, dist / speed),
+      enemy: false,
+      kind: 'love_bomb',
+      damage,
+      aoeRadius,
+      sparkleChance,
+      color: '#ff6fa8',
+    });
+    Neo.ringBurst(Neo.player.x, Neo.player.y, 20 + charge * 10, '#ff9cc9', 0.4);
+    Neo.playSfx?.('lazer_blast');
+    Neo.player.vx -= Math.cos(angle) * (30 + charge * 60);
+    Neo.player.vy -= Math.sin(angle) * (30 + charge * 60);
+  }
+
+  // Drives the Love Bomb Laser charge (mirrors updateDeathBallCharge): attack
+  // speed scales charge gain, release throws a bomb sized to the accumulated
+  // charge.
+  function updateLoveBombCharge(dt) {
+    if (!Neo.loveBombCharging) return;
+    if (!Neo.player || Neo.gameState !== 'play') {
+      Neo.loveBombCharging = false;
+      Neo.queueHeldSkillRecharge?.('laser', Neo.getLaserCooldownDuration('love_bomb_laser', Neo.getAttackSpeedValue()));
+      return;
+    }
+    const chargeSpeed = getChargeSpeedAttackBonus();
+    Neo.loveBombChargeTime = Math.min(
+      LOVE_BOMB_MAX_CHARGE,
+      Number(Neo.loveBombChargeTime || 0) + dt * chargeSpeed
+    );
+    const atMax = Neo.loveBombChargeTime >= LOVE_BOMB_MAX_CHARGE;
+    // Inward-converging motes telegraph the charge (same effect as Mooggy Swipe).
+    spawnChargeMotes(Neo.loveBombChargeTime / LOVE_BOMB_MAX_CHARGE, '#ff6fa8', '#ffd0e6');
+    if (!Neo.isMouseActionHeld?.('laser') || atMax) {
+      const ratio = Neo.loveBombChargeTime / LOVE_BOMB_MAX_CHARGE;
+      castLoveBombLaser(ratio);
+      Neo.queueHeldSkillRecharge?.('laser', Neo.getLaserCooldownDuration('love_bomb_laser', Neo.getAttackSpeedValue()));
+      Neo.loveBombCharging = false;
+      Neo.loveBombChargeTime = 0;
+    }
+  }
+
   function castNailShot() {
     const itemStats = Neo.getItemStats();
     const move = getEquippedMove('laser');
@@ -1934,12 +2030,8 @@
       Number(Neo.nimrodStompChargeTime || 0) + dt * chargeSpeed
     );
     const atMax = Neo.nimrodStompChargeTime >= NIMROD_STOMP_MAX_CHARGE;
-    // A growing gold ring sketched above the player so the charge reads.
-    if (Neo.nextRandom('fx') < 0.6) {
-      const ratio = Neo.nimrodStompChargeTime / NIMROD_STOMP_MAX_CHARGE;
-      const ring = 14 + ratio * 52;
-      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.22, ring, c: '#ffe67a' });
-    }
+    // Inward-converging motes telegraph the charge (same effect as Mooggy Swipe).
+    spawnChargeMotes(Neo.nimrodStompChargeTime / NIMROD_STOMP_MAX_CHARGE, '#ffe67a', '#ffd0e6');
     if (!Neo.dashHeld || atMax) {
       const ratio = Neo.nimrodStompChargeTime / NIMROD_STOMP_MAX_CHARGE;
       castNimrodStomp(Number(Neo.moveInputX || 0), Number(Neo.moveInputY || 0), ratio);
@@ -2623,12 +2715,8 @@
       Number(Neo.healingZoneChargeTime || 0) + dt * chargeSpeed
     );
     const atMax = Neo.healingZoneChargeTime >= HEALING_ZONE_MAX_CHARGE;
-    // Charge tier sparkle so the player can read the wind-up.
-    if (Neo.nextRandom('fx') < 0.6) {
-      const ratio = Neo.healingZoneChargeTime / HEALING_ZONE_MAX_CHARGE;
-      const ring = 18 + ratio * 48;
-      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.22, ring, c: '#47ff7d' });
-    }
+    // Inward-converging motes telegraph the charge (same effect as Mooggy Swipe).
+    spawnChargeMotes(Neo.healingZoneChargeTime / HEALING_ZONE_MAX_CHARGE, '#47ff7d', '#ffd0e6');
     // Release when the key is let go, or auto-release at full charge.
     if (!Neo.smashHeld || atMax) {
       const ratio = Neo.healingZoneChargeTime / HEALING_ZONE_MAX_CHARGE;
@@ -2697,12 +2785,12 @@
       Number(Neo.deathBallChargeTime || 0) + dt * chargeSpeed
     );
     const atMax = Neo.deathBallChargeTime >= DEATH_BALL_MAX_CHARGE;
-    // A growing blue orb sketched above the player so the charge reads.
-    if (Neo.nextRandom('fx') < 0.6) {
-      const ratio = Neo.deathBallChargeTime / DEATH_BALL_MAX_CHARGE;
-      const ring = 14 + ratio * 52;
-      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y, life: 0.22, ring, c: '#5aa0ff' });
-    }
+    // Inward-converging motes telegraph the charge (same effect as Mooggy Swipe).
+    spawnChargeMotes(
+      Neo.deathBallChargeTime / DEATH_BALL_MAX_CHARGE,
+      Neo.deathBallPowerUp ? '#7dffb0' : '#5aa0ff',
+      '#ffd0e6'
+    );
     if (!Neo.smashHeld || atMax) {
       const ratio = Neo.deathBallChargeTime / DEATH_BALL_MAX_CHARGE;
       // Turtle Power-Up throws no ball — it's a pure self-buff burst. Death Ball
@@ -5031,8 +5119,11 @@
   Neo.castDeathBall = castDeathBall;
   Neo.updateDeathBallCharge = updateDeathBallCharge;
   Neo.updateNimrodStompCharge = updateNimrodStompCharge;
+  Neo.updateLoveBombCharge = updateLoveBombCharge;
   Neo.NIMROD_STOMP_MAX_CHARGE = NIMROD_STOMP_MAX_CHARGE;
   Neo.DEATH_BALL_MAX_CHARGE = DEATH_BALL_MAX_CHARGE;
+  Neo.LOVE_BOMB_MAX_CHARGE = LOVE_BOMB_MAX_CHARGE;
+  Neo.spawnChargeMotes = spawnChargeMotes;
   Neo.TURTLE_POWERUP_CHARGE_SPEED_MULTIPLIER = TURTLE_POWERUP_CHARGE_SPEED_MULTIPLIER;
   Neo.castFireCircle = castFireCircle;
   Neo.castFloorLava = castFloorLava;

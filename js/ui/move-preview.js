@@ -125,6 +125,7 @@
       healingZoneCharging: false, healingZoneChargeTime: 0,
       deathBallCharging: false, deathBallChargeTime: 0, deathBallPowerUp: false,
       nimrodStompCharging: false, nimrodStompChargeTime: 0,
+      loveBombCharging: false, loveBombChargeTime: 0,
     };
     sim.smashHeld = false;
     sim.dashHeld = false;

@@ -468,5 +468,7 @@
   "moves.lightning_cross.name": "Lightning Cross",
   "moves.lightning_cross.desc": "Call down two room-spanning lightning bolts through yourself, one horizontal and one vertical, damaging everything they cross and healing you 1% max HP per enemy struck. 2 charges.",
   "moves.princess_shield.name": "Princess's Shield",
-  "moves.princess_shield.desc": "Raise a pink barrier worth 40% of your max HP. Auto-casts itself the moment your HP drops below 15%, as long as it is off cooldown."
+  "moves.princess_shield.desc": "Raise a pink barrier worth 40% of your max HP. Auto-casts itself the moment your HP drops below 15%, as long as it is off cooldown.",
+  "moves.love_bomb_laser.name": "Love Bomb",
+  "moves.love_bomb_laser.desc": "Hold to charge, then release a heart-shaped bomb toward the cursor that bursts in a pink AOE. Enemies caught in the blast have a chance to be Sparkled (guaranteed crits for a few seconds)."
 }

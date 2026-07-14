@@ -1816,10 +1816,12 @@ export function resumeGame() {
     // spent right before leaving 'play' without release) that would never recover.
     const smashChargingLive = !!(Neo.healingZoneCharging || Neo.deathBallCharging);
     const dashChargingLive = !!Neo.nimrodStompCharging;
+    const laserChargingLive = !!Neo.loveBombCharging;
     Neo.MOVE_SLOTS.forEach(slot => {
       const state = Neo.cooldowns[slot] || createCooldownEntry(slot);
       const liveHold = (slot === 'smash' && smashChargingLive && state.holding > 0)
-        || (slot === 'dash' && dashChargingLive && state.holding > 0);
+        || (slot === 'dash' && dashChargingLive && state.holding > 0)
+        || (slot === 'laser' && laserChargingLive && state.holding > 0);
       if (!liveHold && state.holding > 0) {
         // Drop the phantom hold and let the slot be topped up / recharged below.
         state.holding = 0;
@@ -2635,6 +2637,13 @@ export function resumeGame() {
       Neo.dashHeld = false;
       queueHeldSkillRecharge('dash', getDashCooldownDuration('nimrod_stomp', Neo.getAttackSpeedValue()));
     }
+    // Love Bomb Laser's hold-to-charge (laser slot) needs the same
+    // stranded-charge guard as the smash/dash charge moves above.
+    if (nextState !== 'play' && Neo.loveBombCharging) {
+      Neo.loveBombCharging = false;
+      Neo.loveBombChargeTime = 0;
+      queueHeldSkillRecharge('laser', getLaserCooldownDuration('love_bomb_laser', Neo.getAttackSpeedValue()));
+    }
     if (Neo.gameStateManager) Neo.gameStateManager.setState(nextState);
     else {
       Neo.gameState = nextState;
@@ -3378,6 +3387,8 @@ export function resumeGame() {
     Neo.nimrodStompCharging = false;
     Neo.nimrodStompChargeTime = 0;
     Neo.dashHeld = false;
+    Neo.loveBombCharging = false;
+    Neo.loveBombChargeTime = 0;
     Neo.chests = [];
     Neo.pickups = [];
     Neo.destructibles = [];
