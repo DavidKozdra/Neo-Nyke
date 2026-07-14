@@ -1070,7 +1070,7 @@ export const CHARACTER_DEFS = {
     name: 'Sarge',
     rarity: 'knight',
     damageMultiplier: 1.1,
-    hpMultiplier: 1.1,
+    hpMultiplier: 0.99,
     // Old-guard heavy: hammer smash up close, hammer throw at range. His god
     // item (Sarge's Hammer) rewards rapid double-kills with a homing hammer.
     skills: { melee: 'Hammer Smash', laser: 'Hammer Throw', smash: 'Ground Pound', dash: 'Combat Roll' },

@@ -205,6 +205,10 @@
     Neo.tutorialController = null;
     Neo.addNotification = NOOP;
     Neo.showMoveToast = NOOP;
+    // Real combat/status calls still run against the immortal dummy (that's
+    // the point — it's a live preview), so also gate achievement events;
+    // withSimWorld() deletes this key on restore.
+    Neo.isMovePreview = true;
   }
 
   function captureSimGlobals() {
