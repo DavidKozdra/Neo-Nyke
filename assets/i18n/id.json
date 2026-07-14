@@ -468,5 +468,7 @@
   "moves.lightning_cross.name": "Salib Petir",
   "moves.lightning_cross.desc": "Panggil dua petir yang melintasi ruangan ke arah Anda, satu horizontal dan satu vertikal, merusak semua yang dilintasinya dan menyembuhkan Anda 1% HP maksimal per musuh yang diserang. 2 biaya.",
   "moves.princess_shield.name": "Perisai Putri",
-  "moves.princess_shield.desc": "Naikkan penghalang merah muda senilai 40% dari HP maksimal Anda. Ditransmisikan secara otomatis saat HP Anda turun di bawah 15%, selama cooldownnya tidak aktif."
+  "moves.princess_shield.desc": "Naikkan penghalang merah muda senilai 40% dari HP maksimal Anda. Ditransmisikan secara otomatis saat HP Anda turun di bawah 15%, selama cooldownnya tidak aktif.",
+  "moves.love_bomb_laser.name": "Bom Cinta",
+  "moves.love_bomb_laser.desc": "Tahan untuk mengisi daya, lalu lepaskan bom berbentuk hati ke arah kursor yang meledak dalam AOE merah muda. Musuh yang terkena ledakan memiliki peluang untuk \"Berkilau\" (crit terjamin selama beberapa detik)."
 }

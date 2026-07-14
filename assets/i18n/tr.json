@@ -468,5 +468,7 @@
   "moves.lightning_cross.name": "Yıldırım Haçı",
   "moves.lightning_cross.desc": "Oda boyunca uzanan, biri yatay, diğeri dikey olmak üzere iki yıldırım oku göndererek geçtikleri her şeye hasar verir ve vurulan düşman başına maksimum HP'nizin %1'ini iyileştirir. 2 suçlama.",
   "moves.princess_shield.name": "Prensesin Kalkanı",
-  "moves.princess_shield.desc": "Maksimum HP'nizin %40'ı değerinde pembe bir bariyer yükseltin. Bekleme süresi dışında olduğu sürece, HP'niz %15'in altına düştüğü anda kendini otomatik olarak atar."
+  "moves.princess_shield.desc": "Maksimum HP'nizin %40'ı değerinde pembe bir bariyer yükseltin. Bekleme süresi dışında olduğu sürece, HP'niz %15'in altına düştüğü anda kendini otomatik olarak atar.",
+  "moves.love_bomb_laser.name": "Aşk Bombası",
+  "moves.love_bomb_laser.desc": "Şarj etmek için basılı tutun, ardından imleç yönünde pembe bir AOE içinde patlayan kalp şeklinde bir bomba fırlatın. Patlamaya yakalanan düşmanlerin \"Parıldama\" durumuna girme şansı vardır (birkaç saniye boyunca garantili kritik vuruşlar)."
 }

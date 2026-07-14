@@ -423,16 +423,9 @@ export function loop(timestamp) {
         if (meleeHeld) {
           Neo.player.mooggySwipeCharge = Math.min(MOOGGY_SWIPE_CHARGE_MAX, Number(Neo.player.mooggySwipeCharge || 0) + dt);
           const ratio = Neo.player.mooggySwipeCharge / MOOGGY_SWIPE_CHARGE_MAX;
-          // Telegraph: pulsing motes around Mooggy that intensify as she winds up.
-          if (ratio > 0.15 && Math.random() < 0.35 + ratio * 0.5) {
-            const a = Math.random() * Math.PI * 2;
-            const rad = 18 + ratio * 16;
-            Neo.spawnParticle({
-              x: Neo.player.x + Math.cos(a) * rad, y: Neo.player.y + Math.sin(a) * rad,
-              life: 0.2 + ratio * 0.2, vx: -Math.cos(a) * 40, vy: -Math.sin(a) * 40,
-              c: ratio >= 0.99 ? '#ffd0e6' : '#ff6090',
-            });
-          }
+          // Telegraph: inward-converging motes around Mooggy that intensify as
+          // she winds up (shared with every other charge-on-hold move).
+          Neo.spawnChargeMotes?.(ratio, '#ff6090', '#ffd0e6');
         } else if (Number(Neo.player.mooggySwipeCharge || 0) > 0) {
           const ratio = Math.min(1, Number(Neo.player.mooggySwipeCharge || 0) / MOOGGY_SWIPE_CHARGE_MAX);
           Neo.player.mooggySwipeCharge = 0;
@@ -462,13 +455,20 @@ export function loop(timestamp) {
         }
       }
       Neo._meleeWasHeld = meleeHeld;
+      // Love Bomb Laser charges like Death Ball/Nimrod Stomp: the press-edge
+      // below starts Neo.loveBombCharging (inside tryLaser's dispatch), and
+      // Neo.updateLoveBombCharge (polled further down, alongside the other
+      // held-charge updaters) drives the meter and fires on release. While
+      // charging, laserHeld must NOT re-invoke tryLaser every frame — treat it
+      // like an instant move so the press-edge gate below only fires it once.
+      const loveBombChargeActive = !!Neo.loveBombCharging;
       // Instant laser moves (e.g. Nail Shot) fire once per press instead of
       // auto-repeating every frame — otherwise holding the button drains the
       // whole charge pool in a few frames. Beam moves keep their held behavior.
       const laserPressEdge = laserHeld && !Neo._laserWasHeld;
-      const fireLaser = laserHeld && (laserPressEdge || !Neo.isInstantLaserMove?.());
+      const fireLaser = laserHeld && !loveBombChargeActive && (laserPressEdge || !Neo.isInstantLaserMove?.());
       if (!laserHeld && Neo.laserActive && !Neo.isInstantLaserMove?.()) Neo.endActiveLaser?.();
-      if (!overlayOpen && fireLaser) Neo.tryLaser();
+      if (!overlayOpen && !playerStunned && fireLaser) Neo.tryLaser();
       Neo._laserWasHeld = laserHeld;
     }
 
@@ -617,6 +617,7 @@ export function loop(timestamp) {
     if (Neo.gameState !== 'play') return;
     Neo.updateDeathBallCharge?.(dt);
     Neo.updateNimrodStompCharge?.(dt);
+    Neo.updateLoveBombCharge?.(dt);
     if (Neo.gameState !== 'play') return;
     sectionPerfStart = Neo.perfStart();
     Neo.updateWorldProps(dt);

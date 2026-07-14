@@ -468,5 +468,7 @@
   "moves.lightning_cross.name": "闪电十字",
   "moves.lightning_cross.desc": "召唤两道跨越整个房间的闪电穿过你自己，一根水平，一根垂直，对它们穿过的所有物体造成伤害，并为每个被击中的敌人治疗你 1% 的最大生命值。 2 收费。",
   "moves.princess_shield.name": "公主之盾",
-  "moves.princess_shield.desc": "升起一个价值最大生命值 40% 的粉色屏障。当你的 HP 低于 15% 时，只要它没有冷却，它就会自动施放。"
+  "moves.princess_shield.desc": "升起一个价值最大生命值 40% 的粉色屏障。当你的 HP 低于 15% 时，只要它没有冷却，它就会自动施放。",
+  "moves.love_bomb_laser.name": "爱心炸弹",
+  "moves.love_bomb_laser.desc": "按住蓄力，然后朝光标方向释放一枚心形炸弹，在粉色范围内（AOE）爆炸。被爆炸波及的敌人有几率被\"闪耀\"（几秒内必定暴击）。"
 }

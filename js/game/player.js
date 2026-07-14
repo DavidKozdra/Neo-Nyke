@@ -506,6 +506,7 @@ export const KIT_ALTERNATIVES = {
     laser: ['hammer_throw', 'lightning_cross'],
   },
   princess: {
+    laser: ['love_beam', 'love_bomb_laser'],
     dash: ['flying_unhitable', 'princess_shield'],
   },
 };

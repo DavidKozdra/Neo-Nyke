@@ -1069,8 +1069,10 @@ export const CHARACTER_DEFS = {
     key: 'sarge',
     name: 'Sarge',
     rarity: 'knight',
-    damageMultiplier: 1.1,
-    hpMultiplier: 0.99,
+    // Damage/HP pinned relative to Thorn Knight (damageMultiplier 1, implicit
+    // hpMultiplier 1): +5% damage, -10% HP.
+    damageMultiplier: 1.05,
+    hpMultiplier: 0.9,
     // Old-guard heavy: hammer smash up close, hammer throw at range. His god
     // item (Sarge's Hammer) rewards rapid double-kills with a homing hammer.
     skills: { melee: 'Hammer Smash', laser: 'Hammer Throw', smash: 'Ground Pound', dash: 'Combat Roll' },

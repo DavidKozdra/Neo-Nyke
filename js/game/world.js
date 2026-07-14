@@ -878,6 +878,28 @@
     });
   }
 
+  // Detonates a Love Bomb Laser (player AOE, not the enemy-blast path above):
+  // damages/knocks back every enemy in radius via blastRadius, then rolls a
+  // per-enemy chance to Sparkle them (mark for guaranteed crits), reusing the
+  // same critSparkle mechanic the Sparkle Charm item grants.
+  function detonateLoveBomb(projectile, x = projectile?.x, y = projectile?.y) {
+    if (!projectile || projectile.kind !== 'love_bomb' || !Number.isFinite(x) || !Number.isFinite(y)) return;
+    const radius = Math.max(1, Number(projectile.aoeRadius || 60));
+    const damage = Math.max(0, Number(projectile.damage || 0));
+    const sparkleChance = Neo.clamp(Number(projectile.sparkleChance || 0), 0, 1);
+    const color = projectile.color || '#ff6fa8';
+    blastRadius(x, y, radius, damage, color);
+    if (sparkleChance > 0) {
+      forEachEnemyNearCircle(x, y, radius, enemy => {
+        if (!enemy || enemy.dead) return;
+        if (Neo.dist(x, y, enemy.x, enemy.y) > radius + enemy.r) return;
+        if (Neo.nextRandom('encounter') >= sparkleChance) return;
+        enemy.critSparkle = Math.max(Number(enemy.critSparkle || 0), 4);
+        Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 14, life: 0.6, text: 'SPARKLED', c: '#ffe8a3' });
+      });
+    }
+  }
+
   function spawnAoeShockwave(x, y, radius, color = '#ff66cc', style = 'normal') {
     Neo.spawnParticle({
       x,
@@ -1107,6 +1129,13 @@
     p.subSpawn = props.subSpawn ? { ...props.subSpawn } : null;
     p.statusEffects = props.statusEffects ?? null;
     p.enemyBlast = props.enemyBlast ?? null;
+    // Love Bomb Laser (and any future arrival-detonate AOE bomb): flies through
+    // enemies untouched instead of hitting on first contact, then bursts for
+    // aoeRadius/damage and rolls sparkleChance per enemy caught in the blast
+    // (see detonateLoveBomb).
+    p.noDirectHit = !!props.noDirectHit;
+    p.aoeRadius = props.aoeRadius ?? 0;
+    p.sparkleChance = props.sparkleChance ?? 0;
     // Drain: enemy projectiles can heal their owner for `drainHeal` HP on hit.
     p.owner = props.owner ?? null;
     p.drainHeal = Number(props.drainHeal || 0);
@@ -1631,6 +1660,7 @@
           force: projectile.kind === 'fireball' ? 1.35 : 1,
         });
         if (projectile.kind === 'fireball') blastRadius(projectile.x, projectile.y, projectile.splash || 44, projectile.blockedSplashDamage || 16, '#ff8844');
+        if (projectile.kind === 'love_bomb') detonateLoveBomb(projectile, projectile.x, projectile.y);
         spawnProjectileImpact(projectile, projectile.x, projectile.y, { blocked: true });
         removeProjectileAt(index);
         continue;
@@ -1646,6 +1676,7 @@
           resolveBoomerangCatch(projectile);
         }
         detonateEnemyProjectileBlast(projectile, projectile.x, projectile.y);
+        if (projectile.kind === 'love_bomb') detonateLoveBomb(projectile, projectile.x, projectile.y);
         spawnProjectileImpact(projectile, projectile.x, projectile.y, { blocked: true });
         removeProjectileAt(index);
         continue;
@@ -1654,6 +1685,7 @@
       if (sweepBlockHit) {
         if (tryBounceProjectileAtSweepHit(projectile, sweepBlockHit)) continue;
         detonateEnemyProjectileBlast(projectile, sweepBlockHit.x, sweepBlockHit.y);
+        if (projectile.kind === 'love_bomb') detonateLoveBomb(projectile, sweepBlockHit.x, sweepBlockHit.y);
         spawnProjectileImpact(projectile, sweepBlockHit.x, sweepBlockHit.y, { blocked: true });
         removeProjectileAt(index);
         continue;
@@ -1661,6 +1693,7 @@
       if (Neo.isBlocked(projectile.x, projectile.y, projectile.r)) {
         if (tryBounceProjectile(projectile, prevX, prevY)) continue;
         detonateEnemyProjectileBlast(projectile, projectile.x, projectile.y);
+        if (projectile.kind === 'love_bomb') detonateLoveBomb(projectile, projectile.x, projectile.y);
         spawnProjectileImpact(projectile, projectile.x, projectile.y, { blocked: true });
         removeProjectileAt(index);
         continue;
@@ -1684,6 +1717,16 @@
           const dy = projectile.y - enemy.y;
           if (dx * dx + dy * dy <= hitRadius * hitRadius) target = enemy;
         });
+        if (target && projectile.kind === 'love_bomb') {
+          // Love Bomb Laser detonates immediately on first enemy contact rather
+          // than piercing through to its arrival point — the AOE + sparkle burst
+          // (detonateLoveBomb) already covers the target, so it doesn't also
+          // need a direct hitEnemy call here.
+          detonateLoveBomb(projectile, projectile.x, projectile.y);
+          spawnProjectileImpact(projectile, projectile.x, projectile.y);
+          removeProjectileAt(index);
+          continue;
+        }
         if (target) {
           const hitAngle = Math.atan2(projectile.vy, projectile.vx);
           const hitOptions = { ...(projectile.hitOptions || {}) };

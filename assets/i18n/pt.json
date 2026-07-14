@@ -468,5 +468,7 @@
   "moves.lightning_cross.name": "Cruz Relâmpago",
   "moves.lightning_cross.desc": "Invoque dois raios que atravessam a sala através de você, um horizontal e um vertical, danificando tudo que eles cruzam e curando 1% do HP máximo por inimigo atingido. 2 cobranças.",
   "moves.princess_shield.name": "Escudo da Princesa",
-  "moves.princess_shield.desc": "Levante uma barreira rosa que vale 40% do seu HP máximo. Lança-se automaticamente no momento em que seu HP cai abaixo de 15%, desde que esteja fora do tempo de recarga."
+  "moves.princess_shield.desc": "Levante uma barreira rosa que vale 40% do seu HP máximo. Lança-se automaticamente no momento em que seu HP cai abaixo de 15%, desde que esteja fora do tempo de recarga.",
+  "moves.love_bomb_laser.name": "Bomba de Amor",
+  "moves.love_bomb_laser.desc": "Segure para carregar, depois solte uma bomba em forma de coração em direção ao cursor que explode em uma AOE rosa. Inimigos pegos na explosão têm uma chance de ficar \"Brilhantes\" (críticos garantidos por alguns segundos)."
 }

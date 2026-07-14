@@ -468,5 +468,7 @@
   "moves.lightning_cross.name": "ライトニングクロス",
   "moves.lightning_cross.desc": "部屋全体に広がる 2 つの稲妻を自分自身に呼び起こし、1 つは水平方向、もう 1 つは垂直方向に、それが通過するすべてのものにダメージを与え、攻撃を受けた敵ごとに最大 HP 1% を回復します。 2回分の料金。",
   "moves.princess_shield.name": "プリンセスの盾",
-  "moves.princess_shield.desc": "最大HPの40%相当のピンクのバリアを張ります。クールダウンが終了している限り、HP が 15% を下回ると自動的に発動します。"
+  "moves.princess_shield.desc": "最大HPの40%相当のピンクのバリアを張ります。クールダウンが終了している限り、HP が 15% を下回ると自動的に発動します。",
+  "moves.love_bomb_laser.name": "ラブボム",
+  "moves.love_bomb_laser.desc": "長押しでチャージし、離すとカーソル方向にハート型の爆弾を放ち、ピンクのAOEで爆発します。爆発に巻き込まれた敵は「スパークル」状態になることがあります（数秒間クリティカル確定）。"
 }

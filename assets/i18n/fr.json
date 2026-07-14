@@ -468,5 +468,7 @@
   "moves.lightning_cross.name": "Croix de foudre",
   "moves.lightning_cross.desc": "Invoquez deux éclairs traversant la pièce à travers vous-même, un horizontal et un vertical, endommageant tout ce qu'ils traversent et vous soignant de 1 % de PV maximum par ennemi touché. 2 accusations.",
   "moves.princess_shield.name": "Bouclier de princesse",
-  "moves.princess_shield.desc": "Élevez une barrière rose valant 40% de vos HP max. Se lance automatiquement dès que vos HP descendent en dessous de 15 %, tant qu'ils ne sont pas en temps de recharge."
+  "moves.princess_shield.desc": "Élevez une barrière rose valant 40% de vos HP max. Se lance automatiquement dès que vos HP descendent en dessous de 15 %, tant qu'ils ne sont pas en temps de recharge.",
+  "moves.love_bomb_laser.name": "Bombe d'Amour",
+  "moves.love_bomb_laser.desc": "Maintenez pour charger, puis relâchez une bombe en forme de cœur vers le curseur qui explose dans un AOE rose. Les ennemis pris dans l'explosion ont une chance d'être \"Scintillants\" (coups critiques garantis pendant quelques secondes)."
 }
