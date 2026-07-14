@@ -15,8 +15,13 @@ describe('health bar presentation', () => {
 
     expect(source).toContain('function drawCombatBar');
     expect(source).toContain('function getCombatHealthColor');
-    expect(source).toContain('drawCombatBar(-20, -enemy.r - 14, 40, 6, hpPct, getCombatHealthColor(enemy)');
+    expect(source).toContain('function drawEnemyNameplate(enemy, hpPct)');
+    expect(source).toContain('drawEnemyNameplate(enemy, hpPct);');
+    expect(source).toContain('const text = `${label}  ${level}  ${hpText}`;');
+    expect(source).toContain('const plateW = Math.max(46, textWidth + 10);');
+    expect(source).toContain('drawCombatBar(barX, barY, barW, 5, hpPct, getCombatHealthColor(enemy)');
     expect(source).toContain("if (entity?.type === 'rival') return entity.rivalData?.color");
+    expect(source).not.toContain('fitCanvasText');
   });
 
   test('CSS defines framed HP tracks and critical state styling', () => {

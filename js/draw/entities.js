@@ -444,6 +444,61 @@
     ctx.restore();
   }
 
+  function drawEnemyNameplate(enemy, hpPct) {
+    const label = (enemy.type === 'rival' && enemy.rivalData)
+      ? enemy.rivalData.name
+      : enemy.bountyTarget
+        ? `${enemy.bountyName || 'Marked Target'} ${enemy.bountyEpithet || ''}`
+        : Neo.getEliteEnemyLabel(enemy);
+    // Enemy level = total floors entered this run, not the per-loop floor.
+    const level = `Lv.${Neo.floorsEntered ?? Neo.floor}`;
+    const hpText = `${Math.ceil(enemy.hp)}/${Math.ceil(enemy.max)}`;
+    const accent = enemy.bountyTarget ? '#ffb070' : enemy.elite ? '#f6cf6a' : Neo.isBossType(enemy.type) ? '#f2e8d7'
+      : enemy.type === 'rival' ? (enemy.rivalData?.color || '#d96a83') : '#b8cfe0';
+    const dangerous = Neo.isEnemyDangerous?.(enemy);
+
+    Neo.ctx.font = '8px system-ui';
+    Neo.ctx.textAlign = 'left';
+    Neo.ctx.textBaseline = 'middle';
+    const text = `${label}  ${level}  ${hpText}`;
+    const textWidth = Math.ceil(Neo.ctx.measureText(text).width);
+    const plateW = Math.max(46, textWidth + 10);
+    const plateH = 12;
+    const plateX = -Math.round(plateW / 2);
+    const plateY = -enemy.r - 23;
+    const barW = Math.max(36, plateW - 8);
+    const barX = -Math.round(barW / 2);
+    const barY = plateY + plateH + 2;
+
+    Neo.ctx.shadowBlur = 0;
+    Neo.ctx.fillStyle = dangerous ? 'rgba(42, 6, 10, 0.78)' : 'rgba(5, 9, 15, 0.78)';
+    Neo.ctx.fillRect(plateX, plateY, plateW, plateH);
+    Neo.ctx.strokeStyle = dangerous ? '#ff4f5f' : 'rgba(220, 232, 246, 0.34)';
+    Neo.ctx.lineWidth = 1;
+    Neo.ctx.strokeRect(plateX + 0.5, plateY + 0.5, plateW - 1, plateH - 1);
+    Neo.ctx.fillStyle = accent;
+    Neo.ctx.fillRect(plateX, plateY, 2, plateH);
+
+    Neo.ctx.fillStyle = '#e5edf8';
+    Neo.ctx.shadowColor = '#000';
+    Neo.ctx.shadowBlur = 3;
+    Neo.ctx.fillText(text, plateX + 6, plateY + plateH / 2 + 0.5);
+
+    drawCombatBar(barX, barY, barW, 5, hpPct, getCombatHealthColor(enemy), {
+      borderColor: enemy.type === 'rival'
+        ? (enemy.rivalData?.color || 'rgba(220, 232, 246, 0.42)')
+        : undefined,
+    });
+
+    if ((enemy.barrier || 0) > 0) {
+      const barrierPct = Neo.clamp(enemy.barrier / Math.max(1, enemy.max * 0.22), 0, 1);
+      drawCombatBar(barX, barY - 6, barW, 4, barrierPct, '#4fcfff', {
+        endColor: '#c8fbff',
+        borderColor: 'rgba(126, 214, 255, 0.54)',
+      });
+    }
+  }
+
   function drawSpriteFrame(spriteKey, x, y, size, options = {}) {
     const atlas = Neo.SPRITE_ATLAS;
     if (!atlas?.frames || !atlas.canvas) return;
@@ -1130,59 +1185,7 @@
       Neo.ctx.save();
       Neo.ctx.translate(enemy.x, drawY);
       const hpPct = Neo.clamp(enemy.hp / enemy.max, 0, 1);
-
-      // Name tag + level
-      const _enemyLabel = (enemy.type === 'rival' && enemy.rivalData)
-        ? enemy.rivalData.name
-        : enemy.bountyTarget
-          ? `${enemy.bountyName || 'Marked Target'} ${enemy.bountyEpithet || ''}`
-        : Neo.getEliteEnemyLabel(enemy);
-      // Enemy level = total floors entered this run (climbs across loops), not the
-      // per-loop `floor` which resets each loop. Matches enemy scaling.
-      const _levelStr = `Lv.${Neo.floorsEntered ?? Neo.floor}`;
-      Neo.ctx.font = '9px system-ui';
-      Neo.ctx.textAlign = 'center';
-      const _nameText = `${_enemyLabel}  ${_levelStr}`;
-      const _nameY = -enemy.r - 19;
-      // Red-bordered tag warns that a single hit can drop the player from full HP.
-      if (Neo.isEnemyDangerous?.(enemy)) {
-        const _tagW = Neo.ctx.measureText(_nameText).width + 8;
-        const _tagH = 12;
-        Neo.ctx.shadowBlur = 0;
-        Neo.ctx.fillStyle = 'rgba(40, 0, 0, 0.55)';
-        Neo.ctx.fillRect(-_tagW / 2, _nameY - _tagH + 3, _tagW, _tagH);
-        Neo.ctx.strokeStyle = '#ff3b3b';
-        Neo.ctx.lineWidth = 1;
-        Neo.ctx.strokeRect(-_tagW / 2, _nameY - _tagH + 3, _tagW, _tagH);
-      }
-      Neo.ctx.shadowColor = '#000';
-      Neo.ctx.shadowBlur = 4;
-      Neo.ctx.fillStyle = enemy.bountyTarget ? '#ffb070' : enemy.elite ? '#f6cf6a' : Neo.isBossType(enemy.type) ? '#f2e8d7'
-        : (enemy.type === 'rival' && enemy.rivalData) ? enemy.rivalData.color : '#b8cfe0';
-      Neo.ctx.fillText(_nameText, 0, _nameY);
-
-      // HP bar
-      drawCombatBar(-20, -enemy.r - 14, 40, 6, hpPct, getCombatHealthColor(enemy), {
-        borderColor: enemy.type === 'rival'
-          ? (enemy.rivalData?.color || 'rgba(220, 232, 246, 0.42)')
-          : undefined,
-      });
-
-      // HP current / max text
-      Neo.ctx.font = '8px system-ui';
-      Neo.ctx.textAlign = 'center';
-      Neo.ctx.fillStyle = '#dce7f2';
-      Neo.ctx.shadowColor = '#000';
-      Neo.ctx.shadowBlur = 3;
-      Neo.ctx.fillText(`${Math.ceil(enemy.hp)} / ${enemy.max}`, 0, -enemy.r - 5);
-
-      if ((enemy.barrier || 0) > 0) {
-        const barrierPct = Neo.clamp(enemy.barrier / Math.max(1, enemy.max * 0.22), 0, 1);
-        drawCombatBar(-20, -enemy.r - 21, 40, 5, barrierPct, '#4fcfff', {
-          endColor: '#c8fbff',
-          borderColor: 'rgba(126, 214, 255, 0.54)',
-        });
-      }
+      drawEnemyNameplate(enemy, hpPct);
       if (enemy.type === 'boss_spawner') {
         Neo.ctx.fillStyle = '#ffb07b';
         Neo.ctx.font = 'bold 10px system-ui';
