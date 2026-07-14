@@ -18,7 +18,7 @@ const { chromium } = require('playwright');
   const result = await page.evaluate(() => {
     const p = window.Neo.player;
     const enemy = window.Neo.spawnEnemy('hunter', p.x + 60, p.y);
-    enemy.hp = 1000; enemy.maxHp = 1000; enemy.speed = 0; enemy.vx = 0; enemy.vy = 0; enemy.frozen = true;
+    enemy.hp = 1000; enemy.maxHp = 1000; enemy.speed = 0; enemy.vx = 0; enemy.vy = 0;
     window.Neo.mouse.worldX = enemy.x;
     window.Neo.mouse.worldY = enemy.y;
     p.hp = Math.max(1, p.maxHp - 100);
@@ -32,10 +32,18 @@ const { chromium } = require('playwright');
     const enemyHpBefore = enemy.hp;
     const frameLog = [];
     for (let i = 0; i < 60; i += 1) {
-      window.Neo.mouse.right = true; // keep held every frame, like a real player
+      window.Neo.mouse.right = true;
       window.Neo.update(dt);
-      if (i < 10 || i % 10 === 0) {
-        frameLog.push({ i, laserActive: window.Neo.laserActive, laserTick: Number(window.Neo.laserTick).toFixed(3), enemyHp: enemy.hp, enemyXY: { x: Math.round(enemy.x), y: Math.round(enemy.y) } });
+      if (i < 15) {
+        frameLog.push({
+          i,
+          laserActive: window.Neo.laserActive,
+          laserTick: Number(window.Neo.laserTick).toFixed(3),
+          enemyHp: enemy.hp,
+          enemyInv: Number(enemy.inv || 0).toFixed(3),
+          enemyDead: !!enemy.dead,
+          enemyXY: { x: Math.round(enemy.x), y: Math.round(enemy.y) },
+        });
       }
     }
 
