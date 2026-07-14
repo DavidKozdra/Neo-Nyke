@@ -228,6 +228,9 @@
 }
 
 .touch-ham-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   padding: 10px 18px;
   border-radius: 8px;
   border: 1px solid rgba(140, 180, 255, 0.25);
@@ -244,6 +247,32 @@
   backdrop-filter: blur(8px);
   box-shadow: 0 4px 16px rgba(0,0,0,0.4);
   white-space: nowrap;
+}
+
+.touch-ham-icon {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  background-image: url('../assets/sprites/ui/mobile-menu.png');
+  background-repeat: no-repeat;
+  background-size: 72px 24px;
+  image-rendering: pixelated;
+}
+
+.touch-ham-icon--pause {
+  background-position: 0 0;
+}
+
+.touch-ham-icon--inventory {
+  background-position: -24px 0;
+}
+
+.touch-ham-icon--warp {
+  background-position: -48px 0;
+}
+
+.touch-ham-label {
+  min-width: 0;
 }
 
 /* ── Responsive tweaks ─────────────────────────────────────────────────────── */
