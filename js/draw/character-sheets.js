@@ -57,6 +57,17 @@ const CHARACTER_SHEET_DEFS = {
     armFrame: 1,
     portraitFrame: 0,
   },
+  mooggy: {
+    src: 'assets/sprites/chars/Mooggy.png',
+    frameWidth: 24,
+    frameHeight: 24,
+    frameCount: 11,
+    renderScale: 1.5,
+    idleFrames: [3, 4, 5, 6],
+    walkFrames: [7, 8, 9, 10],
+    armFrame: 2,
+    portraitFrame: 0,
+  },
 };
 
 // Which raw frame indices play the idle cycle, and which (ordered) indices
