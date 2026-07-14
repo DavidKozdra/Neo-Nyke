@@ -2,11 +2,11 @@
   const STORE_KEY = 'neonyke:settings';
   const REPLAY_TUTORIAL_KEY = 'neonyke:replayTutorialNextRun';
 
-  const DEFAULT_EQUIPMENT_SLOT_KEYS = ['f', 'g', 'h', 'j', 'k', 'l', 'u', 'i'];
+  const DEFAULT_EQUIPMENT_SLOT_KEYS = ['1', '2', '3', '4', '5', '6', '7', '8'];
   const DEFAULT_BINDINGS = {
     up:'w', down:'s', left:'a', right:'d', dash:'shift', inventory:'i', interact:'e', ascend:' ', smash:'r', slash:'lmb', laser:'rmb',
     activateAll:' ',
-    tool1:'f', tool2:'g', tool3:'h', tool4:'j', tool5:'k', tool6:'l', tool7:'u', tool8:'i',
+    tool1:'1', tool2:'2', tool3:'3', tool4:'4', tool5:'5', tool6:'6', tool7:'7', tool8:'8',
   };
   const DEFAULT_TOUCH_BINDINGS = { touchA:'slash', touchB:'laser', touchY:'smash', touchX:'ascend', touchDash:'dash' };
   const DEFAULT_GAMEPAD_BINDINGS = {
@@ -1548,7 +1548,7 @@
     // Tool slots — show the live run's equipped tools when present, else placeholders.
     const equipHost = frame.querySelector('[data-preview-equipment]');
     if (equipHost) {
-      const keys = ['F', 'G', 'H', 'J'];
+      const keys = getEquipmentSlotKeys();
       const slots = Array.isArray(runPlayer?.equipmentSlots) ? runPlayer.equipmentSlots : [];
       equipHost.querySelectorAll('.equip-slot').forEach((slot, idx) => {
         const itemKey = slots[idx] || '';

@@ -1014,14 +1014,14 @@
     Neo.refreshMenuState();
   }
 
-  // ── Equipment slots (F G H J K L U I) ─────────────────────────────────────
+  // ── Equipment slots (1–8) ─────────────────────────────────────────────────
   // Items that can be activated by pressing a hotkey. Each defines:
   //   key       — item key in ITEM_DEFS
   //   shortName — text shown under icon in slot
   //   activate  — function called when the slot's hotkey is pressed
   //   getState  — returns 'ready' | 'blocked' | 'charging' | 'empty' for slot styling
   //   getStatusText — short status text for tooltip / aria-label
-  const DEFAULT_EQUIPMENT_SLOT_KEYS = ['F', 'G', 'H', 'J', 'K', 'L', 'U', 'I'];
+  const DEFAULT_EQUIPMENT_SLOT_KEYS = ['1', '2', '3', '4', '5', '6', '7', '8'];
   // Live tool-slot keys, honoring custom bindings from settings. Falls back to defaults.
   function getEquipmentSlotKeys() {
     const custom = window.NeoSettings?.getEquipmentSlotKeys?.();
@@ -1550,7 +1550,7 @@
   // Reorder a tool within the equipment slot array (the toolbar editor uses this).
   // fromIdx/toIdx are positions in Neo.player.equipmentSlots; the item at fromIdx
   // is removed and re-inserted at toIdx, shifting the others — so its hotkey
-  // (F G H J K L U I, by index) changes to match its new position.
+  // (1–8, by index) changes to match its new position.
   function reorderEquipmentSlot(fromIdx, toIdx) {
     if (!Neo.player) return false;
     syncEquipmentSlotsFromInventory();
@@ -1621,6 +1621,12 @@
     root.setAttribute('aria-hidden', showRow ? 'false' : 'true');
     nodes.forEach((node, idx) => {
       const letter = getEquipmentSlotKeys()[idx];
+      // The toolbar markup starts with the default keys, but tool bindings can
+      // be changed at runtime. Keep the visible badge and click handler's key
+      // in sync with the live binding for this equipment slot.
+      const keySpan = node.querySelector('.equip-slot__key');
+      if (keySpan) keySpan.textContent = letter;
+      node.dataset.equipKey = letter;
       const itemKey = slots[idx];
       const def = itemKey ? ACTIVATABLE_ITEMS[itemKey] : null;
       const itemDef = itemKey ? Neo.resolveItemIconDef?.(itemKey) : null;

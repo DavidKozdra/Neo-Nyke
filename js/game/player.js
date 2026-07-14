@@ -2174,7 +2174,7 @@ export function consumeCharge(chargeType) {
         Neo.player.escapeReady = true;
         Neo.player.escapeChargeKills = 0;
         const slotIdx = Neo.player?.equipmentSlots?.indexOf?.('charged_adapter') ?? -1;
-        const slotLetter = slotIdx >= 0 ? (Neo.EQUIPMENT_SLOT_KEYS?.[slotIdx] || 'F') : 'F';
+        const slotLetter = slotIdx >= 0 ? (Neo.EQUIPMENT_SLOT_KEYS?.[slotIdx] || '1') : '1';
         const warpHint = Neo.formatControlLabel(slotLetter.toLowerCase(), slotLetter.toLowerCase());
         Neo.pushReadyNotification('charged_adapter', { note: `Press ${warpHint} to warp` });
       }

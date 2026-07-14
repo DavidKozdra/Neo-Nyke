@@ -2668,7 +2668,7 @@ export function renderInventoryPanel() {
               </div>
             </div>`;
           })
-          .join('') || '<div class="inv-card"><span class="inv-card__eyebrow">Empty</span><h4>No tools yet</h4><p>Tools are activatable relics like Pew Pew Box or Zap to the Extreme. Their position here sets which hotkey (F, G, H…) fires them.</p></div>';
+          .join('') || '<div class="inv-card"><span class="inv-card__eyebrow">Empty</span><h4>No tools yet</h4><p>Tools are activatable relics like Pew Pew Box or Zap to the Extreme. Their position here sets which hotkey (1–8) fires them.</p></div>';
         Neo.drawItemIconCanvases?.(Neo.ui.invToolsList, 'data-item-icon');
       }
     } else if (Neo.activeInvTab === 'weapons') {
