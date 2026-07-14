@@ -237,21 +237,17 @@
     const hudScale = Number.isFinite(ownScale) ? Neo.clamp(ownScale, 0.5, 2) : 1.25;
     const minimapOffsetX = Number.isFinite(Number(minimapEntry?.x)) ? Number(minimapEntry.x) : 0;
     const minimapOffsetY = Number.isFinite(Number(minimapEntry?.y)) ? Number(minimapEntry.y) : 0;
-    const baseSize = hasGlasses ? 34 : 17;
-    const baseGap = hasGlasses ? 3 : 2;
+    const baseSize = 17;
+    const baseGap = 2;
     const baseMapWidth = gridCols * baseSize + (gridCols - 1) * baseGap;
     const baseMapHeight = gridRows * baseSize + (gridRows - 1) * baseGap;
-    const targetViewportWidth = hasGlasses
-      ? (compact ? Math.min(224, canvasRect.width * 0.45) : Math.min(280, canvasRect.width * 0.35))
-      : (compact ? Math.min(112, canvasRect.width * 0.25) : Math.min(146, canvasRect.width * 0.2));
-    const targetViewportHeight = hasGlasses
-      ? (compact ? Math.min(224, canvasRect.height * 0.45) : Math.min(280, canvasRect.height * 0.4))
-      : (compact ? Math.min(112, canvasRect.height * 0.25) : Math.min(146, canvasRect.height * 0.23));
+    const targetViewportWidth = compact ? Math.min(112, canvasRect.width * 0.25) : Math.min(146, canvasRect.width * 0.2);
+    const targetViewportHeight = compact ? Math.min(112, canvasRect.height * 0.25) : Math.min(146, canvasRect.height * 0.23);
     const baseViewportWidth = baseMapWidth * scaleX;
     const baseViewportHeight = baseMapHeight * scaleY;
     const responsiveScale = Neo.clamp(
       Math.min(1, targetViewportWidth / Math.max(1, baseViewportWidth), targetViewportHeight / Math.max(1, baseViewportHeight)),
-      hasGlasses ? 0.5 : 0.62,
+      0.62,
       1,
     );
 
@@ -271,13 +267,13 @@
     // Keep the map at its intended size: floor the scale at the per-mode minimum
     // (matching responsiveScale's floor) so the viewport cap can't shrink it to a
     // dot, but never demand more than the visible viewport actually allows.
-    const minScale = Math.min(hasGlasses ? 0.5 : 0.62, Math.max(0.25, maxVisibleScale));
+    const minScale = Math.min(0.62, Math.max(0.25, maxVisibleScale));
     const minimapScale = Neo.clamp(
       Math.min(responsiveScale * hudScale, maxVisibleScale),
       minScale,
       2,
     );
-    const size = Math.max(hasGlasses ? 7 : 8, Math.round(baseSize * minimapScale));
+    const size = Math.max(8, Math.round(baseSize * minimapScale));
     const gap = Math.max(1, Math.round(baseGap * minimapScale));
     const mapWidth = gridCols * size + (gridCols - 1) * gap;
     const mapHeight = gridRows * size + (gridRows - 1) * gap;

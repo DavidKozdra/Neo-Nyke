@@ -244,10 +244,17 @@
 
   const hamMenu = mkEl('div', 'touch-ham-menu');
 
-  function mkHamBtn(label, fn) {
+  function mkHamBtn(label, icon, fn) {
     const b = mkEl('button', 'touch-ham-btn');
     b.setAttribute('type', 'button');
-    b.textContent = label;
+    if (icon) {
+      const iconEl = mkEl('span', `touch-ham-icon touch-ham-icon--${icon}`);
+      iconEl.setAttribute('aria-hidden', 'true');
+      b.appendChild(iconEl);
+    }
+    const labelEl = mkEl('span', 'touch-ham-label');
+    labelEl.textContent = label;
+    b.appendChild(labelEl);
     b.addEventListener('touchstart', e => {
       e.preventDefault();
       if (!isGameplayTouchAllowed()) return;
@@ -265,10 +272,10 @@
     return b;
   }
 
-  hamMenu.appendChild(mkHamBtn('⏸ PAUSE',     () => { if (window._neoGame?.pauseGame)             window._neoGame.pauseGame();             }));
-  hamMenu.appendChild(mkHamBtn('🎒 INVENTORY', () => { if (window._neoGame?.toggleInventoryPanel)   window._neoGame.toggleInventoryPanel();   }));
+  hamMenu.appendChild(mkHamBtn('PAUSE', 'pause', () => { if (window._neoGame?.pauseGame)             window._neoGame.pauseGame();             }));
+  hamMenu.appendChild(mkHamBtn('INVENTORY', 'inventory', () => { if (window._neoGame?.toggleInventoryPanel)   window._neoGame.toggleInventoryPanel();   }));
 
-  const warpHamBtn = mkHamBtn('⚡ WARP', () => { if (window.Neo?.tryChargedLadderWarp) window.Neo.tryChargedLadderWarp(); });
+  const warpHamBtn = mkHamBtn('WARP', 'warp', () => { if (window.Neo?.tryChargedLadderWarp) window.Neo.tryChargedLadderWarp(); });
   warpHamBtn.id = 'hamWarpBtn';
   warpHamBtn.classList.add('hidden');
   hamMenu.appendChild(warpHamBtn);
@@ -277,17 +284,22 @@
 
   let hamOpen = false;
   function closeHamMenu() { hamOpen = false; hamMenu.classList.remove('open'); }
+  function syncWarpHamButton() {
+    const hasAdapter = window.Neo?.getItemCount?.('charged_adapter') > 0;
+    warpHamBtn.classList.toggle('hidden', !hasAdapter);
+    const label = warpHamBtn.querySelector('.touch-ham-label');
+    if (label) {
+      const ready = window.Neo?.player?.escapeReady;
+      label.textContent = ready ? 'WARP (READY)' : 'WARP (CHARGING)';
+    }
+    return hasAdapter;
+  }
 
   hamburger.addEventListener('touchstart', e => {
     e.preventDefault();
     if (!isGameplayTouchAllowed()) return;
     // Update warp button visibility just before opening
-    const hasAdapter = window.Neo?.getItemCount?.('charged_adapter') > 0;
-    warpHamBtn.classList.toggle('hidden', !hasAdapter);
-    if (hasAdapter) {
-      const ready = window.Neo?.player?.escapeReady;
-      warpHamBtn.textContent = ready ? '⚡ WARP (READY)' : '⚡ WARP (CHARGING)';
-    }
+    syncWarpHamButton();
     hamOpen = !hamOpen;
     hamMenu.classList.toggle('open', hamOpen);
     setNTActive();
@@ -295,8 +307,7 @@
   hamburger.addEventListener('click', e => {
     if (!isGameplayTouchAllowed()) return;
     e.preventDefault();
-    const hasAdapter = window.Neo?.getItemCount?.('charged_adapter') > 0;
-    warpHamBtn.classList.toggle('hidden', !hasAdapter);
+    syncWarpHamButton();
     hamOpen = !hamOpen;
     hamMenu.classList.toggle('open', hamOpen);
     setNTActive();
