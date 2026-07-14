@@ -306,11 +306,11 @@
   }
 
   function getHpFillColor(percent, fallbackColor) {
-    if (percent <= 0) return '#485060';
-    if (percent > 70) return '#4cbb5a';
-    if (percent > 50) return '#d4b840';
-    if (percent > 25) return '#d98134';
-    return fallbackColor || '#c04040';
+    if (percent <= 0) return 'linear-gradient(90deg, #3d4654, #596375)';
+    if (percent > 70) return 'linear-gradient(90deg, #24a66a, #7bf2a0)';
+    if (percent > 50) return 'linear-gradient(90deg, #d6a82f, #ffe17a)';
+    if (percent > 25) return 'linear-gradient(90deg, #d46c2f, #ffad5f)';
+    return `linear-gradient(90deg, ${fallbackColor || '#b83346'}, #ff5f73)`;
   }
 
   function renderPlayerStatsPanel() {
@@ -347,7 +347,10 @@
           </div>
           <div class="player-stat-row">
             <span>HP</span>
-            <div class="bar player-hp-bar"><i class="player-stat-fill" data-player-field="hpFill"></i></div>
+            <div class="bar player-hp-bar">
+              <i class="player-stat-chip" data-player-field="hpChip"></i>
+              <i class="player-stat-fill" data-player-field="hpFill"></i>
+            </div>
             <span data-player-field="hpText"></span>
           </div>
           <div class="player-stat-row player-shield-row" data-player-field="shieldRow">
@@ -379,6 +382,7 @@
           xpText: card.querySelector('[data-player-field="xpText"]'),
           metaRow: card.querySelector('[data-player-field="metaRow"]'),
           meta: card.querySelector('[data-player-field="meta"]'),
+          hpChip: card.querySelector('[data-player-field="hpChip"]'),
           hpFill: card.querySelector('[data-player-field="hpFill"]'),
           shieldFill: card.querySelector('[data-player-field="shieldFill"]'),
           xpFill: card.querySelector('[data-player-field="xpFill"]'),
@@ -417,7 +421,22 @@
       }
       if (refs.hpFill) {
         const hpWidth = `${hpPercent.toFixed(1)}%`;
-        if (last.hpWidth !== hpWidth) { last.hpWidth = hpWidth; refs.hpFill.style.width = hpWidth; }
+        if (last.hpWidth !== hpWidth) {
+          const previousHpPercent = Number(last.hpPercent ?? hpPercent);
+          last.hpWidth = hpWidth;
+          last.hpPercent = hpPercent;
+          refs.hpFill.style.width = hpWidth;
+          if (refs.hpChip) {
+            window.clearTimeout(card._hpChipTimer);
+            if (hpPercent < previousHpPercent) {
+              refs.hpChip.style.width = `${previousHpPercent.toFixed(1)}%`;
+              card._hpChipTimer = window.setTimeout(() => { refs.hpChip.style.width = hpWidth; }, 360);
+            } else {
+              refs.hpChip.style.width = hpWidth;
+            }
+          }
+          card.classList.toggle('player-stat-card--critical', hpPercent > 0 && hpPercent <= 25);
+        }
         const hpColor = getHpFillColor(hpPercent, slot.color);
         if (last.hpColor !== hpColor) { last.hpColor = hpColor; refs.hpFill.style.background = hpColor; }
       }
