@@ -2648,8 +2648,13 @@
     return true;
   }
 
+  // Lowered from 1.8x: at 1.8x a fleeing rune always outran the player's plain
+  // move speed, so every single catch (all 5, sequentially) required spending a
+  // dash — the same resource needed to survive the concurrent enemy waves. At
+  // 1.2x a determined chase (cutting an angle rather than tailing directly)
+  // can close the gap on foot, saving dashes for combat.
   function getChallengeRuneMaxSpeed(playerMoveSpeed = 228) {
-    return Math.max(0, Number(playerMoveSpeed) || 0) * 1.8;
+    return Math.max(0, Number(playerMoveSpeed) || 0) * 1.2;
   }
 
   // True when the player is standing on/near a usable ladder. Mirrors the
@@ -3116,7 +3121,11 @@
       if (pickup.type === 'challengeRune') {
         if (!Neo.currentRoom.challengeData) Neo.currentRoom.challengeData = {};
         Neo.currentRoom.challengeData.runesLeft = Math.max(0, Number(Neo.currentRoom.challengeData.runesLeft || 1) - 1);
-        Neo.spawnParticle({ x: pickup.x, y: pickup.y - 18, life: 0.55, text: 'RUNE', c: '#8dd4ff' });
+        // Small timer refund per catch so falling slightly behind on one chase
+        // doesn't doom the whole attempt — up to +10s across all 5 runes.
+        const runeTimerRefund = 2;
+        Neo.currentRoom.challengeTimer = Number(Neo.currentRoom.challengeTimer || 0) + runeTimerRefund;
+        Neo.spawnParticle({ x: pickup.x, y: pickup.y - 18, life: 0.55, text: `RUNE +${runeTimerRefund}s`, c: '#8dd4ff' });
         if (Neo.currentRoom.challengeData.runesLeft <= 0) {
           Neo.completeChallengeTrial('RUNES CLAIMED');
         }

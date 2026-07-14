@@ -385,10 +385,14 @@
       };
     }
     if (type === 'runes') {
+      // Chasing fleeing runes already competes for the same movement/dash
+      // budget survival needs against adds, so enemy pressure here stays
+      // lighter than the other trials rather than stacking on top of the
+      // chase itself — floored higher (2.0s) and no floor-7+ spawn bump.
       return {
         timer: Neo.scaleChallengeTimer(20),
-        tick: Math.max(1.6, 2.9 - floor * 0.08),
-        spawnCount: floor >= 7 ? 2 : 1,
+        tick: Math.max(2.0, 2.9 - floor * 0.06),
+        spawnCount: 1,
       };
     }
     if (type === 'storm') {
@@ -434,11 +438,15 @@
     };
   }
 
-  function getChallengeObeliskMaxHp(floorValue = Neo.floor, difficultyKey = Neo.selectedDifficulty) {
+  // Obelisk HP scales with floor only. It used to also divide by the game
+  // difficulty's statMultiplier, which meant harder difficulties shrank the
+  // obelisk's HP pool on top of the adds already hitting faster/harder from
+  // difficulty scaling elsewhere — a double penalty. Difficulty pressure now
+  // comes entirely from the enemy side (spawn density, drain-per-attacker),
+  // leaving the obelisk's own HP a stable, floor-only curve.
+  function getChallengeObeliskMaxHp(floorValue = Neo.floor) {
     const floor = Math.max(1, Number(floorValue || 1));
-    const difficulty = Neo.getDifficultyDef(difficultyKey);
-    const difficultyMultiplier = Math.max(1, Number(difficulty?.statMultiplier || 1));
-    return Math.max(28, Math.round((90 + floor * 17.5) / difficultyMultiplier / 2 * 1.4));
+    return Math.max(28, Math.round((90 + floor * 17.5) / 2 * 1.4));
   }
 
   function buildWavePlan(count, roomType = 'combat') {
@@ -1933,7 +1941,11 @@
         hitFlash: 0,
         guardRange: 96,
       };
-      spawnTrialEnemyWave(Math.max(3, Number(room.challengeData.spawnCount || 1)));
+      // First wave matches the trial's own spawnCount (used to be forced to a
+      // minimum of 3, which meant floor 1-5 always opened with more adds than
+      // the tuning intended). Floor 6+'s spawnCount of 6 already provides the
+      // ramp-up; no need to also floor the early-floor waves.
+      spawnTrialEnemyWave(Math.max(1, Number(room.challengeData.spawnCount || 1)));
       sayAtPosition(Neo.ROOM_W / 2, Neo.ROOM_H / 2, 'Protect the central ward rune.', { speaker: 'TRIAL', tone: 'warning' });
     } else if (type === 'runes') {
       const tuning = getChallengeTrialTuning('runes');
@@ -4827,7 +4839,18 @@
         const tickStart = Number(Neo.currentRoom.challengeData?.tickStart || 2.2);
         const tickEnd = Number(Neo.currentRoom.challengeData?.tickEnd || 1.35);
         Neo.currentRoom.challengeTick = tickEnd + (tickStart - tickEnd) * timeRatio;
-        spawnTrialEnemyWave(Math.max(1, Number(Neo.currentRoom.challengeData?.spawnCount || 1)));
+        // Cap simultaneous seekers so a player who can't clear a wave in time
+        // doesn't get buried under an ever-growing swarm — pressure plateaus
+        // instead of compounding once this many adds are alive at once.
+        const liveSeekers = Neo.enemies.reduce((total, enemy) => total + (enemy && !enemy.dead && enemy.obeliskSeeker ? 1 : 0), 0);
+        const maxLiveSeekers = 8;
+        if (liveSeekers < maxLiveSeekers) {
+          const spawnCount = Math.min(
+            Number(Neo.currentRoom.challengeData?.spawnCount || 1),
+            maxLiveSeekers - liveSeekers,
+          );
+          spawnTrialEnemyWave(Math.max(1, spawnCount));
+        }
       }
 
       // Enemies that crowd the ward rune drain its hp. The player must clear adds to keep it standing.

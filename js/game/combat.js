@@ -1161,6 +1161,15 @@
   const TURTLE_POWERUP_CHARGE_SPEED_MULTIPLIER = 4;
   const NIMROD_STOMP_MAX_CHARGE = 5; // charge units required for a full-power stomp
   const NIMROD_STOMP_CHARGE_SPEED_MULTIPLIER = 4;
+  // Hold-to-charge moves (Healing Zone, Death Ball, Turtle Power-Up, Nimrod Stomp)
+  // charge faster with attack speed, but only take a fraction of the bonus — full
+  // 1:1 scaling would make charging trivial for a heavily-stacked build. At 0.4,
+  // 3 Attack Servo stacks (+24% attack speed) nets about +10% charge speed.
+  const CHARGE_SPEED_ATTACK_SPEED_DAMPING = 0.4;
+  function getChargeSpeedAttackBonus() {
+    const attackSpeed = Math.max(0.2, Number(Neo.getAttackSpeedValue?.() || 1));
+    return 1 + (attackSpeed - 1) * CHARGE_SPEED_ATTACK_SPEED_DAMPING;
+  }
 
   function trySmash() {
     cancelCowardsWayOnAttack();
@@ -1919,7 +1928,7 @@
       Neo.queueHeldSkillRecharge?.('dash', Neo.getDashCooldownDuration('nimrod_stomp', Neo.getAttackSpeedValue()));
       return;
     }
-    const chargeSpeed = Math.max(0.2, Number(Neo.getAttackSpeedValue?.() || 1)) * NIMROD_STOMP_CHARGE_SPEED_MULTIPLIER;
+    const chargeSpeed = getChargeSpeedAttackBonus() * NIMROD_STOMP_CHARGE_SPEED_MULTIPLIER;
     Neo.nimrodStompChargeTime = Math.min(
       NIMROD_STOMP_MAX_CHARGE,
       Number(Neo.nimrodStompChargeTime || 0) + dt * chargeSpeed
@@ -2608,7 +2617,7 @@
       Neo.queueHeldSkillRecharge?.('smash', Neo.getSmashCooldownDuration(Neo.getAttackSpeedValue()));
       return;
     }
-    const chargeSpeed = Math.max(0.2, Number(Neo.getAttackSpeedValue?.() || 1)) * HEALING_ZONE_CHARGE_SPEED_MULTIPLIER;
+    const chargeSpeed = getChargeSpeedAttackBonus() * HEALING_ZONE_CHARGE_SPEED_MULTIPLIER;
     Neo.healingZoneChargeTime = Math.min(
       HEALING_ZONE_MAX_CHARGE,
       Number(Neo.healingZoneChargeTime || 0) + dt * chargeSpeed
@@ -2681,7 +2690,7 @@
       Neo.queueHeldSkillRecharge?.('smash', Neo.getSmashCooldownDuration(Neo.getAttackSpeedValue()));
       return;
     }
-    const chargeSpeed = Math.max(0.2, Number(Neo.getAttackSpeedValue?.() || 1))
+    const chargeSpeed = getChargeSpeedAttackBonus()
       * (Neo.deathBallPowerUp ? TURTLE_POWERUP_CHARGE_SPEED_MULTIPLIER : 1);
     Neo.deathBallChargeTime = Math.min(
       DEATH_BALL_MAX_CHARGE,
