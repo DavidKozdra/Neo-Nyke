@@ -383,6 +383,67 @@
     }
   }
 
+  function getEnemyAimAngle(enemy) {
+    if (Number.isFinite(enemy?.beamAngle)) return enemy.beamAngle;
+    if (Number.isFinite(enemy?.dashAngle)) return enemy.dashAngle;
+    if (Number.isFinite(enemy?.swingA)) return enemy.swingA;
+    if (Neo.player) return Math.atan2(Neo.player.y - enemy.y, Neo.player.x - enemy.x);
+    if (Math.hypot(Number(enemy?.vx || 0), Number(enemy?.vy || 0)) > 1) {
+      return Math.atan2(Number(enemy.vy || 0), Number(enemy.vx || 0));
+    }
+    return 0;
+  }
+
+  function drawEnemyArmIndicator(enemy, spriteKey, drawSize, facing, attackProgress) {
+    if (!Neo.SPRITE_ATLAS?.frames?.[`${spriteKey}:arm`]) return;
+    const aimAngle = getEnemyAimAngle(enemy);
+    const color = enemy.type === 'rival'
+      ? (enemy.rivalData?.color || '#f5f1e8')
+      : enemy.type === 'mirror_knight'
+        ? '#d7f6ff'
+        : '#f5f1e8';
+    drawAimIndicator(aimAngle, spriteKey, color, drawSize, facing, {
+      attackProgress,
+      recoil: enemy.beamTime > 0 ? 0.18 : 0,
+    });
+  }
+
+  function getCombatHealthColor(entity) {
+    if (entity?.type === 'rival') return entity.rivalData?.color || '#d96a83';
+    if (entity?.type === 'mirror_knight') return '#9de8ff';
+    if (Neo.isBossType?.(entity?.type)) return '#f2e8d7';
+    const pct = Neo.clamp(Number(entity?.hp || 0) / Math.max(1, Number(entity?.max || 1)), 0, 1);
+    if (pct > 0.7) return '#65df8e';
+    if (pct > 0.45) return '#f0c95d';
+    if (pct > 0.25) return '#ee8a46';
+    return '#e05264';
+  }
+
+  function drawCombatBar(x, y, width, height, pct, color, options = {}) {
+    const ctx = Neo.ctx;
+    const clamped = Neo.clamp(Number(pct || 0), 0, 1);
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.fillStyle = 'rgba(4, 7, 12, 0.82)';
+    ctx.fillRect(0, 0, width, height);
+    ctx.strokeStyle = options.borderColor || 'rgba(220, 232, 246, 0.42)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(0.5, 0.5, width - 1, height - 1);
+    if (clamped > 0) {
+      const fillWidth = Math.max(1, Math.floor((width - 2) * clamped));
+      const fill = ctx.createLinearGradient(1, 0, width - 1, 0);
+      fill.addColorStop(0, color);
+      fill.addColorStop(1, options.endColor || '#fff4c7');
+      ctx.fillStyle = fill;
+      ctx.fillRect(1, 1, fillWidth, height - 2);
+      ctx.fillStyle = 'rgba(255,255,255,0.35)';
+      ctx.fillRect(1, 1, fillWidth, 1);
+    }
+    ctx.fillStyle = 'rgba(255,255,255,0.10)';
+    for (let tick = 8; tick < width - 3; tick += 8) ctx.fillRect(tick, 1, 1, height - 2);
+    ctx.restore();
+  }
+
   function drawSpriteFrame(spriteKey, x, y, size, options = {}) {
     const atlas = Neo.SPRITE_ATLAS;
     if (!atlas?.frames || !atlas.canvas) return;
@@ -985,6 +1046,7 @@
         tint: flash ? 'rgba(255,255,180,0.55)' : (enemy.elite ? 'rgba(255,210,96,0.7)' : null),
         ...enemyAnim,
       });
+      drawEnemyArmIndicator(enemy, spriteKey, drawSize, facing, enemyAttackProgress);
       Neo.ctx.restore();
       // Knave Blade swipe: a sweeping slash arc, mirroring the player's melee
       // streak, while a bladed enemy is mid-swing.
@@ -1100,10 +1162,11 @@
       Neo.ctx.fillText(_nameText, 0, _nameY);
 
       // HP bar
-      Neo.ctx.fillStyle = '#000a';
-      Neo.ctx.fillRect(-18, -enemy.r - 13, 36, 5);
-      Neo.ctx.fillStyle = enemy.type === 'rival' ? (enemy.rivalData?.color || '#b24f68') : Neo.isBossType(enemy.type) ? '#f2e8d7' : '#b24f68';
-      Neo.ctx.fillRect(-18, -enemy.r - 13, 36 * hpPct, 5);
+      drawCombatBar(-20, -enemy.r - 14, 40, 6, hpPct, getCombatHealthColor(enemy), {
+        borderColor: enemy.type === 'rival'
+          ? (enemy.rivalData?.color || 'rgba(220, 232, 246, 0.42)')
+          : undefined,
+      });
 
       // HP current / max text
       Neo.ctx.font = '8px system-ui';
@@ -1115,10 +1178,10 @@
 
       if ((enemy.barrier || 0) > 0) {
         const barrierPct = Neo.clamp(enemy.barrier / Math.max(1, enemy.max * 0.22), 0, 1);
-        Neo.ctx.fillStyle = 'rgba(80, 215, 255, 0.24)';
-        Neo.ctx.fillRect(-18, -enemy.r - 20, 36, 4);
-        Neo.ctx.fillStyle = '#7ed6ff';
-        Neo.ctx.fillRect(-18, -enemy.r - 20, 36 * barrierPct, 4);
+        drawCombatBar(-20, -enemy.r - 21, 40, 5, barrierPct, '#4fcfff', {
+          endColor: '#c8fbff',
+          borderColor: 'rgba(126, 214, 255, 0.54)',
+        });
       }
       if (enemy.type === 'boss_spawner') {
         Neo.ctx.fillStyle = '#ffb07b';

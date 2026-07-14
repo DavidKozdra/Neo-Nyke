@@ -1338,12 +1338,18 @@ button, input, select, textarea {
 .bar {
   position: relative;
   width: 180px;
-  height: 12px;
-  background: linear-gradient(180deg, rgba(4, 7, 12, .92), rgba(13, 18, 27, .88));
-  border: 1px solid rgba(180, 200, 225, .22);
-  border-radius: 999px;
+  height: 13px;
+  background:
+    linear-gradient(90deg, rgba(255,255,255,.05) 1px, transparent 1px) 0 0 / 18px 100%,
+    linear-gradient(180deg, rgba(3, 6, 11, .96), rgba(14, 18, 28, .94));
+  border: 1px solid rgba(209, 225, 245, .30);
+  border-radius: 5px;
   overflow: hidden;
-  box-shadow: inset 0 1px 3px rgba(0,0,0,.68), 0 1px 2px rgba(0,0,0,.35);
+  box-shadow:
+    inset 0 0 0 1px rgba(0,0,0,.72),
+    inset 0 2px 4px rgba(0,0,0,.70),
+    0 1px 0 rgba(255,255,255,.08),
+    0 2px 8px rgba(0,0,0,.34);
 }
 
 /* Vertical glass sheen + top highlight strip, painted above the colored fill. */
@@ -1357,10 +1363,11 @@ button, input, select, textarea {
   pointer-events: none;
   background:
     linear-gradient(180deg,
-      rgba(255,255,255,.22) 0%,
-      rgba(255,255,255,.07) 32%,
+      rgba(255,255,255,.26) 0%,
+      rgba(255,255,255,.10) 34%,
       rgba(255,255,255,0) 55%,
-      rgba(0,0,0,.28) 100%);
+      rgba(0,0,0,.34) 100%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.18), inset 0 -1px 0 rgba(0,0,0,.55);
 }
 
 #hpFill {
@@ -1368,9 +1375,9 @@ button, input, select, textarea {
   display: block;
   height: 100%;
   width: 100%;
-  background: linear-gradient(90deg, #5e7698, #9cb3d2);
-  box-shadow: none;
-  transition: width .18s;
+  background: linear-gradient(90deg, #24a66a, #7bf2a0);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.08), 0 0 10px rgba(70, 230, 135, .18);
+  transition: width .16s ease-out, background .18s ease-out;
 }
 
 /* Bright leading edge — the "energy cap" at the end of each fill. */
@@ -1496,12 +1503,18 @@ button, input, select, textarea {
 .player-hp-bar {
   position: relative;
   width: 118px;
-  height: 12px;
-  background: linear-gradient(180deg, rgba(4, 7, 12, .92), rgba(13, 18, 27, .88));
-  border: 1px solid rgba(180, 200, 225, .22);
-  border-radius: 999px;
+  height: 13px;
+  background:
+    linear-gradient(90deg, rgba(255,255,255,.05) 1px, transparent 1px) 0 0 / 16px 100%,
+    linear-gradient(180deg, rgba(3, 6, 11, .96), rgba(14, 18, 28, .94));
+  border: 1px solid rgba(209, 225, 245, .30);
+  border-radius: 5px;
   overflow: hidden;
-  box-shadow: inset 0 1px 3px rgba(0,0,0,.55), 0 1px 2px rgba(0,0,0,.4);
+  box-shadow:
+    inset 0 0 0 1px rgba(0,0,0,.72),
+    inset 0 2px 4px rgba(0,0,0,.70),
+    0 1px 0 rgba(255,255,255,.08),
+    0 2px 8px rgba(0,0,0,.34);
 }
 
 .player-shield-row {
@@ -1524,9 +1537,9 @@ button, input, select, textarea {
   display: block;
   height: 100%;
   width: 100%;
-  background: linear-gradient(90deg, #58719a, #8facd3);
-  box-shadow: none;
-  transition: width .18s;
+  background: linear-gradient(90deg, #24a66a, #7bf2a0);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.08), 0 0 10px rgba(70, 230, 135, .18);
+  transition: width .16s ease-out, background .18s ease-out;
 }
 
 .player-level-badge {
@@ -1568,8 +1581,33 @@ button, input, select, textarea {
   display: block;
   height: 100%;
   width: 100%;
-  background: linear-gradient(90deg, #58719a, #8facd3);
-  transition: width .18s;
+  background: linear-gradient(90deg, #24a66a, #7bf2a0);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.08), 0 0 10px rgba(70, 230, 135, .18);
+  transition: width .16s ease-out, background .18s ease-out;
+}
+
+.player-stat-chip {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 100%;
+  background: linear-gradient(90deg, rgba(255, 224, 120, .72), rgba(255, 95, 95, .82));
+  box-shadow: 0 0 10px rgba(255, 96, 96, .22);
+  transition: width .34s cubic-bezier(.2, .7, .25, 1);
+}
+
+.player-stat-card--critical .player-hp-bar {
+  border-color: rgba(255, 96, 110, .66);
+  box-shadow:
+    inset 0 0 0 1px rgba(0,0,0,.72),
+    inset 0 2px 4px rgba(0,0,0,.70),
+    0 0 0 1px rgba(255, 96, 110, .18),
+    0 0 14px rgba(255, 64, 88, .24);
+  animation: hp-critical-pulse 1s ease-in-out infinite;
+}
+
+@keyframes hp-critical-pulse {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.18); }
 }
 
 .player-stat-fill--xp {
