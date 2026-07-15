@@ -2015,22 +2015,22 @@ button, input, select, textarea {
 
 .game-panel--special {
   width: min(1080px, 96vw);
-  border-color: color-mix(in srgb, var(--special-room-accent, var(--menu-accent)) 58%, var(--menu-border));
-  background:
-    linear-gradient(160deg, color-mix(in srgb, var(--special-room-accent, #d8e9ff) 11%, var(--menu-surface-strong)), var(--menu-bg-deep) 52%),
-    var(--menu-bg-deep);
-  box-shadow: 0 24px 60px rgba(0,0,0,.66), 0 0 34px color-mix(in srgb, var(--special-room-accent, transparent) 18%, transparent);
+  border-color: var(--menu-border-strong);
+  border-top: 4px solid var(--special-room-accent, var(--menu-accent));
+  border-radius: 8px;
+  background: var(--menu-bg-deep);
+  box-shadow: 0 24px 60px rgba(0,0,0,.66);
 }
 
 .game-panel--special .panel-kicker {
   color: var(--special-room-accent, var(--menu-accent-strong));
-  border-color: color-mix(in srgb, var(--special-room-accent, var(--menu-accent)) 60%, var(--menu-border));
-  background: color-mix(in srgb, var(--special-room-accent, var(--menu-accent)) 12%, var(--menu-surface));
+  border-color: var(--special-room-accent, var(--menu-border));
+  border-radius: 3px;
+  background: var(--menu-surface);
 }
 
 .game-panel--special h3 {
   color: var(--menu-text);
-  text-shadow: 0 0 18px color-mix(in srgb, var(--special-room-accent, transparent) 28%, transparent);
 }
 
 .game-panel--special .panel-subtitle {
@@ -2048,8 +2048,8 @@ button, input, select, textarea {
 
 .special-room-resources span {
   padding: 8px 12px;
-  border: 1px solid color-mix(in srgb, var(--special-room-accent, var(--menu-border)) 35%, var(--menu-border));
-  border-radius: 999px;
+  border: 1px solid var(--menu-border);
+  border-radius: 3px;
   background: rgba(0,0,0,.35);
   color: var(--menu-text);
   font-size: calc(13px * var(--font-scale, 1));
@@ -2073,10 +2073,11 @@ button, input, select, textarea {
   flex-direction: column;
   gap: 10px;
   padding: 16px;
-  border: 1px solid color-mix(in srgb, var(--card-accent) 58%, var(--menu-border));
-  border-radius: 16px;
-  background: linear-gradient(145deg, color-mix(in srgb, var(--card-accent) 14%, rgba(20, 27, 38, .98)), rgba(10, 14, 20, .94));
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.07), 0 8px 18px rgba(0,0,0,.22);
+  border: 1px solid var(--menu-border);
+  border-top: 3px solid var(--card-accent);
+  border-radius: 6px;
+  background: var(--menu-surface);
+  box-shadow: none;
 }
 
 .special-room-card__top {
@@ -2090,7 +2091,7 @@ button, input, select, textarea {
   width: 54px;
   height: 54px;
   flex: 0 0 54px;
-  border-color: color-mix(in srgb, var(--card-accent) 46%, var(--menu-border));
+  border-color: var(--card-accent);
 }
 
 .special-room-card__icon {
@@ -2102,8 +2103,8 @@ button, input, select, textarea {
   width: 60px;
   height: 60px;
   border-color: #ff9d66;
-  background: radial-gradient(circle, rgba(255,157,102,.16), rgba(0,0,0,.38));
-  box-shadow: inset 0 0 18px rgba(255,157,102,.12), 0 0 14px rgba(255,157,102,.12);
+  background: var(--menu-bg-deep);
+  box-shadow: none;
 }
 
 .special-room-card__icon--enemy {
@@ -2151,10 +2152,10 @@ button, input, select, textarea {
   max-width: 92px;
   text-align: center;
   padding: 7px 10px;
-  border: 1px solid color-mix(in srgb, var(--card-accent) 70%, var(--menu-border));
-  border-radius: 7px;
+  border: 1px solid var(--card-accent);
+  border-radius: 3px;
   color: var(--menu-text);
-  background: color-mix(in srgb, var(--card-accent) 18%, rgba(0,0,0,.7));
+  background: var(--menu-bg-deep);
   font-size: calc(12px * var(--font-scale, 1));
   font-weight: 900;
   letter-spacing: .1em;
@@ -7569,6 +7570,8 @@ button.alt.danger {
   flex-direction: column;
   gap: 0;
   padding: 0;
+  border-radius: 8px;
+  border-top: 4px solid var(--scroll-control-accent, var(--menu-accent));
   text-align: left;
 }
 
@@ -7577,7 +7580,7 @@ button.alt.danger {
   flex: 0 0 auto;
   padding: 22px 24px 16px;
   border-bottom: 1px solid rgba(128, 146, 170, .22);
-  background: linear-gradient(180deg, color-mix(in srgb, var(--scroll-control-accent, #d8e9ff) 14%, rgba(38, 48, 64, .72)), transparent);
+  background: var(--menu-surface);
 }
 
 .scroll-control-head__row {
@@ -7590,10 +7593,10 @@ button.alt.danger {
   flex: 0 0 auto;
   width: 60px;
   height: 60px;
-  border-radius: 8px;
-  background: radial-gradient(circle at 30% 25%, color-mix(in srgb, var(--scroll-control-accent, #d8e9ff) 30%, transparent), rgba(26, 33, 44, .9));
-  border: 1px solid color-mix(in srgb, var(--scroll-control-accent, #d8e9ff) 68%, var(--menu-border));
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 6px 18px rgba(0,0,0,.35), 0 0 18px color-mix(in srgb, var(--scroll-control-accent, #d8e9ff) 28%, transparent);
+  border-radius: 4px;
+  background: var(--menu-bg-deep);
+  border: 1px solid var(--scroll-control-accent, var(--menu-border-strong));
+  box-shadow: none;
   image-rendering: pixelated;
 }
 
@@ -7706,7 +7709,7 @@ button.alt.danger {
   gap: 8px;
   margin-bottom: 8px;
   padding-bottom: 6px;
-  border-bottom: 1px solid rgba(128, 146, 170, .22);
+  border-bottom: 2px solid var(--menu-border);
 }
 
 .scroll-control-group__title {
@@ -7755,33 +7758,30 @@ button.alt.danger {
   gap: 9px;
   text-align: center;
   padding: 12px 10px 11px;
-  border-radius: 6px;
-  border: 1px solid color-mix(in srgb, var(--scroll-choice-color, #d8e9ff) 40%, rgba(128,146,170,.3));
-  background: linear-gradient(180deg, rgba(30, 38, 50, .92), rgba(20, 26, 35, .92));
+  border-radius: 4px;
+  border: 1px solid var(--menu-border);
+  border-top: 3px solid var(--scroll-choice-color, #d8e9ff);
+  background: var(--menu-surface);
   color: var(--menu-text);
   cursor: pointer;
   transition: transform .12s ease, border-color .14s ease, box-shadow .16s ease, background .16s ease;
-  box-shadow: inset 0 3px 0 var(--scroll-choice-color, #d8e9ff);
+  box-shadow: none;
 }
 
 .scroll-control-choice:hover {
   transform: translateY(-2px);
-  border-color: color-mix(in srgb, var(--scroll-choice-color, #d8e9ff) 75%, white);
-  box-shadow: inset 0 3px 0 var(--scroll-choice-color, #d8e9ff), 0 8px 18px rgba(0,0,0,.4);
+  border-color: var(--scroll-choice-color, #d8e9ff);
+  box-shadow: 0 4px 0 rgba(0,0,0,.28);
 }
 
 .scroll-control-choice:active { transform: translateY(0) scale(.985); }
 
 .scroll-control-choice.is-selected {
   border-color: var(--scroll-choice-color, #d8e9ff);
-  background:
-    linear-gradient(180deg,
-      color-mix(in srgb, var(--scroll-choice-color, #d8e9ff) 22%, rgba(30,38,50,.95)),
-      rgba(20, 26, 35, .95));
+  background: var(--menu-bg-deep);
   box-shadow:
-    inset 0 3px 0 var(--scroll-choice-color, #d8e9ff),
     0 0 0 2px var(--scroll-choice-color, #d8e9ff),
-    0 0 26px color-mix(in srgb, var(--scroll-choice-color, #d8e9ff) 40%, transparent);
+    0 4px 0 rgba(0,0,0,.28);
 }
 
 /* Children should never swallow the click target. */
@@ -7794,9 +7794,9 @@ button.alt.danger {
   height: 68px;
   display: grid;
   place-items: center;
-  border-radius: 6px;
-  background: rgba(8, 12, 18, .6);
-  border: 1px solid rgba(255,255,255,.06);
+  border-radius: 3px;
+  background: var(--menu-bg-deep);
+  border: 1px solid var(--menu-border);
 }
 
 .scroll-control-choice__icon { display: block; width: 60px; height: 60px; image-rendering: pixelated; }
@@ -13499,4 +13499,172 @@ button.alt.danger {
 
 .credits-image {
   border-radius: 50%;
+}
+
+/* ========================================================================
+   Menu UI language — deliberate pixel-game surfaces, not generic glass cards
+   ------------------------------------------------------------------------
+   This applies only to menus and selection panels. Combat/HUD effects keep
+   their richer glow language because there it communicates danger, reward,
+   and moment-to-moment state. Menus use one quiet surface, square-ish frames,
+   and reserve color for category, affordance, and selection.
+   ======================================================================== */
+:root {
+  --ui-frame-radius: 6px;
+  --ui-control-radius: 4px;
+  --ui-panel-surface: #151b26;
+  --ui-panel-raised: #202a39;
+}
+
+/* The shared shells are the game's machinery: opaque, framed, and stable. */
+.panel-shell,
+.game-panel,
+.modal-box,
+.settings-group,
+.anvil-stat-panel,
+.competitive-panel,
+.altmodes-panel,
+.rh-panel {
+  border-radius: var(--ui-frame-radius);
+}
+
+.panel-shell,
+.modal-box {
+  background: var(--ui-panel-surface);
+  box-shadow: 0 18px 42px rgba(0,0,0,.58), inset 0 1px 0 rgba(255,255,255,.05);
+}
+
+.panel-kicker,
+.shop-card__eyebrow,
+.inv-card__eyebrow,
+.shop-card__chip,
+.shop-card__price,
+.anvil-stat-cost,
+.challenge-btn__meta,
+.voucher-type,
+.special-room-resources span,
+.special-room-card__cost,
+.extra-battery-pending,
+.extra-battery-choice__charges,
+.scroll-control-meta {
+  border-radius: var(--ui-control-radius);
+}
+
+/* Inventory/shop cards share a hardware-like frame instead of a soft tile. */
+.shop-card,
+.inv-card,
+.inv-slot,
+.challenge-btn,
+.wizard-paw-stat,
+.wizard-paw-choice,
+.extra-battery-choice,
+.anvil-item-btn,
+.anvil-stat-row,
+.settings-group,
+.voucher-type {
+  border-radius: var(--ui-control-radius);
+  background: var(--ui-panel-raised);
+  box-shadow: none;
+}
+
+.shop-card,
+.challenge-btn {
+  border-top-width: 3px;
+}
+
+.shop-card::before {
+  inset: 0 0 auto;
+  width: auto;
+  height: 3px;
+  background: var(--shop-card-accent);
+  opacity: 1;
+}
+
+.shop-card::after,
+.challenge-btn::before {
+  display: none;
+}
+
+.shop-card:hover,
+.inv-card:hover,
+.challenge-btn:hover:not(:disabled),
+.wizard-paw-choice:hover,
+.extra-battery-choice:hover,
+.anvil-item-btn:hover {
+  box-shadow: 0 4px 0 rgba(0,0,0,.28);
+}
+
+/* Selection is the one persistent high-emphasis state. */
+.challenge-btn.sel,
+.wizard-paw-choice.is-selected,
+.scroll-control-choice.is-selected,
+.voucher-type.is-selected,
+.anvil-item-btn.is-active {
+  box-shadow: 0 0 0 2px currentColor, 0 4px 0 rgba(0,0,0,.28);
+}
+
+.challenge-btn.sel {
+  box-shadow: 0 0 0 2px var(--challenge-accent), 0 4px 0 rgba(0,0,0,.28);
+}
+
+.wizard-paw-choice.is-selected,
+.anvil-item-btn.is-active {
+  box-shadow: 0 0 0 2px var(--menu-accent-strong), 0 4px 0 rgba(0,0,0,.28);
+}
+
+.scroll-control-choice.is-selected {
+  box-shadow: 0 0 0 2px var(--scroll-choice-color, var(--menu-accent-strong)), 0 4px 0 rgba(0,0,0,.28);
+}
+
+.voucher-type.is-selected {
+  box-shadow: 0 0 0 2px var(--voucher-color, var(--menu-accent-strong)), 0 4px 0 rgba(0,0,0,.28);
+}
+
+/* Button styling keeps the arcade menu scale but removes the soft-web sheen. */
+.nav-btn,
+.scroll-control-btn,
+.anvil-btn,
+.settings-reset,
+.shop-buy {
+  border-radius: var(--ui-control-radius);
+  box-shadow: 0 4px 0 rgba(0,0,0,.34);
+}
+
+.nav-btn:hover,
+.scroll-control-btn:hover,
+.anvil-btn:hover,
+.settings-reset:hover,
+.shop-buy:hover:not(:disabled) {
+  box-shadow: 0 5px 0 rgba(0,0,0,.38);
+}
+
+.nav-btn:active,
+.scroll-control-btn:active,
+.anvil-btn:active,
+.settings-reset:active,
+.shop-buy:active {
+  box-shadow: 0 1px 0 rgba(0,0,0,.38);
+}
+
+/* Type does the hierarchy work; muted copy is reserved for genuinely secondary detail. */
+.game-panel-head h3,
+.screen-title,
+.scroll-control-title {
+  letter-spacing: .1em;
+}
+
+.shop-card h4,
+.inv-card h4,
+.challenge-btn__top b,
+.anvil-item-name,
+.scroll-control-choice__name {
+  color: var(--menu-text);
+}
+
+.shop-card p,
+.inv-card p,
+.challenge-btn__desc,
+.scroll-control-copy,
+.settings-hint {
+  color: var(--menu-text-muted);
 }
