@@ -1629,6 +1629,14 @@
         const floor = Neo.getRoomArtTheme?.()?.backdrop || projectile.color || '#8a5a3c';
         return getRockVisual(floor);
       }
+      // Rival casts deliberately reuse the playable move's projectile kind.
+      // Keep them on the same visual lookup/fallback instead of recoloring every
+      // move into the generic enemy dart silhouette.
+      if (projectile.fromRival) {
+        const rivalPreset = PLAYER_PROJECTILE_VISUALS[kind];
+        if (rivalPreset) return rivalPreset;
+        return { color: projectile.color || '#ffd7aa', core: '#ffffff', trail: projectile.color || '#ffd7aa', shape: 'orb', length: 20 };
+      }
       const preset = ENEMY_PROJECTILE_VISUALS[kind];
       if (preset) return preset;
       return { color: projectile.color || '#ff6688', core: '#ffe4eb', trail: projectile.color || '#ff6688', shape: 'dart', length: 24 };
@@ -1888,7 +1896,10 @@
 
   // Blade Justice flying swords: glowing golden blades that swing near the player.
   function drawJusticeBlades() {
-    const blades = Neo.justiceBlades;
+    const blades = [
+      ...(Array.isArray(Neo.justiceBlades) ? Neo.justiceBlades : []),
+      ...(Neo.enemies || []).flatMap(enemy => Array.isArray(enemy?.rivalJusticeBlades) ? enemy.rivalJusticeBlades : []),
+    ];
     if (!Array.isArray(blades) || blades.length === 0) return;
     const ctx = Neo.ctx;
     const lowFx = window.NeoSettings?.isPerformanceMode?.() !== false && (Neo.particles?.length || 0) > 80;

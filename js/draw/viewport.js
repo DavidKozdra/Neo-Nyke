@@ -187,13 +187,17 @@ export function carveEnemyBeamLights() {
       if (!enemy || Number(enemy.beamTime || 0) <= 0 || !Number.isFinite(enemy.beamAngle)) return;
       const isGod = enemy.type === 'god';
       const isPartition = isGod && enemy.state === 'godPartition' && Array.isArray(enemy.partitionAngles);
-      const angles = isPartition ? enemy.partitionAngles : [enemy.beamAngle];
+      const angles = isPartition
+        ? enemy.partitionAngles
+        : enemy.type === 'rival' && Array.isArray(enemy.rivalBeamFan)
+          ? enemy.rivalBeamFan.map(offset => enemy.beamAngle + offset)
+          : [enemy.beamAngle];
       angles.forEach(angle => {
         const beamPath = Neo.buildRicochetBeamPath(
           enemy.x,
           enemy.y,
           angle,
-          isPartition ? Math.hypot(Neo.ROOM_W, Neo.ROOM_H) * 1.15 : isGod ? beam.enemyGodRange : beam.enemyDefaultRange,
+          isPartition ? Math.hypot(Neo.ROOM_W, Neo.ROOM_H) * 1.15 : isGod ? beam.enemyGodRange : enemy.type === 'rival' ? (enemy.rivalBeamRange || beam.enemyDefaultRange) : beam.enemyDefaultRange,
           isPartition ? 0 : Neo.getEnemyBeamBounceCount(enemy),
         );
         Neo.carveBeamLight(beamPath, isGod ? beam.enemyGodWidth : beam.enemyDefaultWidth, isGod ? beam.enemyGodStrength : beam.enemyDefaultStrength);

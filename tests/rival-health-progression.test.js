@@ -48,6 +48,20 @@ describe('rival health progression', () => {
     expect(rival.max).toBe(180);
   });
 
+  test('ordinary carried items contribute to rival combat stats', () => {
+    const { applyRivalLevelStats } = makeApplyRivalLevelStats();
+    const rival = {
+      baseHp: 100, baseDmg: 10, baseSpeed: 100, baseAttackCd: 1,
+      level: 1, lives: 2, hp: 100, max: 100,
+      loot: [{ type: 'item', key: 'one' }, { type: 'item', key: 'two' }],
+    };
+
+    applyRivalLevelStats(rival, { syncLiveEnemy: false, keepHpRatio: false });
+
+    expect(rival.max).toBe(105);
+    expect(rival.dmg).toBe(10);
+  });
+
   test('doubles returned rival max health once without compounding on recalculation', () => {
     const { applyRivalLevelStats } = makeApplyRivalLevelStats();
     const rival = { baseHp: 100, baseDmg: 10, baseSpeed: 100, baseAttackCd: 1, level: 5, lives: 1, hp: 100, max: 100 };

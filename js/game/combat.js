@@ -2990,7 +2990,17 @@
           Neo.addTrauma?.(0.5, Math.PI / 2, 14);
           Neo.addHitstop?.(0.04);
           Neo.spawnAoeShockwave(sword.x, sword.y, sword.radius, '#ffd980', 'heavy');
-          Neo.blastRadius(sword.x, sword.y, sword.radius, sword.damage, '#ffd980');
+          if (sword.enemy) {
+            if (Neo.dist(sword.x, sword.y, Neo.player.x, Neo.player.y) <= sword.radius + Neo.player.r) {
+              const angle = Math.atan2(Neo.player.y - sword.y, Neo.player.x - sword.x);
+              Neo.damagePlayer(sword.damage, angle, 180, sword.source || 'rival_excalibur', {
+                sourceKey: sword.source || 'rival_excalibur',
+                sourceLabel: sword.sourceLabel || 'Rival Excalibur Strike',
+              });
+            }
+          } else {
+            Neo.blastRadius(sword.x, sword.y, sword.radius, sword.damage, '#ffd980');
+          }
           Neo.ringBurst(sword.x, sword.y, sword.radius, '#fff1c2', 0.5);
         }
         swords[write++] = sword;

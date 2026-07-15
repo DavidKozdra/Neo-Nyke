@@ -2075,6 +2075,35 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
     return rival.loot.filter(item => item?.type === 'item' && Neo.isGodTier?.(Neo.ITEM_DEFS?.[item.key]?.rarity)).length;
   }
 
+  function createRivalStartingLoot(characterKey) {
+    const inventory = Neo.getCharacterStartingItems?.(characterKey) || {};
+    return Object.entries(inventory).flatMap(([key, count]) => (
+      Array.from({ length: Math.max(0, Math.round(Number(count) || 0)) }, () => ({ type: 'item', key }))
+    ));
+  }
+
+  function ensureRivalStartingLoot(rival) {
+    if (!rival || rival.startingGearGranted) return 0;
+    if (!Array.isArray(rival.loot)) rival.loot = [];
+    const required = createRivalStartingLoot(rival.characterKey);
+    const ownedCounts = new Map();
+    rival.loot.forEach(item => {
+      if (item?.type === 'item' && item.key) ownedCounts.set(item.key, Number(ownedCounts.get(item.key) || 0) + 1);
+    });
+    let granted = 0;
+    required.forEach(item => {
+      const owned = Number(ownedCounts.get(item.key) || 0);
+      if (owned > 0) {
+        ownedCounts.set(item.key, owned - 1);
+        return;
+      }
+      rival.loot.push(item);
+      granted += 1;
+    });
+    rival.startingGearGranted = true;
+    return granted;
+  }
+
   // Healing a rival wins them over permanently: friends cannot be hurt at all
   // and stop fighting/hunting the player.
   function befriendRival(rival, liveEnemy = null) {
@@ -2248,14 +2277,20 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
     // God-tier gear in the rival's pack makes them hit harder and live longer
     // (the "five God items and sent for you" vendetta loadout).
     const godGear = countRivalGodItems(rival);
+    const carriedItems = Array.isArray(rival.loot)
+      ? rival.loot.filter(item => item?.type === 'item').length
+      : 0;
+    const normalGear = Math.max(0, carriedItems - godGear);
     // Rivals gain more durability than damage as they level. Once their first
     // life is spent, the remaining-life state supplies a stable 2x max-HP boost
     // for the return encounter. Deriving it from lives prevents save restores or
     // repeated floor transitions from multiplying the bonus more than once.
     const hasReturned = Number(rival.lives ?? RIVAL_STARTING_LIVES) < RIVAL_STARTING_LIVES;
     const returnHpScale = hasReturned ? RIVAL_RETURN_HP_MULTIPLIER : 1;
-    const hpScale = (1 + (level - 1) * RIVAL_HP_PER_LEVEL) * (1 + godGear * 0.06) * returnHpScale;
-    const dmgScale = (1 + (level - 1) * 0.11) * (1 + godGear * 0.08);
+    const hpScale = (1 + (level - 1) * RIVAL_HP_PER_LEVEL)
+      * (1 + normalGear * 0.025 + godGear * 0.06) * returnHpScale;
+    const dmgScale = (1 + (level - 1) * 0.11)
+      * (1 + normalGear * 0.02 + godGear * 0.08);
     const speedScale = 1 + Math.min(0.24, (level - 1) * 0.02);
     const attackCdScale = 1 - Math.min(0.28, (level - 1) * 0.018);
     const moveScale = 1 - Math.min(0.38, (level - 1) * 0.022);
@@ -2339,8 +2374,15 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
       friend: !!source.friend,
       vendetta: !!source.vendetta,
       godGearGranted: !!source.godGearGranted,
+      startingGearGranted: !!source.startingGearGranted,
+      slotCooldowns: Object.fromEntries(['melee', 'laser', 'smash', 'dash'].map(slot => [
+        slot,
+        Math.max(0, Number(source.slotCooldowns?.[slot] || 0)),
+      ])),
+      slotLastUsedAt: { ...(source.slotLastUsedAt || {}) },
       dead: !!source.dead,
     };
+    ensureRivalStartingLoot(migrated);
     applyRivalLevelStats(migrated, { syncLiveEnemy: false, keepHpRatio: false });
     migrated.hp = Neo.clamp(Number(source.hp || migrated.hp), 1, migrated.max);
     migrated.hpSnapshot = migrated.hp;
@@ -2365,6 +2407,10 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
       rival.level += 1;
       rival.xpToNext = Math.round(rival.xpToNext * 1.18 + 3);
       applyRivalLevelStats(rival, { keepHpRatio: true });
+      // A level represents time spent adventuring, so the rival also finds one
+      // item. Its pack now contributes to combat stats instead of being merely
+      // flavor visible in the Rivals inventory tab.
+      grantRivalItems(rival, 1);
       leveled = true;
       const liveEnemy = Neo.enemies.find(e => e.type === 'rival' && e.rivalData === rival);
       if (!liveEnemy) {
@@ -2583,7 +2629,7 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
         );
         const startingLevel = Neo.clamp(1 + reputationBonus, 1, Number(Neo.RIVAL_LEVEL_CAP || 9));
         const baseMoveInterval = Neo.RIVAL_MOVE_INTERVAL_BASE + Neo.nextRandom('world') * 4;
-        Neo.rivals.push({
+        const freshRival = {
           rivalId: `${charKey}-${Neo.floor}-${Math.floor(Neo.nextRandom('world') * 1000000)}`,
           characterKey: charKey,
           name: def.name,
@@ -2611,7 +2657,7 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
           xpToNext: 22 + Neo.floor * 4,
           growthTick: 0,
           weapons: buildRivalLoadout(charKey),
-          loot: [],
+          loot: createRivalStartingLoot(charKey),
           homeGx: spawnRoom.gx,
           homeGy: spawnRoom.gy,
           objectiveGx: spawnRoom.gx,
@@ -2629,9 +2675,18 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
           friend: false,
           vendetta: false,
           godGearGranted: false,
+          startingGearGranted: true,
+          slotCooldowns: { melee: 0, laser: 0, smash: 0, dash: 0 },
+          slotLastUsedAt: {},
           dead: false,
-        });
-        applyRivalLevelStats(Neo.rivals[Neo.rivals.length - 1], { syncLiveEnemy: false, keepHpRatio: false });
+        };
+        Neo.rivals.push(freshRival);
+        applyRivalLevelStats(freshRival, { syncLiveEnemy: false, keepHpRatio: false });
+        const progressionItems = Math.floor(Math.max(0, startingLevel - 1) / 2)
+          + Math.floor(Math.max(0, Number(Neo.floor || 1) - 1) / 3);
+        if (progressionItems > 0) grantRivalItems(freshRival, progressionItems, { syncLiveEnemy: false });
+        freshRival.hp = freshRival.max;
+        freshRival.hpSnapshot = freshRival.max;
       }
     }
     applyRivalDifficultyFloorBonuses();
@@ -2903,6 +2958,7 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
     if (roomIdx < 0) return;
     room.pickups.splice(roomIdx, 1);
     rival.loot.push({ type: stolen.type, key: stolen.key, value: stolen.value });
+    if (stolen.type === 'item') applyRivalLevelStats(rival, { keepHpRatio: true });
     if (rival.memory) {
       rival.memory.stolenCount += 1;
       rival.memory.threat += 0.12;
@@ -2933,6 +2989,8 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
       dmg: rival.dmg,
       speed: rival.speed,
       attackCd: 0.5 + Neo.nextRandom('encounter') * 0.6,
+      rivalSlotCooldowns: { ...(rival.slotCooldowns || {}) },
+      rivalSlotLastUsedAt: { ...(rival.slotLastUsedAt || {}) },
       stun: 0, inv: 0,
       elite: false,
       bleedImmune: false, fireImmune: false, poisonImmune: false, dark_drainImmune: false,
@@ -2984,6 +3042,8 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
       // Sync hp from live enemy if they're in the current room
       const liveEnemy = Neo.enemies.find(e => e.type === 'rival' && e.rivalData === rival);
       if (liveEnemy) {
+        rival.slotCooldowns = { ...(liveEnemy.rivalSlotCooldowns || rival.slotCooldowns || {}) };
+        rival.slotLastUsedAt = { ...(liveEnemy.rivalSlotLastUsedAt || rival.slotLastUsedAt || {}) };
         rival.hp = liveEnemy.hp;
         const prevSnapshot = rival.hpSnapshot;
         rival.hpSnapshot = liveEnemy.hp;
@@ -3003,6 +3063,11 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
           setRivalHostile(rival, liveEnemy, 'attacked');
           awardRivalXp(rival, 9, 'combat');
         }
+      }
+      if (!liveEnemy && rival.slotCooldowns) {
+        ['melee', 'laser', 'smash', 'dash'].forEach(slot => {
+          rival.slotCooldowns[slot] = Math.max(0, Number(rival.slotCooldowns[slot] || 0) - dt);
+        });
       }
       if (rival.memory) {
         rival.memory.threat = Math.max(0, rival.memory.threat - dt * 0.03);
@@ -3024,6 +3089,10 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
         }
       }
       rival.aggroTimer = Math.max(0, rival.aggroTimer - dt);
+      // A represented rival stays physically in the room. It may retreat via
+      // updateRivalRetreat, but the overworld route timer must not teleport it
+      // through a door in the middle of combat or conversation.
+      if (liveEnemy) continue;
       rival.moveTimer -= dt;
       if (rival.moveTimer <= 0) {
         rival.moveTimer = rival.moveInterval;
@@ -3323,7 +3392,9 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
     enemy.rivalRetreatExit ||= chooseRivalRetreatExit(enemy);
     const exit = enemy.rivalRetreatExit;
     if (!exit) {
-      rival.brain.intention = 'engage';
+      rival.brain.retreatFloor = Number(Neo.floor || 0);
+      rival.brain.stance = 'hostile';
+      rival.brain.intention = (rival.weapons || []).some(weapon => weapon.class === 'heal') ? 'recover' : 'engage';
       return false;
     }
     const dx = exit.point.x - enemy.x;
@@ -3363,7 +3434,8 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
     if (rival.vendetta) return Object.assign(brain, { stance: 'hostile', intention: 'engage' }).intention;
     if (brain.stance === 'retreating') return Object.assign(brain, { intention: 'retreat' }).intention;
 
-    const retreatAllowed = Number(personality.retreatHp || 0) > 0
+    const retreatAllowed = rival.rivalRumbleStage == null
+      && Number(personality.retreatHp || 0) > 0
       && Number(brain.retreatFloor) !== Number(Neo.floor)
       && perception.hpRatio <= Number(personality.retreatHp || 0);
     if (brain.stance === 'hostile' && retreatAllowed) {
@@ -3428,6 +3500,12 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
     const preferredRange = Number(weapon?.preferredRange || (['ranged', 'burst'].includes(attackClass) ? 220 : 120));
     let score = Math.abs(distance - preferredRange);
 
+    // A rival's four kit slots recharge independently, just like the player's.
+    // An unavailable move must never win merely because its range is ideal.
+    if (Number(context.slotCooldown || 0) > 0) return 20000 + Number(context.slotCooldown) * 100;
+    const maxRange = Number(weapon?.range || Infinity);
+    if (distance > maxRange) score += 900 + (distance - maxRange) * 2;
+
     // Do not stare into walls with a ranged move selected. Mobility becomes much
     // more attractive when cornered or badly hurt, while healing is reserved for
     // a genuinely wounded rival instead of being mixed randomly into its offense.
@@ -3448,13 +3526,487 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
       score += context.recentMoves.filter(move => move === weapon?.key).length * 18;
     }
     if (weapon?.key && weapon.key === context.lastWeaponKey) score += 70;
+    // Make neglected slots progressively more tempting, without allowing that
+    // variety bonus to overpower a wall, invalid range, or an active cooldown.
+    const secondsSinceUse = Number(context.secondsSinceUse);
+    if (!Number.isFinite(secondsSinceUse)) score -= 95;
+    else score -= Math.min(75, Math.max(0, secondsSinceUse - 2) * 7);
     return score;
+  }
+
+  function getRivalWeaponCooldown(rival, weapon) {
+    const explicit = Number(weapon?.cooldown);
+    if (explicit > 0) return explicit;
+    const moveCooldown = Number(Neo.MOVE_BASE_STATS?.[weapon?.key]?.cooldown);
+    const base = (moveCooldown > 0 ? moveCooldown : Math.max(0.42, Number(rival?.attackCd || 1)))
+      * Number(weapon?.cooldownMult || 1);
+    // Signature slots have meaningful cooldowns. The old shared attackCd let a
+    // rival effectively spam whichever move was selected and made swapping kit
+    // slots pointless.
+    const slotMinimums = { melee: 0.55, laser: 2.2, smash: 3.4, dash: 3.0 };
+    return Math.max(base, Number(slotMinimums[weapon?.slot] || 0.55));
+  }
+
+  function tickRivalSlotCooldowns(enemy, dt) {
+    const cooldowns = enemy.rivalSlotCooldowns || (enemy.rivalSlotCooldowns = {});
+    ['melee', 'laser', 'smash', 'dash'].forEach(slot => {
+      cooldowns[slot] = Math.max(0, Number(cooldowns[slot] || 0) - dt);
+    });
+    if (enemy.rivalData) enemy.rivalData.slotCooldowns = { ...cooldowns };
+    return cooldowns;
+  }
+
+  function commitRivalWeaponUse(enemy, rival, weapon, recovery = 0.2) {
+    const slot = weapon?.slot || 'melee';
+    enemy.rivalSlotCooldowns ||= {};
+    enemy.rivalSlotCooldowns[slot] = getRivalWeaponCooldown(rival, weapon);
+    enemy.rivalSlotLastUsedAt ||= {};
+    enemy.rivalSlotLastUsedAt[slot] = Number(Neo.gameElapsedTime || 0);
+    rival.slotCooldowns = { ...enemy.rivalSlotCooldowns };
+    rival.slotLastUsedAt = { ...enemy.rivalSlotLastUsedAt };
+    // attackCd is now only the brief animation/reaction lock between actions;
+    // the real move cooldown lives on its kit slot above.
+    enemy.attackCd = Math.max(Number(enemy.attackCd || 0), recovery);
+    enemy.rivalWeaponSwapCd = 0.08;
+    recordRivalMove(rival, enemy, weapon?.key);
+  }
+
+  function getRivalBeamSpec(weapon) {
+    const key = weapon?.key;
+    const specs = {
+      blood_beam: { color: '#ff00aa', glow: '#f0f', width: 8, shadowBlur: 18, tick: 0.08, knockback: 60, turnRate: 3.5 },
+      love_beam: { color: '#ff9ed6', glow: '#ffd1ea', width: 10, shadowBlur: 22, tick: 0.06, knockback: 52, turnRate: 3.5, healOnHit: 0.012 },
+      turtle_wave: { color: '#74f5ff', glow: '#9bf7ff', width: 18, shadowBlur: 30, tick: 0.08, knockback: 155, turnRate: 2.8, damageScale: 0.65 },
+      wizard_lazer: { color: '#a64bff', glow: '#c79bff', width: 22, shadowBlur: 30, tick: 0.08, knockback: 150, turnRate: 2.4, damageScale: 0.55 },
+      mooggy_blood_beam: { color: '#ff2f57', glow: '#ff8aa0', width: 11, shadowBlur: 18, tick: 0.08, knockback: 60, turnRate: 5.2 },
+      thorn_blood_beams: { color: '#ff3b5c', glow: '#ff8aa0', width: 6, shadowBlur: 18, tick: 0.08, knockback: 60, turnRate: 3.5, fan: [-0.32, -0.11, 0.11, 0.32] },
+    };
+    if (!specs[key]) return null;
+    return {
+      ...specs[key],
+      key,
+      range: Number(weapon.range || 430),
+      duration: Math.max(0.3, Number(Neo.MOVE_BASE_STATS?.[key]?.duration || Neo.ATTACKS?.laser?.duration || 0.58)),
+      damageScale: Number(specs[key].damageScale || 0.45),
+    };
+  }
+
+  function startRivalBeam(enemy, rival, weapon, angle) {
+    const spec = getRivalBeamSpec(weapon);
+    if (!spec) return false;
+    enemy.rivalBeamMove = spec.key;
+    enemy.rivalBeamColor = spec.color;
+    enemy.rivalBeamGlow = spec.glow;
+    enemy.rivalBeamWidth = spec.width;
+    enemy.rivalBeamShadowBlur = spec.shadowBlur;
+    enemy.rivalBeamRange = spec.range;
+    enemy.rivalBeamFan = spec.fan || [0];
+    enemy.rivalBeamSpec = spec;
+    enemy.beamAngle = angle;
+    enemy.beamTime = spec.duration;
+    enemy.beamTick = 0;
+    commitRivalWeaponUse(enemy, rival, weapon, spec.duration + 0.12);
+    return true;
+  }
+
+  function updateRivalBeam(enemy, rival, dt) {
+    const spec = enemy.rivalBeamSpec;
+    if (!spec || Number(enemy.beamTime || 0) <= 0) return false;
+    enemy.beamTime -= dt;
+    enemy.beamTick -= dt;
+    enemy.vx *= 0.84;
+    enemy.vy *= 0.84;
+    Neo.aimEnemyBeam?.(enemy, dt, Number(spec.turnRate || 3.5));
+    if (enemy.beamTick <= 0) {
+      enemy.beamTick = Number(spec.tick || 0.08);
+      const fan = Array.isArray(spec.fan) && spec.fan.length ? spec.fan : [0];
+      const paths = fan.map(offset => Neo.buildRicochetBeamPath(
+        enemy.x,
+        enemy.y,
+        enemy.beamAngle + offset,
+        Number(spec.range || 430),
+        Neo.getEnemyBeamBounceCount(enemy),
+      ));
+      enemy.rivalBeamPaths = paths;
+      const hitSegment = paths
+        .map(path => Neo.beamPathHitsCircle(path, Neo.player.x, Neo.player.y, Neo.player.r + Math.max(5, spec.width * 0.5)))
+        .find(Boolean);
+      if (hitSegment) {
+        const damage = Math.max(1, Math.round(enemy.dmg * Number(spec.damageScale || 0.45)));
+        Neo.damagePlayer(damage, hitSegment.angle, Number(spec.knockback || 60), rival.characterKey, {
+          sourceKey: rival.characterKey,
+          sourceLabel: `${rival.name} ${spec.key}`,
+          attacker: enemy,
+        });
+        if (spec.key === 'blood_beam' && Neo.nextRandom('encounter') < 0.05) {
+          Neo.applyStatus?.(Neo.player, 'bleed', 1, 3.2, rival.characterKey);
+        }
+        if (spec.key === 'thorn_blood_beams' && Neo.nextRandom('encounter') < 0.35) {
+          Neo.applyStatus?.(Neo.player, 'bleed', 1, 3.6, rival.characterKey);
+        }
+        if (spec.key === 'mooggy_blood_beam') {
+          if (Neo.nextRandom('encounter') < 0.5) Neo.applyStatus?.(Neo.player, 'poison', 2, 5, rival.characterKey);
+          if (Neo.nextRandom('encounter') < 0.18) Neo.applyStatus?.(Neo.player, 'slow', 1, 1.2, rival.characterKey);
+        }
+        if (Number(spec.healOnHit || 0) > 0) {
+          const heal = Math.max(1, Math.round(enemy.max * spec.healOnHit));
+          enemy.hp = Math.min(enemy.max, enemy.hp + heal);
+          rival.hp = enemy.hp;
+        }
+      }
+    }
+    if (enemy.beamTime <= 0) {
+      enemy.beamTime = 0;
+      enemy.rivalBeamPaths = [];
+      enemy.rivalBeamSpec = null;
+    }
+    return true;
+  }
+
+  function startRivalJusticeBlades(enemy, rival, weapon, aimAngle) {
+    enemy.rivalJusticeBlades = Array.from({ length: 3 }, (_, index) => ({
+      index,
+      fanOffset: (index - 1) * 0.5,
+      aim: aimAngle,
+      swingPhase: index * 0.7,
+      life: 2.1,
+      maxLife: 2.1,
+      radius: 16,
+      reach: 120,
+      hitCooldown: 0,
+      x: enemy.x,
+      y: enemy.y,
+      angle: aimAngle,
+    }));
+    commitRivalWeaponUse(enemy, rival, weapon, 0.35);
+    Neo.ringBurst?.(enemy.x, enemy.y, 30, '#fff6a3', 0.4);
+  }
+
+  function updateRivalJusticeBlades(enemy, rival, dt) {
+    const blades = enemy.rivalJusticeBlades;
+    if (!Array.isArray(blades) || blades.length === 0) return;
+    const targetAim = Math.atan2(Neo.player.y - enemy.y, Neo.player.x - enemy.x);
+    let write = 0;
+    for (let read = 0; read < blades.length; read += 1) {
+      const blade = blades[read];
+      blade.life -= dt;
+      if (blade.life <= 0) continue;
+      blade.hitCooldown = Math.max(0, Number(blade.hitCooldown || 0) - dt);
+      const delta = Math.atan2(Math.sin(targetAim - blade.aim), Math.cos(targetAim - blade.aim));
+      blade.aim += Neo.clamp(delta, -9 * dt, 9 * dt);
+      blade.swingPhase += dt * 7.5;
+      const direction = blade.aim + blade.fanOffset + Math.sin(blade.swingPhase) * 0.7;
+      const orbit = blade.reach * (0.82 + 0.18 * Math.cos(blade.swingPhase));
+      blade.x = enemy.x + Math.cos(direction) * orbit;
+      blade.y = enemy.y + Math.sin(direction) * orbit;
+      blade.angle = direction + Math.sign(Math.cos(blade.swingPhase)) * 0.5;
+      if (blade.hitCooldown <= 0 && Neo.dist(blade.x, blade.y, Neo.player.x, Neo.player.y) <= blade.radius + Neo.player.r) {
+        blade.hitCooldown = 0.22;
+        Neo.damagePlayer(Math.max(1, Math.round(enemy.dmg * 0.72)), direction, 180, rival.characterKey, {
+          sourceKey: rival.characterKey,
+          sourceLabel: `${rival.name} Blade Justice`,
+          attacker: enemy,
+        });
+      }
+      blades[write++] = blade;
+    }
+    blades.length = write;
+  }
+
+  function damagePlayerInRivalRadius(enemy, rival, radius, damage, knockback, sourceKey) {
+    if (Neo.dist(enemy.x, enemy.y, Neo.player.x, Neo.player.y) > radius + Neo.player.r) return false;
+    const angle = Math.atan2(Neo.player.y - enemy.y, Neo.player.x - enemy.x);
+    Neo.damagePlayer(Math.max(1, Math.round(damage)), angle, knockback, rival.characterKey, {
+      sourceKey: rival.characterKey,
+      sourceLabel: `${rival.name} ${sourceKey}`,
+      attacker: enemy,
+    });
+    return true;
+  }
+
+  function spawnRivalMoveProjectile(enemy, rival, options) {
+    Neo.spawnProjectile({
+      x: options.x ?? enemy.x,
+      y: options.y ?? enemy.y,
+      vx: options.vx,
+      vy: options.vy,
+      r: options.r,
+      life: options.life,
+      damage: options.damage,
+      kind: options.kind,
+      color: options.color,
+      knockback: options.knockback,
+      pierceCount: options.pierceCount || 0,
+      bouncesRemaining: options.bouncesRemaining || 0,
+      homing: !!options.homing,
+      homingSpeed: options.homingSpeed,
+      homingTurnRate: options.homingTurnRate,
+      homingAccel: options.homingAccel,
+      homingRadius: options.homingRadius,
+      enemy: true,
+      fromRival: true,
+      source: rival.characterKey,
+      sourceLabel: rival.name,
+      statusEffects: options.statusEffects,
+      aoeRadius: options.aoeRadius,
+      sparkleChance: options.sparkleChance,
+      splash: options.splash,
+      splashDamage: options.splashDamage,
+      fireStacks: options.fireStacks,
+      fireDuration: options.fireDuration,
+      subSpawn: options.subSpawn,
+    });
+  }
+
+  // Signature moves keep the playable cast's geometry and visual vocabulary.
+  // Returning true means the generic projectile/contact approximation must not
+  // run for this move.
+  function castRivalSignatureMove(enemy, rival, weapon, angle) {
+    const key = weapon?.key;
+    const damage = Math.max(1, Math.round(enemy.dmg * Number(weapon.damageMult || 1)));
+    if (key === 'kicky_kick') {
+      const radius = 138;
+      Neo.ringBurst(enemy.x, enemy.y, radius * 0.85, '#ff7fc2', 0.42);
+      Neo.spawnAoeShockwave?.(enemy.x, enemy.y, radius, '#ff7fc2', 'heavy');
+      damagePlayerInRivalRadius(enemy, rival, radius, damage, 680, key);
+      enemy.vx -= Math.cos(angle) * 260;
+      enemy.vy -= Math.sin(angle) * 260;
+    } else if (key === 'crimson_smash') {
+      const radius = 140;
+      Neo.ringBurst(enemy.x, enemy.y, radius - 30, '#ff3048', 0.4);
+      Neo.spawnAoeShockwave?.(enemy.x, enemy.y, radius, '#ff3048', 'heavy');
+      damagePlayerInRivalRadius(enemy, rival, radius, damage, 320, key);
+      for (let index = 0; index < 8; index += 1) {
+        const rockAngle = angle + index * (Math.PI * 2 / 8);
+        const speed = 460 + Neo.nextRandom('fx') * 120;
+        spawnRivalMoveProjectile(enemy, rival, {
+          x: enemy.x + Math.cos(rockAngle) * radius * 0.4,
+          y: enemy.y + Math.sin(rockAngle) * radius * 0.4,
+          vx: Math.cos(rockAngle) * speed, vy: Math.sin(rockAngle) * speed,
+          r: 7, life: 0.62, kind: 'rock', color: '#8a5a3c',
+          damage: Math.round(damage * 0.45), knockback: 200, pierceCount: 1,
+          statusEffects: [{ key: 'bleed', chance: 0.2, stacks: 1, duration: 4 }],
+        });
+      }
+    } else if (key === 'chaos_burst') {
+      for (let index = 0; index < 4; index += 1) {
+        const blastAngle = angle + (index - 1.5) * 0.38;
+        const px = Neo.player.x + Math.cos(blastAngle) * (Neo.nextRandom('encounter') - 0.5) * 92;
+        const py = Neo.player.y + Math.sin(blastAngle) * (Neo.nextRandom('encounter') - 0.5) * 92;
+        Neo.ringBurst(px, py, 36, '#c971ff', 0.38);
+        if (Neo.dist(Neo.player.x, Neo.player.y, px, py) <= 58 + Neo.player.r) {
+          Neo.damagePlayer(Math.max(1, Math.round(damage * 0.62)), blastAngle, 120, rival.characterKey, {
+            sourceKey: rival.characterKey, sourceLabel: `${rival.name} Chaos Burst`, attacker: enemy,
+          });
+        }
+      }
+      Neo.hazards.push({
+        kind: 'chaos_burst', enemy: true, ownerEnemy: enemy, followEnemy: true,
+        source: rival.characterKey, x: enemy.x, y: enemy.y, r: 180,
+        ttl: 1.8, tick: 0, interval: 0.22, damage: Math.max(1, Math.round(damage * 0.62)),
+      });
+    } else if (key === 'random_pounce') {
+      const radius = 160;
+      Neo.ringBurst(enemy.x, enemy.y, radius - 24, '#ff3070', 0.5);
+      Neo.spawnAoeShockwave?.(enemy.x, enemy.y, radius, '#ff3070', 'heavy');
+      damagePlayerInRivalRadius(enemy, rival, radius, damage, 260, key);
+      for (let index = 0; index < 8; index += 1) {
+        const fangAngle = angle + (index - 3.5) * 0.12;
+        spawnRivalMoveProjectile(enemy, rival, {
+          vx: Math.cos(fangAngle) * 620, vy: Math.sin(fangAngle) * 620,
+          r: 5, life: 1.1, kind: 'fang', color: '#ff5090',
+          damage: Math.round(damage * 0.5), knockback: 180,
+          homing: true, homingSpeed: 680, homingAccel: 4.2, homingTurnRate: 3.8, homingRadius: 380,
+          statusEffects: [{ key: 'bleed', chance: 0.55, stacks: 2, duration: 5 }],
+        });
+      }
+    } else if (key === 'power_disks') {
+      for (let index = 0; index < 8; index += 1) {
+        const diskAngle = index * (Math.PI * 2 / 8);
+        spawnRivalMoveProjectile(enemy, rival, {
+          vx: Math.cos(diskAngle) * 440, vy: Math.sin(diskAngle) * 440,
+          r: 7, life: 1.8, kind: 'disk', color: '#d7f6ff', damage, knockback: 110,
+          statusEffects: [{ key: 'fire', chance: 0.4, stacks: 1, duration: 3 }],
+          subSpawn: {
+            kind: 'disk_shard', interval: 0.18, timer: 0.18, speed: 620,
+            r: 4, life: 0.7, damage: Math.max(1, Math.round(damage * 0.4)), count: 2,
+          },
+        });
+      }
+    } else if (key === 'metao_fire_staff') {
+      for (let index = -1; index <= 1; index += 1) {
+        const fireAngle = angle + index * 0.18;
+        spawnRivalMoveProjectile(enemy, rival, {
+          vx: Math.cos(fireAngle) * 560, vy: Math.sin(fireAngle) * 560,
+          r: 8, life: 1.6, kind: 'fireball', color: '#ff7b32', damage,
+          knockback: 110, splash: 48, splashDamage: Math.round(damage * 0.64), fireStacks: 2, fireDuration: 3.4,
+          statusEffects: [{ key: 'fire', chance: 1, stacks: 2, duration: 3.4 }],
+        });
+      }
+      enemy.vx -= Math.cos(angle) * 150;
+      enemy.vy -= Math.sin(angle) * 150;
+    } else if (key === 'gelleh_lightning_spear') {
+      spawnRivalMoveProjectile(enemy, rival, {
+        x: enemy.x + Math.cos(angle) * 24, y: enemy.y + Math.sin(angle) * 24,
+        vx: Math.cos(angle) * 820, vy: Math.sin(angle) * 820,
+        r: 7, life: 0.5, kind: 'blade_justice', color: '#bfe4ff',
+        damage, knockback: 80, pierceCount: 99,
+        statusEffects: [{ key: 'static', chance: 0.35, stacks: 1, duration: 3 }],
+      });
+    } else if (key === 'nail_shot') {
+      for (let index = 0; index < 12; index += 1) {
+        const nailAngle = index * (Math.PI * 2 / 12) + Neo.nextRandom('encounter') * 0.22;
+        spawnRivalMoveProjectile(enemy, rival, {
+          vx: Math.cos(nailAngle) * 480, vy: Math.sin(nailAngle) * 480,
+          r: 3, life: 1.8, kind: 'nail', color: '#c0d8ff', damage, knockback: 80, bouncesRemaining: 3,
+          statusEffects: [{ key: 'bleed', chance: 0.08, stacks: 1, duration: 3.2 }],
+        });
+      }
+      Neo.ringBurst(enemy.x, enemy.y, 22, '#c0d8ff', 0.3);
+    } else if (key === 'death_ball') {
+      const radius = 42;
+      spawnRivalMoveProjectile(enemy, rival, {
+        x: enemy.x + Math.cos(angle) * (enemy.r + radius * 0.4),
+        y: enemy.y + Math.sin(angle) * (enemy.r + radius * 0.4),
+        vx: Math.cos(angle) * 360, vy: Math.sin(angle) * 360,
+        r: radius, life: 2.2, kind: 'death_ball', color: '#5aa0ff',
+        damage: Math.round(damage * 1.8), knockback: 400, pierceCount: 10,
+      });
+      Neo.ringBurst(enemy.x, enemy.y, radius * 0.8, '#5aa0ff', 0.6);
+      enemy.vx -= Math.cos(angle) * 140;
+      enemy.vy -= Math.sin(angle) * 140;
+    } else if (key === 'love_bomb_laser') {
+      spawnRivalMoveProjectile(enemy, rival, {
+        x: enemy.x + Math.cos(angle) * (enemy.r + 18),
+        y: enemy.y + Math.sin(angle) * (enemy.r + 18),
+        vx: Math.cos(angle) * 420, vy: Math.sin(angle) * 420,
+        r: 16, life: Math.max(0.25, Math.min(1, Neo.dist(enemy.x, enemy.y, Neo.player.x, Neo.player.y) / 420)),
+        kind: 'love_bomb', color: '#ff6fa8', damage: Math.round(damage * 1.6), knockback: 180,
+        aoeRadius: 90, sparkleChance: 0.8,
+      });
+      Neo.ringBurst(enemy.x, enemy.y, 30, '#ff9cc9', 0.4);
+    } else if (key === 'healing_zone') {
+      const radius = 100;
+      Neo.hazards.push({
+        kind: 'healing_zone', enemy: true, ownerEnemy: enemy, source: rival.characterKey,
+        x: enemy.x, y: enemy.y, r: radius, ttl: 7.2,
+        healTick: 0.24, healAccum: 0, plusTick: 0.08, healMult: 1.7, damageMult: 1.8,
+      });
+      Neo.ringBurst(enemy.x, enemy.y, radius * 0.5, '#35ff6f', 0.7);
+    } else if (key === 'mooggy_hairball') {
+      const radius = 132;
+      Neo.ringBurst(enemy.x, enemy.y, radius - 24, '#85df63', 0.45);
+      Neo.spawnAoeShockwave?.(enemy.x, enemy.y, radius, '#85df63', 'heavy');
+      if (damagePlayerInRivalRadius(enemy, rival, radius, damage, 170, key)) {
+        Neo.applyStatus?.(Neo.player, 'poison', 3, 6, rival.characterKey);
+        Neo.applyStatus?.(Neo.player, 'slow', 1, 1.2, rival.characterKey);
+      }
+    } else if (key === 'holy_turrets') {
+      for (let index = 0; index < 3; index += 1) {
+        const turretAngle = angle + (index - 1) * 0.7;
+        const tx = Neo.clamp(enemy.x + Math.cos(turretAngle) * 74, Neo.WALL + 16, Neo.ROOM_W - Neo.WALL - 16);
+        const ty = Neo.clamp(enemy.y + Math.sin(turretAngle) * 74, Neo.WALL + 16, Neo.ROOM_H - Neo.WALL - 16);
+        Neo.hazards.push({
+          kind: 'holy_turret', enemy: true, source: rival.characterKey,
+          x: tx, y: ty, r: 26, ttl: 6, tick: 0, interval: 0.6,
+          range: 360, burstRadius: 56, damage, aimAngle: turretAngle, recoil: 0,
+        });
+        Neo.ringBurst(tx, ty, 22, '#fff1b0', 0.5);
+      }
+    } else if (key === 'excalibur_strike') {
+      if (!Array.isArray(Neo.skySwords)) Neo.skySwords = [];
+      for (let index = 0; index < 5; index += 1) {
+        const offAngle = Neo.nextRandom('fx') * Math.PI * 2;
+        const offDist = index === 0 ? 0 : 28 + Neo.nextRandom('fx') * 122;
+        Neo.skySwords.push({
+          x: Neo.clamp(Neo.player.x + Math.cos(offAngle) * offDist, Neo.WALL + 24, Neo.ROOM_W - Neo.WALL - 24),
+          y: Neo.clamp(Neo.player.y + Math.sin(offAngle) * offDist, Neo.WALL + 24, Neo.ROOM_H - Neo.WALL - 24),
+          phase: 'falling', delay: index * 0.07, fall: 0.34, radius: 76,
+          damage, hoverTime: 0.7, angle: Neo.nextRandom('fx') * Math.PI * 2,
+          spin: (Neo.nextRandom('fx') < 0.5 ? -1 : 1) * (5 + Neo.nextRandom('fx') * 3),
+          enemy: true, source: rival.characterKey, sourceLabel: rival.name,
+        });
+      }
+      Neo.ringBurst(Neo.player.x, Neo.player.y, 36, '#ffd980', 0.5);
+    } else if (key === 'potion_bath') {
+      enemy.hp = Math.min(enemy.max, enemy.hp + enemy.max * 0.2);
+      rival.hp = enemy.hp;
+      rival.hpSnapshot = enemy.hp;
+      enemy.inv = Math.max(Number(enemy.inv || 0), 5);
+      Neo.spawnParticle({ x: enemy.x, y: enemy.y - 30, life: 0.8, text: 'POTION BATH', c: '#9af7d8' });
+      for (let index = 0; index < 7; index += 1) {
+        const burstAngle = index * (Math.PI * 2 / 7) + Neo.nextRandom('fx') * 0.4;
+        const dist = 40 + Neo.nextRandom('fx') * 110;
+        const px = enemy.x + Math.cos(burstAngle) * dist;
+        const py = enemy.y + Math.sin(burstAngle) * dist;
+        Neo.ringBurst(px, py, 22, '#b6f0ff', 0.5);
+        if (Neo.dist(px, py, Neo.player.x, Neo.player.y) <= 56 + Neo.player.r) {
+          Neo.damagePlayer(damage, burstAngle, 100, rival.characterKey, { sourceKey: rival.characterKey, sourceLabel: `${rival.name} Potion Bath` });
+        }
+      }
+    } else if (key === 'turtle_powerup') {
+      const barrier = Math.round(enemy.max * 0.5);
+      enemy.barrier = Number(enemy.barrier || 0) + barrier;
+      enemy.rivalDeathBallPowerUp = true;
+      Neo.ringBurst(enemy.x, enemy.y, 42, '#7dffb0', 0.5);
+      Neo.spawnParticle({ x: enemy.x, y: enemy.y - 20, life: 0.8, text: 'SHELL POWER', c: '#7dffb0' });
+    } else if (key === 'warp') {
+      const behind = angle + Math.PI;
+      const target = Neo.findSafePointNearTarget?.(
+        Neo.player.x + Math.cos(behind) * 72,
+        Neo.player.y + Math.sin(behind) * 72,
+        enemy.r,
+        130,
+        16,
+      );
+      Neo.ringBurst(enemy.x, enemy.y, 22, '#b99cff', 0.3);
+      if (target) { enemy.x = target.x; enemy.y = target.y; }
+      enemy.inv = Math.max(Number(enemy.inv || 0), 0.5);
+      Neo.ringBurst(enemy.x, enemy.y, 22, '#b99cff', 0.3);
+    } else if (key === 'flying_unhitable') {
+      enemy.rivalFlightTime = 15;
+      enemy.inv = Math.max(Number(enemy.inv || 0), 15);
+      enemy.vx = 0; enemy.vy = 0;
+      Neo.spawnParticle({ x: enemy.x, y: enemy.y - 18, life: 0.8, text: 'FLY HIGH', c: '#ffd1ea' });
+    } else if (key === 'princess_shield') {
+      const barrier = Math.round(enemy.max * 0.4);
+      enemy.barrier = Number(enemy.barrier || 0) + barrier;
+      Neo.ringBurst(enemy.x, enemy.y, 40, '#ff5fb0', 0.42);
+      Neo.spawnParticle({ x: enemy.x, y: enemy.y - 18, life: 0.8, text: 'SHIELD UP', c: '#ff5fb0' });
+    } else if (key === 'mooggy_zoomies') {
+      enemy.rivalHasteTime = Math.max(Number(enemy.rivalHasteTime || 0), 12);
+      Neo.spawnParticle({ x: enemy.x, y: enemy.y - 18, life: 0.9, text: 'ZOOMIES!', c: '#a0ffcc' });
+      Neo.ringBurst(enemy.x, enemy.y, 24, '#a0ffcc', 0.35);
+    } else if (key === 'zip_lightning' || key === 'knight_slash_dash') {
+      const startX = enemy.x;
+      const startY = enemy.y;
+      const behind = angle + Math.PI;
+      const target = Neo.findSafePointNearTarget?.(
+        Neo.player.x + Math.cos(behind) * (Neo.player.r + enemy.r + 8),
+        Neo.player.y + Math.sin(behind) * (Neo.player.r + enemy.r + 8),
+        enemy.r, 90, 14,
+      );
+      if (target) { enemy.x = target.x; enemy.y = target.y; }
+      const color = key === 'zip_lightning' ? '#bfe4ff' : '#ff3b5c';
+      Neo.spawnParticle({
+        x: startX, y: startY, life: 0.28, c: color,
+        line: { x1: startX, y1: startY, x2: enemy.x, y2: enemy.y, w: 5, jag: key === 'zip_lightning' ? 14 : 10, seg: 10, phase: Neo.nextRandom('fx') * Math.PI * 2 },
+      });
+      damagePlayerInRivalRadius(enemy, rival, 72, damage, key === 'zip_lightning' ? 185 : 170, key);
+      if (key === 'knight_slash_dash') Neo.applyStatus?.(Neo.player, 'bleed', 3, 5, rival.characterKey);
+    } else {
+      return false;
+    }
+    commitRivalWeaponUse(enemy, rival, weapon, 0.3);
+    return true;
   }
 
   function updateRivalEnemy(enemy, dt) {
     const rival = enemy.rivalData;
     if (!rival) return;
     if (rival.friend) {
+      enemy.beamTime = 0;
+      enemy.rivalJusticeBlades = [];
       // Befriended rivals never attack; they loosely shadow the player.
       const fdx = Neo.player.x - enemy.x;
       const fdy = Neo.player.y - enemy.y;
@@ -3479,6 +4031,7 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
 
     enemy.rivalWeaponIndex = Math.max(0, Math.min(weapons.length - 1, Number(enemy.rivalWeaponIndex || 0)));
     enemy.rivalWeaponSwapCd = Math.max(0, Number(enemy.rivalWeaponSwapCd || 0) - dt);
+    const slotCooldowns = tickRivalSlotCooldowns(enemy, dt);
     enemy.rivalStrafeDir = enemy.rivalStrafeDir || (Neo.nextRandom('encounter') < 0.5 ? -1 : 1);
     enemy.rivalHasteTime = Math.max(0, Number(enemy.rivalHasteTime || 0) - dt);
     enemy.rivalStrafeFlipCd = Math.max(0, Number(enemy.rivalStrafeFlipCd || 0) - dt);
@@ -3488,11 +4041,42 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
     }
     const perception = getRivalPerception(enemy);
     const { dx, dy, distance, hpRatio, hasLineOfSight } = perception;
+    updateRivalJusticeBlades(enemy, rival, dt);
+    if (Number(enemy.rivalClawFollowup || 0) > 0) {
+      enemy.rivalClawFollowup -= dt;
+      if (enemy.rivalClawFollowup <= 0) {
+        enemy.rivalClawFollowup = 0;
+        const followupAngle = Math.atan2(dy, dx) + 0.18;
+        enemy.swingA = followupAngle;
+        enemy.swingTime = 0.22;
+        enemy.rivalSwingMove = 'claw_gauntlets';
+        if (distance < enemy.r + Neo.player.r + 48) {
+          Neo.damagePlayer(Math.max(1, Math.round(enemy.dmg * 0.85)), followupAngle, 260, rival.characterKey, {
+            sourceKey: rival.characterKey, sourceLabel: `${rival.name} Claw Gauntlets`, attacker: enemy,
+          });
+          Neo.applyStatus?.(Neo.player, 'bleed', 1, 5, rival.characterKey);
+        }
+      }
+    }
     const moveSpeed = enemy.speed * (enemy.rivalHasteTime > 0 ? 1.55 : 1);
     if (hasLineOfSight) {
       rival.memory.lastKnownPlayerX = Neo.player.x;
       rival.memory.lastKnownPlayerY = Neo.player.y;
       rival.memory.lastSeenTime = Number(Neo.gameElapsedTime || 0);
+    }
+    // Rivals actually use consumables they have collected. Save healing moves
+    // for their own slot logic; a potion is the emergency fallback at critical
+    // health and costs a short action recovery.
+    const potionIndex = (rival.loot || []).findIndex(item => item?.type === 'potion');
+    if (hpRatio <= 0.38 && potionIndex >= 0 && Number(enemy.attackCd || 0) <= 0) {
+      rival.loot.splice(potionIndex, 1);
+      const heal = Math.max(1, Math.round(enemy.max * 0.3));
+      enemy.hp = Math.min(enemy.max, enemy.hp + heal);
+      rival.hp = enemy.hp;
+      rival.hpSnapshot = enemy.hp;
+      enemy.attackCd = 0.45;
+      Neo.spawnParticle({ x: enemy.x, y: enemy.y - 22, life: 0.75, text: `POTION +${heal}`, c: '#8dffbd' });
+      emitRivalBark(rival, enemy, 'heal', { minGap: 8 });
     }
     if (!enemy.rivalClaimedPickup && rival.brain.claimedLoot) {
       const claim = rival.brain.claimedLoot;
@@ -3520,6 +4104,7 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
           const pickupIndex = Neo.pickups.indexOf(claimed);
           if (pickupIndex >= 0) Neo.pickups.splice(pickupIndex, 1);
           rival.loot.push({ type: claimed.type, key: claimed.key, value: claimed.value });
+          if (claimed.type === 'item') applyRivalLevelStats(rival, { keepHpRatio: true });
           enemy.rivalClaimedPickup = null;
           rival.brain.claimedLoot = null;
           rival.brain.intention = 'observe';
@@ -3542,30 +4127,36 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
       return;
     }
 
-    // Rivals use their whole kit instead of blindly round-robining: when a swap
-    // window opens, pick the weapon whose preferred range best fits the current
-    // distance (with a little jitter so they still mix it up), so a ranged tool
-    // gets used at range and a melee/dash tool up close. They also re-evaluate
-    // sooner after an attack, keeping pressure on with their full loadout.
-    if (enemy.rivalWeaponSwapCd <= 0 && weapons.length > 1) {
+    if (updateRivalBeam(enemy, rival, dt)) return;
+
+    // Reconsider the complete kit whenever the tiny decision lock opens or the
+    // selected slot is unavailable. Range, line of sight, health, combos, slot
+    // cooldowns, and neglected moves all contribute to the choice.
+    const selectedBeforeDecision = weapons[enemy.rivalWeaponIndex] || weapons[0];
+    if ((enemy.rivalWeaponSwapCd <= 0 || Number(slotCooldowns[selectedBeforeDecision.slot] || 0) > 0) && weapons.length > 1) {
       let bestIndex = enemy.rivalWeaponIndex;
       let bestScore = Infinity;
+      const now = Number(Neo.gameElapsedTime || 0);
       for (let i = 0; i < weapons.length; i++) {
         const w = weapons[i];
+        const lastUsedAt = Number(enemy.rivalSlotLastUsedAt?.[w.slot]);
         const score = scoreRivalWeapon(w, {
           distance,
           hpRatio,
           hasLineOfSight,
+          slotCooldown: slotCooldowns[w.slot],
+          secondsSinceUse: Number.isFinite(lastUsedAt) ? now - lastUsedAt : Infinity,
           lastWeaponKey: enemy.rivalLastWeaponKey,
           recentMoves: rival.brain.recentMoves,
           comboFollowups: getRivalComboFollowups(rival),
-        }) + Neo.nextRandom('encounter') * 24;
+        }) + Neo.nextRandom('encounter') * 12;
         if (score < bestScore) { bestScore = score; bestIndex = i; }
       }
       enemy.rivalWeaponIndex = bestIndex;
-      enemy.rivalWeaponSwapCd = Neo.RIVAL_WEAPON_SWAP_BASE + Neo.nextRandom('encounter') * 1.6;
+      enemy.rivalWeaponSwapCd = 0.14 + Neo.nextRandom('encounter') * 0.12;
     }
     const weapon = weapons[enemy.rivalWeaponIndex] || weapons[0];
+    const readyWeaponCount = weapons.filter(candidate => Number(slotCooldowns[candidate.slot] || 0) <= 0).length;
 
     if (enemy.dashTime > 0) {
       enemy.dashTime -= dt;
@@ -3581,7 +4172,7 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
         });
       }
       if (enemy.dashTime <= 0) {
-        enemy.attackCd = Math.max(0.32, rival.attackCd * Number(weapon.cooldownMult || 1));
+        enemy.attackCd = Math.max(Number(enemy.attackCd || 0), 0.12);
       }
       return;
     }
@@ -3591,8 +4182,26 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
     const attackStyle = weapon.class || rival.attackStyle;
     const preferDist = Number(weapon.preferredRange || (attackStyle === 'ranged' || attackStyle === 'burst' ? 220 : 120));
 
+    // Recover behind hard cover when hurt, when every slot is cooling down, or
+    // when the selected ranged lane is blocked. Once an attack is available the
+    // rival peeks/repositions according to that move's preferred distance.
+    const needsRecoveryCover = hpRatio < 0.48 || readyWeaponCount === 0
+      || ((!hasLineOfSight || enemy.attackCd > 0.28) && ['ranged', 'burst', 'heal'].includes(attackStyle));
+    let usingCover = false;
+    if (needsRecoveryCover) {
+      if (!hasLineOfSight) {
+        enemy.vx *= 0.82;
+        enemy.vy *= 0.82;
+        usingCover = true;
+      } else {
+        usingCover = !!Neo.trySteerEnemyToCover(enemy, dt, preferDist, 4.4);
+      }
+    }
+
     // Movement
-    if (attackStyle === 'ranged' || attackStyle === 'burst') {
+    if (usingCover) {
+      // Cover steering/holding already chose the safest movement this frame.
+    } else if (attackStyle === 'ranged' || attackStyle === 'burst') {
       const shouldSeekCover = enemy.hp < enemy.max * 0.65
         || enemy.attackCd > 0.25
         || distance < preferDist * 0.82;
@@ -3619,12 +4228,18 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
       Neo.steerEnemy(enemy, dx / distance, dy / distance, moveSpeed, 4.4, dt);
     }
 
-    if (enemy.attackCd > 0) return;
+    if (enemy.attackCd > 0 || Number(slotCooldowns[weapon.slot] || 0) > 0) return;
 
     if (attackStyle === 'melee' || attackStyle === 'melee_heal') {
       if (distance < enemy.r + Neo.player.r + Number(weapon.range || 12)) {
         if (!prepareRivalAttack(enemy, rival, weapon)) return;
         const angle = Math.atan2(dy, dx);
+        if (weapon.key === 'blade_justice') {
+          startRivalJusticeBlades(enemy, rival, weapon, angle);
+          enemy.swingTime = 0.22;
+          return;
+        }
+        if (castRivalSignatureMove(enemy, rival, weapon, angle)) return;
         const meleeDamage = Math.round(enemy.dmg * Number(weapon.damageMult || 1));
         Neo.damagePlayer(meleeDamage, angle, Number(weapon.knockback || 280), rival.characterKey, {
           sourceKey: rival.characterKey,
@@ -3634,10 +4249,17 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
           rival.memory.playerHitsDealt += 1;
           rival.memory.threat += 0.2;
         }
-        enemy.attackCd = rival.attackCd * Number(weapon.cooldownMult || 1) + Neo.nextRandom('encounter') * 0.4;
-        recordRivalMove(rival, enemy, weapon.key);
-        enemy.rivalWeaponSwapCd = Math.min(enemy.rivalWeaponSwapCd, 0.6);
+        commitRivalWeaponUse(enemy, rival, weapon, 0.18 + Neo.nextRandom('encounter') * 0.14);
         enemy.swingTime = 0.22;
+        enemy.swingA = angle;
+        enemy.rivalSwingMove = weapon.key;
+        if (weapon.key === 'claw_gauntlets') {
+          enemy.swingA = angle - 0.18;
+          enemy.rivalClawFollowup = 0.12;
+          Neo.applyStatus?.(Neo.player, 'bleed', 1, 5, rival.characterKey);
+        } else if (weapon.key === 'thorns_bleed_blade') {
+          Neo.applyStatus?.(Neo.player, 'bleed', 1, 5, rival.characterKey);
+        }
         // Kicky kick: chance to launch the player into the next room.
         if (Number(weapon.roomLaunchChance || 0) > 0) {
           tryRivalKickPlayerToNextRoom(rival, angle, weapon.roomLaunchChance);
@@ -3652,13 +4274,12 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
       }
     } else if (attackStyle === 'heal') {
       if (enemy.hp < enemy.max * 0.82) {
+        if (castRivalSignatureMove(enemy, rival, weapon, Math.atan2(dy, dx))) return;
         const heal = Math.max(1, Math.round(enemy.max * Number(weapon.healRatio || 0.12)));
         enemy.hp = Math.min(enemy.max, enemy.hp + heal);
         rival.hp = enemy.hp;
         rival.hpSnapshot = enemy.hp;
-        enemy.attackCd = rival.attackCd * Number(weapon.cooldownMult || 2);
-        enemy.rivalWeaponSwapCd = 0.45;
-        recordRivalMove(rival, enemy, weapon.key);
+        commitRivalWeaponUse(enemy, rival, weapon, 0.28);
         emitRivalBark(rival, enemy, 'heal', { minGap: 8 });
         Neo.spawnParticle({ x: enemy.x, y: enemy.y - 22, life: 0.75, text: `+${heal}`, c: '#8dffbd' });
       }
@@ -3671,6 +4292,7 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
         const dashTargetDx = dx + perception.observedPlayerVx * Number(personality.prediction || 0) * 0.45;
         const dashTargetDy = dy + perception.observedPlayerVy * Number(personality.prediction || 0) * 0.45;
         const towardPlayer = Math.atan2(dashTargetDy, dashTargetDx);
+        if (castRivalSignatureMove(enemy, rival, weapon, towardPlayer)) return;
         enemy.dashAngle = attackStyle === 'mobility'
           ? towardPlayer + Math.PI + (Neo.nextRandom('encounter') - 0.5) * 1.1
           : towardPlayer;
@@ -3678,9 +4300,7 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
         enemy.dashHit = false;
         enemy.inv = Math.max(Number(enemy.inv || 0), Number(weapon.invTime || 0));
         enemy.rivalHasteTime = Math.max(enemy.rivalHasteTime, Number(weapon.hasteTime || 0));
-        enemy.attackCd = rival.attackCd * Number(weapon.cooldownMult || 1) + 0.35;
-        enemy.rivalWeaponSwapCd = Math.min(enemy.rivalWeaponSwapCd, 0.6);
-        recordRivalMove(rival, enemy, weapon.key);
+        commitRivalWeaponUse(enemy, rival, weapon, 0.24);
         if (attackStyle === 'mobility') {
           Neo.spawnParticle({ x: enemy.x, y: enemy.y - 20, life: 0.5, text: weapon.key === 'warp' ? 'WARP' : 'EVADE', c: rival.color });
         }
@@ -3699,11 +4319,14 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
         const aimDx = dx + perception.observedPlayerVx * leadSeconds;
         const aimDy = dy + perception.observedPlayerVy * leadSeconds;
         const angle = Math.atan2(aimDy, aimDx);
+        if (castRivalSignatureMove(enemy, rival, weapon, angle)) return;
+        if (startRivalBeam(enemy, rival, weapon, angle)) return;
         const shotCount = Math.max(1, Number(weapon.projectileCount || 1));
         const spread = Number(weapon.spread || 0.2);
         for (let shot = 0; shot < shotCount; shot += 1) {
-          const offset = shotCount === 1 ? 0 : (shot / (shotCount - 1)) * 2 - 1;
-          const a = angle + offset * spread;
+          const a = weapon.key === 'power_disks'
+            ? angle + shot * (Math.PI * 2 / shotCount)
+            : angle + (shotCount === 1 ? 0 : ((shot / (shotCount - 1)) * 2 - 1) * spread);
           Neo.spawnProjectile({
             x: enemy.x, y: enemy.y,
             vx: Math.cos(a) * projectileSpeed, vy: Math.sin(a) * projectileSpeed,
@@ -3718,9 +4341,7 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
             sourceLabel: rival.name || 'Rival',
           });
         }
-        enemy.attackCd = rival.attackCd * Number(weapon.cooldownMult || 1) + Neo.nextRandom('encounter') * 0.5;
-        enemy.rivalWeaponSwapCd = Math.min(enemy.rivalWeaponSwapCd, 0.6);
-        recordRivalMove(rival, enemy, weapon.key);
+        commitRivalWeaponUse(enemy, rival, weapon, 0.16 + Neo.nextRandom('encounter') * 0.16);
       }
     }
   }
@@ -3786,6 +4407,7 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
   Neo.tryPlayPrincessKnightCutscene = tryPlayPrincessKnightCutscene;
   Neo.getRivalById = getRivalById;
   Neo.applyRivalLevelStats = applyRivalLevelStats;
+  Neo.createRivalStartingLoot = createRivalStartingLoot;
   Neo.prepareRivalReturn = prepareRivalReturn;
   Neo.scoreRivalWeapon = scoreRivalWeapon;
   Neo.getRivalPerception = getRivalPerception;
