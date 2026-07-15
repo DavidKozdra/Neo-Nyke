@@ -70,6 +70,28 @@ const CHARACTER_SHEET_DEFS = {
     armPivot: { x: 10, y: 15 },
     armOffset: { x: 4, y: 2 },
   },
+  mooggy: {
+    src: 'assets/sprites/chars/Mooggy.png',
+    frameWidth: 24,
+    frameHeight: 24,
+    frameCount: 11,
+    renderScale: 1.5,
+    idleFrames: [3, 4, 5, 6],
+    walkFrames: [7, 8, 9, 10],
+    armFrame: 2,
+    portraitFrame: 0,
+  },
+  turtle_boy: {
+    src: 'assets/sprites/chars/TurtleBoy.png',
+    frameWidth: 32,
+    frameHeight: 32,
+    frameCount: 8,
+    renderScale: 1.5,
+    idleFrames: [2, 3],
+    walkFrames: [4, 5, 6, 7],
+    armFrame: 1,
+    portraitFrame: 0,
+  },
 };
 
 // Which raw frame indices play the idle cycle, and which (ordered) indices
