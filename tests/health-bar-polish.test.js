@@ -19,7 +19,10 @@ describe('health bar presentation', () => {
     expect(source).toContain('drawEnemyNameplate(enemy, hpPct);');
     expect(source).toContain('const text = `${label}  ${level}  ${hpText}`;');
     expect(source).toContain('const plateW = Math.max(46, textWidth + 10);');
-    expect(source).toContain('drawCombatBar(barX, barY, barW, 5, hpPct, getCombatHealthColor(enemy)');
+    expect(source).toContain('const enemyNameplateCache = new WeakMap()');
+    expect(source).toContain('function buildEnemyNameplateRender(enemy, hpPct)');
+    expect(source).toContain('drawCombatBar(ctx, barX, barY, barW, 5, hpPct, healthColor');
+    expect(source).toContain('enemyNameplateCache.set(enemy, render)');
     expect(source).toContain("if (entity?.type === 'rival') return entity.rivalData?.color");
     expect(source).not.toContain('fitCanvasText');
   });

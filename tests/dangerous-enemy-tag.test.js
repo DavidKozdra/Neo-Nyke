@@ -56,6 +56,6 @@ describe('Dangerous enemy name tag', () => {
     const root = path.resolve(__dirname, '..');
     const entities = fs.readFileSync(path.join(root, 'js/draw/entities.js'), 'utf8');
     expect(entities).toContain('Neo.isEnemyDangerous?.(enemy)');
-    expect(entities).toContain("Neo.ctx.strokeStyle = '#ff3b3b'");
+    expect(entities).toContain("ctx.strokeStyle = dangerous ? '#ff4f5f'");
   });
 });

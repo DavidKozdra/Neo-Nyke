@@ -823,6 +823,25 @@
     };
   }
 
+  function getBossLevelHpMultiplier(level, difficulty = Neo.getDifficultyDef()) {
+    const levelsAboveOne = Math.max(0, Math.floor(Number(level || 1)) - 1);
+    const difficultyGrowth = Math.max(0.25, Number(difficulty?.bossHpGrowthMultiplier ?? 1));
+    const perLevelRate = Math.max(0, Number(Neo.ENEMY_SCALING.bossLevelHpRate ?? 0.055)) * difficultyGrowth;
+    const compounded = Math.pow(1 + perLevelRate, levelsAboveOne);
+    return softCapEnemyScale(
+      compounded,
+      Neo.ENEMY_SCALING.bossLevelHpSoftCap ?? 3.25,
+      Neo.ENEMY_SCALING.bossLevelHpSoftCapCurve ?? 0.55,
+    );
+  }
+
+  function getBossTimeHpMultiplier(gameMinutes, difficulty = Neo.getDifficultyDef()) {
+    const minutes = Math.max(0, Number(gameMinutes || 0));
+    const difficultyGrowth = Math.max(0.25, Number(difficulty?.bossHpGrowthMultiplier ?? 1));
+    const perMinuteRate = Math.max(0, Number(Neo.ENEMY_SCALING.bossHpMinute ?? 0.055)) * difficultyGrowth;
+    return 1 + minutes * perMinuteRate;
+  }
+
   // Cumulative floor depth that drives enemy scaling: the number of floors the
   // player has actually entered this run (across loops, excluding skipped floors).
   // Falls back to `floor` for safety if the counter is ever unset.
@@ -872,7 +891,7 @@
     const enemyLevel = Math.max(1, Number(baseStats?.level || progressionDepth));
     const isBoss = isBossType(type);
     const levelMultipliers = isBoss
-      ? { hp: 1, damage: 1, speed: 1, attackSpeed: 1 }
+      ? { hp: getBossLevelHpMultiplier(enemyLevel, difficulty), damage: 1, speed: 1, attackSpeed: 1 }
       : getEnemyLevelStatMultipliers(enemyLevel);
     const loopNumber = Math.max(1, Math.floor((progressionDepth - 1) / Neo.MAX_FLOOR) + 1);
     const floorsCleared = progressionDepth - 1;
@@ -887,13 +906,11 @@
     // Bosses keep their dedicated linear bossLoopHp boost on top of this.
     const loopMultiplier = 1
       + Neo.ENEMY_SCALING.loop * Math.pow(Math.max(0, loopNumber - 1), Neo.ENEMY_SCALING.loopHpCurve ?? 1);
-    // Time intentionally does NOT scale HP anymore — floors traversed already
-    // owns the HP curve, and elapsed time tracks floors so closely that a
-    // per-minute HP term just double-counted it. The clock now expresses itself
-    // through damage / crit / status-resistance instead (see damageTimeMultiplier
-    // below and getEnemyCcLevel). This keeps "easy stays easy" honest: a slow,
-    // careful Easy run no longer silently inflates enemy HP toward a wall.
+    // Normal enemies do not gain HP from the clock because floor traversal already
+    // owns that curve. Bosses are the exception: their dedicated clock multiplier
+    // keeps a late arrival durable enough for the player's accumulated build.
     const difficultyMultiplier = isBoss ? difficulty.bossStatMultiplier : difficulty.statMultiplier;
+    const bossTimeHpMultiplier = isBoss ? getBossTimeHpMultiplier(gameMinutes, difficulty) : 1;
     // Endless mode: enemies "level up" with each wave. The wave the current
     // enemies belong to is endlessWave + 1 (endlessWave counts cleared waves).
     // Outside endless mode this collapses to 1 and changes nothing.
@@ -910,7 +927,8 @@
     const bossLoopDamageMultiplier = isBoss
       ? 1 + (loopNumber - 1) * (Neo.ENEMY_SCALING.bossLoopDamage ?? 0)
       : 1;
-    const hpScale = floorMultiplier * loopMultiplier * difficultyMultiplier * endlessHpMultiplier * bossLoopHpMultiplier;
+    const hpScale = floorMultiplier * loopMultiplier * difficultyMultiplier * endlessHpMultiplier
+      * bossLoopHpMultiplier * bossTimeHpMultiplier;
     const damageFloorMultiplier = 1 + floorsCleared * (Neo.ENEMY_SCALING.damageFloor ?? Neo.ENEMY_SCALING.floor);
     const damageLoopMultiplier = 1 + (loopNumber - 1) * (Neo.ENEMY_SCALING.damageLoop ?? Neo.ENEMY_SCALING.loop);
     // Time -> damage is the clock's main lever now, with a steeper slope than

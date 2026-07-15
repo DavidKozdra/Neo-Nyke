@@ -76,24 +76,18 @@ describe('challenge circuit and protect trial', () => {
     expect(completeChallengeTrial).toHaveBeenCalledWith('CIRCUIT SOLVED');
   });
 
-  test('scales protected ward rune max health down on harder difficulties', () => {
-    const difficultyDefs = {
-      easy: { statMultiplier: 1 },
-      hard: { statMultiplier: 1.22 },
-      god: { statMultiplier: 1.52 },
-    };
-    const Neo = {
-      floor: 5,
-      selectedDifficulty: 'easy',
-      getDifficultyDef: key => difficultyDefs[key],
-    };
+  test('scales the protected ward rune max health on floor only, not difficulty', () => {
+    // Obelisk HP intentionally ignores statMultiplier (see comment above
+    // getChallengeObeliskMaxHp): difficulty pressure already comes from the
+    // enemy side, so scaling HP down too would double-penalize hard/god runs.
+    const Neo = { floor: 5 };
     const getChallengeObeliskMaxHp = extractFunction(
       enemiesSource,
       'getChallengeObeliskMaxHp',
       { Neo },
     );
 
-    expect(getChallengeObeliskMaxHp(5, 'easy')).toBeGreaterThan(getChallengeObeliskMaxHp(5, 'hard'));
-    expect(getChallengeObeliskMaxHp(5, 'hard')).toBeGreaterThan(getChallengeObeliskMaxHp(5, 'god'));
+    expect(getChallengeObeliskMaxHp(5)).toBe(getChallengeObeliskMaxHp(5));
+    expect(getChallengeObeliskMaxHp(8)).toBeGreaterThan(getChallengeObeliskMaxHp(5));
   });
 });

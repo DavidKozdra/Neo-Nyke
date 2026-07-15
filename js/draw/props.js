@@ -1531,8 +1531,7 @@
   // Static projectile visuals keyed by kind. These depend only on `kind`, so we
   // return the shared frozen object instead of allocating a fresh literal for
   // every projectile every frame (dozens of throwaway objects → GC churn). The
-  // few kinds whose look is data-dependent (rock floor-tint, color fallbacks) are
-  // handled separately below and still allocate.
+  // few kinds whose look is data-dependent are handled separately below.
   const ENEMY_PROJECTILE_VISUALS = {
     sword: { color: '#f6f1ff', core: '#ffffff', trail: '#d8c7ff', shape: 'blade', length: 28 },
     god_sword: { color: '#f6f1ff', core: '#ffffff', trail: '#d8c7ff', shape: 'blade', length: 28 },
@@ -1560,12 +1559,75 @@
   Object.values(ENEMY_PROJECTILE_VISUALS).forEach(Object.freeze);
   Object.values(PLAYER_PROJECTILE_VISUALS).forEach(Object.freeze);
 
+  // Rock shots share a floor tint and only need a small set of silhouettes. Cache
+  // their fully shaded body so a rock-heavy attack does one drawImage instead of
+  // rebuilding and rasterizing the same seven-sided path twice per projectile.
+  const ROCK_SPRITE_VARIANT_COUNT = 12;
+  const ROCK_SPRITE_CACHE_LIMIT = 96;
+  const rockSpriteCache = new Map();
+  const rockVisualCache = new Map();
+  let projectileRenderTimeMs = 0;
+  let denseProjectileTrails = false;
+  let denseProjectileBodies = false;
+
+  function getRockVisual(color) {
+    const key = String(color || '#8a5a3c');
+    let visual = rockVisualCache.get(key);
+    if (!visual) {
+      visual = Object.freeze({ color: key, core: key, trail: key, shape: 'rock', length: 16 });
+      if (rockVisualCache.size >= 16) rockVisualCache.delete(rockVisualCache.keys().next().value);
+      rockVisualCache.set(key, visual);
+    }
+    return visual;
+  }
+
+  function getRockSprite(projectile, visual, radius) {
+    const seed = Number.isFinite(projectile.animSeed) ? projectile.animSeed : 0;
+    const normalizedSeed = ((seed % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+    const variant = Math.floor(normalizedSeed / (Math.PI * 2) * ROCK_SPRITE_VARIANT_COUNT);
+    const cacheKey = `${visual.color}|${radius}|${variant}`;
+    const cached = rockSpriteCache.get(cacheKey);
+    if (cached) return cached;
+
+    const halfSize = Math.ceil(radius * 1.7 + 8);
+    const canvas = document.createElement('canvas');
+    canvas.width = halfSize * 2;
+    canvas.height = halfSize * 2;
+    const ctx = canvas.getContext('2d');
+    ctx.translate(halfSize, halfSize);
+    ctx.beginPath();
+    for (let index = 0; index < 7; index += 1) {
+      const angle = (index / 7) * Math.PI * 2;
+      const jag = 0.74 + (Math.sin(variant * 3.71 + index * 2.1) * 0.5 + 0.5) * 0.5;
+      const x = Math.cos(angle) * radius * 1.25 * jag;
+      const y = Math.sin(angle) * radius * 1.25 * jag;
+      if (index === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.shadowColor = 'rgba(0,0,0,0.5)';
+    ctx.shadowBlur = 6;
+    ctx.fillStyle = visual.color;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1.6;
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+
+    if (rockSpriteCache.size >= ROCK_SPRITE_CACHE_LIMIT) {
+      rockSpriteCache.delete(rockSpriteCache.keys().next().value);
+    }
+    rockSpriteCache.set(cacheKey, canvas);
+    return canvas;
+  }
+
   function getProjectileVisual(projectile) {
     const kind = projectile.kind || 'shot';
     if (projectile.enemy) {
       if (kind === 'rock') {
         const floor = Neo.getRoomArtTheme?.()?.backdrop || projectile.color || '#8a5a3c';
-        return { color: floor, core: floor, trail: floor, shape: 'rock', length: 16 };
+        return getRockVisual(floor);
       }
       const preset = ENEMY_PROJECTILE_VISUALS[kind];
       if (preset) return preset;
@@ -1574,7 +1636,7 @@
     if (kind === 'rock') {
       // Tint the debris to match the current floor so it reads as torn-up ground.
       const floor = Neo.getRoomArtTheme?.()?.backdrop || '#8a5a3c';
-      return { color: floor, core: floor, trail: floor, shape: 'rock', length: 16 };
+      return getRockVisual(floor);
     }
     const preset = PLAYER_PROJECTILE_VISUALS[kind];
     if (preset) return preset;
@@ -1586,20 +1648,22 @@
     if (!trail.length) return;
     Neo.ctx.save();
     Neo.ctx.lineCap = 'round';
-    for (let index = trail.length - 1; index >= 0; index -= 1) {
-      const point = trail[index];
-      const next = index === 0 ? projectile : trail[index - 1];
-      const alpha = (1 - index / trail.length) * 0.32;
-      Neo.ctx.globalAlpha = alpha;
-      Neo.ctx.strokeStyle = visual.trail;
-      Neo.ctx.shadowColor = visual.trail;
-      Neo.ctx.shadowBlur = 8;
-      Neo.ctx.lineWidth = Math.max(1.5, projectile.r * (0.42 - index * 0.035));
-      Neo.ctx.beginPath();
-      Neo.ctx.moveTo(point.x, point.y);
-      Neo.ctx.lineTo(next.x, next.y);
-      Neo.ctx.stroke();
+    // One continuous stroke replaces six separately blurred strokes. At high shot
+    // counts the body glow still carries the effect, while disabling trail blur
+    // avoids the GPU/raster cliff that previously appeared around 100 projectiles.
+    Neo.ctx.globalAlpha = denseProjectileTrails ? 0.24 : 0.28;
+    Neo.ctx.strokeStyle = visual.trail;
+    Neo.ctx.shadowColor = visual.trail;
+    Neo.ctx.shadowBlur = denseProjectileTrails ? 0 : 6;
+    Neo.ctx.lineWidth = Math.max(1.5, Number(projectile.r || 5) * 0.34);
+    Neo.ctx.beginPath();
+    const oldest = trail[trail.length - 1];
+    Neo.ctx.moveTo(oldest.x, oldest.y);
+    for (let index = trail.length - 2; index >= 0; index -= 1) {
+      Neo.ctx.lineTo(trail[index].x, trail[index].y);
     }
+    Neo.ctx.lineTo(projectile.x, projectile.y);
+    Neo.ctx.stroke();
     if (visual.shape === 'fireball') {
       const tail = trail[Math.min(trail.length - 1, 2)];
       Neo.ctx.globalAlpha = 0.24;
@@ -1620,7 +1684,7 @@
     Neo.ctx.translate(projectile.x, projectile.y);
     Neo.ctx.rotate(angle);
     Neo.ctx.shadowColor = visual.color;
-    Neo.ctx.shadowBlur = projectile.enemy ? 12 : 14;
+    Neo.ctx.shadowBlur = denseProjectileBodies ? 0 : (projectile.enemy ? 12 : 14);
     Neo.ctx.fillStyle = visual.color;
     Neo.ctx.strokeStyle = visual.core;
     Neo.ctx.lineWidth = 1.5;
@@ -1733,33 +1797,11 @@
       // Chunky tumbling boulder torn from the floor: an irregular polygon tinted to
       // the tile color, with a crisp white outline so it pops against dark ground.
       // Seeded per projectile so each shard has a stable silhouette as it spins.
-      const seed = Number.isFinite(projectile.animSeed) ? projectile.animSeed : 0;
-      Neo.ctx.rotate(Date.now() * 0.006 + seed);
-      const verts = 7;
-      const buildPath = () => {
-        Neo.ctx.beginPath();
-        for (let index = 0; index < verts; index += 1) {
-          const a = (index / verts) * Math.PI * 2;
-          const jag = 0.74 + (Math.sin(seed * 7.3 + index * 2.1) * 0.5 + 0.5) * 0.5;
-          const x = Math.cos(a) * r * 1.25 * jag;
-          const y = Math.sin(a) * r * 1.25 * jag;
-          if (index === 0) Neo.ctx.moveTo(x, y);
-          else Neo.ctx.lineTo(x, y);
-        }
-        Neo.ctx.closePath();
-      };
-      Neo.ctx.shadowColor = 'rgba(0,0,0,0.5)';
-      Neo.ctx.shadowBlur = 6;
-      Neo.ctx.fillStyle = visual.color;
-      buildPath();
-      Neo.ctx.fill();
-      // White outline.
       Neo.ctx.shadowBlur = 0;
-      Neo.ctx.strokeStyle = '#ffffff';
-      Neo.ctx.lineWidth = 1.6;
-      Neo.ctx.lineJoin = 'round';
-      buildPath();
-      Neo.ctx.stroke();
+      const seed = Number.isFinite(projectile.animSeed) ? projectile.animSeed : 0;
+      Neo.ctx.rotate(projectileRenderTimeMs * 0.006 + seed);
+      const sprite = getRockSprite(projectile, visual, r);
+      Neo.ctx.drawImage(sprite, -sprite.width / 2, -sprite.height / 2);
     } else if (visual.shape === 'heart') {
       // Love Bomb Laser: a pulsing pink heart that stays upright in flight
       // (counter-rotated against the travel-angle rotate above) with a soft glow
@@ -1824,9 +1866,20 @@
     Neo.ctx.restore();
   }
 
-  function drawProjectiles() {
+  function drawProjectiles(viewportBounds = null) {
+    const cullMargin = 110;
+    projectileRenderTimeMs = Date.now();
+    const performanceMode = window.NeoSettings?.isPerformanceMode?.() !== false;
+    const projectileCount = Neo.projectiles?.length || 0;
+    denseProjectileTrails = performanceMode && projectileCount >= 64;
+    denseProjectileBodies = performanceMode && projectileCount >= 160;
     Neo.projectiles.forEach(projectile => {
       if (!projectile) return;
+      if (viewportBounds
+        && (projectile.x + cullMargin < viewportBounds.left
+          || projectile.x - cullMargin > viewportBounds.right
+          || projectile.y + cullMargin < viewportBounds.top
+          || projectile.y - cullMargin > viewportBounds.bottom)) return;
       drawProjectileShape(projectile, getProjectileVisual(projectile));
     });
     Neo.ctx.shadowBlur = 0;

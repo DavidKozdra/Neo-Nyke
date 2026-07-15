@@ -4,6 +4,7 @@ const ENVIRONMENT_IMAGE_PATHS = {
   chair_0: 'assets/sprites/env/chair_0.png',
   chair_1: 'assets/sprites/env/chair_1.png',
   chest_0: 'assets/sprites/env/chest_0.png',
+  chest_a_b: 'assets/sprites/env/chest_a_b.png',
   ground_0: 'assets/sprites/env/ground_0.png',
   pillar: 'assets/sprites/env/pillar.png',
   table_0: 'assets/sprites/env/table_0.png',

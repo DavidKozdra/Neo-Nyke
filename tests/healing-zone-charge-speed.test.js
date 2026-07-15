@@ -20,6 +20,8 @@ describe('Healing Zone charge speed', () => {
   const source = fs.readFileSync(path.join(__dirname, '../js/game/combat.js'), 'utf8');
   const healingZoneDeclaration = extractFunction(source, 'updateHealingZoneCharge');
   const deathBallDeclaration = extractFunction(source, 'updateDeathBallCharge');
+  const getChargeSpeedAttackBonusDeclaration = extractFunction(source, 'getChargeSpeedAttackBonus');
+  const spawnChargeMotesDeclaration = extractFunction(source, 'spawnChargeMotes');
 
   function chargeHealingZone(dt, attackSpeed) {
     const castHealingZone = jest.fn();
@@ -31,14 +33,19 @@ describe('Healing Zone charge speed', () => {
       smashHeld: true,
       getAttackSpeedValue: () => attackSpeed,
       nextRandom: () => 1,
+      spawnParticle: () => {},
     };
     const updateHealingZoneCharge = new Function(
       'Neo',
       'HEALING_ZONE_MAX_CHARGE',
       'HEALING_ZONE_CHARGE_SPEED_MULTIPLIER',
+      'CHARGE_SPEED_ATTACK_SPEED_DAMPING',
       'castHealingZone',
-      `${healingZoneDeclaration}; return updateHealingZoneCharge;`,
-    )(Neo, 5, 4, castHealingZone);
+      `${getChargeSpeedAttackBonusDeclaration}
+       ${spawnChargeMotesDeclaration}
+       ${healingZoneDeclaration}
+       return updateHealingZoneCharge;`,
+    )(Neo, 5, 4, 0.4, castHealingZone);
 
     updateHealingZoneCharge(dt);
     return { charge: Neo.healingZoneChargeTime, castHealingZone };
@@ -56,24 +63,31 @@ describe('Healing Zone charge speed', () => {
       smashHeld: true,
       getAttackSpeedValue: () => attackSpeed,
       nextRandom: () => 1,
+      spawnParticle: () => {},
     };
     const updateDeathBallCharge = new Function(
       'Neo',
       'DEATH_BALL_MAX_CHARGE',
       'TURTLE_POWERUP_CHARGE_SPEED_MULTIPLIER',
+      'CHARGE_SPEED_ATTACK_SPEED_DAMPING',
       'applyTurtlePowerUp',
       'castDeathBall',
-      `${deathBallDeclaration}; return updateDeathBallCharge;`,
-    )(Neo, 5, 4, applyTurtlePowerUp, castDeathBall);
+      `${getChargeSpeedAttackBonusDeclaration}
+       ${spawnChargeMotesDeclaration}
+       ${deathBallDeclaration}
+       return updateDeathBallCharge;`,
+    )(Neo, 5, 4, 0.4, applyTurtlePowerUp, castDeathBall);
 
     updateDeathBallCharge(dt);
     return { charge: Neo.deathBallChargeTime, applyTurtlePowerUp, castDeathBall };
   }
 
   test('accumulates Healing Zone charge faster using effective attack speed', () => {
-    expect(chargeHealingZone(0.25, 0.5).charge).toBeCloseTo(0.5);
+    // Attack speed's effect on charge rate is damped by CHARGE_SPEED_ATTACK_SPEED_DAMPING
+    // (0.4), so bonus = 1 + (attackSpeed - 1) * 0.4, then charge/frame = bonus * multiplier.
+    expect(chargeHealingZone(0.25, 0.5).charge).toBeCloseTo(0.8);
     expect(chargeHealingZone(0.25, 1).charge).toBeCloseTo(1);
-    expect(chargeHealingZone(0.25, 2).charge).toBeCloseTo(2);
+    expect(chargeHealingZone(0.25, 2).charge).toBeCloseTo(1.4);
   });
 
   test('auto-releases Healing Zone at the tuned full-charge threshold', () => {

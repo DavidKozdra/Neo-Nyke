@@ -116,6 +116,7 @@ window.Neo = {
     roomWeightBonus: 0,
     statMultiplier: 1,
     bossStatMultiplier: 1,
+    bossHpGrowthMultiplier: 1,
     speedMultiplier: 1,
     enemyReactionMultiplier: 1,
     rangedCadenceMultiplier: 1,

@@ -419,8 +419,10 @@
     return '#e05264';
   }
 
-  function drawCombatBar(x, y, width, height, pct, color, options = {}) {
-    const ctx = Neo.ctx;
+  const enemyNameplateCache = new WeakMap();
+  const ENEMY_NAMEPLATE_PAD = 4;
+
+  function drawCombatBar(ctx, x, y, width, height, pct, color, options = {}) {
     const clamped = Neo.clamp(Number(pct || 0), 0, 1);
     ctx.save();
     ctx.translate(x, y);
@@ -444,7 +446,7 @@
     ctx.restore();
   }
 
-  function drawEnemyNameplate(enemy, hpPct) {
+  function buildEnemyNameplateRender(enemy, hpPct) {
     const label = (enemy.type === 'rival' && enemy.rivalData)
       ? enemy.rivalData.name
       : enemy.bountyTarget
@@ -456,47 +458,88 @@
     const accent = enemy.bountyTarget ? '#ffb070' : enemy.elite ? '#f6cf6a' : Neo.isBossType(enemy.type) ? '#f2e8d7'
       : enemy.type === 'rival' ? (enemy.rivalData?.color || '#d96a83') : '#b8cfe0';
     const dangerous = Neo.isEnemyDangerous?.(enemy);
-
-    Neo.ctx.font = '8px system-ui';
-    Neo.ctx.textAlign = 'left';
-    Neo.ctx.textBaseline = 'middle';
     const text = `${label}  ${level}  ${hpText}`;
-    const textWidth = Math.ceil(Neo.ctx.measureText(text).width);
+    const barrierValue = Math.max(0, Number(enemy.barrier || 0));
+    const healthColor = getCombatHealthColor(enemy);
+    const rivalBorder = enemy.type === 'rival'
+      ? (enemy.rivalData?.color || 'rgba(220, 232, 246, 0.42)')
+      : '';
+    // Most enemies keep the same displayed nameplate for dozens of frames. Cache
+    // the finished bitmap so steady-state rendering is one drawImage rather than
+    // measureText + gradient construction + 10-20 small fills/strokes per enemy.
+    const signature = [
+      text,
+      Number(hpPct || 0).toFixed(4),
+      barrierValue.toFixed(3),
+      Number(enemy.max || 0).toFixed(3),
+      accent,
+      healthColor,
+      rivalBorder,
+      dangerous ? 1 : 0,
+    ].join('|');
+    const cached = enemyNameplateCache.get(enemy);
+    if (cached?.signature === signature) return cached;
+
+    const canvas = cached?.canvas || document.createElement('canvas');
+    let ctx = cached?.ctx || canvas.getContext('2d');
+    ctx.font = '8px system-ui';
+    const textWidth = Math.ceil(ctx.measureText(text).width);
     const plateW = Math.max(46, textWidth + 10);
     const plateH = 12;
-    const plateX = -Math.round(plateW / 2);
-    const plateY = -enemy.r - 23;
     const barW = Math.max(36, plateW - 8);
-    const barX = -Math.round(barW / 2);
-    const barY = plateY + plateH + 2;
+    const pad = ENEMY_NAMEPLATE_PAD;
+    const width = plateW + pad * 2;
+    const height = plateH + 7 + pad * 2;
+    if (canvas.width !== width || canvas.height !== height) {
+      canvas.width = width;
+      canvas.height = height;
+      ctx = canvas.getContext('2d');
+    } else {
+      ctx.clearRect(0, 0, width, height);
+    }
+    ctx.imageSmoothingEnabled = false;
+    ctx.font = '8px system-ui';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = dangerous ? 'rgba(42, 6, 10, 0.78)' : 'rgba(5, 9, 15, 0.78)';
+    ctx.fillRect(pad, pad, plateW, plateH);
+    ctx.strokeStyle = dangerous ? '#ff4f5f' : 'rgba(220, 232, 246, 0.34)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(pad + 0.5, pad + 0.5, plateW - 1, plateH - 1);
+    ctx.fillStyle = accent;
+    ctx.fillRect(pad, pad, 2, plateH);
+    ctx.fillStyle = '#e5edf8';
+    ctx.shadowColor = '#000';
+    ctx.shadowBlur = 3;
+    ctx.fillText(text, pad + 6, pad + plateH / 2 + 0.5);
 
-    Neo.ctx.shadowBlur = 0;
-    Neo.ctx.fillStyle = dangerous ? 'rgba(42, 6, 10, 0.78)' : 'rgba(5, 9, 15, 0.78)';
-    Neo.ctx.fillRect(plateX, plateY, plateW, plateH);
-    Neo.ctx.strokeStyle = dangerous ? '#ff4f5f' : 'rgba(220, 232, 246, 0.34)';
-    Neo.ctx.lineWidth = 1;
-    Neo.ctx.strokeRect(plateX + 0.5, plateY + 0.5, plateW - 1, plateH - 1);
-    Neo.ctx.fillStyle = accent;
-    Neo.ctx.fillRect(plateX, plateY, 2, plateH);
-
-    Neo.ctx.fillStyle = '#e5edf8';
-    Neo.ctx.shadowColor = '#000';
-    Neo.ctx.shadowBlur = 3;
-    Neo.ctx.fillText(text, plateX + 6, plateY + plateH / 2 + 0.5);
-
-    drawCombatBar(barX, barY, barW, 5, hpPct, getCombatHealthColor(enemy), {
-      borderColor: enemy.type === 'rival'
-        ? (enemy.rivalData?.color || 'rgba(220, 232, 246, 0.42)')
-        : undefined,
+    const barX = pad + Math.round((plateW - barW) / 2);
+    const barY = pad + plateH + 2;
+    drawCombatBar(ctx, barX, barY, barW, 5, hpPct, healthColor, {
+      borderColor: rivalBorder || undefined,
     });
-
-    if ((enemy.barrier || 0) > 0) {
-      const barrierPct = Neo.clamp(enemy.barrier / Math.max(1, enemy.max * 0.22), 0, 1);
-      drawCombatBar(barX, barY - 6, barW, 4, barrierPct, '#4fcfff', {
+    if (barrierValue > 0) {
+      const barrierPct = Neo.clamp(barrierValue / Math.max(1, enemy.max * 0.22), 0, 1);
+      drawCombatBar(ctx, barX, barY - 6, barW, 4, barrierPct, '#4fcfff', {
         endColor: '#c8fbff',
         borderColor: 'rgba(126, 214, 255, 0.54)',
       });
     }
+
+    const render = { canvas, ctx, signature, plateW };
+    enemyNameplateCache.set(enemy, render);
+    return render;
+  }
+
+  function drawEnemyNameplate(enemy, hpPct) {
+    const render = buildEnemyNameplateRender(enemy, hpPct);
+    if (!render?.canvas) return;
+    Neo.ctx.drawImage(
+      render.canvas,
+      -Math.round(render.plateW / 2) - ENEMY_NAMEPLATE_PAD,
+      -enemy.r - 23 - ENEMY_NAMEPLATE_PAD,
+    );
   }
 
   function drawSpriteFrame(spriteKey, x, y, size, options = {}) {
@@ -993,11 +1036,21 @@
     }
   }
 
-  function drawEnemies() {
+  function drawEnemies(viewportBounds = null) {
     const _now = Date.now();
     const _reduceFlash = window.NeoSettings?.getAccess()?.reduceFlash;
     Neo.enemies.forEach(enemy => {
       if (!enemy) return;
+      if (viewportBounds) {
+        // Canvas clipping prevents pixels from escaping a viewport, but it does
+        // not prevent the draw calls themselves. Skip enemies well outside this
+        // camera so split-screen does not render the full enemy list 2-4 times.
+        const margin = Math.max(72, Number(enemy.r || 0) + 48);
+        if (enemy.x < viewportBounds.left - margin
+          || enemy.x > viewportBounds.right + margin
+          || enemy.y < viewportBounds.top - margin
+          || enemy.y > viewportBounds.bottom + margin) return;
+      }
       if (enemy.spawnT > 0) { drawSpawnPortal(enemy); return; }
       const drawY = enemy.y - Math.max(0, Number(enemy.jumpZ || 0));
       const bleedStacks = Neo.getStatusStacks(enemy, 'bleed');

@@ -102,7 +102,7 @@ async function main() {
     console.warn('Server stats warning: unable to read one or more endpoints. Unit tests will still run.');
   }
 
-  // runJest(); // FIXME: Bring back tests under specific conditions
+  runJest();
 }
 
 if (require.main === module) {

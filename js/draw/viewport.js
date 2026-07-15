@@ -17,11 +17,27 @@ export function drawWorldViewport(cam, vpX, vpW, vpH, vpY, pLabel, slot = null) 
     Neo.drawWorldProps();
     Neo.drawChallengeObelisk();
     Neo.drawDeadBodies();
+    let sectionPerfStart = Neo.perfStart();
     Neo.drawChests();
     Neo.drawPickups();
-    Neo.drawProjectiles();
+    Neo.perfEnd('draw.items', sectionPerfStart);
+    sectionPerfStart = Neo.perfStart();
+    Neo.drawProjectiles({
+      left: cam.x,
+      right: cam.x + vpW,
+      top: cam.y,
+      bottom: cam.y + vpH,
+    });
+    Neo.perfEnd('draw.projectiles', sectionPerfStart);
     Neo.drawEnemyTelegraphs();
-    Neo.drawEnemies();
+    sectionPerfStart = Neo.perfStart();
+    Neo.drawEnemies({
+      left: cam.x,
+      right: cam.x + vpW,
+      top: cam.y,
+      bottom: cam.y + vpH,
+    });
+    Neo.perfEnd('draw.entities', sectionPerfStart);
     drawRoomCeilingMask();
     if (!isDying) {
       if (Neo.isMultiplayerMode()) {
@@ -46,9 +62,13 @@ export function drawWorldViewport(cam, vpX, vpW, vpH, vpY, pLabel, slot = null) 
     if (!isDying) Neo.drawNimrodStompChargeBar?.();
     if (!isDying) Neo.drawLoveBombChargeBar?.();
     if (isDying && Neo.playerDeathAnim) Neo.drawPlayerCorpseAnim(Neo.playerDeathAnim);
+    sectionPerfStart = Neo.perfStart();
     Neo.drawParticles();
+    Neo.perfEnd('draw.particles', sectionPerfStart);
+    sectionPerfStart = Neo.perfStart();
     if (!isDying) Neo.drawLadderPrompt();
     if (!isDying) Neo.drawJesterPortalPrompt();
+    Neo.perfEnd('draw.prompts', sectionPerfStart);
     // P-label in corner of each viewport (split only)
     if (Neo.isSplitScreen() && pLabel) {
       const slot = Neo.getActivePlayerSlots().find(candidate => candidate.label === pLabel);
