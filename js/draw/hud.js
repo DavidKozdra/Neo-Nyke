@@ -822,11 +822,10 @@
     const visibleRight = Neo.clamp((window.innerWidth - canvasRect.left) / scaleX, 0, Neo.canvas.width);
     const visibleWidth = Math.max(1, visibleRight - visibleLeft);
 
-    // The boss bar reads as a major "this is a fight" element, so its default size
-    // is doubled relative to the base. The HUD Layout scale slider multiplies on top
-    // of this (Auto/100% = 2×, 200% = 4×); the width cap still prevents overflow.
-    const BOSS_BAR_BASE_SCALE = 2;
-    const scale = hudScale * BOSS_BAR_BASE_SCALE;
+    // The render multiplier is shared with the HUD preview through settings-ui,
+    // so the canvas bar and its preview cannot drift to different base sizes.
+    const renderMultiplier = Number(window.NeoSettings?.getHudRenderMultiplier?.('bossbar')) || 2;
+    const scale = hudScale * renderMultiplier;
 
     const count = bosses.length;
     const crowd = Math.min(count - 1, 5);
@@ -844,7 +843,7 @@
     // explicit HUD Layout offset. Keep it tight beneath the Timer/Floor plate so
     // the boss bar reads as part of the top HUD instead of floating in the arena.
     // Stacks downward for multi-boss encounters.
-    const topInset = (visibleWidth <= 700 ? 64 : 72) / scaleY;
+    const topInset = (Number(window.NeoSettings?.getHudAnchor?.('bossbar', 'top')) || 72) / scaleY;
     const startX = Math.round(Neo.clamp(
       visibleLeft + (visibleWidth - width) / 2 + barOffsetX / scaleX,
       visibleLeft + edgeInset,

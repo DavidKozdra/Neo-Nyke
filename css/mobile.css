@@ -539,16 +539,6 @@
     font-size: calc(12px * var(--font-scale, 1));
   }
 
-  .inv-ux-hints {
-    gap: 6px;
-    margin-bottom: 10px;
-  }
-
-  .inv-ux-hint {
-    font-size: calc(10px * var(--font-scale, 1));
-    padding: 5px 8px;
-  }
-
   .inv-tab-panel {
     border-radius: 10px;
     padding: 10px;
@@ -1798,7 +1788,7 @@
   .center-display {
     top: calc(4px + env(safe-area-inset-top, 0px));
     width: min(360px, calc(100vw - 112px));
-    transform: translateX(-50%) scale(var(--hud-scale-center, var(--hud-scale, 1)));
+    transform: translate(calc(-50% + var(--hud-x-center, 0px)), var(--hud-y-center, 0px)) scale(var(--hud-scale-center, var(--hud-scale, 1)));
     transform-origin: top center;
   }
 
@@ -1878,7 +1868,7 @@
     gap: 3px;
     font-size: calc(11px * var(--font-scale, 1));
     letter-spacing: .05em;
-    transform: scale(var(--hud-scale-coins, var(--hud-scale, 1)));
+    transform: translate(var(--hud-x-coins, 0px), var(--hud-y-coins, 0px)) scale(var(--hud-scale-coins, var(--hud-scale, 1)));
   }
 
   .currency-line {
@@ -1908,7 +1898,7 @@
     grid-template-columns: minmax(0, 1fr);
     font-size: calc(8px * var(--font-scale, 1));
     letter-spacing: .04em;
-    transform: scale(var(--hud-scale-stats, var(--hud-scale, 1)));
+    transform: translate(var(--hud-x-stats, 0px), var(--hud-y-stats, 0px)) scale(var(--hud-scale-stats, var(--hud-scale, 1)));
     transform-origin: top left;
   }
 
@@ -1971,7 +1961,7 @@
     width: min(284px, calc(100vw - 16px));
     gap: 3px;
     justify-content: center;
-    transform: translateX(-50%) scale(var(--hud-scale-actions, var(--hud-scale, 1)));
+    transform: translate(calc(-50% + var(--hud-x-actions, 0px)), var(--hud-y-actions, 0px)) scale(var(--hud-scale-actions, var(--hud-scale, 1)));
     transform-origin: bottom center;
   }
 
@@ -2006,7 +1996,7 @@
     max-height: calc(100dvh - 92px - env(safe-area-inset-top, 0px));
     padding: 10px 12px;
     font-size: calc(16px * var(--font-scale, 1));
-    transform: scale(var(--hud-scale-objectives, var(--hud-scale, 1)));
+    transform: translate(var(--hud-x-objectives, 0px), var(--hud-y-objectives, 0px)) scale(var(--hud-scale-objectives, var(--hud-scale, 1)));
   }
 
   .objective-tracker__head {
@@ -3934,5 +3924,12 @@
   .mods-tab {
     flex: 1 1 0;
     min-width: 0;
+  }
+
+  .game-panel-head > .panel-header-tabs,
+  #shopPanel .game-panel-head > .shop-tabs,
+  #invPanel .game-panel-head > .inv-tabs,
+  #anvilPanel .game-panel-head > .anvil-tabs {
+    overflow-y: hidden;
   }
 }

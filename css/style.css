@@ -431,8 +431,8 @@ button, input, select, textarea {
 #statusToastStack {
   position: fixed;
   left: 50%;
-  bottom: calc(120px + var(--hud-y-statustoast, 0px));
-  transform: translateX(calc(-50% + var(--hud-x-statustoast, 0px))) scale(var(--hud-scale-statustoast, 1.2));
+  bottom: 120px;
+  transform: translate(calc(-50% + var(--hud-x-statustoast, 0px)), var(--hud-y-statustoast, 0px)) scale(var(--hud-scale-statustoast, 1.2));
   transform-origin: bottom center;
   display: flex;
   flex-direction: column-reverse;
@@ -1411,7 +1411,7 @@ button, input, select, textarea {
   z-index: 20;
   pointer-events: none;
   max-width: min(620px, calc(100vw - 32px));
-  transform: translate(var(--hud-x-stats, 0px), var(--hud-y-stats, 0px)) scale(calc(2 * var(--hud-scale-stats, var(--hud-scale, 1))));
+  transform: translate(var(--hud-x-stats, 0px), var(--hud-y-stats, 0px)) scale(var(--hud-scale-stats, var(--hud-scale, 1)));
   transform-origin: bottom left;
 }
 
@@ -2929,31 +2929,6 @@ button, input, select, textarea {
   margin-top: 0;
 }
 
-.inv-ux-hints {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin: -6px 0 12px;
-}
-
-.inv-ux-hint {
-  display: inline-flex;
-  align-items: center;
-  padding: 6px 10px;
-  border-radius: 999px;
-  border: 1px solid rgba(148, 193, 225, .24);
-  background: rgba(130, 175, 205, .1);
-  color: var(--menu-text-soft);
-  font-size: calc(11px * var(--font-scale, 1));
-  letter-spacing: .06em;
-  text-transform: uppercase;
-}
-
-.inv-ux-hint b {
-  color: var(--menu-text);
-  margin-right: 4px;
-}
-
 .inv-player-tabs {
   display: flex;
   gap: 6px;
@@ -3754,7 +3729,7 @@ button, input, select, textarea {
   position: absolute;
   left: 50%;
   bottom: 18px;
-  transform: translate(calc(-50% + var(--hud-x-actions, 0px)), var(--hud-y-actions, 0px)) scale(calc(1.5 * var(--hud-scale-actions, var(--hud-scale, 1))));
+  transform: translate(calc(-50% + var(--hud-x-actions, 0px)), var(--hud-y-actions, 0px)) scale(var(--hud-scale-actions, var(--hud-scale, 1)));
   transform-origin: bottom center;
   display: flex;
   gap: 10px;
@@ -14467,4 +14442,10 @@ button.alt.danger {
 .mods-pane__hint--legacy {
   border-left-color: #ae7bd7;
   background: rgba(174,123,215,.07);
+}
+
+.panel-tabs,
+.shop-tabs,
+.mods-tabs {
+  overflow-y: hidden;
 }

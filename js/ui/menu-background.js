@@ -1,3 +1,22 @@
+// Pick one subtitle at random per page load, then stamp it onto every menu
+// title instance (main menu, pause overlay, credits) so they all agree for
+// the rest of the session. animateMenuTitle() below only toggles a fade-in
+// class — it never touches textContent — so setting it once here is safe.
+(function pickMenuSubtitle() {
+  const SUBTITLES = [
+    'DUNGEON OF GOD',
+    'DUNGEON OF FAITH',
+    'THE DUNGEON GOD',
+    'DUNGEON OF THE HERETIC',
+    'GUARDIANS OF FAITH',
+  ];
+  const subtitle = SUBTITLES[Math.floor(Math.random() * SUBTITLES.length)];
+  ['menuSubtitle', 'pauseMenuSubtitle', 'creditsMenuSubtitle'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = subtitle;
+  });
+})();
+
 (function menuBackground() {
   const bg  = document.getElementById('menuBg');
   const bg2 = document.getElementById('charBg');
