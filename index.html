@@ -459,6 +459,10 @@
         <h3>SHOP</h3>
         <p class="panel-subtitle">Weapons, relics, and quick repairs for the next room.</p>
       </div>
+      <div class="shop-balance" aria-label="Current gold">
+        <span class="shop-balance__label">YOUR GOLD</span>
+        <span class="shop-balance__value"><canvas class="gold-coin-icon" data-gold-coin width="32" height="32" aria-hidden="true"></canvas><b id="shopCoins">0</b></span>
+      </div>
       <button id="shopClose" class="panel-close" aria-label="Close shop">X</button>
     </div>
     <div id="shopVoucherBanner" class="shop-voucher-banner hidden" aria-hidden="true">
@@ -1507,7 +1511,6 @@
           <button class="difficulty-btn" data-difficulty="impossible" type="button"><canvas class="difficulty-btn-icon" width="20" height="20" data-difficulty-icon="impossible"></canvas>Impossible</button>
           <button class="difficulty-btn" data-difficulty="god" type="button"><canvas class="difficulty-btn-icon" width="20" height="20" data-difficulty-icon="god"></canvas>God</button>
         </div>
-        <p id="difficultyHint" class="difficulty-hint" aria-live="polite">Balanced enemy pressure and generous relic drops.</p>
         <div class="seedrow seedrow--panel">
           <label id="seedLabel">SEED</label>
           <input id="seed" placeholder="Random seed">
@@ -1517,8 +1520,16 @@
           <div><strong><span id="charLoopCount">0</span> LOOP CRYSTALS</strong><small>Earned by completing loops.</small></div>
         </div>
         <div class="charselect-extra-options">
-          <button id="challengeToggle" class="challenge-toggle" type="button" aria-expanded="false"><strong>CHALLENGE SHOP</strong><small>Run modifiers</small></button>
-          <button id="legacyToggle" class="challenge-toggle legacy-toggle" type="button" aria-expanded="false"><strong>LEGACY UPGRADES</strong><small>Permanent bonuses</small></button>
+          <button id="challengeToggle" class="challenge-toggle" type="button" aria-expanded="false">
+            <span class="run-option-type">OPTIONAL · THIS RUN</span>
+            <strong>CHALLENGE MODIFIERS</strong>
+            <small><span id="challengeToggleStatus">0 ON</span> · Harder rules, bonus crystals</small>
+          </button>
+          <button id="legacyToggle" class="challenge-toggle legacy-toggle" type="button" aria-expanded="false">
+            <span class="run-option-type">PERMANENT · EVERY RUN</span>
+            <strong>LEGACY UPGRADES</strong>
+            <small><span id="legacyToggleStatus">0 OWNED</span> · Always on after purchase</small>
+          </button>
         </div>
         <button id="go" class="charselect-start-btn">ENTER DUNGEON</button>
       </aside>
@@ -1643,15 +1654,22 @@
 <!-- Challenge Shop floating panel -->
 <section id="challengePanel" class="floating-panel hidden" aria-hidden="true">
   <div class="floating-panel__head">
-    <span class="floating-panel__title">CHALLENGE SHOP</span>
+    <div class="floating-panel__title-wrap">
+      <span class="floating-panel__kicker">OPTIONAL · PER RUN</span>
+      <span class="floating-panel__title">CHALLENGE MODIFIERS</span>
+    </div>
     <button id="challengeClose" class="panel-close" aria-label="Close challenge shop">X</button>
   </div>
   <div class="floating-panel__body">
+    <div class="progression-mode-note progression-mode-note--optional">
+      <strong>YOU CHOOSE WHAT IS ON</strong>
+      <span>Buy once, then click owned modifiers ON or OFF before entering. Only ON modifiers change this run.</span>
+    </div>
     <div class="progression-panel-wallet">
       <canvas id="challengeLoopIcon" class="loop-crystal-icon" width="32" height="32" aria-hidden="true"></canvas>
-      <div><strong><span id="challengeLoopCount">0</span> LOOP CRYSTALS</strong><small>Buy once, then toggle for any run.</small></div>
+      <div><strong><span id="challengeLoopCount">0</span> LOOP CRYSTALS</strong><small>Spend to permanently unlock optional modifiers.</small></div>
     </div>
-    <small id="challengeHint" class="progression-panel-status">0 ACTIVE</small>
+    <small id="challengeHint" class="progression-panel-status">0 ON THIS RUN</small>
     <div id="challengeSelect" class="challenge-select" role="group" aria-label="Challenge Modifiers">
       <button class="challenge-btn" data-challenge="no_hit" type="button">Never Get Hit</button>
       <button class="challenge-btn" data-challenge="no_items" type="button">No Items</button>
@@ -1667,10 +1685,17 @@
 <!-- Legacy Upgrades floating panel -->
 <section id="legacyPanel" class="floating-panel hidden" aria-hidden="true">
   <div class="floating-panel__head">
-    <span class="floating-panel__title">LEGACY UPGRADES</span>
+    <div class="floating-panel__title-wrap">
+      <span class="floating-panel__kicker">PERMANENT · ALL RUNS</span>
+      <span class="floating-panel__title">LEGACY UPGRADES</span>
+    </div>
     <button id="legacyClose" class="panel-close" aria-label="Close legacy upgrades">X</button>
   </div>
   <div class="floating-panel__body">
+    <div class="progression-mode-note progression-mode-note--permanent">
+      <strong>ALWAYS ON AFTER PURCHASE</strong>
+      <span>Legacy upgrades permanently strengthen future runs. They are not optional toggles after you buy them.</span>
+    </div>
     <div class="progression-panel-wallet">
       <canvas id="legacyLoopIcon" class="loop-crystal-icon" width="32" height="32" aria-hidden="true"></canvas>
       <div><strong><span id="legacyLoopCount">0</span> LOOP CRYSTALS</strong><small>Permanent upgrades for every future run.</small></div>

@@ -2058,11 +2058,12 @@
     left: calc(8px + env(safe-area-inset-left, 0px));
     gap: 4px;
     transform: translate(var(--hud-x-itemnotify, 0px), var(--hud-y-itemnotify, 0px))
-               scale(var(--hud-scale-itemnotify, 1.5));
+               scale(var(--hud-scale-itemnotify, 2.3));
   }
 
   .item-toast {
-    width: min(280px, calc(100vw - 16px));
+    /* 43.478vw is the inverse of the 2.3× touch default. */
+    width: min(280px, calc(43.478vw - 6.956px));
     gap: 7px;
     padding: 7px 8px;
     border-width: 1px;
@@ -2987,12 +2988,6 @@
     font-size: calc(16px * var(--font-scale, 1));
   }
 
-  #charSelect .difficulty-hint {
-    min-height: 0;
-    font-size: calc(15px * var(--font-scale, 1));
-    line-height: 1.25;
-  }
-
   #charSelect .seedrow {
     display: flex;
     flex-direction: column;
@@ -3454,6 +3449,65 @@
 /* Canonical phone roster rules. Keep this final so older responsive passes
    cannot reintroduce min-content overflow or hide the back control. */
 @media (max-width: 700px) {
+  #shopPanel .game-panel-head {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  #shopPanel .game-panel-head .panel-title-wrap {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  #shopPanel .shop-balance {
+    grid-column: 1;
+    grid-row: 2;
+    justify-self: start;
+    justify-items: start;
+    margin-left: 0;
+    padding: 5px 8px;
+  }
+
+  #shopPanel .game-panel-head .panel-close {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  #shopPanel .shop-list {
+    grid-template-columns: 1fr;
+  }
+
+  #shopPanel .shop-card {
+    min-height: 0;
+    padding: 12px;
+  }
+
+  #shopPanel .shop-card__top {
+    grid-template-columns: 52px minmax(0, 1fr) auto;
+    gap: 9px;
+  }
+
+  #shopPanel .shop-card__icon-frame {
+    width: 48px;
+    height: 48px;
+  }
+
+  #shopPanel .shop-card__icon {
+    width: 42px !important;
+    height: 42px !important;
+  }
+
+  #shopPanel .shop-card__heading h4 {
+    font-size: calc(18px * var(--font-scale, 1));
+  }
+
+  #shopPanel .shop-card__price {
+    font-size: calc(15px * var(--font-scale, 1));
+  }
+
+  #shopPanel .shop-card__copy p {
+    font-size: calc(14px * var(--font-scale, 1));
+  }
+
   #charSelect.overlay {
     overflow: hidden;
   }
@@ -3751,5 +3805,52 @@
   .altmode-card__btn {
     max-width: 100%;
     transform: none !important;
+  }
+}
+
+/* Keep gameplay navigation as top-edge folder tabs on narrow screens too. */
+@media (max-width: 700px) {
+  .game-panel > .panel-tabs,
+  .game-panel > .shop-tabs,
+  #shopPanel.game-panel > .shop-tabs {
+    position: sticky;
+    top: -18px;
+    display: flex;
+    flex-flow: row nowrap;
+    align-items: flex-end;
+    gap: 4px;
+    margin: 0 0 12px;
+    padding: 8px 5px 0;
+    overflow-x: auto;
+    border: 0;
+    border-bottom: 1px solid var(--menu-border-strong);
+    border-radius: 0;
+    background: var(--ui-panel-surface);
+  }
+
+  .game-panel > .panel-tabs .panel-tab,
+  .game-panel > .panel-tabs .shop-tab,
+  .game-panel > .shop-tabs .panel-tab,
+  .game-panel > .shop-tabs .shop-tab,
+  #shopPanel.game-panel > .shop-tabs .shop-tab {
+    flex: 0 0 auto;
+    min-width: 84px;
+    min-height: 40px;
+    margin-bottom: -1px;
+    padding: 7px 9px 8px;
+    border-radius: 6px 6px 0 0;
+    font-size: calc(10px * var(--font-scale, 1));
+  }
+
+  #charSelect .run-option-type {
+    font-size: calc(8px * var(--font-scale, 1));
+  }
+
+  .progression-mode-note strong {
+    font-size: calc(12px * var(--font-scale, 1));
+  }
+
+  .progression-mode-note span {
+    font-size: calc(11px * var(--font-scale, 1));
   }
 }

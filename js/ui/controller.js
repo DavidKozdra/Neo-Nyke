@@ -309,8 +309,8 @@ export function createUIController(view) {
 
     function getChallengeStatus(def, state) {
       if (!state.isUnlocked) return `LOCKED UNTIL ${def.unlockLoops} ${LC}`;
-      if (state.isOwned) return state.isSelected ? 'ACTIVE THIS RUN' : 'OWNED';
-      return `BUY ${def.cost} ${LC}`;
+      if (state.isOwned) return state.isSelected ? 'ON · THIS RUN' : 'OFF · CLICK TO ENABLE';
+      return `BUY ${def.cost} ${LC} · THEN TOGGLE`;
     }
 
     function renderChallengeButtonContent(def, state) {
@@ -3022,6 +3022,7 @@ export function createUIController(view) {
           button.classList.toggle('locked', !isUnlocked);
           button.classList.toggle('purchased', isOwned);
           button.classList.toggle('sel', isSelected);
+          button.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
           button.disabled = !isUnlocked;
           button.title = !isUnlocked
             ? `Unlock at ${def.unlockLoops} Loop Crystals`
@@ -3033,8 +3034,10 @@ export function createUIController(view) {
         if (view.challengeHint) {
           const activeCount = selected.length;
           const bonusCrystals = Math.max(0, Math.round(Neo.getActiveChallengeCrystalBonusMultiplier()));
-          view.challengeHint.textContent = `${activeCount} ACTIVE${bonusCrystals ? ` · +${bonusCrystals}% CRYSTALS` : ''}`;
+          view.challengeHint.textContent = `${activeCount} ON THIS RUN${bonusCrystals ? ` · +${bonusCrystals}% CRYSTALS` : ' · NO EXTRA RULES'}`;
         }
+        const challengeToggleStatus = document.getElementById('challengeToggleStatus');
+        if (challengeToggleStatus) challengeToggleStatus.textContent = `${selected.length} ON`;
         const challengeLoopCount = document.getElementById('challengeLoopCount');
         if (challengeLoopCount) challengeLoopCount.textContent = loopCrystals;
         drawLoopCrystalIcons(document.getElementById('challengePanel') || document);
@@ -3066,6 +3069,8 @@ export function createUIController(view) {
           const ownedCount = Neo.LEGACY_ORDER.filter(k => owned.has(k)).length;
           view.legacyHint.textContent = `${ownedCount} / ${Neo.LEGACY_ORDER.length} UNLOCKED`;
         }
+        const legacyToggleStatus = document.getElementById('legacyToggleStatus');
+        if (legacyToggleStatus) legacyToggleStatus.textContent = `${Neo.LEGACY_ORDER.filter(k => owned.has(k)).length} OWNED`;
         const legacyLoopCount = document.getElementById('legacyLoopCount');
         if (legacyLoopCount) legacyLoopCount.textContent = loopCrystals;
         drawLoopCrystalIcons(document.getElementById('legacyPanel') || document);

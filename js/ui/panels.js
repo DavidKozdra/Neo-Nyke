@@ -2109,7 +2109,7 @@ export function getShopWeaponOffers() {
     const indexAttr = Number.isInteger(index) ? ` data-index="${index}"` : '';
     const styleAttr = accentColor ? ` style="--shop-card-accent:${escapeShopText(accentColor)}"` : '';
     const titleStyle = titleColor ? ` style="color:${escapeShopText(titleColor)}"` : '';
-    const descStyle = ' style="color:#ffffff"'; // descriptions always render white; rarity only colors the title
+    const descStyle = ''; // descriptions use the shared high-contrast panel text color
     const status = state.status || 'available';
     const statusLabel = state.statusLabel || '';
     const chipHtml = renderShopChips(chips.length ? chips : [rarityLabel]);
@@ -2121,6 +2121,7 @@ export function getShopWeaponOffers() {
     const priceInner = isGoldCost
       ? `<canvas class="shop-card__coin gold-coin-icon" data-gold-coin width="32" height="32" aria-hidden="true"></canvas>${escapeShopText(String(cost))}`
       : escapeShopText(cost);
+    const recommendedHtml = recommended ? '<span class="shop-card__recommended-badge">BUILD MATCH</span>' : '';
     return `<div class="shop-card shop-card--${safeKind} shop-card--status-${escapeShopText(status)}${state.showUnaffordable ? ' shop-card--unaffordable' : ''}${state.canAfford && !state.disabled ? ' shop-card--affordable' : ''}${recommended ? ' shop-card--recommended' : ''}${state.bought ? ' shop-card--just-bought' : ''}"${styleAttr}>
       <div class="shop-card__top">
         <span class="shop-card__icon-frame">
@@ -2130,12 +2131,16 @@ export function getShopWeaponOffers() {
           <span class="shop-card__eyebrow">${escapeShopText(rarityLabel)}</span>
           <h4${titleStyle}>${escapeShopText(title)}</h4>
         </div>
-        <span class="shop-card__price">${priceInner}</span>
+        <div class="shop-card__purchase">
+          <span class="shop-card__price">${priceInner}</span>
+          <span class="shop-card__status shop-card__status--${escapeShopText(status)}">${escapeShopText(statusLabel)}</span>
+        </div>
       </div>
 
       <div class="shop-card__copy">
         <p${descStyle}>${escapeShopText(description)}</p>
       </div>
+      <div class="shop-card__tags">${recommendedHtml}${chipHtml}</div>
       ${statsHtml}
       ${footerExtra}
       <div class="shop-card__footer">
@@ -2305,6 +2310,8 @@ export function getShopWeaponOffers() {
 export function renderShopPanel() {
     if (!Neo.ui.shopPanel || !Neo.player) return;
   if (!isPanelOpen(Neo.ui.shopPanel)) return;
+    if (Neo.ui.shopCoins) Neo.ui.shopCoins.textContent = String(Math.max(0, Math.floor(Number(Neo.player.coins || 0))));
+    drawGoldCoinIcons(Neo.ui.shopPanel);
     Neo.refreshShopVoucherBanner?.();
     Neo.refreshRoomShopCosts(Neo.currentRoom);
     Neo.shopOffers = Neo.currentRoom?.shopOffers || Neo.shopOffers;

@@ -840,12 +840,11 @@
     const gap = height + Math.max(12, Math.round((18 - crowd * 1.3) * scale));
     const labelFontSize = Math.max(8, Math.round((12 - crowd * 0.65) * scale));
     const radius = height / 2;
-    // Top-center anchor within the visible viewport (genre convention; clears the
-    // top-left coins widget), nudged by the player's HUD Layout offset. The Y inset
-    // sits below the top-center Timer/Floor pill (a ~44px DOM overlay pinned to the
-    // top edge) with extra clearance for the now-larger bar; screen px → buffer px.
-    // Stacks downward for multi-boss.
-    const topInset = 96 / scaleY;
+    // Top-center anchor within the visible viewport, nudged only by the player's
+    // explicit HUD Layout offset. Keep it tight beneath the Timer/Floor plate so
+    // the boss bar reads as part of the top HUD instead of floating in the arena.
+    // Stacks downward for multi-boss encounters.
+    const topInset = (visibleWidth <= 700 ? 64 : 72) / scaleY;
     const startX = Math.round(Neo.clamp(
       visibleLeft + (visibleWidth - width) / 2 + barOffsetX / scaleX,
       visibleLeft + edgeInset,
