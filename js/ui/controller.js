@@ -990,15 +990,29 @@ export function createUIController(view) {
       view.challengePanel?.classList.toggle('hidden', !challengePanelOpen);
       view.challengePanel?.setAttribute('aria-hidden', challengePanelOpen ? 'false' : 'true');
       view.challengeToggle?.setAttribute('aria-expanded', challengePanelOpen ? 'true' : 'false');
+      if (!challengePanelOpen) legacyPanelOpen = false;
     }
 
     let legacyPanelOpen = false;
+    function setModsTab(tab = 'challenges') {
+      const next = tab === 'legacy' ? 'legacy' : 'challenges';
+      legacyPanelOpen = next === 'legacy';
+      view.modsChallengesPane?.classList.toggle('hidden', next !== 'challenges');
+      view.modsLegacyPane?.classList.toggle('hidden', next !== 'legacy');
+      view.modsTabs?.forEach(button => {
+        const active = button.dataset.modsTab === next;
+        button.classList.toggle('active', active);
+        button.setAttribute('aria-selected', active ? 'true' : 'false');
+        button.tabIndex = active ? 0 : -1;
+      });
+    }
+
     function setLegacyPanelOpen(open) {
       legacyPanelOpen = !!open;
-      if (!legacyPanelOpen) blurIfFocusInside(view.legacyPanel);
-      view.legacyPanel?.classList.toggle('hidden', !legacyPanelOpen);
-      view.legacyPanel?.setAttribute('aria-hidden', legacyPanelOpen ? 'false' : 'true');
-      view.legacyToggle?.setAttribute('aria-expanded', legacyPanelOpen ? 'true' : 'false');
+      if (legacyPanelOpen) {
+        setModsTab('legacy');
+        setChallengePanelOpen(true);
+      }
     }
 
     let runHistoryView = 'info';
@@ -2441,13 +2455,17 @@ export function createUIController(view) {
         });
         view.challengeToggle?.addEventListener('click', handlers.onToggleChallenges);
         view.challengeClose?.addEventListener('click', () => setChallengePanelOpen(false));
+        view.modsTabs?.forEach(tab => {
+          tab.addEventListener('click', () => setModsTab(tab.dataset.modsTab || 'challenges'));
+          tab.addEventListener('keydown', event => handleTablistKeydown(event, view.modsTabs, nextTab => {
+            setModsTab(nextTab.dataset.modsTab || 'challenges');
+          }));
+        });
         view.legacyButtons.forEach(button => {
           button.addEventListener('click', () => {
             handlers.onLegacySelect(button.dataset.legacy || '');
           });
         });
-        view.legacyToggle?.addEventListener('click', handlers.onToggleLegacy);
-        view.legacyClose?.addEventListener('click', () => setLegacyPanelOpen(false));
         view.runHistoryBtn?.addEventListener('click', handlers.onToggleRunHistory);
         document.getElementById('metaLoopPill')?.addEventListener('click', () => {
           activeInfoTab = 'meta';
@@ -3037,7 +3055,7 @@ export function createUIController(view) {
           view.challengeHint.textContent = `${activeCount} ON THIS RUN${bonusCrystals ? ` · +${bonusCrystals}% CRYSTALS` : ' · NO EXTRA RULES'}`;
         }
         const challengeToggleStatus = document.getElementById('challengeToggleStatus');
-        if (challengeToggleStatus) challengeToggleStatus.textContent = `${selected.length} ON`;
+        if (challengeToggleStatus) challengeToggleStatus.textContent = `${selected.length} challenge${selected.length === 1 ? '' : 's'}`;
         const challengeLoopCount = document.getElementById('challengeLoopCount');
         if (challengeLoopCount) challengeLoopCount.textContent = loopCrystals;
         drawLoopCrystalIcons(document.getElementById('challengePanel') || document);
@@ -3070,10 +3088,13 @@ export function createUIController(view) {
           view.legacyHint.textContent = `${ownedCount} / ${Neo.LEGACY_ORDER.length} UNLOCKED`;
         }
         const legacyToggleStatus = document.getElementById('legacyToggleStatus');
-        if (legacyToggleStatus) legacyToggleStatus.textContent = `${Neo.LEGACY_ORDER.filter(k => owned.has(k)).length} OWNED`;
+        if (legacyToggleStatus) {
+          const ownedCount = Neo.LEGACY_ORDER.filter(k => owned.has(k)).length;
+          legacyToggleStatus.textContent = `${ownedCount} legacy`;
+        }
         const legacyLoopCount = document.getElementById('legacyLoopCount');
         if (legacyLoopCount) legacyLoopCount.textContent = loopCrystals;
-        drawLoopCrystalIcons(document.getElementById('legacyPanel') || document);
+          drawLoopCrystalIcons(document.getElementById('challengePanel') || document);
         if (activeInfoTab === 'meta' && view.rhInfoContent) {
           view.rhInfoContent.innerHTML = renderMetaProgressionInfo();
           drawLoopCrystalIcons(view.rhInfoContent);

@@ -1357,13 +1357,16 @@ export function createTutorialController() {
       returnState: 'play',
       onComplete: () => {
         document.body.classList.remove('tutorial-cutscene-active');
-        if (!state.seenScenes || typeof state.seenScenes !== 'object') state.seenScenes = {};
-        state.seenScenes[sceneId] = true;
         Neo.scheduleRunSave?.();
         render(true);
       },
     });
     if (started) {
+      // Mark the scene seen as soon as it actually starts, not when it finishes —
+      // otherwise leaving the room mid-dialogue (e.g. dashing back out the door
+      // before onComplete fires) leaves it "unseen" and replays it on re-entry.
+      if (!state.seenScenes || typeof state.seenScenes !== 'object') state.seenScenes = {};
+      state.seenScenes[sceneId] = true;
       document.body.classList.add('tutorial-cutscene-active');
       Neo.clearGameplayInput?.();
       Neo.setShopPanelOpen?.(false, { animateClose: false });

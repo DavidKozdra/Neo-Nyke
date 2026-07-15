@@ -2058,12 +2058,11 @@
     left: calc(8px + env(safe-area-inset-left, 0px));
     gap: 4px;
     transform: translate(var(--hud-x-itemnotify, 0px), var(--hud-y-itemnotify, 0px))
-               scale(var(--hud-scale-itemnotify, 2.3));
+               scale(var(--hud-scale-itemnotify, 1.2));
   }
 
   .item-toast {
-    /* 43.478vw is the inverse of the 2.3× touch default. */
-    width: min(280px, calc(43.478vw - 6.956px));
+    width: min(280px, calc(100vw - 16px));
     gap: 7px;
     padding: 7px 8px;
     border-width: 1px;

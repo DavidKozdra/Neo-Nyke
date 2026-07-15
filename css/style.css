@@ -351,7 +351,7 @@ button, input, select, textarea {
   top: calc(var(--coin-hud-bottom) * var(--hud-scale-coins, var(--hud-scale, 1)) + var(--notify-gap) + var(--hud-y-coins, 0px));
   left: 16px;
   transform: translate(var(--hud-x-itemnotify, 0px), var(--hud-y-itemnotify, 0px))
-             scale(var(--hud-scale-itemnotify, 2.7));
+             scale(var(--hud-scale-itemnotify, 1.4));
   transform-origin: top left;
   display: flex;
   flex-direction: column;
@@ -362,8 +362,7 @@ button, input, select, textarea {
 
 .item-toast {
   box-sizing: border-box;
-  /* At the 2.7× default, keep the enlarged card inside the viewport. */
-  width: min(520px, calc(37.037vw - 11.852px));
+  width: min(520px, calc(100vw - 32px));
   display: flex;
   align-items: center;
   gap: 12px;
@@ -14315,4 +14314,157 @@ button.alt.danger {
 .game-panel > .shop-tabs .panel-tab:hover,
 .game-panel > .shop-tabs .shop-tab:hover {
   transform: translateY(-2px);
+}
+
+/* Panel navigation belongs in the header, immediately to the right of title. */
+.game-panel .game-panel-head {
+  align-items: flex-end;
+}
+
+.game-panel-head > .panel-title-wrap {
+  flex: 0 1 auto;
+  min-width: 150px;
+}
+
+.game-panel-head > .panel-header-tabs,
+#shopPanel .game-panel-head > .shop-tabs,
+#invPanel .game-panel-head > .inv-tabs,
+#anvilPanel .game-panel-head > .anvil-tabs {
+  position: static;
+  top: auto;
+  z-index: auto;
+  flex: 1 1 auto;
+  align-self: stretch;
+  display: flex;
+  align-items: flex-end;
+  gap: 5px;
+  min-width: 0;
+  margin: 0;
+  padding: 0 4px;
+  overflow-x: auto;
+  border: 0;
+  border-bottom: 1px solid var(--menu-border-strong);
+  border-radius: 0;
+  background: transparent;
+  backdrop-filter: none;
+}
+
+.game-panel-head > .panel-header-tabs .panel-tab,
+#shopPanel .game-panel-head > .shop-tabs .shop-tab,
+#invPanel .game-panel-head > .inv-tabs .panel-tab,
+#anvilPanel .game-panel-head > .anvil-tabs .panel-tab {
+  flex: 0 0 auto;
+  min-width: 100px;
+  min-height: 54px;
+  margin: 0 0 -1px;
+  padding: 11px 14px 12px;
+  border: 1px solid var(--menu-border);
+  border-bottom-color: var(--menu-border-strong);
+  border-radius: 8px 8px 0 0;
+  background: #090c0f;
+  color: var(--menu-text-muted);
+  font-size: calc(15px * var(--font-scale, 1));
+  box-shadow: inset 0 4px 0 transparent;
+}
+
+#shopPanel .game-panel-head > .shop-tabs .shop-tab { min-width: 92px; }
+#invPanel .game-panel-head > .inv-tabs .panel-tab { min-width: 96px; }
+#anvilPanel .game-panel-head > .anvil-tabs .panel-tab { min-width: 132px; }
+
+.game-panel-head > .panel-header-tabs .panel-tab.active,
+#shopPanel .game-panel-head > .shop-tabs .shop-tab.active,
+#invPanel .game-panel-head > .inv-tabs .panel-tab.active,
+#anvilPanel .game-panel-head > .anvil-tabs .panel-tab.active {
+  border-color: var(--menu-border-strong);
+  border-bottom-color: var(--ui-panel-surface);
+  background: var(--ui-panel-surface);
+  color: var(--menu-text);
+  box-shadow: inset 0 4px 0 var(--menu-accent-strong);
+  transform: none;
+}
+
+.game-panel-head > .anvil-resources,
+.game-panel-head > .shop-balance {
+  flex: 0 0 auto;
+  margin-left: 0;
+}
+
+/* One concise entry point for all character-select modifiers. */
+#charSelect .charselect-extra-options {
+  grid-template-columns: 1fr;
+}
+
+#charSelect .mods-toggle {
+  min-height: 54px;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 14px;
+  border-left: 4px solid var(--menu-accent-strong);
+}
+
+#charSelect .mods-toggle strong {
+  color: var(--menu-text);
+  font-size: calc(17px * var(--font-scale, 1));
+  letter-spacing: .14em;
+}
+
+#charSelect .mods-toggle small {
+  text-align: right;
+}
+
+.mods-panel {
+  width: min(700px, 94vw);
+}
+
+.mods-panel .floating-panel__head {
+  gap: 16px;
+}
+
+.mods-tabs {
+  display: flex;
+  align-self: flex-end;
+  gap: 5px;
+  margin-left: auto;
+  border-bottom: 1px solid var(--menu-border-strong);
+}
+
+.mods-tab {
+  min-width: 132px;
+  min-height: 46px;
+  margin-bottom: -1px;
+  padding: 10px 16px;
+  border: 1px solid var(--menu-border);
+  border-radius: 7px 7px 0 0;
+  background: #090c0f;
+  color: var(--menu-text-muted);
+  font-size: calc(13px * var(--font-scale, 1));
+  font-weight: 900;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.mods-tab.active {
+  border-color: var(--menu-border-strong);
+  border-bottom-color: var(--ui-panel-surface);
+  background: var(--ui-panel-surface);
+  color: var(--menu-text);
+  box-shadow: inset 0 3px 0 var(--menu-accent-strong);
+}
+
+.mods-pane__hint {
+  margin: 0 0 12px;
+  padding: 9px 11px;
+  border-left: 3px solid var(--menu-accent-strong);
+  background: rgba(101,217,232,.06);
+  color: var(--menu-text-muted);
+  font-size: calc(13px * var(--font-scale, 1));
+  line-height: 1.4;
+}
+
+.mods-pane__hint--legacy {
+  border-left-color: #ae7bd7;
+  background: rgba(174,123,215,.07);
 }

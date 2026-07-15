@@ -34,7 +34,7 @@
   }
 
   const HUD_SCALE_MIN = 0.5;
-  const HUD_SCALE_MAX = 3.0;
+  const HUD_SCALE_MAX = 2.0;
   const HUD_SCALE_STEP = 0.1;
   function normalizeHudScale(value) {
     const n = Number(value);
@@ -65,7 +65,7 @@
     { key: 'equipment',  label: 'Tool Slots',       cssVar: '--hud-scale-equipment',  xVar: '--hud-x-equipment',  yVar: '--hud-y-equipment',  hideClass: 'hud-hide-equipment' },
     // The new-item pickup toast stack (#itemNotifyStack). DOM widget with its own
     // scale/offset/visibility, independent of the coin display it sits beneath.
-    { key: 'itemnotify', label: 'Item Pickups',     cssVar: '--hud-scale-itemnotify', xVar: '--hud-x-itemnotify', yVar: '--hud-y-itemnotify', hideClass: 'hud-hide-itemnotify', defaultScale: 2.7, touchDefaultScale: 2.3 },
+    { key: 'itemnotify', label: 'Item Pickups',     cssVar: '--hud-scale-itemnotify', xVar: '--hud-x-itemnotify', yVar: '--hud-y-itemnotify', hideClass: 'hud-hide-itemnotify', defaultScale: 1.4, touchDefaultScale: 1.2 },
     // The status-toast stack (#statusToastStack) — relic "Ready" cues and "Copied"
     // bonuses. Bottom-center DOM widget, separate from item pickups so it reads as
     // a status update, not a new-item card. Default 1.2 (20% above its base size).
@@ -388,8 +388,9 @@
     root.style.setProperty('--font-scale', String(normalizeFontScale(access.fontScale)));
   }
 
-  // Push each HUD element's per-widget scale + visibility to the DOM. A null
-  // scale removes the override so the widget falls back to the global --hud-scale.
+  // Push each HUD element's resolved scale + visibility to the DOM. The preview
+  // reads effectiveHudScale() too, so Auto/default sizing has one source of truth
+  // instead of drifting between a JS default and a separate CSS fallback.
   function applyHudElements() {
     const root = document.documentElement;
     HUD_ELEMENTS.forEach(el => {
@@ -397,11 +398,7 @@
       // Canvas-drawn widgets (minimap) have no CSS vars — drawMinimap() reads
       // their scale/visibility from getHudElements() each frame instead.
       if (el.canvas) return;
-      if (entry.scale === null || entry.scale === undefined) {
-        root.style.removeProperty(el.cssVar);
-      } else {
-        root.style.setProperty(el.cssVar, String(normalizeHudScale(entry.scale)));
-      }
+      root.style.setProperty(el.cssVar, String(effectiveHudScale(el.key)));
       const x = normalizeHudOffset(entry.x);
       const y = normalizeHudOffset(entry.y);
       if (x) root.style.setProperty(el.xVar, `${x}px`); else root.style.removeProperty(el.xVar);

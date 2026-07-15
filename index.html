@@ -420,16 +420,16 @@
         <h3>ANVIL</h3>
         <p class="panel-subtitle">Pick a weapon or move, press + on the stat rows, choose XP or gold, then confirm to apply the upgrades.</p>
       </div>
+      <div class="anvil-tabs panel-tabs panel-header-tabs" role="tablist" aria-label="Forge category">
+        <button class="anvil-tab panel-tab active" data-anvil-tab="weapons" role="tab">Weapons</button>
+        <button class="anvil-tab panel-tab" data-anvil-tab="moves" role="tab">Moves</button>
+      </div>
       <div class="anvil-resources">
         <div class="anvil-xp-display">XP <b id="anvilXp">0</b></div>
         <div class="anvil-gold-display"><canvas id="anvilCoinIcon" class="coin-icon" width="32" height="32"></canvas> <b id="anvilCoins">0</b></div>
         <div class="anvil-voucher-display" id="anvilVoucherChip" hidden>&#127915; <b id="anvilVoucherFree">0</b> free upgrade<span id="anvilVoucherPlural">s</span></div>
       </div>
       <button id="anvilClose" class="panel-close" aria-label="Close anvil">X</button>
-    </div>
-    <div class="anvil-tabs panel-tabs">
-      <button class="anvil-tab panel-tab active" data-anvil-tab="weapons">Weapons</button>
-      <button class="anvil-tab panel-tab" data-anvil-tab="moves">Moves</button>
     </div>
     <div id="anvilWeaponsTab" class="anvil-tab-panel">
       <div id="anvilWeaponList" class="anvil-item-list"></div>
@@ -459,6 +459,13 @@
         <h3>SHOP</h3>
         <p class="panel-subtitle">Weapons, relics, and quick repairs for the next room.</p>
       </div>
+      <div class="shop-tabs panel-tabs panel-header-tabs" role="tablist" aria-label="Shop category">
+        <button class="shop-tab panel-tab active" data-tab="items" role="tab"><span class="tab-icon" aria-hidden="true">[]</span><span>Items</span></button>
+        <button class="shop-tab panel-tab" data-tab="weapons" role="tab"><span class="tab-icon" aria-hidden="true">W</span><span>Weapons</span></button>
+        <button class="shop-tab panel-tab" data-tab="moves" role="tab"><span class="tab-icon" aria-hidden="true">M</span><span>Moves</span></button>
+        <button class="shop-tab panel-tab" data-tab="trades" role="tab"><span class="tab-icon" aria-hidden="true">⇄</span><span>Trades</span></button>
+        <button class="shop-tab panel-tab" data-tab="heals" role="tab"><span class="tab-icon" aria-hidden="true">+</span><span>Heal Ups</span></button>
+      </div>
       <div class="shop-balance" aria-label="Current gold">
         <span class="shop-balance__label">YOUR GOLD</span>
         <span class="shop-balance__value"><canvas class="gold-coin-icon" data-gold-coin width="32" height="32" aria-hidden="true"></canvas><b id="shopCoins">0</b></span>
@@ -471,13 +478,6 @@
         <span class="shop-voucher-banner__sub" id="shopVoucherBannerSub">Exchange White, Purple, or Yellow vouchers for a relic in the matching class.</span>
       </div>
       <button id="shopVoucherRedeem" class="nav-btn shop-voucher-banner__btn" type="button">REDEEM VOUCHER</button>
-    </div>
-    <div class="shop-tabs panel-tabs">
-      <button class="shop-tab panel-tab active" data-tab="items"><span class="tab-icon" aria-hidden="true">[]</span><span>Items</span></button>
-      <button class="shop-tab panel-tab" data-tab="weapons"><span class="tab-icon" aria-hidden="true">W</span><span>Weapons</span></button>
-      <button class="shop-tab panel-tab" data-tab="moves"><span class="tab-icon" aria-hidden="true">M</span><span>Moves</span></button>
-      <button class="shop-tab panel-tab" data-tab="trades"><span class="tab-icon" aria-hidden="true">⇄</span><span>Trades</span></button>
-      <button class="shop-tab panel-tab" data-tab="heals"><span class="tab-icon" aria-hidden="true">+</span><span>Heal Ups</span></button>
     </div>
     <div id="shopItems" class="shop-list"></div>
     <div id="shopWeapons" class="shop-list hidden"></div>
@@ -506,6 +506,14 @@
         <h3>INVENTORY</h3>
       
       </div>
+      <div class="inv-tabs panel-tabs panel-header-tabs" role="tablist" aria-label="Inventory category">
+        <button class="inv-tab panel-tab active" data-inv-tab="stats" role="tab"><canvas class="tab-icon tab-icon--canvas" width="22" height="22" data-inv-ui-icon="tab-stats" aria-hidden="true"></canvas>Stats</button>
+        <button class="inv-tab panel-tab" data-inv-tab="items" role="tab"><canvas class="tab-icon tab-icon--canvas" width="22" height="22" data-inv-ui-icon="tab-relics" aria-hidden="true"></canvas>Relics</button>
+        <button class="inv-tab panel-tab" data-inv-tab="tools" role="tab"><canvas class="tab-icon tab-icon--canvas" width="22" height="22" data-inv-ui-icon="tab-relics" aria-hidden="true"></canvas>Tools</button>
+        <button class="inv-tab panel-tab" data-inv-tab="weapons" role="tab"><canvas class="tab-icon tab-icon--canvas" width="22" height="22" data-inv-ui-icon="tab-weapons" aria-hidden="true"></canvas>Weapons</button>
+        <button class="inv-tab panel-tab" data-inv-tab="equipped" role="tab"><canvas class="tab-icon tab-icon--canvas" width="22" height="22" data-inv-ui-icon="tab-moves" aria-hidden="true"></canvas>Moves</button>
+        <button class="inv-tab panel-tab" data-inv-tab="rivals" role="tab"><canvas class="tab-icon tab-icon--canvas" width="22" height="22" data-inv-ui-icon="tab-stats" aria-hidden="true"></canvas>Rivals</button>
+      </div>
       <button id="invClose" class="panel-close" aria-label="Close inventory">X</button>
     </div>
     <div id="invPlayerTabs" class="inv-player-tabs hidden" role="tablist" aria-label="Player">
@@ -513,14 +521,6 @@
       <button class="inv-player-tab" data-inv-player="2" role="tab">P2</button>
       <button class="inv-player-tab" data-inv-player="3" role="tab">P3</button>
       <button class="inv-player-tab" data-inv-player="4" role="tab">P4</button>
-    </div>
-    <div class="inv-tabs panel-tabs" role="tablist">
-      <button class="inv-tab panel-tab active" data-inv-tab="stats" role="tab"><canvas class="tab-icon tab-icon--canvas" width="22" height="22" data-inv-ui-icon="tab-stats" aria-hidden="true"></canvas>Stats</button>
-      <button class="inv-tab panel-tab" data-inv-tab="items" role="tab"><canvas class="tab-icon tab-icon--canvas" width="22" height="22" data-inv-ui-icon="tab-relics" aria-hidden="true"></canvas>Relics</button>
-      <button class="inv-tab panel-tab" data-inv-tab="tools" role="tab"><canvas class="tab-icon tab-icon--canvas" width="22" height="22" data-inv-ui-icon="tab-relics" aria-hidden="true"></canvas>Tools</button>
-      <button class="inv-tab panel-tab" data-inv-tab="weapons" role="tab"><canvas class="tab-icon tab-icon--canvas" width="22" height="22" data-inv-ui-icon="tab-weapons" aria-hidden="true"></canvas>Weapons</button>
-      <button class="inv-tab panel-tab" data-inv-tab="equipped" role="tab"><canvas class="tab-icon tab-icon--canvas" width="22" height="22" data-inv-ui-icon="tab-moves" aria-hidden="true"></canvas>Moves</button>
-      <button class="inv-tab panel-tab" data-inv-tab="rivals" role="tab"><canvas class="tab-icon tab-icon--canvas" width="22" height="22" data-inv-ui-icon="tab-stats" aria-hidden="true"></canvas>Rivals</button>
     </div>
     <div class="inv-ux-hints">
       <span class="inv-ux-hint">Weapons: click Equip to swap</span>
@@ -1520,15 +1520,9 @@
           <div><strong><span id="charLoopCount">0</span> LOOP CRYSTALS</strong><small>Earned by completing loops.</small></div>
         </div>
         <div class="charselect-extra-options">
-          <button id="challengeToggle" class="challenge-toggle" type="button" aria-expanded="false">
-            <span class="run-option-type">OPTIONAL · THIS RUN</span>
-            <strong>CHALLENGE MODIFIERS</strong>
-            <small><span id="challengeToggleStatus">0 ON</span> · Harder rules, bonus crystals</small>
-          </button>
-          <button id="legacyToggle" class="challenge-toggle legacy-toggle" type="button" aria-expanded="false">
-            <span class="run-option-type">PERMANENT · EVERY RUN</span>
-            <strong>LEGACY UPGRADES</strong>
-            <small><span id="legacyToggleStatus">0 OWNED</span> · Always on after purchase</small>
+          <button id="challengeToggle" class="challenge-toggle mods-toggle" type="button" aria-expanded="false">
+            <strong>MODS</strong>
+            <small><span id="challengeToggleStatus">0 challenges</span> · <span id="legacyToggleStatus">0 legacy</span></small>
           </button>
         </div>
         <button id="go" class="charselect-start-btn">ENTER DUNGEON</button>
@@ -1651,23 +1645,24 @@
   </div>
 </section>
 
-<!-- Challenge Shop floating panel -->
-<section id="challengePanel" class="floating-panel hidden" aria-hidden="true">
+<!-- Run modifiers: optional challenges and permanent legacy upgrades. -->
+<section id="challengePanel" class="floating-panel mods-panel hidden" aria-hidden="true">
   <div class="floating-panel__head">
     <div class="floating-panel__title-wrap">
-      <span class="floating-panel__kicker">OPTIONAL · PER RUN</span>
-      <span class="floating-panel__title">CHALLENGE MODIFIERS</span>
+      <span class="floating-panel__kicker">RUN SETUP</span>
+      <span class="floating-panel__title">MODS</span>
     </div>
-    <button id="challengeClose" class="panel-close" aria-label="Close challenge shop">X</button>
+    <div class="mods-tabs" role="tablist" aria-label="Modifier category">
+      <button class="mods-tab active" type="button" role="tab" aria-selected="true" data-mods-tab="challenges">Challenges</button>
+      <button class="mods-tab" type="button" role="tab" aria-selected="false" data-mods-tab="legacy">Legacy</button>
+    </div>
+    <button id="challengeClose" class="panel-close" aria-label="Close mods">X</button>
   </div>
-  <div class="floating-panel__body">
-    <div class="progression-mode-note progression-mode-note--optional">
-      <strong>YOU CHOOSE WHAT IS ON</strong>
-      <span>Buy once, then click owned modifiers ON or OFF before entering. Only ON modifiers change this run.</span>
-    </div>
+  <div id="modsChallengesPane" class="floating-panel__body mods-pane" role="tabpanel">
+    <p class="mods-pane__hint">Optional for this run. Click an owned challenge to switch it on or off.</p>
     <div class="progression-panel-wallet">
       <canvas id="challengeLoopIcon" class="loop-crystal-icon" width="32" height="32" aria-hidden="true"></canvas>
-      <div><strong><span id="challengeLoopCount">0</span> LOOP CRYSTALS</strong><small>Spend to permanently unlock optional modifiers.</small></div>
+      <div><strong><span id="challengeLoopCount">0</span> LOOP CRYSTALS</strong><small>Unlock challenges once.</small></div>
     </div>
     <small id="challengeHint" class="progression-panel-status">0 ON THIS RUN</small>
     <div id="challengeSelect" class="challenge-select" role="group" aria-label="Challenge Modifiers">
@@ -1680,25 +1675,11 @@
       <button class="challenge-btn" data-challenge="glass_cannon" type="button">Quartz Cannon</button>
     </div>
   </div>
-</section>
-
-<!-- Legacy Upgrades floating panel -->
-<section id="legacyPanel" class="floating-panel hidden" aria-hidden="true">
-  <div class="floating-panel__head">
-    <div class="floating-panel__title-wrap">
-      <span class="floating-panel__kicker">PERMANENT · ALL RUNS</span>
-      <span class="floating-panel__title">LEGACY UPGRADES</span>
-    </div>
-    <button id="legacyClose" class="panel-close" aria-label="Close legacy upgrades">X</button>
-  </div>
-  <div class="floating-panel__body">
-    <div class="progression-mode-note progression-mode-note--permanent">
-      <strong>ALWAYS ON AFTER PURCHASE</strong>
-      <span>Legacy upgrades permanently strengthen future runs. They are not optional toggles after you buy them.</span>
-    </div>
+  <div id="modsLegacyPane" class="floating-panel__body mods-pane hidden" role="tabpanel">
+    <p class="mods-pane__hint mods-pane__hint--legacy">Permanent. Purchased Legacy upgrades stay active for every run.</p>
     <div class="progression-panel-wallet">
       <canvas id="legacyLoopIcon" class="loop-crystal-icon" width="32" height="32" aria-hidden="true"></canvas>
-      <div><strong><span id="legacyLoopCount">0</span> LOOP CRYSTALS</strong><small>Permanent upgrades for every future run.</small></div>
+      <div><strong><span id="legacyLoopCount">0</span> LOOP CRYSTALS</strong><small>Spend on permanent upgrades.</small></div>
     </div>
     <small id="legacyHint" class="progression-panel-status">0 / 0 UNLOCKED</small>
     <div id="legacySelect" class="challenge-select legacy-select" role="group" aria-label="Legacy Upgrades">
