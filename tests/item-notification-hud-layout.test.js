@@ -20,6 +20,8 @@ describe('new-item notification HUD layout', () => {
     expect(css).toContain('scale(var(--hud-scale-itemnotify, 1.4))');
     expect(mobileCss).toContain('scale(var(--hud-scale-itemnotify, 1.2))');
     expect(settings).toContain("root.style.setProperty(el.cssVar, String(effectiveHudScale(el.key)))");
+    expect(settings).toContain('requestAnimationFrame(refreshHudPreviewBoxes)');
+    expect(settings).not.toContain('requestAnimationFrame(() => correctHudPreviewOverlaps({ saveAfter: true }))');
   });
 
   test('gives item descriptions a wider live notification card', () => {

@@ -1576,7 +1576,9 @@
     overlay.classList.remove('hidden');
     overlay.setAttribute('aria-hidden', 'false');
     refreshHudPreviewBoxes();
-    requestAnimationFrame(() => correctHudPreviewOverlaps({ saveAfter: true }));
+    // Do not auto-solve overlaps here. That routine changes saved offsets and
+    // scales, which made the preview silently resize the live HUD just by opening.
+    requestAnimationFrame(refreshHudPreviewBoxes);
   }
   document.getElementById('hudLayoutPreviewBtn')?.addEventListener('click', openHudLayoutEditor);
   const hudPreviewClose = () => {
@@ -1601,14 +1603,9 @@
   });
   window.addEventListener('resize', () => {
     refreshHudPreviewBoxes();
-    if (window.NeoSettings.isHudLayoutEditorOpen()) {
-      scheduleHudOverlapCorrection({ saveAfter: true });
-    }
   });
   window.addEventListener('orientationchange', () => {
-    if (window.NeoSettings.isHudLayoutEditorOpen()) {
-      scheduleHudOverlapCorrection({ saveAfter: true });
-    }
+    if (window.NeoSettings.isHudLayoutEditorOpen()) refreshHudPreviewBoxes();
   });
 
   // ── Controller mapper / detector overlay ──────────────────────────────────
