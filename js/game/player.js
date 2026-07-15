@@ -1015,11 +1015,11 @@ export function applyPlayerHealing(amount, options = {}) {
 export function getWizardPawStatCards() {
     const stats = getItemStats();
     return [
-      { label: 'HP', value: `${Math.round(Neo.player.hp)} / ${Math.round(Neo.player.maxHp)}` },
-      { label: 'Attack Power', value: `${Math.round(Neo.player.attackPower)}` },
-      { label: 'Attack Speed', value: getAttackSpeedValue().toFixed(2) },
-      { label: 'Crit Chance', value: `${Math.round(stats.critChance * 100)}%` },
-      { label: 'Move Speed', value: `${Math.round(stats.moveSpeedMultiplier * 100)}%` },
+      { label: 'HP', icon: 'hp', value: `${Math.round(Neo.player.hp)} / ${Math.round(Neo.player.maxHp)}` },
+      { label: 'Attack Power', icon: 'attack', value: `${Math.round(Neo.player.attackPower)}` },
+      { label: 'Attack Speed', icon: 'speed', value: getAttackSpeedValue().toFixed(2) },
+      { label: 'Crit Chance', icon: 'crit', value: `${Math.round(stats.critChance * 100)}%` },
+      { label: 'Move Speed', icon: 'speed', value: `${Math.round(stats.moveSpeedMultiplier * 100)}%` },
     ];
   }
 
@@ -1041,9 +1041,9 @@ function beginWizardPawModal() {
     Neo.wizardPawSelection = {
       picks: [],
       options: [
-        { key: 'maxHp', name: 'Max HP', description: `Current ${Math.round(Neo.player.maxHp)}. Increase max HP by 50% and scale current HP with it.` },
-        { key: 'attackPower', name: 'Attack Power', description: `Current ${Math.round(Neo.player.attackPower)}. Increase raw attack power by 50%.` },
-        { key: 'attackSpeed', name: 'Attack Speed', description: `Current ${getAttackSpeedValue().toFixed(2)}. Increase base attack speed by 50%.` },
+        { key: 'maxHp', name: 'Max HP', description: '+50% max and current HP.' },
+        { key: 'attackPower', name: 'Attack Power', description: '+50% attack power.' },
+        { key: 'attackSpeed', name: 'Attack Speed', description: '+50% attack speed.' },
       ],
     };
     Neo.setWizardPawModalOpen(true);
@@ -1134,8 +1134,11 @@ function notifyPanelItemDeferred(itemKey) {
 export function renderWizardPawPanel() {
     if (!Neo.wizardPawSelection || !Neo.ui.wizardPawStats || !Neo.ui.wizardPawChoices) return;
     Neo.ui.wizardPawStats.innerHTML = getWizardPawStatCards()
-      .map(stat => `<div class="wizard-paw-stat"><span class="wizard-paw-stat__label">${stat.label}</span><div class="wizard-paw-stat__value">${stat.value}</div></div>`)
+      .map(stat => `<div class="wizard-paw-stat"><canvas class="wizard-paw-stat__icon" data-inv-ui-icon="${stat.icon}" width="32" height="32" aria-hidden="true"></canvas><div><span class="wizard-paw-stat__label">${stat.label}</span><div class="wizard-paw-stat__value">${stat.value}</div></div></div>`)
       .join('');
+    Neo.ui.wizardPawStats.querySelectorAll('[data-inv-ui-icon]').forEach(canvas => {
+      Neo.drawInventoryUiIcon?.(canvas, canvas.dataset.invUiIcon);
+    });
     Neo.ui.wizardPawChoices.innerHTML = Neo.wizardPawSelection.options
       .map(option => {
         const selected = Neo.wizardPawSelection.picks.includes(option.key);
@@ -1264,7 +1267,7 @@ export function confirmWizardPawSelection() {
     if (scrollKey === 'scroll_reroll') {
       return {
         title: 'SCROLL OF REROLL',
-        copy: 'Choose one owned relic. One stack is replaced by a seeded relic of the same rarity.',
+        copy: 'Replace one owned relic with a random relic of the same rarity.',
         minPicks: 1,
         maxPicks: 1,
         choices: getScrollChoiceItems({ ownedOnly: true }),
@@ -1273,7 +1276,7 @@ export function confirmWizardPawSelection() {
     if (scrollKey === 'scroll_branching') {
       return {
         title: 'SCROLL OF BRANCHING',
-        copy: 'Choose up to 3 relics. The next reward of each selected rarity becomes that relic.',
+        copy: 'Choose up to 3 relics to favor in future rewards.',
         minPicks: 1,
         maxPicks: 3,
         choices: getScrollChoiceItems(),
@@ -1285,7 +1288,7 @@ export function confirmWizardPawSelection() {
         const fromRarity = String(Neo.ITEM_DEFS?.[fromKeys[0]]?.rarity || 'knight').toLowerCase();
         return {
           title: 'SCROLL OF REPLACE',
-          copy: 'Choose the relic that should appear instead.',
+          copy: 'Choose its replacement.',
           minPicks: 1,
           maxPicks: 1,
           choices: getScrollChoiceItems({ rarity: fromRarity, exclude: fromKeys }),
@@ -1293,7 +1296,7 @@ export function confirmWizardPawSelection() {
       }
       return {
         title: 'SCROLL OF REPLACE',
-        copy: 'Choose up to 3 unwanted relics from one rarity. Confirm to pick a replacement from that same class.',
+        copy: 'Choose up to 3 same-rarity relics to replace.',
         minPicks: 1,
         maxPicks: 3,
         choices: getScrollChoiceItems(),
@@ -1302,7 +1305,7 @@ export function confirmWizardPawSelection() {
     if (scrollKey === 'scroll_abundance') {
       return {
         title: 'SCROLL OF ABUNDANCE',
-        copy: 'Choose 2 relics. Every two floors has a 50% chance to grant one selected relic or one random relic.',
+        copy: 'Choose 2 relics. Every 2 floors, one may drop.',
         minPicks: 2,
         maxPicks: 2,
         choices: getScrollChoiceItems(),
@@ -1311,7 +1314,7 @@ export function confirmWizardPawSelection() {
     if (scrollKey === 'scroll_pool_weight') {
       return {
         title: 'SCROLL OF POOL WEIGHT',
-        copy: 'Choose 1 of these 4 relics. Future rewards favor that relic for the next 3 floors.',
+        copy: 'Choose 1 relic to favor for the next 3 floors.',
         minPicks: 1,
         maxPicks: 1,
         choices: getScrollPoolWeightChoices(),
@@ -1320,7 +1323,7 @@ export function confirmWizardPawSelection() {
     if (scrollKey === 'scroll_ego') {
       return {
         title: 'SCROLL OF EGO',
-        copy: 'Confirm to make items already in your build 10% more common for this floor.',
+        copy: 'Your owned relics are 10% more common this floor.',
         minPicks: 0,
         maxPicks: 0,
         choices: [],
@@ -1343,7 +1346,7 @@ export function confirmWizardPawSelection() {
   function ensureScrollControlRefs() {
     const ui = Neo.ui;
     if (!ui) return false;
-    const ids = ['scrollControlModal', 'scrollControlTitle', 'scrollControlCopy', 'scrollControlSearch', 'scrollControlMeta', 'scrollControlChoices', 'scrollControlCancel', 'scrollControlConfirm'];
+    const ids = ['scrollControlModal', 'scrollControlIcon', 'scrollControlTitle', 'scrollControlCopy', 'scrollControlSearch', 'scrollControlMeta', 'scrollControlChoices', 'scrollControlCancel', 'scrollControlConfirm'];
     ids.forEach(id => { if (!ui[id]) ui[id] = document.getElementById(id); });
     return !!ui.scrollControlChoices;
   }
@@ -1362,6 +1365,13 @@ export function confirmWizardPawSelection() {
     const choices = query ? availableChoices.filter(choice => choice.search.includes(query)) : availableChoices;
     if (Neo.ui.scrollControlTitle) Neo.ui.scrollControlTitle.textContent = config.title;
     if (Neo.ui.scrollControlCopy) Neo.ui.scrollControlCopy.textContent = config.copy;
+    const scrollItem = Neo.SCROLL_DEFS?.[state.scrollKey] || Neo.itemRegistry?.get?.(state.scrollKey) || Neo.ITEM_DEFS?.[state.scrollKey];
+    const scrollBox = Neo.ui.scrollControlModal?.querySelector('.scroll-control-box');
+    if (scrollBox) scrollBox.style.setProperty('--scroll-control-accent', scrollItem?.color || '#d8e9ff');
+    if (Neo.ui.scrollControlIcon) {
+      Neo.ui.scrollControlIcon.dataset.itemIcon = state.scrollKey;
+      Neo.drawItemIconCanvases?.(Neo.ui.scrollControlIcon.parentElement, 'data-item-icon');
+    }
     if (Neo.ui.scrollControlSearch) Neo.ui.scrollControlSearch.value = state.query || '';
     // Hide the search box for confirm-only scrolls (e.g. Ego) that have no list to filter.
     const hasChoices = config.choices.length > 0;
@@ -1384,7 +1394,7 @@ export function confirmWizardPawSelection() {
       const pickOrder = selected ? state.picks.indexOf(choice.key) + 1 : 0;
       const color = choice.type === 'item' ? Neo.getRarityNameColor?.(choice.rarity) || choice.color : choice.color;
       const icon = choice.type === 'item'
-        ? `<canvas class="scroll-control-choice__icon" data-item-icon="${Neo.escapeHtml(choice.key)}" width="48" height="48"></canvas>`
+        ? `<canvas class="scroll-control-choice__icon" data-item-icon="${Neo.escapeHtml(choice.key)}" width="64" height="64"></canvas>`
         : `<span class="scroll-control-choice__tag" aria-hidden="true">#</span>`;
       const owned = Math.max(0, Math.floor(Number(ownedItems[choice.key] || 0)));
       const ownedBadge = owned > 0 ? `<span class="scroll-control-choice__owned">×${owned}</span>` : '';
@@ -1744,7 +1754,7 @@ export function confirmWizardPawSelection() {
       return `<button class="scroll-control-choice${selected ? ' is-selected' : ''}" type="button" role="option" aria-selected="${selected}" aria-label="${Neo.escapeHtml(item.name + (item.description ? `. ${item.description}` : ''))}" title="${Neo.escapeHtml(item.description || item.name)}" data-voucher-item="${Neo.escapeHtml(item.key)}" style="--scroll-choice-color:${Neo.escapeHtml(color)}">
         ${selected ? '<span class="scroll-control-choice__order scroll-control-choice__order--check">✓</span>' : ''}
         <span class="scroll-control-choice__iconwrap">
-          <canvas class="scroll-control-choice__icon" data-item-icon="${Neo.escapeHtml(item.key)}" width="48" height="48"></canvas>
+          <canvas class="scroll-control-choice__icon" data-item-icon="${Neo.escapeHtml(item.key)}" width="64" height="64"></canvas>
           ${owned > 0 ? `<span class="scroll-control-choice__owned">×${owned}</span>` : ''}
         </span>
         <span class="scroll-control-choice__body">
@@ -1986,8 +1996,8 @@ export function renderExtraBatteryPanel() {
     }
     if (Neo.ui.extraBatteryCopy) {
       Neo.ui.extraBatteryCopy.textContent = pending > 1
-        ? 'Time is stopped. Pick a move for each battery, one at a time — every pick adds +1 max charge.'
-        : 'Time is stopped. Pick a move to give it +1 max charge — one more use before its cooldown.';
+        ? 'Choose one move per battery. Each gains +1 max charge.'
+        : 'Choose a move: +1 max charge.';
     }
     const equipped = new Set(Object.values(Neo.player.equippedMoves || {}).filter(Boolean));
     Neo.ui.extraBatteryChoices.innerHTML = getExtraBatteryChoiceMoves()
@@ -2004,13 +2014,12 @@ export function renderExtraBatteryPanel() {
           ? (Neo.getWeaponMaxCharges?.(weapon.key, Neo.player) || 1)
           : Neo.getMoveMaxStacks(key, Neo.player.character, Neo.player);
         const iconHtml = weapon
-          ? `<canvas class="extra-battery-choice__icon" data-weapon-icon="${weapon.key}" width="30" height="30"></canvas>`
-          : `<canvas class="extra-battery-choice__icon" data-move-icon="${key}" width="30" height="30"></canvas>`;
+          ? `<canvas class="extra-battery-choice__icon" data-weapon-icon="${weapon.key}" width="40" height="40"></canvas>`
+          : `<canvas class="extra-battery-choice__icon" data-move-icon="${key}" width="40" height="40"></canvas>`;
         return `<button class="extra-battery-choice${isEquipped ? ' is-equipped' : ''}" type="button" data-move="${key}">
           <span class="extra-battery-choice__eyebrow">${isEquipped ? `Equipped — ${slotLabel}` : slotLabel}</span>
           ${iconHtml}
           <h4>${weapon?.name || def.name}</h4>
-          <p>${weapon ? (weapon.description || def.desc) : def.desc}</p>
           <span class="extra-battery-choice__charges">Charges ${currentMaxStacks} → ${currentMaxStacks + 1}</span>
         </button>`;
       })

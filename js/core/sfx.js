@@ -144,6 +144,8 @@
       ],
     },
     { id: 'hud_confirm', path: 'assets/sounds/sfx_hud_confirm 6.wav', volume: 0.6, priority: priority.HIGH, mixDb: 0 },
+    // Breakable props (pots, crates, and other non-explosive furniture) shattering.
+    { id: 'break_furniture', path: 'assets/sounds/sfx_break_funiture.wav', volume: 0.6, priority: priority.NORMAL, mixDb: 0 },
   ];
 
   // Display metadata for the per-sound volume mixer (Settings → Volume). Each
@@ -173,6 +175,7 @@
     // World
     room_transition: { label: 'Room Transition',     category: 'World' },
     ladder:          { label: 'Ladder',              category: 'World' },
+    break_furniture: { label: 'Break Furniture',     category: 'World' },
     // UI
     menu_click:      { label: 'Menu Click',          category: 'UI' },
     hud_confirm:     { label: 'Confirm',             category: 'UI' },

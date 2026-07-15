@@ -2455,8 +2455,12 @@
     Neo.invalidateBeamReflectGeometry?.();
     prop.breakAge = 0;
     prop.breakAngle = getDestructibleImpactAngle(prop, hit);
-    if (prop.kind === 'barrel') spawnBarrelExplosionFx(prop, hit);
-    else spawnDestructibleBreakFx(prop, hit);
+    if (prop.kind === 'barrel') {
+      spawnBarrelExplosionFx(prop, hit);
+    } else {
+      spawnDestructibleBreakFx(prop, hit);
+      Neo.playSfx?.('break_furniture');
+    }
     // Green (post-loop "lying") items: once the player has completed at least one
     // loop, every barrel/pot ("broken wood") break has a flat 10% chance to drop a
     // random green item. These never appear in shops or normal drops.
