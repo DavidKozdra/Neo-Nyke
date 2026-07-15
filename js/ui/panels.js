@@ -232,13 +232,10 @@ export function bindInput() {
       },
       onToggleChallenges() {
         const opening = Neo.ui.challengePanel?.classList.contains('hidden');
-        if (opening) Neo.uiController.setLegacyPanelOpen(false);
         Neo.uiController.setChallengePanelOpen(opening);
       },
       onToggleLegacy() {
-        const opening = Neo.ui.legacyPanel?.classList.contains('hidden');
-        if (opening) Neo.uiController.setChallengePanelOpen(false);
-        Neo.uiController.setLegacyPanelOpen(opening);
+        Neo.uiController.setLegacyPanelOpen(true);
       },
       onLegacySelect(legacyKey) {
         const def = Neo.LEGACY_UPGRADES[legacyKey];
