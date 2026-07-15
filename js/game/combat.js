@@ -4466,6 +4466,8 @@
         const stolenLoot = Array.isArray(rival.loot) ? rival.loot : [];
         const finalDeath = rival.lives <= 0;
         if (finalDeath) {
+          if (rival.brain) rival.brain.lastOutcome = 'Slain by the player';
+          if (rival.memory) rival.memory.lastOutcome = 'Slain by the player';
           // The large item windfall belongs to the surviving rivals. A final
           // kill gives the player one relic instead of spilling the full pack.
           dropFinalRivalRelic(enemy);
@@ -4473,8 +4475,12 @@
           if (!Neo.slainRivalKeys.includes(rival.characterKey)) Neo.slainRivalKeys.push(rival.characterKey);
           Neo.spawnParticle({ x: enemy.x, y: enemy.y - 44, life: 2.2, text: 'SLAIN FOR GOOD', c: '#9fd0ff' });
         } else {
+          if (rival.brain) rival.brain.lastOutcome = 'Defeated and preparing a return';
+          if (rival.memory) rival.memory.lastOutcome = 'Defeated and preparing a return';
           // Extra life spent: they escape with their pack and return on a
-          // later floor (with god gear if the relationship went negative).
+          // later floor with double max HP (and god gear if the relationship
+          // went negative).
+          Neo.prepareRivalReturn?.(rival);
           Neo.pendingRivalReturns = Array.isArray(Neo.pendingRivalReturns) ? Neo.pendingRivalReturns : [];
           Neo.pendingRivalReturns.push({
             returnFloor: Neo.floor + 1,
@@ -4874,12 +4880,17 @@
       rival.lives = Math.max(0, Number(rival.lives ?? 2) - 1);
       Neo.queueRivalCurse?.(rival.characterKey, { descended: false });
       if (rival.lives <= 0) {
+        if (rival.brain) rival.brain.lastOutcome = 'Slain from afar';
+        if (rival.memory) rival.memory.lastOutcome = 'Slain from afar';
         rival.dead = true;
         if (!Array.isArray(Neo.slainRivalKeys)) Neo.slainRivalKeys = [];
         if (!Neo.slainRivalKeys.includes(rival.characterKey)) Neo.slainRivalKeys.push(rival.characterKey);
         Neo.rivals = (Neo.rivals || []).filter(r => r !== rival);
       } else {
         rival.dead = true;
+        if (rival.brain) rival.brain.lastOutcome = 'Driven off from afar';
+        if (rival.memory) rival.memory.lastOutcome = 'Driven off from afar';
+        Neo.prepareRivalReturn?.(rival);
         Neo.pendingRivalReturns = Array.isArray(Neo.pendingRivalReturns) ? Neo.pendingRivalReturns : [];
         Neo.pendingRivalReturns.push({
           returnFloor: Number(Neo.floor) + 1,

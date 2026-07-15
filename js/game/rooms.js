@@ -2019,6 +2019,8 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
   // Every rival carries one extra life: the first kill only drives them off to
   // a later floor; only the second kill is final.
   const RIVAL_STARTING_LIVES = 2;
+  const RIVAL_HP_PER_LEVEL = 0.20;
+  const RIVAL_RETURN_HP_MULTIPLIER = 2;
 
   function rollRandomRivalItemKey(godTier = false) {
     return Neo.rollItemDrop({
@@ -2084,6 +2086,11 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
     rival.hp = rival.max;
     rival.hpSnapshot = rival.max;
     if (rival.memory) rival.memory.threat = 0;
+    if (rival.brain) {
+      rival.brain.stance = 'friendly';
+      rival.brain.intention = 'travel';
+      rival.brain.lastOutcome = 'Befriended by the player';
+    }
     if (liveEnemy) {
       liveEnemy.hp = liveEnemy.max;
       // Clear active DoTs so a mid-fight bleed can't kill the new friend.
@@ -2104,6 +2111,15 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
       roomsVisited: 0,
       threat: 0,
       lastSeenTime: 0,
+      encounters: 0,
+      warningsGiven: 0,
+      provocations: 0,
+      retreats: 0,
+      claimedLoot: 0,
+      lastKnownPlayerX: 0,
+      lastKnownPlayerY: 0,
+      lastOutcome: 'No encounter yet',
+      recentMoves: [],
       princessKnightIntroPlayed: false,
     };
   }
@@ -2119,7 +2135,72 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
       roomsVisited: Number(memory.roomsVisited || fallback.roomsVisited),
       threat: Number(memory.threat || fallback.threat),
       lastSeenTime: Number(memory.lastSeenTime || fallback.lastSeenTime),
+      encounters: Math.max(0, Number(memory.encounters || fallback.encounters)),
+      warningsGiven: Math.max(0, Number(memory.warningsGiven || fallback.warningsGiven)),
+      provocations: Math.max(0, Number(memory.provocations || fallback.provocations)),
+      retreats: Math.max(0, Number(memory.retreats || fallback.retreats)),
+      claimedLoot: Math.max(0, Number(memory.claimedLoot || fallback.claimedLoot)),
+      lastKnownPlayerX: Number(memory.lastKnownPlayerX || fallback.lastKnownPlayerX),
+      lastKnownPlayerY: Number(memory.lastKnownPlayerY || fallback.lastKnownPlayerY),
+      lastOutcome: String(memory.lastOutcome || fallback.lastOutcome),
+      recentMoves: Array.isArray(memory.recentMoves)
+        ? memory.recentMoves.filter(Boolean).slice(-4).map(String)
+        : [],
       princessKnightIntroPlayed: !!memory.princessKnightIntroPlayed,
+    };
+  }
+
+  function getRivalPersonality(rivalOrKey) {
+    const key = typeof rivalOrKey === 'string' ? rivalOrKey : rivalOrKey?.characterKey;
+    return Neo.RIVAL_DEFS?.[key]?.personality || {
+      archetype: 'wanderer', initialStance: 'guarded', aggression: 0.35,
+      reactionDelay: 0.3, prediction: 0.15, retreatHp: 0.2,
+      warningDistance: 175, triggerDistance: 115,
+      objectiveWeights: {}, combos: [], barks: {},
+    };
+  }
+
+  function createDefaultRivalBrain(characterKey = '') {
+    const personality = getRivalPersonality(characterKey);
+    return {
+      stance: personality.initialStance === 'aggressive' ? 'hostile' : 'neutral',
+      intention: personality.initialStance === 'aggressive' ? 'engage' : 'observe',
+      decisionCd: 0,
+      warningUntil: 0,
+      warnedRoomKey: '',
+      lastBarkAt: -999,
+      lastEncounterRoomKey: '',
+      retreatFloor: -1,
+      claimedLoot: null,
+      lastOutcome: 'No encounter yet',
+      recentMoves: [],
+    };
+  }
+
+  function normalizeRivalBrain(source, characterKey = '') {
+    const fallback = createDefaultRivalBrain(characterKey);
+    const brain = source && typeof source === 'object' ? source : {};
+    const validStances = new Set(['neutral', 'warning', 'hostile', 'retreating', 'friendly']);
+    const validIntentions = new Set(['observe', 'claim_loot', 'engage', 'recover', 'retreat', 'travel']);
+    const claimedLoot = brain.claimedLoot && typeof brain.claimedLoot === 'object'
+      ? {
+        type: String(brain.claimedLoot.type || ''),
+        x: Number(brain.claimedLoot.x || 0),
+        y: Number(brain.claimedLoot.y || 0),
+      }
+      : null;
+    return {
+      stance: validStances.has(brain.stance) ? brain.stance : fallback.stance,
+      intention: validIntentions.has(brain.intention) ? brain.intention : fallback.intention,
+      decisionCd: Math.max(0, Number(brain.decisionCd || 0)),
+      warningUntil: Math.max(0, Number(brain.warningUntil || 0)),
+      warnedRoomKey: String(brain.warnedRoomKey || ''),
+      lastBarkAt: Number.isFinite(Number(brain.lastBarkAt)) ? Number(brain.lastBarkAt) : fallback.lastBarkAt,
+      lastEncounterRoomKey: String(brain.lastEncounterRoomKey || ''),
+      retreatFloor: Number.isFinite(Number(brain.retreatFloor)) ? Number(brain.retreatFloor) : -1,
+      claimedLoot,
+      lastOutcome: String(brain.lastOutcome || fallback.lastOutcome),
+      recentMoves: Array.isArray(brain.recentMoves) ? brain.recentMoves.filter(Boolean).slice(-4).map(String) : [],
     };
   }
 
@@ -2167,7 +2248,13 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
     // God-tier gear in the rival's pack makes them hit harder and live longer
     // (the "five God items and sent for you" vendetta loadout).
     const godGear = countRivalGodItems(rival);
-    const hpScale = (1 + (level - 1) * 0.14) * (1 + godGear * 0.06);
+    // Rivals gain more durability than damage as they level. Once their first
+    // life is spent, the remaining-life state supplies a stable 2x max-HP boost
+    // for the return encounter. Deriving it from lives prevents save restores or
+    // repeated floor transitions from multiplying the bonus more than once.
+    const hasReturned = Number(rival.lives ?? RIVAL_STARTING_LIVES) < RIVAL_STARTING_LIVES;
+    const returnHpScale = hasReturned ? RIVAL_RETURN_HP_MULTIPLIER : 1;
+    const hpScale = (1 + (level - 1) * RIVAL_HP_PER_LEVEL) * (1 + godGear * 0.06) * returnHpScale;
     const dmgScale = (1 + (level - 1) * 0.11) * (1 + godGear * 0.08);
     const speedScale = 1 + Math.min(0.24, (level - 1) * 0.02);
     const attackCdScale = 1 - Math.min(0.28, (level - 1) * 0.018);
@@ -2196,6 +2283,14 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
       : Neo.clamp(liveOldHp, 1, rival.max);
     rival.hp = liveEnemy.hp;
     rival.hpSnapshot = liveEnemy.hp;
+  }
+
+  function prepareRivalReturn(rival) {
+    if (!rival || Number(rival.lives || 0) <= 0) return false;
+    applyRivalLevelStats(rival, { syncLiveEnemy: false, keepHpRatio: false });
+    rival.hp = rival.max;
+    rival.hpSnapshot = rival.max;
+    return true;
   }
 
   function migrateRivalState(source) {
@@ -2231,13 +2326,14 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
       xp: Math.max(0, Number(source.xp || 0)),
       xpToNext: Math.max(8, Number(source.xpToNext || (22 + Neo.floor * 4))),
       growthTick: Math.max(0, Number(source.growthTick || 0)),
-      weapons: Array.isArray(source.weapons) ? source.weapons : [],
+      weapons: normalizeRivalLoadout(source.characterKey, source.weapons),
       loot: Array.isArray(source.loot)
         ? source.loot
           .filter(item => item && ['item', 'coin', 'potion'].includes(item.type))
           .map(item => ({ type: item.type, key: item.key, value: item.value }))
         : [],
       memory: normalizeRivalMemory(source.memory),
+      brain: normalizeRivalBrain(source.brain, source.characterKey),
       lives: Neo.clamp(Math.round(Number(source.lives ?? RIVAL_STARTING_LIVES)), 0, RIVAL_STARTING_LIVES),
       relationship: Number(source.relationship || 0),
       friend: !!source.friend,
@@ -2245,9 +2341,6 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
       godGearGranted: !!source.godGearGranted,
       dead: !!source.dead,
     };
-    if (!migrated.weapons.length) {
-      migrated.weapons = buildRivalLoadout(migrated.characterKey);
-    }
     applyRivalLevelStats(migrated, { syncLiveEnemy: false, keepHpRatio: false });
     migrated.hp = Neo.clamp(Number(source.hp || migrated.hp), 1, migrated.max);
     migrated.hpSnapshot = migrated.hp;
@@ -2321,11 +2414,29 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
     if (alternatives.length === 0 || base.length === 0 || Neo.nextRandom('world') < defaultChance) {
       return base;
     }
-    // Swap one random base slot for one random alternative.
+    // Swap the alternative into its matching kit slot, preserving a complete
+    // melee/laser/smash/dash kit instead of replacing an unrelated move.
     const alt = { ...alternatives[Math.floor(Neo.nextRandom('world') * alternatives.length)] };
-    const slot = Math.floor(Neo.nextRandom('world') * base.length);
-    base[slot] = alt;
+    const slot = base.findIndex(weapon => weapon.slot === alt.slot);
+    if (slot >= 0) base[slot] = alt;
     return base;
+  }
+
+  function normalizeRivalLoadout(charKey, storedWeapons) {
+    const defaults = (Neo.RIVAL_WEAPON_LOADOUTS[charKey] || []).map(weapon => ({ ...weapon }));
+    if (!Array.isArray(storedWeapons) || storedWeapons.length === 0) return buildRivalLoadout(charKey);
+    const alternatives = Neo.RIVAL_LOADOUT_ALTERNATIVES[charKey] || [];
+    const canonicalByKey = new Map([...defaults, ...alternatives].map(weapon => [weapon.key, weapon]));
+    const bySlot = new Map();
+    storedWeapons.forEach(stored => {
+      const canonical = canonicalByKey.get(stored?.key);
+      const normalized = canonical ? { ...stored, ...canonical } : { ...stored };
+      if (normalized.slot) bySlot.set(normalized.slot, normalized);
+    });
+    defaults.forEach(weapon => {
+      if (!bySlot.has(weapon.slot)) bySlot.set(weapon.slot, { ...weapon });
+    });
+    return ['melee', 'laser', 'smash', 'dash'].map(slot => bySlot.get(slot)).filter(Boolean);
   }
 
   // Every rival retaliates with a signature floor-wide curse, armed either when
@@ -2512,6 +2623,7 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
           lastKnownPlayerGy: spawnRoom.gy,
           hpSnapshot: Math.round(def.hp * floorScale),
           memory: createDefaultRivalMemory(),
+          brain: createDefaultRivalBrain(charKey),
           lives: RIVAL_STARTING_LIVES,
           relationship: 0,
           friend: false,
@@ -2644,8 +2756,10 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
   function chooseRivalObjectiveRoom(rival, fromRoom) {
     if (!fromRoom) return null;
     const threat = Number(rival?.memory?.threat || 0);
+    const personality = getRivalPersonality(rival);
+    const motives = personality.objectiveWeights || {};
     if (Neo.currentRoom && Neo.currentRoom !== fromRoom && threat > 1.2) {
-      const huntChance = Neo.clamp(0.2 + threat * 0.07, 0.2, 0.72);
+      const huntChance = Neo.clamp(0.12 + threat * 0.07 + Number(personality.aggression || 0) * 0.2, 0.12, 0.82);
       if (Neo.nextRandom('encounter') < huntChance) {
         return Neo.currentRoom;
       }
@@ -2656,12 +2770,12 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
     const weighted = [];
     pool.forEach(room => {
       let weight = 1;
-      if (hasStealableLoot(room)) weight += 3.4;
-      if (room.type === 'treasure') weight += 2.1;
-      if (room.type === 'shop') weight += 1.7;
-      if (room.type === 'challenge') weight += 1.1;
-      if (room.type === 'anvil') weight += 1.3;
-      if (room.type === 'combat' && !room.cleared) weight += 0.8;
+      if (hasStealableLoot(room)) weight += 2.4 * Number(motives.loot ?? 1);
+      if (room.type === 'treasure') weight += 1.6 * Number(motives.treasure ?? 1);
+      if (room.type === 'shop') weight += 1.2 * Number(motives.shop ?? 1);
+      if (room.type === 'challenge') weight += 1.0 * Number(motives.challenge ?? 1);
+      if (room.type === 'anvil') weight += 1.1 * Number(motives.anvil ?? 1);
+      if (room.type === 'combat' && !room.cleared) weight += 0.9 * Number(motives.combat ?? 1);
       const distance = Math.abs(room.gx - fromRoom.gx) + Math.abs(room.gy - fromRoom.gy);
       weight += Math.min(2, distance * 0.35);
       if (rival.homeGx === room.gx && rival.homeGy === room.gy) weight += 0.2;
@@ -2834,10 +2948,13 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
       state: 'idle',
     };
     Neo.enemies.push(entry);
+    beginRivalEncounter(rival, entry);
     Neo.spawnParticle({ x: entry.x, y: entry.y - 26, life: 1.8, text: `${rival.name.toUpperCase()} ENTERS!`, c: rival.color });
     const playedCutscene = tryPlayPrincessKnightCutscene(rival, entry);
-    if (!playedCutscene) {
+    if (!playedCutscene && rival.memory.encounters === 1) {
       Neo.sayAtPosition(entry.x, entry.y, rival.enterLine, { speaker: rival.name, tone: 'boss', holdTime: 1.8, offsetY: rival.r + 36 });
+    } else if (!playedCutscene && rival.brain.stance === 'hostile') {
+      emitRivalBark(rival, entry, 'hostile');
     }
   }
 
@@ -2855,6 +2972,8 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
     for (let i = Neo.rivals.length - 1; i >= 0; i--) {
       const rival = Neo.rivals[i];
       if (rival.dead) { Neo.rivals.splice(i, 1); continue; }
+      if (!rival.memory) rival.memory = createDefaultRivalMemory();
+      if (!rival.brain) rival.brain = createDefaultRivalBrain(rival.characterKey);
 
       rival.growthTick = Number(rival.growthTick || 0) + dt;
       while (rival.growthTick >= Neo.RIVAL_GROWTH_TICK_SECONDS) {
@@ -2879,6 +2998,9 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
           rival.aggroTimer = Math.max(rival.aggroTimer, 12 + Math.min(8, Number(rival.memory?.threat || 0)));
           rival.lastKnownPlayerGx = Neo.currentRoom.gx;
           rival.lastKnownPlayerGy = Neo.currentRoom.gy;
+          rival.memory.lastKnownPlayerX = Number(Neo.player?.x || 0);
+          rival.memory.lastKnownPlayerY = Number(Neo.player?.y || 0);
+          setRivalHostile(rival, liveEnemy, 'attacked');
           awardRivalXp(rival, 9, 'combat');
         }
       }
@@ -2892,6 +3014,9 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
           && Number(rival.memory.threat || 0) >= Number(Neo.RIVAL_VENDETTA_THREAT || 5)) {
           rival.vendetta = true;
           rival.aggroTimer = Math.max(rival.aggroTimer, 10);
+          rival.brain.stance = 'hostile';
+          rival.brain.intention = 'engage';
+          setRivalOutcome(rival, 'Began a vendetta hunt');
           const liveEnemy = Neo.enemies.find(e => e.type === 'rival' && e.rivalData === rival);
           const px = liveEnemy ? liveEnemy.x : Neo.player.x;
           const py = liveEnemy ? liveEnemy.y - 30 : Neo.player.y - 30;
@@ -3010,6 +3135,322 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
     Neo.startTransition?.(direction);
   }
 
+  function getRivalRoomKey(room = Neo.currentRoom) {
+    return room ? `${room.gx},${room.gy}` : '';
+  }
+
+  function setRivalOutcome(rival, outcome) {
+    const text = String(outcome || '');
+    if (!text) return;
+    rival.brain.lastOutcome = text;
+    rival.memory.lastOutcome = text;
+  }
+
+  function emitRivalBark(rival, enemy, event, options = {}) {
+    if (!rival || !enemy) return false;
+    const now = Number(Neo.gameElapsedTime || 0);
+    const minGap = Math.max(1.5, Number(options.minGap || 6));
+    if (!options.force && now - Number(rival.brain?.lastBarkAt ?? -999) < minGap) return false;
+    const lines = getRivalPersonality(rival).barks?.[event] || [];
+    if (!Array.isArray(lines) || lines.length === 0) return false;
+    const eventCount = event === 'warning'
+      ? Number(rival.memory?.warningsGiven || 0)
+      : event === 'retreat'
+        ? Number(rival.memory?.retreats || 0)
+        : Number(rival.memory?.provocations || 0);
+    const line = lines[Math.max(0, eventCount - 1) % lines.length];
+    rival.brain.lastBarkAt = now;
+    Neo.sayAtPosition(enemy.x, enemy.y, line, {
+      speaker: rival.name,
+      tone: 'boss',
+      holdTime: event === 'warning' ? 1.25 : 1.05,
+      offsetY: rival.r + 34,
+    });
+    return true;
+  }
+
+  function setRivalHostile(rival, enemy, reason = 'provoked') {
+    if (!rival || rival.friend) return false;
+    const wasHostile = rival.brain?.stance === 'hostile';
+    rival.brain.stance = 'hostile';
+    rival.brain.intention = 'engage';
+    rival.brain.warningUntil = 0;
+    rival.aggroTimer = Math.max(Number(rival.aggroTimer || 0), 12);
+    if (!wasHostile) {
+      rival.memory.provocations += 1;
+      setRivalOutcome(rival, reason === 'claimed_loot' ? 'Player took claimed loot' : 'Hostilities began');
+      emitRivalBark(rival, enemy, 'hostile', { force: true, minGap: 1.5 });
+    }
+    return !wasHostile;
+  }
+
+  function findRivalClaimableLoot(enemy) {
+    const pickups = Array.isArray(Neo.pickups) ? Neo.pickups : [];
+    let best = null;
+    let bestScore = Infinity;
+    pickups.forEach(pickup => {
+      if (!pickup || !['item', 'potion', 'coin'].includes(pickup.type)) return;
+      const distance = Math.hypot(Number(pickup.x || 0) - enemy.x, Number(pickup.y || 0) - enemy.y);
+      const valueBias = pickup.type === 'item' ? -180 : pickup.type === 'potion' ? -80 : 0;
+      const score = distance + valueBias;
+      if (score < bestScore) { best = pickup; bestScore = score; }
+    });
+    return best;
+  }
+
+  function beginRivalEncounter(rival, enemy) {
+    rival.memory ||= createDefaultRivalMemory();
+    rival.brain ||= createDefaultRivalBrain(rival.characterKey);
+    const roomKey = getRivalRoomKey();
+    if (rival.brain.lastEncounterRoomKey === roomKey) return;
+    rival.brain.lastEncounterRoomKey = roomKey;
+    rival.memory.encounters += 1;
+    rival.memory.playerSightings += 1;
+    rival.memory.lastSeenTime = Number(Neo.gameElapsedTime || 0);
+    rival.brain.decisionCd = 0;
+    rival.brain.warnedRoomKey = '';
+    rival.brain.warningUntil = 0;
+    rival.brain.claimedLoot = null;
+    enemy.rivalClaimedPickup = findRivalClaimableLoot(enemy);
+    if (enemy.rivalClaimedPickup) {
+      rival.brain.claimedLoot = {
+        type: String(enemy.rivalClaimedPickup.type || ''),
+        x: Number(enemy.rivalClaimedPickup.x || 0),
+        y: Number(enemy.rivalClaimedPickup.y || 0),
+      };
+      rival.memory.claimedLoot += 1;
+    }
+
+    if (rival.friend) {
+      rival.brain.stance = 'friendly';
+      rival.brain.intention = 'travel';
+    } else if (rival.vendetta || Number(rival.relationship || 0) < 0
+      || rival.brain.stance === 'hostile' || getRivalPersonality(rival).initialStance === 'aggressive') {
+      rival.brain.stance = 'hostile';
+      rival.brain.intention = 'engage';
+    } else if (getRivalPersonality(rival).initialStance === 'volatile'
+      && Neo.nextRandom('encounter') < Number(getRivalPersonality(rival).aggression || 0)) {
+      rival.brain.stance = 'hostile';
+      rival.brain.intention = 'engage';
+    } else {
+      rival.brain.stance = 'neutral';
+      rival.brain.intention = enemy.rivalClaimedPickup ? 'claim_loot' : 'observe';
+    }
+    setRivalOutcome(rival, rival.brain.stance === 'hostile' ? 'Encountered the player aggressively' : 'Watching the player');
+  }
+
+  function getRivalPerception(enemy) {
+    const player = Neo.player;
+    const dx = player.x - enemy.x;
+    const dy = player.y - enemy.y;
+    const distance = Math.hypot(dx, dy) || 1;
+    const itemCount = Object.values(player.items || {}).reduce((sum, count) => sum + Math.max(0, Number(count || 0)), 0);
+    return {
+      dx,
+      dy,
+      distance,
+      hasLineOfSight: Neo.hasLineOfSight(enemy.x, enemy.y, player.x, player.y),
+      hpRatio: Neo.clamp(Number(enemy.hp || 0) / Math.max(1, Number(enemy.max || 1)), 0, 1),
+      playerHpRatio: Neo.clamp(Number(player.hp || 0) / Math.max(1, Number(player.maxHp || 1)), 0, 1),
+      playerItemCount: itemCount,
+      observedPlayerVx: Number(player.vx || 0),
+      observedPlayerVy: Number(player.vy || 0),
+    };
+  }
+
+  function recordRivalMove(rival, enemy, weaponKey) {
+    if (!weaponKey) return;
+    enemy.rivalLastWeaponKey = weaponKey;
+    rival.brain.recentMoves = [...(rival.brain.recentMoves || []), weaponKey].slice(-4);
+    rival.memory.recentMoves = [...(rival.memory.recentMoves || []), weaponKey].slice(-4);
+  }
+
+  function prepareRivalAttack(enemy, rival, weapon) {
+    const heavyKeys = new Set(['kicky_kick', 'crimson_smash', 'random_pounce', 'death_ball']);
+    const requiresTelegraph = Number(weapon?.damageMult || 0) >= 1.2 || heavyKeys.has(weapon?.key);
+    if (!requiresTelegraph) return true;
+    const now = Number(Neo.gameElapsedTime || 0);
+    if (enemy.rivalTelegraphReadyKey === weapon.key && now <= Number(enemy.rivalTelegraphExpires || 0)) {
+      enemy.rivalTelegraphReadyKey = '';
+      enemy.rivalTelegraphExpires = 0;
+      return true;
+    }
+    enemy.rivalTelegraphReadyKey = weapon.key;
+    enemy.rivalTelegraphExpires = now + 0.95;
+    enemy.attackCd = Math.max(Number(enemy.attackCd || 0), 0.28 + Number(getRivalPersonality(rival).reactionDelay || 0.3) * 0.35);
+    enemy.rivalWeaponSwapCd = Math.max(Number(enemy.rivalWeaponSwapCd || 0), 0.55);
+    Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 10, life: 0.32, text: '!', c: rival.color });
+    return false;
+  }
+
+  function getRivalComboFollowups(rival) {
+    const recentMoves = rival.brain?.recentMoves || [];
+    const lastMove = recentMoves[recentMoves.length - 1];
+    if (!lastMove) return [];
+    const followups = [];
+    (getRivalPersonality(rival).combos || []).forEach(combo => {
+      if (!Array.isArray(combo)) return;
+      combo.forEach((move, index) => {
+        if (move === lastMove && combo[index + 1]) followups.push(combo[index + 1]);
+      });
+    });
+    return followups;
+  }
+
+  function chooseRivalRetreatExit(enemy) {
+    if (!Neo.currentRoom) return null;
+    const entries = ['n', 's', 'e', 'w']
+      .map(direction => ({ direction, room: getConnectedRoom(Neo.currentRoom, direction) }))
+      .filter(entry => entry.room && !['boss', 'god'].includes(entry.room.type));
+    if (entries.length === 0) return null;
+    const doorPoint = direction => {
+      const inset = Neo.WALL + enemy.r + 12;
+      if (direction === 'n') return { x: Neo.ROOM_W / 2, y: inset };
+      if (direction === 's') return { x: Neo.ROOM_W / 2, y: Neo.ROOM_H - inset };
+      if (direction === 'e') return { x: Neo.ROOM_W - inset, y: Neo.ROOM_H / 2 };
+      return { x: inset, y: Neo.ROOM_H / 2 };
+    };
+    entries.forEach(entry => {
+      entry.point = doorPoint(entry.direction);
+      entry.safety = Math.hypot(entry.point.x - Neo.player.x, entry.point.y - Neo.player.y);
+    });
+    entries.sort((a, b) => b.safety - a.safety || a.direction.localeCompare(b.direction));
+    return entries[0];
+  }
+
+  function updateRivalRetreat(enemy, dt, moveSpeed) {
+    const rival = enemy.rivalData;
+    enemy.rivalRetreatExit ||= chooseRivalRetreatExit(enemy);
+    const exit = enemy.rivalRetreatExit;
+    if (!exit) {
+      rival.brain.intention = 'engage';
+      return false;
+    }
+    const dx = exit.point.x - enemy.x;
+    const dy = exit.point.y - enemy.y;
+    const distance = Math.hypot(dx, dy) || 1;
+    Neo.steerEnemy(enemy, dx / distance, dy / distance, moveSpeed * 1.08, 5.2, dt);
+    if (distance > enemy.r + 16) return true;
+
+    rival.hp = Math.max(1, enemy.hp);
+    rival.hpSnapshot = rival.hp;
+    rival.roomGx = exit.room.gx;
+    rival.roomGy = exit.room.gy;
+    rival.homeGx = exit.room.gx;
+    rival.homeGy = exit.room.gy;
+    rival.route = [];
+    rival.moveTimer = Math.max(2, Number(rival.moveInterval || 4));
+    rival.brain.retreatFloor = Number(Neo.floor || 0);
+    rival.brain.stance = rival.vendetta ? 'hostile' : 'neutral';
+    rival.brain.intention = 'observe';
+    rival.memory.retreats += 1;
+    setRivalOutcome(rival, `Retreated to ${exit.room.type || 'another room'}`);
+    emitRivalBark(rival, enemy, 'retreat', { force: true, minGap: 1.5 });
+    const index = Neo.enemies.indexOf(enemy);
+    if (index >= 0) Neo.enemies.splice(index, 1);
+    Neo.spawnParticle({ x: enemy.x, y: enemy.y - 24, life: 0.9, text: 'RETREATED', c: rival.color });
+    Neo.scheduleRunSave();
+    Neo.markInventoryPanelDirty?.();
+    return true;
+  }
+
+  function updateRivalDisposition(enemy, perception) {
+    const rival = enemy.rivalData;
+    const brain = rival.brain;
+    const personality = getRivalPersonality(rival);
+    const now = Number(Neo.gameElapsedTime || 0);
+    if (rival.friend) return Object.assign(brain, { stance: 'friendly', intention: 'travel' }).intention;
+    if (rival.vendetta) return Object.assign(brain, { stance: 'hostile', intention: 'engage' }).intention;
+    if (brain.stance === 'retreating') return Object.assign(brain, { intention: 'retreat' }).intention;
+
+    const retreatAllowed = Number(personality.retreatHp || 0) > 0
+      && Number(brain.retreatFloor) !== Number(Neo.floor)
+      && perception.hpRatio <= Number(personality.retreatHp || 0);
+    if (brain.stance === 'hostile' && retreatAllowed) {
+      brain.stance = 'retreating';
+      brain.intention = 'retreat';
+      setRivalOutcome(rival, 'Attempting to retreat');
+      return brain.intention;
+    }
+
+    if (brain.stance === 'hostile' || brain.stance === 'retreating') {
+      brain.intention = perception.hpRatio < 0.72
+        && (rival.weapons || []).some(weapon => weapon.class === 'heal')
+        ? 'recover'
+        : 'engage';
+      return brain.intention;
+    }
+
+    const claimedPickup = enemy.rivalClaimedPickup;
+    if (claimedPickup && !Neo.pickups.includes(claimedPickup)) {
+      enemy.rivalClaimedPickup = null;
+      brain.claimedLoot = null;
+      setRivalHostile(rival, enemy, 'claimed_loot');
+      return brain.intention;
+    }
+
+    if (personality.archetype === 'opportunist' && perception.hasLineOfSight
+      && perception.distance < 290 && (perception.playerHpRatio < 0.5 || perception.playerItemCount >= 12)) {
+      setRivalHostile(rival, enemy, 'opportunity');
+      return brain.intention;
+    }
+
+    const warningDistance = Number(personality.warningDistance || 0);
+    const triggerDistance = Number(personality.triggerDistance || warningDistance * 0.7);
+    if (brain.stance === 'neutral' && warningDistance > 0 && perception.hasLineOfSight && perception.distance <= warningDistance) {
+      brain.stance = 'warning';
+      brain.intention = 'observe';
+      brain.warningUntil = now + 2.2;
+      brain.warnedRoomKey = getRivalRoomKey();
+      rival.memory.warningsGiven += 1;
+      setRivalOutcome(rival, 'Warned the player away');
+      emitRivalBark(rival, enemy, 'warning', { force: true, minGap: 1.5 });
+      return brain.intention;
+    }
+    if (brain.stance === 'warning') {
+      if (perception.distance > warningDistance + 70) {
+        brain.stance = 'neutral';
+        brain.intention = enemy.rivalClaimedPickup ? 'claim_loot' : 'observe';
+        setRivalOutcome(rival, 'Player respected the warning');
+      } else if (now >= brain.warningUntil && perception.distance <= triggerDistance) {
+        setRivalHostile(rival, enemy, 'ignored_warning');
+      }
+      return brain.intention;
+    }
+    brain.intention = enemy.rivalClaimedPickup ? 'claim_loot' : 'observe';
+    return brain.intention;
+  }
+
+  function scoreRivalWeapon(weapon, context = {}) {
+    const distance = Math.max(0, Number(context.distance || 0));
+    const hpRatio = Neo.clamp(Number(context.hpRatio ?? 1), 0, 1);
+    const attackClass = weapon?.class || 'melee';
+    const preferredRange = Number(weapon?.preferredRange || (['ranged', 'burst'].includes(attackClass) ? 220 : 120));
+    let score = Math.abs(distance - preferredRange);
+
+    // Do not stare into walls with a ranged move selected. Mobility becomes much
+    // more attractive when cornered or badly hurt, while healing is reserved for
+    // a genuinely wounded rival instead of being mixed randomly into its offense.
+    if (['ranged', 'burst'].includes(attackClass) && context.hasLineOfSight === false) score += 520;
+    if (attackClass === 'heal') {
+      if (hpRatio >= 0.82) return 10000;
+      score = hpRatio * 120 + Math.abs(distance - preferredRange) * 0.2;
+    }
+    if (attackClass === 'mobility') {
+      score += distance < 105 || hpRatio < 0.38 ? -90 : 115;
+    }
+    if (attackClass === 'dash') {
+      const range = Number(weapon?.range || 240);
+      if (distance <= 85 || distance > range) score += 260;
+    }
+    if (Array.isArray(context.comboFollowups) && context.comboFollowups.includes(weapon?.key)) score -= 85;
+    if (Array.isArray(context.recentMoves)) {
+      score += context.recentMoves.filter(move => move === weapon?.key).length * 18;
+    }
+    if (weapon?.key && weapon.key === context.lastWeaponKey) score += 70;
+    return score;
+  }
+
   function updateRivalEnemy(enemy, dt) {
     const rival = enemy.rivalData;
     if (!rival) return;
@@ -3028,6 +3469,9 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
       }
       return;
     }
+    rival.memory ||= createDefaultRivalMemory();
+    rival.brain ||= createDefaultRivalBrain(rival.characterKey);
+    beginRivalEncounter(rival, enemy);
     const weapons = Array.isArray(rival.weapons) && rival.weapons.length
       ? rival.weapons
       : (Neo.RIVAL_WEAPON_LOADOUTS[rival.characterKey] || []);
@@ -3036,14 +3480,67 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
     enemy.rivalWeaponIndex = Math.max(0, Math.min(weapons.length - 1, Number(enemy.rivalWeaponIndex || 0)));
     enemy.rivalWeaponSwapCd = Math.max(0, Number(enemy.rivalWeaponSwapCd || 0) - dt);
     enemy.rivalStrafeDir = enemy.rivalStrafeDir || (Neo.nextRandom('encounter') < 0.5 ? -1 : 1);
+    enemy.rivalHasteTime = Math.max(0, Number(enemy.rivalHasteTime || 0) - dt);
     enemy.rivalStrafeFlipCd = Math.max(0, Number(enemy.rivalStrafeFlipCd || 0) - dt);
     if (enemy.rivalStrafeFlipCd <= 0) {
       enemy.rivalStrafeFlipCd = 1.1 + Neo.nextRandom('encounter') * 1.8;
       if (Neo.nextRandom('encounter') < 0.35) enemy.rivalStrafeDir *= -1;
     }
-    const dx = Neo.player.x - enemy.x;
-    const dy = Neo.player.y - enemy.y;
-    const distance = Math.hypot(dx, dy) || 1;
+    const perception = getRivalPerception(enemy);
+    const { dx, dy, distance, hpRatio, hasLineOfSight } = perception;
+    const moveSpeed = enemy.speed * (enemy.rivalHasteTime > 0 ? 1.55 : 1);
+    if (hasLineOfSight) {
+      rival.memory.lastKnownPlayerX = Neo.player.x;
+      rival.memory.lastKnownPlayerY = Neo.player.y;
+      rival.memory.lastSeenTime = Number(Neo.gameElapsedTime || 0);
+    }
+    if (!enemy.rivalClaimedPickup && rival.brain.claimedLoot) {
+      const claim = rival.brain.claimedLoot;
+      enemy.rivalClaimedPickup = (Neo.pickups || []).find(pickup => pickup?.type === claim.type
+        && Math.hypot(Number(pickup.x || 0) - claim.x, Number(pickup.y || 0) - claim.y) < 8) || null;
+    }
+    rival.brain.decisionCd = Math.max(0, Number(rival.brain.decisionCd || 0) - dt);
+    if (rival.brain.decisionCd <= 0) {
+      updateRivalDisposition(enemy, perception);
+      rival.brain.decisionCd = Math.max(0.08, Number(getRivalPersonality(rival).reactionDelay || 0.3));
+    }
+
+    if (rival.brain.intention === 'retreat') {
+      updateRivalRetreat(enemy, dt, moveSpeed);
+      return;
+    }
+
+    if (rival.brain.stance !== 'hostile') {
+      const claimed = enemy.rivalClaimedPickup;
+      if (claimed && Neo.pickups.includes(claimed)) {
+        const lootDx = Number(claimed.x || 0) - enemy.x;
+        const lootDy = Number(claimed.y || 0) - enemy.y;
+        const lootDistance = Math.hypot(lootDx, lootDy) || 1;
+        if (lootDistance <= enemy.r + 16) {
+          const pickupIndex = Neo.pickups.indexOf(claimed);
+          if (pickupIndex >= 0) Neo.pickups.splice(pickupIndex, 1);
+          rival.loot.push({ type: claimed.type, key: claimed.key, value: claimed.value });
+          enemy.rivalClaimedPickup = null;
+          rival.brain.claimedLoot = null;
+          rival.brain.intention = 'observe';
+          setRivalOutcome(rival, `Claimed ${claimed.type || 'loot'}`);
+          awardRivalXp(rival, claimed.type === 'item' ? 10 : 6, 'loot');
+          Neo.spawnParticle({ x: enemy.x, y: enemy.y - 20, life: 0.65, text: 'CLAIMED', c: rival.color });
+        } else {
+          Neo.steerEnemy(enemy, lootDx / lootDistance, lootDy / lootDistance, moveSpeed * 0.72, 3.2, dt);
+        }
+      } else if (distance < 155) {
+        Neo.steerEnemy(enemy, -(dx / distance), -(dy / distance), moveSpeed * 0.72, 3.5, dt);
+      } else if (distance < 290) {
+        const side = enemy.rivalStrafeDir || 1;
+        const angle = Math.atan2(dy, dx) + Math.PI / 2 * side;
+        Neo.steerEnemy(enemy, Math.cos(angle), Math.sin(angle), moveSpeed * 0.34, 2.6, dt);
+      } else {
+        enemy.vx *= 0.9;
+        enemy.vy *= 0.9;
+      }
+      return;
+    }
 
     // Rivals use their whole kit instead of blindly round-robining: when a swap
     // window opens, pick the weapon whose preferred range best fits the current
@@ -3055,8 +3552,14 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
       let bestScore = Infinity;
       for (let i = 0; i < weapons.length; i++) {
         const w = weapons[i];
-        const pref = Number(w.preferredRange || (w.class === 'ranged' || w.class === 'burst' ? 220 : 120));
-        const score = Math.abs(distance - pref) + Neo.nextRandom('encounter') * 70;
+        const score = scoreRivalWeapon(w, {
+          distance,
+          hpRatio,
+          hasLineOfSight,
+          lastWeaponKey: enemy.rivalLastWeaponKey,
+          recentMoves: rival.brain.recentMoves,
+          comboFollowups: getRivalComboFollowups(rival),
+        }) + Neo.nextRandom('encounter') * 24;
         if (score < bestScore) { bestScore = score; bestIndex = i; }
       }
       enemy.rivalWeaponIndex = bestIndex;
@@ -3066,9 +3569,10 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
 
     if (enemy.dashTime > 0) {
       enemy.dashTime -= dt;
-      enemy.vx = Math.cos(enemy.dashAngle) * 620;
-      enemy.vy = Math.sin(enemy.dashAngle) * 620;
-      if (!enemy.dashHit && distance < enemy.r + Neo.player.r + 8) {
+      const dashSpeed = Number(weapon.dashSpeed || 620);
+      enemy.vx = Math.cos(enemy.dashAngle) * dashSpeed;
+      enemy.vy = Math.sin(enemy.dashAngle) * dashSpeed;
+      if (weapon.class !== 'mobility' && !enemy.dashHit && distance < enemy.r + Neo.player.r + 8) {
         enemy.dashHit = true;
         const dashDamage = Math.round(enemy.dmg * Number(weapon.damageMult || 1));
         Neo.damagePlayer(dashDamage, enemy.dashAngle, Number(weapon.knockback || 340), rival.characterKey, {
@@ -3097,25 +3601,29 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
       } else 
       // Keep preferred distance
       if (distance < preferDist - 30) {
-        Neo.steerEnemy(enemy, -(dx / distance), -(dy / distance), enemy.speed, 4.2, dt);
+        Neo.steerEnemy(enemy, -(dx / distance), -(dy / distance), moveSpeed, 4.2, dt);
       } else if (distance > preferDist + 60) {
-        Neo.steerEnemy(enemy, dx / distance, dy / distance, enemy.speed, 4.2, dt);
+        Neo.steerEnemy(enemy, dx / distance, dy / distance, moveSpeed, 4.2, dt);
       } else {
         // Strafe sideways
         const perp = Math.atan2(dy, dx) + Math.PI / 2 * enemy.rivalStrafeDir;
-        Neo.steerEnemy(enemy, Math.cos(perp) * 0.8, Math.sin(perp) * 0.8, enemy.speed * 0.6, 3.0, dt);
+        Neo.steerEnemy(enemy, Math.cos(perp) * 0.8, Math.sin(perp) * 0.8, moveSpeed * 0.6, 3.0, dt);
       }
-    } else if (attackStyle === 'dash') {
+    } else if (attackStyle === 'heal') {
+      if (distance < preferDist) Neo.steerEnemy(enemy, -(dx / distance), -(dy / distance), moveSpeed, 4.5, dt);
+      else { enemy.vx *= 0.88; enemy.vy *= 0.88; }
+    } else if (attackStyle === 'dash' || attackStyle === 'mobility') {
       const preferred = distance > preferDist ? 1 : distance < 110 ? -1 : 0.2;
-      Neo.steerEnemy(enemy, dx / distance * preferred, dy / distance * preferred, enemy.speed, 4.6, dt);
+      Neo.steerEnemy(enemy, dx / distance * preferred, dy / distance * preferred, moveSpeed, 4.6, dt);
     } else {
-      Neo.steerEnemy(enemy, dx / distance, dy / distance, enemy.speed, 4.4, dt);
+      Neo.steerEnemy(enemy, dx / distance, dy / distance, moveSpeed, 4.4, dt);
     }
 
     if (enemy.attackCd > 0) return;
 
     if (attackStyle === 'melee' || attackStyle === 'melee_heal') {
       if (distance < enemy.r + Neo.player.r + Number(weapon.range || 12)) {
+        if (!prepareRivalAttack(enemy, rival, weapon)) return;
         const angle = Math.atan2(dy, dx);
         const meleeDamage = Math.round(enemy.dmg * Number(weapon.damageMult || 1));
         Neo.damagePlayer(meleeDamage, angle, Number(weapon.knockback || 280), rival.characterKey, {
@@ -3127,6 +3635,7 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
           rival.memory.threat += 0.2;
         }
         enemy.attackCd = rival.attackCd * Number(weapon.cooldownMult || 1) + Neo.nextRandom('encounter') * 0.4;
+        recordRivalMove(rival, enemy, weapon.key);
         enemy.rivalWeaponSwapCd = Math.min(enemy.rivalWeaponSwapCd, 0.6);
         enemy.swingTime = 0.22;
         // Kicky kick: chance to launch the player into the next room.
@@ -3141,21 +3650,55 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
           Neo.spawnParticle({ x: enemy.x, y: enemy.y - 18, life: 0.7, text: `+${heal}`, c: '#a8aaff' });
         }
       }
-    } else if (attackStyle === 'dash') {
-      if (distance < Number(weapon.range || 230) && distance > 85) {
-        enemy.dashAngle = Math.atan2(dy, dx);
-        enemy.dashTime = 0.24;
+    } else if (attackStyle === 'heal') {
+      if (enemy.hp < enemy.max * 0.82) {
+        const heal = Math.max(1, Math.round(enemy.max * Number(weapon.healRatio || 0.12)));
+        enemy.hp = Math.min(enemy.max, enemy.hp + heal);
+        rival.hp = enemy.hp;
+        rival.hpSnapshot = enemy.hp;
+        enemy.attackCd = rival.attackCd * Number(weapon.cooldownMult || 2);
+        enemy.rivalWeaponSwapCd = 0.45;
+        recordRivalMove(rival, enemy, weapon.key);
+        emitRivalBark(rival, enemy, 'heal', { minGap: 8 });
+        Neo.spawnParticle({ x: enemy.x, y: enemy.y - 22, life: 0.75, text: `+${heal}`, c: '#8dffbd' });
+      }
+    } else if (attackStyle === 'dash' || attackStyle === 'mobility') {
+      const mobilityReady = attackStyle === 'mobility' && distance < Number(weapon.range || 360);
+      const attackDashReady = attackStyle === 'dash' && distance < Number(weapon.range || 230) && distance > 85;
+      if (mobilityReady || attackDashReady) {
+        if (!prepareRivalAttack(enemy, rival, weapon)) return;
+        const personality = getRivalPersonality(rival);
+        const dashTargetDx = dx + perception.observedPlayerVx * Number(personality.prediction || 0) * 0.45;
+        const dashTargetDy = dy + perception.observedPlayerVy * Number(personality.prediction || 0) * 0.45;
+        const towardPlayer = Math.atan2(dashTargetDy, dashTargetDx);
+        enemy.dashAngle = attackStyle === 'mobility'
+          ? towardPlayer + Math.PI + (Neo.nextRandom('encounter') - 0.5) * 1.1
+          : towardPlayer;
+        enemy.dashTime = Number(weapon.dashDuration || 0.24);
         enemy.dashHit = false;
+        enemy.inv = Math.max(Number(enemy.inv || 0), Number(weapon.invTime || 0));
+        enemy.rivalHasteTime = Math.max(enemy.rivalHasteTime, Number(weapon.hasteTime || 0));
         enemy.attackCd = rival.attackCd * Number(weapon.cooldownMult || 1) + 0.35;
         enemy.rivalWeaponSwapCd = Math.min(enemy.rivalWeaponSwapCd, 0.6);
+        recordRivalMove(rival, enemy, weapon.key);
+        if (attackStyle === 'mobility') {
+          Neo.spawnParticle({ x: enemy.x, y: enemy.y - 20, life: 0.5, text: weapon.key === 'warp' ? 'WARP' : 'EVADE', c: rival.color });
+        }
       }
     } else if (attackStyle === 'ranged' || attackStyle === 'burst') {
       if (distance < Number(weapon.range || 320)) {
         if (attackStyle === 'ranged' && !Neo.hasLineOfSight(enemy.x, enemy.y, Neo.player.x, Neo.player.y)) {
           enemy.attackCd = 0.2;
+          enemy.rivalWeaponSwapCd = 0;
           return;
         }
-        const angle = Math.atan2(dy, dx);
+        if (!prepareRivalAttack(enemy, rival, weapon)) return;
+        const projectileSpeed = Number(weapon.projectileSpeed || 310);
+        const prediction = Number(getRivalPersonality(rival).prediction || 0);
+        const leadSeconds = Math.min(0.55, distance / Math.max(1, projectileSpeed)) * prediction;
+        const aimDx = dx + perception.observedPlayerVx * leadSeconds;
+        const aimDy = dy + perception.observedPlayerVy * leadSeconds;
+        const angle = Math.atan2(aimDy, aimDx);
         const shotCount = Math.max(1, Number(weapon.projectileCount || 1));
         const spread = Number(weapon.spread || 0.2);
         for (let shot = 0; shot < shotCount; shot += 1) {
@@ -3163,7 +3706,7 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
           const a = angle + offset * spread;
           Neo.spawnProjectile({
             x: enemy.x, y: enemy.y,
-            vx: Math.cos(a) * Number(weapon.projectileSpeed || 310), vy: Math.sin(a) * Number(weapon.projectileSpeed || 310),
+            vx: Math.cos(a) * projectileSpeed, vy: Math.sin(a) * projectileSpeed,
             r: attackStyle === 'burst' ? 4 : 5,
             life: attackStyle === 'burst' ? 1.0 : 1.1,
             damage: Math.round(enemy.dmg * Number(weapon.damageMult || 1)),
@@ -3177,6 +3720,7 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
         }
         enemy.attackCd = rival.attackCd * Number(weapon.cooldownMult || 1) + Neo.nextRandom('encounter') * 0.5;
         enemy.rivalWeaponSwapCd = Math.min(enemy.rivalWeaponSwapCd, 0.6);
+        recordRivalMove(rival, enemy, weapon.key);
       }
     }
   }
@@ -3236,9 +3780,17 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
   Neo.queueRivalCurse = queueRivalCurse;
   Neo.createDefaultRivalMemory = createDefaultRivalMemory;
   Neo.normalizeRivalMemory = normalizeRivalMemory;
+  Neo.getRivalPersonality = getRivalPersonality;
+  Neo.createDefaultRivalBrain = createDefaultRivalBrain;
+  Neo.normalizeRivalBrain = normalizeRivalBrain;
   Neo.tryPlayPrincessKnightCutscene = tryPlayPrincessKnightCutscene;
   Neo.getRivalById = getRivalById;
   Neo.applyRivalLevelStats = applyRivalLevelStats;
+  Neo.prepareRivalReturn = prepareRivalReturn;
+  Neo.scoreRivalWeapon = scoreRivalWeapon;
+  Neo.getRivalPerception = getRivalPerception;
+  Neo.updateRivalDisposition = updateRivalDisposition;
+  Neo.chooseRivalRetreatExit = chooseRivalRetreatExit;
   Neo.migrateRivalState = migrateRivalState;
   Neo.awardRivalXp = awardRivalXp;
   Neo.restoreRivals = restoreRivals;

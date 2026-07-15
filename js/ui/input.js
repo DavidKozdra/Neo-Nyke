@@ -303,6 +303,19 @@ export const RIVAL_DEFS = {
       enterLine: 'This dungeon belongs to me.',
       deathLine: 'Unbelievable...',
       attackStyle: 'ranged',
+      personality: {
+        archetype: 'honorable', initialStance: 'guarded', aggression: 0.3,
+        reactionDelay: 0.28, prediction: 0.16, retreatHp: 0.2,
+        warningDistance: 185, triggerDistance: 125,
+        objectiveWeights: { loot: 1.2, treasure: 1.8, shop: 0.7, challenge: 1.1, anvil: 0.8, combat: 0.5 },
+        combos: [['princess_wand', 'kicky_kick'], ['flying_unhitable', 'love_beam']],
+        barks: {
+          warning: ['That treasure is claimed.', 'Keep your distance.'],
+          hostile: ['You were warned.', 'Then we settle this properly.'],
+          retreat: ['This is not over.', 'Enjoy your moment.'],
+          heal: ['Grace under pressure.'],
+        },
+      },
     },
     thorn_knight: {
       name: 'Rival Thorn',
@@ -311,6 +324,19 @@ export const RIVAL_DEFS = {
       enterLine: 'Your loot is mine.',
       deathLine: 'Run next time...',
       attackStyle: 'melee',
+      personality: {
+        archetype: 'relentless', initialStance: 'aggressive', aggression: 1,
+        reactionDelay: 0.12, prediction: 0.1, retreatHp: 0,
+        warningDistance: 0, triggerDistance: 0,
+        objectiveWeights: { loot: 0.7, treasure: 0.8, shop: 0.3, challenge: 1.4, anvil: 1.8, combat: 1.6 },
+        combos: [['dash', 'crimson_smash'], ['blood_beam', 'thorns_bleed_blade']],
+        barks: {
+          warning: [],
+          hostile: ['Found you.', 'No running this time.'],
+          retreat: [],
+          heal: [],
+        },
+      },
     },
     metao: {
       name: 'Rival Metao',
@@ -319,6 +345,19 @@ export const RIVAL_DEFS = {
       enterLine: 'I\'ve been watching you.',
       deathLine: 'Impossible...',
       attackStyle: 'ranged',
+      personality: {
+        archetype: 'opportunist', initialStance: 'opportunistic', aggression: 0.45,
+        reactionDelay: 0.34, prediction: 0.42, retreatHp: 0.35,
+        warningDistance: 155, triggerDistance: 100,
+        objectiveWeights: { loot: 1.7, treasure: 1.5, shop: 1.3, challenge: 0.4, anvil: 1.1, combat: 0.3 },
+        combos: [['warp', 'wizard_lazer'], ['power_disks', 'chaos_burst']],
+        barks: {
+          warning: ['Do not make this inefficient.', 'We can both walk away.'],
+          hostile: ['The odds just changed.', 'You look vulnerable.'],
+          retreat: ['A tactical correction.', 'Keep the room. For now.'],
+          heal: ['Recalculating.'],
+        },
+      },
     },
     gelleh: {
       name: 'Rival Gelleh',
@@ -327,6 +366,19 @@ export const RIVAL_DEFS = {
       enterLine: 'You dare compete with a god?',
       deathLine: 'This cannot be...',
       attackStyle: 'melee_heal',
+      personality: {
+        archetype: 'guardian', initialStance: 'guarded', aggression: 0.22,
+        reactionDelay: 0.3, prediction: 0.2, retreatHp: 0.22,
+        warningDistance: 205, triggerDistance: 135,
+        objectiveWeights: { loot: 0.8, treasure: 2, shop: 0.7, challenge: 1.3, anvil: 1.2, combat: 0.8 },
+        combos: [['healing_zone', 'gelleh_lightning_spear'], ['zip_lightning', 'blade_justice']],
+        barks: {
+          warning: ['Sacred ground. Step back.', 'That prize is protected.'],
+          hostile: ['You chose violence.', 'Judgment, then.'],
+          retreat: ['Even gods must recover.'],
+          heal: ['Light, return to me.'],
+        },
+      },
     },
     mooggy: {
       name: 'Rival Mooggy',
@@ -335,6 +387,19 @@ export const RIVAL_DEFS = {
       enterLine: 'Mrow.',
       deathLine: 'Hiss...',
       attackStyle: 'ranged',
+      personality: {
+        archetype: 'volatile', initialStance: 'volatile', aggression: 0.65,
+        reactionDelay: 0.18, prediction: 0.08, retreatHp: 0.12,
+        warningDistance: 135, triggerDistance: 95,
+        objectiveWeights: { loot: 1.5, treasure: 1.1, shop: 0.5, challenge: 0.8, anvil: 0.4, combat: 1.4 },
+        combos: [['mooggy_zoomies', 'random_pounce'], ['nail_shot', 'claw_gauntlets']],
+        barks: {
+          warning: ['Mrrr...', 'Mine.'],
+          hostile: ['HISSS!', 'MROW!'],
+          retreat: ['YOWL!'],
+          heal: [],
+        },
+      },
     },
     // Endgame rival: only spawns once the player has completed 3 loops (see the
     // minLoopIndex gate in spawnRivals). Tanky and slow, mirroring his playable
@@ -347,6 +412,19 @@ export const RIVAL_DEFS = {
       deathLine: 'Back... in my shell...',
       attackStyle: 'ranged',
       minLoopIndex: 3,
+      personality: {
+        archetype: 'sentinel', initialStance: 'territorial', aggression: 0.18,
+        reactionDelay: 0.42, prediction: 0.14, retreatHp: 0.15,
+        warningDistance: 220, triggerDistance: 145,
+        objectiveWeights: { loot: 0.6, treasure: 1.7, shop: 0.4, challenge: 1, anvil: 1.5, combat: 0.9 },
+        combos: [['turtle_wave', 'riptide_roll'], ['death_ball', 'extending_staff']],
+        barks: {
+          warning: ['You shall not pass.', 'Turn around while you can.'],
+          hostile: ['Then break upon the shell.', 'I gave you a choice.'],
+          retreat: ['The tide withdraws.'],
+          heal: [],
+        },
+      },
     },
   };
 export const RIVAL_MOVE_INTERVAL_BASE = 8.5;
@@ -366,7 +444,7 @@ export const RED_WEAPON_POOL = ['gelleh_lightning_spear', 'excalibur', 'katana_e
 
 // Each rival's default loadout mirrors that character's PLAYER kit: their
 // default weapon plus their signature laser/smash/dash moves, mapped onto the
-// rival AI's four weapon classes (melee / ranged / burst / dash). The `key` is
+// rival AI's offensive, healing, and mobility behaviors. The `key` is
 // the player move/weapon name so it reads faithfully in projectiles + the
 // rivals tab. Alternatives below mirror each character's KIT_ALTERNATIVES and
 // are swapped in by buildRivalLoadout (~20% of spawns).
@@ -374,44 +452,50 @@ export const RIVAL_WEAPON_LOADOUTS = {
     // wand (ranged), love_beam (ranged heal beam), kicky_kick (smash → heavy
     // melee that can launch you into the next room), flying_unhitable (dash).
     princess: [
-      { key: 'princess_wand', class: 'ranged', range: 380, preferredRange: 230, damageMult: 0.9, cooldownMult: 1.05, projectileCount: 1, spread: 0.05, projectileSpeed: 380 },
-      { key: 'love_beam', class: 'melee_heal', range: 50, preferredRange: 120, damageMult: 1.0, cooldownMult: 1.0, knockback: 280 },
-      { key: 'kicky_kick', class: 'melee', range: 60, preferredRange: 110, damageMult: 1.4, cooldownMult: 1.5, knockback: 620, roomLaunchChance: 0.1 },
+      { key: 'princess_wand', slot: 'melee', class: 'ranged', range: 380, preferredRange: 230, damageMult: 0.9, cooldownMult: 1.05, projectileCount: 1, spread: 0.05, projectileSpeed: 380 },
+      { key: 'love_beam', slot: 'laser', class: 'melee_heal', range: 50, preferredRange: 120, damageMult: 1.0, cooldownMult: 1.0, knockback: 280 },
+      { key: 'kicky_kick', slot: 'smash', class: 'melee', range: 60, preferredRange: 110, damageMult: 1.4, cooldownMult: 1.5, knockback: 620, roomLaunchChance: 0.1 },
+      { key: 'flying_unhitable', slot: 'dash', class: 'mobility', range: 340, preferredRange: 135, cooldownMult: 2.4, dashSpeed: 760, dashDuration: 0.32, invTime: 0.8 },
     ],
     // thorns blade (melee), blood_beam (ranged), crimson_smash (melee AoE),
     // dash (dash).
     thorn_knight: [
-      { key: 'thorns_bleed_blade', class: 'melee', range: 56, preferredRange: 120, damageMult: 1.0, cooldownMult: 0.84, knockback: 320 },
-      { key: 'blood_beam', class: 'ranged', range: 430, preferredRange: 270, damageMult: 0.86, cooldownMult: 1.05, projectileCount: 1, spread: 0.04, projectileSpeed: 420 },
-      { key: 'crimson_smash', class: 'dash', range: 240, preferredRange: 165, damageMult: 1.15, cooldownMult: 1.2, knockback: 360 },
+      { key: 'thorns_bleed_blade', slot: 'melee', class: 'melee', range: 56, preferredRange: 120, damageMult: 1.0, cooldownMult: 0.84, knockback: 320 },
+      { key: 'blood_beam', slot: 'laser', class: 'ranged', range: 430, preferredRange: 270, damageMult: 0.86, cooldownMult: 1.05, projectileCount: 1, spread: 0.04, projectileSpeed: 420 },
+      { key: 'crimson_smash', slot: 'smash', class: 'melee', range: 92, preferredRange: 105, damageMult: 1.3, cooldownMult: 1.35, knockback: 430 },
+      { key: 'dash', slot: 'dash', class: 'dash', range: 250, preferredRange: 165, damageMult: 0.9, cooldownMult: 1.0, knockback: 300 },
     ],
     // fire staff (ranged), power_disks (burst), chaos_burst (smash → burst),
     // warp (dash).
     metao: [
-      { key: 'metao_fire_staff', class: 'ranged', range: 470, preferredRange: 300, damageMult: 0.92, cooldownMult: 1.14, projectileCount: 1, spread: 0.02, projectileSpeed: 460 },
-      { key: 'power_disks', class: 'burst', range: 390, preferredRange: 250, damageMult: 0.72, cooldownMult: 1.0, projectileCount: 4, spread: 0.16, projectileSpeed: 360 },
-      { key: 'chaos_burst', class: 'burst', range: 340, preferredRange: 220, damageMult: 0.85, cooldownMult: 1.12, projectileCount: 3, spread: 0.18, projectileSpeed: 380 },
+      { key: 'metao_fire_staff', slot: 'melee', class: 'ranged', range: 470, preferredRange: 300, damageMult: 0.92, cooldownMult: 1.14, projectileCount: 1, spread: 0.02, projectileSpeed: 460 },
+      { key: 'power_disks', slot: 'laser', class: 'burst', range: 390, preferredRange: 250, damageMult: 0.72, cooldownMult: 1.0, projectileCount: 4, spread: 0.16, projectileSpeed: 360 },
+      { key: 'chaos_burst', slot: 'smash', class: 'burst', range: 340, preferredRange: 220, damageMult: 0.85, cooldownMult: 1.12, projectileCount: 3, spread: 0.18, projectileSpeed: 380 },
+      { key: 'warp', slot: 'dash', class: 'mobility', range: 420, preferredRange: 150, cooldownMult: 1.9, dashSpeed: 920, dashDuration: 0.2, invTime: 0.5 },
     ],
-    // lightning spear (ranged), blade_justice (melee), healing_zone
-    // (melee_heal), zip_lightning (dash).
+    // lightning spear (ranged), blade_justice (melee), healing_zone (heal),
+    // zip_lightning (dash).
     gelleh: [
-      { key: 'gelleh_lightning_spear', class: 'ranged', range: 420, preferredRange: 260, damageMult: 0.94, cooldownMult: 1.0, projectileCount: 2, spread: 0.08, projectileSpeed: 390 },
-      { key: 'blade_justice', class: 'melee_heal', range: 50, preferredRange: 130, damageMult: 1.12, cooldownMult: 0.95, knockback: 320 },
-      { key: 'zip_lightning', class: 'dash', range: 245, preferredRange: 160, damageMult: 1.08, cooldownMult: 1.1, knockback: 300 },
+      { key: 'gelleh_lightning_spear', slot: 'melee', class: 'ranged', range: 420, preferredRange: 260, damageMult: 0.94, cooldownMult: 1.0, projectileCount: 2, spread: 0.08, projectileSpeed: 390 },
+      { key: 'blade_justice', slot: 'laser', class: 'melee', range: 50, preferredRange: 130, damageMult: 1.12, cooldownMult: 0.95, knockback: 320 },
+      { key: 'healing_zone', slot: 'smash', class: 'heal', preferredRange: 210, cooldownMult: 2.1, healRatio: 0.14 },
+      { key: 'zip_lightning', slot: 'dash', class: 'dash', range: 245, preferredRange: 160, damageMult: 1.08, cooldownMult: 1.1, knockback: 300, dashSpeed: 700 },
     ],
     // claw gauntlets (melee), nail_shot (ranged spread), random_pounce (dash),
     // mooggy_zoomies flavor via fast cooldown.
     mooggy: [
-      { key: 'claw_gauntlets', class: 'melee', range: 48, preferredRange: 110, damageMult: 1.05, cooldownMult: 0.7, knockback: 260 },
-      { key: 'nail_shot', class: 'ranged', range: 460, preferredRange: 230, damageMult: 0.85, cooldownMult: 0.9, projectileCount: 3, spread: 0.22, projectileSpeed: 420 },
-      { key: 'random_pounce', class: 'dash', range: 245, preferredRange: 150, damageMult: 1.1, cooldownMult: 1.0, knockback: 320 },
+      { key: 'claw_gauntlets', slot: 'melee', class: 'melee', range: 48, preferredRange: 110, damageMult: 1.05, cooldownMult: 0.7, knockback: 260 },
+      { key: 'nail_shot', slot: 'laser', class: 'ranged', range: 460, preferredRange: 230, damageMult: 0.85, cooldownMult: 0.9, projectileCount: 3, spread: 0.22, projectileSpeed: 420 },
+      { key: 'random_pounce', slot: 'smash', class: 'dash', range: 245, preferredRange: 150, damageMult: 1.1, cooldownMult: 1.0, knockback: 320 },
+      { key: 'mooggy_zoomies', slot: 'dash', class: 'mobility', range: 360, preferredRange: 145, cooldownMult: 2.0, dashSpeed: 840, dashDuration: 0.38, hasteTime: 3.5 },
     ],
     // extending_staff (heavy melee), turtle_wave (long beam → ranged), death_ball
     // (charged burst → ranged), riptide_roll (dash). Slow but high-impact.
     turtle_boy: [
-      { key: 'extending_staff', class: 'melee', range: 130, preferredRange: 120, damageMult: 1.15, cooldownMult: 1.1, knockback: 500 },
-      { key: 'turtle_wave', class: 'ranged', range: 480, preferredRange: 280, damageMult: 0.9, cooldownMult: 1.25, projectileCount: 1, spread: 0.0, projectileSpeed: 420 },
-      { key: 'riptide_roll', class: 'dash', range: 240, preferredRange: 160, damageMult: 1.1, cooldownMult: 1.15, knockback: 360 },
+      { key: 'extending_staff', slot: 'melee', class: 'melee', range: 130, preferredRange: 120, damageMult: 1.15, cooldownMult: 1.1, knockback: 500 },
+      { key: 'turtle_wave', slot: 'laser', class: 'ranged', range: 480, preferredRange: 280, damageMult: 0.9, cooldownMult: 1.25, projectileCount: 1, spread: 0.0, projectileSpeed: 420 },
+      { key: 'death_ball', slot: 'smash', class: 'burst', range: 360, preferredRange: 235, damageMult: 1.05, cooldownMult: 1.55, projectileCount: 1, spread: 0, projectileSpeed: 300 },
+      { key: 'riptide_roll', slot: 'dash', class: 'dash', range: 240, preferredRange: 160, damageMult: 1.1, cooldownMult: 1.15, knockback: 360 },
     ],
   };
 
@@ -421,22 +505,22 @@ export const RIVAL_WEAPON_LOADOUTS = {
 export const RIVAL_LOADOUT_ALTERNATIVES = {
     thorn_knight: [
       // thorn_blood_beams (alt laser) + knight_slash_dash (alt dash)
-      { key: 'thorn_blood_beams', class: 'ranged', range: 450, preferredRange: 250, damageMult: 0.8, cooldownMult: 0.92, projectileCount: 2, spread: 0.1, projectileSpeed: 430 },
-      { key: 'knight_slash_dash', class: 'dash', range: 260, preferredRange: 170, damageMult: 1.2, cooldownMult: 1.05, knockback: 340 },
+      { key: 'thorn_blood_beams', slot: 'laser', class: 'ranged', range: 450, preferredRange: 250, damageMult: 0.8, cooldownMult: 0.92, projectileCount: 2, spread: 0.1, projectileSpeed: 430 },
+      { key: 'knight_slash_dash', slot: 'dash', class: 'dash', range: 260, preferredRange: 170, damageMult: 1.2, cooldownMult: 1.05, knockback: 340 },
     ],
     metao: [
       // wizard_lazer (alt laser) + potion_bath (alt smash → heal flavor)
-      { key: 'wizard_lazer', class: 'ranged', range: 500, preferredRange: 320, damageMult: 1.1, cooldownMult: 1.3, projectileCount: 1, spread: 0.0, projectileSpeed: 520 },
-      { key: 'potion_bath', class: 'melee_heal', range: 54, preferredRange: 120, damageMult: 0.95, cooldownMult: 1.1, knockback: 300 },
+      { key: 'wizard_lazer', slot: 'laser', class: 'ranged', range: 500, preferredRange: 320, damageMult: 1.1, cooldownMult: 1.3, projectileCount: 1, spread: 0.0, projectileSpeed: 520 },
+      { key: 'potion_bath', slot: 'smash', class: 'heal', preferredRange: 190, cooldownMult: 1.8, healRatio: 0.1 },
     ],
     gelleh: [
       // holy_turrets + excalibur_strike (alt smashes)
-      { key: 'excalibur_strike', class: 'burst', range: 360, preferredRange: 230, damageMult: 1.0, cooldownMult: 1.2, projectileCount: 3, spread: 0.12, projectileSpeed: 380 },
+      { key: 'excalibur_strike', slot: 'smash', class: 'burst', range: 360, preferredRange: 230, damageMult: 1.0, cooldownMult: 1.2, projectileCount: 3, spread: 0.12, projectileSpeed: 380 },
     ],
     mooggy: [
       // mooggy_blood_beam (alt laser) + mooggy_hairball (alt smash → burst)
-      { key: 'mooggy_blood_beam', class: 'ranged', range: 480, preferredRange: 250, damageMult: 0.95, cooldownMult: 1.1, projectileCount: 1, spread: 0.02, projectileSpeed: 480 },
-      { key: 'mooggy_hairball', class: 'burst', range: 330, preferredRange: 200, damageMult: 0.9, cooldownMult: 1.1, projectileCount: 4, spread: 0.2, projectileSpeed: 360 },
+      { key: 'mooggy_blood_beam', slot: 'laser', class: 'ranged', range: 480, preferredRange: 250, damageMult: 0.95, cooldownMult: 1.1, projectileCount: 1, spread: 0.02, projectileSpeed: 480 },
+      { key: 'mooggy_hairball', slot: 'smash', class: 'burst', range: 330, preferredRange: 200, damageMult: 0.9, cooldownMult: 1.1, projectileCount: 4, spread: 0.2, projectileSpeed: 360 },
     ],
   };
 
