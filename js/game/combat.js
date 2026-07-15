@@ -4441,6 +4441,20 @@
       Neo.scheduleRunSave();
     }
 
+    if (enemy.type === 'rival' && Neo.gameMode === 'rival_rumble') {
+      const rival = enemy.rivalData;
+      if (rival) {
+        rival.dead = true;
+        window.achievementEvents?.emit('rival:killed');
+        dropCoins(enemy.x, enemy.y, 18 + Neo.rivalRumbleStage * 6);
+        Neo.spawnParticle({ x: enemy.x, y: enemy.y - 26, life: 2.0, text: `${rival.name.toUpperCase()} DEFEATED!`, c: rival.color });
+        Neo.sayAtPosition(enemy.x, enemy.y, rival.deathLine, { speaker: rival.name, tone: 'boss', holdTime: 1.8, offsetY: enemy.r + 36 });
+        grantXp(20 + Neo.rivalRumbleStage * 5);
+      }
+      Neo.onRivalRumbleRivalDefeated();
+      return;
+    }
+
     if (enemy.type === 'rival') {
       const rival = enemy.rivalData;
       if (rival) {

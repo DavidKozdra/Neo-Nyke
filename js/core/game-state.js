@@ -1241,7 +1241,7 @@ export function resumeGame() {
 
   function normalizeGameMode(input) {
     const mode = String(input || 'normal').toLowerCase();
-    if (mode === 'endless' || mode === 'practice' || mode === 'boss_rush' || mode === 'treasure_hunt' || mode === 'sandbox' || mode === 'coop' || mode === 'pvp' || mode === 'competitive') return mode;
+    if (mode === 'endless' || mode === 'practice' || mode === 'boss_rush' || mode === 'rival_rumble' || mode === 'treasure_hunt' || mode === 'sandbox' || mode === 'coop' || mode === 'pvp' || mode === 'competitive') return mode;
     return 'normal';
   }
 
@@ -1251,6 +1251,7 @@ export function resumeGame() {
     if (mode === 'endless') return 'Endless';
     if (mode === 'practice') return 'Practice';
     if (mode === 'boss_rush') return 'Boss Rush';
+    if (mode === 'rival_rumble') return 'Rival Rumble';
     if (mode === 'treasure_hunt') return 'Treasure Hunt';
     if (mode === 'sandbox') return 'Sandbox';
     if (mode === 'competitive') return 'Competitive';
@@ -2640,7 +2641,7 @@ export function resumeGame() {
       Neo.gameState = nextState;
       Neo.uiController.setState(nextState);
     }
-    const isBossRush = Neo.gameMode === 'boss_rush';
+    const isBossRush = Neo.gameMode === 'boss_rush' || Neo.gameMode === 'rival_rumble';
     if (Neo.ui.timerFloorSlot) Neo.ui.timerFloorSlot.style.display = isBossRush ? 'none' : '';
     if (Neo.ui.timerBossSlot) Neo.ui.timerBossSlot.style.display = isBossRush ? '' : 'none';
     if (nextState !== 'pause') {
@@ -2658,6 +2659,7 @@ export function resumeGame() {
     if (Neo.gameMode === 'endless') { startEndless(); return; }
     if (Neo.gameMode === 'practice') { startPractice(); return; }
     if (Neo.gameMode === 'boss_rush') { startBossRush(); return; }
+    if (Neo.gameMode === 'rival_rumble') { startRivalRumble(); return; }
     if (Neo.gameMode === 'coop') { startCoop(); return; }
     if (Neo.gameMode === 'pvp') { startPvp(); return; }
     if (Neo.gameMode === 'competitive') { void startCompetitive(); return; }
@@ -3237,15 +3239,279 @@ export function resumeGame() {
     updateBossRushHud();
   }
 
+  // Shared by Boss Rush and Rival Rumble: both reuse the same #timerBossSlot
+  // stage counter, just with a different label/total/active-flag/next-spawn-at.
   function updateBossRushHud() {
-    const displayStage = Math.min(Neo.bossRushStage + 1, BOSS_RUSH_ORDER.length);
+    const isRivalRumble = Neo.gameMode === 'rival_rumble';
+    const order = isRivalRumble ? (Neo.rivalRumbleOrder || []) : BOSS_RUSH_ORDER;
+    const stage = isRivalRumble ? Number(Neo.rivalRumbleStage || 0) : Number(Neo.bossRushStage || 0);
+    const active = isRivalRumble ? Neo.rivalRumbleActive : Neo.bossRushActive;
+    const nextSpawnAt = isRivalRumble ? Neo.rivalRumbleNextSpawnAt : Neo.bossRushNextSpawnAt;
+    const displayStage = Math.min(stage + 1, order.length);
+    if (Neo.ui.bossRushSlotLabel) {
+      Neo.ui.bossRushSlotLabel.textContent = isRivalRumble
+        ? (Neo.rivalRumbleFinale ? 'FINALE' : 'RIVAL')
+        : 'BOSS';
+    }
     if (Neo.ui.bossRushStageNum) Neo.ui.bossRushStageNum.textContent = displayStage;
     if (Neo.ui.bossRushStageNum2) Neo.ui.bossRushStageNum2.textContent = displayStage;
+    if (Neo.ui.bossRushStageTotal2) Neo.ui.bossRushStageTotal2.textContent = order.length;
     if (!Neo.ui.bossRushNextTimer) return;
-    const remainingMs = Math.max(0, Number(Neo.bossRushNextSpawnAt || 0) - Date.now());
-    const showTimer = Neo.gameMode === 'boss_rush' && !Neo.bossRushActive && remainingMs > 0;
+    const remainingMs = Math.max(0, Number(nextSpawnAt || 0) - Date.now());
+    const showTimer = (Neo.gameMode === 'boss_rush' || isRivalRumble) && !active && remainingMs > 0;
     Neo.ui.bossRushNextTimer.classList.toggle('hidden', !showTimer);
     Neo.ui.bossRushNextTimer.textContent = showTimer ? `NEXT ${(remainingMs / 1000).toFixed(1)}s` : '';
+  }
+
+  // Rival Rumble: a 1v1 tournament against every rival in the roster (minus the
+  // chosen character), each leveled to match the player instead of scaling off
+  // floor number. Mirrors Boss Rush's manual single-room setup and stage
+  // sequencing, but fights rivals via injectRivalToCurrentRoom instead of
+  // spawnEnemy, and skips the normal rival "extra life / return later" flavor
+  // (see the rival_rumble branch inside the enemy.type === 'rival' death
+  // handler in combat.js) since a duel should end cleanly each time.
+  function getRivalRumbleOrder() {
+    const roster = Object.keys(Neo.CHARACTER_DEFS || {})
+      .filter(key => key !== Neo.chosenCharacter && Neo.RIVAL_DEFS?.[key]);
+    const order = createScopedRandom('rival-rumble:order');
+    return roster
+      .map(key => ({ key, sort: order() }))
+      .sort((a, b) => a.sort - b.sort)
+      .map(entry => entry.key);
+  }
+
+  function startRivalRumble() {
+    setGameState('play');
+    Neo.baseSeedStr = createRandomSeed();
+    Neo.selectedDifficulty = normalizeDifficulty(Neo.selectedDifficulty);
+    Neo.selectedChallenges = [];
+    Neo.runLoopIndex = 0;
+    Neo.runRevivesUsed = 0;
+    Neo.runCrystalsEarned = 0;
+    Neo.lastDeathEntryId = '';
+    syncSeedState();
+    Neo.floor = 5;
+    Neo.gameElapsedTime = 0;
+    window.achievementManager?.resetRunCounters();
+    Neo.resetRunUnlocks?.();
+    clearRivalRumbleNextSpawn();
+    resetTutorialState(false);
+    resetMultiplayerState();
+    invalidateRunStatCaches();
+    Neo.player = createDefaultPlayer();
+    Neo.lastDamageSource = '';
+    Neo.lastDamageSourceKey = '';
+    resetScene();
+    // resetScene() zeroes rivalRumbleOrder/Stage/Active, so the tournament
+    // order must be rolled after it, not before.
+    Neo.rivalRumbleOrder = getRivalRumbleOrder();
+    Neo.rivalRumbleStage = 0;
+    Neo.rivalRumbleActive = false;
+    // Rival Rumble builds its room manually (no generateFloor); match the floor
+    // count to the starting floor so incidental floor-scaled systems agree.
+    Neo.floorsEntered = Neo.floor;
+    resetRngStreams();
+    Neo.rooms = [];
+    const room = Neo.createRoomRecord({ x: 4, y: 4 }, { type: 'combat', doors: { n: false, s: false, e: false, w: false }, cleared: false });
+    Neo.decorateRoomData(room);
+    Neo.rooms.push(room);
+    Neo.currentRoom = room;
+    Neo.rivals = [];
+    Neo.pendingRivalDescends = [];
+    Neo.pendingRivalReturns = [];
+    Neo.slainRivalKeys = [];
+    Neo.player.x = Neo.START_X;
+    Neo.player.y = Neo.START_Y;
+    // Grant 3 random starting items
+    const rivalRumbleStartRandom = createScopedRandom('rival-rumble:starting-items');
+    for (let i = 0; i < 3; i++) {
+      const key = Neo.rollItemDrop({ elite: i === 2, random: rivalRumbleStartRandom });
+      if (key) Neo.collectItem(key);
+    }
+    Neo.addCoins(120);
+    updateBossRushHud();
+    // Spawn first rival immediately
+    spawnRivalRumbleRival();
+    Neo.updateObjective();
+    if (!Neo.loopStarted) { Neo.loopStarted = true; requestAnimationFrame(Neo.loop); }
+  }
+
+  // Builds one rival's roster data sized to the player's current level (rather
+  // than floor-scaled like a normal run) and puts it into the fight via the
+  // same live-entity path normal rival encounters use. In the finale gauntlet
+  // (isFinale: true) every previously-beaten rival returns at once with the
+  // same "defeated and came back" bonus a normal run grants a returning
+  // rival: double max HP (applyRivalLevelStats' hasReturned check, driven by
+  // lives < RIVAL_STARTING_LIVES) plus a 5-piece god-tier loadout.
+  function spawnRivalRumbleRival(charKey = null, options = {}) {
+    const order = Neo.rivalRumbleOrder || [];
+    const resolvedKey = charKey || order[Neo.rivalRumbleStage];
+    if (!resolvedKey) return;
+    const def = Neo.RIVAL_DEFS[resolvedKey];
+    if (!def) return;
+    const isFinale = !!options.isFinale;
+    Neo.rivalRumbleActive = true;
+    Neo.currentRoom.cleared = false;
+    clearRivalRumbleNextSpawn();
+    const level = Neo.clamp(Math.round(Number(Neo.player?.level) || 1), 1, Number(Neo.RIVAL_LEVEL_CAP || 9));
+    const baseMoveInterval = Neo.RIVAL_MOVE_INTERVAL_BASE + Neo.nextRandom('world') * 4;
+    const rival = {
+      rivalId: `rumble-${resolvedKey}-${Neo.rivalRumbleStage}-${Math.floor(Neo.nextRandom('world') * 1000000)}`,
+      characterKey: resolvedKey,
+      name: def.name,
+      color: def.color,
+      attackStyle: def.attackStyle,
+      enterLine: isFinale ? `You beat me once. Not again — not with all of us.` : def.enterLine,
+      deathLine: def.deathLine,
+      roomGx: Neo.currentRoom.gx,
+      roomGy: Neo.currentRoom.gy,
+      moveTimer: 6 + Neo.nextRandom('world') * 5,
+      moveInterval: baseMoveInterval,
+      baseMoveInterval,
+      baseHp: def.hp,
+      baseDmg: def.dmg,
+      baseSpeed: def.speed,
+      baseAttackCd: def.attackCd,
+      hp: def.hp,
+      max: def.hp,
+      dmg: def.dmg,
+      speed: def.speed,
+      r: def.r,
+      attackCd: def.attackCd,
+      level,
+      xp: 0,
+      xpToNext: 22 + Neo.floor * 4,
+      growthTick: 0,
+      weapons: (Neo.RIVAL_WEAPON_LOADOUTS?.[resolvedKey] || []).map(weapon => ({ ...weapon })),
+      loot: [],
+      homeGx: Neo.currentRoom.gx,
+      homeGy: Neo.currentRoom.gy,
+      objectiveGx: Neo.currentRoom.gx,
+      objectiveGy: Neo.currentRoom.gy,
+      objectiveKind: 'patrol',
+      route: [],
+      aggroTimer: 0,
+      lastKnownPlayerGx: Neo.currentRoom.gx,
+      lastKnownPlayerGy: Neo.currentRoom.gy,
+      hpSnapshot: def.hp,
+      memory: Neo.createDefaultRivalMemory(),
+      brain: Neo.createDefaultRivalBrain(resolvedKey),
+      // 1 life either way (dies for good on this loss). Being below
+      // RIVAL_STARTING_LIVES (2) is exactly the hasReturned condition
+      // applyRivalLevelStats checks for the 2x return-HP scale, so a finale
+      // rival gets that boost automatically — same mechanic a normal run's
+      // returning rival gets.
+      lives: 1,
+      relationship: isFinale ? -5 : 0,
+      friend: false,
+      vendetta: isFinale,
+      godGearGranted: false,
+      dead: false,
+      rivalRumbleStage: Neo.rivalRumbleStage,
+      rivalRumbleFinale: isFinale,
+    };
+    Neo.applyRivalLevelStats(rival, { syncLiveEnemy: false, keepHpRatio: false });
+    if (isFinale) {
+      rival.godGearGranted = true;
+      Neo.grantRivalItems?.(rival, 5, { godTier: true, syncLiveEnemy: false });
+    }
+    Neo.rivals.push(rival);
+    Neo.injectRivalToCurrentRoom(rival);
+    if (!isFinale) {
+      Neo.spawnParticle({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 50, life: 1.4, text: `RIVAL ${Neo.rivalRumbleStage + 1}: ${def.name.toUpperCase()}`, c: def.color });
+    }
+    Neo.updateObjective();
+  }
+
+  // Finale: every rival beaten in the 1-on-1 gauntlet returns at once, each
+  // carrying the "defeated and came back" bonus (see spawnRivalRumbleRival).
+  // Fires once all individual duels are done instead of an immediate win.
+  function spawnRivalRumbleFinale() {
+    const order = Neo.rivalRumbleOrder || [];
+    Neo.rivalRumbleActive = true;
+    Neo.rivalRumbleFinale = true;
+    Neo.currentRoom.cleared = false;
+    clearRivalRumbleNextSpawn();
+    Neo.spawnParticle({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 50, life: 1.8, text: 'FINAL GAUNTLET: ALL RIVALS', c: '#ff6ad5' });
+    order.forEach(charKey => spawnRivalRumbleRival(charKey, { isFinale: true }));
+    Neo.updateObjective();
+  }
+
+  // Called once per rival kill during the finale gauntlet. Distinct from
+  // onRivalRumbleRivalDefeated (the 1-on-1 duel path) since multiple rivals
+  // can be alive at once here — only advance to the win screen once every
+  // rival spawned for the finale is actually dead.
+  function onRivalRumbleFinaleRivalDefeated() {
+    const stillFighting = Neo.enemies.some(e => e.type === 'rival' && e.rivalData?.rivalRumbleFinale);
+    if (stillFighting) return;
+    Neo.rivalRumbleActive = false;
+    clearRivalRumbleNextSpawn();
+    Neo.win();
+  }
+
+  function onRivalRumbleRivalDefeated() {
+    if (Neo.gameMode !== 'rival_rumble') return;
+    if (Neo.rivalRumbleFinale) { onRivalRumbleFinaleRivalDefeated(); return; }
+    Neo.rivalRumbleActive = false;
+    Neo.rivalRumbleStage += 1;
+    updateBossRushHud();
+    Neo.updateObjective();
+    const order = Neo.rivalRumbleOrder || [];
+    if (Neo.rivalRumbleStage >= order.length) {
+      Neo.spawnParticle({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 40, life: 1.6, text: 'ALL RIVALS DEFEATED!', c: '#78d7ff' });
+      setTimeout(() => {
+        if (Neo.gameMode !== 'rival_rumble' || Neo.gameState !== 'play') return;
+        Neo.spawnParticle({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 50, life: 1.6, text: 'THEY ARE COMING BACK... TOGETHER', c: '#ff6ad5' });
+      }, 1500);
+      scheduleRivalRumbleNextSpawn(4, spawnRivalRumbleFinale);
+      return;
+    }
+    const cx = Neo.ROOM_W / 2;
+    const cy = Neo.ROOM_H / 2;
+    const rewardRandom = createScopedRandom(`rival-rumble:stage:${Neo.rivalRumbleStage}:reward`);
+    Neo.dropCoins(cx, cy - 20, 80 + Neo.rivalRumbleStage * 30);
+    Neo.pickups.push({ x: cx - 60, y: cy, type: 'item', key: Neo.rollItemDrop({ elite: true, random: rewardRandom }) });
+    Neo.pickups.push({ x: cx + 60, y: cy, type: 'potion' });
+    Neo.grantXp(40 + Neo.rivalRumbleStage * 20);
+    const nextDef = Neo.RIVAL_DEFS[order[Neo.rivalRumbleStage]];
+    const nextName = (nextDef?.name || '???').toUpperCase();
+    Neo.spawnParticle({ x: cx, y: cy - 40, life: 1.6, text: 'RIVAL DEFEATED!', c: '#78d7ff' });
+    setTimeout(() => {
+      if (Neo.gameMode !== 'rival_rumble' || Neo.gameState !== 'play') return;
+      Neo.spawnParticle({ x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 50, life: 1.2, text: `NEXT: ${nextName}`, c: '#ffb347' });
+    }, 1500);
+    scheduleRivalRumbleNextSpawn(4);
+  }
+
+  function scheduleRivalRumbleNextSpawn(delaySeconds = 4, spawnFn = spawnRivalRumbleRival) {
+    clearRivalRumbleNextSpawn();
+    const stage = Neo.rivalRumbleStage;
+    Neo.rivalRumbleNextSpawnAt = Date.now() + delaySeconds * 1000;
+    const tick = () => {
+      if (Neo.gameMode !== 'rival_rumble' || Neo.rivalRumbleStage !== stage) {
+        clearRivalRumbleNextSpawn();
+        return;
+      }
+      if (Neo.gameState !== 'play') {
+        Neo.rivalRumbleNextSpawnTimeout = setTimeout(tick, 250);
+        return;
+      }
+      if (Date.now() < Neo.rivalRumbleNextSpawnAt) {
+        Neo.rivalRumbleNextSpawnTimeout = setTimeout(tick, 100);
+        return;
+      }
+      clearRivalRumbleNextSpawn();
+      spawnFn();
+    };
+    Neo.rivalRumbleNextSpawnTimeout = setTimeout(tick, 100);
+    updateBossRushHud();
+  }
+
+  function clearRivalRumbleNextSpawn() {
+    if (Neo.rivalRumbleNextSpawnTimeout) clearTimeout(Neo.rivalRumbleNextSpawnTimeout);
+    Neo.rivalRumbleNextSpawnTimeout = null;
+    Neo.rivalRumbleNextSpawnAt = 0;
+    updateBossRushHud();
   }
 
   function clampPracticeMaxHp(value) {
@@ -3358,6 +3624,10 @@ export function resumeGame() {
     Neo.endlessRespawnTimer = 0;
     Neo.bossRushStage = 0;
     Neo.bossRushActive = false;
+    Neo.rivalRumbleOrder = [];
+    Neo.rivalRumbleStage = 0;
+    Neo.rivalRumbleActive = false;
+    Neo.rivalRumbleFinale = false;
     Neo.treasureHuntPhase = 'seek';
     Neo.treasureHuntHasKey = false;
     Neo.treasureHuntCollapseTimer = 0;
@@ -3365,6 +3635,7 @@ export function resumeGame() {
     Neo.treasureHuntRockTick = 0;
     Neo.treasureHuntBlastTick = 0;
     clearBossRushNextSpawn();
+    clearRivalRumbleNextSpawn();
     Neo.projectiles = [];
     Neo.justiceBlades = [];
     Neo.skySwords = [];
@@ -3789,6 +4060,9 @@ export function resumeGame() {
   Neo.spawnBossRushBoss = spawnBossRushBoss;
   Neo.findBossRushSpawnPoint = findBossRushSpawnPoint;
   Neo.onBossRushBossDefeated = onBossRushBossDefeated;
+  Neo.startRivalRumble = startRivalRumble;
+  Neo.spawnRivalRumbleRival = spawnRivalRumbleRival;
+  Neo.onRivalRumbleRivalDefeated = onRivalRumbleRivalDefeated;
   Neo.updateBossRushHud = updateBossRushHud;
   Neo.clampPracticeMaxHp = clampPracticeMaxHp;
   Neo.syncPracticeMaxHpControls = syncPracticeMaxHpControls;
