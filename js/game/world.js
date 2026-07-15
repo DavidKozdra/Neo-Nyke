@@ -890,6 +890,18 @@
     const damage = Math.max(0, Number(projectile.damage || 0));
     const sparkleChance = Neo.clamp(Number(projectile.sparkleChance || 0), 0, 1);
     const color = projectile.color || '#ff6fa8';
+    if (projectile.enemy) {
+      Neo.ringBurst(x, y, radius, color, 0.5);
+      Neo.spawnAoeShockwave?.(x, y, radius, color, 'heavy');
+      if (Neo.dist(x, y, Neo.player.x, Neo.player.y) <= radius + Neo.player.r) {
+        const angle = Math.atan2(Neo.player.y - y, Neo.player.x - x);
+        Neo.damagePlayer(damage, angle, 220, projectile.source || 'rival_love_bomb', {
+          sourceKey: projectile.source || 'rival_love_bomb',
+          sourceLabel: projectile.sourceLabel || 'Rival Love Bomb',
+        });
+      }
+      return;
+    }
     blastRadius(x, y, radius, damage, color);
     if (sparkleChance > 0) {
       forEachEnemyNearCircle(x, y, radius, enemy => {
@@ -1572,9 +1584,14 @@
         r: cfg.r ?? 4,
         life: cfg.life ?? 0.7,
         enemy: projectile.enemy,
+        fromRival: projectile.fromRival,
+        source: projectile.source,
+        sourceLabel: projectile.sourceLabel,
         kind: cfg.kind || projectile.kind,
+        color: cfg.color || projectile.color,
         damage: cfg.damage ?? Math.round((projectile.damage || 0) / 2),
         hitOptions: cfg.hitOptions ?? projectile.hitOptions ?? null,
+        statusEffects: cfg.statusEffects ?? projectile.statusEffects,
       });
     }
   }
@@ -1799,6 +1816,12 @@
         const dx = projectile.x - Neo.player.x;
         const dy = projectile.y - Neo.player.y;
         if (dx * dx + dy * dy > hitRadius * hitRadius) continue;
+        if (projectile.kind === 'love_bomb') {
+          detonateLoveBomb(projectile, projectile.x, projectile.y);
+          spawnProjectileImpact(projectile, projectile.x, projectile.y);
+          removeProjectileAt(index);
+          continue;
+        }
         const projectileSource = getProjectileDamageSource(projectile);
         damagePlayer(projectile.damage || 10, Math.atan2(projectile.vy, projectile.vx), projectile.knockback || 120, projectileSource, {
           sourceKey: projectileSource,
@@ -1865,6 +1888,10 @@
       if (hazard.followPlayer) {
         hazard.x = Neo.player.x;
         hazard.y = Neo.player.y;
+      }
+      if (hazard.followEnemy && hazard.ownerEnemy && !hazard.ownerEnemy.dead) {
+        hazard.x = hazard.ownerEnemy.x;
+        hazard.y = hazard.ownerEnemy.y;
       }
       hazard.statusTick = Number(hazard.statusTick ?? 0) - dt;
       if (hazard.kind === 'thorn_mine') {
@@ -2046,7 +2073,15 @@
           });
           hazard.plusTick = Neo.rand(0.16, 0.07);
         }
-        if (Neo.dist(Neo.player.x, Neo.player.y, hazard.x, hazard.y) < hazard.r) {
+        const rivalOwner = hazard.enemy ? hazard.ownerEnemy : null;
+        if (rivalOwner && !rivalOwner.dead && Neo.dist(rivalOwner.x, rivalOwner.y, hazard.x, hazard.y) < hazard.r) {
+          const healMult = Number(hazard.healMult || 1);
+          rivalOwner.hp = Math.min(rivalOwner.max, rivalOwner.hp + 7.36 * healMult * dt);
+          if (rivalOwner.rivalData) {
+            rivalOwner.rivalData.hp = rivalOwner.hp;
+            rivalOwner.rivalData.hpSnapshot = rivalOwner.hp;
+          }
+        } else if (!hazard.enemy && Neo.dist(Neo.player.x, Neo.player.y, hazard.x, hazard.y) < hazard.r) {
           const healMult = Number(hazard.healMult || 1);
           const healed = Neo.applyPlayerHealing?.(Neo.scalePlayerHealing(7.36 * healMult * dt), { showBarrier: false }) ?? 0;
           if (healed > 0) {
@@ -2060,12 +2095,22 @@
           }
         }
         const zoneDamageMult = Number(hazard.damageMult || 1);
-        forEachEnemyNearCircle(hazard.x, hazard.y, hazard.r + 80, enemy => {
-          if (Neo.dist(enemy.x, enemy.y, hazard.x, hazard.y) < hazard.r + enemy.r) {
-            enemy.hp -= (10 * zoneDamageMult * dt) / Math.max(1, Number(enemy.defenseMultiplier || 1));
-            if (enemy.hp <= 0) Neo.onEnemyDie(enemy);
+        if (hazard.enemy) {
+          if (Neo.dist(Neo.player.x, Neo.player.y, hazard.x, hazard.y) < hazard.r + Neo.player.r) {
+            hazard.playerDamageTick = Math.max(0, Number(hazard.playerDamageTick || 0) - dt);
+            if (hazard.playerDamageTick <= 0) {
+              hazard.playerDamageTick = 0.2;
+              Neo.damagePlayer(Math.max(1, Math.round(2 * zoneDamageMult)), 0, 35, hazard.source || 'rival_healing_zone');
+            }
           }
-        });
+        } else {
+          forEachEnemyNearCircle(hazard.x, hazard.y, hazard.r + 80, enemy => {
+            if (Neo.dist(enemy.x, enemy.y, hazard.x, hazard.y) < hazard.r + enemy.r) {
+              enemy.hp -= (10 * zoneDamageMult * dt) / Math.max(1, Number(enemy.defenseMultiplier || 1));
+              if (enemy.hp <= 0) Neo.onEnemyDie(enemy);
+            }
+          });
+        }
       } else if (hazard.kind === 'fire_circle') {
         if (canHitPvpPlayer2() && Neo.dist(Neo.player2.x, Neo.player2.y, hazard.x, hazard.y) <= hazard.r + Neo.player2.r) {
           damagePvpPlayer2(Math.max(4, (hazard.dps || 16) * 0.35), hazard.x, hazard.y, 80, 'pvp_p1_fire_circle');
@@ -2121,7 +2166,19 @@
           hazard.tick = hazard.interval || 0.22;
           const blasts = 1 + (Neo.nextRandom('fx') < 0.25 ? 1 : 0);
           for (let b = 0; b < blasts; b += 1) {
-            Neo.spawnChaosBlast(hazard.x, hazard.y, hazard.aoeRadiusMultiplier || 1, hazard.aoeDamageMultiplier || 1, !!hazard.isMetao);
+            if (hazard.enemy) {
+              const blastAngle = Neo.nextRandom('fx') * Math.PI * 2;
+              const px = hazard.x + Math.cos(blastAngle) * (30 + Neo.nextRandom('fx') * 150);
+              const py = hazard.y + Math.sin(blastAngle) * (30 + Neo.nextRandom('fx') * 150);
+              Neo.ringBurst(px, py, 18, '#a857ff', 0.45);
+              if (Neo.dist(px, py, Neo.player.x, Neo.player.y) <= 52 + Neo.player.r) {
+                const angle = Math.atan2(Neo.player.y - py, Neo.player.x - px);
+                Neo.damagePlayer(hazard.damage || 18, angle, 120, hazard.source || 'rival_chaos_burst');
+                Neo.applyStatus?.(Neo.player, 'poison', 1, 4.8, hazard.source || 'rival_chaos_burst');
+              }
+            } else {
+              Neo.spawnChaosBlast(hazard.x, hazard.y, hazard.aoeRadiusMultiplier || 1, hazard.aoeDamageMultiplier || 1, !!hazard.isMetao);
+            }
           }
         }
       } else if (hazard.kind === 'lightning_column') {
@@ -2219,13 +2276,17 @@
         // Gelleh's Holy Turrets: periodically lock onto the nearest enemy in
         // range and drop a holy AOE burst on it.
         hazard.recoil = Math.max(0, Number(hazard.recoil || 0) - dt);
-        let target = null;
+        let target = hazard.enemy && Neo.dist(hazard.x, hazard.y, Neo.player.x, Neo.player.y) <= (hazard.range || 360)
+          ? Neo.player
+          : null;
         let bestSq = (hazard.range || 360) ** 2;
-        forEachEnemyNearCircle(hazard.x, hazard.y, hazard.range || 360, enemy => {
-          if (!enemy || enemy.dead) return;
-          const dSq = (enemy.x - hazard.x) ** 2 + (enemy.y - hazard.y) ** 2;
-          if (dSq < bestSq) { bestSq = dSq; target = enemy; }
-        });
+        if (!hazard.enemy) {
+          forEachEnemyNearCircle(hazard.x, hazard.y, hazard.range || 360, enemy => {
+            if (!enemy || enemy.dead) return;
+            const dSq = (enemy.x - hazard.x) ** 2 + (enemy.y - hazard.y) ** 2;
+            if (dSq < bestSq) { bestSq = dSq; target = enemy; }
+          });
+        }
         if (target) {
           const desiredAngle = Neo.angleBetween(hazard, target);
           const currentAngle = Number(hazard.aimAngle || 0);
@@ -2250,7 +2311,13 @@
             });
             Neo.ringBurst(muzzleX, muzzleY, 7, '#fff7c8', 0.16);
             Neo.ringBurst(target.x, target.y, burstR, '#ffe6a3', 0.4);
-            Neo.blastRadius(target.x, target.y, burstR, hazard.damage || 26, '#ffe6a3');
+            if (hazard.enemy) {
+              if (Neo.dist(Neo.player.x, Neo.player.y, target.x, target.y) <= burstR + Neo.player.r) {
+                Neo.damagePlayer(hazard.damage || 26, aimAngle, 120, hazard.source || 'rival_holy_turret');
+              }
+            } else {
+              Neo.blastRadius(target.x, target.y, burstR, hazard.damage || 26, '#ffe6a3');
+            }
           }
         }
       }

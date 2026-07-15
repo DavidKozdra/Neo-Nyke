@@ -3350,6 +3350,7 @@ export function resumeGame() {
     const def = Neo.RIVAL_DEFS[resolvedKey];
     if (!def) return;
     const isFinale = !!options.isFinale;
+    const startingLoot = Neo.createRivalStartingLoot?.(resolvedKey) || [];
     Neo.rivalRumbleActive = true;
     Neo.currentRoom.cleared = false;
     clearRivalRumbleNextSpawn();
@@ -3383,7 +3384,10 @@ export function resumeGame() {
       xpToNext: 22 + Neo.floor * 4,
       growthTick: 0,
       weapons: (Neo.RIVAL_WEAPON_LOADOUTS?.[resolvedKey] || []).map(weapon => ({ ...weapon })),
-      loot: [],
+      // Mirror the playable character's real starting inventory. Later rivals
+      // have also had more tournament time to loot, and higher-level rivals have
+      // accumulated additional gear through their progression.
+      loot: startingLoot,
       homeGx: Neo.currentRoom.gx,
       homeGy: Neo.currentRoom.gy,
       objectiveGx: Neo.currentRoom.gx,
@@ -3395,7 +3399,9 @@ export function resumeGame() {
       lastKnownPlayerGy: Neo.currentRoom.gy,
       hpSnapshot: def.hp,
       memory: Neo.createDefaultRivalMemory(),
-      brain: Neo.createDefaultRivalBrain(resolvedKey),
+      // Tournament rivals enter to duel, not to run their normal-room warning or
+      // loot-claiming personality opener.
+      brain: { ...Neo.createDefaultRivalBrain(resolvedKey), stance: 'hostile', intention: 'engage' },
       // 1 life either way (dies for good on this loss). Being below
       // RIVAL_STARTING_LIVES (2) is exactly the hasReturned condition
       // applyRivalLevelStats checks for the 2x return-HP scale, so a finale
@@ -3406,15 +3412,28 @@ export function resumeGame() {
       friend: false,
       vendetta: isFinale,
       godGearGranted: false,
+      startingGearGranted: true,
+      slotCooldowns: { melee: 0, laser: 0, smash: 0, dash: 0 },
+      slotLastUsedAt: {},
       dead: false,
       rivalRumbleStage: Neo.rivalRumbleStage,
       rivalRumbleFinale: isFinale,
     };
     Neo.applyRivalLevelStats(rival, { syncLiveEnemy: false, keepHpRatio: false });
+    const progressionItems = Math.floor(Math.max(0, level - 1) / 2)
+      + Math.floor(Math.max(0, Number(Neo.rivalRumbleStage || 0)) / 2);
+    if (progressionItems > 0) {
+      Neo.grantRivalItems?.(rival, progressionItems, { syncLiveEnemy: false });
+    }
     if (isFinale) {
       rival.godGearGranted = true;
       Neo.grantRivalItems?.(rival, 5, { godTier: true, syncLiveEnemy: false });
     }
+    // Stat derivation preserves the previous HP value by design for living
+    // roaming rivals. A newly spawned tournament opponent should enter at the
+    // full max HP earned from its level and inventory.
+    rival.hp = rival.max;
+    rival.hpSnapshot = rival.max;
     Neo.rivals.push(rival);
     Neo.injectRivalToCurrentRoom(rival);
     if (!isFinale) {

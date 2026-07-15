@@ -664,9 +664,14 @@
         && Array.isArray(enemy.partitionAngles)
         && enemy.partitionAngles.length > 0;
       if (enemy.beamTime > 0 || partitionPreview) {
-        const range = enemy.type === 'god' ? (enemy.beamRange || 620) : enemy.type === 'mooggy' ? 520 : enemy.type === 'handsome_devil' ? (enemy.beamRange || 560) : enemy.type === 'bowman_bane' ? 480 : 430;
+        const isRivalBeam = enemy.type === 'rival' && !!enemy.rivalBeamMove;
+        const range = enemy.type === 'god' ? (enemy.beamRange || 620) : enemy.type === 'rival' ? (enemy.rivalBeamRange || 430) : enemy.type === 'mooggy' ? 520 : enemy.type === 'handsome_devil' ? (enemy.beamRange || 560) : enemy.type === 'bowman_bane' ? 480 : 430;
         const isPartition = enemy.type === 'god' && enemy.state === 'godPartition';
-        const angles = isPartition ? enemy.partitionAngles : [enemy.beamAngle];
+        const angles = isPartition
+          ? enemy.partitionAngles
+          : enemy.type === 'rival' && Array.isArray(enemy.rivalBeamFan)
+            ? enemy.rivalBeamFan.map(offset => enemy.beamAngle + offset)
+            : [enemy.beamAngle];
         const beamPaths = angles.map(angle => Neo.buildRicochetBeamPath(
           enemy.x,
           enemy.y,
@@ -674,20 +679,20 @@
           isPartition ? Math.hypot(Neo.ROOM_W, Neo.ROOM_H) * 1.15 : range,
           isPartition ? 0 : Neo.getEnemyBeamBounceCount(enemy),
         ));
-        const color = isPartition ? '#fff1a8' : enemy.type === 'god' ? '#ffffff' : enemy.type === 'mooggy' ? '#ff3348' : enemy.type === 'handsome_devil' ? '#ff3348' : enemy.type === 'bowman_bane' ? '#8dd4ff' : '#aa66ff';
-        const width = isPartition ? 14 : enemy.type === 'god' && enemy.state === 'godSweep' ? 18 : enemy.type === 'god' ? 10 : enemy.type === 'mooggy' ? 6 : enemy.type === 'handsome_devil' ? 9 : 8;
+        const color = isPartition ? '#fff1a8' : enemy.type === 'god' ? '#ffffff' : enemy.type === 'rival' ? (enemy.rivalBeamColor || '#ff00aa') : enemy.type === 'mooggy' ? '#ff3348' : enemy.type === 'handsome_devil' ? '#ff3348' : enemy.type === 'bowman_bane' ? '#8dd4ff' : '#aa66ff';
+        const width = isPartition ? 14 : enemy.type === 'god' && enemy.state === 'godSweep' ? 18 : enemy.type === 'god' ? 10 : enemy.type === 'rival' ? (enemy.rivalBeamWidth || 8) : enemy.type === 'mooggy' ? 6 : enemy.type === 'handsome_devil' ? 9 : 8;
         const options = {
           color,
-          glow: color,
+          glow: enemy.type === 'rival' ? (enemy.rivalBeamGlow || color) : color,
           maxWidth: width,
-          minWidthRatio: enemy.type === 'god' ? 0.12 : 0.2,
-          taperPower: enemy.type === 'god' ? 1.8 : 1.35,
-          segmentLength: lowBeamFx ? 80 : 48,
-          shadowBlur: enemy.type === 'god' && enemy.state === 'godSweep' ? 24 : enemy.type === 'mooggy' || enemy.type === 'handsome_devil' ? 20 : 14,
-          coreColor: enemy.type === 'god' ? '#ffffff' : 'rgba(255,255,255,0.66)',
+          minWidthRatio: isRivalBeam ? 0 : enemy.type === 'god' ? 0.12 : 0.2,
+          taperPower: isRivalBeam ? 2 : enemy.type === 'god' ? 1.8 : 1.35,
+          segmentLength: lowBeamFx ? 80 : isRivalBeam ? 32 : 48,
+          shadowBlur: isRivalBeam ? (enemy.rivalBeamShadowBlur || 18) : enemy.type === 'god' && enemy.state === 'godSweep' ? 24 : enemy.type === 'mooggy' || enemy.type === 'handsome_devil' ? 20 : 14,
+          coreColor: enemy.type === 'god' ? '#ffffff' : isRivalBeam ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.66)',
           coreWidth: Math.max(1.4, width * 0.22),
-          coreShadowBlur: lowBeamFx ? 0 : 4,
-          lowFx: lowBeamFx,
+          coreShadowBlur: lowBeamFx ? 0 : isRivalBeam ? 6 : 4,
+          lowFx: lowBeamFx || (isRivalBeam && angles.length > 1),
           alpha: partitionPreview ? 0.28 : 0.92,
         };
         const groupKey = `${color}|${width}|${options.minWidthRatio}|${options.taperPower}|${options.shadowBlur}|${options.coreColor}|${options.alpha}`;
@@ -1215,6 +1220,46 @@
         Neo.ctx.stroke();
         Neo.ctx.shadowBlur = 0;
         Neo.ctx.globalAlpha = 1;
+        Neo.ctx.restore();
+      }
+      if (enemy.type === 'rival' && enemy.swingTime > 0 && Number.isFinite(enemy.swingA)) {
+        const move = enemy.rivalSwingMove || '';
+        const extending = move === 'extending_staff';
+        const claws = move === 'claw_gauntlets';
+        const swingTotal = 0.22;
+        const swingRange = extending ? 130 : Number(enemy.rivalData?.weapons?.find(weapon => weapon.key === move)?.range || 55);
+        const swingArc = extending ? 1.45 : claws ? Math.PI * 0.7 : Neo.ATTACKS.melee.arc;
+        const swingProgress = Neo.clamp(1 - enemy.swingTime / swingTotal, 0, 1);
+        const sweepDir = Math.cos(enemy.swingA) < 0 ? 1 : -1;
+        const sweepStart = enemy.swingA + swingArc * sweepDir;
+        const sweepEnd = enemy.swingA - swingArc * sweepDir;
+        const currentTip = sweepStart + (sweepEnd - sweepStart) * swingProgress;
+        const trailStart = currentTip + swingArc * 0.55 * sweepDir;
+        const color = extending ? '#ff3333' : claws ? '#ff7a9a' : move === 'thorns_bleed_blade' ? '#ff6e8b' : enemy.rivalData?.color || '#d86d87';
+        const fade = 0.9 * enemy.swingTime / swingTotal;
+        Neo.ctx.save();
+        Neo.ctx.translate(enemy.x, drawY);
+        Neo.ctx.globalAlpha = fade * 0.35;
+        Neo.ctx.strokeStyle = color;
+        Neo.ctx.lineWidth = extending ? 14 : 10;
+        Neo.ctx.shadowColor = color;
+        Neo.ctx.shadowBlur = 16;
+        Neo.ctx.beginPath();
+        Neo.ctx.arc(0, 0, swingRange, trailStart, currentTip, sweepDir > 0);
+        Neo.ctx.stroke();
+        Neo.ctx.globalAlpha = fade;
+        Neo.ctx.lineWidth = extending ? 5 : 3;
+        Neo.ctx.shadowBlur = 8;
+        Neo.ctx.beginPath();
+        Neo.ctx.arc(0, 0, swingRange, trailStart, currentTip, sweepDir > 0);
+        Neo.ctx.stroke();
+        Neo.ctx.globalAlpha = fade * 0.9;
+        Neo.ctx.strokeStyle = '#ffffff';
+        Neo.ctx.lineWidth = extending ? 2 : 1.5;
+        Neo.ctx.shadowBlur = 4;
+        Neo.ctx.beginPath();
+        Neo.ctx.arc(0, 0, swingRange, currentTip + 0.12 * sweepDir, currentTip, sweepDir > 0);
+        Neo.ctx.stroke();
         Neo.ctx.restore();
       }
       if (bleedStacks > 0) drawBleedOverlay(enemy, bleedStacks);

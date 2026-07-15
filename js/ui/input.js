@@ -453,7 +453,7 @@ export const RIVAL_WEAPON_LOADOUTS = {
     // melee that can launch you into the next room), flying_unhitable (dash).
     princess: [
       { key: 'princess_wand', slot: 'melee', class: 'ranged', range: 380, preferredRange: 230, damageMult: 0.9, cooldownMult: 1.05, projectileCount: 1, spread: 0.05, projectileSpeed: 380 },
-      { key: 'love_beam', slot: 'laser', class: 'melee_heal', range: 50, preferredRange: 120, damageMult: 1.0, cooldownMult: 1.0, knockback: 280 },
+      { key: 'love_beam', slot: 'laser', class: 'ranged', range: 430, preferredRange: 210, damageMult: 1.0, cooldownMult: 1.0 },
       { key: 'kicky_kick', slot: 'smash', class: 'melee', range: 60, preferredRange: 110, damageMult: 1.4, cooldownMult: 1.5, knockback: 620, roomLaunchChance: 0.1 },
       { key: 'flying_unhitable', slot: 'dash', class: 'mobility', range: 340, preferredRange: 135, cooldownMult: 2.4, dashSpeed: 760, dashDuration: 0.32, invTime: 0.8 },
     ],
@@ -461,7 +461,7 @@ export const RIVAL_WEAPON_LOADOUTS = {
     // dash (dash).
     thorn_knight: [
       { key: 'thorns_bleed_blade', slot: 'melee', class: 'melee', range: 56, preferredRange: 120, damageMult: 1.0, cooldownMult: 0.84, knockback: 320 },
-      { key: 'blood_beam', slot: 'laser', class: 'ranged', range: 430, preferredRange: 270, damageMult: 0.86, cooldownMult: 1.05, projectileCount: 1, spread: 0.04, projectileSpeed: 420 },
+      { key: 'blood_beam', slot: 'laser', class: 'ranged', range: 430, preferredRange: 270, damageMult: 0.86, cooldownMult: 1.0 },
       { key: 'crimson_smash', slot: 'smash', class: 'melee', range: 92, preferredRange: 105, damageMult: 1.3, cooldownMult: 1.35, knockback: 430 },
       { key: 'dash', slot: 'dash', class: 'dash', range: 250, preferredRange: 165, damageMult: 0.9, cooldownMult: 1.0, knockback: 300 },
     ],
@@ -469,7 +469,7 @@ export const RIVAL_WEAPON_LOADOUTS = {
     // warp (dash).
     metao: [
       { key: 'metao_fire_staff', slot: 'melee', class: 'ranged', range: 470, preferredRange: 300, damageMult: 0.92, cooldownMult: 1.14, projectileCount: 1, spread: 0.02, projectileSpeed: 460 },
-      { key: 'power_disks', slot: 'laser', class: 'burst', range: 390, preferredRange: 250, damageMult: 0.72, cooldownMult: 1.0, projectileCount: 4, spread: 0.16, projectileSpeed: 360 },
+      { key: 'power_disks', slot: 'laser', class: 'burst', range: 390, preferredRange: 250, damageMult: 0.72, cooldownMult: 1.0, projectileCount: 8, spread: 0.16, projectileSpeed: 360 },
       { key: 'chaos_burst', slot: 'smash', class: 'burst', range: 340, preferredRange: 220, damageMult: 0.85, cooldownMult: 1.12, projectileCount: 3, spread: 0.18, projectileSpeed: 380 },
       { key: 'warp', slot: 'dash', class: 'mobility', range: 420, preferredRange: 150, cooldownMult: 1.9, dashSpeed: 920, dashDuration: 0.2, invTime: 0.5 },
     ],
@@ -477,7 +477,7 @@ export const RIVAL_WEAPON_LOADOUTS = {
     // zip_lightning (dash).
     gelleh: [
       { key: 'gelleh_lightning_spear', slot: 'melee', class: 'ranged', range: 420, preferredRange: 260, damageMult: 0.94, cooldownMult: 1.0, projectileCount: 2, spread: 0.08, projectileSpeed: 390 },
-      { key: 'blade_justice', slot: 'laser', class: 'melee', range: 50, preferredRange: 130, damageMult: 1.12, cooldownMult: 0.95, knockback: 320 },
+      { key: 'blade_justice', slot: 'laser', class: 'melee', range: 124, preferredRange: 105, damageMult: 1.12, cooldown: 3.8, knockback: 320 },
       { key: 'healing_zone', slot: 'smash', class: 'heal', preferredRange: 210, cooldownMult: 2.1, healRatio: 0.14 },
       { key: 'zip_lightning', slot: 'dash', class: 'dash', range: 245, preferredRange: 160, damageMult: 1.08, cooldownMult: 1.1, knockback: 300, dashSpeed: 700 },
     ],
@@ -495,7 +495,7 @@ export const RIVAL_WEAPON_LOADOUTS = {
       { key: 'extending_staff', slot: 'melee', class: 'melee', range: 130, preferredRange: 120, damageMult: 1.15, cooldownMult: 1.1, knockback: 500 },
       { key: 'turtle_wave', slot: 'laser', class: 'ranged', range: 480, preferredRange: 280, damageMult: 0.9, cooldownMult: 1.25, projectileCount: 1, spread: 0.0, projectileSpeed: 420 },
       { key: 'death_ball', slot: 'smash', class: 'burst', range: 360, preferredRange: 235, damageMult: 1.05, cooldownMult: 1.55, projectileCount: 1, spread: 0, projectileSpeed: 300 },
-      { key: 'riptide_roll', slot: 'dash', class: 'dash', range: 240, preferredRange: 160, damageMult: 1.1, cooldownMult: 1.15, knockback: 360 },
+      { key: 'dash', slot: 'dash', class: 'dash', range: 240, preferredRange: 160, damageMult: 1.0, cooldownMult: 1.0, knockback: 320 },
     ],
   };
 
@@ -503,6 +503,10 @@ export const RIVAL_WEAPON_LOADOUTS = {
 // moves. buildRivalLoadout swaps one of these in for ~20% of rival spawns so
 // rivals aren't always the cookie-cutter default kit.
 export const RIVAL_LOADOUT_ALTERNATIVES = {
+    princess: [
+      { key: 'love_bomb_laser', slot: 'laser', class: 'burst', range: 420, preferredRange: 250, damageMult: 1.0, cooldownMult: 1.0 },
+      { key: 'princess_shield', slot: 'dash', class: 'mobility', range: 420, preferredRange: 160, cooldownMult: 1.0 },
+    ],
     thorn_knight: [
       // thorn_blood_beams (alt laser) + knight_slash_dash (alt dash)
       { key: 'thorn_blood_beams', slot: 'laser', class: 'ranged', range: 450, preferredRange: 250, damageMult: 0.8, cooldownMult: 0.92, projectileCount: 2, spread: 0.1, projectileSpeed: 430 },
@@ -516,11 +520,15 @@ export const RIVAL_LOADOUT_ALTERNATIVES = {
     gelleh: [
       // holy_turrets + excalibur_strike (alt smashes)
       { key: 'excalibur_strike', slot: 'smash', class: 'burst', range: 360, preferredRange: 230, damageMult: 1.0, cooldownMult: 1.2, projectileCount: 3, spread: 0.12, projectileSpeed: 380 },
+      { key: 'holy_turrets', slot: 'smash', class: 'burst', range: 360, preferredRange: 240, damageMult: 0.8, cooldownMult: 1.0 },
     ],
     mooggy: [
       // mooggy_blood_beam (alt laser) + mooggy_hairball (alt smash → burst)
       { key: 'mooggy_blood_beam', slot: 'laser', class: 'ranged', range: 480, preferredRange: 250, damageMult: 0.95, cooldownMult: 1.1, projectileCount: 1, spread: 0.02, projectileSpeed: 480 },
       { key: 'mooggy_hairball', slot: 'smash', class: 'burst', range: 330, preferredRange: 200, damageMult: 0.9, cooldownMult: 1.1, projectileCount: 4, spread: 0.2, projectileSpeed: 360 },
+    ],
+    turtle_boy: [
+      { key: 'turtle_powerup', slot: 'smash', class: 'mobility', range: 420, preferredRange: 180, cooldownMult: 1.0 },
     ],
   };
 
