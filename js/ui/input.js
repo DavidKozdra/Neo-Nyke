@@ -63,7 +63,7 @@ export const MOVE_DEFS = {
     lightning_columns: { key: 'lightning_columns', slot: 'laser', name: 'Lightning Columns', desc: 'Summon two lightning turrets.' },
     god_sweep: { key: 'god_sweep', slot: 'laser', name: 'God Sweep', desc: 'Spin a massive divine beam around yourself.' },
     laser_shockwave: { key: 'laser_shockwave', slot: 'laser', name: 'Laser Shockwave', desc: 'Fires a shockwave that erupts rock spikes in a vertical line across the room.' },
-    nail_shot: { key: 'nail_shot', slot: 'laser', name: 'Nail Shot', desc: 'Fires a spread of bouncing nails in all directions. 3 charges.', exclusiveCharacter: 'mooggy', maxStacks: 3 },
+    nail_shot: { key: 'nail_shot', slot: 'laser', name: 'Nail Shot', desc: 'Fires a spread of bouncing nails in all directions. 2 charges.', exclusiveCharacter: 'mooggy', maxStacks: 2 },
     mooggy_blood_beam: { key: 'mooggy_blood_beam', slot: 'laser', name: 'Blood Beam', desc: 'A crimson assassin beam that drenches enemies in heavy poison and chills them solid (freeze).', exclusiveCharacter: 'mooggy' },
     thorn_blood_beams: { key: 'thorn_blood_beams', slot: 'laser', name: 'Infinite Blood Beam', desc: 'Four bleeding beams that orbit you, all aimed by the mouse. Channels while held.', exclusiveCharacter: 'thorn_knight' },
     wizard_lazer: { key: 'wizard_lazer', slot: 'laser', name: 'Wizard Lazer', desc: 'A thick, heavy purple beam with massive recoil and heavy damage.', exclusiveCharacter: 'metao' },

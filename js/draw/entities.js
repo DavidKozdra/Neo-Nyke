@@ -323,8 +323,8 @@
     if (reduceMotion) return { angleOffset: 0, recoil: 0 };
     const attackProgress = Neo.clamp(Number(options.attackProgress || 0), 0, 1);
     const recoil = Neo.clamp(Number(options.recoil || 0), 0, 1);
-    if ((spriteKey === 'thorn_knight' || spriteKey === 'sarge') && attackProgress > 0) {
-      const arc = spriteKey === 'sarge' ? 1.35 : 1.05;
+    if ((spriteKey === 'thorn_knight' || spriteKey === 'sarge' || spriteKey === 'mooggy') && attackProgress > 0) {
+      const arc = spriteKey === 'sarge' ? 1.35 : spriteKey === 'mooggy' ? 0.85 : 1.05;
       const eased = 1 - (1 - attackProgress) ** 2;
       const direction = -1;
       return {
@@ -1180,7 +1180,12 @@
         tint: flash ? 'rgba(255,255,180,0.55)' : (enemy.elite ? 'rgba(255,210,96,0.7)' : null),
         ...enemyAnim,
       });
-      drawEnemyArmIndicator(enemy, spriteKey, drawSize, facing, enemyAttackProgress);
+      // Mooggy's claw swing is a single swingTime timer (like the player's
+      // own melee swing), not the generic windup+swingTime combo the shared
+      // enemyAttackProgress assumes — feed the arm indicator its own progress
+      // scaled to its actual swing duration, same treatment as thorn_knight/sarge.
+      const mooggyArmProgress = enemy.type === 'mooggy' ? getAttackProgress(enemy.swingTime, 0.22) : enemyAttackProgress;
+      drawEnemyArmIndicator(enemy, spriteKey, drawSize, facing, mooggyArmProgress);
       Neo.ctx.restore();
       // Knave Blade swipe: a sweeping slash arc, mirroring the player's melee
       // streak, while a bladed enemy is mid-swing.

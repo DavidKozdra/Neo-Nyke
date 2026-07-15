@@ -4747,11 +4747,20 @@
     enemy.attackCd = 0.18;
   }
 
+  // Mooggy claw swing: a single swingTime timer (like the player's own melee
+  // swing, Neo.ATTACKS.melee.active) rather than a separate windup phase, so
+  // getArmSpriteMotion's thorn_knight/sarge-style arc easing drives the arm
+  // through one continuous swing with no discontinuity.
+  const MOOGGY_CLAW_SWING = 0.22;
+  const MOOGGY_CLAW_REACH_PAD = 34;
+  const MOOGGY_CLAW_ARC = 1.0;
+
   function updateMooggyEnemy(enemy, dt) {
     if (!Neo.player) return;
     const dx = Neo.player.x - enemy.x;
     const dy = Neo.player.y - enemy.y;
     const distance = Math.hypot(dx, dy) || 1;
+    const clawReach = enemy.r + Neo.player.r + MOOGGY_CLAW_REACH_PAD;
 
     if (enemy.beamTime > 0) {
       Neo.tickEnemyBeam(enemy, dt, {
@@ -4778,6 +4787,24 @@
       return;
     }
 
+    if (enemy.swingTime > 0) {
+      enemy.swingTime -= dt;
+      enemy.vx *= 0.7;
+      enemy.vy *= 0.7;
+      // Claw lands at the apex of the swing, mirroring the player melee hit
+      // timing (roughly mid-way through the active window).
+      if (!enemy.clawHit && enemy.swingTime <= MOOGGY_CLAW_SWING * 0.5) {
+        const toPlayer = Math.atan2(dy, dx);
+        const angleDiff = Math.abs(Math.atan2(Math.sin(toPlayer - enemy.swingA), Math.cos(toPlayer - enemy.swingA)));
+        if (distance < clawReach && angleDiff < MOOGGY_CLAW_ARC) {
+          enemy.clawHit = true;
+          Neo.damagePlayer(enemy.dmg, toPlayer, 190, 'mooggy', { attacker: enemy });
+          Neo.applyBleed?.(Neo.player, Number(enemy.mooggyBleedStacks || 1), 3.2, enemy.type);
+        }
+      }
+      return;
+    }
+
     const desired = 220;
     const direction = distance < desired - 34 ? -1 : distance > desired + 42 ? 1 : 0.15;
     const strafe = distance < 420 ? 0.44 : 0;
@@ -4790,12 +4817,14 @@
       dt
     );
 
-    if (distance < enemy.r + Neo.player.r + 12 && enemy.attackCd <= 0) {
-      const angle = Math.atan2(dy, dx);
+    if (distance < clawReach && enemy.attackCd <= 0) {
+      // Telegraph + launch the claw swing (read by the renderer/arm indicator).
+      enemy.swingA = Math.atan2(dy, dx);
+      enemy.swingTime = MOOGGY_CLAW_SWING;
+      enemy.clawHit = false;
       enemy.attackAnimT = 0.24;
-      Neo.damagePlayer(enemy.dmg, angle, 190, 'mooggy', { attacker: enemy });
-      Neo.applyBleed?.(Neo.player, Number(enemy.mooggyBleedStacks || 1), 3.2, enemy.type);
-      enemy.attackCd = 0.36;
+      enemy.attackCd = 0.5;
+      Neo.ringBurst(enemy.x, enemy.y, clawReach, '#ff3348', 0.18);
       return;
     }
 
