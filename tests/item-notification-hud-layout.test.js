@@ -19,7 +19,7 @@ describe('new-item notification HUD layout', () => {
     expect(settings).toContain('defaultScale: 1.4, touchDefaultScale: 1.2');
     expect(css).toContain('scale(var(--hud-scale-itemnotify, 1.4))');
     expect(mobileCss).toContain('scale(var(--hud-scale-itemnotify, 1.2))');
-    expect(settings).toContain("root.style.setProperty(el.cssVar, String(effectiveHudScale(el.key)))");
+    expect(settings).toContain("root.style.setProperty(el.cssVar, String(effectiveHudRenderScale(el.key)))");
     expect(settings).toContain('requestAnimationFrame(refreshHudPreviewBoxes)');
     expect(settings).not.toContain('requestAnimationFrame(() => correctHudPreviewOverlaps({ saveAfter: true }))');
   });

@@ -57,25 +57,25 @@
   // old saves and the "everything" knob still work. `cssVar` feeds a transform in
   // style.css; `hideClass` toggles a body class that hides just that widget.
   const HUD_ELEMENTS = [
-    { key: 'coins',      label: 'Coins & Loop',     cssVar: '--hud-scale-coins',      xVar: '--hud-x-coins',      yVar: '--hud-y-coins',      hideClass: 'hud-hide-coins' },
-    { key: 'center',     label: 'Timer / Floor',    cssVar: '--hud-scale-center',     xVar: '--hud-x-center',     yVar: '--hud-y-center',     hideClass: 'hud-hide-center' },
-    { key: 'objectives', label: 'Objective Panel',  cssVar: '--hud-scale-objectives', xVar: '--hud-x-objectives', yVar: '--hud-y-objectives', hideClass: 'hud-hide-objectives' },
-    { key: 'stats',      label: 'Player Stats',     cssVar: '--hud-scale-stats',      xVar: '--hud-x-stats',      yVar: '--hud-y-stats',      hideClass: 'hud-hide-stats' },
-    { key: 'actions',    label: 'Action Bar',       cssVar: '--hud-scale-actions',    xVar: '--hud-x-actions',    yVar: '--hud-y-actions',    hideClass: 'hud-hide-actions' },
-    { key: 'equipment',  label: 'Tool Slots',       cssVar: '--hud-scale-equipment',  xVar: '--hud-x-equipment',  yVar: '--hud-y-equipment',  hideClass: 'hud-hide-equipment' },
+    { key: 'coins',      label: 'Coins & Loop',     selector: '#coinDisplay',       cssVar: '--hud-scale-coins',      xVar: '--hud-x-coins',      yVar: '--hud-y-coins',      hideClass: 'hud-hide-coins' },
+    { key: 'center',     label: 'Timer / Floor',    selector: '#centerDisplay',     cssVar: '--hud-scale-center',     xVar: '--hud-x-center',     yVar: '--hud-y-center',     hideClass: 'hud-hide-center' },
+    { key: 'objectives', label: 'Objective Panel',  selector: '#objectiveTracker',  cssVar: '--hud-scale-objectives', xVar: '--hud-x-objectives', yVar: '--hud-y-objectives', hideClass: 'hud-hide-objectives' },
+    { key: 'stats',      label: 'Player Stats',     selector: '#playerStats',       cssVar: '--hud-scale-stats',      xVar: '--hud-x-stats',      yVar: '--hud-y-stats',      hideClass: 'hud-hide-stats', renderScale: 2, compactRenderScale: 1 },
+    { key: 'actions',    label: 'Action Bar',       selector: '#actionBar',         cssVar: '--hud-scale-actions',    xVar: '--hud-x-actions',    yVar: '--hud-y-actions',    hideClass: 'hud-hide-actions', renderScale: 1.5, compactRenderScale: 1 },
+    { key: 'equipment',  label: 'Tool Slots',       selector: '#equipmentSlots',    cssVar: '--hud-scale-equipment',  xVar: '--hud-x-equipment',  yVar: '--hud-y-equipment',  hideClass: 'hud-hide-equipment' },
     // The new-item pickup toast stack (#itemNotifyStack). DOM widget with its own
     // scale/offset/visibility, independent of the coin display it sits beneath.
-    { key: 'itemnotify', label: 'Item Pickups',     cssVar: '--hud-scale-itemnotify', xVar: '--hud-x-itemnotify', yVar: '--hud-y-itemnotify', hideClass: 'hud-hide-itemnotify', defaultScale: 1.4, touchDefaultScale: 1.2 },
+    { key: 'itemnotify', label: 'Item Pickups',     selector: '#itemNotifyStack',   cssVar: '--hud-scale-itemnotify', xVar: '--hud-x-itemnotify', yVar: '--hud-y-itemnotify', hideClass: 'hud-hide-itemnotify', defaultScale: 1.4, touchDefaultScale: 1.2 },
     // The status-toast stack (#statusToastStack) — relic "Ready" cues and "Copied"
     // bonuses. Bottom-center DOM widget, separate from item pickups so it reads as
     // a status update, not a new-item card. Default 1.2 (20% above its base size).
-    { key: 'statustoast', label: 'Status Cues',     cssVar: '--hud-scale-statustoast', xVar: '--hud-x-statustoast', yVar: '--hud-y-statustoast', hideClass: 'hud-hide-statustoast', defaultScale: 1.2, touchDefaultScale: 1.2 },
+    { key: 'statustoast', label: 'Status Cues',     selector: '#statusToastStack',   cssVar: '--hud-scale-statustoast', xVar: '--hud-x-statustoast', yVar: '--hud-y-statustoast', hideClass: 'hud-hide-statustoast', defaultScale: 1.2, touchDefaultScale: 1.2 },
     // The minimap is drawn on the canvas, not a DOM widget, so it has no CSS vars.
     // drawMinimap() reads its scale/visibility/offsets from getHudElements().
     { key: 'minimap',    label: 'Minimap',          cssVar: null, xVar: null, yVar: null, hideClass: null, canvas: true, defaultScale: 1.25 },
     // The boss health bar is also canvas-drawn. drawBossHealthBars() reads its
     // scale/visibility/offsets from getHudElements().
-    { key: 'bossbar',    label: 'Boss Health Bar',  cssVar: null, xVar: null, yVar: null, hideClass: null, canvas: true },
+    { key: 'bossbar',    label: 'Boss Health Bar',  cssVar: null, xVar: null, yVar: null, hideClass: null, canvas: true, renderScale: 2, top: 72, compactTop: 64 },
   ];
 
   // Per-element movement range, in screen pixels. Large enough to place any
@@ -90,12 +90,6 @@
     return Math.max(HUD_OFFSET_MIN, Math.min(HUD_OFFSET_MAX, Math.round(n / HUD_OFFSET_STEP) * HUD_OFFSET_STEP));
   }
 
-  const HUD_PREVIEW_SCALE_FACTORS = {
-    stats: 2,
-    actions: 1.5,
-    // Boss bar renders at 2× base in drawBossHealthBars() (BOSS_BAR_BASE_SCALE).
-    bossbar: 2,
-  };
   const HUD_OVERLAP_GAP = 10;
   const HUD_OVERLAP_SOLVE_MAX_PASSES = 6;
   const HUD_OVERLAP_SCALE_MAX_ATTEMPTS = 30;
@@ -398,7 +392,7 @@
       // Canvas-drawn widgets (minimap) have no CSS vars — drawMinimap() reads
       // their scale/visibility from getHudElements() each frame instead.
       if (el.canvas) return;
-      root.style.setProperty(el.cssVar, String(effectiveHudScale(el.key)));
+      root.style.setProperty(el.cssVar, String(effectiveHudRenderScale(el.key)));
       const x = normalizeHudOffset(entry.x);
       const y = normalizeHudOffset(entry.y);
       if (x) root.style.setProperty(el.xVar, `${x}px`); else root.style.removeProperty(el.xVar);
@@ -504,6 +498,8 @@
     getVolume: () => volume,
     getHudElements: () => hudElements,
     getHudElementDefs: () => HUD_ELEMENTS.map(el => ({ key: el.key, label: el.label })),
+    getHudRenderMultiplier,
+    getHudAnchor,
     correctHudLayout: () => scheduleHudOverlapCorrection({ saveAfter: true }),
     // True when the player has explicitly picked a theme (anything but the base
     // dark look), in which case it overrides any character-default theme.
@@ -1001,8 +997,31 @@
       : normalizeHudScale(entry.scale);
   }
 
+  function isCompactHudViewport() {
+    return window.innerWidth <= 920;
+  }
+
+  function getHudRenderMultiplier(key) {
+    const def = HUD_ELEMENTS.find(el => el.key === key);
+    const multiplier = isCompactHudViewport()
+      ? (def?.compactRenderScale ?? def?.renderScale)
+      : def?.renderScale;
+    return Number.isFinite(Number(multiplier)) ? Number(multiplier) : 1;
+  }
+
+  function effectiveHudRenderScale(key) {
+    return effectiveHudScale(key) * getHudRenderMultiplier(key);
+  }
+
+  function getHudAnchor(key, axis) {
+    const def = HUD_ELEMENTS.find(el => el.key === key);
+    const compactKey = `compact${String(axis || '').charAt(0).toUpperCase()}${String(axis || '').slice(1)}`;
+    const value = isCompactHudViewport() ? (def?.[compactKey] ?? def?.[axis]) : def?.[axis];
+    return Number.isFinite(Number(value)) ? Number(value) : null;
+  }
+
   function effectiveHudPreviewScale(key, viewportScale = 1) {
-    return effectiveHudScale(key) * (HUD_PREVIEW_SCALE_FACTORS[key] || 1) * viewportScale;
+    return effectiveHudRenderScale(key) * viewportScale;
   }
 
   function formatHudElementScale(entry) {
@@ -1035,6 +1054,38 @@
     frame.style.height = `${height}px`;
   }
 
+  function getLiveHudElement(key) {
+    if (key === 'itemnotify') window.Neo?.ensureItemNotifyStack?.();
+    if (key === 'statustoast') window.Neo?.ensureStatusToastStack?.();
+    const def = HUD_ELEMENTS.find(el => el.key === key);
+    return def?.selector ? document.querySelector(def.selector) : null;
+  }
+
+  function syncPreviewAnchorFromLiveCss(box, key, ratio) {
+    const live = getLiveHudElement(key);
+    if (!live) return false;
+    const style = getComputedStyle(live);
+    const px = property => {
+      const value = Number.parseFloat(style[property]);
+      return Number.isFinite(value) ? value : null;
+    };
+
+    if (key === 'equipment') {
+      box.style.right = '0px';
+    } else if (px('left') !== null) {
+      box.style.left = `${px('left') * ratio.x}px`;
+    } else if (px('right') !== null) {
+      box.style.right = `${px('right') * ratio.x}px`;
+    }
+
+    if (px('top') !== null) {
+      box.style.top = `${px('top') * ratio.y}px`;
+    } else if (px('bottom') !== null) {
+      box.style.bottom = `${px('bottom') * ratio.y}px`;
+    }
+    return true;
+  }
+
   function setHudPreviewAnchor(box, key, ratio) {
     box.dataset.previewSizedFromBounds = 'false';
     box.style.top = '';
@@ -1045,38 +1096,13 @@
       box.style.width = '';
       box.style.height = '';
     }
-    if (key === 'coins') {
-      box.style.top = `${16 * ratio.y}px`;
-      box.style.left = `${16 * ratio.x}px`;
-    } else if (key === 'itemnotify') {
-      box.style.top = `${118 * ratio.y}px`;
-      box.style.left = `${16 * ratio.x}px`;
-    } else if (key === 'center') {
-      box.style.top = '0px';
+    if (key !== 'minimap' && key !== 'bossbar') {
+      syncPreviewAnchorFromLiveCss(box, key, ratio);
+      return;
+    }
+    if (key === 'bossbar') {
+      box.style.top = `${(getHudAnchor('bossbar', 'top') ?? 72) * ratio.y}px`;
       box.style.left = '50%';
-    } else if (key === 'bossbar') {
-      // Mirror the live HUD: top-center, tucked directly beneath Timer/Floor.
-      box.style.top = `${(window.innerWidth <= 700 ? 64 : 72) * ratio.y}px`;
-      box.style.left = '50%';
-    } else if (key === 'objectives') {
-      // Mirror the live HUD: objectives sit to the LEFT of the top-right minimap
-      // (see .objective-tracker right: 206px in style.css).
-      box.style.top = `${154 * ratio.y}px`;
-      box.style.right = `${206 * ratio.x}px`;
-    } else if (key === 'stats') {
-      box.style.bottom = `${10 * ratio.y}px`;
-      box.style.left = `${10 * ratio.x}px`;
-    } else if (key === 'actions') {
-      box.style.bottom = `${18 * ratio.y}px`;
-      box.style.left = '50%';
-    } else if (key === 'statustoast') {
-      // Mirror the live HUD: bottom-center, above the action bar (#statusToastStack
-      // sits at bottom:120px in style.css).
-      box.style.bottom = `${120 * ratio.y}px`;
-      box.style.left = '50%';
-    } else if (key === 'equipment') {
-      box.style.top = '50%';
-      box.style.right = '0px';
     } else if (key === 'minimap') {
       const layoutState = window.Neo?.minimapLayoutState;
       const bounds = layoutState?.viewportBounds || null;
@@ -1602,9 +1628,11 @@
     if (e.target.id === 'hudPreviewOverlay') hudPreviewClose();
   });
   window.addEventListener('resize', () => {
+    applyHudElements();
     refreshHudPreviewBoxes();
   });
   window.addEventListener('orientationchange', () => {
+    applyHudElements();
     if (window.NeoSettings.isHudLayoutEditorOpen()) refreshHudPreviewBoxes();
   });
 
