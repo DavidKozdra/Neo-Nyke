@@ -68,6 +68,17 @@ const CHARACTER_SHEET_DEFS = {
     armFrame: 2,
     portraitFrame: 0,
   },
+  turtle_boy: {
+    src: 'assets/sprites/chars/TurtleBoy.png',
+    frameWidth: 32,
+    frameHeight: 32,
+    frameCount: 8,
+    renderScale: 1.5,
+    idleFrames: [2, 3],
+    walkFrames: [4, 5, 6, 7],
+    armFrame: 1,
+    portraitFrame: 0,
+  },
 };
 
 // Which raw frame indices play the idle cycle, and which (ordered) indices
