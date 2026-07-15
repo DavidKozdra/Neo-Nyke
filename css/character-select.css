@@ -578,8 +578,8 @@
 }
 
 #charSelect .charselect-extra-options {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
+  justify-content: center;
   gap: 7px;
 }
 

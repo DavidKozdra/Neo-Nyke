@@ -3853,3 +3853,86 @@
     font-size: calc(11px * var(--font-scale, 1));
   }
 }
+
+@media (max-width: 900px) {
+  .game-panel .game-panel-head {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+  }
+
+  .game-panel .game-panel-head > .panel-title-wrap {
+    grid-column: 1;
+    grid-row: 1;
+    justify-self: start;
+  }
+
+  .game-panel .game-panel-head > .panel-close {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: start;
+    justify-self: end;
+    margin: 0;
+  }
+
+  .game-panel-head > .panel-header-tabs,
+  #shopPanel .game-panel-head > .shop-tabs,
+  #invPanel .game-panel-head > .inv-tabs,
+  #anvilPanel .game-panel-head > .anvil-tabs {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    margin-top: 4px;
+    padding: 0 3px;
+    overflow-x: auto;
+  }
+
+  .game-panel-head > .anvil-resources,
+  .game-panel-head > .shop-balance {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    justify-self: start;
+    margin-left: 0;
+  }
+
+  .game-panel-head > .panel-header-tabs .panel-tab,
+  #shopPanel .game-panel-head > .shop-tabs .shop-tab,
+  #invPanel .game-panel-head > .inv-tabs .panel-tab,
+  #anvilPanel .game-panel-head > .anvil-tabs .panel-tab {
+    min-width: 96px;
+    min-height: 46px;
+    padding: 9px 11px 10px;
+    border-radius: 7px 7px 0 0;
+    font-size: calc(12px * var(--font-scale, 1));
+  }
+
+  .mods-panel .floating-panel__head {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding-bottom: 0;
+  }
+
+  .mods-panel .floating-panel__title-wrap {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .mods-panel .panel-close {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .mods-tabs {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: 100%;
+    margin: 6px 0 0;
+  }
+
+  .mods-tab {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+}

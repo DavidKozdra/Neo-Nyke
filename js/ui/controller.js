@@ -2727,7 +2727,10 @@ export function createUIController(view) {
         view.bestFloor.textContent = bestFloor;
         if (view.loopCount) view.loopCount.textContent = loopCrystals;
         view.saveState.textContent = saveState;
-        const canOfferTutorial = activeState === 'menu';
+        // An in-progress run means the player has already been through (or
+        // explicitly skipped) onboarding — don't dangle the tutorial offer in
+        // front of someone who has an active save to resume.
+        const canOfferTutorial = activeState === 'menu' && !Neo.activeRun;
         if (activeState === 'menu' && canOfferTutorial && !tutorialMenuOfferVisible) {
           tutorialMenuOfferVisible = true;
           Neo.markTutorialButtonOfferedNow?.();

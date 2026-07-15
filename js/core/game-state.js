@@ -2512,14 +2512,12 @@ export function resumeGame() {
     const seedInput = document.getElementById('seed');
     const seedRow = seedInput?.closest('.seedrow--panel');
     const challengeToggleEl = document.getElementById('challengeToggle');
-    const legacyToggleEl = document.getElementById('legacyToggle');
     if (difficultySelect) difficultySelect.style.pointerEvents = isCompetitive ? 'none' : '';
     if (difficultySelect) difficultySelect.style.opacity = isCompetitive ? '0.35' : '';
     if (seedRow) seedRow.style.display = isCompetitive ? 'none' : '';
     if (!seedRow && seedLabel) seedLabel.style.display = isCompetitive ? 'none' : '';
     if (!seedRow && seedInput) seedInput.style.display = isCompetitive ? 'none' : '';
     if (challengeToggleEl) challengeToggleEl.style.display = isCompetitive ? 'none' : '';
-    if (legacyToggleEl) legacyToggleEl.style.display = isCompetitive ? 'none' : '';
 
     if (isCompetitive) {
       Neo.selectedDifficulty = 'hard';
