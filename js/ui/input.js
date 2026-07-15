@@ -1694,7 +1694,6 @@ export const ui = {
     panelItemAlert: document.getElementById('panelItemAlert'),
     seed: document.getElementById('seed'),
     go: document.getElementById('go'),
-    difficultyHint: document.getElementById('difficultyHint'),
     challengePanel: document.getElementById('challengePanel'),
     challengeToggle: document.getElementById('challengeToggle'),
     challengeClose: document.getElementById('challengeClose'),

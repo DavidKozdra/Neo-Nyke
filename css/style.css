@@ -351,7 +351,7 @@ button, input, select, textarea {
   top: calc(var(--coin-hud-bottom) * var(--hud-scale-coins, var(--hud-scale, 1)) + var(--notify-gap) + var(--hud-y-coins, 0px));
   left: 16px;
   transform: translate(var(--hud-x-itemnotify, 0px), var(--hud-y-itemnotify, 0px))
-             scale(var(--hud-scale-itemnotify, 1.8));
+             scale(var(--hud-scale-itemnotify, 2.7));
   transform-origin: top left;
   display: flex;
   flex-direction: column;
@@ -361,7 +361,9 @@ button, input, select, textarea {
 }
 
 .item-toast {
-  width: min(520px, calc(100vw - 32px));
+  box-sizing: border-box;
+  /* At the 2.7× default, keep the enlarged card inside the viewport. */
+  width: min(520px, calc(37.037vw - 11.852px));
   display: flex;
   align-items: center;
   gap: 12px;
@@ -5098,14 +5100,6 @@ p.sub {
   opacity: .45;
   cursor: not-allowed;
   filter: grayscale(.2);
-}
-
-.difficulty-hint {
-  min-height: 16px;
-  font-size: calc(16px * var(--font-scale, 1));
-  color: var(--menu-text-soft);
-  letter-spacing: .02em;
-  text-align: center;
 }
 
 .challenge-select {
@@ -12998,7 +12992,7 @@ button.alt.danger {
 /* Boss bar is canvas-drawn; the preview shows a labeled schematic bar that uses
    the same saved visibility, scale, and X/Y offsets as drawBossHealthBars(). */
 .hud-preview-box--bossbar {
-  top: 6%; left: 50%;
+  top: 4%; left: 50%;
   /* Base size is halved because settings-ui applies a 2× preview factor (bossbar),
      mirroring drawBossHealthBars()'s 2× base scale — final render ≈ 44% wide. */
   width: 22%; height: 2.5%; min-height: 8px;
@@ -13740,6 +13734,8 @@ button.alt.danger {
 }
 
 #settingsModal .modal-box {
+  width: min(828px, calc(100vw - 32px));
+  height: min(782px, calc(100dvh - 32px));
   border-width: 1px;
   border-radius: var(--ui-frame-radius);
   border-top-color: var(--menu-accent);
@@ -13770,6 +13766,7 @@ button.alt.danger {
   padding: 9px 10px;
   border-radius: 0;
   color: var(--menu-text-muted);
+  font-size: calc(14px * var(--font-scale, 1));
 }
 
 #settingsModal .stab:hover {
@@ -13795,20 +13792,34 @@ button.alt.danger {
 
 #settingsModal .settings-group__title {
   color: var(--menu-accent);
+  font-size: calc(14px * var(--font-scale, 1));
+}
+
+#settingsModal .settings-head .screen-title {
+  font-size: calc(28px * var(--font-scale, 1));
 }
 
 #settingsModal .access-label,
 #settingsModal .bind-label,
 #settingsModal .vol-label {
   color: var(--menu-text);
-  font-size: calc(15px * var(--font-scale, 1));
+  font-size: calc(17px * var(--font-scale, 1));
 }
 
 #settingsModal .access-desc,
 #settingsModal .settings-hint,
 #settingsModal .stab-hint {
   color: var(--menu-text-muted);
-  font-size: calc(13px * var(--font-scale, 1));
+  font-size: calc(15px * var(--font-scale, 1));
+}
+
+#settingsModal .bind-btn,
+#settingsModal .control-profile-btn,
+#settingsModal .settings-reset,
+#settingsModal .theme-action-btn,
+#settingsModal .gamepad-bind-select,
+#settingsModal .mobile-bind-select {
+  font-size: calc(15px * var(--font-scale, 1));
 }
 
 #settingsModal .bind-btn,
@@ -13821,4 +13832,487 @@ button.alt.danger {
 #settingsModal .theme-name-input,
 #settingsModal .theme-action-btn {
   border-radius: var(--ui-control-radius);
+}
+
+/* Gameplay panels use a larger, explicit type ladder. */
+.game-panel .panel-kicker {
+  font-size: calc(12px * var(--font-scale, 1));
+}
+
+.game-panel-head h3 {
+  font-size: calc(clamp(25px, 3vw, 35px) * var(--font-scale, 1));
+}
+
+.game-panel .panel-subtitle {
+  max-width: 62ch;
+  font-size: calc(15px * var(--font-scale, 1));
+  line-height: 1.5;
+}
+
+.game-panel .panel-tab,
+.game-panel .shop-tab {
+  font-size: calc(14px * var(--font-scale, 1));
+}
+
+.game-panel h4 {
+  font-size: calc(18px * var(--font-scale, 1));
+  line-height: 1.25;
+}
+
+.game-panel .inv-card h4,
+.game-panel .anvil-item-name,
+.game-panel .challenge-btn__top b {
+  font-size: calc(18px * var(--font-scale, 1));
+}
+
+.game-panel .inv-card p,
+.game-panel .inv-slot__hint,
+.game-panel .challenge-btn__desc,
+.game-panel .special-room-card p {
+  font-size: calc(15px * var(--font-scale, 1));
+  line-height: 1.5;
+}
+
+.game-panel .inv-card__eyebrow,
+.game-panel .inv-slot__kicker,
+.game-panel .anvil-pay-label {
+  font-size: calc(13px * var(--font-scale, 1));
+}
+
+.game-panel .inv-stat-row__label,
+.game-panel .anvil-stat-label,
+.game-panel .anvil-stat-value {
+  font-size: calc(16px * var(--font-scale, 1));
+}
+
+.game-panel .inv-stat-row__value {
+  font-size: calc(22px * var(--font-scale, 1));
+}
+
+.game-panel .inv-slot__move,
+.game-panel .anvil-stat-title {
+  font-size: calc(19px * var(--font-scale, 1));
+}
+
+.game-panel .anvil-cost-summary {
+  font-size: calc(16px * var(--font-scale, 1));
+}
+
+/* Shop: two-column purchase sheets with explicit balance and state. */
+#shopPanel.game-panel {
+  width: min(1080px, calc(100vw - 32px));
+  max-height: min(88vh, 900px);
+  padding: 26px;
+}
+
+#shopPanel .game-panel-head {
+  align-items: center;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--menu-border);
+}
+
+.shop-balance {
+  display: grid;
+  justify-items: end;
+  gap: 2px;
+  margin-left: auto;
+  padding: 7px 12px;
+  border: 1px solid #d6a84b;
+  border-radius: var(--ui-control-radius);
+  background: rgba(214,168,75,.08);
+}
+
+.shop-balance__label {
+  color: var(--menu-text-muted);
+  font-size: calc(11px * var(--font-scale, 1));
+  font-weight: 800;
+  letter-spacing: .14em;
+}
+
+.shop-balance__value {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #f1c969;
+  font-size: calc(22px * var(--font-scale, 1));
+  line-height: 1;
+}
+
+.shop-balance__value canvas {
+  width: 22px;
+  height: 22px;
+}
+
+#shopPanel .shop-tabs {
+  padding: 4px;
+  border: 1px solid var(--menu-border);
+  border-radius: var(--ui-control-radius);
+  background: #0a0d10;
+}
+
+#shopPanel .shop-tab {
+  min-height: 46px;
+  border-radius: 1px;
+}
+
+#shopPanel .shop-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+#shopPanel #shopTrades.shop-list {
+  grid-template-columns: 1fr;
+}
+
+#shopPanel .shop-card {
+  min-height: 290px;
+  padding: 18px;
+  gap: 12px;
+  grid-template-rows: auto auto auto auto 1fr auto;
+  border: 1px solid var(--menu-border);
+  border-top: 3px solid var(--shop-card-accent);
+  border-radius: var(--ui-frame-radius);
+  background: #101519;
+  box-shadow: 0 5px 0 rgba(0,0,0,.32);
+}
+
+#shopPanel .shop-card::after {
+  display: none;
+}
+
+#shopPanel .shop-card--trade {
+  min-height: 0;
+}
+
+#shopPanel .shop-card__top {
+  grid-template-columns: 64px minmax(0, 1fr) auto;
+  gap: 13px;
+  align-items: center;
+}
+
+#shopPanel .shop-card__icon-frame {
+  width: 60px;
+  height: 60px;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--shop-card-accent) 55%, var(--menu-border));
+  border-radius: var(--ui-control-radius);
+  background: #090c0f;
+}
+
+#shopPanel .shop-card__icon {
+  width: 52px !important;
+  height: 52px !important;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+#shopPanel .shop-card__heading {
+  gap: 4px;
+}
+
+#shopPanel .shop-card__eyebrow {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--menu-text-muted);
+  font-size: calc(12px * var(--font-scale, 1));
+  letter-spacing: .13em;
+  text-indent: 0;
+}
+
+#shopPanel .shop-card__heading h4 {
+  margin: 0;
+  color: var(--menu-text);
+  font-size: calc(22px * var(--font-scale, 1));
+  line-height: 1.12;
+}
+
+#shopPanel .shop-card__purchase {
+  display: grid;
+  justify-items: end;
+  align-content: center;
+  gap: 6px;
+}
+
+#shopPanel .shop-card__price {
+  position: static;
+  padding: 6px 9px;
+  border-radius: var(--ui-control-radius);
+  font-size: calc(18px * var(--font-scale, 1));
+  letter-spacing: .04em;
+}
+
+#shopPanel .shop-card__price .shop-card__coin {
+  width: 22px;
+  height: 22px;
+}
+
+#shopPanel .shop-card__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--menu-text-muted);
+  font-size: calc(13px * var(--font-scale, 1));
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+#shopPanel .shop-card__status::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  background: currentColor;
+}
+
+#shopPanel .shop-card__status--available { color: #7ee0a3; }
+#shopPanel .shop-card__status--short { color: var(--menu-danger); }
+#shopPanel .shop-card__status--owned,
+#shopPanel .shop-card__status--locked { color: var(--menu-text-soft); }
+
+#shopPanel .shop-card__copy,
+#shopPanel .shop-card__stats,
+#shopPanel .shop-card__footer {
+  margin-left: 0;
+}
+
+#shopPanel .shop-card__copy {
+  min-height: 0;
+  padding-top: 2px;
+}
+
+#shopPanel .shop-card__copy p {
+  color: var(--menu-text);
+  font-size: calc(16px * var(--font-scale, 1));
+  line-height: 1.45;
+}
+
+#shopPanel .shop-card__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+#shopPanel .shop-card__tags:empty {
+  display: none;
+}
+
+#shopPanel .shop-card__chip,
+#shopPanel .shop-card__recommended-badge {
+  min-height: 24px;
+  padding: 4px 7px;
+  border-radius: 1px;
+  font-size: calc(11px * var(--font-scale, 1));
+}
+
+#shopPanel .shop-card__recommended-badge {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #d6a84b;
+  background: rgba(214,168,75,.12);
+  color: #f1c969;
+  font-weight: 900;
+  letter-spacing: .08em;
+}
+
+#shopPanel .shop-card__stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+
+#shopPanel .shop-card__stat {
+  min-width: 0;
+  min-height: 48px;
+  padding: 7px 9px;
+  border-radius: 1px;
+  background: #0a0e11;
+}
+
+#shopPanel .shop-card__stat span {
+  font-size: calc(11px * var(--font-scale, 1));
+}
+
+#shopPanel .shop-card__stat b {
+  font-size: calc(16px * var(--font-scale, 1));
+}
+
+#shopPanel .shop-buy {
+  min-height: 50px;
+  margin-top: 0;
+  border-radius: var(--ui-control-radius);
+  background: var(--shop-can-afford, #4caf50);
+  color: #07100a;
+  font-size: calc(16px * var(--font-scale, 1));
+  box-shadow: 0 4px 0 color-mix(in srgb, var(--shop-can-afford, #4caf50) 45%, #000);
+}
+
+#shopPanel .shop-buy:hover:not(:disabled) {
+  transform: translateY(-1px);
+  filter: brightness(1.08);
+  box-shadow: 0 5px 0 color-mix(in srgb, var(--shop-can-afford, #4caf50) 45%, #000);
+}
+
+#shopPanel .shop-buy.shop-buy--unaffordable {
+  border-color: var(--menu-danger);
+  background: rgba(240,107,104,.08);
+  color: #ff8f8c;
+  box-shadow: none;
+  opacity: 1;
+}
+
+#shopPanel .shop-card--status-owned .shop-buy,
+#shopPanel .shop-card--status-locked .shop-buy {
+  border-color: var(--menu-border);
+  background: var(--menu-surface);
+  color: var(--menu-text-muted);
+  box-shadow: none;
+}
+
+#shopPanel .shop-card.shop-card--unaffordable {
+  border-color: var(--menu-border);
+  border-top-color: var(--shop-card-accent);
+  background: #101519;
+}
+
+/* Run setup: make the two progression systems read as different contracts. */
+#charSelect .challenge-toggle {
+  position: relative;
+  gap: 4px;
+  padding: 10px 12px;
+  border-left: 4px solid var(--menu-accent-strong);
+}
+
+#charSelect .legacy-toggle {
+  border-left-color: #ae7bd7;
+}
+
+#charSelect .run-option-type {
+  display: inline-flex;
+  width: max-content;
+  padding: 3px 6px;
+  border: 1px solid color-mix(in srgb, var(--menu-accent-strong) 55%, transparent);
+  border-radius: 1px;
+  background: color-mix(in srgb, var(--menu-accent-strong) 10%, transparent);
+  color: var(--menu-accent-strong);
+  font-size: calc(9px * var(--font-scale, 1));
+  font-weight: 900;
+  letter-spacing: .11em;
+  line-height: 1;
+}
+
+#charSelect .legacy-toggle .run-option-type {
+  border-color: rgba(174,123,215,.55);
+  background: rgba(174,123,215,.1);
+  color: #d0a8ef;
+}
+
+#challengeToggleStatus,
+#legacyToggleStatus {
+  color: var(--menu-text);
+  font-weight: 900;
+  letter-spacing: .06em;
+}
+
+.floating-panel__title-wrap {
+  display: grid;
+  gap: 4px;
+}
+
+.floating-panel__kicker {
+  color: var(--menu-accent-strong);
+  font-size: calc(10px * var(--font-scale, 1));
+  font-weight: 900;
+  letter-spacing: .16em;
+}
+
+#legacyPanel .floating-panel__kicker {
+  color: #d0a8ef;
+}
+
+.progression-mode-note {
+  display: grid;
+  gap: 5px;
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--menu-border-strong);
+  border-left: 4px solid var(--menu-accent-strong);
+  border-radius: var(--ui-control-radius);
+  background: rgba(101,217,232,.07);
+}
+
+.progression-mode-note--permanent {
+  border-color: rgba(174,123,215,.42);
+  border-left-color: #ae7bd7;
+  background: rgba(174,123,215,.08);
+}
+
+.progression-mode-note strong {
+  color: var(--menu-text);
+  font-size: calc(14px * var(--font-scale, 1));
+  letter-spacing: .08em;
+}
+
+.progression-mode-note span {
+  color: var(--menu-text-muted);
+  font-size: calc(13px * var(--font-scale, 1));
+  line-height: 1.45;
+}
+
+/* Shared top-edge folder tabs for inventory, shop, anvil, and related panels. */
+.game-panel > .panel-tabs,
+.game-panel > .shop-tabs,
+#shopPanel.game-panel > .shop-tabs {
+  position: sticky;
+  top: -26px;
+  z-index: 4;
+  align-items: flex-end;
+  gap: 5px;
+  margin: 0 0 18px;
+  padding: 10px 8px 0;
+  overflow-x: auto;
+  border: 0;
+  border-bottom: 1px solid var(--menu-border-strong);
+  border-radius: 0;
+  background: var(--ui-panel-surface);
+  backdrop-filter: blur(12px);
+}
+
+.game-panel > .panel-tabs .panel-tab,
+.game-panel > .panel-tabs .shop-tab,
+.game-panel > .shop-tabs .panel-tab,
+.game-panel > .shop-tabs .shop-tab,
+#shopPanel.game-panel > .shop-tabs .shop-tab {
+  flex: 0 0 auto;
+  min-width: 112px;
+  min-height: 44px;
+  margin-bottom: -1px;
+  padding: 9px 13px 10px;
+  border: 1px solid var(--menu-border);
+  border-bottom-color: var(--menu-border-strong);
+  border-radius: 7px 7px 0 0;
+  background: #090c0f;
+  box-shadow: inset 0 3px 0 transparent;
+  color: var(--menu-text-muted);
+}
+
+.game-panel > .panel-tabs .panel-tab.active,
+.game-panel > .panel-tabs .shop-tab.active,
+.game-panel > .shop-tabs .panel-tab.active,
+.game-panel > .shop-tabs .shop-tab.active,
+#shopPanel.game-panel > .shop-tabs .shop-tab.active {
+  border-color: var(--menu-border-strong);
+  border-bottom-color: var(--ui-panel-surface);
+  background: var(--ui-panel-surface);
+  box-shadow: inset 0 3px 0 var(--menu-accent-strong);
+  color: var(--menu-text);
+  transform: none;
+}
+
+.game-panel > .panel-tabs .panel-tab:hover,
+.game-panel > .panel-tabs .shop-tab:hover,
+.game-panel > .shop-tabs .panel-tab:hover,
+.game-panel > .shop-tabs .shop-tab:hover {
+  transform: translateY(-2px);
 }

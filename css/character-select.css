@@ -554,18 +554,6 @@
   outline-offset: 2px;
 }
 
-#charSelect .difficulty-hint {
-  min-height: 58px;
-  margin: 0;
-  padding: 9px 10px;
-  box-sizing: border-box;
-  border-left: 3px solid var(--menu-accent);
-  background: rgba(101,217,232,.055);
-  color: var(--menu-text-muted);
-  font-size: calc(12px * var(--font-scale, 1));
-  line-height: 1.45;
-}
-
 #charSelect .seedrow--panel {
   display: grid;
   grid-template-columns: 1fr;
@@ -728,7 +716,6 @@
     grid-row: 1 / span 2;
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
-  #charSelect .difficulty-hint { grid-column: 1; grid-row: 3; }
   #charSelect .seedrow--panel { grid-column: 3; grid-row: 1; }
   #charSelect .charselect-crystal-wallet { grid-column: 3; grid-row: 2; }
   #charSelect .charselect-extra-options { grid-column: 3; grid-row: 3; }
@@ -1289,8 +1276,7 @@
   #charSelect .hero-detail-skill-readout-name,
   #charSelect .hero-detail-skill-readout-desc,
   #charSelect .hero-detail-item-pip,
-  #charSelect .hero-detail-item-empty,
-  #charSelect .difficulty-hint {
+  #charSelect .hero-detail-item-empty {
     font-size: calc(10px * var(--font-scale, 1));
   }
 
@@ -1318,12 +1304,6 @@
     min-height: 34px;
     padding: 6px 9px;
     font-size: calc(11px * var(--font-scale, 1));
-  }
-
-  #charSelect .difficulty-hint {
-    min-height: 0;
-    padding: 6px 7px;
-    line-height: 1.25;
   }
 
   #charSelect .charselect-extra-options {

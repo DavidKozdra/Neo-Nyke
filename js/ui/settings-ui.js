@@ -34,7 +34,7 @@
   }
 
   const HUD_SCALE_MIN = 0.5;
-  const HUD_SCALE_MAX = 2.0;
+  const HUD_SCALE_MAX = 3.0;
   const HUD_SCALE_STEP = 0.1;
   function normalizeHudScale(value) {
     const n = Number(value);
@@ -65,7 +65,7 @@
     { key: 'equipment',  label: 'Tool Slots',       cssVar: '--hud-scale-equipment',  xVar: '--hud-x-equipment',  yVar: '--hud-y-equipment',  hideClass: 'hud-hide-equipment' },
     // The new-item pickup toast stack (#itemNotifyStack). DOM widget with its own
     // scale/offset/visibility, independent of the coin display it sits beneath.
-    { key: 'itemnotify', label: 'Item Pickups',     cssVar: '--hud-scale-itemnotify', xVar: '--hud-x-itemnotify', yVar: '--hud-y-itemnotify', hideClass: 'hud-hide-itemnotify', defaultScale: 1.8, touchDefaultScale: 1.5 },
+    { key: 'itemnotify', label: 'Item Pickups',     cssVar: '--hud-scale-itemnotify', xVar: '--hud-x-itemnotify', yVar: '--hud-y-itemnotify', hideClass: 'hud-hide-itemnotify', defaultScale: 2.7, touchDefaultScale: 2.3 },
     // The status-toast stack (#statusToastStack) — relic "Ready" cues and "Copied"
     // bonuses. Bottom-center DOM widget, separate from item pickups so it reads as
     // a status update, not a new-item card. Default 1.2 (20% above its base size).
@@ -1058,8 +1058,8 @@
       box.style.top = '0px';
       box.style.left = '50%';
     } else if (key === 'bossbar') {
-      // Mirror the live HUD: top-center, lowered below the Timer/Floor pill (startY ≈96).
-      box.style.top = `${96 * ratio.y}px`;
+      // Mirror the live HUD: top-center, tucked directly beneath Timer/Floor.
+      box.style.top = `${(window.innerWidth <= 700 ? 64 : 72) * ratio.y}px`;
       box.style.left = '50%';
     } else if (key === 'objectives') {
       // Mirror the live HUD: objectives sit to the LEFT of the top-right minimap
