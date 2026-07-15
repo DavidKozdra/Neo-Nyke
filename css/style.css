@@ -2014,14 +2014,29 @@ button, input, select, textarea {
 }
 
 .game-panel--special {
-  width: min(980px, 94vw);
+  width: min(1080px, 96vw);
   border-color: color-mix(in srgb, var(--special-room-accent, var(--menu-accent)) 58%, var(--menu-border));
-  box-shadow: 0 24px 60px rgba(0,0,0,.58), 0 0 34px color-mix(in srgb, var(--special-room-accent, transparent) 18%, transparent);
+  background:
+    linear-gradient(160deg, color-mix(in srgb, var(--special-room-accent, #d8e9ff) 11%, var(--menu-surface-strong)), var(--menu-bg-deep) 52%),
+    var(--menu-bg-deep);
+  box-shadow: 0 24px 60px rgba(0,0,0,.66), 0 0 34px color-mix(in srgb, var(--special-room-accent, transparent) 18%, transparent);
 }
 
-.game-panel--special .panel-kicker,
-.game-panel--special h3 {
+.game-panel--special .panel-kicker {
   color: var(--special-room-accent, var(--menu-accent-strong));
+  border-color: color-mix(in srgb, var(--special-room-accent, var(--menu-accent)) 60%, var(--menu-border));
+  background: color-mix(in srgb, var(--special-room-accent, var(--menu-accent)) 12%, var(--menu-surface));
+}
+
+.game-panel--special h3 {
+  color: var(--menu-text);
+  text-shadow: 0 0 18px color-mix(in srgb, var(--special-room-accent, transparent) 28%, transparent);
+}
+
+.game-panel--special .panel-subtitle {
+  color: var(--menu-text);
+  font-size: calc(16px * var(--font-scale, 1));
+  line-height: 1.4;
 }
 
 .special-room-resources {
@@ -2032,12 +2047,13 @@ button, input, select, textarea {
 }
 
 .special-room-resources span {
-  padding: 7px 10px;
-  border: 1px solid var(--menu-border);
+  padding: 8px 12px;
+  border: 1px solid color-mix(in srgb, var(--special-room-accent, var(--menu-border)) 35%, var(--menu-border));
   border-radius: 999px;
-  background: rgba(0,0,0,.18);
-  color: var(--menu-text-muted);
-  font-size: calc(11px * var(--font-scale, 1));
+  background: rgba(0,0,0,.35);
+  color: var(--menu-text);
+  font-size: calc(13px * var(--font-scale, 1));
+  font-weight: 700;
   letter-spacing: .08em;
 }
 
@@ -2052,14 +2068,15 @@ button, input, select, textarea {
 }
 
 .special-room-card {
-  min-height: 250px;
+  min-height: 230px;
   display: flex;
   flex-direction: column;
   gap: 10px;
   padding: 16px;
-  border: 1px solid color-mix(in srgb, var(--card-accent) 38%, var(--menu-border));
+  border: 1px solid color-mix(in srgb, var(--card-accent) 58%, var(--menu-border));
   border-radius: 16px;
-  background: linear-gradient(145deg, color-mix(in srgb, var(--card-accent) 8%, transparent), rgba(0,0,0,.18));
+  background: linear-gradient(145deg, color-mix(in srgb, var(--card-accent) 14%, rgba(20, 27, 38, .98)), rgba(10, 14, 20, .94));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.07), 0 8px 18px rgba(0,0,0,.22);
 }
 
 .special-room-card__top {
@@ -2102,7 +2119,7 @@ button, input, select, textarea {
   display: block;
   margin-bottom: 4px;
   color: var(--card-accent);
-  font-size: calc(9px * var(--font-scale, 1));
+  font-size: calc(11px * var(--font-scale, 1));
   font-weight: 900;
   letter-spacing: .14em;
   text-transform: uppercase;
@@ -2111,36 +2128,40 @@ button, input, select, textarea {
 .special-room-card h4 {
   margin: 0;
   color: var(--menu-text);
-  font-size: calc(17px * var(--font-scale, 1));
+  font-size: calc(20px * var(--font-scale, 1));
+  line-height: 1.18;
 }
 
 .special-room-card p {
   margin: 0;
   flex: 1;
-  color: var(--menu-text-muted);
-  font-size: calc(12px * var(--font-scale, 1));
-  line-height: 1.55;
+  color: var(--menu-text);
+  font-size: calc(16px * var(--font-scale, 1));
+  line-height: 1.45;
 }
 
 .special-room-card small {
   color: var(--shop-cant-afford, #e05555);
+  font-size: calc(13px * var(--font-scale, 1));
+  font-weight: 700;
 }
 
 .special-room-card__cost {
   align-self: center;
   max-width: 92px;
   text-align: center;
-  padding: 5px 8px;
-  border: 1px solid color-mix(in srgb, var(--card-accent) 48%, var(--menu-border));
+  padding: 7px 10px;
+  border: 1px solid color-mix(in srgb, var(--card-accent) 70%, var(--menu-border));
   border-radius: 7px;
-  color: var(--card-accent);
-  font-size: calc(10px * var(--font-scale, 1));
+  color: var(--menu-text);
+  background: color-mix(in srgb, var(--card-accent) 18%, rgba(0,0,0,.7));
+  font-size: calc(12px * var(--font-scale, 1));
   font-weight: 900;
   letter-spacing: .1em;
 }
 
 .special-room-card.is-disabled {
-  opacity: .58;
+  opacity: .72;
 }
 
 .special-room-result {
@@ -3202,8 +3223,8 @@ button, input, select, textarea {
   position: absolute;
   top: 10px;
   right: 10px;
-  width: 42px;
-  height: 42px;
+  width: 50px;
+  height: 50px;
   display: grid;
   place-items: center;
   border-radius: 8px;
@@ -3222,7 +3243,7 @@ button, input, select, textarea {
 }
 
 .wizard-paw-title {
-  padding-right: 56px;
+  padding-right: 64px;
 }
 
 .inv-chip__icon {
@@ -7290,7 +7311,8 @@ button.alt.danger {
 
 .wizard-paw-copy {
   margin: 0 0 18px;
-  color: var(--menu-text-muted);
+  color: var(--menu-text);
+  font-size: calc(16px * var(--font-scale, 1));
   line-height: 1.5;
   text-align: center;
 }
@@ -7314,10 +7336,23 @@ button.alt.danger {
   padding: 14px;
 }
 
+.wizard-paw-stat {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.wizard-paw-stat__icon {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  image-rendering: pixelated;
+}
+
 .wizard-paw-stat__label,
 .wizard-paw-choice__eyebrow {
   display: block;
-  font-size: calc(10px * var(--font-scale, 1));
+  font-size: calc(12px * var(--font-scale, 1));
   letter-spacing: .14em;
   text-transform: uppercase;
   color: var(--menu-text-soft);
@@ -7349,13 +7384,14 @@ button.alt.danger {
   margin: 0 0 6px;
   color: var(--menu-text);
   letter-spacing: .06em;
+  font-size: calc(18px * var(--font-scale, 1));
 }
 
 .wizard-paw-choice p {
   margin: 0;
-  color: var(--menu-text-muted);
+  color: var(--menu-text);
   line-height: 1.45;
-  font-size: calc(13px * var(--font-scale, 1));
+  font-size: calc(15px * var(--font-scale, 1));
 }
 
 #wizardPawConfirm {
@@ -7365,7 +7401,7 @@ button.alt.danger {
 
 /* ===== Extra Battery modal ====================================== */
 .extra-battery-box {
-  width: min(860px, calc(100vw - 32px));
+  width: min(940px, calc(100vw - 24px));
   text-align: left;
   position: relative;
   overflow: hidden;
@@ -7426,14 +7462,15 @@ button.alt.danger {
 
 .extra-battery-copy {
   margin: 0 0 18px;
-  color: var(--menu-text-muted);
+  color: var(--menu-text);
+  font-size: calc(16px * var(--font-scale, 1));
   line-height: 1.5;
   text-align: center;
 }
 
 .extra-battery-choices {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
   gap: 12px;
   max-height: min(52vh, 480px);
   overflow-y: auto;
@@ -7464,7 +7501,7 @@ button.alt.danger {
 
 .extra-battery-choice__eyebrow {
   display: block;
-  font-size: calc(10px * var(--font-scale, 1));
+  font-size: calc(12px * var(--font-scale, 1));
   letter-spacing: .14em;
   text-transform: uppercase;
   color: var(--menu-text-soft);
@@ -7477,8 +7514,8 @@ button.alt.danger {
 
 .extra-battery-choice__icon {
   display: block;
-  width: 30px;
-  height: 30px;
+  width: 38px;
+  height: 38px;
   margin-bottom: 8px;
   image-rendering: pixelated;
 }
@@ -7487,6 +7524,7 @@ button.alt.danger {
   margin: 0 0 6px;
   color: var(--menu-text);
   letter-spacing: .06em;
+  font-size: calc(18px * var(--font-scale, 1));
 }
 
 .extra-battery-choice p {
@@ -7498,7 +7536,7 @@ button.alt.danger {
 
 .extra-battery-choice__charges {
   display: inline-block;
-  font-size: calc(11px * var(--font-scale, 1));
+  font-size: calc(13px * var(--font-scale, 1));
   font-weight: 800;
   letter-spacing: .08em;
   color: #cfd7ff;
@@ -7539,7 +7577,7 @@ button.alt.danger {
   flex: 0 0 auto;
   padding: 22px 24px 16px;
   border-bottom: 1px solid rgba(128, 146, 170, .22);
-  background: linear-gradient(180deg, rgba(38, 48, 64, .55), transparent);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--scroll-control-accent, #d8e9ff) 14%, rgba(38, 48, 64, .72)), transparent);
 }
 
 .scroll-control-head__row {
@@ -7550,29 +7588,27 @@ button.alt.danger {
 
 .scroll-control-glyph {
   flex: 0 0 auto;
-  width: 46px;
-  height: 46px;
-  display: grid;
-  place-items: center;
-  font-size: calc(24px * var(--font-scale, 1));
+  width: 60px;
+  height: 60px;
   border-radius: 8px;
-  background: radial-gradient(circle at 30% 25%, rgba(215, 246, 255, .22), rgba(26, 33, 44, .9));
-  border: 1px solid var(--menu-border-strong);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 6px 18px rgba(0,0,0,.35);
+  background: radial-gradient(circle at 30% 25%, color-mix(in srgb, var(--scroll-control-accent, #d8e9ff) 30%, transparent), rgba(26, 33, 44, .9));
+  border: 1px solid color-mix(in srgb, var(--scroll-control-accent, #d8e9ff) 68%, var(--menu-border));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 6px 18px rgba(0,0,0,.35), 0 0 18px color-mix(in srgb, var(--scroll-control-accent, #d8e9ff) 28%, transparent);
+  image-rendering: pixelated;
 }
 
 .scroll-control-head__text { min-width: 0; }
 
 .scroll-control-title {
   margin: 0;
-  font-size: calc(22px * var(--font-scale, 1));
+  font-size: calc(26px * var(--font-scale, 1));
   letter-spacing: .06em;
 }
 
 .scroll-control-copy {
   margin: 4px 0 0;
-  color: var(--menu-text-muted);
-  font-size: calc(13.5px * var(--font-scale, 1));
+  color: var(--menu-text);
+  font-size: calc(16px * var(--font-scale, 1));
   line-height: 1.45;
 }
 
@@ -7619,7 +7655,7 @@ button.alt.danger {
 
 .scroll-control-meta {
   flex: 0 0 auto;
-  font-size: calc(12px * var(--font-scale, 1));
+  font-size: calc(13px * var(--font-scale, 1));
   font-weight: 700;
   letter-spacing: .1em;
   text-transform: uppercase;
@@ -7675,7 +7711,7 @@ button.alt.danger {
 
 .scroll-control-group__title {
   color: var(--menu-text);
-  font-size: calc(12px * var(--font-scale, 1));
+  font-size: calc(14px * var(--font-scale, 1));
   font-weight: 800;
   letter-spacing: .1em;
   text-transform: uppercase;
@@ -7695,8 +7731,8 @@ button.alt.danger {
 
 .scroll-control-group__grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(146px, 1fr));
+  gap: 10px;
 }
 
 .scroll-control-choices::-webkit-scrollbar { width: 10px; }
@@ -7712,13 +7748,13 @@ button.alt.danger {
   position: relative;
   display: flex;
   min-width: 0;
-  min-height: 116px;
+  min-height: 154px;
   align-items: center;
   justify-content: flex-start;
   flex-direction: column;
-  gap: 7px;
+  gap: 9px;
   text-align: center;
-  padding: 10px 8px 9px;
+  padding: 12px 10px 11px;
   border-radius: 6px;
   border: 1px solid color-mix(in srgb, var(--scroll-choice-color, #d8e9ff) 40%, rgba(128,146,170,.3));
   background: linear-gradient(180deg, rgba(30, 38, 50, .92), rgba(20, 26, 35, .92));
@@ -7754,8 +7790,8 @@ button.alt.danger {
 .scroll-control-choice__iconwrap {
   position: relative;
   flex: 0 0 auto;
-  width: 52px;
-  height: 52px;
+  width: 68px;
+  height: 68px;
   display: grid;
   place-items: center;
   border-radius: 6px;
@@ -7763,7 +7799,7 @@ button.alt.danger {
   border: 1px solid rgba(255,255,255,.06);
 }
 
-.scroll-control-choice__icon { display: block; image-rendering: pixelated; }
+.scroll-control-choice__icon { display: block; width: 60px; height: 60px; image-rendering: pixelated; }
 
 .scroll-control-choice__tag {
   font-size: calc(24px * var(--font-scale, 1));
@@ -7794,7 +7830,7 @@ button.alt.danger {
 }
 
 .scroll-control-choice__eyebrow {
-  font-size: calc(9.5px * var(--font-scale, 1));
+  font-size: calc(11px * var(--font-scale, 1));
   letter-spacing: .14em;
   text-transform: uppercase;
   color: color-mix(in srgb, var(--scroll-choice-color, #d8e9ff) 80%, var(--menu-text-soft));
@@ -7802,7 +7838,7 @@ button.alt.danger {
 
 .scroll-control-choice__name {
   min-height: 30px;
-  font-size: calc(12px * var(--font-scale, 1));
+  font-size: calc(14px * var(--font-scale, 1));
   font-weight: 800;
   line-height: 1.2;
   color: var(--menu-text);
@@ -7903,9 +7939,10 @@ button.alt.danger {
   .scroll-control-meta { align-self: flex-start; }
   .scroll-control-choices { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 12px; }
   .scroll-control-group__grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
-  .scroll-control-choice { min-height: 108px; padding: 8px 5px; }
-  .scroll-control-choice__iconwrap { width: 48px; height: 48px; }
-  .scroll-control-choice__name { font-size: calc(11px * var(--font-scale, 1)); }
+  .scroll-control-choice { min-height: 124px; padding: 9px 6px; }
+  .scroll-control-choice__iconwrap { width: 54px; height: 54px; }
+  .scroll-control-choice__icon { width: 48px; height: 48px; }
+  .scroll-control-choice__name { font-size: calc(12px * var(--font-scale, 1)); }
   .scroll-control-head { padding: 18px 16px 14px; }
   .scroll-control-actions { padding: 12px 16px 16px; }
   .scroll-control-btn { flex: 1 1 0; min-width: 0; }

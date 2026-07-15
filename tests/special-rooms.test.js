@@ -31,12 +31,18 @@ describe('special service rooms', () => {
     expect(specialSource).toContain("pickup?.type !== 'specialService'");
   });
 
-  test('shared choice panel is present and exposes all resource readouts', () => {
+  test('shared choice panel is present and exposes only decision-relevant resources', () => {
     expect(htmlSource).toContain('id="specialRoomPanel"');
     expect(htmlSource).toContain('id="specialRoomChoices"');
     expect(specialSource).toContain('HP <b>');
     expect(specialSource).toContain('COINS <b>');
-    expect(specialSource).toContain('XP <b>');
+    expect(specialSource).not.toContain('XP <b>');
+  });
+
+  test('choice cards avoid repeating the room label and use concise effects', () => {
+    expect(specialSource).toContain('`-${hpCost} max HP. +${attackGain} attack.`');
+    expect(specialSource).toContain("choice.enemyType ? `<span class=\"special-room-card__eyebrow\">");
+    expect(specialSource).not.toContain('escapeHtml(def.shortName)}</span>');
   });
 
   test('every service choice uses the established component icon renderer', () => {
@@ -112,6 +118,7 @@ describe('special service rooms', () => {
 
   test('every service receives a minimap definition and glyph path', () => {
     expect(hudSource).toContain('Object.entries(Neo.SPECIAL_ROOM_DEFS || {})');
-    expect(hudSource).toContain('Neo.SPECIAL_ROOM_DEFS[room.type].glyph');
+    expect(hudSource).toContain("'square', def.glyph");
+    expect(hudSource).toContain('const roomGlyph = roomTypeLegend[room.type]?.[4]');
   });
 });

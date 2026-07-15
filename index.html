@@ -556,17 +556,11 @@
 
   <div id="wizardPawModal" class="modal-backdrop hidden" aria-hidden="true">
     <div class="modal-box wizard-paw-box">
-      <canvas class="wizard-paw-stamp" data-item-icon="wizards_paw" width="40" height="40" aria-hidden="true"></canvas>
+      <canvas class="wizard-paw-stamp" data-item-icon="wizards_paw" width="48" height="48" aria-hidden="true"></canvas>
       <h2 class="screen-title wizard-paw-title">WIZARD'S PAW</h2>
-      <p class="wizard-paw-copy">Time is stopped until you lock in your picks.</p>
-      <ol class="wizard-paw-steps">
-        <li>Review your current stats below.</li>
-        <li>Pick <b>2 stats</b> to boost by <b>+50%</b> each.</li>
-        <li>Press <b>Confirm</b> to apply them — this can't be undone.</li>
-      </ol>
-      <p class="wizard-paw-section-label">Your current stats</p>
+      <p class="wizard-paw-copy">Choose 2 stats. Each gets <b>+50%</b>.</p>
       <div id="wizardPawStats" class="wizard-paw-stats"></div>
-      <p class="wizard-paw-section-label">Pick 2 to boost</p>
+      <p class="wizard-paw-section-label">Choose 2</p>
       <div id="wizardPawChoices" class="wizard-paw-choices"></div>
       <button id="wizardPawConfirm" class="nav-btn" disabled>PICK 2 MORE</button>
     </div>
@@ -574,10 +568,10 @@
 
   <div id="extraBatteryModal" class="modal-backdrop hidden" aria-hidden="true">
     <div class="modal-box extra-battery-box">
-      <canvas class="wizard-paw-stamp" data-item-icon="extra_battery" width="40" height="40" aria-hidden="true"></canvas>
+      <canvas class="wizard-paw-stamp" data-item-icon="extra_battery" width="48" height="48" aria-hidden="true"></canvas>
       <h2 class="screen-title extra-battery-title">EXTRA BATTERY</h2>
       <div class="extra-battery-pending-wrap"><span id="extraBatteryPending" class="extra-battery-pending" aria-live="polite"></span></div>
-      <p class="extra-battery-copy" id="extraBatteryCopy">Pick a move to give it +1 max charge.</p>
+      <p class="extra-battery-copy" id="extraBatteryCopy">Choose a move: +1 max charge.</p>
       <div id="extraBatteryChoices" class="extra-battery-choices"></div>
       <button id="extraBatteryLater" class="nav-btn extra-battery-later" type="button">DECIDE LATER</button>
     </div>
@@ -587,7 +581,7 @@
     <div class="modal-box scroll-control-box">
       <div class="scroll-control-head">
         <div class="scroll-control-head__row">
-          <span class="scroll-control-glyph" aria-hidden="true">📜</span>
+          <canvas id="scrollControlIcon" class="scroll-control-glyph" data-item-icon="scroll_reroll" width="60" height="60" aria-hidden="true"></canvas>
           <div class="scroll-control-head__text">
             <h2 class="screen-title scroll-control-title" id="scrollControlTitle">SCROLL OF CONTROL</h2>
             <p class="scroll-control-copy" id="scrollControlCopy">Choose a target, then confirm.</p>

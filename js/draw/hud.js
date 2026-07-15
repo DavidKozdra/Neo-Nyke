@@ -312,18 +312,21 @@
     const keyFooterPad = Math.max(3, Math.round(4 * minimapScale));
     const keyFramePad = Math.max(3, Math.round(size * 0.18));
 
+    // The fifth tuple value is the cell glyph. Use readable abbreviations rather
+    // than relying on color alone or arbitrary collision workarounds (the old
+    // Prison `K` existed only because Portal already used `P`).
     const roomTypeLegend = {
-      god: ['god', 'GOD', '#ffffff', 'square'],
-      challenge: ['trial', 'TRIAL', '#d7f6ff', 'square'],
-      boss: ['boss-room', 'BOSS', '#ff7a7a', 'square'],
-      treasure: ['treasure', 'LOOT', '#ffaa00', 'square'],
-      shop: ['shop', 'SHOP', '#7ec8ff', 'square'],
-      anvil: ['anvil', 'FORGE', '#ffb840', 'square'],
-      start: ['start', 'START', '#00ff88', 'square'],
-      secret: ['secret', 'SECRET', '#b58cff', 'square'],
+      god: ['god', 'GOD', '#ffffff', 'square', 'GD'],
+      challenge: ['trial', 'TRIAL', '#d7f6ff', 'square', 'TR'],
+      boss: ['boss-room', 'BOSS', '#ff7a7a', 'square', 'BS'],
+      treasure: ['treasure', 'LOOT', '#ffaa00', 'square', 'LO'],
+      shop: ['shop', 'SHOP', '#7ec8ff', 'square', '$'],
+      anvil: ['anvil', 'FORGE', '#ffb840', 'square', '⚒'],
+      start: ['start', 'START', '#00ff88', 'square', 'ST'],
+      secret: ['secret', 'SECRET', '#b58cff', 'square', 'SE'],
     };
     Object.entries(Neo.SPECIAL_ROOM_DEFS || {}).forEach(([type, def]) => {
-      roomTypeLegend[type] = [`special-${type}`, String(def.shortName || def.name || type).toUpperCase(), def.color || '#d7f6ff', 'square'];
+      roomTypeLegend[type] = [`special-${type}`, String(def.shortName || def.name || type).toUpperCase(), def.color || '#d7f6ff', 'square', def.glyph];
     });
 
     const legendLayoutSignature = [
@@ -420,19 +423,24 @@
     const drawRoomGlyph = (glyph, x, y, roomExplored) => {
       const cx = x + size / 2;
       const cy = y + size / 2;
+      const glyphText = String(glyph || '');
+      const compactGlyph = glyphText.length > 1;
+      const glyphFont = compactGlyph
+        ? `bold ${Math.max(6, Math.round(size * 0.48))}px system-ui`
+        : `bold ${markerFont}`;
       Neo.ctx.save();
       Neo.ctx.globalAlpha = roomExplored ? 1 : 0.72;
-      Neo.ctx.font = `bold ${markerFont}`;
+      Neo.ctx.font = glyphFont;
       Neo.ctx.textAlign = 'center';
       Neo.ctx.textBaseline = 'middle';
       // Dark halo: a stroked outline scaled to the glyph so contrast holds up
       // against light and dark tiles alike.
       Neo.ctx.lineJoin = 'round';
       Neo.ctx.strokeStyle = 'rgba(4,10,14,0.92)';
-      Neo.ctx.lineWidth = Math.max(2, size * 0.22);
-      Neo.ctx.strokeText(glyph, cx, cy);
+      Neo.ctx.lineWidth = compactGlyph ? Math.max(1.5, size * 0.15) : Math.max(2, size * 0.22);
+      Neo.ctx.strokeText(glyphText, cx, cy);
       Neo.ctx.fillStyle = '#ffffff';
-      Neo.ctx.fillText(glyph, cx, cy);
+      Neo.ctx.fillText(glyphText, cx, cy);
       Neo.ctx.restore();
     };
     Neo.rooms.forEach(room => {
@@ -495,14 +503,9 @@
         Neo.ctx.textAlign = 'center';
         Neo.ctx.textBaseline = 'middle';
         Neo.ctx.fillText('★', x + size / 2, y + size / 2);
-      } else if (room.type === 'challenge' && showRoomGlyph) {
-        drawRoomGlyph('T', x, y, roomExplored);
-      } else if (room.type === 'shop' && showRoomGlyph) {
-        drawRoomGlyph('$', x, y, roomExplored);
-      } else if (room.type === 'anvil' && showRoomGlyph) {
-        drawRoomGlyph('⚒', x, y, roomExplored);
-      } else if (Neo.SPECIAL_ROOM_DEFS?.[room.type] && showRoomGlyph) {
-        drawRoomGlyph(Neo.SPECIAL_ROOM_DEFS[room.type].glyph, x, y, roomExplored);
+      } else if (showRoomGlyph) {
+        const roomGlyph = roomTypeLegend[room.type]?.[4];
+        if (roomGlyph) drawRoomGlyph(roomGlyph, x, y, roomExplored);
       }
       // Forge/shop blink: draw a soft, slowly-blinking highlight ring around
       // revealed forge and shop rooms so they catch the eye on the minimap.

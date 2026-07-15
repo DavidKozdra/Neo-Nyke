@@ -1609,6 +1609,7 @@ export const ui = {
     extraBatteryChoices: document.getElementById('extraBatteryChoices'),
     extraBatteryLater: document.getElementById('extraBatteryLater'),
     scrollControlModal: document.getElementById('scrollControlModal'),
+    scrollControlIcon: document.getElementById('scrollControlIcon'),
     scrollControlTitle: document.getElementById('scrollControlTitle'),
     scrollControlCopy: document.getElementById('scrollControlCopy'),
     scrollControlSearch: document.getElementById('scrollControlSearch'),
@@ -2116,4 +2117,3 @@ export const MOVE_BASE_STATS = {
   Neo.isMouseActionHeld = isMouseActionHeld;
   Neo.formatMouseBindingLabel = formatMouseBindingLabel;
   Neo.getSlotKeyLabel = getSlotKeyLabel;
- 
