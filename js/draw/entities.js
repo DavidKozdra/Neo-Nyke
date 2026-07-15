@@ -1099,6 +1099,27 @@
         }
         Neo.ctx.restore();
       }
+      // Rival intent stays mostly diegetic: a faint stance ring changes shape and
+      // color instead of printing the AI state over the character. Heavy attacks
+      // receive a stronger pulse so their smarter behavior remains fair to read.
+      if (enemy.type === 'rival' && enemy.rivalData?.brain) {
+        const stance = enemy.rivalData.brain.stance;
+        const telegraphing = !!enemy.rivalTelegraphReadyKey;
+        const stanceColor = stance === 'retreating' ? '#8ed1ff'
+          : stance === 'warning' ? '#ffd76a'
+            : stance === 'hostile' ? (enemy.rivalData.color || '#ff6e8b')
+              : '#b7d7ca';
+        Neo.ctx.save();
+        Neo.ctx.translate(enemy.x, drawY + enemy.r * 0.72);
+        Neo.ctx.globalAlpha = telegraphing ? 0.72 : stance === 'hostile' ? 0.24 : 0.32;
+        Neo.ctx.strokeStyle = stanceColor;
+        Neo.ctx.lineWidth = telegraphing ? 3 : 1.5;
+        if (stance === 'warning') Neo.ctx.setLineDash([4, 4]);
+        Neo.ctx.beginPath();
+        Neo.ctx.ellipse(0, 0, enemy.r + (telegraphing ? 9 : 6), Math.max(5, enemy.r * 0.38), 0, 0, Math.PI * 2);
+        Neo.ctx.stroke();
+        Neo.ctx.restore();
+      }
       const spriteKey = getEnemySpriteKey(enemy);
       const facing = getFacingDirection(enemy, enemy.beamAngle || enemy.dashAngle || 0);
       const drawSize = Math.max(30, enemy.r * 2.4);

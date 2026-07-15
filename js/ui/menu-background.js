@@ -10,7 +10,17 @@
     'DUNGEON OF THE HERETIC',
     'GUARDIANS OF FAITH',
   ];
-  const subtitle = SUBTITLES[Math.floor(Math.random() * SUBTITLES.length)];
+  // Rare joke pool: a 5% chance to swap in a gag subtitle instead of the main pool.
+  const BONUS_SUBTITLES = [
+    'THE GAME WITH THE CONTROLS',
+    'BETTER THAN MINECRAFT',
+    'JUST DO IT',
+    'PLAY BARGAIN QUEST',
+    'HALF OFF TODAY ONLY',
+    'SMUDGE QUEST',
+  ];
+  const pool = Math.random() < 0.05 ? BONUS_SUBTITLES : SUBTITLES;
+  const subtitle = pool[Math.floor(Math.random() * pool.length)];
   ['menuSubtitle', 'pauseMenuSubtitle', 'creditsMenuSubtitle'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.textContent = subtitle;

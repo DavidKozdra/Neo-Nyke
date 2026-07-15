@@ -2293,9 +2293,9 @@ export function getShopWeaponOffers() {
     }
     if (tabKey === 'rivals') {
       const live = (Neo.rivals || []).map(rival => rival && !rival.dead
-        ? `${rival.rivalId}:${rival.level}:${rival.lives}:${Math.round(rival.hp)}:${(rival.relationship || 0).toFixed(1)}:${rival.friend ? 1 : 0}:${rival.vendetta ? 1 : 0}:${Number(rival.aggroTimer || 0) > 0 ? 1 : 0}:${Array.isArray(rival.loot) ? rival.loot.length : 0}`
+        ? `${rival.rivalId}:${rival.level}:${rival.lives}:${Math.round(rival.hp)}:${(rival.relationship || 0).toFixed(1)}:${rival.friend ? 1 : 0}:${rival.vendetta ? 1 : 0}:${rival.brain?.stance || ''}:${rival.brain?.intention || ''}:${rival.brain?.lastOutcome || ''}:${Array.isArray(rival.loot) ? rival.loot.length : 0}`
         : '').join(',');
-      const pending = (Neo.pendingRivalReturns || []).map(entry => `${entry?.rival?.rivalId || ''}@${entry?.returnFloor || 0}:${Array.isArray(entry?.rival?.loot) ? entry.rival.loot.length : 0}`).join(',');
+      const pending = (Neo.pendingRivalReturns || []).map(entry => `${entry?.rival?.rivalId || ''}@${entry?.returnFloor || 0}:${Array.isArray(entry?.rival?.loot) ? entry.rival.loot.length : 0}:${entry?.rival?.brain?.lastOutcome || ''}`).join(',');
       const keys = `${Neo.getItemCount?.('paul_cunts_house_keys') || 0}:${Neo.canUseHouseKeysStrike?.() ? 1 : 0}`;
       return `rivals|${live}|ret:${pending}|slain:${(Neo.slainRivalKeys || []).join(',')}|keys:${keys}`;
     }
@@ -2784,8 +2784,13 @@ export function renderInventoryPanel() {
         const liveCards = (Neo.rivals || []).filter(rival => rival && !rival.dead).map(rival => {
           const activity = rival.friend ? 'Travelling with you'
             : rival.vendetta ? 'Hunting you with god gear'
-            : Number(rival.aggroTimer || 0) > 0 ? 'Hunting you'
+            : rival.brain?.intention === 'retreat' ? 'Escaping through the dungeon'
+            : rival.brain?.intention === 'recover' ? 'Trying to recover'
+            : rival.brain?.stance === 'hostile' ? 'Fighting you'
+            : rival.brain?.stance === 'warning' ? 'Watching you carefully'
+            : rival.brain?.intention === 'claim_loot' ? 'Claiming nearby loot'
             : 'Roaming the floor';
+          const lastOutcome = Neo.escapeHtml(String(rival.brain?.lastOutcome || rival.memory?.lastOutcome || 'No encounter yet'));
           return `<div class="inv-card inv-rival inv-rival--has-portrait" style="--rival-color:${rival.color}">
             <span class="inv-rival__portrait"><canvas data-rival-sprite="${Neo.escapeHtml(rival.characterKey || '')}" width="64" height="64" aria-hidden="true"></canvas></span>
             <div class="inv-rival__body">
@@ -2799,7 +2804,7 @@ export function renderInventoryPanel() {
                 <span>PACK ×${Array.isArray(rival.loot) ? rival.loot.length : 0} ITEMS</span>
                 <span>RELATIONSHIP ${Number(rival.relationship || 0).toFixed(1)}</span>
               </div>
-              <p>${activity}.</p>
+              <p>${activity}. Last encounter: ${lastOutcome}.</p>
               ${signatureLine(rival)}
               ${strikeButton(rival)}
             </div>
@@ -2820,7 +2825,7 @@ export function renderInventoryPanel() {
                 <span>PACK ×${Array.isArray(rival.loot) ? rival.loot.length : 0} ITEMS</span>
                 <span>RELATIONSHIP ${Number(rival.relationship || 0).toFixed(1)}</span>
               </div>
-              <p>${Number(rival.relationship || 0) < 0 ? 'Holds a grudge — will return armed for revenge.' : 'Licking their wounds on a floor below.'}</p>
+              <p>${Number(rival.relationship || 0) < 0 ? 'Holds a grudge — will return armed for revenge.' : 'Licking their wounds on a floor below.'} Last encounter: ${Neo.escapeHtml(String(rival.brain?.lastOutcome || rival.memory?.lastOutcome || 'Defeated'))}.</p>
               ${signatureLine(rival)}
             </div>
           </div>`;
