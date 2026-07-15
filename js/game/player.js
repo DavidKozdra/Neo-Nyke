@@ -1866,7 +1866,7 @@ export function confirmWizardPawSelection() {
     return true;
   }
 
-  function refreshShopVoucherBanner() {
+  function refreshShopVoucherBanner(preferredVoucherKey = '') {
     const banner = Neo.ui?.shopVoucherBanner;
     if (!banner) return;
     const show = Neo.currentRoom?.type === 'shop'
@@ -1874,7 +1874,30 @@ export function confirmWizardPawSelection() {
       && !Neo.isChallengeActive?.('no_items');
     banner.classList.toggle('hidden', !show);
     banner.setAttribute('aria-hidden', show ? 'false' : 'true');
-    if (show && Neo.ui.shopVoucherBannerSub) {
+    const redeemButton = Neo.ui?.shopVoucherRedeem;
+    if (!show) {
+      if (redeemButton) {
+        delete redeemButton.dataset.voucherKey;
+        redeemButton.textContent = 'REDEEM VOUCHER';
+      }
+      return;
+    }
+
+    // Keep the banner pointed at the voucher that triggered its refresh. A
+    // no-argument refresh (for example a normal shop rerender) preserves that
+    // choice while it is still owned instead of falling back to the first class.
+    const requestedVoucher = getVoucherType(preferredVoucherKey);
+    const currentVoucher = getVoucherType(redeemButton?.dataset?.voucherKey || '');
+    const redeemVoucher = requestedVoucher && getVoucherCount(requestedVoucher.key) > 0
+      ? requestedVoucher
+      : currentVoucher && getVoucherCount(currentVoucher.key) > 0
+        ? currentVoucher
+        : getOwnedVoucherTypes()[0];
+    if (redeemButton && redeemVoucher) {
+      redeemButton.dataset.voucherKey = redeemVoucher.key;
+      redeemButton.textContent = `REDEEM ${redeemVoucher.label.toUpperCase()} VOUCHER`;
+    }
+    if (Neo.ui.shopVoucherBannerSub) {
       const count = getVoucherCount();
       const summary = getOwnedVoucherTypes()
         .map(voucher => `${getVoucherCount(voucher.key)} ${voucher.label}`)

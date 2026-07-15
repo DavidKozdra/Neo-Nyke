@@ -416,7 +416,9 @@
     Neo.lastDamageSourceKey = String(options.sourceKey || source || '');
 
     Neo.player.hp -= finalAmount;
-    window.achievementEvents?.emit('damage:taken', { amount: finalAmount });
+    const duringGodFight = Neo.currentRoom?.type === 'god'
+      || Neo.enemies.some(enemy => enemy && !enemy.dead && enemy.type === 'god' && Number(enemy.hp || 0) > 0);
+    window.achievementEvents?.emit('damage:taken', { amount: finalAmount, duringGodFight });
 
     // Elite on-hit procs (Enflamed/Gross/Breezy) ride every damage source the
     // elite deals through this choke point.
@@ -931,9 +933,14 @@
   function recordProjectileTrail(projectile, x, y) {
     if (!projectile) return;
     if (!Array.isArray(projectile.trail)) projectile.trail = [];
-    projectile.trail.unshift({ x, y });
     const cap = projectile.kind === 'fireball' ? Neo.PROJECTILE_TRAIL_LENGTH + 2 : Neo.PROJECTILE_TRAIL_LENGTH;
-    if (projectile.trail.length > cap) projectile.trail.length = cap;
+    // Recycle the oldest point once the short trail is full. Rock volleys can
+    // otherwise allocate hundreds of tiny objects every frame and periodically
+    // stall on garbage collection even though each trail keeps only six points.
+    const point = projectile.trail.length >= cap ? projectile.trail.pop() : { x: 0, y: 0 };
+    point.x = x;
+    point.y = y;
+    projectile.trail.unshift(point);
   }
 
   function spawnProjectileImpact(projectile, x = projectile?.x, y = projectile?.y, options = {}) {

@@ -143,11 +143,11 @@ export const LIGHTING_CONFIG = {
 // multiplying into HP (which is what made HP explode). The split:
 //   - Floors traversed  -> HP        (the master HP curve; `floor` slope below)
 //   - Loop              -> HP + dmg  (moderate late-run bump, diminishing)
-//   - Time elapsed      -> DAMAGE + crit + status/CC resistance (NOT HP)
-//   - Difficulty (flat) -> small HP shaping + projectile speed + spawn/elite rate
-// Time deliberately no longer feeds HP: time and floors-traversed are almost
-// perfectly correlated, so a `minute` HP term just double-counted the floor
-// curve. Time now expresses itself as harder-hitting, harder-to-CC enemies.
+//   - Time elapsed      -> boss HP + damage + crit + status/CC resistance
+//   - Difficulty        -> HP base/slope/growth + projectile speed + spawn/elite rate
+// Time does not feed normal-enemy HP because it closely tracks floors traversed.
+// Bosses are the deliberate exception: level and time keep a late-arriving boss
+// durable against the build the player assembled while reaching it.
 export const ENEMY_SCALING = {
   floor: 0.14,
   // Enemy HP bonus per "credit", where a credit is earned every 3 levels above
@@ -155,9 +155,19 @@ export const ENEMY_SCALING = {
   // LEVEL, which — because level tracks the player, not just depth — ballooned
   // floor-1 elites into 100k+ sponges after Knight/Giant stacks multiplied it.
   // 0.45 = +45%/credit: at level 40 that's floor(35/3)=11 credits -> 1+0.45*11
-  // ≈ 6.0x, a chunky bonus that never runs away. Bosses ignore it. Cadence (the
-  // /3) lives in getEnemyLevelStatMultipliers; this is just the per-credit slope.
+  // ≈ 6.0x, a chunky bonus that never runs away. Bosses use the separate curved
+  // compound rate below. Cadence (the /3) lives in getEnemyLevelStatMultipliers;
+  // this is just the per-credit slope.
   levelHpBonus: 0.45,
+  // Boss HP compounds by this base rate per displayed level. A soft cap bends the
+  // high-level tail rather than flattening it, preserving meaningful growth without
+  // recreating the old 100k+ early-loop HP sponges.
+  bossLevelHpRate: 0.055,
+  bossLevelHpSoftCap: 3.25,
+  bossLevelHpSoftCapCurve: 0.55,
+  // Unlike normal enemies, bosses also gain HP from elapsed run time. Difficulty's
+  // bossHpGrowthMultiplier scales both this clock pressure and the level rate.
+  bossHpMinute: 0.055,
   // Per-loop normal-enemy HP growth. `loop` is the marginal bump for the FIRST
   // loop (loopNumber 2); `loopHpCurve` < 1 makes each later loop add less than
   // the last (diminishing returns). With loop 0.26 / curve 0.78 the multiplier
@@ -167,8 +177,8 @@ export const ENEMY_SCALING = {
   loopHpCurve: 0.78,
   damageFloor: 0.095,
   damageLoop: 0.2,
-  // Time -> damage is now the PRIMARY job of the clock (it no longer touches HP),
-  // so the per-minute damage slope is stronger than before (was 0.055). It runs
+  // Time -> damage is the clock's primary normal-enemy lever; boss HP is the
+  // explicit exception above. The damage slope is stronger than before and runs
   // through the damage soft cap below, so long runs get scarier without enemies
   // ever reaching one-shot territory. `damageTimeSoftCap` caps the time term on
   // its own before it combines with floor/loop/difficulty, so a slow careful
@@ -690,6 +700,7 @@ export const DIFFICULTY_DEFS = {
     roomWeightBonus: 0,
     statMultiplier: 1,
     bossStatMultiplier: 1,
+    bossHpGrowthMultiplier: 0.75,
     // Easy's HP curve is the gentlest: a NEGATIVE hpFloorScaleBonus drops the
     // per-floor HP slope below the 0.14 base down to ~0.095/floor (~60% of Hard's
     // 0.16). Combined with the flat 1.0 multiplier this keeps even the loop-1 boss
@@ -726,6 +737,7 @@ export const DIFFICULTY_DEFS = {
     roomWeightBonus: 0.05,
     statMultiplier: 1.06,
     bossStatMultiplier: 1.08,
+    bossHpGrowthMultiplier: 1,
     itemDropChanceMultiplier: 1.1,
     // Per-floor HP slope offset on top of ENEMY_SCALING.floor (0.14). Medium lands
     // at ~0.12/floor — a touch gentler than the 0.14 base, clearly above Easy and
@@ -753,6 +765,7 @@ export const DIFFICULTY_DEFS = {
     roomWeightBonus: 0.1,
     statMultiplier: 1.12,
     bossStatMultiplier: 1.16,
+    bossHpGrowthMultiplier: 1.15,
     // Hard is the reference STEEP HP slope: ~0.16/floor (vs Easy's 0.095). Most of
     // Hard's extra threat lives here in the slope and in its denser elites/
     // minibosses + faster boss projectiles — not in a flat HP wall.
@@ -781,6 +794,7 @@ export const DIFFICULTY_DEFS = {
     roomWeightBonus: 0.16,
     statMultiplier: 1.22,
     bossStatMultiplier: 1.28,
+    bossHpGrowthMultiplier: 1.35,
     // ~0.19/floor — steeper than Hard, plus the heavier elite/miniboss pressure
     // this tier already carries.
     hpFloorScaleBonus: 0.05,
@@ -814,6 +828,7 @@ export const DIFFICULTY_DEFS = {
     // turning every enemy into an instant bullet sponge on floor 1.
     statMultiplier: 1.5,
     bossStatMultiplier: 1.6,
+    bossHpGrowthMultiplier: 1.65,
     hpFloorScaleBonus: 0.08,
     speedMultiplier: 1.14,
     bossProjectileSpeedMultiplier: 1.4,
@@ -843,6 +858,7 @@ export const DIFFICULTY_DEFS = {
     roomWeightBonus: 0,
     statMultiplier: 1,
     bossStatMultiplier: 1,
+    bossHpGrowthMultiplier: 1,
     speedMultiplier: 1,
     enemyReactionMultiplier: 1,
     rangedCadenceMultiplier: 1,

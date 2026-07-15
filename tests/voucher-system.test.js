@@ -105,3 +105,22 @@ describe('voucher tool classification', () => {
     expect(hudSource).not.toContain('ACTIVATABLE_ITEMS[voucher.key]');
   });
 });
+
+describe('voucher shop redemption event', () => {
+  const playerSource = fs.readFileSync(path.join(__dirname, '../js/game/player.js'), 'utf8');
+  const panelSource = fs.readFileSync(path.join(__dirname, '../js/ui/panels.js'), 'utf8');
+
+  test('a purchased voucher emits its class and exposes the matching redeem action', () => {
+    expect(panelSource).toContain("Neo.gameEvents?.emit?.('shop:voucher-bought', { voucherKey: offer.key })");
+    expect(panelSource).toContain("Neo.gameEvents?.on?.('shop:voucher-bought', ({ voucherKey } = {}) => {");
+    expect(panelSource).toContain("kind: voucherRedeemable ? 'voucher-redeem' : 'item'");
+    expect(panelSource).toContain('Neo.openVoucherRedeem?.(voucherKey)');
+  });
+
+  test('the banner remembers the triggering voucher class', () => {
+    expect(playerSource).toContain("function refreshShopVoucherBanner(preferredVoucherKey = '')");
+    expect(playerSource).toContain('redeemButton.dataset.voucherKey = redeemVoucher.key');
+    expect(playerSource).toContain('`REDEEM ${redeemVoucher.label.toUpperCase()} VOUCHER`');
+    expect(panelSource).toContain("Neo.ui.shopVoucherRedeem?.dataset?.voucherKey || ''");
+  });
+});

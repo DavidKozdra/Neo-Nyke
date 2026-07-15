@@ -15,6 +15,7 @@
     { src: 'assets/sprites/env/chair_0.png' },
     { src: 'assets/sprites/env/chair_1.png' },
     { src: 'assets/sprites/env/chest_0.png' },
+    { src: 'assets/sprites/env/chest_a_b.png' },
     { src: 'assets/sprites/env/ground_0.png' },
     { src: 'assets/sprites/env/pillar.png' },
     { src: 'assets/sprites/env/table_0.png' },

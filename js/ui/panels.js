@@ -430,7 +430,13 @@ export function bindInput() {
     Neo.ui.scrollControlConfirm?.addEventListener('click', () => Neo.confirmScrollControlSelection?.());
     Neo.ui.scrollControlCancel?.addEventListener('click', () => Neo.cancelScrollControlSelection?.());
     Neo.ui.scrollControlSearch?.addEventListener('input', event => Neo.updateScrollControlSearch?.(event.target?.value || ''));
-    Neo.ui.shopVoucherRedeem?.addEventListener('click', () => Neo.openVoucherRedeem?.());
+    Neo.ui.shopVoucherRedeem?.addEventListener('click', () => {
+      Neo.openVoucherRedeem?.(Neo.ui.shopVoucherRedeem?.dataset?.voucherKey || '');
+    });
+    Neo.gameEvents?.on?.('shop:voucher-bought', ({ voucherKey } = {}) => {
+      Neo.refreshShopVoucherBanner?.(voucherKey);
+      markShopPanelDirty();
+    });
     Neo.ui.voucherTypes?.addEventListener('click', event => Neo.handleVoucherChoiceClick?.(event));
     Neo.ui.voucherChoices?.addEventListener('click', event => Neo.handleVoucherChoiceClick?.(event));
     Neo.ui.voucherSearch?.addEventListener('input', event => Neo.updateVoucherSearch?.(event.target?.value || ''));
@@ -2325,7 +2331,22 @@ export function renderShopPanel() {
         .filter(offer => offer.type === 'item')
         .map((offer, index) => {
           const item = Neo.itemRegistry.get(offer.key) || Neo.ITEM_DEFS[offer.key];
-          const state = getShopPurchaseState(offer, { blocked: noItemsChallenge });
+          const voucherType = (Neo.VOUCHER_TYPES || []).find(entry => entry.key === offer.key) || null;
+          const voucherRedeemable = !!voucherType
+            && !!offer.bought
+            && Number(Neo.getVoucherCount?.(voucherType.key) || 0) > 0
+            && !noItemsChallenge;
+          const purchaseState = getShopPurchaseState(offer, { blocked: noItemsChallenge });
+          const state = voucherRedeemable
+            ? {
+                canAfford: true,
+                bought: false,
+                disabled: false,
+                showUnaffordable: false,
+                status: 'available',
+                statusLabel: 'Ready to redeem',
+              }
+            : purchaseState;
           const description = noItemsChallenge
             ? 'No Items challenge is active. Relic buys are disabled for this run.'
             : item?.description || 'No details available.';
@@ -2340,7 +2361,19 @@ export function renderShopPanel() {
             ...baseChips,
             buildOfferBuildChip('item', offer.key, baseChips),
           ].filter(Boolean).slice(0, 5);
-          const buttonText = noItemsChallenge ? 'Relics Locked' : state.bought ? 'Sold' : !state.canAfford ? 'Too Expensive' : 'Buy Relic';
+          const buttonText = noItemsChallenge
+            ? 'Relics Locked'
+            : voucherRedeemable
+              ? `Redeem ${voucherType.label} Voucher`
+              : state.bought
+                ? 'Sold'
+                : !state.canAfford
+                  ? 'Too Expensive'
+                  : 'Buy Relic';
+          const buttonExtraAttrs = [
+            offer.tutorialOffer ? 'data-tutorial-offer="true"' : '',
+            voucherRedeemable ? `data-voucher-key="${escapeShopText(voucherType.key)}"` : '',
+          ].filter(Boolean).join(' ');
           return renderShopCard({
             rarityLabel: 'Relic',
             iconAttr: 'data-item-icon',
@@ -2353,11 +2386,11 @@ export function renderShopPanel() {
             description,
             chips,
             recommended: isOfferRecommended('item', offer.key, chips),
-            kind: 'item',
+            kind: voucherRedeemable ? 'voucher-redeem' : 'item',
             index,
             state,
             buttonText,
-            buttonExtraAttrs: offer.tutorialOffer ? 'data-tutorial-offer="true"' : '',
+            buttonExtraAttrs,
             soldStateText: 'OWNED',
           });
         })
@@ -3013,6 +3046,11 @@ export function handleShopBuyClick(event) {
     const button = target?.closest('.shop-buy');
     if (!button || !Neo.player) return;
     const kind = button.dataset.kind;
+    if (kind === 'voucher-redeem') {
+      const voucherKey = button.dataset.voucherKey || '';
+      Neo.openVoucherRedeem?.(voucherKey);
+      return;
+    }
     if (kind === 'item') {
       if (Neo.isChallengeActive('no_items')) {
         Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 24, life: 0.8, text: 'No Items challenge', c: '#ff8894' });
@@ -3025,6 +3063,9 @@ export function handleShopBuyClick(event) {
       if (!spendCoins(offer.cost)) return;
       offer.bought = true;
       Neo.collectItem(offer.key);
+      if ((Neo.VOUCHER_KEYS || []).includes(offer.key)) {
+        Neo.gameEvents?.emit?.('shop:voucher-bought', { voucherKey: offer.key });
+      }
       Neo.tutorialController?.signal?.('shop-purchase', {
         kind: 'item',
         key: offer.key,

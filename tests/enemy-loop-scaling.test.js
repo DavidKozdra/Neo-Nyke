@@ -23,6 +23,8 @@ describe('enemy loop scaling', () => {
     'const ENEMY_UNIVERSAL_STAT_MULTIPLIER = 0.95;',
     extractFunction(source, 'softCapEnemyScale'),
     extractFunction(source, 'getEnemyLevelStatMultipliers'),
+    extractFunction(source, 'getBossLevelHpMultiplier'),
+    extractFunction(source, 'getBossTimeHpMultiplier'),
     extractFunction(source, 'getProgressionDepth'),
     extractFunction(source, 'scaleEnemyStats'),
   ].join('\n');
@@ -38,6 +40,10 @@ describe('enemy loop scaling', () => {
       ENEMY_SCALING: {
         floor: 0.14,
         levelHpBonus: 0.45,
+        bossLevelHpRate: 0.055,
+        bossLevelHpSoftCap: 3.25,
+        bossLevelHpSoftCapCurve: 0.55,
+        bossHpMinute: 0.055,
         loop: 0.32,
         minute: 0.12,
         damageFloor: 0.095,
@@ -73,16 +79,20 @@ describe('enemy loop scaling', () => {
     return scaleEnemyStats({ hp: 100, max: 100, dmg: 10, speed: 100, attackCd: 1, level }, 'hunter');
   }
 
-  function scaleBossAtDepth(floorsEntered, level = floorsEntered, difficulty = {}) {
+  function scaleBossAtDepth(floorsEntered, level = floorsEntered, difficulty = {}, gameMinutes = 0) {
     const Neo = {
       floor: ((floorsEntered - 1) % 10) + 1,
       floorsEntered,
       MAX_FLOOR: 10,
-      gameElapsedTime: 0,
+      gameElapsedTime: gameMinutes * 60,
       gameMode: 'normal',
       endlessWave: 0,
       ENEMY_SCALING: {
         floor: 0.14,
+        bossLevelHpRate: 0.055,
+        bossLevelHpSoftCap: 3.25,
+        bossLevelHpSoftCapCurve: 0.55,
+        bossHpMinute: 0.055,
         loop: 0.32,
         minute: 0.12,
         damageFloor: 0.095,
@@ -104,9 +114,10 @@ describe('enemy loop scaling', () => {
       },
       getActiveSandboxSettings: () => null,
       getDifficultyDef: () => ({
-        statMultiplier: 1.1,
-        bossStatMultiplier: 1.12,
-        hpFloorScaleBonus: 0.03,
+        statMultiplier: 1.06,
+        bossStatMultiplier: 1.08,
+        bossHpGrowthMultiplier: 1,
+        hpFloorScaleBonus: -0.02,
         speedMultiplier: 1.03,
         ...difficulty,
       }),
@@ -168,11 +179,41 @@ describe('enemy loop scaling', () => {
     expect(levelFifteen.enemyLevelAttackSpeedMultiplier).toBeCloseTo(Math.pow(1.07, 10));
   });
 
-  test('does not apply exponential enemy-level HP scaling to bosses', () => {
+  test('applies meaningful compounded level HP scaling to bosses', () => {
+    const mediumLowLevelBoss = scaleBossAtDepth(2, 2);
     const mediumHighLevelBoss = scaleBossAtDepth(2, 15);
 
-    expect(mediumHighLevelBoss.hp).toBe(2340);
-    expect(mediumHighLevelBoss.hp).toBeLessThan(3000);
+    expect(mediumHighLevelBoss.hp).toBeGreaterThan(mediumLowLevelBoss.hp);
+    expect(mediumHighLevelBoss.hp / mediumLowLevelBoss.hp).toBeGreaterThan(1.9);
+    expect(mediumHighLevelBoss.max).toBe(mediumHighLevelBoss.hp);
     expect(mediumHighLevelBoss.enemyLevelAttackSpeedMultiplier).toBe(1);
+  });
+
+  test('elapsed time adds substantial boss-only HP pressure', () => {
+    const immediateBoss = scaleBossAtDepth(2, 15, {}, 0);
+    const fiveMinuteBoss = scaleBossAtDepth(2, 15, {}, 5);
+    const tenMinuteBoss = scaleBossAtDepth(2, 15, {}, 10);
+
+    expect(fiveMinuteBoss.hp).toBeGreaterThan(immediateBoss.hp * 1.27);
+    expect(tenMinuteBoss.hp).toBeGreaterThan(immediateBoss.hp * 1.54);
+    expect(tenMinuteBoss.max).toBe(tenMinuteBoss.hp);
+  });
+
+  test('difficulty strengthens flat, floor, level, and time boss HP pressure', () => {
+    const mediumBoss = scaleBossAtDepth(2, 15);
+    const harderBoss = scaleBossAtDepth(2, 15, {
+      bossStatMultiplier: 1.16,
+      bossHpGrowthMultiplier: 1.15,
+      hpFloorScaleBonus: 0.02,
+    });
+    const mediumLateBoss = scaleBossAtDepth(2, 15, {}, 10);
+    const harderLateBoss = scaleBossAtDepth(2, 15, {
+      bossStatMultiplier: 1.16,
+      bossHpGrowthMultiplier: 1.15,
+      hpFloorScaleBonus: 0.02,
+    }, 10);
+
+    expect(harderBoss.hp).toBeGreaterThan(mediumBoss.hp);
+    expect(harderLateBoss.hp / harderBoss.hp).toBeGreaterThan(mediumLateBoss.hp / mediumBoss.hp);
   });
 });

@@ -30,6 +30,7 @@ const achievementManager = (() => {
   let statusesByEnemy = new Map();
   let runHealTotal = 0;
   let runDamageTaken = 0;
+  let godFightDamageTaken = 0;
   let runShopBuys = 0;
   let bestHitDamage = 0;
   let maxRelicCount = 0;
@@ -220,6 +221,7 @@ const achievementManager = (() => {
     statusesByEnemy = new Map();
     runHealTotal = 0;
     runDamageTaken = 0;
+    godFightDamageTaken = 0;
     runShopBuys = 0;
     bestHitDamage = 0;
     maxRelicCount = 0;
@@ -242,6 +244,7 @@ const achievementManager = (() => {
       statusesApplied: statusesApplied.size,
       runHealTotal,
       runDamageTaken,
+      godFightDamageTaken,
       runShopBuys,
       bestHitDamage,
       maxRelicCount,
@@ -284,7 +287,6 @@ const achievementManager = (() => {
     // artifact of the mode than a real speedrun.
     const SPEEDRUN_MODES = new Set(['normal', 'competitive']);
     if (SPEEDRUN_MODES.has(gameMode) && elapsedSeconds <= 300) await unlock('gotta_meet_god');
-    if (runDamageTaken === 0) await unlock('unkillable');
     if (playerHp <= 1) await unlock('glass_cannon');
   });
 
@@ -293,8 +295,9 @@ const achievementManager = (() => {
     if (runHealTotal >= 343) await unlock('yeshua_is_king');
   });
 
-  achievementEvents.on('damage:taken', async ({ amount }) => {
+  achievementEvents.on('damage:taken', async ({ amount, duringGodFight = false }) => {
     runDamageTaken += amount;
+    if (duringGodFight) godFightDamageTaken += amount;
   });
 
   achievementEvents.on('item:collected', async ({ totalItems }) => {
@@ -332,6 +335,8 @@ const achievementManager = (() => {
   });
 
   achievementEvents.on('god:killed', async () => {
+    if (godFightDamageTaken === 0) await unlock('unkillable');
+    godFightDamageTaken = 0;
     const count = await incrementCumulativeCount('gods_killed');
     if (count >= 10) await unlock('god_slayer');
   });

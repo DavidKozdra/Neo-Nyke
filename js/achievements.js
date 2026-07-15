@@ -4,7 +4,7 @@ const ACHIEVEMENTS = [
   { id: 'rival_rumble',   name: 'Rival Rumble',     desc: 'Kill 100 rivals',                       icon: '⚔' },
   { id: 'gotta_meet_god', name: 'Gotta Meet God',   desc: 'Beat the game in under 5 minutes',      icon: '⚡' },
   { id: 'yeshua_is_king', name: 'Yeshua Is King',   desc: 'Heal 343 (7×7×7) HP total in one run',  icon: '✝' },
-  { id: 'unkillable',     name: 'Unkillable',       desc: 'Beat the game without taking damage',   icon: '⛨' },
+  { id: 'unkillable',     name: 'Unkillable',       desc: 'Defeat God without taking damage during the God fight', icon: '⛨' },
   { id: 'hoarder',        name: 'Hoarder',          desc: 'Hold 100 relics at once',               icon: '◈' },
   { id: 'glass_cannon',   name: 'Quartz Cannon',     desc: 'Win a run at 1 HP',                     icon: '✦' },
   { id: 'floor_muncher',  name: 'Floor Muncher',    desc: 'Reach floor 10',                        icon: '↟' },

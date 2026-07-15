@@ -1617,46 +1617,62 @@
     const inPlay = Neo.gameState === 'play' || Neo.gameState === 'pause';
     const slots = Neo.player?.equipmentSlots || [];
     const showRow = inPlay;
-    root.classList.toggle('hidden', !showRow);
-    root.setAttribute('aria-hidden', showRow ? 'false' : 'true');
+    if (root._equipmentVisible !== showRow) {
+      root._equipmentVisible = showRow;
+      root.classList.toggle('hidden', !showRow);
+      root.setAttribute('aria-hidden', showRow ? 'false' : 'true');
+    }
+    const slotKeys = getEquipmentSlotKeys();
     nodes.forEach((node, idx) => {
-      const letter = getEquipmentSlotKeys()[idx];
+      const letter = slotKeys[idx];
+      if (!node._equipmentRefs) {
+        node._equipmentRefs = {
+          keySpan: node.querySelector('.equip-slot__key'),
+          iconCanvas: node.querySelector('.equip-slot__icon'),
+          labelSpan: node.querySelector('.equip-slot__label'),
+        };
+      }
+      const { keySpan, iconCanvas, labelSpan } = node._equipmentRefs;
       // The toolbar markup starts with the default keys, but tool bindings can
       // be changed at runtime. Keep the visible badge and click handler's key
       // in sync with the live binding for this equipment slot.
-      const keySpan = node.querySelector('.equip-slot__key');
-      if (keySpan) keySpan.textContent = letter;
-      node.dataset.equipKey = letter;
       const itemKey = slots[idx];
       const def = itemKey ? ACTIVATABLE_ITEMS[itemKey] : null;
       const itemDef = itemKey ? Neo.resolveItemIconDef?.(itemKey) : null;
-      const iconCanvas = node.querySelector('.equip-slot__icon');
-      const labelSpan = node.querySelector('.equip-slot__label');
-      node.classList.remove('is-ready', 'is-blocked', 'is-filled', 'is-empty');
+      const state = def && itemDef ? (def.getState?.() || 'ready') : 'empty';
+      const statusText = def && itemDef ? (def.getStatusText?.() || '') : '';
+      const itemName = itemDef?.name || itemKey || '';
+      const itemDesc = itemDef?.description || itemDef?.desc || '';
+      const rarity = itemDef?.rarity || itemDef?.category || '';
+      const signature = `${letter}|${itemKey || ''}|${state}|${statusText}|${itemName}|${itemDesc}|${rarity}`;
+      if (node._equipmentSignature === signature) return;
+      node._equipmentSignature = signature;
+      if (keySpan && keySpan.textContent !== letter) keySpan.textContent = letter;
+      if (node.dataset.equipKey !== letter) node.dataset.equipKey = letter;
+      node.classList.toggle('is-filled', !!(def && itemDef));
+      node.classList.toggle('is-empty', !(def && itemDef));
+      node.classList.toggle('is-ready', state === 'ready');
+      node.classList.toggle('is-blocked', state === 'blocked' || state === 'charging');
       if (def && itemDef) {
-        node.classList.add('is-filled');
-        const state = def.getState?.() || 'ready';
-        if (state === 'ready') node.classList.add('is-ready');
-        else if (state === 'blocked' || state === 'charging') node.classList.add('is-blocked');
-        if (iconCanvas) Neo.drawItemIconByKey?.(iconCanvas, itemKey);
-        const statusText = def.getStatusText?.() || '';
-        if (labelSpan) labelSpan.textContent = statusText;
-        const itemName = itemDef.name || itemKey;
-        const itemDesc = itemDef.description || itemDef.desc || '';
+        if (iconCanvas && node._equipmentIconKey !== itemKey) {
+          Neo.drawItemIconByKey?.(iconCanvas, itemKey);
+          node._equipmentIconKey = itemKey;
+        }
+        if (labelSpan && labelSpan.textContent !== statusText) labelSpan.textContent = statusText;
         const header = `${itemName} [${letter}]${statusText ? ' · ' + statusText : ''}`;
         node.dataset.tipName = header;
         node.dataset.tipDesc = itemDesc;
-        node.dataset.tipRarity = itemDef.rarity || itemDef.category || '';
+        node.dataset.tipRarity = rarity;
         node.removeAttribute('title');
         node.setAttribute('aria-label', itemDesc ? `${header}. ${itemDesc}` : header);
         node.setAttribute('aria-hidden', 'false');
       } else {
-        node.classList.add('is-empty');
-        if (iconCanvas) {
+        if (iconCanvas && node._equipmentIconKey !== '') {
           const ctx = iconCanvas.getContext('2d');
           ctx?.clearRect(0, 0, iconCanvas.width, iconCanvas.height);
+          node._equipmentIconKey = '';
         }
-        if (labelSpan) labelSpan.textContent = '';
+        if (labelSpan && labelSpan.textContent) labelSpan.textContent = '';
         delete node.dataset.tipName;
         delete node.dataset.tipDesc;
         delete node.dataset.tipRarity;

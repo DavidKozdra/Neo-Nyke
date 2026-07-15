@@ -25,11 +25,11 @@ describe('rune challenge movement', () => {
   const combatSource = fs.readFileSync(path.join(__dirname, '../js/game/combat.js'), 'utf8');
   const enemiesSource = fs.readFileSync(path.join(__dirname, '../js/game/enemies.js'), 'utf8');
 
-  test('caps rune movement at 1.8 times base player speed', () => {
+  test('caps rune movement at 1.2 times base player speed', () => {
     const getChallengeRuneMaxSpeed = extractFunction(worldSource, 'getChallengeRuneMaxSpeed');
 
-    expect(getChallengeRuneMaxSpeed()).toBeCloseTo(228 * 1.8);
-    expect(getChallengeRuneMaxSpeed(300)).toBeCloseTo(540);
+    expect(getChallengeRuneMaxSpeed()).toBeCloseTo(228 * 1.2);
+    expect(getChallengeRuneMaxSpeed(300)).toBeCloseTo(360);
   });
 
   test('keeps the standard dash faster than a fleeing rune', () => {

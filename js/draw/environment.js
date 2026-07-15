@@ -758,7 +758,9 @@
 
       Neo.ctx.shadowBlur = 0;
 
-      const chestSheet = Neo.ENVIRONMENT_IMAGES?.chest_0?.image;
+      const chestSheet = isAbChest
+        ? (Neo.ENVIRONMENT_IMAGES?.chest_a_b?.image || Neo.ENVIRONMENT_IMAGES?.chest_0?.image)
+        : Neo.ENVIRONMENT_IMAGES?.chest_0?.image;
       if (chestSheet) {
         const frameCount = Math.max(1, Math.floor(chestSheet.naturalWidth / 24));
         const frame = chest.open

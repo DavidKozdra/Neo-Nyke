@@ -5021,7 +5021,7 @@
     if (Neo.isFirstRunTutorialActive()) Neo.tutorialState.gotRelic = true;
     Neo.addToEquipmentSlots?.(itemKey);
     Neo.markInventoryPanelDirty();
-    if ((Neo.VOUCHER_KEYS || []).includes(itemKey)) Neo.refreshShopVoucherBanner?.();
+    if ((Neo.VOUCHER_KEYS || []).includes(itemKey)) Neo.refreshShopVoucherBanner?.(itemKey);
     Neo.pushItemNotification(itemKey, collectCount);
     // The bonus copy from a duplicate roll gets its own compact status toast,
     // so the pickup card above stays a clean "new item" card rather than
