@@ -973,7 +973,7 @@ export function createUIController(view) {
         inPlay && Neo.gameMode === 'practice' && Neo.practiceVariant !== 'challenges' && show !== 'dying',
         'block',
       );
-      const isBossRush = Neo.gameMode === 'boss_rush';
+      const isBossRush = Neo.gameMode === 'boss_rush' || Neo.gameMode === 'rival_rumble';
       if (view.timerFloorSlot) view.timerFloorSlot.style.display = isBossRush ? 'none' : '';
       if (view.timerBossSlot) view.timerBossSlot.style.display = isBossRush ? '' : 'none';
       updateOrientationPrompt(show);
@@ -2581,6 +2581,10 @@ export function createUIController(view) {
         view.altModeBossRushBtn?.addEventListener('click', () => {
           setAltModesPanelOpen(false);
           handlers.onOpenAltModeCharSelect('boss_rush');
+        });
+        view.altModeRivalRumbleBtn?.addEventListener('click', () => {
+          setAltModesPanelOpen(false);
+          handlers.onOpenAltModeCharSelect('rival_rumble');
         });
         view.altModeTreasureHuntBtn?.addEventListener('click', () => {
           setAltModesPanelOpen(false);

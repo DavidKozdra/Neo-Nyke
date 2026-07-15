@@ -195,6 +195,26 @@
       }
       return;
     }
+    if (Neo.gameMode === 'rival_rumble') {
+      const order = Neo.rivalRumbleOrder || [];
+      if (Neo.rivalRumbleFinale) {
+        const remaining = Neo.enemies.filter(e => e.type === 'rival' && e.rivalData?.rivalRumbleFinale).length;
+        setObjective(remaining > 0 ? `Defeat all ${remaining} returning rivals at once.` : 'Rival Rumble complete!');
+      } else if (Neo.rivalRumbleActive) {
+        const rivalName = Neo.RIVAL_DEFS?.[order[Neo.rivalRumbleStage]]?.name || Neo.RIVAL_DEFS?.[order[0]]?.name || 'the rival';
+        setObjective(`Defeat ${rivalName}.`);
+      } else if (Neo.rivalRumbleStage >= order.length && order.length > 0) {
+        setObjective('Next: every rival, all at once. Get ready.');
+      } else {
+        const nextKey = order[Neo.rivalRumbleStage];
+        if (nextKey) {
+          setObjective(`Next: ${Neo.RIVAL_DEFS?.[nextKey]?.name || nextKey}. Get ready.`);
+        } else {
+          setObjective('Rival Rumble complete!');
+        }
+      }
+      return;
+    }
     if (Neo.gameMode === 'pvp' && Neo.pvpState) {
       setObjective(`PVP: first to ${Neo.pvpState.killsToWin || 3} kills.`);
       return;

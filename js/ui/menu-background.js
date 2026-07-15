@@ -367,11 +367,8 @@
   }
 
   // ── Render ───────────────────────────────────────────────────────────────
-  let brazierT = 0;
-
   function renderScene(c, W, H, dt) {
     c.clearRect(0, 0, W, H);
-    brazierT += dt * 0.045;
 
     // Build atlas + cache lazily (after sprites loaded)
     if (!atlas && Object.keys(TILE_DEFS).length) buildAtlas();
@@ -396,38 +393,6 @@
     } else {
       c.fillStyle = '#0f0d0c';
       c.fillRect(0, 0, W, H);
-    }
-
-    // ── Braziers at each room corner ──
-    if (tileCache) {
-      const cornersPerRoom = [
-        [WALL_TILES * TILE_PX + 20,  WALL_TILES * TILE_PX + 14],
-        [ROOM_W_PX - WALL_TILES * TILE_PX - 20, WALL_TILES * TILE_PX + 14],
-      ];
-      let bi = 0;
-      for (let gy = 0; gy < GRID_H + 1; gy++) {
-        for (let gx = 0; gx < GRID_W + 1; gx++) {
-          for (const [lx, ly] of cornersPerRoom) {
-            const wx = (gx * ROOM_W_PX + lx - camX % TOTAL_W + TOTAL_W * 2) % TOTAL_W;
-            const wy = (gy * ROOM_H_PX + ly - camY % TOTAL_H + TOTAL_H * 2) % TOTAL_H;
-            if (wx < 0 || wx > W || wy < 0 || wy > H) { bi++; continue; }
-            const flick = 1 + Math.sin(brazierT * 3.1 + bi * 1.7) * 0.14;
-            c.save();
-            c.fillStyle = `rgba(255,120,60,${0.65 + Math.sin(brazierT * 4 + bi) * 0.08})`;
-            c.shadowColor = '#ff7b39';
-            c.shadowBlur = 16 + Math.sin(brazierT * 2.5 + bi) * 5;
-            c.beginPath(); c.arc(wx, wy, 8 * flick, 0, Math.PI * 2); c.fill();
-            c.shadowBlur = 0;
-            const fg = c.createRadialGradient(wx, wy, 0, wx, wy, 52);
-            fg.addColorStop(0, 'rgba(255,110,30,0.10)');
-            fg.addColorStop(1, 'rgba(0,0,0,0)');
-            c.fillStyle = fg;
-            c.beginPath(); c.ellipse(wx, wy + 6, 52, 22, 0, 0, Math.PI * 2); c.fill();
-            c.restore();
-            bi++;
-          }
-        }
-      }
     }
 
     // ── Atmospheric vignette ──

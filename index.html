@@ -237,7 +237,7 @@
       <span class="separator">•</span>
       <span id="timerFloorSlot">FL <b id="floorDisplay">1</b>/10</span>
       <span id="timerLoopSlot" class="timer-loop-slot" style="display:none">LOOP <b id="loopNumberDisplay">1</b></span>
-      <span id="timerBossSlot" style="display:none">BOSS <b id="bossRushStageNum2">1</b>/6 <span id="bossRushNextTimer" class="boss-rush-next hidden"></span></span>
+      <span id="timerBossSlot" style="display:none"><span id="bossRushSlotLabel">BOSS</span> <b id="bossRushStageNum2">1</b>/<span id="bossRushStageTotal2">6</span> <span id="bossRushNextTimer" class="boss-rush-next hidden"></span></span>
       <span class="separator">•</span>
       <span id="difficultyDisplay" class="difficulty-display"><canvas id="difficultyHudIcon" width="20" height="20" class="difficulty-hud-icon"></canvas><span id="difficultyLabel">MEDIUM</span></span>
       <span id="competitiveSeedDisplay" class="difficulty-display" style="display:none;color:#ffe566;">&#9733; SEED <b id="competitiveSeedValue"></b></span>
@@ -983,6 +983,14 @@
             <p class="altmode-card__desc">Face all four bosses back to back. Collect loot between each fight. Defeat God to win.</p>
           </div>
           <button id="altModeBossRushBtn" class="nav-btn altmode-card__btn">PLAY</button>
+        </div>
+        <div class="altmode-card" id="altModeRivalRumbleCard">
+          <div class="altmode-card__icon">&#9876;</div>
+          <div class="altmode-card__text">
+            <h3 class="altmode-card__name">RIVAL RUMBLE</h3>
+            <p class="altmode-card__desc">A tournament of 1v1 duels against every rival, each leveled to match you. Collect loot between each fight. Beat them all to win.</p>
+          </div>
+          <button id="altModeRivalRumbleBtn" class="nav-btn altmode-card__btn">PLAY</button>
         </div>
         <div class="altmode-card" id="altModeTreasureHuntCard">
           <div class="altmode-card__icon" aria-hidden="true">&#9919;</div>
