@@ -1040,6 +1040,24 @@
       } else {
         drawGreekColumn(structure.w, structure.h, theme);
       }
+    } else if (structure.kind === 'anvil') {
+      const anvilImage = Neo.ENVIRONMENT_IMAGES?.anvil_0?.image;
+      const w = Math.max(24, Number(structure.w || 40));
+      const h = Math.max(24, Number(structure.h || 40));
+      if (anvilImage) {
+        Neo.ctx.imageSmoothingEnabled = false;
+        Neo.ctx.drawImage(anvilImage, -w / 2, -h / 2, w, h);
+      }
+    } else if (structure.kind === 'forge') {
+      const forgeSheet = Neo.ENVIRONMENT_IMAGES?.forge_0?.image;
+      const w = Math.max(24, Number(structure.w || 48));
+      const h = Math.max(24, Number(structure.h || 48));
+      if (forgeSheet) {
+        const frameCount = Math.max(1, Math.floor(forgeSheet.naturalWidth / 24));
+        const frame = Math.floor(Date.now() / 220) % frameCount;
+        Neo.ctx.imageSmoothingEnabled = false;
+        Neo.ctx.drawImage(forgeSheet, frame * 24, 0, 24, 24, -w / 2, -h / 2, w, h);
+      }
     } else {
       drawEnvironmentTile('wall_block', -structure.w / 2, -structure.h / 2, structure.w, structure.h);
       Neo.ctx.strokeStyle = theme.wallEdge;
