@@ -1626,12 +1626,13 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
       const chestInsetX = Neo.WALL + 88;
       const chestInsetY = Neo.WALL + 76;
       const minChestSpacing = 132;
-      // The tutorial teaches the A/B "hold to claim" dwell, so force the single
-      // tutorial chest to be an A/B item chest regardless of floor/RNG.
+      // The tutorial teaches a plain walk-up-and-grab chest, so force the single
+      // tutorial chest to be a normal item chest (no A/B hold-to-claim) regardless
+      // of floor/RNG.
       for (let index = 0; index < chestCount; index += 1) {
         const itemChance = Neo.getRandomItemDropChance(0.9, 0.98);
-        const isAbChest = isTutorialTreasure || (Neo.floor > 4 && treasureRandom() < 0.2);
-        const rewardsItem = isAbChest || treasureRandom() < itemChance;
+        const isAbChest = !isTutorialTreasure && (Neo.floor > 4 && treasureRandom() < 0.2);
+        const rewardsItem = isTutorialTreasure || isAbChest || treasureRandom() < itemChance;
         let chestPos = null;
         for (let attempt = 0; attempt < 12; attempt += 1) {
           const preferredX = chestInsetX + treasureRandom() * Math.max(1, Neo.ROOM_W - chestInsetX * 2);
@@ -1659,6 +1660,7 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
           choiceType: isAbChest ? 'ab' : '',
           rewardType: rewardsItem ? 'item' : 'potion',
           rewardKey: rewardsItem ? Neo.rollItemDrop({ random: treasureRandom }) : '',
+          tutorialTreasureChest: isTutorialTreasure,
         });
       }
     }

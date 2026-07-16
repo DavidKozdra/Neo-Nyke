@@ -5,7 +5,7 @@ import { TUTORIAL_LESSON_SCENE, TUTORIAL_SCENES } from '../tutorial/scenes.js';
 window.NeoTutorialScenes = TUTORIAL_SCENES;
 window.NeoI18n?.localizeTutorialScenes?.(TUTORIAL_SCENES);
 
-export const TUTORIAL_VERSION = 5;
+export const TUTORIAL_VERSION = 6;
 
 const BUTTON_NAMES = {
   0: 'A', 1: 'B', 2: 'X', 3: 'Y',
@@ -321,7 +321,7 @@ function createSteps() {
       target: targetRoute(() => getNextDoorPoint(Neo.tutorialState?.trainingRoomKey)),
       roomKey: 'trainingRoomKey',
       routeStep: true,
-      completeWhen: ['dash', 'melee', 'laser', 'smash', 'fight', 'relic'],
+      completeWhen: ['dwell_do'],
     },
     {
       id: 'dash',
@@ -511,13 +511,13 @@ function createSteps() {
       target: targetRoute(() => getNextDoorPoint(Neo.tutorialState?.treasureRoomKey)),
       roomKey: 'treasureRoomKey',
       routeStep: true,
-      completeWhen: ['dwell_do'],
+      completeWhen: ['treasure_collect'],
     },
     {
       id: 'treasure_open',
       chapter: 'TREASURE ROOM',
       title: 'Open the chest',
-      text: () => 'Walk into the chest. This one offers a choice between two rewards.',
+      text: () => 'Walk into the chest to crack it open.',
       command: () => 'WALK INTO THE CHEST',
       commandLabel: 'GOAL',
       target: targetWorld(() => Neo.chests?.find(chest => !chest?.open), { padding: 24 }),
@@ -525,15 +525,15 @@ function createSteps() {
       complete: state => !!state.completed?.treasure_open,
     },
     {
-      id: 'dwell_do',
+      id: 'treasure_collect',
       chapter: 'TREASURE ROOM',
-      title: 'Hold to claim a reward',
-      text: () => 'Two reward zones opened. Stand in the one you want until its meter fills to claim it. Dangerous pickups use the same hold-to-agree.',
-      command: () => 'HOLD IN A REWARD ZONE',
+      title: 'Grab the reward',
+      text: () => 'Walk over the reward to pick it up. Risky pickups later on ask for a hold instead of a walk-over — the same room name, a different rulebook.',
+      command: () => 'WALK OVER THE REWARD',
       commandLabel: 'GOAL',
-      target: targetWorld(() => Neo.pickups?.find(pickup => pickup?.type === 'rewardChoice' && pickup.dwellMode), { padding: 28 }),
+      target: targetWorld(() => Neo.pickups?.find(pickup => pickup?.type === 'item' && pickup.tutorialTreasureItem), { padding: 28 }),
       roomKey: 'treasureRoomKey',
-      complete: state => !!state.completed?.dwell_do,
+      complete: state => !!state.completed?.treasure_collect,
     },
     {
       id: 'route_shop',
@@ -589,6 +589,26 @@ function createSteps() {
       target: targetDom('#interactPrompt', 10),
       roomKey: 'forgeRoomKey',
       complete: state => !!state.completed?.forge_open,
+    },
+    {
+      id: 'forge_item_select',
+      chapter: 'FORGE',
+      title: 'Pick an item',
+      text: () => 'Switch to the Moves tab and pick a move to upgrade.',
+      command: () => 'SELECT AN ITEM',
+      target: targetDom('#anvilMovesTab .anvil-item-btn[data-item]', 10),
+      roomKey: 'forgeRoomKey',
+      complete: state => !!state.completed?.forge_item_select,
+    },
+    {
+      id: 'forge_pay_currency',
+      chapter: 'FORGE',
+      title: 'Choose XP or gold',
+      text: () => 'Toggle Pay With to switch between XP and gold.',
+      command: () => 'CHOOSE GOLD',
+      target: targetDom('#anvilPayGold', 10),
+      roomKey: 'forgeRoomKey',
+      complete: state => !!state.completed?.forge_pay_currency,
     },
     {
       id: 'forge_stage',
@@ -947,16 +967,21 @@ export function createTutorialController() {
     if (type === 'inventory-tab' && payload.tab === 'weapons') setCompleted('inventory_weapons');
     if (type === 'move-equipped') setCompleted('moves_equip_do');
     if (type === 'chest-open' && currentRoomKey === state.treasureRoomKey) setCompleted('treasure_open');
-    if (type === 'dwell-collected' && currentRoomKey === state.treasureRoomKey) setCompleted('dwell_do');
+    if (type === 'treasure-item-collected' && currentRoomKey === state.treasureRoomKey) setCompleted('treasure_collect');
     if (type === 'secret-revealed') setCompleted('secret_reveal_do');
     if (type === 'panel-open' && payload.panel === 'shop' && currentRoomKey === state.shopRoomKey) setCompleted('shop_open');
     if (type === 'shop-purchase' && payload.tutorialOffer) setCompleted('shop_buy');
     if (type === 'panel-open' && payload.panel === 'forge' && currentRoomKey === state.forgeRoomKey) setCompleted('forge_open');
+    if (type === 'forge-item-select' && payload.itemType === 'move' && currentRoomKey === state.forgeRoomKey) setCompleted('forge_item_select');
+    if (type === 'forge-pay-currency' && payload.currency === 'gold' && currentRoomKey === state.forgeRoomKey) setCompleted('forge_pay_currency');
     if (type === 'forge-stage' && currentRoomKey === state.forgeRoomKey) setCompleted('forge_stage');
     if (type === 'forge-confirm' && currentRoomKey === state.forgeRoomKey) setCompleted('forge_confirm');
     if (type === 'challenge-started' && payload.challengeType === 'bomb') setCompleted('challenge_start');
     if (type === 'challenge-completed' && payload.challengeType === 'bomb') setCompleted('challenge_bombs');
-    if (type === 'room-enter') advanceCompletedSteps();
+    if (type === 'room-enter') {
+      if (currentRoomKey === state.trainingRoomKey) setCompleted('dwell_do');
+      advanceCompletedSteps();
+    }
     if (type === 'ladder-use') {
       setCompleted('ladder_use');
       complete();

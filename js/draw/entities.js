@@ -665,7 +665,8 @@
         && enemy.partitionAngles.length > 0;
       if (enemy.beamTime > 0 || partitionPreview) {
         const isRivalBeam = enemy.type === 'rival' && !!enemy.rivalBeamMove;
-        const range = enemy.type === 'god' ? (enemy.beamRange || 620) : enemy.type === 'rival' ? (enemy.rivalBeamRange || 430) : enemy.type === 'mooggy' ? 520 : enemy.type === 'handsome_devil' ? (enemy.beamRange || 560) : enemy.type === 'bowman_bane' ? 480 : 430;
+        const isDevilGiantLaser = enemy.type === 'handsome_devil' && enemy.state === 'devilGiantLaser';
+        const range = enemy.type === 'god' ? (enemy.beamRange || 620) : enemy.type === 'rival' ? (enemy.rivalBeamRange || 430) : enemy.type === 'mooggy' ? 520 : isDevilGiantLaser ? 900 : enemy.type === 'handsome_devil' ? (enemy.beamRange || 560) : enemy.type === 'bowman_bane' ? 480 : 430;
         const isPartition = enemy.type === 'god' && enemy.state === 'godPartition';
         const angles = isPartition
           ? enemy.partitionAngles
@@ -680,7 +681,7 @@
           isPartition ? 0 : Neo.getEnemyBeamBounceCount(enemy),
         ));
         const color = isPartition ? '#fff1a8' : enemy.type === 'god' ? '#ffffff' : enemy.type === 'rival' ? (enemy.rivalBeamColor || '#ff00aa') : enemy.type === 'mooggy' ? '#ff3348' : enemy.type === 'handsome_devil' ? '#ff3348' : enemy.type === 'bowman_bane' ? '#8dd4ff' : '#aa66ff';
-        const width = isPartition ? 14 : enemy.type === 'god' && enemy.state === 'godSweep' ? 18 : enemy.type === 'god' ? 10 : enemy.type === 'rival' ? (enemy.rivalBeamWidth || 8) : enemy.type === 'mooggy' ? 6 : enemy.type === 'handsome_devil' ? 9 : 8;
+        const width = isPartition ? 14 : enemy.type === 'god' && enemy.state === 'godSweep' ? 18 : enemy.type === 'god' ? 10 : enemy.type === 'rival' ? (enemy.rivalBeamWidth || 8) : enemy.type === 'mooggy' ? 6 : isDevilGiantLaser ? 22 : enemy.type === 'handsome_devil' ? 9 : 8;
         const options = {
           color,
           glow: enemy.type === 'rival' ? (enemy.rivalBeamGlow || color) : color,
@@ -688,7 +689,7 @@
           minWidthRatio: isRivalBeam ? 0 : enemy.type === 'god' ? 0.12 : 0.2,
           taperPower: isRivalBeam ? 2 : enemy.type === 'god' ? 1.8 : 1.35,
           segmentLength: lowBeamFx ? 80 : isRivalBeam ? 32 : 48,
-          shadowBlur: isRivalBeam ? (enemy.rivalBeamShadowBlur || 18) : enemy.type === 'god' && enemy.state === 'godSweep' ? 24 : enemy.type === 'mooggy' || enemy.type === 'handsome_devil' ? 20 : 14,
+          shadowBlur: isRivalBeam ? (enemy.rivalBeamShadowBlur || 18) : enemy.type === 'god' && enemy.state === 'godSweep' ? 24 : isDevilGiantLaser ? 30 : enemy.type === 'mooggy' || enemy.type === 'handsome_devil' ? 20 : 14,
           coreColor: enemy.type === 'god' ? '#ffffff' : isRivalBeam ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.66)',
           coreWidth: Math.max(1.4, width * 0.22),
           coreShadowBlur: lowBeamFx ? 0 : isRivalBeam ? 6 : 4,

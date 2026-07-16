@@ -1991,7 +1991,7 @@
           : Neo.dist(Neo.player.x, Neo.player.y, hazard.x, hazard.y) < hazard.r + Neo.player.r - 10;
         if (inside) {
           damagePlayer(6 * dt, 0, 0, 'lava', { ignoreInv: true, noInvFrames: true });
-          if (hazard.statusTick <= 0) Neo.applyFire(Neo.player, 1, 2.6, hazard.source || 'lava');
+          if (hazard.statusTick <= 0) Neo.applyFire(Neo.player, Math.max(1, Number(hazard.statusStacks || 1)), 2.6, hazard.source || 'lava');
         }
       }
       if (hazard.kind === 'explosive_trap') {
@@ -2714,7 +2714,7 @@
             });
           });
         } else {
-          Neo.pickups.push({ x: chest.x, y: chest.y - 20, type: 'item', key: chest.rewardKey || Neo.rollItemDrop({ random: Neo.createEntityRandom(chest, 'chest:fallback') }) });
+          Neo.pickups.push({ x: chest.x, y: chest.y - 20, type: 'item', key: chest.rewardKey || Neo.rollItemDrop({ random: Neo.createEntityRandom(chest, 'chest:fallback') }), tutorialTreasureItem: !!chest.tutorialTreasureChest });
         }
       } else {
         Neo.pickups.push({ x: chest.x, y: chest.y - 20, type: 'potion' });
@@ -3038,6 +3038,9 @@
       if (pickup.type === 'item') {
         if (pickup.tutorialRelic) {
           Neo.tutorialController?.signal?.('relic-collected', { tutorialRelic: true, key: pickup.key });
+        }
+        if (pickup.tutorialTreasureItem) {
+          Neo.tutorialController?.signal?.('treasure-item-collected', { key: pickup.key });
         }
         Neo.collectItem(pickup.key);
         Neo.playSfx?.('item_collect');

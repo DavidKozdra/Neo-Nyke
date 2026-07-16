@@ -1048,9 +1048,9 @@
     queen_cult: { r: 38, hp: 912, max: 912, speed: 96, dmg: 20, attackCd: 1.2, summonCd: 2.4 },
     bulk_golem: { r: 58, hp: 1280, max: 1280, speed: 88, dmg: 31, attackCd: 1.6, bleedImmune: true, splitReady: true, aoeTime: 3, jumpCd: 1.2 },
     artificer_knave: { r: 30, hp: 1880, max: 1880, speed: 124, dmg: 20, attackCd: 1.2, phase: 1 },
-    bowman_bane: { r: 36, hp: 2400, max: 2400, speed: 80, dmg: 36, attackCd: 1.4, phase: 1, bleedImmune: true, columnCd: 0, burstCd: 0, bowmanWarpCd: 2.8 },
+    bowman_bane: { r: 36, hp: 2400, max: 2400, speed: 80, dmg: 50, attackCd: 1.4, phase: 1, bleedImmune: true, columnCd: 0, burstCd: 0, bowmanWarpCd: 2.8, thunderSmashCd: 0.6 },
     antony_blemmye: { r: 42, hp: 1250, max: 1250, speed: 78, dmg: 24, attackCd: 1.35, phase: 1, bleedImmune: true, hammerCd: 1.55, biteCd: 1.15, slashCd: 2.05, deathBallCd: 5.4 },
-    handsome_devil: { r: 34, hp: 1700, max: 1700, speed: 104, dmg: 23, attackCd: 1.1, phase: 1, fireImmune: true, spikeCd: 0.9, lavaGridCd: 2.4, devilLaserCd: 1.6, beamRange: 560 },
+    handsome_devil: { r: 34, hp: 1700, max: 1700, speed: 104, dmg: 50, attackCd: 1.1, phase: 1, fireImmune: true, spikeCd: 0.9, lavaGridCd: 2.4, devilLaserCd: 1.6, clawCd: 0.4, giantLaserCd: 3.6, beamRange: 560 },
   };
 
   // Resolve a type's stat overrides: invoke the factory or return the flat object.
@@ -2097,13 +2097,15 @@
     const difficultyRank = getEnemyEvadeDifficultyLevel();
     const level = getEnemyProgressionLevel(enemy);
     const difficultyBonus = [0, 0.06, 0.14, 0.23, 0.33][difficultyRank] || 0;
-    const roleBonus = isBossType(enemy.type)
-      ? 0.2
-      : enemy.type === 'rival'
-        ? 0.14
-        : enemy.elite
-          ? 0.08
-          : 0;
+    const roleBonus = enemy.type === 'handsome_devil'
+      ? 0.34
+      : isBossType(enemy.type)
+        ? 0.2
+        : enemy.type === 'rival'
+          ? 0.14
+          : enemy.elite
+            ? 0.08
+            : 0;
     // On Easy (rank 0), plain enemies should not dodge the player's shots at all —
     // it reads as "my hits don't connect" and undercuts the forgiving fantasy.
     // Bosses/rivals/elites still juke via roleBonus; everyone else gets a clean 0.
@@ -2321,11 +2323,13 @@
     enemy.projectileEvadeTime = enemy.type === 'bulk_golem' ? 0.22 : 0.27;
     enemy.projectileEvadeCd = enemy.type === 'god'
       ? 1.8
-      : enemy.type === 'rival'
-        ? 2.2
-        : isBossType(enemy.type)
-          ? 2.6
-          : 3.2;
+      : enemy.type === 'handsome_devil'
+        ? 1.5
+        : enemy.type === 'rival'
+          ? 2.2
+          : isBossType(enemy.type)
+            ? 2.6
+            : 3.2;
     enemy.inv = Math.max(Number(enemy.inv || 0), 0.1);
     Neo.ringBurst(enemy.x, enemy.y, enemy.r + 18, '#9fe8ff', 0.24);
     return true;
@@ -3474,6 +3478,47 @@
     return boss;
   }
 
+  // Thunder smash: no-windup melee arc for players who close the gap through a
+  // warp cooldown. Bowman's Bane had no answer to being hugged besides
+  // teleporting away; this punishes sticking to him directly.
+  function spawnBowmanThunderSmash(enemy) {
+    const angle = Neo.angleBetween(enemy, Neo.player);
+    const reach = enemy.r + Neo.player.r + 70;
+    const halfArc = 0.9;
+    const damage = Math.round(enemy.dmg * 1.1);
+    enemy.attackAnimT = 0.3;
+    enemy.swingTime = 0.32;
+
+    const arcMotes = 10;
+    for (let i = 0; i < arcMotes; i += 1) {
+      const t = i / (arcMotes - 1) - 0.5;
+      const a = angle + t * 2 * halfArc;
+      const reachAt = reach * (0.7 + 0.3 * (1 - Math.abs(t) * 1.4));
+      Neo.spawnParticle({
+        x: enemy.x + Math.cos(a) * reachAt,
+        y: enemy.y + Math.sin(a) * reachAt,
+        life: 0.24,
+        c: '#8dd4ff',
+        size: 3.6,
+      });
+    }
+
+    if (Neo.player) {
+      const pdx = Neo.player.x - enemy.x;
+      const pdy = Neo.player.y - enemy.y;
+      const pDist = Math.hypot(pdx, pdy) || 1;
+      let delta = Math.abs(Math.atan2(pdy, pdx) - angle);
+      if (delta > Math.PI) delta = Math.PI * 2 - delta;
+      if (pDist <= reach && delta <= halfArc) {
+        Neo.damagePlayer(damage, Math.atan2(pdy, pdx), 300, enemy.type, { attacker: enemy });
+        Neo.applyStatus?.(Neo.player, 'slow', 1, 2.4, enemy.type);
+      }
+    }
+    Neo.playSfx?.('lightning_charge');
+    Neo.shake = Math.max(Neo.shake, 9);
+    Neo.shakeT = Math.max(Neo.shakeT, 0.16);
+  }
+
   function updateBowmanBane(enemy, dt) {
     const tuning = Neo.getEnemyDifficultyTuning();
     const hpPct = enemy.hp / enemy.max;
@@ -3488,21 +3533,43 @@
       enemy.sonichuCd = 6.5;
     }
 
-    // Phase 2: re-cast the room-spanning lightning barrage on a cooldown.
+    if (hpPct <= 0.22 && enemy.phase === 2) {
+      enemy.phase = 3;
+      enemy.dmg = Math.round(enemy.dmg * 1.15);
+      sayOverEntity(enemy, "You've seen nothing yet!", { holdTime: 1.7 });
+      spawnJusticeOfSonichu(enemy);
+      enemy.sonichuCd = 4.6;
+      Neo.ringBurst(enemy.x, enemy.y, 140, '#8dd4ff', 0.8);
+    }
+
+    // Phase 2+: re-cast the room-spanning lightning barrage on a cooldown,
+    // faster once phase 3 kicks in.
     if (enemy.phase >= 2) {
       enemy.sonichuCd = Math.max(0, Number(enemy.sonichuCd || 0) - dt);
       if (enemy.sonichuCd <= 0 && enemy.stun <= 0) {
-        enemy.sonichuCd = 7.5 * tuning.rangedCadence;
+        enemy.sonichuCd = (enemy.phase >= 3 ? 5.2 : 7.5) * tuning.rangedCadence;
         sayOverEntity(enemy, 'JUSTICE OF SONICHU!', { holdTime: 1.2 });
         spawnJusticeOfSonichu(enemy);
       }
     }
 
     enemy.bowmanWarpCd = Math.max(0, Number(enemy.bowmanWarpCd || 0) - dt);
+    enemy.thunderSmashCd = Math.max(0, Number(enemy.thunderSmashCd || 0) - dt);
+    // Thunder smash: melee punish for players who stick to him through a warp
+    // cooldown instead of respecting his range — otherwise he has no answer to
+    // being hugged besides teleporting away.
+    if (enemy.thunderSmashCd <= 0 && enemy.attackCd <= 0 && enemy.stun <= 0
+      && distance < enemy.r + Neo.player.r + 74) {
+      spawnBowmanThunderSmash(enemy);
+      enemy.thunderSmashCd = 2.1 * tuning.rangedCadence;
+      enemy.attackCd = 0.9;
+      return;
+    }
+
     enemy.columnCd = Math.max(0, Number(enemy.columnCd || 0) - dt);
     if (enemy.columnCd <= 0 && enemy.stun <= 0) {
-      enemy.columnCd = enemy.phase >= 2 ? 2.8 * tuning.rangedCadence : 4.2 * tuning.rangedCadence;
-      const columnCount = enemy.phase >= 2 ? 4 : 2;
+      enemy.columnCd = enemy.phase >= 3 ? 2.0 * tuning.rangedCadence : enemy.phase >= 2 ? 2.8 * tuning.rangedCadence : 4.2 * tuning.rangedCadence;
+      const columnCount = enemy.phase >= 3 ? 5 : enemy.phase >= 2 ? 4 : 2;
       const predicted = { x: Neo.player.x + (Neo.player.vx || 0) * 0.55, y: Neo.player.y + (Neo.player.vy || 0) * 0.55 };
       for (let index = 0; index < columnCount; index += 1) {
         const spread = (index - (columnCount - 1) / 2) * 72;
@@ -3550,7 +3617,7 @@
         tick: 0.1 * Math.max(0.72, tuning.rangedCadence),
         range: 480,
         knockback: 170,
-        damage: Math.round(enemy.dmg * 1.25),
+        damage: Math.round(enemy.dmg * (enemy.phase >= 3 ? 1.4 : 1.25)),
         speedDamp: 0.82,
         turnRate: enemy.phase >= 2 ? 2.8 * tuning.reaction : 2.2 * tuning.reaction,
       });
@@ -3568,9 +3635,9 @@
     steerEnemy(enemy, dx / distance * direction, dy / distance * direction, enemy.speed, 3.4, dt);
 
     if (enemy.attackCd <= 0 && distance < 420) {
-      enemy.windup = (enemy.phase >= 2 ? 0.54 : 0.72) / tuning.reaction;
+      enemy.windup = (enemy.phase >= 3 ? 0.42 : enemy.phase >= 2 ? 0.54 : 0.72) / tuning.reaction;
       enemy.beamAngle = Math.atan2(dy, dx) + Neo.rollEnemyBeamBias(enemy, 0.18);
-      enemy.attackCd = (enemy.phase >= 2 ? 2.4 : 3.2) * tuning.rangedCadence;
+      enemy.attackCd = (enemy.phase >= 3 ? 1.9 : enemy.phase >= 2 ? 2.4 : 3.2) * tuning.rangedCadence;
     }
   }
 
@@ -3873,6 +3940,45 @@
     }
   }
 
+  // Claw slash: no-windup melee punish for players who close the distance,
+  // mirrors spawnAntonySlash's arc-check but burns + bleeds on hit.
+  function spawnDevilClawSlash(enemy) {
+    const angle = Neo.angleBetween(enemy, Neo.player);
+    const reach = enemy.r + Neo.player.r + 64;
+    const halfArc = 0.86;
+    const damage = Math.round(enemy.dmg * 1.05);
+    enemy.attackAnimT = 0.28;
+    enemy.swingTime = 0.3;
+
+    const arcMotes = 9;
+    for (let i = 0; i < arcMotes; i += 1) {
+      const t = i / (arcMotes - 1) - 0.5;
+      const a = angle + t * 2 * halfArc;
+      const reachAt = reach * (0.7 + 0.3 * (1 - Math.abs(t) * 1.4));
+      Neo.spawnParticle({
+        x: enemy.x + Math.cos(a) * reachAt,
+        y: enemy.y + Math.sin(a) * reachAt,
+        life: 0.26,
+        c: '#ff3348',
+        size: 3.8,
+      });
+    }
+
+    if (Neo.player) {
+      const pdx = Neo.player.x - enemy.x;
+      const pdy = Neo.player.y - enemy.y;
+      const pDist = Math.hypot(pdx, pdy) || 1;
+      let delta = Math.abs(Math.atan2(pdy, pdx) - angle);
+      if (delta > Math.PI) delta = Math.PI * 2 - delta;
+      if (pDist <= reach && delta <= halfArc) {
+        Neo.damagePlayer(damage, Math.atan2(pdy, pdx), 260, enemy.type, { attacker: enemy });
+        Neo.applyFire?.(Neo.player, 1, 2.8, enemy.type);
+      }
+    }
+    Neo.shake = Math.max(Neo.shake, 7);
+    Neo.shakeT = Math.max(Neo.shakeT, 0.12);
+  }
+
   function spawnDevilRedSpikes(enemy, count = 5) {
     if (!Neo.player) return;
     const baseAngle = Neo.angleBetween(enemy, Neo.player);
@@ -3893,10 +3999,10 @@
         r: 34,
         ttl: 1.1,
         armTime: 0.48,
-        damage: Math.round(enemy.dmg * 0.82),
-        statusKey: 'fire',
-        statusStacks: 1,
-        statusDuration: 3,
+        damage: Math.round(enemy.dmg * 1.1),
+        statusKey: 'bleed',
+        statusStacks: 6,
+        statusDuration: 3.4,
         hit: false,
       });
       Neo.spawnParticle({ x, y, life: 0.35, ring: 18, c: '#ff3348' });
@@ -3926,6 +4032,7 @@
         ttl: 4.2,
         phase: index * 0.7,
         pulse: 1.9,
+        statusStacks: 5,
       });
     });
     horizontals.forEach((y, index) => {
@@ -3945,6 +4052,7 @@
         ttl: 4.2,
         phase: index * 0.9 + 1.3,
         pulse: 1.9,
+        statusStacks: 5,
       });
     });
     Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 12, life: 0.58, text: 'LAVA GRID', c: '#ff7a32' });
@@ -3968,34 +4076,46 @@
     enemy.spikeCd = Math.max(0, Number(enemy.spikeCd || 0) - dt);
     enemy.lavaGridCd = Math.max(0, Number(enemy.lavaGridCd || 0) - dt);
     enemy.devilLaserCd = Math.max(0, Number(enemy.devilLaserCd || 0) - dt);
+    enemy.clawCd = Math.max(0, Number(enemy.clawCd || 0) - dt);
+    enemy.giantLaserCd = Math.max(0, Number(enemy.giantLaserCd ?? 3) - dt);
 
     if (enemy.windup > 0) {
       enemy.windup -= dt;
       enemy.vx *= 0.76;
       enemy.vy *= 0.76;
-      if (enemy.state === 'devilLaser') Neo.aimEnemyBeam(enemy, dt, 3.2 * tuning.reaction);
+      if (enemy.state === 'devilLaser' || enemy.state === 'devilGiantLaser') {
+        Neo.aimEnemyBeam(enemy, dt, (enemy.state === 'devilGiantLaser' ? 1.4 : 3.2) * tuning.reaction);
+      }
       Neo.spawnParticle({ x: enemy.x, y: enemy.y, life: 0.14, c: '#ff3348' });
       if (enemy.windup <= 0 && enemy.state === 'devilLaser') {
         enemy.beamTime = 0.86;
         enemy.beamTick = 0;
       }
+      if (enemy.windup <= 0 && enemy.state === 'devilGiantLaser') {
+        enemy.beamTime = 1.3;
+        enemy.beamTick = 0;
+        Neo.shake = Math.max(Neo.shake, 9);
+        Neo.shakeT = Math.max(Neo.shakeT, 0.2);
+      }
       return;
     }
 
     if (enemy.beamTime > 0) {
+      const isGiant = enemy.state === 'devilGiantLaser';
       Neo.tickEnemyBeam(enemy, dt, {
-        tick: 0.075 * Math.max(0.68, tuning.rangedCadence),
-        range: enemy.beamRange || 560,
-        knockback: 180,
-        damage: Math.round(enemy.dmg * 0.72),
+        tick: (isGiant ? 0.09 : 0.075) * Math.max(0.68, tuning.rangedCadence),
+        range: isGiant ? 900 : (enemy.beamRange || 560),
+        knockback: isGiant ? 260 : 180,
+        damage: Math.round(enemy.dmg * (isGiant ? 1.35 : 0.72)),
         speedDamp: 0.84,
-        turnRate: 1.8 * tuning.reaction,
+        turnRate: (isGiant ? 0.4 : 1.8) * tuning.reaction,
         damageSource: 'handsome_devil',
         onHit: () => {
-          Neo.applyFire?.(Neo.player, 1, 2.8, enemy.type);
+          Neo.applyFire?.(Neo.player, isGiant ? 3 : 1, isGiant ? 3.6 : 2.8, enemy.type);
         },
         onEnd: activeEnemy => {
-          activeEnemy.attackCd = 1.1 * tuning.rangedCadence;
+          activeEnemy.attackCd = (isGiant ? 1.4 : 1.1) * tuning.rangedCadence;
+          activeEnemy.giantLaserWidth = 0;
         },
       });
       return;
@@ -4004,6 +4124,29 @@
     if (enemy.stun > 0) {
       enemy.vx *= 0.88;
       enemy.vy *= 0.88;
+      return;
+    }
+
+    // Claw slash: punishes players who close to melee range, on both phases.
+    if (enemy.clawCd <= 0 && enemy.attackCd <= 0 && distance < enemy.r + Neo.player.r + 70) {
+      spawnDevilClawSlash(enemy);
+      enemy.clawCd = 1.9 * tuning.rangedCadence;
+      enemy.attackCd = 0.8;
+      return;
+    }
+
+    // Giant red laser: heavy long-range punish when the player keeps their
+    // distance instead of engaging.
+    if (enemy.giantLaserCd <= 0 && distance > 420) {
+      enemy.state = 'devilGiantLaser';
+      enemy.windup = 0.85 / tuning.reaction;
+      enemy.beamAngle = Math.atan2(dy, dx) + Neo.rollEnemyBeamBias(enemy, 0.05);
+      enemy.giantLaserWidth = 22;
+      enemy.giantLaserCd = 5.4 * tuning.rangedCadence;
+      if (!enemy.devilGiantLaserLineShown) {
+        enemy.devilGiantLaserLineShown = true;
+        sayOverEntity(enemy, "Can't hide forever.", { holdTime: 1.6 });
+      }
       return;
     }
 

@@ -151,9 +151,9 @@ describe('enemy projectile evasion', () => {
       enemiesSource.indexOf('antony_blemmye:'),
     );
 
-    expect(bowmanBlock).toContain('dmg: 36');
+    expect(bowmanBlock).toContain('dmg: 50');
     expect(enemiesSource).toContain("if (enemy.type === 'bowman_bane') return warpBowmanBane(enemy)");
-    expect(enemiesSource).toContain('damage: Math.round(enemy.dmg * 1.25)');
+    expect(enemiesSource).toContain('damage: Math.round(enemy.dmg * (enemy.phase >= 3 ? 1.4 : 1.25))');
     expect(enemiesSource).toContain('damage: Math.round(enemy.dmg * 1.15)');
   });
 });
