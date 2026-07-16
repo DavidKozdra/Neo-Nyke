@@ -68,6 +68,9 @@
     chair_1: 'assets/sprites/env/chair_1.png',
     chest_0: 'assets/sprites/env/chest_0.png',
     pillar: 'assets/sprites/env/pillar.png',
+    pillar_1: 'assets/sprites/env/pillar_1.png',
+    pillar_2: 'assets/sprites/env/pillar_2.png',
+    pillar_3: 'assets/sprites/env/pillar_3.png',
     table_0: 'assets/sprites/env/table_0.png',
     table_1: 'assets/sprites/env/table_1.png',
   };
@@ -215,13 +218,24 @@
   function drawPixelProp(g, propKey, x, y, size) {
     const def = PROP_DEFS[propKey];
     if (!def) return false;
-    drawPropShadow(g, x, y, size, size, 0.16);
+    // Moss and rubble are floor detail, not upright props. Giving them a drop
+    // shadow makes them look as though they float above nearby furniture.
+    if (propKey !== 'moss_patch' && propKey !== 'rubble') {
+      drawPropShadow(g, x, y, size, size, 0.16);
+    }
     return drawPixelTile(g, x - size / 2, y - size / 2, size, def);
   }
 
   function drawMenuProp(g, kind, x, y, size = TILE_PX) {
     if (kind === 'chest') return drawImageProp(g, 'chest_0', x, y, size, { frame: 0, shadowAlpha: 0.26 });
-    if (kind === 'pillar') return drawImageProp(g, 'pillar', x, y, size * 1.08, { scaleY: 1.35, shadowAlpha: 0.28 }) || blitTile(g, 'pillar_stone', x - size / 2, y - size / 2, size);
+    if (kind === 'pillar') {
+      const mids = Math.floor(seededRand(x, y, 29) * 4);
+      return window.NeoPillarRenderer?.drawPillarSprite(
+        g,
+        { kind: 'pillar', x, y, w: size, h: size, mids },
+        propImages,
+      ) || blitTile(g, 'pillar_stone', x - size / 2, y - size / 2, size);
+    }
     if (kind === 'table') return drawImageProp(g, seededRand(x, y, 17) < 0.5 ? 'table_0' : 'table_1', x, y, size * 1.35, { scaleY: 0.9, shadowAlpha: 0.24 });
     if (kind === 'chair') return drawImageProp(g, seededRand(x, y, 19) < 0.5 ? 'chair_0' : 'chair_1', x, y, size * 0.86, { shadowAlpha: 0.18 });
     if (kind === 'brazier') return drawPixelProp(g, 'brazier', x, y, size * 0.72);
@@ -316,9 +330,23 @@
     const roomSeed = seededRand(gx, gy, 31);
     const toX = tx => rx + tx * TILE_PX + TILE_PX / 2;
     const toY = ty => ry + ty * TILE_PX + TILE_PX / 2;
+
+    // Ground-detail pass. These decals must be painted before every standing
+    // prop so moss and loose stones can never cover a pillar or furniture.
+    const debrisCount = 3 + Math.floor(seededRand(gx, gy, 36) * 4);
+    for (let i = 0; i < debrisCount; i += 1) {
+      const x = toX(2 + Math.floor(seededRand(gx, gy, 40 + i * 2) * (ROOM_COLS - 4)));
+      const y = toY(2 + Math.floor(seededRand(gx, gy, 41 + i * 2) * (ROOM_ROWS - 4)));
+      const mossy = theme.floor === 'floor_stone_moss' || seededRand(gx, gy, 50 + i) < 0.36;
+      drawMenuProp(g, mossy ? 'moss_patch' : 'rubble', x, y, TILE_PX);
+    }
+
+    // Standing-prop pass.
     drawMenuProp(g, 'brazier', rx + WALL_TILES * TILE_PX + 20, ry + WALL_TILES * TILE_PX + 14, TILE_PX);
     drawMenuProp(g, 'brazier', rx + ROOM_W_PX - WALL_TILES * TILE_PX - 20, ry + WALL_TILES * TILE_PX + 14, TILE_PX);
-
+    if (theme.floor === 'floor_stone_moss' || seededRand(gx, gy, 60) < 0.22) {
+      drawMenuProp(g, 'tree', toX(3), toY(7), TILE_PX);
+    }
     if (roomSeed < 0.72) drawMenuProp(g, 'chest', toX(7), toY(5), TILE_PX * 0.9);
     if (seededRand(gx, gy, 32) < 0.64) {
       drawMenuProp(g, 'pillar', toX(3), toY(3), TILE_PX);
@@ -330,18 +358,6 @@
       drawMenuProp(g, 'table', tableX, tableY, TILE_PX);
       drawMenuProp(g, 'chair', tableX - TILE_PX * 0.85, tableY + TILE_PX * 0.05, TILE_PX);
       drawMenuProp(g, 'chair', tableX + TILE_PX * 0.85, tableY + TILE_PX * 0.05, TILE_PX);
-    }
-
-    const debrisCount = 3 + Math.floor(seededRand(gx, gy, 36) * 4);
-    for (let i = 0; i < debrisCount; i += 1) {
-      const x = toX(2 + Math.floor(seededRand(gx, gy, 40 + i * 2) * (ROOM_COLS - 4)));
-      const y = toY(2 + Math.floor(seededRand(gx, gy, 41 + i * 2) * (ROOM_ROWS - 4)));
-      const mossy = theme.floor === 'floor_stone_moss' || seededRand(gx, gy, 50 + i) < 0.36;
-      drawMenuProp(g, mossy ? 'moss_patch' : 'rubble', x, y, TILE_PX);
-    }
-
-    if (theme.floor === 'floor_stone_moss' || seededRand(gx, gy, 60) < 0.22) {
-      drawMenuProp(g, 'tree', toX(3), toY(7), TILE_PX);
     }
   }
 
