@@ -1228,7 +1228,7 @@
     Neo.structures.forEach(structure => {
       if (!structure || !Number.isFinite(structure.x) || !Number.isFinite(structure.y)) return;
       if (!Number.isFinite(structure.w) || !Number.isFinite(structure.h) || structure.w <= 0 || structure.h <= 0) return;
-      rects.push({ x: structure.x - structure.w / 2, y: structure.y - structure.h / 2, w: structure.w, h: structure.h });
+      rects.push(Neo.getStructureCollisionRect(structure));
     });
     _staticBlockerRects = rects;
     _staticBlockerRectsFrame = Neo.frameId;
