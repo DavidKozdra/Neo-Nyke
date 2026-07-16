@@ -52,4 +52,10 @@ describe('minimap room icons', () => {
     expect(props).toContain("Neo.ctx.strokeStyle = '#ffc638'");
     expect(props).toContain("Neo.ctx.fillText('EXIT', 0, 43)");
   });
+
+  test('ends at the room grid without a per-room legend footer', () => {
+    expect(hud).toContain('const minimapFrameHeight = mapHeight');
+    expect(hud).not.toContain('addLegendEntry');
+    expect(hud).not.toContain('keyFooterPad');
+  });
 });

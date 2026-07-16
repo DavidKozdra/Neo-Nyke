@@ -295,9 +295,6 @@
     // pickup dots, and trap skulls for the whole floor.
     const mapObscured = !!Neo.floorRivalCurses?.obscureMap;
     const isRevealed = (room) => !!room?.explored && !(mapObscured && room !== currentRoom);
-    const currentCellCx = currentRoom && !currentRoom.secret
-      ? cellOriginX + currentRoom.gx * (size + gap) + size / 2
-      : originX + mapWidth / 2;
     const hasSpawnedLadder = (room) => {
       if (!room) return false;
       const pickups = room === currentRoom ? Neo.pickups : room.pickups;
@@ -305,17 +302,6 @@
     };
     const revealLadderEarly = !Neo.hideLadderOnMinimap;
     const showsExit = (room) => !!room && ((revealLadderEarly && room.type === 'ladder') || hasSpawnedLadder(room));
-    const keyFontSize = Math.max(7, Math.round(size * 0.52));
-    const keyFont = `bold ${keyFontSize}px system-ui`;
-    const keyIconSize = Math.max(5, Math.round(size * 0.34));
-    const keyIconGap = Math.max(3, Math.round(size * 0.18));
-    const keyPadX = Math.max(4, Math.round(size * 0.2));
-    const keyPillH = Math.max(12, Math.round(size * 0.72));
-    const keyEntryGap = Math.max(2, Math.round(size * 0.16));
-    const keyRowGap = Math.max(2, Math.round(size * 0.14));
-    const keyFooterPad = Math.max(3, Math.round(4 * minimapScale));
-    const keyFramePad = Math.max(3, Math.round(size * 0.18));
-
     // The sixth tuple value selects a pictured cell icon. The fifth remains a
     // compact fallback for environments where an authored PNG is unavailable.
     const roomTypeLegend = {
@@ -333,73 +319,9 @@
       roomTypeLegend[type] = [`special-${type}`, String(def.shortName || def.name || type).toUpperCase(), def.color || '#d7f6ff', 'square', def.glyph, type];
     });
 
-    const legendLayoutSignature = [
-      currentRoom?.gx ?? '-', currentRoom?.gy ?? '-', currentRoom?.type || '',
-      mapWidth, keyFontSize, keyIconSize, keyPadX,
-    ].join('|');
-
-    let legendRows;
-    let legendRowWidths;
-    const cachedLegend = Neo.minimapLegendCache;
-    if (cachedLegend?.layoutSignature === legendLayoutSignature && !Neo.minimapLegendDirty) {
-      legendRows = cachedLegend.rows;
-      legendRowWidths = cachedLegend.rowWidths;
-    } else {
-      const liveEnemies = Array.isArray(Neo.enemies) ? Neo.enemies.filter(enemy => enemy && enemy.hp > 0) : [];
-      const eliteCount = liveEnemies.filter(enemy => enemy.elite).length;
-      const normalEnemyCount = Math.max(0, liveEnemies.length - eliteCount);
-      const currentHazards = Array.isArray(Neo.hazards) ? Neo.hazards : [];
-      const hasTrap = currentHazards.some(hazard => hazard?.kind === 'explosive_trap');
-      const hasLava = currentHazards.some(hazard => hazard?.kind === 'lava' || hazard?.kind === 'lava_moat');
-      const hasHealZone = currentHazards.some(hazard => hazard?.kind === 'healing_zone');
-      const hasFire = currentHazards.some(hazard => hazard?.kind === 'fire_circle');
-      const currentPickups = Array.isArray(Neo.pickups) ? Neo.pickups : [];
-      const potionCount = currentPickups.filter(pickup => pickup?.type === 'potion').length;
-      const coinCount = currentPickups.filter(pickup => pickup?.type === 'coin').length;
-      const itemCount = currentPickups.filter(pickup => pickup?.type === 'item').length;
-      const exitVisible = Array.isArray(Neo.rooms) && Neo.rooms.some(room => !room.secret && showsExit(room));
-      const chestCount = Array.isArray(Neo.chests) ? Neo.chests.filter(chest => chest && !chest.open).length : 0;
-      const legendEntries = [{ key: 'you', label: 'YOU', color: '#fff7c2', mode: 'you' }];
-      const addLegendEntry = (key, label, color, mode = 'dot') => {
-        if (!legendEntries.some(entry => entry.key === key)) legendEntries.push({ key, label, color, mode });
-      };
-      if (exitVisible) addLegendEntry('exit', 'EXIT', '#fff04a', 'star');
-      if (Neo.player?.activeBounty?.targetSpawned) addLegendEntry('bounty-target', 'HUNT', '#ff9d66', 'dot');
-      if (currentRoom && roomTypeLegend[currentRoom.type]) addLegendEntry(...roomTypeLegend[currentRoom.type]);
-      if (eliteCount > 0) addLegendEntry('elite', `${eliteCount} ELITE`, '#ff8800', 'dot');
-      if (normalEnemyCount > 0) addLegendEntry('enemy', `${normalEnemyCount} FOE`, '#ff3333', 'dot');
-      if (hasTrap) addLegendEntry('trap', 'TRAP', '#ff3333', 'triangle');
-      if (hasLava) addLegendEntry('lava', 'LAVA', '#ff7a2a', 'triangle');
-      if (hasHealZone) addLegendEntry('heal-zone', 'HEAL', '#55ff88', 'dot');
-      if (hasFire) addLegendEntry('fire', 'FIRE', '#ff7a2a', 'dot');
-      if (itemCount > 0) addLegendEntry('item', `${itemCount} ITEM`, '#ff5555', 'dot');
-      if (potionCount > 0) addLegendEntry('potion', `${potionCount} HEAL`, '#55ff88', 'dot');
-      if (coinCount > 0) addLegendEntry('coin', `${coinCount} COIN`, '#ffdd44', 'dot');
-      if (chestCount > 0) addLegendEntry('chest', `${chestCount} CHEST`, '#ffaa00', 'square');
-
-      Neo.ctx.font = keyFont;
-      const keyMaxWidth = Math.max(1, mapWidth - keyFramePad * 2);
-      legendRows = [[]];
-      legendRowWidths = [0];
-      legendEntries.forEach(entry => {
-        const labelW = Math.ceil(Neo.ctx.measureText(entry.label).width);
-        const width = keyPadX * 2 + keyIconSize + keyIconGap + labelW;
-        entry.width = Math.min(width, keyMaxWidth);
-        let rowIndex = legendRows.length - 1;
-        const nextWidth = legendRowWidths[rowIndex] + (legendRows[rowIndex].length ? keyEntryGap : 0) + entry.width;
-        if (legendRows[rowIndex].length && nextWidth > keyMaxWidth) {
-          legendRows.push([]);
-          legendRowWidths.push(0);
-          rowIndex += 1;
-        }
-        legendRows[rowIndex].push(entry);
-        legendRowWidths[rowIndex] += (legendRows[rowIndex].length > 1 ? keyEntryGap : 0) + entry.width;
-      });
-      Neo.minimapLegendCache = { layoutSignature: legendLayoutSignature, rows: legendRows, rowWidths: legendRowWidths };
-      Neo.minimapLegendDirty = false;
-    }
-    const keyContentH = legendRows.length * keyPillH + Math.max(0, legendRows.length - 1) * keyRowGap;
-    const minimapFrameHeight = mapHeight + keyFooterPad * 2 + keyContentH;
+    // Room icons now carry all relevant information directly; the old dynamic
+    // per-room legend/footer duplicated those markers and made the map too tall.
+    const minimapFrameHeight = mapHeight;
     let minimapVisualLeft = originX;
     let minimapVisualTop = originY;
     let minimapVisualRight = originX + mapWidth;
@@ -413,12 +335,6 @@
     Neo.ctx.globalAlpha = 0.45;
     Neo.ctx.strokeStyle = '#5a6070';
     Neo.ctx.lineWidth = 1;
-    Neo.ctx.stroke();
-    Neo.ctx.globalAlpha = 0.28;
-    Neo.ctx.strokeStyle = '#5a6070';
-    Neo.ctx.beginPath();
-    Neo.ctx.moveTo(originX + 2, originY + mapHeight + 0.5);
-    Neo.ctx.lineTo(originX + mapWidth - 2, originY + mapHeight + 0.5);
     Neo.ctx.stroke();
     Neo.ctx.globalAlpha = 1;
     // Room-type glyphs are drawn as white lettering wrapped in a dark outline so
@@ -766,8 +682,7 @@
       });
     }
 
-    // Strong current-room emphasis. The dynamic key stays inside the minimap
-    // frame footer so it does not cover rooms, pickups, enemies, or doors.
+    // Strong current-room emphasis lives directly on the active cell.
     const youRoom = currentRoom;
     if (youRoom && !youRoom.secret) {
       const yx = cellOriginX + youRoom.gx * (size + gap);
@@ -776,9 +691,6 @@
       const pulse = 0.5 + 0.5 * Math.sin(t * 5.0);
       const grow = Math.round(2 + pulse * Math.max(2, size * 0.24));
       const lineW = Math.max(1.5, Math.round(size * 0.16));
-      const cellCx = yx + size / 2;
-      const cellCy = yy + size / 2;
-
       // Animated outer ring.
       Neo.ctx.globalAlpha = 0.58 + 0.42 * pulse;
       Neo.ctx.strokeStyle = '#fff7c2';
@@ -794,77 +706,6 @@
       Neo.ctx.strokeRect(yx + 0.5, yy + 0.5, size - 1, size - 1);
     }
 
-    const drawLegendIcon = (entry, x, y, pulse = 1) => {
-      const s = keyIconSize;
-      const cx = x + s / 2;
-      const cy = y + keyPillH / 2;
-      Neo.ctx.fillStyle = entry.color;
-      Neo.ctx.strokeStyle = entry.color;
-      Neo.ctx.lineWidth = Math.max(1, Math.round(s * 0.16));
-      if (entry.mode === 'square') {
-        Neo.ctx.fillRect(x, cy - s / 2, s, s);
-      } else if (entry.mode === 'triangle') {
-        Neo.ctx.beginPath();
-        Neo.ctx.moveTo(cx, cy - s / 2);
-        Neo.ctx.lineTo(cx + s / 2, cy + s / 2);
-        Neo.ctx.lineTo(cx - s / 2, cy + s / 2);
-        Neo.ctx.closePath();
-        Neo.ctx.fill();
-      } else if (entry.mode === 'star') {
-        Neo.ctx.font = `bold ${Math.max(7, Math.round(s * 1.45))}px system-ui`;
-        Neo.ctx.textAlign = 'center';
-        Neo.ctx.textBaseline = 'middle';
-        Neo.ctx.fillText('★', cx, cy + 0.5);
-      } else if (entry.mode === 'you') {
-        Neo.ctx.globalAlpha = 0.82 + 0.18 * pulse;
-        Neo.ctx.strokeRect(x + 0.5, cy - s / 2 + 0.5, s - 1, s - 1);
-      } else {
-        Neo.ctx.beginPath();
-        Neo.ctx.arc(cx, cy, s / 2, 0, Math.PI * 2);
-        Neo.ctx.fill();
-      }
-    };
-    const footerTop = originY + mapHeight + keyFooterPad;
-    if (currentRoom && !currentRoom.secret) {
-      const t = Number(Neo.gameElapsedTime || 0);
-      const pulse = 0.5 + 0.5 * Math.sin(t * 5.0);
-      Neo.ctx.globalAlpha = 0.58 + 0.26 * pulse;
-      Neo.ctx.fillStyle = '#fff7c2';
-      Neo.ctx.beginPath();
-      Neo.ctx.moveTo(Neo.clamp(currentCellCx, originX + 5, originX + mapWidth - 5), footerTop - 1);
-      Neo.ctx.lineTo(Neo.clamp(currentCellCx - 4, originX + 3, originX + mapWidth - 8), footerTop + 3);
-      Neo.ctx.lineTo(Neo.clamp(currentCellCx + 4, originX + 8, originX + mapWidth - 3), footerTop + 3);
-      Neo.ctx.closePath();
-      Neo.ctx.fill();
-    }
-    Neo.ctx.font = keyFont;
-    Neo.ctx.textAlign = 'left';
-    Neo.ctx.textBaseline = 'middle';
-    legendRows.forEach((row, rowIndex) => {
-      let x = Neo.clamp(currentCellCx - legendRowWidths[rowIndex] / 2, originX + keyFramePad, originX + mapWidth - keyFramePad - legendRowWidths[rowIndex]);
-      const y = footerTop + rowIndex * (keyPillH + keyRowGap);
-      row.forEach(entry => {
-        Neo.ctx.globalAlpha = entry.key === 'you' ? 0.94 : 0.82;
-        Neo.ctx.fillStyle = 'rgba(10,13,20,0.84)';
-        Neo.ctx.beginPath();
-        Neo.ctx.roundRect(x, y, entry.width, keyPillH, 3);
-        Neo.ctx.fill();
-        Neo.ctx.strokeStyle = entry.key === 'you' ? '#fff7c2' : 'rgba(255,255,255,0.28)';
-        Neo.ctx.lineWidth = 1;
-        Neo.ctx.stroke();
-        Neo.ctx.globalAlpha = 1;
-        drawLegendIcon(entry, x + keyPadX, y, 0.5 + 0.5 * Math.sin(Number(Neo.gameElapsedTime || 0) * 5.0));
-        Neo.ctx.globalAlpha = 1;
-        Neo.ctx.font = keyFont;
-        Neo.ctx.textAlign = 'left';
-        Neo.ctx.textBaseline = 'middle';
-        Neo.ctx.fillStyle = '#fffbe6';
-        Neo.ctx.fillText(entry.label, x + keyPadX + keyIconSize + keyIconGap, y + keyPillH / 2 + 0.5);
-        x += entry.width + keyEntryGap;
-      });
-    });
-
-    
     Neo.ctx.restore();
 
     const viewportBounds = {
