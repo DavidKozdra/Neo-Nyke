@@ -152,7 +152,7 @@
     if (Neo.gameState !== 'play') return;
     const portal = Neo.pickups
       .filter(pickup => (
-        pickup?.type === 'challengePracticePortal'
+        (pickup?.type === 'challengePracticePortal' && pickup.returnToHub)
         || ((pickup?.type === 'jesterPortal' || pickup?.type === 'adapterPortal') && pickup.active)
       ))
       .sort((a, b) => (
