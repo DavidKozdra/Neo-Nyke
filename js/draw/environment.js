@@ -1031,8 +1031,23 @@
     Neo.ctx.save();
     Neo.ctx.translate(structure.x, structure.y);
     if (structure.kind === 'pillar') {
+      const baseImage = Neo.ENVIRONMENT_IMAGES?.pillar_1?.image;
+      const shaftImage = Neo.ENVIRONMENT_IMAGES?.pillar_2?.image;
+      const capImage = Neo.ENVIRONMENT_IMAGES?.pillar_3?.image;
       const pillarImage = Neo.ENVIRONMENT_IMAGES?.pillar?.image;
-      if (pillarImage) {
+      if (baseImage && shaftImage && capImage) {
+        // Stack capital -> 0-3 shaft repeats -> base, each a 24px segment, so
+        // column height varies by the seeded `mids` count set in addPillar.
+        const mids = Neo.clamp(Number(structure.mids || 0), 0, 3);
+        const segments = [capImage, ...Array(mids).fill(shaftImage), baseImage];
+        const w = Math.max(24, Number(structure.w || 34));
+        const segH = w;
+        const totalH = segH * segments.length;
+        Neo.ctx.imageSmoothingEnabled = false;
+        segments.forEach((segment, index) => {
+          Neo.ctx.drawImage(segment, -w / 2, -totalH / 2 + index * segH, w, segH);
+        });
+      } else if (pillarImage) {
         const w = Math.max(24, Number(structure.w || 48));
         const h = Math.max(24, Number(structure.h || 48)) * 1.35;
         Neo.ctx.imageSmoothingEnabled = false;

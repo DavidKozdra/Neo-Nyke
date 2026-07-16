@@ -475,7 +475,11 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
       });
     };
     const addPillar = (x, y, size = 34) => {
-      room.structures.push({ kind: 'pillar', x, y, w: size, h: size });
+      // Column height varies by seed: always a base + capital, plus 0-3 repeats
+      // of the plain shaft segment in between (pillar_1 base / pillar_2 shaft /
+      // pillar_3 capital), so rooms don't all show identical short columns.
+      const mids = Neo.irand(0, 3, 'world');
+      room.structures.push({ kind: 'pillar', x, y, w: size, h: size, mids });
     };
     const setChambers = (...chambers) => {
       room.layoutChambers = chambers.map(chamber => ({
