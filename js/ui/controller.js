@@ -49,6 +49,7 @@ export function createUIController(view) {
     let objectiveExpanded = true;
     let tutorialMenuOfferVisible = false;
     let objectiveLayoutCache = null;
+    let objectiveLayoutRequestSignature = '';
     let orientationPromptBound = false;
     let orientationPromptDismissed = false;
     try {
@@ -475,6 +476,14 @@ export function createUIController(view) {
     function setObjectiveLayout(layout) {
       if (!view.objectiveTracker) return;
       const objectiveHudEntry = window.NeoSettings?.getHudElements?.()?.objectives;
+      const requestSignature = [
+        layout?.left ?? '', layout?.top ?? '', layout?.right ?? '', layout?.bottom ?? '',
+        window.innerWidth, window.innerHeight,
+        objectiveHudEntry?.x ?? 0, objectiveHudEntry?.y ?? 0,
+        objectiveHudEntry?.scale ?? '', objectiveHudEntry?.visible ?? '',
+      ].join('|');
+      if (requestSignature === objectiveLayoutRequestSignature) return;
+      objectiveLayoutRequestSignature = requestSignature;
       const hasManualObjectiveOffset = !!objectiveHudEntry
         && (Number(objectiveHudEntry.x || 0) !== 0 || Number(objectiveHudEntry.y || 0) !== 0);
       if (hasManualObjectiveOffset) {

@@ -1044,6 +1044,9 @@
   function drawEnemies(viewportBounds = null) {
     const _now = Date.now();
     const _reduceFlash = window.NeoSettings?.getAccess()?.reduceFlash;
+    const performanceMode = window.NeoSettings?.isPerformanceMode?.() !== false;
+    const adaptiveQuality = Neo.getAdaptiveQualityLevel?.() || 0;
+    const denseEnemyFx = performanceMode && ((Neo.enemies?.length || 0) >= 40 || adaptiveQuality >= 1);
     Neo.enemies.forEach(enemy => {
       if (!enemy) return;
       if (viewportBounds) {
@@ -1076,7 +1079,7 @@
           const style = Neo.STATUS_STYLES[key];
           Neo.ctx.strokeStyle = style.color;
           Neo.ctx.shadowColor = style.color;
-          Neo.ctx.shadowBlur = 10;
+          Neo.ctx.shadowBlur = denseEnemyFx ? 0 : 10;
           Neo.ctx.beginPath();
           Neo.ctx.arc(0, 0, enemy.r + 6 + ringIndex * 4 + (_reduceFlash ? 0 : Math.sin(_now / (180 + ringIndex * 40)) * 2), 0, Math.PI * 2);
           Neo.ctx.stroke();
@@ -1097,7 +1100,7 @@
           const tw = _reduceFlash ? 1 : 0.55 + Math.abs(Math.sin(_now / 140 + s)) * 0.9;
           Neo.ctx.fillStyle = '#ffe8a3';
           Neo.ctx.shadowColor = '#ffd05a';
-          Neo.ctx.shadowBlur = 8;
+          Neo.ctx.shadowBlur = denseEnemyFx ? 0 : 8;
           Neo.ctx.beginPath();
           Neo.ctx.arc(px, py, 2.2 * tw, 0, Math.PI * 2);
           Neo.ctx.fill();
@@ -1176,7 +1179,7 @@
         alpha: enemy.stun > 0 ? 0.68 : 1,
         flipX: facing < 0,
         shadowColor: enemy.type === 'mooggy' ? 'rgba(255,30,52,0.55)' : enemy.elite || enemy.type === 'god' ? 'rgba(255,244,180,0.45)' : 'rgba(0,0,0,0.18)',
-        shadowBlur: enemy.type === 'mooggy' ? 16 : enemy.type === 'god' ? 14 : enemy.elite ? 10 : 4,
+        shadowBlur: enemy.type === 'mooggy' ? 16 : enemy.type === 'god' ? 14 : enemy.elite ? 10 : denseEnemyFx ? 0 : 4,
         tint: flash ? 'rgba(255,255,180,0.55)' : (enemy.elite ? 'rgba(255,210,96,0.7)' : null),
         ...enemyAnim,
       });
