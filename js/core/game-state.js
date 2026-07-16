@@ -357,10 +357,10 @@ export function resumeGame() {
     if (characterKey === 'metao') items.mateos_bag = 1;
     if (characterKey === 'gelleh') items.zap_to_extreme = 1;
     if (characterKey === 'turtle_boy') {
-      // Turtle Boy starts with shell defense and copper penny; his red stick and
+      // Turtle Boy starts with shell defense and dragon orb; his red stick and
       // turtle-wave laser come from his default weapon/move kit, not the inventory.
       items.turtle_shell = 1;
-      items.copper_penny = 1;
+      items.dragon_orb = 1;
     }
     if (characterKey === 'sarge') {
       // Sarge's Hammer god item is his default weapon; copper penny rounds out his

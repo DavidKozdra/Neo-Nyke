@@ -252,15 +252,18 @@
     blood_beam:       { base: 10, mult: 'beamDamageMultiplier', tick: true },
     love_beam:        { base: 14, mult: 'beamDamageMultiplier', tick: true },
     turtle_wave:      { base: 34, mult: 'beamDamageMultiplier', tick: true },
-    power_disks:      { base: 20, hits: 8 },
+    power_disks:      { base: 20, hits: 8, mult: 'beamDamageMultiplier' },
     blade_justice:    { base: 22, mult: 'beamDamageMultiplier' },
     lightning_columns:{ base: 18 },
     god_sweep:        { base: 12, mult: 'beamDamageMultiplier', tick: true },
-    nail_shot:        { base: 18, hits: 12 },
+    nail_shot:        { base: 18, hits: 12, mult: 'beamDamageMultiplier' },
     wizard_lazer:     { base: 30, mult: 'beamDamageMultiplier', tick: true },
     mooggy_blood_beam:{ base: 12, mult: 'beamDamageMultiplier', tick: true },
     thorn_blood_beams:{ base: 8,  mult: 'beamDamageMultiplier', tick: true, hits: 4 },
     laser_shockwave:  { base: 22 },
+    hammer_throw:     { base: 46, mult: 'beamDamageMultiplier' },
+    lightning_cross:  { base: 30, mult: 'beamDamageMultiplier' },
+    love_bomb_laser:  { base: 34, mult: 'beamDamageMultiplier' },
     // smash moves
     crimson_smash:    { base: 46, mult: 'aoeDamageMultiplier' },
     hammer_smash:     { base: 46, mult: 'aoeDamageMultiplier' },
@@ -1621,7 +1624,7 @@
     const base = Neo.MOVE_BASE_STATS?.love_bomb_laser?.damage ?? 34;
     const anvilBonus = Neo.getAnvilMoveBonus?.('love_bomb_laser', 'damage') || 0;
     // Tap ~0.6x base, full charge ~2.2x base.
-    const damage = Math.max(1, Math.round((base + anvilBonus) * (0.6 + charge * 1.6) * (itemStats.damageMultiplier || 1)));
+    const damage = Math.max(1, Math.round((base + anvilBonus) * (0.6 + charge * 1.6) * (itemStats.damageMultiplier || 1) * (itemStats.beamDamageMultiplier || 1)));
     const aoeRadius = (48 + charge * 42) * (itemStats.aoeRadiusMultiplier || 1);
     // Sparkle chance scales with charge: a light tap barely dazzles, a full
     // charge reliably marks the whole blast for guaranteed crits.
@@ -1683,7 +1686,7 @@
     const itemStats = Neo.getItemStats();
     const move = getEquippedMove('laser');
     const anvilDmg = Neo.getAnvilMoveBonus(move, 'damage');
-    const damage = 18 + anvilDmg;
+    const damage = Math.max(1, Math.round((18 + anvilDmg) * (itemStats.beamDamageMultiplier || 1)));
     const nailCount = 12;
     const speed = 480 * (itemStats.projectileSpeedMultiplier || 1);
     for (let index = 0; index < nailCount; index += 1) {
@@ -2314,6 +2317,8 @@
   }
 
   function spawnPlayerDiskBurst() {
+    const itemStats = Neo.getItemStats();
+    const beamMult = itemStats.beamDamageMultiplier || 1;
     const isMetao = Neo.player?.character === 'metao';
     const diskHitOptions = isMetao
       ? { drainChanceBonus: 0.05, fireChance: 0.4, fireStacks: 1, fireDuration: 3 }
@@ -2332,7 +2337,7 @@
         life: 1.8,
         enemy: false,
         kind: 'disk',
-        damage: 20,
+        damage: Math.max(1, Math.round(20 * beamMult)),
         hitOptions: diskHitOptions,
         // Disks periodically shed faster sub-projectiles perpendicular to travel.
         subSpawn: {
@@ -2342,7 +2347,7 @@
           speed: 620,
           r: 4,
           life: 0.7,
-          damage: 8,
+          damage: Math.max(1, Math.round(8 * beamMult)),
           count: 2,
           hitOptions: shardHitOptions,
         },
@@ -2358,7 +2363,7 @@
     const itemStats = Neo.getItemStats();
     const base = Neo.MOVE_BASE_STATS?.[move]?.damage ?? 46;
     const anvilBonus = Neo.getAnvilMoveBonus?.(move, 'damage') || 0;
-    const damage = Math.max(1, Math.round((base + anvilBonus) * (itemStats.damageMultiplier || 1)));
+    const damage = Math.max(1, Math.round((base + anvilBonus) * (itemStats.damageMultiplier || 1) * (itemStats.beamDamageMultiplier || 1)));
     const angle = Neo.angleToMouse();
     Neo.spawnProjectile({
       x: Neo.player.x,
@@ -3087,7 +3092,7 @@
     const aoeRadiusMultiplier = itemStats.aoeRadiusMultiplier || 1;
     const px = Neo.player.x;
     const py = Neo.player.y;
-    const damage = (Neo.godTimer > 0 ? 40 : 30) * (itemStats.aoeDamageMultiplier || 1);
+    const damage = (Neo.godTimer > 0 ? 40 : 30) * (itemStats.aoeDamageMultiplier || 1) * (itemStats.beamDamageMultiplier || 1);
     const lines = [
       { x1: 0, y1: py, x2: Neo.ROOM_W, y2: py },
       { x1: px, y1: 0, x2: px, y2: Neo.ROOM_H },
