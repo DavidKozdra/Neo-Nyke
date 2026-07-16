@@ -237,12 +237,14 @@
     const hudScale = Number.isFinite(ownScale) ? Neo.clamp(ownScale, 0.5, 2) : 1.25;
     const minimapOffsetX = Number.isFinite(Number(minimapEntry?.x)) ? Number(minimapEntry.x) : 0;
     const minimapOffsetY = Number.isFinite(Number(minimapEntry?.y)) ? Number(minimapEntry.y) : 0;
-    const baseSize = 17;
-    const baseGap = 2;
+    // A slightly larger cell gives room silhouettes enough pixels to read as
+    // actual sprites instead of collapsing back into one- or two-letter codes.
+    const baseSize = 20;
+    const baseGap = 3;
     const baseMapWidth = gridCols * baseSize + (gridCols - 1) * baseGap;
     const baseMapHeight = gridRows * baseSize + (gridRows - 1) * baseGap;
-    const targetViewportWidth = compact ? Math.min(112, canvasRect.width * 0.25) : Math.min(146, canvasRect.width * 0.2);
-    const targetViewportHeight = compact ? Math.min(112, canvasRect.height * 0.25) : Math.min(146, canvasRect.height * 0.23);
+    const targetViewportWidth = compact ? Math.min(138, canvasRect.width * 0.29) : Math.min(184, canvasRect.width * 0.24);
+    const targetViewportHeight = compact ? Math.min(138, canvasRect.height * 0.29) : Math.min(184, canvasRect.height * 0.28);
     const baseViewportWidth = baseMapWidth * scaleX;
     const baseViewportHeight = baseMapHeight * scaleY;
     const responsiveScale = Neo.clamp(
@@ -312,21 +314,20 @@
     const keyFooterPad = Math.max(3, Math.round(4 * minimapScale));
     const keyFramePad = Math.max(3, Math.round(size * 0.18));
 
-    // The fifth tuple value is the cell glyph. Use readable abbreviations rather
-    // than relying on color alone or arbitrary collision workarounds (the old
-    // Prison `K` existed only because Portal already used `P`).
+    // The sixth tuple value selects a pictured cell icon. The fifth remains a
+    // compact fallback for environments where an authored PNG is unavailable.
     const roomTypeLegend = {
-      god: ['god', 'GOD', '#ffffff', 'square', 'GD'],
-      challenge: ['trial', 'TRIAL', '#d7f6ff', 'square', 'TR'],
-      boss: ['boss-room', 'BOSS', '#ff7a7a', 'square', 'BS'],
-      treasure: ['treasure', 'LOOT', '#ffaa00', 'square', 'LO'],
-      shop: ['shop', 'SHOP', '#7ec8ff', 'square', '$'],
-      anvil: ['anvil', 'FORGE', '#ffb840', 'square', '⚒'],
-      start: ['start', 'START', '#00ff88', 'square', 'ST'],
-      secret: ['secret', 'SECRET', '#b58cff', 'square', 'SE'],
+      god: ['god', 'GOD', '#ffffff', 'square', 'GD', 'crown'],
+      challenge: ['trial', 'TRIAL', '#d7f6ff', 'square', 'TR', 'trial'],
+      boss: ['boss-room', 'BOSS', '#ff7a7a', 'square', 'BS', 'boss'],
+      treasure: ['treasure', 'LOOT', '#ffaa00', 'square', 'LO', 'chest'],
+      shop: ['shop', 'SHOP', '#7ec8ff', 'square', '$', 'shop'],
+      anvil: ['anvil', 'FORGE', '#ffb840', 'square', '⚒', 'anvil'],
+      start: ['start', 'START', '#00ff88', 'square', 'ST', 'start'],
+      secret: ['secret', 'SECRET', '#b58cff', 'square', 'SE', 'secret'],
     };
     Object.entries(Neo.SPECIAL_ROOM_DEFS || {}).forEach(([type, def]) => {
-      roomTypeLegend[type] = [`special-${type}`, String(def.shortName || def.name || type).toUpperCase(), def.color || '#d7f6ff', 'square', def.glyph];
+      roomTypeLegend[type] = [`special-${type}`, String(def.shortName || def.name || type).toUpperCase(), def.color || '#d7f6ff', 'square', def.glyph, type];
     });
 
     const legendLayoutSignature = [
@@ -443,6 +444,86 @@
       Neo.ctx.fillText(glyphText, cx, cy);
       Neo.ctx.restore();
     };
+
+    const drawRoomIcon = (icon, fallbackGlyph, x, y, roomExplored) => {
+      const cx = x + size / 2;
+      const cy = y + size / 2;
+      const inset = Math.max(2, Math.round(size * 0.12));
+      const drawSize = Math.max(8, size - inset * 2);
+      const environmentKey = icon === 'chest' ? 'chest_0' : icon === 'ladder' ? 'ladder_0' : icon === 'anvil' ? 'anvil_0' : '';
+      const image = environmentKey ? Neo.ENVIRONMENT_IMAGES?.[environmentKey]?.image : null;
+      Neo.ctx.save();
+      Neo.ctx.globalAlpha = roomExplored ? 1 : 0.68;
+      Neo.ctx.imageSmoothingEnabled = false;
+      if (image) {
+        Neo.ctx.shadowColor = 'rgba(0,0,0,.9)';
+        Neo.ctx.shadowBlur = Math.max(2, size * 0.12);
+        if (icon === 'chest') Neo.ctx.drawImage(image, 0, 0, 24, 24, x + inset, y + inset, drawSize, drawSize);
+        else Neo.ctx.drawImage(image, x + inset, y + inset, drawSize, drawSize);
+        Neo.ctx.restore();
+        return;
+      }
+
+      const u = size / 18;
+      Neo.ctx.translate(cx, cy);
+      Neo.ctx.scale(u, u);
+      Neo.ctx.strokeStyle = '#ffffff';
+      Neo.ctx.fillStyle = '#ffffff';
+      Neo.ctx.lineWidth = 1.8;
+      Neo.ctx.lineCap = 'square';
+      Neo.ctx.lineJoin = 'round';
+      Neo.ctx.shadowColor = 'rgba(0,0,0,.95)';
+      Neo.ctx.shadowBlur = 2.5;
+      if (icon === 'shop') {
+        Neo.ctx.fillRect(-6, -1, 12, 7);
+        Neo.ctx.fillRect(-7, -6, 14, 3);
+        Neo.ctx.fillStyle = '#17222d';
+        Neo.ctx.fillRect(-3, 1, 3, 5);
+        Neo.ctx.fillRect(2, 0, 3, 3);
+      } else if (icon === 'trial') {
+        Neo.ctx.beginPath(); Neo.ctx.moveTo(0, -8); Neo.ctx.lineTo(7, 0); Neo.ctx.lineTo(0, 8); Neo.ctx.lineTo(-7, 0); Neo.ctx.closePath(); Neo.ctx.stroke();
+        Neo.ctx.beginPath(); Neo.ctx.moveTo(-4, 0); Neo.ctx.lineTo(4, 0); Neo.ctx.moveTo(0, -4); Neo.ctx.lineTo(0, 4); Neo.ctx.stroke();
+      } else if (icon === 'boss') {
+        Neo.ctx.beginPath(); Neo.ctx.arc(0, -1, 6, Math.PI, 0); Neo.ctx.lineTo(5, 5); Neo.ctx.lineTo(2, 7); Neo.ctx.lineTo(-2, 7); Neo.ctx.lineTo(-5, 5); Neo.ctx.closePath(); Neo.ctx.fill();
+        Neo.ctx.fillStyle = '#301014';
+        Neo.ctx.fillRect(-4, -1, 3, 3); Neo.ctx.fillRect(1, -1, 3, 3); Neo.ctx.fillRect(-1, 3, 2, 3);
+      } else if (icon === 'crown') {
+        Neo.ctx.beginPath(); Neo.ctx.moveTo(-7, 5); Neo.ctx.lineTo(-6, -5); Neo.ctx.lineTo(-2, 0); Neo.ctx.lineTo(0, -7); Neo.ctx.lineTo(2, 0); Neo.ctx.lineTo(6, -5); Neo.ctx.lineTo(7, 5); Neo.ctx.closePath(); Neo.ctx.fill();
+      } else if (icon === 'start') {
+        Neo.ctx.strokeRect(-6, -7, 10, 14);
+        Neo.ctx.fillRect(-2, -1, 2, 2);
+        Neo.ctx.beginPath(); Neo.ctx.moveTo(1, 0); Neo.ctx.lineTo(8, 0); Neo.ctx.moveTo(5, -3); Neo.ctx.lineTo(8, 0); Neo.ctx.lineTo(5, 3); Neo.ctx.stroke();
+      } else if (icon === 'prison') {
+        Neo.ctx.strokeRect(-7, -7, 14, 14);
+        [-4, 0, 4].forEach(px => { Neo.ctx.beginPath(); Neo.ctx.moveTo(px, -7); Neo.ctx.lineTo(px, 7); Neo.ctx.stroke(); });
+      } else if (icon === 'wishing_well') {
+        Neo.ctx.strokeRect(-6, -1, 12, 7);
+        Neo.ctx.beginPath(); Neo.ctx.arc(0, -1, 6, Math.PI, 0); Neo.ctx.stroke();
+        Neo.ctx.fillRect(-8, -3, 16, 3);
+      } else if (icon === 'portal') {
+        Neo.ctx.beginPath(); Neo.ctx.arc(0, 0, 7, -1.2, 1.2); Neo.ctx.stroke();
+        Neo.ctx.beginPath(); Neo.ctx.arc(0, 0, 4, 1.9, 4.5); Neo.ctx.stroke();
+      } else if (icon === 'oracle') {
+        Neo.ctx.beginPath(); Neo.ctx.moveTo(-8, 0); Neo.ctx.quadraticCurveTo(0, -7, 8, 0); Neo.ctx.quadraticCurveTo(0, 7, -8, 0); Neo.ctx.stroke();
+        Neo.ctx.beginPath(); Neo.ctx.arc(0, 0, 2.5, 0, Math.PI * 2); Neo.ctx.fill();
+      } else if (icon === 'bounty') {
+        Neo.ctx.beginPath(); Neo.ctx.arc(0, 0, 6, 0, Math.PI * 2); Neo.ctx.stroke();
+        Neo.ctx.beginPath(); Neo.ctx.moveTo(-8, 0); Neo.ctx.lineTo(8, 0); Neo.ctx.moveTo(0, -8); Neo.ctx.lineTo(0, 8); Neo.ctx.stroke();
+      } else if (icon === 'reliquary') {
+        Neo.ctx.beginPath(); Neo.ctx.moveTo(0, -8); Neo.ctx.lineTo(7, -2); Neo.ctx.lineTo(4, 7); Neo.ctx.lineTo(-4, 7); Neo.ctx.lineTo(-7, -2); Neo.ctx.closePath(); Neo.ctx.fill();
+        Neo.ctx.fillStyle = '#3c2450'; Neo.ctx.fillRect(-1, -4, 2, 8);
+      } else if (icon === 'shrine') {
+        Neo.ctx.fillRect(-7, 4, 14, 3); Neo.ctx.fillRect(-5, 1, 10, 3);
+        Neo.ctx.beginPath(); Neo.ctx.moveTo(0, -8); Neo.ctx.quadraticCurveTo(6, -2, 0, 1); Neo.ctx.quadraticCurveTo(-5, -2, 0, -8); Neo.ctx.fill();
+      } else if (icon === 'secret') {
+        Neo.ctx.beginPath(); Neo.ctx.arc(0, -2, 4, 0, Math.PI * 2); Neo.ctx.fill(); Neo.ctx.fillRect(-1.5, 1, 3, 7);
+      } else {
+        Neo.ctx.restore();
+        drawRoomGlyph(fallbackGlyph, x, y, roomExplored);
+        return;
+      }
+      Neo.ctx.restore();
+    };
     Neo.rooms.forEach(room => {
       if (room.secret) return;
       const x = cellOriginX + room.gx * (size + gap);
@@ -497,15 +578,10 @@
       // current one so the floor's layout stays hidden.
       const showRoomGlyph = !mapObscured || room === currentRoom;
       if (roomShowsExit) {
-        Neo.ctx.globalAlpha = roomExplored ? 1 : 0.7;
-        Neo.ctx.fillStyle = '#fff700';
-        Neo.ctx.font = `bold ${markerFont}`;
-        Neo.ctx.textAlign = 'center';
-        Neo.ctx.textBaseline = 'middle';
-        Neo.ctx.fillText('★', x + size / 2, y + size / 2);
+        drawRoomIcon('ladder', '★', x, y, roomExplored);
       } else if (showRoomGlyph) {
-        const roomGlyph = roomTypeLegend[room.type]?.[4];
-        if (roomGlyph) drawRoomGlyph(roomGlyph, x, y, roomExplored);
+        const roomMarker = roomTypeLegend[room.type];
+        if (roomMarker) drawRoomIcon(roomMarker[5], roomMarker[4], x, y, roomExplored);
       }
       // Forge/shop blink: draw a soft, slowly-blinking highlight ring around
       // revealed forge and shop rooms so they catch the eye on the minimap.

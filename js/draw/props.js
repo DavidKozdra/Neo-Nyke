@@ -75,6 +75,74 @@
     return visible.length;
   }
 
+  const TRIAL_STARTER_VISUALS = Object.freeze({
+    mirror: { title: 'Mirror Champion', description: 'Defeat a champion carrying a copy of your build.', color: '#c8efff' },
+    circuit: { title: 'Rune Circuit', description: 'Activate the floor switches in the shown order.', color: '#76e7ff' },
+    bomb: { title: 'Bomb Trial', description: 'Defuse every blue bomb. Touching a red bomb fails the trial.', color: '#ff8a6a' },
+    survival: { title: 'Protect the Ward', description: 'Keep the central ward alive through the enemy assault.', color: '#ffcf7d' },
+    runes: { title: 'Runic Hunt', description: 'Claim every fleeing rune before time runs out.', color: '#b58cff' },
+    storm: { title: 'Lightning Storm', description: 'Keep moving and survive the lightning barrage.', color: '#8dd4ff' },
+  });
+
+  function drawTrialStarterSymbol(trial, color) {
+    Neo.ctx.fillStyle = color;
+    Neo.ctx.strokeStyle = color;
+    Neo.ctx.lineWidth = 3;
+    Neo.ctx.lineJoin = 'round';
+    if (trial === 'mirror') {
+      Neo.ctx.fillStyle = '#182734';
+      Neo.ctx.fillRect(-15, -27, 30, 42);
+      Neo.ctx.strokeRect(-15, -27, 30, 42);
+      Neo.ctx.fillStyle = 'rgba(200,239,255,.72)';
+      Neo.ctx.fillRect(-9, -21, 18, 29);
+      Neo.ctx.fillStyle = '#071018';
+      Neo.ctx.fillRect(-3, -14, 6, 13);
+      Neo.ctx.fillRect(-7, -4, 14, 12);
+    } else if (trial === 'bomb') {
+      Neo.ctx.beginPath();
+      Neo.ctx.arc(0, -4, 15, 0, Math.PI * 2);
+      Neo.ctx.fill();
+      Neo.ctx.strokeStyle = '#fff1d0';
+      Neo.ctx.beginPath();
+      Neo.ctx.moveTo(7, -17); Neo.ctx.lineTo(13, -25); Neo.ctx.lineTo(18, -20);
+      Neo.ctx.stroke();
+      Neo.ctx.fillStyle = '#fff1d0';
+      Neo.ctx.fillRect(-8, -10, 5, 5);
+    } else if (trial === 'survival') {
+      Neo.ctx.beginPath();
+      Neo.ctx.moveTo(0, -29); Neo.ctx.lineTo(19, -20); Neo.ctx.lineTo(15, 3);
+      Neo.ctx.quadraticCurveTo(0, 19, -15, 3);
+      Neo.ctx.lineTo(-19, -20); Neo.ctx.closePath(); Neo.ctx.fill();
+      Neo.ctx.fillStyle = '#4a3516';
+      Neo.ctx.fillRect(-3, -20, 6, 28);
+      Neo.ctx.fillRect(-11, -10, 22, 6);
+    } else if (trial === 'runes') {
+      [-17, 0, 17].forEach((x, index) => {
+        Neo.ctx.fillStyle = index === 1 ? color : '#7653a8';
+        Neo.ctx.beginPath();
+        Neo.ctx.moveTo(x, -25 + index * 3); Neo.ctx.lineTo(x + 10, -7 + index * 2);
+        Neo.ctx.lineTo(x, 12); Neo.ctx.lineTo(x - 10, -7 + index * 2); Neo.ctx.closePath(); Neo.ctx.fill();
+      });
+      Neo.ctx.strokeStyle = '#f0dcff';
+      Neo.ctx.beginPath(); Neo.ctx.moveTo(-4, -12); Neo.ctx.lineTo(5, -3); Neo.ctx.lineTo(-4, 6); Neo.ctx.stroke();
+    } else if (trial === 'storm') {
+      Neo.ctx.beginPath();
+      Neo.ctx.moveTo(7, -31); Neo.ctx.lineTo(-10, -6); Neo.ctx.lineTo(1, -6);
+      Neo.ctx.lineTo(-7, 17); Neo.ctx.lineTo(17, -13); Neo.ctx.lineTo(5, -13);
+      Neo.ctx.closePath(); Neo.ctx.fill();
+    } else {
+      // Circuit console: three illuminated nodes connected by a hard pixel path.
+      Neo.ctx.strokeStyle = '#334a58';
+      Neo.ctx.lineWidth = 7;
+      Neo.ctx.beginPath(); Neo.ctx.moveTo(-17, 8); Neo.ctx.lineTo(0, -17); Neo.ctx.lineTo(17, 8); Neo.ctx.stroke();
+      [-17, 0, 17].forEach((x, index) => {
+        const y = index === 1 ? -17 : 8;
+        Neo.ctx.fillStyle = index === 1 ? '#ffffff' : color;
+        Neo.ctx.fillRect(x - 6, y - 6, 12, 12);
+      });
+    }
+  }
+
   const SHOP_GREETINGS = [
     'Coin for your courage, traveler?',
     'Everything here outlives you. Browse well.',
@@ -1463,37 +1531,65 @@
         }
       } else if (pickup.type === 'challengeStarter') {
         const trial = pickup.trial || 'mirror';
-        const color = trial === 'bomb' ? '#ff8a6a' : trial === 'storm' ? '#8dd4ff' : trial === 'survival' ? '#ffcf7d' : '#d7f6ff';
+        const visual = TRIAL_STARTER_VISUALS[trial] || TRIAL_STARTER_VISUALS.mirror;
+        const color = visual.color;
+        const focused = !!Neo.player && Neo.dist(Neo.player.x, Neo.player.y, pickup.x, pickup.y) <= 122;
+        // Cancel the generic pickup bob: trial starters are authored altar props
+        // planted in the room, with a unique sprite describing the encounter.
+        Neo.ctx.translate(0, -bob);
+        Neo.ctx.globalAlpha = 1;
+        Neo.ctx.fillStyle = 'rgba(0,0,0,.4)';
+        Neo.ctx.beginPath(); Neo.ctx.ellipse(0, 22, 47, 15, 0, 0, Math.PI * 2); Neo.ctx.fill();
+        Neo.ctx.fillStyle = '#272c35';
+        Neo.ctx.fillRect(-38, 7, 76, 17);
+        Neo.ctx.fillStyle = '#454c58';
+        Neo.ctx.fillRect(-33, 1, 66, 9);
+        Neo.ctx.fillStyle = color;
+        Neo.ctx.fillRect(-28, 3, 56, 3);
+        Neo.ctx.fillStyle = 'rgba(7,12,18,.96)';
         Neo.ctx.strokeStyle = color;
+        Neo.ctx.lineWidth = focused ? 3 : 2;
         Neo.ctx.shadowColor = color;
-        Neo.ctx.shadowBlur = 20;
-        Neo.ctx.lineWidth = 3;
-        if (trial === 'mirror') {
-          Neo.ctx.beginPath();
-          Neo.ctx.moveTo(0, -28);
-          Neo.ctx.lineTo(0, 16);
-          Neo.ctx.stroke();
-          Neo.ctx.beginPath();
-          Neo.ctx.moveTo(-14, -6);
-          Neo.ctx.lineTo(14, -6);
-          Neo.ctx.stroke();
-          Neo.ctx.beginPath();
-          Neo.ctx.moveTo(-8, 16);
-          Neo.ctx.lineTo(8, 16);
-          Neo.ctx.stroke();
-        } else {
-          Neo.ctx.beginPath();
-          Neo.ctx.arc(0, 0, 18, 0, Math.PI * 2);
-          Neo.ctx.stroke();
-          Neo.ctx.beginPath();
-          Neo.ctx.moveTo(-10, 0);
-          Neo.ctx.lineTo(10, 0);
-          Neo.ctx.stroke();
-        }
-        Neo.ctx.fillStyle = '#ffffff';
-        Neo.ctx.font = 'bold 10px system-ui';
+        Neo.ctx.shadowBlur = focused ? 17 : 7;
+        Neo.ctx.fillRect(-35, -63, 70, 64);
+        Neo.ctx.strokeRect(-35, -63, 70, 64);
+        Neo.ctx.shadowBlur = 0;
+        Neo.ctx.save();
+        Neo.ctx.translate(0, -25);
+        drawTrialStarterSymbol(trial, color);
+        Neo.ctx.restore();
+        Neo.ctx.fillStyle = '#fff';
+        Neo.ctx.font = 'bold 11px system-ui';
         Neo.ctx.textAlign = 'center';
-        Neo.ctx.fillText(Neo.getChallengeTrialLabel(trial), 0, 34);
+        Neo.ctx.textBaseline = 'alphabetic';
+        Neo.ctx.fillText(Neo.getChallengeTrialLabel(trial), 0, 39);
+
+        if (focused) {
+          const boxW = 250;
+          const boxH = 88;
+          const boxX = -boxW / 2;
+          const boxY = -171;
+          Neo.ctx.fillStyle = 'rgba(5,10,16,.97)';
+          Neo.ctx.strokeStyle = color;
+          Neo.ctx.lineWidth = 2;
+          Neo.ctx.shadowColor = '#000';
+          Neo.ctx.shadowBlur = 12;
+          Neo.ctx.fillRect(boxX, boxY, boxW, boxH);
+          Neo.ctx.shadowBlur = 0;
+          Neo.ctx.strokeRect(boxX, boxY, boxW, boxH);
+          Neo.ctx.fillStyle = color;
+          Neo.ctx.fillRect(boxX, boxY, 5, boxH);
+          Neo.ctx.textAlign = 'left';
+          Neo.ctx.fillStyle = '#fff';
+          Neo.ctx.font = 'bold 13px system-ui';
+          Neo.ctx.fillText(visual.title, boxX + 13, boxY + 20);
+          Neo.ctx.fillStyle = '#d3dbe5';
+          Neo.ctx.font = '11px system-ui';
+          drawWrappedWorldText(visual.description, boxX + 13, boxY + 38, boxW - 26, 14, 2);
+          Neo.ctx.fillStyle = color;
+          Neo.ctx.font = 'bold 10px system-ui';
+          Neo.ctx.fillText('STEP ONTO THE ALTAR TO BEGIN', boxX + 13, boxY + boxH - 10);
+        }
       } else if (pickup.type === 'challengeSwitch') {
         const color = pickup.color || '#d7f6ff';
         const armed = pickup.armed !== false;

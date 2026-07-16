@@ -1,7 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-describe('minimap room glyphs', () => {
+describe('minimap room icons', () => {
   const specialRooms = fs.readFileSync(path.join(__dirname, '../js/game/specialRooms.js'), 'utf8');
   const hud = fs.readFileSync(path.join(__dirname, '../js/draw/hud.js'), 'utf8');
 
@@ -24,17 +24,19 @@ describe('minimap room glyphs', () => {
     expect(specialRooms).not.toContain("glyph: 'K'");
   });
 
-  test('all major revealed room types have an explicit glyph', () => {
-    expect(hud).toContain("god: ['god', 'GOD', '#ffffff', 'square', 'GD']");
-    expect(hud).toContain("challenge: ['trial', 'TRIAL', '#d7f6ff', 'square', 'TR']");
-    expect(hud).toContain("boss: ['boss-room', 'BOSS', '#ff7a7a', 'square', 'BS']");
-    expect(hud).toContain("treasure: ['treasure', 'LOOT', '#ffaa00', 'square', 'LO']");
-    expect(hud).toContain("start: ['start', 'START', '#00ff88', 'square', 'ST']");
+  test('all major revealed room types have an explicit pictured icon', () => {
+    expect(hud).toContain("god: ['god', 'GOD', '#ffffff', 'square', 'GD', 'crown']");
+    expect(hud).toContain("challenge: ['trial', 'TRIAL', '#d7f6ff', 'square', 'TR', 'trial']");
+    expect(hud).toContain("boss: ['boss-room', 'BOSS', '#ff7a7a', 'square', 'BS', 'boss']");
+    expect(hud).toContain("treasure: ['treasure', 'LOOT', '#ffaa00', 'square', 'LO', 'chest']");
+    expect(hud).toContain("anvil: ['anvil', 'FORGE', '#ffb840', 'square', '⚒', 'anvil']");
   });
 
-  test('uses the marker table for cells and fits multi-character glyphs', () => {
-    expect(hud).toContain('const roomGlyph = roomTypeLegend[room.type]?.[4]');
-    expect(hud).toContain('const compactGlyph = glyphText.length > 1');
-    expect(hud).toContain('if (roomGlyph) drawRoomGlyph(roomGlyph, x, y, roomExplored)');
+  test('uses authored environment sprites and vector fallbacks in larger cells', () => {
+    expect(hud).toContain('const baseSize = 20');
+    expect(hud).toContain("icon === 'chest' ? 'chest_0'");
+    expect(hud).toContain("icon === 'ladder' ? 'ladder_0'");
+    expect(hud).toContain("icon === 'anvil' ? 'anvil_0'");
+    expect(hud).toContain("drawRoomIcon('ladder', '★'");
   });
 });
