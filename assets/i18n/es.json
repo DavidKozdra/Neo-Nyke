@@ -475,5 +475,15 @@
   "moves.ghost_ball.desc": "Mantén presionado para cargar, luego libera un orbe espectral que persigue al mouse y atraviesa a los enemigos. Se encoge y se debilita con el tiempo y con cada golpe hasta desaparecer.",
   "moves.holy_eye_beams.name": "Rayos del Santo Ojo",
   "moves.holy_eye_beams.desc": "Canaliza rayos sagrados gemelos desde tus ojos. Cada lanzamiento tiene la posibilidad de curarte un 5% de HP máximo.",
-  "sounds.break_furniture.label": "Romper muebles"
+  "sounds.break_furniture.label": "Romper muebles",
+  "moves.titan_hammer.name": "Martillo Titán",
+  "moves.titan_hammer.desc": "Invoca un martillo gigante que sigue al cursor. Haz clic para aplastarlo y causar un fuerte daño en área. Dura 8s.",
+  "difficulties.easy.name": "Fácil",
+  "difficulties.easy.description": "Fácil usa una curva de enemigos más ligera y más caídas de reliquias.",
+  "difficulties.gelleh.name": "Gelleh",
+  "difficulties.mooggy.name": "Mooggy",
+  "difficulties.turtle_boy.name": "Chico Tortuga",
+  "difficulties.sarge.name": "Sarge",
+  "difficulties.sarge.label": "HP",
+  "difficulties.custom_character.label": "HP"
 }

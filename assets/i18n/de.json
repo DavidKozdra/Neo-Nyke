@@ -475,5 +475,15 @@
   "moves.ghost_ball.desc": "Halten Sie die Taste gedrückt, um anzugreifen, und lassen Sie dann eine Spektralkugel los, die die Maus verfolgt und durch Feinde hindurchgeht. Es schrumpft und wird mit der Zeit und bei jedem Schlag schwächer, bis es verschwindet.",
   "moves.holy_eye_beams.name": "Strahlen des Heiligen Auges",
   "moves.holy_eye_beams.desc": "Kanalisiere zwei heilige Strahlen aus deinen Augen. Bei jedem Zauber besteht die Chance, dich um 5 % deiner maximalen HP zu heilen.",
-  "sounds.break_furniture.label": "Möbel kaputt machen"
+  "sounds.break_furniture.label": "Möbel kaputt machen",
+  "moves.titan_hammer.name": "Titanenhammer",
+  "moves.titan_hammer.desc": "Beschwöre einen riesigen Hammer, der dem Cursor folgt. Klicken, um ihn für einen schweren Flächenschaden herabzuschmettern. Hält 8s.",
+  "difficulties.easy.name": "Leicht",
+  "difficulties.easy.description": "Leicht nutzt eine sanftere Gegnerkurve und zusätzliche Relikt-Drops.",
+  "difficulties.gelleh.name": "Gelleh",
+  "difficulties.mooggy.name": "Mooggy",
+  "difficulties.turtle_boy.name": "Schildkrötenjunge",
+  "difficulties.sarge.name": "Sarge",
+  "difficulties.sarge.label": "HP",
+  "difficulties.custom_character.label": "HP"
 }

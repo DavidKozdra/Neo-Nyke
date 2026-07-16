@@ -475,5 +475,15 @@
   "moves.ghost_ball.desc": "Maintenez la charge, puis relâchez un orbe spectral qui poursuit la souris et traverse les ennemis. Il rétrécit et s'affaiblit avec le temps et à chaque coup jusqu'à disparaître.",
   "moves.holy_eye_beams.name": "Faisceaux du Saint-Œil",
   "moves.holy_eye_beams.desc": "Canalisez les rayons sacrés jumeaux de vos yeux. Chaque lancer a une chance de vous soigner de 5 % de vos PV maximum.",
-  "sounds.break_furniture.label": "Casser les meubles"
+  "sounds.break_furniture.label": "Casser les meubles",
+  "moves.titan_hammer.name": "Marteau Titan",
+  "moves.titan_hammer.desc": "Invoque un marteau géant qui suit le curseur. Cliquez pour l'abattre et infliger un lourd impact de zone. Dure 8s.",
+  "difficulties.easy.name": "Facile",
+  "difficulties.easy.description": "Facile utilise une courbe d'ennemis plus légère et davantage de reliques.",
+  "difficulties.gelleh.name": "Gelleh",
+  "difficulties.mooggy.name": "Mooggy",
+  "difficulties.turtle_boy.name": "Garçon Tortue",
+  "difficulties.sarge.name": "Sarge",
+  "difficulties.sarge.label": "HP",
+  "difficulties.custom_character.label": "HP"
 }

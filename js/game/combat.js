@@ -268,6 +268,7 @@
     // smash moves
     crimson_smash:    { base: 46, mult: 'aoeDamageMultiplier' },
     hammer_smash:     { base: 46, mult: 'aoeDamageMultiplier' },
+    titan_hammer:     { base: 56, mult: 'aoeDamageMultiplier' },
     chaos_burst:      { base: 18, mult: 'aoeDamageMultiplier' },
     fire_circle:      { base: 18, mult: 'aoeDamageMultiplier', tick: true },
     kicky_kick:       { base: 184 },
@@ -1353,6 +1354,10 @@
     }
     if (move === 'holy_turrets') {
       castHolyTurrets();
+      return;
+    }
+    if (move === 'titan_hammer') {
+      castTitanHammer();
       return;
     }
     const anvilSmashRange = Neo.getAnvilMoveBonus(move, 'range');
@@ -2748,6 +2753,125 @@
     blades.length = write;
   }
 
+  const TITAN_HAMMER_SWING_COOLDOWN = 1;
+  const TITAN_HAMMER_FOLLOW_RADIUS = 120;
+  // The hammer despawns once 90% of its own recharge has elapsed, so it's
+  // gone a beat before the player can summon another one rather than lingering
+  // at max duration right up to the recast.
+  const TITAN_HAMMER_LIFE_RATIO = 0.7;
+  // Only the first two clicks per summon trigger the big AOE slam; after that
+  // it keeps hovering (and still chips away via contact damage) but can't slam
+  // again until the player recasts smash.
+  const TITAN_HAMMER_MAX_SWINGS = 2;
+  // Passive contact damage: touching the hammer head while it hovers/follows
+  // ticks a much smaller hit than a full slam, on a per-enemy cooldown so it
+  // can't melt a single target instantly.
+  const TITAN_HAMMER_CONTACT_COOLDOWN = 0.35;
+  const TITAN_HAMMER_CONTACT_DAMAGE_RATIO = 0.18;
+
+  // Sarge alt-smash: summon a giant hammer that hovers near the cursor. Click
+  // to slam it down for a heavy AOE crush; it stays out until its timer runs
+  // down or the player casts smash again.
+  function castTitanHammer() {
+    const itemStats = Neo.getItemStats();
+    const anvilBonus = Neo.getAnvilMoveBonus('titan_hammer', 'damage') || 0;
+    const baseDamage = (Neo.godTimer > 0 ? 90 : 70) + anvilBonus;
+    const damage = Math.max(1, Math.round(baseDamage * (itemStats.aoeDamageMultiplier || 1)));
+    const cooldownDuration = Neo.getSmashCooldownDuration(Neo.getAttackSpeedValue());
+    Neo.titanHammer = {
+      x: Neo.player.x,
+      y: Neo.player.y,
+      angle: 0,
+      life: cooldownDuration * TITAN_HAMMER_LIFE_RATIO,
+      swingCooldown: 0,
+      swinging: 0, // 0..1 progress through an active slam animation
+      damage,
+      radius: (Neo.ATTACKS.smash.radius || 130) * (itemStats.aoeRadiusMultiplier || 1) * 0.75,
+      swingsLeft: TITAN_HAMMER_MAX_SWINGS,
+      contactCooldowns: new Map(),
+      _wasDown: !!Neo.mouse.down || !!Neo.mouse.downQueued,
+    };
+    Neo.tutorialController?.signal?.('attack', { action: 'smash' });
+    Neo.ringBurst(Neo.player.x, Neo.player.y, 26, '#7da3ff', 0.4);
+  }
+
+  // Per-frame Titan Hammer behaviour: hover toward the mouse, and slam down
+  // whenever the player clicks (a fresh left-click, not a held button).
+  function updateTitanHammer(dt) {
+    const hammer = Neo.titanHammer;
+    if (!hammer) return;
+    if (!Neo.player) { Neo.titanHammer = null; return; }
+
+    hammer.life -= dt;
+    if (hammer.life <= 0) { Neo.titanHammer = null; return; }
+
+    // Hover at a fixed reach out in front of the player, steered by the mouse.
+    const mouseAim = Neo.angleToMouse();
+    hammer.angle = Neo.turnAngleToward ? Neo.turnAngleToward(hammer.angle, mouseAim, 10 * dt) : mouseAim;
+    const targetX = Neo.player.x + Math.cos(hammer.angle) * TITAN_HAMMER_FOLLOW_RADIUS;
+    const targetY = Neo.player.y + Math.sin(hammer.angle) * TITAN_HAMMER_FOLLOW_RADIUS;
+    hammer.x += (targetX - hammer.x) * Math.min(1, dt * 12);
+    hammer.y += (targetY - hammer.y) * Math.min(1, dt * 12);
+
+    if (hammer.swingCooldown > 0) hammer.swingCooldown -= dt;
+    if (hammer.swinging > 0) {
+      hammer.swinging = Math.max(0, hammer.swinging - dt * 4.5);
+    }
+
+    // Fresh click (edge-triggered): compare against last frame's button state
+    // ourselves rather than relying on Neo.mouse.downQueued, since that flag
+    // is already consumed earlier in the frame by the melee-attack input
+    // handling (LMB doubles as both melee and, while the hammer is out, smash).
+    const mouseDown = !!Neo.mouse.down || !!Neo.mouse.downQueued;
+    const clicked = mouseDown && !hammer._wasDown;
+    hammer._wasDown = mouseDown;
+    if (clicked && hammer.swingCooldown <= 0 && hammer.swingsLeft > 0) {
+      hammer.swingCooldown = TITAN_HAMMER_SWING_COOLDOWN;
+      hammer.swinging = 1;
+      hammer.swingsLeft -= 1;
+      Neo.addTrauma?.(0.6, hammer.angle, 18);
+      Neo.addHitstop?.(0.05);
+      Neo.ringBurst(hammer.x, hammer.y, hammer.radius - 20, '#7da3ff', 0.35);
+      Neo.spawnAoeShockwave(hammer.x, hammer.y, hammer.radius, '#7da3ff', 'heavy');
+      Neo.playSfx?.('aoe');
+      Neo.hitPvpPlayer2InRadius?.(hammer.x, hammer.y, hammer.radius, hammer.damage, 280, 'pvp_p1_smash');
+      Neo.forEachEnemyNearCircle?.(hammer.x, hammer.y, hammer.radius, enemy => {
+        if (!enemy || enemy.dead) return;
+        const angle = Neo.angleBetween(hammer, enemy);
+        hitEnemy(enemy, hammer.damage, angle, 300, '#7da3ff', { melee: true });
+        enemy.stun = Math.max(Number(enemy.stun || 0), 0.6);
+      });
+      if (typeof Neo.forEachDestructibleNearCircle === 'function') {
+        Neo.forEachDestructibleNearCircle(hammer.x, hammer.y, hammer.radius + COMBAT_SPATIAL_PADDING, prop => {
+          if (prop.broken || prop.hidden) return;
+          if (Neo.dist(hammer.x, hammer.y, prop.x, prop.y) > hammer.radius + (prop.r || 12)) return;
+          Neo.damageDestructible(prop, 2);
+        });
+      }
+    }
+
+    // Passive contact damage: the hammer head still hurts to touch even once
+    // its slams are spent, on a per-enemy cooldown so standing next to it
+    // doesn't melt a target instantly.
+    if (hammer.contactCooldowns.size) {
+      hammer.contactCooldowns.forEach((value, key) => {
+        const next = value - dt;
+        if (next <= 0) hammer.contactCooldowns.delete(key);
+        else hammer.contactCooldowns.set(key, next);
+      });
+    }
+    const headRadius = hammer.radius * 0.32;
+    const contactDamage = Math.max(1, Math.round(hammer.damage * TITAN_HAMMER_CONTACT_DAMAGE_RATIO));
+    Neo.forEachEnemyNearCircle?.(hammer.x, hammer.y, headRadius + 80, enemy => {
+      if (!enemy || enemy.dead) return;
+      if (Neo.dist(hammer.x, hammer.y, enemy.x, enemy.y) > headRadius + enemy.r) return;
+      if (hammer.contactCooldowns.has(enemy)) return;
+      hammer.contactCooldowns.set(enemy, TITAN_HAMMER_CONTACT_COOLDOWN);
+      const angle = Neo.angleBetween(hammer, enemy);
+      hitEnemy(enemy, contactDamage, angle, 120, '#9bb8ff', { melee: true });
+    });
+  }
+
   // Two lightning blades thrown straight ahead by the spear jab.
   function spawnSpearBlades(angle) {
     const itemStats = Neo.getItemStats();
@@ -3640,11 +3764,12 @@
       enemy.stun = Math.max(Number(enemy.stun || 0), 0.62);
       Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 18, life: 0.48, text: 'SHOCK', c: '#9adfff' });
     }
-    // Copper Penny: lightning hits build a Static charge on the target. One stack
-    // per hit (it stacks well), refreshing the duration. The DoT and the arc to
-    // nearby foes are handled in updateEnemyStatuses.
-    if (copperPennyStacks > 0 && !options.noStatic) {
-      applyStatic(enemy, 1, 4);
+    // Every lightning hit builds a Static charge on the target — one stack per
+    // hit (it stacks well), refreshing the duration. The DoT and the arc to
+    // nearby foes are handled in updateEnemyStatuses. Copper Penny stacks add
+    // bonus damage (above) plus extra Static stacks per hit on top of the base.
+    if (options.lightning && !options.noStatic) {
+      applyStatic(enemy, 1 + copperPennyStacks, 4);
     }
     window.achievementEvents?.emit('damage:dealt', { amount: dealt });
     rollAndApplyStatus(enemy, 'bleed', options.bleedChance, Number(options.bleedStacks || 1), Number(options.bleedDuration || 4), applyBleed);
@@ -4643,6 +4768,14 @@
       Neo.pickups = Neo.pickups.filter(pickup => pickup.type !== 'secret_boss_chest');
       Neo.pickups.push({ x: enemy.x, y: enemy.y, type: 'secret_boss_chest' });
       Neo.spawnParticle({ x: enemy.x, y: enemy.y - 40, life: 1.4, text: "BANE DEFEATED", c: '#c9aaff' });
+      Neo.metaProgress.bowmanBaneDefeats = Number(Neo.metaProgress.bowmanBaneDefeats || 0) + 1;
+      if (!Neo.metaProgress.unlockedCharacters.includes('sarge')) {
+        Neo.metaProgress.unlockedCharacters.push('sarge');
+        Neo.spawnParticle({ x: enemy.x, y: enemy.y - 60, life: 2.2, text: 'SARGE UNLOCKED!', c: '#ffd24a' });
+        Neo.recordCharacterUnlock?.('sarge');
+      }
+      Neo.persistMetaSoon();
+      Neo.refreshMenuState();
       Neo.updateObjective();
       Neo.scheduleRunSave();
     }
@@ -5340,6 +5473,8 @@
   Neo.spawnChaosBlast = spawnChaosBlast;
   Neo.castBladeOfJustice = castBladeOfJustice;
   Neo.updateJusticeBlades = updateJusticeBlades;
+  Neo.castTitanHammer = castTitanHammer;
+  Neo.updateTitanHammer = updateTitanHammer;
   Neo.updateSkySwords = updateSkySwords;
   Neo.castSmiteChain = castSmiteChain;
   Neo.findNearestSmiteTarget = findNearestSmiteTarget;

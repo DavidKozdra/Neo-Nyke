@@ -29,7 +29,7 @@ export function resumeGame() {
       bestCoins: 0,
       bestEndlessWave: 0,
       unlockedItems: [],
-      unlockedCharacters: ['princess', 'thorn_knight', 'metao', 'turtle_boy', 'sarge'],
+      unlockedCharacters: ['princess', 'thorn_knight', 'metao'],
       unlockedChallenges: [],
       selectedDifficulty: 'medium',
       selectedChallenges: [],
@@ -38,6 +38,7 @@ export function resumeGame() {
       customCharacters: normalizeCustomCharactersSettings(),
       godsKilled: 0,
       mooggyDefeats: 0,
+      bowmanBaneDefeats: 0,
       loopCrystals: 0,
       unlockedLegacy: [],
       tutorialCompleted: false,
@@ -476,23 +477,40 @@ export function resumeGame() {
     return false;
   }
 
-  // Every non-custom character except Sarge himself. Sarge is the "old guard"
-  // reward, so the tutorial can only be replayed as Sarge once the player has
-  // unlocked the rest of the roster.
-  const SARGE_TUTORIAL_PREREQS = ['princess', 'thorn_knight', 'metao', 'gelleh', 'mooggy', 'turtle_boy'];
-
-  function hasAllSargeTutorialPrereqs() {
-    const unlocked = new Set(Neo.metaProgress?.unlockedCharacters || []);
-    if (Number(Neo.metaProgress?.godsKilled || 0) > 0) unlocked.add('gelleh');
-    if (Number(Neo.metaProgress?.mooggyDefeats || 0) >= 3) unlocked.add('mooggy');
-    return SARGE_TUTORIAL_PREREQS.every(key => unlocked.has(key));
+  // Sarge is the "old guard" reward: locked until the player has defeated
+  // Bowman's Bane at least once, including for the tutorial replay.
+  function hasSargeUnlockPrereq() {
+    return Number(Neo.metaProgress?.bowmanBaneDefeats || 0) > 0;
   }
 
-  // The tutorial may not be played as Sarge until the rest of the roster is
-  // unlocked. This only gates the *tutorial* — Sarge stays freely playable in
-  // normal runs.
+  // The tutorial may not be played as Sarge until he's unlocked.
   function isSargeTutorialBlocked() {
-    return isReplayTutorialRequested() && !hasAllSargeTutorialPrereqs();
+    return isReplayTutorialRequested() && !hasSargeUnlockPrereq();
+  }
+
+  // Custom character creation is a reward for completing the roster: locked
+  // until every base (non-custom) character has been unlocked.
+  function hasAllCharactersUnlocked() {
+    const unlocked = new Set(Neo.metaProgress?.unlockedCharacters || ['princess', 'thorn_knight', 'metao']);
+    if (Number(Neo.metaProgress?.godsKilled || 0) > 0) unlocked.add('gelleh');
+    if (Number(Neo.metaProgress?.mooggyDefeats || 0) >= 3) unlocked.add('mooggy');
+    if (Number(Neo.metaProgress?.bowmanBaneDefeats || 0) > 0) unlocked.add('sarge');
+    const baseKeys = Object.keys(Neo.CHARACTER_DEFS || {}).filter(key => key !== 'custom_character');
+    return baseKeys.every(key => unlocked.has(key));
+  }
+
+  // Turtle Boy unlocks the moment the player has his signature weapon and
+  // laser equipped at the same time: Extending Staff + Turtle Wave.
+  function checkTurtleBoyUnlock() {
+    if (!Neo.player) return;
+    if (!Neo.metaProgress || Neo.metaProgress.unlockedCharacters?.includes('turtle_boy')) return;
+    if (Neo.player.equippedWeapon !== 'extending_staff') return;
+    if (Neo.player.equippedMoves?.laser !== 'turtle_wave') return;
+    Neo.metaProgress.unlockedCharacters.push('turtle_boy');
+    Neo.spawnParticle?.({ x: Neo.player.x, y: Neo.player.y - 34, life: 2.2, text: 'TURTLE BOY UNLOCKED!', c: '#6ee7a0' });
+    Neo.recordCharacterUnlock?.('turtle_boy');
+    Neo.persistMetaSoon();
+    Neo.refreshMenuState();
   }
 
   // Offer the green main-menu tutorial button on the first menu visit, then at
@@ -1030,12 +1048,13 @@ export function resumeGame() {
         const unlocked = new Set(Neo.metaProgress.unlockedCharacters || ['princess', 'thorn_knight', 'metao']);
         if (Neo.metaProgress.godsKilled > 0) unlocked.add('gelleh');
         if (Number(Neo.metaProgress.mooggyDefeats || 0) >= 3) unlocked.add('mooggy');
+        if (Number(Neo.metaProgress.bowmanBaneDefeats || 0) > 0) unlocked.add('sarge');
         getCustomCharacterKeys().forEach(key => unlocked.add(key));
-        // Persist the derived unlocks back into the saved list. Gelleh/Mooggy were only
-        // ever re-derived from the godsKilled/mooggyDefeats counters at load and never
-        // written back, so adding new always-unlocked starters (turtle_boy, sarge) made
-        // the earned unlocks look lost whenever those counters didn't survive. Once an
-        // earned character is recorded here it stays unlocked regardless of the counters.
+        // Persist the derived unlocks back into the saved list. Gelleh/Mooggy/Sarge were
+        // only ever re-derived from their counters at load and never written back, so
+        // adding new always-unlocked starters (turtle_boy) made the earned unlocks look
+        // lost whenever those counters didn't survive. Once an earned character is
+        // recorded here it stays unlocked regardless of the counters.
         Neo.metaProgress.unlockedCharacters = normalizeUnlockedCharacters([...unlocked]);
         const preferredCharacter = String(Neo.metaProgress.selectedCharacter || Neo.chosenCharacter);
         Neo.chosenCharacter = unlocked.has(preferredCharacter) ? preferredCharacter : [...unlocked][0] || 'thorn_knight';
@@ -1106,9 +1125,7 @@ export function resumeGame() {
   }
 
   function normalizeUnlockedCharacters(input) {
-    // Turtle Boy and Sarge are knight-tier starters: always unlocked, including for
-    // existing saves (they get merged in on load via this fallback set).
-    const fallback = ['princess', 'thorn_knight', 'metao', 'turtle_boy', 'sarge'];
+    const fallback = ['princess', 'thorn_knight', 'metao'];
     if (!Array.isArray(input)) return fallback;
     const remapped = input.map(migrateCharacterKey);
     const chars = Object.keys(Neo.CHARACTER_DEFS).filter(name => remapped.includes(name));
@@ -2567,6 +2584,7 @@ export function resumeGame() {
     const ownedChallenges = getOwnedChallengeSet();
     if (Neo.metaProgress.godsKilled > 0) unlocked.add('gelleh');
     if (Number(Neo.metaProgress.mooggyDefeats || 0) >= 3) unlocked.add('mooggy');
+    if (Number(Neo.metaProgress.bowmanBaneDefeats || 0) > 0) unlocked.add('sarge');
     getCustomCharacterKeys().forEach(key => unlocked.add(key));
     const preferredCharacter = String(Neo.metaProgress.selectedCharacter || Neo.chosenCharacter);
     if (!Neo.charSelectPhase || Neo.charSelectPhase === 'p1') {
@@ -3666,6 +3684,7 @@ export function resumeGame() {
     Neo.justiceBlades = [];
     Neo.ghostBalls = [];
     Neo.skySwords = [];
+    Neo.titanHammer = null;
     Neo.activeBeamPaths = null;
     Neo.healingZoneCharging = false;
     Neo.healingZoneChargeTime = 0;
@@ -3941,8 +3960,10 @@ export function resumeGame() {
   Neo.isFirstRunTutorialEngaged = isFirstRunTutorialEngaged;
   Neo.consumeReplayTutorialRequest = consumeReplayTutorialRequest;
   Neo.isReplayTutorialRequested = isReplayTutorialRequested;
-  Neo.hasAllSargeTutorialPrereqs = hasAllSargeTutorialPrereqs;
+  Neo.hasSargeUnlockPrereq = hasSargeUnlockPrereq;
   Neo.isSargeTutorialBlocked = isSargeTutorialBlocked;
+  Neo.hasAllCharactersUnlocked = hasAllCharactersUnlocked;
+  Neo.checkTurtleBoyUnlock = checkTurtleBoyUnlock;
   Neo.formatControlLabel = formatControlLabel;
   Neo.getControlHint = getControlHint;
   Neo.getAscendControlHint = getAscendControlHint;

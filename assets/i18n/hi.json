@@ -475,5 +475,15 @@
   "moves.ghost_ball.desc": "चार्ज करने के लिए पकड़ें, फिर एक वर्णक्रमीय गोला छोड़ें जो माउस का पीछा करता है और दुश्मनों के बीच से गुजरता है। यह समय के साथ और हर प्रहार के साथ सिकुड़ता और कमजोर होता जाता है जब तक कि यह खत्म नहीं हो जाता।",
   "moves.holy_eye_beams.name": "पवित्र नेत्र किरणें",
   "moves.holy_eye_beams.desc": "अपनी आंखों से जुड़वां पवित्र किरणें प्रवाहित करें। प्रत्येक कास्ट के पास आपको 5% अधिकतम एचपी तक ठीक करने का मौका है।",
-  "sounds.break_furniture.label": "फर्नीचर तोड़ो"
+  "sounds.break_furniture.label": "फर्नीचर तोड़ो",
+  "moves.titan_hammer.name": "टाइटन हैमर",
+  "moves.titan_hammer.desc": "एक विशाल हथौड़ा बुलाएं जो कर्सर का पीछा करता है। भारी क्षेत्रीय प्रहार के लिए क्लिक करके इसे पटकें। 8 सेकंड तक रहता है।",
+  "difficulties.easy.name": "आसान",
+  "difficulties.easy.description": "आसान में हल्के शत्रु वक्र और अतिरिक्त अवशेष ड्रॉप होते हैं।",
+  "difficulties.gelleh.name": "गेल्लेह",
+  "difficulties.mooggy.name": "Mooggy",
+  "difficulties.turtle_boy.name": "कछुआ लड़का",
+  "difficulties.sarge.name": "सार्ज",
+  "difficulties.sarge.label": "HP",
+  "difficulties.custom_character.label": "HP"
 }

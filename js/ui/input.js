@@ -72,6 +72,7 @@ export const MOVE_DEFS = {
 
     crimson_smash: { key: 'crimson_smash', slot: 'smash', name: 'Crimson Smash', desc: 'Heavy area smash.' },
     hammer_smash: { key: 'hammer_smash', slot: 'smash', name: 'Hammer Smash', desc: 'Slam the war hammer down: a heavy shockwave that stuns and flings a cross of debris outward, up, down, left, and right.', exclusiveCharacter: 'sarge' },
+    titan_hammer: { key: 'titan_hammer', slot: 'smash', name: 'Titan Hammer', desc: 'Summon a giant hammer that follows the cursor. Click to smash it down for a heavy AOE crush. Lasts 8s.', exclusiveCharacter: 'sarge' },
     death_ball: { key: 'death_ball', slot: 'smash', name: 'Death Ball', desc: 'Hold to charge, then release a big blue energy ball toward the cursor. The longer you hold, the larger it grows and the more damage it deals.', exclusiveCharacter: 'turtle_boy' },
     turtle_powerup: { key: 'turtle_powerup', slot: 'smash', name: 'Turtle Power-Up', desc: 'Hold to charge a shell surge: on release, burst a small AOE at your feet, gain a barrier worth 25% of your current HP, and a temporary attack-speed & move-speed boost that grows the longer you charge.', exclusiveCharacter: 'turtle_boy' },
     mooggy_hairball: { key: 'mooggy_hairball', slot: 'smash', name: 'Hairball Blast', desc: 'Hack up a venomous hairball that bursts for high poison and freezes everything caught in it.', exclusiveCharacter: 'mooggy' },
@@ -2138,6 +2139,7 @@ export const MOVE_BASE_STATS = {
     hammer_throw:     { damage: 46,  cooldown: 2.20, range: 320 },
     lightning_cross:  { damage: 30,  cooldown: 5.50 },
     hammer_smash:     { damage: 58,  cooldown: 4.00, range: 150 },
+    titan_hammer:     { damage: 70,  cooldown: 6.50, duration: 8.0, range: 120 },
     death_ball:       { damage: 40,  cooldown: 5.00, range: 360 },
     turtle_powerup:   { damage: 36,  cooldown: 6.00, range: 110 },
     laser_shockwave:  { damage: 22,  cooldown: 2.60, range: 400 },

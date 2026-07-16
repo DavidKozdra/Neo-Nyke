@@ -475,5 +475,15 @@
   "moves.ghost_ball.desc": "Удерживайте, чтобы зарядиться, а затем выпустите призрачную сферу, которая преследует мышь и проходит сквозь врагов. Он сжимается и ослабевает с течением времени и с каждым ударом, пока не исчезнет.",
   "moves.holy_eye_beams.name": "Лучи святого глаза",
   "moves.holy_eye_beams.desc": "Направьте из своих глаз двойные святые лучи. Каждое применение может восстановить вам 5% от максимального запаса здоровья.",
-  "sounds.break_furniture.label": "Переломить мебель"
+  "sounds.break_furniture.label": "Переломить мебель",
+  "moves.titan_hammer.name": "Молот Титана",
+  "moves.titan_hammer.desc": "Призывает гигантский молот, следующий за курсором. Нажмите, чтобы обрушить его и нанести мощный урон по площади. Длится 8 сек.",
+  "difficulties.easy.name": "Лёгкий",
+  "difficulties.easy.description": "Лёгкий использует более пологую кривую сложности врагов и дополнительные реликвии.",
+  "difficulties.gelleh.name": "Геллех",
+  "difficulties.mooggy.name": "Mooggy",
+  "difficulties.turtle_boy.name": "Черепаший Мальчик",
+  "difficulties.sarge.name": "Сардж",
+  "difficulties.sarge.label": "HP",
+  "difficulties.custom_character.label": "HP"
 }

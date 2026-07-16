@@ -475,5 +475,15 @@
   "moves.ghost_ball.desc": "長押ししてチャージし、マウスを追いかけて敵を通過するスペクトルオーブを放ちます。それは時間の経過とともに、そして攻撃を受けるたびに縮小し、弱くなり、やがて消えていきます。",
   "moves.holy_eye_beams.name": "ホーリーアイビーム",
   "moves.holy_eye_beams.desc": "目からツインホーリービームを放ちます。各キャストは最大HPの5%を回復するチャンスがあります。",
-  "sounds.break_furniture.label": "家具の破壊"
+  "sounds.break_furniture.label": "家具の破壊",
+  "moves.titan_hammer.name": "タイタンハンマー",
+  "moves.titan_hammer.desc": "カーソルを追従する巨大なハンマーを召喚する。クリックで叩き落とし、広範囲に強力な打撃を与える。持続8秒。",
+  "difficulties.easy.name": "イージー",
+  "difficulties.easy.description": "イージーは敵の強さの上昇を緩やかにし、遺物のドロップを増やす。",
+  "difficulties.gelleh.name": "ゲレー",
+  "difficulties.mooggy.name": "Mooggy",
+  "difficulties.turtle_boy.name": "タートルボーイ",
+  "difficulties.sarge.name": "サージ",
+  "difficulties.sarge.label": "HP",
+  "difficulties.custom_character.label": "HP"
 }
