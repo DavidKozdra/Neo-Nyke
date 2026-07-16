@@ -2947,7 +2947,7 @@ export function createUIController(view) {
           const inventoryHtml = inventoryKeys.length
             ? inventoryKeys.map(key => {
               const count = Math.max(1, Math.round(Number(startingItems[key]) || 0));
-              const item = Neo.ITEM_DEFS[key] || {};
+              const item = Neo.itemRegistry?.get?.(key) || Neo.ITEM_DEFS[key] || {};
               const itemName = item.name || Neo.titleCase(String(key || '').replace(/_/g, ' '));
               const countText = count > 1 ? ` x${count}` : '';
               // Tooltip parity with the death screen: description on hover/focus.

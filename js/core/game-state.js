@@ -981,7 +981,17 @@ export function resumeGame() {
     // relics so runtime lookups (icons, rarity, tags, names, shop offers, save/load)
     // resolve scroll keys. Relic-only consumers iterate Neo.ITEM_KEYS, which excludes
     // scrolls, so this does not leak scrolls into relic pools or the relic codex.
-    const allDefs = { ...Neo.ITEM_DEFS, ...(Neo.SCROLL_DEFS || {}) };
+    const runtimeItemDefs = Object.fromEntries(
+      Object.entries(Neo.ITEM_DEFS || {}).map(([key, definition]) => [key, {
+        ...definition,
+        fullDescription: definition.description || '',
+        description: Neo.getItemShortDescription?.(definition)
+          || definition.shortDescription
+          || definition.description
+          || '',
+      }]),
+    );
+    const allDefs = { ...runtimeItemDefs, ...(Neo.SCROLL_DEFS || {}) };
     const factory = window.KozEngine?.Items?.itemFactory;
     if (factory?.createLibrary && factory?.createRegistryFromLibrary) {
       class RuntimeItem {
