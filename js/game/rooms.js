@@ -535,6 +535,10 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
     room.layoutChambers = [];
     addDoorFrames();
     Neo.applyRoomTemplate(room, template, { addWall, addPillar, setChambers });
+    if (room.type === 'anvil') {
+      room.structures.push({ kind: 'forge', x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 - 20, w: 48, h: 48 });
+      room.structures.push({ kind: 'anvil', x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 + 40, w: 40, h: 40 });
+    }
   }
 
   function decorateGardenRoomData(room) {

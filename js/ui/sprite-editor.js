@@ -12,11 +12,15 @@
   const PLAYABLE_KEYS = ['princess', 'thorn_knight', 'metao', 'gelleh', 'mooggy', 'turtle_boy', 'sarge'];
 
   const ENVIRONMENT_ASSET_FILES = [
+    { src: 'assets/sprites/env/anvil_0.png' },
+    { src: 'assets/sprites/env/barrel_0.png' },
     { src: 'assets/sprites/env/chair_0.png' },
     { src: 'assets/sprites/env/chair_1.png' },
     { src: 'assets/sprites/env/chest_0.png' },
     { src: 'assets/sprites/env/chest_a_b.png' },
+    { src: 'assets/sprites/env/forge_0.png' },
     { src: 'assets/sprites/env/ground_0.png' },
+    { src: 'assets/sprites/env/ladder_0.png' },
     { src: 'assets/sprites/env/pillar.png' },
     { src: 'assets/sprites/env/table_0.png' },
     { src: 'assets/sprites/env/table_1.png' },

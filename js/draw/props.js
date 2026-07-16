@@ -708,7 +708,13 @@
       if (prop.kind === 'pot') {
         Neo.drawEnvironmentTile('pot_clay', -24, -26, 48, 48);
       } else if (prop.kind === 'barrel') {
-        Neo.drawEnvironmentTile('barrel_oak', -24, -26, 48, 48);
+        const barrelImage = Neo.ENVIRONMENT_IMAGES?.barrel_0?.image;
+        if (barrelImage) {
+          Neo.ctx.imageSmoothingEnabled = false;
+          Neo.ctx.drawImage(barrelImage, -24, -26, 48, 48);
+        } else {
+          Neo.drawEnvironmentTile('barrel_oak', -24, -26, 48, 48);
+        }
       } else if (prop.kind === 'wall') {
         Neo.drawEnvironmentTile('wall_block', -26, -26, 52, 52);
         Neo.drawDestructibleBlockDamage?.(prop, 52, 52);
@@ -1092,18 +1098,26 @@
           }
         }
       } else if (pickup.type === 'ladder') {
-        Neo.ctx.strokeStyle = '#7dff9e';
-        Neo.ctx.shadowColor = '#7dff9e';
-        Neo.ctx.shadowBlur = 18;
-        Neo.ctx.lineWidth = 3;
-        Neo.ctx.strokeRect(-12, -16, 24, 32);
-        Neo.ctx.beginPath();
-        Neo.ctx.moveTo(-6, -12); Neo.ctx.lineTo(-6, 12);
-        Neo.ctx.moveTo(6, -12); Neo.ctx.lineTo(6, 12);
-        Neo.ctx.moveTo(-6, -6); Neo.ctx.lineTo(6, -6);
-        Neo.ctx.moveTo(-6, 0); Neo.ctx.lineTo(6, 0);
-        Neo.ctx.moveTo(-6, 6); Neo.ctx.lineTo(6, 6);
-        Neo.ctx.stroke();
+        const ladderImage = Neo.ENVIRONMENT_IMAGES?.ladder_0?.image;
+        if (ladderImage) {
+          Neo.ctx.imageSmoothingEnabled = false;
+          Neo.ctx.shadowColor = '#7dff9e';
+          Neo.ctx.shadowBlur = 18;
+          Neo.ctx.drawImage(ladderImage, -16, -16, 32, 32);
+        } else {
+          Neo.ctx.strokeStyle = '#7dff9e';
+          Neo.ctx.shadowColor = '#7dff9e';
+          Neo.ctx.shadowBlur = 18;
+          Neo.ctx.lineWidth = 3;
+          Neo.ctx.strokeRect(-12, -16, 24, 32);
+          Neo.ctx.beginPath();
+          Neo.ctx.moveTo(-6, -12); Neo.ctx.lineTo(-6, 12);
+          Neo.ctx.moveTo(6, -12); Neo.ctx.lineTo(6, 12);
+          Neo.ctx.moveTo(-6, -6); Neo.ctx.lineTo(6, -6);
+          Neo.ctx.moveTo(-6, 0); Neo.ctx.lineTo(6, 0);
+          Neo.ctx.moveTo(-6, 6); Neo.ctx.lineTo(6, 6);
+          Neo.ctx.stroke();
+        }
       } else if (pickup.type === 'jesterPortal' || pickup.type === 'adapterPortal') {
         const adapter = pickup.type === 'adapterPortal';
         // Per-type palette: jester is pink/chaos, adapter is violet/tech.
