@@ -56,11 +56,13 @@ export function drawWorldViewport(cam, vpX, vpW, vpH, vpY, pLabel, slot = null) 
     Neo.drawStructuresOverPlayer?.();
     if (!isDying) Neo.drawPlayerLaser();
     Neo.drawJusticeBlades?.();
+    Neo.drawGhostBalls?.();
     Neo.drawSkySwords?.();
     if (!isDying) Neo.drawHealingZoneChargeBar?.();
     if (!isDying) Neo.drawDeathBallChargeBar?.();
     if (!isDying) Neo.drawNimrodStompChargeBar?.();
     if (!isDying) Neo.drawLoveBombChargeBar?.();
+    if (!isDying) Neo.drawGhostBallChargeBar?.();
     if (isDying && Neo.playerDeathAnim) Neo.drawPlayerCorpseAnim(Neo.playerDeathAnim);
     sectionPerfStart = Neo.perfStart();
     Neo.drawParticles();

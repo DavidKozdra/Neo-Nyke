@@ -115,6 +115,7 @@
     sim.particles.length = 0;
     sim.projectiles.length = 0;
     sim.justiceBlades.length = 0;
+    sim.ghostBalls.length = 0;
     sim.skySwords.length = 0;
     sim.laser = {
       laserActive: false, laserMode: 'beam', laserTime: 0, laserTick: 0,
@@ -126,6 +127,7 @@
       deathBallCharging: false, deathBallChargeTime: 0, deathBallPowerUp: false,
       nimrodStompCharging: false, nimrodStompChargeTime: 0,
       loveBombCharging: false, loveBombChargeTime: 0,
+      ghostBallCharging: false, ghostBallChargeTime: 0,
     };
     sim.smashHeld = false;
     sim.dashHeld = false;
@@ -154,6 +156,7 @@
       particles: [],
       projectiles: [],
       justiceBlades: [],
+      ghostBalls: [],
       skySwords: [],
       cooldowns: {},
       mouse: { x: 0, y: 0, worldX: 0, worldY: 0, down: false, right: false, downQueued: false, rightQueued: false },
@@ -182,6 +185,7 @@
     Neo.particles = sim.particles;
     Neo.projectiles = sim.projectiles;
     Neo.justiceBlades = sim.justiceBlades;
+    Neo.ghostBalls = sim.ghostBalls;
     Neo.skySwords = sim.skySwords;
     Neo.cooldowns = sim.cooldowns;
     Neo.mouse = sim.mouse;
@@ -307,8 +311,10 @@
     try { Neo.updateHealingZoneCharge?.(dt); } catch (e) { /* demo-only guard */ }
     try { Neo.updateDeathBallCharge?.(dt); } catch (e) { /* demo-only guard */ }
     try { Neo.updateNimrodStompCharge?.(dt); } catch (e) { /* demo-only guard */ }
+    try { Neo.updateGhostBallCharge?.(dt); } catch (e) { /* demo-only guard */ }
     try { Neo.updateProjectiles?.(dt); } catch (e) { /* demo-only guard */ }
     try { Neo.updateJusticeBlades?.(dt); } catch (e) { /* demo-only guard */ }
+    try { Neo.updateGhostBalls?.(dt); } catch (e) { /* demo-only guard */ }
     try { Neo.updateSkySwords?.(dt); } catch (e) { /* demo-only guard */ }
     try { Neo.updateParticles?.(dt); } catch (e) { /* demo-only guard */ }
 
@@ -354,6 +360,7 @@
       Neo.drawPlayer?.();
       Neo.drawPlayerLaser?.();
       Neo.drawJusticeBlades?.();
+      Neo.drawGhostBalls?.();
       Neo.drawSkySwords?.();
       Neo.drawHealingZoneChargeBar?.();
       Neo.drawDeathBallChargeBar?.();

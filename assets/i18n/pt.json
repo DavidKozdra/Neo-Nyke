@@ -470,5 +470,10 @@
   "moves.princess_shield.name": "Escudo da Princesa",
   "moves.princess_shield.desc": "Levante uma barreira rosa que vale 40% do seu HP máximo. Lança-se automaticamente no momento em que seu HP cai abaixo de 15%, desde que esteja fora do tempo de recarga.",
   "moves.love_bomb_laser.name": "Bomba de Amor",
-  "moves.love_bomb_laser.desc": "Segure para carregar, depois solte uma bomba em forma de coração em direção ao cursor que explode em uma AOE rosa. Inimigos pegos na explosão têm uma chance de ficar \"Brilhantes\" (críticos garantidos por alguns segundos)."
+  "moves.love_bomb_laser.desc": "Segure para carregar, depois solte uma bomba em forma de coração em direção ao cursor que explode em uma AOE rosa. Inimigos pegos na explosão têm uma chance de ficar \"Brilhantes\" (críticos garantidos por alguns segundos).",
+  "moves.ghost_ball.name": "Bola Fantasma",
+  "moves.ghost_ball.desc": "Segure para carregar e, em seguida, solte um orbe espectral que persegue o mouse e passa pelos inimigos. Ele encolhe e enfraquece com o tempo e a cada golpe até desaparecer.",
+  "moves.holy_eye_beams.name": "Raios dos Olhos Sagrados",
+  "moves.holy_eye_beams.desc": "Canalize raios sagrados gêmeos de seus olhos. Cada lançamento tem uma chance de curar 5% do HP máximo.",
+  "sounds.break_furniture.label": "Quebrar móveis"
 }

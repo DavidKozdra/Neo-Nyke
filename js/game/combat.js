@@ -254,6 +254,7 @@
     turtle_wave:      { base: 34, mult: 'beamDamageMultiplier', tick: true },
     power_disks:      { base: 20, hits: 8, mult: 'beamDamageMultiplier' },
     blade_justice:    { base: 22, mult: 'beamDamageMultiplier' },
+    holy_eye_beams:   { base: 13, mult: 'beamDamageMultiplier', tick: true, hits: 2 },
     lightning_columns:{ base: 18 },
     god_sweep:        { base: 12, mult: 'beamDamageMultiplier', tick: true },
     nail_shot:        { base: 18, hits: 12, mult: 'beamDamageMultiplier' },
@@ -858,6 +859,18 @@
       Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 16, life: 0.5, text: 'CHARGING', c: '#ff6fa8' });
       return;
     }
+    // Ghost Ball (Turtle Boy alt laser) is hold-to-charge like Death Ball: spend
+    // the charge up front (deferred timer), then updateGhostBallCharge grows the
+    // meter each frame and summons a ball sized to the charge on release.
+    if (move === 'ghost_ball') {
+      if (Neo.ghostBallCharging) return; // already winding up
+      if (!Neo.spendSkillCharge('laser', rechargeTime, { deferTimer: true })) return;
+      Neo.tutorialController?.signal?.('attack', { action: 'laser' });
+      Neo.ghostBallCharging = true;
+      Neo.ghostBallChargeTime = 0;
+      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 16, life: 0.5, text: 'CHARGING', c: '#8fffe0' });
+      return;
+    }
     // Spend the laser charge and, on a successful fire, play the laser blast
     // one-shot. Gating on the spend result means held/sustained beams only
     // trigger the sound once at cast time, not every damage tick.
@@ -895,6 +908,18 @@
     if (move === 'blade_justice') {
       if (!spendLaserCharge()) return;
       castBladeOfJustice();
+      return;
+    }
+    if (move === 'holy_eye_beams') {
+      if (!spendLaserCharge({ deferTimer: true })) return;
+      Neo.laserActive = true;
+      Neo.laserMode = 'holy_eye_beams';
+      Neo.laserTime = Neo.getLaserCastDuration(move);
+      Neo.laserTick = 0;
+      Neo.turtleWaveHpTimer = 0;
+      Neo.laserAngle = Neo.angleToMouse();
+      // Heal chance rolls once per cast, not per beam/tick.
+      Neo.holyEyeBeamsHealRolled = false;
       return;
     }
     if (move === 'love_beam') {
@@ -1030,6 +1055,7 @@
       const mooggyBeamActive = move === 'mooggy_blood_beam';
       const wizardBeamActive = wizardLazerActive;
       const thornBeamsActive = Neo.laserMode === 'thorn_blood_beams';
+      const holyEyeBeamsActive = Neo.laserMode === 'holy_eye_beams';
       const range = Neo.getPlayerBeamRange(Neo.laserMode, move);
       // Wizard Lazer is visually and mechanically thick; Mooggy's blood beam is a
       // touch wider than a standard beam too.
@@ -1048,9 +1074,11 @@
                 ? 12
                 : thornBeamsActive
                   ? 8
-                  : Neo.godTimer > 0
-                    ? 16
-                    : Neo.ATTACKS.laser.damage;
+                  : holyEyeBeamsActive
+                    ? Neo.MOVE_BASE_STATS.holy_eye_beams.damage
+                    : Neo.godTimer > 0
+                      ? 16
+                      : Neo.ATTACKS.laser.damage;
       const anvilBeamBonus = Neo.getAnvilMoveBonus(move, 'damage');
       // Turtle Boy earns a free laser tier every 3 floors (see grantTurtleLaserStep):
       // each step adds +15% beam damage, stacking for the whole run.
@@ -1063,25 +1091,32 @@
         : Neo.laserMode === 'turtle_wave' ? 155
         : loveBeamActive ? 52
         : wizardBeamActive ? 150
+        : holyEyeBeamsActive ? 70
         : 60;
       const beamColor = loveBeamActive ? '#ff9ed6'
         : wizardBeamActive ? '#a64bff'
         : mooggyBeamActive ? '#ff2f57'
         : thornBeamsActive ? '#ff3b5c'
+        : holyEyeBeamsActive ? '#ffcc33'
         : '#f0f';
       const beamChainColor = loveBeamActive ? '#ffb8e0'
         : wizardBeamActive ? '#c79bff'
         : (mooggyBeamActive || thornBeamsActive) ? '#ff8aa0'
+        : holyEyeBeamsActive ? '#ffe08a'
         : '#d890ff';
       const hitOptions = anvilCritBonus > 0 ? { critBonus: anvilCritBonus, beamFx: true } : { beamFx: true };
       const bloodBeamActive = move === 'blood_beam';
       let loveBeamHits = 0;
+      let holyEyeBeamHits = 0;
       // Build the set of beam paths to apply this tick. Thorn's Infinite Blood
-      // Beam fires four bleeding beams fanned around the aim direction; everything
-      // else is a single beam down the aim line.
+      // Beam fires four bleeding beams fanned around the aim direction; Holy Eye
+      // Beams fires a pair of parallel beams (twin eyes); everything else is a
+      // single beam down the aim line.
       const beamAngles = thornBeamsActive
         ? [angle - 0.32, angle - 0.11, angle + 0.11, angle + 0.32]
-        : [angle];
+        : holyEyeBeamsActive
+          ? [angle - 0.07, angle + 0.07]
+          : [angle];
       const beamPaths = beamAngles.map(a =>
         Neo.buildRicochetBeamPath(Neo.player.x, Neo.player.y, a, range, Neo.getPlayerBeamBounceCount(Neo.laserMode)));
       Neo.activeBeamPaths = beamPaths; // exposed for the renderer (multi-beam draw)
@@ -1106,6 +1141,7 @@
             thornBeamsActive ? { ...hitOptions, skipDrainRoll: true } : hitOptions);
           chainBeamHit(enemy, beamDamage, hitSegment.angle, beamChainColor);
           if (loveBeamActive) loveBeamHits += 1;
+          if (holyEyeBeamsActive) holyEyeBeamHits += 1;
           if (bloodBeamActive && Neo.rng() < 0.05) applyBleed(enemy, 1, 3.2);
           if (bloodBeamActive && Neo.rng() < 0.08) applyDarkDrain(enemy, 1, 3.4);
           // Thorn's beams bleed hard — that's their whole identity.
@@ -1128,6 +1164,17 @@
         const gained = Neo.applyPlayerHealing(heal);
         if (gained > 0) Neo.spawnHealPopup(Neo.player.x + Neo.rand(-6, 6), Neo.player.y - 22, gained, { color: '#ff9ed6' });
         Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 26, life: 0.22, text: 'LOVE', c: '#ff9ed6' });
+      }
+      // Holy Eye Beams: one 5%-max-HP heal chance per cast (not per beam/tick),
+      // rolled the first time either beam connects.
+      if (holyEyeBeamsActive && holyEyeBeamHits > 0 && !Neo.holyEyeBeamsHealRolled) {
+        Neo.holyEyeBeamsHealRolled = true;
+        if (Neo.rng() < 0.25) {
+          const heal = Neo.scalePlayerHealing(Neo.player.maxHp * 0.05);
+          const gained = Neo.applyPlayerHealing(heal);
+          if (gained > 0) Neo.spawnHealPopup(Neo.player.x + Neo.rand(-6, 6), Neo.player.y - 22, gained, { color: '#ffcc33' });
+          Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 26, life: 0.3, text: 'HOLY', c: '#ffcc33' });
+        }
       }
     }
     if (Neo.laserTime <= 0) {
@@ -1177,6 +1224,7 @@
   const NIMROD_STOMP_MAX_CHARGE = 5; // charge units required for a full-power stomp
   const NIMROD_STOMP_CHARGE_SPEED_MULTIPLIER = 4;
   const LOVE_BOMB_MAX_CHARGE = 5;    // charge units required for a full-size Love Bomb
+  const GHOST_BALL_MAX_CHARGE = 5;   // charge units required for a full-size Ghost Ball
   // Hold-to-charge moves (Healing Zone, Death Ball, Turtle Power-Up, Nimrod Stomp)
   // charge faster with attack speed, but only take a fraction of the bonus — full
   // 1:1 scaling would make charging trivial for a heavily-stacked build. At 0.4,
@@ -1679,6 +1727,149 @@
       Neo.queueHeldSkillRecharge?.('laser', Neo.getLaserCooldownDuration('love_bomb_laser', Neo.getAttackSpeedValue()));
       Neo.loveBombCharging = false;
       Neo.loveBombChargeTime = 0;
+    }
+  }
+
+  // Drives the Ghost Ball charge (mirrors updateDeathBallCharge): attack speed
+  // scales charge gain, release summons a ghost ball sized to the accumulated
+  // charge.
+  function updateGhostBallCharge(dt) {
+    if (!Neo.ghostBallCharging) return;
+    if (!Neo.player || Neo.gameState !== 'play') {
+      Neo.ghostBallCharging = false;
+      Neo.queueHeldSkillRecharge?.('laser', Neo.getLaserCooldownDuration('ghost_ball', Neo.getAttackSpeedValue()));
+      return;
+    }
+    const chargeSpeed = getChargeSpeedAttackBonus();
+    Neo.ghostBallChargeTime = Math.min(
+      GHOST_BALL_MAX_CHARGE,
+      Number(Neo.ghostBallChargeTime || 0) + dt * chargeSpeed
+    );
+    const atMax = Neo.ghostBallChargeTime >= GHOST_BALL_MAX_CHARGE;
+    spawnChargeMotes(Neo.ghostBallChargeTime / GHOST_BALL_MAX_CHARGE, '#8fffe0', '#e0fff6');
+    if (!Neo.isMouseActionHeld?.('laser') || atMax) {
+      const ratio = Neo.ghostBallChargeTime / GHOST_BALL_MAX_CHARGE;
+      castGhostBall(ratio);
+      // Cooldown doesn't start ticking until the ball itself fades away (see
+      // updateGhostBalls) — the slot stays "held" until then, same mechanism
+      // Love Bomb Laser's deferTimer uses for the charge-up phase.
+      Neo.ghostBallCharging = false;
+      Neo.ghostBallChargeTime = 0;
+    }
+  }
+
+  // Turtle Boy's Ghost Ball (alt laser): a spectral orb that drifts toward the
+  // mouse cursor, passing through enemies rather than dying on first contact.
+  // It shrinks a little every second, and shrinks (and weakens) more sharply on
+  // every enemy it hits, guttering out once it drops below its minimum size.
+  const GHOST_BALL_MIN_RADIUS = 8;    // below this the ball fizzles out
+  const GHOST_BALL_DECAY_PER_SEC = 3; // passive radius loss per second alive
+  const GHOST_BALL_HIT_DECAY = 6;     // extra radius lost on each enemy hit
+  function castGhostBall(chargeRatio = 0) {
+    if (!Neo.player) return;
+    const itemStats = Neo.getItemStats();
+    const charge = Neo.clamp(Number(chargeRatio) || 0, 0, 1);
+    const base = Neo.MOVE_BASE_STATS?.ghost_ball?.damage ?? 34;
+    const anvilBonus = Neo.getAnvilMoveBonus?.('ghost_ball', 'damage') || 0;
+    // Tap ~0.6x base, full charge ~2.2x base — same shape as Love Bomb Laser.
+    const damage = Math.max(1, Math.round((base + anvilBonus) * (0.6 + charge * 1.6) * (itemStats.beamDamageMultiplier || 1)));
+    const startRadius = (18 + charge * 22) * Number(itemStats.aoeRadiusMultiplier || 1); // 18px tap -> 40px full
+    const angle = Neo.angleToMouse();
+    if (!Array.isArray(Neo.ghostBalls)) Neo.ghostBalls = [];
+    Neo.ghostBalls.push({
+      x: Neo.player.x + Math.cos(angle) * (Neo.player.r + startRadius * 0.4),
+      y: Neo.player.y + Math.sin(angle) * (Neo.player.r + startRadius * 0.4),
+      vx: 0,
+      vy: 0,
+      radius: startRadius,
+      startRadius,
+      damage,
+      hitCooldowns: new Map(), // per-enemy re-hit gate so a slow ball doesn't melt one target every frame
+      animSeed: Neo.rand(0, Math.PI * 2, 'fx'),
+    });
+    Neo.ringBurst(Neo.player.x, Neo.player.y, startRadius * 0.7, '#8fffe0', 0.5);
+    Neo.playSfx?.('lazer_blast');
+  }
+
+  // Per-frame Ghost Ball behaviour: drift toward the mouse, decay over time,
+  // damage enemies on overlap (shrinking further on each hit), and despawn once
+  // too small to matter.
+  function updateGhostBalls(dt) {
+    const balls = Neo.ghostBalls;
+    if (!Array.isArray(balls) || balls.length === 0) return;
+    if (!Neo.player) { balls.length = 0; return; }
+    const GHOST_BALL_SPEED = 300;
+    const GHOST_BALL_ACCEL = 6;
+    let write = 0;
+    for (let read = 0; read < balls.length; read += 1) {
+      const ball = balls[read];
+      // Passive shrink over time.
+      ball.radius -= GHOST_BALL_DECAY_PER_SEC * dt;
+      if (ball.radius < GHOST_BALL_MIN_RADIUS) continue; // fizzled out, drop it
+
+      // Chase the mouse cursor's world position, easing toward it rather than
+      // snapping — reads as a ghost drifting, not a rigid homing missile.
+      const targetX = Neo.mouse.worldX;
+      const targetY = Neo.mouse.worldY;
+      const dx = targetX - ball.x;
+      const dy = targetY - ball.y;
+      const dist = Math.hypot(dx, dy) || 1;
+      const desiredVx = (dx / dist) * GHOST_BALL_SPEED;
+      const desiredVy = (dy / dist) * GHOST_BALL_SPEED;
+      ball.vx += (desiredVx - ball.vx) * Math.min(1, GHOST_BALL_ACCEL * dt);
+      ball.vy += (desiredVy - ball.vy) * Math.min(1, GHOST_BALL_ACCEL * dt);
+      ball.x += ball.vx * dt;
+      ball.y += ball.vy * dt;
+
+      // Decay per-enemy hit cooldowns.
+      if (ball.hitCooldowns.size) {
+        ball.hitCooldowns.forEach((value, key) => {
+          const next = value - dt;
+          if (next <= 0) ball.hitCooldowns.delete(key);
+          else ball.hitCooldowns.set(key, next);
+        });
+      }
+
+      // Damage is scaled to how much of its starting size the ball has left, so
+      // a ball that's chewed through several targets hits progressively softer.
+      const sizeRatio = Neo.clamp(ball.radius / ball.startRadius, 0, 1);
+      const currentDamage = Math.max(1, Math.round(ball.damage * sizeRatio));
+      Neo.forEachEnemyNearCircle?.(ball.x, ball.y, ball.radius + 80, enemy => {
+        if (ball.radius < GHOST_BALL_MIN_RADIUS) return;
+        const hitRadius = ball.radius + enemy.r;
+        if (Neo.dist(ball.x, ball.y, enemy.x, enemy.y) > hitRadius) return;
+        if (ball.hitCooldowns.has(enemy)) return;
+        ball.hitCooldowns.set(enemy, 0.35);
+        const hitAngle = Neo.angleBetween(ball, enemy);
+        hitEnemy(enemy, currentDamage, hitAngle, 140, '#8fffe0', { lightning: false });
+        // Every hit chips a chunk off the ball, on top of its passive decay.
+        ball.radius -= GHOST_BALL_HIT_DECAY;
+      });
+      // Ghost Ball also smashes through pots, crates, and breakable walls.
+      if (typeof Neo.forEachDestructibleNearCircle === 'function') {
+        Neo.forEachDestructibleNearCircle(ball.x, ball.y, ball.radius + COMBAT_SPATIAL_PADDING, prop => {
+          if (ball.radius < GHOST_BALL_MIN_RADIUS) return;
+          if (prop.broken || prop.hidden) return;
+          if (Neo.dist(ball.x, ball.y, prop.x, prop.y) > ball.radius + (prop.r || 12)) return;
+          if (ball.hitCooldowns.has(prop)) return;
+          ball.hitCooldowns.set(prop, 0.4);
+          Neo.damageDestructible(prop, 2);
+        });
+      }
+
+      if (Neo.nextRandom('fx') < 0.4) {
+        Neo.spawnParticle({ x: ball.x, y: ball.y, life: 0.22, c: '#8fffe0', spark: true, size: 2 });
+      }
+
+      if (ball.radius < GHOST_BALL_MIN_RADIUS) continue; // shrank below the floor this frame — drop it
+      balls[write++] = ball;
+    }
+    balls.length = write;
+    // The laser slot's recharge starts only once the ball has actually faded
+    // away (not when it was thrown) — see the deferred hold in tryLaser/
+    // updateGhostBallCharge, resolved here just like a held-beam's endActiveLaser.
+    if (write === 0 && !Neo.ghostBallCharging) {
+      Neo.queueHeldSkillRecharge?.('laser', Neo.getLaserCooldownDuration('ghost_ball', Neo.getAttackSpeedValue()));
     }
   }
 
@@ -5160,9 +5351,13 @@
   Neo.updateDeathBallCharge = updateDeathBallCharge;
   Neo.updateNimrodStompCharge = updateNimrodStompCharge;
   Neo.updateLoveBombCharge = updateLoveBombCharge;
+  Neo.castGhostBall = castGhostBall;
+  Neo.updateGhostBallCharge = updateGhostBallCharge;
+  Neo.updateGhostBalls = updateGhostBalls;
   Neo.NIMROD_STOMP_MAX_CHARGE = NIMROD_STOMP_MAX_CHARGE;
   Neo.DEATH_BALL_MAX_CHARGE = DEATH_BALL_MAX_CHARGE;
   Neo.LOVE_BOMB_MAX_CHARGE = LOVE_BOMB_MAX_CHARGE;
+  Neo.GHOST_BALL_MAX_CHARGE = GHOST_BALL_MAX_CHARGE;
   Neo.spawnChargeMotes = spawnChargeMotes;
   Neo.TURTLE_POWERUP_CHARGE_SPEED_MULTIPLIER = TURTLE_POWERUP_CHARGE_SPEED_MULTIPLIER;
   Neo.castFireCircle = castFireCircle;

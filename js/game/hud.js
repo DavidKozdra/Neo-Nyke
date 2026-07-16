@@ -757,6 +757,7 @@
     Neo.hazards = [];
     Neo.skySwords = [];
     Neo.justiceBlades = [];
+    Neo.ghostBalls = [];
     Neo.activeBeamPaths = null;
     Neo.lastDamageSource = '';
     Neo.lastDamageSourceKey = '';

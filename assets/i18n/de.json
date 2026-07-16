@@ -470,5 +470,10 @@
   "moves.princess_shield.name": "Schild der Prinzessin",
   "moves.princess_shield.desc": "Erhöhe eine rosa Barriere im Wert von 40 % deiner maximalen HP. Wird automatisch gewirkt, sobald Ihre HP unter 15 % sinken, solange die Abklingzeit abgelaufen ist.",
   "moves.love_bomb_laser.name": "Liebesbombe",
-  "moves.love_bomb_laser.desc": "Halten zum Aufladen, dann eine herzförmige Bombe in Richtung des Cursors abfeuern, die in einer pinken AOE explodiert. Getroffene Gegner haben eine Chance, \"funkeln\" zu lassen (garantierte kritische Treffer für ein paar Sekunden)."
+  "moves.love_bomb_laser.desc": "Halten zum Aufladen, dann eine herzförmige Bombe in Richtung des Cursors abfeuern, die in einer pinken AOE explodiert. Getroffene Gegner haben eine Chance, \"funkeln\" zu lassen (garantierte kritische Treffer für ein paar Sekunden).",
+  "moves.ghost_ball.name": "Geisterball",
+  "moves.ghost_ball.desc": "Halten Sie die Taste gedrückt, um anzugreifen, und lassen Sie dann eine Spektralkugel los, die die Maus verfolgt und durch Feinde hindurchgeht. Es schrumpft und wird mit der Zeit und bei jedem Schlag schwächer, bis es verschwindet.",
+  "moves.holy_eye_beams.name": "Strahlen des Heiligen Auges",
+  "moves.holy_eye_beams.desc": "Kanalisiere zwei heilige Strahlen aus deinen Augen. Bei jedem Zauber besteht die Chance, dich um 5 % deiner maximalen HP zu heilen.",
+  "sounds.break_furniture.label": "Möbel kaputt machen"
 }

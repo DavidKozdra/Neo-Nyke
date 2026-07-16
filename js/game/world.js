@@ -624,6 +624,13 @@
         }
       },
     });
+    tickPlayerStatus('static', dt, {
+      interval: 0.5,
+      // % max HP per stack, mirroring poison/dark_drain — same shape as the
+      // enemy-side static tick, minus the neighbour-arc (nothing to spread to).
+      damage: stacks => Neo.player.maxHp * (0.004 + stacks * 0.003),
+      color: Neo.STATUS_STYLES.static.color,
+    });
     // Cold (slow) deals no damage-over-time; it just slows + makes brittle.
     // Player cold stores 15s of duration per stack, so visible stacks drop one
     // at a time as that budget decays.

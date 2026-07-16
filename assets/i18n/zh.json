@@ -470,5 +470,10 @@
   "moves.princess_shield.name": "公主之盾",
   "moves.princess_shield.desc": "升起一个价值最大生命值 40% 的粉色屏障。当你的 HP 低于 15% 时，只要它没有冷却，它就会自动施放。",
   "moves.love_bomb_laser.name": "爱心炸弹",
-  "moves.love_bomb_laser.desc": "按住蓄力，然后朝光标方向释放一枚心形炸弹，在粉色范围内（AOE）爆炸。被爆炸波及的敌人有几率被\"闪耀\"（几秒内必定暴击）。"
+  "moves.love_bomb_laser.desc": "按住蓄力，然后朝光标方向释放一枚心形炸弹，在粉色范围内（AOE）爆炸。被爆炸波及的敌人有几率被\"闪耀\"（几秒内必定暴击）。",
+  "moves.ghost_ball.name": "幽灵球",
+  "moves.ghost_ball.desc": "按住进行冲锋，然后释放一个光谱球来追逐鼠标并穿过敌人。随着时间的推移和每次撞击，它都会收缩和减弱，直到消失。",
+  "moves.holy_eye_beams.name": "圣眼光束",
+  "moves.holy_eye_beams.desc": "从你的眼睛中引导出双神圣的光束。每次施放都有几率治愈你最大生命值的 5%。",
+  "sounds.break_furniture.label": "打破家具"
 }

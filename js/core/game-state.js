@@ -1654,6 +1654,7 @@ export function resumeGame() {
     if (moveKey === 'god_sweep') return 1.45;
     if (moveKey === 'love_beam') return Math.max(0.1, Neo.MOVE_BASE_STATS.love_beam.duration + Neo.getAnvilMoveBonus('love_beam', 'duration'));
     if (moveKey === 'turtle_wave') return Math.max(0.1, Neo.MOVE_BASE_STATS.turtle_wave.duration + Neo.getAnvilMoveBonus('turtle_wave', 'duration'));
+    if (moveKey === 'holy_eye_beams') return Math.max(0.1, Neo.MOVE_BASE_STATS.holy_eye_beams.duration + Neo.getAnvilMoveBonus('holy_eye_beams', 'duration'));
     return Neo.godTimer > 0 ? 0.72 : Neo.ATTACKS.laser.duration;
   }
 
@@ -1817,7 +1818,13 @@ export function resumeGame() {
     // spent right before leaving 'play' without release) that would never recover.
     const smashChargingLive = !!(Neo.healingZoneCharging || Neo.deathBallCharging);
     const dashChargingLive = !!Neo.nimrodStompCharging;
-    const laserChargingLive = !!Neo.loveBombCharging;
+    // Ghost Ball's hold stays live for its whole flight, not just the charge-up
+    // phase — its recharge only starts once the ball itself fades (see
+    // updateGhostBalls), so the room-enter reconciler must not treat an
+    // in-flight ball's hold as orphaned.
+    const laserChargingLive = !!Neo.loveBombCharging
+      || !!Neo.ghostBallCharging
+      || (Array.isArray(Neo.ghostBalls) && Neo.ghostBalls.length > 0);
     Neo.MOVE_SLOTS.forEach(slot => {
       const state = Neo.cooldowns[slot] || createCooldownEntry(slot);
       const liveHold = (slot === 'smash' && smashChargingLive && state.holding > 0)
@@ -3657,6 +3664,7 @@ export function resumeGame() {
     clearRivalRumbleNextSpawn();
     Neo.projectiles = [];
     Neo.justiceBlades = [];
+    Neo.ghostBalls = [];
     Neo.skySwords = [];
     Neo.activeBeamPaths = null;
     Neo.healingZoneCharging = false;
@@ -3670,6 +3678,8 @@ export function resumeGame() {
     Neo.dashHeld = false;
     Neo.loveBombCharging = false;
     Neo.loveBombChargeTime = 0;
+    Neo.ghostBallCharging = false;
+    Neo.ghostBallChargeTime = 0;
     Neo.chests = [];
     Neo.pickups = [];
     Neo.destructibles = [];

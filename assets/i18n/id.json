@@ -470,5 +470,10 @@
   "moves.princess_shield.name": "Perisai Putri",
   "moves.princess_shield.desc": "Naikkan penghalang merah muda senilai 40% dari HP maksimal Anda. Ditransmisikan secara otomatis saat HP Anda turun di bawah 15%, selama cooldownnya tidak aktif.",
   "moves.love_bomb_laser.name": "Bom Cinta",
-  "moves.love_bomb_laser.desc": "Tahan untuk mengisi daya, lalu lepaskan bom berbentuk hati ke arah kursor yang meledak dalam AOE merah muda. Musuh yang terkena ledakan memiliki peluang untuk \"Berkilau\" (crit terjamin selama beberapa detik)."
+  "moves.love_bomb_laser.desc": "Tahan untuk mengisi daya, lalu lepaskan bom berbentuk hati ke arah kursor yang meledak dalam AOE merah muda. Musuh yang terkena ledakan memiliki peluang untuk \"Berkilau\" (crit terjamin selama beberapa detik).",
+  "moves.ghost_ball.name": "Bola Hantu",
+  "moves.ghost_ball.desc": "Tahan untuk mengisi daya, lalu lepaskan bola spektral yang mengejar mouse dan melewati musuh. Ia menyusut dan melemah seiring berjalannya waktu dan dengan setiap pukulan hingga menghilang.",
+  "moves.holy_eye_beams.name": "Sinar Mata Suci",
+  "moves.holy_eye_beams.desc": "Salurkan pancaran sinar suci kembar dari matamu. Setiap pemain berpeluang memulihkan 5% HP maksimal Anda.",
+  "sounds.break_furniture.label": "Hancurkan Furnitur"
 }
