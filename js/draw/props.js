@@ -1223,25 +1223,45 @@
         }
       } else if (pickup.type === 'ladder') {
         const ladderImage = Neo.ENVIRONMENT_IMAGES?.ladder_0?.image;
+        // Exit language matches the minimap: a fixed gold-backed plinth with the
+        // authored ladder sprite on top, instead of another floating pickup.
+        Neo.ctx.translate(0, -bob);
+        Neo.ctx.globalAlpha = 1;
+        Neo.ctx.fillStyle = 'rgba(0,0,0,.42)';
+        Neo.ctx.beginPath();
+        Neo.ctx.ellipse(0, 25, 34, 12, 0, 0, Math.PI * 2);
+        Neo.ctx.fill();
+        Neo.ctx.fillStyle = 'rgba(91,61,8,.9)';
+        Neo.ctx.strokeStyle = '#ffc638';
+        Neo.ctx.lineWidth = 3;
+        Neo.ctx.shadowColor = '#ffc638';
+        Neo.ctx.shadowBlur = 15;
+        Neo.ctx.beginPath();
+        Neo.ctx.roundRect(-27, -26, 54, 54, 6);
+        Neo.ctx.fill();
+        Neo.ctx.stroke();
+        Neo.ctx.shadowBlur = 0;
         if (ladderImage) {
           Neo.ctx.imageSmoothingEnabled = false;
-          Neo.ctx.shadowColor = '#7dff9e';
-          Neo.ctx.shadowBlur = 18;
-          Neo.ctx.drawImage(ladderImage, -16, -16, 32, 32);
+          Neo.ctx.shadowColor = '#fff0a0';
+          Neo.ctx.shadowBlur = 10;
+          Neo.ctx.drawImage(ladderImage, -22, -22, 44, 44);
         } else {
-          Neo.ctx.strokeStyle = '#7dff9e';
-          Neo.ctx.shadowColor = '#7dff9e';
-          Neo.ctx.shadowBlur = 18;
+          Neo.ctx.strokeStyle = '#fff0a0';
+          Neo.ctx.shadowColor = '#ffc638';
+          Neo.ctx.shadowBlur = 10;
           Neo.ctx.lineWidth = 3;
-          Neo.ctx.strokeRect(-12, -16, 24, 32);
           Neo.ctx.beginPath();
-          Neo.ctx.moveTo(-6, -12); Neo.ctx.lineTo(-6, 12);
-          Neo.ctx.moveTo(6, -12); Neo.ctx.lineTo(6, 12);
-          Neo.ctx.moveTo(-6, -6); Neo.ctx.lineTo(6, -6);
-          Neo.ctx.moveTo(-6, 0); Neo.ctx.lineTo(6, 0);
-          Neo.ctx.moveTo(-6, 6); Neo.ctx.lineTo(6, 6);
+          Neo.ctx.moveTo(-9, -18); Neo.ctx.lineTo(-9, 18);
+          Neo.ctx.moveTo(9, -18); Neo.ctx.lineTo(9, 18);
+          [-12, -4, 4, 12].forEach(py => { Neo.ctx.moveTo(-9, py); Neo.ctx.lineTo(9, py); });
           Neo.ctx.stroke();
         }
+        Neo.ctx.shadowBlur = 0;
+        Neo.ctx.fillStyle = '#fff1a8';
+        Neo.ctx.font = 'bold 10px system-ui';
+        Neo.ctx.textAlign = 'center';
+        Neo.ctx.fillText('EXIT', 0, 43);
       } else if (pickup.type === 'jesterPortal' || pickup.type === 'adapterPortal') {
         const adapter = pickup.type === 'adapterPortal';
         // Per-type palette: jester is pink/chaos, adapter is violet/tech.

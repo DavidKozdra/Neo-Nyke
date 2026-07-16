@@ -319,6 +319,7 @@
     // The sixth tuple value selects a pictured cell icon. The fifth remains a
     // compact fallback for environments where an authored PNG is unavailable.
     const roomTypeLegend = {
+      combat: ['combat', 'COMBAT', '#ff434f', 'square', '!', 'combat'],
       god: ['god', 'GOD', '#ffffff', 'square', 'GD', 'crown'],
       challenge: ['trial', 'TRIAL', '#d7f6ff', 'square', 'TR', 'trial'],
       boss: ['boss-room', 'BOSS', '#ff7a7a', 'square', 'BS', 'boss'],
@@ -450,12 +451,9 @@
     const drawRoomIcon = (icon, fallbackGlyph, x, y, roomExplored) => {
       const cx = x + size / 2;
       const cy = y + size / 2;
-      const inset = Math.max(2, Math.round(size * 0.12));
-      const drawSize = Math.max(8, size - inset * 2);
-      // Chest and ladder use intentionally simplified pixel silhouettes below.
-      // Their full 24px environment art lost its shape when cells responsively
-      // shrank; the anvil remains readable enough to use the authored sprite.
-      const environmentKey = icon === 'anvil' ? 'anvil_0' : '';
+      // Prefer authored environment art whenever that vocabulary exists. Canvas
+      // silhouettes below are fallbacks for an asset that failed to preload.
+      const environmentKey = icon === 'chest' ? 'chest_0' : icon === 'ladder' ? 'ladder_0' : icon === 'anvil' ? 'anvil_0' : '';
       const image = environmentKey ? Neo.ENVIRONMENT_IMAGES?.[environmentKey]?.image : null;
       Neo.ctx.save();
       Neo.ctx.globalAlpha = roomExplored ? 1 : 0.68;
@@ -465,11 +463,29 @@
         drawRoomGlyph('$', x, y, roomExplored);
         return;
       }
+      if (icon === 'combat') {
+        Neo.ctx.globalAlpha = roomExplored ? 1 : 0.68;
+        Neo.ctx.font = `900 ${Math.max(10, Math.round(size * 0.82))}px system-ui`;
+        Neo.ctx.textAlign = 'center';
+        Neo.ctx.textBaseline = 'middle';
+        Neo.ctx.lineJoin = 'round';
+        Neo.ctx.strokeStyle = 'rgba(30,0,3,.96)';
+        Neo.ctx.lineWidth = Math.max(2, size * 0.2);
+        Neo.ctx.strokeText('!', cx, cy + size * 0.03);
+        Neo.ctx.fillStyle = '#ff2638';
+        Neo.ctx.fillText('!', cx, cy + size * 0.03);
+        Neo.ctx.restore();
+        return;
+      }
       if (image) {
-        Neo.ctx.shadowColor = 'rgba(0,0,0,.9)';
-        Neo.ctx.shadowBlur = Math.max(2, size * 0.12);
-        if (icon === 'chest') Neo.ctx.drawImage(image, 0, 0, 24, 24, x + inset, y + inset, drawSize, drawSize);
-        else Neo.ctx.drawImage(image, x + inset, y + inset, drawSize, drawSize);
+        const assetInset = Math.max(1, Math.round(size * 0.06));
+        const assetSize = size - assetInset * 2;
+        Neo.ctx.fillStyle = 'rgba(4,8,12,.58)';
+        Neo.ctx.fillRect(x + assetInset, y + assetInset, assetSize, assetSize);
+        Neo.ctx.shadowColor = 'rgba(0,0,0,1)';
+        Neo.ctx.shadowBlur = Math.max(3, size * 0.16);
+        if (icon === 'chest') Neo.ctx.drawImage(image, 0, 0, 24, 24, x + assetInset, y + assetInset, assetSize, assetSize);
+        else Neo.ctx.drawImage(image, x + assetInset, y + assetInset, assetSize, assetSize);
         Neo.ctx.restore();
         return;
       }
@@ -573,7 +589,10 @@
         Neo.ctx.fillStyle = '#001018';
       } else if (roomShowsExit) {
         Neo.ctx.globalAlpha = 1;
-        Neo.ctx.fillStyle = room === Neo.currentRoom ? '#ffff00' : '#fff04a';
+        Neo.ctx.fillStyle = '#e5b62f';
+      } else if (room.type === 'ladder' && roomExplored) {
+        Neo.ctx.globalAlpha = 1;
+        Neo.ctx.fillStyle = '#e5b62f';
       } else if (room === Neo.currentRoom) {
         Neo.ctx.globalAlpha = 1;
         Neo.ctx.fillStyle = '#00ffff';
@@ -613,7 +632,9 @@
       if (roomShowsExit) {
         drawRoomIcon('ladder', '★', x, y, roomExplored);
       } else if (showRoomGlyph) {
-        const roomMarker = roomTypeLegend[room.type];
+        const roomMarker = room.type === 'ladder' && roomExplored
+          ? ['exit', 'EXIT', '#e5b62f', 'square', '★', 'ladder']
+          : roomTypeLegend[room.type];
         if (roomMarker) drawRoomIcon(roomMarker[5], roomMarker[4], x, y, roomExplored);
       }
       // Forge/shop blink: draw a soft, slowly-blinking highlight ring around
