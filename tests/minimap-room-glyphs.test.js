@@ -4,6 +4,7 @@ const path = require('node:path');
 describe('minimap room icons', () => {
   const specialRooms = fs.readFileSync(path.join(__dirname, '../js/game/specialRooms.js'), 'utf8');
   const hud = fs.readFileSync(path.join(__dirname, '../js/draw/hud.js'), 'utf8');
+  const props = fs.readFileSync(path.join(__dirname, '../js/draw/props.js'), 'utf8');
 
   test('service rooms use readable unique abbreviations', () => {
     const expected = {
@@ -32,12 +33,23 @@ describe('minimap room icons', () => {
     expect(hud).toContain("anvil: ['anvil', 'FORGE', '#ffb840', 'square', '⚒', 'anvil']");
   });
 
-  test('uses high-contrast pixel silhouettes and an authored forge sprite in larger cells', () => {
+  test('prefers authored environment sprites with high-contrast fallbacks in larger cells', () => {
     expect(hud).toContain('const baseSize = 24');
+    expect(hud).toContain("icon === 'chest' ? 'chest_0'");
+    expect(hud).toContain("icon === 'ladder' ? 'ladder_0'");
+    expect(hud).toContain("icon === 'anvil' ? 'anvil_0'");
     expect(hud).toContain("if (icon === 'chest')");
     expect(hud).toContain("else if (icon === 'ladder')");
     expect(hud).toContain("drawRoomGlyph('$', x, y, roomExplored)");
-    expect(hud).toContain("icon === 'anvil' ? 'anvil_0'");
     expect(hud).toContain("drawRoomIcon('ladder', '★'");
+  });
+
+  test('marks combat with a red alert and gives ladders matching gold backings', () => {
+    expect(hud).toContain("combat: ['combat', 'COMBAT', '#ff434f', 'square', '!', 'combat']");
+    expect(hud).toContain("Neo.ctx.fillStyle = '#ff2638'");
+    expect(hud).toContain("Neo.ctx.fillStyle = '#e5b62f'");
+    expect(props).toContain("Neo.ENVIRONMENT_IMAGES?.ladder_0?.image");
+    expect(props).toContain("Neo.ctx.strokeStyle = '#ffc638'");
+    expect(props).toContain("Neo.ctx.fillText('EXIT', 0, 43)");
   });
 });
