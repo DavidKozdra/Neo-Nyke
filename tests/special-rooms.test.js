@@ -106,7 +106,7 @@ describe('special service rooms', () => {
 
   test('active targets receive a health bar, world name, and minimap hunt marker', () => {
     expect(hudSource).toContain('enemy?.bountyTarget');
-    expect(hudSource).toContain("addLegendEntry('bounty-target', 'HUNT'");
+    expect(hudSource).toContain('activeBounty?.targetSpawned && activeBounty.targetRoomKey');
     expect(hudSource).toContain("Neo.ctx.strokeStyle = '#ff9d66'");
     expect(entitySource).toContain("enemy.bountyName || 'Marked Target'");
   });
