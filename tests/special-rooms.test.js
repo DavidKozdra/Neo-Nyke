@@ -117,9 +117,9 @@ describe('special service rooms', () => {
     expect(specialSource).toContain("'1 TROPHY'");
   });
 
-  test('every service receives a minimap definition and glyph path', () => {
+  test('every service receives a pictured minimap definition', () => {
     expect(hudSource).toContain('Object.entries(Neo.SPECIAL_ROOM_DEFS || {})');
-    expect(hudSource).toContain("'square', def.glyph");
-    expect(hudSource).toContain('const roomGlyph = roomTypeLegend[room.type]?.[4]');
+    expect(hudSource).toContain("'square', def.glyph, type");
+    expect(hudSource).toContain('drawRoomIcon(roomMarker[5], roomMarker[4]');
   });
 });

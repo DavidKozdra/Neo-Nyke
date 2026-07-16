@@ -57,8 +57,11 @@ const result = await page.evaluate(() => {
   Neo.enemies = [];
   Neo.pickups = [];
   Neo.prepareSpecialRoom(bountyRoom);
-  Neo.setSpecialRoomPanelOpen(true);
-  document.querySelector('[data-special-choice="elite_hunter"]')?.click();
+  Neo.pickups = bountyRoom.pickups;
+  const hunterStation = Neo.pickups.find(pickup => pickup.type === 'specialChoice' && pickup.choiceId === 'elite_hunter');
+  Neo.player.x = hunterStation.x;
+  Neo.player.y = hunterStation.y;
+  Neo.trySpecialRoomChoiceInteract();
   const acceptedWithoutSpawn = !!Neo.player.activeBounty && !Neo.player.activeBounty.targetSpawned && Neo.enemies.length === 0;
 
   const combatRoom = Neo.createRoomRecord({ x: 1, y: 0 }, { type: 'combat', cleared: false, explored: true, visited: true });
