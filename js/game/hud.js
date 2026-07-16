@@ -1224,9 +1224,9 @@
   function pulseExtremeZap(stacks = 1) {
     if (!Neo.player) return;
     stacks = Math.max(1, Math.floor(Number(stacks || 1)));
-    const targetCount = Math.min(10, 5 + (stacks - 1));
-    const damage = 11 + (stacks - 1) * 3;
-    const radius = 250 + (stacks - 1) * 22;
+    const targetCount = Math.min(12, 7 + (stacks - 1));
+    const damage = 15 + (stacks - 1) * 3;
+    const radius = 300 + (stacks - 1) * 22;
     const enemies = [];
     Neo.forEachEnemyNearCircle?.(Neo.player.x, Neo.player.y, radius, enemy => {
       const dx = enemy.x - Neo.player.x;
@@ -1248,7 +1248,7 @@
       ttl: 0.55,
       tick: 0,
       interval: 0.22,
-      damage: 10 + (stacks - 1) * 2,
+      damage: 13 + (stacks - 1) * 2,
     });
   }
 

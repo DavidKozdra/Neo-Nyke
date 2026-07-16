@@ -68,6 +68,7 @@ describe('drain balance', () => {
     const spawned = [];
     const Neo = {
       player: { character: 'metao', x: 20, y: 30 },
+      getItemStats: () => ({}),
       spawnProjectile: projectile => spawned.push(projectile),
     };
     const spawnPlayerDiskBurst = new Function(
