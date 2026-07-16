@@ -590,14 +590,28 @@ export function loop(timestamp) {
       Neo.moveCircle(enemy, dt);
     }
 
-    if (itemStats.bleedHealScale > 0 && totalBleed > 0 && Neo.player.hp < Neo.player.maxHp) {
-      if (Neo.player.hp < 50) Neo.player.scarfHealReady = true;
-      if (Neo.player.scarfHealReady) {
-        const heal = Neo.scalePlayerHealing(Neo.player.maxHp * 0.0006 * totalBleed * itemStats.bleedHealScale * dt);
+    // Heme's Scarf spends one earned charge as soon as its low-health discharge
+    // begins. The discharge is finite; once it ends, another 10-kill charge must
+    // be earned. This prevents one slow discharge from healing forever in bosses.
+    if (
+      itemStats.bleedHealScale > 0
+      && totalBleed > 0
+      && Neo.player.hp < 50
+      && Neo.player.scarfHealReady
+      && Number(Neo.player.scarfHealTime || 0) <= 0
+    ) {
+      Neo.consumeCharge('hemes_scarf');
+      Neo.player.scarfHealTime = 3;
+      Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 28, life: 0.65, text: 'SCARF DRAIN', c: '#0f8' });
+    }
+    if (Number(Neo.player.scarfHealTime || 0) > 0) {
+      Neo.player.scarfHealTime = Math.max(0, Number(Neo.player.scarfHealTime) - dt);
+      if (itemStats.bleedHealScale > 0 && totalBleed > 0 && Neo.player.hp < Neo.player.maxHp) {
+        // Keep large bleed packs from turning the finite discharge into an instant
+        // refill, while preserving stack/bleed scaling within its three seconds.
+        const rawHeal = Neo.player.maxHp * 0.0003 * totalBleed * itemStats.bleedHealScale * dt;
+        const heal = Neo.scalePlayerHealing(Math.min(rawHeal, Neo.player.maxHp * 0.025 * dt));
         const gained = Neo.applyPlayerHealing?.(heal, { showBarrier: false }) ?? 0;
-        if (Neo.player.hp >= 50 && Neo.player.scarfHealReady) {
-          Neo.consumeCharge('hemes_scarf');
-        }
         if (gained > 0 && Neo.nextRandom('fx') < 0.14) {
           Neo.spawnHealPopup(Neo.player.x + Neo.rand(-10, 10), Neo.player.y - 18, gained, { color: '#0f8' });
         }

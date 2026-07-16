@@ -83,6 +83,52 @@ describe('drain balance', () => {
     expect(spawned[0].subSpawn.hitOptions).toMatchObject({ drainChanceBonus: 0.05, fireChance: 0.25 });
   });
 
+  test('Metao can visibly proc Tooth at full HP and bank its lingering drain', () => {
+    const Neo = {
+      player: { character: 'metao', hp: 10, maxHp: 10, x: 100, y: 100 },
+      getItemStats: () => ({ drainChance: 0.19 }),
+      getEnemyProgressionLevel: () => 1,
+      nextRandom: () => 0,
+      scalePlayerHealing: value => value,
+      applyPlayerHealing: jest.fn(() => 0),
+      spawnParticle: jest.fn(),
+      spawnHealPopup: jest.fn(),
+    };
+    const rollToothOfThornDrain = new Function(
+      'Neo',
+      `${extractFunction(combatSource, 'rollToothOfThornDrain')}; return rollToothOfThornDrain;`,
+    )(Neo);
+
+    rollToothOfThornDrain({ type: 'hunter', max: 200, x: 50, y: 50, r: 12 });
+
+    expect(Neo.spawnParticle).toHaveBeenCalledWith(expect.objectContaining({ text: 'DRAIN' }));
+    expect(Neo.player.thornDrainTime).toBe(2.5);
+    expect(Neo.player.thornDrainRate).toBeGreaterThan(0);
+  });
+
+  test('late-game drain resistance cannot suppress more than 60% of the chance', () => {
+    const Neo = {
+      player: { character: 'metao', hp: 5, maxHp: 10, x: 100, y: 100 },
+      getItemStats: () => ({ drainChance: 0.19 }),
+      getEnemyProgressionLevel: () => 100,
+      // Two Teeth plus Power Disks: (19% + 5%) * 40% = 9.6% at the cap.
+      nextRandom: () => 0.095,
+      scalePlayerHealing: value => value,
+      applyPlayerHealing: jest.fn(value => value),
+      spawnParticle: jest.fn(),
+      spawnHealPopup: jest.fn(),
+      rand: () => 0,
+    };
+    const rollToothOfThornDrain = new Function(
+      'Neo',
+      `${extractFunction(combatSource, 'rollToothOfThornDrain')}; return rollToothOfThornDrain;`,
+    )(Neo);
+
+    rollToothOfThornDrain({ type: 'god', max: 1000, x: 50, y: 50, r: 30 }, null, 0.05);
+
+    expect(Neo.applyPlayerHealing).toHaveBeenCalled();
+  });
+
   test('Nail Shot carries Tooth of Thorn drain bonus on every nail', () => {
     const spawned = [];
     const Neo = {
