@@ -184,6 +184,27 @@ export function destructibleIntersectsCircle(prop, x, y, r) {
   return circleRect(x, y, r, rect.x, rect.y, rect.w, rect.h);
 }
 
+// Structures are positioned by their ground footprint, not by the full height
+// of their artwork. In particular, a pillar's shaft rises up the screen from a
+// shallow plinth. Keeping only that plinth solid lets actors pass naturally in
+// front of and behind the column without colliding with empty floor beside the
+// tall sprite.
+export function getStructureCollisionRect(structure) {
+  const w = Math.max(0, Number(structure?.w || 0));
+  const h = Math.max(0, Number(structure?.h || 0));
+  if (structure?.kind !== 'pillar') {
+    return { x: Number(structure?.x || 0) - w / 2, y: Number(structure?.y || 0) - h / 2, w, h };
+  }
+  const footprintH = Math.max(6, h * 0.28);
+  const groundY = Number(structure?.y || 0) + h / 2;
+  return {
+    x: Number(structure?.x || 0) - w / 2,
+    y: groundY - footprintH,
+    w,
+    h: footprintH,
+  };
+}
+
 export function getClosedDoorBlockerRects(room = Neo.currentRoom) {
   if (!room) return [];
   const roomLocked = typeof Neo.isRoomLocked === 'function' ? Neo.isRoomLocked() : false;
@@ -203,7 +224,10 @@ export function getClosedDoorBlockerRects(room = Neo.currentRoom) {
 export function isBlocked(x, y, r) {
   if (Neo.walls.some(wall => circleRect(x, y, r, wall.x, wall.y, wall.w, wall.h))) return true;
   if (getClosedDoorBlockerRects().some(door => circleRect(x, y, r, door.x, door.y, door.w, door.h))) return true;
-  if (Neo.structures.some(s => circleRect(x, y, r, s.x - s.w / 2, s.y - s.h / 2, s.w, s.h))) return true;
+  if (Neo.structures.some(s => {
+    const rect = getStructureCollisionRect(s);
+    return circleRect(x, y, r, rect.x, rect.y, rect.w, rect.h);
+  })) return true;
   // Disguised secret walls are pass-through: the player walks into them to open
   // the passage (see updateWorldProps), so they never act as a solid blocker.
   return Neo.destructibles.some(prop => !prop.broken && !prop.hidden
@@ -327,7 +351,7 @@ export function getBeamReflectRects() {
   structures.forEach(structure => {
     if (!structure || !Number.isFinite(structure.x) || !Number.isFinite(structure.y)) return;
     if (!Number.isFinite(structure.w) || !Number.isFinite(structure.h) || structure.w <= 0 || structure.h <= 0) return;
-    rects.push({ x: structure.x - structure.w / 2, y: structure.y - structure.h / 2, w: structure.w, h: structure.h });
+    rects.push(getStructureCollisionRect(structure));
   });
   destructibles.forEach(prop => {
     if (!prop || prop.broken || prop.hidden) return;
@@ -843,6 +867,7 @@ Neo.distToSegment = distToSegment;
 Neo.circleRect = circleRect;
 Neo.getDestructibleRect = getDestructibleRect;
 Neo.destructibleIntersectsCircle = destructibleIntersectsCircle;
+Neo.getStructureCollisionRect = getStructureCollisionRect;
 Neo.getClosedDoorBlockerRects = getClosedDoorBlockerRects;
 Neo.isBlocked = isBlocked;
 Neo.beamHitsCircle = beamHitsCircle;

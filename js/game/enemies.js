@@ -128,12 +128,7 @@
     // allocation + map/forEach work by ~10x with a roomful of shooters.
     const frame = Number(Neo.frameId || 0);
     if (_coverObstacleFrame === frame && _coverObstacleCache) return _coverObstacleCache;
-    const obstacleRects = Neo.structures.map(structure => ({
-      x: structure.x - structure.w / 2,
-      y: structure.y - structure.h / 2,
-      w: structure.w,
-      h: structure.h,
-    }));
+    const obstacleRects = Neo.structures.map(structure => Neo.getStructureCollisionRect(structure));
     Neo.destructibles.forEach(prop => {
       if (prop.broken || prop.hidden) return;
       if (prop.kind !== 'wall' && prop.kind !== 'secret_wall' && prop.kind !== 'cover_wall') return;

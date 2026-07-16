@@ -1765,7 +1765,7 @@
       const clearRadius = Math.hypot(halfW, halfH) + 12;
       const wallRects = [
         ...Neo.walls.map(w => ({ x: w.x, y: w.y, w: w.w, h: w.h })),
-        ...Neo.structures.map(s => ({ x: s.x - s.w / 2, y: s.y - s.h / 2, w: s.w, h: s.h })),
+        ...Neo.structures.map(s => Neo.getStructureCollisionRect(s)),
         ...Neo.destructibles
           .filter(p => !p.broken && (p.kind === 'wall' || p.kind === 'cover_wall' || p.kind === 'secret_wall'))
           .map(Neo.getDestructibleRect),

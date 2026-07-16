@@ -1043,15 +1043,18 @@
         const w = Math.max(24, Number(structure.w || 34));
         const segH = w;
         const totalH = segH * segments.length;
+        // structure.y is the centre of the base footprint. Extra shaft pieces
+        // grow upward; they must never push the base (and its collision) down.
+        const top = Number(structure.h || w) / 2 - totalH;
         Neo.ctx.imageSmoothingEnabled = false;
         segments.forEach((segment, index) => {
-          Neo.ctx.drawImage(segment, -w / 2, -totalH / 2 + index * segH, w, segH);
+          Neo.ctx.drawImage(segment, -w / 2, top + index * segH, w, segH);
         });
       } else if (pillarImage) {
         const w = Math.max(24, Number(structure.w || 48));
         const h = Math.max(24, Number(structure.h || 48)) * 1.35;
         Neo.ctx.imageSmoothingEnabled = false;
-        Neo.ctx.drawImage(pillarImage, -w / 2, -h / 2, w, h);
+        Neo.ctx.drawImage(pillarImage, -w / 2, Number(structure.h || 48) / 2 - h, w, h);
       } else {
         drawGreekColumn(structure.w, structure.h, theme);
       }

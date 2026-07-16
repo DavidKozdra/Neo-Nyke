@@ -864,7 +864,10 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
       if (x < Neo.WALL + radius + 12 || x > Neo.ROOM_W - Neo.WALL - radius - 12) return true;
       if (y < Neo.WALL + radius + 12 || y > Neo.ROOM_H - Neo.WALL - radius - 12) return true;
       if (Math.hypot(x - Neo.START_X, y - Neo.START_Y) < 78) return true;
-      if (structuresList.some(structure => Neo.circleRect(x, y, radius + 6, structure.x - structure.w / 2, structure.y - structure.h / 2, structure.w, structure.h))) return true;
+      if (structuresList.some(structure => {
+        const rect = Neo.getStructureCollisionRect(structure);
+        return Neo.circleRect(x, y, radius + 6, rect.x, rect.y, rect.w, rect.h);
+      })) return true;
       if (destructibleList.some(prop => !prop.broken && !prop.hidden && Neo.destructibleIntersectsCircle(prop, x, y, radius + 4))) return true;
       if (Array.isArray(room.hazards) && room.hazards.some(hazard => hazard?.kind === 'explosive_trap' && Neo.dist(x, y, hazard.x, hazard.y) < radius + (hazard.r || 16) + 58)) return true;
       return false;
