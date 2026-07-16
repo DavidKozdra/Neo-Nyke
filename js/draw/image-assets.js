@@ -11,6 +11,9 @@ const ENVIRONMENT_IMAGE_PATHS = {
   ground_0: 'assets/sprites/env/ground_0.png',
   ladder_0: 'assets/sprites/env/ladder_0.png',
   pillar: 'assets/sprites/env/pillar.png',
+  pillar_1: 'assets/sprites/env/pillar_1.png',
+  pillar_2: 'assets/sprites/env/pillar_2.png',
+  pillar_3: 'assets/sprites/env/pillar_3.png',
   table_0: 'assets/sprites/env/table_0.png',
   table_1: 'assets/sprites/env/table_1.png',
 };
