@@ -3591,13 +3591,14 @@
     let drainChance = Math.max(0, baseChance + Number(bonusChance || 0));
     if (!(drainChance > 0)) return;
     // Higher-level enemies resist lifesteal: starting at level 5, every full 5
-    // levels grants +15% drain resistance (lvl 5 → 15%, lvl 10 → 30%, …),
-    // capped so the steal never becomes impossible.
+    // levels grants +15% drain resistance (lvl 5 → 15%, lvl 10 → 30%, …).
+    // Cap at 60%: the old 90% cap made low-stack Tooth builds effectively
+    // disappear in late boss fights, especially on slower non-Thorn kits.
     const enemyLevel = Math.max(1, Number(Neo.getEnemyProgressionLevel?.(enemy)) || 0);
-    const drainResistance = Math.min(0.9, Math.floor(enemyLevel / 5) * 0.15);
+    const drainResistance = Math.min(0.6, Math.floor(enemyLevel / 5) * 0.15);
     drainChance *= (1 - drainResistance);
     if (!(drainChance > 0)) return;
-    if (!Neo.player || Neo.player.hp >= Neo.player.maxHp) return;
+    if (!Neo.player) return;
     if (Neo.nextRandom('encounter') >= drainChance) return;
     // Instant steal: the flat 1 HP plus 1% of the drained enemy's max HP, so the
     // bite scales against tankier foes instead of being a flat trickle.
@@ -3605,12 +3606,17 @@
     const bite = 1 + enemyMax * 0.01;
     const heal = Neo.scalePlayerHealing(bite, 1);
     const gained = Neo.applyPlayerHealing(heal);
+    // Always show that the proc landed. At full HP there is no green heal number,
+    // which previously made a working Tooth look completely inert.
+    Neo.spawnParticle?.({ x: enemy.x, y: enemy.y - enemy.r - 14, life: 0.45, text: 'DRAIN', c: '#ff8fb4' });
     if (gained > 0) {
       Neo.spawnHealPopup(Neo.player.x + Neo.rand(-6, 6), Neo.player.y - 22, gained, { color: '#ff8fb4', size: 13 });
     }
     // …then a lingering bleed-out: heal a little of the same bite each second for
     // a couple of seconds. Procs refresh the window and stack the per-second rate
     // up to a cap so chaining drains keeps the trickle topped up.
+    // Arm the lingering heal even at full HP, so a proc can still pay off if the
+    // player takes damage during the next couple of seconds.
     Neo.player.thornDrainTime = 2.5;
     Neo.player.thornDrainRate = Math.min(enemyMax * 0.04, Number(Neo.player.thornDrainRate || 0) + bite * 0.5);
   }

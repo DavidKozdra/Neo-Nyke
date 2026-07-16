@@ -407,7 +407,10 @@ export function migratePlayerData(source) {
     playerData.robotArmChargeKills = Number(playerData.robotArmChargeKills || 0);
     playerData.robotArmReady = !!playerData.robotArmReady;
     playerData.scarfChargeKills = Number(playerData.scarfChargeKills || 0);
-    playerData.scarfHealReady = playerData.scarfHealReady !== false;
+    // An absent ready flag is uncharged. Older saves used to treat `undefined`
+    // as ready, which let the scarf heal before the player earned any kills.
+    playerData.scarfHealReady = playerData.scarfHealReady === true;
+    playerData.scarfHealTime = Math.max(0, Number(playerData.scarfHealTime || 0));
     return playerData;
   }
 
@@ -2224,9 +2227,13 @@ export function consumeCharge(chargeType) {
       }
     }
 
-    if (getItemCount('hemes_scarf') > 0 && !Neo.player.scarfHealReady) {
+    if (
+      getItemCount('hemes_scarf') > 0
+      && !Neo.player.scarfHealReady
+      && Number(Neo.player.scarfHealTime || 0) <= 0
+    ) {
       Neo.player.scarfChargeKills += chargeSteps;
-      if (Neo.player.scarfChargeKills >= getChargeRequirement(6)) {
+      if (Neo.player.scarfChargeKills >= getChargeRequirement(10)) {
         Neo.player.scarfHealReady = true;
         Neo.player.scarfChargeKills = 0;
         Neo.pushReadyNotification('hemes_scarf');

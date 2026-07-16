@@ -3004,7 +3004,7 @@
     // Death-defying finisher. Triggered two ways: proactively once she drops
     // below 5% HP, or as a catch-all from onEnemyDie if a single blow would have
     // killed her outright. She holds in place, immune, charging a telegraphed
-    // AOE, then detonates for 2.5x her attack power and dies with the blast.
+    // AOE, then detonates with distance-scaled damage and dies with the blast.
     if (!enemy.queenFinisherActive && !enemy.queenFinisherDone && enemy.hp <= enemy.max * 0.05) {
       enemy.queenFinisherActive = true;
       enemy.queenFinisherTimer = QUEEN_FINISHER_WINDUP;
@@ -3035,11 +3035,20 @@
       if (enemy.queenFinisherTimer <= 0) {
         enemy.queenFinisherDone = true;
         enemy.queenFinisherShake = 0;
-        const blastDamage = Math.round(enemy.dmg * 2.8);
+        const blastDamage = Math.round(enemy.dmg);
         Neo.ringBurst(enemy.x, enemy.y, QUEEN_FINISHER_RADIUS, '#ff6ad5', 0.7);
-        // Bigger AOE, lots of knockback to fling the player clear, and a heavy
-        // screen slam so the detonation lands hard.
-        Neo.blastRadius(enemy.x, enemy.y, QUEEN_FINISHER_RADIUS, blastDamage, '#ff6ad5', enemy, QUEEN_FINISHER_KNOCKBACK);
+        // The telegraph is also the damage ruler: 5x her normal attack at the
+        // center, falling linearly to 1x at the indicated outer edge.
+        Neo.blastRadius(
+          enemy.x,
+          enemy.y,
+          QUEEN_FINISHER_RADIUS,
+          blastDamage,
+          '#ff6ad5',
+          enemy,
+          QUEEN_FINISHER_KNOCKBACK,
+          { playerDamageFalloff: { centerMultiplier: 5, edgeMultiplier: 1 } },
+        );
         Neo.addTrauma(0.95, Neo.angleBetween(enemy, Neo.player), 12);
         Neo.addHitstop(0.08);
         // Take herself out with the blast.

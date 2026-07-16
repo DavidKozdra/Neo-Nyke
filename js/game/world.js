@@ -847,10 +847,30 @@
     return Math.max(1, Math.round(base * multiplier));
   }
 
-  function blastRadius(x, y, radius, damage, color, sourceEnemy = null, knockback = 200) {
+  function getRadialFalloffDamage(baseDamage, distance, radius, centerMultiplier = 1, edgeMultiplier = 1) {
+    const safeRadius = Math.max(1, Number(radius || 0));
+    const normalizedDistance = Neo.clamp(Math.max(0, Number(distance || 0)) / safeRadius, 0, 1);
+    const proximity = 1 - normalizedDistance;
+    const multiplier = Number(edgeMultiplier || 0)
+      + (Number(centerMultiplier || 0) - Number(edgeMultiplier || 0)) * proximity;
+    return Math.max(0, Math.round(Math.max(0, Number(baseDamage || 0)) * multiplier));
+  }
+
+  function blastRadius(x, y, radius, damage, color, sourceEnemy = null, knockback = 200, options = {}) {
     spawnAoeShockwave(x, y, radius, color, damage >= 28 ? 'heavy' : 'normal');
-    if (sourceEnemy && Neo.player && Neo.dist(x, y, Neo.player.x, Neo.player.y) <= radius + Neo.player.r) {
-      damagePlayer(damage, Math.atan2(Neo.player.y - y, Neo.player.x - x), knockback, sourceEnemy.type || 'enemy_aoe');
+    const playerDistance = Neo.player ? Neo.dist(x, y, Neo.player.x, Neo.player.y) : Infinity;
+    if (sourceEnemy && Neo.player && playerDistance <= radius + Neo.player.r) {
+      const falloff = options.playerDamageFalloff;
+      const playerDamage = falloff
+        ? getRadialFalloffDamage(
+            damage,
+            playerDistance,
+            radius,
+            falloff.centerMultiplier,
+            falloff.edgeMultiplier,
+          )
+        : damage;
+      damagePlayer(playerDamage, Math.atan2(Neo.player.y - y, Neo.player.x - x), knockback, sourceEnemy.type || 'enemy_aoe');
     }
     if (!sourceEnemy) hitPvpPlayer2InRadius(x, y, radius, damage, knockback, 'pvp_p1_aoe');
     forEachEnemyNearCircle(x, y, radius, enemy => {
@@ -3682,6 +3702,7 @@
   Neo.tickPlayerStatus = tickPlayerStatus;
   Neo.updatePlayerStatuses = updatePlayerStatuses;
   Neo.blastRadius = blastRadius;
+  Neo.getRadialFalloffDamage = getRadialFalloffDamage;
   Neo.spawnAoeShockwave = spawnAoeShockwave;
   Neo.recordProjectileTrail = recordProjectileTrail;
   Neo.spawnProjectileImpact = spawnProjectileImpact;
