@@ -239,12 +239,12 @@
     const minimapOffsetY = Number.isFinite(Number(minimapEntry?.y)) ? Number(minimapEntry.y) : 0;
     // A slightly larger cell gives room silhouettes enough pixels to read as
     // actual sprites instead of collapsing back into one- or two-letter codes.
-    const baseSize = 20;
-    const baseGap = 3;
+    const baseSize = 24;
+    const baseGap = 4;
     const baseMapWidth = gridCols * baseSize + (gridCols - 1) * baseGap;
     const baseMapHeight = gridRows * baseSize + (gridRows - 1) * baseGap;
-    const targetViewportWidth = compact ? Math.min(138, canvasRect.width * 0.29) : Math.min(184, canvasRect.width * 0.24);
-    const targetViewportHeight = compact ? Math.min(138, canvasRect.height * 0.29) : Math.min(184, canvasRect.height * 0.28);
+    const targetViewportWidth = compact ? Math.min(166, canvasRect.width * 0.35) : Math.min(221, canvasRect.width * 0.29);
+    const targetViewportHeight = compact ? Math.min(166, canvasRect.height * 0.35) : Math.min(221, canvasRect.height * 0.34);
     const baseViewportWidth = baseMapWidth * scaleX;
     const baseViewportHeight = baseMapHeight * scaleY;
     const responsiveScale = Neo.clamp(
@@ -259,8 +259,10 @@
     const visibleCanvasTop = Neo.clamp(-canvasRect.top / scaleY, 0, Neo.canvas.height);
     const visibleCanvasRight = Neo.clamp((window.innerWidth - canvasRect.left) / scaleX, 0, Neo.canvas.width);
     const visibleCanvasBottom = Neo.clamp((window.innerHeight - canvasRect.top) / scaleY, 0, Neo.canvas.height);
-    const topInset = (compact ? 8 : 12) / scaleY;
-    const edgeInsetX = (compact ? 8 : 12) / scaleX;
+    // Pin the default map frame into the visible top-right corner. Two viewport
+    // pixels preserve the outer stroke without leaving a noticeable margin.
+    const topInset = 2 / scaleY;
+    const edgeInsetX = 2 / scaleX;
     const edgeInsetY = 8 / scaleY;
     const maxVisibleScale = Math.min(
       (visibleCanvasRight - visibleCanvasLeft - edgeInsetX * 2) / Math.max(1, baseMapWidth),
@@ -450,11 +452,19 @@
       const cy = y + size / 2;
       const inset = Math.max(2, Math.round(size * 0.12));
       const drawSize = Math.max(8, size - inset * 2);
-      const environmentKey = icon === 'chest' ? 'chest_0' : icon === 'ladder' ? 'ladder_0' : icon === 'anvil' ? 'anvil_0' : '';
+      // Chest and ladder use intentionally simplified pixel silhouettes below.
+      // Their full 24px environment art lost its shape when cells responsively
+      // shrank; the anvil remains readable enough to use the authored sprite.
+      const environmentKey = icon === 'anvil' ? 'anvil_0' : '';
       const image = environmentKey ? Neo.ENVIRONMENT_IMAGES?.[environmentKey]?.image : null;
       Neo.ctx.save();
       Neo.ctx.globalAlpha = roomExplored ? 1 : 0.68;
       Neo.ctx.imageSmoothingEnabled = false;
+      if (icon === 'shop') {
+        Neo.ctx.restore();
+        drawRoomGlyph('$', x, y, roomExplored);
+        return;
+      }
       if (image) {
         Neo.ctx.shadowColor = 'rgba(0,0,0,.9)';
         Neo.ctx.shadowBlur = Math.max(2, size * 0.12);
@@ -474,12 +484,35 @@
       Neo.ctx.lineJoin = 'round';
       Neo.ctx.shadowColor = 'rgba(0,0,0,.95)';
       Neo.ctx.shadowBlur = 2.5;
-      if (icon === 'shop') {
-        Neo.ctx.fillRect(-6, -1, 12, 7);
-        Neo.ctx.fillRect(-7, -6, 14, 3);
-        Neo.ctx.fillStyle = '#17222d';
-        Neo.ctx.fillRect(-3, 1, 3, 5);
-        Neo.ctx.fillRect(2, 0, 3, 3);
+      if (icon === 'chest') {
+        // Bold 16x13 treasure chest: dark outline, gold lid, brown body, lock.
+        Neo.ctx.fillStyle = '#251506';
+        Neo.ctx.fillRect(-8, -6, 16, 13);
+        Neo.ctx.fillStyle = '#ffd15a';
+        Neo.ctx.fillRect(-7, -5, 14, 4);
+        Neo.ctx.fillRect(-5, -7, 10, 2);
+        Neo.ctx.fillStyle = '#87501d';
+        Neo.ctx.fillRect(-7, 0, 14, 6);
+        Neo.ctx.fillStyle = '#fff1a0';
+        Neo.ctx.fillRect(-2, -2, 4, 6);
+        Neo.ctx.fillStyle = '#3b240d';
+        Neo.ctx.fillRect(-1, 0, 2, 2);
+      } else if (icon === 'ladder') {
+        // Thick outlined ladder survives the smallest responsive map scale.
+        Neo.ctx.strokeStyle = '#182029';
+        Neo.ctx.lineWidth = 5;
+        Neo.ctx.beginPath();
+        Neo.ctx.moveTo(-6, -8); Neo.ctx.lineTo(-6, 8);
+        Neo.ctx.moveTo(6, -8); Neo.ctx.lineTo(6, 8);
+        [-5, 0, 5].forEach(py => { Neo.ctx.moveTo(-6, py); Neo.ctx.lineTo(6, py); });
+        Neo.ctx.stroke();
+        Neo.ctx.strokeStyle = '#fff3a0';
+        Neo.ctx.lineWidth = 2.4;
+        Neo.ctx.beginPath();
+        Neo.ctx.moveTo(-6, -8); Neo.ctx.lineTo(-6, 8);
+        Neo.ctx.moveTo(6, -8); Neo.ctx.lineTo(6, 8);
+        [-5, 0, 5].forEach(py => { Neo.ctx.moveTo(-6, py); Neo.ctx.lineTo(6, py); });
+        Neo.ctx.stroke();
       } else if (icon === 'trial') {
         Neo.ctx.beginPath(); Neo.ctx.moveTo(0, -8); Neo.ctx.lineTo(7, 0); Neo.ctx.lineTo(0, 8); Neo.ctx.lineTo(-7, 0); Neo.ctx.closePath(); Neo.ctx.stroke();
         Neo.ctx.beginPath(); Neo.ctx.moveTo(-4, 0); Neo.ctx.lineTo(4, 0); Neo.ctx.moveTo(0, -4); Neo.ctx.lineTo(0, 4); Neo.ctx.stroke();
