@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'neonyke-v43';
+const CACHE_VERSION = 'neonyke-v44';
 const CACHE_META = 'neonyke-cache-meta';
 const CACHE_META_KEY = '/__neonyke_cache_meta__';
 const CACHE_REFRESH_INTERVAL_MS = 5 * 60 * 60 * 1000;
@@ -57,6 +57,7 @@ const PRECACHE = [
   '/js/game/world.js',
   '/js/game/hud.js',
   '/js/draw/viewport.js',
+  '/js/draw/pillar-renderer.js',
   '/js/draw/environment.js',
   '/js/draw/lighting.js',
   '/js/draw/props.js',
