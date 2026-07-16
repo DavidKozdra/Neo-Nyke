@@ -2914,11 +2914,9 @@
         const switchDistance = Neo.dist(playerX, playerY, pickup.x, pickup.y);
         if (switchDistance > 44) pickup.armed = true;
       }
-      // Service-room markers are interaction anchors, not walk-over loot. The
-      // shared E/X interaction opens their choice panel from anywhere in the
-      // peaceful room, so never feed these markers into the generic pickup
-      // consume path below.
-      if (pickup.type === 'specialService') continue;
+      // Service-room choice stations are interaction anchors, not walk-over
+      // loot. The player approaches a pictured option and confirms with E/X.
+      if (pickup.type === 'specialService' || pickup.type === 'specialChoice') continue;
       // A/B chest dwell areas fill a meter while the player stands inside, and
       // only grant once full. Run this before the generic instant-pickup gate so
       // the meter can fill/decay every frame using the larger dwell radius.

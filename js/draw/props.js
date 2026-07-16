@@ -41,6 +41,40 @@
     });
   }
 
+  const specialChoiceSpriteCache = new Map();
+
+  function getSpecialChoiceSprite(choice) {
+    const cacheKey = choice.enemyType ? `enemy:${choice.enemyType}` : `icon:${choice.iconKey}`;
+    if (specialChoiceSpriteCache.has(cacheKey)) return specialChoiceSpriteCache.get(cacheKey);
+    const canvas = document.createElement('canvas');
+    canvas.width = 48;
+    canvas.height = 48;
+    if (choice.enemyType) Neo.drawSpriteToCanvas?.(canvas, choice.enemyType, 44);
+    else Neo.drawInventoryUiIcon?.(canvas, choice.iconKey || 'item');
+    specialChoiceSpriteCache.set(cacheKey, canvas);
+    return canvas;
+  }
+
+  function drawWrappedWorldText(text, x, y, maxWidth, lineHeight, maxLines = 3) {
+    const words = String(text || '').split(/\s+/).filter(Boolean);
+    const lines = [];
+    let line = '';
+    words.forEach(word => {
+      const candidate = line ? `${line} ${word}` : word;
+      if (line && Neo.ctx.measureText(candidate).width > maxWidth) {
+        lines.push(line);
+        line = word;
+      } else {
+        line = candidate;
+      }
+    });
+    if (line) lines.push(line);
+    const visible = lines.slice(0, maxLines);
+    if (lines.length > maxLines && visible.length) visible[visible.length - 1] = `${visible[visible.length - 1].replace(/[.…]*$/, '')}…`;
+    visible.forEach((entry, index) => Neo.ctx.fillText(entry, x, y + index * lineHeight));
+    return visible.length;
+  }
+
   const SHOP_GREETINGS = [
     'Coin for your courage, traveler?',
     'Everything here outlives you. Browse well.',
@@ -1354,32 +1388,79 @@
         Neo.ctx.lineTo(14, 10);
         Neo.ctx.closePath();
         Neo.ctx.fill();
-      } else if (pickup.type === 'specialService') {
-        const def = Neo.SPECIAL_ROOM_DEFS?.[pickup.serviceType] || { glyph: '?', name: 'Service', color: '#d7f6ff' };
-        const pulse = 0.5 + Math.sin(Date.now() / 240) * 0.5;
-        Neo.ctx.shadowColor = def.color;
-        Neo.ctx.shadowBlur = 18 + pulse * 8;
-        Neo.ctx.strokeStyle = def.color;
-        Neo.ctx.fillStyle = 'rgba(7, 12, 18, .9)';
-        Neo.ctx.lineWidth = 3;
-        Neo.ctx.beginPath();
-        Neo.ctx.arc(0, 0, 25, 0, Math.PI * 2);
-        Neo.ctx.fill();
-        Neo.ctx.stroke();
-        Neo.ctx.globalAlpha = 0.3 + pulse * 0.35;
-        Neo.ctx.beginPath();
-        Neo.ctx.arc(0, 0, 34 + pulse * 4, 0, Math.PI * 2);
-        Neo.ctx.stroke();
+      } else if (pickup.type === 'specialChoice') {
+        // These are solid world stations, not hovering service orbs. The stone
+        // pedestal stays fixed while its pixel sprite identifies the actual
+        // choice; approaching one expands its effect/cost tooltip.
+        Neo.ctx.translate(0, -bob);
         Neo.ctx.globalAlpha = 1;
-        Neo.ctx.shadowBlur = 8;
-        Neo.ctx.fillStyle = def.color;
-        Neo.ctx.font = 'bold 22px system-ui';
-        Neo.ctx.textAlign = 'center';
-        Neo.ctx.textBaseline = 'middle';
-        Neo.ctx.fillText(def.glyph, 0, 1);
-        Neo.ctx.shadowBlur = 0;
-        Neo.ctx.font = 'bold 10px system-ui';
-        Neo.ctx.fillText(def.name.toUpperCase(), 0, 45);
+        const choice = Neo.getSpecialRoomChoiceView?.(pickup.choiceId);
+        if (choice) {
+          const nearby = Neo.getNearestSpecialRoomChoice?.(118);
+          const focused = nearby?.pickup === pickup;
+          const color = choice.enabled ? choice.color : '#8b7f78';
+          const sprite = getSpecialChoiceSprite(choice);
+
+          Neo.ctx.fillStyle = 'rgba(0,0,0,.34)';
+          Neo.ctx.beginPath();
+          Neo.ctx.ellipse(0, 18, 42, 14, 0, 0, Math.PI * 2);
+          Neo.ctx.fill();
+          Neo.ctx.fillStyle = '#252932';
+          Neo.ctx.fillRect(-31, 3, 62, 17);
+          Neo.ctx.fillStyle = '#3d424d';
+          Neo.ctx.fillRect(-27, -3, 54, 9);
+          Neo.ctx.fillStyle = color;
+          Neo.ctx.globalAlpha = choice.enabled ? 0.82 : 0.35;
+          Neo.ctx.fillRect(-23, 0, 46, 3);
+          Neo.ctx.globalAlpha = 1;
+
+          Neo.ctx.fillStyle = 'rgba(7,12,18,.94)';
+          Neo.ctx.strokeStyle = color;
+          Neo.ctx.lineWidth = focused ? 3 : 2;
+          Neo.ctx.shadowColor = color;
+          Neo.ctx.shadowBlur = focused ? 14 : 5;
+          Neo.ctx.fillRect(-30, -57, 60, 55);
+          Neo.ctx.strokeRect(-30, -57, 60, 55);
+          Neo.ctx.shadowBlur = 0;
+          Neo.ctx.globalAlpha = choice.enabled ? 1 : 0.45;
+          Neo.ctx.imageSmoothingEnabled = false;
+          Neo.ctx.drawImage(sprite, -22, -53, 44, 44);
+          Neo.ctx.globalAlpha = 1;
+
+          Neo.ctx.fillStyle = choice.enabled ? '#f4f7fb' : '#b8a9a5';
+          Neo.ctx.font = 'bold 10px system-ui';
+          Neo.ctx.textAlign = 'center';
+          Neo.ctx.textBaseline = 'alphabetic';
+          const shortTitle = choice.title.length > 24 ? `${choice.title.slice(0, 22)}…` : choice.title;
+          Neo.ctx.fillText(shortTitle.toUpperCase(), 0, 35);
+
+          if (focused) {
+            const boxW = 238;
+            const boxH = choice.enabled ? 91 : 105;
+            const boxX = -boxW / 2;
+            const boxY = -174;
+            Neo.ctx.fillStyle = 'rgba(5,10,16,.97)';
+            Neo.ctx.strokeStyle = color;
+            Neo.ctx.lineWidth = 2;
+            Neo.ctx.shadowColor = '#000';
+            Neo.ctx.shadowBlur = 12;
+            Neo.ctx.fillRect(boxX, boxY, boxW, boxH);
+            Neo.ctx.shadowBlur = 0;
+            Neo.ctx.strokeRect(boxX, boxY, boxW, boxH);
+            Neo.ctx.fillStyle = color;
+            Neo.ctx.fillRect(boxX, boxY, 5, boxH);
+            Neo.ctx.textAlign = 'left';
+            Neo.ctx.fillStyle = '#fff';
+            Neo.ctx.font = 'bold 13px system-ui';
+            Neo.ctx.fillText(choice.title, boxX + 13, boxY + 20);
+            Neo.ctx.fillStyle = '#d3dbe5';
+            Neo.ctx.font = '11px system-ui';
+            drawWrappedWorldText(choice.description, boxX + 13, boxY + 38, boxW - 26, 14, 3);
+            Neo.ctx.font = 'bold 10px system-ui';
+            Neo.ctx.fillStyle = choice.enabled ? color : '#ff8b98';
+            Neo.ctx.fillText(choice.enabled ? `${choice.cost}  •  INTERACT TO CHOOSE` : String(choice.disabledReason || 'UNAVAILABLE').toUpperCase(), boxX + 13, boxY + boxH - 10);
+          }
+        }
       } else if (pickup.type === 'challengeStarter') {
         const trial = pickup.trial || 'mirror';
         const color = trial === 'bomb' ? '#ff8a6a' : trial === 'storm' ? '#8dd4ff' : trial === 'survival' ? '#ffcf7d' : '#d7f6ff';

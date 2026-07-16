@@ -639,7 +639,8 @@
         : '';
       const isShop = Neo.currentRoom?.type === 'shop' && !Neo.isPanelOpen(Neo.ui.shopPanel);
       const isAnvil = Neo.currentRoom?.type === 'anvil' && !Neo.isPanelOpen(Neo.ui.anvilPanel);
-      const isSpecial = Neo.isSpecialRoom?.() && !Neo.isPanelOpen(document.getElementById('specialRoomPanel'));
+      const isSpecial = Neo.isSpecialRoom?.() && !Neo.currentRoom?.serviceUsed && !Neo.isPanelOpen(document.getElementById('specialRoomPanel'));
+      const specialChoiceAction = isSpecial ? (Neo.getSpecialRoomChoiceInteractLabel?.() || '') : '';
       const bountyAction = Neo.getBountyTargetInteractLabel?.() || '';
       const isLadder = !bountyAction && !isShop && !isAnvil && !isSpecial && !!Neo.isAtLadder?.();
       if (bountyAction) {
@@ -653,8 +654,9 @@
         Neo.ui.interactPrompt.classList.remove('hidden');
         Neo.ui.interactPrompt.classList.add('interact-prompt--forge');
       } else if (isSpecial) {
-        const serviceName = Neo.SPECIAL_ROOM_DEFS?.[Neo.currentRoom.type]?.name || 'Service';
-        Neo.ui.interactPrompt.textContent = `[${shopHint}]${touchHint}  Open ${serviceName}`;
+        Neo.ui.interactPrompt.textContent = specialChoiceAction
+          ? `[${shopHint}]${touchHint}  ${specialChoiceAction}`
+          : 'Approach a pictured choice';
         Neo.ui.interactPrompt.classList.remove('hidden', 'interact-prompt--forge');
       } else if (isLadder) {
         Neo.ui.interactPrompt.textContent = `[${shopHint}]${touchHint}  Use Ladder`;
