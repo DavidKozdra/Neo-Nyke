@@ -32,10 +32,11 @@ describe('minimap room icons', () => {
     expect(hud).toContain("anvil: ['anvil', 'FORGE', '#ffb840', 'square', '⚒', 'anvil']");
   });
 
-  test('uses authored environment sprites and vector fallbacks in larger cells', () => {
-    expect(hud).toContain('const baseSize = 20');
-    expect(hud).toContain("icon === 'chest' ? 'chest_0'");
-    expect(hud).toContain("icon === 'ladder' ? 'ladder_0'");
+  test('uses high-contrast pixel silhouettes and an authored forge sprite in larger cells', () => {
+    expect(hud).toContain('const baseSize = 24');
+    expect(hud).toContain("if (icon === 'chest')");
+    expect(hud).toContain("else if (icon === 'ladder')");
+    expect(hud).toContain("drawRoomGlyph('$', x, y, roomExplored)");
     expect(hud).toContain("icon === 'anvil' ? 'anvil_0'");
     expect(hud).toContain("drawRoomIcon('ladder', '★'");
   });
