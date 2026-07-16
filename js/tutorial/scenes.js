@@ -28,7 +28,7 @@ export const TUTORIAL_SCENES = {
     lesson: 'treasure',
     lines: [
       { speaker: 'SARGE', text: 'Treasure room. Chests cough up coins, healing, relics — sometimes a choice between two prizes.' },
-      { speaker: 'SARGE', text: "Walk into a chest to crack it. If two reward zones light up, that's a hold-to-claim: stand in the one you want until its meter fills. Risky pickups work the same way." },
+      { speaker: 'SARGE', text: 'Walk into a chest to crack it, then walk over what drops to grab it. Some chests later on offer a choice instead — those make you hold your ground on the one you want. Risky pickups work the same way.' },
       { speaker: 'SARGE', text: 'Crack this one open before you move on, recruit.' },
     ],
   },
@@ -78,7 +78,7 @@ export const TUTORIAL_SCENES = {
     lines: [
       { speaker: 'SARGE', text: "That's a graduation, recruit. You move, you fight, you crit, you stack status. You shop, forge, and crack chests." },
       { speaker: 'SARGE', text: 'Your build, your coins, your forged upgrades, your relics — all of it rides with you to Floor Two.' },
-      { speaker: 'SARGE', text: 'Now get down there and make the dungeon of LAB regret it. Dismissed!' },
+      { speaker: 'SARGE', text: 'Now get down there and make HIM regret it. Dismissed!' },
     ],
   },
 };

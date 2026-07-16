@@ -492,6 +492,7 @@ export function bindPanelInput() {
       // readout changes. If the batch is now unaffordable the footer shows it in
       // red and confirm stays disabled (confirm also hard-guards funds).
       renderAnvilPanel();
+      Neo.tutorialController?.signal?.('forge-pay-currency', { currency });
     };
     Neo.ui.anvilPayXp?.addEventListener('click', () => setAnvilPayCurrency('xp'));
     Neo.ui.anvilPayGold?.addEventListener('click', () => setAnvilPayCurrency('gold'));
@@ -1485,6 +1486,7 @@ export function renderAnvilStatPanel() {
     const itemType = btn.dataset.itemType;
     Neo.anvilSelectedItem = `${itemType}:${itemKey}`;
     renderAnvilPanel();
+    Neo.tutorialController?.signal?.('forge-item-select', { itemType, itemKey });
   }
 
   // Flash a short rejection message in the anvil footer (in-modal, so it's
