@@ -1281,6 +1281,89 @@ export const ITEM_DEFS = {
       tags: ['rival', 'utility', 'lie'],
     },
   };
+
+// Moment-to-moment UI uses these compact mechanical summaries. The full copy in
+// ITEM_DEFS.description remains the Item Index source of truth. Green relics are
+// deliberately excluded: their long, misleading descriptions are part of their
+// design and must be shown unchanged everywhere.
+export const ITEM_SHORT_DESCRIPTIONS = Object.freeze({
+  neo_knife: '+10% melee Bleed chance per stack.',
+  tooth_of_thorn: 'Hits can drain enemy life and heal you.',
+  tough_bandaid: 'Gain defense, Bleed chance, and Bleed resistance.',
+  orb_of_blood: 'Bleeding enemies take +100% damage per stack.',
+  hemes_scarf: 'Bleed nearby enemies; charged blood restores low HP.',
+  insurance: 'Survive a hit below half HP, then recharge with kills.',
+  gold_vac: 'Tool: vacuum pickups and multiply collected coins.',
+  copycat_charm: 'Chance to duplicate item pickups.',
+  crit_charm: 'Gain crit chance and periodic kill-powered crit surges.',
+  copper_penny: 'Electric attacks deal more damage and build Static.',
+  attack_servo: '+8% attack speed per stack.',
+  enemy_magnet: 'Projectiles gain increasingly strong homing.',
+  keen_eye: 'Kills charge a powerful temporary crit boost.',
+  chrono_spring: 'Kills charge a temporary attack-speed boost.',
+  scholar_seal: 'Gain more kill XP and near-level shop discounts.',
+  scholar_cap: 'Deal more damage as you approach the next level.',
+  push_man: '+18% knockback per stack.',
+  titan_heart: '+8% max HP per stack.',
+  weapon_fatigue: 'Hits can slow or briefly freeze enemies.',
+  generic_health_item: 'Kills restore HP; overhealing can grant a shield.',
+  snake_knife: 'Hits can poison; poison may spread between enemies.',
+  confuse_ray: 'Hits can stun or make enemies lose track of you.',
+  overclocked_watch: 'Kills can grant double charge progress.',
+  charged_adapter: 'Tool: spend half your coins to warp to the exit.',
+  pew_pew_box: 'Tool: fire volleys of homing missiles.',
+  skizzard_tail: 'Tool: regenerate health over time.',
+  zap_to_extreme: 'Tool: unleash chain lightning around you.',
+  panic_button: 'Tool: cleanse, repel enemies, and become briefly invulnerable.',
+  mid_sweepy_box: 'Tool: sweep explosive Bleed mines around you.',
+  sparkle_charm: 'Tool: mark enemies so every hit critically strikes.',
+  churu_stick: 'Tool: instantly heal 30% max HP.',
+  explosive_jelly: '+20% AOE range per stack.',
+  dragon_orb: 'Beams deal more damage, widen, and chain to enemies.',
+  overstimulate: 'Status-loaded enemies can be stunned for longer.',
+  grave_zone: 'Kills can create a damaging, healing knockback field.',
+  ricocete: 'Projectiles gain guaranteed and bonus wall bounces.',
+  drink_master: 'Healing is stronger; potions can trigger twice.',
+  turtle_shell: '+5% move speed per stack.',
+  anchor_charm: 'Resist stuns and incoming knockback.',
+  iron_lung: 'Non-boss hits cannot exceed 20% max HP.',
+  pendant_of_rock: 'Take less damage and deal more rock damage.',
+  iron_helm: 'Tool: create a shield worth 50% max HP.',
+  oracles_lens: 'Double crit chance and improve crit scaling.',
+  homing_missile: 'Smash attacks can launch two homing missiles.',
+  wizards_paw: 'Choose two stats to increase by 50%.',
+  jesters_dice: 'Skip three floors and gain ten random items.',
+  shield_of_aegis: 'Gain defense, floor healing, and a recurring shield.',
+  pendant_of_kronos: 'God relics grant crit and damage bonuses.',
+  robot_arm: 'Kills charge one automatic, ultra-fast primary attack.',
+  rich_mans_luck: 'Shops offer more relics and enemies drop more items.',
+  rich_mans_blues: 'Gain Loop Crystals now and after boss kills.',
+  artificer_charger: 'Double your level and enlarge your character and AOEs.',
+  cloak_of_naked_king: 'Statuses hurt more, but incoming hits lose flat damage.',
+  moggys_coat: 'Hidden kills prime an opening Dark Drain ambush.',
+  veggys_pendant: 'Gain max HP now and every three rooms.',
+  procy_pickle: 'Crits, status procs, and tools can spread statuses.',
+  princes_glasses: 'Upgrade the minimap and gain crit and defense.',
+  mateos_bag: 'Store potions for stronger healing and emergency use.',
+  extra_battery: 'Choose one move to gain +1 max stack.',
+  mooggy_zoomies: 'Projectiles gain speed, range, and magnetism.',
+  el_bartos_cape: 'Tool: turn invisible, move faster, and empower your first hit.',
+  voucher_white: 'Choose any Knight relic at a shop.',
+  voucher_purple: 'Choose any Wizard relic at a shop.',
+  voucher_yellow: 'Choose any God relic at a shop.',
+  forge_voucher: 'Gain five free Forge upgrade steps.',
+});
+
+export function getItemShortDescription(itemOrKey) {
+  const item = typeof itemOrKey === 'string' ? ITEM_DEFS[itemOrKey] : itemOrKey;
+  if (!item) return '';
+  if ((item.rarity || item.category) === 'green') return item.description || '';
+  return ITEM_SHORT_DESCRIPTIONS[item.key] || item.shortDescription || item.description || '';
+}
+
+Object.values(ITEM_DEFS).forEach(item => {
+  item.shortDescription = getItemShortDescription(item);
+});
 // Scrolls are their own system, kept out of ITEM_DEFS / the relic pools. They are
 // registered into the item registry (see createItemRegistry) so runtime lookups —
 // icons, rarity, tags, names, shop offers, save/load — resolve scroll keys the same
@@ -2181,6 +2264,8 @@ export const MOVE_BASE_STATS = {
   Neo.RIVAL_LOADOUT_ALTERNATIVES = RIVAL_LOADOUT_ALTERNATIVES;
   Neo.RIVAL_DEFAULT_KIT_CHANCE = RIVAL_DEFAULT_KIT_CHANCE;
   Neo.ITEM_DEFS = ITEM_DEFS;
+  Neo.ITEM_SHORT_DESCRIPTIONS = ITEM_SHORT_DESCRIPTIONS;
+  Neo.getItemShortDescription = getItemShortDescription;
   Neo.ITEM_KEYS = ITEM_KEYS;
   Neo.SCROLL_DEFS = SCROLL_DEFS;
   Neo.SCROLL_KEYS = SCROLL_KEYS;
