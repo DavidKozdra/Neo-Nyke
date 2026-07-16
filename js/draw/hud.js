@@ -206,7 +206,54 @@
     });
   }
 
-  function drawMinimap() {
+  const MINIMAP_CACHE_REFRESH_MS = [80, 120, 160];
+  const minimapRenderCache = {
+    canvas: null,
+    ctx: null,
+    signature: '',
+    layout: null,
+    renderedAt: 0,
+    dirty: true,
+  };
+
+  function invalidateMinimapCache() {
+    minimapRenderCache.dirty = true;
+  }
+
+  function getMinimapCacheSignature() {
+    const minimapEntry = window.NeoSettings?.getHudElements?.()?.minimap || {};
+    const roomState = (Neo.rooms || []).map(room => {
+      const pickups = room === Neo.currentRoom ? Neo.pickups : room.pickups;
+      const chests = room === Neo.currentRoom ? Neo.chests : room.chests;
+      const enemies = room === Neo.currentRoom ? Neo.enemies : room.enemies;
+      const ladder = Array.isArray(pickups) && pickups.some(pickup => pickup?.type === 'ladder') ? 1 : 0;
+      const chestState = Array.isArray(chests) && chests.length
+        ? `${chests.length}:${chests.every(chest => chest?.open) ? 1 : 0}`
+        : '0:0';
+      const enemyState = Array.isArray(enemies)
+        ? `${enemies.filter(enemy => enemy?.hp > 0).length}:${enemies.some(enemy => enemy?.elite && enemy.hp > 0) ? 1 : 0}`
+        : '0:0';
+      const doors = room.doors || {};
+      return [
+        room.gx, room.gy, room.type, room.secret ? 1 : 0, room.explored ? 1 : 0,
+        room.visited ? 1 : 0, doors.n ? 1 : 0, doors.s ? 1 : 0,
+        doors.w ? 1 : 0, doors.e ? 1 : 0, ladder, chestState, enemyState,
+      ].join(':');
+    }).join('|');
+    return [
+      Neo.canvas.width, Neo.canvas.height, window.innerWidth, window.innerHeight,
+      minimapEntry.scale ?? '', minimapEntry.x ?? 0, minimapEntry.y ?? 0,
+      Neo.currentRoom?.gx ?? '', Neo.currentRoom?.gy ?? '',
+      Neo.floorRivalCurses?.obscureMap ? 1 : 0, Neo.hideLadderOnMinimap ? 1 : 0,
+      Neo.getItemStats?.()?.hasPrincesGlasses ? 1 : 0,
+      Neo.hasLegacy?.('elite_tracker') ? 1 : 0,
+      Neo.player?.activeBounty?.targetRoomKey || '',
+      Neo.player?.activeBounty?.targetSpawned ? 1 : 0,
+      roomState,
+    ].join(';');
+  }
+
+  function renderMinimapToContext() {
     const hasGlasses = Neo.getItemStats?.()?.hasPrincesGlasses;
     const visibleRooms = Neo.rooms.filter(r => !r.secret);
     // Size the map to the rooms that actually exist, not the full 9x9 generator
@@ -738,6 +785,56 @@
     return Neo.minimapLayoutState;
   }
 
+  function drawMinimap() {
+    if (!minimapRenderCache.canvas) {
+      minimapRenderCache.canvas = document.createElement('canvas');
+      minimapRenderCache.ctx = minimapRenderCache.canvas.getContext('2d');
+    }
+    const cacheCanvas = minimapRenderCache.canvas;
+    if (cacheCanvas.width !== Neo.canvas.width || cacheCanvas.height !== Neo.canvas.height) {
+      cacheCanvas.width = Neo.canvas.width;
+      cacheCanvas.height = Neo.canvas.height;
+      minimapRenderCache.dirty = true;
+    }
+
+    const now = performance.now();
+    const signature = getMinimapCacheSignature();
+    const adaptiveLevel = Neo.getAdaptiveQualityLevel?.() || 0;
+    const refreshMs = MINIMAP_CACHE_REFRESH_MS[Math.min(2, adaptiveLevel)] || MINIMAP_CACHE_REFRESH_MS[0];
+    const animationDue = Neo.gameState === 'play' && now - minimapRenderCache.renderedAt >= refreshMs;
+    if (minimapRenderCache.dirty || signature !== minimapRenderCache.signature || animationDue) {
+      const liveContext = Neo.ctx;
+      const cacheContext = minimapRenderCache.ctx;
+      cacheContext.clearRect(0, 0, cacheCanvas.width, cacheCanvas.height);
+      Neo.ctx = cacheContext;
+      try {
+        minimapRenderCache.layout = renderMinimapToContext();
+      } finally {
+        Neo.ctx = liveContext;
+      }
+      minimapRenderCache.signature = signature;
+      minimapRenderCache.renderedAt = now;
+      minimapRenderCache.dirty = false;
+    }
+
+    const layout = minimapRenderCache.layout;
+    if (layout) {
+      const pad = 20;
+      const sx = Math.max(0, Math.floor(layout.x - pad));
+      const sy = Math.max(0, Math.floor(layout.y - pad));
+      const sw = Math.min(cacheCanvas.width - sx, Math.ceil(layout.width + pad * 2));
+      const sh = Math.min(cacheCanvas.height - sy, Math.ceil(layout.height + pad * 2));
+      Neo.ctx.save();
+      Neo.ctx.imageSmoothingEnabled = false;
+      Neo.ctx.drawImage(cacheCanvas, sx, sy, sw, sh, sx, sy, sw, sh);
+      Neo.ctx.restore();
+      Neo.minimapLayoutState = layout;
+    }
+    return layout;
+  }
+
+  window.addEventListener('resize', invalidateMinimapCache, { passive: true });
+
   function drawGodModeBar() {
     Neo.ctx.fillStyle = 'rgba(0,0,0,0.6)';
     Neo.ctx.fillRect(300, 12, 360, 6);
@@ -1251,6 +1348,7 @@
   // Expose on Neo
   Neo.drawParticles = drawParticles;
   Neo.drawMinimap = drawMinimap;
+  Neo.invalidateMinimapCache = invalidateMinimapCache;
   Neo.drawGodModeBar = drawGodModeBar;
   Neo.getBossLabel = getBossLabel;
   Neo.drawBossHealthBars = drawBossHealthBars;

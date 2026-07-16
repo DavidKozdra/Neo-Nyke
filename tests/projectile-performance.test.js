@@ -15,14 +15,14 @@ describe('projectile rendering performance safeguards', () => {
   });
 
   test('batches each projectile trail into one path and drops dense-scene blur', () => {
-    expect(props).toContain('denseProjectileTrails = performanceMode && projectileCount >= 64');
+    expect(props).toContain('projectileCount >= 64 || (adaptiveQuality >= 1 && projectileCount >= 24)');
     expect(props).toContain('Neo.ctx.shadowBlur = denseProjectileTrails ? 0 : 6');
     expect(props).toContain('const oldest = trail[trail.length - 1]');
     expect(props).toContain('Neo.ctx.lineTo(projectile.x, projectile.y)');
   });
 
   test('drops per-body glow only at extreme counts in performance mode', () => {
-    expect(props).toContain('denseProjectileBodies = performanceMode && projectileCount >= 160');
+    expect(props).toContain('projectileCount >= 160 || (adaptiveQuality >= 2 && projectileCount >= 48)');
     expect(props).toContain('Neo.ctx.shadowBlur = denseProjectileBodies ? 0 : (projectile.enemy ? 12 : 14)');
   });
 

@@ -2118,9 +2118,12 @@
     const cullMargin = 110;
     projectileRenderTimeMs = Date.now();
     const performanceMode = window.NeoSettings?.isPerformanceMode?.() !== false;
+    const adaptiveQuality = Neo.getAdaptiveQualityLevel?.() || 0;
     const projectileCount = Neo.projectiles?.length || 0;
-    denseProjectileTrails = performanceMode && projectileCount >= 64;
-    denseProjectileBodies = performanceMode && projectileCount >= 160;
+    denseProjectileTrails = performanceMode
+      && (projectileCount >= 64 || (adaptiveQuality >= 1 && projectileCount >= 24));
+    denseProjectileBodies = performanceMode
+      && (projectileCount >= 160 || (adaptiveQuality >= 2 && projectileCount >= 48));
     Neo.projectiles.forEach(projectile => {
       if (!projectile) return;
       if (viewportBounds
