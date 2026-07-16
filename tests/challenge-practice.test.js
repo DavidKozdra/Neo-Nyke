@@ -5,6 +5,8 @@ describe('challenge testing practice variant', () => {
   const gameStateSource = fs.readFileSync(path.join(__dirname, '../js/core/game-state.js'), 'utf8');
   const worldSource = fs.readFileSync(path.join(__dirname, '../js/game/world.js'), 'utf8');
   const enemiesSource = fs.readFileSync(path.join(__dirname, '../js/game/enemies.js'), 'utf8');
+  const propsSource = fs.readFileSync(path.join(__dirname, '../js/draw/props.js'), 'utf8');
+  const environmentSource = fs.readFileSync(path.join(__dirname, '../js/draw/environment.js'), 'utf8');
 
   test('builds one portal for every challenge trial', () => {
     const layoutMatch = gameStateSource.match(/const CHALLENGE_PRACTICE_LAYOUT = \[([\s\S]*?)\n  \];/);
@@ -28,5 +30,11 @@ describe('challenge testing practice variant', () => {
 
     expect(completion.match(/ensureChallengePracticeReturnPortal/g)).toHaveLength(2);
     expect(gameStateSource).toContain("destinationLabel: 'START'");
+  });
+
+  test('hub destinations reuse the live challenge altar renderer', () => {
+    expect(propsSource.match(/^\s*drawChallengeAltar\(pickup, bob/gm)).toHaveLength(2);
+    expect(propsSource).toContain("drawChallengeAltar(pickup, bob, { practicePortal: true })");
+    expect(environmentSource).toContain("pickup?.type === 'challengePracticePortal' && pickup.returnToHub");
   });
 });

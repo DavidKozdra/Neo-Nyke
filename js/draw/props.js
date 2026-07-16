@@ -143,6 +143,68 @@
     }
   }
 
+  function drawChallengeAltar(pickup, bob, { practicePortal = false } = {}) {
+    const trial = pickup.trial || pickup.challengeType || 'mirror';
+    const visual = TRIAL_STARTER_VISUALS[trial] || TRIAL_STARTER_VISUALS.mirror;
+    const color = visual.color;
+    const focused = !!Neo.player && Neo.dist(Neo.player.x, Neo.player.y, pickup.x, pickup.y) <= 122;
+    // Cancel the generic pickup bob: both live starters and challenge-testing
+    // destinations are the same grounded altar component.
+    Neo.ctx.translate(0, -bob);
+    Neo.ctx.globalAlpha = 1;
+    Neo.ctx.fillStyle = 'rgba(0,0,0,.4)';
+    Neo.ctx.beginPath(); Neo.ctx.ellipse(0, 22, 47, 15, 0, 0, Math.PI * 2); Neo.ctx.fill();
+    Neo.ctx.fillStyle = '#272c35';
+    Neo.ctx.fillRect(-38, 7, 76, 17);
+    Neo.ctx.fillStyle = '#454c58';
+    Neo.ctx.fillRect(-33, 1, 66, 9);
+    Neo.ctx.fillStyle = color;
+    Neo.ctx.fillRect(-28, 3, 56, 3);
+    Neo.ctx.fillStyle = 'rgba(7,12,18,.96)';
+    Neo.ctx.strokeStyle = color;
+    Neo.ctx.lineWidth = focused ? 3 : 2;
+    Neo.ctx.shadowColor = color;
+    Neo.ctx.shadowBlur = focused ? 17 : 7;
+    Neo.ctx.fillRect(-35, -63, 70, 64);
+    Neo.ctx.strokeRect(-35, -63, 70, 64);
+    Neo.ctx.shadowBlur = 0;
+    Neo.ctx.save();
+    Neo.ctx.translate(0, -25);
+    drawTrialStarterSymbol(trial, color);
+    Neo.ctx.restore();
+    Neo.ctx.fillStyle = '#fff';
+    Neo.ctx.font = 'bold 11px system-ui';
+    Neo.ctx.textAlign = 'center';
+    Neo.ctx.textBaseline = 'alphabetic';
+    Neo.ctx.fillText(Neo.getChallengeTrialLabel(trial), 0, 39);
+
+    if (!focused) return;
+    const boxW = 250;
+    const boxH = 88;
+    const boxX = -boxW / 2;
+    const boxY = -171;
+    Neo.ctx.fillStyle = 'rgba(5,10,16,.97)';
+    Neo.ctx.strokeStyle = color;
+    Neo.ctx.lineWidth = 2;
+    Neo.ctx.shadowColor = '#000';
+    Neo.ctx.shadowBlur = 12;
+    Neo.ctx.fillRect(boxX, boxY, boxW, boxH);
+    Neo.ctx.shadowBlur = 0;
+    Neo.ctx.strokeRect(boxX, boxY, boxW, boxH);
+    Neo.ctx.fillStyle = color;
+    Neo.ctx.fillRect(boxX, boxY, 5, boxH);
+    Neo.ctx.textAlign = 'left';
+    Neo.ctx.fillStyle = '#fff';
+    Neo.ctx.font = 'bold 13px system-ui';
+    Neo.ctx.fillText(visual.title, boxX + 13, boxY + 20);
+    Neo.ctx.fillStyle = '#d3dbe5';
+    Neo.ctx.font = '11px system-ui';
+    drawWrappedWorldText(visual.description, boxX + 13, boxY + 38, boxW - 26, 14, 2);
+    Neo.ctx.fillStyle = color;
+    Neo.ctx.font = 'bold 10px system-ui';
+    Neo.ctx.fillText(practicePortal ? 'TOUCH ALTAR TO ENTER TEST' : 'STEP ONTO THE ALTAR TO BEGIN', boxX + 13, boxY + boxH - 10);
+  }
+
   const SHOP_GREETINGS = [
     'Coin for your courage, traveler?',
     'Everything here outlives you. Browse well.',
@@ -1316,27 +1378,31 @@
           Neo.ctx.fillText(pal.label, 0, 3);
         }
       } else if (pickup.type === 'challengePracticePortal') {
-        const color = pickup.returnToHub ? '#8dffcf' : '#d7b4ff';
-        const spin = Date.now() / 420;
-        Neo.ctx.strokeStyle = color;
-        Neo.ctx.shadowColor = color;
-        Neo.ctx.shadowBlur = 20;
-        Neo.ctx.lineWidth = 3;
-        Neo.ctx.beginPath();
-        Neo.ctx.arc(0, 0, 20, 0, Math.PI * 2);
-        Neo.ctx.stroke();
-        Neo.ctx.lineWidth = 2;
-        Neo.ctx.beginPath();
-        for (let segment = 0; segment < 6; segment += 1) {
-          const start = spin + segment * Math.PI / 3;
-          Neo.ctx.arc(0, 0, 14, start, start + 0.42);
+        if (!pickup.returnToHub && pickup.challengeType) {
+          drawChallengeAltar(pickup, bob, { practicePortal: true });
+        } else {
+          const color = '#8dffcf';
+          const spin = Date.now() / 420;
+          Neo.ctx.strokeStyle = color;
+          Neo.ctx.shadowColor = color;
+          Neo.ctx.shadowBlur = 20;
+          Neo.ctx.lineWidth = 3;
+          Neo.ctx.beginPath();
+          Neo.ctx.arc(0, 0, 20, 0, Math.PI * 2);
+          Neo.ctx.stroke();
+          Neo.ctx.lineWidth = 2;
+          Neo.ctx.beginPath();
+          for (let segment = 0; segment < 6; segment += 1) {
+            const start = spin + segment * Math.PI / 3;
+            Neo.ctx.arc(0, 0, 14, start, start + 0.42);
+          }
+          Neo.ctx.stroke();
+          Neo.ctx.shadowBlur = 0;
+          Neo.ctx.fillStyle = color;
+          Neo.ctx.font = 'bold 10px system-ui';
+          Neo.ctx.textAlign = 'center';
+          Neo.ctx.fillText(pickup.destinationLabel || 'PORTAL', 0, 34);
         }
-        Neo.ctx.stroke();
-        Neo.ctx.shadowBlur = 0;
-        Neo.ctx.fillStyle = color;
-        Neo.ctx.font = 'bold 10px system-ui';
-        Neo.ctx.textAlign = 'center';
-        Neo.ctx.fillText(pickup.destinationLabel || 'PORTAL', 0, 34);
       } else if (pickup.type === 'fightGod') {
         Neo.ctx.strokeStyle = '#fff';
         Neo.ctx.shadowColor = '#fff';
@@ -1550,66 +1616,7 @@
           }
         }
       } else if (pickup.type === 'challengeStarter') {
-        const trial = pickup.trial || 'mirror';
-        const visual = TRIAL_STARTER_VISUALS[trial] || TRIAL_STARTER_VISUALS.mirror;
-        const color = visual.color;
-        const focused = !!Neo.player && Neo.dist(Neo.player.x, Neo.player.y, pickup.x, pickup.y) <= 122;
-        // Cancel the generic pickup bob: trial starters are authored altar props
-        // planted in the room, with a unique sprite describing the encounter.
-        Neo.ctx.translate(0, -bob);
-        Neo.ctx.globalAlpha = 1;
-        Neo.ctx.fillStyle = 'rgba(0,0,0,.4)';
-        Neo.ctx.beginPath(); Neo.ctx.ellipse(0, 22, 47, 15, 0, 0, Math.PI * 2); Neo.ctx.fill();
-        Neo.ctx.fillStyle = '#272c35';
-        Neo.ctx.fillRect(-38, 7, 76, 17);
-        Neo.ctx.fillStyle = '#454c58';
-        Neo.ctx.fillRect(-33, 1, 66, 9);
-        Neo.ctx.fillStyle = color;
-        Neo.ctx.fillRect(-28, 3, 56, 3);
-        Neo.ctx.fillStyle = 'rgba(7,12,18,.96)';
-        Neo.ctx.strokeStyle = color;
-        Neo.ctx.lineWidth = focused ? 3 : 2;
-        Neo.ctx.shadowColor = color;
-        Neo.ctx.shadowBlur = focused ? 17 : 7;
-        Neo.ctx.fillRect(-35, -63, 70, 64);
-        Neo.ctx.strokeRect(-35, -63, 70, 64);
-        Neo.ctx.shadowBlur = 0;
-        Neo.ctx.save();
-        Neo.ctx.translate(0, -25);
-        drawTrialStarterSymbol(trial, color);
-        Neo.ctx.restore();
-        Neo.ctx.fillStyle = '#fff';
-        Neo.ctx.font = 'bold 11px system-ui';
-        Neo.ctx.textAlign = 'center';
-        Neo.ctx.textBaseline = 'alphabetic';
-        Neo.ctx.fillText(Neo.getChallengeTrialLabel(trial), 0, 39);
-
-        if (focused) {
-          const boxW = 250;
-          const boxH = 88;
-          const boxX = -boxW / 2;
-          const boxY = -171;
-          Neo.ctx.fillStyle = 'rgba(5,10,16,.97)';
-          Neo.ctx.strokeStyle = color;
-          Neo.ctx.lineWidth = 2;
-          Neo.ctx.shadowColor = '#000';
-          Neo.ctx.shadowBlur = 12;
-          Neo.ctx.fillRect(boxX, boxY, boxW, boxH);
-          Neo.ctx.shadowBlur = 0;
-          Neo.ctx.strokeRect(boxX, boxY, boxW, boxH);
-          Neo.ctx.fillStyle = color;
-          Neo.ctx.fillRect(boxX, boxY, 5, boxH);
-          Neo.ctx.textAlign = 'left';
-          Neo.ctx.fillStyle = '#fff';
-          Neo.ctx.font = 'bold 13px system-ui';
-          Neo.ctx.fillText(visual.title, boxX + 13, boxY + 20);
-          Neo.ctx.fillStyle = '#d3dbe5';
-          Neo.ctx.font = '11px system-ui';
-          drawWrappedWorldText(visual.description, boxX + 13, boxY + 38, boxW - 26, 14, 2);
-          Neo.ctx.fillStyle = color;
-          Neo.ctx.font = 'bold 10px system-ui';
-          Neo.ctx.fillText('STEP ONTO THE ALTAR TO BEGIN', boxX + 13, boxY + boxH - 10);
-        }
+        drawChallengeAltar(pickup, bob);
       } else if (pickup.type === 'challengeSwitch') {
         const color = pickup.color || '#d7f6ff';
         const armed = pickup.armed !== false;
