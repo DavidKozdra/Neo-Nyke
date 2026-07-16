@@ -578,33 +578,55 @@
         Neo.ctx.restore();
       } else if (hazard.kind === 'chaos_burst') {
         const t = Date.now() * 0.005 + hazard.x * 0.01;
-        const pulse = 1 + Math.sin(t * 2.4) * 0.05;
+        const flicker = 0.75 + Math.sin(t * 9) * 0.15 + Math.sin(t * 23.7) * 0.1;
+        const pulse = 1 + Math.sin(t * 2.4) * 0.06;
+        // Hot inner flash core that flickers fast, giving the field a "live wire" feel.
+        const coreGrad = Neo.ctx.createRadialGradient(0, 0, 0, 0, 0, hazard.r * 0.5);
+        coreGrad.addColorStop(0, `rgba(255,225,255,${0.16 * flicker})`);
+        coreGrad.addColorStop(0.5, `rgba(200,107,255,${0.12 * flicker})`);
+        coreGrad.addColorStop(1, 'rgba(168,87,255,0)');
+        Neo.ctx.fillStyle = coreGrad;
+        Neo.ctx.beginPath();
+        Neo.ctx.arc(0, 0, hazard.r * 0.5, 0, Math.PI * 2);
+        Neo.ctx.fill();
         Neo.ctx.fillStyle = 'rgba(168,87,255,0.08)';
         Neo.ctx.beginPath();
         Neo.ctx.arc(0, 0, hazard.r * 0.94, 0, Math.PI * 2);
         Neo.ctx.fill();
-        Neo.ctx.strokeStyle = 'rgba(168,87,255,0.55)';
-        Neo.ctx.shadowColor = '#a857ff';
-        Neo.ctx.shadowBlur = 14;
+        Neo.ctx.strokeStyle = `rgba(214,170,255,${0.5 + flicker * 0.3})`;
+        Neo.ctx.shadowColor = '#c86bff';
+        Neo.ctx.shadowBlur = 18;
         Neo.ctx.lineWidth = 2.5;
         Neo.ctx.beginPath();
         Neo.ctx.arc(0, 0, hazard.r * pulse, 0, Math.PI * 2);
         Neo.ctx.stroke();
-        Neo.ctx.globalAlpha = 0.7;
-        Neo.ctx.strokeStyle = 'rgba(214,170,255,0.8)';
+        // Jagged lightning-style bolts instead of smooth arcs, for a more chaotic/electric read.
+        Neo.ctx.globalAlpha = 0.85;
         Neo.ctx.lineWidth = 2;
-        for (let index = 0; index < 9; index += 1) {
-          const a = t * 1.3 + index * (Math.PI * 2 / 9);
-          const r0 = hazard.r * (0.35 + 0.1 * Math.sin(t * 1.7 + index));
-          const r1 = hazard.r * (0.7 + 0.1 * Math.cos(t * 1.4 + index));
+        const boltCount = 7;
+        for (let index = 0; index < boltCount; index += 1) {
+          const a = t * 1.6 + index * (Math.PI * 2 / boltCount);
+          const boltSeed = index * 91.7 + Math.floor(t * 6);
+          const rInner = hazard.r * 0.3;
+          const rOuter = hazard.r * (0.85 + 0.1 * Math.sin(t * 3.1 + index));
+          Neo.ctx.strokeStyle = index % 2 === 0 ? 'rgba(255,225,255,0.85)' : 'rgba(214,170,255,0.75)';
           Neo.ctx.beginPath();
-          Neo.ctx.arc(0, 0, r0, a, a + 0.5);
-          Neo.ctx.stroke();
-          Neo.ctx.beginPath();
-          Neo.ctx.arc(0, 0, r1, -a, -a + 0.4);
+          const segments = 4;
+          for (let seg = 0; seg <= segments; seg += 1) {
+            const frac = seg / segments;
+            const r = rInner + (rOuter - rInner) * frac;
+            const hashed = Math.sin(boltSeed * 12.9898 + seg * 78.233) * 43758.5453;
+            const jitterRand = hashed - Math.floor(hashed);
+            const jitter = seg > 0 && seg < segments ? (jitterRand - 0.5) * hazard.r * 0.22 : 0;
+            const x = Math.cos(a) * r + Math.cos(a + Math.PI / 2) * jitter;
+            const y = Math.sin(a) * r + Math.sin(a + Math.PI / 2) * jitter;
+            if (seg === 0) Neo.ctx.moveTo(x, y);
+            else Neo.ctx.lineTo(x, y);
+          }
           Neo.ctx.stroke();
         }
         Neo.ctx.globalAlpha = 1;
+        Neo.ctx.shadowBlur = 0;
       } else if (hazard.kind === 'red_spikes') {
         const armed = Number(hazard.armTime || 0) <= 0;
         const t = Date.now() * 0.009 + hazard.x * 0.01;
@@ -2011,6 +2033,17 @@
       ctx.arc(px, py, 5, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
+      // Spent pips get an X so "gone" reads clearly, not just dimmer.
+      if (!filled) {
+        ctx.strokeStyle = 'rgba(255,120,120,0.8)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(px - 2.6, py - 2.6);
+        ctx.lineTo(px + 2.6, py + 2.6);
+        ctx.moveTo(px + 2.6, py - 2.6);
+        ctx.lineTo(px - 2.6, py + 2.6);
+        ctx.stroke();
+      }
     }
     ctx.restore();
 

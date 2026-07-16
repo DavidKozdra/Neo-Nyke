@@ -2640,8 +2640,26 @@
     const angle = Neo.rng() * Math.PI * 2;
     const px = ox + Math.cos(angle) * Neo.rand(180, 30);
     const py = oy + Math.sin(angle) * Neo.rand(180, 30);
-    Neo.ringBurst(px, py, 18 * aoeRadiusMultiplier, '#a857ff', 0.45);
-    Neo.blastRadius(px, py, 52 * aoeRadiusMultiplier, Math.round(18 * aoeDamageMultiplier), '#a857ff');
+    // Hot white-pink flash core so each pop reads instantly, plus the purple ring beneath it.
+    Neo.ringBurst(px, py, 10 * aoeRadiusMultiplier, '#ffe6ff', 0.22);
+    Neo.ringBurst(px, py, 20 * aoeRadiusMultiplier, '#e79bff', 0.5);
+    Neo.blastRadius(px, py, 52 * aoeRadiusMultiplier, Math.round(18 * aoeDamageMultiplier), '#c86bff');
+    for (let index = 0; index < 5; index += 1) {
+      const sparkAngle = Neo.rand(Math.PI * 2, 0, 'fx');
+      const speed = Neo.rand(240, 100, 'fx');
+      Neo.spawnParticle({
+        x: px,
+        y: py,
+        life: Neo.rand(0.32, 0.16, 'fx'),
+        vx: Math.cos(sparkAngle) * speed,
+        vy: Math.sin(sparkAngle) * speed,
+        c: index % 2 === 0 ? '#ffe6ff' : '#a857ff',
+        spark: true,
+        size: 3,
+      });
+    }
+    Neo.shake = Math.max(Number(Neo.shake || 0), 6);
+    Neo.shakeT = Math.max(Number(Neo.shakeT || 0), 0.1);
     applyStatusInRadius(px, py, 52 * aoeRadiusMultiplier, 'poison', 1, 4.8);
     if (isMetao) applyStatusInRadius(px, py, 52 * aoeRadiusMultiplier, 'fire', 1, 3.5);
   }
@@ -2753,7 +2771,7 @@
     blades.length = write;
   }
 
-  const TITAN_HAMMER_SWING_COOLDOWN = 1;
+  const TITAN_HAMMER_SWING_COOLDOWN = 1; 
   const TITAN_HAMMER_FOLLOW_RADIUS = 120;
   // The hammer despawns once 90% of its own recharge has elapsed, so it's
   // gone a beat before the player can summon another one rather than lingering

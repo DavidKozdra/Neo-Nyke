@@ -5,7 +5,7 @@ import { TUTORIAL_LESSON_SCENE, TUTORIAL_SCENES } from '../tutorial/scenes.js';
 window.NeoTutorialScenes = TUTORIAL_SCENES;
 window.NeoI18n?.localizeTutorialScenes?.(TUTORIAL_SCENES);
 
-export const TUTORIAL_VERSION = 4;
+export const TUTORIAL_VERSION = 5;
 
 const BUTTON_NAMES = {
   0: 'A', 1: 'B', 2: 'X', 3: 'Y',
@@ -367,14 +367,16 @@ function createSteps() {
       id: 'tools_fire',
       chapter: 'COMBAT',
       title: 'Fire your tools',
-      text: () => `Tools are activatable gear that sit in the tool bar below your moves. Each has its own key, and ${getActionLabel('activateAll', 'SPACE')} fires every equipped tool at once. Activate them on the dummy.`,
+      text: () => `Tools are activatable gear that sit in the tool bar below your moves. Each has its own key, and ${getActionLabel('activateAll', 'SPACE')} fires every equipped tool at once. If you have one equipped, try it on the dummy.`,
       command: () => getActivateAllLabel(),
       target: targetDom('#equipmentSlots', 8),
       roomKey: 'trainingRoomKey',
-      // Clears whether they hit Space (fire all) or tap/press a single slot, so
-      // touch players with no Space key can still complete it. Fight is the
-      // fallback so a tool that downs the dummy first can never stall the step.
-      complete: state => !!state.completed?.tools_fire || !!state.completed?.fight,
+      // Manual so Continue is always available — characters that start with
+      // an empty tool bar (princess/thorn_knight) can't fire anything here and
+      // would otherwise have no way to clear this step. Firing a tool (or
+      // activating all) still sets completed.tools_fire via the signal below
+      // and auto-advances immediately, same as before.
+      manual: true,
     },
     {
       id: 'status_lesson',
