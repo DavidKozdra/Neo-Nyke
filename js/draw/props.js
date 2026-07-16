@@ -1963,6 +1963,41 @@
     ctx.globalAlpha = 1;
   }
 
+  // Ghost Ball: a spectral orb that drifts toward the mouse, drawn shrinking as
+  // it decays (radius already reflects remaining size/power — see updateGhostBalls).
+  function drawGhostBalls() {
+    const balls = Neo.ghostBalls;
+    if (!Array.isArray(balls) || balls.length === 0) return;
+    const ctx = Neo.ctx;
+    const lowFx = window.NeoSettings?.isPerformanceMode?.() !== false && (Neo.particles?.length || 0) > 80;
+    balls.forEach(ball => {
+      const wobble = Math.sin((Neo.frameId || 0) * 0.12 + (ball.animSeed || 0)) * ball.radius * 0.08;
+      const r = Math.max(1, ball.radius + wobble);
+      ctx.save();
+      ctx.globalAlpha = 0.9;
+      if (!lowFx) {
+        ctx.shadowColor = '#8fffe0';
+        ctx.shadowBlur = 16;
+      }
+      ctx.fillStyle = 'rgba(143, 255, 224, 0.35)';
+      ctx.beginPath();
+      ctx.arc(ball.x, ball.y, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = '#c8fff0';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.globalAlpha = 0.85;
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(ball.x, ball.y, r * 0.4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    });
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1;
+  }
+
   // Excalibur Strike: giant golden swords plunging from the sky, then a brief
   // glowing afterglow at each impact point.
   function drawSkySwords() {
@@ -2729,8 +2764,50 @@
     });
   }
 
+  function drawGhostBallChargeBar() {
+    if (!Neo.ghostBallCharging || !Neo.player) return;
+    const max = Neo.GHOST_BALL_MAX_CHARGE || 5;
+    const ratio = Neo.clamp((Number(Neo.ghostBallChargeTime || 0)) / max, 0, 1);
+    const ctx = Neo.ctx;
+    const angle = Neo.angleToMouse ? Neo.angleToMouse() : 0;
+    const previewR = 9 + ratio * 15;
+    const previewDist = (Neo.player.r || 14) + 18;
+    const hx = Neo.player.x + Math.cos(angle) * previewDist;
+    const hy = Neo.player.y + Math.sin(angle) * previewDist;
+    ctx.save();
+    ctx.globalAlpha = 0.55 + ratio * 0.35;
+    ctx.shadowColor = '#8fffe0';
+    ctx.shadowBlur = 14;
+    ctx.fillStyle = 'rgba(143, 255, 224, 0.5)';
+    ctx.beginPath();
+    ctx.arc(hx, hy, previewR, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    // Bar.
+    const w = 138;
+    const rowH = 5;
+    const gap = 3;
+    const x = Neo.player.x - w / 2;
+    const y = Neo.player.y - (Neo.player.r || 14) - 44;
+    drawChargeRewardMeter({
+      ratio,
+      x,
+      y,
+      width: w,
+      rowHeight: rowH,
+      gap,
+      trackColor: 'rgba(10,40,34,0.82)',
+      fillColor: '#8fffe0',
+      outlineColor: 'rgba(200,255,240,0.9)',
+      textColor: '#f0fffb',
+      shadowColor: '#8fffe0',
+    });
+  }
+
+  Neo.drawGhostBallChargeBar = drawGhostBallChargeBar;
   Neo.drawProjectiles = drawProjectiles;
   Neo.drawJusticeBlades = drawJusticeBlades;
+  Neo.drawGhostBalls = drawGhostBalls;
   Neo.drawSkySwords = drawSkySwords;
   Neo.drawHealingZoneChargeBar = drawHealingZoneChargeBar;
   Neo.drawDeathBallChargeBar = drawDeathBallChargeBar;

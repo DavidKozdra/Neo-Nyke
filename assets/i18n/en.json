@@ -470,5 +470,10 @@
   "moves.princess_shield.name": "Princess's Shield",
   "moves.princess_shield.desc": "Raise a pink barrier worth 40% of your max HP. Auto-casts itself the moment your HP drops below 15%, as long as it is off cooldown.",
   "moves.love_bomb_laser.name": "Love Bomb",
-  "moves.love_bomb_laser.desc": "Hold to charge, then release a heart-shaped bomb toward the cursor that bursts in a pink AOE. Enemies caught in the blast have a chance to be Sparkled (guaranteed crits for a few seconds)."
+  "moves.love_bomb_laser.desc": "Hold to charge, then release a heart-shaped bomb toward the cursor that bursts in a pink AOE. Enemies caught in the blast have a chance to be Sparkled (guaranteed crits for a few seconds).",
+  "moves.ghost_ball.name": "Ghost Ball",
+  "moves.ghost_ball.desc": "Hold to charge, then release a spectral orb that chases the mouse and passes through enemies. It shrinks and weakens over time and with every hit until it fades away.",
+  "moves.holy_eye_beams.name": "Holy Eye Beams",
+  "moves.holy_eye_beams.desc": "Channel twin holy beams from your eyes. Each cast has a chance to heal you 5% max HP.",
+  "sounds.break_furniture.label": "Break Furniture"
 }

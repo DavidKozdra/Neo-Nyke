@@ -461,7 +461,8 @@ export function loop(timestamp) {
       // held-charge updaters) drives the meter and fires on release. While
       // charging, laserHeld must NOT re-invoke tryLaser every frame — treat it
       // like an instant move so the press-edge gate below only fires it once.
-      const loveBombChargeActive = !!Neo.loveBombCharging;
+      // Ghost Ball charges the same way (see updateGhostBallCharge below).
+      const loveBombChargeActive = !!Neo.loveBombCharging || !!Neo.ghostBallCharging;
       // Instant laser moves (e.g. Nail Shot) fire once per press instead of
       // auto-repeating every frame — otherwise holding the button drains the
       // whole charge pool in a few frames. Beam moves keep their held behavior.
@@ -613,11 +614,14 @@ export function loop(timestamp) {
     if (Neo.gameState !== 'play') return;
     Neo.updateSkySwords?.(dt);
     if (Neo.gameState !== 'play') return;
+    Neo.updateGhostBalls?.(dt);
+    if (Neo.gameState !== 'play') return;
     Neo.updateHealingZoneCharge?.(dt);
     if (Neo.gameState !== 'play') return;
     Neo.updateDeathBallCharge?.(dt);
     Neo.updateNimrodStompCharge?.(dt);
     Neo.updateLoveBombCharge?.(dt);
+    Neo.updateGhostBallCharge?.(dt);
     if (Neo.gameState !== 'play') return;
     sectionPerfStart = Neo.perfStart();
     Neo.updateWorldProps(dt);

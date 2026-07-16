@@ -470,5 +470,10 @@
   "moves.princess_shield.name": "공주의 방패",
   "moves.princess_shield.desc": "최대 HP의 40%에 해당하는 핑크 배리어를 올립니다. 재사용 대기시간이 꺼져 있는 동안 HP가 15% 미만으로 떨어지면 자동으로 시전됩니다.",
   "moves.love_bomb_laser.name": "러브 봄",
-  "moves.love_bomb_laser.desc": "길게 눌러 충전한 후, 커서 방향으로 하트 모양의 폭탄을 발사하여 핑크색 AOE로 터뜨립니다. 폭발에 휘말린 적은 \"반짝임\" 상태가 될 확률이 있습니다 (몇 초간 크리티컬 확정)."
+  "moves.love_bomb_laser.desc": "길게 눌러 충전한 후, 커서 방향으로 하트 모양의 폭탄을 발사하여 핑크색 AOE로 터뜨립니다. 폭발에 휘말린 적은 \"반짝임\" 상태가 될 확률이 있습니다 (몇 초간 크리티컬 확정).",
+  "moves.ghost_ball.name": "고스트볼",
+  "moves.ghost_ball.desc": "길게 눌러 충전한 다음 마우스를 쫓아 적을 통과하는 스펙트럼 구체를 방출합니다. 그것은 시간이 지남에 따라 그리고 사라질 때까지 공격할 때마다 줄어들고 약해집니다.",
+  "moves.holy_eye_beams.name": "신성한 눈 광선",
+  "moves.holy_eye_beams.desc": "당신의 눈에서 쌍둥이 성스러운 광선을 내보내십시오. 시전할 때마다 일정 확률로 최대 HP의 5%를 회복합니다.",
+  "sounds.break_furniture.label": "가구를 깨다"
 }

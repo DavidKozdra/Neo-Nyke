@@ -493,6 +493,7 @@ export const KIT_ALTERNATIVES = {
     smash: ['chaos_burst', 'potion_bath'],
   },
   gelleh: {
+    laser: ['blade_justice', 'holy_eye_beams'],
     smash: ['healing_zone', 'holy_turrets', 'excalibur_strike'],
   },
   mooggy: {
@@ -500,6 +501,7 @@ export const KIT_ALTERNATIVES = {
     smash: ['random_pounce', 'mooggy_hairball'],
   },
   turtle_boy: {
+    laser: ['turtle_wave', 'ghost_ball'],
     smash: ['death_ball', 'turtle_powerup'],
   },
   sarge: {

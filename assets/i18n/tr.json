@@ -470,5 +470,10 @@
   "moves.princess_shield.name": "Prensesin Kalkanı",
   "moves.princess_shield.desc": "Maksimum HP'nizin %40'ı değerinde pembe bir bariyer yükseltin. Bekleme süresi dışında olduğu sürece, HP'niz %15'in altına düştüğü anda kendini otomatik olarak atar.",
   "moves.love_bomb_laser.name": "Aşk Bombası",
-  "moves.love_bomb_laser.desc": "Şarj etmek için basılı tutun, ardından imleç yönünde pembe bir AOE içinde patlayan kalp şeklinde bir bomba fırlatın. Patlamaya yakalanan düşmanlerin \"Parıldama\" durumuna girme şansı vardır (birkaç saniye boyunca garantili kritik vuruşlar)."
+  "moves.love_bomb_laser.desc": "Şarj etmek için basılı tutun, ardından imleç yönünde pembe bir AOE içinde patlayan kalp şeklinde bir bomba fırlatın. Patlamaya yakalanan düşmanlerin \"Parıldama\" durumuna girme şansı vardır (birkaç saniye boyunca garantili kritik vuruşlar).",
+  "moves.ghost_ball.name": "Hayalet Top",
+  "moves.ghost_ball.desc": "Hücum etmek için basılı tutun, ardından fareyi kovalayan ve düşmanların içinden geçen spektral bir küreyi bırakın. Zamanla ve her vuruşta, kaybolana kadar küçülür ve zayıflar.",
+  "moves.holy_eye_beams.name": "Kutsal Göz Işınları",
+  "moves.holy_eye_beams.desc": "Gözlerinizden ikiz kutsal ışınları kanalize edin. Her kullanımın sizi maksimum HP'nin %5'i kadar iyileştirme şansı vardır.",
+  "sounds.break_furniture.label": "Mobilyayı Kır"
 }

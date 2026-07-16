@@ -470,5 +470,10 @@
   "moves.princess_shield.name": "Bouclier de princesse",
   "moves.princess_shield.desc": "Élevez une barrière rose valant 40% de vos HP max. Se lance automatiquement dès que vos HP descendent en dessous de 15 %, tant qu'ils ne sont pas en temps de recharge.",
   "moves.love_bomb_laser.name": "Bombe d'Amour",
-  "moves.love_bomb_laser.desc": "Maintenez pour charger, puis relâchez une bombe en forme de cœur vers le curseur qui explose dans un AOE rose. Les ennemis pris dans l'explosion ont une chance d'être \"Scintillants\" (coups critiques garantis pendant quelques secondes)."
+  "moves.love_bomb_laser.desc": "Maintenez pour charger, puis relâchez une bombe en forme de cœur vers le curseur qui explose dans un AOE rose. Les ennemis pris dans l'explosion ont une chance d'être \"Scintillants\" (coups critiques garantis pendant quelques secondes).",
+  "moves.ghost_ball.name": "Boule fantôme",
+  "moves.ghost_ball.desc": "Maintenez la charge, puis relâchez un orbe spectral qui poursuit la souris et traverse les ennemis. Il rétrécit et s'affaiblit avec le temps et à chaque coup jusqu'à disparaître.",
+  "moves.holy_eye_beams.name": "Faisceaux du Saint-Œil",
+  "moves.holy_eye_beams.desc": "Canalisez les rayons sacrés jumeaux de vos yeux. Chaque lancer a une chance de vous soigner de 5 % de vos PV maximum.",
+  "sounds.break_furniture.label": "Casser les meubles"
 }

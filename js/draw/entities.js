@@ -1800,13 +1800,17 @@
     const wizardBeamActive = equippedLaser === 'wizard_lazer';
     const mooggyBeamActive = equippedLaser === 'mooggy_blood_beam';
     const thornBeamsActive = Neo.laserMode === 'thorn_blood_beams';
+    const holyEyeBeamsActive = Neo.laserMode === 'holy_eye_beams';
     const beamRange = Neo.getPlayerBeamRange(Neo.laserMode, equippedLaser);
     const bounces = Neo.getPlayerBeamBounceCount(Neo.laserMode);
     // Mirror the combat tick's path set so what's drawn matches what hits:
-    // Thorn's Infinite Blood Beam fans four beams; everything else is one.
+    // Thorn's Infinite Blood Beam fans four beams; Holy Eye Beams fans two
+    // parallel beams; everything else is one.
     const fanAngles = thornBeamsActive
       ? [angle - 0.32, angle - 0.11, angle + 0.11, angle + 0.32]
-      : [angle];
+      : holyEyeBeamsActive
+        ? [angle - 0.07, angle + 0.07]
+        : [angle];
     const beamPaths = (Array.isArray(Neo.activeBeamPaths) && Neo.activeBeamPaths.length)
       ? Neo.activeBeamPaths
       : fanAngles.map(a => Neo.buildRicochetBeamPath(Neo.player.x, Neo.player.y, a, beamRange, bounces));
@@ -1818,12 +1822,14 @@
       : wizardBeamActive ? '#a64bff'
       : mooggyBeamActive ? '#ff2f57'
       : thornBeamsActive ? '#ff3b5c'
+      : holyEyeBeamsActive ? '#ffcc33'
       : '#ff00aa';
     const beamGlow = turtleWaveActive ? '#9bf7ff'
       : loveBeamActive ? '#ffd1ea'
       : Neo.laserMode === 'god_sweep' ? '#e8f0ff'
       : wizardBeamActive ? '#c79bff'
       : (mooggyBeamActive || thornBeamsActive) ? '#ff8aa0'
+      : holyEyeBeamsActive ? '#ffe08a'
       : '#f0f';
     const maxW = (Neo.laserMode === 'god_sweep' ? 16
       : turtleWaveActive ? 18
@@ -1831,6 +1837,7 @@
       : wizardBeamActive ? 22
       : mooggyBeamActive ? 11
       : thornBeamsActive ? 6
+      : holyEyeBeamsActive ? 7
       : 8)
       * beamWidthMultiplier;
     const beamShadow = Neo.laserMode === 'god_sweep' ? 26
