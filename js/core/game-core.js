@@ -1080,6 +1080,7 @@ export const CHARACTER_DEFS = {
     // Turtle Boy trades raw output for survivability: a thick shell, a draining
     // wave laser, and a free laser tier every 3 floors (see grantTurtleLaserStep).
     skills: { melee: 'Extending Staff', laser: 'Turtle Wave', smash: 'Death Ball', dash: 'Riptide Roll' },
+    unlock: 'turtle_kit',
   },
   sarge: {
     key: 'sarge',
@@ -1092,6 +1093,7 @@ export const CHARACTER_DEFS = {
     // Old-guard heavy: hammer smash up close, hammer throw at range. His god
     // item (Sarge's Hammer) rewards rapid double-kills with a homing hammer.
     skills: { melee: 'Hammer Smash', laser: 'Hammer Throw', smash: 'Ground Pound', dash: 'Combat Roll' },
+    unlock: 'bowman_bane',
   },
   custom_character: {
     key: 'custom_character',
@@ -1150,7 +1152,7 @@ export const HERO_DISPLAY = {
     ],
   },
   turtle_boy: {
-    lore: 'A water-blooded brawler with a turtle shell on his back and a long red extending staff. Tanky and patient — his wave laser grows stronger every few floors.',
+    lore: 'A water-blooded brawler with a turtle shell on his back and a long red extending staff. Tanky and patient — his wave laser grows stronger every few floors. Unlock by equipping the Extending Staff and Turtle Wave at the same time.',
     stats: [
       { label: 'HP',    pct: 92, color: '#5fd6a0' },
       { label: 'DMG',   pct: 58, color: '#3fb6c0' },
@@ -1159,7 +1161,7 @@ export const HERO_DISPLAY = {
     ],
   },
   sarge: {
-    lore: 'A blue-coated old soldier who never left the war. Smashes with his hammer up close and hurls it at range. Double-kills feed his homing hammer.',
+    lore: 'A blue-coated old soldier who never left the war. Smashes with his hammer up close and hurls it at range. Double-kills feed his homing hammer. Unlock by defeating Bowman\'s Bane.',
     stats: [
       { label: 'HP',    pct: 72, color: '#6fa8ff' },
       { label: 'DMG',   pct: 84, color: '#9bbcff' },

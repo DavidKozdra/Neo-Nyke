@@ -475,5 +475,15 @@
   "moves.ghost_ball.desc": "Hücum etmek için basılı tutun, ardından fareyi kovalayan ve düşmanların içinden geçen spektral bir küreyi bırakın. Zamanla ve her vuruşta, kaybolana kadar küçülür ve zayıflar.",
   "moves.holy_eye_beams.name": "Kutsal Göz Işınları",
   "moves.holy_eye_beams.desc": "Gözlerinizden ikiz kutsal ışınları kanalize edin. Her kullanımın sizi maksimum HP'nin %5'i kadar iyileştirme şansı vardır.",
-  "sounds.break_furniture.label": "Mobilyayı Kır"
+  "sounds.break_furniture.label": "Mobilyayı Kır",
+  "moves.titan_hammer.name": "Titan Çekici",
+  "moves.titan_hammer.desc": "İmleci takip eden dev bir çekiç çağır. Ağır bir alan hasarı için yere çakmak üzere tıkla. 8 saniye sürer.",
+  "difficulties.easy.name": "Kolay",
+  "difficulties.easy.description": "Kolay, daha hafif bir düşman eğrisi ve ekstra kalıntı düşüşleri kullanır.",
+  "difficulties.gelleh.name": "Gelleh",
+  "difficulties.mooggy.name": "Mooggy",
+  "difficulties.turtle_boy.name": "Kaplumbağa Çocuk",
+  "difficulties.sarge.name": "Sarge",
+  "difficulties.sarge.label": "HP",
+  "difficulties.custom_character.label": "HP"
 }

@@ -475,5 +475,15 @@
   "moves.ghost_ball.desc": "Segure para carregar e, em seguida, solte um orbe espectral que persegue o mouse e passa pelos inimigos. Ele encolhe e enfraquece com o tempo e a cada golpe até desaparecer.",
   "moves.holy_eye_beams.name": "Raios dos Olhos Sagrados",
   "moves.holy_eye_beams.desc": "Canalize raios sagrados gêmeos de seus olhos. Cada lançamento tem uma chance de curar 5% do HP máximo.",
-  "sounds.break_furniture.label": "Quebrar móveis"
+  "sounds.break_furniture.label": "Quebrar móveis",
+  "moves.titan_hammer.name": "Martelo Titã",
+  "moves.titan_hammer.desc": "Invoca um martelo gigante que segue o cursor. Clique para esmagá-lo, causando um forte impacto em área. Dura 8s.",
+  "difficulties.easy.name": "Fácil",
+  "difficulties.easy.description": "Fácil usa uma curva de inimigos mais leve e drops extras de relíquias.",
+  "difficulties.gelleh.name": "Gelleh",
+  "difficulties.mooggy.name": "Mooggy",
+  "difficulties.turtle_boy.name": "Menino Tartaruga",
+  "difficulties.sarge.name": "Sarge",
+  "difficulties.sarge.label": "HP",
+  "difficulties.custom_character.label": "HP"
 }

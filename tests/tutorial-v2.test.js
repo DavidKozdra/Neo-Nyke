@@ -108,15 +108,13 @@ describe('Sarge tutorial v2', () => {
     expect(serviceWorker).toContain("'/js/tutorial/scenes.js'");
   });
 
-  test('gates the Sarge tutorial replay behind unlocking the rest of the roster', () => {
-    // The prereq set is every non-custom character except Sarge himself.
-    expect(gameState).toContain("const SARGE_TUTORIAL_PREREQS = ['princess', 'thorn_knight', 'metao', 'gelleh', 'mooggy', 'turtle_boy']");
+  test('gates the Sarge tutorial replay behind defeating Bowman\'s Bane', () => {
+    // Sarge unlocks (for normal play and the tutorial replay) once Bowman's Bane is defeated.
+    expect(gameState).toContain('function hasSargeUnlockPrereq()');
+    expect(gameState).toContain("return Number(Neo.metaProgress?.bowmanBaneDefeats || 0) > 0");
     expect(gameState).toContain('function isSargeTutorialBlocked()');
-    expect(gameState).toContain('return isReplayTutorialRequested() && !hasAllSargeTutorialPrereqs()');
+    expect(gameState).toContain('return isReplayTutorialRequested() && !hasSargeUnlockPrereq()');
     expect(gameState).toContain('Neo.isSargeTutorialBlocked = isSargeTutorialBlocked');
-    // The prereq check honors the derived gelleh/mooggy unlocks too.
-    expect(gameState).toContain("if (Number(Neo.metaProgress?.godsKilled || 0) > 0) unlocked.add('gelleh')");
-    expect(gameState).toContain("if (Number(Neo.metaProgress?.mooggyDefeats || 0) >= 3) unlocked.add('mooggy')");
     // Run start drops the replay rather than running the tutorial as Sarge.
     expect(gameState).toContain("if (!resume && Neo.chosenCharacter === 'sarge' && isSargeTutorialBlocked())");
     // Charselect nudges a blocked Sarge selection onto a starter.

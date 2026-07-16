@@ -475,5 +475,15 @@
   "moves.ghost_ball.desc": "استمر في الشحن، ثم أطلق الجرم السماوي الطيفي الذي يطارد الفأر ويمر عبر الأعداء. فهو يتقلص ويضعف بمرور الوقت ومع كل ضربة حتى يتلاشى.",
   "moves.holy_eye_beams.name": "شعاع العين المقدسة",
   "moves.holy_eye_beams.desc": "قم بتوجيه الشعاعين المقدسين من عينيك. كل طاقم لديه فرصة لشفاءك بنسبة 5% كحد أقصى من الصحة.",
-  "sounds.break_furniture.label": "كسر الأثاث"
+  "sounds.break_furniture.label": "كسر الأثاث",
+  "moves.titan_hammer.name": "مطرقة تيتان",
+  "moves.titan_hammer.desc": "استدعِ مطرقة عملاقة تتبع المؤشر. اضغط لتحطيمها لإحداث سحق منطقة واسعة. تدوم 8 ثوانٍ.",
+  "difficulties.easy.name": "سهل",
+  "difficulties.easy.description": "يستخدم وضع السهل منحنى أعداء أخف وإسقاطات آثار إضافية.",
+  "difficulties.gelleh.name": "جيليه",
+  "difficulties.mooggy.name": "Mooggy",
+  "difficulties.turtle_boy.name": "فتى السلحفاة",
+  "difficulties.sarge.name": "سارج",
+  "difficulties.sarge.label": "HP",
+  "difficulties.custom_character.label": "HP"
 }

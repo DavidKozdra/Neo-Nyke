@@ -1151,6 +1151,12 @@ export function createUIController(view) {
         const defeats = Math.max(0, Math.min(3, Number(Neo.metaProgress?.mooggyDefeats || 0)));
         return `<div class="info-char-card__lock">LOCKED: Defeat Mooggy ${defeats}/3</div>`;
       }
+      if (characterKey === 'sarge') {
+        return "<div class=\"info-char-card__lock\">LOCKED: Defeat Bowman's Bane</div>";
+      }
+      if (characterKey === 'turtle_boy') {
+        return '<div class="info-char-card__lock">LOCKED: Equip Extending Staff + Turtle Wave together</div>';
+      }
       return '<div class="info-char-card__lock">LOCKED</div>';
     }
 
@@ -1852,6 +1858,7 @@ export function createUIController(view) {
         rosterTrack?.addEventListener('click', event => {
           const addButton = event.target instanceof Element ? event.target.closest('[data-add-custom-character]') : null;
           if (addButton) {
+            if (!Neo.hasAllCharactersUnlocked?.()) return;
             const newKey = Neo.createCustomCharacter?.();
             if (!newKey) return;
             Neo.editingCustomCharacterKey = newKey;
@@ -2774,10 +2781,9 @@ export function createUIController(view) {
         renderCustomRosterCards();
         const previousCarouselKey = selectedCarouselKey;
         selectedCarouselKey = selected || previousCarouselKey;
-        // The tutorial can only be replayed as Sarge once the rest of the
-        // roster is unlocked. When a tutorial replay is pending and that prereq
-        // isn't met, Sarge's card behaves as locked here (he stays playable in
-        // normal runs — this only affects the tutorial flow).
+        // A pending tutorial replay can't run as Sarge until he's unlocked
+        // (he stays playable in normal runs once earned — this only affects
+        // the tutorial flow when the prereq somehow isn't met yet).
         const sargeTutorialBlocked = !!Neo.isSargeTutorialBlocked?.();
         const isSelectable = (itemKey) =>
           unlocked.has(itemKey) && !(itemKey === 'sarge' && sargeTutorialBlocked);
@@ -2792,8 +2798,21 @@ export function createUIController(view) {
             const mooggyProgress = Math.max(0, Math.min(3, Number(Neo.metaProgress?.mooggyDefeats || 0)));
             return `Unlock: Mooggy ${mooggyProgress}/3`;
           }
+          if (itemKey === 'sarge') return "Unlock: defeat Bowman's Bane";
+          if (itemKey === 'turtle_boy') return 'Unlock: equip Extending Staff + Turtle Wave';
           return 'Locked';
         };
+
+        const allCharactersUnlocked = !!Neo.hasAllCharactersUnlocked?.();
+        const addCustomButton = document.querySelector('[data-add-custom-character]');
+        if (addCustomButton) {
+          addCustomButton.classList.toggle('locked', !allCharactersUnlocked);
+          addCustomButton.disabled = !allCharactersUnlocked;
+          const addHint = addCustomButton.querySelector('small');
+          const addHintText = allCharactersUnlocked ? 'New custom' : 'Unlock the full roster first';
+          if (addHint) addHint.textContent = addHintText;
+          addCustomButton.setAttribute('aria-label', `Add custom character. ${addHintText}.`);
+        }
 
         view.charButtons.forEach(button => {
           const itemKey = button.dataset.char;

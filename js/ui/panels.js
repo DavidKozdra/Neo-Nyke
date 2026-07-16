@@ -2988,6 +2988,7 @@ export function equipMove(slot, moveKey) {
     Neo.updateHud();
     Neo.scheduleRunSave();
     Neo.tutorialController?.signal?.('move-equipped', { slot, moveKey });
+    Neo.checkTurtleBoyUnlock?.();
   }
 
 export function equipWeapon(weaponKey) {
@@ -3009,6 +3010,7 @@ export function equipWeapon(weaponKey) {
     renderInventoryPanel();
     Neo.updateHud();
     Neo.scheduleRunSave();
+    Neo.checkTurtleBoyUnlock?.();
   }
 
   function handleInventoryWeaponSelect(event) {

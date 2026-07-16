@@ -26,10 +26,12 @@ const unchangedStrictValues = new Set([
   'XP',
   'Antony Blemmyae',
   'Excalibur',
+  'Gelleh',
   'Gorba Gorba',
   'Katana Excalibur 777X',
   'Metao',
   'Mooggy',
+  'Sarge',
 ]);
 
 function isPunctuationOnly(value) {

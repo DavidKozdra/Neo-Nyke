@@ -475,5 +475,15 @@
   "moves.ghost_ball.desc": "길게 눌러 충전한 다음 마우스를 쫓아 적을 통과하는 스펙트럼 구체를 방출합니다. 그것은 시간이 지남에 따라 그리고 사라질 때까지 공격할 때마다 줄어들고 약해집니다.",
   "moves.holy_eye_beams.name": "신성한 눈 광선",
   "moves.holy_eye_beams.desc": "당신의 눈에서 쌍둥이 성스러운 광선을 내보내십시오. 시전할 때마다 일정 확률로 최대 HP의 5%를 회복합니다.",
-  "sounds.break_furniture.label": "가구를 깨다"
+  "sounds.break_furniture.label": "가구를 깨다",
+  "moves.titan_hammer.name": "타이탄 해머",
+  "moves.titan_hammer.desc": "커서를 따라오는 거대한 망치를 소환합니다. 클릭하면 내리쳐서 강력한 광역 피해를 줍니다. 8초 동안 지속됩니다.",
+  "difficulties.easy.name": "쉬움",
+  "difficulties.easy.description": "쉬움은 적 성장 곡선을 완만하게 하고 유물 드롭을 늘립니다.",
+  "difficulties.gelleh.name": "겔레",
+  "difficulties.mooggy.name": "Mooggy",
+  "difficulties.turtle_boy.name": "거북이 소년",
+  "difficulties.sarge.name": "사지",
+  "difficulties.sarge.label": "HP",
+  "difficulties.custom_character.label": "HP"
 }

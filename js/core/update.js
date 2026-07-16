@@ -612,6 +612,8 @@ export function loop(timestamp) {
     if (Neo.gameState !== 'play') return;
     Neo.updateJusticeBlades?.(dt);
     if (Neo.gameState !== 'play') return;
+    Neo.updateTitanHammer?.(dt);
+    if (Neo.gameState !== 'play') return;
     Neo.updateSkySwords?.(dt);
     if (Neo.gameState !== 'play') return;
     Neo.updateGhostBalls?.(dt);

@@ -1963,6 +1963,111 @@
     ctx.globalAlpha = 1;
   }
 
+  // Titan Hammer (Sarge alt-smash): a giant hammer hovering near the cursor,
+  // squashing down into a slam pose while its swing animation plays out.
+  function drawTitanHammer() {
+    const hammer = Neo.titanHammer;
+    if (!hammer) return;
+    const ctx = Neo.ctx;
+    // swinging counts down 1 -> 0; render a quick downward slam near the start.
+    const slamPhase = hammer.swinging > 0 ? 1 - hammer.swinging : 0;
+    const dip = Math.sin(Math.min(1, slamPhase * 2.4) * Math.PI) * 14;
+    const fadeAlpha = hammer.life < 0.6 ? hammer.life / 0.6 : 1;
+
+    // Slam-ready indicator: a dashed ring at the AOE radius, around the spot the
+    // hammer would land on. Bright pulsing cyan-white when a click would land a
+    // slam right now; dim static blue while the swing is on cooldown or the
+    // hammer is out of slams (contact damage still applies either way).
+    const canSlam = hammer.swingCooldown <= 0 && hammer.swingsLeft > 0;
+    ctx.save();
+    ctx.globalAlpha = fadeAlpha * (canSlam ? 0.85 : 0.35);
+    ctx.strokeStyle = canSlam ? '#eaffff' : '#5578b8';
+    ctx.lineWidth = canSlam ? 3 : 2;
+    ctx.setLineDash([10, 8]);
+    if (canSlam) {
+      ctx.shadowColor = '#bfe4ff';
+      ctx.shadowBlur = 14 + Math.sin(Neo.gameElapsedTime * 6) * 4;
+    }
+    ctx.beginPath();
+    ctx.arc(hammer.x, hammer.y, hammer.radius, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.shadowBlur = 0;
+    ctx.restore();
+    // Swings-remaining pips just above the head, so it's clear at a glance
+    // whether any slams are left (contact damage keeps working at 0).
+    ctx.save();
+    ctx.globalAlpha = fadeAlpha;
+    const pipCount = Math.max(0, Number(hammer.swingsLeft || 0));
+    const pipTotal = 2;
+    for (let index = 0; index < pipTotal; index += 1) {
+      const filled = index < pipCount;
+      const px = hammer.x - 8 + index * 16;
+      const py = hammer.y - hammer.radius * 0.55 - 40;
+      ctx.fillStyle = filled ? '#bfe4ff' : 'rgba(180,200,230,0.25)';
+      ctx.strokeStyle = filled ? '#eaffff' : 'rgba(180,200,230,0.4)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(px, py, 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    ctx.save();
+    ctx.translate(hammer.x, hammer.y + dip);
+    ctx.rotate(hammer.angle + Math.PI / 2);
+    ctx.globalAlpha = fadeAlpha;
+
+    // Ground shadow anchors the head even while it hovers/dips.
+    ctx.save();
+    ctx.rotate(-(hammer.angle + Math.PI / 2));
+    ctx.fillStyle = 'rgba(8,10,18,0.4)';
+    ctx.beginPath();
+    ctx.ellipse(0, 30 - dip * 0.5, 26, 12, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // Handle.
+    ctx.fillStyle = '#3a465d';
+    ctx.strokeStyle = '#cfe0ff';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.roundRect(-4, -6, 8, 46, 4);
+    ctx.fill();
+    ctx.stroke();
+
+    // Hammer head.
+    ctx.shadowColor = '#7da3ff';
+    ctx.shadowBlur = hammer.swinging > 0 ? 20 : 10;
+    ctx.fillStyle = '#7da3ff';
+    ctx.strokeStyle = '#cfe0ff';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.roundRect(-30, -34, 60, 32, 8);
+    ctx.fill();
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#e7efff';
+    ctx.fillRect(-30, -34, 60, 6);
+
+    ctx.restore();
+
+    // Impact ring while the slam is active.
+    if (hammer.swinging > 0.55) {
+      const ringAlpha = (hammer.swinging - 0.55) / 0.45;
+      ctx.save();
+      ctx.globalAlpha = ringAlpha * 0.5;
+      ctx.strokeStyle = '#9bb8ff';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(hammer.x, hammer.y, hammer.radius * (1 - ringAlpha) + 10, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+    ctx.globalAlpha = 1;
+  }
+
   // Ghost Ball: a spectral orb that drifts toward the mouse, drawn shrinking as
   // it decays (radius already reflects remaining size/power — see updateGhostBalls).
   function drawGhostBalls() {
@@ -2807,6 +2912,7 @@
   Neo.drawGhostBallChargeBar = drawGhostBallChargeBar;
   Neo.drawProjectiles = drawProjectiles;
   Neo.drawJusticeBlades = drawJusticeBlades;
+  Neo.drawTitanHammer = drawTitanHammer;
   Neo.drawGhostBalls = drawGhostBalls;
   Neo.drawSkySwords = drawSkySwords;
   Neo.drawHealingZoneChargeBar = drawHealingZoneChargeBar;

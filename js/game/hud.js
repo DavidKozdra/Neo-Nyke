@@ -758,6 +758,7 @@
     Neo.skySwords = [];
     Neo.justiceBlades = [];
     Neo.ghostBalls = [];
+    Neo.titanHammer = null;
     Neo.activeBeamPaths = null;
     Neo.lastDamageSource = '';
     Neo.lastDamageSourceKey = '';
@@ -1237,7 +1238,7 @@
     enemies.sort((a, b) => a.distSq - b.distSq);
     enemies.slice(0, targetCount).forEach(({ enemy }) => {
       const angle = Neo.angleBetween(Neo.player, enemy);
-      Neo.hitEnemy?.(enemy, damage, angle, 70, '#8dd4ff');
+      Neo.hitEnemy?.(enemy, damage, angle, 70, '#8dd4ff', { lightning: true });
       Neo.ringBurst(enemy.x, enemy.y, 14, '#bde8ff', 0.2);
     });
     const angle = Neo.rand(0, Math.PI * 2, 'fx');

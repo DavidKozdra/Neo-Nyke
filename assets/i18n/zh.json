@@ -475,5 +475,15 @@
   "moves.ghost_ball.desc": "按住进行冲锋，然后释放一个光谱球来追逐鼠标并穿过敌人。随着时间的推移和每次撞击，它都会收缩和减弱，直到消失。",
   "moves.holy_eye_beams.name": "圣眼光束",
   "moves.holy_eye_beams.desc": "从你的眼睛中引导出双神圣的光束。每次施放都有几率治愈你最大生命值的 5%。",
-  "sounds.break_furniture.label": "打破家具"
+  "sounds.break_furniture.label": "打破家具",
+  "moves.titan_hammer.name": "泰坦之锤",
+  "moves.titan_hammer.desc": "召唤一把跟随光标移动的巨锤。点击将其砸下，造成大范围重击。持续8秒。",
+  "difficulties.easy.name": "简单",
+  "difficulties.easy.description": "简单难度使用更平缓的敌人强度曲线，并增加遗物掉落。",
+  "difficulties.gelleh.name": "盖勒",
+  "difficulties.mooggy.name": "Mooggy",
+  "difficulties.turtle_boy.name": "神龟小子",
+  "difficulties.sarge.name": "萨吉",
+  "difficulties.sarge.label": "HP",
+  "difficulties.custom_character.label": "HP"
 }

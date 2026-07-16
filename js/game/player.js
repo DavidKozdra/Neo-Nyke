@@ -506,6 +506,7 @@ export const KIT_ALTERNATIVES = {
   },
   sarge: {
     laser: ['hammer_throw', 'lightning_cross'],
+    smash: ['hammer_smash', 'titan_hammer'],
   },
   princess: {
     laser: ['love_beam', 'love_bomb_laser'],
