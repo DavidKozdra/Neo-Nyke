@@ -58,4 +58,10 @@ describe('minimap room icons', () => {
     expect(hud).not.toContain('addLegendEntry');
     expect(hud).not.toContain('keyFooterPad');
   });
+
+  test('switches loot markers to the authored open-chest frame', () => {
+    expect(hud).toContain('const chestFrame = chestOpen ? 4 : 0');
+    expect(hud).toContain('roomChests.every(chest => chest?.open)');
+    expect(hud).toContain('drawRoomIcon(roomMarker[5], roomMarker[4], x, y, roomExplored, { chestOpen })');
+  });
 });

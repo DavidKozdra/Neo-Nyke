@@ -364,7 +364,7 @@
       Neo.ctx.restore();
     };
 
-    const drawRoomIcon = (icon, fallbackGlyph, x, y, roomExplored) => {
+    const drawRoomIcon = (icon, fallbackGlyph, x, y, roomExplored, { chestOpen = false } = {}) => {
       const cx = x + size / 2;
       const cy = y + size / 2;
       // Prefer authored environment art whenever that vocabulary exists. Canvas
@@ -400,7 +400,10 @@
         Neo.ctx.fillRect(x + assetInset, y + assetInset, assetSize, assetSize);
         Neo.ctx.shadowColor = 'rgba(0,0,0,1)';
         Neo.ctx.shadowBlur = Math.max(3, size * 0.16);
-        if (icon === 'chest') Neo.ctx.drawImage(image, 0, 0, 24, 24, x + assetInset, y + assetInset, assetSize, assetSize);
+        if (icon === 'chest') {
+          const chestFrame = chestOpen ? 4 : 0;
+          Neo.ctx.drawImage(image, chestFrame * 24, 0, 24, 24, x + assetInset, y + assetInset, assetSize, assetSize);
+        }
         else Neo.ctx.drawImage(image, x + assetInset, y + assetInset, assetSize, assetSize);
         Neo.ctx.restore();
         return;
@@ -551,7 +554,14 @@
         const roomMarker = room.type === 'ladder' && roomExplored
           ? ['exit', 'EXIT', '#e5b62f', 'square', '★', 'ladder']
           : roomTypeLegend[room.type];
-        if (roomMarker) drawRoomIcon(roomMarker[5], roomMarker[4], x, y, roomExplored);
+        if (roomMarker) {
+          const roomChests = room === currentRoom ? Neo.chests : room.chests;
+          const chestOpen = room.type === 'treasure'
+            && Array.isArray(roomChests)
+            && roomChests.length > 0
+            && roomChests.every(chest => chest?.open);
+          drawRoomIcon(roomMarker[5], roomMarker[4], x, y, roomExplored, { chestOpen });
+        }
       }
       // Forge/shop blink: draw a soft, slowly-blinking highlight ring around
       // revealed forge and shop rooms so they catch the eye on the minimap.
