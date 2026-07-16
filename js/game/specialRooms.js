@@ -161,13 +161,23 @@ function grantRelic(room, rewardId, { elite = false } = {}) {
   return key;
 }
 
-function servicePickup(room) {
-  return {
-    x: Neo.ROOM_W / 2,
-    y: Neo.ROOM_H / 2,
-    type: 'specialService',
-    serviceType: room.type,
-  };
+const SPECIAL_CHOICE_POSITIONS = Object.freeze([
+  { x: -138, y: 42 },
+  { x: 0, y: -28 },
+  { x: 138, y: 42 },
+]);
+
+function serviceChoicePickups(room) {
+  return getChoices(room).map((choice, index) => {
+    const position = SPECIAL_CHOICE_POSITIONS[index] || { x: (index - 1) * 138, y: 42 };
+    return {
+      x: Neo.ROOM_W / 2 + position.x,
+      y: Neo.ROOM_H / 2 + position.y,
+      type: 'specialChoice',
+      serviceType: room.type,
+      choiceId: choice.id,
+    };
+  });
 }
 
 export function assignSpecialServiceRoom(pool = []) {
@@ -183,16 +193,19 @@ export function prepareSpecialRoom(room) {
   room.cleared = true;
   room.serviceUsed = !!room.serviceUsed;
   room.pickups = Array.isArray(room.pickups) ? room.pickups : [];
-  room.pickups = room.pickups.filter(pickup => pickup?.type !== 'specialService');
-  if (!room.serviceUsed) room.pickups.push(servicePickup(room));
+  // Replace the legacy floating room orb with one stable world prop per choice.
+  // Rebuild these on entry because costs and availability can depend on the
+  // player's current inventory, HP, coins, or active bounty.
+  room.pickups = room.pickups.filter(pickup => !['specialService', 'specialChoice'].includes(pickup?.type));
+  if (!room.serviceUsed) room.pickups.push(...serviceChoicePickups(room));
   return true;
 }
 
 function consumeService(room, result) {
   room.serviceUsed = true;
   room.serviceResult = String(result || 'The room falls silent.');
-  room.pickups = (room.pickups || []).filter(pickup => pickup?.type !== 'specialService');
-  if (room === Neo.currentRoom) Neo.pickups = Neo.pickups.filter(pickup => pickup?.type !== 'specialService');
+  room.pickups = (room.pickups || []).filter(pickup => !['specialService', 'specialChoice'].includes(pickup?.type));
+  if (room === Neo.currentRoom) Neo.pickups = Neo.pickups.filter(pickup => !['specialService', 'specialChoice'].includes(pickup?.type));
   Neo.playSfx?.('buy_sell');
   Neo.spawnParticle?.({
     x: Neo.player?.x || Neo.ROOM_W / 2,
@@ -596,6 +609,66 @@ function getChoices(room) {
   return [];
 }
 
+export function getSpecialRoomChoiceView(choiceId, room = Neo.currentRoom) {
+  if (!isSpecialRoom(room) || room.serviceUsed) return null;
+  const choice = getChoices(room).find(entry => entry.id === choiceId);
+  if (!choice) return null;
+  return {
+    id: choice.id,
+    title: choice.title,
+    description: choice.description,
+    cost: choice.cost,
+    enabled: !!choice.enabled,
+    disabledReason: choice.disabledReason || '',
+    enemyType: choice.enemyType || '',
+    iconKey: SPECIAL_CHOICE_ICON_KEYS[`${room.type}:${choice.id}`] || 'item',
+    color: SPECIAL_ROOM_DEFS[room.type]?.color || '#d7f6ff',
+  };
+}
+
+export function getNearestSpecialRoomChoice(maxDistance = 118) {
+  if (!isSpecialRoom() || Neo.currentRoom?.serviceUsed || !Neo.player) return null;
+  let nearest = null;
+  let nearestDistance = Math.max(0, Number(maxDistance || 0));
+  for (const pickup of Neo.pickups || []) {
+    if (pickup?.type !== 'specialChoice') continue;
+    const distance = Neo.dist(Neo.player.x, Neo.player.y, pickup.x, pickup.y);
+    if (distance > nearestDistance) continue;
+    const choice = getSpecialRoomChoiceView(pickup.choiceId);
+    if (!choice) continue;
+    nearest = { pickup, choice, distance };
+    nearestDistance = distance;
+  }
+  return nearest;
+}
+
+export function getSpecialRoomChoiceInteractLabel() {
+  const nearest = getNearestSpecialRoomChoice(92);
+  if (!nearest) return '';
+  return nearest.choice.enabled
+    ? `Choose ${nearest.choice.title} — ${nearest.choice.cost}`
+    : `${nearest.choice.title} unavailable`;
+}
+
+export function trySpecialRoomChoiceInteract() {
+  const nearest = getNearestSpecialRoomChoice(92);
+  if (!nearest || Neo.currentRoom?.serviceUsed) return false;
+  const choice = getChoices(Neo.currentRoom).find(entry => entry.id === nearest.choice.id);
+  if (!choice) return false;
+  if (!choice.enabled) {
+    Neo.spawnParticle?.({
+      x: nearest.pickup.x,
+      y: nearest.pickup.y - 46,
+      life: 1,
+      text: String(choice.disabledReason || 'UNAVAILABLE').toUpperCase(),
+      c: '#ff8b98',
+    });
+    Neo.playSfx?.('menu_error');
+    return true;
+  }
+  return !!choice.apply();
+}
+
 function renderSpecialRoomPanel() {
   const panel = document.getElementById('specialRoomPanel');
   const title = document.getElementById('specialRoomTitle');
@@ -952,6 +1025,10 @@ Neo.prepareSpecialRoom = prepareSpecialRoom;
 Neo.renderSpecialRoomPanel = renderSpecialRoomPanel;
 Neo.setSpecialRoomPanelOpen = setSpecialRoomPanelOpen;
 Neo.toggleSpecialRoomPanel = toggleSpecialRoomPanel;
+Neo.getSpecialRoomChoiceView = getSpecialRoomChoiceView;
+Neo.getNearestSpecialRoomChoice = getNearestSpecialRoomChoice;
+Neo.getSpecialRoomChoiceInteractLabel = getSpecialRoomChoiceInteractLabel;
+Neo.trySpecialRoomChoiceInteract = trySpecialRoomChoiceInteract;
 Neo.updateSpecialRoomProgress = updateSpecialRoomProgress;
 Neo.updateBountyTarget = updateBountyTarget;
 Neo.handleBountyTargetLethal = handleBountyTargetLethal;

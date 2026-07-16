@@ -112,7 +112,7 @@ export function bindInput() {
         if (bountyTargetHandled) Neo.specialRoomKeyLatch = true;
         const inSpecialRoom = Neo.isSpecialRoom?.();
         if (!bountyTargetHandled && inSpecialRoom && !Neo.specialRoomKeyLatch) {
-          Neo.toggleSpecialRoomPanel?.();
+          Neo.trySpecialRoomChoiceInteract?.();
           Neo.specialRoomKeyLatch = true;
         }
         const inShopRoom = Neo.currentRoom?.type === 'shop';

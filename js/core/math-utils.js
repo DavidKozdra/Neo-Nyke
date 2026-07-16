@@ -813,7 +813,7 @@ function triggerInteract() {
   const inShopRoom = Neo.currentRoom?.type === 'shop';
   const inAnvilRoom = Neo.currentRoom?.type === 'anvil';
   if (inSpecialRoom && !Neo.specialRoomKeyLatch) {
-    Neo.toggleSpecialRoomPanel?.();
+    Neo.trySpecialRoomChoiceInteract?.();
     Neo.specialRoomKeyLatch = true;
     setTimeout(() => { Neo.specialRoomKeyLatch = false; }, 200);
   }

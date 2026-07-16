@@ -25,10 +25,11 @@ describe('special service rooms', () => {
     expect(serviceAssignment).toBeLessThan(shopAssignment);
   });
 
-  test('service markers persist until a panel choice consumes them', () => {
-    expect(specialSource).toContain("type: 'specialService'");
-    expect(worldSource).toContain("if (pickup.type === 'specialService') continue;");
-    expect(specialSource).toContain("pickup?.type !== 'specialService'");
+  test('service choices are pictured world stations and never walk-over loot', () => {
+    expect(specialSource).toContain("type: 'specialChoice'");
+    expect(specialSource).toContain('room.pickups.push(...serviceChoicePickups(room))');
+    expect(worldSource).toContain("pickup.type === 'specialService' || pickup.type === 'specialChoice'");
+    expect(specialSource).toContain('trySpecialRoomChoiceInteract');
   });
 
   test('shared choice panel is present and exposes only decision-relevant resources', () => {

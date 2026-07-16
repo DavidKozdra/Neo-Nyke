@@ -8,7 +8,7 @@ await page.goto('http://127.0.0.1:5173/index.html', { waitUntil: 'domcontentload
 await page.waitForFunction(() => window.Neo?.createDefaultPlayer && window.Neo?.prepareSpecialRoom && window.Neo?.ITEM_KEYS?.length);
 
 const result = await page.evaluate(() => {
-  const roomTypes = ['shrine', 'bounty', 'reliquary', 'sanctuary', 'oracle', 'portal', 'prison', 'wishing_well'];
+  const roomTypes = ['shrine', 'bounty', 'reliquary', 'oracle', 'portal', 'prison', 'wishing_well'];
   Neo.player = Neo.createDefaultPlayer();
   Neo.player.coins = 500;
   Neo.player.xp = 10;
@@ -40,7 +40,7 @@ const result = await page.evaluate(() => {
       title: document.getElementById('specialRoomTitle')?.textContent || '',
       choices: document.querySelectorAll('#specialRoomChoices [data-special-choice]').length,
       icons: document.querySelectorAll('#specialRoomChoices [data-inv-ui-icon], #specialRoomChoices [data-special-enemy-icon]').length,
-      marker: room.pickups.some(pickup => pickup.type === 'specialService'),
+      worldChoices: room.pickups.filter(pickup => pickup.type === 'specialChoice').length,
     });
     Neo.setSpecialRoomPanelOpen(false);
   }
@@ -160,9 +160,9 @@ const result = await page.evaluate(() => {
 await browser.close();
 if (pageErrors.length) throw new Error(`Page errors: ${pageErrors.join(' | ')}`);
 for (const entry of result.rendered) {
-  if (!entry.title || entry.choices !== 3 || entry.icons !== 3 || !entry.marker) throw new Error(`Invalid ${entry.type}: ${JSON.stringify(entry)}`);
+  if (!entry.title || entry.choices !== 3 || entry.icons !== 3 || entry.worldChoices !== 3) throw new Error(`Invalid ${entry.type}: ${JSON.stringify(entry)}`);
 }
-const expected = ['shrine', 'bounty', 'reliquary', 'sanctuary', 'oracle', 'portal', 'prison', 'wishing_well'];
+const expected = ['shrine', 'bounty', 'reliquary', 'oracle', 'portal', 'prison', 'wishing_well'];
 if (JSON.stringify(result.generated) !== JSON.stringify(expected)) throw new Error(`Invalid generated rotation: ${JSON.stringify(result.generated)}`);
 if (!Object.values(result.bountyFlow).every(Boolean)) throw new Error(`Invalid bounty flow: ${JSON.stringify(result.bountyFlow)}`);
 console.log(JSON.stringify(result));
