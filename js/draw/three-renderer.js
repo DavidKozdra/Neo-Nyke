@@ -51,6 +51,7 @@ const pools = {
   offers: new Map(),
   bodies: new Map(),
   spawnPortals: new Map(),
+  justiceBlades: new Map(),
 };
 let playerSprite = null;
 let playerShadow = null;
@@ -2340,49 +2341,79 @@ function syncTitanHammer() {
 }
 
 // Blade Justice is a live three-sword formation, not an ordinary projectile.
-// Re-bake the authored 2D sword drawing exactly as Titan Hammer does so its
-// kite blades, gold outline, core highlight, and per-sword swing stay identical
-// in 3D rather than becoming anonymous particle dots.
-let justiceBladesSprite = null;
-let justiceBladesCanvas = null;
-let justiceBladesTexture = null;
-const JUSTICE_BLADES_BAKE_HALF = 210;
+// Each sword gets its own billboard in 3D. A single top-down texture bake looks
+// correct from above but can disappear edge-on in first person, which is why
+// the former implementation made the move appear not to spawn at all.
+let justiceBladeTexture = null;
+
+function getJusticeBladeTexture() {
+  if (justiceBladeTexture) return justiceBladeTexture;
+  const canvasEl = document.createElement('canvas');
+  canvasEl.width = 96;
+  canvasEl.height = 36;
+  const g = canvasEl.getContext('2d');
+  g.imageSmoothingEnabled = false;
+  const cx = 48;
+  const cy = 18;
+  const len = 38;
+  const width = 12;
+  g.shadowColor = '#fff6a3';
+  g.shadowBlur = 10;
+  g.fillStyle = '#fff6a3';
+  g.strokeStyle = '#ffd86a';
+  g.lineWidth = 2;
+  g.beginPath();
+  g.moveTo(cx + len, cy);
+  g.lineTo(cx - len * 0.4, cy - width * 0.5);
+  g.lineTo(cx - len * 0.62, cy);
+  g.lineTo(cx - len * 0.4, cy + width * 0.5);
+  g.closePath();
+  g.fill();
+  g.stroke();
+  g.shadowBlur = 0;
+  g.fillStyle = '#ffffff';
+  g.beginPath();
+  g.moveTo(cx + len * 0.86, cy);
+  g.lineTo(cx - len * 0.2, cy - width * 0.16);
+  g.lineTo(cx - len * 0.4, cy);
+  g.lineTo(cx - len * 0.2, cy + width * 0.16);
+  g.closePath();
+  g.fill();
+  g.fillStyle = '#ffd86a';
+  g.fillRect(cx - len * 0.62, cy - width * 0.42, width * 0.32, width * 0.84);
+  justiceBladeTexture = makeCanvasTexture(canvasEl);
+  return justiceBladeTexture;
+}
 
 function syncJusticeBlades() {
-  const playerBlades = Array.isArray(Neo.justiceBlades) ? Neo.justiceBlades : [];
-  const rivalBlades = (Neo.enemies || []).some(enemy => Array.isArray(enemy?.rivalJusticeBlades) && enemy.rivalJusticeBlades.length);
-  if ((!playerBlades.length && !rivalBlades) || typeof Neo.drawJusticeBlades !== 'function' || !Neo.player) {
-    if (justiceBladesSprite) justiceBladesSprite.visible = false;
-    return;
-  }
-  if (!justiceBladesCanvas) {
-    justiceBladesCanvas = document.createElement('canvas');
-    justiceBladesCanvas.width = JUSTICE_BLADES_BAKE_HALF * 2;
-    justiceBladesCanvas.height = JUSTICE_BLADES_BAKE_HALF * 2;
-    justiceBladesTexture = makeCanvasTexture(justiceBladesCanvas);
-    justiceBladesSprite = new THREE.Sprite(new THREE.SpriteMaterial({
-      map: justiceBladesTexture, transparent: true, alphaTest: 0.02, depthWrite: false,
-    }));
-    justiceBladesSprite.center.set(0.5, 0.5);
-    scene.add(justiceBladesSprite);
-  }
-  const g = justiceBladesCanvas.getContext('2d');
-  g.clearRect(0, 0, justiceBladesCanvas.width, justiceBladesCanvas.height);
-  g.imageSmoothingEnabled = false;
-  const realCtx = Neo.ctx;
-  g.save();
-  g.translate(JUSTICE_BLADES_BAKE_HALF - Neo.player.x, JUSTICE_BLADES_BAKE_HALF - Neo.player.y);
-  try {
-    Neo.ctx = g;
-    Neo.drawJusticeBlades();
-  } catch { /* leave the current live sword frame blank rather than break render */ }
-  Neo.ctx = realCtx;
-  g.restore();
-  justiceBladesTexture.needsUpdate = true;
-  justiceBladesSprite.visible = true;
-  const size = JUSTICE_BLADES_BAKE_HALF * 2;
-  justiceBladesSprite.scale.set(size, size, 1);
-  justiceBladesSprite.position.set(Neo.player.x, BEAM_Y + 12, Neo.player.y);
+  const blades = [
+    ...(Array.isArray(Neo.justiceBlades) ? Neo.justiceBlades : []),
+    ...(Neo.enemies || []).flatMap(enemy => Array.isArray(enemy?.rivalJusticeBlades) ? enemy.rivalJusticeBlades : []),
+  ];
+  syncPool(
+    pools.justiceBlades,
+    blades,
+    () => {
+      const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: getJusticeBladeTexture(), transparent: true, alphaTest: 0.02, depthWrite: false, blending: THREE.AdditiveBlending,
+      }));
+      sprite.center.set(0.5, 0.5);
+      sprite.renderOrder = 5;
+      return sprite;
+    },
+    (blade, sprite) => {
+      const alpha = Math.max(0, Math.min(1, Number(blade.life || 0) / 0.4));
+      const radius = Number(blade.radius || 16);
+      const length = radius * 2.6;
+      const width = radius * 0.9;
+      sprite.position.set(blade.x, BEAM_Y + 10, blade.y);
+      sprite.scale.set(length * 2, width * 2, 1);
+      // The simulation's live swing angle drives the visible sword orientation,
+      // so the three separate blades keep their authored formation and sweep.
+      sprite.material.rotation = -Number(blade.angle || 0);
+      sprite.material.opacity = alpha;
+    },
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -2930,6 +2961,7 @@ Neo.threeRenderer = {
     fpYaw,
     fpPitch,
     roomChildren: roomGroup?.children?.length,
+    justiceBlades: pools.justiceBlades.size,
     floorHasMap: !!floorMesh?.material?.map,
     contextLost: !!renderer?.getContext?.()?.isContextLost?.(),
   }),
