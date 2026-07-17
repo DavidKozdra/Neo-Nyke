@@ -11,6 +11,7 @@
 import * as THREE from '../vendor/three.module.js';
 
 const RENDER3D_STORE_KEY = 'neonyke:render3d';
+const CAMERA_MODE_STORE_KEY = 'neonyke:camera3d';
 const WALL_HEIGHT = 112;
 const PILLAR_HEIGHT = 150;
 const BLOCK_HEIGHT = 58;
@@ -221,9 +222,13 @@ function makeShadowMesh(radius) {
 function disposeObject(obj) {
   obj.traverse?.(node => {
     if (node.material) {
-      // Textures are cached/shared; only dispose the materials.
-      if (Array.isArray(node.material)) node.material.forEach(m => m.dispose());
-      else node.material.dispose();
+      // Cached/shared textures survive; per-segment texture clones (marked
+      // `owned`) are disposed with their material.
+      const materials = Array.isArray(node.material) ? node.material : [node.material];
+      materials.forEach(m => {
+        if (m.map?.userData?.owned) m.map.dispose();
+        m.dispose();
+      });
     }
     if (node.geometry && node.geometry !== unitBox && node.geometry !== unitPlane && node.geometry !== unitCircle) {
       node.geometry.dispose();
@@ -323,13 +328,87 @@ function themeWallColor(theme) {
   return new THREE.Color(Number(match[1]) / 255, Number(match[2]) / 255, Number(match[3]) / 255);
 }
 
-function addWallSegment(group, material, x1, x2, z1, z2) {
+// One env tile stretched over a whole wall reads as a giant smear up close (it
+// was very visible in first person). Give each segment its own texture clone
+// with UV repeat so the tile pattern actually tiles at world scale.
+const WALL_TILE_UNITS = 56;
+function makeWallMaterial(texture, color, lengthUnits, heightUnits = WALL_HEIGHT) {
+  if (!texture) return new THREE.MeshLambertMaterial({ color });
+  const tiled = texture.clone();
+  tiled.wrapS = THREE.RepeatWrapping;
+  tiled.wrapT = THREE.RepeatWrapping;
+  tiled.repeat.set(
+    Math.max(1, Math.round(lengthUnits / WALL_TILE_UNITS)),
+    Math.max(1, Math.round(heightUnits / WALL_TILE_UNITS)),
+  );
+  tiled.needsUpdate = true;
+  tiled.userData = { owned: true };
+  return new THREE.MeshLambertMaterial({ map: tiled, color: 0xcfcfcf });
+}
+
+function addWallSegment(group, wallSkin, x1, x2, z1, z2) {
   const w = Math.max(1, x2 - x1);
   const d = Math.max(1, z2 - z1);
-  const mesh = new THREE.Mesh(unitBox, material);
+  const mesh = new THREE.Mesh(unitBox, makeWallMaterial(wallSkin.texture, wallSkin.color, Math.max(w, d)));
   mesh.scale.set(w, WALL_HEIGHT, d);
   mesh.position.set(x1 + w / 2, WALL_HEIGHT / 2, z1 + d / 2);
   group.add(mesh);
+}
+
+// A short dark passage beyond each door gap, so doorways read as tunnels to
+// the next room instead of holes into the void — matters most in first person.
+const CORRIDOR_DEPTH = 96;
+function addDoorCorridor(group, side, wallSkin) {
+  const W = Neo.ROOM_W;
+  const H = Neo.ROOM_H;
+  const DOOR = Neo.DOOR;
+  const half = DOOR / 2;
+  const midX = W / 2;
+  const midZ = H / 2;
+  const dark = new THREE.MeshBasicMaterial({ color: 0x0a0c12 });
+  const capMaterial = new THREE.MeshBasicMaterial({ color: 0x05060d });
+
+  const addFloorAndCeiling = (cx, cz, w, d) => {
+    const floor = new THREE.Mesh(unitPlane, dark);
+    floor.rotation.x = -Math.PI / 2;
+    floor.scale.set(w, d, 1);
+    floor.position.set(cx, 0.4, cz);
+    group.add(floor);
+    const top = new THREE.Mesh(unitPlane, dark);
+    top.rotation.x = Math.PI / 2;
+    top.scale.set(w, d, 1);
+    top.position.set(cx, WALL_HEIGHT, cz);
+    group.add(top);
+  };
+  const addCap = (cx, cz, rotY) => {
+    const cap = new THREE.Mesh(unitPlane, capMaterial);
+    cap.scale.set(DOOR, WALL_HEIGHT, 1);
+    cap.position.set(cx, WALL_HEIGHT / 2, cz);
+    cap.rotation.y = rotY;
+    group.add(cap);
+  };
+
+  if (side === 'n') {
+    addFloorAndCeiling(midX, -CORRIDOR_DEPTH / 2, DOOR, CORRIDOR_DEPTH);
+    addWallSegment(group, wallSkin, midX - half - 10, midX - half, -CORRIDOR_DEPTH, 0);
+    addWallSegment(group, wallSkin, midX + half, midX + half + 10, -CORRIDOR_DEPTH, 0);
+    addCap(midX, -CORRIDOR_DEPTH, 0);
+  } else if (side === 's') {
+    addFloorAndCeiling(midX, H + CORRIDOR_DEPTH / 2, DOOR, CORRIDOR_DEPTH);
+    addWallSegment(group, wallSkin, midX - half - 10, midX - half, H, H + CORRIDOR_DEPTH);
+    addWallSegment(group, wallSkin, midX + half, midX + half + 10, H, H + CORRIDOR_DEPTH);
+    addCap(midX, H + CORRIDOR_DEPTH, Math.PI);
+  } else if (side === 'w') {
+    addFloorAndCeiling(-CORRIDOR_DEPTH / 2, midZ, CORRIDOR_DEPTH, DOOR);
+    addWallSegment(group, wallSkin, -CORRIDOR_DEPTH, 0, midZ - half - 10, midZ - half);
+    addWallSegment(group, wallSkin, -CORRIDOR_DEPTH, 0, midZ + half, midZ + half + 10);
+    addCap(-CORRIDOR_DEPTH, midZ, Math.PI / 2);
+  } else if (side === 'e') {
+    addFloorAndCeiling(W + CORRIDOR_DEPTH / 2, midZ, CORRIDOR_DEPTH, DOOR);
+    addWallSegment(group, wallSkin, W, W + CORRIDOR_DEPTH, midZ - half - 10, midZ - half);
+    addWallSegment(group, wallSkin, W, W + CORRIDOR_DEPTH, midZ + half, midZ + half + 10);
+    addCap(W + CORRIDOR_DEPTH, midZ, -Math.PI / 2);
+  }
 }
 
 function buildRoom() {
@@ -364,44 +443,58 @@ function buildRoom() {
   roomGroup.add(apron);
 
   // Walls: textured with the theme's wall tile, gaps where doors exist.
-  const wallTexture = theme.wallTile ? getEnvTileTexture(theme.wallTile) : null;
-  const wallMaterial = new THREE.MeshLambertMaterial({ color: themeWallColor(theme) });
-  if (wallTexture) {
-    wallMaterial.map = wallTexture;
-    wallMaterial.color = new THREE.Color(0xbfbfbf);
-  }
+  const wallSkin = {
+    texture: theme.wallTile ? getEnvTileTexture(theme.wallTile) : null,
+    color: themeWallColor(theme),
+  };
   const doors = room.doors || {};
   const midX = W / 2;
   const midZ = H / 2;
   const half = DOOR / 2;
   // North wall (z: 0..WALL)
   if (doors.n) {
-    addWallSegment(roomGroup, wallMaterial, 0, midX - half, 0, WALL);
-    addWallSegment(roomGroup, wallMaterial, midX + half, W, 0, WALL);
+    addWallSegment(roomGroup, wallSkin, 0, midX - half, 0, WALL);
+    addWallSegment(roomGroup, wallSkin, midX + half, W, 0, WALL);
   } else {
-    addWallSegment(roomGroup, wallMaterial, 0, W, 0, WALL);
+    addWallSegment(roomGroup, wallSkin, 0, W, 0, WALL);
   }
   // South wall
   if (doors.s) {
-    addWallSegment(roomGroup, wallMaterial, 0, midX - half, H - WALL, H);
-    addWallSegment(roomGroup, wallMaterial, midX + half, W, H - WALL, H);
+    addWallSegment(roomGroup, wallSkin, 0, midX - half, H - WALL, H);
+    addWallSegment(roomGroup, wallSkin, midX + half, W, H - WALL, H);
   } else {
-    addWallSegment(roomGroup, wallMaterial, 0, W, H - WALL, H);
+    addWallSegment(roomGroup, wallSkin, 0, W, H - WALL, H);
   }
   // West wall
   if (doors.w) {
-    addWallSegment(roomGroup, wallMaterial, 0, WALL, 0, midZ - half);
-    addWallSegment(roomGroup, wallMaterial, 0, WALL, midZ + half, H);
+    addWallSegment(roomGroup, wallSkin, 0, WALL, 0, midZ - half);
+    addWallSegment(roomGroup, wallSkin, 0, WALL, midZ + half, H);
   } else {
-    addWallSegment(roomGroup, wallMaterial, 0, WALL, 0, H);
+    addWallSegment(roomGroup, wallSkin, 0, WALL, 0, H);
   }
   // East wall
   if (doors.e) {
-    addWallSegment(roomGroup, wallMaterial, W - WALL, W, 0, midZ - half);
-    addWallSegment(roomGroup, wallMaterial, W - WALL, W, midZ + half, H);
+    addWallSegment(roomGroup, wallSkin, W - WALL, W, 0, midZ - half);
+    addWallSegment(roomGroup, wallSkin, W - WALL, W, midZ + half, H);
   } else {
-    addWallSegment(roomGroup, wallMaterial, W - WALL, W, 0, H);
+    addWallSegment(roomGroup, wallSkin, W - WALL, W, 0, H);
   }
+
+  // Ceiling: a single down-facing plane at wall height. Single-sided, so the
+  // third-person camera above it culls it away entirely — only the first-person
+  // camera (under it) ever sees it.
+  const ceiling = new THREE.Mesh(unitPlane, new THREE.MeshBasicMaterial({
+    color: new THREE.Color(theme.backdrop || '#151916').multiplyScalar(0.55),
+  }));
+  ceiling.rotation.x = Math.PI / 2;
+  ceiling.scale.set(W, H, 1);
+  ceiling.position.set(W / 2, WALL_HEIGHT, H / 2);
+  roomGroup.add(ceiling);
+
+  // Passage stubs beyond each open door.
+  ['n', 's', 'w', 'e'].forEach(side => {
+    if (doors[side]) addDoorCorridor(roomGroup, side, wallSkin);
+  });
 
   // Door glow markers on the floor at each opening.
   const doorMaterial = new THREE.MeshBasicMaterial({
@@ -427,10 +520,7 @@ function buildRoom() {
     if (!structure) return;
     if (structure.kind === 'pillar') {
       const w = Math.max(20, Number(structure.w || 40));
-      const pillarTexture = getEnvTileTexture('wall_block');
-      const material = pillarTexture
-        ? new THREE.MeshLambertMaterial({ map: pillarTexture, color: 0xd9d9d9 })
-        : new THREE.MeshLambertMaterial({ color: themeWallColor(theme) });
+      const material = makeWallMaterial(getEnvTileTexture('wall_block'), themeWallColor(theme), w, PILLAR_HEIGHT);
       const mesh = new THREE.Mesh(unitBox, material);
       mesh.scale.set(w, PILLAR_HEIGHT, w * 0.8);
       mesh.position.set(structure.x, PILLAR_HEIGHT / 2, structure.y);
@@ -564,7 +654,8 @@ function syncPlayer() {
     playerShadow = playerSprite.getObjectByName('shadow');
     scene.add(playerSprite);
   }
-  playerSprite.visible = true;
+  // First person: you are the camera — no player billboard in view.
+  playerSprite.visible = !isFirstPersonActive();
   const anim = dying ? Neo.playerDeathAnim : null;
   const x = anim ? anim.x : p.x;
   const z = anim ? anim.y : p.y;
@@ -961,8 +1052,19 @@ function syncBeams() {
   // Player beam weapons / laser skill while firing.
   if (p && (Neo.laserActive || Number(p.weaponBeamTime || 0) > 0) && typeof Neo.buildRicochetBeamPath === 'function') {
     const angle = Neo.angleToMouse?.() ?? 0;
-    const path = Neo.buildRicochetBeamPath(p.x, p.y, angle, 430, Neo.PLAYER_BEAM_BOUNCES || 0) || [];
-    path.forEach(seg => addBeamSegment(seg.x1, seg.y1, seg.x2, seg.y2, 0x8df0ff, 7));
+    // First person: start the visible beam from the held weapon — forward and
+    // to the right of the eye, far enough out that the near end of the beam box
+    // doesn't blow up in perspective (visual only — damage still traces from
+    // the player).
+    const fp = isFirstPersonActive();
+    let ox = p.x;
+    let oy = p.y;
+    if (fp) {
+      ox += Math.cos(angle) * 60 - Math.sin(angle) * 18;
+      oy += Math.sin(angle) * 60 + Math.cos(angle) * 18;
+    }
+    const path = Neo.buildRicochetBeamPath(ox, oy, angle, 430, Neo.PLAYER_BEAM_BOUNCES || 0) || [];
+    path.forEach(seg => addBeamSegment(seg.x1, seg.y1, seg.x2, seg.y2, 0x8df0ff, fp ? 5 : 7));
   }
   // Enemy / rival beams.
   (Neo.enemies || []).forEach(enemy => {
@@ -994,10 +1096,90 @@ function syncBeams() {
 // ---------------------------------------------------------------------------
 const CAMERA_HEIGHT = 580;
 const CAMERA_BACK = 430;
+const FP_EYE_HEIGHT = 34;
 const camTarget = new THREE.Vector3();
+
+// Camera mode: 'fp' (first person, the default) or 'third' (follow cam).
+let cameraMode = 'fp';
+try { cameraMode = localStorage.getItem(CAMERA_MODE_STORE_KEY) === 'third' ? 'third' : 'fp'; } catch { /* private mode */ }
+let fpYaw = 0;
+let fpPitch = -0.08;
+
+// True when first-person is actually driving the view this frame — the aim and
+// movement hooks in update.js key off this so 2D / third-person behavior is
+// completely untouched otherwise.
+function isFirstPersonActive() {
+  return ready && Neo.render3D && cameraMode === 'fp'
+    && !Neo.isSplitScreen?.() && !window.NeoTouch?.active;
+}
+
+function setCameraMode(mode) {
+  cameraMode = mode === 'fp' ? 'fp' : 'third';
+  try { localStorage.setItem(CAMERA_MODE_STORE_KEY, cameraMode); } catch { /* private mode */ }
+  if (cameraMode !== 'fp' && document.pointerLockElement) document.exitPointerLock?.();
+}
+
+function syncPointerLock() {
+  const wantLock = isFirstPersonActive() && Neo.gameState === 'play';
+  if (!wantLock && document.pointerLockElement === Neo.canvas) {
+    document.exitPointerLock?.();
+  }
+}
+
+// Mouse-look while pointer-locked; gamepad right stick also turns the view.
+// Chrome fires a spurious huge-delta mousemove when pointer lock engages (the
+// pointer "jumping" to the lock position), which would wildly spin the view —
+// swallow the first events after lock and reject absurd deltas.
+let lockSuppressEvents = 0;
+document.addEventListener('pointerlockchange', () => {
+  if (document.pointerLockElement === Neo?.canvas) lockSuppressEvents = 2;
+});
+window.addEventListener('mousemove', event => {
+  if (!isFirstPersonActive() || document.pointerLockElement !== Neo.canvas) return;
+  if (lockSuppressEvents > 0) {
+    lockSuppressEvents -= 1;
+    return;
+  }
+  const mx = event.movementX || 0;
+  const my = event.movementY || 0;
+  if (Math.abs(mx) > 200 || Math.abs(my) > 200) return;
+  fpYaw += mx * 0.0026;
+  fpPitch = Math.max(-0.55, Math.min(0.45, fpPitch - my * 0.0022));
+});
+
+document.addEventListener('mousedown', () => {
+  if (!isFirstPersonActive() || Neo.gameState !== 'play') return;
+  if (document.pointerLockElement !== Neo.canvas) {
+    Neo.canvas.requestPointerLock?.();
+  }
+});
 
 function syncCamera() {
   const p = Neo.player;
+  // FPS-appropriate field of view in first person; classic follow cam otherwise.
+  const targetFov = isFirstPersonActive() ? 68 : 50;
+  if (camera.fov !== targetFov) {
+    camera.fov = targetFov;
+    camera.updateProjectionMatrix();
+  }
+  if (isFirstPersonActive() && p) {
+    const gp = window.NeoGamepad?.[0];
+    if (gp?.active && gp.hasAim && Math.hypot(gp.aimX || 0, gp.aimY || 0) > 0.25) {
+      fpYaw = Math.atan2(gp.aimY, gp.aimX);
+    }
+    const shakeOn = window.NeoSettings?.getAccess()?.screenShake !== false;
+    const jitter = shakeOn ? Math.min(6, (Neo.shake || 0) * 0.55) : 0;
+    const jx = ((Neo.nextRandom?.('fx') ?? Math.random()) - 0.5) * jitter;
+    const jy = ((Neo.nextRandom?.('fx') ?? Math.random()) - 0.5) * jitter;
+    camera.position.set(p.x + jx, FP_EYE_HEIGHT + jy, p.y + jx * 0.6);
+    const cosPitch = Math.cos(fpPitch);
+    camera.lookAt(
+      p.x + Math.cos(fpYaw) * cosPitch * 100,
+      FP_EYE_HEIGHT + Math.sin(fpPitch) * 100,
+      p.y + Math.sin(fpYaw) * cosPitch * 100,
+    );
+    return;
+  }
   const anim = Neo.gameState === 'dying' ? Neo.playerDeathAnim : null;
   const focusX = anim ? anim.x : (p?.x ?? Neo.ROOM_W / 2);
   const focusZ = anim ? anim.y : (p?.y ?? Neo.ROOM_H / 2);
@@ -1053,6 +1235,100 @@ function drawPrompts() {
   if (ladder && Neo.currentRoom?.cleared) {
     drawProjectedPrompt(ladder.x, ladder.y, 30, Neo.drawLadderPrompt);
   }
+  if (isFirstPersonActive()) {
+    drawViewmodel();
+    drawCrosshair();
+    if (document.pointerLockElement !== Neo.canvas) drawLockHint();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// First-person viewmodel: the equipped weapon held at the bottom of the screen
+// (Doom-style), with walk bob, a melee lunge, and laser-fire shake. Drawn as a
+// 2D overlay on #c so the HUD still layers above it.
+// ---------------------------------------------------------------------------
+const weaponIconCache = new Map();
+function getWeaponIconCanvas() {
+  const key = Neo.getEquippedWeapon?.();
+  if (!key) return null;
+  let canvasEl = weaponIconCache.get(key);
+  if (canvasEl) return canvasEl;
+  const def = Neo.WEAPON_DEFS?.[key];
+  if (!def || typeof Neo.drawWeaponToastIcon !== 'function') return null;
+  canvasEl = document.createElement('canvas');
+  canvasEl.width = 64;
+  canvasEl.height = 64;
+  try { Neo.drawWeaponToastIcon(canvasEl, def); } catch { return null; }
+  weaponIconCache.set(key, canvasEl);
+  return canvasEl;
+}
+
+function drawViewmodel() {
+  const icon = getWeaponIconCanvas();
+  const p = Neo.player;
+  if (!icon || !p) return;
+  const g = Neo.ctx;
+  const W = Neo.canvas.width;
+  const H = Neo.canvas.height;
+  const t = performance.now() / 1000;
+  const moving = Math.hypot(p.vx || 0, p.vy || 0) > 24;
+  const bobX = moving ? Math.sin(t * 7.4) * 10 : Math.sin(t * 1.6) * 3;
+  const bobY = moving ? Math.abs(Math.cos(t * 7.4)) * 12 : Math.sin(t * 2.1) * 4;
+  // Melee swing: lunge the weapon toward screen center and rotate through.
+  const swingWindow = Neo.ATTACKS?.melee?.active || 0.17;
+  const swing = Math.max(0, Number(p.swing || 0));
+  const lunge = swing > 0 ? Math.sin(Math.min(1, 1 - swing / swingWindow) * Math.PI) : 0;
+  const laserKick = Neo.laserActive ? Math.sin(t * 55) * 4 : 0;
+  const size = Math.round(H * 0.34);
+  const x = W * 0.62 + bobX - lunge * 130;
+  const y = H - size * 0.62 + bobY - lunge * 95 + laserKick;
+  g.save();
+  g.imageSmoothingEnabled = false;
+  g.translate(x, y);
+  g.rotate(-0.55 + (moving ? Math.sin(t * 7.4) * 0.03 : 0) - lunge * 1.05);
+  g.drawImage(icon, -size / 2, -size / 2, size, size);
+  g.restore();
+}
+
+function drawLockHint() {
+  if (Neo.gameState !== 'play') return;
+  const g = Neo.ctx;
+  const cx = Neo.canvas.width / 2;
+  const cy = Neo.canvas.height * 0.6;
+  g.save();
+  g.font = 'bold 14px monospace';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  const text = 'CLICK TO LOOK AROUND  ·  F6 = THIRD PERSON';
+  const w = g.measureText(text).width + 28;
+  g.fillStyle = 'rgba(8, 16, 26, 0.82)';
+  g.beginPath();
+  g.roundRect(cx - w / 2, cy - 15, w, 30, 8);
+  g.fill();
+  g.strokeStyle = 'rgba(141, 240, 255, 0.5)';
+  g.lineWidth = 1.5;
+  g.stroke();
+  g.fillStyle = '#8df0ff';
+  g.fillText(text, cx, cy);
+  g.restore();
+}
+
+function drawCrosshair() {
+  const cx = Neo.canvas.width / 2;
+  const cy = Neo.canvas.height / 2;
+  const g = Neo.ctx;
+  g.save();
+  g.strokeStyle = 'rgba(200, 240, 255, 0.9)';
+  g.lineWidth = 2;
+  g.shadowColor = 'rgba(0,0,0,0.8)';
+  g.shadowBlur = 2;
+  g.beginPath();
+  g.moveTo(cx - 9, cy); g.lineTo(cx - 3, cy);
+  g.moveTo(cx + 3, cy); g.lineTo(cx + 9, cy);
+  g.moveTo(cx, cy - 9); g.lineTo(cx, cy - 3);
+  g.moveTo(cx, cy + 3); g.lineTo(cx, cy + 9);
+  g.stroke();
+  g.restore();
 }
 
 // ---------------------------------------------------------------------------
@@ -1093,6 +1369,7 @@ function render() {
   syncCamera();
 
   renderer.render(scene, camera);
+  syncPointerLock();
   drawPrompts();
   return true;
 }
@@ -1109,19 +1386,32 @@ try { storedPreference = localStorage.getItem(RENDER3D_STORE_KEY) ?? '1'; } catc
 Neo.render3D = storedPreference !== '0';
 
 window.addEventListener('keydown', event => {
-  if (event.code !== 'F4' || event.repeat) return;
-  event.preventDefault();
-  setRender3D(!Neo.render3D);
-  if (Neo.player) {
-    Neo.spawnParticle?.({
-      x: Neo.player.x,
-      y: Neo.player.y - 40,
-      life: 1.4,
-      text: Neo.render3D ? '3D VIEW' : '2D VIEW',
-      c: '#8df0ff',
-    });
+  if (event.repeat) return;
+  if (event.code === 'F4') {
+    event.preventDefault();
+    setRender3D(!Neo.render3D);
+    announceViewChange(Neo.render3D ? '3D VIEW' : '2D VIEW');
+  } else if (event.code === 'F6' && Neo.render3D) {
+    event.preventDefault();
+    setCameraMode(cameraMode === 'fp' ? 'third' : 'fp');
+    announceViewChange(cameraMode === 'fp' ? 'FIRST PERSON' : 'THIRD PERSON');
   }
 });
 
-Neo.threeRenderer = { render, setRender3D };
+function announceViewChange(text) {
+  if (!Neo.player) return;
+  Neo.spawnParticle?.({ x: Neo.player.x, y: Neo.player.y - 40, life: 1.4, text, c: '#8df0ff' });
+}
+
+// The aim/movement hooks in core/update.js read this: a number (view yaw in
+// radians) while first-person is driving, null otherwise.
+Neo.getFirstPersonYaw = () => (isFirstPersonActive() ? fpYaw : null);
+
+Neo.threeRenderer = {
+  render,
+  setRender3D,
+  setCameraMode,
+  getCameraMode: () => cameraMode,
+  setYaw: value => { fpYaw = Number(value) || 0; },
+};
 Neo.setRender3D = setRender3D;
