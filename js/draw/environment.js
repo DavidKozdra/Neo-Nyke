@@ -7,7 +7,14 @@
     Neo.ctx.clearRect(0, 0, Neo.canvas.width, Neo.canvas.height);
     if (isPlayLike) {
       const split = Neo.isSplitScreen();
-      if (split) {
+      // 3D mode: the Three.js renderer draws the world onto the WebGL canvas
+      // behind this one; the 2D canvas stays transparent there so minimap/HUD
+      // overlays below still composite on top. Returns false (2D fallback)
+      // whenever it can't render (split-screen, atlas not ready, WebGL failed).
+      const worldDrawn3D = !split && Neo.render3D && !!Neo.threeRenderer?.render?.();
+      if (worldDrawn3D) {
+        // world rendered on the WebGL layer; nothing to draw here
+      } else if (split) {
         const slots = Neo.getActivePlayerSlots();
         const sc = slots.length;
         const vpW = Math.floor(Neo.canvas.width / 2);
