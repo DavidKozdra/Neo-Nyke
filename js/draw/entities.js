@@ -1954,6 +1954,10 @@
   Neo.drawStatusBadge = drawStatusBadge;
   Neo.drawSpawnPortal = drawSpawnPortal;
   Neo.drawEnemies = drawEnemies;
+  // Exposed so the 3D renderer can reuse the exact 2D enemy nameplate/health-bar
+  // bitmap (name + level + HP + bar + barrier) as a billboard texture, keeping
+  // the two views pixel-identical.
+  Neo.buildEnemyNameplateRender = buildEnemyNameplateRender;
   Neo.drawPlayerCorpseAnim = drawPlayerCorpseAnim;
   Neo.drawDeathOverlay = drawDeathOverlay;
   Neo.drawPlayer = drawPlayer;
