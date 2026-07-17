@@ -11282,6 +11282,7 @@ button.alt.danger {
 .credits-page__back,
 .credits__hero,
 .credits__person,
+.credits__special-thanks,
 .credits-extras,
 .credits__thanks {
   opacity: 0;
@@ -11723,8 +11724,14 @@ button.alt.danger {
 .credits-page.is-open .credits__person--audio {
   animation: creditsFlyUp .6s cubic-bezier(.22,1,.36,1) .38s forwards;
 }
-.credits-page.is-open .credits-extras {
+.credits-page.is-open .credits__person--art {
+  animation: creditsFlyUp .6s cubic-bezier(.22,1,.36,1) .44s forwards;
+}
+.credits-page.is-open .credits__special-thanks {
   animation: creditsFlyUp .6s cubic-bezier(.22,1,.36,1) .5s forwards;
+}
+.credits-page.is-open .credits-extras {
+  animation: creditsFlyUp .6s cubic-bezier(.22,1,.36,1) .56s forwards;
 }
 .credits-page.is-open .credits__thanks {
   animation: creditsFlyUp .6s cubic-bezier(.22,1,.36,1) .62s forwards;
@@ -11744,6 +11751,7 @@ button.alt.danger {
 .acc-reduce-flash .credits-back__arrow,
 .acc-reduce-flash .credits__hero,
 .acc-reduce-flash .credits__person,
+.acc-reduce-flash .credits__special-thanks,
 .acc-reduce-flash .credits__thanks {
   opacity: 1;
   transform: none;
@@ -11754,6 +11762,7 @@ button.alt.danger {
   .credits-back__arrow,
   .credits__hero,
   .credits__person,
+  .credits__special-thanks,
   .credits-extras,
   .credits__thanks {
     opacity: 1 !important;
@@ -11785,8 +11794,12 @@ button.alt.danger {
   font-size: calc(clamp(13px, 1.6vw, 17px) * var(--font-scale, 1));
   letter-spacing: .42em;
   text-transform: uppercase;
-  color: #ffb3e6;
-  text-shadow: 0 0 18px rgba(255,120,210,.4);
+  color: #ffe1f5;
+  text-shadow: 0 0 18px rgba(255,120,210,.6);
+  background: rgba(10,6,14,.72);
+  padding: 6px 18px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,179,230,.28);
 }
 
 /* Two glass cards, side by side on wide screens */
@@ -11820,6 +11833,7 @@ button.alt.danger {
   background: rgba(var(--accent), .9);
 }
 .credits__person--audio { --accent: 255,140,214; }
+.credits__person--art { --accent: 255,210,120; }
 
 /* hovering a card lifts it and intensifies its accent glow */
 .credits__person {
@@ -11854,7 +11868,7 @@ button.alt.danger {
 
 .credits__person-head { display: flex; flex-direction: column; gap: 6px; padding-right: 56px; }
 .credits__role {
-  font-size: calc(clamp(11px, 1.2vw, 13px) * var(--font-scale, 1));
+  font-size: calc(clamp(12px, 1.3vw, 15px) * var(--font-scale, 1));
   letter-spacing: .18em;
   text-transform: uppercase;
   color: rgba(var(--accent), 1);
@@ -11921,6 +11935,33 @@ button.alt.danger {
   text-transform: uppercase;
   color: #cfe0ff;
   opacity: .9;
+}
+
+/* Special thanks — a quieter footnote below the role cards, not another card. */
+.credits__special-thanks {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  max-width: min(560px, 100%);
+}
+.credits__special-thanks-title {
+  margin: 0;
+  font-size: calc(clamp(11px, 1.2vw, 13px) * var(--font-scale, 1));
+  letter-spacing: .32em;
+  text-transform: uppercase;
+  color: #8fa4c2;
+}
+.credits__special-thanks-list {
+  margin: 0;
+  font-size: calc(clamp(13px, 1.5vw, 15px) * var(--font-scale, 1));
+  color: #cfe0ff;
+  opacity: .85;
+  line-height: 1.5;
+}
+.credits__special-thanks-name {
+  color: #ffd27a;
+  font-weight: 600;
 }
 .info-card {
   display: flex;

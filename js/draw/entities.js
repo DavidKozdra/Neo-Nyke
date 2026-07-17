@@ -447,6 +447,7 @@
   }
 
   function buildEnemyNameplateRender(enemy, hpPct) {
+    const bountyReady = !!(enemy.bountyTarget && (enemy.bountyCaptureReady || enemy.bountyTheftReady));
     const label = (enemy.type === 'rival' && enemy.rivalData)
       ? enemy.rivalData.name
       : enemy.bountyTarget
@@ -455,12 +456,14 @@
     // Enemy level = total floors entered this run, not the per-loop floor.
     const level = `Lv.${Neo.floorsEntered ?? Neo.floor}`;
     const hpText = `${Math.ceil(enemy.hp)}/${Math.ceil(enemy.max)}`;
-    const accent = enemy.bountyTarget ? '#ffb070' : enemy.elite ? '#f6cf6a' : Neo.isBossType(enemy.type) ? '#f2e8d7'
+    const accent = bountyReady ? '#83f0b0' : enemy.bountyTarget ? '#ffb070' : enemy.elite ? '#f6cf6a' : Neo.isBossType(enemy.type) ? '#f2e8d7'
       : enemy.type === 'rival' ? (enemy.rivalData?.color || '#d96a83') : '#b8cfe0';
     const dangerous = Neo.isEnemyDangerous?.(enemy);
-    const text = `${label}  ${level}  ${hpText}`;
+    const text = bountyReady
+      ? `${label}  [E] ${enemy.bountyCaptureReady ? 'CAPTURE' : 'STEAL'}`
+      : `${label}  ${level}  ${hpText}`;
     const barrierValue = Math.max(0, Number(enemy.barrier || 0));
-    const healthColor = getCombatHealthColor(enemy);
+    const healthColor = bountyReady ? '#83f0b0' : getCombatHealthColor(enemy);
     const rivalBorder = enemy.type === 'rival'
       ? (enemy.rivalData?.color || 'rgba(220, 232, 246, 0.42)')
       : '';
@@ -476,6 +479,7 @@
       healthColor,
       rivalBorder,
       dangerous ? 1 : 0,
+      bountyReady ? 1 : 0,
     ].join('|');
     const cached = enemyNameplateCache.get(enemy);
     if (cached?.signature === signature) return cached;
@@ -1290,17 +1294,21 @@
         Neo.ctx.restore();
       }
       if (enemy.bountyTarget) {
-        const markY = drawY - enemy.r - 30;
-        const pulse = 1 + Math.sin(Number(Neo.gameElapsedTime || 0) * 6) * 0.12;
+        const bountyReady = !!(enemy.bountyCaptureReady || enemy.bountyTheftReady);
+        const markY = drawY - enemy.r - (bountyReady ? 34 : 30);
+        const pulse = bountyReady
+          ? 1 + Math.sin(Number(Neo.gameElapsedTime || 0) * 10) * 0.22
+          : 1 + Math.sin(Number(Neo.gameElapsedTime || 0) * 6) * 0.12;
+        const markColor = bountyReady ? '#83f0b0' : '#ff9d66';
         Neo.ctx.save();
         Neo.ctx.translate(enemy.x, markY);
         Neo.ctx.scale(pulse, pulse);
-        Neo.ctx.strokeStyle = '#ff9d66';
-        Neo.ctx.shadowColor = '#ff9d66';
-        Neo.ctx.shadowBlur = 10;
-        Neo.ctx.lineWidth = 2;
+        Neo.ctx.strokeStyle = markColor;
+        Neo.ctx.shadowColor = markColor;
+        Neo.ctx.shadowBlur = bountyReady ? 16 : 10;
+        Neo.ctx.lineWidth = bountyReady ? 3 : 2;
         Neo.ctx.beginPath();
-        Neo.ctx.arc(0, 0, 9, 0, Math.PI * 2);
+        Neo.ctx.arc(0, 0, bountyReady ? 11 : 9, 0, Math.PI * 2);
         Neo.ctx.stroke();
         Neo.ctx.beginPath();
         Neo.ctx.moveTo(-13, 0); Neo.ctx.lineTo(-6, 0);
@@ -1308,6 +1316,15 @@
         Neo.ctx.moveTo(0, -13); Neo.ctx.lineTo(0, -6);
         Neo.ctx.moveTo(0, 13); Neo.ctx.lineTo(0, 6);
         Neo.ctx.stroke();
+        if (bountyReady) {
+          Neo.ctx.fillStyle = markColor;
+          Neo.ctx.beginPath();
+          Neo.ctx.arc(0, 0, 3, 0, Math.PI * 2);
+          Neo.ctx.fill();
+          Neo.ctx.font = 'bold 9px system-ui';
+          Neo.ctx.textAlign = 'center';
+          Neo.ctx.fillText('PRESS E', 0, -20);
+        }
         Neo.ctx.restore();
       }
       Neo.ctx.save();

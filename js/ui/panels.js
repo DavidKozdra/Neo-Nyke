@@ -1286,7 +1286,14 @@ export function renderAnvilItemList(itemType) {
     if (itemType === 'weapon') {
       keys = Object.keys(Neo.player.ownedWeapons || {}).filter(k => Neo.WEAPON_BASE_STATS[k] && Neo.player.ownedWeapons[k]);
     } else {
-      keys = Object.keys(Neo.player.ownedMoves || {}).filter(k => Neo.MOVE_BASE_STATS[k] && Neo.player.ownedMoves[k]);
+      // `slash` is the bare-hands melee fallback every character starts with,
+      // so it lands in ownedMoves at run start even when the melee slot gets
+      // swapped to something else — and unlike other moves it's never removed.
+      // Hide it from the forge once it's no longer actually equipped so it
+      // doesn't clutter the list with an upgrade the player can't use.
+      const equippedMoveKeys = new Set(Object.values(Neo.player.equippedMoves || {}).filter(Boolean));
+      keys = Object.keys(Neo.player.ownedMoves || {}).filter(k => Neo.MOVE_BASE_STATS[k] && Neo.player.ownedMoves[k]
+        && (k !== 'slash' || equippedMoveKeys.has('slash')));
     }
 
     if (keys.length === 0) {
