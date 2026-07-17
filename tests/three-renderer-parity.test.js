@@ -63,6 +63,19 @@ describe('3D renderer gameplay parity', () => {
     expect(renderer).toContain('Neo.CHARACTER_SPRITE_SHEETS?.[spriteKey]');
   });
 
+  test('uses authored healing, Blade Justice, Turtle Wave, and charge HUD visuals in 3D', () => {
+    expect(renderer).toContain("if (hazard.kind === 'healing_zone') return makeHealingZoneObject();");
+    expect(renderer).toContain('function updateHealingZone(hazard, group)');
+    expect(renderer).toContain('function syncJusticeBlades()');
+    expect(renderer).toContain('Neo.drawJusticeBlades();');
+    expect(renderer).toContain('turtleWave,');
+    expect(renderer).toContain('playerBeam.width * 1.7 * wavePulse');
+    expect(renderer).toContain('function drawChargeHud()');
+    expect(renderer).toContain('Neo.drawHealingZoneChargeBar?.();');
+    expect(renderer).toContain('Neo.drawDeathBallChargeBar?.();');
+    expect(renderer).toContain('Neo.drawLoveBombChargeBar?.();');
+  });
+
   test('projects third-person mouse aim to the same 3D floor the player sees', () => {
     const update = fs.readFileSync(path.join(__dirname, '../js/core/update.js'), 'utf8');
     expect(renderer).toContain('function projectCanvasMouseToWorld(canvasX, canvasY)');

@@ -1494,6 +1494,7 @@ function syncDestructibles() {
 
 const HAZARD_STYLES = {
   lava: { color: 0xff7a2e, opacity: 0.85 },
+  healing_zone: { color: 0x35ff6f, opacity: 0.78 },
   red_spikes: { color: 0xc7ccd6, opacity: 0.9 },
   thorn_mine: { color: 0xc22a3f, opacity: 0.85 },
   bomb: { color: 0xffa94d, opacity: 0.9 },
@@ -1553,12 +1554,65 @@ function makeChaosBurstObject() {
   return group;
 }
 
+function makeHealingZoneObject() {
+  const group = new THREE.Group();
+  const core = new THREE.Mesh(unitCircle, new THREE.MeshBasicMaterial({
+    color: 0x50ff8c, transparent: true, opacity: 0.16, depthWrite: false, blending: THREE.AdditiveBlending,
+  }));
+  core.rotation.x = -Math.PI / 2;
+  core.position.y = 1.8;
+  core.name = 'core';
+  group.add(core);
+  const ring = new THREE.Mesh(new THREE.RingGeometry(0.92, 1, 48), new THREE.MeshBasicMaterial({
+    color: 0x35ff6f, transparent: true, opacity: 0.9, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+  }));
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = 2.1;
+  ring.name = 'ring';
+  group.add(ring);
+  for (let index = 0; index < 6; index += 1) {
+    const plus = new THREE.Mesh(unitBox, new THREE.MeshBasicMaterial({
+      color: 0xcaffd8, transparent: true, opacity: 0.8, depthWrite: false, blending: THREE.AdditiveBlending,
+    }));
+    plus.name = `plus-${index}`;
+    group.add(plus);
+  }
+  return group;
+}
+
+function updateHealingZone(hazard, group) {
+  const t = performance.now() * 0.004 + Number(hazard.ttl || 0);
+  const pulse = 1 + Math.sin(t * 2.2) * 0.08;
+  const radius = Math.max(20, Number(hazard.r || 62));
+  group.position.set(hazard.x, 0, hazard.y);
+  const core = group.getObjectByName('core');
+  const ring = group.getObjectByName('ring');
+  if (core) {
+    core.scale.set(radius * 1.24 * pulse, radius * 1.24 * pulse, 1);
+    core.material.opacity = 0.12 + Math.sin(t * 1.8) * 0.04;
+  }
+  if (ring) {
+    ring.scale.set(radius * pulse, radius * pulse, 1);
+    ring.material.opacity = 0.78 + Math.sin(t * 3.4) * 0.12;
+  }
+  for (let index = 0; index < 6; index += 1) {
+    const plus = group.getObjectByName(`plus-${index}`);
+    if (!plus) continue;
+    const angle = t + index * (Math.PI * 2 / 6);
+    const distance = radius * 0.7;
+    plus.position.set(Math.cos(angle) * distance, 5, Math.sin(angle) * distance);
+    plus.scale.set(8, 1.5, 1.5);
+    plus.rotation.y = -angle;
+  }
+}
+
 function syncHazards() {
   syncPool(
     pools.hazards,
     Neo.hazards,
     hazard => {
       if (hazard.kind === 'chaos_burst') return makeChaosBurstObject();
+      if (hazard.kind === 'healing_zone') return makeHealingZoneObject();
       if (hazard.kind === 'lightning_column') return makeLightningColumnObject();
       if (hazard.kind === 'lightning_strike_line') return makeLightningLineObject();
       const style = HAZARD_STYLES[hazard.kind] || { color: 0xa46bff, opacity: 0.8 };
@@ -1587,6 +1641,10 @@ function syncHazards() {
     (hazard, mesh) => {
       if (hazard.kind === 'chaos_burst') {
         updateChaosBurst(hazard, mesh);
+        return;
+      }
+      if (hazard.kind === 'healing_zone') {
+        updateHealingZone(hazard, mesh);
         return;
       }
       if (hazard.kind === 'lightning_column') {
@@ -1884,7 +1942,7 @@ function clearBeams() {
   beamMeshes.length = 0;
 }
 
-function addBeamSegment(x1, z1, x2, z2, color, width = 6) {
+function addBeamSegment(x1, z1, x2, z2, color, width = 6, opacity = 0.88) {
   const dx = x2 - x1;
   const dz = z2 - z1;
   const length = Math.hypot(dx, dz);
@@ -1892,7 +1950,7 @@ function addBeamSegment(x1, z1, x2, z2, color, width = 6) {
   const mesh = new THREE.Mesh(unitBox, new THREE.MeshBasicMaterial({
     color,
     transparent: true,
-    opacity: 0.88,
+    opacity,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
   }));
@@ -1956,6 +2014,7 @@ function getPlayerBeamVisual() {
               : thornBeams ? 6
                 : holyEyeBeams ? 7
                   : 8) * beamWidthMultiplier,
+    turtleWave,
     paths,
   };
 }
@@ -1998,9 +2057,16 @@ function syncBeams() {
   const playerBeam = getPlayerBeamVisual();
   if (playerBeam) {
     const color = new THREE.Color(playerBeam.color).getHex();
-    playerBeam.paths.forEach(path => path.forEach(seg => addBeamSegment(
-      seg.x1, seg.y1, seg.x2, seg.y2, color, playerBeam.width,
-    )));
+    const wavePulse = 0.85 + Math.sin(performance.now() / 85) * 0.15;
+    playerBeam.paths.forEach(path => path.forEach(seg => {
+      // Turtle Wave gets the same wide cyan aura + whitewater core as 2D,
+      // rather than relying on the normal thin beam box alone.
+      if (playerBeam.turtleWave) {
+        addBeamSegment(seg.x1, seg.y1, seg.x2, seg.y2, 0x74f5ff, playerBeam.width * 1.7 * wavePulse, 0.28);
+        addBeamSegment(seg.x1, seg.y1, seg.x2, seg.y2, 0xa8fbff, playerBeam.width * 0.42, 0.96);
+      }
+      addBeamSegment(seg.x1, seg.y1, seg.x2, seg.y2, color, playerBeam.width, playerBeam.turtleWave ? 0.78 : 0.88);
+    }));
   }
   // Enemy and rival beams use the same range, fan and ricochet path used by
   // combat and the top-down renderer — visual walls can never disagree with
@@ -2077,6 +2143,52 @@ function syncTitanHammer() {
   const size = titanHammerBakeHalf * 2;
   titanHammerSprite.scale.set(size, size, 1);
   titanHammerSprite.position.set(hammer.x, BEAM_Y + 12, hammer.y);
+}
+
+// Blade Justice is a live three-sword formation, not an ordinary projectile.
+// Re-bake the authored 2D sword drawing exactly as Titan Hammer does so its
+// kite blades, gold outline, core highlight, and per-sword swing stay identical
+// in 3D rather than becoming anonymous particle dots.
+let justiceBladesSprite = null;
+let justiceBladesCanvas = null;
+let justiceBladesTexture = null;
+const JUSTICE_BLADES_BAKE_HALF = 210;
+
+function syncJusticeBlades() {
+  const playerBlades = Array.isArray(Neo.justiceBlades) ? Neo.justiceBlades : [];
+  const rivalBlades = (Neo.enemies || []).some(enemy => Array.isArray(enemy?.rivalJusticeBlades) && enemy.rivalJusticeBlades.length);
+  if ((!playerBlades.length && !rivalBlades) || typeof Neo.drawJusticeBlades !== 'function' || !Neo.player) {
+    if (justiceBladesSprite) justiceBladesSprite.visible = false;
+    return;
+  }
+  if (!justiceBladesCanvas) {
+    justiceBladesCanvas = document.createElement('canvas');
+    justiceBladesCanvas.width = JUSTICE_BLADES_BAKE_HALF * 2;
+    justiceBladesCanvas.height = JUSTICE_BLADES_BAKE_HALF * 2;
+    justiceBladesTexture = makeCanvasTexture(justiceBladesCanvas);
+    justiceBladesSprite = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: justiceBladesTexture, transparent: true, alphaTest: 0.02, depthWrite: false,
+    }));
+    justiceBladesSprite.center.set(0.5, 0.5);
+    scene.add(justiceBladesSprite);
+  }
+  const g = justiceBladesCanvas.getContext('2d');
+  g.clearRect(0, 0, justiceBladesCanvas.width, justiceBladesCanvas.height);
+  g.imageSmoothingEnabled = false;
+  const realCtx = Neo.ctx;
+  g.save();
+  g.translate(JUSTICE_BLADES_BAKE_HALF - Neo.player.x, JUSTICE_BLADES_BAKE_HALF - Neo.player.y);
+  try {
+    Neo.ctx = g;
+    Neo.drawJusticeBlades();
+  } catch { /* leave the current live sword frame blank rather than break render */ }
+  Neo.ctx = realCtx;
+  g.restore();
+  justiceBladesTexture.needsUpdate = true;
+  justiceBladesSprite.visible = true;
+  const size = JUSTICE_BLADES_BAKE_HALF * 2;
+  justiceBladesSprite.scale.set(size, size, 1);
+  justiceBladesSprite.position.set(Neo.player.x, BEAM_Y + 12, Neo.player.y);
 }
 
 // ---------------------------------------------------------------------------
@@ -2266,12 +2378,33 @@ function drawProjectedPrompt(worldX, worldY, height, drawFn) {
   Neo.ctx.restore();
 }
 
+function drawChargeHud() {
+  const p = Neo.player;
+  if (!p || Neo.gameState !== 'play') return;
+  const draw = () => {
+    Neo.drawHealingZoneChargeBar?.();
+    Neo.drawDeathBallChargeBar?.();
+    Neo.drawLoveBombChargeBar?.();
+  };
+  if (isFirstPersonActive()) {
+    // There is no player position to project from the camera's own eye. Keep
+    // the shared 2D meter layout intact, anchored just below the crosshair.
+    Neo.ctx.save();
+    Neo.ctx.translate(Neo.canvas.width / 2 - p.x, Neo.canvas.height * 0.72 - p.y);
+    draw();
+    Neo.ctx.restore();
+    return;
+  }
+  drawProjectedPrompt(p.x, p.y, Math.max(26, (p.r || 14) * SPRITE_SIZE_MULT), draw);
+}
+
 function drawPrompts() {
   if (Neo.gameState !== 'play') return;
   const ladder = (Neo.pickups || []).find(pickup => pickup?.type === 'ladder');
   if (ladder && Neo.currentRoom?.cleared) {
     drawProjectedPrompt(ladder.x, ladder.y, 30, Neo.drawLadderPrompt);
   }
+  drawChargeHud();
   if (isFirstPersonActive()) {
     drawViewmodel();
     drawCrosshair();
@@ -2477,6 +2610,7 @@ function render() {
   syncParticles();
   syncDeadBodies();
   syncBeams();
+  syncJusticeBlades();
   syncTitanHammer();
   syncCamera();
   scaleNameplatesToScreen();
