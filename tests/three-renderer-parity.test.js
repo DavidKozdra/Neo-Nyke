@@ -73,7 +73,9 @@ describe('3D renderer gameplay parity', () => {
     expect(renderer).toContain("if (hazard.kind === 'healing_zone') return makeHealingZoneObject();");
     expect(renderer).toContain('function updateHealingZone(hazard, group)');
     expect(renderer).toContain('function syncJusticeBlades()');
-    expect(renderer).toContain('Neo.drawJusticeBlades();');
+    expect(renderer).toContain('pools.justiceBlades');
+    expect(renderer).toContain('function getJusticeBladeTexture()');
+    expect(renderer).toContain('sprite.material.rotation = -Number(blade.angle || 0);');
     expect(renderer).toContain('turtleWave,');
     expect(renderer).toContain('playerBeam.width * 1.7 * wavePulse');
     expect(renderer).toContain('function drawChargeHud()');
