@@ -47,8 +47,14 @@ describe('3D renderer gameplay parity', () => {
   });
 
   test('keeps UI clicks out of first-person pointer lock and preserves the canvas input layer', () => {
-    expect(renderer).toContain("Neo.canvas?.addEventListener('pointerdown', requestGameplayPointerLock);");
+    expect(renderer).toContain("document.addEventListener('pointerdown', requestGameplayPointerLock, true);");
     expect(renderer).toContain('let pointerLockRequested = false;');
+    expect(renderer).toContain("document.addEventListener('mousemove', event => {");
+    expect(renderer).toContain('}, true);');
+    expect(renderer).toContain('function clearPointerLockPending()');
+    expect(renderer).toContain('[data-no-pointer-lock]');
+    expect(renderer).toContain('function isActuallyVisible(element)');
+    expect(renderer).toContain("element.closest('.hidden, [aria-hidden=\"true\"]')");
     expect(renderer).toContain('function hasPointerLockBlockingUi()');
     expect(renderer).toContain('POINTER_LOCK_UI_SELECTORS');
     expect(styles).toMatch(/#c3d\s*\{[\s\S]*?pointer-events:\s*none;/);
@@ -74,6 +80,20 @@ describe('3D renderer gameplay parity', () => {
     expect(renderer).toContain('Neo.drawHealingZoneChargeBar?.();');
     expect(renderer).toContain('Neo.drawDeathBallChargeBar?.();');
     expect(renderer).toContain('Neo.drawLoveBombChargeBar?.();');
+    expect(renderer).toContain('Neo.drawNimrodStompChargeBar?.();');
+    expect(renderer).toContain('Neo.drawGhostBallChargeBar?.();');
+  });
+
+  test('keeps authored room dressing, special encounter visuals, and enemy windups in 3D', () => {
+    expect(renderer).toContain('Neo.drawRoomDecor();');
+    expect(renderer).toContain('function syncWorldFxOverlay()');
+    expect(renderer).toContain('Neo.drawGhostBalls?.();');
+    expect(renderer).toContain('Neo.drawSkySwords?.();');
+    expect(renderer).toContain('Neo.drawChallengeObelisk?.();');
+    expect(renderer).toContain('function syncEnemyWindup(group, enemy)');
+    expect(renderer).toContain('function syncMooggyAura(group, enemy)');
+    expect(renderer).toContain('if (particle.line && sprite.isLine)');
+    expect(renderer).toContain('if (particle.shockwave && sprite.isMesh)');
   });
 
   test('projects third-person mouse aim to the same 3D floor the player sees', () => {

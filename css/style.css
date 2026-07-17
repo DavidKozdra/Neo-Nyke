@@ -246,8 +246,6 @@ button, input, select, textarea {
   max-height: none;
   transform: translate(-50%, -50%);
   background: #05060d;
-  /* Input stays on #c, which is the gameplay/pointer-lock canvas. */
-  pointer-events: none;
 }
 
 body.render3d #c3d {
