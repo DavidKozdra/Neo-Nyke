@@ -304,6 +304,18 @@ export function loop(timestamp) {
       moveX = 0;
       moveY = 0;
     }
+    // First-person camera (3D renderer): movement input is camera-relative —
+    // W walks along the view yaw, A/D strafe. Rotation preserves the vector
+    // length, so speed is identical to the world-relative path.
+    const _fpMoveYaw = Neo.getFirstPersonYaw?.();
+    if (_fpMoveYaw != null && (moveX || moveY)) {
+      const _fpCos = Math.cos(_fpMoveYaw);
+      const _fpSin = Math.sin(_fpMoveYaw);
+      const _fpForward = -moveY;
+      const _fpStrafe = moveX;
+      moveX = _fpCos * _fpForward - _fpSin * _fpStrafe;
+      moveY = _fpSin * _fpForward + _fpCos * _fpStrafe;
+    }
     // Exposed so Nimrod Stomp's hold-to-charge (ticked later this frame, outside
     // this function's scope) can aim toward wherever the player is currently
     // holding, not just the direction at the moment the charge started.
@@ -383,10 +395,20 @@ export function loop(timestamp) {
       }
     }
 
-    const _vpW = Neo.isSplitScreen() ? Neo.canvas.width / 2 : Neo.canvas.width;
-    const _clampedMouseX = Neo.isSplitScreen() ? Math.min(Neo.mouse.x, _vpW) : Neo.mouse.x;
-    Neo.mouse.worldX = _clampedMouseX + Neo.camera.x;
-    Neo.mouse.worldY = Neo.mouse.y + Neo.camera.y;
+    // First-person camera (3D renderer): the aim point is "straight ahead" —
+    // the view yaw projected 240px out. Writing mouse.worldX/Y here (the
+    // canonical aim source) makes every aim consumer (beams, warps, pounces,
+    // melee arcs) fire where the player is looking, with no per-skill changes.
+    const _fpAimYaw = Neo.getFirstPersonYaw?.();
+    if (_fpAimYaw != null) {
+      Neo.mouse.worldX = Neo.player.x + Math.cos(_fpAimYaw) * 240;
+      Neo.mouse.worldY = Neo.player.y + Math.sin(_fpAimYaw) * 240;
+    } else {
+      const _vpW = Neo.isSplitScreen() ? Neo.canvas.width / 2 : Neo.canvas.width;
+      const _clampedMouseX = Neo.isSplitScreen() ? Math.min(Neo.mouse.x, _vpW) : Neo.mouse.x;
+      Neo.mouse.worldX = _clampedMouseX + Neo.camera.x;
+      Neo.mouse.worldY = Neo.mouse.y + Neo.camera.y;
+    }
     Neo.updateWeaponSystems(dt);
     Neo.updateRivals(dt);
     Neo.updateMonsterDoorRoaming(dt);
