@@ -10387,6 +10387,19 @@ button.alt.danger {
   max-height: 286px;
 }
 
+.custom-character-stats-card .sandbox-rows {
+  gap: 16px;
+}
+
+.custom-character-stat-row {
+  grid-template-columns: 1fr;
+  gap: 4px;
+}
+
+.custom-character-stat-row .sandbox-num {
+  width: 100%;
+}
+
 .custom-character-remove-btn {
   border-color: rgba(255,120,120,.42);
   color: #ffb0b0;

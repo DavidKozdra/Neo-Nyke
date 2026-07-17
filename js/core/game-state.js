@@ -57,7 +57,20 @@ export function resumeGame() {
     moveLoadout: { melee: 'slash', laser: 'blood_beam', smash: 'crimson_smash', dash: 'dash' },
     weaponLoadout: { weapon: 'thorns_bleed_blade' },
     starterRelics: [],
+    damageMultiplier: 1,
+    hpMultiplier: 1,
   };
+  // Custom characters can be tuned 50%-150% on damage/HP so a saved build can be
+  // played fragile-and-strong or tanky-and-weak instead of always the flat 1/1
+  // custom_character default.
+  const CUSTOM_CHARACTER_STAT_MIN = 0.5;
+  const CUSTOM_CHARACTER_STAT_MAX = 1.5;
+
+  function clampCustomCharacterStatMultiplier(value, fallback) {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return fallback;
+    return Math.round(Math.min(CUSTOM_CHARACTER_STAT_MAX, Math.max(CUSTOM_CHARACTER_STAT_MIN, parsed)) * 100) / 100;
+  }
 
   function isCustomCharacterKey(key) {
     return String(key || '').startsWith(CUSTOM_CHARACTER_PREFIX);
@@ -98,6 +111,8 @@ export function resumeGame() {
         weapon: Neo.WEAPON_DEFS?.[weaponKey] ? weaponKey : CUSTOM_CHARACTER_DEFAULT.weaponLoadout.weapon,
       },
       starterRelics,
+      damageMultiplier: clampCustomCharacterStatMultiplier(source.damageMultiplier, CUSTOM_CHARACTER_DEFAULT.damageMultiplier),
+      hpMultiplier: clampCustomCharacterStatMultiplier(source.hpMultiplier, CUSTOM_CHARACTER_DEFAULT.hpMultiplier),
     };
   }
 
@@ -855,7 +870,16 @@ export function resumeGame() {
       forge_voucher: 0,
     };
     const character = isCustomCharacterKey(Neo.chosenCharacter)
-      ? { ...(Neo.CHARACTER_DEFS.custom_character || Neo.CHARACTER_DEFS.thorn_knight), key: Neo.chosenCharacter, name: getCustomCharacterSettings(Neo.chosenCharacter).name || 'Custom' }
+      ? (() => {
+          const custom = getCustomCharacterSettings(Neo.chosenCharacter);
+          return {
+            ...(Neo.CHARACTER_DEFS.custom_character || Neo.CHARACTER_DEFS.thorn_knight),
+            key: Neo.chosenCharacter,
+            name: custom.name || 'Custom',
+            damageMultiplier: custom.damageMultiplier,
+            hpMultiplier: custom.hpMultiplier,
+          };
+        })()
       : (Neo.CHARACTER_DEFS[Neo.chosenCharacter] || Neo.CHARACTER_DEFS.thorn_knight);
     const starterItems = getCharacterStartingItems(character.key);
     if (isCustomCharacterKey(character.key)) {
@@ -3962,6 +3986,8 @@ export function resumeGame() {
   Neo.removeCustomCharacter = removeCustomCharacter;
   Neo.getCharacterSpriteKey = getCharacterSpriteKey;
   Neo.isCustomCharacterKey = isCustomCharacterKey;
+  Neo.CUSTOM_CHARACTER_STAT_MIN = CUSTOM_CHARACTER_STAT_MIN;
+  Neo.CUSTOM_CHARACTER_STAT_MAX = CUSTOM_CHARACTER_STAT_MAX;
   Neo.isSandboxRunActive = isSandboxRunActive;
   Neo.getActiveSandboxSettings = getActiveSandboxSettings;
   Neo.applySandboxPlayerSetup = applySandboxPlayerSetup;
