@@ -277,9 +277,9 @@ function syncSize() {
   const h = Math.max(2, Math.round(rect.height));
   if (glCanvas.width !== Math.round(w * ratio) || glCanvas.height !== Math.round(h * ratio)) {
     renderer.setPixelRatio(ratio);
-    renderer.setSize(w, h, false);
-    glCanvas.style.width = '';
-    glCanvas.style.height = '';
+    // updateStyle=true: #c3d's CSS box mirrors #c's actual layout box, so
+    // theme/media-query size overrides on #c can never desync the two layers.
+    renderer.setSize(w, h, true);
   }
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
@@ -1263,10 +1263,62 @@ function getWeaponIconCanvas() {
   return canvasEl;
 }
 
+// The character's own first-person arm: every playable character's sprite
+// sheet carries a dedicated "arm holding the weapon" reference frame
+// (`<key>:arm` in the atlas — the same art drawAimIndicator rotates in 2D).
+// Art rest direction and pivot vary per character, so normalize once into an
+// upright cached canvas (rotated by the rest angle around the pivot, cropped
+// to visible pixels); the viewmodel then draws every character's arm in the
+// same bottom-right slot at the same visual size.
+const fpArmCache = new Map();
+function getFpArmSprite() {
+  const key = playerSpriteKey();
+  if (fpArmCache.has(key)) return fpArmCache.get(key);
+  const atlas = Neo.SPRITE_ATLAS;
+  const frame = atlas?.frames?.[`${key}:arm`];
+  if (!frame || !atlas?.canvas) { fpArmCache.set(key, null); return null; }
+  const sheet = Neo.CHARACTER_SPRITE_SHEETS?.[key] || Neo.CHARACTER_SHEET_DEFS?.[key] || {};
+  const baseAngle = Number.isFinite(Number(sheet.armBaseAngle)) ? Number(sheet.armBaseAngle) : 0;
+  const pivot = sheet.armPivot && Number.isFinite(Number(sheet.armPivot.x))
+    ? sheet.armPivot
+    : { x: frame.w / 2, y: frame.h / 2 };
+  const size = Math.max(frame.w, frame.h) * 3;
+  const upright = document.createElement('canvas');
+  upright.width = size;
+  upright.height = size;
+  const g = upright.getContext('2d');
+  g.imageSmoothingEnabled = false;
+  g.translate(size / 2, size * 0.8);
+  g.rotate(-Math.PI / 2 - baseAngle); // art rest direction now points up
+  g.drawImage(atlas.canvas, frame.x, frame.y, frame.w, frame.h, -pivot.x, -pivot.y, frame.w, frame.h);
+  // Crop to the visible pixel bounds so small arms still fill the slot.
+  const pixels = g.getImageData(0, 0, size, size).data;
+  let minX = size, minY = size, maxX = -1, maxY = -1;
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) {
+      if (pixels[(y * size + x) * 4 + 3] > 8) {
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+    }
+  }
+  if (maxX < minX) { fpArmCache.set(key, null); return null; }
+  const crop = document.createElement('canvas');
+  crop.width = maxX - minX + 1;
+  crop.height = maxY - minY + 1;
+  const cropCtx = crop.getContext('2d');
+  cropCtx.imageSmoothingEnabled = false;
+  cropCtx.drawImage(upright, -minX, -minY);
+  const entry = { canvas: crop };
+  fpArmCache.set(key, entry);
+  return entry;
+}
+
 function drawViewmodel() {
-  const icon = getWeaponIconCanvas();
   const p = Neo.player;
-  if (!icon || !p) return;
+  if (!p) return;
   const g = Neo.ctx;
   const W = Neo.canvas.width;
   const H = Neo.canvas.height;
@@ -1274,19 +1326,39 @@ function drawViewmodel() {
   const moving = Math.hypot(p.vx || 0, p.vy || 0) > 24;
   const bobX = moving ? Math.sin(t * 7.4) * 10 : Math.sin(t * 1.6) * 3;
   const bobY = moving ? Math.abs(Math.cos(t * 7.4)) * 12 : Math.sin(t * 2.1) * 4;
-  // Melee swing: lunge the weapon toward screen center and rotate through.
+  // Melee swing: lunge arm and weapon toward screen center, sweeping through.
   const swingWindow = Neo.ATTACKS?.melee?.active || 0.17;
   const swing = Math.max(0, Number(p.swing || 0));
   const lunge = swing > 0 ? Math.sin(Math.min(1, 1 - swing / swingWindow) * Math.PI) : 0;
   const laserKick = Neo.laserActive ? Math.sin(t * 55) * 4 : 0;
-  const size = Math.round(H * 0.34);
-  const x = W * 0.62 + bobX - lunge * 130;
-  const y = H - size * 0.62 + bobY - lunge * 95 + laserKick;
+  const armSprite = getFpArmSprite();
+  const sway = moving ? Math.sin(t * 7.4) * 0.03 : Math.sin(t * 1.6) * 0.015;
+
+  if (!armSprite) {
+    // No arm art (shouldn't happen — customs map to Thorn Knight): weapon only.
+    const icon = getWeaponIconCanvas();
+    if (!icon) return;
+    const size = Math.round(H * 0.34);
+    g.save();
+    g.imageSmoothingEnabled = false;
+    g.translate(W * 0.62 + bobX - lunge * 130, H - size * 0.62 + bobY - lunge * 95 + laserKick);
+    g.rotate(-0.55 - lunge * 1.05);
+    g.drawImage(icon, -size / 2, -size / 2, size, size);
+    g.restore();
+    return;
+  }
+
+  // The arm frames are full "arm holding the weapon" poses, so the arm art
+  // alone IS the viewmodel. Anchor its base at the bottom edge, tilted toward
+  // the crosshair, rising into view Doom-style.
+  const targetH = H * 0.44;
+  const scale = targetH / armSprite.canvas.height;
+  const targetW = armSprite.canvas.width * scale;
   g.save();
   g.imageSmoothingEnabled = false;
-  g.translate(x, y);
-  g.rotate(-0.55 + (moving ? Math.sin(t * 7.4) * 0.03 : 0) - lunge * 1.05);
-  g.drawImage(icon, -size / 2, -size / 2, size, size);
+  g.translate(W * 0.68 + bobX - lunge * 90, H + 8 + bobY - lunge * 130 + laserKick);
+  g.rotate(-0.38 + sway - lunge * 0.8);
+  g.drawImage(armSprite.canvas, -targetW / 2, -targetH, targetW, targetH);
   g.restore();
 }
 
@@ -1385,16 +1457,37 @@ let storedPreference = '1';
 try { storedPreference = localStorage.getItem(RENDER3D_STORE_KEY) ?? '1'; } catch { /* private mode */ }
 Neo.render3D = storedPreference !== '0';
 
+// Unified view mode: '2d' (original top-down) | 'third' | 'fp'. The settings
+// UI and the F4/F6 hotkeys all route through this so they stay in sync; a
+// 'neo-view-mode-changed' event fires on every change for UI mirrors.
+function getViewMode() {
+  if (!Neo.render3D) return '2d';
+  return cameraMode === 'fp' ? 'fp' : 'third';
+}
+
+function setViewMode(mode) {
+  const normalized = mode === 'third' || mode === 'fp' ? mode : '2d';
+  if (normalized === '2d') {
+    setRender3D(false);
+  } else {
+    setCameraMode(normalized);
+    setRender3D(true);
+  }
+  window.dispatchEvent(new CustomEvent('neo-view-mode-changed', { detail: getViewMode() }));
+}
+
+const VIEW_MODE_LABELS = { '2d': '2D VIEW', third: 'THIRD PERSON', fp: 'FIRST PERSON' };
+
 window.addEventListener('keydown', event => {
   if (event.repeat) return;
   if (event.code === 'F4') {
     event.preventDefault();
-    setRender3D(!Neo.render3D);
-    announceViewChange(Neo.render3D ? '3D VIEW' : '2D VIEW');
+    setViewMode(Neo.render3D ? '2d' : cameraMode === 'fp' ? 'fp' : 'third');
+    announceViewChange(VIEW_MODE_LABELS[getViewMode()]);
   } else if (event.code === 'F6' && Neo.render3D) {
     event.preventDefault();
-    setCameraMode(cameraMode === 'fp' ? 'third' : 'fp');
-    announceViewChange(cameraMode === 'fp' ? 'FIRST PERSON' : 'THIRD PERSON');
+    setViewMode(cameraMode === 'fp' ? 'third' : 'fp');
+    announceViewChange(VIEW_MODE_LABELS[getViewMode()]);
   }
 });
 
@@ -1407,11 +1500,26 @@ function announceViewChange(text) {
 // radians) while first-person is driving, null otherwise.
 Neo.getFirstPersonYaw = () => (isFirstPersonActive() ? fpYaw : null);
 
+Neo.getViewMode = getViewMode;
+Neo.setViewMode = setViewMode;
+
 Neo.threeRenderer = {
   render,
   setRender3D,
   setCameraMode,
+  setViewMode,
+  getViewMode,
   getCameraMode: () => cameraMode,
   setYaw: value => { fpYaw = Number(value) || 0; },
+  _debug: () => ({
+    sceneChildren: scene?.children?.length,
+    camera: camera?.position?.toArray?.().map(v => Math.round(v * 10) / 10),
+    fov: camera?.fov,
+    fpYaw,
+    fpPitch,
+    roomChildren: roomGroup?.children?.length,
+    floorHasMap: !!floorMesh?.material?.map,
+    contextLost: !!renderer?.getContext?.()?.isContextLost?.(),
+  }),
 };
 Neo.setRender3D = setRender3D;

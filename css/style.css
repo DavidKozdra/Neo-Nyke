@@ -179,7 +179,8 @@ button, input, select, textarea {
   background: rgba(8, 12, 20, .34);
 }
 
-.control-profile-btn {
+.control-profile-btn,
+.view-mode-btn {
   padding: 9px 14px;
   border: 1px solid transparent;
   border-radius: 7px;
@@ -192,7 +193,8 @@ button, input, select, textarea {
   cursor: pointer;
 }
 
-.control-profile-btn.is-active {
+.control-profile-btn.is-active,
+.view-mode-btn.is-active {
   border-color: var(--menu-border-strong);
   background: var(--menu-surface-strong);
   color: var(--menu-accent-strong);
@@ -250,8 +252,11 @@ body.render3d #c3d {
   display: block;
 }
 
+/* !important: theme stylesheets restyle every canvas with ID-level specificity
+   (e.g. princess theme's `html.princess-ui canvas:not(#confettiCanvas)`), and
+   an opaque #c would completely hide the WebGL world behind it. */
 body.render3d #c {
-  background: transparent;
+  background: transparent !important;
 }
 
 .perf-overlay {
@@ -13866,6 +13871,7 @@ button.alt.danger {
 
 #settingsModal .bind-btn,
 #settingsModal .control-profile-btn,
+#settingsModal .view-mode-btn,
 #settingsModal .settings-reset,
 #settingsModal .theme-action-btn,
 #settingsModal .gamepad-bind-select,
@@ -13877,6 +13883,7 @@ button.alt.danger {
 #settingsModal .settings-reset,
 #settingsModal .control-profile-switch,
 #settingsModal .control-profile-btn,
+#settingsModal .view-mode-btn,
 #settingsModal .gamepad-bind-select,
 #settingsModal .mobile-bind-select,
 #settingsModal .theme-card,

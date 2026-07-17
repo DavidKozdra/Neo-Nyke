@@ -536,9 +536,27 @@
     modalScreen.hide();
   }
 
+  // ── View mode (2D / third-person 3D / first-person 3D) ─────────────────────
+  // The mode itself lives in the 3D renderer module (window.Neo.setViewMode,
+  // persisted under its own localStorage keys, shared with the F4/F6 hotkeys).
+  // These buttons just call into it and mirror its state. Note the renderer is
+  // an ES module and loads AFTER this classic deferred script, so all access is
+  // optional and state is synced lazily (on modal open + on change events).
+  const viewModeButtons = Array.from(document.querySelectorAll('.view-mode-btn'));
+  function syncViewModeButtons() {
+    const mode = window.Neo?.getViewMode?.() || '2d';
+    viewModeButtons.forEach(btn => btn.classList.toggle('is-active', btn.dataset.viewMode === mode));
+  }
+  viewModeButtons.forEach(btn => btn.addEventListener('click', () => {
+    window.Neo?.setViewMode?.(btn.dataset.viewMode);
+    syncViewModeButtons();
+  }));
+  window.addEventListener('neo-view-mode-changed', syncViewModeButtons);
+
   function openSettings() {
     stopListening();
     refreshGamepadStatus();
+    syncViewModeButtons();
     // sfx.js may register its catalog after this module's first synchronous pass
     // (module vs. classic-defer load order), so populate lazily if still empty.
     const soundHost = document.getElementById('soundLevels');
