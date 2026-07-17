@@ -1574,6 +1574,22 @@
         <h4>Name</h4>
         <input id="customCharacterName" class="sandbox-search custom-character-name-input" type="text" maxlength="24" placeholder="Custom character name" autocomplete="off" spellcheck="false" aria-label="Custom character name">
       </div>
+      <div class="sandbox-card custom-character-card custom-character-stats-card">
+        <h4>Stats</h4>
+        <p class="sandbox-card__hint">Tune this character's attack power and max HP relative to the default (100%).</p>
+        <div class="sandbox-rows">
+          <div class="sandbox-row custom-character-stat-row" data-custom-stat-param="damageMultiplier">
+            <span>Attack Power</span>
+            <input type="range" class="sandbox-slider" min="0.5" max="1.5" step="0.05" value="1">
+            <input type="number" class="sandbox-num" min="0.5" max="1.5" step="0.05" value="1">
+          </div>
+          <div class="sandbox-row custom-character-stat-row" data-custom-stat-param="hpMultiplier">
+            <span>Max HP</span>
+            <input type="range" class="sandbox-slider" min="0.5" max="1.5" step="0.05" value="1">
+            <input type="number" class="sandbox-num" min="0.5" max="1.5" step="0.05" value="1">
+          </div>
+        </div>
+      </div>
       <div class="sandbox-card">
         <h4>Move Set</h4>
         <p class="sandbox-card__hint">Pick one move per slot. Every defined move is available.</p>

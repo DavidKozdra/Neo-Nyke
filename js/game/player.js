@@ -418,7 +418,13 @@ export function getCharacterDef() {
     const key = Neo.player?.character || Neo.chosenCharacter;
     if (Neo.isCustomCharacterKey?.(key)) {
       const custom = Neo.getCustomCharacterSettings?.(key);
-      return { ...(Neo.CHARACTER_DEFS.custom_character || Neo.CHARACTER_DEFS.thorn_knight), key, name: custom?.name || 'Custom' };
+      return {
+        ...(Neo.CHARACTER_DEFS.custom_character || Neo.CHARACTER_DEFS.thorn_knight),
+        key,
+        name: custom?.name || 'Custom',
+        damageMultiplier: custom?.damageMultiplier ?? 1,
+        hpMultiplier: custom?.hpMultiplier ?? 1,
+      };
     }
     return Neo.CHARACTER_DEFS[key] || Neo.CHARACTER_DEFS.thorn_knight;
   }

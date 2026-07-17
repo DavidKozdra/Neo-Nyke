@@ -2140,6 +2140,15 @@ export function createUIController(view) {
               button.setAttribute('aria-pressed', active ? 'true' : 'false');
             });
           });
+          view.customCharacterPanel?.querySelectorAll('[data-custom-stat-param]').forEach(row => {
+            const param = row.dataset.customStatParam;
+            const value = custom[param];
+            if (value === undefined) return;
+            const slider = row.querySelector('.sandbox-slider');
+            const numInput = row.querySelector('.sandbox-num');
+            if (slider) slider.value = String(value);
+            if (numInput) numInput.value = String(value);
+          });
           if (view.customCharacterRelicList) {
             const selectedRelics = new Set(custom.starterRelics || []);
             view.customCharacterRelicList.innerHTML = Neo.ITEM_KEYS.map(key => {
@@ -2303,6 +2312,29 @@ export function createUIController(view) {
           Neo.persistMetaSoon();
           syncCustomCharacterPanelFields();
           Neo.updateCharacterSelectionUI?.();
+        });
+
+        view.customCharacterPanel?.querySelectorAll('[data-custom-stat-param]').forEach(row => {
+          const param = row.dataset.customStatParam;
+          const slider = row.querySelector('.sandbox-slider');
+          const numInput = row.querySelector('.sandbox-num');
+          function applyValue(raw) {
+            if (!Neo.metaProgress) return;
+            const min = Number(slider?.min ?? Neo.CUSTOM_CHARACTER_STAT_MIN ?? 0.5);
+            const max = Number(slider?.max ?? Neo.CUSTOM_CHARACTER_STAT_MAX ?? 1.5);
+            const fallback = Number(slider?.value ?? 1);
+            const parsed = parseFloat(raw);
+            const clamped = Math.min(max, Math.max(min, Number.isFinite(parsed) ? parsed : fallback));
+            const rounded = Math.round(clamped * 100) / 100;
+            if (slider) slider.value = String(rounded);
+            if (numInput) numInput.value = String(rounded);
+            const customKey = getEditingCustomCharacterKey();
+            writeCustomCharacterSettings(customKey, custom => ({ ...custom, [param]: rounded }));
+            Neo.persistMetaSoon();
+            Neo.updateCharacterSelectionUI?.();
+          }
+          slider?.addEventListener('input', () => applyValue(slider.value));
+          numInput?.addEventListener('change', () => applyValue(numInput.value));
         });
 
         view.customCharacterRelicList?.addEventListener('click', event => {
