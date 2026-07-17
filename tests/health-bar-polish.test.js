@@ -17,7 +17,7 @@ describe('health bar presentation', () => {
     expect(source).toContain('function getCombatHealthColor');
     expect(source).toContain('function drawEnemyNameplate(enemy, hpPct)');
     expect(source).toContain('drawEnemyNameplate(enemy, hpPct);');
-    expect(source).toContain('const text = `${label}  ${level}  ${hpText}`;');
+    expect(source).toContain('`${label}  ${level}  ${hpText}`;');
     expect(source).toContain('const plateW = Math.max(46, textWidth + 10);');
     expect(source).toContain('const enemyNameplateCache = new WeakMap()');
     expect(source).toContain('function buildEnemyNameplateRender(enemy, hpPct)');
