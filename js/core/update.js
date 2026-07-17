@@ -406,8 +406,14 @@ export function loop(timestamp) {
     } else {
       const _vpW = Neo.isSplitScreen() ? Neo.canvas.width / 2 : Neo.canvas.width;
       const _clampedMouseX = Neo.isSplitScreen() ? Math.min(Neo.mouse.x, _vpW) : Neo.mouse.x;
-      Neo.mouse.worldX = _clampedMouseX + Neo.camera.x;
-      Neo.mouse.worldY = Neo.mouse.y + Neo.camera.y;
+      const _perspectiveAim = Neo.projectCanvasMouseToWorld?.(_clampedMouseX, Neo.mouse.y);
+      if (_perspectiveAim) {
+        Neo.mouse.worldX = _perspectiveAim.x;
+        Neo.mouse.worldY = _perspectiveAim.y;
+      } else {
+        Neo.mouse.worldX = _clampedMouseX + Neo.camera.x;
+        Neo.mouse.worldY = Neo.mouse.y + Neo.camera.y;
+      }
     }
     Neo.updateWeaponSystems(dt);
     Neo.updateRivals(dt);

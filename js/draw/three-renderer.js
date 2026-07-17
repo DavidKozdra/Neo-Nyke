@@ -51,7 +51,7 @@ const pools = {
 let playerSprite = null;
 let playerShadow = null;
 const beamMeshes = []; // reused per-frame list of beam boxes
-const hpBarPool = new Map(); // enemy -> {back, fill}
+const nameplatePool = new Map(); // enemy -> { sprite, texture, signature }
 
 // ---------------------------------------------------------------------------
 // Texture caches
@@ -140,6 +140,50 @@ function getEnvTileTexture(tileKey, size = 48) {
   return texture;
 }
 
+// Bake a 2D projectile silhouette (via Neo.drawProjectileShape) into its own
+// texture so a shaped shot — Sarge's spinning hammer, the Death Ball orb —
+// keeps the 2D art in 3D instead of collapsing to a plain glow blob. We render
+// a synthetic projectile centered in the canvas; the sprite billboards it, so
+// per-frame spin/pulse is dropped but the silhouette matches 2D exactly. Keyed
+// by projectile kind (one texture shared across every shot of that kind).
+// Projectile kinds whose 2D silhouette is distinctive enough to bake rather than
+// render as a generic glow. Sarge's Hammer Throw (spinning rock-hammer) and the
+// Death Ball (energy orb) both read as blobs otherwise.
+const SHAPED_PROJECTILE_KINDS = new Set(['sarges_hammer', 'death_ball']);
+const shapedProjectileTextureCache = new Map(); // kind -> THREE.Texture
+function getShapedProjectileTexture(projectile) {
+  const kind = projectile?.kind;
+  if (!kind || typeof Neo.drawProjectileShape !== 'function' || typeof Neo.getProjectileVisual !== 'function') return null;
+  const cached = shapedProjectileTextureCache.get(kind);
+  if (cached) return cached;
+  const visual = Neo.getProjectileVisual(projectile) || {};
+  if (!SHAPED_PROJECTILE_KINDS.has(kind)) return null;
+  // Canonical radius baked into the texture; the sprite is scaled per shot to
+  // the live radius, so this only sets the internal resolution.
+  const r = 20;
+  const pad = Math.ceil(r * 2.2 + 12);
+  const size = pad * 2;
+  const canvasEl = document.createElement('canvas');
+  canvasEl.width = size;
+  canvasEl.height = size;
+  const g = canvasEl.getContext('2d');
+  g.imageSmoothingEnabled = false;
+  // Draw a synthetic, axis-aligned projectile at canvas center. vx>0 keeps the
+  // travel-angle rotate at 0 so the silhouette bakes upright; trails are skipped
+  // (they live in the game's particle stream, already handled in 3D).
+  const synthetic = { x: pad, y: pad, vx: 1, vy: 0, r, kind, animSeed: 0, enemy: !!projectile.enemy };
+  const realCtx = Neo.ctx;
+  try {
+    Neo.ctx = g;
+    Neo.drawProjectileShape(synthetic, { ...visual, shape: visual.shape });
+  } catch { /* shape failed to bake; fall through with whatever rendered */ }
+  Neo.ctx = realCtx;
+  const texture = makeCanvasTexture(canvasEl);
+  texture.userData = { bakedRadius: r, halfSize: pad };
+  shapedProjectileTextureCache.set(kind, texture);
+  return texture;
+}
+
 function getGlowTexture(color = '#ffffff') {
   const cached = glowTextureCache.get(color);
   if (cached) return cached;
@@ -217,6 +261,22 @@ function makeShadowMesh(radius) {
   mesh.scale.setScalar(radius * 2);
   mesh.renderOrder = 1;
   return mesh;
+}
+
+// World props use the same convention as actor billboards: their feet sit on
+// the floor and their shadow is a separate, floor-hugging mesh. Keeping this
+// in one helper prevents a sprite's transparent padding from making it read as
+// if it were hovering in the 3D camera.
+function makeGroundedBillboard(texture, shadowRadius = 16) {
+  const group = new THREE.Group();
+  const sprite = makeBillboard(texture);
+  sprite.name = 'body';
+  sprite.position.y = 0.6;
+  group.add(sprite);
+  const shadow = makeShadowMesh(shadowRadius);
+  shadow.position.y = 0.35;
+  group.add(shadow);
+  return group;
 }
 
 function disposeObject(obj) {
@@ -515,24 +575,49 @@ function buildRoom() {
   if (doors.w) addDoorPad(WALL / 2, midZ, WALL, DOOR);
   if (doors.e) addDoorPad(W - WALL / 2, midZ, WALL, DOOR);
 
-  // Structures: pillars become real columns; anvil/forge/furniture billboard.
+  // Structures: use the same authored environment art as the 2D renderer.
+  // This matters for landmark readability: the pillar is a capital/shaft/base
+  // stack, not a generic wall block, and service-room props retain their exact
+  // sprite scale and animation.
   (Neo.structures || []).forEach(structure => {
     if (!structure) return;
     if (structure.kind === 'pillar') {
       const w = Math.max(20, Number(structure.w || 40));
-      const material = makeWallMaterial(getEnvTileTexture('wall_block'), themeWallColor(theme), w, PILLAR_HEIGHT);
-      const mesh = new THREE.Mesh(unitBox, material);
-      mesh.scale.set(w, PILLAR_HEIGHT, w * 0.8);
-      mesh.position.set(structure.x, PILLAR_HEIGHT / 2, structure.y);
-      roomGroup.add(mesh);
-    } else if (structure.kind === 'anvil' || structure.kind === 'forge') {
-      const texture = getImageTexture(structure.kind === 'anvil' ? 'anvil_0' : 'forge_0', 0, 24);
-      if (texture) {
-        const size = Math.max(32, Number(structure.w || 48)) * 1.4;
+      const mids = Math.max(0, Math.min(3, Math.floor(Number(structure.mids || 0))));
+      const segments = ['pillar_1', ...Array(mids).fill('pillar_2'), 'pillar_3'];
+      const shadow = makeShadowMesh(w * 0.46);
+      shadow.position.set(structure.x, 0.35, structure.y);
+      roomGroup.add(shadow);
+      segments.forEach((key, index) => {
+        const texture = getImageTexture(key, 0, 24);
+        if (!texture) return;
         const sprite = makeBillboard(texture);
-        sprite.scale.set(size, size, 1);
-        sprite.position.set(structure.x, 0, structure.y + Number(structure.h || 40) / 2);
+        sprite.scale.set(w, w, 1);
+        // Start at the plinth and build upward. The 2D renderer draws this
+        // same sequence from base to shaft(s) to capital.
+        sprite.position.set(structure.x, 0.6 + index * w, structure.y);
         roomGroup.add(sprite);
+      });
+    } else if (structure.kind === 'anvil' || structure.kind === 'forge') {
+      const key = structure.kind === 'anvil' ? 'anvil_0' : 'forge_0';
+      const image = Neo.ENVIRONMENT_IMAGES?.[key]?.image;
+      const frameCount = Math.max(1, Math.floor(Number(image?.naturalWidth || 24) / 24));
+      const frame = structure.kind === 'forge' ? Math.floor(Date.now() / 220) % frameCount : 0;
+      const texture = getImageTexture(key, frame, 24);
+      if (texture) {
+        const w = Math.max(24, Number(structure.w || 48));
+        const h = Math.max(24, Number(structure.h || w));
+        const prop = makeGroundedBillboard(texture, Math.min(w, h) * 0.34);
+        const sprite = prop.getObjectByName('body');
+        sprite.scale.set(w, h, 1);
+        // Simulation coordinates are the prop center in both renderers. The
+        // former +h/2 shift put every forge downstage of its interaction spot.
+        prop.position.set(structure.x, 0, structure.y);
+        roomGroup.add(prop);
+        if (structure.kind === 'forge') {
+          const animated = roomGroup.userData.animatedSprites || (roomGroup.userData.animatedSprites = []);
+          animated.push({ sprite, key, frameCount, frameWidth: 24, interval: 220 });
+        }
       }
     } else {
       const w = Math.max(20, Number(structure.w || 40));
@@ -545,6 +630,19 @@ function buildRoom() {
   });
 
   scene.add(roomGroup);
+}
+
+function syncRoomEnvironmentSprites() {
+  const animated = roomGroup?.userData?.animatedSprites;
+  if (!animated?.length) return;
+  animated.forEach(entry => {
+    const frame = Math.floor(Date.now() / entry.interval) % entry.frameCount;
+    const texture = getImageTexture(entry.key, frame, entry.frameWidth);
+    if (texture && entry.sprite.material.map !== texture) {
+      entry.sprite.material.map = texture;
+      entry.sprite.material.needsUpdate = true;
+    }
+  });
 }
 
 function getRoomBuildKey() {
@@ -669,20 +767,34 @@ function syncPlayer() {
   if (playerLight) playerLight.position.set(x, 130, z);
 }
 
-function ensureHpBar(enemy, group) {
-  let bar = hpBarPool.get(enemy);
-  if (!bar) {
-    const back = new THREE.Sprite(new THREE.SpriteMaterial({ color: 0x1a0d10, transparent: true, opacity: 0.82, depthWrite: false }));
-    const fill = new THREE.Sprite(new THREE.SpriteMaterial({ color: 0xff4455, transparent: true, opacity: 0.95, depthWrite: false }));
-    back.center.set(0.5, 0);
-    fill.center.set(0.5, 0);
-    group.add(back);
-    group.add(fill);
-    bar = { back, fill };
-    hpBarPool.set(enemy, bar);
+// The enemy nameplate — name + level + HP text + health bar (+ barrier bar) —
+// is drawn identically to 2D by reusing the same cached bitmap the 2D renderer
+// builds (Neo.buildEnemyNameplateRender). We mirror it onto a camera-facing
+// billboard so 3D/first-person show the very same health bars as the original
+// top-down view. The bitmap changes only when its signature does (HP crossed a
+// pixel, name/barrier/danger state changed), so the texture upload is rare.
+function ensureNameplate(enemy, group) {
+  let plate = nameplatePool.get(enemy);
+  if (!plate) {
+    const texture = new THREE.Texture();
+    texture.magFilter = THREE.NearestFilter;
+    texture.minFilter = THREE.NearestFilter;
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.generateMipmaps = false;
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false, depthTest: false }));
+    sprite.center.set(0.5, 0);
+    sprite.renderOrder = 10; // always on top of world geometry / other enemies
+    group.add(sprite);
+    plate = { sprite, texture, signature: null };
+    nameplatePool.set(enemy, plate);
   }
-  return bar;
+  return plate;
 }
+
+// Nameplates render at a constant on-SCREEN size (like the 2D plate, which
+// doesn't grow when the camera is near), so their world scale is set per-frame
+// from each enemy's distance to the camera in scaleNameplatesToScreen().
+const NAMEPLATE_SCREEN_PX_PER_CANVAS_PX = 1.15; // on-screen px per source px at reference
 
 function syncEnemies() {
   syncPool(
@@ -696,23 +808,57 @@ function syncEnemies() {
       const stunned = Number(enemy.stun || 0) > 0;
       const tint = stunned ? 0xaad4ff : enemy.elite ? 0xffe2a8 : 0xffffff;
       updateActorSprite(group, enemySpriteKey(enemy), enemy.r || 12, flip, { ...bob, tint });
-      // Health bar above the billboard once damaged.
-      const hurt = Number.isFinite(enemy.hp) && Number.isFinite(enemy.max) && enemy.hp < enemy.max;
-      const bar = ensureHpBar(enemy, group);
-      const height = (enemy.r || 12) * SPRITE_SIZE_MULT;
-      bar.back.visible = bar.fill.visible = hurt;
-      if (hurt) {
-        const w = Math.max(26, (enemy.r || 12) * 2.4);
-        const ratio = Math.max(0, Math.min(1, enemy.hp / enemy.max));
-        bar.back.scale.set(w, 4.5, 1);
-        bar.fill.scale.set(Math.max(0.001, w * ratio), 4.5, 1);
-        bar.back.position.set(0, height + 10, 0);
-        bar.fill.position.set(-(w - w * ratio) / 2, height + 10.2, 0);
+
+      // Nameplate + health bar, pixel-matched to the 2D renderer.
+      const plate = ensureNameplate(enemy, group);
+      const hpPct = Neo.clamp?.(enemy.hp / Math.max(1, enemy.max), 0, 1)
+        ?? Math.max(0, Math.min(1, enemy.hp / Math.max(1, enemy.max)));
+      let render = null;
+      try { render = Neo.buildEnemyNameplateRender?.(enemy, hpPct); } catch { render = null; }
+      if (render?.canvas) {
+        plate.sprite.visible = true;
+        // The 2D cache reuses one canvas per enemy and only repaints it when the
+        // signature changes; re-point the texture and flag an upload only then.
+        if (plate.texture.image !== render.canvas || plate.signature !== render.signature) {
+          plate.texture.image = render.canvas;
+          plate.texture.needsUpdate = true;
+          plate.signature = render.signature;
+        }
+        plate.cw = render.canvas.width;
+        plate.ch = render.canvas.height;
+        // Sit just above the billboard's head, like the 2D plate above the sprite.
+        const headY = (enemy.r || 12) * SPRITE_SIZE_MULT;
+        plate.sprite.position.set(0, headY + 8, 0);
+      } else {
+        plate.sprite.visible = false;
       }
     },
   );
-  // hp bars of removed enemies die with their group (child objects); prune map
-  hpBarPool.forEach((bar, enemy) => { if (!pools.enemies.has(enemy)) hpBarPool.delete(enemy); });
+  // Nameplate sprites die with their enemy group (child objects); prune the map.
+  nameplatePool.forEach((plate, enemy) => { if (!pools.enemies.has(enemy)) nameplatePool.delete(enemy); });
+}
+
+// Give every nameplate a constant on-screen size regardless of camera distance
+// — matching the 2D renderer, where the plate never grows as you approach an
+// enemy. World-units-per-screen-pixel at a given depth is
+// (2·tan(fov/2)·distance)/viewportHeight, so multiplying that by the desired
+// on-screen pixel size yields the world scale. Called after syncCamera() so the
+// camera's world position is current this frame.
+const _plateWorldPos = new THREE.Vector3();
+function scaleNameplatesToScreen() {
+  if (!nameplatePool.size) return;
+  const vpH = glCanvas?.height || renderer?.domElement?.height || 720;
+  const halfFovTan = Math.tan((camera.fov * Math.PI / 180) / 2);
+  const camPos = camera.position;
+  nameplatePool.forEach((plate) => {
+    const sprite = plate.sprite;
+    if (!sprite.visible || !plate.cw) return;
+    sprite.getWorldPosition(_plateWorldPos);
+    const distance = Math.max(1, camPos.distanceTo(_plateWorldPos));
+    const worldPerScreenPx = (2 * halfFovTan * distance) / vpH;
+    const s = worldPerScreenPx * NAMEPLATE_SCREEN_PX_PER_CANVAS_PX;
+    sprite.scale.set(plate.cw * s, plate.ch * s, 1);
+  });
 }
 
 function syncProjectiles() {
@@ -722,12 +868,21 @@ function syncProjectiles() {
     () => new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending })),
     (projectile, sprite) => {
       const visual = Neo.getProjectileVisual?.(projectile) || {};
-      const texture = getGlowTexture(visual.color || projectile.color || '#ffffff');
+      // Shaped shots (Sarge's hammer, the Death Ball) bake their 2D silhouette;
+      // everything else keeps the fast generic glow.
+      const shaped = getShapedProjectileTexture(projectile);
+      const texture = shaped || getGlowTexture(visual.color || projectile.color || '#ffffff');
       if (sprite.material.map !== texture) {
         sprite.material.map = texture;
+        // Baked art carries its own shading; additive would wash it out.
+        sprite.material.blending = shaped ? THREE.NormalBlending : THREE.AdditiveBlending;
         sprite.material.needsUpdate = true;
       }
-      const size = Math.max(10, (projectile.r || 6) * 4);
+      const size = shaped
+        // Scale the baked texture so its baked radius maps to the live radius,
+        // preserving the padding baked into the canvas.
+        ? (texture.userData.halfSize / texture.userData.bakedRadius) * (projectile.r || 6) * 2
+        : Math.max(10, (projectile.r || 6) * 4);
       sprite.scale.set(size, size, 1);
       sprite.position.set(projectile.x, BEAM_Y, projectile.y);
     },
@@ -804,11 +959,10 @@ function syncChests() {
   syncPool(
     pools.chests,
     Neo.chests,
-    () => {
-      const sprite = makeBillboard(getGlowTexture('#c98a4b'));
-      return sprite;
-    },
-    (chest, sprite) => {
+    () => makeGroundedBillboard(getGlowTexture('#c98a4b'), 20),
+    (chest, group) => {
+      const sprite = group.getObjectByName('body');
+      if (!sprite) return;
       const sheetKey = chest.choiceType === 'ab'
         ? (Neo.ENVIRONMENT_IMAGES?.chest_a_b ? 'chest_a_b' : 'chest_0')
         : 'chest_0';
@@ -825,8 +979,10 @@ function syncChests() {
         sprite.material.map = texture;
         sprite.material.needsUpdate = true;
       }
-      sprite.scale.set(56, 56, 1);
-      sprite.position.set(chest.x, 0, chest.y);
+      // drawChests() uses a 64px source frame. Matching that scale plus a
+      // contact shadow keeps treasure grounded and recognizable in 3D.
+      sprite.scale.set(64, 64, 1);
+      group.position.set(chest.x, 0, chest.y);
     },
   );
 }
@@ -874,13 +1030,49 @@ const HAZARD_STYLES = {
   red_spikes: { color: 0xc7ccd6, opacity: 0.9 },
   thorn_mine: { color: 0xc22a3f, opacity: 0.85 },
   bomb: { color: 0xffa94d, opacity: 0.9 },
+  lightning_column: { color: 0x8dd4ff, opacity: 0.85 },
 };
+
+const LIGHTNING_COLUMN_HEIGHT = 150; // tall enough to read as a floor-to-ceiling bolt
+
+// Sarge's Lightning Columns (turrets) and lightning-cross (line) hazards need
+// real vertical/linear geometry — the generic flat disc drops the vertical bolt,
+// and a line hazard has no x/y/r at all so it would scale to NaN. Build a bolt
+// group for a column, and a floor beam box for a strike line.
+function makeLightningColumnObject() {
+  const group = new THREE.Group();
+  // Ground disc so the AOE footprint reads on the floor.
+  const disc = new THREE.Mesh(unitCircle, new THREE.MeshBasicMaterial({
+    color: 0x8dd4ff, transparent: true, opacity: 0.35, depthWrite: false, blending: THREE.AdditiveBlending,
+  }));
+  disc.rotation.x = -Math.PI / 2;
+  disc.position.y = 2;
+  disc.renderOrder = 2;
+  disc.name = 'disc';
+  group.add(disc);
+  // Vertical bolt column.
+  const column = new THREE.Mesh(unitBox, new THREE.MeshBasicMaterial({
+    color: 0xbfe8ff, transparent: true, opacity: 0.7, depthWrite: false, blending: THREE.AdditiveBlending,
+  }));
+  column.name = 'column';
+  group.add(column);
+  return group;
+}
+
+function makeLightningLineObject() {
+  const mesh = new THREE.Mesh(unitBox, new THREE.MeshBasicMaterial({
+    color: 0xbfe4ff, transparent: true, opacity: 0.85, depthWrite: false, blending: THREE.AdditiveBlending,
+  }));
+  return mesh;
+}
 
 function syncHazards() {
   syncPool(
     pools.hazards,
     Neo.hazards,
     hazard => {
+      if (hazard.kind === 'lightning_column') return makeLightningColumnObject();
+      if (hazard.kind === 'lightning_strike_line') return makeLightningLineObject();
       const style = HAZARD_STYLES[hazard.kind] || { color: 0xa46bff, opacity: 0.8 };
       let material;
       if (hazard.kind === 'lava') {
@@ -905,6 +1097,14 @@ function syncHazards() {
       return mesh;
     },
     (hazard, mesh) => {
+      if (hazard.kind === 'lightning_column') {
+        updateLightningColumn(hazard, mesh);
+        return;
+      }
+      if (hazard.kind === 'lightning_strike_line') {
+        updateLightningLine(hazard, mesh);
+        return;
+      }
       const w = hazard.shape === 'rect' ? hazard.w : (hazard.r || 24) * 2;
       const h = hazard.shape === 'rect' ? hazard.h : (hazard.r || 24) * 2;
       mesh.scale.set(w, h, 1);
@@ -914,6 +1114,45 @@ function syncHazards() {
       }
     },
   );
+}
+
+function updateLightningColumn(hazard, group) {
+  const diameter = (hazard.r || 24) * 2;
+  group.position.set(hazard.x, 0, hazard.y);
+  const disc = group.getObjectByName('disc');
+  const column = group.getObjectByName('column');
+  // Flicker in sync with the strike tick so the bolt pulses when it damages.
+  const flicker = 0.55 + Math.abs(Math.sin(performance.now() / 90 + (hazard.x + hazard.y) * 0.01)) * 0.35;
+  // Fade out over the last stretch of the hazard's life.
+  const fade = hazard.ttl != null ? Math.min(1, Math.max(0, hazard.ttl / 0.6)) : 1;
+  if (disc) {
+    disc.scale.set(diameter, diameter, 1);
+    disc.material.opacity = 0.35 * fade;
+  }
+  if (column) {
+    const width = Math.max(10, diameter * 0.35);
+    column.scale.set(width, LIGHTNING_COLUMN_HEIGHT, width);
+    column.position.y = LIGHTNING_COLUMN_HEIGHT / 2 + 2;
+    column.material.opacity = 0.7 * flicker * fade;
+  }
+}
+
+function updateLightningLine(hazard, mesh) {
+  const x1 = hazard.x1 ?? hazard.x ?? 0;
+  const z1 = hazard.y1 ?? hazard.y ?? 0;
+  const x2 = hazard.x2 ?? x1;
+  const z2 = hazard.y2 ?? z1;
+  const dx = x2 - x1;
+  const dz = z2 - z1;
+  const length = Math.hypot(dx, dz);
+  const width = Math.max(8, (hazard.r || 26) * 2);
+  // Warn phase draws a thin dim guide; the live strike is a bright fat bolt.
+  const warning = Number(hazard.warn || 0) > 0 && Number(hazard.warnTick || 0) < Number(hazard.warn || 0);
+  const flicker = 0.5 + Math.abs(Math.sin(performance.now() / 70)) * 0.5;
+  mesh.scale.set(length, warning ? 4 : width * 0.6, warning ? 4 : width);
+  mesh.position.set((x1 + x2) / 2, BEAM_Y, (z1 + z2) / 2);
+  mesh.rotation.y = -Math.atan2(dz, dx);
+  mesh.material.opacity = warning ? 0.4 : 0.85 * flicker;
 }
 
 function syncShopOffers() {
@@ -1046,49 +1285,180 @@ function addBeamSegment(x1, z1, x2, z2, color, width = 6) {
   beamMeshes.push(mesh);
 }
 
-function syncBeams() {
-  clearBeams();
+function getPlayerBeamVisual() {
   const p = Neo.player;
-  // Player beam weapons / laser skill while firing.
-  if (p && (Neo.laserActive || Number(p.weaponBeamTime || 0) > 0) && typeof Neo.buildRicochetBeamPath === 'function') {
+  if (!p || typeof Neo.buildRicochetBeamPath !== 'function') return null;
+  const beamWidthMultiplier = Number(Neo.getItemStats?.()?.beamWidthMultiplier || 1);
+
+  if (!Neo.laserActive && Neo.getEquippedWeapon?.() === 'lazer_glasses' && Number(p.weaponBeamTime || 0) > 0) {
     const angle = Neo.angleToMouse?.() ?? 0;
-    // First person: start the visible beam from the held weapon — forward and
-    // to the right of the eye, far enough out that the near end of the beam box
-    // doesn't blow up in perspective (visual only — damage still traces from
-    // the player).
-    const fp = isFirstPersonActive();
-    let ox = p.x;
-    let oy = p.y;
-    if (fp) {
-      ox += Math.cos(angle) * 60 - Math.sin(angle) * 18;
-      oy += Math.sin(angle) * 60 + Math.cos(angle) * 18;
-    }
-    const path = Neo.buildRicochetBeamPath(ox, oy, angle, 430, Neo.PLAYER_BEAM_BOUNCES || 0) || [];
-    path.forEach(seg => addBeamSegment(seg.x1, seg.y1, seg.x2, seg.y2, 0x8df0ff, fp ? 5 : 7));
+    return {
+      color: '#cda8ff',
+      width: 5 * beamWidthMultiplier,
+      paths: [-0.2, 0.2].map(offset => Neo.buildRicochetBeamPath(
+        p.x, p.y, angle + offset, 430, Neo.LAZER_GLASSES_BOUNCES,
+      )),
+    };
   }
-  // Enemy / rival beams.
-  (Neo.enemies || []).forEach(enemy => {
-    if (!enemy || Number(enemy.beamTime || 0) <= 0) return;
-    const range = enemy.type === 'god' ? (enemy.beamRange || 620)
-      : enemy.type === 'rival' ? (enemy.rivalBeamRange || 430)
-        : enemy.type === 'handsome_devil' ? (enemy.beamRange || 560)
-          : 430;
-    const angles = Array.isArray(enemy.rivalBeamFan) && enemy.rivalBeamFan.length
+
+  if (!Neo.laserActive) return null;
+  const move = Neo.getEquippedMove?.('laser');
+  const mode = Neo.laserMode;
+  const thornBeams = mode === 'thorn_blood_beams';
+  const holyEyeBeams = mode === 'holy_eye_beams';
+  const angle = Number(Neo.laserAngle || 0);
+  const fan = thornBeams ? [-0.32, -0.11, 0.11, 0.32] : holyEyeBeams ? [-0.07, 0.07] : [0];
+  const paths = Array.isArray(Neo.activeBeamPaths) && Neo.activeBeamPaths.length
+    ? Neo.activeBeamPaths
+    : fan.map(offset => Neo.buildRicochetBeamPath(
+      p.x,
+      p.y,
+      angle + offset,
+      Neo.getPlayerBeamRange?.(mode, move) ?? 430,
+      Neo.getPlayerBeamBounceCount?.(mode) ?? 0,
+    ));
+  const turtleWave = mode === 'turtle_wave';
+  const loveBeam = !!Neo.loveBeamCasting;
+  const wizardBeam = move === 'wizard_lazer';
+  const mooggyBeam = move === 'mooggy_blood_beam';
+  return {
+    color: turtleWave ? '#74f5ff'
+      : loveBeam ? '#ff9ed6'
+        : mode === 'god_sweep' ? '#ffffff'
+          : wizardBeam ? '#a64bff'
+            : mooggyBeam ? '#ff2f57'
+              : thornBeams ? '#ff3b5c'
+                : holyEyeBeams ? '#ffcc33'
+                  : '#ff00aa',
+    width: (mode === 'god_sweep' ? 16
+      : turtleWave ? 18
+        : loveBeam ? 10
+          : wizardBeam ? 22
+            : mooggyBeam ? 11
+              : thornBeams ? 6
+                : holyEyeBeams ? 7
+                  : 8) * beamWidthMultiplier,
+    paths,
+  };
+}
+
+function getEnemyBeamVisual(enemy) {
+  const isPartition = enemy.type === 'god' && enemy.state === 'godPartition';
+  const isDevilGiantLaser = enemy.type === 'handsome_devil' && enemy.state === 'devilGiantLaser';
+  const range = enemy.type === 'god' ? (enemy.beamRange || 620)
+    : enemy.type === 'rival' ? (enemy.rivalBeamRange || 430)
+      : enemy.type === 'mooggy' ? 520
+        : isDevilGiantLaser ? 900
+          : enemy.type === 'handsome_devil' ? (enemy.beamRange || 560)
+            : enemy.type === 'bowman_bane' ? 480 : 430;
+  const angles = isPartition
+    ? enemy.partitionAngles || []
+    : enemy.type === 'rival' && Array.isArray(enemy.rivalBeamFan)
       ? enemy.rivalBeamFan.map(offset => enemy.beamAngle + offset)
       : [enemy.beamAngle];
-    const color = enemy.type === 'god' ? 0xffffff
-      : enemy.type === 'rival' ? new THREE.Color(enemy.rivalBeamColor || '#ff00aa').getHex()
-        : 0xff3358;
-    angles.forEach(angle => {
-      addBeamSegment(
-        enemy.x, enemy.y,
-        enemy.x + Math.cos(angle) * range,
-        enemy.y + Math.sin(angle) * range,
-        color,
-        enemy.type === 'god' ? 11 : 7,
-      );
-    });
+  return {
+    color: isPartition ? '#fff1a8' : enemy.type === 'god' ? '#ffffff'
+      : enemy.type === 'rival' ? (enemy.rivalBeamColor || '#ff00aa')
+        : enemy.type === 'mooggy' || enemy.type === 'handsome_devil' ? '#ff3348'
+          : enemy.type === 'bowman_bane' ? '#8dd4ff' : '#aa66ff',
+    width: isPartition ? 14 : enemy.type === 'god' && enemy.state === 'godSweep' ? 18
+      : enemy.type === 'god' ? 10 : enemy.type === 'rival' ? (enemy.rivalBeamWidth || 8)
+        : enemy.type === 'mooggy' ? 6 : isDevilGiantLaser ? 22
+          : enemy.type === 'handsome_devil' ? 9 : 8,
+    paths: angles.map(angle => Neo.buildRicochetBeamPath(
+      enemy.x,
+      enemy.y,
+      angle,
+      isPartition ? Math.hypot(Neo.ROOM_W, Neo.ROOM_H) * 1.15 : range,
+      isPartition ? 0 : (Neo.getEnemyBeamBounceCount?.(enemy) ?? 0),
+    )),
+  };
+}
+
+function syncBeams() {
+  clearBeams();
+  const playerBeam = getPlayerBeamVisual();
+  if (playerBeam) {
+    const color = new THREE.Color(playerBeam.color).getHex();
+    playerBeam.paths.forEach(path => path.forEach(seg => addBeamSegment(
+      seg.x1, seg.y1, seg.x2, seg.y2, color, playerBeam.width,
+    )));
+  }
+  // Enemy and rival beams use the same range, fan and ricochet path used by
+  // combat and the top-down renderer — visual walls can never disagree with
+  // what can damage the player.
+  (Neo.enemies || []).forEach(enemy => {
+    if (!enemy || Number(enemy.beamTime || 0) <= 0) return;
+    const beam = getEnemyBeamVisual(enemy);
+    const color = new THREE.Color(beam.color).getHex();
+    beam.paths.forEach(path => path.forEach(seg => addBeamSegment(
+      seg.x1, seg.y1, seg.x2, seg.y2, color, beam.width,
+    )));
   });
+}
+
+// ---------------------------------------------------------------------------
+// Titan Hammer — Sarge's smash summon. A bespoke Neo.titanHammer global (not a
+// projectile/hazard/enemy), so it has no generic pool. We re-bake the 2D
+// drawTitanHammer art each active frame into one reused canvas — it animates
+// (hover dip, slam, pip states, fade) — and billboard it at the hammer's spot.
+// ---------------------------------------------------------------------------
+let titanHammerSprite = null;
+let titanHammerCanvas = null;
+let titanHammerTexture = null;
+let titanHammerBakeHalf = 0; // canvas half-size (world units), sized to the live AOE
+
+function syncTitanHammer() {
+  const hammer = Neo.titanHammer;
+  if (!hammer || typeof Neo.drawTitanHammer !== 'function') {
+    if (titanHammerSprite) titanHammerSprite.visible = false;
+    return;
+  }
+
+  // Size the bake canvas to enclose the AOE ring plus the pips/head that draw
+  // above the spot; grows with big-AOE builds so nothing clips.
+  const half = Math.ceil((hammer.radius || 110) + 56);
+  if (!titanHammerCanvas || half > titanHammerBakeHalf) {
+    titanHammerBakeHalf = half;
+    if (!titanHammerCanvas) titanHammerCanvas = document.createElement('canvas');
+    titanHammerCanvas.width = half * 2;
+    titanHammerCanvas.height = half * 2;
+    titanHammerTexture?.dispose();
+    titanHammerTexture = makeCanvasTexture(titanHammerCanvas);
+    if (!titanHammerSprite) {
+      titanHammerSprite = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: titanHammerTexture, transparent: true, alphaTest: 0.02, depthWrite: false,
+      }));
+      titanHammerSprite.center.set(0.5, 0.5);
+      scene.add(titanHammerSprite);
+    } else {
+      titanHammerSprite.material.map = titanHammerTexture;
+      titanHammerSprite.material.needsUpdate = true;
+    }
+  }
+  titanHammerSprite.visible = true;
+
+  // Re-bake: translate so the hammer's world (x,y) lands at canvas center, then
+  // let drawTitanHammer paint at its real world coords into our offscreen ctx.
+  const g = titanHammerCanvas.getContext('2d');
+  g.clearRect(0, 0, titanHammerCanvas.width, titanHammerCanvas.height);
+  g.imageSmoothingEnabled = false;
+  const realCtx = Neo.ctx;
+  g.save();
+  g.translate(titanHammerBakeHalf - hammer.x, titanHammerBakeHalf - hammer.y);
+  try {
+    Neo.ctx = g;
+    Neo.drawTitanHammer();
+  } catch { /* draw failed; leave whatever rendered */ }
+  Neo.ctx = realCtx;
+  g.restore();
+  titanHammerTexture.needsUpdate = true;
+
+  // Billboard sized to the baked canvas; sit it at torso height so the head
+  // hovers above the floor like the 2D art (which draws the head above the spot).
+  const size = titanHammerBakeHalf * 2;
+  titanHammerSprite.scale.set(size, size, 1);
+  titanHammerSprite.position.set(hammer.x, BEAM_Y + 12, hammer.y);
 }
 
 // ---------------------------------------------------------------------------
@@ -1098,6 +1468,8 @@ const CAMERA_HEIGHT = 580;
 const CAMERA_BACK = 430;
 const FP_EYE_HEIGHT = 34;
 const camTarget = new THREE.Vector3();
+const mouseAimNdc = new THREE.Vector2();
+const mouseAimRay = new THREE.Raycaster();
 
 // Camera mode: 'fp' (first person, the default) or 'third' (follow cam).
 let cameraMode = 'fp';
@@ -1113,6 +1485,27 @@ function isFirstPersonActive() {
     && !Neo.isSplitScreen?.() && !window.NeoTouch?.active;
 }
 
+// The old 2D aim conversion treats canvas pixels as world pixels. That is
+// correct for the top-down camera but points beside the cursor in perspective
+// third person. Intersect the current 3D camera ray with the floor instead so
+// the shared simulation receives the same intended world target the player is
+// actually pointing at.
+function projectCanvasMouseToWorld(canvasX, canvasY) {
+  if (!ready || !Neo.render3D || cameraMode !== 'third' || Neo.isSplitScreen?.() || !camera || !Neo.canvas) return null;
+  const width = Math.max(1, Number(Neo.canvas.width || 1));
+  const height = Math.max(1, Number(Neo.canvas.height || 1));
+  mouseAimNdc.set((Number(canvasX || 0) / width) * 2 - 1, 1 - (Number(canvasY || 0) / height) * 2);
+  mouseAimRay.setFromCamera(mouseAimNdc, camera);
+  const directionY = mouseAimRay.ray.direction.y;
+  if (Math.abs(directionY) < 1e-5) return null;
+  const distance = -mouseAimRay.ray.origin.y / directionY;
+  if (!(distance > 0) || !Number.isFinite(distance)) return null;
+  return {
+    x: mouseAimRay.ray.origin.x + mouseAimRay.ray.direction.x * distance,
+    y: mouseAimRay.ray.origin.z + mouseAimRay.ray.direction.z * distance,
+  };
+}
+
 function setCameraMode(mode) {
   cameraMode = mode === 'fp' ? 'fp' : 'third';
   try { localStorage.setItem(CAMERA_MODE_STORE_KEY, cameraMode); } catch { /* private mode */ }
@@ -1120,7 +1513,7 @@ function setCameraMode(mode) {
 }
 
 function syncPointerLock() {
-  const wantLock = isFirstPersonActive() && Neo.gameState === 'play';
+  const wantLock = isFirstPersonActive() && Neo.gameState === 'play' && !Neo.isOverlayBlockingInput?.();
   if (!wantLock && document.pointerLockElement === Neo.canvas) {
     document.exitPointerLock?.();
   }
@@ -1147,8 +1540,10 @@ window.addEventListener('mousemove', event => {
   fpPitch = Math.max(-0.55, Math.min(0.45, fpPitch - my * 0.0022));
 });
 
-document.addEventListener('mousedown', () => {
-  if (!isFirstPersonActive() || Neo.gameState !== 'play') return;
+document.addEventListener('mousedown', event => {
+  // UI buttons, panels and text inputs must retain an ordinary cursor. Only a
+  // direct click on the gameplay canvas may enter mouse-look.
+  if (event.target !== Neo.canvas || !isFirstPersonActive() || Neo.gameState !== 'play' || Neo.isOverlayBlockingInput?.()) return;
   if (document.pointerLockElement !== Neo.canvas) {
     Neo.canvas.requestPointerLock?.();
   }
@@ -1422,6 +1817,7 @@ function render() {
     roomBuildKey = buildKey;
     buildRoom();
   }
+  syncRoomEnvironmentSprites();
 
   // Dim ambient for dark room types so lighting mood carries over.
   const darkness = Neo.getRoomDarkness?.(Neo.currentRoom, []) || 0;
@@ -1438,7 +1834,9 @@ function render() {
   syncParticles();
   syncDeadBodies();
   syncBeams();
+  syncTitanHammer();
   syncCamera();
+  scaleNameplatesToScreen();
 
   renderer.render(scene, camera);
   syncPointerLock();
@@ -1499,6 +1897,7 @@ function announceViewChange(text) {
 // The aim/movement hooks in core/update.js read this: a number (view yaw in
 // radians) while first-person is driving, null otherwise.
 Neo.getFirstPersonYaw = () => (isFirstPersonActive() ? fpYaw : null);
+Neo.projectCanvasMouseToWorld = projectCanvasMouseToWorld;
 
 Neo.getViewMode = getViewMode;
 Neo.setViewMode = setViewMode;
