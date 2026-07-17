@@ -47,9 +47,14 @@ const pools = {
   hazards: new Map(),
   offers: new Map(),
   bodies: new Map(),
+  spawnPortals: new Map(),
 };
 let playerSprite = null;
 let playerShadow = null;
+let playerDeathPool = null;
+const dashAfterimages = [];
+let lastDashAfterimageAt = -Infinity;
+let playerMeleeIndicator = null;
 const beamMeshes = []; // reused per-frame list of beam boxes
 const nameplatePool = new Map(); // enemy -> { sprite, texture, signature }
 
@@ -61,6 +66,8 @@ const glowTextureCache = new Map();   // color -> THREE.Texture
 const textTextureCache = new Map();   // `${text}|${color}` -> {texture, w, h}
 const imageTextureCache = new Map();  // `${imgKey}|${frame}|${fw}` -> THREE.Texture
 const tileTextureCache = new Map();   // envTileKey -> THREE.Texture
+const shopOfferTextureCache = new Map();
+const statusBadgeTextureCache = new Map();
 
 function makeCanvasTexture(canvasEl) {
   const texture = new THREE.CanvasTexture(canvasEl);
@@ -149,15 +156,18 @@ function getEnvTileTexture(tileKey, size = 48) {
 // Projectile kinds whose 2D silhouette is distinctive enough to bake rather than
 // render as a generic glow. Sarge's Hammer Throw (spinning rock-hammer) and the
 // Death Ball (energy orb) both read as blobs otherwise.
-const SHAPED_PROJECTILE_KINDS = new Set(['sarges_hammer', 'death_ball']);
-const shapedProjectileTextureCache = new Map(); // kind -> THREE.Texture
+const SHAPED_PROJECTILE_KINDS = new Set(['sarges_hammer', 'death_ball', 'rock']);
+const shapedProjectileTextureCache = new Map(); // kind + floor tint -> THREE.Texture
 function getShapedProjectileTexture(projectile) {
   const kind = projectile?.kind;
   if (!kind || typeof Neo.drawProjectileShape !== 'function' || typeof Neo.getProjectileVisual !== 'function') return null;
-  const cached = shapedProjectileTextureCache.get(kind);
-  if (cached) return cached;
   const visual = Neo.getProjectileVisual(projectile) || {};
   if (!SHAPED_PROJECTILE_KINDS.has(kind)) return null;
+  // Rock shots inherit the current floor tint in 2D, so their baked texture
+  // must carry that same tint instead of reusing a previous room's boulder.
+  const cacheKey = `${kind}|${visual.color || ''}`;
+  const cached = shapedProjectileTextureCache.get(cacheKey);
+  if (cached) return cached;
   // Canonical radius baked into the texture; the sprite is scaled per shot to
   // the live radius, so this only sets the internal resolution.
   const r = 20;
@@ -180,8 +190,34 @@ function getShapedProjectileTexture(projectile) {
   Neo.ctx = realCtx;
   const texture = makeCanvasTexture(canvasEl);
   texture.userData = { bakedRadius: r, halfSize: pad };
-  shapedProjectileTextureCache.set(kind, texture);
+  shapedProjectileTextureCache.set(cacheKey, texture);
   return texture;
+}
+
+// Status badge art is already authored for the 2D renderer. Rasterizing that
+// exact badge gives 3D the same icon, stack count, border, and palette rather
+// than replacing effects with anonymous colored dots.
+function getStatusBadgeTexture(statusKey, stacks) {
+  const count = Math.max(1, Math.min(99, Math.round(Number(stacks || 1))));
+  const cacheKey = `${statusKey}|${count}`;
+  const cached = statusBadgeTextureCache.get(cacheKey);
+  if (cached) return cached;
+  if (typeof Neo.drawStatusIconBadge !== 'function') return null;
+  const canvasEl = document.createElement('canvas');
+  canvasEl.width = count > 1 ? 29 : 20;
+  canvasEl.height = 18;
+  const g = canvasEl.getContext('2d');
+  g.imageSmoothingEnabled = false;
+  const realCtx = Neo.ctx;
+  try {
+    Neo.ctx = g;
+    Neo.drawStatusIconBadge(statusKey, count, 1, 1);
+  } catch { /* a missing optional badge must not interrupt the world render */ }
+  Neo.ctx = realCtx;
+  const texture = makeCanvasTexture(canvasEl);
+  const entry = { texture, w: canvasEl.width, h: canvasEl.height };
+  statusBadgeTextureCache.set(cacheKey, entry);
+  return entry;
 }
 
 function getGlowTexture(color = '#ffffff') {
@@ -691,7 +727,12 @@ function enemySpriteKey(enemy) {
 function playerSpriteKey() {
   const key = Neo.getCharacterDef?.().key;
   const spriteKey = Neo.getCharacterSpriteKey ? Neo.getCharacterSpriteKey(key) : key;
-  return Neo.SPRITE_DEFS?.[spriteKey] ? spriteKey : 'thorn_knight';
+  // Character sheets (Gelleh, Sarge, etc.) are deliberately stored outside
+  // SPRITE_DEFS, so treating that table as the only valid source silently
+  // turned those heroes into Thorn Knight in 3D.
+  return Neo.SPRITE_DEFS?.[spriteKey] || Neo.CHARACTER_SPRITE_SHEETS?.[spriteKey]
+    ? spriteKey
+    : 'thorn_knight';
 }
 
 function facingOf(actor, fallbackAngle) {
@@ -710,6 +751,26 @@ function makeActorGroup(spriteKey, radius) {
   shadow.name = 'shadow';
   shadow.position.y = 0.6;
   group.add(shadow);
+  // The 2D player is made of both a body frame and its rotating aim/arm frame.
+  // Keep that composition in third person instead of reducing characters to a
+  // body-only billboard.
+  const arm = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, alphaTest: 0.05, depthWrite: false }));
+  arm.center.set(0.5, 0.5);
+  arm.name = 'arm';
+  arm.renderOrder = 3;
+  arm.visible = false;
+  group.add(arm);
+  const status = new THREE.Group();
+  status.name = 'status-effects';
+  const aura = new THREE.Mesh(
+    new THREE.RingGeometry(0.72, 1, 28),
+    new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }),
+  );
+  aura.rotation.x = -Math.PI / 2;
+  aura.position.y = 1.3;
+  aura.name = 'aura';
+  status.add(aura);
+  group.add(status);
   return group;
 }
 
@@ -729,6 +790,243 @@ function updateActorSprite(group, spriteKey, radius, flip, opts = {}) {
   sprite.material.opacity = opts.alpha ?? 1;
   const tint = opts.tint || 0xffffff;
   if (sprite.material.color.getHex() !== tint) sprite.material.color.setHex(tint);
+}
+
+function syncPlayerArm(group, spriteKey, player, aim, flip, options = {}) {
+  const arm = group.getObjectByName('arm');
+  if (!arm) return;
+  const texture = getSpriteTexture(`${spriteKey}:arm`, flip);
+  if (!texture || options.hidden) {
+    arm.visible = false;
+    return;
+  }
+  const renderScale = Number(texture.userData?.renderScale || 1);
+  const aspect = Number(texture.userData?.aspect || 1);
+  const sheet = Neo.CHARACTER_SPRITE_SHEETS?.[spriteKey] || Neo.CHARACTER_SHEET_DEFS?.[spriteKey] || {};
+  const size = (player.r || 14) * SPRITE_SIZE_MULT * renderScale;
+  const recoil = Math.max(0, Number(options.recoil || 0));
+  const attackProgress = Math.max(0, Math.min(1, Number(options.attackProgress || 0)));
+  let angleOffset = 0;
+  let swingRecoil = recoil;
+  if (!window.NeoSettings?.getAccess?.()?.reduceMotion
+    && ['thorn_knight', 'sarge', 'mooggy'].includes(spriteKey) && attackProgress > 0) {
+    const arc = spriteKey === 'sarge' ? 1.35 : spriteKey === 'mooggy' ? 0.85 : 1.05;
+    const eased = 1 - (1 - attackProgress) ** 2;
+    angleOffset = -arc * (1 - eased * 2);
+    swingRecoil = Math.sin(attackProgress * Math.PI) * 0.2;
+  }
+  const baseAngle = Number.isFinite(Number(sheet.armBaseAngle)) ? Number(sheet.armBaseAngle) : 0;
+  const sourceAimAngle = flip ? Math.PI - baseAngle : baseAngle;
+  const offset = sheet.armOffset || {};
+  const offsetX = Number(offset.x || 0) * size / Math.max(1, Number(texture.image?.width || 24)) * (flip ? -1 : 1);
+  const offsetY = Number(offset.y || 0) * size / Math.max(1, Number(texture.image?.width || 24));
+  const reach = Math.max(8, (player.r || 14) * 0.68 - swingRecoil * 18);
+  arm.visible = true;
+  arm.material.map = texture;
+  arm.material.opacity = options.alpha ?? 1;
+  arm.material.rotation = -(aim - sourceAimAngle + angleOffset * (flip ? -1 : 1));
+  arm.scale.set(size * aspect, size, 1);
+  arm.position.set(Math.cos(aim) * reach + offsetX, size * 0.45 + offsetY, Math.sin(aim) * reach);
+  arm.material.needsUpdate = true;
+}
+
+function syncActorStatus(group, actor, radius, isPlayer = false) {
+  const status = group.getObjectByName('status-effects');
+  if (!status) return;
+  const active = [];
+  (Neo.STATUS_KEYS || []).forEach(key => {
+    const stacks = Number(Neo.getStatusStacks?.(actor, key) || 0);
+    if (stacks > 0) active.push({ key, stacks });
+  });
+  if (Number(actor.stun || 0) > 0) active.push({ key: 'stun', stacks: 1 });
+  status.visible = active.length > 0;
+  if (!active.length) return;
+
+  const now = performance.now() / 1000;
+  const aura = status.getObjectByName('aura');
+  const primary = active[0];
+  const primaryColor = Neo.STATUS_STYLES?.[primary.key]?.color
+    || Neo.STATUS_ICON_DEFS?.[primary.key]?.color || '#ffe66d';
+  if (aura) {
+    aura.material.color.set(primaryColor);
+    aura.material.opacity = 0.34 + Math.sin(now * 8) * 0.1;
+    const scale = Math.max(12, radius * (isPlayer ? 2.65 : 2.35)) * (1 + Math.sin(now * 6) * 0.05);
+    aura.scale.set(scale, scale, 1);
+  }
+
+  const obsolete = new Set();
+  status.children.forEach(child => { if (child.name.startsWith('badge:')) obsolete.add(child.name); });
+  const totalWidth = active.reduce((sum, entry) => sum + (entry.stacks > 1 ? 29 : 20), 0) + Math.max(0, active.length - 1) * 3;
+  let offset = -totalWidth / 2;
+  active.forEach(entry => {
+    const name = `badge:${entry.key}`;
+    obsolete.delete(name);
+    let badge = status.getObjectByName(name);
+    const textureEntry = getStatusBadgeTexture(entry.key, entry.stacks);
+    if (!textureEntry) return;
+    if (!badge) {
+      badge = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthWrite: false, depthTest: false }));
+      badge.center.set(0.5, 0);
+      badge.name = name;
+      badge.renderOrder = 11;
+      status.add(badge);
+    }
+    if (badge.material.map !== textureEntry.texture) {
+      badge.material.map = textureEntry.texture;
+      badge.material.needsUpdate = true;
+    }
+    const width = textureEntry.w;
+    badge.position.set(offset + width / 2, Math.max(36, radius * SPRITE_SIZE_MULT + 18), 0);
+    badge.scale.set(width, textureEntry.h, 1);
+    offset += width + 3;
+  });
+  obsolete.forEach(name => {
+    const badge = status.getObjectByName(name);
+    if (badge) {
+      status.remove(badge);
+      badge.material.dispose();
+    }
+  });
+}
+
+function syncPlayerDashTrail(player, spriteKey, flip) {
+  const now = performance.now() / 1000;
+  const active = !isFirstPersonActive() && Number(player.dashTime || 0) > 0;
+  if (active && now - lastDashAfterimageAt >= 0.038) {
+    const texture = getSpriteTexture(spriteKey, flip);
+    if (texture) {
+      const sprite = makeBillboard(texture, { depthWrite: false, color: 0xbceeff });
+      sprite.material.opacity = 0.46;
+      sprite.renderOrder = 2;
+      const renderScale = Number(texture.userData?.renderScale || 1);
+      const aspect = Number(texture.userData?.aspect || 1);
+      const height = (player.r || 14) * SPRITE_SIZE_MULT * renderScale;
+      sprite.scale.set(height * aspect, height, 1);
+      sprite.position.set(player.x, 0.8, player.y);
+      scene.add(sprite);
+      dashAfterimages.push({ sprite, born: now });
+      lastDashAfterimageAt = now;
+    }
+  }
+  for (let index = dashAfterimages.length - 1; index >= 0; index -= 1) {
+    const trail = dashAfterimages[index];
+    const age = now - trail.born;
+    if (age >= 0.26) {
+      scene.remove(trail.sprite);
+      trail.sprite.material.dispose();
+      dashAfterimages.splice(index, 1);
+      continue;
+    }
+    trail.sprite.material.opacity = 0.46 * (1 - age / 0.26);
+  }
+}
+
+function makeMeleeIndicator() {
+  const group = new THREE.Group();
+  const makeLine = (color, opacity) => {
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(33 * 3), 3));
+    const material = new THREE.LineBasicMaterial({ color, transparent: true, opacity, depthWrite: false, blending: THREE.AdditiveBlending });
+    return new THREE.Line(geometry, material);
+  };
+  const glow = makeLine(0xd86d87, 0.32);
+  glow.name = 'glow';
+  group.add(glow);
+  const edge = makeLine(0xffffff, 0.9);
+  edge.name = 'edge';
+  group.add(edge);
+  const tip = new THREE.Sprite(new THREE.SpriteMaterial({ map: getGlowTexture('#ffffff'), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+  tip.center.set(0.5, 0.5);
+  tip.name = 'tip';
+  group.add(tip);
+  group.visible = false;
+  scene.add(group);
+  return group;
+}
+
+function writeMeleeLine(line, points) {
+  const attribute = line.geometry.getAttribute('position');
+  points.forEach((point, index) => attribute.setXYZ(index, point.x, point.y, point.z));
+  line.geometry.setDrawRange(0, points.length);
+  attribute.needsUpdate = true;
+}
+
+function syncPlayerMeleeIndicator() {
+  const p = Neo.player;
+  if (!p || Number(p.swing || 0) <= 0) {
+    if (playerMeleeIndicator) playerMeleeIndicator.visible = false;
+    return;
+  }
+  if (!playerMeleeIndicator) playerMeleeIndicator = makeMeleeIndicator();
+  const total = Math.max(0.01, Number(Neo.ATTACKS?.melee?.active || 0.32));
+  const progress = Math.max(0, Math.min(1, 1 - Number(p.swing || 0) / total));
+  const staff = Neo.getEquippedWeapon?.() === 'extending_staff';
+  const color = staff ? '#ff3333' : Neo.godTimer > 0 ? '#f6e8c8' : p.character === 'gelleh' ? '#bfe4ff' : '#d86d87';
+  const fade = 0.9 * Math.max(0, Math.min(1, Number(p.swing || 0) / total));
+  const glow = playerMeleeIndicator.getObjectByName('glow');
+  const edge = playerMeleeIndicator.getObjectByName('edge');
+  const tip = playerMeleeIndicator.getObjectByName('tip');
+  playerMeleeIndicator.visible = true;
+  glow.material.color.set(color);
+  glow.material.opacity = fade * 0.42;
+  edge.material.opacity = fade;
+  const angle = Number(p.swingA || Neo.angleToMouse?.() || 0);
+  if (p.stabSwing) {
+    const lunge = Math.sin(progress * Math.PI);
+    const reach = 30 + lunge * 60;
+    const points = [
+      { x: p.x + Math.cos(angle) * 12, y: 8, z: p.y + Math.sin(angle) * 12 },
+      { x: p.x + Math.cos(angle) * reach, y: 8, z: p.y + Math.sin(angle) * reach },
+    ];
+    writeMeleeLine(glow, points);
+    writeMeleeLine(edge, points);
+    tip.position.copy(new THREE.Vector3(points[1].x, points[1].y, points[1].z));
+    tip.scale.set(14, 14, 1);
+    tip.material.color.set(color);
+    tip.material.opacity = fade;
+    return;
+  }
+  const range = staff ? 130 : 55;
+  const arc = staff ? 1.45 : Number(Neo.ATTACKS?.melee?.arc || 0.9);
+  const direction = Number(p.swingFacing || 1) < 0 ? 1 : -1;
+  const start = angle + arc * direction;
+  const end = angle - arc * direction;
+  const current = start + (end - start) * progress;
+  const trailStart = current + arc * 0.55 * direction;
+  const points = [];
+  for (let index = 0; index < 33; index += 1) {
+    const t = index / 32;
+    const theta = trailStart + (current - trailStart) * t;
+    points.push({ x: p.x + Math.cos(theta) * range, y: 7, z: p.y + Math.sin(theta) * range });
+  }
+  writeMeleeLine(glow, points);
+  writeMeleeLine(edge, points);
+  const finalPoint = points[points.length - 1];
+  tip.position.set(finalPoint.x, finalPoint.y, finalPoint.z);
+  tip.scale.set(staff ? 16 : 11, staff ? 16 : 11, 1);
+  tip.material.color.set(color);
+  tip.material.opacity = fade;
+}
+
+function syncPlayerDeathPool(anim, size, fallEase) {
+  if (!playerDeathPool) {
+    playerDeathPool = new THREE.Mesh(unitCircle, new THREE.MeshBasicMaterial({
+      color: 0x5e0010,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+    }));
+    playerDeathPool.rotation.x = -Math.PI / 2;
+    playerDeathPool.renderOrder = 2;
+    scene.add(playerDeathPool);
+  }
+  const t = Neo.clamp?.(anim.timer / anim.duration, 0, 1) ?? Math.max(0, Math.min(1, anim.timer / anim.duration));
+  const poolAlpha = Math.max(0, Math.min(1, (t - 0.3) / 0.4));
+  playerDeathPool.visible = poolAlpha > 0;
+  playerDeathPool.position.set(anim.x, 0.45, anim.y);
+  playerDeathPool.scale.set(size * (0.64 + poolAlpha * 0.24), size * (0.16 + poolAlpha * 0.08), 1);
+  playerDeathPool.material.opacity = 0.45 * poolAlpha;
+  playerDeathPool.rotation.z = (anim.facing < 0 ? -1 : 1) * fallEase * 0.2;
 }
 
 function walkBob(actor, seedX = 0) {
@@ -752,18 +1050,72 @@ function syncPlayer() {
     playerShadow = playerSprite.getObjectByName('shadow');
     scene.add(playerSprite);
   }
-  // First person: you are the camera — no player billboard in view.
-  playerSprite.visible = !isFirstPersonActive();
   const anim = dying ? Neo.playerDeathAnim : null;
+  // First person normally hides the body, but the death fall must remain
+  // visible in every camera mode just like the 2D corpse animation.
+  playerSprite.visible = !isFirstPersonActive() || !!anim;
   const x = anim ? anim.x : p.x;
   const z = anim ? anim.y : p.y;
   playerSprite.position.set(x, 0, z);
-  const aim = Neo.angleToMouse?.() ?? 0;
-  const flip = facingOf(p, aim) < 0;
-  const bob = dying ? { hop: 0, squashX: 1, squashY: 1 } : walkBob(p);
-  const alpha = anim ? Math.max(0.1, 1 - anim.timer / Math.max(0.01, anim.duration)) : 1;
-  const tint = anim ? 0xff6666 : (p.inv > 0 && Math.floor(Neo.frameId / 3) % 2 === 0 ? 0xff9999 : 0xffffff);
-  updateActorSprite(playerSprite, playerSpriteKey(), p.r || 14, flip, { ...bob, alpha, tint });
+  const currentAim = Neo.angleToMouse?.() ?? 0;
+  const swingActive = !anim && Number(p.swing || 0) > 0;
+  const armRecoilDuration = Math.max(0.01, Number(p.armRecoilDuration || 0.16));
+  const armRecoilRemaining = Math.max(0, Number(p.armRecoilUntil || 0) - Number(Neo.gameElapsedTime || 0));
+  const aim = anim ? Number(anim.facing || 1) * 0.01
+    : swingActive && Number.isFinite(Number(p.swingA)) ? Number(p.swingA)
+      : armRecoilRemaining > 0 && Number.isFinite(Number(p.armRecoilA)) ? Number(p.armRecoilA)
+        : currentAim;
+  const flip = anim ? Number(anim.facing || 1) < 0
+    : swingActive && Number(p.swingFacing || 0) ? Number(p.swingFacing) < 0
+      : armRecoilRemaining > 0 && Number(p.armRecoilFacing || 0) ? Number(p.armRecoilFacing) < 0
+        : facingOf(p, currentAim) < 0;
+  const baseKey = playerSpriteKey();
+  const swingTotal = Neo.ATTACKS?.melee?.active || 0.32;
+  const frameKey = !anim
+    ? (Neo.getActorSpriteFrameKey?.(baseKey, p, {
+      maxSpeed: p.mooggyZoomiesTime > 0 ? 640 : p.princessFlightTime > 0 ? 420 : 260,
+      stepRate: p.mooggyZoomiesTime > 0 ? 11 : 7.5,
+      attackProgress: Math.max(0, 1 - Number(p.swing || 0) / swingTotal),
+      seedKey: 'player',
+    }) || baseKey)
+    : baseKey;
+  let bob = !anim ? walkBob(p) : { hop: 0, squashX: 1, squashY: 1 };
+  if (!anim && Number(p.dashTime || 0) > 0) {
+    bob = { ...bob, hop: bob.hop + 4, squashX: bob.squashX + 0.12, squashY: bob.squashY - 0.075 };
+  }
+  let alpha = 1;
+  let tint = p.inv > 0 && Math.floor(Neo.frameId / 3) % 2 === 0 ? 0xff9999 : 0xffffff;
+  let fallEase = 0;
+  if (anim) {
+    const t = Neo.clamp?.(anim.timer / anim.duration, 0, 1) ?? Math.max(0, Math.min(1, anim.timer / anim.duration));
+    fallEase = 1 - (1 - Math.min(t * 1.6, 1)) ** 3;
+    bob = { hop: 0, squashX: 1 + 0.05 * fallEase, squashY: 1 - 0.46 * fallEase };
+    tint = 0x5e2630;
+    syncPlayerDeathPool(anim, Math.max(34, (anim.r || p.r || 14) * 2.5), fallEase);
+  } else if (playerDeathPool) {
+    playerDeathPool.visible = false;
+  }
+  updateActorSprite(playerSprite, frameKey, p.r || 14, flip, { ...bob, alpha, tint });
+  const body = playerSprite.getObjectByName('body');
+  if (body) {
+    body.material.rotation = anim ? (anim.facing < 0 ? -1 : 1) * (Math.PI / 2) * fallEase : 0;
+    body.center.set(0.5, anim ? 0.5 : 0);
+    if (anim) body.position.y = Math.max(4, (p.r || 14) * SPRITE_SIZE_MULT * 0.28);
+  }
+  const recoil = armRecoilRemaining / armRecoilDuration;
+  syncPlayerArm(playerSprite, baseKey, p, aim, flip, {
+    hidden: !!anim || isFirstPersonActive(),
+    recoil,
+    attackProgress: swingActive ? Math.max(0, 1 - Number(p.swing || 0) / swingTotal) : 0,
+    alpha,
+  });
+  syncActorStatus(playerSprite, p, p.r || 14, true);
+  syncPlayerDashTrail(p, frameKey, flip);
+  if (playerShadow) {
+    const dashScale = Number(p.dashTime || 0) > 0 ? 1.18 : 1;
+    playerShadow.scale.setScalar((p.r || 14) * 2 * dashScale);
+    playerShadow.material.opacity = Number(p.dashTime || 0) > 0 ? 0.4 : 0.28;
+  }
   if (playerLight) playerLight.position.set(x, 130, z);
 }
 
@@ -803,6 +1155,11 @@ function syncEnemies() {
     enemy => makeActorGroup(enemySpriteKey(enemy), enemy.r || 12),
     (enemy, group) => {
       group.position.set(enemy.x, 0, enemy.y);
+      // During the shared 0.72s spawn window, 2D draws only the portal and
+      // its emerging silhouette. Keep the normal actor/nameplate hidden until
+      // that presentation has completed.
+      group.visible = Number(enemy.spawnT || 0) <= 0;
+      if (!group.visible) return;
       const flip = (Neo.player ? Neo.player.x < enemy.x : false);
       const bob = walkBob(enemy, enemy.x);
       const stunned = Number(enemy.stun || 0) > 0;
@@ -832,10 +1189,118 @@ function syncEnemies() {
       } else {
         plate.sprite.visible = false;
       }
+      syncActorStatus(group, enemy, enemy.r || 12);
     },
   );
+  // Guard keeps an older cached module from taking down the entire 3D frame
+  // while a dev server/browser refresh catches up; the current renderer always
+  // supplies this function immediately below.
+  if (typeof syncSpawnPortals === 'function') syncSpawnPortals();
   // Nameplate sprites die with their enemy group (child objects); prune the map.
   nameplatePool.forEach((plate, enemy) => { if (!pools.enemies.has(enemy)) nameplatePool.delete(enemy); });
+}
+
+function makeSpawnPortalObject() {
+  const group = new THREE.Group();
+  const pool = new THREE.Mesh(unitCircle, new THREE.MeshBasicMaterial({
+    color: 0x4d167d, transparent: true, opacity: 0.4, depthWrite: false, blending: THREE.AdditiveBlending,
+  }));
+  pool.rotation.x = -Math.PI / 2;
+  pool.position.y = 1.1;
+  pool.name = 'pool';
+  group.add(pool);
+  ['outer-ring', 'inner-ring'].forEach((name, index) => {
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(1, index ? 0.055 : 0.08, 6, 24), new THREE.MeshBasicMaterial({
+      transparent: true, opacity: 0.9, depthWrite: false, blending: THREE.AdditiveBlending,
+    }));
+    ring.rotation.x = Math.PI / 2;
+    ring.position.y = 2 + index * 0.35;
+    ring.name = name;
+    group.add(ring);
+  });
+  const glow = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: getGlowTexture('#cc88ff'), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  }));
+  glow.center.set(0.5, 0.5);
+  glow.position.y = 3;
+  glow.name = 'glow';
+  group.add(glow);
+  const emerge = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, alphaTest: 0.05, depthWrite: false }));
+  emerge.center.set(0.5, 0);
+  emerge.name = 'emerge';
+  emerge.visible = false;
+  group.add(emerge);
+  return group;
+}
+
+function syncSpawnPortals() {
+  const spawning = (Neo.enemies || []).filter(enemy => enemy && Number(enemy.spawnT || 0) > 0);
+  syncPool(
+    pools.spawnPortals,
+    spawning,
+    () => makeSpawnPortalObject(),
+    (enemy, group) => {
+      const duration = 0.72;
+      const progress = Math.max(0, Math.min(1, 1 - Number(enemy.spawnT || 0) / duration));
+      const emergeProgress = Math.max(0, Math.min(1, (progress - 0.35) / 0.65));
+      const portalEase = 1 - (1 - Math.min(progress * 1.8, 1)) ** 3;
+      const boss = Neo.BOSS_TYPES?.has(enemy.type);
+      const elite = !!enemy.elite;
+      const color = boss ? '#ffd060' : elite ? '#e8b030' : '#8855ff';
+      const innerColor = boss ? '#fff4c0' : elite ? '#ffe080' : '#cc88ff';
+      const radius = (enemy.r || 12) * (1.8 + portalEase * 0.6);
+      const now = performance.now() / 1000;
+      group.position.set(enemy.x, 0, enemy.y);
+
+      const pool = group.getObjectByName('pool');
+      if (pool) {
+        pool.material.color.set(boss ? 0x785000 : 0x280050);
+        pool.material.opacity = 0.45 * portalEase;
+        pool.scale.set(radius * 1.7, radius * 0.56, 1);
+      }
+      const outer = group.getObjectByName('outer-ring');
+      const inner = group.getObjectByName('inner-ring');
+      if (outer) {
+        outer.material.color.set(color);
+        outer.material.opacity = 0.9 * portalEase;
+        outer.scale.set(radius, radius * 0.38, 1);
+        outer.rotation.z = now * 3.1;
+      }
+      if (inner) {
+        inner.material.color.set(innerColor);
+        inner.material.opacity = 0.82 * portalEase;
+        inner.scale.set(radius * 0.78, radius * 0.3, 1);
+        inner.rotation.z = -now * 2.1;
+      }
+      const glow = group.getObjectByName('glow');
+      if (glow) {
+        const texture = getGlowTexture(color);
+        if (glow.material.map !== texture) {
+          glow.material.map = texture;
+          glow.material.needsUpdate = true;
+        }
+        glow.material.opacity = 0.62 * portalEase;
+        glow.scale.set(radius * 2.3, radius * 1.3, 1);
+      }
+      const emerge = group.getObjectByName('emerge');
+      if (emerge) {
+        const flip = Neo.player ? Neo.player.x < enemy.x : false;
+        const texture = getSpriteTexture(enemySpriteKey(enemy), flip);
+        emerge.visible = emergeProgress > 0 && !!texture;
+        if (!texture) return;
+        if (emerge.material.map !== texture) {
+          emerge.material.map = texture;
+          emerge.material.needsUpdate = true;
+        }
+        const renderScale = Number(texture.userData?.renderScale || 1);
+        const aspect = Number(texture.userData?.aspect || 1);
+        const height = (enemy.r || 12) * SPRITE_SIZE_MULT * renderScale;
+        emerge.scale.set(height * aspect, height * (0.28 + emergeProgress * 0.72), 1);
+        emerge.position.y = 1.4;
+        emerge.material.opacity = Math.min(1, emergeProgress * 1.8);
+      }
+    },
+  );
 }
 
 // Give every nameplate a constant on-screen size regardless of camera distance
@@ -1003,13 +1468,15 @@ function syncDestructibles() {
           : getEnvTileTexture('barrel_oak');
         return texture ? makeBillboard(texture) : null;
       }
-      // wall / cover_wall / secret_wall blocks: real boxes.
-      const texture = getEnvTileTexture('wall_block');
+      // Wooden cover walls are authored as timber barricades in 2D. Give their
+      // 3D boxes the matching oak texture rather than the generic stone block.
+      const wooden = prop.kind === 'cover_wall' && !prop.reinforced;
+      const texture = getEnvTileTexture(wooden ? 'barrel_oak' : 'wall_block');
       const material = texture
-        ? new THREE.MeshLambertMaterial({ map: texture, color: 0xd9d9d9 })
-        : new THREE.MeshLambertMaterial({ color: 0x555f6d });
+        ? makeWallMaterial(texture, new THREE.Color(wooden ? 0x9b6334 : 0xd9d9d9), Number(prop.w || 50), BLOCK_HEIGHT)
+        : new THREE.MeshLambertMaterial({ color: wooden ? 0x6b3d20 : 0x555f6d });
       const mesh = new THREE.Mesh(unitBox, material);
-      mesh.scale.set(50, BLOCK_HEIGHT, 50);
+      mesh.scale.set(Math.max(24, Number(prop.w || 50)), BLOCK_HEIGHT, Math.max(24, Number(prop.h || 50)));
       return mesh;
     },
     (prop, obj) => {
@@ -1066,11 +1533,32 @@ function makeLightningLineObject() {
   return mesh;
 }
 
+function makeChaosBurstObject() {
+  const group = new THREE.Group();
+  const core = new THREE.Mesh(unitCircle, new THREE.MeshBasicMaterial({ color: 0xc86bff, transparent: true, opacity: 0.18, depthWrite: false, blending: THREE.AdditiveBlending }));
+  core.rotation.x = -Math.PI / 2;
+  core.position.y = 2.2;
+  core.name = 'core';
+  group.add(core);
+  const ring = new THREE.Mesh(new THREE.RingGeometry(0.88, 1, 48), new THREE.MeshBasicMaterial({ color: 0xd6aaff, transparent: true, opacity: 0.82, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }));
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = 2.6;
+  ring.name = 'ring';
+  group.add(ring);
+  for (let index = 0; index < 7; index += 1) {
+    const bolt = new THREE.Mesh(unitBox, new THREE.MeshBasicMaterial({ color: index % 2 ? 0xd6aaff : 0xffe1ff, transparent: true, opacity: 0.82, depthWrite: false, blending: THREE.AdditiveBlending }));
+    bolt.name = `bolt-${index}`;
+    group.add(bolt);
+  }
+  return group;
+}
+
 function syncHazards() {
   syncPool(
     pools.hazards,
     Neo.hazards,
     hazard => {
+      if (hazard.kind === 'chaos_burst') return makeChaosBurstObject();
       if (hazard.kind === 'lightning_column') return makeLightningColumnObject();
       if (hazard.kind === 'lightning_strike_line') return makeLightningLineObject();
       const style = HAZARD_STYLES[hazard.kind] || { color: 0xa46bff, opacity: 0.8 };
@@ -1097,6 +1585,10 @@ function syncHazards() {
       return mesh;
     },
     (hazard, mesh) => {
+      if (hazard.kind === 'chaos_burst') {
+        updateChaosBurst(hazard, mesh);
+        return;
+      }
       if (hazard.kind === 'lightning_column') {
         updateLightningColumn(hazard, mesh);
         return;
@@ -1114,6 +1606,37 @@ function syncHazards() {
       }
     },
   );
+}
+
+function updateChaosBurst(hazard, group) {
+  const radius = Math.max(20, Number(hazard.r || 180));
+  const t = performance.now() * 0.005 + hazard.x * 0.01;
+  const flicker = 0.75 + Math.sin(t * 9) * 0.15 + Math.sin(t * 23.7) * 0.1;
+  const pulse = 1 + Math.sin(t * 2.4) * 0.06;
+  const fade = hazard.ttl == null ? 1 : Math.max(0, Math.min(1, Number(hazard.ttl || 0) / 0.35));
+  group.position.set(hazard.x, 0, hazard.y);
+  const core = group.getObjectByName('core');
+  const ring = group.getObjectByName('ring');
+  if (core) {
+    core.scale.set(radius, radius, 1);
+    core.material.opacity = 0.2 * flicker * fade;
+  }
+  if (ring) {
+    ring.scale.set(radius * pulse, radius * pulse, 1);
+    ring.material.opacity = (0.55 + flicker * 0.3) * fade;
+  }
+  for (let index = 0; index < 7; index += 1) {
+    const bolt = group.getObjectByName(`bolt-${index}`);
+    if (!bolt) continue;
+    const angle = t * 1.6 + index * (Math.PI * 2 / 7);
+    const inner = radius * 0.3;
+    const outer = radius * (0.85 + 0.1 * Math.sin(t * 3.1 + index));
+    const length = outer - inner;
+    bolt.scale.set(length, 3.2, 3.2);
+    bolt.position.set(Math.cos(angle) * (inner + length / 2), 8 + Math.sin(t * 7 + index) * 2, Math.sin(angle) * (inner + length / 2));
+    bolt.rotation.y = -angle;
+    bolt.material.opacity = 0.78 * flicker * fade;
+  }
 }
 
 function updateLightningColumn(hazard, group) {
@@ -1155,6 +1678,41 @@ function updateLightningLine(hazard, mesh) {
   mesh.material.opacity = warning ? 0.4 : 0.85 * flicker;
 }
 
+function getShopOfferTexture(offer, state) {
+  const signature = [offer.type, offer.key, offer.cost, state.blocked ? 1 : 0, state.affordable ? 1 : 0].join('|');
+  const cached = shopOfferTextureCache.get(signature);
+  if (cached) return cached;
+  const canvasEl = document.createElement('canvas');
+  canvasEl.width = 64;
+  canvasEl.height = 76;
+  const g = canvasEl.getContext('2d');
+  g.imageSmoothingEnabled = false;
+  g.fillStyle = state.blocked ? 'rgba(36,18,24,0.95)' : 'rgba(0,30,44,0.95)';
+  g.fillRect(6, 4, 52, 52);
+  g.strokeStyle = state.blocked ? '#ff8b98' : !state.affordable ? '#6b7480' : '#ffd966';
+  g.lineWidth = 2;
+  g.strokeRect(7, 5, 50, 50);
+  const icon = offer.type === 'item' ? window.NeoNykeIconDefs?.items?.[offer.key]
+    : offer.type === 'move' ? window.NeoNykeIconDefs?.moves?.[offer.key]
+      : offer.type === 'weapon' ? window.NeoNykeIconDefs?.weapons?.[offer.key]
+        : offer.type === 'potion' ? window.NeoNykeIconDefs?.pickups?.potion : null;
+  const iconColor = state.blocked ? '#ff8b98' : icon?.color || (offer.type === 'item' ? '#a857ff' : offer.type === 'potion' ? '#35ff6f' : '#8fd2ff');
+  if (Array.isArray(icon?.pixels)) {
+    g.fillStyle = iconColor;
+    icon.pixels.forEach(([x, y]) => g.fillRect(16 + x * 4, 10 + y * 4, 4, 4));
+  } else {
+    g.fillStyle = iconColor;
+    g.beginPath(); g.arc(32, 28, 10, 0, Math.PI * 2); g.fill();
+  }
+  g.fillStyle = state.blocked ? '#ffccd2' : !state.affordable ? '#c4cdd6' : '#fff';
+  g.font = 'bold 11px system-ui';
+  g.textAlign = 'center';
+  g.fillText(String(offer.cost), 32, 70);
+  const texture = makeCanvasTexture(canvasEl);
+  shopOfferTextureCache.set(signature, texture);
+  return texture;
+}
+
 function syncShopOffers() {
   syncPool(
     pools.offers,
@@ -1166,25 +1724,30 @@ function syncShopOffers() {
       glow.scale.set(34, 34, 1);
       glow.name = 'glow';
       group.add(glow);
-      const label = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthWrite: false }));
-      label.center.set(0.5, 0);
-      label.name = 'label';
-      label.position.y = 44;
-      group.add(label);
+      const card = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, alphaTest: 0.05, depthWrite: false }));
+      card.center.set(0.5, 0);
+      card.name = 'card';
+      card.position.y = 0.8;
+      card.scale.set(64, 76, 1);
+      group.add(card);
       return group;
     },
     (offer, group) => {
       group.visible = !offer.bought;
       group.position.set(offer.x, 4, offer.y);
       if (offer.bought) return;
-      const canAfford = !!Neo.player && Neo.player.coins >= offer.cost;
-      const entry = getTextTexture(`${offer.cost}c`, canAfford ? '#ffe07a' : '#8b93a4');
-      const label = group.getObjectByName('label');
-      if (label && label.material.map !== entry.texture) {
-        label.material.map = entry.texture;
-        label.material.needsUpdate = true;
-        label.scale.set(entry.w * 0.9, entry.h * 0.9, 1);
+      const state = {
+        blocked: offer.type === 'item' && !!Neo.isChallengeActive?.('no_items'),
+        affordable: !!Neo.player && Neo.player.coins >= offer.cost,
+      };
+      const texture = getShopOfferTexture(offer, state);
+      const card = group.getObjectByName('card');
+      if (card && card.material.map !== texture) {
+        card.material.map = texture;
+        card.material.needsUpdate = true;
       }
+      const glow = group.getObjectByName('glow');
+      if (glow) glow.material.color.set(state.blocked ? 0xff6677 : state.affordable ? 0xffd97a : 0x6b7480);
     },
   );
 }
@@ -1194,6 +1757,15 @@ function syncParticles() {
     pools.particles,
     Neo.particles,
     particle => {
+      if (particle.ring) {
+        const mesh = new THREE.Mesh(
+          new THREE.RingGeometry(0.9, 1, 40),
+          new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }),
+        );
+        mesh.rotation.x = -Math.PI / 2;
+        mesh.userData.maxLife = Math.max(0.01, Number(particle.life || 0.5));
+        return mesh;
+      }
       const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthWrite: false }));
       sprite.center.set(0.5, 0.5);
       if (!particle.text) sprite.material.blending = THREE.AdditiveBlending;
@@ -1201,6 +1773,15 @@ function syncParticles() {
     },
     (particle, sprite) => {
       const life = Math.max(0, Number(particle.life || 0));
+      if (particle.ring && sprite.isMesh) {
+        const radius = Math.max(2, Number(particle.ring || 2));
+        const alpha = Math.max(0, Math.min(1, life / Math.max(0.01, Number(sprite.userData.maxLife || life))));
+        sprite.material.color.set(particle.c || '#ffffff');
+        sprite.material.opacity = alpha * 0.82;
+        sprite.scale.set(radius * 2, radius * 2, 1);
+        sprite.position.set(particle.x, 2.5, particle.y);
+        return;
+      }
       sprite.material.opacity = Math.min(1, life * 2.2);
       if (particle.text) {
         const entry = getTextTexture(String(particle.text), particle.c || '#ffffff');
@@ -1231,6 +1812,14 @@ function syncDeadBodies() {
       const key = body.spriteKey || body.type;
       const texture = key ? getSpriteTexture(key) : null;
       if (!texture) return null;
+      const group = new THREE.Group();
+      const pool = new THREE.Mesh(unitCircle, new THREE.MeshBasicMaterial({
+        transparent: true, opacity: 0, depthWrite: false,
+      }));
+      pool.rotation.x = -Math.PI / 2;
+      pool.position.y = 0.7;
+      pool.name = 'blood-pool';
+      group.add(pool);
       const mesh = new THREE.Mesh(unitPlane, new THREE.MeshBasicMaterial({
         map: texture,
         transparent: true,
@@ -1239,18 +1828,47 @@ function syncDeadBodies() {
         color: 0x9aa0ad,
       }));
       mesh.rotation.x = -Math.PI / 2;
-      mesh.rotation.z = (body.x * 13.37) % Math.PI;
+      mesh.name = 'corpse';
       mesh.renderOrder = 3;
-      return mesh;
+      group.add(mesh);
+      return group;
     },
-    (body, mesh) => {
+    (body, group) => {
+      const mesh = group.getObjectByName('corpse');
+      const pool = group.getObjectByName('blood-pool');
+      if (!mesh) return;
       const size = (body.r || 12) * SPRITE_SIZE_MULT;
-      mesh.scale.set(size, size, 1);
-      mesh.position.set(body.x, 2.4, body.y);
       const age = Number(body.age || 0);
       const fadeStart = Neo.CORPSE_FADE_START || 4.5;
       const lifetime = Neo.CORPSE_LIFETIME || 11;
-      mesh.material.opacity = age < fadeStart ? 1 : Math.max(0, 1 - (age - fadeStart) / Math.max(0.1, lifetime - fadeStart));
+      const fade = age < fadeStart ? 1 : Math.max(0, 1 - (age - fadeStart) / Math.max(0.1, lifetime - fadeStart));
+      const fallTime = Math.max(0.01, Number(body.fallTime || Neo.CORPSE_FALL_TIME || 0.5));
+      const fallEase = 1 - (1 - Math.min(1, age / fallTime)) ** 3;
+      const lift = Math.max(0, Number(body.z || 0));
+      const velocity = Math.hypot(Number(body.vx || 0), Number(body.vy || 0)) + Math.abs(Number(body.vz || 0)) * 0.35;
+      const impactStretch = Math.max(0, Math.min(1, lift / 140 + velocity / 240));
+      const squash = Math.max(0.5, 1 - 0.46 * fallEase - impactStretch * 0.18);
+      const stretch = (1 + 0.05 * fallEase) * (1 + impactStretch * 0.1);
+      const rotation = Number(body.angle || 0) + Number(body.fallAngle || 0) * fallEase + Number(body.angularOffset || 0);
+      group.position.set(body.x, 0, body.y);
+      group.rotation.y = -rotation;
+      mesh.position.y = 1.5 + lift;
+      mesh.scale.set(size * stretch * (Number(body.face || 1) < 0 ? -1 : 1), size * squash, 1);
+      mesh.material.opacity = fade;
+      mesh.material.color.set(0xffffff);
+      // A launched corpse visibly pitches while airborne, then settles flat
+      // into the same fallen pose as the top-down ragdoll.
+      mesh.rotation.x = -Math.PI / 2 + Math.min(0.72, lift / 120) * (Number(body.vz || 0) >= 0 ? 1 : -1);
+      if (pool) {
+        const poolScale = Math.max(0, Math.min(1, age / 1.2)) * fade;
+        const leavesBlood = body.leavesBloodPool !== false && body.bloodColor !== '' && !['golem', 'bulk_golem'].includes(body.type);
+        pool.visible = leavesBlood;
+        if (leavesBlood) {
+          pool.material.color.set(body.type === 'god' ? 0xe0dcff : 0x5e0010);
+          pool.material.opacity = (body.type === 'god' ? 0.2 : 0.32) * poolScale;
+          pool.scale.set(size * (0.7 + poolScale * 0.28), size * (0.16 + poolScale * 0.1), 1);
+        }
+      }
     },
   );
 }
@@ -1512,8 +2130,24 @@ function setCameraMode(mode) {
   if (cameraMode !== 'fp' && document.pointerLockElement) document.exitPointerLock?.();
 }
 
+const POINTER_LOCK_UI_SELECTORS = [
+  '#shopPanel', '#invPanel', '#anvilPanel', '#specialRoomPanel',
+  '#wizardPawModal', '#extraBatteryModal', '#scrollControlModal', '#voucherModal',
+  '#settingsModal', '#pause', '#itemCinematic', '#tutorialOverlay', '#dialogueOverlay',
+  '#birthdayModal', '#sandboxPanel', '#sandboxPanelBackdrop', '#runHistoryPanel',
+];
+
+function hasPointerLockBlockingUi() {
+  if (Neo.isOverlayBlockingInput?.() || Neo.uiController?.isDialogueOpen?.()) return true;
+  return POINTER_LOCK_UI_SELECTORS.some(selector => {
+    const element = document.querySelector(selector);
+    if (!element || element.classList.contains('hidden') || element.getAttribute('aria-hidden') === 'true') return false;
+    return window.getComputedStyle(element).display !== 'none';
+  });
+}
+
 function syncPointerLock() {
-  const wantLock = isFirstPersonActive() && Neo.gameState === 'play' && !Neo.isOverlayBlockingInput?.();
+  const wantLock = isFirstPersonActive() && Neo.gameState === 'play' && !hasPointerLockBlockingUi();
   if (!wantLock && document.pointerLockElement === Neo.canvas) {
     document.exitPointerLock?.();
   }
@@ -1524,9 +2158,12 @@ function syncPointerLock() {
 // pointer "jumping" to the lock position), which would wildly spin the view —
 // swallow the first events after lock and reject absurd deltas.
 let lockSuppressEvents = 0;
+let pointerLockRequested = false;
 document.addEventListener('pointerlockchange', () => {
-  if (document.pointerLockElement === Neo?.canvas) lockSuppressEvents = 2;
+  pointerLockRequested = document.pointerLockElement === Neo?.canvas;
+  if (pointerLockRequested) lockSuppressEvents = 2;
 });
+document.addEventListener('pointerlockerror', () => { pointerLockRequested = false; });
 window.addEventListener('mousemove', event => {
   if (!isFirstPersonActive() || document.pointerLockElement !== Neo.canvas) return;
   if (lockSuppressEvents > 0) {
@@ -1540,14 +2177,19 @@ window.addEventListener('mousemove', event => {
   fpPitch = Math.max(-0.55, Math.min(0.45, fpPitch - my * 0.0022));
 });
 
-document.addEventListener('mousedown', event => {
-  // UI buttons, panels and text inputs must retain an ordinary cursor. Only a
-  // direct click on the gameplay canvas may enter mouse-look.
-  if (event.target !== Neo.canvas || !isFirstPersonActive() || Neo.gameState !== 'play' || Neo.isOverlayBlockingInput?.()) return;
+function requestGameplayPointerLock(event) {
+  // Listen on the actual input canvas rather than document-level hit testing:
+  // the transparent 2D HUD layer sits over WebGL in 3D mode, and a document
+  // target check can miss a legitimate world click on some browser/theme stacks.
+  if (event.button != null && event.button !== 0) return;
+  if (!isFirstPersonActive() || Neo.gameState !== 'play' || hasPointerLockBlockingUi()) return;
   if (document.pointerLockElement !== Neo.canvas) {
-    Neo.canvas.requestPointerLock?.();
+    pointerLockRequested = true;
+    const request = Neo.canvas.requestPointerLock?.();
+    request?.catch?.(() => { pointerLockRequested = false; });
   }
-});
+}
+Neo.canvas?.addEventListener('pointerdown', requestGameplayPointerLock);
 
 function syncCamera() {
   const p = Neo.player;
@@ -1633,7 +2275,7 @@ function drawPrompts() {
   if (isFirstPersonActive()) {
     drawViewmodel();
     drawCrosshair();
-    if (document.pointerLockElement !== Neo.canvas) drawLockHint();
+    if (document.pointerLockElement !== Neo.canvas && !pointerLockRequested) drawLockHint();
   }
 }
 
@@ -1824,6 +2466,7 @@ function render() {
   if (ambientLight) ambientLight.intensity = 0.92 - Math.min(0.45, darkness * 2.2);
 
   syncPlayer();
+  syncPlayerMeleeIndicator();
   syncEnemies();
   syncProjectiles();
   syncPickups();
@@ -1898,6 +2541,7 @@ function announceViewChange(text) {
 // radians) while first-person is driving, null otherwise.
 Neo.getFirstPersonYaw = () => (isFirstPersonActive() ? fpYaw : null);
 Neo.projectCanvasMouseToWorld = projectCanvasMouseToWorld;
+Neo.hasPointerLockBlockingUi = hasPointerLockBlockingUi;
 
 Neo.getViewMode = getViewMode;
 Neo.setViewMode = setViewMode;
