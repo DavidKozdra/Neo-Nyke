@@ -31,6 +31,9 @@ let roomBuildKey = '';
 let floorMesh = null;
 let floorTexture = null;
 let floorCacheKey = null;
+let worldFxMesh = null;
+let worldFxCanvas = null;
+let worldFxTexture = null;
 
 // Lighting
 let ambientLight = null;
@@ -611,6 +614,35 @@ function buildRoom() {
   if (doors.w) addDoorPad(WALL / 2, midZ, WALL, DOOR);
   if (doors.e) addDoorPad(W - WALL / 2, midZ, WALL, DOOR);
 
+  // Room dressing is authored entirely in the 2D renderer (rubble, cracks,
+  // braziers, trees, moss and candles). Rasterize that exact pass onto a thin
+  // floor overlay so 3D rooms keep their familiar visual language.
+  if (Array.isArray(Neo.decorations) && Neo.decorations.length && typeof Neo.drawRoomDecor === 'function') {
+    const decorCanvas = document.createElement('canvas');
+    decorCanvas.width = W;
+    decorCanvas.height = H;
+    const decorCtx = decorCanvas.getContext('2d');
+    decorCtx.imageSmoothingEnabled = false;
+    const realCtx = Neo.ctx;
+    const realStructures = Neo.structures;
+    try {
+      Neo.ctx = decorCtx;
+      // drawRoomDecor also draws structures; they already have real 3D forms.
+      Neo.structures = [];
+      Neo.drawRoomDecor();
+    } catch { /* decoration omission is preferable to a failed room build */ }
+    Neo.structures = realStructures;
+    Neo.ctx = realCtx;
+    const decorTexture = makeCanvasTexture(decorCanvas);
+    decorTexture.userData.owned = true;
+    const decor = new THREE.Mesh(unitPlane, new THREE.MeshBasicMaterial({ map: decorTexture, transparent: true, depthWrite: false }));
+    decor.rotation.x = -Math.PI / 2;
+    decor.scale.set(W, H, 1);
+    decor.position.set(W / 2, 1.45, H / 2);
+    decor.renderOrder = 1;
+    roomGroup.add(decor);
+  }
+
   // Structures: use the same authored environment art as the 2D renderer.
   // This matters for landmark readability: the pillar is a capital/shaft/base
   // stack, not a generic wall block, and service-room props retain their exact
@@ -679,6 +711,52 @@ function syncRoomEnvironmentSprites() {
       entry.sprite.material.needsUpdate = true;
     }
   });
+}
+
+function syncWorldFxOverlay() {
+  const room = Neo.currentRoom;
+  const hasGhostBalls = Array.isArray(Neo.ghostBalls) && Neo.ghostBalls.length > 0;
+  const hasSkySwords = Array.isArray(Neo.skySwords) && Neo.skySwords.length > 0;
+  const hasChallengeVisual = room?.type === 'challenge' && !room.cleared && !!room.challengeStarted;
+  if (!hasGhostBalls && !hasSkySwords && !hasChallengeVisual) {
+    if (worldFxMesh) worldFxMesh.visible = false;
+    return;
+  }
+  const W = Neo.ROOM_W;
+  const H = Neo.ROOM_H;
+  if (!worldFxCanvas || worldFxCanvas.width !== W || worldFxCanvas.height !== H) {
+    worldFxCanvas = document.createElement('canvas');
+    worldFxCanvas.width = W;
+    worldFxCanvas.height = H;
+    worldFxTexture?.dispose?.();
+    worldFxTexture = makeCanvasTexture(worldFxCanvas);
+    if (!worldFxMesh) {
+      worldFxMesh = new THREE.Mesh(unitPlane, new THREE.MeshBasicMaterial({
+        map: worldFxTexture, transparent: true, depthWrite: false, side: THREE.DoubleSide,
+      }));
+      worldFxMesh.rotation.x = -Math.PI / 2;
+      worldFxMesh.renderOrder = 3;
+      scene.add(worldFxMesh);
+    } else {
+      worldFxMesh.material.map = worldFxTexture;
+      worldFxMesh.material.needsUpdate = true;
+    }
+  }
+  const g = worldFxCanvas.getContext('2d');
+  g.clearRect(0, 0, W, H);
+  g.imageSmoothingEnabled = false;
+  const realCtx = Neo.ctx;
+  try {
+    Neo.ctx = g;
+    Neo.drawGhostBalls?.();
+    Neo.drawSkySwords?.();
+    Neo.drawChallengeObelisk?.();
+  } catch { /* a special effect must never take down the 3D frame */ }
+  Neo.ctx = realCtx;
+  worldFxTexture.needsUpdate = true;
+  worldFxMesh.visible = true;
+  worldFxMesh.scale.set(W, H, 1);
+  worldFxMesh.position.set(W / 2, 3.2, H / 2);
 }
 
 function getRoomBuildKey() {
@@ -771,7 +849,56 @@ function makeActorGroup(spriteKey, radius) {
   aura.name = 'aura';
   status.add(aura);
   group.add(status);
+  // Windup circles are an important attack read in the top-down renderer.
+  // Keep one under every actor and simply reveal/tint it for enemies that are
+  // currently charging an attack.
+  const windup = new THREE.Mesh(
+    new THREE.RingGeometry(0.88, 1, 32),
+    new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }),
+  );
+  windup.rotation.x = -Math.PI / 2;
+  windup.position.y = 1.15;
+  windup.name = 'windup';
+  windup.visible = false;
+  group.add(windup);
+  const mooggyAura = new THREE.Mesh(
+    unitCircle,
+    new THREE.MeshBasicMaterial({ color: 0xff1d34, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }),
+  );
+  mooggyAura.rotation.x = -Math.PI / 2;
+  mooggyAura.position.y = 0.95;
+  mooggyAura.name = 'mooggy-aura';
+  mooggyAura.visible = false;
+  group.add(mooggyAura);
   return group;
+}
+
+function syncEnemyWindup(group, enemy) {
+  const windup = group.getObjectByName('windup');
+  if (!windup) return;
+  const active = Number(enemy.windup || 0) > 0;
+  windup.visible = active;
+  if (!active) return;
+  const color = (enemy.type === 'charger' || enemy.type === 'golem' || enemy.type === 'bulk_golem') ? '#ff8844'
+    : enemy.type === 'bowman_bane' ? '#8dd4ff'
+      : enemy.type === 'handsome_devil' ? '#ff3348'
+        : enemy.type === 'antony_blemmye' ? '#ffcf8a'
+          : '#aa66ff';
+  const radius = (enemy.r || 12) + 10 + Math.sin(Date.now() / 120) * 2;
+  windup.material.color.set(color);
+  windup.material.opacity = 0.8;
+  windup.scale.set(radius * 2, radius * 2, 1);
+}
+
+function syncMooggyAura(group, enemy) {
+  const aura = group.getObjectByName('mooggy-aura');
+  if (!aura) return;
+  const active = enemy.type === 'mooggy';
+  aura.visible = active;
+  if (!active) return;
+  const radius = (enemy.r || 12) + 19;
+  aura.material.opacity = 0.13 + Math.sin(Date.now() / 180) * 0.03;
+  aura.scale.set(radius * 2, radius * 2, 1);
 }
 
 function updateActorSprite(group, spriteKey, radius, flip, opts = {}) {
@@ -1165,6 +1292,8 @@ function syncEnemies() {
       const stunned = Number(enemy.stun || 0) > 0;
       const tint = stunned ? 0xaad4ff : enemy.elite ? 0xffe2a8 : 0xffffff;
       updateActorSprite(group, enemySpriteKey(enemy), enemy.r || 12, flip, { ...bob, tint });
+      syncEnemyWindup(group, enemy);
+      syncMooggyAura(group, enemy);
 
       // Nameplate + health bar, pixel-matched to the 2D renderer.
       const plate = ensureNameplate(enemy, group);
@@ -1815,6 +1944,25 @@ function syncParticles() {
     pools.particles,
     Neo.particles,
     particle => {
+      if (particle.line) {
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
+        const line = new THREE.Line(geometry, new THREE.LineBasicMaterial({
+          transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+        }));
+        line.userData.kind = 'line';
+        return line;
+      }
+      if (particle.shockwave) {
+        const mesh = new THREE.Mesh(
+          new THREE.RingGeometry(0.88, 1, 40),
+          new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }),
+        );
+        mesh.rotation.x = -Math.PI / 2;
+        mesh.userData.kind = 'shockwave';
+        mesh.userData.maxLife = Math.max(0.01, Number(particle.maxLife || particle.life || 0.5));
+        return mesh;
+      }
       if (particle.ring) {
         const mesh = new THREE.Mesh(
           new THREE.RingGeometry(0.9, 1, 40),
@@ -1827,10 +1975,32 @@ function syncParticles() {
       const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthWrite: false }));
       sprite.center.set(0.5, 0.5);
       if (!particle.text) sprite.material.blending = THREE.AdditiveBlending;
+      sprite.userData.maxLife = Math.max(0.01, Number(particle.maxLife || particle.life || 0.5));
       return sprite;
     },
     (particle, sprite) => {
       const life = Math.max(0, Number(particle.life || 0));
+      if (particle.line && sprite.isLine) {
+        const line = particle.line;
+        const positions = sprite.geometry.getAttribute('position');
+        positions.setXYZ(0, line.x1 || 0, 5, line.y1 || 0);
+        positions.setXYZ(1, line.x2 || 0, 5, line.y2 || 0);
+        positions.needsUpdate = true;
+        sprite.material.color.set(particle.c || '#dfe8ff');
+        sprite.material.opacity = Math.min(1, life * 3.4);
+        return;
+      }
+      if (particle.shockwave && sprite.isMesh) {
+        const maxLife = Math.max(0.01, Number(sprite.userData.maxLife || life));
+        const progress = Math.max(0, Math.min(1, 1 - life / maxLife));
+        const radius = Number(particle.radius || 48);
+        const waveRadius = radius * (0.22 + progress * 0.92);
+        sprite.material.color.set(particle.c || '#ff66cc');
+        sprite.material.opacity = (1 - progress) * 0.8;
+        sprite.scale.set(waveRadius * 2, waveRadius * 2, 1);
+        sprite.position.set(particle.x, 2.2, particle.y);
+        return;
+      }
       if (particle.ring && sprite.isMesh) {
         const radius = Math.max(2, Number(particle.ring || 2));
         const alpha = Math.max(0, Math.min(1, life / Math.max(0.01, Number(sprite.userData.maxLife || life))));
@@ -1849,14 +2019,38 @@ function syncParticles() {
           sprite.scale.set(entry.w * 0.95, entry.h * 0.95, 1);
         }
         sprite.position.set(particle.x, 46 + (1 - life) * 26, particle.y);
+      } else if (particle.silhouette) {
+        const sil = particle.silhouette;
+        const texture = getSpriteTexture(sil.spriteKey, sil.facing < 0);
+        const progress = Math.max(0, Math.min(1, 1 - life / Math.max(0.01, Number(sprite.userData.maxLife || life))));
+        if (texture && sprite.material.map !== texture) {
+          sprite.material.map = texture;
+          sprite.material.needsUpdate = true;
+        }
+        const size = Number(sil.size || 40);
+        sprite.material.color.set(particle.c || '#b99cff');
+        sprite.material.opacity = (1 - progress) * 0.65;
+        sprite.scale.set(size, size, 1);
+        sprite.position.set(particle.x, 1.2, particle.y);
       } else {
         const texture = getGlowTexture(particle.c || '#ffffff');
         if (sprite.material.map !== texture) {
           sprite.material.map = texture;
           sprite.material.needsUpdate = true;
         }
-        sprite.scale.set(9, 9, 1);
-        sprite.position.set(particle.x, 14, particle.y);
+        const progress = Math.max(0, Math.min(1, 1 - life / Math.max(0.01, Number(sprite.userData.maxLife || life))));
+        const size = Number(particle.size || (particle.blood ? 3 : particle.spark ? 2.2 : 3));
+        const scale = particle.impact ? size * (1 + progress * 1.4) * 2.5
+          : particle.spark ? size * 3.6
+            : particle.smoke ? size * 2.4
+              : particle.blood ? size * 2.1
+                : 9;
+        sprite.material.opacity = particle.smoke
+          ? Math.min(0.78, Math.max(0.16, life))
+          : particle.impact ? (1 - progress) * 0.85
+            : Math.min(1, life * 2.2);
+        sprite.scale.set(scale, scale, 1);
+        sprite.position.set(particle.x, particle.smoke || particle.blood ? 3 : 14, particle.y);
       }
     },
   );
@@ -2249,13 +2443,20 @@ const POINTER_LOCK_UI_SELECTORS = [
   '#birthdayModal', '#sandboxPanel', '#sandboxPanelBackdrop', '#runHistoryPanel',
 ];
 
+function isActuallyVisible(element) {
+  if (!element || !element.isConnected) return false;
+  // Several overlays hide only their parent (not every descendant). In
+  // particular #sandboxPanelBackdrop remains `display: block` while its
+  // #sandboxPanel parent is `.hidden`; checking the node alone made ordinary
+  // gameplay falsely appear to have a blocking UI open.
+  if (element.closest('.hidden, [aria-hidden="true"]')) return false;
+  const style = window.getComputedStyle(element);
+  return style.display !== 'none' && style.visibility !== 'hidden';
+}
+
 function hasPointerLockBlockingUi() {
   if (Neo.isOverlayBlockingInput?.() || Neo.uiController?.isDialogueOpen?.()) return true;
-  return POINTER_LOCK_UI_SELECTORS.some(selector => {
-    const element = document.querySelector(selector);
-    if (!element || element.classList.contains('hidden') || element.getAttribute('aria-hidden') === 'true') return false;
-    return window.getComputedStyle(element).display !== 'none';
-  });
+  return POINTER_LOCK_UI_SELECTORS.some(selector => isActuallyVisible(document.querySelector(selector)));
 }
 
 function syncPointerLock() {
@@ -2266,42 +2467,73 @@ function syncPointerLock() {
 }
 
 // Mouse-look while pointer-locked; gamepad right stick also turns the view.
-// Chrome fires a spurious huge-delta mousemove when pointer lock engages (the
-// pointer "jumping" to the lock position), which would wildly spin the view —
-// swallow the first events after lock and reject absurd deltas.
-let lockSuppressEvents = 0;
+// Use a capture-phase document listener: pointer-lock movement is dispatched
+// at document level in some browsers and can otherwise miss a window listener
+// when UI code stops a bubbling mouse event.
 let pointerLockRequested = false;
+let pointerLockPendingTimer = null;
+
+function clearPointerLockPending() {
+  if (pointerLockPendingTimer != null) window.clearTimeout(pointerLockPendingTimer);
+  pointerLockPendingTimer = null;
+}
+
 document.addEventListener('pointerlockchange', () => {
   pointerLockRequested = document.pointerLockElement === Neo?.canvas;
-  if (pointerLockRequested) lockSuppressEvents = 2;
+  clearPointerLockPending();
 });
-document.addEventListener('pointerlockerror', () => { pointerLockRequested = false; });
-window.addEventListener('mousemove', event => {
+document.addEventListener('pointerlockerror', () => {
+  pointerLockRequested = false;
+  clearPointerLockPending();
+});
+document.addEventListener('mousemove', event => {
   if (!isFirstPersonActive() || document.pointerLockElement !== Neo.canvas) return;
-  if (lockSuppressEvents > 0) {
-    lockSuppressEvents -= 1;
-    return;
-  }
   const mx = event.movementX || 0;
   const my = event.movementY || 0;
+  // Chrome can emit one huge movement as it transitions into lock; reject
+  // only that implausible delta, never ordinary first input from the player.
   if (Math.abs(mx) > 200 || Math.abs(my) > 200) return;
   fpYaw += mx * 0.0026;
   fpPitch = Math.max(-0.55, Math.min(0.45, fpPitch - my * 0.0022));
-});
+}, true);
 
 function requestGameplayPointerLock(event) {
-  // Listen on the actual input canvas rather than document-level hit testing:
-  // the transparent 2D HUD layer sits over WebGL in 3D mode, and a document
-  // target check can miss a legitimate world click on some browser/theme stacks.
   if (event.button != null && event.button !== 0) return;
   if (!isFirstPersonActive() || Neo.gameState !== 'play' || hasPointerLockBlockingUi()) return;
+  const canvas = Neo.canvas;
+  if (!canvas) return;
+  // In 3D the transparent HUD can be the event target even when the player
+  // clearly clicked the world. Accept any click inside the gameplay viewport,
+  // but never steal a click from a real control or an open panel.
+  const rect = canvas.getBoundingClientRect();
+  if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) return;
+  const target = event.target instanceof Element ? event.target : null;
+  if (target?.closest('button, input, select, textarea, a, [contenteditable="true"], [role="button"], .panel-shell:not(.hidden), .overlay:not(.hidden), [data-no-pointer-lock]')) return;
   if (document.pointerLockElement !== Neo.canvas) {
     pointerLockRequested = true;
-    const request = Neo.canvas.requestPointerLock?.();
-    request?.catch?.(() => { pointerLockRequested = false; });
+    clearPointerLockPending();
+    // A rejected/ignored request does not reliably fire pointerlockerror in
+    // every browser. Restore the click-to-look hint shortly after it fails so
+    // the player is never left with a permanently "locking" camera.
+    pointerLockPendingTimer = window.setTimeout(() => {
+      if (document.pointerLockElement !== Neo.canvas) pointerLockRequested = false;
+      pointerLockPendingTimer = null;
+    }, 750);
+    try {
+      const request = canvas.requestPointerLock?.();
+      request?.catch?.(() => {
+        pointerLockRequested = false;
+        clearPointerLockPending();
+      });
+    } catch {
+      pointerLockRequested = false;
+      clearPointerLockPending();
+    }
   }
 }
-Neo.canvas?.addEventListener('pointerdown', requestGameplayPointerLock);
+// Capture at document level so transparent HUD layers and their event handlers
+// cannot prevent the trusted world-click gesture from reaching pointer lock.
+document.addEventListener('pointerdown', requestGameplayPointerLock, true);
 
 function syncCamera() {
   const p = Neo.player;
@@ -2384,7 +2616,9 @@ function drawChargeHud() {
   const draw = () => {
     Neo.drawHealingZoneChargeBar?.();
     Neo.drawDeathBallChargeBar?.();
+    Neo.drawNimrodStompChargeBar?.();
     Neo.drawLoveBombChargeBar?.();
+    Neo.drawGhostBallChargeBar?.();
   };
   if (isFirstPersonActive()) {
     // There is no player position to project from the camera's own eye. Keep
@@ -2593,6 +2827,7 @@ function render() {
     buildRoom();
   }
   syncRoomEnvironmentSprites();
+  syncWorldFxOverlay();
 
   // Dim ambient for dark room types so lighting mood carries over.
   const darkness = Neo.getRoomDarkness?.(Neo.currentRoom, []) || 0;
