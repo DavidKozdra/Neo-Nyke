@@ -13,8 +13,8 @@ const { LOCAL_BUILD_VERSION, LOCAL_CONTENT_HASH } = require('../js/multiplayer/L
 
 describe('network multiplayer game view', () => {
   test('uses a floor-renderer compatibility identity so stale movement clients cannot join', () => {
-    expect(LOCAL_BUILD_VERSION).toBe('1.0.0-campaign-parity-v16');
-    expect(LOCAL_CONTENT_HASH).toBe('shared-neo-campaign-parity-v16');
+    expect(LOCAL_BUILD_VERSION).toBe('1.0.0-campaign-parity-v21');
+    expect(LOCAL_CONTENT_HASH).toBe('shared-neo-campaign-parity-v21');
   });
 
   test('normalizes diagonal keyboard/gamepad movement', () => {
@@ -37,6 +37,67 @@ describe('network multiplayer game view', () => {
     view.localPredictedPlayer = { id: 'p1', x: 100, y: 100, radius: 18, moveSpeed: 180 };
     view._sendInput();
     expect(sent).toEqual([expect.objectContaining({ moveX: 1, moveY: 0, aimDirection: 0 })]);
+  });
+
+  test('sends lasers along campaign FPS yaw instead of overwriting aim with a top-down click angle', () => {
+    const sent = [];
+    const canvas = {
+      width: 960,
+      height: 640,
+      getBoundingClientRect: () => ({ left: 0, top: 0, width: 960, height: 640 }),
+    };
+    const updatePointerAimWorld = jest.fn(() => 1.75);
+    const view = new NetworkGameView({
+      canvas,
+      neo: { updatePointerAimWorld },
+      session: {
+        snapshot: () => ({ status: 'running' }),
+        sendAbility: (...args) => sent.push(args),
+      },
+    });
+    view.active = true;
+    view.localPredictedPlayer = {
+      x: 450,
+      y: 350,
+      equippedMoves: { laser: 'blood_beam' },
+    };
+
+    view._onPointerDown({
+      button: 2,
+      target: canvas,
+      clientX: 900,
+      clientY: 40,
+      preventDefault: jest.fn(),
+    });
+
+    expect(view.aimDirection).toBe(1.75);
+    expect(sent).toEqual([['blood_beam', 1.75]]);
+    expect(updatePointerAimWorld).toHaveBeenCalledWith(expect.objectContaining({
+      canvasX: 900,
+      canvasY: 40,
+      player: view.localPredictedPlayer,
+    }));
+  });
+
+  test('uses the campaign third-person floor projection for network laser aim', () => {
+    const canvas = {
+      width: 960,
+      height: 640,
+      getBoundingClientRect: () => ({ left: 10, top: 20, width: 480, height: 320 }),
+    };
+    const updatePointerAimWorld = jest.fn(() => Math.PI / 2);
+    const view = new NetworkGameView({
+      canvas,
+      neo: { updatePointerAimWorld },
+      session: {},
+    });
+    view.active = true;
+    view.localPredictedPlayer = { x: 100, y: 100 };
+
+    view._onPointerMove({ clientX: 250, clientY: 180 });
+
+    expect(updatePointerAimWorld).toHaveBeenCalledWith(expect.objectContaining({ canvasX: 480, canvasY: 320 }));
+    expect(view.aimDirection).toBeCloseTo(Math.PI / 2);
   });
 
   test('fits the authority room into the Neo Nyke canvas', () => {
@@ -112,6 +173,26 @@ describe('network multiplayer game view', () => {
     expect(neo.chests).toEqual([expect.objectContaining({ id: 'chest', x: 300, y: 280, open: true })]);
     expect(neo.pickups).toContainEqual(expect.objectContaining({ id: 'stairs', type: 'ladder', networkExit: true }));
     expect(neo.currentRoom.cleared).toBe(true);
+  });
+
+  test('projects authority-owned shop stock into the normal campaign shop UI state', () => {
+    const neo = {};
+    const view = new NetworkGameView({ session: {}, neo });
+    const offers = [
+      { id: 'shop:item:0', type: 'item', key: 'neo_knife', cost: 36, bought: false },
+      { id: 'shop:potion', type: 'potion', cost: 20, bought: false },
+    ];
+    const floorState = {
+      currentRoomId: 'shop-room',
+      visitedRoomIds: ['shop-room'],
+      layout: { floorNumber: 1, rooms: [{ id: 'shop-room', type: 'shop', shopOffers: offers }] },
+    };
+
+    view._syncNeoPresentationFloor(floorState, {}, {}, { interactables: {}, abilityEntities: {} });
+
+    expect(neo.currentRoom.type).toBe('shop');
+    expect(neo.shopOffers).toEqual(offers);
+    expect(neo.currentRoom.shopOffers).toEqual(offers);
   });
 
   test('adapts server-owned persistent abilities into campaign hazards', () => {

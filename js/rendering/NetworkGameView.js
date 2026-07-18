@@ -11,6 +11,10 @@
   const moveContent = typeof require === 'function'
     ? require('../simulation/SharedMoveContent.js')
     : (root.NeoNyke?.content || {});
+  const worldContent = typeof require === 'function'
+    ? require('../simulation/SharedWorldContent.js')
+    : (root.NeoNyke?.content || {});
+  const CAMPAIGN_ROOM_GEOMETRY = worldContent.CAMPAIGN_ROOM_GEOMETRY;
 
   const INPUT_INTERVAL_MS = 50;
   const INTERPOLATION_DELAY_MS = 100;
@@ -106,7 +110,7 @@
     return { moveX: x, moveY: y };
   }
 
-  function computeWorldTransform(canvasWidth, canvasHeight, roomWidth = 900, roomHeight = 700, visibleBounds = null) {
+  function computeWorldTransform(canvasWidth, canvasHeight, roomWidth = CAMPAIGN_ROOM_GEOMETRY.width, roomHeight = CAMPAIGN_ROOM_GEOMETRY.height, visibleBounds = null) {
     const bounds = visibleBounds || { left: 0, top: 0, right: canvasWidth, bottom: canvasHeight };
     const visibleWidth = Math.max(1, bounds.right - bounds.left);
     const visibleHeight = Math.max(1, bounds.bottom - bounds.top);
@@ -499,6 +503,14 @@
       const state = this.currentSample?.state;
       const player = state?.players?.[this.session.snapshot().playerId];
       if (!player || player.downed || player.pendingUpgrade) return;
+      if (this.neo.currentRoom?.type === 'shop') {
+        this.neo.toggleShopPanel?.();
+        return;
+      }
+      if (this.neo.currentRoom?.type === 'anvil') {
+        this.neo.toggleAnvilPanel?.();
+        return;
+      }
       const target = Object.values(state.interactables || {})
         .filter(item => !item.opened && item.roomId === player.roomId)
         .map(item => ({ item, distance: Math.hypot(Number(item.x) - Number(player.x), Number(item.y) - Number(player.y)) }))
@@ -697,15 +709,16 @@
     _onPointerMove(event) {
       if (!this.active || !this.localPredictedPlayer || !this.canvas) return;
       const rect = this.canvas.getBoundingClientRect();
-      const floorState = this.currentSample?.state?.floorState || {};
-      const transform = this.lastWorldTransform || computeCameraTransform(
-        this.canvas.width, this.canvas.height, this.camera, this._visibleCanvasBounds(),
-      );
       const canvasX = (event.clientX - rect.left) * (this.canvas.width / Math.max(1, rect.width));
       const canvasY = (event.clientY - rect.top) * (this.canvas.height / Math.max(1, rect.height));
-      const worldX = (canvasX - transform.offsetX) / transform.scale;
-      const worldY = (canvasY - transform.offsetY) / transform.scale;
-      this.aimDirection = Math.atan2(worldY - this.localPredictedPlayer.y, worldX - this.localPredictedPlayer.x);
+      this.aimDirection = this.neo.updatePointerAimWorld?.({
+        canvasX,
+        canvasY,
+        canvas: this.canvas,
+        camera: this.camera,
+        player: this.localPredictedPlayer,
+        splitScreen: false,
+      }) ?? this.aimDirection;
     }
 
     _readMovement() {
@@ -875,7 +888,7 @@
           r: Number(player.radius || 18),
           hp: Number(player.health || 0),
           maxHp: Number(player.maxHealth || 100),
-          coins: Number(player.gold || 0),
+          coins: Number(player.coins || 0),
           items: { ...(player.items || {}) },
           equipmentSlots: Array.isArray(player.equipmentSlots) ? [...player.equipmentSlots] : [],
           level: Math.max(1, Number(player.level || 1)),
@@ -1076,7 +1089,7 @@
       if (!this.active || !this.ctx || !this.canvas) return;
       const now = root.performance?.now?.() || Date.now();
       const state = this.currentSample?.state;
-      const authorityFloorState = state?.floorState || { width: 900, height: 700, wallThickness: 28, doorWidth: 140 };
+      const authorityFloorState = state?.floorState || CAMPAIGN_ROOM_GEOMETRY;
       const visibleBounds = this._visibleCanvasBounds();
       const players = this._renderedPlayers(now);
       const localPlayerId = this.session.snapshot().playerId;
@@ -1092,6 +1105,13 @@
         : 1 / 60;
       this.lastPresentationFrameAt = now;
       this._updateCamera(localPlayer, frameDelta);
+      // Neo.draw reads Neo.camera in every local presentation mode. Keep that
+      // canonical camera object synchronized with the network state adapter;
+      // otherwise the adapter aimed/tracked with one camera while the normal
+      // renderer displayed another, making the same 900x700 room look larger.
+      this.neo.camera = this.neo.camera || { x: 0, y: 0 };
+      this.neo.camera.x = this.camera.x;
+      this.neo.camera.y = this.camera.y;
       const transform = computeCameraTransform(this.canvas.width, this.canvas.height, this.camera, visibleBounds);
       this.lastWorldTransform = transform;
       this.lastRenderedPlayerCount = Object.keys(visiblePlayers).length;
@@ -1163,6 +1183,13 @@
       this.neo.currentRoom = rooms.find(room => room.id === floorState.currentRoomId) || rooms[0] || null;
       this.neo.floor = Math.max(1, Number(floorState.layout?.floorNumber || 1));
       this.neo.floorsEntered = this.neo.floor;
+      this.neo.shopOffers = this.neo.currentRoom?.shopOffers || [];
+      if (this.neo.currentRoom?.type !== 'shop' && this.neo.isPanelOpen?.(this.neo.ui?.shopPanel)) {
+        this.neo.setShopPanelOpen?.(false, { animateClose: false });
+      } else if (this.neo.currentRoom?.type === 'shop' && this.neo.isPanelOpen?.(this.neo.ui?.shopPanel)) {
+        this.neo.markShopPanelDirty?.();
+        this.neo.renderShopPanel?.();
+      }
       const liveEnemies = Object.values(enemies || {})
         .filter(enemy => !enemy.dead && enemy.roomId === floorState.currentRoomId);
       this.neo.enemies = this._stablePresentationEntities(
@@ -1222,8 +1249,9 @@
           x: Number(interactable.x || 0),
           y: Number(interactable.y || 0),
           open: !!interactable.opened || !!interactable.activated,
-          choiceType: '',
-          networkChest: true,
+          choiceType: interactable.choiceType || '',
+          rewardType: interactable.rewardType || 'item',
+          rewardKey: interactable.rewardKey || '',
         }),
       );
       rooms.forEach(room => {
@@ -1268,6 +1296,7 @@
       const savedStreams = this.neo.rngStreams;
       const savedRng = this.neo.rng;
       const authoritativeCleared = room.cleared;
+      const authoritativeShopOffers = Array.isArray(room.shopOffers) ? room.shopOffers.map(offer => ({ ...offer })) : null;
       try {
         this.neo.rngStreams = {
           world: this.neo.createRngStream(`${seedKey}|world`),
@@ -1277,6 +1306,7 @@
         };
         this.neo.rng = () => this.neo.nextRandom?.('encounter') ?? Math.random();
         this.neo.decorateRoomData(room);
+        if (authoritativeShopOffers) room.shopOffers = authoritativeShopOffers;
         // Room geometry is presentation authored by the normal campaign room
         // decorator. Removing it made network rooms lose pillars/chambers and
         // appear larger despite sharing the same 900x700 authority bounds.

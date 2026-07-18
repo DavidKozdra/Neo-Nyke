@@ -38,7 +38,7 @@
     love_bomb_laser: Object.freeze({ damage: 34, cooldown: 3.80, range: 420 }),
     turtle_wave: Object.freeze({ damage: 55, cooldown: 6.00, duration: 1.35 }),
     ghost_ball: Object.freeze({ damage: 34, cooldown: 5.50, range: 460 }),
-    power_disks: Object.freeze({ damage: 22, cooldown: 1.90, range: 240 }),
+    power_disks: Object.freeze({ damage: 20, cooldown: 1.90, range: 240 }),
     blade_justice: Object.freeze({ damage: 60, cooldown: 3.80, range: 80 }),
     holy_eye_beams: Object.freeze({ damage: 13, cooldown: 3.60, duration: 1.2 }),
     lightning_columns: Object.freeze({ damage: 30, cooldown: 4.80, range: 180 }),
@@ -167,6 +167,40 @@
     return MOVE_SLOT_BY_KEY[moveKey] || null;
   }
 
+  // Power Disks are a radial projectile system, not an aimed volley. This
+  // recipe is gameplay content shared by the local campaign and authority;
+  // each runtime only adapts the returned records into its entity storage.
+  function createPowerDiskBurstDescriptors(options = {}) {
+    const damageMultiplier = Math.max(0, Number(options.damageMultiplier ?? 1));
+    const metao = String(options.characterKey || '') === 'metao';
+    const diskHitOptions = metao
+      ? { drainChanceBonus: 0.05, fireChance: 0.4, fireStacks: 1, fireDuration: 3 }
+      : { drainChanceBonus: 0.05 };
+    const shardHitOptions = metao
+      ? { drainChanceBonus: 0.05, fireChance: 0.25, fireStacks: 1, fireDuration: 2 }
+      : { drainChanceBonus: 0.05 };
+    return Array.from({ length: 8 }, (_, index) => ({
+      kind: 'disk',
+      angle: index * (Math.PI * 2 / 8),
+      speed: 440,
+      radius: 7,
+      lifeSeconds: 1.8,
+      damage: Math.max(1, Math.round(20 * damageMultiplier)),
+      hitOptions: { ...diskHitOptions },
+      subSpawn: {
+        kind: 'disk_shard',
+        intervalSeconds: 0.18,
+        speed: 620,
+        radius: 4,
+        lifeSeconds: 0.7,
+        damage: Math.max(1, Math.round(8 * damageMultiplier)),
+        count: 2,
+        jitterRadians: 0.5,
+        hitOptions: { ...shardHitOptions },
+      },
+    }));
+  }
+
   return {
     MOVE_SLOTS,
     MOVE_SLOT_KEYS,
@@ -177,5 +211,6 @@
     KIT_ALTERNATIVES,
     getDefaultMoveLoadout,
     getMoveSlot,
+    createPowerDiskBurstDescriptors,
   };
 });

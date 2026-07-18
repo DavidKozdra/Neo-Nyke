@@ -22,7 +22,7 @@ function combatHarness(characterKey = 'princess') {
     players: {
       p1: {
         id: 'p1', characterKey, roomId: 'room-4-4', x: 300, y: 350, radius: 18, moveSpeed: 180,
-        maxHealth: 100, health: 100, gold: 0, action: 'idle', attackCooldownUntilTick: 0,
+        maxHealth: 100, health: 100, coins: 0, action: 'idle', attackCooldownUntilTick: 0,
       },
     },
   });
@@ -115,6 +115,40 @@ describe('authoritative network combat system', () => {
     }));
     expect(events.filter(event => event.eventType === 'PLAYER_ABILITY_USED')).toHaveLength(3);
     expect(events.find(event => event.data.abilityId === 'blood_beam').data.effectRadius).toBe(470);
+  });
+
+  test('uses the campaign Power Disk recipe: eight radial disks that shed perpendicular shards', () => {
+    const { state, simulation } = combatHarness('metao');
+    applyNetworkHeroProfile(state.players.p1, 'metao');
+    simulation.updateGame({}, 0.05);
+    Object.values(state.enemies).forEach(enemy => {
+      enemy.x = 850;
+      enemy.y = 650;
+      enemy.moveSpeed = 0;
+    });
+    const player = state.players.p1;
+
+    simulation.updateGame({ p1: { actions: [
+      { action: 'ABILITY', abilityId: 'power_disks', aimDirection: 1.234 },
+    ] } }, 0.05);
+
+    const disks = Object.values(state.projectiles).filter(projectile => projectile.kind === 'disk');
+    expect(disks).toHaveLength(8);
+    expect(disks.every(projectile => (
+      Math.round(Math.hypot(projectile.vx, projectile.vy)) === 440
+      && projectile.damage === 20
+      && projectile.hitOptions.fireChance === 0.4
+    ))).toBe(true);
+    expect(new Set(disks.map(projectile => Math.atan2(projectile.vy, projectile.vx).toFixed(4))).size).toBe(8);
+
+    for (let tick = 0; tick < 4; tick += 1) simulation.updateGame({}, 0.05);
+    const shards = Object.values(state.projectiles).filter(projectile => projectile.kind === 'disk_shard');
+    expect(shards).toHaveLength(16);
+    expect(shards.every(projectile => (
+      Math.round(Math.hypot(projectile.vx, projectile.vy)) === 620
+      && projectile.damage === 8
+      && projectile.hitOptions.fireChance === 0.25
+    ))).toBe(true);
   });
 
   test('server spawns and publishes Crimson Smash rock trajectories', () => {
@@ -379,7 +413,7 @@ describe('authoritative network combat system', () => {
     state.players.p1.x = pickup.x;
     state.players.p1.y = pickup.y;
     simulation.updateGame({}, 0.05);
-    expect(state.players.p1.gold).toBe(1);
+    expect(state.players.p1.coins).toBe(1);
     expect(Object.values(state.pickups)).toHaveLength(0);
     expect(events.filter(event => event.eventType === 'PICKUP_COLLECTED')).toHaveLength(1);
   });

@@ -16,14 +16,15 @@
   const floorApi = typeof require === 'function' ? require('./DeterministicFloorGenerator.js') : browserApi;
   const movementRulesApi = typeof require === 'function' ? require('./CampaignMovementRules.js') : browserApi;
   const combatApi = typeof require === 'function' ? require('./NetworkCombatSystem.js') : browserApi;
+  const worldContentApi = typeof require === 'function' ? require('./SharedWorldContent.js') : (globalThis.NeoNyke?.content || {});
   const { GameSimulation } = gameSimulationApi;
   const { GameState } = gameStateApi;
   const { generateFloorLayout } = floorApi;
   const { applyResponsiveVelocity } = movementRulesApi;
   const { createNetworkCombatSystem, createFloorProgressionSystem, applyNetworkHeroProfile } = combatApi;
 
-  const CAMPAIGN_CONTENT_VERSION = 'shared-neo-campaign-parity-v16';
-  const CAMPAIGN_ROOM = Object.freeze({ id: 'campaign-start-room', width: 900, height: 700, wallThickness: 28, doorWidth: 140 });
+  const CAMPAIGN_CONTENT_VERSION = 'shared-neo-campaign-parity-v21';
+  const CAMPAIGN_ROOM = Object.freeze({ id: 'campaign-start-room', ...worldContentApi.CAMPAIGN_ROOM_GEOMETRY });
   const ROOM_DIRECTIONS = Object.freeze({
     n: Object.freeze({ dx: 0, dy: -1, opposite: 's' }),
     s: Object.freeze({ dx: 0, dy: 1, opposite: 'n' }),
@@ -169,7 +170,7 @@
       x: Number.isFinite(Number(options.x)) ? Number(options.x) : 450,
       y: Number.isFinite(Number(options.y)) ? Number(options.y) : CAMPAIGN_ROOM.height / 2,
       vx: 0, vy: 0, radius: 18, moveSpeed: 180,
-      maxHealth: 100, health: 100, gold: 0, level: 1, xp: 0, xpToNext: 20,
+      maxHealth: 100, health: 100, coins: 0, level: 1, xp: 0, xpToNext: 20,
       damageMultiplier: 1, kills: 0, playerKills: 0, deaths: 0,
       downed: false, action: 'idle', actionTick: -1, attackCooldownUntilTick: 0,
       aimDirection: 0, characterKey: options.characterKey || 'thorn_knight', slotIndex,

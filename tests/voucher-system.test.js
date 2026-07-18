@@ -8,12 +8,13 @@ function loadVoucherData() {
     .replace(/\bexport\s+/g, '');
   return new Function(
     'Neo',
+    'globalThis',
     `${dataSource}; return { ITEM_DEFS, ITEM_KEYS, ITEM_DROP_WEIGHTS, VOUCHER_TYPES, VOUCHER_KEYS, WHITE_ITEM_POOL, FORGE_VOUCHER_KEY, FORGE_VOUCHER_UPGRADE_STEPS };`,
   )({
     buildWeightTable(entries) {
       return entries;
     },
-  });
+  }, { NeoNyke: { content: require('../js/simulation/SharedItemContent') } });
 }
 
 function loadLegacyVoucherMigration() {

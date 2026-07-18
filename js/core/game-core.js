@@ -4,10 +4,12 @@ export const canvas = document.getElementById('c');
 export const ctx = canvas.getContext('2d');
 ctx.imageSmoothingEnabled = false;
 
-export const ROOM_W = 900;
-export const ROOM_H = 700;
-export const WALL = 28;
-export const DOOR = 140;
+const SHARED_ROOM_GEOMETRY = globalThis.NeoNyke?.content?.CAMPAIGN_ROOM_GEOMETRY;
+if (!SHARED_ROOM_GEOMETRY) throw new Error('Shared campaign room geometry is unavailable');
+export const ROOM_W = SHARED_ROOM_GEOMETRY.width;
+export const ROOM_H = SHARED_ROOM_GEOMETRY.height;
+export const WALL = SHARED_ROOM_GEOMETRY.wallThickness;
+export const DOOR = SHARED_ROOM_GEOMETRY.doorWidth;
 export const MAX_FLOOR = 10;
 export const START_X = ROOM_W / 2;
 export const START_Y = ROOM_H / 2;

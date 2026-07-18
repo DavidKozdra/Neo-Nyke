@@ -109,9 +109,11 @@ describe('3D renderer gameplay parity', () => {
 
   test('projects third-person mouse aim to the same 3D floor the player sees', () => {
     const update = fs.readFileSync(path.join(__dirname, '../js/core/update.js'), 'utf8');
+    const math = fs.readFileSync(path.join(__dirname, '../js/core/math-utils.js'), 'utf8');
     expect(renderer).toContain('function projectCanvasMouseToWorld(canvasX, canvasY)');
     expect(renderer).toContain('mouseAimRay.setFromCamera(mouseAimNdc, camera);');
     expect(renderer).toContain('Neo.projectCanvasMouseToWorld = projectCanvasMouseToWorld;');
-    expect(update).toContain('const _perspectiveAim = Neo.projectCanvasMouseToWorld?.(_clampedMouseX, Neo.mouse.y);');
+    expect(math).toContain('const perspectiveAim = Neo.projectCanvasMouseToWorld?.(clampedCanvasX, canvasY);');
+    expect(update).toContain('Neo.updatePointerAimWorld();');
   });
 });

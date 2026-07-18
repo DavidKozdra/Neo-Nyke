@@ -66,13 +66,11 @@ export function loop(timestamp) {
           // authoritative updates therefore advance in identical 20 Hz steps.
           if (Neo.hitstop > 0) {
             Neo.hitstop = Math.max(0, Neo.hitstop - fixedDelta);
-            if (Neo.gameMode === 'normal') Neo.gameSession?.advance?.({}, fixedDelta);
             Neo.tickGameFeel(fixedDelta);
             return;
           }
           if (Neo.gameState === 'play' && !Neo.isWizardPawOpen() && !Neo.isExtraBatteryOpen?.()) {
             update(fixedDelta);
-            if (Neo.gameMode === 'normal') Neo.gameSession?.advance?.({}, fixedDelta);
           }
         })
         : (() => {
@@ -420,26 +418,9 @@ export function loop(timestamp) {
       }
     }
 
-    // First-person camera (3D renderer): the aim point is "straight ahead" —
-    // the view yaw projected 240px out. Writing mouse.worldX/Y here (the
-    // canonical aim source) makes every aim consumer (beams, warps, pounces,
-    // melee arcs) fire where the player is looking, with no per-skill changes.
-    const _fpAimYaw = Neo.getFirstPersonYaw?.();
-    if (_fpAimYaw != null) {
-      Neo.mouse.worldX = Neo.player.x + Math.cos(_fpAimYaw) * 240;
-      Neo.mouse.worldY = Neo.player.y + Math.sin(_fpAimYaw) * 240;
-    } else {
-      const _vpW = Neo.isSplitScreen() ? Neo.canvas.width / 2 : Neo.canvas.width;
-      const _clampedMouseX = Neo.isSplitScreen() ? Math.min(Neo.mouse.x, _vpW) : Neo.mouse.x;
-      const _perspectiveAim = Neo.projectCanvasMouseToWorld?.(_clampedMouseX, Neo.mouse.y);
-      if (_perspectiveAim) {
-        Neo.mouse.worldX = _perspectiveAim.x;
-        Neo.mouse.worldY = _perspectiveAim.y;
-      } else {
-        Neo.mouse.worldX = _clampedMouseX + Neo.camera.x;
-        Neo.mouse.worldY = Neo.mouse.y + Neo.camera.y;
-      }
-    }
+    // One canonical pointer-to-world conversion feeds every local combat
+    // consumer and the network command adapter.
+    Neo.updatePointerAimWorld();
     Neo.updateWeaponSystems(dt);
     Neo.updateRivals(dt);
     Neo.updateMonsterDoorRoaming(dt);

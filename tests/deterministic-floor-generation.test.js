@@ -34,4 +34,32 @@ describe('deterministic multiplayer floor generation', () => {
     const perturbedDraws = Array.from({ length: 20 }, () => perturbed.next('floor-generation'));
     expect(perturbedDraws).toEqual(baselineDraws);
   });
+
+  test('one injected campaign stream drives the exact browser and authority floor contract', () => {
+    const values = Array.from({ length: 500 }, (_, index) => ((index * 73 + 19) % 997) / 997);
+    const stream = () => {
+      let cursor = 0;
+      const api = {
+        next: () => values[(cursor++) % values.length],
+        int(min, max) { return min + Math.floor(api.next() * (max - min + 1)); },
+        pick(items) { return items[Math.floor(api.next() * items.length)]; },
+        chance(probability) { return api.next() < probability; },
+        shuffle(items) {
+          const copy = items.slice();
+          for (let index = copy.length - 1; index > 0; index -= 1) {
+            const other = Math.floor(api.next() * (index + 1));
+            [copy[index], copy[other]] = [copy[other], copy[index]];
+          }
+          return copy;
+        },
+      };
+      return api;
+    };
+    const parityOptions = { ...options, floorNumber: 2, runLoopIndex: 1 };
+    const browserFloor = generateFloorLayout({ ...parityOptions, random: stream() });
+    const authorityFloor = generateFloorLayout({ ...parityOptions, random: stream() });
+
+    expect(authorityFloor).toEqual(browserFloor);
+    expect(authorityFloor.rooms.some(room => room.type === 'portal')).toBe(true);
+  });
 });

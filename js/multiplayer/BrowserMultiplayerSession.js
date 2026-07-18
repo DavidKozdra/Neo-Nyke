@@ -79,6 +79,14 @@
       return this.client.sendUpgrade(selectionEventId, optionId);
     }
 
+    sendShopPurchase(kind, options) {
+      return this.client.sendShopPurchase(kind, options);
+    }
+
+    sendGameCommand(command, args) {
+      return this.client.sendGameCommand(command, args);
+    }
+
     subscribe(handler) {
       if (typeof handler !== 'function') throw new TypeError('Browser multiplayer listener must be a function');
       this.listeners.add(handler);

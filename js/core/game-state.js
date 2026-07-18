@@ -2763,9 +2763,6 @@ export function resumeGame() {
     if (Neo.gameMode === 'coop') { startCoop(); return; }
     if (Neo.gameMode === 'pvp') { startPvp(); return; }
     if (Neo.gameMode === 'competitive') { void startCompetitive(); return; }
-    const offlineSession = typeof Neo.ensureSinglePlayerSession === 'function'
-      ? await Neo.ensureSinglePlayerSession()
-      : null;
     // Safety net for the Sarge tutorial gate: if a replay was requested while
     // Sarge is selected but the rest of the roster isn't unlocked yet, drop the
     // replay rather than running the tutorial as Sarge. The charselect UI gates
@@ -2835,15 +2832,6 @@ export function resumeGame() {
       Neo.persistMetaSoon();
       Neo.scheduleRunSave();
     }
-
-    offlineSession?.beginRun({
-      matchSeed: Neo.baseSeedStr,
-      floorSeed: Neo.seedStr || Neo.baseSeedStr,
-      generationVersion: 1,
-      contentVersion: globalThis.NeoNyke?.simulation?.CAMPAIGN_CONTENT_VERSION || 'shared-neo-campaign-parity-v16',
-      floorNumber: Neo.floor,
-      characterKey: Neo.chosenCharacter,
-    });
 
     if (!Neo.loopStarted) {
       Neo.loopStarted = true;

@@ -110,6 +110,39 @@ export function angleToMouse() {
   return Math.atan2(Neo.mouse.worldY - Neo.player.y, Neo.mouse.worldX - Neo.player.x);
 }
 
+// Canonical campaign pointer-to-world aim conversion. Presentation modes only
+// decide what world point the player means; combat and networking consume the
+// resulting angle. Keeping this here prevents input adapters from inventing a
+// second FPS/third-person/top-down aiming path.
+export function updatePointerAimWorld(options = {}) {
+  const player = options.player || Neo.player;
+  const camera = options.camera || Neo.camera || { x: 0, y: 0 };
+  const canvas = options.canvas || Neo.canvas;
+  if (!player || !canvas) return 0;
+  if (!Neo.mouse) Neo.mouse = {};
+  const canvasX = Number.isFinite(Number(options.canvasX)) ? Number(options.canvasX) : Number(Neo.mouse.x || 0);
+  const canvasY = Number.isFinite(Number(options.canvasY)) ? Number(options.canvasY) : Number(Neo.mouse.y || 0);
+  const splitScreen = options.splitScreen == null ? !!Neo.isSplitScreen?.() : !!options.splitScreen;
+  const viewportWidth = splitScreen ? Number(canvas.width || 0) / 2 : Number(canvas.width || 0);
+  const clampedCanvasX = splitScreen ? Math.min(canvasX, viewportWidth) : canvasX;
+  const firstPersonYaw = Neo.getFirstPersonYaw?.();
+
+  if (firstPersonYaw != null) {
+    Neo.mouse.worldX = Number(player.x || 0) + Math.cos(firstPersonYaw) * 240;
+    Neo.mouse.worldY = Number(player.y || 0) + Math.sin(firstPersonYaw) * 240;
+  } else {
+    const perspectiveAim = Neo.projectCanvasMouseToWorld?.(clampedCanvasX, canvasY);
+    if (perspectiveAim) {
+      Neo.mouse.worldX = Number(perspectiveAim.x);
+      Neo.mouse.worldY = Number(perspectiveAim.y);
+    } else {
+      Neo.mouse.worldX = clampedCanvasX + Number(camera.x || 0);
+      Neo.mouse.worldY = canvasY + Number(camera.y || 0);
+    }
+  }
+  return Math.atan2(Neo.mouse.worldY - Number(player.y || 0), Neo.mouse.worldX - Number(player.x || 0));
+}
+
 // Add a directional impulse to an entity's velocity: vx/vy gain a vector of the
 // given magnitude pointing along `angle` (radians). Centralizes the knockback
 // idiom that was hand-written as cos/sin pairs at every hit site.
@@ -858,6 +891,7 @@ Neo.unorderedRemoveAt = unorderedRemoveAt;
 Neo.clamp = clamp;
 Neo.angleBetween = angleBetween;
 Neo.angleToMouse = angleToMouse;
+Neo.updatePointerAimWorld = updatePointerAimWorld;
 Neo.applyImpulse = applyImpulse;
 Neo.shieldRingRadius = shieldRingRadius;
 Neo.applyCritRollback = applyCritRollback;

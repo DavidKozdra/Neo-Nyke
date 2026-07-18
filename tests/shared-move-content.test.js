@@ -6,7 +6,10 @@ const {
   KIT_ALTERNATIVES,
   getDefaultMoveLoadout,
   getMoveSlot,
+  createPowerDiskBurstDescriptors,
 } = require('../js/simulation/SharedMoveContent');
+const fs = require('node:fs');
+const path = require('node:path');
 
 describe('shared Neo Nyke move content', () => {
   test('catalogs every authored move exactly once for headless authorities', () => {
@@ -35,5 +38,26 @@ describe('shared Neo Nyke move content', () => {
         options.forEach(moveKey => expect(getMoveSlot(moveKey)).toBe(slot));
       });
     });
+  });
+
+  test('defines Power Disks once as the campaign radial burst with shard emitters', () => {
+    const disks = createPowerDiskBurstDescriptors({ characterKey: 'metao', damageMultiplier: 1 });
+    expect(disks).toHaveLength(8);
+    expect(disks.map(disk => disk.angle)).toEqual(Array.from({ length: 8 }, (_, index) => index * Math.PI * 2 / 8));
+    expect(disks[0]).toEqual(expect.objectContaining({
+      kind: 'disk', speed: 440, radius: 7, lifeSeconds: 1.8, damage: 20,
+      hitOptions: expect.objectContaining({ drainChanceBonus: 0.05, fireChance: 0.4 }),
+      subSpawn: expect.objectContaining({
+        kind: 'disk_shard', intervalSeconds: 0.18, speed: 620, radius: 4,
+        lifeSeconds: 0.7, damage: 8, count: 2,
+        hitOptions: expect.objectContaining({ drainChanceBonus: 0.05, fireChance: 0.25 }),
+      }),
+    }));
+
+    const browserCombat = fs.readFileSync(path.join(__dirname, '../js/game/combat.js'), 'utf8');
+    const authorityCombat = fs.readFileSync(path.join(__dirname, '../js/simulation/NetworkCombatSystem.js'), 'utf8');
+    expect(browserCombat).toContain('createPowerDiskBurstDescriptors');
+    expect(authorityCombat).toContain('createPowerDiskBurstDescriptors({ characterKey: player.characterKey || player.character })');
+    expect(authorityCombat).not.toContain("moveKey === 'power_disks' ? 6");
   });
 });

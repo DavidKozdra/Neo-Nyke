@@ -13,6 +13,7 @@
   const campaignApi = typeof require === 'function' ? require('../simulation/CampaignSimulation.js') : browserSimulationApi;
   const floorApi = typeof require === 'function' ? require('../simulation/DeterministicFloorGenerator.js') : browserSimulationApi;
   const combatApi = typeof require === 'function' ? require('../simulation/NetworkCombatSystem.js') : browserSimulationApi;
+  const worldContentApi = typeof require === 'function' ? require('../simulation/SharedWorldContent.js') : (globalThis.NeoNyke?.content || {});
   const protocolApi = typeof require === 'function' ? require('../protocol/ProtocolV1.js') : browserProtocolApi;
   const { GameSimulation, FIXED_DELTA_SECONDS, SIMULATION_TICK_RATE } = simulationApi;
   const { GameState, cloneSerializable } = gameStateApi;
@@ -33,14 +34,14 @@
     getDeliveryIntent,
   } = protocolApi;
 
-  const LOCAL_BUILD_VERSION = '1.0.0-campaign-parity-v16';
+  const LOCAL_BUILD_VERSION = '1.0.0-campaign-parity-v21';
   const LOCAL_GENERATION_VERSION = 1;
-  const LOCAL_CONTENT_HASH = CAMPAIGN_CONTENT_VERSION || 'shared-neo-campaign-parity-v16';
-  const LOCAL_CONTENT_VERSION = CAMPAIGN_CONTENT_VERSION || 'shared-neo-campaign-parity-v16';
+  const LOCAL_CONTENT_HASH = CAMPAIGN_CONTENT_VERSION || 'shared-neo-campaign-parity-v21';
+  const LOCAL_CONTENT_VERSION = CAMPAIGN_CONTENT_VERSION || 'shared-neo-campaign-parity-v21';
   const SNAPSHOT_RATE = 10;
   const SNAPSHOT_TICK_INTERVAL = SIMULATION_TICK_RATE / SNAPSHOT_RATE;
   const FULL_CORRECTION_TICK_INTERVAL = SIMULATION_TICK_RATE;
-  const TEST_ROOM = Object.freeze({ id: 'network-start-room', width: 900, height: 700, wallThickness: 28, doorWidth: 140 });
+  const TEST_ROOM = Object.freeze({ id: 'network-start-room', ...worldContentApi.CAMPAIGN_ROOM_GEOMETRY });
   const PLAYER_CHARACTERS = Object.freeze(['thorn_knight', 'metao', 'gelleh', 'mooggy']);
   const SELECTABLE_CHARACTERS = Object.freeze(['princess', 'thorn_knight', 'metao', 'gelleh', 'mooggy', 'turtle_boy', 'sarge']);
   const RECONNECT_RESERVATION_TICKS = SIMULATION_TICK_RATE * 45;
@@ -322,6 +323,8 @@
         case 'PLAYER_ACTION': this._handleAction(peerId, message.payload); break;
         case 'INTERACT_REQUEST': this._handleInteract(peerId, message.payload); break;
         case 'UPGRADE_SELECTION': this._handleUpgrade(peerId, message.payload); break;
+        case 'SHOP_PURCHASE': this._handleShopPurchase(peerId, message.payload); break;
+        case 'GAME_COMMAND': this._handleGameCommand(peerId, message.payload); break;
         case 'PING': this._send(peerId, 'PONG', {
           nonce: message.payload.nonce,
           clientTime: message.payload.clientTime,
@@ -427,7 +430,7 @@
         moveSpeed: 180,
         maxHealth: 100,
         health: 100,
-        gold: 0,
+        coins: 0,
         level: 1,
         xp: 0,
         xpToNext: 20,
@@ -540,6 +543,25 @@
         selectionEventId: payload.selectionEventId,
         optionId: payload.optionId,
       });
+    }
+
+    _handleShopPurchase(peerId, payload) {
+      const playerId = this.playerIdByPeer.get(peerId);
+      if (!playerId || this.simulation.state.status !== 'running') return;
+      const queue = this.pendingActions[playerId] || (this.pendingActions[playerId] = []);
+      if (queue.length < 8) queue.push({
+        action: 'SHOP_PURCHASE',
+        kind: payload.kind,
+        offerIndex: payload.offerIndex,
+        healKind: payload.healKind,
+      });
+    }
+
+    _handleGameCommand(peerId, payload) {
+      const playerId = this.playerIdByPeer.get(peerId);
+      if (!playerId || this.simulation.state.status !== 'running') return;
+      const queue = this.pendingActions[playerId] || (this.pendingActions[playerId] = []);
+      if (queue.length < 8) queue.push({ action: payload.command, ...(cloneSerializable(payload.arguments) || {}) });
     }
 
     _queueGameplayEvent(eventType, data = {}) {
@@ -728,7 +750,7 @@
           players: players.map(player => ({
             playerId: player.id,
             characterKey: player.characterKey,
-            gold: Number(player.gold || 0),
+            gold: Number(player.coins || 0),
             downed: !!player.downed,
           })),
         },
@@ -888,6 +910,20 @@
         selectionEventId: String(selectionEventId || ''),
         optionId: String(optionId || ''),
       });
+    }
+
+    sendShopPurchase(kind, options = {}) {
+      if (this.status !== 'running') throw new Error('Client match is not running');
+      this._send('SHOP_PURCHASE', {
+        kind: String(kind || ''),
+        ...(Number.isInteger(options.offerIndex) ? { offerIndex: options.offerIndex } : {}),
+        ...(options.healKind ? { healKind: String(options.healKind) } : {}),
+      });
+    }
+
+    sendGameCommand(command, args = {}) {
+      if (this.status !== 'running') throw new Error('Client match is not running');
+      this._send('GAME_COMMAND', { command: String(command || ''), arguments: cloneSerializable(args) });
     }
 
     ping(nonce = `ping-${this.outgoingSequence}`) {

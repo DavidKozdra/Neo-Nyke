@@ -13,7 +13,7 @@ const {
 function player(id, roomId, x = 450, y = 350) {
   const result = {
     id, roomId, x, y, radius: 18, maxHealth: 100, health: 100,
-    moveSpeed: 180, gold: 0, level: 1, xp: 0, xpToNext: 20,
+    moveSpeed: 180, coins: 0, level: 1, xp: 0, xpToNext: 20,
     attackCooldownUntilTick: 0, action: 'idle',
   };
   applyNetworkHeroProfile(result, id === 'p1' ? 'princess' : 'thorn_knight');
@@ -133,7 +133,7 @@ describe('networked run lifecycle', () => {
     expect(events.filter(event => event.eventType === 'XP_AWARDED')).toHaveLength(2);
   });
 
-  test('treasure chests open on touch, offer seeded choices, and can only be claimed once', () => {
+  test('treasure chests use normal campaign rewards before floor five', () => {
     const state = stateFor('coop');
     const treasure = state.floorState.layout.rooms.find(room => room.type === 'treasure');
     state.players.p1.roomId = treasure.id;
@@ -148,24 +148,20 @@ describe('networked run lifecycle', () => {
     });
     simulation.updateGame({}, 0.05);
     const chest = Object.values(state.interactables).find(item => item.kind === 'relic_chest');
-    expect(chest.optionIds).toHaveLength(2);
+    expect(chest).toEqual(expect.objectContaining({ choiceType: '', opened: false }));
 
     state.players.p1.x = chest.x;
     state.players.p1.y = chest.y;
     simulation.updateGame({}, 0.05);
-    expect(state.players.p1.pendingUpgrade.optionIds).toEqual(chest.optionIds);
-    expect(chest.activated).toBe(true);
+    expect(state.players.p1.pendingUpgrade).toBeUndefined();
+    expect(chest).toEqual(expect.objectContaining({ activated: true, opened: true }));
     expect(events).toContainEqual(expect.objectContaining({ eventType: 'CHEST_OPENED' }));
-    const optionId = chest.optionIds[0];
-    simulation.updateGame({ p1: { actions: [{
-      action: 'UPGRADE', selectionEventId: chest.id, optionId,
-    }] } }, 0.05);
-    expect(state.players.p1.items[optionId]).toBe(1);
-    expect(chest).toEqual(expect.objectContaining({ opened: true, claimedBy: 'p1' }));
+    expect(state.players.p1.coins).toBeGreaterThan(0);
+    if (chest.rewardType === 'item') expect(state.players.p1.items[chest.rewardKey]).toBe(1);
 
     simulation.updateGame({ p2: { actions: [{ action: 'INTERACT', targetEntityId: chest.id }] } }, 0.05);
     expect(state.players.p2.pendingUpgrade).toBeUndefined();
-    expect(events.filter(event => event.eventType === 'UPGRADE_APPLIED')).toHaveLength(1);
+    expect(events.filter(event => event.eventType === 'CHEST_OPENED')).toHaveLength(1);
 
     const remainingChests = Object.values(state.interactables)
       .filter(item => item.kind === 'relic_chest' && !item.opened);
@@ -173,10 +169,60 @@ describe('networked run lifecycle', () => {
       state.players.p1.x = nextChest.x;
       state.players.p1.y = nextChest.y;
       simulation.updateGame({}, 0.05);
-      simulation.updateGame({ p1: { actions: [{
-        action: 'UPGRADE', selectionEventId: nextChest.id, optionId: nextChest.optionIds[0],
-      }] } }, 0.05);
     });
     expect(state.floorState.rewards[treasure.id].status).toBe('claimed');
+  });
+
+  test('A/B chests offer and grant real campaign item keys', () => {
+    const state = stateFor('coop');
+    const treasure = state.floorState.layout.rooms.find(room => room.type === 'treasure');
+    state.players.p1.roomId = treasure.id;
+    const simulation = new GameSimulation({
+      state,
+      randomService: new RandomService({ matchSeed: state.matchSeed }),
+      systems: [createNetworkCombatSystem()],
+    });
+    simulation.updateGame({}, 0.05);
+    const chest = Object.values(state.interactables).find(item => item.kind === 'relic_chest');
+    Object.assign(chest, { choiceType: 'ab', rewardType: 'item', rewardChoices: ['neo_knife', 'titan_heart'] });
+    state.players.p1.x = chest.x;
+    state.players.p1.y = chest.y;
+    simulation.updateGame({}, 0.05);
+    expect(state.players.p1.pendingUpgrade.optionIds).toEqual(['neo_knife', 'titan_heart']);
+    simulation.updateGame({ p1: { actions: [{
+      action: 'UPGRADE', selectionEventId: chest.id, optionId: 'neo_knife',
+    }] } }, 0.05);
+    expect(state.players.p1.items.neo_knife).toBe(1);
+  });
+
+  test('shops are authority-stocked and purchases replicate through campaign inventory state', () => {
+    const state = stateFor();
+    const shop = state.floorState.layout.rooms.find(room => room.type === 'shop')
+      || state.floorState.layout.rooms.find(room => room.type === 'combat');
+    shop.type = 'shop';
+    state.players.p1.roomId = shop.id;
+    state.players.p1.coins = 1000;
+    state.players.p2.disconnected = true;
+    const events = [];
+    const simulation = new GameSimulation({
+      state,
+      randomService: new RandomService({ matchSeed: state.matchSeed }),
+      systems: [createNetworkCombatSystem({ emitEvent: (eventType, data) => events.push({ eventType, data }) })],
+    });
+
+    simulation.updateGame({}, 0.05);
+    const itemOffers = shop.shopOffers.filter(offer => offer.type === 'item');
+    expect(itemOffers).toHaveLength(3);
+    expect(shop.shopOffers).toContainEqual(expect.objectContaining({ type: 'potion' }));
+    const offer = itemOffers[0];
+    const startingGold = state.players.p1.coins;
+    const startingCount = Number(state.players.p1.items?.[offer.key] || 0);
+
+    simulation.updateGame({ p1: { actions: [{ action: 'SHOP_PURCHASE', kind: 'item', offerIndex: 0 }] } }, 0.05);
+
+    expect(offer.bought).toBe(true);
+    expect(state.players.p1.coins).toBe(startingGold - offer.cost);
+    expect(state.players.p1.items[offer.key]).toBe(startingCount + 1);
+    expect(events).toContainEqual(expect.objectContaining({ eventType: 'SHOP_PURCHASED' }));
   });
 });

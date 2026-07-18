@@ -16,7 +16,7 @@
 
   const CLIENT_MESSAGE_TYPES = Object.freeze([
     'CLIENT_HELLO', 'AUTHENTICATE', 'JOIN_MATCH', 'PLAYER_CHARACTER', 'PLAYER_READY', 'PLAYER_INPUT',
-    'PLAYER_ACTION', 'INTERACT_REQUEST', 'UPGRADE_SELECTION', 'LEAVE_MATCH', 'PING',
+    'PLAYER_ACTION', 'INTERACT_REQUEST', 'UPGRADE_SELECTION', 'SHOP_PURCHASE', 'GAME_COMMAND', 'LEAVE_MATCH', 'PING',
   ]);
   const AUTHORITY_MESSAGE_TYPES = Object.freeze([
     'SERVER_HELLO', 'JOIN_ACCEPTED', 'JOIN_REJECTED', 'LOBBY_STATE', 'MATCH_STARTING',
@@ -103,6 +103,23 @@
       fields: {
         selectionEventId: field('string', { required: true, minLength: 1, maxLength: 96 }),
         optionId: field('string', { required: true, minLength: 1, maxLength: 96 }),
+      },
+    },
+    SHOP_PURCHASE: {
+      direction: CLIENT_TO_AUTHORITY,
+      delivery: { reliability: 'reliable', channel: 'gameplay', replaceable: false },
+      fields: {
+        kind: field('string', { required: true, enum: ['item', 'heal'] }),
+        offerIndex: field('integer', { min: 0, max: 32 }),
+        healKind: field('string', { enum: ['small', 'major'] }),
+      },
+    },
+    GAME_COMMAND: {
+      direction: CLIENT_TO_AUTHORITY,
+      delivery: { reliability: 'reliable', channel: 'gameplay', replaceable: false },
+      fields: {
+        command: field('string', { required: true, enum: ['FORGE_COMMIT'] }),
+        arguments: field('object', { required: true }),
       },
     },
     LEAVE_MATCH: {
