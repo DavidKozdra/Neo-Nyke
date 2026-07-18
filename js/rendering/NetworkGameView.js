@@ -251,6 +251,7 @@
       const floorState = state?.floorState || { width: 900, height: 700, wallThickness: 28, doorWidth: 140 };
       const transform = computeWorldTransform(this.canvas.width, this.canvas.height, floorState.width, floorState.height);
       const players = this._renderedPlayers(now);
+      this.lastRenderedPlayerCount = Object.keys(players).length;
       const ctx = this.ctx;
 
       ctx.save();
