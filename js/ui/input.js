@@ -1904,6 +1904,8 @@ export const ui = {
     multiplayerRoomStatus: document.getElementById('multiplayerRoomStatus'),
     multiplayerMemberList: document.getElementById('multiplayerMemberList'),
     multiplayerReady: document.getElementById('multiplayerReady'),
+    multiplayerGameHud: document.getElementById('multiplayerGameHud'),
+    multiplayerLeaveGame: document.getElementById('multiplayerLeaveGame'),
     multiplayerBack: document.getElementById('multiplayerBack'),
     multiplayerBackButton: document.getElementById('multiplayerBackButton'),
     runHistoryBtn: document.getElementById('runHistoryBtn'),

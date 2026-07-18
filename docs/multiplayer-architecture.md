@@ -1,6 +1,6 @@
 # Neo Nyke multiplayer architecture
 
-Status: local Cloudflare room/movement vertical slice. Room routes, a room-authoritative Durable Object, browser WebSockets, two-client ready state, and synchronized headless movement are implemented. Full campaign synchronization, production deployment, reconnect, Electron, and Steamworks are not implemented yet.
+Status: playable local Cloudflare floor/movement vertical slice. Room routes, a room-authoritative Durable Object, browser WebSockets, two-client ready state, a shared deterministic floor layout, real character rendering, normal movement controls, local prediction, remote interpolation, and synchronized headless movement are implemented. Enemies/combat and the complete campaign, production deployment, reconnect, Electron, and Steamworks are not implemented yet.
 
 ## Required layering
 
@@ -59,13 +59,14 @@ Create Room and Join Room are active only when that flag is enabled. Create call
 - `js/multiplayer/LocalLoopbackTransport.js`: deterministic latency, jitter, packet-loss, duplicate, and disconnect simulation for local proof tests.
 - `js/multiplayer/CloudflareWebSocketTransport.js`: browser HTTP room operations plus a protocol-envelope WebSocket connection to the room authority.
 - `js/multiplayer/BrowserMultiplayerSession.js`: UI-facing create/join/ready/input session facade using the shared multiplayer client.
+- `js/rendering/NetworkGameView.js`: browser-only multiplayer canvas renderer, input sampling, basic prediction/reconciliation, and remote interpolation. It never runs in the Durable Object or offline authority.
 - `js/protocol/ProtocolV1.js`: runtime message definitions and validation shared by every transport.
 
 These files use a small universal wrapper because Neo Nyke has no bundler: the browser registers APIs under `globalThis.NeoNyke`, while Jest and future Worker tests can `require()` the same sources.
 
 ## Current transitional boundary
 
-The browser's legacy `Neo` runtime still owns most production gameplay objects and several gameplay functions still read browser input or emit presentation effects directly. The new `GameSimulation` is genuinely headless and tested, but it currently drives the simple local proof room rather than the complete campaign.
+The browser's legacy `Neo` runtime still owns most production gameplay objects and several gameplay functions still read browser input or emit presentation effects directly. The new `GameSimulation` is genuinely headless and tested. It now drives a playable shared start chamber and deterministic floor map, but not yet enemies, room traversal, combat, items, or the complete campaign.
 
 Offline runs now create an `OfflineGameSession`, and its serializable authority clock advances on the same 20 Hz fixed steps as the legacy local authority. This preserves the playable game while systems are extracted incrementally. It must not be represented as full campaign extraction yet.
 
@@ -176,6 +177,6 @@ Steam Networking Sockets/SDR is a later alternate transport only. It would chang
 
 ## Current milestone and next gate
 
-Milestone A's infrastructure proof now supports room creation, joining, ready state, two authoritative players, snapshots, and disconnect cleanup in local development. It has automated protocol/transport tests and a repeatable two-browser smoke command.
+Milestone A's playable proof now supports room creation, joining, ready state, two authoritative players, a seeded 8–10-room floor layout, Neo Nyke character sprites, WASD/arrows/gamepad movement, snapshots, prediction/interpolation, a leave-room path, and disconnect cleanup in local development. It has automated protocol/transport/rendering tests and a repeatable two-browser smoke command.
 
-The next gate is to integrate the shared deterministic floor representation into that room and render remote players in the actual game view. Prediction, reconciliation, interpolation, latency diagnostics, reconnect reservations, enemies, combat, items, transitions, and a complete run remain required before Cloudflare multiplayer can be called proven. Electron and Steam remain out of scope until then.
+The next gate is authoritative room traversal plus the first enemy/combat vertical slice. Latency diagnostics, stronger reconciliation, reconnect reservations, complete enemy/item/transition systems, and a complete run remain required before Cloudflare multiplayer can be called proven. Electron and Steam remain out of scope until then.

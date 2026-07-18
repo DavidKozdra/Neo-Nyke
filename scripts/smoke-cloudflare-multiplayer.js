@@ -66,13 +66,16 @@ async function main() {
       waitForSessionStatus(host, 'running', 'host match start'),
       waitForSessionStatus(guest, 'running', 'guest match start'),
     ]);
+    await Promise.all([host, guest].map(page => page.waitForFunction(() => (
+      globalThis.Neo?.multiplayerGameView?.active === true
+      && globalThis.Neo.gameSession.snapshot().gameState?.floorState?.layout?.rooms?.length >= 8
+      && document.querySelector('#start')?.classList.contains('hidden')
+      && !document.querySelector('#multiplayerGameHud')?.classList.contains('hidden')
+    ))));
 
-    for (let index = 0; index < 10; index += 1) {
-      await Promise.all([
-        host.evaluate(() => globalThis.Neo.gameSession.sendInput({ moveX: 1, moveY: 0, aimDirection: 0 })),
-        guest.evaluate(() => globalThis.Neo.gameSession.sendInput({ moveX: -1, moveY: 0, aimDirection: Math.PI })),
-      ]);
-    }
+    await Promise.all([host.keyboard.down('d'), guest.keyboard.down('a')]);
+    await host.waitForTimeout(700);
+    await Promise.all([host.keyboard.up('d'), guest.keyboard.up('a')]);
 
     await Promise.all([
       host.waitForFunction(() => globalThis.Neo.gameSession.snapshot().gameState?.tick >= 10),
@@ -88,6 +91,20 @@ async function main() {
     const converged = JSON.stringify(hostPlayers) === JSON.stringify(guestPlayers);
     const moved = Object.values(hostPlayers).some(player => player.x > 300)
       && Object.values(hostPlayers).some(player => player.x < 600);
+    const canvasRendered = await host.evaluate(() => {
+      const canvas = document.querySelector('#c');
+      const context = canvas?.getContext('2d');
+      if (!canvas || !context) return false;
+      const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+      let visibleSamples = 0;
+      for (let y = 20; y < canvas.height; y += 80) {
+        for (let x = 20; x < canvas.width; x += 80) {
+          const offset = (y * canvas.width + x) * 4;
+          if (pixels[offset] + pixels[offset + 1] + pixels[offset + 2] > 40) visibleSamples += 1;
+        }
+      }
+      return visibleSamples >= 10;
+    });
 
     const report = {
       baseUrl,
@@ -97,13 +114,21 @@ async function main() {
       guestStatus: guestSnapshot.status,
       tick: hostSnapshot.gameState?.tick,
       memberCount: hostSnapshot.lobbyState?.members?.length,
+      gameViewActive: await host.evaluate(() => globalThis.Neo.multiplayerGameView?.active === true),
+      canvasRendered,
+      floorRoomCount: hostSnapshot.gameState?.floorState?.layout?.rooms?.length,
       players: hostPlayers,
       converged,
       moved,
       errors,
     };
+    const screenshotPath = String(process.env.NEONYKE_MULTIPLAYER_SCREENSHOT || '').trim();
+    if (screenshotPath) {
+      await host.screenshot({ path: screenshotPath, fullPage: true });
+      report.screenshotPath = screenshotPath;
+    }
     console.log(JSON.stringify(report, null, 2));
-    if (!converged || !moved || errors.length) process.exitCode = 1;
+    if (!converged || !moved || report.gameViewActive !== true || !canvasRendered || report.floorRoomCount < 8 || errors.length) process.exitCode = 1;
   } finally {
     await Promise.all([hostContext.close(), guestContext.close()]);
     await browser.close();
