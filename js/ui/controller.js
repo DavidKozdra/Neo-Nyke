@@ -107,6 +107,153 @@ export function createUIController(view) {
     window.addEventListener('neo-feature-flags-changed', syncMultiplayerFeatureUI);
     syncMultiplayerFeatureUI();
 
+    const MULTIPLAYER_CHARACTER_NAMES = {
+      princess: 'PRINCESS',
+      thorn_knight: 'THORN KNIGHT',
+      metao: 'METAO',
+      gelleh: 'GELLEH',
+      mooggy: 'MOOGGY',
+      turtle_boy: 'TURTLE BOY',
+      sarge: 'SARGE',
+    };
+    const MULTIPLAYER_SLOT_COLORS = ['#9de9ff', '#d9a7ff', '#ffd98f', '#ff9fcf'];
+    const MULTIPLAYER_MAX_SLOTS = 4;
+    // While true, the shared #charSelect champion panel acts as the networked
+    // co-op lobby: card clicks broadcast a character choice and #go toggles ready.
+    let coopLobbyActive = false;
+
+    function isCoopLobbyActive() {
+      return coopLobbyActive && !!browserMultiplayerSession;
+    }
+
+    function paintLobbyPortrait(canvas, characterKey) {
+      if (!(canvas instanceof HTMLCanvasElement)) return;
+      const key = Neo.getPortraitSpriteKey?.(characterKey) || characterKey;
+      if (canvas.dataset.portraitKey === key) return;
+      canvas.dataset.portraitKey = key;
+      const ctx = canvas.getContext('2d');
+      ctx?.clearRect(0, 0, canvas.width, canvas.height);
+      Neo.drawSpriteToCanvas?.(canvas, key, canvas.width);
+    }
+
+    // Enter/leave the co-op lobby dressing of the shared champion panel. The
+    // roster, portraits and dossier stay exactly as single-player uses them.
+    function setCoopLobbyMode(active) {
+      coopLobbyActive = !!active;
+      Neo.coopLobbyActive = coopLobbyActive;
+      view.coopLobbyBar?.classList.toggle('hidden', !coopLobbyActive);
+      view.coopLobbyBar?.setAttribute('aria-hidden', coopLobbyActive ? 'false' : 'true');
+      document.getElementById('charSelect')?.classList.toggle('charselect--coop', coopLobbyActive);
+      // The run-setup sidebar (difficulty/seed/mods) is authority-controlled in
+      // co-op, so hide those controls while keeping the #go button as READY.
+      ['difficultySelect', 'seed', 'seedLabel', 'challengeToggle'].forEach(id => {
+        document.getElementById(id)?.closest('.seedrow, .charselect-extra-options, .difficulty-select')
+          ?.classList.toggle('coop-hidden', coopLobbyActive);
+        document.getElementById(id)?.classList.toggle('coop-hidden', coopLobbyActive
+          && !document.getElementById(id)?.closest('.seedrow, .charselect-extra-options, .difficulty-select'));
+      });
+      if (coopLobbyActive) {
+        if (typeof Neo.setGameState === 'function' && Neo.gameState !== 'charselect') {
+          Neo.gameMode = 'coop';
+          Neo.charSelectPhase = null;
+          Neo.setGameState('charselect');
+        }
+      }
+    }
+
+    // Reflect the authoritative lobby snapshot onto the shared champion panel.
+    function renderCoopLobby(snapshot, members, localMember) {
+      const inLobby = ['waiting', 'starting'].includes(snapshot.status) && !!snapshot.playerId;
+      if (inLobby !== coopLobbyActive) setCoopLobbyMode(inLobby);
+      if (!inLobby) return;
+
+      if (view.coopLobbyRoomCode) {
+        view.coopLobbyRoomCode.textContent = snapshot.roomCode ? `ROOM ${snapshot.roomCode}` : '';
+      }
+      renderCoopSlots(members, snapshot.playerId);
+
+      // Keep the shared roster's highlight synced to *this* player's pick.
+      if (localMember?.characterKey) highlightCoopRosterSelection(localMember.characterKey);
+
+      const titleEl = document.getElementById('charSelectTitle');
+      const subtitleEl = document.getElementById('charSelectSubtitle');
+      const goBtn = document.getElementById('go');
+      const readyCount = members.filter(member => member.ready).length;
+      const minPlayers = Number(snapshot.lobbyState?.minPlayers) || 2;
+      if (titleEl) titleEl.textContent = 'CO-OP LOBBY';
+      if (subtitleEl) {
+        subtitleEl.textContent = snapshot.status === 'starting'
+          ? 'All players ready — entering the dungeon…'
+          : members.length < minPlayers
+            ? `Waiting for players (${members.length}/${minPlayers} minimum)…`
+            : `${readyCount}/${members.length} ready — pick your hero, then ENTER DUNGEON.`;
+      }
+      if (goBtn) {
+        const isReady = localMember?.ready === true;
+        goBtn.textContent = isReady ? 'WAITING…' : 'ENTER DUNGEON';
+        goBtn.classList.toggle('charselect-start-btn--armed', isReady);
+        goBtn.disabled = snapshot.status !== 'waiting' || !localMember;
+      }
+    }
+
+    function highlightCoopRosterSelection(characterKey) {
+      document.querySelectorAll('#choose .char-card[data-char]').forEach(card => {
+        card.classList.toggle('char-card--coop-selected', card.dataset.char === characterKey);
+      });
+    }
+
+    function renderCoopSlots(members, localPlayerId) {
+      if (!view.coopLobbySlots) return;
+      const slots = [];
+      for (let index = 0; index < MULTIPLAYER_MAX_SLOTS; index += 1) {
+        const member = members[index] || null;
+        const slot = document.createElement('div');
+        slot.className = 'coop-slot';
+        slot.setAttribute('role', 'listitem');
+        slot.style.setProperty('--slot-color', MULTIPLAYER_SLOT_COLORS[index]);
+        const isLocal = member && member.playerId === localPlayerId;
+        slot.classList.toggle('coop-slot--empty', !member);
+        slot.classList.toggle('coop-slot--local', !!isLocal);
+        slot.classList.toggle('coop-slot--ready', !!member?.ready);
+
+        const badge = document.createElement('span');
+        badge.className = 'coop-slot__badge';
+        badge.textContent = `P${index + 1}`;
+        slot.appendChild(badge);
+
+        if (member) {
+          const art = document.createElement('canvas');
+          art.className = 'coop-slot__art';
+          art.width = 72;
+          art.height = 72;
+          art.setAttribute('aria-hidden', 'true');
+          slot.appendChild(art);
+          paintLobbyPortrait(art, member.characterKey || 'thorn_knight');
+
+          const meta = document.createElement('div');
+          meta.className = 'coop-slot__meta';
+          const name = document.createElement('span');
+          name.className = 'coop-slot__name';
+          name.textContent = `${member.displayName || `Player ${index + 1}`}${isLocal ? ' (YOU)' : ''}`;
+          const hero = document.createElement('span');
+          hero.className = 'coop-slot__hero';
+          hero.textContent = MULTIPLAYER_CHARACTER_NAMES[member.characterKey] || 'HERO';
+          const status = document.createElement('span');
+          status.className = 'coop-slot__status';
+          status.textContent = member.ready ? 'READY ✓' : 'CHOOSING…';
+          meta.append(name, hero, status);
+          slot.appendChild(meta);
+        } else {
+          const empty = document.createElement('span');
+          empty.className = 'coop-slot__empty-label';
+          empty.textContent = 'OPEN SLOT';
+          slot.appendChild(empty);
+        }
+        slots.push(slot);
+      }
+      view.coopLobbySlots.replaceChildren(...slots);
+    }
+
     function renderBrowserMultiplayerState(snapshot = {}) {
       const roomCode = snapshot.roomCode || '';
       if (view.multiplayerRoomCodeDisplay) {
@@ -129,15 +276,7 @@ export function createUIController(view) {
         view.multiplayerRoomStatus.textContent = latestError?.message || statusMessages[snapshot.status] || 'Preparing multiplayer…';
       }
       const members = Array.isArray(snapshot.lobbyState?.members) ? snapshot.lobbyState.members : [];
-      const multiplayerCharacterNames = {
-        princess: 'PRINCESS',
-        thorn_knight: 'THORN KNIGHT',
-        metao: 'METAO',
-        gelleh: 'GELLEH',
-        mooggy: 'MOOGGY',
-        turtle_boy: 'TURTLE BOY',
-        sarge: 'SARGE',
-      };
+      const multiplayerCharacterNames = MULTIPLAYER_CHARACTER_NAMES;
       if (view.multiplayerMemberList) {
         view.multiplayerMemberList.replaceChildren(...members.map(member => {
           const row = document.createElement('div');
@@ -147,6 +286,7 @@ export function createUIController(view) {
         }));
       }
       const localMember = members.find(member => member.playerId === snapshot.playerId);
+      renderCoopLobby(snapshot, members, localMember);
       const canChooseCharacter = snapshot.status === 'waiting' && !!localMember;
       view.multiplayerCharacterPicker?.classList.toggle('hidden', !canChooseCharacter);
       if (view.multiplayerCharacter) {
@@ -168,6 +308,7 @@ export function createUIController(view) {
     }
 
     function startBrowserMultiplayerGameView() {
+      setCoopLobbyMode(false);
       if (browserMultiplayerGameView?.active || !browserMultiplayerSession) return;
       const GameView = globalThis.NeoNyke?.rendering?.NetworkGameView;
       if (typeof GameView !== 'function') {
@@ -255,6 +396,7 @@ export function createUIController(view) {
       browserMultiplayerSession = null;
       if (Neo.gameSession === disposedSession) Neo.gameSession = null;
       setMultiplayerCopyFeedback('idle');
+      setCoopLobbyMode(false);
       renderBrowserMultiplayerState({ status: 'disconnected' });
     }
 
@@ -2094,6 +2236,16 @@ export function createUIController(view) {
           }
           const button = event.target instanceof Element ? event.target.closest('#choose .char-card[data-char]') : null;
           if (!button) return;
+          // In the networked co-op lobby, a card click broadcasts this player's
+          // hero to the authority instead of starting a single-player run.
+          if (isCoopLobbyActive()) {
+            const key = button.dataset.char || '';
+            if (MULTIPLAYER_CHARACTER_NAMES[key]) {
+              browserMultiplayerSession.setCharacter(key);
+              highlightCoopRosterSelection(key);
+            }
+            return;
+          }
           handlers.onCharacterSelect(button.dataset.char || '', button);
         });
 
@@ -2802,9 +2954,19 @@ export function createUIController(view) {
             renderRunHistoryPage();
           });
         });
-        view.go.addEventListener('click', handlers.onStartNew);
+        view.go.addEventListener('click', () => {
+          // In the co-op lobby, #go becomes the READY toggle rather than the
+          // single-player run start.
+          if (isCoopLobbyActive()) {
+            const snap = browserMultiplayerSession.snapshot?.() || {};
+            const isReady = snap.lobbyState?.members?.find(m => m.playerId === snap.playerId)?.ready === true;
+            browserMultiplayerSession.setReady(!isReady);
+            return;
+          }
+          handlers.onStartNew();
+        });
         view.seed.addEventListener('keydown', event => {
-          if (event.key === 'Enter') handlers.onStartNew();
+          if (event.key === 'Enter' && !isCoopLobbyActive()) handlers.onStartNew();
         });
         view.continueBtn?.addEventListener('click', handlers.onContinue);
         view.deleteRunBtn?.addEventListener('click', handlers.onDeleteRun);
@@ -2852,7 +3014,16 @@ export function createUIController(view) {
           disposeBrowserMultiplayerSession();
           setMultiplayerPanelOpen(false);
         });
-        view.charBackBtn?.addEventListener('click', handlers.onCloseCharacterSelect);
+        view.charBackBtn?.addEventListener('click', () => {
+          // Leaving the champion panel while it's acting as the co-op lobby
+          // means leaving the room, not backing through sequential phases.
+          if (isCoopLobbyActive()) {
+            disposeBrowserMultiplayerSession();
+            setMultiplayerPanelOpen(false);
+            return;
+          }
+          handlers.onCloseCharacterSelect();
+        });
         // Alt modes panel
         view.altModesBtn?.addEventListener('click', () => setAltModesPanelOpen(true));
         view.altModesClose?.addEventListener('click', () => setAltModesPanelOpen(false));

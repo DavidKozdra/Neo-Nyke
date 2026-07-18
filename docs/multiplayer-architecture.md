@@ -1,6 +1,6 @@
 # Neo Nyke multiplayer architecture
 
-Status: playable local Cloudflare combat/exploration vertical slice. Room routes, a room-authoritative Durable Object, browser WebSockets, authority-validated character selection, two-client ready state, a shared deterministic floor layout, seeded encounters, server-owned enemy AI/projectiles/damage/death/drops/currency, locked-room traversal, real Neo Nyke sprites, client-side combat effects, local prediction, and remote interpolation are implemented. The complete campaign, production deployment, reconnect, Electron, and Steamworks are not implemented yet.
+Status: playable Cloudflare combat/exploration vertical slice. Room routes, a room-authoritative Durable Object, browser WebSockets, authority-validated character selection, two-client ready state, a shared deterministic floor layout, seeded encounters, server-owned enemy AI/projectiles/damage/death/drops/currency, real primary/laser/smash/dash move IDs and cooldowns, locked-room traversal, the complete shared enemy catalog, campaign presentation adapters, local prediction, and remote interpolation are implemented. Full per-enemy boss scripting, progression, complete runs, production deployment, reconnect, Electron, and Steamworks are not implemented yet.
 
 ## Required layering
 
@@ -52,6 +52,9 @@ Create Room and Join Room are active only when that flag is enabled. Create call
 - `js/simulation/RandomService.js`: explicit deterministic streams for floor generation, enemy spawning, loot, shops, combat variance, and boss patterns, including serializable stream state.
 - `js/simulation/DeterministicFloorGenerator.js`: a pure seeded floor-layout proof. It is not yet a replacement for the content-rich legacy generator.
 - `js/simulation/NetworkCombatSystem.js`: headless seeded room encounters, enemy chase AI, player projectile attacks, contact damage, death, room clear, one-time drops, and pickup currency.
+- `js/simulation/SharedCombatContent.js`: canonical weapon stats and default primary-attack behavior shared by offline play and authority.
+- `js/simulation/SharedMoveContent.js`: all 47 authored move IDs/base stats, slots, hero defaults, and alternate kits.
+- `js/simulation/SharedEnemyContent.js`: all 13 standard enemies, 7 bosses, special opponents, elite powers, base stats, roles, and boss pattern names.
 - `js/simulation/GameSimulation.js`: headless `updateGame(inputs, fixedDelta)` boundary. Systems receive `{state, inputs, fixedDelta, random}` and cannot reach browser globals.
 - `js/simulation/FixedTickRunner.js`: initial 20 Hz accumulator shared by browser runtime and headless tests.
 - `js/multiplayer/NetworkTransport.js`: platform-neutral lifecycle, identity, message, peer, and delivery-intent contract.
@@ -60,14 +63,14 @@ Create Room and Join Room are active only when that flag is enabled. Create call
 - `js/multiplayer/LocalLoopbackTransport.js`: deterministic latency, jitter, packet-loss, duplicate, and disconnect simulation for local proof tests.
 - `js/multiplayer/CloudflareWebSocketTransport.js`: browser HTTP room operations plus a protocol-envelope WebSocket connection to the room authority.
 - `js/multiplayer/BrowserMultiplayerSession.js`: UI-facing create/join/ready/input session facade using the shared multiplayer client.
-- `js/rendering/NetworkGameView.js`: browser-only multiplayer canvas renderer, input sampling, basic prediction/reconciliation, and remote interpolation. It never runs in the Durable Object or offline authority.
+- `js/rendering/NetworkGameView.js`: browser-only presentation adapter and input sampler. It reuses the campaign floor, decoration, enemy, pickup, player, projectile, particle, audio, minimap, HUD, and camera seams while applying prediction/reconciliation and remote interpolation. It never runs in the Durable Object or offline authority.
 - `js/protocol/ProtocolV1.js`: runtime message definitions and validation shared by every transport.
 
 These files use a small universal wrapper because Neo Nyke has no bundler: the browser registers APIs under `globalThis.NeoNyke`, while Jest and future Worker tests can `require()` the same sources.
 
 ## Current transitional boundary
 
-The browser's legacy `Neo` runtime still owns most production gameplay objects and several gameplay functions still read browser input or emit presentation effects directly. The new `GameSimulation` is genuinely headless and tested. It now drives seeded rooms, movement/traversal, a first enemy/AI/projectile combat system, damage/death, drops, and currency, but not yet the full enemy roster, character-specific attacks, inventory/progression, bosses, or the complete campaign.
+The browser's legacy `Neo` runtime still owns most production gameplay objects and several gameplay functions still read browser input or emit presentation effects directly. The new `GameSimulation` is genuinely headless and tested. It drives seeded rooms, movement/traversal, every hero's default primary plus equipped laser/smash/dash actions, the full enemy data catalog, generic authority behavior roles, damage/death, drops, and currency. Unique enemy/boss scripts, charge/hold/release nuances for every move, inventory/progression, and the complete campaign still need extraction.
 
 Offline runs now create an `OfflineGameSession`, and its serializable authority clock advances on the same 20 Hz fixed steps as the legacy local authority. This preserves the playable game while systems are extracted incrementally. It must not be represented as full campaign extraction yet.
 
@@ -162,7 +165,9 @@ The implementation target is immediate local input response and low perceived la
 
 ## Co-op lifecycle and safety
 
-Initial co-op supports 2–4 players. Suggested rules remain configurable: personal gold, shared XP, no friendly fire, no player collision, revive enabled, and all living players at the exit to advance.
+Initial co-op supports 2–4 players. Room location is per player: one player crossing a door never teleports the party. `player.roomId` selects that client's camera/presentation while `floorState.encounters[roomId]` retains the shared authoritative enemies, drops, clear state, and other room outcomes. Every occupied room simulates concurrently; a later visitor receives its current shared state. Discovered room IDs are currently shared on the party minimap. Suggested rules remain configurable: personal gold, shared XP, no friendly fire, no player collision, revive enabled, and an explicit co-op rule for final floor advancement.
+
+The normal multiplayer screen uses the campaign HUD rather than a separate always-on debug HUD. Escape opens a local multiplayer menu (the authority keeps running) with Resume, Info, Settings, and Leave Server. Network diagnostics will return as an opt-in debug overlay rather than replacing gameplay presentation.
 
 Upgrade and Scroll choices cannot globally pause active multiplayer combat. Initial multiplayer choices should occur in an inter-floor safe state. Offline single-player retains its current pause behavior.
 
@@ -178,6 +183,6 @@ Steam Networking Sockets/SDR is a later alternate transport only. It would chang
 
 ## Current milestone and next gate
 
-Milestones A–C now have a playable vertical proof: room creation/joining, hero choice, ready state, 2–4 authoritative players, seeded 8–10-room floors and encounters, locked doors, shared party traversal, enemy chase AI, click/Space/gamepad attacks, authoritative projectiles/hits/contact damage/death, exactly-once coin drops and collection, real Neo Nyke character/enemy sprites, health bars, hit feedback, prediction/interpolation, and disconnect cleanup. Automated tests and the two-browser smoke command cover the authoritative combat-to-traversal flow.
+Milestones A–C now have a playable vertical proof: room creation/joining, hero choice, ready state, 2–4 authoritative players, seeded 8–10-room floors and encounters, locked doors, shared party traversal, click/Space primaries, right-click lasers, R smashes, Shift mobility, authoritative cooldowns/projectiles/hits/contact damage/death, exactly-once coin drops and collection, campaign render/audio/HUD reuse, prediction/interpolation, and disconnect cleanup. The authority can instantiate the complete standard/boss roster and elite metadata through generic behavior roles. Automated tests cover catalog completeness, equipped-action validation, authoritative outcomes, and combat-to-traversal.
 
-The next gate is replacing the proof encounter with the content-rich Neo Nyke room/enemy definitions and character-specific attack kits, followed by chests/items/XP, shops/upgrades, floor exits, bosses, defeat/revive, and complete-run results. Latency diagnostics, stronger reconciliation, reconnect reservations, and a complete run remain required before Cloudflare multiplayer can be called proven. Electron and Steam remain out of scope until then.
+The next gate is behavior fidelity: port each move's hold/charge/channel/special rules and each catalog enemy's existing AI script onto the shared headless primitives, then add authority-owned structures/hazards, chests/items/XP, shops/upgrades, floor exits, bosses, defeat/revive, and complete-run results. Latency diagnostics, stronger reconciliation, reconnect reservations, and a complete run remain required before Cloudflare multiplayer can be called proven. Electron and Steam remain out of scope until then.

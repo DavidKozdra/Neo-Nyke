@@ -24,6 +24,8 @@
 import './config/FeatureFlags.js';
 import './simulation/RandomService.js';
 import './simulation/SharedCombatContent.js';
+import './simulation/SharedMoveContent.js';
+import './simulation/SharedEnemyContent.js';
 import './simulation/GameState.js';
 import './simulation/GameSimulation.js';
 import './simulation/FixedTickRunner.js';

@@ -11,6 +11,7 @@
   const INPUT_INTERVAL_MS = 50;
   const INTERPOLATION_DELAY_MS = 100;
   const ATTACK_KEYS = new Set(['Space', 'KeyJ']);
+  const ABILITY_KEYS = new Map([['KeyR', 'smash'], ['ShiftLeft', 'dash'], ['ShiftRight', 'dash']]);
   const MOVEMENT_KEYS = new Map([
     ['KeyW', [0, -1]], ['ArrowUp', [0, -1]],
     ['KeyS', [0, 1]], ['ArrowDown', [0, 1]],
@@ -44,6 +45,17 @@
       offsetY: bounds.top + (visibleHeight - roomHeight * scale) / 2,
       roomWidth,
       roomHeight,
+    };
+  }
+
+  function computeCameraTransform(canvasWidth, canvasHeight, camera = { x: 0, y: 0 }, visibleBounds = null) {
+    const bounds = visibleBounds || { left: 0, top: 0, right: canvasWidth, bottom: canvasHeight };
+    return {
+      scale: 1,
+      offsetX: bounds.left - Number(camera.x || 0),
+      offsetY: bounds.top - Number(camera.y || 0),
+      roomWidth: Math.max(1, Number(canvasWidth) || 1),
+      roomHeight: Math.max(1, Number(canvasHeight) || 1),
     };
   }
 
@@ -104,11 +116,20 @@
       this.presentationRooms = new Map();
       this.localAttackUntil = 0;
       this.gamepadAttackPressed = false;
+      this.camera = { x: 0, y: 0, roomId: null };
+      this.lastPresentationFrameAt = 0;
+      this.lastWorldTransform = null;
+      this.paused = false;
       this.boundKeyDown = event => this._onKey(event, true);
       this.boundKeyUp = event => this._onKey(event, false);
       this.boundPointerMove = event => this._onPointerMove(event);
       this.boundPointerDown = event => this._onPointerDown(event);
+      this.boundContextMenu = event => {
+        if (this.active && event.target === this.canvas) event.preventDefault();
+      };
       this.boundBlur = () => this.keys.clear();
+      this.boundPauseResume = () => this._togglePause(false);
+      this.boundPauseLeave = () => this.document?.getElementById('multiplayerLeaveGame')?.click();
       this.boundRenderFrame = () => {
         if (!this.active) return;
         this.render();
@@ -121,13 +142,17 @@
       if (!this.canvas || !this.ctx) throw new Error('NetworkGameView requires the Neo Nyke canvas');
       this.active = true;
       this.document?.getElementById('start')?.classList.add('hidden');
-      this.document?.getElementById('multiplayerGameHud')?.classList.remove('hidden');
+      this.document?.getElementById('multiplayerGameHud')?.classList.add('hidden');
+      this._setCampaignHudVisible(true);
       root.document?.body?.classList.add('network-multiplayer-active');
       root.addEventListener?.('keydown', this.boundKeyDown);
       root.addEventListener?.('keyup', this.boundKeyUp);
       root.addEventListener?.('pointermove', this.boundPointerMove);
       root.addEventListener?.('pointerdown', this.boundPointerDown);
+      root.addEventListener?.('contextmenu', this.boundContextMenu);
       root.addEventListener?.('blur', this.boundBlur);
+      this.document?.getElementById('pauseResume')?.addEventListener('click', this.boundPauseResume);
+      this.document?.getElementById('pauseLeaveServer')?.addEventListener('click', this.boundPauseLeave);
       this.unsubscribe = this.session.subscribe(snapshot => this._onSnapshot(snapshot));
       this.inputTimer = root.setInterval(() => this._sendInput(), INPUT_INTERVAL_MS);
       this._onSnapshot(this.session.snapshot());
@@ -147,12 +172,25 @@
       root.removeEventListener?.('keyup', this.boundKeyUp);
       root.removeEventListener?.('pointermove', this.boundPointerMove);
       root.removeEventListener?.('pointerdown', this.boundPointerDown);
+      root.removeEventListener?.('contextmenu', this.boundContextMenu);
       root.removeEventListener?.('blur', this.boundBlur);
+      this.document?.getElementById('pauseResume')?.removeEventListener('click', this.boundPauseResume);
+      this.document?.getElementById('pauseLeaveServer')?.removeEventListener('click', this.boundPauseLeave);
       this.keys.clear();
       this.projectileTrails.clear();
       this.document?.getElementById('multiplayerGameHud')?.classList.add('hidden');
+      this._togglePause(false);
+      this._setCampaignHudVisible(false);
       this.document?.getElementById('start')?.classList.remove('hidden');
       root.document?.body?.classList.remove('network-multiplayer-active');
+    }
+
+    _setCampaignHudVisible(visible) {
+      ['hud', 'coinDisplay', 'centerDisplay', 'actionBar'].forEach(id => {
+        const element = this.document?.getElementById(id);
+        element?.classList.toggle('hidden', !visible);
+        element?.setAttribute('aria-hidden', visible ? 'false' : 'true');
+      });
     }
 
     _onSnapshot(snapshot = {}) {
@@ -161,7 +199,8 @@
       this._consumeGameplayEvents(snapshot.gameplayEvents || []);
       if (!state || !state.players) return;
       const receivedAt = root.performance?.now?.() || Date.now();
-      const transitionSequence = Math.max(0, Number(state.floorState?.transitionSequence) || 0);
+      const localTransition = state.floorState?.transitionsByPlayer?.[snapshot.playerId];
+      const transitionSequence = Math.max(0, Number(localTransition?.sequence) || 0);
       if (transitionSequence > this.lastTransitionSequence) {
         if (this.lastTransitionSequence > 0 || this.currentSample) this.transitionFlashUntil = receivedAt + 260;
         this.lastTransitionSequence = transitionSequence;
@@ -190,11 +229,20 @@
     }
 
     _onKey(event, pressed) {
-      if (!this.active || (!MOVEMENT_KEYS.has(event.code) && !ATTACK_KEYS.has(event.code))) return;
+      if (this.active && event.code === 'Escape' && pressed && !event.repeat) {
+        event.preventDefault();
+        this._togglePause(!this.paused);
+        return;
+      }
+      if (!this.active || (!MOVEMENT_KEYS.has(event.code) && !ATTACK_KEYS.has(event.code) && !ABILITY_KEYS.has(event.code))) return;
       if (event.target?.closest?.('input, textarea, select, [contenteditable="true"]')) return;
       event.preventDefault();
       if (ATTACK_KEYS.has(event.code)) {
         if (pressed && !event.repeat) this._attack();
+        return;
+      }
+      if (ABILITY_KEYS.has(event.code)) {
+        if (pressed && !event.repeat) this._useSlot(ABILITY_KEYS.get(event.code));
         return;
       }
       if (pressed) this.keys.add(event.code);
@@ -202,14 +250,15 @@
     }
 
     _onPointerDown(event) {
-      if (!this.active || event.button !== 0 || event.target !== this.canvas) return;
+      if (!this.active || this.paused || ![0, 2].includes(event.button) || event.target !== this.canvas) return;
       event.preventDefault();
       this._onPointerMove(event);
-      this._attack();
+      if (event.button === 2) this._useSlot('laser');
+      else this._attack();
     }
 
     _attack() {
-      if (!this.active || this.session.snapshot().status !== 'running') return;
+      if (!this.active || this.paused || this.session.snapshot().status !== 'running') return;
       this.localAttackUntil = (root.performance?.now?.() || Date.now()) + 150;
       if (this.localPredictedPlayer) {
         this.localPredictedPlayer.action = 'attack';
@@ -223,12 +272,33 @@
       }
     }
 
+    _useSlot(slot) {
+      if (!this.active || this.paused || this.session.snapshot().status !== 'running') return;
+      const player = this.localPredictedPlayer;
+      const abilityId = player?.equippedMoves?.[slot];
+      if (!abilityId) return;
+      try {
+        if (slot === 'dash') this.session.sendDash(abilityId, this.aimDirection);
+        else this.session.sendAbility(abilityId, this.aimDirection);
+      } catch {
+        return;
+      }
+      if (player) {
+        player.action = slot === 'dash' ? 'dash' : 'ability';
+        player.actionMode = slot;
+        player.actionKind = abilityId;
+        player.actionTick = this.currentSample?.state?.tick || 0;
+        player.aimDirection = this.aimDirection;
+      }
+    }
+
     _consumeGameplayEvents(events) {
       const now = root.performance?.now?.() || Date.now();
       events.forEach(event => {
         if (!event?.eventId || this.seenGameplayEvents.has(event.eventId)) return;
         this.seenGameplayEvents.add(event.eventId);
         if (this.seenGameplayEvents.size > 512) this.seenGameplayEvents.delete(this.seenGameplayEvents.values().next().value);
+        if (!this._isGameplayEventVisible(event)) return;
         if (event.eventType === 'PLAYER_ATTACKED') {
           const weaponKey = event.data?.weaponKey || event.data?.attackKind;
           const sound = weaponKey === 'metao_fire_staff' ? 'fire_burn'
@@ -237,23 +307,59 @@
                 : 'sword_swing';
           this.neo.playSfx?.(sound);
         }
-        if (['PLAYER_ATTACKED', 'PLAYER_ATTACK_FOLLOWUP', 'ENEMY_ATTACKED', 'ENEMY_TELEGRAPH', 'ENEMY_HIT', 'ENEMY_DEFEATED', 'PLAYER_HIT', 'PICKUP_COLLECTED', 'ROOM_CLEARED'].includes(event.eventType)) {
+        if (event.eventType === 'PLAYER_ABILITY_USED') {
+          const slot = event.data?.slot;
+          this.neo.playSfx?.(slot === 'dash' ? 'dash' : slot === 'smash' ? 'aoe' : 'lazer_blast');
+        }
+        this._spawnGameplayEventEffect(event);
+        if (['PLAYER_ATTACKED', 'PLAYER_ATTACK_FOLLOWUP', 'PLAYER_ABILITY_USED', 'ENEMY_ATTACKED', 'ENEMY_TELEGRAPH', 'ENEMY_HIT', 'ENEMY_DEFEATED', 'PLAYER_HIT', 'PICKUP_COLLECTED', 'ROOM_CLEARED'].includes(event.eventType)) {
           this.combatEffects.push({ ...event, startedAt: now });
         }
       });
       this.combatEffects = this.combatEffects.filter(effect => now - effect.startedAt < 700);
     }
 
+    _isGameplayEventVisible(event) {
+      const state = this.currentSample?.state;
+      if (!state) return true;
+      const localPlayer = state.players?.[this.session.snapshot().playerId];
+      if (!localPlayer) return true;
+      const data = event.data || {};
+      const eventEntity = state.enemies?.[data.enemyId]
+        || state.players?.[data.playerId]
+        || state.pickups?.[data.pickupId];
+      const eventRoomId = data.roomId || eventEntity?.roomId;
+      return !eventRoomId || eventRoomId === localPlayer.roomId;
+    }
+
+    _spawnGameplayEventEffect(event) {
+      const state = this.currentSample?.state;
+      const data = event.data || {};
+      const entity = state?.enemies?.[data.enemyId] || state?.players?.[data.playerId];
+      if (!entity) return;
+      if (event.eventType === 'ENEMY_HIT' || event.eventType === 'PLAYER_HIT') {
+        const color = event.eventType === 'PLAYER_HIT' ? '#ff6b75'
+          : data.attackKind === 'bleed' ? '#ff536d' : '#ffffff';
+        this.neo.spawnDamagePopup?.(entity.x, entity.y - Number(entity.radius || 18) - 12, Number(data.damage || 0), { color, size: 18 });
+        this.neo.ringBurst?.(entity.x, entity.y, Number(entity.radius || 18) + 5, color, 0.28);
+      } else if (event.eventType === 'ENEMY_DEFEATED') {
+        this.neo.ringBurst?.(entity.x, entity.y, Number(entity.radius || 20) + 8, '#ff7592', 0.48);
+        this.neo.playSfx?.('enemy_hit');
+      } else if (event.eventType === 'PICKUP_COLLECTED') {
+        this.neo.ringBurst?.(entity.x, entity.y, 9, '#ffd966', 0.34);
+        this.neo.playSfx?.('coin');
+      } else if (event.eventType === 'PLAYER_ABILITY_USED') {
+        const color = event.data?.slot === 'dash' ? '#8fdcff' : event.data?.slot === 'smash' ? '#ffb36b' : '#d89bff';
+        this.neo.ringBurst?.(entity.x, entity.y, event.data?.slot === 'smash' ? 34 : 18, color, 0.42);
+      }
+    }
+
     _onPointerMove(event) {
       if (!this.active || !this.localPredictedPlayer || !this.canvas) return;
       const rect = this.canvas.getBoundingClientRect();
       const floorState = this.currentSample?.state?.floorState || {};
-      const transform = computeWorldTransform(
-        this.canvas.width,
-        this.canvas.height,
-        floorState.width,
-        floorState.height,
-        this._visibleCanvasBounds(),
+      const transform = this.lastWorldTransform || computeCameraTransform(
+        this.canvas.width, this.canvas.height, this.camera, this._visibleCanvasBounds(),
       );
       const canvasX = (event.clientX - rect.left) * (this.canvas.width / Math.max(1, rect.width));
       const canvasY = (event.clientY - rect.top) * (this.canvas.height / Math.max(1, rect.height));
@@ -295,7 +401,7 @@
 
     _sendInput() {
       if (!this.active || this.session.snapshot().status !== 'running') return;
-      const movement = this._readMovement();
+      const movement = this.paused ? { moveX: 0, moveY: 0 } : this._readMovement();
       const input = { ...movement, aimDirection: this.aimDirection, buttons: 0 };
       if (this.localPredictedPlayer) {
         this.localPredictedPlayer = predictPosition(
@@ -310,6 +416,18 @@
       } catch {
         // Session state changes are surfaced by its normal disconnect handler.
       }
+    }
+
+    _togglePause(visible) {
+      this.paused = !!visible && this.active;
+      this.keys.clear();
+      const pause = this.document?.getElementById('pause');
+      pause?.classList.toggle('hidden', !this.paused);
+      const title = this.document?.getElementById('pauseTitle');
+      if (title) title.textContent = this.paused ? 'MULTIPLAYER' : 'PAUSED';
+      this.document?.getElementById('pauseMain')?.classList.toggle('hidden', this.paused);
+      this.document?.getElementById('pauseLeaveServer')?.classList.toggle('hidden', !this.paused);
+      root.document?.body?.classList.toggle('game-paused', this.paused);
     }
 
     _renderedPlayers(now) {
@@ -351,20 +469,25 @@
       if (!this.active || !this.ctx || !this.canvas) return;
       const now = root.performance?.now?.() || Date.now();
       const state = this.currentSample?.state;
-      const floorState = state?.floorState || { width: 900, height: 700, wallThickness: 28, doorWidth: 140 };
+      const authorityFloorState = state?.floorState || { width: 900, height: 700, wallThickness: 28, doorWidth: 140 };
       const visibleBounds = this._visibleCanvasBounds();
-      const transform = computeWorldTransform(
-        this.canvas.width,
-        this.canvas.height,
-        floorState.width,
-        floorState.height,
-        visibleBounds,
-      );
       const players = this._renderedPlayers(now);
+      const localPlayerId = this.session.snapshot().playerId;
+      const localRoomId = players[localPlayerId]?.roomId || authorityFloorState.currentRoomId;
+      const floorState = { ...authorityFloorState, currentRoomId: localRoomId };
+      const visiblePlayers = Object.fromEntries(Object.entries(players).filter(([, player]) => player.roomId === localRoomId));
       const enemies = this._renderedEntities('enemies', now);
       const projectiles = this._renderedEntities('projectiles', now);
       const pickups = state?.pickups || {};
-      this.lastRenderedPlayerCount = Object.keys(players).length;
+      const localPlayer = players[localPlayerId];
+      const frameDelta = this.lastPresentationFrameAt > 0
+        ? clamp((now - this.lastPresentationFrameAt) / 1000, 0, 0.05)
+        : 1 / 60;
+      this.lastPresentationFrameAt = now;
+      this._updateCamera(localPlayer, frameDelta);
+      const transform = computeCameraTransform(this.canvas.width, this.canvas.height, this.camera, visibleBounds);
+      this.lastWorldTransform = transform;
+      this.lastRenderedPlayerCount = Object.keys(visiblePlayers).length;
       this.lastRenderedEnemyCount = Object.keys(enemies).length;
       this.lastRenderedProjectileCount = Object.keys(projectiles).length;
       this.lastRenderedPickupCount = Object.keys(pickups).length;
@@ -377,21 +500,37 @@
       ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
       ctx.translate(transform.offsetX, transform.offsetY);
       ctx.scale(transform.scale, transform.scale);
-      this._syncNeoPresentationFloor(floorState, enemies);
+      this._syncNeoPresentationFloor(floorState, enemies, pickups, state);
       if (typeof this.neo.drawFloor === 'function') {
         this.neo.drawFloor();
         this.neo.drawRoomDecor?.();
       } else {
         this._drawRoom(floorState);
       }
-      Object.values(pickups).filter(entity => entity.roomId === floorState.currentRoomId)
+      if (typeof this.neo.drawPickups === 'function') this.neo.drawPickups();
+      else Object.values(pickups).filter(entity => entity.roomId === floorState.currentRoomId)
         .forEach(entity => this._drawPickup(entity, now));
       Object.values(projectiles).filter(entity => entity.roomId === floorState.currentRoomId)
         .forEach(entity => this._drawProjectile(entity));
-      Object.values(enemies).filter(entity => entity.roomId === floorState.currentRoomId)
+      if (typeof this.neo.drawEnemies === 'function') {
+        try {
+          this.neo.drawEnemies({
+            left: this.camera.x,
+            right: this.camera.x + this.canvas.width,
+            top: this.camera.y,
+            bottom: this.camera.y + this.canvas.height,
+          });
+        } catch (_error) {
+          Object.values(enemies).filter(entity => entity.roomId === floorState.currentRoomId)
+            .forEach(entity => this._drawEnemy(entity, state?.tick || 0, now));
+        }
+      } else Object.values(enemies).filter(entity => entity.roomId === floorState.currentRoomId)
         .forEach(entity => this._drawEnemy(entity, state?.tick || 0, now));
-      Object.values(players).forEach(player => this._drawPlayer(player, player.id === this.session.snapshot().playerId));
-      this._drawCombatEffects(players, enemies, now);
+      Object.values(visiblePlayers).forEach(player => this._drawPlayer(player, player.id === localPlayerId));
+      this.neo.updateParticles?.(frameDelta);
+      if (typeof this.neo.drawParticles === 'function') this.neo.drawParticles();
+      else this._drawCombatEffects(visiblePlayers, enemies, now);
+      this._drawAbilityEffects(visiblePlayers, now);
       ctx.restore();
       if (typeof this.neo.drawMinimap === 'function') this.neo.drawMinimap();
       else this._drawMinimap(floorState, visibleBounds);
@@ -400,7 +539,23 @@
       this._updateHud(state, players);
     }
 
-    _syncNeoPresentationFloor(floorState, enemies) {
+    _updateCamera(player, fixedDelta) {
+      if (!player) return;
+      const changedRoom = this.camera.roomId !== player.roomId;
+      const targetX = Number(player.x || 0) - this.canvas.width / 2 + Number(player.vx || 0) * 0.08;
+      const targetY = Number(player.y || 0) - this.canvas.height / 2 + Number(player.vy || 0) * 0.08;
+      if (changedRoom || !Number.isFinite(this.camera.x) || !Number.isFinite(this.camera.y)) {
+        this.camera.x = targetX;
+        this.camera.y = targetY;
+        this.camera.roomId = player.roomId || null;
+        return;
+      }
+      const smoothing = clamp(8 * fixedDelta, 0, 1);
+      this.camera.x += (targetX - this.camera.x) * smoothing;
+      this.camera.y += (targetY - this.camera.y) * smoothing;
+    }
+
+    _syncNeoPresentationFloor(floorState, enemies, pickups, state) {
       const layoutRooms = floorState.layout?.rooms || [];
       const visited = new Set(floorState.visitedRoomIds || []);
       const rooms = layoutRooms.map(source => {
@@ -420,14 +575,72 @@
         if (!activeIds.has(id)) this.presentationRooms.delete(id);
       });
       this.neo.rooms = rooms;
+      rooms.forEach(room => this._hydrateRoomDecor(room, floorState, state));
       this.neo.currentRoom = rooms.find(room => room.id === floorState.currentRoomId) || rooms[0] || null;
       this.neo.floor = Math.max(1, Number(floorState.layout?.floorNumber || 1));
-      this.neo.enemies = Object.values(enemies || {}).filter(enemy => !enemy.dead);
+      this.neo.floorsEntered = this.neo.floor;
+      this.neo.enemies = Object.values(enemies || {})
+        .filter(enemy => !enemy.dead && enemy.roomId === floorState.currentRoomId)
+        .map(enemy => {
+          const adapted = {
+            ...enemy,
+            r: Number(enemy.radius || 20),
+            hp: Number(enemy.health || 0),
+            max: Math.max(1, Number(enemy.maxHealth || 1)),
+            speed: Number(enemy.moveSpeed || 0),
+            spawnT: 0,
+            stun: 0,
+            swingTime: enemy.state === 'attacking' ? 0.2 : 0,
+            windup: enemy.state === 'aiming' ? 0.35 : 0,
+            beamAngle: Number(enemy.aimDirection || enemy.beamAngle || 0),
+          };
+          this.neo.ensureStatuses?.(adapted);
+          return adapted;
+        });
+      this.neo.pickups = Object.values(pickups || {})
+        .filter(pickup => pickup.roomId === floorState.currentRoomId)
+        .map(pickup => ({ ...pickup, value: Number(pickup.amount || pickup.value || 1), r: Number(pickup.radius || 13) }));
       this.neo.hazards = [];
       this.neo.decorations = this.neo.currentRoom?.decorations || [];
       this.neo.structures = this.neo.currentRoom?.structures || [];
       this.neo.destructibles = this.neo.currentRoom?.destructibles || [];
       this.neo.environmentBackgroundCache = this.neo.environmentBackgroundCache || { key: '', canvas: null };
+    }
+
+    _hydrateRoomDecor(room, floorState, state) {
+      if (!room || typeof this.neo.decorateRoomData !== 'function' || typeof this.neo.createRngStream !== 'function') return;
+      const seedKey = `${state?.floorSeed ?? floorState.floorSeed ?? 'network'}|presentation|${room.id}`;
+      if (room._networkDecorSeed === seedKey) return;
+      const savedStreams = this.neo.rngStreams;
+      const savedRng = this.neo.rng;
+      const authoritativeCleared = room.cleared;
+      try {
+        this.neo.rngStreams = {
+          world: this.neo.createRngStream(`${seedKey}|world`),
+          loot: this.neo.createRngStream(`${seedKey}|loot`),
+          encounter: this.neo.createRngStream(`${seedKey}|encounter`),
+          fx: this.neo.createRngStream(`${seedKey}|fx`),
+        };
+        this.neo.rng = () => this.neo.nextRandom?.('encounter') ?? Math.random();
+        this.neo.decorateRoomData(room);
+        // Decorative pixels are client-only. Structures, hazards and
+        // destructibles join this adapter only when authority collision owns them.
+        room.structures = [];
+        room.destructibles = [];
+        room.hazards = [];
+        room.pickups = [];
+        room.chests = [];
+        room.enemies = [];
+        room.projectiles = [];
+        room.cleared = authoritativeCleared;
+        room._networkDecorSeed = seedKey;
+      } catch (_error) {
+        room.decorations = Array.isArray(room.decorations) ? room.decorations : [];
+        room._networkDecorSeed = seedKey;
+      } finally {
+        this.neo.rngStreams = savedStreams;
+        this.neo.rng = savedRng;
+      }
     }
 
     _drawRoom(floorState) {
@@ -704,6 +917,53 @@
       });
     }
 
+    _drawAbilityEffects(players, now) {
+      const ctx = this.ctx;
+      this.combatEffects.forEach(effect => {
+        if (effect.eventType !== 'PLAYER_ABILITY_USED') return;
+        const age = now - effect.startedAt;
+        if (age > 520) return;
+        const data = effect.data || {};
+        const player = players[data.playerId];
+        if (!player) return;
+        const alpha = clamp(1 - age / 520, 0, 1);
+        const angle = Number(data.aimDirection || 0);
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.shadowBlur = 18;
+        if (data.mode === 'beam' || data.mode === 'cross') {
+          ctx.strokeStyle = data.abilityId === 'love_beam' ? '#ff9de8' : '#b99cff';
+          ctx.shadowColor = ctx.strokeStyle;
+          ctx.lineWidth = data.abilityId === 'turtle_wave' || data.abilityId === 'wizard_lazer' ? 22 : 9;
+          ctx.beginPath();
+          if (data.mode === 'cross') {
+            ctx.moveTo(28, player.y); ctx.lineTo(872, player.y);
+            ctx.moveTo(player.x, 28); ctx.lineTo(player.x, 672);
+          } else {
+            ctx.moveTo(player.x, player.y);
+            ctx.lineTo(player.x + Math.cos(angle) * 470, player.y + Math.sin(angle) * 470);
+          }
+          ctx.stroke();
+        } else if (data.mode === 'aoe' || data.mode === 'support') {
+          ctx.strokeStyle = data.mode === 'support' ? '#78f0bc' : '#ffb36b';
+          ctx.shadowColor = ctx.strokeStyle;
+          ctx.lineWidth = 7;
+          ctx.beginPath();
+          ctx.arc(player.x, player.y, 55 + age * 0.24, 0, Math.PI * 2);
+          ctx.stroke();
+        } else if (data.slot === 'dash') {
+          ctx.strokeStyle = '#8fdcff';
+          ctx.shadowColor = '#8fdcff';
+          ctx.lineWidth = 12;
+          ctx.beginPath();
+          ctx.moveTo(player.x - Math.cos(angle) * 120, player.y - Math.sin(angle) * 120);
+          ctx.lineTo(player.x, player.y);
+          ctx.stroke();
+        }
+        ctx.restore();
+      });
+    }
+
     _drawPlayer(player, isLocal) {
       const ctx = this.ctx;
       const color = player.color || '#9de9ff';
@@ -719,7 +979,7 @@
 
       const serverTick = this.currentSample?.state?.tick || 0;
       const attacking = (isLocal && (root.performance?.now?.() || Date.now()) < this.localAttackUntil)
-        || (player.action === 'attack' && serverTick - Number(player.actionTick || 0) <= 4);
+        || (player.action !== 'idle' && serverTick - Number(player.actionTick || 0) <= 4);
       if (typeof this.neo.drawPlayerSlot === 'function') {
         const activeSeconds = Number(this.neo.ATTACKS?.melee?.active || 0.17);
         const elapsed = Math.max(0, serverTick - Number(player.actionTick || 0)) / 20;
@@ -736,7 +996,7 @@
           getEntity: () => actor,
           getCharacter: () => player.characterKey || 'thorn_knight',
           color,
-          label: '',
+          label: `${player.displayName || player.id}${isLocal ? ' (YOU)' : ''}`,
         });
       } else if (typeof this.neo.drawSpriteFrame === 'function') {
         this.neo.drawSpriteFrame(player.characterKey || 'thorn_knight', player.x, player.y, attacking ? 66 : 58, {
@@ -751,12 +1011,6 @@
         ctx.fill();
       }
       ctx.save();
-      ctx.fillStyle = isLocal ? '#ffffff' : color;
-      ctx.font = '700 16px VT323, monospace';
-      ctx.textAlign = 'center';
-      ctx.shadowColor = '#000';
-      ctx.shadowBlur = 5;
-      ctx.fillText(`${player.displayName || player.id}${isLocal ? ' (YOU)' : ''}`, player.x, player.y - 38);
       const healthRatio = clamp(Number(player.health ?? 100) / Math.max(1, Number(player.maxHealth || 100)), 0, 1);
       ctx.fillStyle = 'rgba(0,0,0,.8)';
       ctx.fillRect(player.x - 28, player.y + 34, 56, 6);
@@ -834,6 +1088,57 @@
       setText('multiplayerGameEnemies', Object.values(state?.enemies || {}).filter(enemy => !enemy.dead).length);
       const localPlayer = players[this.session.snapshot().playerId];
       setText('multiplayerGameGold', localPlayer?.gold ?? 0);
+      if (!localPlayer || !state) return;
+      this._setCampaignHudVisible(true);
+      setText('coinCount', localPlayer.gold ?? 0);
+      setText('timerDisplay', this._formatTime(state.elapsedSeconds));
+      setText('floorDisplay', state.floorNumber || state.floorState?.layout?.floorNumber || 1);
+      const ticksRemaining = Math.max(0, Number(localPlayer.attackCooldownUntilTick || 0) - Number(state.tick || 0));
+      const meleeCurrent = ticksRemaining / 20;
+      const weaponStats = root.NeoNyke?.content?.WEAPON_BASE_STATS?.[localPlayer.equippedWeapon] || {};
+      const meleeMaximum = Math.max(0.05, Number(weaponStats.cooldown || 0.5));
+      const characterDef = this.neo.CHARACTER_DEFS?.[localPlayer.characterKey] || {};
+      const equippedMoves = localPlayer.equippedMoves || {};
+      const cooldownFor = slot => Math.max(0, Number(localPlayer.moveCooldownUntilTick?.[equippedMoves[slot]] || 0) - Number(state.tick || 0)) / 20;
+      const maximumFor = slot => Math.max(0.05, Number(root.NeoNyke?.content?.MOVE_BASE_STATS?.[equippedMoves[slot]]?.cooldown || 1));
+      const laserCurrent = cooldownFor('laser');
+      const smashCurrent = cooldownFor('smash');
+      const dashCurrent = cooldownFor('dash');
+      this.neo.uiController?.setHudValues?.({
+        floor: state.floorNumber || 1,
+        level: Number(localPlayer.level || 1),
+        xpText: `${Number(localPlayer.xp || 0)}/${Number(localPlayer.xpToNext || 20)}`,
+        coins: Number(localPlayer.gold || 0),
+        character: String(characterDef.name || localPlayer.characterKey || 'HERO').toUpperCase(),
+        hp: Number(localPlayer.health || 0),
+        maxHp: Math.max(1, Number(localPlayer.maxHealth || 1)),
+        meleeCd: meleeCurrent,
+        laserCd: laserCurrent,
+        smashCd: smashCurrent,
+        dashCd: dashCurrent,
+        gameTime: this._formatTime(state.elapsedSeconds),
+        difficultyName: 'CO-OP',
+        itemRarityCounts: { white: 0, purple: 0, red: 0, blue: 0, green: 0 },
+        skills: {
+          melee: { current: meleeCurrent, max: meleeMaximum, active: localPlayer.action === 'attack', charges: meleeCurrent > 0 ? 0 : 1, maxCharges: 1, timers: meleeCurrent > 0 ? [meleeCurrent] : [] },
+          laser: { current: laserCurrent, max: maximumFor('laser'), active: localPlayer.actionMode === 'laser', charges: laserCurrent > 0 ? 0 : 1, maxCharges: 1, timers: laserCurrent > 0 ? [laserCurrent] : [] },
+          smash: { current: smashCurrent, max: maximumFor('smash'), active: localPlayer.actionMode === 'smash', charges: smashCurrent > 0 ? 0 : 1, maxCharges: 1, timers: smashCurrent > 0 ? [smashCurrent] : [] },
+          dash: { current: dashCurrent, max: maximumFor('dash'), active: localPlayer.actionMode === 'dash', charges: dashCurrent > 0 ? 0 : 1, maxCharges: 1, timers: dashCurrent > 0 ? [dashCurrent] : [] },
+        },
+      });
+      if (this.neo.ui?.skillNames?.melee) {
+        const weaponName = this.neo.WEAPON_DEFS?.[localPlayer.equippedWeapon]?.name || localPlayer.equippedWeapon || 'Attack';
+        this.neo.ui.skillNames.melee.textContent = weaponName;
+      }
+      ['laser', 'smash', 'dash'].forEach(slot => {
+        if (!this.neo.ui?.skillNames?.[slot]) return;
+        this.neo.ui.skillNames[slot].textContent = this.neo.MOVE_DEFS?.[equippedMoves[slot]]?.name || equippedMoves[slot] || slot;
+      });
+    }
+
+    _formatTime(secondsValue) {
+      const total = Math.max(0, Math.floor(Number(secondsValue || 0)));
+      return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
     }
   }
 
@@ -842,6 +1147,7 @@
     INTERPOLATION_DELAY_MS,
     normalizeMovement,
     computeWorldTransform,
+    computeCameraTransform,
     interpolatePlayers,
     predictPosition,
     NetworkGameView,

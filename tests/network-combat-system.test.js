@@ -55,6 +55,7 @@ describe('authoritative network combat system', () => {
     applyNetworkHeroProfile(player, 'turtle_boy');
     expect(player).toEqual(expect.objectContaining({
       characterKey: 'turtle_boy', maxHealth: 120, health: 60, moveSpeed: 165,
+      equippedMoves: { melee: 'slash', laser: 'turtle_wave', smash: 'death_ball', dash: 'dash' },
     }));
     applyNetworkHeroProfile(player, 'mooggy');
     expect(player).toEqual(expect.objectContaining({
@@ -62,13 +63,45 @@ describe('authoritative network combat system', () => {
     }));
   });
 
+  test('authoritatively resolves equipped laser, smash, and dash slots with cooldowns', () => {
+    const { state, simulation, events } = combatHarness('thorn_knight');
+    applyNetworkHeroProfile(state.players.p1, 'thorn_knight');
+    simulation.updateGame({}, 0.05);
+    const enemy = Object.values(state.enemies)[0];
+    enemy.x = state.players.p1.x + 80;
+    enemy.y = state.players.p1.y;
+    enemy.moveSpeed = 0;
+
+    simulation.updateGame({ p1: { actions: [
+      { action: 'ABILITY', abilityId: 'blood_beam', aimDirection: 0 },
+      { action: 'ABILITY', abilityId: 'crimson_smash', aimDirection: 0 },
+      { action: 'DASH', abilityId: 'dash', aimDirection: Math.PI / 2 },
+    ] } }, 0.05);
+
+    expect(enemy.health).toBeLessThan(enemy.maxHealth);
+    expect(state.players.p1.y).toBeGreaterThan(350);
+    expect(state.players.p1.moveCooldownUntilTick).toEqual(expect.objectContaining({
+      blood_beam: expect.any(Number), crimson_smash: expect.any(Number), dash: expect.any(Number),
+    }));
+    expect(events.filter(event => event.eventType === 'PLAYER_ABILITY_USED')).toHaveLength(3);
+  });
+
+  test('rejects client ability IDs that are not equipped by that hero', () => {
+    const { state, simulation, events } = combatHarness('princess');
+    applyNetworkHeroProfile(state.players.p1, 'princess');
+    simulation.updateGame({}, 0.05);
+    simulation.updateGame({ p1: { actions: [{ action: 'ABILITY', abilityId: 'wizard_lazer', aimDirection: 0 }] } }, 0.05);
+    expect(events.some(event => event.eventType === 'PLAYER_ABILITY_USED')).toBe(false);
+    expect(state.players.p1.moveCooldownUntilTick).toEqual({});
+  });
+
   test.each([
-    ['princess', 30, 1, 'princess_wand'],
-    ['thorn_knight', 28, 0, 'thorns_bleed_blade'],
-    ['metao', 24, 2, 'metao_fire_staff'],
-    ['gelleh', 4, 1, 'gelleh_lightning_spear'],
-    ['mooggy', 34, 0, 'claw_gauntlets'],
-    ['turtle_boy', 22, 0, 'extending_staff'],
+    ['princess', 34, 1, 'princess_wand'],
+    ['thorn_knight', 2, 0, 'thorns_bleed_blade'],
+    ['metao', 34, 3, 'metao_fire_staff'],
+    ['gelleh', 0, 1, 'gelleh_lightning_spear'],
+    ['mooggy', 8, 0, 'claw_gauntlets'],
+    ['turtle_boy', 0, 0, 'extending_staff'],
     ['sarge', 0, 0, 'sarges_hammer'],
   ])('%s resolves its own attack shape on the authority', (characterKey, healthAfterImmediate, projectileCount, attackKind) => {
     const { state, simulation, events } = combatHarness(characterKey);
@@ -88,7 +121,7 @@ describe('authoritative network combat system', () => {
     if (characterKey === 'mooggy') {
       simulation.updateGame({}, 0.05);
       simulation.updateGame({}, 0.05);
-      expect(enemy.health).toBe(8);
+      expect(enemy.health).toBe(0);
       expect(events).toContainEqual(expect.objectContaining({ eventType: 'PLAYER_ATTACK_FOLLOWUP' }));
     }
   });
@@ -136,17 +169,50 @@ describe('authoritative network combat system', () => {
     expect(isNetworkRoomLocked(first.state)).toBe(true);
   });
 
+  test('runs persistent shared encounter state in every occupied player room', () => {
+    const { state, simulation } = combatHarness('princess');
+    applyNetworkHeroProfile(state.players.p1, 'princess');
+    const secondRoom = state.floorState.layout.rooms.find(room => room.type === 'combat');
+    state.players.p2 = {
+      ...state.players.p1,
+      id: 'p2',
+      characterKey: 'sarge',
+      roomId: secondRoom.id,
+      x: 450,
+      y: 350,
+    };
+    applyNetworkHeroProfile(state.players.p2, 'sarge');
+
+    simulation.updateGame({}, 0.05);
+
+    const firstRoomId = state.players.p1.roomId;
+    expect(state.floorState.encounters[firstRoomId]).toEqual(expect.objectContaining({ status: 'active' }));
+    expect(state.floorState.encounters[secondRoom.id]).toEqual(expect.objectContaining({ status: 'active' }));
+    expect(new Set(Object.values(state.enemies).map(enemy => enemy.roomId))).toEqual(new Set([firstRoomId, secondRoom.id]));
+
+    state.floorState.encounters[secondRoom.id].status = 'cleared';
+    Object.keys(state.enemies).forEach(id => {
+      if (state.enemies[id].roomId === secondRoom.id) delete state.enemies[id];
+    });
+    state.players.p2.roomId = firstRoomId;
+    simulation.updateGame({}, 0.05);
+    state.players.p2.roomId = secondRoom.id;
+    simulation.updateGame({}, 0.05);
+    expect(state.floorState.encounters[secondRoom.id].status).toBe('cleared');
+    expect(Object.values(state.enemies).some(enemy => enemy.roomId === secondRoom.id)).toBe(false);
+  });
+
   test('owns projectile hits, death, room clear, a single drop, and pickup currency', () => {
     const { state, simulation, events } = combatHarness();
     simulation.updateGame({}, 0.05);
     const enemy = Object.values(state.enemies)[0];
     enemy.x = 500;
     enemy.y = 350;
-    enemy.moveSpeed = 0;
+    enemy.moveSpeed = 0.001;
 
     simulation.updateGame({ p1: { actions: [{ action: 'ATTACK', aimDirection: 0 }] } }, 0.05);
     for (let tick = 0; tick < getHeroPrimaryAttack('princess').cooldownTicks + 1; tick += 1) simulation.updateGame({}, 0.05);
-    expect(enemy.health).toBe(30);
+    expect(enemy.health).toBe(4);
 
     simulation.updateGame({ p1: { actions: [{ action: 'ATTACK', aimDirection: 0 }] } }, 0.05);
     for (let tick = 0; tick < 12; tick += 1) simulation.updateGame({}, 0.05);

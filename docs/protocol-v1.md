@@ -88,6 +88,16 @@ Representative input:
 }
 ```
 
+Equipped move slots use the same envelope and send the authored move ID, never a damage value:
+
+```js
+{ action: "ABILITY", abilityId: "blood_beam", inputSequence: 413, aimDirection: 1.82 }
+{ action: "ABILITY", abilityId: "crimson_smash", inputSequence: 414, aimDirection: 1.82 }
+{ action: "DASH", abilityId: "dash", inputSequence: 415, aimDirection: 1.82 }
+```
+
+The authority checks that `abilityId` belongs to the action's slot, is currently equipped by that player, is off cooldown, and is legal in the current status. Cooldown maps, charge/status timers, action kind/mode, barriers, resulting entities, and hit outcomes are authority state.
+
 ## Authority-to-client messages
 
 | Type | Reliability/channel | Payload purpose |
@@ -135,6 +145,8 @@ Initial shape (delta encoding may later use arrays/bitmasks without changing sem
 ```
 
 Static floor geometry is sent once in `INITIAL_STATE` or generated from the validated floor seed/version. It is not repeated in ordinary snapshots. A periodic reliable or recoverable full correction prevents permanent drift after lost unreliable snapshots.
+
+Player room location is dynamic entity state (`players[playerId].roomId`), not a party-global current room. `floorState.transitionsByPlayer[playerId]` records that player's latest authoritative doorway transition. Room-owned encounter/interactable/pickup state is keyed by room ID and persists while empty, allowing players to separate and later observe the same room outcome.
 
 ## Ordering, acknowledgement, and deduplication
 

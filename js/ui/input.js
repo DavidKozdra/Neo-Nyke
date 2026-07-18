@@ -1908,6 +1908,9 @@ export const ui = {
     multiplayerReady: document.getElementById('multiplayerReady'),
     multiplayerGameHud: document.getElementById('multiplayerGameHud'),
     multiplayerLeaveGame: document.getElementById('multiplayerLeaveGame'),
+    coopLobbyBar: document.getElementById('coopLobbyBar'),
+    coopLobbyRoomCode: document.getElementById('coopLobbyRoomCode'),
+    coopLobbySlots: document.getElementById('coopLobbySlots'),
     multiplayerBack: document.getElementById('multiplayerBack'),
     multiplayerBackButton: document.getElementById('multiplayerBackButton'),
     runHistoryBtn: document.getElementById('runHistoryBtn'),
@@ -2182,7 +2185,7 @@ export const MOVE_UPGRADEABLE_STATS = {
 export const WEAPON_BASE_STATS = globalThis.NeoNyke?.content?.WEAPON_BASE_STATS || {};
 
 // Base stat values per move
-export const MOVE_BASE_STATS = {
+export const MOVE_BASE_STATS = globalThis.NeoNyke?.content?.MOVE_BASE_STATS || {
     slash:            { damage: 32,  cooldown: 0.40, range: 90  },
     fire_balls:       { damage: 20,  cooldown: 0.75, range: 180 },
     smite:            { damage: 28,  cooldown: 0.55, range: 110 },
