@@ -8,6 +8,7 @@ function loadItemData() {
     .replace(/\bexport\s+/g, '');
   return new Function(
     'Neo',
+    'globalThis',
     `${dataSource}; return {
       ITEM_DEFS,
       ITEM_DROP_TABLE,
@@ -19,7 +20,7 @@ function loadItemData() {
     buildWeightTable(entries) {
       return entries;
     },
-  });
+  }, { NeoNyke: { content: require('../js/simulation/SharedItemContent') } });
 }
 
 describe('relic rarity distribution', () => {

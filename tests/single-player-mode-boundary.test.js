@@ -14,13 +14,14 @@ describe('single-player mode boundary', () => {
     expect(featureSource).toContain('multiplayer: false');
   });
 
-  test('selecting Single Player prepares OfflineGameSession before character selection', () => {
+  test('single player does not start or advance a second shadow authority', () => {
     const panelSource = read('js/ui/panels.js');
     const gameStateSource = read('js/core/game-state.js');
+    const updateSource = read('js/core/update.js');
 
-    expect(panelSource).toMatch(/onOpenCharacterSelect\(\)[\s\S]*?prepareSinglePlayerSession/);
-    expect(gameStateSource).toContain('new OfflineGameSession()');
-    expect(gameStateSource).toContain('await Neo.ensureSinglePlayerSession()');
+    expect(panelSource).not.toMatch(/onOpenCharacterSelect\(\)[\s\S]*?prepareSinglePlayerSession/);
+    expect(gameStateSource).not.toMatch(/offlineSession\?\.beginRun/);
+    expect(updateSource).not.toMatch(/gameSession\?\.advance/);
   });
 
   test('offline runtime has no WebSocket, Cloudflare, Steam, Electron, or DOM dependency', () => {

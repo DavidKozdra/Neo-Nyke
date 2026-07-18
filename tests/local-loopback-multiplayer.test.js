@@ -339,7 +339,7 @@ describe('protocol-driven local multiplayer session', () => {
     expect(clientB.state.abilityEntities).toEqual(authority.simulation.state.abilityEntities);
   });
 
-  test('routes chest interaction and relic selection through validated protocol messages', async () => {
+  test('routes the ordinary campaign chest and item pickup through authority state', async () => {
     const { clock, authority, clientA } = await createRunningHarness({
       unreliablePacketLoss: 0,
       duplicateMessageRate: 0,
@@ -348,11 +348,13 @@ describe('protocol-driven local multiplayer session', () => {
     const state = authority.simulation.state;
     const treasure = state.floorState.layout.rooms.find(room => room.type === 'treasure');
     const player = state.players[clientA.playerId];
+    const startingKnifeCount = Number(player.items?.neo_knife || 0);
     player.roomId = treasure.id;
     player.x = 450;
     player.y = 350;
     authority.step(1);
     const chest = Object.values(state.interactables).find(item => item.kind === 'relic_chest');
+    Object.assign(chest, { rewardType: 'item', rewardKey: 'neo_knife' });
     player.x = chest.x;
     player.y = chest.y;
 
@@ -361,15 +363,13 @@ describe('protocol-driven local multiplayer session', () => {
     authority.step(1);
     authority.sendFullCorrection();
     clock.runAll();
-    const optionId = state.players[clientA.playerId].pendingUpgrade.optionIds[0];
-    clientA.sendUpgrade(chest.id, optionId);
-    clock.runAll();
-    authority.step(1);
+    expect(chest.choiceType).toBe('');
+    expect(chest.opened).toBe(true);
     authority.sendFullCorrection();
     clock.runAll();
 
-    expect(state.players[clientA.playerId].items[optionId]).toBe(1);
-    expect(clientA.state.players[clientA.playerId].items[optionId]).toBe(1);
+    expect(state.players[clientA.playerId].items.neo_knife).toBe(startingKnifeCount + 1);
+    expect(clientA.state.players[clientA.playerId].items.neo_knife).toBe(startingKnifeCount + 1);
     expect(clientA.receivedTypes).toEqual(expect.arrayContaining(['GAMEPLAY_EVENT', 'WORLD_SNAPSHOT']));
   });
 

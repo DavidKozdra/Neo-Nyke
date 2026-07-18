@@ -4,6 +4,7 @@ const path = require('path');
 const root = path.join(__dirname, '..');
 const specialSource = fs.readFileSync(path.join(root, 'js/game/specialRooms.js'), 'utf8');
 const roomsSource = fs.readFileSync(path.join(root, 'js/game/rooms.js'), 'utf8');
+const floorGeneratorSource = fs.readFileSync(path.join(root, 'js/simulation/DeterministicFloorGenerator.js'), 'utf8');
 const worldSource = fs.readFileSync(path.join(root, 'js/game/world.js'), 'utf8');
 const combatSource = fs.readFileSync(path.join(root, 'js/game/combat.js'), 'utf8');
 const hudSource = fs.readFileSync(path.join(root, 'js/draw/hud.js'), 'utf8');
@@ -18,11 +19,13 @@ describe('special service rooms', () => {
   });
 
   test('reserves a rotating service during normal floor generation', () => {
-    const treasureAssignment = roomsSource.indexOf('pool[index].type = \'treasure\'');
-    const serviceAssignment = roomsSource.indexOf('Neo.assignSpecialServiceRoom?.(pool)');
-    const shopAssignment = roomsSource.indexOf("const shopCandidate = pool.find(room => room.type === 'combat')");
+    const treasureAssignment = floorGeneratorSource.indexOf("room.type = 'treasure'");
+    const serviceAssignment = floorGeneratorSource.indexOf('service.type = SPECIAL_ROOM_ORDER');
+    const shopAssignment = floorGeneratorSource.indexOf("const shop = candidates.find(room => room.type === 'combat')");
     expect(serviceAssignment).toBeGreaterThan(treasureAssignment);
     expect(serviceAssignment).toBeLessThan(shopAssignment);
+    expect(roomsSource).toContain('const floorGenerator = globalThis.NeoNyke?.simulation?.generateFloorLayout');
+    expect(roomsSource).not.toContain('const grid = Array.from({ length: 9 }');
   });
 
   test('service choices are pictured world stations and never walk-over loot', () => {

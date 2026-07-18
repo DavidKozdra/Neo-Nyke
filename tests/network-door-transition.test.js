@@ -2,15 +2,23 @@ const { GameState } = require('../js/simulation/GameState');
 const { GameSimulation } = require('../js/simulation/GameSimulation');
 const { createNetworkFloorState, createPlayerMovementSystem, TEST_ROOM, getCurrentNetworkRoom, getAdjacentNetworkRoom } = require('../js/multiplayer/LocalMultiplayerSession');
 
-// west door open on the start room (room-4-4 -> room-3-4 for this seed)
 function offsetTransitions(offsetFromCenter) {
   const floorState = createNetworkFloorState({ matchSeed:'s', floorSeed:'s|floor:1', floorNumber:1 });
   const startId = floorState.currentRoomId;
-  // Player near the west wall, offset vertically from door center by offsetFromCenter.
+  const room = floorState.layout.rooms.find(candidate => candidate.id === startId);
+  const direction = ['w', 'e', 'n', 's'].find(key => room.doors[key]);
+  const position = {
+    x: direction === 'w' ? 80 : direction === 'e' ? TEST_ROOM.width - 80 : TEST_ROOM.width / 2 + offsetFromCenter,
+    y: direction === 'n' ? 80 : direction === 's' ? TEST_ROOM.height - 80 : TEST_ROOM.height / 2 + offsetFromCenter,
+  };
+  const movement = {
+    moveX: direction === 'w' ? -1 : direction === 'e' ? 1 : 0,
+    moveY: direction === 'n' ? -1 : direction === 's' ? 1 : 0,
+  };
   const state = new GameState({ status:'running', floorState,
-    players: { p1: { id:'p1', roomId:startId, x: 80, y: TEST_ROOM.height/2 + offsetFromCenter, radius:18, moveSpeed:180 } } });
+    players: { p1: { id:'p1', roomId:startId, ...position, radius:18, moveSpeed:180 } } });
   const sim = new GameSimulation({ state, systems: [createPlayerMovementSystem(TEST_ROOM)] });
-  for (let i=0;i<120;i++){ sim.updateGame({ p1:{ moveX:-1, moveY:0, aimDirection:0 } }, 1/20); if (state.players.p1.roomId!==startId) return true; }
+  for (let i=0;i<120;i++){ sim.updateGame({ p1:{ ...movement, aimDirection:0 } }, 1/20); if (state.players.p1.roomId!==startId) return true; }
   return false;
 }
 

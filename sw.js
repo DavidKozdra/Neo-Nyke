@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'neonyke-v65';
+const CACHE_VERSION = 'neonyke-v71';
 const CACHE_META = 'neonyke-cache-meta';
 const CACHE_META_KEY = '/__neonyke_cache_meta__';
 const CACHE_REFRESH_INTERVAL_MS = 5 * 60 * 60 * 1000;
@@ -13,6 +13,8 @@ const PRECACHE = [
   '/js/simulation/SharedCombatContent.js',
   '/js/simulation/SharedMoveContent.js',
   '/js/simulation/SharedEnemyContent.js',
+  '/js/simulation/SharedItemContent.js',
+  '/js/simulation/SharedForgeSystem.js',
   '/js/simulation/GameState.js',
   '/js/simulation/GameSimulation.js',
   '/js/simulation/FixedTickRunner.js',
@@ -45,7 +47,7 @@ const PRECACHE = [
   '/assets/sounds/Player Death.wav',
   '/Koz_Engine_Lib/Core/koz-engine.global.js',
   '/assets/sprites/combatants.js',
-  '/assets/sprites/chars/Mateo.png',
+  '/assets/sprites/chars/Metao.png',
   '/assets/sprites/chars/princess.png',
   '/assets/sprites/environment.js',
   '/assets/sprites/icons.js',

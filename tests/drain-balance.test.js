@@ -1,5 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
+require('../js/simulation/SharedMoveContent');
 
 function extractFunction(source, functionName) {
   const start = source.indexOf(`function ${functionName}`);

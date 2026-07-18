@@ -1,6 +1,6 @@
 (function initializeNetworkCombatSystem(root, factory) {
   const contentApi = typeof require === 'function'
-    ? { ...require('./SharedCombatContent.js'), ...require('./SharedMoveContent.js'), ...require('./SharedEnemyContent.js') }
+    ? { ...require('./SharedCombatContent.js'), ...require('./SharedMoveContent.js'), ...require('./SharedEnemyContent.js'), ...require('./SharedItemContent.js'), ...require('./SharedForgeSystem.js') }
     : (root.NeoNyke?.content || {});
   const floorApi = typeof require === 'function' ? require('./DeterministicFloorGenerator.js') : (root.NeoNyke?.simulation || {});
   const api = factory(root.NeoNyke?.simulation || {}, contentApi, floorApi);
@@ -42,12 +42,17 @@
     MOVE_PRESENTATION_DEFS = {},
     MOVE_SLOT_BY_KEY = {},
     getDefaultMoveLoadout = () => ({ melee: 'slash', laser: 'blood_beam', smash: 'crimson_smash', dash: 'dash' }),
+    createPowerDiskBurstDescriptors = () => [],
     ENEMY_CATALOG = {},
     STANDARD_ENEMY_TYPES = [],
     BOSS_ENEMY_TYPES = [],
     ELITE_POWER_TYPES = [],
     getEnemyDefinition = type => ENEMY_CATALOG[type],
     getCharacterDefaultWeapon = characterKey => CHARACTER_DEFAULT_WEAPONS[characterKey] || 'thorns_bleed_blade',
+    createCampaignItemChoices = () => [],
+    createTreasureChestPlan = () => [],
+    ITEM_DROP_ENTRIES = [],
+    applyForgeCommand = () => ({ ok: false, reason: 'FORGE_UNAVAILABLE' }),
   } = contentApi || {};
   const HERO_PRIMARY_ATTACKS = Object.freeze(Object.fromEntries(
     Object.entries(CHARACTER_DEFAULT_WEAPONS).map(([characterKey, weaponKey]) => [characterKey, Object.freeze({
@@ -73,35 +78,34 @@
     turtle_boy: Object.freeze({ maxHealth: 144, moveSpeed: 180, damageMultiplier: 1 }),
     sarge: Object.freeze({ maxHealth: 108, moveSpeed: 180, damageMultiplier: 1.05 }),
   });
-  // Real campaign items from ITEM_DEFS. Multiplayer must never invent a second
-  // reward catalog. These headless records contain only authority-relevant
-  // facts; the browser resolves names, descriptions, rarity and icons through
-  // its normal itemRegistry using the same keys.
-  const CAMPAIGN_CHEST_ITEMS = Object.freeze({
-    titan_heart: Object.freeze({ maxHealthMultiplier: 0.08 }),
-    attack_servo: Object.freeze({ attackSpeedMultiplier: 0.08 }),
-    turtle_shell: Object.freeze({ moveSpeedMultiplier: 0.05 }),
-  });
-
   function getHeroPrimaryAttack(characterKey) {
     return HERO_PRIMARY_ATTACKS[characterKey] || HERO_PRIMARY_ATTACKS.thorn_knight;
   }
 
-  function applyCampaignItem(player, itemKey) {
-    const item = CAMPAIGN_CHEST_ITEMS[itemKey];
-    if (!player || !item) return false;
+  function applyForgeStats(player, itemType, itemKey, baseStats) {
+    const result = { ...(baseStats || {}) };
+    const upgrades = player?.anvilUpgrades?.[itemType]?.[itemKey] || {};
+    const schema = itemType === 'weapon'
+      ? contentApi.WEAPON_UPGRADEABLE_STATS || {}
+      : contentApi.MOVE_UPGRADEABLE_STATS || {};
+    Object.entries(upgrades).forEach(([statKey, count]) => {
+      if (!(statKey in result) || !schema[statKey]) return;
+      result[statKey] = Number(result[statKey]) + Math.max(0, Math.floor(Number(count) || 0)) * Number(schema[statKey].step);
+      if (statKey === 'cooldown') result[statKey] = Math.max(Number(baseStats[statKey]) * 0.5, result[statKey]);
+    });
+    return result;
+  }
+
+  function collectCampaignItem(player, itemKey) {
+    if (!player || !itemKey) return false;
     player.items = player.items || {};
     player.items[itemKey] = Number(player.items[itemKey] || 0) + 1;
-    if (item.maxHealthMultiplier) {
-      const increase = Math.max(1, Math.round(Number(player.maxHealth || 100) * item.maxHealthMultiplier));
-      player.maxHealth = Math.max(1, Number(player.maxHealth || 100) + increase);
-      player.health = Math.min(player.maxHealth, Number(player.health || 0) + increase);
-    }
-    if (item.attackSpeedMultiplier) {
-      player.cooldownMultiplier = Math.max(0.45, Number(player.cooldownMultiplier || 1) / (1 + item.attackSpeedMultiplier));
-    }
-    if (item.moveSpeedMultiplier) {
-      player.moveSpeed = Math.max(1, Number(player.moveSpeed || 180) * (1 + item.moveSpeedMultiplier));
+    // Match collectItem's immediate Titan Heart pickup hook. Other campaign
+    // relic effects are derived from player.items by shared combat/stat rules,
+    // not by a network-only acquisition switch.
+    if (itemKey === 'titan_heart') {
+      player.maxHealth = Math.max(120, Math.round(Number(player.maxHealth || 100) * 1.08));
+      player.health = Math.min(player.maxHealth, Math.round(Number(player.health || 0) * 1.08));
     }
     return true;
   }
@@ -247,20 +251,21 @@
     const existingReward = state.floorState.rewards[room.id];
     if (existingReward) return state.interactables?.[existingReward.interactableIds?.[0]] || null;
     const stream = random.scoped(`loot:${state.floorNumber}:${room.id}`);
-    const chestCount = 1 + stream.int(0, 1);
     const interactableIds = [];
-    for (let index = 0; index < chestCount; index += 1) {
+    const chestPlan = createTreasureChestPlan({
+      random: stream,
+      floorNumber: state.floorNumber,
+      geometry: state.floorState,
+      itemChance: 0.9,
+    });
+    chestPlan.forEach(plannedChest => {
       const interactableId = state.allocateEntityId('interactable');
-      const spread = chestCount === 1 ? 0 : (index === 0 ? -105 : 105);
-      const optionIds = stream.shuffle(Object.keys(CAMPAIGN_CHEST_ITEMS)).slice(0, 2);
       const chest = {
+        ...plannedChest,
         id: interactableId,
         kind: 'relic_chest',
         roomId: room.id,
-        x: Number(state.floorState.width || 900) / 2 + spread,
-        y: Number(state.floorState.height || 700) / 2 + (index % 2 === 0 ? -28 : 28),
         radius: 34,
-        optionIds,
         opened: false,
         claimedBy: null,
         spawnTick: state.tick,
@@ -268,9 +273,104 @@
       state.interactables[interactableId] = chest;
       interactableIds.push(interactableId);
       emitEvent('INTERACTABLE_SPAWNED', { interactableId, kind: chest.kind, roomId: room.id });
-    }
+    });
     state.floorState.rewards[room.id] = { interactableIds, status: 'available' };
     return state.interactables[interactableIds[0]];
+  }
+
+  function scaleCampaignShopPrice(state, player, baseCost) {
+    const depth = Math.max(1, Number(state.floorNumber || 1));
+    const progression = 1 + Math.max(0, depth - 1) * 0.03 + Math.max(0, Number(state.elapsedSeconds || 0)) / 60 * 0.02;
+    const xpProgress = Number(player?.items?.scholar_seal || 0) > 0
+      ? Math.max(0, Math.min(1, Number(player.xp || 0) / Math.max(1, Number(player.xpToNext || 1))))
+      : 0;
+    return Math.max(1, Math.round(Number(baseCost || 0) * progression * (1 - xpProgress * 0.1)));
+  }
+
+  function campaignShopItemCost(state, player, itemIndex, itemKey) {
+    const rarity = String(ITEM_DROP_ENTRIES.find(([key]) => key === itemKey)?.[2] || 'knight');
+    const rarityMultiplier = rarity === 'god' ? 4.75 : rarity === 'wizard' ? 2.15 : 1;
+    return scaleCampaignShopPrice(state, player, (32 + Number(state.floorNumber || 1) * 4 + itemIndex * 6) * rarityMultiplier);
+  }
+
+  function ensureCampaignShop(state, random, emitEvent = () => {}, roomId = null) {
+    const room = currentRoom(state, roomId);
+    if (!room || room.type !== 'shop') return null;
+    if (Array.isArray(room.shopOffers) && room.shopOffers.length) return room.shopOffers;
+    const stream = random.scoped(`shop-inventory:${state.floorNumber}:${room.id}`);
+    const itemKeys = createCampaignItemChoices(3, stream);
+    if (stream.next() < 0.5 && !itemKeys.some(key => ITEM_DROP_ENTRIES.find(entry => entry[0] === key)?.[2] === 'god')) {
+      const godKeys = ITEM_DROP_ENTRIES.filter(([, weight, rarity]) => weight > 0 && rarity === 'god').map(([key]) => key);
+      if (godKeys.length && itemKeys.length) itemKeys[itemKeys.length - 1] = godKeys[stream.int(0, godKeys.length - 1)];
+    }
+    room.shopOffers = itemKeys.map((key, index) => ({
+      id: `shop:${room.id}:item:${index}`,
+      type: 'item',
+      key,
+      cost: campaignShopItemCost(state, null, index, key),
+      x: Number(state.floorState.width || 900) / 2 + (index - (itemKeys.length - 1) / 2) * 150,
+      y: Number(state.floorState.height || 700) / 2 - 16,
+      bought: false,
+    }));
+    room.shopOffers.push({
+      id: `shop:${room.id}:potion`, type: 'potion',
+      cost: scaleCampaignShopPrice(state, null, 18 + Number(state.floorNumber || 1) * 2),
+      x: Number(state.floorState.width || 900) / 2,
+      y: Number(state.floorState.height || 700) / 2 + 88,
+      bought: false,
+    });
+    emitEvent('SHOP_STOCKED', { roomId: room.id, offerCount: room.shopOffers.length });
+    return room.shopOffers;
+  }
+
+  function resolveShopPurchase(state, player, action, emitEvent) {
+    const room = currentRoom(state, player.roomId);
+    if (!room || room.type !== 'shop') return false;
+    if (action.kind === 'item') {
+      const itemOffers = (room.shopOffers || []).filter(offer => offer.type === 'item');
+      const offer = itemOffers[Math.max(0, Math.trunc(Number(action.offerIndex) || 0))];
+      if (!offer || offer.bought) return false;
+      const cost = campaignShopItemCost(state, player, itemOffers.indexOf(offer), offer.key);
+      if (Number(player.coins || 0) < cost) return false;
+      player.coins -= cost;
+      offer.cost = cost;
+      offer.bought = true;
+      collectCampaignItem(player, offer.key);
+      emitEvent('SHOP_PURCHASED', { playerId: player.id, roomId: room.id, kind: 'item', itemKey: offer.key, cost });
+      return true;
+    }
+    if (action.kind === 'heal') {
+      const major = action.healKind === 'major';
+      if (Number(player.health || 0) >= Number(player.maxHealth || 1)) return false;
+      const cost = scaleCampaignShopPrice(state, player, (major ? 34 : 16) + Number(state.floorNumber || 1) * (major ? 4 : 2));
+      if (Number(player.coins || 0) < cost) return false;
+      player.coins -= cost;
+      const amount = major ? 100 : 45;
+      player.health = Math.min(Number(player.maxHealth || 100), Number(player.health || 0) + amount);
+      emitEvent('SHOP_PURCHASED', { playerId: player.id, roomId: room.id, kind: 'heal', healKind: action.healKind, cost });
+      return true;
+    }
+    return false;
+  }
+
+  function resolveForgeCommand(state, player, action, emitEvent) {
+    const room = currentRoom(state, player?.roomId);
+    if (!room || room.type !== 'anvil' || player?.downed) return false;
+    const result = applyForgeCommand(player, action, { WEAPON_BASE_STATS, MOVE_BASE_STATS });
+    if (!result.ok) {
+      emitEvent('GAME_COMMAND_REJECTED', { playerId: player.id, command: 'FORGE_COMMIT', reason: result.reason });
+      return false;
+    }
+    emitEvent('FORGE_COMMITTED', {
+      playerId: player.id,
+      roomId: room.id,
+      currency: result.currency,
+      xp: result.xp,
+      gold: result.gold,
+      stagedSteps: result.stagedSteps,
+      voucherSteps: result.voucherSteps,
+    });
+    return true;
   }
 
   function nearestLivingPlayer(state, enemy) {
@@ -421,9 +521,9 @@
       kind: definition.projectileKind || definition.kind,
       ownerId: player.id,
       hostile: false,
-      roomId: player.roomId,
-      x: Number(player.x) + Math.cos(angle) * muzzleDistance,
-      y: Number(player.y) + Math.sin(angle) * muzzleDistance,
+      roomId: definition.roomId || player.roomId,
+      x: Number.isFinite(Number(definition.originX)) ? Number(definition.originX) : Number(player.x) + Math.cos(angle) * muzzleDistance,
+      y: Number.isFinite(Number(definition.originY)) ? Number(definition.originY) : Number(player.y) + Math.sin(angle) * muzzleDistance,
       vx: Math.cos(angle) * Number(definition.speed || PROJECTILE_SPEED),
       vy: Math.sin(angle) * Number(definition.speed || PROJECTILE_SPEED),
       radius: Number(definition.radius || 8),
@@ -438,6 +538,11 @@
       splashDamage: Number(definition.splashDamage || 0),
       fireStacks: Number(definition.fireStacks || 0),
       fireDuration: Number(definition.fireDuration || 0),
+      hitOptions: definition.hitOptions ? { ...definition.hitOptions } : null,
+      subSpawn: definition.subSpawn ? {
+        ...definition.subSpawn,
+        nextSpawnTick: state.tick + Math.max(1, Number(definition.subSpawn.intervalSeconds || 0.2) * 20),
+      } : null,
     };
     state.projectiles[projectileId] = projectile;
     return projectile;
@@ -674,7 +779,13 @@
     if (state.tick < Number(player.attackCooldownUntilTick || 0) || player.downed) return null;
     const angle = Number(action.aimDirection);
     if (!Number.isFinite(angle)) return null;
-    const definition = getHeroPrimaryAttack(player.characterKey);
+    const authoredDefinition = getHeroPrimaryAttack(player.characterKey);
+    const upgradedStats = applyForgeStats(player, 'weapon', authoredDefinition.weaponKey, WEAPON_BASE_STATS[authoredDefinition.weaponKey]);
+    const definition = {
+      ...authoredDefinition,
+      ...upgradedStats,
+      cooldownTicks: Math.max(1, Math.ceil(Number(upgradedStats.cooldown || 0.5) * 20)),
+    };
     const projectileIds = [];
     let targetIds = [];
     let segments = [];
@@ -799,7 +910,7 @@
     if (!slot || slot === 'melee' || player.equippedMoves?.[slot] !== moveKey) return null;
     const expectedAction = slot === 'dash' ? 'DASH' : 'ABILITY';
     if (action.action !== expectedAction) return null;
-    const stats = MOVE_BASE_STATS[moveKey] || {};
+    const stats = applyForgeStats(player, 'move', moveKey, MOVE_BASE_STATS[moveKey] || {});
     const presentation = MOVE_PRESENTATION_DEFS[moveKey] || { kind: slot, style: 'normal' };
     const cooldowns = player.moveCooldownUntilTick || (player.moveCooldownUntilTick = {});
     if (state.tick < Number(cooldowns[moveKey] || 0)) return null;
@@ -854,20 +965,36 @@
         abilityEntityIds.push(...spawnPersistentMoveEntities(state, player, moveKey, stats, angle).map(entity => entity.id));
         mode = 'summon';
       } else if (projectileMoves.has(moveKey)) {
-        const count = moveKey === 'power_disks' ? 6 : moveKey === 'nail_shot' ? 8 : moveKey === 'lightning_columns' ? 2 : 1;
-        for (let index = 0; index < count; index += 1) {
-          const spread = count > 1 ? (index - (count - 1) / 2) * (moveKey === 'nail_shot' ? Math.PI * 2 / count : 0.14) : 0;
-          projectileIds.push(createPlayerProjectile(state, player, {
-            kind: moveKey,
-            attackKind: moveKey,
-            damage: Number(stats.damage || 20),
-            speed: moveKey === 'ghost_ball' ? 300 : 520,
-            radius: moveKey === 'love_bomb_laser' ? 14 : 7,
-            lifeTicks: Math.max(12, Math.round(Number(stats.range || 320) / 18)),
-            pierce: moveKey === 'ghost_ball' ? 8 : 0,
-            splash: moveKey === 'love_bomb_laser' ? 105 : 0,
-            splashDamage: Number(stats.damage || 20),
-          }, angle + spread).id);
+        if (moveKey === 'power_disks') {
+          createPowerDiskBurstDescriptors({ characterKey: player.characterKey || player.character }).forEach(disk => {
+            projectileIds.push(createPlayerProjectile(state, player, {
+              kind: disk.kind,
+              attackKind: moveKey,
+              damage: disk.damage,
+              speed: disk.speed,
+              radius: disk.radius,
+              lifeTicks: Math.ceil(disk.lifeSeconds * 20),
+              spawnDistance: 0,
+              hitOptions: disk.hitOptions,
+              subSpawn: disk.subSpawn,
+            }, disk.angle).id);
+          });
+        } else {
+          const count = moveKey === 'nail_shot' ? 8 : 1;
+          for (let index = 0; index < count; index += 1) {
+            const spread = count > 1 ? (index - (count - 1) / 2) * (moveKey === 'nail_shot' ? Math.PI * 2 / count : 0.14) : 0;
+            projectileIds.push(createPlayerProjectile(state, player, {
+              kind: moveKey,
+              attackKind: moveKey,
+              damage: Number(stats.damage || 20),
+              speed: moveKey === 'ghost_ball' ? 300 : 520,
+              radius: moveKey === 'love_bomb_laser' ? 14 : 7,
+              lifeTicks: Math.max(12, Math.round(Number(stats.range || 320) / 18)),
+              pierce: moveKey === 'ghost_ball' ? 8 : 0,
+              splash: moveKey === 'love_bomb_laser' ? 105 : 0,
+              splashDamage: Number(stats.damage || 20),
+            }, angle + spread).id);
+          }
         }
         mode = 'projectile';
       } else if (moveKey === 'lightning_cross') {
@@ -1003,18 +1130,48 @@
     if (!target || target.opened || target.activated || target.roomId !== player.roomId) return false;
     if (Math.hypot(Number(target.x) - Number(player.x), Number(target.y) - Number(player.y))
       > Number(target.radius || 30) + Number(player.radius || 18) + 38) return false;
-    if (target.kind !== 'relic_chest' || !Array.isArray(target.optionIds) || !target.optionIds.length) return false;
-    player.pendingUpgrade = {
-      selectionEventId: target.id,
-      sourceEntityId: target.id,
-      optionIds: target.optionIds.slice(),
-      options: target.optionIds.map(optionId => ({ id: optionId })),
-    };
+    if (target.kind !== 'relic_chest') return false;
     target.activated = true;
     target.offeredTo = player.id;
     target.activatedTick = state.tick;
     emitEvent('CHEST_OPENED', { playerId: player.id, interactableId: target.id, roomId: target.roomId });
-    emitEvent('UPGRADE_OFFERED', { playerId: player.id, selectionEventId: target.id, optionIds: target.optionIds });
+    if (target.choiceType !== 'ab') {
+      target.opened = true;
+      target.claimedBy = player.id;
+      const pickupId = state.allocateEntityId('pickup');
+      state.pickups[pickupId] = {
+        id: pickupId,
+        type: target.rewardType === 'potion' ? 'potion' : 'item',
+        key: target.rewardKey || '',
+        roomId: target.roomId,
+        x: Number(target.x),
+        y: Number(target.y) - 20,
+        radius: 13,
+        amount: 1,
+        spawnTick: state.tick,
+      };
+      const coinId = state.allocateEntityId('pickup');
+      state.pickups[coinId] = {
+        id: coinId, type: 'coin', roomId: target.roomId,
+        x: Number(target.x), y: Number(target.y), radius: 13,
+        amount: 12 + Number(state.floorNumber || 1) * 2, spawnTick: state.tick,
+      };
+      const rewardState = state.floorState.rewards?.[target.roomId];
+      if (rewardState) {
+        rewardState.claimedIds = [...new Set([...(rewardState.claimedIds || []), target.id])];
+        rewardState.status = (rewardState.interactableIds || []).every(id => state.interactables[id]?.opened) ? 'claimed' : 'available';
+      }
+      return true;
+    }
+    const optionIds = Array.isArray(target.rewardChoices) ? target.rewardChoices : [];
+    if (!optionIds.length) return false;
+    player.pendingUpgrade = {
+      selectionEventId: target.id,
+      sourceEntityId: target.id,
+      optionIds: optionIds.slice(),
+      options: optionIds.map(optionId => ({ id: optionId })),
+    };
+    emitEvent('UPGRADE_OFFERED', { playerId: player.id, selectionEventId: target.id, optionIds });
     return true;
   }
 
@@ -1036,7 +1193,7 @@
       player.pendingUpgrade = null;
       return false;
     }
-    if (!applyCampaignItem(player, action.optionId)) return false;
+    if (!collectCampaignItem(player, action.optionId)) return false;
     source.opened = true;
     source.claimedBy = player.id;
     source.openedTick = state.tick;
@@ -1083,6 +1240,10 @@
         .forEach(action => resolvePlayerInteraction(state, player, action, emitEvent));
       actions.filter(action => action?.action === 'UPGRADE')
         .forEach(action => resolveUpgradeSelection(state, player, action, emitEvent));
+      actions.filter(action => action?.action === 'SHOP_PURCHASE')
+        .forEach(action => resolveShopPurchase(state, player, action, emitEvent));
+      actions.filter(action => action?.action === 'FORGE_COMMIT')
+        .forEach(action => resolveForgeCommand(state, player, action, emitEvent));
       if (player.action !== 'idle' && state.tick - Number(player.actionTick || 0) > 4) player.action = 'idle';
     });
   }
@@ -1344,7 +1505,36 @@
     emitEvent('ROOM_CLEARED', { roomId });
   }
 
-  function updateProjectiles(state, fixedDelta, emitEvent) {
+  function emitProjectileSubSpawn(state, projectile, random) {
+    const config = projectile.subSpawn;
+    if (!config || state.tick < Number(config.nextSpawnTick || 0)) return;
+    const intervalTicks = Math.max(1, Number(config.intervalSeconds || 0.2) * 20);
+    config.nextSpawnTick += intervalTicks;
+    const owner = state.players?.[projectile.ownerId];
+    if (!owner) return;
+    const travel = Math.atan2(Number(projectile.vy || 0), Number(projectile.vx || 1));
+    const count = Math.max(1, Number(config.count || 2));
+    for (let index = 0; index < count; index += 1) {
+      const side = index % 2 === 0 ? 1 : -1;
+      const jitter = ((typeof random === 'function' ? random() : 0.5) - 0.5) * Number(config.jitterRadians || 0);
+      const angle = travel + side * (Math.PI / 2) + jitter;
+      createPlayerProjectile(state, owner, {
+        kind: config.kind || projectile.kind,
+        attackKind: projectile.attackKind,
+        damage: Number(config.damage || Math.round(Number(projectile.damage || 0) / 2)),
+        speed: Number(config.speed || 480),
+        radius: Number(config.radius || 4),
+        lifeTicks: Math.ceil(Number(config.lifeSeconds || 0.7) * 20),
+        spawnDistance: 0,
+        originX: projectile.x,
+        originY: projectile.y,
+        roomId: projectile.roomId,
+        hitOptions: config.hitOptions,
+      }, angle);
+    }
+  }
+
+  function updateProjectiles(state, fixedDelta, emitEvent, random) {
     Object.entries(state.projectiles || {}).forEach(([projectileId, projectile]) => {
       if (state.tick >= Number(projectile.expiresTick || 0)) {
         delete state.projectiles[projectileId];
@@ -1352,6 +1542,7 @@
       }
       projectile.x += Number(projectile.vx || 0) * fixedDelta;
       projectile.y += Number(projectile.vy || 0) * fixedDelta;
+      emitProjectileSubSpawn(state, projectile, random);
       const wall = Number(state.floorState?.wallThickness || 28);
       if (projectile.x < wall || projectile.x > Number(state.floorState?.width || 900) - wall
         || projectile.y < wall || projectile.y > Number(state.floorState?.height || 700) - wall) {
@@ -1404,6 +1595,15 @@
         });
       } else if (Number(projectile.fireStacks || 0) > 0) {
         applyFireStatus(state, enemy, projectile.fireStacks, projectile.fireDuration, projectile.ownerId);
+      } else if (Number(projectile.hitOptions?.fireChance || 0) > 0
+        && (typeof random === 'function' ? random() : 0.5) < Number(projectile.hitOptions.fireChance)) {
+        applyFireStatus(
+          state,
+          enemy,
+          Number(projectile.hitOptions.fireStacks || 1),
+          Number(projectile.hitOptions.fireDuration || 3),
+          projectile.ownerId,
+        );
       }
       if (Number(projectile.remainingPierces || 0) > 0) {
         projectile.remainingPierces -= 1;
@@ -1422,15 +1622,23 @@
             <= Number(candidate.radius || 18) + Number(pickup.radius || 13) + 5 + Number(candidate.pickupRadius || 0)
       ));
       if (!player) return;
-      const amount = Math.max(0, Number(pickup.amount || 0)) + Math.max(0, Number(player.goldBonus || 0));
-      player.gold = Math.max(0, Number(player.gold || 0)) + amount;
+      let amount = Math.max(0, Number(pickup.amount || 0));
+      if (pickup.type === 'coin') {
+        amount += Math.max(0, Number(player.goldBonus || 0));
+        player.coins = Math.max(0, Number(player.coins || 0)) + amount;
+      } else if (pickup.type === 'item') {
+        collectCampaignItem(player, pickup.key);
+      } else if (pickup.type === 'potion') {
+        player.health = Math.min(Number(player.maxHealth || 100), Number(player.health || 0) + 40);
+      }
       delete state.pickups[pickupId];
       emitEvent('PICKUP_COLLECTED', {
         pickupId,
         playerId: player.id,
         pickupType: pickup.type,
         amount,
-        gold: player.gold,
+        gold: player.coins,
+        itemKey: pickup.key || '',
       });
     });
   }
@@ -1664,12 +1872,13 @@
       occupiedRoomIds.forEach(roomId => {
         ensureNetworkEncounter(state, random, emitEvent, roomId);
         ensureNetworkRoomReward(state, random, emitEvent, roomId);
+        ensureCampaignShop(state, random, emitEvent, roomId);
       });
       updateChestProximity(state, emitEvent);
       updatePlayerActions(state, inputs, emitEvent, random);
       updateAbilityEntities(state, emitEvent, random);
       updateEnemies(state, fixedDelta, emitEvent);
-      updateProjectiles(state, fixedDelta, emitEvent);
+      updateProjectiles(state, fixedDelta, emitEvent, random);
       updatePickups(state, emitEvent);
     };
   }
@@ -1683,13 +1892,13 @@
     PROJECTILE_SPEED,
     HERO_PRIMARY_ATTACKS,
     HERO_BASE_STATS,
-    CAMPAIGN_CHEST_ITEMS,
     ENEMY_ARCHETYPES,
     getHeroPrimaryAttack,
     applyNetworkHeroProfile,
-    applyCampaignItem,
+    collectCampaignItem,
     ensureNetworkEncounter,
     ensureNetworkRoomReward,
+    ensureCampaignShop,
     isNetworkRoomLocked,
     livingEncounterEnemies,
     resolvePlayerAbility,

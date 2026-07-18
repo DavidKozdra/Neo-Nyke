@@ -1517,8 +1517,8 @@ export const ITEM_KEYS = Object.keys(ITEM_DEFS);
 // canonical list is SCROLL_KEYS (derived from SCROLL_DEFS).
 export const SCROLL_OF_CONTROL_KEYS = SCROLL_KEYS;
 export const LEGACY_VOUCHER_KEY = 'voucher';
-export const FORGE_VOUCHER_KEY = 'forge_voucher';
-export const FORGE_VOUCHER_UPGRADE_STEPS = 5;
+export const FORGE_VOUCHER_KEY = globalThis.NeoNyke?.simulation?.FORGE_VOUCHER_KEY || 'forge_voucher';
+export const FORGE_VOUCHER_UPGRADE_STEPS = globalThis.NeoNyke?.simulation?.FORGE_VOUCHER_UPGRADE_STEPS || 5;
 export const VOUCHER_TYPES = [
   { id: 'white', key: 'voucher_white', label: 'White', classLabel: 'Knight', rarity: 'knight', color: '#f4f6fb' },
   { id: 'purple', key: 'voucher_purple', label: 'Purple', classLabel: 'Wizard', rarity: 'wizard', color: '#b77dff' },
@@ -1533,68 +1533,9 @@ export const SANDBOX_ENEMY_TYPES = [
     'golem', 'cult_mage', 'cult_follower', 'summoner', 'shield_unit', 'healer', 'boss_spawner',
     'queen_cult', 'bulk_golem', 'artificer_knave', 'antony_blemmye', 'handsome_devil', 'god', 'mirror_knight', 'mooggy',
   ];
-export const ITEM_DROP_WEIGHTS = [
-    ['neo_knife', 60],
-  ['tooth_of_thorn', 24],
-    ['tough_bandaid', 22],
-    ['orb_of_blood', 28],
-    ['hemes_scarf', 12],
-    ['insurance', 18],
-    ['gold_vac', 12],
-    ['copycat_charm', 12],
-    ['crit_charm', 24],
-    ['attack_servo', 22],
-  ['enemy_magnet', 28],
-    ['keen_eye', 20],
-    ['chrono_spring', 20],
-    ['scholar_seal', 18],
-    ['scholar_cap', 12],
-    ['push_man', 18],
-    ['titan_heart', 18],
-    ['charged_adapter', 18],
-    ['pew_pew_box', 18],
-    ['skizzard_tail', 12],
-    ['zap_to_extreme', 10],
-    ['panic_button', 10],
-    ['mid_sweepy_box', 12],
-    ['churu_stick', 10],
-    ['explosive_jelly', 12],
-    ['dragon_orb', 14],
-    ['ricocete', 20],
-    ['drink_master', 14],
-    ['turtle_shell', 24],
-    ['anchor_charm', 18],
-    ['iron_lung', 10],
-    ['iron_helm', 6],
-    ['oracles_lens', 8],
-    ['homing_missile', 10],
-    ['wizards_paw', 6],
-    ['jesters_dice', 4],
-    ['shield_of_aegis', 4],
-    ['pendant_of_kronos', 5],
-    ['robot_arm', 3],
-    ['rich_mans_luck', 5],
-    ['princes_glasses', 14],
-    ['procy_pickle', 5],
-    ['veggys_pendant', 0],
-    ['mateos_bag', 10],
-    ['extra_battery', 10],
-    ['mooggy_zoomies', 14],
-    ['el_bartos_cape', 6],
-    ['voucher_white', 5],
-    ['voucher_purple', 2],
-    ['voucher_yellow', 1],
-  ];
-export const ITEM_RARITY_DROP_WEIGHTS = {
-  knight: 80,
-  wizard: 15,
-  god: 5,
-};
-export const ELITE_ITEM_RARITY_DROP_WEIGHTS = {
-  knight: 65,
-  wizard: 25,
-  god: 10,
-};
+export const ITEM_DROP_WEIGHTS = globalThis.NeoNyke?.content?.ITEM_DROP_WEIGHTS || [];
+export const ITEM_RARITY_DROP_WEIGHTS = globalThis.NeoNyke?.content?.ITEM_RARITY_DROP_WEIGHTS || {};
+export const ELITE_ITEM_RARITY_DROP_WEIGHTS = globalThis.NeoNyke?.content?.ELITE_ITEM_RARITY_DROP_WEIGHTS || {};
 
 function buildTierNormalizedDropWeights(entries, rarityWeights) {
   const tierTotals = {};
@@ -2172,19 +2113,34 @@ export const AB_CHEST_DWELL_RADIUS = 44;
 export const REPLAY_TUTORIAL_KEY = 'neonyke:replayTutorialNextRun';
 
 // Upgradeable stat schemas for the anvil panel
-export const WEAPON_UPGRADEABLE_STATS = {
+const SHARED_WEAPON_UPGRADEABLE_STATS = globalThis.NeoNyke?.content?.WEAPON_UPGRADEABLE_STATS || {};
+const SHARED_MOVE_UPGRADEABLE_STATS = globalThis.NeoNyke?.content?.MOVE_UPGRADEABLE_STATS || {};
+export const WEAPON_UPGRADEABLE_STATS = Object.fromEntries(Object.entries(SHARED_WEAPON_UPGRADEABLE_STATS).map(([key, value]) => [key, {
+    ...value,
+    label: { damage: 'Damage', cooldown: 'Cooldown (s)', range: 'Range', knockback: 'Knockback' }[key],
+    format: key === 'cooldown' ? v => v.toFixed(2) + 's' : v => Math.round(v),
+  }]));
+/* legacy fallback for isolated preview/test loading */
+if (!Object.keys(WEAPON_UPGRADEABLE_STATS).length) Object.assign(WEAPON_UPGRADEABLE_STATS, {
     damage:    { label: 'Damage',       step: 5,     min: 5,    max: 9999, xpPerStep: 15, goldPerStep: 45, format: v => Math.round(v) },
     cooldown:  { label: 'Cooldown (s)', step: -0.05, min: 0.05, max: 9999, xpPerStep: 20, goldPerStep: 60, format: v => v.toFixed(2) + 's' },
     range:     { label: 'Range',        step: 10,    min: 10,   max: 9999, xpPerStep: 13, goldPerStep: 39, format: v => Math.round(v) },
     knockback: { label: 'Knockback',    step: 30,    min: 0,    max: 9999, xpPerStep: 10, goldPerStep: 30, format: v => Math.round(v) },
-  };
-export const MOVE_UPGRADEABLE_STATS = {
+  });
+export const MOVE_UPGRADEABLE_STATS = Object.fromEntries(Object.entries(SHARED_MOVE_UPGRADEABLE_STATS).map(([key, value]) => [key, {
+    ...value,
+    label: { damage: 'Damage', cooldown: 'Cooldown (s)', duration: 'Duration (s)', range: 'Range / AOE', critChance: 'Crit Chance' }[key],
+    format: key === 'cooldown' ? v => v.toFixed(2) + 's'
+      : key === 'duration' ? v => v.toFixed(1) + 's'
+        : key === 'critChance' ? v => Math.round(v * 100) + '%' : v => Math.round(v),
+  }]));
+if (!Object.keys(MOVE_UPGRADEABLE_STATS).length) Object.assign(MOVE_UPGRADEABLE_STATS, {
     damage:    { label: 'Damage',       step: 5,    min: 5,   max: 9999, xpPerStep: 15, goldPerStep: 45, format: v => Math.round(v) },
     cooldown:  { label: 'Cooldown (s)', step: -0.05,min: 0.05,max: 9999, xpPerStep: 20, goldPerStep: 60, format: v => v.toFixed(2) + 's' },
     duration:  { label: 'Duration (s)', step: 0.1,  min: 0.1, max: 30,   xpPerStep: 13, goldPerStep: 39, format: v => v.toFixed(1) + 's' },
     range:     { label: 'Range / AOE',  step: 10,   min: 10,  max: 9999, xpPerStep: 13, goldPerStep: 39, format: v => Math.round(v) },
     critChance:{ label: 'Crit Chance',  step: 0.05, min: 0,   max: 1.0,  xpPerStep: 25, goldPerStep: 75, format: v => Math.round(v * 100) + '%' },
-  };
+  });
 
 // Canonical values are headless-safe so offline play and multiplayer authority
 // consume the exact same authored weapon table.
@@ -2201,7 +2157,7 @@ export const MOVE_BASE_STATS = globalThis.NeoNyke?.content?.MOVE_BASE_STATS || {
     love_bomb_laser:  { damage: 34,  cooldown: 3.80, range: 420 },
     turtle_wave:      { damage: 55,  cooldown: 6.00, duration: 1.35 },
     ghost_ball:       { damage: 34,  cooldown: 5.50, range: 460 },
-    power_disks:      { damage: 22,  cooldown: 1.90, range: 240 },
+    power_disks:      { damage: 20,  cooldown: 1.90, range: 240 },
     blade_justice:    { damage: 60,  cooldown: 3.80, range: 80  },
     holy_eye_beams:   { damage: 13,  cooldown: 3.60, duration: 1.2 },
     lightning_columns:{ damage: 30,  cooldown: 4.80, range: 180 },

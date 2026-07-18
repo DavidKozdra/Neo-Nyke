@@ -193,14 +193,28 @@ async function main() {
     // Trigger Princess's real RMB Love Beam. Both the ordinary projected effect
     // list and the ordinary Three.js beam scene must see it; no network renderer
     // is involved in either assertion.
+    await host.evaluate(() => globalThis.Neo?.threeRenderer?.setYaw?.(1.137));
+    const fpsAimBeforeLaser = await host.evaluate(() => globalThis.Neo?.getFirstPersonYaw?.());
     await host.locator('#c').click({ button: 'right', position: { x: 640, y: 360 }, force: true });
-    await host.waitForFunction(() => {
+    await host.waitForFunction(expectedAim => {
       const effects = globalThis.Neo?.activePlayerEffects || [];
       const beams = globalThis.Neo?.threeRenderer?._debug?.().beams || 0;
-      if (!effects.some(effect => effect.abilityId === 'love_beam') || beams < 1) return false;
-      globalThis.__networkBeamProof = { activeEffects: effects.length, beams };
+      const effect = effects.find(candidate => candidate.abilityId === 'love_beam');
+      if (!effect || beams < 1) return false;
+      const angleDelta = Math.abs(Math.atan2(
+        Math.sin(Number(effect.laserAngle) - Number(expectedAim)),
+        Math.cos(Number(effect.laserAngle) - Number(expectedAim)),
+      ));
+      if (angleDelta > 0.0001) return false;
+      globalThis.__networkBeamProof = {
+        activeEffects: effects.length,
+        beams,
+        cameraYaw: Number(expectedAim),
+        authorityLaserAngle: Number(effect.laserAngle),
+        angleDelta,
+      };
       return true;
-    }, undefined, { timeout: 10_000 });
+    }, fpsAimBeforeLaser, { timeout: 10_000 });
     const beamProof = await host.evaluate(() => globalThis.__networkBeamProof);
 
     // Gelleh's RMB uses Blade Justice. Prove the remote action becomes the same
@@ -238,7 +252,19 @@ async function main() {
     ]);
     const hostPlayers = hostSnapshot.gameState?.players || {};
     const guestPlayers = guestSnapshot.gameState?.players || {};
-    const converged = JSON.stringify(hostPlayers) === JSON.stringify(guestPlayers);
+    // Snapshots are delivered at different instants, so transient tick/action
+    // fields are expected to differ. Convergence means both clients agree on
+    // the durable identity/inventory and the authoritative world position.
+    const converged = Object.entries(hostPlayers).every(([id, hostPlayer]) => {
+      const guestPlayer = guestPlayers[id];
+      return !!guestPlayer
+        && guestPlayer.characterKey === hostPlayer.characterKey
+        && JSON.stringify(guestPlayer.items || {}) === JSON.stringify(hostPlayer.items || {})
+        && Math.hypot(
+          Number(guestPlayer.x || 0) - Number(hostPlayer.x || 0),
+          Number(guestPlayer.y || 0) - Number(hostPlayer.y || 0),
+        ) <= 2;
+    });
     const movedPlayer = hostPlayers[hostSnapshot.playerId];
     const moved = Math.hypot(
       Number(movedPlayer?.x || 0) - movementStart.x,

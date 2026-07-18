@@ -2,6 +2,7 @@ import '../js/simulation/RandomService.js';
 import '../js/simulation/SharedCombatContent.js';
 import '../js/simulation/SharedMoveContent.js';
 import '../js/simulation/SharedEnemyContent.js';
+import '../js/simulation/SharedItemContent.js';
 import '../js/simulation/GameState.js';
 import '../js/simulation/GameSimulation.js';
 import '../js/simulation/DeterministicFloorGenerator.js';

@@ -31,56 +31,31 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
     Neo.resetRngStreams();
     Neo.rooms = [];
 
-    const grid = Array.from({ length: 9 }, () => Array(9).fill(null));
-    const positions = [];
-    const start = { x: 4, y: 4 };
-    grid[start.y][start.x] = true;
-    positions.push(start);
-
-    const target = 8 + Math.floor(Neo.nextRandom('world') * 3) + Math.min(2, Neo.floor >> 2);
-    while (positions.length < target) {
-      const seed = positions[Neo.irand(0, positions.length - 1, 'world')];
-      const dirs = Neo.shuffle([[1, 0], [-1, 0], [0, 1], [0, -1]], 'world');
-      let added = false;
-      for (const [dx, dy] of dirs) {
-        const nx = seed.x + dx;
-        const ny = seed.y + dy;
-        if (nx < 0 || nx > 8 || ny < 0 || ny > 8 || grid[ny][nx]) continue;
-        grid[ny][nx] = true;
-        positions.push({ x: nx, y: ny });
-        added = true;
-        break;
-      }
-      if (!added) break;
-    }
-
-    const roomMap = new Map();
-    positions.forEach(position => {
-      const room = createRoomRecord(position);
-      Neo.rooms.push(room);
-      roomMap.set(`${position.x},${position.y}`, room);
+    const floorGenerator = globalThis.NeoNyke?.simulation?.generateFloorLayout;
+    if (typeof floorGenerator !== 'function') throw new Error('Shared campaign floor generator is unavailable');
+    const worldRandom = {
+      next: () => Neo.nextRandom('world'),
+      int: (min, max) => Neo.irand(min, max, 'world'),
+      pick: values => values[Neo.irand(0, values.length - 1, 'world')],
+      shuffle: values => Neo.shuffle(values, 'world'),
+      chance: probability => Neo.nextRandom('world') < probability,
+    };
+    const layout = floorGenerator({
+      matchSeed: Neo.baseSeedStr,
+      floorSeed: Neo.getFloorSeed?.() || Neo.seedStr,
+      floorNumber: Neo.floor,
+      maxFloor: Neo.MAX_FLOOR,
+      gameMode: Neo.gameMode,
+      runLoopIndex: Neo.runLoopIndex,
+      tutorial: Neo.isTutorialRun?.(),
+      contentVersion: globalThis.NeoNyke?.simulation?.CAMPAIGN_CONTENT_VERSION,
+      random: worldRandom,
     });
-
-    Neo.rooms.forEach(room => {
-      const north = roomMap.get(`${room.gx},${room.gy - 1}`);
-      const south = roomMap.get(`${room.gx},${room.gy + 1}`);
-      const east = roomMap.get(`${room.gx + 1},${room.gy}`);
-      const west = roomMap.get(`${room.gx - 1},${room.gy}`);
-      if (north) { room.doors.n = true; north.doors.s = true; }
-      if (south) { room.doors.s = true; south.doors.n = true; }
-      if (east) { room.doors.e = true; east.doors.w = true; }
-      if (west) { room.doors.w = true; west.doors.e = true; }
-    });
-
+    Neo.rooms = layout.rooms;
+    const roomMap = new Map(Neo.rooms.map(room => [`${room.gx},${room.gy}`, room]));
     const startRoom = roomMap.get('4,4');
-    startRoom.type = 'start';
-    startRoom.cleared = true;
-    startRoom.explored = true;
-    startRoom.visited = true;
-
-    const farRoom = findFarthestRoom(startRoom, roomMap);
+    const farRoom = Neo.rooms.find(room => room.id === layout.exitRoomId);
     if (Neo.gameMode === 'treasure_hunt') {
-      farRoom.type = 'boss';
       Neo.treasureHuntPhase = 'seek';
       Neo.treasureHuntHasKey = false;
       Neo.treasureHuntCollapseTimer = 0;
@@ -88,47 +63,10 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
       Neo.treasureHuntRockTick = 0;
       Neo.treasureHuntBlastTick = 0;
       startRoom.treasureHuntExitKind = Neo.nextRandom('world') < 0.5 ? 'ladder' : 'chest';
-    } else if (Neo.floor === Neo.MAX_FLOOR) {
-      farRoom.type = 'god';
-    } else if (Neo.floor > Neo.MAX_FLOOR) {
-      farRoom.type = Neo.floor % 3 === 0 ? 'boss' : 'ladder';
-    } else if (Neo.floor % 3 === 0) {
-      farRoom.type = 'boss';
-    } else {
-      farRoom.type = 'ladder';
     }
-
-    // 10% of floors keep the ladder room hidden on the minimap until it's
-    // actually entered, so you sometimes have to explore to find the exit.
-    // Rolled once per floor (stable) so the minimap star doesn't flicker.
-    Neo.hideLadderOnMinimap = Neo.gameMode !== 'treasure_hunt'
-      && farRoom.type === 'ladder'
-      && Neo.rand(1, 0, 'world') < 0.1;
-
-    const pool = Neo.rooms.filter(room => room !== startRoom && room !== farRoom);
-    Neo.shuffle(pool, 'world');
-    // Floor grammar (opt-in via Neo.useFloorGrammar): bias rewards toward dead-end
-    // rooms so treasure/shop/etc. live off the critical start->exit path, the way
-    // Spelunky/Isaac do. This is a STABLE reorder of the already-shuffled pool, so
-    // it consumes no extra RNG — the draws below are unchanged; only which rooms
-    // receive the reward types shifts. With the flag off, behaviour is identical.
-    if (Neo.useFloorGrammar) biasRewardPoolToDeadEnds(pool, startRoom);
-    const treasureCount = Math.min(3, 1 + Math.floor(Neo.nextRandom('world') * 3));
-    for (let index = 0; index < treasureCount; index += 1) {
-      if (pool[index]) pool[index].type = 'treasure';
-    }
-    // Reserve one rotating run-shaping service before the probabilistic Shop,
-    // Trial, and Forge rolls consume the remaining combat-room candidates.
-    // Floors 1-8 therefore expose every service once in a standard first loop.
-    Neo.assignSpecialServiceRoom?.(pool);
-    const shopCandidate = pool.find(room => room.type === 'combat');
-    if (shopCandidate && Neo.nextRandom('world') < 0.7) shopCandidate.type = 'shop';
-    const challengeCandidate = pool.find(room => room.type === 'combat');
-    if (challengeCandidate && Neo.floor >= 2 && Neo.floor < Neo.MAX_FLOOR && Neo.nextRandom('world') < 0.42) challengeCandidate.type = 'challenge';
-    const anvilCandidate = pool.find(room => room.type === 'combat');
-    if (anvilCandidate && Neo.nextRandom('world') < 0.55) anvilCandidate.type = 'anvil';
+    Neo.hideLadderOnMinimap = !!layout.hideExitOnMinimap;
     if (Neo.isTutorialRun?.()) configureTutorialFloor(startRoom, farRoom);
-    assignSecretRoom(roomMap);
+    if (Neo.isTutorialRun?.()) assignSecretRoom(roomMap);
     Neo.rooms.forEach(decorateRoomData);
     if (Neo.isTutorialRun?.()) finalizeTutorialFloor(startRoom, farRoom);
     configureStartRoomDifficultyEncounter(startRoom);
@@ -1621,48 +1559,19 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
     if (room.type === 'treasure' && !room.cleared && Neo.chests.length === 0) {
       const treasureRandom = Neo.createRoomRandom(room, 'treasure:chests');
       const isTutorialTreasure = Neo.isTutorialRun?.() && room.tutorialLesson === 'treasure';
-      const chestCount = isTutorialTreasure ? 1 : 1 + Math.floor(treasureRandom() * 2);
-      const placedChestPositions = [];
-      const chestInsetX = Neo.WALL + 88;
-      const chestInsetY = Neo.WALL + 76;
-      const minChestSpacing = 132;
-      // The tutorial teaches a plain walk-up-and-grab chest, so force the single
-      // tutorial chest to be a normal item chest (no A/B hold-to-claim) regardless
-      // of floor/RNG.
-      for (let index = 0; index < chestCount; index += 1) {
-        const itemChance = Neo.getRandomItemDropChance(0.9, 0.98);
-        const isAbChest = !isTutorialTreasure && (Neo.floor > 4 && treasureRandom() < 0.2);
-        const rewardsItem = isTutorialTreasure || isAbChest || treasureRandom() < itemChance;
-        let chestPos = null;
-        for (let attempt = 0; attempt < 12; attempt += 1) {
-          const preferredX = chestInsetX + treasureRandom() * Math.max(1, Neo.ROOM_W - chestInsetX * 2);
-          const preferredY = chestInsetY + treasureRandom() * Math.max(1, Neo.ROOM_H - chestInsetY * 2);
-          const safeSpawn = Neo.findSafeEnemySpawnPoint?.(preferredX, preferredY, 24)
-            || { x: Neo.clamp(preferredX, chestInsetX, Neo.ROOM_W - chestInsetX), y: Neo.clamp(preferredY, chestInsetY, Neo.ROOM_H - chestInsetY) };
-          const overlapsPlacedChest = placedChestPositions.some(pos => Neo.dist(pos.x, pos.y, safeSpawn.x, safeSpawn.y) < minChestSpacing);
-          if (!overlapsPlacedChest) {
-            chestPos = safeSpawn;
-            break;
-          }
-        }
-        if (!chestPos) {
-          const fallbackSpread = chestCount === 1 ? 0 : (index - (chestCount - 1) / 2) * 150;
-          chestPos = {
-            x: Neo.clamp(Neo.ROOM_W / 2 + fallbackSpread, chestInsetX, Neo.ROOM_W - chestInsetX),
-            y: Neo.ROOM_H / 2 + (index % 2 === 0 ? -36 : 36),
-          };
-        }
-        placedChestPositions.push(chestPos);
+      const createChestPlan = globalThis.NeoNyke?.content?.createTreasureChestPlan;
+      if (typeof createChestPlan !== 'function') throw new Error('Shared treasure chest rules are unavailable');
+      createChestPlan({
+        random: treasureRandom,
+        floorNumber: Neo.floor,
+        tutorial: isTutorialTreasure,
+        itemChance: Neo.getRandomItemDropChance(0.9, 0.98),
+      }).forEach(chest => {
         Neo.chests.push({
-          x: chestPos.x,
-          y: chestPos.y,
+          ...chest,
           open: false,
-          choiceType: isAbChest ? 'ab' : '',
-          rewardType: rewardsItem ? 'item' : 'potion',
-          rewardKey: rewardsItem ? Neo.rollItemDrop({ random: treasureRandom }) : '',
-          tutorialTreasureChest: isTutorialTreasure,
         });
-      }
+      });
     }
 
     if (room.secret) {

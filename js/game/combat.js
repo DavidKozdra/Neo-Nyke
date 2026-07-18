@@ -2517,40 +2517,32 @@
   function spawnPlayerDiskBurst() {
     const itemStats = Neo.getItemStats();
     const beamMult = itemStats.beamDamageMultiplier || 1;
-    const isMetao = Neo.player?.character === 'metao';
-    const diskHitOptions = isMetao
-      ? { drainChanceBonus: 0.05, fireChance: 0.4, fireStacks: 1, fireDuration: 3 }
-      : { drainChanceBonus: 0.05 };
-    const shardHitOptions = isMetao
-      ? { drainChanceBonus: 0.05, fireChance: 0.25, fireStacks: 1, fireDuration: 2 }
-      : { drainChanceBonus: 0.05 };
-    for (let index = 0; index < 8; index += 1) {
-      const angle = index * (Math.PI * 2 / 8);
+    const createBurst = globalThis.NeoNyke?.content?.createPowerDiskBurstDescriptors;
+    if (typeof createBurst !== 'function') throw new Error('Shared Power Disk content is unavailable');
+    createBurst({
+      characterKey: Neo.player?.character,
+      damageMultiplier: beamMult,
+    }).forEach(disk => {
       Neo.spawnProjectile({
         x: Neo.player.x,
         y: Neo.player.y,
-        vx: Math.cos(angle) * 440,
-        vy: Math.sin(angle) * 440,
-        r: 7,
-        life: 1.8,
+        vx: Math.cos(disk.angle) * disk.speed,
+        vy: Math.sin(disk.angle) * disk.speed,
+        r: disk.radius,
+        life: disk.lifeSeconds,
         enemy: false,
-        kind: 'disk',
-        damage: Math.max(1, Math.round(20 * beamMult)),
-        hitOptions: diskHitOptions,
-        // Disks periodically shed faster sub-projectiles perpendicular to travel.
+        kind: disk.kind,
+        damage: disk.damage,
+        hitOptions: disk.hitOptions,
         subSpawn: {
-          kind: 'disk_shard',
-          interval: 0.18,
-          timer: 0.18,
-          speed: 620,
-          r: 4,
-          life: 0.7,
-          damage: Math.max(1, Math.round(8 * beamMult)),
-          count: 2,
-          hitOptions: shardHitOptions,
+          ...disk.subSpawn,
+          interval: disk.subSpawn.intervalSeconds,
+          timer: disk.subSpawn.intervalSeconds,
+          r: disk.subSpawn.radius,
+          life: disk.subSpawn.lifeSeconds,
         },
       });
-    }
+    });
   }
 
   // Sarge's Hammer Throw (laser slot): hurl a spinning hammer toward the cursor.

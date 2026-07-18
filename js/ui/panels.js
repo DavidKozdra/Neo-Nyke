@@ -287,7 +287,6 @@ export function bindInput() {
         Neo.navigateTutorialStep(1);
       },
       onOpenCharacterSelect() {
-        void Neo.prepareSinglePlayerSession?.();
         Neo.gameMode = 'normal';
         Neo.practiceVariant = 'standard';
         Neo.charSelectPhase = null;
@@ -1207,33 +1206,14 @@ export function toggleAnvilPanel() {
   // Total cost of all staged upgrades, charged entirely in the selected
   // currency (XP or gold). The other currency is always 0.
   function getAnvilTotalCost() {
-    let total = 0;
-    let freeStepsRemaining = getForgeVoucherFreeSteps();
-    let voucherStepsUsed = 0;
-    let stagedSteps = 0;
-    // Run-wide escalation index: each step (free or paid) advances the price
-    // curve, so the multiplier matches the order upgrades will be applied in.
-    let costIndex = getForgeUpgradesApplied();
-    for (const [key, count] of Object.entries(Neo.anvilStagedUpgrades)) {
-      if (count === 0) continue;
-      const [itemType, , statKey] = key.split(':');
-      const schema = itemType === 'weapon' ? Neo.WEAPON_UPGRADEABLE_STATS : Neo.MOVE_UPGRADEABLE_STATS;
-      const statDef = schema[statKey];
-      const stepCount = Math.max(0, Math.floor(Number(count) || 0));
-      stagedSteps += stepCount;
-      for (let i = 0; i < stepCount; i++) {
-        if (freeStepsRemaining > 0) {
-          freeStepsRemaining -= 1;
-          voucherStepsUsed += 1;
-        } else {
-          total += getAnvilStepCostAtIndex(statDef, costIndex);
-        }
-        costIndex += 1;
-      }
-    }
-    return Neo.anvilPayCurrency === 'gold'
-      ? { xp: 0, gold: total, voucherSteps: voucherStepsUsed, stagedSteps }
-      : { xp: total, gold: 0, voucherSteps: voucherStepsUsed, stagedSteps };
+    const quote = globalThis.NeoNyke?.simulation?.quoteForgeCommand?.(Neo.player, {
+      currency: Neo.anvilPayCurrency === 'gold' ? 'gold' : 'xp',
+      staged: Neo.anvilStagedUpgrades,
+    }, {
+      WEAPON_BASE_STATS: Neo.WEAPON_BASE_STATS,
+      MOVE_BASE_STATS: Neo.MOVE_BASE_STATS,
+    });
+    return quote || { xp: 0, gold: 0, voucherSteps: 0, stagedSteps: 0 };
   }
 
 export function renderAnvilPanel() {
@@ -1566,25 +1546,20 @@ export function confirmAnvilUpgrades() {
     const cost = getAnvilTotalCost();
     if (!Neo.player || (cost.stagedSteps || 0) <= 0) return;
     if (Neo.player.xp < cost.xp || (Neo.player.coins ?? 0) < cost.gold) return;
-
-    Neo.player.xp -= cost.xp;
-    Neo.player.coins = (Neo.player.coins ?? 0) - cost.gold;
-    consumeForgeVoucherSteps(cost.voucherSteps || 0);
-
-    if (!Neo.player.anvilUpgrades) Neo.player.anvilUpgrades = { weapon: {}, move: {} };
-
-    for (const [key, count] of Object.entries(Neo.anvilStagedUpgrades)) {
-      if (count === 0) continue;
-      const [itemType, itemKey, statKey] = key.split(':');
-      if (!Neo.player.anvilUpgrades[itemType]) Neo.player.anvilUpgrades[itemType] = {};
-      if (!Neo.player.anvilUpgrades[itemType][itemKey]) Neo.player.anvilUpgrades[itemType][itemKey] = {};
-      Neo.player.anvilUpgrades[itemType][itemKey][statKey] =
-        (Neo.player.anvilUpgrades[itemType][itemKey][statKey] ?? 0) + count;
+    const command = {
+      currency: Neo.anvilPayCurrency === 'gold' ? 'gold' : 'xp',
+      staged: { ...Neo.anvilStagedUpgrades },
+    };
+    if (Neo.multiplayerGameView?.active) {
+      Neo.gameSession?.sendGameCommand?.('FORGE_COMMIT', command);
+    } else {
+      const resolver = globalThis.NeoNyke?.simulation?.applyForgeCommand;
+      const result = resolver?.(Neo.player, command, {
+        WEAPON_BASE_STATS: Neo.WEAPON_BASE_STATS,
+        MOVE_BASE_STATS: Neo.MOVE_BASE_STATS,
+      });
+      if (!result?.ok) return;
     }
-
-    // Advance the run-wide escalation counter so each future step is priced 5%
-    // higher than the last (free voucher steps still count as upgrades applied).
-    Neo.player.forgeUpgradesApplied = getForgeUpgradesApplied() + (cost.stagedSteps || 0);
     Neo.tutorialController?.signal?.('forge-confirm', { stagedSteps: cost.stagedSteps || 0 });
 
     Neo.anvilStagedUpgrades = {};
@@ -1594,31 +1569,6 @@ export function confirmAnvilUpgrades() {
     Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 26, life: 1.0, text: 'UPGRADED!', c: '#ffb840' });
     renderAnvilPanel();
     Neo.updateHud();
-  }
-
-  function consumeForgeVoucherSteps(steps) {
-    let remaining = Math.max(0, Math.floor(Number(steps) || 0));
-    if (!Neo.player || remaining <= 0) return 0;
-    const voucherKey = Neo.FORGE_VOUCHER_KEY || 'forge_voucher';
-    const stepValue = getForgeVoucherStepValue();
-    let looseCharges = Math.max(0, Math.floor(Number(Neo.player.forgeVoucherCharges || 0)));
-    const looseUsed = Math.min(looseCharges, remaining);
-    looseCharges -= looseUsed;
-    remaining -= looseUsed;
-
-    if (remaining > 0) {
-      let vouchers = Math.max(0, Math.floor(Number(Neo.player.items?.[voucherKey] || 0)));
-      const vouchersUsed = Math.min(vouchers, Math.ceil(remaining / stepValue));
-      vouchers -= vouchersUsed;
-      const openedCharges = vouchersUsed * stepValue;
-      const openedUsed = Math.min(openedCharges, remaining);
-      remaining -= openedUsed;
-      looseCharges += Math.max(0, openedCharges - openedUsed);
-      if (Neo.player.items) Neo.player.items[voucherKey] = vouchers;
-    }
-
-    Neo.player.forgeVoucherCharges = looseCharges;
-    return Math.max(0, Math.floor(Number(steps) || 0)) - remaining;
   }
 
 // Returns the anvil bonus for a given weapon stat (additive delta)
@@ -3067,6 +3017,13 @@ export function handleShopBuyClick(event) {
     const button = target?.closest('.shop-buy');
     if (!button || !Neo.player) return;
     const kind = button.dataset.kind;
+    if (Neo.multiplayerGameView?.active && ['item', 'heal'].includes(kind)) {
+      const offerIndex = Number(button.dataset.index || 0);
+      const heal = Number(button.dataset.heal || 0);
+      const healKind = heal >= 80 ? 'major' : 'small';
+      Neo.gameSession?.sendShopPurchase?.(kind, kind === 'item' ? { offerIndex } : { healKind });
+      return;
+    }
     if (kind === 'voucher-redeem') {
       const voucherKey = button.dataset.voucherKey || '';
       Neo.openVoucherRedeem?.(voucherKey);
