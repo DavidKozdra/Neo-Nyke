@@ -44,6 +44,11 @@
       this._notify();
     }
 
+    setCharacter(characterKey) {
+      this.client.sendCharacter(characterKey);
+      this._notify();
+    }
+
     sendInput(input) {
       return this.client.sendInput(input);
     }

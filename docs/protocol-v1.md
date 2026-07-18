@@ -1,6 +1,6 @@
 # Neo Nyke gameplay protocol v1
 
-Status: versioned runtime contract with validation, a fault-injected local-loopback proof, and a Cloudflare Durable Object room/movement proof. The complete campaign message surface remains incremental; every transport carries this same envelope.
+Status: versioned runtime contract with validation, a fault-injected local-loopback proof, and a Cloudflare Durable Object floor-traversal proof. Lobby character choice, authoritative movement, and shared room transitions use this contract. The complete combat/campaign message surface remains incremental; every transport carries the same envelope.
 
 ## Envelope
 
@@ -60,6 +60,7 @@ The protocol's co-op match is entered from the separate `MULTIPLAYER` flow. Lega
 | `CLIENT_HELLO` | reliable/control | Version/capability negotiation. First message only. |
 | `AUTHENTICATE` | reliable/control | Establish connection identity through configured identity provider. |
 | `JOIN_MATCH` | reliable/control | Room/session locator plus reconnect proof when applicable. Authority checks room status/capacity/identity. |
+| `PLAYER_CHARACTER` | reliable/control | Select a supported character while waiting. Authority validates availability, updates the player entity, and clears that player's ready state. |
 | `PLAYER_READY` | reliable/control | Boolean lobby readiness for sender-owned player. Waiting state only. |
 | `PLAYER_INPUT` | unreliable, replaceable/simulation | Normalized movement vector, aim angle, held-button bitset, and input sequence. Authority clamps magnitude and orders/deduplicates. |
 | `PLAYER_ACTION` | reliable for discrete actions or unreliable for repeatable input/simulation | Attack/ability intent, input sequence, aim direction, equipped slot/item reference. Authority checks ownership, cooldown, status, range, and match state. |

@@ -991,11 +991,23 @@
       </div>
       <div id="multiplayerRoomState" class="multiplayer-room-state" aria-live="polite">
         <div id="multiplayerRoomCodeShare" class="multiplayer-room-code-share hidden">
-          <div id="multiplayerRoomCodeDisplay" class="multiplayer-room-code-display"></div>
+        <div id="multiplayerRoomCodeDisplay" class="multiplayer-room-code-display"></div>
           <button id="multiplayerCopyRoomCode" class="nav-btn nav-btn--minor multiplayer-copy-room-code" type="button" aria-label="Copy multiplayer room code">COPY CODE</button>
         </div>
         <div id="multiplayerRoomStatus">Create a room or enter a room code.</div>
         <div id="multiplayerMemberList" class="multiplayer-member-list"></div>
+        <label id="multiplayerCharacterPicker" class="multiplayer-character-picker hidden">
+          <span>YOUR HERO</span>
+          <select id="multiplayerCharacter" aria-label="Choose multiplayer character">
+            <option value="princess">Princess</option>
+            <option value="thorn_knight">Thorn Knight</option>
+            <option value="metao">Metao</option>
+            <option value="gelleh">Gelleh</option>
+            <option value="mooggy">Mooggy</option>
+            <option value="turtle_boy">Turtle Boy</option>
+            <option value="sarge">Sarge</option>
+          </select>
+        </label>
         <button id="multiplayerReady" class="nav-btn multiplayer-ready hidden" type="button">READY</button>
       </div>
       <button id="multiplayerBackButton" class="nav-btn nav-btn--minor multiplayer-back-button" type="button">BACK</button>

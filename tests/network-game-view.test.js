@@ -10,8 +10,8 @@ const { LOCAL_BUILD_VERSION, LOCAL_CONTENT_HASH } = require('../js/multiplayer/L
 
 describe('network multiplayer game view', () => {
   test('uses a floor-renderer compatibility identity so stale movement clients cannot join', () => {
-    expect(LOCAL_BUILD_VERSION).toBe('1.0.0-mp-floor-v2');
-    expect(LOCAL_CONTENT_HASH).toBe('network-floor-renderer-v2');
+    expect(LOCAL_BUILD_VERSION).toBe('1.0.0-mp-traversal-v3');
+    expect(LOCAL_CONTENT_HASH).toBe('network-floor-traversal-v3');
   });
 
   test('normalizes diagonal keyboard/gamepad movement', () => {
@@ -28,6 +28,15 @@ describe('network multiplayer game view', () => {
       roomWidth: 900,
       roomHeight: 700,
     });
+    const croppedViewport = computeWorldTransform(960, 640, 900, 700, {
+      left: 0,
+      top: 50,
+      right: 960,
+      bottom: 590,
+    });
+    expect(croppedViewport.scale).toBeCloseTo(540 / 700);
+    expect(croppedViewport.offsetY).toBe(50);
+    expect(croppedViewport.offsetX).toBeCloseTo((960 - 900 * (540 / 700)) / 2);
   });
 
   test('interpolates remote players and bounds local prediction inside walls', () => {
@@ -37,6 +46,11 @@ describe('network multiplayer game view', () => {
       0.5,
     );
     expect(players.p1).toEqual({ id: 'p1', x: 150, y: 250 });
+    expect(interpolatePlayers(
+      { p1: { id: 'p1', roomId: 'room-a', x: 850, y: 350 } },
+      { p1: { id: 'p1', roomId: 'room-b', x: 64, y: 350 } },
+      0.5,
+    ).p1).toEqual({ id: 'p1', roomId: 'room-b', x: 64, y: 350 });
 
     const predicted = predictPosition(
       { id: 'p1', x: 50, y: 50, radius: 18, moveSpeed: 180 },

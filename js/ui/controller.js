@@ -129,14 +129,32 @@ export function createUIController(view) {
         view.multiplayerRoomStatus.textContent = latestError?.message || statusMessages[snapshot.status] || 'Preparing multiplayer…';
       }
       const members = Array.isArray(snapshot.lobbyState?.members) ? snapshot.lobbyState.members : [];
+      const multiplayerCharacterNames = {
+        princess: 'PRINCESS',
+        thorn_knight: 'THORN KNIGHT',
+        metao: 'METAO',
+        gelleh: 'GELLEH',
+        mooggy: 'MOOGGY',
+        turtle_boy: 'TURTLE BOY',
+        sarge: 'SARGE',
+      };
       if (view.multiplayerMemberList) {
         view.multiplayerMemberList.replaceChildren(...members.map(member => {
           const row = document.createElement('div');
-          row.textContent = `${member.displayName || 'Player'} — ${member.ready ? 'READY' : 'WAITING'}`;
+          const hero = multiplayerCharacterNames[member.characterKey] || 'HERO';
+          row.textContent = `${member.displayName || 'Player'} — ${hero} — ${member.ready ? 'READY' : 'WAITING'}`;
           return row;
         }));
       }
       const localMember = members.find(member => member.playerId === snapshot.playerId);
+      const canChooseCharacter = snapshot.status === 'waiting' && !!localMember;
+      view.multiplayerCharacterPicker?.classList.toggle('hidden', !canChooseCharacter);
+      if (view.multiplayerCharacter) {
+        view.multiplayerCharacter.disabled = !canChooseCharacter || localMember?.ready === true;
+        if (localMember?.characterKey && view.multiplayerCharacter.value !== localMember.characterKey) {
+          view.multiplayerCharacter.value = localMember.characterKey;
+        }
+      }
       if (view.multiplayerReady) {
         const canReady = snapshot.status === 'waiting' && !!snapshot.playerId;
         view.multiplayerReady.classList.toggle('hidden', !canReady);
@@ -2816,6 +2834,9 @@ export function createUIController(view) {
           view.multiplayerJoinRoom?.click();
         });
         view.multiplayerReady?.addEventListener('click', () => browserMultiplayerSession?.setReady(true));
+        view.multiplayerCharacter?.addEventListener('change', () => {
+          browserMultiplayerSession?.setCharacter(view.multiplayerCharacter.value);
+        });
         view.multiplayerLeaveGame?.addEventListener('click', () => {
           disposeBrowserMultiplayerSession();
           setMultiplayerPanelOpen(false);

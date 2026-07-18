@@ -1,6 +1,6 @@
 # Neo Nyke multiplayer architecture
 
-Status: playable local Cloudflare floor/movement vertical slice. Room routes, a room-authoritative Durable Object, browser WebSockets, two-client ready state, a shared deterministic floor layout, real character rendering, normal movement controls, local prediction, remote interpolation, and synchronized headless movement are implemented. Enemies/combat and the complete campaign, production deployment, reconnect, Electron, and Steamworks are not implemented yet.
+Status: playable local Cloudflare exploration vertical slice. Room routes, a room-authoritative Durable Object, browser WebSockets, authority-validated character selection, two-client ready state, a shared deterministic floor layout, seeded door traversal, party room transitions, real character rendering, normal movement controls, local prediction, remote interpolation, and synchronized headless movement are implemented. Enemies/combat and the complete campaign, production deployment, reconnect, Electron, and Steamworks are not implemented yet.
 
 ## Required layering
 
@@ -177,6 +177,6 @@ Steam Networking Sockets/SDR is a later alternate transport only. It would chang
 
 ## Current milestone and next gate
 
-Milestone A's playable proof now supports room creation, joining, ready state, two authoritative players, a seeded 8–10-room floor layout, Neo Nyke character sprites, WASD/arrows/gamepad movement, snapshots, prediction/interpolation, a leave-room path, and disconnect cleanup in local development. It has automated protocol/transport/rendering tests and a repeatable two-browser smoke command.
+Milestone A's playable proof now supports room creation, joining, authority-validated hero choice, ready state, two authoritative players, a seeded 8–10-room floor layout, valid-door collision and shared party traversal, visited-room mapping, Neo Nyke character sprites, WASD/arrows/gamepad movement, snapshots, prediction/interpolation, a leave-room path, and disconnect cleanup in local development. It has automated protocol/transport/rendering tests and a repeatable two-browser exploration smoke command.
 
-The next gate is authoritative room traversal plus the first enemy/combat vertical slice. Latency diagnostics, stronger reconciliation, reconnect reservations, complete enemy/item/transition systems, and a complete run remain required before Cloudflare multiplayer can be called proven. Electron and Steam remain out of scope until then.
+The next gate is the first authoritative enemy/combat vertical slice: one real enemy, one real player attack, server-owned damage/death, and a synchronized drop. Latency diagnostics, stronger reconciliation, reconnect reservations, complete enemy/item/floor systems, and a complete run remain required before Cloudflare multiplayer can be called proven. Electron and Steam remain out of scope until then.

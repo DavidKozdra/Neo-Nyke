@@ -47,6 +47,15 @@ describe('gameplay protocol v1 runtime validation', () => {
     }, { direction: CLIENT_TO_AUTHORITY })).toEqual(expect.objectContaining({ ok: false }));
   });
 
+  test('validates authority-controlled multiplayer character choices', () => {
+    const selection = createEnvelope('PLAYER_CHARACTER', 3, 0, { characterKey: 'sarge' });
+    expect(validateEnvelope(selection, { direction: CLIENT_TO_AUTHORITY })).toEqual({ ok: true, errors: [] });
+    expect(validateEnvelope({
+      ...selection,
+      payload: { characterKey: 'unreleased_secret_character' },
+    }, { direction: CLIENT_TO_AUTHORITY }).errors).toContain('payload.characterKey has an unsupported value');
+  });
+
   test('rejects wrong direction, unknown fields, invalid movement, and oversized messages', () => {
     const input = createEnvelope('PLAYER_INPUT', 1, 1, {
       inputSequence: 1,
