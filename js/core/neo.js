@@ -57,6 +57,8 @@ window.Neo = {
   // --- flow ---
   gameState: 'menu',
   gameMode: 'normal',
+  gameSession: null,
+  gameSessionReady: null,
   treasureHuntPhase: 'seek',
   treasureHuntHasKey: false,
   treasureHuntCollapseTimer: 0,
@@ -221,6 +223,7 @@ window.Neo = {
   metaSavePendingTimer: 0,
   metaSaveDirty: false,
   frameId: 0,
+  simulationTick: 0,
 
   // --- sprites ---
   SPRITE_ATLAS: null,

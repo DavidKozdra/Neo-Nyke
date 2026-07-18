@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'neonyke-v44';
+const CACHE_VERSION = 'neonyke-v49';
 const CACHE_META = 'neonyke-cache-meta';
 const CACHE_META_KEY = '/__neonyke_cache_meta__';
 const CACHE_REFRESH_INTERVAL_MS = 5 * 60 * 60 * 1000;
@@ -8,6 +8,20 @@ const PRECACHE = [
   '/index.html',
   '/manifest.json',
   '/js/main.js',
+  '/js/config/FeatureFlags.js',
+  '/js/simulation/RandomService.js',
+  '/js/simulation/GameState.js',
+  '/js/simulation/GameSimulation.js',
+  '/js/simulation/FixedTickRunner.js',
+  '/js/simulation/DeterministicFloorGenerator.js',
+  '/js/multiplayer/NetworkTransport.js',
+  '/js/multiplayer/OfflineTransport.js',
+  '/js/multiplayer/OfflineGameSession.js',
+  '/js/multiplayer/LocalLoopbackTransport.js',
+  '/js/multiplayer/LocalMultiplayerSession.js',
+  '/js/multiplayer/CloudflareWebSocketTransport.js',
+  '/js/multiplayer/BrowserMultiplayerSession.js',
+  '/js/protocol/ProtocolV1.js',
   '/css/style.css',
   '/css/theme-princess.css',
   '/css/mobile.css',

@@ -287,6 +287,7 @@ export function bindInput() {
         Neo.navigateTutorialStep(1);
       },
       onOpenCharacterSelect() {
+        void Neo.prepareSinglePlayerSession?.();
         Neo.gameMode = 'normal';
         Neo.practiceVariant = 'standard';
         Neo.charSelectPhase = null;

@@ -98,10 +98,10 @@
 
   function compactEnemyList() {
     if (!Array.isArray(Neo.enemies) || Neo.enemies.length === 0) return;
-    const frame = Number(Neo.frameId || 0);
+    const frame = Number(Neo.simulationTick || 0);
     const nextScanFrame = Number(Neo._nextEnemyCompactionScanFrame || 0);
     if (frame < nextScanFrame) return;
-    Neo._nextEnemyCompactionScanFrame = frame + 12;
+    Neo._nextEnemyCompactionScanFrame = frame + 4;
     let needsCompaction = false;
     for (let index = 0; index < Neo.enemies.length; index += 1) {
       const enemy = Neo.enemies[index];
@@ -126,7 +126,7 @@
     // gameplay events — not within a single frame. Rebuilding the rect list once
     // per frame (instead of once per ranged enemy per LOS check) cuts the
     // allocation + map/forEach work by ~10x with a roomful of shooters.
-    const frame = Number(Neo.frameId || 0);
+    const frame = Number(Neo.simulationTick || 0);
     if (_coverObstacleFrame === frame && _coverObstacleCache) return _coverObstacleCache;
     const obstacleRects = Neo.structures.map(structure => Neo.getStructureCollisionRect(structure));
     Neo.destructibles.forEach(prop => {

@@ -19,6 +19,23 @@
 	});
 })();
 
+// Platform-neutral foundations load before the legacy browser runtime. They use
+// no DOM APIs and can also be required directly by Node-based authorities/tests.
+import './config/FeatureFlags.js';
+import './simulation/RandomService.js';
+import './simulation/GameState.js';
+import './simulation/GameSimulation.js';
+import './simulation/FixedTickRunner.js';
+import './simulation/DeterministicFloorGenerator.js';
+import './multiplayer/NetworkTransport.js';
+import './multiplayer/OfflineTransport.js';
+import './multiplayer/OfflineGameSession.js';
+import './multiplayer/LocalLoopbackTransport.js';
+import './protocol/ProtocolV1.js';
+import './multiplayer/LocalMultiplayerSession.js';
+import './multiplayer/CloudflareWebSocketTransport.js';
+import './multiplayer/BrowserMultiplayerSession.js';
+
 import './core/game-core.js';
 import './core/math-utils.js';
 import './core/sfx.js';

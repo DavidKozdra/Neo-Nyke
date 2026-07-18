@@ -1,3 +1,10 @@
+import '../js/simulation/RandomService.js';
+import '../js/simulation/GameState.js';
+import '../js/simulation/GameSimulation.js';
+import '../js/multiplayer/NetworkTransport.js';
+import '../js/protocol/ProtocolV1.js';
+import '../js/multiplayer/LocalMultiplayerSession.js';
+
 // Cloudflare Worker — NeoNyke backend
 // Bindings required (wrangler.toml):
 //   KV namespace: STORE
@@ -7,6 +14,197 @@ const MAX_FLOOR = 10_000;
 const MAX_TIME  = 86_400;
 const COMPETITIVE_WIN_FLOOR = 10;
 const VALID_CHARACTERS = new Set(['thorn_knight', 'metao', 'gelleh', 'granialla', 'mooggy']);
+const ROOM_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const ROOM_CODE_LENGTH = 6;
+const ROOM_CODE_PATTERN = /^[A-HJ-NP-Z2-9]{4,8}$/;
+const MULTIPLAYER_ROOM_LIMIT = 4;
+const ROOM_TICK_INTERVAL_MS = 50;
+
+const multiplayerApi = globalThis.NeoNyke?.multiplayer || {};
+const protocolApi = globalThis.NeoNyke?.protocol || {};
+const { NetworkTransport } = multiplayerApi;
+const { MultiplayerRoomAuthority } = multiplayerApi;
+const { getDeliveryIntent } = protocolApi;
+
+function normalizeRoomCode(value) {
+  const code = String(value || '').trim().toUpperCase();
+  return ROOM_CODE_PATTERN.test(code) ? code : null;
+}
+
+function createRoomCode(randomValues = crypto.getRandomValues(new Uint8Array(ROOM_CODE_LENGTH))) {
+  let code = '';
+  for (let index = 0; index < ROOM_CODE_LENGTH; index += 1) {
+    code += ROOM_CODE_ALPHABET[randomValues[index] % ROOM_CODE_ALPHABET.length];
+  }
+  return code;
+}
+
+function getRoomStub(env, roomCode) {
+  if (!env?.MULTIPLAYER_ROOMS) return null;
+  return env.MULTIPLAYER_ROOMS.getByName(roomCode);
+}
+
+class DurableObjectRoomTransport extends NetworkTransport {
+  constructor(roomCode) {
+    super({ identity: { provider: 'account', id: 'cloudflare-authority', displayName: 'Neo Nyke Authority' } });
+    this.roomCode = roomCode;
+    this.peers = new Map();
+  }
+
+  async createSession(options = {}) {
+    if (!this.initialized) await this.initialize();
+    this.sessionId = String(options.sessionId || this.roomCode);
+    return { sessionId: this.sessionId, authorityPeerId: this.identity.id };
+  }
+
+  async joinSession() {
+    throw new Error('The Durable Object transport is authority-only');
+  }
+
+  attach(peerId, socket, identity) {
+    this.peers.set(peerId, { socket, identity });
+    this._emit('peerConnected', identity);
+  }
+
+  receive(peerId, data) {
+    const message = JSON.parse(typeof data === 'string' ? data : new TextDecoder().decode(data));
+    this._emit('message', peerId, message, getDeliveryIntent(message.type));
+  }
+
+  detach(peerId, reason = 'disconnected') {
+    const peer = this.peers.get(peerId);
+    if (!peer) return false;
+    this.peers.delete(peerId);
+    this._emit('peerDisconnected', peer.identity, reason);
+    return true;
+  }
+
+  send(peerId, message) {
+    const peer = this.peers.get(String(peerId));
+    if (!peer || peer.socket.readyState !== 1) throw new Error(`Room peer is unavailable: ${peerId}`);
+    peer.socket.send(JSON.stringify(message));
+    return { queued: true, dropped: false };
+  }
+
+  broadcast(message) {
+    const results = [];
+    this.peers.forEach((_peer, peerId) => {
+      try { results.push(this.send(peerId, message)); } catch { /* disconnect cleanup handles stale sockets */ }
+    });
+    return results;
+  }
+
+  getPeerIdentity(peerId) {
+    const identity = this.peers.get(String(peerId))?.identity;
+    return identity ? { ...identity } : null;
+  }
+
+  disconnectPeer(peerId, reason = 'authority-disconnect') {
+    const peer = this.peers.get(String(peerId));
+    if (!peer) return false;
+    try { peer.socket.close(1008, String(reason).slice(0, 96)); } catch { /* already closed */ }
+    return this.detach(String(peerId), reason);
+  }
+}
+
+export class MultiplayerRoom {
+  constructor(ctx, env) {
+    this.ctx = ctx;
+    this.env = env;
+    this.roomCode = normalizeRoomCode(ctx.id?.name) || 'UNKNOWN';
+    this.transport = new DurableObjectRoomTransport(this.roomCode);
+    this.authority = new MultiplayerRoomAuthority({
+      transport: this.transport,
+      sessionId: this.roomCode,
+      matchId: `cloudflare-${this.roomCode}`,
+      matchSeed: `cloudflare-${this.roomCode}`,
+      minPlayers: 2,
+      maxPlayers: MULTIPLAYER_ROOM_LIMIT,
+    });
+    this.startPromise = null;
+    this.tickTimer = null;
+  }
+
+  async ensureStarted() {
+    if (!this.startPromise) this.startPromise = this.authority.start();
+    await this.startPromise;
+  }
+
+  async fetch(request) {
+    const url = new URL(request.url);
+    if (url.pathname === '/initialize' && request.method === 'POST') return this.initializeRoom();
+    if (url.pathname === '/info' && request.method === 'GET') return this.roomInfo();
+    if (url.pathname === '/socket' && request.method === 'GET') return this.openSocket(request);
+    return json({ error: 'Room route not found' }, 404);
+  }
+
+  async initializeRoom() {
+    const existing = await this.ctx.storage.get('room');
+    if (existing) return json({ error: 'Room code collision' }, 409);
+    const room = {
+      roomCode: this.roomCode,
+      createdAt: Date.now(),
+      maxPlayers: MULTIPLAYER_ROOM_LIMIT,
+      status: 'waiting',
+    };
+    await this.ctx.storage.put('room', room);
+    await this.ensureStarted();
+    return json(room, 201);
+  }
+
+  async roomInfo() {
+    const room = await this.ctx.storage.get('room');
+    if (!room) return json({ error: 'Room not found' }, 404);
+    return json({
+      ...room,
+      status: this.authority.simulation.state.status,
+      players: this.authority.playerIdByPeer.size,
+      joinable: this.authority.simulation.state.status === 'waiting'
+        && this.authority.playerIdByPeer.size < MULTIPLAYER_ROOM_LIMIT,
+    });
+  }
+
+  async openSocket(request) {
+    const room = await this.ctx.storage.get('room');
+    if (!room) return json({ error: 'Room not found' }, 404);
+    if (request.headers.get('Upgrade')?.toLowerCase() !== 'websocket') {
+      return json({ error: 'Expected WebSocket upgrade' }, 426);
+    }
+    if (this.authority.playerIdByPeer.size >= MULTIPLAYER_ROOM_LIMIT) {
+      return json({ error: 'Room is full' }, 409);
+    }
+    await this.ensureStarted();
+    const pair = new WebSocketPair();
+    const [client, server] = Object.values(pair);
+    server.accept();
+    const peerId = `guest-${crypto.randomUUID()}`;
+    const identity = { provider: 'guest', id: peerId, displayName: `Player ${this.transport.peers.size + 1}` };
+    this.transport.attach(peerId, server, identity);
+    server.addEventListener('message', event => {
+      try {
+        this.transport.receive(peerId, event.data);
+      } catch {
+        this.transport.disconnectPeer(peerId, 'invalid-message');
+      }
+    });
+    server.addEventListener('close', event => this.transport.detach(peerId, event.reason || `socket-${event.code}`));
+    server.addEventListener('error', () => this.transport.detach(peerId, 'socket-error'));
+    this.ensureTicking();
+    return new Response(null, { status: 101, webSocket: client });
+  }
+
+  ensureTicking() {
+    if (this.tickTimer !== null) return;
+    this.tickTimer = setInterval(() => {
+      if (this.transport.peers.size === 0) {
+        clearInterval(this.tickTimer);
+        this.tickTimer = null;
+        return;
+      }
+      this.authority.step(1);
+    }, ROOM_TICK_INTERVAL_MS);
+  }
+}
 
 const NOTICES = [
   {
@@ -177,6 +375,42 @@ async function handleRequest(request, env) {
 
   // Strip optional /api prefix so routes work both standalone and under Pages
   const path = url.pathname.replace(/^\/api/, '');
+
+  // ── Multiplayer rooms ────────────────────────────────────────────────────
+  if (path === '/multiplayer/rooms' && request.method === 'POST') {
+    if (!env?.MULTIPLAYER_ROOMS) return json({ error: 'MULTIPLAYER_ROOMS binding missing' }, 503);
+    if (!rateLimit(`room-create:${ip}`, 10, 60_000)) return json({ error: 'Too many room creation requests' }, 429);
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const roomCode = createRoomCode();
+      const stub = getRoomStub(env, roomCode);
+      const initialized = await stub.fetch(new Request('https://room.internal/initialize', { method: 'POST' }));
+      if (initialized.status === 409) continue;
+      if (!initialized.ok) return json({ error: 'Could not initialize multiplayer room' }, 502);
+      return json({
+        roomCode,
+        status: 'waiting',
+        maxPlayers: MULTIPLAYER_ROOM_LIMIT,
+        socketPath: `/api/multiplayer/rooms/${roomCode}/socket`,
+      }, 201);
+    }
+    return json({ error: 'Could not allocate a unique room code' }, 503);
+  }
+
+  const roomRoute = path.match(/^\/multiplayer\/rooms\/([A-Za-z0-9]+)(\/socket)?$/);
+  if (roomRoute && request.method === 'GET') {
+    if (!env?.MULTIPLAYER_ROOMS) return json({ error: 'MULTIPLAYER_ROOMS binding missing' }, 503);
+    const roomCode = normalizeRoomCode(roomRoute[1]);
+    if (!roomCode) return json({ error: 'Invalid room code' }, 400);
+    const stub = getRoomStub(env, roomCode);
+    if (roomRoute[2]) {
+      const forwarded = new Request('https://room.internal/socket', {
+        method: 'GET',
+        headers: request.headers,
+      });
+      return stub.fetch(forwarded);
+    }
+    return stub.fetch(new Request('https://room.internal/info'));
+  }
 
   // ── GET /health ──────────────────────────────────────────────────────────
   if (path === '/health' && request.method === 'GET') {
@@ -352,7 +586,7 @@ const SECURITY_HEADERS = {
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
     "media-src 'self' blob:",
-    "connect-src 'self' https://neonyke.davidkozdra.workers.dev",
+    "connect-src 'self' https://neonyke.davidkozdra.workers.dev wss://neonyke.davidkozdra.workers.dev",
     "worker-src 'self' blob:",
     "font-src 'self'",
     "frame-ancestors 'none'",
@@ -366,6 +600,7 @@ const SECURITY_HEADERS = {
  * @returns {Response} Cloned response with security headers.
  */
 function addSecurityHeaders(response) {
+  if (response.webSocket) return response;
   const res = new Response(response.body, response);
   for (const [k, v] of Object.entries(SECURITY_HEADERS)) res.headers.set(k, v);
   return res;

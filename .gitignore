@@ -13,6 +13,7 @@ js/game.bundle.js
 .codex
 .codex/
 .agents/
+.wrangler/
 
 # Logs and local runtime noise
 *.log

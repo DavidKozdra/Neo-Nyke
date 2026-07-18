@@ -823,7 +823,8 @@
         <button id="tutorialMenuBtn" class="nav-btn nav-btn--tutorial hidden"><span class="nav-btn__icon" aria-hidden="true">▶</span><span data-i18n="menu.tutorial">TUTORIAL</span></button>
         <button id="continueBtn" class="nav-btn hidden" data-i18n="menu.continue">CONTINUE</button>
         <button id="mainCompetitiveBtn" class="nav-btn nav-btn--competitive" data-i18n="menu.competitive">COMPETITIVE</button>
-        <button id="newRunBtn"   class="nav-btn" data-i18n="menu.newRun">NEW RUN</button>
+        <button id="newRunBtn" class="nav-btn">SINGLE PLAYER</button>
+        <button id="multiplayerBtn" class="nav-btn" type="button" aria-expanded="false">MULTIPLAYER</button>
         <button id="altModesBtn"   class="nav-btn nav-btn--minor" data-i18n="menu.altModes">ALT MODES</button>
         <button id="runHistoryBtn" class="nav-btn nav-btn--minor" data-i18n="menu.archive">ARCHIVE</button>
         <button id="settingsBtn" class="nav-btn nav-btn--minor" data-i18n="menu.settings">SETTINGS</button>
@@ -954,6 +955,43 @@
     </div>
   </section>
 
+  <section id="multiplayerPanel" class="panel-shell competitive-panel multiplayer-panel hidden" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="multiplayerPanelTitle">
+    <div class="altmodes-head">
+      <span id="multiplayerPanelTitle" class="altmodes-title">MULTIPLAYER</span>
+      <button id="multiplayerBack" class="panel-close" type="button" aria-label="Back to main menu">X</button>
+    </div>
+    <div class="competitive-screen-body">
+      <p id="multiplayerDevelopmentNote" class="multiplayer-development-note">Multiplayer is under development. Network services are not initialized from this screen.</p>
+      <div class="altmode-card">
+        <div class="altmode-card__icon" aria-hidden="true">+</div>
+        <div class="altmode-card__text">
+          <h3 class="altmode-card__name">CREATE ROOM</h3>
+          <p class="altmode-card__desc">Create an authoritative Cloudflare room and share its code with up to three other players.</p>
+        </div>
+        <button id="multiplayerCreateRoom" class="nav-btn altmode-card__btn" type="button" disabled>CREATE</button>
+      </div>
+      <div class="altmode-card">
+        <div class="altmode-card__icon" aria-hidden="true">#</div>
+        <div class="altmode-card__text">
+          <h3 class="altmode-card__name">JOIN ROOM</h3>
+          <p class="altmode-card__desc">Enter a room code to connect to the same authoritative test room.</p>
+          <input id="multiplayerRoomCode" class="multiplayer-room-code-input" type="text" minlength="4" maxlength="8" autocomplete="off" autocapitalize="characters" spellcheck="false" inputmode="text" placeholder="ROOM CODE" aria-label="Multiplayer room code">
+        </div>
+        <button id="multiplayerJoinRoom" class="nav-btn altmode-card__btn" type="button" disabled>JOIN</button>
+      </div>
+      <div id="multiplayerRoomState" class="multiplayer-room-state" aria-live="polite">
+        <div id="multiplayerRoomCodeShare" class="multiplayer-room-code-share hidden">
+          <div id="multiplayerRoomCodeDisplay" class="multiplayer-room-code-display"></div>
+          <button id="multiplayerCopyRoomCode" class="nav-btn nav-btn--minor multiplayer-copy-room-code" type="button" aria-label="Copy multiplayer room code">COPY CODE</button>
+        </div>
+        <div id="multiplayerRoomStatus">Create a room or enter a room code.</div>
+        <div id="multiplayerMemberList" class="multiplayer-member-list"></div>
+        <button id="multiplayerReady" class="nav-btn multiplayer-ready hidden" type="button">READY</button>
+      </div>
+      <button id="multiplayerBackButton" class="nav-btn nav-btn--minor multiplayer-back-button" type="button">BACK</button>
+    </div>
+  </section>
+
   <!-- Alt Modes panel (slides in over main menu) -->
   <section id="altModesPanel" class="panel-shell altmodes-panel hidden" aria-hidden="true">
     <div class="altmodes-head">
@@ -962,7 +1000,7 @@
     </div>
     <div class="altmodes-tabs" role="tablist">
       <button class="altmodes-tab active" data-tab="challenges" type="button">CHALLENGES</button>
-      <button class="altmodes-tab" data-tab="multiplayer" type="button">MULTIPLAYER</button>
+      <button class="altmodes-tab" data-tab="multiplayer" type="button">LOCAL PLAY</button>
       <button class="altmodes-tab" data-tab="testing" type="button">TESTING</button>
     </div>
     <div class="altmodes-body">
@@ -1001,7 +1039,7 @@
           <button id="altModeTreasureHuntBtn" class="nav-btn altmode-card__btn">PLAY</button>
         </div>
       </div>
-      <!-- MULTIPLAYER -->
+      <!-- Existing same-device local play; separate from network multiplayer. -->
       <div class="altmodes-tab-panel hidden" data-panel="multiplayer">
         <div class="altmode-card" id="altModeCoopCard">
           <div class="altmode-card__icon">&#9829;</div>
