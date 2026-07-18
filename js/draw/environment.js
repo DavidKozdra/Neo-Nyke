@@ -1,5 +1,9 @@
 // environment.js — standalone IIFE. Room environment drawing.
   function draw() {
+    if (Neo.multiplayerGameView?.active) {
+      Neo.multiplayerGameView.render();
+      return;
+    }
     const isDying = Neo.gameState === 'dying';
     const isPlayLike = Neo.gameState === 'play' || Neo.gameState === 'pause' || Neo.gameState === 'dialogue' || isDying;
     Neo._lightsFrame = (Neo._lightsFrame || 0) + 1;

@@ -1,6 +1,7 @@
 import '../js/simulation/RandomService.js';
 import '../js/simulation/GameState.js';
 import '../js/simulation/GameSimulation.js';
+import '../js/simulation/DeterministicFloorGenerator.js';
 import '../js/multiplayer/NetworkTransport.js';
 import '../js/protocol/ProtocolV1.js';
 import '../js/multiplayer/LocalMultiplayerSession.js';

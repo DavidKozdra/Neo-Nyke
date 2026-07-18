@@ -90,6 +90,10 @@ describe('protocol-driven local multiplayer session', () => {
     expect(clientA.status).toBe('running');
     expect(clientB.status).toBe('running');
     expect(Object.keys(authority.simulation.state.players)).toHaveLength(2);
+    expect(authority.simulation.state.floorState.layout.rooms.length).toBeGreaterThanOrEqual(8);
+    expect(clientA.state.floorState).toEqual(authority.simulation.state.floorState);
+    expect(authority.simulation.state.players[clientA.playerId].characterKey).toBe('thorn_knight');
+    expect(authority.simulation.state.players[clientB.playerId].characterKey).toBe('metao');
 
     for (let repeat = 0; repeat < 12; repeat += 1) {
       clientA.sendInput({ moveX: 1, moveY: 0, aimDirection: 0 });

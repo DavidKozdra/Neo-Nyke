@@ -54,6 +54,7 @@ export function createUIController(view) {
     let orientationPromptDismissed = false;
     let browserMultiplayerSession = null;
     let browserMultiplayerUnsubscribe = null;
+    let browserMultiplayerGameView = null;
     let multiplayerRequestBusy = false;
     try {
       orientationPromptDismissed = sessionStorage.getItem('neonyke:orientationPromptDismissed') === '1';
@@ -142,6 +143,34 @@ export function createUIController(view) {
         view.multiplayerReady.disabled = !canReady || localMember?.ready === true;
         view.multiplayerReady.textContent = localMember?.ready ? 'READY ✓' : 'READY';
       }
+      if (snapshot.status === 'running' && snapshot.gameState) startBrowserMultiplayerGameView();
+      else if (browserMultiplayerGameView?.active && ['disconnected', 'rejected', 'ended'].includes(snapshot.status)) {
+        stopBrowserMultiplayerGameView();
+      }
+    }
+
+    function startBrowserMultiplayerGameView() {
+      if (browserMultiplayerGameView?.active || !browserMultiplayerSession) return;
+      const GameView = globalThis.NeoNyke?.rendering?.NetworkGameView;
+      if (typeof GameView !== 'function') {
+        if (view.multiplayerRoomStatus) view.multiplayerRoomStatus.textContent = 'Multiplayer game renderer failed to load.';
+        return;
+      }
+      browserMultiplayerGameView = new GameView({
+        session: browserMultiplayerSession,
+        neo: Neo,
+        canvas: Neo.canvas,
+        context: Neo.ctx,
+      });
+      Neo.multiplayerGameView = browserMultiplayerGameView;
+      browserMultiplayerGameView.start();
+    }
+
+    function stopBrowserMultiplayerGameView() {
+      const gameView = browserMultiplayerGameView;
+      browserMultiplayerGameView = null;
+      gameView?.stop?.();
+      if (Neo.multiplayerGameView === gameView) Neo.multiplayerGameView = null;
     }
 
     let multiplayerCopyFeedbackTimer = null;
@@ -200,6 +229,7 @@ export function createUIController(view) {
     }
 
     function disposeBrowserMultiplayerSession() {
+      stopBrowserMultiplayerGameView();
       browserMultiplayerUnsubscribe?.();
       browserMultiplayerUnsubscribe = null;
       const disposedSession = browserMultiplayerSession;
@@ -2786,6 +2816,10 @@ export function createUIController(view) {
           view.multiplayerJoinRoom?.click();
         });
         view.multiplayerReady?.addEventListener('click', () => browserMultiplayerSession?.setReady(true));
+        view.multiplayerLeaveGame?.addEventListener('click', () => {
+          disposeBrowserMultiplayerSession();
+          setMultiplayerPanelOpen(false);
+        });
         view.multiplayerCopyRoomCode?.addEventListener('click', () => {
           void copyMultiplayerRoomCode();
         });

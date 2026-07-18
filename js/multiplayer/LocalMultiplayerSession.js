@@ -10,9 +10,11 @@
 
   const simulationApi = typeof require === 'function' ? require('../simulation/GameSimulation.js') : browserSimulationApi;
   const gameStateApi = typeof require === 'function' ? require('../simulation/GameState.js') : browserSimulationApi;
+  const floorApi = typeof require === 'function' ? require('../simulation/DeterministicFloorGenerator.js') : browserSimulationApi;
   const protocolApi = typeof require === 'function' ? require('../protocol/ProtocolV1.js') : browserProtocolApi;
   const { GameSimulation, FIXED_DELTA_SECONDS, SIMULATION_TICK_RATE } = simulationApi;
   const { GameState, cloneSerializable } = gameStateApi;
+  const { generateFloorLayout } = floorApi;
   const {
     CLIENT_TO_AUTHORITY,
     AUTHORITY_TO_CLIENT,
@@ -29,7 +31,26 @@
   const SNAPSHOT_RATE = 10;
   const SNAPSHOT_TICK_INTERVAL = SIMULATION_TICK_RATE / SNAPSHOT_RATE;
   const FULL_CORRECTION_TICK_INTERVAL = SIMULATION_TICK_RATE;
-  const TEST_ROOM = Object.freeze({ id: 'local-test-room', width: 900, height: 700 });
+  const TEST_ROOM = Object.freeze({ id: 'network-start-room', width: 900, height: 700, wallThickness: 28, doorWidth: 140 });
+  const PLAYER_CHARACTERS = Object.freeze(['thorn_knight', 'metao', 'gelleh', 'mooggy']);
+  const PLAYER_COLORS = Object.freeze(['#9de9ff', '#d9a7ff', '#ffd98f', '#ff9fcf']);
+
+  function createNetworkFloorState(options = {}) {
+    const layout = typeof generateFloorLayout === 'function'
+      ? generateFloorLayout({
+        matchSeed: options.matchSeed,
+        floorSeed: options.floorSeed,
+        floorNumber: options.floorNumber || 1,
+        generationVersion: options.generationVersion || LOCAL_GENERATION_VERSION,
+        contentVersion: options.contentVersion || LOCAL_CONTENT_VERSION,
+      })
+      : { startRoomId: TEST_ROOM.id, rooms: [] };
+    return {
+      ...TEST_ROOM,
+      currentRoomId: layout.startRoomId,
+      layout,
+    };
+  }
 
   function createPlayerMovementSystem(room = TEST_ROOM) {
     return ({ state, inputs, fixedDelta }) => {
@@ -45,8 +66,10 @@
         }
         const speed = Math.max(0, Number(player.moveSpeed) || 180);
         const radius = Math.max(1, Number(player.radius) || 18);
-        player.x = Math.max(radius, Math.min(room.width - radius, player.x + moveX * speed * fixedDelta));
-        player.y = Math.max(radius, Math.min(room.height - radius, player.y + moveY * speed * fixedDelta));
+        const wallInset = Math.max(0, Number(room.wallThickness) || 0);
+        const minimum = wallInset + radius;
+        player.x = Math.max(minimum, Math.min(room.width - minimum, player.x + moveX * speed * fixedDelta));
+        player.y = Math.max(minimum, Math.min(room.height - minimum, player.y + moveY * speed * fixedDelta));
         player.vx = moveX * speed;
         player.vy = moveY * speed;
         player.aimDirection = Number(input.aimDirection) || 0;
@@ -81,14 +104,21 @@
       this.lastReplaceableSequence = new Map();
       this.invalidMessageCount = new Map();
       this.metrics = { acceptedInputs: 0, duplicateInputs: 0, invalidMessages: 0, snapshots: 0 };
+      const floorSeed = `${this.matchSeed}|floor:1`;
       const state = new GameState({
         matchId: String(options.matchId || 'local-match'),
         matchSeed: this.matchSeed,
-        floorSeed: `${this.matchSeed}|floor:1`,
+        floorSeed,
         generationVersion: this.generationVersion,
         contentVersion: this.contentVersion,
         status: 'waiting',
-        floorState: TEST_ROOM,
+        floorState: createNetworkFloorState({
+          matchSeed: this.matchSeed,
+          floorSeed,
+          floorNumber: 1,
+          generationVersion: this.generationVersion,
+          contentVersion: this.contentVersion,
+        }),
       });
       this.simulation = new GameSimulation({ state, systems: [createPlayerMovementSystem(TEST_ROOM)] });
       this.unsubscribeMessage = this.transport.onMessage((peerId, message, delivery) => this._onMessage(peerId, message, delivery));
@@ -202,6 +232,9 @@
         radius: 18,
         moveSpeed: 180,
         aimDirection: 0,
+        characterKey: PLAYER_CHARACTERS[slotIndex % PLAYER_CHARACTERS.length],
+        color: PLAYER_COLORS[slotIndex % PLAYER_COLORS.length],
+        roomId: this.simulation.state.floorState.currentRoomId,
       };
       this.pendingInputs[playerId] = { moveX: 0, moveY: 0, aimDirection: 0, buttons: 0 };
       this.lastProcessedInput[playerId] = -1;
@@ -512,6 +545,7 @@
     SNAPSHOT_RATE,
     TEST_ROOM,
     createPlayerMovementSystem,
+    createNetworkFloorState,
     LocalMultiplayerAuthority,
     LocalMultiplayerClient,
     MultiplayerRoomAuthority: LocalMultiplayerAuthority,

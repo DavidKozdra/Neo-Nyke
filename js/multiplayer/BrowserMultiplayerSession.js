@@ -16,6 +16,8 @@
 
   class BrowserMultiplayerSession {
     constructor(options = {}) {
+      this.mode = 'multiplayer';
+      this.authority = 'remote';
       this.transport = options.transport || new CloudflareWebSocketTransport(options.transportOptions);
       this.client = new Client({ transport: this.transport, ...options.clientOptions });
       this.roomCode = null;
