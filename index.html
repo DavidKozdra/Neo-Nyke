@@ -1465,7 +1465,10 @@
 
     <!-- Networked co-op lobby strip (shown only while connected to a room). -->
     <div id="coopLobbyBar" class="coop-lobby-bar hidden" aria-hidden="true">
-      <div id="coopLobbyRoomCode" class="coop-lobby-bar__roomcode"></div>
+      <div class="coop-lobby-bar__share">
+        <div id="coopLobbyRoomCode" class="coop-lobby-bar__roomcode"></div>
+        <button id="coopLobbyCopyRoomCode" class="nav-btn nav-btn--minor multiplayer-copy-room-code" type="button" aria-label="Copy multiplayer room code">COPY CODE</button>
+      </div>
       <div id="coopLobbySlots" class="coop-lobby-bar__slots" role="list" aria-label="Players in this room"></div>
     </div>
 
