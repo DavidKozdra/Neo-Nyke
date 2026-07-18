@@ -13,8 +13,8 @@ const { LOCAL_BUILD_VERSION, LOCAL_CONTENT_HASH } = require('../js/multiplayer/L
 
 describe('network multiplayer game view', () => {
   test('uses a floor-renderer compatibility identity so stale movement clients cannot join', () => {
-    expect(LOCAL_BUILD_VERSION).toBe('1.0.0-campaign-parity-v15');
-    expect(LOCAL_CONTENT_HASH).toBe('shared-neo-campaign-parity-v15');
+    expect(LOCAL_BUILD_VERSION).toBe('1.0.0-campaign-parity-v16');
+    expect(LOCAL_CONTENT_HASH).toBe('shared-neo-campaign-parity-v16');
   });
 
   test('normalizes diagonal keyboard/gamepad movement', () => {
@@ -136,20 +136,43 @@ describe('network multiplayer game view', () => {
     expect(neo.hazards).toEqual([
       expect.objectContaining({ id: 'zone', kind: 'healing_zone', x: 320, y: 280, r: 130, ttl: 3 }),
     ]);
+    const firstZone = neo.hazards[0];
+    view._syncNeoPresentationFloor(floorState, {}, {}, {
+      tick: 21,
+      interactables: {},
+      abilityEntities: {
+        zone: { id: 'zone', kind: 'healing_zone', roomId: 'room-a', x: 325, y: 280, radius: 130, expiresTick: 80 },
+      },
+    });
+    expect(neo.hazards[0]).toBe(firstZone);
+    expect(firstZone.x).toBe(325);
   });
 
-  test('renders authoritative beams through the campaign laser renderer and restores its globals', () => {
-    const draws = [];
-    const originalPlayer = { id: 'campaign-player' };
-    const neo = {
-      player: originalPlayer,
-      laserActive: false,
-      laserMode: 'beam',
-      drawPlayerLaser() {
-        expect(typeof this.rng).toBe('function');
-        draws.push({ player: this.player, active: this.laserActive, mode: this.laserMode, angle: this.laserAngle });
-      },
+  test('keeps enemies and projectiles stable for normal renderer animation pools', () => {
+    const neo = { ensureStatuses: jest.fn() };
+    const view = new NetworkGameView({ session: {}, neo });
+    const floorState = {
+      currentRoomId: 'room-a', visitedRoomIds: ['room-a'],
+      layout: { floorNumber: 1, rooms: [{ id: 'room-a', type: 'combat' }] },
     };
+    const enemy = { id: 'e1', roomId: 'room-a', x: 20, y: 30, health: 50, maxHealth: 50, radius: 18 };
+    view._syncNeoPresentationFloor(floorState, { e1: enemy }, {}, { tick: 1, interactables: {}, abilityEntities: {} });
+    view._syncCampaignPresentationEntities({}, { shot: { id: 'shot', x: 1, y: 2, radius: 4, expiresTick: 20 } }, '', { tick: 1 });
+    const firstEnemy = neo.enemies[0];
+    const firstProjectile = neo.projectiles[0];
+
+    enemy.x = 25;
+    view._syncNeoPresentationFloor(floorState, { e1: enemy }, {}, { tick: 2, interactables: {}, abilityEntities: {} });
+    view._syncCampaignPresentationEntities({}, { shot: { id: 'shot', x: 3, y: 2, radius: 4, expiresTick: 20 } }, '', { tick: 2 });
+
+    expect(neo.enemies[0]).toBe(firstEnemy);
+    expect(firstEnemy.x).toBe(25);
+    expect(neo.projectiles[0]).toBe(firstProjectile);
+    expect(firstProjectile.x).toBe(3);
+  });
+
+  test('projects authoritative beams as ordinary client presentation effects', () => {
+    const neo = {};
     const actor = { id: 'p1', equippedMoves: { laser: 'turtle_wave' }, items: {} };
     const view = new NetworkGameView({ session: {}, neo });
     view.presentationPlayerSlots = [{ id: 'p1', getEntity: () => actor, getDead: () => false }];
@@ -159,12 +182,66 @@ describe('network multiplayer game view', () => {
       data: { playerId: 'p1', abilityId: 'turtle_wave', aimDirection: 1.25 },
     }];
 
-    view.drawAuthoritativePlayerEffects();
+    const effects = view._projectActivePlayerEffects(performance.now());
 
-    expect(draws).toEqual([expect.objectContaining({ player: actor, active: true, mode: 'turtle_wave', angle: 1.25 })]);
-    expect(neo.player).toBe(originalPlayer);
-    expect(neo.laserActive).toBe(false);
-    expect(neo.rng).toBeUndefined();
+    expect(effects).toEqual([expect.objectContaining({
+      player: actor,
+      laserActive: true,
+      laserMode: 'turtle_wave',
+      laserAngle: 1.25,
+    })]);
+  });
+
+  test('projects authored Blade Justice, Titan Hammer, and Excalibur visuals', () => {
+    const neo = { projectiles: [] };
+    const actor = { id: 'p1', x: 300, y: 350, aimDirection: 0 };
+    const view = new NetworkGameView({ session: {}, neo });
+    view.presentationPlayerSlots = [{ id: 'p1', getEntity: () => actor, getDead: () => false }];
+    const now = performance.now();
+    view.combatEffects = [
+      { eventId: 'blade-event', eventType: 'PLAYER_ABILITY_USED', startedAt: now - 200, data: { playerId: 'p1', abilityId: 'blade_justice', aimDirection: 0 } },
+      { eventId: 'hammer-event', eventType: 'PLAYER_ABILITY_USED', startedAt: now - 200, data: { playerId: 'p1', abilityId: 'titan_hammer', aimDirection: 0, effectRadius: 120 } },
+      { eventId: 'sword-event', eventType: 'PLAYER_ABILITY_USED', startedAt: now - 200, data: { playerId: 'p1', abilityId: 'excalibur_strike', aimDirection: 0, originX: 400, originY: 350 } },
+    ];
+
+    view._syncSpecialMovePresentation(now);
+
+    expect(neo.justiceBlades).toHaveLength(3);
+    expect(neo.titanHammer).toEqual(expect.objectContaining({ ownerId: 'p1', x: 420, y: 350 }));
+    expect(neo.skySwords).toHaveLength(5);
+    expect(neo.skySwords[0]).toEqual(expect.objectContaining({ x: 400, y: 350 }));
+  });
+
+  test('preserves the shared enemy spawn window from authority ticks', () => {
+    const neo = { ensureStatuses: jest.fn() };
+    const view = new NetworkGameView({ session: {}, neo });
+    const floorState = {
+      currentRoomId: 'room-a', visitedRoomIds: ['room-a'],
+      layout: { floorNumber: 1, rooms: [{ id: 'room-a', type: 'combat' }] },
+    };
+    const enemy = { id: 'e1', roomId: 'room-a', health: 10, maxHealth: 10, radius: 18, spawnTick: 20 };
+    view._syncNeoPresentationFloor(floorState, { e1: enemy }, {}, { tick: 20, interactables: {}, abilityEntities: {} });
+    expect(neo.enemies[0].spawnT).toBeCloseTo(0.72);
+    view._syncNeoPresentationFloor(floorState, { e1: enemy }, {}, { tick: 35, interactables: {}, abilityEntities: {} });
+    expect(neo.enemies[0].spawnT).toBe(0);
+  });
+
+  test('keeps projected player actors stable for the shared 3D renderer', () => {
+    const neo = { ATTACKS: { melee: { active: 0.17 } }, cooldowns: {} };
+    const view = new NetworkGameView({ session: {}, neo });
+    const state = { tick: 10 };
+    const players = {
+      p1: { id: 'p1', x: 10, y: 20, health: 100, maxHealth: 100, characterKey: 'princess' },
+      p2: { id: 'p2', x: 30, y: 40, health: 100, maxHealth: 100, characterKey: 'metao' },
+    };
+
+    view._syncCampaignPresentationEntities(players, {}, 'p1', state);
+    const firstRemoteActor = view.presentationPlayerSlots.find(slot => slot.id === 'p2').getEntity();
+    players.p2.x = 55;
+    view._syncCampaignPresentationEntities(players, {}, 'p1', { tick: 11 });
+
+    expect(view.presentationPlayerSlots.find(slot => slot.id === 'p2').getEntity()).toBe(firstRemoteActor);
+    expect(firstRemoteActor.x).toBe(55);
   });
 
   test('restores single-player presentation state after leaving a network match', () => {
@@ -197,8 +274,8 @@ describe('network multiplayer game view', () => {
           pendingUpgrade: {
             selectionEventId: 'chest-1', sourceEntityId: 'chest-1',
             options: [
-              { id: 'iron_heart', name: 'Iron Heart', description: '+25 max HP', rarity: 'knight' },
-              { id: 'war_sigil', name: 'War Sigil', description: '+20% damage', rarity: 'knight' },
+              { id: 'titan_heart' },
+              { id: 'attack_servo' },
             ],
           },
         },
@@ -208,9 +285,49 @@ describe('network multiplayer game view', () => {
 
     const choices = view._upgradePresentationPickups(state);
     expect(choices).toHaveLength(2);
-    expect(choices[0]).toEqual(expect.objectContaining({ type: 'rewardChoice', dwellMode: true, itemPresentation: expect.objectContaining({ name: 'Iron Heart' }) }));
+    expect(choices[0]).toEqual(expect.objectContaining({
+      type: 'rewardChoice', dwellMode: true, x: 378, y: 296, side: 'left', picksRemaining: 1,
+      itemPresentation: expect.objectContaining({ id: 'titan_heart' }),
+    }));
+    expect(choices[1]).toEqual(expect.objectContaining({ x: 522, y: 296, side: 'right' }));
     view._updateUpgradeDwell({ x: choices[0].x, y: choices[0].y }, state, 2.2);
-    expect(sent).toEqual([['chest-1', 'iron_heart']]);
+    expect(sent).toEqual([['chest-1', 'titan_heart']]);
+  });
+
+  test('requests authority chest activation at the same proximity as single player', () => {
+    const sent = [];
+    const view = new NetworkGameView({
+      session: { sendInteract: id => sent.push(id) },
+      neo: {},
+    });
+    const state = {
+      interactables: {
+        chest: { id: 'chest', kind: 'relic_chest', roomId: 'treasure', x: 200, y: 200 },
+      },
+    };
+    view._syncAutomaticChestInteraction({ roomId: 'treasure', x: 235, y: 200 }, state);
+    view._syncAutomaticChestInteraction({ roomId: 'treasure', x: 234, y: 200 }, state);
+    view._syncAutomaticChestInteraction({ roomId: 'treasure', x: 234, y: 200 }, state);
+    expect(sent).toEqual(['chest']);
+  });
+
+  test('keeps normal room pillars and chamber geometry in network presentation', () => {
+    const neo = {
+      rngStreams: {}, rng: () => 0.5,
+      createRngStream: () => ({ next: () => 0.5 }),
+      decorateRoomData: room => {
+        room.structures = [{ kind: 'pillar', x: 120, y: 160, w: 34, h: 34 }];
+        room.layoutChambers = [{ x: 40, y: 40, w: 300, h: 260 }];
+        room.destructibles = [{ kind: 'cover_wall' }];
+        room.decorations = [{ kind: 'torch' }];
+      },
+    };
+    const view = new NetworkGameView({ session: {}, neo });
+    const room = { id: 'room-a', cleared: false };
+    view._hydrateRoomDecor(room, { floorSeed: 'floor-a' }, { floorSeed: 'floor-a' });
+    expect(room.structures).toEqual([expect.objectContaining({ kind: 'pillar', x: 120, y: 160 })]);
+    expect(room.layoutChambers).toEqual([{ x: 40, y: 40, w: 300, h: 260 }]);
+    expect(room.destructibles).toEqual([]);
   });
 
   test('uses campaign-authored ability presentation from the authority event', () => {
@@ -307,8 +424,10 @@ describe('network multiplayer game view', () => {
     expect(fs.readFileSync(path.join(root, 'js/rendering/NetworkGameView.js'), 'utf8')).toContain('this.neo.updateHud?.()');
     expect(fs.readFileSync(path.join(root, 'js/rendering/NetworkGameView.js'), 'utf8')).not.toContain('this.neo.uiController?.setHudValues');
     expect(fs.readFileSync(path.join(root, 'js/rendering/NetworkGameView.js'), 'utf8')).not.toContain('_drawAbilityEffects');
-    expect(fs.readFileSync(path.join(root, 'js/draw/viewport.js'), 'utf8')).toContain('drawAuthoritativePlayerEffects?.()');
+    expect(fs.readFileSync(path.join(root, 'js/draw/viewport.js'), 'utf8')).toContain('Neo.drawActivePlayerEffects?.()');
     expect(fs.readFileSync(path.join(root, 'js/rendering/NetworkGameView.js'), 'utf8')).not.toContain("ctx.font = '700 16px VT323, monospace'");
-    expect(fs.readFileSync(path.join(root, 'js/draw/viewport.js'), 'utf8')).toContain('getPresentationPlayerSlots?.()');
+    expect(fs.readFileSync(path.join(root, 'js/draw/viewport.js'), 'utf8')).toContain('Neo.presentationPlayerSlots');
+    expect(fs.readFileSync(path.join(root, 'js/rendering/NetworkGameView.js'), 'utf8')).not.toContain('_renderLegacyFallback');
+    expect(fs.readFileSync(path.join(root, 'js/rendering/NetworkGameView.js'), 'utf8')).not.toContain('_drawPlayer(');
   });
 });

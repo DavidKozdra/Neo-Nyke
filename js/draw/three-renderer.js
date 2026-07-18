@@ -41,6 +41,7 @@ let playerLight = null;
 
 // Entity pools: Map<gameObject, THREE.Object3D>
 const pools = {
+  players: new Map(),
   enemies: new Map(),
   projectiles: new Map(),
   pickups: new Map(),
@@ -814,6 +815,14 @@ function playerSpriteKey() {
     : 'thorn_knight';
 }
 
+function actorPlayerSpriteKey(actor, slot = null) {
+  const key = actor?.character || slot?.getCharacter?.() || 'thorn_knight';
+  const spriteKey = Neo.getCharacterSpriteKey ? Neo.getCharacterSpriteKey(key) : key;
+  return Neo.SPRITE_DEFS?.[spriteKey] || Neo.CHARACTER_SPRITE_SHEETS?.[spriteKey]
+    ? spriteKey
+    : 'thorn_knight';
+}
+
 function facingOf(actor, fallbackAngle) {
   if (Math.abs(actor.vx || 0) > 6) return actor.vx < 0 ? -1 : 1;
   return Math.cos(fallbackAngle) < 0 ? -1 : 1;
@@ -1245,6 +1254,59 @@ function syncPlayer() {
     playerShadow.material.opacity = Number(p.dashTime || 0) > 0 ? 0.4 : 0.28;
   }
   if (playerLight) playerLight.position.set(x, 130, z);
+}
+
+// The browser's regular player-slot projection is also the source of truth for
+// network peers.  Synchronize those actors into the same Three.js scene as the
+// local player so first- and third-person modes do not need a multiplayer-only
+// drawing path.
+function syncOtherPlayers() {
+  const slots = Neo.presentationPlayerSlots || [];
+  const remoteSlots = slots.filter(slot => {
+    const actor = slot?.getEntity?.();
+    return actor && actor !== Neo.player && !slot.getDead?.();
+  });
+  syncPool(
+    pools.players,
+    remoteSlots.map(slot => slot.getEntity()),
+    actor => makeActorGroup(actorPlayerSpriteKey(actor), actor.r || 14),
+    (actor, group) => {
+      const baseKey = actorPlayerSpriteKey(actor);
+      const aim = Number.isFinite(Number(actor.swingA))
+        ? Number(actor.swingA)
+        : Number(actor.aimDirection || 0);
+      const flip = Number(actor.swingFacing || 0)
+        ? Number(actor.swingFacing) < 0
+        : facingOf(actor, aim) < 0;
+      const swingTotal = Neo.ATTACKS?.melee?.active || 0.32;
+      const frameKey = Neo.getActorSpriteFrameKey?.(baseKey, actor, {
+        maxSpeed: actor.mooggyZoomiesTime > 0 ? 640 : actor.princessFlightTime > 0 ? 420 : 260,
+        stepRate: actor.mooggyZoomiesTime > 0 ? 11 : 7.5,
+        attackProgress: Math.max(0, 1 - Number(actor.swing || 0) / swingTotal),
+        seedKey: `player:${actor.id || actor.displayName || 'remote'}`,
+      }) || baseKey;
+      let bob = walkBob(actor, Number(actor.x || 0));
+      if (Number(actor.dashTime || 0) > 0) {
+        bob = { ...bob, hop: bob.hop + 4, squashX: bob.squashX + 0.12, squashY: bob.squashY - 0.075 };
+      }
+      const tint = actor.inv > 0 && Math.floor(Neo.frameId / 3) % 2 === 0 ? 0xff9999 : 0xffffff;
+      group.visible = true;
+      group.position.set(actor.x, 0, actor.y);
+      updateActorSprite(group, frameKey, actor.r || 14, flip, { ...bob, tint });
+      syncPlayerArm(group, baseKey, actor, aim, flip, {
+        attackProgress: Number(actor.swing || 0) > 0
+          ? Math.max(0, 1 - Number(actor.swing || 0) / swingTotal)
+          : 0,
+      });
+      syncActorStatus(group, actor, actor.r || 14, true);
+      const shadow = group.getObjectByName('shadow');
+      if (shadow) {
+        const dashScale = Number(actor.dashTime || 0) > 0 ? 1.18 : 1;
+        shadow.scale.setScalar((actor.r || 14) * 2 * dashScale);
+        shadow.material.opacity = Number(actor.dashTime || 0) > 0 ? 0.4 : 0.28;
+      }
+    },
+  );
 }
 
 // The enemy nameplate — name + level + HP text + health bar (+ barrier bar) —
@@ -2156,12 +2218,13 @@ function addBeamSegment(x1, z1, x2, z2, color, width = 6, opacity = 0.88) {
   beamMeshes.push(mesh);
 }
 
-function getPlayerBeamVisual() {
-  const p = Neo.player;
+function getPlayerBeamVisual(effect = null) {
+  const p = effect?.player || Neo.player;
   if (!p || typeof Neo.buildRicochetBeamPath !== 'function') return null;
   const beamWidthMultiplier = Number(Neo.getItemStats?.()?.beamWidthMultiplier || 1);
 
-  if (!Neo.laserActive && Neo.getEquippedWeapon?.() === 'lazer_glasses' && Number(p.weaponBeamTime || 0) > 0) {
+  const laserActive = effect ? !!effect.laserActive : !!Neo.laserActive;
+  if (!laserActive && Neo.getEquippedWeapon?.() === 'lazer_glasses' && Number(p.weaponBeamTime || 0) > 0) {
     const angle = Neo.angleToMouse?.() ?? 0;
     return {
       color: '#cda8ff',
@@ -2172,15 +2235,16 @@ function getPlayerBeamVisual() {
     };
   }
 
-  if (!Neo.laserActive) return null;
-  const move = Neo.getEquippedMove?.('laser');
-  const mode = Neo.laserMode;
+  if (!laserActive) return null;
+  const move = effect?.equippedLaser || Neo.getEquippedMove?.('laser');
+  const mode = effect?.laserMode || Neo.laserMode;
   const thornBeams = mode === 'thorn_blood_beams';
   const holyEyeBeams = mode === 'holy_eye_beams';
-  const angle = Number(Neo.laserAngle || 0);
+  const angle = Number(effect?.laserAngle ?? Neo.laserAngle ?? 0);
   const fan = thornBeams ? [-0.32, -0.11, 0.11, 0.32] : holyEyeBeams ? [-0.07, 0.07] : [0];
-  const paths = Array.isArray(Neo.activeBeamPaths) && Neo.activeBeamPaths.length
-    ? Neo.activeBeamPaths
+  const activePaths = effect?.activeBeamPaths || Neo.activeBeamPaths;
+  const paths = Array.isArray(activePaths) && activePaths.length
+    ? activePaths
     : fan.map(offset => Neo.buildRicochetBeamPath(
       p.x,
       p.y,
@@ -2189,7 +2253,7 @@ function getPlayerBeamVisual() {
       Neo.getPlayerBeamBounceCount?.(mode) ?? 0,
     ));
   const turtleWave = mode === 'turtle_wave';
-  const loveBeam = !!Neo.loveBeamCasting;
+  const loveBeam = effect ? !!effect.loveBeamCasting : !!Neo.loveBeamCasting;
   const wizardBeam = move === 'wizard_lazer';
   const mooggyBeam = move === 'mooggy_blood_beam';
   return {
@@ -2249,8 +2313,11 @@ function getEnemyBeamVisual(enemy) {
 
 function syncBeams() {
   clearBeams();
-  const playerBeam = getPlayerBeamVisual();
-  if (playerBeam) {
+  const presentedEffects = Neo.activePlayerEffects;
+  const playerBeams = Array.isArray(presentedEffects)
+    ? presentedEffects.map(effect => getPlayerBeamVisual(effect)).filter(Boolean)
+    : [getPlayerBeamVisual()].filter(Boolean);
+  playerBeams.forEach(playerBeam => {
     const color = new THREE.Color(playerBeam.color).getHex();
     const wavePulse = 0.85 + Math.sin(performance.now() / 85) * 0.15;
     playerBeam.paths.forEach(path => path.forEach(seg => {
@@ -2262,7 +2329,7 @@ function syncBeams() {
       }
       addBeamSegment(seg.x1, seg.y1, seg.x2, seg.y2, color, playerBeam.width, playerBeam.turtleWave ? 0.78 : 0.88);
     }));
-  }
+  });
   // Enemy and rival beams use the same range, fan and ricochet path used by
   // combat and the top-down renderer — visual walls can never disagree with
   // what can damage the player.
@@ -2865,6 +2932,7 @@ function render() {
   if (ambientLight) ambientLight.intensity = 0.92 - Math.min(0.45, darkness * 2.2);
 
   syncPlayer();
+  syncOtherPlayers();
   syncPlayerMeleeIndicator();
   syncEnemies();
   syncProjectiles();
@@ -2962,6 +3030,8 @@ Neo.threeRenderer = {
     fpPitch,
     roomChildren: roomGroup?.children?.length,
     justiceBlades: pools.justiceBlades.size,
+    otherPlayers: pools.players.size,
+    beams: beamMeshes.length,
     floorHasMap: !!floorMesh?.material?.map,
     contextLost: !!renderer?.getContext?.()?.isContextLost?.(),
   }),

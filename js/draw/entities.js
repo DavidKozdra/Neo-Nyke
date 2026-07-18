@@ -1938,6 +1938,49 @@
     Neo.ctx.globalAlpha = 1;
   }
 
+  // Draw player effects from the browser's ordinary presentation state. Local
+  // play has no projected list and uses its existing globals. A remote authority
+  // supplies the same cosmetic inputs for every player, never drawing anything.
+  function drawActivePlayerEffects() {
+    const effects = Neo.activePlayerEffects;
+    if (!Array.isArray(effects)) {
+      drawPlayerLaser();
+      return;
+    }
+    const saved = {
+      player: Neo.player,
+      laserActive: Neo.laserActive,
+      laserTime: Neo.laserTime,
+      laserTick: Neo.laserTick,
+      laserMode: Neo.laserMode,
+      laserAngle: Neo.laserAngle,
+      laserSweepSpeed: Neo.laserSweepSpeed,
+      loveBeamCasting: Neo.loveBeamCasting,
+      activeBeamPaths: Neo.activeBeamPaths,
+      rng: Neo.rng,
+    };
+    try {
+      effects.forEach(effect => {
+        if (!effect?.player || !effect.laserActive) return;
+        Neo.player = effect.player;
+        Neo.laserActive = true;
+        Neo.laserTime = Number(effect.laserTime || 0);
+        Neo.laserTick = Number(effect.laserTick || 0);
+        Neo.laserMode = effect.laserMode || 'beam';
+        Neo.laserAngle = Number(effect.laserAngle || 0);
+        Neo.laserSweepSpeed = Number(effect.laserSweepSpeed || 0);
+        Neo.loveBeamCasting = !!effect.loveBeamCasting;
+        Neo.activeBeamPaths = effect.activeBeamPaths || null;
+        Neo.rng = typeof saved.rng === 'function'
+          ? saved.rng
+          : () => Neo.nextRandom?.('fx') ?? Math.random();
+        drawPlayerLaser();
+      });
+    } finally {
+      Object.assign(Neo, saved);
+    }
+  }
+
   // Expose on Neo
   Neo.buildSpriteAtlas = buildSpriteAtlas;
   Neo.getEnemySpriteKey = getEnemySpriteKey;
@@ -1974,3 +2017,4 @@
   Neo.drawPlayer2 = drawPlayer2;
   Neo.drawPlayerN = drawPlayerN;
   Neo.drawPlayerLaser = drawPlayerLaser;
+  Neo.drawActivePlayerEffects = drawActivePlayerEffects;

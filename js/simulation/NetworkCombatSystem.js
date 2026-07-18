@@ -73,37 +73,36 @@
     turtle_boy: Object.freeze({ maxHealth: 144, moveSpeed: 180, damageMultiplier: 1 }),
     sarge: Object.freeze({ maxHealth: 108, moveSpeed: 180, damageMultiplier: 1.05 }),
   });
-  const NETWORK_RELICS = Object.freeze({
-    iron_heart: Object.freeze({ name: 'Iron Heart', description: '+25 max HP and heal 25.', rarity: 'knight', color: '#d7f6ff', maxHealth: 25, heal: 25 }),
-    war_sigil: Object.freeze({ name: 'War Sigil', description: '+20% damage.', rarity: 'knight', color: '#ff718c', damageMultiplier: 0.2 }),
-    quicksilver_boots: Object.freeze({ name: 'Quicksilver Boots', description: '+12% move speed.', rarity: 'artificer', color: '#7dbdff', moveSpeedMultiplier: 0.12 }),
-    chronometer: Object.freeze({ name: 'Chronometer', description: 'Abilities recover 12% faster.', rarity: 'wizard', color: '#c996ff', cooldownMultiplier: -0.12 }),
-    coin_charm: Object.freeze({ name: 'Coin Charm', description: '+1 gold from every coin.', rarity: 'knight', color: '#ffd966', goldBonus: 1 }),
-    long_reach: Object.freeze({ name: 'Long Reach', description: 'Collect drops from farther away.', rarity: 'knight', color: '#a7ffdc', pickupRadius: 55 }),
-    field_rations: Object.freeze({ name: 'Field Rations', description: 'Restore 45% health.', rarity: 'knave', color: '#8cff9d', healFraction: 0.45 }),
-    glass_crown: Object.freeze({ name: 'Glass Crown', description: '+35% damage, -15 max HP.', rarity: 'god', color: '#ffdf6d', damageMultiplier: 0.35, maxHealth: -15 }),
+  // Real campaign items from ITEM_DEFS. Multiplayer must never invent a second
+  // reward catalog. These headless records contain only authority-relevant
+  // facts; the browser resolves names, descriptions, rarity and icons through
+  // its normal itemRegistry using the same keys.
+  const CAMPAIGN_CHEST_ITEMS = Object.freeze({
+    titan_heart: Object.freeze({ maxHealthMultiplier: 0.08 }),
+    attack_servo: Object.freeze({ attackSpeedMultiplier: 0.08 }),
+    turtle_shell: Object.freeze({ moveSpeedMultiplier: 0.05 }),
   });
 
   function getHeroPrimaryAttack(characterKey) {
     return HERO_PRIMARY_ATTACKS[characterKey] || HERO_PRIMARY_ATTACKS.thorn_knight;
   }
 
-  function applyNetworkRelic(player, relicId) {
-    const relic = NETWORK_RELICS[relicId];
-    if (!player || !relic) return false;
-    player.relics = Array.isArray(player.relics) ? player.relics : [];
-    player.relics.push(relicId);
-    if (relic.maxHealth) {
-      player.maxHealth = Math.max(1, Number(player.maxHealth || 100) + relic.maxHealth);
-      player.health = Math.min(player.maxHealth, Math.max(1, Number(player.health || 0) + Math.max(0, relic.maxHealth)));
+  function applyCampaignItem(player, itemKey) {
+    const item = CAMPAIGN_CHEST_ITEMS[itemKey];
+    if (!player || !item) return false;
+    player.items = player.items || {};
+    player.items[itemKey] = Number(player.items[itemKey] || 0) + 1;
+    if (item.maxHealthMultiplier) {
+      const increase = Math.max(1, Math.round(Number(player.maxHealth || 100) * item.maxHealthMultiplier));
+      player.maxHealth = Math.max(1, Number(player.maxHealth || 100) + increase);
+      player.health = Math.min(player.maxHealth, Number(player.health || 0) + increase);
     }
-    if (relic.heal) player.health = Math.min(player.maxHealth, Number(player.health || 0) + relic.heal);
-    if (relic.healFraction) player.health = Math.min(player.maxHealth, Number(player.health || 0) + player.maxHealth * relic.healFraction);
-    if (relic.damageMultiplier) player.damageMultiplier = Math.max(0.1, Number(player.damageMultiplier || 1) + relic.damageMultiplier);
-    if (relic.moveSpeedMultiplier) player.moveSpeed = Math.max(1, Number(player.moveSpeed || 180) * (1 + relic.moveSpeedMultiplier));
-    if (relic.cooldownMultiplier) player.cooldownMultiplier = Math.max(0.45, Number(player.cooldownMultiplier || 1) + relic.cooldownMultiplier);
-    if (relic.goldBonus) player.goldBonus = Number(player.goldBonus || 0) + relic.goldBonus;
-    if (relic.pickupRadius) player.pickupRadius = Math.max(Number(player.pickupRadius || 0), relic.pickupRadius);
+    if (item.attackSpeedMultiplier) {
+      player.cooldownMultiplier = Math.max(0.45, Number(player.cooldownMultiplier || 1) / (1 + item.attackSpeedMultiplier));
+    }
+    if (item.moveSpeedMultiplier) {
+      player.moveSpeed = Math.max(1, Number(player.moveSpeed || 180) * (1 + item.moveSpeedMultiplier));
+    }
     return true;
   }
 
@@ -253,7 +252,7 @@
     for (let index = 0; index < chestCount; index += 1) {
       const interactableId = state.allocateEntityId('interactable');
       const spread = chestCount === 1 ? 0 : (index === 0 ? -105 : 105);
-      const optionIds = stream.shuffle(Object.keys(NETWORK_RELICS)).slice(0, 2);
+      const optionIds = stream.shuffle(Object.keys(CAMPAIGN_CHEST_ITEMS)).slice(0, 2);
       const chest = {
         id: interactableId,
         kind: 'relic_chest',
@@ -1009,7 +1008,7 @@
       selectionEventId: target.id,
       sourceEntityId: target.id,
       optionIds: target.optionIds.slice(),
-      options: target.optionIds.map(optionId => ({ id: optionId, ...NETWORK_RELICS[optionId] })),
+      options: target.optionIds.map(optionId => ({ id: optionId })),
     };
     target.activated = true;
     target.offeredTo = player.id;
@@ -1037,7 +1036,7 @@
       player.pendingUpgrade = null;
       return false;
     }
-    if (!applyNetworkRelic(player, action.optionId)) return false;
+    if (!applyCampaignItem(player, action.optionId)) return false;
     source.opened = true;
     source.claimedBy = player.id;
     source.openedTick = state.tick;
@@ -1053,7 +1052,7 @@
       playerId: player.id,
       selectionEventId: action.selectionEventId,
       optionId: action.optionId,
-      relicCount: player.relics.length,
+      itemCount: Object.values(player.items || {}).reduce((total, count) => total + Number(count || 0), 0),
     });
     return true;
   }
@@ -1218,6 +1217,16 @@
         if (state.tick - Number(enemy.deathTick || 0) >= ENEMY_DEATH_TICKS) delete state.enemies[enemyId];
         return;
       }
+      // Match the campaign's 0.72 second portal/emergence window. During this
+      // authoritative phase the enemy cannot move, attack, or deal contact
+      // damage; every client is free to render the shared spawn animation.
+      if (state.tick - Number(enemy.spawnTick || 0) < 15) {
+        enemy.state = 'spawning';
+        enemy.vx = 0;
+        enemy.vy = 0;
+        return;
+      }
+      if (enemy.state === 'spawning') enemy.state = 'chasing';
       if (Number(enemy.bleedTicksRemaining || 0) > 0 && state.tick >= Number(enemy.bleedNextTick || 0)) {
         enemy.bleedTicksRemaining -= 1;
         enemy.bleedNextTick = state.tick + 10;
@@ -1674,11 +1683,11 @@
     PROJECTILE_SPEED,
     HERO_PRIMARY_ATTACKS,
     HERO_BASE_STATS,
-    NETWORK_RELICS,
+    CAMPAIGN_CHEST_ITEMS,
     ENEMY_ARCHETYPES,
     getHeroPrimaryAttack,
     applyNetworkHeroProfile,
-    applyNetworkRelic,
+    applyCampaignItem,
     ensureNetworkEncounter,
     ensureNetworkRoomReward,
     isNetworkRoomLocked,

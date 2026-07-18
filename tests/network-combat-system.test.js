@@ -35,6 +35,20 @@ function combatHarness(characterKey = 'princess') {
 }
 
 describe('authoritative network combat system', () => {
+  test('holds newly spawned enemies harmless during the shared portal animation', () => {
+    const { state, simulation, events } = combatHarness();
+    simulation.updateGame({}, 0.05);
+    const enemy = Object.values(state.enemies)[0];
+    enemy.x = state.players.p1.x;
+    enemy.y = state.players.p1.y;
+    enemy.attackCooldownUntilTick = 0;
+    const startingHealth = state.players.p1.health;
+    for (let tick = 0; tick < 13; tick += 1) simulation.updateGame({}, 0.05);
+    expect(enemy.state).toBe('spawning');
+    expect(state.players.p1.health).toBe(startingHealth);
+    expect(events.some(event => event.eventType === 'PLAYER_HIT')).toBe(false);
+  });
+
   test('creates the selected hero with their campaign starter inventory and loadout', () => {
     const player = { maxHealth: 100, health: 100 };
     applyNetworkHeroProfile(player, 'thorn_knight');
@@ -269,7 +283,7 @@ describe('authoritative network combat system', () => {
     enemy.attackCooldownUntilTick = state.tick;
     enemy.x = 560;
     enemy.y = 350;
-    for (let tick = 0; tick < 10; tick += 1) simulation.updateGame({}, 0.05);
+    for (let tick = 0; tick < 25; tick += 1) simulation.updateGame({}, 0.05);
 
     expect(events.some(event => event.eventType === 'ENEMY_TELEGRAPH')).toBe(true);
     expect(events.some(event => event.eventType === 'ENEMY_ATTACKED')).toBe(true);

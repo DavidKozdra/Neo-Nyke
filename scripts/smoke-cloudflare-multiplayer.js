@@ -83,12 +83,12 @@ async function main() {
     await host.waitForFunction(() => globalThis.Neo.gameSession.snapshot().lobbyState?.members?.length === 2);
 
     await host.locator('#coopLobbyPicker [data-char="princess"]').click();
-    await guest.locator('#coopLobbyPicker [data-char="metao"]').click();
+    await guest.locator('#coopLobbyPicker [data-char="gelleh"]').click();
     await Promise.all([
       host.waitForFunction(() => globalThis.Neo.gameSession.snapshot().lobbyState?.members
         ?.find(member => member.playerId === globalThis.Neo.gameSession.snapshot().playerId)?.characterKey === 'princess'),
       guest.waitForFunction(() => globalThis.Neo.gameSession.snapshot().lobbyState?.members
-        ?.find(member => member.playerId === globalThis.Neo.gameSession.snapshot().playerId)?.characterKey === 'metao'),
+        ?.find(member => member.playerId === globalThis.Neo.gameSession.snapshot().playerId)?.characterKey === 'gelleh'),
     ]);
 
     await Promise.all([
@@ -108,6 +108,9 @@ async function main() {
       && !document.querySelector('#hud')?.classList.contains('hidden')
       && !document.querySelector('#actionBar')?.classList.contains('hidden')
     ), undefined, { timeout: 45_000 })));
+    const initialEnemyCount = await host.evaluate(() => Object.values(
+      globalThis.Neo.gameSession.snapshot().gameState?.enemies || {},
+    ).filter(enemy => !enemy.dead).length);
 
     // FPS is a local presentation preference. Prove that changing it through
     // the normal in-game Settings UI leaves the network session alone and that
@@ -123,48 +126,94 @@ async function main() {
         renderer.__networkFpsSmokeCalls += 1;
         return originalRender(...args);
       };
+      if (globalThis.Neo?.drawWorldViewport && !globalThis.Neo.__network2dSmokeWrapped) {
+        const originalWorldViewport = globalThis.Neo.drawWorldViewport.bind(globalThis.Neo);
+        globalThis.Neo.__network2dSmokeCalls = 0;
+        globalThis.Neo.__network2dSmokeWrapped = true;
+        globalThis.Neo.drawWorldViewport = (...args) => {
+          globalThis.Neo.__network2dSmokeCalls += 1;
+          return originalWorldViewport(...args);
+        };
+      }
     });
     await host.keyboard.press('Escape');
     await host.locator('#pause').waitFor({ state: 'visible' });
     await host.locator('#pauseSettings').click();
     await host.locator('#settingsModal').waitFor({ state: 'visible' });
     await host.locator('[data-tab="gameplay"]').click();
+    await host.locator('[data-view-mode="2d"]').click();
+    await host.waitForFunction(() => (
+      globalThis.Neo?.getViewMode?.() === '2d'
+      && globalThis.Neo?.render3D === false
+      && globalThis.Neo?.presentationPlayerSlots?.length === 2
+      && (globalThis.Neo?.__network2dSmokeCalls || 0) > 0
+    ), undefined, { timeout: 10_000 });
+    const twoDimensionalProof = {
+      mode: await host.evaluate(() => globalThis.Neo?.getViewMode?.()),
+      visiblePlayers: await host.evaluate(() => globalThis.Neo?.presentationPlayerSlots?.length || 0),
+      worldViewportCalls: await host.evaluate(() => globalThis.Neo?.__network2dSmokeCalls || 0),
+      canvasRendered: await canvasHasRenderedDungeon(host),
+    };
     await host.locator('[data-view-mode="fp"]').click();
     await host.waitForFunction(() => (
       globalThis.Neo?.getViewMode?.() === 'fp'
       && globalThis.Neo?.render3D === true
       && (globalThis.Neo?.threeRenderer?.__networkFpsSmokeCalls || 0) > 0
+      && globalThis.Neo?.threeRenderer?._debug?.().otherPlayers === 1
       && document.querySelector('#c3d')?.style.display === 'block'
     ), undefined, { timeout: 10_000 });
     const fpsProof = await host.evaluate(() => ({
       mode: globalThis.Neo?.getViewMode?.(),
       render3D: globalThis.Neo?.render3D === true,
       threeRendererCalls: globalThis.Neo?.threeRenderer?.__networkFpsSmokeCalls || 0,
+      visibleRemotePlayers: globalThis.Neo?.threeRenderer?._debug?.().otherPlayers || 0,
       gameViewActive: globalThis.Neo?.multiplayerGameView?.active === true,
       sessionStatus: globalThis.Neo?.gameSession?.snapshot?.().status,
     }));
+    await host.locator('[data-view-mode="third"]').click();
+    await host.waitForFunction(() => (
+      globalThis.Neo?.getViewMode?.() === 'third'
+      && globalThis.Neo?.threeRenderer?._debug?.().otherPlayers === 1
+    ), undefined, { timeout: 10_000 });
+    const thirdPersonProof = await host.evaluate(() => ({
+      mode: globalThis.Neo?.getViewMode?.(),
+      visibleRemotePlayers: globalThis.Neo?.threeRenderer?._debug?.().otherPlayers || 0,
+    }));
+    await host.locator('[data-view-mode="fp"]').click();
+    const settingsOpened = await host.locator('#settingsModal').isVisible();
     await host.locator('#settingsClose').click();
-    await host.keyboard.press('Escape');
+    await host.locator('#pauseResume').click();
+    await host.locator('#pause').waitFor({ state: 'hidden' });
+    const pauseProof = await host.evaluate(opened => ({
+      settingsOpened: opened,
+      resumed: document.querySelector('#pause')?.classList.contains('hidden') === true,
+      legacyGameStateWasNotStarted: globalThis.Neo?.gameState !== 'play',
+    }), settingsOpened);
 
-    const initialEnemyCount = await host.evaluate(() => Object.values(
-      globalThis.Neo.gameSession.snapshot().gameState?.enemies || {},
-    ).filter(enemy => !enemy.dead).length);
-    for (let attempt = 0; attempt < 8; attempt += 1) {
-      const target = await host.evaluate(() => {
-        const snapshot = globalThis.Neo.gameSession.snapshot();
-        const player = snapshot.gameState?.players?.[snapshot.playerId];
-        const enemy = Object.values(snapshot.gameState?.enemies || {}).find(candidate => !candidate.dead);
-        if (!player || !enemy) return null;
-        const angle = Math.atan2(enemy.y - player.y, enemy.x - player.x);
-        globalThis.Neo.multiplayerGameView.aimDirection = angle;
-        return { enemyId: enemy.id, health: enemy.health, angle };
-      });
-      if (!target) break;
-      await host.keyboard.press('Space');
-      await host.waitForTimeout(520);
-    }
-    await host.waitForFunction(() => globalThis.Neo.gameSession.snapshot().gameplayEvents
-      ?.some(event => event.eventType === 'PLAYER_ATTACKED'), undefined, { timeout: 10_000 });
+    // Trigger Princess's real RMB Love Beam. Both the ordinary projected effect
+    // list and the ordinary Three.js beam scene must see it; no network renderer
+    // is involved in either assertion.
+    await host.locator('#c').click({ button: 'right', position: { x: 640, y: 360 }, force: true });
+    await host.waitForFunction(() => {
+      const effects = globalThis.Neo?.activePlayerEffects || [];
+      const beams = globalThis.Neo?.threeRenderer?._debug?.().beams || 0;
+      if (!effects.some(effect => effect.abilityId === 'love_beam') || beams < 1) return false;
+      globalThis.__networkBeamProof = { activeEffects: effects.length, beams };
+      return true;
+    }, undefined, { timeout: 10_000 });
+    const beamProof = await host.evaluate(() => globalThis.__networkBeamProof);
+
+    // Gelleh's RMB uses Blade Justice. Prove the remote action becomes the same
+    // three ordinary sword objects in the host's 2D/Three.js presentation.
+    await guest.locator('#c').click({ button: 'right', position: { x: 640, y: 360 }, force: true });
+    await host.waitForFunction(() => {
+      const blades = globalThis.Neo?.justiceBlades || [];
+      const rendered = globalThis.Neo?.threeRenderer?._debug?.().justiceBlades || 0;
+      if (blades.length !== 3 || rendered !== 3) return false;
+      globalThis.__networkBladeProof = { projectedBlades: blades.length, renderedBlades: rendered };
+      return true;
+    }, undefined, { timeout: 10_000 });
+    const bladeJusticeProof = await host.evaluate(() => globalThis.__networkBladeProof);
 
     // Movement remains normal browser input; only its result is authoritative.
     const movementStart = await host.evaluate(() => {
@@ -176,7 +225,7 @@ async function main() {
     await host.waitForFunction(start => {
       const snapshot = globalThis.Neo.gameSession.snapshot();
       const player = snapshot.gameState?.players?.[snapshot.playerId];
-      return player && Math.abs(player.x - start.x) > 20;
+      return player && Math.hypot(player.x - start.x, player.y - start.y) > 20;
     }, movementStart, { timeout: 10_000 });
     await Promise.all([
       host.waitForFunction(() => globalThis.Neo.gameSession.snapshot().gameState?.tick >= 10),
@@ -190,7 +239,11 @@ async function main() {
     const hostPlayers = hostSnapshot.gameState?.players || {};
     const guestPlayers = guestSnapshot.gameState?.players || {};
     const converged = JSON.stringify(hostPlayers) === JSON.stringify(guestPlayers);
-    const moved = Math.abs(Number(hostPlayers[hostSnapshot.playerId]?.x || 0) - movementStart.x) > 20;
+    const movedPlayer = hostPlayers[hostSnapshot.playerId];
+    const moved = Math.hypot(
+      Number(movedPlayer?.x || 0) - movementStart.x,
+      Number(movedPlayer?.y || 0) - movementStart.y,
+    ) > 20;
     const [hostCanvasRendered, guestCanvasRendered] = await Promise.all([
       canvasHasRenderedDungeon(host),
       canvasHasRenderedDungeon(guest),
@@ -209,7 +262,12 @@ async function main() {
       tick: hostSnapshot.gameState?.tick,
       memberCount: hostSnapshot.lobbyState?.members?.length,
       gameViewActive: await host.evaluate(() => globalThis.Neo.multiplayerGameView?.active === true),
+      pauseProof,
+      twoDimensionalProof,
       fpsProof,
+      thirdPersonProof,
+      beamProof,
+      bladeJusticeProof,
       hostCanvasRendered,
       guestCanvasRendered,
       hostRenderedPlayerCount,
@@ -236,15 +294,42 @@ async function main() {
       ]);
       report.screenshots = { host: hostScreenshotPath, guest: guestScreenshotPath };
     }
+    await host.evaluate(() => document.querySelector('#multiplayerLeaveGame')?.click());
+    await host.waitForFunction(() => (
+      !globalThis.Neo?.multiplayerGameView
+      && !document.querySelector('#start')?.classList.contains('hidden')
+      && !document.body.classList.contains('network-multiplayer-active')
+      && !document.body.classList.contains('render3d')
+      && document.querySelector('#c3d')?.style.display === 'none'
+    ), undefined, { timeout: 10_000 });
+    report.leaveProof = await host.evaluate(() => ({
+      gameViewReleased: !globalThis.Neo?.multiplayerGameView,
+      menuVisible: !document.querySelector('#start')?.classList.contains('hidden'),
+      networkClassRemoved: !document.body.classList.contains('network-multiplayer-active'),
+      webglSuspended: !document.body.classList.contains('render3d')
+        && document.querySelector('#c3d')?.style.display === 'none',
+      pauseClosed: document.querySelector('#pause')?.classList.contains('hidden') === true,
+      settingsClosed: document.querySelector('#settingsModal')?.classList.contains('hidden') === true,
+    }));
     console.log(JSON.stringify(report, null, 2));
     if (!converged || !moved || report.gameViewActive !== true
       || hostRenderedPlayerCount < 2 || guestRenderedPlayerCount < 2
-      || hostPlayers['player-1']?.characterKey !== 'princess' || hostPlayers['player-2']?.characterKey !== 'metao'
+      || hostPlayers['player-1']?.characterKey !== 'princess' || hostPlayers['player-2']?.characterKey !== 'gelleh'
       || hostPlayers['player-1']?.items?.princes_glasses !== 1
-      || hostPlayers['player-2']?.items?.mateos_bag !== 1
+      || hostPlayers['player-2']?.items?.zap_to_extreme !== 1
       || initialEnemyCount < 1
       || report.floorRoomCount < 8
+      || report.twoDimensionalProof.mode !== '2d' || report.twoDimensionalProof.visiblePlayers !== 2
+      || report.twoDimensionalProof.worldViewportCalls < 1
       || report.fpsProof.mode !== 'fp' || !report.fpsProof.render3D
+      || report.fpsProof.visibleRemotePlayers !== 1
+      || report.thirdPersonProof.mode !== 'third' || report.thirdPersonProof.visibleRemotePlayers !== 1
+      || report.beamProof.activeEffects < 1 || report.beamProof.beams < 1
+      || report.bladeJusticeProof.projectedBlades !== 3 || report.bladeJusticeProof.renderedBlades !== 3
+      || !report.pauseProof.settingsOpened || !report.pauseProof.resumed || !report.pauseProof.legacyGameStateWasNotStarted
+      || !report.leaveProof.gameViewReleased || !report.leaveProof.menuVisible
+      || !report.leaveProof.networkClassRemoved || !report.leaveProof.webglSuspended
+      || !report.leaveProof.pauseClosed || !report.leaveProof.settingsClosed
       || report.fpsProof.threeRendererCalls < 1 || !report.fpsProof.gameViewActive
       || report.fpsProof.sessionStatus !== 'running' || errors.length) process.exitCode = 1;
   } finally {

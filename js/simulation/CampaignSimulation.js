@@ -22,7 +22,7 @@
   const { applyResponsiveVelocity } = movementRulesApi;
   const { createNetworkCombatSystem, createFloorProgressionSystem, applyNetworkHeroProfile } = combatApi;
 
-  const CAMPAIGN_CONTENT_VERSION = 'shared-neo-campaign-parity-v15';
+  const CAMPAIGN_CONTENT_VERSION = 'shared-neo-campaign-parity-v16';
   const CAMPAIGN_ROOM = Object.freeze({ id: 'campaign-start-room', width: 900, height: 700, wallThickness: 28, doorWidth: 140 });
   const ROOM_DIRECTIONS = Object.freeze({
     n: Object.freeze({ dx: 0, dy: -1, opposite: 's' }),

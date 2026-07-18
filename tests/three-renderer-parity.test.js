@@ -20,6 +20,14 @@ describe('3D renderer gameplay parity', () => {
     expect(renderer).toContain('function syncPlayerDeathPool(anim, size, fallEase)');
   });
 
+  test('renders network peers through the normal first- and third-person scene', () => {
+    expect(renderer).toContain('function syncOtherPlayers()');
+    expect(renderer).toContain('Neo.presentationPlayerSlots || []');
+    expect(renderer).toContain('syncPool(\n    pools.players,');
+    expect(renderer).toContain('syncOtherPlayers();');
+    expect(renderer).toContain('otherPlayers: pools.players.size');
+  });
+
   test('carries shared chaos, oak, and shop-card visuals into 3D', () => {
     expect(renderer).toContain("if (hazard.kind === 'chaos_burst') return makeChaosBurstObject();");
     expect(renderer).toContain('function updateChaosBurst(hazard, group)');
@@ -38,7 +46,8 @@ describe('3D renderer gameplay parity', () => {
   });
 
   test('renders live combat beam paths instead of a fixed visual-only beam', () => {
-    expect(renderer).toContain('function getPlayerBeamVisual()');
+    expect(renderer).toContain('function getPlayerBeamVisual(effect = null)');
+    expect(renderer).toContain('Neo.activePlayerEffects');
     expect(renderer).toContain('Neo.activeBeamPaths');
     expect(renderer).toContain("color: '#cda8ff'");
     expect(renderer).toContain('Neo.getPlayerBeamRange?.(mode, move)');
