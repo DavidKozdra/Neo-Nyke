@@ -34,6 +34,7 @@
   const LOCKING_ENCOUNTER_ROOM_TYPES = new Set(['challenge', 'ladder', 'boss', 'god']);
   const {
     CHARACTER_DEFAULT_WEAPONS = {},
+    CHARACTER_STARTING_ITEMS = {},
     DEFAULT_WEAPON_ATTACKS = {},
     PROJECTILE_TYPE_DEFS = {},
     WEAPON_BASE_STATS = {},
@@ -60,14 +61,17 @@
     })]),
   ));
   const ENEMY_ARCHETYPES = ENEMY_CATALOG;
+  // These are the campaign character multipliers applied to its 120 HP base.
+  // Keep the authority's selected hero identical to createDefaultPlayer(),
+  // rather than maintaining a separate multiplayer balance table.
   const HERO_BASE_STATS = Object.freeze({
-    princess: Object.freeze({ maxHealth: 115, moveSpeed: 180 }),
-    thorn_knight: Object.freeze({ maxHealth: 100, moveSpeed: 180 }),
-    metao: Object.freeze({ maxHealth: 100, moveSpeed: 180 }),
-    gelleh: Object.freeze({ maxHealth: 100, moveSpeed: 185 }),
-    mooggy: Object.freeze({ maxHealth: 108, moveSpeed: 205 }),
-    turtle_boy: Object.freeze({ maxHealth: 120, moveSpeed: 165 }),
-    sarge: Object.freeze({ maxHealth: 90, moveSpeed: 165 }),
+    princess: Object.freeze({ maxHealth: 138, moveSpeed: 180, damageMultiplier: 1.2 }),
+    thorn_knight: Object.freeze({ maxHealth: 120, moveSpeed: 180, damageMultiplier: 1 }),
+    metao: Object.freeze({ maxHealth: 120, moveSpeed: 180, damageMultiplier: 0.5 }),
+    gelleh: Object.freeze({ maxHealth: 120, moveSpeed: 180, damageMultiplier: 1 }),
+    mooggy: Object.freeze({ maxHealth: 130, moveSpeed: 180, damageMultiplier: 0.6 }),
+    turtle_boy: Object.freeze({ maxHealth: 144, moveSpeed: 180, damageMultiplier: 1 }),
+    sarge: Object.freeze({ maxHealth: 108, moveSpeed: 180, damageMultiplier: 1.05 }),
   });
   const NETWORK_RELICS = Object.freeze({
     iron_heart: Object.freeze({ name: 'Iron Heart', description: '+25 max HP and heal 25.', rarity: 'knight', color: '#d7f6ff', maxHealth: 25, heal: 25 }),
@@ -109,14 +113,20 @@
     const previousMaximum = Math.max(1, Number(player.maxHealth || profile.maxHealth));
     const healthRatio = Math.max(0, Math.min(1, Number(player.health ?? previousMaximum) / previousMaximum));
     player.characterKey = key;
+    player.character = key;
     player.equippedWeapon = getCharacterDefaultWeapon(key);
     player.equippedMoves = getDefaultMoveLoadout(key);
+    player.ownedWeapons = { [player.equippedWeapon]: true };
+    player.ownedMoves = Object.fromEntries(Object.values(player.equippedMoves).map(moveKey => [moveKey, true]));
+    player.items = { ...(CHARACTER_STARTING_ITEMS[key] || {}) };
+    player.equipmentSlots = key === 'metao' ? ['mateos_bag'] : [];
     player.moveCooldownUntilTick = {};
     player.statusUntilTick = {};
     player.barrier = 0;
     player.maxHealth = profile.maxHealth;
     player.health = Math.round(profile.maxHealth * healthRatio);
     player.moveSpeed = profile.moveSpeed;
+    player.damageMultiplier = profile.damageMultiplier;
     return player;
   }
 

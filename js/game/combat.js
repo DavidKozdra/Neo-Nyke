@@ -4117,7 +4117,10 @@
       }
       if (key === 'bleed') spawnBleedSpray(enemy, state.stacks, 0.7);
       if (config.healScale > 0 && Neo.player && Neo.player.hp < Neo.player.maxHp) {
-        const heal = Neo.scalePlayerHealing(damage * config.healScale);
+        // Cap per tick against the player's max HP, not the enemy's: tick damage
+        // scales with enemy max, so deep-floor elites would otherwise siphon huge
+        // chunks (mirrors the 2%-of-owner cap on the enemy-owned drain).
+        const heal = Neo.scalePlayerHealing(Math.min(damage * config.healScale, Neo.player.maxHp * 0.015));
         const gained = Neo.applyPlayerHealing(heal);
         if (gained > 0.2) Neo.spawnHealPopup(Neo.player.x + Neo.rand(-8, 8), Neo.player.y - 22, gained, { color: config.color });
       }
@@ -4242,7 +4245,7 @@
       damage: stacks => Math.max(1, enemy.max * (0.006 * stacks)),
       color: Neo.STATUS_STYLES.dark_drain.textColor,
       particleColor: Neo.STATUS_STYLES.dark_drain.color,
-      healScale: 0.35,
+      healScale: 0.2,
       stats,
     });
     if (enemy.dead) return bleedStacks;

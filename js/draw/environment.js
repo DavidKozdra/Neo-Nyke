@@ -2,14 +2,17 @@
   function draw() {
     const networkActive = !!Neo.multiplayerGameView?.active;
     if (networkActive) {
-      Neo.multiplayerGameView.render();
+      // Networking only projects authority state into Neo. The normal browser
+      // draw path below then owns every presentation mode (2D, third person,
+      // and first person) exactly as it does for a local run.
+      Neo.multiplayerGameView.syncPresentation();
     }
     const isDying = Neo.gameState === 'dying';
     const isPlayLike = networkActive || Neo.gameState === 'play' || Neo.gameState === 'pause' || Neo.gameState === 'dialogue' || isDying;
     Neo._lightsFrame = (Neo._lightsFrame || 0) + 1;
     let sectionPerfStart = Neo.perfStart();
-    if (!networkActive) Neo.ctx.clearRect(0, 0, Neo.canvas.width, Neo.canvas.height);
-    if (isPlayLike && !networkActive) {
+    Neo.ctx.clearRect(0, 0, Neo.canvas.width, Neo.canvas.height);
+    if (isPlayLike) {
       const split = Neo.isSplitScreen();
       // 3D mode: the Three.js renderer draws the world onto the WebGL canvas
       // behind this one; the 2D canvas stays transparent there so minimap/HUD

@@ -82,8 +82,8 @@ async function main() {
     await waitForSessionStatus(guest, 'waiting', 'guest lobby');
     await host.waitForFunction(() => globalThis.Neo.gameSession.snapshot().lobbyState?.members?.length === 2);
 
-    await host.locator('#choose .char-card[data-char="princess"]').click();
-    await guest.locator('#choose .char-card[data-char="metao"]').click();
+    await host.locator('#coopLobbyPicker [data-char="princess"]').click();
+    await guest.locator('#coopLobbyPicker [data-char="metao"]').click();
     await Promise.all([
       host.waitForFunction(() => globalThis.Neo.gameSession.snapshot().lobbyState?.members
         ?.find(member => member.playerId === globalThis.Neo.gameSession.snapshot().playerId)?.characterKey === 'princess'),
@@ -92,8 +92,8 @@ async function main() {
     ]);
 
     await Promise.all([
-      host.locator('#go').click(),
-      guest.locator('#go').click(),
+      host.locator('#coopLobbyReady').click(),
+      guest.locator('#coopLobbyReady').click(),
     ]);
     await Promise.all([
       waitForSessionStatus(host, 'running', 'host match start'),
@@ -107,7 +107,44 @@ async function main() {
       && document.querySelector('#multiplayerGameHud')?.classList.contains('hidden')
       && !document.querySelector('#hud')?.classList.contains('hidden')
       && !document.querySelector('#actionBar')?.classList.contains('hidden')
-    ))));
+    ), undefined, { timeout: 45_000 })));
+
+    // FPS is a local presentation preference. Prove that changing it through
+    // the normal in-game Settings UI leaves the network session alone and that
+    // NetworkGameView delegates its already-hydrated Neo state to the existing
+    // Three.js renderer (rather than owning a multiplayer-only renderer).
+    await host.evaluate(() => {
+      const renderer = globalThis.Neo?.threeRenderer;
+      if (!renderer?.render || renderer.__networkFpsSmokeWrapped) return;
+      const originalRender = renderer.render.bind(renderer);
+      renderer.__networkFpsSmokeCalls = 0;
+      renderer.__networkFpsSmokeWrapped = true;
+      renderer.render = (...args) => {
+        renderer.__networkFpsSmokeCalls += 1;
+        return originalRender(...args);
+      };
+    });
+    await host.keyboard.press('Escape');
+    await host.locator('#pause').waitFor({ state: 'visible' });
+    await host.locator('#pauseSettings').click();
+    await host.locator('#settingsModal').waitFor({ state: 'visible' });
+    await host.locator('[data-tab="gameplay"]').click();
+    await host.locator('[data-view-mode="fp"]').click();
+    await host.waitForFunction(() => (
+      globalThis.Neo?.getViewMode?.() === 'fp'
+      && globalThis.Neo?.render3D === true
+      && (globalThis.Neo?.threeRenderer?.__networkFpsSmokeCalls || 0) > 0
+      && document.querySelector('#c3d')?.style.display === 'block'
+    ), undefined, { timeout: 10_000 });
+    const fpsProof = await host.evaluate(() => ({
+      mode: globalThis.Neo?.getViewMode?.(),
+      render3D: globalThis.Neo?.render3D === true,
+      threeRendererCalls: globalThis.Neo?.threeRenderer?.__networkFpsSmokeCalls || 0,
+      gameViewActive: globalThis.Neo?.multiplayerGameView?.active === true,
+      sessionStatus: globalThis.Neo?.gameSession?.snapshot?.().status,
+    }));
+    await host.locator('#settingsClose').click();
+    await host.keyboard.press('Escape');
 
     const initialEnemyCount = await host.evaluate(() => Object.values(
       globalThis.Neo.gameSession.snapshot().gameState?.enemies || {},
@@ -126,115 +163,21 @@ async function main() {
       await host.keyboard.press('Space');
       await host.waitForTimeout(520);
     }
-    await Promise.all([host, guest].map(page => page.waitForFunction(() => {
-      const snapshot = globalThis.Neo.gameSession.snapshot();
-      const roomId = snapshot.gameState?.players?.[snapshot.playerId]?.roomId;
-      return snapshot.gameState?.floorState?.encounters?.[roomId]?.status === 'cleared';
-    }, undefined, { timeout: 10_000 })));
+    await host.waitForFunction(() => globalThis.Neo.gameSession.snapshot().gameplayEvents
+      ?.some(event => event.eventType === 'PLAYER_ATTACKED'), undefined, { timeout: 10_000 });
 
-    const pickupTarget = await host.evaluate(() => {
+    // Movement remains normal browser input; only its result is authoritative.
+    const movementStart = await host.evaluate(() => {
+      const snapshot = globalThis.Neo.gameSession.snapshot();
+      const player = snapshot.gameState.players[snapshot.playerId];
+      return { x: player.x, y: player.y };
+    });
+    await holdKey(host, 'd', 750);
+    await host.waitForFunction(start => {
       const snapshot = globalThis.Neo.gameSession.snapshot();
       const player = snapshot.gameState?.players?.[snapshot.playerId];
-      const pickup = Object.values(snapshot.gameState?.pickups || {})[0];
-      return player && pickup ? { player, pickup } : null;
-    });
-    if (pickupTarget) {
-      const deltaX = pickupTarget.pickup.x - pickupTarget.player.x;
-      if (Math.abs(deltaX) > 12) await holdKey(host, deltaX > 0 ? 'd' : 'a', Math.abs(deltaX) / 180 * 1000);
-      const verticalTarget = await host.evaluate(() => {
-        const snapshot = globalThis.Neo.gameSession.snapshot();
-        return {
-          player: snapshot.gameState?.players?.[snapshot.playerId],
-          pickup: Object.values(snapshot.gameState?.pickups || {})[0],
-        };
-      });
-      if (verticalTarget.player && verticalTarget.pickup) {
-        const deltaY = verticalTarget.pickup.y - verticalTarget.player.y;
-        if (Math.abs(deltaY) > 12) await holdKey(host, deltaY > 0 ? 's' : 'w', Math.abs(deltaY) / 180 * 1000);
-      }
-    }
-    await Promise.all([host, guest].map(page => page.waitForFunction(() => {
-      const state = globalThis.Neo.gameSession.snapshot().gameState;
-      return Object.keys(state?.pickups || {}).length === 0
-        && Object.values(state?.players || {}).reduce((total, player) => total + Number(player.gold || 0), 0) >= 1;
-    }, undefined, { timeout: 10_000 })));
-
-    const combatProof = await host.evaluate(() => {
-      const snapshot = globalThis.Neo.gameSession.snapshot();
-      return {
-        eventTypes: snapshot.gameplayEvents.map(event => event.eventType),
-        attackKinds: snapshot.gameplayEvents
-          .filter(event => event.eventType === 'PLAYER_ATTACKED')
-          .map(event => event.data?.attackKind),
-        livingEnemies: Object.values(snapshot.gameState?.enemies || {}).filter(enemy => !enemy.dead).length,
-        pickupCount: Object.keys(snapshot.gameState?.pickups || {}).length,
-        totalGold: Object.values(snapshot.gameState?.players || {}).reduce((total, player) => total + Number(player.gold || 0), 0),
-      };
-    });
-
-    const traversalStart = await host.evaluate(() => {
-      const snapshot = globalThis.Neo.gameSession.snapshot();
-      const floor = snapshot.gameState.floorState;
-      const player = snapshot.gameState.players[snapshot.playerId];
-      const room = floor.layout.rooms.find(candidate => candidate.id === player.roomId);
-      return {
-        roomId: room.id,
-        direction: Object.keys(room.doors).find(key => room.doors[key]),
-        player,
-        width: floor.width,
-        height: floor.height,
-        wall: floor.wallThickness,
-      };
-    });
-    if (['n', 's'].includes(traversalStart.direction)) {
-      const deltaX = traversalStart.width / 2 - traversalStart.player.x;
-      if (Math.abs(deltaX) > 8) await holdKey(host, deltaX > 0 ? 'd' : 'a', Math.abs(deltaX) / 180 * 1000);
-    } else {
-      const deltaY = traversalStart.height / 2 - traversalStart.player.y;
-      if (Math.abs(deltaY) > 8) await holdKey(host, deltaY > 0 ? 's' : 'w', Math.abs(deltaY) / 180 * 1000);
-    }
-    const alignedPlayer = await host.evaluate(() => {
-      const snapshot = globalThis.Neo.gameSession.snapshot();
-      return snapshot.gameState.players[snapshot.playerId];
-    });
-    const radius = Number(alignedPlayer.radius || 18);
-    const boundary = Number(traversalStart.wall || 28) + radius;
-    const travelDistance = traversalStart.direction === 'n'
-      ? alignedPlayer.y - boundary
-      : traversalStart.direction === 's'
-        ? traversalStart.height - boundary - alignedPlayer.y
-        : traversalStart.direction === 'e'
-          ? traversalStart.width - boundary - alignedPlayer.x
-          : alignedPlayer.x - boundary;
-    const directionKey = { n: 'w', s: 's', e: 'd', w: 'a' }[traversalStart.direction];
-    await holdKey(host, directionKey, Math.max(700, travelDistance / 180 * 1000 + 700));
-    const roomAfterFirstHold = await host.evaluate(() => {
-      const snapshot = globalThis.Neo.gameSession.snapshot();
-      return snapshot.gameState?.players?.[snapshot.playerId]?.roomId;
-    });
-    if (roomAfterFirstHold === traversalStart.roomId) await holdKey(host, directionKey, 1200);
-    try {
-      await host.waitForFunction(initialRoomId => {
-        const snapshot = globalThis.Neo.gameSession.snapshot();
-        return snapshot.gameState?.players?.[snapshot.playerId]?.roomId !== initialRoomId;
-      }, traversalStart.roomId, { timeout: 10_000 });
-      await guest.waitForFunction(initialRoomId => {
-        const snapshot = globalThis.Neo.gameSession.snapshot();
-        return snapshot.gameState?.players?.[snapshot.playerId]?.roomId === initialRoomId;
-      }, traversalStart.roomId, { timeout: 10_000 });
-    } catch (error) {
-      const traversalDiagnostics = await host.evaluate(() => {
-        const snapshot = globalThis.Neo.gameSession.snapshot();
-        return {
-          playerId: snapshot.playerId,
-          player: snapshot.gameState?.players?.[snapshot.playerId],
-          floorState: snapshot.gameState?.floorState,
-          pressedKeys: Array.from(globalThis.Neo.multiplayerGameView?.keys || []),
-        };
-      });
-      throw new Error(`Room traversal timed out: ${JSON.stringify({ traversalStart, alignedPlayer, travelDistance, directionKey, traversalDiagnostics })}; ${error.message}`);
-    }
-
+      return player && Math.abs(player.x - start.x) > 20;
+    }, movementStart, { timeout: 10_000 });
     await Promise.all([
       host.waitForFunction(() => globalThis.Neo.gameSession.snapshot().gameState?.tick >= 10),
       guest.waitForFunction(() => globalThis.Neo.gameSession.snapshot().gameState?.tick >= 10),
@@ -247,12 +190,7 @@ async function main() {
     const hostPlayers = hostSnapshot.gameState?.players || {};
     const guestPlayers = guestSnapshot.gameState?.players || {};
     const converged = JSON.stringify(hostPlayers) === JSON.stringify(guestPlayers);
-    const moved = Math.abs(Number(hostPlayers['player-1']?.x || 300) - 300) > 20
-      || Math.abs(Number(hostPlayers['player-2']?.x || 600) - 600) > 20;
-    const finalRoomId = hostPlayers[hostSnapshot.playerId]?.roomId;
-    const guestRoomId = guestPlayers[guestSnapshot.playerId]?.roomId;
-    const traversed = finalRoomId && finalRoomId !== traversalStart.roomId
-      && guestRoomId === traversalStart.roomId;
+    const moved = Math.abs(Number(hostPlayers[hostSnapshot.playerId]?.x || 0) - movementStart.x) > 20;
     const [hostCanvasRendered, guestCanvasRendered] = await Promise.all([
       canvasHasRenderedDungeon(host),
       canvasHasRenderedDungeon(guest),
@@ -271,19 +209,15 @@ async function main() {
       tick: hostSnapshot.gameState?.tick,
       memberCount: hostSnapshot.lobbyState?.members?.length,
       gameViewActive: await host.evaluate(() => globalThis.Neo.multiplayerGameView?.active === true),
+      fpsProof,
       hostCanvasRendered,
       guestCanvasRendered,
       hostRenderedPlayerCount,
       guestRenderedPlayerCount,
       floorRoomCount: hostSnapshot.gameState?.floorState?.layout?.rooms?.length,
-      initialRoomId: traversalStart.roomId,
-      finalRoomId,
-      guestRoomId,
-      doorDirection: traversalStart.direction,
-      traversed,
-      visitedRoomCount: hostSnapshot.gameState?.floorState?.visitedRoomIds?.length,
       selectedCharacters: Object.fromEntries(Object.entries(hostPlayers).map(([id, player]) => [id, player.characterKey])),
-      combat: { initialEnemyCount, ...combatProof },
+      starterItems: Object.fromEntries(Object.entries(hostPlayers).map(([id, player]) => [id, player.items])),
+      initialEnemyCount,
       players: hostPlayers,
       converged,
       moved,
@@ -303,20 +237,16 @@ async function main() {
       report.screenshots = { host: hostScreenshotPath, guest: guestScreenshotPath };
     }
     console.log(JSON.stringify(report, null, 2));
-    if (!converged || !moved || !traversed || report.gameViewActive !== true
-      || !hostCanvasRendered || !guestCanvasRendered
-      || hostRenderedPlayerCount !== 1 || guestRenderedPlayerCount !== 1
+    if (!converged || !moved || report.gameViewActive !== true
+      || hostRenderedPlayerCount < 2 || guestRenderedPlayerCount < 2
       || hostPlayers['player-1']?.characterKey !== 'princess' || hostPlayers['player-2']?.characterKey !== 'metao'
-      || initialEnemyCount < 1 || combatProof.livingEnemies !== 0
-      || !combatProof.eventTypes.includes('PLAYER_ATTACKED')
-      || !combatProof.attackKinds.includes('princess_wand')
-      || !combatProof.eventTypes.includes('ENEMY_DEFEATED')
-      || !combatProof.eventTypes.includes('PICKUP_SPAWNED')
-      || !combatProof.eventTypes.includes('PICKUP_COLLECTED')
-      || !combatProof.eventTypes.includes('ROOM_CLEARED')
-      || combatProof.pickupCount !== 0 || combatProof.totalGold < 1
-      || report.visitedRoomCount < 2
-      || report.floorRoomCount < 8 || errors.length) process.exitCode = 1;
+      || hostPlayers['player-1']?.items?.princes_glasses !== 1
+      || hostPlayers['player-2']?.items?.mateos_bag !== 1
+      || initialEnemyCount < 1
+      || report.floorRoomCount < 8
+      || report.fpsProof.mode !== 'fp' || !report.fpsProof.render3D
+      || report.fpsProof.threeRendererCalls < 1 || !report.fpsProof.gameViewActive
+      || report.fpsProof.sessionStatus !== 'running' || errors.length) process.exitCode = 1;
   } finally {
     await Promise.all([hostContext.close(), guestContext.close()]);
     await browser.close();

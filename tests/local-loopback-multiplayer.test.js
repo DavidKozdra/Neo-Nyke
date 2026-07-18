@@ -104,7 +104,13 @@ describe('protocol-driven local multiplayer session', () => {
     clock.runAll();
 
     expect(authority.simulation.state.players[client.playerId].characterKey).toBe('sarge');
-    expect(authority.simulation.state.players[client.playerId]).toEqual(expect.objectContaining({ maxHealth: 90, health: 90, moveSpeed: 165 }));
+    expect(authority.simulation.state.players[client.playerId]).toEqual(expect.objectContaining({
+      maxHealth: 108,
+      health: 108,
+      moveSpeed: 180,
+      damageMultiplier: 1.05,
+      items: { copper_penny: 1 },
+    }));
     expect(client.lobbyState.members).toEqual([
       expect.objectContaining({ playerId: client.playerId, characterKey: 'sarge', ready: false }),
     ]);

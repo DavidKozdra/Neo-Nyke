@@ -54,6 +54,19 @@
     sarge: 'sarges_hammer',
   });
 
+  // Matches the starter inventory assigned by the campaign's
+  // createDefaultPlayer(). The authority must create the same selected hero,
+  // not an empty network-only version of one.
+  const CHARACTER_STARTING_ITEMS = Object.freeze({
+    princess: Object.freeze({ princes_glasses: 1 }),
+    thorn_knight: Object.freeze({ neo_knife: 1, tooth_of_thorn: 2, tough_bandaid: 1 }),
+    metao: Object.freeze({ mateos_bag: 1 }),
+    gelleh: Object.freeze({ zap_to_extreme: 1 }),
+    mooggy: Object.freeze({ hemes_scarf: 1, mooggy_zoomies: 1, churu_stick: 1 }),
+    turtle_boy: Object.freeze({ turtle_shell: 1, dragon_orb: 1 }),
+    sarge: Object.freeze({ copper_penny: 1 }),
+  });
+
   // Exact default-weapon behavior authored in combat.js, represented without
   // browser effects so the authority can resolve the same attack.
   const DEFAULT_WEAPON_ATTACKS = Object.freeze({
@@ -80,6 +93,7 @@
     PROJECTILE_TYPE_DEFS,
     WEAPON_PROJECTILE_ATTACKS,
     CHARACTER_DEFAULT_WEAPONS,
+    CHARACTER_STARTING_ITEMS,
     DEFAULT_WEAPON_ATTACKS,
     getCharacterDefaultWeapon,
     getDefaultWeaponAttack,

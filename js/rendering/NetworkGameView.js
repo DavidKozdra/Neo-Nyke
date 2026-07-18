@@ -212,7 +212,8 @@
       this.boundPauseLeave = () => this.document?.getElementById('multiplayerLeaveGame')?.click();
       this.boundRenderFrame = () => {
         if (!this.active) return;
-        this.render();
+        this.syncPresentation();
+        this.neo.draw?.();
         this.animationFrame = root.requestAnimationFrame?.(this.boundRenderFrame) ?? null;
       };
     }
@@ -223,7 +224,12 @@
       this._captureCampaignPresentationState();
       this.active = true;
       this.document?.getElementById('start')?.classList.add('hidden');
-      this.document?.getElementById('multiplayerGameHud')?.classList.add('hidden');
+      const multiplayerHud = this.document?.getElementById('multiplayerGameHud');
+      multiplayerHud?.classList.add('hidden');
+      if (multiplayerHud) {
+        multiplayerHud.style.display = 'none';
+        multiplayerHud.setAttribute('aria-hidden', 'true');
+      }
       this._setCampaignHudVisible(true);
       root.document?.body?.classList.add('network-multiplayer-active');
       root.addEventListener?.('keydown', this.boundKeyDown);
@@ -260,7 +266,12 @@
       this.keys.clear();
       this.projectileTrails.clear();
       this.presentationPlayerSlots = [];
-      this.document?.getElementById('multiplayerGameHud')?.classList.add('hidden');
+      const multiplayerHud = this.document?.getElementById('multiplayerGameHud');
+      multiplayerHud?.classList.add('hidden');
+      if (multiplayerHud) {
+        multiplayerHud.style.display = '';
+        multiplayerHud.setAttribute('aria-hidden', 'true');
+      }
       this._togglePause(false);
       this._setCampaignHudVisible(false);
       this.document?.getElementById('start')?.classList.remove('hidden');
@@ -662,7 +673,20 @@
       } else {
         this.gamepadAttackPressed = false;
       }
-      return normalizeMovement(moveX, moveY);
+      const movement = normalizeMovement(moveX, moveY);
+      // Network input must use the same camera-relative controls as the normal
+      // campaign update loop. Without this, W continued to mean world-up while
+      // the first-person camera faced world-right, which felt inverted.
+      const firstPersonYaw = this.neo.getFirstPersonYaw?.();
+      if (firstPersonYaw == null || (!movement.moveX && !movement.moveY)) return movement;
+      const cosine = Math.cos(firstPersonYaw);
+      const sine = Math.sin(firstPersonYaw);
+      const forward = -movement.moveY;
+      const strafe = movement.moveX;
+      return {
+        moveX: cosine * forward - sine * strafe,
+        moveY: sine * forward + cosine * strafe,
+      };
     }
 
     _sendInput() {
@@ -670,6 +694,10 @@
       const movement = this.paused || this.localPredictedPlayer?.downed
         ? { moveX: 0, moveY: 0 }
         : this._readMovement();
+      // The campaign uses first-person yaw as its canonical aim. Send that same
+      // direction to authority instead of the stale top-down pointer angle.
+      const firstPersonYaw = this.neo.getFirstPersonYaw?.();
+      if (firstPersonYaw != null) this.aimDirection = firstPersonYaw;
       const input = { ...movement, aimDirection: this.aimDirection, buttons: 0 };
       if (this.localPredictedPlayer) {
         this.localPredictedPlayer = predictPosition(
@@ -757,8 +785,8 @@
           hp: Number(player.health || 0),
           maxHp: Number(player.maxHealth || 100),
           coins: Number(player.gold || 0),
-          items: {},
-          equipmentSlots: [],
+          items: { ...(player.items || {}) },
+          equipmentSlots: Array.isArray(player.equipmentSlots) ? [...player.equipmentSlots] : [],
           level: Math.max(1, Number(player.level || 1)),
           xp: Math.max(0, Number(player.xp || 0)),
           xpToNext: Math.max(1, Number(player.xpToNext || 20)),
@@ -847,6 +875,7 @@
         laserSweepSpeed: this.neo.laserSweepSpeed,
         loveBeamCasting: this.neo.loveBeamCasting,
         activeBeamPaths: this.neo.activeBeamPaths,
+        rng: this.neo.rng,
       };
       try {
         this.combatEffects.forEach(effect => {
@@ -871,6 +900,12 @@
           this.neo.laserAngle = Number(data.aimDirection || 0)
             + (data.abilityId === 'god_sweep' ? this.neo.laserSweepSpeed * ageSeconds : 0);
           this.neo.activeBeamPaths = null;
+          // drawPlayerLaser is the real campaign renderer and emits cosmetic
+          // particles via Neo.rng(). Network sessions do not own a campaign
+          // run RNG, so provide a client-only FX source for this draw.
+          this.neo.rng = typeof saved.rng === 'function'
+            ? saved.rng
+            : () => this.neo.nextRandom?.('fx') ?? Math.random();
           this.neo.drawPlayerLaser();
         });
       } finally {
@@ -878,7 +913,11 @@
       }
     }
 
-    render() {
+    // This is intentionally a state projection, not a renderer. It gives the
+    // existing browser game (`Neo.draw`) the same live objects it normally
+    // reads in single player; networked mode changes only where those objects
+    // came from.
+    syncPresentation() {
       if (!this.active || !this.ctx || !this.canvas) return;
       const now = root.performance?.now?.() || Date.now();
       const state = this.currentSample?.state;
@@ -910,21 +949,40 @@
       this._updateUpgradeDwell(localPlayer, state, frameDelta);
       this._syncNeoPresentationFloor(floorState, enemies, pickups, state);
       this._syncCampaignPresentationEntities(visiblePlayers, projectiles, localPlayerId, state);
-      // Networking has already done its job: the authoritative state above is
-      // now projected into the normal Neo world model. Let the existing 3D/FPS
-      // renderer consume that model when the player selected it; do not create
-      // or maintain a multiplayer-only renderer for this view mode.
-      const worldDrawn3D = this.neo.render3D === true && this.neo.threeRenderer?.render?.() === true;
-      if (worldDrawn3D) {
-        ctx.save();
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
-        // The 2D canvas is an overlay above the existing WebGL canvas. Clear
-        // only this overlay so the normal HUD/minimap pass can draw afterward.
-        ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-        ctx.restore();
-        this._updateHud(state, players);
-        return;
-      }
+      this.neo.gameElapsedTime = Number(state?.elapsedSeconds || 0);
+      const floorTransitionAge = this.floorTransitionStartedAt > 0
+        ? Math.max(0, now - this.floorTransitionStartedAt) / 1000
+        : Number.POSITIVE_INFINITY;
+      this.neo.showFloorTransition = floorTransitionAge <= 1.25;
+      this.neo.floorTransitionTime = floorTransitionAge;
+      this.neo.lavaAnimTime = Number(this.neo.lavaAnimTime || 0) + frameDelta;
+      this.neo.updateParticles?.(frameDelta);
+      this._updateHud(state, players);
+      return true;
+    }
+
+    // Compatibility alias for callers that previously treated this adapter as
+    // a renderer. It now only synchronizes state; Neo.draw owns presentation.
+    render() {
+      return this.syncPresentation();
+    }
+
+    _renderLegacyFallback() {
+      const now = root.performance?.now?.() || Date.now();
+      const state = this.currentSample?.state;
+      const authorityFloorState = state?.floorState || { width: 900, height: 700, wallThickness: 28, doorWidth: 140 };
+      const visibleBounds = this._visibleCanvasBounds();
+      const players = this._renderedPlayers(now);
+      const localPlayerId = this.session.snapshot().playerId;
+      const localRoomId = players[localPlayerId]?.roomId || authorityFloorState.currentRoomId;
+      const floorState = { ...authorityFloorState, currentRoomId: localRoomId };
+      const visiblePlayers = Object.fromEntries(Object.entries(players).filter(([, player]) => player.roomId === localRoomId));
+      const enemies = this._renderedEntities('enemies', now);
+      const projectiles = this._renderedEntities('projectiles', now);
+      const pickups = state?.pickups || {};
+      const interactables = state?.interactables || {};
+      const ctx = this.ctx;
+      const transform = computeCameraTransform(this.canvas.width, this.canvas.height, this.camera, visibleBounds);
       const useCampaignWorldPipeline = typeof this.neo.drawWorldViewport === 'function'
         && typeof this.neo.drawProjectiles === 'function'
         && typeof this.neo.drawEnemies === 'function'
@@ -1556,16 +1614,15 @@
     }
 
     _updateHud(state, players) {
-      const setText = (id, value) => {
-        const element = this.document?.getElementById(id);
-        if (element) element.textContent = String(value);
-      };
-      setText('multiplayerGameRoom', this.lastRoomCode || '—');
-      setText('multiplayerGameTick', state?.tick ?? 0);
-      setText('multiplayerGamePlayers', Object.keys(players).length);
-      setText('multiplayerGameEnemies', Object.values(state?.enemies || {}).filter(enemy => !enemy.dead).length);
+      // The old network status panel was a second, competing HUD. Multiplayer
+      // uses the campaign HUD exclusively, just as a local run does.
+      const multiplayerHud = this.document?.getElementById('multiplayerGameHud');
+      multiplayerHud?.classList.add('hidden');
+      if (multiplayerHud) {
+        multiplayerHud.style.display = 'none';
+        multiplayerHud.setAttribute('aria-hidden', 'true');
+      }
       const localPlayer = players[this.session.snapshot().playerId];
-      setText('multiplayerGameGold', localPlayer?.gold ?? 0);
       if (!localPlayer || !state) return;
       this._setCampaignHudVisible(true);
       this.neo.updateHud?.();
