@@ -2,15 +2,22 @@
   const contentApi = typeof require === 'function'
     ? { ...require('./SharedCombatContent.js'), ...require('./SharedMoveContent.js'), ...require('./SharedEnemyContent.js') }
     : (root.NeoNyke?.content || {});
-  const api = factory(root.NeoNyke?.simulation || {}, contentApi);
+  const floorApi = typeof require === 'function' ? require('./DeterministicFloorGenerator.js') : (root.NeoNyke?.simulation || {});
+  const api = factory(root.NeoNyke?.simulation || {}, contentApi, floorApi);
   const namespace = root.NeoNyke = root.NeoNyke || {};
   namespace.simulation = namespace.simulation || {};
   Object.assign(namespace.simulation, api);
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function createNetworkCombatSystemApi(browserApi, contentApi) {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function createNetworkCombatSystemApi(browserApi, contentApi, floorApi) {
   'use strict';
 
+  const generateFloorLayout = floorApi?.generateFloorLayout || browserApi?.generateFloorLayout;
+  const MAX_FLOOR = 10;
+  const STAIRS_DWELL_TICKS = 30; // ~1.5s at 20 Hz — a deliberate hold, not a walk-over.
+  const REVIVE_DWELL_TICKS = 40; // ~2s standing over a downed ally to bring them back.
+  const REVIVE_RADIUS = 44;
+  const REVIVE_HEALTH_FRACTION = 0.4;
   const ATTACK_COOLDOWN_TICKS = 7;
   const PROJECTILE_SPEED = 520;
   const PROJECTILE_DAMAGE = 30;
@@ -878,6 +885,185 @@
     });
   }
 
+  // ── Floor progression, run end, and downed/revive ───────────────────────
+  // Runs as a deterministic simulation system so it behaves identically on the
+  // authority and any client that re-simulates.
+
+  function activePlayers(state) {
+    return Object.values(state.players || {}).filter(player => player && !player.disconnected);
+  }
+
+  function isExitRoomCleared(state, room) {
+    if (!room) return false;
+    const encounter = state.floorState?.encounters?.[room.id];
+    // An exit room is "cleared" once its encounter has been spawned and beaten.
+    return encounter?.status === 'cleared';
+  }
+
+  // Spawn the stairs interactable once the floor's exit room is cleared. Boss
+  // and god exit rooms count too — beating the boss reveals the stairs.
+  function ensureFloorExit(state, emitEvent) {
+    const layout = state.floorState?.layout;
+    const exitRoomId = layout?.exitRoomId;
+    if (!exitRoomId) return;
+    const existing = Object.values(state.interactables || {}).find(item => item.kind === 'stairs' && item.roomId === exitRoomId);
+    if (existing) return;
+    const exitRoom = (layout.rooms || []).find(room => room.id === exitRoomId);
+    if (!isExitRoomCleared(state, exitRoom)) return;
+    const isFinalFloor = Number(state.floorNumber || 1) >= MAX_FLOOR || exitRoom.type === 'god';
+    const interactableId = state.allocateEntityId('interactable');
+    state.interactables[interactableId] = {
+      id: interactableId,
+      kind: 'stairs',
+      roomId: exitRoomId,
+      x: Number(state.floorState.width || 900) / 2,
+      y: Number(state.floorState.height || 700) / 2,
+      radius: 30,
+      final: isFinalFloor,
+      dwellByPlayer: {},
+      spawnTick: state.tick,
+    };
+    emitEvent('INTERACTABLE_SPAWNED', { interactableId, kind: 'stairs', roomId: exitRoomId, final: isFinalFloor });
+  }
+
+  // Regenerate the floor at floorNumber+1 and reset the party into its start
+  // room. Enemies, projectiles, pickups and interactables are cleared; the
+  // floor seed is derived deterministically from the match seed.
+  function advanceToNextFloor(state, emitEvent) {
+    const nextFloorNumber = Number(state.floorNumber || 1) + 1;
+    const floorSeed = `${state.matchSeed}|floor:${nextFloorNumber}`;
+    const layout = typeof generateFloorLayout === 'function'
+      ? generateFloorLayout({
+        matchSeed: state.matchSeed,
+        floorSeed,
+        floorNumber: nextFloorNumber,
+        generationVersion: state.generationVersion,
+        contentVersion: state.contentVersion,
+        maxFloor: MAX_FLOOR,
+      })
+      : state.floorState.layout;
+    state.floorNumber = nextFloorNumber;
+    state.floorSeed = floorSeed;
+    state.enemies = {};
+    state.projectiles = {};
+    state.pickups = {};
+    state.interactables = {};
+    const width = Number(state.floorState.width) || 900;
+    const height = Number(state.floorState.height) || 700;
+    state.floorState = {
+      ...state.floorState,
+      currentRoomId: layout.startRoomId,
+      visitedRoomIds: [layout.startRoomId],
+      roomTransition: null,
+      transitionSequence: 0,
+      transitionsByPlayer: {},
+      encounters: {},
+      layout,
+    };
+    const wall = Number(state.floorState.wallThickness) || 28;
+    activePlayers(state).forEach((player, index) => {
+      const radius = Math.max(1, Number(player.radius) || 18);
+      const inset = wall + radius + 18;
+      const offset = (index - (activePlayers(state).length - 1) / 2) * 52;
+      player.roomId = layout.startRoomId;
+      player.x = Math.max(inset, Math.min(width - inset, width / 2 + offset));
+      player.y = height / 2;
+      player.vx = 0;
+      player.vy = 0;
+    });
+    emitEvent('FLOOR_ADVANCED', { floorNumber: nextFloorNumber, floorSeed, startRoomId: layout.startRoomId });
+  }
+
+  // A player standing on the stairs charges a dwell timer; once it fills the
+  // floor advances (or the run ends victorious on the final floor). The dwell
+  // gate makes descending a deliberate group decision, not an accidental brush.
+  function updateFloorExit(state, emitEvent) {
+    Object.values(state.interactables || {}).forEach(stairs => {
+      if (stairs.kind !== 'stairs') return;
+      stairs.dwellByPlayer = stairs.dwellByPlayer || {};
+      let charging = false;
+      activePlayers(state).forEach(player => {
+        if (player.downed || player.roomId !== stairs.roomId) {
+          delete stairs.dwellByPlayer[player.id];
+          return;
+        }
+        const onStairs = Math.hypot(Number(player.x) - stairs.x, Number(player.y) - stairs.y)
+          <= Number(stairs.radius || 30) + Number(player.radius || 18);
+        if (!onStairs) {
+          delete stairs.dwellByPlayer[player.id];
+          return;
+        }
+        charging = true;
+        stairs.dwellByPlayer[player.id] = Number(stairs.dwellByPlayer[player.id] || 0) + 1;
+      });
+      const dwell = Math.max(0, ...Object.values(stairs.dwellByPlayer), 0);
+      stairs.dwellProgress = Math.min(1, dwell / STAIRS_DWELL_TICKS);
+      if (charging && stairs.dwellTelegraphTick !== state.tick && dwell === 1) {
+        stairs.dwellTelegraphTick = state.tick;
+        emitEvent('STAIRS_ENGAGED', { interactableId: stairs.id, roomId: stairs.roomId });
+      }
+      if (dwell < STAIRS_DWELL_TICKS) return;
+      if (stairs.final) {
+        state.status = 'ended';
+        emitEvent('RUN_ENDED', {
+          result: 'victory',
+          reason: 'god-floor-cleared',
+          floorNumber: Number(state.floorNumber || 1),
+        });
+      } else {
+        advanceToNextFloor(state, emitEvent);
+      }
+    });
+  }
+
+  // Downed players charge a revive when a living ally stands over them; a full
+  // party wipe (everyone downed, none reviving) ends the run in defeat.
+  function updateDownedAndRevive(state, emitEvent) {
+    const players = activePlayers(state);
+    if (!players.length) return;
+    const living = players.filter(player => !player.downed);
+    players.forEach(downedPlayer => {
+      if (!downedPlayer.downed) {
+        downedPlayer.reviveProgress = 0;
+        return;
+      }
+      const reviver = living.find(ally => ally.roomId === downedPlayer.roomId
+        && Math.hypot(Number(ally.x) - Number(downedPlayer.x), Number(ally.y) - Number(downedPlayer.y)) <= REVIVE_RADIUS);
+      if (!reviver) {
+        downedPlayer.reviveTicks = 0;
+        downedPlayer.reviveProgress = 0;
+        return;
+      }
+      downedPlayer.reviveTicks = Number(downedPlayer.reviveTicks || 0) + 1;
+      downedPlayer.reviveProgress = Math.min(1, downedPlayer.reviveTicks / REVIVE_DWELL_TICKS);
+      if (downedPlayer.reviveTicks < REVIVE_DWELL_TICKS) return;
+      downedPlayer.downed = false;
+      downedPlayer.reviveTicks = 0;
+      downedPlayer.reviveProgress = 0;
+      downedPlayer.health = Math.max(1, Math.round(Number(downedPlayer.maxHealth || 100) * REVIVE_HEALTH_FRACTION));
+      emitEvent('PLAYER_REVIVED', { playerId: downedPlayer.id, reviverId: reviver.id, health: downedPlayer.health });
+    });
+    if (state.status === 'running' && living.length === 0) {
+      state.status = 'ended';
+      emitEvent('RUN_ENDED', {
+        result: 'defeat',
+        reason: 'party-wiped',
+        floorNumber: Number(state.floorNumber || 1),
+      });
+    }
+  }
+
+  function createFloorProgressionSystem(options = {}) {
+    const emitEvent = typeof options.emitEvent === 'function' ? options.emitEvent : () => {};
+    return ({ state }) => {
+      if (state.status !== 'running') return;
+      updateDownedAndRevive(state, emitEvent);
+      if (state.status !== 'running') return; // a wipe ended the run this tick
+      ensureFloorExit(state, emitEvent);
+      updateFloorExit(state, emitEvent);
+    };
+  }
+
   function createNetworkCombatSystem(options = {}) {
     const emitEvent = typeof options.emitEvent === 'function' ? options.emitEvent : () => {};
     return ({ state, inputs, fixedDelta, random }) => {
@@ -906,5 +1092,8 @@
     livingEncounterEnemies,
     resolvePlayerAbility,
     createNetworkCombatSystem,
+    createFloorProgressionSystem,
+    advanceToNextFloor,
+    MAX_FLOOR,
   };
 });

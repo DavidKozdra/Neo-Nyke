@@ -2536,11 +2536,6 @@ export function resumeGame() {
   }
 
   function updateCharacterSelectionUI() {
-    // In networked co-op the champion panel is driven by the multiplayer
-    // controller (title, subtitle, #go READY toggle, per-slot picks). Skip the
-    // single-player header/start-button dressing so the two don't fight; the
-    // roster/portrait/unlock logic below still runs so cards render normally.
-    const coopLobby = Neo.coopLobbyActive === true;
     const phaseTag = document.getElementById('charSelectPhaseTag');
     const titleEl = document.getElementById('charSelectTitle');
     const subtitleEl = document.getElementById('charSelectSubtitle');
@@ -2555,10 +2550,7 @@ export function resumeGame() {
     if (backBtn) backBtn.setAttribute('aria-label', phaseIdx > 0
       ? `Back to ${backTarget.toLowerCase()} character selection`
       : 'Back to menu');
-    if (coopLobby) {
-      if (phaseTag) phaseTag.classList.add('hidden');
-      // Title / subtitle / #go are owned by the co-op lobby renderer.
-    } else if (Neo.charSelectPhase && PHASE_LABELS[Neo.charSelectPhase]) {
+    if (Neo.charSelectPhase && PHASE_LABELS[Neo.charSelectPhase]) {
       const label = PHASE_LABELS[Neo.charSelectPhase];
       if (phaseTag) { phaseTag.textContent = label; phaseTag.className = `charselect-phase-tag ${PHASE_COLORS[Neo.charSelectPhase]}`; phaseTag.classList.remove('hidden'); }
       if (titleEl) titleEl.textContent = `${label}: PICK HERO`;

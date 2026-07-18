@@ -23,6 +23,38 @@
     return Math.max(minimum, Math.min(maximum, value));
   }
 
+  // ── Client-side cosmetics ────────────────────────────────────────────────
+  // Colours are pure presentation: the same for every entity of a given type,
+  // and identical on every client. They belong here, derived locally from the
+  // authoritative type/behaviour, NOT sent over the wire each snapshot. Keeping
+  // them client-side saves bandwidth and removes cosmetic work from the server.
+  const PLAYER_COLORS = ['#9de9ff', '#d9a7ff', '#ffd98f', '#ff9fcf'];
+
+  // Stable per-player colour from the player's slot. playerId is allocated as
+  // "player-N" by the authority, so N-1 maps to a deterministic palette slot.
+  function derivePlayerColor(player = {}) {
+    if (typeof player.slotIndex === 'number') return PLAYER_COLORS[player.slotIndex % PLAYER_COLORS.length];
+    const match = /(\d+)\s*$/.exec(String(player.id || ''));
+    const index = match ? (Number(match[1]) - 1) : 0;
+    return PLAYER_COLORS[((index % PLAYER_COLORS.length) + PLAYER_COLORS.length) % PLAYER_COLORS.length];
+  }
+
+  function deriveEnemyProjectileColor(behavior) {
+    if (behavior === 'beam') return '#c77bff';
+    if (behavior === 'burst') return '#ff9f68';
+    return '#ffc477';
+  }
+
+  // Resolve a projectile's colour: prefer the shared content table (same data
+  // the authority used to embed), fall back to a neutral player/enemy tint.
+  function deriveProjectileColor(projectile = {}, neo = {}) {
+    const defs = neo.PROJECTILE_TYPE_DEFS || root.NeoNyke?.content?.PROJECTILE_TYPE_DEFS || {};
+    const kind = projectile.kind || projectile.type;
+    if (defs[kind]?.color) return defs[kind].color;
+    if (projectile.hostile) return deriveEnemyProjectileColor(projectile.behavior);
+    return '#9de9ff';
+  }
+
   function normalizeMovement(moveX = 0, moveY = 0) {
     let x = Number(moveX) || 0;
     let y = Number(moveY) || 0;
@@ -186,10 +218,19 @@
     }
 
     _setCampaignHudVisible(visible) {
-      ['hud', 'coinDisplay', 'centerDisplay', 'actionBar'].forEach(id => {
+      // The campaign state machine (controller.js fallbackState) parks the HUD
+      // widgets at inline `display:none` while `Neo.gameState` sits at the menu,
+      // which it does for the whole network match. Toggling only the `hidden`
+      // class leaves that inline style winning, so clear/set `style.display` too
+      // (mirroring the per-element display values the campaign uses when it shows
+      // the HUD in play).
+      const displayValues = { hud: 'flex', coinDisplay: 'flex', centerDisplay: '', actionBar: '' };
+      Object.entries(displayValues).forEach(([id, displayValue]) => {
         const element = this.document?.getElementById(id);
-        element?.classList.toggle('hidden', !visible);
-        element?.setAttribute('aria-hidden', visible ? 'false' : 'true');
+        if (!element) return;
+        element.classList.toggle('hidden', !visible);
+        element.setAttribute('aria-hidden', visible ? 'false' : 'true');
+        element.style.display = visible ? displayValue : 'none';
       });
     }
 

@@ -116,88 +116,72 @@ export function createUIController(view) {
       turtle_boy: 'TURTLE BOY',
       sarge: 'SARGE',
     };
+    // Roster the authority accepts (mirrors ProtocolV1 PLAYER_CHARACTER enum).
+    // Card metadata copied from the #charSelect champion panel so the lobby
+    // cards look identical without sharing that panel's runtime state.
+    const MULTIPLAYER_ROSTER = [
+      { key: 'princess', rarity: 'princess', tag: 'princess', role: 'PRINCESS', hint: 'Easy starter' },
+      { key: 'thorn_knight', rarity: 'knight', tag: 'knight', role: 'KNIGHT', hint: 'Bleed melee' },
+      { key: 'metao', rarity: 'wizard', tag: 'wizard', role: 'WIZARD', hint: 'Long range' },
+      { key: 'gelleh', rarity: 'god', tag: 'god', role: 'GOD', hint: 'Divine power' },
+      { key: 'mooggy', rarity: 'assassin', tag: 'assassin', role: 'ASSASSIN', hint: 'Fast striker' },
+      { key: 'turtle_boy', rarity: 'knight', tag: 'knight', role: 'KNIGHT', hint: 'Tanky, free laser' },
+      { key: 'sarge', rarity: 'knight', tag: 'knight', role: 'KNIGHT', hint: 'Hammer brawler' },
+    ];
+    const MULTIPLAYER_SELECTABLE = MULTIPLAYER_ROSTER.map(entry => entry.key);
     const MULTIPLAYER_SLOT_COLORS = ['#9de9ff', '#d9a7ff', '#ffd98f', '#ff9fcf'];
     const MULTIPLAYER_MAX_SLOTS = 4;
-    // While true, the shared #charSelect champion panel acts as the networked
-    // co-op lobby: card clicks broadcast a character choice and #go toggles ready.
-    let coopLobbyActive = false;
+    // The networked co-op lobby is a fully standalone overlay. It NEVER touches
+    // Neo.gameMode / setGameState / #charSelect — those drive single-player and
+    // split-screen local co-op, which are entirely separate from the network path.
+    let coopLobbyOpen = false;
 
-    function isCoopLobbyActive() {
-      return coopLobbyActive && !!browserMultiplayerSession;
-    }
-
-    function paintLobbyPortrait(canvas, characterKey) {
+    // Paint a hero sprite exactly the way the champion-select cards do, so the
+    // lobby's copied cards render pixel-identically.
+    function paintLobbyPortrait(canvas, characterKey, size = 76) {
       if (!(canvas instanceof HTMLCanvasElement)) return;
-      const key = Neo.getPortraitSpriteKey?.(characterKey) || characterKey;
+      const spriteKey = Neo.getCharacterSpriteKey?.(characterKey) || characterKey;
+      const key = Neo.getPortraitSpriteKey?.(spriteKey) || spriteKey;
       if (canvas.dataset.portraitKey === key) return;
       canvas.dataset.portraitKey = key;
       const ctx = canvas.getContext('2d');
       ctx?.clearRect(0, 0, canvas.width, canvas.height);
-      Neo.drawSpriteToCanvas?.(canvas, key, canvas.width);
+      Neo.drawSpriteToCanvas?.(canvas, key, size);
     }
 
-    // Enter/leave the co-op lobby dressing of the shared champion panel. The
-    // roster, portraits and dossier stay exactly as single-player uses them.
-    function setCoopLobbyMode(active) {
-      coopLobbyActive = !!active;
-      Neo.coopLobbyActive = coopLobbyActive;
-      view.coopLobbyBar?.classList.toggle('hidden', !coopLobbyActive);
-      view.coopLobbyBar?.setAttribute('aria-hidden', coopLobbyActive ? 'false' : 'true');
-      document.getElementById('charSelect')?.classList.toggle('charselect--coop', coopLobbyActive);
-      // The run-setup sidebar (difficulty/seed/mods) is authority-controlled in
-      // co-op, so hide those control groups while keeping #go as the READY toggle.
-      ['difficultySelect', 'seed', 'challengeToggle'].forEach(id => {
-        const group = document.getElementById(id)?.closest('.seedrow, .charselect-extra-options, .difficulty-select');
-        group?.classList.toggle('coop-hidden', coopLobbyActive);
-      });
-      if (coopLobbyActive) {
-        if (typeof Neo.setGameState === 'function' && Neo.gameState !== 'charselect') {
-          Neo.gameMode = 'coop';
-          Neo.charSelectPhase = null;
-          Neo.setGameState('charselect');
-        }
-      }
+    function setCoopLobbyOpen(open) {
+      coopLobbyOpen = !!open;
+      view.coopLobby?.classList.toggle('hidden', !coopLobbyOpen);
+      view.coopLobby?.setAttribute('aria-hidden', coopLobbyOpen ? 'false' : 'true');
     }
 
-    // Reflect the authoritative lobby snapshot onto the shared champion panel.
+    // Reflect the authoritative lobby snapshot onto the standalone overlay.
     function renderCoopLobby(snapshot, members, localMember) {
       const inLobby = ['waiting', 'starting'].includes(snapshot.status) && !!snapshot.playerId;
-      if (inLobby !== coopLobbyActive) setCoopLobbyMode(inLobby);
+      if (inLobby !== coopLobbyOpen) setCoopLobbyOpen(inLobby);
       if (!inLobby) return;
 
       if (view.coopLobbyRoomCode) {
-        view.coopLobbyRoomCode.textContent = snapshot.roomCode ? `ROOM ${snapshot.roomCode}` : '';
+        view.coopLobbyRoomCode.textContent = snapshot.roomCode || '';
       }
       renderCoopSlots(members, snapshot.playerId);
+      renderCoopPicker(localMember, snapshot.status);
 
-      // Keep the shared roster's highlight synced to *this* player's pick.
-      if (localMember?.characterKey) highlightCoopRosterSelection(localMember.characterKey);
-
-      const titleEl = document.getElementById('charSelectTitle');
-      const subtitleEl = document.getElementById('charSelectSubtitle');
-      const goBtn = document.getElementById('go');
       const readyCount = members.filter(member => member.ready).length;
       const minPlayers = Number(snapshot.lobbyState?.minPlayers) || 2;
-      if (titleEl) titleEl.textContent = 'CO-OP LOBBY';
-      if (subtitleEl) {
-        subtitleEl.textContent = snapshot.status === 'starting'
+      if (view.coopLobbyStatus) {
+        view.coopLobbyStatus.textContent = snapshot.status === 'starting'
           ? 'All players ready — entering the dungeon…'
           : members.length < minPlayers
             ? `Waiting for players (${members.length}/${minPlayers} minimum)…`
             : `${readyCount}/${members.length} ready — pick your hero, then ENTER DUNGEON.`;
       }
-      if (goBtn) {
+      if (view.coopLobbyReady) {
         const isReady = localMember?.ready === true;
-        goBtn.textContent = isReady ? 'WAITING…' : 'ENTER DUNGEON';
-        goBtn.classList.toggle('charselect-start-btn--armed', isReady);
-        goBtn.disabled = snapshot.status !== 'waiting' || !localMember;
+        view.coopLobbyReady.textContent = isReady ? 'WAITING…' : 'ENTER DUNGEON';
+        view.coopLobbyReady.classList.toggle('coop-lobby__ready--armed', isReady);
+        view.coopLobbyReady.disabled = snapshot.status !== 'waiting' || !localMember;
       }
-    }
-
-    function highlightCoopRosterSelection(characterKey) {
-      document.querySelectorAll('#choose .char-card[data-char]').forEach(card => {
-        card.classList.toggle('char-card--coop-selected', card.dataset.char === characterKey);
-      });
     }
 
     function renderCoopSlots(members, localPlayerId) {
@@ -252,6 +236,66 @@ export function createUIController(view) {
       view.coopLobbySlots.replaceChildren(...slots);
     }
 
+    // Build the hero picker from the SAME .char-card markup the single-player
+    // champion select uses, so it inherits that panel's exact look and feels
+    // familiar. Only the behaviour differs: a click broadcasts a co-op pick.
+    function renderCoopPicker(localMember, status) {
+      if (!view.coopLobbyPicker) return;
+      const locked = status !== 'waiting' || localMember?.ready === true;
+      view.coopLobbyPicker.classList.toggle('coop-lobby__picker--locked', locked);
+      const selectedKey = localMember?.characterKey || 'thorn_knight';
+      const cards = MULTIPLAYER_ROSTER.map(entry => {
+        const card = document.createElement('button');
+        card.type = 'button';
+        card.className = 'char-card';
+        card.dataset.char = entry.key;
+        card.dataset.rarity = entry.rarity;
+        const selected = entry.key === selectedKey;
+        card.classList.toggle('sel', selected);
+        card.setAttribute('aria-pressed', selected ? 'true' : 'false');
+        card.disabled = locked;
+
+        const artWrap = document.createElement('div');
+        artWrap.className = 'char-card-art-wrap';
+        const art = document.createElement('canvas');
+        art.className = 'char-card-art';
+        art.width = 96;
+        art.height = 96;
+        art.setAttribute('aria-hidden', 'true');
+        artWrap.appendChild(art);
+        paintLobbyPortrait(art, entry.key);
+
+        const header = document.createElement('div');
+        header.className = 'char-card-header';
+        const name = document.createElement('span');
+        name.className = 'char-card-name';
+        name.textContent = MULTIPLAYER_CHARACTER_NAMES[entry.key] || entry.key.toUpperCase();
+        const tag = document.createElement('span');
+        tag.className = `char-card-tag ${entry.tag}-tag`;
+        const tagIcon = document.createElement('canvas');
+        tagIcon.className = 'char-card-tag-icon';
+        tagIcon.width = 18;
+        tagIcon.height = 18;
+        tagIcon.setAttribute('aria-hidden', 'true');
+        tag.append(tagIcon, document.createTextNode(entry.role));
+        Neo.drawInventoryUiIcon?.(tagIcon, `role-${entry.tag}`);
+        header.append(name, tag);
+
+        const hint = document.createElement('small');
+        hint.className = 'char-card-hint';
+        hint.textContent = entry.hint;
+
+        card.append(artWrap, header, hint);
+        card.setAttribute('aria-label', `${name.textContent}. ${entry.hint}.${selected ? ' Selected.' : ''}`);
+        card.addEventListener('click', () => {
+          if (card.disabled) return;
+          browserMultiplayerSession?.setCharacter(entry.key);
+        });
+        return card;
+      });
+      view.coopLobbyPicker.replaceChildren(...cards);
+    }
+
     function renderBrowserMultiplayerState(snapshot = {}) {
       const roomCode = snapshot.roomCode || '';
       if (view.multiplayerRoomCodeDisplay) {
@@ -259,6 +303,7 @@ export function createUIController(view) {
       }
       view.multiplayerRoomCodeShare?.classList.toggle('hidden', !roomCode);
       if (view.multiplayerCopyRoomCode) view.multiplayerCopyRoomCode.disabled = !roomCode;
+      if (view.coopLobbyCopyRoomCode) view.coopLobbyCopyRoomCode.disabled = !roomCode;
       const latestError = snapshot.errors?.[snapshot.errors.length - 1];
       const statusMessages = {
         disconnected: 'Not connected.',
@@ -306,7 +351,7 @@ export function createUIController(view) {
     }
 
     function startBrowserMultiplayerGameView() {
-      setCoopLobbyMode(false);
+      setCoopLobbyOpen(false);
       if (browserMultiplayerGameView?.active || !browserMultiplayerSession) return;
       const GameView = globalThis.NeoNyke?.rendering?.NetworkGameView;
       if (typeof GameView !== 'function') {
@@ -397,7 +442,7 @@ export function createUIController(view) {
       browserMultiplayerSession = null;
       if (Neo.gameSession === disposedSession) Neo.gameSession = null;
       setMultiplayerCopyFeedback('idle');
-      setCoopLobbyMode(false);
+      setCoopLobbyOpen(false);
       renderBrowserMultiplayerState({ status: 'disconnected' });
     }
 
@@ -2237,16 +2282,6 @@ export function createUIController(view) {
           }
           const button = event.target instanceof Element ? event.target.closest('#choose .char-card[data-char]') : null;
           if (!button) return;
-          // In the networked co-op lobby, a card click broadcasts this player's
-          // hero to the authority instead of starting a single-player run.
-          if (isCoopLobbyActive()) {
-            const key = button.dataset.char || '';
-            if (MULTIPLAYER_CHARACTER_NAMES[key]) {
-              browserMultiplayerSession.setCharacter(key);
-              highlightCoopRosterSelection(key);
-            }
-            return;
-          }
           handlers.onCharacterSelect(button.dataset.char || '', button);
         });
 
@@ -2955,19 +2990,19 @@ export function createUIController(view) {
             renderRunHistoryPage();
           });
         });
-        view.go.addEventListener('click', () => {
-          // In the co-op lobby, #go becomes the READY toggle rather than the
-          // single-player run start.
-          if (isCoopLobbyActive()) {
-            const snap = browserMultiplayerSession.snapshot?.() || {};
-            const isReady = snap.lobbyState?.members?.find(m => m.playerId === snap.playerId)?.ready === true;
-            browserMultiplayerSession.setReady(!isReady);
-            return;
-          }
-          handlers.onStartNew();
-        });
+        view.go.addEventListener('click', handlers.onStartNew);
         view.seed.addEventListener('keydown', event => {
-          if (event.key === 'Enter' && !isCoopLobbyActive()) handlers.onStartNew();
+          if (event.key === 'Enter') handlers.onStartNew();
+        });
+        // Networked co-op lobby: standalone overlay controls (never #charSelect).
+        view.coopLobbyReady?.addEventListener('click', () => {
+          const snap = browserMultiplayerSession?.snapshot?.() || {};
+          const isReady = snap.lobbyState?.members?.find(m => m.playerId === snap.playerId)?.ready === true;
+          browserMultiplayerSession?.setReady(!isReady);
+        });
+        view.coopLobbyLeave?.addEventListener('click', () => {
+          disposeBrowserMultiplayerSession();
+          setMultiplayerPanelOpen(false);
         });
         view.continueBtn?.addEventListener('click', handlers.onContinue);
         view.deleteRunBtn?.addEventListener('click', handlers.onDeleteRun);
@@ -3018,16 +3053,7 @@ export function createUIController(view) {
           disposeBrowserMultiplayerSession();
           setMultiplayerPanelOpen(false);
         });
-        view.charBackBtn?.addEventListener('click', () => {
-          // Leaving the champion panel while it's acting as the co-op lobby
-          // means leaving the room, not backing through sequential phases.
-          if (isCoopLobbyActive()) {
-            disposeBrowserMultiplayerSession();
-            setMultiplayerPanelOpen(false);
-            return;
-          }
-          handlers.onCloseCharacterSelect();
-        });
+        view.charBackBtn?.addEventListener('click', handlers.onCloseCharacterSelect);
         // Alt modes panel
         view.altModesBtn?.addEventListener('click', () => setAltModesPanelOpen(true));
         view.altModesClose?.addEventListener('click', () => setAltModesPanelOpen(false));

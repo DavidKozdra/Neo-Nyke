@@ -23,6 +23,7 @@ const ROOM_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const ROOM_CODE_LENGTH = 6;
 const ROOM_CODE_PATTERN = /^[A-HJ-NP-Z2-9]{4,8}$/;
 const MULTIPLAYER_ROOM_LIMIT = 4;
+const MULTIPLAYER_MIN_PLAYERS = 1;
 const ROOM_TICK_INTERVAL_MS = 50;
 
 const multiplayerApi = globalThis.NeoNyke?.multiplayer || {};
@@ -123,7 +124,9 @@ export class MultiplayerRoom {
       sessionId: this.roomCode,
       matchId: `cloudflare-${this.roomCode}`,
       matchSeed: `cloudflare-${this.roomCode}`,
-      minPlayers: 2,
+      // 1 so a solo player (dev testing, or a host who wants to start before
+      // friends arrive) can begin; up to MULTIPLAYER_ROOM_LIMIT can still join.
+      minPlayers: MULTIPLAYER_MIN_PLAYERS,
       maxPlayers: MULTIPLAYER_ROOM_LIMIT,
     });
     this.startPromise = null;

@@ -17,17 +17,25 @@
   }
 
   function cloneSerializable(value) {
-    const seen = new WeakSet();
-    const json = JSON.stringify(value, (_key, current) => {
-      if (typeof current === 'function' || typeof current === 'symbol' || typeof current === 'bigint') {
-        throw new TypeError('Game state contains a non-serializable value');
+    // Reject non-serializable leaf types with a clear message. True circular
+    // references are caught natively by JSON.stringify below — we must NOT
+    // hand-roll cycle detection with a "seen" set, because a set that never
+    // clears also rejects legitimate shared references (diamonds), e.g. the
+    // same room-transition object referenced from two floorState fields.
+    let json;
+    try {
+      json = JSON.stringify(value, (_key, current) => {
+        if (typeof current === 'function' || typeof current === 'symbol' || typeof current === 'bigint') {
+          throw new TypeError('Game state contains a non-serializable value');
+        }
+        return current;
+      });
+    } catch (error) {
+      if (error instanceof TypeError && /circular|cyclic/i.test(error.message)) {
+        throw new TypeError('Game state contains a circular reference');
       }
-      if (current && typeof current === 'object') {
-        if (seen.has(current)) throw new TypeError('Game state contains a circular reference');
-        seen.add(current);
-      }
-      return current;
-    });
+      throw error;
+    }
     if (json === undefined) throw new TypeError('Game state must be serializable');
     return JSON.parse(json);
   }

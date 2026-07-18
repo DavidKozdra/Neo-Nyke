@@ -82,18 +82,18 @@ async function main() {
     await waitForSessionStatus(guest, 'waiting', 'guest lobby');
     await host.waitForFunction(() => globalThis.Neo.gameSession.snapshot().lobbyState?.members?.length === 2);
 
-    await host.locator('#multiplayerCharacter').selectOption('princess');
-    await guest.locator('#multiplayerCharacter').selectOption('sarge');
+    await host.locator('#choose .char-card[data-char="princess"]').click();
+    await guest.locator('#choose .char-card[data-char="metao"]').click();
     await Promise.all([
       host.waitForFunction(() => globalThis.Neo.gameSession.snapshot().lobbyState?.members
         ?.find(member => member.playerId === globalThis.Neo.gameSession.snapshot().playerId)?.characterKey === 'princess'),
       guest.waitForFunction(() => globalThis.Neo.gameSession.snapshot().lobbyState?.members
-        ?.find(member => member.playerId === globalThis.Neo.gameSession.snapshot().playerId)?.characterKey === 'sarge'),
+        ?.find(member => member.playerId === globalThis.Neo.gameSession.snapshot().playerId)?.characterKey === 'metao'),
     ]);
 
     await Promise.all([
-      host.locator('#multiplayerReady').click(),
-      guest.locator('#multiplayerReady').click(),
+      host.locator('#go').click(),
+      guest.locator('#go').click(),
     ]);
     await Promise.all([
       waitForSessionStatus(host, 'running', 'host match start'),
@@ -306,7 +306,7 @@ async function main() {
     if (!converged || !moved || !traversed || report.gameViewActive !== true
       || !hostCanvasRendered || !guestCanvasRendered
       || hostRenderedPlayerCount !== 1 || guestRenderedPlayerCount !== 1
-      || hostPlayers['player-1']?.characterKey !== 'princess' || hostPlayers['player-2']?.characterKey !== 'sarge'
+      || hostPlayers['player-1']?.characterKey !== 'princess' || hostPlayers['player-2']?.characterKey !== 'metao'
       || initialEnemyCount < 1 || combatProof.livingEnemies !== 0
       || !combatProof.eventTypes.includes('PLAYER_ATTACKED')
       || !combatProof.attackKinds.includes('princess_wand')
