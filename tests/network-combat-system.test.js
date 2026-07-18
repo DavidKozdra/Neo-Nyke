@@ -2,6 +2,7 @@ const { GameState } = require('../js/simulation/GameState');
 const { GameSimulation } = require('../js/simulation/GameSimulation');
 const { RandomService } = require('../js/simulation/RandomService');
 const { createNetworkFloorState, TEST_ROOM } = require('../js/multiplayer/LocalMultiplayerSession');
+const { MOVE_SLOT_KEYS, MOVE_PRESENTATION_DEFS } = require('../js/simulation/SharedMoveContent');
 const {
   ATTACK_COOLDOWN_TICKS,
   applyNetworkHeroProfile,
@@ -84,6 +85,96 @@ describe('authoritative network combat system', () => {
       blood_beam: expect.any(Number), crimson_smash: expect.any(Number), dash: expect.any(Number),
     }));
     expect(events.filter(event => event.eventType === 'PLAYER_ABILITY_USED')).toHaveLength(3);
+    expect(events.find(event => event.data.abilityId === 'blood_beam').data.effectRadius).toBe(470);
+  });
+
+  test('server spawns and publishes Crimson Smash rock trajectories', () => {
+    const { state, simulation, events } = combatHarness('thorn_knight');
+    applyNetworkHeroProfile(state.players.p1, 'thorn_knight');
+    simulation.updateGame({}, 0.05);
+    const player = state.players.p1;
+    const origin = { x: player.x, y: player.y };
+
+    simulation.updateGame({ p1: { actions: [
+      { action: 'ABILITY', abilityId: 'crimson_smash', aimDirection: Math.PI / 4 },
+    ] } }, 0.05);
+
+    const rocks = Object.values(state.projectiles).filter(projectile => projectile.attackKind === 'crimson_smash');
+    expect(rocks).toHaveLength(8);
+    expect(rocks.every(projectile => projectile.kind === 'rock' && projectile.ownerId === 'p1')).toBe(true);
+    expect(new Set(rocks.map(projectile => `${projectile.vx.toFixed(2)}:${projectile.vy.toFixed(2)}`)).size).toBe(8);
+    const abilityEvent = events.find(event => event.eventType === 'PLAYER_ABILITY_USED');
+    expect(abilityEvent.data).toEqual(expect.objectContaining({
+      playerId: 'p1',
+      abilityId: 'crimson_smash',
+      presentationKey: 'crimson_smash',
+      originX: origin.x,
+      originY: origin.y,
+      effectRadius: 140,
+      projectileIds: rocks.map(projectile => projectile.id),
+      spawnedProjectiles: expect.arrayContaining([
+        expect.objectContaining({ id: rocks[0].id, kind: 'rock', vx: expect.any(Number), vy: expect.any(Number) }),
+      ]),
+    }));
+  });
+
+  test('server owns persistent zones, pulses, and expiry', () => {
+    const { state, simulation, events } = combatHarness('gelleh');
+    const player = state.players.p1;
+    applyNetworkHeroProfile(player, 'gelleh');
+    player.health = 40;
+    simulation.updateGame({}, 0.05);
+    const enemy = Object.values(state.enemies)[0];
+    enemy.x = player.x + 40;
+    enemy.y = player.y;
+    enemy.moveSpeed = 0;
+
+    simulation.updateGame({ p1: { actions: [
+      { action: 'ABILITY', abilityId: 'healing_zone', aimDirection: 0 },
+    ] } }, 0.05);
+
+    expect(Object.values(state.abilityEntities)).toEqual([
+      expect.objectContaining({ kind: 'healing_zone', ownerId: 'p1', roomId: player.roomId }),
+    ]);
+    expect(player.health).toBeGreaterThan(40);
+    expect(enemy.health).toBeLessThan(enemy.maxHealth);
+    expect(events).toContainEqual(expect.objectContaining({ eventType: 'ABILITY_ENTITY_PULSED' }));
+
+    for (let tick = 0; tick < 70; tick += 1) simulation.updateGame({}, 0.05);
+    expect(state.abilityEntities).toEqual({});
+    expect(events).toContainEqual(expect.objectContaining({ eventType: 'ABILITY_ENTITY_REMOVED' }));
+  });
+
+  test('server enforces authored invulnerability and Hammer Smash stun', () => {
+    const flight = combatHarness('princess');
+    applyNetworkHeroProfile(flight.state.players.p1, 'princess');
+    flight.simulation.updateGame({}, 0.05);
+    flight.simulation.updateGame({ p1: { actions: [
+      { action: 'DASH', abilityId: 'flying_unhitable', aimDirection: 0 },
+    ] } }, 0.05);
+    const flyer = flight.state.players.p1;
+    const projectileId = flight.state.allocateEntityId('projectile');
+    flight.state.projectiles[projectileId] = {
+      id: projectileId, hostile: true, ownerId: 'enemy', roomId: flyer.roomId,
+      x: flyer.x, y: flyer.y, vx: 0, vy: 0, radius: 8, damage: 25,
+      attackKind: 'test', expiresTick: flight.state.tick + 5,
+    };
+    flight.simulation.updateGame({}, 0.05);
+    expect(flyer.health).toBe(flyer.maxHealth);
+    expect(flight.events).toContainEqual(expect.objectContaining({ eventType: 'PLAYER_DAMAGE_BLOCKED' }));
+
+    const hammer = combatHarness('sarge');
+    applyNetworkHeroProfile(hammer.state.players.p1, 'sarge');
+    hammer.simulation.updateGame({}, 0.05);
+    const enemy = Object.values(hammer.state.enemies)[0];
+    enemy.maxHealth = 200;
+    enemy.health = 200;
+    enemy.x = hammer.state.players.p1.x + 70;
+    enemy.y = hammer.state.players.p1.y;
+    hammer.simulation.updateGame({ p1: { actions: [
+      { action: 'ABILITY', abilityId: 'hammer_smash', aimDirection: 0 },
+    ] } }, 0.05);
+    expect(enemy.stunnedUntilTick).toBeGreaterThan(hammer.state.tick);
   });
 
   test('rejects client ability IDs that are not equipped by that hero', () => {
@@ -93,6 +184,33 @@ describe('authoritative network combat system', () => {
     simulation.updateGame({ p1: { actions: [{ action: 'ABILITY', abilityId: 'wizard_lazer', aimDirection: 0 }] } }, 0.05);
     expect(events.some(event => event.eventType === 'PLAYER_ABILITY_USED')).toBe(false);
     expect(state.players.p1.moveCooldownUntilTick).toEqual({});
+  });
+
+  test.each(Object.entries(MOVE_SLOT_KEYS)
+    .filter(([slot]) => slot !== 'melee')
+    .flatMap(([slot, moveKeys]) => moveKeys.map(moveKey => [slot, moveKey])))('%s move %s resolves through the shared authority catalog', (slot, moveKey) => {
+    const { state, simulation, events } = combatHarness('thorn_knight');
+    const player = state.players.p1;
+    player.equippedMoves = { melee: 'slash', laser: 'blood_beam', smash: 'crimson_smash', dash: 'dash', [slot]: moveKey };
+    player.moveCooldownUntilTick = {};
+    player.statusUntilTick = {};
+    simulation.updateGame({}, 0.05);
+    simulation.updateGame({ p1: { actions: [{
+      action: slot === 'dash' ? 'DASH' : 'ABILITY', abilityId: moveKey, aimDirection: 0.35,
+    }] } }, 0.05);
+
+    const event = events.find(candidate => candidate.eventType === 'PLAYER_ABILITY_USED');
+    expect(event?.data).toEqual(expect.objectContaining({
+      playerId: 'p1', roomId: player.roomId, slot, abilityId: moveKey,
+      presentationKey: moveKey,
+      presentation: {
+        key: moveKey,
+        kind: MOVE_PRESENTATION_DEFS[moveKey].kind,
+        style: MOVE_PRESENTATION_DEFS[moveKey].style,
+      },
+      originX: expect.any(Number), originY: expect.any(Number),
+      destinationX: expect.any(Number), destinationY: expect.any(Number),
+    }));
   });
 
   test.each([
@@ -166,6 +284,10 @@ describe('authoritative network combat system', () => {
     expect(first.state.floorState.encounters[first.state.floorState.currentRoomId]).toEqual(
       expect.objectContaining({ status: 'active', enemyIds: [firstEnemy.id] }),
     );
+    expect(isNetworkRoomLocked(first.state)).toBe(false);
+
+    const startRoom = first.state.floorState.layout.rooms.find(room => room.id === first.state.floorState.currentRoomId);
+    startRoom.type = 'challenge';
     expect(isNetworkRoomLocked(first.state)).toBe(true);
   });
 

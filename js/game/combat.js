@@ -2505,6 +2505,8 @@
   }
 
   function applyResponsiveVelocity(current, desired, dt) {
+    const sharedRule = globalThis.NeoNyke?.simulation?.applyResponsiveVelocity;
+    if (typeof sharedRule === 'function') return sharedRule(current, desired, dt);
     const isStopping = Math.abs(desired) < 0.001;
     const isTurning = !isStopping && current !== 0 && Math.sign(current) !== Math.sign(desired);
     const response = isStopping ? 20 : isTurning ? 24 : 14;

@@ -1085,7 +1085,7 @@
         Neo.ctx.fillStyle = '#ffd8d8';
         Neo.ctx.fillRect(2, -11, 2, 2);
       } else if (pickup.type === 'item') {
-        const item = Neo.itemRegistry.get(pickup.key);
+        const item = Neo.itemRegistry.get(pickup.key) || pickup.itemPresentation;
         const color = item?.color || '#fff';
         const iconDef = window.NeoNykeIconDefs?.items?.[pickup.key];
 

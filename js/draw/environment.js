@@ -1,15 +1,15 @@
 // environment.js — standalone IIFE. Room environment drawing.
   function draw() {
-    if (Neo.multiplayerGameView?.active) {
+    const networkActive = !!Neo.multiplayerGameView?.active;
+    if (networkActive) {
       Neo.multiplayerGameView.render();
-      return;
     }
     const isDying = Neo.gameState === 'dying';
-    const isPlayLike = Neo.gameState === 'play' || Neo.gameState === 'pause' || Neo.gameState === 'dialogue' || isDying;
+    const isPlayLike = networkActive || Neo.gameState === 'play' || Neo.gameState === 'pause' || Neo.gameState === 'dialogue' || isDying;
     Neo._lightsFrame = (Neo._lightsFrame || 0) + 1;
     let sectionPerfStart = Neo.perfStart();
-    Neo.ctx.clearRect(0, 0, Neo.canvas.width, Neo.canvas.height);
-    if (isPlayLike) {
+    if (!networkActive) Neo.ctx.clearRect(0, 0, Neo.canvas.width, Neo.canvas.height);
+    if (isPlayLike && !networkActive) {
       const split = Neo.isSplitScreen();
       // 3D mode: the Three.js renderer draws the world onto the WebGL canvas
       // behind this one; the 2D canvas stays transparent there so minimap/HUD
@@ -91,7 +91,7 @@
   }
 
   function drawLowHealthEdgeGlow() {
-    if (!Neo.player || Neo.gameState !== 'play' || !Number.isFinite(Neo.player.hp) || !Number.isFinite(Neo.player.maxHp) || Neo.player.maxHp <= 0) return;
+    if (!Neo.player || (Neo.gameState !== 'play' && !Neo.multiplayerGameView?.active) || !Number.isFinite(Neo.player.hp) || !Number.isFinite(Neo.player.maxHp) || Neo.player.maxHp <= 0) return;
     const access = window.NeoSettings?.getAccess() || {};
     const now = Date.now();
     const hpRatio = Neo.clamp(Neo.player.hp / Neo.player.maxHp, 0, 1);
@@ -133,7 +133,7 @@
   }
 
   function drawLadderPrompt() {
-    if (Neo.gameState !== 'play' || !Neo.currentRoom?.cleared) return;
+    if ((Neo.gameState !== 'play' && !Neo.multiplayerGameView?.active) || !Neo.currentRoom?.cleared) return;
     const ladder = Neo.pickups.find(pickup => pickup?.type === 'ladder');
     if (!ladder) return;
     if (Neo.dist(Neo.player.x, Neo.player.y, ladder.x, ladder.y) > Neo.LADDER_TRIGGER_RADIUS) return;

@@ -133,7 +133,7 @@ describe('networked run lifecycle', () => {
     expect(events.filter(event => event.eventType === 'XP_AWARDED')).toHaveLength(2);
   });
 
-  test('treasure relic choices are seeded, authority validated, and claimed once', () => {
+  test('treasure chests open on touch, offer seeded choices, and can only be claimed once', () => {
     const state = stateFor('coop');
     const treasure = state.floorState.layout.rooms.find(room => room.type === 'treasure');
     state.players.p1.roomId = treasure.id;
@@ -148,10 +148,14 @@ describe('networked run lifecycle', () => {
     });
     simulation.updateGame({}, 0.05);
     const chest = Object.values(state.interactables).find(item => item.kind === 'relic_chest');
-    expect(chest.optionIds).toHaveLength(3);
+    expect(chest.optionIds).toHaveLength(2);
 
-    simulation.updateGame({ p1: { actions: [{ action: 'INTERACT', targetEntityId: chest.id }] } }, 0.05);
+    state.players.p1.x = chest.x;
+    state.players.p1.y = chest.y;
+    simulation.updateGame({}, 0.05);
     expect(state.players.p1.pendingUpgrade.optionIds).toEqual(chest.optionIds);
+    expect(chest.activated).toBe(true);
+    expect(events).toContainEqual(expect.objectContaining({ eventType: 'CHEST_OPENED' }));
     const optionId = chest.optionIds[0];
     simulation.updateGame({ p1: { actions: [{
       action: 'UPGRADE', selectionEventId: chest.id, optionId,
@@ -162,5 +166,17 @@ describe('networked run lifecycle', () => {
     simulation.updateGame({ p2: { actions: [{ action: 'INTERACT', targetEntityId: chest.id }] } }, 0.05);
     expect(state.players.p2.pendingUpgrade).toBeUndefined();
     expect(events.filter(event => event.eventType === 'UPGRADE_APPLIED')).toHaveLength(1);
+
+    const remainingChests = Object.values(state.interactables)
+      .filter(item => item.kind === 'relic_chest' && !item.opened);
+    remainingChests.forEach(nextChest => {
+      state.players.p1.x = nextChest.x;
+      state.players.p1.y = nextChest.y;
+      simulation.updateGame({}, 0.05);
+      simulation.updateGame({ p1: { actions: [{
+        action: 'UPGRADE', selectionEventId: nextChest.id, optionId: nextChest.optionIds[0],
+      }] } }, 0.05);
+    });
+    expect(state.floorState.rewards[treasure.id].status).toBe('claimed');
   });
 });

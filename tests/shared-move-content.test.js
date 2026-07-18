@@ -1,5 +1,6 @@
 const {
   MOVE_BASE_STATS,
+  MOVE_PRESENTATION_DEFS,
   MOVE_SLOT_KEYS,
   DEFAULT_MOVE_LOADOUTS,
   KIT_ALTERNATIVES,
@@ -13,6 +14,13 @@ describe('shared Neo Nyke move content', () => {
     expect(catalog).toHaveLength(47);
     expect(new Set(catalog).size).toBe(catalog.length);
     expect(Object.keys(MOVE_BASE_STATS).sort()).toEqual(catalog.slice().sort());
+    expect(Object.keys(MOVE_PRESENTATION_DEFS).sort()).toEqual(catalog.slice().sort());
+    Object.values(MOVE_PRESENTATION_DEFS).forEach(presentation => {
+      expect(presentation).toEqual(expect.objectContaining({
+        kind: expect.any(String), color: expect.stringMatching(/^#[0-9a-f]{6}$/i),
+        style: expect.stringMatching(/^(light|normal|heavy)$/), sound: expect.any(String),
+      }));
+    });
     catalog.forEach(moveKey => expect(getMoveSlot(moveKey)).toBeTruthy());
   });
 

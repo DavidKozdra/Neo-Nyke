@@ -10,11 +10,18 @@
 
   const simulationApi = typeof require === 'function' ? require('../simulation/GameSimulation.js') : browserSimulationApi;
   const gameStateApi = typeof require === 'function' ? require('../simulation/GameState.js') : browserSimulationApi;
+  const campaignApi = typeof require === 'function' ? require('../simulation/CampaignSimulation.js') : browserSimulationApi;
   const floorApi = typeof require === 'function' ? require('../simulation/DeterministicFloorGenerator.js') : browserSimulationApi;
   const combatApi = typeof require === 'function' ? require('../simulation/NetworkCombatSystem.js') : browserSimulationApi;
   const protocolApi = typeof require === 'function' ? require('../protocol/ProtocolV1.js') : browserProtocolApi;
   const { GameSimulation, FIXED_DELTA_SECONDS, SIMULATION_TICK_RATE } = simulationApi;
   const { GameState, cloneSerializable } = gameStateApi;
+  const {
+    createCampaignSimulation,
+    createCampaignFloorState,
+    createCampaignMovementSystem,
+    CAMPAIGN_CONTENT_VERSION,
+  } = campaignApi;
   const { generateFloorLayout } = floorApi;
   const { applyNetworkHeroProfile, createNetworkCombatSystem, createFloorProgressionSystem, ensureNetworkEncounter, isNetworkRoomLocked } = combatApi;
   const {
@@ -26,10 +33,10 @@
     getDeliveryIntent,
   } = protocolApi;
 
-  const LOCAL_BUILD_VERSION = '1.0.0-network-runs-v9';
+  const LOCAL_BUILD_VERSION = '1.0.0-campaign-parity-v15';
   const LOCAL_GENERATION_VERSION = 1;
-  const LOCAL_CONTENT_HASH = 'shared-neo-network-runs-v9';
-  const LOCAL_CONTENT_VERSION = 'shared-neo-network-runs-v9';
+  const LOCAL_CONTENT_HASH = CAMPAIGN_CONTENT_VERSION || 'shared-neo-campaign-parity-v15';
+  const LOCAL_CONTENT_VERSION = CAMPAIGN_CONTENT_VERSION || 'shared-neo-campaign-parity-v15';
   const SNAPSHOT_RATE = 10;
   const SNAPSHOT_TICK_INTERVAL = SIMULATION_TICK_RATE / SNAPSHOT_RATE;
   const FULL_CORRECTION_TICK_INTERVAL = SIMULATION_TICK_RATE;
@@ -45,6 +52,7 @@
   }
 
   function createNetworkFloorState(options = {}) {
+    if (typeof createCampaignFloorState === 'function') return createCampaignFloorState(options);
     const layout = typeof generateFloorLayout === 'function'
       ? generateFloorLayout({
         matchSeed: options.matchSeed,
@@ -136,6 +144,11 @@
   }
 
   function createPlayerMovementSystem(room = TEST_ROOM) {
+    // Compatibility export for local harnesses/tests. Live authorities use the
+    // same implementation through createCampaignSimulation above.
+    if (typeof createCampaignMovementSystem === 'function') {
+      return createCampaignMovementSystem({ isRoomLocked: isNetworkRoomLocked });
+    }
     return ({ state, inputs, fixedDelta }) => {
       const players = Object.values(state.players);
       for (const player of players) {
@@ -151,7 +164,13 @@
           moveX /= magnitude;
           moveY /= magnitude;
         }
-        const speed = Math.max(0, Number(player.moveSpeed) || 180);
+        const statusUntil = player.statusUntilTick || {};
+        const statusSpeedMultiplier = state.tick < Number(statusUntil.mooggy_zoomies || 0)
+          ? 5
+          : state.tick < Number(statusUntil.turtle_powerup || 0)
+            ? 1.3
+            : 1;
+        const speed = Math.max(0, Number(player.moveSpeed) || 180) * statusSpeedMultiplier;
         const radius = Math.max(1, Number(player.radius) || 18);
         const wallInset = Math.max(0, Number(room.wallThickness) || 0);
         const minimum = wallInset + radius;
@@ -239,16 +258,21 @@
           contentVersion: this.contentVersion,
         }),
       });
-      this.simulation = new GameSimulation({
-        state,
-        systems: [
-          createPlayerMovementSystem(TEST_ROOM),
-          createNetworkCombatSystem({ emitEvent: (eventType, data) => this._queueGameplayEvent(eventType, data) }),
-          typeof createFloorProgressionSystem === 'function'
-            ? createFloorProgressionSystem({ emitEvent: (eventType, data) => this._queueGameplayEvent(eventType, data) })
-            : () => {},
-        ],
-      });
+      this.simulation = typeof createCampaignSimulation === 'function'
+        ? createCampaignSimulation({
+          state,
+          emitEvent: (eventType, data) => this._queueGameplayEvent(eventType, data),
+        })
+        : new GameSimulation({
+          state,
+          systems: [
+            createPlayerMovementSystem(TEST_ROOM),
+            createNetworkCombatSystem({ emitEvent: (eventType, data) => this._queueGameplayEvent(eventType, data) }),
+            typeof createFloorProgressionSystem === 'function'
+              ? createFloorProgressionSystem({ emitEvent: (eventType, data) => this._queueGameplayEvent(eventType, data) })
+              : () => {},
+          ],
+        });
       this.unsubscribeMessage = this.transport.onMessage((peerId, message, delivery) => this._onMessage(peerId, message, delivery));
       this.unsubscribeDisconnect = this.transport.onPeerDisconnected((identity, reason) => this._onPeerDisconnected(identity, reason));
     }
@@ -722,6 +746,7 @@
           players: cloneSerializable(this.simulation.state.players),
           enemies: cloneSerializable(this.simulation.state.enemies),
           projectiles: cloneSerializable(this.simulation.state.projectiles),
+          abilityEntities: cloneSerializable(this.simulation.state.abilityEntities),
           pickups: cloneSerializable(this.simulation.state.pickups),
           interactables: cloneSerializable(this.simulation.state.interactables),
         },
@@ -933,6 +958,7 @@
       this.state.players = cloneSerializable(snapshot.entities.players || {});
       this.state.enemies = cloneSerializable(snapshot.entities.enemies || {});
       this.state.projectiles = cloneSerializable(snapshot.entities.projectiles || {});
+      this.state.abilityEntities = cloneSerializable(snapshot.entities.abilityEntities || {});
       this.state.pickups = cloneSerializable(snapshot.entities.pickups || {});
       this.state.interactables = cloneSerializable(snapshot.entities.interactables || {});
       this.state.floorState = cloneSerializable(snapshot.floorState || this.state.floorState);
