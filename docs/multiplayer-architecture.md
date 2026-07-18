@@ -1,6 +1,6 @@
 # Neo Nyke multiplayer architecture
 
-Status: playable local Cloudflare exploration vertical slice. Room routes, a room-authoritative Durable Object, browser WebSockets, authority-validated character selection, two-client ready state, a shared deterministic floor layout, seeded door traversal, party room transitions, real character rendering, normal movement controls, local prediction, remote interpolation, and synchronized headless movement are implemented. Enemies/combat and the complete campaign, production deployment, reconnect, Electron, and Steamworks are not implemented yet.
+Status: playable local Cloudflare combat/exploration vertical slice. Room routes, a room-authoritative Durable Object, browser WebSockets, authority-validated character selection, two-client ready state, a shared deterministic floor layout, seeded encounters, server-owned enemy AI/projectiles/damage/death/drops/currency, locked-room traversal, real Neo Nyke sprites, client-side combat effects, local prediction, and remote interpolation are implemented. The complete campaign, production deployment, reconnect, Electron, and Steamworks are not implemented yet.
 
 ## Required layering
 
@@ -51,6 +51,7 @@ Create Room and Join Room are active only when that flag is enabled. Create call
 - `js/simulation/GameState.js`: versioned JSON-safe authority state, ID-keyed entity maps, and stable monotonic entity ID allocation.
 - `js/simulation/RandomService.js`: explicit deterministic streams for floor generation, enemy spawning, loot, shops, combat variance, and boss patterns, including serializable stream state.
 - `js/simulation/DeterministicFloorGenerator.js`: a pure seeded floor-layout proof. It is not yet a replacement for the content-rich legacy generator.
+- `js/simulation/NetworkCombatSystem.js`: headless seeded room encounters, enemy chase AI, player projectile attacks, contact damage, death, room clear, one-time drops, and pickup currency.
 - `js/simulation/GameSimulation.js`: headless `updateGame(inputs, fixedDelta)` boundary. Systems receive `{state, inputs, fixedDelta, random}` and cannot reach browser globals.
 - `js/simulation/FixedTickRunner.js`: initial 20 Hz accumulator shared by browser runtime and headless tests.
 - `js/multiplayer/NetworkTransport.js`: platform-neutral lifecycle, identity, message, peer, and delivery-intent contract.
@@ -66,7 +67,7 @@ These files use a small universal wrapper because Neo Nyke has no bundler: the b
 
 ## Current transitional boundary
 
-The browser's legacy `Neo` runtime still owns most production gameplay objects and several gameplay functions still read browser input or emit presentation effects directly. The new `GameSimulation` is genuinely headless and tested. It now drives a playable shared start chamber and deterministic floor map, but not yet enemies, room traversal, combat, items, or the complete campaign.
+The browser's legacy `Neo` runtime still owns most production gameplay objects and several gameplay functions still read browser input or emit presentation effects directly. The new `GameSimulation` is genuinely headless and tested. It now drives seeded rooms, movement/traversal, a first enemy/AI/projectile combat system, damage/death, drops, and currency, but not yet the full enemy roster, character-specific attacks, inventory/progression, bosses, or the complete campaign.
 
 Offline runs now create an `OfflineGameSession`, and its serializable authority clock advances on the same 20 Hz fixed steps as the legacy local authority. This preserves the playable game while systems are extracted incrementally. It must not be represented as full campaign extraction yet.
 
@@ -177,6 +178,6 @@ Steam Networking Sockets/SDR is a later alternate transport only. It would chang
 
 ## Current milestone and next gate
 
-Milestone A's playable proof now supports room creation, joining, authority-validated hero choice, ready state, two authoritative players, a seeded 8–10-room floor layout, valid-door collision and shared party traversal, visited-room mapping, Neo Nyke character sprites, WASD/arrows/gamepad movement, snapshots, prediction/interpolation, a leave-room path, and disconnect cleanup in local development. It has automated protocol/transport/rendering tests and a repeatable two-browser exploration smoke command.
+Milestones A–C now have a playable vertical proof: room creation/joining, hero choice, ready state, 2–4 authoritative players, seeded 8–10-room floors and encounters, locked doors, shared party traversal, enemy chase AI, click/Space/gamepad attacks, authoritative projectiles/hits/contact damage/death, exactly-once coin drops and collection, real Neo Nyke character/enemy sprites, health bars, hit feedback, prediction/interpolation, and disconnect cleanup. Automated tests and the two-browser smoke command cover the authoritative combat-to-traversal flow.
 
-The next gate is the first authoritative enemy/combat vertical slice: one real enemy, one real player attack, server-owned damage/death, and a synchronized drop. Latency diagnostics, stronger reconciliation, reconnect reservations, complete enemy/item/floor systems, and a complete run remain required before Cloudflare multiplayer can be called proven. Electron and Steam remain out of scope until then.
+The next gate is replacing the proof encounter with the content-rich Neo Nyke room/enemy definitions and character-specific attack kits, followed by chests/items/XP, shops/upgrades, floor exits, bosses, defeat/revive, and complete-run results. Latency diagnostics, stronger reconciliation, reconnect reservations, and a complete run remain required before Cloudflare multiplayer can be called proven. Electron and Steam remain out of scope until then.

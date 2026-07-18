@@ -1,6 +1,6 @@
 # Neo Nyke gameplay protocol v1
 
-Status: versioned runtime contract with validation, a fault-injected local-loopback proof, and a Cloudflare Durable Object floor-traversal proof. Lobby character choice, authoritative movement, and shared room transitions use this contract. The complete combat/campaign message surface remains incremental; every transport carries the same envelope.
+Status: versioned runtime contract with validation, a fault-injected local-loopback proof, and a Cloudflare Durable Object combat/traversal proof. Lobby character choice, authoritative movement, attacks, hits, deaths, drops, pickup collection, and shared room transitions use this contract. The remaining campaign message surface is incremental; every transport carries the same envelope.
 
 ## Envelope
 

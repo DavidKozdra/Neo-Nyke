@@ -128,7 +128,34 @@ async function main() {
       const snapshot = globalThis.Neo.gameSession.snapshot();
       const roomId = snapshot.gameState?.floorState?.currentRoomId;
       return snapshot.gameState?.floorState?.encounters?.[roomId]?.status === 'cleared';
-    }, { timeout: 10_000 })));
+    }, undefined, { timeout: 10_000 })));
+
+    const pickupTarget = await host.evaluate(() => {
+      const snapshot = globalThis.Neo.gameSession.snapshot();
+      const player = snapshot.gameState?.players?.[snapshot.playerId];
+      const pickup = Object.values(snapshot.gameState?.pickups || {})[0];
+      return player && pickup ? { player, pickup } : null;
+    });
+    if (pickupTarget) {
+      const deltaX = pickupTarget.pickup.x - pickupTarget.player.x;
+      if (Math.abs(deltaX) > 12) await holdKey(host, deltaX > 0 ? 'd' : 'a', Math.abs(deltaX) / 180 * 1000);
+      const verticalTarget = await host.evaluate(() => {
+        const snapshot = globalThis.Neo.gameSession.snapshot();
+        return {
+          player: snapshot.gameState?.players?.[snapshot.playerId],
+          pickup: Object.values(snapshot.gameState?.pickups || {})[0],
+        };
+      });
+      if (verticalTarget.player && verticalTarget.pickup) {
+        const deltaY = verticalTarget.pickup.y - verticalTarget.player.y;
+        if (Math.abs(deltaY) > 12) await holdKey(host, deltaY > 0 ? 's' : 'w', Math.abs(deltaY) / 180 * 1000);
+      }
+    }
+    await Promise.all([host, guest].map(page => page.waitForFunction(() => {
+      const state = globalThis.Neo.gameSession.snapshot().gameState;
+      return Object.keys(state?.pickups || {}).length === 0
+        && Object.values(state?.players || {}).reduce((total, player) => total + Number(player.gold || 0), 0) >= 1;
+    }, undefined, { timeout: 10_000 })));
 
     const combatProof = await host.evaluate(() => {
       const snapshot = globalThis.Neo.gameSession.snapshot();
@@ -269,7 +296,9 @@ async function main() {
       || !combatProof.eventTypes.includes('PLAYER_ATTACKED')
       || !combatProof.eventTypes.includes('ENEMY_DEFEATED')
       || !combatProof.eventTypes.includes('PICKUP_SPAWNED')
+      || !combatProof.eventTypes.includes('PICKUP_COLLECTED')
       || !combatProof.eventTypes.includes('ROOM_CLEARED')
+      || combatProof.pickupCount !== 0 || combatProof.totalGold < 1
       || report.visitedRoomCount < 2
       || report.floorRoomCount < 8 || errors.length) process.exitCode = 1;
   } finally {
