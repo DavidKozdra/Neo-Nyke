@@ -23,6 +23,22 @@ describe('network multiplayer game view', () => {
     expect(normalizeMovement(0.5, 0)).toEqual({ moveX: 0.5, moveY: 0 });
   });
 
+  test('maps network movement and aim to the first-person camera direction', () => {
+    const sent = [];
+    const neo = { getFirstPersonYaw: () => 0 };
+    const session = {
+      snapshot: () => ({ status: 'running' }),
+      sendInput: input => sent.push(input),
+    };
+    const view = new NetworkGameView({ session, neo });
+    view.active = true;
+    view.keys.add('KeyW');
+    expect(view._readMovement()).toEqual({ moveX: 1, moveY: 0 });
+    view.localPredictedPlayer = { id: 'p1', x: 100, y: 100, radius: 18, moveSpeed: 180 };
+    view._sendInput();
+    expect(sent).toEqual([expect.objectContaining({ moveX: 1, moveY: 0, aimDirection: 0 })]);
+  });
+
   test('fits the authority room into the Neo Nyke canvas', () => {
     expect(computeWorldTransform(960, 640, 900, 700)).toEqual({
       scale: 640 / 700,
@@ -130,6 +146,7 @@ describe('network multiplayer game view', () => {
       laserActive: false,
       laserMode: 'beam',
       drawPlayerLaser() {
+        expect(typeof this.rng).toBe('function');
         draws.push({ player: this.player, active: this.laserActive, mode: this.laserMode, angle: this.laserAngle });
       },
     };
@@ -147,6 +164,7 @@ describe('network multiplayer game view', () => {
     expect(draws).toEqual([expect.objectContaining({ player: actor, active: true, mode: 'turtle_wave', angle: 1.25 })]);
     expect(neo.player).toBe(originalPlayer);
     expect(neo.laserActive).toBe(false);
+    expect(neo.rng).toBeUndefined();
   });
 
   test('restores single-player presentation state after leaving a network match', () => {
@@ -279,18 +297,12 @@ describe('network multiplayer game view', () => {
     const main = fs.readFileSync(path.join(root, 'js/main.js'), 'utf8');
     const environment = fs.readFileSync(path.join(root, 'js/draw/environment.js'), 'utf8');
     expect(main).toContain("import './rendering/NetworkGameView.js'");
-    expect(environment).toMatch(/Neo\.multiplayerGameView\?\.active[\s\S]*Neo\.multiplayerGameView\.render\(\)/);
+    expect(environment).toContain('Neo.multiplayerGameView.syncPresentation();');
     expect(fs.readFileSync(path.join(root, 'js/rendering/NetworkGameView.js'), 'utf8')).toContain('requestAnimationFrame?.(this.boundRenderFrame)');
-    expect(fs.readFileSync(path.join(root, 'js/rendering/NetworkGameView.js'), 'utf8')).toContain('this.neo.drawFloor()');
-    expect(fs.readFileSync(path.join(root, 'js/rendering/NetworkGameView.js'), 'utf8')).toContain('this.neo.threeRenderer?.render?.() === true');
-    expect(fs.readFileSync(path.join(root, 'js/rendering/NetworkGameView.js'), 'utf8')).toContain('this.neo.drawPlayerSlot');
-    expect(fs.readFileSync(path.join(root, 'js/rendering/NetworkGameView.js'), 'utf8')).toContain('this.neo.drawProjectileShape');
-    expect(fs.readFileSync(path.join(root, 'js/rendering/NetworkGameView.js'), 'utf8')).toContain('this.neo.drawEnemies');
-    expect(fs.readFileSync(path.join(root, 'js/rendering/NetworkGameView.js'), 'utf8')).toContain('this.neo.drawChests?.()');
-    expect(fs.readFileSync(path.join(root, 'js/rendering/NetworkGameView.js'), 'utf8')).toContain('this.neo.drawWorldProps?.()');
-    expect(fs.readFileSync(path.join(root, 'js/rendering/NetworkGameView.js'), 'utf8')).toContain('this.neo.drawWorldViewport(this.camera');
-    expect(fs.readFileSync(path.join(root, 'js/rendering/NetworkGameView.js'), 'utf8')).toContain('this.neo.drawStructuresOverPlayer?.()');
-    expect(fs.readFileSync(path.join(root, 'js/rendering/NetworkGameView.js'), 'utf8')).toContain('this.neo.drawPickups');
+    expect(fs.readFileSync(path.join(root, 'js/rendering/NetworkGameView.js'), 'utf8')).toContain('_syncNeoPresentationFloor(floorState, enemies, pickups, state)');
+    expect(fs.readFileSync(path.join(root, 'js/rendering/NetworkGameView.js'), 'utf8')).toContain('_syncCampaignPresentationEntities(visiblePlayers, projectiles, localPlayerId, state)');
+    expect(fs.readFileSync(path.join(root, 'js/draw/environment.js'), 'utf8')).toContain('Neo.threeRenderer?.render?.()');
+    expect(fs.readFileSync(path.join(root, 'js/draw/environment.js'), 'utf8')).toContain('Neo.drawWorldViewport(Neo.camera');
     expect(fs.readFileSync(path.join(root, 'js/rendering/NetworkGameView.js'), 'utf8')).toContain('this.neo.decorateRoomData(room)');
     expect(fs.readFileSync(path.join(root, 'js/rendering/NetworkGameView.js'), 'utf8')).toContain('this.neo.updateHud?.()');
     expect(fs.readFileSync(path.join(root, 'js/rendering/NetworkGameView.js'), 'utf8')).not.toContain('this.neo.uiController?.setHudValues');

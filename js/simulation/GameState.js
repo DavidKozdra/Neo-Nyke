@@ -57,10 +57,6 @@
       floorNumber: Math.max(1, Math.trunc(Number(source.floorNumber) || 1)),
       status,
       matchRules: {
-        mode,
-        friendlyFire: mode === 'rival',
-        reviveEnabled: mode === 'coop',
-        floorAdvance: mode === 'coop' ? 'all-living' : 'first',
         sharedDiscovery: mode === 'coop',
         ...cloneSerializable(plainObject(source.matchRules)),
         // Security-sensitive rule values are derived from the validated mode.

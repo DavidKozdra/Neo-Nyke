@@ -35,6 +35,18 @@ function combatHarness(characterKey = 'princess') {
 }
 
 describe('authoritative network combat system', () => {
+  test('creates the selected hero with their campaign starter inventory and loadout', () => {
+    const player = { maxHealth: 100, health: 100 };
+    applyNetworkHeroProfile(player, 'thorn_knight');
+
+    expect(player).toEqual(expect.objectContaining({
+      character: 'thorn_knight',
+      equippedWeapon: 'thorns_bleed_blade',
+      equippedMoves: expect.objectContaining({ laser: 'blood_beam', smash: 'crimson_smash', dash: 'dash' }),
+      items: { neo_knife: 1, tooth_of_thorn: 2, tough_bandaid: 1 },
+    }));
+  });
+
   test('gives every Neo Nyke hero a distinct server-owned primary attack', () => {
     const expected = {
       princess: ['projectile', 'princess_wand'],
@@ -55,12 +67,15 @@ describe('authoritative network combat system', () => {
     const player = { characterKey: 'thorn_knight', maxHealth: 100, health: 50, moveSpeed: 180 };
     applyNetworkHeroProfile(player, 'turtle_boy');
     expect(player).toEqual(expect.objectContaining({
-      characterKey: 'turtle_boy', maxHealth: 120, health: 60, moveSpeed: 165,
+      characterKey: 'turtle_boy', maxHealth: 144, health: 72, moveSpeed: 180,
+      damageMultiplier: 1, items: { turtle_shell: 1, dragon_orb: 1 },
       equippedMoves: { melee: 'slash', laser: 'turtle_wave', smash: 'death_ball', dash: 'dash' },
     }));
     applyNetworkHeroProfile(player, 'mooggy');
     expect(player).toEqual(expect.objectContaining({
-      characterKey: 'mooggy', maxHealth: 108, health: 54, moveSpeed: 205,
+      characterKey: 'mooggy', maxHealth: 130, health: 65, moveSpeed: 180,
+      damageMultiplier: 0.6,
+      items: { hemes_scarf: 1, mooggy_zoomies: 1, churu_stick: 1 },
     }));
   });
 
