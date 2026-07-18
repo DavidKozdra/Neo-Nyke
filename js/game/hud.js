@@ -1784,7 +1784,7 @@
 
   function updateRewardChoiceTooltip() {
     // Only meaningful during play, with a real mouse cursor on the canvas.
-    if (Neo.gameState !== 'play' || !Array.isArray(Neo.pickups)
+    if ((Neo.gameState !== 'play' && !Neo.multiplayerGameView?.active) || !Array.isArray(Neo.pickups)
         || typeof Neo.mouse?.clientX !== 'number') {
       hideRewardChoiceTooltip();
       return;
@@ -1802,7 +1802,7 @@
     }
     if (!hovered) { hideRewardChoiceTooltip(); return; }
 
-    const item = Neo.itemRegistry?.get?.(hovered.key);
+    const item = Neo.itemRegistry?.get?.(hovered.key) || hovered.itemPresentation;
     const name = item?.name || Neo.titleCase?.(hovered.key) || hovered.key;
     const desc = item?.description || '';
     const rarity = item?.rarity || item?.category;

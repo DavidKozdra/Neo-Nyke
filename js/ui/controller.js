@@ -356,7 +356,8 @@ export function createUIController(view) {
     function startBrowserMultiplayerGameView() {
       setCoopLobbyOpen(false);
       if (browserMultiplayerGameView?.active || !browserMultiplayerSession) return;
-      const GameView = globalThis.NeoNyke?.rendering?.NetworkGameView;
+      const GameView = globalThis.NeoNyke?.rendering?.CampaignPresentationAdapter
+        || globalThis.NeoNyke?.rendering?.NetworkGameView;
       if (typeof GameView !== 'function') {
         if (view.multiplayerRoomStatus) view.multiplayerRoomStatus.textContent = 'Multiplayer game renderer failed to load.';
         return;

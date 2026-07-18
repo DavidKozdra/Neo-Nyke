@@ -73,6 +73,7 @@
       players: cloneSerializable(plainObject(source.players)),
       enemies: cloneSerializable(plainObject(source.enemies)),
       projectiles: cloneSerializable(plainObject(source.projectiles)),
+      abilityEntities: cloneSerializable(plainObject(source.abilityEntities)),
       pickups: cloneSerializable(plainObject(source.pickups)),
       interactables: cloneSerializable(plainObject(source.interactables)),
       floorState: cloneSerializable(plainObject(source.floorState)),

@@ -78,6 +78,63 @@
     wall_of_toph: Object.freeze({ damage: 46, cooldown: 4.20, range: 150 }),
   });
 
+  // Presentation is shared content, while rendering remains client-only. The
+  // authority includes the resolved key/kind/style in accepted action events;
+  // every client then selects the same campaign presentation without accepting
+  // client-authored colours, sounds, entity types, or gameplay outcomes.
+  const MOVE_PRESENTATION_DEFS = Object.freeze({
+    slash: Object.freeze({ kind: 'swing', color: '#ff7a9a', style: 'normal', sound: 'sword_swing' }),
+    fire_balls: Object.freeze({ kind: 'projectile', color: '#ffb35c', style: 'normal', sound: 'fire' }),
+    smite: Object.freeze({ kind: 'chain', color: '#cfdcff', style: 'normal', sound: 'lightning_charge' }),
+    narwal_fight: Object.freeze({ kind: 'swing', color: '#ff8ed0', style: 'normal', sound: 'sword_swing' }),
+    mooggy_swipe: Object.freeze({ kind: 'swing', color: '#ff7a9a', style: 'heavy', sound: 'sword_swing' }),
+
+    blood_beam: Object.freeze({ kind: 'beam', color: '#ff3048', style: 'normal', sound: 'lazer_blast' }),
+    love_beam: Object.freeze({ kind: 'beam', color: '#ff9de8', style: 'normal', sound: 'lazer_blast' }),
+    love_bomb_laser: Object.freeze({ kind: 'projectile', color: '#ff9cc9', style: 'heavy', sound: 'lazer_blast' }),
+    turtle_wave: Object.freeze({ kind: 'beam', color: '#74f5ff', style: 'heavy', sound: 'lazer_blast' }),
+    ghost_ball: Object.freeze({ kind: 'projectile', color: '#8fffe0', style: 'heavy', sound: 'lazer_blast' }),
+    power_disks: Object.freeze({ kind: 'projectile', color: '#ffb35c', style: 'normal', sound: 'lazer_blast' }),
+    hammer_throw: Object.freeze({ kind: 'projectile', color: '#9bb8ff', style: 'heavy', sound: 'sword_swing' }),
+    lightning_cross: Object.freeze({ kind: 'cross', color: '#bfe4ff', style: 'heavy', sound: 'lightning_charge' }),
+    blade_justice: Object.freeze({ kind: 'beam', color: '#fff6a3', style: 'heavy', sound: 'sword_swing' }),
+    holy_eye_beams: Object.freeze({ kind: 'beam', color: '#ffcc33', style: 'normal', sound: 'lazer_blast' }),
+    lightning_columns: Object.freeze({ kind: 'summon', color: '#8dd4ff', style: 'normal', sound: 'lightning_charge' }),
+    god_sweep: Object.freeze({ kind: 'beam', color: '#ffd980', style: 'heavy', sound: 'lazer_blast' }),
+    laser_shockwave: Object.freeze({ kind: 'column', color: '#8a5a3c', style: 'light', sound: 'aoe' }),
+    nail_shot: Object.freeze({ kind: 'projectile', color: '#c0d8ff', style: 'normal', sound: 'lazer_blast' }),
+    mooggy_blood_beam: Object.freeze({ kind: 'beam', color: '#ff4164', style: 'normal', sound: 'lazer_blast' }),
+    thorn_blood_beams: Object.freeze({ kind: 'beam', color: '#ff3048', style: 'heavy', sound: 'lazer_blast' }),
+    wizard_lazer: Object.freeze({ kind: 'beam', color: '#b99cff', style: 'heavy', sound: 'lazer_blast' }),
+
+    crimson_smash: Object.freeze({ kind: 'aoe', color: '#ff3048', style: 'heavy', sound: 'aoe' }),
+    hammer_smash: Object.freeze({ kind: 'aoe', color: '#7da3ff', style: 'heavy', sound: 'aoe' }),
+    titan_hammer: Object.freeze({ kind: 'summon', color: '#7da3ff', style: 'heavy', sound: 'aoe' }),
+    death_ball: Object.freeze({ kind: 'projectile', color: '#5aa0ff', style: 'heavy', sound: 'lazer_blast' }),
+    turtle_powerup: Object.freeze({ kind: 'support', color: '#7dffb0', style: 'light', sound: 'lazer_blast' }),
+    mooggy_hairball: Object.freeze({ kind: 'aoe', color: '#85df63', style: 'heavy', sound: 'aoe' }),
+    potion_bath: Object.freeze({ kind: 'support', color: '#b6f0ff', style: 'light', sound: 'aoe' }),
+    excalibur_strike: Object.freeze({ kind: 'summon', color: '#ffd980', style: 'heavy', sound: 'aoe' }),
+    holy_turrets: Object.freeze({ kind: 'summon', color: '#fff1b0', style: 'normal', sound: 'lazer_blast' }),
+    kicky_kick: Object.freeze({ kind: 'aoe', color: '#ff7fc2', style: 'heavy', sound: 'aoe' }),
+    chaos_burst: Object.freeze({ kind: 'aoe', color: '#a857ff', style: 'heavy', sound: 'fire_burn' }),
+    wall_of_toph: Object.freeze({ kind: 'aoe', color: '#8a5a3c', style: 'heavy', sound: 'aoe' }),
+    healing_zone: Object.freeze({ kind: 'support', color: '#35ff6f', style: 'light', sound: 'aoe' }),
+    fire_circle: Object.freeze({ kind: 'aura', color: '#ff7b32', style: 'heavy', sound: 'fire_burn' }),
+    floor_lava: Object.freeze({ kind: 'status', color: '#ff9f40', style: 'heavy', sound: 'fire_burn' }),
+    random_pounce: Object.freeze({ kind: 'aoe', color: '#ff3070', style: 'heavy', sound: 'aoe' }),
+
+    dash: Object.freeze({ kind: 'dash', color: '#fff06a', style: 'normal', sound: 'dash' }),
+    nimrod_stomp: Object.freeze({ kind: 'dash_aoe', color: '#ffe67a', style: 'heavy', sound: 'aoe' }),
+    warp: Object.freeze({ kind: 'warp', color: '#b99cff', style: 'normal', sound: 'dash' }),
+    zip_lightning: Object.freeze({ kind: 'dash', color: '#95deff', style: 'heavy', sound: 'lightning_charge' }),
+    flying_unhitable: Object.freeze({ kind: 'status', color: '#ffd1ea', style: 'light', sound: 'dash' }),
+    princess_shield: Object.freeze({ kind: 'shield', color: '#ff5fb0', style: 'heavy', sound: 'dash' }),
+    cowards_way: Object.freeze({ kind: 'status', color: '#8dffcf', style: 'light', sound: 'dash' }),
+    mooggy_zoomies: Object.freeze({ kind: 'status', color: '#a0ffcc', style: 'light', sound: 'dash' }),
+    knight_slash_dash: Object.freeze({ kind: 'dash', color: '#ff3b5c', style: 'heavy', sound: 'sword_swing' }),
+  });
+
   const DEFAULT_MOVE_LOADOUTS = Object.freeze({
     princess: Object.freeze({ melee: 'slash', laser: 'love_beam', smash: 'kicky_kick', dash: 'flying_unhitable' }),
     thorn_knight: Object.freeze({ melee: 'slash', laser: 'blood_beam', smash: 'crimson_smash', dash: 'dash' }),
@@ -115,6 +172,7 @@
     MOVE_SLOT_KEYS,
     MOVE_SLOT_BY_KEY,
     MOVE_BASE_STATS,
+    MOVE_PRESENTATION_DEFS,
     DEFAULT_MOVE_LOADOUTS,
     KIT_ALTERNATIVES,
     getDefaultMoveLoadout,

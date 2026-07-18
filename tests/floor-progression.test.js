@@ -51,10 +51,12 @@ describe('floor progression, run end, and revive', () => {
 
   test('a player dwelling on the stairs advances to the next floor', () => {
     const { state, simulation, events } = progressionHarness({ floorNumber: 1 });
+    state.floorState.rewards = { 'room-4-4': { status: 'claimed', interactableIds: ['old-chest'] } };
     stepMany(simulation, 60); // spawn stairs + fill the dwell timer
     expect(state.floorNumber).toBe(2);
     expect(Object.keys(state.interactables)).toHaveLength(0); // reset on new floor
     expect(Object.keys(state.enemies)).toHaveLength(0);
+    expect(state.floorState.rewards).toEqual({});
     expect(state.players.p1.roomId).toBe(state.floorState.layout.startRoomId);
     expect(events.some(e => e.eventType === 'FLOOR_ADVANCED' && e.data.floorNumber === 2)).toBe(true);
   });

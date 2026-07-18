@@ -172,6 +172,25 @@ describe('protocol-driven local multiplayer session', () => {
     expect(player.y).toBeLessThanOrEqual(TEST_ROOM.height - minimum);
   });
 
+  test('authority applies status movement multipliers instead of trusting client speed', () => {
+    const state = new GameState({
+      matchId: 'zoom-test', status: 'running', tick: 10,
+      floorState: createNetworkFloorState({ matchSeed: 'zoom', floorSeed: 'zoom-floor' }),
+      players: {
+        p1: {
+          id: 'p1', x: 300, y: 350, radius: 18, moveSpeed: 100,
+          roomId: 'unused', statusUntilTick: { mooggy_zoomies: 100 },
+        },
+      },
+    });
+    state.players.p1.roomId = state.floorState.currentRoomId;
+    createPlayerMovementSystem(TEST_ROOM)({ state, inputs: { p1: { moveX: 1 } }, fixedDelta: 0.05 });
+    // Campaign movement accelerates responsively rather than snapping straight
+    // to the network command's top speed (500 * 0.7 = 350 on this first tick).
+    expect(state.players.p1.x).toBeCloseTo(317.5);
+    expect(state.players.p1.vx).toBeCloseTo(350);
+  });
+
   test('runs one authority and two clients to compatible shared movement state', async () => {
     const harness = await createRunningHarness();
     const { clock, network, authority, clientA, clientB } = harness;
@@ -260,6 +279,60 @@ describe('protocol-driven local multiplayer session', () => {
     expect(authority.metrics.acceptedActions).toBe(2);
   });
 
+  test('broadcasts one validated AOE and converges server-owned rocks on both clients', async () => {
+    const { clock, authority, clientA, clientB } = await createRunningHarness({
+      unreliablePacketLoss: 0,
+      duplicateMessageRate: 0,
+      jitterMs: 0,
+    });
+
+    clientA.sendAbility('crimson_smash', Math.PI / 3);
+    clock.runAll();
+    authority.step(1);
+    authority.sendFullCorrection();
+    clock.runAll();
+
+    const authorityRocks = Object.fromEntries(Object.entries(authority.simulation.state.projectiles)
+      .filter(([, projectile]) => projectile.attackKind === 'crimson_smash'));
+    expect(Object.keys(authorityRocks)).toHaveLength(8);
+    expect(clientA.state.projectiles).toEqual(authority.simulation.state.projectiles);
+    expect(clientB.state.projectiles).toEqual(authority.simulation.state.projectiles);
+    const eventA = clientA.gameplayEvents.find(event => event.eventType === 'PLAYER_ABILITY_USED');
+    const eventB = clientB.gameplayEvents.find(event => event.eventType === 'PLAYER_ABILITY_USED');
+    expect(eventA).toEqual(eventB);
+    expect(eventA.payload ?? eventA).toEqual(expect.objectContaining({
+      data: expect.objectContaining({
+        abilityId: 'crimson_smash',
+        projectileIds: Object.keys(authorityRocks),
+        spawnedProjectiles: expect.arrayContaining([
+          expect.objectContaining({ id: Object.keys(authorityRocks)[0], kind: 'rock' }),
+        ]),
+      }),
+    }));
+  });
+
+  test('converges persistent campaign ability entities on both clients', async () => {
+    const { clock, authority, clientA, clientB } = await createRunningHarness({
+      unreliablePacketLoss: 0,
+      duplicateMessageRate: 0,
+      jitterMs: 0,
+    });
+    const player = authority.simulation.state.players[clientA.playerId];
+    player.equippedMoves.smash = 'healing_zone';
+
+    clientA.sendAbility('healing_zone', 0);
+    clock.runAll();
+    authority.step(2);
+    authority.sendFullCorrection();
+    clock.runAll();
+
+    expect(Object.values(authority.simulation.state.abilityEntities)).toEqual([
+      expect.objectContaining({ kind: 'healing_zone', ownerId: clientA.playerId }),
+    ]);
+    expect(clientA.state.abilityEntities).toEqual(authority.simulation.state.abilityEntities);
+    expect(clientB.state.abilityEntities).toEqual(authority.simulation.state.abilityEntities);
+  });
+
   test('routes chest interaction and relic selection through validated protocol messages', async () => {
     const { clock, authority, clientA } = await createRunningHarness({
       unreliablePacketLoss: 0,
@@ -274,6 +347,8 @@ describe('protocol-driven local multiplayer session', () => {
     player.y = 350;
     authority.step(1);
     const chest = Object.values(state.interactables).find(item => item.kind === 'relic_chest');
+    player.x = chest.x;
+    player.y = chest.y;
 
     clientA.sendInteract(chest.id);
     clock.runAll();

@@ -98,6 +98,12 @@ Equipped move slots use the same envelope and send the authored move ID, never a
 
 The authority checks that `abilityId` belongs to the action's slot, is currently equipped by that player, is off cooldown, and is legal in the current status. Cooldown maps, charge/status timers, action kind/mode, barriers, resulting entities, and hit outcomes are authority state.
 
+An accepted ability produces a reliable `PLAYER_ABILITY_USED` gameplay event containing the authority-resolved presentation key, origin, radius, target IDs, projectile IDs, and (when relevant) initial projectile trajectories. Those trajectory fields are presentation bootstrap data, not a second simulation: projectile motion and collision continue in authority state and are reconciled by snapshots.
+
+Clients must not play combat presentation directly from button input. The sender and observers consume the same accepted gameplay event, so validation failure produces no cast and successful commands puppet the same character animation, sound, effect, and entity presentation everywhere.
+
+`presentation.key`, `presentation.kind`, and `presentation.style` are selected by the authority from the versioned shared move catalog. They are instructions for campaign presentation hooks, never client-supplied behavior. A content-hash mismatch prevents clients with different move catalogs from joining the room.
+
 ## Authority-to-client messages
 
 | Type | Reliability/channel | Payload purpose |
@@ -135,6 +141,7 @@ Initial shape (delta encoding may later use arrays/bitmasks without changing sem
     players: {},
     enemies: {},
     projectiles: {},
+    abilityEntities: {},
     pickups: {},
     interactables: {}
   },
@@ -147,6 +154,8 @@ Initial shape (delta encoding may later use arrays/bitmasks without changing sem
 Static floor geometry is sent once in `INITIAL_STATE` or generated from the validated floor seed/version. It is not repeated in ordinary snapshots. A periodic reliable or recoverable full correction prevents permanent drift after lost unreliable snapshots.
 
 Player room location is dynamic entity state (`players[playerId].roomId`), not a party-global current room. `floorState.transitionsByPlayer[playerId]` records that player's latest authoritative doorway transition. Room-owned encounter/interactable/pickup state is keyed by room ID and persists while empty, allowing players to separate and later observe the same room outcome.
+
+Persistent move state such as healing zones, fire circles, chaos fields, holy turrets, lightning columns, and lava effects lives in `abilityEntities`. The authority owns pulse timing, following/placement, targeting, healing, damage, status application, and expiry. Clients adapt these records into the same campaign hazard renderer used by single-player and never tick their gameplay locally.
 
 ## Ordering, acknowledgement, and deduplication
 
