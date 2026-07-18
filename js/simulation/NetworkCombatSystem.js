@@ -285,7 +285,7 @@
       vy: Math.sin(angle) * Number(definition.speed || PROJECTILE_SPEED),
       radius: Number(definition.radius || 8),
       damage: Number(definition.damage || PROJECTILE_DAMAGE),
-      color: definition.color || player.color || '#9de9ff',
+      // colour is derived client-side from `kind` (see NetworkGameView cosmetics)
       attackKind: definition.attackKind || definition.weaponKey || definition.kind,
       remainingPierces: Math.max(0, Number(definition.pierce || 0)),
       hitEnemyIds: [],
@@ -641,7 +641,8 @@
       vy: Math.sin(angle) * 390,
       radius: enemy.behavior === 'beam' ? 9 : enemy.behavior === 'burst' ? 4 : 6,
       damage: Number(enemy.projectileDamage || 9),
-      color: enemy.behavior === 'beam' ? '#c77bff' : enemy.behavior === 'burst' ? '#ff9f68' : '#ffc477',
+      // colour is derived client-side from `behavior` (see NetworkGameView cosmetics)
+      behavior: enemy.behavior,
       attackKind: enemy.type === 'hunter' ? 'hunter_arrow' : enemy.type,
       spawnTick: state.tick,
       expiresTick: state.tick + 30,

@@ -846,7 +846,7 @@
       }
       const ctx = this.ctx;
       const angle = Math.atan2(Number(projectile.vy || 0), Number(projectile.vx || 0));
-      const color = projectile.color || '#9de9ff';
+      const color = deriveProjectileColor(projectile, this.neo);
       ctx.save();
       ctx.strokeStyle = color;
       ctx.lineWidth = 5;
@@ -1007,7 +1007,7 @@
 
     _drawPlayer(player, isLocal) {
       const ctx = this.ctx;
-      const color = player.color || '#9de9ff';
+      const color = player.color || derivePlayerColor(player);
       ctx.save();
       ctx.strokeStyle = isLocal ? '#ffffff' : color;
       ctx.lineWidth = isLocal ? 4 : 2;
@@ -1191,6 +1191,10 @@
     computeCameraTransform,
     interpolatePlayers,
     predictPosition,
+    PLAYER_COLORS,
+    derivePlayerColor,
+    deriveEnemyProjectileColor,
+    deriveProjectileColor,
     NetworkGameView,
   };
 });

@@ -36,7 +36,6 @@
   const TEST_ROOM = Object.freeze({ id: 'network-start-room', width: 900, height: 700, wallThickness: 28, doorWidth: 140 });
   const PLAYER_CHARACTERS = Object.freeze(['thorn_knight', 'metao', 'gelleh', 'mooggy']);
   const SELECTABLE_CHARACTERS = Object.freeze(['princess', 'thorn_knight', 'metao', 'gelleh', 'mooggy', 'turtle_boy', 'sarge']);
-  const PLAYER_COLORS = Object.freeze(['#9de9ff', '#d9a7ff', '#ffd98f', '#ff9fcf']);
 
   function createNetworkFloorState(options = {}) {
     const layout = typeof generateFloorLayout === 'function'
@@ -358,7 +357,8 @@
         attackCooldownUntilTick: 0,
         aimDirection: 0,
         characterKey: PLAYER_CHARACTERS[slotIndex % PLAYER_CHARACTERS.length],
-        color: PLAYER_COLORS[slotIndex % PLAYER_COLORS.length],
+        // colour is derived client-side from slotIndex (see NetworkGameView cosmetics)
+        slotIndex,
         roomId: this.simulation.state.floorState.currentRoomId,
       };
       applyNetworkHeroProfile(this.simulation.state.players[playerId], PLAYER_CHARACTERS[slotIndex % PLAYER_CHARACTERS.length]);
