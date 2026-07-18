@@ -16,7 +16,7 @@
   const { GameSimulation, FIXED_DELTA_SECONDS, SIMULATION_TICK_RATE } = simulationApi;
   const { GameState, cloneSerializable } = gameStateApi;
   const { generateFloorLayout } = floorApi;
-  const { applyNetworkHeroProfile, createNetworkCombatSystem, ensureNetworkEncounter, isNetworkRoomLocked } = combatApi;
+  const { applyNetworkHeroProfile, createNetworkCombatSystem, createFloorProgressionSystem, ensureNetworkEncounter, isNetworkRoomLocked } = combatApi;
   const {
     CLIENT_TO_AUTHORITY,
     AUTHORITY_TO_CLIENT,
@@ -150,7 +150,12 @@
         const maximumY = room.height - minimum;
         const desiredX = player.x + moveX * speed * fixedDelta;
         const desiredY = player.y + moveY * speed * fixedDelta;
-        const halfDoor = Math.max(radius * 1.5, (Number(room.doorWidth) || 140) / 2 - radius);
+        // The transition zone must cover the full VISIBLE door gap (rendered at
+        // ±doorWidth/2 from room centre). Using doorWidth/2 - radius left an
+        // ~18px dead band on each side where the player was inside the drawn
+        // opening but no transition fired — i.e. "I reach the door, nothing
+        // happens." Match the rendered gap (plus the radius so the edges count).
+        const halfDoor = Math.max(radius * 1.5, (Number(room.doorWidth) || 140) / 2 + radius);
         const insideHorizontalDoor = Math.abs(desiredX - room.width / 2) <= halfDoor;
         const insideVerticalDoor = Math.abs(desiredY - room.height / 2) <= halfDoor;
         let transitionDirection = null;
@@ -227,6 +232,9 @@
         systems: [
           createPlayerMovementSystem(TEST_ROOM),
           createNetworkCombatSystem({ emitEvent: (eventType, data) => this._queueGameplayEvent(eventType, data) }),
+          typeof createFloorProgressionSystem === 'function'
+            ? createFloorProgressionSystem({ emitEvent: (eventType, data) => this._queueGameplayEvent(eventType, data) })
+            : () => {},
         ],
       });
       this.unsubscribeMessage = this.transport.onMessage((peerId, message, delivery) => this._onMessage(peerId, message, delivery));
@@ -428,6 +436,16 @@
     }
 
     _queueGameplayEvent(eventType, data = {}) {
+      // The floor-progression system signals a finished run via a RUN_ENDED
+      // sim event; capture its details so step() can send the dedicated
+      // authoritative RUN_ENDED message (schema-validated, terminal for clients).
+      if (eventType === 'RUN_ENDED' && !this.pendingRunEnd) {
+        this.pendingRunEnd = {
+          result: data.result === 'victory' ? 'victory' : 'defeat',
+          reason: String(data.reason || 'run-ended').slice(0, 96),
+          floorNumber: Math.max(1, Math.trunc(Number(data.floorNumber) || 1)),
+        };
+      }
       this.pendingGameplayEvents.push({
         eventType: String(eventType || 'UNKNOWN').slice(0, 64),
         data: { ...cloneSerializable(data), tick: this.simulation.state.tick },
@@ -527,11 +545,41 @@
         ]));
         this.simulation.updateGame(tickInputs, FIXED_DELTA_SECONDS);
         this._flushGameplayEvents();
+        if (this.simulation.state.status === 'ended') {
+          // A run just finished (victory on the god floor, or party wipe). Send
+          // a final full snapshot so clients see the terminal world, then the
+          // dedicated RUN_ENDED message that flips their status to 'ended'.
+          this._publishSnapshot(true);
+          this._broadcastRunEnded();
+          break;
+        }
         if (this.simulation.state.tick % SNAPSHOT_TICK_INTERVAL === 0) {
           this._publishSnapshot(this.simulation.state.tick % FULL_CORRECTION_TICK_INTERVAL === 0);
         }
       }
       return this.simulation.state;
+    }
+
+    _broadcastRunEnded() {
+      if (this.runEndedBroadcast) return;
+      this.runEndedBroadcast = true;
+      const end = this.pendingRunEnd || { result: 'defeat', reason: 'run-ended', floorNumber: Number(this.simulation.state.floorNumber || 1) };
+      const players = Object.values(this.simulation.state.players || {});
+      this._broadcast('RUN_ENDED', {
+        result: end.result,
+        reason: end.reason,
+        summary: {
+          floorNumber: end.floorNumber,
+          elapsedSeconds: Math.round(Number(this.simulation.state.elapsedSeconds || 0)),
+          players: players.map(player => ({
+            playerId: player.id,
+            characterKey: player.characterKey,
+            gold: Number(player.gold || 0),
+            downed: !!player.downed,
+          })),
+        },
+        leaderboardEligible: false,
+      });
     }
 
     _publishSnapshot(full) {

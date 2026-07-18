@@ -1017,6 +1017,43 @@
     </div>
   </section>
 
+  <!-- Networked co-op lobby — standalone overlay, fully separate from #charSelect
+       and split-screen local co-op. Shown only while connected to a room. -->
+  <div id="coopLobby" class="overlay coop-lobby hidden" role="dialog" aria-modal="true" aria-labelledby="coopLobbyTitle" aria-hidden="true">
+    <div class="menu-content charselect-layout coop-lobby__layout">
+      <header class="charselect-header coop-lobby__header">
+        <div class="charselect-titlewrap">
+          <h2 class="screen-title" id="coopLobbyTitle">CO-OP LOBBY</h2>
+          <p id="coopLobbyStatus" class="charselect-subtitle coop-lobby__status" aria-live="polite">Waiting for players…</p>
+        </div>
+      </header>
+
+      <section class="coop-lobby__room-strip" aria-label="Players and lobby code">
+        <div class="coop-lobby__share" aria-label="Lobby invite code">
+          <div class="coop-lobby__code">
+            <span class="coop-lobby__code-label">LOBBY CODE</span>
+            <code id="coopLobbyRoomCode" class="coop-lobby__roomcode"></code>
+          </div>
+          <button id="coopLobbyCopyRoomCode" class="nav-btn nav-btn--minor multiplayer-copy-room-code" type="button" aria-label="Copy lobby code">COPY CODE</button>
+        </div>
+        <div id="coopLobbySlots" class="coop-lobby__slots" role="list" aria-label="Players in this room"></div>
+      </section>
+
+      <div class="charselect-main coop-lobby__main">
+        <section class="charselect-roster coop-lobby__hero-panel" aria-labelledby="coopLobbyHeroHeading">
+          <div class="char-roster-head">
+            <span class="char-roster-kicker" id="coopLobbyHeroHeading">Choose your hero</span>
+          </div>
+          <div id="coopLobbyPicker" class="coop-lobby__picker" role="radiogroup" aria-label="Choose your hero"></div>
+          <div class="coop-lobby__actions">
+            <button id="coopLobbyLeave" class="nav-btn nav-btn--minor" type="button">LEAVE</button>
+            <button id="coopLobbyReady" class="nav-btn coop-lobby__ready" type="button">ENTER DUNGEON</button>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+
   <!-- Alt Modes panel (slides in over main menu) -->
   <section id="altModesPanel" class="panel-shell altmodes-panel hidden" aria-hidden="true">
     <div class="altmodes-head">
@@ -1461,15 +1498,6 @@
         <h2 class="screen-title" id="charSelectTitle">CHOOSE YOUR CHAMPION </h2>
         <p class="charselect-subtitle" id="charSelectSubtitle"></p>
       </div>
-    </div>
-
-    <!-- Networked co-op lobby strip (shown only while connected to a room). -->
-    <div id="coopLobbyBar" class="coop-lobby-bar hidden" aria-hidden="true">
-      <div class="coop-lobby-bar__share">
-        <div id="coopLobbyRoomCode" class="coop-lobby-bar__roomcode"></div>
-        <button id="coopLobbyCopyRoomCode" class="nav-btn nav-btn--minor multiplayer-copy-room-code" type="button" aria-label="Copy multiplayer room code">COPY CODE</button>
-      </div>
-      <div id="coopLobbySlots" class="coop-lobby-bar__slots" role="list" aria-label="Players in this room"></div>
     </div>
 
     <div class="charselect-main">
