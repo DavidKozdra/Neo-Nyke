@@ -52,6 +52,9 @@ export function createUIController(view) {
     let objectiveLayoutRequestSignature = '';
     let orientationPromptBound = false;
     let orientationPromptDismissed = false;
+    let browserMultiplayerSession = null;
+    let browserMultiplayerUnsubscribe = null;
+    let multiplayerRequestBusy = false;
     try {
       orientationPromptDismissed = sessionStorage.getItem('neonyke:orientationPromptDismissed') === '1';
     } catch {
@@ -86,6 +89,158 @@ export function createUIController(view) {
     }
     window.addEventListener('developer-mode-changed', (e) => updateDeveloperModeUI(!!e.detail));
     updateDeveloperModeUI(!!globalThis.developer_mode);
+
+    function syncMultiplayerFeatureUI() {
+      const enabled = globalThis.NeoNyke?.features?.isEnabled?.('multiplayer') === true;
+      view.multiplayerBtn?.classList.remove('hidden');
+      view.multiplayerPanel?.toggleAttribute('data-multiplayer-development-enabled', enabled);
+      if (view.multiplayerCreateRoom) view.multiplayerCreateRoom.disabled = !enabled || multiplayerRequestBusy;
+      if (view.multiplayerJoinRoom) view.multiplayerJoinRoom.disabled = !enabled || multiplayerRequestBusy;
+      if (view.multiplayerRoomCode) view.multiplayerRoomCode.disabled = !enabled || multiplayerRequestBusy;
+      if (view.multiplayerDevelopmentNote) {
+        view.multiplayerDevelopmentNote.textContent = enabled
+          ? 'Development multiplayer is enabled. Create or join an authoritative test room.'
+          : 'Multiplayer networking is disabled in this build. It is enabled automatically on localhost.';
+      }
+    }
+    window.addEventListener('neo-feature-flags-changed', syncMultiplayerFeatureUI);
+    syncMultiplayerFeatureUI();
+
+    function renderBrowserMultiplayerState(snapshot = {}) {
+      const roomCode = snapshot.roomCode || '';
+      if (view.multiplayerRoomCodeDisplay) {
+        view.multiplayerRoomCodeDisplay.textContent = roomCode ? `ROOM ${roomCode}` : '';
+      }
+      view.multiplayerRoomCodeShare?.classList.toggle('hidden', !roomCode);
+      if (view.multiplayerCopyRoomCode) view.multiplayerCopyRoomCode.disabled = !roomCode;
+      const latestError = snapshot.errors?.[snapshot.errors.length - 1];
+      const statusMessages = {
+        disconnected: 'Not connected.',
+        connecting: 'Connecting to room authority…',
+        handshaking: 'Checking build compatibility…',
+        waiting: 'Connected. Waiting for 2–4 players to ready up.',
+        starting: 'Match starting…',
+        running: 'Authoritative movement test is running.',
+        rejected: latestError?.message || 'The room rejected this client.',
+        ended: 'Match ended.',
+      };
+      if (view.multiplayerRoomStatus) {
+        view.multiplayerRoomStatus.textContent = latestError?.message || statusMessages[snapshot.status] || 'Preparing multiplayer…';
+      }
+      const members = Array.isArray(snapshot.lobbyState?.members) ? snapshot.lobbyState.members : [];
+      if (view.multiplayerMemberList) {
+        view.multiplayerMemberList.replaceChildren(...members.map(member => {
+          const row = document.createElement('div');
+          row.textContent = `${member.displayName || 'Player'} — ${member.ready ? 'READY' : 'WAITING'}`;
+          return row;
+        }));
+      }
+      const localMember = members.find(member => member.playerId === snapshot.playerId);
+      if (view.multiplayerReady) {
+        const canReady = snapshot.status === 'waiting' && !!snapshot.playerId;
+        view.multiplayerReady.classList.toggle('hidden', !canReady);
+        view.multiplayerReady.disabled = !canReady || localMember?.ready === true;
+        view.multiplayerReady.textContent = localMember?.ready ? 'READY ✓' : 'READY';
+      }
+    }
+
+    let multiplayerCopyFeedbackTimer = null;
+
+    function setMultiplayerCopyFeedback(state = 'idle') {
+      if (!view.multiplayerCopyRoomCode) return;
+      clearTimeout(multiplayerCopyFeedbackTimer);
+      multiplayerCopyFeedbackTimer = null;
+      const labels = {
+        idle: 'COPY CODE',
+        copied: 'COPIED ✓',
+        error: 'COPY FAILED',
+      };
+      view.multiplayerCopyRoomCode.textContent = labels[state] || labels.idle;
+      view.multiplayerCopyRoomCode.dataset.copyState = state;
+      view.multiplayerCopyRoomCode.setAttribute('aria-label', state === 'copied'
+        ? 'Multiplayer room code copied'
+        : state === 'error' ? 'Could not copy multiplayer room code' : 'Copy multiplayer room code');
+      if (state !== 'idle') {
+        multiplayerCopyFeedbackTimer = setTimeout(() => setMultiplayerCopyFeedback('idle'), 1800);
+      }
+    }
+
+    async function copyMultiplayerRoomCode() {
+      const roomCode = browserMultiplayerSession?.roomCode;
+      if (!roomCode) return;
+      try {
+        let copied = false;
+        if (navigator.clipboard?.writeText) {
+          try {
+            await navigator.clipboard.writeText(roomCode);
+            copied = true;
+          } catch {
+            // Fall through for browsers that expose Clipboard API but deny it.
+          }
+        }
+        if (!copied) {
+          const fallback = document.createElement('textarea');
+          fallback.value = roomCode;
+          fallback.setAttribute('readonly', '');
+          fallback.style.position = 'fixed';
+          fallback.style.opacity = '0';
+          document.body.appendChild(fallback);
+          try {
+            fallback.select();
+            copied = document.execCommand?.('copy') === true;
+          } finally {
+            fallback.remove();
+          }
+        }
+        if (!copied) throw new Error('Clipboard copy is unavailable');
+        setMultiplayerCopyFeedback('copied');
+      } catch {
+        setMultiplayerCopyFeedback('error');
+      }
+    }
+
+    function disposeBrowserMultiplayerSession() {
+      browserMultiplayerUnsubscribe?.();
+      browserMultiplayerUnsubscribe = null;
+      const disposedSession = browserMultiplayerSession;
+      browserMultiplayerSession?.dispose?.();
+      browserMultiplayerSession = null;
+      if (Neo.gameSession === disposedSession) Neo.gameSession = null;
+      setMultiplayerCopyFeedback('idle');
+      renderBrowserMultiplayerState({ status: 'disconnected' });
+    }
+
+    async function runBrowserMultiplayerAction(action) {
+      if (multiplayerRequestBusy) return;
+      if (globalThis.NeoNyke?.features?.isEnabled?.('multiplayer') !== true) {
+        if (view.multiplayerRoomStatus) view.multiplayerRoomStatus.textContent = 'Multiplayer is disabled in this build.';
+        return;
+      }
+      const Session = globalThis.NeoNyke?.multiplayer?.BrowserMultiplayerSession;
+      if (typeof Session !== 'function') {
+        if (view.multiplayerRoomStatus) view.multiplayerRoomStatus.textContent = 'Multiplayer client failed to load.';
+        return;
+      }
+      disposeBrowserMultiplayerSession();
+      browserMultiplayerSession = new Session();
+      Neo.gameSession = browserMultiplayerSession;
+      browserMultiplayerUnsubscribe = browserMultiplayerSession.subscribe(renderBrowserMultiplayerState);
+      multiplayerRequestBusy = true;
+      syncMultiplayerFeatureUI();
+      try {
+        await action(browserMultiplayerSession);
+        renderBrowserMultiplayerState(browserMultiplayerSession.snapshot());
+      } catch (error) {
+        renderBrowserMultiplayerState({
+          roomCode: browserMultiplayerSession?.roomCode,
+          status: 'rejected',
+          errors: [{ message: error?.message || 'Could not connect to multiplayer.' }],
+        });
+      } finally {
+        multiplayerRequestBusy = false;
+        syncMultiplayerFeatureUI();
+      }
+    }
 
     const CHARACTER_PAGE_SIZE = 8;
     const LOOP_CRYSTAL_PIXELS = [
@@ -973,7 +1128,7 @@ export function createUIController(view) {
       }
       if (show !== 'charselect') { setChallengePanelOpen(false); setLegacyPanelOpen(false); }
       if (show !== 'menu' && show !== 'pause') setRunHistoryOpen(false);
-      if (show !== 'menu') { setAltModesPanelOpen(false); setCompetitivePanelOpen(false); setSandboxPanelOpen(false); }
+      if (show !== 'menu') { setAltModesPanelOpen(false); setCompetitivePanelOpen(false); setMultiplayerPanelOpen(false); setSandboxPanelOpen(false); }
       if (show !== 'charselect') setCustomCharacterPanelOpen(false);
       if (show !== 'menu') tutorialMenuOfferVisible = false;
       setVisible(view.endlessHud, inPlay && Neo.gameMode === 'endless', 'flex');
@@ -1613,6 +1768,18 @@ export function createUIController(view) {
       if (open) {
         setAltModesPanelOpen(false);
         initCompetitiveLeaderboard();
+      }
+    }
+
+    function setMultiplayerPanelOpen(open) {
+      const shouldOpen = open === true;
+      view.multiplayerPanel?.classList.toggle('hidden', !shouldOpen);
+      view.multiplayerPanel?.setAttribute('aria-hidden', shouldOpen ? 'false' : 'true');
+      view.multiplayerBtn?.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+      if (shouldOpen) {
+        setAltModesPanelOpen(false);
+        setCompetitivePanelOpen(false);
+        view.multiplayerBack?.focus?.({ preventScroll: true });
       }
     }
 
@@ -2602,6 +2769,34 @@ export function createUIController(view) {
           setCompetitivePanelOpen(true);
         });
         view.newRunBtn?.addEventListener('click', handlers.onOpenCharacterSelect);
+        view.multiplayerBtn?.addEventListener('click', () => setMultiplayerPanelOpen(true));
+        view.multiplayerCreateRoom?.addEventListener('click', () => {
+          void runBrowserMultiplayerAction(session => session.createRoom());
+        });
+        view.multiplayerJoinRoom?.addEventListener('click', () => {
+          const code = view.multiplayerRoomCode?.value || '';
+          void runBrowserMultiplayerAction(session => session.joinRoom(code));
+        });
+        view.multiplayerRoomCode?.addEventListener('input', () => {
+          view.multiplayerRoomCode.value = view.multiplayerRoomCode.value.toUpperCase().replace(/[^A-Z2-9]/g, '').slice(0, 8);
+        });
+        view.multiplayerRoomCode?.addEventListener('keydown', event => {
+          if (event.key !== 'Enter') return;
+          event.preventDefault();
+          view.multiplayerJoinRoom?.click();
+        });
+        view.multiplayerReady?.addEventListener('click', () => browserMultiplayerSession?.setReady(true));
+        view.multiplayerCopyRoomCode?.addEventListener('click', () => {
+          void copyMultiplayerRoomCode();
+        });
+        view.multiplayerBack?.addEventListener('click', () => {
+          disposeBrowserMultiplayerSession();
+          setMultiplayerPanelOpen(false);
+        });
+        view.multiplayerBackButton?.addEventListener('click', () => {
+          disposeBrowserMultiplayerSession();
+          setMultiplayerPanelOpen(false);
+        });
         view.charBackBtn?.addEventListener('click', handlers.onCloseCharacterSelect);
         // Alt modes panel
         view.altModesBtn?.addEventListener('click', () => setAltModesPanelOpen(true));

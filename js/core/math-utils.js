@@ -573,7 +573,7 @@ export function buildRicochetBeamPath(originX, originY, angle, range, maxBounces
   // Validate room geometry before consulting the path cache so a room/door
   // change within the same animation frame cannot reuse an obsolete path.
   getBeamReflectRects();
-  const frameId = Number(Neo.frameId || 0);
+  const frameId = Number(Neo.simulationTick || 0);
   const quantizedOriginX = quantizeBeamCacheValue(originX);
   const quantizedOriginY = quantizeBeamCacheValue(originY);
   const quantizedAngle = quantizeBeamCacheValue(angle);

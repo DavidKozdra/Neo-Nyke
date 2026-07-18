@@ -9288,6 +9288,95 @@ button.alt.danger {
 }
 .competitive-panel.hidden { display: none; }
 
+.multiplayer-development-note {
+  margin: 0;
+  color: var(--menu-text-muted);
+  font-size: calc(12px * var(--font-scale, 1));
+  line-height: 1.5;
+  text-align: center;
+}
+
+.multiplayer-panel .nav-btn:disabled {
+  cursor: not-allowed;
+  opacity: .46;
+}
+
+.multiplayer-back-button {
+  align-self: center;
+}
+
+.multiplayer-room-code-input {
+  width: min(220px, 100%);
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--menu-border);
+  border-radius: var(--ui-control-radius);
+  background: var(--menu-surface);
+  color: var(--menu-text);
+  font: inherit;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+}
+
+.multiplayer-room-state {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  color: var(--menu-text-muted);
+  text-align: center;
+}
+
+.multiplayer-room-code-display {
+  color: var(--menu-accent-strong);
+  font-size: calc(24px * var(--font-scale, 1));
+  font-weight: 800;
+  letter-spacing: .2em;
+}
+
+.multiplayer-room-code-share {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--menu-border);
+  border-radius: var(--ui-control-radius);
+  background: rgba(0, 0, 0, .24);
+}
+
+.multiplayer-room-code-share.hidden {
+  display: none;
+}
+
+.multiplayer-copy-room-code {
+  min-width: 132px;
+  padding: 9px 12px;
+  font-size: calc(12px * var(--font-scale, 1));
+}
+
+.multiplayer-copy-room-code[data-copy-state="copied"] {
+  border-color: #62d892;
+  color: #9df5bf;
+}
+
+.multiplayer-copy-room-code[data-copy-state="error"] {
+  border-color: #e66b72;
+  color: #ffadb2;
+}
+
+.multiplayer-member-list {
+  display: grid;
+  gap: 4px;
+  min-height: 1em;
+}
+
+.multiplayer-ready {
+  width: 220px;
+  padding: 12px 20px;
+  font-size: calc(18px * var(--font-scale, 1));
+}
+
 .competitive-screen-body {
   display: flex;
   flex-direction: column;

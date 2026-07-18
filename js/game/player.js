@@ -709,7 +709,7 @@ export function triggerChronoSpringBuff() {
   }
 
 export function getItemStats() {
-    if (Neo.itemStatsCacheFrame === Neo.frameId && Neo.itemStatsCacheValue) return Neo.itemStatsCacheValue;
+    if (Neo.itemStatsCacheFrame === Neo.simulationTick && Neo.itemStatsCacheValue) return Neo.itemStatsCacheValue;
     if (!Neo.godItemKeysCache) {
       Neo.godItemKeysCache = Neo.ITEM_KEYS.filter(key => (
         Neo.isGodTier?.(Neo.ITEM_DEFS[key]?.rarity) && !Neo.ITEM_DEFS[key]?.voucher
@@ -946,7 +946,7 @@ export function getItemStats() {
       chargeSynergyReduction: tagCounts.charge >= 6 ? 2 : tagCounts.charge >= 3 ? 1 : 0,
       buildTags: getActiveBuildTags(),
     };
-    Neo.itemStatsCacheFrame = Neo.frameId;
+    Neo.itemStatsCacheFrame = Neo.simulationTick;
     return Neo.itemStatsCacheValue;
   }
 
@@ -995,7 +995,7 @@ export function applyPlayerHealing(amount, options = {}) {
     const barrierRatio = Number(stats.overhealBarrierRatio || 0);
     const barrierCap = maxHp * Number(stats.overhealBarrierCapRatio || 0);
     const barrierChance = Number(stats.overhealBarrierChance || 0);
-    if (overflow > 0 && barrierRatio > 0 && barrierCap > 0 && Math.random() < barrierChance) {
+    if (overflow > 0 && barrierRatio > 0 && barrierCap > 0 && Neo.nextRandom('encounter') < barrierChance) {
       const addedBarrier = Math.min(barrierCap - Number(Neo.player.overhealBarrier || 0), overflow * barrierRatio);
       if (addedBarrier > 0) {
         setOverhealBarrier(
@@ -1009,8 +1009,8 @@ export function applyPlayerHealing(amount, options = {}) {
       }
     }
     if ((gained > 0 || overflow > 0) && Neo.player.character === 'gelleh') {
-      const now = Number(Neo.frameId || 0);
-      if (now - Number(Neo.player.gellehHealPulseFrame || -9999) >= 24) {
+      const now = Number(Neo.simulationTick || 0);
+      if (now - Number(Neo.player.gellehHealPulseFrame || -9999) >= 8) {
         Neo.player.gellehHealPulseFrame = now;
         const radius = 86;
         const pulseDamage = Math.max(2, Math.min(18, (gained + overflow) * 0.45));

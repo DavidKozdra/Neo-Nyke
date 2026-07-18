@@ -696,13 +696,13 @@
   }
 
   // Build (or reuse) the spatial indexes at most once per frame. The per-query
-  // consumers below already honor the `...IndexFrame === Neo.frameId` cache;
+  // consumers below already honor the `...IndexFrame === Neo.simulationTick` cache;
   // these ensure-helpers let the per-frame update functions populate that cache
   // instead of rebuilding unconditionally.
   function ensureEnemySpatialIndex() {
-    if (Neo.enemySpatialIndexFrame !== Neo.frameId || !Neo.enemySpatialIndex) {
+    if (Neo.enemySpatialIndexFrame !== Neo.simulationTick || !Neo.enemySpatialIndex) {
       Neo.enemySpatialIndex = buildEnemySpatialIndex();
-      Neo.enemySpatialIndexFrame = Neo.frameId;
+      Neo.enemySpatialIndexFrame = Neo.simulationTick;
     }
     return Neo.enemySpatialIndex;
   }
@@ -712,14 +712,14 @@
   // built earlier this frame, e.g. during enemy AI, predates that movement).
   function rebuildEnemySpatialIndex() {
     Neo.enemySpatialIndex = buildEnemySpatialIndex();
-    Neo.enemySpatialIndexFrame = Neo.frameId;
+    Neo.enemySpatialIndexFrame = Neo.simulationTick;
     return Neo.enemySpatialIndex;
   }
 
   function ensureDestructibleSpatialIndex() {
-    if (Neo.destructibleSpatialIndexFrame !== Neo.frameId || !Neo.destructibleSpatialIndex) {
+    if (Neo.destructibleSpatialIndexFrame !== Neo.simulationTick || !Neo.destructibleSpatialIndex) {
       Neo.destructibleSpatialIndex = buildDestructibleSpatialIndex();
-      Neo.destructibleSpatialIndexFrame = Neo.frameId;
+      Neo.destructibleSpatialIndexFrame = Neo.simulationTick;
     }
     return Neo.destructibleSpatialIndex;
   }
@@ -743,7 +743,7 @@
   function forEachEnemyNearCircle(x, y, radius, visitor, options = {}) {
     const searchRadius = Math.max(0, Number(radius || 0));
     const index = options.index
-      || (Neo.enemySpatialIndexFrame === Neo.frameId ? Neo.enemySpatialIndex : null)
+      || (Neo.enemySpatialIndexFrame === Neo.simulationTick ? Neo.enemySpatialIndex : null)
       || buildEnemySpatialIndex();
     const bounds = getEnemyCellBounds(x - searchRadius, y - searchRadius, x + searchRadius, y + searchRadius);
     queryEnemyIndexCells(index, bounds, enemy => {
@@ -756,7 +756,7 @@
   function forEachEnemyNearRect(left, top, width, height, visitor, options = {}) {
     const padding = Math.max(0, Number(options.padding || 0));
     const index = options.index
-      || (Neo.enemySpatialIndexFrame === Neo.frameId ? Neo.enemySpatialIndex : null)
+      || (Neo.enemySpatialIndexFrame === Neo.simulationTick ? Neo.enemySpatialIndex : null)
       || buildEnemySpatialIndex();
     const bounds = getEnemyCellBounds(left - padding, top - padding, left + width + padding, top + height + padding);
     queryEnemyIndexCells(index, bounds, enemy => {
@@ -809,7 +809,7 @@
   function forEachDestructibleNearCircle(x, y, radius, visitor, options = {}) {
     const searchRadius = Math.max(0, Number(radius || 0));
     const index = options.index
-      || (Neo.destructibleSpatialIndexFrame === Neo.frameId ? Neo.destructibleSpatialIndex : null)
+      || (Neo.destructibleSpatialIndexFrame === Neo.simulationTick ? Neo.destructibleSpatialIndex : null)
       || buildDestructibleSpatialIndex();
     const bounds = getEnemyCellBounds(x - searchRadius, y - searchRadius, x + searchRadius, y + searchRadius);
     // queryEnemyIndexCells already dedupes across cells via its own `seen` set, so
@@ -824,7 +824,7 @@
   function forEachDestructibleNearRect(left, top, width, height, visitor, options = {}) {
     const padding = Math.max(0, Number(options.padding || 0));
     const index = options.index
-      || (Neo.destructibleSpatialIndexFrame === Neo.frameId ? Neo.destructibleSpatialIndex : null)
+      || (Neo.destructibleSpatialIndexFrame === Neo.simulationTick ? Neo.destructibleSpatialIndex : null)
       || buildDestructibleSpatialIndex();
     const bounds = getEnemyCellBounds(left - padding, top - padding, left + width + padding, top + height + padding);
     queryEnemyIndexCells(index, bounds, prop => {
@@ -1246,7 +1246,7 @@
   const _blockerRectScratch = [];
 
   function getStaticBlockerRects() {
-    if (_staticBlockerRectsFrame === Neo.frameId) return _staticBlockerRects;
+    if (_staticBlockerRectsFrame === Neo.simulationTick) return _staticBlockerRects;
     const rects = Neo.walls.slice();
     if (typeof Neo.getClosedDoorBlockerRects === 'function') {
       const doors = Neo.getClosedDoorBlockerRects();
@@ -1258,7 +1258,7 @@
       rects.push(Neo.getStructureCollisionRect(structure));
     });
     _staticBlockerRects = rects;
-    _staticBlockerRectsFrame = Neo.frameId;
+    _staticBlockerRectsFrame = Neo.simulationTick;
     return _staticBlockerRects;
   }
 

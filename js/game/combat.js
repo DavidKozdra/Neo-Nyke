@@ -3839,9 +3839,9 @@
     return enemy.statusReactionFrames;
   }
 
-  function canTriggerStatusReaction(enemy, key, frameGap = 28) {
+  function canTriggerStatusReaction(enemy, key, frameGap = 9) {
     const state = getStatusReactionFrameState(enemy);
-    const now = Number(Neo.frameId || 0);
+    const now = Number(Neo.simulationTick || 0);
     const last = Number(state[key] || -9999);
     if (now - last < frameGap) return false;
     state[key] = now;
@@ -4517,7 +4517,7 @@
     // foe, then returns to Sarge — healing and pulling pickups on the way back. A
     // short re-arm window keeps big AoE clears from spamming a swarm of hammers.
     if (!isTutorialDummy && Neo.player && Neo.player.equippedWeapon === 'sarges_hammer') {
-      const now = performance.now() / 1000;
+      const now = Number(Neo.gameElapsedTime || 0);
       const lastKillAt = Number(Neo.player.sargesHammerLastKillAt || 0);
       const rearmUntil = Number(Neo.player.sargesHammerRearmAt || 0);
       if (lastKillAt > 0 && now - lastKillAt <= 1 && now >= rearmUntil) {

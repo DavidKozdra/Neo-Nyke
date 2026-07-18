@@ -2717,6 +2717,44 @@ export function resumeGame() {
     }
   }
 
+  function prepareSinglePlayerSession() {
+    const OfflineGameSession = globalThis.NeoNyke?.multiplayer?.OfflineGameSession;
+    if (typeof OfflineGameSession !== 'function') {
+      return Promise.reject(new Error('OfflineGameSession is unavailable'));
+    }
+
+    const previousSession = Neo.gameSession;
+    const session = new OfflineGameSession();
+    Neo.gameSession = session;
+    const ready = (async () => {
+      if (previousSession && previousSession !== session) await previousSession.dispose?.();
+      await session.initialize();
+      if (Neo.gameSession !== session) {
+        await session.dispose();
+        return Neo.gameSession;
+      }
+      return session;
+    })();
+    Neo.gameSessionReady = ready;
+    ready.catch(() => {
+      if (Neo.gameSession === session) {
+        Neo.gameSession = null;
+        Neo.gameSessionReady = null;
+      }
+    });
+    return ready;
+  }
+
+  function ensureSinglePlayerSession() {
+    if (Neo.gameSession?.mode === 'single-player' && Neo.gameSession.ready) {
+      return Promise.resolve(Neo.gameSession);
+    }
+    if (Neo.gameSession?.mode === 'single-player' && Neo.gameSessionReady) {
+      return Neo.gameSessionReady;
+    }
+    return prepareSinglePlayerSession();
+  }
+
   async function startGame(resume) {
     if (Neo.gameMode === 'endless') { startEndless(); return; }
     if (Neo.gameMode === 'practice') { startPractice(); return; }
@@ -2725,6 +2763,9 @@ export function resumeGame() {
     if (Neo.gameMode === 'coop') { startCoop(); return; }
     if (Neo.gameMode === 'pvp') { startPvp(); return; }
     if (Neo.gameMode === 'competitive') { void startCompetitive(); return; }
+    const offlineSession = typeof Neo.ensureSinglePlayerSession === 'function'
+      ? await Neo.ensureSinglePlayerSession()
+      : null;
     // Safety net for the Sarge tutorial gate: if a replay was requested while
     // Sarge is selected but the rest of the roster isn't unlocked yet, drop the
     // replay rather than running the tutorial as Sarge. The charselect UI gates
@@ -2794,6 +2835,14 @@ export function resumeGame() {
       Neo.persistMetaSoon();
       Neo.scheduleRunSave();
     }
+
+    offlineSession?.beginRun({
+      matchSeed: Neo.baseSeedStr,
+      floorSeed: Neo.seedStr || Neo.baseSeedStr,
+      generationVersion: 1,
+      contentVersion: '1.0.0',
+      floorNumber: Neo.floor,
+    });
 
     if (!Neo.loopStarted) {
       Neo.loopStarted = true;
@@ -4130,6 +4179,8 @@ export function resumeGame() {
   Neo.forceUnlockCharacter = forceUnlockCharacter;
   Neo.forceUnlockAllCharacters = forceUnlockAllCharacters;
   Neo.setGameState = setGameState;
+  Neo.prepareSinglePlayerSession = prepareSinglePlayerSession;
+  Neo.ensureSinglePlayerSession = ensureSinglePlayerSession;
   Neo.startGame = startGame;
   Neo.spawnMpPlayer = spawnMpPlayer;
   Neo.startCoop = startCoop;

@@ -2,6 +2,16 @@
 
 // Seconds of holding the melee button to reach a full-power Mooggy Swipe.
 const MOOGGY_SWIPE_CHARGE_MAX = 0.8;
+const simulationApi = globalThis.NeoNyke?.simulation || {};
+const LEGACY_SIMULATION_TICK_RATE = simulationApi.SIMULATION_TICK_RATE || 20;
+const LEGACY_FIXED_DELTA_SECONDS = simulationApi.FIXED_DELTA_SECONDS || (1 / LEGACY_SIMULATION_TICK_RATE);
+const legacyFixedTickRunner = simulationApi.FixedTickRunner
+  ? new simulationApi.FixedTickRunner({ tickRate: LEGACY_SIMULATION_TICK_RATE })
+  : null;
+
+Neo.simulationTick = Math.max(0, Number(Neo.simulationTick) || 0);
+Neo.simulationInterpolationAlpha = 0;
+Neo.fixedSimulationRunner = legacyFixedTickRunner;
 
 export function updateEnemyLostSightState(enemy, playerHidden, dt = 0) {
   if (!enemy) return false;
@@ -32,7 +42,8 @@ export function isEnemyBlindedByHiddenPlayer(enemy, playerHidden) {
 
 export function loop(timestamp) {
     const framePerfStart = Neo.perfBeginFrame(timestamp);
-    const dt = Math.min(0.033, (timestamp - Neo.lastTime) / 1000 || 0.016);
+    const elapsedSeconds = Neo.lastTime > 0 ? Math.max(0, (timestamp - Neo.lastTime) / 1000) : 0;
+    const dt = Math.min(0.033, elapsedSeconds || 0.016);
     Neo.lastTime = timestamp;
     Neo.frameId += 1;
 
@@ -43,24 +54,38 @@ export function loop(timestamp) {
       Neo.clearGameplayInput();
     }
 
-    // --- Hitstop / freeze-frame ---------------------------------------------
-    // Drain the hitstop accumulator BEFORE gameplay sim. While frozen, the world
-    // simulation is paused (gives hits a satisfying "connect"), but visual feel
-    // systems — shake/trauma and particles — keep advancing so the freeze reads
-    // as impact, not a stutter.
-    let simDt = dt;
-    let frozen = false;
-    if (Neo.hitstop > 0) {
-      Neo.hitstop = Math.max(0, Neo.hitstop - dt);
-      frozen = Neo.gameState === 'play';
-      if (frozen) simDt = 0;
-    }
-    if (frozen) Neo.tickGameFeel(dt);
-
     const updatePerfStart = Neo.perfStart();
-    if (frozen) { /* sim paused this frame; feel systems already ticked above */ }
-    else if (Neo.gameState === 'play' && !Neo.isWizardPawOpen() && !Neo.isExtraBatteryOpen?.()) update(simDt);
-    else if (Neo.player && (Neo.gameState === 'dialogue' || Neo.gameState === 'pause')) {
+    const canAdvanceSimulation = Neo.gameState === 'play'
+      && !Neo.isWizardPawOpen()
+      && !Neo.isExtraBatteryOpen?.();
+    if (canAdvanceSimulation) {
+      const advanceResult = legacyFixedTickRunner
+        ? legacyFixedTickRunner.advance(elapsedSeconds, fixedDelta => {
+          Neo.simulationTick += 1;
+          // Hitstop is simulation time, not render time. Its duration and all
+          // authoritative updates therefore advance in identical 20 Hz steps.
+          if (Neo.hitstop > 0) {
+            Neo.hitstop = Math.max(0, Neo.hitstop - fixedDelta);
+            if (Neo.gameMode === 'normal') Neo.gameSession?.advance?.({}, fixedDelta);
+            Neo.tickGameFeel(fixedDelta);
+            return;
+          }
+          if (Neo.gameState === 'play' && !Neo.isWizardPawOpen() && !Neo.isExtraBatteryOpen?.()) {
+            update(fixedDelta);
+            if (Neo.gameMode === 'normal') Neo.gameSession?.advance?.({}, fixedDelta);
+          }
+        })
+        : (() => {
+          update(LEGACY_FIXED_DELTA_SECONDS);
+          Neo.simulationTick += 1;
+          return { interpolationAlpha: 0 };
+        })();
+      Neo.simulationInterpolationAlpha = advanceResult.interpolationAlpha;
+    } else {
+      legacyFixedTickRunner?.discardAccumulatedTime();
+      Neo.simulationInterpolationAlpha = 0;
+    }
+    if (Neo.player && (Neo.gameState === 'dialogue' || Neo.gameState === 'pause')) {
       Neo.tickPlayerTransientDefenseTimers(dt);
       Neo.stepActiveTransitionFade(dt);
     } else if (Neo.gameState === 'dying' && Neo.playerDeathAnim && !Neo.windowBlurred) {

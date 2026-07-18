@@ -14,6 +14,9 @@
     "start": "python3 -m http.server 5173",
     "start:py": "python -m http.server 5173",
     "editor": "node server/editor-server.js",
+    "multiplayer:local": "node scripts/run-local-multiplayer-harness.js",
+    "multiplayer:dev": "npm run build && server/node_modules/.bin/wrangler dev --config wrangler.toml",
+    "multiplayer:smoke": "node scripts/smoke-cloudflare-multiplayer.js",
     "build": "rm -rf dist && mkdir -p dist && cp -r index.html game.html sw.js manifest.json css js assets Koz_Engine_Lib dist/"
   },
   "devDependencies": {
