@@ -11,10 +11,12 @@
   const simulationApi = typeof require === 'function' ? require('../simulation/GameSimulation.js') : browserSimulationApi;
   const gameStateApi = typeof require === 'function' ? require('../simulation/GameState.js') : browserSimulationApi;
   const floorApi = typeof require === 'function' ? require('../simulation/DeterministicFloorGenerator.js') : browserSimulationApi;
+  const combatApi = typeof require === 'function' ? require('../simulation/NetworkCombatSystem.js') : browserSimulationApi;
   const protocolApi = typeof require === 'function' ? require('../protocol/ProtocolV1.js') : browserProtocolApi;
   const { GameSimulation, FIXED_DELTA_SECONDS, SIMULATION_TICK_RATE } = simulationApi;
   const { GameState, cloneSerializable } = gameStateApi;
   const { generateFloorLayout } = floorApi;
+  const { createNetworkCombatSystem, ensureNetworkEncounter, isNetworkRoomLocked } = combatApi;
   const {
     CLIENT_TO_AUTHORITY,
     AUTHORITY_TO_CLIENT,
@@ -24,10 +26,10 @@
     getDeliveryIntent,
   } = protocolApi;
 
-  const LOCAL_BUILD_VERSION = '1.0.0-mp-traversal-v3';
+  const LOCAL_BUILD_VERSION = '1.0.0-mp-combat-v4';
   const LOCAL_GENERATION_VERSION = 1;
-  const LOCAL_CONTENT_HASH = 'network-floor-traversal-v3';
-  const LOCAL_CONTENT_VERSION = 'network-floor-v3';
+  const LOCAL_CONTENT_HASH = 'network-combat-authority-v4';
+  const LOCAL_CONTENT_VERSION = 'network-combat-v4';
   const SNAPSHOT_RATE = 10;
   const SNAPSHOT_TICK_INTERVAL = SIMULATION_TICK_RATE / SNAPSHOT_RATE;
   const FULL_CORRECTION_TICK_INTERVAL = SIMULATION_TICK_RATE;
@@ -108,7 +110,7 @@
     const floorState = state.floorState;
     const currentRoom = getCurrentNetworkRoom(floorState);
     const nextRoom = getAdjacentNetworkRoom(floorState, currentRoom, directionKey);
-    if (!nextRoom || floorState.roomTransition?.tick === state.tick) return false;
+    if (!nextRoom || floorState.roomTransition?.tick === state.tick || isNetworkRoomLocked?.(state)) return false;
     const fromRoomId = currentRoom.id;
     floorState.currentRoomId = nextRoom.id;
     floorState.transitionSequence = Math.max(0, Number(floorState.transitionSequence) || 0) + 1;
@@ -187,11 +189,22 @@
       this.peerRecords = new Map();
       this.playerIdByPeer = new Map();
       this.pendingInputs = {};
+      this.pendingActions = {};
       this.lastProcessedInput = {};
+      this.lastProcessedAction = {};
+      this.pendingGameplayEvents = [];
       this.seenReliableSequences = new Map();
       this.lastReplaceableSequence = new Map();
       this.invalidMessageCount = new Map();
-      this.metrics = { acceptedInputs: 0, duplicateInputs: 0, invalidMessages: 0, snapshots: 0 };
+      this.metrics = {
+        acceptedInputs: 0,
+        duplicateInputs: 0,
+        acceptedActions: 0,
+        duplicateActions: 0,
+        gameplayEvents: 0,
+        snapshots: 0,
+        invalidMessages: 0,
+      };
       const floorSeed = `${this.matchSeed}|floor:1`;
       const state = new GameState({
         matchId: String(options.matchId || 'local-match'),
@@ -208,7 +221,13 @@
           contentVersion: this.contentVersion,
         }),
       });
-      this.simulation = new GameSimulation({ state, systems: [createPlayerMovementSystem(TEST_ROOM)] });
+      this.simulation = new GameSimulation({
+        state,
+        systems: [
+          createPlayerMovementSystem(TEST_ROOM),
+          createNetworkCombatSystem({ emitEvent: (eventType, data) => this._queueGameplayEvent(eventType, data) }),
+        ],
+      });
       this.unsubscribeMessage = this.transport.onMessage((peerId, message, delivery) => this._onMessage(peerId, message, delivery));
       this.unsubscribeDisconnect = this.transport.onPeerDisconnected((identity, reason) => this._onPeerDisconnected(identity, reason));
     }
@@ -255,6 +274,7 @@
         case 'PLAYER_CHARACTER': this._handleCharacter(peerId, message.payload); break;
         case 'PLAYER_READY': this._handleReady(peerId, message.payload); break;
         case 'PLAYER_INPUT': this._handleInput(peerId, message.payload); break;
+        case 'PLAYER_ACTION': this._handleAction(peerId, message.payload); break;
         case 'PING': this._send(peerId, 'PONG', {
           nonce: message.payload.nonce,
           clientTime: message.payload.clientTime,
@@ -320,13 +340,22 @@
         vy: 0,
         radius: 18,
         moveSpeed: 180,
+        maxHealth: 100,
+        health: 100,
+        gold: 0,
+        downed: false,
+        action: 'idle',
+        actionTick: -1,
+        attackCooldownUntilTick: 0,
         aimDirection: 0,
         characterKey: PLAYER_CHARACTERS[slotIndex % PLAYER_CHARACTERS.length],
         color: PLAYER_COLORS[slotIndex % PLAYER_COLORS.length],
         roomId: this.simulation.state.floorState.currentRoomId,
       };
       this.pendingInputs[playerId] = { moveX: 0, moveY: 0, aimDirection: 0, buttons: 0 };
+      this.pendingActions[playerId] = [];
       this.lastProcessedInput[playerId] = -1;
+      this.lastProcessedAction[playerId] = -1;
       this._send(peerId, 'JOIN_ACCEPTED', {
         matchId: this.simulation.state.matchId,
         sessionId: this.sessionId,
@@ -378,6 +407,42 @@
       this.metrics.acceptedInputs += 1;
     }
 
+    _handleAction(peerId, payload) {
+      const playerId = this.playerIdByPeer.get(peerId);
+      if (!playerId || this.simulation.state.status !== 'running') return;
+      if (payload.inputSequence <= this.lastProcessedAction[playerId]) {
+        this.metrics.duplicateActions += 1;
+        return;
+      }
+      this.lastProcessedAction[playerId] = payload.inputSequence;
+      const queue = this.pendingActions[playerId] || (this.pendingActions[playerId] = []);
+      if (queue.length < 8) queue.push({
+        action: payload.action,
+        aimDirection: payload.aimDirection,
+        inputSequence: payload.inputSequence,
+      });
+      this.metrics.acceptedActions += 1;
+    }
+
+    _queueGameplayEvent(eventType, data = {}) {
+      this.pendingGameplayEvents.push({
+        eventType: String(eventType || 'UNKNOWN').slice(0, 64),
+        data: { ...cloneSerializable(data), tick: this.simulation.state.tick },
+      });
+    }
+
+    _flushGameplayEvents() {
+      const events = this.pendingGameplayEvents.splice(0);
+      events.forEach(event => {
+        this._broadcast('GAMEPLAY_EVENT', {
+          eventId: this.simulation.state.allocateEntityId('event'),
+          eventType: event.eventType,
+          data: event.data,
+        });
+        this.metrics.gameplayEvents += 1;
+      });
+    }
+
     _startMatch() {
       if (this.simulation.state.status !== 'waiting') return;
       this.simulation.state.status = 'starting';
@@ -389,11 +454,14 @@
         contentVersion: this.contentVersion,
       });
       this.simulation.state.status = 'running';
+      ensureNetworkEncounter(this.simulation.state, this.simulation.random,
+        (eventType, data) => this._queueGameplayEvent(eventType, data));
       this._broadcast('INITIAL_STATE', {
         serverTick: this.simulation.state.tick,
         state: this.simulation.state.snapshot(),
         lastProcessedInput: { ...this.lastProcessedInput },
       });
+      this._flushGameplayEvents();
       this._broadcastLobbyState();
     }
 
@@ -436,7 +504,9 @@
       this.playerIdByPeer.delete(peerId);
       this.peerRecords.delete(peerId);
       delete this.pendingInputs[playerId];
+      delete this.pendingActions[playerId];
       delete this.lastProcessedInput[playerId];
+      delete this.lastProcessedAction[playerId];
       delete this.simulation.state.players[playerId];
       if (this.transport.sessionId) {
         this._broadcast('PLAYER_DISCONNECTED', { playerId, reason: String(reason || 'disconnected').slice(0, 96) });
@@ -448,7 +518,12 @@
       const count = Math.max(0, Math.trunc(Number(tickCount) || 0));
       for (let index = 0; index < count; index += 1) {
         if (this.simulation.state.status !== 'running') break;
-        this.simulation.updateGame(this.pendingInputs, FIXED_DELTA_SECONDS);
+        const tickInputs = Object.fromEntries(Object.entries(this.pendingInputs).map(([playerId, input]) => [
+          playerId,
+          { ...input, actions: (this.pendingActions[playerId] || []).splice(0) },
+        ]));
+        this.simulation.updateGame(tickInputs, FIXED_DELTA_SECONDS);
+        this._flushGameplayEvents();
         if (this.simulation.state.tick % SNAPSHOT_TICK_INTERVAL === 0) {
           this._publishSnapshot(this.simulation.state.tick % FULL_CORRECTION_TICK_INTERVAL === 0);
         }
@@ -464,10 +539,10 @@
         lastProcessedInput: { ...this.lastProcessedInput },
         entities: {
           players: cloneSerializable(this.simulation.state.players),
-          enemies: {},
-          projectiles: {},
-          pickups: {},
-          interactables: {},
+          enemies: cloneSerializable(this.simulation.state.enemies),
+          projectiles: cloneSerializable(this.simulation.state.projectiles),
+          pickups: cloneSerializable(this.simulation.state.pickups),
+          interactables: cloneSerializable(this.simulation.state.interactables),
         },
         removedEntityIds: [],
         floorState: cloneSerializable(this.simulation.state.floorState),
@@ -500,6 +575,7 @@
       this.contentHash = String(options.contentHash || LOCAL_CONTENT_HASH);
       this.outgoingSequence = 0;
       this.inputSequence = 0;
+      this.actionSequence = 0;
       this.authorityPeerId = null;
       this.sessionId = null;
       this.playerId = null;
@@ -510,6 +586,7 @@
       this.lastAcknowledgedInput = -1;
       this.seenReliableSequences = new Set();
       this.receivedTypes = [];
+      this.gameplayEvents = [];
       this.errors = [];
       this.unsubscribeMessage = this.transport.onMessage((peerId, message, delivery) => this._onMessage(peerId, message, delivery));
       this.unsubscribeDisconnect = this.transport.onPeerDisconnected((identity, reason) => {
@@ -567,6 +644,17 @@
       return inputSequence;
     }
 
+    sendAction(action = 'ATTACK', aimDirection = 0) {
+      if (this.status !== 'running') throw new Error('Client match is not running');
+      const inputSequence = this.actionSequence++;
+      this._send('PLAYER_ACTION', {
+        action: String(action || 'ATTACK'),
+        inputSequence,
+        aimDirection: Number(aimDirection) || 0,
+      });
+      return inputSequence;
+    }
+
     ping(nonce = `ping-${this.outgoingSequence}`) {
       this._send('PING', { nonce, clientTime: Math.max(0, this.transport.network?.clock?.now?.() || Date.now()) });
     }
@@ -604,6 +692,10 @@
           this.status = 'running';
           break;
         case 'WORLD_SNAPSHOT': this._applySnapshot(message.payload); break;
+        case 'GAMEPLAY_EVENT':
+          this.gameplayEvents.push(cloneSerializable(message.payload));
+          if (this.gameplayEvents.length > 128) this.gameplayEvents.splice(0, this.gameplayEvents.length - 128);
+          break;
         case 'PLAYER_DISCONNECTED':
           if (this.state) delete this.state.players[message.payload.playerId];
           break;

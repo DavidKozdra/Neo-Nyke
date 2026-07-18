@@ -185,6 +185,7 @@ describe('protocol-driven local multiplayer session', () => {
     }
     clock.runAll();
     authority.step(30);
+    authority.sendFullCorrection();
     clock.runAll();
 
     const authoritativePlayers = authority.simulation.state.snapshot().players;
@@ -197,7 +198,7 @@ describe('protocol-driven local multiplayer session', () => {
     expect(clientA.lastAcknowledgedInput).toBeGreaterThanOrEqual(0);
     expect(clientB.lastAcknowledgedInput).toBeGreaterThanOrEqual(0);
     expect(network.getMetrics().dropped).toBeGreaterThan(0);
-    expect(authority.metrics.snapshots).toBe(15);
+    expect(authority.metrics.snapshots).toBe(16);
   });
 
   test('rejects stale input sequences even when the envelope itself is new', async () => {
@@ -220,6 +221,39 @@ describe('protocol-driven local multiplayer session', () => {
     clock.runAll();
     expect(authority.metrics.duplicateInputs).toBe(1);
     expect(authority.pendingInputs[clientA.playerId].moveX).toBe(1);
+  });
+
+  test('synchronizes authority-owned attacks, enemy death, and one drop to both clients', async () => {
+    const { clock, authority, clientA, clientB } = await createRunningHarness({
+      unreliablePacketLoss: 0,
+      duplicateMessageRate: 0,
+      jitterMs: 0,
+    });
+    const enemy = Object.values(authority.simulation.state.enemies)[0];
+    const player = authority.simulation.state.players[clientA.playerId];
+    enemy.x = player.x + 190;
+    enemy.y = player.y;
+    enemy.moveSpeed = 0;
+
+    clientA.sendAction('ATTACK', 0);
+    clock.runAll();
+    authority.step(8);
+    clock.runAll();
+    clientA.sendAction('ATTACK', 0);
+    clock.runAll();
+    authority.step(12);
+    authority.sendFullCorrection();
+    clock.runAll();
+
+    expect(enemy.dead).toBe(true);
+    expect(Object.values(authority.simulation.state.pickups)).toHaveLength(1);
+    expect(clientA.state.enemies).toEqual(authority.simulation.state.enemies);
+    expect(clientB.state.enemies).toEqual(authority.simulation.state.enemies);
+    expect(clientA.state.pickups).toEqual(authority.simulation.state.pickups);
+    expect(clientB.state.pickups).toEqual(authority.simulation.state.pickups);
+    expect(clientA.gameplayEvents.filter(event => event.eventType === 'ENEMY_DEFEATED')).toHaveLength(1);
+    expect(clientB.gameplayEvents.filter(event => event.eventType === 'PICKUP_SPAWNED')).toHaveLength(1);
+    expect(authority.metrics.acceptedActions).toBe(2);
   });
 
   test('cleans up a disconnected player and notifies the remaining client', async () => {

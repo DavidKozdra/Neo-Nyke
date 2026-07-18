@@ -10,6 +10,7 @@
 
   const INPUT_INTERVAL_MS = 50;
   const INTERPOLATION_DELAY_MS = 100;
+  const ATTACK_KEYS = new Set(['Space', 'KeyJ']);
   const MOVEMENT_KEYS = new Map([
     ['KeyW', [0, -1]], ['ArrowUp', [0, -1]],
     ['KeyS', [0, 1]], ['ArrowDown', [0, 1]],
@@ -97,9 +98,14 @@
       this.lastRoomCode = '';
       this.lastTransitionSequence = 0;
       this.transitionFlashUntil = 0;
+      this.seenGameplayEvents = new Set();
+      this.combatEffects = [];
+      this.localAttackUntil = 0;
+      this.gamepadAttackPressed = false;
       this.boundKeyDown = event => this._onKey(event, true);
       this.boundKeyUp = event => this._onKey(event, false);
       this.boundPointerMove = event => this._onPointerMove(event);
+      this.boundPointerDown = event => this._onPointerDown(event);
       this.boundBlur = () => this.keys.clear();
       this.boundRenderFrame = () => {
         if (!this.active) return;
@@ -118,6 +124,7 @@
       root.addEventListener?.('keydown', this.boundKeyDown);
       root.addEventListener?.('keyup', this.boundKeyUp);
       root.addEventListener?.('pointermove', this.boundPointerMove);
+      root.addEventListener?.('pointerdown', this.boundPointerDown);
       root.addEventListener?.('blur', this.boundBlur);
       this.unsubscribe = this.session.subscribe(snapshot => this._onSnapshot(snapshot));
       this.inputTimer = root.setInterval(() => this._sendInput(), INPUT_INTERVAL_MS);
@@ -137,6 +144,7 @@
       root.removeEventListener?.('keydown', this.boundKeyDown);
       root.removeEventListener?.('keyup', this.boundKeyUp);
       root.removeEventListener?.('pointermove', this.boundPointerMove);
+      root.removeEventListener?.('pointerdown', this.boundPointerDown);
       root.removeEventListener?.('blur', this.boundBlur);
       this.keys.clear();
       this.document?.getElementById('multiplayerGameHud')?.classList.add('hidden');
@@ -147,6 +155,7 @@
     _onSnapshot(snapshot = {}) {
       this.lastRoomCode = snapshot.roomCode || this.lastRoomCode;
       const state = snapshot.gameState;
+      this._consumeGameplayEvents(snapshot.gameplayEvents || []);
       if (!state || !state.players) return;
       const receivedAt = root.performance?.now?.() || Date.now();
       const transitionSequence = Math.max(0, Number(state.floorState?.transitionSequence) || 0);
@@ -178,11 +187,50 @@
     }
 
     _onKey(event, pressed) {
-      if (!this.active || !MOVEMENT_KEYS.has(event.code)) return;
+      if (!this.active || (!MOVEMENT_KEYS.has(event.code) && !ATTACK_KEYS.has(event.code))) return;
       if (event.target?.closest?.('input, textarea, select, [contenteditable="true"]')) return;
       event.preventDefault();
+      if (ATTACK_KEYS.has(event.code)) {
+        if (pressed && !event.repeat) this._attack();
+        return;
+      }
       if (pressed) this.keys.add(event.code);
       else this.keys.delete(event.code);
+    }
+
+    _onPointerDown(event) {
+      if (!this.active || event.button !== 0 || event.target !== this.canvas) return;
+      event.preventDefault();
+      this._onPointerMove(event);
+      this._attack();
+    }
+
+    _attack() {
+      if (!this.active || this.session.snapshot().status !== 'running') return;
+      this.localAttackUntil = (root.performance?.now?.() || Date.now()) + 150;
+      if (this.localPredictedPlayer) {
+        this.localPredictedPlayer.action = 'attack';
+        this.localPredictedPlayer.actionTick = this.currentSample?.state?.tick || 0;
+        this.localPredictedPlayer.aimDirection = this.aimDirection;
+      }
+      try {
+        this.session.sendAction('ATTACK', this.aimDirection);
+      } catch {
+        // Session state changes are surfaced by its normal disconnect handler.
+      }
+    }
+
+    _consumeGameplayEvents(events) {
+      const now = root.performance?.now?.() || Date.now();
+      events.forEach(event => {
+        if (!event?.eventId || this.seenGameplayEvents.has(event.eventId)) return;
+        this.seenGameplayEvents.add(event.eventId);
+        if (this.seenGameplayEvents.size > 512) this.seenGameplayEvents.delete(this.seenGameplayEvents.values().next().value);
+        if (['ENEMY_HIT', 'ENEMY_DEFEATED', 'PLAYER_HIT', 'PICKUP_COLLECTED', 'ROOM_CLEARED'].includes(event.eventType)) {
+          this.combatEffects.push({ ...event, startedAt: now });
+        }
+      });
+      this.combatEffects = this.combatEffects.filter(effect => now - effect.startedAt < 700);
     }
 
     _onPointerMove(event) {
@@ -225,6 +273,11 @@
         const aimX = Math.abs(Number(gamepad.axes?.[2]) || 0) > 0.22 ? Number(gamepad.axes[2]) : 0;
         const aimY = Math.abs(Number(gamepad.axes?.[3]) || 0) > 0.22 ? Number(gamepad.axes[3]) : 0;
         if (aimX || aimY) this.aimDirection = Math.atan2(aimY, aimX);
+        const attackPressed = !!gamepad.buttons?.[0]?.pressed;
+        if (attackPressed && !this.gamepadAttackPressed) this._attack();
+        this.gamepadAttackPressed = attackPressed;
+      } else {
+        this.gamepadAttackPressed = false;
       }
       return normalizeMovement(moveX, moveY);
     }
@@ -261,6 +314,16 @@
       return players;
     }
 
+    _renderedEntities(kind, now) {
+      if (!this.currentSample) return {};
+      const current = this.currentSample.state[kind] || {};
+      const previous = this.previousSample?.state?.[kind] || current;
+      const duration = Math.max(1, this.currentSample.receivedAt - (this.previousSample?.receivedAt || this.currentSample.receivedAt));
+      const targetTime = now - INTERPOLATION_DELAY_MS;
+      const alpha = clamp((targetTime - (this.previousSample?.receivedAt || targetTime)) / duration, 0, 1);
+      return interpolatePlayers(previous, current, alpha);
+    }
+
     _visibleCanvasBounds() {
       const rect = this.canvas?.getBoundingClientRect?.();
       if (!rect || rect.width <= 0 || rect.height <= 0) {
@@ -290,7 +353,13 @@
         visibleBounds,
       );
       const players = this._renderedPlayers(now);
+      const enemies = this._renderedEntities('enemies', now);
+      const projectiles = this._renderedEntities('projectiles', now);
+      const pickups = state?.pickups || {};
       this.lastRenderedPlayerCount = Object.keys(players).length;
+      this.lastRenderedEnemyCount = Object.keys(enemies).length;
+      this.lastRenderedProjectileCount = Object.keys(projectiles).length;
+      this.lastRenderedPickupCount = Object.keys(pickups).length;
       const ctx = this.ctx;
 
       ctx.save();
@@ -301,7 +370,14 @@
       ctx.translate(transform.offsetX, transform.offsetY);
       ctx.scale(transform.scale, transform.scale);
       this._drawRoom(floorState);
+      Object.values(pickups).filter(entity => entity.roomId === floorState.currentRoomId)
+        .forEach(entity => this._drawPickup(entity, now));
+      Object.values(projectiles).filter(entity => entity.roomId === floorState.currentRoomId)
+        .forEach(entity => this._drawProjectile(entity));
+      Object.values(enemies).filter(entity => entity.roomId === floorState.currentRoomId)
+        .forEach(entity => this._drawEnemy(entity, state?.tick || 0, now));
       Object.values(players).forEach(player => this._drawPlayer(player, player.id === this.session.snapshot().playerId));
+      this._drawCombatEffects(players, enemies, now);
       ctx.restore();
       this._drawMinimap(floorState, visibleBounds);
       this._drawInstructions(visibleBounds);
@@ -389,6 +465,112 @@
       ctx.fillRect(wall, height - wall - 4, width - wall * 2, 4);
     }
 
+    _drawEnemy(enemy, serverTick, now) {
+      const ctx = this.ctx;
+      const hit = serverTick - Number(enemy.hitTick || -100) <= 2;
+      const dying = !!enemy.dead;
+      const bob = dying ? 0 : Math.sin(now / 140 + Number(String(enemy.id).replace(/\D/g, '') || 0)) * 3;
+      ctx.save();
+      ctx.globalAlpha = dying ? 0.45 : 1;
+      ctx.shadowColor = hit ? '#ffffff' : '#ff4f78';
+      ctx.shadowBlur = hit ? 24 : 10;
+      if (typeof this.neo.drawSpriteFrame === 'function') {
+        this.neo.drawSpriteFrame(enemy.spriteKey || enemy.type || 'cult_follower', enemy.x, enemy.y + bob, dying ? 50 : 60, {
+          flipX: Number(enemy.facing || 1) < 0,
+          shadowColor: hit ? '#ffffff' : '#ff4f78',
+          shadowBlur: hit ? 24 : 10,
+        });
+      } else {
+        ctx.fillStyle = hit ? '#ffffff' : '#d54a68';
+        ctx.beginPath();
+        ctx.arc(enemy.x, enemy.y, Number(enemy.radius || 20), 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+      if (dying) return;
+      const width = 58;
+      const ratio = clamp(Number(enemy.health || 0) / Math.max(1, Number(enemy.maxHealth || 1)), 0, 1);
+      ctx.save();
+      ctx.fillStyle = 'rgba(0,0,0,.82)';
+      ctx.fillRect(enemy.x - width / 2, enemy.y - 43, width, 7);
+      ctx.fillStyle = ratio > 0.35 ? '#ff4f78' : '#ffb347';
+      ctx.fillRect(enemy.x - width / 2 + 1, enemy.y - 42, (width - 2) * ratio, 5);
+      ctx.fillStyle = '#ffd8e2';
+      ctx.font = '700 14px VT323, monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(String(enemy.type || 'enemy').replace(/_/g, ' ').toUpperCase(), enemy.x, enemy.y - 49);
+      ctx.restore();
+    }
+
+    _drawProjectile(projectile) {
+      const ctx = this.ctx;
+      const angle = Math.atan2(Number(projectile.vy || 0), Number(projectile.vx || 0));
+      const color = projectile.color || '#9de9ff';
+      ctx.save();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 5;
+      ctx.globalAlpha = 0.45;
+      ctx.beginPath();
+      ctx.moveTo(projectile.x - Math.cos(angle) * 24, projectile.y - Math.sin(angle) * 24);
+      ctx.lineTo(projectile.x, projectile.y);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = '#ffffff';
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 18;
+      ctx.beginPath();
+      ctx.arc(projectile.x, projectile.y, Number(projectile.radius || 8), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    _drawPickup(pickup, now) {
+      const ctx = this.ctx;
+      const y = Number(pickup.y || 0) + Math.sin(now / 130) * 5;
+      ctx.save();
+      ctx.fillStyle = '#ffd23f';
+      ctx.strokeStyle = '#fff2a8';
+      ctx.lineWidth = 3;
+      ctx.shadowColor = '#ffd23f';
+      ctx.shadowBlur = 18;
+      ctx.beginPath();
+      ctx.arc(Number(pickup.x || 0), y, Number(pickup.radius || 13), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#6f4d00';
+      ctx.font = '700 17px VT323, monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('$', Number(pickup.x || 0), y + 5);
+      ctx.restore();
+    }
+
+    _drawCombatEffects(players, enemies, now) {
+      const ctx = this.ctx;
+      this.combatEffects = this.combatEffects.filter(effect => now - effect.startedAt < 700);
+      this.combatEffects.forEach(effect => {
+        const age = now - effect.startedAt;
+        const data = effect.data || {};
+        const entity = enemies[data.enemyId] || players[data.playerId];
+        if (effect.eventType === 'ROOM_CLEARED') {
+          ctx.save();
+          ctx.globalAlpha = clamp(1 - age / 700, 0, 1);
+          ctx.fillStyle = '#ffe978';
+          ctx.font = '700 30px VT323, monospace';
+          ctx.textAlign = 'center';
+          ctx.fillText('ROOM CLEARED', 450, 210 - age * 0.025);
+          ctx.restore();
+        } else if (entity && ['ENEMY_HIT', 'PLAYER_HIT'].includes(effect.eventType)) {
+          ctx.save();
+          ctx.globalAlpha = clamp(1 - age / 700, 0, 1);
+          ctx.fillStyle = effect.eventType === 'PLAYER_HIT' ? '#ff6b75' : '#ffffff';
+          ctx.font = '700 24px VT323, monospace';
+          ctx.textAlign = 'center';
+          ctx.fillText(`-${Number(data.damage || 0)}`, entity.x, entity.y - 48 - age * 0.035);
+          ctx.restore();
+        }
+      });
+    }
+
     _drawPlayer(player, isLocal) {
       const ctx = this.ctx;
       const color = player.color || '#9de9ff';
@@ -402,8 +584,11 @@
       ctx.stroke();
       ctx.restore();
 
+      const serverTick = this.currentSample?.state?.tick || 0;
+      const attacking = (isLocal && (root.performance?.now?.() || Date.now()) < this.localAttackUntil)
+        || (player.action === 'attack' && serverTick - Number(player.actionTick || 0) <= 4);
       if (typeof this.neo.drawSpriteFrame === 'function') {
-        this.neo.drawSpriteFrame(player.characterKey || 'thorn_knight', player.x, player.y, 58, {
+        this.neo.drawSpriteFrame(player.characterKey || 'thorn_knight', player.x, player.y, attacking ? 66 : 58, {
           flipX: Number(player.vx || 0) < 0,
           shadowColor: color,
           shadowBlur: 10,
@@ -421,6 +606,11 @@
       ctx.shadowColor = '#000';
       ctx.shadowBlur = 5;
       ctx.fillText(`${player.displayName || player.id}${isLocal ? ' (YOU)' : ''}`, player.x, player.y - 38);
+      const healthRatio = clamp(Number(player.health ?? 100) / Math.max(1, Number(player.maxHealth || 100)), 0, 1);
+      ctx.fillStyle = 'rgba(0,0,0,.8)';
+      ctx.fillRect(player.x - 28, player.y + 34, 56, 6);
+      ctx.fillStyle = healthRatio > 0.3 ? '#70e68f' : '#ff5d6f';
+      ctx.fillRect(player.x - 27, player.y + 35, 54 * healthRatio, 4);
       ctx.restore();
     }
 
@@ -454,11 +644,11 @@
       const baselineY = visibleBounds.bottom - 20;
       ctx.save();
       ctx.fillStyle = 'rgba(2, 4, 10, .76)';
-      ctx.fillRect(centerX - 190, baselineY - 19, 380, 27);
+      ctx.fillRect(centerX - 265, baselineY - 19, 530, 27);
       ctx.fillStyle = '#dceaff';
       ctx.font = '700 15px VT323, monospace';
       ctx.textAlign = 'center';
-      ctx.fillText('MOVE  WASD / ARROWS / GAMEPAD   •   AIM  MOUSE / RIGHT STICK', centerX, baselineY);
+      ctx.fillText('MOVE  WASD / ARROWS   •   AIM  MOUSE   •   ATTACK  CLICK / SPACE / GAMEPAD A', centerX, baselineY);
       ctx.restore();
     }
 
@@ -490,6 +680,9 @@
       setText('multiplayerGameRoom', this.lastRoomCode || '—');
       setText('multiplayerGameTick', state?.tick ?? 0);
       setText('multiplayerGamePlayers', Object.keys(players).length);
+      setText('multiplayerGameEnemies', Object.values(state?.enemies || {}).filter(enemy => !enemy.dead).length);
+      const localPlayer = players[this.session.snapshot().playerId];
+      setText('multiplayerGameGold', localPlayer?.gold ?? 0);
     }
   }
 
