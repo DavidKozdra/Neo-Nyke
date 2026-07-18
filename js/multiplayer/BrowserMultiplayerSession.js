@@ -53,6 +53,10 @@
       return this.client.sendInput(input);
     }
 
+    sendAction(action, aimDirection) {
+      return this.client.sendAction(action, aimDirection);
+    }
+
     subscribe(handler) {
       if (typeof handler !== 'function') throw new TypeError('Browser multiplayer listener must be a function');
       this.listeners.add(handler);
@@ -67,6 +71,7 @@
         playerId: this.client.playerId,
         lobbyState: this.client.lobbyState,
         gameState: this.client.getStateSnapshot(),
+        gameplayEvents: this.client.gameplayEvents.slice(),
         errors: this.client.errors.slice(),
       };
     }

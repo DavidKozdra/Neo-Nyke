@@ -27,6 +27,7 @@ import './simulation/GameState.js';
 import './simulation/GameSimulation.js';
 import './simulation/FixedTickRunner.js';
 import './simulation/DeterministicFloorGenerator.js';
+import './simulation/NetworkCombatSystem.js';
 import './multiplayer/NetworkTransport.js';
 import './multiplayer/OfflineTransport.js';
 import './multiplayer/OfflineGameSession.js';

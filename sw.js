@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'neonyke-v53';
+const CACHE_VERSION = 'neonyke-v54';
 const CACHE_META = 'neonyke-cache-meta';
 const CACHE_META_KEY = '/__neonyke_cache_meta__';
 const CACHE_REFRESH_INTERVAL_MS = 5 * 60 * 60 * 1000;
@@ -14,6 +14,7 @@ const PRECACHE = [
   '/js/simulation/GameSimulation.js',
   '/js/simulation/FixedTickRunner.js',
   '/js/simulation/DeterministicFloorGenerator.js',
+  '/js/simulation/NetworkCombatSystem.js',
   '/js/multiplayer/NetworkTransport.js',
   '/js/multiplayer/OfflineTransport.js',
   '/js/multiplayer/OfflineGameSession.js',

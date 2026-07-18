@@ -102,9 +102,43 @@ async function main() {
     await Promise.all([host, guest].map(page => page.waitForFunction(() => (
       globalThis.Neo?.multiplayerGameView?.active === true
       && globalThis.Neo.gameSession.snapshot().gameState?.floorState?.layout?.rooms?.length >= 8
+      && Object.values(globalThis.Neo.gameSession.snapshot().gameState?.enemies || {}).some(enemy => !enemy.dead)
       && document.querySelector('#start')?.classList.contains('hidden')
       && !document.querySelector('#multiplayerGameHud')?.classList.contains('hidden')
     ))));
+
+    const initialEnemyCount = await host.evaluate(() => Object.values(
+      globalThis.Neo.gameSession.snapshot().gameState?.enemies || {},
+    ).filter(enemy => !enemy.dead).length);
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const target = await host.evaluate(() => {
+        const snapshot = globalThis.Neo.gameSession.snapshot();
+        const player = snapshot.gameState?.players?.[snapshot.playerId];
+        const enemy = Object.values(snapshot.gameState?.enemies || {}).find(candidate => !candidate.dead);
+        if (!player || !enemy) return null;
+        const angle = Math.atan2(enemy.y - player.y, enemy.x - player.x);
+        globalThis.Neo.multiplayerGameView.aimDirection = angle;
+        return { enemyId: enemy.id, health: enemy.health, angle };
+      });
+      if (!target) break;
+      await host.keyboard.press('Space');
+      await host.waitForTimeout(520);
+    }
+    await Promise.all([host, guest].map(page => page.waitForFunction(() => {
+      const snapshot = globalThis.Neo.gameSession.snapshot();
+      const roomId = snapshot.gameState?.floorState?.currentRoomId;
+      return snapshot.gameState?.floorState?.encounters?.[roomId]?.status === 'cleared';
+    }, { timeout: 10_000 })));
+
+    const combatProof = await host.evaluate(() => {
+      const snapshot = globalThis.Neo.gameSession.snapshot();
+      return {
+        eventTypes: snapshot.gameplayEvents.map(event => event.eventType),
+        livingEnemies: Object.values(snapshot.gameState?.enemies || {}).filter(enemy => !enemy.dead).length,
+        pickupCount: Object.keys(snapshot.gameState?.pickups || {}).length,
+        totalGold: Object.values(snapshot.gameState?.players || {}).reduce((total, player) => total + Number(player.gold || 0), 0),
+      };
+    });
 
     const traversalStart = await host.evaluate(() => {
       const snapshot = globalThis.Neo.gameSession.snapshot();
@@ -207,6 +241,7 @@ async function main() {
       traversed,
       visitedRoomCount: hostSnapshot.gameState?.floorState?.visitedRoomIds?.length,
       selectedCharacters: Object.fromEntries(Object.entries(hostPlayers).map(([id, player]) => [id, player.characterKey])),
+      combat: { initialEnemyCount, ...combatProof },
       players: hostPlayers,
       converged,
       moved,
@@ -230,6 +265,11 @@ async function main() {
       || !hostCanvasRendered || !guestCanvasRendered
       || hostRenderedPlayerCount !== 2 || guestRenderedPlayerCount !== 2
       || hostPlayers['player-1']?.characterKey !== 'sarge' || hostPlayers['player-2']?.characterKey !== 'princess'
+      || initialEnemyCount < 1 || combatProof.livingEnemies !== 0
+      || !combatProof.eventTypes.includes('PLAYER_ATTACKED')
+      || !combatProof.eventTypes.includes('ENEMY_DEFEATED')
+      || !combatProof.eventTypes.includes('PICKUP_SPAWNED')
+      || !combatProof.eventTypes.includes('ROOM_CLEARED')
       || report.visitedRoomCount < 2
       || report.floorRoomCount < 8 || errors.length) process.exitCode = 1;
   } finally {

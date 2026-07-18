@@ -10,8 +10,8 @@ const { LOCAL_BUILD_VERSION, LOCAL_CONTENT_HASH } = require('../js/multiplayer/L
 
 describe('network multiplayer game view', () => {
   test('uses a floor-renderer compatibility identity so stale movement clients cannot join', () => {
-    expect(LOCAL_BUILD_VERSION).toBe('1.0.0-mp-traversal-v3');
-    expect(LOCAL_CONTENT_HASH).toBe('network-floor-traversal-v3');
+    expect(LOCAL_BUILD_VERSION).toBe('1.0.0-mp-combat-v4');
+    expect(LOCAL_CONTENT_HASH).toBe('network-combat-authority-v4');
   });
 
   test('normalizes diagonal keyboard/gamepad movement', () => {
