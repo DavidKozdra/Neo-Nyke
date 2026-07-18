@@ -1,64 +1,8 @@
 // projectile-types.js — projectile presets and weapon projectile attack data.
 
-const PROJECTILE_TYPE_DEFS = {
-  arrow: {
-    kind: 'hunters_bow',
-    color: '#f0fbff',
-    speed: 820,
-    r: 4,
-    life: 0.9,
-    pierceCount: 1,
-    hitOptions: { critBonus: 0.1 },
-  },
-  heavy_slug: {
-    kind: 'magenta_degale',
-    color: '#ff8bd2',
-    speed: 1240,
-    r: 7,
-    life: 0.9,
-    recoil: 280,
-  },
-  burst_round: {
-    kind: 'magenta_p90',
-    color: '#ff9dd7',
-    speed: 1200,
-    r: 4,
-    life: 0.8,
-    recoil: 55,
-  },
-  void_lance: {
-    kind: 'void_piercer',
-    color: '#ffd2c0',
-    speed: 760,
-    r: 6,
-    life: 1.2,
-    pierceCount: 4,
-    hitOptions: { ignoreBarrier: true, critBonus: 0.2 },
-  },
-  royal_bolt: {
-    kind: 'princess_wand',
-    color: '#ff9de8',
-    speed: 680,
-    r: 5,
-    life: 1,
-    pierceCount: 1,
-    muzzleRing: 10,
-    recoil: 160,
-  },
-};
-
-const WEAPON_PROJECTILE_ATTACKS = {
-  hunters_bow: { projectileType: 'arrow' },
-  magenta_degale: { projectileType: 'heavy_slug' },
-  magenta_p90: {
-    projectileType: 'burst_round',
-    burstCount: 5,
-    burstDelay: 0.08,
-    spread: 0.05,
-  },
-  void_piercer: { projectileType: 'void_lance' },
-  princess_wand: { projectileType: 'royal_bolt' },
-};
+const sharedCombatContent = globalThis.NeoNyke?.content || {};
+const PROJECTILE_TYPE_DEFS = sharedCombatContent.PROJECTILE_TYPE_DEFS || {};
+const WEAPON_PROJECTILE_ATTACKS = sharedCombatContent.WEAPON_PROJECTILE_ATTACKS || {};
 
 function mergeHitOptions(...sources) {
   const merged = {};

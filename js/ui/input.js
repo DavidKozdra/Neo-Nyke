@@ -2177,24 +2177,9 @@ export const MOVE_UPGRADEABLE_STATS = {
     critChance:{ label: 'Crit Chance',  step: 0.05, min: 0,   max: 1.0,  xpPerStep: 25, goldPerStep: 75, format: v => Math.round(v * 100) + '%' },
   };
 
-// Base stat values per weapon (used to compute current upgraded value)
-export const WEAPON_BASE_STATS = {
-    extending_staff:          { damage: 38,   cooldown: 0.55, range: 130, knockback: 500 },
-    hunters_bow:              { damage: 28,   cooldown: 0.40,             knockback: 180 },
-    thorns_bleed_blade:       { damage: 32,   cooldown: 0.55, range: 90,  knockback: 120 },
-    claw_gauntlets:           { damage: 26,   cooldown: 0.38, range: 85,  knockback: 90  },
-    lazer_glasses:            { damage: 18,   cooldown: 3.60,             knockback: 80  },
-    metao_fire_staff:         { damage: 22,   cooldown: 0.75, range: 200, knockback: 100 },
-    magenta_degale:           { damage: 108,  cooldown: 1.50,             knockback: 480 },
-    magenta_p90:              { damage: 22,   cooldown: 1.80,             knockback: 140 },
-    gelleh_lightning_spear:{ damage: 45,   cooldown: 2.00,             knockback: 200 },
-    excalibur:                { damage: 202,  cooldown: 2.00, range: 120, knockback: 600 },
-    katana_excalibur_777x:    { damage: 202,  cooldown: 0.777, range: 130, knockback: 380 },
-    golden_fleece:            { damage: 20,   cooldown: 0.50, range: 80,  knockback: 80  },
-    void_piercer:             { damage: 55,   cooldown: 0.80,             knockback: 160 },
-    princess_wand:            { damage: 30,   cooldown: 0.77, range: 120, knockback: 160 },
-    sarges_hammer:            { damage: 64,   cooldown: 0.70, range: 120, knockback: 520 },
-  };
+// Canonical values are headless-safe so offline play and multiplayer authority
+// consume the exact same authored weapon table.
+export const WEAPON_BASE_STATS = globalThis.NeoNyke?.content?.WEAPON_BASE_STATS || {};
 
 // Base stat values per move
 export const MOVE_BASE_STATS = {

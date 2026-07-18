@@ -1,5 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
+const { WEAPON_BASE_STATS, WEAPON_PROJECTILE_ATTACKS } = require('../js/simulation/SharedCombatContent');
 
 function loadMovingGunPenalty(Neo) {
   const source = fs.readFileSync(path.join(__dirname, '../js/game/combat.js'), 'utf8');
@@ -16,14 +17,15 @@ function loadMovingGunPenalty(Neo) {
 
 describe('Degale and P90 movement balance', () => {
   test('uses the reduced base damage values', () => {
-    const source = fs.readFileSync(path.join(__dirname, '../js/ui/input.js'), 'utf8');
-    expect(source).toMatch(/magenta_degale:\s+\{ damage: 108,/);
-    expect(source).toMatch(/magenta_p90:\s+\{ damage: 22,/);
+    expect(WEAPON_BASE_STATS.magenta_degale.damage).toBe(108);
+    expect(WEAPON_BASE_STATS.magenta_p90.damage).toBe(22);
   });
 
   test('spaces P90 rounds through a readable burst', () => {
-    const source = fs.readFileSync(path.join(__dirname, '../js/game/projectile-types.js'), 'utf8');
-    expect(source).toMatch(/magenta_p90:\s*\{[\s\S]*?burstCount: 5,[\s\S]*?burstDelay: 0\.08,/);
+    expect(WEAPON_PROJECTILE_ATTACKS.magenta_p90).toEqual(expect.objectContaining({
+      burstCount: 5,
+      burstDelay: 0.08,
+    }));
   });
 
   test('keeps stationary shots accurate with normal recoil', () => {

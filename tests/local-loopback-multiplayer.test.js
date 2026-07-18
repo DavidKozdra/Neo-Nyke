@@ -104,6 +104,7 @@ describe('protocol-driven local multiplayer session', () => {
     clock.runAll();
 
     expect(authority.simulation.state.players[client.playerId].characterKey).toBe('sarge');
+    expect(authority.simulation.state.players[client.playerId]).toEqual(expect.objectContaining({ maxHealth: 90, health: 90, moveSpeed: 165 }));
     expect(client.lobbyState.members).toEqual([
       expect.objectContaining({ playerId: client.playerId, characterKey: 'sarge', ready: false }),
     ]);
@@ -231,13 +232,13 @@ describe('protocol-driven local multiplayer session', () => {
     });
     const enemy = Object.values(authority.simulation.state.enemies)[0];
     const player = authority.simulation.state.players[clientA.playerId];
-    enemy.x = player.x + 190;
+    enemy.x = player.x + 100;
     enemy.y = player.y;
     enemy.moveSpeed = 0;
 
     clientA.sendAction('ATTACK', 0);
     clock.runAll();
-    authority.step(8);
+    authority.step(12);
     clock.runAll();
     clientA.sendAction('ATTACK', 0);
     clock.runAll();
