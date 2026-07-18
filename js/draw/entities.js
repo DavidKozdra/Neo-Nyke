@@ -1486,6 +1486,124 @@
     void fadeIn;
   }
 
+  // Shared by the offline player and network presentation actors. The authority
+  // supplies swing state; this client-only function keeps Neo Nyke's authored
+  // jab and weapon-sweep animation in one place.
+  function drawPlayerWeaponAnimation(actor, weaponKey, aimAngle, facing, options = {}) {
+    if (!actor) return;
+    const extendingStaffEquipped = weaponKey === 'extending_staff';
+    const godActive = !!options.godActive;
+    if (extendingStaffEquipped && options.showRangePreview) {
+      const previewRange = 130;
+      const previewArc = 1.45;
+      const previewAngle = actor.swing > 0 ? aimAngle : Number(options.previewAngle ?? aimAngle);
+      const previewX = Math.cos(previewAngle) * previewRange;
+      const previewY = Math.sin(previewAngle) * previewRange;
+      Neo.ctx.globalAlpha = 0.32;
+      Neo.ctx.strokeStyle = '#ff6666';
+      Neo.ctx.lineWidth = 2;
+      Neo.ctx.beginPath();
+      Neo.ctx.moveTo(Math.cos(previewAngle) * 18, Math.sin(previewAngle) * 18);
+      Neo.ctx.lineTo(previewX, previewY);
+      Neo.ctx.stroke();
+      Neo.ctx.globalAlpha = 0.18;
+      Neo.ctx.beginPath();
+      Neo.ctx.arc(0, 0, previewRange, previewAngle - previewArc, previewAngle + previewArc);
+      Neo.ctx.stroke();
+      Neo.ctx.globalAlpha = 0.55;
+      Neo.ctx.fillStyle = '#ff3333';
+      Neo.ctx.beginPath();
+      Neo.ctx.arc(previewX, previewY, 4, 0, Math.PI * 2);
+      Neo.ctx.fill();
+    }
+    if (actor.swing > 0 && actor.stabSwing) {
+      const swingTotal = Neo.ATTACKS.melee.active;
+      const t = 1 - (actor.swing / swingTotal);
+      const lunge = Math.sin(Math.min(1, t) * Math.PI);
+      const reach = 30 + lunge * 60;
+      const fade = 0.9 * (actor.swing / swingTotal);
+      const stabColor = godActive ? '#f6e8c8' : '#bfe4ff';
+      const cos = Math.cos(actor.swingA);
+      const sin = Math.sin(actor.swingA);
+      Neo.ctx.globalAlpha = fade * 0.4;
+      Neo.ctx.strokeStyle = stabColor;
+      Neo.ctx.lineWidth = 9;
+      Neo.ctx.shadowColor = stabColor;
+      Neo.ctx.shadowBlur = 16;
+      Neo.ctx.beginPath();
+      Neo.ctx.moveTo(cos * 12, sin * 12);
+      Neo.ctx.lineTo(cos * reach, sin * reach);
+      Neo.ctx.stroke();
+      Neo.ctx.globalAlpha = fade;
+      Neo.ctx.strokeStyle = '#ffffff';
+      Neo.ctx.lineWidth = 2.5;
+      Neo.ctx.shadowBlur = 6;
+      Neo.ctx.beginPath();
+      Neo.ctx.moveTo(cos * 12, sin * 12);
+      Neo.ctx.lineTo(cos * reach, sin * reach);
+      Neo.ctx.stroke();
+      Neo.ctx.fillStyle = stabColor;
+      Neo.ctx.shadowBlur = 8;
+      const tipX = cos * reach;
+      const tipY = sin * reach;
+      const perpX = -sin;
+      const perpY = cos;
+      Neo.ctx.beginPath();
+      Neo.ctx.moveTo(tipX + cos * 10, tipY + sin * 10);
+      Neo.ctx.lineTo(tipX + perpX * 5, tipY + perpY * 5);
+      Neo.ctx.lineTo(tipX - perpX * 5, tipY - perpY * 5);
+      Neo.ctx.closePath();
+      Neo.ctx.fill();
+      Neo.ctx.shadowBlur = 0;
+    } else if (actor.swing > 0) {
+      const swingRange = extendingStaffEquipped ? 130 : 55;
+      const swingArc = extendingStaffEquipped ? 1.45 : Neo.ATTACKS.melee.arc;
+      const swingTotal = Neo.ATTACKS.melee.active;
+      const swingProgress = 1 - (actor.swing / swingTotal);
+      const sweepDir = (Number(actor.swingFacing || facing || 1) < 0) ? 1 : -1;
+      const sweepStart = actor.swingA + swingArc * sweepDir;
+      const sweepEnd = actor.swingA - swingArc * sweepDir;
+      const currentTip = sweepStart + (sweepEnd - sweepStart) * swingProgress;
+      const trailLength = swingArc * 0.55;
+      const trailStart = currentTip + trailLength * sweepDir;
+      const counterClockwise = sweepDir > 0;
+      const fadeAlpha = 0.9 * (actor.swing / swingTotal);
+      const slashColor = extendingStaffEquipped ? '#ff3333' : godActive ? '#f6e8c8' : '#d86d87';
+      Neo.ctx.globalAlpha = fadeAlpha * 0.35;
+      Neo.ctx.strokeStyle = slashColor;
+      Neo.ctx.lineWidth = extendingStaffEquipped ? 14 : 10;
+      Neo.ctx.shadowColor = slashColor;
+      Neo.ctx.shadowBlur = 16;
+      Neo.ctx.beginPath();
+      Neo.ctx.arc(0, 0, swingRange, trailStart, currentTip, counterClockwise);
+      Neo.ctx.stroke();
+      Neo.ctx.globalAlpha = fadeAlpha;
+      Neo.ctx.strokeStyle = slashColor;
+      Neo.ctx.lineWidth = extendingStaffEquipped ? 5 : 3;
+      Neo.ctx.shadowBlur = 8;
+      Neo.ctx.beginPath();
+      Neo.ctx.arc(0, 0, swingRange, trailStart, currentTip, counterClockwise);
+      Neo.ctx.stroke();
+      Neo.ctx.globalAlpha = fadeAlpha * 0.9;
+      Neo.ctx.strokeStyle = '#ffffff';
+      Neo.ctx.lineWidth = extendingStaffEquipped ? 2 : 1.5;
+      Neo.ctx.shadowBlur = 4;
+      Neo.ctx.beginPath();
+      Neo.ctx.arc(0, 0, swingRange, currentTip + 0.12 * sweepDir, currentTip, counterClockwise);
+      Neo.ctx.stroke();
+      Neo.ctx.shadowBlur = 0;
+      if (extendingStaffEquipped) {
+        Neo.ctx.globalAlpha = 0.12 * fadeAlpha;
+        Neo.ctx.fillStyle = '#eaf4ff';
+        Neo.ctx.beginPath();
+        Neo.ctx.moveTo(0, 0);
+        Neo.ctx.arc(0, 0, swingRange, trailStart, currentTip, counterClockwise);
+        Neo.ctx.closePath();
+        Neo.ctx.fill();
+      }
+    }
+  }
+
   function drawPlayer() {
     if (!Neo.player) return;
     const currentAimAngle = Neo.angleToMouse();
@@ -1581,127 +1699,11 @@
       attackProgress: getAttackProgress(Neo.player.swing, Neo.ATTACKS.melee.active),
       recoil: Neo.clamp(armRecoilRemaining / armRecoilDuration, 0, 1),
     });
-    const equippedWeapon = Neo.getEquippedWeapon();
-    const extendingStaffEquipped = equippedWeapon === 'extending_staff';
-    if (extendingStaffEquipped) {
-      const previewRange = 130;
-      const previewArc = 1.45;
-      const previewAngle = swingActive ? aimAngle : currentAimAngle;
-      const previewX = Math.cos(previewAngle) * previewRange;
-      const previewY = Math.sin(previewAngle) * previewRange;
-      Neo.ctx.globalAlpha = 0.32;
-      Neo.ctx.strokeStyle = '#ff6666';
-      Neo.ctx.lineWidth = 2;
-      Neo.ctx.beginPath();
-      Neo.ctx.moveTo(Math.cos(previewAngle) * 18, Math.sin(previewAngle) * 18);
-      Neo.ctx.lineTo(previewX, previewY);
-      Neo.ctx.stroke();
-      Neo.ctx.globalAlpha = 0.18;
-      Neo.ctx.beginPath();
-      Neo.ctx.arc(0, 0, previewRange, previewAngle - previewArc, previewAngle + previewArc);
-      Neo.ctx.stroke();
-      Neo.ctx.globalAlpha = 0.55;
-      Neo.ctx.fillStyle = '#ff3333';
-      Neo.ctx.beginPath();
-      Neo.ctx.arc(previewX, previewY, 4, 0, Math.PI * 2);
-      Neo.ctx.fill();
-    }
-    if (Neo.player.swing > 0 && Neo.player.stabSwing) {
-      // Jab: a straight forward thrust that lunges out and snaps back, instead
-      // of the sweeping arc used by swipes.
-      const swingTotal = Neo.ATTACKS.melee.active;
-      const t = 1 - (Neo.player.swing / swingTotal);
-      // Ease out then back in so the tip punches forward and recoils.
-      const lunge = Math.sin(Math.min(1, t) * Math.PI);
-      const reach = 30 + lunge * 60;
-      const fade = 0.9 * (Neo.player.swing / swingTotal);
-      const stabColor = Neo.godTimer > 0 ? '#f6e8c8' : '#bfe4ff';
-      const cos = Math.cos(Neo.player.swingA);
-      const sin = Math.sin(Neo.player.swingA);
-      // Glow shaft
-      Neo.ctx.globalAlpha = fade * 0.4;
-      Neo.ctx.strokeStyle = stabColor;
-      Neo.ctx.lineWidth = 9;
-      Neo.ctx.shadowColor = stabColor;
-      Neo.ctx.shadowBlur = 16;
-      Neo.ctx.beginPath();
-      Neo.ctx.moveTo(cos * 12, sin * 12);
-      Neo.ctx.lineTo(cos * reach, sin * reach);
-      Neo.ctx.stroke();
-      // Sharp core
-      Neo.ctx.globalAlpha = fade;
-      Neo.ctx.strokeStyle = '#ffffff';
-      Neo.ctx.lineWidth = 2.5;
-      Neo.ctx.shadowBlur = 6;
-      Neo.ctx.beginPath();
-      Neo.ctx.moveTo(cos * 12, sin * 12);
-      Neo.ctx.lineTo(cos * reach, sin * reach);
-      Neo.ctx.stroke();
-      // Spear tip
-      Neo.ctx.globalAlpha = fade;
-      Neo.ctx.fillStyle = stabColor;
-      Neo.ctx.shadowBlur = 8;
-      const tipX = cos * reach;
-      const tipY = sin * reach;
-      const perpX = -sin;
-      const perpY = cos;
-      Neo.ctx.beginPath();
-      Neo.ctx.moveTo(tipX + cos * 10, tipY + sin * 10);
-      Neo.ctx.lineTo(tipX + perpX * 5, tipY + perpY * 5);
-      Neo.ctx.lineTo(tipX - perpX * 5, tipY - perpY * 5);
-      Neo.ctx.closePath();
-      Neo.ctx.fill();
-      Neo.ctx.shadowBlur = 0;
-    } else if (Neo.player.swing > 0) {
-      const swingRange = extendingStaffEquipped ? 130 : 55;
-      const swingArc = extendingStaffEquipped ? 1.45 : Neo.ATTACKS.melee.arc;
-      const swingTotal = Neo.ATTACKS.melee.active;
-      const swingProgress = 1 - (Neo.player.swing / swingTotal);
-      const sweepDir = (Number(Neo.player.swingFacing || facing || 1) < 0) ? 1 : -1;
-      const sweepStart = Neo.player.swingA + swingArc * sweepDir;
-      const sweepEnd = Neo.player.swingA - swingArc * sweepDir;
-      const currentTip = sweepStart + (sweepEnd - sweepStart) * swingProgress;
-      const trailLength = swingArc * 0.55;
-      const trailStart = currentTip + trailLength * sweepDir;
-      const counterClockwise = sweepDir > 0;
-      const fadeAlpha = 0.9 * (Neo.player.swing / swingTotal);
-      const slashColor = extendingStaffEquipped ? '#ff3333' : Neo.godTimer > 0 ? '#f6e8c8' : '#d86d87';
-      // Glow outer trail
-      Neo.ctx.globalAlpha = fadeAlpha * 0.35;
-      Neo.ctx.strokeStyle = slashColor;
-      Neo.ctx.lineWidth = extendingStaffEquipped ? 14 : 10;
-      Neo.ctx.shadowColor = slashColor;
-      Neo.ctx.shadowBlur = 16;
-      Neo.ctx.beginPath();
-      Neo.ctx.arc(0, 0, swingRange, trailStart, currentTip, counterClockwise);
-      Neo.ctx.stroke();
-      // Main sharp edge
-      Neo.ctx.globalAlpha = fadeAlpha;
-      Neo.ctx.strokeStyle = slashColor;
-      Neo.ctx.lineWidth = extendingStaffEquipped ? 5 : 3;
-      Neo.ctx.shadowBlur = 8;
-      Neo.ctx.beginPath();
-      Neo.ctx.arc(0, 0, swingRange, trailStart, currentTip, counterClockwise);
-      Neo.ctx.stroke();
-      // Bright tip streak
-      Neo.ctx.globalAlpha = fadeAlpha * 0.9;
-      Neo.ctx.strokeStyle = '#ffffff';
-      Neo.ctx.lineWidth = extendingStaffEquipped ? 2 : 1.5;
-      Neo.ctx.shadowBlur = 4;
-      Neo.ctx.beginPath();
-      Neo.ctx.arc(0, 0, swingRange, currentTip + 0.12 * sweepDir, currentTip, counterClockwise);
-      Neo.ctx.stroke();
-      Neo.ctx.shadowBlur = 0;
-      if (extendingStaffEquipped) {
-        Neo.ctx.globalAlpha = 0.12 * fadeAlpha;
-        Neo.ctx.fillStyle = '#eaf4ff';
-        Neo.ctx.beginPath();
-        Neo.ctx.moveTo(0, 0);
-        Neo.ctx.arc(0, 0, swingRange, trailStart, currentTip, counterClockwise);
-        Neo.ctx.closePath();
-        Neo.ctx.fill();
-      }
-    }
+    drawPlayerWeaponAnimation(Neo.player, Neo.getEquippedWeapon(), aimAngle, facing, {
+      godActive: Neo.godTimer > 0,
+      showRangePreview: true,
+      previewAngle: currentAimAngle,
+    });
     Neo.ctx.restore();
   }
 
@@ -1720,7 +1722,9 @@
     const charKey = slot.getCharacter();
     const tintColor = slot.color;
     const label = slot.label;
-    const aimAngle = Math.atan2(pn.vy || 0, pn.vx || 1);
+    const aimAngle = Number.isFinite(Number(pn.aimDirection))
+      ? Number(pn.aimDirection)
+      : Math.atan2(pn.vy || 0, pn.vx || 1);
     const facing = getFacingDirection(pn, aimAngle);
     const spriteKey = Neo.SPRITE_DEFS[charKey] ? charKey : 'thorn_knight';
     drawActorSprite(pn, spriteKey, pn.x, pn.y, Math.max(34, pn.r * 2.5), {
@@ -1743,6 +1747,7 @@
     drawAimIndicator(aimAngle, spriteKey, tintColor, Math.max(34, pn.r * 2.5), facing, {
       attackProgress: getAttackProgress(pn.swing, Neo.ATTACKS.melee.active),
     });
+    drawPlayerWeaponAnimation(pn, pn.equippedWeapon, aimAngle, facing);
     Neo.ctx.restore();
     Neo.ctx.save();
     Neo.ctx.fillStyle = tintColor;
@@ -1944,6 +1949,8 @@
   Neo.drawWarpPreview = drawWarpPreview;
   Neo.drawSpriteFrame = drawSpriteFrame;
   Neo.drawSpriteToCanvas = drawSpriteToCanvas;
+  Neo.drawActorSprite = drawActorSprite;
+  Neo.drawAimIndicator = drawAimIndicator;
   Neo.drawEnemyTelegraphs = drawEnemyTelegraphs;
   Neo.drawBleedOverlay = drawBleedOverlay;
   Neo.drawStatusIcon = drawStatusIcon;
@@ -1961,6 +1968,7 @@
   Neo.drawPlayerCorpseAnim = drawPlayerCorpseAnim;
   Neo.drawDeathOverlay = drawDeathOverlay;
   Neo.drawPlayer = drawPlayer;
+  Neo.drawPlayerWeaponAnimation = drawPlayerWeaponAnimation;
   Neo.hexToRgba = hexToRgba;
   Neo.drawPlayerSlot = drawPlayerSlot;
   Neo.drawPlayer2 = drawPlayer2;

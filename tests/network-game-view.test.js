@@ -10,8 +10,8 @@ const { LOCAL_BUILD_VERSION, LOCAL_CONTENT_HASH } = require('../js/multiplayer/L
 
 describe('network multiplayer game view', () => {
   test('uses a floor-renderer compatibility identity so stale movement clients cannot join', () => {
-    expect(LOCAL_BUILD_VERSION).toBe('1.0.0-mp-combat-v4');
-    expect(LOCAL_CONTENT_HASH).toBe('network-combat-authority-v4');
+    expect(LOCAL_BUILD_VERSION).toBe('1.0.0-shared-combat-v6');
+    expect(LOCAL_CONTENT_HASH).toBe('shared-neo-combat-rendering-v6');
   });
 
   test('normalizes diagonal keyboard/gamepad movement', () => {
@@ -70,5 +70,8 @@ describe('network multiplayer game view', () => {
     expect(main).toContain("import './rendering/NetworkGameView.js'");
     expect(environment).toMatch(/Neo\.multiplayerGameView\?\.active[\s\S]*Neo\.multiplayerGameView\.render\(\)/);
     expect(fs.readFileSync(path.join(root, 'js/rendering/NetworkGameView.js'), 'utf8')).toContain('requestAnimationFrame?.(this.boundRenderFrame)');
+    expect(fs.readFileSync(path.join(root, 'js/rendering/NetworkGameView.js'), 'utf8')).toContain('this.neo.drawFloor()');
+    expect(fs.readFileSync(path.join(root, 'js/rendering/NetworkGameView.js'), 'utf8')).toContain('this.neo.drawPlayerSlot');
+    expect(fs.readFileSync(path.join(root, 'js/rendering/NetworkGameView.js'), 'utf8')).toContain('this.neo.drawProjectileShape');
   });
 });

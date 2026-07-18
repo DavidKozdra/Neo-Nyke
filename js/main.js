@@ -23,6 +23,7 @@
 // no DOM APIs and can also be required directly by Node-based authorities/tests.
 import './config/FeatureFlags.js';
 import './simulation/RandomService.js';
+import './simulation/SharedCombatContent.js';
 import './simulation/GameState.js';
 import './simulation/GameSimulation.js';
 import './simulation/FixedTickRunner.js';

@@ -82,13 +82,13 @@ async function main() {
     await waitForSessionStatus(guest, 'waiting', 'guest lobby');
     await host.waitForFunction(() => globalThis.Neo.gameSession.snapshot().lobbyState?.members?.length === 2);
 
-    await host.locator('#multiplayerCharacter').selectOption('sarge');
-    await guest.locator('#multiplayerCharacter').selectOption('princess');
+    await host.locator('#multiplayerCharacter').selectOption('princess');
+    await guest.locator('#multiplayerCharacter').selectOption('sarge');
     await Promise.all([
       host.waitForFunction(() => globalThis.Neo.gameSession.snapshot().lobbyState?.members
-        ?.find(member => member.playerId === globalThis.Neo.gameSession.snapshot().playerId)?.characterKey === 'sarge'),
-      guest.waitForFunction(() => globalThis.Neo.gameSession.snapshot().lobbyState?.members
         ?.find(member => member.playerId === globalThis.Neo.gameSession.snapshot().playerId)?.characterKey === 'princess'),
+      guest.waitForFunction(() => globalThis.Neo.gameSession.snapshot().lobbyState?.members
+        ?.find(member => member.playerId === globalThis.Neo.gameSession.snapshot().playerId)?.characterKey === 'sarge'),
     ]);
 
     await Promise.all([
@@ -161,6 +161,9 @@ async function main() {
       const snapshot = globalThis.Neo.gameSession.snapshot();
       return {
         eventTypes: snapshot.gameplayEvents.map(event => event.eventType),
+        attackKinds: snapshot.gameplayEvents
+          .filter(event => event.eventType === 'PLAYER_ATTACKED')
+          .map(event => event.data?.attackKind),
         livingEnemies: Object.values(snapshot.gameState?.enemies || {}).filter(enemy => !enemy.dead).length,
         pickupCount: Object.keys(snapshot.gameState?.pickups || {}).length,
         totalGold: Object.values(snapshot.gameState?.players || {}).reduce((total, player) => total + Number(player.gold || 0), 0),
@@ -291,9 +294,10 @@ async function main() {
     if (!converged || !moved || !traversed || report.gameViewActive !== true
       || !hostCanvasRendered || !guestCanvasRendered
       || hostRenderedPlayerCount !== 2 || guestRenderedPlayerCount !== 2
-      || hostPlayers['player-1']?.characterKey !== 'sarge' || hostPlayers['player-2']?.characterKey !== 'princess'
+      || hostPlayers['player-1']?.characterKey !== 'princess' || hostPlayers['player-2']?.characterKey !== 'sarge'
       || initialEnemyCount < 1 || combatProof.livingEnemies !== 0
       || !combatProof.eventTypes.includes('PLAYER_ATTACKED')
+      || !combatProof.attackKinds.includes('princess_wand')
       || !combatProof.eventTypes.includes('ENEMY_DEFEATED')
       || !combatProof.eventTypes.includes('PICKUP_SPAWNED')
       || !combatProof.eventTypes.includes('PICKUP_COLLECTED')

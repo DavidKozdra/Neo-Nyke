@@ -479,13 +479,7 @@ export function getDefaultWeaponForCharacter(characterKey) {
     if (Neo.isCustomCharacterKey?.(characterKey)) {
       return Neo.getCustomCharacterSettings?.(characterKey).weaponLoadout?.weapon || 'thorns_bleed_blade';
     }
-    if (characterKey === 'princess') return 'princess_wand';
-    if (characterKey === 'metao') return 'metao_fire_staff';
-    if (characterKey === 'gelleh') return 'gelleh_lightning_spear';
-    if (characterKey === 'mooggy') return 'claw_gauntlets';
-    if (characterKey === 'turtle_boy') return 'extending_staff';
-    if (characterKey === 'sarge') return 'sarges_hammer';
-    return 'thorns_bleed_blade';
+    return globalThis.NeoNyke?.content?.getCharacterDefaultWeapon?.(characterKey) || 'thorns_bleed_blade';
   }
 
 // Per-character, per-slot kit options selectable on the pick-character screen.

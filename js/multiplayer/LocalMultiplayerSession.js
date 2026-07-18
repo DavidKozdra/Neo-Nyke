@@ -16,7 +16,7 @@
   const { GameSimulation, FIXED_DELTA_SECONDS, SIMULATION_TICK_RATE } = simulationApi;
   const { GameState, cloneSerializable } = gameStateApi;
   const { generateFloorLayout } = floorApi;
-  const { createNetworkCombatSystem, ensureNetworkEncounter, isNetworkRoomLocked } = combatApi;
+  const { applyNetworkHeroProfile, createNetworkCombatSystem, ensureNetworkEncounter, isNetworkRoomLocked } = combatApi;
   const {
     CLIENT_TO_AUTHORITY,
     AUTHORITY_TO_CLIENT,
@@ -26,10 +26,10 @@
     getDeliveryIntent,
   } = protocolApi;
 
-  const LOCAL_BUILD_VERSION = '1.0.0-mp-combat-v4';
+  const LOCAL_BUILD_VERSION = '1.0.0-shared-combat-v6';
   const LOCAL_GENERATION_VERSION = 1;
-  const LOCAL_CONTENT_HASH = 'network-combat-authority-v4';
-  const LOCAL_CONTENT_VERSION = 'network-combat-v4';
+  const LOCAL_CONTENT_HASH = 'shared-neo-combat-rendering-v6';
+  const LOCAL_CONTENT_VERSION = 'shared-neo-combat-rendering-v6';
   const SNAPSHOT_RATE = 10;
   const SNAPSHOT_TICK_INTERVAL = SIMULATION_TICK_RATE / SNAPSHOT_RATE;
   const FULL_CORRECTION_TICK_INTERVAL = SIMULATION_TICK_RATE;
@@ -352,6 +352,7 @@
         color: PLAYER_COLORS[slotIndex % PLAYER_COLORS.length],
         roomId: this.simulation.state.floorState.currentRoomId,
       };
+      applyNetworkHeroProfile(this.simulation.state.players[playerId], PLAYER_CHARACTERS[slotIndex % PLAYER_CHARACTERS.length]);
       this.pendingInputs[playerId] = { moveX: 0, moveY: 0, aimDirection: 0, buttons: 0 };
       this.pendingActions[playerId] = [];
       this.lastProcessedInput[playerId] = -1;
@@ -378,7 +379,7 @@
       const player = record?.playerId && this.simulation.state.players[record.playerId];
       if (!player || this.simulation.state.status !== 'waiting') return;
       if (!SELECTABLE_CHARACTERS.includes(payload.characterKey)) return this._rejectInvalidMessage(peerId, ['character is unavailable']);
-      player.characterKey = payload.characterKey;
+      applyNetworkHeroProfile(player, payload.characterKey);
       record.ready = false;
       this._broadcastLobbyState();
     }
