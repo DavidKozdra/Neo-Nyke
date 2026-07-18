@@ -145,12 +145,10 @@ export function createUIController(view) {
       view.coopLobbyBar?.setAttribute('aria-hidden', coopLobbyActive ? 'false' : 'true');
       document.getElementById('charSelect')?.classList.toggle('charselect--coop', coopLobbyActive);
       // The run-setup sidebar (difficulty/seed/mods) is authority-controlled in
-      // co-op, so hide those controls while keeping the #go button as READY.
-      ['difficultySelect', 'seed', 'seedLabel', 'challengeToggle'].forEach(id => {
-        document.getElementById(id)?.closest('.seedrow, .charselect-extra-options, .difficulty-select')
-          ?.classList.toggle('coop-hidden', coopLobbyActive);
-        document.getElementById(id)?.classList.toggle('coop-hidden', coopLobbyActive
-          && !document.getElementById(id)?.closest('.seedrow, .charselect-extra-options, .difficulty-select'));
+      // co-op, so hide those control groups while keeping #go as the READY toggle.
+      ['difficultySelect', 'seed', 'challengeToggle'].forEach(id => {
+        const group = document.getElementById(id)?.closest('.seedrow, .charselect-extra-options, .difficulty-select');
+        group?.classList.toggle('coop-hidden', coopLobbyActive);
       });
       if (coopLobbyActive) {
         if (typeof Neo.setGameState === 'function' && Neo.gameState !== 'charselect') {
@@ -335,7 +333,8 @@ export function createUIController(view) {
     let multiplayerCopyFeedbackTimer = null;
 
     function setMultiplayerCopyFeedback(state = 'idle') {
-      if (!view.multiplayerCopyRoomCode) return;
+      const buttons = [view.multiplayerCopyRoomCode, view.coopLobbyCopyRoomCode].filter(Boolean);
+      if (!buttons.length) return;
       clearTimeout(multiplayerCopyFeedbackTimer);
       multiplayerCopyFeedbackTimer = null;
       const labels = {
@@ -343,11 +342,13 @@ export function createUIController(view) {
         copied: 'COPIED ✓',
         error: 'COPY FAILED',
       };
-      view.multiplayerCopyRoomCode.textContent = labels[state] || labels.idle;
-      view.multiplayerCopyRoomCode.dataset.copyState = state;
-      view.multiplayerCopyRoomCode.setAttribute('aria-label', state === 'copied'
-        ? 'Multiplayer room code copied'
-        : state === 'error' ? 'Could not copy multiplayer room code' : 'Copy multiplayer room code');
+      buttons.forEach(button => {
+        button.textContent = labels[state] || labels.idle;
+        button.dataset.copyState = state;
+        button.setAttribute('aria-label', state === 'copied'
+          ? 'Multiplayer room code copied'
+          : state === 'error' ? 'Could not copy multiplayer room code' : 'Copy multiplayer room code');
+      });
       if (state !== 'idle') {
         multiplayerCopyFeedbackTimer = setTimeout(() => setMultiplayerCopyFeedback('idle'), 1800);
       }
@@ -3004,6 +3005,9 @@ export function createUIController(view) {
           setMultiplayerPanelOpen(false);
         });
         view.multiplayerCopyRoomCode?.addEventListener('click', () => {
+          void copyMultiplayerRoomCode();
+        });
+        view.coopLobbyCopyRoomCode?.addEventListener('click', () => {
           void copyMultiplayerRoomCode();
         });
         view.multiplayerBack?.addEventListener('click', () => {

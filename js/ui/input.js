@@ -1910,6 +1910,7 @@ export const ui = {
     multiplayerLeaveGame: document.getElementById('multiplayerLeaveGame'),
     coopLobbyBar: document.getElementById('coopLobbyBar'),
     coopLobbyRoomCode: document.getElementById('coopLobbyRoomCode'),
+    coopLobbyCopyRoomCode: document.getElementById('coopLobbyCopyRoomCode'),
     coopLobbySlots: document.getElementById('coopLobbySlots'),
     multiplayerBack: document.getElementById('multiplayerBack'),
     multiplayerBackButton: document.getElementById('multiplayerBackButton'),

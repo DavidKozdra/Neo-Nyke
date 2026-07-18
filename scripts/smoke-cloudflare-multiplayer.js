@@ -73,8 +73,8 @@ async function main() {
     await waitForSessionStatus(host, 'waiting', 'host lobby');
 
     const roomCode = await host.evaluate(() => globalThis.Neo.gameSession.snapshot().roomCode);
-    await host.locator('#multiplayerCopyRoomCode').click();
-    await host.waitForFunction(() => document.querySelector('#multiplayerCopyRoomCode')?.textContent?.includes('COPIED'));
+    await host.locator('#coopLobbyCopyRoomCode').click();
+    await host.waitForFunction(() => document.querySelector('#coopLobbyCopyRoomCode')?.textContent?.includes('COPIED'));
     const copiedRoomCode = await host.evaluate(() => navigator.clipboard.readText());
     if (copiedRoomCode !== roomCode) throw new Error(`Clipboard contained ${copiedRoomCode} instead of ${roomCode}`);
     await guest.locator('#multiplayerRoomCode').fill(roomCode);
