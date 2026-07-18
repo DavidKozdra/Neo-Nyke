@@ -24,10 +24,10 @@
     getDeliveryIntent,
   } = protocolApi;
 
-  const LOCAL_BUILD_VERSION = '1.0.0-local';
+  const LOCAL_BUILD_VERSION = '1.0.0-mp-floor-v2';
   const LOCAL_GENERATION_VERSION = 1;
-  const LOCAL_CONTENT_HASH = 'local-test-room-v1';
-  const LOCAL_CONTENT_VERSION = 'local-test-room-v1';
+  const LOCAL_CONTENT_HASH = 'network-floor-renderer-v2';
+  const LOCAL_CONTENT_VERSION = 'network-floor-v2';
   const SNAPSHOT_RATE = 10;
   const SNAPSHOT_TICK_INTERVAL = SIMULATION_TICK_RATE / SNAPSHOT_RATE;
   const FULL_CORRECTION_TICK_INTERVAL = SIMULATION_TICK_RATE;

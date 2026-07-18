@@ -6,8 +6,14 @@ const {
   interpolatePlayers,
   predictPosition,
 } = require('../js/rendering/NetworkGameView');
+const { LOCAL_BUILD_VERSION, LOCAL_CONTENT_HASH } = require('../js/multiplayer/LocalMultiplayerSession');
 
 describe('network multiplayer game view', () => {
+  test('uses a floor-renderer compatibility identity so stale movement clients cannot join', () => {
+    expect(LOCAL_BUILD_VERSION).toBe('1.0.0-mp-floor-v2');
+    expect(LOCAL_CONTENT_HASH).toBe('network-floor-renderer-v2');
+  });
+
   test('normalizes diagonal keyboard/gamepad movement', () => {
     const movement = normalizeMovement(1, 1);
     expect(Math.hypot(movement.moveX, movement.moveY)).toBeCloseTo(1);

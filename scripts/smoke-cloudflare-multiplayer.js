@@ -24,6 +24,23 @@ async function openMultiplayer(page) {
   }
 }
 
+async function canvasHasRenderedDungeon(page) {
+  return page.evaluate(() => {
+    const canvas = document.querySelector('#c');
+    const context = canvas?.getContext('2d');
+    if (!canvas || !context) return false;
+    const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+    let visibleSamples = 0;
+    for (let y = 20; y < canvas.height; y += 80) {
+      for (let x = 20; x < canvas.width; x += 80) {
+        const offset = (y * canvas.width + x) * 4;
+        if (pixels[offset] + pixels[offset + 1] + pixels[offset + 2] > 40) visibleSamples += 1;
+      }
+    }
+    return visibleSamples >= 10;
+  });
+}
+
 async function main() {
   const browser = await chromium.launch({ headless: true });
   const hostContext = await browser.newContext();
@@ -91,20 +108,14 @@ async function main() {
     const converged = JSON.stringify(hostPlayers) === JSON.stringify(guestPlayers);
     const moved = Object.values(hostPlayers).some(player => player.x > 300)
       && Object.values(hostPlayers).some(player => player.x < 600);
-    const canvasRendered = await host.evaluate(() => {
-      const canvas = document.querySelector('#c');
-      const context = canvas?.getContext('2d');
-      if (!canvas || !context) return false;
-      const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
-      let visibleSamples = 0;
-      for (let y = 20; y < canvas.height; y += 80) {
-        for (let x = 20; x < canvas.width; x += 80) {
-          const offset = (y * canvas.width + x) * 4;
-          if (pixels[offset] + pixels[offset + 1] + pixels[offset + 2] > 40) visibleSamples += 1;
-        }
-      }
-      return visibleSamples >= 10;
-    });
+    const [hostCanvasRendered, guestCanvasRendered] = await Promise.all([
+      canvasHasRenderedDungeon(host),
+      canvasHasRenderedDungeon(guest),
+    ]);
+    const [hostRenderedPlayerCount, guestRenderedPlayerCount] = await Promise.all([
+      host.evaluate(() => globalThis.Neo.multiplayerGameView?.lastRenderedPlayerCount || 0),
+      guest.evaluate(() => globalThis.Neo.multiplayerGameView?.lastRenderedPlayerCount || 0),
+    ]);
 
     const report = {
       baseUrl,
@@ -115,7 +126,10 @@ async function main() {
       tick: hostSnapshot.gameState?.tick,
       memberCount: hostSnapshot.lobbyState?.members?.length,
       gameViewActive: await host.evaluate(() => globalThis.Neo.multiplayerGameView?.active === true),
-      canvasRendered,
+      hostCanvasRendered,
+      guestCanvasRendered,
+      hostRenderedPlayerCount,
+      guestRenderedPlayerCount,
       floorRoomCount: hostSnapshot.gameState?.floorState?.layout?.rooms?.length,
       players: hostPlayers,
       converged,
@@ -124,11 +138,22 @@ async function main() {
     };
     const screenshotPath = String(process.env.NEONYKE_MULTIPLAYER_SCREENSHOT || '').trim();
     if (screenshotPath) {
-      await host.screenshot({ path: screenshotPath, fullPage: true });
-      report.screenshotPath = screenshotPath;
+      const dot = screenshotPath.lastIndexOf('.');
+      const prefix = dot > 0 ? screenshotPath.slice(0, dot) : screenshotPath;
+      const suffix = dot > 0 ? screenshotPath.slice(dot) : '.png';
+      const hostScreenshotPath = `${prefix}-host${suffix}`;
+      const guestScreenshotPath = `${prefix}-guest${suffix}`;
+      await Promise.all([
+        host.screenshot({ path: hostScreenshotPath, fullPage: true }),
+        guest.screenshot({ path: guestScreenshotPath, fullPage: true }),
+      ]);
+      report.screenshots = { host: hostScreenshotPath, guest: guestScreenshotPath };
     }
     console.log(JSON.stringify(report, null, 2));
-    if (!converged || !moved || report.gameViewActive !== true || !canvasRendered || report.floorRoomCount < 8 || errors.length) process.exitCode = 1;
+    if (!converged || !moved || report.gameViewActive !== true
+      || !hostCanvasRendered || !guestCanvasRendered
+      || hostRenderedPlayerCount !== 2 || guestRenderedPlayerCount !== 2
+      || report.floorRoomCount < 8 || errors.length) process.exitCode = 1;
   } finally {
     await Promise.all([hostContext.close(), guestContext.close()]);
     await browser.close();

@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'neonyke-v51';
+const CACHE_VERSION = 'neonyke-v52';
 const CACHE_META = 'neonyke-cache-meta';
 const CACHE_META_KEY = '/__neonyke_cache_meta__';
 const CACHE_REFRESH_INTERVAL_MS = 5 * 60 * 60 * 1000;
