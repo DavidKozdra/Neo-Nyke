@@ -18,6 +18,7 @@
   const REVIVE_DWELL_TICKS = 40; // ~2s standing over a downed ally to bring them back.
   const REVIVE_RADIUS = 44;
   const REVIVE_HEALTH_FRACTION = 0.4;
+  const RIVAL_RESPAWN_TICKS = 60;
   const ATTACK_COOLDOWN_TICKS = 7;
   const PROJECTILE_SPEED = 520;
   const PROJECTILE_DAMAGE = 30;
@@ -60,9 +61,38 @@
     turtle_boy: Object.freeze({ maxHealth: 120, moveSpeed: 165 }),
     sarge: Object.freeze({ maxHealth: 90, moveSpeed: 165 }),
   });
+  const NETWORK_RELICS = Object.freeze({
+    iron_heart: Object.freeze({ name: 'Iron Heart', description: '+25 max HP and heal 25.', maxHealth: 25, heal: 25 }),
+    war_sigil: Object.freeze({ name: 'War Sigil', description: '+20% damage.', damageMultiplier: 0.2 }),
+    quicksilver_boots: Object.freeze({ name: 'Quicksilver Boots', description: '+12% move speed.', moveSpeedMultiplier: 0.12 }),
+    chronometer: Object.freeze({ name: 'Chronometer', description: 'Abilities recover 12% faster.', cooldownMultiplier: -0.12 }),
+    coin_charm: Object.freeze({ name: 'Coin Charm', description: '+1 gold from every coin.', goldBonus: 1 }),
+    long_reach: Object.freeze({ name: 'Long Reach', description: 'Collect drops from farther away.', pickupRadius: 55 }),
+    field_rations: Object.freeze({ name: 'Field Rations', description: 'Restore 45% health.', healFraction: 0.45 }),
+    glass_crown: Object.freeze({ name: 'Glass Crown', description: '+35% damage, -15 max HP.', damageMultiplier: 0.35, maxHealth: -15 }),
+  });
 
   function getHeroPrimaryAttack(characterKey) {
     return HERO_PRIMARY_ATTACKS[characterKey] || HERO_PRIMARY_ATTACKS.thorn_knight;
+  }
+
+  function applyNetworkRelic(player, relicId) {
+    const relic = NETWORK_RELICS[relicId];
+    if (!player || !relic) return false;
+    player.relics = Array.isArray(player.relics) ? player.relics : [];
+    player.relics.push(relicId);
+    if (relic.maxHealth) {
+      player.maxHealth = Math.max(1, Number(player.maxHealth || 100) + relic.maxHealth);
+      player.health = Math.min(player.maxHealth, Math.max(1, Number(player.health || 0) + Math.max(0, relic.maxHealth)));
+    }
+    if (relic.heal) player.health = Math.min(player.maxHealth, Number(player.health || 0) + relic.heal);
+    if (relic.healFraction) player.health = Math.min(player.maxHealth, Number(player.health || 0) + player.maxHealth * relic.healFraction);
+    if (relic.damageMultiplier) player.damageMultiplier = Math.max(0.1, Number(player.damageMultiplier || 1) + relic.damageMultiplier);
+    if (relic.moveSpeedMultiplier) player.moveSpeed = Math.max(1, Number(player.moveSpeed || 180) * (1 + relic.moveSpeedMultiplier));
+    if (relic.cooldownMultiplier) player.cooldownMultiplier = Math.max(0.45, Number(player.cooldownMultiplier || 1) + relic.cooldownMultiplier);
+    if (relic.goldBonus) player.goldBonus = Number(player.goldBonus || 0) + relic.goldBonus;
+    if (relic.pickupRadius) player.pickupRadius = Math.max(Number(player.pickupRadius || 0), relic.pickupRadius);
+    return true;
   }
 
   function applyNetworkHeroProfile(player, characterKey) {
@@ -191,6 +221,32 @@
     return encounter;
   }
 
+  function ensureNetworkRoomReward(state, random, emitEvent = () => {}, roomId = null) {
+    const room = currentRoom(state, roomId);
+    if (!room || room.type !== 'treasure') return null;
+    state.floorState.rewards = state.floorState.rewards || {};
+    if (state.floorState.rewards[room.id]) return state.floorState.rewards[room.id];
+    const stream = random.scoped(`loot:${state.floorNumber}:${room.id}`);
+    const optionIds = stream.shuffle(Object.keys(NETWORK_RELICS)).slice(0, 3);
+    const interactableId = state.allocateEntityId('interactable');
+    const chest = {
+      id: interactableId,
+      kind: 'relic_chest',
+      roomId: room.id,
+      x: Number(state.floorState.width || 900) / 2,
+      y: Number(state.floorState.height || 700) / 2,
+      radius: 34,
+      optionIds,
+      opened: false,
+      claimedBy: null,
+      spawnTick: state.tick,
+    };
+    state.interactables[interactableId] = chest;
+    state.floorState.rewards[room.id] = { interactableId, status: 'available' };
+    emitEvent('INTERACTABLE_SPAWNED', { interactableId, kind: chest.kind, roomId: room.id });
+    return chest;
+  }
+
   function nearestLivingPlayer(state, enemy) {
     let nearest = null;
     let nearestDistance = Infinity;
@@ -217,13 +273,50 @@
     enemy.vy = 0;
     enemy.deathTick = state.tick;
     emitEvent('ENEMY_DEFEATED', { enemyId: enemy.id, playerId, roomId: enemy.roomId });
+    awardEncounterExperience(state, enemy, playerId, emitEvent);
     spawnCoinDrop(state, enemy, emitEvent);
     markEncounterCleared(state, enemy.roomId, emitEvent);
   }
 
+  function xpRequiredForLevel(level) {
+    return 20 + Math.max(0, Number(level || 1) - 1) * 15;
+  }
+
+  function awardEncounterExperience(state, enemy, playerId, emitEvent) {
+    const definition = getEnemyDefinition(enemy.type) || {};
+    const amount = definition.boss ? 30 : enemy.elite ? 12 : 6;
+    const recipients = activePlayers(state).filter(player => !player.downed && player.roomId === enemy.roomId);
+    recipients.forEach(player => {
+      player.xp = Math.max(0, Number(player.xp || 0)) + amount;
+      player.level = Math.max(1, Number(player.level || 1));
+      player.xpToNext = Math.max(1, Number(player.xpToNext || xpRequiredForLevel(player.level)));
+      while (player.xp >= player.xpToNext) {
+        player.xp -= player.xpToNext;
+        player.level += 1;
+        const healthGain = 8;
+        player.maxHealth = Math.max(1, Number(player.maxHealth || 100)) + healthGain;
+        player.health = Math.min(player.maxHealth, Number(player.health || 0) + healthGain);
+        player.damageMultiplier = 1 + (player.level - 1) * 0.08;
+        player.xpToNext = xpRequiredForLevel(player.level);
+        emitEvent('PLAYER_LEVELED', { playerId: player.id, level: player.level, maxHealth: player.maxHealth });
+      }
+      emitEvent('XP_AWARDED', { playerId: player.id, sourcePlayerId: playerId, amount, xp: player.xp, level: player.level });
+    });
+    const stats = state.runStats || (state.runStats = { killsByPlayer: {}, playerKills: {}, deathsByPlayer: {} });
+    stats.killsByPlayer = stats.killsByPlayer || {};
+    stats.killsByPlayer[playerId] = Number(stats.killsByPlayer[playerId] || 0) + 1;
+    const killer = state.players?.[playerId];
+    if (killer) killer.kills = Number(killer.kills || 0) + 1;
+  }
+
+  function playerDamage(state, playerId, amount) {
+    const attacker = state.players?.[playerId];
+    return Math.max(0, Number(amount || 0)) * Math.max(0.1, Number(attacker?.damageMultiplier || 1));
+  }
+
   function damageEnemy(state, enemy, damage, playerId, emitEvent, details = {}) {
     if (!enemy || enemy.dead) return false;
-    const incoming = Math.max(0, Number(damage || 0));
+    const incoming = playerDamage(state, playerId, damage);
     const absorbed = Math.min(incoming, Math.max(0, Number(enemy.barrier || 0)));
     enemy.barrier = Math.max(0, Number(enemy.barrier || 0) - absorbed);
     const dealt = incoming - absorbed;
@@ -267,6 +360,20 @@
       .filter(candidate => candidate.distance <= range + Number(candidate.enemy.radius || 20)
         && angleDifference(candidate.angle, angle) <= arc)
       .sort((first, second) => first.distance - second.distance);
+  }
+
+  function rivalPlayers(state, player) {
+    if (!state.matchRules?.friendlyFire) return [];
+    return activePlayers(state).filter(candidate => candidate.id !== player.id
+      && !candidate.downed && candidate.roomId === player.roomId);
+  }
+
+  function rivalTargetsInArc(state, player, angle, range, arc) {
+    return rivalPlayers(state, player).filter(candidate => {
+      const distance = Math.hypot(candidate.x - player.x, candidate.y - player.y);
+      const targetAngle = Math.atan2(candidate.y - player.y, candidate.x - player.x);
+      return distance <= range + Number(candidate.radius || 18) && angleDifference(targetAngle, angle) <= arc;
+    });
   }
 
   function createPlayerProjectile(state, player, definition, angle) {
@@ -317,7 +424,9 @@
       });
       if (!candidate.enemy.dead) maybeApplyBleed(state, candidate.enemy, definition, player.id, random);
     });
-    return targets.map(candidate => candidate.enemy.id);
+    const rivals = rivalTargetsInArc(state, player, angle, Number(definition.range || 120), Number(definition.arc || 1.04));
+    rivals.forEach(target => damagePlayer(state, target, playerDamage(state, player.id, definition.damage), player.id, emitEvent, definition.weaponKey));
+    return [...targets.map(candidate => candidate.enemy.id), ...rivals.map(candidate => candidate.id)];
   }
 
   function resolveSmite(state, player, definition, angle, emitEvent) {
@@ -402,7 +511,8 @@
       segments = result.segments;
     }
 
-    player.attackCooldownUntilTick = state.tick + Number(definition.cooldownTicks || ATTACK_COOLDOWN_TICKS);
+    player.attackCooldownUntilTick = state.tick + Math.max(1, Math.ceil(Number(definition.cooldownTicks || ATTACK_COOLDOWN_TICKS)
+      * Math.max(0.45, Number(player.cooldownMultiplier || 1))));
     player.action = 'attack';
     player.actionTick = state.tick;
     player.actionKind = definition.weaponKey;
@@ -447,6 +557,28 @@
       const forward = ox * dx + oy * dy;
       const perpendicular = Math.abs(ox * -dy + oy * dx);
       return forward >= 0 && forward <= range && perpendicular <= width + Number(enemy.radius || 20);
+    });
+  }
+
+  function damageRivalsInRadius(state, player, x, y, range, damage, emitEvent, attackKind, targetIds) {
+    rivalPlayers(state, player).forEach(target => {
+      if (Math.hypot(target.x - x, target.y - y) > range + Number(target.radius || 18)) return;
+      damagePlayer(state, target, playerDamage(state, player.id, damage), player.id, emitEvent, attackKind);
+      targetIds.push(target.id);
+    });
+  }
+
+  function damageRivalsInBeam(state, player, angle, range, width, damage, emitEvent, attackKind, targetIds) {
+    const dx = Math.cos(angle);
+    const dy = Math.sin(angle);
+    rivalPlayers(state, player).forEach(target => {
+      const ox = target.x - player.x;
+      const oy = target.y - player.y;
+      const forward = ox * dx + oy * dy;
+      const perpendicular = Math.abs(ox * -dy + oy * dx);
+      if (forward < 0 || forward > range || perpendicular > width + Number(target.radius || 18)) return;
+      damagePlayer(state, target, playerDamage(state, player.id, damage), player.id, emitEvent, attackKind);
+      targetIds.push(target.id);
     });
   }
 
@@ -523,6 +655,11 @@
           damageEnemy(state, enemy, stats.damage, player.id, emitEvent, { attackKind: moveKey });
           targetIds.push(enemy.id);
         });
+        rivalPlayers(state, player).forEach(target => {
+          if (Math.abs(target.x - player.x) > 40 && Math.abs(target.y - player.y) > 40) return;
+          damagePlayer(state, target, playerDamage(state, player.id, stats.damage), player.id, emitEvent, moveKey);
+          targetIds.push(target.id);
+        });
         mode = 'cross';
       } else {
         const range = Number(stats.range || (moveKey === 'blade_justice' ? 90 : 470));
@@ -531,6 +668,7 @@
           damageEnemy(state, enemy, stats.damage, player.id, emitEvent, { attackKind: moveKey });
           targetIds.push(enemy.id);
         });
+        damageRivalsInBeam(state, player, angle, range, width, stats.damage, emitEvent, moveKey, targetIds);
         if (moveKey === 'love_beam' || moveKey === 'holy_eye_beams') {
           player.health = Math.min(Number(player.maxHealth || 100), Number(player.health || 0) + Math.max(1, targetIds.length * 4));
         }
@@ -564,11 +702,12 @@
           damageEnemy(state, enemy, stats.damage, player.id, emitEvent, { attackKind: moveKey });
           targetIds.push(enemy.id);
         });
+        damageRivalsInRadius(state, player, centerX, centerY, Number(stats.range || 140), stats.damage, emitEvent, moveKey, targetIds);
         mode = 'aoe';
       }
     }
 
-    cooldowns[moveKey] = state.tick + cooldownTicks;
+    cooldowns[moveKey] = state.tick + Math.max(1, Math.ceil(cooldownTicks * Math.max(0.45, Number(player.cooldownMultiplier || 1))));
     setPlayerAction(state, player, slot, moveKey, angle);
     emitEvent('PLAYER_ABILITY_USED', {
       playerId: player.id,
@@ -582,6 +721,46 @@
       targetIds,
     });
     return { moveKey, slot, mode, projectileIds, targetIds };
+  }
+
+  function resolvePlayerInteraction(state, player, action, emitEvent) {
+    if (!player || player.downed || player.pendingUpgrade) return false;
+    const target = state.interactables?.[action.targetEntityId];
+    if (!target || target.opened || target.roomId !== player.roomId) return false;
+    if (Math.hypot(Number(target.x) - Number(player.x), Number(target.y) - Number(player.y))
+      > Number(target.radius || 30) + Number(player.radius || 18) + 38) return false;
+    if (target.kind !== 'relic_chest' || !Array.isArray(target.optionIds) || !target.optionIds.length) return false;
+    player.pendingUpgrade = {
+      selectionEventId: target.id,
+      sourceEntityId: target.id,
+      optionIds: target.optionIds.slice(),
+      options: target.optionIds.map(optionId => ({ id: optionId, ...NETWORK_RELICS[optionId] })),
+    };
+    emitEvent('UPGRADE_OFFERED', { playerId: player.id, selectionEventId: target.id, optionIds: target.optionIds });
+    return true;
+  }
+
+  function resolveUpgradeSelection(state, player, action, emitEvent) {
+    const pending = player?.pendingUpgrade;
+    if (!pending || pending.selectionEventId !== action.selectionEventId || !pending.optionIds.includes(action.optionId)) return false;
+    const source = state.interactables?.[pending.sourceEntityId];
+    if (!source || source.opened) {
+      player.pendingUpgrade = null;
+      return false;
+    }
+    if (!applyNetworkRelic(player, action.optionId)) return false;
+    source.opened = true;
+    source.claimedBy = player.id;
+    source.openedTick = state.tick;
+    state.floorState.rewards[source.roomId].status = 'claimed';
+    player.pendingUpgrade = null;
+    emitEvent('UPGRADE_APPLIED', {
+      playerId: player.id,
+      selectionEventId: action.selectionEventId,
+      optionId: action.optionId,
+      relicCount: player.relics.length,
+    });
+    return true;
   }
 
   function updatePlayerActions(state, inputs, emitEvent, random) {
@@ -603,11 +782,15 @@
       if (attack) resolvePlayerAttack(state, player, attack, emitEvent, random);
       actions.filter(action => action?.action === 'ABILITY' || action?.action === 'DASH')
         .forEach(action => resolvePlayerAbility(state, player, action, emitEvent));
+      actions.filter(action => action?.action === 'INTERACT')
+        .forEach(action => resolvePlayerInteraction(state, player, action, emitEvent));
+      actions.filter(action => action?.action === 'UPGRADE')
+        .forEach(action => resolveUpgradeSelection(state, player, action, emitEvent));
       if (player.action !== 'idle' && state.tick - Number(player.actionTick || 0) > 4) player.action = 'idle';
     });
   }
 
-  function damagePlayer(state, player, damage, enemyId, emitEvent, attackKind = 'contact') {
+  function damagePlayer(state, player, damage, sourceId, emitEvent, attackKind = 'contact') {
     if (!player || player.downed) return;
     const incoming = Math.max(0, Number(damage || 0));
     const absorbed = Math.min(incoming, Math.max(0, Number(player.barrier || 0)));
@@ -615,10 +798,28 @@
     const dealt = incoming - absorbed;
     player.health = Math.max(0, Number(player.health || 0) - dealt);
     player.hitTick = state.tick;
-    if (player.health <= 0) player.downed = true;
+    const newlyDowned = player.health <= 0;
+    if (newlyDowned) {
+      player.downed = true;
+      player.downedAtTick = state.tick;
+      player.vx = 0;
+      player.vy = 0;
+      player.deaths = Number(player.deaths || 0) + 1;
+      const stats = state.runStats || (state.runStats = { killsByPlayer: {}, playerKills: {}, deathsByPlayer: {} });
+      stats.deathsByPlayer = stats.deathsByPlayer || {};
+      stats.deathsByPlayer[player.id] = Number(stats.deathsByPlayer[player.id] || 0) + 1;
+      if (state.players?.[sourceId] && sourceId !== player.id) {
+        const attacker = state.players[sourceId];
+        attacker.playerKills = Number(attacker.playerKills || 0) + 1;
+        stats.playerKills = stats.playerKills || {};
+        stats.playerKills[sourceId] = Number(stats.playerKills[sourceId] || 0) + 1;
+      }
+      emitEvent('PLAYER_DOWNED', { playerId: player.id, sourceId, roomId: player.roomId, attackKind });
+    }
     emitEvent('PLAYER_HIT', {
       playerId: player.id,
-      enemyId,
+      enemyId: state.players?.[sourceId] ? undefined : sourceId,
+      sourcePlayerId: state.players?.[sourceId] ? sourceId : undefined,
       damage: dealt,
       absorbed,
       health: player.health,
@@ -834,6 +1035,19 @@
         damagePlayer(state, player, projectile.damage, projectile.ownerId, emitEvent, projectile.attackKind);
         return;
       }
+      if (state.matchRules?.friendlyFire) {
+        const rival = Object.values(state.players || {}).find(candidate => (
+          candidate && candidate.id !== projectile.ownerId && !candidate.downed
+            && candidate.roomId === projectile.roomId
+            && Math.hypot(candidate.x - projectile.x, candidate.y - projectile.y)
+              <= Number(candidate.radius || 18) + Number(projectile.radius || 8)
+        ));
+        if (rival) {
+          damagePlayer(state, rival, playerDamage(state, projectile.ownerId, projectile.damage), projectile.ownerId, emitEvent, projectile.attackKind);
+          delete state.projectiles[projectileId];
+          return;
+        }
+      }
       const hitIds = new Set(Array.isArray(projectile.hitEnemyIds) ? projectile.hitEnemyIds : []);
       const enemy = livingEncounterEnemies(state, projectile.roomId).find(candidate => (
         !hitIds.has(candidate.id)
@@ -869,18 +1083,19 @@
   function updatePickups(state, emitEvent) {
     Object.entries(state.pickups || {}).forEach(([pickupId, pickup]) => {
       const player = Object.values(state.players || {}).find(candidate => (
-        candidate && !candidate.downed && candidate.roomId === pickup.roomId
+          candidate && !candidate.downed && candidate.roomId === pickup.roomId
           && Math.hypot(candidate.x - pickup.x, candidate.y - pickup.y)
-            <= Number(candidate.radius || 18) + Number(pickup.radius || 13) + 5
+            <= Number(candidate.radius || 18) + Number(pickup.radius || 13) + 5 + Number(candidate.pickupRadius || 0)
       ));
       if (!player) return;
-      player.gold = Math.max(0, Number(player.gold || 0)) + Math.max(0, Number(pickup.amount || 0));
+      const amount = Math.max(0, Number(pickup.amount || 0)) + Math.max(0, Number(player.goldBonus || 0));
+      player.gold = Math.max(0, Number(player.gold || 0)) + amount;
       delete state.pickups[pickupId];
       emitEvent('PICKUP_COLLECTED', {
         pickupId,
         playerId: player.id,
         pickupType: pickup.type,
-        amount: pickup.amount,
+        amount,
         gold: player.gold,
       });
     });
@@ -982,8 +1197,9 @@
     Object.values(state.interactables || {}).forEach(stairs => {
       if (stairs.kind !== 'stairs') return;
       stairs.dwellByPlayer = stairs.dwellByPlayer || {};
+      const players = activePlayers(state);
       let charging = false;
-      activePlayers(state).forEach(player => {
+      players.forEach(player => {
         if (player.downed || player.roomId !== stairs.roomId) {
           delete stairs.dwellByPlayer[player.id];
           return;
@@ -997,19 +1213,38 @@
         charging = true;
         stairs.dwellByPlayer[player.id] = Number(stairs.dwellByPlayer[player.id] || 0) + 1;
       });
-      const dwell = Math.max(0, ...Object.values(stairs.dwellByPlayer), 0);
+      const firstPlayerWins = state.matchRules?.floorAdvance === 'first';
+      const requiredPlayers = firstPlayerWins ? players.filter(player => !player.downed) : players;
+      const dwellValues = requiredPlayers.map(player => Number(stairs.dwellByPlayer[player.id] || 0));
+      const dwell = firstPlayerWins
+        ? Math.max(0, ...dwellValues, 0)
+        : (dwellValues.length ? Math.min(...dwellValues) : 0);
+      stairs.requiredPlayers = requiredPlayers.length;
+      stairs.readyPlayers = dwellValues.filter(value => value > 0).length;
       stairs.dwellProgress = Math.min(1, dwell / STAIRS_DWELL_TICKS);
-      if (charging && stairs.dwellTelegraphTick !== state.tick && dwell === 1) {
+      if (charging && stairs.dwellTelegraphTick !== state.tick && Math.max(0, ...dwellValues, 0) === 1) {
         stairs.dwellTelegraphTick = state.tick;
-        emitEvent('STAIRS_ENGAGED', { interactableId: stairs.id, roomId: stairs.roomId });
+        emitEvent('STAIRS_ENGAGED', {
+          interactableId: stairs.id,
+          roomId: stairs.roomId,
+          requiredPlayers: requiredPlayers.length,
+          rule: firstPlayerWins ? 'first' : 'all',
+        });
       }
       if (dwell < STAIRS_DWELL_TICKS) return;
       if (stairs.final) {
+        const finisherId = Object.entries(stairs.dwellByPlayer)
+          .sort((first, second) => Number(second[1]) - Number(first[1]))[0]?.[0] || null;
+        if (state.matchRules?.mode === 'rival') {
+          state.runStats = state.runStats || {};
+          state.runStats.winnerPlayerId = finisherId;
+        }
         state.status = 'ended';
         emitEvent('RUN_ENDED', {
           result: 'victory',
-          reason: 'god-floor-cleared',
+          reason: state.matchRules?.mode === 'rival' ? 'rival-first-finish' : 'god-floor-cleared',
           floorNumber: Number(state.floorNumber || 1),
+          winnerPlayerId: state.matchRules?.mode === 'rival' ? finisherId : null,
         });
       } else {
         advanceToNextFloor(state, emitEvent);
@@ -1023,6 +1258,25 @@
     const players = activePlayers(state);
     if (!players.length) return;
     const living = players.filter(player => !player.downed);
+    if (state.matchRules?.mode === 'rival') {
+      players.filter(player => player.downed).forEach(player => {
+        const downedAtTick = Number(player.downedAtTick ?? state.tick);
+        if (state.tick - downedAtTick < RIVAL_RESPAWN_TICKS) {
+          player.reviveProgress = Math.min(1, (state.tick - downedAtTick) / RIVAL_RESPAWN_TICKS);
+          return;
+        }
+        const startRoomId = state.floorState?.layout?.startRoomId || state.floorState?.currentRoomId;
+        player.downed = false;
+        player.downedAtTick = null;
+        player.reviveProgress = 0;
+        player.health = Math.max(1, Math.round(Number(player.maxHealth || 100) * 0.75));
+        player.roomId = startRoomId;
+        player.x = Number(state.floorState?.width || 900) / 2;
+        player.y = Number(state.floorState?.height || 700) / 2;
+        emitEvent('PLAYER_RESPAWNED', { playerId: player.id, roomId: startRoomId, health: player.health });
+      });
+      return;
+    }
     players.forEach(downedPlayer => {
       if (!downedPlayer.downed) {
         downedPlayer.reviveProgress = 0;
@@ -1071,7 +1325,10 @@
       const occupiedRoomIds = new Set(Object.values(state.players || {})
         .filter(player => player && !player.disconnected)
         .map(player => player.roomId));
-      occupiedRoomIds.forEach(roomId => ensureNetworkEncounter(state, random, emitEvent, roomId));
+      occupiedRoomIds.forEach(roomId => {
+        ensureNetworkEncounter(state, random, emitEvent, roomId);
+        ensureNetworkRoomReward(state, random, emitEvent, roomId);
+      });
       updatePlayerActions(state, inputs, emitEvent, random);
       updateEnemies(state, fixedDelta, emitEvent);
       updateProjectiles(state, fixedDelta, emitEvent);
@@ -1080,15 +1337,21 @@
   }
 
   return {
+    STAIRS_DWELL_TICKS,
+    REVIVE_DWELL_TICKS,
+    RIVAL_RESPAWN_TICKS,
     ATTACK_COOLDOWN_TICKS,
     PROJECTILE_DAMAGE,
     PROJECTILE_SPEED,
     HERO_PRIMARY_ATTACKS,
     HERO_BASE_STATS,
+    NETWORK_RELICS,
     ENEMY_ARCHETYPES,
     getHeroPrimaryAttack,
     applyNetworkHeroProfile,
+    applyNetworkRelic,
     ensureNetworkEncounter,
+    ensureNetworkRoomReward,
     isNetworkRoomLocked,
     livingEncounterEnemies,
     resolvePlayerAbility,

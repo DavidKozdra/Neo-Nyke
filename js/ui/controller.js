@@ -98,6 +98,7 @@ export function createUIController(view) {
       if (view.multiplayerCreateRoom) view.multiplayerCreateRoom.disabled = !enabled || multiplayerRequestBusy;
       if (view.multiplayerJoinRoom) view.multiplayerJoinRoom.disabled = !enabled || multiplayerRequestBusy;
       if (view.multiplayerRoomCode) view.multiplayerRoomCode.disabled = !enabled || multiplayerRequestBusy;
+      if (view.multiplayerMode) view.multiplayerMode.disabled = !enabled || multiplayerRequestBusy;
       if (view.multiplayerDevelopmentNote) {
         view.multiplayerDevelopmentNote.textContent = enabled
           ? 'Development multiplayer is enabled. Create or join an authoritative test room.'
@@ -319,6 +320,8 @@ export function createUIController(view) {
         view.multiplayerRoomStatus.textContent = latestError?.message || statusMessages[snapshot.status] || 'Preparing multiplayer…';
       }
       const members = Array.isArray(snapshot.lobbyState?.members) ? snapshot.lobbyState.members : [];
+      const multiplayerMode = snapshot.lobbyState?.mode === 'rival' ? 'RIVAL' : 'CO-OP';
+      if (view.multiplayerRoomCodeDisplay && roomCode) view.multiplayerRoomCodeDisplay.textContent = `${multiplayerMode} • ROOM ${roomCode}`;
       const multiplayerCharacterNames = MULTIPLAYER_CHARACTER_NAMES;
       if (view.multiplayerMemberList) {
         view.multiplayerMemberList.replaceChildren(...members.map(member => {
@@ -3017,7 +3020,8 @@ export function createUIController(view) {
         view.newRunBtn?.addEventListener('click', handlers.onOpenCharacterSelect);
         view.multiplayerBtn?.addEventListener('click', () => setMultiplayerPanelOpen(true));
         view.multiplayerCreateRoom?.addEventListener('click', () => {
-          void runBrowserMultiplayerAction(session => session.createRoom());
+          const mode = view.multiplayerMode?.value === 'rival' ? 'rival' : 'coop';
+          void runBrowserMultiplayerAction(session => session.createRoom({ mode, maxPlayers: 4 }));
         });
         view.multiplayerJoinRoom?.addEventListener('click', () => {
           const code = view.multiplayerRoomCode?.value || '';

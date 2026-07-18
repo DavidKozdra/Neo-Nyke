@@ -979,7 +979,14 @@
         <div class="altmode-card__icon" aria-hidden="true">+</div>
         <div class="altmode-card__text">
           <h3 class="altmode-card__name">CREATE ROOM</h3>
-          <p class="altmode-card__desc">Create an authoritative Cloudflare room and share its code with up to three other players.</p>
+          <p class="altmode-card__desc">Run a co-op expedition or a rival dungeon where heroes can fight each other.</p>
+          <label class="multiplayer-character-picker multiplayer-mode-picker">
+            <span>RULES</span>
+            <select id="multiplayerMode" aria-label="Multiplayer rules">
+              <option value="coop">CO-OP EXPEDITION</option>
+              <option value="rival">RIVAL EXPEDITION (PVP)</option>
+            </select>
+          </label>
         </div>
         <button id="multiplayerCreateRoom" class="nav-btn altmode-card__btn" type="button" disabled>CREATE</button>
       </div>

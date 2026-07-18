@@ -26,16 +26,23 @@
     getDeliveryIntent,
   } = protocolApi;
 
-  const LOCAL_BUILD_VERSION = '1.0.0-independent-rooms-v8';
+  const LOCAL_BUILD_VERSION = '1.0.0-network-runs-v9';
   const LOCAL_GENERATION_VERSION = 1;
-  const LOCAL_CONTENT_HASH = 'shared-neo-independent-rooms-v8';
-  const LOCAL_CONTENT_VERSION = 'shared-neo-independent-rooms-v8';
+  const LOCAL_CONTENT_HASH = 'shared-neo-network-runs-v9';
+  const LOCAL_CONTENT_VERSION = 'shared-neo-network-runs-v9';
   const SNAPSHOT_RATE = 10;
   const SNAPSHOT_TICK_INTERVAL = SIMULATION_TICK_RATE / SNAPSHOT_RATE;
   const FULL_CORRECTION_TICK_INTERVAL = SIMULATION_TICK_RATE;
   const TEST_ROOM = Object.freeze({ id: 'network-start-room', width: 900, height: 700, wallThickness: 28, doorWidth: 140 });
   const PLAYER_CHARACTERS = Object.freeze(['thorn_knight', 'metao', 'gelleh', 'mooggy']);
   const SELECTABLE_CHARACTERS = Object.freeze(['princess', 'thorn_knight', 'metao', 'gelleh', 'mooggy', 'turtle_boy', 'sarge']);
+  const RECONNECT_RESERVATION_TICKS = SIMULATION_TICK_RATE * 45;
+
+  function createReconnectToken() {
+    const uuid = globalThis.crypto?.randomUUID?.();
+    if (uuid) return `reconnect-${uuid}`;
+    return `reconnect-${Date.now()}-${Math.floor(Math.random() * 1e9)}`;
+  }
 
   function createNetworkFloorState(options = {}) {
     const layout = typeof generateFloorLayout === 'function'
@@ -132,7 +139,10 @@
     return ({ state, inputs, fixedDelta }) => {
       const players = Object.values(state.players);
       for (const player of players) {
-        if (!player || player.disconnected) continue;
+        if (!player || player.disconnected || player.downed) {
+          if (player) { player.vx = 0; player.vy = 0; }
+          continue;
+        }
         const input = inputs[player.id] || {};
         let moveX = Number(input.moveX) || 0;
         let moveY = Number(input.moveY) || 0;
@@ -189,6 +199,7 @@
       this.contentHash = String(options.contentHash || LOCAL_CONTENT_HASH);
       this.contentVersion = String(options.contentVersion || LOCAL_CONTENT_VERSION);
       this.matchSeed = options.matchSeed ?? 'local-match-seed';
+      this.mode = options.mode === 'rival' ? 'rival' : 'coop';
       this.outgoingSequence = 0;
       this.snapshotSequence = 0;
       this.peerRecords = new Map();
@@ -201,6 +212,7 @@
       this.seenReliableSequences = new Map();
       this.lastReplaceableSequence = new Map();
       this.invalidMessageCount = new Map();
+      this.reconnectReservations = new Map();
       this.metrics = {
         acceptedInputs: 0,
         duplicateInputs: 0,
@@ -218,6 +230,7 @@
         generationVersion: this.generationVersion,
         contentVersion: this.contentVersion,
         status: 'waiting',
+        matchRules: { mode: this.mode },
         floorState: createNetworkFloorState({
           matchSeed: this.matchSeed,
           floorSeed,
@@ -283,6 +296,8 @@
         case 'PLAYER_READY': this._handleReady(peerId, message.payload); break;
         case 'PLAYER_INPUT': this._handleInput(peerId, message.payload); break;
         case 'PLAYER_ACTION': this._handleAction(peerId, message.payload); break;
+        case 'INTERACT_REQUEST': this._handleInteract(peerId, message.payload); break;
+        case 'UPGRADE_SELECTION': this._handleUpgrade(peerId, message.payload); break;
         case 'PING': this._send(peerId, 'PONG', {
           nonce: message.payload.nonce,
           clientTime: message.payload.clientTime,
@@ -324,6 +339,43 @@
         this._send(peerId, 'JOIN_REJECTED', { code: 'INVALID_SESSION', message: 'The local multiplayer session does not exist.' });
         return;
       }
+      const reservation = payload.reconnectToken && this.reconnectReservations.get(payload.reconnectToken);
+      if (reservation && reservation.deadlineTick >= this.simulation.state.tick
+        && reservation.deadlineAt >= Date.now() && this.simulation.state.players[reservation.playerId]) {
+        const player = this.simulation.state.players[reservation.playerId];
+        this.reconnectReservations.delete(payload.reconnectToken);
+        this.playerIdByPeer.set(peerId, player.id);
+        record.playerId = player.id;
+        record.ready = true;
+        record.reconnectToken = payload.reconnectToken;
+        player.peerId = peerId;
+        player.disconnected = false;
+        player.reconnectDeadlineTick = null;
+        player.reconnectDeadlineAt = null;
+        this.pendingInputs[player.id] = { moveX: 0, moveY: 0, aimDirection: player.aimDirection || 0, buttons: 0 };
+        this.pendingActions[player.id] = [];
+        this.lastProcessedInput[player.id] = -1;
+        this.lastProcessedAction[player.id] = -1;
+        this._send(peerId, 'JOIN_ACCEPTED', {
+          matchId: this.simulation.state.matchId,
+          sessionId: this.sessionId,
+          playerId: player.id,
+          reconnectToken: payload.reconnectToken,
+        });
+        this._send(peerId, 'INITIAL_STATE', {
+          serverTick: this.simulation.state.tick,
+          state: this.simulation.state.snapshot(),
+          lastProcessedInput: { ...this.lastProcessedInput },
+        });
+        this._broadcastLobbyState();
+        this._broadcast('GAMEPLAY_EVENT', {
+          eventId: this.simulation.state.allocateEntityId('event'),
+          eventType: 'PLAYER_RECONNECTED',
+          data: { playerId: player.id, tick: this.simulation.state.tick },
+        });
+        return;
+      }
+      if (payload.reconnectToken && reservation) this.reconnectReservations.delete(payload.reconnectToken);
       if (this.simulation.state.status !== 'waiting') {
         this._send(peerId, 'JOIN_REJECTED', { code: 'MATCH_STARTED', message: 'The local multiplayer match has already started.' });
         return;
@@ -338,6 +390,7 @@
       this.playerIdByPeer.set(peerId, playerId);
       record.playerId = playerId;
       record.ready = false;
+      record.reconnectToken = createReconnectToken();
       this.simulation.state.players[playerId] = {
         id: playerId,
         peerId,
@@ -351,6 +404,13 @@
         maxHealth: 100,
         health: 100,
         gold: 0,
+        level: 1,
+        xp: 0,
+        xpToNext: 20,
+        damageMultiplier: 1,
+        kills: 0,
+        playerKills: 0,
+        deaths: 0,
         downed: false,
         action: 'idle',
         actionTick: -1,
@@ -370,6 +430,7 @@
         matchId: this.simulation.state.matchId,
         sessionId: this.sessionId,
         playerId,
+        reconnectToken: record.reconnectToken,
       });
       this._broadcastLobbyState();
     }
@@ -435,6 +496,28 @@
       this.metrics.acceptedActions += 1;
     }
 
+    _handleInteract(peerId, payload) {
+      const playerId = this.playerIdByPeer.get(peerId);
+      if (!playerId || this.simulation.state.status !== 'running') return;
+      const queue = this.pendingActions[playerId] || (this.pendingActions[playerId] = []);
+      if (queue.length < 8) queue.push({
+        action: 'INTERACT',
+        targetEntityId: payload.targetEntityId,
+        inputSequence: payload.inputSequence,
+      });
+    }
+
+    _handleUpgrade(peerId, payload) {
+      const playerId = this.playerIdByPeer.get(peerId);
+      if (!playerId || this.simulation.state.status !== 'running') return;
+      const queue = this.pendingActions[playerId] || (this.pendingActions[playerId] = []);
+      if (queue.length < 8) queue.push({
+        action: 'UPGRADE',
+        selectionEventId: payload.selectionEventId,
+        optionId: payload.optionId,
+      });
+    }
+
     _queueGameplayEvent(eventType, data = {}) {
       // The floor-progression system signals a finished run via a RUN_ENDED
       // sim event; capture its details so step() can send the dedicated
@@ -446,6 +529,7 @@
           floorNumber: Math.max(1, Math.trunc(Number(data.floorNumber) || 1)),
         };
       }
+      if (eventType === 'FLOOR_ADVANCED') this.pendingFloorTransition = cloneSerializable(data);
       this.pendingGameplayEvents.push({
         eventType: String(eventType || 'UNKNOWN').slice(0, 64),
         data: { ...cloneSerializable(data), tick: this.simulation.state.tick },
@@ -499,6 +583,7 @@
         members,
         minPlayers: this.minPlayers,
         maxPlayers: this.maxPlayers,
+        mode: this.mode,
       });
     }
 
@@ -522,15 +607,33 @@
       const peerId = identity?.id;
       const playerId = this.playerIdByPeer.get(peerId);
       if (!playerId) return;
+      const record = this.peerRecords.get(peerId);
       this.playerIdByPeer.delete(peerId);
       this.peerRecords.delete(peerId);
       delete this.pendingInputs[playerId];
       delete this.pendingActions[playerId];
       delete this.lastProcessedInput[playerId];
       delete this.lastProcessedAction[playerId];
-      delete this.simulation.state.players[playerId];
+      const player = this.simulation.state.players[playerId];
+      const canReconnect = this.simulation.state.status === 'running' && player && record?.reconnectToken;
+      if (canReconnect) {
+        const deadlineTick = this.simulation.state.tick + RECONNECT_RESERVATION_TICKS;
+        const deadlineAt = Date.now() + (RECONNECT_RESERVATION_TICKS / SIMULATION_TICK_RATE) * 1000;
+        player.disconnected = true;
+        player.reconnectDeadlineTick = deadlineTick;
+        player.reconnectDeadlineAt = deadlineAt;
+        player.vx = 0;
+        player.vy = 0;
+        this.reconnectReservations.set(record.reconnectToken, { playerId, deadlineTick, deadlineAt });
+      } else {
+        delete this.simulation.state.players[playerId];
+      }
       if (this.transport.sessionId) {
-        this._broadcast('PLAYER_DISCONNECTED', { playerId, reason: String(reason || 'disconnected').slice(0, 96) });
+        this._broadcast('PLAYER_DISCONNECTED', {
+          playerId,
+          reason: String(reason || 'disconnected').slice(0, 96),
+          ...(canReconnect ? { reconnectDeadline: this.simulation.state.elapsedSeconds + RECONNECT_RESERVATION_TICKS / SIMULATION_TICK_RATE } : {}),
+        });
         this._broadcastLobbyState();
       }
     }
@@ -544,7 +647,23 @@
           { ...input, actions: (this.pendingActions[playerId] || []).splice(0) },
         ]));
         this.simulation.updateGame(tickInputs, FIXED_DELTA_SECONDS);
+        this._expireReconnectReservations();
+        const floorTransition = this.pendingFloorTransition;
+        this.pendingFloorTransition = null;
         this._flushGameplayEvents();
+        if (floorTransition) {
+          this._broadcast('FLOOR_TRANSITION', {
+            floorNumber: this.simulation.state.floorNumber,
+            floorSeed: this.simulation.state.floorSeed,
+            transitionTick: this.simulation.state.tick,
+            spawnPoints: Object.fromEntries(Object.values(this.simulation.state.players).map(player => [player.id, {
+              roomId: player.roomId, x: player.x, y: player.y,
+            }])),
+            generationVersion: this.generationVersion,
+            contentVersion: this.contentVersion,
+          });
+          this._publishSnapshot(true);
+        }
         if (this.simulation.state.status === 'ended') {
           // A run just finished (victory on the god floor, or party wipe). Send
           // a final full snapshot so clients see the terminal world, then the
@@ -560,6 +679,15 @@
       return this.simulation.state;
     }
 
+    _expireReconnectReservations() {
+      this.reconnectReservations.forEach((reservation, token) => {
+        if (reservation.deadlineTick > this.simulation.state.tick && reservation.deadlineAt > Date.now()) return;
+        this.reconnectReservations.delete(token);
+        delete this.simulation.state.players[reservation.playerId];
+        this._broadcast('PLAYER_DISCONNECTED', { playerId: reservation.playerId, reason: 'reconnect-timeout' });
+      });
+    }
+
     _broadcastRunEnded() {
       if (this.runEndedBroadcast) return;
       this.runEndedBroadcast = true;
@@ -571,6 +699,8 @@
         summary: {
           floorNumber: end.floorNumber,
           elapsedSeconds: Math.round(Number(this.simulation.state.elapsedSeconds || 0)),
+          mode: this.mode,
+          runStats: cloneSerializable(this.simulation.state.runStats || {}),
           players: players.map(player => ({
             playerId: player.id,
             characterKey: player.characterKey,
@@ -627,6 +757,8 @@
       this.outgoingSequence = 0;
       this.inputSequence = 0;
       this.actionSequence = 0;
+      this.interactionSequence = 0;
+      this.reconnectToken = null;
       this.authorityPeerId = null;
       this.sessionId = null;
       this.playerId = null;
@@ -660,7 +792,10 @@
         contentHash: this.contentHash,
         requestedIdentityProvider: this.transport.identity.provider,
       });
-      this._send('JOIN_MATCH', { sessionId: this.sessionId });
+      this._send('JOIN_MATCH', {
+        sessionId: this.sessionId,
+        ...(this.reconnectToken ? { reconnectToken: this.reconnectToken } : {}),
+      });
       return joined;
     }
 
@@ -715,6 +850,21 @@
       return this.sendAction('DASH', aimDirection, { abilityId });
     }
 
+    sendInteract(targetEntityId) {
+      if (this.status !== 'running') throw new Error('Client match is not running');
+      const inputSequence = this.interactionSequence++;
+      this._send('INTERACT_REQUEST', { targetEntityId: String(targetEntityId || ''), inputSequence });
+      return inputSequence;
+    }
+
+    sendUpgrade(selectionEventId, optionId) {
+      if (this.status !== 'running') throw new Error('Client match is not running');
+      this._send('UPGRADE_SELECTION', {
+        selectionEventId: String(selectionEventId || ''),
+        optionId: String(optionId || ''),
+      });
+    }
+
     ping(nonce = `ping-${this.outgoingSequence}`) {
       this._send('PING', { nonce, clientTime: Math.max(0, this.transport.network?.clock?.now?.() || Date.now()) });
     }
@@ -736,6 +886,7 @@
         case 'SERVER_HELLO': this.status = 'handshaking'; break;
         case 'JOIN_ACCEPTED':
           this.playerId = message.payload.playerId;
+          this.reconnectToken = message.payload.reconnectToken || this.reconnectToken;
           this.status = 'waiting';
           break;
         case 'JOIN_REJECTED':
@@ -758,6 +909,12 @@
           break;
         case 'PLAYER_DISCONNECTED':
           if (this.state) delete this.state.players[message.payload.playerId];
+          break;
+        case 'FLOOR_TRANSITION':
+          if (this.state) {
+            this.state.floorNumber = message.payload.floorNumber;
+            this.state.floorSeed = message.payload.floorSeed;
+          }
           break;
         case 'RUN_ENDED': this.status = 'ended'; break;
         case 'ERROR':
@@ -799,6 +956,7 @@
     LOCAL_GENERATION_VERSION,
     LOCAL_CONTENT_HASH,
     LOCAL_CONTENT_VERSION,
+    RECONNECT_RESERVATION_TICKS,
     SNAPSHOT_RATE,
     TEST_ROOM,
     SELECTABLE_CHARACTERS,

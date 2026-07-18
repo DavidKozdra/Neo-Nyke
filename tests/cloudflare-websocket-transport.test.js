@@ -64,9 +64,10 @@ describe('CloudflareWebSocketTransport', () => {
       fetch,
       WebSocket: FakeWebSocket,
     });
-    const created = await transport.createSession();
+    const created = await transport.createSession({ mode: 'rival', maxPlayers: 3 });
     expect(created).toEqual(expect.objectContaining({ roomCode: 'ABC234', sessionId: 'ABC234' }));
     expect(fetch).toHaveBeenCalledWith('https://game.example/api/multiplayer/rooms', expect.objectContaining({ method: 'POST' }));
+    expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({ mode: 'rival', maxPlayers: 3 });
     expect(FakeWebSocket.instances).toHaveLength(0);
   });
 

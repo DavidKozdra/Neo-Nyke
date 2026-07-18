@@ -1,6 +1,6 @@
 # Neo Nyke multiplayer architecture
 
-Status: playable Cloudflare combat/exploration vertical slice. Room routes, a room-authoritative Durable Object, browser WebSockets, authority-validated character selection, two-client ready state, a shared deterministic floor layout, seeded encounters, server-owned enemy AI/projectiles/damage/death/drops/currency, real primary/laser/smash/dash move IDs and cooldowns, locked-room traversal, the complete shared enemy catalog, campaign presentation adapters, local prediction, and remote interpolation are implemented. Full per-enemy boss scripting, progression, complete runs, production deployment, reconnect, Electron, and Steamworks are not implemented yet.
+Status: playable authoritative network-run slice. Cloudflare rooms now support 2–4 player Co-op Expedition and Rival Expedition rules, independent occupied-room simulation, ten deterministic floors, group-gated co-op floor exits, bosses and terminal victory/defeat, down/revive, Rival PvP/respawn, shared combat XP/levels, seeded relic chests with server-validated choices, reliable floor transitions, and 45-second reconnect reservations. Full legacy item/shop/forge parity, authored per-boss scripting, authority-owned structures/hazards, durable cold-restart recovery, production deployment, Electron, and Steamworks are not implemented yet.
 
 ## Required layering
 
@@ -34,7 +34,7 @@ The supported local room workflow is:
 ```text
 npm run multiplayer:dev
 open http://127.0.0.1:8787 in two browser windows
-Multiplayer → Create Room / Join Room → Ready
+Multiplayer → choose Co-op or Rival → Create Room / Join Room → Ready
 ```
 
 To opt into the same development flag on another explicitly trusted development origin, use the browser console:
@@ -169,7 +169,7 @@ Initial co-op supports 2–4 players. Room location is per player: one player cr
 
 The normal multiplayer screen uses the campaign HUD rather than a separate always-on debug HUD. Escape opens a local multiplayer menu (the authority keeps running) with Resume, Info, Settings, and Leave Server. Network diagnostics will return as an opt-in debug overlay rather than replacing gameplay presentation.
 
-Upgrade and Scroll choices cannot globally pause active multiplayer combat. Initial multiplayer choices should occur in an inter-floor safe state. Offline single-player retains its current pause behavior.
+Upgrade choices never globally pause multiplayer. Treasure chests publish a personal authoritative choice in player state; the receiving player selects with 1–3 while every occupied room continues simulating. Offline single-player retains its current pause behavior.
 
 Reconnect reservations initially last 30–60 seconds and bind to authenticated session identity, never only to a client-provided player ID. Authority validates protocol/build/generation/content version, message size/type/rate, sender/room membership, sequence, movement limits, cooldowns, interaction range, item eligibility, and currency transitions. Repeatedly invalid clients are rate-limited and disconnected.
 
@@ -183,6 +183,6 @@ Steam Networking Sockets/SDR is a later alternate transport only. It would chang
 
 ## Current milestone and next gate
 
-Milestones A–C now have a playable vertical proof: room creation/joining, hero choice, ready state, 2–4 authoritative players, seeded 8–10-room floors and encounters, locked doors, shared party traversal, click/Space primaries, right-click lasers, R smashes, Shift mobility, authoritative cooldowns/projectiles/hits/contact damage/death, exactly-once coin drops and collection, campaign render/audio/HUD reuse, prediction/interpolation, and disconnect cleanup. The authority can instantiate the complete standard/boss roster and elite metadata through generic behavior roles. Automated tests cover catalog completeness, equipped-action validation, authoritative outcomes, and combat-to-traversal.
+Milestones A–D now have a playable network-run proof: room creation/joining, selectable Co-op/Rival rules, hero choice, ready state, 2–4 authoritative players, seeded multi-floor encounters, locked doors, players splitting across persistent rooms, complete input slots, server combat/PvP, shared XP and automatic levels, exactly-once coins and relic claims, party-gated stairs, down/revive or Rival respawn, run results, campaign presentation reuse, prediction/interpolation, and reconnect recovery. Automated tests cover catalog completeness, protocol validation, progression races, floor consensus, fault-injected convergence, PvP, and reconnect identity continuity.
 
-The next gate is behavior fidelity: port each move's hold/charge/channel/special rules and each catalog enemy's existing AI script onto the shared headless primitives, then add authority-owned structures/hazards, chests/items/XP, shops/upgrades, floor exits, bosses, defeat/revive, and complete-run results. Latency diagnostics, stronger reconciliation, reconnect reservations, and a complete run remain required before Cloudflare multiplayer can be called proven. Electron and Steam remain out of scope until then.
+The next gate is content fidelity and operations: port each move's hold/charge/channel rules and each catalog enemy's authored AI script; extract the full legacy relic, shop, forge, structure, hazard, challenge, and boss systems; persist authority checkpoints in Durable Object storage; then load-test CPU, bandwidth, snapshot size, reconnect, and abuse limits. The current run lifecycle is real, but it must not be represented as complete legacy-campaign parity until those ports land. Electron and Steam remain out of scope until the Cloudflare run survives that gate.

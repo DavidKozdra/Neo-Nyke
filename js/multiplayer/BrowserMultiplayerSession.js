@@ -1,11 +1,11 @@
 (function initializeBrowserMultiplayerSession(root, factory) {
-  const api = factory(root.NeoNyke?.multiplayer || {});
+  const api = factory(root, root.NeoNyke?.multiplayer || {});
   const namespace = root.NeoNyke = root.NeoNyke || {};
   namespace.multiplayer = namespace.multiplayer || {};
   Object.assign(namespace.multiplayer, api);
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function createBrowserMultiplayerSessionApi(browserMultiplayerApi) {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function createBrowserMultiplayerSessionApi(root, browserMultiplayerApi) {
   'use strict';
 
   const cloudflareApi = typeof require === 'function' ? require('./CloudflareWebSocketTransport.js') : browserMultiplayerApi;
@@ -22,8 +22,14 @@
       this.client = new Client({ transport: this.transport, ...options.clientOptions });
       this.roomCode = null;
       this.listeners = new Set();
+      this.disposed = false;
+      this.reconnectAttempts = 0;
+      this.reconnectTimer = null;
       this.unsubscribeMessage = this.transport.onMessage(() => queueMicrotask(() => this._notify()));
-      this.unsubscribeDisconnect = this.transport.onPeerDisconnected(() => queueMicrotask(() => this._notify()));
+      this.unsubscribeDisconnect = this.transport.onPeerDisconnected(() => {
+        queueMicrotask(() => this._notify());
+        this._scheduleReconnect();
+      });
     }
 
     async createRoom(options = {}) {
@@ -57,6 +63,22 @@
       return this.client.sendAction(action, aimDirection);
     }
 
+    sendAbility(abilityId, aimDirection) {
+      return this.client.sendAbility(abilityId, aimDirection);
+    }
+
+    sendDash(abilityId, aimDirection) {
+      return this.client.sendDash(abilityId, aimDirection);
+    }
+
+    sendInteract(targetEntityId) {
+      return this.client.sendInteract(targetEntityId);
+    }
+
+    sendUpgrade(selectionEventId, optionId) {
+      return this.client.sendUpgrade(selectionEventId, optionId);
+    }
+
     subscribe(handler) {
       if (typeof handler !== 'function') throw new TypeError('Browser multiplayer listener must be a function');
       this.listeners.add(handler);
@@ -81,7 +103,29 @@
       this.listeners.forEach(listener => listener(snapshot));
     }
 
+    _scheduleReconnect() {
+      if (this.disposed || !this.roomCode || !this.client.reconnectToken || this.reconnectTimer !== null) return;
+      const delay = Math.min(8_000, 750 * (2 ** Math.min(this.reconnectAttempts, 4)));
+      this.reconnectTimer = root.setTimeout?.(async () => {
+        this.reconnectTimer = null;
+        if (this.disposed) return;
+        this.reconnectAttempts += 1;
+        try {
+          await this.client.connect(this.roomCode);
+          this.reconnectAttempts = 0;
+          this._notify();
+        } catch (error) {
+          this.client.errors.push({ code: 'RECONNECT_FAILED', message: String(error?.message || error) });
+          this._notify();
+          this._scheduleReconnect();
+        }
+      }, delay) ?? null;
+    }
+
     dispose() {
+      this.disposed = true;
+      if (this.reconnectTimer !== null) root.clearTimeout?.(this.reconnectTimer);
+      this.reconnectTimer = null;
       this.unsubscribeMessage?.();
       this.unsubscribeDisconnect?.();
       this.client.dispose();
