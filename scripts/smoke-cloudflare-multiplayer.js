@@ -41,6 +41,13 @@ async function canvasHasRenderedDungeon(page) {
   });
 }
 
+async function holdKey(page, key, durationMs) {
+  await page.keyboard.down(key);
+  await page.waitForTimeout(Math.max(100, durationMs));
+  await page.keyboard.up(key);
+  await page.waitForTimeout(180);
+}
+
 async function main() {
   const browser = await chromium.launch({ headless: true });
   const hostContext = await browser.newContext();
@@ -75,6 +82,15 @@ async function main() {
     await waitForSessionStatus(guest, 'waiting', 'guest lobby');
     await host.waitForFunction(() => globalThis.Neo.gameSession.snapshot().lobbyState?.members?.length === 2);
 
+    await host.locator('#multiplayerCharacter').selectOption('sarge');
+    await guest.locator('#multiplayerCharacter').selectOption('princess');
+    await Promise.all([
+      host.waitForFunction(() => globalThis.Neo.gameSession.snapshot().lobbyState?.members
+        ?.find(member => member.playerId === globalThis.Neo.gameSession.snapshot().playerId)?.characterKey === 'sarge'),
+      guest.waitForFunction(() => globalThis.Neo.gameSession.snapshot().lobbyState?.members
+        ?.find(member => member.playerId === globalThis.Neo.gameSession.snapshot().playerId)?.characterKey === 'princess'),
+    ]);
+
     await Promise.all([
       host.locator('#multiplayerReady').click(),
       guest.locator('#multiplayerReady').click(),
@@ -90,9 +106,60 @@ async function main() {
       && !document.querySelector('#multiplayerGameHud')?.classList.contains('hidden')
     ))));
 
-    await Promise.all([host.keyboard.down('d'), guest.keyboard.down('a')]);
-    await host.waitForTimeout(700);
-    await Promise.all([host.keyboard.up('d'), guest.keyboard.up('a')]);
+    const traversalStart = await host.evaluate(() => {
+      const snapshot = globalThis.Neo.gameSession.snapshot();
+      const floor = snapshot.gameState.floorState;
+      const player = snapshot.gameState.players[snapshot.playerId];
+      const room = floor.layout.rooms.find(candidate => candidate.id === floor.currentRoomId);
+      return {
+        roomId: room.id,
+        direction: Object.keys(room.doors).find(key => room.doors[key]),
+        player,
+        width: floor.width,
+        height: floor.height,
+        wall: floor.wallThickness,
+      };
+    });
+    if (['n', 's'].includes(traversalStart.direction)) {
+      const deltaX = traversalStart.width / 2 - traversalStart.player.x;
+      if (Math.abs(deltaX) > 8) await holdKey(host, deltaX > 0 ? 'd' : 'a', Math.abs(deltaX) / 180 * 1000);
+    } else {
+      const deltaY = traversalStart.height / 2 - traversalStart.player.y;
+      if (Math.abs(deltaY) > 8) await holdKey(host, deltaY > 0 ? 's' : 'w', Math.abs(deltaY) / 180 * 1000);
+    }
+    const alignedPlayer = await host.evaluate(() => {
+      const snapshot = globalThis.Neo.gameSession.snapshot();
+      return snapshot.gameState.players[snapshot.playerId];
+    });
+    const radius = Number(alignedPlayer.radius || 18);
+    const boundary = Number(traversalStart.wall || 28) + radius;
+    const travelDistance = traversalStart.direction === 'n'
+      ? alignedPlayer.y - boundary
+      : traversalStart.direction === 's'
+        ? traversalStart.height - boundary - alignedPlayer.y
+        : traversalStart.direction === 'e'
+          ? traversalStart.width - boundary - alignedPlayer.x
+          : alignedPlayer.x - boundary;
+    const directionKey = { n: 'w', s: 's', e: 'd', w: 'a' }[traversalStart.direction];
+    await holdKey(host, directionKey, Math.max(700, travelDistance / 180 * 1000 + 700));
+    const roomAfterFirstHold = await host.evaluate(() => globalThis.Neo.gameSession.snapshot().gameState?.floorState?.currentRoomId);
+    if (roomAfterFirstHold === traversalStart.roomId) await holdKey(host, directionKey, 1200);
+    try {
+      await Promise.all([host, guest].map(page => page.waitForFunction(initialRoomId => (
+        globalThis.Neo.gameSession.snapshot().gameState?.floorState?.currentRoomId !== initialRoomId
+      ), traversalStart.roomId, { timeout: 10_000 })));
+    } catch (error) {
+      const traversalDiagnostics = await host.evaluate(() => {
+        const snapshot = globalThis.Neo.gameSession.snapshot();
+        return {
+          playerId: snapshot.playerId,
+          player: snapshot.gameState?.players?.[snapshot.playerId],
+          floorState: snapshot.gameState?.floorState,
+          pressedKeys: Array.from(globalThis.Neo.multiplayerGameView?.keys || []),
+        };
+      });
+      throw new Error(`Room traversal timed out: ${JSON.stringify({ traversalStart, alignedPlayer, travelDistance, directionKey, traversalDiagnostics })}; ${error.message}`);
+    }
 
     await Promise.all([
       host.waitForFunction(() => globalThis.Neo.gameSession.snapshot().gameState?.tick >= 10),
@@ -106,8 +173,11 @@ async function main() {
     const hostPlayers = hostSnapshot.gameState?.players || {};
     const guestPlayers = guestSnapshot.gameState?.players || {};
     const converged = JSON.stringify(hostPlayers) === JSON.stringify(guestPlayers);
-    const moved = Object.values(hostPlayers).some(player => player.x > 300)
-      && Object.values(hostPlayers).some(player => player.x < 600);
+    const moved = Math.abs(Number(hostPlayers['player-1']?.x || 300) - 300) > 20
+      || Math.abs(Number(hostPlayers['player-2']?.x || 600) - 600) > 20;
+    const finalRoomId = hostSnapshot.gameState?.floorState?.currentRoomId;
+    const traversed = finalRoomId && finalRoomId !== traversalStart.roomId
+      && guestSnapshot.gameState?.floorState?.currentRoomId === finalRoomId;
     const [hostCanvasRendered, guestCanvasRendered] = await Promise.all([
       canvasHasRenderedDungeon(host),
       canvasHasRenderedDungeon(guest),
@@ -131,6 +201,12 @@ async function main() {
       hostRenderedPlayerCount,
       guestRenderedPlayerCount,
       floorRoomCount: hostSnapshot.gameState?.floorState?.layout?.rooms?.length,
+      initialRoomId: traversalStart.roomId,
+      finalRoomId,
+      doorDirection: traversalStart.direction,
+      traversed,
+      visitedRoomCount: hostSnapshot.gameState?.floorState?.visitedRoomIds?.length,
+      selectedCharacters: Object.fromEntries(Object.entries(hostPlayers).map(([id, player]) => [id, player.characterKey])),
       players: hostPlayers,
       converged,
       moved,
@@ -150,9 +226,11 @@ async function main() {
       report.screenshots = { host: hostScreenshotPath, guest: guestScreenshotPath };
     }
     console.log(JSON.stringify(report, null, 2));
-    if (!converged || !moved || report.gameViewActive !== true
+    if (!converged || !moved || !traversed || report.gameViewActive !== true
       || !hostCanvasRendered || !guestCanvasRendered
       || hostRenderedPlayerCount !== 2 || guestRenderedPlayerCount !== 2
+      || hostPlayers['player-1']?.characterKey !== 'sarge' || hostPlayers['player-2']?.characterKey !== 'princess'
+      || report.visitedRoomCount < 2
       || report.floorRoomCount < 8 || errors.length) process.exitCode = 1;
   } finally {
     await Promise.all([hostContext.close(), guestContext.close()]);

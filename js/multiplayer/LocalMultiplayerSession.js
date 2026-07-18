@@ -24,15 +24,16 @@
     getDeliveryIntent,
   } = protocolApi;
 
-  const LOCAL_BUILD_VERSION = '1.0.0-mp-floor-v2';
+  const LOCAL_BUILD_VERSION = '1.0.0-mp-traversal-v3';
   const LOCAL_GENERATION_VERSION = 1;
-  const LOCAL_CONTENT_HASH = 'network-floor-renderer-v2';
-  const LOCAL_CONTENT_VERSION = 'network-floor-v2';
+  const LOCAL_CONTENT_HASH = 'network-floor-traversal-v3';
+  const LOCAL_CONTENT_VERSION = 'network-floor-v3';
   const SNAPSHOT_RATE = 10;
   const SNAPSHOT_TICK_INTERVAL = SIMULATION_TICK_RATE / SNAPSHOT_RATE;
   const FULL_CORRECTION_TICK_INTERVAL = SIMULATION_TICK_RATE;
   const TEST_ROOM = Object.freeze({ id: 'network-start-room', width: 900, height: 700, wallThickness: 28, doorWidth: 140 });
   const PLAYER_CHARACTERS = Object.freeze(['thorn_knight', 'metao', 'gelleh', 'mooggy']);
+  const SELECTABLE_CHARACTERS = Object.freeze(['princess', 'thorn_knight', 'metao', 'gelleh', 'mooggy', 'turtle_boy', 'sarge']);
   const PLAYER_COLORS = Object.freeze(['#9de9ff', '#d9a7ff', '#ffd98f', '#ff9fcf']);
 
   function createNetworkFloorState(options = {}) {
@@ -48,14 +49,88 @@
     return {
       ...TEST_ROOM,
       currentRoomId: layout.startRoomId,
+      visitedRoomIds: [layout.startRoomId],
+      roomTransition: null,
+      transitionSequence: 0,
       layout,
     };
   }
 
+  const ROOM_DIRECTIONS = Object.freeze({
+    n: Object.freeze({ dx: 0, dy: -1, opposite: 's' }),
+    s: Object.freeze({ dx: 0, dy: 1, opposite: 'n' }),
+    e: Object.freeze({ dx: 1, dy: 0, opposite: 'w' }),
+    w: Object.freeze({ dx: -1, dy: 0, opposite: 'e' }),
+  });
+
+  function getCurrentNetworkRoom(floorState = {}) {
+    return floorState.layout?.rooms?.find(room => room.id === floorState.currentRoomId) || null;
+  }
+
+  function getAdjacentNetworkRoom(floorState, room, directionKey) {
+    const direction = ROOM_DIRECTIONS[directionKey];
+    if (!direction || !room?.doors?.[directionKey]) return null;
+    return floorState.layout?.rooms?.find(candidate => (
+      candidate.gx === room.gx + direction.dx && candidate.gy === room.gy + direction.dy
+    )) || null;
+  }
+
+  function placePartyAtRoomEntrance(state, directionKey) {
+    const floorState = state.floorState;
+    const width = Number(floorState.width) || TEST_ROOM.width;
+    const height = Number(floorState.height) || TEST_ROOM.height;
+    const wall = Number(floorState.wallThickness) || TEST_ROOM.wallThickness;
+    const players = Object.values(state.players).sort((a, b) => String(a.id).localeCompare(String(b.id)));
+    players.forEach((player, index) => {
+      const radius = Math.max(1, Number(player.radius) || 18);
+      const inset = wall + radius + 18;
+      const formationOffset = (index - (players.length - 1) / 2) * 52;
+      if (directionKey === 'e') {
+        player.x = inset;
+        player.y = Math.max(inset, Math.min(height - inset, height / 2 + formationOffset));
+      } else if (directionKey === 'w') {
+        player.x = width - inset;
+        player.y = Math.max(inset, Math.min(height - inset, height / 2 + formationOffset));
+      } else if (directionKey === 'n') {
+        player.x = Math.max(inset, Math.min(width - inset, width / 2 + formationOffset));
+        player.y = height - inset;
+      } else {
+        player.x = Math.max(inset, Math.min(width - inset, width / 2 + formationOffset));
+        player.y = inset;
+      }
+      player.vx = 0;
+      player.vy = 0;
+      player.roomId = floorState.currentRoomId;
+    });
+  }
+
+  function transitionNetworkRoom(state, directionKey) {
+    const floorState = state.floorState;
+    const currentRoom = getCurrentNetworkRoom(floorState);
+    const nextRoom = getAdjacentNetworkRoom(floorState, currentRoom, directionKey);
+    if (!nextRoom || floorState.roomTransition?.tick === state.tick) return false;
+    const fromRoomId = currentRoom.id;
+    floorState.currentRoomId = nextRoom.id;
+    floorState.transitionSequence = Math.max(0, Number(floorState.transitionSequence) || 0) + 1;
+    floorState.roomTransition = {
+      sequence: floorState.transitionSequence,
+      tick: state.tick,
+      fromRoomId,
+      toRoomId: nextRoom.id,
+      direction: directionKey,
+    };
+    const visited = new Set(Array.isArray(floorState.visitedRoomIds) ? floorState.visitedRoomIds : []);
+    visited.add(nextRoom.id);
+    floorState.visitedRoomIds = Array.from(visited);
+    placePartyAtRoomEntrance(state, directionKey);
+    return true;
+  }
+
   function createPlayerMovementSystem(room = TEST_ROOM) {
     return ({ state, inputs, fixedDelta }) => {
-      Object.values(state.players).forEach(player => {
-        if (!player || player.disconnected) return;
+      const players = Object.values(state.players);
+      for (const player of players) {
+        if (!player || player.disconnected) continue;
         const input = inputs[player.id] || {};
         let moveX = Number(input.moveX) || 0;
         let moveY = Number(input.moveY) || 0;
@@ -68,12 +143,25 @@
         const radius = Math.max(1, Number(player.radius) || 18);
         const wallInset = Math.max(0, Number(room.wallThickness) || 0);
         const minimum = wallInset + radius;
-        player.x = Math.max(minimum, Math.min(room.width - minimum, player.x + moveX * speed * fixedDelta));
-        player.y = Math.max(minimum, Math.min(room.height - minimum, player.y + moveY * speed * fixedDelta));
+        const maximumX = room.width - minimum;
+        const maximumY = room.height - minimum;
+        const desiredX = player.x + moveX * speed * fixedDelta;
+        const desiredY = player.y + moveY * speed * fixedDelta;
+        const halfDoor = Math.max(radius * 1.5, (Number(room.doorWidth) || 140) / 2 - radius);
+        const insideHorizontalDoor = Math.abs(desiredX - room.width / 2) <= halfDoor;
+        const insideVerticalDoor = Math.abs(desiredY - room.height / 2) <= halfDoor;
+        let transitionDirection = null;
+        if (desiredY < minimum && insideHorizontalDoor) transitionDirection = 'n';
+        else if (desiredY > maximumY && insideHorizontalDoor) transitionDirection = 's';
+        else if (desiredX > maximumX && insideVerticalDoor) transitionDirection = 'e';
+        else if (desiredX < minimum && insideVerticalDoor) transitionDirection = 'w';
+        if (transitionDirection && transitionNetworkRoom(state, transitionDirection)) break;
+        player.x = Math.max(minimum, Math.min(maximumX, desiredX));
+        player.y = Math.max(minimum, Math.min(maximumY, desiredY));
         player.vx = moveX * speed;
         player.vy = moveY * speed;
         player.aimDirection = Number(input.aimDirection) || 0;
-      });
+      }
     };
   }
 
@@ -164,6 +252,7 @@
       switch (message.type) {
         case 'CLIENT_HELLO': this._handleHello(peerId, message.payload); break;
         case 'JOIN_MATCH': this._handleJoin(peerId, message.payload); break;
+        case 'PLAYER_CHARACTER': this._handleCharacter(peerId, message.payload); break;
         case 'PLAYER_READY': this._handleReady(peerId, message.payload); break;
         case 'PLAYER_INPUT': this._handleInput(peerId, message.payload); break;
         case 'PING': this._send(peerId, 'PONG', {
@@ -255,6 +344,16 @@
       if (joined.length >= this.minPlayers && joined.every(peer => peer.ready)) this._startMatch();
     }
 
+    _handleCharacter(peerId, payload) {
+      const record = this.peerRecords.get(peerId);
+      const player = record?.playerId && this.simulation.state.players[record.playerId];
+      if (!player || this.simulation.state.status !== 'waiting') return;
+      if (!SELECTABLE_CHARACTERS.includes(payload.characterKey)) return this._rejectInvalidMessage(peerId, ['character is unavailable']);
+      player.characterKey = payload.characterKey;
+      record.ready = false;
+      this._broadcastLobbyState();
+    }
+
     _handleInput(peerId, payload) {
       const playerId = this.playerIdByPeer.get(peerId);
       if (!playerId || this.simulation.state.status !== 'running') return;
@@ -303,6 +402,7 @@
         peerId,
         playerId,
         displayName: this.simulation.state.players[playerId]?.displayName || peerId,
+        characterKey: this.simulation.state.players[playerId]?.characterKey || 'thorn_knight',
         ready: !!this.peerRecords.get(peerId)?.ready,
       }));
       this._broadcast('LOBBY_STATE', {
@@ -449,6 +549,11 @@
       this._send('PLAYER_READY', { ready: !!ready });
     }
 
+    sendCharacter(characterKey) {
+      if (!this.playerId) throw new Error('Client has not joined the match');
+      this._send('PLAYER_CHARACTER', { characterKey: String(characterKey || '') });
+    }
+
     sendInput(input = {}) {
       if (this.status !== 'running') throw new Error('Client match is not running');
       const inputSequence = this.inputSequence++;
@@ -544,6 +649,11 @@
     LOCAL_CONTENT_VERSION,
     SNAPSHOT_RATE,
     TEST_ROOM,
+    SELECTABLE_CHARACTERS,
+    ROOM_DIRECTIONS,
+    getCurrentNetworkRoom,
+    getAdjacentNetworkRoom,
+    transitionNetworkRoom,
     createPlayerMovementSystem,
     createNetworkFloorState,
     LocalMultiplayerAuthority,

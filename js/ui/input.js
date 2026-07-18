@@ -1903,6 +1903,8 @@ export const ui = {
     multiplayerCopyRoomCode: document.getElementById('multiplayerCopyRoomCode'),
     multiplayerRoomStatus: document.getElementById('multiplayerRoomStatus'),
     multiplayerMemberList: document.getElementById('multiplayerMemberList'),
+    multiplayerCharacterPicker: document.getElementById('multiplayerCharacterPicker'),
+    multiplayerCharacter: document.getElementById('multiplayerCharacter'),
     multiplayerReady: document.getElementById('multiplayerReady'),
     multiplayerGameHud: document.getElementById('multiplayerGameHud'),
     multiplayerLeaveGame: document.getElementById('multiplayerLeaveGame'),

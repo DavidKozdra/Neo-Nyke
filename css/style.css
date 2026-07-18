@@ -9371,6 +9371,33 @@ button.alt.danger {
   min-height: 1em;
 }
 
+.multiplayer-character-picker {
+  display: grid;
+  gap: 6px;
+  width: min(280px, 100%);
+  color: var(--menu-accent-strong);
+  font-size: calc(12px * var(--font-scale, 1));
+  font-weight: 800;
+  letter-spacing: .12em;
+  text-align: left;
+}
+
+.multiplayer-character-picker.hidden {
+  display: none;
+}
+
+.multiplayer-character-picker select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--menu-border);
+  border-radius: var(--ui-control-radius);
+  background: var(--menu-surface);
+  color: var(--menu-text);
+  font: inherit;
+  font-size: calc(15px * var(--font-scale, 1));
+  letter-spacing: .06em;
+}
+
 .multiplayer-ready {
   width: 220px;
   padding: 12px 20px;

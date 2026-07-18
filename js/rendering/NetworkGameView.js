@@ -32,12 +32,15 @@
     return { moveX: x, moveY: y };
   }
 
-  function computeWorldTransform(canvasWidth, canvasHeight, roomWidth = 900, roomHeight = 700) {
-    const scale = Math.min(canvasWidth / roomWidth, canvasHeight / roomHeight);
+  function computeWorldTransform(canvasWidth, canvasHeight, roomWidth = 900, roomHeight = 700, visibleBounds = null) {
+    const bounds = visibleBounds || { left: 0, top: 0, right: canvasWidth, bottom: canvasHeight };
+    const visibleWidth = Math.max(1, bounds.right - bounds.left);
+    const visibleHeight = Math.max(1, bounds.bottom - bounds.top);
+    const scale = Math.min(visibleWidth / roomWidth, visibleHeight / roomHeight);
     return {
       scale,
-      offsetX: (canvasWidth - roomWidth * scale) / 2,
-      offsetY: (canvasHeight - roomHeight * scale) / 2,
+      offsetX: bounds.left + (visibleWidth - roomWidth * scale) / 2,
+      offsetY: bounds.top + (visibleHeight - roomHeight * scale) / 2,
       roomWidth,
       roomHeight,
     };
@@ -47,10 +50,11 @@
     const amount = clamp(Number(alpha) || 0, 0, 1);
     return Object.fromEntries(Object.entries(current).map(([playerId, player]) => {
       const before = previous[playerId] || player;
+      const changedRoom = before.roomId && player.roomId && before.roomId !== player.roomId;
       return [playerId, {
         ...player,
-        x: Number(before.x || 0) + (Number(player.x || 0) - Number(before.x || 0)) * amount,
-        y: Number(before.y || 0) + (Number(player.y || 0) - Number(before.y || 0)) * amount,
+        x: changedRoom ? Number(player.x || 0) : Number(before.x || 0) + (Number(player.x || 0) - Number(before.x || 0)) * amount,
+        y: changedRoom ? Number(player.y || 0) : Number(before.y || 0) + (Number(player.y || 0) - Number(before.y || 0)) * amount,
       }];
     }));
   }
@@ -91,6 +95,8 @@
       this.inputTimer = null;
       this.animationFrame = null;
       this.lastRoomCode = '';
+      this.lastTransitionSequence = 0;
+      this.transitionFlashUntil = 0;
       this.boundKeyDown = event => this._onKey(event, true);
       this.boundKeyUp = event => this._onKey(event, false);
       this.boundPointerMove = event => this._onPointerMove(event);
@@ -143,6 +149,11 @@
       const state = snapshot.gameState;
       if (!state || !state.players) return;
       const receivedAt = root.performance?.now?.() || Date.now();
+      const transitionSequence = Math.max(0, Number(state.floorState?.transitionSequence) || 0);
+      if (transitionSequence > this.lastTransitionSequence) {
+        if (this.lastTransitionSequence > 0 || this.currentSample) this.transitionFlashUntil = receivedAt + 260;
+        this.lastTransitionSequence = transitionSequence;
+      }
       if (!this.currentSample || state.tick > this.currentSample.tick) {
         this.previousSample = this.currentSample || { tick: state.tick, receivedAt, state };
         this.currentSample = { tick: state.tick, receivedAt, state };
@@ -178,7 +189,13 @@
       if (!this.active || !this.localPredictedPlayer || !this.canvas) return;
       const rect = this.canvas.getBoundingClientRect();
       const floorState = this.currentSample?.state?.floorState || {};
-      const transform = computeWorldTransform(this.canvas.width, this.canvas.height, floorState.width, floorState.height);
+      const transform = computeWorldTransform(
+        this.canvas.width,
+        this.canvas.height,
+        floorState.width,
+        floorState.height,
+        this._visibleCanvasBounds(),
+      );
       const canvasX = (event.clientX - rect.left) * (this.canvas.width / Math.max(1, rect.width));
       const canvasY = (event.clientY - rect.top) * (this.canvas.height / Math.max(1, rect.height));
       const worldX = (canvasX - transform.offsetX) / transform.scale;
@@ -244,12 +261,34 @@
       return players;
     }
 
+    _visibleCanvasBounds() {
+      const rect = this.canvas?.getBoundingClientRect?.();
+      if (!rect || rect.width <= 0 || rect.height <= 0) {
+        return { left: 0, top: 0, right: this.canvas.width, bottom: this.canvas.height };
+      }
+      const scaleX = this.canvas.width / rect.width;
+      const scaleY = this.canvas.height / rect.height;
+      return {
+        left: clamp(-rect.left * scaleX, 0, this.canvas.width),
+        top: clamp(-rect.top * scaleY, 0, this.canvas.height),
+        right: clamp((root.innerWidth - rect.left) * scaleX, 0, this.canvas.width),
+        bottom: clamp((root.innerHeight - rect.top) * scaleY, 0, this.canvas.height),
+      };
+    }
+
     render() {
       if (!this.active || !this.ctx || !this.canvas) return;
       const now = root.performance?.now?.() || Date.now();
       const state = this.currentSample?.state;
       const floorState = state?.floorState || { width: 900, height: 700, wallThickness: 28, doorWidth: 140 };
-      const transform = computeWorldTransform(this.canvas.width, this.canvas.height, floorState.width, floorState.height);
+      const visibleBounds = this._visibleCanvasBounds();
+      const transform = computeWorldTransform(
+        this.canvas.width,
+        this.canvas.height,
+        floorState.width,
+        floorState.height,
+        visibleBounds,
+      );
       const players = this._renderedPlayers(now);
       this.lastRenderedPlayerCount = Object.keys(players).length;
       const ctx = this.ctx;
@@ -264,8 +303,9 @@
       this._drawRoom(floorState);
       Object.values(players).forEach(player => this._drawPlayer(player, player.id === this.session.snapshot().playerId));
       ctx.restore();
-      this._drawMinimap(floorState);
-      this._drawInstructions();
+      this._drawMinimap(floorState, visibleBounds);
+      this._drawInstructions(visibleBounds);
+      this._drawRoomTransition(now, floorState, visibleBounds);
       this._updateHud(state, players);
     }
 
@@ -276,14 +316,26 @@
       const wall = Number(floorState.wallThickness) || 28;
       const tile = 50;
       const currentRoom = floorState.layout?.rooms?.find(room => room.id === floorState.currentRoomId) || { doors: {} };
+      const roomColors = {
+        start: ['#25273a', '#0a0b13'],
+        combat: ['#292431', '#0d0a10'],
+        treasure: ['#302944', '#100b18'],
+        shop: ['#21352f', '#08110e'],
+        anvil: ['#352b24', '#120c08'],
+        challenge: ['#38232a', '#12070a'],
+        ladder: ['#333123', '#111006'],
+        boss: ['#382026', '#120609'],
+        god: ['#3c1d24', '#130508'],
+      };
+      const palette = roomColors[currentRoom.type] || roomColors.combat;
       const gradient = ctx.createRadialGradient(width / 2, height / 2, 40, width / 2, height / 2, width * 0.7);
-      gradient.addColorStop(0, '#25273a');
-      gradient.addColorStop(1, '#0a0b13');
+      gradient.addColorStop(0, palette[0]);
+      gradient.addColorStop(1, palette[1]);
       ctx.fillStyle = gradient;
       ctx.fillRect(0, 0, width, height);
       for (let y = wall; y < height - wall; y += tile) {
         for (let x = wall; x < width - wall; x += tile) {
-          const shade = ((x / tile + y / tile) % 2 === 0) ? '#202235' : '#1b1d2d';
+          const shade = ((x / tile + y / tile) % 2 === 0) ? 'rgba(58, 62, 84, .34)' : 'rgba(35, 38, 57, .38)';
           ctx.fillStyle = shade;
           ctx.fillRect(x + 1, y + 1, Math.min(tile - 2, width - wall - x), Math.min(tile - 2, height - wall - y));
         }
@@ -305,7 +357,7 @@
       ctx.fillStyle = 'rgba(196, 224, 255, .25)';
       ctx.font = '700 18px VT323, monospace';
       ctx.textAlign = 'center';
-      ctx.fillText('NEO NYKE CO-OP', 0, 6);
+      ctx.fillText(String(currentRoom.type || 'combat').replace(/_/g, ' ').toUpperCase(), 0, 6);
       ctx.restore();
     }
 
@@ -372,36 +424,61 @@
       ctx.restore();
     }
 
-    _drawMinimap(floorState) {
+    _drawMinimap(floorState, visibleBounds = { right: this.canvas.width, top: 0 }) {
       const rooms = floorState.layout?.rooms || [];
       if (!rooms.length) return;
       const ctx = this.ctx;
       const size = 13;
-      const left = this.canvas.width - 142;
-      const top = 52;
+      const left = visibleBounds.right - 142;
+      const top = visibleBounds.top + 52;
       ctx.save();
       ctx.fillStyle = 'rgba(2, 4, 10, .78)';
       ctx.fillRect(left - 12, top - 26, 126, 142);
       ctx.fillStyle = '#dceaff';
       ctx.font = '700 13px VT323, monospace';
       ctx.fillText(`FLOOR ${floorState.layout.floorNumber || 1}`, left, top - 9);
+      const visited = new Set(floorState.visitedRoomIds || []);
       rooms.forEach(room => {
         const colors = { start: '#68dcff', ladder: '#ffe378', boss: '#ff6b75', god: '#ff6b75', treasure: '#d8a3ff', shop: '#75e6a0' };
-        ctx.fillStyle = room.id === floorState.currentRoomId ? '#ffffff' : (colors[room.type] || '#526078');
+        ctx.fillStyle = room.id === floorState.currentRoomId
+          ? '#ffffff'
+          : visited.has(room.id) ? (colors[room.type] || '#71819c') : '#242a38';
         ctx.fillRect(left + room.gx * size, top + room.gy * size, size - 2, size - 2);
       });
       ctx.restore();
     }
 
-    _drawInstructions() {
+    _drawInstructions(visibleBounds = { left: 0, right: this.canvas.width, bottom: this.canvas.height }) {
       const ctx = this.ctx;
+      const centerX = (visibleBounds.left + visibleBounds.right) / 2;
+      const baselineY = visibleBounds.bottom - 20;
       ctx.save();
       ctx.fillStyle = 'rgba(2, 4, 10, .76)';
-      ctx.fillRect(this.canvas.width / 2 - 190, this.canvas.height - 39, 380, 27);
+      ctx.fillRect(centerX - 190, baselineY - 19, 380, 27);
       ctx.fillStyle = '#dceaff';
       ctx.font = '700 15px VT323, monospace';
       ctx.textAlign = 'center';
-      ctx.fillText('MOVE  WASD / ARROWS / GAMEPAD   •   AIM  MOUSE / RIGHT STICK', this.canvas.width / 2, this.canvas.height - 20);
+      ctx.fillText('MOVE  WASD / ARROWS / GAMEPAD   •   AIM  MOUSE / RIGHT STICK', centerX, baselineY);
+      ctx.restore();
+    }
+
+    _drawRoomTransition(now, floorState, visibleBounds = { left: 0, top: 0, right: this.canvas.width, bottom: this.canvas.height }) {
+      if (now >= this.transitionFlashUntil) return;
+      const remaining = clamp((this.transitionFlashUntil - now) / 260, 0, 1);
+      const currentRoom = floorState.layout?.rooms?.find(room => room.id === floorState.currentRoomId);
+      const ctx = this.ctx;
+      ctx.save();
+      ctx.fillStyle = `rgba(3, 5, 12, ${remaining * 0.72})`;
+      ctx.fillRect(visibleBounds.left, visibleBounds.top, visibleBounds.right - visibleBounds.left, visibleBounds.bottom - visibleBounds.top);
+      ctx.globalAlpha = clamp(1 - Math.abs(remaining - 0.5) * 1.4, 0, 1);
+      ctx.fillStyle = '#e9f5ff';
+      ctx.font = '700 28px VT323, monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(
+        String(currentRoom?.type || 'ROOM').replace(/_/g, ' ').toUpperCase(),
+        (visibleBounds.left + visibleBounds.right) / 2,
+        (visibleBounds.top + visibleBounds.bottom) / 2,
+      );
       ctx.restore();
     }
 

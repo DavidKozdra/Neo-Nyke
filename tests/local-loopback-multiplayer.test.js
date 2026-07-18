@@ -6,7 +6,13 @@ const {
 const {
   LocalMultiplayerAuthority,
   LocalMultiplayerClient,
+  TEST_ROOM,
+  createNetworkFloorState,
+  createPlayerMovementSystem,
+  getAdjacentNetworkRoom,
+  getCurrentNetworkRoom,
 } = require('../js/multiplayer/LocalMultiplayerSession');
+const { GameState } = require('../js/simulation/GameState');
 const { createEnvelope, getDeliveryIntent } = require('../js/protocol/ProtocolV1');
 
 function transport(network, id, displayName) {
@@ -84,6 +90,84 @@ describe('LocalLoopbackTransport', () => {
 });
 
 describe('protocol-driven local multiplayer session', () => {
+  test('authority validates and broadcasts lobby character selection', async () => {
+    const clock = new VirtualNetworkClock();
+    const network = new LocalLoopbackNetwork({ clock });
+    const authority = new LocalMultiplayerAuthority({ transport: transport(network, 'authority', 'Authority') });
+    const client = new LocalMultiplayerClient({ transport: transport(network, 'client-a', 'Client A') });
+    await authority.start();
+    await client.connect('neo-local-room');
+    clock.runAll();
+
+    client.sendReady(true);
+    client.sendCharacter('sarge');
+    clock.runAll();
+
+    expect(authority.simulation.state.players[client.playerId].characterKey).toBe('sarge');
+    expect(client.lobbyState.members).toEqual([
+      expect.objectContaining({ playerId: client.playerId, characterKey: 'sarge', ready: false }),
+    ]);
+  });
+
+  test('crossing a valid seeded doorway transitions the entire party authoritatively', () => {
+    const floorState = createNetworkFloorState({ matchSeed: 'door-test', floorSeed: 'door-test-floor' });
+    const currentRoom = getCurrentNetworkRoom(floorState);
+    const direction = Object.keys(currentRoom.doors).find(key => currentRoom.doors[key]);
+    const nextRoom = getAdjacentNetworkRoom(floorState, currentRoom, direction);
+    const state = new GameState({
+      matchId: 'door-test',
+      matchSeed: 'door-test',
+      status: 'running',
+      floorState,
+      players: {
+        p1: { id: 'p1', x: TEST_ROOM.width / 2, y: TEST_ROOM.height / 2, radius: 18, moveSpeed: 180, roomId: currentRoom.id },
+        p2: { id: 'p2', x: TEST_ROOM.width / 2 + 40, y: TEST_ROOM.height / 2, radius: 18, moveSpeed: 180, roomId: currentRoom.id },
+      },
+    });
+    const player = state.players.p1;
+    const minimum = TEST_ROOM.wallThickness + player.radius;
+    const inputs = { p1: { moveX: 0, moveY: 0 } };
+    if (direction === 'n') { player.y = minimum; inputs.p1.moveY = -1; }
+    if (direction === 's') { player.y = TEST_ROOM.height - minimum; inputs.p1.moveY = 1; }
+    if (direction === 'e') { player.x = TEST_ROOM.width - minimum; inputs.p1.moveX = 1; }
+    if (direction === 'w') { player.x = minimum; inputs.p1.moveX = -1; }
+
+    createPlayerMovementSystem(TEST_ROOM)({ state, inputs, fixedDelta: 0.05 });
+
+    expect(state.floorState.currentRoomId).toBe(nextRoom.id);
+    expect(state.floorState.visitedRoomIds).toEqual(expect.arrayContaining([currentRoom.id, nextRoom.id]));
+    expect(state.floorState.roomTransition).toEqual(expect.objectContaining({
+      fromRoomId: currentRoom.id,
+      toRoomId: nextRoom.id,
+      direction,
+    }));
+    expect(Object.values(state.players).every(member => member.roomId === nextRoom.id)).toBe(true);
+  });
+
+  test('authority blocks crossing a wall when the seeded room has no door', () => {
+    const floorState = createNetworkFloorState({ matchSeed: 'wall-test', floorSeed: 'wall-test-floor' });
+    const currentRoom = floorState.layout.rooms.find(room => Object.values(room.doors).some(open => !open));
+    floorState.currentRoomId = currentRoom.id;
+    const direction = Object.keys(currentRoom.doors).find(key => !currentRoom.doors[key]);
+    expect(direction).toBeDefined();
+    const player = { id: 'p1', x: TEST_ROOM.width / 2, y: TEST_ROOM.height / 2, radius: 18, moveSpeed: 180, roomId: currentRoom.id };
+    const state = new GameState({ matchId: 'wall-test', status: 'running', floorState, players: { p1: player } });
+    const minimum = TEST_ROOM.wallThickness + player.radius;
+    const inputs = { p1: { moveX: 0, moveY: 0 } };
+    if (direction === 'n') { player.y = minimum; inputs.p1.moveY = -1; }
+    if (direction === 's') { player.y = TEST_ROOM.height - minimum; inputs.p1.moveY = 1; }
+    if (direction === 'e') { player.x = TEST_ROOM.width - minimum; inputs.p1.moveX = 1; }
+    if (direction === 'w') { player.x = minimum; inputs.p1.moveX = -1; }
+
+    createPlayerMovementSystem(TEST_ROOM)({ state, inputs, fixedDelta: 0.05 });
+
+    expect(state.floorState.currentRoomId).toBe(currentRoom.id);
+    expect(player.x).toBeGreaterThanOrEqual(minimum);
+    expect(player.y).toBeGreaterThanOrEqual(minimum);
+    expect(player.x).toBeLessThanOrEqual(TEST_ROOM.width - minimum);
+    expect(player.y).toBeLessThanOrEqual(TEST_ROOM.height - minimum);
+  });
+
   test('runs one authority and two clients to compatible shared movement state', async () => {
     const harness = await createRunningHarness();
     const { clock, network, authority, clientA, clientB } = harness;

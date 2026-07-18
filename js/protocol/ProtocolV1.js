@@ -15,7 +15,7 @@
   const AUTHORITY_TO_CLIENT = 'authority-to-client';
 
   const CLIENT_MESSAGE_TYPES = Object.freeze([
-    'CLIENT_HELLO', 'AUTHENTICATE', 'JOIN_MATCH', 'PLAYER_READY', 'PLAYER_INPUT',
+    'CLIENT_HELLO', 'AUTHENTICATE', 'JOIN_MATCH', 'PLAYER_CHARACTER', 'PLAYER_READY', 'PLAYER_INPUT',
     'PLAYER_ACTION', 'INTERACT_REQUEST', 'UPGRADE_SELECTION', 'LEAVE_MATCH', 'PING',
   ]);
   const AUTHORITY_MESSAGE_TYPES = Object.freeze([
@@ -56,6 +56,16 @@
       direction: CLIENT_TO_AUTHORITY,
       delivery: { reliability: 'reliable', channel: 'control', replaceable: false },
       fields: { ready: field('boolean', { required: true }) },
+    },
+    PLAYER_CHARACTER: {
+      direction: CLIENT_TO_AUTHORITY,
+      delivery: { reliability: 'reliable', channel: 'control', replaceable: false },
+      fields: {
+        characterKey: field('string', {
+          required: true,
+          enum: ['princess', 'thorn_knight', 'metao', 'gelleh', 'mooggy', 'turtle_boy', 'sarge'],
+        }),
+      },
     },
     PLAYER_INPUT: {
       direction: CLIENT_TO_AUTHORITY,
