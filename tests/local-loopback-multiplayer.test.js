@@ -260,16 +260,59 @@ describe('protocol-driven local multiplayer session', () => {
     expect(authority.metrics.acceptedActions).toBe(2);
   });
 
-  test('cleans up a disconnected player and notifies the remaining client', async () => {
+  test('routes chest interaction and relic selection through validated protocol messages', async () => {
+    const { clock, authority, clientA } = await createRunningHarness({
+      unreliablePacketLoss: 0,
+      duplicateMessageRate: 0,
+      jitterMs: 0,
+    });
+    const state = authority.simulation.state;
+    const treasure = state.floorState.layout.rooms.find(room => room.type === 'treasure');
+    const player = state.players[clientA.playerId];
+    player.roomId = treasure.id;
+    player.x = 450;
+    player.y = 350;
+    authority.step(1);
+    const chest = Object.values(state.interactables).find(item => item.kind === 'relic_chest');
+
+    clientA.sendInteract(chest.id);
+    clock.runAll();
+    authority.step(1);
+    authority.sendFullCorrection();
+    clock.runAll();
+    const optionId = state.players[clientA.playerId].pendingUpgrade.optionIds[0];
+    clientA.sendUpgrade(chest.id, optionId);
+    clock.runAll();
+    authority.step(1);
+    authority.sendFullCorrection();
+    clock.runAll();
+
+    expect(state.players[clientA.playerId].relics).toEqual([optionId]);
+    expect(clientA.state.players[clientA.playerId].relics).toEqual([optionId]);
+    expect(clientA.receivedTypes).toEqual(expect.arrayContaining(['GAMEPLAY_EVENT', 'WORLD_SNAPSHOT']));
+  });
+
+  test('reserves a disconnected player and restores the same authority entity on reconnect', async () => {
     const { clock, network, authority, clientA, clientB } = await createRunningHarness({
       unreliablePacketLoss: 0,
       duplicateMessageRate: 0,
     });
+    const originalPlayerId = clientB.playerId;
+    const reconnectToken = clientB.reconnectToken;
     expect(network.disconnectPeer('client-b', 'test-disconnect')).toBe(true);
     clock.runAll();
-    expect(authority.simulation.state.players[clientB.playerId]).toBeUndefined();
-    expect(clientA.state.players[clientB.playerId]).toBeUndefined();
+    expect(authority.simulation.state.players[originalPlayerId]).toEqual(expect.objectContaining({ disconnected: true }));
+    expect(clientA.state.players[originalPlayerId]).toBeUndefined();
     expect(clientA.receivedTypes).toContain('PLAYER_DISCONNECTED');
+
+    const reconnected = new LocalMultiplayerClient({ transport: transport(network, 'client-b-returned', 'Client B') });
+    reconnected.reconnectToken = reconnectToken;
+    await reconnected.connect('GOFAST');
+    clock.runAll();
+    expect(reconnected.status).toBe('running');
+    expect(reconnected.playerId).toBe(originalPlayerId);
+    expect(authority.simulation.state.players[originalPlayerId]).toEqual(expect.objectContaining({ disconnected: false }));
+    expect(reconnected.state.players[originalPlayerId].id).toBe(originalPlayerId);
   });
 
   test('rejects an incompatible build before joining', async () => {

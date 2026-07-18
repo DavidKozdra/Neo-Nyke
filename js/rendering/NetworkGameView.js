@@ -275,6 +275,16 @@
         this._togglePause(!this.paused);
         return;
       }
+      if (this.active && pressed && !event.repeat && event.code === 'KeyE') {
+        event.preventDefault();
+        this._interact();
+        return;
+      }
+      if (this.active && pressed && !event.repeat && /^Digit[1-3]$/.test(event.code)) {
+        const selected = Number(event.code.slice(-1)) - 1;
+        if (this._selectUpgrade(selected)) event.preventDefault();
+        return;
+      }
       if (!this.active || (!MOVEMENT_KEYS.has(event.code) && !ATTACK_KEYS.has(event.code) && !ABILITY_KEYS.has(event.code))) return;
       if (event.target?.closest?.('input, textarea, select, [contenteditable="true"]')) return;
       event.preventDefault();
@@ -331,6 +341,27 @@
         player.actionTick = this.currentSample?.state?.tick || 0;
         player.aimDirection = this.aimDirection;
       }
+    }
+
+    _interact() {
+      const state = this.currentSample?.state;
+      const player = state?.players?.[this.session.snapshot().playerId];
+      if (!player || player.downed || player.pendingUpgrade) return;
+      const target = Object.values(state.interactables || {})
+        .filter(item => !item.opened && item.roomId === player.roomId)
+        .map(item => ({ item, distance: Math.hypot(Number(item.x) - Number(player.x), Number(item.y) - Number(player.y)) }))
+        .filter(entry => entry.distance <= Number(entry.item.radius || 30) + Number(player.radius || 18) + 38)
+        .sort((first, second) => first.distance - second.distance)[0]?.item;
+      if (target) this.session.sendInteract(target.id);
+    }
+
+    _selectUpgrade(index) {
+      const player = this.currentSample?.state?.players?.[this.session.snapshot().playerId];
+      const pending = player?.pendingUpgrade;
+      const optionId = pending?.optionIds?.[index];
+      if (!optionId) return false;
+      this.session.sendUpgrade(pending.selectionEventId, optionId);
+      return true;
     }
 
     _consumeGameplayEvents(events) {
@@ -442,7 +473,9 @@
 
     _sendInput() {
       if (!this.active || this.session.snapshot().status !== 'running') return;
-      const movement = this.paused ? { moveX: 0, moveY: 0 } : this._readMovement();
+      const movement = this.paused || this.localPredictedPlayer?.downed
+        ? { moveX: 0, moveY: 0 }
+        : this._readMovement();
       const input = { ...movement, aimDirection: this.aimDirection, buttons: 0 };
       if (this.localPredictedPlayer) {
         this.localPredictedPlayer = predictPosition(
@@ -520,6 +553,7 @@
       const enemies = this._renderedEntities('enemies', now);
       const projectiles = this._renderedEntities('projectiles', now);
       const pickups = state?.pickups || {};
+      const interactables = state?.interactables || {};
       const localPlayer = players[localPlayerId];
       const frameDelta = this.lastPresentationFrameAt > 0
         ? clamp((now - this.lastPresentationFrameAt) / 1000, 0, 0.05)
@@ -551,6 +585,8 @@
       if (typeof this.neo.drawPickups === 'function') this.neo.drawPickups();
       else Object.values(pickups).filter(entity => entity.roomId === floorState.currentRoomId)
         .forEach(entity => this._drawPickup(entity, now));
+      Object.values(interactables).filter(entity => entity.roomId === floorState.currentRoomId)
+        .forEach(entity => this._drawInteractable(entity, now));
       Object.values(projectiles).filter(entity => entity.roomId === floorState.currentRoomId)
         .forEach(entity => this._drawProjectile(entity));
       if (typeof this.neo.drawEnemies === 'function') {
@@ -576,6 +612,7 @@
       if (typeof this.neo.drawMinimap === 'function') this.neo.drawMinimap();
       else this._drawMinimap(floorState, visibleBounds);
       this._drawInstructions(visibleBounds);
+      this._drawUpgradeOffer(localPlayer, visibleBounds);
       this._drawRoomTransition(now, floorState, visibleBounds);
       this._updateHud(state, players);
     }
@@ -892,6 +929,71 @@
       ctx.restore();
     }
 
+    _drawInteractable(interactable, now) {
+      const ctx = this.ctx;
+      const radius = Number(interactable.radius || 30);
+      const pulse = 1 + Math.sin(now / 180) * 0.08;
+      const progress = clamp(Number(interactable.dwellProgress || 0), 0, 1);
+      ctx.save();
+      ctx.translate(Number(interactable.x || 0), Number(interactable.y || 0));
+      ctx.scale(pulse, pulse);
+      const chest = interactable.kind === 'relic_chest';
+      ctx.fillStyle = chest ? 'rgba(186,124,255,.3)' : interactable.final ? 'rgba(255,92,125,.32)' : 'rgba(255,224,105,.28)';
+      ctx.strokeStyle = chest ? '#d3a0ff' : interactable.final ? '#ff6b86' : '#ffe469';
+      ctx.shadowColor = ctx.strokeStyle;
+      ctx.shadowBlur = 20;
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(0, 0, radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 6;
+      ctx.beginPath();
+      ctx.arc(0, 0, radius + 9, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * progress);
+      ctx.stroke();
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '700 18px VT323, monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(chest ? (interactable.opened ? 'CLAIMED' : 'RELIC • E') : interactable.final ? 'FINISH' : 'DESCEND', 0, 6);
+      if (Number(interactable.requiredPlayers || 0) > 1) {
+        ctx.font = '700 14px VT323, monospace';
+        ctx.fillText(`${Number(interactable.readyPlayers || 0)}/${interactable.requiredPlayers} PARTY`, 0, radius + 29);
+      }
+      ctx.restore();
+    }
+
+    _drawUpgradeOffer(player, visibleBounds) {
+      const pending = player?.pendingUpgrade;
+      if (!pending?.options?.length) return;
+      const ctx = this.ctx;
+      const width = Math.min(720, visibleBounds.right - visibleBounds.left - 40);
+      const left = (visibleBounds.left + visibleBounds.right - width) / 2;
+      const top = visibleBounds.bottom - 155;
+      ctx.save();
+      ctx.fillStyle = 'rgba(4,5,14,.94)';
+      ctx.strokeStyle = '#d3a0ff';
+      ctx.lineWidth = 3;
+      ctx.fillRect(left, top, width, 120);
+      ctx.strokeRect(left, top, width, 120);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '700 20px VT323, monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('CHOOSE A RELIC', left + width / 2, top + 25);
+      const cardWidth = width / pending.options.length;
+      pending.options.forEach((option, index) => {
+        const center = left + cardWidth * (index + 0.5);
+        ctx.fillStyle = '#d3a0ff';
+        ctx.font = '700 17px VT323, monospace';
+        ctx.fillText(`${index + 1}  ${String(option.name || option.id).toUpperCase()}`, center, top + 57);
+        ctx.fillStyle = '#dce4f5';
+        ctx.font = '15px VT323, monospace';
+        ctx.fillText(String(option.description || ''), center, top + 83, cardWidth - 18);
+      });
+      ctx.restore();
+    }
+
     _drawCombatEffects(players, enemies, now) {
       const ctx = this.ctx;
       this.combatEffects = this.combatEffects.filter(effect => now - effect.startedAt < 700);
@@ -1009,6 +1111,7 @@
       const ctx = this.ctx;
       const color = player.color || derivePlayerColor(player);
       ctx.save();
+      ctx.globalAlpha = player.downed ? 0.48 : 1;
       ctx.strokeStyle = isLocal ? '#ffffff' : color;
       ctx.lineWidth = isLocal ? 4 : 2;
       ctx.shadowColor = color;
@@ -1017,6 +1120,21 @@
       ctx.arc(player.x, player.y, Number(player.radius || 18) + 8, 0, Math.PI * 2);
       ctx.stroke();
       ctx.restore();
+      if (player.downed) {
+        ctx.save();
+        ctx.fillStyle = '#ff7890';
+        ctx.font = '700 18px VT323, monospace';
+        ctx.textAlign = 'center';
+        const label = this.currentSample?.state?.matchRules?.mode === 'rival' ? 'RESPAWNING' : 'DOWN — STAND CLOSE TO REVIVE';
+        ctx.fillText(label, player.x, player.y - 52);
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(player.x, player.y, Number(player.radius || 18) + 14, -Math.PI / 2,
+          -Math.PI / 2 + Math.PI * 2 * clamp(Number(player.reviveProgress || 0), 0, 1));
+        ctx.stroke();
+        ctx.restore();
+      }
 
       const serverTick = this.currentSample?.state?.tick || 0;
       const attacking = (isLocal && (root.performance?.now?.() || Date.now()) < this.localAttackUntil)

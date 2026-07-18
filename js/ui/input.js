@@ -1896,6 +1896,7 @@ export const ui = {
     multiplayerPanel: document.getElementById('multiplayerPanel'),
     multiplayerDevelopmentNote: document.getElementById('multiplayerDevelopmentNote'),
     multiplayerCreateRoom: document.getElementById('multiplayerCreateRoom'),
+    multiplayerMode: document.getElementById('multiplayerMode'),
     multiplayerJoinRoom: document.getElementById('multiplayerJoinRoom'),
     multiplayerRoomCode: document.getElementById('multiplayerRoomCode'),
     multiplayerRoomCodeShare: document.getElementById('multiplayerRoomCodeShare'),

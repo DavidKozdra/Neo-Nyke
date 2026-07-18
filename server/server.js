@@ -140,19 +140,33 @@ export class MultiplayerRoom {
 
   async fetch(request) {
     const url = new URL(request.url);
-    if (url.pathname === '/initialize' && request.method === 'POST') return this.initializeRoom();
+    if (url.pathname === '/initialize' && request.method === 'POST') return this.initializeRoom(request);
     if (url.pathname === '/info' && request.method === 'GET') return this.roomInfo();
     if (url.pathname === '/socket' && request.method === 'GET') return this.openSocket(request);
     return json({ error: 'Room route not found' }, 404);
   }
 
-  async initializeRoom() {
+  async initializeRoom(request) {
     const existing = await this.ctx.storage.get('room');
     if (existing) return json({ error: 'Room code collision' }, 409);
+    const options = await request.json().catch(() => ({}));
+    const mode = options.mode === 'rival' ? 'rival' : 'coop';
+    const maxPlayers = Math.max(2, Math.min(MULTIPLAYER_ROOM_LIMIT, Math.trunc(Number(options.maxPlayers) || MULTIPLAYER_ROOM_LIMIT)));
+    this.authority.mode = mode;
+    this.authority.maxPlayers = maxPlayers;
+    this.authority.minPlayers = mode === 'rival' ? 2 : MULTIPLAYER_MIN_PLAYERS;
+    this.authority.simulation.state.matchRules = {
+      mode,
+      friendlyFire: mode === 'rival',
+      reviveEnabled: mode === 'coop',
+      floorAdvance: mode === 'rival' ? 'first' : 'all-living',
+      sharedDiscovery: mode === 'coop',
+    };
     const room = {
       roomCode: this.roomCode,
       createdAt: Date.now(),
-      maxPlayers: MULTIPLAYER_ROOM_LIMIT,
+      maxPlayers,
+      mode,
       status: 'waiting',
     };
     await this.ctx.storage.put('room', room);
@@ -168,7 +182,7 @@ export class MultiplayerRoom {
       status: this.authority.simulation.state.status,
       players: this.authority.playerIdByPeer.size,
       joinable: this.authority.simulation.state.status === 'waiting'
-        && this.authority.playerIdByPeer.size < MULTIPLAYER_ROOM_LIMIT,
+        && this.authority.playerIdByPeer.size < room.maxPlayers,
     });
   }
 
@@ -178,7 +192,7 @@ export class MultiplayerRoom {
     if (request.headers.get('Upgrade')?.toLowerCase() !== 'websocket') {
       return json({ error: 'Expected WebSocket upgrade' }, 426);
     }
-    if (this.authority.playerIdByPeer.size >= MULTIPLAYER_ROOM_LIMIT) {
+    if (this.authority.playerIdByPeer.size >= room.maxPlayers) {
       return json({ error: 'Room is full' }, 409);
     }
     await this.ensureStarted();
@@ -388,16 +402,24 @@ async function handleRequest(request, env) {
   if (path === '/multiplayer/rooms' && request.method === 'POST') {
     if (!env?.MULTIPLAYER_ROOMS) return json({ error: 'MULTIPLAYER_ROOMS binding missing' }, 503);
     if (!rateLimit(`room-create:${ip}`, 10, 60_000)) return json({ error: 'Too many room creation requests' }, 429);
+    const options = await request.json().catch(() => ({}));
+    const mode = options.mode === 'rival' ? 'rival' : 'coop';
+    const maxPlayers = Math.max(2, Math.min(MULTIPLAYER_ROOM_LIMIT, Math.trunc(Number(options.maxPlayers) || MULTIPLAYER_ROOM_LIMIT)));
     for (let attempt = 0; attempt < 8; attempt += 1) {
       const roomCode = createRoomCode();
       const stub = getRoomStub(env, roomCode);
-      const initialized = await stub.fetch(new Request('https://room.internal/initialize', { method: 'POST' }));
+      const initialized = await stub.fetch(new Request('https://room.internal/initialize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode, maxPlayers }),
+      }));
       if (initialized.status === 409) continue;
       if (!initialized.ok) return json({ error: 'Could not initialize multiplayer room' }, 502);
       return json({
         roomCode,
         status: 'waiting',
-        maxPlayers: MULTIPLAYER_ROOM_LIMIT,
+        maxPlayers,
+        mode,
         socketPath: `/api/multiplayer/rooms/${roomCode}/socket`,
       }, 201);
     }

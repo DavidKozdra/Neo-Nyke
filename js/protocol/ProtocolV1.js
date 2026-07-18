@@ -156,6 +156,7 @@
         members: field('array', { required: true, maxLength: 4 }),
         minPlayers: field('integer', { required: true, min: 1, max: 4 }),
         maxPlayers: field('integer', { required: true, min: 1, max: 4 }),
+        mode: field('string', { required: true, enum: ['coop', 'rival'] }),
       },
     },
     MATCH_STARTING: {

@@ -66,7 +66,10 @@
       const response = await this.fetchImpl(`${this.apiBase}/rooms`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ maxPlayers: options.maxPlayers || 4 }),
+        body: JSON.stringify({
+          maxPlayers: options.maxPlayers || 4,
+          mode: options.mode === 'rival' ? 'rival' : 'coop',
+        }),
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || `Room creation failed (${response.status})`);
