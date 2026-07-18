@@ -1,7 +1,6 @@
 // viewport.js — Viewport rendering, lighting compositing.
 export function drawWorldViewport(cam, vpX, vpW, vpH, vpY, pLabel, slot = null) {
     const isDying = Neo.gameState === 'dying';
-    const networkView = Neo.multiplayerGameView?.active ? Neo.multiplayerGameView : null;
     const slotDead = !!slot?.getDead?.();
     const _shakeOn = window.NeoSettings?.getAccess()?.screenShake !== false;
     // Random jitter (magnitude from the trauma² curve) + a directional kick that
@@ -16,7 +15,7 @@ export function drawWorldViewport(cam, vpX, vpW, vpH, vpY, pLabel, slot = null) 
     Neo.drawFloor();
     Neo.drawRoomDecor();
     Neo.drawWorldProps();
-    if (!networkView) Neo.drawChallengeObelisk();
+    Neo.drawChallengeObelisk();
     Neo.drawDeadBodies();
     let sectionPerfStart = Neo.perfStart();
     Neo.drawChests();
@@ -41,11 +40,9 @@ export function drawWorldViewport(cam, vpX, vpW, vpH, vpY, pLabel, slot = null) 
     Neo.perfEnd('draw.entities', sectionPerfStart);
     drawRoomCeilingMask();
     if (!isDying) {
-      const networkSlots = networkView
-        ? networkView.getPresentationPlayerSlots?.()
-        : null;
-      if (Array.isArray(networkSlots)) {
-        networkSlots.forEach(drawSlot => {
+      const presentationSlots = Neo.presentationPlayerSlots;
+      if (Array.isArray(presentationSlots)) {
+        presentationSlots.forEach(drawSlot => {
           if (!drawSlot.getDead?.()) Neo.drawPlayerSlot(drawSlot);
         });
       } else if (Neo.isMultiplayerMode()) {
@@ -62,27 +59,23 @@ export function drawWorldViewport(cam, vpX, vpW, vpH, vpY, pLabel, slot = null) 
     // occlude the player. Columns the player is in front of were already drawn
     // in drawRoomDecor (before the player).
     Neo.drawStructuresOverPlayer?.();
-    if (networkView) {
-      if (!isDying) networkView.drawAuthoritativePlayerEffects?.();
-    } else {
-      if (!isDying) Neo.drawPlayerLaser();
-      Neo.drawJusticeBlades?.();
-      Neo.drawTitanHammer?.();
-      Neo.drawGhostBalls?.();
-      Neo.drawSkySwords?.();
-      if (!isDying) Neo.drawHealingZoneChargeBar?.();
-      if (!isDying) Neo.drawDeathBallChargeBar?.();
-      if (!isDying) Neo.drawNimrodStompChargeBar?.();
-      if (!isDying) Neo.drawLoveBombChargeBar?.();
-      if (!isDying) Neo.drawGhostBallChargeBar?.();
-    }
+    if (!isDying) Neo.drawActivePlayerEffects?.();
+    Neo.drawJusticeBlades?.();
+    Neo.drawTitanHammer?.();
+    Neo.drawGhostBalls?.();
+    Neo.drawSkySwords?.();
+    if (!isDying) Neo.drawHealingZoneChargeBar?.();
+    if (!isDying) Neo.drawDeathBallChargeBar?.();
+    if (!isDying) Neo.drawNimrodStompChargeBar?.();
+    if (!isDying) Neo.drawLoveBombChargeBar?.();
+    if (!isDying) Neo.drawGhostBallChargeBar?.();
     if (isDying && Neo.playerDeathAnim) Neo.drawPlayerCorpseAnim(Neo.playerDeathAnim);
     sectionPerfStart = Neo.perfStart();
     Neo.drawParticles();
     Neo.perfEnd('draw.particles', sectionPerfStart);
     sectionPerfStart = Neo.perfStart();
     if (!isDying) Neo.drawLadderPrompt();
-    if (!isDying && !networkView) Neo.drawJesterPortalPrompt();
+    if (!isDying) Neo.drawJesterPortalPrompt();
     Neo.perfEnd('draw.prompts', sectionPerfStart);
     // P-label in corner of each viewport (split only)
     if (Neo.isSplitScreen() && pLabel) {

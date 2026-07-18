@@ -2840,7 +2840,7 @@ export function resumeGame() {
       matchSeed: Neo.baseSeedStr,
       floorSeed: Neo.seedStr || Neo.baseSeedStr,
       generationVersion: 1,
-      contentVersion: globalThis.NeoNyke?.simulation?.CAMPAIGN_CONTENT_VERSION || 'shared-neo-campaign-parity-v15',
+      contentVersion: globalThis.NeoNyke?.simulation?.CAMPAIGN_CONTENT_VERSION || 'shared-neo-campaign-parity-v16',
       floorNumber: Neo.floor,
       characterKey: Neo.chosenCharacter,
     });

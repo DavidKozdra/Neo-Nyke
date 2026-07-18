@@ -56,7 +56,8 @@
     'laserActive', 'laserTime', 'laserTick', 'laserMode', 'laserAngle',
     'laserSweepSpeed', 'loveBeamCasting', 'activeBeamPaths', 'justiceBlades',
     'titanHammer', 'ghostBalls', 'skySwords', 'gameElapsedTime', 'lavaAnimTime',
-    'showFloorTransition', 'floorTransitionTime',
+    'showFloorTransition', 'floorTransitionTime', 'presentationPlayerSlots',
+    'activePlayerEffects',
   ]);
 
   function deriveAbilityPresentation(data = {}) {
@@ -188,15 +189,22 @@
       this.floorTransitionStartedAt = 0;
       this.seenGameplayEvents = new Set();
       this.combatEffects = [];
-      this.projectileTrails = new Map();
       this.presentationRooms = new Map();
       this.presentationPlayerSlots = [];
+      this.presentationPlayerActors = new Map();
+      this.presentationEnemyActors = new Map();
+      this.presentationProjectiles = new Map();
+      this.presentationPickups = new Map();
+      this.presentationHazards = new Map();
+      this.presentationBodies = new Map();
+      this.presentationInteractables = new Map();
       this.gamepadAttackPressed = false;
       this.camera = { x: 0, y: 0, roomId: null };
       this.lastPresentationFrameAt = 0;
       this.lastWorldTransform = null;
       this.paused = false;
       this.upgradeDwell = { selectionEventId: '', optionId: '', seconds: 0, sent: false };
+      this.requestedInteractions = new Set();
       this.campaignPresentationState = null;
       this.campaignHudState = null;
       this.campaignBodyPaused = null;
@@ -208,8 +216,23 @@
         if (this.active && event.target === this.canvas) event.preventDefault();
       };
       this.boundBlur = () => this.keys.clear();
-      this.boundPauseResume = () => this._togglePause(false);
+      this.boundPauseResume = event => {
+        event?.preventDefault?.();
+        event?.stopImmediatePropagation?.();
+        this._togglePause(false);
+      };
+      this.boundPauseSettings = event => {
+        event?.preventDefault?.();
+        event?.stopImmediatePropagation?.();
+        this.document?.getElementById('settingsBtn')?.click();
+      };
       this.boundPauseLeave = () => this.document?.getElementById('multiplayerLeaveGame')?.click();
+      this.pointerWasLocked = false;
+      this.boundPointerLockChange = () => {
+        const locked = this.document?.pointerLockElement === this.canvas;
+        if (this.active && this.pointerWasLocked && !locked && !this.paused) this._togglePause(true);
+        this.pointerWasLocked = locked;
+      };
       this.boundRenderFrame = () => {
         if (!this.active) return;
         this.syncPresentation();
@@ -238,7 +261,10 @@
       root.addEventListener?.('pointerdown', this.boundPointerDown);
       root.addEventListener?.('contextmenu', this.boundContextMenu);
       root.addEventListener?.('blur', this.boundBlur);
-      this.document?.getElementById('pauseResume')?.addEventListener('click', this.boundPauseResume);
+      this.pointerWasLocked = this.document?.pointerLockElement === this.canvas;
+      this.document?.addEventListener?.('pointerlockchange', this.boundPointerLockChange);
+      this.document?.getElementById('pauseResume')?.addEventListener('click', this.boundPauseResume, true);
+      this.document?.getElementById('pauseSettings')?.addEventListener('click', this.boundPauseSettings, true);
       this.document?.getElementById('pauseLeaveServer')?.addEventListener('click', this.boundPauseLeave);
       this.unsubscribe = this.session.subscribe(snapshot => this._onSnapshot(snapshot));
       this.inputTimer = root.setInterval(() => this._sendInput(), INPUT_INTERVAL_MS);
@@ -261,11 +287,14 @@
       root.removeEventListener?.('pointerdown', this.boundPointerDown);
       root.removeEventListener?.('contextmenu', this.boundContextMenu);
       root.removeEventListener?.('blur', this.boundBlur);
-      this.document?.getElementById('pauseResume')?.removeEventListener('click', this.boundPauseResume);
+      this.document?.removeEventListener?.('pointerlockchange', this.boundPointerLockChange);
+      this.document?.getElementById('pauseResume')?.removeEventListener('click', this.boundPauseResume, true);
+      this.document?.getElementById('pauseSettings')?.removeEventListener('click', this.boundPauseSettings, true);
       this.document?.getElementById('pauseLeaveServer')?.removeEventListener('click', this.boundPauseLeave);
       this.keys.clear();
-      this.projectileTrails.clear();
       this.presentationPlayerSlots = [];
+      this.presentationPlayerActors.clear();
+      this._clearPresentationEntityCaches();
       const multiplayerHud = this.document?.getElementById('multiplayerGameHud');
       multiplayerHud?.classList.add('hidden');
       if (multiplayerHud) {
@@ -277,6 +306,14 @@
       this.document?.getElementById('start')?.classList.remove('hidden');
       root.document?.body?.classList.remove('network-multiplayer-active');
       this._restoreCampaignPresentationState();
+      // A 3D multiplayer frame must never remain behind the main menu after the
+      // authority/session is gone. The next normal 3D render re-enables this
+      // class and canvas without changing the player's saved view preference.
+      root.document?.body?.classList.remove('render3d');
+      const webglCanvas = this.document?.getElementById('c3d');
+      if (webglCanvas) webglCanvas.style.display = 'none';
+      this.ctx?.setTransform?.(1, 0, 0, 1, 0, 0);
+      this.ctx?.clearRect?.(0, 0, this.canvas?.width || 0, this.canvas?.height || 0);
     }
 
     _captureCampaignPresentationState() {
@@ -318,6 +355,8 @@
       this.campaignHudState = null;
       this.campaignBodyPaused = null;
       this.presentationRooms.clear();
+      this.presentationPlayerActors.clear();
+      this._clearPresentationEntityCaches();
       this.combatEffects = [];
       this.seenGameplayEvents.clear();
       this.previousSample = null;
@@ -332,6 +371,7 @@
       this.lastPresentationFrameAt = 0;
       this.camera = { x: 0, y: 0, roomId: null };
       this.upgradeDwell = { selectionEventId: '', optionId: '', seconds: 0, sent: false };
+      this.requestedInteractions.clear();
     }
 
     _setCampaignHudVisible(visible) {
@@ -467,6 +507,27 @@
       if (target) this.session.sendInteract(target.id);
     }
 
+    _syncAutomaticChestInteraction(localPlayer, state) {
+      const interactables = Object.values(state?.interactables || {});
+      const liveIds = new Set(interactables.map(item => item.id));
+      this.requestedInteractions.forEach(id => {
+        const item = state?.interactables?.[id];
+        if (!liveIds.has(id) || item?.activated || item?.opened) this.requestedInteractions.delete(id);
+      });
+      if (!localPlayer || localPlayer.downed || localPlayer.pendingUpgrade) return;
+      const chest = interactables.find(item => item.kind === 'relic_chest'
+        && !item.activated && !item.opened
+        && item.roomId === localPlayer.roomId
+        && Math.hypot(Number(item.x) - Number(localPlayer.x), Number(item.y) - Number(localPlayer.y)) < 36);
+      if (!chest || this.requestedInteractions.has(chest.id)) return;
+      this.requestedInteractions.add(chest.id);
+      try {
+        this.session.sendInteract(chest.id);
+      } catch {
+        this.requestedInteractions.delete(chest.id);
+      }
+    }
+
     _selectUpgrade(index) {
       const player = this.currentSample?.state?.players?.[this.session.snapshot().playerId];
       const pending = player?.pendingUpgrade;
@@ -493,12 +554,14 @@
         optionId: option.id,
         selectionEventId: pending.selectionEventId,
         roomId: source.roomId,
-        x: Number(source.x || 0) + (index - (count - 1) / 2) * 112,
-        y: Number(source.y || 0) + 92,
+        x: Number(source.x || 0) + (index - (count - 1) / 2) * 144,
+        y: Number(source.y || 0) - 4,
         r: 20,
         dwellMode: true,
         dwell: this.upgradeDwell.selectionEventId === pending.selectionEventId
           && this.upgradeDwell.optionId === option.id ? this.upgradeDwell.seconds : 0,
+        side: index < count / 2 ? 'left' : 'right',
+        picksRemaining: 1,
         networkChoice: true,
       }));
     }
@@ -765,9 +828,36 @@
       return this.presentationPlayerSlots;
     }
 
+    _clearPresentationEntityCaches() {
+      this.presentationEnemyActors.clear();
+      this.presentationProjectiles.clear();
+      this.presentationPickups.clear();
+      this.presentationHazards.clear();
+      this.presentationBodies.clear();
+      this.presentationInteractables.clear();
+    }
+
+    _stablePresentationEntities(cache, sources, adapt = source => source) {
+      const liveIds = new Set(sources.map(source => String(source.id)));
+      cache.forEach((entity, id) => {
+        if (!liveIds.has(id)) cache.delete(id);
+      });
+      return sources.map(source => {
+        const id = String(source.id);
+        const entity = cache.get(id) || {};
+        Object.assign(entity, adapt(source));
+        cache.set(id, entity);
+        return entity;
+      });
+    }
+
     _syncCampaignPresentationEntities(players, projectiles, localPlayerId, state) {
       const serverTick = Number(state?.tick || 0);
       const now = root.performance?.now?.() || Date.now();
+      const livePlayerIds = new Set(Object.keys(players || {}));
+      this.presentationPlayerActors.forEach((actor, playerId) => {
+        if (!livePlayerIds.has(playerId)) this.presentationPlayerActors.delete(playerId);
+      });
       this.presentationPlayerSlots = Object.values(players || {}).map(player => {
         const authoritativeActionEvent = this.combatEffects.some(effect => (
           effect.data?.playerId === player.id
@@ -778,7 +868,8 @@
           || (player.action !== 'idle' && serverTick - Number(player.actionTick || 0) <= 4);
         const activeSeconds = Number(this.neo.ATTACKS?.melee?.active || 0.17);
         const elapsed = Math.max(0, serverTick - Number(player.actionTick || 0)) / 20;
-        const actor = {
+        const actor = this.presentationPlayerActors.get(player.id) || {};
+        Object.assign(actor, {
           ...player,
           character: player.characterKey || 'thorn_knight',
           r: Number(player.radius || 18),
@@ -797,7 +888,8 @@
           swingFacing: Math.cos(Number(player.aimDirection || 0)) < 0 ? -1 : 1,
           overhealBarrier: Number(player.barrier || 0),
           overhealBarrierMax: Math.max(Number(player.barrier || 0), Number(player.maxHealth || 100) * 0.4),
-        };
+        });
+        this.presentationPlayerActors.set(player.id, actor);
         return {
           id: player.id,
           label: `${player.displayName || player.id}${player.id === localPlayerId ? ' (YOU)' : ''}`,
@@ -808,16 +900,131 @@
         };
       });
       const localSlot = this.presentationPlayerSlots.find(slot => slot.id === localPlayerId);
+      this.neo.presentationPlayerSlots = this.presentationPlayerSlots;
       if (localSlot) {
         this.neo.player = localSlot.getEntity();
         this._syncCampaignHudState(this.neo.player, state);
       }
-      this.neo.projectiles = Object.values(projectiles || {}).map(projectile => ({
-        ...projectile,
-        r: Number(projectile.radius || 7),
-        enemy: !!projectile.hostile,
-        life: Math.max(0, Number(projectile.expiresTick || 0) - serverTick) / 20,
-      }));
+      this.neo.activePlayerEffects = this._projectActivePlayerEffects(now);
+      this.neo.projectiles = this._stablePresentationEntities(
+        this.presentationProjectiles,
+        Object.values(projectiles || {}),
+        projectile => ({
+          ...projectile,
+          r: Number(projectile.radius || 7),
+          enemy: !!projectile.hostile,
+          life: Math.max(0, Number(projectile.expiresTick || 0) - serverTick) / 20,
+        }),
+      );
+      this._syncSpecialMovePresentation(now);
+    }
+
+    _projectActivePlayerEffects(now = root.performance?.now?.() || Date.now()) {
+      const slotsById = new Map(this.presentationPlayerSlots.map(slot => [slot.id, slot]));
+      return this.combatEffects.flatMap(effect => {
+        const data = effect.data || {};
+        if (effect.eventType !== 'PLAYER_ABILITY_USED' || !CONTINUOUS_BEAM_MOVES.has(data.abilityId)) return [];
+        const duration = Math.max(0.05, Number(MOVE_BASE_STATS[data.abilityId]?.duration || 0.52));
+        const ageSeconds = Math.max(0, now - Number(effect.startedAt || now)) / 1000;
+        const slot = slotsById.get(data.playerId);
+        if (!slot || slot.getDead?.() || ageSeconds >= duration) return [];
+        const mode = data.abilityId === 'turtle_wave' ? 'turtle_wave'
+          : data.abilityId === 'holy_eye_beams' ? 'holy_eye_beams'
+            : data.abilityId === 'thorn_blood_beams' ? 'thorn_blood_beams'
+              : data.abilityId === 'god_sweep' ? 'god_sweep'
+                : 'beam';
+        const sweepSpeed = Number(data.sweepDirection || 1) * 4.6;
+        return [{
+          player: slot.getEntity(),
+          abilityId: data.abilityId,
+          equippedLaser: data.abilityId,
+          laserActive: true,
+          laserTime: duration - ageSeconds,
+          laserTick: 0,
+          laserMode: mode,
+          laserAngle: Number(data.aimDirection || 0)
+            + (data.abilityId === 'god_sweep' ? sweepSpeed * ageSeconds : 0),
+          laserSweepSpeed: sweepSpeed,
+          loveBeamCasting: data.abilityId === 'love_beam',
+          activeBeamPaths: null,
+        }];
+      });
+    }
+
+    _syncSpecialMovePresentation(now = root.performance?.now?.() || Date.now()) {
+      const slotsById = new Map(this.presentationPlayerSlots.map(slot => [slot.id, slot]));
+      const abilityEffects = this.combatEffects.filter(effect => effect.eventType === 'PLAYER_ABILITY_USED');
+      this.neo.justiceBlades = [];
+      this.neo.titanHammer = null;
+      this.neo.skySwords = [];
+
+      abilityEffects.forEach(effect => {
+        const data = effect.data || {};
+        const actor = slotsById.get(data.playerId)?.getEntity?.();
+        if (!actor) return;
+        const age = Math.max(0, now - Number(effect.startedAt || now)) / 1000;
+        const aim = Number(data.aimDirection || actor.aimDirection || 0);
+        if (data.abilityId === 'blade_justice' && age < 2.1) {
+          for (let index = 0; index < 3; index += 1) {
+            const fanOffset = (index - 1) * 0.5;
+            const swingPhase = age * 7.5 + index * 0.7;
+            const direction = aim + fanOffset + Math.sin(swingPhase) * 0.7;
+            const orbit = 120 * (0.82 + 0.18 * Math.cos(swingPhase));
+            this.neo.justiceBlades.push({
+              id: `${effect.eventId || 'blade'}:${index}`,
+              ownerId: actor.id,
+              x: actor.x + Math.cos(direction) * orbit,
+              y: actor.y + Math.sin(direction) * orbit,
+              angle: direction + Math.sign(Math.cos(swingPhase)) * 0.5,
+              radius: 16,
+              life: 2.1 - age,
+              maxLife: 2.1,
+            });
+          }
+        } else if (data.abilityId === 'titan_hammer' && age < 8) {
+          this.neo.titanHammer = {
+            id: effect.eventId || 'titan-hammer',
+            ownerId: actor.id,
+            x: actor.x + Math.cos(aim) * 120,
+            y: actor.y + Math.sin(aim) * 120,
+            angle: aim,
+            life: 8 - age,
+            radius: Math.max(70, Number(data.effectRadius || 120) * 0.75),
+            swinging: age < 0.24 ? Math.max(0, 1 - age / 0.24) : 0,
+            swingCooldown: 0,
+            swingsLeft: 0,
+          };
+        } else if (data.abilityId === 'excalibur_strike' && age < 1.34) {
+          const centerX = Number.isFinite(Number(data.originX)) ? Number(data.originX) : Number(actor.x);
+          const centerY = Number.isFinite(Number(data.originY)) ? Number(data.originY) : Number(actor.y);
+          const seed = stableNumericId(effect.eventId || `${data.playerId}:${effect.tick || 0}`);
+          for (let index = 0; index < 5; index += 1) {
+            const delay = index * 0.07;
+            const localAge = age - delay;
+            if (localAge >= 1.34) continue;
+            const offsetAngle = ((seed + index * 2654435761) % 6283) / 1000;
+            const offsetDistance = index === 0 ? 0 : 28 + ((seed >>> (index * 3)) % 92);
+            const spin = ((seed >>> index) & 1 ? -1 : 1) * (5 + ((seed + index) % 30) / 10);
+            const falling = localAge < 0.34;
+            const hovering = localAge >= 0.34 && localAge < 1.04;
+            this.neo.skySwords.push({
+              id: `${effect.eventId || 'excalibur'}:${index}`,
+              x: centerX + Math.cos(offsetAngle) * offsetDistance,
+              y: centerY + Math.sin(offsetAngle) * offsetDistance,
+              radius: 76,
+              delay: Math.max(0, -localAge),
+              phase: falling ? 'falling' : hovering ? 'hover' : 'fade',
+              fall: falling ? Math.max(0, 0.34 - Math.max(0, localAge)) : 0,
+              hoverTime: hovering ? 1.04 - localAge : 0,
+              fadeT: hovering || falling ? 0.3 : Math.max(0, 1.34 - localAge),
+              angle: offsetAngle + spin * Math.max(0, localAge - 0.34),
+              spin,
+            });
+          }
+        }
+      });
+      this.neo.ghostBalls = this.neo.projectiles.filter(projectile => projectile.kind === 'ghost_ball');
+      this.neo.projectiles = this.neo.projectiles.filter(projectile => projectile.kind !== 'ghost_ball');
     }
 
     _syncCampaignHudState(localPlayer, state) {
@@ -861,58 +1068,6 @@
       this.neo.activeBeamPaths = null;
     }
 
-    drawAuthoritativePlayerEffects() {
-      if (typeof this.neo.drawPlayerLaser !== 'function') return;
-      const now = root.performance?.now?.() || Date.now();
-      const slotsById = new Map(this.presentationPlayerSlots.map(slot => [slot.id, slot]));
-      const saved = {
-        player: this.neo.player,
-        laserActive: this.neo.laserActive,
-        laserTime: this.neo.laserTime,
-        laserTick: this.neo.laserTick,
-        laserMode: this.neo.laserMode,
-        laserAngle: this.neo.laserAngle,
-        laserSweepSpeed: this.neo.laserSweepSpeed,
-        loveBeamCasting: this.neo.loveBeamCasting,
-        activeBeamPaths: this.neo.activeBeamPaths,
-        rng: this.neo.rng,
-      };
-      try {
-        this.combatEffects.forEach(effect => {
-          const data = effect.data || {};
-          if (effect.eventType !== 'PLAYER_ABILITY_USED' || !CONTINUOUS_BEAM_MOVES.has(data.abilityId)) return;
-          const duration = Math.max(0.05, Number(MOVE_BASE_STATS[data.abilityId]?.duration || 0.52));
-          const ageSeconds = Math.max(0, now - Number(effect.startedAt || now)) / 1000;
-          if (ageSeconds >= duration) return;
-          const slot = slotsById.get(data.playerId);
-          if (!slot || slot.getDead?.()) return;
-          this.neo.player = slot.getEntity();
-          this.neo.laserActive = true;
-          this.neo.laserTime = duration - ageSeconds;
-          this.neo.laserTick = 0;
-          this.neo.laserMode = data.abilityId === 'turtle_wave' ? 'turtle_wave'
-            : data.abilityId === 'holy_eye_beams' ? 'holy_eye_beams'
-              : data.abilityId === 'thorn_blood_beams' ? 'thorn_blood_beams'
-                : data.abilityId === 'god_sweep' ? 'god_sweep'
-                  : 'beam';
-          this.neo.loveBeamCasting = data.abilityId === 'love_beam';
-          this.neo.laserSweepSpeed = Number(data.sweepDirection || 1) * 4.6;
-          this.neo.laserAngle = Number(data.aimDirection || 0)
-            + (data.abilityId === 'god_sweep' ? this.neo.laserSweepSpeed * ageSeconds : 0);
-          this.neo.activeBeamPaths = null;
-          // drawPlayerLaser is the real campaign renderer and emits cosmetic
-          // particles via Neo.rng(). Network sessions do not own a campaign
-          // run RNG, so provide a client-only FX source for this draw.
-          this.neo.rng = typeof saved.rng === 'function'
-            ? saved.rng
-            : () => this.neo.nextRandom?.('fx') ?? Math.random();
-          this.neo.drawPlayerLaser();
-        });
-      } finally {
-        Object.assign(this.neo, saved);
-      }
-    }
-
     // This is intentionally a state projection, not a renderer. It gives the
     // existing browser game (`Neo.draw`) the same live objects it normally
     // reads in single player; networked mode changes only where those objects
@@ -931,7 +1086,6 @@
       const enemies = this._renderedEntities('enemies', now);
       const projectiles = this._renderedEntities('projectiles', now);
       const pickups = state?.pickups || {};
-      const interactables = state?.interactables || {};
       const localPlayer = players[localPlayerId];
       const frameDelta = this.lastPresentationFrameAt > 0
         ? clamp((now - this.lastPresentationFrameAt) / 1000, 0, 0.05)
@@ -947,6 +1101,7 @@
       const ctx = this.ctx;
 
       this._updateUpgradeDwell(localPlayer, state, frameDelta);
+      this._syncAutomaticChestInteraction(localPlayer, state);
       this._syncNeoPresentationFloor(floorState, enemies, pickups, state);
       this._syncCampaignPresentationEntities(visiblePlayers, projectiles, localPlayerId, state);
       this.neo.gameElapsedTime = Number(state?.elapsedSeconds || 0);
@@ -965,94 +1120,6 @@
     // a renderer. It now only synchronizes state; Neo.draw owns presentation.
     render() {
       return this.syncPresentation();
-    }
-
-    _renderLegacyFallback() {
-      const now = root.performance?.now?.() || Date.now();
-      const state = this.currentSample?.state;
-      const authorityFloorState = state?.floorState || { width: 900, height: 700, wallThickness: 28, doorWidth: 140 };
-      const visibleBounds = this._visibleCanvasBounds();
-      const players = this._renderedPlayers(now);
-      const localPlayerId = this.session.snapshot().playerId;
-      const localRoomId = players[localPlayerId]?.roomId || authorityFloorState.currentRoomId;
-      const floorState = { ...authorityFloorState, currentRoomId: localRoomId };
-      const visiblePlayers = Object.fromEntries(Object.entries(players).filter(([, player]) => player.roomId === localRoomId));
-      const enemies = this._renderedEntities('enemies', now);
-      const projectiles = this._renderedEntities('projectiles', now);
-      const pickups = state?.pickups || {};
-      const interactables = state?.interactables || {};
-      const ctx = this.ctx;
-      const transform = computeCameraTransform(this.canvas.width, this.canvas.height, this.camera, visibleBounds);
-      const useCampaignWorldPipeline = typeof this.neo.drawWorldViewport === 'function'
-        && typeof this.neo.drawProjectiles === 'function'
-        && typeof this.neo.drawEnemies === 'function'
-        && typeof this.neo.drawPlayerSlot === 'function';
-      if (useCampaignWorldPipeline) {
-        this.neo.gameElapsedTime = Number(state?.elapsedSeconds || 0);
-        const floorTransitionAge = this.floorTransitionStartedAt > 0
-          ? Math.max(0, now - this.floorTransitionStartedAt) / 1000
-          : Number.POSITIVE_INFINITY;
-        this.neo.showFloorTransition = floorTransitionAge <= 1.25;
-        this.neo.floorTransitionTime = floorTransitionAge;
-        this.neo.lavaAnimTime = Number(this.neo.lavaAnimTime || 0) + frameDelta;
-        this.neo.updateParticles?.(frameDelta);
-        ctx.save();
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
-        ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-        ctx.fillStyle = '#02030a';
-        ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-        ctx.restore();
-        this.neo.drawWorldViewport(this.camera, 0, this.canvas.width, this.canvas.height, 0, null);
-        this._updateHud(state, players);
-        return;
-      }
-
-      ctx.save();
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-      ctx.fillStyle = '#02030a';
-      ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-      ctx.translate(transform.offsetX, transform.offsetY);
-      ctx.scale(transform.scale, transform.scale);
-      if (typeof this.neo.drawFloor === 'function') {
-        this.neo.drawFloor();
-        this.neo.drawRoomDecor?.();
-        this.neo.drawWorldProps?.();
-        this.neo.drawChallengeObelisk?.();
-      } else {
-        this._drawRoom(floorState);
-      }
-      this.neo.drawChests?.();
-      if (typeof this.neo.drawPickups === 'function') this.neo.drawPickups();
-      else Object.values(pickups).filter(entity => entity.roomId === floorState.currentRoomId)
-        .forEach(entity => this._drawPickup(entity, now));
-      Object.values(interactables).filter(entity => entity.roomId === floorState.currentRoomId
-        && !(entity.kind === 'relic_chest' && typeof this.neo.drawChests === 'function')
-        && !(entity.kind === 'stairs' && typeof this.neo.drawPickups === 'function'))
-        .forEach(entity => this._drawInteractable(entity, now));
-      Object.values(projectiles).filter(entity => entity.roomId === floorState.currentRoomId)
-        .forEach(entity => this._drawProjectile(entity));
-      if (typeof this.neo.drawEnemies === 'function') {
-        try {
-          this.neo.drawEnemies({
-            left: this.camera.x,
-            right: this.camera.x + this.canvas.width,
-            top: this.camera.y,
-            bottom: this.camera.y + this.canvas.height,
-          });
-        } catch (_error) {
-          Object.values(enemies).filter(entity => entity.roomId === floorState.currentRoomId)
-            .forEach(entity => this._drawEnemy(entity, state?.tick || 0, now));
-        }
-      } else Object.values(enemies).filter(entity => entity.roomId === floorState.currentRoomId)
-        .forEach(entity => this._drawEnemy(entity, state?.tick || 0, now));
-      Object.values(visiblePlayers).forEach(player => this._drawPlayer(player, player.id === localPlayerId));
-      this.neo.drawStructuresOverPlayer?.();
-      this.neo.updateParticles?.(frameDelta);
-      if (typeof this.neo.drawParticles === 'function') this.neo.drawParticles();
-      else this._drawCombatEffects(visiblePlayers, enemies, now);
-      ctx.restore();
-      this._updateHud(state, players);
     }
 
     _updateCamera(player, fixedDelta) {
@@ -1096,16 +1163,19 @@
       this.neo.currentRoom = rooms.find(room => room.id === floorState.currentRoomId) || rooms[0] || null;
       this.neo.floor = Math.max(1, Number(floorState.layout?.floorNumber || 1));
       this.neo.floorsEntered = this.neo.floor;
-      this.neo.enemies = Object.values(enemies || {})
-        .filter(enemy => !enemy.dead && enemy.roomId === floorState.currentRoomId)
-        .map(enemy => {
+      const liveEnemies = Object.values(enemies || {})
+        .filter(enemy => !enemy.dead && enemy.roomId === floorState.currentRoomId);
+      this.neo.enemies = this._stablePresentationEntities(
+        this.presentationEnemyActors,
+        liveEnemies,
+        enemy => {
           const adapted = {
             ...enemy,
             r: Number(enemy.radius || 20),
             hp: Number(enemy.health || 0),
             max: Math.max(1, Number(enemy.maxHealth || 1)),
             speed: Number(enemy.moveSpeed || 0),
-            spawnT: 0,
+            spawnT: Math.max(0, 0.72 - (Number(state?.tick || 0) - Number(enemy.spawnTick || 0)) / 20),
             stun: Math.max(0, Number(enemy.stunnedUntilTick || enemy.frozenUntilTick || 0) - Number(state?.tick || 0)) / 20,
             statuses: {
               bleed: { stacks: Math.max(0, Math.round(Number(enemy.bleedDamage || 0) / 4)), duration: Math.max(0, Number(enemy.bleedTicksRemaining || 0)) * 0.5, tick: 0 },
@@ -1121,10 +1191,12 @@
           };
           this.neo.ensureStatuses?.(adapted);
           return adapted;
-        });
-      this.neo.deadBodies = Object.values(enemies || {})
-        .filter(enemy => enemy.dead && enemy.roomId === floorState.currentRoomId)
-        .map(enemy => ({
+        },
+      );
+      this.neo.deadBodies = this._stablePresentationEntities(
+        this.presentationBodies,
+        Object.values(enemies || {}).filter(enemy => enemy.dead && enemy.roomId === floorState.currentRoomId),
+        enemy => ({
           id: stableNumericId(enemy.id),
           x: Number(enemy.x || 0),
           y: Number(enemy.y || 0),
@@ -1138,42 +1210,51 @@
           fadeStart: Number(this.neo.CORPSE_FADE_START || 8),
           fallTime: Number(this.neo.CORPSE_FALL_TIME || 0.45),
           leavesBloodPool: true,
-        }));
-      this.neo.justiceBlades = [];
-      this.neo.titanHammer = null;
-      this.neo.ghostBalls = [];
-      this.neo.skySwords = [];
+        }),
+      );
       const roomInteractables = Object.values(state?.interactables || {});
-      rooms.forEach(room => {
-        room.chests = roomInteractables
-          .filter(interactable => interactable.kind === 'relic_chest' && interactable.roomId === room.id)
-          .map(interactable => ({
-            id: interactable.id,
-            x: Number(interactable.x || 0),
-            y: Number(interactable.y || 0),
-            open: !!interactable.opened || !!interactable.activated,
-            choiceType: '',
-            networkChest: true,
-          }));
-      });
-      this.neo.chests = this.neo.currentRoom?.chests || [];
-      this.neo.pickups = Object.values(pickups || {})
-        .filter(pickup => pickup.roomId === floorState.currentRoomId)
-        .map(pickup => ({ ...pickup, value: Number(pickup.amount || pickup.value || 1), r: Number(pickup.radius || 13) }));
-      this.neo.pickups.push(...roomInteractables
-        .filter(interactable => interactable.kind === 'stairs' && interactable.roomId === floorState.currentRoomId)
-        .map(interactable => ({
+      const presentationChests = this._stablePresentationEntities(
+        this.presentationInteractables,
+        roomInteractables.filter(interactable => interactable.kind === 'relic_chest'),
+        interactable => ({
           id: interactable.id,
-          type: 'ladder',
+          roomId: interactable.roomId,
           x: Number(interactable.x || 0),
           y: Number(interactable.y || 0),
-          networkExit: true,
-        })));
-      this.neo.pickups.push(...this._upgradePresentationPickups(state)
-        .filter(choice => choice.roomId === floorState.currentRoomId));
-      this.neo.hazards = Object.values(state?.abilityEntities || {})
-        .filter(entity => entity.roomId === floorState.currentRoomId)
-        .map(entity => ({ ...entity, r: Number(entity.radius || entity.r || 32), ttl: Math.max(0, Number(entity.expiresTick || 0) - Number(state?.tick || 0)) / 20 }));
+          open: !!interactable.opened || !!interactable.activated,
+          choiceType: '',
+          networkChest: true,
+        }),
+      );
+      rooms.forEach(room => {
+        room.chests = presentationChests.filter(chest => chest.roomId === room.id);
+      });
+      this.neo.chests = this.neo.currentRoom?.chests || [];
+      const presentationPickupSources = [
+        ...Object.values(pickups || {}).filter(pickup => pickup.roomId === floorState.currentRoomId),
+        ...roomInteractables
+          .filter(interactable => interactable.kind === 'stairs' && interactable.roomId === floorState.currentRoomId)
+          .map(interactable => ({
+            ...interactable,
+            type: 'ladder',
+            networkExit: true,
+          })),
+        ...this._upgradePresentationPickups(state).filter(choice => choice.roomId === floorState.currentRoomId),
+      ];
+      this.neo.pickups = this._stablePresentationEntities(
+        this.presentationPickups,
+        presentationPickupSources,
+        pickup => ({
+          ...pickup,
+          value: Number(pickup.amount || pickup.value || 1),
+          r: Number(pickup.radius || pickup.r || 13),
+        }),
+      );
+      this.neo.hazards = this._stablePresentationEntities(
+        this.presentationHazards,
+        Object.values(state?.abilityEntities || {}).filter(entity => entity.roomId === floorState.currentRoomId),
+        entity => ({ ...entity, r: Number(entity.radius || entity.r || 32), ttl: Math.max(0, Number(entity.expiresTick || 0) - Number(state?.tick || 0)) / 20 }),
+      );
       this.neo.decorations = this.neo.currentRoom?.decorations || [];
       this.neo.structures = this.neo.currentRoom?.structures || [];
       this.neo.destructibles = this.neo.currentRoom?.destructibles || [];
@@ -1196,9 +1277,10 @@
         };
         this.neo.rng = () => this.neo.nextRandom?.('encounter') ?? Math.random();
         this.neo.decorateRoomData(room);
-        // Decorative pixels are client-only. Structures, hazards and
-        // destructibles join this adapter only when authority collision owns them.
-        room.structures = [];
+        // Room geometry is presentation authored by the normal campaign room
+        // decorator. Removing it made network rooms lose pillars/chambers and
+        // appear larger despite sharing the same 900x700 authority bounds.
+        // Dynamic/gameplay entities below still come only from authority.
         room.destructibles = [];
         room.hazards = [];
         room.pickups = [];
@@ -1214,403 +1296,6 @@
         this.neo.rngStreams = savedStreams;
         this.neo.rng = savedRng;
       }
-    }
-
-    _drawRoom(floorState) {
-      const ctx = this.ctx;
-      const width = Number(floorState.width) || 900;
-      const height = Number(floorState.height) || 700;
-      const wall = Number(floorState.wallThickness) || 28;
-      const tile = 50;
-      const currentRoom = floorState.layout?.rooms?.find(room => room.id === floorState.currentRoomId) || { doors: {} };
-      const roomColors = {
-        start: ['#25273a', '#0a0b13'],
-        combat: ['#292431', '#0d0a10'],
-        treasure: ['#302944', '#100b18'],
-        shop: ['#21352f', '#08110e'],
-        anvil: ['#352b24', '#120c08'],
-        challenge: ['#38232a', '#12070a'],
-        ladder: ['#333123', '#111006'],
-        boss: ['#382026', '#120609'],
-        god: ['#3c1d24', '#130508'],
-      };
-      const palette = roomColors[currentRoom.type] || roomColors.combat;
-      const gradient = ctx.createRadialGradient(width / 2, height / 2, 40, width / 2, height / 2, width * 0.7);
-      gradient.addColorStop(0, palette[0]);
-      gradient.addColorStop(1, palette[1]);
-      ctx.fillStyle = gradient;
-      ctx.fillRect(0, 0, width, height);
-      for (let y = wall; y < height - wall; y += tile) {
-        for (let x = wall; x < width - wall; x += tile) {
-          const shade = ((x / tile + y / tile) % 2 === 0) ? 'rgba(58, 62, 84, .34)' : 'rgba(35, 38, 57, .38)';
-          ctx.fillStyle = shade;
-          ctx.fillRect(x + 1, y + 1, Math.min(tile - 2, width - wall - x), Math.min(tile - 2, height - wall - y));
-        }
-      }
-      ctx.strokeStyle = 'rgba(126, 164, 215, .12)';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(wall + 8, wall + 8, width - wall * 2 - 16, height - wall * 2 - 16);
-      this._drawWalls(width, height, wall, Number(floorState.doorWidth) || 140, currentRoom.doors || {});
-
-      ctx.save();
-      ctx.translate(width / 2, height / 2);
-      ctx.fillStyle = 'rgba(82, 113, 172, .12)';
-      ctx.beginPath();
-      ctx.arc(0, 0, 92, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = 'rgba(136, 190, 255, .28)';
-      ctx.lineWidth = 3;
-      ctx.stroke();
-      ctx.fillStyle = 'rgba(196, 224, 255, .25)';
-      ctx.font = '700 18px VT323, monospace';
-      ctx.textAlign = 'center';
-      ctx.fillText(String(currentRoom.type || 'combat').replace(/_/g, ' ').toUpperCase(), 0, 6);
-      ctx.restore();
-    }
-
-    _drawWalls(width, height, wall, doorWidth, doors) {
-      const ctx = this.ctx;
-      const halfDoor = doorWidth / 2;
-      ctx.fillStyle = '#3c3d4d';
-      ctx.shadowColor = 'rgba(0,0,0,.65)';
-      ctx.shadowBlur = 12;
-      const horizontal = (y, open) => {
-        if (open) {
-          ctx.fillRect(0, y, width / 2 - halfDoor, wall);
-          ctx.fillRect(width / 2 + halfDoor, y, width / 2 - halfDoor, wall);
-        } else ctx.fillRect(0, y, width, wall);
-      };
-      const vertical = (x, open) => {
-        if (open) {
-          ctx.fillRect(x, 0, wall, height / 2 - halfDoor);
-          ctx.fillRect(x, height / 2 + halfDoor, wall, height / 2 - halfDoor);
-        } else ctx.fillRect(x, 0, wall, height);
-      };
-      horizontal(0, doors.n);
-      horizontal(height - wall, doors.s);
-      vertical(0, doors.w);
-      vertical(width - wall, doors.e);
-      ctx.shadowBlur = 0;
-      ctx.fillStyle = '#74758a';
-      ctx.fillRect(wall, wall, width - wall * 2, 4);
-      ctx.fillRect(wall, height - wall - 4, width - wall * 2, 4);
-    }
-
-    _drawEnemy(enemy, serverTick, now) {
-      const ctx = this.ctx;
-      const hit = serverTick - Number(enemy.hitTick || -100) <= 2;
-      const dying = !!enemy.dead;
-      const bob = dying ? 0 : Math.sin(now / 140 + Number(String(enemy.id).replace(/\D/g, '') || 0)) * 3;
-      ctx.save();
-      ctx.globalAlpha = dying ? 0.45 : 1;
-      ctx.shadowColor = hit ? '#ffffff' : '#ff4f78';
-      ctx.shadowBlur = hit ? 24 : 10;
-      const spriteKey = this.neo.getEnemySpriteKey?.(enemy) || enemy.spriteKey || enemy.type || 'cult_follower';
-      if (typeof this.neo.drawActorSprite === 'function') {
-        this.neo.drawActorSprite(enemy, spriteKey, enemy.x, enemy.y + bob, dying ? 50 : 60, {
-          flipX: Number(enemy.facing || 1) < 0,
-          shadowColor: hit ? '#ffffff' : '#ff4f78',
-          shadowBlur: hit ? 24 : 10,
-          animation: {
-            maxSpeed: Math.max(1, Number(enemy.moveSpeed || 100)),
-            stepRate: enemy.state === 'charging' ? 11 : 7.5,
-            actionPulse: enemy.state === 'firing' ? 1 : 0,
-            attackProgress: enemy.state === 'aiming' ? 0.5 : 0,
-            seedKey: enemy.id,
-          },
-        });
-      } else if (typeof this.neo.drawSpriteFrame === 'function') {
-        this.neo.drawSpriteFrame(spriteKey, enemy.x, enemy.y + bob, dying ? 50 : 60, {
-          flipX: Number(enemy.facing || 1) < 0,
-          shadowColor: hit ? '#ffffff' : '#ff4f78',
-          shadowBlur: hit ? 24 : 10,
-        });
-      } else {
-        ctx.fillStyle = hit ? '#ffffff' : '#d54a68';
-        ctx.beginPath();
-        ctx.arc(enemy.x, enemy.y, Number(enemy.radius || 20), 0, Math.PI * 2);
-        ctx.fill();
-      }
-      ctx.restore();
-      if (dying) return;
-      if (enemy.state === 'aiming') {
-        ctx.save();
-        ctx.strokeStyle = '#ffb347';
-        ctx.lineWidth = 3;
-        ctx.globalAlpha = 0.65 + Math.sin(now / 55) * 0.25;
-        ctx.beginPath();
-        ctx.arc(enemy.x, enemy.y, Number(enemy.radius || 20) + 12, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.restore();
-      }
-      const width = 58;
-      const ratio = clamp(Number(enemy.health || 0) / Math.max(1, Number(enemy.maxHealth || 1)), 0, 1);
-      ctx.save();
-      ctx.fillStyle = 'rgba(0,0,0,.82)';
-      ctx.fillRect(enemy.x - width / 2, enemy.y - 43, width, 7);
-      ctx.fillStyle = ratio > 0.35 ? '#ff4f78' : '#ffb347';
-      ctx.fillRect(enemy.x - width / 2 + 1, enemy.y - 42, (width - 2) * ratio, 5);
-      ctx.fillStyle = '#ffd8e2';
-      ctx.font = '700 14px VT323, monospace';
-      ctx.textAlign = 'center';
-      ctx.fillText(String(enemy.type || 'enemy').replace(/_/g, ' ').toUpperCase(), enemy.x, enemy.y - 49);
-      ctx.restore();
-    }
-
-    _drawProjectile(projectile) {
-      if (typeof this.neo.drawProjectileShape === 'function' && typeof this.neo.getProjectileVisual === 'function') {
-        const history = this.projectileTrails.get(projectile.id) || [];
-        const last = history[0];
-        if (!last || Math.hypot(Number(last.x) - Number(projectile.x), Number(last.y) - Number(projectile.y)) > 2) {
-          history.unshift({ x: Number(projectile.x), y: Number(projectile.y) });
-          if (history.length > 6) history.length = 6;
-          this.projectileTrails.set(projectile.id, history);
-        }
-        const presentation = {
-          ...projectile,
-          kind: projectile.kind || projectile.type,
-          r: Number(projectile.radius || 5),
-          enemy: !!projectile.hostile,
-          trail: history.slice(1),
-        };
-        this.neo.drawProjectileShape(presentation, this.neo.getProjectileVisual(presentation));
-        return;
-      }
-      const ctx = this.ctx;
-      const angle = Math.atan2(Number(projectile.vy || 0), Number(projectile.vx || 0));
-      const color = deriveProjectileColor(projectile, this.neo);
-      ctx.save();
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 5;
-      ctx.globalAlpha = 0.45;
-      ctx.beginPath();
-      ctx.moveTo(projectile.x - Math.cos(angle) * 24, projectile.y - Math.sin(angle) * 24);
-      ctx.lineTo(projectile.x, projectile.y);
-      ctx.stroke();
-      ctx.globalAlpha = 1;
-      ctx.fillStyle = projectile.hostile ? color : '#ffffff';
-      ctx.shadowColor = color;
-      ctx.shadowBlur = 18;
-      ctx.beginPath();
-      ctx.arc(projectile.x, projectile.y, Number(projectile.radius || 8), 0, Math.PI * 2);
-      ctx.fill();
-      if (projectile.type === 'metao_fire_staff') {
-        ctx.strokeStyle = '#ffe5a3';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(projectile.x, projectile.y, Number(projectile.radius || 8) + 5, 0, Math.PI * 2);
-        ctx.stroke();
-      }
-      ctx.restore();
-    }
-
-    _drawPickup(pickup, now) {
-      const ctx = this.ctx;
-      const y = Number(pickup.y || 0) + Math.sin(now / 130) * 5;
-      ctx.save();
-      ctx.fillStyle = '#ffd23f';
-      ctx.strokeStyle = '#fff2a8';
-      ctx.lineWidth = 3;
-      ctx.shadowColor = '#ffd23f';
-      ctx.shadowBlur = 18;
-      ctx.beginPath();
-      ctx.arc(Number(pickup.x || 0), y, Number(pickup.radius || 13), 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-      ctx.fillStyle = '#6f4d00';
-      ctx.font = '700 17px VT323, monospace';
-      ctx.textAlign = 'center';
-      ctx.fillText('$', Number(pickup.x || 0), y + 5);
-      ctx.restore();
-    }
-
-    _drawInteractable(interactable, now) {
-      const ctx = this.ctx;
-      const radius = Number(interactable.radius || 30);
-      const pulse = 1 + Math.sin(now / 180) * 0.08;
-      const progress = clamp(Number(interactable.dwellProgress || 0), 0, 1);
-      ctx.save();
-      ctx.translate(Number(interactable.x || 0), Number(interactable.y || 0));
-      ctx.scale(pulse, pulse);
-      const chest = interactable.kind === 'relic_chest';
-      ctx.fillStyle = chest ? 'rgba(186,124,255,.3)' : interactable.final ? 'rgba(255,92,125,.32)' : 'rgba(255,224,105,.28)';
-      ctx.strokeStyle = chest ? '#d3a0ff' : interactable.final ? '#ff6b86' : '#ffe469';
-      ctx.shadowColor = ctx.strokeStyle;
-      ctx.shadowBlur = 20;
-      ctx.lineWidth = 4;
-      ctx.beginPath();
-      ctx.arc(0, 0, radius, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-      ctx.shadowBlur = 0;
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 6;
-      ctx.beginPath();
-      ctx.arc(0, 0, radius + 9, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * progress);
-      ctx.stroke();
-      ctx.fillStyle = '#ffffff';
-      ctx.font = '700 18px VT323, monospace';
-      ctx.textAlign = 'center';
-      ctx.fillText(chest ? (interactable.opened ? 'CLAIMED' : 'RELIC • E') : interactable.final ? 'FINISH' : 'DESCEND', 0, 6);
-      if (Number(interactable.requiredPlayers || 0) > 1) {
-        ctx.font = '700 14px VT323, monospace';
-        ctx.fillText(`${Number(interactable.readyPlayers || 0)}/${interactable.requiredPlayers} PARTY`, 0, radius + 29);
-      }
-      ctx.restore();
-    }
-
-    _drawCombatEffects(players, enemies, now) {
-      const ctx = this.ctx;
-      this.combatEffects = this.combatEffects.filter(effect => now - effect.startedAt < 700);
-      this.combatEffects.forEach(effect => {
-        const age = now - effect.startedAt;
-        const data = effect.data || {};
-        const entity = enemies[data.enemyId] || players[data.playerId];
-        if (effect.eventType === 'PLAYER_ATTACKED') {
-          const player = players[data.playerId];
-          if (!player || age > 320) return;
-          const alpha = clamp(1 - age / 320, 0, 1);
-          ctx.save();
-          ctx.globalAlpha = alpha;
-          ctx.strokeStyle = data.color || '#ffffff';
-          ctx.fillStyle = data.color || '#ffffff';
-          ctx.shadowColor = data.color || '#ffffff';
-          ctx.shadowBlur = 18;
-          if (data.attackMode === 'smite') {
-            ctx.lineWidth = 6;
-            (data.segments || []).forEach(segment => {
-              ctx.beginPath();
-              ctx.moveTo(segment.fromX, segment.fromY);
-              ctx.lineTo(segment.toX, segment.toY);
-              ctx.stroke();
-            });
-          } else if (data.attackMode === 'projectile') {
-            ctx.beginPath();
-            const originX = Number.isFinite(Number(data.originX)) ? Number(data.originX) : Number(player.x);
-            const originY = Number.isFinite(Number(data.originY)) ? Number(data.originY) : Number(player.y);
-            ctx.arc(originX + Math.cos(Number(data.aimDirection || 0)) * 32,
-              originY + Math.sin(Number(data.aimDirection || 0)) * 32, 13 + age * 0.03, 0, Math.PI * 2);
-            ctx.stroke();
-          } else if (data.attackMode === 'sweep' || data.attackMode === 'double_sweep') {
-            const originX = Number.isFinite(Number(data.originX)) ? Number(data.originX) : Number(player.x);
-            const originY = Number.isFinite(Number(data.originY)) ? Number(data.originY) : Number(player.y);
-            const angle = Number(data.aimDirection || 0);
-            const arc = Math.max(0.25, Number(data.arc || Math.PI * 0.7));
-            ctx.lineWidth = data.attackMode === 'double_sweep' ? 9 : 7;
-            ctx.beginPath();
-            ctx.arc(originX, originY, Math.max(45, Number(data.range || 100)), angle - arc, angle + arc);
-            ctx.stroke();
-          }
-          ctx.restore();
-        } else if (effect.eventType === 'ENEMY_TELEGRAPH') {
-          const enemy = enemies[data.enemyId];
-          const player = players[data.targetPlayerId];
-          if (!enemy || !player || age > 450) return;
-          ctx.save();
-          ctx.globalAlpha = clamp(0.9 - age / 700, 0, 0.9);
-          ctx.strokeStyle = '#ffb347';
-          ctx.lineWidth = 3;
-          ctx.setLineDash([10, 8]);
-          ctx.beginPath();
-          ctx.moveTo(enemy.x, enemy.y);
-          ctx.lineTo(player.x, player.y);
-          ctx.stroke();
-          ctx.restore();
-        } else if (effect.eventType === 'ROOM_CLEARED') {
-          ctx.save();
-          ctx.globalAlpha = clamp(1 - age / 700, 0, 1);
-          ctx.fillStyle = '#ffe978';
-          ctx.font = '700 30px VT323, monospace';
-          ctx.textAlign = 'center';
-          ctx.fillText('ROOM CLEARED', 450, 210 - age * 0.025);
-          ctx.restore();
-        } else if (entity && ['ENEMY_HIT', 'PLAYER_HIT'].includes(effect.eventType)) {
-          ctx.save();
-          ctx.globalAlpha = clamp(1 - age / 700, 0, 1);
-          ctx.fillStyle = effect.eventType === 'PLAYER_HIT' ? '#ff6b75' : data.attackKind === 'bleed' ? '#ff536d' : '#ffffff';
-          ctx.font = '700 24px VT323, monospace';
-          ctx.textAlign = 'center';
-          ctx.fillText(`-${Number(data.damage || 0)}`, entity.x, entity.y - 48 - age * 0.035);
-          ctx.restore();
-        }
-      });
-    }
-
-    _drawPlayer(player, isLocal) {
-      const ctx = this.ctx;
-      const color = player.color || derivePlayerColor(player);
-      ctx.save();
-      ctx.globalAlpha = player.downed ? 0.48 : 1;
-      ctx.strokeStyle = isLocal ? '#ffffff' : color;
-      ctx.lineWidth = isLocal ? 4 : 2;
-      ctx.shadowColor = color;
-      ctx.shadowBlur = isLocal ? 18 : 9;
-      ctx.beginPath();
-      ctx.arc(player.x, player.y, Number(player.radius || 18) + 8, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.restore();
-      if (player.downed) {
-        ctx.save();
-        ctx.fillStyle = '#ff7890';
-        ctx.font = '700 18px VT323, monospace';
-        ctx.textAlign = 'center';
-        const label = this.currentSample?.state?.matchRules?.mode === 'rival' ? 'RESPAWNING' : 'DOWN — STAND CLOSE TO REVIVE';
-        ctx.fillText(label, player.x, player.y - 52);
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 4;
-        ctx.beginPath();
-        ctx.arc(player.x, player.y, Number(player.radius || 18) + 14, -Math.PI / 2,
-          -Math.PI / 2 + Math.PI * 2 * clamp(Number(player.reviveProgress || 0), 0, 1));
-        ctx.stroke();
-        ctx.restore();
-      }
-
-      const serverTick = this.currentSample?.state?.tick || 0;
-      const presentationNow = root.performance?.now?.() || Date.now();
-      const authoritativeActionEvent = this.combatEffects.some(effect => (
-        effect.data?.playerId === player.id
-        && ['PLAYER_ATTACKED', 'PLAYER_ATTACK_FOLLOWUP', 'PLAYER_ABILITY_USED'].includes(effect.eventType)
-        && presentationNow - Number(effect.startedAt || 0) <= 220
-      ));
-      const attacking = authoritativeActionEvent
-        || (player.action !== 'idle' && serverTick - Number(player.actionTick || 0) <= 4);
-      if (typeof this.neo.drawPlayerSlot === 'function') {
-        const activeSeconds = Number(this.neo.ATTACKS?.melee?.active || 0.17);
-        const elapsed = Math.max(0, serverTick - Number(player.actionTick || 0)) / 20;
-        const actor = {
-          ...player,
-          r: Number(player.radius || 18),
-          inv: 0,
-          swing: attacking ? Math.max(0.001, activeSeconds - elapsed) : 0,
-          swingA: Number(player.aimDirection || 0),
-          swingFacing: Math.cos(Number(player.aimDirection || 0)) < 0 ? -1 : 1,
-          stabSwing: player.actionMode === 'smite' || player.equippedWeapon === 'gelleh_lightning_spear',
-        };
-        this.neo.drawPlayerSlot({
-          getEntity: () => actor,
-          getCharacter: () => player.characterKey || 'thorn_knight',
-          color,
-          label: `${player.displayName || player.id}${isLocal ? ' (YOU)' : ''}`,
-        });
-      } else if (typeof this.neo.drawSpriteFrame === 'function') {
-        this.neo.drawSpriteFrame(player.characterKey || 'thorn_knight', player.x, player.y, attacking ? 66 : 58, {
-          flipX: Number(player.vx || 0) < 0,
-          shadowColor: color,
-          shadowBlur: 10,
-        });
-      } else {
-        ctx.fillStyle = color;
-        ctx.beginPath();
-        ctx.arc(player.x, player.y, Number(player.radius || 18), 0, Math.PI * 2);
-        ctx.fill();
-      }
-      ctx.save();
-      const healthRatio = clamp(Number(player.health ?? 100) / Math.max(1, Number(player.maxHealth || 100)), 0, 1);
-      ctx.fillStyle = 'rgba(0,0,0,.8)';
-      ctx.fillRect(player.x - 28, player.y + 34, 56, 6);
-      ctx.fillStyle = healthRatio > 0.3 ? '#70e68f' : '#ff5d6f';
-      ctx.fillRect(player.x - 27, player.y + 35, 54 * healthRatio, 4);
-      ctx.restore();
     }
 
     _updateHud(state, players) {

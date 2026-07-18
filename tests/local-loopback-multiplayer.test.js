@@ -368,8 +368,8 @@ describe('protocol-driven local multiplayer session', () => {
     authority.sendFullCorrection();
     clock.runAll();
 
-    expect(state.players[clientA.playerId].relics).toEqual([optionId]);
-    expect(clientA.state.players[clientA.playerId].relics).toEqual([optionId]);
+    expect(state.players[clientA.playerId].items[optionId]).toBe(1);
+    expect(clientA.state.players[clientA.playerId].items[optionId]).toBe(1);
     expect(clientA.receivedTypes).toEqual(expect.arrayContaining(['GAMEPLAY_EVENT', 'WORLD_SNAPSHOT']));
   });
 

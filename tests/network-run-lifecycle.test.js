@@ -160,7 +160,7 @@ describe('networked run lifecycle', () => {
     simulation.updateGame({ p1: { actions: [{
       action: 'UPGRADE', selectionEventId: chest.id, optionId,
     }] } }, 0.05);
-    expect(state.players.p1.relics).toEqual([optionId]);
+    expect(state.players.p1.items[optionId]).toBe(1);
     expect(chest).toEqual(expect.objectContaining({ opened: true, claimedBy: 'p1' }));
 
     simulation.updateGame({ p2: { actions: [{ action: 'INTERACT', targetEntityId: chest.id }] } }, 0.05);
