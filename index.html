@@ -759,11 +759,12 @@
       <div id="pauseMenuLetters" class="menu-letters"></div>
       <div id="pauseMenuSubtitle" class="menu-subtitle-flash">DUNGEON OF GOD</div>
     </div>
-    <h2 class="screen-title">PAUSED</h2>
+    <h2 id="pauseTitle" class="screen-title">PAUSED</h2>
     <div class="main-nav">
       <button id="pauseResume" class="nav-btn" data-i18n="pause.resume">RESUME</button>
       <button id="pauseInfo" class="nav-btn nav-btn--minor" data-i18n="pause.info">INFO</button>
       <button id="pauseSettings" class="nav-btn nav-btn--minor" data-i18n="menu.settings">SETTINGS</button>
+      <button id="pauseLeaveServer" class="nav-btn nav-btn--minor hidden" type="button">LEAVE SERVER</button>
       <button id="pauseMain" class="nav-btn nav-btn--minor" data-i18n="pause.mainMenu">MAIN MENU</button>
     </div>
   </div>
@@ -811,7 +812,7 @@
       <span>GOLD <b id="multiplayerGameGold">0</b></span>
       <span>TICK <b id="multiplayerGameTick">0</b></span>
     </div>
-    <button id="multiplayerLeaveGame" class="nav-btn nav-btn--minor multiplayer-leave-game" type="button">LEAVE ROOM</button>
+    <button id="multiplayerLeaveGame" class="nav-btn nav-btn--minor multiplayer-leave-game" type="button">LEAVE SERVER</button>
   </div>
 </div>
 
@@ -1460,6 +1461,12 @@
         <h2 class="screen-title" id="charSelectTitle">CHOOSE YOUR CHAMPION </h2>
         <p class="charselect-subtitle" id="charSelectSubtitle"></p>
       </div>
+    </div>
+
+    <!-- Networked co-op lobby strip (shown only while connected to a room). -->
+    <div id="coopLobbyBar" class="coop-lobby-bar hidden" aria-hidden="true">
+      <div id="coopLobbyRoomCode" class="coop-lobby-bar__roomcode"></div>
+      <div id="coopLobbySlots" class="coop-lobby-bar__slots" role="list" aria-label="Players in this room"></div>
     </div>
 
     <div class="charselect-main">

@@ -3,6 +3,7 @@ const path = require('node:path');
 const {
   normalizeMovement,
   computeWorldTransform,
+  computeCameraTransform,
   interpolatePlayers,
   predictPosition,
 } = require('../js/rendering/NetworkGameView');
@@ -10,8 +11,8 @@ const { LOCAL_BUILD_VERSION, LOCAL_CONTENT_HASH } = require('../js/multiplayer/L
 
 describe('network multiplayer game view', () => {
   test('uses a floor-renderer compatibility identity so stale movement clients cannot join', () => {
-    expect(LOCAL_BUILD_VERSION).toBe('1.0.0-shared-combat-v6');
-    expect(LOCAL_CONTENT_HASH).toBe('shared-neo-combat-rendering-v6');
+    expect(LOCAL_BUILD_VERSION).toBe('1.0.0-independent-rooms-v8');
+    expect(LOCAL_CONTENT_HASH).toBe('shared-neo-independent-rooms-v8');
   });
 
   test('normalizes diagonal keyboard/gamepad movement', () => {
@@ -37,6 +38,16 @@ describe('network multiplayer game view', () => {
     expect(croppedViewport.scale).toBeCloseTo(540 / 700);
     expect(croppedViewport.offsetY).toBe(50);
     expect(croppedViewport.offsetX).toBeCloseTo((960 - 900 * (540 / 700)) / 2);
+  });
+
+  test('uses the same unscaled camera translation as the campaign renderer', () => {
+    expect(computeCameraTransform(960, 640, { x: -30, y: 30 })).toEqual({
+      scale: 1,
+      offsetX: 30,
+      offsetY: -30,
+      roomWidth: 960,
+      roomHeight: 640,
+    });
   });
 
   test('interpolates remote players and bounds local prediction inside walls', () => {
@@ -73,5 +84,10 @@ describe('network multiplayer game view', () => {
     expect(fs.readFileSync(path.join(root, 'js/rendering/NetworkGameView.js'), 'utf8')).toContain('this.neo.drawFloor()');
     expect(fs.readFileSync(path.join(root, 'js/rendering/NetworkGameView.js'), 'utf8')).toContain('this.neo.drawPlayerSlot');
     expect(fs.readFileSync(path.join(root, 'js/rendering/NetworkGameView.js'), 'utf8')).toContain('this.neo.drawProjectileShape');
+    expect(fs.readFileSync(path.join(root, 'js/rendering/NetworkGameView.js'), 'utf8')).toContain('this.neo.drawEnemies');
+    expect(fs.readFileSync(path.join(root, 'js/rendering/NetworkGameView.js'), 'utf8')).toContain('this.neo.drawPickups');
+    expect(fs.readFileSync(path.join(root, 'js/rendering/NetworkGameView.js'), 'utf8')).toContain('this.neo.decorateRoomData(room)');
+    expect(fs.readFileSync(path.join(root, 'js/rendering/NetworkGameView.js'), 'utf8')).toContain('this.neo.uiController?.setHudValues');
+    expect(fs.readFileSync(path.join(root, 'js/rendering/NetworkGameView.js'), 'utf8')).not.toContain("ctx.font = '700 16px VT323, monospace'");
   });
 });

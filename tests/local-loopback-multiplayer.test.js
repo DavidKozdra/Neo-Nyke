@@ -110,7 +110,7 @@ describe('protocol-driven local multiplayer session', () => {
     ]);
   });
 
-  test('crossing a valid seeded doorway transitions the entire party authoritatively', () => {
+  test('crossing a valid seeded doorway moves only that player and records shared room state', () => {
     const floorState = createNetworkFloorState({ matchSeed: 'door-test', floorSeed: 'door-test-floor' });
     const currentRoom = getCurrentNetworkRoom(floorState);
     const direction = Object.keys(currentRoom.doors).find(key => currentRoom.doors[key]);
@@ -135,14 +135,17 @@ describe('protocol-driven local multiplayer session', () => {
 
     createPlayerMovementSystem(TEST_ROOM)({ state, inputs, fixedDelta: 0.05 });
 
-    expect(state.floorState.currentRoomId).toBe(nextRoom.id);
+    expect(state.floorState.currentRoomId).toBe(currentRoom.id);
     expect(state.floorState.visitedRoomIds).toEqual(expect.arrayContaining([currentRoom.id, nextRoom.id]));
     expect(state.floorState.roomTransition).toEqual(expect.objectContaining({
       fromRoomId: currentRoom.id,
       toRoomId: nextRoom.id,
       direction,
+      playerId: 'p1',
     }));
-    expect(Object.values(state.players).every(member => member.roomId === nextRoom.id)).toBe(true);
+    expect(state.floorState.transitionsByPlayer.p1).toEqual(state.floorState.roomTransition);
+    expect(state.players.p1.roomId).toBe(nextRoom.id);
+    expect(state.players.p2.roomId).toBe(currentRoom.id);
   });
 
   test('authority blocks crossing a wall when the seeded room has no door', () => {

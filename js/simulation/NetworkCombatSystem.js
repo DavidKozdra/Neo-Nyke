@@ -1,6 +1,6 @@
 (function initializeNetworkCombatSystem(root, factory) {
   const contentApi = typeof require === 'function'
-    ? require('./SharedCombatContent.js')
+    ? { ...require('./SharedCombatContent.js'), ...require('./SharedMoveContent.js'), ...require('./SharedEnemyContent.js') }
     : (root.NeoNyke?.content || {});
   const api = factory(root.NeoNyke?.simulation || {}, contentApi);
   const namespace = root.NeoNyke = root.NeoNyke || {};
@@ -16,12 +16,20 @@
   const PROJECTILE_DAMAGE = 30;
   const PROJECTILE_LIFETIME_TICKS = 24;
   const ENEMY_DEATH_TICKS = 8;
-  const ENCOUNTER_ROOM_TYPES = new Set(['start', 'combat', 'challenge']);
+  const ENCOUNTER_ROOM_TYPES = new Set(['start', 'combat', 'challenge', 'ladder', 'boss', 'god']);
   const {
     CHARACTER_DEFAULT_WEAPONS = {},
     DEFAULT_WEAPON_ATTACKS = {},
     PROJECTILE_TYPE_DEFS = {},
     WEAPON_BASE_STATS = {},
+    MOVE_BASE_STATS = {},
+    MOVE_SLOT_BY_KEY = {},
+    getDefaultMoveLoadout = () => ({ melee: 'slash', laser: 'blood_beam', smash: 'crimson_smash', dash: 'dash' }),
+    ENEMY_CATALOG = {},
+    STANDARD_ENEMY_TYPES = [],
+    BOSS_ENEMY_TYPES = [],
+    ELITE_POWER_TYPES = [],
+    getEnemyDefinition = type => ENEMY_CATALOG[type],
     getCharacterDefaultWeapon = characterKey => CHARACTER_DEFAULT_WEAPONS[characterKey] || 'thorns_bleed_blade',
   } = contentApi || {};
   const HERO_PRIMARY_ATTACKS = Object.freeze(Object.fromEntries(
@@ -35,11 +43,7 @@
       cooldownTicks: Math.max(1, Math.ceil(Number(WEAPON_BASE_STATS[weaponKey]?.cooldown || 0.5) * 20)),
     })]),
   ));
-  const ENEMY_ARCHETYPES = Object.freeze({
-    cult_follower: Object.freeze({ spriteKey: 'cult_follower', behavior: 'chaser', maxHealth: 60, moveSpeed: 74, contactDamage: 8, radius: 20 }),
-    hunter: Object.freeze({ spriteKey: 'hunter', behavior: 'ranged', maxHealth: 52, moveSpeed: 68, contactDamage: 5, projectileDamage: 9, radius: 19 }),
-    charger: Object.freeze({ spriteKey: 'charger', behavior: 'charger', maxHealth: 80, moveSpeed: 118, contactDamage: 12, radius: 22 }),
-  });
+  const ENEMY_ARCHETYPES = ENEMY_CATALOG;
   const HERO_BASE_STATS = Object.freeze({
     princess: Object.freeze({ maxHealth: 115, moveSpeed: 180 }),
     thorn_knight: Object.freeze({ maxHealth: 100, moveSpeed: 180 }),
@@ -61,14 +65,18 @@
     const healthRatio = Math.max(0, Math.min(1, Number(player.health ?? previousMaximum) / previousMaximum));
     player.characterKey = key;
     player.equippedWeapon = getCharacterDefaultWeapon(key);
+    player.equippedMoves = getDefaultMoveLoadout(key);
+    player.moveCooldownUntilTick = {};
+    player.statusUntilTick = {};
+    player.barrier = 0;
     player.maxHealth = profile.maxHealth;
     player.health = Math.round(profile.maxHealth * healthRatio);
     player.moveSpeed = profile.moveSpeed;
     return player;
   }
 
-  function currentRoom(state) {
-    return state.floorState?.layout?.rooms?.find(room => room.id === state.floorState.currentRoomId) || null;
+  function currentRoom(state, roomId = state.floorState?.currentRoomId) {
+    return state.floorState?.layout?.rooms?.find(room => room.id === roomId) || null;
   }
 
   function livingEncounterEnemies(state, roomId = state.floorState?.currentRoomId) {
@@ -83,13 +91,33 @@
   }
 
   function encounterCount(room) {
+    if (room?.type === 'boss' || room?.type === 'god') return 1;
     if (room?.type === 'challenge') return 3;
+    if (room?.type === 'ladder') return 3;
     if (room?.type === 'combat') return 2;
     return 1;
   }
 
-  function ensureNetworkEncounter(state, random, emitEvent = () => {}) {
-    const room = currentRoom(state);
+  function getEncounterPool(room, floorNumber) {
+    if (room?.type === 'god') return ['god'];
+    if (room?.type === 'boss') {
+      const bosses = BOSS_ENEMY_TYPES.filter(type => !['god', 'bowman_bane'].includes(type));
+      return bosses.length ? bosses : ['queen_cult'];
+    }
+    if (room?.type === 'start') return ['cult_follower'];
+    const floor = Math.max(1, Number(floorNumber || 1));
+    const pool = ['hunter', 'charger', 'laser', 'knave', 'cult_mage'];
+    if (floor >= 3) pool.push('sniper', 'golem');
+    if (floor >= 4) pool.push('summoner', 'shield_unit', 'healer');
+    if (floor >= 6) pool.push('machine_gunner');
+    if (room?.type === 'challenge') pool.push('golem', 'shield_unit', 'summoner');
+    if (room?.type === 'ladder') pool.push('boss_spawner', 'healer');
+    return pool.filter(type => STANDARD_ENEMY_TYPES.includes(type));
+  }
+
+  function ensureNetworkEncounter(state, random, emitEvent = () => {}, roomId = null) {
+    const occupiedRoomId = roomId || Object.values(state.players || {}).find(player => !player?.disconnected)?.roomId || state.floorState?.currentRoomId;
+    const room = currentRoom(state, occupiedRoomId);
     if (!room || !ENCOUNTER_ROOM_TYPES.has(room.type)) return null;
     state.floorState.encounters = state.floorState.encounters || {};
     if (state.floorState.encounters[room.id]) return state.floorState.encounters[room.id];
@@ -101,14 +129,14 @@
       const enemyId = state.allocateEntityId('enemy');
       const angle = stream.next() * Math.PI * 2;
       const distance = 175 + stream.next() * 95;
-      const pool = room.type === 'start'
-        ? ['cult_follower']
-        : room.type === 'challenge'
-          ? ['cult_follower', 'hunter', 'charger']
-          : ['cult_follower', 'hunter', 'charger', 'hunter'];
+      const pool = getEncounterPool(room, state.floorNumber);
       const type = pool[stream.int(0, pool.length - 1)];
-      const archetype = ENEMY_ARCHETYPES[type];
+      const archetype = getEnemyDefinition(type) || getEnemyDefinition('hunter');
       const healthScale = room.type === 'challenge' ? 1.25 : 1;
+      const elite = !archetype.boss && room.type !== 'start' && stream.chance(room.type === 'challenge' ? 0.3 : 0.08);
+      const elitePower = elite ? ELITE_POWER_TYPES[stream.int(0, ELITE_POWER_TYPES.length - 1)] : null;
+      const eliteHealthScale = elitePower === 'giant' ? 1.82 : elite ? 1.35 : 1;
+      const eliteDamageScale = elite ? 1.18 : 1;
       const enemy = {
         id: enemyId,
         type,
@@ -121,12 +149,18 @@
         vy: 0,
         radius: archetype.radius,
         moveSpeed: archetype.moveSpeed * (room.type === 'challenge' ? 1.08 : 1),
-        maxHealth: Math.round(archetype.maxHealth * healthScale),
-        health: Math.round(archetype.maxHealth * healthScale),
-        contactDamage: archetype.contactDamage,
-        projectileDamage: Number(archetype.projectileDamage || 0),
+        maxHealth: Math.round(archetype.maxHealth * healthScale * eliteHealthScale),
+        health: Math.round(archetype.maxHealth * healthScale * eliteHealthScale),
+        contactDamage: Math.round(archetype.contactDamage * eliteDamageScale),
+        projectileDamage: Math.max(5, Math.round(Number(archetype.projectileDamage || archetype.contactDamage * 0.75) * eliteDamageScale)),
+        elite,
+        eliteTypes: elite ? ['knight', elitePower] : [],
+        elitePowers: elite ? [elitePower] : [],
+        patterns: archetype.patterns || [],
+        bleedImmune: !!archetype.bleedImmune,
+        fireImmune: !!archetype.fireImmune,
         contactCooldownUntilTick: 0,
-        attackCooldownUntilTick: state.tick + 14 + stream.int(0, 10),
+        attackCooldownUntilTick: state.tick + Math.max(4, Math.round(Number(archetype.attackCooldown || 1) * 20)) + stream.int(0, 6),
         attackWindupUntilTick: 0,
         state: 'chasing',
         facing: 1,
@@ -136,7 +170,7 @@
       };
       state.enemies[enemyId] = enemy;
       enemyIds.push(enemyId);
-      emitEvent('ENEMY_SPAWNED', { enemyId, roomId: room.id, enemyType: enemy.type });
+      emitEvent('ENEMY_SPAWNED', { enemyId, roomId: room.id, enemyType: enemy.type, elite, elitePower });
     }
     const encounter = {
       roomId: room.id,
@@ -182,13 +216,17 @@
 
   function damageEnemy(state, enemy, damage, playerId, emitEvent, details = {}) {
     if (!enemy || enemy.dead) return false;
-    const dealt = Math.max(0, Number(damage || 0));
+    const incoming = Math.max(0, Number(damage || 0));
+    const absorbed = Math.min(incoming, Math.max(0, Number(enemy.barrier || 0)));
+    enemy.barrier = Math.max(0, Number(enemy.barrier || 0) - absorbed);
+    const dealt = incoming - absorbed;
     enemy.health = Math.max(0, Number(enemy.health || 0) - dealt);
     enemy.hitTick = state.tick;
     emitEvent('ENEMY_HIT', {
       enemyId: enemy.id,
       playerId,
       damage: dealt,
+      absorbed,
       health: enemy.health,
       attackKind: details.attackKind,
       projectileId: details.projectileId,
@@ -380,6 +418,165 @@
     return { definition, projectileIds, targetIds };
   }
 
+  function setPlayerAction(state, player, slot, moveKey, angle) {
+    player.action = slot === 'dash' ? 'dash' : 'ability';
+    player.actionTick = state.tick;
+    player.actionKind = moveKey;
+    player.actionMode = slot;
+    player.aimDirection = angle;
+  }
+
+  function abilityTargetsInRadius(state, player, x, y, range) {
+    return livingEncounterEnemies(state, player.roomId)
+      .filter(enemy => Math.hypot(enemy.x - x, enemy.y - y) <= range + Number(enemy.radius || 20));
+  }
+
+  function abilityTargetsInBeam(state, player, angle, range, width) {
+    const dx = Math.cos(angle);
+    const dy = Math.sin(angle);
+    return livingEncounterEnemies(state, player.roomId).filter(enemy => {
+      const ox = enemy.x - player.x;
+      const oy = enemy.y - player.y;
+      const forward = ox * dx + oy * dy;
+      const perpendicular = Math.abs(ox * -dy + oy * dx);
+      return forward >= 0 && forward <= range && perpendicular <= width + Number(enemy.radius || 20);
+    });
+  }
+
+  function resolvePlayerAbility(state, player, action, emitEvent) {
+    if (player.downed) return null;
+    const moveKey = String(action.abilityId || '');
+    const slot = MOVE_SLOT_BY_KEY[moveKey];
+    if (!slot || slot === 'melee' || player.equippedMoves?.[slot] !== moveKey) return null;
+    const expectedAction = slot === 'dash' ? 'DASH' : 'ABILITY';
+    if (action.action !== expectedAction) return null;
+    const stats = MOVE_BASE_STATS[moveKey] || {};
+    const cooldowns = player.moveCooldownUntilTick || (player.moveCooldownUntilTick = {});
+    if (state.tick < Number(cooldowns[moveKey] || 0)) return null;
+    const angle = Number(action.aimDirection);
+    if (!Number.isFinite(angle)) return null;
+    const cooldownTicks = Math.max(1, Math.ceil(Number(stats.cooldown || 0.5) * 20));
+    const projectileIds = [];
+    const targetIds = [];
+    let mode = slot;
+
+    if (slot === 'dash') {
+      const floor = state.floorState || {};
+      const statusUntil = player.statusUntilTick || (player.statusUntilTick = {});
+      if (moveKey === 'flying_unhitable' || moveKey === 'cowards_way' || moveKey === 'mooggy_zoomies') {
+        const durationTicks = Math.max(1, Math.round(Number(stats.duration || 3) * 20));
+        statusUntil[moveKey] = state.tick + durationTicks;
+        mode = 'status';
+      } else if (moveKey === 'princess_shield') {
+        player.barrier = Math.max(Number(player.barrier || 0), Number(player.maxHealth || 100) * 0.4);
+        mode = 'shield';
+      } else {
+        const distance = moveKey === 'warp' ? 300 : moveKey === 'zip_lightning' ? 230 : 170;
+        const minimum = Number(floor.wallThickness || 28) + Number(player.radius || 18);
+        const before = { x: player.x, y: player.y };
+        player.x = Math.max(minimum, Math.min(Number(floor.width || 900) - minimum, player.x + Math.cos(angle) * distance));
+        player.y = Math.max(minimum, Math.min(Number(floor.height || 700) - minimum, player.y + Math.sin(angle) * distance));
+        player.vx = Math.cos(angle) * distance * 5;
+        player.vy = Math.sin(angle) * distance * 5;
+        if (Number(stats.damage || 0) > 0) {
+          livingEncounterEnemies(state, player.roomId).forEach(enemy => {
+            const lineLength = Math.max(1, Math.hypot(player.x - before.x, player.y - before.y));
+            const t = Math.max(0, Math.min(1, ((enemy.x - before.x) * (player.x - before.x) + (enemy.y - before.y) * (player.y - before.y)) / (lineLength * lineLength)));
+            const px = before.x + (player.x - before.x) * t;
+            const py = before.y + (player.y - before.y) * t;
+            if (Math.hypot(enemy.x - px, enemy.y - py) > Number(enemy.radius || 20) + 28) return;
+            damageEnemy(state, enemy, stats.damage, player.id, emitEvent, { attackKind: moveKey });
+            targetIds.push(enemy.id);
+          });
+        }
+        mode = moveKey === 'warp' ? 'warp' : 'dash';
+      }
+    } else if (slot === 'laser') {
+      const projectileMoves = new Set(['love_bomb_laser', 'ghost_ball', 'power_disks', 'hammer_throw', 'lightning_columns', 'nail_shot', 'laser_shockwave']);
+      if (projectileMoves.has(moveKey)) {
+        const count = moveKey === 'power_disks' ? 6 : moveKey === 'nail_shot' ? 8 : moveKey === 'lightning_columns' ? 2 : 1;
+        for (let index = 0; index < count; index += 1) {
+          const spread = count > 1 ? (index - (count - 1) / 2) * (moveKey === 'nail_shot' ? Math.PI * 2 / count : 0.14) : 0;
+          projectileIds.push(createPlayerProjectile(state, player, {
+            kind: moveKey,
+            attackKind: moveKey,
+            damage: Number(stats.damage || 20),
+            speed: moveKey === 'ghost_ball' ? 300 : 520,
+            radius: moveKey === 'love_bomb_laser' ? 14 : 7,
+            lifeTicks: Math.max(12, Math.round(Number(stats.range || 320) / 18)),
+            pierce: moveKey === 'ghost_ball' ? 8 : 0,
+            splash: moveKey === 'love_bomb_laser' ? 105 : 0,
+            splashDamage: Number(stats.damage || 20),
+          }, angle + spread).id);
+        }
+        mode = 'projectile';
+      } else if (moveKey === 'lightning_cross') {
+        livingEncounterEnemies(state, player.roomId).forEach(enemy => {
+          if (Math.abs(enemy.x - player.x) > 40 && Math.abs(enemy.y - player.y) > 40) return;
+          damageEnemy(state, enemy, stats.damage, player.id, emitEvent, { attackKind: moveKey });
+          targetIds.push(enemy.id);
+        });
+        mode = 'cross';
+      } else {
+        const range = Number(stats.range || (moveKey === 'blade_justice' ? 90 : 470));
+        const width = moveKey === 'god_sweep' ? 120 : moveKey === 'turtle_wave' || moveKey === 'wizard_lazer' ? 48 : 24;
+        abilityTargetsInBeam(state, player, angle, range, width).forEach(enemy => {
+          damageEnemy(state, enemy, stats.damage, player.id, emitEvent, { attackKind: moveKey });
+          targetIds.push(enemy.id);
+        });
+        if (moveKey === 'love_beam' || moveKey === 'holy_eye_beams') {
+          player.health = Math.min(Number(player.maxHealth || 100), Number(player.health || 0) + Math.max(1, targetIds.length * 4));
+        }
+        mode = 'beam';
+      }
+    } else if (slot === 'smash') {
+      if (moveKey === 'healing_zone' || moveKey === 'potion_bath' || moveKey === 'turtle_powerup') {
+        const heal = moveKey === 'potion_bath' ? Number(player.maxHealth || 100) * 0.2 : Number(player.maxHealth || 100) * 0.12;
+        player.health = Math.min(Number(player.maxHealth || 100), Number(player.health || 0) + heal);
+        if (moveKey === 'turtle_powerup') player.barrier = Math.max(Number(player.barrier || 0), Number(player.health || 0) * 0.25);
+        const statusUntil = player.statusUntilTick || (player.statusUntilTick = {});
+        statusUntil[moveKey] = state.tick + Math.max(1, Math.round(Number(stats.duration || 3) * 20));
+        mode = 'support';
+      } else if (moveKey === 'death_ball' || moveKey === 'mooggy_hairball') {
+        projectileIds.push(createPlayerProjectile(state, player, {
+          kind: moveKey,
+          attackKind: moveKey,
+          damage: Number(stats.damage || 40),
+          speed: 350,
+          radius: 16,
+          lifeTicks: 30,
+          splash: Number(stats.range || 140),
+          splashDamage: Number(stats.damage || 40),
+        }, angle).id);
+        mode = 'projectile';
+      } else {
+        const centerDistance = moveKey === 'kicky_kick' ? 70 : moveKey === 'random_pounce' ? 100 : 0;
+        const centerX = player.x + Math.cos(angle) * centerDistance;
+        const centerY = player.y + Math.sin(angle) * centerDistance;
+        abilityTargetsInRadius(state, player, centerX, centerY, Number(stats.range || 140)).forEach(enemy => {
+          damageEnemy(state, enemy, stats.damage, player.id, emitEvent, { attackKind: moveKey });
+          targetIds.push(enemy.id);
+        });
+        mode = 'aoe';
+      }
+    }
+
+    cooldowns[moveKey] = state.tick + cooldownTicks;
+    setPlayerAction(state, player, slot, moveKey, angle);
+    emitEvent('PLAYER_ABILITY_USED', {
+      playerId: player.id,
+      characterKey: player.characterKey,
+      slot,
+      abilityId: moveKey,
+      mode,
+      aimDirection: angle,
+      cooldownTicks,
+      projectileIds,
+      targetIds,
+    });
+    return { moveKey, slot, mode, projectileIds, targetIds };
+  }
+
   function updatePlayerActions(state, inputs, emitEvent, random) {
     Object.values(state.players || {}).forEach(player => {
       const pending = Array.isArray(player.pendingWeaponStrikes) ? player.pendingWeaponStrikes : [];
@@ -397,13 +594,18 @@
       const actions = Array.isArray(inputs[player.id]?.actions) ? inputs[player.id].actions : [];
       const attack = actions.find(action => action?.action === 'ATTACK');
       if (attack) resolvePlayerAttack(state, player, attack, emitEvent, random);
-      if (player.action === 'attack' && state.tick - Number(player.actionTick || 0) > 4) player.action = 'idle';
+      actions.filter(action => action?.action === 'ABILITY' || action?.action === 'DASH')
+        .forEach(action => resolvePlayerAbility(state, player, action, emitEvent));
+      if (player.action !== 'idle' && state.tick - Number(player.actionTick || 0) > 4) player.action = 'idle';
     });
   }
 
   function damagePlayer(state, player, damage, enemyId, emitEvent, attackKind = 'contact') {
     if (!player || player.downed) return;
-    const dealt = Math.max(0, Number(damage || 0));
+    const incoming = Math.max(0, Number(damage || 0));
+    const absorbed = Math.min(incoming, Math.max(0, Number(player.barrier || 0)));
+    player.barrier = Math.max(0, Number(player.barrier || 0) - absorbed);
+    const dealt = incoming - absorbed;
     player.health = Math.max(0, Number(player.health || 0) - dealt);
     player.hitTick = state.tick;
     if (player.health <= 0) player.downed = true;
@@ -411,6 +613,7 @@
       playerId: player.id,
       enemyId,
       damage: dealt,
+      absorbed,
       health: player.health,
       attackKind,
     });
@@ -421,7 +624,7 @@
     const projectileId = state.allocateEntityId('projectile');
     state.projectiles[projectileId] = {
       id: projectileId,
-      type: 'hunter_arrow',
+      type: enemy.type === 'hunter' ? 'hunter_arrow' : enemy.behavior === 'beam' ? 'enemy_beam_bolt' : enemy.behavior === 'burst' ? 'enemy_burst_round' : `${enemy.type}_shot`,
       ownerId: enemy.id,
       hostile: true,
       roomId: enemy.roomId,
@@ -429,14 +632,55 @@
       y: enemy.y + Math.sin(angle) * (Number(enemy.radius || 19) + 10),
       vx: Math.cos(angle) * 390,
       vy: Math.sin(angle) * 390,
-      radius: 6,
+      radius: enemy.behavior === 'beam' ? 9 : enemy.behavior === 'burst' ? 4 : 6,
       damage: Number(enemy.projectileDamage || 9),
-      color: '#ffc477',
-      attackKind: 'hunter_arrow',
+      color: enemy.behavior === 'beam' ? '#c77bff' : enemy.behavior === 'burst' ? '#ff9f68' : '#ffc477',
+      attackKind: enemy.type === 'hunter' ? 'hunter_arrow' : enemy.type,
       spawnTick: state.tick,
       expiresTick: state.tick + 30,
     };
     return projectileId;
+  }
+
+  function spawnSummonedEnemy(state, summoner, emitEvent) {
+    const definition = getEnemyDefinition('cult_follower');
+    const enemyId = state.allocateEntityId('enemy');
+    const angle = (Number(state.tick || 0) + Number(String(enemyId).replace(/\D/g, '') || 0)) * 1.7;
+    state.enemies[enemyId] = {
+      id: enemyId,
+      type: definition.type,
+      spriteKey: definition.spriteKey,
+      behavior: definition.behavior,
+      roomId: summoner.roomId,
+      x: summoner.x + Math.cos(angle) * 48,
+      y: summoner.y + Math.sin(angle) * 48,
+      vx: 0, vy: 0,
+      radius: definition.radius,
+      moveSpeed: definition.moveSpeed,
+      maxHealth: definition.maxHealth,
+      health: definition.maxHealth,
+      contactDamage: definition.contactDamage,
+      projectileDamage: 6,
+      contactCooldownUntilTick: 0,
+      attackCooldownUntilTick: state.tick + 12,
+      attackWindupUntilTick: 0,
+      state: 'spawning', facing: 1, spawnTick: state.tick, hitTick: -1, dead: false,
+      summonedBy: summoner.id,
+    };
+    state.floorState?.encounters?.[summoner.roomId]?.enemyIds?.push(enemyId);
+    emitEvent('ENEMY_SPAWNED', { enemyId, roomId: summoner.roomId, enemyType: definition.type, summonedBy: summoner.id });
+  }
+
+  function updateEnemySupport(state, enemy, emitEvent) {
+    if (!['healer', 'shield'].includes(enemy.behavior) || state.tick < Number(enemy.supportCooldownUntilTick || 0)) return;
+    const allies = livingEncounterEnemies(state, enemy.roomId).filter(candidate => candidate.id !== enemy.id);
+    if (!allies.length) return;
+    allies.sort((first, second) => (first.health / first.maxHealth) - (second.health / second.maxHealth));
+    const target = allies[0];
+    if (enemy.behavior === 'healer') target.health = Math.min(target.maxHealth, target.health + Math.max(8, Math.round(target.maxHealth * 0.12)));
+    else target.barrier = Math.max(Number(target.barrier || 0), Math.round(target.maxHealth * 0.24));
+    enemy.supportCooldownUntilTick = state.tick + (enemy.behavior === 'healer' ? 60 : 56);
+    emitEvent('ENEMY_SUPPORT_USED', { enemyId: enemy.id, targetEnemyId: target.id, supportKind: enemy.behavior });
   }
 
   function moveEnemy(enemy, angle, multiplier, fixedDelta, floor) {
@@ -458,7 +702,6 @@
         if (state.tick - Number(enemy.deathTick || 0) >= ENEMY_DEATH_TICKS) delete state.enemies[enemyId];
         return;
       }
-      if (enemy.roomId !== floor.currentRoomId) return;
       if (Number(enemy.bleedTicksRemaining || 0) > 0 && state.tick >= Number(enemy.bleedNextTick || 0)) {
         enemy.bleedTicksRemaining -= 1;
         enemy.bleedNextTick = state.tick + 10;
@@ -480,7 +723,18 @@
       }
       const angle = Math.atan2(target.player.y - enemy.y, target.player.x - enemy.x);
       const contactDistance = Number(enemy.radius || 20) + Number(target.player.radius || 18) + 4;
-      if (enemy.behavior === 'ranged') {
+      if (enemy.behavior === 'summoner' && state.tick >= Number(enemy.summonCooldownUntilTick || 0)) {
+        const liveSummons = livingEncounterEnemies(state, enemy.roomId).filter(candidate => candidate.summonedBy === enemy.id).length;
+        if (liveSummons < 2) spawnSummonedEnemy(state, enemy, emitEvent);
+        enemy.summonCooldownUntilTick = state.tick + 88;
+      }
+      updateEnemySupport(state, enemy, emitEvent);
+      if (enemy.behavior === 'boss') {
+        const hpRatio = Number(enemy.health || 0) / Math.max(1, Number(enemy.maxHealth || 1));
+        enemy.phase = hpRatio <= 0.25 ? 4 : hpRatio <= 0.5 ? 3 : hpRatio <= 0.75 ? 2 : 1;
+      }
+      const rangedBehavior = ['ranged', 'sniper', 'beam', 'burst', 'summoner', 'healer', 'shield', 'boss_spawner', 'boss'].includes(enemy.behavior);
+      if (rangedBehavior) {
         if (Number(enemy.attackWindupUntilTick || 0) > 0) {
           enemy.vx = 0;
           enemy.vy = 0;
@@ -490,14 +744,14 @@
             enemy.attackWindupUntilTick = 0;
             enemy.attackCooldownUntilTick = state.tick + 28;
             enemy.state = 'firing';
-            emitEvent('ENEMY_ATTACKED', { enemyId, targetPlayerId: target.player.id, attackKind: 'hunter_arrow', projectileId });
+            emitEvent('ENEMY_ATTACKED', { enemyId, targetPlayerId: target.player.id, attackKind: enemy.type, projectileId, phase: enemy.phase || 1 });
           }
         } else if (state.tick >= Number(enemy.attackCooldownUntilTick || 0)) {
           enemy.attackWindupUntilTick = state.tick + 7;
           enemy.state = 'aiming';
           enemy.vx = 0;
           enemy.vy = 0;
-          emitEvent('ENEMY_TELEGRAPH', { enemyId, targetPlayerId: target.player.id, attackKind: 'hunter_arrow', windupTicks: 7 });
+          emitEvent('ENEMY_TELEGRAPH', { enemyId, targetPlayerId: target.player.id, attackKind: enemy.type, windupTicks: 7, phase: enemy.phase || 1 });
         } else if (target.distance < 165) {
           enemy.state = 'retreating';
           moveEnemy(enemy, angle, -1, fixedDelta, floor);
@@ -549,7 +803,7 @@
 
   function updateProjectiles(state, fixedDelta, emitEvent) {
     Object.entries(state.projectiles || {}).forEach(([projectileId, projectile]) => {
-      if (state.tick >= Number(projectile.expiresTick || 0) || projectile.roomId !== state.floorState?.currentRoomId) {
+      if (state.tick >= Number(projectile.expiresTick || 0)) {
         delete state.projectiles[projectileId];
         return;
       }
@@ -606,7 +860,6 @@
 
   function updatePickups(state, emitEvent) {
     Object.entries(state.pickups || {}).forEach(([pickupId, pickup]) => {
-      if (pickup.roomId !== state.floorState?.currentRoomId) return;
       const player = Object.values(state.players || {}).find(candidate => (
         candidate && !candidate.downed && candidate.roomId === pickup.roomId
           && Math.hypot(candidate.x - pickup.x, candidate.y - pickup.y)
@@ -628,7 +881,10 @@
   function createNetworkCombatSystem(options = {}) {
     const emitEvent = typeof options.emitEvent === 'function' ? options.emitEvent : () => {};
     return ({ state, inputs, fixedDelta, random }) => {
-      ensureNetworkEncounter(state, random, emitEvent);
+      const occupiedRoomIds = new Set(Object.values(state.players || {})
+        .filter(player => player && !player.disconnected)
+        .map(player => player.roomId));
+      occupiedRoomIds.forEach(roomId => ensureNetworkEncounter(state, random, emitEvent, roomId));
       updatePlayerActions(state, inputs, emitEvent, random);
       updateEnemies(state, fixedDelta, emitEvent);
       updateProjectiles(state, fixedDelta, emitEvent);
@@ -648,6 +904,7 @@
     ensureNetworkEncounter,
     isNetworkRoomLocked,
     livingEncounterEnemies,
+    resolvePlayerAbility,
     createNetworkCombatSystem,
   };
 });

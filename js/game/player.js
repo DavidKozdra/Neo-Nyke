@@ -528,6 +528,8 @@ function getBaseMovesForCharacter(characterKey) {
         dash: customMoves.dash || 'dash',
       };
     }
+    const sharedLoadout = globalThis.NeoNyke?.content?.getDefaultMoveLoadout?.(characterKey);
+    if (sharedLoadout) return sharedLoadout;
     // The melee slot is the bare-hands fallback only: it is the attack you get
     // when no weapon is equipped, so every character defaults to the generic
     // `slash`. Signature melee attacks (smite, fire_balls, narwal_fight,

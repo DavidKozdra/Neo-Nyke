@@ -26,10 +26,10 @@
     getDeliveryIntent,
   } = protocolApi;
 
-  const LOCAL_BUILD_VERSION = '1.0.0-shared-combat-v6';
+  const LOCAL_BUILD_VERSION = '1.0.0-independent-rooms-v8';
   const LOCAL_GENERATION_VERSION = 1;
-  const LOCAL_CONTENT_HASH = 'shared-neo-combat-rendering-v6';
-  const LOCAL_CONTENT_VERSION = 'shared-neo-combat-rendering-v6';
+  const LOCAL_CONTENT_HASH = 'shared-neo-independent-rooms-v8';
+  const LOCAL_CONTENT_VERSION = 'shared-neo-independent-rooms-v8';
   const SNAPSHOT_RATE = 10;
   const SNAPSHOT_TICK_INTERVAL = SIMULATION_TICK_RATE / SNAPSHOT_RATE;
   const FULL_CORRECTION_TICK_INTERVAL = SIMULATION_TICK_RATE;
@@ -54,6 +54,7 @@
       visitedRoomIds: [layout.startRoomId],
       roomTransition: null,
       transitionSequence: 0,
+      transitionsByPlayer: {},
       layout,
     };
   }
@@ -65,8 +66,8 @@
     w: Object.freeze({ dx: -1, dy: 0, opposite: 'e' }),
   });
 
-  function getCurrentNetworkRoom(floorState = {}) {
-    return floorState.layout?.rooms?.find(room => room.id === floorState.currentRoomId) || null;
+  function getCurrentNetworkRoom(floorState = {}, roomId = floorState.currentRoomId) {
+    return floorState.layout?.rooms?.find(room => room.id === roomId) || null;
   }
 
   function getAdjacentNetworkRoom(floorState, room, directionKey) {
@@ -77,54 +78,54 @@
     )) || null;
   }
 
-  function placePartyAtRoomEntrance(state, directionKey) {
+  function placePlayerAtRoomEntrance(state, player, directionKey, roomId) {
     const floorState = state.floorState;
     const width = Number(floorState.width) || TEST_ROOM.width;
     const height = Number(floorState.height) || TEST_ROOM.height;
     const wall = Number(floorState.wallThickness) || TEST_ROOM.wallThickness;
-    const players = Object.values(state.players).sort((a, b) => String(a.id).localeCompare(String(b.id)));
-    players.forEach((player, index) => {
       const radius = Math.max(1, Number(player.radius) || 18);
       const inset = wall + radius + 18;
-      const formationOffset = (index - (players.length - 1) / 2) * 52;
       if (directionKey === 'e') {
         player.x = inset;
-        player.y = Math.max(inset, Math.min(height - inset, height / 2 + formationOffset));
+        player.y = height / 2;
       } else if (directionKey === 'w') {
         player.x = width - inset;
-        player.y = Math.max(inset, Math.min(height - inset, height / 2 + formationOffset));
+        player.y = height / 2;
       } else if (directionKey === 'n') {
-        player.x = Math.max(inset, Math.min(width - inset, width / 2 + formationOffset));
+        player.x = width / 2;
         player.y = height - inset;
       } else {
-        player.x = Math.max(inset, Math.min(width - inset, width / 2 + formationOffset));
+        player.x = width / 2;
         player.y = inset;
       }
       player.vx = 0;
       player.vy = 0;
-      player.roomId = floorState.currentRoomId;
-    });
+      player.roomId = roomId;
   }
 
-  function transitionNetworkRoom(state, directionKey) {
-    const floorState = state.floorState;
-    const currentRoom = getCurrentNetworkRoom(floorState);
+  function transitionNetworkRoom(state, player, directionKey) {
+      const floorState = state.floorState;
+    const currentRoom = getCurrentNetworkRoom(floorState, player?.roomId);
     const nextRoom = getAdjacentNetworkRoom(floorState, currentRoom, directionKey);
-    if (!nextRoom || floorState.roomTransition?.tick === state.tick || isNetworkRoomLocked?.(state)) return false;
+    const lastTransition = floorState.transitionsByPlayer?.[player?.id];
+    if (!player || !nextRoom || lastTransition?.tick === state.tick || isNetworkRoomLocked?.(state, currentRoom?.id)) return false;
     const fromRoomId = currentRoom.id;
-    floorState.currentRoomId = nextRoom.id;
     floorState.transitionSequence = Math.max(0, Number(floorState.transitionSequence) || 0) + 1;
-    floorState.roomTransition = {
+    const transition = {
       sequence: floorState.transitionSequence,
       tick: state.tick,
+      playerId: player.id,
       fromRoomId,
       toRoomId: nextRoom.id,
       direction: directionKey,
     };
+    floorState.roomTransition = transition;
+    floorState.transitionsByPlayer = floorState.transitionsByPlayer || {};
+    floorState.transitionsByPlayer[player.id] = transition;
     const visited = new Set(Array.isArray(floorState.visitedRoomIds) ? floorState.visitedRoomIds : []);
     visited.add(nextRoom.id);
     floorState.visitedRoomIds = Array.from(visited);
-    placePartyAtRoomEntrance(state, directionKey);
+    placePlayerAtRoomEntrance(state, player, directionKey, nextRoom.id);
     return true;
   }
 
@@ -157,7 +158,7 @@
         else if (desiredY > maximumY && insideHorizontalDoor) transitionDirection = 's';
         else if (desiredX > maximumX && insideVerticalDoor) transitionDirection = 'e';
         else if (desiredX < minimum && insideVerticalDoor) transitionDirection = 'w';
-        if (transitionDirection && transitionNetworkRoom(state, transitionDirection)) break;
+        if (transitionDirection && transitionNetworkRoom(state, player, transitionDirection)) continue;
         player.x = Math.max(minimum, Math.min(maximumX, desiredX));
         player.y = Math.max(minimum, Math.min(maximumY, desiredY));
         player.vx = moveX * speed;
@@ -420,6 +421,7 @@
       if (queue.length < 8) queue.push({
         action: payload.action,
         aimDirection: payload.aimDirection,
+        abilityId: payload.abilityId,
         inputSequence: payload.inputSequence,
       });
       this.metrics.acceptedActions += 1;
@@ -645,15 +647,24 @@
       return inputSequence;
     }
 
-    sendAction(action = 'ATTACK', aimDirection = 0) {
+    sendAction(action = 'ATTACK', aimDirection = 0, options = {}) {
       if (this.status !== 'running') throw new Error('Client match is not running');
       const inputSequence = this.actionSequence++;
       this._send('PLAYER_ACTION', {
         action: String(action || 'ATTACK'),
         inputSequence,
         aimDirection: Number(aimDirection) || 0,
+        ...(options.abilityId ? { abilityId: String(options.abilityId) } : {}),
       });
       return inputSequence;
+    }
+
+    sendAbility(abilityId, aimDirection = 0) {
+      return this.sendAction('ABILITY', aimDirection, { abilityId });
+    }
+
+    sendDash(abilityId, aimDirection = 0) {
+      return this.sendAction('DASH', aimDirection, { abilityId });
     }
 
     ping(nonce = `ping-${this.outgoingSequence}`) {
