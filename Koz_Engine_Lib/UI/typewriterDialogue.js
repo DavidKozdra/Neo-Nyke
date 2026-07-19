@@ -146,8 +146,12 @@
         return false;
       }
       this.current = this.lines[this.index];
-      this.visibleText = "";
-      this.charIndex = 0;
+      // Put the first visible character in the initial snapshot. This keeps a
+      // newly opened panel (and every subsequent line) from rendering as an
+      // intentional-looking blank card while it waits for the first timer tick.
+      const firstVisibleIndex = this.current.text.search(/\S/);
+      this.charIndex = firstVisibleIndex >= 0 ? firstVisibleIndex + 1 : 0;
+      this.visibleText = this.current.text.slice(0, this.charIndex);
       this.charTimer = 0;
       this.holdTimer = 0;
       this._emitChange();

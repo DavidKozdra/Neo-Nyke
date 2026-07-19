@@ -42,7 +42,7 @@ const baseUrl = process.env.NEONYKE_BASE_URL || 'http://127.0.0.1:5173';
   });
 
   const tutorialSamples = [];
-  for (let elapsed = 0; elapsed <= 1600; elapsed += 100) {
+  for (let elapsed = 0; elapsed <= 7000; elapsed += 100) {
     if (elapsed) await page.waitForTimeout(100);
     tutorialSamples.push(await page.evaluate(elapsedMs => {
       const node = document.querySelector('#dialogueText');
@@ -51,6 +51,14 @@ const baseUrl = process.env.NEONYKE_BASE_URL || 'http://127.0.0.1:5173';
         text: node?.textContent,
         height: node?.getBoundingClientRect().height,
         scrollHeight: node?.scrollHeight,
+        boxTop: document.querySelector('.dialogue-box')?.getBoundingClientRect().top,
+        boxBottom: document.querySelector('.dialogue-box')?.getBoundingClientRect().bottom,
+        viewportHeight: innerHeight,
+        lines: (() => {
+          const range = document.createRange();
+          range.selectNodeContents(node);
+          return new Set([...range.getClientRects()].map(rect => Math.round(rect.top))).size;
+        })(),
         wrap: getComputedStyle(node).textWrap,
         overflow: getComputedStyle(node).overflow,
       };
