@@ -309,29 +309,26 @@
   }
 
   function getWaveCount(baseOffset) {
-    const difficulty = Neo.getDifficultyDef();
-    const challengeBonus = Neo.isChallengeActive('swarm_rooms') ? 2 : 0;
-    return baseOffset + Neo.floor + difficulty.waveBonus + challengeBonus + Neo.irand(0, 1, 'encounter');
+    return globalThis.NeoNyke.simulation.getCampaignWaveCount(
+      Neo.floor,
+      baseOffset,
+      Neo.getDifficultyDef(),
+      Neo.isChallengeActive('swarm_rooms') ? 2 : 0,
+      () => Neo.nextRandom('encounter'),
+    );
   }
 
   function rollEnemyType() {
-    const bonus = Neo.getDifficultyDef().roomWeightBonus;
-    const roll = Neo.nextRandom('encounter');
-    if (Neo.floor >= 7 && roll > 0.9 - bonus * 0.92) return 'machine_gunner';
-    if (roll > 0.84 - bonus * 0.9) return 'golem';
-    if (roll > 0.68 - bonus * 0.82) return 'sniper';
-    if (roll > 0.5 - bonus * 0.68) return 'knave';
-    if (roll > 0.32 - bonus * 0.54) return 'cult_mage';
-    if (roll > 0.16 - bonus * 0.4) return 'charger';
-    if (roll > 0.08 - bonus * 0.24) return 'laser';
-    return 'hunter';
+    return globalThis.NeoNyke.simulation.rollCampaignEnemyType(
+      Neo.floor,
+      Neo.getDifficultyDef().roomWeightBonus,
+      () => Neo.nextRandom('encounter'),
+    );
   }
 
   function getFloorBossType() {
     const bossRandom = Neo.createScopedRandom('floor-boss:type');
-    if (Neo.floor === 6 && bossRandom() < 0.66) return 'handsome_devil';
-    const bossPool = ['queen_cult', 'bulk_golem', 'artificer_knave', 'antony_blemmye'];
-    return bossPool[Math.floor(bossRandom() * bossPool.length)] || bossPool[0];
+    return globalThis.NeoNyke.simulation.getCampaignFloorBossType(Neo.floor, bossRandom);
   }
 
   function rollChallengeTrialType() {
@@ -445,52 +442,15 @@
   }
 
   function buildWavePlan(count, roomType = 'combat') {
-    if (Neo.floor < 4) {
-      return Array.from({ length: count }, () => rollEnemyType());
-    }
-
-    const squads = [
-      ['hunter', 'hunter', 'charger'],
-      ['hunter', 'laser', 'shield_unit'],
-      ['golem', 'healer', 'hunter'],
-      ['knave', 'charger', 'healer'],
-      ['sniper', 'shield_unit', 'hunter'],
-      ['cult_mage', 'summoner', 'hunter'],
-    ];
-    if (Neo.floor >= 7) {
-      squads.push(
-        ['machine_gunner', 'shield_unit', 'hunter'],
-        ['machine_gunner', 'healer', 'charger'],
-        ['sniper', 'machine_gunner', 'hunter'],
-      );
-    }
-    const plan = [];
-    let safety = 0;
-    while (plan.length < count && safety < 12) {
-      safety += 1;
-      const squad = squads[Neo.irand(0, squads.length - 1, 'encounter')];
-      squad.forEach(type => {
-        if (plan.length < count) plan.push(type);
-      });
-    }
-
-    if (roomType === 'ladder' && !plan.includes('shield_unit') && count >= 3) {
-      plan[Math.max(1, count - 2)] = 'shield_unit';
-    }
-
-    if (count >= 5 && !plan.includes('healer')) {
-      plan[count - 2] = 'healer';
-    }
-
-    if (count >= 6 && !plan.includes('summoner') && Neo.nextRandom('encounter') < 0.55) {
-      plan[count - 3] = 'summoner';
-    }
-
-    if (count >= 6 && roomType === 'combat' && Neo.floor >= 4 && Neo.nextRandom('encounter') < 0.22) {
-      plan[count - 1] = 'boss_spawner';
-    }
-
-    return plan.slice(0, count);
+    return globalThis.NeoNyke.simulation.buildCampaignWavePlan(count, {
+      floorNumber: Neo.floor,
+      roomType,
+      roomWeightBonus: Neo.getDifficultyDef().roomWeightBonus,
+      random: {
+        next: () => Neo.nextRandom('encounter'),
+        int: (min, max) => Neo.irand(min, max, 'encounter'),
+      },
+    });
   }
 
   function spawnMiniBoss(roomType = 'combat') {

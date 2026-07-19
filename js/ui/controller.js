@@ -1367,8 +1367,17 @@ export function createUIController(view) {
     }
 
     function renderDialogue() {
+
       if (!view.dialogueOverlay || !view.dialogueSpeaker || !view.dialogueText) return;
       const snapshot = dialogueRuntime?.getSnapshot?.() || { active: false, speaker: 'GOD', visibleText: '', isFullyTyped: false };
+
+      //!! cutscenes break here 
+      if(snapshot.visibleText == ""){
+
+
+        return;
+      }
+
       if (dialogueRenderCache.active !== snapshot.active) {
         view.dialogueOverlay.classList.toggle('hidden', !snapshot.active);
         view.dialogueOverlay.style.display = snapshot.active ? 'flex' : 'none';
@@ -1384,7 +1393,7 @@ export function createUIController(view) {
         return;
       }
       const speaker = snapshot.speaker || 'GOD';
-      const text = snapshot.visibleText || '';
+      const text = snapshot?.visibleText;
       if (dialogueRenderCache.speaker !== speaker) {
         view.dialogueSpeaker.textContent = speaker;
         dialogueRenderCache.speaker = speaker;
@@ -1394,7 +1403,8 @@ export function createUIController(view) {
         dialogueRenderCache.text = text;
       }
       if (view.dialoguePortrait instanceof HTMLCanvasElement) {
-        const spriteKey = resolveDialoguePortraitKey(speaker);
+
+       const spriteKey = resolveDialoguePortraitKey(speaker);
         if (dialogueRenderCache.portraitKey !== spriteKey) {
           Neo.drawSpriteToCanvas(view.dialoguePortrait, Neo.getPortraitSpriteKey?.(spriteKey) || spriteKey, view.dialoguePortrait.width);
           dialogueRenderCache.portraitKey = spriteKey;

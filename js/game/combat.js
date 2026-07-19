@@ -5309,7 +5309,9 @@
       // Scrolls resolve their selection popup on acquisition (pickup/buy/reward),
       // not as an activatable tool. Queue one prompt per copy collected.
       match: (itemKey) => Neo.isScrollControlItem?.(itemKey),
-      run: (itemKey, { collectCount }) => Neo.enqueueScrollSelection?.(itemKey, collectCount),
+      // The shared collection transaction already records one owed selection
+      // per copy. This hook only asks the browser presentation to open it.
+      run: (itemKey) => Neo.requestPanelItemSelection?.({ itemKey }),
     },
   ];
 

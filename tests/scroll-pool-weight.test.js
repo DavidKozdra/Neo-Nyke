@@ -24,23 +24,17 @@ function extractFunction(source, functionName, dependencies = {}) {
 
 describe('Scroll of Pool Weight', () => {
   const playerSource = fs.readFileSync(path.join(__dirname, '../js/game/player.js'), 'utf8');
-  const combatSource = fs.readFileSync(path.join(__dirname, '../js/game/combat.js'), 'utf8');
+const combatSource = fs.readFileSync(path.join(__dirname, '../js/game/combat.js'), 'utf8');
 const inputSource = fs.readFileSync(path.join(__dirname, '../js/simulation/SharedItemDefinitions.js'), 'utf8');
+const acquisitionSource = fs.readFileSync(path.join(__dirname, '../js/simulation/SharedAcquisitionSystem.js'), 'utf8');
+const { createCampaignScrollPoolChoices } = require('../js/simulation/SharedAcquisitionSystem.js');
 
   test('offers exactly four distinct seeded relic choices', () => {
-    const choices = ['a', 'b', 'c', 'd', 'e', 'f'].map(key => ({ key }));
-    const getScrollChoiceItems = () => choices.map(choice => ({ ...choice }));
-    const Neo = { rng: () => 0 };
-    const createChoices = extractFunction(playerSource, 'createScrollPoolWeightChoiceKeys', {
-      Neo,
-      getScrollChoiceItems,
-    });
-
-    const offered = createChoices(() => 0.42);
+    const offered = createCampaignScrollPoolChoices(() => 0.42, 4);
 
     expect(offered).toHaveLength(4);
     expect(new Set(offered).size).toBe(4);
-    expect(offered.every(key => choices.some(choice => choice.key === key))).toBe(true);
+    expect(offered.every(key => typeof key === 'string' && key.length > 0)).toBe(true);
   });
 
   test('describes an item choice instead of a tag choice', () => {
@@ -55,8 +49,8 @@ const inputSource = fs.readFileSync(path.join(__dirname, '../js/simulation/Share
   });
 
   test('stores and applies weighting by item key only', () => {
-    expect(playerSource).toContain("buffs.push({ itemKey: state.picks[0], expiresFloor: Neo.floor + 3 })");
-    expect(playerSource).not.toContain("buffs.push({ tag: state.picks[0]");
+    expect(acquisitionSource).toContain("{ itemKey: selected[0], expiresFloor: floor + 3 }");
+    expect(acquisitionSource).not.toContain("{ tag: selected[0]");
     expect(combatSource).toContain('if (buff.itemKey !== key) return;');
     expect(combatSource).not.toContain('tags.includes(buff.tag)');
   });

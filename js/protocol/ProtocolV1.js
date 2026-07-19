@@ -122,7 +122,7 @@
       direction: CLIENT_TO_AUTHORITY,
       delivery: { reliability: 'reliable', channel: 'gameplay', replaceable: false },
       fields: {
-        command: field('string', { required: true, enum: ['FORGE_COMMIT', 'EQUIP_MOVE', 'EQUIP_WEAPON', 'REORDER_EQUIPMENT', 'ACTIVATE_EQUIPMENT', 'SPECIAL_ROOM_CHOICE'] }),
+        command: field('string', { required: true, enum: ['FORGE_COMMIT', 'EQUIP_MOVE', 'EQUIP_WEAPON', 'REORDER_EQUIPMENT', 'ACTIVATE_EQUIPMENT', 'SPECIAL_ROOM_CHOICE', 'WIZARD_PAW_SELECT', 'EXTRA_BATTERY_SELECT', 'VOUCHER_REDEEM', 'SCROLL_APPLY'] }),
         arguments: field('object', { required: true }),
       },
     },

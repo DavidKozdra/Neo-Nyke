@@ -29,26 +29,30 @@ Target: the server resolves authoritative outcomes and broadcasts campaign state
 - Destructibles (pots, barrels, tables, walls) now break on the authority from melee sweeps, beams, AOE smashes and projectiles through one shared mutation, with the campaign break outcomes: pot coin/item loot, barrel 130-radius blast that chains to nearby props and damages enemies, and hidden-prop reveal on wall breaks. The client consumes `DESTRUCTIBLE_HIT`/`DESTRUCTIBLE_BROKEN` events to play the normal campaign hit/break/explosion FX and sounds.
 - The local hero renders through the full campaign `drawPlayer` path in networked play (status rings, barrier bar, god tint, sprite scale, weapon range preview); only remote allies get the tinted `drawPlayerSlot` treatment with a name label.
 - Pickup presentation is per-type like the campaign: the coin ring/chime only plays for coin pickups, potions show the authoritative heal popup, and item pickups show the normal card plus the compact "Copied!" toast on a duplicate roll.
+- Encounter counts, seeded wave composition, ladder support units and floor-boss selection now come from `SharedEncounterSystem`; authority no longer maintains its fixed 1/2/3-enemy counts or a separate enemy pool.
+- Projectile ricochet rolls, item speed/lifetime/pierce/homing modifiers, homing steering, movement integration, blocker reflection and perpendicular sub-spawn descriptors now come from `SharedProjectileSystem` in browser and authority.
+- Wizard's Paw, Extra Battery, vouchers and all six control-scroll transactions (including pending queues, reroll, replace, abundance and pool weighting) now resolve through `SharedAcquisitionSystem` and validated game commands.
+- Kill healing and kill-charge progression for Insurance, Keen Eye, Crit Charm, Chrono Spring, Charged Adapter, Robot Arm and Hemes Scarf now resolve through `SharedEventItemSystem` in both runtimes.
+- Destructible HP/break state, secret-wall intent, hidden-group reveal, pot rewards, barrel blast intent and post-loop green drops now resolve through `SharedWorldMutationSystem`; local code retains only FX/audio and authority retains entity/event materialization.
 
 ## Still blocking literal 1:1 parity
 
-1. **Enemy behavior bodies and encounter construction**
-   - Type dispatch is shared, but single-player still executes the authored per-enemy handlers in `game/enemies.js` while authority executes a generic ranged/melee behavior in `NetworkCombatSystem.js`.
-   - `spawnWave`, boss phases, elite traits, projectile evasion, obstacle breaking, hidden-player wandering, bounty control and named boss attacks are not one shared operation yet.
+1. **Enemy behavior bodies**
+   - Type dispatch and encounter construction are shared, but single-player still executes the authored per-enemy handlers in `game/enemies.js` while authority executes a generic ranged/melee behavior in `NetworkCombatSystem.js`.
+   - Boss phases, elite traits, projectile evasion, obstacle breaking, hidden-player wandering, bounty control and named boss attacks are not one shared operation yet.
 
 2. **Remaining item procs and acquisition side effects**
    - The live campaign's 74 definitions and derived passive/stat table are now shared, but event-driven effects still need extraction.
-   - On-hit status rolls are shared now; on-kill, charge, revive, scroll, voucher, Wizard's Paw, Extra Battery, Jester and other event-driven character/item synergy behavior remains browser-only.
-   - Drop-table membership is not the same thing as effect support: non-random rewards and scrolls must still resolve on authority.
+   - On-hit status rolls, core kill-charge/healing, scroll, voucher, Wizard's Paw and Extra Battery transactions are shared now; revive modifiers, Jester and remaining event-driven character/item synergies still need extraction.
 
 3. **Combat execution**
-   - Damage scaling, crit resolution and status application/ticking/on-hit status procs are shared, but authority still has separate implementations for attack sequencing, beams, persistent moves and projectile collision.
+   - Damage scaling, crit resolution, status application/ticking/on-hit status procs and core projectile trajectories are shared, but authority still has separate implementations for attack sequencing, beams, persistent moves and portions of projectile hit/collision disposition.
    - Several authored move sequences are projected from events for appearance instead of consuming the exact campaign gameplay entities.
-   - Destructible/structure collision, breaking, ricochet, homing, sub-spawns and all status/item modifiers need the campaign operation extracted once.
+   - Boomerang catch, drain, love-bomb detonation and several move-specific projectile dispositions still need extraction.
 
 4. **Chests and reward-selection flows**
    - Basic authority chests and A/B selection exist.
-   - Campaign chest varieties, random chest placement/rules, scroll selection, Wizard's Paw, Extra Battery, duplicate-item behavior, secret vendor rewards and every presentation/selection event need the same shared acquisition transaction.
+   - Scroll selection, Wizard's Paw, Extra Battery and duplicate pickup collection now use shared transactions. Campaign chest varieties, random chest placement/rules, secret vendor rewards and several selection events still need the same treatment.
 
 5. **Special/challenge/secret/garden rooms**
    - Seven service-room choices share an outcome resolver.
@@ -56,7 +60,7 @@ Target: the server resolves authoritative outcomes and broadcasts campaign state
 
 6. **World mutation**
    - Pots, barrels, breakable walls and hidden-prop reveals now share an authoritative break lifecycle with campaign loot/blast outcomes.
-   - Secret-wall passage opening, cover-wall specifics (reinforced HP tuning), post-loop green-item drops, garden nodes and room projectiles do not yet share the full campaign mutation lifecycle.
+   - Secret-wall break intent, cover HP, reveals and post-loop green drops are shared. Garden nodes and room-projectile lifecycles do not yet share the full campaign mutation lifecycle.
 
 7. **Remaining run services**
    - XP, canonical level-up gains, coins, floors and revive have authority state.

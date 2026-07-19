@@ -29,7 +29,7 @@
   const { syncCampaignItemStats } = itemEffectApi;
   const { getCampaignStatusStacks, getCampaignSlowMultiplier } = statusApi;
 
-  const CAMPAIGN_CONTENT_VERSION = 'shared-neo-campaign-parity-v22';
+  const CAMPAIGN_CONTENT_VERSION = 'shared-neo-campaign-parity-v23';
   const CAMPAIGN_ROOM = Object.freeze({ id: 'campaign-start-room', ...worldContentApi.CAMPAIGN_ROOM_GEOMETRY });
   const ROOM_DIRECTIONS = Object.freeze({
     n: Object.freeze({ dx: 0, dy: -1, opposite: 's' }),

@@ -5,13 +5,14 @@ const root = path.resolve(__dirname, '..');
 const playerSource = fs.readFileSync(path.join(root, 'js/game/player.js'), 'utf8');
 const updateSource = fs.readFileSync(path.join(root, 'js/core/update.js'), 'utf8');
 const gameStateSource = fs.readFileSync(path.join(root, 'js/core/game-state.js'), 'utf8');
+const sharedEventSource = fs.readFileSync(path.join(root, 'js/simulation/SharedEventItemSystem.js'), 'utf8');
 
 describe("Heme's Scarf charge and healing balance", () => {
   test('starts uncharged and requires ten kill-charge steps', () => {
     expect(gameStateSource).toContain('scarfHealReady: false');
     expect(gameStateSource).toContain('scarfHealTime: 0');
     expect(playerSource).toContain('playerData.scarfHealReady = playerData.scarfHealReady === true');
-    expect(playerSource).toContain('getChargeRequirement(10)');
+    expect(sharedEventSource).toContain("'hemes_scarf', 'scarfChargeKills', 'scarfHealReady', chargeRequirement(player, 10, stats)");
   });
 
   test('low health cannot arm the scarf without kills', () => {
@@ -31,6 +32,6 @@ describe("Heme's Scarf charge and healing balance", () => {
     expect(spendAt).toBeGreaterThan(-1);
     expect(startAt).toBeGreaterThan(spendAt);
     expect(healAt).toBeGreaterThan(startAt);
-    expect(playerSource).toContain('&& Number(Neo.player.scarfHealTime || 0) <= 0');
+    expect(sharedEventSource).toContain('Number(player.scarfHealTime || 0) <= 0');
   });
 });

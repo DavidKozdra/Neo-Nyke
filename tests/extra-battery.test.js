@@ -1,5 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
+const { applyExtraBatterySelection } = require('../js/simulation/SharedAcquisitionSystem');
 
 function extractFunction(sourcePath, functionName, dependencies = {}) {
   const source = fs.readFileSync(sourcePath, 'utf8');
@@ -56,10 +57,14 @@ describe('Extra Battery wiring', () => {
     const player = {
       equippedWeapon: 'hunters_bow',
       equippedMoves: {},
+      ownedMoves: { slash: true },
       extraBatteryPendingCount: 1,
     };
     const Neo = makeNeo(player);
-    const grantExtraBatteryToMove = extractFunction(playerPath, 'grantExtraBatteryToMove', { Neo });
+    const grantExtraBatteryToMove = extractFunction(playerPath, 'grantExtraBatteryToMove', {
+      Neo,
+      globalThis: { NeoNyke: { simulation: { applyExtraBatterySelection } } },
+    });
 
     const nextMaxCharges = grantExtraBatteryToMove('slash');
 
@@ -74,11 +79,14 @@ describe('Extra Battery wiring', () => {
     const player = {
       equippedWeapon: '',
       equippedMoves: {},
+      ownedMoves: { slash: true },
       extraBatteryPendingCount: 1,
     };
     const Neo = makeNeo(player);
-    const ensureMoveStackOverrides = extractFunction(playerPath, 'ensureMoveStackOverrides', { Neo });
-    const grantExtraBatteryToMove = extractFunction(playerPath, 'grantExtraBatteryToMove', { Neo, ensureMoveStackOverrides });
+    const grantExtraBatteryToMove = extractFunction(playerPath, 'grantExtraBatteryToMove', {
+      Neo,
+      globalThis: { NeoNyke: { simulation: { applyExtraBatterySelection } } },
+    });
 
     const nextMaxStacks = grantExtraBatteryToMove('slash');
 
