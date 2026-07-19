@@ -22,6 +22,9 @@ Target: the server resolves authoritative outcomes and broadcasts campaign state
 - Shop stock, prices, item/move/weapon acquisition, next-tier trades, healing and stored potions now resolve through one shared campaign operation. Browser-only item/move/weapon stock generators and direct purchase mutations were deleted.
 - Shared shop stock preserves campaign rules for difficulty offer counts, Rich Man's Luck extras, character-exclusive moves, God Sweep unlocks, projectile-weapon representation and featured-god premium pricing.
 - Enemy damage scaling is now one headless campaign operation in local play and authority: character/item/boss/bleed/bounty/challenge multipliers, elite and loop resistance, defense and flat reduction no longer have separate formulas.
+- Crit chance, forced crits and rollback now resolve through one shared hit operation in local play and authority.
+- Level-up XP growth, health/attack/attack-speed gains, Artificer bonuses and character milestones now resolve through one shared progression operation. Authority no longer overwrites a hero's character damage multiplier on level-up.
+- Browser Playwright proves the normal campaign pause/settings flow, 2D/FPS/third-person rendering, two visible heroes, exact FPS beam yaw, Blade Justice, starter inventories, the normal item pickup card and clean server leave across two clients.
 
 ## Still blocking literal 1:1 parity
 
@@ -50,8 +53,8 @@ Target: the server resolves authoritative outcomes and broadcasts campaign state
 6. **World mutation**
    - Static room state is authoritative, but pots, barrels, cover walls, secret walls, hidden props, garden nodes and room projectiles do not yet share the full campaign mutation lifecycle.
 
-7. **Progression and run services**
-   - XP, coins, floors and revive have authority state.
+7. **Remaining run services**
+   - XP, canonical level-up gains, coins, floors and revive have authority state.
    - Achievements, unlocks, tutorial progression, run-save/meta progression, difficulty/challenge modifiers and all alternate campaign modes are not yet authoritative multiplayer services.
 
 8. **Prediction/reconciliation coverage**

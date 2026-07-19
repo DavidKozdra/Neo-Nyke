@@ -50,8 +50,8 @@
       this._notify();
     }
 
-    setCharacter(characterKey) {
-      this.client.sendCharacter(characterKey);
+    setCharacter(characterKey, kitChoices) {
+      this.client.sendCharacter(characterKey, kitChoices);
       this._notify();
     }
 

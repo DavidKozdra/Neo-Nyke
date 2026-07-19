@@ -13,8 +13,8 @@ const { LOCAL_BUILD_VERSION, LOCAL_CONTENT_HASH } = require('../js/multiplayer/L
 
 describe('network multiplayer game view', () => {
   test('uses a floor-renderer compatibility identity so stale movement clients cannot join', () => {
-    expect(LOCAL_BUILD_VERSION).toBe('1.0.0-campaign-parity-v21');
-    expect(LOCAL_CONTENT_HASH).toBe('shared-neo-campaign-parity-v21');
+    expect(LOCAL_BUILD_VERSION).toBe('1.0.0-campaign-parity-v22');
+    expect(LOCAL_CONTENT_HASH).toBe('shared-neo-campaign-parity-v22');
   });
 
   test('normalizes diagonal keyboard/gamepad movement', () => {
