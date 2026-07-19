@@ -9499,6 +9499,33 @@ button.alt.danger {
   line-height: 1.4;
 }
 
+.coop-lobby__demo-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 14px;
+  padding: 9px 12px;
+  box-sizing: border-box;
+  border: 1px solid color-mix(in srgb, #ffb648 52%, var(--menu-border));
+  border-radius: var(--ui-frame-radius);
+  background: rgba(10, 13, 16, .96);
+  box-shadow: 0 7px 0 rgba(0, 0, 0, .32);
+  color: var(--menu-text-soft, #dfe9ff);
+  font-size: calc(13px * var(--font-scale, 1));
+  line-height: 1.4;
+}
+
+.coop-lobby__demo-tag {
+  flex: 0 0 auto;
+  padding: 3px 8px;
+  border-radius: var(--ui-control-radius);
+  background: #ffb648;
+  color: #16110a;
+  font-size: calc(10px * var(--font-scale, 1));
+  font-weight: 950;
+  letter-spacing: .16em;
+}
+
 .coop-lobby__room-strip {
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);
@@ -9825,6 +9852,12 @@ button.alt.danger {
 
   .coop-lobby__share {
     width: 100%;
+  }
+
+  .coop-lobby__demo-banner {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 7px;
   }
 
   .coop-lobby__code {
