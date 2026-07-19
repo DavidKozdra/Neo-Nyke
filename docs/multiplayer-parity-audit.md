@@ -23,6 +23,7 @@ Target: the server resolves authoritative outcomes and broadcasts campaign state
 - Shared shop stock preserves campaign rules for difficulty offer counts, Rich Man's Luck extras, character-exclusive moves, God Sweep unlocks, projectile-weapon representation and featured-god premium pricing.
 - Enemy damage scaling is now one headless campaign operation in local play and authority: character/item/boss/bleed/bounty/challenge multipliers, elite and loop resistance, defense and flat reduction no longer have separate formulas.
 - Crit chance, forced crits and rollback now resolve through one shared hit operation in local play and authority.
+- Status storage/application, six-stack limits, duration/resistance math, player cold budgets, slow movement, enemy/player DoT formulas, bleed resistance and item/weapon on-hit proc rolls now resolve through `SharedStatusSystem` in both campaign and authority. Network presentation consumes the authority's real `statuses` map; legacy network bleed/fire/poison/freeze counters and reconstructed client statuses were deleted.
 - Level-up XP growth, health/attack/attack-speed gains, Artificer bonuses and character milestones now resolve through one shared progression operation. Authority no longer overwrites a hero's character damage multiplier on level-up.
 - Browser Playwright proves the normal campaign pause/settings flow, 2D/FPS/third-person rendering, two visible heroes, exact FPS beam yaw, Blade Justice, starter inventories, the normal item pickup card and clean server leave across two clients.
 - Destructibles (pots, barrels, tables, walls) now break on the authority from melee sweeps, beams, AOE smashes and projectiles through one shared mutation, with the campaign break outcomes: pot coin/item loot, barrel 130-radius blast that chains to nearby props and damages enemies, and hidden-prop reveal on wall breaks. The client consumes `DESTRUCTIBLE_HIT`/`DESTRUCTIBLE_BROKEN` events to play the normal campaign hit/break/explosion FX and sounds.
@@ -37,11 +38,11 @@ Target: the server resolves authoritative outcomes and broadcasts campaign state
 
 2. **Remaining item procs and acquisition side effects**
    - The live campaign's 74 definitions and derived passive/stat table are now shared, but event-driven effects still need extraction.
-   - Most on-hit, on-kill, charge, revive, scroll, voucher, Wizard's Paw, Extra Battery, Jester and character/item synergy behavior remains browser-only.
+   - On-hit status rolls are shared now; on-kill, charge, revive, scroll, voucher, Wizard's Paw, Extra Battery, Jester and other event-driven character/item synergy behavior remains browser-only.
    - Drop-table membership is not the same thing as effect support: non-random rewards and scrolls must still resolve on authority.
 
 3. **Combat execution**
-   - The damage-scaling operation is shared, but authority still has separate implementations for attack sequencing, crit/proc resolution, beams, persistent moves, status application and projectile collision.
+   - Damage scaling, crit resolution and status application/ticking/on-hit status procs are shared, but authority still has separate implementations for attack sequencing, beams, persistent moves and projectile collision.
    - Several authored move sequences are projected from events for appearance instead of consuming the exact campaign gameplay entities.
    - Destructible/structure collision, breaking, ricochet, homing, sub-spawns and all status/item modifiers need the campaign operation extracted once.
 
@@ -63,7 +64,7 @@ Target: the server resolves authoritative outcomes and broadcasts campaign state
 
 8. **Prediction/reconciliation coverage**
    - Player obstacle prediction is shared now.
-   - Dash/warp, knockback, status-driven speed, doors during transitions and moving hazards still need the exact authority movement operation reflected by prediction.
+   - Authority movement now consumes the shared slow multiplier; client prediction still needs status-driven speed plus exact dash/warp, knockback, doors during transitions and moving-hazard reconciliation.
 
 ## Deletion rule for remaining work
 

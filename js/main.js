@@ -35,6 +35,7 @@ import './simulation/SharedItemContent.js';
 import './simulation/SharedItemEffectSystem.js';
 import './simulation/SharedDamageSystem.js';
 import './simulation/SharedHitResolutionSystem.js';
+import './simulation/SharedStatusSystem.js';
 import './simulation/SharedProgressionSystem.js';
 import './simulation/SharedForgeSystem.js';
 import './simulation/SharedInventorySystem.js';

@@ -58,6 +58,9 @@
     STATUS_EFFECT_KEYS.forEach(key => {
       const state = entity.statuses[key];
       if (!state || typeof state !== 'object') entity.statuses[key] = { stacks: 0, duration: 0, tick: 0 };
+      entity.statuses[key].stacks = Math.max(0, Number(entity.statuses[key].stacks || 0));
+      entity.statuses[key].duration = Math.max(0, Number(entity.statuses[key].duration || 0));
+      entity.statuses[key].tick = Number(entity.statuses[key].tick || 0);
     });
     return entity.statuses;
   }
@@ -145,12 +148,22 @@
     return Math.max(0, Math.min(cfg.max, scale * (1 + timeRamp)));
   }
 
-  function getCampaignStatusTickDamage(key, stacks, maxHp) {
+  function getCampaignStatusTickDamage(key, stacks, maxHp, options = {}) {
+    const count = Math.max(0, Number(stacks || 0));
+    const maximum = Math.max(1, Number(maxHp || 1));
+    if (options.targetKind === 'player') {
+      if (key === 'bleed') return 1.2 + count * 1.3;
+      if (key === 'fire') return (1 + count * 1.6) * Math.max(0.2, 1 - Math.max(0, Number(options.fireResistance || 0)));
+      if (key === 'poison') return maximum * (0.004 + count * 0.0025);
+      if (key === 'dark_drain') return maximum * (0.003 + count * 0.002);
+      if (key === 'static') return maximum * (0.004 + count * 0.003);
+      return 0;
+    }
     const config = CAMPAIGN_STATUS_TICKS[key];
     if (!config) return 0;
-    if (config.baseDamage) return config.baseDamage(stacks);
+    if (config.baseDamage) return config.baseDamage(count);
     if (config.maxHpFraction) {
-      return Math.max(1, Math.max(1, Number(maxHp || 1)) * config.maxHpFraction * Math.max(0, Number(stacks || 0)));
+      return Math.max(1, maximum * config.maxHpFraction * count);
     }
     return 0;
   }
@@ -166,32 +179,45 @@
     const statuses = ensureCampaignStatuses(entity);
     const results = [];
     const isDead = () => (typeof hooks.isDead === 'function' ? hooks.isDead() : !!entity.dead);
+    const requestedKeys = Array.isArray(hooks.keys) ? new Set(hooks.keys) : null;
     for (const key of ['bleed', 'fire', 'poison', 'dark_drain', 'static']) {
+      if (requestedKeys && !requestedKeys.has(key)) continue;
       const state = statuses[key];
       if (Number(state.stacks || 0) <= 0) continue;
       if (entity[`${key}Immune`]) {
         clearCampaignStatus(entity, key);
         continue;
       }
-      state.duration -= dt;
+      const durationDecay = typeof hooks.getDurationDecay === 'function'
+        ? Math.max(0, Number(hooks.getDurationDecay(key, state) || 0))
+        : 1;
+      state.duration -= dt * durationDecay;
       state.tick -= dt;
       if (state.tick <= 0) {
         state.tick = CAMPAIGN_STATUS_TICKS[key].interval;
-        const raw = getCampaignStatusTickDamage(key, state.stacks, hooks.maxHp ?? entity.maxHealth ?? entity.max)
+        const raw = getCampaignStatusTickDamage(key, state.stacks, hooks.maxHp ?? entity.maxHp ?? entity.maxHealth ?? entity.max, {
+          targetKind: hooks.targetKind,
+          fireResistance: hooks.fireResistance,
+        })
           * Math.max(1, Number(state.damageMultiplier || 1));
         const dealt = typeof hooks.dealDamage === 'function' ? hooks.dealDamage(key, raw, state) : 0;
         results.push({ key, dealt, stacks: state.stacks, state });
         if (isDead()) return results;
-        if (typeof hooks.onTick === 'function') hooks.onTick(key, state);
+        if (typeof hooks.onTick === 'function') hooks.onTick(key, state, dealt);
       }
       if (state.duration <= 0) clearCampaignStatus(entity, key);
     }
     const slow = statuses.slow;
+    if (requestedKeys && !requestedKeys.has('slow')) return results;
     if (Number(slow.stacks || 0) > 0) {
       slow.duration -= dt;
       slow.tick -= dt;
-      if (slow.tick <= 0) slow.tick = CAMPAIGN_STATUS_TICKS.slow.interval;
+      if (slow.tick <= 0) {
+        slow.tick = CAMPAIGN_STATUS_TICKS.slow.interval;
+        if (typeof hooks.onTick === 'function') hooks.onTick('slow', slow);
+      }
       if (slow.duration <= 0) clearCampaignStatus(entity, 'slow');
+      else if (hooks.playerColdBudget) slow.stacks = getColdStacksFromDuration(slow.duration);
     }
     return results;
   }
@@ -239,9 +265,16 @@
         damageMultiplier: rolled.effectMultiplier,
       });
     };
-    pushStatus('bleed', options.bleedChance, Number(options.bleedStacks || 1), Number(options.bleedDuration || 4));
-    pushStatus('bleed', options.itemBleedChance ?? stats.bleedChance, 1, 5);
-    pushStatus('fire', options.fireChance, Number(options.fireStacks || 1), Number(options.fireDuration || 2.8));
+    // Keep this order identical to the campaign hitEnemy operation. Seeded
+    // encounter RNG must be consumed in the same order locally and remotely.
+    if (Number(stats.confuseRayStunChance || 0) > 0) {
+      const rolled = roll(stats.confuseRayStunChance);
+      if (rolled.triggered) procs.push({ kind: 'stun', presentation: 'stun', seconds: 0.55 * rolled.effectMultiplier });
+    }
+    if (context.canBlind !== false && Number(stats.confuseRayBlindChance || 0) > 0) {
+      const rolled = roll(stats.confuseRayBlindChance);
+      if (rolled.triggered) procs.push({ kind: 'blind', presentation: 'blind', seconds: 1.6 * rolled.effectMultiplier });
+    }
     pushStatus('poison', stats.snakeKnifePoisonChance, 1, 4);
     pushStatus('slow', stats.weaponFatigueChance, 1, 4);
     if (Number(stats.weaponFatigueFreezeChance || 0) > 0) {
@@ -250,17 +283,23 @@
         procs.push({ kind: 'freeze', seconds: 0.6 * rolled.effectMultiplier, slowStacks: 1, slowDuration: 4 * rolled.effectMultiplier });
       }
     }
-    if (Number(stats.confuseRayStunChance || 0) > 0) {
-      const rolled = roll(stats.confuseRayStunChance);
-      if (rolled.triggered) procs.push({ kind: 'stun', seconds: 0.55 * rolled.effectMultiplier });
-    }
     if (Number(stats.overstimulateStunChance || 0) > 0 && Number(context.activeStatusCount || 0) >= 2) {
       const rolled = roll(stats.overstimulateStunChance);
-      if (rolled.triggered) procs.push({ kind: 'stun', seconds: 1.4 * rolled.effectMultiplier });
+      if (rolled.triggered) procs.push({ kind: 'stun', presentation: 'stimulated', seconds: 1.4 * rolled.effectMultiplier });
+    }
+    if (options.lightning && Number(context.targetSlowStacks || 0) > 0) {
+      const rolled = roll(0.35);
+      if (rolled.triggered) procs.push({ kind: 'stun', presentation: 'shock', seconds: 0.62 });
     }
     if (options.lightning && !options.noStatic) {
       procs.push({ kind: 'status', key: 'static', stacks: 1 + Math.max(0, Number(context.copperPennyStacks || 0)), duration: 4, damageMultiplier: 1 });
     }
+    pushStatus('bleed', options.bleedChance, Number(options.bleedStacks || 1), Number(options.bleedDuration || 4));
+    pushStatus('fire', options.fireChance, Number(options.fireStacks || 1), Number(options.fireDuration || 2.8));
+    // Item bleed is not implicit: campaign weapon paths decide whether the hit
+    // type can proc it and opt in. This prevents projectiles from gaining a proc
+    // that the single-player operation never supplied.
+    pushStatus('bleed', options.itemBleedChance, 1, 5);
     return procs;
   }
 

@@ -178,25 +178,23 @@
   }
 
   function getEnemyBleedResistance(enemy) {
-    if (enemy?.mirrorExactCopy) return 1;
     // Use cumulative floors entered (across loops) so bleed resistance keeps pace
     // with enemy HP/damage scaling instead of resetting every loop. See
     // getProgressionDepth() / scaleEnemyStats() in enemies.js.
     const progressionDepth = Neo.getProgressionDepth ? Neo.getProgressionDepth() : Math.max(1, Number(Neo.floor) || 1);
-    const loopNumber = Math.max(1, Math.floor((progressionDepth - 1) / Neo.MAX_FLOOR) + 1);
-    const floorInLoop = ((progressionDepth - 1) % Neo.MAX_FLOOR) + 1;
-    let resistance = 1;
-    resistance += Math.max(0, floorInLoop - 1) * Neo.BLEED_RESIST_SCALING.floorInLoop;
-    resistance += Math.max(0, loopNumber - 1) * Neo.BLEED_RESIST_SCALING.loop;
-    if (enemy?.elite) resistance += Neo.BLEED_RESIST_SCALING.elite;
-    if (enemy?.miniBoss) resistance += Neo.BLEED_RESIST_SCALING.miniBoss;
-    if (Neo.isBossType(enemy?.type) || enemy?.type === 'god') resistance += Neo.BLEED_RESIST_SCALING.boss;
-    if (enemy?.type === 'rival' || enemy?.type === 'mirror_knight') resistance += Neo.BLEED_RESIST_SCALING.rival;
-    return Math.max(1, resistance);
+    return globalThis.NeoNyke.simulation.getCampaignBleedResistance({
+      mirrorExactCopy: !!enemy?.mirrorExactCopy,
+      elite: !!enemy?.elite,
+      miniBoss: !!enemy?.miniBoss,
+      boss: Neo.isBossType(enemy?.type),
+      type: enemy?.type,
+    }, { progressionDepth, maxFloor: Neo.MAX_FLOOR });
   }
 
-  function scaleBleedDamageAgainstEnemy(enemy, stacks, cachedStats = null) {
-    const baseBleed = 1.8 + Math.max(1, Number(stacks || 1)) * 2.2;
+  function scaleBleedDamageAgainstEnemy(enemy, stacks, cachedStats = null, resolvedBaseDamage = null) {
+    const baseBleed = resolvedBaseDamage == null
+      ? globalThis.NeoNyke.simulation.getCampaignStatusTickDamage('bleed', stacks)
+      : Math.max(0, Number(resolvedBaseDamage || 0));
     const preResist = scaleDamageAgainstEnemy(enemy, baseBleed, NO_BLEED_BONUS_DAMAGE_OPTIONS, cachedStats);
     const itemResistance = Neo.clamp(Number(enemy?.bleedResistance || 0), 0, 0.8);
     const difficultyMultiplier = Math.max(0, Number(Neo.getDifficultyDef?.()?.enemyBleedDamageMultiplier ?? 1));
@@ -537,8 +535,6 @@
       const difference = angleDifferenceAbs(targetAngle, angle);
       if (difference > arc) return;
       hitEnemy(enemy, damage, angle, push, color, options);
-      rollAndApplyStatus(enemy, 'bleed', options.bleedChance, Number(options.bleedStacks || 1), Number(options.bleedDuration || 4), applyBleed);
-      rollAndApplyStatus(enemy, 'bleed', options.itemBleedChance, 1, 5, applyBleed);
     });
 
     forEachDestructibleNearPlayer(adjustedRange + 32, prop => {
@@ -724,9 +720,13 @@
       const targetAngle = Neo.angleBetween(Neo.player, enemy);
       const difference = angleDifferenceAbs(targetAngle, angle);
       if (difference > Neo.ATTACKS.melee.arc) return;
-      hitEnemy(enemy, damage, angle, meleeKnockback, '#0ff', { melee: true });
-      rollAndApplyStatus(enemy, 'bleed', slashBleedChance, 1, 5, applyBleed);
-      rollAndApplyStatus(enemy, 'bleed', itemStats.bleedChance, 1, 5, applyBleed);
+      hitEnemy(enemy, damage, angle, meleeKnockback, '#0ff', {
+        melee: true,
+        bleedChance: slashBleedChance,
+        bleedStacks: 1,
+        bleedDuration: 5,
+        itemBleedChance: itemStats.bleedChance,
+      });
     });
     forEachDestructibleNearPlayer(meleeRange + 32, prop => {
       if (prop.broken || prop.hidden) return;
@@ -1635,8 +1635,11 @@
       const targetAngle = Neo.angleBetween(Neo.player, enemy);
       const diff = angleDifferenceAbs(targetAngle, angle);
       if (diff > arc) return;
-      hitEnemy(enemy, damage, angle, knockback, '#ff6090');
-      rollAndApplyStatus(enemy, 'bleed', bleedChance, charge >= 0.99 ? 2 : 1, 5, applyBleed);
+      hitEnemy(enemy, damage, angle, knockback, '#ff6090', {
+        bleedChance,
+        bleedStacks: charge >= 0.99 ? 2 : 1,
+        bleedDuration: 5,
+      });
     });
     forEachDestructibleNearPlayer(range + 8, prop => {
       if (prop.broken || prop.hidden) return;
@@ -3617,15 +3620,6 @@
     Neo.player.thornDrainRate = Math.min(enemyMax * 0.04, Number(Neo.player.thornDrainRate || 0) + bite * 0.5);
   }
 
-  function rollProcEffect(chance, baseMultiplier = 1) {
-    const rolled = globalThis.NeoNyke?.simulation?.applyProcRollback?.(chance, baseMultiplier)
-      || { procChance: Number(chance || 0), effectMultiplier: Number(baseMultiplier || 1) };
-    return {
-      chance: Neo.clamp(Number(rolled.procChance || 0), 0, 0.999),
-      multiplier: Math.max(1, Number(rolled.effectMultiplier || 1)),
-    };
-  }
-
   function applyStatusPower(entity, key, multiplier) {
     if (!(multiplier > 1)) return;
     const state = Neo.getStatusState?.(entity, key);
@@ -3633,14 +3627,56 @@
     state.damageMultiplier = Math.max(Number(state.damageMultiplier || 1), multiplier);
   }
 
-  function rollAndApplyStatus(enemy, key, chance, stacks, duration, applyFn, options = {}) {
-    if (!(chance > 0)) return false;
-    const rolled = rollProcEffect(chance, options.baseMultiplier || 1);
-    if (Neo.nextRandom('encounter') >= rolled.chance) return false;
-    const scaledDuration = Number(duration || 0) * (options.durationScales === false ? 1 : rolled.multiplier);
-    applyFn(enemy, stacks, scaledDuration);
-    applyStatusPower(enemy, key, rolled.multiplier);
-    return true;
+  function applyCampaignOnHitStatusProcs(enemy, stats, options, copperPennyStacks) {
+    const shared = globalThis.NeoNyke.simulation;
+    const procs = shared.resolveCampaignOnHitStatusProcs({
+      itemStats: stats,
+      hitOptions: options,
+      activeStatusCount: Neo.getActiveStatusCount?.(enemy) || 0,
+      copperPennyStacks,
+      targetSlowStacks: Neo.getStatusStacks?.(enemy, 'slow') || 0,
+      canBlind: enemy.type !== 'god',
+      random: () => Neo.nextRandom('encounter'),
+    });
+    const statusAppliers = {
+      bleed: applyBleed,
+      fire: applyFire,
+      poison: applyPoison,
+      slow: (target, stacks, duration) => Neo.applyStatus(target, 'slow', stacks, duration),
+      static: applyStatic,
+    };
+    procs.forEach(proc => {
+      if (proc.kind === 'status') {
+        const apply = statusAppliers[proc.key];
+        if (!apply) return;
+        apply(enemy, proc.stacks, proc.duration);
+        applyStatusPower(enemy, proc.key, proc.damageMultiplier);
+        return;
+      }
+      if (proc.kind === 'freeze') {
+        enemy.stun = Math.max(Number(enemy.stun || 0), Number(proc.seconds || 0));
+        Neo.applyStatus(enemy, 'slow', proc.slowStacks, proc.slowDuration);
+        Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 18, life: 0.5, text: 'FROZEN', c: '#9fe8ff' });
+        Neo.ringBurst(enemy.x, enemy.y, enemy.r + 12, '#9fe8ff', 0.3);
+        return;
+      }
+      if (proc.kind === 'blind') {
+        enemy.confusedBlindUntil = Math.max(Number(enemy.confusedBlindUntil || 0), Number(Neo.gameElapsedTime || 0) + Number(proc.seconds || 0));
+        Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 18, life: 0.5, text: '?!', c: '#67d8ff' });
+        Neo.ringBurst(enemy.x, enemy.y, enemy.r + 12, '#67d8ff', 0.28);
+        return;
+      }
+      if (proc.kind === 'stun') {
+        enemy.stun = Math.max(Number(enemy.stun || 0), Number(proc.seconds || 0));
+        const shock = proc.presentation === 'shock';
+        const stimulated = proc.presentation === 'stimulated';
+        const text = shock ? 'SHOCK' : stimulated ? 'STIMULATED' : 'STUN';
+        const color = shock ? '#9adfff' : stimulated ? '#ffd27d' : '#ffe66d';
+        Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 18, life: shock ? 0.48 : 0.5, text, c: color });
+        Neo.ringBurst(enemy.x, enemy.y, enemy.r + 12, color, 0.28);
+      }
+    });
+    return procs;
   }
 
   function hitEnemy(enemy, damage, angle, knockback, color, options = {}) {
@@ -3746,59 +3782,8 @@
       applyPoison(enemy, 1, 4.5);
       Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 22, life: 0.6, text: 'AMBUSH', c: '#ffb37a' });
     }
-    if (stats.confuseRayStunChance > 0) {
-      const rolled = rollProcEffect(stats.confuseRayStunChance);
-      if (Neo.nextRandom('encounter') < rolled.chance) {
-        enemy.stun = Math.max(Number(enemy.stun || 0), 0.55 * rolled.multiplier);
-        Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 18, life: 0.5, text: 'STUN', c: '#ffe66d' });
-        Neo.ringBurst(enemy.x, enemy.y, enemy.r + 12, '#ffe66d', 0.28);
-      }
-    }
-    // Confuse Ray can also make the enemy think the player turned invisible: it
-    // enters the shared lost-sight state (? mark + wander, no attacks) for a beat.
-    // Skip the god/boss types that ignore the hidden-player blind entirely.
-    if (stats.confuseRayBlindChance > 0 && enemy.type !== 'god' && Neo.nextRandom('encounter') < stats.confuseRayBlindChance) {
-      enemy.confusedBlindUntil = Math.max(Number(enemy.confusedBlindUntil || 0), Number(Neo.gameElapsedTime || 0) + 1.6);
-      Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 18, life: 0.5, text: '?!', c: '#67d8ff' });
-      Neo.ringBurst(enemy.x, enemy.y, enemy.r + 12, '#67d8ff', 0.28);
-    }
-    // Snake Knife poisons on ANY hit (melee or ranged), so it lives on the shared
-    // hit path rather than inside individual melee moves.
-    rollAndApplyStatus(enemy, 'poison', stats.snakeKnifePoisonChance, 1, 4, applyPoison);
-    // Weapon Fatigue chills on ANY hit too: a slow stack, plus a smaller chance to
-    // briefly freeze (hard stun) the target solid.
-    rollAndApplyStatus(enemy, 'slow', stats.weaponFatigueChance, 1, 4, (target, stacks, duration) => Neo.applyStatus(target, 'slow', stacks, duration));
-    if (stats.weaponFatigueFreezeChance > 0) {
-      const rolled = rollProcEffect(stats.weaponFatigueFreezeChance);
-      if (Neo.nextRandom('encounter') < rolled.chance) {
-        enemy.stun = Math.max(Number(enemy.stun || 0), 0.6 * rolled.multiplier);
-        Neo.applyStatus(enemy, 'slow', 1, 4 * rolled.multiplier);
-        Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 18, life: 0.5, text: 'FROZEN', c: '#9fe8ff' });
-        Neo.ringBurst(enemy.x, enemy.y, enemy.r + 12, '#9fe8ff', 0.3);
-      }
-    }
-    if (stats.overstimulateStunChance > 0 && (Neo.getActiveStatusCount?.(enemy) || 0) >= 2) {
-      const rolled = rollProcEffect(stats.overstimulateStunChance);
-      if (Neo.nextRandom('encounter') < rolled.chance) {
-        enemy.stun = Math.max(Number(enemy.stun || 0), 1.4 * rolled.multiplier);
-        Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 18, life: 0.5, text: 'STIMULATED', c: '#ffd27d' });
-        Neo.ringBurst(enemy.x, enemy.y, enemy.r + 12, '#ffd27d', 0.28);
-      }
-    }
-    if (options.lightning && Neo.getStatusStacks?.(enemy, 'slow') > 0 && Neo.nextRandom('encounter') < 0.35) {
-      enemy.stun = Math.max(Number(enemy.stun || 0), 0.62);
-      Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 18, life: 0.48, text: 'SHOCK', c: '#9adfff' });
-    }
-    // Every lightning hit builds a Static charge on the target — one stack per
-    // hit (it stacks well), refreshing the duration. The DoT and the arc to
-    // nearby foes are handled in updateEnemyStatuses. Copper Penny stacks add
-    // bonus damage (above) plus extra Static stacks per hit on top of the base.
-    if (options.lightning && !options.noStatic) {
-      applyStatic(enemy, 1 + copperPennyStacks, 4);
-    }
+    applyCampaignOnHitStatusProcs(enemy, stats, options, copperPennyStacks);
     window.achievementEvents?.emit('damage:dealt', { amount: dealt });
-    rollAndApplyStatus(enemy, 'bleed', options.bleedChance, Number(options.bleedStacks || 1), Number(options.bleedDuration || 4), applyBleed);
-    rollAndApplyStatus(enemy, 'fire', options.fireChance, Number(options.fireStacks || 1), Number(options.fireDuration || 2.8), applyFire);
     if (options.chainLightningRadius > 0) {
       const chained = Neo.findNearestEnemy(enemy.x, enemy.y, options.chainLightningRadius, new Set([enemy]));
       if (chained) {
@@ -4091,46 +4076,38 @@
     return enemy;
   }
 
-  function tickEnemyStatus(enemy, key, dt, config) {
-    const state = Neo.getStatusState(enemy, key);
-    if (state.stacks <= 0) return false;
-    if (enemy[`${key}Immune`]) {
-      Neo.clearStatus(enemy, key);
-      return false;
+  // The DoT cadence, ordering, base damage shapes and duration bookkeeping are
+  // the shared campaign status operation (SharedStatusSystem). This hook turns
+  // one shared tick into the campaign presentation: player-pipeline scaling for
+  // bleed/fire, cursed-blood, bleed crits, popups, sprays, siphon heals, death.
+  function dealEnemyStatusTickDamage(enemy, key, state, stats, sharedRawDamage) {
+    const shared = globalThis.NeoNyke.simulation;
+    const style = Neo.STATUS_STYLES[key];
+    const base = key === 'bleed'
+      ? scaleBleedDamageAgainstEnemy(enemy, state.stacks, stats, sharedRawDamage)
+      : key === 'fire'
+        ? scaleDamageAgainstEnemy(enemy, sharedRawDamage, DEFAULT_DAMAGE_OPTIONS, stats)
+        : sharedRawDamage;
+    let damage = scaleRawDamageAgainstEnemy(enemy, Math.max(1, Math.round(base)));
+    if (Neo.isChallengeActive?.('cursed_blood')) damage = Math.max(1, Math.round(damage * 1.35));
+    const bleedCrit = key === 'bleed' && Number(stats.bleedCritChance || 0) > 0 && Neo.nextRandom('encounter') < Number(stats.bleedCritChance || 0);
+    if (bleedCrit) damage = Math.max(1, Math.round(damage * Number(stats.critMultiplier || 1.6)));
+    enemy.hp -= damage;
+    Neo.spawnDamagePopup(enemy.x, enemy.y - 10, damage, { color: style.textColor, size: bleedCrit ? 18 : 15, crit: bleedCrit });
+    if (bleedCrit) Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 14, life: 0.38, text: 'BLEED CRIT', c: style.textColor });
+    Neo.spawnParticle({ x: enemy.x + Neo.rand(-8, 8), y: enemy.y + Neo.rand(-8, 8), life: 0.25, c: style.color });
+    if (key === 'bleed') spawnBleedSpray(enemy, state.stacks, 0.7);
+    const healScale = Number(shared.CAMPAIGN_STATUS_TICKS[key]?.healScale || 0);
+    if (healScale > 0 && Neo.player && Neo.player.hp < Neo.player.maxHp) {
+      // Cap per tick against the player's max HP, not the enemy's: tick damage
+      // scales with enemy max, so deep-floor elites would otherwise siphon huge
+      // chunks (mirrors the 2%-of-owner cap on the enemy-owned drain).
+      const heal = Neo.scalePlayerHealing(Math.min(damage * healScale, Neo.player.maxHp * 0.015));
+      const gained = Neo.applyPlayerHealing(heal);
+      if (gained > 0.2) Neo.spawnHealPopup(Neo.player.x + Neo.rand(-8, 8), Neo.player.y - 22, gained, { color: style.textColor });
     }
-    state.duration -= dt;
-    state.tick -= dt;
-    if (state.tick <= 0) {
-      state.tick = config.interval;
-      const stats = config.stats || Neo.getItemStats?.() || {};
-      const statusDamageMultiplier = Math.max(1, Number(state.damageMultiplier || 1));
-      let damage = scaleRawDamageAgainstEnemy(enemy, Math.max(1, Math.round(config.damage(state.stacks, stats) * statusDamageMultiplier)));
-      if (Neo.isChallengeActive?.('cursed_blood')) damage = Math.max(1, Math.round(damage * 1.35));
-      const bleedCrit = key === 'bleed' && Number(stats.bleedCritChance || 0) > 0 && Neo.nextRandom('encounter') < Number(stats.bleedCritChance || 0);
-      if (bleedCrit) damage = Math.max(1, Math.round(damage * Number(stats.critMultiplier || 1.6)));
-      enemy.hp -= damage;
-      Neo.spawnDamagePopup(enemy.x, enemy.y - 10, damage, { color: config.color, size: bleedCrit ? 18 : 15, crit: bleedCrit });
-      if (bleedCrit) Neo.spawnParticle({ x: enemy.x, y: enemy.y - enemy.r - 14, life: 0.38, text: 'BLEED CRIT', c: config.color });
-      if (config.particleColor) {
-        Neo.spawnParticle({ x: enemy.x + Neo.rand(-8, 8), y: enemy.y + Neo.rand(-8, 8), life: 0.25, c: config.particleColor });
-      }
-      if (key === 'bleed') spawnBleedSpray(enemy, state.stacks, 0.7);
-      if (config.healScale > 0 && Neo.player && Neo.player.hp < Neo.player.maxHp) {
-        // Cap per tick against the player's max HP, not the enemy's: tick damage
-        // scales with enemy max, so deep-floor elites would otherwise siphon huge
-        // chunks (mirrors the 2%-of-owner cap on the enemy-owned drain).
-        const heal = Neo.scalePlayerHealing(Math.min(damage * config.healScale, Neo.player.maxHp * 0.015));
-        const gained = Neo.applyPlayerHealing(heal);
-        if (gained > 0.2) Neo.spawnHealPopup(Neo.player.x + Neo.rand(-8, 8), Neo.player.y - 22, gained, { color: config.color });
-      }
-      if (enemy.hp <= 0) {
-        onEnemyDie(enemy);
-        return true;
-      }
-      if (typeof config.onTick === 'function') config.onTick(enemy, state, stats);
-    }
-    if (state.duration <= 0) Neo.clearStatus(enemy, key);
-    return false;
+    if (enemy.hp <= 0) onEnemyDie(enemy);
+    return damage;
   }
 
   // Snake Knife's poison is naturally infectious: each tick has a 1% chance to
@@ -4212,64 +4189,24 @@
     if (enemy.bleedFlash > 0) enemy.bleedFlash = Math.max(0, enemy.bleedFlash - dt);
     const stats = Neo.getItemStats?.() || {};
     const bleedStacks = Neo.getStatusStacks(enemy, 'bleed');
-    if (tickEnemyStatus(enemy, 'bleed', dt, {
-      interval: 0.5,
-      damage: (stacks, cachedStats) => scaleBleedDamageAgainstEnemy(enemy, stacks, cachedStats),
-      color: Neo.STATUS_STYLES.bleed.textColor,
-      particleColor: Neo.STATUS_STYLES.bleed.color,
-      stats,
-    })) return bleedStacks;
-    if (enemy.dead) return bleedStacks;
-    if (tickEnemyStatus(enemy, 'fire', dt, {
-      interval: 0.45,
-      damage: (stacks, cachedStats) => scaleDamageAgainstEnemy(enemy, 1.5 + stacks * 1.8, DEFAULT_DAMAGE_OPTIONS, cachedStats),
-      color: Neo.STATUS_STYLES.fire.textColor,
-      particleColor: Neo.STATUS_STYLES.fire.color,
-      stats,
-    })) return bleedStacks;
-    if (enemy.dead) return bleedStacks;
-    if (tickEnemyStatus(enemy, 'poison', dt, {
-      interval: 0.7,
-      damage: stacks => Math.max(1, enemy.max * (0.008 * stacks)),
-      color: Neo.STATUS_STYLES.poison.textColor,
-      particleColor: Neo.STATUS_STYLES.poison.color,
-      onTick: spreadSnakeKnifePoison,
-      stats,
-    })) return bleedStacks;
-    if (enemy.dead) return bleedStacks;
-    tickEnemyStatus(enemy, 'dark_drain', dt, {
-      interval: 0.6,
-      // % max HP, mirroring poison so it stays meaningful against high-HP enemies.
-      // The siphon (healScale) rides on this same value, so healing scales with it.
-      damage: stacks => Math.max(1, enemy.max * (0.006 * stacks)),
-      color: Neo.STATUS_STYLES.dark_drain.textColor,
-      particleColor: Neo.STATUS_STYLES.dark_drain.color,
-      healScale: 0.2,
-      stats,
-    });
-    if (enemy.dead) return bleedStacks;
-    if (tickEnemyStatus(enemy, 'static', dt, {
-      interval: 0.5,
-      // % max HP per stack, in line with poison/dark_drain so it stays relevant
-      // against tanky foes. The arc to neighbours rides on onTick.
-      damage: stacks => Math.max(1, enemy.max * (0.007 * stacks)),
-      color: Neo.STATUS_STYLES.static.textColor,
-      particleColor: Neo.STATUS_STYLES.static.color,
-      onTick: spreadStatic,
-      stats,
-    })) return bleedStacks;
-    const slowState = Neo.getStatusState(enemy, 'slow');
-    if (slowState.stacks > 0) {
-      slowState.duration -= dt;
-      slowState.tick -= dt;
-      if (slowState.tick <= 0) {
-        slowState.tick = 0.32;
-        if (Neo.nextRandom('fx') < 0.32) {
+    Neo.ensureStatuses(enemy);
+    let died = false;
+    globalThis.NeoNyke.simulation.tickCampaignStatuses(enemy, dt, {
+      maxHp: enemy.max,
+      isDead: () => died || !!enemy.dead,
+      dealDamage: (key, rawDamage, state) => {
+        const damage = dealEnemyStatusTickDamage(enemy, key, state, stats, rawDamage);
+        if (enemy.hp <= 0) died = true;
+        return damage;
+      },
+      onTick: (key, state) => {
+        if (key === 'poison') spreadSnakeKnifePoison(enemy, state);
+        else if (key === 'static') spreadStatic(enemy, state);
+        else if (key === 'slow' && Neo.nextRandom('fx') < 0.32) {
           Neo.spawnParticle({ x: enemy.x + Neo.rand(-7, 7), y: enemy.y + Neo.rand(-7, 7), life: 0.22, c: Neo.STATUS_STYLES.slow.color });
         }
-      }
-      if (slowState.duration <= 0) Neo.clearStatus(enemy, 'slow');
-    }
+      },
+    });
     return bleedStacks;
   }
 
@@ -5542,7 +5479,6 @@
   Neo.procyPickleSpread = procyPickleSpread;
   Neo.spawnBleedSpray = spawnBleedSpray;
   Neo.migrateEnemyState = migrateEnemyState;
-  Neo.tickEnemyStatus = tickEnemyStatus;
   Neo.updateEnemyStatuses = updateEnemyStatuses;
   // normalizeAngle is intentionally not exported on Neo: it's only used internally
   // by turnAngleToward in this file.

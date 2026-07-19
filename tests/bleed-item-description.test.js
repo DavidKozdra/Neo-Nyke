@@ -14,7 +14,7 @@ describe('Neo-Knife and Tough Bandaid descriptions', () => {
   });
 
   test('describes the actual melee bleed-proc scope', () => {
-    expect(combat).toContain("rollAndApplyStatus(enemy, 'bleed', itemStats.bleedChance, 1, 5, applyBleed)");
+    expect(combat).toContain('resolveCampaignOnHitStatusProcs({');
     expect(combat).toContain('itemBleedChance: itemStats.bleedChance || 0');
     expect(input).toContain('on basic and bleed-focused melee attacks');
   });
@@ -22,7 +22,7 @@ describe('Neo-Knife and Tough Bandaid descriptions', () => {
   test('Tough Bandaid accurately states bleed mitigation and caps', () => {
     expect(player).toContain('bleedResistance: Neo.clamp(toughBandaid * 0.1, 0, 0.8)');
     expect(player).toContain('bleedDurationDecayMultiplier: Neo.clamp(1 + toughBandaid * 0.2, 1, 3)');
-    expect(world).toContain("const resistance = key === 'bleed'");
+    expect(world).toContain("const resistance = statusKey === 'bleed'");
     expect(input).toContain('Bleed tick damage taken -10% per stack (max -80%)');
     expect(input).toContain('20% faster per stack (max 3× speed)');
   });

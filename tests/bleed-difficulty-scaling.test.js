@@ -33,8 +33,11 @@ describe('enemy bleed damage difficulty scaling', () => {
       'scaleDamageAgainstEnemy',
       'getEnemyBleedResistance',
       'NO_BLEED_BONUS_DAMAGE_OPTIONS',
+      'globalThis',
       `${scaleDeclaration}; return scaleBleedDamageAgainstEnemy;`,
-    )(Neo, () => 100, () => 1, {});
+    )(Neo, () => 100, () => 1, {}, {
+      NeoNyke: { simulation: { getCampaignStatusTickDamage: () => 100 } },
+    });
 
     return scaleBleedDamageAgainstEnemy({}, 1);
   }

@@ -1,39 +1,17 @@
 // status.js — status-effect helpers and walls constant.
 
 export function createStatusMap() {
-  return {
-    bleed: { stacks: 0, duration: 0, tick: 0 },
-    fire: { stacks: 0, duration: 0, tick: 0 },
-    poison: { stacks: 0, duration: 0, tick: 0 },
-    dark_drain: { stacks: 0, duration: 0, tick: 0 },
-    slow: { stacks: 0, duration: 0, tick: 0 },
-    static: { stacks: 0, duration: 0, tick: 0 },
-  };
-}
-
-// Fully normalize a status map's shape + numeric fields. Only worth running once
-// per map (fresh entity, or a map rehydrated from a save where fields may be
-// strings); after that the map is mutated exclusively through numeric writes, so
-// re-coercing every key on every read is pure waste.
-function normalizeStatusMap(statuses) {
-  Neo.STATUS_KEYS.forEach(key => {
-    const state = statuses[key];
-    if (!state || typeof state !== 'object') statuses[key] = { stacks: 0, duration: 0, tick: 0 };
-    statuses[key].stacks = Number(statuses[key].stacks || 0);
-    statuses[key].duration = Number(statuses[key].duration || 0);
-    statuses[key].tick = Number(statuses[key].tick || 0);
-  });
-  // Non-enumerable so it never leaks into save serialization or key iteration.
-  Object.defineProperty(statuses, '_normalized', { value: true, writable: true, configurable: true });
-  return statuses;
+  return globalThis.NeoNyke.simulation.createCampaignStatusMap();
 }
 
 export function ensureStatuses(entity) {
   if (!entity || typeof entity !== 'object') return createStatusMap();
   const existing = entity.statuses;
   if (existing && typeof existing === 'object' && existing._normalized) return existing;
-  if (!existing || typeof existing !== 'object') entity.statuses = createStatusMap();
-  return normalizeStatusMap(entity.statuses);
+  const statuses = globalThis.NeoNyke.simulation.ensureCampaignStatuses(entity);
+  // Non-enumerable so it never leaks into save serialization or key iteration.
+  Object.defineProperty(statuses, '_normalized', { value: true, writable: true, configurable: true });
+  return statuses;
 }
 
 export function getStatusState(entity, key) {
@@ -41,7 +19,8 @@ export function getStatusState(entity, key) {
 }
 
 export function getStatusStacks(entity, key) {
-  return Number(getStatusState(entity, key).stacks || 0);
+  ensureStatuses(entity);
+  return globalThis.NeoNyke.simulation.getCampaignStatusStacks(entity, key);
 }
 
 export function getActiveStatusCount(entity) {
@@ -49,13 +28,19 @@ export function getActiveStatusCount(entity) {
   return Neo.STATUS_KEYS.reduce((total, key) => total + (Number(statuses?.[key]?.stacks || 0) > 0 ? 1 : 0), 0);
 }
 
-export function getSlowMultiplier(entity) {
-  const stacks = Math.max(0, Number(getStatusStacks(entity, 'slow') || 0));
-  if (stacks <= 0) return 1;
-  const severity = entity === Neo.player
+// The severity multiplier only applies to the player (their items can worsen
+// incoming statuses); enemies always take the base debuff.
+function getEntityStatusSeverity(entity) {
+  return entity === Neo.player
     ? Number(Neo.getItemStats?.()?.negativeStatusMultiplier || 1)
     : 1;
-  return Math.max(0.35, 1 - stacks * 0.1 * severity);
+}
+
+export function getSlowMultiplier(entity) {
+  return globalThis.NeoNyke.simulation.getCampaignSlowMultiplier(
+    getStatusStacks(entity, 'slow'),
+    getEntityStatusSeverity(entity),
+  );
 }
 
 // Poison weakens the victim's strikes: each stack shaves ~1% off outgoing
@@ -63,23 +48,19 @@ export function getSlowMultiplier(entity) {
 // slow/brittle debuff multipliers. Floored so a full 6-stack stays a soft ~6%
 // rather than gutting damage.
 export function getPoisonDamageMultiplier(entity) {
-  const stacks = Math.max(0, Number(getStatusStacks(entity, 'poison') || 0));
-  if (stacks <= 0) return 1;
-  const severity = entity === Neo.player
-    ? Number(Neo.getItemStats?.()?.negativeStatusMultiplier || 1)
-    : 1;
-  return Math.max(0.85, 1 - stacks * 0.01 * severity);
+  return globalThis.NeoNyke.simulation.getCampaignPoisonDamageMultiplier(
+    getStatusStacks(entity, 'poison'),
+    getEntityStatusSeverity(entity),
+  );
 }
 
 // Cold/brittle: each slow (cold) stack strips a quarter of the target's defense,
 // so it takes more damage. 4+ stacks remove all defense (multiplier 0).
 export function getBrittleDefenseMultiplier(entity) {
-  const stacks = Math.max(0, Number(getStatusStacks(entity, 'slow') || 0));
-  if (stacks <= 0) return 1;
-  const severity = entity === Neo.player
-    ? Number(Neo.getItemStats?.()?.negativeStatusMultiplier || 1)
-    : 1;
-  return Math.max(0, 1 - stacks * 0.25 * severity);
+  return globalThis.NeoNyke.simulation.getCampaignBrittleDefenseMultiplier(
+    getStatusStacks(entity, 'slow'),
+    getEntityStatusSeverity(entity),
+  );
 }
 
 export function getPlayerNegativeStatusProcChance(chance) {
@@ -88,10 +69,8 @@ export function getPlayerNegativeStatusProcChance(chance) {
 }
 
 export function clearStatus(entity, key) {
+  globalThis.NeoNyke.simulation.clearCampaignStatus(entity, key);
   const state = getStatusState(entity, key);
-  state.stacks = 0;
-  state.duration = 0;
-  state.tick = 0;
   state.sourceKey = '';
   state.sourceLabel = '';
   state.owner = null;
@@ -103,16 +82,13 @@ export function clearStatus(entity, key) {
 // (statusResistScale 0), on the player, or for bleed. See STATUS_RESIST_SCALING
 // and the difficulty defs' statusResistScale in game-core.js.
 function getEnemyGenericStatusResistance(entity, key) {
-  if (key === 'bleed') return 0;
   if (!entity || entity === Neo.player) return 0;
-  const scale = Number(Neo.getDifficultyDef?.()?.statusResistScale || 0);
-  if (scale <= 0) return 0;
-  const cfg = Neo.STATUS_RESIST_SCALING || {};
-  const minutes = Math.max(0, Number(Neo.gameElapsedTime || 0) / 60);
   // Time owns "resistances": the base difficulty scale ramps up over the run,
   // capped so a slow player plateaus instead of facing ever-climbing immunity.
-  const timeRamp = Math.min(Number(cfg.timeCap ?? 0.6), minutes * Number(cfg.minute ?? 0.05));
-  return Math.max(0, Math.min(Number(cfg.max ?? 0.85), scale * (1 + timeRamp)));
+  return globalThis.NeoNyke.simulation.getCampaignGenericStatusResistance(key, {
+    statusResistScale: Number(Neo.getDifficultyDef?.()?.statusResistScale || 0),
+    elapsedSeconds: Number(Neo.gameElapsedTime || 0),
+  });
 }
 
 export function getStatusResistance(entity, key) {
@@ -126,10 +102,10 @@ export function getStatusResistance(entity, key) {
 // Player cold (slow) uses duration as a stack-time budget: each stack is 15s.
 // The update loop recomputes visible stacks from the remaining budget so one
 // stack falls off every 15s instead of all stacks sticking until the end.
-export const COLD_SECONDS_PER_STACK = 15;
+export const COLD_SECONDS_PER_STACK = globalThis.NeoNyke.simulation.COLD_SECONDS_PER_STACK;
 
 export function getColdStacksFromDuration(duration) {
-  return Math.min(6, Math.max(0, Math.ceil((Number(duration || 0) - 0.001) / COLD_SECONDS_PER_STACK)));
+  return globalThis.NeoNyke.simulation.getColdStacksFromDuration(duration);
 }
 
 export function applyStatus(entity, key, stacks, duration, source = null) {
@@ -139,12 +115,17 @@ export function applyStatus(entity, key, stacks, duration, source = null) {
   // statuses.
   if (entity === Neo.player && Number(Neo.player.statusResistTime || 0) > 0) return;
   const state = getStatusState(entity, key);
-  const resistanceMultiplier = 1 - getStatusResistance(entity, key);
-  const addedStacks = Math.max(0, Number(stacks || 0)) * resistanceMultiplier;
-  const durationSeverity = entity === Neo.player
-    ? Number(Neo.getItemStats?.()?.negativeStatusMultiplier || 1)
-    : 1;
-  const adjustedDuration = Math.max(0, Number(duration || 0)) * durationSeverity * resistanceMultiplier;
+  // The numeric mutation (resistance-scaled stacks/duration, the 6-stack cap
+  // with max-duration merge, the player's cold budget) is the shared campaign
+  // operation; browser-only attribution and signals stay here.
+  const result = globalThis.NeoNyke.simulation.applyCampaignStatus(entity, key, stacks, duration, {
+    resistance: getStatusResistance(entity, key),
+    severity: entity === Neo.player
+      ? Number(Neo.getItemStats?.()?.negativeStatusMultiplier || 1)
+      : 1,
+    playerColdBudget: entity === Neo.player,
+  });
+  const addedStacks = Number(result?.addedStacks || 0);
   // Remember who inflicted a damaging status on the player so the death screen
   // can attribute a DoT kill (bleed/poison/fire) to the enemy, not the tick.
   if (entity === Neo.player && source && addedStacks > 0) {
@@ -158,19 +139,6 @@ export function applyStatus(entity, key, stacks, duration, source = null) {
     if (key === 'dark_drain' && typeof source === 'object' && source.owner) {
       state.owner = source.owner;
     }
-  }
-  if (key === 'slow' && entity === Neo.player) {
-    const existingBudget = Number(state.duration || 0) > 0
-      ? Number(state.duration || 0)
-      : Math.max(0, Number(state.stacks || 0)) * COLD_SECONDS_PER_STACK;
-    state.duration = Math.min(
-      6 * COLD_SECONDS_PER_STACK * durationSeverity,
-      existingBudget + addedStacks * COLD_SECONDS_PER_STACK * durationSeverity,
-    );
-    state.stacks = getColdStacksFromDuration(state.duration);
-  } else {
-    state.stacks = Math.min(6, Math.max(state.stacks, 0) + addedStacks);
-    state.duration = Math.max(state.duration, adjustedDuration);
   }
   if (entity !== Neo.player) window.achievementEvents?.emit('status:applied', { key, entityId: entity.id });
   // Tutorial status lesson: advances on the first status the player lands on the
