@@ -1186,28 +1186,17 @@
   }
 
   function tryBounceProjectile(projectile, prevX, prevY) {
-    const remaining = Math.floor(Number(projectile?.bouncesRemaining || 0));
-    if (remaining <= 0) return false;
     const hitX = Neo.isBlocked(projectile.x, prevY, projectile.r);
     const hitY = Neo.isBlocked(prevX, projectile.y, projectile.r);
     const impactX = projectile.x;
     const impactY = projectile.y;
-    projectile.x = prevX;
-    projectile.y = prevY;
-    projectile.bouncesRemaining = remaining - 1;
-    if (hitX && !hitY) {
-      projectile.vx *= -1;
-    } else if (hitY && !hitX) {
-      projectile.vy *= -1;
-    } else {
-      projectile.vx *= -1;
-      projectile.vy *= -1;
-    }
+    const bounced = globalThis.NeoNyke.simulation.bounceCampaignProjectile(
+      projectile,
+      { hitX: hitX && !hitY, hitY: hitY && !hitX },
+      { x: prevX, y: prevY },
+    );
+    if (!bounced) return false;
     spawnProjectileImpact(projectile, impactX, impactY, { blocked: true });
-    const speed = Math.hypot(Number(projectile.vx || 0), Number(projectile.vy || 0)) || 1;
-    const nudge = Math.max(2, Number(projectile.r || 0) * 0.6);
-    projectile.x += (projectile.vx / speed) * nudge;
-    projectile.y += (projectile.vy / speed) * nudge;
     return true;
   }
 
@@ -1277,21 +1266,9 @@
   }
 
   function tryBounceProjectileAtSweepHit(projectile, sweepHit) {
-    const remaining = Math.floor(Number(projectile?.bouncesRemaining || 0));
-    if (remaining <= 0 || !sweepHit) return false;
-    projectile.bouncesRemaining = remaining - 1;
-    const incomingVx = Number(projectile.vx || 0);
-    const incomingVy = Number(projectile.vy || 0);
-    const dot = incomingVx * sweepHit.normalX + incomingVy * sweepHit.normalY;
-    projectile.vx = incomingVx - 2 * dot * sweepHit.normalX;
-    projectile.vy = incomingVy - 2 * dot * sweepHit.normalY;
-    projectile.x = sweepHit.x;
-    projectile.y = sweepHit.y;
+    const bounced = globalThis.NeoNyke.simulation.bounceCampaignProjectile(projectile, sweepHit);
+    if (!bounced) return false;
     spawnProjectileImpact(projectile, sweepHit.x, sweepHit.y, { blocked: true });
-    const speed = Math.hypot(Number(projectile.vx || 0), Number(projectile.vy || 0)) || 1;
-    const nudge = Math.max(2, Number(projectile.r || 0) * 0.6);
-    projectile.x += (projectile.vx / speed) * nudge;
-    projectile.y += (projectile.vy / speed) * nudge;
     return true;
   }
 
@@ -1570,31 +1547,30 @@
     cfg.timer -= dt;
     if (cfg.timer > 0) return;
     cfg.timer += cfg.interval || 0.2;
-    const travel = Math.atan2(Number(projectile.vy || 0), Number(projectile.vx || 1));
-    const speed = cfg.speed || 480;
-    const count = Math.max(1, cfg.count || 2);
-    for (let i = 0; i < count; i += 1) {
-      // Alternate sides (perpendicular), with a touch of jitter so it feels random.
-      const side = i % 2 === 0 ? 1 : -1;
-      const angle = travel + side * (Math.PI / 2) + (Neo.rng() - 0.5) * 0.5;
+    const descriptors = globalThis.NeoNyke.simulation.createCampaignSubSpawnDescriptors(
+      projectile,
+      cfg,
+      () => Neo.nextRandom('encounter'),
+    );
+    descriptors.forEach(descriptor => {
       spawnProjectile({
         x: projectile.x,
         y: projectile.y,
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed,
-        r: cfg.r ?? 4,
-        life: cfg.life ?? 0.7,
+        vx: Math.cos(descriptor.angle) * descriptor.speed,
+        vy: Math.sin(descriptor.angle) * descriptor.speed,
+        r: descriptor.radius,
+        life: descriptor.lifeSeconds,
         enemy: projectile.enemy,
         fromRival: projectile.fromRival,
         source: projectile.source,
         sourceLabel: projectile.sourceLabel,
-        kind: cfg.kind || projectile.kind,
-        color: cfg.color || projectile.color,
-        damage: cfg.damage ?? Math.round((projectile.damage || 0) / 2),
-        hitOptions: cfg.hitOptions ?? projectile.hitOptions ?? null,
-        statusEffects: cfg.statusEffects ?? projectile.statusEffects,
+        kind: descriptor.kind,
+        color: descriptor.color,
+        damage: descriptor.damage,
+        hitOptions: descriptor.hitOptions,
+        statusEffects: descriptor.statusEffects,
       });
-    }
+    });
   }
 
   // Flip a Sarge's Hammer boomerang from its outward seek into the return-to-player
@@ -1652,23 +1628,16 @@
       if (!projectile) { removeProjectileAt(index, false); continue; }
       projectile.life -= dt;
       if (projectile.homing) {
-        const speed = Math.hypot(Number(projectile.vx || 0), Number(projectile.vy || 0)) || Number(projectile.homingSpeed || 180);
-        const currentAngle = Math.atan2(Number(projectile.vy || 0), Number(projectile.vx || 1));
-        let targetAngle = currentAngle;
         const target = getProjectileHomingTarget(projectile, dt);
+        let aimPoint = null;
         if (target) {
-          const aimPoint = getProjectileHomingAimPoint(projectile, target, dt) || target;
-          targetAngle = Neo.angleBetween(projectile, aimPoint);
+          aimPoint = getProjectileHomingAimPoint(projectile, target, dt) || target;
         }
-        const nextAngle = Neo.turnAngleToward(currentAngle, targetAngle, Number(projectile.homingTurnRate || 2) * dt);
-        const nextSpeed = speed + (Number(projectile.homingSpeed || speed) - speed) * Number(projectile.homingAccel || 2.5) * dt;
-        projectile.vx = Math.cos(nextAngle) * nextSpeed;
-        projectile.vy = Math.sin(nextAngle) * nextSpeed;
+        globalThis.NeoNyke.simulation.steerCampaignHomingProjectile(projectile, aimPoint, dt);
       }
-      const prevX = projectile.x;
-      const prevY = projectile.y;
-      projectile.x += projectile.vx * dt;
-      projectile.y += projectile.vy * dt;
+      const previous = globalThis.NeoNyke.simulation.advanceCampaignProjectile(projectile, dt);
+      const prevX = previous.x;
+      const prevY = previous.y;
       recordProjectileTrail(projectile, prevX, prevY);
       if (projectile.subSpawn && projectile.life > 0) emitProjectileSubSpawn(projectile, dt);
       let hitProp = null;
@@ -2490,25 +2459,22 @@
     }
   }
 
-  // GREEN_DROP_CHANCE: flat per-break odds of a green item once the player has
-  // looped at least once. Only barrels/pots ("barrels and broken wood") roll.
-  const GREEN_DROP_CHANCE = 0.10;
-  function maybeDropGreenItem(prop) {
-    if (prop.kind !== 'barrel' && prop.kind !== 'pot') return;
-    if ((Number(Neo.runLoopIndex) || 0) < 1) return; // only after the first loop
-    const pool = Neo.GREEN_ITEM_POOL || [];
-    if (!pool.length) return;
-    const greenRandom = Neo.createEntityRandom(prop, 'green:drop');
-    if (greenRandom() >= GREEN_DROP_CHANCE) return;
-    const key = pool[Math.floor(greenRandom() * pool.length)] || pool[0];
-    Neo.pickups.push({ x: prop.x, y: prop.y, type: 'item', key });
-  }
-
   function damageDestructible(prop, damage, hit = {}) {
     if (prop.broken) return;
     const numericDamage = Math.max(0, Number(damage || 0));
     const dealt = Math.max(0, Math.round(numericDamage));
-    if (!Number.isFinite(prop.maxHp) || prop.maxHp <= 0) prop.maxHp = Math.max(1, Number(prop.hp || 0), dealt || 1);
+    const greenRandom = Neo.createEntityRandom(prop, 'green:drop');
+    const potRandom = Neo.createEntityRandom(prop, 'pot:reward');
+    const result = globalThis.NeoNyke.simulation.applyCampaignDestructibleDamage(prop, numericDamage, {
+      floorNumber: Neo.floor,
+      runLoopIndex: Neo.runLoopIndex,
+      destructibles: Neo.destructibles,
+      itemChance: Neo.getRandomItemDropChance(0.12, 0.5),
+      greenRandom,
+      potRandom,
+      rollItem: random => Neo.rollItemDrop({ random }),
+    });
+    if (!result.ok) return;
     if (dealt > 0 && !isWallLikeDestructible(prop) && prop.kind !== 'barrel') {
       spawnDamagePopup(prop.x, prop.y - prop.r - 8, dealt, {
         color: prop.kind === 'barrel' ? '#ff9f1c' : prop.reinforced ? '#b8c0ca' : '#ffd27d',
@@ -2517,9 +2483,7 @@
       });
     }
     if (dealt > 0) spawnDestructibleHitFx(prop, dealt, hit);
-    prop.hp -= numericDamage;
-    if (prop.hp > 0) return;
-    prop.broken = true;
+    if (!result.broken) return;
     Neo.invalidateBeamReflectGeometry?.();
     prop.breakAge = 0;
     prop.breakAngle = getDestructibleImpactAngle(prop, hit);
@@ -2532,29 +2496,22 @@
     // Green (post-loop "lying") items: once the player has completed at least one
     // loop, every barrel/pot ("broken wood") break has a flat 10% chance to drop a
     // random green item. These never appear in shops or normal drops.
-    maybeDropGreenItem(prop);
-    if (prop.kind === 'pot') {
-      const potRandom = Neo.createEntityRandom(prop, 'pot:reward');
-      const itemChance = Neo.getRandomItemDropChance(0.12, 0.5);
-      if (potRandom() < itemChance) Neo.pickups.push({ x: prop.x, y: prop.y, type: 'item', key: Neo.rollItemDrop({ random: potRandom }) });
-      else Neo.dropCoins(prop.x, prop.y, 6 + Neo.floor);
-    }
-    if (prop.kind === 'barrel') {
+    result.drops.forEach(drop => {
+      if (drop.type === 'coin') Neo.dropCoins(prop.x, prop.y, drop.amount);
+      else Neo.pickups.push({ x: prop.x, y: prop.y, type: 'item', key: drop.key });
+    });
+    if (result.blast) {
       blastRadius(prop.x, prop.y, 130, 55, '#ff5a3d');
     }
     if (prop.kind === 'wall') {
-      const revealGroup = prop.revealGroup;
-      Neo.destructibles.forEach(other => {
-        if (!other.hidden) return;
-        if (revealGroup && other.revealGroup === revealGroup) {
-          other.hidden = false;
-          return;
-        }
-        if (!revealGroup && Neo.dist(other.x, other.y, prop.x, prop.y) <= 220) other.hidden = false;
-      });
       Neo.spawnParticle({ x: prop.x, y: prop.y - 22, life: 0.75, text: 'CLEAR', c: '#d7f6ff' });
     }
-    if (prop.kind === 'secret_wall') revealSecretWall(prop);
+    if (result.secretDirection) {
+      Neo.setSecretPassageOpen(Neo.currentRoom, result.secretDirection, true);
+      Neo.playSfx?.('secret_reveal');
+      Neo.spawnParticle({ x: prop.x, y: prop.y - 18, life: 0.9, text: 'SECRET', c: '#8dd4ff' });
+      Neo.tutorialController?.signal?.('secret-revealed', { dir: result.secretDirection });
+    }
   }
 
   // Open the passage a secret wall guards. Shared by the break path (crate-style

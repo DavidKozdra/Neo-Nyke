@@ -25,6 +25,7 @@
   });
   const ACTIVATABLE_ITEM_KEYS = Object.freeze(Object.keys(EQUIPMENT_ACTIVE_DEFS));
   const MOVE_SLOTS = new Set(['melee', 'laser', 'smash', 'dash']);
+  const SCROLL_ITEM_KEYS = new Set(['scroll_reroll', 'scroll_branching', 'scroll_replace', 'scroll_abundance', 'scroll_pool_weight', 'scroll_ego']);
   const count = (player, key) => Math.max(0, Math.floor(Number(player?.items?.[key] || 0)));
 
   function syncEquipmentSlots(player) {
@@ -61,6 +62,10 @@
     if (itemKey === 'robot_arm' && previousCount === 0) player.robotArmReady = true;
     if (itemKey === 'wizards_paw') player.wizardPawPendingCount = Math.max(0, Number(player.wizardPawPendingCount || 0)) + amount;
     if (itemKey === 'extra_battery') player.extraBatteryPendingCount = Math.max(0, Number(player.extraBatteryPendingCount || 0)) + amount;
+    if (SCROLL_ITEM_KEYS.has(itemKey)) {
+      player.scrollPendingQueue = Array.isArray(player.scrollPendingQueue) ? player.scrollPendingQueue : [];
+      for (let index = 0; index < amount; index += 1) player.scrollPendingQueue.push(itemKey);
+    }
     syncEquipmentSlots(player);
     return { ok: true, itemKey, amount, previousCount, events: [{ type: 'ITEM_COLLECTED', itemKey, amount }] };
   }

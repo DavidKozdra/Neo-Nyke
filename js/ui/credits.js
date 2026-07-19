@@ -186,13 +186,16 @@
   }
 
   function playScene(scene) {
+
     if (!scene || !Array.isArray(scene.lines) || !scene.lines.length) return;
     const ctrl = Neo.uiController;
+    
     if (!ctrl || typeof ctrl.playDialogue !== 'function') return;
     // Close the gallery so the dialogue overlay plays unobstructed over the
     // credits backdrop. Dialogue runs as its own game state and returns to the
     // menu (which the credits page is layered over) when it closes.
     setModalOpen(galleryOverlay, false);
+
     ctrl.playDialogue(scene.lines, { returnState: 'menu' });
   }
 

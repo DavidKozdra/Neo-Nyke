@@ -1,6 +1,6 @@
 (function initializeNetworkCombatSystem(root, factory) {
   const contentApi = typeof require === 'function'
-    ? { ...require('./SharedCombatContent.js'), ...require('./SharedMoveContent.js'), ...require('./SharedEnemyContent.js'), ...require('./SharedEnemyAISystem.js'), ...require('./SharedItemContent.js'), ...require('./SharedItemDefinitions.js'), ...require('./SharedItemEffectSystem.js'), ...require('./SharedDamageSystem.js'), ...require('./SharedHitResolutionSystem.js'), ...require('./SharedStatusSystem.js'), ...require('./SharedProgressionSystem.js'), ...require('./SharedRoomInteriorSystem.js'), ...require('./SharedForgeSystem.js'), ...require('./SharedInventorySystem.js'), ...require('./SharedShopSystem.js'), ...require('./SharedSpecialRoomSystem.js') }
+    ? { ...require('./SharedCombatContent.js'), ...require('./SharedMoveContent.js'), ...require('./SharedEnemyContent.js'), ...require('./SharedEnemyAISystem.js'), ...require('./SharedEncounterSystem.js'), ...require('./SharedItemContent.js'), ...require('./SharedItemDefinitions.js'), ...require('./SharedItemEffectSystem.js'), ...require('./SharedEventItemSystem.js'), ...require('./SharedDamageSystem.js'), ...require('./SharedHitResolutionSystem.js'), ...require('./SharedStatusSystem.js'), ...require('./SharedProjectileSystem.js'), ...require('./SharedProgressionSystem.js'), ...require('./SharedRoomInteriorSystem.js'), ...require('./SharedWorldMutationSystem.js'), ...require('./SharedForgeSystem.js'), ...require('./SharedInventorySystem.js'), ...require('./SharedAcquisitionSystem.js'), ...require('./SharedShopSystem.js'), ...require('./SharedSpecialRoomSystem.js') }
     : { ...(root.NeoNyke?.content || {}), ...(root.NeoNyke?.simulation || {}) };
   const floorApi = typeof require === 'function' ? require('./DeterministicFloorGenerator.js') : (root.NeoNyke?.simulation || {});
   const api = factory(root.NeoNyke?.simulation || {}, contentApi, floorApi);
@@ -49,6 +49,7 @@
     BOSS_ENEMY_TYPES = [],
     ELITE_POWER_TYPES = [],
     getEnemyDefinition = type => ENEMY_CATALOG[type],
+    getCampaignEncounterPlan = () => [],
     getCharacterDefaultWeapon = characterKey => CHARACTER_DEFAULT_WEAPONS[characterKey] || 'thorns_bleed_blade',
     createCampaignItemChoices = () => [],
     createTreasureChestPlan = () => [],
@@ -57,6 +58,7 @@
     applyForgeCommand = () => ({ ok: false, reason: 'FORGE_UNAVAILABLE' }),
     collectCampaignItem: collectSharedCampaignItem = () => ({ ok: false }),
     applyInventoryCommand = () => ({ ok: false, reason: 'INVENTORY_UNAVAILABLE' }),
+    applyAcquisitionCommand = () => ({ ok: false, reason: 'ACQUISITION_UNAVAILABLE' }),
     activateEquipment = () => ({ ok: false, reason: 'EQUIPMENT_UNAVAILABLE' }),
     updateEquipmentEffects = () => [],
     stockCampaignShop = () => null,
@@ -77,6 +79,19 @@
     getCampaignGenericStatusResistance = () => 0,
     tickCampaignStatuses = () => [],
     resolveCampaignOnHitStatusProcs = () => [],
+    syncCampaignItemStats = state => state,
+    applyCampaignKillCharge = () => ({ ok: true, intents: [] }),
+    configureCampaignProjectile = projectile => projectile,
+    steerCampaignHomingProjectile = projectile => projectile,
+    advanceCampaignProjectile = (projectile, delta) => {
+      const previous = { x: projectile.x, y: projectile.y };
+      projectile.x += Number(projectile.vx || 0) * delta;
+      projectile.y += Number(projectile.vy || 0) * delta;
+      return previous;
+    },
+    bounceCampaignProjectile = () => false,
+    createCampaignSubSpawnDescriptors = () => [],
+    applyCampaignDestructibleDamage = () => ({ ok: false, drops: [] }),
     applyCampaignLevelUp = () => null,
   } = contentApi || {};
   const combatRandomByState = new WeakMap();
@@ -219,14 +234,19 @@
     if (state.floorState.encounters[room.id]) return state.floorState.encounters[room.id];
 
     const stream = random.scoped(`enemy-spawning:${state.floorNumber}:${room.id}`);
-    const count = encounterCount(room);
+    const plan = getCampaignEncounterPlan(room, {
+      floorNumber: state.floorNumber,
+      random: stream,
+      difficulty: state.matchRules?.difficulty || {},
+      challengeBonus: state.matchRules?.swarmRooms ? 2 : 0,
+      roomWeightBonus: Number(state.matchRules?.difficulty?.roomWeightBonus || 0),
+    });
     const enemyIds = [];
-    for (let index = 0; index < count; index += 1) {
+    for (let index = 0; index < plan.length; index += 1) {
       const enemyId = state.allocateEntityId('enemy');
       const angle = stream.next() * Math.PI * 2;
       const distance = 175 + stream.next() * 95;
-      const pool = getEncounterPool(room, state.floorNumber);
-      const type = pool[stream.int(0, pool.length - 1)];
+      const type = plan[index];
       const archetype = getEnemyDefinition(type) || getEnemyDefinition('hunter');
       const healthScale = room.type === 'challenge' ? 1.25 : 1;
       const elite = !archetype.boss && room.type !== 'start' && stream.chance(room.type === 'challenge' ? 0.3 : 0.08);
@@ -456,6 +476,26 @@
     return true;
   }
 
+  function resolveAcquisitionCommand(state, player, action, emitEvent, random) {
+    const nextScrollSerial = Math.max(0, Math.floor(Number(player?.scrollUseSerial || 0))) + 1;
+    const selectedScope = [...(action.fromKeys || []), ...(action.picks || [])].join(',');
+    const scrollRandom = action.action === 'SCROLL_APPLY'
+      ? random.scoped(`scroll:${action.scrollKey}:use:${nextScrollSerial}:floor:${state.floorNumber}:choices:${selectedScope}`)
+      : null;
+    const result = applyAcquisitionCommand(player, action.action, action, {
+      inShop: currentRoom(state, player.roomId)?.type === 'shop',
+      floorNumber: state.floorNumber,
+      random: scrollRandom ? () => scrollRandom.next() : undefined,
+    });
+    if (!result.ok) {
+      emitEvent('GAME_COMMAND_REJECTED', { playerId: player.id, command: action.action, reason: result.reason });
+      return false;
+    }
+    syncCampaignItemStats(player, { currentTick: state.tick, lowerCombatCurse: !!state.matchRules?.lowerCombatCurse });
+    emitEvent('ACQUISITION_APPLIED', { playerId: player.id, ...result });
+    return true;
+  }
+
   function nearestLivingPlayer(state, enemy) {
     let nearest = null;
     let nearestDistance = Infinity;
@@ -482,6 +522,20 @@
     enemy.vy = 0;
     enemy.deathTick = state.tick;
     emitEvent('ENEMY_DEFEATED', { enemyId: enemy.id, playerId, roomId: enemy.roomId });
+    const player = state.players?.[playerId];
+    if (player) {
+      player.kills = Math.max(0, Number(player.kills || 0)) + 1;
+      const randomService = combatRandomByState.get(state);
+      const killEffects = applyCampaignKillCharge(player, {
+        itemStats: player.itemStats,
+        difficulty: state.matchRules?.difficultyKey || 'medium',
+        overcharged: !!state.matchRules?.overcharged,
+        currentTick: state.tick,
+        tickRate: 20,
+        random: randomService ? () => randomService.next('encounter') : () => 0.5,
+      });
+      killEffects.intents.forEach(intent => emitEvent('ITEM_KILL_EFFECT', { playerId, enemyId: enemy.id, ...intent }));
+    }
     awardEncounterExperience(state, enemy, playerId, emitEvent);
     spawnCoinDrop(state, enemy, emitEvent);
     markEncounterCleared(state, enemy.roomId, emitEvent);
@@ -675,6 +729,8 @@
     const muzzleDistance = Number.isFinite(Number(definition.spawnDistance))
       ? Number(definition.spawnDistance)
       : Number(player.radius || 18) + 13;
+    const randomService = combatRandomByState.get(state);
+    const lifeTicks = Number(definition.lifeTicks || PROJECTILE_LIFETIME_TICKS);
     const projectile = {
       id: projectileId,
       type: definition.projectileKind || definition.kind,
@@ -693,17 +749,32 @@
       remainingPierces: Math.max(0, Number(definition.pierce || 0)),
       hitEnemyIds: [],
       spawnTick: state.tick,
-      expiresTick: state.tick + Number(definition.lifeTicks || PROJECTILE_LIFETIME_TICKS),
+      lifeTicks,
       splash: Number(definition.splash || 0),
       splashDamage: Number(definition.splashDamage || 0),
       fireStacks: Number(definition.fireStacks || 0),
       fireDuration: Number(definition.fireDuration || 0),
       hitOptions: definition.hitOptions ? { ...definition.hitOptions } : null,
+      homing: !!definition.homing,
+      homingTarget: definition.homingTarget || null,
+      homingSpeed: Number(definition.homingSpeed || definition.speed || PROJECTILE_SPEED),
+      homingAccel: Number(definition.homingAccel || 0),
+      homingTurnRate: Number(definition.homingTurnRate || 0),
+      homingRadius: Number(definition.homingRadius || 0),
+      bouncesRemaining: Math.max(0, Math.floor(Number(definition.bouncesRemaining || 0))),
       subSpawn: definition.subSpawn ? {
         ...definition.subSpawn,
         nextSpawnTick: state.tick + Math.max(1, Number(definition.subSpawn.intervalSeconds || 0.2) * 20),
       } : null,
     };
+    configureCampaignProjectile(projectile, {
+      enemy: false,
+      itemStats: player.itemStats,
+      random: randomService ? () => randomService.next('encounter') : () => 0.5,
+      hasExplicitHoming: Object.prototype.hasOwnProperty.call(definition, 'homing'),
+      hasExplicitBounces: Object.prototype.hasOwnProperty.call(definition, 'bouncesRemaining'),
+    });
+    projectile.expiresTick = state.tick + Math.ceil(Number(projectile.lifeTicks || lifeTicks));
     state.projectiles[projectileId] = projectile;
     return projectile;
   }
@@ -883,10 +954,20 @@
   // toward broken, then pot loot, barrel blast, and hidden-prop reveal. The
   // visual FX are event-driven on the client from the emitted events.
   function damageNetworkDestructible(state, roomId, destructible, damage, emitEvent, random, context = {}) {
-    if (!destructible || destructible.broken || destructible.hidden) return false;
-    destructible.hp = Math.max(0, Number(destructible.hp || 1) - Math.max(1, Math.round(Number(damage || 1))));
-    destructible.broken = destructible.hp <= 0;
-    emitEvent(destructible.broken ? 'DESTRUCTIBLE_BROKEN' : 'DESTRUCTIBLE_HIT', {
+    const room = currentRoom(state, roomId);
+    const loot = random?.stream?.('loot');
+    const green = random?.scoped?.(`green:${state.floorNumber}:${roomId}:${destructible?.x},${destructible?.y}`);
+    const result = applyCampaignDestructibleDamage(destructible, damage, {
+      floorNumber: state.floorNumber,
+      runLoopIndex: state.floorState?.runLoopIndex || 0,
+      destructibles: room?.destructibles,
+      itemChance: Math.min(0.5, 0.12 + Number(context.itemDropChanceBonus || 0)),
+      greenRandom: green ? () => green.next() : () => 1,
+      potRandom: loot ? () => loot.next() : () => 1,
+      rollItem: stream => rollCampaignItem(stream),
+    });
+    if (!result.ok) return false;
+    emitEvent(result.broken ? 'DESTRUCTIBLE_BROKEN' : 'DESTRUCTIBLE_HIT', {
       roomId,
       obstacleKind: destructible.kind,
       x: destructible.x,
@@ -895,17 +976,13 @@
       reinforced: !!destructible.reinforced,
       ...context,
     });
-    if (!destructible.broken) return true;
-    const room = currentRoom(state, roomId);
-    if (destructible.kind === 'pot') {
-      const loot = random?.stream?.('loot');
+    if (!result.broken) return true;
+    result.drops.forEach(drop => {
       const pickupId = state.allocateEntityId('pickup');
-      state.pickups[pickupId] = loot?.chance(0.12)
-        ? { id: pickupId, type: 'item', key: rollCampaignItem(loot), roomId, x: destructible.x, y: destructible.y, radius: 13, amount: 1, spawnTick: state.tick }
-        : { id: pickupId, type: 'coin', roomId, x: destructible.x, y: destructible.y, radius: 13, amount: 6 + Math.max(1, Number(state.floorNumber || 1)), spawnTick: state.tick };
+      state.pickups[pickupId] = { id: pickupId, ...drop, roomId, x: destructible.x, y: destructible.y, radius: 13, amount: drop.amount || 1, spawnTick: state.tick };
       emitEvent('PICKUP_SPAWNED', { pickupId, pickupType: state.pickups[pickupId].type });
-    }
-    if (destructible.kind === 'barrel') {
+    });
+    if (result.blast) {
       livingEncounterEnemies(state, roomId).forEach(enemy => {
         if (Math.hypot(enemy.x - destructible.x, enemy.y - destructible.y) > 130 + Number(enemy.radius || 20)) return;
         damageEnemy(state, enemy, 55, context.playerId || null, emitEvent, { attackKind: 'barrel_blast' });
@@ -916,16 +993,7 @@
         damageNetworkDestructible(state, roomId, other, 55, emitEvent, random, context);
       });
     }
-    if (destructible.kind === 'wall') {
-      (room?.destructibles || []).forEach(other => {
-        if (!other.hidden) return;
-        if (destructible.revealGroup && other.revealGroup === destructible.revealGroup) {
-          other.hidden = false;
-          return;
-        }
-        if (!destructible.revealGroup && Math.hypot(other.x - destructible.x, other.y - destructible.y) <= 220) other.hidden = false;
-      });
-    }
+    if (result.secretDirection && room?.secretPassages?.[result.secretDirection]) room.secretPassages[result.secretDirection].open = true;
     return true;
   }
 
@@ -1505,6 +1573,8 @@
         .forEach(action => resolveInventoryCommand(state, player, action, emitEvent));
       actions.filter(action => action?.action === 'SPECIAL_ROOM_CHOICE')
         .forEach(action => resolveSpecialRoomCommand(state, player, action, emitEvent, random));
+      actions.filter(action => ['WIZARD_PAW_SELECT', 'EXTRA_BATTERY_SELECT', 'VOUCHER_REDEEM', 'SCROLL_APPLY'].includes(action?.action))
+        .forEach(action => resolveAcquisitionCommand(state, player, action, emitEvent, random));
       if (player.action !== 'idle' && state.tick - Number(player.actionTick || 0) > 4) player.action = 'idle';
     });
   }
@@ -1901,26 +1971,22 @@
     config.nextSpawnTick += intervalTicks;
     const owner = state.players?.[projectile.ownerId];
     if (!owner) return;
-    const travel = Math.atan2(Number(projectile.vy || 0), Number(projectile.vx || 1));
-    const count = Math.max(1, Number(config.count || 2));
-    for (let index = 0; index < count; index += 1) {
-      const side = index % 2 === 0 ? 1 : -1;
-      const jitter = ((typeof random === 'function' ? random() : 0.5) - 0.5) * Number(config.jitterRadians || 0);
-      const angle = travel + side * (Math.PI / 2) + jitter;
+    const randomNext = typeof random?.next === 'function' ? () => random.next('encounter') : () => 0.5;
+    createCampaignSubSpawnDescriptors(projectile, config, randomNext).forEach(descriptor => {
       createPlayerProjectile(state, owner, {
-        kind: config.kind || projectile.kind,
+        kind: descriptor.kind,
         attackKind: projectile.attackKind,
-        damage: Number(config.damage || Math.round(Number(projectile.damage || 0) / 2)),
-        speed: Number(config.speed || 480),
-        radius: Number(config.radius || 4),
-        lifeTicks: Math.ceil(Number(config.lifeSeconds || 0.7) * 20),
+        damage: descriptor.damage,
+        speed: descriptor.speed,
+        radius: descriptor.radius,
+        lifeTicks: Math.ceil(descriptor.lifeSeconds * 20),
         spawnDistance: 0,
         originX: projectile.x,
         originY: projectile.y,
         roomId: projectile.roomId,
-        hitOptions: config.hitOptions,
-      }, angle);
-    }
+        hitOptions: descriptor.hitOptions,
+      }, descriptor.angle);
+    });
   }
 
   function updateProjectiles(state, fixedDelta, emitEvent, random) {
@@ -1929,12 +1995,25 @@
         delete state.projectiles[projectileId];
         return;
       }
-      projectile.x += Number(projectile.vx || 0) * fixedDelta;
-      projectile.y += Number(projectile.vy || 0) * fixedDelta;
+      if (projectile.homing) {
+        const target = projectile.hostile
+          ? nearestLivingPlayer(state, projectile).player
+          : livingEncounterEnemies(state, projectile.roomId)
+            .filter(candidate => Math.hypot(candidate.x - projectile.x, candidate.y - projectile.y) <= Number(projectile.homingRadius || 960))
+            .sort((a, b) => Math.hypot(a.x - projectile.x, a.y - projectile.y) - Math.hypot(b.x - projectile.x, b.y - projectile.y))[0];
+        steerCampaignHomingProjectile(projectile, target || null, fixedDelta);
+      }
+      const previous = advanceCampaignProjectile(projectile, fixedDelta);
       emitProjectileSubSpawn(state, projectile, random);
       const wall = Number(state.floorState?.wallThickness || 28);
       if (projectile.x < wall || projectile.x > Number(state.floorState?.width || 900) - wall
         || projectile.y < wall || projectile.y > Number(state.floorState?.height || 700) - wall) {
+        const hitX = projectile.x < wall || projectile.x > Number(state.floorState?.width || 900) - wall;
+        const hitY = projectile.y < wall || projectile.y > Number(state.floorState?.height || 700) - wall;
+        if (bounceCampaignProjectile(projectile, { hitX, hitY }, previous)) {
+          emitEvent('PROJECTILE_BOUNCED', { projectileId, roomId: projectile.roomId });
+          return;
+        }
         delete state.projectiles[projectileId];
         return;
       }
@@ -1943,6 +2022,13 @@
         circleIntersectsRoomObstacle(projectile.x, projectile.y, Number(projectile.radius || 6), obstacle)
       ));
       if (solidStructure) {
+        if (bounceCampaignProjectile(projectile, {
+          hitX: previous.x < Number(solidStructure.x || 0) || previous.x > Number(solidStructure.x || 0) + Number(solidStructure.w || 0),
+          hitY: previous.y < Number(solidStructure.y || 0) || previous.y > Number(solidStructure.y || 0) + Number(solidStructure.h || 0),
+        }, previous)) {
+          emitEvent('PROJECTILE_BOUNCED', { projectileId, roomId: projectile.roomId, obstacleKind: solidStructure.kind });
+          return;
+        }
         delete state.projectiles[projectileId];
         emitEvent('PROJECTILE_BLOCKED', { projectileId, roomId: projectile.roomId, obstacleKind: solidStructure.kind });
         return;

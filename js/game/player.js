@@ -1091,32 +1091,21 @@ export function handleWizardPawChoiceClick(event) {
   }
 
 export function applyWizardPawStat(stat) {
-    const boost = 1.5;
-    if (stat === 'maxHp') {
-      const previousMaxHp = Math.max(1, Number(Neo.player.maxHp || 120));
-      const nextMaxHp = Math.round(previousMaxHp * boost);
-      Neo.player.maxHp = nextMaxHp;
-      Neo.player.hp = Math.min(nextMaxHp, Math.round(Number(Neo.player.hp || previousMaxHp) * boost));
-      return;
-    }
-    if (stat === 'attackPower') {
-      Neo.player.attackPower = Math.max(3, Math.round(Neo.player.attackPower * boost));
-      return;
-    }
-    if (stat === 'attackSpeed') {
-      Neo.player.attackSpeed = Math.max(0.2, Neo.player.attackSpeed * boost);
-    }
+    return globalThis.NeoNyke?.simulation?.applyWizardPawStat?.(Neo.player, stat) || false;
   }
 
 export function confirmWizardPawSelection() {
     if (!Neo.wizardPawSelection || Neo.wizardPawSelection.picks.length !== 2) return;
-    Neo.wizardPawSelection.picks.forEach(applyWizardPawStat);
+    const picks = Neo.wizardPawSelection.picks.slice();
+    if (Neo.multiplayerGameView?.active) {
+      Neo.gameSession?.sendGameCommand?.('WIZARD_PAW_SELECT', { picks });
+    } else {
+      const result = globalThis.NeoNyke?.simulation?.applyWizardPawSelection?.(Neo.player, picks);
+      if (!result?.ok) return;
+    }
     Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 46, life: 1, text: 'PAW APPLIED!', c: '#ffd27d' });
     Neo.wizardPawSelection = null;
     Neo.setWizardPawModalOpen(false);
-    if (Neo.player) {
-      Neo.player.wizardPawPendingCount = Math.max(0, Math.floor(Number(Neo.player.wizardPawPendingCount || 0)) - 1);
-    }
     Neo.markInventoryPanelDirty();
     Neo.renderInventoryPanel();
     Neo.updateHud();
@@ -1165,13 +1154,7 @@ export function confirmWizardPawSelection() {
   }
 
   function createScrollPoolWeightChoiceKeys(random = Neo.rng) {
-    const choices = getScrollChoiceItems();
-    const rng = typeof random === 'function' ? random : Math.random;
-    for (let index = choices.length - 1; index > 0; index -= 1) {
-      const swapIndex = Math.floor(rng() * (index + 1));
-      [choices[index], choices[swapIndex]] = [choices[swapIndex], choices[index]];
-    }
-    return choices.slice(0, 4).map(choice => choice.key);
+    return globalThis.NeoNyke.simulation.createCampaignScrollPoolChoices(random, 4);
   }
 
   function getScrollPoolWeightChoices() {
@@ -1181,7 +1164,7 @@ export function confirmWizardPawSelection() {
   }
 
   function getScrollChoiceRarity(key) {
-    return String(Neo.ITEM_DEFS?.[key]?.rarity || Neo.ITEM_DEFS?.[key]?.category || 'knight').toLowerCase();
+    return globalThis.NeoNyke.simulation.getScrollChoiceRarity(key);
   }
 
   function getScrollControlConfig(scrollKey, phase = 'main') {
@@ -1465,19 +1448,8 @@ export function confirmWizardPawSelection() {
     renderScrollControlPanel();
   }
 
-  function consumeScroll(scrollKey) {
-    if (!Neo.player?.items || Number(Neo.player.items[scrollKey] || 0) <= 0) return false;
-    Neo.player.items[scrollKey] = Math.max(0, Number(Neo.player.items[scrollKey] || 0) - 1);
-    if (Neo.player.items[scrollKey] <= 0) delete Neo.player.items[scrollKey];
-    Neo.syncEquipmentSlotsFromInventory?.();
-    return true;
-  }
-
   function getSameRarityRandomItem(sourceKey, random) {
-    const rarity = String(Neo.ITEM_DEFS?.[sourceKey]?.rarity || 'knight').toLowerCase();
-    const pool = (Neo.ITEM_KEYS || []).filter(key => !SCROLL_KEYS.has(key) && key !== sourceKey && String(Neo.ITEM_DEFS?.[key]?.rarity || '').toLowerCase() === rarity);
-    const pickPool = pool.length ? pool : (Neo.ITEM_KEYS || []).filter(key => !SCROLL_KEYS.has(key) && key !== sourceKey);
-    return pickPool[Math.floor((typeof random === 'function' ? random() : Neo.rng()) * pickPool.length)] || 'neo_knife';
+    return globalThis.NeoNyke.simulation.getSameRarityCampaignItem(sourceKey, random);
   }
 
   function confirmScrollControlSelection() {
@@ -1500,37 +1472,28 @@ export function confirmWizardPawSelection() {
       renderScrollControlPanel();
       return;
     }
-    if (!consumeScroll(state.scrollKey)) return;
-    Neo.player.scrollUseSerial = Math.max(0, Math.floor(Number(Neo.player.scrollUseSerial || 0))) + 1;
+    const nextUseSerial = Math.max(0, Math.floor(Number(Neo.player.scrollUseSerial || 0))) + 1;
     const selectedScope = [...state.fromKeys, ...state.picks].join(',');
-    const random = Neo.createScopedRandom?.(`scroll:${state.scrollKey}:use:${Neo.player.scrollUseSerial}:floor:${Neo.floor}:choices:${selectedScope}`) || Neo.rng;
-    if (state.scrollKey === 'scroll_reroll') {
-      const oldKey = state.picks[0];
-      const newKey = getSameRarityRandomItem(oldKey, random);
-      Neo.player.items[oldKey] = Math.max(0, Number(Neo.player.items[oldKey] || 0) - 1);
-      if (Neo.player.items[oldKey] <= 0) delete Neo.player.items[oldKey];
-      Neo.collectItem(newKey);
-    } else if (state.scrollKey === 'scroll_branching') {
-      Neo.player.scrollBranchingTargets = { ...(Neo.player.scrollBranchingTargets || {}) };
-      state.picks.forEach(key => {
-        const rarity = String(Neo.ITEM_DEFS?.[key]?.rarity || 'knight').toLowerCase();
-        Neo.player.scrollBranchingTargets[rarity] = key;
+    if (Neo.multiplayerGameView?.active) {
+      Neo.gameSession?.sendGameCommand?.('SCROLL_APPLY', {
+        scrollKey: state.scrollKey,
+        picks: state.picks.slice(),
+        fromKeys: state.fromKeys.slice(),
       });
-    } else if (state.scrollKey === 'scroll_replace') {
-      const toKey = state.picks[0];
-      const toRarity = getScrollChoiceRarity(toKey);
-      Neo.player.scrollReplaceMap = { ...(Neo.player.scrollReplaceMap || {}) };
-      state.fromKeys.forEach(fromKey => {
-        if (getScrollChoiceRarity(fromKey) === toRarity) Neo.player.scrollReplaceMap[fromKey] = toKey;
-      });
-    } else if (state.scrollKey === 'scroll_abundance') {
-      Neo.player.scrollAbundance = { items: state.picks.slice(0, 2), nextCheckFloor: Neo.floor + 2, expiresFloor: Neo.floor + 8 };
-    } else if (state.scrollKey === 'scroll_pool_weight') {
-      const buffs = Array.isArray(Neo.player.scrollPoolWeights) ? Neo.player.scrollPoolWeights : [];
-      buffs.push({ itemKey: state.picks[0], expiresFloor: Neo.floor + 3 });
-      Neo.player.scrollPoolWeights = buffs.slice(-4);
-    } else if (state.scrollKey === 'scroll_ego') {
-      Neo.player.scrollEgoFloor = Neo.floor;
+    } else {
+      const random = Neo.createScopedRandom?.(`scroll:${state.scrollKey}:use:${nextUseSerial}:floor:${Neo.floor}:choices:${selectedScope}`) || Neo.rng;
+      const result = globalThis.NeoNyke.simulation.applyCampaignScrollSelection(
+        Neo.player,
+        state.scrollKey,
+        state.picks,
+        {
+          fromKeys: state.fromKeys,
+          floorNumber: Neo.floor,
+          random,
+          collectItem: (_player, itemKey) => { Neo.collectItem(itemKey); return { ok: true }; },
+        },
+      );
+      if (!result?.ok) return;
     }
     Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 28, life: 0.9, text: 'SCROLL SET', c: '#d7f6ff' });
     dequeueScrollSelection(state.scrollKey);
@@ -1769,11 +1732,14 @@ export function confirmWizardPawSelection() {
     if (!voucher || getVoucherCount(voucher.key) <= 0) return false;
     if (!itemKey || !getVoucherRarityPool(voucher.rarity).includes(itemKey)) return false;
 
-    Neo.player.items[voucher.key] = Math.max(0, getVoucherCount(voucher.key) - 1);
-    if (Neo.player.items[voucher.key] <= 0) delete Neo.player.items[voucher.key];
-    Neo.syncEquipmentSlotsFromInventory?.();
+    if (Neo.multiplayerGameView?.active) {
+      Neo.gameSession?.sendGameCommand?.('VOUCHER_REDEEM', { voucherKey: voucher.key, itemKey });
+      cancelVoucherRedeem();
+      return true;
+    }
+    const result = globalThis.NeoNyke?.simulation?.redeemCampaignVoucher?.(Neo.player, voucher.key, itemKey, { inShop: Neo.currentRoom?.type === 'shop' });
+    if (!result?.ok) return false;
     const grantedName = Neo.itemRegistry?.get?.(itemKey)?.name || Neo.ITEM_DEFS?.[itemKey]?.name || itemKey;
-    Neo.collectItem(itemKey);
     Neo.spawnParticle?.({ x: Neo.player.x, y: Neo.player.y - 24, life: 0.9, text: `VOUCHER: ${grantedName}`, c: voucher.color });
     Neo.playSfx?.('item_collect');
     window.achievementEvents?.emit?.('shop:bought');
@@ -1963,6 +1929,11 @@ export function handleExtraBatteryChoiceClick(event) {
       Neo.setExtraBatteryModalOpen?.(false);
       return;
     }
+    if (Neo.multiplayerGameView?.active) {
+      Neo.gameSession?.sendGameCommand?.('EXTRA_BATTERY_SELECT', { moveKey });
+      Neo.setExtraBatteryModalOpen?.(false);
+      return;
+    }
     const nextMaxStacks = grantExtraBatteryToMove(moveKey);
     if (nextMaxStacks <= 0) return;
     const grantedName = (moveKey === 'slash' && Neo.WEAPON_DEFS?.[Neo.player.equippedWeapon]?.name)
@@ -1987,33 +1958,9 @@ export function dismissExtraBatteryModal() {
 
 export function grantExtraBatteryToMove(moveKey, playerData = Neo.player) {
     if (!playerData || !Neo.MOVE_DEFS[moveKey]) return 0;
-    // M1 with a weapon equipped: weapon attacks run on the weapon-charge
-    // system, not move stacks, so the battery must land there — a `slash`
-    // stack override would never show up on the weapon's HUD card.
-    const weaponKey = moveKey === 'slash' && Neo.WEAPON_DEFS?.[playerData.equippedWeapon]
-      ? playerData.equippedWeapon
-      : '';
-    if (weaponKey) {
-      if (!playerData.weaponChargeOverrides || typeof playerData.weaponChargeOverrides !== 'object') {
-        playerData.weaponChargeOverrides = {};
-      }
-      const nextMaxCharges = (Neo.getWeaponMaxCharges?.(weaponKey, playerData) || 1) + 1;
-      playerData.weaponChargeOverrides[weaponKey] = nextMaxCharges;
-      playerData.extraBatteryPendingCount = Math.max(0, Math.floor(Number(playerData.extraBatteryPendingCount || 0)) - 1);
-      if (playerData === Neo.player) {
-        // ensureWeaponChargeState sees the raised max on its next tick/HUD
-        // read and refills the pool, so the paid-for charge shows immediately.
-        Neo.markInventoryPanelDirty?.();
-        Neo.updateHud?.();
-        Neo.scheduleRunSave?.();
-      }
-      return nextMaxCharges;
-    }
-    const overrides = ensureMoveStackOverrides(playerData);
-    if (!overrides) return 0;
-    const nextMaxStacks = Neo.getMoveMaxStacks(moveKey, playerData.character, playerData) + 1;
-    overrides[moveKey] = nextMaxStacks;
-    playerData.extraBatteryPendingCount = Math.max(0, Math.floor(Number(playerData.extraBatteryPendingCount || 0)) - 1);
+    const result = globalThis.NeoNyke?.simulation?.applyExtraBatterySelection?.(playerData, moveKey);
+    if (!result?.ok) return 0;
+    const nextMaxStacks = result.maxCharges;
     if (playerData === Neo.player) {
       const slot = Neo.MOVE_DEFS[moveKey]?.slot || '';
       // Resolve the slot's active move with the same fallback chain
@@ -2075,86 +2022,23 @@ export function consumeCharge(chargeType) {
   window.achievementEvents?.on('charge:kill', () => {
     if (!Neo.player) return;
     const stats = getItemStats();
-    const chargeSteps = (stats.overclockedWatchChance > 0 && Neo.nextRandom('encounter') < stats.overclockedWatchChance ? 2 : 1)
-      + (Neo.isChallengeActive?.('overcharged') ? 1 : 0);
-    if (stats.genericHealthItemHealRatio > 0 && Neo.player.hp < Neo.player.maxHp) {
-      const heal = Neo.scalePlayerHealing(Math.max(0, Neo.player.hp * stats.genericHealthItemHealRatio));
-      const gained = Neo.applyPlayerHealing(heal);
-      if (gained > 0) {
-        Neo.spawnHealPopup(Neo.player.x, Neo.player.y - 22, gained, { color: '#d9ffe5' });
-      }
-    }
-
-    if (getItemCount('insurance') > 0 && !Neo.player.insuranceReady) {
-      Neo.player.insuranceChargeKills += chargeSteps;
-      if (Neo.player.insuranceChargeKills >= getChargeRequirement(9)) {
-        Neo.player.insuranceReady = true;
-        Neo.player.insuranceChargeKills = 0;
-        Neo.player.insuranceActive = false;
-        Neo.pushReadyNotification('insurance');
-      }
-    }
-
-    if (getItemCount('keen_eye') > 0 && !Neo.player.keenEyeReady) {
-      Neo.player.keenEyeChargeKills += chargeSteps;
-      if (Neo.player.keenEyeChargeKills >= getChargeRequirement(10)) {
-        Neo.player.keenEyeReady = true;
-        Neo.player.keenEyeChargeKills = 0;
-        Neo.pushReadyNotification('keen_eye');
-      }
-    }
-
-    if (getItemCount('crit_charm') > 0) {
-      Neo.player.critCharmChargeKills += chargeSteps;
-      if (Neo.player.critCharmChargeKills >= getCritCharmKillRequirement()) {
-        Neo.player.critCharmChargeKills = 0;
-        grantCritCharmBurst();
-        Neo.pushReadyNotification('crit_charm', { label: 'Surge' });
-      }
-    }
-
-    if (getItemCount('chrono_spring') > 0 && !Neo.player.chronoSpringReady) {
-      Neo.player.chronoSpringChargeKills += chargeSteps;
-      if (Neo.player.chronoSpringChargeKills >= getChargeRequirement(7)) {
-        Neo.player.chronoSpringReady = true;
-        Neo.player.chronoSpringChargeKills = 0;
-        Neo.pushReadyNotification('chrono_spring');
-      }
-    }
-
-    if (getItemCount('charged_adapter') > 0 && !Neo.player.escapeReady) {
-      Neo.player.escapeChargeKills += chargeSteps;
-      if (Neo.player.escapeChargeKills >= getChargeRequirement(20)) {
-        Neo.player.escapeReady = true;
-        Neo.player.escapeChargeKills = 0;
+    const result = globalThis.NeoNyke.simulation.applyCampaignKillCharge(Neo.player, {
+      itemStats: stats,
+      difficulty: Neo.selectedDifficulty,
+      overcharged: Neo.isChallengeActive?.('overcharged'),
+      random: () => Neo.nextRandom('encounter'),
+      heal: amount => Neo.applyPlayerHealing(Neo.scalePlayerHealing(amount)),
+    });
+    result.intents.forEach(intent => {
+      if (intent.kind === 'heal') Neo.spawnHealPopup(Neo.player.x, Neo.player.y - 22, intent.amount, { color: '#d9ffe5' });
+      if (intent.kind === 'surge') Neo.pushReadyNotification('crit_charm', { label: 'Surge' });
+      if (intent.kind === 'ready' && intent.itemKey === 'charged_adapter') {
         const slotIdx = Neo.player?.equipmentSlots?.indexOf?.('charged_adapter') ?? -1;
         const slotLetter = slotIdx >= 0 ? (Neo.EQUIPMENT_SLOT_KEYS?.[slotIdx] || '1') : '1';
         const warpHint = Neo.formatControlLabel(slotLetter.toLowerCase(), slotLetter.toLowerCase());
         Neo.pushReadyNotification('charged_adapter', { note: `Press ${warpHint} to warp` });
-      }
-    }
-
-    if (getItemCount('robot_arm') > 0 && !Neo.player.robotArmReady) {
-      Neo.player.robotArmChargeKills += chargeSteps;
-      if (Neo.player.robotArmChargeKills >= getChargeRequirement(8)) {
-        Neo.player.robotArmReady = true;
-        Neo.player.robotArmChargeKills = 0;
-        Neo.pushReadyNotification('robot_arm');
-      }
-    }
-
-    if (
-      getItemCount('hemes_scarf') > 0
-      && !Neo.player.scarfHealReady
-      && Number(Neo.player.scarfHealTime || 0) <= 0
-    ) {
-      Neo.player.scarfChargeKills += chargeSteps;
-      if (Neo.player.scarfChargeKills >= getChargeRequirement(10)) {
-        Neo.player.scarfHealReady = true;
-        Neo.player.scarfChargeKills = 0;
-        Neo.pushReadyNotification('hemes_scarf');
-      }
-    }
+      } else if (intent.kind === 'ready') Neo.pushReadyNotification(intent.itemKey);
+    });
   });
 
 export function refreshFloorChargeStates() {
@@ -2220,13 +2104,10 @@ export function refreshFloorChargeStates() {
   // Ricocete bounce roll: 1 guaranteed bounce if any stack is owned, then a 50%
   // chance per stack to add another. Rolled per-projectile so shots vary.
   function rollRicoceteBounces(stacks) {
-    const n = Math.max(0, Math.floor(Number(stacks || 0)));
-    if (n <= 0) return 0;
-    let bounces = 1;
-    for (let i = 0; i < n; i += 1) {
-      if (Neo.nextRandom('encounter') < 0.5) bounces += 1;
-    }
-    return bounces;
+    return globalThis.NeoNyke.simulation.rollCampaignProjectileBounces(
+      stacks,
+      () => Neo.nextRandom('encounter'),
+    );
   }
   Neo.rollRicoceteBounces = rollRicoceteBounces;
   Neo.getItemStats = getItemStats;
