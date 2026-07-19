@@ -53,6 +53,7 @@
     createCampaignItemChoices = () => [],
     createTreasureChestPlan = () => [],
     ITEM_DROP_ENTRIES = [],
+    rollCampaignItem = () => '',
     applyForgeCommand = () => ({ ok: false, reason: 'FORGE_UNAVAILABLE' }),
     collectCampaignItem: collectSharedCampaignItem = () => ({ ok: false }),
     applyInventoryCommand = () => ({ ok: false, reason: 'INVENTORY_UNAVAILABLE' }),
@@ -819,6 +820,96 @@
     enemy.bleedOwnerId = playerId;
   }
 
+  // Mirrors the campaign's damageDestructible outcome chain (world.js): chip
+  // toward broken, then pot loot, barrel blast, and hidden-prop reveal. The
+  // visual FX are event-driven on the client from the emitted events.
+  function damageNetworkDestructible(state, roomId, destructible, damage, emitEvent, random, context = {}) {
+    if (!destructible || destructible.broken || destructible.hidden) return false;
+    destructible.hp = Math.max(0, Number(destructible.hp || 1) - Math.max(1, Math.round(Number(damage || 1))));
+    destructible.broken = destructible.hp <= 0;
+    emitEvent(destructible.broken ? 'DESTRUCTIBLE_BROKEN' : 'DESTRUCTIBLE_HIT', {
+      roomId,
+      obstacleKind: destructible.kind,
+      x: destructible.x,
+      y: destructible.y,
+      health: destructible.hp,
+      reinforced: !!destructible.reinforced,
+      ...context,
+    });
+    if (!destructible.broken) return true;
+    const room = currentRoom(state, roomId);
+    if (destructible.kind === 'pot') {
+      const loot = random?.stream?.('loot');
+      const pickupId = state.allocateEntityId('pickup');
+      state.pickups[pickupId] = loot?.chance(0.12)
+        ? { id: pickupId, type: 'item', key: rollCampaignItem(loot), roomId, x: destructible.x, y: destructible.y, radius: 13, amount: 1, spawnTick: state.tick }
+        : { id: pickupId, type: 'coin', roomId, x: destructible.x, y: destructible.y, radius: 13, amount: 6 + Math.max(1, Number(state.floorNumber || 1)), spawnTick: state.tick };
+      emitEvent('PICKUP_SPAWNED', { pickupId, pickupType: state.pickups[pickupId].type });
+    }
+    if (destructible.kind === 'barrel') {
+      livingEncounterEnemies(state, roomId).forEach(enemy => {
+        if (Math.hypot(enemy.x - destructible.x, enemy.y - destructible.y) > 130 + Number(enemy.radius || 20)) return;
+        damageEnemy(state, enemy, 55, context.playerId || null, emitEvent, { attackKind: 'barrel_blast' });
+      });
+      (room?.destructibles || []).forEach(other => {
+        if (other === destructible || other.broken || other.hidden) return;
+        if (Math.hypot(other.x - destructible.x, other.y - destructible.y) > 130 + Number(other.r || 24)) return;
+        damageNetworkDestructible(state, roomId, other, 55, emitEvent, random, context);
+      });
+    }
+    if (destructible.kind === 'wall') {
+      (room?.destructibles || []).forEach(other => {
+        if (!other.hidden) return;
+        if (destructible.revealGroup && other.revealGroup === destructible.revealGroup) {
+          other.hidden = false;
+          return;
+        }
+        if (!destructible.revealGroup && Math.hypot(other.x - destructible.x, other.y - destructible.y) <= 220) other.hidden = false;
+      });
+    }
+    return true;
+  }
+
+  function chipDestructiblesInArc(state, player, angle, range, arc, emitEvent, random) {
+    const room = currentRoom(state, player.roomId);
+    (room?.destructibles || []).forEach(prop => {
+      if (prop.broken || prop.hidden) return;
+      const propRadius = Number(prop.r || 24);
+      const distance = Math.hypot(prop.x - player.x, prop.y - player.y);
+      // The campaign gives pots extra reach/arc forgiveness so swings connect.
+      const pot = prop.kind === 'pot';
+      if (distance > range + propRadius + (pot ? 24 : 8)) return;
+      const touching = distance <= Number(player.radius || 18) + propRadius + (pot ? 32 : 18);
+      const difference = angleDifference(Math.atan2(prop.y - player.y, prop.x - player.x), angle);
+      if (!touching && difference > arc + (pot ? 0.45 : 0.25)) return;
+      damageNetworkDestructible(state, player.roomId, prop, 1, emitEvent, random, { playerId: player.id });
+    });
+  }
+
+  function chipDestructiblesInRadius(state, player, x, y, radius, damage, emitEvent, random) {
+    const room = currentRoom(state, player.roomId);
+    (room?.destructibles || []).forEach(prop => {
+      if (prop.broken || prop.hidden) return;
+      if (Math.hypot(prop.x - x, prop.y - y) > radius + Number(prop.r || 24)) return;
+      damageNetworkDestructible(state, player.roomId, prop, damage, emitEvent, random, { playerId: player.id });
+    });
+  }
+
+  function chipDestructiblesAlongBeam(state, player, angle, range, width, emitEvent, random) {
+    const room = currentRoom(state, player.roomId);
+    const dx = Math.cos(angle);
+    const dy = Math.sin(angle);
+    (room?.destructibles || []).forEach(prop => {
+      if (prop.broken || prop.hidden) return;
+      const ox = prop.x - player.x;
+      const oy = prop.y - player.y;
+      const forward = ox * dx + oy * dy;
+      const perpendicular = Math.abs(ox * -dy + oy * dx);
+      if (forward < 0 || forward > range || perpendicular > width + Number(prop.r || 24)) return;
+      damageNetworkDestructible(state, player.roomId, prop, 1, emitEvent, random, { playerId: player.id });
+    });
+  }
+
   function resolveSweep(state, player, definition, angle, emitEvent, random, strike = 0) {
     const targets = targetsInArc(state, player, angle, Number(definition.range || 120), Number(definition.arc || 1.04));
     targets.forEach(candidate => {
@@ -830,6 +921,7 @@
     });
     const rivals = rivalTargetsInArc(state, player, angle, Number(definition.range || 120), Number(definition.arc || 1.04));
     rivals.forEach(target => damagePlayer(state, target, playerDamage(state, player.id, definition.damage), player.id, emitEvent, definition.weaponKey));
+    chipDestructiblesInArc(state, player, angle, Number(definition.range || 120), Number(definition.arc || 1.04), emitEvent, random);
     return [...targets.map(candidate => candidate.enemy.id), ...rivals.map(candidate => candidate.id)];
   }
 
@@ -1112,6 +1204,7 @@
           targetIds.push(enemy.id);
         });
         damageRivalsInBeam(state, player, angle, range, width, stats.damage, emitEvent, moveKey, targetIds);
+        chipDestructiblesAlongBeam(state, player, angle, range, width, emitEvent, random);
         if (moveKey === 'love_beam' || moveKey === 'holy_eye_beams') {
           player.hp = Math.min(Number(player.maxHp || 100), Number(player.hp || 0) + Math.max(1, targetIds.length * 4));
         }
@@ -1154,6 +1247,7 @@
         originX = centerX;
         originY = centerY;
         effectRadius = Number(stats.range || 140);
+        chipDestructiblesInRadius(state, player, centerX, centerY, effectRadius, Number(stats.damage || 1), emitEvent, random);
         abilityTargetsInRadius(state, player, centerX, centerY, Number(stats.range || 140)).forEach(enemy => {
           damageEnemy(state, enemy, stats.damage, player.id, emitEvent, { attackKind: moveKey });
           if (moveKey === 'hammer_smash' && !enemy.dead) {
@@ -1729,12 +1823,10 @@
           && circleIntersectsRoomObstacle(projectile.x, projectile.y, Number(projectile.radius || 6), obstacle)
       ));
       if (destructible) {
-        destructible.hp = Math.max(0, Number(destructible.hp || 1) - 1);
-        destructible.broken = destructible.hp <= 0;
         delete state.projectiles[projectileId];
-        emitEvent(destructible.broken ? 'DESTRUCTIBLE_BROKEN' : 'DESTRUCTIBLE_HIT', {
-          projectileId, roomId: projectile.roomId, obstacleKind: destructible.kind,
-          x: destructible.x, y: destructible.y, health: destructible.hp,
+        damageNetworkDestructible(state, projectile.roomId, destructible, 1, emitEvent, random, {
+          projectileId,
+          playerId: projectile.hostile ? null : projectile.ownerId,
         });
         return;
       }
@@ -1822,12 +1914,16 @@
         const duplicate = duplicateChance > 0 && random.stream('loot').chance(duplicateChance);
         amount = duplicate ? 2 : 1;
         collectSharedCampaignItem(player, pickup.key, { amount });
-      } else if (pickup.type === 'potion') {
+      }
+      let healedAmount = 0;
+      if (pickup.type === 'potion') {
         const doubled = Number(player.itemStats?.potionDoubleChance || 0) > 0
           && random.stream('loot').chance(Number(player.itemStats.potionDoubleChance));
         amount = doubled ? 2 : 1;
-        player.hp = Math.min(Number(player.maxHp || 100), Number(player.hp || 0)
+        const before = Number(player.hp || 0);
+        player.hp = Math.min(Number(player.maxHp || 100), before
           + 40 * amount * Math.max(1, Number(player.itemStats?.healingMultiplier || 1)));
+        healedAmount = Math.max(0, player.hp - before);
       }
       delete state.pickups[pickupId];
       emitEvent('PICKUP_COLLECTED', {
@@ -1835,6 +1931,7 @@
         playerId: player.id,
         pickupType: pickup.type,
         amount,
+        healedAmount,
         gold: player.coins,
         itemKey: pickup.key || '',
         roomId: pickup.roomId,

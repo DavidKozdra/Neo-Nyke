@@ -75,6 +75,7 @@
         peerId: playerId,
         displayName: options.displayName || this.transport.getLocalIdentity().displayName,
         characterKey: options.characterKey || 'thorn_knight',
+        kitChoices: options.kitChoices,
         roomId: floorState.currentRoomId,
       });
       return this.simulation;

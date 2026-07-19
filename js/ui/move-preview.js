@@ -28,14 +28,22 @@
   let lastTs = 0;
   let lastArgs = null;
   let observer = null;
+  let observedHost = null;
 
   // Persistent sim world (survives across frames, swapped in per frame).
   let sim = null;
 
   const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
-  function charSelectHidden() {
-    const el = document.getElementById('charSelect');
+  // The hero dossier renders on more than one screen (#charSelect and the
+  // networked co-op lobby), so the demo pauses/resumes with whichever screen
+  // hosts its canvas rather than #charSelect specifically.
+  function hostScreen() {
+    return canvas?.closest?.('#charSelect, #coopLobby') || document.getElementById('charSelect');
+  }
+
+  function hostHidden() {
+    const el = hostScreen();
     return !el || el.classList.contains('hidden');
   }
 
@@ -401,9 +409,10 @@
   }
 
   function ensureObserver() {
-    if (observer) return;
-    const el = document.getElementById('charSelect');
-    if (!el) return;
+    const el = hostScreen();
+    if (!el || el === observedHost) return;
+    observer?.disconnect();
+    observedHost = el;
     observer = new MutationObserver(() => {
       if (el.classList.contains('hidden')) {
         pause();
@@ -416,11 +425,11 @@
 
   function show(canvasEl, args) {
     if (!(canvasEl instanceof HTMLCanvasElement) || !args?.slot || !args?.heroKey) return;
-    ensureObserver();
     pause();
     canvas = canvasEl;
     lastArgs = { ...args };
-    if (charSelectHidden()) return; // resume via the observer when revealed
+    ensureObserver();
+    if (hostHidden()) return; // resume via the observer when revealed
 
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     canvas.width = LOGICAL_W * dpr;

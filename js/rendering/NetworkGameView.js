@@ -657,6 +657,9 @@
         }
         if (event.eventType === 'PICKUP_COLLECTED' && event.data?.playerId === localPlayerId && event.data?.itemKey) {
           this.neo.pushItemNotification?.(event.data.itemKey, Math.max(1, Number(event.data.amount || 1)));
+          // A duplicate roll gets the campaign's compact "Copied!" toast next
+          // to the normal pickup card, exactly as collectItem presents it.
+          if (Number(event.data.amount || 1) >= 2) this.neo.pushCopiedNotification?.(event.data.itemKey);
           this.neo.playSfx?.('item_collect');
         }
         if (event.eventType === 'UPGRADE_APPLIED' && event.data?.playerId === localPlayerId && event.data?.itemKey) {
@@ -667,6 +670,24 @@
           if (event.data?.kind === 'item' && event.data?.key) this.neo.pushItemNotification?.(event.data.key, 1);
           else if (event.data?.kind === 'move' && event.data?.key) this.neo.pushMoveNotification?.(event.data.key, 1);
           else if (event.data?.kind === 'weapon' && event.data?.key) this.neo.pushWeaponNotification?.(event.data.key);
+        }
+        if (event.eventType === 'DESTRUCTIBLE_HIT' || event.eventType === 'DESTRUCTIBLE_BROKEN') {
+          const data = event.data || {};
+          // Reuse the authoritative prop from the mirrored room so the campaign
+          // FX read its real size/kind; fall back to a stub at the event point.
+          const prop = (this.neo.destructibles || []).find(candidate => (
+            candidate.kind === data.obstacleKind
+            && Math.abs(Number(candidate.x) - Number(data.x)) < 1
+            && Math.abs(Number(candidate.y) - Number(data.y)) < 1
+          )) || { kind: data.obstacleKind, x: Number(data.x), y: Number(data.y), r: 24, reinforced: !!data.reinforced };
+          if (event.eventType === 'DESTRUCTIBLE_HIT') {
+            this.neo.spawnDestructibleHitFx?.(prop, 1, {});
+          } else if (data.obstacleKind === 'barrel') {
+            this.neo.spawnBarrelExplosionFx?.(prop, {});
+          } else {
+            this.neo.spawnDestructibleBreakFx?.(prop, {});
+            this.neo.playSfx?.('break_furniture');
+          }
         }
         this._spawnGameplayEventEffect(event);
         if (['PLAYER_ATTACKED', 'PLAYER_ATTACK_FOLLOWUP', 'PLAYER_ABILITY_USED', 'ENEMY_ATTACKED', 'ENEMY_TELEGRAPH', 'ENEMY_HIT', 'ENEMY_DEFEATED', 'PLAYER_HIT', 'PICKUP_COLLECTED', 'ROOM_CLEARED'].includes(event.eventType)) {
@@ -707,8 +728,15 @@
         this.neo.ringBurst?.(entity.x, entity.y, Number(entity.radius || 20) + 8, '#ff7592', 0.48);
         this.neo.playSfx?.('enemy_hit');
       } else if (event.eventType === 'PICKUP_COLLECTED') {
-        this.neo.ringBurst?.(entity.x, entity.y, 9, '#ffd966', 0.34);
-        this.neo.playSfx?.('coin');
+        // Match the campaign's per-type pickup presentation: coins ring and
+        // chime, potions show the heal popup, items only play item_collect
+        // (handled with the notification card in _consumeGameplayEvents).
+        if (data.pickupType === 'coin') {
+          this.neo.ringBurst?.(entity.x, entity.y, 9, '#ffd966', 0.34);
+          this.neo.playSfx?.('coin');
+        } else if (data.pickupType === 'potion' && Number(data.healedAmount || 0) > 0) {
+          this.neo.spawnHealPopup?.(entity.x, entity.y - 20, Number(data.healedAmount));
+        }
       } else if (event.eventType === 'PLAYER_ABILITY_USED') {
         const presentation = deriveAbilityPresentation(data);
         const originX = Number.isFinite(Number(data.originX)) ? Number(data.originX) : Number(entity.x);
@@ -954,6 +982,9 @@
         this.presentationPlayerActors.set(player.id, actor);
         return {
           id: player.id,
+          // The local hero renders through the full campaign drawPlayer path
+          // (no tint, no name label), exactly like a single-player run.
+          isLocal: player.id === localPlayerId,
           label: `${player.displayName || player.id}${player.id === localPlayerId ? ' (YOU)' : ''}`,
           color: player.color || derivePlayerColor(player),
           getEntity: () => actor,

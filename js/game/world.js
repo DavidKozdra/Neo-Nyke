@@ -3720,6 +3720,9 @@
   Neo.updateProjectiles = updateProjectiles;
   Neo.updateWorldProps = updateWorldProps;
   Neo.damageDestructible = damageDestructible;
+  Neo.spawnDestructibleHitFx = spawnDestructibleHitFx;
+  Neo.spawnDestructibleBreakFx = spawnDestructibleBreakFx;
+  Neo.spawnBarrelExplosionFx = spawnBarrelExplosionFx;
   Neo.spawnDamagePopup = spawnDamagePopup;
   Neo.spawnHealPopup = spawnHealPopup;
   Neo.updateChests = updateChests;

@@ -25,6 +25,9 @@ Target: the server resolves authoritative outcomes and broadcasts campaign state
 - Crit chance, forced crits and rollback now resolve through one shared hit operation in local play and authority.
 - Level-up XP growth, health/attack/attack-speed gains, Artificer bonuses and character milestones now resolve through one shared progression operation. Authority no longer overwrites a hero's character damage multiplier on level-up.
 - Browser Playwright proves the normal campaign pause/settings flow, 2D/FPS/third-person rendering, two visible heroes, exact FPS beam yaw, Blade Justice, starter inventories, the normal item pickup card and clean server leave across two clients.
+- Destructibles (pots, barrels, tables, walls) now break on the authority from melee sweeps, beams, AOE smashes and projectiles through one shared mutation, with the campaign break outcomes: pot coin/item loot, barrel 130-radius blast that chains to nearby props and damages enemies, and hidden-prop reveal on wall breaks. The client consumes `DESTRUCTIBLE_HIT`/`DESTRUCTIBLE_BROKEN` events to play the normal campaign hit/break/explosion FX and sounds.
+- The local hero renders through the full campaign `drawPlayer` path in networked play (status rings, barrier bar, god tint, sprite scale, weapon range preview); only remote allies get the tinted `drawPlayerSlot` treatment with a name label.
+- Pickup presentation is per-type like the campaign: the coin ring/chime only plays for coin pickups, potions show the authoritative heal popup, and item pickups show the normal card plus the compact "Copied!" toast on a duplicate roll.
 
 ## Still blocking literal 1:1 parity
 
@@ -51,7 +54,8 @@ Target: the server resolves authoritative outcomes and broadcasts campaign state
    - Challenge trial lifecycles, secret bosses/warp/vendor state, garden fruit growth, treasure-hunt state, ladder charge/warp and several named room interactions remain campaign-only.
 
 6. **World mutation**
-   - Static room state is authoritative, but pots, barrels, cover walls, secret walls, hidden props, garden nodes and room projectiles do not yet share the full campaign mutation lifecycle.
+   - Pots, barrels, breakable walls and hidden-prop reveals now share an authoritative break lifecycle with campaign loot/blast outcomes.
+   - Secret-wall passage opening, cover-wall specifics (reinforced HP tuning), post-loop green-item drops, garden nodes and room projectiles do not yet share the full campaign mutation lifecycle.
 
 7. **Remaining run services**
    - XP, canonical level-up gains, coins, floors and revive have authority state.
