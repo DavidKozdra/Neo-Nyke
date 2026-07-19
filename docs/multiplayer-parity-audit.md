@@ -43,7 +43,7 @@ Target: the server resolves authoritative outcomes and broadcasts campaign state
 
 2. **Remaining item procs and acquisition side effects**
    - The live campaign's 74 definitions and derived passive/stat table are now shared, but event-driven effects still need extraction.
-   - On-hit status rolls, core kill-charge/healing, scroll, voucher, Wizard's Paw and Extra Battery transactions are shared now; revive modifiers, Jester and remaining event-driven character/item synergies still need extraction.
+   - On-hit status rolls, core kill-charge/healing, paid/co-op/rival revive reset, scroll, voucher, Wizard's Paw, Extra Battery and the complete Jester pickup/gate/floor-skip transaction are shared now. Remaining event-driven character/item synergies still need extraction.
 
 3. **Combat execution**
    - Damage scaling, crit resolution, status application/ticking/on-hit status procs and core projectile trajectories are shared, but authority still has separate implementations for attack sequencing, beams, persistent moves and portions of projectile hit/collision disposition.
@@ -51,8 +51,8 @@ Target: the server resolves authoritative outcomes and broadcasts campaign state
    - Boomerang catch, drain, love-bomb detonation and several move-specific projectile dispositions still need extraction.
 
 4. **Chests and reward-selection flows**
-   - Basic authority chests and A/B selection exist.
-   - Scroll selection, Wizard's Paw, Extra Battery and duplicate pickup collection now use shared transactions. Campaign chest varieties, random chest placement/rules, secret vendor rewards and several selection events still need the same treatment.
+   - Campaign and authority now open direct, potion, A/B and treasure-hunt exit chests through `SharedChestSystem`; authored choice lists are preserved and selection claims flow through the same duplication/Jester acquisition transaction as ordinary pickups.
+   - Scroll selection, Wizard's Paw, Extra Battery and duplicate pickup collection use shared transactions. Secret vendor/boss rewards and several named selection events still need the same treatment.
 
 5. **Special/challenge/secret/garden rooms**
    - Seven service-room choices share an outcome resolver.
@@ -67,8 +67,8 @@ Target: the server resolves authoritative outcomes and broadcasts campaign state
    - Achievements, unlocks, tutorial progression, run-save/meta progression, difficulty/challenge modifiers and all alternate campaign modes are not yet authoritative multiplayer services.
 
 8. **Prediction/reconciliation coverage**
-   - Player obstacle prediction is shared now.
-   - Authority movement now consumes the shared slow multiplier; client prediction still needs status-driven speed plus exact dash/warp, knockback, doors during transitions and moving-hazard reconciliation.
+   - Player obstacle prediction, responsive velocity, timed speed boosts, item speed and status slow math are shared between authority and client prediction. Accepted dash/warp destinations are applied immediately to the local predicted hero.
+   - Knockback, doors during transitions and moving-hazard reconciliation still need exact prediction/replay coverage.
 
 ## Deletion rule for remaining work
 

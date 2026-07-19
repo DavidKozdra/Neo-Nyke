@@ -17,6 +17,9 @@
   const roomInterior = typeof require === 'function'
     ? require('../simulation/SharedRoomInteriorSystem.js')
     : (root.NeoNyke?.simulation || {});
+  const movementRules = typeof require === 'function'
+    ? require('../simulation/CampaignMovementRules.js')
+    : (root.NeoNyke?.simulation || {});
   const CAMPAIGN_ROOM_GEOMETRY = worldContent.CAMPAIGN_ROOM_GEOMETRY;
 
   const INPUT_INTERVAL_MS = 50;
@@ -151,16 +154,19 @@
     }));
   }
 
-  function predictPosition(player, input, fixedDelta, floorState = {}) {
+  function predictPosition(player, input, fixedDelta, floorState = {}, currentTick = floorState.tick) {
     const movement = normalizeMovement(input.moveX, input.moveY);
-    const speed = Math.max(0, Number(player.moveSpeed) || 180);
+    const speed = movementRules.getCampaignPlayerMovementSpeed?.(player, currentTick)
+      ?? Math.max(0, Number(player.moveSpeed) || 180);
     const radius = Math.max(1, Number(player.radius) || 18);
     const wall = Math.max(0, Number(floorState.wallThickness) || 28);
     const width = Math.max(1, Number(floorState.width) || 900);
     const height = Math.max(1, Number(floorState.height) || 700);
     const minimum = wall + radius;
-    const desiredX = clamp(Number(player.x || 0) + movement.moveX * speed * fixedDelta, minimum, width - minimum);
-    const desiredY = clamp(Number(player.y || 0) + movement.moveY * speed * fixedDelta, minimum, height - minimum);
+    const vx = movementRules.applyResponsiveVelocity?.(player.vx, movement.moveX * speed, fixedDelta) ?? movement.moveX * speed;
+    const vy = movementRules.applyResponsiveVelocity?.(player.vy, movement.moveY * speed, fixedDelta) ?? movement.moveY * speed;
+    const desiredX = clamp(Number(player.x || 0) + vx * fixedDelta, minimum, width - minimum);
+    const desiredY = clamp(Number(player.y || 0) + vy * fixedDelta, minimum, height - minimum);
     const room = floorState.layout?.rooms?.find(candidate => candidate.id === player.roomId);
     const collision = roomInterior.resolveRoomObstacleMovement?.(room, player, desiredX, desiredY)
       || { x: desiredX, y: desiredY, blockedX: false, blockedY: false };
@@ -168,8 +174,8 @@
       ...player,
       x: collision.x,
       y: collision.y,
-      vx: collision.blockedX ? 0 : movement.moveX * speed,
-      vy: collision.blockedY ? 0 : movement.moveY * speed,
+      vx: collision.blockedX ? 0 : vx,
+      vy: collision.blockedY ? 0 : vy,
       aimDirection: Number(input.aimDirection) || 0,
     };
   }
@@ -745,6 +751,14 @@
         const destinationY = Number.isFinite(Number(data.destinationY)) ? Number(data.destinationY) : Number(entity.y);
         const radius = Math.max(1, Number(data.effectRadius || (data.slot === 'smash' ? 140 : 34)));
         const kind = String(data.presentation?.kind || presentation.kind || data.mode || '');
+        if (data.playerId === this.session.snapshot?.()?.playerId
+          && this.localPredictedPlayer
+          && ['dash', 'warp', 'dash_aoe'].includes(kind)) {
+          this.localPredictedPlayer.x = destinationX;
+          this.localPredictedPlayer.y = destinationY;
+          this.localPredictedPlayer.vx = 0;
+          this.localPredictedPlayer.vy = 0;
+        }
         if (['aoe', 'dash_aoe'].includes(kind) && typeof this.neo.spawnAoeShockwave === 'function') {
           const impactX = kind === 'dash_aoe' ? destinationX : originX;
           const impactY = kind === 'dash_aoe' ? destinationY : originY;
@@ -852,6 +866,7 @@
           input,
           INPUT_INTERVAL_MS / 1000,
           this.currentSample?.state?.floorState,
+          this.currentSample?.tick,
         );
       }
       try {

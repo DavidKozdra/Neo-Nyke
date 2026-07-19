@@ -24,6 +24,20 @@
       this.onCharRevealed = typeof opts.onCharRevealed === "function" ? opts.onCharRevealed : null;
       this.onOpen = typeof opts.onOpen === "function" ? opts.onOpen : null;
       this.onClose = typeof opts.onClose === "function" ? opts.onClose : null;
+      // Menu/gallery dialogue may run before a game's main update loop exists.
+      // In that case the manager can own a small requestAnimationFrame loop.
+      // Game integrations that already call update() can leave this disabled.
+      this.autoUpdate = opts.autoUpdate === true;
+      this.requestFrame = typeof opts.requestAnimationFrame === "function"
+        ? opts.requestAnimationFrame
+        : (typeof globalThis?.requestAnimationFrame === "function"
+          ? globalThis.requestAnimationFrame.bind(globalThis)
+          : null);
+      this.cancelFrame = typeof opts.cancelAnimationFrame === "function"
+        ? opts.cancelAnimationFrame
+        : (typeof globalThis?.cancelAnimationFrame === "function"
+          ? globalThis.cancelAnimationFrame.bind(globalThis)
+          : null);
       this.changeListeners = [];
       this.active = false;
       this.returnState = "play";
@@ -35,6 +49,8 @@
       this.charTimer = 0;
       this.holdTimer = 0;
       this.completeCallback = null;
+      this.animationFrame = null;
+      this.lastFrameTime = null;
     }
 
     onChange(callback) {
@@ -90,12 +106,37 @@
       this.charIndex = 0;
       this.charTimer = 0;
       this.holdTimer = 0;
+      // Prepare the first line before changing game state. State listeners can
+      // render synchronously, so publishing "dialogue" while current is still
+      // null produces a transient empty panel.
+      this._beginNextLine();
       if (this.onOpen) this.onOpen();
       if (this.gameStateManager?.getState?.() !== "dialogue") {
         this.gameStateManager?.setState?.("dialogue");
       }
-      this._beginNextLine();
+      this._startAutoUpdate();
       return true;
+    }
+
+    _startAutoUpdate() {
+      if (!this.autoUpdate || !this.requestFrame || this.animationFrame !== null) return;
+      this.lastFrameTime = null;
+      const tick = (timestamp) => {
+        this.animationFrame = null;
+        if (!this.active) return;
+        const now = Number(timestamp);
+        const dt = this.lastFrameTime === null || !Number.isFinite(now)
+          ? 0
+          : Math.min(0.1, Math.max(0, (now - this.lastFrameTime) / 1000));
+        if (Number.isFinite(now)) this.lastFrameTime = now;
+        this.update(dt);
+        if (this.active) this.animationFrame = this.requestFrame(tick);
+      };
+      this.animationFrame = this.requestFrame(tick);
+    }
+
+    usesAutoUpdate() {
+      return this.autoUpdate && !!this.requestFrame;
     }
 
     _beginNextLine() {
@@ -170,6 +211,11 @@
       this.charTimer = 0;
       this.holdTimer = 0;
       this.completeCallback = null;
+      if (this.animationFrame !== null && this.cancelFrame) {
+        this.cancelFrame(this.animationFrame);
+      }
+      this.animationFrame = null;
+      this.lastFrameTime = null;
       if (this.onClose) this.onClose();
       if (shouldRestoreState && this.gameStateManager?.getState?.() === "dialogue") {
         this.gameStateManager?.setState?.(this.returnState || "play");

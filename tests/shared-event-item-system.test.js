@@ -1,4 +1,4 @@
-const { applyCampaignKillCharge, chargeRequirement } = require('../js/simulation/SharedEventItemSystem.js');
+const { applyCampaignKillCharge, chargeRequirement, applyCampaignRevive } = require('../js/simulation/SharedEventItemSystem.js');
 
 describe('SharedEventItemSystem kill transactions', () => {
   test('advances every campaign charge item from one kill event', () => {
@@ -39,5 +39,11 @@ describe('SharedEventItemSystem kill transactions', () => {
 
   test('charge requirement shares adapter and tag synergy reductions', () => {
     expect(chargeRequirement({ items: { charged_adapter: 2 } }, 10, { chargeSynergyReduction: 2 })).toBe(6);
+  });
+
+  test('revive state reset is identical for local, co-op, and rival fractions', () => {
+    const target = { maxHp: 120, hp: 0, downed: true, downedAtTick: 4, reviveTicks: 20, reviveProgress: 0.5, vx: 8, vy: -2, stun: 1, dashTime: 0.4 };
+    expect(applyCampaignRevive(target, { healthFraction: 0.4, currentTick: 100, tickRate: 20, invulnerabilitySeconds: 1.5 })).toMatchObject({ ok: true, health: 48 });
+    expect(target).toEqual(expect.objectContaining({ downed: false, hp: 48, vx: 0, vy: 0, stun: 0, dashTime: 0, invulnerableUntilTick: 130 }));
   });
 });

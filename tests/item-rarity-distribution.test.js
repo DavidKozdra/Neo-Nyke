@@ -62,7 +62,9 @@ describe('relic rarity distribution', () => {
   });
 
   test('routes random bonus and rival relics through the shared roller', () => {
-    expect(combatSource).toContain("Neo.rollItemDrop({ excludeKeys: ['jesters_dice'] })");
+    const acquisitionSource = fs.readFileSync(path.join(__dirname, '../js/simulation/SharedAcquisitionSystem.js'), 'utf8');
+    expect(acquisitionSource).toContain("rollItem(random, ['jesters_dice'])");
+    expect(combatSource).toContain('collectCampaignPickup?.(runState, Neo.player, itemKey');
     expect(combatSource).not.toContain('const rewardPool = Neo.ITEM_KEYS.filter');
     expect(roomsSource).toContain("rarities: godTier ? ['god'] : ['knight', 'wizard']");
     expect(roomsSource).toContain('excludeKeys: Neo.VOUCHER_KEYS || []');

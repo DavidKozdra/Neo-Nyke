@@ -11,6 +11,7 @@ export function createUIController(view) {
         defaultSpeaker: 'GOD',
         typeSpeed: 0.028,
         autoAdvanceDelay: 1.35,
+        autoUpdate: true,
         autoAdvanceEnabled: () => window.NeoSettings?.shouldAutoAdvanceCutscenes?.() === true,
         onCharRevealed: () => Neo.playSfx?.('dialogue'),
         onOpen: () => {
@@ -1371,12 +1372,6 @@ export function createUIController(view) {
       if (!view.dialogueOverlay || !view.dialogueSpeaker || !view.dialogueText) return;
       const snapshot = dialogueRuntime?.getSnapshot?.() || { active: false, speaker: 'GOD', visibleText: '', isFullyTyped: false };
 
-      //!! cutscenes break here 
-      if(snapshot.visibleText == ""){
-
-
-        return;
-      }
 
       if (dialogueRenderCache.active !== snapshot.active) {
         view.dialogueOverlay.classList.toggle('hidden', !snapshot.active);
@@ -1392,8 +1387,10 @@ export function createUIController(view) {
         }
         return;
       }
+
       const speaker = snapshot.speaker || 'GOD';
       const text = snapshot?.visibleText;
+
       if (dialogueRenderCache.speaker !== speaker) {
         view.dialogueSpeaker.textContent = speaker;
         dialogueRenderCache.speaker = speaker;
@@ -1408,6 +1405,7 @@ export function createUIController(view) {
         if (dialogueRenderCache.portraitKey !== spriteKey) {
           Neo.drawSpriteToCanvas(view.dialoguePortrait, Neo.getPortraitSpriteKey?.(spriteKey) || spriteKey, view.dialoguePortrait.width);
           dialogueRenderCache.portraitKey = spriteKey;
+
         }
       }
       if (view.dialogueHint) {
@@ -1421,6 +1419,11 @@ export function createUIController(view) {
         }
       }
     }
+
+    // Gallery cutscenes can run before the main game loop has started. Render
+    // directly from manager changes as well as from tick(); the cache above
+    // keeps this inexpensive during normal gameplay.
+    dialogueRuntime?.onChange?.(renderDialogue);
 
     function renderEntityDialogue() {
       const layer = view.entityDialogueLayer;
@@ -2492,7 +2495,7 @@ export function createUIController(view) {
         hudUpdateHook = typeof hook === 'function' ? hook : null;
       },
       tick(dt = 0) {
-        if (dialogueRuntime?.update) dialogueRuntime.update(dt);
+        if (dialogueRuntime?.update && !dialogueRuntime?.usesAutoUpdate?.()) dialogueRuntime.update(dt);
         if (worldSpeechRuntime?.update) worldSpeechRuntime.update(dt);
         if (manager && typeof manager.updateAll === 'function') {
           manager.updateAll();

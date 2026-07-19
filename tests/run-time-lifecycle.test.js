@@ -58,6 +58,8 @@ describe('run time lifecycle', () => {
     const persistMetaSoon = jest.fn();
     const scheduleRunSave = jest.fn();
     const updateHud = jest.fn();
+    const previousNeoNyke = globalThis.NeoNyke;
+    globalThis.NeoNyke = { simulation: require('../js/simulation/SharedEventItemSystem.js') };
     const reviveFromDeath = new Function(
       'Neo',
       'getReviveCost',
@@ -69,6 +71,7 @@ describe('run time lifecycle', () => {
     )(Neo, getReviveCost, canReviveFromDeath, persistMetaSoon, scheduleRunSave, updateHud);
 
     expect(reviveFromDeath()).toBe(true);
+    globalThis.NeoNyke = previousNeoNyke;
     expect(Neo.gameElapsedTime).toBe(93.5);
     expect(Neo.setGameState).toHaveBeenCalledWith('play');
   });

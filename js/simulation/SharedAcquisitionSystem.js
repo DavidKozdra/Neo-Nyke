@@ -115,6 +115,88 @@
     return { ok: true, type: 'SCROLL_APPLY', scrollKey: key, picks: selected, fromKeys, rewardKey };
   }
 
+  function applyJestersDiceAcquisition(runState, player, collectCount, options = {}) {
+    const copies = Math.max(0, Math.floor(Number(collectCount || 0)));
+    if (!runState || !player || copies <= 0) return { ok: false, reason: 'INVALID_JESTER_ACQUISITION', bonusItemCounts: {} };
+    const random = typeof options.random === 'function' ? options.random : Math.random;
+    const rollItem = typeof options.rollItem === 'function'
+      ? options.rollItem
+      : () => '';
+    runState.floorSkipPending = Math.max(0, Number(runState.floorSkipPending || 0)) + 3 * copies;
+    const bonusItemCounts = {};
+    for (let index = 0; index < 10 * copies; index += 1) {
+      const key = String(rollItem(random, ['jesters_dice']) || '');
+      if (!key || key === 'jesters_dice' || !definitions.ITEM_DEFS?.[key]) continue;
+      const collected = inventory.collectCampaignItem(player, key);
+      if (!collected?.ok) continue;
+      bonusItemCounts[key] = Number(bonusItemCounts[key] || 0) + 1;
+    }
+    return { ok: true, type: 'JESTER_ACQUIRED', copies, skipFloors: 3 * copies, bonusItemCounts };
+  }
+
+  // The one canonical item-pickup transaction. It owns duplication, inventory
+  // mutation, pending selection debts, and Jester's chained grants. Callers only
+  // materialize notifications/achievements or authority events from the result.
+  function collectCampaignPickup(runState, player, itemKey, options = {}) {
+    const key = String(itemKey || '');
+    if (!runState || !player || !definitions.ITEM_DEFS?.[key]) return { ok: false, reason: 'INVALID_ITEM' };
+    if (options.noItems) return { ok: false, reason: 'ITEMS_DISABLED' };
+    const random = typeof options.random === 'function' ? options.random : Math.random;
+    const duplicateChance = Math.max(0, Math.min(0.75, Number(options.duplicateChance || 0)));
+    const canDuplicate = options.canDuplicate !== false && key !== 'artificer_charger';
+    const duplicated = canDuplicate && duplicateChance > 0 && random() < duplicateChance;
+    const amount = Math.max(1, Math.floor(Number(options.amount || 1))) * (duplicated ? 2 : 1);
+    const collected = inventory.collectCampaignItem(player, key, { amount });
+    if (!collected?.ok) return collected;
+    const jester = key === 'jesters_dice'
+      ? applyJestersDiceAcquisition(runState, player, amount, options)
+      : null;
+    return {
+      ok: true,
+      type: 'ITEM_PICKUP_ACQUIRED',
+      itemKey: key,
+      amount,
+      duplicated,
+      previousCount: collected.previousCount,
+      jester,
+    };
+  }
+
+  function createCampaignJesterGate(runState, options = {}) {
+    const currentFloor = Math.max(1, Math.floor(Number(options.floorNumber ?? runState?.floorNumber ?? runState?.floor ?? 1)));
+    const maxFloor = Math.max(currentFloor, Math.floor(Number(options.maxFloor || 10)));
+    const pending = Math.max(0, Math.floor(Number(runState?.floorSkipPending || 0)));
+    if (!runState || pending <= 0 || currentFloor >= maxFloor || options.hasExistingGate) {
+      return { ok: false, reason: 'JESTER_GATE_UNAVAILABLE' };
+    }
+    const skipFloors = Math.min(pending, maxFloor - currentFloor);
+    runState.floorSkipPending = 0;
+    return {
+      ok: true,
+      type: 'JESTER_GATE_CREATED',
+      gate: {
+        type: 'jesterPortal',
+        x: Number(options.x || 0),
+        y: Number(options.y || 0),
+        skipFloors,
+        spawnT: 0,
+        activateAt: Math.max(0, Number(options.activateAt || 0)),
+        active: Number(options.activateAt || 0) <= 0,
+      },
+    };
+  }
+
+  function useCampaignJesterGate(runState, gate, options = {}) {
+    const currentFloor = Math.max(1, Math.floor(Number(runState?.floorNumber ?? runState?.floor ?? 1)));
+    const maxFloor = Math.max(currentFloor, Math.floor(Number(options.maxFloor || 10)));
+    const skipFloors = Math.min(Math.max(0, Math.floor(Number(gate?.skipFloors || 0))), maxFloor - currentFloor);
+    if (!runState || !gate || skipFloors <= 0) return { ok: false, reason: 'JESTER_GATE_UNAVAILABLE' };
+    const nextFloor = currentFloor + skipFloors;
+    if ('floorNumber' in runState) runState.floorNumber = nextFloor;
+    if ('floor' in runState) runState.floor = nextFloor;
+    return { ok: true, type: 'JESTER_GATE_USED', previousFloor: currentFloor, floorNumber: nextFloor, skipFloors };
+  }
+
   function applyWizardPawStat(player, stat) {
     if (!player || !WIZARD_PAW_STATS.includes(stat)) return false;
     if (stat === 'maxHp') {
@@ -222,6 +304,8 @@
     getSameRarityCampaignItem,
     createCampaignScrollPoolChoices,
     applyCampaignScrollSelection,
+    applyJestersDiceAcquisition,
+    collectCampaignPickup, createCampaignJesterGate, useCampaignJesterGate,
     applyAcquisitionCommand,
   };
 });

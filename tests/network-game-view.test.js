@@ -13,14 +13,22 @@ const { LOCAL_BUILD_VERSION, LOCAL_CONTENT_HASH } = require('../js/multiplayer/L
 
 describe('network multiplayer game view', () => {
   test('uses a floor-renderer compatibility identity so stale movement clients cannot join', () => {
-    expect(LOCAL_BUILD_VERSION).toBe('1.0.0-campaign-parity-v23');
-    expect(LOCAL_CONTENT_HASH).toBe('shared-neo-campaign-parity-v23');
+    expect(LOCAL_BUILD_VERSION).toBe('1.0.0-campaign-parity-v24');
+    expect(LOCAL_CONTENT_HASH).toBe('shared-neo-campaign-parity-v24');
   });
 
   test('normalizes diagonal keyboard/gamepad movement', () => {
     const movement = normalizeMovement(1, 1);
     expect(Math.hypot(movement.moveX, movement.moveY)).toBeCloseTo(1);
     expect(normalizeMovement(0.5, 0)).toEqual({ moveX: 0.5, moveY: 0 });
+  });
+
+  test('predicts with the same status speed and responsive velocity used by authority', () => {
+    const base = { id: 'p1', x: 450, y: 350, vx: 0, vy: 0, radius: 18, moveSpeed: 200, statuses: { slow: { stacks: 2 } } };
+    const predicted = predictPosition(base, { moveX: 1, moveY: 0 }, 0.05, { width: 900, height: 700 }, 10);
+    expect(predicted.vx).toBeGreaterThan(0);
+    expect(predicted.vx).toBeLessThan(200);
+    expect(predicted.x).toBeCloseTo(450 + predicted.vx * 0.05);
   });
 
   test('maps network movement and aim to the first-person camera direction', () => {
