@@ -47,6 +47,8 @@ import './simulation/SharedAcquisitionSystem.js';
 import './simulation/SharedChestSystem.js';
 import './simulation/SharedShopSystem.js';
 import './simulation/SharedSpecialRoomSystem.js';
+import './simulation/SharedRoomLifecycleSystem.js';
+import './simulation/SharedRunServiceSystem.js';
 import './simulation/GameState.js';
 import './simulation/GameSimulation.js';
 import './simulation/FixedTickRunner.js';

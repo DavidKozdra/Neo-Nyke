@@ -34,7 +34,8 @@ describe('treasure hunt alt mode', () => {
 
   test('finishes the final floor from the returned entrance ladder', () => {
     const world = read('js/game/world.js');
-    expect(world).toContain("Neo.gameMode === 'treasure_hunt' && Neo.floor >= Neo.MAX_FLOOR");
+    expect(world).toContain('simulation.useCampaignLadder');
+    expect(read('js/simulation/SharedRoomLifecycleSystem.js')).toContain("options.gameMode === 'treasure_hunt' && floor >= maxFloor");
     expect(world).toContain('Neo.win();');
   });
 

@@ -2746,14 +2746,20 @@
   // through the shared interact action (E / gamepad / mobile button) rather than
   // self-triggering from the pickup loop, so all input methods share one path.
   function useLadder() {
-    if (Neo.gameMode === 'treasure_hunt' && Neo.floor >= Neo.MAX_FLOOR) {
+    const runState = { floor: Neo.floor };
+    const result = globalThis.NeoNyke.simulation.useCampaignLadder(runState, {
+      gameMode: Neo.gameMode,
+      maxFloor: Neo.MAX_FLOOR,
+    });
+    if (!result.ok) return;
+    if (result.type === 'RUN_WON') {
       Neo.win();
       return;
     }
     // The new-floor stinger now plays from the floor:enter event (so it also
     // covers the run's first floor); generateFloor() below emits that event.
     Neo.tutorialController?.signal?.('ladder-use');
-    Neo.floor = Math.min(Neo.MAX_FLOOR, Neo.floor + 1);
+    Neo.floor = runState.floor;
     Neo.refreshFloorChargeStates();
     Neo.metaProgress.bestFloor = Math.max(Neo.metaProgress.bestFloor, Neo.floor);
     Neo.persistMetaSoon();
@@ -2955,11 +2961,11 @@
           Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 18, life: 0.55, text: `+${Math.ceil(actual)}`, c: '#79ff8f' });
         }
         const fruitRoom = Neo.getRoomByCoords(Number(pickup.roomGx ?? Neo.currentRoom?.gx), Number(pickup.roomGy ?? Neo.currentRoom?.gy)) || Neo.currentRoom;
-        const node = fruitRoom?.gardenFruitNodes?.find(gardenNode => gardenNode && gardenNode.id === pickup.gardenNodeId);
-        if (node) {
-          node.respawnAt = Neo.gameElapsedTime + Neo.rand(22, 12, 'world');
-          node.fruitSpawned = false;
-        }
+        globalThis.NeoNyke.simulation.collectCampaignGardenFruit(fruitRoom, pickup, Neo.gameElapsedTime, {
+          random: () => Neo.nextRandom('world'),
+          minimumRespawnSeconds: 12,
+          respawnSpreadSeconds: 10,
+        });
       }
 
       if (pickup.type === 'item') {
@@ -3089,56 +3095,49 @@
       }
 
       if (pickup.type === 'secretVendor') {
-        const cost = Math.max(1, Number(pickup.cost || 1));
-        const usesCoins = pickup.offerKind === 'xp';
-        const crystals = Number(Neo.metaProgress.loopCrystals || 0);
-        const coins = Number(Neo.player.coins || 0);
-        const canAfford = usesCoins ? coins >= cost : crystals >= cost;
-        const costLabel = usesCoins ? `${cost} C` : `${cost} LC`;
         if (pickup.bought) {
           removePickupAt(index);
           continue;
         }
-        if (!canAfford) {
+        if (pickup.offerKind === 'relic' && !pickup.rewardKey) {
+          pickup.rewardKey = Neo.rollItemDrop({ elite: true, random: Neo.createEntityRandom(pickup, 'secret-vendor:fallback') });
+        }
+        const result = globalThis.NeoNyke.simulation.purchaseCampaignSecretVendor(
+          { floor: Neo.floor, metaProgress: Neo.metaProgress }, Neo.currentRoom, Neo.player, pickup,
+        );
+        if (!result.ok) {
           const now = Date.now();
           if (!pickup.lastDeniedAt || now - pickup.lastDeniedAt > 450) {
-            Neo.spawnParticle({ x: pickup.x, y: pickup.y - 20, life: 0.85, text: costLabel, c: '#ffb1b1' });
+            Neo.spawnParticle({ x: pickup.x, y: pickup.y - 20, life: 0.85, text: `${result.cost || pickup.cost || 1} ${pickup.offerKind === 'xp' ? 'C' : 'LC'}`, c: '#ffb1b1' });
             pickup.lastDeniedAt = now;
           }
           continue;
         }
-        if (usesCoins) {
-          if (!Neo.spendCoins(cost)) continue;
-        } else {
-          Neo.metaProgress.loopCrystals = crystals - cost;
-        }
-        pickup.bought = true;
-        if (pickup.offerKind === 'relic') {
-          const rewardKey = pickup.rewardKey || Neo.rollItemDrop({ elite: true, random: Neo.createEntityRandom(pickup, 'secret-vendor:fallback') });
-          Neo.collectItem(rewardKey);
-          if (Neo.player && rewardKey) Neo.player.lastSecretVendorRewardKey = rewardKey;
-        } else if (pickup.offerKind === 'vitality') {
-          Neo.player.maxHp += 20;
-          Neo.applyPlayerHealing?.(Neo.scalePlayerHealing(60, 20));
+        if (result.rewardKey) {
+          Neo.collectItem(result.rewardKey);
+          Neo.player.lastSecretVendorRewardKey = result.rewardKey;
+        } else if (result.offerKind === 'vitality') {
+          Neo.applyPlayerHealing?.(Neo.scalePlayerHealing(result.heal, 20));
           Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.7, text: '+VIT', c: '#8dffbd' });
-        } else if (pickup.offerKind === 'xp') {
-          const xpValue = Math.max(1, Number(pickup.xpValue || Neo.getSecretXpOfferAmount()));
-          Neo.grantXp(xpValue);
-          Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.7, text: `+${xpValue} XP`, c: '#8dd4ff' });
+        } else if (result.offerKind === 'xp') {
+          Neo.grantXp(result.xp);
+          Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.7, text: `+${result.xp} XP`, c: '#8dd4ff' });
         } else {
-          addCoins(90 + Neo.floor * 12);
+          addCoins(result.coins);
           Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 20, life: 0.7, text: 'RICH', c: '#ffd966' });
         }
         Neo.persistMetaSoon();
       }
 
       if (pickup.type === 'secret_boss_chest') {
+        const rewardKey = pickup.rewardKey || Neo.rollItemDrop({ elite: true, random: Neo.createEntityRandom(pickup, 'secret-boss:loot') });
+        const result = globalThis.NeoNyke.simulation.lootCampaignSecretBossChest(
+          { floor: Neo.floor }, Neo.currentRoom, Neo.player, pickup, { rewardKey },
+        );
+        if (!result.ok) continue;
         removePickupAt(index);
-        // Mark the chest as looted so re-entering the cleared room doesn't
-        // re-spawn it (which previously let players farm the reward forever).
-        if (Neo.currentRoom) Neo.currentRoom.secretChestLooted = true;
-        Neo.collectItem(Neo.rollItemDrop({ elite: true, random: Neo.createEntityRandom(pickup, 'secret-boss:loot') }));
-        addCoins(60 + Neo.floor * 8);
+        Neo.collectItem(result.rewardKey);
+        addCoins(result.coins);
         Neo.spawnParticle({ x: Neo.player.x, y: Neo.player.y - 24, life: 1.0, text: 'BANE SLAIN', c: '#c9aaff' });
         Neo.syncCurrentRoomState();
         Neo.scheduleRunSave();
@@ -3173,24 +3172,26 @@
       }
 
       if (pickup.type === 'challengeBomb') {
-        if (pickup.safe) {
-          // Defuse this blue bomb, then check whether any blue bombs remain.
-          // The trial only clears once every blue bomb has been defused.
-          removePickupAt(index);
-          const safeLeft = Neo.pickups.filter(p => p?.type === 'challengeBomb' && p.safe).length;
-          if (safeLeft <= 0) {
+        const tutorialBomb = Neo.isTutorialRun?.() && Neo.currentRoom?.tutorialLesson === 'challenge';
+        const result = globalThis.NeoNyke.simulation.resolveCampaignChallengePickup(Neo.currentRoom, pickup, {
+          tutorial: tutorialBomb,
+          damage: getBombHazardDamage(28),
+          remainingSafeBombs: Neo.pickups.filter(p => p !== pickup && p?.type === 'challengeBomb' && p.safe).length,
+        });
+        if (!result.ok) return;
+        if (result.type === 'CHALLENGE_BOMB_DEFUSED') {
+          if (result.removePickup) removePickupAt(index);
+          if (result.complete) {
             Neo.completeChallengeTrial('BOMBS DISARMED');
           } else {
-            Neo.spawnParticle({ x: pickup.x, y: pickup.y - 20, life: 0.7, text: `DEFUSED — ${safeLeft} LEFT`, c: '#8dd4ff' });
+            Neo.spawnParticle({ x: pickup.x, y: pickup.y - 20, life: 0.7, text: `DEFUSED — ${result.remaining} LEFT`, c: '#8dd4ff' });
             Neo.updateObjective();
           }
         } else {
-          const tutorialBomb = Neo.isTutorialRun?.() && Neo.currentRoom?.tutorialLesson === 'challenge';
-          blastRadius(pickup.x, pickup.y, 76, tutorialBomb ? 1 : getBombHazardDamage(28), '#ff7a66');
+          blastRadius(pickup.x, pickup.y, 76, result.damage, '#ff7a66');
           Neo.spawnParticle({ x: pickup.x, y: pickup.y - 20, life: 0.75, text: tutorialBomb ? 'RED = DANGER' : 'WRONG', c: '#ff7a7a' });
-          if (tutorialBomb) {
-            removePickupAt(index);
-          } else {
+          if (result.removePickup) removePickupAt(index);
+          if (result.spawnFailureHazard) {
             Neo.spawnBombFailAoe(pickup.x, pickup.y);
             Neo.failChallengeTrial('WRONG BOMB');
           }
@@ -3200,14 +3201,10 @@
       }
 
       if (pickup.type === 'challengeRune') {
-        if (!Neo.currentRoom.challengeData) Neo.currentRoom.challengeData = {};
-        Neo.currentRoom.challengeData.runesLeft = Math.max(0, Number(Neo.currentRoom.challengeData.runesLeft || 1) - 1);
-        // Small timer refund per catch so falling slightly behind on one chase
-        // doesn't doom the whole attempt — up to +10s across all 5 runes.
-        const runeTimerRefund = 2;
-        Neo.currentRoom.challengeTimer = Number(Neo.currentRoom.challengeTimer || 0) + runeTimerRefund;
-        Neo.spawnParticle({ x: pickup.x, y: pickup.y - 18, life: 0.55, text: `RUNE +${runeTimerRefund}s`, c: '#8dd4ff' });
-        if (Neo.currentRoom.challengeData.runesLeft <= 0) {
+        const result = globalThis.NeoNyke.simulation.resolveCampaignChallengePickup(Neo.currentRoom, pickup, { timerRefund: 2 });
+        if (!result.ok) return;
+        Neo.spawnParticle({ x: pickup.x, y: pickup.y - 18, life: 0.55, text: `RUNE +${result.timerRefund}s`, c: '#8dd4ff' });
+        if (result.complete) {
           Neo.completeChallengeTrial('RUNES CLAIMED');
         }
       }

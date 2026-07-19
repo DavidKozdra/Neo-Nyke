@@ -3,16 +3,6 @@
   const LADDER_BOSS_HEALTH_SCALING_START_FLOOR = 5;
   const LADDER_BOSS_HEALTH_PER_FLOOR = 0.12;
 
-export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '', maxRerolls = 6) {
-    if (typeof rollReward !== 'function') return '';
-    const previous = String(previousRewardKey || '');
-    let rewardKey = rollReward();
-    for (let attempt = 0; rewardKey === previous && attempt < maxRerolls; attempt += 1) {
-      rewardKey = rollReward();
-    }
-    return rewardKey;
-  }
-
   function applyLadderBossFloorHealthModifier(boss) {
     if (!boss || Neo.floor <= LADDER_BOSS_HEALTH_SCALING_START_FLOOR) return;
     const floorNumberModifier = 1 + (Neo.floor - LADDER_BOSS_HEALTH_SCALING_START_FLOOR) * LADDER_BOSS_HEALTH_PER_FLOOR;
@@ -327,23 +317,19 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
         { kind: 'banner', x: Neo.ROOM_W / 2 + 110, y: Neo.ROOM_H / 2 - 92, r: 14 },
         { kind: 'crack', x: Neo.ROOM_W / 2, y: Neo.ROOM_H / 2 + 118, r: 32 },
       );
-      if (room.secretKind === 'warp') {
-        const deltaPool = Neo.floor <= 2 ? [1, 2] : Neo.floor >= Neo.MAX_FLOOR - 1 ? [-2, -1] : [-2, -1, 1, 2];
-        const delta = deltaPool[Neo.irand(0, deltaPool.length - 1, 'world')];
-        room.pickups.push({
-          x: Neo.ROOM_W / 2,
-          y: Neo.ROOM_H / 2,
-          type: 'secretWarp',
-          delta,
-          targetFloor: Neo.clamp(Neo.floor + delta, 1, Neo.MAX_FLOOR),
-        });
-      } else {
-        const regularOffers = Neo.shuffle(['relic', 'vitality', 'wealth'], 'world');
-        const offerPool = Neo.shuffle(['xp', regularOffers[0], regularOffers[1]], 'world');
-        room.pickups.push(createSecretVendorOffer(offerPool[0], Neo.ROOM_W / 2 - 110, Neo.ROOM_H / 2 + 26, room, 0));
-        room.pickups.push(createSecretVendorOffer(offerPool[1], Neo.ROOM_W / 2, Neo.ROOM_H / 2 - 18, room, 1));
-        room.pickups.push(createSecretVendorOffer(offerPool[2], Neo.ROOM_W / 2 + 110, Neo.ROOM_H / 2 + 26, room, 2));
-      }
+      const secretRandom = Neo.createRoomRandom(room, 'secret:lifecycle');
+      const plan = globalThis.NeoNyke.simulation.createCampaignSecretRoomPlan(room, {
+        floorNumber: Neo.floor,
+        maxFloor: Neo.MAX_FLOOR,
+        width: Neo.ROOM_W,
+        height: Neo.ROOM_H,
+        random: secretRandom,
+        xpCost: Neo.getSecretXpOfferCost(),
+        xpValue: Neo.getSecretXpOfferAmount(),
+        rollEliteItem: nextRandom => Neo.rollItemDrop({ elite: true, random: nextRandom }),
+        previousRewardKey: Neo.player?.lastSecretVendorRewardKey,
+      });
+      if (plan.ok) room.pickups.push(...plan.pickups);
       return;
     }
 
@@ -378,7 +364,7 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
       room.challengeLifecycleState = 'ready';
       room.challengeRewardSpawned = false;
       room.challengeFailed = false;
-      room.challengeType = Neo.rollChallengeTrialType();
+      room.challengeType = Neo.rollChallengeTrialType(room);
       room.challengeTimer = 0;
       room.challengeTick = 0;
       room.challengeData = {};
@@ -547,22 +533,7 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
   }
 
   function spawnGardenFruit(room, node) {
-    if (!room || !node) return;
-    room.pickups = Array.isArray(room.pickups) ? room.pickups : [];
-    if (room.pickups.some(pickup => (pickup?.type === 'apple' || pickup?.type === 'fruit') && pickup.gardenNodeId === node.id)) return;
-    room.pickups.push({
-      x: node.x,
-      y: node.y - 8,
-      type: 'apple',
-      heal: Number(node.heal || 20),
-      gardenNodeId: node.id,
-      roomGx: room.gx,
-      roomGy: room.gy,
-      respawnAt: Number(node.respawnAt || 0),
-      grownAt: Neo.gameElapsedTime,
-      ripe: true,
-    });
-    node.fruitSpawned = true;
+    return globalThis.NeoNyke.simulation.updateCampaignGardenNode(room, node, Neo.gameElapsedTime);
   }
 
   function updateGardenGrowth() {
@@ -573,15 +544,7 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
       ensureGardenRoomData(room);
       room.gardenFruitNodes.forEach(node => {
         if (!node) return;
-        const activeFruit = Array.isArray(room.pickups) && room.pickups.some(pickup => (pickup?.type === 'apple' || pickup?.type === 'fruit') && pickup.gardenNodeId === node.id);
-        if (activeFruit) {
-          node.fruitSpawned = true;
-          return;
-        }
-        node.fruitSpawned = false;
-        if (Neo.gameElapsedTime >= Number(node.respawnAt || 0)) {
-          spawnGardenFruit(room, node);
-        }
+        spawnGardenFruit(room, node);
       });
     });
   }
@@ -979,50 +942,6 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
       secretDir: direction,
       targetGx: targetRoom.gx,
       targetGy: targetRoom.gy,
-    };
-  }
-
-  function createSecretVendorOffer(kind, x, y, room = Neo.currentRoom, index = 0) {
-    // Every offer carries an explicit give -> get descriptor so the vendor box
-    // can spell out the trade (pay X, receive Y) instead of a vague one-word label.
-    if (kind === 'relic') {
-      const vendorRandom = Neo.createRoomRandom(room, `secret-vendor:relic:${index}`);
-      const previousRewardKey = String(Neo.player?.lastSecretVendorRewardKey || '');
-      // A seeded run can legitimately hit the same weighted result on adjacent
-      // floors. Reroll only the last purchased secret-vendor relic so this rare,
-      // expensive offer does not feel fixed while preserving deterministic runs.
-      const rewardKey = rollDistinctSecretVendorReward(
-        () => Neo.rollItemDrop({ elite: true, random: vendorRandom }),
-        previousRewardKey,
-      );
-      return {
-        x, y, type: 'secretVendor', offerKind: 'relic', cost: 1, label: 'Relic',
-        rewardKey,
-        getLabel: 'Elite Item',
-      };
-    }
-    if (kind === 'vitality') {
-      return {
-        x, y, type: 'secretVendor', offerKind: 'vitality', cost: 1, label: 'Vital',
-        getLabel: '+20 Max HP',
-      };
-    }
-    if (kind === 'xp') {
-      const xpValue = Neo.getSecretXpOfferAmount();
-      return {
-        x,
-        y,
-        type: 'secretVendor',
-        offerKind: 'xp',
-        cost: Neo.getSecretXpOfferCost(),
-        xpValue,
-        label: 'XP',
-        getLabel: `+${xpValue} XP`,
-      };
-    }
-    return {
-      x, y, type: 'secretVendor', offerKind: 'wealth', cost: 2, label: 'Wealth',
-      getLabel: `+${90 + Neo.floor * 12} Coins`,
     };
   }
 
@@ -4098,7 +4017,6 @@ export function rollDistinctSecretVendorReward(rollReward, previousRewardKey = '
   Neo.prepareBowmanBaneEscape = prepareBowmanBaneEscape;
   Neo.revealBowmanBaneEscape = revealBowmanBaneEscape;
   Neo.createSecretWall = createSecretWall;
-  Neo.createSecretVendorOffer = createSecretVendorOffer;
   Neo.assignSecretRoom = assignSecretRoom;
   Neo.findFarthestRoom = findFarthestRoom;
   Neo.syncCurrentRoomState = syncCurrentRoomState;

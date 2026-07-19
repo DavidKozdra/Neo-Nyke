@@ -20,6 +20,9 @@
   const movementRules = typeof require === 'function'
     ? require('../simulation/CampaignMovementRules.js')
     : (root.NeoNyke?.simulation || {});
+  const runServices = typeof require === 'function'
+    ? require('../simulation/SharedRunServiceSystem.js')
+    : (root.NeoNyke?.simulation || {});
   const CAMPAIGN_ROOM_GEOMETRY = worldContent.CAMPAIGN_ROOM_GEOMETRY;
 
   const INPUT_INTERVAL_MS = 50;
@@ -431,7 +434,8 @@
       this.lastFloorNumber = receivedFloorNumber;
       const localTransition = state.floorState?.transitionsByPlayer?.[snapshot.playerId];
       const transitionSequence = Math.max(0, Number(localTransition?.sequence) || 0);
-      if (transitionSequence > this.lastTransitionSequence) {
+      const transitionChanged = transitionSequence > this.lastTransitionSequence;
+      if (transitionChanged) {
         if (this.lastTransitionSequence > 0 || this.currentSample) this.transitionFlashUntil = receivedAt + 260;
         this.lastTransitionSequence = transitionSequence;
       }
@@ -441,6 +445,11 @@
       }
       const authorityPlayer = state.players[snapshot.playerId];
       if (!authorityPlayer) return;
+      if (transitionChanged || receivedFloorNumber !== Number(this.localPredictedPlayer?.floorNumber || receivedFloorNumber)) {
+        this.localPredictedPlayerId = snapshot.playerId;
+        this.localPredictedPlayer = { ...authorityPlayer, floorNumber: receivedFloorNumber };
+        return;
+      }
       // A reconnect (or a session handoff) can change playerId while this
       // view remains mounted. Never carry prediction from the previous
       // identity into the new authoritative entity.
@@ -649,6 +658,10 @@
         if (!event?.eventId || this.seenGameplayEvents.has(event.eventId)) return;
         this.seenGameplayEvents.add(event.eventId);
         if (this.seenGameplayEvents.size > 512) this.seenGameplayEvents.delete(this.seenGameplayEvents.values().next().value);
+        runServices.getClientRunServiceIntents?.(event.eventType, event.data || {}, localPlayerId).forEach(intent => {
+          if (intent.kind === 'achievement') root.achievementEvents?.emit?.(intent.name, intent.data);
+          else if (intent.kind === 'tutorial') this.neo.tutorialController?.signal?.(intent.name, intent.data);
+        });
         if (!this._isGameplayEventVisible(event)) return;
         if (event.eventType === 'PLAYER_ATTACKED') {
           const weaponKey = event.data?.weaponKey || event.data?.attackKind;
@@ -660,6 +673,14 @@
         }
         if (event.eventType === 'PLAYER_ABILITY_USED') {
           this.neo.playSfx?.(deriveAbilityPresentation(event.data).sound || 'lazer_blast');
+        }
+        if (event.eventType === 'PLAYER_HIT' && event.data?.playerId === localPlayerId
+          && this.localPredictedPlayer && Number(event.data.knockbackMagnitude || 0) > 0) {
+          movementRules.applyCampaignImpulse?.(
+            this.localPredictedPlayer,
+            Number(event.data.knockbackAngle || 0),
+            Number(event.data.knockbackMagnitude || 0),
+          );
         }
         if (event.eventType === 'PICKUP_COLLECTED' && event.data?.playerId === localPlayerId && event.data?.itemKey) {
           this.neo.pushItemNotification?.(event.data.itemKey, Math.max(1, Number(event.data.amount || 1)));
