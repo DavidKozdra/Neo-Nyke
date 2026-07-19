@@ -947,6 +947,7 @@ export const ui = {
     coopLobbyStatus: document.getElementById('coopLobbyStatus'),
     coopLobbySlots: document.getElementById('coopLobbySlots'),
     coopLobbyPicker: document.getElementById('coopLobbyPicker'),
+    coopLobbyHeroDetail: document.getElementById('coopLobbyHeroDetail'),
     coopLobbyReady: document.getElementById('coopLobbyReady'),
     coopLobbyLeave: document.getElementById('coopLobbyLeave'),
     multiplayerBack: document.getElementById('multiplayerBack'),

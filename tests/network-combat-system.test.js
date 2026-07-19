@@ -6,6 +6,7 @@ const { MOVE_SLOT_KEYS, MOVE_PRESENTATION_DEFS } = require('../js/simulation/Sha
 const {
   ATTACK_COOLDOWN_TICKS,
   applyNetworkHeroProfile,
+  sanitizeKitChoices,
   createNetworkCombatSystem,
   ensureNetworkEncounter,
   getHeroPrimaryAttack,
@@ -52,6 +53,34 @@ describe('authoritative network combat system', () => {
     expect(events.some(event => event.eventType === 'DESTRUCTIBLE_BROKEN')).toBe(true);
   });
 
+  test('melee sweeps break pots and spawn campaign loot like single player', () => {
+    const { state, simulation, events } = combatHarness('thorn_knight');
+    const player = state.players.p1;
+    const room = state.floorState.layout.rooms.find(candidate => candidate.id === player.roomId);
+    room.destructibles = [{ kind: 'pot', x: player.x + 60, y: player.y, r: 12, hp: 1, broken: false }];
+    simulation.updateGame({ p1: { actions: [{ action: 'ATTACK', aimDirection: 0 }] } }, 0.05);
+    expect(room.destructibles[0].broken).toBe(true);
+    expect(events.some(event => event.eventType === 'DESTRUCTIBLE_BROKEN' && event.data.obstacleKind === 'pot')).toBe(true);
+    // Broken pots pay out the campaign reward: coins or a rolled item.
+    expect(Object.values(state.pickups).some(pickup => ['coin', 'item'].includes(pickup.type))).toBe(true);
+  });
+
+  test('barrel breaks detonate an authoritative blast that chains to nearby props', () => {
+    const { state, simulation, events } = combatHarness('thorn_knight');
+    const player = state.players.p1;
+    const room = state.floorState.layout.rooms.find(candidate => candidate.id === player.roomId);
+    room.destructibles = [
+      { kind: 'barrel', x: player.x + 60, y: player.y, r: 14, hp: 1, broken: false },
+      // Beyond the swing's reach but inside the barrel's 130 blast radius.
+      { kind: 'pot', x: player.x + 170, y: player.y + 60, r: 12, hp: 1, broken: false },
+    ];
+    simulation.updateGame({ p1: { actions: [{ action: 'ATTACK', aimDirection: 0 }] } }, 0.05);
+    expect(room.destructibles[0].broken).toBe(true);
+    // The 130-radius blast chips the pot even though the swing never reached it.
+    expect(room.destructibles[1].broken).toBe(true);
+    expect(events.filter(event => event.eventType === 'DESTRUCTIBLE_BROKEN').length).toBeGreaterThanOrEqual(2);
+  });
+
   test('holds newly spawned enemies harmless during the shared portal animation', () => {
     const { state, simulation, events } = combatHarness();
     simulation.updateGame({}, 0.05);
@@ -76,6 +105,27 @@ describe('authoritative network combat system', () => {
       equippedMoves: expect.objectContaining({ laser: 'blood_beam', smash: 'crimson_smash', dash: 'dash' }),
       items: { neo_knife: 1, tooth_of_thorn: 2, tough_bandaid: 1 },
     }));
+  });
+
+  test('applies validated alt-kit choices and rejects moves outside KIT_ALTERNATIVES', () => {
+    const player = { maxHp: 100, hp: 100 };
+    applyNetworkHeroProfile(player, 'thorn_knight', { laser: 'thorn_blood_beams', dash: 'knight_slash_dash' });
+    expect(player.equippedMoves).toEqual(expect.objectContaining({ laser: 'thorn_blood_beams', dash: 'knight_slash_dash' }));
+    expect(player.kitChoices).toEqual({ laser: 'thorn_blood_beams', dash: 'knight_slash_dash' });
+    expect(player.ownedMoves.thorn_blood_beams).toBe(true);
+
+    // Picking a slot's default is legal but not recorded as a custom choice.
+    expect(sanitizeKitChoices('thorn_knight', { laser: 'blood_beam' })).toEqual({});
+    // Anything outside the character's alternatives is rejected outright.
+    expect(sanitizeKitChoices('thorn_knight', { laser: 'holy_eye_beams' })).toBeNull();
+    expect(sanitizeKitChoices('thorn_knight', { melee: 'slash' })).toBeNull();
+    expect(sanitizeKitChoices('thorn_knight', ['blood_beam'])).toBeNull();
+
+    // An invalid payload never silently swaps the kit: the profile falls back
+    // to the character defaults.
+    applyNetworkHeroProfile(player, 'thorn_knight', { laser: 'holy_eye_beams' });
+    expect(player.equippedMoves.laser).toBe('blood_beam');
+    expect(player.kitChoices).toEqual({});
   });
 
   test('gives every Neo Nyke hero a distinct server-owned primary attack', () => {

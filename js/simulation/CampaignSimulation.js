@@ -197,7 +197,7 @@
       roomId: String(options.roomId || ''),
     };
     return typeof applyNetworkHeroProfile === 'function'
-      ? applyNetworkHeroProfile(player, player.characterKey)
+      ? applyNetworkHeroProfile(player, player.characterKey, options.kitChoices)
       : player;
   }
 

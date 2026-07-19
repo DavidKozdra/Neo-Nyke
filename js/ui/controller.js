@@ -154,6 +154,12 @@ export function createUIController(view) {
       coopLobbyOpen = !!open;
       view.coopLobby?.classList.toggle('hidden', !coopLobbyOpen);
       view.coopLobby?.setAttribute('aria-hidden', coopLobbyOpen ? 'false' : 'true');
+      if (!coopLobbyOpen && coopHeroDetailSignature) {
+        // Stop the dossier's move-preview loop and force a fresh render the
+        // next time the lobby opens.
+        coopHeroDetailSignature = '';
+        Neo.MovePreview?.stop();
+      }
     }
 
     // Reflect the authoritative lobby snapshot onto the standalone overlay.
@@ -167,6 +173,7 @@ export function createUIController(view) {
       }
       renderCoopSlots(members, snapshot.playerId);
       renderCoopPicker(localMember, snapshot.status);
+      renderCoopHeroDetail(localMember, snapshot.status);
 
       const readyCount = members.filter(member => member.ready).length;
       const minPlayers = Number(snapshot.lobbyState?.minPlayers) || 2;
@@ -237,6 +244,188 @@ export function createUIController(view) {
       view.coopLobbySlots.replaceChildren(...slots);
     }
 
+    // ── Shared hero dossier ─────────────────────────────────────────────
+    // Fills a .hero-detail-panel container with a character's full dossier:
+    // portrait, lore, stats, starting inventory, abilities with selectable
+    // alt-kit options, and the hover readout with its live move preview.
+    // Used by the single-player champion select and the networked co-op
+    // lobby; callers differ only in where kit choices are stored and what
+    // clicking a kit option does.
+    function renderHeroDetailPanel(detail, selected, options = {}) {
+      const disp = Neo.HERO_DISPLAY[selected] || (Neo.isCustomCharacterKey?.(selected) ? Neo.HERO_DISPLAY.custom_character : null);
+      // The rebuild below replaces the move-preview canvas, so kill its
+      // animation loop first; the readout seeding restarts it.
+      Neo.MovePreview?.stop();
+      if (!detail || !disp) return false;
+      const getKitChoice = options.getKitChoice || (slot => Neo.getKitChoice(selected, slot));
+      const onKitSelect = options.onKitSelect || ((slot, moveKey) => {
+        Neo.setKitChoice?.(selected, slot, moveKey);
+        Neo.updateCharacterSelectionUI?.();
+      });
+      const kitLocked = options.kitLocked === true;
+      const STAT_ICON_KEYS = { HP: 'hp', ATK: 'attack', DMG: 'attack', SPD: 'speed', RANGE: 'range', RNG: 'range', CTRL: 'crit' };
+      const statsHtml = disp.stats.map(s =>
+        `<div class="char-stat-row"><canvas class="char-stat-icon" data-inv-ui-icon="${Neo.escapeHtml(STAT_ICON_KEYS[s.label] || 'crit')}" width="24" height="24" aria-hidden="true"></canvas><span class="stat-label">${s.label}</span>` +
+        `<div class="stat-bar"><div class="stat-fill" style="width:${s.pct}%;background:${s.color}"></div></div></div>`
+      ).join('');
+      const defaultMoves = Neo.getDefaultMovesForCharacter(selected);
+      const defaultWeapon = Neo.getDefaultWeaponForCharacter(selected);
+      const slots = ['melee', 'laser', 'smash', 'dash'];
+      const skillsHtml = slots.map(slot => {
+        const slotLabel = Neo.SLOT_LABELS[slot] || Neo.titleCase(slot);
+        // The melee (M1) slot is driven by the equipped weapon — characters
+        // start with their signature weapon, so show that here rather than the
+        // bare-hands `slash` fallback the move slot defaults to.
+        if (slot === 'melee' && defaultWeapon) {
+          const weaponDef = Neo.WEAPON_DEFS[defaultWeapon] || {};
+          const weaponLabel = weaponDef.name || defaultWeapon || 'Unknown';
+          const weaponDesc = weaponDef.description || '';
+          const safeWeaponDesc = Neo.escapeHtml(weaponDesc);
+          const safeWeaponName = Neo.escapeHtml(weaponLabel);
+          return `<span class="hero-detail-skill-pip" tabindex="0" title="${safeWeaponDesc}" aria-label="${Neo.escapeHtml(`${slotLabel}: ${weaponLabel}. ${weaponDesc}`)}" data-skill-name="${safeWeaponName}" data-skill-desc="${safeWeaponDesc}" data-preview-slot="melee" data-preview-weapon="${Neo.escapeHtml(defaultWeapon)}">
+          <canvas class="hero-detail-skill-icon" data-hero-weapon="${Neo.escapeHtml(defaultWeapon)}" width="24" height="24" aria-hidden="true"></canvas>
+          <span class="hero-detail-skill-text">${Neo.escapeHtml(slotLabel)}: ${safeWeaponName}</span>
+        </span>`;
+        }
+        const moveKey = String(defaultMoves[slot] || '');
+        const moveDef = Neo.MOVE_DEFS[moveKey] || {};
+        const moveLabel = moveDef.name || moveKey || 'Unknown';
+        // If this character has alternative abilities for this slot, render the
+        // options as a selectable row so the player can swap their kit here.
+        const altOptions = Neo.KIT_ALTERNATIVES?.[selected]?.[slot];
+        if (Array.isArray(altOptions) && altOptions.length > 1) {
+          const chosen = getKitChoice(slot) || altOptions[0];
+          const optionPips = altOptions.map(optKey => {
+            const optDef = Neo.MOVE_DEFS[optKey] || {};
+            const optLabel = optDef.name || optKey;
+            const isSel = optKey === chosen;
+            const safeDesc = Neo.escapeHtml(optDef.desc || '');
+            const safeOptName = Neo.escapeHtml(optLabel);
+            return `<button type="button" class="hero-detail-kit-option${isSel ? ' hero-detail-kit-option--sel' : ''}"
+              data-kit-slot="${Neo.escapeHtml(slot)}" data-kit-move="${Neo.escapeHtml(optKey)}"
+              data-skill-name="${safeOptName}" data-skill-desc="${safeDesc}"
+              data-preview-slot="${Neo.escapeHtml(slot)}" data-preview-move="${Neo.escapeHtml(optKey)}"
+              title="${safeDesc}" aria-pressed="${isSel}"${kitLocked ? ' disabled' : ''}>
+              <canvas class="hero-detail-skill-icon" data-hero-move="${Neo.escapeHtml(optKey)}" width="24" height="24" aria-hidden="true"></canvas>
+              <span class="hero-detail-skill-text">${Neo.escapeHtml(optLabel)}</span>
+            </button>`;
+          }).join('');
+          return `<div class="hero-detail-skill-pip hero-detail-skill-pip--choice">
+            <span class="hero-detail-skill-slot-label">${Neo.escapeHtml(slotLabel)}</span>
+            <div class="hero-detail-kit-options">${optionPips}</div>
+          </div>`;
+        }
+        const moveDesc = moveDef.desc || '';
+        const safeMoveDesc = Neo.escapeHtml(moveDesc);
+        const safeMoveName = Neo.escapeHtml(moveLabel);
+        return `<span class="hero-detail-skill-pip" tabindex="0" title="${safeMoveDesc}" aria-label="${Neo.escapeHtml(`${slotLabel}: ${moveLabel}. ${moveDesc}`)}" data-skill-name="${safeMoveName}" data-skill-desc="${safeMoveDesc}" data-preview-slot="${Neo.escapeHtml(slot)}" data-preview-move="${Neo.escapeHtml(moveKey)}">
+          <canvas class="hero-detail-skill-icon" data-hero-move="${Neo.escapeHtml(moveKey)}" width="24" height="24" aria-hidden="true"></canvas>
+          <span class="hero-detail-skill-text">${Neo.escapeHtml(slotLabel)}: ${safeMoveName}</span>
+        </span>`;
+      }).join('');
+      const startingItems = getCharacterStartingItems(selected);
+      if (Neo.isCustomCharacterKey?.(selected) && Neo.getCustomCharacterSettings?.(selected).active) {
+        const customRelics = Neo.getCustomCharacterSettings?.(selected).starterRelics || [];
+        customRelics.forEach(key => { startingItems[key] = (Number(startingItems[key]) || 0) + 1; });
+      }
+      const inventoryKeys = Object.keys(startingItems).filter(key => Number(startingItems[key] || 0) > 0);
+      const inventoryHtml = inventoryKeys.length
+        ? inventoryKeys.map(key => {
+          const count = Math.max(1, Math.round(Number(startingItems[key]) || 0));
+          const item = Neo.itemRegistry?.get?.(key) || Neo.ITEM_DEFS[key] || {};
+          const itemName = item.name || Neo.titleCase(String(key || '').replace(/_/g, ' '));
+          const countText = count > 1 ? ` x${count}` : '';
+          // Tooltip parity with the death screen: description on hover/focus.
+          const tooltipText = item.description || 'No item description available.';
+          const safeTooltip = Neo.escapeHtml(tooltipText);
+          const safeAria = Neo.escapeHtml(`${itemName}${countText}. ${tooltipText}`);
+          return `<span class="hero-detail-item-pip" tabindex="0" title="${safeTooltip}" aria-label="${safeAria}" data-tooltip="${safeTooltip}">
+            <canvas class="hero-detail-item-icon" data-hero-item="${Neo.escapeHtml(key)}" width="20" height="20" aria-hidden="true"></canvas>
+            <span>${Neo.escapeHtml(itemName)}${Neo.escapeHtml(countText)}</span>
+          </span>`;
+        }).join('')
+        : '<span class="hero-detail-item-empty">No starter items</span>';
+      const charDef = Neo.isCustomCharacterKey?.(selected)
+        ? { ...(Neo.CHARACTER_DEFS.custom_character || {}), key: selected, name: Neo.getCustomCharacterSettings?.(selected).name || 'Custom' }
+        : (Neo.CHARACTER_DEFS[selected] || {});
+      const customIsActive = Neo.isCustomCharacterKey?.(selected) && Neo.getCustomCharacterSettings?.(selected).active;
+      const lore = Neo.isCustomCharacterKey?.(selected)
+        ? (customIsActive
+          ? `Saved Plus character. Edit the name, weapon, move set, and starter relics from the roster card.`
+          : `Empty Plus slot. Click the card, save a build, then enter the dungeon.`)
+        : disp.lore;
+      detail.innerHTML =
+        `<div class="hero-detail-portrait"><canvas class="hero-detail-sprite" width="128" height="128" aria-hidden="true"></canvas></div>` +
+        `<div class="hero-detail-head"><span class="hero-detail-name">${Neo.escapeHtml(charDef.name || selected)}</span><span class="hero-detail-archetype">${Neo.escapeHtml(getCharacterRoleLabel(selected))}</span></div>` +
+        `<p class="hero-detail-lore">${Neo.escapeHtml(lore)}</p>` +
+        `<div class="hero-detail-stats"><div class="hero-detail-section-label">Core stats</div>${statsHtml}</div>` +
+        `<div class="hero-detail-inventory"><span class="hero-detail-inventory-label">Starting Inventory</span>${inventoryHtml}</div>` +
+        `<div class="hero-detail-skills"><div class="hero-detail-section-label">Starting abilities</div>${skillsHtml}</div>` +
+        `<div class="hero-detail-skill-readout" data-skill-readout aria-live="polite"><canvas class="hero-detail-skill-preview" data-skill-preview aria-hidden="true"></canvas><span class="hero-detail-skill-readout-name" data-skill-readout-name></span><span class="hero-detail-skill-readout-desc" data-skill-readout-desc>Hover a move to see what it does.</span></div>`;
+      const heroDetailSpriteKey = Neo.getCharacterSpriteKey?.(selected) || selected;
+      Neo.drawSpriteToCanvas(detail.querySelector('.hero-detail-portrait canvas'), Neo.getPortraitSpriteKey?.(heroDetailSpriteKey) || heroDetailSpriteKey, 104, {
+        tint: Neo.isCustomCharacterKey?.(selected) ? '#83f3ff' : null,
+      });
+      detail.querySelectorAll('[data-hero-move]').forEach(el => {
+        const move = Neo.MOVE_DEFS[el.dataset.heroMove];
+        if (move) Neo.drawMoveToastIcon(el, move);
+      });
+      detail.querySelectorAll('[data-hero-weapon]').forEach(el => {
+        const weapon = Neo.WEAPON_DEFS[el.dataset.heroWeapon];
+        if (weapon) Neo.drawWeaponToastIcon(el, weapon);
+      });
+      Neo.drawItemIconCanvases?.(detail, 'data-hero-item');
+      detail.querySelectorAll('[data-inv-ui-icon]').forEach(el => {
+        Neo.drawInventoryUiIcon?.(el, el.dataset.invUiIcon);
+      });
+      // Alt-kit selection: clicking an option saves the choice and re-renders.
+      detail.querySelectorAll('[data-kit-move]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          if (btn.disabled) return;
+          onKitSelect(btn.dataset.kitSlot, btn.dataset.kitMove);
+        });
+      });
+      // Kit move descriptions: hovering (or focusing) a move feeds its
+      // description into the readout below the grid. The last-hovered move
+      // stays shown — we never clear back to a placeholder on mouseout — so
+      // players can read the full text after moving the cursor away.
+      const readout = detail.querySelector('[data-skill-readout]');
+      const readoutName = readout?.querySelector('[data-skill-readout-name]');
+      const readoutDesc = readout?.querySelector('[data-skill-readout-desc]');
+      if (readout && readoutName && readoutDesc) {
+        const previewCanvas = readout.querySelector('[data-skill-preview]');
+        const showSkill = (el) => {
+          const name = el?.dataset.skillName || '';
+          const desc = el?.dataset.skillDesc || '';
+          if (!name && !desc) return;
+          readoutName.textContent = name;
+          readoutDesc.textContent = desc || 'No description available.';
+          // Live in-game demo of the hovered move next to its description.
+          // Pass the character key: the sim builds a real player from it.
+          if (previewCanvas && el.dataset.previewSlot) {
+            Neo.MovePreview?.show(previewCanvas, {
+              heroKey: selected,
+              slot: el.dataset.previewSlot,
+              moveKey: el.dataset.previewMove || '',
+              weaponKey: el.dataset.previewWeapon || '',
+            });
+          }
+        };
+        const pips = detail.querySelectorAll('[data-skill-desc]');
+        pips.forEach(el => {
+          el.addEventListener('mouseenter', () => showSkill(el));
+          el.addEventListener('focus', () => showSkill(el));
+        });
+        // Seed the readout with the selected/chosen move so the panel never
+        // opens empty and re-renders (e.g. after an alt-kit swap) keep a
+        // meaningful default.
+        const seed = detail.querySelector('.hero-detail-kit-option--sel[data-skill-desc]')
+          || pips[0];
+        if (seed) showSkill(seed);
+      }
+      return true;
+    }
+
     // Build the hero picker from the SAME .char-card markup the single-player
     // champion select uses, so it inherits that panel's exact look and feels
     // familiar. Only the behaviour differs: a click broadcasts a co-op pick.
@@ -290,11 +479,49 @@ export function createUIController(view) {
         card.setAttribute('aria-label', `${name.textContent}. ${entry.hint}.${selected ? ' Selected.' : ''}`);
         card.addEventListener('click', () => {
           if (card.disabled) return;
-          browserMultiplayerSession?.setCharacter(entry.key);
+          // Carry the player's saved single-player alt-kit picks into the room.
+          browserMultiplayerSession?.setCharacter(entry.key, getLocalKitChoices(entry.key));
         });
         return card;
       });
       view.coopLobbyPicker.replaceChildren(...cards);
+    }
+
+    // The player's saved alt-kit picks for a character (non-default slots
+    // only), in the shape the PLAYER_CHARACTER message carries.
+    function getLocalKitChoices(characterKey) {
+      const slots = Neo.KIT_ALTERNATIVES?.[characterKey] || {};
+      const choices = {};
+      Object.keys(slots).forEach(slot => {
+        const choice = Neo.getKitChoice?.(characterKey, slot);
+        if (choice && choice !== slots[slot][0]) choices[slot] = choice;
+      });
+      return choices;
+    }
+
+    // Track what the lobby dossier last rendered so snapshot spam does not
+    // rebuild the panel (and restart its move preview) on every broadcast.
+    let coopHeroDetailSignature = '';
+
+    function renderCoopHeroDetail(localMember, status) {
+      if (!view.coopLobbyHeroDetail) return;
+      const selectedKey = localMember?.characterKey || 'thorn_knight';
+      const locked = status !== 'waiting' || localMember?.ready === true;
+      const kitChoices = { ...(localMember?.kitChoices || {}) };
+      const signature = JSON.stringify([selectedKey, kitChoices, locked]);
+      if (signature === coopHeroDetailSignature) return;
+      coopHeroDetailSignature = signature;
+      renderHeroDetailPanel(view.coopLobbyHeroDetail, selectedKey, {
+        kitLocked: locked,
+        // The authority's LOBBY_STATE echo is the source of truth in a room.
+        getKitChoice: slot => kitChoices[slot] || null,
+        onKitSelect: (slot, moveKey) => {
+          // Save the pick locally too so single-player stays in sync, then
+          // tell the authority; its LOBBY_STATE echo re-renders this panel.
+          Neo.setKitChoice?.(selectedKey, slot, moveKey);
+          browserMultiplayerSession?.setCharacter(selectedKey, { ...kitChoices, [slot]: moveKey });
+        },
+      });
     }
 
     function renderBrowserMultiplayerState(snapshot = {}) {
@@ -3368,174 +3595,8 @@ export function createUIController(view) {
           goBtn.disabled = !isSelectable(selected) || inactiveCustom;
         }
 
-        // ── Hero detail panel ────────────────────────────────
-        const detail = document.getElementById('heroDetail');
-        const disp = Neo.HERO_DISPLAY[selected] || (Neo.isCustomCharacterKey?.(selected) ? Neo.HERO_DISPLAY.custom_character : null);
-        // The rebuild below replaces the move-preview canvas, so kill its
-        // animation loop first; the readout seeding restarts it.
-        Neo.MovePreview?.stop();
-        if (detail && disp) {
-          const STAT_ICON_KEYS = { HP: 'hp', ATK: 'attack', DMG: 'attack', SPD: 'speed', RANGE: 'range', RNG: 'range', CTRL: 'crit' };
-          const statsHtml = disp.stats.map(s =>
-            `<div class="char-stat-row"><canvas class="char-stat-icon" data-inv-ui-icon="${Neo.escapeHtml(STAT_ICON_KEYS[s.label] || 'crit')}" width="24" height="24" aria-hidden="true"></canvas><span class="stat-label">${s.label}</span>` +
-            `<div class="stat-bar"><div class="stat-fill" style="width:${s.pct}%;background:${s.color}"></div></div></div>`
-          ).join('');
-          const defaultMoves = Neo.getDefaultMovesForCharacter(selected);
-          const defaultWeapon = Neo.getDefaultWeaponForCharacter(selected);
-          const slots = ['melee', 'laser', 'smash', 'dash'];
-          const skillsHtml = slots.map(slot => {
-            const slotLabel = Neo.SLOT_LABELS[slot] || Neo.titleCase(slot);
-            // The melee (M1) slot is driven by the equipped weapon — characters
-            // start with their signature weapon, so show that here rather than the
-            // bare-hands `slash` fallback the move slot defaults to.
-            if (slot === 'melee' && defaultWeapon) {
-              const weaponDef = Neo.WEAPON_DEFS[defaultWeapon] || {};
-              const weaponLabel = weaponDef.name || defaultWeapon || 'Unknown';
-              const weaponDesc = weaponDef.description || '';
-              const safeWeaponDesc = Neo.escapeHtml(weaponDesc);
-              const safeWeaponName = Neo.escapeHtml(weaponLabel);
-              return `<span class="hero-detail-skill-pip" tabindex="0" title="${safeWeaponDesc}" aria-label="${Neo.escapeHtml(`${slotLabel}: ${weaponLabel}. ${weaponDesc}`)}" data-skill-name="${safeWeaponName}" data-skill-desc="${safeWeaponDesc}" data-preview-slot="melee" data-preview-weapon="${Neo.escapeHtml(defaultWeapon)}">
-              <canvas class="hero-detail-skill-icon" data-hero-weapon="${Neo.escapeHtml(defaultWeapon)}" width="24" height="24" aria-hidden="true"></canvas>
-              <span class="hero-detail-skill-text">${Neo.escapeHtml(slotLabel)}: ${safeWeaponName}</span>
-            </span>`;
-            }
-            const moveKey = String(defaultMoves[slot] || '');
-            const moveDef = Neo.MOVE_DEFS[moveKey] || {};
-            const moveLabel = moveDef.name || moveKey || 'Unknown';
-            // If this character has alternative abilities for this slot, render the
-            // options as a selectable row so the player can swap their kit here.
-            const altOptions = Neo.KIT_ALTERNATIVES?.[selected]?.[slot];
-            if (Array.isArray(altOptions) && altOptions.length > 1) {
-              const chosen = Neo.getKitChoice(selected, slot) || altOptions[0];
-              const optionPips = altOptions.map(optKey => {
-                const optDef = Neo.MOVE_DEFS[optKey] || {};
-                const optLabel = optDef.name || optKey;
-                const isSel = optKey === chosen;
-                const safeDesc = Neo.escapeHtml(optDef.desc || '');
-                const safeOptName = Neo.escapeHtml(optLabel);
-                return `<button type="button" class="hero-detail-kit-option${isSel ? ' hero-detail-kit-option--sel' : ''}"
-                  data-kit-slot="${Neo.escapeHtml(slot)}" data-kit-move="${Neo.escapeHtml(optKey)}"
-                  data-skill-name="${safeOptName}" data-skill-desc="${safeDesc}"
-                  data-preview-slot="${Neo.escapeHtml(slot)}" data-preview-move="${Neo.escapeHtml(optKey)}"
-                  title="${safeDesc}" aria-pressed="${isSel}">
-                  <canvas class="hero-detail-skill-icon" data-hero-move="${Neo.escapeHtml(optKey)}" width="24" height="24" aria-hidden="true"></canvas>
-                  <span class="hero-detail-skill-text">${Neo.escapeHtml(optLabel)}</span>
-                </button>`;
-              }).join('');
-              return `<div class="hero-detail-skill-pip hero-detail-skill-pip--choice">
-                <span class="hero-detail-skill-slot-label">${Neo.escapeHtml(slotLabel)}</span>
-                <div class="hero-detail-kit-options">${optionPips}</div>
-              </div>`;
-            }
-            const moveDesc = moveDef.desc || '';
-            const safeMoveDesc = Neo.escapeHtml(moveDesc);
-            const safeMoveName = Neo.escapeHtml(moveLabel);
-            return `<span class="hero-detail-skill-pip" tabindex="0" title="${safeMoveDesc}" aria-label="${Neo.escapeHtml(`${slotLabel}: ${moveLabel}. ${moveDesc}`)}" data-skill-name="${safeMoveName}" data-skill-desc="${safeMoveDesc}" data-preview-slot="${Neo.escapeHtml(slot)}" data-preview-move="${Neo.escapeHtml(moveKey)}">
-              <canvas class="hero-detail-skill-icon" data-hero-move="${Neo.escapeHtml(moveKey)}" width="24" height="24" aria-hidden="true"></canvas>
-              <span class="hero-detail-skill-text">${Neo.escapeHtml(slotLabel)}: ${safeMoveName}</span>
-            </span>`;
-          }).join('');
-          const startingItems = getCharacterStartingItems(selected);
-          if (Neo.isCustomCharacterKey?.(selected) && Neo.getCustomCharacterSettings?.(selected).active) {
-            const customRelics = Neo.getCustomCharacterSettings?.(selected).starterRelics || [];
-            customRelics.forEach(key => { startingItems[key] = (Number(startingItems[key]) || 0) + 1; });
-          }
-          const inventoryKeys = Object.keys(startingItems).filter(key => Number(startingItems[key] || 0) > 0);
-          const inventoryHtml = inventoryKeys.length
-            ? inventoryKeys.map(key => {
-              const count = Math.max(1, Math.round(Number(startingItems[key]) || 0));
-              const item = Neo.itemRegistry?.get?.(key) || Neo.ITEM_DEFS[key] || {};
-              const itemName = item.name || Neo.titleCase(String(key || '').replace(/_/g, ' '));
-              const countText = count > 1 ? ` x${count}` : '';
-              // Tooltip parity with the death screen: description on hover/focus.
-              const tooltipText = item.description || 'No item description available.';
-              const safeTooltip = Neo.escapeHtml(tooltipText);
-              const safeAria = Neo.escapeHtml(`${itemName}${countText}. ${tooltipText}`);
-              return `<span class="hero-detail-item-pip" tabindex="0" title="${safeTooltip}" aria-label="${safeAria}" data-tooltip="${safeTooltip}">
-                <canvas class="hero-detail-item-icon" data-hero-item="${Neo.escapeHtml(key)}" width="20" height="20" aria-hidden="true"></canvas>
-                <span>${Neo.escapeHtml(itemName)}${Neo.escapeHtml(countText)}</span>
-              </span>`;
-            }).join('')
-            : '<span class="hero-detail-item-empty">No starter items</span>';
-          const charDef = Neo.isCustomCharacterKey?.(selected)
-            ? { ...(Neo.CHARACTER_DEFS.custom_character || {}), key: selected, name: Neo.getCustomCharacterSettings?.(selected).name || 'Custom' }
-            : (Neo.CHARACTER_DEFS[selected] || {});
-          const customIsActive = Neo.isCustomCharacterKey?.(selected) && Neo.getCustomCharacterSettings?.(selected).active;
-          const lore = Neo.isCustomCharacterKey?.(selected)
-            ? (customIsActive
-              ? `Saved Plus character. Edit the name, weapon, move set, and starter relics from the roster card.`
-              : `Empty Plus slot. Click the card, save a build, then enter the dungeon.`)
-            : disp.lore;
-          detail.innerHTML =
-            `<div class="hero-detail-portrait"><canvas id="heroDetailSprite" width="128" height="128" aria-hidden="true"></canvas></div>` +
-            `<div class="hero-detail-head"><span class="hero-detail-name">${Neo.escapeHtml(charDef.name || selected)}</span><span class="hero-detail-archetype">${Neo.escapeHtml(getCharacterRoleLabel(selected))}</span></div>` +
-            `<p class="hero-detail-lore">${Neo.escapeHtml(lore)}</p>` +
-            `<div class="hero-detail-stats"><div class="hero-detail-section-label">Core stats</div>${statsHtml}</div>` +
-            `<div class="hero-detail-inventory"><span class="hero-detail-inventory-label">Starting Inventory</span>${inventoryHtml}</div>` +
-            `<div class="hero-detail-skills"><div class="hero-detail-section-label">Starting abilities</div>${skillsHtml}</div>` +
-            `<div class="hero-detail-skill-readout" data-skill-readout aria-live="polite"><canvas class="hero-detail-skill-preview" data-skill-preview aria-hidden="true"></canvas><span class="hero-detail-skill-readout-name" data-skill-readout-name></span><span class="hero-detail-skill-readout-desc" data-skill-readout-desc>Hover a move to see what it does.</span></div>`;
-          const heroDetailSpriteKey = Neo.getCharacterSpriteKey?.(selected) || selected;
-          Neo.drawSpriteToCanvas(document.getElementById('heroDetailSprite'), Neo.getPortraitSpriteKey?.(heroDetailSpriteKey) || heroDetailSpriteKey, 104, {
-            tint: Neo.isCustomCharacterKey?.(selected) ? '#83f3ff' : null,
-          });
-          detail.querySelectorAll('[data-hero-move]').forEach(el => {
-            const move = Neo.MOVE_DEFS[el.dataset.heroMove];
-            if (move) Neo.drawMoveToastIcon(el, move);
-          });
-          detail.querySelectorAll('[data-hero-weapon]').forEach(el => {
-            const weapon = Neo.WEAPON_DEFS[el.dataset.heroWeapon];
-            if (weapon) Neo.drawWeaponToastIcon(el, weapon);
-          });
-          Neo.drawItemIconCanvases?.(detail, 'data-hero-item');
-          detail.querySelectorAll('[data-inv-ui-icon]').forEach(el => {
-            Neo.drawInventoryUiIcon?.(el, el.dataset.invUiIcon);
-          });
-          // Alt-kit selection: clicking an option saves the choice and re-renders.
-          detail.querySelectorAll('[data-kit-move]').forEach(btn => {
-            btn.addEventListener('click', () => {
-              Neo.setKitChoice?.(selected, btn.dataset.kitSlot, btn.dataset.kitMove);
-              Neo.updateCharacterSelectionUI?.();
-            });
-          });
-          // Kit move descriptions: hovering (or focusing) a move feeds its
-          // description into the readout below the grid. The last-hovered move
-          // stays shown — we never clear back to a placeholder on mouseout — so
-          // players can read the full text after moving the cursor away.
-          const readout = detail.querySelector('[data-skill-readout]');
-          const readoutName = readout?.querySelector('[data-skill-readout-name]');
-          const readoutDesc = readout?.querySelector('[data-skill-readout-desc]');
-          if (readout && readoutName && readoutDesc) {
-            const previewCanvas = readout.querySelector('[data-skill-preview]');
-            const showSkill = (el) => {
-              const name = el?.dataset.skillName || '';
-              const desc = el?.dataset.skillDesc || '';
-              if (!name && !desc) return;
-              readoutName.textContent = name;
-              readoutDesc.textContent = desc || 'No description available.';
-              // Live in-game demo of the hovered move next to its description.
-              // Pass the character key: the sim builds a real player from it.
-              if (previewCanvas && el.dataset.previewSlot) {
-                Neo.MovePreview?.show(previewCanvas, {
-                  heroKey: selected,
-                  slot: el.dataset.previewSlot,
-                  moveKey: el.dataset.previewMove || '',
-                  weaponKey: el.dataset.previewWeapon || '',
-                });
-              }
-            };
-            const pips = detail.querySelectorAll('[data-skill-desc]');
-            pips.forEach(el => {
-              el.addEventListener('mouseenter', () => showSkill(el));
-              el.addEventListener('focus', () => showSkill(el));
-            });
-            // Seed the readout with the selected/chosen move so the panel never
-            // opens empty and re-renders (e.g. after an alt-kit swap) keep a
-            // meaningful default.
-            const seed = detail.querySelector('.hero-detail-kit-option--sel[data-skill-desc]')
-              || pips[0];
-            if (seed) showSkill(seed);
-          }
-        }
+        // ── Hero detail panel (shared renderer, also used by the co-op lobby) ─
+        renderHeroDetailPanel(document.getElementById('heroDetail'), selected);
 
       },
       updateDifficultySelection(unlocked, selected, loopCrystals) {

@@ -116,6 +116,32 @@ describe('protocol-driven local multiplayer session', () => {
     ]);
   });
 
+  test('authority applies valid alt-kit choices and rejects kit picks outside the shared table', async () => {
+    const clock = new VirtualNetworkClock();
+    const network = new LocalLoopbackNetwork({ clock });
+    const authority = new LocalMultiplayerAuthority({ transport: transport(network, 'authority', 'Authority') });
+    const client = new LocalMultiplayerClient({ transport: transport(network, 'client-a', 'Client A') });
+    await authority.start();
+    await client.connect('neo-local-room');
+    clock.runAll();
+
+    client.sendCharacter('sarge', { smash: 'titan_hammer' });
+    clock.runAll();
+
+    const player = authority.simulation.state.players[client.playerId];
+    expect(player.equippedMoves).toEqual(expect.objectContaining({ laser: 'hammer_throw', smash: 'titan_hammer' }));
+    expect(client.lobbyState.members).toEqual([
+      expect.objectContaining({ characterKey: 'sarge', kitChoices: { smash: 'titan_hammer' } }),
+    ]);
+
+    // A kit pick from another character's exclusive pool must be refused and
+    // must not disturb the applied loadout.
+    client.sendCharacter('sarge', { smash: 'potion_bath' });
+    clock.runAll();
+    expect(player.equippedMoves.smash).toBe('titan_hammer');
+    expect(client.errors.some(error => /kit choice/i.test(error.message || ''))).toBe(true);
+  });
+
   test('crossing a valid seeded doorway moves only that player and records shared room state', () => {
     const floorState = createNetworkFloorState({ matchSeed: 'door-test', floorSeed: 'door-test-floor' });
     const currentRoom = getCurrentNetworkRoom(floorState);

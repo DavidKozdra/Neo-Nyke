@@ -9624,6 +9624,17 @@ button.alt.danger {
 }
 .coop-lobby__picker--locked { opacity: .6; pointer-events: none; }
 
+/* Selected-hero dossier: reuses the champion-select .hero-detail-* styles;
+   only the framing is lobby-specific. */
+#coopLobby .coop-lobby__hero-detail {
+  border: 1px solid var(--menu-border);
+}
+
+.hero-detail-kit-option:disabled {
+  opacity: .55;
+  cursor: default;
+}
+
 /* Use the same compact dossier cards as the champion-select roster. */
 #coopLobby .char-card {
   min-width: 0;

@@ -56,6 +56,18 @@ describe('gameplay protocol v1 runtime validation', () => {
     }, { direction: CLIENT_TO_AUTHORITY }).errors).toContain('payload.characterKey has an unsupported value');
   });
 
+  test('accepts optional alt-kit choices and rejects malformed kit payloads', () => {
+    const withKit = createEnvelope('PLAYER_CHARACTER', 4, 0, {
+      characterKey: 'sarge',
+      kitChoices: { laser: 'lightning_cross' },
+    });
+    expect(validateEnvelope(withKit, { direction: CLIENT_TO_AUTHORITY })).toEqual({ ok: true, errors: [] });
+    expect(validateEnvelope({
+      ...withKit,
+      payload: { characterKey: 'sarge', kitChoices: ['lightning_cross'] },
+    }, { direction: CLIENT_TO_AUTHORITY }).errors).toContain('payload.kitChoices must be object');
+  });
+
   test('rejects wrong direction, unknown fields, invalid movement, and oversized messages', () => {
     const input = createEnvelope('PLAYER_INPUT', 1, 1, {
       inputSequence: 1,
