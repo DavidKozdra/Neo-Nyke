@@ -5254,30 +5254,11 @@
     Neo.player.hp = Math.min(Neo.player.maxHp, Math.round(Number(Neo.player.hp || 0) + gain));
   }
 
-  function applyJestersDicePickup(collectCount) {
-    Neo.floorSkipPending += 3 * collectCount;
-    const bonusItemCounts = {};
-    for (let index = 0; index < 10 * collectCount; index += 1) {
-      const key = Neo.rollItemDrop({ excludeKeys: ['jesters_dice'] });
-      if (!key) continue;
-      const previousBonusCount = Neo.getItemCount(key);
-      Neo.player.items[key] = previousBonusCount + 1;
-      readyRobotArmOnFirstPickup(key, previousBonusCount);
-      bonusItemCounts[key] = (bonusItemCounts[key] || 0) + 1;
-      if (key === 'titan_heart') {
-        Neo.player.maxHp = Math.max(120, Math.round(Neo.player.maxHp * 1.08));
-        Neo.player.hp = Math.min(Neo.player.maxHp, Math.round(Neo.player.hp * 1.08));
-      }
-      if (key === 'wizards_paw') {
-        Neo.openWizardPawSelection();
-      }
-      if (key === 'extra_battery') {
-        Neo.openExtraBatterySelection();
-      }
-    }
-    Object.entries(bonusItemCounts).forEach(([key, amount]) => {
+  function presentJestersDiceAcquisition(result) {
+    Object.entries(result?.bonusItemCounts || {}).forEach(([key, amount]) => {
       Neo.pushItemNotification(key, Number(amount), '(Jester bonus)');
     });
+    Neo.requestPanelItemSelection?.();
   }
 
   // EARLY-phase handlers run before notifications fire (they grant crystals or
@@ -5290,7 +5271,6 @@
   };
 
   const LATE_ITEM_PICKUP_HANDLERS = {
-    jesters_dice: ({ collectCount }) => applyJestersDicePickup(collectCount),
     wizards_paw: ({ collectCount }) => {
       for (let index = 0; index < collectCount; index += 1) Neo.openWizardPawSelection();
     },
@@ -5336,12 +5316,18 @@
     }
     const item = Neo.itemRegistry.get(itemKey);
     if (!item) return;
-    const duplicateChance = Neo.clamp(Number(Neo.getItemStats?.()?.itemDuplicateChance || 0), 0, 1);
-    const duplicatePickup = canDuplicateItemPickup(itemKey) && duplicateChance > 0 && Neo.rng() < duplicateChance;
-    const collectCount = duplicatePickup ? 2 : 1;
-    const previousCount = Neo.getItemCount(itemKey);
-    const sharedCollection = globalThis.NeoNyke?.simulation?.collectCampaignItem?.(Neo.player, itemKey, { amount: collectCount });
+    const runState = { floorSkipPending: Neo.floorSkipPending };
+    const sharedCollection = globalThis.NeoNyke?.simulation?.collectCampaignPickup?.(runState, Neo.player, itemKey, {
+      duplicateChance: Neo.getItemStats?.()?.itemDuplicateChance,
+      canDuplicate: canDuplicateItemPickup(itemKey),
+      random: () => Neo.rng(),
+      rollItem: (random, excludeKeys) => Neo.rollItemDrop({ random, excludeKeys }),
+    });
     if (!sharedCollection?.ok) return;
+    Neo.floorSkipPending = runState.floorSkipPending;
+    const collectCount = sharedCollection.amount;
+    const previousCount = sharedCollection.previousCount;
+    const duplicatePickup = sharedCollection.duplicated;
     // Early pickup effects that must run before notifications (crystals/charge state).
     runEarlyItemPickupHandlers(itemKey, { previousCount, collectCount });
     if (Neo.isFirstRunTutorialActive()) Neo.tutorialState.gotRelic = true;
@@ -5353,6 +5339,7 @@
     // so the pickup card above stays a clean "new item" card rather than
     // conflating "Copied!" into the item's description.
     if (duplicatePickup) Neo.pushCopiedNotification(itemKey);
+    if (sharedCollection.jester?.ok) presentJestersDiceAcquisition(sharedCollection.jester);
     const totalItems = Object.values(Neo.player.items).reduce((s, v) => s + Number(v || 0), 0);
     window.achievementEvents?.emit('item:collected', { totalItems });
 

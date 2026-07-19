@@ -34,10 +34,10 @@
     getDeliveryIntent,
   } = protocolApi;
 
-  const LOCAL_BUILD_VERSION = '1.0.0-campaign-parity-v23';
+  const LOCAL_BUILD_VERSION = '1.0.0-campaign-parity-v24';
   const LOCAL_GENERATION_VERSION = 1;
-  const LOCAL_CONTENT_HASH = CAMPAIGN_CONTENT_VERSION || 'shared-neo-campaign-parity-v23';
-  const LOCAL_CONTENT_VERSION = CAMPAIGN_CONTENT_VERSION || 'shared-neo-campaign-parity-v23';
+  const LOCAL_CONTENT_HASH = CAMPAIGN_CONTENT_VERSION || 'shared-neo-campaign-parity-v24';
+  const LOCAL_CONTENT_VERSION = CAMPAIGN_CONTENT_VERSION || 'shared-neo-campaign-parity-v24';
   const SNAPSHOT_RATE = 10;
   const SNAPSHOT_TICK_INTERVAL = SIMULATION_TICK_RATE / SNAPSHOT_RATE;
   const FULL_CORRECTION_TICK_INTERVAL = SIMULATION_TICK_RATE;

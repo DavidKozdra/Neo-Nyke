@@ -2612,46 +2612,40 @@
     Neo.chests.forEach(chest => {
       if (chest.open) return;
       if (Neo.dist(chest.x, chest.y, Neo.player.x, Neo.player.y) >= 36) return;
-      chest.open = true;
+      const chestRandom = Neo.createEntityRandom(chest, 'chest:open');
+      const result = globalThis.NeoNyke.simulation.openCampaignChest(chest, {
+        floorNumber: Neo.floor,
+        random: chestRandom,
+        groupId: `chest:${Neo.currentRoom?.gx ?? 0}:${Neo.currentRoom?.gy ?? 0}:${Math.round(chest.x)}:${Math.round(chest.y)}`,
+      });
+      if (!result.ok) return;
       Neo.tutorialController?.signal?.('chest-open', { chest, room: Neo.currentRoom });
       Neo.minimapLegendDirty = true;
-      Neo.dropCoins(chest.x, chest.y, 12 + Neo.floor * 2);
-      if ((chest.rewardType || 'item') === 'item') {
-        if (chest.choiceType === 'ab') {
-          const choiceRandom = Neo.createEntityRandom(chest, 'chest:ab-choice');
-          const choices = Array.isArray(chest.rewardChoices) && chest.rewardChoices.length >= 2
-            ? chest.rewardChoices.slice(0, 2)
-            : Neo.createSeededItemChoices?.(2, choiceRandom) || [
-              chest.rewardKey || Neo.rollItemDrop({ random: choiceRandom }),
-              Neo.rollItemDrop({ random: choiceRandom }),
-            ];
-          chest.rewardChoices = choices;
-          const groupId = chest.choiceGroupId || `chest:${Neo.currentRoom?.gx ?? 0}:${Neo.currentRoom?.gy ?? 0}:${Math.round(chest.x)}:${Math.round(chest.y)}`;
-          chest.choiceGroupId = groupId;
+      Neo.dropCoins(chest.x, chest.y, result.coinAmount);
+      if (result.selection) {
           // A/B chest: spawn one stand-in "area" to the left and one to the
           // right of the chest. The player confirms a pick by dwelling inside an
           // area until its circular meter fills (see updatePickups / drawPickups).
-          choices.forEach((key, choiceIndex) => {
+          result.selection.optionIds.forEach((key, choiceIndex) => {
             Neo.pickups.push({
               x: chest.x + (choiceIndex === 0 ? -72 : 72),
               y: chest.y - 4,
               type: 'rewardChoice',
               key,
-              groupId,
+              groupId: result.selection.selectionEventId,
               picksRemaining: 1,
               dwellMode: true,
               dwell: 0,
               side: choiceIndex === 0 ? 'left' : 'right',
             });
           });
-        } else {
-          Neo.pickups.push({ x: chest.x, y: chest.y - 20, type: 'item', key: chest.rewardKey || Neo.rollItemDrop({ random: Neo.createEntityRandom(chest, 'chest:fallback') }), tutorialTreasureItem: !!chest.tutorialTreasureChest });
-        }
-      } else {
-        Neo.pickups.push({ x: chest.x, y: chest.y - 20, type: 'potion' });
       }
+      result.pickups.forEach(pickup => Neo.pickups.push({
+        ...pickup,
+        tutorialTreasureItem: pickup.type === 'item' && !!chest.tutorialTreasureChest,
+      }));
       Neo.currentRoom.cleared = Neo.chests.every(item => item.open);
-      if (chest.treasureHuntExitChest && !Neo.pickups.some(pickup => pickup.type === 'ladder')) {
+      if (result.revealExit && !Neo.pickups.some(pickup => pickup.type === 'ladder')) {
         Neo.pickups.push({ x: chest.x, y: chest.y + 76, type: 'ladder' });
         Neo.spawnParticle({ x: chest.x, y: chest.y + 42, life: 1.2, text: 'LADDER REVEALED', c: '#7dff9e' });
       }
@@ -2670,20 +2664,21 @@
 
   function spawnJesterPortalPickup() {
     if (!canSpawnJesterPortal()) return false;
-    const skipFloors = Math.max(1, Math.floor(Neo.floorSkipPending));
     const preferred = Neo.findSafePointNearTarget(Neo.player.x, Neo.player.y - 96, 24, 180, 20);
     const fallback = Neo.findSafePointNearTarget(Neo.ROOM_W / 2, Neo.ROOM_H / 2, 24, 240, 20) || Neo.findSafeSpawnPoint();
     const spawnPoint = preferred || fallback;
-    Neo.pickups.push({
+    const runState = { floor: Neo.floor, floorSkipPending: Neo.floorSkipPending };
+    const result = globalThis.NeoNyke.simulation.createCampaignJesterGate(runState, {
+      floorNumber: Neo.floor,
+      maxFloor: Neo.MAX_FLOOR,
       x: spawnPoint.x,
       y: spawnPoint.y,
-      type: 'jesterPortal',
-      skipFloors,
-      spawnT: 0,
       activateAt: Neo.JESTER_PORTAL_ACTIVATE_DELAY,
-      active: false,
+      hasExistingGate: Neo.pickups.some(pickup => pickup?.type === 'jesterPortal'),
     });
-    Neo.floorSkipPending = 0;
+    if (!result.ok) return false;
+    Neo.pickups.push(result.gate);
+    Neo.floorSkipPending = runState.floorSkipPending;
     Neo.ringBurst(spawnPoint.x, spawnPoint.y, 28, '#ff8bd8', 0.5);
     Neo.spawnParticle({ x: spawnPoint.x, y: spawnPoint.y - 20, life: 0.8, text: 'CHAOS GATE', c: '#ffc2f0' });
     return true;
@@ -2713,9 +2708,10 @@
   }
 
   function useJesterPortal(pickup) {
-    const skipFloors = Neo.clamp(Number(pickup?.skipFloors || 0), 1, Neo.MAX_FLOOR - Neo.floor);
-    if (skipFloors <= 0) return false;
-    Neo.floor = Math.min(Neo.MAX_FLOOR, Neo.floor + skipFloors);
+    const runState = { floor: Neo.floor };
+    const result = globalThis.NeoNyke.simulation.useCampaignJesterGate(runState, pickup, { maxFloor: Neo.MAX_FLOOR });
+    if (!result.ok) return false;
+    Neo.floor = runState.floor;
     window.achievementEvents?.emit('floor:reached', { floor: Neo.floor });
     Neo.refreshFloorChargeStates();
     Neo.metaProgress.bestFloor = Math.max(Neo.metaProgress.bestFloor, Neo.floor);
@@ -3005,6 +3001,11 @@
         if (!groupId || !key) {
           removePickupAt(index);
           continue;
+        }
+        const sourceChest = Neo.chests.find(chest => String(chest?.choiceGroupId || '') === groupId);
+        if (sourceChest) {
+          const claim = globalThis.NeoNyke.simulation.claimCampaignChestSelection(sourceChest, key);
+          if (!claim.ok) { removePickupAt(index); continue; }
         }
         Neo.collectItem(key);
         Neo.playSfx?.('item_collect');

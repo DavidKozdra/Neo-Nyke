@@ -7,6 +7,10 @@ const {
   redeemCampaignVoucher,
   createCampaignScrollPoolChoices,
   applyCampaignScrollSelection,
+  applyJestersDiceAcquisition,
+  collectCampaignPickup,
+  createCampaignJesterGate,
+  useCampaignJesterGate,
 } = require('../js/simulation/SharedAcquisitionSystem');
 
 function player(overrides = {}) {
@@ -78,14 +82,52 @@ describe('shared campaign acquisition transactions', () => {
     );
   });
 
+  test('Jester acquisition grants ten shared items and three pending floors per copy', () => {
+    const run = { floorSkipPending: 1 };
+    const target = player();
+    const result = applyJestersDiceAcquisition(run, target, 2, {
+      random: () => 0,
+      rollItem: () => 'neo_knife',
+    });
+    expect(result).toMatchObject({ ok: true, copies: 2, skipFloors: 6, bonusItemCounts: { neo_knife: 20 } });
+    expect(run.floorSkipPending).toBe(7);
+    expect(target.items.neo_knife).toBe(20);
+  });
+
+  test('canonical pickup transaction owns duplication and Jester chaining', () => {
+    const run = {};
+    const target = player({ items: { copycat_charm: 3 } });
+    const result = collectCampaignPickup(run, target, 'jesters_dice', {
+      duplicateChance: 0.75,
+      random: () => 0,
+      rollItem: () => 'anchor_charm',
+    });
+    expect(result).toMatchObject({ ok: true, amount: 2, duplicated: true });
+    expect(target.items.jesters_dice).toBe(2);
+    expect(target.items.anchor_charm).toBe(20);
+    expect(run.floorSkipPending).toBe(6);
+  });
+
+  test('Jester gate creation and floor transition are shared and capped at the final floor', () => {
+    const run = { floorNumber: 8, floorSkipPending: 6 };
+    const created = createCampaignJesterGate(run, { maxFloor: 10, x: 90, y: 120 });
+    expect(created).toMatchObject({ ok: true, gate: { type: 'jesterPortal', skipFloors: 2, x: 90, y: 120 } });
+    expect(run.floorSkipPending).toBe(0);
+    expect(useCampaignJesterGate(run, created.gate, { maxFloor: 10 })).toMatchObject({ ok: true, floorNumber: 10, skipFloors: 2 });
+    expect(run.floorNumber).toBe(10);
+  });
+
   test('browser and authority both invoke the shared acquisition operations', () => {
     const read = file => fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
     const browser = read('js/game/player.js');
+    const world = read('js/game/world.js');
     const authority = read('js/simulation/NetworkCombatSystem.js');
     expect(browser).toContain('simulation?.applyWizardPawSelection?.');
     expect(browser).toContain('simulation?.applyExtraBatterySelection?.');
     expect(browser).toContain('simulation?.redeemCampaignVoucher?.');
     expect(browser).toContain('simulation.applyCampaignScrollSelection');
+    expect(world).toContain('simulation.createCampaignJesterGate');
+    expect(world).toContain('simulation.useCampaignJesterGate');
     expect(authority).toContain('applyAcquisitionCommand(player, action.action, action, {');
   });
 });

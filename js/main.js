@@ -44,6 +44,7 @@ import './simulation/SharedProgressionSystem.js';
 import './simulation/SharedForgeSystem.js';
 import './simulation/SharedInventorySystem.js';
 import './simulation/SharedAcquisitionSystem.js';
+import './simulation/SharedChestSystem.js';
 import './simulation/SharedShopSystem.js';
 import './simulation/SharedSpecialRoomSystem.js';
 import './simulation/GameState.js';

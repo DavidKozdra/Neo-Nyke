@@ -981,7 +981,9 @@ body.render3d #c {
   font-weight: 700;
   line-height: 1.45;
   letter-spacing: .02em;
-  text-wrap: balance;
+  /* Incrementally revealed text must not rebalance every existing line as its
+     length crosses the browser's balancing threshold. */
+  text-wrap: wrap;
 }
 
 .dialogue-hint {

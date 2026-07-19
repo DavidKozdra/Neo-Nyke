@@ -71,5 +71,25 @@
     return { ok: true, steps, intents };
   }
 
-  return { chargeRequirement, critCharmRequirement, applyCampaignKillCharge };
+  function applyCampaignRevive(player, options = {}) {
+    if (!player) return { ok: false, reason: 'NO_PLAYER' };
+    const healthFraction = Math.max(0.01, Math.min(1, Number(options.healthFraction ?? 0.45)));
+    player.downed = false;
+    player.downedAtTick = null;
+    player.reviveTicks = 0;
+    player.reviveProgress = 0;
+    player.hp = Math.max(1, Math.round(Number(player.maxHp || 100) * healthFraction));
+    player.vx = 0;
+    player.vy = 0;
+    player.stun = 0;
+    player.dashTime = 0;
+    if (Number.isFinite(Number(options.currentTick))) {
+      player.invulnerableUntilTick = Math.max(Number(player.invulnerableUntilTick || 0), Number(options.currentTick) + Math.round(Number(options.invulnerabilitySeconds || 0) * Number(options.tickRate || 20)));
+    } else if (Number(options.invulnerabilitySeconds || 0) > 0) {
+      player.inv = Math.max(Number(player.inv || 0), Number(options.invulnerabilitySeconds));
+    }
+    return { ok: true, type: 'PLAYER_REVIVED', health: player.hp, healthFraction };
+  }
+
+  return { chargeRequirement, critCharmRequirement, applyCampaignKillCharge, applyCampaignRevive };
 });

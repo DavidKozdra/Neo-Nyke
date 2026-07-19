@@ -749,12 +749,10 @@
       Neo.lastDeathEntryId = '';
     }
     Neo.playerDeathAnim = null;
-    Neo.player.hp = Math.max(1, Math.round(Neo.player.maxHp * 0.45));
-    Neo.player.inv = Math.max(Neo.player.inv || 0, 1.5);
-    Neo.player.stun = 0;
-    Neo.player.vx = 0;
-    Neo.player.vy = 0;
-    Neo.player.dashTime = 0;
+    globalThis.NeoNyke.simulation.applyCampaignRevive(Neo.player, {
+      healthFraction: 0.45,
+      invulnerabilitySeconds: 1.5,
+    });
     Neo.projectiles = [];
     Neo.hazards = [];
     Neo.skySwords = [];

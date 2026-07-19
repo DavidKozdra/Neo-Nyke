@@ -19,17 +19,15 @@
   const worldContentApi = typeof require === 'function' ? require('./SharedWorldContent.js') : (globalThis.NeoNyke?.content || {});
   const roomInteriorApi = typeof require === 'function' ? require('./SharedRoomInteriorSystem.js') : browserApi;
   const itemEffectApi = typeof require === 'function' ? require('./SharedItemEffectSystem.js') : browserApi;
-  const statusApi = typeof require === 'function' ? require('./SharedStatusSystem.js') : browserApi;
   const { GameSimulation } = gameSimulationApi;
   const { GameState } = gameStateApi;
   const { generateFloorLayout } = floorApi;
-  const { applyResponsiveVelocity } = movementRulesApi;
+  const { applyResponsiveVelocity, getCampaignPlayerMovementSpeed } = movementRulesApi;
   const { createNetworkCombatSystem, createFloorProgressionSystem, applyNetworkHeroProfile } = combatApi;
   const { decorateSharedRoomInterior, resolveRoomObstacleMovement } = roomInteriorApi;
   const { syncCampaignItemStats } = itemEffectApi;
-  const { getCampaignStatusStacks, getCampaignSlowMultiplier } = statusApi;
 
-  const CAMPAIGN_CONTENT_VERSION = 'shared-neo-campaign-parity-v23';
+  const CAMPAIGN_CONTENT_VERSION = 'shared-neo-campaign-parity-v24';
   const CAMPAIGN_ROOM = Object.freeze({ id: 'campaign-start-room', ...worldContentApi.CAMPAIGN_ROOM_GEOMETRY });
   const ROOM_DIRECTIONS = Object.freeze({
     n: Object.freeze({ dx: 0, dy: -1, opposite: 's' }),
@@ -147,16 +145,7 @@
         let moveY = Number(input.moveY) || 0;
         const magnitude = Math.hypot(moveX, moveY);
         if (magnitude > 1) { moveX /= magnitude; moveY /= magnitude; }
-        const statusUntil = player.statusUntilTick || {};
-        const speedMultiplier = state.tick < Number(statusUntil.mooggy_zoomies || 0) ? 5
-          : state.tick < Number(statusUntil.turtle_powerup || 0) ? 1.3 : 1;
-        const speed = Math.max(0, Number(player.moveSpeed) || 180)
-          * speedMultiplier
-          * Math.max(0.1, Number(player.itemStats?.moveSpeedMultiplier || 1))
-          * getCampaignSlowMultiplier(
-            getCampaignStatusStacks(player, 'slow'),
-            Number(player.itemStats?.negativeStatusMultiplier || 1),
-          );
+        const speed = getCampaignPlayerMovementSpeed(player, state.tick);
         const radius = Math.max(1, Number(player.radius) || 18);
         const minimum = wall + radius;
         const maximumX = width - minimum;
