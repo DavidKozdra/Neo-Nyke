@@ -60,7 +60,7 @@ It is not yet a premium release build. The largest gaps are:
 
 | Area | Current condition | Paid-release requirement |
 | --- | --- | --- |
-| Product identity | The app still says `Beta 1.3`; README and shipped roster terminology are not fully synchronized. | One accurate 1.0 identity, feature list, roster, credits, and store promise. |
+| Product identity | The app still says `Beta 2.0`; README and shipped roster terminology are not fully synchronized. | One accurate 1.0 identity, feature list, roster, credits, and store promise. |
 | Architecture | Large modules coordinate through mutable globals and DOM contracts. | Stabilize boundaries and tests around risky systems; do not rewrite working code merely for elegance. |
 | Packaging | The root build produces static web files only. | Signed, installable desktop builds with correct versioning, icons, crash handling, and update/rollback procedures. |
 | Saves | Progress is browser-storage-first. | Versioned disk saves with atomic writes, backups, corruption recovery, migration fixtures, and optional cloud sync. |
@@ -424,7 +424,7 @@ Before accepting money:
 - Achieve full controller navigation and target-hardware performance.
 - Synchronize content/roster/save/backend contracts.
 - Complete rights, credits, privacy, storefront, support, and release tooling.
-- Replace `Beta 1.3` with one generated release version only when all gates pass.
+- Replace `Beta 2.0` with one generated release version only when all gates pass.
 
 **P1 — high-value launch features**
 
