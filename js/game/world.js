@@ -498,43 +498,45 @@
   }
 
   function tickPlayerStatus(key, dt, config) {
-    const state = Neo.getStatusState(Neo.player, key);
-    if (state.stacks <= 0) return;
-    // Tough Skin shortens player bleeds by decaying their duration faster.
-    const durationDecay = key === 'bleed'
-      ? Number(Neo.getItemStats?.()?.bleedDurationDecayMultiplier || 1)
-      : 1;
-    state.duration -= dt * durationDecay;
-    state.tick -= dt;
-    if (state.tick <= 0) {
-      state.tick = config.interval;
-      const resistance = key === 'bleed' ? Number(Neo.getItemStats?.()?.bleedResistance || 0) : 0;
-      const damageMultiplier = Math.max(0.2, 1 - resistance);
-      const statusSeverity = Number(Neo.getItemStats?.()?.negativeStatusMultiplier || 1);
-      const statusDamageMultiplier = Math.max(1, Number(state.damageMultiplier || 1));
-      const damage = Math.max(0.25, config.damage(state.stacks) * damageMultiplier * statusSeverity * statusDamageMultiplier);
-      // Attribute the kill to whoever inflicted the status (e.g. "Mooggy"),
-      // falling back to the status name when the source is unknown.
-      const inflictorKey = String(state.sourceKey || '').trim();
-      if (inflictorKey) {
-        const inflictorLabel = state.sourceLabel || Neo.getDamageSourceLabel(inflictorKey);
-        damagePlayer(damage, 0, 0, inflictorKey, {
-          ignoreInv: true,
-          noInvFrames: true,
-          // Keep the killer key (for death quotes / killer icon) but label the
-          // death screen with the status that finished the player off.
-          sourceKey: inflictorKey,
-          sourceLabel: `${inflictorLabel} (${key})`,
-        });
-      } else {
-        damagePlayer(damage, 0, 0, key, { ignoreInv: true, noInvFrames: true });
-      }
-      if (typeof config.onTick === 'function') config.onTick(damage, state);
-      if (Neo.nextRandom('fx') < 0.3) {
-        Neo.spawnParticle({ x: Neo.player.x + Neo.rand(-8, 8), y: Neo.player.y + Neo.rand(-8, 8), life: 0.25, c: config.color });
-      }
-    }
-    if (state.duration <= 0) Neo.clearStatus(Neo.player, key);
+    const stats = Neo.getItemStats?.() || {};
+    globalThis.NeoNyke.simulation.tickCampaignStatuses(Neo.player, dt, {
+      keys: [key],
+      maxHp: Neo.player.maxHp,
+      targetKind: 'player',
+      fireResistance: Number(stats.fireResistance || 0),
+      playerColdBudget: true,
+      getDurationDecay: statusKey => statusKey === 'bleed' ? Number(stats.bleedDurationDecayMultiplier || 1) : 1,
+      isDead: () => Number(Neo.player.hp || 0) <= 0,
+      dealDamage: (statusKey, rawDamage, state) => {
+        const resistance = statusKey === 'bleed' ? Number(stats.bleedResistance || 0) : 0;
+        const damageMultiplier = Math.max(0.2, 1 - resistance);
+        const statusSeverity = Number(stats.negativeStatusMultiplier || 1);
+        const damage = Math.max(0.25, rawDamage * damageMultiplier * statusSeverity);
+        // Attribute the kill to whoever inflicted the status (e.g. "Mooggy"),
+        // falling back to the status name when the source is unknown.
+        const inflictorKey = String(state.sourceKey || '').trim();
+        if (inflictorKey) {
+          const inflictorLabel = state.sourceLabel || Neo.getDamageSourceLabel(inflictorKey);
+          damagePlayer(damage, 0, 0, inflictorKey, {
+            ignoreInv: true,
+            noInvFrames: true,
+            // Keep the killer key (for death quotes / killer icon) but label the
+            // death screen with the status that finished the player off.
+            sourceKey: inflictorKey,
+            sourceLabel: `${inflictorLabel} (${statusKey})`,
+          });
+        } else {
+          damagePlayer(damage, 0, 0, statusKey, { ignoreInv: true, noInvFrames: true });
+        }
+        return damage;
+      },
+      onTick: (statusKey, state, dealt) => {
+        if (typeof config?.onTick === 'function') config.onTick(dealt, state);
+        if (Neo.nextRandom('fx') < 0.3) {
+          Neo.spawnParticle({ x: Neo.player.x + Neo.rand(-8, 8), y: Neo.player.y + Neo.rand(-8, 8), life: 0.25, c: config?.color || Neo.STATUS_STYLES[statusKey]?.color });
+        }
+      },
+    });
   }
 
   function updatePlayerStatuses(dt) {
@@ -587,24 +589,15 @@
     Neo.player.keenEyeBuffTime = Math.max(0, Number(Neo.player.keenEyeBuffTime || 0) - dt);
     Neo.player.chronoSpringBuffTime = Math.max(0, Number(Neo.player.chronoSpringBuffTime || 0) - dt);
     tickPlayerStatus('bleed', dt, {
-      interval: 0.5,
-      damage: stacks => 1.2 + stacks * 1.3,
       color: Neo.STATUS_STYLES.bleed.color,
     });
     tickPlayerStatus('fire', dt, {
-      interval: 0.45,
-      damage: stacks => (1 + stacks * 1.6) * Math.max(0.2, 1 - (Neo.getItemStats?.()?.fireResistance || 0)),
       color: Neo.STATUS_STYLES.fire.color,
     });
     tickPlayerStatus('poison', dt, {
-      interval: 0.7,
-      damage: stacks => Neo.player.maxHp * (0.004 + stacks * 0.0025),
       color: Neo.STATUS_STYLES.poison.color,
     });
     tickPlayerStatus('dark_drain', dt, {
-      interval: 0.6,
-      // % max HP, same system as poison/the enemy-side drain tick.
-      damage: stacks => Neo.player.maxHp * (0.003 + stacks * 0.002),
       color: Neo.STATUS_STYLES.dark_drain.color,
       // Siphon the drained HP back to the enemy that applied it — the same way
       // the player's drain heals off an enemy's dark_drain DoT. Heal scales with
@@ -625,31 +618,12 @@
       },
     });
     tickPlayerStatus('static', dt, {
-      interval: 0.5,
-      // % max HP per stack, mirroring poison/dark_drain — same shape as the
-      // enemy-side static tick, minus the neighbour-arc (nothing to spread to).
-      damage: stacks => Neo.player.maxHp * (0.004 + stacks * 0.003),
       color: Neo.STATUS_STYLES.static.color,
     });
     // Cold (slow) deals no damage-over-time; it just slows + makes brittle.
     // Player cold stores 15s of duration per stack, so visible stacks drop one
     // at a time as that budget decays.
-    const coldState = Neo.getStatusState(Neo.player, 'slow');
-    if (coldState.stacks > 0) {
-      coldState.duration -= dt;
-      coldState.tick -= dt;
-      if (coldState.tick <= 0) {
-        coldState.tick = 0.32;
-        if (Neo.nextRandom('fx') < 0.3) {
-          Neo.spawnParticle({ x: Neo.player.x + Neo.rand(-8, 8), y: Neo.player.y + Neo.rand(-8, 8), life: 0.25, c: Neo.STATUS_STYLES.slow.color });
-        }
-      }
-      if (coldState.duration <= 0) {
-        Neo.clearStatus(Neo.player, 'slow');
-      } else {
-        coldState.stacks = Neo.getColdStacksFromDuration?.(coldState.duration) ?? Math.min(6, Math.ceil(coldState.duration / Neo.COLD_SECONDS_PER_STACK));
-      }
-    }
+    tickPlayerStatus('slow', dt, { color: Neo.STATUS_STYLES.slow.color });
   }
 
   const ENEMY_QUERY_CELL_SIZE = 128;

@@ -19,6 +19,7 @@
   const worldContentApi = typeof require === 'function' ? require('./SharedWorldContent.js') : (globalThis.NeoNyke?.content || {});
   const roomInteriorApi = typeof require === 'function' ? require('./SharedRoomInteriorSystem.js') : browserApi;
   const itemEffectApi = typeof require === 'function' ? require('./SharedItemEffectSystem.js') : browserApi;
+  const statusApi = typeof require === 'function' ? require('./SharedStatusSystem.js') : browserApi;
   const { GameSimulation } = gameSimulationApi;
   const { GameState } = gameStateApi;
   const { generateFloorLayout } = floorApi;
@@ -26,6 +27,7 @@
   const { createNetworkCombatSystem, createFloorProgressionSystem, applyNetworkHeroProfile } = combatApi;
   const { decorateSharedRoomInterior, resolveRoomObstacleMovement } = roomInteriorApi;
   const { syncCampaignItemStats } = itemEffectApi;
+  const { getCampaignStatusStacks, getCampaignSlowMultiplier } = statusApi;
 
   const CAMPAIGN_CONTENT_VERSION = 'shared-neo-campaign-parity-v22';
   const CAMPAIGN_ROOM = Object.freeze({ id: 'campaign-start-room', ...worldContentApi.CAMPAIGN_ROOM_GEOMETRY });
@@ -149,7 +151,12 @@
         const speedMultiplier = state.tick < Number(statusUntil.mooggy_zoomies || 0) ? 5
           : state.tick < Number(statusUntil.turtle_powerup || 0) ? 1.3 : 1;
         const speed = Math.max(0, Number(player.moveSpeed) || 180)
-          * speedMultiplier * Math.max(0.1, Number(player.itemStats?.moveSpeedMultiplier || 1));
+          * speedMultiplier
+          * Math.max(0.1, Number(player.itemStats?.moveSpeedMultiplier || 1))
+          * getCampaignSlowMultiplier(
+            getCampaignStatusStacks(player, 'slow'),
+            Number(player.itemStats?.negativeStatusMultiplier || 1),
+          );
         const radius = Math.max(1, Number(player.radius) || 18);
         const minimum = wall + radius;
         const maximumX = width - minimum;

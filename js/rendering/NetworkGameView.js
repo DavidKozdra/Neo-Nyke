@@ -1282,15 +1282,13 @@
             max: Math.max(1, Number(enemy.maxHealth || 1)),
             speed: Number(enemy.moveSpeed || 0),
             spawnT: Math.max(0, 0.72 - (Number(state?.tick || 0) - Number(enemy.spawnTick || 0)) / 20),
-            stun: Math.max(0, Number(enemy.stunnedUntilTick || enemy.frozenUntilTick || 0) - Number(state?.tick || 0)) / 20,
-            statuses: {
-              bleed: { stacks: Math.max(0, Math.round(Number(enemy.bleedDamage || 0) / 4)), duration: Math.max(0, Number(enemy.bleedTicksRemaining || 0)) * 0.5, tick: 0 },
-              fire: { stacks: Math.max(0, Number(enemy.fireStacks || 0)), duration: Math.max(0, Number(enemy.fireTicksRemaining || 0)) * 0.45, tick: 0 },
-              poison: { stacks: Math.max(0, Number(enemy.poisonStacks || 0)), duration: Math.max(0, Number(enemy.poisonTicksRemaining || 0)) * 0.5, tick: 0 },
-              dark_drain: { stacks: 0, duration: 0, tick: 0 },
-              slow: { stacks: Number(enemy.frozenUntilTick || 0) > Number(state?.tick || 0) ? 4 : 0, duration: Math.max(0, Number(enemy.frozenUntilTick || 0) - Number(state?.tick || 0)) / 20, tick: 0 },
-              static: { stacks: 0, duration: 0, tick: 0 },
-            },
+            stun: Math.max(0, Number(enemy.stunnedUntilTick || 0) - Number(state?.tick || 0)) / 20,
+            confusedBlindUntil: Number(enemy.confusedBlindUntilTick || 0) / 20,
+            // Status state is already canonical authority state. Pass it through
+            // unchanged so campaign 2D/3D renderers see the same stacks,
+            // durations and proc power as local play; never reconstruct a
+            // network-only approximation from legacy bleed/fire fields.
+            statuses: enemy.statuses || root.NeoNyke?.simulation?.createCampaignStatusMap?.() || {},
             swingTime: enemy.state === 'attacking' ? 0.2 : 0,
             windup: enemy.state === 'aiming' ? 0.35 : 0,
             beamAngle: Number(enemy.aimDirection || enemy.beamAngle || 0),

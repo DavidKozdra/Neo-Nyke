@@ -1,6 +1,6 @@
 (function initializeNetworkCombatSystem(root, factory) {
   const contentApi = typeof require === 'function'
-    ? { ...require('./SharedCombatContent.js'), ...require('./SharedMoveContent.js'), ...require('./SharedEnemyContent.js'), ...require('./SharedEnemyAISystem.js'), ...require('./SharedItemContent.js'), ...require('./SharedItemDefinitions.js'), ...require('./SharedItemEffectSystem.js'), ...require('./SharedDamageSystem.js'), ...require('./SharedHitResolutionSystem.js'), ...require('./SharedProgressionSystem.js'), ...require('./SharedRoomInteriorSystem.js'), ...require('./SharedForgeSystem.js'), ...require('./SharedInventorySystem.js'), ...require('./SharedShopSystem.js'), ...require('./SharedSpecialRoomSystem.js') }
+    ? { ...require('./SharedCombatContent.js'), ...require('./SharedMoveContent.js'), ...require('./SharedEnemyContent.js'), ...require('./SharedEnemyAISystem.js'), ...require('./SharedItemContent.js'), ...require('./SharedItemDefinitions.js'), ...require('./SharedItemEffectSystem.js'), ...require('./SharedDamageSystem.js'), ...require('./SharedHitResolutionSystem.js'), ...require('./SharedStatusSystem.js'), ...require('./SharedProgressionSystem.js'), ...require('./SharedRoomInteriorSystem.js'), ...require('./SharedForgeSystem.js'), ...require('./SharedInventorySystem.js'), ...require('./SharedShopSystem.js'), ...require('./SharedSpecialRoomSystem.js') }
     : { ...(root.NeoNyke?.content || {}), ...(root.NeoNyke?.simulation || {}) };
   const floorApi = typeof require === 'function' ? require('./DeterministicFloorGenerator.js') : (root.NeoNyke?.simulation || {});
   const api = factory(root.NeoNyke?.simulation || {}, contentApi, floorApi);
@@ -68,6 +68,15 @@
     circleIntersectsRoomObstacle = () => false,
     scaleCampaignDamage = options => Math.max(0, Number(options.damage || 0)),
     resolveCampaignCrit = () => ({ isCrit: false, critMultiplier: 1 }),
+    createCampaignStatusMap = () => ({}),
+    ensureCampaignStatuses = entity => entity?.statuses || {},
+    applyCampaignStatus = () => null,
+    getCampaignStatusStacks = () => 0,
+    getCampaignSlowMultiplier = () => 1,
+    getCampaignBleedResistance = () => 1,
+    getCampaignGenericStatusResistance = () => 0,
+    tickCampaignStatuses = () => [],
+    resolveCampaignOnHitStatusProcs = () => [],
     applyCampaignLevelUp = () => null,
   } = contentApi || {};
   const combatRandomByState = new WeakMap();
@@ -151,6 +160,7 @@
     player.equipmentSlots = key === 'metao' ? ['mateos_bag'] : [];
     player.moveCooldownUntilTick = {};
     player.statusUntilTick = {};
+    player.statuses = createCampaignStatusMap();
     player.barrier = 0;
     player.maxHp = profile.maxHp;
     player.hp = Math.round(profile.maxHp * healthRatio);
@@ -245,6 +255,8 @@
         patterns: archetype.patterns || [],
         bleedImmune: !!archetype.bleedImmune,
         fireImmune: !!archetype.fireImmune,
+        poisonImmune: !!archetype.poisonImmune,
+        statuses: createCampaignStatusMap(),
         contactCooldownUntilTick: 0,
         attackCooldownUntilTick: state.tick + Math.max(4, Math.round(Number(archetype.attackCooldown || 1) * 20)) + stream.int(0, 6),
         attackWindupUntilTick: 0,
@@ -512,14 +524,15 @@
     const sparkleMultiplier = state.tick < Number(enemy.critSparkleUntilTick || 0) ? 2 : 1;
     const attacker = state.players?.[playerId];
     const loopNumber = Math.max(1, Math.floor((Math.max(1, Number(state.floorNumber || 1)) - 1) / MAX_FLOOR) + 1);
-    let incoming = scaleCampaignDamage({
+    let incoming = details.preScaled ? Math.max(0, Math.round(Number(damage || 0))) : scaleCampaignDamage({
       damage,
+      raw: !!details.rawDamage,
       enemy,
       itemStats: attacker?.itemStats,
       attackPower: attacker?.attackPower,
       attackerDamageMultiplier: Math.max(0.1, Number(attacker?.damageMultiplier || 1)),
       isBoss: !!getEnemyDefinition(enemy.type)?.boss || !!enemy.miniBoss,
-      hasBleed: Number(enemy.bleedTicksRemaining || 0) > 0,
+      hasBleed: getCampaignStatusStacks(enemy, 'bleed') > 0,
       applyBleedBonus: details.applyBleedBonus,
       glassCannon: !!state.matchRules?.glassCannon,
       loopNumber,
@@ -527,14 +540,15 @@
     });
     const randomService = combatRandomByState.get(state);
     const capeActive = Number(attacker?.equipmentEffectsUntilTick?.el_bartos_cape || 0) > Number(state.tick || 0);
+    const canCrit = details.canCrit !== false;
     const crit = resolveCampaignCrit({
-      itemStats: attacker?.itemStats,
+      itemStats: canCrit ? attacker?.itemStats : {},
       critBonus: details.critBonus,
-      forced: sparkleMultiplier > 1 || (!!attacker?.elBartoAmbushReady && capeActive),
-      random: randomService ? () => randomService.next('encounter') : null,
+      forced: canCrit && (sparkleMultiplier > 1 || (!!attacker?.elBartoAmbushReady && capeActive)),
+      random: canCrit && randomService ? () => randomService.next('encounter') : () => 1,
     });
     if (crit.isCrit) incoming = Math.round(incoming * crit.critMultiplier);
-    if (attacker?.elBartoAmbushReady && capeActive) attacker.elBartoAmbushReady = false;
+    if (canCrit && attacker?.elBartoAmbushReady && capeActive) attacker.elBartoAmbushReady = false;
     const absorbed = Math.min(incoming, Math.max(0, Number(enemy.barrier || 0)));
     enemy.barrier = Math.max(0, Number(enemy.barrier || 0) - absorbed);
     const dealt = incoming - absorbed;
@@ -551,30 +565,83 @@
       strike: details.strike,
       crit: crit.isCrit,
     });
-    if (details.bleedDamage && enemy.health > 0) {
-      enemy.bleedDamage = Math.max(Number(enemy.bleedDamage || 0), Number(details.bleedDamage));
-      enemy.bleedTicksRemaining = Math.max(Number(enemy.bleedTicksRemaining || 0), Number(details.bleedTicks || 0));
-      enemy.bleedNextTick = Math.max(Number(enemy.bleedNextTick || 0), state.tick + 5);
-      enemy.bleedOwnerId = playerId;
-    }
     if (enemy.health <= 0) defeatEnemy(state, enemy, playerId, emitEvent);
     return true;
   }
 
+  function getAuthorityStatusResistance(state, target, key) {
+    const general = Number(target?.statusResistance || 0);
+    const keyed = Number(target?.statusResistances?.[key] || 0);
+    const ramped = getCampaignGenericStatusResistance(key, {
+      statusResistScale: Number(state.matchRules?.statusResistScale || 0),
+      elapsedSeconds: Number(state.tick || 0) / 20,
+    });
+    return Math.max(0, Math.min(0.95, Math.max(general, keyed, ramped)));
+  }
+
+  function applyAuthorityStatus(state, target, key, stacks, duration, ownerId, options = {}) {
+    if (!target || target.dead || target.downed) return null;
+    return applyCampaignStatus(target, key, stacks, duration, {
+      resistance: options.resistance ?? getAuthorityStatusResistance(state, target, key),
+      severity: options.severity ?? 1,
+      playerColdBudget: !!options.playerColdBudget,
+      ownerId,
+      damageMultiplier: options.damageMultiplier,
+    });
+  }
+
   function applyFireStatus(state, enemy, stacks, duration, playerId) {
-    if (!enemy || enemy.dead || stacks <= 0) return;
-    enemy.fireStacks = Math.max(Number(enemy.fireStacks || 0), Number(stacks));
-    enemy.fireTicksRemaining = Math.max(Number(enemy.fireTicksRemaining || 0), Math.ceil(Number(duration || 3) / 0.45));
-    enemy.fireNextTick = Math.max(Number(enemy.fireNextTick || 0), state.tick + 9);
-    enemy.fireOwnerId = playerId;
+    const owner = state.players?.[playerId];
+    const durationMultiplier = Math.max(1, Number(owner?.itemStats?.statusDurationMultiplier || 1))
+      * (owner?.characterKey === 'metao' ? 1.15 : 1);
+    return applyAuthorityStatus(state, enemy, 'fire', stacks, Number(duration || 0) * durationMultiplier, playerId);
   }
 
   function applyPoisonStatus(state, enemy, stacks, duration, playerId) {
-    if (!enemy || enemy.dead) return;
-    enemy.poisonStacks = Math.max(Number(enemy.poisonStacks || 0), Number(stacks || 1));
-    enemy.poisonTicksRemaining = Math.max(Number(enemy.poisonTicksRemaining || 0), Math.ceil(Number(duration || 4) / 0.5));
-    enemy.poisonNextTick = Math.max(Number(enemy.poisonNextTick || 0), state.tick + 10);
-    enemy.poisonOwnerId = playerId;
+    const owner = state.players?.[playerId];
+    const durationMultiplier = Math.max(1, Number(owner?.itemStats?.statusDurationMultiplier || 1))
+      * (owner?.characterKey === 'metao' ? 1.15 : 1);
+    return applyAuthorityStatus(state, enemy, 'poison', stacks, Number(duration || 0) * durationMultiplier, playerId);
+  }
+
+  function applyAuthorityOnHitStatusProcs(state, enemy, player, hitOptions, random) {
+    if (!enemy || enemy.dead || !player) return [];
+    const statuses = ensureCampaignStatuses(enemy);
+    const activeStatusCount = Object.values(statuses).filter(status => Number(status?.stacks || 0) > 0).length;
+    const procs = resolveCampaignOnHitStatusProcs({
+      itemStats: player.itemStats,
+      hitOptions,
+      activeStatusCount,
+      copperPennyStacks: Number(player.items?.copper_penny || 0),
+      targetSlowStacks: getCampaignStatusStacks(enemy, 'slow'),
+      canBlind: enemy.type !== 'god' && !getEnemyDefinition(enemy.type)?.boss,
+      random: typeof random === 'function' ? random : () => random?.next?.('encounter') ?? 1,
+    });
+    procs.forEach(proc => {
+      if (proc.kind === 'status') {
+        const durationMultiplier = proc.key === 'slow'
+          ? 1
+          : Math.max(1, Number(player.itemStats?.statusDurationMultiplier || 1))
+            * (['fire', 'poison'].includes(proc.key) && player.characterKey === 'metao' ? 1.15 : 1);
+        applyAuthorityStatus(state, enemy, proc.key, proc.stacks, Number(proc.duration || 0) * durationMultiplier, player.id, {
+          damageMultiplier: proc.damageMultiplier,
+        });
+        return;
+      }
+      if (proc.kind === 'blind') {
+        enemy.confusedBlindUntilTick = Math.max(
+          Number(enemy.confusedBlindUntilTick || 0),
+          Number(state.tick || 0) + Math.ceil(Math.max(0, Number(proc.seconds || 0)) * 20),
+        );
+        return;
+      }
+      const seconds = Math.max(0, Number(proc.seconds || 0));
+      enemy.stunnedUntilTick = Math.max(Number(enemy.stunnedUntilTick || 0), Number(state.tick || 0) + Math.ceil(seconds * 20));
+      if (proc.kind === 'freeze') {
+        applyAuthorityStatus(state, enemy, 'slow', proc.slowStacks, proc.slowDuration, player.id);
+      }
+    });
+    return procs;
   }
 
   function targetsInArc(state, player, angle, range, arc) {
@@ -812,14 +879,6 @@
     });
   }
 
-  function maybeApplyBleed(state, enemy, definition, playerId, random) {
-    if (!definition.bleedChance || !random?.stream('combat-variance')?.chance(definition.bleedChance)) return;
-    enemy.bleedDamage = Math.max(Number(enemy.bleedDamage || 0), 4 * Number(definition.bleedStacks || 1));
-    enemy.bleedTicksRemaining = Math.max(Number(enemy.bleedTicksRemaining || 0), Math.ceil(Number(definition.bleedDuration || 5) / 0.5));
-    enemy.bleedNextTick = Math.max(Number(enemy.bleedNextTick || 0), state.tick + 10);
-    enemy.bleedOwnerId = playerId;
-  }
-
   // Mirrors the campaign's damageDestructible outcome chain (world.js): chip
   // toward broken, then pot loot, barrel blast, and hidden-prop reveal. The
   // visual FX are event-driven on the client from the emitted events.
@@ -917,7 +976,10 @@
         attackKind: definition.weaponKey,
         strike,
       });
-      if (!candidate.enemy.dead) maybeApplyBleed(state, candidate.enemy, definition, player.id, random);
+      if (!candidate.enemy.dead) applyAuthorityOnHitStatusProcs(state, candidate.enemy, player, {
+        ...definition,
+        itemBleedChance: Number(player.itemStats?.bleedChance || 0),
+      }, random);
     });
     const rivals = rivalTargetsInArc(state, player, angle, Number(definition.range || 120), Number(definition.arc || 1.04));
     rivals.forEach(target => damagePlayer(state, target, playerDamage(state, player.id, definition.damage), player.id, emitEvent, definition.weaponKey));
@@ -1254,14 +1316,19 @@
             enemy.stunnedUntilTick = Math.max(Number(enemy.stunnedUntilTick || 0), state.tick + 14);
           }
           if (moveKey === 'random_pounce' && !enemy.dead) {
-            enemy.bleedDamage = Math.max(Number(enemy.bleedDamage || 0), 8);
-            enemy.bleedTicksRemaining = Math.max(Number(enemy.bleedTicksRemaining || 0), 10);
-            enemy.bleedNextTick = Math.max(Number(enemy.bleedNextTick || 0), state.tick + 10);
-            enemy.bleedOwnerId = player.id;
+            applyAuthorityStatus(
+              state,
+              enemy,
+              'bleed',
+              2,
+              5 * Math.max(1, Number(player.itemStats?.statusDurationMultiplier || 1)),
+              player.id,
+            );
           }
           if (moveKey === 'mooggy_hairball' && !enemy.dead) {
             applyPoisonStatus(state, enemy, 3, 6, player.id);
-            enemy.frozenUntilTick = Math.max(Number(enemy.frozenUntilTick || 0), state.tick + 16);
+            enemy.stunnedUntilTick = Math.max(Number(enemy.stunnedUntilTick || 0), state.tick + 16);
+            applyAuthorityStatus(state, enemy, 'slow', 1, 4, player.id);
           }
           targetIds.push(enemy.id);
         });
@@ -1442,14 +1509,14 @@
     });
   }
 
-  function damagePlayer(state, player, damage, sourceId, emitEvent, attackKind = 'contact') {
+  function damagePlayer(state, player, damage, sourceId, emitEvent, attackKind = 'contact', options = {}) {
     if (!player || player.downed) return;
     const statusUntil = player.statusUntilTick || {};
     const protectedByStatus = state.tick < Number(player.invulnerableUntilTick || 0)
       || state.tick < Number(statusUntil.flying_unhitable || 0)
       || state.tick < Number(statusUntil.cowards_way || 0)
       || state.tick < Number(statusUntil.potion_bath || 0);
-    if (protectedByStatus) {
+    if (protectedByStatus && !options.ignoreInv) {
       emitEvent('PLAYER_DAMAGE_BLOCKED', { playerId: player.id, sourceId, roomId: player.roomId, attackKind });
       return;
     }
@@ -1595,6 +1662,7 @@
       attackCooldownUntilTick: state.tick + 12,
       attackWindupUntilTick: 0,
       state: 'spawning', facing: 1, spawnTick: state.tick, hitTick: -1, dead: false,
+      statuses: createCampaignStatusMap(),
       summonedBy: summoner.id,
     };
     state.floorState?.encounters?.[summoner.roomId]?.enemyIds?.push(enemyId);
@@ -1614,7 +1682,8 @@
   }
 
   function moveEnemy(enemy, angle, multiplier, fixedDelta, floor, room) {
-    const speed = Number(enemy.moveSpeed || 72) * multiplier;
+    const slowMultiplier = getCampaignSlowMultiplier(getCampaignStatusStacks(enemy, 'slow'));
+    const speed = Number(enemy.moveSpeed || 72) * multiplier * slowMultiplier;
     enemy.vx = Math.cos(angle) * speed;
     enemy.vy = Math.sin(angle) * speed;
     enemy.facing = enemy.vx < 0 ? -1 : 1;
@@ -1628,6 +1697,84 @@
     if (collision.blockedY) enemy.vy = 0;
     enemy.x = collision.x;
     enemy.y = collision.y;
+  }
+
+  function scaleAuthorityStatusDamage(state, enemy, key, rawDamage, status) {
+    const owner = state.players?.[status?.ownerId];
+    const loopNumber = Math.max(1, Math.floor((Math.max(1, Number(state.floorNumber || 1)) - 1) / MAX_FLOOR) + 1);
+    let staged = Math.max(0, Number(rawDamage || 0));
+    if (key === 'bleed' || key === 'fire') {
+      staged = scaleCampaignDamage({
+        damage: staged,
+        enemy,
+        itemStats: owner?.itemStats,
+        attackPower: owner?.attackPower,
+        attackerDamageMultiplier: Math.max(0.1, Number(owner?.damageMultiplier || 1)),
+        isBoss: !!getEnemyDefinition(enemy.type)?.boss || !!enemy.miniBoss,
+        hasBleed: getCampaignStatusStacks(enemy, 'bleed') > 0,
+        applyBleedBonus: key !== 'bleed',
+        glassCannon: !!state.matchRules?.glassCannon,
+        loopNumber,
+        enemyLoopDamageReduction: state.matchRules?.enemyLoopDamageReduction,
+      });
+    }
+    if (key === 'bleed') {
+      const divisor = getCampaignBleedResistance(enemy, {
+        progressionDepth: Number(state.floorNumber || 1),
+        maxFloor: MAX_FLOOR,
+      });
+      const innateResistance = Math.max(0, Math.min(0.8, Number(enemy.bleedResistance || 0)));
+      staged = staged / divisor
+        * Math.max(0.2, 1 - innateResistance)
+        * Math.max(0, Number(state.matchRules?.enemyBleedDamageMultiplier ?? 1));
+    }
+    return scaleCampaignDamage({
+      damage: Math.max(1, Math.round(staged)),
+      enemy,
+      raw: true,
+      loopNumber,
+      enemyLoopDamageReduction: state.matchRules?.enemyLoopDamageReduction,
+    });
+  }
+
+  function updateAuthorityStatuses(state, fixedDelta, emitEvent) {
+    Object.values(state.enemies || {}).forEach(enemy => {
+      if (!enemy || enemy.dead) return;
+      ensureCampaignStatuses(enemy);
+      tickCampaignStatuses(enemy, fixedDelta, {
+        maxHp: enemy.maxHealth,
+        isDead: () => !!enemy.dead,
+        dealDamage: (key, rawDamage, status) => {
+          const damage = scaleAuthorityStatusDamage(state, enemy, key, rawDamage, status);
+          damageEnemy(state, enemy, damage, status.ownerId, emitEvent, {
+            attackKind: key,
+            preScaled: true,
+            canCrit: false,
+          });
+          return damage;
+        },
+      });
+    });
+    Object.values(state.players || {}).forEach(player => {
+      if (!player || player.downed || player.disconnected) return;
+      ensureCampaignStatuses(player);
+      const stats = player.itemStats || {};
+      tickCampaignStatuses(player, fixedDelta, {
+        maxHp: player.maxHp,
+        targetKind: 'player',
+        fireResistance: Number(stats.fireResistance || 0),
+        playerColdBudget: true,
+        getDurationDecay: key => key === 'bleed' ? Number(stats.bleedDurationDecayMultiplier || 1) : 1,
+        isDead: () => !!player.downed,
+        dealDamage: (key, rawDamage, status) => {
+          const resistance = key === 'bleed' ? Number(stats.bleedResistance || 0) : 0;
+          const severity = Number(stats.negativeStatusMultiplier || 1);
+          const damage = Math.max(0.25, rawDamage * Math.max(0.2, 1 - resistance) * severity);
+          damagePlayer(state, player, damage, status.ownerId || key, emitEvent, key, { ignoreInv: true });
+          return damage;
+        },
+      });
+    });
   }
 
   function updateEnemies(state, fixedDelta, emitEvent) {
@@ -1647,34 +1794,16 @@
         return;
       }
       if (enemy.state === 'spawning') enemy.state = 'chasing';
-      if (Number(enemy.bleedTicksRemaining || 0) > 0 && state.tick >= Number(enemy.bleedNextTick || 0)) {
-        enemy.bleedTicksRemaining -= 1;
-        enemy.bleedNextTick = state.tick + 10;
-        damageEnemy(state, enemy, enemy.bleedDamage, enemy.bleedOwnerId, emitEvent, { attackKind: 'bleed' });
-        if (enemy.dead) return;
-      }
-      if (Number(enemy.fireTicksRemaining || 0) > 0 && state.tick >= Number(enemy.fireNextTick || 0)) {
-        enemy.fireTicksRemaining -= 1;
-        enemy.fireNextTick = state.tick + 9;
-        damageEnemy(state, enemy, Math.max(1, Math.round(1.5 + Number(enemy.fireStacks || 1) * 1.8)), enemy.fireOwnerId, emitEvent, { attackKind: 'fire' });
-        if (enemy.dead) return;
-      }
-      if (Number(enemy.poisonTicksRemaining || 0) > 0 && state.tick >= Number(enemy.poisonNextTick || 0)) {
-        enemy.poisonTicksRemaining -= 1;
-        enemy.poisonNextTick = state.tick + 10;
-        damageEnemy(state, enemy, Math.max(1, Math.round(2 + Number(enemy.poisonStacks || 1) * 1.5)), enemy.poisonOwnerId, emitEvent, { attackKind: 'poison' });
-        if (enemy.dead) return;
-      }
-      if (state.tick < Number(enemy.frozenUntilTick || 0)) {
-        enemy.vx = 0;
-        enemy.vy = 0;
-        enemy.state = 'frozen';
-        return;
-      }
       if (state.tick < Number(enemy.stunnedUntilTick || 0)) {
         enemy.vx = 0;
         enemy.vy = 0;
         enemy.state = 'stunned';
+        return;
+      }
+      if (state.tick < Number(enemy.confusedBlindUntilTick || 0)) {
+        enemy.vx = 0;
+        enemy.vy = 0;
+        enemy.state = 'confused';
         return;
       }
       const target = nearestLivingPlayer(state, enemy);
@@ -1865,6 +1994,10 @@
         projectileId,
         attackKind: projectile.attackKind,
       });
+      const projectileOwner = state.players?.[projectile.ownerId];
+      if (!enemy.dead && projectileOwner) {
+        applyAuthorityOnHitStatusProcs(state, enemy, projectileOwner, projectile.hitOptions || {}, random);
+      }
       if (Number(projectile.splash || 0) > 0) {
         livingEncounterEnemies(state, projectile.roomId).forEach(candidate => {
           if (Math.hypot(candidate.x - projectile.x, candidate.y - projectile.y) > Number(projectile.splash)) return;
@@ -1876,15 +2009,6 @@
         });
       } else if (Number(projectile.fireStacks || 0) > 0) {
         applyFireStatus(state, enemy, projectile.fireStacks, projectile.fireDuration, projectile.ownerId);
-      } else if (Number(projectile.hitOptions?.fireChance || 0) > 0
-        && (typeof random === 'function' ? random() : 0.5) < Number(projectile.hitOptions.fireChance)) {
-        applyFireStatus(
-          state,
-          enemy,
-          Number(projectile.hitOptions.fireStacks || 1),
-          Number(projectile.hitOptions.fireDuration || 3),
-          projectile.ownerId,
-        );
       }
       if (Number(projectile.remainingPierces || 0) > 0) {
         projectile.remainingPierces -= 1;
@@ -2176,6 +2300,7 @@
       updatePlayerEquipmentEffects(state, emitEvent);
       updateAbilityEntities(state, emitEvent, random);
       updateRoomHazards(state, fixedDelta, emitEvent);
+      updateAuthorityStatuses(state, fixedDelta, emitEvent);
       updateEnemies(state, fixedDelta, emitEvent);
       updateProjectiles(state, fixedDelta, emitEvent, random);
       updatePickups(state, emitEvent, random);

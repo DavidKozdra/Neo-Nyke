@@ -19,6 +19,7 @@ describe('God boss buffs', () => {
   const root = path.resolve(__dirname, '..');
   const enemySource = fs.readFileSync(path.join(root, 'js/game/enemies.js'), 'utf8');
   const statusSource = fs.readFileSync(path.join(root, 'js/core/status.js'), 'utf8');
+  const sharedStatusSource = fs.readFileSync(path.join(root, 'js/simulation/SharedStatusSystem.js'), 'utf8');
 
   test('adds damage, cadence, and a fifth partition laser as run time grows', () => {
     const declaration = extractFunction(enemySource, 'getGodRunPressure');
@@ -61,14 +62,19 @@ describe('God boss buffs', () => {
     const declaration = extractFunction(statusSource, 'getStatusResistance');
     const getStatusResistance = new Function(
       'Neo',
+      'globalThis',
       `${helper}; ${declaration}; return getStatusResistance;`,
-    )({ player: {}, gameElapsedTime: 0, getDifficultyDef: () => ({ statusResistScale: 0 }) });
+    )(
+      { player: {}, gameElapsedTime: 0, getDifficultyDef: () => ({ statusResistScale: 0 }) },
+      { NeoNyke: { simulation: { getCampaignGenericStatusResistance: () => 0 } } },
+    );
 
     expect(getStatusResistance({ statusResistance: 0.45, statusResistances: { slow: 0.7 } }, 'slow')).toBe(0.7);
     expect(getStatusResistance({ statusResistance: 0.45, statusResistances: { fire: 0.2 } }, 'fire')).toBe(0.45);
-    expect(statusSource).toContain('const resistanceMultiplier = 1 - getStatusResistance(entity, key)');
-    expect(statusSource).toContain('Number(stacks || 0)) * resistanceMultiplier');
-    expect(statusSource).toContain('durationSeverity * resistanceMultiplier');
+    expect(statusSource).toContain('simulation.applyCampaignStatus(entity, key, stacks, duration, {');
+    expect(sharedStatusSource).toContain('const resistanceMultiplier = 1 - Math.max(0, Math.min(0.95');
+    expect(sharedStatusSource).toContain('Number(stacks || 0)) * resistanceMultiplier');
+    expect(sharedStatusSource).toContain('Number(duration || 0)) * severity * resistanceMultiplier');
   });
 
   test('partition attack uses four or five rotating beams with a windup preview', () => {

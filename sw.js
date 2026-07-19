@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'neonyke-v75';
+const CACHE_VERSION = 'neonyke-v76';
 const CACHE_META = 'neonyke-cache-meta';
 const CACHE_META_KEY = '/__neonyke_cache_meta__';
 const CACHE_REFRESH_INTERVAL_MS = 5 * 60 * 60 * 1000;
@@ -21,6 +21,7 @@ const PRECACHE = [
   '/js/simulation/SharedItemEffectSystem.js',
   '/js/simulation/SharedDamageSystem.js',
   '/js/simulation/SharedHitResolutionSystem.js',
+  '/js/simulation/SharedStatusSystem.js',
   '/js/simulation/SharedProgressionSystem.js',
   '/js/simulation/SharedForgeSystem.js',
   '/js/simulation/SharedInventorySystem.js',
